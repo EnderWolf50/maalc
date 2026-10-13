@@ -47,7 +47,7 @@
 | 飾品獲得視窗 | OCR：`E.G.O Gift GET!`；模板：Confirm | 點 Confirm。一次拿到多個飾品時，每個飾品各彈一次 | E.G.O Gift Search 頁、主題包頁、地圖頁、商店、飾品選擇頁、獎勵卡頁 | #8 | `captures/08_after_select.png`、`126_boss_gift2_get.png` |
 | E.G.O Gift Search 頁 | OCR：標題 `E.G.O Gift Search`、`Select 0/3`、右上 `Owned` 星光 | v1 一律點 Refuse Gift。這頁花的是持有的星光 | 觀測拒絕確認 | #8、#19 | `captures/09_gift_search_page.png` |
 | 觀測拒絕確認 | OCR：`Forgo E.G.O Gift Search?` | 點 Confirm | 主題包頁 | #8 | `captures/10_gift_search_refuse_dialog.png` |
-| 主題包頁 | OCR：標題 `SELECT FLOOR <N> THEME PACK`、卡片標題列；模板：右上難度切換（`NORMAL ◀ ▶`／`◀ ▶ HARD`）、`Refresh` | 先讀難度並切到這一層該用的難度（遊戲會記住上一次的選擇，地圖頁不顯示難度）。依主題包方案挑主題包，必要時用 Refresh；把選中的卡片往下拉。Pack Search 不使用（[03](03-decisions.md) 難度、主題包）。實機：第 1 層切到 HARD 後，第 2 層起難度箭頭變灰、點了沒反應；Refresh 每層免費一次，用過就變灰。卡片上可能有 `EFFECTIVE` 標章、危險標記、紅色 `!` 標記（第 4 層的三個主題包都有，點了沒反應）；沒看到 NEW 標記。第 5 層沒有 `CLEAR BONUS` 列 | 載入畫面、地圖頁 | #8、#9、#11 | `captures/11_theme_pack_floor1.png`、`12_theme_pack_toggle_hard.png`、`128_f2_tap_difficulty_left.png`、`129_f2_refresh_tapped.png`、`197_f3boss_rewards_pack.png`、`222_f4boss_rw_pack.png` |
+| 主題包頁 | OCR：標題 `SELECT FLOOR <N> THEME PACK`、卡片標題列；模板：右上難度切換（`NORMAL ◀ ▶`／`◀ ▶ HARD`）、`Refresh` | 先讀難度並切到這一層該用的難度（遊戲會記住上一次的選擇，地圖頁不顯示難度）。依主題包方案挑主題包，必要時用 Refresh；把選中的卡片往下拉。Pack Search 不使用（[03](03-decisions.md) 難度、主題包）。實機：任何一層切到 HARD 後，下一層起難度箭頭變灰、點了沒反應；Refresh 每層免費一次，用過就變灰。卡片上可能有 `EFFECTIVE` 標章、危險標記、紅色 `!` 標記（第 4 層的三個主題包都有，點了沒反應）；沒看到 NEW 標記。第 5 層沒有 `CLEAR BONUS` 列 | 載入畫面、地圖頁 | #8、#9、#11 | `captures/11_theme_pack_floor1.png`、`12_theme_pack_toggle_hard.png`、`128_f2_tap_difficulty_left.png`、`129_f2_refresh_tapped.png`、`197_f3boss_rewards_pack.png`、`222_f4boss_rw_pack.png` |
 
 主題包頁出現的提示 `Unused Starlight have been added to the Clear Rewards.` 不需要處理。（#8）
 
