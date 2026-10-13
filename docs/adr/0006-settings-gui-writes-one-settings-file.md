@@ -27,3 +27,4 @@ status: accepted（取代 ADR 0004，修訂 ADR 0005）
 - 修訂 [ADR 0005](0005-game-data-files-separate-from-user-settings.md)：每季的預設主題包方案仍在資料檔，使用者不能改；使用者的主題包方案、事件覆寫、試煉風險覆寫存在設定檔，疊加在資料檔上。不再有另外的覆寫檔。
 - 設定檔用暫存檔加改名寫入，並有 `version` 欄位供日後遷移格式。
 - 多一個要維護的專案（`gui/`），也多一套 Rust 與 TypeScript 工具鏈。
+- MXU 是 AGPL-3.0，依 [ADR 0001](0001-mit-and-no-agpl-derived-assets.md) 只能讀它的做法再自己重寫，不複製程式碼。MaaFramework 是 LGPL-3.0，照常引用即可。
