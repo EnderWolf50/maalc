@@ -60,6 +60,10 @@ _Avoid_: 星光 preset、開局加成設定
 一組主題包的「偏好／中立／避開」標記，可以被多支隊伍共用。
 _Avoid_: 主題包權重、theme pack weight
 
+**試煉**：
+困難模式中，Boss 後的選項附帶的額外難度（Mounting Trial），選了會讓之後的戰鬥更難。
+_Avoid_: 懲罰、debuff
+
 ## 事件
 
 **事件覆寫表**：
