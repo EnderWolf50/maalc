@@ -55,3 +55,17 @@ _Avoid_: preset（PI 的 preset 指開發者預設的設定快照）
 **星光方案**：
 一組開局星光的購買計畫：每個加成的等級、購買優先順序，以及是否把剩下的星光換成 Cost。可以被多支隊伍共用。
 _Avoid_: 星光 preset、開局加成設定
+
+**主題包方案**：
+一組主題包的「偏好／中立／避開」標記，可以被多支隊伍共用。
+_Avoid_: 主題包權重、theme pack weight
+
+## 事件
+
+**事件覆寫表**：
+針對特定事件、依問題文字指定要選哪個選項的例外清單；沒列出的事件照通用規則處理。
+_Avoid_: 事件腳本、事件資料庫
+
+**獎勵卡**：
+遭遇戰勝利後從 2 到 3 張中選一張的獎勵，共五種：Cost、Cost & Keyword Gift Chance、E.G.O Resource、Random E.G.O Gift、Starlight。
+_Avoid_: 獎勵、reward（單指這頁時）
