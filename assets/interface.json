@@ -1,0 +1,46 @@
+{
+    "$schema": "https://raw.githubusercontent.com/MaaXYZ/MaaFramework/main/tools/interface.schema.json",
+    "interface_version": 2,
+    "languages": {
+        "zh_tw": "locales/zh_tw.json",
+        "en_us": "locales/en_us.json"
+    },
+    "name": "maalc",
+    "label": "$maalc",
+    "github": "https://github.com/EnderWolf50/maalc",
+    "version": "v0.0.0",
+    "license": "MIT",
+    "controller": [
+        {
+            "name": "MuMu",
+            "label": "$MuMu",
+            "type": "Adb",
+            // PI V2 has no adb screencap/input fields: the client passes the methods
+            // Toolkit.find_adb_devices() reports, which for MuMu already include
+            // EmulatorExtras for both screencap and input (input's Default lacks it).
+            "adb": {}
+        }
+    ],
+    "resource": [
+        {
+            "name": "base",
+            "label": "$base",
+            "path": [
+                "./resource/base"
+            ]
+        }
+    ],
+    "agent": {
+        "child_exec": "python",
+        "child_args": [
+            "./agent/main.py"
+        ]
+    },
+    "task": [
+        {
+            "name": "MirrorDungeon",
+            "label": "$MirrorDungeon",
+            "entry": "MirrorDungeon"
+        }
+    ]
+}
