@@ -77,6 +77,7 @@
 |---|---|---|---|
 | Pipeline 檢查 | `maa-tools check` | Pipeline 與 `interface.json` 的格式 | #4 |
 | 畫面節點 | `maa-tools test`，每個畫面節點一份 | 節點命中與不命中 | #13、#14 |
+| 設定檢查 | GUI 與 Agent 各自的單元測試，共用同一批範例設定檔 | `settings.schema.json` 的結構檢查與跨物件檢查；兩邊對同一份檔案必須給出相同的錯誤 | #19 |
 | Agent 邏輯 | pytest，用 Python `CustomController` 餵截圖 | 輪替游標、地圖重試額度、選路、卡住偵測、恢復升級上限 | #4、#14 |
 | 回歸 | `RecordController` 錄下驗收局，`ReplayController` 重播 | 整條流程；行為不符就失敗 | #4、#14 |
 

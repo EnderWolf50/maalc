@@ -7,11 +7,12 @@
 - 鏡牢的流程必須寫在 Pipeline。每種畫面的辨識必須各自寫在自己的 Pipeline 節點；不用單一 custom recognition 對全螢幕做分類。（#8）
 - 需要判斷的選擇必須寫成 Agent 的 custom action 或 custom recognition，包括地圖節點、飾品、主題包、商店、星光、獎勵卡、事件選項、Boss 後的選擇、戰前的出戰順序。（#8、#9、#11、#17）
 - 不採用把整局寫在程式碼迴圈裡的做法（MaaLimbus、AALC）。理由見 [ADR 0002](../adr/0002-pipeline-hub-and-agent-decisions.md)。（#8）
-- 使用者設定只能經 `pipeline_override` 到達 Agent；`PI_*` 環境變數不含選項值。一個選項只寫自己專屬的節點欄位，因為 override 是整欄替換、不深度合併。（#6）
-- 遊戲資料（主題包方案、事件覆寫表、尋路權重、Cost 對照表與商店數字、試煉風險表）放在 `resource/base/data/` 的 YAML 資料檔，由 Agent 讀取（[ADR 0005](../adr/0005-game-data-files-separate-from-user-settings.md)）。格式見 [05-game-data.md](05-game-data.md)。（#11、#12、#17、#19）
+- 使用者設定由設定 GUI 寫進 `<root>/config/settings.json`，Agent 在任務開始時讀取並檢查；PI 不帶使用者選項（[ADR 0006](../adr/0006-settings-gui-writes-one-settings-file.md)）。格式見 [04-settings.md](04-settings.md)。（#6、#19，2026-10-14 定案）
+- 遊戲資料（主題包清單與預設主題包方案、事件覆寫表、尋路權重、Cost 對照表與商店數字、試煉風險表）放在 `resource/base/data/` 的 YAML 資料檔，由 Agent 讀取（[ADR 0005](../adr/0005-game-data-files-separate-from-user-settings.md)）。格式見 [05-game-data.md](05-game-data.md)。（#11、#12、#17、#19）
 
 | 層 | 負責 | 不負責 |
 |---|---|---|
+| 設定 GUI | 編輯、檢查並寫入設定檔；重置某隊的時間記錄 | 執行 bot（第一階段） |
 | Pipeline | 畫面辨識、畫面分派、固定的點擊序列、全域彈窗、導航、`max_hit` 與 `timeout` | 依設定或資料做選擇 |
 | Agent | 依設定與資料做選擇、讀數字並核對結果、輪替游標、卡住偵測的計數、`runs.jsonl`、停止時的 webhook | 決定目前在哪個畫面 |
 
@@ -56,19 +57,19 @@
 ## 中途接續與狀態檔
 
 - 中途接續必須以畫面為準，不讀存檔。理由見 [ADR 0003](../adr/0003-screen-is-truth-state-file-only-rotation-cursor.md)。（#8）
-- Agent 狀態檔只存**輪替游標**。（#8、#9）
+- Agent 狀態檔只存**輪替游標**，記的是隊伍 id。（#8、#9、#19）
 - 輪替游標只在 bot 親眼看到某隊完成一局並領到獎勵才前進。手動跑的局不影響輪替。選隊頁或戰前編隊頁顯示的隊伍和游標不同時，以畫面為準。（#8）
 - 用途和這一局難度不符的隊伍跳過，但不推進游標；沒有任何可用的隊伍就結束任務。（#9）
 - 接續暫停中的局時，`Dungeon Progress` 不顯示隊伍。Agent 必須等下一次戰前編隊讀到 `TEAMS #N` 才得知隊伍；整局都沒讀到，就不推進輪替游標。（#8、#19）
 - 「跑幾局」只算 bot 這次啟動後完成的局數，不存檔。「每週獎勵用完就停」的剩餘次數從畫面讀。（#8）
-- 難度、每週獎勵用法這類策略屬於 GUI 選項，不寫進狀態檔。（#8）
+- 難度、每週獎勵用法這類策略屬於設定檔，不寫進狀態檔。（#8、#19）
 - 刷新次數這類以層為單位的計數記在 Agent 記憶體，不存檔。（#10）
-- 狀態檔必須放在 Agent 自己的子目錄，避開 GUI 的設定檔（`mxu-*.json`、`instances/`）；用暫存檔加改名的方式寫入；根目錄用 Agent 腳本自身的位置定位，不依賴工作目錄。（#6）
+- 狀態檔必須放在 Agent 自己的子目錄 `<root>/state/`，避開 MXU 與 MFAAvalonia 的設定檔（`mxu-*.json`、`instances/`）；用暫存檔加改名的方式寫入；根目錄用 Agent 腳本自身的位置定位，不依賴工作目錄。（#6）
 
 ## 執行記錄 runs.jsonl
 
-- Agent 必須為每局寫一行到 `<root>/logs/runs.jsonl`（`<root>` 是 Agent 的根目錄），欄位包括：起訖時間、隊伍、難度、有沒有用每週獎勵、通過幾層、結果（通關／停止／放棄）、L1／L2／L3 各觸發幾次。（#14）
-- `runs.jsonl` 是唯讀的記錄，只用於驗收和計算整局時間上限，不得用於中途接續的判斷。（#14）
+- Agent 必須為每局寫一行到 `<root>/logs/runs.jsonl`（`<root>` 是 Agent 的根目錄），欄位包括：起訖時間、隊伍 id、難度、有沒有用每週獎勵、通過幾層、結果（通關／停止／放棄）、L1／L2／L3 各觸發幾次。（#14）
+- `runs.jsonl` 是唯讀的記錄，只用於驗收和計算整局時間上限，不得用於中途接續的判斷。時間上限每隊各自計算；設定 GUI 的「重置時間記錄」只附加一行該隊的重置標記，不刪舊記錄（[04-settings.md](04-settings.md#12-其他檔案)）。（#14、#19）
 
 ## 各畫面讀取的資訊
 

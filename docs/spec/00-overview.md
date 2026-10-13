@@ -13,7 +13,7 @@
 | 項目 | 內容 | 來源 |
 |---|---|---|
 | 鏡牢 | 普通與困難，第 1–5 層；難度可以逐層切換 | #1、#8、#9 |
-| 隊伍與輪替 | 最多 10 支隊伍，依編號輪替，用途不符就跳過 | #9 |
+| 隊伍與輪替 | 隊伍數量不限，依清單順序輪替，用途不符就跳過 | #9、#19 |
 | 戰前編隊 | 依出戰順序方案重選出戰順序 | #9、#16 |
 | 開局 | 依星光方案購買星光；依主要體系選初始飾品；觀測飾品一律 Refuse | #9、#19 |
 | 戰鬥 | 只按勝率加開始；處理全滅、陣亡與戰鬥中的事件 | #1、#16 |
@@ -24,7 +24,7 @@
 | 結算 | 五層全部通過才依每週獎勵設定切開關並 Claim；否則放棄獎勵 | #8、#17、#19 |
 | 中途接續 | 從任何畫面啟動都能接手，以畫面為準 | #8 |
 | 卡住處理 | 偵測卡住，分三級恢復，必要時重啟遊戲；停止時保存證據並發 webhook | #14 |
-| GUI | PI V2 標準欄位，介面提供繁中與英文，預設繁中 | #1、#18 |
+| 設定 GUI | 自製設定 GUI（`gui/`）編輯所有使用者設定：執行選項、具名方案、隊伍、事件與試煉風險覆寫；介面提供繁中與英文，預設繁中。執行仍在 MXU／MFAAvalonia | #1、#18、#19 |
 
 驗收標準是無人看管、連續 10 局困難鏡牢、0 次停止；累計 30 局標記為穩定。詳見 [07-assets-and-testing.md](07-assets-and-testing.md)。（#14）
 
@@ -79,8 +79,9 @@
 | 架構 | 流程寫在 Pipeline 的 `MirrorHub`，決策寫在 Python Agent（[ADR 0002](../adr/0002-pipeline-hub-and-agent-decisions.md)） | #8 |
 | Agent | Python，由 `interface.json` 的 `agent.child_exec`／`child_args` 啟動 | #1、#4 |
 | 專案骨架 | 以 MaaPracticeBoilerplate（MIT）為起點，手動搬入所需檔案，保留其版權聲明 | #4 |
-| GUI | 只用 ProjectInterface V2 標準欄位，MXU 與 MFAAvalonia 都必須能跑；開發時用 MXU。不依賴只有其中一邊支援的功能 | #1、#6 |
-| 設定 | 使用者設定全部放 PI，以固定數量的方案欄位共用（[ADR 0004](../adr/0004-team-settings-in-pi-with-fixed-preset-slots.md)）；遊戲資料放資料檔（[ADR 0005](../adr/0005-game-data-files-separate-from-user-settings.md)） | #9、#11 |
+| 執行介面 | ProjectInterface V2，只放控制器、資源與鏡牢任務，沒有使用者選項；MXU 與 MFAAvalonia 都必須能跑，開發時用 MXU。不依賴只有其中一邊支援的功能 | #1、#6、#19 |
+| 設定 GUI | Tauri 2 + React/TypeScript，放在 `gui/`，是 v1 新增的交付物。第一階段只編輯設定，不執行 bot（[ADR 0006](../adr/0006-settings-gui-writes-one-settings-file.md)） | #19 |
+| 設定 | 使用者設定全部放在 `<root>/config/settings.json`，由設定 GUI 寫入、Agent 讀取，格式由 `settings.schema.json` 描述（[ADR 0006](../adr/0006-settings-gui-writes-one-settings-file.md)）；遊戲資料放資料檔（[ADR 0005](../adr/0005-game-data-files-separate-from-user-settings.md)） | #9、#11、#19 |
 | 辨識 | 文字與數字用 OCR（`ppocr_v6/small`），圖示與按鈕用自製模板；地圖節點先找 Bus 再比對相鄰格位，不用整張地圖的偵測模型 | #3、#13 |
 | 授權 | MIT。AGPL 專案（AALC、MaaLimbus、Lix）可以讀、不能抄，程式碼、圖片和模型都不複製；不用 Ultralytics 訓練模型（[ADR 0001](../adr/0001-mit-and-no-agpl-derived-assets.md)） | #1、#3 |
 
@@ -96,8 +97,8 @@
 | [01-architecture.md](01-architecture.md) | `MirrorHub`、導航、全域彈窗、Pipeline 與 Agent 分工、中途接續、一局的流程 |
 | [02-screens.md](02-screens.md) | 畫面清單與每個畫面讀什麼、做什麼 |
 | [03-decisions.md](03-decisions.md) | Agent 的決策規則：輪替、飾品、商店、主題包、事件、尋路、Boss 後選擇 |
-| [04-settings.md](04-settings.md) | PI 選項結構：全域選項、方案、隊伍 |
-| [05-game-data.md](05-game-data.md) | 資料檔格式：主題包方案、事件覆寫表、尋路權重、Cost 對照表與商店數字、試煉風險表 |
+| [04-settings.md](04-settings.md) | 設定檔結構：執行選項、方案、隊伍、覆寫、檢查 |
+| [05-game-data.md](05-game-data.md) | 資料檔格式：主題包清單與預設方案、事件覆寫表、尋路權重、Cost 對照表與商店數字、試煉風險表 |
 | [06-recovery.md](06-recovery.md) | 卡住偵測、三級恢復、停止與通知 |
 | [07-assets-and-testing.md](07-assets-and-testing.md) | 素材製作、測試、驗收 |
 
