@@ -59,7 +59,9 @@
 
 **用途**：困難模式 Boss 後的選擇評分。選項評分 = 飾品分數 − 權重 × 試煉風險；分數最高的勝出，同分時選試煉風險較低的。權重是每隊的「試煉風險權重」（低／中／高），見 [04-settings.md](04-settings.md)。（#17）
 
-**內容**：試煉（Mounting Trial）的識別字 → 風險值（0–5）。從選項上 OCR 讀出識別字再查表；查不到就當作最高風險 5。識別字用試煉名稱還是等級，等截圖確認。（#17、#19）
+**內容**：試煉（Mounting Trial）的名稱 → 風險值（0–5）。從選項上 OCR 讀出試煉名稱再查表；查不到就當作最高風險 5。（#17、#19）
+
+識別字用試煉名稱，含羅馬數字，例如 `Defense Level Up`、`Defense Skill Up`、`Take Less Damage`、`Growth I`、`Keen I`、`Offense Level Up II`。每個試煉旁另有紅色 `Enemy Level Up +1`／`+2` 標記，只有兩種值，不能當識別字。（實機：captures/122_boss_gift_trials_page.png、captures/176_f2boss_rewards_gift.png）
 
 評分的初始數值如下，等截圖確認後再調整：（#19）
 
@@ -69,12 +71,12 @@
 | 試煉風險 | 0–5 |
 | 權重 | 低 0.5、中 1、高 2 |
 
-**範例**（虛構內容，僅示意）：
+**範例**（試煉名稱取自實機，風險值僅示意）：
 
 | 試煉 | 風險 |
 |---|---|
-| `<試煉名稱或等級 A>` | 1 |
-| `<試煉名稱或等級 B>` | 3 |
+| `Defense Level Up` | 1 |
+| `Growth I` | 3 |
 
 **維護**：開發者每季更新。（#17）
 
@@ -111,6 +113,18 @@
 | 異想體戰 | 150 | 180 |
 | 事件 | 75 | 100 |
 
+**困難模式的實測 Cost**：下表是 2026-10-13 困難鏡牢實機看到的節點 Cost 標記，不是資料檔的預設值，也不是 wiki 的數字。和上表不一致的部分見 [03-decisions.md](03-decisions.md#未決)。
+
+| 節點 | 實測 Cost | 實機截圖 |
+|---|---|---|
+| 普通戰鬥 | 85 | `captures/23_after_pack_pull.png`、`178_f3_map.png` |
+| Focused（橘色 `WARNING` 環） | 150、180 | `captures/152_focused_node_selected.png`、`178_f3_map.png`、`223_f5_map.png` |
+| 異想體戰 | 120 | `captures/179_f3_abno_node_selected.png`、`225_f5ev_map.png` |
+| 事件、商店 | 沒有 Cost 標記 | `captures/131_f2_event_selected.png`、`74_battle4_map.png` |
+| Boss | 第 1–4 層依序 250、300、375、500；第 5 層沒有標記 | `captures/74_battle4_map.png`、`175_f2_map_after_supershop.png`、`196_f3_map_before_boss.png`、`216_f4_map_before_boss.png`、`230_f5abno_rewards_map.png` |
+
+Risky 節點這一局沒有分辨出來。商店節點的選取面板顯示的是下一個 Boss 的 Cost，不是商店本身的。
+
 **商店數字**（#10、#19）
 
 | 項目 | 值 |
@@ -119,6 +133,8 @@
 | 定向刷新費用 | 90 起，每次 +15 |
 | 刷新條件 | Cost ≥ 刷新費用 + 120（定向與普通刷新相同） |
 | 全體治療門檻 | 100 |
+
+實機的刷新費用（普通 15 → 30、定向 90 → 105）與治療費用（每項 100）和上表一致（實機：captures/107_shop_after_refresh.png、captures/82_shop_heal_page.png）。
 
 ## 7. 每季更新檢查清單
 
@@ -135,6 +151,6 @@
 
 ## 未決
 
-1. 試煉風險表的識別字用試煉名稱還是等級，等截圖確認。（#17）
-2. 資料檔的主題包方案少於 6 組時 Agent 怎麼處理（見 [04-settings.md](04-settings.md)）。
-3. 覆寫檔的檔名與位置。
+1. 資料檔的主題包方案少於 6 組時 Agent 怎麼處理（見 [04-settings.md](04-settings.md)）。
+2. 覆寫檔的檔名與位置。
+3. Cost 對照表的困難欄是否改用實測值，以及 Focused 與 Risky 怎麼分辨（見 [03-decisions.md](03-decisions.md#未決)）。

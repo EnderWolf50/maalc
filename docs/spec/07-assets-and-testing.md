@@ -31,6 +31,19 @@
 - `maa-tools test` 找不到圖片時只會警告，不會失敗，所以必須另外檢查每個測試引用的圖片都存在。（#13）
 - 參考數據：同一模板比對 1080p 縮成的 720p 截圖，分數最低約 0.93（小字、半透明元素）。（#7）
 
+## 辨識方法的實機經驗
+
+以下是 2026-10-13 困難鏡牢實機探測得到的做法，是實作指引，不是規則；括號裡的數字是實測值，門檻仍依上一節驗證。截圖路徑相對於探測目錄 `~/.cache/maalc-probe/`。
+
+- **勝率按鈕**：位置隨技能格數左右移動（實測每多一格右移約 38 px，x 從 966 到 1194），所以用模板在夠寬的 ROI 裡找，不用固定座標；模板在各關卡都穩定命中（實測分數約 0.99）。開始圓盤固定在勝率按鈕左下方的同一個偏移。（實機：captures/53_battle_winrate_pressed.png、captures/56_battle_wait.png）
+- **開始圓盤亮起**：用圓盤中心一小塊的亮度判斷（實測 HSV V 亮起約 254、未亮約 133），不要用 `START` 字樣的模板。字樣模板在明亮的雪地關卡失效，迴圈空轉 80 次。（實機：captures/180_f3abno_battle_map.png、captures/182_abno_winrate_tap.png）
+- **回合開場動畫**：動畫還在播時點勝率可能沒效果或把自動配卡切回關閉；改用亮度確認後，約 100 個回合中有 13 次要重試，全部自動恢復，沒有誤開始。所以每次點完都要重新確認狀態。
+- **地圖頁錨點**：左上的 `Exploring Floor` 標題會被節點蓋住，錨點改用右側的圖示欄與齒輪；標題只在看得到時讀樓層。（實機：captures/202_f4ev_stuck.png）
+- **事件按鈕**：`SKIP`、`Proceed`、`Continue`、`Commence` 都在右下同一個紅色按鈕，沒作用時變灰，可用顏色判斷是否可點。成功率等級（Very High … Very Low）的文字顏色各不相同。（實機：captures/132_event_entered.png、captures/149_ev2_check.png）
+- **罪人列座標**：商店與事件頁的罪人列頭像間距不同，不能共用一組座標。（實機：captures/213_revive_selected.png、captures/137_event_check_after_tap.png）
+- **數量會變的卡片**：獎勵卡 1–4 張、飾品選擇頁 1 或 4 張，都置中排列，要先找出卡片再點，不用固定格位。（實機：captures/154_focused_unknown.png、captures/197_f3boss_rewards_card.png）
+- **淡出中的頁面**：確認後頁面淡出的期間仍可能比對到舊畫面；處理完要等畫面換掉再判斷，避免重複點擊。
+
 ## OCR 與模板的分工
 
 | 用 | 對象 |
@@ -51,6 +64,7 @@
 ## 測試截圖的存放與授權
 
 - 測試截圖先放在主 repo 的 `tests/`。格式為 720p PNG，以 oxipng 壓縮，必須遮掉 UID 和帳號名稱。（#13）
+- 2026-10-13 困難鏡牢的探測截圖（`~/.cache/maalc-probe/captures/`，[02-screens.md](02-screens.md) 的「實機截圖」欄）目前放在 repo 外，還沒遮蔽；實作時依上一條處理後搬進 `tests/`，作為第一批測試截圖。（#13）
 - 直接傳給 `post_recognition`／`run_recognition` 的圖不會被縮放，所以測試截圖必須已經是 720p。（#4）
 - 總量超過約 50 MB 時，搬到獨立的 testset repo，用 submodule 引用。（#13）
 - README 必須註明：遊戲素材 © Project Moon，不在 MIT 授權範圍內。（#13，[ADR 0001](../adr/0001-mit-and-no-agpl-derived-assets.md)）

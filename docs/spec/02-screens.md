@@ -10,6 +10,8 @@
 - 標題含有季名的畫面（例如 `Will you enter Mirror of Names and Spiders?`、`Grace of the Star of Names and Spiders`），錨點必須只用不隨季節改變的部分。這一季在 2026-10-15 結束。（#11）
 - 所有輸入都用觸控；`P`／`Enter` 鍵盤在 Android 上不保證有效。（#2、#16）
 - 「待截圖確認」表示這個畫面還沒有實機截圖，辨識方式是依 ticket 的描述暫定，截圖回來後要核對本章。已實機確認的畫面來自 2026-10-13 在 Limbus 1.116.2（MuMu 12，1280×720）上的一局普通鏡牢與一局困難鏡牢。（#7、#8、#19）
+- 「實機截圖」欄列出困難鏡牢那一局的代表截圖，路徑相對於探測目錄 `~/.cache/maalc-probe/`（例如 `captures/176_f2boss_rewards_card.png`），逐張說明見該目錄的 `captures/INDEX.md`。這些截圖目前放在 repo 外，還沒有遮掉 UID 與帳號名稱；實作時依 #13 遮蔽、壓縮後搬進 `tests/`（[07](07-assets-and-testing.md#測試截圖的存放與授權)）。「—」表示這一局沒有截到。（#13）
+- 截圖中的座標與數值只是實測參考，不是規則；辨識方法的實機經驗見 [07](07-assets-and-testing.md#辨識方法的實機經驗)。
 - 認不出畫面超過 60 秒（載入畫面 90 秒）、同一畫面連續處理 5 次，都交給卡住處理。（#14）
 - 用 OCR 找文字再點的按鈕（`Skip`、`Continue`、`Proceed` 這類），每個畫面最多點 5 次。（#16、#19）
 
@@ -17,122 +19,133 @@
 
 這一組是從遊戲啟動到鏡牢入口頁的導航，以及入口頁的分流。導航做成獨立的一串節點，不放進 `MirrorHub`。（#8）
 
-| 畫面 | 辨識方式 | 處理 | 可能的下一個畫面 | 來源 |
-|---|---|---|---|---|
-| 標題畫面 | 模板：`Change Account`、`Clear all caches` 按鈕 | 點畫面中央進入遊戲 | 連線中（`CONNECTING`）、載入畫面、主畫面 | #2、#7 |
-| 主畫面（Window 分頁） | 模板：底部分頁列（Window／Sinners／Drive／Theater／Extract／Dispense） | 點 Drive | Drive | #8 |
-| Drive | 模板：`Mirror Dungeons` 入口按鈕 | 點 Mirror Dungeons | 鏡牢入口頁 | #8 |
-| 鏡牢入口頁：Before Entry | OCR：`Exploring:` 欄位為 `Before Entry`；模板：右下 Enter 按鈕 | 讀 Weekly Bonuses 剩餘格數（全域難度「自動」與「每週獎勵用完就停」要用）；依輪替游標開新局，點 Enter | 進入確認對話框 | #8、#9 |
-| 鏡牢入口頁：暫停中的局 | OCR：`Exploring:` 欄位為 `<季名> - F<N>`，下一行是 `<主題包> [NORMAL]` 或 `[HARD]` | 點 Enter 接續 | Resume 對話框 | #8 |
-| 鏡牢入口頁：Exploration Complete | OCR：`Exploring:` 欄位為 `Exploration Complete`，卡片中央 `Unclaimed Rewards` | 點 Enter，依結算規則處理上局沒領的獎勵（[01](01-architecture.md#結算規則)） | Exploration Reward 視窗 | #8、#19 |
-| 鏡牢入口頁：過期的局（待截圖確認） | 未知 | 依結算規則處理（[01](01-architecture.md#結算規則)） | 未知 | #8、#19 |
-| 進入確認對話框 | OCR：`Will you enter`；模板：Cancel／Enter 按鈕 | 點 Enter | 選隊頁 | #8 |
-| Resume 對話框 | OCR：標題 `Dungeon Progress`，按鈕 `Resume`、`Halt Exploration`、`Cancel` | 讀每層的難度與進度（例如 `Floor 1 [NORMAL] 0/6`）。接續時點 Resume；放棄這局時點 Halt Exploration | 地圖頁或這局停下時的畫面；放棄確認對話框 | #8、#14 |
-| 放棄確認對話框 | OCR：`Forfeit previous exploration progress?` | 點 Confirm | Exploration Reward 視窗 | #8 |
+| 畫面 | 辨識方式 | 處理 | 可能的下一個畫面 | 來源 | 實機截圖 |
+|---|---|---|---|---|---|
+| 標題畫面 | 模板：`Change Account`、`Clear all caches` 按鈕 | 點畫面中央進入遊戲 | 連線中（`CONNECTING`）、載入畫面、主畫面 | #2、#7 | — |
+| 主畫面（Window 分頁） | 模板：底部分頁列（Window／Sinners／Drive／Theater／Extract／Dispense） | 點 Drive | Drive | #8 | `captures/255_final_window.png` |
+| Drive | 模板：`Mirror Dungeons` 入口按鈕 | 點 Mirror Dungeons | 鏡牢入口頁 | #8 | — |
+| 鏡牢入口頁：Before Entry | OCR：`Exploring:` 欄位為 `Before Entry`；模板：右下 Enter 按鈕 | 讀 Weekly Bonuses 剩餘格數（全域難度「自動」與「每週獎勵用完就停」要用）；依輪替游標開新局，點 Enter | 進入確認對話框 | #8、#9 | `captures/00_md_enter_dialog.png`（對話框背後） |
+| 鏡牢入口頁：暫停中的局 | OCR：`Exploring:` 欄位為 `<季名> - F<N>`，下一行是 `<主題包> [NORMAL]` 或 `[HARD]` | 點 Enter 接續 | Resume 對話框 | #8 | — |
+| 鏡牢入口頁：Exploration Complete | OCR：`Exploring:` 欄位為 `Exploration Complete`，卡片中央 `Unclaimed Rewards` | 點 Enter，依結算規則處理上局沒領的獎勵（[01](01-architecture.md#結算規則)） | Exploration Reward 視窗 | #8、#19 | — |
+| 鏡牢入口頁：過期的局（待截圖確認） | 未知 | 依結算規則處理（[01](01-architecture.md#結算規則)） | 未知 | #8、#19 | — |
+| 進入確認對話框 | OCR：`Will you enter`；模板：Cancel／Enter 按鈕 | 點 Enter | 選隊頁 | #8 | `captures/00_md_enter_dialog.png` |
+| Resume 對話框 | OCR：標題 `Dungeon Progress`，按鈕 `Resume`、`Halt Exploration`、`Cancel` | 讀每層的難度與進度（例如 `Floor 1 [NORMAL] 0/6`）。接續時點 Resume；放棄這局時點 Halt Exploration | 地圖頁或這局停下時的畫面；放棄確認對話框 | #8、#14 | — |
+| 放棄確認對話框 | OCR：`Forfeit previous exploration progress?` | 點 Confirm | Exploration Reward 視窗 | #8 | — |
 
 入口頁上的 `Parallel Superposition Mode` 必須保持 OFF，bot 不點 `INFINITY MIRROR`。（#17）
 
 ## 開局
 
-| 畫面 | 辨識方式 | 處理 | 可能的下一個畫面 | 來源 |
-|---|---|---|---|---|
-| 選隊頁 | OCR：左側 `TEAMS` 清單（`TEAMS #1`–`#40`）；模板：右下 Confirm | 選輪替游標指到的隊伍所設定的遊戲內隊伍欄位，點 Confirm（[03](03-decisions.md) 輪替） | 等級警告對話框、星光頁 | #8、#9 |
-| 等級警告對話框 | OCR：`lower than the recommended level`、`Current Avg. Level`、`Recommended Level` | 點 Confirm 繼續 | 星光頁 | #8、#19 |
-| 星光頁（Grace of Stars） | 模板：右側 `Select All Graces`、`Enter`；OCR：右上 `Owned` → `Available` → Cost 三個數字 | 依隊伍的星光方案逐張點 Grace 的等級（基礎／+／++），讀可用星光；買不起時依全域選項停止或跳過（[03](03-decisions.md) 星光）。完成後點 Enter | 星光確認對話框 | #8、#9 |
-| 星光確認對話框 | OCR：標題 `Select Grace of Stars`、`Continue with selected effects?`；模板：`Convert Starlight to Cost` 勾選框 | 依星光方案切換 `Convert Starlight to Cost`，點 Confirm | 初始飾品頁 | #8、#9 |
-| 初始飾品頁 | OCR：`Selected E.G.O Gift`、`Select 0/1`；模板：10 個體系櫃（Burn、Bleed …） | 點隊伍主要體系的櫃子，依序選滿 `Select n/m` 的可選數量，點 Select（[03](03-decisions.md) 初始飾品） | 飾品獲得視窗 | #9、#10、#19 |
-| 初始飾品拒絕確認 | OCR：`Continue without selecting an E.G.O Gift?` | bot 不按 Refuse Gift；誤入時點 Cancel | 初始飾品頁 | #8 |
-| 飾品獲得視窗 | OCR：`E.G.O Gift GET!`；模板：Confirm | 點 Confirm | E.G.O Gift Search 頁、主題包頁、地圖頁、商店 | #8 |
-| E.G.O Gift Search 頁 | OCR：標題 `E.G.O Gift Search`、`Select 0/3`、右上 `Owned` 星光 | v1 一律點 Refuse Gift | 觀測拒絕確認 | #8、#19 |
-| 觀測拒絕確認 | OCR：`Forgo E.G.O Gift Search?` | 點 Confirm | 主題包頁 | #8 |
-| 主題包頁 | OCR：標題 `SELECT FLOOR <N> THEME PACK`、卡片標題列；模板：右上難度切換（`NORMAL ◀ ▶`／`◀ ▶ HARD`）、`Refresh` | 先讀難度並切到這一層該用的難度（遊戲會記住上一次的選擇，地圖頁不顯示難度）。依主題包方案挑主題包，必要時用 Refresh；把選中的卡片往下拉。Pack Search 不使用（[03](03-decisions.md) 難度、主題包） | 載入畫面、地圖頁 | #8、#9、#11 |
+| 畫面 | 辨識方式 | 處理 | 可能的下一個畫面 | 來源 | 實機截圖 |
+|---|---|---|---|---|---|
+| 選隊頁 | OCR：左側 `TEAMS` 清單（`TEAMS #1`–`#40`）；模板：右下 Confirm | 選輪替游標指到的隊伍所設定的遊戲內隊伍欄位，點 Confirm（[03](03-decisions.md) 輪替）。清單一次只顯示約 7 欄，要捲動才看得到後面的欄位。右下的 `Starlight Bonus` 是這支隊伍可用的星光 | 等級警告對話框、星光頁 | #8、#9 | `captures/01_team_picker.png` |
+| 等級警告對話框 | OCR：`lower than the recommended level`、`Current Avg. Level`、`Recommended Level` | 點 Confirm 繼續 | 星光頁 | #8、#19 | `captures/02_after_team_confirm.png` |
+| 星光頁（Grace of Stars） | 模板：右側 `Select All Graces`、`Enter`；OCR：右上 `Owned` → `Available` → Cost 三個數字 | 依隊伍的星光方案逐張點 Grace 的等級，讀可用星光（`Available`，等於選隊頁的 `Starlight Bonus`，不是 `Owned`）；買不起時依全域選項停止或跳過（[03](03-decisions.md) 星光）。完成後點 Enter。10 張卡排成兩列，每張卡右上是基礎價格，底部是 `+`、`++` 兩個按鈕；右側另有 `Enhance All` 的 `+`／`++`，bot 不用。名稱與等級的對應見 [04](04-settings.md#6-星光方案6-組) | 星光確認對話框 | #8、#9 | `captures/03_starlight_page.png` |
+| 星光確認對話框 | OCR：標題 `Select Grace of Stars`、`Continue with selected effects?`；模板：`Convert Starlight to Cost` 勾選框 | 依星光方案切換 `Convert Starlight to Cost`，點 Confirm。不勾選時，沒用掉的星光會加進這局的結算獎勵（對話框文字 `Any unspent Starlight will be added to your Dungeon clear rewards.`） | 初始飾品頁 | #8、#9 | `captures/04_starlight_confirm.png` |
+| 初始飾品頁 | OCR：`Selected E.G.O Gift`、`Select 0/1`；模板：10 個體系櫃（Burn、Bleed …） | 點隊伍主要體系的櫃子，右側面板會列出這個櫃子的 3 個飾品；點飾品，依序選滿 `Select n/m` 的可選數量，點 Select（[03](03-decisions.md) 初始飾品）。畫面一次只顯示 8 個櫃子，最後兩個（Pierce、Blunt）要往下捲才看得到。右上的 `Activate Gift Search` 開關不碰 | 飾品獲得視窗 | #9、#10、#19 | `captures/05_initial_ego_gift.png`、`06_initial_gift_bleed_selected.png`、`07_initial_gift_picked.png` |
+| 初始飾品拒絕確認 | OCR：`Continue without selecting an E.G.O Gift?` | bot 不按 Refuse Gift；誤入時點 Cancel | 初始飾品頁 | #8 | — |
+| 飾品獲得視窗 | OCR：`E.G.O Gift GET!`；模板：Confirm | 點 Confirm。一次拿到多個飾品時，每個飾品各彈一次 | E.G.O Gift Search 頁、主題包頁、地圖頁、商店、飾品選擇頁、獎勵卡頁 | #8 | `captures/08_after_select.png`、`126_boss_gift2_get.png` |
+| E.G.O Gift Search 頁 | OCR：標題 `E.G.O Gift Search`、`Select 0/3`、右上 `Owned` 星光 | v1 一律點 Refuse Gift。這頁花的是持有的星光 | 觀測拒絕確認 | #8、#19 | `captures/09_gift_search_page.png` |
+| 觀測拒絕確認 | OCR：`Forgo E.G.O Gift Search?` | 點 Confirm | 主題包頁 | #8 | `captures/10_gift_search_refuse_dialog.png` |
+| 主題包頁 | OCR：標題 `SELECT FLOOR <N> THEME PACK`、卡片標題列；模板：右上難度切換（`NORMAL ◀ ▶`／`◀ ▶ HARD`）、`Refresh` | 先讀難度並切到這一層該用的難度（遊戲會記住上一次的選擇，地圖頁不顯示難度）。依主題包方案挑主題包，必要時用 Refresh；把選中的卡片往下拉。Pack Search 不使用（[03](03-decisions.md) 難度、主題包）。實機：第 1 層切到 HARD 後，第 2 層起難度箭頭變灰、點了沒反應；Refresh 每層免費一次，用過就變灰。卡片上可能有 `EFFECTIVE` 標章、危險標記、紅色 `!` 標記（第 4 層的三個主題包都有，點了沒反應）；沒看到 NEW 標記。第 5 層沒有 `CLEAR BONUS` 列 | 載入畫面、地圖頁 | #8、#9、#11 | `captures/11_theme_pack_floor1.png`、`12_theme_pack_toggle_hard.png`、`128_f2_tap_difficulty_left.png`、`129_f2_refresh_tapped.png`、`197_f3boss_rewards_pack.png`、`222_f4boss_rw_pack.png` |
 
 主題包頁出現的提示 `Unused Starlight have been added to the Clear Rewards.` 不需要處理。（#8）
 
 ## 地圖
 
-| 畫面 | 辨識方式 | 處理 | 可能的下一個畫面 | 來源 |
-|---|---|---|---|---|
-| 地圖頁 | OCR：左上 `Exploring Floor <N>` 與主題包名稱、右上 Cost；模板：Bus、右上齒輪 | 進入新一層時重設地圖的重試額度。找 Bus，對相鄰一欄的固定格位做模板比對，用節點上的 Cost 交叉確認（Cost 相同的類型不交叉確認，事件用 `?` 圖示分辨），依權重點節點；失敗時走後備順序（[03](03-decisions.md) 尋路）。只有和 Bus 以亮線相連的節點能點，點不可走的節點沒有反應 | 節點選取面板 | #3、#8、#12、#14、#19 |
-| 節點選取面板 | 模板：右側 `Enter` 按鈕；OCR：面板上的節點 Cost | 點 Enter。點空白處會關閉面板 | 戰前編隊頁、事件頁、商店、載入畫面 | #12 |
-| 設定面板 Dungeon Progress | OCR：標題 `Dungeon Progress`、按鈕 `Progress`／`Forfeit`／`Continue`／`To Window`／`Config` | 讀每層難度與進度。L2 恢復時點 To Window；其他情況點 Continue 回地圖。面板上的 Parallel Superposition 開關不碰 | 暫停確認對話框、地圖頁、放棄確認（待截圖確認） | #8、#14、#17 |
-| 暫停確認對話框 | OCR：標題 `Pause Exploration`、`Save your progress and return to the Main Menu?` | 點 Confirm | 主畫面（再經導航回入口頁 Resume） | #14 |
-| 載入畫面 | OCR：`NOW LOADING`；模板：右下 `Combat Tips` | 等待，逾時 90 秒 | 地圖頁、戰鬥、戰前編隊頁 | #14 |
+| 畫面 | 辨識方式 | 處理 | 可能的下一個畫面 | 來源 | 實機截圖 |
+|---|---|---|---|---|---|
+| 地圖頁 | 模板：右上齒輪與右側的圖示欄、Bus；OCR：左上 `Exploring Floor <N>` 與主題包名稱、右上 Cost | 進入新一層時重設地圖的重試額度。找 Bus，對相鄰一欄的固定格位做模板比對，用節點上的 Cost 交叉確認（Cost 相同的類型不交叉確認，事件用 `?` 圖示分辨），依權重點節點；失敗時走後備順序（[03](03-decisions.md) 尋路）。只有和 Bus 以亮線相連的節點能點，點其他節點沒有任何反應。實機：左上的 `Exploring Floor` 標題會被節點蓋住，所以錨點不能只靠它；困難模式約看得到前方兩欄，地圖可自由拖曳；節點與連線的樣式隨主題包改變。底部罪人列顯示每人 HP 數字與 SP，陣亡者頭像變灰、HP 為 `0` | 節點選取面板 | #3、#8、#12、#14、#19 | `captures/24_map_f1_settled.png`、`25_map_tap_unreachable_node.png`、`65_event_node_selected.png`、`200_f4_map.png`、`202_f4ev_stuck.png`、`189_map_dead_sinner.png` |
+| 節點選取面板 | 模板：右側 `Enter` 按鈕；OCR：面板上的節點 Cost | 點 Enter。點空白處會關閉面板。實機：事件節點的面板只有主題包名稱與 Enter，沒有 Cost；商店節點的面板顯示的是下一個 Boss 的獎勵與 Cost，不能拿來交叉確認商店節點。選取節點時底部罪人列的第 7–12 位會變暗 | 戰前編隊頁、事件頁、商店、載入畫面 | #12 | `captures/26_map_node_selected.png`、`131_f2_event_selected.png`、`76_shop_node_selected.png`、`152_focused_node_selected.png` |
+| 設定面板 Dungeon Progress | OCR：標題 `Dungeon Progress`、按鈕 `Progress`／`Forfeit`／`Continue`／`To Window`／`Config` | 讀每層難度與進度。L2 恢復時點 To Window；其他情況點 Continue 回地圖。面板上的 Parallel Superposition 開關不碰 | 暫停確認對話框、地圖頁、放棄探索確認對話框、Progress 頁 | #8、#14、#17 | `captures/31_gear_dungeon_progress.png`、`242_gear_before_forfeit.png` |
+| 暫停確認對話框 | OCR：標題 `Pause Exploration`、`Save your progress and return to the Main Menu?` | 點 Confirm | 主畫面（再經導航回入口頁 Resume） | #14 | — |
+| 放棄探索確認對話框 | OCR：標題 `Pause Exploration`、`Quit exploring the dungeon?` | 標題和暫停確認對話框相同，必須用內文區分。這是從設定面板按 Forfeit 後出現的對話框；按 Confirm 會結束這一局。目前的規則不走這條路，誤入時點 Cancel（見 [03](03-decisions.md#未決)） | Defeat 畫面、地圖頁 | #8 | `captures/243_forfeit_dialog.png` |
+| 載入畫面 | OCR：`NOW LOADING`；模板：右下 `Combat Tips` | 等待，逾時 90 秒 | 地圖頁、戰鬥、戰前編隊頁 | #14 | `captures/64_loading_combat_tips.png`、`240_after_accept_results.png` |
 
 ## 戰鬥
 
-| 畫面 | 辨識方式 | 處理 | 可能的下一個畫面 | 來源 |
-|---|---|---|---|---|
-| 戰前編隊頁 | 模板：`Chain To Battle!`、`Clear Selection`；OCR：`Total Participants <n>/12` | 讀存活人數並記到進商店（治療用）；存活少於隊伍設定的 K 人就停止。讀卡片上的順序標記，和出戰順序方案不符就 Clear Selection，等計數歸零後依序點選，跳過陣亡的罪人，確認每點一次計數加一。點 Chain To Battle! | 載入畫面、戰鬥 | #9、#10、#16 |
-| 戰鬥（等待輸入） | 模板：右下 `Win Rate` 按鈕；OCR：左上 `TURN <n>`、`WAVE <n>/<m>` | 點 Win Rate → 確認開始圓盤（`START`）亮起，最多試 2 次 → 點圓盤 → 3 秒內確認戰鬥動畫或暫停圖示出現。Win Rate 已經生效時再點會取消自動配卡，所以重點前必須先確認狀態。送出 3 次後回合數不變就交給卡住處理 | 戰鬥（演出中）、Victory、DEFEAT | #2、#16 |
-| 戰鬥（演出中） | 模板：右上暫停圖示 | 等待；60 秒內什麼都認不出來就交給卡住處理，每場上限約 20 分鐘 | 戰鬥（等待輸入）、Victory、DEFEAT、戰鬥中對話 | #16 |
-| 戰鬥中對話與事件（待截圖確認） | OCR：`Skip`、`Continue`、`Proceed` 文字；選擇題同事件頁 | 用 OCR 找到文字再點，每個畫面最多 5 次，不盲點畫面中央。選擇沿用事件的通用規則。前提是使用者關掉遊戲設定裡的戰鬥旁白等待 | 戰鬥 | #16 |
-| 戰鬥暫停選單（待截圖確認） | OCR：`Resume` | 點 Resume | 戰鬥 | #16 |
-| Victory | OCR：`VICTORY` 文字 | 看到 `VICTORY` 就算戰鬥結束；Confirm 有出現才點，之後交給 hub。不用 EX-CLEAR 標章判斷勝利。打贏後這場的重打計數歸零。實機上打贏後經過載入畫面直接回到地圖 | 載入畫面、獎勵卡頁、飾品選擇頁、地圖頁 | #16、#19 |
-| DEFEAT 對話框（待截圖確認） | OCR：`Remaining Units: 0/12`；按鈕 `Return to Stage Select`、`Retry Stage`、`Accept results` | 同一場最多 Retry Stage N 次（預設 2）；用完依全域選項停止（預設）或放棄這局。只有放棄這局時才點 `Accept results`，之後依結算規則處理（[01](01-architecture.md#結算規則)） | 戰前編隊頁或戰鬥、停止、Exploration Reward 視窗（待截圖確認） | #16、#19 |
+| 畫面 | 辨識方式 | 處理 | 可能的下一個畫面 | 來源 | 實機截圖 |
+|---|---|---|---|---|---|
+| 戰前編隊頁 | 模板：`Chain To Battle!`、`Clear Selection`；OCR：`Total Participants <n>/<m>` | 讀存活人數並記到進商店（治療用）；存活少於隊伍設定的 K 人就停止。讀卡片上的順序標記，和出戰順序方案不符就 Clear Selection，等計數歸零後依序點選，跳過陣亡的罪人，確認每點一次計數加一。點 Chain To Battle!。實機：`<m>` 是存活人數（12 減陣亡人數，例如 `10/11`）；順序 1–7 標 `SELECTED` 上場，之後最多 5 位標 `BACKUP`（`Backup Deployed <n>/5`）；陣亡者的卡片變灰、沒有順序標記，點了沒反應；上一場的選擇會沿用 | 載入畫面、戰鬥 | #9、#10、#16 | `captures/43_after_enter_node.png`、`50_formation_collapse_details.png`、`206_formation_with_dead_sinner.png`、`207_formation_tap_dead_card.png` |
+| 戰鬥（等待輸入） | 模板：右下 `Win Rate` 按鈕；OCR：左上 `TURN <n>`、`WAVE <n>/<m>` | 點 Win Rate → 確認開始圓盤（`START`）亮起，最多試 2 次 → 點圓盤 → 3 秒內確認戰鬥動畫或暫停圖示出現。Win Rate 已經生效時再點會取消自動配卡，所以重點前必須先確認狀態。送出 3 次後回合數不變就交給卡住處理。實機：Win Rate 按鈕的位置隨技能格數左右移動，圓盤固定在它左下方；圓盤亮不亮要用亮度判斷，不能用 `START` 字樣（見 [07](07-assets-and-testing.md#辨識方法的實機經驗)）。回合開場動畫還在播時點 Win Rate 可能沒有效果。部分戰鬥開場左上先顯示 `ENEMY <n>/<m>`，之後才是 `WAVE` | 戰鬥（演出中）、Victory、DEFEAT | #2、#16 | `captures/52_battle_turn1_ui.png`、`53_battle_winrate_pressed.png`、`56_battle_wait.png`、`182_abno_winrate_tap.png` |
+| 戰鬥（演出中） | 模板：右上暫停圖示 | 等待；60 秒內什麼都認不出來就交給卡住處理，每場上限約 20 分鐘 | 戰鬥（等待輸入）、Victory、DEFEAT、戰鬥中對話 | #16 | `captures/54_battle_start_pressed.png`、`55_battle_midturn.png` |
+| 戰鬥中對話與事件 | 同事件頁（左側敘事面板加右下紅色按鈕、右側 `Choices`），畫面上沒有地圖與戰鬥介面 | 用 OCR 找到文字再點，每個畫面最多 5 次，不盲點畫面中央。選擇沿用事件的通用規則。前提是使用者關掉遊戲設定裡的戰鬥旁白等待。實機：Boss 戰中途會切到這個畫面，罪人列只顯示上場的 7 人；點敘事框推進文字時可能點到戰場上的單位，開出人格詳情面板。戰鬥畫面上方的角色台詞橫幅不需要處理 | 戰鬥 | #16 | `captures/217_f4boss_rewards_stuck.png`、`218_f4boss_ev_choices.png`、`73_after_battle4.png` |
+| 戰鬥暫停選單（待截圖確認） | OCR：`Resume` | 點 Resume | 戰鬥 | #16 | — |
+| Victory | OCR：`VICTORY` 文字 | 看到 `VICTORY` 就算戰鬥結束；Confirm 有出現才點，之後交給 hub。不用 EX-CLEAR 標章判斷勝利。打贏後這場的重打計數歸零。實機：`VICTORY` 不需要輸入，接著是載入畫面（`Combat Tips`），然後回地圖；Focused、異想體戰與 Boss 之後先出現飾品選擇頁或獎勵卡頁 | 載入畫面、獎勵卡頁、飾品選擇頁、地圖頁 | #16、#19 | `captures/63_battle_victory.png`、`64_loading_combat_tips.png` |
+| DEFEAT 對話框 | OCR：`All participating Sinners have been killed.`、`Remaining Units: <n>/12`；選項 `Return to Stage Select`、`Retry Stage`、`Accept results and return to Stage select` | 同一場最多 Retry Stage N 次（預設 2）；用完依全域選項停止（預設）或放棄這局。只有放棄這局時才點 `Accept results`，之後依結算規則處理（[01](01-architecture.md#結算規則)）。實機：`<n>` 是沒上場的存活人數，不一定是 0；三個選項是可選的卡片，先點選項再點 Confirm。`Retry Stage` 從第一波重打，出戰順序不變；`Accept results` 保留陣亡結果，經載入畫面回到地圖（Bus 停在同一個節點），不會進入結算（見 [03](03-decisions.md#未決)） | 戰鬥（Retry）、戰前編隊頁（Return，待截圖確認）、載入畫面 → 地圖頁（Accept） | #16、#19 | `captures/236_finalboss_unknown.png`、`238_defeat_opt_retry_selected.png`、`239_defeat_opt_accept_selected.png`、`241_after_loading.png` |
 
 ## 獎勵與事件
 
-| 畫面 | 辨識方式 | 處理 | 可能的下一個畫面 | 來源 |
-|---|---|---|---|---|
-| 獎勵卡頁（待截圖確認） | 模板：5 種卡（Cost、Cost & Keyword Gift Chance、E.G.O Resource、Random E.G.O Gift、Starlight）；OCR：`Selectable <n>/<m>` | 依隊伍的獎勵卡順序選；比對不到任何類型就選第一張。按 Confirm 前讀 `Selectable n/m`，永遠不按 Cancel（[03](03-decisions.md) 獎勵卡） | 飾品獲得視窗、地圖頁 | #11 |
-| 飾品選擇頁（戰後、事件、Boss 後；待截圖確認） | OCR：飾品名稱、`0/1` 或 `0/2` 計數；模板：體系圖示、`Owned` 標籤 | 依「主要體系 > 其他 > 已擁有」選，計數允許多選時依同一順序繼續選；沒有任何候選時選第一個（[03](03-decisions.md) 飾品） | 飾品獲得視窗、地圖頁 | #10 |
-| 事件頁：選項（待截圖確認） | OCR：問題文字與選項文字 | 先查事件覆寫表（問題文字用模糊比對，依選項文字選）；沒有就用通用規則：「獲得主要體系 E.G.O」> 其他獲得 E.G.O 的選項 > 第一個選項（[03](03-decisions.md) 事件） | 技能判定頁、事件結果頁、飾品選擇頁、戰前編隊頁 | #11 |
-| 事件頁：技能判定（待截圖確認） | OCR：罪人的成功率等級（Very High … Very Low） | 選等級最高的罪人，同等級選最左邊；讀不到就選第 1 位，不盲點 | 事件結果頁 | #11 |
-| 事件頁：結果（待截圖確認） | OCR：`Continue`、`Proceed`、`Skip` 這類文字 | 點該文字 | 事件頁、飾品選擇頁、地圖頁、戰前編隊頁 | #11、#16 |
+| 畫面 | 辨識方式 | 處理 | 可能的下一個畫面 | 來源 | 實機截圖 |
+|---|---|---|---|---|---|
+| 獎勵卡頁 | OCR：標題 `Select Encounter Reward Card`、`Selectable <n>/<m>`；模板：5 種卡（Cost、Cost & Keyword Gift Chance、E.G.O Resource、Random E.G.O Gift、Starlight） | 依隊伍的獎勵卡順序選；比對不到任何類型就選第一張。按 Confirm 前讀 `Selectable n/m`，永遠不按 Cancel（[03](03-decisions.md) 獎勵卡）。實機：卡片置中排列，1–4 張；卡上文字例如 `Gain 100~150 Cost`、`Gain a random Tier 1~2 E.G.O Gift`、`E.G.O Resource +8 for 2 of the least-owned Affinities`、`Gain additional 8~10 Starlight upon clearing the Mirror Dungeon` | 飾品選擇頁、Boss 後的選擇與試煉、地圖頁、獎勵卡放棄確認 | #11 | `captures/115_boss_unknown.png`、`176_f2boss_rewards_card.png`、`197_f3boss_rewards_card.png`、`230_f5abno_rewards_card.png` |
+| 獎勵卡放棄確認 | OCR：`Continue without choosing a reward?` | bot 不按 Cancel；誤入時點這個對話框的 Cancel 回到獎勵卡頁 | 獎勵卡頁 | #11 | `captures/158_reward_card_cancel.png` |
+| 飾品選擇頁（戰後、事件） | OCR：飾品名稱、`Select <n>/<m>`；模板：卡片上的 `Acquire E.G.O Gift` 標籤、`Refuse Gift`、體系圖示、`Owned` 標籤 | 依「主要體系 > 其他 > 已擁有」選，計數允許多選時依同一順序繼續選；沒有任何候選時選第一個（[03](03-decisions.md) 飾品）。實機：只有一張卡時置中顯示，Select 上沒有計數，點卡片前 Select 是灰的 | 飾品獲得視窗 | #10 | `captures/154_focused_unknown.png`、`155_gift_acquire_selected.png` |
+| 事件頁：敘事 | 模板：左側敘事面板、右下紅色按鈕；OCR：按鈕文字（`SKIP`、`Proceed`、`Continue`、`Commence`） | 點該文字。這幾個按鈕都在右下同一個位置，沒有作用時變灰；敘事中途要點敘事框推進文字 | 事件頁：選項、事件頁：技能判定、地圖頁、飾品獲得視窗 | #11、#16 | `captures/132_event_entered.png`、`142_event_after_skip.png`、`146_event_continue.png` |
+| 事件頁：選項 | OCR：右側 `Choices` 面板的問題文字與選項文字 | 先查事件覆寫表（問題文字用模糊比對，依選項文字選）；沒有就用通用規則：「獲得主要體系 E.G.O」> 其他獲得 E.G.O 的選項 > 第一個選項（[03](03-decisions.md) 事件）。實機：選項下方的提示寫出判定與獎勵，例如 `Lust & Pride Advantage check. Pass to gain a Keywordless E.G.O Gift.`；選項多時面板會出現捲軸 | 事件頁：結果、事件頁：技能判定 | #11 | `captures/133_event_skip1.png`、`149_ev2_choices.png` |
+| 事件頁：技能判定 | OCR：`Choose a character to perform the check with:`、`Threshold`；每位罪人頭像上方的成功率等級（Very High … Very Low） | 選等級最高的罪人，同等級選最左邊；讀不到就選第 1 位，不盲點。選好後點 `Commence` | 事件頁：結果 | #11 | `captures/137_event_check_after_tap.png`、`139_event_check_sinner_selected.png`、`141_event_check_result.png` |
+| 事件頁：結果 | OCR：`Result` 標題、`Check Passed` 這類文字、`Continue`／`Proceed`／`SKIP` | 點該文字。獲得的飾品會先在結果面板顯示，回地圖後再彈飾品獲得視窗 | 事件頁、飾品獲得視窗、地圖頁、戰前編隊頁 | #11、#16 | `captures/134_event_choice1.png`、`143_event_next.png` |
 
 ## 商店
 
 商店流程是先治療，再循環「出售 → 購買與刷新 → 合成」，直到跑完一圈都沒有動作或跑滿 10 圈才離開。細節見 [03-decisions.md](03-decisions.md) 商店。（#10、#19）
 
-| 畫面 | 辨識方式 | 處理 | 可能的下一個畫面 | 來源 |
-|---|---|---|---|---|
-| 商店主畫面（待截圖確認） | 模板：兩個刷新鈕、各格的體系圖示；OCR：各格價格、目前 Cost | 依循環處理，最多 10 圈：只買主要體系、點之前先讀價格、買完核對 Cost 有沒有正確扣掉。刷新以層計數，優先用定向刷新，錢不夠時改用普通刷新；所有花費都要保留預留金額 | 治療頁、出售畫面、合成畫面、定向刷新對話框、飾品獲得視窗、地圖頁 | #10 |
-| 治療頁（待截圖確認） | 未定；需確認有沒有 HP、復活與單人治療選項 | 依隊伍的治療方式：不治療／錢 ≥ 100 + 預留時全體治療／有罪人陣亡時復活（預設）。復活也不得花到預留金額 | 商店主畫面 | #10 |
-| 出售畫面（待截圖確認） | 模板：重複飾品標記（`Sale & Fusion-only`）；OCR：飾品名稱 | 只在想買的飾品買不起時出售；只賣無法湊滿 3 個的非主要體系飾品，以及 `Sale & Fusion-only` 的重複飾品 | 商店主畫面 | #10 |
-| 合成畫面（待截圖確認） | 模板：體系選擇、結果預覽 | 非主要體系的飾品每 3 個合成一個，指定主要體系 | 飾品獲得視窗、商店主畫面 | #10 |
-| 定向刷新對話框（待截圖確認） | 模板：體系選項 | 指定主要體系；條件是錢 ≥ 定向刷新費用 + 120 | 商店主畫面 | #10 |
-| Super Shop（困難；待截圖確認） | 同商店主畫面，另加區分 Super Shop 的標記 | 和一般商店同一套流程；規則不依賴格數，每格都從畫面讀價格和體系 | 同商店主畫面 | #17 |
+| 畫面 | 辨識方式 | 處理 | 可能的下一個畫面 | 來源 | 實機截圖 |
+|---|---|---|---|---|---|
+| 商店主畫面 | 模板：`Refresh`、`Keyword Refresh` 兩個刷新鈕、左側 `Enhance Gifts`／`Fuse Gifts`／`Sell Gifts`／`Heal Sinner`／`Team`、右下 `Leave`；OCR：各格價格與名稱、目前 Cost、`Super Shop On Next Floor? <n>%` | 依循環處理，最多 10 圈：只買主要體系、點之前先讀價格、買完核對 Cost 有沒有正確扣掉。刷新以層計數，優先用定向刷新，錢不夠時改用普通刷新；所有花費都要保留預留金額。實機：每列 4 格；刷新費用顯示在按鈕下方；買不起的格子標 `Not Enough Cost`，買過的標 `Purchased`；除了飾品還有 `Replace <罪人>'s Skill` 這類非飾品商品 | 治療頁、出售畫面、合成畫面、定向刷新對話框、購買確認、離開確認 | #10 | `captures/77_after_enter_shop_node.png`、`107_shop_after_refresh.png`、`209_f4shop_entered.png` |
+| 購買確認 | OCR：標題 `Purchase E.G.O Gifts`、Cost 的扣款預覽；模板：Cancel／Purchase | 點 Purchase | 飾品獲得視窗 | #10 | `captures/78_shop_item_tap.png` |
+| 治療頁 | OCR：標題 `Heal Sinners`；三個選項 `Greatly heal a single Sinner`（HP 50% + SP 45）、`Moderately heal every Sinner`（HP 20% + SP 15）、`Revive a single Sinner`，各 100 Cost | 依隊伍的治療方式：不治療／錢 ≥ 100 + 預留時全體治療／有罪人陣亡時復活（預設）。復活也不得花到預留金額。實機：沒有人陣亡時 Revive 是灰的；復活要先點陣亡罪人的頭像，`Select` 才會出現，點活著的罪人沒反應；復活後 HP 全滿、SP 為 0。商店罪人列的頭像間距和事件頁不同 | 商店主畫面 | #10 | `captures/82_shop_heal_page.png`、`191_heal_page_with_dead.png`、`213_revive_selected.png`、`194_revive_result.png`、`109_heal_all_result.png` |
+| 出售畫面 | OCR：標題 `Sell E.G.O Gift`、飾品名稱與售價；模板：重複飾品標記（`Sale & Fusion-only`，實機未見）、Close／Sell | 只在想買的飾品買不起時出售；只賣無法湊滿 3 個的非主要體系飾品，以及 `Sale & Fusion-only` 的重複飾品 | 商店主畫面 | #10 | `captures/88_shop_sell_page.png`、`89_sell_gift_selected.png` |
+| 合成畫面 | OCR：標題 `Fuse E.G.O Gift`、預測列；模板：中央的體系選擇格、周圍的材料格、Close／Fuse | 非主要體系的飾品每 3 個合成一個，指定主要體系。實機：點中央格開 `Fusion - Keyword Selection` 選體系；材料最多 5 格；`Wishmaking` 勾選框要花持有的星光，必須保持不勾；按 Fuse 後還有確認頁 `Fuse the selected E.G.O Gifts?`。合成本身不花 Cost。點飾品出現的說明框會蓋住 Fuse，Close 在容易誤觸的位置 | 飾品獲得視窗、商店主畫面 | #10 | `captures/94_shop_fuse_try2.png`、`95_fuse_center_tap.png`、`173_fuse_confirm.png`、`174_fuse_result.png` |
+| 定向刷新對話框 | OCR：標題 `Shop - Keyword Refresh`、`Spend <n> Cost to Keyword Refresh?`；模板：10 個體系選項、Cancel／Refresh | 指定主要體系；條件是錢 ≥ 定向刷新費用 + 120 | 商店主畫面 | #10 | `captures/79_shop_keyword_refresh_dialog.png`、`80_shop_keyword_bleed_selected.png` |
+| 離開確認 | OCR：`Leave the shop?` | 點 Confirm | 地圖頁 | #10 | `captures/111_shop_leave.png` |
+| Super Shop（困難） | 同商店主畫面，標題改為紅色 `Super Shop` | 和一般商店同一套流程；規則不依賴格數，每格都從畫面讀價格和體系。實機：10 格分兩列，要捲動；有一格 `ID Skill Search` 用星光計價；`Special Catalogue` 會讓獎勵卡多一張 | 同商店主畫面 | #17 | `captures/162_f2shop_entered.png`、`163_supershop_scrolled.png`、`190_f3shop_entered.png` |
 
 ## 困難模式與結算
 
-| 畫面 | 辨識方式 | 處理 | 可能的下一個畫面 | 來源 |
-|---|---|---|---|---|
-| Boss 後的選擇與試煉（困難；待截圖確認） | OCR：選項上的飾品名稱、試煉名稱或等級（讀哪一個等截圖決定） | 每個選項評分 = 飾品分數 − 權重 × 試煉風險，查不到的試煉當最高風險（5）；取最高分，同分選風險較低者（[03](03-decisions.md) 困難模式） | 飾品獲得視窗、主題包頁 | #17 |
-| Exploration Reward 視窗 | OCR：標題 `Exploration Reward`、`Weekly Bonuses <n>/3`、每層結果（例如 `Floor 1 [NORMAL] 0/6`）；模板：三個 ON／OFF 開關、`GiveUpRewards`／`To List`／`Claim` | 依結算規則（[01](01-architecture.md#結算規則)）：讀逐層結果，五層都是 `6/6` 才依每週獎勵設定（不用／普通／困難、每局一次或全用）把對應數量的開關切到 ON，數量和剩餘次數從畫面讀，再點 Claim；Claim 要花的腦啡肽模組不夠就停止並通知。沒達到目標就點 GiveUpRewards。Claim 完成後輪替游標前進 | 入口頁、結束確認（不領獎）、結算後的獎勵畫面（待截圖確認） | #8、#9、#17、#19、ADR 0003 |
-| 結束確認（不領獎） | OCR：`End expedition without claiming rewards?` | 依結算規則放棄獎勵時點確認；其他情況誤入時點 Cancel | 入口頁（待截圖確認）、Exploration Reward 視窗 | #8、#19 |
+| 畫面 | 辨識方式 | 處理 | 可能的下一個畫面 | 來源 | 實機截圖 |
+|---|---|---|---|---|---|
+| Boss 後的選擇與試煉（困難） | 模板：卡片上的 `Acquire E.G.O Gift` 與 `Mounting Trials` 標籤、`Refuse Gift`；OCR：每欄的飾品名稱、試煉名稱（例如 `Defense Level Up`、`Growth I`）、`Select <n>/<m>` | 每個選項評分 = 飾品分數 − 權重 × 試煉風險，試煉以名稱查風險表，查不到的當最高風險（5）；取最高分，同分選風險較低者（[03](03-decisions.md) 困難模式）。實機：4 欄，每欄上半是飾品、下半是試煉，試煉旁有紅色 `Enemy Level Up +1`／`+2` 標記；計數是 `Select 0/2`，選一欄就同時拿到飾品和試煉 | 飾品獲得視窗 → 下一層的主題包頁 | #17 | `captures/122_boss_gift_trials_page.png`、`124_boss_gift_pick2.png`、`176_f2boss_rewards_gift.png`、`127_after_boss_gifts.png` |
+| Defeat 畫面 | OCR：`Defeat`；模板：右下 Confirm | 點 Confirm | Exploration Complete 摘要 | #8 | `captures/244_after_forfeit_confirm.png` |
+| Exploration Complete 摘要 | OCR：`Exploration Complete`、逐層結果（例如 `Floor 5 [HARD] 5/6`）、`Total Progress`；模板：右下 `Claim Rewards` | 點 Claim Rewards。摘要有 6 頁，不用翻頁 | Exploration Reward 視窗 | #8、#19 | `captures/245_after_defeat_confirm.png`、`246_exploration_complete_p6.png` |
+| Exploration Reward 視窗 | OCR：標題 `Exploration Reward`、`Weekly Bonuses <n>/3`、這局的結果（例如 `Floor 5 [HARD] 5/6`）；模板：三個 ON／OFF 開關、`GiveUpRewards`／`To Window`／`Claim` | 依結算規則（[01](01-architecture.md#結算規則)）：讀結果，五層都是 `6/6` 才依每週獎勵設定（不用／普通／困難、每局一次或全用）把對應數量的開關切到 ON，數量和剩餘次數從畫面讀，再點 Claim；Claim 要花的腦啡肽模組不夠就停止並通知。沒達到目標就點 GiveUpRewards。Claim 完成後輪替游標前進。bot 不點 To Window。實機：Claim 按鈕上標示花 5 個模組（`-5`）；視窗只顯示最後到達的那一層，逐層結果要在背後的摘要讀 | 入口頁、結束確認（不領獎）、移往 Window 確認、結算後的獎勵畫面（待截圖確認） | #8、#9、#17、#19、ADR 0003 | `captures/252_exploration_reward_window.png` |
+| 移往 Window 確認 | OCR：`Would you like to move to the Window?` | 誤入時點 Cancel。按 Confirm 會回主畫面，獎勵保留到下次進鏡牢選單時再彈出 | Exploration Reward 視窗、主畫面 | #8 | `captures/253_after_to_window.png` |
+| 結束確認（不領獎） | OCR：`End expedition without claiming rewards?` | 依結算規則放棄獎勵時點確認；其他情況誤入時點 Cancel | 入口頁（待截圖確認）、Exploration Reward 視窗 | #8、#19 | — |
 
 輪替游標前進的理由見 [ADR 0003](../adr/0003-screen-is-truth-state-file-only-rotation-cursor.md)。
 
 ## 全域彈窗
 
-全域彈窗排在 hub `next` 的最前面，各子流程也引用同一組節點。（#8）
+全域彈窗排在 hub `next` 的最前面，各子流程也引用同一組節點。困難鏡牢那一局沒有遇到任何全域彈窗。（#8）
 
-| 畫面 | 辨識方式 | 處理 | 可能的下一個畫面 | 來源 |
-|---|---|---|---|---|
-| 連線中 | OCR：`CONNECTING` | 等待 | 前一個畫面、Retry 彈窗 | #7、#8 |
-| Retry 彈窗（待截圖確認） | OCR：`Retry` 按鈕文字 | 點 Retry | 連線中、前一個畫面 | #8 |
-| 教學提示（待截圖確認） | 模板：關閉按鈕 | 關閉 | 前一個畫面 | #8 |
-| 每週重置通知（待截圖確認） | OCR：通知文字 | 關閉，當成一般全域彈窗 | 前一個畫面、主畫面 | #8、#14 |
-| 無限鏡牢彈窗（待截圖確認） | 模板：彈窗的關閉按鈕 | 關閉，不開啟無限鏡牢 | 前一個畫面 | #8、#17 |
-| 升級彈窗（待截圖確認） | OCR：升級文字；模板：關閉或 Confirm | 關閉 | 前一個畫面 | #16 |
-| 維護公告（待截圖確認） | OCR：公告文字 | 直接停止，保存證據並發 webhook | 停止 | #14 |
+| 畫面 | 辨識方式 | 處理 | 可能的下一個畫面 | 來源 | 實機截圖 |
+|---|---|---|---|---|---|
+| 連線中 | OCR：`CONNECTING` | 等待 | 前一個畫面、Retry 彈窗 | #7、#8 | — |
+| Retry 彈窗（待截圖確認） | OCR：`Retry` 按鈕文字 | 點 Retry | 連線中、前一個畫面 | #8 | — |
+| 教學提示（待截圖確認） | 模板：關閉按鈕 | 關閉 | 前一個畫面 | #8 | — |
+| 每週重置通知（待截圖確認） | OCR：通知文字 | 關閉，當成一般全域彈窗 | 前一個畫面、主畫面 | #8、#14 | — |
+| 無限鏡牢彈窗（待截圖確認） | 模板：彈窗的關閉按鈕 | 關閉，不開啟無限鏡牢 | 前一個畫面 | #8、#17 | — |
+| 升級彈窗（待截圖確認） | OCR：升級文字；模板：關閉或 Confirm | 關閉 | 前一個畫面 | #16 | — |
+| 維護公告（待截圖確認） | OCR：公告文字 | 直接停止，保存證據並發 webhook | 停止 | #14 | — |
 
 ## 資訊面板（誤觸才會進入）
 
 以下面板不在流程裡，是點錯位置時才會出現。看到時關閉並回到前一個畫面，屬於 L1 恢復（彈窗與返回）。（#14）
 
-| 畫面 | 從哪裡進入 | 關閉方式 |
-|---|---|---|
-| 主題包詳情（`Effective Affinities`） | 主題包卡片上的放大鏡 | Confirm |
-| Featured Theme Packs 清單 | 主題包頁或地圖頁右側按鈕 | Confirm |
-| Active Effects（Trials／Grace of Stars／Choice Effects／Adversity 分頁） | 主題包頁或地圖頁右側 `?` | Confirm |
-| 隊伍配置檢視（12 張人格卡） | 主題包頁或地圖頁右側罪人按鈕 | 返回 |
-| E.G.O Gifts Owned／E.G.O Gifts（Owned、Clear Rewards、Current Theme Pack-Exclusive、Featured 分頁） | 主題包頁或地圖頁左上飾品欄 | Confirm |
-| 教學頁（鏡牢說明、`Creating your Team`） | 地圖頁、入口頁、選隊頁、編隊頁的 `i` | 返回 |
-| Progress（`Exploring` 進度頁） | Dungeon Progress 面板的 Progress | Close（直接回到地圖） |
+| 畫面 | 從哪裡進入 | 關閉方式 | 實機截圖 |
+|---|---|---|---|
+| 主題包詳情（`Effective Affinities`） | 主題包卡片上的放大鏡 | Confirm | `captures/13_theme_pack_magnifier_detail.png` |
+| Featured Theme Packs 清單 | 主題包頁或地圖頁右側按鈕 | Confirm | `captures/21_pack_list_button.png` |
+| Active Effects（Trials／Grace of Stars／Choice Effects／Adversity 分頁） | 主題包頁、地圖頁或商店右側 `?` | Confirm | `captures/16_theme_pack_help.png`、`108_shop_help.png` |
+| 隊伍配置檢視（12 張人格卡） | 主題包頁或地圖頁右側罪人按鈕 | 返回 | `captures/18_sinner_button_panel.png` |
+| E.G.O Gifts Owned／E.G.O Gifts（Owned、Clear Rewards、Current Theme Pack-Exclusive、Featured 分頁） | 主題包頁或地圖頁左上飾品欄 | Confirm | `captures/20_ego_gift_inventory.png`、`37_map_topleft_gift_panel.png` |
+| 教學頁（鏡牢說明、`Creating your Team`） | 地圖頁、入口頁、選隊頁、編隊頁的 `i` | 返回 | `captures/28_map_info_i.png`、`47_formation_info_i.png` |
+| Progress（`Exploring` 進度頁） | Dungeon Progress 面板的 Progress | Close（直接回到地圖） | `captures/32_gear_progress_view.png` |
+| Encounter Reward Cards Guide | 獎勵卡頁右上 | Confirm | `captures/116_reward_card_guide.png` |
+| 人格詳情（戰鬥中） | 戰鬥中點到單位 | 點面板外 | `captures/219_battle_sinner_detail_panel.png`、`220_after_close_detail.png` |
+| 商店子頁：`Enhance E.G.O Gift`、`Team`、`Replace <罪人>'s Skill`、`ID Skill Search` 的選人模式、`Fusion Recipes`、`Fusion Guide` | 商店主畫面或合成畫面的對應按鈕 | Close、返回、Cancel、Return 或 Confirm（依頁面） | `captures/101_shop_enhance_page.png`、`104_shop_team_page.png`、`106_shop_replace_skill.png`、`165_supershop_id_skill_search.png`、`98_fuse_recipes.png`、`99_fusion_guide.png` |
 
 ## 未決
 
-- **初始飾品頁的 `Activate Gift Search` 開關**：關掉後是否就不會出現 E.G.O Gift Search 頁，未確認。v1 的處理已定案為一律 Refuse Gift。（#8、#19）
-- **Dungeon Progress 面板的 Forfeit**：從設定面板放棄時的確認畫面沒有截圖。（#8）
+- **初始飾品頁的 `Activate Gift Search` 開關**：教學頁說明這個開關切換 E.G.O Gift Search 功能（`captures/29_help_page_11.png`）；開著時會出現 E.G.O Gift Search 頁（`captures/09_gift_search_page.png`）。關掉後是否就跳過那一頁，沒有實測。v1 的處理已定案為一律 Refuse Gift，不碰開關。（#8、#19）
+- **DEFEAT 對話框的 `Return to Stage Select`**：之後出現哪個畫面沒有實測。`Accept results` 不會結束這局，和放棄這局的規則衝突，見 [03-decisions.md](03-decisions.md#未決)。（#16）

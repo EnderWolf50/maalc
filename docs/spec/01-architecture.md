@@ -20,7 +20,7 @@
 - `MirrorHub` 是鏡牢流程的分派節點。每種鏡牢畫面都必須列在它的 `next` 裡，並標上 `[JumpBack]`；每個畫面處理完就回到 hub，重新判斷畫面。（#8）
 - `next` 的順序就是優先權。全域彈窗必須排在最前面，各子流程也引用同一組全域彈窗節點。（#8）
 - 點下地圖節點之後出現什麼畫面，由 `MirrorHub` 依畫面判斷，不依預期的節點類型走分支；兩者不符時只記錄。（#12）
-- 看到 `VICTORY` 就算戰鬥結束；Confirm 有出現才按，之後的畫面交給 `MirrorHub`。實機上打贏後會經過載入畫面直接回到地圖。（#16、#19）
+- 看到 `VICTORY` 就算戰鬥結束；Confirm 有出現才按，之後的畫面交給 `MirrorHub`。實機：`VICTORY` → 載入畫面（`Combat Tips`）→ 地圖頁；Focused、異想體戰與 Boss 之後先出現飾品選擇頁或獎勵卡頁。（#16、#19；實機：captures/63_battle_victory.png、captures/64_loading_combat_tips.png）
 - `MirrorHub` 的 `timeout` 為 60 秒，逾時經 `on_error` 交給卡住處理；載入畫面另給 90 秒。`on_error` 路徑裡 `[JumpBack]` 不生效，恢復後必須明確回到 `MirrorHub`。細節見 [06-recovery.md](06-recovery.md)。（#14）
 
 ### 全域彈窗
@@ -81,8 +81,8 @@
 | 選隊頁 | 標題 `TEAMS #N` | 確認用的是哪個遊戲內隊伍欄位 | #8 |
 | 主題包頁 | `SELECT FLOOR N THEME PACK`、右上角的本層難度（遊戲會記住上次的選擇） | 讀取並設定本層難度、挑主題包 | #8 |
 | 地圖頁 | `Exploring Floor N`、主題包名稱、身上的飾品；不顯示難度 | 尋路、確認層數 | #8 |
-| 戰前編隊頁 | 出戰順序標記、存活人數（例如 `11/12`） | 重選出戰順序、治療判斷、存活下限 | #9、#10、#16 |
-| 結算視窗（Exploration Reward） | `Weekly Bonuses n/3` 與開關、逐層結果 | 依每週獎勵設定切開關 | #8、#9、#17 |
+| 戰前編隊頁 | 出戰順序標記、存活人數（`Total Participants <n>/<m>` 的 `<m>`，例如 `10/11` 表示 11 人存活） | 重選出戰順序、治療判斷、存活下限 | #9、#10、#16 |
+| 結算視窗（Exploration Reward） | `Weekly Bonuses n/3` 與開關、最後到達的一層；逐層結果在背後的 Exploration Complete 摘要 | 依每週獎勵設定切開關 | #8、#9、#17 |
 
 地圖頁不顯示難度，所以本層難度只能在主題包頁或 `Dungeon Progress` 讀取。（#8）
 
@@ -103,7 +103,7 @@
       - **事件**：事件覆寫表有列出就照表，否則用通用規則。（#11）
       - **商店**：先治療，再循環「出售 → 購買與刷新 → 合成」，直到一整圈沒有動作或跑滿 10 圈。（#10、#19）
    4. **Boss**：Boss 只在它是唯一可走的節點時才走；每層 Boss 前一定有一家商店。（#12）
-   5. **困難模式的 Boss 後選擇**：依「飾品分數 − 權重 × 試煉風險」評分選擇；Super Shop 和一般商店同一套流程。（#17）
+   5. **困難模式的 Boss 後選擇**：依「飾品分數 − 權重 × 試煉風險」評分選擇；Super Shop 和一般商店同一套流程。（#17）實機：Boss 打完先出獎勵卡頁，再出 4 欄「飾品＋試煉」的選擇頁（`Select 0/2`），選完直接進入下一層的主題包頁，所有罪人 HP 回滿。（實機：captures/115_boss_unknown.png、captures/122_boss_gift_trials_page.png、captures/127_after_boss_gifts.png）
    6. 進入下一層，回到第 6.1 步。
 7. **結算（Exploration Reward）**：依下面的[結算規則](#結算規則)處理。（#9、#17、#19）
 8. **領到獎勵**：Claim 完成後，輪替游標前進到下一支隊伍，寫一行 `runs.jsonl`，回到入口頁開下一局。（#8、#14）
@@ -112,7 +112,7 @@
 
 ### 結算規則
 
-結算前必須先判斷這一局有沒有達到目標。目標是五層全部通過（每層 `6/6`），從 Exploration Reward 視窗的逐層結果讀。（#8、#19）
+結算前必須先判斷這一局有沒有達到目標。目標是五層全部通過（每層 `6/6`），從 Exploration Reward 視窗的逐層結果讀。（#8、#19）實機：Exploration Reward 視窗只顯示最後到達的一層（例如 `Floor 5 [HARD] 5/6`），逐層的 `n/6` 在它背後的 Exploration Complete 摘要。（實機：captures/252_exploration_reward_window.png、captures/245_after_defeat_confirm.png）
 
 - 達到目標：依每週獎勵設定把對應數量的開關切到 ON，再按 Claim。開關數量與剩餘次數從畫面讀。Claim 要花的腦啡肽模組不夠時，必須停止並通知（[06-recovery.md](06-recovery.md)）。（#9、#17、#19）
 - 沒達到目標：按 GiveUpRewards 放棄獎勵，不花模組。（#19）

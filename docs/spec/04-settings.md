@@ -72,6 +72,23 @@
 | 剩下的星光換成 Cost | checkbox | 開／關 | 未決 | #9 |
 
 - 加成依遊戲星光頁的順序編號，標籤用遊戲的英文名稱。（#9、#18）
+
+| 編號 | 加成（英文名稱） | 基礎價格（星光） |
+|---|---|---|
+| 1 | `Star of the Beginning` | 10 |
+| 2 | `Cumulating Starcloud` | 10 |
+| 3 | `Interstellar Travel` | 20 |
+| 4 | `Star-shower` | 20 |
+| 5 | `Binary Star-shop` | 30 |
+| 6 | `Moon Star-shop` | 30 |
+| 7 | `Favor of the Nebulae` | 40 |
+| 8 | `Starlight Guidance` | 40 |
+| 9 | `Chance Comet` | 50 |
+| 10 | `Perfected Possibility` | 60 |
+
+- 編號依星光頁上排左到右、再下排左到右。名稱與基礎價格是 Mirror of Names and Spiders 這一季的實機畫面（實機：captures/03_starlight_page.png）。
+- 「基礎」是卡片本身的效果，價格標在卡片右上；「+」「++」對應卡片底部的 `+`、`++` 兩個按鈕。點卡片本身是否就選了基礎等級、「+」「++」各要多少星光，沒有實測。（實機：captures/03_starlight_page.png）
+- 可用的星光是星光頁右上的 `Available`，等於選隊頁該隊的 `Starlight Bonus`，不是持有的 `Owned`。「剩下的星光換成 Cost」對應星光確認對話框的 `Convert Starlight to Cost`；不換時，剩下的星光加進這局的結算獎勵。（實機：captures/01_team_picker.png、captures/04_starlight_confirm.png）
 - 依優先順位由小到大購買。（#9、#19）
 - 買不起時依全域選項「星光買不起時」處理。（#9）
 
@@ -132,7 +149,7 @@
 
 1. 全域選項「每週獎勵用完就停」的預設值；「跑幾局」的 0 是否代表不限。
 2. 隊伍欄位的預設值：啟用（例如只啟用隊伍 1）、遊戲內隊伍欄位、主要體系。出戰順序方案與星光方案各組的預設內容。
-3. 星光加成 1–10 的英文名稱，以及「基礎／+／++」在遊戲中的對應，等實機截圖確認。
+3. 星光頁上點卡片本身是否就選了「基礎」等級，以及「+」「++」各要多少星光，等實機確認。名稱與按鈕位置已確認（見第 6 節）。
 4. 資料檔的主題包方案少於 6 組時 Agent 怎麼處理（任務開始時報錯，或退回方案 1）。
 5. 全域選項（難度、跑幾局、webhook 等）與 10 支隊伍要放在 `global_option` 還是鏡牢任務的 option；ADR 0004 只定了方案放 `global_option`。
 6. 任務開始時檢查的完整清單：除了重複罪人與沒有啟用的隊伍，是否也檢查獎勵卡順位重複、星光優先順位重複、兩支啟用隊伍用同一個遊戲內隊伍欄位等。

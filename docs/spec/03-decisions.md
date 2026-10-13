@@ -46,6 +46,7 @@
 - 只要有一層是 HARD，這一局就算困難局；每週獎勵與「自動」難度都照這個判斷。遊戲規定某一層進入困難後就不能切回普通，這條規則不會要求切回普通。（#9、#19）
 - 難度是逐層在主題包頁設定的。遊戲會記住上一次選的難度，所以每一層進主題包頁時，Agent 必須先讀出目前的難度，和本層應有的難度不同就切換，確認切換成功後才選主題包。不得假設預設值。（#8）
 - 地圖頁不顯示難度。接續暫停中的局時，從入口頁（`… [NORMAL]`）或設定面板、Resume 對話框的 `Dungeon Progress`（例如 `Floor 1 [NORMAL] 0/6`）讀出各層難度。（#8，[ADR 0003](../adr/0003-screen-is-truth-state-file-only-rotation-cursor.md)）
+- 實機：第 1 層選了 HARD 之後，第 2 層起主題包頁的難度箭頭變灰、點了沒反應。普通局到第 N 層才切到 HARD 的情形沒有實測，見[未決](#未決)。（實機：captures/128_f2_tap_difficulty_left.png）
 
 ## 3. 出戰順序與戰前編隊
 
@@ -59,10 +60,13 @@
 - 有罪人陣亡時，照方案順序重選並跳過陣亡的罪人。（#16）
 - 每次在戰前編隊頁讀出的存活人數要記在 Agent 記憶體，供商店的治療判斷使用（第 13 節）。（#10）
 - 存活少於 K 人就停止：每隊一個數字，預設 0（不檢查）。有些隊伍需要罪人陣亡，所以預設不檢查。（#16）
+- 實機：`Total Participants <n>/<m>` 的 `<m>` 就是存活人數（12 減陣亡人數）；陣亡者的卡片變灰、沒有順序標記，點了沒反應。順序 1–7 上場（`SELECTED`），之後最多 5 位是 `BACKUP`。（實機：captures/206_formation_with_dead_sinner.png、captures/207_formation_tap_dead_card.png、captures/49_formation_tap_unselected_card.png）
 
 ## 4. 星光
 
 **輸入**：每隊引用的星光方案（6 組之一，全域設定）；全域「買不起時」選項；星光頁上各加成的價格與剩餘星光。（#9）
+
+10 個加成的名稱與價格見 [04-settings.md](04-settings.md#6-星光方案6-組)。
 
 **星光方案的內容**（#9）
 
@@ -100,6 +104,7 @@
 - 只有畫面上全部是避開時才用免費刷新。刷新後仍然全部是避開，就選最左邊的一個，絕不停在這頁。（#11、#19）
 - 選主題包時要把卡片往下拉才能選定。（#8）
 - 選主題包之前必須先依第 2 節設定好本層難度。（#8）
+- 實機：免費刷新每層一次，用過按鈕就變灰。這一局沒有看到 NEW 標記；第 4 層的主題包左上有紅色 `!` 標記（推測是沒打過的主題包），標題照常可讀。第 5 層的主題包沒有 `CLEAR BONUS` 列。困難局打完 Boss 後直接進入下一層的主題包頁，中間沒有換層畫面。（實機：captures/129_f2_refresh_tapped.png、captures/197_f3boss_rewards_pack.png、captures/222_f4boss_rw_pack.png、captures/127_after_boss_gifts.png）
 
 ## 7. 地圖選路
 
@@ -122,6 +127,8 @@
 
 普通模式下事件與普通戰鬥的 Cost 都是 75，這兩種只能靠模板區分。權重與 Cost 放在資料檔（[05-game-data.md](05-game-data.md)）。（#12、#19）
 
+上表的 Cost 是資料檔的預設值。困難鏡牢實機看到的 Cost 和它不一致，列在 [05-game-data.md](05-game-data.md#6-cost-對照表與商店數字)；資料檔要不要改見[未決](#未決)。
+
 **路線**（#12）
 
 - 只看相鄰一欄，選權重最低的節點。
@@ -129,6 +136,7 @@
 - 同權重時，選下一欄可走路線最多的節點；節點連線辨識不出來時，改成中間列優先，再來是上列。
 - 每一步都重新辨識，不保存路線。
 - 困難模式只看得到兩欄，權重相同，只把 Risky 改為 8，排在其他可辨識節點之後、無法辨識（9）之前。（#12、#19）
+- 實機：只有和 Bus 以亮線相連的節點能進入，點其他節點（包括斜對角沒有連線的節點與還不能走的 Boss）沒有任何反應。商店節點的選取面板顯示的是下一個 Boss 的 Cost。（實機：captures/25_map_tap_unreachable_node.png、captures/65_event_node_selected.png、captures/75_map_tap_boss_unreachable.png、captures/76_shop_node_selected.png）
 - 點節點 → 等 Enter → 點 Enter。之後出現什麼畫面由 `MirrorHub` 判斷，不依預期的節點類型分支；兩者不符時只記錄下來。（[ADR 0002](../adr/0002-pipeline-hub-and-agent-decisions.md)）
 
 **辨識失敗時的後備順序**（#12）
@@ -151,11 +159,11 @@
 **規則**（#16）
 
 - 只用觸控，每個動作都要確認結果。
-  1. 點勝率 → 確認開始圓盤亮起，最多試 2 次。
+  1. 點勝率 → 確認開始圓盤亮起，最多試 2 次。勝率按鈕的位置隨技能格數移動，圓盤亮起要用亮度判斷，見 [07-assets-and-testing.md](07-assets-and-testing.md#辨識方法的實機經驗)。
   2. 點圓盤 → 3 秒內確認出現戰鬥動畫或暫停圖示。
 - 送出 3 次後回合數都沒變，或 60 秒內什麼都認不出來，交給 L1 → L2 → L3（[06-recovery.md](06-recovery.md)）。（#16、#19）
 - 每場戰鬥上限約 20 分鐘，超過就直接走 L2。
-- 勝利以 `VICTORY` 文字判斷，不用 EX-CLEAR 標章。看到 `VICTORY` 就算戰鬥結束；Confirm 有出現才按，之後的畫面交給 `MirrorHub`。實機上打贏後會經過載入畫面直接回到地圖。（#16、#19）
+- 勝利以 `VICTORY` 文字判斷，不用 EX-CLEAR 標章。看到 `VICTORY` 就算戰鬥結束；Confirm 有出現才按，之後的畫面交給 `MirrorHub`。實機：`VICTORY` 不需要輸入，之後是載入畫面（`Combat Tips`），再回到地圖；Focused、異想體戰與 Boss 之後先出現飾品選擇頁或獎勵卡頁。（#16、#19；實機：captures/63_battle_victory.png、captures/64_loading_combat_tips.png）
 - 升級彈窗屬於全域彈窗。
 - 前提：使用者必須在遊戲設定裡關掉戰鬥中的旁白等待。
 
@@ -163,10 +171,11 @@
 
 **全滅**（#16）
 
-- 辨識：DEFEAT 對話框，顯示 `Remaining Units: 0/12`，選項有 `Return to Stage Select`、`Retry Stage`、`Accept results`。
+- 辨識：DEFEAT 對話框，顯示 `All participating Sinners have been killed.` 與 `Remaining Units: <n>/12`，選項有 `Return to Stage Select`、`Retry Stage`、`Accept results and return to Stage select`。實機：`<n>` 是沒上場的存活人數，不一定是 0；選項要先點選再按 Confirm。（實機：captures/236_finalboss_unknown.png）
 - 按 `Retry Stage` 重打。同一場最多重打 N 次（全域，預設 2）。計數以每場遭遇戰為單位，打贏就歸零。
 - 重打次數用完後依全域選項處理：停止（預設）或放棄這局。停止時保存證據。
 - 只有重打次數用完、而全域選項為「放棄這局」時，才按 `Accept results`，之後依第 14 節的結算規則處理。其他情況不得按 `Accept results`。（#16、#19）
+- 實機：`Retry Stage` 從第一波重打，出戰順序不變。`Accept results` 只保留陣亡結果，經載入畫面回到地圖，不會結束這局也不會進結算；實際結束這局要從設定面板按 Forfeit（`Quit exploring the dungeon?` → Defeat → Exploration Complete → Exploration Reward）。這和上一條規則衝突，見[未決](#未決)。（實機：captures/240_after_accept_results.png、captures/241_after_loading.png、captures/243_forfeit_dialog.png、captures/244_after_forfeit_confirm.png、captures/245_after_defeat_confirm.png）
 
 **陣亡**（#16）
 
@@ -182,11 +191,12 @@
 - 先查事件覆寫表：格式是「問題文字 → 選項文字」。問題文字用模糊比對，比對到就選表上指定文字的選項。表一開始是空的，依記錄逐步補充。（#11、#19）
 - 沒列在表上的事件照通用規則：「獲得主要體系 E.G.O」> 其他獲得 E.G.O 的選項 > 第一個選項。
 - 技能判定：選成功率等級最高的罪人（Very High > … > Very Low），同等級選最左邊；讀不到就選第 1 位，不盲點。
+- 實機：選項下方的提示寫出判定與獎勵的體系，例如 `Lust & Pride Advantage check. Pass to gain a Keywordless E.G.O Gift.`；成功率等級顯示在每位罪人頭像上方。（實機：captures/133_event_skip1.png、captures/137_event_check_after_tap.png）
 
 **戰鬥中的事件與對話**（#16）
 
 - 暫停選單按 Resume。
-- 戰鬥中出現的選擇沿用地圖事件的規則。
+- 戰鬥中出現的選擇沿用地圖事件的規則。實機：Boss 戰中途的劇情用的是事件頁，畫面上沒有地圖與戰鬥介面，罪人列只顯示上場的 7 人。（實機：captures/217_f4boss_rewards_stuck.png、captures/218_f4boss_ev_choices.png）
 - Skip、Continue、Proceed 這類文字用 OCR 辨識後點擊，每個畫面最多 5 次；不盲點畫面中央。（#16、#19）
 - 認不出來的畫面超過 60 秒，交給卡住處理（[06-recovery.md](06-recovery.md)）。（#16、#19）
 
@@ -201,6 +211,7 @@
 - 比對不到任何類型時選第一張。
 - 按 Confirm 前先讀 `Selectable n/m`，確認已選滿；永遠不按 Cancel。
 - 張數：第 1、2 層每次 2 張，第 3 層起 3 張。普通最高到 V 階，困難最高到 VII 階。Special Catalogue、Tomorrow's Fortune、Star-shower、Binary Star-shop 會改變卡的效果，但不是新的卡種，仍依類型比對。
+- 實機：困難局看到 1–4 張。第 1、2 層 2 張，第 3 層起 3 張；買了 `Special Catalogue`（`Number of Encounter Reward Card Choices +1`）後每次多 1 張。Focused 與異想體戰之後的順序是飾品選擇頁 → 飾品獲得視窗 → 獎勵卡頁；Boss 之後先出現獎勵卡頁。按 Cancel 會問 `Continue without choosing a reward?`。（實機：captures/115_boss_unknown.png、captures/176_f2boss_rewards_card.png、captures/197_f3boss_rewards_card.png、captures/157_after_focused.png、captures/158_reward_card_cancel.png）
 
 ## 12. 選飾品、Boss 後的困難選擇與試煉
 
@@ -209,14 +220,16 @@
 - 依「主要體系 > 其他 > 已擁有」挑選。
 - 還能多選時（例如 `0/2`），依同樣順序繼續挑。
 - 沒有任何候選（全部都已擁有或讀不出體系）時，選第一個。（#10、#19）
+- 實機：只有一張卡時，Select 上沒有計數。第 3 層的異想體戰節點標了飾品，打完卻沒有出現飾品選擇頁。（實機：captures/154_focused_unknown.png、captures/183_f3abno_map.png）
 
 **Boss 後的選擇與試煉**（困難模式，#17）
 
 - 困難模式的 Boss 後選項一定附帶試煉，所以每個選項都要評分：選項分數 = 飾品分數 − 權重 × 試煉風險。
   - 飾品分數：沿用選飾品的順序，主要體系 3、其他 2、已擁有 0。
-  - 試煉風險：0–5。從選項上 OCR 讀出試煉名稱或等級，查資料檔的試煉風險表（開發者每季更新）；查不到就當作最高風險 5。
+  - 試煉風險：0–5。從選項上 OCR 讀出試煉名稱（例如 `Defense Level Up`、`Growth I`），查資料檔的試煉風險表（開發者每季更新）；查不到就當作最高風險 5。不用等級：每個試煉旁的 `Enemy Level Up +1`／`+2` 只有兩種值，分不出試煉。（#17；實機：captures/122_boss_gift_trials_page.png、captures/176_f2boss_rewards_gift.png）
   - 權重：每隊一個下拉選單（低／中／高），預設「高」；數值為低 0.5、中 1、高 2。
 - 分數最高的選項勝出；同分時選試煉風險較低的。
+- 實機：頁面有 4 欄，每欄上半是飾品、下半是 `Mounting Trials`；計數是 `Select 0/2`，選一欄就同時拿到飾品和試煉。選完後每個飾品各彈一次飾品獲得視窗，然後直接進入下一層的主題包頁。要選幾欄見[未決](#未決)。（實機：captures/122_boss_gift_trials_page.png、captures/124_boss_gift_pick2.png、captures/127_after_boss_gifts.png）
 - 以上數值是初始值，等截圖確認後再調整。（#17、#19）
 
 ## 13. 商店
@@ -238,7 +251,9 @@
 | 全體治療 | Cost ≥ 100 + 預留金額時全體治療 |
 | 有罪人陣亡時才治療（預設） | 依戰前編隊頁記下的存活人數（例如 `11/12`），有人陣亡就用「復活」 |
 
-每到新的一層，罪人會自動復活並回滿，所以商店治療只對本層的 Boss 戰有幫助。存活門檻 K > 0 的隊伍應設為「不治療」。
+每到新的一層，罪人會自動復活並回滿，所以商店治療只對本層的 Boss 戰有幫助。存活門檻 K > 0 的隊伍應設為「不治療」。實機：每層 Boss 打完後所有罪人 HP 全滿；層內的 HP 與 SP 會延續到下一個節點。（實機：captures/130_f2_map.png、captures/200_f4_map.png、captures/223_f5_map.png、captures/187_map_sinner_bar_damaged.png）
+
+實機的治療頁有三個選項，各 100 Cost：單人大量治療（HP 50% + SP 45）、全體中量治療（HP 20% + SP 15）、復活一人。沒人陣亡時復活是灰的；復活要先點陣亡罪人的頭像才會出現 `Select`；復活後 HP 全滿、SP 為 0。商店的罪人列也直接顯示陣亡者（灰色、HP `0`）。（實機：captures/82_shop_heal_page.png、captures/191_heal_page_with_dead.png、captures/213_revive_selected.png、captures/194_revive_result.png）
 
 預留金額適用於所有花費：治療、購買、刷新。任何花費後剩下的 Cost 都不得低於預留金額。（#10、#19）
 
@@ -249,6 +264,7 @@
 - 優先用定向刷新並指定主要體系，條件是 Cost ≥ 定向刷新費用 + 120（約一個 I 級飾品的價格）。
 - 錢不夠定向刷新、但 Cost ≥ 普通刷新費用 + 120 時，改用普通刷新。（#10、#19）
 - 刷新費用：普通刷新 15 起、每次 +15；定向刷新 90 起、每次 +15。兩者共用同一個次數計數。這些數字放在資料檔（[05-game-data.md](05-game-data.md)）。（#10、#19）
+- 實機：普通刷新一次後，普通刷新變 30、定向刷新變 105，和上面的數字一致。買不起的格子標 `Not Enough Cost`。（實機：captures/107_shop_after_refresh.png）
 
 **出售**（#10）
 
@@ -267,6 +283,7 @@
 - 和一般商店用同一套流程：先治療，再循環「出售 → 購買與刷新 → 合成」。
 - 規則不依賴格數，每格都從畫面讀出價格和體系。
 - 合成仍然每 3 個一組；放 5 個合成屬於延後的激進合成。
+- 實機：商店顯示 `Super Shop On Next Floor? <n>%`，這個機率隨本層花掉的 Cost 上升（3% → 8% → 15% → 24%），進過 Super Shop 後回到 3%。Super Shop 標題是紅色 `Super Shop`，10 格分兩列要捲動；其中 `ID Skill Search` 用星光計價，`Special Catalogue` 讓獎勵卡多一張。合成畫面的 `Wishmaking` 也花星光。只買主要體系飾品的規則已經排除這些商品。（實機：captures/77_after_enter_shop_node.png、captures/87_back_to_shop.png、captures/162_f2shop_entered.png、captures/163_supershop_scrolled.png、captures/94_shop_fuse_try2.png）
 
 ## 14. 結算與每週獎勵
 
@@ -280,9 +297,13 @@
   - 用量：每局只用一次 = 切 1 個開關到 ON；一次全用 = 把剩餘次數全部切到 ON。開關的數量和剩餘次數都從結算視窗讀。（#9、#17）
   - 切好開關後按 Claim。Claim 要花的腦啡肽模組不夠時，必須停止並通知（[06-recovery.md](06-recovery.md)）。（#8、#19）
 - 沒達到目標時：按 GiveUpRewards 放棄獎勵，不花模組。（#19）
+- 實機：視窗的三個按鈕是 `GiveUpRewards`、`To Window`、`Claim`，Claim 上標示花 5 個腦啡肽模組（`-5`）；bot 不按 To Window。視窗只顯示最後到達的那一層（例如 `Floor 5 [HARD] 5/6`），逐層的 `n/6` 在背後的 Exploration Complete 摘要。（實機：captures/252_exploration_reward_window.png、captures/245_after_defeat_confirm.png）
 - 這條規則適用於：一般結算；入口頁顯示 `Unclaimed Rewards` 時補領上一局沒領的獎勵；每週重置後過期的局；全滅後重打次數用完、全域選項為「放棄這局」時按 `Accept results` 之後的結算（第 9 節）。（#8、#16、#19）
 - 看到 Claim 完成後，輪替游標才前進（第 1 節）。（#8）
 
 ## 未決
 
-1. **Boss 後選擇讀什麼**：OCR 讀試煉名稱還是等級，等截圖確認。（#17）
+1. **Boss 後要選幾欄**：困難的 Boss 後頁面是 `Select 0/2`，要選兩欄（或按 Refuse Gift）。第 12 節的規則只說「取最高分」，是否依分數取前兩名還沒定案。（#17；實機：captures/122_boss_gift_trials_page.png）
+2. **放棄這局的方法**：第 9 節規定重打用完、選「放棄這局」時按 `Accept results` 再結算；實機上 `Accept results` 只回到地圖，不會結束這局。放棄這局是否改走設定面板的 Forfeit，還沒定案。（#16、#19；實機：captures/241_after_loading.png、captures/243_forfeit_dialog.png）
+3. **第 N 層才轉困難**：第 1 層選 HARD 後，之後的難度箭頭都是灰的。普通局在第 2 層以後還能不能切到 HARD 沒有實測；不能的話，「第幾層起轉困難」只有 0 與 1 有效。（#9、#19；實機：captures/128_f2_tap_difficulty_left.png）
+4. **節點 Cost 的預設值**：困難實機的 Focused 是 150–180、異想體戰是 120、事件沒有 Cost 標記，和第 7 節表格不一致；Focused 與 Risky 的區別也還沒看到。資料檔是否改用實測值、怎樣分辨 Focused 與 Risky，還沒定案。見 [05-game-data.md](05-game-data.md#6-cost-對照表與商店數字)。（#12、#19）
