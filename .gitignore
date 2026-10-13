@@ -1,1 +1,18 @@
 .claude/settings.local.json
+
+# Python
+.venv/
+__pycache__/
+
+# Node (maa-tools)
+node_modules/
+
+# OCR model, fetched by tools/fetch_ocr.py
+assets/resource/base/model/ocr/
+
+# Runtime output under <root>
+/debug/
+/logs/
+/state/
+/config/settings.json
+/install/
