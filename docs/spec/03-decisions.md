@@ -46,7 +46,8 @@
 - 只要有一層是 HARD，這一局就算困難局；每週獎勵與「自動」難度都照這個判斷。遊戲規定某一層進入困難後就不能切回普通，這條規則不會要求切回普通。（#9、#19）
 - 難度是逐層在主題包頁設定的。遊戲會記住上一次選的難度，所以每一層進主題包頁時，Agent 必須先讀出目前的難度，和本層應有的難度不同就切換，確認切換成功後才選主題包。不得假設預設值。（#8）
 - 地圖頁不顯示難度。接續暫停中的局時，從入口頁（`… [NORMAL]`）或設定面板、Resume 對話框的 `Dungeon Progress`（例如 `Floor 1 [NORMAL] 0/6`）讀出各層難度。（#8，[ADR 0003](../adr/0003-screen-is-truth-state-file-only-rotation-cursor.md)）
-- 實機：第 1 層選了 HARD 之後，第 2 層起主題包頁的難度箭頭變灰、點了沒反應。普通局到第 N 層才切到 HARD 的情形沒有實測，見[未決](#未決)。（實機：captures/128_f2_tap_difficulty_left.png）
+- 第 1 層選了 HARD 之後，之後各層都不能切回 NORMAL：第 2 層起主題包頁的難度箭頭變灰、點了沒反應。（#19，2026-10-14 定案；實機：captures/128_f2_tap_difficulty_left.png）
+- 普通局到第 N 層（N > 1）才切到 HARD 是否可行，還沒有實測，見[未決](#未決)。
 
 ## 3. 出戰順序與戰前編隊
 
@@ -108,13 +109,12 @@
 
 ## 7. 地圖選路
 
-**輸入**：地圖頁的 Bus 位置、相鄰格位的節點圖示（自製模板）與節點上的 Cost 數字（OCR）；資料檔的節點權重。（#3、#12，[ADR 0005](../adr/0005-game-data-files-separate-from-user-settings.md)）
+**輸入**：地圖頁的 Bus 位置、相鄰格位的節點圖示（自製模板）；資料檔的節點權重。（#3、#12，[ADR 0005](../adr/0005-game-data-files-separate-from-user-settings.md)）
 
 **節點辨識**（#12）
 
 - 先找 Bus，再對相鄰的固定格位做模板比對。
-- 模板比對出的類型必須和 OCR 讀出的 Cost 一致，不一致就當作無法辨識。
-- Cost 相同的節點類型不做交叉確認；事件另外用 `?` 圖示分辨。（#12、#19）
+- 節點類型只看圖示模板。v1 不用 Cost 交叉確認；節點上的 Cost 只 OCR 下來寫進記錄。（#12、#19，2026-10-14 定案）
 
 | 節點 | 普通 Cost | 困難 Cost | 權重（越低越優先） |
 |---|---|---|---|
@@ -125,9 +125,7 @@
 | Risky | 120 | 150 | 6（困難模式 8） |
 | 無法辨識 | — | — | 9 |
 
-普通模式下事件與普通戰鬥的 Cost 都是 75，這兩種只能靠模板區分。權重與 Cost 放在資料檔（[05-game-data.md](05-game-data.md)）。（#12、#19）
-
-上表的 Cost 是資料檔的預設值。困難鏡牢實機看到的 Cost 和它不一致，列在 [05-game-data.md](05-game-data.md#6-cost-對照表與商店數字)；資料檔要不要改見[未決](#未決)。
+表上的 Cost 只供參考，不用於辨識。權重放在資料檔（[05-game-data.md](05-game-data.md)）。困難鏡牢實機看到的 Cost 列在 [05-game-data.md](05-game-data.md#6-cost-對照表與商店數字)。（#12、#19）
 
 **路線**（#12）
 
@@ -174,8 +172,12 @@
 - 辨識：DEFEAT 對話框，顯示 `All participating Sinners have been killed.` 與 `Remaining Units: <n>/12`，選項有 `Return to Stage Select`、`Retry Stage`、`Accept results and return to Stage select`。實機：`<n>` 是沒上場的存活人數，不一定是 0；選項要先點選再按 Confirm。（實機：captures/236_finalboss_unknown.png）
 - 按 `Retry Stage` 重打。同一場最多重打 N 次（全域，預設 2）。計數以每場遭遇戰為單位，打贏就歸零。
 - 重打次數用完後依全域選項處理：停止（預設）或放棄這局。停止時保存證據。
-- 只有重打次數用完、而全域選項為「放棄這局」時，才按 `Accept results`，之後依第 14 節的結算規則處理。其他情況不得按 `Accept results`。（#16、#19）
-- 實機：`Retry Stage` 從第一波重打，出戰順序不變。`Accept results` 只保留陣亡結果，經載入畫面回到地圖，不會結束這局也不會進結算；實際結束這局要從設定面板按 Forfeit（`Quit exploring the dungeon?` → Defeat → Exploration Complete → Exploration Reward）。這和上一條規則衝突，見[未決](#未決)。（實機：captures/240_after_accept_results.png、captures/241_after_loading.png、captures/243_forfeit_dialog.png、captures/244_after_forfeit_confirm.png、captures/245_after_defeat_confirm.png）
+- 只有重打次數用完、而全域選項為「放棄這局」時，才放棄這局：（#16、#19，2026-10-14 定案）
+  1. 按 `Accept results`。它只保留陣亡結果，經載入畫面回到地圖，不會結束這局。
+  2. 開設定面板（`Dungeon Progress`）→ 按 Forfeit → `Quit exploring the dungeon?` 按 Confirm。
+  3. 依序經過 Defeat → Exploration Complete → Exploration Reward，再依第 14 節的結算規則處理。
+- 其他情況不得按 `Accept results`，也不得按 Forfeit。
+- 實機：`Retry Stage` 從第一波重打，出戰順序不變。`Accept results` 回到地圖時 Bus 停在同一個節點。（實機：captures/240_after_accept_results.png、captures/241_after_loading.png、captures/243_forfeit_dialog.png、captures/244_after_forfeit_confirm.png、captures/245_after_defeat_confirm.png）
 
 **陣亡**（#16）
 
@@ -228,8 +230,8 @@
   - 飾品分數：沿用選飾品的順序，主要體系 3、其他 2、已擁有 0。
   - 試煉風險：0–5。從選項上 OCR 讀出試煉名稱（例如 `Defense Level Up`、`Growth I`），查資料檔的試煉風險表（開發者每季更新）；查不到就當作最高風險 5。不用等級：每個試煉旁的 `Enemy Level Up +1`／`+2` 只有兩種值，分不出試煉。（#17；實機：captures/122_boss_gift_trials_page.png、captures/176_f2boss_rewards_gift.png）
   - 權重：每隊一個下拉選單（低／中／高），預設「高」；數值為低 0.5、中 1、高 2。
-- 分數最高的選項勝出；同分時選試煉風險較低的。
-- 實機：頁面有 4 欄，每欄上半是飾品、下半是 `Mounting Trials`；計數是 `Select 0/2`，選一欄就同時拿到飾品和試煉。選完後每個飾品各彈一次飾品獲得視窗，然後直接進入下一層的主題包頁。要選幾欄見[未決](#未決)。（實機：captures/122_boss_gift_trials_page.png、captures/124_boss_gift_pick2.png、captures/127_after_boss_gifts.png）
+- 依分數取前兩名（頁面是 `Select 0/2`）；同分時選試煉風險較低的。（#17、#19，2026-10-14 定案）
+- 實機：頁面有 4 欄，每欄上半是飾品、下半是 `Mounting Trials`；計數是 `Select 0/2`，選一欄就同時拿到飾品和試煉。選完後每個飾品各彈一次飾品獲得視窗，然後直接進入下一層的主題包頁。（實機：captures/122_boss_gift_trials_page.png、captures/124_boss_gift_pick2.png、captures/127_after_boss_gifts.png）
 - 以上數值是初始值，等截圖確認後再調整。（#17、#19）
 
 ## 13. 商店
@@ -287,23 +289,21 @@
 
 ## 14. 結算與每週獎勵
 
-**輸入**：全域每週獎勵選項（不用／用在普通／用在困難，預設「用在困難」）與用量（每局只用一次／一次全用，預設「一次全用」）；Exploration Reward 視窗上的 `Weekly Bonuses n/3` 與開關、逐層結果。（#9、#17、#19）
+**輸入**：全域每週獎勵選項（不用／用在普通／用在困難，預設「用在困難」）與用量（每局只用一次／一次全用，預設「一次全用」）；Exploration Reward 視窗上的 `Weekly Bonuses n/3` 與開關、這一局的結果（例如 `Floor 5 [HARD] 6/6`）。（#9、#17、#19）
 
 **規則**
 
-- 結算前必須先判斷這一局有沒有達到目標。目標是五層全部通過，逐層結果每層都是 `6/6`。（#8、#19）
+- 結算前必須先判斷這一局有沒有達到目標。目標是五層全部通過：Exploration Reward 視窗顯示 `Floor 5` 且進度是 `6/6` 才算達到。不看 Exploration Complete 摘要的逐層 `n/6`。（#8、#19，2026-10-14 定案）
 - 達到目標時：
   - 這一局的難度符合「用在普通」或「用在困難」時才使用每週獎勵；選「不用」或難度不符時，所有開關保持 OFF。提供「不用」是因為有些玩家還沒開放困難鏡牢。困難局的判斷見第 2 節。（#9、#19）
   - 用量：每局只用一次 = 切 1 個開關到 ON；一次全用 = 把剩餘次數全部切到 ON。開關的數量和剩餘次數都從結算視窗讀。（#9、#17）
   - 切好開關後按 Claim。Claim 要花的腦啡肽模組不夠時，必須停止並通知（[06-recovery.md](06-recovery.md)）。（#8、#19）
 - 沒達到目標時：按 GiveUpRewards 放棄獎勵，不花模組。（#19）
-- 實機：視窗的三個按鈕是 `GiveUpRewards`、`To Window`、`Claim`，Claim 上標示花 5 個腦啡肽模組（`-5`）；bot 不按 To Window。視窗只顯示最後到達的那一層（例如 `Floor 5 [HARD] 5/6`），逐層的 `n/6` 在背後的 Exploration Complete 摘要。（實機：captures/252_exploration_reward_window.png、captures/245_after_defeat_confirm.png）
-- 這條規則適用於：一般結算；入口頁顯示 `Unclaimed Rewards` 時補領上一局沒領的獎勵；每週重置後過期的局；全滅後重打次數用完、全域選項為「放棄這局」時按 `Accept results` 之後的結算（第 9 節）。（#8、#16、#19）
+- 實機：視窗的三個按鈕是 `GiveUpRewards`、`To Window`、`Claim`，Claim 上標示花 5 個腦啡肽模組（`-5`）；bot 不按 To Window。視窗只顯示最後到達的那一層（例如 `Floor 5 [HARD] 5/6`，表示第 5 層沒打完，沒達到目標）。（實機：captures/252_exploration_reward_window.png、captures/245_after_defeat_confirm.png）
+- 這條規則適用於：一般結算；入口頁顯示 `Unclaimed Rewards` 時補領上一局沒領的獎勵；每週重置後過期的局；全滅後重打次數用完、全域選項為「放棄這局」時從設定面板 Forfeit 之後的結算（第 9 節）。（#8、#16、#19）
 - 看到 Claim 完成後，輪替游標才前進（第 1 節）。（#8）
 
 ## 未決
 
-1. **Boss 後要選幾欄**：困難的 Boss 後頁面是 `Select 0/2`，要選兩欄（或按 Refuse Gift）。第 12 節的規則只說「取最高分」，是否依分數取前兩名還沒定案。（#17；實機：captures/122_boss_gift_trials_page.png）
-2. **放棄這局的方法**：第 9 節規定重打用完、選「放棄這局」時按 `Accept results` 再結算；實機上 `Accept results` 只回到地圖，不會結束這局。放棄這局是否改走設定面板的 Forfeit，還沒定案。（#16、#19；實機：captures/241_after_loading.png、captures/243_forfeit_dialog.png）
-3. **第 N 層才轉困難**：第 1 層選 HARD 後，之後的難度箭頭都是灰的。普通局在第 2 層以後還能不能切到 HARD 沒有實測；不能的話，「第幾層起轉困難」只有 0 與 1 有效。（#9、#19；實機：captures/128_f2_tap_difficulty_left.png）
-4. **節點 Cost 的預設值**：困難實機的 Focused 是 150–180、異想體戰是 120、事件沒有 Cost 標記，和第 7 節表格不一致；Focused 與 Risky 的區別也還沒看到。資料檔是否改用實測值、怎樣分辨 Focused 與 Risky，還沒定案。見 [05-game-data.md](05-game-data.md#6-cost-對照表與商店數字)。（#12、#19）
+1. **普通局第 N 層才轉困難**：第 1 層選 HARD 後不能切回 NORMAL 已確認（第 2 節）。普通局在第 2 層以後還能不能切到 HARD 沒有實測；不能的話，「第幾層起轉困難」欄位會移除。（#9、#19；實機：captures/128_f2_tap_difficulty_left.png）
+2. **Risky 節點的圖示**：困難實機還沒看到 Risky 節點，它的圖示模板和 Focused 怎麼區分還不知道。（#12、#19）
