@@ -1,8 +1,15 @@
 // File access through the Rust side (src-tauri/src/lib.rs). In a plain browser (`pnpm dev`,
 // screenshots) it falls back to localStorage so the editor can be tried without Tauri.
 import { invoke, isTauri } from "@tauri-apps/api/core";
+import bundledThemePacks from "../../assets/resource/base/data/theme_packs.yaml?raw";
+import { parseThemePacks, type ThemePacks } from "./model";
 
 const tauri = isTauri();
+
+let themePacks: Promise<ThemePacks> | undefined;
+/** Read once from <root>; the browser falls back to the repo's copy. */
+export const loadThemePacks = (): Promise<ThemePacks> =>
+  (themePacks ??= (tauri ? invoke<string>("load_theme_packs") : Promise.resolve(bundledThemePacks)).then(parseThemePacks));
 
 export const rootDir = (): Promise<string> => (tauri ? invoke("root_dir") : Promise.resolve("(browser)"));
 
