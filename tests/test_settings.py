@@ -1,5 +1,6 @@
 import copy
 import json
+from pathlib import Path
 
 import pytest
 
@@ -144,3 +145,41 @@ def test_cross_check_allows_what_the_spec_allows(tmp_path):
 def test_every_error_is_reported(tmp_path):
     data = edited(lambda d: (d["teams"][1].update(game_team=1), d["teams"][0].update(starlight={"plan": "x"})))
     assert len(errors(tmp_path, data)) == 2
+
+
+CASES = json.loads((Path(__file__).parent / "settings_cases.json").read_text(encoding="utf-8"))
+
+
+def apply_edits(data, edits):
+    """The edit format of tests/settings_cases.json; gui/src/validate.test.ts reads it the same way."""
+    data = copy.deepcopy(data)
+    for edit in edits:
+        *parents, last = (edit["set"] if "set" in edit else edit["delete"]).split("/")
+        node = data
+        for key in parents:
+            node = node[int(key)] if isinstance(node, list) else node[key]
+        if "delete" in edit:
+            del node[last]
+        elif last == "-":
+            node.append(edit["value"])
+        else:
+            node[int(last) if isinstance(node, list) else last] = edit["value"]
+    return data
+
+
+@pytest.mark.parametrize("case", CASES["cases"], ids=lambda c: c["name"])
+def test_shared_cases(tmp_path, case):
+    """The GUI runs the same cases; both sides must agree on what is wrong."""
+    data = apply_edits(CASES["valid"], case["edits"])
+    if case.get("cross") == []:
+        load(tmp_path, data)
+    elif "cross" in case:
+        assert errors(tmp_path, data) == case["cross"]
+    else:
+        paths = {e.split(": ", 1)[0] for e in errors(tmp_path, data)}
+        assert set(case["schema"]) <= paths
+        assert all(any(p == s or p.startswith(s + "/") for s in case["schema"]) for p in paths)
+
+
+def test_shared_valid_loads(tmp_path):
+    assert load(tmp_path, CASES["valid"]) == CASES["valid"]
