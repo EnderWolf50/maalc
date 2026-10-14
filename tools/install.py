@@ -1,5 +1,6 @@
 """Assemble a runnable <root> in install/: interface.json, resource/, agent/,
-and maafw/ (the MaaFramework DLLs MXU loads, taken from the installed maafw).
+maafw/ (the MaaFramework DLLs MXU loads, taken from the installed maafw), and
+the settings GUI maalc-gui.exe when it has been built.
 
 Drop MXU or MFAAvalonia into install/ and start it. child_exec is pinned to the
 Python running this script (run it with `uv run`), because MXU on Windows
@@ -27,4 +28,9 @@ if __name__ == "__main__":
     shutil.copytree(Path(maa.__file__).parent / "bin", install / "maafw", dirs_exist_ok=True)
     for name in ("LICENSE", "NOTICE.md"):
         shutil.copy2(repo / name, install)
+    # The settings GUI finds <root> from its own folder, so it sits next to agent/.
+    # Build it first with `pnpm tauri build --no-bundle` in gui/.
+    gui = repo / "gui" / "src-tauri" / "target" / "release" / "maalc-gui.exe"
+    if gui.exists():
+        shutil.copy2(gui, install)
     print(f"Installed to {install}")

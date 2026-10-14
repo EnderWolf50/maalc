@@ -1,0 +1,151 @@
+// Named plans (spec 04 sections 6–8) and the editors teams reuse for their custom values.
+import { useState, type ReactNode } from "react";
+import {
+  BOOSTS, LEVELS, MARKS, SINNERS, defaultStarlight, freeName, newId,
+  type DeploymentPlan, type Order, type StarlightPlan, type StarlightValues, type ThemePackPlan,
+} from "./model";
+import { Field, ReorderList, Select, useEditor } from "./ui";
+
+export function OrderEditor({ order, onChange, path }: { order: Order; onChange: (o: Order) => void; path: string }) {
+  const { t, bad } = useEditor();
+  return (
+    <div className={bad(path) ? "bad" : ""}>
+      <ReorderList items={order} onChange={onChange} keyOf={(s) => s}
+        render={(s, i) => <>{i + 1}. {s}{i < 7 && <em className="tag">{t("deployed")}</em>}</>} />
+    </div>
+  );
+}
+
+export function StarlightEditor({ value, onChange, path }: {
+  value: StarlightValues; onChange: (v: StarlightValues) => void; path: string;
+}) {
+  const { t, tv, bad } = useEditor();
+  return (
+    <div className="starlight">
+      <table className={bad(`${path}/levels`) ? "bad" : ""}>
+        <thead><tr><th>#</th><th>Boost</th><th>{t("starlight.level")}</th></tr></thead>
+        <tbody>
+          {BOOSTS.map((b, i) => (
+            <tr key={b}><td>{i + 1}</td><td>{b}</td><td>
+              <Select value={value.levels[i]} options={LEVELS} label={(v) => tv("level", v)}
+                onChange={(v) => onChange({ ...value, levels: value.levels.map((l, j) => (j === i ? v : l)) })} />
+            </td></tr>
+          ))}
+        </tbody>
+      </table>
+      <div>
+        <h4 className={bad(`${path}/priority`) ? "bad" : ""}>{t("starlight.priority")}</h4>
+        <ReorderList items={value.priority} keyOf={String} onChange={(priority) => onChange({ ...value, priority })}
+          render={(n, i) => <>{i + 1}. {BOOSTS[n - 1] ?? n}</>} />
+        <label className="check">
+          <input type="checkbox" checked={value.convert_leftover}
+            onChange={(e) => onChange({ ...value, convert_leftover: e.target.checked })} />
+          {t("starlight.convert_leftover")}
+        </label>
+      </div>
+    </div>
+  );
+}
+
+type PlanKey = "deployment_order_plans" | "starlight_plans" | "theme_pack_plans";
+
+/** A list of named plans on the left, the selected plan's editor on the right. */
+function PlanTab<P extends { id: string; name: string }>({ planKey, tab, make, editor, lead }: {
+  planKey: PlanKey; tab: "tab.deployment" | "tab.starlight" | "tab.themepacks"; make: () => Omit<P, "id" | "name">;
+  editor: (plan: P, change: (p: P) => void, path: string) => ReactNode;
+  lead?: { label: string; body: ReactNode };
+}) {
+  const { s, update, t, bad } = useEditor();
+  const plans = s[planKey] as unknown as P[];
+  const [sel, setSel] = useState(lead ? -1 : 0);
+  const i = Math.min(sel, plans.length - 1);
+  const set = (fn: (list: P[]) => void) => update((d) => fn(d[planKey] as unknown as P[]));
+  const add = () => {
+    set((list) => list.push({ ...make(), id: newId(), name: freeName(t(tab), plans.map((p) => p.name)) } as P));
+    setSel(plans.length);
+  };
+  return (
+    <div className="split">
+      <aside>
+        {lead && <button type="button" className={"lead" + (i === -1 ? " selected" : "")} onClick={() => setSel(-1)}>{lead.label}</button>}
+        {plans.length || lead ? (
+          <ReorderList items={plans} keyOf={(p) => p.id} selected={i} onSelect={setSel}
+            badAt={(j) => bad(`${planKey}/${j}`)} onChange={(list) => set((l) => l.splice(0, l.length, ...list))}
+            render={(p) => p.name || "—"} />
+        ) : <p className="muted">{t("noPlans")}</p>}
+        <button type="button" onClick={add}>+ {t("add")}</button>
+      </aside>
+      <section>
+        {i === -1 && lead ? lead.body : plans[i] && (
+          <>
+            <div className="row">
+              <Field label={t("name")} path={`${planKey}/${i}/name`}>
+                <input value={plans[i].name} onChange={(e) => set((l) => { l[i].name = e.target.value; })} />
+              </Field>
+              <button type="button" className="danger" onClick={() => { set((l) => l.splice(i, 1)); setSel(Math.max(0, i - 1)); }}>
+                {t("remove")}
+              </button>
+            </div>
+            {editor(plans[i], (p) => set((l) => { l[i] = p; }), `${planKey}/${i}`)}
+          </>
+        )}
+      </section>
+    </div>
+  );
+}
+
+export const DeploymentTab = () => (
+  <PlanTab<DeploymentPlan> planKey="deployment_order_plans" tab="tab.deployment" make={() => ({ order: [...SINNERS] })}
+    editor={(p, change, path) => <OrderEditor order={p.order} path={`${path}/order`} onChange={(order) => change({ ...p, order })} />} />
+);
+
+export const StarlightTab = () => (
+  <PlanTab<StarlightPlan> planKey="starlight_plans" tab="tab.starlight" make={defaultStarlight}
+    editor={(p, change, path) => (
+      <StarlightEditor value={p} path={path} onChange={(v) => change({ ...p, ...v })} />
+    )} />
+);
+
+export function ThemePackTab() {
+  const { t } = useEditor();
+  return (
+    <PlanTab<ThemePackPlan> planKey="theme_pack_plans" tab="tab.themepacks" make={() => ({ marks: {} })}
+      lead={{ label: t("defaultPlanLocked"), body: <p className="muted">{t("defaultPlanNote")}</p> }}
+      editor={(p, change, path) => <MarksEditor plan={p} change={change} path={path} />} />
+  );
+}
+
+function MarksEditor({ plan, change, path }: { plan: ThemePackPlan; change: (p: ThemePackPlan) => void; path: string }) {
+  const { t, tv, bad } = useEditor();
+  const [pack, setPack] = useState("");
+  const setMarks = (marks: Record<string, string>) => change({ ...plan, marks });
+  // ponytail: packs are typed by name until the season's theme pack data file (spec 05 section 2) exists; then list them all.
+  return (
+    <>
+      <p className="muted">{t("marksNote")}</p>
+      <table>
+        <tbody>
+          {Object.entries(plan.marks).map(([name, mark]) => (
+            <tr key={name} className={bad(`${path}/marks/${name}`) ? "bad" : ""}>
+              <td>{name}</td>
+              <td><Select value={mark} options={MARKS} label={(v) => tv("mark", v)} onChange={(v) => setMarks({ ...plan.marks, [name]: v })} /></td>
+              <td><button type="button" className="danger" onClick={() => {
+                const rest = { ...plan.marks };
+                delete rest[name];
+                setMarks(rest);
+              }}>{t("remove")}</button></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <form className="row" onSubmit={(e) => {
+        e.preventDefault();
+        if (pack.trim()) setMarks({ ...plan.marks, [pack.trim()]: plan.marks[pack.trim()] ?? "prefer" });
+        setPack("");
+      }}>
+        <input placeholder={t("packName")} value={pack} onChange={(e) => setPack(e.target.value)} />
+        <button type="submit">+ {t("add")}</button>
+      </form>
+    </>
+  );
+}
