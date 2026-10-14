@@ -37,7 +37,7 @@ export default function App() {
         const { data, migrated } = parseSettings(text);
         setS(data);
         if (migrated && !validate(data).length) await api.saveSettings(toText(data));
-        setSavedText(migrated ? toText(data) : text);
+        setSavedText(toText(data)); // dirty = content changed, not formatting
       } catch (e) {
         setLoadError(String(e));
       }
