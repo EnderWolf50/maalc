@@ -64,7 +64,7 @@
 | 每週獎勵用法 | `weekly_bonus_use` | 字串 | `none` 不用／`normal` 用在普通／`hard` 用在困難 | `hard` | #9、#19 |
 | 每週獎勵用量 | `weekly_bonus_amount` | 字串 | `one` 每局只用一次／`all` 一次全用 | `all` | #9、#19 |
 | 每週獎勵用完就停 | `stop_when_weekly_bonus_out` | 布林 | 開／關 | 關 | #8、#19 |
-| 星光買不起時 | `starlight_unaffordable` | 字串 | `stop` 停止購買／`skip` 跳過這個加成（見第 7 節） | `skip` | #9、#19 |
+| 星光買不起時 | `starlight_unaffordable` | 字串 | `stop` 停止任務／`skip` 跳過這個加成（見第 7 節） | `skip` | #9、#19 |
 | 全滅重打次數 N | `wipe_retries` | 整數 ≥ 0 | 同一場遭遇戰最多重打幾次 | 2 | #16 |
 | 重打用完後 | `after_retries` | 字串 | `stop` 停止／`forfeit` 放棄這局 | `stop` | #16 |
 | 失敗通知 webhook | `webhook_url` | 字串 | 停止時送出摘要的網址；空字串 = 不送 | 空字串 | #14 |
@@ -130,7 +130,7 @@
   - 連續點太快（間隔不到約 1 秒）會漏掉輸入。離開再回到星光頁時，選取與等級都重設。
 - 可用的星光是星光頁右上的 `Available`，等於選隊頁該隊的 `Starlight Bonus`，不是持有的 `Owned`。「剩下的星光換成 Cost」對應星光確認對話框的 `Convert Starlight to Cost`；不換時，剩下的星光加進這局的結算獎勵。（實機：captures/01_team_picker.png、captures/04_starlight_confirm.png）
 - 依購買順序購買。（#9、#19）
-- 買不起時依執行選項「星光買不起時」處理：`skip` 跳過這張繼續買下一張，`stop` 不再買後面的加成，用已經選好的進入鏡牢（不是停止整個任務）。買不起的加成不降級購買。（#9、#25）
+- 買不起時依執行選項「星光買不起時」處理：`skip` 跳過這張繼續買下一張，`stop` 停止整個任務：方案裡只要有一張買不起，就一張都不買，這局停在星光頁。買不起的加成不降級購買。（#9、#25）
 
 ## 8. 主題包方案（`theme_pack_plans`）
 

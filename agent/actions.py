@@ -197,9 +197,13 @@ class BuyStarlight(CustomAction):
         if available is None:
             log("stop: starlight page already spends owned starlight")
             return False
-        buys, missed = run_start.starlight_purchases(plan, available, run["settings"]["run"]["starlight_unaffordable"])
+        unaffordable = run["settings"]["run"]["starlight_unaffordable"]
+        buys, missed = run_start.starlight_purchases(plan, available, unaffordable)
         for n, level, price in missed:
             log(f"grace {n} {level} costs {price}: not bought")
+        if missed and unaffordable == "stop":
+            log("stop: a planned grace is unaffordable")
+            return False
         for n, level, price in buys:
             x, y = grace_box(n)
             if grace_selected(image, n):
@@ -348,8 +352,8 @@ class PickThemePack(CustomAction):
             return False
 
         names, marks = theme_pack_marks(run["settings"], run["team"])
-        refreshed = False
-        while True:
+        seen = None
+        for _ in range(10):  # ponytail: stop when a refresh changes nothing; read `Refresh n/m` if that misfires
             cards = pack_titles(context, screen(context))
             if not cards:
                 log("stop: no theme pack titles read")
@@ -357,11 +361,11 @@ class PickThemePack(CustomAction):
             ranked = run_start.rank_packs([lines for _, lines in cards], names, marks)
             log(f"floor {floor} packs: " + ", ".join(f"{t} ({r})" for t, r in ranked))
             ranks = [r for _, r in ranked]
-            if all(r == "avoid" for r in ranks) and not refreshed:
-                refreshed = True
-                tap(context, 1083, 47, wait=3)
-                continue
-            break
+            titles = [t for t, _ in ranked]
+            if not all(r == "avoid" for r in ranks) or titles == seen:
+                break
+            seen = titles
+            tap(context, 1083, 47, wait=3)
         i = run_start.pick_pack(ranks)
         x = cards[i][0]
         log(f"floor {floor}: pull {ranked[i][0]!r}")
