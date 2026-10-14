@@ -30,7 +30,7 @@ const zh_tw = {
   "difficulty.hard": "困難", "difficulty.normal": "普通", "difficulty.auto": "自動",
   "weekly_bonus_use.none": "不用", "weekly_bonus_use.normal": "用在普通", "weekly_bonus_use.hard": "用在困難",
   "weekly_bonus_amount.one": "每局只用一次", "weekly_bonus_amount.all": "一次全用",
-  "starlight_unaffordable.stop": "停止", "starlight_unaffordable.skip": "跳過這個加成",
+  "starlight_unaffordable.stop": "停止任務", "starlight_unaffordable.skip": "跳過這個加成",
   "after_retries.stop": "停止", "after_retries.forfeit": "放棄這局",
   // plans
   name: "名稱",
@@ -116,7 +116,7 @@ const en_us: typeof zh_tw = {
   "difficulty.hard": "Hard", "difficulty.normal": "Normal", "difficulty.auto": "Auto",
   "weekly_bonus_use.none": "Nothing", "weekly_bonus_use.normal": "Normal", "weekly_bonus_use.hard": "Hard",
   "weekly_bonus_amount.one": "One per run", "weekly_bonus_amount.all": "All at once",
-  "starlight_unaffordable.stop": "Stop", "starlight_unaffordable.skip": "Skip that boost",
+  "starlight_unaffordable.stop": "Stop the task", "starlight_unaffordable.skip": "Skip that boost",
   "after_retries.stop": "Stop", "after_retries.forfeit": "Forfeit the run",
   name: "Name",
   add: "Add",
