@@ -26,7 +26,8 @@
             "[JumpBack]GiftSearchForgo",
             "[JumpBack]GiftSearch",
             "[JumpBack]StartingGift",
-            "ThemePack",
+            "[JumpBack]ThemePack",
+            "MirrorMap",
             "[JumpBack]GoToMirrorEntry"
         ]
     },
@@ -35,9 +36,8 @@
         "recognition": "OCR",
         "roi": [990, 140, 230, 35],
         "expected": "Before Entry",
-        "action": "Click",
-        "target": [1020, 465, 175, 60],
-        "post_delay": 1500
+        "action": "Custom",
+        "custom_action": "PlanRun"
     },
     // Tracer: a paused run or an unclaimed reward stops the task instead of
     // resuming or settling it: Resume lands with #31, settlement with #30.
@@ -87,36 +87,21 @@
         "roi": [80, 272, 100, 28],
         "expected": "^TEAMS$",
         "action": "Custom",
-        "custom_action": "SelectTeam",
-        "next": [
-            "TeamConfirm"
-        ]
-    },
-    "TeamName": {
-        "recognition": "OCR",
-        "roi": [220, 112, 210, 26]
-    },
-    "TeamConfirm": {
-        "action": "Click",
-        "target": [1075, 560, 140, 55],
-        "post_delay": 2000
+        "custom_action": "SelectTeam"
     },
     "StarlightPage": {
         "recognition": "OCR",
         "roi": [925, 33, 70, 22],
         "expected": "Available",
-        "action": "Click",
-        "target": [1150, 650, 90, 45],
-        "post_delay": 1500
+        "action": "Custom",
+        "custom_action": "BuyStarlight"
     },
-    // Nothing bought: the Agent's starlight plan replaces this (#25).
     "StarlightConfirm": {
         "recognition": "OCR",
         "roi": [480, 210, 320, 35],
         "expected": "Continue with selected effects",
-        "action": "Click",
-        "target": [655, 512, 165, 38],
-        "post_delay": 2000
+        "action": "Custom",
+        "custom_action": "ConfirmStarlight"
     },
     "StartingGift": {
         "recognition": "OCR",
@@ -151,13 +136,22 @@
         "target": [665, 478, 200, 35],
         "post_delay": 2000
     },
-    // Tracer stops here; picking a pack is the Agent's job (#25).
     "ThemePack": {
         "recognition": "OCR",
         "roi": [480, 100, 320, 40],
         "expected": "THEME ?PACK",
         "action": "Custom",
+        "custom_action": "PickThemePack"
+    },
+    // Right-hand icon column (pack detail, team); the Exploring Floor title is often covered.
+    // Run start ends here: routing the map is #26.
+    "MirrorMap": {
+        "recognition": "TemplateMatch",
+        "roi": [1195, 65, 75, 130],
+        "template": "Map/MirrorMap.png",
+        "threshold": 0.8,
+        "action": "Custom",
         "custom_action": "Halt",
-        "custom_action_param": "reached the theme pack page"
+        "custom_action_param": "reached the map"
     }
 }
