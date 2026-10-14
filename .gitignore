@@ -20,3 +20,4 @@ assets/resource/base/model/ocr/
 # Local tools
 /mxu/
 /.playwright-mcp/
+/.claude/worktrees/

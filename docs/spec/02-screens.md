@@ -24,8 +24,8 @@
 | 標題畫面 | 模板：`Change Account`、`Clear all caches` 按鈕 | 點畫面中央進入遊戲 | 連線中（`CONNECTING`）、載入畫面、主畫面 | #2、#7 | — |
 | 主畫面（Window 分頁） | 模板：底部分頁列（Window／Sinners／Drive／Theater／Extract／Dispense） | 點 Drive | Drive | #8 | `captures/255_final_window.png` |
 | Drive | 模板：`Mirror Dungeons` 入口按鈕 | 點 Mirror Dungeons | 鏡牢入口頁 | #8 | — |
-| 鏡牢入口頁：Before Entry | OCR：`Exploring:` 欄位為 `Before Entry`；模板：右下 Enter 按鈕 | 讀 Weekly Bonuses 剩餘格數（全域難度「自動」與「每週獎勵用完就停」要用）；依輪替游標開新局，點 Enter | 進入確認對話框 | #8、#9 | `captures/00_md_enter_dialog.png`（對話框背後） |
-| 鏡牢入口頁：暫停中的局 | OCR：`Exploring:` 欄位為 `<季名> - F<N>`，下一行是 `<主題包> [NORMAL]` 或 `[HARD]` | 點 Enter 接續 | Resume 對話框 | #8 | — |
+| 鏡牢入口頁：Before Entry | OCR：`Exploring:` 欄位為 `Before Entry`；模板：右下 Enter 按鈕。旁邊另有 `Rental` 按鈕，不要點（#24 實機） | 讀 Weekly Bonuses 剩餘格數（全域難度「自動」與「每週獎勵用完就停」要用）；依輪替游標開新局，點 Enter | 進入確認對話框 | #8、#9 | `captures/00_md_enter_dialog.png`（對話框背後） |
+| 鏡牢入口頁：暫停中的局 | OCR：`Exploring:` 欄位為 `<季名> - F<N>`，下一行是 `<主題包> [NORMAL]` 或 `[HARD]`；還沒選主題包就暫停時是 `-`（#24 實機） | 點 Enter 接續 | Resume 對話框 | #8 | — |
 | 鏡牢入口頁：Exploration Complete | OCR：`Exploring:` 欄位為 `Exploration Complete`，卡片中央 `Unclaimed Rewards` | 點 Enter，依結算規則處理上局沒領的獎勵（[01](01-architecture.md#結算規則)） | Exploration Reward 視窗 | #8、#19 | — |
 | 鏡牢入口頁：過期的局（待截圖確認） | 未知 | 依結算規則處理（[01](01-architecture.md#結算規則)） | 未知 | #8、#19 | — |
 | 進入確認對話框 | OCR：`Will you enter`；模板：Cancel／Enter 按鈕 | 點 Enter | 選隊頁 | #8 | `captures/00_md_enter_dialog.png` |
@@ -60,7 +60,7 @@
 | 設定面板 Dungeon Progress | OCR：標題 `Dungeon Progress`、按鈕 `Progress`／`Forfeit`／`Continue`／`To Window`／`Config` | 讀每層難度與進度。L2 恢復時點 To Window；放棄這局時點 Forfeit；其他情況點 Continue 回地圖。面板上的 Parallel Superposition 開關不碰 | 暫停確認對話框、地圖頁、放棄探索確認對話框、Progress 頁 | #8、#14、#17、#19 | `captures/31_gear_dungeon_progress.png`、`242_gear_before_forfeit.png` |
 | 暫停確認對話框 | OCR：標題 `Pause Exploration`、`Save your progress and return to the Main Menu?` | 點 Confirm | 主畫面（再經導航回入口頁 Resume） | #14 | — |
 | 放棄探索確認對話框 | OCR：標題 `Pause Exploration`、`Quit exploring the dungeon?` | 標題和暫停確認對話框相同，必須用內文區分。這是從設定面板按 Forfeit 後出現的對話框；按 Confirm 會結束這一局。全滅後重打次數用完、全域選項為「放棄這局」時點 Confirm（[03](03-decisions.md#9-全滅與陣亡)）；其他情況點 Cancel | Defeat 畫面 → Exploration Complete → Exploration Reward 視窗（Confirm）、地圖頁（Cancel） | #8、#16、#19 | `captures/243_forfeit_dialog.png` |
-| 載入畫面 | OCR：`NOW LOADING`；模板：右下 `Combat Tips` | 等待，逾時 90 秒 | 地圖頁、戰鬥、戰前編隊頁 | #14 | `captures/64_loading_combat_tips.png`、`240_after_accept_results.png` |
+| 載入畫面 | OCR：`NOW LOADING`；OCR：右側中段 `Combat Tips`（#24 實機：不在右下） | 等待，逾時 90 秒 | 地圖頁、戰鬥、戰前編隊頁 | #14 | `captures/64_loading_combat_tips.png`、`240_after_accept_results.png` |
 
 ## 戰鬥
 
