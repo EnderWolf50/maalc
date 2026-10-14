@@ -28,3 +28,28 @@ jobs:
       - run: pnpm exec maa-tools check
       - run: python3 tools/fetch_ocr.py
       - run: pnpm exec maa-tools test
+
+  gui:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: gui
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: gui/package.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: gui/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm test
+      # tauri's generate_context! needs the built frontend in gui/dist.
+      - run: pnpm exec vite build
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: gui/src-tauri
+      - run: cargo check --locked --manifest-path src-tauri/Cargo.toml

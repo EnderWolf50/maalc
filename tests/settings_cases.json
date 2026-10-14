@@ -1,0 +1,80 @@
+{
+  "description": "Shared by tests/test_settings.py and gui/src/validate.test.ts so the agent and the GUI reject the same files. Each case applies edits to valid: set (a last path segment of - appends) or delete. schema lists the error paths; every error must sit at or under one of them. cross lists the exact cross-check messages, in order.",
+  "valid": {
+    "version": 1,
+    "language": "zh_tw",
+    "run": {
+      "difficulty": "auto", "runs": 1, "weekly_bonus_use": "hard", "weekly_bonus_amount": "all",
+      "stop_when_weekly_bonus_out": false, "starlight_unaffordable": "skip", "wipe_retries": 2,
+      "after_retries": "stop", "webhook_url": ""
+    },
+    "deployment_order_plans": [
+      {"id": "d1", "name": "Bleed order", "order": ["Yi Sang", "Faust", "Don Quixote", "Ryōshū", "Meursault", "Hong Lu", "Heathcliff", "Ishmael", "Rodion", "Sinclair", "Outis", "Gregor"]}
+    ],
+    "starlight_plans": [
+      {"id": "s1", "name": "Cheap", "levels": ["none", "none", "none", "none", "none", "none", "none", "none", "none", "none"], "priority": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], "convert_leftover": false}
+    ],
+    "theme_pack_plans": [{"id": "p1", "name": "Mine", "marks": {"Automated Factory": "avoid"}}],
+    "teams": [
+      {
+        "id": "a", "name": "Team a", "enabled": true, "game_team": 1, "keyword": "Burn", "usage": "any", "hard_from_floor": 0,
+        "deployment_order": {"plan": "d1"}, "starlight": {"plan": "s1"}, "theme_pack_plan": "p1",
+        "reward_cards": ["Starlight", "Random E.G.O Gift", "Cost & Keyword Gift Chance", "Cost", "E.G.O Resource"],
+        "shop_refresh_limit": 2, "heal": "revive", "reserve_cost": 0, "min_alive": 0, "trial_risk_weight": "high"
+      },
+      {
+        "id": "b", "name": "Team b", "enabled": true, "game_team": 2, "keyword": "Bleed", "usage": "hard_only", "hard_from_floor": 3,
+        "deployment_order": {"custom": ["Gregor", "Outis", "Sinclair", "Rodion", "Ishmael", "Heathcliff", "Hong Lu", "Meursault", "Ryōshū", "Don Quixote", "Faust", "Yi Sang"]},
+        "starlight": {"custom": {"levels": ["base", "plus", "plus2", "none", "none", "none", "none", "none", "none", "none"], "priority": [10, 9, 8, 7, 6, 5, 4, 3, 2, 1], "convert_leftover": true}},
+        "theme_pack_plan": "default",
+        "reward_cards": ["Cost", "Starlight", "Random E.G.O Gift", "Cost & Keyword Gift Chance", "E.G.O Resource"],
+        "shop_refresh_limit": 0, "heal": "none", "reserve_cost": 50, "min_alive": 3, "trial_risk_weight": "low"
+      }
+    ],
+    "event_overrides": [{"question": "Q?", "option": "Yes"}],
+    "trial_risk_overrides": [{"trial": "Growth I", "risk": 3}]
+  },
+  "cases": [
+    {"name": "disabled teams may share a slot, plan names are per kind, empty marks",
+     "edits": [
+       {"set": "teams/1/game_team", "value": 1}, {"set": "teams/1/enabled", "value": false},
+       {"set": "starlight_plans/-", "value": {"id": "s2", "name": "Bleed order", "levels": ["none", "none", "none", "none", "none", "none", "none", "none", "none", "none"], "priority": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], "convert_leftover": false}},
+       {"set": "theme_pack_plans/0/marks", "value": {}}
+     ],
+     "cross": []},
+    {"name": "bad enum", "edits": [{"set": "run/difficulty", "value": "extreme"}], "schema": ["run/difficulty"]},
+    {"name": "negative runs", "edits": [{"set": "run/runs", "value": -1}], "schema": ["run/runs"]},
+    {"name": "game team out of range", "edits": [{"set": "teams/0/game_team", "value": 41}], "schema": ["teams/0/game_team"]},
+    {"name": "repeated sinner", "edits": [{"set": "deployment_order_plans/0/order/1", "value": "Yi Sang"}], "schema": ["deployment_order_plans/0/order"]},
+    {"name": "repeated starlight priority", "edits": [{"set": "starlight_plans/0/priority/0", "value": 2}], "schema": ["starlight_plans/0/priority"]},
+    {"name": "bad custom starlight level", "edits": [{"set": "teams/1/starlight/custom/levels/0", "value": "max"}], "schema": ["teams/1/starlight"]},
+    {"name": "bad theme pack mark", "edits": [{"set": "theme_pack_plans/0/marks/X", "value": "love"}], "schema": ["theme_pack_plans/0/marks/X"]},
+    {"name": "user plan named default", "edits": [{"set": "theme_pack_plans/0/id", "value": "default"}], "schema": ["theme_pack_plans/0/id"]},
+    {"name": "missing team field", "edits": [{"delete": "teams/0/heal"}], "schema": ["teams/0"]},
+    {"name": "unknown top-level key", "edits": [{"set": "extra", "value": 1}], "schema": ["(root)"]},
+    {"name": "empty override question", "edits": [{"set": "event_overrides/0/question", "value": ""}], "schema": ["event_overrides/0/question"]},
+    {"name": "no enabled team", "edits": [{"set": "teams/0/enabled", "value": false}, {"set": "teams/1/enabled", "value": false}],
+     "cross": ["No enabled team: set up a team in the settings GUI first."]},
+    {"name": "no team at all", "edits": [{"set": "teams", "value": []}],
+     "cross": ["No enabled team: set up a team in the settings GUI first."]},
+    {"name": "two enabled teams on one slot", "edits": [{"set": "teams/1/game_team", "value": 1}],
+     "cross": ["teams: enabled teams 'Team a', 'Team b' all use TEAMS #1"]},
+    {"name": "missing plans", "edits": [
+       {"set": "teams/0/deployment_order", "value": {"plan": "gone"}}, {"set": "teams/0/starlight", "value": {"plan": "gone"}},
+       {"set": "teams/1/theme_pack_plan", "value": "gone"}],
+     "cross": [
+       "teams/0/deployment_order: team 'Team a' uses missing plan 'gone' (not in deployment_order_plans)",
+       "teams/0/starlight: team 'Team a' uses missing plan 'gone' (not in starlight_plans)",
+       "teams/1/theme_pack_plan: team 'Team b' uses missing plan 'gone' (not in theme_pack_plans)"]},
+    {"name": "duplicate team id", "edits": [{"set": "teams/1/id", "value": "a"}], "cross": ["teams: id 'a' appears 2 times"]},
+    {"name": "duplicate plan id and name with quotes", "edits": [
+       {"set": "deployment_order_plans/0/name", "value": "Don't"},
+       {"set": "deployment_order_plans/-", "value": {"id": "d1", "name": "Don't", "order": ["Yi Sang", "Faust", "Don Quixote", "Ryōshū", "Meursault", "Hong Lu", "Heathcliff", "Ishmael", "Rodion", "Sinclair", "Outis", "Gregor"]}}],
+     "cross": ["deployment_order_plans: id 'd1' appears 2 times", "deployment_order_plans: name \"Don't\" appears 2 times"]},
+    {"name": "duplicate overrides", "edits": [
+       {"set": "event_overrides/-", "value": {"question": "Q?", "option": "No"}},
+       {"set": "trial_risk_overrides/-", "value": {"trial": "Growth I", "risk": 1}},
+       {"set": "trial_risk_overrides/-", "value": {"trial": "Growth I", "risk": 2}}],
+     "cross": ["event_overrides: question 'Q?' appears 2 times", "trial_risk_overrides: trial 'Growth I' appears 3 times"]}
+  ]
+}
