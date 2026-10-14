@@ -1,4 +1,5 @@
 // Settings types and the values that come from agent/settings.schema.json (docs/spec/04-settings.md).
+import { parse as parseYaml } from "yaml";
 import schema from "../../agent/settings.schema.json";
 
 export { schema };
@@ -27,6 +28,13 @@ export interface StarlightValues { levels: string[]; priority: number[]; convert
 export interface DeploymentPlan { id: string; name: string; order: Order }
 export interface StarlightPlan extends StarlightValues { id: string; name: string }
 export interface ThemePackPlan { id: string; name: string; marks: Record<string, string> }
+/** assets/resource/base/data/theme_packs.yaml (spec 05 section 2): the season's packs and the locked default plan. */
+export interface ThemePacks { packs: string[]; default_plan: Record<string, string> }
+
+export function parseThemePacks(text: string): ThemePacks {
+  const data = (parseYaml(text) ?? {}) as Partial<ThemePacks>;
+  return { packs: data.packs ?? [], default_plan: data.default_plan ?? {} };
+}
 export type Ref<T> = { plan: string } | { custom: T };
 export interface Team {
   id: string; name: string; enabled: boolean; game_team: number; keyword: string; usage: string;

@@ -1,7 +1,8 @@
 // Runs tests/settings_cases.json, which tests/test_settings.py runs against agent/settings.py too.
 import { describe, expect, test } from "vitest";
 import cases from "../../tests/settings_cases.json";
-import { newSettings, newTeam, parseSettings } from "./model";
+import themePacksYaml from "../../assets/resource/base/data/theme_packs.yaml?raw";
+import { newSettings, newTeam, parseSettings, parseThemePacks } from "./model";
 import { pyRepr, validate } from "./validate";
 
 type Edit = { set: string; value: unknown } | { delete: string };
@@ -55,4 +56,12 @@ test("a new file asks for a team, and new teams make it valid", () => {
 test("parseSettings refuses newer and unmigratable versions", () => {
   expect(() => parseSettings('{"version": 2}')).toThrow("newer");
   expect(() => parseSettings('{"version": 0}')).toThrow("cannot be migrated");
+});
+
+test("parseThemePacks reads the season's data file", () => {
+  const data = parseThemePacks(themePacksYaml);
+  expect(data.packs).toContain("Walpurgis Night: Hatred and Despair");
+  expect(data.default_plan).toEqual({});
+  expect(parseThemePacks("packs: [A]\ndefault_plan:\n  A: avoid\n")).toEqual({ packs: ["A"], default_plan: { A: "avoid" } });
+  expect(parseThemePacks("")).toEqual({ packs: [], default_plan: {} });
 });

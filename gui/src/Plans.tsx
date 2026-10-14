@@ -1,8 +1,9 @@
 // Named plans (spec 04 sections 6–8) and the editors teams reuse for their custom values.
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import { loadThemePacks } from "./api";
 import {
   BOOSTS, LEVELS, MARKS, SINNERS, defaultStarlight, freeName, newId,
-  type DeploymentPlan, type Order, type StarlightPlan, type StarlightValues, type ThemePackPlan,
+  type DeploymentPlan, type Order, type StarlightPlan, type StarlightValues, type ThemePackPlan, type ThemePacks,
 } from "./model";
 import { Field, ReorderList, Select, useEditor } from "./ui";
 
@@ -108,44 +109,48 @@ export const StarlightTab = () => (
 
 export function ThemePackTab() {
   const { t } = useEditor();
+  const [data, setData] = useState<ThemePacks>({ packs: [], default_plan: {} });
+  const [error, setError] = useState("");
+  useEffect(() => { loadThemePacks().then(setData, (e) => setError(String(e))); }, []);
+  const note = error && <p className="bad">{t("themePacksError")}: {error}</p>;
   return (
     <PlanTab<ThemePackPlan> planKey="theme_pack_plans" tab="tab.themepacks" make={() => ({ marks: {} })}
-      lead={{ label: t("defaultPlanLocked"), body: <p className="muted">{t("defaultPlanNote")}</p> }}
-      editor={(p, change, path) => <MarksEditor plan={p} change={change} path={path} />} />
+      lead={{ label: t("defaultPlanLocked"), body: <>
+        <p className="muted">{t("defaultPlanNote")}</p>{note}
+        <MarksTable packs={data.packs} marks={data.default_plan} path="" />
+      </> }}
+      editor={(p, change, path) => <>
+        <p className="muted">{t("marksNote")}</p>{note}
+        <MarksTable packs={data.packs} marks={p.marks} path={`${path}/marks`} onChange={(marks) => change({ ...p, marks })} />
+      </>} />
   );
 }
 
-function MarksEditor({ plan, change, path }: { plan: ThemePackPlan; change: (p: ThemePackPlan) => void; path: string }) {
+/** Every pack of the season, then marked packs the data file no longer lists. Read-only without onChange. */
+function MarksTable({ packs, marks, path, onChange }: {
+  packs: string[]; marks: Record<string, string>; path: string; onChange?: (marks: Record<string, string>) => void;
+}) {
   const { t, tv, bad } = useEditor();
-  const [pack, setPack] = useState("");
-  const setMarks = (marks: Record<string, string>) => change({ ...plan, marks });
-  // ponytail: packs are typed by name until the season's theme pack data file (spec 05 section 2) exists; then list them all.
+  const rows = [...packs, ...Object.keys(marks).filter((name) => !packs.includes(name))];
+  const set = (name: string, mark: string) => {
+    const next = { ...marks, [name]: mark };
+    if (mark === "neutral") delete next[name]; // unlisted packs are neutral (spec 04 section 8)
+    onChange?.(next);
+  };
   return (
-    <>
-      <p className="muted">{t("marksNote")}</p>
-      <table>
-        <tbody>
-          {Object.entries(plan.marks).map(([name, mark]) => (
-            <tr key={name} className={bad(`${path}/marks/${name}`) ? "bad" : ""}>
-              <td>{name}</td>
-              <td><Select value={mark} options={MARKS} label={(v) => tv("mark", v)} onChange={(v) => setMarks({ ...plan.marks, [name]: v })} /></td>
-              <td><button type="button" className="danger" onClick={() => {
-                const rest = { ...plan.marks };
-                delete rest[name];
-                setMarks(rest);
-              }}>{t("remove")}</button></td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      <form className="row" onSubmit={(e) => {
-        e.preventDefault();
-        if (pack.trim()) setMarks({ ...plan.marks, [pack.trim()]: plan.marks[pack.trim()] ?? "prefer" });
-        setPack("");
-      }}>
-        <input placeholder={t("packName")} value={pack} onChange={(e) => setPack(e.target.value)} />
-        <button type="submit">+ {t("add")}</button>
-      </form>
-    </>
+    <table>
+      <tbody>
+        {rows.map((name) => (
+          <tr key={name} className={path && bad(`${path}/${name}`) ? "bad" : ""}>
+            <td>{name}{!packs.includes(name) && <em className="tag">{t("packNotInData")}</em>}</td>
+            <td>
+              {onChange
+                ? <Select value={marks[name] ?? "neutral"} options={MARKS} label={(v) => tv("mark", v)} onChange={(v) => set(name, v)} />
+                : tv("mark", marks[name] ?? "neutral")}
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
   );
 }
