@@ -4,7 +4,10 @@ version = "0.0.0"
 description = "MaaFramework automation for Limbus Company Mirror Dungeon"
 license = "MIT"
 requires-python = ">=3.12,<3.13"
-dependencies = ["maafw~=5.14.3"]
+dependencies = [
+    "jsonschema>=4.26.0",
+    "maafw~=5.14.3",
+]
 
 [dependency-groups]
 dev = ["pytest"]
