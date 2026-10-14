@@ -1,0 +1,11 @@
+{
+    "private": true,
+    "packageManager": "pnpm@12.4.2",
+    "scripts": {
+        "check": "maa-tools check",
+        "test": "maa-tools test"
+    },
+    "devDependencies": {
+        "@nekosu/maa-tools": "1.1.3"
+    }
+}
