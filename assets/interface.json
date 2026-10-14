@@ -15,9 +15,8 @@
             "name": "MuMu",
             "label": "$MuMu",
             "type": "Adb",
-            // PI V2 has no adb screencap/input fields: the client passes the methods
-            // Toolkit.find_adb_devices() reports, which for MuMu already include
-            // EmulatorExtras for both screencap and input (input's Default lacks it).
+            // PI V2 has no adb screencap/input fields: the client uses whatever
+            // Toolkit.find_adb_devices() reports. Any method that connects and taps works.
             "adb": {}
         }
     ],
@@ -31,6 +30,7 @@
         }
     ],
     "agent": {
+        // tools/install.py pins this to an absolute interpreter path.
         "child_exec": "python",
         "child_args": [
             "./agent/main.py"

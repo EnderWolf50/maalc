@@ -61,7 +61,7 @@
 | 項目 | 規範 | 來源 |
 |---|---|---|
 | 模擬器 | 驗收以 MuMu 12 為準（實測版本 MuMu Player Global 6.8.3.0）；其他 ADB 模擬器只要求能用 | #1、#7 |
-| 連線 | ADB；MuMu 的截圖與觸控都必須走 `EmulatorExtras`（`MuMuPlayerExtras`），輸入方式必須明確開啟它，因為輸入的 `Default` 不含 `EmulatorExtras` | #7 |
+| 連線 | ADB；截圖與輸入方式交給框架自動偵測，能連上、能點擊即可，不指定 `EmulatorExtras` | #7、#22 |
 | 解析度 | 任何 16:9 解析度；MaaFramework 預設把截圖縮到短邊 720，素材以 720p 製作 | #1、#7 |
 | 遊戲 | Android 版 Limbus Company，套件名 `com.ProjectMoon.LimbusCompany`，實測版本 1.116.2 | #2、#7 |
 | 遊戲語言 | 只支援英文客戶端。官方語言只有韓、日、英，沒有中文 | #1、#2 |

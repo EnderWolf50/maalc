@@ -16,3 +16,7 @@ assets/resource/base/model/ocr/
 /state/
 /config/settings.json
 /install/
+
+# Local tools
+/mxu/
+/.playwright-mcp/
