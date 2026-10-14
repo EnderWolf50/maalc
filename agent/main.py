@@ -7,7 +7,7 @@ from maa.agent.agent_server import AgentServer
 # config/, state/ and logs/ live under it. Located from this file, never from cwd.
 ROOT = Path(__file__).resolve().parent.parent
 
-import placeholder  # noqa: E402,F401  registers custom actions
+import actions  # noqa: E402,F401  registers custom actions
 
 
 def main() -> None:

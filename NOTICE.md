@@ -31,3 +31,7 @@ SOFTWARE.
 ## OCR 模型 ppocr_v6/small
 
 `assets/resource/base/model/ocr/` 的模型由 `tools/fetch_ocr.py` 從 [MaaCommonAssets](https://github.com/MaaXYZ/MaaCommonAssets/tree/main/OCR/ppocr_v6/small) 下載，不放進 repo。模型出自 [PaddleOCR](https://github.com/PaddlePaddle/PaddleOCR) 的 PP-OCRv6，採 [Apache-2.0](https://www.apache.org/licenses/LICENSE-2.0) 授權。
+
+## Limbus Company 遊戲素材
+
+`assets/resource/base/image/` 的模板與 `tests/screens/` 的測試截圖取自 Limbus Company 的遊戲畫面，著作權屬於 © Project Moon，不在本專案的 MIT 授權範圍內。測試截圖中的 UID 與帳號已遮蔽。

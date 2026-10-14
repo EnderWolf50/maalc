@@ -1,0 +1,34 @@
+{
+    // Global popups (spec 01, 全域彈窗): first in MirrorHub's next.
+    // Not built yet, no screenshot of them so far: tutorial tip, weekly reset notice,
+    // Infinity Mirror popup, level-up popup.
+    "Connecting": {
+        "recognition": "OCR",
+        "roi": [1000, 50, 240, 50],
+        "expected": "CONNECTING",
+        "post_delay": 1000
+    },
+    // Unverified layout: matches a lone "Retry" button anywhere mid-screen.
+    "RetryPopup": {
+        "recognition": "OCR",
+        "roi": [340, 380, 600, 180],
+        "expected": "^Retry$",
+        "action": "Click",
+        "post_delay": 2000
+    },
+    // Unverified layout: any "maintenance" text mid-screen stops the task.
+    "MaintenanceNotice": {
+        "recognition": "OCR",
+        "roi": [240, 160, 800, 400],
+        "expected": "(?i)maintenance",
+        "action": "Custom",
+        "custom_action": "Halt",
+        "custom_action_param": "maintenance notice"
+    },
+    "Loading": {
+        "recognition": "OCR",
+        "roi": [1060, 625, 190, 40],
+        "expected": "NOW LOADING",
+        "post_delay": 1000
+    }
+}

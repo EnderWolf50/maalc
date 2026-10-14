@@ -26,4 +26,5 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec maa-tools check
+      - run: python3 tools/fetch_ocr.py
       - run: pnpm exec maa-tools test
