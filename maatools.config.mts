@@ -24,6 +24,8 @@ const screens: [image: string, hits: string[]][] = [
   ['GiftSearch.png', ['GiftSearch']],
   ['GiftSearchForgo.png', ['GiftSearchForgo', 'GiftSearch']],
   ['ThemePack.png', ['ThemePack']],
+  ['ThemePackNormal.png', ['ThemePack']],
+  ['MirrorMap.png', ['MirrorMap']],
 ]
 
 const config: FullConfig = {

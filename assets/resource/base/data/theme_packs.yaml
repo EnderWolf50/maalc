@@ -1,0 +1,36 @@
+# Theme packs of the current season and the default theme pack plan (docs/spec/05-game-data.md section 2).
+# Developer-maintained, replaced every season; users build their own plans in the settings GUI.
+#
+# Season: Mirror of Names and Spiders, ends 2026-10-15.
+# ponytail: only the packs seen in live captures so far; list the full season from the
+# Theme Pack Compendium when the next season's data lands. Unlisted packs count as neutral.
+packs:
+  - Automated Factory
+  - Charm, Wander, Doubt
+  - Emotional Craving
+  - Emotional Indolence
+  - Emotional Judgment
+  - Emotional Repression
+  - Faith & Erosion
+  - Flat-broke Gamblers
+  - Insignificant Envy
+  - Lake World
+  - LCB Regular Check-up
+  - Mnestic Experience
+  - Mountain of Corpses, Sea of Blood
+  - Nagel und Hammer
+  - Nest, Workshop, and Technology
+  - Poised Breathing
+  - Sinking Deluge
+  - The Forgotten
+  - The Outcast
+  - The Unconfronting
+  - The Unloving
+  - To be Cleaved
+  - To be Crushed
+  - To be Pierced
+  - Tyrannical Pride
+  - "Walpurgis Night: Hatred and Despair"
+
+# Pack name -> prefer / neutral / avoid. Unlisted packs are neutral.
+default_plan: {}
