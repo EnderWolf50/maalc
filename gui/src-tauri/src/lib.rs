@@ -36,6 +36,19 @@ fn load_settings() -> Result<Option<String>, String> {
     }
 }
 
+/// The season's theme pack data file text (spec 05 section 2). resource/ sits under <root> in a
+/// release and under assets/ in the repo: the same lookup as agent/actions.py.
+#[tauri::command]
+fn load_theme_packs() -> Result<String, String> {
+    let root = root()?;
+    let resource = [root.join("resource"), root.join("assets").join("resource")]
+        .into_iter()
+        .find(|p| p.is_dir())
+        .ok_or("no resource folder under <root>")?;
+    let path = resource.join("base").join("data").join("theme_packs.yaml");
+    fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))
+}
+
 /// Write a temp file next to settings.json, then rename over it, so a crash never leaves half a file.
 #[tauri::command]
 fn save_settings(text: String) -> Result<(), String> {
@@ -78,6 +91,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             root_dir,
             load_settings,
+            load_theme_packs,
             save_settings,
             append_runs_log
         ])
