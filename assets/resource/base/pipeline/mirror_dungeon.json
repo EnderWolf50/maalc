@@ -1,6 +1,163 @@
 {
     "MirrorDungeon": {
+        "next": [
+            "MirrorHub"
+        ]
+    },
+    // Dispatch: every screen is one node; [JumpBack] nodes return here to look again.
+    // next order is priority: global popups first, then dialogs before the page under them.
+    "MirrorHub": {
+        "timeout": 60000,
+        "next": [
+            "[JumpBack]Connecting",
+            "[JumpBack]RetryPopup",
+            "MaintenanceNotice",
+            "[JumpBack]Loading",
+            "ExplorationReward",
+            "[JumpBack]MirrorEnterDialog",
+            "MirrorEntryUnclaimed",
+            "MirrorEntryPaused",
+            "[JumpBack]MirrorEntryNewRun",
+            "[JumpBack]LevelWarning",
+            "[JumpBack]TeamSelect",
+            "[JumpBack]StarlightConfirm",
+            "[JumpBack]StarlightPage",
+            "[JumpBack]GiftGet",
+            "[JumpBack]GiftSearchForgo",
+            "[JumpBack]GiftSearch",
+            "[JumpBack]StartingGift",
+            "ThemePack",
+            "[JumpBack]GoToMirrorEntry"
+        ]
+    },
+    // Entry page: branch on the Exploring: field (spec 01, 入口頁的分流).
+    "MirrorEntryNewRun": {
+        "recognition": "OCR",
+        "roi": [990, 140, 230, 35],
+        "expected": "Before Entry",
+        "action": "Click",
+        "target": [1020, 465, 175, 60],
+        "post_delay": 1500
+    },
+    // Tracer: a paused run or an unclaimed reward stops the task instead of
+    // resuming or settling it: Resume lands with #31, settlement with #30.
+    "MirrorEntryPaused": {
+        "recognition": "OCR",
+        "roi": [990, 140, 230, 35],
+        "expected": "F\\s*\\d",
         "action": "Custom",
-        "custom_action": "Placeholder"
+        "custom_action": "Halt",
+        "custom_action_param": "paused run on the entry page, not resuming"
+    },
+    "MirrorEntryUnclaimed": {
+        "recognition": "OCR",
+        "roi": [990, 140, 230, 35],
+        "expected": "Exploration Complete",
+        "action": "Custom",
+        "custom_action": "Halt",
+        "custom_action_param": "unclaimed rewards on the entry page, not claiming"
+    },
+    // Pops up by itself on the entry page while rewards are pending (captures/253).
+    "ExplorationReward": {
+        "recognition": "OCR",
+        "roi": [500, 100, 280, 45],
+        "expected": "Exploration Reward",
+        "action": "Custom",
+        "custom_action": "Halt",
+        "custom_action_param": "Exploration Reward window, not claiming"
+    },
+    "MirrorEnterDialog": {
+        "recognition": "OCR",
+        "roi": [400, 325, 480, 45],
+        "expected": "Will you enter",
+        "action": "Click",
+        "target": [650, 465, 220, 40],
+        "post_delay": 2000
+    },
+    "LevelWarning": {
+        "recognition": "OCR",
+        "roi": [400, 230, 480, 90],
+        "expected": "recommended level",
+        "action": "Click",
+        "target": [665, 478, 200, 35],
+        "post_delay": 2000
+    },
+    "TeamSelect": {
+        "recognition": "OCR",
+        "roi": [80, 272, 100, 28],
+        "expected": "^TEAMS$",
+        "action": "Custom",
+        "custom_action": "SelectTeam",
+        "next": [
+            "TeamConfirm"
+        ]
+    },
+    "TeamName": {
+        "recognition": "OCR",
+        "roi": [220, 112, 210, 26]
+    },
+    "TeamConfirm": {
+        "action": "Click",
+        "target": [1075, 560, 140, 55],
+        "post_delay": 2000
+    },
+    "StarlightPage": {
+        "recognition": "OCR",
+        "roi": [925, 33, 70, 22],
+        "expected": "Available",
+        "action": "Click",
+        "target": [1150, 650, 90, 45],
+        "post_delay": 1500
+    },
+    // Nothing bought: the Agent's starlight plan replaces this (#25).
+    "StarlightConfirm": {
+        "recognition": "OCR",
+        "roi": [480, 210, 320, 35],
+        "expected": "Continue with selected effects",
+        "action": "Click",
+        "target": [655, 512, 165, 38],
+        "post_delay": 2000
+    },
+    "StartingGift": {
+        "recognition": "OCR",
+        "roi": [780, 145, 230, 35],
+        "expected": "Selected E",
+        "action": "Custom",
+        "custom_action": "PickStartingGift",
+        "post_delay": 1000
+    },
+    "GiftGet": {
+        "recognition": "OCR",
+        "roi": [520, 160, 240, 40],
+        "expected": "Gift GET",
+        "action": "Click",
+        "target": [545, 512, 190, 40],
+        "post_delay": 1500
+    },
+    // v1 always refuses Gift Search: it spends owned Starlight.
+    "GiftSearch": {
+        "recognition": "OCR",
+        "roi": [140, 30, 220, 35],
+        "expected": "Gift Search",
+        "action": "Click",
+        "target": [840, 552, 160, 42],
+        "post_delay": 1500
+    },
+    "GiftSearchForgo": {
+        "recognition": "OCR",
+        "roi": [480, 330, 320, 35],
+        "expected": "Forgo",
+        "action": "Click",
+        "target": [665, 478, 200, 35],
+        "post_delay": 2000
+    },
+    // Tracer stops here; picking a pack is the Agent's job (#25).
+    "ThemePack": {
+        "recognition": "OCR",
+        "roi": [480, 100, 320, 40],
+        "expected": "THEME ?PACK",
+        "action": "Custom",
+        "custom_action": "Halt",
+        "custom_action_param": "reached the theme pack page"
     }
 }
