@@ -14,6 +14,7 @@ from maa.agent.agent_server import AgentServer
 from maa.context import Context
 from maa.custom_action import CustomAction
 
+import map_route
 import run_start
 from settings import SettingsError, load_settings
 from state import pick_team, read_cursor
@@ -389,9 +390,134 @@ class PickThemePack(CustomAction):
                 if want is not None and hard != want:
                     log(f"floor {floor} stays HARD: a run never goes back to NORMAL")
                 log(f"floor {floor}: {'HARD' if hard else 'NORMAL'}")
+                RUN["floor_hard"] = hard  # the map does not show it; RouteMap's weights need it
                 return True
             # The arrows sit left of HARD, right of NORMAL; switching re-rolls the packs.
             log(f"floor {floor}: switch to {move.upper()}")
             tap(context, 965 if move == "hard" else 850, 46, wait=2.5)
         log(f"stop: floor {floor} difficulty did not switch to {'HARD' if want else 'NORMAL'}")
         return False
+
+
+# Map page (spec 03 section 7). Offsets are from the MapBus template's top-left corner.
+BUS_HOME = (446, 320)  # map panned ~70 px down from rest (bus at 446, 248): top-row badges clear the resource bar
+SLOT = (279, 37)  # middle-row slot centre; map_route.ROW_DY gives the other rows
+LINKS = {
+    "up": ("MapLinkUp", (90, -115, 110, 110)),
+    "mid": ("MapLinkMid", (95, -10, 110, 80)),
+    "down": ("MapLinkDown", (85, 85, 110, 110)),
+}
+MARKS = {  # node -> (mark, roi around the slot centre)
+    "MapNodeBoss": ("boss", (-40, -40, 80, 80)),
+    "MapNodeFocusedHex": ("focused", (-80, -60, 160, 120)),
+    "MapNodeFocusedRound": ("focused", (-75, -60, 150, 120)),
+    "MapNodeCost": ("cost", (-60, -80, 120, 60)),
+    "MapNodeGift": ("gift", (-60, -80, 120, 60)),
+    "MapNodeEvent": ("event", (-60, -60, 120, 120)),
+    "MapNodeShop": ("shop", (-60, -60, 120, 120)),
+}
+ENTER = (1133, 543)
+PANEL_REWARDS = [700, 495, 110, 30]  # the "Clear Rewards" label
+PANEL_COST = [730, 545, 40, 35]  # the number by its Cost coin
+
+
+def seen(context, image, node, roi=None):
+    """The node's hit on image, its roi overridden and clipped to the screen; None on a miss."""
+    override = None
+    if roi:
+        x, y, w, h = roi
+        x0, y0 = max(0, x), max(0, y)
+        override = {node: {"roi": [x0, y0, min(1280, x + w) - x0, min(720, y + h) - y0]}}
+    detail = context.run_recognition(node, image, override)
+    return detail if detail and detail.hit else None
+
+
+def map_weights(context):
+    run = current_run(context)
+    hard = run.get("floor_hard", run["difficulty"] == "hard")
+    data = yaml.safe_load((RESOURCE / "base" / "data" / "map_weights.yaml").read_text(encoding="utf-8"))
+    return data["hard" if hard else "normal"]
+
+
+def enter_node(context):
+    """On the node selection panel: log its Clear Rewards, press Enter until the panel is gone."""
+    # Only logged: events show no Clear Rewards, a shop shows the next boss's (spec 03 section 7).
+    image = screen(context)
+    cost = number(text(context, image, PANEL_COST)) if "Rewards" in text(context, image, PANEL_REWARDS) else None
+    log(f"node panel: Clear Rewards Cost {cost}")
+    for _ in range(3):
+        tap(context, *ENTER, wait=2)
+        if not seen(context, screen(context), "MapNodePanel"):
+            log("entered the node; its screens come with #27-#29: stop")
+            return True
+    log("stop: Enter on the node panel did nothing")
+    return False
+
+
+@AgentServer.custom_action("EnterNode")
+class EnterNode(CustomAction):
+    """The node selection panel is already up (e.g. after a restart): enter the node."""
+
+    def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
+        return enter_node(context)
+
+
+@AgentServer.custom_action("RouteMap")
+class RouteMap(CustomAction):
+    """Pick the next node and enter it (spec 03 section 7).
+
+    Slots linked to the bus (a chevron on the link) are typed by their marks, ranked by
+    map_route.rank and tapped in that order until the node panel (MapNodePanel) shows. After them come
+    the fallbacks: the bus (a node reached but not entered), then the slots not tried yet.
+    Nothing taking a tap is a stop; stuck handling is #31.
+    """
+
+    def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
+        image, bus = self.find_bus(context)
+        bx, by = bus or (446, 248)  # no bus found: assume the map at rest
+        slots = self.read_slots(context, image, bx, by) if bus else {}
+        log("map: " + (", ".join(f"{r} {t} ({'?' if n is None else n} onward)" for r, (t, n) in slots.items()) or "no linked slot read"))
+        order = map_route.rank(slots, map_weights(context))
+
+        def centre(row):
+            return bx + SLOT[0], by + SLOT[1] + map_route.ROW_DY[row]
+
+        tries = [(f"{r} {slots[r][0]}", centre(r)) for r in order]
+        tries += [("the bus", (bx + 22, by + 37))] + [(f"{r} slot", centre(r)) for r in map_route.ROWS if r not in order]
+        for name, (x, y) in tries:
+            tap(context, x, y, wait=2)
+            if seen(context, screen(context), "MapNodePanel"):
+                log(f"map: take {name}")
+                return enter_node(context)
+        log("stop: no node on the map took a tap")
+        return False
+
+    @staticmethod
+    def find_bus(context):
+        """A screenshot and the bus's top-left in it, after panning the bus to BUS_HOME."""
+        for attempt in range(4):
+            image = screen(context)
+            bus = seen(context, image, "MapBus")
+            if not bus:
+                return image, None
+            bx, by = bus.box[0], bus.box[1]
+            dx, dy = BUS_HOME[0] - bx, BUS_HOME[1] - by
+            if abs(dx) <= 30 and abs(dy) <= 25 or attempt == 3:
+                return image, (bx, by)
+            # Live: pans are uneven (a slow 70 px swipe moved the map 90 px, a 55 px one 35 px),
+            # so look again after each. Start left of the bus, on map background.
+            swipe(context, 300, 400, 300 + int(dx * 0.78), 400 + int(dy * 0.78), ms=1000, wait=1.5)
+
+    @staticmethod
+    def read_slots(context, image, bx, by):
+        """{row: (node type, routes onward or None)} for the slots linked to the bus."""
+        v = image.max(axis=2)
+        slots = {}
+        for row in map_route.ROWS:
+            node, (rx, ry, rw, rh) = LINKS[row]
+            if not seen(context, image, node, (bx + rx, by + ry, rw, rh)):
+                continue
+            cx, cy = bx + SLOT[0], by + SLOT[1] + map_route.ROW_DY[row]
+            marks = {mark for n, (mark, (ox, oy, w, h)) in MARKS.items() if seen(context, image, n, (cx + ox, cy + oy, w, h))}
+            slots[row] = (map_route.node_type(marks), map_route.routes(v, cx, cy))
+        return slots

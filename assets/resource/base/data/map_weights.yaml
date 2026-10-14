@@ -1,0 +1,22 @@
+# Map routing weights (docs/spec/05-game-data.md section 5): the lowest goes first.
+# Developer-maintained. The boss is not weighted: it is taken only when it is the only linked node.
+#
+# shop is not in the spec's table: the bot never seeks a shop (every floor has one before the boss),
+# so it ranks after every fight it can recognise and before unknown, on both difficulties.
+# risky: no template yet, the icon has not been seen live (spec 03, 未決 2); it reads as abno or unknown.
+normal:
+  event: 1
+  battle: 2
+  focused: 4
+  abno: 5
+  risky: 6
+  shop: 7
+  unknown: 9
+hard:
+  event: 1
+  battle: 2
+  focused: 4
+  abno: 5
+  shop: 7
+  risky: 8
+  unknown: 9
