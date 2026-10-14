@@ -1,0 +1,98 @@
+{
+    // Map page parts the RouteMap action reads (spec 03 section 7). Never in a next list:
+    // RouteMap runs them with ROIs relative to the bus, so it overrides every roi below.
+    // The default ROIs fit a map at rest (bus template at 446,248) for maa-tools test.
+    "MapBus": {
+        "recognition": "TemplateMatch",
+        "roi": [100, 60, 1000, 560],
+        "template": "Map/MapBus.png",
+        "threshold": 0.8
+    },
+    // Chevrons sit only on the lit links from the bus: the slots the bus can move to.
+    // Green-masked: the link line behind them takes the theme pack's colour.
+    "MapLinkUp": {
+        "recognition": "TemplateMatch",
+        "roi": [536, 133, 110, 110],
+        "template": "Map/MapLinkUp.png",
+        "green_mask": true,
+        "threshold": 0.8
+    },
+    "MapLinkMid": {
+        "recognition": "TemplateMatch",
+        "roi": [541, 238, 110, 80],
+        "template": "Map/MapLinkMid.png",
+        "green_mask": true,
+        "threshold": 0.8
+    },
+    "MapLinkDown": {
+        "recognition": "TemplateMatch",
+        "roi": [531, 333, 110, 110],
+        "template": "Map/MapLinkDown.png",
+        "green_mask": true,
+        "threshold": 0.8
+    },
+    // Node marks; the default ROIs cover the whole column next to the bus.
+    // Cost coin and gift box badges are UI art, the same on every theme pack.
+    "MapNodeCost": {
+        "recognition": "TemplateMatch",
+        "roi": [640, 0, 180, 620],
+        "template": "Map/MapNodeCost.png",
+        "threshold": 0.8
+    },
+    "MapNodeGift": {
+        "recognition": "TemplateMatch",
+        "roi": [640, 0, 180, 620],
+        "template": "Map/MapNodeGift.png",
+        "threshold": 0.8
+    },
+    // The orange WARNING ring of a Focused encounter, hexagonal on most packs, round on some.
+    // The hexagonal one is matched by shape: its colours shift with the pack's glow
+    // (live: a colour template scored 0.67 on an orange pack).
+    "MapNodeFocusedHex": {
+        "recognition": "FeatureMatch",
+        "roi": [640, 0, 180, 620],
+        "template": "Map/MapNodeFocusedHex.png",
+        "count": 12
+    },
+    // Ring pixels only (green-masked): the node art inside differs on every such pack.
+    "MapNodeFocusedRound": {
+        "recognition": "TemplateMatch",
+        "roi": [640, 0, 180, 620],
+        "template": [
+            "Map/MapNodeFocusedRound.png",
+            "Map/MapNodeFocusedRoundCards.png"
+        ],
+        "green_mask": true,
+        "threshold": 0.8
+    },
+    // The boss node glows saturated red on every pack seen; no other node does.
+    // Default roi: the middle slot's body at rest; red affinity icons sit outside it.
+    "MapNodeBoss": {
+        "recognition": "ColorMatch",
+        "roi": [685, 245, 80, 80],
+        "method": 4,
+        "lower": [170, 0, 0],
+        "upper": [255, 70, 70],
+        "count": 500
+    },
+    // Glyphs take the pack's colour, so they are matched by shape (SIFT works on grey).
+    "MapNodeEvent": {
+        "recognition": "FeatureMatch",
+        "roi": [640, 0, 180, 620],
+        "template": [
+            "Map/MapNodeEvent.png",
+            "Map/MapNodeEventRock.png",
+            "Map/MapNodeEventCards.png"
+        ],
+        "count": 6
+    },
+    "MapNodeShop": {
+        "recognition": "FeatureMatch",
+        "roi": [640, 0, 180, 620],
+        "template": [
+            "Map/MapNodeShop.png",
+            "Map/MapNodeShopCards.png"
+        ],
+        "count": 6
+    }
+}
