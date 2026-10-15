@@ -63,6 +63,7 @@
 - 每次在戰前編隊頁讀出的存活人數要記在 Agent 記憶體，供商店的治療判斷使用（第 13 節）。（#10）
 - 存活少於 K 人就停止：每隊一個數字，預設 0（不檢查）。有些隊伍需要罪人陣亡，所以預設不檢查。（#16）
 - 實機：`Total Participants <n>/<m>` 的 `<m>` 就是存活人數（12 減陣亡人數）；陣亡者的卡片變灰、沒有順序標記，點了沒反應。順序 1–7 上場（`SELECTED`），之後最多 5 位是 `BACKUP`。（實機：captures/206_formation_with_dead_sinner.png、captures/207_formation_tap_dead_card.png、captures/49_formation_tap_unselected_card.png）
+- 實機（1.117.0）：Clear Selection 會先問 `Reset Deployment Order?`，按 Confirm 後計數才歸零。存活的罪人都可以點選，12 人存活時 `Backup Deployed 5/5`。（#27；2026-10-15 實機）
 
 ## 4. 星光
 
