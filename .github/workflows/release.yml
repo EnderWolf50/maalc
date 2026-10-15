@@ -46,11 +46,15 @@ jobs:
           Rename-Item install maalc
           7z a -tzip "$name.zip" maalc
           "ZIP=$name.zip" >> $env:GITHUB_ENV
+      # A convenience copy; the draft release is the output. Kept off the
+      # critical path so a full Actions storage quota does not fail the build.
       - uses: actions/upload-artifact@v4
+        continue-on-error: true
         with:
           name: ${{ env.ZIP }}
           path: ${{ env.ZIP }}
           compression-level: 0
+          retention-days: 3
       - if: env.TAG != ''
         run: gh release create $env:TAG $env:ZIP --draft --target $env:GITHUB_SHA --title $env:TAG --generate-notes
         env:
