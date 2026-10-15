@@ -19,6 +19,7 @@ import battle
 import map_route
 import rewards
 import run_start
+import shop
 from settings import SettingsError, load_settings
 from state import pick_team, read_cursor
 
@@ -933,3 +934,318 @@ class PickGift(CustomAction):
                 return True
         log("stop: Select did not take the gifts")
         return False
+
+
+# Shop (spec 03 section 13). The Super Shop has the same layout with up to 10 offers.
+SHOP_COST = [540, 112, 110, 45]
+REFRESH = {"normal": ((997, 122), [960, 140, 80, 30]), "keyword": ((1140, 122), [1100, 140, 80, 30])}  # button, fee
+OFFER_GRID = [545, 215, 620, 300]
+DIALOG_TITLE = [360, 80, 560, 115]  # Purchase E.G.O Gifts, Shop - Keyword Refresh, Fuse / Sell E.G.O Gift
+PURCHASE_TEXT = [525, 210, 400, 220]
+PURCHASE_PREVIEW = [780, 145, 140, 40]  # "2864 > 2612": the Cost before and after
+PURCHASE, PURCHASE_CANCEL = (747, 482), (525, 482)
+KEYWORD_LABELS = [270, 300, 740, 200]  # the 10 keyword cards of both keyword dialogs
+KEYWORD_REFRESH, KEYWORD_CANCEL = (785, 560), (495, 560)
+GET_TITLE, GET_CONFIRM = [520, 160, 240, 40], (640, 532)
+PAGE_CLOSE, PAGE_OK = (490, 585), (788, 585)  # Close, and Fuse / Sell, on the fuse and sell pages
+SHOP_BUTTONS = {"fuse": (295, 390), "sell": (395, 390), "heal": (197, 474)}
+FUSE_CENTRE, FUSE_KEYWORD_OK = (365, 340), (788, 566)
+FUSE_CELLS = [(677 + 96 * c, y) for y in (293, 385, 468) for c in range(5)]  # the third row shows half
+FUSE_TOOLTIP = [600, 180, 680, 440]
+FUSE_CONFIRM = [300, 150, 680, 380]  # "Selected E.G.O Gifts 3/5" over "Fuse the selected E.G.O Gifts?"
+FUSE_NEUTRAL = (715, 229)  # the E.G.O Gifts Owned label: closes a tooltip, selects nothing
+SELL_CELLS = [(683 + 96 * c, y) for y in (258, 365, 462) for c in range(5)]
+SELL_PANEL, SELL_PRICE, SELL_COST = [150, 160, 420, 360], [500, 160, 60, 45], [960, 80, 160, 45]
+HEAL_TITLE, HEAL_COST = [130, 30, 220, 45], [1100, 90, 110, 50]
+HEAL_OPTIONS = {"full": (1020, 330), "revive": (1020, 455)}
+SHOP_PORTRAIT_X = [98 + 77 * i for i in range(12)]  # the shop's sinner bar (step 77, not the event bar's)
+BOTTOM_RIGHT = (1130, 647)  # Leave on the shop; Return, Select or Leave on the heal pages
+OUTSIDE = (40, 400)  # left of every shop dialog, on nothing
+LEAVE_DIALOG, LEAVE_CONFIRM, LEAVE_CANCEL = [440, 320, 400, 45], (765, 493), (515, 493)
+
+
+def read_cost(context, roi=SHOP_COST):
+    return number(text(context, screen(context), roi))
+
+
+def tap_keyword(context, keyword):
+    """Tap the keyword's card in an open keyword dialog; False when its label is not read."""
+    label = next((b for t, b in ocr(context, screen(context), KEYWORD_LABELS) if t.strip().upper() == keyword.upper()), None)
+    if label:
+        x, y, w, h = label
+        tap(context, x + w // 2, y - 40)
+    return bool(label)
+
+
+def gift_get(context):
+    """Confirm the E.G.O Gift GET! popup after a purchase or a fusion."""
+    for _ in range(4):
+        if "GET" in text(context, screen(context), GET_TITLE):
+            tap(context, *GET_CONFIRM, wait=1.5)
+            return True
+        time.sleep(0.5)
+    return False
+
+
+@AgentServer.custom_action("Shop")
+class Shop(CustomAction):
+    """Heal, then sell -> buy and refresh -> fuse until a round does nothing, then leave (spec 03 section 13).
+
+    The visit's state (healed, refreshes used, keywords read) lives in RUN["shop"], so a re-entry
+    from MirrorHub carries on; leaving drops it. Every spend keeps the team's reserve_cost.
+    """
+
+    def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
+        team = current_run(context)["team"]
+        if not self.to_main(context):
+            return True  # a page fading in or out: let MirrorHub look again
+        visit = RUN.setdefault("shop", {"healed": False, "refreshes": 0, "kinds": {}, "wanted": None, "sold": False})
+        if not visit["healed"]:
+            self.heal(context, team)
+            visit["healed"] = True
+        for _ in range(shop.ROUNDS):
+            acted = self.sell(context, team, visit)
+            acted = self.buy(context, team, visit) or acted
+            acted = self.fuse(context, team) or acted
+            if not acted:
+                break
+        else:
+            log(f"shop: still acting after {shop.ROUNDS} rounds")
+        for _ in range(3):
+            tap(context, *BOTTOM_RIGHT, wait=1.5)
+            if "Leave the shop" in text(context, screen(context), LEAVE_DIALOG):
+                log(f"shop: leave with {read_cost(context)} Cost")
+                tap(context, *LEAVE_CONFIRM, wait=2)
+                RUN.pop("shop")
+                return True
+        log("stop: Leave did not bring up `Leave the shop?`")
+        return False
+
+    @staticmethod
+    def to_main(context):
+        """Back out of any shop page or dialog; True once the main shop (its Refresh fee) shows."""
+        for _ in range(5):
+            image = screen(context)
+            title = text(context, image, DIALOG_TITLE)
+            heal = "Heal" in text(context, image, HEAL_TITLE)
+            if "GET" in text(context, image, GET_TITLE):
+                tap(context, *GET_CONFIRM, wait=1.5)
+            elif "Purchase" in title:
+                tap(context, *PURCHASE_CANCEL)
+            elif "Keyword Refresh" in title:
+                tap(context, *KEYWORD_CANCEL)
+            elif "Keyword Selection" in title:
+                tap(context, 490, 566)  # its Cancel
+            elif "Gift Info" in title:  # a bought offer tapped: only a tap outside it closes it
+                tap(context, *OUTSIDE)
+            elif "E.G.O Gift" in title:  # the fuse or sell page; a tooltip may cover Close
+                tap(context, *FUSE_NEUTRAL)
+                tap(context, *PAGE_CLOSE, wait=1.5)
+            elif "Leave the shop" in text(context, image, LEAVE_DIALOG):
+                tap(context, *LEAVE_CANCEL)
+            elif heal:
+                tap(context, *BOTTOM_RIGHT, wait=1.5)
+            elif number(text(context, image, REFRESH["normal"][1])) is not None:
+                return True
+            else:
+                time.sleep(1)
+        return False
+
+    @staticmethod
+    def heal(context, team):
+        """Heal everyone once, or revive the dead, per the team's heal setting.
+
+        The dead are the grey portraits on the shop's sinner bar; the count from the last formation
+        (RUN["alive"]) is only checked against them, as the shop shows deaths since then too.
+        """
+        cost = read_cost(context)
+        image = screen(context)
+        dead = [x for x in SHOP_PORTRAIT_X if saturation(image[630:680, x - 25:x + 25]).mean() < 30]
+        if "alive" in RUN and 12 - RUN["alive"] != len(dead):
+            log(f"shop: {12 - RUN['alive']} dead at the last formation, {len(dead)} grey portraits")
+        plan = shop.heal_plan(team["heal"], cost or 0, team["reserve_cost"], len(dead), data("shop.yaml")["heal_cost"])
+        log(f"shop: {cost} Cost, {len(dead)} dead, heal {team['heal']}: {plan or 'nothing'}")
+        if not plan:
+            return
+        kind, n = plan
+        for x in dead[:n] if kind == "revive" else [None]:
+            tap(context, *SHOP_BUTTONS["heal"], wait=2)
+            if "Heal" not in text(context, screen(context), HEAL_TITLE):
+                log("shop: the heal page did not open")
+                break
+            before = read_cost(context, HEAL_COST)
+            tap(context, *HEAL_OPTIONS[kind], wait=1.5)
+            if x is not None:
+                tap(context, x, 655, wait=1.2)  # only a dead sinner takes the tap; then Select shows
+                tap(context, *BOTTOM_RIGHT, wait=2)
+            after = read_cost(context, HEAL_COST)
+            log(f"shop: {kind}: {before} -> {after} Cost")
+            if after == before:
+                break
+            if kind == "revive" and "alive" in RUN:
+                RUN["alive"] += 1
+            tap(context, *BOTTOM_RIGHT, wait=2)  # the result's Leave: back to the shop
+            Shop.to_main(context)
+        Shop.to_main(context)
+
+    @staticmethod
+    def buy(context, team, visit):
+        """Buy each affordable main-keyword gift on show, then refresh while the rules allow; True on any spend.
+
+        A main gift too dear for the reserve becomes visit["wanted"] for the next round's sell, and
+        holds the refresh back until that sell has been tried.
+        """
+        keyword, reserve, acted = team["keyword"], team["reserve_cost"], False
+        while True:
+            if Shop.buy_one(context, keyword, reserve, visit):
+                acted = True
+                continue  # live: a bought offer moves to the end of the grid, so read the offers again
+            if visit["wanted"] and not visit["sold"]:
+                return True  # sell first, next round
+            image = screen(context)
+            cost = number(text(context, image, SHOP_COST))
+            fees = {k: number(text(context, image, roi)) for k, (_, roi) in REFRESH.items()}
+            choice = shop.refresh_choice(cost or 0, reserve, visit["refreshes"], team["shop_refresh_limit"],
+                                         fees["normal"], fees["keyword"], data("shop.yaml")["refresh_margin"])
+            if not choice:
+                return acted
+            tap(context, *REFRESH[choice][0], wait=1.5)
+            if choice == "keyword":
+                if not tap_keyword(context, keyword):
+                    log("shop: no keyword dialog on the refresh")
+                    Shop.to_main(context)
+                    return acted
+                tap(context, *KEYWORD_REFRESH, wait=2)
+            time.sleep(1)
+            after = read_cost(context)
+            log(f"shop: {choice} refresh for {fees[choice]}: {cost} -> {after} Cost")
+            if after == cost:
+                Shop.to_main(context)
+                return acted
+            visit["refreshes"] += 1
+            visit["sold"] = False
+            acted = True
+
+    @staticmethod
+    def buy_one(context, keyword, reserve, visit):
+        """Buy the first affordable main-keyword gift on show; True when one was bought.
+
+        A gift's keyword is read from its purchase dialog (spec 03 section 12's text rule), once per name.
+        """
+        visit["wanted"] = None
+        # ponytail: only the offers on show; a Super Shop's last 2 of 10 need a scroll first.
+        for slot in shop.read_slots(ocr(context, screen(context), OFFER_GRID)):
+            name, price = slot["name"], slot["price"]
+            if not shop.buyable(slot) or visit["kinds"].get(name) == "other":
+                continue
+            cost = read_cost(context)
+            tap(context, slot["x"], slot["y"] - 50, wait=1.5)
+            image = screen(context)
+            if "Purchase" not in text(context, image, DIALOG_TITLE):
+                log(f"shop: {name!r} opened no purchase dialog")
+                Shop.to_main(context)
+                continue
+            price = shop.dialog_price(cost, text(context, image, PURCHASE_PREVIEW)) or price
+            kind = visit["kinds"].setdefault(name, rewards.gift_kind(text(context, image, PURCHASE_TEXT), keyword, False))
+            if kind != "main" or not shop.can_spend(cost or 0, price, reserve):
+                tap(context, *PURCHASE_CANCEL)
+                if kind == "main":
+                    visit["wanted"] = min(price, visit["wanted"] or price)
+                log(f"shop: {name!r} {price}: {kind}" + (f", {cost} Cost is short" if kind == "main" else ""))
+                continue
+            tap(context, *PURCHASE, wait=2)
+            gift_get(context)
+            after = read_cost(context)
+            log(f"shop: bought {name!r} for {price}: {cost} -> {after} Cost")
+            if after == cost:
+                log("shop: the Cost did not change; taking it as not bought")
+                visit["kinds"][name] = "other"  # do not try it again
+                Shop.to_main(context)
+                continue
+            return True
+        return False
+
+    @staticmethod
+    def sell(context, team, visit):
+        """Sell leftover non-main gifts (what fusion cannot group by 3) when a wanted main gift is too dear."""
+        wanted = visit["wanted"]
+        if not wanted or visit["sold"]:
+            return False
+        visit["sold"] = True
+        tap(context, *SHOP_BUTTONS["sell"], wait=2)
+        if "Sell" not in text(context, screen(context), DIALOG_TITLE):
+            Shop.to_main(context)
+            return False
+        cost = number(text(context, screen(context), SELL_COST))
+        gifts = []
+        for i, (x, y) in enumerate(SELL_CELLS):
+            tap(context, x, y, wait=1.2)
+            image = screen(context)
+            panel = " ".join(t for t, _ in ocr(context, image, SELL_PANEL))
+            price = number(text(context, image, SELL_PRICE))
+            if price and "Select the" not in panel and rewards.gift_kind(panel, team["keyword"], False) != "main":
+                gifts.append((i, price))
+        picked = shop.to_sell(gifts, wanted, cost or 0, team["reserve_cost"])
+        log(f"shop: {wanted} wanted, {cost} Cost, non-main (cell, price) {gifts}: sell {picked}")
+        for i in picked or []:
+            before = number(text(context, screen(context), SELL_COST))
+            tap(context, *SELL_CELLS[i], wait=1.2)
+            tap(context, *PAGE_OK, wait=2)
+            after = number(text(context, screen(context), SELL_COST))
+            log(f"shop: sold cell {i}: {before} -> {after} Cost")
+            if after == before:
+                break  # ponytail: no Sell confirm dialog handled; none seen yet
+        Shop.to_main(context)
+        return bool(picked)
+
+    @staticmethod
+    def fuse(context, team):
+        """Fuse 3 non-main gifts into the main keyword, Wishmaking left unticked; True when one fused.
+
+        A tap on a gift shows its tooltip (its keyword, by spec 03 section 12's text rule) and puts it
+        in the fusion, so a main gift is tapped again to take it back out.
+        """
+        keyword = team["keyword"]
+        tap(context, *SHOP_BUTTONS["fuse"], wait=2)
+        if "Fuse" not in text(context, screen(context), DIALOG_TITLE):
+            Shop.to_main(context)
+            return False
+        tap(context, *FUSE_CENTRE, wait=1.5)
+        if not tap_keyword(context, keyword):
+            log("shop: no keyword dialog on the fusion")
+            Shop.to_main(context)
+            return False
+        tap(context, *FUSE_KEYWORD_OK, wait=1.5)
+        if screen(context)[495:515, 263:283].max(axis=2).mean() > 60:  # unticked: V ~30
+            log("shop: Wishmaking is ticked (it spends owned Starlight): no fusion")
+            Shop.to_main(context)
+            return False
+        picked = []
+        # ponytail: the 15 cells on show; a scroll would find more when 13+ of them are main gifts.
+        for x, y in FUSE_CELLS:
+            tap(context, x, y, wait=1.2)
+            lines = [(t, b) for t, b in ocr(context, screen(context), FUSE_TOOLTIP) if "Owned" not in t]
+            tap(context, *FUSE_NEUTRAL)
+            head = next((b for t, b in lines if re.search(r"O\s*GIFT$", t)), None)
+            if not head:
+                continue  # an empty cell
+            name = min(((b[1] - head[1], t) for t, b in lines if b[1] > head[1] + 10 and re.search(r"[a-z]{3}", t)), default=(0, "?"))[1]
+            if rewards.gift_kind(" ".join(t for t, _ in lines), keyword, False) == "main":
+                tap(context, x, y, wait=1.2)  # out of the fusion again
+                tap(context, *FUSE_NEUTRAL)
+                continue
+            picked.append(name)
+            if len(picked) == 3:
+                break
+        fused = False
+        if len(picked) == 3:
+            tap(context, *PAGE_OK, wait=2)
+            m = re.search(r"(\d)\s*/\s*\d", text(context, screen(context), FUSE_CONFIRM))
+            if m and m[1] == "3":
+                tap(context, 788, 583, wait=2.5)  # the dialog's Confirm
+                fused = gift_get(context)
+            log(f"shop: fuse {picked} into {keyword}: {'done' if fused else 'not confirmed'}")
+        else:
+            log(f"shop: {len(picked)} non-main gifts on show, a fusion takes 3")
+        Shop.to_main(context)
+        return fused
