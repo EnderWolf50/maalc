@@ -21,8 +21,8 @@ const screens: [image: string, hits: string[]][] = [
   ['StartingGift.png', ['StartingGift']],
   ['StartingGiftPicked.png', ['StartingGift']],
   ['GiftGet.png', ['GiftGet']],
-  ['GiftSearch.png', ['GiftSearch']],
-  ['GiftSearchForgo.png', ['GiftSearchForgo', 'GiftSearch']],
+  ['GiftSearch.png', ['GiftSearch', 'GiftChoice']],  // same Refuse Gift button; GiftSearch comes first in the hub
+  ['GiftSearchForgo.png', ['GiftSearchForgo', 'GiftSearch', 'GiftChoice']],
   ['ThemePack.png', ['ThemePack']],
   ['ThemePackNormal.png', ['ThemePack']],
   ['MirrorMap.png', ['MirrorMap', 'MapBus', 'MapLinkUp', 'MapLinkMid', 'MapLinkDown', 'MapNodeCost', 'MapNodeEvent']],
@@ -48,6 +48,17 @@ const screens: [image: string, hits: string[]][] = [
   ['ForfeitDialog.png', ['MirrorMap']],
   ['DefeatScreen.png', ['DefeatScreen']],
   ['ExplorationComplete.png', ['ExplorationComplete']],
+  // Rewards and events. The dialogs sit over their page, which still reads.
+  ['RewardCard.png', ['RewardCard']],
+  ['RewardCardForgo.png', ['RewardCardForgo', 'RewardCard']],
+  ['GiftChoice.png', ['GiftChoice']],
+  ['BossGiftTrials.png', ['GiftChoice']],
+  ['BossGiftTrialsHard.png', ['GiftChoice']],
+  ['GiftRefuseDialog.png', ['GiftRefuseDialog', 'GiftChoice']],
+  ['EventStory.png', ['Event']],
+  ['EventChoices.png', ['Event']],
+  ['EventCheck.png', ['Event']],
+  ['EventResult.png', ['Event']],
 ]
 
 const config: FullConfig = {
