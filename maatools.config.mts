@@ -48,6 +48,12 @@ const screens: [image: string, hits: string[]][] = [
   ['ForfeitDialog.png', ['MirrorMap']],
   ['DefeatScreen.png', ['DefeatScreen']],
   ['ExplorationComplete.png', ['ExplorationComplete']],
+  // Settlement: the summary behind the window still reads; Settle handles the window's own dialogs.
+  ['RunVictory.png', ['RunVictory']],
+  ['ExplorationReward.png', ['ExplorationReward', 'ExplorationComplete']],
+  ['ExplorationRewardOff.png', ['ExplorationReward', 'ExplorationComplete']],
+  ['GiveUpDialog.png', ['ExplorationReward', 'ExplorationComplete']],
+  ['ClaimNoBonusDialog.png', ['ExplorationReward', 'ExplorationComplete']],
   // Rewards and events. The dialogs sit over their page, which still reads.
   ['RewardCard.png', ['RewardCard']],
   ['RewardCardForgo.png', ['RewardCardForgo', 'RewardCard']],

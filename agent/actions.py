@@ -19,9 +19,10 @@ import battle
 import map_route
 import rewards
 import run_start
+import settlement
 import shop
 from settings import SettingsError, load_settings
-from state import pick_team, read_cursor
+from state import next_cursor, pick_team, read_cursor, write_cursor
 
 # Same <root> as main.ROOT; resource/ sits under it in a release, under assets/ in the repo.
 ROOT = Path(__file__).resolve().parent.parent
@@ -30,6 +31,7 @@ RESOURCE = next(p for p in (ROOT / "resource", ROOT / "assets" / "resource") if 
 # This run's plan, made on the entry page: {"settings", "team", "difficulty"}.
 # Memory only (ADR 0003); an agent restarted mid-run falls back to current_run's guess.
 RUN = {}
+SETTLED = {"runs": 0}  # runs settled since this agent started: the run count stop (spec 01); never saved
 
 WEEKLY_SLOTS = (922, 960, 998)  # x of the 3 Weekly Bonuses slots on the entry page, y 285-297
 TEAM_LIST = [75, 292, 115, 245]
@@ -112,9 +114,12 @@ class PlanRun(CustomAction):
             log(f"stop: {e}")
             return False
         hsv_v = screen(context)[285:297].max(axis=2)  # V of HSV
-        # ponytail: filled slots are only assumed bright; live captures so far only show empty ones (V ~5).
+        # Live: a filled slot reads V ~240, an empty one ~5 (2026-10-15).
         weekly = sum(hsv_v[:, x:x + 30].mean() > 40 for x in WEEKLY_SLOTS)
         run = settings["run"]
+        if settlement.runs_done(SETTLED["runs"], run["runs"]):
+            log(f"stop: {SETTLED['runs']} of {run['runs']} runs done")
+            return False
         if run["stop_when_weekly_bonus_out"] and weekly == 0:
             log("stop: weekly bonuses used up")
             return False
@@ -124,7 +129,8 @@ class PlanRun(CustomAction):
             log(f"stop: no enabled team may run {difficulty}")
             return False
         RUN.clear()
-        RUN.update(settings=settings, team=team, difficulty=difficulty)
+        # planned: the bot picked the team itself, so the rotation cursor may move after the claim.
+        RUN.update(settings=settings, team=team, difficulty=difficulty, planned=True, start=settlement.now())
         log(f"new run: {difficulty}, team {team['name']!r} (TEAMS #{team['game_team']}), weekly bonuses left {weekly}")
         tap(context, 1108, 494, wait=1.5)
         return True
@@ -1249,3 +1255,120 @@ class Shop(CustomAction):
             log(f"shop: {len(picked)} non-main gifts on show, a fusion takes 3")
         Shop.to_main(context)
         return fused
+
+
+# Settlement (spec 03 section 14): the Exploration Reward window.
+RESULT = [300, 400, 100, 85]  # "Floor 5 [NORMAL] 6/6" under the floor icon
+WEEKLY_LEFT = [440, 230, 65, 50]  # "n/3"
+TOGGLE_X, TOGGLE_ROI = (558, 660, 763), (-45, 237, 90, 30)  # the 3 weekly-bonus toggles: x centre, roi offset
+GIVE_UP, CLAIM = (393, 544), (887, 544)
+REWARD_TITLE_ROI = [500, 100, 280, 45]
+DIALOG_TEXT = [360, 280, 560, 140]
+DIALOG_CANCEL, DIALOG_CONFIRM = (515, 493), (763, 493)
+
+
+def toggles(context, image):
+    """Each weekly-bonus toggle as True (ON), False (OFF) or None (unread)."""
+    out = []
+    for x in TOGGLE_X:
+        dx, y, w, h = TOGGLE_ROI
+        t = text(context, image, [x + dx, y, w, h], only_rec=True).upper()
+        out.append(False if "OFF" in t else True if "ON" in t else None)
+    return out
+
+
+@AgentServer.custom_action("Settle")
+class Settle(CustomAction):
+    """Goal check, weekly-bonus toggles, then Claim or GiveUpRewards; then the cursor and runs.jsonl (spec 03 section 14).
+
+    Claim is pressed only after the toggles read back exactly as wanted; anything unexpected stops.
+    """
+
+    def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
+        run = current_run(context)
+        image = screen(context)
+        dialog = text(context, image, DIALOG_TEXT)
+        if "without claiming" in dialog or "without using" in dialog:
+            tap(context, *DIALOG_CANCEL, wait=1.5)  # left over from an earlier try: back out and decide again
+            return True
+        lines = sorted(ocr(context, image, RESULT), key=lambda r: r[1][1])  # results come out of order
+        result = settlement.read_result(" ".join(t for t, _ in lines))
+        if not result:
+            return True  # fading in: let MirrorHub look again
+        floor, hard, cleared, total = result
+        log(f"exploration reward: Floor {floor} [{'HARD' if hard else 'NORMAL'}] {cleared}/{total}")
+        if not settlement.goal_met(result):
+            return self.give_up(context, run, result)
+
+        s, team = run["settings"]["run"], run["team"]
+        left = number(text(context, image, WEEKLY_LEFT).split("/")[0])
+        all_hard = run.get("planned", False) and run["difficulty"] == "hard" and team["hard_from_floor"] <= 1
+        want = settlement.bonus_toggles(s["weekly_bonus_use"], s["weekly_bonus_amount"], hard, left or 0, all_hard)
+        for _ in range(6):
+            states = toggles(context, screen(context))
+            on = [i for i, v in enumerate(states) if v]
+            if None in states and len(on) <= want:
+                time.sleep(1)  # an unread toggle may be ON: never claim on a guess
+                continue
+            if len(on) == want:
+                break
+            i = on[-1] if len(on) > want else states.index(False)
+            tap(context, TOGGLE_X[i], 252, wait=1.5)
+        else:
+            log(f"stop: weekly bonus toggles read {states}, want {want} ON: not claiming")
+            return False
+        log(f"weekly bonuses left {left}, use {s['weekly_bonus_use']}/{s['weekly_bonus_amount']}: toggles {states} verified, {want} ON")
+
+        tap(context, *CLAIM, wait=2)
+        for _ in range(5):
+            image = screen(context)
+            if "Exploration Reward" not in text(context, image, REWARD_TITLE_ROI):
+                break
+            # Live 2026-10-15: claiming with bonuses left and none ON asks to confirm.
+            if want == 0 and "without using" in text(context, image, DIALOG_TEXT):
+                tap(context, *DIALOG_CONFIRM, wait=2)
+                continue
+            time.sleep(1)
+        else:
+            # Anything else, too few Enkephalin Modules most likely: nothing more is tapped, so nothing is bought.
+            log(f"stop: Claim did not close the window: {text(context, image, DIALOG_TEXT)!r}")
+            self.record(run, result, want, "stop")
+            return False
+        log(f"claimed with {want} weekly bonus(es)")
+        self.record(run, result, want, "clear")
+        if run.get("planned"):
+            cursor = next_cursor(run["settings"]["teams"], team["id"])
+            if cursor:
+                write_cursor(ROOT, address(context), cursor)
+                log(f"rotation cursor -> {cursor}")
+        else:
+            log("team not picked by the bot this run: rotation cursor stays")
+        RUN.clear()
+        return True
+
+    def give_up(self, context, run, result):
+        """GiveUpRewards, then `End expedition without claiming rewards?` Confirm; no module is spent."""
+        for _ in range(3):
+            tap(context, *GIVE_UP, wait=1.5)
+            if "without claiming" in text(context, screen(context), DIALOG_TEXT):
+                break
+        else:
+            log("stop: GiveUpRewards brought up no `End expedition without claiming rewards?`")
+            return False
+        tap(context, *DIALOG_CONFIRM, wait=2)
+        log("goal not met: gave up the rewards")
+        self.record(run, result, 0, "giveup")
+        RUN.clear()
+        return True
+
+    @staticmethod
+    def record(run, result, bonuses, outcome):
+        team = run["team"] if run.get("planned") else None
+        settlement.append_run(ROOT, {
+            "start": run.get("start"), "end": settlement.now(),
+            "team": team and team["id"], "team_name": team and team["name"],
+            "difficulty": "hard" if result[1] else "normal", "weekly_bonus": bonuses,
+            "floors": settlement.floors_passed(result), "result": outcome,
+            "l1": 0, "l2": 0, "l3": 0,  # ponytail: no recovery levels yet (#31); count them there
+        })
+        SETTLED["runs"] += 1
