@@ -1,0 +1,92 @@
+{
+    // Stuck handling (spec 06). A stuck reported by the Agent waits in StuckFlag for MirrorHub's
+    // Stuck node; MirrorHub's own timeout lands in GlobalStuck. Recover picks the level and runs
+    // RecoverL1-3 with context.run_task; then both go back to MirrorHub explicitly ([JumpBack]
+    // does not work on the on_error path).
+    "Stuck": {
+        "recognition": "Custom",
+        "custom_recognition": "StuckFlag",
+        "action": "Custom",
+        "custom_action": "Recover",
+        "next": [
+            "MirrorHub"
+        ]
+    },
+    "GlobalStuck": {
+        "action": "Custom",
+        "custom_action": "Recover",
+        "next": [
+            "MirrorHub"
+        ]
+    },
+    // L1: the back key; the global popups come first in MirrorHub anyway.
+    "RecoverL1": {
+        "action": "ClickKey",
+        "key": 4,
+        "post_delay": 2000
+    },
+    // L2: Dungeon Progress (already open, e.g. by L1's back key on the map, or by the map's gear),
+    // To Window, Pause Exploration Confirm. The main menu follows; MirrorHub navigates back to the
+    // entry page and resumes the run. Not on the map: L2 does not go through, so L3 follows.
+    "RecoverL2": {
+        "next": [
+            "RecoverToWindow",
+            "RecoverGear"
+        ]
+    },
+    "RecoverGear": {
+        "recognition": "Or",
+        "any_of": [
+            "MirrorMap"
+        ],
+        "action": "Click",
+        "target": [1212, 25, 40, 40],
+        "post_delay": 2000,
+        "next": [
+            "RecoverToWindow"
+        ]
+    },
+    "RecoverToWindow": {
+        "recognition": "OCR",
+        "roi": [520, 212, 240, 30],
+        "expected": "Dungeon Progress",
+        "action": "Click",
+        "target": [700, 380, 76, 110],
+        "post_delay": 2000,
+        "next": [
+            "RecoverPauseConfirm"
+        ]
+    },
+    "RecoverPauseConfirm": {
+        "recognition": "OCR",
+        "roi": [360, 280, 560, 140],
+        "expected": "Save your progress",
+        "action": "Click",
+        "target": [670, 475, 180, 30],
+        "post_delay": 5000
+    },
+    // L3: restart the game and wait for its title screen.
+    "RecoverL3": {
+        "action": "StopApp",
+        "package": "com.ProjectMoon.LimbusCompany",
+        "post_delay": 3000,
+        "next": [
+            "RecoverStartApp"
+        ]
+    },
+    "RecoverStartApp": {
+        "action": "StartApp",
+        "package": "com.ProjectMoon.LimbusCompany",
+        "post_delay": 10000,
+        "next": [
+            "RecoverTitle"
+        ]
+    },
+    "RecoverTitle": {
+        "recognition": "Or",
+        "any_of": [
+            "NavTitle"
+        ],
+        "timeout": 180000
+    }
+}
