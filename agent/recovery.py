@@ -78,20 +78,18 @@ class Ladder:
     A stuck opens an episode on its screen type at the start level (L1, or L2 for the time limits);
     each further stuck before the bot gets past that screen climbs one level, up to L3, which may repeat
     within its limits (live: a restarted game sometimes hangs on CONNECTING). Getting past it closes
-    the episode; the same screen type stuck again later in the run stops.
+    the episode: a later stuck, even on the same screen type, starts over at its start level
+    (2026-10-16). Only the per-run and per-launch caps stop.
     """
 
     def __init__(self):
         self.counts = {1: 0, 2: 0, 3: 0}
         self.open = None  # (screen type, level) of the episode under way
-        self.done = set()
 
     def stuck(self, kind, start, l3_this_execution):
         """(level, None) to recover with, or (None, why) to stop."""
         if self.open:
             kind, level = self.open[0], min(self.open[1] + 1, 3)  # L3 repeats while its limits allow
-        elif kind in self.done:
-            return None, f"stuck on {kind} a second time this run"
         else:
             level = start
         if level == 2 and self.counts[2] >= L2_PER_RUN:
@@ -107,7 +105,6 @@ class Ladder:
     def progress(self, kind):
         """MirrorHub handed out kind: a screen other than the stuck one closes the episode."""
         if self.open and kind != self.open[0] and kind not in TRANSIT:
-            self.done.add(self.open[0])
             self.open = None
 
 

@@ -69,13 +69,15 @@ def test_ladder_climbs_until_the_screen_is_past():
     assert ladder.counts == {1: 1, 2: 1, 3: 2}
 
 
-def test_ladder_same_screen_twice_in_a_run_stops():
+def test_ladder_progress_starts_the_next_stuck_over():
     ladder = Ladder()
     assert ladder.stuck("Event", 1, 0) == (1, None)
-    ladder.progress("MirrorMap")
-    assert ladder.stuck("Shop", 1, 0) == (1, None)  # another screen: a fresh episode
-    ladder.progress("MirrorMap")
-    assert ladder.stuck("Event", 1, 0) == (None, "stuck on Event a second time this run")
+    assert ladder.stuck("Event", 1, 0) == (2, None)
+    ladder.progress("MirrorMap")  # got past it
+    assert ladder.stuck("Event", 1, 0) == (1, None)  # the same screen again: a fresh episode, not a stop
+    ladder.progress("Event")  # still the stuck screen: the episode stays open
+    assert ladder.stuck("Event", 1, 0) == (2, None)
+    assert ladder.counts == {1: 2, 2: 2, 3: 0}
 
 
 def test_ladder_time_limits_start_at_l2():
