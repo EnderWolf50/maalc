@@ -35,3 +35,11 @@ SOFTWARE.
 ## Limbus Company 遊戲素材
 
 `assets/resource/base/image/` 的模板與 `tests/screens/` 的測試截圖取自 Limbus Company 的遊戲畫面，著作權屬於 © Project Moon，不在本專案的 MIT 授權範圍內。測試截圖中的 UID 與帳號已遮蔽。
+
+## 發佈 zip 內附的第三方程式
+
+`tools/install.py --release` 組出的發佈 zip 另外附上以下程式，都是原樣下載、不經修改：
+
+- [MXU](https://github.com/MistEO/MXU) v2.7.1 的 `mxu.exe`，採 [AGPL-3.0](https://www.gnu.org/licenses/agpl-3.0.html) 授權，授權全文在 zip 內的 `LICENSE-MXU`。對應原始碼：<https://github.com/MistEO/MXU/tree/v2.7.1>。
+- [Python](https://www.python.org/) 3.12.10 embeddable package（`python/`），採 PSF License，授權全文在 `python/LICENSE.txt`；`python/Lib/site-packages/` 內的套件各依其授權。
+- [MaaFramework](https://github.com/MaaXYZ/MaaFramework)（`maafw/` 與 `maafw` 套件），採 LGPL-3.0 授權。

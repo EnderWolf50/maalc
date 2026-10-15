@@ -36,7 +36,7 @@
 
 - 無限鏡牢（Parallel Superposition，第 6–10 層），一律不開啟。（#17）
 - 日常任務：經驗本、紐本、領獎、狂氣換體、腦啡肽模組。v1 只做鏡牢。
-- 安裝程式與自動更新。v1 只用 GitHub Actions 產出一個 zip：bot、resource、MFAAvalonia、設定 GUI 的執行檔放在同一個發佈目錄（做法參考 MaaPracticeBoilerplate 的 workflow）。（#1、#4、#19，2026-10-14 定案）
+- 安裝程式與自動更新。v1 只用 GitHub Actions 產出一個 zip：bot、resource、MXU、內嵌 Python、設定 GUI 的執行檔放在同一個發佈目錄（做法參考 MaaPracticeBoilerplate 的 workflow）。（#1、#4、#19，2026-10-14 定案；MXU 與內嵌 Python 見 #33）
 - Windows 原生客戶端（Win32 控制器）。
 - 中文或其他語言的遊戲畫面辨識。
 - 戰鬥防禦選項、技能配置與配卡決策。
