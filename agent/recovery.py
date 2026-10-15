@@ -76,7 +76,8 @@ class Ladder:
     """One run's recovery levels and their limits (spec 06 恢復的三級, 上限與停止).
 
     A stuck opens an episode on its screen type at the start level (L1, or L2 for the time limits);
-    each further stuck before the bot gets past that screen climbs one level. Getting past it closes
+    each further stuck before the bot gets past that screen climbs one level, up to L3, which may repeat
+    within its limits (live: a restarted game sometimes hangs on CONNECTING). Getting past it closes
     the episode; the same screen type stuck again later in the run stops.
     """
 
@@ -88,13 +89,11 @@ class Ladder:
     def stuck(self, kind, start, l3_this_execution):
         """(level, None) to recover with, or (None, why) to stop."""
         if self.open:
-            kind, level = self.open[0], self.open[1] + 1
+            kind, level = self.open[0], min(self.open[1] + 1, 3)  # L3 repeats while its limits allow
         elif kind in self.done:
             return None, f"stuck on {kind} a second time this run"
         else:
             level = start
-        if level > 3:
-            return None, "L3 did not get past it"
         if level == 2 and self.counts[2] >= L2_PER_RUN:
             return None, f"L2 used {L2_PER_RUN} times this run"
         if level == 3 and self.counts[3] >= L3_PER_RUN:
