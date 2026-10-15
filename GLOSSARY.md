@@ -69,7 +69,7 @@ _Avoid_: 方案 1
 _Avoid_: 私有方案、inline
 
 **試煉**：
-困難模式中，Boss 後的選項附帶的額外難度（Mounting Trial），選了會讓之後的戰鬥更難。
+困難模式中（1.117.0 實機在普通局也看到，待確認），Boss 後的選項附帶的額外難度（Mounting Trial），選了會讓之後的戰鬥更難。
 _Avoid_: 懲罰、debuff
 
 ## 事件
