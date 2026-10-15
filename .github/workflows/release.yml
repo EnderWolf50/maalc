@@ -3,6 +3,9 @@ name: release
 on:
   push:
     tags: ["v*"]
+  # Build (artifact only) when the release pipeline itself changes.
+  pull_request:
+    paths: [.github/workflows/release.yml, tools/install.py]
   workflow_dispatch:
     inputs:
       tag:
