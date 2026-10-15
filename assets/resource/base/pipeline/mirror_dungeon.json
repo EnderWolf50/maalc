@@ -13,11 +13,12 @@
             "[JumpBack]RetryPopup",
             "MaintenanceNotice",
             "[JumpBack]Loading",
-            "ExplorationReward",
+            "[JumpBack]ExplorationReward",
+            "[JumpBack]RunVictory",
             "[JumpBack]DefeatScreen",
             "[JumpBack]ExplorationComplete",
             "[JumpBack]MirrorEnterDialog",
-            "MirrorEntryUnclaimed",
+            "[JumpBack]MirrorEntryUnclaimed",
             "MirrorEntryPaused",
             "[JumpBack]MirrorEntryNewRun",
             "[JumpBack]LevelWarning",
@@ -53,8 +54,7 @@
         "action": "Custom",
         "custom_action": "PlanRun"
     },
-    // Tracer: a paused run or an unclaimed reward stops the task instead of
-    // resuming or settling it: Resume lands with #31, settlement with #30.
+    // Tracer: a paused run stops the task instead of resuming it: Resume lands with #31.
     "MirrorEntryPaused": {
         "recognition": "OCR",
         "roi": [990, 140, 230, 35],
@@ -63,22 +63,23 @@
         "custom_action": "Halt",
         "custom_action_param": "paused run on the entry page, not resuming"
     },
+    // Unclaimed rewards: Enter opens the Exploration Reward window, settled like any other.
     "MirrorEntryUnclaimed": {
         "recognition": "OCR",
         "roi": [990, 140, 230, 35],
         "expected": "Exploration Complete",
-        "action": "Custom",
-        "custom_action": "Halt",
-        "custom_action_param": "unclaimed rewards on the entry page, not claiming"
+        "action": "Click",
+        "target": [1030, 470, 160, 50],
+        "post_delay": 2000
     },
-    // Pops up by itself on the entry page while rewards are pending (captures/253).
+    // Also pops up by itself on the entry page while rewards are pending (captures/253).
+    // Settle: goal check, weekly-bonus toggles, Claim or GiveUpRewards (spec 03 section 14).
     "ExplorationReward": {
         "recognition": "OCR",
         "roi": [500, 100, 280, 45],
         "expected": "Exploration Reward",
         "action": "Custom",
-        "custom_action": "Halt",
-        "custom_action_param": "Exploration Reward window, not claiming"
+        "custom_action": "Settle"
     },
     "MirrorEnterDialog": {
         "recognition": "OCR",
@@ -269,6 +270,15 @@
         "template": "Battle/BattlePause.png",
         "threshold": 0.8,
         "post_delay": 1000
+    },
+    // After the floor 5 boss (live 1.117.0); the run's counterpart of DefeatScreen.
+    "RunVictory": {
+        "recognition": "OCR",
+        "roi": [990, 100, 200, 70],
+        "expected": "^Victory$",
+        "action": "Click",
+        "target": [1050, 550, 150, 45],
+        "post_delay": 2000
     },
     // After a forfeit (captures/244, 245); Claim Rewards only opens the Exploration Reward window.
     "DefeatScreen": {
