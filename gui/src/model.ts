@@ -40,7 +40,7 @@ export interface Team {
   id: string; name: string; enabled: boolean; game_team: number; keyword: string; usage: string;
   hard_from_floor: number; deployment_order: Ref<Order>; starlight: Ref<StarlightValues>;
   theme_pack_plan: string; reward_cards: string[]; shop_refresh_limit: number; heal: string;
-  reserve_cost: number; min_alive: number; trial_risk_weight: string;
+  reserve_cost: number; min_alive: number; guard_turns: number; trial_risk_weight: string;
 }
 export interface Settings {
   version: number;
@@ -95,7 +95,14 @@ export function freeName(base: string, taken: string[]) {
 }
 
 /** MIGRATIONS[n] turns a version-n file into a version-(n + 1) file; keep in step with agent/settings.py. */
-const MIGRATIONS: Record<number, (d: Record<string, unknown>) => Record<string, unknown>> = {};
+const MIGRATIONS: Record<number, (d: Record<string, unknown>) => Record<string, unknown>> = {
+  // Version 2 adds teams[].guard_turns (#52); its short orders need nothing.
+  1: (d) => ({
+    ...d,
+    teams: Array.isArray(d.teams)
+      ? d.teams.map((t) => (t && typeof t === "object" ? { guard_turns: 0, ...t } : t)) : d.teams,
+  }),
+};
 
 /** Parse a settings file; an older version is migrated and the caller writes it back (spec 04 section 2). */
 export function parseSettings(text: string): { data: Settings; migrated: boolean } {

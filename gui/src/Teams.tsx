@@ -106,6 +106,9 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
         <Field label={t("team.min_alive")} path={`${path}/min_alive`} note={t("team.min_alive_note")}>
           <Num value={team.min_alive} min={0} max={12} onChange={(v) => set({ min_alive: v })} />
         </Field>
+        <Field label={t("team.guard_turns")} path={`${path}/guard_turns`} note={t("team.guard_turns_note")}>
+          <Num value={team.guard_turns} min={0} max={5} onChange={(v) => set({ guard_turns: v })} />
+        </Field>
       </div>
 
       <div className="columns">

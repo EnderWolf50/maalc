@@ -54,8 +54,17 @@ test("a new file asks for a team, and new teams make it valid", () => {
 });
 
 test("parseSettings refuses newer and unmigratable versions", () => {
-  expect(() => parseSettings('{"version": 2}')).toThrow("newer");
+  expect(() => parseSettings('{"version": 3}')).toThrow("newer");
   expect(() => parseSettings('{"version": 0}')).toThrow("cannot be migrated");
+});
+
+test("version 1 gets guard turns off", () => {
+  const old = structuredClone(cases.valid) as Record<string, unknown> & { teams: Record<string, unknown>[] };
+  for (const t of old.teams) delete t.guard_turns;
+  const { data, migrated } = parseSettings(JSON.stringify({ ...old, version: 1 }));
+  expect(migrated).toBe(true);
+  expect(data.teams.map((t) => t.guard_turns)).toEqual([0, 0]);
+  expect(validate(data)).toEqual([]);
 });
 
 test("parseThemePacks reads the season's data file", () => {

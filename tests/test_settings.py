@@ -18,13 +18,13 @@ def team(id, game_team, **kw):
         "usage": "any", "hard_from_floor": 0, "deployment_order": {"custom": ORDER},
         "starlight": {"custom": STARLIGHT}, "theme_pack_plan": "default",
         "reward_cards": ["Starlight", "Random E.G.O Gift", "Cost & Keyword Gift Chance", "Cost", "E.G.O Resource"],
-        "shop_refresh_limit": 2, "heal": "revive", "reserve_cost": 0, "min_alive": 0,
+        "shop_refresh_limit": 2, "heal": "revive", "reserve_cost": 0, "min_alive": 0, "guard_turns": 0,
         "trial_risk_weight": "high", **kw,
     }
 
 
 VALID = {
-    "version": 1,
+    "version": 2,
     "language": "zh_tw",
     "run": {
         "difficulty": "auto", "runs": 1, "weekly_bonus_use": "hard", "weekly_bonus_amount": "all",
@@ -97,7 +97,12 @@ def test_schema_errors_name_the_field(tmp_path, fn, where):
 
 
 def test_newer_version_is_refused(tmp_path):
-    assert "newer" in errors(tmp_path, {**VALID, "version": 2})[0]
+    assert "newer" in errors(tmp_path, {**VALID, "version": 3})[0]
+
+
+def test_version_1_gets_guard_turns_off(tmp_path):
+    old = edited(lambda d: [t.pop("guard_turns") for t in d["teams"]])
+    assert load(tmp_path, {**old, "version": 1}) == VALID
 
 
 def test_old_version_is_migrated_in_memory(tmp_path, monkeypatch):
@@ -105,7 +110,7 @@ def test_old_version_is_migrated_in_memory(tmp_path, monkeypatch):
         d["language"] = d.pop("lang")
         return d
 
-    monkeypatch.setattr(settings, "MIGRATIONS", {0: v0_to_v1})
+    monkeypatch.setattr(settings, "MIGRATIONS", {**settings.MIGRATIONS, 0: v0_to_v1})
     old = {**edited(lambda d: d.pop("language")), "version": 0, "lang": "en_us"}
     assert load(tmp_path, old)["language"] == "en_us"
     assert json.loads((tmp_path / "config" / "settings.json").read_text(encoding="utf-8"))["version"] == 0

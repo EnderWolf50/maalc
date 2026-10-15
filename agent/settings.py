@@ -12,8 +12,17 @@ from jsonschema import Draft202012Validator
 SCHEMA = json.loads((Path(__file__).parent / "settings.schema.json").read_text(encoding="utf-8"))
 CURRENT_VERSION = SCHEMA["properties"]["version"]["const"]
 
-# MIGRATIONS[n] turns a version-n dict into a version-(n + 1) dict.
-MIGRATIONS = {}
+def _v1_to_v2(data):
+    """Version 2 adds teams[].guard_turns (#52); its short orders need nothing."""
+    teams = data.get("teams")
+    for team in teams if isinstance(teams, list) else []:  # a broken file is left to the checks
+        if isinstance(team, dict):
+            team.setdefault("guard_turns", 0)
+    return data
+
+
+# MIGRATIONS[n] turns a version-n dict into a version-(n + 1) dict; keep in step with gui/src/model.ts.
+MIGRATIONS = {1: _v1_to_v2}
 
 NO_TEAM = "No enabled team: set up a team in the settings GUI first."
 

@@ -9,10 +9,16 @@ import { Field, ReorderList, Select, useEditor } from "./ui";
 
 export function OrderEditor({ order, onChange, path }: { order: Order; onChange: (o: Order) => void; path: string }) {
   const { t, bad } = useEditor();
+  // Sinners left out of the order are never picked (spec 04 section 6); one must stay.
+  const out = SINNERS.filter((s) => !order.includes(s));
   return (
     <div className={bad(path) ? "bad" : ""}>
       <ReorderList items={order} onChange={onChange} keyOf={(s) => s}
-        render={(s, i) => <>{i + 1}. {s}{i < 7 && <em className="tag">{t("deployed")}</em>}</>} />
+        render={(s, i) => <>{i + 1}. {s}{i < 7 && <em className="tag">{t("deployed")}</em>}
+          <button type="button" disabled={order.length === 1}
+            onClick={(e) => { e.stopPropagation(); onChange(order.filter((x) => x !== s)); }}>{t("leaveOut")}</button></>} />
+      {out.length > 0 && <p className="muted">{t("leftOut")}{" "}
+        {out.map((s) => <button type="button" key={s} onClick={() => onChange([...order, s])}>+ {s}</button>)}</p>}
     </div>
   );
 }

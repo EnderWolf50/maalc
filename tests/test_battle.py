@@ -1,3 +1,4 @@
+import numpy as np
 import pytest
 
 import battle as b
@@ -13,6 +14,7 @@ def marks_for(order):
 def test_formation_order_skips_the_dead():
     assert b.formation_order(PLAN, {"Faust", "Gregor"}) == [s for s in PLAN if s not in ("Faust", "Gregor")]
     assert b.formation_order(PLAN, set()) == PLAN
+    assert b.formation_order(["Ryōshū"], {"Ryōshū"}) == []  # a solo order with its sinner dead: Formation stops
 
 
 def test_formation_matches_only_the_exact_order():
@@ -37,6 +39,22 @@ def test_formation_matches_only_the_exact_order():
 ])
 def test_after_wipe(used, retries, after, expected):
     assert b.after_wipe(used, retries, after) == expected
+
+
+def test_guard_turns_count_only_turns_started_on_guard():
+    left = 2
+    for guarded in (False, True, False, True, True):  # fallbacks to Win Rate keep the count
+        left = b.guard_left(left, guarded)
+    assert left == 0
+
+
+def test_slot_centres_merge_ticks_and_drop_sparks():
+    row = np.zeros(400, bool)
+    row[10:33] = row[35:53] = True  # one top edge cut by a tick: 10-53
+    row[100:143] = True
+    row[200:204] = True  # a spark
+    row[300:390] = True  # too wide for one portrait
+    assert b.slot_centres(row) == [31, 121]
 
 
 def test_same_turn_counts_tries_at_one_turn():
