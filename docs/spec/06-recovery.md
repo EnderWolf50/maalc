@@ -9,10 +9,10 @@
 | 條件 | 門檻 | 實作位置 | 來源 |
 |---|---|---|---|
 | hub 認不出畫面 | `MirrorHub` 的 `timeout` 為 60 秒，逾時經 `on_error` 進入 `GlobalStuck` | Pipeline | #14 |
-| 載入畫面過久 | 載入畫面另給 90 秒 | Pipeline | #14 |
-| 畫面沒變 | 每處理完一個畫面，記下「畫面類型 + 縮圖雜湊」；同一組連續出現 5 次 | Agent | #14 |
+| 載入畫面過久 | 載入畫面（`Loading`）與連線中（`Connecting`）連續出現超過 90 秒，不論畫面有沒有變 | Agent | #14、#31 |
+| 畫面沒變 | 每處理完一個畫面，記下「畫面類型 + 縮圖」；同一組連續出現 5 次（縮圖的比對見下方實作）。戰鬥演出中（`BattlePause`）另須持續 30 秒以上 | Agent | #14、#31 |
 | 後備點擊用完 | 點空白、按返回這類後備節點必須設 `max_hit`，每個任務約 3 次 | Pipeline | #14 |
-| 地圖重試額度用完 | 見下方「地圖的重試額度」 | Pipeline + Agent | #12、#14 |
+| 地圖重試額度用完 | 見下方「地圖的重試額度」 | Agent | #12、#14、#31 |
 | 整局超時 | 每隊各自計算：該隊最新重置標記之後有 10 局以上記錄時，為其第 95 百分位耗時的 2 倍；不到 10 局時為 60 分鐘。超過時從 L2 開始處理 | Agent | #14、#19 |
 | 戰鬥回合數不變 | 送出 3 次後回合數都沒變 | Agent | #16 |
 | 戰鬥中認不出畫面 | 60 秒內什麼都認不出來 | Pipeline | #16、#19 |
@@ -20,9 +20,16 @@
 
 `on_error` 路徑裡 `[JumpBack]` 不會生效。所以 `GlobalStuck` 與各級恢復處理完後，必須明確跳回 `MirrorHub`，不能依賴 `[JumpBack]` 回到 hub。（#14，[ADR 0002](../adr/0002-pipeline-hub-and-agent-decisions.md)）
 
+### 實作（#31）
+
+- `MirrorHub` 的 `next` 最前面是 `Stuck` 節點，它的辨識是 Agent 的 custom recognition `StuckFlag`；排在全域彈窗之前，否則一直出現的彈窗（例如連線中）會讓它沒機會執行。hub 每判斷一輪畫面，`StuckFlag` 就讀出任務剛處理完的節點（節點名稱就是畫面類型）與當下的畫面，做上表的「畫面沒變」「載入畫面過久」與「整局超時」，並把畫面放進證據用的最近 20 張。不用 Agent 的 context sink：要用戶端（MXU、MFAAvalonia）另外註冊才收得到通知。
+- 「畫面沒變」的比對：把 1280×720 的截圖切成 40×40 的格子取平均亮度（32×18 的縮圖），和這一串的第一張比，變動超過 8 階的格子少於 3% 就算同一個畫面。不用精確的雜湊：實機（2026-10-16）地圖頁的 Bus 火焰與光暈每一幀都在動，雜湊永遠不會連續相同。
+- 卡住有兩個來源：Agent 的動作發現點了沒反應（例如節點面板按 Enter 沒反應、Chain To Battle! 沒反應），回報卡住後回到 hub，由 `Stuck` 節點接手；或 `MirrorHub` 逾時進入 `GlobalStuck`，算作卡在最後處理的那個畫面。兩者都交給 Agent 的 `Recover` 動作決定恢復等級，再用 `context.run_task` 執行 Pipeline 的 `RecoverL1`–`RecoverL3`，最後明確跳回 `MirrorHub`。
+- 停止條件（設定的停止、存活不足、重打用完、不能確定開關時不 Claim、會花持有星光）不經恢復，直接走停止程序。開局前的結束條件（設定錯誤、局數已滿、每週獎勵用完、沒有可用隊伍）沒有進行中的局，只寫記錄後結束任務，不存證據也不送 webhook。
+
 ### 地圖的重試額度
 
-- 每次進入新一層的地圖時給一份重試額度，用 `max_hit` 計數。只有進入新一層的地圖時才清除，任何子流程都不能把它歸零。（#12、#14）
+- 每次進入新一層的地圖時給一份重試額度：地圖頁的選路（`RouteMap`）一次都沒進入節點就算用掉一次，每層 3 次，用完算卡住。額度記在 Agent 記憶體，主題包頁讀到新的層數時才重設，任何子流程都不能把它歸零；恢復之後重新給一份，讓下一級也有重試的機會。（#12、#14、#31）
 - 另有看門狗：一直看到同一張地圖畫面就累計次數，併入上表「畫面沒變」的計數。（#12）
 - 地圖的後備順序（點 Bus → 依權重點三格 → 拖曳地圖讓 Bus 回到中央 → 再點三格）全部失敗後，才交給本章。後備順序本身見 [03-decisions.md](03-decisions.md)。（#12）
 
@@ -45,6 +52,13 @@
 
 單場戰鬥超時與整局超時不經 L1，直接從 L2 開始。（#14、#16、#19）
 
+- 升級：一次卡住開始一段「卡住」，從 L1（超時從 L2）開始；在 bot 越過那個畫面之前再卡住，就升一級，最高 L3。越過的意思是 hub 分派到別種畫面，回入口頁路上的畫面（載入、連線中、導航、入口頁、Resume 對話框、Dungeon Progress 面板）不算。某一級沒能執行（例如 L2 不在地圖頁）就直接升到下一級。（#31）
+- L1 是 Android 的返回鍵，之後回到 hub，全域彈窗排在最前面。（#31）
+- L2 只在地圖頁做得到：Dungeon Progress 面板（L1 的返回鍵已經打開，或點右上齒輪）→ `To Window` → `Pause Exploration` 對話框（`Save your progress and return to the Main Menu?`）按 Confirm → 主畫面，之後由 hub 的導航回到入口頁，入口頁的暫停中的局按 Enter → Resume 對話框按 Resume。（#31）
+- L3 重啟遊戲後最多等 180 秒標題畫面出現，之後同樣由 hub 導航回入口頁並 Resume。（#31）
+- 單場戰鬥的計時從該場第一個回合開始，打贏、全滅或恢復之後重新計算。整局超時每局只觸發一次；Resume 接手、Agent 不知道開始時間的局不計整局時間。（#31）
+- 實機（2026-10-16，1.117.0）：地圖頁按返回鍵會打開 Dungeon Progress 面板，hub 的 `ProgressPanel` 按 Continue 關閉它。戰鬥中強制關閉遊戲，L3 重啟、Resume 後回到地圖頁，Bus 停在那一場戰鬥的節點上，再進去時戰鬥從頭開始（編隊頁重來）。重啟到標題畫面約 20 秒，不需要下載資料。（實機：tests/screens/ProgressPanel.png、PauseExploration.png、ResumeDialog.png）
+
 - 回到入口頁的導航是獨立的一串節點，不放進 `MirrorHub`；入口頁的分流（開新局、Resume、領取未領獎勵、處理過期的局）沿用同一串。（[ADR 0002](../adr/0002-pipeline-hub-and-agent-decisions.md)）
 - Resume 之後的狀態一律從畫面讀，不讀記錄檔。（[ADR 0003](../adr/0003-screen-is-truth-state-file-only-rotation-cursor.md)）
 - v1 不重啟模擬器。（#14）
@@ -57,7 +71,7 @@
 | 每局 L2 次數 | 最多 3 次 | #19 |
 | 每局重啟遊戲（L3）次數 | 最多 2 次 | #14 |
 | 每次執行（bot 一次啟動）重啟遊戲次數 | 最多 3 次 | #14 |
-| 同一個畫面卡住 | 同一局內第二次卡住就直接停止；用畫面類型判斷是不是同一個畫面 | #14、#19 |
+| 同一個畫面卡住 | 同一局內第二次卡住就直接停止；用畫面類型判斷是不是同一個畫面。「第二次」指越過那個畫面之後再卡在同一種畫面，同一段卡住裡的升級不算 | #14、#19、#31 |
 
 超過任一上限就停止。下列情況也必須直接停止，不走恢復：
 
@@ -70,16 +84,16 @@
 
 ### 停止程序
 
-1. 保存最近 20 張畫面作為證據，放在 `<root>/logs/evidence/<時間>/`（`<root>` 是 Agent 的根目錄）。（#14、#19）
-2. 執行期間必須開著 `SaveOnError`（`Toolkit.init_option` 的 `save_on_error`），讓辨識失敗的繪圖一併留下。（#13、#14）
-3. 在 `<root>/logs/runs.jsonl` 寫入這局，結果為「停止」。（#14、#19）
+1. 保存最近 20 張畫面作為證據，放在 `<root>/logs/evidence/<時間>/`（`<root>` 是 Agent 的根目錄）。（#14、#19）實作：`<時間>` 是 UTC ISO 時間、冒號換成 `-`；`00.png` 起依序是 hub 最近分派的畫面，最後一張是停止當下的畫面；另有 `agent.log`，是 Agent 最近 500 行記錄。（#31）
+2. 執行期間必須開著 `SaveOnError`（`Toolkit.init_option` 的 `save_on_error`），讓辨識失敗的繪圖一併留下。（#13、#14）這是用戶端的選項（MXU 寫在 `config/maa_option.json`），Agent 設不到。（#31）
+3. 在 `<root>/logs/runs.jsonl` 寫入這局，結果為「停止」。（#14、#19）只在有進行中的局時寫；Agent 這次啟動後還沒碰過這局（例如一啟動就卡住）時沒有這一行。（#31）
 4. 若使用者設定了 webhook，送出失敗通知（見下節）。（#14）
 5. 結束任務。
 
 ## 失敗通知
 
 - 執行選項提供一個 webhook 網址欄位，預設空白（不通知）。（#14）
-- 停止時由 Agent 以 HTTP POST 送出 JSON，內容包含這局的摘要（即該局 `runs.jsonl` 那一行的欄位）和證據的存放路徑。（#14、#19）
+- 停止時由 Agent 以 HTTP POST 送出 JSON，內容包含這局的摘要（即該局 `runs.jsonl` 那一行的欄位）和證據的存放路徑。（#14、#19）鍵名：`runs.jsonl` 那一行的各鍵（沒有進行中的局時沒有），加上 `reason`（停止原因）與 `evidence`（證據資料夾的絕對路徑）。逾時 10 秒；送不出去只記錄，不影響停止。（#31）
 - MFAAvalonia 內建的通知可以額外使用，與 webhook 互不影響。（#14）
 
 ## 執行記錄 `runs.jsonl`
@@ -96,7 +110,7 @@
 | 結果 | 通關／停止／放棄 |
 | L1、L2、L3 | 各級恢復各觸發幾次 |
 
-- 鍵名（#30）：`start`、`end`（UTC ISO 8601，和重置標記的 `time` 同格式；接續的局沒有 `start`，寫 `null`）、`team`、`team_name`（bot 沒有自己選隊時寫 `null`）、`difficulty`（`hard`／`normal`）、`weekly_bonus`（用了幾次）、`floors`、`result`（`clear` 通關／`stop` 停止／`giveup` 放棄）、`l1`、`l2`、`l3`。目前只有結算會寫入；結算以外的停止還不寫（#48）。
+- 鍵名（#30）：`start`、`end`（UTC ISO 8601，和重置標記的 `time` 同格式；接續的局沒有 `start`，寫 `null`）、`team`、`team_name`（bot 沒有自己選隊時寫 `null`）、`difficulty`（`hard`／`normal`）、`weekly_bonus`（用了幾次）、`floors`、`result`（`clear` 通關／`stop` 停止／`giveup` 放棄）、`l1`、`l2`、`l3`。結算與停止程序都會寫入（#31）。結算以外的停止：`difficulty` 取目前這層的難度，`floors` 是主題包頁讀到的層數減 1；Resume 接手、Agent 沒看過主題包頁的局寫 0。`l1`–`l3` 是 Agent 這次啟動後這局的恢復次數。
 - 這份記錄是唯讀的：只用來驗收（見 [07-assets-and-testing.md](07-assets-and-testing.md)）和計算整局時間上限，必須不拿來做中途接續或輪替的判斷。（#14，[ADR 0003](../adr/0003-screen-is-truth-state-file-only-rotation-cursor.md)）
 - 輪替游標仍只存在 Agent 狀態檔，不從 `runs.jsonl` 推算。（[ADR 0003](../adr/0003-screen-is-truth-state-file-only-rotation-cursor.md)）
-- 設定 GUI 的「重置時間記錄」會附加一行重置標記，只含隊伍 id 與時間。計算該隊的時間上限時，只看最新一個標記之後的記錄；舊記錄保留。（#14、#19，2026-10-14 定案）
+- 設定 GUI 的「重置時間記錄」會附加一行重置標記，只含隊伍 id 與時間。計算該隊的時間上限時，只看最新一個標記之後的記錄；舊記錄保留。（#14、#19，2026-10-14 定案）重置標記的格式是 `{"reset": "<隊伍 id>", "time": "<ISO 時間>"}`。算耗時只用該隊結果為 `clear`、`start` 與 `end` 都有的行，第 95 百分位用線性內插（Python `statistics.quantiles(..., n=20, method="inclusive")`）。（#31）

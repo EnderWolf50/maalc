@@ -12,6 +12,7 @@ const screens: [image: string, hits: string[]][] = [
   ['Drive.png', ['GoToMirrorEntry', 'NavDrive']],
   ['EntryNewRun.png', ['MirrorEntryNewRun']],
   ['EntryPaused.png', ['MirrorEntryPaused']],
+  ['ResumeDialog.png', ['ResumeDialog', 'MirrorEntryPaused', 'RecoverToWindow']],  // the entry page reads through it
   ['EnterDialog.png', ['MirrorEnterDialog', 'MirrorEntryNewRun']],
   ['TeamSelect.png', ['TeamSelect']],
   ['LevelWarning.png', ['LevelWarning', 'TeamSelect']],
@@ -44,8 +45,11 @@ const screens: [image: string, hits: string[]][] = [
   ['BattlePause.png', ['BattlePause']],
   ['Victory.png', ['Victory']],
   ['WipeDialog.png', ['WipeDialog']],
-  ['DungeonProgress.png', ['MirrorMap']],
+  ['DungeonProgress.png', ['MirrorMap', 'ProgressPanel', 'RecoverToWindow']],
   ['ForfeitDialog.png', ['MirrorMap']],
+  // Recovery L2 (run by Recover, not the hub): Dungeon Progress -> To Window -> Pause Exploration.
+  ['ProgressPanel.png', ['MirrorMap', 'ProgressPanel', 'RecoverToWindow']],
+  ['PauseExploration.png', ['MirrorMap', 'RecoverPauseConfirm']],
   ['DefeatScreen.png', ['DefeatScreen']],
   ['ExplorationComplete.png', ['ExplorationComplete']],
   // Settlement: the summary behind the window still reads; Settle handles the window's own dialogs.

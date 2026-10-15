@@ -29,7 +29,7 @@
 | 鏡牢入口頁：Exploration Complete | OCR：`Exploring:` 欄位為 `Exploration Complete`，卡片中央 `Unclaimed Rewards` | 點 Enter，依結算規則處理上局沒領的獎勵（[01](01-architecture.md#結算規則)） | Exploration Reward 視窗 | #8、#19 | — |
 | 鏡牢入口頁：過期的局（待截圖確認） | 未知 | 依結算規則處理（[01](01-architecture.md#結算規則)） | 未知 | #8、#19 | — |
 | 進入確認對話框 | OCR：`Will you enter`；模板：Cancel／Enter 按鈕 | 點 Enter | 選隊頁 | #8 | `captures/00_md_enter_dialog.png` |
-| Resume 對話框 | OCR：標題 `Dungeon Progress`，按鈕 `Resume`、`Halt Exploration`、`Cancel` | 讀每層的難度與進度（例如 `Floor 1 [NORMAL] 0/6`）。接續時點 Resume；放棄這局時點 Halt Exploration | 地圖頁或這局停下時的畫面；放棄確認對話框 | #8、#14 | — |
+| Resume 對話框 | OCR：標題 `Dungeon Progress`，按鈕 `Resume`、`Halt Exploration`、`Cancel` | 讀每層的難度與進度（例如 `Floor 1 [NORMAL] 0/6`）。接續時點 Resume；放棄這局時點 Halt Exploration。實機：三個按鈕由上而下排在對話框中央（Resume 約 y 398），背後入口頁的 `Exploring:` 仍讀得到（#31） | 地圖頁或這局停下時的畫面；放棄確認對話框 | #8、#14 | `tests/screens/ResumeDialog.png` |
 | 放棄確認對話框 | OCR：`Forfeit previous exploration progress?` | 點 Confirm | Exploration Reward 視窗 | #8 | — |
 
 入口頁上的 `Parallel Superposition Mode` 必須保持 OFF，bot 不點 `INFINITY MIRROR`。（#17）
@@ -57,8 +57,8 @@
 |---|---|---|---|---|---|
 | 地圖頁 | 模板：右上齒輪與右側的圖示欄、Bus；OCR：左上 `Exploring Floor <N>` 與主題包名稱、右上 Cost | 進入新一層時重設地圖的重試額度。找 Bus，對相鄰一欄的固定格位做模板比對，節點類型只看圖示模板（節點上的 Cost 只 OCR 寫進記錄），依權重點節點；失敗時走後備順序（[03](03-decisions.md) 尋路）。只有和 Bus 以亮線相連的節點能點，點其他節點沒有任何反應。實機：左上的 `Exploring Floor` 標題會被節點蓋住，所以錨點不能只靠它；困難模式約看得到前方兩欄，地圖可自由拖曳；節點與連線的樣式隨主題包改變。底部罪人列顯示每人 HP 數字與 SP，陣亡者頭像變灰、HP 為 `0` | 節點選取面板 | #3、#8、#12、#14、#19 | `captures/24_map_f1_settled.png`、`25_map_tap_unreachable_node.png`、`65_event_node_selected.png`、`200_f4_map.png`、`202_f4ev_stuck.png`、`189_map_dead_sinner.png` |
 | 節點選取面板 | 模板：右側 `Enter` 按鈕；OCR：面板上的節點 Cost（只寫進記錄） | 點 Enter。點空白處會關閉面板。實機：事件節點的面板只有主題包名稱與 Enter，沒有 Cost；商店節點的面板顯示的是下一個 Boss 的獎勵與 Cost，不是商店本身的。選取節點時底部罪人列的第 7–12 位會變暗 | 戰前編隊頁、事件頁、商店、載入畫面 | #12 | `captures/26_map_node_selected.png`、`131_f2_event_selected.png`、`76_shop_node_selected.png`、`152_focused_node_selected.png` |
-| 設定面板 Dungeon Progress | OCR：標題 `Dungeon Progress`、按鈕 `Progress`／`Forfeit`／`Continue`／`To Window`／`Config` | 讀每層難度與進度。L2 恢復時點 To Window；放棄這局時點 Forfeit；其他情況點 Continue 回地圖。面板上的 Parallel Superposition 開關不碰 | 暫停確認對話框、地圖頁、放棄探索確認對話框、Progress 頁 | #8、#14、#17、#19 | `captures/31_gear_dungeon_progress.png`、`242_gear_before_forfeit.png` |
-| 暫停確認對話框 | OCR：標題 `Pause Exploration`、`Save your progress and return to the Main Menu?` | 點 Confirm | 主畫面（再經導航回入口頁 Resume） | #14 | — |
+| 設定面板 Dungeon Progress | OCR：標題 `Dungeon Progress`、按鈕 `Progress`／`Forfeit`／`Continue`／`To Window`／`Config` | 讀每層難度與進度。L2 恢復時點 To Window；放棄這局時點 Forfeit；其他情況點 Continue 回地圖。面板上的 Parallel Superposition 開關不碰。實機：地圖頁按 Android 返回鍵也會打開這個面板（2026-10-16，#31） | 暫停確認對話框、地圖頁、放棄探索確認對話框、Progress 頁 | #8、#14、#17、#19 | `captures/31_gear_dungeon_progress.png`、`242_gear_before_forfeit.png` |
+| 暫停確認對話框 | OCR：標題 `Pause Exploration`、`Save your progress and return to the Main Menu?` | 點 Confirm | 主畫面（再經導航回入口頁 Resume） | #14 | `tests/screens/PauseExploration.png` |
 | 放棄探索確認對話框 | OCR：標題 `Pause Exploration`、`Quit exploring the dungeon?` | 標題和暫停確認對話框相同，必須用內文區分。這是從設定面板按 Forfeit 後出現的對話框；按 Confirm 會結束這一局。全滅後重打次數用完、全域選項為「放棄這局」時點 Confirm（[03](03-decisions.md#9-全滅與陣亡)）；其他情況點 Cancel | Defeat 畫面 → Exploration Complete → Exploration Reward 視窗（Confirm）、地圖頁（Cancel） | #8、#16、#19 | `captures/243_forfeit_dialog.png` |
 | 載入畫面 | OCR：`NOW LOADING`；OCR：右側中段 `Combat Tips`（#24 實機：不在右下） | 等待，逾時 90 秒 | 地圖頁、戰鬥、戰前編隊頁 | #14 | `captures/64_loading_combat_tips.png`、`240_after_accept_results.png` |
 

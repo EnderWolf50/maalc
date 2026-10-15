@@ -7,6 +7,8 @@ Coordinates are on the 1280x720 screenshot (spec 07).
 import json
 import re
 import time
+import urllib.request
+from collections import deque
 from pathlib import Path
 
 import numpy as np
@@ -14,9 +16,11 @@ import yaml
 from maa.agent.agent_server import AgentServer
 from maa.context import Context
 from maa.custom_action import CustomAction
+from maa.custom_recognition import CustomRecognition
 
 import battle
 import map_route
+import recovery
 import rewards
 import run_start
 import settlement
@@ -32,6 +36,12 @@ RESOURCE = next(p for p in (ROOT / "resource", ROOT / "assets" / "resource") if 
 # Memory only (ADR 0003); an agent restarted mid-run falls back to current_run's guess.
 RUN = {}
 SETTLED = {"runs": 0}  # runs claimed since this agent started: the run count stop (spec 01); never saved
+# Stuck detection and recovery (spec 06), memory only: the last node seen ("node", its id) and the
+# screen type it handled ("kind"), a pending stuck for MirrorHub's Stuck node ("flag": (kind, start
+# level, reason)), this run's Ladder, and the game restarts since this agent started ("l3").
+STUCK = {"node": None, "kind": None, "flag": None, "watch": recovery.Watchdog(), "ladder": recovery.Ladder(), "l3": 0}
+SCREENS = deque(maxlen=20)  # the last screens MirrorHub handed out: the evidence on a stop
+LOG = deque(maxlen=500)
 
 WEEKLY_SLOTS = (922, 960, 998)  # x of the 3 Weekly Bonuses slots on the entry page, y 285-297
 TEAM_LIST = [75, 292, 115, 245]
@@ -41,6 +51,7 @@ PACK_TITLES = [120, 400, 1040, 100]  # up to 5 cards (live: 5 with two Theme Pac
 
 
 def log(msg):
+    LOG.append(f"{time.strftime('%H:%M:%S')} {msg}")
     print(f"[maalc] {msg}", flush=True)
 
 
@@ -79,7 +90,7 @@ def address(context):
 
 def current_run(context):
     """The run plan; made up from settings and the rotation cursor when the agent restarted mid-run."""
-    if not RUN:
+    if "settings" not in RUN:  # a run plan, not just counters left by an action
         settings = load_settings(ROOT)
         difficulty = settings["run"]["difficulty"]
         difficulty = None if difficulty == "auto" else difficulty
@@ -90,14 +101,133 @@ def current_run(context):
     return RUN
 
 
-@AgentServer.custom_action("Halt")
-class Halt(CustomAction):
-    """End the task on a screen the bot must not act on yet; the reason goes to the log."""
+# Stuck detection, recovery and the stop procedure (spec 06).
+def stuck(reason, level=1):
+    """Hand the screen being handled to recovery: MirrorHub's Stuck node picks it up next.
+
+    Returns True, for the action to return: its [JumpBack] leads to MirrorHub.
+    """
+    log(f"stuck: {reason}")
+    STUCK["flag"] = (None, level, reason)  # StuckFlag fills in the screen type
+    return True
+
+
+def run_line(run, outcome, hard, floors, bonuses=0):
+    """This run's runs.jsonl line (spec 06 執行記錄)."""
+    team = run["team"] if run.get("planned") else None
+    counts = STUCK["ladder"].counts
+    return {
+        "start": run.get("start"), "end": settlement.now(),
+        "team": team and team["id"], "team_name": team and team["name"],
+        "difficulty": "hard" if hard else "normal", "weekly_bonus": bonuses,
+        "floors": floors, "result": outcome, "l1": counts[1], "l2": counts[2], "l3": counts[3],
+    }
+
+
+def stop(context, reason, line=None):
+    """The stop procedure (spec 06 停止程序): evidence, a `stop` line in runs.jsonl, the webhook.
+
+    line is this run's line when the caller knows it better (Settle); otherwise one is made up while a
+    run is under way. Returns False, for the action to return: that ends the task.
+    """
+    log(f"stop: {reason}")
+    if line is None and "settings" in RUN:
+        line = run_line(RUN, "stop", RUN.get("floor_hard", RUN.get("difficulty") == "hard"), max(RUN.get("floor", 1) - 1, 0))
+    if line:
+        settlement.append_run(ROOT, line)
+    folder = ROOT / "logs" / "evidence" / settlement.now().replace(":", "-")
+    try:
+        folder.mkdir(parents=True, exist_ok=True)
+        for i, image in enumerate([*SCREENS, screen(context)]):  # the last one: the screen now
+            (folder / f"{i:02}.png").write_bytes(recovery.png(image))
+        (folder / "agent.log").write_text("\n".join(LOG) + "\n", encoding="utf-8")
+        log(f"evidence: {folder}")
+    except OSError as e:
+        log(f"evidence not saved: {e}")
+    settings = RUN.get("settings")
+    if settings is None:
+        try:
+            settings = load_settings(ROOT)
+        except SettingsError:
+            settings = None
+    url = settings and settings["run"]["webhook_url"]
+    if url:
+        body = json.dumps({**(line or {}), "reason": reason, "evidence": str(folder)}, ensure_ascii=False).encode()
+        try:
+            urllib.request.urlopen(urllib.request.Request(url, body, {"Content-Type": "application/json"}), timeout=10).close()
+            log("webhook sent")
+        except (OSError, ValueError) as e:
+            log(f"webhook failed: {e}")
+    return False
+
+
+@AgentServer.custom_recognition("StuckFlag")
+class StuckFlag(CustomRecognition):
+    """MirrorHub's Stuck node: watches every screen it hands out, hits while a stuck waits for recovery.
+
+    It runs first on each MirrorHub pass, so the task's last node is the screen just
+    handled and argv.image what it left: the watchdog, the evidence and the run time limit work from them.
+    """
+
+    def analyze(self, context: Context, argv: CustomRecognition.AnalyzeArg):
+        ids = argv.task_detail.node_id_list
+        if ids and ids[-1] != STUCK["node"]:
+            STUCK["node"] = ids[-1]
+            node = context.tasker.get_node_detail(ids[-1])
+            if node and node.name not in ("MirrorDungeon", "MirrorHub", "Stuck", "GlobalStuck"):
+                self.see(node.name, argv.image)
+        if STUCK["flag"] and STUCK["flag"][0] is None:
+            STUCK["flag"] = (STUCK["kind"], *STUCK["flag"][1:])  # reported by the action of the node just handled
+        return CustomRecognition.AnalyzeResult(box=(0, 0, 1, 1), detail={}) if STUCK["flag"] else None
+
+    @staticmethod
+    def see(kind, image):
+        STUCK["kind"] = kind
+        SCREENS.append(image)
+        STUCK["ladder"].progress(kind)
+        if STUCK["flag"]:
+            return
+        if STUCK["watch"].see(kind, recovery.thumb(image), time.monotonic()):
+            stuck(f"{kind}: the screen did not change")
+        elif RUN.get("deadline") and time.time() > RUN["deadline"]:
+            RUN.pop("deadline")  # once a run: after L2 the run carries on to its end
+            stuck("over the run time limit", level=2)
+
+
+@AgentServer.custom_action("Recover")
+class Recover(CustomAction):
+    """Run the recovery level the Ladder gives (Pipeline RecoverL1-3), or stop (spec 06).
+
+    MirrorHub's timeout (GlobalStuck, no flag set) counts as a stuck on the last screen handed out.
+    A level that does not go through climbs straight to the next one.
+    """
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
-        reason = json.loads(argv.custom_action_param or '""')
-        log(f"halt at {argv.node_name}: {reason}")
+        flag = STUCK["flag"] or (f"{STUCK['kind']}, then nothing recognised", 1, "MirrorHub recognised nothing for 60 s")
+        STUCK["flag"] = None
+        kind, start, reason = flag
+        while True:
+            level, why = STUCK["ladder"].stuck(kind, start, STUCK["l3"])
+            if level is None:
+                return stop(context, f"{reason}; {why}")
+            log(f"recovery L{level}: {reason}")
+            STUCK["l3"] += level == 3
+            detail = context.run_task(f"RecoverL{level}")
+            if detail and detail.status.succeeded:
+                break
+            log(f"L{level} did not go through")
+        STUCK["watch"].reset()
+        for key in ("turn", "battle_start", "map_misses"):
+            RUN.pop(key, None)
         return True
+
+
+@AgentServer.custom_action("Halt")
+class Halt(CustomAction):
+    """Stop on a screen the bot must not act on (the maintenance notice); the reason goes to the log."""
+
+    def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
+        return stop(context, f"{argv.node_name}: {json.loads(argv.custom_action_param or '""')}")
 
 
 @AgentServer.custom_action("PlanRun")
@@ -130,8 +260,10 @@ class PlanRun(CustomAction):
             return False
         RUN.clear()
         # planned: the bot picked the team itself, so the rotation cursor may move after the claim.
-        RUN.update(settings=settings, team=team, difficulty=difficulty, planned=True, start=settlement.now())
-        log(f"new run: {difficulty}, team {team['name']!r} (TEAMS #{team['game_team']}), weekly bonuses left {weekly}")
+        limit = recovery.run_limit(recovery.read_runs(ROOT), team["id"])
+        RUN.update(settings=settings, team=team, difficulty=difficulty, planned=True, start=settlement.now(), deadline=time.time() + limit)
+        STUCK["ladder"] = recovery.Ladder()
+        log(f"new run: {difficulty}, team {team['name']!r} (TEAMS #{team['game_team']}), weekly bonuses left {weekly}, time limit {limit / 60:.0f} min")
         tap(context, 1108, 494, wait=1.5)
         return True
 
@@ -141,7 +273,7 @@ class SelectTeam(CustomAction):
     """Pick the team's in-game TEAMS #N slot, check the title, press Confirm."""
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
-        if not RUN:
+        if "settings" not in RUN:
             # The plan is made on the entry page (weekly bonuses); the back arrow leads there.
             log("team picker without a run plan: back to the entry page")
             tap(context, 97, 42, wait=2)
@@ -168,8 +300,7 @@ class SelectTeam(CustomAction):
                     log(f"team TEAMS #{n}, Starlight Bonus {bonus}")
                     tap(context, 1145, 587, wait=2)
                     return True
-        log(f"stop: could not select TEAMS #{n}")
-        return False
+        return stop(context, f"could not select TEAMS #{n}")
 
 
 def grace_box(n):
@@ -206,23 +337,20 @@ class BuyStarlight(CustomAction):
         image = screen(context)
         available = read_available(context, image)
         if available is None:
-            log("stop: starlight page already spends owned starlight")
-            return False
+            return stop(context, "starlight page already spends owned starlight")
         unaffordable = run["settings"]["run"]["starlight_unaffordable"]
         buys, missed = run_start.starlight_purchases(plan, available, unaffordable)
         for n, level, price in missed:
             log(f"grace {n} {level} costs {price}: not bought")
         if missed and unaffordable == "stop":
-            log("stop: a planned grace is unaffordable")
-            return False
+            return stop(context, "a planned grace is unaffordable")
         for n, level, price in buys:
             x, y = grace_box(n)
             if grace_selected(image, n):
                 log(f"grace {n} already selected")
                 continue
             if not self.set_level(context, n, level):
-                log(f"stop: could not set grace {n} to {level}")
-                return False
+                return stuck(f"could not set grace {n} to {level}")
             for _ in range(2):
                 tap(context, x + 92, y + 100)
                 image = screen(context)
@@ -231,11 +359,9 @@ class BuyStarlight(CustomAction):
                     break
             if now is None:
                 tap(context, x + 92, y + 100)  # undo: never pay with owned starlight
-                log(f"stop: grace {n} would spend owned starlight")
-                return False
+                return stop(context, f"grace {n} would spend owned starlight")
             if now != available - price:
-                log(f"stop: grace {n} {level}: Available {available} -> {now}, expected -{price}")
-                return False
+                return stop(context, f"grace {n} {level}: Available {available} -> {now}, expected -{price}")
             log(f"grace {n} {level} for {price}, {now} left")
             available = now
         tap(context, 1195, 672, wait=1.5)
@@ -270,8 +396,7 @@ class ConfirmStarlight(CustomAction):
             image = screen(context)
             if "-" in text(context, image, [870, 165, 85, 25]):
                 tap(context, 543, 530)
-                log("stop: the graces would spend owned starlight")
-                return False
+                return stop(context, "the graces would spend owned starlight")
             # The line under the checkbox: "Any unspent Starlight will be added ..." when off,
             # "Coverts any remaining Starlight ..." when on.
             note = text(context, image, [660, 395, 320, 90]).lower()
@@ -281,8 +406,7 @@ class ConfirmStarlight(CustomAction):
                 return True
             if on is not None:
                 tap(context, 727, 363)
-        log("stop: could not set Convert Starlight to Cost")
-        return False
+        return stuck("could not set Convert Starlight to Cost")
 
 
 @AgentServer.custom_action("PickStartingGift")
@@ -299,8 +423,7 @@ class PickStartingGift(CustomAction):
                     break
                 swipe(context, 440, 480, 440, 230)  # Pierce and Blunt sit below the fold
             else:
-                log(f"stop: no {keyword} cabinet")
-                return False
+                return stuck(f"no {keyword} cabinet")
             x, y, w, h = label
             tap(context, x + w // 2, y + h // 2 + 75)
             for gift_y in (262, 370, 475):
@@ -314,8 +437,7 @@ class PickStartingGift(CustomAction):
             if "GET" in text(context, image, [520, 160, 240, 40]) or "Selected" not in text(context, image, [780, 145, 230, 35]):
                 log(f"starting gift: {keyword}")
                 return True
-        log("stop: Select did not take the starting gift")
-        return False
+        return stuck("Select did not take the starting gift")
 
     @staticmethod
     def full(context):
@@ -363,17 +485,18 @@ class PickThemePack(CustomAction):
         if not m:
             return True  # page fading in or out: let MirrorHub look again
         floor = int(m[1])
+        if floor != RUN.get("floor"):
+            RUN.update(floor=floor, map_misses=0)  # a new floor's map gets a fresh retry quota (spec 06)
         want = None if run["difficulty"] is None else run_start.hard_wanted(floor, run["difficulty"] == "hard", run["team"]["hard_from_floor"])
         if not self.set_difficulty(context, floor, want):
-            return False
+            return stuck(f"floor {floor} difficulty did not switch to {'HARD' if want else 'NORMAL'}")
 
         names, marks = theme_pack_marks(run["settings"], run["team"])
         seen = None
         for _ in range(10):  # ponytail: stop when a refresh changes nothing; read `Refresh n/m` if that misfires
             cards = pack_titles(context, screen(context))
             if not cards:
-                log("stop: no theme pack titles read")
-                return False
+                return stuck("no theme pack titles read")
             ranked = run_start.rank_packs([lines for _, lines in cards], names, marks)
             log(f"floor {floor} packs: " + ", ".join(f"{t} ({r})" for t, r in ranked))
             ranks = [r for _, r in ranked]
@@ -410,7 +533,6 @@ class PickThemePack(CustomAction):
             # The arrows sit left of HARD, right of NORMAL; switching re-rolls the packs.
             log(f"floor {floor}: switch to {move.upper()}")
             tap(context, 965 if move == "hard" else 850, 46, wait=2.5)
-        log(f"stop: floor {floor} difficulty did not switch to {'HARD' if want else 'NORMAL'}")
         return False
 
 
@@ -432,6 +554,7 @@ MARKS = {  # node -> (mark, roi around the slot centre)
     "MapNodeShop": ("shop", (-60, -60, 120, 120)),
 }
 ENTER = (1133, 543)
+MAP_RETRIES = 3  # RouteMap calls per floor that may enter nothing before the map is stuck
 PANEL_REWARDS = [700, 495, 110, 30]  # the "Clear Rewards" label
 PANEL_COST = [730, 545, 40, 35]  # the number by its Cost coin
 
@@ -465,8 +588,7 @@ def enter_node(context):
         if not seen(context, screen(context), "MapNodePanel"):
             log("entered the node")
             return True
-    log("stop: Enter on the node panel did nothing")
-    return False
+    return stuck("Enter on the node panel did nothing")
 
 
 @AgentServer.custom_action("EnterNode")
@@ -484,7 +606,7 @@ class RouteMap(CustomAction):
     Slots linked to the bus (a chevron on the link) are typed by their marks, ranked by
     map_route.rank and tapped in that order until the node panel (MapNodePanel) shows. After them come
     the fallbacks: the bus (a node reached but not entered), then the slots not tried yet.
-    Nothing taking a tap is a stop; stuck handling is #31.
+    Nothing taking a tap spends one of the floor's map retries; when they run out, the map is stuck (spec 06).
     """
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
@@ -506,8 +628,11 @@ class RouteMap(CustomAction):
             if seen(context, screen(context), "MapNodePanel"):
                 log(f"map: take {name}")
                 return enter_node(context)
-        log("stop: no node on the map took a tap")
-        return False
+        RUN["map_misses"] = RUN.get("map_misses", 0) + 1
+        if RUN["map_misses"] >= MAP_RETRIES:
+            return stuck(f"no node on the map took a tap, {MAP_RETRIES} times this floor")
+        log("map: no node took a tap; MirrorHub looks again")
+        return True
 
     @staticmethod
     def find_bus(context):
@@ -611,8 +736,7 @@ class Formation(CustomAction):
         alive, need = count[1], run["team"]["min_alive"]
         RUN["alive"] = alive  # the shop's heal reads it (spec 03 section 13)
         if alive < need:
-            log(f"stop: {alive} sinners alive, team {run['team']['name']!r} stops below {need}")
-            return False
+            return stop(context, f"{alive} sinners alive, team {run['team']['name']!r} stops below {need}")
         if "Details" not in text(context, image, DETAILS_BUTTON):
             tap(context, 826, 125, wait=1.5)  # its » folds the details view (skills, E.G.O), which hides the order marks
             image = screen(context)
@@ -623,13 +747,12 @@ class Formation(CustomAction):
         if battle.formation_matches(order_marks(context, image), order):
             log(f"formation as planned, {alive} alive")
         elif not self.pick(context, order):
-            return False
+            return True  # pick() handed it to recovery
         for _ in range(3):
             tap(context, *TO_BATTLE, wait=3)
             if not participants(context, screen(context)):
                 return True
-        log("stop: Chain To Battle! did nothing")
-        return False
+        return stuck("Chain To Battle! did nothing")
 
     @staticmethod
     def pick(context, order):
@@ -649,7 +772,7 @@ class Formation(CustomAction):
             if count_reaches(0):
                 break
         else:
-            log("stop: Clear Selection did not clear the formation")
+            stuck("Clear Selection did not clear the formation")
             return False
         for n, sinner in enumerate(order, 1):
             for _ in range(2):  # a tap within ~1 s of the last one can be lost
@@ -657,7 +780,7 @@ class Formation(CustomAction):
                 if count_reaches(n):
                     break
             else:
-                log(f"stop: tapping {sinner} did not pick them")
+                stuck(f"tapping {sinner} did not pick them")
                 return False
         log(f"formation re-picked: {', '.join(order)}")
         return True
@@ -681,13 +804,14 @@ class PlayTurn(CustomAction):
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         x, y = argv.box[0], argv.box[1]
         dx, dy = x + START_DISC[0], y + START_DISC[1]
+        if time.time() - RUN.setdefault("battle_start", time.time()) > recovery.BATTLE_LIMIT:
+            return stuck(f"battle over {recovery.BATTLE_LIMIT // 60} min", level=2)  # skips L1 (spec 06)
         time.sleep(1)  # taps during the turn's opening animation do nothing
         image = screen(context)
         turn = text(context, image, TURN_NUMBER, only_rec=True).strip() or None
         RUN["turn"] = battle.same_turn(RUN.get("turn"), turn)
         if RUN["turn"][1] > 3:
-            log(f"stop: turn {turn} unchanged after 3 submits")
-            return False
+            return stuck(f"turn {turn} unchanged after 3 submits")
         for _ in range(2):
             if disc_lit(image, dx, dy):
                 break
@@ -716,6 +840,7 @@ class Victory(CustomAction):
         if "turn" in RUN:
             log("victory")
         RUN.pop("turn", None)
+        RUN.pop("battle_start", None)
         RUN["wipes"] = 0
         return True
 
@@ -738,17 +863,16 @@ class Wipe(CustomAction):
         choice = battle.after_wipe(used, settings["wipe_retries"], settings["after_retries"])
         log(f"wipe: {used} of {settings['wipe_retries']} retries used: {choice}")
         if choice == "stop":
-            log("stop: retries used up")
-            return False
+            return stop(context, "retries used up")
         for _ in range(3):
             tap(context, *DEFEAT_OPTIONS[choice], wait=1.2)  # the options are cards: pick one, then Confirm
             tap(context, *DEFEAT_CONFIRM, wait=2.5)
             if "participating" not in text(context, screen(context), DEFEAT_TEXT):
                 break
         else:
-            log(f"stop: the DEFEAT dialog did not take {choice}")
-            return False
+            return stuck(f"the DEFEAT dialog did not take {choice}")
         RUN.pop("turn", None)
+        RUN.pop("battle_start", None)
         if choice == "retry":
             RUN["wipes"] = used + 1
         else:
@@ -775,8 +899,7 @@ def forfeit(context):
             if (want in text(context, screen(context), roi)) == shown:
                 break
         else:
-            log(f"stop: forfeit: {want!r} did not {'show' if shown else 'go'}")
-            return False
+            return stuck(f"forfeit: {want!r} did not {'show' if shown else 'go'}")
     RUN.pop("forfeit")
     log("forfeited the run")
     return True
@@ -873,8 +996,7 @@ class RewardCard(CustomAction):
             log(f"reward cards: {', '.join(str(t) for t in types)}: take {types[i] or ' '.join(cards[i][1])!r}")
             tap(context, cards[i][0], 300, wait=1.5)
             taken.add(i)
-        log("stop: reward card page did not fill Selectable")
-        return False
+        return stuck("reward card page did not fill Selectable")
 
 
 GIFT_CARDS = [100, 150, 1080, 410]  # 1-4 cards; on the boss page the Mounting Trials half below each
@@ -938,8 +1060,7 @@ class PickGift(CustomAction):
             tap(context, *GIFT_SELECT, wait=2)
             if "Refuse" not in text(context, screen(context), REFUSE_GIFT):
                 return True
-        log("stop: Select did not take the gifts")
-        return False
+        return stuck("Select did not take the gifts")
 
 
 # Shop (spec 03 section 13). The Super Shop has the same layout with up to 10 offers.
@@ -1024,8 +1145,7 @@ class Shop(CustomAction):
                 tap(context, *LEAVE_CONFIRM, wait=2)
                 RUN.pop("shop")
                 return True
-        log("stop: Leave did not bring up `Leave the shop?`")
-        return False
+        return stuck("Leave did not bring up `Leave the shop?`")
 
     @staticmethod
     def to_main(context):
@@ -1315,8 +1435,7 @@ class Settle(CustomAction):
             i = on[-1] if len(on) > want else states.index(False)
             tap(context, TOGGLE_X[i], 252, wait=1.5)
         else:
-            log(f"stop: weekly bonus toggles read {states}, want {want} ON: not claiming")
-            return False
+            return stop(context, f"weekly bonus toggles read {states}, want {want} ON: not claiming")
         log(f"weekly bonuses left {left}, use {s['weekly_bonus_use']}/{s['weekly_bonus_amount']}: toggles {states} verified, {want} ON")
 
         tap(context, *CLAIM, wait=2)
@@ -1331,9 +1450,8 @@ class Settle(CustomAction):
             time.sleep(1)
         else:
             # Anything else, too few Enkephalin Modules most likely: nothing more is tapped, so nothing is bought.
-            log(f"stop: Claim did not close the window: {text(context, image, DIALOG_TEXT)!r}")
-            self.record(run, result, want, "stop")
-            return False
+            return stop(context, f"Claim did not close the window: {text(context, image, DIALOG_TEXT)!r}",
+                        run_line(run, "stop", hard, settlement.floors_passed(result), want))
         log(f"claimed with {want} weekly bonus(es)")
         self.record(run, result, want, "clear")
         if run.get("planned"):
@@ -1353,8 +1471,7 @@ class Settle(CustomAction):
             if "without claiming" in text(context, screen(context), DIALOG_TEXT):
                 break
         else:
-            log("stop: GiveUpRewards brought up no `End expedition without claiming rewards?`")
-            return False
+            return stuck("GiveUpRewards brought up no `End expedition without claiming rewards?`")
         tap(context, *DIALOG_CONFIRM, wait=2)
         log("goal not met: gave up the rewards")
         self.record(run, result, 0, "giveup")
@@ -1363,12 +1480,6 @@ class Settle(CustomAction):
 
     @staticmethod
     def record(run, result, bonuses, outcome):
-        team = run["team"] if run.get("planned") else None
-        settlement.append_run(ROOT, {
-            "start": run.get("start"), "end": settlement.now(),
-            "team": team and team["id"], "team_name": team and team["name"],
-            "difficulty": "hard" if result[1] else "normal", "weekly_bonus": bonuses,
-            "floors": settlement.floors_passed(result), "result": outcome,
-            "l1": 0, "l2": 0, "l3": 0,  # ponytail: no recovery levels yet (#31); count them there
-        })
+        settlement.append_run(ROOT, run_line(run, outcome, result[1], settlement.floors_passed(result), bonuses))
         SETTLED["runs"] += settlement.counts_as_run(outcome)
+        STUCK["ladder"] = recovery.Ladder()
