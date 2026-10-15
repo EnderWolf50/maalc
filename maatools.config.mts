@@ -42,6 +42,7 @@ const screens: [image: string, hits: string[]][] = [
   ['FormationDetails.png', ['Formation']],
   ['BattleTurn.png', ['BattleTurn']],
   ['BattleTurnLit.png', ['BattleTurn']],
+  ['BattleTurnSolo.png', ['BattleTurn']], // 1-sinner formation: one slot, Win Rate at x ~740
   ['BattlePause.png', ['BattlePause']],
   ['Victory.png', ['Victory']],
   ['WipeDialog.png', ['WipeDialog']],

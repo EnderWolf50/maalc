@@ -3,8 +3,6 @@
 actions.py reads the formation page and the DEFEAT dialog and taps; everything here is plain data.
 """
 
-import numpy as np
-
 # The 12 cards on the formation page, left to right, top row first.
 SINNERS = ("Yi Sang", "Faust", "Don Quixote", "Ryōshū", "Meursault", "Hong Lu",
            "Heathcliff", "Ishmael", "Rodion", "Sinclair", "Outis", "Gregor")
@@ -48,16 +46,33 @@ def guard_left(left, guarded):
     return left - 1 if guarded and left > 0 else left
 
 
-def slot_centres(columns):
-    """x centres of the skill slots, from one bool per x: is the portraits' orange hexagon top there.
+def slot_xs(win_rate_x):
+    """x of each skill slot's portrait, from the Win Rate label's x (BattleTurn box, 1280x720).
 
-    A top edge is one run of about 43 px, cut by white ticks (gaps under 10 px); other runs are sparks.
+    Live (2026-10-16): the slots are 81 px apart and centred on x 605; each extra slot moves the
+    label half a step right (7 slots: x 984, 8: 1020, 9: 1060). Counted from the label rather than
+    the portraits, as a unit's extra slot shows a dark guard icon instead of a portrait.
     """
-    edges = np.flatnonzero(np.diff(np.concatenate(([0], columns.astype(np.int8), [0]))))
-    runs = []
-    for a, b in edges.reshape(-1, 2).tolist():
-        if runs and a - runs[-1][1] <= 10:
-            runs[-1][1] = b
+    n = 7 + round((win_rate_x - 984) / 40.5)
+    return [round(605 + 81 * (i - (n - 1) / 2)) for i in range(max(n, 0))]
+
+
+def guard_shown(before, after):
+    """Per slot, whether its lower skill shows the guard skill after a portrait tap swapped it.
+
+    before and after hold one (brown, texture) pair per slot, read at the slot's lower skill before
+    and after the tap: brown is the share of the guard icons' flat brown, texture the mean brightness
+    step between neighbouring pixels (a skill is busy line art, a guard icon flat shapes). The tap swaps
+    the lower skill between the slot's skill and its guard skill, and the game keeps that choice from
+    turn to turn, so each slot is compared with itself. Texture decides (live: the guard side is 11-65%
+    flatter); brown only breaks a tie, as orange and red skill frames read brown too. None when neither tells.
+    """
+    shown = []
+    for (b0, t0), (b1, t1) in zip(before, after):
+        if t1 < t0 * 0.93 or t1 > t0 * 1.07:
+            shown.append(t1 < t0)
+        elif abs(b1 - b0) >= 0.1:
+            shown.append(b1 > b0)
         else:
-            runs.append([a, b])
-    return [(a + b) // 2 for a, b in runs if 25 <= b - a <= 60]
+            shown.append(None)
+    return shown
