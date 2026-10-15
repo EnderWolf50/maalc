@@ -146,6 +146,8 @@ Risky 節點這一局沒有看到，圖示見 [03-decisions.md](03-decisions.md#
 | 刷新條件 | Cost ≥ 刷新費用 + 120（定向與普通刷新相同） |
 | 全體治療門檻 | 100 |
 
+**檔案**：`resource/base/data/shop.yaml`，只放全體治療（每項治療）費用 `heal_cost` 與刷新條件的 `refresh_margin`。刷新費用 bot 從商店按鈕下方讀，不放資料檔。（#29）
+
 實機的刷新費用（普通 15 → 30、定向 90 → 105）與治療費用（每項 100）和上表一致（實機：captures/107_shop_after_refresh.png、captures/82_shop_heal_page.png）。
 
 ## 7. 每季更新檢查清單
