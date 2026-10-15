@@ -30,7 +30,7 @@
         }
     ],
     "agent": {
-        // tools/install.py pins this to an absolute interpreter path.
+        // tools/install.py pins this to an absolute interpreter path, or to the bundled ./python/python.exe with --release.
         "child_exec": "python",
         "child_args": [
             "./agent/main.py"
