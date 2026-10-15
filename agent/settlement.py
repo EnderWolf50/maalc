@@ -1,0 +1,58 @@
+"""Settlement decisions, free of MaaFramework (docs/spec/03-decisions.md sections 1, 14).
+
+actions.py reads the Exploration Reward window and taps; everything here is plain data in, plain data out.
+"""
+
+import json
+import re
+from datetime import datetime, timezone
+from pathlib import Path
+
+
+def read_result(text):
+    """(floor, hard, cleared, total) from the window's result, e.g. "Floor 5 [NORMAL] 6/6"; None when unreadable."""
+    m = re.search(r"Floor\s*(\d).*?\[?\s*(HARD|NORMAL)\s*\]?.*?(\d)\s*/\s*(\d)", text, re.I | re.S)
+    if not m:
+        return None
+    return int(m[1]), m[2].upper() == "HARD", int(m[3]), int(m[4])
+
+
+def goal_met(result):
+    """The goal is all five floors: Floor 5 at 6/6 (spec 03 section 14)."""
+    floor, _, cleared, total = result
+    return floor == 5 and cleared == total == 6
+
+
+def floors_passed(result):
+    floor, _, cleared, total = result
+    return floor if cleared == total else floor - 1
+
+
+def bonus_toggles(use, amount, hard, left, all_hard):
+    """How many weekly-bonus toggles go ON for a run that met the goal.
+
+    A run counts as hard when any floor was HARD; the window's last floor shows it, as a run never
+    goes back to NORMAL. More than one bonus at once needs every floor HARD (in-game help page).
+    """
+    if use == "none" or use != ("hard" if hard else "normal"):
+        return 0
+    want = 1 if amount == "one" or not all_hard else 3
+    return min(want, left)
+
+
+def runs_done(done, limit):
+    """Whether the run count is reached: limit 0 means no limit (spec 04 section 5)."""
+    return limit > 0 and done >= limit
+
+
+def now():
+    """UTC ISO time with milliseconds, the format of the GUI's reset markers (JS toISOString)."""
+    return datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+
+
+def append_run(root, line):
+    """Append one run to <root>/logs/runs.jsonl (spec 06, 執行記錄)."""
+    path = Path(root) / "logs" / "runs.jsonl"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(line, ensure_ascii=False) + "\n")

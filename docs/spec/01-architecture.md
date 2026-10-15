@@ -107,7 +107,7 @@
    5. **Boss 後選擇**：依「飾品分數 − 權重 × 試煉風險」評分，困難取前兩名（`Select 0/2`）；1.117.0 實機在普通局也看到這一頁（未見官方公告，待確認）（`Select 0/1`），規則相同（#28）。Super Shop 和一般商店同一套流程。（#17）實機：Boss 打完先出獎勵卡頁，再出 4 欄「飾品＋試煉」的選擇頁（`Select 0/2`），選完直接進入下一層的主題包頁，所有罪人 HP 回滿。（實機：captures/115_boss_unknown.png、captures/122_boss_gift_trials_page.png、captures/127_after_boss_gifts.png）
    6. 進入下一層，回到第 6.1 步。
 7. **結算（Exploration Reward）**：依下面的[結算規則](#結算規則)處理。（#9、#17、#19）
-8. **領到獎勵**：Claim 完成後，輪替游標前進到下一支隊伍，寫一行 `runs.jsonl`，回到入口頁開下一局。（#8、#14）
+8. **領到獎勵**：Claim 完成後，輪替游標前進到下一支隊伍，寫一行 `runs.jsonl`，回到入口頁開下一局。2026-10-15 實機：第 5 層 Boss 後依序是通關畫面（`Victory`）→ Exploration Complete 摘要 → Exploration Reward 視窗；Claim 後經載入畫面回到主畫面，再由導航回到入口頁。（#8、#14、#30）
 
 任何一步卡住都交給 [06-recovery.md](06-recovery.md) 的卡住處理。（#14）
 
