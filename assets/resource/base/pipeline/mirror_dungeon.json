@@ -27,6 +27,7 @@
             "[JumpBack]GiftSearch",
             "[JumpBack]StartingGift",
             "[JumpBack]ThemePack",
+            "MapNodePanel",
             "MirrorMap",
             "[JumpBack]GoToMirrorEntry"
         ]
@@ -143,15 +144,24 @@
         "action": "Custom",
         "custom_action": "PickThemePack"
     },
+    // Node selection panel: right-hand Enter. Before MirrorMap: the panel hides part of its icons.
+    // No next: entering a node ends the task until its screens land (#27-#29), then [JumpBack].
+    "MapNodePanel": {
+        "recognition": "TemplateMatch",
+        "roi": [1030, 495, 210, 95],
+        "template": "Map/MapNodePanel.png",
+        "threshold": 0.8,
+        "action": "Custom",
+        "custom_action": "EnterNode"
+    },
     // Right-hand icon column (pack detail, team); the Exploring Floor title is often covered.
-    // Run start ends here: routing the map is #26.
+    // RouteMap picks and enters the next node; no next, as MapNodePanel.
     "MirrorMap": {
         "recognition": "TemplateMatch",
         "roi": [1195, 65, 75, 130],
         "template": "Map/MirrorMap.png",
         "threshold": 0.8,
         "action": "Custom",
-        "custom_action": "Halt",
-        "custom_action_param": "reached the map"
+        "custom_action": "RouteMap"
     }
 }
