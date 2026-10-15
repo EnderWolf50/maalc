@@ -1,0 +1,4 @@
+# Shop numbers (docs/spec/05-game-data.md section 6). Developer-maintained.
+# Refresh fees are not listed: the bot reads them off the shop's two refresh buttons.
+heal_cost: 100  # each of the three heal options
+refresh_margin: 120  # a refresh must leave this much (plus the reserve) to buy with: about a tier I gift

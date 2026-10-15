@@ -33,6 +33,7 @@
             "[JumpBack]GiftRefuseDialog",
             "[JumpBack]RewardCard",
             "[JumpBack]GiftChoice",
+            "[JumpBack]Shop",
             "[JumpBack]Event",
             "[JumpBack]WipeDialog",
             "[JumpBack]Victory",
@@ -190,6 +191,15 @@
         "action": "Custom",
         "custom_action": "PickGift"
     },
+    // Shop and Super Shop (spec 03 section 13): the Leave button, also under the shop's own dialogs and pages.
+    // Shop heals, then sells, buys, refreshes and fuses in rounds, and leaves.
+    "Shop": {
+        "recognition": "OCR",
+        "roi": [1040, 615, 180, 65],
+        "expected": "^Leave$",
+        "action": "Custom",
+        "custom_action": "Shop"
+    },
     // The red button bottom right reads SKIP, Proceed, Continue or Commence, grey while it does nothing.
     "Event": {
         "recognition": "OCR",
@@ -199,7 +209,6 @@
         "custom_action": "Event"
     },
     // Node selection panel: right-hand Enter. Before MirrorMap: the panel hides part of its icons.
-    // Shop screens are not in the hub yet (#29): entering one ends in the hub's timeout.
     "MapNodePanel": {
         "recognition": "TemplateMatch",
         "roi": [1030, 495, 210, 95],

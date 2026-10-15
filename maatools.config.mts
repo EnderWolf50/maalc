@@ -59,6 +59,12 @@ const screens: [image: string, hits: string[]][] = [
   ['EventChoices.png', ['Event']],
   ['EventCheck.png', ['Event']],
   ['EventResult.png', ['Event']],
+  // Shop: Leave stays readable under the shop's own dialogs and pages; the heal page has Return instead.
+  ['Shop.png', ['Shop']],
+  ['SuperShop.png', ['Shop']],
+  ['ShopPurchase.png', ['Shop']],
+  ['ShopFuse.png', ['Shop']],
+  ['ShopHeal.png', []],
 ]
 
 const config: FullConfig = {
