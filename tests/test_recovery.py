@@ -64,8 +64,9 @@ def test_ladder_climbs_until_the_screen_is_past():
     ladder.progress("Loading")  # on the way back: not past it
     assert ladder.stuck("MirrorMap", 1, 0) == (2, None)
     assert ladder.stuck("NavDrive", 1, 0) == (3, None)  # any stuck in an open episode climbs
-    assert ladder.stuck("MirrorMap", 1, 0) == (None, "L3 did not get past it")
-    assert ladder.counts == {1: 1, 2: 1, 3: 1}
+    assert ladder.stuck("MirrorMap", 1, 1) == (3, None)  # L3 again: a restart may hang too
+    assert ladder.stuck("MirrorMap", 1, 2) == (None, "game restarted 2 times this run")
+    assert ladder.counts == {1: 1, 2: 1, 3: 2}
 
 
 def test_ladder_same_screen_twice_in_a_run_stops():
