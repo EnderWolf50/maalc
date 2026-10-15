@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from settlement import append_run, bonus_toggles, floors_passed, goal_met, now, read_result, runs_done
+from settlement import append_run, bonus_toggles, counts_as_run, floors_passed, goal_met, now, read_result, runs_done
 
 
 @pytest.mark.parametrize("text, expected", [
@@ -41,6 +41,11 @@ def test_goal_and_floors(result, met, passed):
 ])
 def test_bonus_toggles(use, amount, hard, left, all_hard, expected):
     assert bonus_toggles(use, amount, hard, left, all_hard) == expected
+
+
+@pytest.mark.parametrize("result, expected", [("clear", True), ("giveup", False), ("stop", False)])
+def test_only_claimed_runs_count(result, expected):
+    assert counts_as_run(result) is expected
 
 
 @pytest.mark.parametrize("done, limit, expected", [(0, 1, False), (1, 1, True), (5, 0, False), (2, 3, False)])

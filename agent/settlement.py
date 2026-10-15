@@ -40,6 +40,11 @@ def bonus_toggles(use, amount, hard, left, all_hard):
     return min(want, left)
 
 
+def counts_as_run(result):
+    """Only a claimed run counts toward the run count; a given-up or stopped one does not."""
+    return result == "clear"
+
+
 def runs_done(done, limit):
     """Whether the run count is reached: limit 0 means no limit (spec 04 section 5)."""
     return limit > 0 and done >= limit
