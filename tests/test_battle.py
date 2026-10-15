@@ -1,4 +1,3 @@
-import numpy as np
 import pytest
 
 import battle as b
@@ -48,13 +47,21 @@ def test_guard_turns_count_only_turns_started_on_guard():
     assert left == 0
 
 
-def test_slot_centres_merge_ticks_and_drop_sparks():
-    row = np.zeros(400, bool)
-    row[10:33] = row[35:53] = True  # one top edge cut by a tick: 10-53
-    row[100:143] = True
-    row[200:204] = True  # a spark
-    row[300:390] = True  # too wide for one portrait
-    assert b.slot_centres(row) == [31, 121]
+@pytest.mark.parametrize(("win_rate_x", "first", "last", "n"), [(984, 362, 848, 7), (1020, 322, 888, 8), (1060, 281, 929, 9)])
+def test_slot_xs_follow_the_win_rate_label(win_rate_x, first, last, n):
+    # Live 2026-10-16: 7, 8 and 9 slots; the portraits sat at 362-849, 322-887 and 281-929.
+    xs = b.slot_xs(win_rate_x)
+    assert (xs[0], xs[-1], len(xs)) == (first, last, n)
+
+
+def test_guard_shown_compares_each_slot_before_and_after_the_tap():
+    # Live (2026-10-16): slot 6 had been swapped in an earlier turn, so the taps swapped it off guard.
+    before = [(0.08, 142), (0.0, 115), (0.01, 135), (0.21, 144), (0.16, 102), (0.28, 45), (0.0, 72), (0.02, 136)]
+    after = [(0.53, 71), (0.14, 102), (0.28, 82), (0.44, 72), (0.36, 53), (0.02, 101), (0.05, 51), (0.4, 44)]
+    assert b.guard_shown(before, after) == [True] * 5 + [False, True, True]
+    # Snow map: an orange skill frame reads browner than the guard icon; the texture still tells.
+    assert b.guard_shown([(0.15, 122), (0.01, 131)], [(0.06, 104), (0.03, 113)]) == [True, True]
+    assert b.guard_shown([(0.1, 100), (0.2, 100)], [(0.12, 104), (0.05, 100)]) == [None, False]
 
 
 def test_same_turn_counts_tries_at_one_turn():

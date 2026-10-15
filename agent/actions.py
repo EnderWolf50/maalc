@@ -795,8 +795,8 @@ class Formation(CustomAction):
 WIN_RATE = (20, 14)
 START_DISC = (-66, 26)
 TURN_NUMBER = [55, 57, 45, 30]
-SLOT_TOPS = (631, 639)  # y band of the portraits' hexagon tops, under the skill slots
-PORTRAIT_Y = 665  # tapping a slot's portrait puts that unit on guard
+PORTRAIT_Y = 665  # tapping a slot's portrait swaps its lower skill and its guard skill
+LOWER_Y = 577  # a slot's lower skill: once the slots have picks, tapping it picks that skill instead
 
 
 def disc_lit(image, x, y):
@@ -804,12 +804,18 @@ def disc_lit(image, x, y):
     return image[y - 10:y + 10, x - 10:x + 10].max(axis=2).mean() > 200
 
 
-def slot_xs(image, right):
-    """x of each skill slot's portrait, left of right (the Win Rate label); live: 81 px apart."""
-    band = image[SLOT_TOPS[0]:SLOT_TOPS[1], 200:right].astype(int)
-    b, g, r = band[..., 0], band[..., 1], band[..., 2]
-    orange = (r > 200) & (g > 60) & (g < 140) & (b < 90)  # live: about (236, 79, 41) RGB
-    return [x + 200 for x in battle.slot_centres(orange.any(axis=0))]
+def lower_x(x):
+    """x of a slot's lower skill: the skill rows lean in towards the middle (x ~604) by about 6%."""
+    return round(x + (604 - x) * 0.06)
+
+
+def guard_score(image, x):
+    """(brown, texture) at a lower skill, for battle.guard_shown; guard icons are flat brown (~(150, 100, 50) RGB)."""
+    p = image[LOWER_Y - 14:LOWER_Y + 14, x - 14:x + 14].astype(int)
+    b, g, r = p[..., 0], p[..., 1], p[..., 2]
+    v = p.sum(axis=2)
+    texture = np.abs(np.diff(v, axis=0)).mean() + np.abs(np.diff(v, axis=1)).mean()
+    return float(((r > 90) & (r - g > 20) & (g - b > 10)).mean()), float(texture)
 
 
 @AgentServer.custom_action("PlayTurn")
@@ -828,12 +834,10 @@ class PlayTurn(CustomAction):
         if RUN["turn"][1] > 3:
             return stuck(f"turn {turn} unchanged after 3 submits")
         guarded = False
-        if RUN.get("guard", 0) > 0:
-            guarded, image = self.guard(context, image, x, (dx, dy))
+        if RUN.get("guard", 0) > 0 and RUN["turn"][1] == 1:  # a turn submitted again plays as before #52
+            guarded, image = self.guard(context, x, y, (dx, dy))
             if not guarded:
                 log(f"turn {turn}: guard did not take, Win Rate instead")
-                tap(context, x + WIN_RATE[0], y + WIN_RATE[1], wait=1.5)
-                image = screen(context)
         for _ in range(2):
             if disc_lit(image, dx, dy):
                 break
@@ -858,14 +862,45 @@ class PlayTurn(CustomAction):
         return True
 
     @staticmethod
-    def guard(context, image, right, disc):
-        """Tap every slot's portrait, then check the START disc lit: (every unit on guard, screen after)."""
-        xs = slot_xs(image, right)
-        if not xs:
+    def guard(context, x, y, disc):
+        """Put every slot on its guard skill: (whether the START disc lit, the screen after).
+
+        A portrait tap swaps the slot's lower skill and its guard skill, and the game keeps the swap
+        from turn to turn, so every portrait is tapped once and the lower skills compared before and
+        after (the check that every slot shows its guard skill); the slots that went off guard are
+        tapped back. A lower skill tap only swaps a pick, so Win Rate picks first, then each lower
+        skill is tapped. Live, the picked icons could not be told apart reliably (banners, chain and
+        glow cover them), so the picks are not read back.
+        """
+        time.sleep(1)  # live: a battle's first turn slides the portraits in late
+        image = screen(context)
+        lows = [lower_x(sx) for sx in battle.slot_xs(x)]
+        before = [guard_score(image, lx) for lx in lows]
+        for sx in battle.slot_xs(x):
+            tap(context, sx, PORTRAIT_Y, wait=0.4)
+        time.sleep(0.8)
+        image = screen(context)
+        after = [guard_score(image, lx) for lx in lows]
+        shown = battle.guard_shown(before, after)
+        unsure = [i for i, s in enumerate(shown) if s is None]
+        if unsure:  # live: the glow on a unit's slot flickers; swap those back and compare once more
+            for i in unsure:
+                tap(context, battle.slot_xs(x)[i], PORTRAIT_Y, wait=0.4)
+            time.sleep(0.8)
+            image = screen(context)
+            again = battle.guard_shown([after[i] for i in unsure], [guard_score(image, lows[i]) for i in unsure])
+            for i, s in zip(unsure, again):
+                shown[i] = s
+        if None in shown:
+            log(f"guard: cannot tell the guard skill of slots {[i + 1 for i, s in enumerate(shown) if s is None]}")
             return False, image
-        for sx in xs:
-            tap(context, sx, PORTRAIT_Y, wait=0.3)
-        time.sleep(1)
+        for sx, on in zip(battle.slot_xs(x), shown):
+            if not on:
+                tap(context, sx, PORTRAIT_Y, wait=0.4)
+        tap(context, x + WIN_RATE[0], y + WIN_RATE[1], wait=1.5)
+        for lx in lows:
+            tap(context, lx, LOWER_Y, wait=0.6)
+        time.sleep(0.5)
         image = screen(context)
         return disc_lit(image, *disc), image
 
