@@ -29,6 +29,11 @@
             "[JumpBack]GiftSearch",
             "[JumpBack]StartingGift",
             "[JumpBack]ThemePack",
+            "[JumpBack]RewardCardForgo",
+            "[JumpBack]GiftRefuseDialog",
+            "[JumpBack]RewardCard",
+            "[JumpBack]GiftChoice",
+            "[JumpBack]Event",
             "[JumpBack]WipeDialog",
             "[JumpBack]Victory",
             "[JumpBack]Formation",
@@ -99,7 +104,7 @@
     },
     "StarlightPage": {
         "recognition": "OCR",
-        "roi": [925, 33, 70, 22],
+        "roi": [890, 30, 115, 28],
         "expected": "Available",
         "action": "Custom",
         "custom_action": "BuyStarlight"
@@ -151,8 +156,50 @@
         "action": "Custom",
         "custom_action": "PickThemePack"
     },
+    // Rewards and events (spec 03 sections 10-12). The bot never cancels a reward or refuses a gift;
+    // landing in either dialog anyway, it backs out with Cancel.
+    "RewardCardForgo": {
+        "recognition": "OCR",
+        "roi": [440, 320, 400, 35],
+        "expected": "Continue without choosing",
+        "action": "Click",
+        "target": [455, 448, 165, 37],
+        "post_delay": 1500
+    },
+    // Select with picks left; Confirm would hand out random trials (1.117.0, also after a NORMAL boss).
+    "GiftRefuseDialog": {
+        "recognition": "OCR",
+        "roi": [440, 280, 400, 35],
+        "expected": "remaining E.G.O Gift choices",
+        "action": "Click",
+        "target": [415, 476, 200, 35],
+        "post_delay": 1500
+    },
+    "RewardCard": {
+        "recognition": "OCR",
+        "roi": [290, 112, 490, 48],
+        "expected": "Encounter Reward",
+        "action": "Custom",
+        "custom_action": "RewardCard"
+    },
+    // After a fight, an event or a boss (with Mounting Trials); the starting gift page is matched before.
+    "GiftChoice": {
+        "recognition": "OCR",
+        "roi": [870, 560, 160, 40],
+        "expected": "Refuse Gift",
+        "action": "Custom",
+        "custom_action": "PickGift"
+    },
+    // The red button bottom right reads SKIP, Proceed, Continue or Commence, grey while it does nothing.
+    "Event": {
+        "recognition": "OCR",
+        "roi": [1040, 612, 190, 66],
+        "expected": "SKIP|Proceed|Continue|Commence",
+        "action": "Custom",
+        "custom_action": "Event"
+    },
     // Node selection panel: right-hand Enter. Before MirrorMap: the panel hides part of its icons.
-    // Event and shop screens are not in the hub yet (#28, #29): entering one ends in the hub's timeout.
+    // Shop screens are not in the hub yet (#29): entering one ends in the hub's timeout.
     "MapNodePanel": {
         "recognition": "TemplateMatch",
         "roi": [1030, 495, 210, 95],

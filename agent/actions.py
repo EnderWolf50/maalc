@@ -17,6 +17,7 @@ from maa.custom_action import CustomAction
 
 import battle
 import map_route
+import rewards
 import run_start
 from settings import SettingsError, load_settings
 from state import pick_team, read_cursor
@@ -324,12 +325,17 @@ def theme_pack_marks(settings, team):
 
 
 def pack_titles(context, image):
-    """Cards left to right as (x centre, [text lines top to bottom]); lines within 80 px belong to one card.
+    """Cards left to right as (x centre, [text lines top to bottom]).
 
     All-caps lines are CAUTION stamps or CLEAR BONUS, never a title; the LIMBUS COMPANY logo
     above the title may still slip in as the top line (run_start.match_card drops it).
     """
-    lines = sorted((x + w // 2, y, t) for t, (x, y, w, h) in ocr(context, image, PACK_TITLES) if re.search(r"[a-z]", t))
+    return columns([r for r in ocr(context, image, PACK_TITLES) if re.search(r"[a-z]", r[0])])
+
+
+def columns(results):
+    """OCR results grouped into cards left to right as (x centre, [lines top to bottom]); lines within 80 px are one card."""
+    lines = sorted((x + w // 2, y, t) for t, (x, y, w, h) in results)
     groups = []
     for line in lines:
         if groups and line[0] - groups[-1][-1][0] < 80:
@@ -767,3 +773,163 @@ def forfeit(context):
     RUN.pop("forfeit")
     log("forfeited the run")
     return True
+
+
+# Events, reward cards and gifts (spec 03 sections 10-12).
+EVENT_BUTTON = (1130, 645)  # SKIP / Proceed / Continue / Commence share it; grey while it does nothing
+EVENT_STORY = [60, 320, 580, 200]
+CHOICES_HEADER = [690, 105, 170, 45]
+CHOICE_ROWS = [690, 170, 480, 440]
+CHECK_PROMPT = [850, 295, 300, 50]
+PORTRAIT_X = [77 + round(69.3 * i) for i in range(12)]  # 7 in a boss's mid-battle event, from the left
+PORTRAIT_Y = 655
+
+
+def data(name):
+    return yaml.safe_load((RESOURCE / "base" / "data" / name).read_text(encoding="utf-8")) or {}
+
+
+def red_button(image):
+    b, g, r = image[640:650, 1080:1180].reshape(-1, 3).mean(0)
+    return r > 150 and r - b > 70
+
+
+@AgentServer.custom_action("Event")
+class Event(CustomAction):
+    """One step on an event page: press the lit button, pick a checker or an option, else advance the text (spec 03 section 10)."""
+
+    def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
+        run = current_run(context)
+        image = screen(context)
+        if red_button(image):
+            tap(context, *EVENT_BUTTON, wait=1.5)
+        elif "Choose a character" in text(context, image, CHECK_PROMPT):
+            # One read per portrait: read as a row, neighbouring captions run together ("HighVery Low").
+            captions = [(text(context, image, [x - 38, 605, 76, 24], only_rec=True), x) for x in PORTRAIT_X]
+            i = rewards.pick_checker(captions)
+            log(f"event check: {', '.join(t for t, _ in captions) or 'no odds read'}: take {captions[i][0] if i is not None else 'the first'}")
+            tap(context, captions[i][1] if i is not None else 77, PORTRAIT_Y, wait=1.5)
+        elif "Choices" in text(context, image, CHOICES_HEADER):
+            options = [(" ".join(lines), y) for y, lines in self.rows(ocr(context, image, CHOICE_ROWS))]
+            if not options:
+                return True
+            overrides = data("events.yaml") | {o["question"]: o["option"] for o in run["settings"]["event_overrides"]}
+            story = [t for t, _ in ocr(context, image, EVENT_STORY)]
+            question = next(filter(None, (run_start.match_pack(t, list(overrides)) for t in story + [" ".join(story)])), None) if overrides else None
+            i = rewards.pick_choice([t for t, _ in options], run["team"]["keyword"], overrides.get(question))
+            log(f"event: {' | '.join(t for t, _ in options)}: take {options[i][0]!r}" + (f" (override {question!r})" if question else ""))
+            tap(context, 925, options[i][1], wait=1.5)
+        else:
+            tap(context, 350, 420, wait=1.5)  # the story box: shows the next line
+        return True
+
+    @staticmethod
+    def rows(results):
+        """Option rows top to bottom as (y of the first line, [lines]); a gap over 50 px starts a new row."""
+        rows = []
+        for t, (x, y, w, h) in sorted(results, key=lambda r: r[1][1]):
+            if rows and y - rows[-1][2] < 50:
+                rows[-1][1].append(t)
+                rows[-1][2] = y
+            else:
+                rows.append([y + h // 2, [t], y])
+        return [(y, lines) for y, lines, _ in rows]
+
+
+REWARD_TITLE = [290, 112, 490, 48]
+CARD_TEXT = [130, 340, 1020, 120]
+SELECTABLE = [880, 115, 170, 40]
+CARD_CONFIRM = (808, 528)
+
+
+@AgentServer.custom_action("RewardCard")
+class RewardCard(CustomAction):
+    """Take reward cards in the team's order until Selectable n/m is full, then Confirm; never Cancel (spec 03 section 11)."""
+
+    def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
+        order = current_run(context)["team"]["reward_cards"]
+        taken = set()
+        for _ in range(5):
+            image = screen(context)
+            if "Encounter Reward" not in text(context, image, REWARD_TITLE):
+                return True  # gone (or fading in): let MirrorHub look again
+            m = re.search(r"(\d)\s*/\s*(\d)", text(context, image, SELECTABLE))
+            if m and m[1] == m[2]:
+                tap(context, *CARD_CONFIRM, wait=2)
+                return True
+            cards = columns(ocr(context, image, CARD_TEXT))
+            if not cards or len(taken) == len(cards):
+                time.sleep(1)
+                continue
+            types = [rewards.card_type(" ".join(lines)) for _, lines in cards]
+            i = rewards.pick_card(types, order, taken)
+            log(f"reward cards: {', '.join(str(t) for t in types)}: take {types[i] or ' '.join(cards[i][1])!r}")
+            tap(context, cards[i][0], 300, wait=1.5)
+            taken.add(i)
+        log("stop: reward card page did not fill Selectable")
+        return False
+
+
+GIFT_CARDS = [100, 150, 1080, 410]  # 1-4 cards; on the boss page the Mounting Trials half below each
+GIFT_COUNT = [1060, 555, 160, 50]  # "Select 0/2"; no count with one card
+GIFT_SELECT = (1138, 579)
+REFUSE_GIFT = [870, 560, 160, 40]
+TRIAL_NAME_Y = (440, 475)  # top of the trial name line; the effect line under it starts ~485
+
+
+def gift_count(context):
+    m = re.search(r"(\d)\s*/\s*(\d)", text(context, screen(context), GIFT_COUNT))
+    return (int(m[1]), int(m[2])) if m else None
+
+
+@AgentServer.custom_action("PickGift")
+class PickGift(CustomAction):
+    """Gift choice after a fight, an event or a boss: best cards until Select n/m is full, then Select (spec 03 section 12).
+
+    Cards are main keyword > other > owned; when Mounting Trials hang under them (after a boss),
+    each scores gift - weight x trial risk. Refuse Gift is never pressed: it hands out random trials.
+    """
+
+    def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
+        run = current_run(context)
+        image = screen(context)
+        results = ocr(context, image, GIFT_CARDS)
+        # The "Acquire E.G.O Gift" tab sits on each card's top-right corner, 114 px right of its centre.
+        centres = sorted(x + w - 114 for t, (x, y, w, h) in results if "Acquire" in t)
+        if not centres:
+            return True  # page fading in or out: let MirrorHub look again
+        lines = [[] for _ in centres]
+        for t, (x, y, w, h) in results:
+            i = min(range(len(centres)), key=lambda i: abs(centres[i] - x - w // 2))
+            if abs(centres[i] - x - w // 2) < 130 and "Acquire" not in t:
+                lines[i].append((y, t))
+        trials = any("Mounting" in t for t, _ in results)
+        risks = data("trial_risks.yaml") | {o["trial"]: o["risk"] for o in run["settings"]["trial_risk_overrides"]}
+        cards = []
+        for card in lines:
+            gift = " ".join(t for y, t in card if y < 410)
+            owned = any(re.fullmatch(r"\W*Owned\W*", t) for _, t in card)
+            names = [t for y, t in card if TRIAL_NAME_Y[0] <= y < TRIAL_NAME_Y[1]]
+            risk = min((rewards.trial_risk(t, risks) for t in names), default=rewards.MAX_RISK) if trials else None
+            cards.append((rewards.gift_kind(gift, run["team"]["keyword"], owned), risk))
+        ranked = rewards.rank_gifts(cards, run["team"]["trial_risk_weight"])
+        log("gifts: " + ", ".join(k + ("" if r is None else f"/risk {r}") for k, r in cards) + f": order {ranked}")
+
+        count = gift_count(context)
+        for i in ranked:
+            if count and count[0] >= count[1]:
+                break
+            tap(context, centres[i], 300, wait=1.5)
+            now = gift_count(context)
+            if count and now and now[0] < count[0]:  # it was picked already: pick it again, go on to the next
+                tap(context, centres[i], 300, wait=1.5)
+                now = gift_count(context)
+            if not count:
+                break  # one card, no count
+            count = now or count
+        for _ in range(3):
+            tap(context, *GIFT_SELECT, wait=2)
+            if "Refuse" not in text(context, screen(context), REFUSE_GIFT):
+                return True
+        log("stop: Select did not take the gifts")
+        return False

@@ -198,6 +198,7 @@
 - 沒列在表上的事件照通用規則：「獲得主要體系 E.G.O」> 其他獲得 E.G.O 的選項 > 第一個選項。
 - 技能判定：選成功率等級最高的罪人（Very High > … > Very Low），同等級選最左邊；讀不到就選第 1 位，不盲點。
 - 實機：選項下方的提示寫出判定與獎勵的體系，例如 `Lust & Pride Advantage check. Pass to gain a Keywordless E.G.O Gift.`；成功率等級顯示在每位罪人頭像上方。（實機：captures/133_event_skip1.png、captures/137_event_check_after_tap.png）
+- 實作：選項的文字連同提示一起讀，提示寫 `<主要體系> E.G.O Gift` 的算「獲得主要體系 E.G.O」。問題文字取左側敘事框的文字。成功率等級逐一頭像讀：整列一起讀時相鄰的等級會黏在一起。（#28）
 
 **戰鬥中的事件與對話**（#16）
 
@@ -215,27 +216,30 @@
 - 基本卡只有 5 種：Cost、Cost & Keyword Gift Chance、E.G.O Resource、Random E.G.O Gift、Starlight，各有 I–VII 階。
 - 依該隊的順序選卡。預設順序：Starlight → Random E.G.O Gift → Cost & Keyword Gift Chance → Cost → E.G.O Resource。
 - 比對不到任何類型時選第一張。
+- 實作：卡片類型由卡上說明的 OCR 文字判斷（`Starlight`、`Resource`、`Cost` 加 `Gift`／`chance`、`Cost`、`Gift`），不用圖示模板。（#28）
 - 按 Confirm 前先讀 `Selectable n/m`，確認已選滿；永遠不按 Cancel。
 - 張數：第 1、2 層每次 2 張，第 3 層起 3 張。普通最高到 V 階，困難最高到 VII 階。Special Catalogue、Tomorrow's Fortune、Star-shower、Binary Star-shop 會改變卡的效果，但不是新的卡種，仍依類型比對。
 - 實機：困難局看到 1–4 張。第 1、2 層 2 張，第 3 層起 3 張；買了 `Special Catalogue`（`Number of Encounter Reward Card Choices +1`）後每次多 1 張。Focused 與異想體戰之後的順序是飾品選擇頁 → 飾品獲得視窗 → 獎勵卡頁；Boss 之後先出現獎勵卡頁。按 Cancel 會問 `Continue without choosing a reward?`。（實機：captures/115_boss_unknown.png、captures/176_f2boss_rewards_card.png、captures/197_f3boss_rewards_card.png、captures/157_after_focused.png、captures/158_reward_card_cancel.png）
 
-## 12. 選飾品、Boss 後的困難選擇與試煉
+## 12. 選飾品、Boss 後的選擇與試煉
 
 **戰後與事件選飾品**（#10）
 
 - 依「主要體系 > 其他 > 已擁有」挑選。
 - 還能多選時（例如 `0/2`），依同樣順序繼續挑。
 - 沒有任何候選（全部都已擁有或讀不出體系）時，選第一個。（#10、#19）
+- 永遠不按 `Refuse Gift`。選不滿就按 Select 會問 `You have remaining E.G.O Gift choices.`，按 Confirm 會拿到等量的隨機試煉；誤入時按 Cancel。（#28；2026-10-15 實機）
 - 實機：只有一張卡時，Select 上沒有計數。第 3 層的異想體戰節點標了飾品，打完卻沒有出現飾品選擇頁。（實機：captures/154_focused_unknown.png、captures/183_f3abno_map.png）
+- 實作：主要體系以卡片說明的 OCR 文字判斷，說明裡出現主要體系的字（例如 `Burn`）就算；卡上的體系圖示太小，沒有做模板。已擁有以卡上的 `Owned` 文字判斷。（#28）
 
-**Boss 後的選擇與試煉**（困難模式，#17）
+**Boss 後的選擇與試煉**（#17、#28）
 
-- 困難模式的 Boss 後選項一定附帶試煉，所以每個選項都要評分：選項分數 = 飾品分數 − 權重 × 試煉風險。
+- 遊戲 1.117.0 實機在普通局 Boss 後也看到這一頁（未見官方公告，待確認；程式碼兩種難度都處理，沒出現就不影響），選項一定附帶試煉；按 `Refuse Gift` 仍會拿到隨機試煉。所以兩種難度都照同一條規則評分：選項分數 = 飾品分數 − 權重 × 試煉風險。（#28；2026-10-15 實機）
   - 飾品分數：沿用選飾品的順序，主要體系 3、其他 2、已擁有 0。
   - 試煉風險：0–5。從選項上 OCR 讀出試煉名稱（例如 `Defense Level Up`、`Growth I`），查資料檔的試煉風險表（開發者每季更新）；查不到就當作最高風險 5。不用等級：每個試煉旁的 `Enemy Level Up +1`／`+2` 只有兩種值，分不出試煉。（#17；實機：captures/122_boss_gift_trials_page.png、captures/176_f2boss_rewards_gift.png）
   - 權重：每隊一個下拉選單（低／中／高），預設「高」；數值為低 0.5、中 1、高 2。
-- 依分數取前兩名（頁面是 `Select 0/2`）；同分時選試煉風險較低的。（#17、#19，2026-10-14 定案）
-- 實機：頁面有 4 欄，每欄上半是飾品、下半是 `Mounting Trials`；計數是 `Select 0/2`，選一欄就同時拿到飾品和試煉。選完後每個飾品各彈一次飾品獲得視窗，然後直接進入下一層的主題包頁。（實機：captures/122_boss_gift_trials_page.png、captures/124_boss_gift_pick2.png、captures/127_after_boss_gifts.png）
+- 依分數取 `Select n/m` 的可選數量（困難 `Select 0/2`、普通 `Select 0/1`）；同分時選試煉風險較低的。（#17、#19，2026-10-14 定案；#28）
+- 實機：困難頁面有 4 欄，每欄上半是飾品、下半是 `Mounting Trials`；計數是 `Select 0/2`，選一欄就同時拿到飾品和試煉。選完後每個飾品各彈一次飾品獲得視窗，然後直接進入下一層的主題包頁。普通頁面是 3 欄、`Select 0/1`，試煉例如 `Resilient I`、`Offense Level Up I`。（實機：captures/122_boss_gift_trials_page.png、captures/124_boss_gift_pick2.png、captures/127_after_boss_gifts.png；1.117.0 普通局 2026-10-15）
 - 以上數值是初始值，等截圖確認後再調整。（#17、#19）
 
 ## 13. 商店
