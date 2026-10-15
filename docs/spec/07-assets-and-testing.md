@@ -39,6 +39,7 @@
 - **開始圓盤亮起**：用圓盤中心一小塊的亮度判斷（實測 HSV V 亮起約 254、未亮約 133），不要用 `START` 字樣的模板。字樣模板在明亮的雪地關卡失效，迴圈空轉 80 次。（實機：captures/180_f3abno_battle_map.png、captures/182_abno_winrate_tap.png）
 - **回合開場動畫**：動畫還在播時點勝率可能沒效果或把自動配卡切回關閉；改用亮度確認後，約 100 個回合中有 13 次要重試，全部自動恢復，沒有誤開始。所以每次點完都要重新確認狀態。
 - **地圖頁錨點**：左上的 `Exploring Floor` 標題會被節點蓋住，錨點改用右側的圖示欄與齒輪；標題只在看得到時讀樓層。（實機：captures/202_f4ev_stuck.png）
+- **地圖選路**（#26，2026-10-15 普通鏡牢實機）：地圖靜止時 Bus 固定在同一位置，相鄰一欄的三格在 Bus 右方 255 px、上下相隔 213 px。只有可走的連線上有灰色箭頭（chevron），用它判斷相鄰格能不能走。最上一格的徽章被頂端資源列蓋住，所以先把地圖往下拖約 70 px（拖曳距離不準，拖完重新找 Bus）。節點類型看與主題包無關的標記：Cost 硬幣、飾品箱、Focused 的橘色 WARNING 環、Boss 的紅光；事件與商店的圖示隨主題包變色，用 FeatureMatch（灰階形狀）比對。六角形的 Focused 環用顏色模板在橘色主題包只有 0.67，也改用 FeatureMatch。
 - **事件按鈕**：`SKIP`、`Proceed`、`Continue`、`Commence` 都在右下同一個紅色按鈕，沒作用時變灰，可用顏色判斷是否可點。成功率等級（Very High … Very Low）的文字顏色各不相同。（實機：captures/132_event_entered.png、captures/149_ev2_check.png）
 - **罪人列座標**：商店與事件頁的罪人列頭像間距不同，不能共用一組座標。（實機：captures/213_revive_selected.png、captures/137_event_check_after_tap.png）
 - **數量會變的卡片**：獎勵卡 1–4 張、飾品選擇頁 1 或 4 張，都置中排列，要先找出卡片再點，不用固定格位。（實機：captures/154_focused_unknown.png、captures/197_f3boss_rewards_card.png）
