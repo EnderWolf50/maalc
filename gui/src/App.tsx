@@ -118,8 +118,8 @@ function RunTab() {
   const { s, update, t, tv, bad } = useEditor();
   const run = s.run;
   const set = (patch: Partial<Settings["run"]>) => update((d) => { Object.assign(d.run, patch); });
-  const pick = (k: "difficulty" | "weekly_bonus_use" | "weekly_bonus_amount" | "starlight_unaffordable" | "after_retries") => (
-    <Field label={t(`run.${k}`)} path={`run/${k}`}>
+  const pick = (k: "difficulty" | "weekly_bonus_use" | "weekly_bonus_amount" | "starlight_unaffordable" | "after_retries", note?: string) => (
+    <Field label={t(`run.${k}`)} path={`run/${k}`} note={note}>
       <Select value={run[k]} options={runEnum(k)} label={(v) => tv(k, v)} onChange={(v) => set({ [k]: v })} />
     </Field>
   );
@@ -127,7 +127,7 @@ function RunTab() {
     <div className="grid">
       {pick("difficulty")}
       <Field label={t("run.runs")} path="run/runs"><Num value={run.runs} min={0} onChange={(v) => set({ runs: v })} /></Field>
-      {pick("weekly_bonus_use")}
+      {pick("weekly_bonus_use", run.weekly_bonus_use === "normal" ? t("run.weekly_bonus_normal_note") : undefined)}
       {pick("weekly_bonus_amount")}
       <label className={"check" + (bad("run/stop_when_weekly_bonus_out") ? " bad" : "")}>
         <input type="checkbox" checked={run.stop_when_weekly_bonus_out} onChange={(e) => set({ stop_when_weekly_bonus_out: e.target.checked })} />
