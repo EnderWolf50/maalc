@@ -5,10 +5,15 @@
         ]
     },
     // Dispatch: every screen is one node; [JumpBack] nodes return here to look again.
-    // next order is priority: global popups first, then dialogs before the page under them.
+    // next order is priority: Stuck (the watchdog, which must see every pass), global popups,
+    // then dialogs before the page under them.
     "MirrorHub": {
         "timeout": 60000,
+        "on_error": [
+            "GlobalStuck"
+        ],
         "next": [
+            "Stuck",
             "[JumpBack]Connecting",
             "[JumpBack]RetryPopup",
             "MaintenanceNotice",
@@ -18,8 +23,9 @@
             "[JumpBack]DefeatScreen",
             "[JumpBack]ExplorationComplete",
             "[JumpBack]MirrorEnterDialog",
+            "[JumpBack]ResumeDialog",
             "[JumpBack]MirrorEntryUnclaimed",
-            "MirrorEntryPaused",
+            "[JumpBack]MirrorEntryPaused",
             "[JumpBack]MirrorEntryNewRun",
             "[JumpBack]LevelWarning",
             "[JumpBack]TeamSelect",
@@ -41,6 +47,7 @@
             "[JumpBack]Formation",
             "[JumpBack]BattleTurn",
             "[JumpBack]BattlePause",
+            "[JumpBack]ProgressPanel",
             "[JumpBack]MapNodePanel",
             "[JumpBack]MirrorMap",
             "[JumpBack]GoToMirrorEntry"
@@ -54,14 +61,22 @@
         "action": "Custom",
         "custom_action": "PlanRun"
     },
-    // Tracer: a paused run stops the task instead of resuming it: Resume lands with #31.
+    // A paused run (after To Window, a restart, or by hand): Enter opens the Resume dialog.
     "MirrorEntryPaused": {
         "recognition": "OCR",
         "roi": [990, 140, 230, 35],
         "expected": "F\\s*\\d",
-        "action": "Custom",
-        "custom_action": "Halt",
-        "custom_action_param": "paused run on the entry page, not resuming"
+        "action": "Click",
+        "target": [1030, 470, 160, 50],
+        "post_delay": 2000
+    },
+    // Dungeon Progress with Resume / Halt Exploration / Cancel: always Resume (spec 01 入口頁的分流).
+    "ResumeDialog": {
+        "recognition": "OCR",
+        "roi": [520, 380, 240, 40],
+        "expected": "^Resume$",
+        "action": "Click",
+        "post_delay": 3000
     },
     // Unclaimed rewards: Enter opens the Exploration Reward window, settled like any other.
     "MirrorEntryUnclaimed": {
@@ -208,6 +223,15 @@
         "expected": "SKIP|Proceed|Continue|Commence",
         "action": "Custom",
         "custom_action": "Event"
+    },
+    // The map's Dungeon Progress panel (the gear, or the back key on the map): Continue closes it.
+    // Over the map, whose icons still show: before MirrorMap.
+    "ProgressPanel": {
+        "recognition": "OCR",
+        "roi": [600, 440, 80, 35],
+        "expected": "^Continue$",
+        "action": "Click",
+        "post_delay": 1500
     },
     // Node selection panel: right-hand Enter. Before MirrorMap: the panel hides part of its icons.
     "MapNodePanel": {
