@@ -14,6 +14,8 @@
             "MaintenanceNotice",
             "[JumpBack]Loading",
             "ExplorationReward",
+            "[JumpBack]DefeatScreen",
+            "[JumpBack]ExplorationComplete",
             "[JumpBack]MirrorEnterDialog",
             "MirrorEntryUnclaimed",
             "MirrorEntryPaused",
@@ -27,8 +29,13 @@
             "[JumpBack]GiftSearch",
             "[JumpBack]StartingGift",
             "[JumpBack]ThemePack",
-            "MapNodePanel",
-            "MirrorMap",
+            "[JumpBack]WipeDialog",
+            "[JumpBack]Victory",
+            "[JumpBack]Formation",
+            "[JumpBack]BattleTurn",
+            "[JumpBack]BattlePause",
+            "[JumpBack]MapNodePanel",
+            "[JumpBack]MirrorMap",
             "[JumpBack]GoToMirrorEntry"
         ]
     },
@@ -145,7 +152,7 @@
         "custom_action": "PickThemePack"
     },
     // Node selection panel: right-hand Enter. Before MirrorMap: the panel hides part of its icons.
-    // No next: entering a node ends the task until its screens land (#27-#29), then [JumpBack].
+    // Event and shop screens are not in the hub yet (#28, #29): entering one ends in the hub's timeout.
     "MapNodePanel": {
         "recognition": "TemplateMatch",
         "roi": [1030, 495, 210, 95],
@@ -155,7 +162,7 @@
         "custom_action": "EnterNode"
     },
     // Right-hand icon column (pack detail, team); the Exploring Floor title is often covered.
-    // RouteMap picks and enters the next node; no next, as MapNodePanel.
+    // RouteMap picks and enters the next node, or forfeits the run after a wipe's Accept results.
     "MirrorMap": {
         "recognition": "TemplateMatch",
         "roi": [1195, 65, 75, 130],
@@ -163,5 +170,65 @@
         "threshold": 0.8,
         "action": "Custom",
         "custom_action": "RouteMap"
+    },
+    // Battle (spec 03 sections 3, 8, 9). The DEFEAT dialog sits over the battle: first.
+    "WipeDialog": {
+        "recognition": "OCR",
+        "roi": [330, 360, 270, 50],
+        "expected": "All participating",
+        "action": "Custom",
+        "custom_action": "Wipe"
+    },
+    "Victory": {
+        "recognition": "OCR",
+        "roi": [420, 280, 440, 140],
+        "expected": "VICTORY",
+        "action": "Custom",
+        "custom_action": "Victory",
+        "post_delay": 2000
+    },
+    "Formation": {
+        "recognition": "OCR",
+        "roi": [1065, 465, 160, 30],
+        "expected": "Clear Selection",
+        "action": "Custom",
+        "custom_action": "Formation"
+    },
+    // Waiting for input: the Win Rate label, off or on. It moves right with every extra skill slot.
+    "BattleTurn": {
+        "recognition": "TemplateMatch",
+        "roi": [940, 515, 340, 60],
+        "template": [
+            "Battle/BattleTurn.png",
+            "Battle/BattleTurnPressed.png"
+        ],
+        "threshold": 0.8,
+        "action": "Custom",
+        "custom_action": "PlayTurn"
+    },
+    // A turn playing out: the pause button replaces the top-right controls.
+    "BattlePause": {
+        "recognition": "TemplateMatch",
+        "roi": [1130, 5, 100, 75],
+        "template": "Battle/BattlePause.png",
+        "threshold": 0.8,
+        "post_delay": 1000
+    },
+    // After a forfeit (captures/244, 245); Claim Rewards only opens the Exploration Reward window.
+    "DefeatScreen": {
+        "recognition": "OCR",
+        "roi": [1000, 135, 200, 70],
+        "expected": "^Defeat$",
+        "action": "Click",
+        "target": [1052, 548, 150, 40],
+        "post_delay": 2000
+    },
+    "ExplorationComplete": {
+        "recognition": "OCR",
+        "roi": [130, 90, 210, 70],
+        "expected": "Complete",
+        "action": "Click",
+        "target": [1060, 575, 150, 45],
+        "post_delay": 2000
     }
 }

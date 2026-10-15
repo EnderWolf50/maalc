@@ -9,11 +9,13 @@ import re
 import time
 from pathlib import Path
 
+import numpy as np
 import yaml
 from maa.agent.agent_server import AgentServer
 from maa.context import Context
 from maa.custom_action import CustomAction
 
+import battle
 import map_route
 import run_start
 from settings import SettingsError, load_settings
@@ -52,14 +54,14 @@ def swipe(context, x1, y1, x2, y2, ms=500, wait=1.0):
     time.sleep(wait)
 
 
-def ocr(context, image, roi):
-    """Every OCR result in roi as (text, (x, y, w, h))."""
-    detail = context.run_recognition("ReadText", image, {"ReadText": {"recognition": "OCR", "roi": roi}})
+def ocr(context, image, roi, only_rec=False):
+    """Every OCR result in roi as (text, (x, y, w, h)); only_rec reads roi as one line, no text detection."""
+    detail = context.run_recognition("ReadText", image, {"ReadText": {"recognition": "OCR", "roi": roi, "only_rec": only_rec}})
     return [(r.text, tuple(r.box)) for r in (detail.all_results if detail else [])]
 
 
-def text(context, image, roi):
-    return " ".join(t for t, _ in ocr(context, image, roi))
+def text(context, image, roi, only_rec=False):
+    return " ".join(t for t, _ in ocr(context, image, roi, only_rec))
 
 
 def number(s):
@@ -448,7 +450,7 @@ def enter_node(context):
     for _ in range(3):
         tap(context, *ENTER, wait=2)
         if not seen(context, screen(context), "MapNodePanel"):
-            log("entered the node; its screens come with #27-#29: stop")
+            log("entered the node")
             return True
     log("stop: Enter on the node panel did nothing")
     return False
@@ -473,6 +475,8 @@ class RouteMap(CustomAction):
     """
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
+        if RUN.get("forfeit"):
+            return forfeit(context)
         image, bus = self.find_bus(context)
         bx, by = bus or (446, 248)  # no bus found: assume the map at rest
         slots = self.read_slots(context, image, bx, by) if bus else {}
@@ -521,3 +525,245 @@ class RouteMap(CustomAction):
             marks = {mark for n, (mark, (ox, oy, w, h)) in MARKS.items() if seen(context, image, n, (cx + ox, cy + oy, w, h))}
             slots[row] = (map_route.node_type(marks), map_route.routes(v, cx, cy))
         return slots
+
+
+# Formation page (spec 03 section 3). Cards are in battle.SINNERS order, two rows of six.
+CARD_X = [295 + round(132.2 * i) for i in range(6)]  # card centres
+CARD_ART_Y = ((180, 300), (380, 500))
+CARD_NUMBER_Y = (211, 410)  # centre of the order mark on each row
+CARD_TAP_Y = (290, 488)  # the card's name plate
+PARTICIPANTS = [1125, 500, 100, 45]  # "10/11": selected / alive
+DETAILS_BUTTON = [860, 110, 125, 30]  # reads "Details" in the card view
+CLEAR_SELECTION = (1145, 479)
+RESET_DIALOG = [450, 330, 380, 35]  # Clear Selection asks "Reset Deployment Order?"
+RESET_CONFIRM = (767, 497)
+TO_BATTLE = (1145, 588)
+
+
+def card_xy(i, ys):
+    return CARD_X[i % 6], ys[i // 6]
+
+
+def participants(context, image):
+    """(selected, alive) from Total Participants, or None when it is not readable."""
+    m = re.search(r"(\d+)\s*/\s*(\d+)", text(context, image, PARTICIPANTS))
+    return (int(m[1]), int(m[2])) if m else None
+
+
+def saturation(image):
+    """HSV S (0-255) of a BGR image."""
+    hi, lo = image.max(axis=2).astype(int), image.min(axis=2).astype(int)
+    return (hi - lo) * 255 // np.maximum(hi, 1)
+
+
+def dead_sinners(image):
+    """Sinners whose card is grey: mean S ~2 against 65+ for any living card, picked or not."""
+    dead = set()
+    for i, sinner in enumerate(battle.SINNERS):
+        x, (y0, y1) = CARD_X[i % 6], CARD_ART_Y[i // 6]
+        if saturation(image[y0:y1, x - 50:x + 50]).mean() < 30:
+            dead.add(sinner)
+    return dead
+
+
+def order_marks(context, image):
+    """{sinner: order mark or None}.
+
+    The marks (orange SELECTED, cyan BACKUP) are cut out by colour first: OCR on the card art
+    misread 4, 6 and 9 in live captures; on the mask, one line per card, it read all 22 right.
+    """
+    mask = (image.max(axis=2) > 200) & (saturation(image) > 120)
+    plain = np.where(mask[..., None], 0, 255).astype(np.uint8).repeat(3, axis=2)
+    marks = {}
+    for i, sinner in enumerate(battle.SINNERS):
+        x, y = card_xy(i, CARD_NUMBER_Y)
+        t = text(context, plain, [x - 25, y - 23, 50, 46], only_rec=True).strip()
+        marks[sinner] = int(t) if t.isdigit() else None
+    return marks
+
+
+@AgentServer.custom_action("Formation")
+class Formation(CustomAction):
+    """Re-pick the deployment order, skipping the dead, then Chain To Battle! (spec 03 section 3).
+
+    The game keeps the last battle's picks: they are read off the cards and redone only when they differ.
+    """
+
+    def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
+        run = current_run(context)
+        image = screen(context)
+        count = participants(context, image)
+        if not count:
+            return True  # page fading in or out: let MirrorHub look again
+        alive, need = count[1], run["team"]["min_alive"]
+        RUN["alive"] = alive  # the shop's heal reads it (spec 03 section 13)
+        if alive < need:
+            log(f"stop: {alive} sinners alive, team {run['team']['name']!r} stops below {need}")
+            return False
+        if "Details" not in text(context, image, DETAILS_BUTTON):
+            tap(context, 826, 125, wait=1.5)  # its » folds the details view (skills, E.G.O), which hides the order marks
+            image = screen(context)
+        dead = dead_sinners(image)
+        if len(dead) != 12 - alive:
+            log(f"formation: {12 - alive} dead by the count, grey cards {sorted(dead)}")
+        order = battle.formation_order(run_start.resolve_plan(run["settings"], run["team"], "deployment_order"), dead)
+        if battle.formation_matches(order_marks(context, image), order):
+            log(f"formation as planned, {alive} alive")
+        elif not self.pick(context, order):
+            return False
+        for _ in range(3):
+            tap(context, *TO_BATTLE, wait=3)
+            if not participants(context, screen(context)):
+                return True
+        log("stop: Chain To Battle! did nothing")
+        return False
+
+    @staticmethod
+    def pick(context, order):
+        """Clear Selection, then tap the order card by card, each tap checked by the count going up by one."""
+        def count_reaches(n):
+            for _ in range(6):
+                count = participants(context, screen(context))
+                if count and count[0] == n:
+                    return True
+                time.sleep(0.5)
+            return False
+
+        for _ in range(3):
+            tap(context, *CLEAR_SELECTION, wait=1.5)
+            if "Reset Deployment" in text(context, screen(context), RESET_DIALOG):
+                tap(context, *RESET_CONFIRM)
+            if count_reaches(0):
+                break
+        else:
+            log("stop: Clear Selection did not clear the formation")
+            return False
+        for n, sinner in enumerate(order, 1):
+            for _ in range(2):  # a tap within ~1 s of the last one can be lost
+                tap(context, *card_xy(battle.SINNERS.index(sinner), CARD_TAP_Y), wait=1.2)
+                if count_reaches(n):
+                    break
+            else:
+                log(f"stop: tapping {sinner} did not pick them")
+                return False
+        log(f"formation re-picked: {', '.join(order)}")
+        return True
+
+
+# Battle (spec 03 section 8). Offsets are from the BattleTurn (Win Rate label) template's top-left.
+WIN_RATE = (20, 14)
+START_DISC = (-66, 26)
+TURN_NUMBER = [55, 57, 45, 30]
+
+
+def disc_lit(image, x, y):
+    # Lit: HSV V ~254 at the disc centre, unlit ~133 (spec 07: the START label fails on snow maps).
+    return image[y - 10:y + 10, x - 10:x + 10].max(axis=2).mean() > 200
+
+
+@AgentServer.custom_action("PlayTurn")
+class PlayTurn(CustomAction):
+    """Win Rate, check the START disc lit (2 tries), press it, check the turn plays (spec 03 section 8, 06)."""
+
+    def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
+        x, y = argv.box[0], argv.box[1]
+        dx, dy = x + START_DISC[0], y + START_DISC[1]
+        time.sleep(1)  # taps during the turn's opening animation do nothing
+        image = screen(context)
+        turn = text(context, image, TURN_NUMBER, only_rec=True).strip() or None
+        RUN["turn"] = battle.same_turn(RUN.get("turn"), turn)
+        if RUN["turn"][1] > 3:
+            log(f"stop: turn {turn} unchanged after 3 submits")
+            return False
+        for _ in range(2):
+            if disc_lit(image, dx, dy):
+                break
+            # Win Rate toggles: pressed while on, it clears the skills again; hence the check first.
+            tap(context, x + WIN_RATE[0], y + WIN_RATE[1], wait=1.5)
+            image = screen(context)
+        if not disc_lit(image, dx, dy):
+            log(f"turn {turn}: START did not light")
+            return True
+        tap(context, dx, dy, wait=0)
+        for _ in range(6):
+            time.sleep(0.5)
+            image = screen(context)
+            if seen(context, image, "BattlePause") or not seen(context, image, "BattleTurn"):
+                log(f"turn {turn}: started")
+                return True
+        log(f"turn {turn}: START did not start the turn")
+        return True
+
+
+@AgentServer.custom_action("Victory")
+class Victory(CustomAction):
+    """VICTORY ends the battle; it needs no tap. The encounter's retry count starts over."""
+
+    def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
+        if "turn" in RUN:
+            log("victory")
+        RUN.pop("turn", None)
+        RUN["wipes"] = 0
+        return True
+
+
+DEFEAT_OPTIONS = {"retry": (790, 354), "forfeit": (790, 446)}  # Retry Stage, Accept results
+DEFEAT_CONFIRM = (645, 527)
+DEFEAT_TEXT = [330, 360, 270, 50]
+
+
+@AgentServer.custom_action("Wipe")
+class Wipe(CustomAction):
+    """DEFEAT dialog: Retry Stage up to wipe_retries times, then stop or forfeit (spec 03 section 9).
+
+    Accept results only on the way to forfeiting: it keeps the deaths.
+    """
+
+    def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
+        settings = current_run(context)["settings"]["run"]
+        used = RUN.get("wipes", 0)
+        choice = battle.after_wipe(used, settings["wipe_retries"], settings["after_retries"])
+        log(f"wipe: {used} of {settings['wipe_retries']} retries used: {choice}")
+        if choice == "stop":
+            log("stop: retries used up")
+            return False
+        for _ in range(3):
+            tap(context, *DEFEAT_OPTIONS[choice], wait=1.2)  # the options are cards: pick one, then Confirm
+            tap(context, *DEFEAT_CONFIRM, wait=2.5)
+            if "participating" not in text(context, screen(context), DEFEAT_TEXT):
+                break
+        else:
+            log(f"stop: the DEFEAT dialog did not take {choice}")
+            return False
+        RUN.pop("turn", None)
+        if choice == "retry":
+            RUN["wipes"] = used + 1
+        else:
+            RUN["forfeit"] = True  # Accept results lands on the map; RouteMap forfeits from there
+        return True
+
+
+GEAR = (1232, 45)
+FORFEIT = (541, 435)
+FORFEIT_CONFIRM = (760, 488)
+FORFEIT_DIALOG = [450, 335, 380, 40]
+
+
+def forfeit(context):
+    """Map after Accept results: settings panel, Forfeit, Confirm `Quit exploring the dungeon?` (spec 03 section 9)."""
+    steps = [
+        (GEAR, [520, 212, 240, 30], "Dungeon Progress", True),
+        (FORFEIT, FORFEIT_DIALOG, "Quit exploring", True),
+        (FORFEIT_CONFIRM, FORFEIT_DIALOG, "Quit exploring", False),
+    ]
+    for xy, roi, want, shown in steps:
+        for _ in range(3):
+            tap(context, *xy, wait=2)
+            if (want in text(context, screen(context), roi)) == shown:
+                break
+        else:
+            log(f"stop: forfeit: {want!r} did not {'show' if shown else 'go'}")
+            return False
+    RUN.pop("forfeit")
+    log("forfeited the run")
+    return True

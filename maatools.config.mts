@@ -35,6 +35,19 @@ const screens: [image: string, hits: string[]][] = [
   ['MapShop.png', ['MirrorMap', 'MapBus', 'MapLinkDown', 'MapNodeShop']],
   ['MapBoss.png', ['MirrorMap', 'MapBus', 'MapLinkMid', 'MapNodeCost', 'MapNodeGift', 'MapNodeBoss']],
   ['MapNodePanel.png', ['MapNodePanel']],
+  // Battle. The forfeit screens (settings panel, Quit exploring) are read inside RouteMap's forfeit,
+  // not by the hub, and the map icons still show through them.
+  ['Formation.png', ['Formation']],
+  ['FormationDetails.png', ['Formation']],
+  ['BattleTurn.png', ['BattleTurn']],
+  ['BattleTurnLit.png', ['BattleTurn']],
+  ['BattlePause.png', ['BattlePause']],
+  ['Victory.png', ['Victory']],
+  ['WipeDialog.png', ['WipeDialog']],
+  ['DungeonProgress.png', ['MirrorMap']],
+  ['ForfeitDialog.png', ['MirrorMap']],
+  ['DefeatScreen.png', ['DefeatScreen']],
+  ['ExplorationComplete.png', ['ExplorationComplete']],
 ]
 
 const config: FullConfig = {
