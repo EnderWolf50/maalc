@@ -31,7 +31,7 @@ RESOURCE = next(p for p in (ROOT / "resource", ROOT / "assets" / "resource") if 
 # This run's plan, made on the entry page: {"settings", "team", "difficulty"}.
 # Memory only (ADR 0003); an agent restarted mid-run falls back to current_run's guess.
 RUN = {}
-SETTLED = {"runs": 0}  # runs settled since this agent started: the run count stop (spec 01); never saved
+SETTLED = {"runs": 0}  # runs claimed since this agent started: the run count stop (spec 01); never saved
 
 WEEKLY_SLOTS = (922, 960, 998)  # x of the 3 Weekly Bonuses slots on the entry page, y 285-297
 TEAM_LIST = [75, 292, 115, 245]
@@ -1371,4 +1371,4 @@ class Settle(CustomAction):
             "floors": settlement.floors_passed(result), "result": outcome,
             "l1": 0, "l2": 0, "l3": 0,  # ponytail: no recovery levels yet (#31); count them there
         })
-        SETTLED["runs"] += 1
+        SETTLED["runs"] += settlement.counts_as_run(outcome)
