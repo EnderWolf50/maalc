@@ -97,7 +97,8 @@ def current_run(context):
         cursor = read_cursor(ROOT, address(context))
         team = pick_team(settings["teams"], cursor, difficulty or "hard") or pick_team(settings["teams"], cursor, "normal")
         RUN.update(settings=settings, team=team, difficulty=difficulty)
-        log(f"no run plan in memory: assuming team {team['name']!r}, difficulty {difficulty or 'unknown'}")
+        # The guard turns left are unknown after a restart: they count as used up (spec 03 section 8).
+        log(f"no run plan in memory: assuming team {team['name']!r}, difficulty {difficulty or 'unknown'}, no guard turns")
     return RUN
 
 
@@ -261,7 +262,9 @@ class PlanRun(CustomAction):
         RUN.clear()
         # planned: the bot picked the team itself, so the rotation cursor may move after the claim.
         limit = recovery.run_limit(recovery.read_runs(ROOT), team["id"])
-        RUN.update(settings=settings, team=team, difficulty=difficulty, planned=True, start=settlement.now(), deadline=time.time() + limit)
+        # guard: the run's guard turns left (spec 03 section 8), counted across its battles.
+        RUN.update(settings=settings, team=team, difficulty=difficulty, planned=True, start=settlement.now(), deadline=time.time() + limit,
+                   guard=team["guard_turns"])
         STUCK["ladder"] = recovery.Ladder()
         log(f"new run: {difficulty}, team {team['name']!r} (TEAMS #{team['game_team']}), weekly bonuses left {weekly}, time limit {limit / 60:.0f} min")
         tap(context, 1108, 494, wait=1.5)
@@ -744,6 +747,8 @@ class Formation(CustomAction):
         if len(dead) != 12 - alive:
             log(f"formation: {12 - alive} dead by the count, grey cards {sorted(dead)}")
         order = battle.formation_order(run_start.resolve_plan(run["settings"], run["team"], "deployment_order"), dead)
+        if not order:  # a short order (sinners left out) with all its sinners dead
+            return stop(context, f"no sinner in team {run['team']['name']!r}'s deployment order is alive")
         if battle.formation_matches(order_marks(context, image), order):
             log(f"formation as planned, {alive} alive")
         elif not self.pick(context, order):
@@ -790,6 +795,8 @@ class Formation(CustomAction):
 WIN_RATE = (20, 14)
 START_DISC = (-66, 26)
 TURN_NUMBER = [55, 57, 45, 30]
+SLOT_TOPS = (631, 639)  # y band of the portraits' hexagon tops, under the skill slots
+PORTRAIT_Y = 665  # tapping a slot's portrait puts that unit on guard
 
 
 def disc_lit(image, x, y):
@@ -797,9 +804,17 @@ def disc_lit(image, x, y):
     return image[y - 10:y + 10, x - 10:x + 10].max(axis=2).mean() > 200
 
 
+def slot_xs(image, right):
+    """x of each skill slot's portrait, left of right (the Win Rate label); live: 81 px apart."""
+    band = image[SLOT_TOPS[0]:SLOT_TOPS[1], 200:right].astype(int)
+    b, g, r = band[..., 0], band[..., 1], band[..., 2]
+    orange = (r > 200) & (g > 60) & (g < 140) & (b < 90)  # live: about (236, 79, 41) RGB
+    return [x + 200 for x in battle.slot_centres(orange.any(axis=0))]
+
+
 @AgentServer.custom_action("PlayTurn")
 class PlayTurn(CustomAction):
-    """Win Rate, check the START disc lit (2 tries), press it, check the turn plays (spec 03 section 8, 06)."""
+    """Guard or Win Rate, check the START disc lit (2 tries), press it, check the turn plays (spec 03 section 8, 06)."""
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         x, y = argv.box[0], argv.box[1]
@@ -812,6 +827,13 @@ class PlayTurn(CustomAction):
         RUN["turn"] = battle.same_turn(RUN.get("turn"), turn)
         if RUN["turn"][1] > 3:
             return stuck(f"turn {turn} unchanged after 3 submits")
+        guarded = False
+        if RUN.get("guard", 0) > 0:
+            guarded, image = self.guard(context, image, x, (dx, dy))
+            if not guarded:
+                log(f"turn {turn}: guard did not take, Win Rate instead")
+                tap(context, x + WIN_RATE[0], y + WIN_RATE[1], wait=1.5)
+                image = screen(context)
         for _ in range(2):
             if disc_lit(image, dx, dy):
                 break
@@ -826,10 +848,26 @@ class PlayTurn(CustomAction):
             time.sleep(0.5)
             image = screen(context)
             if seen(context, image, "BattlePause") or not seen(context, image, "BattleTurn"):
-                log(f"turn {turn}: started")
+                if guarded:
+                    RUN["guard"] = battle.guard_left(RUN["guard"], guarded)
+                    log(f"turn {turn}: started on guard, {RUN['guard']} guard turns left")
+                else:
+                    log(f"turn {turn}: started")
                 return True
         log(f"turn {turn}: START did not start the turn")
         return True
+
+    @staticmethod
+    def guard(context, image, right, disc):
+        """Tap every slot's portrait, then check the START disc lit: (every unit on guard, screen after)."""
+        xs = slot_xs(image, right)
+        if not xs:
+            return False, image
+        for sx in xs:
+            tap(context, sx, PORTRAIT_Y, wait=0.3)
+        time.sleep(1)
+        image = screen(context)
+        return disc_lit(image, *disc), image
 
 
 @AgentServer.custom_action("Victory")
