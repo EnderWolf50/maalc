@@ -1,7 +1,7 @@
 // Teams (spec 04 section 9): list order is rotation order.
 import { useState } from "react";
 import { resetTeamTimes } from "./api";
-import { BOOSTS, KEYWORDS, SINNERS, defaultStarlight, freeName, newId, newTeam, teamEnum, type Team } from "./model";
+import { KEYWORDS, SINNERS, defaultStarlight, freeName, newId, newTeam, teamEnum, type Team } from "./model";
 import { SinnerGrid, StarlightEditor } from "./Plans";
 import { Field, Num, ReorderList, Select, useEditor } from "./ui";
 
@@ -120,10 +120,7 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
         {"custom" in team.starlight ? (
           <StarlightEditor value={team.starlight.custom} path={`${path}/starlight/custom`}
             onChange={(custom) => set({ starlight: { custom } })} />
-        ) : starPlan && (
-          <p className="muted">{starPlan.priority.filter((n) => starPlan.levels[n - 1] !== "none")
-            .map((n) => `${BOOSTS[n - 1]} ${tv("level", starPlan.levels[n - 1])}`).join(" → ") || tv("level", "none")}</p>
-        )}
+        ) : starPlan && <StarlightEditor value={starPlan} path={`${path}/starlight`} />}
       </fieldset>
 
       <details className="panel" open>
