@@ -17,7 +17,7 @@
     "trial_risk_overrides"
   ],
   "properties": {
-    "version": { "const": 1 },
+    "version": { "const": 2 },
     "language": { "enum": ["zh_tw", "en_us"], "default": "zh_tw" },
     "run": {
       "type": "object",
@@ -116,6 +116,7 @@
           "heal",
           "reserve_cost",
           "min_alive",
+          "guard_turns",
           "trial_risk_weight"
         ],
         "properties": {
@@ -180,6 +181,7 @@
           "heal": { "enum": ["none", "full", "revive"], "default": "revive" },
           "reserve_cost": { "type": "integer", "minimum": 0, "default": 0 },
           "min_alive": { "type": "integer", "minimum": 0, "maximum": 12, "default": 0 },
+          "guard_turns": { "type": "integer", "minimum": 0, "maximum": 5, "default": 0 },
           "trial_risk_weight": { "enum": ["low", "medium", "high"], "default": "high" }
         }
       }
@@ -220,7 +222,7 @@
     },
     "order": {
       "type": "array",
-      "minItems": 12,
+      "minItems": 1,
       "maxItems": 12,
       "uniqueItems": true,
       "items": {
