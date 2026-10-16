@@ -2,23 +2,48 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { loadThemePacks } from "./api";
 import {
-  BOOSTS, LEVELS, MARKS, SINNERS, defaultStarlight, freeName, newId,
+  BOOSTS, BOOST_COST, LEVELS, MARKS, SINNERS, clickLevel, defaultStarlight, freeName, lowestLevel, newId, starlightCost,
+  toggleSinner,
   type DeploymentPlan, type Order, type StarlightPlan, type StarlightValues, type ThemePackPlan, type ThemePacks,
 } from "./model";
 import { Field, ReorderList, Select, useEditor } from "./ui";
 
-export function OrderEditor({ order, onChange, path }: { order: Order; onChange: (o: Order) => void; path: string }) {
+/** The 12 sinners in the game's grid; clicking adds one at the end of the order or leaves it out
+ * (spec 04 section 6). Read-only without onChange. */
+export function SinnerGrid({ order, onChange, path }: { order: Order; onChange?: (o: Order) => void; path: string }) {
   const { t, bad } = useEditor();
-  // Sinners left out of the order are never picked (spec 04 section 6); one must stay.
-  const out = SINNERS.filter((s) => !order.includes(s));
+  return (<>
+    {onChange && <p className="muted">{t("order.hint")}</p>}
+    <div className={"sinners" + (bad(path) ? " bad" : "")}>
+      {SINNERS.map((s) => {
+        const n = order.indexOf(s) + 1;
+        const kind = n === 0 ? "" : n <= 7 ? "deployed" : "backup";
+        return (
+          <button type="button" key={s} className={"sinner " + kind} disabled={!onChange} aria-pressed={n > 0}
+            onClick={() => onChange?.(toggleSinner(order, s))}>
+            {n > 0 && <span className="num">{n}</span>}
+            {n > 0 && <span className="banner">{t(n <= 7 ? "order.deployed" : "order.backup")}</span>}
+            <span className="name">{s}</span>
+          </button>
+        );
+      })}
+    </div>
+  </>);
+}
+
+/** Base, + and ++ as one control, like the game's starlight card; clicking a lit segment turns it and above off. */
+function LevelSelector({ label, title, cost, level, onChange }: {
+  label: string; title?: string; cost: number; level: string; onChange: (level: string) => void;
+}) {
+  const lit = LEVELS.indexOf(level);
   return (
-    <div className={bad(path) ? "bad" : ""}>
-      <ReorderList items={order} onChange={onChange} keyOf={(s) => s}
-        render={(s, i) => <>{i + 1}. {s}{i < 7 && <em className="tag">{t("deployed")}</em>}
-          <button type="button" disabled={order.length === 1}
-            onClick={(e) => { e.stopPropagation(); onChange(order.filter((x) => x !== s)); }}>{t("leaveOut")}</button></>} />
-      {out.length > 0 && <p className="muted">{t("leftOut")}{" "}
-        {out.map((s) => <button type="button" key={s} onClick={() => onChange([...order, s])}>+ {s}</button>)}</p>}
+    <div className="levels" title={title}>
+      {[label, "+", "++"].map((text, seg) => (
+        <button type="button" key={seg} className={seg < lit ? "lit" : ""} aria-pressed={seg < lit}
+          onClick={() => onChange(clickLevel(level, seg))}>
+          {seg === 0 && <small>{cost * Math.max(1, lit)}</small>}{text}
+        </button>
+      ))}
     </div>
   );
 }
@@ -26,20 +51,22 @@ export function OrderEditor({ order, onChange, path }: { order: Order; onChange:
 export function StarlightEditor({ value, onChange, path }: {
   value: StarlightValues; onChange: (v: StarlightValues) => void; path: string;
 }) {
-  const { t, tv, bad } = useEditor();
+  const { t, bad } = useEditor();
+  const setLevels = (levels: string[]) => onChange({ ...value, levels });
   return (
     <div className="starlight">
-      <table className={bad(`${path}/levels`) ? "bad" : ""}>
-        <thead><tr><th>#</th><th>Boost</th><th>{t("starlight.level")}</th></tr></thead>
-        <tbody>
-          {BOOSTS.map((b, i) => (
-            <tr key={b}><td>{i + 1}</td><td>{b}</td><td>
-              <Select value={value.levels[i]} options={LEVELS} label={(v) => tv("level", v)}
-                onChange={(v) => onChange({ ...value, levels: value.levels.map((l, j) => (j === i ? v : l)) })} />
-            </td></tr>
-          ))}
-        </tbody>
-      </table>
+      <div className={"boosts" + (bad(`${path}/levels`) ? " bad" : "")}>
+        <div className="boost-tools">
+          <LevelSelector label={t("starlight.all")} cost={BOOST_COST.reduce((a, b) => a + b)} level={lowestLevel(value.levels)}
+            onChange={(l) => setLevels(value.levels.map(() => l))} />
+          <button type="button" onClick={() => setLevels(value.levels.map(() => "none"))}>{t("starlight.clear")}</button>
+          <span className="total">{t("starlight.total")} <b>{starlightCost(value.levels)}</b></span>
+        </div>
+        {BOOSTS.map((b, i) => (
+          <LevelSelector key={b} label={`${i + 1}. ${b}`} title={b} cost={BOOST_COST[i]} level={value.levels[i]}
+            onChange={(l) => setLevels(value.levels.map((x, j) => (j === i ? l : x)))} />
+        ))}
+      </div>
       <div>
         <h4 className={bad(`${path}/priority`) ? "bad" : ""}>{t("starlight.priority")}</h4>
         <ReorderList items={value.priority} keyOf={String} onChange={(priority) => onChange({ ...value, priority })}
@@ -103,7 +130,7 @@ function PlanTab<P extends { id: string; name: string }>({ planKey, tab, make, e
 
 export const DeploymentTab = () => (
   <PlanTab<DeploymentPlan> planKey="deployment_order_plans" tab="tab.deployment" make={() => ({ order: [...SINNERS] })}
-    editor={(p, change, path) => <OrderEditor order={p.order} path={`${path}/order`} onChange={(order) => change({ ...p, order })} />} />
+    editor={(p, change, path) => <SinnerGrid order={p.order} path={`${path}/order`} onChange={(order) => change({ ...p, order })} />} />
 );
 
 export const StarlightTab = () => (

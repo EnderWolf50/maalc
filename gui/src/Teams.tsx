@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { resetTeamTimes } from "./api";
 import { BOOSTS, KEYWORDS, SINNERS, defaultStarlight, freeName, newId, newTeam, teamEnum, type Team } from "./model";
-import { OrderEditor, StarlightEditor } from "./Plans";
+import { SinnerGrid, StarlightEditor } from "./Plans";
 import { Field, Num, ReorderList, Select, useEditor } from "./ui";
 
 export function TeamsTab() {
@@ -35,7 +35,7 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
   const team = s.teams[i];
   const path = `teams/${i}`;
   const set = (patch: Partial<Team>) => update((d) => { Object.assign(d.teams[i], patch); });
-  const pick = (field: "usage" | "heal" | "trial_risk_weight") => (
+  const pick = (field: "heal" | "trial_risk_weight") => (
     <Field label={t(`team.${field}`)} path={`${path}/${field}`}>
       <Select value={team[field]} options={teamEnum(field)} label={(v) => tv(field, v)} onChange={(v) => set({ [field]: v })} />
     </Field>
@@ -62,13 +62,29 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
     d.teams[i].starlight = { plan: id };
   });
 
+  const planSelect = (value: string, plans: { id: string; name: string }[], onChange: (id: string) => void) => (
+    <select value={value} onChange={(e) => onChange(e.target.value)}>
+      <option value="">{t("custom")}</option>
+      {plans.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+      {missing(value, plans)}
+    </select>
+  );
+
+  // Laid out like AALC's team page: who and what on top, the sinner grid, starlight, then the rest.
   return (
     <div className="team">
-      <div className="row">
+      <div className="bar">
         <Field label={t("name")} path={`${path}/name`}>
           <input value={team.name} onChange={(e) => set({ name: e.target.value })} />
         </Field>
+        <Field label={t("team.game_team")} path={`${path}/game_team`}>
+          <Num value={team.game_team} min={1} max={40} onChange={(v) => set({ game_team: v })} />
+        </Field>
+        <Field label={t("team.keyword")} path={`${path}/keyword`}>
+          <Select value={team.keyword} options={KEYWORDS} onChange={(v) => set({ keyword: v })} />
+        </Field>
         <label className="check"><input type="checkbox" checked={team.enabled} onChange={(e) => set({ enabled: e.target.checked })} />{t("team.enabled")}</label>
+        <span className="spacer" />
         <button type="button" onClick={async () => {
           if (!confirm(t("resetConfirm"))) return;
           try { await resetTeamTimes(team.id); setNotice(t("resetDone")); } catch (e) { setNotice(String(e)); }
@@ -77,97 +93,92 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
       </div>
       {notice && <p className="notice">{notice}</p>}
 
-      <div className="grid">
-        <Field label={t("team.game_team")} path={`${path}/game_team`}>
-          <Num value={team.game_team} min={1} max={40} onChange={(v) => set({ game_team: v })} />
-        </Field>
-        <Field label={t("team.keyword")} path={`${path}/keyword`}>
-          <Select value={team.keyword} options={KEYWORDS} onChange={(v) => set({ keyword: v })} />
-        </Field>
-        {pick("usage")}
-        <Field label={t("team.hard_from_floor")} path={`${path}/hard_from_floor`}>
-          <Num value={team.hard_from_floor} min={0} max={5} onChange={(v) => set({ hard_from_floor: v })} />
-        </Field>
-        <Field label={t("team.theme_pack_plan")} path={`${path}/theme_pack_plan`}>
-          <select value={team.theme_pack_plan} onChange={(e) => set({ theme_pack_plan: e.target.value })}>
-            <option value="default">{t("defaultPlan")}</option>
-            {s.theme_pack_plans.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-            {missing(team.theme_pack_plan !== "default" && team.theme_pack_plan, s.theme_pack_plans)}
-          </select>
-        </Field>
-        {pick("trial_risk_weight")}
-        <Field label={t("team.shop_refresh_limit")} path={`${path}/shop_refresh_limit`}>
-          <Num value={team.shop_refresh_limit} min={0} onChange={(v) => set({ shop_refresh_limit: v })} />
-        </Field>
-        {pick("heal")}
-        <Field label={t("team.reserve_cost")} path={`${path}/reserve_cost`}>
-          <Num value={team.reserve_cost} min={0} onChange={(v) => set({ reserve_cost: v })} />
-        </Field>
-        <Field label={t("team.min_alive")} path={`${path}/min_alive`} note={t("team.min_alive_note")}>
-          <Num value={team.min_alive} min={0} max={12} onChange={(v) => set({ min_alive: v })} />
-        </Field>
-        <Field label={t("team.guard_turns")} path={`${path}/guard_turns`} note={t("team.guard_turns_note")}>
-          <Num value={team.guard_turns} min={0} max={5} onChange={(v) => set({ guard_turns: v })} />
-        </Field>
-      </div>
-
-      <div className="columns">
-        <fieldset>
-          <legend>{t("team.deployment_order")}</legend>
-          <Field label="" path={`${path}/deployment_order`}>
-            <select value={orderSource} onChange={(e) => set({
-              deployment_order: e.target.value ? { plan: e.target.value } : { custom: [...(order ?? SINNERS)] },
-            })}>
-              <option value="">{t("custom")}</option>
-              {s.deployment_order_plans.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-              {missing(orderSource, s.deployment_order_plans)}
-            </select>
-          </Field>
-          {"custom" in team.deployment_order ? (
-            <>
-              <button type="button" onClick={saveOrderPlan}>{t("saveAsPlan")}</button>
-              <OrderEditor order={team.deployment_order.custom} path={`${path}/deployment_order/custom`}
-                onChange={(custom) => set({ deployment_order: { custom } })} />
-            </>
-          ) : order && <ol className="preview">{order.map((x) => <li key={x}>{x}</li>)}</ol>}
-        </fieldset>
-
-        <fieldset>
-          <legend>{t("team.reward_cards")}</legend>
-          <div className={bad(`${path}/reward_cards`) ? "bad" : ""}>
-            <ReorderList items={team.reward_cards} keyOf={(x) => x} onChange={(reward_cards) => set({ reward_cards })}
-              render={(x, j) => <>{j + 1}. {x}</>} />
-          </div>
-        </fieldset>
-      </div>
+      <fieldset>
+        <legend>{t("team.deployment_order")}</legend>
+        <div className={"row" + (bad(`${path}/deployment_order`) && !("custom" in team.deployment_order) ? " bad" : "")}>
+          {planSelect(orderSource, s.deployment_order_plans, (id) => set({
+            deployment_order: id ? { plan: id } : { custom: [...(order ?? SINNERS)] },
+          }))}
+          {"custom" in team.deployment_order && <button type="button" onClick={saveOrderPlan}>{t("saveAsPlan")}</button>}
+        </div>
+        {"custom" in team.deployment_order ? (
+          <SinnerGrid order={team.deployment_order.custom} path={`${path}/deployment_order/custom`}
+            onChange={(custom) => set({ deployment_order: { custom } })} />
+        ) : order && <SinnerGrid order={order} path={`${path}/deployment_order`} />}
+      </fieldset>
 
       <fieldset>
         <legend>{t("team.starlight")}</legend>
-        <Field label="" path={`${path}/starlight`}>
-          <select value={starSource} onChange={(e) => {
-            const plan = s.starlight_plans.find((p) => p.id === starSource);
-            set({
-              starlight: e.target.value ? { plan: e.target.value } : {
-                custom: plan ? { levels: [...plan.levels], priority: [...plan.priority], convert_leftover: plan.convert_leftover } : defaultStarlight(),
-              },
-            });
-          }}>
-            <option value="">{t("custom")}</option>
-            {s.starlight_plans.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-            {missing(starSource, s.starlight_plans)}
-          </select>
-        </Field>
+        <div className={"row" + (bad(`${path}/starlight`) && !("custom" in team.starlight) ? " bad" : "")}>
+          {planSelect(starSource, s.starlight_plans, (id) => set({
+            starlight: id ? { plan: id } : {
+              custom: starPlan ? { levels: [...starPlan.levels], priority: [...starPlan.priority], convert_leftover: starPlan.convert_leftover } : defaultStarlight(),
+            },
+          }))}
+          {"custom" in team.starlight && <button type="button" onClick={saveStarPlan}>{t("saveAsPlan")}</button>}
+        </div>
         {"custom" in team.starlight ? (
-          <>
-            <button type="button" onClick={saveStarPlan}>{t("saveAsPlan")}</button>
-            <StarlightEditor value={team.starlight.custom} path={`${path}/starlight/custom`}
-              onChange={(custom) => set({ starlight: { custom } })} />
-          </>
+          <StarlightEditor value={team.starlight.custom} path={`${path}/starlight/custom`}
+            onChange={(custom) => set({ starlight: { custom } })} />
         ) : starPlan && (
           <p className="muted">{starPlan.priority.filter((n) => starPlan.levels[n - 1] !== "none")
             .map((n) => `${BOOSTS[n - 1]} ${tv("level", starPlan.levels[n - 1])}`).join(" → ") || tv("level", "none")}</p>
         )}
       </fieldset>
+
+      <details className="panel" open>
+        <summary>{t("team.more")}</summary>
+        <div className="options">
+          <div className={"toggle" + (bad(`${path}/guard_turns`) ? " bad" : "")}>
+            <label className="check">
+              <input type="checkbox" checked={team.guard_turns > 0} onChange={(e) => set({ guard_turns: e.target.checked ? 1 : 0 })} />
+              {t("team.guard_turns")}
+            </label>
+            <select value={team.guard_turns || 1} disabled={!team.guard_turns} onChange={(e) => set({ guard_turns: Number(e.target.value) })}>
+              {[1, 2, 3, 4, 5].map((n) => <option key={n} value={n}>{n} {t("team.turns")}</option>)}
+            </select>
+            <small>{t("team.guard_turns_note")}</small>
+          </div>
+          <div className={"toggle" + (bad(`${path}/usage`) ? " bad" : "")}>
+            <label className="check">
+              <input type="checkbox" checked={team.usage !== "any"} onChange={(e) => set({ usage: e.target.checked ? "hard_only" : "any" })} />
+              {t("team.usage")}
+            </label>
+            <select value={team.usage === "any" ? "hard_only" : team.usage} disabled={team.usage === "any"}
+              onChange={(e) => set({ usage: e.target.value })}>
+              {teamEnum("usage").filter((u) => u !== "any").map((u) => <option key={u} value={u}>{tv("usage", u)}</option>)}
+            </select>
+          </div>
+        </div>
+        <div className="grid">
+          <Field label={t("team.hard_from_floor")} path={`${path}/hard_from_floor`}>
+            <Num value={team.hard_from_floor} min={0} max={5} onChange={(v) => set({ hard_from_floor: v })} />
+          </Field>
+          {pick("heal")}
+          <Field label={t("team.reserve_cost")} path={`${path}/reserve_cost`}>
+            <Num value={team.reserve_cost} min={0} onChange={(v) => set({ reserve_cost: v })} />
+          </Field>
+          <Field label={t("team.shop_refresh_limit")} path={`${path}/shop_refresh_limit`}>
+            <Num value={team.shop_refresh_limit} min={0} onChange={(v) => set({ shop_refresh_limit: v })} />
+          </Field>
+          <Field label={t("team.theme_pack_plan")} path={`${path}/theme_pack_plan`}>
+            <select value={team.theme_pack_plan} onChange={(e) => set({ theme_pack_plan: e.target.value })}>
+              <option value="default">{t("defaultPlan")}</option>
+              {s.theme_pack_plans.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+              {missing(team.theme_pack_plan !== "default" && team.theme_pack_plan, s.theme_pack_plans)}
+            </select>
+          </Field>
+          {pick("trial_risk_weight")}
+          <Field label={t("team.min_alive")} path={`${path}/min_alive`} note={t("team.min_alive_note")}>
+            <Num value={team.min_alive} min={0} max={12} onChange={(v) => set({ min_alive: v })} />
+          </Field>
+        </div>
+        <div className={"rewards" + (bad(`${path}/reward_cards`) ? " bad" : "")}>
+          <h4>{t("team.reward_cards")}</h4>
+          <ReorderList items={team.reward_cards} keyOf={(x) => x} onChange={(reward_cards) => set({ reward_cards })}
+            render={(x, j) => <>{j + 1}. {x}</>} />
+        </div>
+      </details>
     </div>
   );
 }
