@@ -2,8 +2,8 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { loadThemePacks } from "./api";
 import {
-  BOOSTS, BOOST_COST, LEVELS, MARKS, SINNERS, clickLevel, defaultStarlight, freeName, lowestLevel, newId, starlightCost,
-  toggleSinner,
+  GRACES, LEVELS, MARKS, SINNERS, buyOrder, clickCard, clickEnhance, defaultStarlight, enhanceAll, freeName, gracePrice,
+  newId, selectAll, starlightCost, toggleSinner,
   type DeploymentPlan, type Order, type StarlightPlan, type StarlightValues, type ThemePackPlan, type ThemePacks,
 } from "./model";
 import { Field, ReorderList, Select, useEditor } from "./ui";
@@ -31,53 +31,59 @@ export function SinnerGrid({ order, onChange, path }: { order: Order; onChange?:
   </>);
 }
 
-/** Base, + and ++ as one control, like the game's starlight card; clicking a lit segment turns it and above off. */
-function LevelSelector({ label, title, cost, level, onChange }: {
-  label: string; title?: string; cost: number; level: string; onChange: (level: string) => void;
-}) {
-  const lit = LEVELS.indexOf(level);
-  return (
-    <div className="levels" title={title}>
-      {[label, "+", "++"].map((text, seg) => (
-        <button type="button" key={seg} className={seg < lit ? "lit" : ""} aria-pressed={seg < lit}
-          onClick={() => onChange(clickLevel(level, seg))}>
-          {seg === 0 && <small>{cost * Math.max(1, lit)}</small>}{text}
-        </button>
-      ))}
-    </div>
-  );
-}
-
+/** The game's "Grace of the Star" page: click a card to select it at base, + / ++ to enhance it
+ * (spec 04 section 7). The number on a selected card is its place in the buying order. Read-only without onChange. */
 export function StarlightEditor({ value, onChange, path }: {
-  value: StarlightValues; onChange: (v: StarlightValues) => void; path: string;
+  value: StarlightValues; onChange?: (v: StarlightValues) => void; path: string;
 }) {
-  const { t, bad } = useEditor();
-  const setLevels = (levels: string[]) => onChange({ ...value, levels });
+  const { s, t, tv, bad } = useEditor();
+  const zh = s.language === "zh_tw";
+  const order = buyOrder(value);
+  const set = (fn: (v: StarlightValues) => StarlightValues) => onChange?.(fn(value));
   return (
-    <div className="starlight">
-      <div className={"boosts" + (bad(`${path}/levels`) ? " bad" : "")}>
-        <div className="boost-tools">
-          <LevelSelector label={t("starlight.all")} cost={BOOST_COST.reduce((a, b) => a + b)} level={lowestLevel(value.levels)}
-            onChange={(l) => setLevels(value.levels.map(() => l))} />
-          <button type="button" onClick={() => setLevels(value.levels.map(() => "none"))}>{t("starlight.clear")}</button>
-          <span className="total">{t("starlight.total")} <b>{starlightCost(value.levels)}</b></span>
-        </div>
-        {BOOSTS.map((b, i) => (
-          <LevelSelector key={b} label={`${i + 1}. ${b}`} title={b} cost={BOOST_COST[i]} level={value.levels[i]}
-            onChange={(l) => setLevels(value.levels.map((x, j) => (j === i ? l : x)))} />
-        ))}
+    <>{onChange && <p className="muted">{t("starlight.hint")}</p>}
+    <div className={"starlight" + (onChange ? "" : " readonly")}>
+      <div className={"graces" + (bad(`${path}/levels`) || bad(`${path}/priority`) ? " bad" : "")}>
+        {GRACES.map((g, i) => {
+          const n = i + 1;
+          const level = value.levels[i];
+          const rank = order.indexOf(n) + 1;
+          const effects = g.effects[level as "plus" | "plus2"] ?? g.effects.base;
+          return (
+            <div key={g.en} className={`grace ${level}`} role="button" tabIndex={onChange ? 0 : -1} aria-pressed={rank > 0}
+              aria-disabled={!onChange} title={`${n}. ${g.en} (${tv("level", level)})`}
+              onClick={() => set((v) => clickCard(v, n))}
+              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); set((v) => clickCard(v, n)); } }}>
+              {rank > 0 && <span className="rank">{rank}</span>}
+              <span className="price">★ {gracePrice(n, level === "none" ? "base" : level)}</span>
+              <span className="name">{zh && g.zh ? g.zh : g.en}{zh && g.zh && <small>{g.en}</small>}</span>
+              {zh && <ul>{effects.map((line, j) => <li key={j} className={line.startsWith("-") ? "sub" : ""}>{line.replace(/^-/, "")}</li>)}</ul>}
+              <span className="enhance">
+                {([1, 2] as const).map((plus) => (
+                  <button type="button" key={plus} disabled={!onChange} aria-pressed={level === LEVELS[plus + 1]}
+                    className={level === LEVELS[plus + 1] ? "lit" : ""}
+                    onClick={(e) => { e.stopPropagation(); set((v) => clickEnhance(v, n, plus)); }}>{"+".repeat(plus)}</button>
+                ))}
+              </span>
+            </div>
+          );
+        })}
       </div>
-      <div>
-        <h4 className={bad(`${path}/priority`) ? "bad" : ""}>{t("starlight.priority")}</h4>
-        <ReorderList items={value.priority} keyOf={String} onChange={(priority) => onChange({ ...value, priority })}
-          render={(n, i) => <>{i + 1}. {BOOSTS[n - 1] ?? n}</>} />
+      <div className="grace-side">
+        {onChange && <>
+          <button type="button" onClick={() => set(selectAll)}>{t("starlight.selectAll")}</button>
+          <span className="muted">{t("starlight.enhanceAll")}</span>
+          <button type="button" onClick={() => set((v) => enhanceAll(v, 1))}>+</button>
+          <button type="button" onClick={() => set((v) => enhanceAll(v, 2))}>++</button>
+        </>}
+        <span className="total">{t("starlight.total")} <b>★ {starlightCost(value.levels)}</b></span>
         <label className="check">
-          <input type="checkbox" checked={value.convert_leftover}
-            onChange={(e) => onChange({ ...value, convert_leftover: e.target.checked })} />
+          <input type="checkbox" checked={value.convert_leftover} disabled={!onChange}
+            onChange={(e) => set((v) => ({ ...v, convert_leftover: e.target.checked }))} />
           {t("starlight.convert_leftover")}
         </label>
       </div>
-    </div>
+    </div></>
   );
 }
 
