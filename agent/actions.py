@@ -69,6 +69,24 @@ def swipe(context, x1, y1, x2, y2, ms=500, wait=1.0):
     time.sleep(wait)
 
 
+def drag(context, points, settle=0.3, dwell=0.1):
+    """One touch through points: down on the first, settle s, then 10 px moves (20 ms each), dwell s on each point.
+
+    Lifts on the last point at once: a finger held on a battle skill opens its details.
+    """
+    ctl = context.tasker.controller
+    ctl.post_touch_down(*points[0]).wait()
+    time.sleep(settle)
+    for (x0, y0), (x1, y1) in zip(points, points[1:]):
+        n = max(1, max(abs(x1 - x0), abs(y1 - y0)) // 10)
+        for k in range(1, n + 1):
+            ctl.post_touch_move(round(x0 + (x1 - x0) * k / n), round(y0 + (y1 - y0) * k / n)).wait()
+            time.sleep(0.02)
+        if (x1, y1) != points[-1]:
+            time.sleep(dwell)
+    ctl.post_touch_up().wait()
+
+
 def ocr(context, image, roi, only_rec=False):
     """Every OCR result in roi as (text, (x, y, w, h)); only_rec reads roi as one line, no text detection."""
     detail = context.run_recognition("ReadText", image, {"ReadText": {"recognition": "OCR", "roi": roi, "only_rec": only_rec}})
@@ -795,8 +813,8 @@ class Formation(CustomAction):
 WIN_RATE = (20, 14)
 START_DISC = (-66, 26)
 TURN_NUMBER = [55, 57, 45, 30]
-PORTRAIT_Y = 665  # tapping a slot's portrait swaps its lower skill and its guard skill
-LOWER_Y = 577  # a slot's lower skill: once the slots have picks, tapping it picks that skill instead
+SLOT_PORTRAIT_Y = 665  # tapping a slot's portrait swaps its lower skill and its guard skill
+LOWER_Y = 577  # a slot's lower skill, at rest (while a drag is down it sits at y 665: battle.guard_chain)
 
 
 def disc_lit(image, x, y):
@@ -835,7 +853,7 @@ class PlayTurn(CustomAction):
             return stuck(f"turn {turn} unchanged after 3 submits")
         guarded = False
         if RUN.get("guard", 0) > 0 and RUN["turn"][1] == 1:  # a turn submitted again plays as before #52
-            guarded, image = self.guard(context, x, y, (dx, dy))
+            guarded, image = self.guard(context, x, (dx, dy))
             if not guarded:
                 log(f"turn {turn}: guard did not take, Win Rate instead")
         for _ in range(2):
@@ -862,22 +880,23 @@ class PlayTurn(CustomAction):
         return True
 
     @staticmethod
-    def guard(context, x, y, disc):
-        """Put every slot on its guard skill: (whether the START disc lit, the screen after).
+    def guard(context, x, disc):
+        """Pick every slot's guard skill: (whether the START disc lit, the screen after).
 
         A portrait tap swaps the slot's lower skill and its guard skill, and the game keeps the swap
         from turn to turn, so every portrait is tapped once and the lower skills compared before and
         after (the check that every slot shows its guard skill); the slots that went off guard are
-        tapped back. A lower skill tap only swaps a pick, so Win Rate picks first, then each lower
-        skill is tapped. Live, the picked icons could not be told apart reliably (banners, chain and
-        glow cover them), so the picks are not read back.
+        tapped back. Then one drag from the left gear through every slot's lower skill picks them
+        (battle.guard_chain); no Win Rate. Live, the picked icons could not be told apart reliably
+        (banners, chain and glow cover them), so the picks are not read back: the lit disc says
+        every slot has a pick.
         """
         time.sleep(1)  # live: a battle's first turn slides the portraits in late
         image = screen(context)
         lows = [lower_x(sx) for sx in battle.slot_xs(x)]
         before = [guard_score(image, lx) for lx in lows]
         for sx in battle.slot_xs(x):
-            tap(context, sx, PORTRAIT_Y, wait=0.4)
+            tap(context, sx, SLOT_PORTRAIT_Y, wait=0.4)
         time.sleep(0.8)
         image = screen(context)
         after = [guard_score(image, lx) for lx in lows]
@@ -885,7 +904,7 @@ class PlayTurn(CustomAction):
         unsure = [i for i, s in enumerate(shown) if s is None]
         if unsure:  # live: the glow on a unit's slot flickers; swap those back and compare once more
             for i in unsure:
-                tap(context, battle.slot_xs(x)[i], PORTRAIT_Y, wait=0.4)
+                tap(context, battle.slot_xs(x)[i], SLOT_PORTRAIT_Y, wait=0.4)
             time.sleep(0.8)
             image = screen(context)
             again = battle.guard_shown([after[i] for i in unsure], [guard_score(image, lows[i]) for i in unsure])
@@ -896,11 +915,9 @@ class PlayTurn(CustomAction):
             return False, image
         for sx, on in zip(battle.slot_xs(x), shown):
             if not on:
-                tap(context, sx, PORTRAIT_Y, wait=0.4)
-        tap(context, x + WIN_RATE[0], y + WIN_RATE[1], wait=1.5)
-        for lx in lows:
-            tap(context, lx, LOWER_Y, wait=0.6)
-        time.sleep(0.5)
+                tap(context, sx, SLOT_PORTRAIT_Y, wait=0.4)
+        drag(context, battle.guard_chain(battle.slot_xs(x)))
+        time.sleep(1)
         image = screen(context)
         return disc_lit(image, *disc), image
 
@@ -984,8 +1001,8 @@ EVENT_STORY = [60, 320, 580, 200]
 CHOICES_HEADER = [690, 105, 170, 45]
 CHOICE_ROWS = [690, 170, 480, 440]
 CHECK_PROMPT = [850, 295, 300, 50]
-PORTRAIT_X = [77 + round(69.3 * i) for i in range(12)]  # 7 in a boss's mid-battle event, from the left
-PORTRAIT_Y = 655
+EVENT_PORTRAIT_X = [77 + round(69.3 * i) for i in range(12)]  # 7 in a boss's mid-battle event, from the left
+EVENT_PORTRAIT_Y = 655
 
 
 def data(name):
@@ -1008,10 +1025,10 @@ class Event(CustomAction):
             tap(context, *EVENT_BUTTON, wait=1.5)
         elif "Choose a character" in text(context, image, CHECK_PROMPT):
             # One read per portrait: read as a row, neighbouring captions run together ("HighVery Low").
-            captions = [(text(context, image, [x - 38, 605, 76, 24], only_rec=True), x) for x in PORTRAIT_X]
+            captions = [(text(context, image, [x - 38, 605, 76, 24], only_rec=True), x) for x in EVENT_PORTRAIT_X]
             i = rewards.pick_checker(captions)
             log(f"event check: {', '.join(t for t, _ in captions) or 'no odds read'}: take {captions[i][0] if i is not None else 'the first'}")
-            tap(context, captions[i][1] if i is not None else 77, PORTRAIT_Y, wait=1.5)
+            tap(context, captions[i][1] if i is not None else 77, EVENT_PORTRAIT_Y, wait=1.5)
         elif "Choices" in text(context, image, CHOICES_HEADER):
             options = [(" ".join(lines), y) for y, lines in self.rows(ocr(context, image, CHOICE_ROWS))]
             if not options:

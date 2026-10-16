@@ -57,6 +57,17 @@ def slot_xs(win_rate_x):
     return [round(605 + 81 * (i - (n - 1) / 2)) for i in range(max(n, 0))]
 
 
+def guard_chain(xs):
+    """The points of the drag that picks every slot's lower skill, left to right (spec 03 section 8).
+
+    Live (2026-10-16): the chain starts only on the left gear, 90 px left of the first slot at y 557.
+    Once the finger is down the panel tilts: the upper skills move to y ~600 and the lower skills to
+    y ~665, under the slots' x, so the drag runs along y 665 (along the resting lower row, y 577,
+    it picks the upper skills).
+    """
+    return [(xs[0] - 90, 557)] + [(x, 665) for x in xs]
+
+
 def guard_shown(before, after):
     """Per slot, whether its lower skill shows the guard skill after a portrait tap swapped it.
 

@@ -54,6 +54,22 @@ def test_slot_xs_follow_the_win_rate_label(win_rate_x, first, last, n):
     assert (xs[0], xs[-1], len(xs)) == (first, last, n)
 
 
+def test_slot_xs_land_on_the_portraits_of_an_even_count():
+    # tests/screens/BattleTurnEven.png: 8 slots, Win Rate box at x 1022; the portrait rings centre on
+    # these x (slot 4 is a unit's second slot: a dark guard icon, between 484 and 646).
+    portraits = [322, 403, 484, 565, 646, 727, 808, 889]
+    xs = b.slot_xs(1022)
+    assert len(xs) == 8
+    assert all(abs(x - p) <= 2 for x, p in zip(xs, portraits))
+
+
+def test_guard_chain_starts_on_the_left_gear_and_runs_along_the_lower_row():
+    # Live (2026-10-16), 8 slots: the chain starts on the left gear (x ~232, y 557); once the finger is
+    # down the panel tilts and the lower skills (the guard skills) sit at y ~665 under the slots' x.
+    xs = b.slot_xs(1022)
+    assert b.guard_chain(xs) == [(232, 557)] + [(x, 665) for x in xs]
+
+
 def test_guard_shown_compares_each_slot_before_and_after_the_tap():
     # Live (2026-10-16): slot 6 had been swapped in an earlier turn, so the taps swapped it off guard.
     before = [(0.08, 142), (0.0, 115), (0.01, 135), (0.21, 144), (0.16, 102), (0.28, 45), (0.0, 72), (0.02, 136)]
