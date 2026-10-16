@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from settlement import append_run, bonus_toggles, counts_as_run, floors_passed, goal_met, now, read_result, runs_done
+from settlement import append_run, bonus_toggles, claim_dialog, counts_as_run, floors_passed, goal_met, now, read_result, runs_done
 
 
 @pytest.mark.parametrize("text, expected", [
@@ -21,6 +21,8 @@ def test_read_result(text, expected):
     ((5, True, 5, 6), False, 4),
     ((4, True, 6, 6), False, 4),
     ((1, False, 5, 5), False, 1),
+    ((5, True, 7, 7), True, 5),  # live 2026-10-16: a HARD floor 5 may have 7 nodes
+    ((5, True, 6, 7), False, 4),
 ])
 def test_goal_and_floors(result, met, passed):
     assert goal_met(result) is met
@@ -41,6 +43,19 @@ def test_goal_and_floors(result, met, passed):
 ])
 def test_bonus_toggles(use, amount, hard, left, all_hard, expected):
     assert bonus_toggles(use, amount, hard, left, all_hard) == expected
+
+
+# The dialogs as OCR read them live (tests/screens: GiveUpDialog, ClaimNoBonusDialog, ClaimBonusDialog).
+@pytest.mark.parametrize("text, expected", [
+    ("End expedition without claiming rewards?", "giveup"),
+    ("You have Weekly Bonus Eligibility remaining. Are you sure you want to claim the current rewards without using the Eligibility?", "no_bonus"),
+    ("Spend your 'Weekly Bonuses, to claim the bonus rewards?", "bonus"),  # live 2026-10-16
+    ("Spend your 「Weekly Bonuses」 to claim the bonus rewards?", "bonus"),
+    ("", None),
+    ("Would you like to move to the Window?", None),
+])
+def test_claim_dialog(text, expected):
+    assert claim_dialog(text) == expected
 
 
 @pytest.mark.parametrize("result, expected", [("clear", True), ("giveup", False), ("stop", False)])

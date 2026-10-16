@@ -3,7 +3,7 @@ import json
 import numpy as np
 import pytest
 
-from recovery import Ladder, Watchdog, read_runs, run_limit, same_screen, thumb
+from recovery import Ladder, Watchdog, floor_limit, over_time, read_runs, run_limit, same_screen, thumb
 
 
 def screen(level):
@@ -119,6 +119,25 @@ def test_run_limit_only_clears_after_the_latest_reset():
     assert run_limit(lines, "a") == pytest.approx(2 * 40 * 60)
     assert run_limit(lines + [{"reset": "a", "time": "z"}], "a") == 3600
     assert run_limit(lines, "b") == 3600
+
+
+def test_floor_limit_45_min_unless_history_says_longer():
+    # Live 2026-10-16 (#34): hard runs took 80 and 107 min, floors up to ~25 min, all of it progress.
+    assert floor_limit([], "a") == 45 * 60
+    assert floor_limit([line("a", 40)] * 10, "a") == 45 * 60  # a fast team keeps the floor's 45 min
+    assert floor_limit([line("a", 150)] * 10, "a") == pytest.approx(2 * 150 * 60 / 5)
+
+
+@pytest.mark.parametrize("kind, now, expected", [
+    ("MirrorMap", 999, False),
+    ("MirrorMap", 1001, True),  # on the map, where L2 goes through
+    ("BattleTurn", 1001, False),  # mid-battle L2 cannot go through: L3 would restart the battle
+    ("Event", 1000 + 20 * 60, False),
+    ("Event", 1001 + 20 * 60, True),  # not back on the map a battle's limit later: fire anyway
+])
+def test_over_time_waits_for_the_map(kind, now, expected):
+    assert over_time(kind, 1000, now) is expected
+    assert over_time(kind, None, now) is False  # no deadline: a resumed run
 
 
 def test_read_runs_skips_bad_lines(tmp_path):
