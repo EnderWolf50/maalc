@@ -111,7 +111,7 @@
 | 結果 | 通關／停止／放棄 |
 | L1、L2、L3 | 各級恢復各觸發幾次 |
 
-- 鍵名（#30）：`start`、`end`（UTC ISO 8601，和重置標記的 `time` 同格式；接續的局沒有 `start`，寫 `null`）、`team`、`team_name`（bot 沒有自己選隊時寫 `null`）、`difficulty`（`hard`／`normal`）、`weekly_bonus`（用了幾次）、`floors`、`result`（`clear` 通關／`stop` 停止／`giveup` 放棄）、`l1`、`l2`、`l3`。結算與停止程序都會寫入（#31）。結算以外的停止：`difficulty` 取目前這層的難度，`floors` 是主題包頁讀到的層數減 1；Resume 接手、Agent 沒看過主題包頁的局寫 0。`l1`–`l3` 是 Agent 這次啟動後這局的恢復次數。
+- 鍵名（#30）：`start`、`end`（UTC ISO 8601，和重置標記的 `time` 同格式；接續的局沒有 `start`，寫 `null`）、`team`、`team_name`（bot 沒有自己選隊時寫 `null`）、`difficulty`（`hard`／`normal`）、`weekly_bonus`（用了幾次）、`floors`、`result`（`clear` 通關／`stop` 停止／`giveup` 放棄）、`l1`、`l2`、`l3`。結算與停止程序都會寫入（#31）。結算以外的停止：`difficulty` 取目前這層的難度，`floors` 是主題包頁讀到的層數減 1；Resume 接手、Agent 沒看過主題包頁的局寫 0。`l1`–`l3` 是 Agent 這次啟動後這局的恢復次數。這局觀測了飾品時多一個 `gift_search`：`{"gifts": [英文名…], "starlight": 確認彈窗的價格, "owned_before": 觀測前的持有星光, "owned_after": 扣掉價格後}`，讀不到的值寫 `null`（#54）。
 - 這份記錄是唯讀的：只用來驗收（見 [07-assets-and-testing.md](07-assets-and-testing.md)）和計算整局時間上限，必須不拿來做中途接續或輪替的判斷。（#14，[ADR 0003](../adr/0003-screen-is-truth-state-file-only-rotation-cursor.md)）
 - 輪替游標仍只存在 Agent 狀態檔，不從 `runs.jsonl` 推算。（[ADR 0003](../adr/0003-screen-is-truth-state-file-only-rotation-cursor.md)）
 - 設定 GUI 的「重置時間記錄」會附加一行重置標記，只含隊伍 id 與時間。計算該隊的時間上限時，只看最新一個標記之後的記錄；舊記錄保留。（#14、#19，2026-10-14 定案）重置標記的格式是 `{"reset": "<隊伍 id>", "time": "<ISO 時間>"}`。算耗時只用該隊結果為 `clear`、`start` 與 `end` 都有的行，第 95 百分位用線性內插（Python `statistics.quantiles(..., n=20, method="inclusive")`）。（#31）

@@ -21,8 +21,17 @@ def _v1_to_v2(data):
     return data
 
 
+def _v2_to_v3(data):
+    """Version 3 adds teams[].gift_search (#54), off."""
+    teams = data.get("teams")
+    for team in teams if isinstance(teams, list) else []:
+        if isinstance(team, dict):
+            team.setdefault("gift_search", {"enabled": False, "gifts": []})
+    return data
+
+
 # MIGRATIONS[n] turns a version-n dict into a version-(n + 1) dict; keep in step with gui/src/model.ts.
-MIGRATIONS = {1: _v1_to_v2}
+MIGRATIONS = {1: _v1_to_v2, 2: _v2_to_v3}
 
 NO_TEAM = "No enabled team: set up a team in the settings GUI first."
 

@@ -1,7 +1,10 @@
 // Teams (spec 04 section 9): list order is rotation order.
 import { useState } from "react";
 import { resetTeamTimes } from "./api";
-import { KEYWORDS, SINNERS, defaultStarlight, freeName, newId, newTeam, teamEnum, type Team } from "./model";
+import {
+  KEYWORDS, SEARCH_GIFTS, SEARCH_TABS, SINNERS, defaultStarlight, freeName, newId, newTeam, teamEnum, toggleGift,
+  type GiftRef, type SearchGift, type Team,
+} from "./model";
 import { SinnerGrid, StarlightEditor } from "./Plans";
 import { Field, Num, ReorderList, Select, useEditor } from "./ui";
 
@@ -123,6 +126,8 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
         ) : starPlan && <StarlightEditor value={starPlan} path={`${path}/starlight`} />}
       </fieldset>
 
+      <GiftSearchPanel i={i} />
+
       <details className="panel" open>
         <summary>{t("team.more")}</summary>
         <div className="options">
@@ -177,6 +182,76 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
         </div>
       </details>
     </div>
+  );
+}
+
+const ROMAN = ["", "I", "II", "III"];
+
+/** E.G.O Gift Search (spec 04 section 9): keyword tabs and tiers like the game's page; a click adds or removes. */
+function GiftSearchPanel({ i }: { i: number }) {
+  const { s, update, t, bad } = useEditor();
+  const team = s.teams[i];
+  const search = team.gift_search;
+  const path = `teams/${i}/gift_search`;
+  const [tab, setTab] = useState(SEARCH_TABS.includes(team.keyword) ? team.keyword : SEARCH_TABS[0]);
+  const set = (patch: Partial<Team["gift_search"]>) => update((d) => { Object.assign(d.teams[i].gift_search, patch); });
+  const zh = s.language === "zh_tw";
+  const nameOf = (g: GiftRef) => {
+    const known = SEARCH_GIFTS.find((x) => x.keyword === g.keyword && x.tier === g.tier && x.en === g.name);
+    return zh && known?.zh ? known.zh : g.name;
+  };
+  const rank = (g: SearchGift) => search.gifts.findIndex((x) => x.keyword === g.keyword && x.tier === g.tier && x.name === g.en) + 1;
+  const count = (k: string) => search.gifts.filter((g) => g.keyword === k).length;
+  return (
+    <details className={"panel" + (bad(path) ? " bad" : "")}>
+      <summary>{t("gift.title")}{search.enabled && search.gifts.length ? ` (${search.gifts.length})` : ""}</summary>
+      <div className="toggle">
+        <label className="check">
+          <input type="checkbox" checked={search.enabled} onChange={(e) => set({ enabled: e.target.checked })} />{t("gift.enabled")}
+        </label>
+        <small>{t("gift.note")}</small>
+      </div>
+      <div className="gift-search">
+        <div className="gift-tabs" role="tablist">
+          {SEARCH_TABS.map((k) => (
+            <button type="button" key={k} role="tab" aria-selected={k === tab} className={k === tab ? "selected" : ""} onClick={() => setTab(k)}>
+              {k}{count(k) > 0 && <b>{count(k)}</b>}
+            </button>
+          ))}
+        </div>
+        {[3, 2, 1].map((tier) => (
+          <div key={tier} className="gift-tier">
+            <h4>{ROMAN[tier]}</h4>
+            <div className="gifts">
+              {SEARCH_GIFTS.filter((g) => g.keyword === tab && g.tier === tier).map((g) => {
+                const n = rank(g);
+                return (
+                  <button type="button" key={g.en} className={"gift" + (n ? " picked" : "")} aria-pressed={n > 0}
+                    onClick={() => set({ gifts: toggleGift(search.gifts, { keyword: g.keyword, tier: g.tier, name: g.en }) })}>
+                    {n > 0 && <span className="rank">{n}</span>}
+                    <span className="name">{zh && g.zh ? g.zh : g.en}</span>
+                    {zh && g.zh && <small>{g.en}</small>}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className={"rewards" + (bad(`${path}/gifts`) ? " bad" : "")}>
+        <h4>{t("gift.order")}</h4>
+        {search.gifts.length ? (
+          <ReorderList items={search.gifts} keyOf={(g) => `${g.keyword}|${g.tier}|${g.name}`} onChange={(gifts) => set({ gifts })}
+            render={(g, j) => (
+              <>
+                {j + 1}. {nameOf(g)} <small className="muted">{g.keyword} {ROMAN[g.tier]}</small>{" "}
+                <button type="button" className="icon" aria-label={t("remove")} title={t("remove")}
+                  onClick={(e) => { e.stopPropagation(); set({ gifts: toggleGift(search.gifts, g) }); }}>×</button>
+              </>
+            )} />
+        ) : <p className="muted">{t("gift.none")}</p>}
+      </div>
+    </details>
   );
 }
 

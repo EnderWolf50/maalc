@@ -19,12 +19,12 @@ def team(id, game_team, **kw):
         "starlight": {"custom": STARLIGHT}, "theme_pack_plan": "default",
         "reward_cards": ["Starlight", "Random E.G.O Gift", "Cost & Keyword Gift Chance", "Cost", "E.G.O Resource"],
         "shop_refresh_limit": 2, "heal": "revive", "reserve_cost": 0, "min_alive": 0, "guard_turns": 0,
-        "trial_risk_weight": "high", **kw,
+        "trial_risk_weight": "high", "gift_search": {"enabled": False, "gifts": []}, **kw,
     }
 
 
 VALID = {
-    "version": 2,
+    "version": 3,
     "language": "zh_tw",
     "run": {
         "difficulty": "auto", "runs": 1, "weekly_bonus_use": "hard", "weekly_bonus_amount": "all",
@@ -91,18 +91,24 @@ def test_broken_json(tmp_path):
     (lambda d: d["theme_pack_plans"][0].update(id="default"), "theme_pack_plans/0/id"),
     (lambda d: d.update(extra=1), "(root)"),
     (lambda d: d["teams"][0].pop("heal"), "teams/0"),
+    (lambda d: d["teams"][0]["gift_search"]["gifts"].append({"keyword": "Bleed", "tier": 4, "name": "X"}), "teams/0/gift_search/gifts/0/tier"),
 ])
 def test_schema_errors_name_the_field(tmp_path, fn, where):
     assert any(e.startswith(where + ":") for e in errors(tmp_path, edited(fn)))
 
 
 def test_newer_version_is_refused(tmp_path):
-    assert "newer" in errors(tmp_path, {**VALID, "version": 3})[0]
+    assert "newer" in errors(tmp_path, {**VALID, "version": 4})[0]
 
 
 def test_version_1_gets_guard_turns_off(tmp_path):
-    old = edited(lambda d: [t.pop("guard_turns") for t in d["teams"]])
+    old = edited(lambda d: [(t.pop("guard_turns"), t.pop("gift_search")) for t in d["teams"]])
     assert load(tmp_path, {**old, "version": 1}) == VALID
+
+
+def test_version_2_gets_gift_search_off(tmp_path):
+    old = edited(lambda d: [t.pop("gift_search") for t in d["teams"]])
+    assert load(tmp_path, {**old, "version": 2}) == VALID
 
 
 def test_old_version_is_migrated_in_memory(tmp_path, monkeypatch):
