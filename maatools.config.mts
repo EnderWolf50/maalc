@@ -22,7 +22,12 @@ const screens: [image: string, hits: string[]][] = [
   ['StartingGift.png', ['StartingGift']],
   ['StartingGiftPicked.png', ['StartingGift']],
   ['GiftGet.png', ['GiftGet']],
+  ['StartingGiftSearchOff.png', ['StartingGift']],  // Activate Gift Search switched off (1.117.0, blue season)
   ['GiftSearch.png', ['GiftSearch', 'GiftChoice']],  // same Refuse Gift button; GiftSearch comes first in the hub
+  // 3 gifts picked, Select 3/3; its Selected E.G.O Gift header reads like the starting gift page's: GiftSearch comes first
+  ['GiftSearchSelected.png', ['GiftSearch', 'GiftChoice', 'StartingGift']],
+  ['GiftSearchConfirm.png', ['GiftSearch', 'GiftChoice']],  // "Consume 70 Starlight ...": GiftSearch confirms it
+  ['GiftSearchGet.png', ['GiftGet', 'GiftSearch']],  // GiftGet comes first in the hub
   ['GiftSearchForgo.png', ['GiftSearchForgo', 'GiftSearch', 'GiftChoice']],
   ['ThemePack.png', ['ThemePack']],
   ['ThemePackNormal.png', ['ThemePack']],
