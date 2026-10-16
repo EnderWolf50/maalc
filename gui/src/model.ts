@@ -1,7 +1,7 @@
 // Settings types and the values that come from agent/settings.schema.json (docs/spec/04-settings.md).
 import { parse as parseYaml } from "yaml";
 import schema from "../../agent/settings.schema.json";
-import gifts from "./gifts.json";
+import gifts from "../../assets/resource/base/data/gift_search.json";
 import graces from "./graces.json";
 
 export { schema };
@@ -72,7 +72,7 @@ export function enhanceAll(v: StarlightValues, plus: 1 | 2) {
 /** The E.G.O Gift Search page's tabs, left to right (agent/settings.schema.json gift_search keywords). */
 export const SEARCH_TABS: string[] = TEAM.gift_search.properties.gifts.items.properties.keyword.enum;
 /** Spec 04 section 9: the gifts the search page offers, in page order; ids, tiers and English names from the game's
- * static data, Chinese names from the wiki (gifts.json carries its sources and license). */
+ * static data, Chinese names from the wiki (data/gift_search.json carries its sources and license). */
 export const SEARCH_GIFTS: SearchGift[] = gifts.gifts;
 export interface SearchGift { id: number; keyword: string; tier: number; en: string; zh: string }
 

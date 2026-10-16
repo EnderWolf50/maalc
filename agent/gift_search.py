@@ -34,6 +34,30 @@ def gift_cells(image):
     return sorted(cells, key=lambda c: (c[1] // 40, c[0]))
 
 
+HEADER_Y = 252  # the first section header with the tab scrolled to the top
+HEADER_TO_ROW = 61  # header -> its first row, and a section's last row -> the next header
+ROW = 78.7
+
+
+def expected_cell(tab, name):
+    """Screen (x, y) of a gift with its tab scrolled to the top, from the observation table's order; y may be
+    below the grid. tab: the tab's gifts in table order ({"en", "tier"}). None when name is not in it.
+
+    The table order is the page order (checked cell by cell live). A gift this account lacks shifts every
+    later cell of its section by one: the icon match confirms the place.
+    """
+    y = HEADER_Y
+    for tier in (3, 2, 1):
+        section = [g["en"] for g in tab if g["tier"] == tier]
+        if not section:
+            continue
+        if name in section:
+            row, col = divmod(section.index(name), 8)
+            return CELL_X[col], round(y + HEADER_TO_ROW + ROW * row)
+        y += 2 * HEADER_TO_ROW + ROW * (-(-len(section) // 8) - 1)
+    return None
+
+
 def next_gift(wanted, chosen, tried, count):
     """The next of the team's gifts to look for, in the user's order, or None.
 

@@ -1,5 +1,5 @@
 {
-  "note": "Gifts the E.G.O Gift Search page offers, tab by tab, tiers III-I, in page order. List, ids, tiers and English names: the game client 1.117.0's static data (mirror-dungeon-egogift-observation-data-md8, the ego-gift tier tags, EN_EGOgift localization), checked against the live page on 2026-10-16. Chinese names: the 灰機 Limbus Company wiki's gift table by id (Simplified Chinese), converted with OpenCC s2twp; empty where it has no entry. Chinese names licensed CC BY-SA 4.0 (see NOTICE.md).",
+  "note": "Gifts the E.G.O Gift Search page offers, tab by tab, tiers III-I, in page order. List, ids, tiers and English names: the game client 1.117.0's static data (mirror-dungeon-egogift-observation-data-md8, the ego-gift tier tags, EN_EGOgift localization), checked against the live page on 2026-10-16. Icon templates: image/GiftSearch/<id>.png, the game's EgoGiftIcon sprites (by the ego-gift iconId) scaled by 0.21. Chinese names: the 灰機 Limbus Company wiki's gift table by id (Simplified Chinese), converted with OpenCC s2twp; empty where it has no entry. Chinese names licensed CC BY-SA 4.0 (see NOTICE.md).",
   "source": "https://limbuscompany.huijiwiki.com/wiki/Data:Giftchoose.tabx",
   "source_section": "Data:Giftchoose.tabx (last edited 2026-08-06)",
   "accessed": "2026-10-16",
