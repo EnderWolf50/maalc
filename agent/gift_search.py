@@ -34,6 +34,23 @@ def gift_cells(image):
     return sorted(cells, key=lambda c: (c[1] // 40, c[0]))
 
 
+def section_headers(image):
+    """Section headers on screen as [(y, tier)] top to bottom: y is their numerals' centre.
+
+    A header is a blue band 24-25 px tall across the grid with its tier's 1-3 yellow numerals at its left,
+    12 px above its centre line (live 2026-10-16); a band cut by the grid's edge is skipped.
+    """
+    b, g, r = (image[GRID_Y[0]:GRID_Y[1], :, i].astype(int) for i in range(3))
+    band = (b[:, 300:700] - r[:, 300:700]).mean(axis=1) > 40
+    yellow = (r > 200) & (g > 150) & (b < 80)
+    out = []
+    for top, run in _runs(np.flatnonzero(band)):
+        bars = len(_runs(np.flatnonzero(yellow[top + 12, CELL_X[0] - 34:CELL_X[0] - 8])))
+        if 22 <= run <= 27 and 1 <= bars <= 3:
+            out.append((GRID_Y[0] + top + 12, bars))
+    return out
+
+
 HEADER_Y = 252  # the first section header with the tab scrolled to the top
 HEADER_TO_ROW = 61  # header -> its first row, and a section's last row -> the next header
 ROW = 78.7
@@ -46,16 +63,37 @@ def expected_cell(tab, name):
     The table order is the page order (checked cell by cell live). A gift this account lacks shifts every
     later cell of its section by one: the icon match confirms the place.
     """
-    y = HEADER_Y
+    tier = next((g["tier"] for g in tab if g["en"] == name), None)
+    if tier is None:
+        return None
+    row, col = divmod([g["en"] for g in tab if g["tier"] == tier].index(name), 8)
+    return CELL_X[col], round(_header_ys(tab)[tier] + HEADER_TO_ROW + ROW * row)
+
+
+def cell_y(tab, name, headers):
+    """Screen y of name's row now, from the section headers on screen (section_headers); None without one.
+
+    Measured from its own section's header when that is on screen, so a gift the account lacks in an
+    earlier section does not shift it; else from the first header and the table's section sizes.
+    """
+    tops = _header_ys(tab)
+    headers = [h for h in headers if h[1] in tops]
+    if not headers:
+        return None
+    tier = next(g["tier"] for g in tab if g["en"] == name)
+    y, t = next((h for h in headers if h[1] == tier), headers[0])
+    return expected_cell(tab, name)[1] - round(tops[t]) + y
+
+
+def _header_ys(tab):
+    """{tier: its header's y} with the tab scrolled to the top, from the table's section sizes."""
+    ys, y = {}, HEADER_Y
     for tier in (3, 2, 1):
-        section = [g["en"] for g in tab if g["tier"] == tier]
-        if not section:
-            continue
-        if name in section:
-            row, col = divmod(section.index(name), 8)
-            return CELL_X[col], round(y + HEADER_TO_ROW + ROW * row)
-        y += 2 * HEADER_TO_ROW + ROW * (-(-len(section) // 8) - 1)
-    return None
+        n = sum(g["tier"] == tier for g in tab)
+        if n:
+            ys[tier] = y
+            y += 2 * HEADER_TO_ROW + ROW * (-(-n // 8) - 1)
+    return ys
 
 
 def next_gift(wanted, chosen, tried, count):
