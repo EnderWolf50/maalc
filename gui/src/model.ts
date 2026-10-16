@@ -1,6 +1,7 @@
 // Settings types and the values that come from agent/settings.schema.json (docs/spec/04-settings.md).
 import { parse as parseYaml } from "yaml";
 import schema from "../../agent/settings.schema.json";
+import gifts from "../../assets/resource/base/data/gift_search.json";
 import graces from "./graces.json";
 
 export { schema };
@@ -68,6 +69,18 @@ export function enhanceAll(v: StarlightValues, plus: 1 | 2) {
   return allTo(v, () => (v.levels.every((l) => l === level) ? "base" : level));
 }
 
+/** The E.G.O Gift Search page's tabs, left to right (agent/settings.schema.json gift_search keywords). */
+export const SEARCH_TABS: string[] = TEAM.gift_search.properties.gifts.items.properties.keyword.enum;
+/** Spec 04 section 9: the gifts the search page offers, in page order; ids, tiers and English names from the game's
+ * static data, Chinese names from the wiki (data/gift_search.json carries its sources and license). */
+export const SEARCH_GIFTS: SearchGift[] = gifts.gifts;
+export interface SearchGift { id: number; keyword: string; tier: number; en: string; zh: string }
+
+const sameGift = (a: GiftRef, b: GiftRef) => a.keyword === b.keyword && a.tier === b.tier && a.name === b.name;
+/** A gift card's click: add the gift at the end of the search list, or take it out. */
+export const toggleGift = (list: GiftRef[], gift: GiftRef) =>
+  list.some((g) => sameGift(g, gift)) ? list.filter((g) => !sameGift(g, gift)) : [...list, gift];
+
 /** The sinner grid's click (spec 04 section 6): add at the end, or leave out; the last one stays. */
 export function toggleSinner(order: Order, sinner: string): Order {
   if (!order.includes(sinner)) return [...order, sinner];
@@ -90,7 +103,10 @@ export interface Team {
   hard_from_floor: number; deployment_order: Ref<Order>; starlight: Ref<StarlightValues>;
   theme_pack_plan: string; reward_cards: string[]; shop_refresh_limit: number; heal: string;
   reserve_cost: number; min_alive: number; guard_turns: number; trial_risk_weight: string;
+  gift_search: { enabled: boolean; gifts: GiftRef[] };
 }
+/** A gift on the E.G.O Gift Search page: its keyword tab, tier and English name (spec 04 section 9). */
+export interface GiftRef { keyword: string; tier: number; name: string }
 export interface Settings {
   version: number;
   language: "zh_tw" | "en_us";
@@ -146,12 +162,18 @@ export function freeName(base: string, taken: string[]) {
 /** MIGRATIONS[n] turns a version-n file into a version-(n + 1) file; keep in step with agent/settings.py. */
 const MIGRATIONS: Record<number, (d: Record<string, unknown>) => Record<string, unknown>> = {
   // Version 2 adds teams[].guard_turns (#52); its short orders need nothing.
-  1: (d) => ({
+  1: (d) => withTeamDefault(d, { guard_turns: 0 }),
+  // Version 3 adds teams[].gift_search (#54), off.
+  2: (d) => withTeamDefault(d, { gift_search: { enabled: false, gifts: [] } }),
+};
+
+function withTeamDefault(d: Record<string, unknown>, field: Record<string, unknown>) {
+  return {
     ...d,
     teams: Array.isArray(d.teams)
-      ? d.teams.map((t) => (t && typeof t === "object" ? { guard_turns: 0, ...t } : t)) : d.teams,
-  }),
-};
+      ? d.teams.map((t) => (t && typeof t === "object" ? { ...clone(field), ...t } : t)) : d.teams,
+  };
+}
 
 /** Parse a settings file; an older version is migrated and the caller writes it back (spec 04 section 2). */
 export function parseSettings(text: string): { data: Settings; migrated: boolean } {

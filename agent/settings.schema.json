@@ -17,7 +17,7 @@
     "trial_risk_overrides"
   ],
   "properties": {
-    "version": { "const": 2 },
+    "version": { "const": 3 },
     "language": { "enum": ["zh_tw", "en_us"], "default": "zh_tw" },
     "run": {
       "type": "object",
@@ -117,7 +117,8 @@
           "reserve_cost",
           "min_alive",
           "guard_turns",
-          "trial_risk_weight"
+          "trial_risk_weight",
+          "gift_search"
         ],
         "properties": {
           "id": { "$ref": "#/$defs/id" },
@@ -182,7 +183,35 @@
           "reserve_cost": { "type": "integer", "minimum": 0, "default": 0 },
           "min_alive": { "type": "integer", "minimum": 0, "maximum": 12, "default": 0 },
           "guard_turns": { "type": "integer", "minimum": 0, "maximum": 5, "default": 0 },
-          "trial_risk_weight": { "enum": ["low", "medium", "high"], "default": "high" }
+          "trial_risk_weight": { "enum": ["low", "medium", "high"], "default": "high" },
+          "gift_search": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["enabled", "gifts"],
+            "description": "E.G.O Gift Search at the start of a run: gifts bought with owned starlight, in priority order",
+            "properties": {
+              "enabled": { "type": "boolean", "default": false },
+              "gifts": {
+                "type": "array",
+                "uniqueItems": true,
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["keyword", "tier", "name"],
+                  "properties": {
+                    "keyword": {
+                      "enum": ["Burn", "Bleed", "Tremor", "Rupture", "Sinking", "Poise", "Charge", "Slash", "Pierce", "Blunt", "Keywordless"],
+                      "description": "the page's keyword tab"
+                    },
+                    "tier": { "type": "integer", "minimum": 1, "maximum": 3 },
+                    "name": { "type": "string", "minLength": 1, "description": "English name as the game shows it" }
+                  }
+                },
+                "default": []
+              }
+            },
+            "default": { "enabled": false, "gifts": [] }
+          }
         }
       }
     },

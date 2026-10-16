@@ -1,7 +1,8 @@
 // The click rules of the team page's sinner grid and starlight cards.
 import { expect, test } from "vitest";
 import {
-  buyOrder, clickCard, clickEnhance, enhanceAll, gracePrice, selectAll, starlightCost, toggleSinner, type StarlightValues,
+  SEARCH_GIFTS, SEARCH_TABS, buyOrder, clickCard, clickEnhance, enhanceAll, gracePrice, selectAll, starlightCost, toggleGift,
+  toggleSinner, type StarlightValues,
 } from "./model";
 
 test("clicking a sinner not in the order adds it at the end", () => {
@@ -14,6 +15,24 @@ test("clicking a sinner in the order leaves it out and moves the later ones up",
 
 test("the last sinner in the order stays", () => {
   expect(toggleSinner(["Ryōshū"], "Ryōshū")).toEqual(["Ryōshū"]);
+});
+
+const smokes = { keyword: "Bleed", tier: 3, name: "Smokes and Wires" };
+const bass = { keyword: "Bleed", tier: 2, name: "Walking Bass" };
+
+test("clicking a gift adds it at the end of the search list, clicking it again takes it out", () => {
+  const list = toggleGift([smokes], bass);
+  expect(list).toEqual([smokes, bass]);
+  expect(toggleGift(list, { ...smokes })).toEqual([bass]);
+});
+
+test("every gift on the search page has a keyword tab, a tier of 1-3 and a unique name", () => {
+  expect(SEARCH_GIFTS.length).toBeGreaterThan(300);
+  for (const g of SEARCH_GIFTS) {
+    expect(SEARCH_TABS).toContain(g.keyword);
+    expect([1, 2, 3]).toContain(g.tier);
+  }
+  expect(new Set(SEARCH_GIFTS.map((g) => g.en)).size).toBe(SEARCH_GIFTS.length);
 });
 
 const none = (): StarlightValues => ({ levels: Array(10).fill("none"), priority: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], convert_leftover: false });
