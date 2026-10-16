@@ -1,3 +1,4 @@
+import { availableParallelism } from 'node:os'
 import type { FullConfig } from '@nekosu/maa-tools'
 
 // Every image runs every node named below; a node not in its hits must miss (07-assets-and-testing.md).
@@ -91,6 +92,8 @@ const config: FullConfig = {
   interfacePath: 'assets/interface.json',
   check: {},
   test: {
+    // maa-tools defaults to cpus/4 workers: 1 on a 4-core CI runner, where the test ran ~10 min serially.
+    job: availableParallelism(),
     cases: [
       {
         configs: { controller: 'MuMu', resource: 'base', imageRoot: 'tests/screens' },
