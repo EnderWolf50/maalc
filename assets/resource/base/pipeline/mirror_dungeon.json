@@ -275,10 +275,11 @@
         "action": "Custom",
         "custom_action": "Formation"
     },
-    // Waiting for input: the Win Rate label, off or on. It moves right with every extra skill slot.
+    // Waiting for input: the Win Rate label, off or on. It moves half a slot (~40 px) right with every
+    // extra skill slot: x 984 with 7 slots, ~740 with 1 (a 1-sinner formation, live 2026-10-16).
     "BattleTurn": {
         "recognition": "TemplateMatch",
-        "roi": [940, 515, 340, 60],
+        "roi": [700, 515, 580, 60],
         "template": [
             "Battle/BattleTurn.png",
             "Battle/BattleTurnPressed.png"

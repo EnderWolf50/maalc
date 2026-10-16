@@ -101,15 +101,14 @@ export default function App() {
           <ul>{problems.map((p, i) => <li key={i}>{p.text}</li>)}</ul>
         </div>
       )}
-      <div className="body">
-        <nav>
-          {TABS.map(([id, label, , prefixes]) => (
-            <button type="button" key={id} className={(tab === id ? "selected" : "") + (prefixes.some(bad) ? " bad" : "")}
-              onClick={() => setTab(id)}>{t(label)}</button>
-          ))}
-        </nav>
-        <main><Current /></main>
-      </div>
+      <nav role="tablist">
+        {TABS.map(([id, label, , prefixes]) => (
+          <button type="button" role="tab" key={id} aria-selected={tab === id}
+            className={(tab === id ? "selected" : "") + (prefixes.some(bad) ? " bad" : "")}
+            onClick={() => setTab(id)}>{t(label)}</button>
+        ))}
+      </nav>
+      <main><Current /></main>
     </EditorContext.Provider>
   );
 }

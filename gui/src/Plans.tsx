@@ -2,49 +2,88 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { loadThemePacks } from "./api";
 import {
-  BOOSTS, LEVELS, MARKS, SINNERS, defaultStarlight, freeName, newId,
+  GRACES, LEVELS, MARKS, SINNERS, buyOrder, clickCard, clickEnhance, defaultStarlight, enhanceAll, freeName, gracePrice,
+  newId, selectAll, starlightCost, toggleSinner,
   type DeploymentPlan, type Order, type StarlightPlan, type StarlightValues, type ThemePackPlan, type ThemePacks,
 } from "./model";
 import { Field, ReorderList, Select, useEditor } from "./ui";
 
-export function OrderEditor({ order, onChange, path }: { order: Order; onChange: (o: Order) => void; path: string }) {
+/** The 12 sinners in the game's grid; clicking adds one at the end of the order or leaves it out
+ * (spec 04 section 6). Read-only without onChange. */
+export function SinnerGrid({ order, onChange, path }: { order: Order; onChange?: (o: Order) => void; path: string }) {
   const { t, bad } = useEditor();
-  return (
-    <div className={bad(path) ? "bad" : ""}>
-      <ReorderList items={order} onChange={onChange} keyOf={(s) => s}
-        render={(s, i) => <>{i + 1}. {s}{i < 7 && <em className="tag">{t("deployed")}</em>}</>} />
+  return (<>
+    {onChange && <p className="muted">{t("order.hint")}</p>}
+    <div className={"sinners" + (bad(path) ? " bad" : "")}>
+      {SINNERS.map((s) => {
+        const n = order.indexOf(s) + 1;
+        const kind = n === 0 ? "" : n <= 7 ? "deployed" : "backup";
+        return (
+          <button type="button" key={s} className={"sinner " + kind} disabled={!onChange} aria-pressed={n > 0}
+            onClick={() => onChange?.(toggleSinner(order, s))}>
+            {n > 0 && <span className="num">{n}</span>}
+            {n > 0 && <span className="banner">{t(n <= 7 ? "order.deployed" : "order.backup")}</span>}
+            <span className="name">{s}</span>
+          </button>
+        );
+      })}
     </div>
-  );
+  </>);
 }
 
+/** The game's "Grace of the Star" page: click a card to select it at base, + / ++ to enhance it
+ * (spec 04 section 7). The number on a selected card is its place in the buying order. Read-only without onChange. */
 export function StarlightEditor({ value, onChange, path }: {
-  value: StarlightValues; onChange: (v: StarlightValues) => void; path: string;
+  value: StarlightValues; onChange?: (v: StarlightValues) => void; path: string;
 }) {
-  const { t, tv, bad } = useEditor();
+  const { s, t, tv, bad } = useEditor();
+  const zh = s.language === "zh_tw";
+  const order = buyOrder(value);
+  const set = (fn: (v: StarlightValues) => StarlightValues) => onChange?.(fn(value));
   return (
-    <div className="starlight">
-      <table className={bad(`${path}/levels`) ? "bad" : ""}>
-        <thead><tr><th>#</th><th>Boost</th><th>{t("starlight.level")}</th></tr></thead>
-        <tbody>
-          {BOOSTS.map((b, i) => (
-            <tr key={b}><td>{i + 1}</td><td>{b}</td><td>
-              <Select value={value.levels[i]} options={LEVELS} label={(v) => tv("level", v)}
-                onChange={(v) => onChange({ ...value, levels: value.levels.map((l, j) => (j === i ? v : l)) })} />
-            </td></tr>
-          ))}
-        </tbody>
-      </table>
-      <div>
-        <h4 className={bad(`${path}/priority`) ? "bad" : ""}>{t("starlight.priority")}</h4>
-        <ReorderList items={value.priority} keyOf={String} onChange={(priority) => onChange({ ...value, priority })}
-          render={(n, i) => <>{i + 1}. {BOOSTS[n - 1] ?? n}</>} />
+    <>{onChange && <p className="muted">{t("starlight.hint")}</p>}
+    <div className={"starlight" + (onChange ? "" : " readonly")}>
+      <div className={"graces" + (bad(`${path}/levels`) || bad(`${path}/priority`) ? " bad" : "")}>
+        {GRACES.map((g, i) => {
+          const n = i + 1;
+          const level = value.levels[i];
+          const rank = order.indexOf(n) + 1;
+          const effects = g.effects[level as "plus" | "plus2"] ?? g.effects.base;
+          return (
+            <div key={g.en} className={`grace ${level}`} role="button" tabIndex={onChange ? 0 : -1} aria-pressed={rank > 0}
+              aria-disabled={!onChange} title={`${n}. ${g.en} (${tv("level", level)})`}
+              onClick={() => set((v) => clickCard(v, n))}
+              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); set((v) => clickCard(v, n)); } }}>
+              {rank > 0 && <span className="rank">{rank}</span>}
+              <span className="price">★ {gracePrice(n, level === "none" ? "base" : level)}</span>
+              <span className="name">{zh && g.zh ? g.zh : g.en}{zh && g.zh && <small>{g.en}</small>}</span>
+              {zh && <ul>{effects.map((line, j) => <li key={j} className={line.startsWith("-") ? "sub" : ""}>{line.replace(/^-/, "")}</li>)}</ul>}
+              <span className="enhance">
+                {([1, 2] as const).map((plus) => (
+                  <button type="button" key={plus} disabled={!onChange} aria-pressed={level === LEVELS[plus + 1]}
+                    className={level === LEVELS[plus + 1] ? "lit" : ""}
+                    onClick={(e) => { e.stopPropagation(); set((v) => clickEnhance(v, n, plus)); }}>{"+".repeat(plus)}</button>
+                ))}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+      <div className="grace-side">
+        {onChange && <>
+          <button type="button" onClick={() => set(selectAll)}>{t("starlight.selectAll")}</button>
+          <span className="muted">{t("starlight.enhanceAll")}</span>
+          <button type="button" onClick={() => set((v) => enhanceAll(v, 1))}>+</button>
+          <button type="button" onClick={() => set((v) => enhanceAll(v, 2))}>++</button>
+        </>}
+        <span className="total">{t("starlight.total")} <b>★ {starlightCost(value.levels)}</b></span>
         <label className="check">
-          <input type="checkbox" checked={value.convert_leftover}
-            onChange={(e) => onChange({ ...value, convert_leftover: e.target.checked })} />
+          <input type="checkbox" checked={value.convert_leftover} disabled={!onChange}
+            onChange={(e) => set((v) => ({ ...v, convert_leftover: e.target.checked }))} />
           {t("starlight.convert_leftover")}
         </label>
       </div>
-    </div>
+    </div></>
   );
 }
 
@@ -97,7 +136,7 @@ function PlanTab<P extends { id: string; name: string }>({ planKey, tab, make, e
 
 export const DeploymentTab = () => (
   <PlanTab<DeploymentPlan> planKey="deployment_order_plans" tab="tab.deployment" make={() => ({ order: [...SINNERS] })}
-    editor={(p, change, path) => <OrderEditor order={p.order} path={`${path}/order`} onChange={(order) => change({ ...p, order })} />} />
+    editor={(p, change, path) => <SinnerGrid order={p.order} path={`${path}/order`} onChange={(order) => change({ ...p, order })} />} />
 );
 
 export const StarlightTab = () => (

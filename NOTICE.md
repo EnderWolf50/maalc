@@ -36,6 +36,10 @@ SOFTWARE.
 
 `assets/resource/base/image/` 的模板與 `tests/screens/` 的測試截圖取自 Limbus Company 的遊戲畫面，著作權屬於 © Project Moon，不在本專案的 MIT 授權範圍內。測試截圖中的 UID 與帳號已遮蔽。
 
+## 星光加成的中文名稱與效果文字
+
+`gui/src/graces.json` 的中文名稱與效果文字取自 [灰機 Limbus Company 維基](https://limbuscompany.huijiwiki.com/) 的頁面 [名与蛛之镜](https://limbuscompany.huijiwiki.com/wiki/%E5%90%8D%E4%B8%8E%E8%9B%9B%E4%B9%8B%E9%95%9C)「名与蛛的星之恩惠」一節（修訂 133560，2026-10-16 取用），由維基的貢獻者撰寫，採 [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/) 授權。本專案以 OpenCC `s2twp` 轉成繁體並修改兩個用詞（「重新整理」改回「刷新」、「映象」改為「鏡像」）；修改後的 `gui/src/graces.json` 同樣以 CC BY-SA 4.0 授權。英文名稱取自遊戲畫面。
+
 ## 發佈 zip 內附的第三方程式
 
 `tools/install.py --release` 組出的發佈 zip 另外附上以下程式，都是原樣下載、不經修改：
