@@ -70,10 +70,25 @@ def swipe(context, x1, y1, x2, y2, ms=500, wait=1.0):
     time.sleep(wait)
 
 
-def drag(context, points, settle=0.3, dwell=0.1):
+def scroll(context, x, y, dx, dy):
+    """Drag the content under (x, y) by (dx, dy) px and let go without a fling (spec 07).
+
+    The game drops a drag's first move and flings the content on when the finger lifts while moving, so the
+    finger goes one 10 px move further and holds still SCROLL_HOLD s before lifting.
+    """
+    lead = 1 + 10 / max(abs(dx), abs(dy), 1)
+    drag(context, [(x, y), (x + round(dx * lead), y + round(dy * lead))], settle=0.1, hold=SCROLL_HOLD)
+
+
+# Live 2026-10-16: held 0.5 s, 10 drags of 150-300 px moved the grid 1 px more than asked, every time;
+# 0.4 s left up to 8 px of fling, 0.3 s 9 px, 0.1 s 80 px.
+SCROLL_HOLD = 0.5
+
+
+def drag(context, points, settle=0.3, dwell=0.1, hold=0.0):
     """One touch through points: down on the first, settle s, then 10 px moves (20 ms each), dwell s on each point.
 
-    Lifts on the last point at once: a finger held on a battle skill opens its details.
+    Lifts on the last point after hold s; at once by default: a finger held on a battle skill opens its details.
     """
     ctl = context.tasker.controller
     ctl.post_touch_down(*points[0]).wait()
@@ -85,6 +100,7 @@ def drag(context, points, settle=0.3, dwell=0.1):
             time.sleep(0.02)
         if (x1, y1) != points[-1]:
             time.sleep(dwell)
+    time.sleep(hold)
     ctl.post_touch_up().wait()
 
 
@@ -311,9 +327,9 @@ class SelectTeam(CustomAction):
                     visible[int(m[1])] = y + h // 2
             move = run_start.team_list_move(visible, n)
             if move == "down":
-                swipe(context, 130, 480, 130, 340)
+                scroll(context, 130, 480, 0, -140)
             elif move == "up":
-                swipe(context, 130, 340, 130, 480)
+                scroll(context, 130, 340, 0, 140)
             else:
                 tap(context, 130, move[1], wait=1.5)
                 image = screen(context)
@@ -446,7 +462,7 @@ class PickStartingGift(CustomAction):
                 label = next((b for t, b in ocr(context, image, [145, 145, 590, 430]) if t.strip().lower() == keyword.lower()), None)
                 if label:
                     break
-                swipe(context, 440, 480, 440, 230)  # Pierce and Blunt sit below the fold
+                scroll(context, 440, 480, 0, -250)  # Pierce and Blunt sit below the fold
             else:
                 return stuck(f"no {keyword} cabinet")
             x, y, w, h = label
@@ -498,7 +514,7 @@ SEARCH_DIALOG_BUTTONS = {"cancel": (513, 495), "confirm": (765, 495)}
 # A gift's icon (image/GiftSearch/<id>.png) scores 0.71-0.97 on its own cell, other cells up to ~0.75 (2026-10-16):
 # low enough to try a dark icon; the panel name check undoes a lookalike.
 ICON_MIN = 0.65
-SWIPE_GAIN = 1.05  # the grid moves ~1.05 px per px of a 1 s swipe (318 for 300, live 2026-10-16)
+GRID_MID = 420  # a dragged-to gift's row lands here: whole rows above and below it
 
 
 def gift_data():
@@ -587,7 +603,11 @@ class GiftSearch(CustomAction):
         y = gift_search.expected_cell(tab, entry["en"])[1]
         guessed = y > gift_search.LAST_Y
         if guessed:
-            GiftSearch.scroll(context, y - 420)
+            GiftSearch.scroll(context, y - GRID_MID)
+            # Line the grid up by the section headers on screen, not by the distance dragged.
+            y = gift_search.cell_y(tab, entry["en"], gift_search.section_headers(screen(context)))
+            if y is not None and abs(y - GRID_MID) > 140:
+                GiftSearch.scroll(context, y - GRID_MID)
         for _ in range(12):
             image = screen(context)
             cells = gift_search.gift_cells(image)
@@ -599,11 +619,12 @@ class GiftSearch(CustomAction):
                     return True
             if guessed:
                 guessed = False
-                GiftSearch.open_tab(context, gift["keyword"])  # not where the table puts it: search from the top
+                log(f"gift search: {gift['name']} is not where the table puts it: searching {gift['keyword']} from the top")
+                GiftSearch.open_tab(context, gift["keyword"])
                 continue
             if any(tier < gift["tier"] for _, _, tier in cells):
                 return False  # the tiers below have started: the wanted tier is done
-            swipe(context, 430, 560, 430, 320, ms=800, wait=1.5)
+            GiftSearch.scroll(context, 300)
             if np.abs(screen(context)[228:625, 85:775].astype(int) - image[228:625, 85:775].astype(int)).mean() < 2:
                 return False  # the end of the tab
         return False
@@ -617,12 +638,15 @@ class GiftSearch(CustomAction):
 
     @staticmethod
     def scroll(context, distance):
-        """Drag the grid up by about distance px, in strokes that stay inside it."""
-        while distance > 20:
-            step = min(distance, 300)
-            swipe(context, 430, 590, 430, 590 - round(step / SWIPE_GAIN), ms=1000, wait=0.8)
+        """Drag the grid up by distance px (down when negative), in strokes that stay inside it.
+
+        Dragged past the tab's end, the grid springs back after the lift: wait that out.
+        """
+        while abs(distance) > 20:
+            step = max(-300, min(distance, 300))
+            scroll(context, 430, 590 if step > 0 else 290, 0, -step)
             distance -= step
-        time.sleep(0.7)
+        time.sleep(0.5)
 
     @staticmethod
     def icon_scores(context, image, gid, cells):
@@ -848,9 +872,9 @@ class RouteMap(CustomAction):
             dx, dy = BUS_HOME[0] - bx, BUS_HOME[1] - by
             if abs(dx) <= 30 and abs(dy) <= 25 or attempt == 3:
                 return image, (bx, by)
-            # Live: pans are uneven (a slow 70 px swipe moved the map 90 px, a 55 px one 35 px),
-            # so look again after each. Start left of the bus, on map background.
-            swipe(context, 300, 400, 300 + int(dx * 0.78), 400 + int(dy * 0.78), ms=1000, wait=1.5)
+            # Look again after each pan. Start left of the bus, on map background.
+            scroll(context, 300, 400, dx, dy)
+            time.sleep(0.5)
 
     @staticmethod
     def read_slots(context, image, bx, by):
