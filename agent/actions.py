@@ -495,6 +495,15 @@ SEARCH_SELECT = (1100, 575)
 SEARCH_REFUSE = (922, 575)
 SEARCH_DIALOG = [400, 315, 480, 60]  # "Consume 70 Starlight to search and obtain these E.G.O Gifts?"
 SEARCH_DIALOG_BUTTONS = {"cancel": (513, 495), "confirm": (765, 495)}
+# A gift's icon (image/GiftSearch/<id>.png) scores 0.71-0.97 on its own cell, other cells up to ~0.75 (2026-10-16):
+# low enough to try a dark icon; the panel name check undoes a lookalike.
+ICON_MIN = 0.65
+SWIPE_GAIN = 1.05  # the grid moves ~1.05 px per px of a 1 s swipe (318 for 300, live 2026-10-16)
+
+
+def gift_data():
+    """data/gift_search.json: the observation table, tab by tab, in page order."""
+    return json.loads((RESOURCE / "base" / "data" / "gift_search.json").read_text(encoding="utf-8"))["gifts"]
 
 
 @AgentServer.custom_action("GiftSearch")
@@ -502,8 +511,8 @@ class GiftSearch(CustomAction):
     """E.G.O Gift Search (spec 03 section 5): the team's gifts in its order until Select n/m is full, then Select.
 
     Off, no gifts, or none of them found: Refuse Gift (the Forgo dialog is MirrorHub's). Gifts cost owned
-    starlight; choosing them in the settings is the user's consent (#54). A gift is found by its tier bars
-    on the keyword tab, tapped, and kept only when the panel names it; otherwise it is tapped off again.
+    starlight; choosing them in the settings is the user's consent (#54). A gift is found by its icon among
+    the cells of its tier (pick), tapped once, and kept only when the panel names it.
     """
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
@@ -562,34 +571,80 @@ class GiftSearch(CustomAction):
 
     @staticmethod
     def pick(context, gift):
-        """Select gift: open its tab, try each cell of its tier top to bottom; True once the panel names it.
+        """Select gift: find its icon among its tier's cells, tap it once, and check the panel names it.
 
-        A cell that selects another gift is tapped off again; one that stays on shows in the panel
-        as a gift not in the list, and run then refuses everything rather than buy it.
+        The observation table's order says how far down the tab the gift sits, so the tab is dragged
+        straight there; when the icon is not on that screen (the account lacks a gift above it, or the drag
+        fell short) the tab is searched from the top, screen by screen. Cells are never tapped to read names.
         """
-        tap(context, 113 + 62 * SEARCH_TABS.index(gift["keyword"]), 190, wait=1.5)
-        for _ in range(3):
-            swipe(context, 430, 330, 430, 610, ms=400, wait=0.5)  # back to the top of the tab
+        tab = [g for g in gift_data() if g["keyword"] == gift["keyword"]]
+        entry = next((g for g in tab if g["tier"] == gift["tier"] and run_start.match_pack(g["en"], [gift["name"]])), None)
+        if entry is None:
+            log(f"gift search: {gift['name']} is not in data/gift_search.json")
+            return False
+        start = time.time()
+        GiftSearch.open_tab(context, gift["keyword"])
+        y = gift_search.expected_cell(tab, entry["en"])[1]
+        guessed = y > gift_search.LAST_Y
+        if guessed:
+            GiftSearch.scroll(context, y - 420)
         for _ in range(12):
             image = screen(context)
-            before = GiftSearch.chosen(context, image, [])
-            cells = gift_search.gift_cells(image)  # selected cells have no bars: never tapped twice
-            for x, y, tier in cells:
-                if tier != gift["tier"]:
-                    continue
-                tap(context, x, y, wait=1)
-                new = [t for t in GiftSearch.chosen(context, screen(context), []) if t not in before]
-                if not new:
-                    continue  # owned or unaffordable: nothing was selected
-                if run_start.match_pack(new[0], [gift["name"]]):
-                    log(f"gift search: {gift['name']} selected")
+            cells = gift_search.gift_cells(image)
+            for score, x, y in GiftSearch.icon_scores(context, image, entry["id"], [c for c in cells if c[2] == gift["tier"]])[:2]:
+                if score < ICON_MIN:
+                    break
+                if GiftSearch.tap_and_check(context, image, x, y, gift["name"]):
+                    log(f"gift search: {gift['name']} selected in {time.time() - start:.1f} s (icon {score:.2f})")
                     return True
-                tap(context, x, y, wait=1)  # another gift: tap it off again
+            if guessed:
+                guessed = False
+                GiftSearch.open_tab(context, gift["keyword"])  # not where the table puts it: search from the top
+                continue
             if any(tier < gift["tier"] for _, _, tier in cells):
                 return False  # the tiers below have started: the wanted tier is done
             swipe(context, 430, 560, 430, 320, ms=800, wait=1.5)
             if np.abs(screen(context)[228:625, 85:775].astype(int) - image[228:625, 85:775].astype(int)).mean() < 2:
                 return False  # the end of the tab
+        return False
+
+    @staticmethod
+    def open_tab(context, keyword):
+        """Open keyword's tab at its top: switching tabs resets the scroll (live 2026-10-16), so via a neighbour."""
+        i = SEARCH_TABS.index(keyword)
+        tap(context, 113 + 62 * (i + 1 if i == 0 else i - 1), 190, wait=0.6)
+        tap(context, 113 + 62 * i, 190, wait=1)
+
+    @staticmethod
+    def scroll(context, distance):
+        """Drag the grid up by about distance px, in strokes that stay inside it."""
+        while distance > 20:
+            step = min(distance, 300)
+            swipe(context, 430, 590, 430, 590 - round(step / SWIPE_GAIN), ms=1000, wait=0.8)
+            distance -= step
+        time.sleep(0.7)
+
+    @staticmethod
+    def icon_scores(context, image, gid, cells):
+        """[(score, x, y)] best first: the gift's icon (data/gift_search.json id) matched on each cell, TM_CCORR_NORMED."""
+        node = {"recognition": "TemplateMatch", "template": f"GiftSearch/{gid}.png", "threshold": 0.0, "method": 3, "green_mask": True}
+        out = []
+        for x, y, _ in cells:
+            detail = context.run_recognition("GiftIcon", image, {"GiftIcon": {**node, "roi": [x - 40, y - 40, 80, 80]}})
+            out.append((detail.best_result.score if detail and detail.best_result else 0.0, x, y))
+        return sorted(out, reverse=True)
+
+    @staticmethod
+    def tap_and_check(context, image, x, y, name):
+        """Tap a cell; True when the panel's new entry is name, else tap it off again (a lookalike icon)."""
+        before = GiftSearch.chosen(context, image, [])
+        tap(context, x, y, wait=1)
+        new = [t for t in GiftSearch.chosen(context, screen(context), []) if t not in before]
+        if new and run_start.match_pack(new[0], [name]):
+            return True
+        if new:
+            log(f"gift search: the icon match picked {new[0]}, not {name}: unselected")
+            tap(context, x, y, wait=1)
         return False
 
 

@@ -58,7 +58,9 @@
 
 - 上方 11 個體系分頁，由左到右 `Burn`、`Bleed`、`Tremor`、`Rupture`、`Sinking`、`Poise`、`Charge`、`Slash`、`Pierce`、`Blunt`、`Keywordless`，中心 x = 113 + 62 × 序號、y = 190。兩次進頁都停在 `Bleed`（初始飾品選的也是 Bleed），Agent 不依賴它，每次先點分頁。
 - 分頁下方是飾品格，每列 8 格（中心 x 約 130 + 83.4 × 欄），列距約 80 px，依等級分成 III、II、I 三段，每段開頭一條標題列。觀測頁沒有 IV 級。一次看得到約 4 列，分頁內容較多時（`Keywordless` 有 78 個）要往上拖才看得到下面。遊戲的觀測表列了 320 個，這個帳號的頁面少了 5 個（`Pinpoint Logic Circuit`、`Spicebush Branch`、`Kaleidoscope`、`Baekja Water Dropper`、`Out-of-style Rouge Clothing`），原因未確認，可能是還沒解鎖；Agent 找不到就跳過。
-- 飾品格只有圖示、沒有名字。每格左上有 1–3 條黃色等級條（高 19 px，段標題的數字只有 14 px）。這局已持有的飾品灰掉並標 `Owned`，沒有等級條，點了沒反應；已選取的格子加橘框，黃條也讀不到。
+- 切換分頁會把捲動重設到頂端。慢速拖動（1 秒）格子移動的距離約為手指移動的 1.05 倍。
+- 位置：頂端時第一段標題列 y 約 252，標題到該段第一列、該段最後一列到下一段標題都是 61 px，列距 78.7 px（`agent/gift_search.py` 的 `expected_cell`）。
+- 飾品格只有圖示、沒有名字。圖示和遊戲資源裡的 `Sprite/EgoGiftIcon/<iconId>` 相同，縮成 0.21 倍（約 50 px）後可用模板比對；淺色圖示分數 0.9 以上，深色圖示（例如 `Rusted Clock Hands`）只有 0.7 左右，和相似圖示（`Etched Clock Hands`）分不太開，所以點下去後還要讀名字確認。每格左上有 1–3 條黃色等級條（高 19 px，段標題的數字只有 14 px）。這局已持有的飾品灰掉並標 `Owned`，沒有等級條，點了沒反應；已選取的格子加橘框，黃條也讀不到。
 - 點一格就選取，右側 `Selected E.G.O Gift` 清單依選取順序列出名字與效果（每項名字一行，y 約 205、316、427）；再點同一格，或點清單裡那一項，就取消。選滿 `Select n/m` 後再點別格沒反應。
 - 價格只看選了幾個，和等級無關：1 個 70、2 個 160、3 個 270 星光（遊戲靜態資料的觀測表也是這三個數字）。右上 `Owned` 顯示「持有 −本次價格 ▶ 剩下」。
 - 按 Select 後跳出 `Consume N Starlight to search and obtain these E.G.O Gifts?`，Confirm 之後每個飾品各彈一次 `E.G.O Gift GET!`，再到主題包頁。

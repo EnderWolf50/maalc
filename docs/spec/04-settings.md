@@ -191,7 +191,7 @@
 - 試煉風險權重用於 Boss 後的選擇評分：飾品分數 − 權重 × 試煉風險。（#17）
 - 開局連續防禦的做法、失敗時的退路與 Agent 重啟後的處理見 [03-decisions.md](03-decisions.md#8-戰鬥) 第 8 節。（#52）
 - 觀測飾品花的是持有的星光；在 GUI 選了飾品就表示同意花費，不設上限（2026-10-16 使用者確認）。選取規則見 [03-decisions.md](03-decisions.md#5-初始飾品與-gift-search) 第 5 節。（#54）
-- GUI 的觀測飾品區塊預設收合，和遊戲的觀測頁一樣分體系分頁、III／II／I 三段；點飾品加到清單最後，再點一次移除，清單可拖曳排序。飾品列表是 `gui/src/gifts.json`（320 個）：清單、id、等級與英文名取自遊戲客戶端 1.117.0 靜態資料的觀測表 `mirror-dungeon-egogift-observation-data-md8`（分頁順序即表的 `uiKeyword` 順序；表裡等級空白的用 `ego-gift*.json` 的 `TIER_n` 標籤補上；英文名來自 `EN_EGOgift_*` 在地化檔），依等級 III → I、表內順序排列；中文名依 id 取自灰機 wiki（見 `NOTICE.md`），wiki 還沒收錄的 8 個只有英文名。2026-10-16 實機逐格點過整頁對照：順序與等級一致，只有 5 個沒出現在頁面上（見 [02-screens.md](02-screens.md#ego-gift-search-頁的版面)）。換季時要依新的觀測表重新產生。（#54）
+- GUI 的觀測飾品區塊預設收合，和遊戲的觀測頁一樣分體系分頁、III／II／I 三段；點飾品加到清單最後，再點一次移除，清單可拖曳排序。飾品列表是 `assets/resource/base/data/gift_search.json`（320 個）：清單、id、等級與英文名取自遊戲客戶端 1.117.0 靜態資料的觀測表 `mirror-dungeon-egogift-observation-data-md8`（分頁順序即表的 `uiKeyword` 順序；表裡等級空白的用 `ego-gift*.json` 的 `TIER_n` 標籤補上；英文名來自 `EN_EGOgift_*` 在地化檔），依等級 III → I、表內順序排列；中文名依 id 取自灰機 wiki（見 `NOTICE.md`），wiki 還沒收錄的 8 個只有英文名。2026-10-16 實機逐格點過整頁對照：順序與等級一致，只有 5 個沒出現在頁面上（見 [02-screens.md](02-screens.md#ego-gift-search-頁的版面)）。換季時要依新的觀測表重新產生。（#54）
 - 刷新次數記在 Agent 記憶體，以層為單位，不存檔。（#10）
 - 預留金額適用於所有花費：治療、購買、刷新。（#10、#19）
 - 每支隊伍在 GUI 有「重置時間記錄」按鈕，見第 12 節。（#14、#19，2026-10-14 定案）

@@ -1,6 +1,18 @@
+import json
+from pathlib import Path
+
 import numpy as np
 
 import gift_search as g
+
+BASE = Path(__file__).resolve().parent.parent / "assets" / "resource" / "base"
+
+
+def test_every_searchable_gift_has_its_icon_template():
+    gifts = json.loads((BASE / "data" / "gift_search.json").read_text(encoding="utf-8"))["gifts"]
+    assert len(gifts) == 320
+    missing = [x["id"] for x in gifts if not (BASE / "image" / "GiftSearch" / f"{x['id']}.png").is_file()]
+    assert not missing
 
 YELLOW = (0, 195, 249)  # BGR of a tier bar (live 2026-10-16)
 
@@ -25,6 +37,29 @@ def test_gift_cells_skip_section_headers_and_cut_cells():
     image = grid((0, 245, 3), height=14)
     image[600:620, g.CELL_X[2] - 30:g.CELL_X[2] - 27] = YELLOW  # bars running into the grid's bottom edge
     assert g.gift_cells(image) == []
+
+
+def bleed_tab():
+    """The Bleed tab as the observation table lists it: 14 tier III, 17 tier II, 5 tier I gifts."""
+    return [{"en": f"III {i}", "tier": 3} for i in range(14)] + [{"en": f"II {i}", "tier": 2} for i in range(17)] \
+        + [{"en": f"I {i}", "tier": 1} for i in range(5)]
+
+
+def near(got, want):
+    return abs(got[0] - want[0]) <= 4 and abs(got[1] - want[1]) <= 4
+
+
+def test_expected_cell_on_the_unscrolled_tab():
+    # Live 2026-10-16, Bleed with nothing scrolled: III rows at y 313 and 391, II header at 452, II rows from 512.
+    tab = bleed_tab()
+    assert near(g.expected_cell(tab, "III 0"), (130, 313))
+    assert near(g.expected_cell(tab, "III 9"), (213, 391))
+    assert near(g.expected_cell(tab, "II 0"), (130, 512))
+    assert near(g.expected_cell(tab, "II 15"), (714, 591))
+    # Below the fold: after a 212 px scroll the II row 3 sat at 458 and the I row at 578.
+    assert near(g.expected_cell(tab, "II 16"), (130, 458 + 212))
+    assert near(g.expected_cell(tab, "I 4"), (464, 578 + 212))
+    assert g.expected_cell(tab, "no such gift") is None
 
 
 SMOKES = {"keyword": "Bleed", "tier": 3, "name": "Smokes and Wires"}
