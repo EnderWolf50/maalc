@@ -62,6 +62,51 @@ def test_expected_cell_on_the_unscrolled_tab():
     assert g.expected_cell(tab, "no such gift") is None
 
 
+BAND = (150, 60, 50)  # BGR of a section header's blue band (live 2026-10-16: B - R about 50 across the grid)
+
+
+def headers_screen(*bands):
+    """A grid screen with section headers: (band top y, tier, band height) each, numerals 5 px below the band's top."""
+    image = grid()
+    for top, tier, height in bands:
+        image[max(top, 240):top + height, 85:775] = BAND
+        x = g.CELL_X[0] - 30
+        for k in range(tier):
+            image[max(top + 5, 240):top + 19, x + 6 * k:x + 6 * k + 3] = YELLOW
+    return image
+
+
+def test_section_headers_from_their_blue_bands():
+    # Live 2026-10-16, Bleed scrolled 150 px: the II band at y 289-313, the I band at 568-592.
+    image = headers_screen((289, 2, 25), (568, 1, 25))
+    assert g.section_headers(image) == [(301, 2), (580, 1)]
+
+
+def test_section_headers_skip_a_band_cut_by_the_grid_top():
+    # Live: Keywordless scrolled 450 px shows only the bottom 11 rows of the II band, at the grid's top edge.
+    assert g.section_headers(headers_screen((227, 2, 25))) == []
+    assert g.section_headers(grid((0, 281, 3))) == []  # cells only
+
+
+def test_cell_y_from_the_headers_on_screen():
+    # Live 2026-10-16, Bleed scrolled 151 px: II header 301, I header 580; II rows at 362 and 441.
+    tab, on_screen = bleed_tab(), [(301, 2), (580, 1)]
+    assert abs(g.cell_y(tab, "II 0", on_screen) - 362) <= 2
+    assert abs(g.cell_y(tab, "II 9", on_screen) - 441) <= 2
+    assert abs(g.cell_y(tab, "I 0", on_screen) - 641) <= 2
+    assert abs(g.cell_y(tab, "III 13", on_screen) - (391 - 151)) <= 2  # scrolled off the top
+    assert abs(g.cell_y(tab, "III 13", [(580, 1)]) - (391 - 151)) <= 2  # from a lower section's header
+
+
+def test_cell_y_trusts_the_gifts_own_header():
+    # The account lacks a II gift and its section is a row short: the I header sits 79 px higher than the table says.
+    assert abs(g.cell_y(bleed_tab(), "I 0", [(301, 2), (501, 1)]) - 562) <= 2
+
+
+def test_cell_y_without_a_header_on_screen():
+    assert g.cell_y(bleed_tab(), "II 0", []) is None
+
+
 SMOKES = {"keyword": "Bleed", "tier": 3, "name": "Smokes and Wires"}
 BASS = {"keyword": "Bleed", "tier": 2, "name": "Walking Bass"}
 STAKE = {"keyword": "Bleed", "tier": 1, "name": "Grimy Iron Stake"}
