@@ -69,7 +69,7 @@
 ## 執行記錄 runs.jsonl
 
 - Agent 必須為每局寫一行到 `<root>/logs/runs.jsonl`（`<root>` 是 Agent 的根目錄），欄位包括：起訖時間、隊伍 id、難度、有沒有用每週獎勵、通過幾層、結果（通關／停止／放棄）、L1／L2／L3 各觸發幾次。（#14）
-- `runs.jsonl` 是唯讀的記錄，只用於驗收和計算整局時間上限，不得用於中途接續的判斷。時間上限每隊各自計算；設定 GUI 的「重置時間記錄」只附加一行該隊的重置標記，不刪舊記錄（[04-settings.md](04-settings.md#12-其他檔案)）。（#14、#19）
+- `runs.jsonl` 是唯讀的記錄，只用於驗收和計算每層時間上限，不得用於中途接續的判斷。時間上限每隊各自計算；設定 GUI 的「重置時間記錄」只附加一行該隊的重置標記，不刪舊記錄（[04-settings.md](04-settings.md#12-其他檔案)）。（#14、#19）
 
 ## 各畫面讀取的資訊
 
@@ -113,7 +113,7 @@
 
 ### 結算規則
 
-結算前必須先判斷這一局有沒有達到目標。目標是五層全部通過：Exploration Reward 視窗顯示 `Floor 5` 且進度是 `6/6` 才算達到。不看 Exploration Complete 摘要的逐層 `n/6`。（#8、#19，2026-10-14 定案）實機：Exploration Reward 視窗只顯示最後到達的一層（例如 `Floor 5 [HARD] 5/6`）。（實機：captures/252_exploration_reward_window.png）
+結算前必須先判斷這一局有沒有達到目標。目標是五層全部通過：Exploration Reward 視窗顯示 `Floor 5` 且進度是 `n/n`（已通過數等於總數）才算達到。困難層的節點數不一定是 6：2026-10-16 實機第 5 層是 `Floor 5 [HARD] 7/7`（#67）。不看 Exploration Complete 摘要的逐層 `n/6`。（#8、#19，2026-10-14 定案）實機：Exploration Reward 視窗只顯示最後到達的一層（例如 `Floor 5 [HARD] 5/6`）。（實機：captures/252_exploration_reward_window.png）
 
 - 達到目標：依每週獎勵設定把對應數量的開關切到 ON，再按 Claim。開關數量與剩餘次數從畫面讀。Claim 要花的腦啡肽模組不夠時，必須停止並通知（[06-recovery.md](06-recovery.md)）。（#9、#17、#19）
 - 沒達到目標：按 GiveUpRewards 放棄獎勵，不花模組。（#19）

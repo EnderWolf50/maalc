@@ -18,9 +18,12 @@ def read_result(text):
 
 
 def goal_met(result):
-    """The goal is all five floors: Floor 5 at 6/6 (spec 03 section 14)."""
+    """The goal is all five floors: Floor 5 with every node cleared (spec 03 section 14).
+
+    Live 2026-10-16: a HARD floor may have 7 nodes (`Floor 5 [HARD] 7/7`), so the total is read, not assumed 6.
+    """
     floor, _, cleared, total = result
-    return floor == 5 and cleared == total == 6
+    return floor == 5 and cleared == total
 
 
 def floors_passed(result):
@@ -38,6 +41,21 @@ def bonus_toggles(use, amount, hard, left, all_hard):
         return 0
     want = 1 if amount == "one" or not all_hard else 3
     return min(want, left)
+
+
+def claim_dialog(text):
+    """Which of the Exploration Reward window's confirm dialogs the text is, or None.
+
+    giveup: GiveUpRewards' `End expedition without claiming rewards?`; no_bonus: Claim with bonuses left
+    and none ON; bonus: Claim with toggles ON, `Spend your 「Weekly Bonuses」 to claim the bonus rewards?`.
+    """
+    if "without claiming" in text:
+        return "giveup"
+    if "without using" in text:
+        return "no_bonus"
+    if "Spend your" in text:
+        return "bonus"
+    return None
 
 
 def counts_as_run(result):
