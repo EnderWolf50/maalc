@@ -24,6 +24,23 @@ export const runEnum = (k: keyof typeof P.run.properties) => (P.run.properties[k
 export const teamEnum = (k: keyof typeof TEAM) => (TEAM[k] as { enum: string[] }).enum;
 
 export type Order = string[];
+
+/** A starlight selector's segment (0 = the boost, 1 = +, 2 = ++): light up to it, or turn it and above off. */
+export function clickLevel(level: string, segment: number): string {
+  return LEVELS[segment + 1 > LEVELS.indexOf(level) ? segment + 1 : segment];
+}
+
+/** Spec 04 section 7: base prices; + and ++ cost 2x and 3x (agent/run_start.py GRACE_BASE). */
+export const BOOST_COST = [10, 10, 20, 20, 30, 30, 40, 40, 50, 60];
+export const starlightCost = (levels: string[]) =>
+  levels.reduce((sum, l, i) => sum + BOOST_COST[i] * LEVELS.indexOf(l), 0);
+export const lowestLevel = (levels: string[]) => LEVELS[Math.min(...levels.map((l) => LEVELS.indexOf(l)))];
+
+/** The sinner grid's click (spec 04 section 6): add at the end, or leave out; the last one stays. */
+export function toggleSinner(order: Order, sinner: string): Order {
+  if (!order.includes(sinner)) return [...order, sinner];
+  return order.length === 1 ? order : order.filter((x) => x !== sinner);
+}
 export interface StarlightValues { levels: string[]; priority: number[]; convert_leftover: boolean }
 export interface DeploymentPlan { id: string; name: string; order: Order }
 export interface StarlightPlan extends StarlightValues { id: string; name: string }
