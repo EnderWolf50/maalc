@@ -85,6 +85,13 @@ const screens: [image: string, hits: string[]][] = [
   ['ShopHeal.png', []],
 ]
 
+// CI shards by node: SHARD=i SHARDS=n keeps every n-th node, and every image still runs its shard's nodes,
+// so a node not in an image's hits still must miss. Unset runs everything.
+const shard = Number(process.env.SHARD ?? 0)
+const shards = Number(process.env.SHARDS ?? 1)
+const nodes = [...new Set(screens.flatMap(([, hits]) => hits))].sort()
+const mine = new Set(nodes.filter((_, i) => i % shards === shard))
+
 const config: FullConfig = {
   cwd: import.meta.dirname,
   maaVersion: '5.14.3',
@@ -97,7 +104,7 @@ const config: FullConfig = {
     cases: [
       {
         configs: { controller: 'MuMu', resource: 'base', imageRoot: 'tests/screens' },
-        cases: screens.map(([image, hits]) => ({ image, hits })),
+        cases: screens.map(([image, hits]) => ({ image, hits: hits.filter((n) => mine.has(n)) })),
       },
     ],
   },
