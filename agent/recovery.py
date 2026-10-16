@@ -1,4 +1,4 @@
-"""Stuck detection, recovery levels and the run time limit, free of MaaFramework (docs/spec/06-recovery.md).
+"""Stuck detection, recovery levels and the floor time limit, free of MaaFramework (docs/spec/06-recovery.md).
 
 actions.py feeds every screen MirrorHub hands out to a Watchdog, asks a Ladder which level to
 recover with, and does the taps; everything here is plain data in, plain data out.
@@ -22,6 +22,7 @@ TRANSIT = {"Loading", "Connecting", "RetryPopup", "GoToMirrorEntry", "NavTitle",
 L2_PER_RUN, L3_PER_RUN, L3_PER_EXECUTION = 3, 2, 3
 BATTLE_LIMIT = 20 * 60
 RUN_LIMIT_DEFAULT, RUN_LIMIT_MIN_RUNS = 60 * 60, 10
+FLOOR_LIMIT, FLOORS = 45 * 60, 5  # live (#34): a HARD floor took up to ~25 min of real progress
 
 
 def thumb(image):
@@ -130,7 +131,7 @@ def _seconds(start, end):
 
 
 def run_limit(lines, team_id):
-    """Seconds team_id's run may take (spec 06 整局超時).
+    """Seconds team_id's whole run may take, floor_limit's history part (spec 06 每層超時).
 
     Only the team's cleared runs with both times after its latest reset marker count:
     10 or more of them give twice their 95th percentile, fewer give 60 minutes.
@@ -146,3 +147,23 @@ def run_limit(lines, team_id):
     if len(times) < RUN_LIMIT_MIN_RUNS:
         return RUN_LIMIT_DEFAULT
     return 2 * statistics.quantiles(times, n=20, method="inclusive")[-1]
+
+
+def floor_limit(lines, team_id):
+    """Seconds one floor of team_id's run may take (spec 06 每層超時): 45 minutes, or the team's
+    run_limit spread over the 5 floors when that is longer.
+
+    Live 2026-10-16 (#34): two HARD runs took 80 and 107 minutes of steady progress, so a whole-run
+    limit of 60 minutes broke into runs that were fine. A floor restarts the clock, so a run that keeps
+    reaching new floors is never cut off; a floor stuck past it still is.
+    """
+    return max(FLOOR_LIMIT, run_limit(lines, team_id) / FLOORS)
+
+
+def over_time(kind, deadline, now):
+    """Whether the floor time limit fires on this screen type.
+
+    On the map, where L2 goes through; elsewhere only a battle's limit later: L2 fails mid-battle, and the
+    L3 that follows restarts the game and the battle with it (live 2026-10-16, #34).
+    """
+    return deadline is not None and now > deadline + (0 if kind == "MirrorMap" else BATTLE_LIMIT)

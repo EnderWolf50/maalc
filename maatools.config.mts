@@ -66,6 +66,10 @@ const screens: [image: string, hits: string[]][] = [
   ['ExplorationRewardOff.png', ['ExplorationReward', 'ExplorationComplete']],
   ['GiveUpDialog.png', ['ExplorationReward', 'ExplorationComplete']],
   ['ClaimNoBonusDialog.png', ['ExplorationReward', 'ExplorationComplete']],
+  ['ClaimBonusDialog.png', ['ExplorationReward', 'ExplorationComplete']],  // toggles ON: "Spend your 「Weekly Bonuses」..."
+  // After that Confirm (live 2026-10-16): two popups over the summary, each closed by its Confirm.
+  ['RewardsAcquired.png', ['ClaimPopup', 'ExplorationComplete']],
+  ['PassLevelUp.png', ['ClaimPopup', 'ExplorationComplete']],
   // Rewards and events. The dialogs sit over their page, which still reads.
   ['RewardCard.png', ['RewardCard']],
   ['RewardCardForgo.png', ['RewardCardForgo', 'RewardCard']],

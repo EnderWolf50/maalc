@@ -226,9 +226,9 @@ class StuckFlag(CustomRecognition):
             return
         if STUCK["watch"].see(kind, recovery.thumb(image), time.monotonic()):
             stuck(f"{kind}: the screen did not change")
-        elif RUN.get("deadline") and time.time() > RUN["deadline"]:
-            RUN.pop("deadline")  # once a run: after L2 the run carries on to its end
-            stuck("over the run time limit", level=2)
+        elif recovery.over_time(kind, RUN.get("deadline"), time.time()):
+            RUN.pop("deadline")  # once a floor: the next floor starts the clock again
+            stuck(f"floor {RUN.get('floor', '?')} over its time limit", level=2)
 
 
 @AgentServer.custom_action("Recover")
@@ -297,12 +297,13 @@ class PlanRun(CustomAction):
             return False
         RUN.clear()
         # planned: the bot picked the team itself, so the rotation cursor may move after the claim.
-        limit = recovery.run_limit(recovery.read_runs(ROOT), team["id"])
+        limit = recovery.floor_limit(recovery.read_runs(ROOT), team["id"])
         # guard: the run's guard turns left (spec 03 section 8), counted across its battles.
+        # floor_limit: each floor's time; the first clock runs from here, PickThemePack restarts it (spec 06).
         RUN.update(settings=settings, team=team, difficulty=difficulty, planned=True, start=settlement.now(), deadline=time.time() + limit,
-                   guard=team["guard_turns"])
+                   floor_limit=limit, guard=team["guard_turns"])
         STUCK["ladder"] = recovery.Ladder()
-        log(f"new run: {difficulty}, team {team['name']!r} (TEAMS #{team['game_team']}), weekly bonuses left {weekly}, time limit {limit / 60:.0f} min")
+        log(f"new run: {difficulty}, team {team['name']!r} (TEAMS #{team['game_team']}), weekly bonuses left {weekly}, time limit {limit / 60:.0f} min a floor")
         tap(context, 1108, 494, wait=1.5)
         return True
 
@@ -713,6 +714,8 @@ class PickThemePack(CustomAction):
         floor = int(m[1])
         if floor != RUN.get("floor"):
             RUN.update(floor=floor, map_misses=0)  # a new floor's map gets a fresh retry quota (spec 06)
+            if "floor_limit" in RUN:  # a run the bot started: the floor time limit starts over
+                RUN["deadline"] = time.time() + RUN["floor_limit"]
         want = None if run["difficulty"] is None else run_start.hard_wanted(floor, run["difficulty"] == "hard", run["team"]["hard_from_floor"])
         if not self.set_difficulty(context, floor, want):
             return stuck(f"floor {floor} difficulty did not switch to {'HARD' if want else 'NORMAL'}")
@@ -1702,8 +1705,7 @@ class Settle(CustomAction):
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         run = current_run(context)
         image = screen(context)
-        dialog = text(context, image, DIALOG_TEXT)
-        if "without claiming" in dialog or "without using" in dialog:
+        if settlement.claim_dialog(text(context, image, DIALOG_TEXT)):
             tap(context, *DIALOG_CANCEL, wait=1.5)  # left over from an earlier try: back out and decide again
             return True
         lines = sorted(ocr(context, image, RESULT), key=lambda r: r[1][1])  # results come out of order
@@ -1738,8 +1740,9 @@ class Settle(CustomAction):
             image = screen(context)
             if "Exploration Reward" not in text(context, image, REWARD_TITLE_ROI):
                 break
-            # Live 2026-10-15: claiming with bonuses left and none ON asks to confirm.
-            if want == 0 and "without using" in text(context, image, DIALOG_TEXT):
+            # Live: Claim asks to confirm with bonuses left and none ON (2026-10-15), and with any ON (2026-10-16).
+            # Confirm only the dialog of what the toggles were set and read back to; a bonus is spent only then.
+            if settlement.claim_dialog(text(context, image, DIALOG_TEXT)) == ("bonus" if want else "no_bonus"):
                 tap(context, *DIALOG_CONFIRM, wait=2)
                 continue
             time.sleep(1)
@@ -1763,7 +1766,7 @@ class Settle(CustomAction):
         """GiveUpRewards, then `End expedition without claiming rewards?` Confirm; no module is spent."""
         for _ in range(3):
             tap(context, *GIVE_UP, wait=1.5)
-            if "without claiming" in text(context, screen(context), DIALOG_TEXT):
+            if settlement.claim_dialog(text(context, screen(context), DIALOG_TEXT)) == "giveup":
                 break
         else:
             return stuck("GiveUpRewards brought up no `End expedition without claiming rewards?`")
