@@ -149,13 +149,13 @@
         "target": [545, 512, 190, 40],
         "post_delay": 1500
     },
-    // v1 always refuses Gift Search: it spends owned Starlight.
+    // Selects the team's gifts with owned Starlight, or presses Refuse Gift (spec 03 section 5).
     "GiftSearch": {
         "recognition": "OCR",
         "roi": [140, 30, 220, 35],
         "expected": "Gift Search",
-        "action": "Click",
-        "target": [840, 552, 160, 42],
+        "action": "Custom",
+        "custom_action": "GiftSearch",
         "post_delay": 1500
     },
     "GiftSearchForgo": {

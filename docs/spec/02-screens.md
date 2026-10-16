@@ -42,14 +42,28 @@
 | 等級警告對話框 | OCR：`lower than the recommended level`、`Current Avg. Level`、`Recommended Level` | 點 Confirm 繼續 | 星光頁 | #8、#19 | `captures/02_after_team_confirm.png` |
 | 星光頁（Grace of Stars） | 模板：右側 `Select All Graces`、`Enter`；OCR：右上 `Owned` → `Available` → Cost 三個數字 | 依隊伍的星光方案逐張點 Grace 的等級，讀可用星光（`Available`，等於選隊頁的 `Starlight Bonus`，不是 `Owned`）；買不起時依全域選項停止或跳過（[03](03-decisions.md) 星光）。完成後點 Enter。10 張卡排成兩列，每張卡右上是基礎價格，底部是 `+`、`++` 兩個按鈕；右側另有 `Enhance All` 的 `+`／`++`，bot 不用。名稱與等級的對應見 [04](04-settings.md#6-星光方案6-組) | 星光確認對話框 | #8、#9 | `captures/03_starlight_page.png` |
 | 星光確認對話框 | OCR：標題 `Select Grace of Stars`、`Continue with selected effects?`；模板：`Convert Starlight to Cost` 勾選框 | 依星光方案切換 `Convert Starlight to Cost`，點 Confirm。不勾選時，沒用掉的星光會加進這局的結算獎勵（對話框文字 `Any unspent Starlight will be added to your Dungeon clear rewards.`） | 初始飾品頁 | #8、#9 | `captures/04_starlight_confirm.png` |
-| 初始飾品頁 | OCR：`Selected E.G.O Gift`、`Select 0/1`；模板：10 個體系櫃（Burn、Bleed …） | 點隊伍主要體系的櫃子，右側面板會列出這個櫃子的 3 個飾品；點飾品，依序選滿 `Select n/m` 的可選數量，點 Select（[03](03-decisions.md) 初始飾品）。畫面一次只顯示 8 個櫃子，最後兩個（Pierce、Blunt）要往下捲才看得到。右上的 `Activate Gift Search` 開關不碰。實機：買了 `Star-shower` 時是 `Select 0/2`；選滿後第一次點 Select 常沒反應，要確認畫面換掉，沒換就再點（#25） | 飾品獲得視窗 | #9、#10、#19 | `captures/05_initial_ego_gift.png`、`06_initial_gift_bleed_selected.png`、`07_initial_gift_picked.png` |
+| 初始飾品頁 | OCR：`Selected E.G.O Gift`、`Select 0/1`；模板：10 個體系櫃（Burn、Bleed …） | 點隊伍主要體系的櫃子，右側面板會列出這個櫃子的 3 個飾品；點飾品，依序選滿 `Select n/m` 的可選數量，點 Select（[03](03-decisions.md) 初始飾品）。畫面一次只顯示 8 個櫃子，最後兩個（Pierce、Blunt）要往下捲才看得到。右上的 `Activate Gift Search` 開關（OCR 讀 `ON`／`OFF`，點 (1140, 158) 切換）：隊伍開啟觀測並選了飾品時切到 ON，否則切到 OFF；讀不到就不碰（[03](03-decisions.md) 第 5 節）。實機觀察 (2026-10-16)：OFF 時選完初始飾品直接到主題包頁，不出現 E.G.O Gift Search 頁；同一次遊戲執行中，下一局沿用上一局的開關，重啟模擬器後又是 ON。實機：買了 `Star-shower` 時是 `Select 0/2`；選滿後第一次點 Select 常沒反應，要確認畫面換掉，沒換就再點（#25） | 飾品獲得視窗 | #9、#10、#19 | `captures/05_initial_ego_gift.png`、`06_initial_gift_bleed_selected.png`、`07_initial_gift_picked.png` |
 | 初始飾品拒絕確認 | OCR：`Continue without selecting an E.G.O Gift?` | bot 不按 Refuse Gift；誤入時點 Cancel | 初始飾品頁 | #8 | — |
 | 飾品獲得視窗 | OCR：`E.G.O Gift GET!`；模板：Confirm | 點 Confirm。一次拿到多個飾品時，每個飾品各彈一次 | E.G.O Gift Search 頁、主題包頁、地圖頁、商店、飾品選擇頁、獎勵卡頁 | #8 | `captures/08_after_select.png`、`126_boss_gift2_get.png` |
-| E.G.O Gift Search 頁 | OCR：標題 `E.G.O Gift Search`、`Select 0/3`、右上 `Owned` 星光 | v1 一律點 Refuse Gift。這頁花的是持有的星光 | 觀測拒絕確認 | #8、#19 | `captures/09_gift_search_page.png` |
+| E.G.O Gift Search 頁 | OCR：標題 `E.G.O Gift Search`、`Select 0/3`、右上 `Owned` 星光（`1315 -70 ▶ 1245`）、右側 `Selected E.G.O Gift` 清單的飾品名；顏色：每格飾品左上的黃色等級條 | 隊伍開啟觀測並選了飾品時依清單選取後點 Select；否則點 Refuse Gift（[03](03-decisions.md) 第 5 節）。這頁花的是持有的星光。版面見下方「E.G.O Gift Search 頁的版面」 | 觀測確認、觀測拒絕確認 | #8、#19、#54 | `captures/09_gift_search_page.png`、`tests/screens/GiftSearchSelected.png` |
+| 觀測確認 | OCR：`Consume 70 Starlight to search and obtain these E.G.O Gifts?` | 點 Confirm（765, 495）；Cancel 在（513, 495）。之後每個飾品各彈一次飾品獲得視窗 | 飾品獲得視窗 | #54 | `tests/screens/GiftSearchConfirm.png`、`GiftSearchGet.png` |
 | 觀測拒絕確認 | OCR：`Forgo E.G.O Gift Search?` | 點 Confirm | 主題包頁 | #8 | `captures/10_gift_search_refuse_dialog.png` |
 | 主題包頁 | OCR：標題 `SELECT FLOOR <N> THEME PACK`、卡片標題列；模板：右上難度切換（`NORMAL ◀ ▶`／`◀ ▶ HARD`）、`Refresh` | 先讀難度並切到這一層該用的難度（遊戲會記住上一次的選擇，地圖頁不顯示難度）。依主題包方案挑主題包，必要時用 Refresh；把選中的卡片往下拉。Pack Search 不使用（[03](03-decisions.md) 難度、主題包）。實機：任何一層切到 HARD 後，下一層起難度箭頭變灰、點了沒反應；Refresh 每層免費一次，用過就變灰。卡片上可能有 `EFFECTIVE` 標章、危險標記、紅色 `!` 標記（第 4 層的三個主題包都有，點了沒反應）；沒看到 NEW 標記。第 5 層沒有 `CLEAR BONUS` 列 | 載入畫面、地圖頁 | #8、#9、#11 | `captures/11_theme_pack_floor1.png`、`12_theme_pack_toggle_hard.png`、`128_f2_tap_difficulty_left.png`、`129_f2_refresh_tapped.png`、`197_f3boss_rewards_pack.png`、`222_f4boss_rw_pack.png` |
 
 主題包頁出現的提示 `Unused Starlight have been added to the Clear Rewards.` 不需要處理。（#8）
+
+### E.G.O Gift Search 頁的版面
+
+以下都是實機觀察 (2026-10-16)，1.117.0、1280×720。（#54）
+
+- 上方 11 個體系分頁，由左到右 `Burn`、`Bleed`、`Tremor`、`Rupture`、`Sinking`、`Poise`、`Charge`、`Slash`、`Pierce`、`Blunt`、`Keywordless`，中心 x = 113 + 62 × 序號、y = 190。兩次進頁都停在 `Bleed`（初始飾品選的也是 Bleed），Agent 不依賴它，每次先點分頁。
+- 分頁下方是飾品格，每列 8 格（中心 x 約 130 + 83.4 × 欄），列距約 80 px，依等級分成 III、II、I 三段，每段開頭一條標題列。觀測頁沒有 IV 級。一次看得到約 4 列，分頁內容較多時（`Keywordless` 有 78 個）要往上拖才看得到下面。遊戲的觀測表列了 320 個，這個帳號的頁面少了 5 個（`Pinpoint Logic Circuit`、`Spicebush Branch`、`Kaleidoscope`、`Baekja Water Dropper`、`Out-of-style Rouge Clothing`），原因未確認，可能是還沒解鎖；Agent 找不到就跳過。
+- 飾品格只有圖示、沒有名字。每格左上有 1–3 條黃色等級條（高 19 px，段標題的數字只有 14 px）。這局已持有的飾品灰掉並標 `Owned`，沒有等級條，點了沒反應；已選取的格子加橘框，黃條也讀不到。
+- 點一格就選取，右側 `Selected E.G.O Gift` 清單依選取順序列出名字與效果（每項名字一行，y 約 205、316、427）；再點同一格，或點清單裡那一項，就取消。選滿 `Select n/m` 後再點別格沒反應。
+- 價格只看選了幾個，和等級無關：1 個 70、2 個 160、3 個 270 星光（遊戲靜態資料的觀測表也是這三個數字）。右上 `Owned` 顯示「持有 −本次價格 ▶ 剩下」。
+- 按 Select 後跳出 `Consume N Starlight to search and obtain these E.G.O Gifts?`，Confirm 之後每個飾品各彈一次 `E.G.O Gift GET!`，再到主題包頁。
+- 星光到結算才真正扣：這局的結算獎勵列出 `Starlight -70`；放棄獎勵（GiveUpRewards）後回入口頁，持有星光仍是觀測前的數字。
+- 遊戲重啟後以 Resume 接續，會回到這一頁，之前的選取已清空。
 
 ## 地圖
 
@@ -151,5 +165,4 @@
 
 ## 未決
 
-- **初始飾品頁的 `Activate Gift Search` 開關**：教學頁說明這個開關切換 E.G.O Gift Search 功能（`captures/29_help_page_11.png`）；開著時會出現 E.G.O Gift Search 頁（`captures/09_gift_search_page.png`）。關掉後是否就跳過那一頁，沒有實測。v1 的處理已定案為一律 Refuse Gift，不碰開關。（#8、#19）
 - **DEFEAT 對話框的 `Return to Stage Select`**：之後出現哪個畫面沒有實測。（#16）

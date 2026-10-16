@@ -19,6 +19,7 @@ from maa.custom_action import CustomAction
 from maa.custom_recognition import CustomRecognition
 
 import battle
+import gift_search
 import map_route
 import recovery
 import rewards
@@ -140,6 +141,7 @@ def run_line(run, outcome, hard, floors, bonuses=0):
         "team": team and team["id"], "team_name": team and team["name"],
         "difficulty": "hard" if hard else "normal", "weekly_bonus": bonuses,
         "floors": floors, "result": outcome, "l1": counts[1], "l2": counts[2], "l3": counts[3],
+        **({"gift_search": run["gift_search"]} if "gift_search" in run else {}),
     }
 
 
@@ -435,7 +437,9 @@ class PickStartingGift(CustomAction):
     """Open the team keyword's cabinet, take its gifts in order until Select n/m is full, press Select."""
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
-        keyword = current_run(context)["team"]["keyword"]
+        team = current_run(context)["team"]
+        keyword = team["keyword"]
+        self.set_gift_search(context, bool(team["gift_search"]["enabled"] and team["gift_search"]["gifts"]))
         if not self.full(context):
             for _ in range(3):
                 image = screen(context)
@@ -461,10 +465,132 @@ class PickStartingGift(CustomAction):
         return stuck("Select did not take the starting gift")
 
     @staticmethod
+    def set_gift_search(context, want):
+        """Turn the Activate Gift Search switch on only for a team with gifts to search (spec 03 section 5).
+
+        Live 2026-10-16: off skips the E.G.O Gift Search page; the next run keeps the switch (back on after a restart).
+        An unread switch is left alone: the search page, if it comes, refuses or picks anyway.
+        """
+        for _ in range(3):
+            shown = text(context, screen(context), [1100, 145, 85, 28]).upper()
+            on = False if "OFF" in shown else True if "ON" in shown else None
+            if on is None or on == want:
+                return
+            tap(context, 1140, 158, wait=1)
+            log(f"Activate Gift Search: {'on' if want else 'off'}")
+
+    @staticmethod
     def full(context):
         """Select n/m reads n == m."""
         m = re.search(r"(\d)\s*/\s*(\d)", text(context, screen(context), [990, 565, 190, 45]))
         return bool(m) and m[1] == m[2]
+
+
+# E.G.O Gift Search page (live 2026-10-16, 1.117.0). Tabs left to right, 62 px apart.
+SEARCH_TABS = ["Burn", "Bleed", "Tremor", "Rupture", "Sinking", "Poise", "Charge", "Slash", "Pierce", "Blunt", "Keywordless"]
+SEARCH_COUNT = [1010, 550, 190, 50]  # "Select 0/3"
+SEARCH_OWNED = ([935, 26, 120, 38], [1065, 26, 80, 38])  # "1315-270" and "1045"
+SEARCH_PANEL_Y = (205, 316, 427)  # name lines of the Selected E.G.O Gift panel's 3 entries
+SEARCH_SELECT = (1100, 575)
+SEARCH_REFUSE = (922, 575)
+SEARCH_DIALOG = [400, 315, 480, 60]  # "Consume 70 Starlight to search and obtain these E.G.O Gifts?"
+SEARCH_DIALOG_BUTTONS = {"cancel": (513, 495), "confirm": (765, 495)}
+
+
+@AgentServer.custom_action("GiftSearch")
+class GiftSearch(CustomAction):
+    """E.G.O Gift Search (spec 03 section 5): the team's gifts in its order until Select n/m is full, then Select.
+
+    Off, no gifts, or none of them found: Refuse Gift (the Forgo dialog is MirrorHub's). Gifts cost owned
+    starlight; choosing them in the settings is the user's consent (#54). A gift is found by its tier bars
+    on the keyword tab, tapped, and kept only when the panel names it; otherwise it is tapped off again.
+    """
+
+    def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
+        run = current_run(context)
+        search = run["team"]["gift_search"]
+        wanted = search["gifts"] if search["enabled"] else []
+        names = [g["name"] for g in wanted]
+        if "Consume" in text(context, screen(context), SEARCH_DIALOG):
+            tap(context, *SEARCH_DIALOG_BUTTONS["cancel"], wait=1.5)  # left open by an earlier try: check the picks again
+        tried, dropped = [], 0
+        while True:
+            image = screen(context)
+            count = gift_search.select_count(text(context, image, SEARCH_COUNT))
+            if count is None:
+                return True  # fading in or out: let MirrorHub look again
+            chosen = self.chosen(context, image, names)
+            unwanted = [k for k, c in enumerate(chosen) if c not in names]
+            if unwanted and dropped < 3:
+                # Left over from a tap that missed: tapping its panel entry unselects it (live 2026-10-16).
+                log(f"gift search: unselecting {chosen[unwanted[0]]}, not in the team's list")
+                tap(context, 1000, SEARCH_PANEL_Y[unwanted[0]] + 45, wait=1.5)
+                dropped += 1
+                continue
+            gift = gift_search.next_gift(wanted, chosen, tried, count)
+            if gift is None:
+                break
+            tried.append(gift)
+            if not self.pick(context, gift):
+                log(f"gift search: {gift['name']} ({gift['keyword']} tier {gift['tier']}) not picked: not on the page, owned or unaffordable")
+        if not chosen or unwanted:
+            log("gift search: refused" + (f", {chosen} would not unselect" if unwanted else ""))
+            tap(context, *SEARCH_REFUSE, wait=1.5)
+            return True
+        owned = gift_search.owned_starlight(*(text(context, image, roi) for roi in SEARCH_OWNED))
+        # Select asks "Consume N Starlight to search and obtain these E.G.O Gifts?"; the GET! windows are MirrorHub's.
+        for _ in range(3):
+            tap(context, *SEARCH_SELECT, wait=2)
+            ask = text(context, screen(context), SEARCH_DIALOG)
+            if "Consume" in ask:
+                break
+        else:
+            return stuck("Select did not ask to consume starlight")
+        tap(context, *SEARCH_DIALOG_BUTTONS["confirm"], wait=2)
+        price = number(ask.split("Starlight")[0])
+        before = owned[0] if owned else None
+        after = before - price if before is not None and price is not None else None
+        log(f"gift search: bought {', '.join(chosen)} for {price} owned starlight; owned starlight {before} -> {after}")
+        run["gift_search"] = {"gifts": chosen, "starlight": price, "owned_before": before, "owned_after": after}
+        return True
+
+    @staticmethod
+    def chosen(context, image, names):
+        """The gifts the Selected E.G.O Gift panel lists, as the team's names where they match."""
+        texts = [text(context, image, [922, y, 270, 34]) for y in SEARCH_PANEL_Y]
+        return [run_start.match_pack(t, names) or t for t in texts if t.strip()]
+
+    @staticmethod
+    def pick(context, gift):
+        """Select gift: open its tab, try each cell of its tier top to bottom; True once the panel names it.
+
+        A cell that selects another gift is tapped off again; one that stays on shows in the panel
+        as a gift not in the list, and run then refuses everything rather than buy it.
+        """
+        tap(context, 113 + 62 * SEARCH_TABS.index(gift["keyword"]), 190, wait=1.5)
+        for _ in range(3):
+            swipe(context, 430, 330, 430, 610, ms=400, wait=0.5)  # back to the top of the tab
+        for _ in range(12):
+            image = screen(context)
+            before = GiftSearch.chosen(context, image, [])
+            cells = gift_search.gift_cells(image)  # selected cells have no bars: never tapped twice
+            for x, y, tier in cells:
+                if tier != gift["tier"]:
+                    continue
+                tap(context, x, y, wait=1)
+                new = [t for t in GiftSearch.chosen(context, screen(context), []) if t not in before]
+                if not new:
+                    continue  # owned or unaffordable: nothing was selected
+                if run_start.match_pack(new[0], [gift["name"]]):
+                    log(f"gift search: {gift['name']} selected")
+                    return True
+                tap(context, x, y, wait=1)  # another gift: tap it off again
+            if any(tier < gift["tier"] for _, _, tier in cells):
+                return False  # the tiers below have started: the wanted tier is done
+            swipe(context, 430, 560, 430, 320, ms=800, wait=1.5)
+            if np.abs(screen(context)[228:625, 85:775].astype(int) - image[228:625, 85:775].astype(int)).mean() < 2:
+                return False  # the end of the tab
+        return False
 
 
 def theme_pack_marks(settings, team):

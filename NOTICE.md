@@ -40,6 +40,10 @@ SOFTWARE.
 
 `gui/src/graces.json` 的中文名稱與效果文字取自 [灰機 Limbus Company 維基](https://limbuscompany.huijiwiki.com/) 的頁面 [名与蛛之镜](https://limbuscompany.huijiwiki.com/wiki/%E5%90%8D%E4%B8%8E%E8%9B%9B%E4%B9%8B%E9%95%9C)「名与蛛的星之恩惠」一節（修訂 133560，2026-10-16 取用），由維基的貢獻者撰寫，採 [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/) 授權。本專案以 OpenCC `s2twp` 轉成繁體並修改兩個用詞（「重新整理」改回「刷新」、「映象」改為「鏡像」）；修改後的 `gui/src/graces.json` 同樣以 CC BY-SA 4.0 授權。英文名稱取自遊戲畫面。
 
+## 觀測飾品的中文名稱
+
+`gui/src/gifts.json` 的中文名稱取自 [灰機 Limbus Company 維基](https://limbuscompany.huijiwiki.com/) 的飾品資料表 [Data:Giftchoose.tabx](https://limbuscompany.huijiwiki.com/wiki/Data:Giftchoose.tabx)（最後編輯 2026-08-06，2026-10-16 取用），依飾品 id 對應，由維基的貢獻者撰寫，採 [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/) 授權。本專案以 OpenCC `s2twp` 轉成繁體並修改一個用詞（「指標」改回「指針」）；這份檔案的中文名稱同樣以 CC BY-SA 4.0 授權。飾品清單、id、等級、英文名稱與排列順序取自遊戲客戶端 1.117.0 的靜態資料（© Project Moon），只摘錄這些欄位。
+
 ## 發佈 zip 內附的第三方程式
 
 `tools/install.py --release` 組出的發佈 zip 另外附上以下程式，都是原樣下載、不經修改：
