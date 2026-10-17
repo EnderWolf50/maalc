@@ -209,7 +209,7 @@ def test_the_fusion_grid_is_not_scanned_again_while_the_owned_gifts_are_the_same
     # The fuse page with its keyword dialog, every cell empty: no fusion this visit.
     reads(context, {tuple(actions.DIALOG_TITLE): [("Fuse E.G.O Gift", (500, 100, 200, 40))],
                     tuple(actions.KEYWORD_LABELS): [("Burn", (300, 400, 60, 20))]})
-    team, visit = {"keyword": "Burn"}, {}
+    team, visit = {"keyword": "Burn", "gift_search": {"gifts": []}}, {}
     assert not actions.Shop.fuse(context, team, visit)
     taps = context.tasker.controller.post_click.call_count
     assert taps > len(actions.FUSE_CELLS)  # the grid was scanned
