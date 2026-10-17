@@ -1482,7 +1482,16 @@ LEAVE_DIALOG, LEAVE_CONFIRM, LEAVE_CANCEL = [440, 320, 400, 45], (765, 493), (51
 
 
 def read_cost(context, roi=SHOP_COST):
-    return number(text(context, screen(context), roi))
+    """The Cost in roi, read again on a fresh screenshot when OCR gives no digit; None when 3 reads give none (#82).
+
+    None is never a Cost of 0: a caller that needs the Cost does nothing on None and logs it.
+    """
+    for _ in range(3):
+        cost = shop.cost_value(text(context, screen(context), roi))
+        if cost is not None:
+            return cost
+        time.sleep(0.5)
+    return None
 
 
 def kept_gifts(team):
@@ -1598,11 +1607,14 @@ class Shop(CustomAction):
         if team["heal"] == "none":
             return  # nothing to decide: skip the Cost and portrait reads
         cost = read_cost(context)
+        if cost is None:
+            log("shop: the Cost reads nothing: no heal")
+            return
         image = screen(context)
         dead = [x for x in SHOP_PORTRAIT_X if saturation(image[630:680, x - 25:x + 25]).mean() < 30]
         if "alive" in RUN and 12 - RUN["alive"] != len(dead):
             log(f"shop: {12 - RUN['alive']} dead at the last formation, {len(dead)} grey portraits")
-        plan = shop.heal_plan(team["heal"], cost or 0, team["reserve_cost"], len(dead), data("shop.yaml")["heal_cost"])
+        plan = shop.heal_plan(team["heal"], cost, team["reserve_cost"], len(dead), data("shop.yaml")["heal_cost"])
         log(f"shop: {cost} Cost, {len(dead)} dead, heal {team['heal']}: {plan or 'nothing'}")
         if not plan:
             return
@@ -1642,10 +1654,13 @@ class Shop(CustomAction):
                 continue  # live: a bought offer moves to the end of the grid, so read the offers again
             if visit["wanted"] and not visit["sold"]:
                 return True  # sell first, next round
+            cost = read_cost(context)
+            if cost is None:
+                log("shop: the Cost reads nothing: no refresh")
+                return acted
             image = screen(context)
-            cost = number(text(context, image, SHOP_COST))
             fees = {k: number(text(context, image, roi)) for k, (_, roi) in REFRESH.items()}
-            choice = shop.refresh_choice(cost or 0, reserve, visit["refreshes"], team["shop_refresh_limit"],
+            choice = shop.refresh_choice(cost, reserve, visit["refreshes"], team["shop_refresh_limit"],
                                          fees["normal"], fees["keyword"], data("shop.yaml")["refresh_margin"])
             if not choice:
                 return acted
@@ -1675,11 +1690,17 @@ class Shop(CustomAction):
         visit["wanted"] = None
         # ponytail: only the offers on show; a Super Shop's last 2 of 10 need a scroll first.
         cost = read_cost(context)
+        if cost is None:
+            log("shop: the Cost reads nothing: nothing bought")
+            return False
         for slot in shop.read_slots(ocr(context, screen(context), OFFER_GRID)):
             name, price = slot["name"], slot["price"]
             if not shop.buyable(slot, cost) or visit["kinds"].get(name) == "other":
                 continue
             cost = read_cost(context)
+            if cost is None:
+                log("shop: the Cost reads nothing: nothing bought")
+                return False
             tap(context, slot["x"], slot["y"] - 50, wait=1.5)
             image = screen(context)
             if "Purchase" not in text(context, image, DIALOG_TITLE):
@@ -1689,7 +1710,7 @@ class Shop(CustomAction):
                 continue
             price = shop.dialog_price(cost, text(context, image, PURCHASE_PREVIEW)) or price
             kind = visit["kinds"].setdefault(name, rewards.gift_kind(text(context, image, PURCHASE_TEXT), keyword, False))
-            if kind != "main" or not shop.can_spend(cost or 0, price, reserve):
+            if kind != "main" or not shop.can_spend(cost, price, reserve):
                 tap(context, *PURCHASE_CANCEL)
                 if kind == "main":
                     visit["wanted"] = min(price, visit["wanted"] or price)
@@ -1718,7 +1739,11 @@ class Shop(CustomAction):
         if "Sell" not in text(context, screen(context), DIALOG_TITLE):
             Shop.to_main(context)
             return False
-        cost = number(text(context, screen(context), SELL_COST))
+        cost = read_cost(context, SELL_COST)
+        if cost is None:
+            log("shop: the sell page's Cost reads nothing: nothing sold")
+            Shop.to_main(context)
+            return False
         gifts, keep = [], kept_gifts(team)
         for i, (x, y) in enumerate(SELL_CELLS):
             tap(context, x, y, wait=1.2)
@@ -1730,14 +1755,14 @@ class Shop(CustomAction):
                 log(f"shop: sell cell {i} kept: {panel[:40]!r}")
             elif price and "Select the" not in panel and rewards.gift_kind(panel, team["keyword"], False) != "main":
                 gifts.append((i, price))
-        picked = shop.to_sell(gifts, wanted, cost or 0, team["reserve_cost"])
+        picked = shop.to_sell(gifts, wanted, cost, team["reserve_cost"])
         visit["fuse_scanned"] = visit.get("fuse_scanned") and not picked
         log(f"shop: {wanted} wanted, {cost} Cost, non-main (cell, price) {gifts}: sell {picked}")
         for i in picked or []:
-            before = number(text(context, screen(context), SELL_COST))
+            before = read_cost(context, SELL_COST)
             tap(context, *SELL_CELLS[i], wait=1.2)
             tap(context, *PAGE_OK, wait=2)
-            after = number(text(context, screen(context), SELL_COST))
+            after = read_cost(context, SELL_COST)
             log(f"shop: sold cell {i}: {before} -> {after} Cost")
             if after == before:
                 break  # ponytail: no Sell confirm dialog handled; none seen yet

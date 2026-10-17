@@ -254,7 +254,8 @@ def test_the_shop_stops_tapping_once_the_map_shows(context):
         if name == "MirrorMap":  # the map shows once anything was tapped
             return SimpleNamespace(hit=True, box=[0, 0, 10, 10]) if context.tasker.controller.post_click.called else None
         roi = tuple((override or {}).get(name, {}).get("roi", ()))
-        results = [SimpleNamespace(text=t, box=b) for t, b in (offers if roi == tuple(actions.OFFER_GRID) else [])]
+        lines = {tuple(actions.OFFER_GRID): offers, tuple(actions.SHOP_COST): [("500", (560, 120, 60, 30))]}.get(roi, [])
+        results = [SimpleNamespace(text=t, box=b) for t, b in lines]
         return SimpleNamespace(all_results=results, hit=True, best_result=None) if results else None
     context.run_recognition.side_effect = run_recognition
     visit = {"kinds": {}, "wanted": None}
@@ -270,3 +271,25 @@ def test_only_the_filled_fusion_cells_are_tapped_and_an_unnamed_gift_comes_out_a
     assert not actions.Shop.fuse(context, {"keyword": "Burn", "gift_search": {"gifts": []}}, {})
     taps = [c.args for c in context.tasker.controller.post_click.call_args_list]
     assert [taps.count(c) for c in actions.FUSE_CELLS] == [2, 2] + [0] * (len(actions.FUSE_CELLS) - 2)
+
+
+def cost_reads(context, values):
+    """The shop's Cost reads each of values in turn (None: nothing read), the last one from then on."""
+    def run_recognition(name, image, override=None):
+        if tuple((override or {}).get(name, {}).get("roi", ())) != tuple(actions.SHOP_COST):
+            return None
+        t = values.pop(0) if len(values) > 1 else values[0]
+        return SimpleNamespace(all_results=[SimpleNamespace(text=t, box=(560, 120, 60, 30))]) if t else None
+    context.run_recognition.side_effect = run_recognition
+
+
+def test_an_unread_cost_is_read_again_not_taken_as_0(context):
+    # #82: one empty OCR read made the Cost 0, and the whole shop was skipped as too dear.
+    cost_reads(context, [None, "33O2"])
+    assert actions.read_cost(context) == 3302
+
+
+def test_a_cost_that_stays_unread_is_none(context):
+    cost_reads(context, [None])
+    assert actions.read_cost(context) is None
+    assert context.run_recognition.call_count > 1  # read again before giving up

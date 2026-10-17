@@ -114,3 +114,15 @@ def test_dialog_price_from_the_cost_preview():
 ])
 def test_protected_gifts_are_matched_by_name(read, kept):
     assert s.protected(read, ["Spiderweb Entangled in Red", "Sunshower"]) == kept
+
+
+@pytest.mark.parametrize("read, cost", [
+    ("3302", 3302),
+    ("33O2", 3302),  # OCR reads digits as look-alike letters (#82)
+    ("l5S", 155),
+    ("2B4", 284),
+    ("", None),
+    ("Cost", None),  # no digit at all: not a number
+])
+def test_cost_value_reads_look_alike_letters_as_digits(read, cost):
+    assert s.cost_value(read) == cost
