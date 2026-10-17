@@ -32,3 +32,31 @@ def test_a_missed_victory_does_not_carry_the_battle_clock_into_the_next_battle(c
     actions.Formation().run(context, None)  # the next battle's formation (fading in: no count read)
     actions.PlayTurn().run(context, SimpleNamespace(box=[600, 400, 40, 20]))
     assert actions.STUCK["flag"] is None
+
+
+def reads(context, texts):
+    """OCR reads texts[roi] (a list of (text, box)) in that roi, nothing elsewhere; no other node hits."""
+    def run_recognition(name, image, override=None):
+        roi = tuple((override or {}).get(name, {}).get("roi", ()))
+        results = [SimpleNamespace(text=t, box=b) for t, b in texts.get(roi, [])]
+        return SimpleNamespace(all_results=results, hit=True, best_result=None) if results else None
+    context.run_recognition.side_effect = run_recognition
+
+
+def taps(context):
+    return [c.args for c in context.tasker.controller.post_click.call_args_list]
+
+
+def test_a_battle_is_switched_to_the_shortest_animations_once(context):
+    reads(context, {tuple(actions.SPEED_LABEL): [("MAX", (1085, 28, 50, 25))]})
+    actions.PlayTurn().run(context, SimpleNamespace(box=[984, 531, 40, 20]))
+    assert taps(context)[:2] == [actions.SPEED_TOGGLE, actions.SPEED_MIN]
+    context.tasker.controller.post_click.reset_mock()
+    actions.PlayTurn().run(context, SimpleNamespace(box=[984, 531, 40, 20]))  # the next turn
+    assert actions.SPEED_TOGGLE not in taps(context)
+
+
+def test_a_battle_already_at_the_shortest_animations_is_left_alone(context):
+    reads(context, {tuple(actions.SPEED_LABEL): [("MIN", (1085, 28, 50, 25))]})
+    actions.PlayTurn().run(context, SimpleNamespace(box=[984, 531, 40, 20]))
+    assert actions.SPEED_TOGGLE not in taps(context)
