@@ -1,10 +1,11 @@
 {
     // Map page parts the RouteMap action reads (spec 03 section 7). Never in a next list:
-    // RouteMap runs them with ROIs relative to the bus, so it overrides every roi below.
-    // The default ROIs fit a map at rest (bus template at 446,248) for maa-tools test.
+    // RouteMap runs them with ROIs relative to the bus, so it overrides every roi below but MapBus's.
+    // The other default ROIs fit a map at rest (bus template at 446,248) for maa-tools test.
+    // MapBus: from the screen's left edge, where RouteMap drags the bus (x 50, #111).
     "MapBus": {
         "recognition": "TemplateMatch",
-        "roi": [100, 60, 1000, 560],
+        "roi": [0, 60, 1100, 560],
         "template": "Map/MapBus.png",
         "threshold": 0.8
     },

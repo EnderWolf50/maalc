@@ -143,44 +143,44 @@ def test_a_map_not_readable_yet_is_read_again_before_any_tap(context, monkeypatc
     assert first == (446 + actions.SLOT[0], 248 + actions.SLOT[1])  # the middle row's battle
 
 
-def test_a_map_at_rest_is_not_panned_when_no_link_leads_up(context):
-    bus_at(context, 446, 248, linked=("MapLinkMid", "MapLinkDown"))
+def test_a_bus_at_the_far_left_is_not_dragged(context):
+    bus_at(context, *actions.BUS_HOME, linked=("MapLinkMid", "MapLinkDown"))
     _, bus = actions.RouteMap.find_bus(context)
-    assert bus == (446, 248)
+    assert bus == actions.BUS_HOME
     context.tasker.controller.post_touch_down.assert_not_called()
 
 
-def test_a_map_at_rest_is_panned_when_a_link_leads_up(context):
-    # The top row's marks sit under the resource bar until the map is panned down.
-    bus_at(context, 446, 248, linked=("MapLinkUp",))
+def test_a_map_at_rest_is_dragged(context):
+    # #111: the bus goes to the far left, where the screen shows it and about four columns.
+    bus_at(context, 446, 248, linked=("MapLinkMid",))
     actions.RouteMap.find_bus(context)
     context.tasker.controller.post_touch_down.assert_called()
 
 
-def map_world(context, nodes, links, width=2300):
-    """A map wider than the screen, bus at BUS_HOME before any drag; drags move the screen over it.
+def map_world(context, nodes, links, bus_x):
+    """A map wider than the screen, the bus at (bus_x, BUS_HOME's y) on screen; drags move the screen over it.
 
     nodes: {(column, row): marks}, column 1 next to the bus; links: ((column, row), (column, row)) pairs.
-    The bus's chevrons lead to the first column's nodes. Returns the list of screen offsets seen.
+    The bus's chevrons lead to the first column's nodes. Returns the screen's offsets after each drag.
     """
-    bx, by = actions.BUS_HOME
+    bx, by = 446, actions.BUS_HOME[1]  # on the map; the screen starts at 446 - bus_x
 
     def at(column, row):
         return bx + actions.SLOT[0] + (column - 1) * 255, by + actions.SLOT[1] + {"up": -213, "mid": 0, "down": 213}[row]
-    world = np.random.default_rng(2).integers(0, 30, size=(720, width, 3)).astype(np.uint8)
+    world = np.random.default_rng(2).integers(0, 30, size=(720, 1800, 3)).astype(np.uint8)
     for a, b in links:
         (x0, y0), (x1, y1) = at(*a), at(*b)
         for t in np.linspace(0, 1, 600):
             x, y = int(x0 + (x1 - x0) * t), int(y0 + (y1 - y0) * t)
             world[y - 2:y + 3, x - 2:x + 3] = 200
-    off, start, offsets = [0], [], []  # the screen's left edge on the world; where the touch went down
+    off, start, offsets = [bx - bus_x], [], []  # the screen's left edge on the map; where the touch went down
 
     def down(x, y):
         start[:] = [x, off[0]]
         return MagicMock()
 
     def move(x, y):
-        off[0] = min(max(0, start[1] + start[0] - x), width - 1280)
+        off[0] = min(max(0, start[1] + start[0] - x), 1800 - 1280)
         return MagicMock()
 
     def up():
@@ -193,8 +193,8 @@ def map_world(context, nodes, links, width=2300):
 
     def run_recognition(name, image, override=None):
         if name == "MapBus":
-            return SimpleNamespace(hit=True, box=[bx - off[0], by, 45, 75]) if bx - off[0] >= 100 else None
-        if name in ("MapLinkUp", "MapLinkMid", "MapLinkDown") and off[0] == 0:
+            return SimpleNamespace(hit=True, box=[bx - off[0], by, 45, 75])
+        if name in ("MapLinkUp", "MapLinkMid", "MapLinkDown"):
             return SimpleNamespace(hit=True) if (1, name[7:].lower()) in nodes else None
         if name in actions.MARKS:
             mark, (ox, oy, _, _) = actions.MARKS[name]
@@ -205,38 +205,28 @@ def map_world(context, nodes, links, width=2300):
     return offsets
 
 
-def test_the_map_is_panned_to_read_the_floor_and_the_cheapest_path_is_taken(context, monkeypatch):
-    # The user (#111): event -> battle -> abnormality (8) loses to battle -> battle -> event (5),
-    # which only the third column, off screen until the map is dragged left, tells apart.
-    monkeypatch.setattr(actions, "map_weights", lambda context: {"event": 1, "battle": 2, "abno": 5, "unknown": 9})
+WEIGHTS = {"event": 1, "battle": 2, "abno": 5, "unknown": 9}
+
+
+def test_the_bus_is_dragged_to_the_far_left_and_the_cheapest_path_over_four_columns_is_taken(context, monkeypatch):
+    # The user (#111): event -> battle -> battle -> abnormality (10) loses to battle -> battle -> battle -> event (7),
+    # which only the fourth column tells apart; with the bus at rest it is off screen.
+    monkeypatch.setattr(actions, "map_weights", lambda context: WEIGHTS)
     nodes = {(1, "up"): {"event"}, (1, "down"): {"cost"}, (2, "up"): {"cost"}, (2, "down"): {"cost"},
-             (3, "up"): {"cost", "gift"}, (3, "down"): {"event"}}
-    links = [((1, "up"), (2, "up")), ((1, "down"), (2, "down")), ((2, "up"), (3, "up")), ((2, "down"), (3, "down"))]
-    offsets = map_world(context, nodes, links)
+             (3, "up"): {"cost"}, (3, "down"): {"cost"}, (4, "up"): {"cost", "gift"}, (4, "down"): {"event"}}
+    links = [((c, r), (c + 1, r)) for c in (1, 2, 3) for r in ("up", "down")]
+    offsets = map_world(context, nodes, links, bus_x=446)
     actions.RouteMap().run(context, None)
+    assert len(offsets) == 1 and abs(446 - offsets[0] - actions.BUS_HOME[0]) <= 30  # one drag, none back
     first = context.tasker.controller.post_click.call_args_list[0].args
-    bx, by = actions.BUS_HOME
-    assert first == (bx + actions.SLOT[0], by + actions.SLOT[1] + 213)  # the bottom row's battle
-    assert offsets[0] > 400 and abs(offsets[-1]) <= 30  # dragged left, then back before the tap
+    assert first == (446 - offsets[0] + actions.SLOT[0], actions.BUS_HOME[1] + actions.SLOT[1] + 213)  # the bottom row's battle
 
 
-def test_a_hard_floor_is_never_panned(context, monkeypatch):
-    # Hard mode shows two columns by design: the faint links past them lead nowhere to read.
-    monkeypatch.setattr(actions, "map_weights", lambda context: {"event": 1, "battle": 2, "abno": 5, "unknown": 9})
-    actions.RUN["floor_hard"] = True
-    nodes = {(1, "up"): {"event"}, (1, "down"): {"cost"}, (2, "up"): {"cost"}, (2, "down"): {"cost"},
-             (3, "up"): {"cost", "gift"}, (3, "down"): {"event"}}
-    links = [((1, "up"), (2, "up")), ((1, "down"), (2, "down")), ((2, "up"), (3, "up")), ((2, "down"), (3, "down"))]
-    map_world(context, nodes, links)
-    actions.RouteMap().run(context, None)
-    context.tasker.controller.post_touch_down.assert_not_called()
-
-
-def test_a_map_whose_second_column_leads_nowhere_visible_is_not_panned(context, monkeypatch):
+def test_two_columns_on_a_hard_floor_take_the_cheapest_path(context, monkeypatch):
     # Hard mode shows two columns; nothing past them is lit to read.
-    monkeypatch.setattr(actions, "map_weights", lambda context: {"event": 1, "battle": 2, "abno": 5, "unknown": 9})
+    monkeypatch.setattr(actions, "map_weights", lambda context: WEIGHTS)
     nodes = {(1, "up"): {"event"}, (1, "down"): {"cost"}, (2, "up"): {"cost", "gift"}, (2, "down"): {"event"}}
-    map_world(context, nodes, [((1, "up"), (2, "up")), ((1, "down"), (2, "down"))])
+    map_world(context, nodes, [((1, "up"), (2, "up")), ((1, "down"), (2, "down"))], bus_x=actions.BUS_HOME[0])
     actions.RouteMap().run(context, None)
     first = context.tasker.controller.post_click.call_args_list[0].args
     bx, by = actions.BUS_HOME

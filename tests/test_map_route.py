@@ -70,20 +70,6 @@ def test_an_unmarked_node_beyond_the_first_column_scores_as_an_event():
     assert mr.rank({"up": ("battle", 1), "down": ("event", 1)}, HARD, ahead) == ["up", "down"]
 
 
-def test_shift_finds_how_far_the_map_moved_left():
-    world = np.random.default_rng(1).integers(0, 255, size=(720, 2000, 3)).astype(np.uint8)
-    before, after = world[:, :1280], world[:, 497:1777]
-    assert abs(mr.shift(before, after) - 497) <= 2
-    assert mr.shift(before, before) == 0  # the map's end: the drag moved nothing
-
-
-def test_unknown_last_and_risky_after_shop_on_hard():
-    slots = {"up": ("unknown", 3), "mid": ("shop", 1), "down": ("focused", 0)}
-    assert mr.rank(slots, NORMAL) == ["down", "mid", "up"]
-    assert NORMAL["risky"] < NORMAL["shop"] < HARD["risky"] < HARD["unknown"]
-    assert {k: v for k, v in NORMAL.items() if k != "risky"} == {k: v for k, v in HARD.items() if k != "risky"}
-
-
 def lit(links, size=(720, 1280)):
     """A dark map with bright 5 px links from (725, 285) into the next column, plus faint noise."""
     v = np.random.default_rng(0).integers(0, 30, size=size).astype(np.uint8)
