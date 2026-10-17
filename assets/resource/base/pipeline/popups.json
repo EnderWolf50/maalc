@@ -8,11 +8,12 @@
         "expected": "CONNECTING",
         "post_delay": 1000
     },
-    // Unverified layout: matches a lone "Retry" button anywhere mid-screen.
+    // Unverified layout: a "Retry" button, also with a countdown ("Retry (5)"), or "Try Again", anywhere
+    // mid-screen (#84). Not the DEFEAT dialog's Retry Stage.
     "RetryPopup": {
         "recognition": "OCR",
         "roi": [340, 380, 600, 180],
-        "expected": "^Retry$",
+        "expected": "^(Retry(?!\\s*Stage)|Try Again)",
         "action": "Click",
         "post_delay": 2000
     },

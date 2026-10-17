@@ -11,6 +11,10 @@ const screens: [image: string, hits: string[]][] = [
   // Synthetic (#83): EventStory with the notice's message line pasted into its text box. Only the
   // notice window stops the task, not the word in other text.
   ['EventMaintenanceText.png', ['Event']],
+  // Synthetic (#84), no live capture yet: the one-button notice window (MaintenanceNotice's, live) relabelled
+  // as a server error with a countdown Retry or a Try Again button. They put RetryPopup on every other screen.
+  ['RetryCountdown.png', ['RetryPopup', 'GoToMirrorEntry', 'NavTitle']],
+  ['TryAgain.png', ['RetryPopup', 'GoToMirrorEntry', 'NavTitle']],
   ['MainWindow.png', ['GoToMirrorEntry', 'NavMainTabs']],
   ['MainWindowFadeIn.png', ['GoToMirrorEntry', 'NavMainTabs']],
   ['SinnersTab.png', ['GoToMirrorEntry', 'NavMainTabs']],
