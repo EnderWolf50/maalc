@@ -1090,6 +1090,13 @@ def guard_score(image, x):
     return float(((r > 90) & (r - g > 20) & (g - b > 10)).mean()), float(texture)
 
 
+def win_rate_on(context, image, x, y):
+    """Whether the Win Rate label at (x, y) shows pressed (on): its two templates match each other at only 0.70."""
+    node = {"template": "Battle/BattleTurnPressed.png", "roi": [x - 10, y - 10, 60, 49]}
+    detail = context.run_recognition("BattleTurn", image, {"BattleTurn": node})
+    return bool(detail and detail.hit)
+
+
 @AgentServer.custom_action("PlayTurn")
 class PlayTurn(CustomAction):
     """Guard or Win Rate (one tap), press the START disc, check the turn plays (spec 03 section 8, 06)."""
@@ -1110,11 +1117,17 @@ class PlayTurn(CustomAction):
             guarded, image = self.guard(context, x, (dx, dy))
             if not guarded:
                 log(f"turn {turn}: guard did not take, Win Rate instead")
-        if not battle.disc_lit(image, dx, dy):
-            # Win Rate toggles: a second tap clears the skills the first picked, so one tap per submit.
+        for _ in range(2):
+            if battle.disc_lit(image, dx, dy):
+                break
+            # Win Rate toggles: a second tap clears the skills the first picked, so it is tapped again only
+            # when its label does not show pressed: live, a tap in the turn's opening did nothing (#58).
             tap(context, x + WIN_RATE[0], y + WIN_RATE[1], wait=0)
-            lit = until(context, lambda im: battle.disc_lit(im, dx, dy), timeout=1.5)
-            image = screen(context) if lit is None else lit
+            took = until(context, lambda im: battle.disc_lit(im, dx, dy) or win_rate_on(context, im, x, y), timeout=1.5)
+            image = screen(context) if took is None else took
+            if took is not None:
+                break
+            log(f"turn {turn}: Win Rate did not take")
         if not battle.disc_lit(image, dx, dy):
             # Live 2026-10-17 (#69): a ready disc that read unlit stalled the battle. The check below tells
             # whether the press started the turn; an unready disc is not expected to (unverified live).
