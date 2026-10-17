@@ -65,6 +65,27 @@ def tap(context, x, y, wait=1.0):
     time.sleep(wait)
 
 
+def until(context, done, timeout=2.0, least=0.0, every=0.2):
+    """Screenshots every `every` s until done(image) holds: that image, or None after timeout s (#58).
+
+    least: s to wait before the first look, where the game ignores taps during an animation.
+    """
+    time.sleep(least)
+    end = time.monotonic() + timeout
+    while True:
+        image = screen(context)
+        if done(image):
+            return image
+        if time.monotonic() >= end:
+            return None
+        time.sleep(every)
+
+
+def moved(before, after):
+    """Whether any 40x40 block of the screen changed by more than 8 levels: a tap took (#58)."""
+    return bool((np.abs(recovery.thumb(before) - recovery.thumb(after)) > 8).any())
+
+
 def swipe(context, x1, y1, x2, y2, ms=500, wait=1.0):
     context.tasker.controller.post_swipe(x1, y1, x2, y2, ms).wait()
     time.sleep(wait)
@@ -738,11 +759,9 @@ class PickThemePack(CustomAction):
         i = run_start.pick_pack(ranks)
         x = cards[i][0]
         log(f"floor {floor}: pull {ranked[i][0]!r}")
-        swipe(context, x, 330, x, 650, ms=600)
-        for _ in range(8):  # the page fades out slowly; do not let MirrorHub pull twice
-            if "FLOOR" not in text(context, screen(context), [480, 100, 320, 40]):
-                break
-            time.sleep(1)
+        swipe(context, x, 330, x, 650, ms=600, wait=0)
+        # The page fades out slowly; do not let MirrorHub pull twice.
+        until(context, lambda im: "FLOOR" not in text(context, im, [480, 100, 320, 40]), timeout=9)
         return True
 
     @staticmethod
@@ -768,6 +787,7 @@ class PickThemePack(CustomAction):
 
 # Map page (spec 03 section 7). Offsets are from the MapBus template's top-left corner.
 BUS_HOME = (446, 320)  # map panned ~70 px down from rest (bus at 446, 248): top-row badges clear the resource bar
+BUS_REST = (446, 248)
 SLOT = (279, 37)  # middle-row slot centre; map_route.ROW_DY gives the other rows
 LINKS = {
     "up": ("MapLinkUp", (90, -115, 110, 110)),
@@ -814,8 +834,8 @@ def enter_node(context):
     cost = number(text(context, image, PANEL_COST)) if "Rewards" in text(context, image, PANEL_REWARDS) else None
     log(f"node panel: Clear Rewards Cost {cost}")
     for _ in range(3):
-        tap(context, *ENTER, wait=2)
-        if not seen(context, screen(context), "MapNodePanel"):
+        tap(context, *ENTER, wait=0)
+        if until(context, lambda im: not seen(context, im, "MapNodePanel")) is not None:
             log("entered the node")
             return True
     return stuck("Enter on the node panel did nothing")
@@ -843,7 +863,7 @@ class RouteMap(CustomAction):
         if RUN.get("forfeit"):
             return forfeit(context)
         image, bus = self.find_bus(context)
-        bx, by = bus or (446, 248)  # no bus found: assume the map at rest
+        bx, by = bus or BUS_REST  # no bus found: assume the map at rest
         slots = self.read_slots(context, image, bx, by) if bus else {}
         log("map: " + (", ".join(f"{r} {t} ({'?' if n is None else n} onward)" for r, (t, n) in slots.items()) or "no linked slot read"))
         order = map_route.rank(slots, map_weights(context))
@@ -854,8 +874,8 @@ class RouteMap(CustomAction):
         tries = [(f"{r} {slots[r][0]}", centre(r)) for r in order]
         tries += [("the bus", (bx + 22, by + 37))] + [(f"{r} slot", centre(r)) for r in map_route.ROWS if r not in order]
         for name, (x, y) in tries:
-            tap(context, x, y, wait=2)
-            if seen(context, screen(context), "MapNodePanel"):
+            tap(context, x, y, wait=0)
+            if until(context, lambda im: seen(context, im, "MapNodePanel")) is not None:
                 log(f"map: take {name}")
                 return enter_node(context)
         RUN["map_misses"] = RUN.get("map_misses", 0) + 1
@@ -875,6 +895,10 @@ class RouteMap(CustomAction):
             bx, by = bus.box[0], bus.box[1]
             dx, dy = BUS_HOME[0] - bx, BUS_HOME[1] - by
             if abs(dx) <= 30 and abs(dy) <= 25 or attempt == 3:
+                return image, (bx, by)
+            # At rest only the top row hides under the resource bar: no link up, nothing to pan for (#58).
+            rest = abs(bx - BUS_REST[0]) <= 30 and abs(by - BUS_REST[1]) <= 25
+            if rest and not seen(context, image, LINKS["up"][0], (bx + LINKS["up"][1][0], by + LINKS["up"][1][1], *LINKS["up"][1][2:])):
                 return image, (bx, by)
             # Look again after each pan. Start left of the bus, on map background.
             scroll(context, 300, 400, dx, dy)
@@ -984,8 +1008,8 @@ class Formation(CustomAction):
         elif not self.pick(context, order):
             return True  # pick() handed it to recovery
         for _ in range(3):
-            tap(context, *TO_BATTLE, wait=3)
-            if not participants(context, screen(context)):
+            tap(context, *TO_BATTLE, wait=0)
+            if until(context, lambda im: not participants(context, im), timeout=3) is not None:
                 return True
         return stuck("Chain To Battle! did nothing")
 
@@ -1052,7 +1076,7 @@ class PlayTurn(CustomAction):
         dx, dy = x + START_DISC[0], y + START_DISC[1]
         if time.time() - RUN.setdefault("battle_start", time.time()) > recovery.BATTLE_LIMIT:
             return stuck(f"battle over {recovery.BATTLE_LIMIT // 60} min", level=2)  # skips L1 (spec 06)
-        time.sleep(1)  # taps during the turn's opening animation do nothing
+        # Live 2026-10-17: Win Rate tapped 0.02 s after its label showed lit the disc in 0.24 s, every time.
         image = screen(context)
         turn = text(context, image, TURN_NUMBER, only_rec=True).strip() or None
         RUN["turn"] = battle.same_turn(RUN.get("turn"), turn)
@@ -1065,23 +1089,20 @@ class PlayTurn(CustomAction):
                 log(f"turn {turn}: guard did not take, Win Rate instead")
         if not battle.disc_lit(image, dx, dy):
             # Win Rate toggles: a second tap clears the skills the first picked, so one tap per submit.
-            tap(context, x + WIN_RATE[0], y + WIN_RATE[1], wait=1.5)
-            image = screen(context)
+            tap(context, x + WIN_RATE[0], y + WIN_RATE[1], wait=0)
+            image = until(context, lambda im: battle.disc_lit(im, dx, dy), timeout=1.5) or screen(context)
         if not battle.disc_lit(image, dx, dy):
             # Live 2026-10-17 (#69): a ready disc that read unlit stalled the battle. The check below tells
             # whether the press started the turn; an unready disc is not expected to (unverified live).
             log(f"turn {turn}: START reads unlit, pressing it anyway")
         tap(context, dx, dy, wait=0)
-        for _ in range(6):
-            time.sleep(0.5)
-            image = screen(context)
-            if seen(context, image, "BattlePause") or not seen(context, image, "BattleTurn"):
-                if guarded:
-                    RUN["guard"] = battle.guard_left(RUN["guard"], guarded)
-                    log(f"turn {turn}: started on guard, {RUN['guard']} guard turns left")
-                else:
-                    log(f"turn {turn}: started")
-                return True
+        if until(context, lambda im: seen(context, im, "BattlePause") or not seen(context, im, "BattleTurn"), timeout=3) is not None:
+            if guarded:
+                RUN["guard"] = battle.guard_left(RUN["guard"], guarded)
+                log(f"turn {turn}: started on guard, {RUN['guard']} guard turns left")
+            else:
+                log(f"turn {turn}: started")
+            return True
         log(f"turn {turn}: START did not start the turn")
         return True
 
@@ -1209,6 +1230,7 @@ CHOICE_ROWS = [690, 170, 480, 440]
 CHECK_PROMPT = [850, 295, 300, 50]
 EVENT_PORTRAIT_X = [77 + round(69.3 * i) for i in range(12)]  # 7 in a boss's mid-battle event, from the left
 EVENT_PORTRAIT_Y = 655
+EVENT_LEAST = 0.5  # s after a tap before the screen counts as moved: a fade's first frames are the same page
 
 
 def data(name):
@@ -1230,13 +1252,15 @@ class Event(CustomAction):
         tried = RUN.setdefault("event_tried", set())  # this question's options a tap did nothing on
         if red_button(image):
             tried.clear()
-            tap(context, *EVENT_BUTTON, wait=1.5)
+            tap(context, *EVENT_BUTTON, wait=0)
+            Event.settle(context, image)
         elif "Choose a character" in text(context, image, CHECK_PROMPT):
             # One read per portrait: read as a row, neighbouring captions run together ("HighVery Low").
             captions = [(text(context, image, [x - 38, 605, 76, 24], only_rec=True), x) for x in EVENT_PORTRAIT_X]
             i = rewards.pick_checker(captions)
             log(f"event check: {', '.join(t for t, _ in captions) or 'no odds read'}: take {captions[i][0] if i is not None else 'the first'}")
-            tap(context, captions[i][1] if i is not None else 77, EVENT_PORTRAIT_Y, wait=1.5)
+            tap(context, captions[i][1] if i is not None else 77, EVENT_PORTRAIT_Y, wait=0)
+            Event.settle(context, image)
         elif "Choices" in text(context, image, CHOICES_HEADER):
             options = [(" ".join(lines), y) for y, lines in self.rows(ocr(context, image, CHOICE_ROWS))]
             if not options:
@@ -1253,14 +1277,20 @@ class Event(CustomAction):
                 swipe(context, 925, 520, 925, 220, wait=1.5)  # the list scrolls when it holds more than fits
                 return True
             log(f"event: {shown}: take {options[i][0]!r}" + (f" (override {question!r})" if question else ""))
-            tap(context, 925, options[i][1], wait=1.5)
-            if Event.panel_same(image, screen(context)):
+            tap(context, 925, options[i][1], wait=0)
+            if until(context, lambda im: not Event.panel_same(image, im), timeout=1.5) is None:
                 log(f"event: {options[i][0]!r} did nothing: try another")
                 tried.add(options[i][0])
         else:
             tried.clear()
-            tap(context, 350, 420, wait=1.5)  # the story box: shows the next line
+            tap(context, 350, 420, wait=0)  # the story box: shows the next line
+            Event.settle(context, image)
         return True
+
+    @staticmethod
+    def settle(context, before):
+        """Wait for a tap to show on screen, at most the 1.5 s it used to wait; MirrorHub looks again after."""
+        until(context, lambda im: moved(before, im), timeout=1.5, least=EVENT_LEAST)
 
     @staticmethod
     def panel_same(before, after):
@@ -1300,7 +1330,8 @@ class RewardCard(CustomAction):
                 return True  # gone (or fading in): let MirrorHub look again
             m = re.search(r"(\d)\s*/\s*(\d)", text(context, image, SELECTABLE))
             if m and m[1] == m[2]:
-                tap(context, *CARD_CONFIRM, wait=2)
+                tap(context, *CARD_CONFIRM, wait=0)
+                until(context, lambda im: "Encounter Reward" not in text(context, im, REWARD_TITLE))
                 return True
             cards = columns(ocr(context, image, CARD_TEXT))
             if not cards or len(taken) == len(cards):
@@ -1309,7 +1340,8 @@ class RewardCard(CustomAction):
             types = [rewards.card_type(" ".join(lines)) for _, lines in cards]
             i = rewards.pick_card(types, order, taken)
             log(f"reward cards: {', '.join(str(t) for t in types)}: take {types[i] or ' '.join(cards[i][1])!r}")
-            tap(context, cards[i][0], 300, wait=1.5)
+            tap(context, cards[i][0], 300, wait=0)
+            until(context, lambda im: text(context, im, SELECTABLE) != text(context, image, SELECTABLE), timeout=1.5)
             taken.add(i)
         return stuck("reward card page did not fill Selectable")
 
@@ -1321,8 +1353,8 @@ REFUSE_GIFT = [870, 560, 160, 40]
 TRIAL_NAME_Y = (440, 475)  # top of the trial name line; the effect line under it starts ~485
 
 
-def gift_count(context):
-    m = re.search(r"(\d)\s*/\s*(\d)", text(context, screen(context), GIFT_COUNT))
+def gift_count(context, image=None):
+    m = re.search(r"(\d)\s*/\s*(\d)", text(context, screen(context) if image is None else image, GIFT_COUNT))
     return (int(m[1]), int(m[2])) if m else None
 
 
@@ -1359,10 +1391,15 @@ class PickGift(CustomAction):
         ranked = rewards.rank_gifts(cards, run["team"]["trial_risk_weight"])
         log("gifts: " + ", ".join(k + ("" if r is None else f"/risk {r}") for k, r in cards) + f": order {ranked}")
 
-        rewards.pick_gifts(ranked, lambda: gift_count(context), lambda i: tap(context, centres[i], 300, wait=1.5))
+        def pick(i):
+            before = gift_count(context)
+            tap(context, centres[i], 300, wait=0)
+            until(context, lambda im: gift_count(context, im) != before, timeout=1.5)
+
+        rewards.pick_gifts(ranked, lambda: gift_count(context), pick)
         for _ in range(3):
-            tap(context, *GIFT_SELECT, wait=2)
-            if "Refuse" not in text(context, screen(context), REFUSE_GIFT):
+            tap(context, *GIFT_SELECT, wait=0)
+            if until(context, lambda im: "Refuse" not in text(context, im, REFUSE_GIFT)) is not None:
                 return True
         return stuck("Select did not take the gifts")
 
