@@ -844,19 +844,21 @@ def node_marks(context, image, cx, cy):
     return {mark: hit for n, (mark, (ox, oy, w, h)) in MARKS.items() if (hit := seen(context, image, n, (cx + ox, cy + oy, w, h)))}
 
 
-def node_at(context, image, cx, cy, marks=None):
+def node_at(context, image, cx, cy, marks=None, costs=True):
     """The type of the map node centred at (cx, cy), by its marks (map_route.node_type).
 
     No mark at all where the badges (80 px above the centre) sit under the resource bar: unknown, not an
     event; a fight's Cost coin may be hidden there (the top row with the map at rest).
-    #91: Risky has no template and its Cost coin alone read as a battle. A coin alone whose number reads
-    as none of the battle costs is taken for Risky; an unread number leaves it a battle.
+    #91: Risky has no template and its Cost coin alone read as a battle. With costs, a coin alone whose
+    number reads as none of the battle costs is taken for Risky; an unread number leaves it a battle.
+    Only the column next to the bus is read so: past it the badges are dim (offline, MirrorMap.png's
+    85 two columns out read 8). A planned slot is read again once next to the bus (RouteMap.follow).
     """
     marks = node_marks(context, image, cx, cy) if marks is None else marks
     if not marks and cy - 80 < 60:
         return "unknown"
     kind = map_route.node_type(set(marks))
-    if kind == "battle":
+    if kind == "battle" and costs:
         cost = coin_number(context, image, marks["cost"].box)
         if cost is not None and cost not in map_data()["battle_costs"]:
             log(f"map: a Cost coin alone at {cx}, {cy} reads {cost}, no battle cost: risky")
@@ -870,13 +872,14 @@ def coin_number(context, image, box):
     Offline on 13 nodes of 7 captures: OCR of the bare badge read 75 as 25 or 5; of the bright,
     near-white digits cut out (as order_marks does) every battle's 75 or 85 right, dim ones too.
     A 3-digit number may lose its first digit (375 read 75): only fights carrying 3-digit costs do.
+    A single digit is a part read: None.
     """
     x, y, w, _ = box
     part = image[max(0, y + 8):y + 38, max(0, x + w - 8):x + w + 32]
     mask = (part.max(axis=2) > 170) & (saturation(part) < 90)
     plain = np.where(mask[..., None], 0, 255).astype(np.uint8).repeat(3, axis=2)
     digits = re.sub(r"\D", "", text(context, plain, [0, 0, plain.shape[1], plain.shape[0]], only_rec=True))
-    return int(digits) if digits else None
+    return int(digits) if len(digits) >= 2 else None
 
 
 def map_data():
@@ -1100,7 +1103,7 @@ class RouteMap(CustomAction):
                           and (map_route.line_contrast(v, x - dx, y(r), x, y(row)) or 0) >= map_route.LINE_CONTRAST}
                 if linked:
                     marks = node_marks(context, image, x, y(row))
-                    column[row] = (node_at(context, image, x, y(row), marks), linked)
+                    column[row] = (node_at(context, image, x, y(row), marks, costs=False), linked)
                     # A node with no mark may still be lit: a red pack's dim "?" (live 2026-10-18) reads 48-60
                     # here; hard mode's dark columns read 0.
                     lit = lit or bool(marks) or np.percentile(v[y(row) - 45:y(row) + 45, x - 45:x + 45], 90) >= 20
