@@ -233,3 +233,24 @@ def test_the_teams_observed_gift_is_kept_out_of_a_fusion(context):
     assert not actions.Shop.fuse(context, team, {})
     taps = [c.args for c in context.tasker.controller.post_click.call_args_list]
     assert taps.count(actions.FUSE_CELLS[0]) == 2  # tapped in, then out again
+
+
+def test_confirm_download_taps_the_button_and_holds_the_watchdog(context, clock):
+    # #86: after Confirm the download runs on a screen the hub does not know: it must not count as stuck.
+    actions.STUCK["watch"].reset()
+    actions.ConfirmDownload().run(context, SimpleNamespace(box=[700, 450, 100, 30]))
+    context.tasker.controller.post_click.assert_called_once_with(750, 465)
+    assert actions.STUCK["watch"].held(actions.time.monotonic() + 60)
+    actions.STUCK["watch"].reset()
+
+
+def test_recover_waits_out_a_download_without_climbing(context, clock, monkeypatch, tmp_path):
+    # MirrorHub's own 60 s timeout lands in Recover while the download shows nothing it knows.
+    monkeypatch.setattr(actions, "ROOT", tmp_path)
+    actions.STUCK["watch"].reset()
+    actions.STUCK["watch"].hold(actions.time.monotonic(), 1800)
+    before = dict(actions.STUCK["ladder"].counts)
+    assert actions.Recover().run(context, None)
+    assert actions.STUCK["ladder"].counts == before
+    context.run_task.assert_not_called()
+    actions.STUCK["watch"].reset()

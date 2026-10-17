@@ -7,10 +7,15 @@ const screens: [image: string, hits: string[]][] = [
   ['TitleConnecting.png', ['Connecting', 'GoToMirrorEntry', 'NavTitle']],
   ['TitleFading.png', ['Connecting', 'GoToMirrorEntry', 'NavTitle']],
   ['Loading.png', ['Loading']],
-  ['MaintenanceNotice.png', ['MaintenanceNotice', 'GoToMirrorEntry', 'NavTitle']],  // live 2026-10-15, over the title
+  ['MaintenanceNotice.png', ['MaintenanceNotice', 'PopupButton', 'GoToMirrorEntry', 'NavTitle']],  // live 2026-10-15, over the title
   // Synthetic (#83): EventStory with the notice's message line pasted into its text box. Only the
   // notice window stops the task, not the word in other text.
   ['EventMaintenanceText.png', ['Event']],
+  // Synthetic (#86), no live capture yet: the one-button notice window (live) as the title's dialogs. The
+  // download dialog (live 2026-10-16: `Downloading N MB of data`, Close / Confirm; the layout is a guess)
+  // is Confirmed; a one-button error box is closed by its one button. Both sit on the title, which reads through.
+  ['TitleDownload.png', ['DownloadDialog', 'GoToMirrorEntry', 'NavTitle']],
+  ['TitleErrorConfirm.png', ['PopupButton', 'GoToMirrorEntry', 'NavTitle']],
   // Synthetic (#84), no live capture yet: the one-button notice window (MaintenanceNotice's, live) relabelled
   // as a server error with a countdown Retry or a Try Again button. They put RetryPopup on every other screen.
   ['RetryCountdown.png', ['RetryPopup', 'GoToMirrorEntry', 'NavTitle']],
@@ -77,8 +82,8 @@ const screens: [image: string, hits: string[]][] = [
   ['ClaimNoBonusDialog.png', ['ExplorationReward', 'ExplorationComplete']],
   ['ClaimBonusDialog.png', ['ExplorationReward', 'ExplorationComplete']],  // toggles ON: "Spend your 「Weekly Bonuses」..."
   // After that Confirm (live 2026-10-16): two popups over the summary, each closed by its Confirm.
-  ['RewardsAcquired.png', ['ClaimPopup', 'ExplorationComplete']],
-  ['PassLevelUp.png', ['ClaimPopup', 'ExplorationComplete']],
+  ['RewardsAcquired.png', ['ClaimPopup', 'PopupButton', 'ExplorationComplete']],
+  ['PassLevelUp.png', ['ClaimPopup', 'PopupButton', 'ExplorationComplete']],
   // Rewards and events. The dialogs sit over their page, which still reads.
   ['RewardCard.png', ['RewardCard']],
   ['RewardCardForgo.png', ['RewardCardForgo', 'RewardCard']],
