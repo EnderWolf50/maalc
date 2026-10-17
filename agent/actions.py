@@ -1023,6 +1023,11 @@ class Formation(CustomAction):
 
 # Battle (spec 03 section 8). Offsets are from the BattleTurn (Win Rate label) template's top-left.
 WIN_RATE = (20, 14)
+# The battle animation control, top right: the label shows MIN, MID or MAX; the arrow left of it opens
+# the three. Live 2026-10-17 (boss of floor 1, Win Rate turns, alternated): MAX played 41, 55 and 66 s,
+# MIN 8, 12 and 27 s. The game keeps MAX by default; Settings has no speed option.
+SPEED_LABEL = [1083, 24, 56, 34]
+SPEED_TOGGLE, SPEED_MIN = (1061, 40), (1027, 40)
 START_DISC = (-66, 26)
 TURN_NUMBER = [55, 57, 45, 30]
 SLOT_PORTRAIT_Y = 665  # tapping a slot's portrait swaps its lower skill and its guard skill
@@ -1043,6 +1048,15 @@ def guard_score(image, x):
     return float(((r > 90) & (r - g > 20) & (g - b > 10)).mean()), float(texture)
 
 
+def battle_speed(context, image):
+    """Set the battle animation to MIN, the shortest turn playback; an unread label is left alone."""
+    shown = text(context, image, SPEED_LABEL, only_rec=True).upper()
+    if "MID" in shown or "MAX" in shown:
+        tap(context, *SPEED_TOGGLE, wait=0.8)
+        tap(context, *SPEED_MIN, wait=0.8)
+        log(f"battle animation {shown.strip()} -> MIN")
+
+
 @AgentServer.custom_action("PlayTurn")
 class PlayTurn(CustomAction):
     """Guard or Win Rate (one tap), press the START disc, check the turn plays (spec 03 section 8, 06)."""
@@ -1058,6 +1072,9 @@ class PlayTurn(CustomAction):
         RUN["turn"] = battle.same_turn(RUN.get("turn"), turn)
         if RUN["turn"][1] > 3:
             return stuck(f"turn {turn} unchanged after 3 submits")
+        if RUN.get("speed_checked") != RUN["battle_start"]:  # once a battle
+            RUN["speed_checked"] = RUN["battle_start"]
+            battle_speed(context, image)
         guarded = False
         if RUN.get("guard", 0) > 0 and RUN["turn"][1] == 1:  # a turn submitted again plays as before #52
             guarded, image = self.guard(context, x, (dx, dy))
