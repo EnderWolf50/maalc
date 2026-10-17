@@ -1,6 +1,12 @@
+import zlib
+from pathlib import Path
+
+import numpy as np
 import pytest
 
 import battle as b
+
+DISCS = Path(__file__).resolve().parent / "discs"
 
 PLAN = ["Ryōshū", "Yi Sang", "Faust", "Hong Lu", "Rodion", "Ishmael",
         "Outis", "Heathcliff", "Sinclair", "Don Quixote", "Meursault", "Gregor"]
@@ -85,3 +91,24 @@ def test_same_turn_counts_tries_at_one_turn():
     for turn, tries in [("1", 1), ("1", 2), ("2", 1), ("2", 2), ("2", 3), ("2", 4), (None, 1), (None, 2), ("3", 1)]:
         last = b.same_turn(last, turn)
         assert last == (turn, tries)
+
+
+def disc(name):
+    """tests/discs/<name>.png as BGR: 40x40 round the START disc centre, cut from the battle screens in
+    tests/screens and written by recovery.png (one IDAT, filter 0 on every row)."""
+    data = (DISCS / f"{name}.png").read_bytes()
+    rows = np.frombuffer(zlib.decompress(data[8 + 25 + 8:-12 - 4]), np.uint8).reshape(40, 1 + 40 * 3)
+    return rows[:, 1:].reshape(40, 40, 3)[:, :, ::-1]
+
+
+@pytest.mark.parametrize(("name", "lit"), [
+    ("lit", True),  # BattleTurnLit.png: every slot picked, the disc glows (centre ~254)
+    # BattleTurnStagger.png (live 2026-10-17, #69, floor 5 boss turn 6): 6 of 7 slots staggered, Win Rate
+    # on, the one unit picked and the START plaque up, but the disc glows only half as much (~189).
+    ("stagger", True),
+    ("unlit", False),  # BattleTurn.png, BattleTurnEven.png, BattleTurnSolo.png: nothing picked (~128-142)
+    ("unlit_even", False),
+    ("unlit_solo", False),
+])
+def test_disc_lit(name, lit):
+    assert b.disc_lit(disc(name), 20, 20) is lit
