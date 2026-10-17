@@ -131,6 +131,12 @@ def test_next_gift_stops_when_select_is_full():
     assert g.next_gift([SMOKES, BASS], chosen=[], tried=[], count=(3, 3)) is None
 
 
+def test_next_gift_never_goes_past_three():
+    # The game searches 3 at most (70/160/270 starlight); a misread m or an old file does not buy a 4th.
+    assert g.next_gift([SMOKES, BASS, STAKE], chosen=[], tried=[], count=(3, 9)) is None
+    assert g.next_gift([SMOKES, BASS, STAKE], chosen=[], tried=[], count=(2, 9)) == SMOKES
+
+
 def test_select_count():
     assert g.select_count("Select 0/3") == (0, 3)
     assert g.select_count("Select 2 / 3") == (2, 3)

@@ -76,10 +76,13 @@ export const SEARCH_TABS: string[] = TEAM.gift_search.properties.gifts.items.pro
 export const SEARCH_GIFTS: SearchGift[] = gifts.gifts;
 export interface SearchGift { id: number; keyword: string; tier: number; en: string; zh: string }
 
+/** The game searches 3 gifts at most; agent/settings.schema.json caps gift_search.gifts the same. */
+export const MAX_GIFTS: number = TEAM.gift_search.properties.gifts.maxItems;
 const sameGift = (a: GiftRef, b: GiftRef) => a.keyword === b.keyword && a.tier === b.tier && a.name === b.name;
 /** A gift card's click: add the gift at the end of the search list, or take it out. */
 export const toggleGift = (list: GiftRef[], gift: GiftRef) =>
-  list.some((g) => sameGift(g, gift)) ? list.filter((g) => !sameGift(g, gift)) : [...list, gift];
+  list.some((g) => sameGift(g, gift)) ? list.filter((g) => !sameGift(g, gift))
+    : list.length >= MAX_GIFTS ? list : [...list, gift];
 
 /** The sinner grid's click (spec 04 section 6): add at the end, or leave out; the last one stays. */
 export function toggleSinner(order: Order, sinner: string): Order {

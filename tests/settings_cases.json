@@ -81,6 +81,11 @@
        {"set": "deployment_order_plans/0/name", "value": "Don't"},
        {"set": "deployment_order_plans/-", "value": {"id": "d1", "name": "Don't", "order": ["Yi Sang", "Faust", "Don Quixote", "Ryōshū", "Meursault", "Hong Lu", "Heathcliff", "Ishmael", "Rodion", "Sinclair", "Outis", "Gregor"]}}],
      "cross": ["deployment_order_plans: id 'd1' appears 2 times", "deployment_order_plans: name \"Don't\" appears 2 times"]},
+    {"name": "more than 3 gifts to search", "edits": [
+       {"set": "teams/0/gift_search/gifts", "value": [
+         {"keyword": "Bleed", "tier": 3, "name": "A"}, {"keyword": "Bleed", "tier": 3, "name": "B"},
+         {"keyword": "Bleed", "tier": 2, "name": "C"}, {"keyword": "Bleed", "tier": 1, "name": "D"}]}],
+     "schema": ["teams/0/gift_search/gifts"]},
     {"name": "duplicate overrides", "edits": [
        {"set": "event_overrides/-", "value": {"question": "Q?", "option": "No"}},
        {"set": "trial_risk_overrides/-", "value": {"trial": "Growth I", "risk": 1}},
