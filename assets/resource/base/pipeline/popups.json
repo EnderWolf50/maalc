@@ -16,11 +16,22 @@
         "action": "Click",
         "post_delay": 2000
     },
-    // Unverified layout: any "maintenance" text mid-screen stops the task.
+    // The notice window over the title (live 2026-10-15, tests/screens/MaintenanceNotice.png): "maintenance"
+    // in its message and its one Close button; the word elsewhere (event text, gift tooltips) is no notice (#83).
     "MaintenanceNotice": {
-        "recognition": "OCR",
-        "roi": [240, 160, 800, 400],
-        "expected": "(?i)maintenance",
+        "recognition": "And",
+        "all_of": [
+            {
+                "recognition": "OCR",
+                "roi": [350, 230, 580, 200],
+                "expected": "(?i)maintenance"
+            },
+            {
+                "recognition": "OCR",
+                "roi": [550, 445, 175, 45],
+                "expected": "^Close$"
+            }
+        ],
         "action": "Custom",
         "custom_action": "Halt",
         "custom_action_param": "maintenance notice"
