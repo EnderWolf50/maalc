@@ -233,3 +233,61 @@ def test_the_teams_observed_gift_is_kept_out_of_a_fusion(context):
     assert not actions.Shop.fuse(context, team, {})
     taps = [c.args for c in context.tasker.controller.post_click.call_args_list]
     assert taps.count(actions.FUSE_CELLS[0]) == 2  # tapped in, then out again
+
+
+def check_page(context, odds=()):
+    """The skill-check page: `Choose a character`, and the odds caption (x -> text) over each portrait."""
+    texts = {tuple(actions.CHECK_PROMPT): [("Choose a character", (860, 300, 200, 30))]}
+    for x, t in odds:
+        texts[(x - 38, 605, 76, 24)] = [(t, (x - 30, 608, 60, 20))]
+    reads(context, texts)
+
+
+def portrait_taps(context):
+    return [c.args[0] for c in context.tasker.controller.post_click.call_args_list if c.args[1] == actions.EVENT_PORTRAIT_Y]
+
+
+def test_a_check_with_no_odds_read_tries_the_next_sinner_when_a_tap_did_nothing(context):
+    # #92: with no odds read it was always the first sinner; when she cannot be picked it never ended.
+    check_page(context)
+    for _ in range(3):
+        actions.Event().run(context, None)  # the screen never changes: each tap did nothing
+    assert portrait_taps(context) == actions.EVENT_PORTRAIT_X[:3]
+
+
+def test_a_check_with_odds_read_takes_the_next_best_when_a_tap_did_nothing(context):
+    check_page(context, [(actions.EVENT_PORTRAIT_X[0], "Low"), (actions.EVENT_PORTRAIT_X[2], "Very High"), (actions.EVENT_PORTRAIT_X[4], "High")])
+    for _ in range(3):
+        actions.Event().run(context, None)
+    assert portrait_taps(context) == [actions.EVENT_PORTRAIT_X[i] for i in (2, 4, 0)]
+
+
+def test_a_check_tap_that_took_is_not_held_against_the_sinner(context):
+    check_page(context)
+    screens(context, [0, 9])  # the first tap changes the screen
+    actions.Event().run(context, None)
+    actions.Event().run(context, None)
+    assert portrait_taps(context) == [actions.EVENT_PORTRAIT_X[0]] * 2
+
+
+def event_for(context, seconds):
+    """Run Event once a second on a page it cannot read, for `seconds` or until it hands over to recovery."""
+    for _ in range(seconds):
+        actions.Event().run(context, None)
+        if actions.STUCK["flag"]:
+            return
+        actions.time.sleep(1)
+
+
+def test_one_event_that_goes_on_past_its_limit_goes_to_recovery(context):
+    event_for(context, actions.EVENT_LIMIT + 60)
+    flag = actions.STUCK["flag"]
+    assert flag and flag[1] == 1 and "event" in flag[2]
+    assert actions.RUN.get("event") is None  # recovery's next look starts a new clock
+
+
+def test_an_event_after_a_pause_starts_its_own_clock(context):
+    event_for(context, actions.EVENT_LIMIT - 30)
+    actions.time.sleep(actions.EVENT_LIMIT)  # the event ended; the next one comes later
+    event_for(context, actions.EVENT_LIMIT - 30)
+    assert actions.STUCK["flag"] is None
