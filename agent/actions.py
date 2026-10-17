@@ -820,6 +820,7 @@ MARKS = {  # node -> (mark, roi around the slot centre)
 }
 ENTER = (1133, 543)
 MAP_RETRIES = 3  # RouteMap calls per floor that may enter nothing before the map is stuck
+MAP_LOOKS = 4  # looks, 1 s apart, for a linked slot before the fallback taps
 PANEL_REWARDS = [700, 495, 110, 30]  # the "Clear Rewards" label
 PANEL_COST = [730, 545, 40, 35]  # the number by its Cost coin
 
@@ -878,11 +879,15 @@ class RouteMap(CustomAction):
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         if RUN.get("forfeit"):
             return forfeit(context)
-        if still(context) is None:
-            return True  # still fading in or out: let MirrorHub look again
-        image, bus = self.find_bus(context)
-        bx, by = bus or BUS_REST  # no bus found: assume the map at rest
-        slots = self.read_slots(context, image, bx, by) if bus else {}
+        for _ in range(MAP_LOOKS):  # live: right after a floor's theme pack, the map shows before its bus and links
+            if still(context) is None:
+                return True  # still fading in or out: let MirrorHub look again
+            image, bus = self.find_bus(context)
+            bx, by = bus or BUS_REST  # no bus found: assume the map at rest
+            slots = self.read_slots(context, image, bx, by) if bus else {}
+            if slots:
+                break
+            time.sleep(1)
         log("map: " + (", ".join(f"{r} {t} ({'?' if n is None else n} onward)" for r, (t, n) in slots.items()) or "no linked slot read"))
         order = map_route.rank(slots, map_weights(context))
 

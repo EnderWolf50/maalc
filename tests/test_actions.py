@@ -105,6 +105,22 @@ def bus_at(context, x, y, linked=()):
     context.run_recognition.side_effect = run_recognition
 
 
+def test_a_map_not_readable_yet_is_read_again_before_any_tap(context, monkeypatch):
+    # Live (#58): 2 s after a theme pack pull the hub saw a map with no bus or link to read; a fallback slot was entered.
+    looks = []
+
+    def run_recognition(name, image, override=None):
+        if name == "MapBus":
+            looks.append(1)
+            return SimpleNamespace(hit=True, box=[446, 248, 45, 75]) if len(looks) > 1 else None
+        return SimpleNamespace(hit=True) if name in ("MapLinkMid", "MapNodeCost") else None
+    context.run_recognition.side_effect = run_recognition
+    monkeypatch.setattr(actions, "map_weights", lambda context: {"battle": 2, "unknown": 9})
+    actions.RouteMap().run(context, None)
+    first = context.tasker.controller.post_click.call_args_list[0].args
+    assert first == (446 + actions.SLOT[0], 248 + actions.SLOT[1])  # the middle row's battle
+
+
 def test_a_map_at_rest_is_not_panned_when_no_link_leads_up(context):
     bus_at(context, 446, 248, linked=("MapLinkMid", "MapLinkDown"))
     _, bus = actions.RouteMap.find_bus(context)
