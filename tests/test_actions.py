@@ -194,3 +194,24 @@ def test_a_turn_starts_after_win_rate_lights_the_disc(context, monkeypatch):
     lit = iter([False, True])  # unlit on the turn's first look, lit after the Win Rate tap
     monkeypatch.setattr(actions.battle, "disc_lit", lambda image, x, y: next(lit, True))
     assert actions.PlayTurn().run(context, SimpleNamespace(box=[984, 531, 40, 20]))
+
+
+def reads(context, texts):
+    """OCR reads texts[roi] (a list of (text, box)) in that roi, nothing elsewhere; no other node hits."""
+    def run_recognition(name, image, override=None):
+        roi = tuple((override or {}).get(name, {}).get("roi", ()))
+        results = [SimpleNamespace(text=t, box=b) for t, b in texts.get(roi, [])]
+        return SimpleNamespace(all_results=results, hit=True, best_result=None) if results else None
+    context.run_recognition.side_effect = run_recognition
+
+
+def test_the_fusion_grid_is_not_scanned_again_while_the_owned_gifts_are_the_same(context):
+    # The fuse page with its keyword dialog, every cell empty: no fusion this visit.
+    reads(context, {tuple(actions.DIALOG_TITLE): [("Fuse E.G.O Gift", (500, 100, 200, 40))],
+                    tuple(actions.KEYWORD_LABELS): [("Burn", (300, 400, 60, 20))]})
+    team, visit = {"keyword": "Burn", "gift_search": {"gifts": []}}, {}
+    assert not actions.Shop.fuse(context, team, visit)
+    taps = context.tasker.controller.post_click.call_count
+    assert taps > len(actions.FUSE_CELLS)  # the grid was scanned
+    assert not actions.Shop.fuse(context, team, visit)  # nothing bought or sold since
+    assert context.tasker.controller.post_click.call_count == taps
