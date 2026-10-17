@@ -88,3 +88,14 @@ def test_dialog_price_from_the_cost_preview():
     assert s.dialog_price(2618, "2218") is None  # not the Cost we read
     assert s.dialog_price(2618, "2618") is None
     assert s.dialog_price(None, "28642612") is None
+
+
+@pytest.mark.parametrize("read, kept", [
+    ("Spiderweb Entangled in Red", True),
+    ("Spiderweb Entangledin Red", True),  # OCR runs words together
+    ("SpiderwebEntangled in Rcd", True),
+    ("Hellterfly's Dream", False),
+    ("", False),
+])
+def test_protected_gifts_are_matched_by_name(read, kept):
+    assert s.protected(read, ["Spiderweb Entangled in Red", "Sunshower"]) == kept
