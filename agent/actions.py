@@ -276,8 +276,14 @@ class Recover(CustomAction):
     """
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
+        unknown = STUCK["flag"] is None  # MirrorHub's own timeout: a screen it has no node for
         flag = STUCK["flag"] or (f"{STUCK['kind']}, then nothing recognised", 1, "MirrorHub recognised nothing for 60 s")
         STUCK["flag"] = None
+        if unknown:  # also during a download: its progress screen is one to have a capture of
+            try:
+                recovery.keep_unknown(ROOT, screen(context), settlement.now().replace(":", "-"))
+            except OSError as e:
+                log(f"unknown screen not saved: {e}")
         if STUCK["watch"].held(time.monotonic()):
             log(f"{flag[2]}: a download is under way, waiting")
             return True

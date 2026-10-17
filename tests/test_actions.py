@@ -254,3 +254,12 @@ def test_recover_waits_out_a_download_without_climbing(context, clock, monkeypat
     assert actions.STUCK["ladder"].counts == before
     context.run_task.assert_not_called()
     actions.STUCK["watch"].reset()
+
+
+def test_recover_keeps_the_screen_when_the_hub_recognised_nothing(context, clock, monkeypatch, tmp_path):
+    monkeypatch.setattr(actions, "ROOT", tmp_path)
+    actions.STUCK["flag"] = None
+    actions.STUCK["watch"].reset()
+    actions.Recover().run(context, None)
+    assert len(list((tmp_path / "logs" / "unknown").glob("*.png"))) == 1
+    actions.STUCK["ladder"].__init__()

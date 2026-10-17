@@ -146,10 +146,10 @@
 |---|---|---|---|---|---|
 | 連線中 | OCR：`CONNECTING` | 等待 | 前一個畫面、Retry 彈窗 | #7、#8 | — |
 | Retry 彈窗（待截圖確認） | OCR：按鈕文字以 `Retry`（可接倒數，例如 `Retry (5)`；不含 DEFEAT 的 `Retry Stage`）或 `Try Again` 開頭 | 點那個按鈕 | 連線中、前一個畫面 | #8、#84 | —（`tests/screens/RetryCountdown.png`、`TryAgain.png` 是合成圖） |
-| 教學提示（待截圖確認） | 模板：關閉按鈕 | 關閉 | 前一個畫面 | #8 | — |
-| 每週重置通知（待截圖確認） | OCR：通知文字 | 關閉，當成一般全域彈窗 | 前一個畫面、主畫面 | #8、#14 | — |
-| 無限鏡牢彈窗（待截圖確認） | 模板：彈窗的關閉按鈕 | 關閉，不開啟無限鏡牢 | 前一個畫面 | #8、#17 | — |
-| 升級彈窗（待截圖確認） | OCR：升級文字；模板：關閉或 Confirm | 關閉 | 前一個畫面 | #16 | — |
+| 教學提示（待截圖確認，沒有專用節點） | 第一次進某畫面的說明頁，整頁圖片，右側有 ▶ 翻頁。AALC 用 Android 返回鍵關閉（`close_first_prompt`） | 還沒做：沒有截圖。卡住後 L1 的返回鍵會關掉它；截圖會存在 `logs/unknown/` | 前一個畫面 | #8、#85 | — |
+| 每週重置通知／舊局過期（待截圖確認，沒有專用節點） | AALC：主畫面上只有一個打勾按鈕的 renew 對話框，確認後回主畫面（`renew_confirm`，AALC `mirror.py`） | 還沒做：沒有截圖，按鈕是圖示不是文字，`PopupButton` 讀不到。下次重置時看 `logs/unknown/` | 前一個畫面、主畫面 | #8、#14、#85 | — |
+| 無限鏡牢（Parallel Superposition）彈窗 | OCR：`You can enter the … Mode`，按鈕 `Cancel`（兩個按鈕：Cancel／Confirm）。只有「Parallel Superposition Mode」開著、通過第 5 層（EXTREME 是第 10 層）才會出現 | 點 Cancel，不開啟（`ParallelModePrompt`，排在各頁之前，它蓋在頁面上） | 前一個畫面 | #8、#17、#85 | `tests/screens/ParallelModePrompt.png`、`ParallelModeExtreme.png`（遊戲說明頁裡的彈窗圖，位置待實機確認） |
+| 升級彈窗 | 結算後的 `Pass Level Up` 是 `ClaimPopup`；其他升級彈窗沒有截圖 | `ClaimPopup` 按 Confirm；其他的由 `PopupButton` 擋住單鈕的，其餘還沒做 | 前一個畫面 | #16、#85 | `tests/screens/PassLevelUp.png` |
 | 單鈕彈窗（`PopupButton`，後備） | OCR：畫面中央（540–740, 430–500）的按鈕文字是 `Close`、`Confirm` 或 `OK`。只有一個按鈕，沒有可選的，所以按它；兩個按鈕的問句（Cancel／Confirm）按鈕不在中央，不會被它按到。排在 `ClaimPopup` 之後、所有頁面之前，維護公告在它前面（同樣是單個 Close，要停止） | 點那個按鈕 | 前一個畫面 | #85、#86 | `tests/screens/TitleErrorConfirm.png`（合成圖）；`RewardsAcquired.png`、`PassLevelUp.png` 它也讀得到，但 `ClaimPopup` 在前 |
 | 標題畫面的資料下載對話框（待截圖確認） | OCR：視窗內文含 `Download`／`Update`／`<n> MB`，按鈕 `Confirm`（另一個 `Close`）。2026-10-16 實機看過 `Downloading N MB of data`（L3 重啟後），位置沒截圖，ROI 取得寬 | 點 Confirm（`DownloadDialog`），卡住偵測暫停 30 分鐘等下載完 | 下載進度畫面（沒截過）、標題畫面 | #31、#86 | `tests/screens/TitleDownload.png`（合成圖） |
 | 維護公告 | OCR：公告視窗內文含 `maintenance`，且視窗唯一的按鈕讀到 `Close`（兩者同時出現；其他畫面文字含 maintenance 不算） | 直接停止，保存證據並發 webhook | 停止 | #14、#83 | `tests/screens/MaintenanceNotice.png` |

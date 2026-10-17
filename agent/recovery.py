@@ -19,6 +19,7 @@ HASH_FLOOR = {"BattlePause": 30}  # a turn playing out may sit still a while: al
 # Screens on the way back to a run after L2/L3: seeing them does not mean the stuck screen was got past.
 TRANSIT = {"Loading", "Connecting", "RetryPopup", "GoToMirrorEntry", "NavTitle", "NavMainTabs", "NavDrive",
            "MirrorEntryPaused", "ResumeDialog", "ProgressPanel", "DownloadDialog", "PopupButton"}
+UNKNOWN_KEEP = 30  # screens MirrorHub did not recognise that logs/unknown/ keeps
 DOWNLOAD_HOLD = 30 * 60  # seconds after confirming the title's download dialog in which nothing is stuck
 L2_PER_RUN, L3_PER_RUN, L3_PER_EXECUTION = 3, 2, 3
 BATTLE = {"BattleTurn", "BattlePause"}  # L2 cannot go through mid-battle: only the map has To Window
@@ -51,6 +52,19 @@ def png(image):
 
     return (b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 2, 0, 0, 0))
             + chunk(b"IDAT", zlib.compress(rows.tobytes(), 6)) + chunk(b"IEND", b""))
+
+
+def keep_unknown(root, image, stamp):
+    """Save a screen MirrorHub recognised nothing on to <root>/logs/unknown/<stamp>.png, the newest UNKNOWN_KEEP.
+
+    A popup nobody has a capture of (weekly reset, tutorial tip, an event's choice page) is otherwise lost once
+    the back key closes it; this is the capture its node needs.
+    """
+    folder = Path(root) / "logs" / "unknown"
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / f"{stamp}.png").write_bytes(png(image))
+    for old in sorted(folder.glob("*.png"))[:-UNKNOWN_KEEP]:
+        old.unlink()
 
 
 class Watchdog:

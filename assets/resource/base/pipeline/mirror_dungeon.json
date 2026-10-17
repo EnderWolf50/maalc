@@ -22,6 +22,7 @@
             "[JumpBack]DownloadDialog",
             "[JumpBack]Loading",
             "[JumpBack]ClaimPopup",
+            "[JumpBack]ParallelModePrompt",
             "[JumpBack]PopupButton",
             "[JumpBack]ExplorationReward",
             "[JumpBack]RunVictory",
