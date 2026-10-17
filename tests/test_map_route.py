@@ -88,3 +88,14 @@ def test_routes_counts_drawn_links(links):
 def test_routes_unreadable_off_the_map():
     # A top-row node at rest sits under the resource bar: nothing onward can be read.
     assert mr.routes(lit(()), 725, -200) is None
+
+
+def test_the_lit_links_from_the_bus_read_at_the_far_left():
+    """Live 2026-10-18, bus at 50, 320: the chevron templates missed; the lines did not.
+
+    tests/data/map_far_left.npz is the frame's per-pixel brightness, x 0-399.
+    """
+    v = np.load(Path(__file__).resolve().parent / "data/map_far_left.npz")["v"]
+    bus, slot = (50 + 22, 320 + 37), (50 + 279, 320 + 37)
+    lit = {row: mr.line_contrast(v, *bus, slot[0], slot[1] + dy) for row, dy in mr.ROW_DY.items()}
+    assert lit["up"] >= 60 and lit["down"] >= 60 and lit["mid"] < 15
