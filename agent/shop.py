@@ -46,6 +46,7 @@ def read_slots(results):
             "name": name,
             "price": int(digits) if digits and "?" not in t else None,
             "purchased": any("Purchased" in u for u, uy in near if -110 < uy - y < 0),
+            "short": any("Enough" in u for u, uy in near if -110 < uy - y < 0),  # red "Not Enough Cost"
             "x": x,
             "y": y,
         })
@@ -64,14 +65,17 @@ def dialog_price(cost, preview):
     return cost - int(digits[len(head):])
 
 
-def buyable(slot):
-    """Whether a shop slot {"name", "price", "purchased"} is worth reading: a gift on sale for Cost.
+def buyable(slot, cost=None):
+    """Whether a shop slot {"name", "price", "purchased", "short"} is worth reading: a gift on sale for Cost.
 
     Skill replacements and ID Skill Search show "??" (no price) or take Starlight; a bought slot moves
-    to the end of the grid, tagged Purchased.
+    to the end of the grid, tagged Purchased. One dearer than the Cost (tagged Not Enough Cost) opens
+    no purchase dialog (live 2026-10-18), so it is not tapped.
     """
-    name = slot["name"]
-    return slot["price"] is not None and not slot["purchased"] and "Replace" not in name and "ID Skill" not in name
+    name, price = slot["name"], slot["price"]
+    if price is None or slot["purchased"] or slot.get("short") or "Replace" in name or "ID Skill" in name:
+        return False
+    return cost is None or price <= cost
 
 
 def refresh_choice(cost, reserve, used, limit, normal_fee, keyword_fee, margin):
