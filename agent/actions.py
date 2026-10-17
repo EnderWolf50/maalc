@@ -849,16 +849,44 @@ def node_at(context, image, cx, cy, marks=None):
 
     No mark at all where the badges (80 px above the centre) sit under the resource bar: unknown, not an
     event; a fight's Cost coin may be hidden there (the top row with the map at rest).
+    #91: Risky has no template and its Cost coin alone read as a battle. A coin alone whose number reads
+    as none of the battle costs is taken for Risky; an unread number leaves it a battle.
     """
     marks = node_marks(context, image, cx, cy) if marks is None else marks
-    return "unknown" if not marks and cy - 80 < 60 else map_route.node_type(set(marks))
+    if not marks and cy - 80 < 60:
+        return "unknown"
+    kind = map_route.node_type(set(marks))
+    if kind == "battle":
+        cost = coin_number(context, image, marks["cost"].box)
+        if cost is not None and cost not in map_data()["battle_costs"]:
+            log(f"map: a Cost coin alone at {cx}, {cy} reads {cost}, no battle cost: risky")
+            kind = "risky"
+    return kind
+
+
+def coin_number(context, image, box):
+    """The number printed beside a map node's Cost coin (box), or None when none reads (#91).
+
+    Offline on 13 nodes of 7 captures: OCR of the bare badge read 75 as 25 or 5; of the bright,
+    near-white digits cut out (as order_marks does) every battle's 75 or 85 right, dim ones too.
+    A 3-digit number may lose its first digit (375 read 75): only fights carrying 3-digit costs do.
+    """
+    x, y, w, _ = box
+    part = image[max(0, y + 8):y + 38, max(0, x + w - 8):x + w + 32]
+    mask = (part.max(axis=2) > 170) & (saturation(part) < 90)
+    plain = np.where(mask[..., None], 0, 255).astype(np.uint8).repeat(3, axis=2)
+    digits = re.sub(r"\D", "", text(context, plain, [0, 0, plain.shape[1], plain.shape[0]], only_rec=True))
+    return int(digits) if digits else None
+
+
+def map_data():
+    return yaml.safe_load((RESOURCE / "base" / "data" / "map_weights.yaml").read_text(encoding="utf-8"))
 
 
 def map_weights(context):
     run = current_run(context)
     hard = run.get("floor_hard", run["difficulty"] == "hard")
-    data = yaml.safe_load((RESOURCE / "base" / "data" / "map_weights.yaml").read_text(encoding="utf-8"))
-    return data["hard" if hard else "normal"]
+    return map_data()["hard" if hard else "normal"]
 
 
 def enter_node(context):
