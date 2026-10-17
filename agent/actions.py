@@ -1748,14 +1748,14 @@ class Shop(CustomAction):
         for x, y in FUSE_CELLS:
             tap(context, x, y, wait=1.2)
             lines = [(t, b) for t, b in ocr(context, screen(context), FUSE_TOOLTIP) if "Owned" not in t]
-            tap(context, *FUSE_NEUTRAL, wait=0)  # closes the tooltip; the next cell's tap waits for its own
+            tap(context, *FUSE_NEUTRAL)
             head = next((b for t, b in lines if re.search(r"O\s*GIFT$", t)), None)
             if not head:
                 continue  # an empty cell
             name = min(((b[1] - head[1], t) for t, b in lines if b[1] > head[1] + 10 and re.search(r"[a-z]{3}", t)), default=(0, "?"))[1]
             if rewards.gift_kind(" ".join(t for t, _ in lines), keyword, False) == "main":
                 tap(context, x, y, wait=1.2)  # out of the fusion again
-                tap(context, *FUSE_NEUTRAL, wait=0)
+                tap(context, *FUSE_NEUTRAL)
                 continue
             picked.append(name)
             if len(picked) == 3:
