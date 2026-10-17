@@ -1485,6 +1485,14 @@ def read_cost(context, roi=SHOP_COST):
     return number(text(context, screen(context), roi))
 
 
+def kept_gifts(team):
+    """Gift names the shop never fuses or sells: the team's observed gifts and every keywordless gift (#103).
+
+    Keywordless gifts are told by name (data/gift_search.json's Keywordless tab): the tooltip names no keyword.
+    """
+    return [g["name"] for g in team["gift_search"]["gifts"]] + [g["en"] for g in gift_data() if g["keyword"] == "Keywordless"]
+
+
 def tap_keyword(context, keyword):
     """Tap the keyword's card in an open keyword dialog; False when its label is not read."""
     label = next((b for t, b in ocr(context, screen(context), KEYWORD_LABELS) if t.strip().upper() == keyword.upper()), None)
@@ -1696,13 +1704,16 @@ class Shop(CustomAction):
             Shop.to_main(context)
             return False
         cost = number(text(context, screen(context), SELL_COST))
-        gifts = []
+        gifts, keep = [], kept_gifts(team)
         for i, (x, y) in enumerate(SELL_CELLS):
             tap(context, x, y, wait=1.2)
             image = screen(context)
-            panel = " ".join(t for t, _ in ocr(context, image, SELL_PANEL))
+            lines = [t for t, _ in ocr(context, image, SELL_PANEL)]
+            panel = " ".join(lines)
             price = number(text(context, image, SELL_PRICE))
-            if price and "Select the" not in panel and rewards.gift_kind(panel, team["keyword"], False) != "main":
+            if any(shop.protected(t, keep) for t in lines):
+                log(f"shop: sell cell {i} kept: {panel[:40]!r}")
+            elif price and "Select the" not in panel and rewards.gift_kind(panel, team["keyword"], False) != "main":
                 gifts.append((i, price))
         picked = shop.to_sell(gifts, wanted, cost or 0, team["reserve_cost"])
         visit["fuse_scanned"] = visit.get("fuse_scanned") and not picked
@@ -1717,6 +1728,23 @@ class Shop(CustomAction):
                 break  # ponytail: no Sell confirm dialog handled; none seen yet
         Shop.to_main(context)
         return bool(picked)
+
+    @staticmethod
+    def tooltip(context, last):
+        """The tooltip of the cell just tapped: (its lines, its name), or ([], None) when none shows.
+
+        Polled until a tooltip names a gift other than last: a stale read logged the same gift twice (#103).
+        """
+        for _ in range(8):
+            time.sleep(0.2)
+            lines = [(t, b) for t, b in ocr(context, screen(context), FUSE_TOOLTIP) if "Owned" not in t]
+            head = next((b for t, b in lines if re.search(r"O\s*GIFT$", t)), None)
+            if head:
+                name = min(((b[1] - head[1], t) for t, b in lines if b[1] > head[1] + 10 and re.search(r"[a-z]{3}", t)),
+                           default=(0, "?"))[1]
+                if name != last:
+                    return lines, name
+        return [], None
 
     @staticmethod
     def fuse(context, team, visit):
@@ -1743,17 +1771,19 @@ class Shop(CustomAction):
             log("shop: Wishmaking is ticked (it spends owned Starlight): no fusion")
             Shop.to_main(context)
             return False
-        picked = []
+        picked, last, keep = [], None, kept_gifts(team)
         # ponytail: the 15 cells on show; a scroll would find more when 13+ of them are main gifts.
         for x, y in FUSE_CELLS:
-            tap(context, x, y, wait=1.2)
-            lines = [(t, b) for t, b in ocr(context, screen(context), FUSE_TOOLTIP) if "Owned" not in t]
+            tap(context, x, y, wait=0)
+            lines, name = Shop.tooltip(context, last)
             tap(context, *FUSE_NEUTRAL)
-            head = next((b for t, b in lines if re.search(r"O\s*GIFT$", t)), None)
-            if not head:
-                continue  # an empty cell
-            name = min(((b[1] - head[1], t) for t, b in lines if b[1] > head[1] + 10 and re.search(r"[a-z]{3}", t)), default=(0, "?"))[1]
-            if rewards.gift_kind(" ".join(t for t, _ in lines), keyword, False) == "main":
+            if name is None:
+                continue  # an empty cell, or a tap that only closed the last tooltip
+            last = name
+            main = rewards.gift_kind(" ".join(t for t, _ in lines), keyword, False) == "main"
+            if main or shop.protected(name, keep):
+                if not main:
+                    log(f"shop: {name!r} kept out of the fusion")
                 tap(context, x, y, wait=1.2)  # out of the fusion again
                 tap(context, *FUSE_NEUTRAL)
                 continue

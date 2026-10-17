@@ -3,6 +3,8 @@
 actions.py reads the shop pages and taps; everything here is plain data in, plain data out.
 """
 
+from difflib import SequenceMatcher
+
 ROUNDS = 10
 
 
@@ -103,3 +105,13 @@ def to_sell(gifts, wanted, cost, reserve):
     if not can_spend(cost, wanted, reserve):
         return None
     return sorted(picked, reverse=True)  # selling from the back keeps the earlier cells in place
+
+
+def protected(name, names, min_ratio=0.85):
+    """Whether an OCR'd gift name is one of names (fuzzy): a gift the shop must not fuse or sell (#103)."""
+    key = _norm(name)
+    return bool(key) and any(SequenceMatcher(None, key, _norm(n)).ratio() >= min_ratio for n in names)
+
+
+def _norm(s):
+    return "".join(c for c in s.lower() if c.isalnum())
