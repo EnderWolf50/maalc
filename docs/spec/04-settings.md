@@ -180,7 +180,7 @@
 | 存活少於 K 人就停止 | `min_alive` | 整數 0–12 | 0 = 不檢查 | 0 | #16 |
 | 開局連續防禦回合數 | `guard_turns` | 整數 0–5 | 每局最前面 N 個戰鬥回合（跨場累計）全員防禦；0 = 不用 | 0 | #52 |
 | 試煉風險權重 | `trial_risk_weight` | 字串 | `low` 低／`medium` 中／`high` 高 | `high` | #17 |
-| 觀測飾品 | `gift_search` | 物件 | `{"enabled": 布林, "gifts": [{"keyword", "tier", "name"}, …]}`：開關，與依優先順序排列、不重複的飾品清單。`keyword` 是觀測頁的分頁（主要體系的 10 個值加 `Keywordless`），`tier` 是 1–3，`name` 是遊戲顯示的英文名 | `{"enabled": false, "gifts": []}` | #54 |
+| 觀測飾品 | `gift_search` | 物件 | `{"enabled": 布林, "gifts": [{"keyword", "tier", "name"}, …]}`：開關，與依優先順序排列、不重複、最多 3 個的飾品清單。`keyword` 是觀測頁的分頁（主要體系的 10 個值加 `Keywordless`），`tier` 是 1–3，`name` 是遊戲顯示的英文名 | `{"enabled": false, "gifts": []}` | #54 |
 
 規則：
 
@@ -190,7 +190,7 @@
 - 「存活少於 K 人就停止」的說明必須提醒：需要罪人陣亡的隊伍，治療方式應設為「不治療」。（#16）
 - 試煉風險權重用於 Boss 後的選擇評分：飾品分數 − 權重 × 試煉風險。（#17）
 - 開局連續防禦的做法、失敗時的退路與 Agent 重啟後的處理見 [03-decisions.md](03-decisions.md#8-戰鬥) 第 8 節。（#52）
-- 觀測飾品花的是持有的星光；在 GUI 選了飾品就表示同意花費，不設上限（2026-10-16 使用者確認）。選取規則見 [03-decisions.md](03-decisions.md#5-初始飾品與-gift-search) 第 5 節。（#54）
+- 觀測飾品花的是持有的星光；在 GUI 選了飾品就表示同意花費；遊戲一次最多觀測 3 個（觀測表只有 1／2／3 個的價格 70／160／270），所以清單最多 3 個：GUI 選滿後其餘飾品停用，schema 的 `gifts` 為 `maxItems: 3`，Agent 也以 3 為上限。舊設定超過 3 個時不默默丟掉，而是驗證報錯，使用者自己移除多的才能儲存（2026-10-16 使用者確認同意花費，#63）。選取規則見 [03-decisions.md](03-decisions.md#5-初始飾品與-gift-search) 第 5 節。（#54）
 - GUI 的觀測飾品區塊預設收合，和遊戲的觀測頁一樣分體系分頁、III／II／I 三段；點飾品加到清單最後，再點一次移除，清單可拖曳排序。飾品列表是 `assets/resource/base/data/gift_search.json`（320 個）：清單、id、等級與英文名取自遊戲客戶端 1.117.0 靜態資料的觀測表 `mirror-dungeon-egogift-observation-data-md8`（分頁順序即表的 `uiKeyword` 順序；表裡等級空白的用 `ego-gift*.json` 的 `TIER_n` 標籤補上；英文名來自 `EN_EGOgift_*` 在地化檔），依等級 III → I、表內順序排列；中文名依 id 取自灰機 wiki（見 `NOTICE.md`），wiki 還沒收錄的 8 個只有英文名。2026-10-16 實機逐格點過整頁對照：順序與等級一致，只有 5 個沒出現在頁面上（見 [02-screens.md](02-screens.md#ego-gift-search-頁的版面)）。換季時要依新的觀測表重新產生。（#54）
 - 刷新次數記在 Agent 記憶體，以層為單位，不存檔。（#10）
 - 預留金額適用於所有花費：治療、購買、刷新。（#10、#19）

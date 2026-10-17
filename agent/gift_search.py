@@ -9,6 +9,7 @@ import numpy as np
 
 # The gift grid (live 2026-10-16, 1.117.0): 8 columns, rows 80 px apart, sections III, II, I top to bottom.
 # Each cell has its tier as 1-3 yellow bars at its top-left; an Owned cell is greyed and shows none.
+MAX_GIFTS = 3  # the game's observation table prices 1, 2 or 3 gifts (70/160/270 starlight)
 CELL_X = [130 + round(83.4 * c) for c in range(8)]
 GRID_Y = (228, 625)
 LAST_Y = 600  # lowest cell centre still inside the grid
@@ -103,7 +104,7 @@ def next_gift(wanted, chosen, tried, count):
     count: Select n/m. Nothing more once n == m: the list is a priority order, not a quota.
     """
     n, m = count
-    if n >= m:
+    if n >= min(m, MAX_GIFTS):
         return None
     return next((gift for gift in wanted if gift not in tried and gift["name"] not in chosen), None)
 
