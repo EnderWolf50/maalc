@@ -244,6 +244,7 @@
 
 - 暫停選單按 Resume。
 - 戰鬥中出現的選擇沿用地圖事件的規則。實機：Boss 戰中途的劇情用的是事件頁，畫面上沒有地圖與戰鬥介面，罪人列只顯示上場的 7 人。（實機：captures/217_f4boss_rewards_stuck.png、captures/218_f4boss_ev_choices.png）
+- 不能選的選項跳過，在其餘選項中照同樣規則挑：外框是灰色的（不是紅褐色），或點了之後選項面板沒變（記到這一題結束、或恢復動作之後）。畫面上的選項都不能選時，把選項列表往上捲再讀。實機 2026-10-17（#34）：第 5 層 Boss 戰中途的多輪問答（`What should I say this time?`），前一輪選過的回答變成灰框，點了沒反應；三個選項放不下，第三個只露出一半，列表可以捲動。（tests/screens/EventChoicesUsed.png）
 - Skip、Continue、Proceed 這類文字用 OCR 辨識後點擊，每個畫面最多 5 次；不盲點畫面中央。（#16、#19）
 - 認不出來的畫面超過 60 秒，交給卡住處理（[06-recovery.md](06-recovery.md)）。（#16、#19）
 
