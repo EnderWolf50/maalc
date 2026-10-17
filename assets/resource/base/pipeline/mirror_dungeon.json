@@ -160,7 +160,7 @@
         "expected": "Gift GET",
         "action": "Click",
         "target": [545, 512, 190, 40],
-        "post_delay": 1500
+        "post_delay": 1000
     },
     // Selects the team's gifts with owned Starlight, or presses Refuse Gift (spec 03 section 5).
     "GiftSearch": {
@@ -279,7 +279,7 @@
         "expected": "VICTORY",
         "action": "Custom",
         "custom_action": "Victory",
-        "post_delay": 2000
+        "post_delay": 500
     },
     "Formation": {
         "recognition": "OCR",
