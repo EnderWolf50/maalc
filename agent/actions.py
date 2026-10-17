@@ -1529,6 +1529,8 @@ class Shop(CustomAction):
             self.heal(context, team)
             visit["healed"] = True
         for _ in range(shop.ROUNDS):
+            if not self.to_main(context):
+                break  # left already: the leave below finds the map
             acted = self.sell(context, team, visit)
             acted = self.buy(context, team, visit) or acted
             acted = self.fuse(context, team, visit) or acted
@@ -1537,6 +1539,11 @@ class Shop(CustomAction):
         else:
             log(f"shop: still acting after {shop.ROUNDS} rounds")
         for _ in range(3):
+            image = screen(context)
+            if seen(context, image, "MirrorMap") or seen(context, image, "MapNodePanel"):
+                log("shop: already out of the shop")
+                RUN.pop("shop", None)
+                return True
             tap(context, *BOTTOM_RIGHT, wait=1.5)
             if "Leave the shop" in text(context, screen(context), LEAVE_DIALOG):
                 log(f"shop: leave with {read_cost(context)} Cost")
@@ -1547,9 +1554,15 @@ class Shop(CustomAction):
 
     @staticmethod
     def to_main(context):
-        """Back out of any shop page or dialog; True once the main shop (its Refresh fee) shows."""
+        """Back out of any shop page or dialog; True once the main shop (its Refresh fee) shows.
+
+        False at once on the map: the shop was left (live 2026-10-18, by hand mid-visit), and a tap
+        meant for a shop page lands on a map node.
+        """
         for _ in range(5):
             image = screen(context)
+            if seen(context, image, "MirrorMap") or seen(context, image, "MapNodePanel"):
+                return False
             title = text(context, image, DIALOG_TITLE)
             heal = "Heal" in text(context, image, HEAL_TITLE)
             if "GET" in text(context, image, GET_TITLE):
@@ -1671,7 +1684,8 @@ class Shop(CustomAction):
             image = screen(context)
             if "Purchase" not in text(context, image, DIALOG_TITLE):
                 log(f"shop: {name!r} opened no purchase dialog")
-                Shop.to_main(context)
+                if not Shop.to_main(context):
+                    return False
                 continue
             price = shop.dialog_price(cost, text(context, image, PURCHASE_PREVIEW)) or price
             kind = visit["kinds"].setdefault(name, rewards.gift_kind(text(context, image, PURCHASE_TEXT), keyword, False))
