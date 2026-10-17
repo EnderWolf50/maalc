@@ -1661,9 +1661,10 @@ class Shop(CustomAction):
         """
         visit["wanted"] = None
         # ponytail: only the offers on show; a Super Shop's last 2 of 10 need a scroll first.
+        cost = read_cost(context)
         for slot in shop.read_slots(ocr(context, screen(context), OFFER_GRID)):
             name, price = slot["name"], slot["price"]
-            if not shop.buyable(slot) or visit["kinds"].get(name) == "other":
+            if not shop.buyable(slot, cost) or visit["kinds"].get(name) == "other":
                 continue
             cost = read_cost(context)
             tap(context, slot["x"], slot["y"] - 50, wait=1.5)
