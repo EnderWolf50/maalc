@@ -44,7 +44,8 @@ export function Num({ value, min, max, onChange }: { value: number; min: number;
   );
 }
 
-/** Native HTML drag and drop, plus up/down buttons for the keyboard. */
+/** Native HTML drag and drop, plus up/down buttons for the keyboard. Needs "dragDropEnabled": false on the Tauri
+ * window (tauri.conf.json): on Windows Tauri otherwise replaces WebView2's drop handler and no HTML5 drop fires (#64). */
 export function ReorderList<T>({ items, onChange, render, keyOf, selected, onSelect, badAt }: {
   items: T[]; onChange: (items: T[]) => void; render: (item: T, i: number) => ReactNode; keyOf: (item: T) => string;
   selected?: number; onSelect?: (i: number) => void; badAt?: (i: number) => boolean;
