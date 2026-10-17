@@ -1508,8 +1508,8 @@ def gift_get(context):
 class Shop(CustomAction):
     """Heal, then sell -> buy and refresh -> fuse until a round does nothing, then leave (spec 03 section 13).
 
-    The visit's state (healed, refreshes used, keywords read) lives in RUN["shop"], so a re-entry
-    from MirrorHub carries on; leaving drops it. Every spend keeps the team's reserve_cost.
+    The visit's state (healed, refreshes used, keywords read, whether the owned gifts were scanned for a
+    fusion) lives in RUN["shop"], so a re-entry from MirrorHub carries on; leaving drops it. Every spend keeps the team's reserve_cost.
     """
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
@@ -1523,7 +1523,7 @@ class Shop(CustomAction):
         for _ in range(shop.ROUNDS):
             acted = self.sell(context, team, visit)
             acted = self.buy(context, team, visit) or acted
-            acted = self.fuse(context, team) or acted
+            acted = self.fuse(context, team, visit) or acted
             if not acted:
                 break
         else:
@@ -1617,6 +1617,7 @@ class Shop(CustomAction):
         while True:
             if Shop.buy_one(context, keyword, reserve, visit):
                 acted = True
+                visit["fuse_scanned"] = False  # a new gift: the fusion grid has changed
                 continue  # live: a bought offer moves to the end of the grid, so read the offers again
             if visit["wanted"] and not visit["sold"]:
                 return True  # sell first, next round
@@ -1704,6 +1705,7 @@ class Shop(CustomAction):
             if price and "Select the" not in panel and rewards.gift_kind(panel, team["keyword"], False) != "main":
                 gifts.append((i, price))
         picked = shop.to_sell(gifts, wanted, cost or 0, team["reserve_cost"])
+        visit["fuse_scanned"] = visit.get("fuse_scanned") and not picked
         log(f"shop: {wanted} wanted, {cost} Cost, non-main (cell, price) {gifts}: sell {picked}")
         for i in picked or []:
             before = number(text(context, screen(context), SELL_COST))
@@ -1717,12 +1719,15 @@ class Shop(CustomAction):
         return bool(picked)
 
     @staticmethod
-    def fuse(context, team):
+    def fuse(context, team, visit):
         """Fuse 3 non-main gifts into the main keyword, Wishmaking left unticked; True when one fused.
 
         A tap on a gift shows its tooltip (its keyword, by spec 03 section 12's text rule) and puts it
-        in the fusion, so a main gift is tapped again to take it back out.
+        in the fusion, so a main gift is tapped again to take it back out. A grid that held too few
+        non-main gifts is not scanned again until a purchase or a sale changes the owned gifts (#62).
         """
+        if visit.get("fuse_scanned"):
+            return False
         keyword = team["keyword"]
         tap(context, *SHOP_BUTTONS["fuse"], wait=2)
         if "Fuse" not in text(context, screen(context), DIALOG_TITLE):
@@ -1764,6 +1769,7 @@ class Shop(CustomAction):
                 fused = gift_get(context)
             log(f"shop: fuse {picked} into {keyword}: {'done' if fused else 'not confirmed'}")
         else:
+            visit["fuse_scanned"] = True
             log(f"shop: {len(picked)} non-main gifts on show, a fusion takes 3")
         Shop.to_main(context)
         return fused
