@@ -194,6 +194,7 @@
               "gifts": {
                 "type": "array",
                 "uniqueItems": true,
+                "maxItems": 3,
                 "items": {
                   "type": "object",
                   "additionalProperties": false,
