@@ -80,6 +80,7 @@ const screens: [image: string, hits: string[]][] = [
   ['GiftRefuseDialog.png', ['GiftRefuseDialog', 'GiftChoice']],
   ['EventStory.png', ['Event']],
   ['EventChoices.png', ['Event']],
+  ['EventChoicesUsed.png', ['Event']],  // floor 5 boss's second round of questions: the first answer greyed out (#34)
   ['EventCheck.png', ['Event']],
   ['EventResult.png', ['Event']],
   // Shop: Leave stays readable under the shop's own dialogs and pages; the heal page has Return instead.
