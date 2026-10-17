@@ -117,5 +117,26 @@ def rank_gifts(cards, weight):
     return sorted(range(len(cards)), key=key)
 
 
+def pick_gifts(ranked, read, tap):
+    """Tap gift cards best first until Select n/m is full (spec 03 section 12).
+
+    read() gives (n, m) off the screen or None; tap(i) taps card i. A lone card shows no count.
+    With several cards and no count read, it is read again, then cards are tapped in order until
+    it reads, every card when it never does (#81).
+    """
+    count = read()
+    if count is None and len(ranked) > 1:
+        count = read()
+    for i in ranked:
+        if count and count[0] >= count[1]:
+            break
+        tap(i)
+        now = read()
+        if count and now and now[0] < count[0]:  # it was picked already: pick it again, go on to the next
+            tap(i)
+            now = read()
+        count = now or count
+
+
 def _norm(s):
     return "".join(c for c in s.lower() if c.isalnum())
