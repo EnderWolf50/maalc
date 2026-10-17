@@ -46,6 +46,12 @@ LOG = deque(maxlen=500)
 
 WEEKLY_SLOTS = (922, 960, 998)  # x of the 3 Weekly Bonuses slots on the entry page, y 285-297
 TEAM_LIST = [75, 292, 115, 245]
+ENTER_DIALOG = [400, 325, 480, 45]  # "Will you enter ...?"
+TEAM_TITLE = [220, 112, 210, 26]  # "TEAMS #n" over the card list
+LEVEL_WARNING = [400, 230, 480, 90]  # "... lower than the recommended level ..."
+STARLIGHT_HEADER = [890, 30, 115, 28]  # "Available"
+STARLIGHT_DIALOG = [480, 210, 320, 35]  # "Continue with selected effects?"
+STARTING_GIFT_HEADER = [780, 145, 230, 35]  # "Selected E.G.O Gift"
 STARLIGHT_AVAILABLE = [1010, 30, 80, 28]
 GRACE_ORIGIN_X, GRACE_ORIGIN_Y = (138, 152), (152, 390)  # top-left of card 1; step 198 px per column
 PACK_TITLES = [120, 400, 1040, 100]  # up to 5 cards (live: 5 with two Theme Pack Selection +1 graces)
@@ -79,6 +85,17 @@ def until(context, done, timeout=2.0, least=0.0, every=0.2):
         if time.monotonic() >= end:
             return None
         time.sleep(every)
+
+
+def shows(context, roi, pattern, flags=re.I):
+    """A done(image) for until(): the OCR text in roi matches pattern."""
+    return lambda image: re.search(pattern, text(context, image, roi), flags) is not None
+
+
+def tap_then(context, x, y, done, timeout=2.0):
+    """Tap, then until() done(image) holds: that image, or None after timeout s (#115)."""
+    tap(context, x, y, wait=0)
+    return until(context, done, timeout=timeout)
 
 
 def still(context, timeout=2.0):
@@ -304,6 +321,22 @@ class Halt(CustomAction):
         return stop(context, f"{argv.node_name}: {json.loads(argv.custom_action_param or '""')}")
 
 
+@AgentServer.custom_action("TapUntil")
+class TapUntil(CustomAction):
+    """A Click node that waits for the page that follows instead of a post_delay (#115).
+
+    Param: {"target": [x, y, w, h], "next": {"roi": [...], "expected": regex} or a list of them (any), "timeout": s (default 3)}.
+    The page it leaves may still read like itself for a moment; MirrorHub would act on it twice.
+    """
+
+    def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
+        p = json.loads(argv.custom_action_param)
+        x, y, w, h = p["target"]
+        pages = [shows(context, n["roi"], n["expected"]) for n in (p["next"] if isinstance(p["next"], list) else [p["next"]])]
+        tap_then(context, x + w // 2, y + h // 2, lambda im: any(page(im) for page in pages), timeout=p.get("timeout", 3))
+        return True
+
+
 @AgentServer.custom_action("PlanRun")
 class PlanRun(CustomAction):
     """Entry page, no run under way: check settings, pick difficulty and team, press Enter (spec 03 sections 1, 2).
@@ -341,7 +374,7 @@ class PlanRun(CustomAction):
                    floor_limit=limit, guard=team["guard_turns"])
         STUCK["ladder"] = recovery.Ladder()
         log(f"new run: {difficulty}, team {team['name']!r} (TEAMS #{team['game_team']}), weekly bonuses left {weekly}, time limit {limit / 60:.0f} min a floor")
-        tap(context, 1108, 494, wait=1.5)
+        tap_then(context, 1108, 494, shows(context, ENTER_DIALOG, "Will you enter"), timeout=3)
         return True
 
 
@@ -369,13 +402,14 @@ class SelectTeam(CustomAction):
             elif move == "up":
                 scroll(context, 130, 340, 0, 140)
             else:
-                tap(context, 130, move[1], wait=1.5)
-                image = screen(context)
-                title = text(context, image, [220, 112, 210, 26])
-                if re.search(rf"#\s*{n}\b", title):
+                image = tap_then(context, 130, move[1], shows(context, TEAM_TITLE, rf"#\s*{n}\b"))
+                if image is not None:
                     bonus = number(text(context, image, [1160, 522, 60, 34]))
                     log(f"team TEAMS #{n}, Starlight Bonus {bonus}")
-                    tap(context, 1145, 587, wait=2)
+                    # LevelWarning when the team is under the recommended level, else the starlight page; the team page
+                    # reads through the warning, so leaving it early would have MirrorHub pick the team twice.
+                    warning, starlight = shows(context, LEVEL_WARNING, "recommended level"), shows(context, STARLIGHT_HEADER, "Available")
+                    tap_then(context, 1145, 587, lambda im: warning(im) or starlight(im), timeout=4)
                     return True
         return stop(context, f"could not select TEAMS #{n}")
 
@@ -441,7 +475,8 @@ class BuyStarlight(CustomAction):
                 return stop(context, f"grace {n} {level}: Available {available} -> {now}, expected -{price}")
             log(f"grace {n} {level} for {price}, {now} left")
             available = now
-        tap(context, 1195, 672, wait=1.5)
+        run["starlight_unspent"] = available  # added to the Owned box at once unless ConfirmStarlight converts it (#73)
+        tap_then(context, 1195, 672, shows(context, STARLIGHT_DIALOG, "Continue with selected"), timeout=3)
         return True
 
     @staticmethod
@@ -479,7 +514,10 @@ class ConfirmStarlight(CustomAction):
             note = text(context, image, [660, 395, 320, 90]).lower()
             on = True if "remaining" in note else False if "unspent" in note else None
             if on == want:
-                tap(context, 738, 530, wait=2)
+                if want:
+                    run["starlight_unspent"] = 0
+                # The dialog stays up behind the game's Connecting; MirrorHub would confirm it twice.
+                tap_then(context, 738, 530, shows(context, STARTING_GIFT_HEADER, "Selected E"), timeout=4)
                 return True
             if on is not None:
                 tap(context, 727, 363)
@@ -504,16 +542,18 @@ class PickStartingGift(CustomAction):
             else:
                 return stuck(f"no {keyword} cabinet")
             x, y, w, h = label
-            tap(context, x + w // 2, y + h // 2 + 75)
+            tap(context, x + w // 2, y + h // 2 + 75, wait=0)
+            still(context, timeout=1.5)  # the cabinet's gifts slide in
             for gift_y in (262, 370, 475):
-                if self.full(context):
+                before = self.count(context)
+                if before and before[0] == before[1]:
                     break
-                tap(context, 970, gift_y, wait=1.5)
+                tap_then(context, 970, gift_y, lambda im: self.count(context, im) != before, timeout=1.5)
+            still(context, timeout=1.0)  # Live: Select ignores a tap in the picking animation
         # Live: the first tap on Select right after picking is often ignored.
+        header, popup = shows(context, STARTING_GIFT_HEADER, "Selected"), shows(context, GET_TITLE, "GET")
         for _ in range(4):
-            tap(context, 1080, 587, wait=2.5)
-            image = screen(context)
-            if "GET" in text(context, image, [520, 160, 240, 40]) or "Selected" not in text(context, image, [780, 145, 230, 35]):
+            if tap_then(context, 1080, 587, lambda im: popup(im) or not header(im), timeout=2.5) is not None:
                 log(f"starting gift: {keyword}")
                 return True
         return stuck("Select did not take the starting gift")
@@ -525,19 +565,49 @@ class PickStartingGift(CustomAction):
         Live 2026-10-16: off skips the E.G.O Gift Search page; the next run keeps the switch (back on after a restart).
         An unread switch is left alone: the search page, if it comes, refuses or picks anyway.
         """
+        def switch(image):
+            shown = text(context, image, [1100, 145, 85, 28]).upper()
+            return False if "OFF" in shown else True if "ON" in shown else None
+
         for _ in range(3):
-            shown = text(context, screen(context), [1100, 145, 85, 28]).upper()
-            on = False if "OFF" in shown else True if "ON" in shown else None
+            on = switch(screen(context))
             if on is None or on == want:
                 return
-            tap(context, 1140, 158, wait=1)
+            tap_then(context, 1140, 158, lambda im: switch(im) == want, timeout=1.5)
             log(f"Activate Gift Search: {'on' if want else 'off'}")
+
+    @staticmethod
+    def count(context, image=None):
+        """The (n, m) strings of Select n/m, or None."""
+        m = re.search(r"(\d)\s*/\s*(\d)", text(context, screen(context) if image is None else image, [990, 565, 190, 45]))
+        return m.groups() if m else None
 
     @staticmethod
     def full(context):
         """Select n/m reads n == m."""
-        m = re.search(r"(\d)\s*/\s*(\d)", text(context, screen(context), [990, 565, 190, 45]))
-        return bool(m) and m[1] == m[2]
+        n = PickStartingGift.count(context)
+        return bool(n) and n[0] == n[1]
+
+
+@AgentServer.custom_action("GiftGet")
+class GiftGet(CustomAction):
+    """Close an E.G.O Gift GET! popup and wait until it is gone or the next gift's popup is up (#115).
+
+    A search or a cabinet that gives n gifts pops n windows. The name plate tells the next window from the
+    one just closed; MirrorHub closes it in its next pass.
+    """
+
+    def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
+        title = shows(context, GET_TITLE, "GET")
+        before = text(context, screen(context), GET_NAME).strip()
+
+        def closed(image):
+            if not title(image):
+                return True
+            now = text(context, image, GET_NAME).strip()
+            return bool(before and now and now != before)
+        tap_then(context, *GET_CONFIRM, closed, timeout=2)
+        return True
 
 
 # E.G.O Gift Search page (live 2026-10-16, 1.117.0). Tabs left to right, 62 px apart.
@@ -548,6 +618,7 @@ SEARCH_PANEL_Y = (205, 316, 427)  # name lines of the Selected E.G.O Gift panel'
 SEARCH_SELECT = (1100, 575)
 SEARCH_REFUSE = (922, 575)
 SEARCH_DIALOG = [400, 315, 480, 60]  # "Consume 70 Starlight to search and obtain these E.G.O Gifts?"
+FORGO_DIALOG = [480, 330, 320, 35]  # Refuse Gift's "Forgo ...?"
 SEARCH_DIALOG_BUTTONS = {"cancel": (513, 495), "confirm": (765, 495)}
 # A gift's icon (image/GiftSearch/<id>.png) scores 0.71-0.97 on its own cell, other cells up to ~0.75 (2026-10-16):
 # low enough to try a dark icon; the panel name check undoes a lookalike.
@@ -575,7 +646,8 @@ class GiftSearch(CustomAction):
         wanted = search["gifts"] if search["enabled"] else []
         names = [g["name"] for g in wanted]
         if "Consume" in text(context, screen(context), SEARCH_DIALOG):
-            tap(context, *SEARCH_DIALOG_BUTTONS["cancel"], wait=1.5)  # left open by an earlier try: check the picks again
+            # left open by an earlier try: check the picks again
+            tap_then(context, *SEARCH_DIALOG_BUTTONS["cancel"], lambda im: "Consume" not in text(context, im, SEARCH_DIALOG), timeout=1.5)
         tried, dropped = [], 0
         while True:
             image = screen(context)
@@ -587,7 +659,7 @@ class GiftSearch(CustomAction):
             if unwanted and dropped < 3:
                 # Left over from a tap that missed: tapping its panel entry unselects it (live 2026-10-16).
                 log(f"gift search: unselecting {chosen[unwanted[0]]}, not in the team's list")
-                tap(context, 1000, SEARCH_PANEL_Y[unwanted[0]] + 45, wait=1.5)
+                tap_then(context, 1000, SEARCH_PANEL_Y[unwanted[0]] + 45, lambda im: self.chosen(context, im, names) != chosen, timeout=1.5)
                 dropped += 1
                 continue
             gift = gift_search.next_gift(wanted, chosen, tried, count)
@@ -598,20 +670,22 @@ class GiftSearch(CustomAction):
                 log(f"gift search: {gift['name']} ({gift['keyword']} tier {gift['tier']}) not picked: not on the page, owned or unaffordable")
         if not chosen or unwanted:
             log("gift search: refused" + (f", {chosen} would not unselect" if unwanted else ""))
-            tap(context, *SEARCH_REFUSE, wait=1.5)
+            tap_then(context, *SEARCH_REFUSE, shows(context, FORGO_DIALOG, "Forgo"), timeout=2)
             return True
         owned = gift_search.owned_starlight(*(text(context, image, roi) for roi in SEARCH_OWNED))
         # Select asks "Consume N Starlight to search and obtain these E.G.O Gifts?"; the GET! windows are MirrorHub's.
         for _ in range(3):
-            tap(context, *SEARCH_SELECT, wait=2)
-            ask = text(context, screen(context), SEARCH_DIALOG)
-            if "Consume" in ask:
+            asked = tap_then(context, *SEARCH_SELECT, shows(context, SEARCH_DIALOG, "Consume"), timeout=2)
+            if asked is not None:
+                ask = text(context, asked, SEARCH_DIALOG)
                 break
         else:
             return stuck("Select did not ask to consume starlight")
-        tap(context, *SEARCH_DIALOG_BUTTONS["confirm"], wait=2)
+        # The search page reads through the dialog and again before the first window: leaving early would buy twice.
+        tap_then(context, *SEARCH_DIALOG_BUTTONS["confirm"], shows(context, GET_TITLE, "GET"), timeout=4)
         price = number(ask.split("Starlight")[0])
-        before = owned[0] if owned else None
+        # The Owned box counts the Starlight left unspent on the starlight page (#73): not the account's before the run.
+        before = owned[0] - RUN.get("starlight_unspent", 0) if owned else None
         after = before - price if before is not None and price is not None else None
         log(f"gift search: bought {', '.join(chosen)} for {price} owned starlight; owned starlight {before} -> {after}")
         run["gift_search"] = {"gifts": chosen, "starlight": price, "owned_before": before, "owned_after": after}
@@ -671,8 +745,10 @@ class GiftSearch(CustomAction):
     def open_tab(context, keyword):
         """Open keyword's tab at its top: switching tabs resets the scroll (live 2026-10-16), so via a neighbour."""
         i = SEARCH_TABS.index(keyword)
-        tap(context, 113 + 62 * (i + 1 if i == 0 else i - 1), 190, wait=0.6)
-        tap(context, 113 + 62 * i, 190, wait=1)
+        tap(context, 113 + 62 * (i + 1 if i == 0 else i - 1), 190, wait=0)
+        still(context, timeout=1)
+        tap(context, 113 + 62 * i, 190, wait=0)
+        still(context, timeout=1)
 
     @staticmethod
     def scroll(context, distance):
@@ -700,13 +776,13 @@ class GiftSearch(CustomAction):
     def tap_and_check(context, image, x, y, name):
         """Tap a cell; True when the panel's new entry is name, else tap it off again (a lookalike icon)."""
         before = GiftSearch.chosen(context, image, [])
-        tap(context, x, y, wait=1)
-        new = [t for t in GiftSearch.chosen(context, screen(context), []) if t not in before]
+        after = tap_then(context, x, y, lambda im: GiftSearch.chosen(context, im, []) != before, timeout=1)
+        new = [t for t in GiftSearch.chosen(context, after if after is not None else screen(context), []) if t not in before]
         if new and run_start.match_pack(new[0], [name]):
             return True
         if new:
             log(f"gift search: the icon match picked {new[0]}, not {name}: unselected")
-            tap(context, x, y, wait=1)
+            tap_then(context, x, y, lambda im: GiftSearch.chosen(context, im, []) == before, timeout=1)
         return False
 
 
@@ -781,11 +857,14 @@ class PickThemePack(CustomAction):
 
     @staticmethod
     def set_difficulty(context, floor, want):
+        def label(image):
+            shown = text(context, image, [830, 30, 160, 35]).upper()
+            return True if "HARD" in shown else False if "NORMAL" in shown else None
+
         for _ in range(4):
-            shown = text(context, screen(context), [830, 30, 160, 35]).upper()
-            hard = True if "HARD" in shown else False if "NORMAL" in shown else None
+            hard = label(screen(context))
             if hard is None:
-                time.sleep(1)
+                until(context, lambda im: label(im) is not None, timeout=1)
                 continue
             move = run_start.difficulty_move(floor, hard, want)
             if move is None:
@@ -796,7 +875,8 @@ class PickThemePack(CustomAction):
                 return True
             # The arrows sit left of HARD, right of NORMAL; switching re-rolls the packs.
             log(f"floor {floor}: switch to {move.upper()}")
-            tap(context, 965 if move == "hard" else 850, 46, wait=2.5)
+            tap_then(context, 965 if move == "hard" else 850, 46, lambda im: label(im) == (move == "hard"), timeout=2.5)
+            still(context, timeout=1.5)  # the packs re-roll
         return False
 
 
@@ -1464,6 +1544,7 @@ PURCHASE, PURCHASE_CANCEL = (747, 482), (525, 482)
 KEYWORD_LABELS = [270, 300, 740, 200]  # the 10 keyword cards of both keyword dialogs
 KEYWORD_REFRESH, KEYWORD_CANCEL = (785, 560), (495, 560)
 GET_TITLE, GET_CONFIRM = [520, 160, 240, 40], (640, 532)
+GET_NAME = [320, 405, 180, 80]  # the red plate under the gift's icon
 PAGE_CLOSE, PAGE_OK = (490, 585), (788, 585)  # Close, and Fuse / Sell, on the fuse and sell pages
 SHOP_BUTTONS = {"fuse": (295, 390), "sell": (395, 390), "heal": (197, 474)}
 FUSE_CENTRE, FUSE_KEYWORD_OK = (365, 340), (788, 566)
