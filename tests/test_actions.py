@@ -205,10 +205,19 @@ def reads(context, texts):
     context.run_recognition.side_effect = run_recognition
 
 
+def owned_gifts(context, n=len(actions.FUSE_CELLS)):
+    """Screenshots whose first n fuse cells hold a gift (a textured square); the rest stay flat."""
+    image = np.zeros((720, 1280, 3), np.uint8)
+    for x, y in actions.FUSE_CELLS[:n]:
+        image[y - 30:y + 30, x - 30:x + 30] = np.random.default_rng(0).integers(0, 255, (60, 60, 3), np.uint8)
+    context.tasker.controller.post_screencap.return_value.wait.return_value.get.return_value = image
+
+
 def test_the_fusion_grid_is_not_scanned_again_while_the_owned_gifts_are_the_same(context):
     # The fuse page with its keyword dialog, every cell empty: no fusion this visit.
     reads(context, {tuple(actions.DIALOG_TITLE): [("Fuse E.G.O Gift", (500, 100, 200, 40))],
                     tuple(actions.KEYWORD_LABELS): [("Burn", (300, 400, 60, 20))]})
+    owned_gifts(context)
     team, visit = {"keyword": "Burn", "gift_search": {"gifts": []}}, {}
     assert not actions.Shop.fuse(context, team, visit)
     taps = context.tasker.controller.post_click.call_count
@@ -229,6 +238,7 @@ def test_the_teams_observed_gift_is_kept_out_of_a_fusion(context):
         results = [SimpleNamespace(text=t, box=b) for t, b in reads.get(roi, [])]
         return SimpleNamespace(all_results=results) if results else None
     context.run_recognition.side_effect = run_recognition
+    owned_gifts(context)
     team = {"keyword": "Burn", "gift_search": {"gifts": [{"name": "Spiderweb Entangled in Red"}]}}
     assert not actions.Shop.fuse(context, team, {})
     taps = [c.args for c in context.tasker.controller.post_click.call_args_list]
@@ -250,3 +260,13 @@ def test_the_shop_stops_tapping_once_the_map_shows(context):
     visit = {"kinds": {}, "wanted": None}
     assert not actions.Shop.buy_one(context, "Burn", 0, visit)
     assert context.tasker.controller.post_click.call_count == 1  # the second offer is never tapped
+
+
+def test_only_the_filled_fusion_cells_are_tapped_and_an_unnamed_gift_comes_out_again(context):
+    # Live 2026-10-18: 5 gifts owned, 10 empty cells tapped at 3.4 s each; Spiderweb read no name and stayed in.
+    reads(context, {tuple(actions.DIALOG_TITLE): [("Fuse E.G.O Gift", (500, 100, 200, 40))],
+                    tuple(actions.KEYWORD_LABELS): [("Burn", (300, 400, 60, 20))]})
+    owned_gifts(context, 2)
+    assert not actions.Shop.fuse(context, {"keyword": "Burn", "gift_search": {"gifts": []}}, {})
+    taps = [c.args for c in context.tasker.controller.post_click.call_args_list]
+    assert [taps.count(c) for c in actions.FUSE_CELLS] == [2, 2] + [0] * (len(actions.FUSE_CELLS) - 2)
