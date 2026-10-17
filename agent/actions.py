@@ -839,9 +839,19 @@ def seen(context, image, node, roi=None):
     return detail if detail and detail.hit else None
 
 
-def node_at(context, image, cx, cy):
-    """The type of the map node centred at (cx, cy), by the marks seen around it (map_route.node_type)."""
-    return map_route.node_type({mark for n, (mark, (ox, oy, w, h)) in MARKS.items() if seen(context, image, n, (cx + ox, cy + oy, w, h))})
+def node_marks(context, image, cx, cy):
+    """The marks seen around the map node centred at (cx, cy): {mark: hit}."""
+    return {mark: hit for n, (mark, (ox, oy, w, h)) in MARKS.items() if (hit := seen(context, image, n, (cx + ox, cy + oy, w, h)))}
+
+
+def node_at(context, image, cx, cy, marks=None):
+    """The type of the map node centred at (cx, cy), by its marks (map_route.node_type).
+
+    No mark at all where the badges (80 px above the centre) sit under the resource bar: unknown, not an
+    event; a fight's Cost coin may be hidden there (the top row with the map at rest).
+    """
+    marks = node_marks(context, image, cx, cy) if marks is None else marks
+    return "unknown" if not marks and cy - 80 < 60 else map_route.node_type(set(marks))
 
 
 def map_weights(context):
@@ -977,9 +987,10 @@ class RouteMap(CustomAction):
     def follow(context):
         """Tap the next node of this floor's planned path; whether its node panel showed (#111).
 
-        No node is read, and the map is dragged (bus to the far left) only when the slot sits under the
-        resource bar or the buttons. False, for a full read, with no plan or a used-up one, or when the
-        slot does not read as linked to the bus or its tap shows no panel.
+        Only that slot is read, and the map is dragged (bus to the far left) only when it sits under the
+        resource bar or the buttons. False, for a full read, whenever in doubt: no plan or a used-up one,
+        the slot not linked to the bus or not of the planned type (the bus not where the plan put it, or a
+        misread from afar), or its tap showing no panel.
         """
         plan = RUN.get("map_plan")
         if not plan or plan["floor"] != RUN.get("floor") or not plan["steps"]:
@@ -997,7 +1008,12 @@ class RouteMap(CustomAction):
             log(f"map: planned {row} {node} not linked to the bus; reading the map again")
             return False
         bx, by = bus
-        tap(context, bx + SLOT[0], by + SLOT[1] + map_route.ROW_DY[row], wait=0)
+        cx, cy = bx + SLOT[0], by + SLOT[1] + map_route.ROW_DY[row]
+        kind = node_at(context, image, cx, cy)
+        if kind != node:
+            log(f"map: planned {row} {node} reads {kind}; reading the map again")
+            return False
+        tap(context, cx, cy, wait=0)
         if until(context, lambda im: seen(context, im, "MapNodePanel")) is None:
             log(f"map: planned {row} {node} took no tap; reading the map again")
             return False
@@ -1010,8 +1026,8 @@ class RouteMap(CustomAction):
         """The columns beyond the first on screen, for map_route.rank.
 
         A node counts when a link into it from the column before reads (map_route.line_contrast); only rows
-        next to each other link. The read ends at the screen's edge, at a column with nothing linked or
-        nothing but unknown nodes (dark: hard mode shows two columns), or after the boss.
+        next to each other link. The read ends at the screen's edge, at a column with nothing linked or no
+        mark on any node (dark: hard mode shows two columns), or after the boss.
         """
         dx, dy = map_route.COLUMN_DX, map_route.ROW_DY
         v, x, ahead = image.max(axis=2), bx + SLOT[0], []
@@ -1020,13 +1036,14 @@ class RouteMap(CustomAction):
             return by + SLOT[1] + dy[row]
         while x + dx + 80 <= 1200:  # MapNodeFocusedHex reads 80 px either side; buttons from x 1205
             x += dx
-            before, column = ahead[-1] if ahead else slots, {}
+            before, column, lit = ahead[-1] if ahead else slots, {}, False
             for row in map_route.ROWS:
                 linked = {r for r in before if abs(dy[r] - dy[row]) <= 213
                           and (map_route.line_contrast(v, x - dx, y(r), x, y(row)) or 0) >= map_route.LINE_CONTRAST}
                 if linked:
-                    column[row] = (node_at(context, image, x, y(row)), linked)
-            if not column or all(t == "unknown" for t, _ in column.values()):
+                    marks = node_marks(context, image, x, y(row))
+                    column[row], lit = (node_at(context, image, x, y(row), marks), linked), lit or bool(marks)
+            if not lit:
                 break
             ahead.append(column)
             log(f"map: column {len(ahead) + 1}: " + ", ".join(f"{r} {t} (from {'/'.join(sorted(n))})" for r, (t, n) in column.items()))

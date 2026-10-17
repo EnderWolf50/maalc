@@ -1,6 +1,7 @@
 """Custom actions driven offline: a fake Maa context reads nothing on a blank screen."""
 
 import time
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
@@ -143,6 +144,39 @@ def test_a_map_not_readable_yet_is_read_again_before_any_tap(context, monkeypatc
     assert first == (446 + actions.SLOT[0], 248 + actions.SLOT[1])  # the middle row's battle
 
 
+def test_a_bright_event_its_templates_miss_is_still_an_event(context):
+    # Live 2026-10-18, floor 2 "Lake World" (cyan): the top slot's "?" matched no MapNodeEvent template, read
+    # unknown (9), and the bot took the middle abnormality (22) over up event > mid battle > mid shop > boss (19).
+    # tests/data/map_lake_world.npz: that frame's per-pixel brightness, y 70-614, x 0-1179; bus at 50, 320.
+    v = np.zeros((720, 1280), np.uint8)
+    v[70:615, :1180] = np.load(Path(__file__).resolve().parent / "data/map_lake_world.npz")["v"]
+    image = v[..., None].repeat(3, axis=2)
+    seen_live = {(329, 357): {"cost", "gift"}, (584, 357): {"cost"}, (839, 357): {"shop"}, (1094, 357): {"boss", "cost", "gift"}}
+
+    def run_recognition(name, image, override=None):
+        if name in ("MapLinkUp", "MapLinkMid"):
+            return SimpleNamespace(hit=True)
+        if name in actions.MARKS:
+            mark, (ox, oy, _, _) = actions.MARKS[name]
+            x, y = override[name]["roi"][:2]
+            return SimpleNamespace(hit=True, box=[x, y, 26, 24]) if mark in seen_live.get((x - ox, y - oy), ()) else None
+        return None
+    context.run_recognition.side_effect = run_recognition
+    slots = actions.RouteMap.read_slots(context, image, 50, 320)
+    ahead = actions.RouteMap.read_ahead(context, image, 50, 320, slots)
+    weights = {"event": 1, "battle": 2, "abno": 5, "shop": 7, "unknown": 9}
+    assert slots["up"][0] == "event"
+    score, path = actions.map_route.paths(slots, weights, ahead)[actions.map_route.rank(slots, weights, ahead)[0]]
+    assert (path, score) == (["up", "mid", "mid", "mid"], 19)
+
+
+def test_a_node_with_its_badges_under_the_resource_bar_is_no_event_for_showing_none(context):
+    # At rest (bus at 446, 248) the top row's badges hide under the resource bar: a fight would show no coin.
+    image = np.zeros((720, 1280, 3), np.uint8)
+    assert actions.node_at(context, image, 725, 72) == "unknown"
+    assert actions.node_at(context, image, 329, 144) == "event"  # the top row with the bus at BUS_HOME
+
+
 def test_a_bus_at_the_far_left_is_not_dragged(context):
     bus_at(context, *actions.BUS_HOME, linked=("MapLinkMid", "MapLinkDown"))
     _, bus = actions.RouteMap.find_bus(context)
@@ -238,7 +272,7 @@ def test_two_columns_on_a_hard_floor_take_the_cheapest_path(context, monkeypatch
     context.tasker.controller.post_touch_down.assert_not_called()
 
 
-def test_a_full_read_plans_the_path_and_the_next_step_follows_it_without_a_drag_or_a_node_read(context, monkeypatch):
+def test_a_full_read_plans_the_path_and_the_next_step_follows_it_without_a_drag(context, monkeypatch):
     # The user (#111): once the floor's nodes are read, follow the path decided on.
     monkeypatch.setattr(actions, "map_weights", lambda context: WEIGHTS)
     actions.RUN["floor"] = 1
@@ -255,8 +289,17 @@ def test_a_full_read_plans_the_path_and_the_next_step_follows_it_without_a_drag_
     actions.RouteMap().run(context, None)
     context.tasker.controller.post_touch_down.assert_not_called()
     assert context.tasker.controller.post_click.call_args_list[0].args == (446 + actions.SLOT[0], actions.BUS_HOME[1] + actions.SLOT[1] - 213)
-    assert not [c for c in context.run_recognition.call_args_list if c.args[0] in actions.MARKS]
     assert actions.RUN["map_plan"]["steps"] == [("mid", "event")]
+
+
+def test_a_planned_slot_of_another_type_means_the_map_is_read_again(context, monkeypatch):
+    # The bus not where the plan put it, or a node misread from afar: read again rather than follow.
+    monkeypatch.setattr(actions, "map_weights", lambda context: WEIGHTS)
+    actions.RUN.update(floor=1, map_plan={"floor": 1, "steps": [("mid", "event")]})
+    map_world(context, {(1, "mid"): {"cost"}}, [], bus_x=446)
+    actions.RouteMap().run(context, None)
+    context.tasker.controller.post_touch_down.assert_called()  # dragged to the far left for a full read
+    assert actions.RUN["map_plan"] == {"floor": 1, "steps": []}
 
 
 def test_a_planned_slot_not_linked_to_the_bus_means_the_map_is_read_again(context, monkeypatch):

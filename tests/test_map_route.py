@@ -18,8 +18,10 @@ NORMAL, HARD = WEIGHTS["normal"], WEIGHTS["hard"]
     ({"cost"}, "battle"),
     ({"event"}, "event"),
     ({"shop"}, "shop"),
-    ({"gift"}, "unknown"),
-    (set(), "unknown"),
+    # No Cost coin, no boss, Focused or shop mark: an event, its "?" missed by the templates. Live 2026-10-18,
+    # floor 2 "Lake World" (cyan): a bright "?" next to the bus; MapPanned.png: a dim one two columns out.
+    ({"gift"}, "event"),
+    (set(), "event"),
 ])
 def test_node_type(marks, expected):
     assert mr.node_type(marks) == expected
@@ -62,12 +64,6 @@ def test_a_slot_with_no_link_read_onward_goes_on_to_the_cheapest_node():
     # Every node leads on, so an unread link must not make a path look shorter (cheaper) than the others.
     ahead = [{"down": ("event", {"down"})}]
     assert mr.rank({"up": ("battle", None), "down": ("event", None)}, HARD, ahead) == ["down", "up"]
-
-
-def test_an_unmarked_node_beyond_the_first_column_scores_as_an_event():
-    # MapPanned.png: the "?" two columns out is too dim for its template; fights carry a lit Cost coin.
-    ahead = [{"up": ("unknown", {"up"}), "down": ("abno", {"down"})}]
-    assert mr.rank({"up": ("battle", 1), "down": ("event", 1)}, HARD, ahead) == ["up", "down"]
 
 
 def lit(links, size=(720, 1280)):
