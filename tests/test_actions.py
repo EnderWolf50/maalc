@@ -157,6 +157,32 @@ def test_a_map_at_rest_is_panned_when_a_link_leads_up(context):
     context.tasker.controller.post_touch_down.assert_called()
 
 
+def win_rate_taps(context):
+    return [c for c in context.tasker.controller.post_click.call_args_list if c.args == (984 + 20, 531 + 14)]
+
+
+def test_a_win_rate_tap_lost_in_the_turns_opening_is_tapped_again(context, monkeypatch):
+    # Live (#58): 0.3 s after the label showed, a Win Rate tap did nothing: label not pressed, disc unlit.
+    monkeypatch.setattr(actions.battle, "disc_lit", lambda image, x, y: len(win_rate_taps(context)) >= 2)
+    actions.PlayTurn().run(context, SimpleNamespace(box=[984, 531, 40, 20]))
+    assert len(win_rate_taps(context)) == 2
+
+
+def test_a_pressed_win_rate_is_not_tapped_again_while_the_disc_reads_unlit(context, monkeypatch):
+    # #69: Win Rate on, the disc dim (staggered slots): a second tap would clear the picks.
+    monkeypatch.setattr(actions.battle, "disc_lit", lambda image, x, y: False)
+    pressed = "Battle/BattleTurnPressed.png"
+
+    def run_recognition(name, image, override=None):
+        node = (override or {}).get(name, {})
+        if name == "BattleTurn" and node.get("template") == pressed and win_rate_taps(context):
+            return SimpleNamespace(hit=True, box=[984, 531, 40, 29])
+        return None
+    context.run_recognition.side_effect = run_recognition
+    actions.PlayTurn().run(context, SimpleNamespace(box=[984, 531, 40, 20]))
+    assert len(win_rate_taps(context)) == 1
+
+
 def test_a_turn_starts_after_win_rate_lights_the_disc(context, monkeypatch):
     lit = iter([False, True])  # unlit on the turn's first look, lit after the Win Rate tap
     monkeypatch.setattr(actions.battle, "disc_lit", lambda image, x, y: next(lit, True))
