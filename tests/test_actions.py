@@ -12,8 +12,20 @@ import recovery
 
 
 @pytest.fixture
-def context(monkeypatch):
-    monkeypatch.setattr(actions.time, "sleep", lambda s: None)
+def clock(monkeypatch):
+    """A fake clock that time.sleep moves on; returns the list of sleeps."""
+    now, sleeps = [1000.0], []
+
+    def sleep(s):
+        sleeps.append(s)
+        now[0] += s
+    monkeypatch.setattr(actions.time, "sleep", sleep)
+    monkeypatch.setattr(actions.time, "monotonic", lambda: now[0])
+    return sleeps
+
+
+@pytest.fixture
+def context(clock):
     ctx = MagicMock()
     ctx.tasker.controller.post_screencap.return_value.wait.return_value.get.return_value = np.zeros((720, 1280, 3), np.uint8)
     ctx.run_recognition.return_value = None  # OCR reads nothing, no node hits
@@ -25,26 +37,13 @@ def context(monkeypatch):
     actions.STUCK["flag"] = None
 
 
-def test_a_missed_victory_does_not_carry_the_battle_clock_into_the_next_battle(context, clock):
+def test_a_missed_victory_does_not_carry_the_battle_clock_into_the_next_battle(context):
     # #80: the last battle ended without VICTORY being seen, its clock and turn count left behind.
     actions.RUN["battle_start"] = time.time() - recovery.BATTLE_LIMIT - 60
     actions.RUN["turn"] = (None, 3)
     actions.Formation().run(context, None)  # the next battle's formation (fading in: no count read)
     actions.PlayTurn().run(context, SimpleNamespace(box=[600, 400, 40, 20]))
     assert actions.STUCK["flag"] is None
-
-
-@pytest.fixture
-def clock(monkeypatch):
-    """A fake clock that time.sleep moves on; returns the list of sleeps."""
-    now, sleeps = [1000.0], []
-
-    def sleep(s):
-        sleeps.append(s)
-        now[0] += s
-    monkeypatch.setattr(actions.time, "sleep", sleep)
-    monkeypatch.setattr(actions.time, "monotonic", lambda: now[0])
-    return sleeps
 
 
 def screens(context, values):
