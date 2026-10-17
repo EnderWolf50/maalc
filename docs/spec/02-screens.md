@@ -152,6 +152,7 @@
 | 升級彈窗 | 結算後的 `Pass Level Up` 是 `ClaimPopup`；其他升級彈窗沒有截圖 | `ClaimPopup` 按 Confirm；其他的由 `PopupButton` 擋住單鈕的，其餘還沒做 | 前一個畫面 | #16、#85 | `tests/screens/PassLevelUp.png` |
 | 單鈕彈窗（`PopupButton`，後備） | OCR：畫面中央（540–740, 430–500）的按鈕文字是 `Close`、`Confirm` 或 `OK`。只有一個按鈕，沒有可選的，所以按它；兩個按鈕的問句（Cancel／Confirm）按鈕不在中央，不會被它按到。排在 `ClaimPopup` 之後、所有頁面之前，維護公告在它前面（同樣是單個 Close，要停止） | 點那個按鈕 | 前一個畫面 | #85、#86 | `tests/screens/TitleErrorConfirm.png`（合成圖）；`RewardsAcquired.png`、`PassLevelUp.png` 它也讀得到，但 `ClaimPopup` 在前 |
 | 標題畫面的資料下載對話框（待截圖確認） | OCR：視窗內文含 `Download`／`Update`／`<n> MB`，按鈕 `Confirm`（另一個 `Close`）。2026-10-16 實機看過 `Downloading N MB of data`（L3 重啟後），位置沒截圖，ROI 取得寬 | 點 Confirm（`DownloadDialog`），卡住偵測暫停 30 分鐘等下載完 | 下載進度畫面（沒截過）、標題畫面 | #31、#86 | `tests/screens/TitleDownload.png`（合成圖） |
+| 「?」選效果頁（待截圖確認，沒有節點） | AALC 在鏡牢迴圈裡（主題包頁與選路之間）點一個八角形的「?」按鈕（`event_effect_button`），再點打勾確認（`select_event_effect_confirm`），註解標 rare。是哪一頁、什麼時候出現都沒有截圖，AALC 的素材沒有任何背景，也沒有一張現有截圖含這個圖示 | 還沒做。證據只夠說「點八角形『?』、再點打勾」，不夠定位置與辨識。出現時 `logs/unknown/` 會留下截圖，之後再補節點。需實機確認：①是哪一頁、出現在什麼時候（AALC 的迴圈順序暗示在主題包頁之後、地圖頁之前，只是推測）；②八角形「?」和打勾在畫面哪裡，「?」是不是選項之一（AALC 沒選任何東西就按打勾）；③打勾按鈕是圖示、OCR 讀不到，要截圖裁模板；④多常出現（AALC 標 rare），會不會讓選擇有後果 | 地圖頁 | #87 | — |
 | 維護公告 | OCR：公告視窗內文含 `maintenance`，且視窗唯一的按鈕讀到 `Close`（兩者同時出現；其他畫面文字含 maintenance 不算） | 直接停止，保存證據並發 webhook | 停止 | #14、#83 | `tests/screens/MaintenanceNotice.png` |
 
 ## 資訊面板（誤觸才會進入）
