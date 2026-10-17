@@ -242,7 +242,7 @@ def test_a_bus_not_found_even_by_dragging_goes_straight_to_l2(context, monkeypat
     assert actions.STUCK["flag"][1] == 2
 
 
-@pytest.mark.parametrize(("number", "expected"), [("85", "battle"), ("75.", "battle"), ("120", "risky"), ("50", "risky"), ("", "battle")])
+@pytest.mark.parametrize(("number", "expected"), [("85", "battle"), ("75.", "battle"), ("120", "risky"), ("50", "risky"), ("8", "battle"), ("", "battle")])
 def test_a_cost_coin_whose_number_is_no_battle_cost_is_not_a_battle(context, number, expected):
     # #91: no Risky capture yet; a Cost coin alone read as a battle (weight 2) whatever it was.
     def run_recognition(name, image, override=None):
@@ -253,6 +253,8 @@ def test_a_cost_coin_whose_number_is_no_battle_cost_is_not_a_battle(context, num
         return None
     context.run_recognition.side_effect = run_recognition
     assert actions.node_at(context, np.zeros((720, 1280, 3), np.uint8), 713, 380) == expected
+    # Past the first column the badges are dim (offline: MirrorMap.png's 85 read 8): no Cost read there.
+    assert actions.node_at(context, np.zeros((720, 1280, 3), np.uint8), 713, 380, costs=False) == "battle"
 
 
 def test_a_bus_at_the_far_left_is_not_dragged(context):
