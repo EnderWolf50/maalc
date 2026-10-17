@@ -205,12 +205,88 @@ def reads(context, texts):
     context.run_recognition.side_effect = run_recognition
 
 
-def owned_gifts(context, n=len(actions.FUSE_CELLS)):
-    """Screenshots whose first n fuse cells hold a gift (a textured square); the rest stay flat."""
+def owned_gifts(context, cells=actions.FUSE_CELLS):
+    """Screenshots whose cells hold a gift (a textured square); the rest stay flat."""
     image = np.zeros((720, 1280, 3), np.uint8)
-    for x, y in actions.FUSE_CELLS[:n]:
+    for x, y in cells:
         image[y - 30:y + 30, x - 30:x + 30] = np.random.default_rng(0).integers(0, 255, (60, 60, 3), np.uint8)
     context.tasker.controller.post_screencap.return_value.wait.return_value.get.return_value = image
+
+
+def cells_read(monkeypatch, *readings):
+    """read_cells reads the first cells of any grid as readings [(keyword, observed gift[, tier])], tier 2 by default
+    (test_shop_cells checks the reading itself on live captures)."""
+    def read_cells(context, image, cells, page, gifts=()):
+        return [{"i": i, "x": cells[i][0], "y": cells[i][1], "tier": (t or [2])[0], "keyword": k, "gift": g}
+                for i, (k, g, *t) in enumerate(readings)]
+    monkeypatch.setattr(actions, "read_cells", read_cells)
+
+
+FUSE_PAGE = {tuple(actions.DIALOG_TITLE): [("Fuse E.G.O Gift", (500, 100, 200, 40))],
+             tuple(actions.KEYWORD_LABELS): [("Burn", (300, 400, 60, 20))]}
+SPIDERWEB = {"name": "Spiderweb Entangled in Red", "keyword": "Keywordless", "tier": 3}
+
+
+def test_a_fusion_taps_only_the_materials_its_cells_show(context, monkeypatch):
+    # #112: one screenshot decides; no tooltip is opened. Spiderweb (observed), Burn (main) and keywordless gifts stay.
+    reads(context, FUSE_PAGE)
+    cells_read(monkeypatch, ("Keywordless", SPIDERWEB["name"]), ("Bleed", None), ("Burn", None), ("Keywordless", None),
+               ("Tremor", None), ("Pierce", None), ("Sinking", None), (None, None))
+    actions.Shop.fuse(context, {"keyword": "Burn", "gift_search": {"gifts": [SPIDERWEB]}}, {})
+    taps = [c.args for c in context.tasker.controller.post_click.call_args_list]
+    assert [taps.count(c) for c in actions.FUSE_CELLS[:8]] == [0, 1, 0, 0, 1, 1, 0, 0]
+    assert actions.PAGE_OK in taps
+    rois = [(c.args[2] or {}).get(c.args[0], {}).get("roi") for c in context.run_recognition.call_args_list]
+    assert actions.FUSE_TOOLTIP not in rois
+
+
+def test_offers_are_read_once_and_bought_high_tier_first_from_the_back(context, monkeypatch):
+    # #76: no purchase dialog is opened to read a keyword. Burn T1 140, Bleed T2 150, Burn T2 200, Burn T3 250 with
+    # 500 Cost: T3 then T2 (the T1 no longer fits), the last cell first so the other stays in place.
+    offers = [("Ashes", (570, 333, 90, 17)), ("140", (600, 306, 40, 24)), ("Wound", (725, 333, 90, 17)),
+              ("150", (755, 306, 40, 24)), ("Fiery", (880, 333, 90, 17)), ("200", (910, 306, 40, 24)),
+              ("Dust", (1035, 333, 90, 17)), ("250", (1064, 306, 40, 24))]
+    price_at = {620: 140, 775: 150, 930: 200, 1084: 250}
+    costs, tapped = [500], []
+
+    def click(x, y):
+        tapped.append((x, y))
+        if (x, y) == actions.PURCHASE:
+            costs.append(costs[-1] - price_at[tapped[-2][0]])
+        return MagicMock()
+    context.tasker.controller.post_click.side_effect = click
+
+    def run_recognition(name, image, override=None):
+        roi = tuple((override or {}).get(name, {}).get("roi", ()))
+        lines = {tuple(actions.OFFER_GRID): offers, tuple(actions.SHOP_COST): [(str(costs[-1]), (560, 120, 60, 30))],
+                 tuple(actions.DIALOG_TITLE): [("Purchase E.G.O Gifts", (500, 100, 260, 40))],
+                 tuple(actions.GET_TITLE): [("E.G.O Gift GET!", (560, 165, 160, 30))]}.get(roi, [])
+        results = [SimpleNamespace(text=t, box=b) for t, b in lines]
+        return SimpleNamespace(all_results=results, hit=True, best_result=None) if results else None
+    context.run_recognition.side_effect = run_recognition
+    cells_read(monkeypatch, ("Burn", None, 1), ("Bleed", None, 2), ("Burn", None, 2), ("Burn", None, 3))
+    visit = {"wanted": None, "sold": False}
+    assert actions.Shop.buy_offers(context, {"keyword": "Burn", "reserve_cost": 0}, visit) == 2
+    offer_taps = [t for t in tapped if t[1] == 268]
+    assert offer_taps == [(1084, 268), (930, 268)]
+    assert costs[-1] == 50 and visit["wanted"] is None
+
+
+def test_a_sale_reads_keywords_and_prices_off_the_grid_and_taps_only_what_it_sells(context, monkeypatch):
+    # #112: no gift is tapped to read its panel. Non-main gifts Bleed, Tremor, Pierce, Sinking: one is left over
+    # from a fusion of 3, the dearest (Tremor, 120) goes.
+    prices = [90, 300, 200, 120, 60, 80]
+    lines = [(str(p), (x - 3, y + 37, 26, 20)) for p, (x, y) in zip(prices, actions.SELL_CELLS)]
+    reads(context, {tuple(actions.DIALOG_TITLE): [("Sell E.G.O Gift", (500, 90, 200, 40))],
+                    tuple(actions.SELL_COST): [("100", (980, 90, 60, 30))], tuple(actions.SELL_GRID): lines})
+    cells_read(monkeypatch, ("Bleed", None), ("Burn", None), ("Keywordless", None), ("Tremor", None), ("Pierce", None),
+               ("Sinking", None))
+    visit = {"wanted": 180, "sold": False}
+    assert actions.Shop.sell(context, {"keyword": "Burn", "reserve_cost": 0, "gift_search": {"gifts": []}}, visit)
+    taps = [c.args for c in context.tasker.controller.post_click.call_args_list]
+    assert [c for c in taps if c in actions.SELL_CELLS] == [actions.SELL_CELLS[3]]
+    rois = [(c.args[2] or {}).get(c.args[0], {}).get("roi") for c in context.run_recognition.call_args_list]
+    assert actions.SELL_PANEL not in rois
 
 
 def test_the_fusion_grid_is_not_scanned_again_while_the_owned_gifts_are_the_same(context):
@@ -226,8 +302,10 @@ def test_the_fusion_grid_is_not_scanned_again_while_the_owned_gifts_are_the_same
     assert context.tasker.controller.post_click.call_count == taps
 
 
-def test_the_teams_observed_gift_is_kept_out_of_a_fusion(context):
+def test_the_teams_observed_gift_is_kept_out_of_a_fusion(context, monkeypatch):
     # The user (#103): Spiderweb Entangled in Red, found by gift search, kept getting fused away.
+    # A cell whose badge is unread falls back to its tooltip: the name keeps it.
+    cells_read(monkeypatch, (None, None))
     gift = [("E.G.O GIFT", (1030, 305, 100, 25)), ("Spiderweb Entangled in Red", (1010, 340, 180, 22)),
             ("Slash damage +10%", (1000, 380, 200, 20))]
     reads = {tuple(actions.DIALOG_TITLE): [("Fuse E.G.O Gift", (500, 100, 200, 40))],
@@ -239,7 +317,7 @@ def test_the_teams_observed_gift_is_kept_out_of_a_fusion(context):
         return SimpleNamespace(all_results=results) if results else None
     context.run_recognition.side_effect = run_recognition
     owned_gifts(context)
-    team = {"keyword": "Burn", "gift_search": {"gifts": [{"name": "Spiderweb Entangled in Red"}]}}
+    team = {"keyword": "Burn", "gift_search": {"gifts": [SPIDERWEB]}}
     assert not actions.Shop.fuse(context, team, {})
     taps = [c.args for c in context.tasker.controller.post_click.call_args_list]
     assert taps.count(actions.FUSE_CELLS[0]) == 2  # tapped in, then out again
@@ -258,19 +336,19 @@ def test_the_shop_stops_tapping_once_the_map_shows(context):
         results = [SimpleNamespace(text=t, box=b) for t, b in lines]
         return SimpleNamespace(all_results=results, hit=True, best_result=None) if results else None
     context.run_recognition.side_effect = run_recognition
-    visit = {"kinds": {}, "wanted": None}
-    assert not actions.Shop.buy_one(context, "Burn", 0, visit)
+    visit = {"wanted": None, "sold": False}
+    assert not actions.Shop.buy_offers(context, {"keyword": "Burn", "reserve_cost": 0}, visit)
     assert context.tasker.controller.post_click.call_count == 1  # the second offer is never tapped
 
 
 def test_only_the_filled_fusion_cells_are_tapped_and_an_unnamed_gift_comes_out_again(context):
     # Live 2026-10-18: 5 gifts owned, 10 empty cells tapped at 3.4 s each; Spiderweb read no name and stayed in.
-    reads(context, {tuple(actions.DIALOG_TITLE): [("Fuse E.G.O Gift", (500, 100, 200, 40))],
-                    tuple(actions.KEYWORD_LABELS): [("Burn", (300, 400, 60, 20))]})
-    owned_gifts(context, 2)
+    # Two gifts in the third row, whose badges the grid's edge cuts off: their tooltips decide.
+    reads(context, FUSE_PAGE)
+    owned_gifts(context, actions.FUSE_CELLS[10:12])
     assert not actions.Shop.fuse(context, {"keyword": "Burn", "gift_search": {"gifts": []}}, {})
     taps = [c.args for c in context.tasker.controller.post_click.call_args_list]
-    assert [taps.count(c) for c in actions.FUSE_CELLS] == [2, 2] + [0] * (len(actions.FUSE_CELLS) - 2)
+    assert [taps.count(c) for c in actions.FUSE_CELLS] == [0] * 10 + [2, 2] + [0] * 3
 
 
 def test_a_fuse_page_showing_a_fixed_recipe_is_closed_and_not_tried_again(context):
