@@ -7,6 +7,10 @@ const screens: [image: string, hits: string[]][] = [
   ['TitleConnecting.png', ['Connecting', 'GoToMirrorEntry', 'NavTitle']],
   ['TitleFading.png', ['Connecting', 'GoToMirrorEntry', 'NavTitle']],
   ['Loading.png', ['Loading']],
+  ['MaintenanceNotice.png', ['MaintenanceNotice', 'GoToMirrorEntry', 'NavTitle']],  // live 2026-10-15, over the title
+  // Synthetic (#83): EventStory with the notice's message line pasted into its text box. Only the
+  // notice window stops the task, not the word in other text.
+  ['EventMaintenanceText.png', ['Event']],
   ['MainWindow.png', ['GoToMirrorEntry', 'NavMainTabs']],
   ['MainWindowFadeIn.png', ['GoToMirrorEntry', 'NavMainTabs']],
   ['SinnersTab.png', ['GoToMirrorEntry', 'NavMainTabs']],
