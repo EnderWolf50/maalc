@@ -1787,13 +1787,22 @@ class Shop(CustomAction):
             Shop.to_main(context)
             return False
         picked, last, keep = [], None, kept_gifts(team)
+        # Live 2026-10-18: 5 gifts owned, the 10 empty cells cost 3.4 s each. An empty cell is flat (spread 1-2,
+        # a gift 41-84), so only the filled ones are tapped.
+        image = screen(context)
+        cells = [(x, y) for x, y in FUSE_CELLS if image[y - 25:y + 25, x - 25:x + 25].max(axis=2).std() > 15]
         # ponytail: the 15 cells on show; a scroll would find more when 13+ of them are main gifts.
-        for x, y in FUSE_CELLS:
+        for x, y in cells:
             tap(context, x, y, wait=0)
             lines, name = Shop.tooltip(context, last)
             tap(context, *FUSE_NEUTRAL)
             if name is None:
-                continue  # an empty cell, or a tap that only closed the last tooltip
+                # Live 2026-10-18: Spiderweb Entangled in Red's long tooltip read no name and stayed in the
+                # fusion; a gift that cannot be named is taken out again.
+                log(f"shop: the gift at {x},{y} read no name: kept out of the fusion")
+                tap(context, x, y, wait=1.2)
+                tap(context, *FUSE_NEUTRAL)
+                continue
             last = name
             main = rewards.gift_kind(" ".join(t for t, _ in lines), keyword, False) == "main"
             if main or shop.protected(name, keep):
