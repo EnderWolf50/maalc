@@ -1787,6 +1787,20 @@ class Shop(CustomAction):
         return [], None
 
     @staticmethod
+    def recipe_shown(context, image, visit):
+        """True, and the fuse page closed for this visit's owned gifts, when it shows a Fusion Available section.
+
+        #103 (live 2026-10-17): the section lists a fixed recipe's result above E.G.O Gifts Owned and pushes
+        the owned grid down, so FUSE_CELLS miss; the bot stuck on the page. Fixed recipes are #78's.
+        """
+        if not seen(context, image, "ShopFusionAvailable"):
+            return False
+        log("shop: the fuse page shows Fusion Available (a fixed recipe): closed, no fusion")
+        visit["fuse_scanned"] = True
+        Shop.to_main(context)
+        return True
+
+    @staticmethod
     def fuse(context, team, visit):
         """Fuse 3 non-main gifts into the main keyword, Wishmaking left unticked; True when one fused.
 
@@ -1811,10 +1825,12 @@ class Shop(CustomAction):
             log("shop: Wishmaking is ticked (it spends owned Starlight): no fusion")
             Shop.to_main(context)
             return False
+        image = screen(context)
+        if Shop.recipe_shown(context, image, visit):
+            return False
         picked, last, keep = [], None, kept_gifts(team)
         # Live 2026-10-18: 5 gifts owned, the 10 empty cells cost 3.4 s each. An empty cell is flat (spread 1-2,
         # a gift 41-84), so only the filled ones are tapped.
-        image = screen(context)
         cells = [(x, y) for x, y in FUSE_CELLS if image[y - 25:y + 25, x - 25:x + 25].max(axis=2).std() > 15]
         # ponytail: the 15 cells on show; a scroll would find more when 13+ of them are main gifts.
         for x, y in cells:
@@ -1841,12 +1857,15 @@ class Shop(CustomAction):
                 break
         fused = False
         if len(picked) == 3:
+            if Shop.recipe_shown(context, screen(context), visit):
+                return False
             tap(context, *PAGE_OK, wait=2)
             m = re.search(r"(\d)\s*/\s*\d", text(context, screen(context), FUSE_CONFIRM))
             if m and m[1] == "3":
                 tap(context, 788, 583, wait=2.5)  # the dialog's Confirm
                 fused = gift_get(context)
             log(f"shop: fuse {picked} into {keyword}: {'done' if fused else 'not confirmed'}")
+            visit["fuse_scanned"] = not fused  # unconfirmed: not the same scan again until the owned gifts change (#103)
         else:
             visit["fuse_scanned"] = True
             log(f"shop: {len(picked)} non-main gifts on show, a fusion takes 3")

@@ -273,6 +273,29 @@ def test_only_the_filled_fusion_cells_are_tapped_and_an_unnamed_gift_comes_out_a
     assert [taps.count(c) for c in actions.FUSE_CELLS] == [2, 2] + [0] * (len(actions.FUSE_CELLS) - 2)
 
 
+def test_a_fuse_page_showing_a_fixed_recipe_is_closed_and_not_tried_again(context):
+    # #103 (tests/screens/ShopFuseRecipe.png): a "Fusion Available" section pushed the owned gifts down and
+    # the bot stuck on the fuse page. It is closed untouched; the owned gifts must change before another try.
+    texts = {tuple(actions.DIALOG_TITLE): [("Fuse E.G.O Gift", (500, 100, 200, 40))],
+             tuple(actions.KEYWORD_LABELS): [("Burn", (300, 400, 60, 20))]}
+
+    def run_recognition(name, image, override=None):
+        if name == "ShopFusionAvailable":
+            return SimpleNamespace(hit=True, box=[640, 215, 150, 30])
+        roi = tuple((override or {}).get(name, {}).get("roi", ()))
+        results = [SimpleNamespace(text=t, box=b) for t, b in texts.get(roi, [])]
+        return SimpleNamespace(all_results=results, hit=True, best_result=None) if results else None
+    context.run_recognition.side_effect = run_recognition
+    owned_gifts(context)
+    team, visit = {"keyword": "Burn", "gift_search": {"gifts": []}}, {}
+    assert not actions.Shop.fuse(context, team, visit)
+    taps = [c.args for c in context.tasker.controller.post_click.call_args_list]
+    assert not set(taps) & set(actions.FUSE_CELLS)
+    assert actions.PAGE_CLOSE in taps
+    assert not actions.Shop.fuse(context, team, visit)
+    assert context.tasker.controller.post_click.call_count == len(taps)
+
+
 def cost_reads(context, values):
     """The shop's Cost reads each of values in turn (None: nothing read), the last one from then on."""
     def run_recognition(name, image, override=None):
