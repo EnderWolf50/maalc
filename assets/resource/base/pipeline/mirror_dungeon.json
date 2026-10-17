@@ -7,8 +7,10 @@
     // Dispatch: every screen is one node; [JumpBack] nodes return here to look again.
     // next order is priority: Stuck (the watchdog, which must see every pass), global popups,
     // then dialogs before the page under them.
+    // rate_limit: a pass is ~0.1-0.5 s of work; the default 1000 ms between passes saw every new screen ~0.5 s late.
     "MirrorHub": {
         "timeout": 60000,
+        "rate_limit": 300,
         "on_error": [
             "GlobalStuck"
         ],
@@ -305,7 +307,8 @@
         "roi": [1130, 5, 100, 75],
         "template": "Battle/BattlePause.png",
         "threshold": 0.8,
-        "post_delay": 1000
+        "pre_delay": 0,
+        "post_delay": 500
     },
     // After the floor 5 boss (live 1.117.0); the run's counterpart of DefeatScreen.
     "RunVictory": {
