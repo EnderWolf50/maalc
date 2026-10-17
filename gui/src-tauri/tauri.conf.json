@@ -10,7 +10,7 @@
     "frontendDist": "../dist"
   },
   "app": {
-    "windows": [{ "title": "maalc", "width": 1100, "height": 760 }],
+    "windows": [{ "title": "maalc", "width": 1100, "height": 760, "dragDropEnabled": false }],
     "security": { "csp": null }
   },
   "bundle": {
