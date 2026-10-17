@@ -32,15 +32,48 @@ def node_type(marks):
     return "unknown"
 
 
-def rank(slots, weights):
+def rank(slots, weights, ahead=()):
     """Rows of the linked slots, best first.
 
-    slots maps row -> (node type, routes onward or None). Lowest weight first; on equal weight the
-    node with more routes into the next column; then middle, top, bottom. The boss only when it is
-    the only linked node.
+    slots maps row -> (node type, routes onward or None); ahead lists the columns read beyond them,
+    each row -> (node type, rows of the column before it linked to that node). A slot scores the
+    weights on its cheapest path through those columns, lowest first; a node with no link read
+    onward goes on as if linked to the cheapest node of the next column, and an unknown node beyond
+    the first column scores as an event. With no column ahead the score is the slot's own weight. On equal score the node with more routes into the next column;
+    then middle, top, bottom. The boss only when it is the only linked node.
     """
+    best = paths(slots, weights, ahead)
     rows = [r for r in slots if slots[r][0] != "boss"] or list(slots)
-    return sorted(rows, key=lambda r: (weights.get(slots[r][0], weights["unknown"]), -(slots[r][1] or 0), ROWS.index(r)))
+    return sorted(rows, key=lambda r: (best[r][0], -(slots[r][1] or 0), ROWS.index(r)))
+
+
+def paths(slots, weights, ahead=()):
+    """row -> (score, rows of the cheapest path from that slot, one per column) for each slot; see rank."""
+    best = {}  # the same for the nodes of the column after the one being scored
+    for column, after in reversed(list(zip((slots, *ahead), (*ahead, {})))):
+        nxt, best = best, {}
+        for r, (node, _) in column.items():
+            score, path = min([nxt[u] for u in nxt if r in after[u][1]] or nxt.values() or [(0, [])])
+            if node == "unknown" and column is not slots:
+                node = "event"  # every fight carries a lit Cost coin; the "?" dims past its template (MapPanned.png)
+            best[r] = (weights.get(node, weights["unknown"]) + score, [r, *path])
+    return best
+
+
+def shift(before, after, top=150, bottom=615, right=1150):
+    """How far the map moved left between two screenshots, to about 4 px; 0 when it did not move.
+
+    Compares the mean brightness of 4 px blocks on the map, clear of what stays put: the floor's
+    name, the resource bar, the sinner bar and the buttons at the right.
+    """
+    def blocks(image):
+        v = image[top:bottom, :right].max(axis=2).astype(float)
+        h, w = v.shape[0] // 4 * 4, v.shape[1] // 4 * 4
+        return v[:h, :w].reshape(h // 4, 4, w // 4, 4).mean(axis=(1, 3))
+
+    a, b = blocks(before), blocks(after)
+    w = a.shape[1]
+    return 4 * min(range(w * 2 // 3), key=lambda s: np.abs(a[:, s:] - b[:, :w - s]).mean())
 
 
 def line_contrast(v, x0, y0, x1, y1, top=70, bottom=615):

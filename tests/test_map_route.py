@@ -46,6 +46,37 @@ def test_boss_only_when_alone():
     assert mr.rank({"mid": ("boss", 0)}, NORMAL) == ["mid"]
 
 
+def test_two_columns_take_the_cheapest_path():
+    # Live 2026-10-18, hard floor 1 (user's capture): battle / event / battle, then battle / battle;
+    # each battle runs straight on, the event links to both. event -> battle (1 + 2) is cheapest.
+    ahead = [{"up": ("battle", {"up", "mid"}), "down": ("battle", {"mid", "down"})}]
+    slots = {"up": ("battle", 1), "mid": ("event", 2), "down": ("battle", 1)}
+    assert mr.rank(slots, HARD, ahead)[0] == "mid"
+    # An event on to an abnormality (1 + 5) loses to a battle on to an event (2 + 1).
+    ahead = [{"up": ("abno", {"up"}), "down": ("event", {"down"})}]
+    assert mr.rank({"up": ("event", 1), "down": ("battle", 1)}, HARD, ahead) == ["down", "up"]
+    assert mr.paths({"up": ("event", 1), "down": ("battle", 1)}, HARD, ahead)["down"] == (3, ["down", "down"])
+
+
+def test_a_slot_with_no_link_read_onward_goes_on_to_the_cheapest_node():
+    # Every node leads on, so an unread link must not make a path look shorter (cheaper) than the others.
+    ahead = [{"down": ("event", {"down"})}]
+    assert mr.rank({"up": ("battle", None), "down": ("event", None)}, HARD, ahead) == ["down", "up"]
+
+
+def test_an_unmarked_node_beyond_the_first_column_scores_as_an_event():
+    # MapPanned.png: the "?" two columns out is too dim for its template; fights carry a lit Cost coin.
+    ahead = [{"up": ("unknown", {"up"}), "down": ("abno", {"down"})}]
+    assert mr.rank({"up": ("battle", 1), "down": ("event", 1)}, HARD, ahead) == ["up", "down"]
+
+
+def test_shift_finds_how_far_the_map_moved_left():
+    world = np.random.default_rng(1).integers(0, 255, size=(720, 2000, 3)).astype(np.uint8)
+    before, after = world[:, :1280], world[:, 497:1777]
+    assert abs(mr.shift(before, after) - 497) <= 2
+    assert mr.shift(before, before) == 0  # the map's end: the drag moved nothing
+
+
 def test_unknown_last_and_risky_after_shop_on_hard():
     slots = {"up": ("unknown", 3), "mid": ("shop", 1), "down": ("focused", 0)}
     assert mr.rank(slots, NORMAL) == ["down", "mid", "up"]
