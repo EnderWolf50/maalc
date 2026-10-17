@@ -24,6 +24,10 @@ test("clicking a gift adds it at the end of the search list, clicking it again t
   const list = toggleGift([smokes], bass);
   expect(list).toEqual([smokes, bass]);
   expect(toggleGift(list, { ...smokes })).toEqual([bass]);
+  // The game searches 3 at most: a fourth is not added, but any can still be removed.
+  const full = [smokes, bass, { keyword: "Bleed", tier: 1, name: "C" }];
+  expect(toggleGift(full, { keyword: "Bleed", tier: 1, name: "D" })).toEqual(full);
+  expect(toggleGift(full, bass)).toHaveLength(2);
 });
 
 test("every gift on the search page has a keyword tab, a tier of 1-3 and a unique name", () => {

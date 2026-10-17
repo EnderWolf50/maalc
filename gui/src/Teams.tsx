@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { resetTeamTimes } from "./api";
 import {
-  KEYWORDS, SEARCH_GIFTS, SEARCH_TABS, SINNERS, defaultStarlight, freeName, newId, newTeam, teamEnum, toggleGift,
+  KEYWORDS, MAX_GIFTS, SEARCH_GIFTS, SEARCH_TABS, SINNERS, defaultStarlight, freeName, newId, newTeam, teamEnum, toggleGift,
   type GiftRef, type SearchGift, type Team,
 } from "./model";
 import { SinnerGrid, StarlightEditor } from "./Plans";
@@ -201,6 +201,7 @@ function GiftSearchPanel({ i }: { i: number }) {
     return zh && known?.zh ? known.zh : g.name;
   };
   const rank = (g: SearchGift) => search.gifts.findIndex((x) => x.keyword === g.keyword && x.tier === g.tier && x.name === g.en) + 1;
+  const full = search.gifts.length >= MAX_GIFTS;
   const count = (k: string) => search.gifts.filter((g) => g.keyword === k).length;
   return (
     <details className={"panel" + (bad(path) ? " bad" : "")}>
@@ -227,6 +228,7 @@ function GiftSearchPanel({ i }: { i: number }) {
                 const n = rank(g);
                 return (
                   <button type="button" key={g.en} className={"gift" + (n ? " picked" : "")} aria-pressed={n > 0}
+                    disabled={!n && full} title={!n && full ? t("gift.full") : undefined}
                     onClick={() => set({ gifts: toggleGift(search.gifts, { keyword: g.keyword, tier: g.tier, name: g.en }) })}>
                     {n > 0 && <span className="rank">{n}</span>}
                     <span className="name">{zh && g.zh ? g.zh : g.en}</span>
@@ -239,7 +241,8 @@ function GiftSearchPanel({ i }: { i: number }) {
         ))}
       </div>
       <div className={"rewards" + (bad(`${path}/gifts`) ? " bad" : "")}>
-        <h4>{t("gift.order")}</h4>
+        <h4>{t("gift.order")} ({search.gifts.length}/{MAX_GIFTS})</h4>
+        {full && <p className="muted">{t("gift.full")}</p>}
         {search.gifts.length ? (
           <ReorderList items={search.gifts} keyOf={(g) => `${g.keyword}|${g.tier}|${g.name}`} onChange={(gifts) => set({ gifts })}
             render={(g, j) => (
