@@ -1254,6 +1254,9 @@ CHOICE_ROWS = [690, 170, 480, 440]
 CHECK_PROMPT = [850, 295, 300, 50]
 EVENT_PORTRAIT_X = [77 + round(69.3 * i) for i in range(12)]  # 7 in a boss's mid-battle event, from the left
 EVENT_PORTRAIT_Y = 655
+EVENT_NEUTRAL = (5, 5)  # top-left corner: nothing there on any event page
+EVENT_TEXT_TAPS = 30
+EVENT_BUTTON_LABEL = [1040, 612, 190, 66]  # the Event node's roi: empty once the event page is gone
 EVENT_LEAST = 0.5  # s after a tap before the screen counts as moved: a fade's first frames are the same page
 
 
@@ -1307,8 +1310,14 @@ class Event(CustomAction):
                 tried.add(options[i][0])
         else:
             tried.clear()
-            tap(context, 350, 420, wait=0)  # the story box: shows the next line
-            Event.settle(context, image)
+            # Text running on (the button grey): taps on a dead corner show it line by line; keep tapping
+            # until there is something to act on, for MirrorHub's next look.
+            for _ in range(EVENT_TEXT_TAPS):
+                tap(context, *EVENT_NEUTRAL, wait=0.2)
+                image = screen(context)
+                if red_button(image) or not text(context, image, EVENT_BUTTON_LABEL) or any(k in text(context, image, roi) for k, roi in
+                                            (("Choices", CHOICES_HEADER), ("Choose a character", CHECK_PROMPT))):
+                    break
         return True
 
     @staticmethod
