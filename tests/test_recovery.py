@@ -205,3 +205,14 @@ def test_ladder_the_downloading_screens_are_on_the_way_back_not_past_the_stuck_o
     for kind in ("DownloadDialog", "PopupButton"):
         ladder.progress(kind)  # an acknowledged dialog on the title does not end the episode
     assert ladder.stuck("NavTitle", 1, 0) == (2, None)
+
+
+def test_keep_unknown_saves_the_screen_and_keeps_only_the_latest(tmp_path):
+    # #85/#87: a screen MirrorHub does not know is the capture the missing popup nodes need.
+    from recovery import UNKNOWN_KEEP, keep_unknown
+    for i in range(UNKNOWN_KEEP + 2):
+        keep_unknown(tmp_path, screen(i), f"2026-10-18T00-00-{i:02}.000Z")
+    saved = sorted(p.name for p in (tmp_path / "logs" / "unknown").iterdir())
+    assert len(saved) == UNKNOWN_KEEP
+    assert saved[0] == "2026-10-18T00-00-02.000Z.png"  # the two oldest went
+    assert (tmp_path / "logs" / "unknown" / saved[-1]).read_bytes().startswith(b"\x89PNG")
