@@ -1106,8 +1106,11 @@ class PlayTurn(CustomAction):
         dx, dy = x + START_DISC[0], y + START_DISC[1]
         if time.time() - RUN.setdefault("battle_start", time.time()) > recovery.BATTLE_LIMIT:
             return stuck(f"battle over {recovery.BATTLE_LIMIT // 60} min", level=2)  # skips L1 (spec 06)
-        # Live 2026-10-17: Win Rate tapped 0.02 s after its label showed lit the disc in 0.24 s, every time.
-        image = screen(context)
+        # Live 2026-10-17: the Win Rate label also matches in the first frames of a turn playing out (the
+        # screen moving), and a tap in the turn's opening can do nothing: act on a still screen only.
+        image = still(context, timeout=1)
+        if image is None:
+            return True  # moving: MirrorHub looks again
         turn = text(context, image, TURN_NUMBER, only_rec=True).strip() or None
         RUN["turn"] = battle.same_turn(RUN.get("turn"), turn)
         if RUN["turn"][1] > 3:
@@ -1123,9 +1126,9 @@ class PlayTurn(CustomAction):
             # Win Rate toggles: a second tap clears the skills the first picked, so it is tapped again only
             # when its label does not show pressed: live, a tap in the turn's opening did nothing (#58).
             tap(context, x + WIN_RATE[0], y + WIN_RATE[1], wait=0)
-            took = until(context, lambda im: battle.disc_lit(im, dx, dy) or win_rate_on(context, im, x, y), timeout=1.5)
-            image = screen(context) if took is None else took
-            if took is not None:
+            lit = until(context, lambda im: battle.disc_lit(im, dx, dy), timeout=1.5)
+            image = screen(context) if lit is None else lit
+            if lit is not None or win_rate_on(context, image, x, y):
                 break
             log(f"turn {turn}: Win Rate did not take")
         if not battle.disc_lit(image, dx, dy):

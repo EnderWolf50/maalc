@@ -161,6 +161,13 @@ def win_rate_taps(context):
     return [c for c in context.tasker.controller.post_click.call_args_list if c.args == (984 + 20, 531 + 14)]
 
 
+def test_a_turn_label_on_a_moving_screen_is_not_played(context):
+    # Live (#58): the label matched in the first frames of a turn playing out; Win Rate and START were tapped.
+    screens(context, [0, 60, 120, 180, 240, 30, 90, 150, 210, 20, 80, 140])
+    actions.PlayTurn().run(context, SimpleNamespace(box=[984, 531, 40, 20]))
+    context.tasker.controller.post_click.assert_not_called()
+
+
 def test_a_win_rate_tap_lost_in_the_turns_opening_is_tapped_again(context, monkeypatch):
     # Live (#58): 0.3 s after the label showed, a Win Rate tap did nothing: label not pressed, disc unlit.
     monkeypatch.setattr(actions.battle, "disc_lit", lambda image, x, y: len(win_rate_taps(context)) >= 2)
