@@ -47,11 +47,12 @@ def claim_dialog(text):
     """Which of the Exploration Reward window's confirm dialogs the text is, or None.
 
     giveup: GiveUpRewards' `End expedition without claiming rewards?`; no_bonus: Claim with bonuses left
-    and none ON; bonus: Claim with toggles ON, `Spend your 「Weekly Bonuses」 to claim the bonus rewards?`.
+    and none ON, or `Claim the rewards?` when none are left (live 2026-10-17); bonus: Claim with toggles
+    ON, `Spend your 「Weekly Bonuses」 to claim the bonus rewards?`.
     """
     if "without claiming" in text:
         return "giveup"
-    if "without using" in text:
+    if "without using" in text or "Claim the rewards" in text:
         return "no_bonus"
     if "Spend your" in text:
         return "bonus"
