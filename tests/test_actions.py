@@ -96,6 +96,28 @@ def test_a_formation_page_still_fading_in_is_read_once_it_is_still(context, monk
     assert actions.RUN["alive"] == 12
 
 
+def test_event_text_is_tapped_through_until_the_choices_show(context):
+    # The user's tip: taps on a dead corner run the text on; stop once there is something to pick.
+    shots = []
+
+    def screencap():
+        shots.append(1)
+        return np.full((720, 1280, 3), len(shots), np.uint8)
+    context.tasker.controller.post_screencap.return_value.wait.return_value.get.side_effect = screencap
+
+    def run_recognition(name, image, override=None):
+        roi = tuple((override or {}).get(name, {}).get("roi", ()))
+        if roi == tuple(actions.CHOICES_HEADER) and image[0, 0, 0] >= 4:
+            return SimpleNamespace(all_results=[SimpleNamespace(text="Choices", box=(700, 110, 100, 30))])
+        if roi == tuple(actions.EVENT_BUTTON_LABEL):  # the grey button
+            return SimpleNamespace(all_results=[SimpleNamespace(text="Continue", box=(1065, 625, 140, 40))])
+        return None
+    context.run_recognition.side_effect = run_recognition
+    actions.Event().run(context, None)
+    corner = [c for c in context.tasker.controller.post_click.call_args_list if c.args == actions.EVENT_NEUTRAL]
+    assert len(corner) == 3
+
+
 def bus_at(context, x, y, linked=()):
     """The map's bus at (x, y); the link nodes in linked hit, nothing else does."""
     def run_recognition(name, image, override=None):
