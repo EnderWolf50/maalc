@@ -1356,18 +1356,7 @@ class PickGift(CustomAction):
         ranked = rewards.rank_gifts(cards, run["team"]["trial_risk_weight"])
         log("gifts: " + ", ".join(k + ("" if r is None else f"/risk {r}") for k, r in cards) + f": order {ranked}")
 
-        count = gift_count(context)
-        for i in ranked:
-            if count and count[0] >= count[1]:
-                break
-            tap(context, centres[i], 300, wait=1.5)
-            now = gift_count(context)
-            if count and now and now[0] < count[0]:  # it was picked already: pick it again, go on to the next
-                tap(context, centres[i], 300, wait=1.5)
-                now = gift_count(context)
-            if not count:
-                break  # one card, no count
-            count = now or count
+        rewards.pick_gifts(ranked, lambda: gift_count(context), lambda i: tap(context, centres[i], 300, wait=1.5))
         for _ in range(3):
             tap(context, *GIFT_SELECT, wait=2)
             if "Refuse" not in text(context, screen(context), REFUSE_GIFT):

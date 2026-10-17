@@ -280,6 +280,7 @@
   - 試煉風險：0–5。從選項上 OCR 讀出試煉名稱（例如 `Defense Level Up`、`Growth I`），查資料檔的試煉風險表（開發者每季更新）；查不到就當作最高風險 5。不用等級：每個試煉旁的 `Enemy Level Up +1`／`+2` 只有兩種值，分不出試煉。（#17；實機：captures/122_boss_gift_trials_page.png、captures/176_f2boss_rewards_gift.png）
   - 權重：每隊一個下拉選單（低／中／高），預設「高」；數值為低 0.5、中 1、高 2。
 - 依分數取 `Select n/m` 的可選數量（困難 `Select 0/2`、普通 `Select 0/1`）；同分時選試煉風險較低的。（#17、#19，2026-10-14 定案；#28）
+- 讀不到 `Select n/m`：只有一張卡時點那一張（單卡頁沒有張數）；兩張以上時再讀一次，仍讀不到就依排序一張一張點，每點一張重讀，讀到張數後照張數停，一直讀不到就全部點完。（#81）
 - 實機：困難頁面有 4 欄，每欄上半是飾品、下半是 `Mounting Trials`；計數是 `Select 0/2`，選一欄就同時拿到飾品和試煉。選完後每個飾品各彈一次飾品獲得視窗，然後直接進入下一層的主題包頁。普通頁面是 3 欄、`Select 0/1`，試煉例如 `Resilient I`、`Offense Level Up I`。（實機：captures/122_boss_gift_trials_page.png、captures/124_boss_gift_pick2.png、captures/127_after_boss_gifts.png；1.117.0 普通局 2026-10-15）
 - 以上數值是初始值，等截圖確認後再調整。（#17、#19）
 

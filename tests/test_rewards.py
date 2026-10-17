@@ -122,6 +122,55 @@ def test_rank_gifts_with_trials():
     assert r.rank_gifts([("main", 1), ("other", 0)], "medium") == [1, 0]
 
 
+class GiftPage:
+    """Select n/m over the gift cards: a tap picks a card, or drops it when picked; full, a tap does nothing."""
+
+    def __init__(self, picks, unread=0):
+        self.picks, self.unread = picks, unread  # unread: count reads that come back empty first
+        self.picked, self.taps = [], []
+
+    def read(self):
+        if self.unread:
+            self.unread -= 1
+            return None
+        return len(self.picked), self.picks
+
+    def tap(self, i):
+        self.taps.append(i)
+        if i in self.picked:
+            self.picked.remove(i)
+        elif len(self.picked) < self.picks:
+            self.picked.append(i)
+
+
+def test_pick_gifts_taps_every_card_when_the_count_never_reads():
+    page = GiftPage(picks=2, unread=99)  # #81: hard boss, Select 0/2 not read
+    r.pick_gifts([1, 0], page.read, page.tap)
+    assert sorted(page.picked) == [0, 1]
+
+
+def test_pick_gifts_stops_at_the_count_once_it_reads():
+    page = GiftPage(picks=1, unread=1)  # the first read misses, the second reads Select 0/1
+    r.pick_gifts([2, 0, 1], page.read, page.tap)
+    assert page.taps == [2]
+    page = GiftPage(picks=1, unread=2)  # unread until the first card is in: Select 1/1
+    r.pick_gifts([2, 0, 1], page.read, page.tap)
+    assert page.taps == [2]
+
+
+def test_pick_gifts_a_lone_card_is_tapped_once():
+    page = GiftPage(picks=1, unread=99)  # one card shows no count
+    r.pick_gifts([0], page.read, page.tap)
+    assert page.taps == [0]
+
+
+def test_pick_gifts_repicks_a_card_the_tap_dropped():
+    page = GiftPage(picks=2)
+    page.picked = [1]  # left picked by the last try, Select 1/2
+    r.pick_gifts([1, 0, 2], page.read, page.tap)
+    assert sorted(page.picked) == [0, 1]
+
+
 def test_data_files():
     risks = yaml.safe_load((DATA / "trial_risks.yaml").read_text(encoding="utf-8"))
     assert risks and all(isinstance(v, int) and 0 <= v <= r.MAX_RISK for v in risks.values())
