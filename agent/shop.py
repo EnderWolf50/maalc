@@ -8,6 +8,16 @@ from difflib import SequenceMatcher
 ROUNDS = 10
 
 
+LOOKALIKE = str.maketrans("OoDQIl|SsBZz", "000011155822")
+
+
+def cost_value(text):
+    """The Cost an OCR read stands for, look-alike letters taken as digits (33O2 -> 3302); None without a digit (#82)."""
+    if not any(c.isdigit() for c in text):
+        return None
+    return int("".join(c for c in text.translate(LOOKALIKE) if c.isdigit()))
+
+
 def can_spend(cost, price, reserve):
     """Whether paying price still leaves the reserve (spec 03 section 13: every spend keeps it)."""
     return cost - price >= reserve
