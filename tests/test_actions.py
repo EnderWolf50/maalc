@@ -215,3 +215,21 @@ def test_the_fusion_grid_is_not_scanned_again_while_the_owned_gifts_are_the_same
     assert taps > len(actions.FUSE_CELLS)  # the grid was scanned
     assert not actions.Shop.fuse(context, team, visit)  # nothing bought or sold since
     assert context.tasker.controller.post_click.call_count == taps
+
+
+def test_the_teams_observed_gift_is_kept_out_of_a_fusion(context):
+    # The user (#103): Spiderweb Entangled in Red, found by gift search, kept getting fused away.
+    gift = [("E.G.O GIFT", (1030, 305, 100, 25)), ("Spiderweb Entangled in Red", (1010, 340, 180, 22)),
+            ("Slash damage +10%", (1000, 380, 200, 20))]
+    reads = {tuple(actions.DIALOG_TITLE): [("Fuse E.G.O Gift", (500, 100, 200, 40))],
+             tuple(actions.KEYWORD_LABELS): [("Burn", (300, 400, 60, 20))], tuple(actions.FUSE_TOOLTIP): gift}
+
+    def run_recognition(name, image, override=None):
+        roi = tuple((override or {}).get(name, {}).get("roi", ()))
+        results = [SimpleNamespace(text=t, box=b) for t, b in reads.get(roi, [])]
+        return SimpleNamespace(all_results=results) if results else None
+    context.run_recognition.side_effect = run_recognition
+    team = {"keyword": "Burn", "gift_search": {"gifts": [{"name": "Spiderweb Entangled in Red"}]}}
+    assert not actions.Shop.fuse(context, team, {})
+    taps = [c.args for c in context.tasker.controller.post_click.call_args_list]
+    assert taps.count(actions.FUSE_CELLS[0]) == 2  # tapped in, then out again
