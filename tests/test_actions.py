@@ -233,3 +233,20 @@ def test_the_teams_observed_gift_is_kept_out_of_a_fusion(context):
     assert not actions.Shop.fuse(context, team, {})
     taps = [c.args for c in context.tasker.controller.post_click.call_args_list]
     assert taps.count(actions.FUSE_CELLS[0]) == 2  # tapped in, then out again
+
+
+def test_the_shop_stops_tapping_once_the_map_shows(context):
+    # Live 2026-10-18: the shop was left by hand mid-visit; its next taps opened a map node's panel.
+    offers = [("Bone Stake", (575, 333, 90, 17)), ("120", (600, 306, 40, 24)),
+              ("Wrist Guards", (730, 333, 90, 17)), ("130", (755, 306, 40, 24))]
+
+    def run_recognition(name, image, override=None):
+        if name == "MirrorMap":  # the map shows once anything was tapped
+            return SimpleNamespace(hit=True, box=[0, 0, 10, 10]) if context.tasker.controller.post_click.called else None
+        roi = tuple((override or {}).get(name, {}).get("roi", ()))
+        results = [SimpleNamespace(text=t, box=b) for t, b in (offers if roi == tuple(actions.OFFER_GRID) else [])]
+        return SimpleNamespace(all_results=results, hit=True, best_result=None) if results else None
+    context.run_recognition.side_effect = run_recognition
+    visit = {"kinds": {}, "wanted": None}
+    assert not actions.Shop.buy_one(context, "Burn", 0, visit)
+    assert context.tasker.controller.post_click.call_count == 1  # the second offer is never tapped
