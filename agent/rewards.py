@@ -14,20 +14,32 @@ MAX_RISK = 5
 KEYWORDS = ("Burn", "Bleed", "Tremor", "Rupture", "Sinking", "Poise", "Charge", "Slash", "Pierce", "Blunt", "Keywordless")
 
 
-def pick_choice(options, keyword, override=None):
-    """Index of the event option to take (spec 03 section 10).
+def pick_choice(options, keyword, override=None, closed=()):
+    """Index of the event option to take (spec 03 section 10), or None when every option is closed.
 
-    options are each option's OCR text (its line plus the hint under it). An override's option
+    options are each option's OCR text (its line plus the hint under it); closed are the indices that
+    cannot be taken (greyed out, or a tap left the page as it was). Among the rest an override's option
     text wins when it matches; else a main-keyword E.G.O Gift > any E.G.O Gift > the first option.
     """
+    open_ = [i for i in range(len(options)) if i not in closed]
     if override:
-        for i, o in enumerate(options):
-            if _norm(override) in _norm(o):
+        for i in open_:
+            if _norm(override) in _norm(options[i]):
                 return i
     # A third option's hint may be cut off at the panel edge: "... Pass to gain a Sinking".
-    gift = [i for i, o in enumerate(options) if re.search(rf"E\.?\s*G\.?\s*O\b.*Gift|\bgain an? ({'|'.join(KEYWORDS)})\b", o, re.I)]
+    gift = [i for i in open_ if re.search(rf"E\.?\s*G\.?\s*O\b.*Gift|\bgain an? ({'|'.join(KEYWORDS)})\b", options[i], re.I)]
     main = [i for i in gift if re.search(rf"\b{keyword}\b", options[i], re.I)]
-    return (main or gift or [0])[0]
+    return (main or gift or open_ or [None])[0]
+
+
+def choice_open(image, y):
+    """Whether the event option whose first line is at y (1280x720 BGR) can be taken: its frame is red-brown.
+
+    Live 2026-10-17 (#34): in a boss's rounds of questions an answer taken in an earlier round turns grey
+    (red - blue ~0) and a tap on it does nothing; open options read red - blue ~20 left of their text.
+    """
+    b, _, r = image[y - 5:y + 5, 700:728].reshape(-1, 3).mean(0)
+    return bool(r - b > 10)
 
 
 def odds_rank(caption):

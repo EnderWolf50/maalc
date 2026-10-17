@@ -255,7 +255,7 @@ class Recover(CustomAction):
             log(f"L{level} did not go through")
             STUCK["ladder"].failed(level)
         STUCK["watch"].reset()
-        for key in ("turn", "battle_start", "map_misses"):
+        for key in ("turn", "battle_start", "map_misses", "event_tried"):
             RUN.pop(key, None)
         return True
 
@@ -1224,7 +1224,9 @@ class Event(CustomAction):
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         run = current_run(context)
         image = screen(context)
+        tried = RUN.setdefault("event_tried", set())  # this question's options a tap did nothing on
         if red_button(image):
+            tried.clear()
             tap(context, *EVENT_BUTTON, wait=1.5)
         elif "Choose a character" in text(context, image, CHECK_PROMPT):
             # One read per portrait: read as a row, neighbouring captions run together ("HighVery Low").
@@ -1239,12 +1241,29 @@ class Event(CustomAction):
             overrides = data("events.yaml") | {o["question"]: o["option"] for o in run["settings"]["event_overrides"]}
             story = [t for t, _ in ocr(context, image, EVENT_STORY)]
             question = next(filter(None, (run_start.match_pack(t, list(overrides)) for t in story + [" ".join(story)])), None) if overrides else None
-            i = rewards.pick_choice([t for t, _ in options], run["team"]["keyword"], overrides.get(question))
-            log(f"event: {' | '.join(t for t, _ in options)}: take {options[i][0]!r}" + (f" (override {question!r})" if question else ""))
+            # Grey options (taken in an earlier round of the same questions) and ones a tap did nothing on are closed.
+            closed = {k for k, (t, y) in enumerate(options) if t in tried or not rewards.choice_open(image, y)}
+            i = rewards.pick_choice([t for t, _ in options], run["team"]["keyword"], overrides.get(question), closed)
+            shown = " | ".join(("(closed) " if k in closed else "") + t for k, (t, _) in enumerate(options))
+            if i is None:
+                log(f"event: {shown}: all closed, scroll for more")
+                swipe(context, 925, 520, 925, 220, wait=1.5)  # the list scrolls when it holds more than fits
+                return True
+            log(f"event: {shown}: take {options[i][0]!r}" + (f" (override {question!r})" if question else ""))
             tap(context, 925, options[i][1], wait=1.5)
+            if Event.panel_same(image, screen(context)):
+                log(f"event: {options[i][0]!r} did nothing: try another")
+                tried.add(options[i][0])
         else:
+            tried.clear()
             tap(context, 350, 420, wait=1.5)  # the story box: shows the next line
         return True
+
+    @staticmethod
+    def panel_same(before, after):
+        """Whether the choice panel looks as it did: a tap on it did nothing."""
+        x, y, w, h = CHOICE_ROWS
+        return recovery.same_screen(*(recovery.thumb(i[y:y + h, x:x + w]) for i in (before, after)))
 
     @staticmethod
     def rows(results):

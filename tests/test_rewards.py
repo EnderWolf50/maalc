@@ -1,10 +1,14 @@
+import struct
+import zlib
 from pathlib import Path
 
+import numpy as np
 import yaml
 
 import rewards as r
 
 DATA = Path(__file__).resolve().parent.parent / "assets/resource/base/data"
+SCREENS = Path(__file__).resolve().parent / "screens"
 
 ORDER = ["Starlight", "Random E.G.O Gift", "Cost & Keyword Gift Chance", "Cost", "E.G.O Resource"]
 RISKS = {"Defense Level Up": 1, "Growth I": 3, "Offense Level Up I": 2, "Offense Level Up II": 4}
@@ -31,6 +35,35 @@ def test_pick_choice_override_wins():
     options = ["Take the gift. Pass to gain a Burn E.G.O Gift.", "Leave it alone."]
     assert r.pick_choice(options, "Burn", "Leave it") == 1
     assert r.pick_choice(options, "Burn", "not on screen") == 0
+
+
+def test_pick_choice_passes_over_closed_options():
+    # Live 2026-10-17 (#34), floor 5 boss's second round of questions: the first answer was taken last round.
+    options = [
+        "What if you do feel like what you did was wrong? Weakens the Poise Passive 「Adaptation, for this Encounter",
+        "You're running away from something. Weakens the Shield Passive 「Defense Mechanism, for this Encounter",
+    ]
+    assert r.pick_choice(options, "Poise", closed={0}) == 1
+    assert r.pick_choice(options, "Poise", options[0][:20], closed={0}) == 1  # an override of a closed one too
+    gift = ["Leave.", "Pass to gain a Burn E.G.O Gift."]
+    assert r.pick_choice(gift, "Burn", closed={1}) == 0
+    assert r.pick_choice(options, "Poise", closed={0, 1}) is None  # all closed: scroll for more
+
+
+def test_choice_open_reads_the_frame_colour():
+    # EventChoicesUsed.png (live 2026-10-17, #34): an answer taken in an earlier round turns grey and does
+    # nothing when tapped; the open ones stay red-brown. y is each option's first line (Event.rows).
+    image = screen("EventChoicesUsed")
+    assert not r.choice_open(image, 208)
+    assert r.choice_open(image, 367)
+
+
+def screen(name):
+    """tests/screens/<name>.png as BGR, for fixtures written by recovery.png (one IDAT, filter 0 on every row)."""
+    data = (SCREENS / f"{name}.png").read_bytes()
+    w, h = struct.unpack(">II", data[16:24])
+    rows = np.frombuffer(zlib.decompress(data[8 + 25 + 8:-12 - 4]), np.uint8).reshape(h, 1 + w * 3)
+    return rows[:, 1:].reshape(h, w, 3)[:, :, ::-1]
 
 
 def test_pick_checker_takes_best_odds_leftmost():
