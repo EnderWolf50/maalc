@@ -161,7 +161,8 @@ def map_world(context, nodes, links, bus_x):
     """A map wider than the screen, the bus at (bus_x, BUS_HOME's y) on screen; drags move the screen over it.
 
     nodes: {(column, row): marks}, column 1 next to the bus; links: ((column, row), (column, row)) pairs.
-    The bus's chevrons lead to the first column's nodes. Returns the screen's offsets after each drag.
+    The bus's chevrons lead to the first column's nodes; a tap on anything but Enter opens a node panel.
+    Returns the screen's offsets after each drag.
     """
     bx, by = 446, actions.BUS_HOME[1]  # on the map; the screen starts at 446 - bus_x
 
@@ -196,6 +197,9 @@ def map_world(context, nodes, links, bus_x):
             return SimpleNamespace(hit=True, box=[bx - off[0], by, 45, 75])
         if name in ("MapLinkUp", "MapLinkMid", "MapLinkDown"):
             return SimpleNamespace(hit=True) if (1, name[7:].lower()) in nodes else None
+        if name == "MapNodePanel":
+            taps = ctl.post_click.call_args_list
+            return SimpleNamespace(hit=True) if taps and taps[-1].args != actions.ENTER else None
         if name in actions.MARKS:
             mark, (ox, oy, _, _) = actions.MARKS[name]
             x, y = override[name]["roi"][:2]
@@ -232,6 +236,45 @@ def test_two_columns_on_a_hard_floor_take_the_cheapest_path(context, monkeypatch
     bx, by = actions.BUS_HOME
     assert first == (bx + actions.SLOT[0], by + actions.SLOT[1] + 213)  # battle -> event (3), not event -> abno (6)
     context.tasker.controller.post_touch_down.assert_not_called()
+
+
+def test_a_full_read_plans_the_path_and_the_next_step_follows_it_without_a_drag_or_a_node_read(context, monkeypatch):
+    # The user (#111): once the floor's nodes are read, follow the path decided on.
+    monkeypatch.setattr(actions, "map_weights", lambda context: WEIGHTS)
+    actions.RUN["floor"] = 1
+    nodes = {(1, "up"): {"event"}, (1, "down"): {"cost"}, (2, "up"): {"cost"}, (2, "mid"): {"cost"},
+             (3, "up"): {"cost", "gift"}, (3, "mid"): {"event"}}
+    links = [((1, "up"), (2, "up")), ((1, "down"), (2, "mid")), ((2, "up"), (3, "up")), ((2, "mid"), (3, "mid"))]
+    map_world(context, nodes, links, bus_x=actions.BUS_HOME[0])
+    actions.RouteMap().run(context, None)  # down battle > mid battle > mid event (5), not up event > battle > abno (8)
+    # Steps go from the node before: up from the bottom row to the middle one, then straight on.
+    assert actions.RUN["map_plan"] == {"floor": 1, "steps": [("up", "battle"), ("mid", "event")]}
+
+    context.reset_mock()  # on the battle's node now, the map back at rest
+    map_world(context, {(1, "up"): {"cost"}, (1, "down"): {"cost"}}, [], bus_x=446)
+    actions.RouteMap().run(context, None)
+    context.tasker.controller.post_touch_down.assert_not_called()
+    assert context.tasker.controller.post_click.call_args_list[0].args == (446 + actions.SLOT[0], actions.BUS_HOME[1] + actions.SLOT[1] - 213)
+    assert not [c for c in context.run_recognition.call_args_list if c.args[0] in actions.MARKS]
+    assert actions.RUN["map_plan"]["steps"] == [("mid", "event")]
+
+
+def test_a_planned_slot_not_linked_to_the_bus_means_the_map_is_read_again(context, monkeypatch):
+    monkeypatch.setattr(actions, "map_weights", lambda context: WEIGHTS)
+    actions.RUN.update(floor=1, map_plan={"floor": 1, "steps": [("up", "battle")]})
+    map_world(context, {(1, "mid"): {"event"}}, [], bus_x=446)
+    actions.RouteMap().run(context, None)
+    context.tasker.controller.post_touch_down.assert_called()  # dragged to the far left for a full read
+    assert actions.RUN["map_plan"] == {"floor": 1, "steps": []}  # the new plan: the middle event, nothing after
+
+
+def test_a_plan_from_the_last_floor_is_not_followed(context, monkeypatch):
+    monkeypatch.setattr(actions, "map_weights", lambda context: WEIGHTS)
+    actions.RUN.update(floor=2, map_plan={"floor": 1, "steps": [("mid", "battle")]})
+    map_world(context, {(1, "mid"): {"cost"}}, [], bus_x=446)
+    actions.RouteMap().run(context, None)
+    context.tasker.controller.post_touch_down.assert_called()
+    assert actions.RUN["map_plan"] == {"floor": 2, "steps": []}
 
 
 def win_rate_taps(context):
