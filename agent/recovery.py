@@ -18,7 +18,8 @@ WAIT_LIMITS = {"Loading": 90, "Connecting": 90}  # seconds a waiting screen may 
 HASH_FLOOR = {"BattlePause": 30}  # a turn playing out may sit still a while: also this many seconds
 # Screens on the way back to a run after L2/L3: seeing them does not mean the stuck screen was got past.
 TRANSIT = {"Loading", "Connecting", "RetryPopup", "GoToMirrorEntry", "NavTitle", "NavMainTabs", "NavDrive",
-           "MirrorEntryPaused", "ResumeDialog", "ProgressPanel"}
+           "MirrorEntryPaused", "ResumeDialog", "ProgressPanel", "DownloadDialog", "PopupButton"}
+DOWNLOAD_HOLD = 30 * 60  # seconds after confirming the title's download dialog in which nothing is stuck
 L2_PER_RUN, L3_PER_RUN, L3_PER_EXECUTION = 3, 2, 3
 BATTLE = {"BattleTurn", "BattlePause"}  # L2 cannot go through mid-battle: only the map has To Window
 BATTLE_LIMIT = 20 * 60
@@ -58,6 +59,7 @@ class Watchdog:
     def __init__(self):
         self.kind, self.kind_since = None, 0.0
         self.first, self.count, self.since = None, 0, 0.0  # the streak's first thumbnail
+        self.hold_until = 0.0  # a download is under way until then: no screen counts as stuck
 
     def see(self, kind, small, now):
         """Record one screen handed out by MirrorHub (its type and thumb); True when it makes the bot stuck."""
@@ -66,9 +68,18 @@ class Watchdog:
         if not same_screen(small, self.first):
             self.first, self.count, self.since = small, 0, now
         self.count += 1
+        if self.held(now):
+            return False
         if kind in WAIT_LIMITS:
             return now - self.kind_since > WAIT_LIMITS[kind]
         return self.count >= SAME_SCREEN and now - self.since >= HASH_FLOOR.get(kind, 0)
+
+    def hold(self, now, seconds):
+        """A download was confirmed: nothing is stuck for the next seconds (its progress screen is not known)."""
+        self.hold_until = now + seconds
+
+    def held(self, now):
+        return now < self.hold_until
 
     def reset(self):
         self.__init__()

@@ -150,6 +150,8 @@
 | 每週重置通知（待截圖確認） | OCR：通知文字 | 關閉，當成一般全域彈窗 | 前一個畫面、主畫面 | #8、#14 | — |
 | 無限鏡牢彈窗（待截圖確認） | 模板：彈窗的關閉按鈕 | 關閉，不開啟無限鏡牢 | 前一個畫面 | #8、#17 | — |
 | 升級彈窗（待截圖確認） | OCR：升級文字；模板：關閉或 Confirm | 關閉 | 前一個畫面 | #16 | — |
+| 單鈕彈窗（`PopupButton`，後備） | OCR：畫面中央（540–740, 430–500）的按鈕文字是 `Close`、`Confirm` 或 `OK`。只有一個按鈕，沒有可選的，所以按它；兩個按鈕的問句（Cancel／Confirm）按鈕不在中央，不會被它按到。排在 `ClaimPopup` 之後、所有頁面之前，維護公告在它前面（同樣是單個 Close，要停止） | 點那個按鈕 | 前一個畫面 | #85、#86 | `tests/screens/TitleErrorConfirm.png`（合成圖）；`RewardsAcquired.png`、`PassLevelUp.png` 它也讀得到，但 `ClaimPopup` 在前 |
+| 標題畫面的資料下載對話框（待截圖確認） | OCR：視窗內文含 `Download`／`Update`／`<n> MB`，按鈕 `Confirm`（另一個 `Close`）。2026-10-16 實機看過 `Downloading N MB of data`（L3 重啟後），位置沒截圖，ROI 取得寬 | 點 Confirm（`DownloadDialog`），卡住偵測暫停 30 分鐘等下載完 | 下載進度畫面（沒截過）、標題畫面 | #31、#86 | `tests/screens/TitleDownload.png`（合成圖） |
 | 維護公告 | OCR：公告視窗內文含 `maintenance`，且視窗唯一的按鈕讀到 `Close`（兩者同時出現；其他畫面文字含 maintenance 不算） | 直接停止，保存證據並發 webhook | 停止 | #14、#83 | `tests/screens/MaintenanceNotice.png` |
 
 ## 資訊面板（誤觸才會進入）

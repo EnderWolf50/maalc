@@ -74,19 +74,25 @@
             "RecoverStartApp"
         ]
     },
+    // timeout is the wait for next, so it sits here, not on RecoverTitle (there it was never read: a restart
+    // that took more than ~30 s to reach the title failed L3, 33.5 s in an offline run, #86).
     "RecoverStartApp": {
         "action": "StartApp",
         "package": "com.ProjectMoon.LimbusCompany",
         "post_delay": 10000,
+        "timeout": 180000,
         "next": [
             "RecoverTitle"
         ]
     },
+    // The title, also under its dialogs (they only tint it); a download dialog or an error box that hides it counts too.
+    // MirrorHub answers them: DownloadDialog confirms, PopupButton presses the lone button.
     "RecoverTitle": {
         "recognition": "Or",
         "any_of": [
-            "NavTitle"
-        ],
-        "timeout": 180000
+            "NavTitle",
+            "DownloadDialog",
+            "PopupButton"
+        ]
     }
 }
