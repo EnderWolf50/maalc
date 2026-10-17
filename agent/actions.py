@@ -291,7 +291,7 @@ class Recover(CustomAction):
             log(f"L{level} did not go through")
             STUCK["ladder"].failed(level)
         STUCK["watch"].reset()
-        for key in ("turn", "battle_start", "map_misses", "event_tried"):
+        for key in ("turn", "battle_start", "map_misses", "event_tried", "map_plan"):
             RUN.pop(key, None)
         return True
 
@@ -878,15 +878,22 @@ class EnterNode(CustomAction):
 class RouteMap(CustomAction):
     """Pick the next node and enter it (spec 03 section 7).
 
-    Slots linked to the bus (a chevron on the link) are typed by their marks, ranked by
-    map_route.rank and tapped in that order until the node panel (MapNodePanel) shows. After them come
-    the fallbacks: the bus (a node reached but not entered), then the slots not tried yet.
+    Slots linked to the bus (its lit line or a chevron on it) are typed by their marks, ranked by
+    map_route.rank over the columns on screen and tapped in that order until the node panel (MapNodePanel)
+    shows. After them come the fallbacks: the bus (a node reached but not entered), then the slots not tried yet.
     Nothing taking a tap spends one of the floor's map retries; when they run out, the map is stuck (spec 06).
+    When the best path's first node is entered, the rest of the path is the floor's plan: the next calls
+    follow it (follow) until it is used up or does not fit the map.
     """
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         if RUN.get("forfeit"):
             return forfeit(context)
+        if still(context) is None:
+            return True  # still fading in or out: let MirrorHub look again
+        if self.follow(context):
+            return enter_node(context)
+        RUN.pop("map_plan", None)
         for _ in range(MAP_LOOKS):  # live: right after a floor's theme pack, the map shows before its bus and links
             if still(context) is None:
                 return True  # still fading in or out: let MirrorHub look again
@@ -900,9 +907,14 @@ class RouteMap(CustomAction):
         ahead = self.read_ahead(context, image, bx, by, slots) if slots else []
         weights = map_weights(context)
         order = map_route.rank(slots, weights, ahead)
+        steps = None
         if order:
             score, path = map_route.paths(slots, weights, ahead)[order[0]]
-            log(f"map: path {' > '.join(f'{r} {c[r][0]}' for r, c in zip(path, (slots, *ahead)))}, score {score}")
+            nodes = [c[r][0] for r, c in zip(path, (slots, *ahead))]
+            log(f"map: path {' > '.join(f'{r} {t}' for r, t in zip(path, nodes))}, score {score}")
+            # The rest of the path, each step's row seen from the node before it: where the bus will stand.
+            row_at = {dy: r for r, dy in map_route.ROW_DY.items()}
+            steps = [(row_at[map_route.ROW_DY[b] - map_route.ROW_DY[a]], t) for a, b, t in zip(path, path[1:], nodes[1:])]
 
         def centre(row):
             return bx + SLOT[0], by + SLOT[1] + map_route.ROW_DY[row]
@@ -913,6 +925,8 @@ class RouteMap(CustomAction):
             tap(context, x, y, wait=0)
             if until(context, lambda im: seen(context, im, "MapNodePanel")) is not None:
                 log(f"map: take {name}")
+                if steps is not None and (x, y) == tries[0][1]:  # the path's first node: follow the rest
+                    RUN["map_plan"] = {"floor": RUN.get("floor"), "steps": steps}
                 return enter_node(context)
         RUN["map_misses"] = RUN.get("map_misses", 0) + 1
         if RUN["map_misses"] >= MAP_RETRIES:
@@ -943,15 +957,53 @@ class RouteMap(CustomAction):
         v = image.max(axis=2)
         slots = {}
         for row in map_route.ROWS:
-            node, (rx, ry, rw, rh) = LINKS[row]
-            cx, cy = bx + SLOT[0], by + SLOT[1] + map_route.ROW_DY[row]
-            # Live 2026-10-18, bus at the far left: the chevrons scored 0.75-0.84 against 0.8, the lit link
-            # itself 157-171 against -2 unlinked; either one counts.
-            lit = map_route.line_contrast(v, bx + 22, by + 37, cx, cy)
-            if not (lit is not None and lit >= BUS_LINK or seen(context, image, node, (bx + rx, by + ry, rw, rh))):
-                continue
-            slots[row] = (node_at(context, image, cx, cy), map_route.routes(v, cx, cy))
+            if RouteMap.linked(context, image, bx, by, row):
+                cx, cy = bx + SLOT[0], by + SLOT[1] + map_route.ROW_DY[row]
+                slots[row] = (node_at(context, image, cx, cy), map_route.routes(v, cx, cy))
         return slots
+
+    @staticmethod
+    def linked(context, image, bx, by, row):
+        """Whether the slot in row is linked to the bus.
+
+        Live 2026-10-18, bus at the far left: the chevrons scored 0.75-0.84 against 0.8, the lit link
+        itself 157-171 against -2 unlinked; either one counts.
+        """
+        node, (rx, ry, rw, rh) = LINKS[row]
+        lit = map_route.line_contrast(image.max(axis=2), bx + 22, by + 37, bx + SLOT[0], by + SLOT[1] + map_route.ROW_DY[row])
+        return lit is not None and lit >= BUS_LINK or bool(seen(context, image, node, (bx + rx, by + ry, rw, rh)))
+
+    @staticmethod
+    def follow(context):
+        """Tap the next node of this floor's planned path; whether its node panel showed (#111).
+
+        No node is read, and the map is dragged (bus to the far left) only when the slot sits under the
+        resource bar or the buttons. False, for a full read, with no plan or a used-up one, or when the
+        slot does not read as linked to the bus or its tap shows no panel.
+        """
+        plan = RUN.get("map_plan")
+        if not plan or plan["floor"] != RUN.get("floor") or not plan["steps"]:
+            return False
+        row, node = plan["steps"][0]
+        image = screen(context)
+        bus = seen(context, image, "MapBus")
+        bus = bus and tuple(bus.box[:2])
+
+        def clear(bx, by):  # the slot's node, badges included, clear of the resource bar and the buttons
+            return bx + SLOT[0] + 80 <= 1200 and by + SLOT[1] + map_route.ROW_DY[row] - 80 >= 60
+        if not bus or not clear(*bus):
+            image, bus = RouteMap.find_bus(context)
+        if not bus or not RouteMap.linked(context, image, *bus, row):
+            log(f"map: planned {row} {node} not linked to the bus; reading the map again")
+            return False
+        bx, by = bus
+        tap(context, bx + SLOT[0], by + SLOT[1] + map_route.ROW_DY[row], wait=0)
+        if until(context, lambda im: seen(context, im, "MapNodePanel")) is None:
+            log(f"map: planned {row} {node} took no tap; reading the map again")
+            return False
+        log(f"map: follow plan {row} {node}")
+        plan["steps"] = plan["steps"][1:]
+        return True
 
     @staticmethod
     def read_ahead(context, image, bx, by, slots):
