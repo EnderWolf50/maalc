@@ -821,6 +821,11 @@ MARKS = {  # node -> (mark, roi around the slot centre)
 ENTER = (1133, 543)
 MAP_RETRIES = 3  # RouteMap calls per floor that may enter nothing before the map is stuck
 MAP_LOOKS = 4  # looks, 1 s apart, for a linked slot before the fallback taps
+# Columns beyond the first are read while their widest mark roi (MARKS) stays left of the buttons: at
+# BUS_HOME the second; the third, at x 1235, is under them. The rest of the floor is read by dragging the
+# map left two columns at a time, from map background between the middle and bottom rows (#111).
+MAP_PANS = 4
+MAP_PAN_FROM = (1100, 460)
 PANEL_REWARDS = [700, 495, 110, 30]  # the "Clear Rewards" label
 PANEL_COST = [730, 545, 40, 35]  # the number by its Cost coin
 
@@ -836,11 +841,19 @@ def seen(context, image, node, roi=None):
     return detail if detail and detail.hit else None
 
 
-def map_weights(context):
+def node_at(context, image, cx, cy):
+    """The type of the map node centred at (cx, cy), by the marks seen around it (map_route.node_type)."""
+    return map_route.node_type({mark for n, (mark, (ox, oy, w, h)) in MARKS.items() if seen(context, image, n, (cx + ox, cy + oy, w, h))})
+
+
+def floor_hard(context):
     run = current_run(context)
-    hard = run.get("floor_hard", run["difficulty"] == "hard")
+    return run.get("floor_hard", run.get("difficulty") == "hard")
+
+
+def map_weights(context):
     data = yaml.safe_load((RESOURCE / "base" / "data" / "map_weights.yaml").read_text(encoding="utf-8"))
-    return data["hard" if hard else "normal"]
+    return data["hard" if floor_hard(context) else "normal"]
 
 
 def enter_node(context):
@@ -888,8 +901,17 @@ class RouteMap(CustomAction):
             if slots:
                 break
             time.sleep(1)
-        log("map: " + (", ".join(f"{r} {t} ({'?' if n is None else n} onward)" for r, (t, n) in slots.items()) or "no linked slot read"))
-        order = map_route.rank(slots, map_weights(context))
+        log("map: column 1: " + (", ".join(f"{r} {t} ({'?' if n is None else n} onward)" for r, (t, n) in slots.items()) or "no linked slot read"))
+        # A hard floor shows two columns by design: the faint links past them lead nowhere to read.
+        ahead, moved = self.read_ahead(context, image, bx, by, slots, 0 if floor_hard(context) else MAP_PANS) if slots else ([], 0)
+        if moved:  # dragged back: the bus may sit a few px off where it was
+            _, bus = self.find_bus(context)
+            bx, by = bus or (bx, by)
+        weights = map_weights(context)
+        order = map_route.rank(slots, weights, ahead)
+        if order:
+            score, path = map_route.paths(slots, weights, ahead)[order[0]]
+            log(f"map: path {' > '.join(f'{r} {c[r][0]}' for r, c in zip(path, (slots, *ahead)))}, score {score}")
 
         def centre(row):
             return bx + SLOT[0], by + SLOT[1] + map_route.ROW_DY[row]
@@ -937,9 +959,53 @@ class RouteMap(CustomAction):
             if not seen(context, image, node, (bx + rx, by + ry, rw, rh)):
                 continue
             cx, cy = bx + SLOT[0], by + SLOT[1] + map_route.ROW_DY[row]
-            marks = {mark for n, (mark, (ox, oy, w, h)) in MARKS.items() if seen(context, image, n, (cx + ox, cy + oy, w, h))}
-            slots[row] = (map_route.node_type(marks), map_route.routes(v, cx, cy))
+            slots[row] = (node_at(context, image, cx, cy), map_route.routes(v, cx, cy))
         return slots
+
+    @staticmethod
+    def read_ahead(context, image, bx, by, slots, pans):
+        """The columns beyond the first for map_route.rank, and how far the map was dragged to read them.
+
+        A node counts when a link into it from the column before reads (map_route.line_contrast); only rows
+        next to each other link. Past the screen the map is dragged left two columns at a time, at most pans
+        times. The read ends at a column with nothing linked or nothing but unknown nodes (dark), after the
+        boss, when nothing leads on from the last column, or when a drag no longer moves the map. The map is
+        dragged back before returning.
+        """
+        dx, dy = map_route.COLUMN_DX, map_route.ROW_DY
+        v, x, ahead, shifts = image.max(axis=2), bx + SLOT[0], [], []
+
+        def y(row):
+            return by + SLOT[1] + dy[row]
+        for pan in range(pans + 1):
+            ended = False
+            while not ended and x + dx + 80 <= 1200:  # MapNodeFocusedHex reads 80 px either side; buttons from x 1205
+                x += dx
+                before, column = ahead[-1] if ahead else slots, {}
+                for row in map_route.ROWS:
+                    linked = {r for r in before if abs(dy[r] - dy[row]) <= 213
+                              and (map_route.line_contrast(v, x - dx, y(r), x, y(row)) or 0) >= map_route.LINE_CONTRAST}
+                    if linked:
+                        column[row] = (node_at(context, image, x, y(row)), linked)
+                ended = not column or all(t == "unknown" for t, _ in column.values())
+                if not ended:
+                    ahead.append(column)
+                    log(f"map: column {len(ahead) + 1}: " + ", ".join(f"{r} {t} (from {'/'.join(sorted(n))})" for r, (t, n) in column.items()))
+                    ended = any(t == "boss" for t, _ in column.values())
+            if ended or pan == pans or not ahead or all(map_route.routes(v, x, y(r)) == 0 for r in ahead[-1]):
+                break
+            scroll(context, *MAP_PAN_FROM, -2 * dx, 0)
+            time.sleep(0.5)
+            last, image = image, screen(context)
+            s = map_route.shift(last, image)
+            if s < dx // 2:  # the map's end, or the drag was lost
+                break
+            shifts.append(s)
+            v, x = image.max(axis=2), x - s
+        for s in reversed(shifts):
+            scroll(context, MAP_PAN_FROM[0] - 2 * dx, MAP_PAN_FROM[1], s, 0)
+            time.sleep(0.5)
+        return ahead, sum(shifts)
 
 
 # Formation page (spec 03 section 3). Cards are in battle.SINNERS order, two rows of six.
