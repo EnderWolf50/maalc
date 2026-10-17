@@ -82,8 +82,32 @@ def test_ladder_progress_starts_the_next_stuck_over():
 
 def test_ladder_time_limits_start_at_l2():
     ladder = Ladder()
-    assert ladder.stuck("BattleTurn", 2, 0) == (2, None)
+    assert ladder.stuck("MirrorMap", 2, 0) == (2, None)
     assert ladder.counts == {1: 0, 2: 1, 3: 0}
+
+
+@pytest.mark.parametrize("kind", ["BattleTurn", "BattlePause"])
+def test_ladder_skips_l2_in_battle(kind):
+    # L2 only goes through on the map: mid-battle it failed after 20 s and the L3 restart followed anyway
+    # (live 2026-10-17, #70). A battle climbs from L1 straight to L3; its time limit starts there.
+    ladder = Ladder()
+    assert ladder.stuck(kind, 1, 0) == (1, None)
+    assert ladder.stuck(kind, 1, 0) == (3, None)
+    assert Ladder().stuck(kind, 2, 0) == (3, None)
+    assert ladder.counts == {1: 1, 2: 0, 3: 1}
+
+
+def test_ladder_a_level_that_did_not_go_through_is_not_charged_to_the_run():
+    # Live 2026-10-17 (#70): `am force-stop` failed once (adb exit 1), then the restart that went through
+    # hung on NOW LOADING; the failed one had used up one of the run's 2 restarts, so the bot stopped.
+    ladder = Ladder()
+    assert ladder.stuck("BattleTurn", 1, 0) == (1, None)
+    assert ladder.stuck("BattleTurn", 1, 0) == (3, None)
+    ladder.failed(3)
+    assert ladder.stuck("BattleTurn", 1, 1) == (3, None)  # the same episode retries the restart
+    assert ladder.stuck("Loading", 1, 2) == (3, None)  # the restarted game hangs: one more within the run's 2
+    assert ladder.counts == {1: 1, 2: 0, 3: 2}
+    assert ladder.stuck("Loading", 1, 2) == (None, "game restarted 2 times this run")
 
 
 @pytest.mark.parametrize("counts, l3_execution, start, expected", [

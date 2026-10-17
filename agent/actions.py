@@ -253,6 +253,7 @@ class Recover(CustomAction):
             if detail and detail.status.succeeded:
                 break
             log(f"L{level} did not go through")
+            STUCK["ladder"].failed(level)
         STUCK["watch"].reset()
         for key in ("turn", "battle_start", "map_misses"):
             RUN.pop(key, None)
@@ -1025,11 +1026,6 @@ SLOT_PORTRAIT_Y = 665  # tapping a slot's portrait swaps its lower skill and its
 LOWER_Y = 577  # a slot's lower skill, at rest (while a drag is down it sits at y 665: battle.guard_chain)
 
 
-def disc_lit(image, x, y):
-    # Lit: HSV V ~254 at the disc centre, unlit ~133 (spec 07: the START label fails on snow maps).
-    return image[y - 10:y + 10, x - 10:x + 10].max(axis=2).mean() > 200
-
-
 def lower_x(x):
     """x of a slot's lower skill: the skill rows lean in towards the middle (x ~604) by about 6%."""
     return round(x + (604 - x) * 0.06)
@@ -1046,7 +1042,7 @@ def guard_score(image, x):
 
 @AgentServer.custom_action("PlayTurn")
 class PlayTurn(CustomAction):
-    """Guard or Win Rate, check the START disc lit (2 tries), press it, check the turn plays (spec 03 section 8, 06)."""
+    """Guard or Win Rate (one tap), press the START disc, check the turn plays (spec 03 section 8, 06)."""
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         x, y = argv.box[0], argv.box[1]
@@ -1064,15 +1060,14 @@ class PlayTurn(CustomAction):
             guarded, image = self.guard(context, x, (dx, dy))
             if not guarded:
                 log(f"turn {turn}: guard did not take, Win Rate instead")
-        for _ in range(2):
-            if disc_lit(image, dx, dy):
-                break
-            # Win Rate toggles: pressed while on, it clears the skills again; hence the check first.
+        if not battle.disc_lit(image, dx, dy):
+            # Win Rate toggles: a second tap clears the skills the first picked, so one tap per submit.
             tap(context, x + WIN_RATE[0], y + WIN_RATE[1], wait=1.5)
             image = screen(context)
-        if not disc_lit(image, dx, dy):
-            log(f"turn {turn}: START did not light")
-            return True
+        if not battle.disc_lit(image, dx, dy):
+            # Live 2026-10-17 (#69): a ready disc that read unlit stalled the battle. The check below tells
+            # whether the press started the turn; an unready disc is not expected to (unverified live).
+            log(f"turn {turn}: START reads unlit, pressing it anyway")
         tap(context, dx, dy, wait=0)
         for _ in range(6):
             time.sleep(0.5)
@@ -1127,7 +1122,7 @@ class PlayTurn(CustomAction):
         drag(context, battle.guard_chain(battle.slot_xs(x)))
         time.sleep(1)
         image = screen(context)
-        return disc_lit(image, *disc), image
+        return battle.disc_lit(image, *disc), image
 
 
 @AgentServer.custom_action("Victory")
