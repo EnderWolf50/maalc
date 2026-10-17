@@ -1,5 +1,6 @@
 """Custom actions driven offline: a fake Maa context reads nothing on a blank screen."""
 
+import json
 import time
 from pathlib import Path
 from types import SimpleNamespace
@@ -168,6 +169,35 @@ def test_a_bright_event_its_templates_miss_is_still_an_event(context):
     assert slots["up"][0] == "event"
     score, path = actions.map_route.paths(slots, weights, ahead)[actions.map_route.rank(slots, weights, ahead)[0]]
     assert (path, score) == (["up", "mid", "mid", "mid"], 19)
+
+
+RED = Path(__file__).resolve().parent / "data/map_red_theme.npz"  # live 2026-10-18, floor 3 hard, red theme
+
+
+def test_a_column_of_lit_events_its_templates_miss_is_read_and_a_dark_one_ends_the_read(context):
+    # H1: next to the bus a Focused; then two dim red "?" (no template hit, linked by bright lines); then black.
+    v = np.zeros((720, 1280), np.uint8)
+    v[70:615, :1180] = np.load(RED)["h1_v"]
+    context.run_recognition.return_value = None  # no mark on any node past the first column
+    ahead = actions.RouteMap.read_ahead(context, v[..., None].repeat(3, axis=2), 50, 320, {"mid": ("focused", 2)})
+    assert ahead == [{"up": ("event", {"mid"}), "down": ("event", {"mid"})}]
+
+
+def map_node_boss():
+    lines = (Path(actions.__file__).resolve().parent.parent / "assets/resource/base/pipeline/map.json").read_text(encoding="utf-8").splitlines()
+    return json.loads("\n".join(ln for ln in lines if not ln.strip().startswith("//")))["MapNodeBoss"]
+
+
+@pytest.mark.parametrize(("node", "boss"), [
+    ("boss_mapboss", True), ("boss_mapshop", True), ("boss_lake_world", True),
+    # H2, H3: the red theme's "?" nodes; H2's bottom one read as the boss with a count of 500.
+    ("event_h2_up", False), ("event_h2_down", False), ("event_h3_mid", False),
+])
+def test_only_the_boss_glows_red_enough_for_map_node_boss(node, boss):
+    # MapNodeBoss is a ColorMatch (RGB, method 4) over 80 x 80 px around the node: its pixels in range, counted.
+    params, rgb = map_node_boss(), np.load(RED)[node]
+    hits = ((rgb >= params["lower"]) & (rgb <= params["upper"])).all(axis=2).sum()
+    assert (hits >= params["count"]) == boss
 
 
 def test_a_node_with_its_badges_under_the_resource_bar_is_no_event_for_showing_none(context):

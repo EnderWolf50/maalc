@@ -66,7 +66,8 @@
         "green_mask": true,
         "threshold": 0.8
     },
-    // The boss node glows saturated red on every pack seen; no other node does.
+    // The boss node glows saturated red on every pack seen. So do the red packs' "?" nodes, less:
+    // live 2026-10-18 ("Charm, Wander, Doubt") 388-506 px in range against 1530-1783 for three bosses.
     // Default roi: the middle slot's body at rest; red affinity icons sit outside it.
     "MapNodeBoss": {
         "recognition": "ColorMatch",
@@ -74,7 +75,7 @@
         "method": 4,
         "lower": [170, 0, 0],
         "upper": [255, 70, 70],
-        "count": 500
+        "count": 1000
     },
     // Glyphs take the pack's colour, so they are matched by shape (SIFT works on grey).
     "MapNodeEvent": {

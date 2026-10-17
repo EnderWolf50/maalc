@@ -1026,8 +1026,8 @@ class RouteMap(CustomAction):
         """The columns beyond the first on screen, for map_route.rank.
 
         A node counts when a link into it from the column before reads (map_route.line_contrast); only rows
-        next to each other link. The read ends at the screen's edge, at a column with nothing linked or no
-        mark on any node (dark: hard mode shows two columns), or after the boss.
+        next to each other link. The read ends at the screen's edge, at a column with nothing linked or
+        dark (no mark and no light on any node: hard mode shows two columns), or after the boss.
         """
         dx, dy = map_route.COLUMN_DX, map_route.ROW_DY
         v, x, ahead = image.max(axis=2), bx + SLOT[0], []
@@ -1042,7 +1042,10 @@ class RouteMap(CustomAction):
                           and (map_route.line_contrast(v, x - dx, y(r), x, y(row)) or 0) >= map_route.LINE_CONTRAST}
                 if linked:
                     marks = node_marks(context, image, x, y(row))
-                    column[row], lit = (node_at(context, image, x, y(row), marks), linked), lit or bool(marks)
+                    column[row] = (node_at(context, image, x, y(row), marks), linked)
+                    # A node with no mark may still be lit: a red pack's dim "?" (live 2026-10-18) reads 48-60
+                    # here; hard mode's dark columns read 0.
+                    lit = lit or bool(marks) or np.percentile(v[y(row) - 45:y(row) + 45, x - 45:x + 45], 90) >= 20
             if not lit:
                 break
             ahead.append(column)
