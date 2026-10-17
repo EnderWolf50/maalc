@@ -5,7 +5,13 @@ actions.py reads the shop pages and taps; everything here is plain data in, plai
 
 from difflib import SequenceMatcher
 
+import numpy as np
+
+from gift_search import _runs
+
 ROUNDS = 10
+CELL_HALF = 48  # screen px kept around a cell's centre: its icon, tier numerals and keyword badge
+TIERS = {(1, 1): 1, (2, 2): 2, (3, 3): 3, (3, 2): 4, (2, 1): 5}  # numeral strokes at its top and bottom row: I-V
 
 
 LOOKALIKE = str.maketrans("OoDQIl|SsBZz", "000011155822")
@@ -16,6 +22,41 @@ def cost_value(text):
     if not any(c.isdigit() for c in text):
         return None
     return int("".join(c for c in text.translate(LOOKALIKE) if c.isdigit()))
+
+
+def rescale(image, factor):
+    """image resized by factor, nearest pixel (no OpenCV in the agent)."""
+    h, w = image.shape[:2]
+    ys = np.minimum((np.arange(round(h * factor)) / factor).astype(int), h - 1)
+    xs = np.minimum((np.arange(round(w * factor)) / factor).astype(int), w - 1)
+    return np.ascontiguousarray(image[ys][:, xs])
+
+
+def cell_crop(image, x, y, scale):
+    """The grid cell centred at (x, y), resized so its gift icon is at its GiftSearch template's size.
+
+    scale: the page's icon size over the template's (fuse and sell pages 1.1, offers 0.8; live captures).
+    The cell's centre is the crop's centre.
+    """
+    return rescale(image[y - CELL_HALF:y + CELL_HALF, x - CELL_HALF:x + CELL_HALF], 1 / scale)
+
+
+def tier(cell):
+    """A cell's tier (1-5) from its yellow numerals top left (cell_crop), or None (no numerals: a skill, a dim page).
+
+    I, II and III are 1-3 bars top to bottom; IV and V end in a V, so the bottom row has a stroke fewer.
+    """
+    mid = cell.shape[0] // 2
+    box = cell[mid - 36:mid - 8, mid - 36:mid - 16].astype(int)
+    b, g, r = box[:, :, 0], box[:, :, 1], box[:, :, 2]
+    yellow = (r > 200) & (g > 140) & (b < 90)
+    top, bottom = 9, 19  # rows inside every numeral on both scales
+    bars = [(x, n) for x, n in _runs(np.flatnonzero(yellow[top])) if n >= 2]
+    if not bars:
+        return None
+    lo, hi = bars[0][0] - 1, bars[-1][0] + bars[-1][1] + 1  # icon art beside the numerals stays out
+    ends = [n for _, n in _runs(np.flatnonzero(yellow[bottom, lo:hi])) if n >= 2]
+    return TIERS.get((len(bars), len(ends)))
 
 
 def can_spend(cost, price, reserve):
@@ -82,10 +123,34 @@ def buyable(slot, cost=None):
     to the end of the grid, tagged Purchased. One dearer than the Cost (tagged Not Enough Cost) opens
     no purchase dialog (live 2026-10-18), so it is not tapped.
     """
-    name, price = slot["name"], slot["price"]
-    if price is None or slot["purchased"] or slot.get("short") or "Replace" in name or "ID Skill" in name:
+    if not on_sale(slot) or slot.get("short"):
         return False
-    return cost is None or price <= cost
+    return cost is None or slot["price"] <= cost
+
+
+def on_sale(slot):
+    """Whether a shop slot is a gift on sale for Cost, affordable or not: not bought, not a skill, not "??"."""
+    name = slot["name"]
+    return slot["price"] is not None and not slot["purchased"] and "Replace" not in name and "ID Skill" not in name
+
+
+def buy_plan(offers, cost, reserve, sold):
+    """(grid indexes to buy, last first; the wanted price or None) for the main-keyword offers on show (#76).
+
+    offers: [(grid index, tier or None, price)]. Highest tier first, cheapest first within a tier, each only
+    while the reserve stays. When the first choice is too dear and no sale has been tried for it, nothing is
+    bought: wanted asks the next round to sell first. Bought from the back, a purchase (moved to the grid's
+    end) leaves the offers before it in place, so the grid is read once.
+    """
+    order = sorted(offers, key=lambda o: (-(o[1] or 0), o[2]))
+    if order and not sold and not can_spend(cost, order[0][2], reserve):
+        return [], order[0][2]
+    picked = []
+    for i, _, price in order:
+        if can_spend(cost, price, reserve):
+            picked.append(i)
+            cost -= price
+    return sorted(picked, reverse=True), None
 
 
 def refresh_choice(cost, reserve, used, limit, normal_fee, keyword_fee, margin):
@@ -100,6 +165,23 @@ def refresh_choice(cost, reserve, used, limit, normal_fee, keyword_fee, margin):
         if fee is not None and can_spend(cost, fee + margin, reserve):
             return kind
     return None
+
+
+def cell_prices(results, cells):
+    """{cell index: sell price} from the OCR results [(text, (x, y, w, h))] of the sell page's grid.
+
+    A price is a number line 35-60 px under its cell's centre (its coin reads as junk left of it); a cell
+    whose price is cut off by the grid's edge has none.
+    """
+    prices = {}
+    for t, (x, y, w, h) in results:
+        tx, ty = x + w // 2, y + h // 2
+        if not t.isdigit() or h < 15:
+            continue
+        i = next((i for i, (cx, cy) in enumerate(cells) if abs(tx - cx) < 40 and 35 < ty - cy < 60), None)
+        if i is not None:
+            prices[i] = int(t)
+    return prices
 
 
 def to_sell(gifts, wanted, cost, reserve):
@@ -119,6 +201,18 @@ def to_sell(gifts, wanted, cost, reserve):
     if not can_spend(cost, wanted, reserve):
         return None
     return sorted(picked, reverse=True)  # selling from the back keeps the earlier cells in place
+
+
+def gift_role(keyword, gift, main):
+    """"keep", "material" or "unknown" for an owned gift read off its grid cell, on the fuse and the sell page.
+
+    keyword: its badge's keyword, "Keywordless" with no badge, None when the badge is cut off or unread;
+    gift: the team's observed gift its icon matched, or None. Kept: the main keyword, every keywordless gift
+    and the observed gifts (#103, #112). Unknown is left to the tooltip.
+    """
+    if gift or keyword in (main, "Keywordless"):
+        return "keep"
+    return "unknown" if keyword is None else "material"
 
 
 def protected(name, names, min_ratio=0.85):

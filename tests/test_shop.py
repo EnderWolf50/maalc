@@ -1,6 +1,46 @@
+import struct
+import zlib
+from pathlib import Path
+
+import numpy as np
 import pytest
 
 import shop as s
+
+# Grid crops of live 1280x720 captures (written by recovery.png: one IDAT, filter 0), and where each sat on screen.
+CROPS = Path(__file__).resolve().parent / "shop"
+CROP_AT = {
+    "fuse_spiderweb": (620, 236),  # live 2026-10-18 (maalc-probe rec/m3/fuse-140): Spiderweb Entangled in Red first
+    "fuse": (620, 236),  # tests/screens/ShopFuse.png
+    "fuse_recipe": (620, 236),  # tests/screens/ShopFuseRecipe.png (#103): the owned row sits at y 427
+    "sell": (620, 200),  # live 2026-10-16 (maalc-probe s29/025_sell): the sell page of ShopFuse.png's gifts
+    "offers": (560, 210),  # tests/screens/Shop.png
+    "offers_super": (560, 210),  # tests/screens/SuperShop.png
+}
+OWNED, OFFER = 1.1, 0.8  # a gift icon's size on the fuse / sell pages and on the offers, over its GiftSearch template's
+
+
+def screen_with(name):
+    """A black 1280x720 BGR screen with the crop tests/shop/<name>.png back in its place."""
+    data = (CROPS / f"{name}.png").read_bytes()
+    w, h = struct.unpack(">II", data[16:24])
+    rows = np.frombuffer(zlib.decompress(data[8 + 25 + 8:-12 - 4]), np.uint8).reshape(h, 1 + w * 3)
+    x, y = CROP_AT[name]
+    image = np.zeros((720, 1280, 3), np.uint8)
+    image[y:y + h, x:x + w] = rows[:, 1:].reshape(h, w, 3)[:, :, ::-1]
+    return image
+
+
+@pytest.mark.parametrize("name, scale, cells, tiers", [
+    ("fuse_spiderweb", OWNED, [(678 + 96 * c, 294) for c in range(5)], [3, 2, 2, 1, 1]),
+    ("fuse_recipe", OWNED, [(678 + 96 * c, 427) for c in range(5)], [1, 4, 4, 3, 3]),
+    ("fuse_recipe", OWNED, [(678, 293)], [4]),  # the Fusion Available cell
+    ("offers", OFFER, [(624, 265), (778, 265), (932, 265), (1086, 265), (624, 418)], [None, 1, 2, 2, 2]),  # a skill first
+    ("offers_super", OFFER, [(624 + 154 * c, 418) for c in range(4)], [2, 1, 1, 1]),  # flames and a sun by the numerals
+])
+def test_tier_is_read_from_the_cells_numerals(name, scale, cells, tiers):
+    image = screen_with(name)
+    assert [s.tier(s.cell_crop(image, x, y, scale)) for x, y in cells] == tiers
 
 
 def test_can_spend_keeps_the_reserve():
@@ -97,6 +137,14 @@ def test_an_offer_dearer_than_the_cost_is_not_opened():
     assert s.buyable(slot, cost=144) and s.buyable(slot, cost=None)  # unread Cost: open it and see
 
 
+def test_an_offer_too_dear_is_still_on_sale():
+    # Its badge tells its keyword without opening it (#76): it can become the gift to sell for.
+    dear = {"name": "Devil's Share", "price": 144, "purchased": False, "short": True}
+    assert s.on_sale(dear) and not s.buyable(dear, cost=77)
+    assert not s.on_sale({"name": "Replace Ryōshū's Skill", "price": None, "purchased": False, "short": False})
+    assert not s.on_sale({"name": "UPS System", "price": 156, "purchased": True, "short": False})
+
+
 def test_dialog_price_from_the_cost_preview():
     assert s.dialog_price(2864, "28642612") == 252  # live OCR runs the two numbers together
     assert s.dialog_price(540, "540 ▶ 384") == 156
@@ -126,3 +174,49 @@ def test_protected_gifts_are_matched_by_name(read, kept):
 ])
 def test_cost_value_reads_look_alike_letters_as_digits(read, cost):
     assert s.cost_value(read) == cost
+
+
+@pytest.mark.parametrize("keyword, gift, role", [
+    ("Bleed", None, "material"),  # another keyword: fuse or sell it
+    ("Burn", None, "keep"),  # the main keyword
+    ("Keywordless", None, "keep"),  # no badge: every keywordless gift is kept (#103)
+    ("Bleed", "Hellterfly's Dream", "keep"),  # its icon is one of the team's observed gifts
+    (None, None, "unknown"),  # badge cut off or unread: the tooltip decides
+    (None, "Spiderweb Entangled in Red", "keep"),
+])
+def test_gift_role_from_the_cells_badge_and_icon(keyword, gift, role):
+    assert s.gift_role(keyword, gift, "Burn") == role
+
+
+SELL_OCR = [  # Maa OCR of the sell page's grid (crop "sell"): coins read as 米/水/*, icon art as junk
+    ('生', (656, 330, 29, 40)), ('米', (659, 293, 21, 21)), ('Rooy', (678, 342, 35, 48)), ('100', (680, 293, 26, 20)),
+    ('100', (680, 400, 26, 21)), ('*', (755, 294, 19, 19)), ('水', (756, 402, 17, 18)), ('2', (760, 479, 12, 12)),
+    ('50', (773, 292, 23, 22)), ('97', (775, 400, 19, 20)), ('米', (847, 296, 14, 15)), ('水', (848, 403, 18, 16)),
+    ('Fa', (857, 349, 20, 17)), ('131', (867, 294, 20, 18)), ('91', (867, 401, 18, 19)), ('关', (936, 399, 22, 22)),
+    ('*', (940, 295, 17, 18)), ('0', (949, 441, 27, 23)), ('99', (958, 294, 20, 19)), ('101', (958, 401, 21, 19)),
+    ('光', (973, 378, 23, 23)), ('61N', (977, 487, 18, 8)), ('米', (1029, 401, 21, 19)), ('*', (1031, 295, 18, 18)),
+    ('石', (1039, 452, 14, 13)), ('ZA', (1048, 463, 14, 13)), ('93', (1050, 294, 20, 19)), ('96', (1050, 401, 21, 19)),
+    ('4', (1053, 255, 9, 12)),
+]
+
+
+def test_sell_prices_are_the_numbers_under_each_cell():
+    cells = [(683 + 92 * c, y) for y in (258, 363, 473) for c in range(5)]
+    assert s.cell_prices(SELL_OCR, cells) == {0: 100, 1: 50, 2: 131, 3: 99, 4: 93, 5: 100, 6: 97, 7: 91, 8: 101, 9: 96}
+
+
+def test_buy_plan_takes_high_tier_first_and_buys_from_the_back():
+    # #76: (grid index, tier, price) of the main-keyword offers on show.
+    offers = [(0, 1, 140), (1, 2, 200), (3, 2, 180), (4, 3, 250)]
+    # Tier 3, then the cheaper tier 2, then the dearer one; tier 1 no longer fits. Bought last cell first,
+    # so the offers before it keep their places (a bought one moves to the end of the grid).
+    assert s.buy_plan(offers, 700, 0, sold=False) == ([4, 3, 1], None)
+    assert s.buy_plan(offers, 700, 100, sold=False) == ([4, 3, 0], None)  # the reserve: 200 no longer fits, 140 does
+    assert s.buy_plan([(2, None, 150), (5, 1, 160)], 200, 0, sold=False) == ([5], None)  # an unread tier comes last
+
+
+def test_buy_plan_sells_first_when_the_top_tier_is_too_dear():
+    offers = [(0, 1, 140), (2, 3, 250)]
+    assert s.buy_plan(offers, 200, 0, sold=False) == ([], 250)  # nothing bought: the next round sells for it
+    assert s.buy_plan(offers, 200, 0, sold=True) == ([0], None)  # sold already (or nothing to sell): what fits
+    assert s.buy_plan([], 200, 0, sold=False) == ([], None)
