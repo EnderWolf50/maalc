@@ -1488,6 +1488,8 @@ class Shop(CustomAction):
         The dead are the grey portraits on the shop's sinner bar; the count from the last formation
         (RUN["alive"]) is only checked against them, as the shop shows deaths since then too.
         """
+        if team["heal"] == "none":
+            return  # nothing to decide: skip the Cost and portrait reads
         cost = read_cost(context)
         image = screen(context)
         dead = [x for x in SHOP_PORTRAIT_X if saturation(image[630:680, x - 25:x + 25]).mean() < 30]
