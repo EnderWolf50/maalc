@@ -811,6 +811,7 @@ LINKS = {
     "mid": ("MapLinkMid", (95, -10, 110, 80)),
     "down": ("MapLinkDown", (85, 85, 110, 110)),
 }
+BUS_LINK = 60  # line_contrast of a lit link from the bus; links between other nodes read up to ~50
 MARKS = {  # node -> (mark, roi around the slot centre)
     "MapNodeBoss": ("boss", (-40, -40, 80, 80)),
     "MapNodeFocusedHex": ("focused", (-80, -60, 160, 120)),
@@ -943,9 +944,12 @@ class RouteMap(CustomAction):
         slots = {}
         for row in map_route.ROWS:
             node, (rx, ry, rw, rh) = LINKS[row]
-            if not seen(context, image, node, (bx + rx, by + ry, rw, rh)):
-                continue
             cx, cy = bx + SLOT[0], by + SLOT[1] + map_route.ROW_DY[row]
+            # Live 2026-10-18, bus at the far left: the chevrons scored 0.75-0.84 against 0.8, the lit link
+            # itself 157-171 against -2 unlinked; either one counts.
+            lit = map_route.line_contrast(v, bx + 22, by + 37, cx, cy)
+            if not (lit is not None and lit >= BUS_LINK or seen(context, image, node, (bx + rx, by + ry, rw, rh))):
+                continue
             slots[row] = (node_at(context, image, cx, cy), map_route.routes(v, cx, cy))
         return slots
 
