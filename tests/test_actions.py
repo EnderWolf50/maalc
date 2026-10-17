@@ -72,6 +72,30 @@ def test_until_waits_its_minimum_before_the_first_look(context, clock):
     assert sum(clock) == pytest.approx(0.6)
 
 
+def test_still_waits_out_a_fade(context, clock):
+    screens(context, [0, 40, 80, 120, 120])  # fading in, then still
+    image = actions.still(context)
+    assert image[0, 0, 0] == 120
+    assert context.tasker.controller.post_screencap.call_count == 5
+
+
+def test_a_formation_page_still_fading_in_is_read_once_it_is_still(context, monkeypatch):
+    # Live (#58): read mid-fade, Total Participants gave 3 alive of 12.
+    actions.RUN["team"] = {"min_alive": 5, "name": "t"}
+    monkeypatch.setattr(actions, "stop", lambda context, reason, line=None: False)
+    monkeypatch.setattr(actions.run_start, "resolve_plan", lambda *a: [])  # ends the action after the count
+    screens(context, [60, 120, 120])
+    reads_by_image = {60: "3/3", 120: "12/12"}
+
+    def run_recognition(name, image, override=None):
+        roi = tuple((override or {}).get(name, {}).get("roi", ()))
+        t = reads_by_image.get(int(image[0, 0, 0])) if roi == tuple(actions.PARTICIPANTS) else None
+        return SimpleNamespace(all_results=[SimpleNamespace(text=t, box=(1125, 500, 60, 30))]) if t else None
+    context.run_recognition.side_effect = run_recognition
+    actions.Formation().run(context, None)
+    assert actions.RUN["alive"] == 12
+
+
 def bus_at(context, x, y, linked=()):
     """The map's bus at (x, y); the link nodes in linked hit, nothing else does."""
     def run_recognition(name, image, override=None):

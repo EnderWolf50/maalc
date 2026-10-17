@@ -81,6 +81,21 @@ def until(context, done, timeout=2.0, least=0.0, every=0.2):
         time.sleep(every)
 
 
+def still(context, timeout=2.0):
+    """The first screenshot that looks like the one 0.2 s before it: a fade in or out has ended; None after timeout s.
+
+    MirrorHub, polling every 300 ms, can hand out a page while it is still fading in or the last one fading out.
+    """
+    last = [recovery.thumb(screen(context))]
+
+    def done(image):
+        small = recovery.thumb(image)
+        same = recovery.same_screen(last[0], small)
+        last[0] = small
+        return same
+    return until(context, done, timeout=timeout, least=0.2)
+
+
 def moved(before, after):
     """Whether any 40x40 block of the screen changed by more than 8 levels: a tap took (#58)."""
     return bool((np.abs(recovery.thumb(before) - recovery.thumb(after)) > 8).any())
@@ -837,6 +852,7 @@ def enter_node(context):
         tap(context, *ENTER, wait=0)
         if until(context, lambda im: not seen(context, im, "MapNodePanel")) is not None:
             log("entered the node")
+            until(context, lambda im: not seen(context, im, "MirrorMap"), timeout=3)  # the map fades out
             return True
     return stuck("Enter on the node panel did nothing")
 
@@ -862,6 +878,8 @@ class RouteMap(CustomAction):
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         if RUN.get("forfeit"):
             return forfeit(context)
+        if still(context) is None:
+            return True  # still fading in or out: let MirrorHub look again
         image, bus = self.find_bus(context)
         bx, by = bus or BUS_REST  # no bus found: assume the map at rest
         slots = self.read_slots(context, image, bx, by) if bus else {}
@@ -986,8 +1004,8 @@ class Formation(CustomAction):
         # A new battle: its clock and turn count start over, also when the last VICTORY went unseen (#80).
         RUN.pop("turn", None)
         RUN.pop("battle_start", None)
-        image = screen(context)
-        count = participants(context, image)
+        image = still(context)
+        count = image is not None and participants(context, image)
         if not count:
             return True  # page fading in or out: let MirrorHub look again
         alive, need = count[1], run["team"]["min_alive"]
