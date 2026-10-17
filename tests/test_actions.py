@@ -93,3 +93,9 @@ def test_a_map_at_rest_is_panned_when_a_link_leads_up(context):
     bus_at(context, 446, 248, linked=("MapLinkUp",))
     actions.RouteMap.find_bus(context)
     context.tasker.controller.post_touch_down.assert_called()
+
+
+def test_a_turn_starts_after_win_rate_lights_the_disc(context, monkeypatch):
+    lit = iter([False, True])  # unlit on the turn's first look, lit after the Win Rate tap
+    monkeypatch.setattr(actions.battle, "disc_lit", lambda image, x, y: next(lit, True))
+    assert actions.PlayTurn().run(context, SimpleNamespace(box=[984, 531, 40, 20]))

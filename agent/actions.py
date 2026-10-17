@@ -1090,7 +1090,8 @@ class PlayTurn(CustomAction):
         if not battle.disc_lit(image, dx, dy):
             # Win Rate toggles: a second tap clears the skills the first picked, so one tap per submit.
             tap(context, x + WIN_RATE[0], y + WIN_RATE[1], wait=0)
-            image = until(context, lambda im: battle.disc_lit(im, dx, dy), timeout=1.5) or screen(context)
+            lit = until(context, lambda im: battle.disc_lit(im, dx, dy), timeout=1.5)
+            image = screen(context) if lit is None else lit
         if not battle.disc_lit(image, dx, dy):
             # Live 2026-10-17 (#69): a ready disc that read unlit stalled the battle. The check below tells
             # whether the press started the turn; an unready disc is not expected to (unverified live).
