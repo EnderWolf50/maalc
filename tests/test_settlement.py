@@ -51,6 +51,7 @@ def test_bonus_toggles(use, amount, hard, left, all_hard, expected):
     ("You have Weekly Bonus Eligibility remaining. Are you sure you want to claim the current rewards without using the Eligibility?", "no_bonus"),
     ("Spend your 'Weekly Bonuses, to claim the bonus rewards?", "bonus"),  # live 2026-10-16
     ("Spend your 「Weekly Bonuses」 to claim the bonus rewards?", "bonus"),
+    ("Claim the rewards? UIEIR", "no_bonus"),  # live 2026-10-17: no weekly bonus left
     ("", None),
     ("Would you like to move to the Window?", None),
 ])
