@@ -20,6 +20,7 @@ HASH_FLOOR = {"BattlePause": 30}  # a turn playing out may sit still a while: al
 TRANSIT = {"Loading", "Connecting", "RetryPopup", "GoToMirrorEntry", "NavTitle", "NavMainTabs", "NavDrive",
            "MirrorEntryPaused", "ResumeDialog", "ProgressPanel"}
 L2_PER_RUN, L3_PER_RUN, L3_PER_EXECUTION = 3, 2, 3
+BATTLE = {"BattleTurn", "BattlePause"}  # L2 cannot go through mid-battle: only the map has To Window
 BATTLE_LIMIT = 20 * 60
 RUN_LIMIT_DEFAULT, RUN_LIMIT_MIN_RUNS = 60 * 60, 10
 FLOOR_LIMIT, FLOORS = 45 * 60, 5  # live (#34): a HARD floor took up to ~25 min of real progress
@@ -80,7 +81,8 @@ class Ladder:
     each further stuck before the bot gets past that screen climbs one level, up to L3, which may repeat
     within its limits (live: a restarted game sometimes hangs on CONNECTING). Getting past it closes
     the episode: a later stuck, even on the same screen type, starts over at its start level
-    (2026-10-16). Only the per-run and per-launch caps stop.
+    (2026-10-16). Only the per-run and per-launch caps stop. A battle skips L2 (live 2026-10-17, #70: it
+    failed there and L3 followed anyway), and a level that did not go through is not charged to the run.
     """
 
     def __init__(self):
@@ -93,6 +95,8 @@ class Ladder:
             kind, level = self.open[0], min(self.open[1] + 1, 3)  # L3 repeats while its limits allow
         else:
             level = start
+        if level == 2 and kind in BATTLE:
+            level = 3
         if level == 2 and self.counts[2] >= L2_PER_RUN:
             return None, f"L2 used {L2_PER_RUN} times this run"
         if level == 3 and self.counts[3] >= L3_PER_RUN:
@@ -102,6 +106,14 @@ class Ladder:
         self.counts[level] += 1
         self.open = (kind, level)
         return level, None
+
+    def failed(self, level):
+        """The level just given did not go through (L2 off the map, a failed force-stop): uncharge it.
+
+        The episode stays at that level, so the next stuck climbs on or repeats L3; the caller still
+        counts every L3 attempt towards L3_PER_EXECUTION, which bounds a force-stop that always fails.
+        """
+        self.counts[level] -= 1
 
     def progress(self, kind):
         """MirrorHub handed out kind: a screen other than the stuck one closes the episode."""

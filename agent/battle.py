@@ -87,3 +87,13 @@ def guard_shown(before, after):
         else:
             shown.append(None)
     return shown
+
+
+def disc_lit(image, x, y):
+    """Whether the START disc centred on (x, y) is lit: the brightest channel's mean in a 20 px square.
+
+    Brightness, not the START label (spec 07: the label template fails on snow maps). Unlit reads
+    128-142 and lit ~254; live 2026-10-17 (#69) a turn with 6 of 7 slots staggered and its one unit
+    picked read ~189 with the START plaque up, so the line sits at 160.
+    """
+    return bool(image[y - 10:y + 10, x - 10:x + 10].max(axis=2).mean() > 160)
