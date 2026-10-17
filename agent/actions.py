@@ -959,6 +959,9 @@ class Formation(CustomAction):
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         run = current_run(context)
+        # A new battle: its clock and turn count start over, also when the last VICTORY went unseen (#80).
+        RUN.pop("turn", None)
+        RUN.pop("battle_start", None)
         image = screen(context)
         count = participants(context, image)
         if not count:
