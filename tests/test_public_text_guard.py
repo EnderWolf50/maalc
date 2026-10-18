@@ -68,6 +68,18 @@ MUST_HIT = [
     "git commit --file=dirty.md",
     f'gh pr create --title t --body ok && gh issue comment 1 --body "see {WIN}"',  # every call in a line is checked
     f'git commit -m ok; git tag -a v1 -m "see {WIN}"',
+    # bash's backslash rules: an escaped separator or a line continuation does not end the call
+    f"gh issue comment 1 --body a\\;{WIN_FWD}",
+    f"gh issue comment 1 --body a\\|{WIN_FWD}",
+    f"git commit -m fix\\;{WIN_FWD}",
+    f'gh issue comment 1 \\\n  --body "{WIN_FWD}"',
+    "gh pr create --title t \\\n  --body-file dirty.md",
+    "git commit \\\n  -F dirty.md",
+    # quotes as bash reads them: no escape inside '...', an escaped quote outside quotes opens nothing
+    f"gh issue comment 1 --body 'a\\''; {WIN_FWD}'",
+    f'gh issue comment 1 --body \\""; {WIN_FWD}"',
+    # a call inside a quoted command string (bash -c, eval) is checked through to the end of the line
+    f'bash -c "gh issue comment 1 --body a\\\\;{WIN_FWD}"',
 ]
 MUST_PASS = [
     'gh issue comment 1 --body "see https://github.com/EnderWolf50/maalc/pull/2 and tests/screens/Title.png"',
@@ -117,6 +129,8 @@ UNREADABLE_CMDS = [
     "gh pr comment 1 --body-file missing.md",  # a file created earlier in the same command does not exist yet
     "echo hi > b.md && gh pr comment 1 --body-file b.md",
     "git commit -Fmissing.md",
+    "echo dirty.md | xargs gh issue comment 1 --body-file && echo done",  # xargs supplies the file
+    "echo dirty.md | xargs gh issue comment 1 --body-file",
 ]
 
 

@@ -32,6 +32,7 @@ FIELD = re.compile(r"^[\w.\[\]]+=")  # `-F key=value` is an api field, not a fil
 INPUT = re.compile(r"--input(?:\s|=)")
 UNREADABLE = re.compile(r"\$\(|`|<<-?\s*[\"']?\w")  # command substitution or heredoc
 LOCAL = re.compile(r"\b[A-Za-z]:[\\/]+\w|(?<![\w.])/(?:home|Users|mnt/[a-z])/\w+|~[\\/]\.?\w|file://", re.I)
+EMPTY_FLAG = re.compile(r"(?<![\w-])(?:--body-file|--notes-file|--file|-F)\s*$")  # xargs supplies the file
 UNREADABLE_REASON = "write the body to a file with the Write tool and pass its absolute Windows path to --body-file"
 
 
@@ -71,7 +72,7 @@ def base_dir(prefix: str, start_text: str, cwd: str) -> Path:
 
 def public_text(cmd: str, base: Path) -> tuple[str, bool]:
     """(the part of the call that reaches GitHub or the commit log, whether some of it could not be read)."""
-    unreadable = bool(INPUT.search(cmd)) or bool(UNREADABLE.search(cmd))
+    unreadable = bool(INPUT.search(cmd)) or bool(UNREADABLE.search(cmd)) or bool(EMPTY_FLAG.search(cmd))
     files = []
     for pat in (FILE_FLAG, FIELD_FILE):
         for m in pat.finditer(cmd):
@@ -96,26 +97,37 @@ def terms(cwd: str) -> list[str]:
     return [t.strip() for t in found if len(t.strip()) >= 4]
 
 
-def segment(cmd: str, at: int) -> str:
-    """The one call starting at `at`: up to the first `&&`, `||`, `;`, `|` or newline outside quotes and `$(...)`.
-    A heredoc's `<<` stays in the call, so its body still reads as unreadable."""
+def scan(cmd: str, at: int, stop: bool) -> tuple[int, bool]:
+    """(where the call starting at `at` ends, whether a quote or `$(...)` is still open there), the way bash reads it:
+    a backslash escapes the next character outside quotes, in "..." and in $'...', never in '...'."""
     quote, depth, i = "", 0, at
     while i < len(cmd):
         c = cmd[i]
+        if c == "\\" and quote != "\'":
+            i += 2
+            continue
         if quote:
-            if c == quote and cmd[i - 1] != "\\":
+            if c == "\'" and quote in "\'$" or c == quote:
                 quote = ""
+        elif cmd.startswith("$\'", i):
+            quote, i = "$", i + 1
         elif c in "'\"":
             quote = c
         elif cmd.startswith("$(", i):
-            depth += 1
-            i += 1
+            depth, i = depth + 1, i + 1
         elif c == ")" and depth:
             depth -= 1
-        elif not depth and (c in ";|\n" or cmd.startswith("&&", i)):
+        elif stop and not depth and (c in ";|\n" or cmd.startswith("&&", i)):
             break
         i += 1
-    return cmd[at:i]
+    return i, bool(quote or depth)
+
+
+def segment(cmd: str, at: int) -> str:
+    """The one call starting at `at`; the rest of the line when the call sits inside quotes (bash -c, eval)."""
+    if scan(cmd[:at], 0, False)[1]:
+        return cmd[at:]
+    return cmd[at:scan(cmd, at, True)[0]]
 
 
 def check(cmd: str, cwd: str) -> str | None:
