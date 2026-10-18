@@ -773,7 +773,7 @@ def test_tap_until_gives_up_after_its_timeout_and_leaves_the_page_to_the_hub(con
 
 
 def test_plan_run_waits_for_the_enter_dialog_after_pressing_enter(context, clock, monkeypatch):
-    team = {"id": 1, "name": "t", "game_team": 1, "guard_turns": 3}
+    team = {"id": 1, "name": "t", "game_team": 1, "guard_turns": 3, "hard_from_floor": 1}
     run = {"runs": 0, "stop_when_weekly_bonus_out": False, "difficulty": "normal"}
     monkeypatch.setattr(actions, "load_settings", lambda root: {"run": run, "teams": [team]})
     monkeypatch.setattr(actions, "pick_team", lambda teams, cursor, difficulty: team)
@@ -785,6 +785,23 @@ def test_plan_run_waits_for_the_enter_dialog_after_pressing_enter(context, clock
     assert actions.PlanRun().run(context, argv())
     assert taps(context) == [(1108, 494)]
     no_fixed_wait(clock)
+
+
+@pytest.mark.parametrize(("setting", "expected"), [("auto", "normal"), ("hard", "hard")])
+def test_a_planned_run_of_a_team_that_never_switches_to_hard(context, clock, monkeypatch, setting, expected):
+    # #137: auto with weekly bonuses left decides hard, but this team's switch to hard is off: the run is NORMAL.
+    # Only the global "hard" makes it HARD (every floor, hard_wanted).
+    team = {"id": 1, "name": "t", "game_team": 1, "guard_turns": 0, "hard_from_floor": None}
+    run = {"runs": None, "stop_when_weekly_bonus_out": False, "difficulty": setting}
+    monkeypatch.setattr(actions, "load_settings", lambda root: {"run": run, "teams": [team]})
+    monkeypatch.setattr(actions, "pick_team", lambda teams, cursor, difficulty: team)
+    monkeypatch.setattr(actions, "read_cursor", lambda root, address: None)
+    monkeypatch.setattr(actions.run_start, "run_difficulty", lambda setting, weekly: "hard")
+    monkeypatch.setattr(actions.recovery, "read_runs", lambda root: [])
+    monkeypatch.setattr(actions.recovery, "floor_limit", lambda runs, team: 1800)
+    page(context, {})
+    actions.PlanRun().run(context, argv())
+    assert actions.RUN["difficulty"] == expected
 
 
 def team_picker(context, title, after_confirm):

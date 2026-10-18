@@ -398,6 +398,9 @@ class PlanRun(CustomAction):
         if team is None:
             log(f"stop: no enabled team may run {difficulty}")
             return False
+        if run_start.team_difficulty(run["difficulty"], difficulty, team["hard_from_floor"]) != difficulty:
+            log(f"team {team['name']!r} never switches to hard and the difficulty is {run['difficulty']}: a normal run")
+            difficulty = "normal"
         RUN.clear()
         # planned: the bot picked the team itself, so the rotation cursor may move after the claim.
         limit = recovery.floor_limit(recovery.read_runs(ROOT), team["id"])
@@ -2424,7 +2427,7 @@ class Settle(CustomAction):
 
         s, team = run["settings"]["run"], run["team"]
         left = number(text(context, image, WEEKLY_LEFT).split("/")[0])
-        all_hard = run.get("planned", False) and run["difficulty"] == "hard" and team["hard_from_floor"] == 1
+        all_hard = run.get("planned", False) and run["difficulty"] == "hard" and team["hard_from_floor"] in (1, None)
         want = settlement.bonus_toggles(s["weekly_bonus_use"], s["weekly_bonus_amount"], hard, left or 0, all_hard)
         for _ in range(6):
             states = toggles(context, screen(context))

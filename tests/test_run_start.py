@@ -44,10 +44,21 @@ def test_starlight_never_buys_more_than_available():
 
 @pytest.mark.parametrize(("floor", "run_hard", "from_floor", "expected"), [
     (1, True, 1, True), (5, True, 1, True), (2, True, 3, False), (3, True, 3, True), (1, False, 1, False),
-    (1, True, None, False), (5, True, None, False),  # the switch off: this team plays the whole run NORMAL (#137)
+    # The switch off (#137): a hard run here is one the global difficulty "hard" forced (team_difficulty): every floor.
+    (1, True, None, True), (5, True, None, True), (1, False, None, False),
 ])
 def test_hard_wanted(floor, run_hard, from_floor, expected):
     assert rs.hard_wanted(floor, run_hard, from_floor) is expected
+
+
+@pytest.mark.parametrize(("setting", "decided", "from_floor", "expected"), [
+    ("auto", "hard", None, "normal"),  # #137: the switch off plays NORMAL under auto, weekly bonuses or not
+    ("hard", "hard", None, "hard"),  # the global "hard" wins: HARD on every floor
+    ("normal", "normal", None, "normal"),
+    ("auto", "hard", 2, "hard"), ("auto", "normal", 2, "normal"),  # the switch on: as decided
+])
+def test_a_team_with_its_switch_to_hard_off_plays_normal_unless_the_run_says_hard(setting, decided, from_floor, expected):
+    assert rs.team_difficulty(setting, decided, from_floor) == expected
 
 
 @pytest.mark.parametrize(("floor", "shown_hard", "want_hard", "expected"), [
