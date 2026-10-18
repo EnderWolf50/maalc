@@ -1506,6 +1506,44 @@ def press_start(context, disc):
     return False
 
 
+# #150: a finger held on the screen while a turn plays speeds up its E.G.O animations (user, 2026-10-18; no
+# difference seen on turns without one: 5.9 s held, 6.4 s not, over 16 turns). The top-left corner held then
+# touched nothing (docs/perf/2026-10-18-guard-chain-145.md); a lift there is a tap on whatever screen follows.
+HOLD_SPOT = (1, 1)
+HOLD_EVERY = 0.3  # s between looks, MirrorHub's rate_limit
+HOLD_LIMIT = 30  # s at most per hold: then MirrorHub (its watchdog, recovery) looks; BattlePause holds again
+# Screens that can follow a turn, besides the next turn: the finger lifts before their node acts.
+BATTLE_LEFT = ("Victory", "WipeDialog", "Event", "RetryPopup", "Connecting", "PopupButton", "ClaimPopup", "Loading")
+
+
+def hold_turn(context):
+    """Hold a finger on HOLD_SPOT while the turn plays: until the next turn waits for input, a screen of
+    BATTLE_LEFT shows, the task is stopping or HOLD_LIMIT s. Always lifted on return, also on an error:
+    a finger left down keeps the panel tilted and MirrorHub blind (#145)."""
+    ctl = context.tasker.controller
+    end = time.monotonic() + HOLD_LIMIT
+    try:
+        ctl.post_touch_down(*HOLD_SPOT).wait()
+        while time.monotonic() < end and not context.tasker.stopping:
+            time.sleep(HOLD_EVERY)
+            image = screen(context)
+            if seen(context, image, "BattlePause"):
+                continue  # playing (the Win Rate label can still match in a turn's first frames)
+            if seen(context, image, "BattleTurn") or any(seen(context, image, n) for n in BATTLE_LEFT):
+                return
+    finally:
+        ctl.post_touch_up().wait()
+
+
+@AgentServer.custom_action("HoldTurn")
+class HoldTurn(CustomAction):
+    """BattlePause: a turn playing out (after a hold timed out, a recovery or an agent restart): hold_turn."""
+
+    def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
+        hold_turn(context)
+        return True
+
+
 # The guard chain drag, slower on each try (#145, live 2026-10-18, 12 slots). The game links a slot only if it
 # draws a frame while the finger is on it; during the drag it draws 9-30 frames a second, fewer under load
 # or with its window covered or minimised. 10 px moves 10 ms apart and no rest (#119) missed 7 of 88 drags
@@ -1551,6 +1589,8 @@ class PlayTurn(CustomAction):
             log(f"turn {turn}: started")
         else:
             log(f"turn {turn}: START did not start the turn")
+            return True
+        hold_turn(context)
         return True
 
     @staticmethod

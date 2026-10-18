@@ -32,6 +32,7 @@ def context(clock):
     ctx = MagicMock()
     ctx.tasker.controller.post_screencap.return_value.wait.return_value.get.return_value = np.zeros((720, 1280, 3), np.uint8)
     ctx.run_recognition.return_value = None  # OCR reads nothing, no node hits
+    ctx.tasker.stopping = False
     actions.RUN.clear()
     actions.RUN.update(settings={}, team={})  # a run plan in memory
     actions.STUCK["flag"] = None
@@ -498,6 +499,74 @@ def test_a_turn_starts_after_win_rate_lights_the_disc(context, monkeypatch):
     lit = iter([False, True])  # unlit on the turn's first look, lit after the Win Rate tap
     monkeypatch.setattr(actions.battle, "disc_lit", lambda image, x, y: next(lit, True))
     assert actions.PlayTurn().run(context, SimpleNamespace(box=[984, 531, 40, 20]))
+
+
+def touches(context):
+    """The controller's touch and tap calls, in order: ("down", (x, y)), ("up", ()), ("click", (x, y))."""
+    names = {"post_touch_down": "down", "post_touch_up": "up", "post_click": "click"}
+    return [(names[n], a) for n, a, _ in context.tasker.controller.method_calls if n in names]
+
+
+def hits(context, *shown):
+    """The nodes in shown hit on every screen; the others miss."""
+    context.run_recognition.side_effect =         lambda name, image, override=None: SimpleNamespace(hit=True, box=[0, 0, 1, 1]) if name in shown else None
+
+
+@pytest.mark.parametrize("shown", [("BattleTurn",), ("Victory",), ("WipeDialog",), ("RetryPopup",), ("Event",)])
+def test_a_held_finger_lifts_once_the_next_turn_or_another_screen_shows(context, clock, shown):
+    # #150: held from the turn's start until the next turn waits for input or the battle leaves the screen.
+    hits(context, *shown)
+    actions.hold_turn(context)
+    assert touches(context) == [("down", actions.HOLD_SPOT), ("up", ())]
+    assert sum(clock) < 1
+
+
+def test_a_held_finger_stays_down_while_the_pause_button_shows(context, clock):
+    # In a turn's first frames the Win Rate label can still match: the pause button says the turn plays.
+    hits(context, "BattlePause", "BattleTurn")
+    actions.hold_turn(context)
+    assert touches(context) == [("down", actions.HOLD_SPOT), ("up", ())]
+    assert sum(clock) == pytest.approx(actions.HOLD_LIMIT, abs=actions.HOLD_EVERY)
+
+
+def test_a_held_finger_lifts_when_the_task_is_stopping(context, clock):
+    # #145: a finger left down when the bot stopped kept the panel tilted; L1-L3 and a game restart followed.
+    hits(context, "BattlePause")
+    looks = iter([False, False, True])
+    type(context.tasker).stopping = property(lambda self: next(looks))
+    try:
+        actions.hold_turn(context)
+    finally:
+        del type(context.tasker).stopping
+    assert touches(context) == [("down", actions.HOLD_SPOT), ("up", ())]
+
+
+def test_a_held_finger_lifts_on_an_error(context, clock):
+    context.tasker.controller.post_screencap.side_effect = RuntimeError("controller gone")
+    with pytest.raises(RuntimeError):
+        actions.hold_turn(context)
+    assert touches(context) == [("down", actions.HOLD_SPOT), ("up", ())]
+
+
+def test_a_turn_started_by_play_turn_is_held_until_the_next_turn(context, monkeypatch):
+    monkeypatch.setattr(actions.battle, "disc_lit", lambda image, x, y: True)
+    monkeypatch.setattr(actions, "turn_started", lambda context, image: True)
+    hits(context, "BattleTurn")
+    actions.PlayTurn().run(context, SimpleNamespace(box=[984, 531, 40, 20]))
+    assert [t for t, _ in touches(context)] == ["click", "down", "up"]  # START, then the hold
+
+
+def test_a_turn_that_did_not_start_is_not_held(context, monkeypatch):
+    monkeypatch.setattr(actions.battle, "disc_lit", lambda image, x, y: True)
+    monkeypatch.setattr(actions, "turn_started", lambda context, image: False)
+    actions.PlayTurn().run(context, SimpleNamespace(box=[984, 531, 40, 20]))
+    assert "down" not in [t for t, _ in touches(context)]
+
+
+def test_the_pause_button_holds_the_turn(context, clock):
+    hits(context, "Victory")
+    assert actions.HoldTurn().run(context, None)
+    assert touches(context) == [("down", actions.HOLD_SPOT), ("up", ())]
 
 
 def reads(context, texts):
@@ -1498,7 +1567,7 @@ def test_a_guard_turn_on_a_hollow_gear_plays_win_rate_and_keeps_its_guard_turn(c
     actions.RUN["guard"] = 3
     actions.PlayTurn().run(context, SimpleNamespace(box=[984, 531, 40, 20]))
     assert not portrait_taps(context)
-    assert not context.tasker.controller.post_touch_down.called
+    assert [c.args for c in context.tasker.controller.post_touch_down.call_args_list] == [actions.HOLD_SPOT]  # no drag
     assert win_rate_taps(context)
     assert actions.RUN["guard"] == 3
 

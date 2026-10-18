@@ -47,3 +47,11 @@ def test_no_next_list_batches_two_ocr_recognitions_under_one_name():
         if dupes := sorted(o for o, k in Counter(names).items() if k > 1):
             shared[name] = dupes
     assert shared == {}
+
+
+def test_the_screens_that_lift_a_held_finger_are_hub_nodes():
+    # #150: hold_turn lifts on these; each is a MirrorHub screen, so the hub acts on it once the finger is up.
+    import actions
+    hub = [re.sub(r"^(\[\w+\])+", "", n) for n in load_nodes()["MirrorHub"]["next"]]
+    assert set(actions.BATTLE_LEFT) <= set(hub)
+    assert load_nodes()["BattlePause"]["custom_action"] == "HoldTurn"
