@@ -1427,15 +1427,21 @@ def turn_started(context, image):
 # ~0.15 s and the Win Rate label does not match: the first look waits START_LEAST s.
 START_WAIT = 1.5
 START_LEAST = 0.3
+# The plaque appears tilted on the disc's right once the chain is complete, rests there ~0.3 s and swings up to
+# the top: upright (template >= 0.5) 0.33-0.47 s after the panel levels, settled from 0.40-0.53 s (30 fps
+# recording, 3 drags; 0.48-0.71 s after the lift in 73 drags polled by screenshot). A minimised emulator held it
+# mid-swing for over 2 s, so "no plaque" is only concluded after this much more polling.
+PLAQUE_WAIT = 1.5
 
 
 def press_start(context, disc):
-    """Press START: whether the turn starts. Pressed once more when it did not although the plaque shows."""
+    """Press START: whether the turn starts. Pressed once more when it did not although the plaque shows
+    (looked for up to PLAQUE_WAIT s: it can still be swinging in)."""
     for _ in range(2):
         tap(context, *disc, wait=0)
         if until(context, lambda im: turn_started(context, im), timeout=START_WAIT, least=START_LEAST) is not None:
             return True
-        if not start_shown(context, screen(context), disc):
+        if until(context, lambda im: start_shown(context, im, disc), timeout=PLAQUE_WAIT, every=0.1) is None:
             return False
     return False
 

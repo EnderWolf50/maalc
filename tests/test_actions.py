@@ -971,13 +971,15 @@ class Panel:
     (live #145: under load the finger crosses a slot between two frames and the chain ends there); a drag
     from the gear or a tap on it while a chain is linked clears it. The disc lights once anything is linked,
     the START plaque shows (and START starts the turn) only once every slot is. units[i] is the unit in
-    slot i (slots reorder by speed every turn); guard[u] whether unit u shows its guard skill."""
+    slot i (slots reorder by speed every turn); guard[u] whether unit u shows its guard skill. The plaque swings
+    in plaque_after s after the chain is complete (live 2026-10-18, 30 fps recording: upright 0.33-0.47 s after
+    the panel levels, ~0.5-0.65 s after the lift; a minimised emulator held it mid-swing for over 2 s)."""
 
-    def __init__(self, context, guard, drops=(), lost_start=0):
+    def __init__(self, context, guard, drops=(), lost_start=0, plaque_after=0.6):
         self.xs = actions.battle.slot_xs(984)
         self.units, self.guard, self.dealt = list(range(7)), list(guard), 0
         self.linked, self.win_rate, self.started, self.at, self.lifted = 0, False, False, None, -1.0
-        self.drops, self.lost_start = list(drops), lost_start
+        self.drops, self.lost_start, self.plaque_after, self.complete_at = list(drops), lost_start, plaque_after, None
         self.drags = []  # how long each chain drag took, s
         ctl = context.tasker.controller
         ctl.post_screencap.return_value.wait.return_value.get.side_effect = self.render
@@ -997,6 +999,7 @@ class Panel:
                 self.linked = 0
             else:
                 self.linked = 7 - (self.drops.pop(0) if self.drops else 0)
+                self.complete_at = self.lifted if self.linked == 7 else None
                 self.drags.append(actions.time.monotonic() - self.t0)
         return DEFAULT
 
@@ -1010,6 +1013,7 @@ class Panel:
         elif (x, y) == WIN_RATE_XY:
             self.win_rate = not self.win_rate
             self.linked = 7 if self.win_rate else 0
+            self.complete_at = actions.time.monotonic() if self.win_rate else None
         elif (x, y) == DISC and self.linked == 7 and actions.time.monotonic() - self.lifted >= 0.15:
             # live #145: a press while the panel still tilts back from a drag misses the disc
             if self.lost_start:
@@ -1020,7 +1024,8 @@ class Panel:
 
     def recognise(self, name, image, override=None):
         node = (override or {}).get(name, {})
-        hit = {"BattlePause": self.started, "BattleStart": self.linked == 7,
+        plaque = self.linked == 7 and actions.time.monotonic() - self.complete_at >= self.plaque_after
+        hit = {"BattlePause": self.started, "BattleStart": plaque,
                "BattleTurn": not self.started and actions.time.monotonic() - self.lifted >= 0.15  # live: the panel
                and (self.win_rate or "Pressed" not in node.get("template", ""))}  # tilts back 0.15 s, the label gone
         return SimpleNamespace(hit=True, box=[984, 531, 40, 20]) if hit.get(name) else None
@@ -1095,6 +1100,15 @@ def test_start_is_pressed_again_within_the_call_when_the_first_press_is_lost(con
     assert panel.started
     assert actions.RUN["guard"] == 2
     assert actions.STUCK["flag"] is None
+
+
+def test_a_plaque_still_swinging_in_is_waited_for_before_the_chain_is_dragged_again(context):
+    # PR #148 follow-up: a minimised emulator held the plaque mid-swing for over 2 s; one look after START did not
+    # take read "no plaque", cleared a complete chain and dragged it again. The plaque is waited for instead.
+    panel = Panel(context, guard=[False] * 7, lost_start=1, plaque_after=2.5)
+    guard_turn(context)
+    assert panel.started and len(panel.drags) == 1
+    assert actions.RUN["guard"] == 2
 
 
 def test_a_win_rate_turn_presses_start_at_once_and_counts_no_guard_turn(context):
