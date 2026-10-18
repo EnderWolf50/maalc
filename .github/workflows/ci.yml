@@ -6,8 +6,35 @@ on:
   pull_request:
   workflow_dispatch:
 
+# A new push to a PR cancels its older run. Other runs get a group of their own, so every main commit runs.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
 jobs:
+  # Which jobs a PR needs. Push and workflow_dispatch run everything.
+  # code: a changed file outside docs and gui/ (agent, assets, tests, tools, configs, lock files, workflows).
+  # gui: any changed file outside docs; gui/ imports agent/, assets/ and tests/ files.
+  changes:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+    outputs:
+      code: ${{ github.event_name != 'pull_request' || steps.filter.outputs.code == 'true' }}
+      gui: ${{ github.event_name != 'pull_request' || steps.filter.outputs.gui == 'true' }}
+    steps:
+      - if: github.event_name == 'pull_request'
+        id: filter
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        with:
+          predicate-quantifier: every
+          filters: |
+            code: ['**', '!docs/**', '!*.md', '!LICENSE', '!gui/**']
+            gui: ['**', '!docs/**', '!*.md', '!LICENSE']
+
   agent:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -16,14 +43,17 @@ jobs:
       - run: uv run pytest
 
   pipeline:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        shard: [0, 1, 2, 3]
+        # maatools.config.mts balances the nodes over however many shards are listed here.
+        shard: [0, 1, 2, 3, 4, 5]
     env:
-      SHARD: ${{ matrix.shard }}
-      SHARDS: 4
+      SHARD: ${{ strategy.job-index }}
+      SHARDS: ${{ strategy.job-total }}
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -32,11 +62,15 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm exec maa-tools check
+      # Checks the whole pipeline regardless of SHARD: once is enough.
+      - if: strategy.job-index == 0
+        run: pnpm exec maa-tools check
       - run: python3 tools/fetch_ocr.py
       - run: pnpm exec maa-tools test
 
   gui:
+    needs: changes
+    if: needs.changes.outputs.gui == 'true'
     runs-on: windows-latest
     defaults:
       run:
@@ -60,3 +94,12 @@ jobs:
         with:
           workspaces: gui/src-tauri
       - run: cargo check --locked --manifest-path src-tauri/Cargo.toml
+
+  # The one check to require: fails if the filter or any job it asked for failed or was cancelled.
+  ci-ok:
+    if: always()
+    needs: [changes, agent, pipeline, gui]
+    runs-on: ubuntu-latest
+    steps:
+      - if: needs.changes.result != 'success' || contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
+        run: exit 1
