@@ -1703,6 +1703,8 @@ class Shop(CustomAction):
             self.heal(context, team)
             visit["healed"] = True
         for _ in range(shop.ROUNDS):
+            if not self.to_main(context):
+                break  # left already: the leave below finds the map
             acted = self.sell(context, team, visit)
             acted = self.buy(context, team, visit) or acted
             acted = self.fuse(context, team, visit) or acted
@@ -1711,6 +1713,11 @@ class Shop(CustomAction):
         else:
             log(f"shop: still acting after {shop.ROUNDS} rounds")
         for _ in range(3):
+            image = screen(context)
+            if seen(context, image, "MirrorMap") or seen(context, image, "MapNodePanel"):
+                log("shop: already out of the shop")
+                RUN.pop("shop", None)
+                return True
             tap(context, *BOTTOM_RIGHT, wait=1.5)
             if "Leave the shop" in text(context, screen(context), LEAVE_DIALOG):
                 log(f"shop: leave with {read_cost(context)} Cost")
@@ -1721,9 +1728,15 @@ class Shop(CustomAction):
 
     @staticmethod
     def to_main(context):
-        """Back out of any shop page or dialog; True once the main shop (its Refresh fee) shows."""
+        """Back out of any shop page or dialog; True once the main shop (its Refresh fee) shows.
+
+        False at once on the map: the shop was left (live 2026-10-18, by hand mid-visit), and a tap
+        meant for a shop page lands on a map node.
+        """
         for _ in range(5):
             image = screen(context)
+            if seen(context, image, "MirrorMap") or seen(context, image, "MapNodePanel"):
+                return False
             title = text(context, image, DIALOG_TITLE)
             heal = "Heal" in text(context, image, HEAL_TITLE)
             if "GET" in text(context, image, GET_TITLE):
@@ -1835,16 +1848,18 @@ class Shop(CustomAction):
         """
         visit["wanted"] = None
         # ponytail: only the offers on show; a Super Shop's last 2 of 10 need a scroll first.
+        cost = read_cost(context)
         for slot in shop.read_slots(ocr(context, screen(context), OFFER_GRID)):
             name, price = slot["name"], slot["price"]
-            if not shop.buyable(slot) or visit["kinds"].get(name) == "other":
+            if not shop.buyable(slot, cost) or visit["kinds"].get(name) == "other":
                 continue
             cost = read_cost(context)
             tap(context, slot["x"], slot["y"] - 50, wait=1.5)
             image = screen(context)
             if "Purchase" not in text(context, image, DIALOG_TITLE):
                 log(f"shop: {name!r} opened no purchase dialog")
-                Shop.to_main(context)
+                if not Shop.to_main(context):
+                    return False
                 continue
             price = shop.dialog_price(cost, text(context, image, PURCHASE_PREVIEW)) or price
             kind = visit["kinds"].setdefault(name, rewards.gift_kind(text(context, image, PURCHASE_TEXT), keyword, False))
@@ -1946,13 +1961,22 @@ class Shop(CustomAction):
             Shop.to_main(context)
             return False
         picked, last, keep = [], None, kept_gifts(team)
+        # Live 2026-10-18: 5 gifts owned, the 10 empty cells cost 3.4 s each. An empty cell is flat (spread 1-2,
+        # a gift 41-84), so only the filled ones are tapped.
+        image = screen(context)
+        cells = [(x, y) for x, y in FUSE_CELLS if image[y - 25:y + 25, x - 25:x + 25].max(axis=2).std() > 15]
         # ponytail: the 15 cells on show; a scroll would find more when 13+ of them are main gifts.
-        for x, y in FUSE_CELLS:
+        for x, y in cells:
             tap(context, x, y, wait=0)
             lines, name = Shop.tooltip(context, last)
             tap(context, *FUSE_NEUTRAL)
             if name is None:
-                continue  # an empty cell, or a tap that only closed the last tooltip
+                # Live 2026-10-18: Spiderweb Entangled in Red's long tooltip read no name and stayed in the
+                # fusion; a gift that cannot be named is taken out again.
+                log(f"shop: the gift at {x},{y} read no name: kept out of the fusion")
+                tap(context, x, y, wait=1.2)
+                tap(context, *FUSE_NEUTRAL)
+                continue
             last = name
             main = rewards.gift_kind(" ".join(t for t, _ in lines), keyword, False) == "main"
             if main or shop.protected(name, keep):

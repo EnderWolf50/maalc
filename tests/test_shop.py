@@ -82,6 +82,21 @@ def test_read_slots_purchased():
     assert not slots["Thorny Path"]["purchased"] and s.buyable(slots["Thorny Path"])
 
 
+def test_read_slots_not_enough_cost():
+    # Live 2026-10-18, 77 Cost: the dearer offers carry a red "Not Enough Cost" where a bought one says Purchased.
+    results = ocr(("Tomorrow's Fortune", (713, 333, 128, 17)), ("Not-Enough-Cost", (733, 221, 90, 12)), ("140", (760, 307, 30, 22)),
+                  ("Thorny Path", (1023, 332, 81, 17)), ("60", (1040, 306, 30, 23)))
+    slots = {x["name"]: x for x in s.read_slots(results)}
+    assert slots["Tomorrow's Fortune"]["short"] and not s.buyable(slots["Tomorrow's Fortune"])
+    assert not slots["Thorny Path"]["short"] and s.buyable(slots["Thorny Path"])
+
+
+def test_an_offer_dearer_than_the_cost_is_not_opened():
+    slot = {"name": "Devil's Share", "price": 144, "purchased": False, "short": False}
+    assert not s.buyable(slot, cost=77)
+    assert s.buyable(slot, cost=144) and s.buyable(slot, cost=None)  # unread Cost: open it and see
+
+
 def test_dialog_price_from_the_cost_preview():
     assert s.dialog_price(2864, "28642612") == 252  # live OCR runs the two numbers together
     assert s.dialog_price(540, "540 ▶ 384") == 156
