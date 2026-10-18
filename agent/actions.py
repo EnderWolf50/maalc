@@ -4,6 +4,7 @@ The Pipeline decides which screen is up; these decide what to pick on it.
 Coordinates are on the 1280x720 screenshot (spec 07).
 """
 
+import functools
 import json
 import re
 import time
@@ -1599,10 +1600,19 @@ EVENT_BUTTON_LABEL = [1040, 612, 190, 66]  # the Event node's roi: empty once th
 EVENT_LIMIT = 180  # s one event may take before recovery L1 (AALC allows 300); a boss quiz of several rounds stays well under
 EVENT_GAP = 30  # s between two Event calls after which the next call is another event
 EVENT_LEAST = 0.5 # s after a tap before the screen counts as moved: a fade's first frames are the same page
+CHOICE_X = 925  # the option list's middle
+CHOICE_STEP = 150  # px per drag of a list that scrolls: about a card (130-150 px), so none is skipped
+CHOICE_SCROLLS = 6  # drags at most to an end of the list
 
 
 def data(name):
     return yaml.safe_load((RESOURCE / "base" / "data" / name).read_text(encoding="utf-8")) or {}
+
+
+@functools.cache
+def event_table():
+    """data/event_table.json's events (spec 03 section 10, #93), read once."""
+    return json.loads((RESOURCE / "base" / "data" / "event_table.json").read_text(encoding="utf-8"))["events"]
 
 
 def red_button(image):
@@ -1648,22 +1658,29 @@ class Event(CustomAction):
                 checked.add(i)
         elif "Choices" in text(context, image, CHOICES_HEADER):
             checked.clear()
-            options = [(" ".join(lines), y) for y, lines in self.rows(ocr(context, image, CHOICE_ROWS))]
+            story = [t for t, _ in sorted(ocr(context, image, EVENT_STORY), key=lambda r: (r[1][1], r[1][0]))]
+            scrolls = rewards.choice_scrollbar(image) or any(None in c for c in rewards.choice_cards(image))
+            options, image = self.read_choices(context, image, scrolls)
             if not options:
                 return True
             overrides = data("events.yaml") | {o["question"]: o["option"] for o in run["settings"]["event_overrides"]}
-            story = [t for t, _ in ocr(context, image, EVENT_STORY)]
             question = next(filter(None, (run_start.match_pack(t, list(overrides)) for t in story + [" ".join(story)])), None) if overrides else None
+            known = rewards.match_event(" ".join(story), event_table())
             # Grey options (taken in an earlier round of the same questions) and ones a tap did nothing on are closed.
-            closed = {k for k, (t, y) in enumerate(options) if t in tried or not rewards.choice_open(image, y)}
-            i = rewards.pick_choice([t for t, _ in options], run["team"]["keyword"], overrides.get(question), closed)
-            shown = " | ".join(("(closed) " if k in closed else "") + t for k, (t, _) in enumerate(options))
+            closed = {k for k, (t, is_open, _) in enumerate(options) if t in tried or not is_open}
+            i = rewards.pick_choice([t for t, _, _ in options], run["team"]["keyword"], overrides.get(question), closed, known)
+            shown = " | ".join(("(closed) " if k in closed else "") + t for k, (t, _, _) in enumerate(options))
             if i is None:
                 log(f"event: {shown}: all closed, scroll for more")
-                swipe(context, 925, 520, 925, 220, wait=1.5)  # the list scrolls when it holds more than fits
+                scroll(context, CHOICE_X, 420, 0, -CHOICE_STEP)  # in case the list scrolls with no sign of it
                 return True
-            log(f"event: {shown}: take {options[i][0]!r}" + (f" (override {question!r})" if question else ""))
-            tap(context, 925, options[i][1], wait=0)
+            log(f"event: {shown}: take {options[i][0]!r}" + (f" (override {question!r})" if question else "")
+                + ("" if known else " (not in the event table: hint rules)"))
+            y, image = self.into_view(context, image, options, i) if scrolls else (options[i][2], image)
+            if y is None:
+                log(f"event: {options[i][0]!r} not found again in the list")
+                return True
+            tap(context, CHOICE_X, y, wait=0)
             if until(context, lambda im: not Event.panel_same(image, im), timeout=1.5) is None:
                 log(f"event: {options[i][0]!r} did nothing: try another")
                 tried.add(options[i][0])
@@ -1692,6 +1709,70 @@ class Event(CustomAction):
         """Whether the choice panel looks as it did: a tap on it did nothing."""
         x, y, w, h = CHOICE_ROWS
         return recovery.same_screen(*(recovery.thumb(i[y:y + h, x:x + w]) for i in (before, after)))
+
+    @staticmethod
+    def shown(context, image, scrolls):
+        """The options on screen as [(text, y of its first line)]; in a list that scrolls only those whose frame shows whole."""
+        rows = [(" ".join(lines), y) for y, lines in Event.rows(ocr(context, image, CHOICE_ROWS))]
+        if not scrolls:
+            return rows
+        whole = [(top, bottom) for top, bottom in rewards.choice_cards(image) if top is not None and bottom is not None]
+        return [(t, y) for t, y in rows if any(top < y < bottom for top, bottom in whole)]
+
+    @staticmethod
+    def drag(context, image, dy):
+        """Scroll the option list by dy px (dy < 0 shows what is below); the screen after, None when it did not move."""
+        scroll(context, CHOICE_X, 420 if dy < 0 else 260, 0, dy)
+        after = screen(context)
+        # Pixel by pixel, not panel_same's thumbnails: cards about a drag apart look alike in those.
+        y0, y1 = rewards.CHOICE_LIST_Y
+        return after if np.abs(after[y0:y1, 690:1170].astype(int) - image[y0:y1, 690:1170]).mean() >= 2 else None
+
+    @staticmethod
+    def read_choices(context, image, scrolls):
+        """Every option as [(text, open, y of its first line where read)] top to bottom, and the screen it ends on.
+
+        A list that scrolls (#93) is dragged to its top, then down a card at a time without a fling, each
+        option read once its frame shows whole; the same text read again is the same option.
+        """
+        if not scrolls:
+            return [(t, rewards.choice_open(image, y), y) for t, y in Event.shown(context, image, False)], image
+        for _ in range(CHOICE_SCROLLS):  # to the top
+            after = Event.drag(context, image, CHOICE_STEP)
+            if after is None:
+                break
+            image = after
+        options = []
+        for _ in range(CHOICE_SCROLLS):
+            for t, y in Event.shown(context, image, True):
+                if not run_start.match_pack(t, [o[0] for o in options], margin=0):
+                    options.append((t, rewards.choice_open(image, y), y))
+            after = Event.drag(context, image, -CHOICE_STEP)
+            if after is None:
+                break
+            image = after
+        if not options:  # no whole frame read: take the list as it reads
+            return Event.read_choices(context, image, False)
+        return options, image
+
+    @staticmethod
+    def into_view(context, image, options, i):
+        """(y to tap, screen) for option i of a list that scrolls, dragged until its frame shows whole; (None, screen) when not found."""
+        texts = [t for t, _, _ in options]
+        for _ in range(CHOICE_SCROLLS + 1):
+            seen = {}  # option index -> y, for the options on screen
+            for t, y in Event.shown(context, image, True):
+                if name := run_start.match_pack(t, texts, margin=0):
+                    seen.setdefault(texts.index(name), y)
+            if i in seen:
+                return seen[i], image
+            if not seen:
+                return None, image
+            after = Event.drag(context, image, CHOICE_STEP if min(seen) > i else -CHOICE_STEP)
+            if after is None:
+                return None, image
+            image = after
+        return None, image
 
     @staticmethod
     def rows(results):

@@ -1,3 +1,4 @@
+import json
 import struct
 import zlib
 from pathlib import Path
@@ -32,6 +33,91 @@ def test_pick_choice_prefers_a_main_keyword_gift():
     assert r.pick_choice(["Gain 100 Cost.", "Leave."], "Burn") == 0
 
 
+def table():
+    return json.loads((DATA / "event_table.json").read_text(encoding="utf-8"))["events"]
+
+
+def test_match_event_reads_the_end_of_the_story():
+    # EventChoices.png (901069): the box shows the last lines of a story longer than it holds.
+    story = ("What looked like palms are made of black rocks. At the tip of the fingers attached to the palms are smaller palms "
+             "and smaller fingers. It reaches out with the hand of the hand.")
+    assert [o["text"] for o in r.match_event(story, table())] == ["Shake hands.", "Push the hand away."]
+    assert r.match_event(story.replace("palms", "pa1ms").replace("hand.", "hand"), table())  # OCR slips
+    assert r.match_event("A story this season's table does not have.", table()) is None
+
+
+def test_match_event_prefers_the_longest_story_matched():
+    # Five pages tell only "What will you do?": a long story ending the same way is that story's event, the
+    # short ones are pooled, each on-screen option then finds its own entry by its texts.
+    events = [{"key": "whatwillyoudo", "options": [{"text": "Take the painting.", "hint": "", "kind": "other"}]},
+              {"key": "whatwillyoudo", "options": [{"text": "Leave.", "hint": "", "kind": "other"}]},
+              {"key": "thepaintinghangsonthewallwhatwillyoudo", "options": [{"text": "Burn it.", "hint": "", "kind": "other"}]}]
+    assert [o["text"] for o in r.match_event("What will you do?", events)] == ["Take the painting.", "Leave."]
+    assert [o["text"] for o in r.match_event("The painting hangs on the wall. What will you do?", events)] == ["Burn it."]
+
+
+def opt(text, hint, kind, *gifts):
+    return {"text": text, "hint": hint, "kind": kind, "gifts": [list(g) for g in gifts]}
+
+
+RANKED = [  # the user's order (#93), best last; on screen as "<text> <hint>"
+    opt("Leave.", "", "other"),
+    opt("Read it.", "Run a Wrath check to gain an E.G.O Gift.", "check_fail_gift", ("Burn", "check_fail")),
+    opt("Fight.", "Win the battle to earn a Burn E.G.O Gift", "battle", ("Burn", "win_battle")),
+    opt("Wait.", "Then, maybe gain a Burn E.G.O Gift depending on the subsequent choice", "followup", ("Burn", "later_direct")),
+    opt("Open it.", "Lust check. Pass to gain a Burn E.G.O Gift.", "check", ("Burn", "check_pass")),
+    opt("Insert the coin.", "???", "random", ("Keywordless", "direct_random")),
+    opt("Take it.", "Select to gain a Bleed E.G.O Gift", "direct", ("Bleed", "direct")),
+    opt("Hold it.", "Select to gain a Burn E.G.O Gift", "direct", ("Burn", "direct")),
+]
+
+
+def shown(event):
+    return [f"{o['text']} {o['hint']}" for o in event]
+
+
+def test_pick_choice_ranks_by_the_event_table():
+    # direct main > direct other > ??? / random > check pass > follow-up page > win battle > the rest
+    options = shown(RANKED)
+    for best in range(len(RANKED) - 1, 1, -1):
+        assert r.pick_choice(options, "Burn", closed=range(best + 1, len(RANKED)), event=RANKED) == best
+    # a gift only when a check fails is no gain: the first of the rest
+    assert r.pick_choice(options, "Burn", closed=range(2, len(RANKED)), event=RANKED) == 0
+    assert r.pick_choice(options, "Bleed", event=RANKED) == 6  # the direct Bleed gift is the main one now
+    assert r.pick_choice(options, "Burn", "Leave", event=RANKED) == 0  # an override still wins
+
+
+def test_pick_choice_ties_go_to_the_main_keyword_then_the_screen_order():
+    event = [opt("Pull.", "Wrath check. Pass to gain a Burn E.G.O Gift.", "check", ("Burn", "check_pass")),
+             opt("Push.", "Wrath check. Pass to gain a Bleed E.G.O Gift.", "check", ("Bleed", "check_pass"))]
+    assert r.pick_choice(shown(event), "Bleed", event=event) == 1
+    assert r.pick_choice(shown(event), "Tremor", event=event) == 0
+
+
+def test_pick_choice_ties_each_option_to_its_entry_by_its_texts():
+    hidden = [opt("Kick the machine.", "???", "other"),
+              opt("Insert the coin in the slot.", "???", "random", ("Keywordless", "direct_random"))]
+    assert r.pick_choice(["Insert the coin in the slot. ???", "Kick the machine. ???"], "Burn", event=hidden) == 0
+    same_hint = [opt("Walk into the mist.", "Wrath & Lust Advantage check.", "check", ("Burn", "check_pass")),
+                 opt("Look the mist in the eye.", "Wrath & Lust Advantage check.", "check_other")]
+    assert r.pick_choice(shown(same_hint[::-1]), "Burn", event=same_hint) == 1
+    # "Leave." is its own entry, not the start of "Leave the room."
+    rooms = [opt("Leave.", "", "other"), opt("Leave the room.", "Select to gain a Charge E.G.O Gift", "direct", ("Charge", "direct"))]
+    assert r.pick_choice(["Leave.", "Leave the room. Select to gain a Charge E.G.O Gift"][::-1], "Burn", event=rooms) == 0
+    # a hint cut off at the panel edge still finds its entry
+    cut = shown(RANKED[:1]) + ["Hold it. Select to gain a Bu"]
+    assert r.pick_choice(cut, "Burn", event=RANKED) == 1
+
+
+def test_pick_choice_an_option_not_in_the_entry_falls_back_to_its_hint():
+    event = [opt("Stay.", "", "other"), opt("Go.", "Select to gain a Burn E.G.O Gift", "direct", ("Burn", "direct"))]
+    # never by position: the first option on screen is an OCR miss, not "Stay."
+    assert r.pick_choice(["Qwerty plugh.", "Stay."], "Burn", event=event) == 0
+    assert r.pick_choice(["Stay.", "Grab it. Win the battle to earn a Burn E.G.O Gift"], "Burn", event=event) == 1
+    assert r.pick_choice(["Fight. Win the battle to earn a Burn E.G.O Gift", "Grab it. Select to gain a Bleed E.G.O Gift",
+                          "Coin. ???"], "Burn", event=event) == 1
+
+
 def test_pick_choice_override_wins():
     options = ["Take the gift. Pass to gain a Burn E.G.O Gift.", "Leave it alone."]
     assert r.pick_choice(options, "Burn", "Leave it") == 1
@@ -57,6 +143,17 @@ def test_choice_open_reads_the_frame_colour():
     image = screen("EventChoicesUsed")
     assert not r.choice_open(image, 208)
     assert r.choice_open(image, 367)
+
+
+def test_choice_cards_and_scrollbar_show_a_list_that_scrolls():
+    # EventChoicesUsed.png (#34): three options, the third cut off at the list's bottom edge, a scrollbar right of them.
+    used = screen("EventChoicesUsed")
+    assert r.choice_scrollbar(used)
+    assert r.choice_cards(used) == [(170, 302), (320, 452), (469, None)]
+    # EventChoices.png: two options that fit, no scrollbar.
+    fits = screen("EventChoices")
+    assert not r.choice_scrollbar(fits)
+    assert r.choice_cards(fits) == [(170, 284), (301, 414)]
 
 
 def screen(name):
@@ -200,3 +297,7 @@ def test_data_files():
     risks = yaml.safe_load((DATA / "trial_risks.yaml").read_text(encoding="utf-8"))
     assert risks and all(isinstance(v, int) and 0 <= v <= r.MAX_RISK for v in risks.values())
     assert yaml.safe_load((DATA / "events.yaml").read_text(encoding="utf-8")) == {}
+    events = json.loads((DATA / "event_table.json").read_text(encoding="utf-8"))
+    assert events["client"] == "1.117.0" and "Project Moon" in events["note"]
+    nails = next(e for e in events["events"] if e["id"] == 901008)["options"][0]  # Grimy Iron Stake is a Bleed gift
+    assert (nails["text"], nails["kind"], nails["gifts"]) == ("Remove the nails.", "check", [["Bleed", "check_pass"]])

@@ -1183,6 +1183,106 @@ def test_an_event_after_a_pause_starts_its_own_clock(context):
     assert actions.STUCK["flag"] is None
 
 
+class Choices:
+    """An event's choice page: option cards 130 px tall, 18 apart from y 170, in the list's view y 165-512;
+    more than fit show a scrollbar and scroll() moves them. options are (text, hint); OCR reads a line only
+    where it shows whole. tapped: the option each tap hit, None when its card was not whole in view."""
+
+    def __init__(self, context, monkeypatch, options, story=(), offset=0, scrollbar=True):
+        self.options, self.story, self.offset, self.drags, self.tapped = options, story, offset, [], []
+        self.end = max(0, 170 + 148 * len(options) - 18 - 508)
+        self.scrollbar = scrollbar and self.end > 0
+        ctl = context.tasker.controller
+        ctl.post_screencap.return_value.wait.return_value.get.side_effect = self.render
+        ctl.post_click.side_effect = self.click
+        context.run_recognition.side_effect = self.read
+        monkeypatch.setattr(actions, "scroll", self.scroll)
+
+    def scroll(self, context, x, y, dx, dy):
+        assert 690 < x < 1165 and 165 < y < 512 and 165 < y + dy < 512  # on the list
+        self.drags.append(dy)
+        self.offset = min(max(self.offset - dy, 0), self.end)
+
+    def tops(self):
+        return [170 + 148 * k - self.offset for k in range(len(self.options))]
+
+    def click(self, x, y):
+        if 690 < x < 1165:
+            whole = [k for k, t in enumerate(self.tops()) if 165 <= t and t + 130 <= 512 and t < y < t + 130]
+            self.tapped.append(self.options[whole[0]][0] if whole else None)
+        return DEFAULT
+
+    def render(self):
+        image = np.zeros((720, 1280, 3), np.uint8)
+        for t in self.tops():
+            image[max(t, 165):max(min(t + 130, 512), 165), 700:1160] = (20, 30, 60)  # red-brown: open
+            for y in [*range(t, t + 9), *range(t + 127, t + 130)]:  # top edge double, bottom edge single
+                if 165 <= y < 512:
+                    image[y, 690:1165] = 200
+        if self.scrollbar:
+            image[170:505, 1203:1213] = (26, 41, 60)
+        return image
+
+    def read(self, name, image, override=None):
+        roi = tuple((override or {}).get(name, {}).get("roi", ()))
+        lines = []
+        if roi == tuple(actions.CHOICES_HEADER):
+            lines = [("Choices", (700, 110, 100, 30))]
+        elif roi == tuple(actions.EVENT_STORY):
+            lines = [(t, (80, 340 + 30 * i, 400, 20)) for i, t in enumerate(self.story)]
+        elif roi == tuple(actions.CHOICE_ROWS):
+            for t, (text, hint) in zip(self.tops(), self.options):
+                lines += [(s, (733, y, 300, 20)) for s, y in ((text, t + 30), (hint, t + 60)) if s and 165 <= y and y + 20 <= 512]
+        results = [SimpleNamespace(text=t, box=b) for t, b in lines]
+        return SimpleNamespace(all_results=results, hit=True, best_result=None) if results else None
+
+
+DOLL = ["In this cramped room, you find a wooden doll, standing.", "Are the talismans filling the room for a wish?",
+        "Does this wooden doll wish for anything?"]  # 901013's story, as the box ends it
+
+
+def test_an_event_in_the_table_takes_a_direct_gift_over_a_check_for_the_main_keyword(context, monkeypatch):
+    # 901013 for a Poise team: the hint rules took the check that may give Poise; the table ranks the sure gift first.
+    actions.RUN["team"] = {"keyword": "Poise"}
+    actions.RUN["settings"] = {"event_overrides": []}
+    page = Choices(context, monkeypatch, [
+        ("Remove the doll's talismans.", "Select to gain a Rupture E.G.O Gift"),
+        ("Remove the wall talismans.", "Sloth & Wrath Advantage check. Then, maybe gain a Poise E.G.O Gift depending on the subsequent choice")],
+        DOLL)
+    actions.Event().run(context, None)
+    assert page.tapped == ["Remove the doll's talismans."]
+    assert page.drags == []  # two options fit: no scrolling
+
+
+SCROLLED = [(f"Option {k}.", "") for k in range(5)]
+TABLE = [{"key": "doesthiswoodendollwishforanything",
+          "options": [{"text": t, "hint": h, "kind": "other"} for t, h in SCROLLED]}]
+
+
+@pytest.mark.parametrize("best", [0, 2, 4])
+def test_a_list_that_scrolls_is_read_whole_and_the_pick_scrolled_into_view(context, monkeypatch, best):
+    # #93: more options than fit: read top to bottom anchored on their texts, the pick tapped whole in view.
+    actions.RUN["team"] = {"keyword": "Burn"}
+    actions.RUN["settings"] = {"event_overrides": []}
+    options = list(SCROLLED)
+    options[best] = (f"Option {best}.", "Select to gain a Burn E.G.O Gift")
+    table = [{"key": TABLE[0]["key"], "options": [{"text": t, "hint": h, "kind": "direct" if h else "other",
+                                                   "gifts": [["Burn", "direct"]] if h else []} for t, h in options]}]
+    monkeypatch.setattr(actions, "event_table", lambda: table)
+    page = Choices(context, monkeypatch, options, DOLL, offset=100)  # left part way down
+    actions.Event().run(context, None)
+    assert page.tapped == [f"Option {best}."]
+
+
+def test_an_option_cut_off_with_no_scrollbar_still_scrolls(context, monkeypatch):
+    actions.RUN["team"] = {"keyword": "Burn"}
+    actions.RUN["settings"] = {"event_overrides": []}
+    options = [("Option 0.", ""), ("Option 1.", ""), ("Option 2.", "Select to gain a Burn E.G.O Gift")]
+    page = Choices(context, monkeypatch, options, ["Unknown story."], scrollbar=False)
+    actions.Event().run(context, None)
+    assert page.tapped == ["Option 2."]  # the hint rules, on the option read once scrolled
+
+
 class Panel:
     """A battle's skill panel (7 slots, Win Rate label at x 984): a portrait tap swaps the slot's lower skill
     and its guard skill; the chain drag lights the START disc. units[i] is the unit in slot i (slots
