@@ -1,0 +1,10 @@
+{
+    // Shop page parts the Shop action reads (spec 03 section 13). Never in a next list.
+    // The fuse page's grid header reads "E.G.O Gifts Owned"; with a fixed recipe on offer a yellow
+    // "Fusion Available" section takes its place and pushes the owned gifts down (#103).
+    "ShopFusionAvailable": {
+        "recognition": "OCR",
+        "roi": [630, 205, 220, 50],
+        "expected": "Fusion Available"
+    }
+}

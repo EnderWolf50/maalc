@@ -1641,12 +1641,22 @@ GET_TITLE, GET_CONFIRM = [520, 160, 240, 40], (640, 532)
 PAGE_CLOSE, PAGE_OK = (490, 585), (788, 585)  # Close, and Fuse / Sell, on the fuse and sell pages
 SHOP_BUTTONS = {"fuse": (295, 390), "sell": (395, 390), "heal": (197, 474)}
 FUSE_CENTRE, FUSE_KEYWORD_OK = (365, 340), (788, 566)
-FUSE_CELLS = [(677 + 96 * c, y) for y in (293, 385, 468) for c in range(5)]  # the third row shows half
+# Grid cells by their centre (live 2026-10-16/18). Each cell's tier numerals sit top left, its keyword badge
+# bottom right (none on a keywordless gift). The owned grids' third row shows half: its badges are cut off.
+FUSE_CELLS = [(678 + 96 * c, y) for y in (294, 385, 477) for c in range(5)]
+OFFER_CELLS = [(624 + 154 * c, y) for y in (265, 418) for c in range(4)]  # a shop at rest; the price line is 52 px under
+SELL_CELLS = [(683 + 92 * c, y) for y in (258, 363, 473) for c in range(5)]
+# page: (its icon size over the GiftSearch template's, the grid's lower edge on screen)
+CELL_PAGES = {"fuse": (1.1, 493), "sell": (1.1, 495), "offer": (0.8, 530)}
+BADGES = ["Burn", "Bleed", "Tremor", "Rupture", "Sinking", "Poise", "Charge", "Slash", "Pierce", "Blunt"]
+# On scaled cells (CCOEFF): its own badge 0.54-0.99, another keyword's up to 0.60 (the cell's best wins), a keywordless
+# cell's best 0.41; 160 cells of 60 live captures. An observed gift's icon: Spiderweb's thin lines 0.5-0.6, others 0.86+.
+BADGE_MIN, ICON_KEEP = 0.5, 0.45
 FUSE_TOOLTIP = [600, 180, 680, 440]
 FUSE_CONFIRM = [300, 150, 680, 380]  # "Selected E.G.O Gifts 3/5" over "Fuse the selected E.G.O Gifts?"
 FUSE_NEUTRAL = (715, 229)  # the E.G.O Gifts Owned label: closes a tooltip, selects nothing
-SELL_CELLS = [(683 + 96 * c, y) for y in (258, 365, 462) for c in range(5)]
 SELL_PANEL, SELL_PRICE, SELL_COST = [150, 160, 420, 360], [500, 160, 60, 45], [960, 80, 160, 45]
+SELL_GRID = [630, 210, 480, 290]  # the sell page's gifts with their prices under them
 HEAL_TITLE, HEAL_COST = [130, 30, 220, 45], [1100, 90, 110, 50]
 HEAL_OPTIONS = {"full": (1020, 330), "revive": (1020, 455)}
 SHOP_PORTRAIT_X = [98 + 77 * i for i in range(12)]  # the shop's sinner bar (step 77, not the event bar's)
@@ -1656,7 +1666,16 @@ LEAVE_DIALOG, LEAVE_CONFIRM, LEAVE_CANCEL = [440, 320, 400, 45], (765, 493), (51
 
 
 def read_cost(context, roi=SHOP_COST):
-    return number(text(context, screen(context), roi))
+    """The Cost in roi, read again on a fresh screenshot when OCR gives no digit; None when 3 reads give none (#82).
+
+    None is never a Cost of 0: a caller that needs the Cost does nothing on None and logs it.
+    """
+    for _ in range(3):
+        cost = shop.cost_value(text(context, screen(context), roi))
+        if cost is not None:
+            return cost
+        time.sleep(0.5)
+    return None
 
 
 def kept_gifts(team):
@@ -1665,6 +1684,75 @@ def kept_gifts(team):
     Keywordless gifts are told by name (data/gift_search.json's Keywordless tab): the tooltip names no keyword.
     """
     return [g["name"] for g in team["gift_search"]["gifts"]] + [g["en"] for g in gift_data() if g["keyword"] == "Keywordless"]
+
+
+def observed_gifts(team):
+    """The team's observed gifts ({"name", "keyword", "tier"}) with their icon's id in data/gift_search.json."""
+    table = gift_data()
+    out = []
+    for g in team["gift_search"]["gifts"]:
+        entry = next((e for e in table if e["keyword"] == g["keyword"] and e["tier"] == g["tier"]
+                      and run_start.match_pack(e["en"], [g["name"]])), None)
+        if entry:
+            out.append({**g, "id": entry["id"]})
+    return out
+
+
+def template_hits(context, image, template, threshold):
+    """[(score, (x, y))]: the centres where template matches on image (TemplateMatch CCOEFF, its green masked)."""
+    h, w = image.shape[:2]
+    node = {"recognition": "TemplateMatch", "template": template, "threshold": threshold, "method": 5,
+            "green_mask": True, "roi": [0, 0, w, h]}
+    detail = context.run_recognition("ShopCell", image, {"ShopCell": node})
+    return [(r.score, (r.box[0] + r.box[2] / 2, r.box[1] + r.box[3] / 2)) for r in (detail.filtered_results if detail else [])]
+
+
+def read_cells(context, image, cells, page, gifts=()):
+    """The filled cells of a shop grid read off one screenshot (#76, #112): [{"i", "x", "y", "tier", "keyword", "gift"}].
+
+    The grid is scaled so gift icons are at their GiftSearch template's size, then each keyword's badge and each
+    observed gift's icon (gifts, observed_gifts) is matched once over it. keyword: the cell's best badge,
+    "Keywordless" with none, None when the badge is below the grid's edge; gift: the observed gift whose icon
+    matched, when its keyword and tier agree with the cell's. An empty cell is flat (live: spread 1-2, a gift 41-84).
+    """
+    scale, bottom = CELL_PAGES[page]
+    half = shop.CELL_HALF
+    filled = [(i, x, y) for i, (x, y) in enumerate(cells) if image[y - 25:y + 25, x - 25:x + 25].max(axis=2).std() > 15]
+    if not filled:
+        return []
+    x0, y0 = min(x for _, x, _ in filled) - half, min(y for _, _, y in filled) - half
+    x1, y1 = max(x for _, x, _ in filled) + half, min(bottom, max(y for _, _, y in filled) + half)
+    grid = shop.rescale(image[y0:y1, x0:x1], 1 / scale)
+    out = [{"i": i, "x": x, "y": y, "tier": shop.tier(shop.cell_crop(image, x, y, scale)),
+            "keyword": "Keywordless" if y + 40 <= bottom else None, "gift": None,
+            "at": ((x - x0) / scale, (y - y0) / scale)} for i, x, y in filled]
+    best = {}
+    for keyword in BADGES:
+        for score, (bx, by) in template_hits(context, grid, f"Shop/Badge{keyword}.png", BADGE_MIN):
+            for c in out:  # a badge sits 12-40 px right of and below its cell's centre, on the scaled grid
+                cx, cy = c["at"]
+                if c["keyword"] and 12 <= bx - cx <= 40 and 12 <= by - cy <= 40 and score > best.get(c["i"], 0):
+                    best[c["i"]], c["keyword"] = score, keyword
+    for g in gifts:
+        for score, (bx, by) in template_hits(context, grid, f"GiftSearch/{g['id']}.png", ICON_KEEP):
+            for c in out:
+                cx, cy = c["at"]
+                if abs(bx - cx) < 16 and abs(by - cy) < 16 and c["keyword"] in (None, g["keyword"]) and c["tier"] in (None, g["tier"]):
+                    c["gift"] = g["name"]
+    for c in out:
+        del c["at"]
+    return out
+
+
+def offer_cell(slot):
+    """The icon centre of an offer read by shop.read_slots: its column's, 52 px over its price line."""
+    return min((x for x, _ in OFFER_CELLS[:4]), key=lambda x: abs(x - slot["x"])), slot["y"] - 52
+
+
+def cell_line(cell, role):
+    """One cell read for the log: "0 III Keywordless Spiderweb Entangled in Red: keep"."""
+    tier = "I II III IV V".split()[cell["tier"] - 1] if cell["tier"] else "?"
+    return f"{cell['i']} {tier} {cell['keyword'] or 'badge unread'}{' ' + cell['gift'] if cell['gift'] else ''}: {role}"
 
 
 def tap_keyword(context, keyword):
@@ -1690,15 +1778,15 @@ def gift_get(context):
 class Shop(CustomAction):
     """Heal, then sell -> buy and refresh -> fuse until a round does nothing, then leave (spec 03 section 13).
 
-    The visit's state (healed, refreshes used, keywords read, whether the owned gifts were scanned for a
-    fusion) lives in RUN["shop"], so a re-entry from MirrorHub carries on; leaving drops it. Every spend keeps the team's reserve_cost.
+    The visit's state (healed, refreshes used, the gift wanted and whether a sale was tried for it, whether the
+    owned gifts were scanned for a fusion) lives in RUN["shop"], so a re-entry from MirrorHub carries on; leaving drops it. Every spend keeps the team's reserve_cost.
     """
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         team = current_run(context)["team"]
         if not self.to_main(context):
             return True  # a page fading in or out: let MirrorHub look again
-        visit = RUN.setdefault("shop", {"healed": False, "refreshes": 0, "kinds": {}, "wanted": None, "sold": False})
+        visit = RUN.setdefault("shop", {"healed": False, "refreshes": 0, "wanted": None, "sold": False})
         if not visit["healed"]:
             self.heal(context, team)
             visit["healed"] = True
@@ -1772,11 +1860,14 @@ class Shop(CustomAction):
         if team["heal"] == "none":
             return  # nothing to decide: skip the Cost and portrait reads
         cost = read_cost(context)
+        if cost is None:
+            log("shop: the Cost reads nothing: no heal")
+            return
         image = screen(context)
         dead = [x for x in SHOP_PORTRAIT_X if saturation(image[630:680, x - 25:x + 25]).mean() < 30]
         if "alive" in RUN and 12 - RUN["alive"] != len(dead):
             log(f"shop: {12 - RUN['alive']} dead at the last formation, {len(dead)} grey portraits")
-        plan = shop.heal_plan(team["heal"], cost or 0, team["reserve_cost"], len(dead), data("shop.yaml")["heal_cost"])
+        plan = shop.heal_plan(team["heal"], cost, team["reserve_cost"], len(dead), data("shop.yaml")["heal_cost"])
         log(f"shop: {cost} Cost, {len(dead)} dead, heal {team['heal']}: {plan or 'nothing'}")
         if not plan:
             return
@@ -1803,23 +1894,25 @@ class Shop(CustomAction):
 
     @staticmethod
     def buy(context, team, visit):
-        """Buy each affordable main-keyword gift on show, then refresh while the rules allow; True on any spend.
+        """Buy the main-keyword gifts on show (buy_offers), then refresh while the rules allow; True on any spend.
 
-        A main gift too dear for the reserve becomes visit["wanted"] for the next round's sell, and
-        holds the refresh back until that sell has been tried.
+        A first choice too dear for the reserve becomes visit["wanted"] for the next round's sell, and
+        holds the purchases and the refresh back until that sell has been tried.
         """
         keyword, reserve, acted = team["keyword"], team["reserve_cost"], False
         while True:
-            if Shop.buy_one(context, keyword, reserve, visit):
+            if Shop.buy_offers(context, team, visit):
                 acted = True
                 visit["fuse_scanned"] = False  # a new gift: the fusion grid has changed
-                continue  # live: a bought offer moves to the end of the grid, so read the offers again
             if visit["wanted"] and not visit["sold"]:
                 return True  # sell first, next round
+            cost = read_cost(context)
+            if cost is None:
+                log("shop: the Cost reads nothing: no refresh")
+                return acted
             image = screen(context)
-            cost = number(text(context, image, SHOP_COST))
             fees = {k: number(text(context, image, roi)) for k, (_, roi) in REFRESH.items()}
-            choice = shop.refresh_choice(cost or 0, reserve, visit["refreshes"], team["shop_refresh_limit"],
+            choice = shop.refresh_choice(cost, reserve, visit["refreshes"], team["shop_refresh_limit"],
                                          fees["normal"], fees["keyword"], data("shop.yaml")["refresh_margin"])
             if not choice:
                 return acted
@@ -1841,49 +1934,91 @@ class Shop(CustomAction):
             acted = True
 
     @staticmethod
-    def buy_one(context, keyword, reserve, visit):
-        """Buy the first affordable main-keyword gift on show; True when one was bought.
+    def buy_offers(context, team, visit):
+        """Read the offers once, then buy the main-keyword ones shop.buy_plan picks, last cell first; how many bought.
 
-        A gift's keyword is read from its purchase dialog (spec 03 section 12's text rule), once per name.
+        A gift's keyword is its offer's badge (read_cells, #76); only an offer whose badge is unread is opened
+        to read its purchase dialog (spec 03 section 12's text rule). Each purchase is checked on the Cost.
         """
+        keyword, reserve = team["keyword"], team["reserve_cost"]
         visit["wanted"] = None
         # ponytail: only the offers on show; a Super Shop's last 2 of 10 need a scroll first.
         cost = read_cost(context)
-        for slot in shop.read_slots(ocr(context, screen(context), OFFER_GRID)):
-            name, price = slot["name"], slot["price"]
-            if not shop.buyable(slot, cost) or visit["kinds"].get(name) == "other":
+        if cost is None:
+            log("shop: the Cost reads nothing: nothing bought")
+            return 0
+        image = screen(context)
+        slots = [s for s in shop.read_slots(ocr(context, image, OFFER_GRID)) if shop.on_sale(s)]
+        cells = {c["i"]: c for c in read_cells(context, image, [offer_cell(s) for s in slots], "offer")}
+        offers = []
+        for i, slot in enumerate(slots):
+            cell = cells.get(i, {"tier": None, "keyword": None})
+            slot["short"] = slot["short"] or shop.short_cell(image, *offer_cell(slot))
+            if slot["short"] and slot["price"] <= cost:
+                log(f"shop: {slot['name']!r} is tagged Not Enough Cost: its price {slot['price']} is a misread")
                 continue
-            cost = read_cost(context)
-            tap(context, slot["x"], slot["y"] - 50, wait=1.5)
-            image = screen(context)
-            if "Purchase" not in text(context, image, DIALOG_TITLE):
-                log(f"shop: {name!r} opened no purchase dialog")
+            kind = cell["keyword"]
+            if kind is None and shop.buyable(slot, cost):
+                kind = Shop.dialog_keyword(context, slot, keyword)
+                if kind is False:
+                    return 0  # the shop is gone
+            log(f"shop: {slot['name']!r} {slot['price']}: tier {cell['tier']} {kind}")
+            if kind == keyword:
+                offers.append((i, cell["tier"], slot["price"]))
+        plan, visit["wanted"] = shop.buy_plan(offers, cost, reserve, visit["sold"])
+        if visit["wanted"]:
+            log(f"shop: the first choice costs {visit['wanted']}, {cost} Cost is short: sell first")
+        bought = 0
+        for i in plan:
+            slot = slots[i]
+            image = Shop.open_offer(context, slot)
+            if image is None:
                 if not Shop.to_main(context):
-                    return False
+                    return bought
                 continue
-            price = shop.dialog_price(cost, text(context, image, PURCHASE_PREVIEW)) or price
-            kind = visit["kinds"].setdefault(name, rewards.gift_kind(text(context, image, PURCHASE_TEXT), keyword, False))
-            if kind != "main" or not shop.can_spend(cost or 0, price, reserve):
+            price = shop.dialog_price(cost, text(context, image, PURCHASE_PREVIEW)) or slot["price"]
+            if not shop.can_spend(cost, price, reserve):
                 tap(context, *PURCHASE_CANCEL)
-                if kind == "main":
-                    visit["wanted"] = min(price, visit["wanted"] or price)
-                log(f"shop: {name!r} {price}: {kind}" + (f", {cost} Cost is short" if kind == "main" else ""))
+                log(f"shop: {slot['name']!r} costs {price}, {cost} Cost is short")
                 continue
             tap(context, *PURCHASE, wait=2)
             gift_get(context)
             after = read_cost(context)
-            log(f"shop: bought {name!r} for {price}: {cost} -> {after} Cost")
-            if after == cost:
+            log(f"shop: bought {slot['name']!r} for {price}: {cost} -> {after} Cost")
+            if after is None or after == cost:
                 log("shop: the Cost did not change; taking it as not bought")
-                visit["kinds"][name] = "other"  # do not try it again
                 Shop.to_main(context)
                 continue
-            return True
-        return False
+            cost, bought = after, bought + 1
+        return bought
+
+    @staticmethod
+    def open_offer(context, slot):
+        """Tap an offer; the screenshot of its purchase dialog, or None when none opened."""
+        tap(context, slot["x"], slot["y"] - 50, wait=1.5)
+        image = screen(context)
+        if "Purchase" in text(context, image, DIALOG_TITLE):
+            return image
+        log(f"shop: {slot['name']!r} opened no purchase dialog")
+        return None
+
+    @staticmethod
+    def dialog_keyword(context, slot, keyword):
+        """An offer's keyword from its purchase dialog's text: keyword when main, else "other"; None when no
+        dialog opened, False when the shop is gone (to_main). The dialog is cancelled."""
+        image = Shop.open_offer(context, slot)
+        if image is None:
+            return None if Shop.to_main(context) else False
+        kind = rewards.gift_kind(text(context, image, PURCHASE_TEXT), keyword, False)
+        tap(context, *PURCHASE_CANCEL)
+        return keyword if kind == "main" else "other"
 
     @staticmethod
     def sell(context, team, visit):
-        """Sell leftover non-main gifts (what fusion cannot group by 3) when a wanted main gift is too dear."""
+        """Sell leftover non-main gifts (what fusion cannot group by 3) when a wanted main gift is too dear.
+
+        Kept like the fusion's (read_cells, shop.gift_role): main-keyword, keywordless and observed gifts.
+        """
         wanted = visit["wanted"]
         if not wanted or visit["sold"]:
             return False
@@ -1892,9 +2027,22 @@ class Shop(CustomAction):
         if "Sell" not in text(context, screen(context), DIALOG_TITLE):
             Shop.to_main(context)
             return False
-        cost = number(text(context, screen(context), SELL_COST))
-        gifts, keep = [], kept_gifts(team)
-        for i, (x, y) in enumerate(SELL_CELLS):
+        cost = read_cost(context, SELL_COST)
+        if cost is None:
+            log("shop: the sell page's Cost reads nothing: nothing sold")
+            Shop.to_main(context)
+            return False
+        # One screenshot decides (#112): each cell's badge and icon, its price under it.
+        image = screen(context)
+        cells = read_cells(context, image, SELL_CELLS, "sell", observed_gifts(team))
+        roles = [shop.gift_role(c["keyword"], c["gift"], team["keyword"]) for c in cells]
+        prices = shop.cell_prices(ocr(context, image, SELL_GRID), SELL_CELLS)
+        log("shop: sell cells " + "; ".join(f"{cell_line(c, r)} {prices.get(c['i'])}" for c, r in zip(cells, roles)))
+        gifts = [(c["i"], prices[c["i"]]) for c, r in zip(cells, roles) if r == "material" and c["i"] in prices]
+        # A badge or price below the grid's edge: the panel a tap shows decides (spec 03 section 12's rule).
+        keep = kept_gifts(team)
+        for c in [c for c, r in zip(cells, roles) if r == "unknown" or (r == "material" and c["i"] not in prices)]:
+            i, x, y = c["i"], c["x"], c["y"]
             tap(context, x, y, wait=1.2)
             image = screen(context)
             lines = [t for t, _ in ocr(context, image, SELL_PANEL)]
@@ -1904,14 +2052,14 @@ class Shop(CustomAction):
                 log(f"shop: sell cell {i} kept: {panel[:40]!r}")
             elif price and "Select the" not in panel and rewards.gift_kind(panel, team["keyword"], False) != "main":
                 gifts.append((i, price))
-        picked = shop.to_sell(gifts, wanted, cost or 0, team["reserve_cost"])
+        picked = shop.to_sell(gifts, wanted, cost, team["reserve_cost"])
         visit["fuse_scanned"] = visit.get("fuse_scanned") and not picked
         log(f"shop: {wanted} wanted, {cost} Cost, non-main (cell, price) {gifts}: sell {picked}")
         for i in picked or []:
-            before = number(text(context, screen(context), SELL_COST))
+            before = read_cost(context, SELL_COST)
             tap(context, *SELL_CELLS[i], wait=1.2)
             tap(context, *PAGE_OK, wait=2)
-            after = number(text(context, screen(context), SELL_COST))
+            after = read_cost(context, SELL_COST)
             log(f"shop: sold cell {i}: {before} -> {after} Cost")
             if after == before:
                 break  # ponytail: no Sell confirm dialog handled; none seen yet
@@ -1936,12 +2084,28 @@ class Shop(CustomAction):
         return [], None
 
     @staticmethod
+    def recipe_shown(context, image, visit):
+        """True, and the fuse page closed for this visit's owned gifts, when it shows a Fusion Available section.
+
+        #103 (live 2026-10-17): the section lists a fixed recipe's result above E.G.O Gifts Owned and pushes
+        the owned grid down, so FUSE_CELLS miss; the bot stuck on the page. Fixed recipes are #78's.
+        """
+        if not seen(context, image, "ShopFusionAvailable"):
+            return False
+        log("shop: the fuse page shows Fusion Available (a fixed recipe): closed, no fusion")
+        visit["fuse_scanned"] = True
+        Shop.to_main(context)
+        return True
+
+    @staticmethod
     def fuse(context, team, visit):
         """Fuse 3 non-main gifts into the main keyword, Wishmaking left unticked; True when one fused.
 
-        A tap on a gift shows its tooltip (its keyword, by spec 03 section 12's text rule) and puts it
-        in the fusion, so a main gift is tapped again to take it back out. A grid that held too few
-        non-main gifts is not scanned again until a purchase or a sale changes the owned gifts (#62).
+        The cells are read off one screenshot (read_cells, #112): main-keyword, keywordless and observed gifts
+        stay, the first 3 others are tapped into the fusion. A cell whose badge is cut off is tapped for its
+        tooltip (spec 03 section 12's text rule) only while materials are short, and tapped again to take a
+        kept gift back out. A grid that held too few materials is not read again until a purchase or a sale
+        changes the owned gifts (#62).
         """
         if visit.get("fuse_scanned"):
             return False
@@ -1960,13 +2124,23 @@ class Shop(CustomAction):
             log("shop: Wishmaking is ticked (it spends owned Starlight): no fusion")
             Shop.to_main(context)
             return False
-        picked, last, keep = [], None, kept_gifts(team)
-        # Live 2026-10-18: 5 gifts owned, the 10 empty cells cost 3.4 s each. An empty cell is flat (spread 1-2,
-        # a gift 41-84), so only the filled ones are tapped.
         image = screen(context)
-        cells = [(x, y) for x, y in FUSE_CELLS if image[y - 25:y + 25, x - 25:x + 25].max(axis=2).std() > 15]
-        # ponytail: the 15 cells on show; a scroll would find more when 13+ of them are main gifts.
-        for x, y in cells:
+        if Shop.recipe_shown(context, image, visit):
+            return False
+        # One screenshot decides (#112): a tap puts a gift in the fusion, so only the materials are tapped.
+        # ponytail: the 15 cells on show; a scroll would find more when 13+ of them are kept.
+        cells = read_cells(context, image, FUSE_CELLS, "fuse", observed_gifts(team))
+        roles = [shop.gift_role(c["keyword"], c["gift"], keyword) for c in cells]
+        log("shop: fuse cells " + "; ".join(cell_line(c, r) for c, r in zip(cells, roles)))
+        picked = []
+        for c in [c for c, r in zip(cells, roles) if r == "material"][:3]:
+            tap(context, c["x"], c["y"], wait=0.5)
+            tap(context, *FUSE_NEUTRAL)  # closes its tooltip
+            picked.append(f"cell {c['i']} ({c['keyword']} {c['tier']})")
+        # Badges below the grid's edge: the tooltip's text decides (spec 03 section 12's rule), a tap at a time.
+        last, keep = None, kept_gifts(team)
+        for c in [c for c, r in zip(cells, roles) if r == "unknown"] if len(picked) < 3 else []:
+            x, y = c["x"], c["y"]
             tap(context, x, y, wait=0)
             lines, name = Shop.tooltip(context, last)
             tap(context, *FUSE_NEUTRAL)
@@ -1990,12 +2164,15 @@ class Shop(CustomAction):
                 break
         fused = False
         if len(picked) == 3:
+            if Shop.recipe_shown(context, screen(context), visit):
+                return False
             tap(context, *PAGE_OK, wait=2)
             m = re.search(r"(\d)\s*/\s*\d", text(context, screen(context), FUSE_CONFIRM))
             if m and m[1] == "3":
                 tap(context, 788, 583, wait=2.5)  # the dialog's Confirm
                 fused = gift_get(context)
             log(f"shop: fuse {picked} into {keyword}: {'done' if fused else 'not confirmed'}")
+            visit["fuse_scanned"] = not fused  # unconfirmed: not the same scan again until the owned gifts change (#103)
         else:
             visit["fuse_scanned"] = True
             log(f"shop: {len(picked)} non-main gifts on show, a fusion takes 3")
