@@ -2,6 +2,7 @@
 
 import json
 import time
+import zlib
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import DEFAULT, MagicMock
@@ -1369,6 +1370,27 @@ def test_slots_already_on_guard_are_swapped_off_and_tapped_back(context):
     lit, _ = actions.PlayTurn.guard(context, 984, (918, 557))
     assert lit and all(panel.guard)
     assert len(portrait_taps(context)) == 7 + 3
+
+
+def test_a_guard_turn_on_a_hollow_gear_plays_win_rate_and_keeps_its_guard_turn(context):
+    # #127 (live 2026-10-18): in a focused encounter the left gear is a hollow ring and no chain starts from it;
+    # each skill has to be dragged onto an enemy's skill slot, which moves with the camera.
+    panel = Panel(context, guard=[False] * 7)
+    data = (Path(__file__).resolve().parent / "gears" / "hollow_boss.png").read_bytes()  # tests/test_battle.py gear()
+    rows = np.frombuffer(zlib.decompress(data[8 + 25 + 8:-12 - 4]), np.uint8).reshape(80, 1 + 80 * 3)
+    ring = rows[:, 1:].reshape(80, 80, 3)[:, :, ::-1]
+
+    def render():
+        image = panel.render()
+        image[536:616, 236:316] = ring  # round the left gear of 7 slots, (276, 576)
+        return image
+    context.tasker.controller.post_screencap.return_value.wait.return_value.get.side_effect = render
+    actions.RUN["guard"] = 3
+    actions.PlayTurn().run(context, SimpleNamespace(box=[984, 531, 40, 20]))
+    assert not portrait_taps(context)
+    assert not context.tasker.controller.post_touch_down.called
+    assert win_rate_taps(context)
+    assert actions.RUN["guard"] == 3
 
 
 def gesture(context, clock):
