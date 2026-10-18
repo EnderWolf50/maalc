@@ -848,6 +848,51 @@ def test_starlight_confirm_waits_for_the_starting_gift_page(context, clock, monk
     no_fixed_wait(clock)
 
 
+def starlight_page(context, available, owned):
+    """The starlight page with Available and the Owned box as texts or f(clicks, looks); card 1's price reads 10."""
+    page(context, {tuple(actions.STARLIGHT_AVAILABLE): available, tuple(actions.STARLIGHT_OWNED): owned,
+                   (250, 149, 80, 28): "10", (480, 210, 320, 35): "Continue with selected effects?"})
+
+
+def buy_grace_1(monkeypatch, unaffordable):
+    actions.RUN["settings"] = {"run": {"starlight_unaffordable": unaffordable}}
+    monkeypatch.setattr(actions.run_start, "resolve_plan", lambda *a: {"priority": [1], "levels": ["base"] + ["none"] * 9})
+
+
+def test_a_configured_grace_is_bought_with_owned_starlight_when_available_falls_short(context, clock, monkeypatch):
+    # #96: the user chose the grace, so owned starlight pays the 5 that Available (5 of 10) cannot (live: "0+5").
+    buy_grace_1(monkeypatch, "stop")
+    starlight_page(context, lambda clicks, looks: "5" if clicks == 0 else "0+5", lambda clicks, looks: "4035" if clicks == 0 else "4035-5")
+    assert actions.BuyStarlight().run(context, argv())
+    assert taps(context) == [(230, 252), (1195, 672)]
+    assert actions.RUN["starlight_unspent"] == 0
+
+
+def test_graces_beyond_available_and_owned_follow_starlight_unaffordable_skip(context, clock, monkeypatch):
+    buy_grace_1(monkeypatch, "skip")
+    starlight_page(context, "5", "2")
+    assert actions.BuyStarlight().run(context, argv())
+    assert taps(context) == [(1195, 672)]  # nothing bought, Enter only
+
+
+def test_graces_beyond_available_and_owned_follow_starlight_unaffordable_stop(context, clock, monkeypatch):
+    stopped = []
+    monkeypatch.setattr(actions, "stop", lambda context, reason, line=None: stopped.append(reason) or False)
+    buy_grace_1(monkeypatch, "stop")
+    starlight_page(context, "5", "2")
+    assert actions.BuyStarlight().run(context, argv()) is False
+    assert stopped == ["a planned grace is unaffordable"] and taps(context) == []
+
+
+def test_the_confirm_dialog_is_confirmed_when_the_graces_spent_owned_starlight(context, clock, monkeypatch):
+    # #96: "-60" in the dialog's Owned box is the consented spend, not a reason to cancel.
+    monkeypatch.setattr(actions.run_start, "resolve_plan", lambda *a: {"convert_leftover": False})
+    page(context, {(870, 165, 85, 25): "-60", (660, 395, 320, 90): "Any unspent Starlight will be added",
+                   (780, 145, 230, 35): lambda clicks, looks: "Selected E.G.O Gift" if clicks else None})
+    assert actions.ConfirmStarlight().run(context, argv())
+    assert taps(context) == [(738, 530)]
+
+
 SELECT_COUNT, SEARCH_SWITCH, GIFT_POPUP = (990, 565, 190, 45), (1100, 145, 85, 28), (520, 160, 240, 40)
 
 
