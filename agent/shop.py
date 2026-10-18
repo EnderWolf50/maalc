@@ -202,16 +202,15 @@ def cell_prices(results, cells):
     return prices
 
 
-def to_sell(gifts, wanted, cost, reserve, first=()):
-    """Indexes of the non-main gifts to sell so the wanted gift's price fits, highest index first.
+def to_sell(spare, wanted, cost, reserve, first=()):
+    """Indexes of the spare gifts to sell so the wanted gift's price fits, highest index first.
 
-    gifts are [(index on the sell page, sell price)] of the non-main gifts. Only the ones fusion
-    cannot use go: what is left over after groups of 3. The indexes in first (gifts the team avoids, #90) go
-    first, then the dearest, fewest sales. None when even all of those would not cover the price: then nothing is sold.
+    spare: [(index on the sell page, sell price)] of the gifts fusion cannot use (#79: what pick_fusion leaves over,
+    and the gifts the team avoids). The indexes in first (the avoided ones, #90) go first, then the dearest, fewest
+    sales. None when even all of those would not cover the price: then nothing is sold.
     """
-    spare = sorted(gifts, key=lambda g: (g[0] not in first, -g[1]))[:len(gifts) % 3]
     picked = []
-    for i, price in spare:
+    for i, price in sorted(spare, key=lambda g: (g[0] not in first, -g[1])):
         if can_spend(cost, wanted, reserve):
             break
         picked.append(i)

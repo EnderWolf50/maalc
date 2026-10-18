@@ -603,21 +603,39 @@ def test_an_offer_with_a_red_price_is_not_tapped_though_ocr_read_it_as_affordabl
     assert visit["wanted"] is None
 
 
-def test_a_sale_reads_keywords_and_prices_off_the_grid_and_taps_only_what_it_sells(context, monkeypatch):
-    # #112: no gift is tapped to read its panel. Non-main gifts Bleed, Tremor, Pierce, Sinking: one is left over
-    # from a fusion of 3, the dearest (Tremor, 120) goes.
-    prices = [90, 300, 200, 120, 60, 80]
+def sale_taps(context, monkeypatch, team, prices, *readings):
+    """Shop.sell with 100 Cost and a 180 wanted, readings (cells_read) priced prices on the grid: the cells it tapped."""
     lines = [(str(p), (x - 3, y + 37, 26, 20)) for p, (x, y) in zip(prices, actions.SELL_CELLS)]
     reads(context, {tuple(actions.DIALOG_TITLE): [("Sell E.G.O Gift", (500, 90, 200, 40))],
                     tuple(actions.SELL_COST): [("100", (980, 90, 60, 30))], tuple(actions.SELL_GRID): lines})
-    cells_read(monkeypatch, ("Bleed", None), ("Burn", None), ("Keywordless", None), ("Tremor", None), ("Pierce", None),
-               ("Sinking", None))
-    visit = {"wanted": 180, "sold": False}
-    assert actions.Shop.sell(context, {"keyword": "Burn", "reserve_cost": 0, "gift_search": {"gifts": []}}, visit)
-    taps = [c.args for c in context.tasker.controller.post_click.call_args_list]
-    assert [c for c in taps if c in actions.SELL_CELLS] == [actions.SELL_CELLS[3]]
+    cells_read(monkeypatch, *readings)
+    actions.Shop.sell(context, {"keyword": "Burn", "reserve_cost": 0, "gift_search": {"gifts": []}, **team},
+                      {"wanted": 180, "sold": False})
+    return [c.args for c in context.tasker.controller.post_click.call_args_list if c.args in actions.SELL_CELLS]
+
+
+def test_a_sale_reads_keywords_and_prices_off_the_grid_and_taps_only_what_it_sells(context, monkeypatch):
+    # #112: no gift is tapped to read its panel. #79: Tremor III + Pierce III + Sinking II fuse into a tier IV; the
+    # Bleed I no fusion uses goes, though Tremor's price is higher.
+    taps = sale_taps(context, monkeypatch, {}, [90, 300, 200, 120, 60, 80], ("Bleed", None, 1), ("Burn", None),
+                     ("Keywordless", None), ("Tremor", None, 3), ("Pierce", None, 3), ("Sinking", None, 2))
+    assert taps == [actions.SELL_CELLS[0]]
     rois = [(c.args[2] or {}).get(c.args[0], {}).get("roi") for c in context.run_recognition.call_args_list]
     assert actions.SELL_PANEL not in rois
+
+
+def test_a_sale_skips_the_teams_kept_gifts(context, monkeypatch):
+    # #79: Spiderweb (keep_gifts, by its icon) is the dearest and no fusion would use it once keywordless gifts may go:
+    # it stays. Of Bleed, Tremor, Pierce and Sinking, 3 fuse and the one left over goes.
+    team = {"keep_keywordless": False, "keep_gifts": [SPIDERWEB]}
+    taps = sale_taps(context, monkeypatch, team, [400, 90, 60, 70, 80], ("Keywordless", SPIDERWEB["name"], 3),
+                     ("Bleed", None), ("Tremor", None), ("Pierce", None), ("Sinking", None))
+    assert taps == [actions.SELL_CELLS[4]]
+
+
+def test_nothing_is_sold_when_every_material_fuses(context, monkeypatch):
+    # #79: 3 materials make a fusion; a sale would only break it.
+    assert sale_taps(context, monkeypatch, {}, [90, 60, 70], ("Bleed", None), ("Tremor", None), ("Pierce", None)) == []
 
 
 GOSSYPIUM = "White Gossypium"

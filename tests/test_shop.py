@@ -92,13 +92,12 @@ def test_refresh_choice_unread_fee_is_skipped():
     assert s.refresh_choice(3000, 0, 0, 2, None, None, 120) is None
 
 
-def test_to_sell_only_what_fusion_leaves_over():
-    # 4 non-main gifts: 3 fuse, 1 may go; the dearest one.
+def test_to_sell_the_dearest_spare_first():
     gifts = [(0, 50), (2, 100), (5, 90), (7, 60)]
     assert s.to_sell(gifts, 200, 120, 0) == [2]
-    # 3 non-main gifts all fuse: nothing to sell, so no sale helps.
-    assert s.to_sell(gifts[:3], 200, 120, 0) is None
-    # Two leftovers, both needed; sold from the back so earlier cells stay put.
+    # Nothing spare: no sale helps.
+    assert s.to_sell([], 200, 120, 0) is None
+    # Two spare, both needed; sold from the back so earlier cells stay put.
     assert s.to_sell([(1, 50), (4, 60)], 200, 100, 0) == [4, 1]
     # Already affordable: nothing to sell.
     assert s.to_sell([(1, 50)], 200, 300, 0) == []

@@ -2439,9 +2439,9 @@ class Shop(CustomAction):
 
     @staticmethod
     def sell(context, team, visit):
-        """Sell leftover non-main gifts (what fusion cannot group by 3) when a wanted main gift is too dear.
+        """Sell the materials no fusion uses (fusions' leftovers, #79) when a wanted main gift is too dear.
 
-        Kept like the fusion's (read_cells, shop.gift_role): main-keyword, keywordless and observed gifts.
+        Kept like the fusion's (read_cells, shop.gift_role): the team's kept keywords and gifts (#77) are never sold.
         """
         wanted = visit["wanted"]
         if not wanted or visit["sold"]:
@@ -2481,9 +2481,13 @@ class Shop(CustomAction):
                 gifts.append((i, price))
                 if kind == "avoid":
                     avoided.add(i)
-        picked = shop.to_sell(gifts, wanted, cost, team["reserve_cost"], avoided)
+        # ponytail: a Super Shop's 5 slots are known once its fuse page was read; 3 until then.
+        materials = [c for c in cells if c["i"] in dict(gifts)]
+        fused = {i for group, _ in fusions(materials, ["material"] * len(materials), visit.get("slots", 3), avoid) for i in group}
+        spare = [g for g in gifts if g[0] not in fused or g[0] in avoided]
+        picked = shop.to_sell(spare, wanted, cost, team["reserve_cost"], avoided)
         visit["fuse_scanned"] = visit.get("fuse_scanned") and not picked
-        log(f"shop: {wanted} wanted, {cost} Cost, non-main (cell, price) {gifts}: sell {picked}")
+        log(f"shop: {wanted} wanted, {cost} Cost, materials (cell, price) {gifts}, {sorted(fused)} fuse: sell {picked}")
         for i in picked or []:
             before = read_cost(context, SELL_COST)
             tap(context, *SELL_CELLS[i], wait=1.2)
