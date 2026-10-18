@@ -27,6 +27,24 @@ def test_node_type(marks, expected):
     assert mr.node_type(marks) == expected
 
 
+def test_the_column_before_the_boss_is_the_shop():
+    # Live 2026-10-18 (floor 1 orange, floor 2 cyan): bus, one node read as an event, then the boss. Every path ends
+    # at the shop, the last column before the boss, whatever the node's mark reads (#146).
+    slots, ahead = {"up": ("event", 1)}, [{"up": ("boss", {"up"})}]
+    mr.shop_before_boss(slots, ahead)
+    assert slots == {"up": ("shop", 1)}
+    # Further out: only the column that holds the boss' neighbour changes; the columns before stay as read.
+    slots = {"mid": ("battle", 2), "down": ("event", 1)}
+    ahead = [{"mid": ("event", {"mid", "down"}), "down": ("battle", {"down"})}, {"mid": ("boss", {"mid", "down"})}]
+    mr.shop_before_boss(slots, ahead)
+    assert slots == {"mid": ("battle", 2), "down": ("event", 1)}
+    assert ahead[0] == {"mid": ("shop", {"mid", "down"}), "down": ("shop", {"down"})}
+    # No boss on screen: nothing is a shop by position.
+    slots = {"mid": ("event", 1)}
+    mr.shop_before_boss(slots, [{"mid": ("event", {"mid"})}])
+    assert slots == {"mid": ("event", 1)}
+
+
 def test_lowest_weight_first():
     slots = {"up": ("battle", 1), "mid": ("abno", 2), "down": ("event", 0)}
     assert mr.rank(slots, NORMAL) == ["down", "up", "mid"]

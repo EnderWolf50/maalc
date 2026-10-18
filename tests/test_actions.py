@@ -341,6 +341,20 @@ def test_the_bus_is_dragged_to_the_far_left_and_the_cheapest_path_over_four_colu
     assert first == (446 - offsets[0] + actions.SLOT[0], actions.BUS_HOME[1] + actions.SLOT[1] + 213)  # the bottom row's battle
 
 
+def test_the_node_before_the_boss_is_a_shop_whatever_its_mark_reads(context, monkeypatch):
+    # #146 (live 2026-10-18, cyan and orange packs): bus, a shop none of whose templates matched, the boss.
+    monkeypatch.setattr(actions, "map_weights", lambda context: {**WEIGHTS, "shop": 0, "boss": 0})
+    logs = []
+    monkeypatch.setattr(actions, "log", logs.append)
+    actions.RUN["floor"] = 1
+    nodes = {(1, "mid"): set(), (2, "mid"): {"boss"}}
+    map_world(context, nodes, [((1, "mid"), (2, "mid"))], bus_x=actions.BUS_HOME[0])
+    actions.RouteMap().run(context, None)
+    assert "map: the column before the boss is the shop" in logs
+    assert actions.RUN["map_plan"] == {"floor": 1, "steps": [("mid", "boss")]}
+    assert any(line.startswith("map: path mid shop > mid boss") for line in logs)
+
+
 def test_two_columns_on_a_hard_floor_take_the_cheapest_path(context, monkeypatch):
     # Hard mode shows two columns; nothing past them is lit to read.
     monkeypatch.setattr(actions, "map_weights", lambda context: WEIGHTS)

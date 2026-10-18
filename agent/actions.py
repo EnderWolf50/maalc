@@ -957,8 +957,29 @@ def seen(context, image, node, roi=None):
 
 
 def node_marks(context, image, cx, cy):
-    """The marks seen around the map node centred at (cx, cy): {mark: hit}."""
-    return {mark: hit for n, (mark, (ox, oy, w, h)) in MARKS.items() if (hit := seen(context, image, n, (cx + ox, cy + oy, w, h)))}
+    """The marks seen around the map node centred at (cx, cy): {mark: hit}.
+
+    The shop is also looked for by its icon's shape alone (shop_icon) where nothing says a fight or the boss.
+    """
+    marks = {mark: hit for n, (mark, (ox, oy, w, h)) in MARKS.items() if (hit := seen(context, image, n, (cx + ox, cy + oy, w, h)))}
+    if not marks.keys() & {"boss", "focused", "cost", "shop"} and (hit := shop_icon(context, image, cx, cy)):
+        marks["shop"] = hit
+    return marks
+
+
+def shop_icon(context, image, cx, cy):
+    """The hit of the shop's icon (MapNodeShopIcon) around the node centred at (cx, cy), whatever the pack's colours.
+
+    The icon takes the theme pack's hue: cyan and orange packs (live 2026-10-18) matched none of the colour
+    templates. TemplateMatch CCOEFF on the brightness alone (max over the channels) is blind to hue and to the
+    pack's brightness: the shop scored 0.49-1.0 on 12 packs' captures, anything else 0.31 at most.
+    """
+    ox, oy, w, h = MARKS["MapNodeShop"][1]
+    window = image[max(0, cy + oy):cy + oy + h, max(0, cx + ox):cx + ox + w]
+    if window.shape[0] < 40 or window.shape[1] < 70:
+        return None
+    grey = np.repeat(window.max(axis=2)[..., None], 3, axis=2)
+    return seen(context, grey, "MapNodeShopIcon", (0, 0, window.shape[1], window.shape[0]))
 
 
 def node_at(context, image, cx, cy, marks=None, costs=True):
@@ -1069,6 +1090,10 @@ class RouteMap(CustomAction):
             slots = self.read_slots(context, image, bx, by) if bus else {}
         log("map: column 1: " + (", ".join(f"{r} {t} ({'?' if n is None else n} onward)" for r, (t, n) in slots.items()) or "no linked slot read"))
         ahead = self.read_ahead(context, image, bx, by, slots) if slots else []
+        read = [t for column in (slots, *ahead) for t, _ in column.values()]
+        map_route.shop_before_boss(slots, ahead)  # #146: the shop's icon takes the theme pack's colours
+        if read != [t for column in (slots, *ahead) for t, _ in column.values()]:
+            log("map: the column before the boss is the shop")
         weights = map_weights(context)
         order = map_route.rank(slots, weights, ahead)
         steps = None

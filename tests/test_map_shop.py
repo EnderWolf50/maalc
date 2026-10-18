@@ -1,7 +1,7 @@
 """The shop node on the map, read by MaaFramework's own template matching (#146), on live captures.
 
 actions.node_at runs inside a real MaaFramework task (resource bundle loaded, a still controller), so the
-MapNodeShop templates and their scores are the agent's on the device. The pytest process holds MaaFramework in
+MapNodeShop and MapNodeShopIcon templates and their scores are the agent's on the device. The pytest process holds MaaFramework in
 AgentServer mode, so the task runs in a child process: this file run as a script, as test_shop_cells.py does.
 """
 
