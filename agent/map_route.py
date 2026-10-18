@@ -18,7 +18,9 @@ def node_type(marks):
     """The node type for the set of marks seen on a slot.
 
     boss: red glow; focused: WARNING ring; abno: Cost coin and gift box; battle: Cost coin alone.
-    Only the icons count, never the Cost number (spec 03 section 7).
+    Only the icons count, never the Cost number (spec 03 section 7). Every fight carries a lit Cost coin,
+    so a node with none and no shop mark is an event, matched or not: its "?" takes the theme pack's look
+    (live 2026-10-18, a bright cyan one missed every template) and dims with distance (MapPanned.png).
     """
     if "boss" in marks:
         return "boss"
@@ -26,21 +28,33 @@ def node_type(marks):
         return "focused"
     if "cost" in marks:
         return "abno" if "gift" in marks else "battle"
-    for t in ("event", "shop"):
-        if t in marks:
-            return t
-    return "unknown"
+    return "shop" if "shop" in marks else "event"
 
 
-def rank(slots, weights):
+def rank(slots, weights, ahead=()):
     """Rows of the linked slots, best first.
 
-    slots maps row -> (node type, routes onward or None). Lowest weight first; on equal weight the
-    node with more routes into the next column; then middle, top, bottom. The boss only when it is
-    the only linked node.
+    slots maps row -> (node type, routes onward or None); ahead lists the columns read beyond them,
+    each row -> (node type, rows of the column before it linked to that node). A slot scores the
+    weights on its cheapest path through those columns, lowest first; a node with no link read
+    onward goes on as if linked to the cheapest node of the next column. With no column ahead the score
+    is the slot's own weight. On equal score the node with more routes into the next column;
+    then middle, top, bottom. The boss only when it is the only linked node.
     """
+    best = paths(slots, weights, ahead)
     rows = [r for r in slots if slots[r][0] != "boss"] or list(slots)
-    return sorted(rows, key=lambda r: (weights.get(slots[r][0], weights["unknown"]), -(slots[r][1] or 0), ROWS.index(r)))
+    return sorted(rows, key=lambda r: (best[r][0], -(slots[r][1] or 0), ROWS.index(r)))
+
+
+def paths(slots, weights, ahead=()):
+    """row -> (score, rows of the cheapest path from that slot, one per column) for each slot; see rank."""
+    best = {}  # the same for the nodes of the column after the one being scored
+    for column, after in reversed(list(zip((slots, *ahead), (*ahead, {})))):
+        nxt, best = best, {}
+        for r, (node, _) in column.items():
+            score, path = min([nxt[u] for u in nxt if r in after[u][1]] or nxt.values() or [(0, [])])
+            best[r] = (weights.get(node, weights["unknown"]) + score, [r, *path])
+    return best
 
 
 def line_contrast(v, x0, y0, x1, y1, top=70, bottom=615):

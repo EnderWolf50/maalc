@@ -53,9 +53,12 @@ def odds_rank(caption):
     return ODDS.index(f"very {level}" if very else level)
 
 
-def pick_checker(captions):
-    """Index into captions [(text, x)] of the sinner to take the check: best odds, leftmost; None when none read."""
-    ranked = [(odds_rank(t), x, i) for i, (t, x) in enumerate(captions) if odds_rank(t) is not None]
+def pick_checker(captions, skip=()):
+    """Index into captions [(text, x)] of the sinner to take the check: best odds, leftmost; None when none read.
+
+    skip: indices a tap did nothing on.
+    """
+    ranked = [(odds_rank(t), x, i) for i, (t, x) in enumerate(captions) if odds_rank(t) is not None and i not in skip]
     return min(ranked, key=lambda r: (-r[0], r[1]))[2] if ranked else None
 
 

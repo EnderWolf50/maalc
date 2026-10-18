@@ -131,20 +131,24 @@ def swipe(context, x1, y1, x2, y2, ms=500, wait=1.0):
 def scroll(context, x, y, dx, dy):
     """Drag the content under (x, y) by (dx, dy) px and let go without a fling (spec 07).
 
-    The game drops a drag's first move and flings the content on when the finger lifts while moving, so the
-    finger goes one 10 px move further and holds still SCROLL_HOLD s before lifting.
+    The game's drag threshold eats the first move, so the finger first moves 10 px and rests 0.1 s (a move
+    right after it can be eaten too), then moves (dx, dy) in 20 px moves 10 ms apart. The game flings the content
+    on with the speed the finger still has at the lift, decaying while it rests, so it rests SCROLL_HOLD s first.
     """
-    lead = 1 + 10 / max(abs(dx), abs(dy), 1)
-    drag(context, [(x, y), (x + round(dx * lead), y + round(dy * lead))], settle=0.1, hold=SCROLL_HOLD)
+    d = max(abs(dx), abs(dy), 1)
+    lx, ly = x + round(10 * dx / d), y + round(10 * dy / d)
+    drag(context, [(x, y), (lx, ly), (lx + dx, ly + dy)], settle=0, dwell=0.1, hold=SCROLL_HOLD, pause=0.01, step=20)
 
 
-# Live 2026-10-16: held 0.5 s, 10 drags of 150-300 px moved the grid 1 px more than asked, every time;
-# 0.4 s left up to 8 px of fling, 0.3 s 9 px, 0.1 s 80 px.
-SCROLL_HOLD = 0.5
+# Live 2026-10-18 (#114): with these moves (~1000 px/s) a 0.55 s rest left at most 1 px of fling in 126 drags of
+# 50-300 px on the map, the team list and the gift grid, 0.62-0.77 s each (1 px and 0.73-1.25 s before);
+# 0.5 s left 2 px, 0.4 s 6 px. Resting 0.05 s after the threshold move, 1 drag in ~200 lost a whole 20 px move.
+# At ~330 px/s the fling was +1/+6/+19/+58/+176 px for 0.5/0.3/0.2/0.1/0 s.
+SCROLL_HOLD = 0.55
 
 
-def drag(context, points, settle=0.3, dwell=0.1, hold=0.0):
-    """One touch through points: down on the first, settle s, then 10 px moves (20 ms each), dwell s on each point.
+def drag(context, points, settle=0.3, dwell=0.1, hold=0.0, pause=0.02, step=10):
+    """One touch through points: down on the first, settle s, then step px moves pause s apart, dwell s on each point.
 
     Lifts on the last point after hold s; at once by default: a finger held on a battle skill opens its details.
     """
@@ -152,10 +156,10 @@ def drag(context, points, settle=0.3, dwell=0.1, hold=0.0):
     ctl.post_touch_down(*points[0]).wait()
     time.sleep(settle)
     for (x0, y0), (x1, y1) in zip(points, points[1:]):
-        n = max(1, max(abs(x1 - x0), abs(y1 - y0)) // 10)
+        n = max(1, max(abs(x1 - x0), abs(y1 - y0)) // step)
         for k in range(1, n + 1):
             ctl.post_touch_move(round(x0 + (x1 - x0) * k / n), round(y0 + (y1 - y0) * k / n)).wait()
-            time.sleep(0.02)
+            time.sleep(pause)
         if (x1, y1) != points[-1]:
             time.sleep(dwell)
     time.sleep(hold)
@@ -313,7 +317,7 @@ class Recover(CustomAction):
             log(f"L{level} did not go through")
             STUCK["ladder"].failed(level)
         STUCK["watch"].reset()
-        for key in ("turn", "battle_start", "map_misses", "event_tried"):
+        for key in ("turn", "battle_start", "map_misses", "event_tried", "map_plan", "map_entered"):
             RUN.pop(key, None)
         return True
 
@@ -890,7 +894,9 @@ class PickThemePack(CustomAction):
 
 
 # Map page (spec 03 section 7). Offsets are from the MapBus template's top-left corner.
-BUS_HOME = (446, 320)  # map panned ~70 px down from rest (bus at 446, 248): top-row badges clear the resource bar
+# The bus at the far left: the screen shows it and four columns (#111; the user's hard-mode capture, bus at 47, 311).
+# Panned ~70 px down from rest (bus at 446, 248): top-row badges clear the resource bar.
+BUS_HOME = (50, 320)
 BUS_REST = (446, 248)
 SLOT = (279, 37)  # middle-row slot centre; map_route.ROW_DY gives the other rows
 LINKS = {
@@ -898,6 +904,7 @@ LINKS = {
     "mid": ("MapLinkMid", (95, -10, 110, 80)),
     "down": ("MapLinkDown", (85, 85, 110, 110)),
 }
+BUS_LINK = 60  # line_contrast of a lit link from the bus; links between other nodes read up to ~50
 MARKS = {  # node -> (mark, roi around the slot centre)
     "MapNodeBoss": ("boss", (-40, -40, 80, 80)),
     "MapNodeFocusedHex": ("focused", (-80, -60, 160, 120)),
@@ -925,11 +932,57 @@ def seen(context, image, node, roi=None):
     return detail if detail and detail.hit else None
 
 
+def node_marks(context, image, cx, cy):
+    """The marks seen around the map node centred at (cx, cy): {mark: hit}."""
+    return {mark: hit for n, (mark, (ox, oy, w, h)) in MARKS.items() if (hit := seen(context, image, n, (cx + ox, cy + oy, w, h)))}
+
+
+def node_at(context, image, cx, cy, marks=None, costs=True):
+    """The type of the map node centred at (cx, cy), by its marks (map_route.node_type).
+
+    No mark at all where the badges (80 px above the centre) sit under the resource bar: unknown, not an
+    event; a fight's Cost coin may be hidden there (the top row with the map at rest).
+    #91: Risky has no template and its Cost coin alone read as a battle. With costs, a coin alone whose
+    number reads as none of the battle costs is taken for Risky; an unread number leaves it a battle.
+    Only the column next to the bus is read so: past it the badges are dim (offline, MirrorMap.png's
+    85 two columns out read 8). A planned slot is read again once next to the bus (RouteMap.follow).
+    """
+    marks = node_marks(context, image, cx, cy) if marks is None else marks
+    if not marks and cy - 80 < 60:
+        return "unknown"
+    kind = map_route.node_type(set(marks))
+    if kind == "battle" and costs:
+        cost = coin_number(context, image, marks["cost"].box)
+        if cost is not None and cost not in map_data()["battle_costs"]:
+            log(f"map: a Cost coin alone at {cx}, {cy} reads {cost}, no battle cost: risky")
+            kind = "risky"
+    return kind
+
+
+def coin_number(context, image, box):
+    """The number printed beside a map node's Cost coin (box), or None when none reads (#91).
+
+    Offline on 13 nodes of 7 captures: OCR of the bare badge read 75 as 25 or 5; of the bright,
+    near-white digits cut out (as order_marks does) every battle's 75 or 85 right, dim ones too.
+    A 3-digit number may lose its first digit (375 read 75): only fights carrying 3-digit costs do.
+    A single digit is a part read: None.
+    """
+    x, y, w, _ = box
+    part = image[max(0, y + 8):y + 38, max(0, x + w - 8):x + w + 32]
+    mask = (part.max(axis=2) > 170) & (saturation(part) < 90)
+    plain = np.where(mask[..., None], 0, 255).astype(np.uint8).repeat(3, axis=2)
+    digits = re.sub(r"\D", "", text(context, plain, [0, 0, plain.shape[1], plain.shape[0]], only_rec=True))
+    return int(digits) if len(digits) >= 2 else None
+
+
+def map_data():
+    return yaml.safe_load((RESOURCE / "base" / "data" / "map_weights.yaml").read_text(encoding="utf-8"))
+
+
 def map_weights(context):
     run = current_run(context)
     hard = run.get("floor_hard", run["difficulty"] == "hard")
-    data = yaml.safe_load((RESOURCE / "base" / "data" / "map_weights.yaml").read_text(encoding="utf-8"))
-    return data["hard" if hard else "normal"]
+    return map_data()["hard" if hard else "normal"]
 
 
 def enter_node(context):
@@ -959,15 +1012,24 @@ class EnterNode(CustomAction):
 class RouteMap(CustomAction):
     """Pick the next node and enter it (spec 03 section 7).
 
-    Slots linked to the bus (a chevron on the link) are typed by their marks, ranked by
-    map_route.rank and tapped in that order until the node panel (MapNodePanel) shows. After them come
-    the fallbacks: the bus (a node reached but not entered), then the slots not tried yet.
-    Nothing taking a tap spends one of the floor's map retries; when they run out, the map is stuck (spec 06).
+    Slots linked to the bus (its lit line or a chevron on it) are typed by their marks, ranked by
+    map_route.rank over the columns on screen and tapped in that order until the node panel (MapNodePanel)
+    shows. After them come the fallbacks: the bus (a node reached but not entered; first after a restart or a
+    recovery, #88), then the slots not tried yet. No bus on screen: the map is dragged about for it (#61).
+    Nothing taking a tap spends one of the floor's map retries; when they run out, the map is stuck (spec 06);
+    with no bus found at all, at once at L2.
+    When the best path's first node is entered, the rest of the path is the floor's plan: the next calls
+    follow it (follow) until it is used up or does not fit the map.
     """
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         if RUN.get("forfeit"):
             return forfeit(context)
+        if still(context) is None:
+            return True  # still fading in or out: let MirrorHub look again
+        if self.follow(context):
+            return enter_node(context)
+        RUN.pop("map_plan", None)
         for _ in range(MAP_LOOKS):  # live: right after a floor's theme pack, the map shows before its bus and links
             if still(context) is None:
                 return True  # still fading in or out: let MirrorHub look again
@@ -977,19 +1039,41 @@ class RouteMap(CustomAction):
             if slots:
                 break
             time.sleep(1)
-        log("map: " + (", ".join(f"{r} {t} ({'?' if n is None else n} onward)" for r, (t, n) in slots.items()) or "no linked slot read"))
-        order = map_route.rank(slots, map_weights(context))
+        if not bus and self.search_bus(context):  # #61: the map dragged off by hand
+            image, bus = self.find_bus(context)
+            bx, by = bus or BUS_REST
+            slots = self.read_slots(context, image, bx, by) if bus else {}
+        log("map: column 1: " + (", ".join(f"{r} {t} ({'?' if n is None else n} onward)" for r, (t, n) in slots.items()) or "no linked slot read"))
+        ahead = self.read_ahead(context, image, bx, by, slots) if slots else []
+        weights = map_weights(context)
+        order = map_route.rank(slots, weights, ahead)
+        steps = None
+        if order:
+            score, path = map_route.paths(slots, weights, ahead)[order[0]]
+            nodes = [c[r][0] for r, c in zip(path, (slots, *ahead))]
+            log(f"map: path {' > '.join(f'{r} {t}' for r, t in zip(path, nodes))}, score {score}")
+            # The rest of the path, each step's row seen from the node before it: where the bus will stand.
+            row_at = {dy: r for r, dy in map_route.ROW_DY.items()}
+            steps = [(row_at[map_route.ROW_DY[b] - map_route.ROW_DY[a]], t) for a, b, t in zip(path, path[1:], nodes[1:])]
 
         def centre(row):
             return bx + SLOT[0], by + SLOT[1] + map_route.ROW_DY[row]
 
-        tries = [(f"{r} {slots[r][0]}", centre(r)) for r in order]
-        tries += [("the bus", (bx + 22, by + 37))] + [(f"{r} slot", centre(r)) for r in map_route.ROWS if r not in order]
+        ranked = [(f"{r} {slots[r][0]}", centre(r)) for r in order]
+        on_bus = [("the bus", (bx + 22, by + 37))]
+        # #88: after a restart or a recovery the bus may stand on a node not entered yet; its own tap opens it.
+        tries = ranked + on_bus if RUN.get("map_entered") else on_bus + ranked
+        tries += [(f"{r} slot", centre(r)) for r in map_route.ROWS if r not in order]
         for name, (x, y) in tries:
             tap(context, x, y, wait=0)
             if until(context, lambda im: seen(context, im, "MapNodePanel")) is not None:
                 log(f"map: take {name}")
+                if steps is not None and (x, y) == ranked[0][1]:  # the path's first node: follow the rest
+                    RUN["map_plan"] = {"floor": RUN.get("floor"), "steps": steps}
+                RUN["map_entered"] = True
                 return enter_node(context)
+        if not bus:  # #61: L2's To Window and Resume put the map back; L1's back key does nothing here
+            return stuck("no bus on the map, even after dragging it about", level=2)
         RUN["map_misses"] = RUN.get("map_misses", 0) + 1
         if RUN["map_misses"] >= MAP_RETRIES:
             return stuck(f"no node on the map took a tap, {MAP_RETRIES} times this floor")
@@ -1008,13 +1092,28 @@ class RouteMap(CustomAction):
             dx, dy = BUS_HOME[0] - bx, BUS_HOME[1] - by
             if abs(dx) <= 30 and abs(dy) <= 25 or attempt == 3:
                 return image, (bx, by)
-            # At rest only the top row hides under the resource bar: no link up, nothing to pan for (#58).
-            rest = abs(bx - BUS_REST[0]) <= 30 and abs(by - BUS_REST[1]) <= 25
-            if rest and not seen(context, image, LINKS["up"][0], (bx + LINKS["up"][1][0], by + LINKS["up"][1][1], *LINKS["up"][1][2:])):
-                return image, (bx, by)
-            # Look again after each pan. Start left of the bus, on map background.
-            scroll(context, 300, 400, dx, dy)
+            # Look again after each pan. Start on map background: between the first and second columns,
+            # between the middle and bottom rows.
+            scroll(context, min(bx + SLOT[0] + map_route.COLUMN_DX // 2, 1100), by + SLOT[1] + 106, dx, dy)
             time.sleep(0.5)
+
+    @staticmethod
+    def search_bus(context):
+        """Drag the map about, looking for the bus after each drag; whether it showed (#61).
+
+        Live 2026-10-16: a map dragged by hand left the bus off the top of the screen. The drags go
+        250 px down and up, 400 px right and left of where the map was, then back.
+        """
+        at = (0, 0)
+        for to in ((0, 250), (0, -250), (400, 0), (-400, 0), (0, 0)):
+            dx, dy = to[0] - at[0], to[1] - at[1]
+            scroll(context, 640 - dx // 2, 340 - dy // 2, dx, dy)
+            time.sleep(0.5)
+            at = to
+            if seen(context, screen(context), "MapBus"):
+                log(f"map: the bus showed after dragging the map {to}")
+                return True
+        return False
 
     @staticmethod
     def read_slots(context, image, bx, by):
@@ -1022,13 +1121,92 @@ class RouteMap(CustomAction):
         v = image.max(axis=2)
         slots = {}
         for row in map_route.ROWS:
-            node, (rx, ry, rw, rh) = LINKS[row]
-            if not seen(context, image, node, (bx + rx, by + ry, rw, rh)):
-                continue
-            cx, cy = bx + SLOT[0], by + SLOT[1] + map_route.ROW_DY[row]
-            marks = {mark for n, (mark, (ox, oy, w, h)) in MARKS.items() if seen(context, image, n, (cx + ox, cy + oy, w, h))}
-            slots[row] = (map_route.node_type(marks), map_route.routes(v, cx, cy))
+            if RouteMap.linked(context, image, bx, by, row):
+                cx, cy = bx + SLOT[0], by + SLOT[1] + map_route.ROW_DY[row]
+                slots[row] = (node_at(context, image, cx, cy), map_route.routes(v, cx, cy))
         return slots
+
+    @staticmethod
+    def linked(context, image, bx, by, row):
+        """Whether the slot in row is linked to the bus.
+
+        Live 2026-10-18, bus at the far left: the chevrons scored 0.75-0.84 against 0.8, the lit link
+        itself 157-171 against -2 unlinked; either one counts.
+        """
+        node, (rx, ry, rw, rh) = LINKS[row]
+        lit = map_route.line_contrast(image.max(axis=2), bx + 22, by + 37, bx + SLOT[0], by + SLOT[1] + map_route.ROW_DY[row])
+        return lit is not None and lit >= BUS_LINK or bool(seen(context, image, node, (bx + rx, by + ry, rw, rh)))
+
+    @staticmethod
+    def follow(context):
+        """Tap the next node of this floor's planned path; whether its node panel showed (#111).
+
+        Only that slot is read, and the map is dragged (bus to the far left) only when it sits under the
+        resource bar or the buttons. False, for a full read, whenever in doubt: no plan or a used-up one,
+        the slot not linked to the bus or not of the planned type (the bus not where the plan put it, or a
+        misread from afar), or its tap showing no panel.
+        """
+        plan = RUN.get("map_plan")
+        if not plan or plan["floor"] != RUN.get("floor") or not plan["steps"]:
+            return False
+        row, node = plan["steps"][0]
+        image = screen(context)
+        bus = seen(context, image, "MapBus")
+        bus = bus and tuple(bus.box[:2])
+
+        def clear(bx, by):  # the slot's node, badges included, clear of the resource bar and the buttons
+            return bx + SLOT[0] + 80 <= 1200 and by + SLOT[1] + map_route.ROW_DY[row] - 80 >= 60
+        if not bus or not clear(*bus):
+            image, bus = RouteMap.find_bus(context)
+        if not bus or not RouteMap.linked(context, image, *bus, row):
+            log(f"map: planned {row} {node} not linked to the bus; reading the map again")
+            return False
+        bx, by = bus
+        cx, cy = bx + SLOT[0], by + SLOT[1] + map_route.ROW_DY[row]
+        kind = node_at(context, image, cx, cy)
+        if kind != node:
+            log(f"map: planned {row} {node} reads {kind}; reading the map again")
+            return False
+        tap(context, cx, cy, wait=0)
+        if until(context, lambda im: seen(context, im, "MapNodePanel")) is None:
+            log(f"map: planned {row} {node} took no tap; reading the map again")
+            return False
+        log(f"map: follow plan {row} {node}")
+        plan["steps"] = plan["steps"][1:]
+        return True
+
+    @staticmethod
+    def read_ahead(context, image, bx, by, slots):
+        """The columns beyond the first on screen, for map_route.rank.
+
+        A node counts when a link into it from the column before reads (map_route.line_contrast); only rows
+        next to each other link. The read ends at the screen's edge, at a column with nothing linked or
+        dark (no mark and no light on any node: hard mode shows two columns), or after the boss.
+        """
+        dx, dy = map_route.COLUMN_DX, map_route.ROW_DY
+        v, x, ahead = image.max(axis=2), bx + SLOT[0], []
+
+        def y(row):
+            return by + SLOT[1] + dy[row]
+        while x + dx + 80 <= 1200:  # MapNodeFocusedHex reads 80 px either side; buttons from x 1205
+            x += dx
+            before, column, lit = ahead[-1] if ahead else slots, {}, False
+            for row in map_route.ROWS:
+                linked = {r for r in before if abs(dy[r] - dy[row]) <= 213
+                          and (map_route.line_contrast(v, x - dx, y(r), x, y(row)) or 0) >= map_route.LINE_CONTRAST}
+                if linked:
+                    marks = node_marks(context, image, x, y(row))
+                    column[row] = (node_at(context, image, x, y(row), marks, costs=False), linked)
+                    # A node with no mark may still be lit: a red pack's dim "?" (live 2026-10-18) reads 48-60
+                    # here; hard mode's dark columns read 0.
+                    lit = lit or bool(marks) or np.percentile(v[y(row) - 45:y(row) + 45, x - 45:x + 45], 90) >= 20
+            if not lit:
+                break
+            ahead.append(column)
+            log(f"map: column {len(ahead) + 1}: " + ", ".join(f"{r} {t} (from {'/'.join(sorted(n))})" for r, (t, n) in column.items()))
+            if any(t == "boss" for t, _ in column.values()):
+                break
+        return ahead
 
 
 # Formation page (spec 03 section 3). Cards are in battle.SINNERS order, two rows of six.
@@ -1163,6 +1341,9 @@ START_DISC = (-66, 26)
 TURN_NUMBER = [55, 57, 45, 30]
 SLOT_PORTRAIT_Y = 665  # tapping a slot's portrait swaps its lower skill and its guard skill
 LOWER_Y = 577  # a slot's lower skill, at rest (while a drag is down it sits at y 665: battle.guard_chain)
+# Live 2026-10-18 (#119): portrait taps 52 ms apart lost 9 of 28, 72 ms apart 1 of 28, 83-350 ms apart none
+# of 168; this wait plus ~50 ms for the tap puts them 150 ms apart.
+GUARD_TAP_WAIT = 0.1
 
 
 def lower_x(x):
@@ -1177,6 +1358,22 @@ def guard_score(image, x):
     v = p.sum(axis=2)
     texture = np.abs(np.diff(v, axis=0)).mean() + np.abs(np.diff(v, axis=1)).mean()
     return float(((r > 90) & (r - g > 20) & (g - b > 10)).mean()), float(texture)
+
+
+def lower_skills(context, xs, before=None, timeout=1.5):
+    """The first screenshot whose lower skills at xs read as they did 0.1 s before, after every one of them
+    swapped from before (battle.guard_shown tells); without before, every one shows something. The last
+    screenshot after timeout s. Live (#119): a swap shows 0.1-0.6 s after the tap and fades for ~0.4 s."""
+    last = [None]
+
+    def done(image):
+        now = [guard_score(image, x) for x in xs]
+        steady = last[0] is not None and all(abs(a[1] - b[1]) <= 2 for a, b in zip(now, last[0]))
+        last[0] = now
+        changed = None not in battle.guard_shown(before, now) if before else min(t for _, t in now) > 20
+        return steady and changed
+    image = until(context, done, timeout=timeout, every=0.1)
+    return screen(context) if image is None else image
 
 
 def win_rate_on(context, image, x, y):
@@ -1239,7 +1436,7 @@ class PlayTurn(CustomAction):
     def guard(context, x, disc):
         """Pick every slot's guard skill: (whether the START disc lit, the screen after).
 
-        A portrait tap swaps the slot's lower skill and its guard skill, and the game keeps the swap
+        A portrait tap swaps the slot's lower skill and its guard skill, and the game can keep the swap
         from turn to turn, so every portrait is tapped once and the lower skills compared before and
         after (the check that every slot shows its guard skill); the slots that went off guard are
         tapped back. Then one drag from the left gear through every slot's lower skill picks them
@@ -1247,35 +1444,34 @@ class PlayTurn(CustomAction):
         (banners, chain and glow cover them), so the picks are not read back: the lit disc says
         every slot has a pick.
         """
-        time.sleep(1)  # live: a battle's first turn slides the portraits in late
-        image = screen(context)
-        lows = [lower_x(sx) for sx in battle.slot_xs(x)]
+        xs = battle.slot_xs(x)
+        lows = [lower_x(sx) for sx in xs]
+        image = lower_skills(context, lows)  # live: a battle's first turn slides the portraits in late
         before = [guard_score(image, lx) for lx in lows]
-        for sx in battle.slot_xs(x):
-            tap(context, sx, SLOT_PORTRAIT_Y, wait=0.4)
-        time.sleep(0.8)
-        image = screen(context)
+        for sx in xs:
+            tap(context, sx, SLOT_PORTRAIT_Y, wait=GUARD_TAP_WAIT)
+        image = lower_skills(context, lows, before)
         after = [guard_score(image, lx) for lx in lows]
         shown = battle.guard_shown(before, after)
         unsure = [i for i, s in enumerate(shown) if s is None]
         if unsure:  # live: the glow on a unit's slot flickers; swap those back and compare once more
             for i in unsure:
-                tap(context, battle.slot_xs(x)[i], SLOT_PORTRAIT_Y, wait=0.4)
-            time.sleep(0.8)
-            image = screen(context)
+                tap(context, xs[i], SLOT_PORTRAIT_Y, wait=GUARD_TAP_WAIT)
+            image = lower_skills(context, [lows[i] for i in unsure], [after[i] for i in unsure])
             again = battle.guard_shown([after[i] for i in unsure], [guard_score(image, lows[i]) for i in unsure])
             for i, s in zip(unsure, again):
                 shown[i] = s
         if None in shown:
             log(f"guard: cannot tell the guard skill of slots {[i + 1 for i, s in enumerate(shown) if s is None]}")
             return False, image
-        for sx, on in zip(battle.slot_xs(x), shown):
+        for sx, on in zip(xs, shown):
             if not on:
-                tap(context, sx, SLOT_PORTRAIT_Y, wait=0.4)
-        drag(context, battle.guard_chain(battle.slot_xs(x)))
-        time.sleep(1)
-        image = screen(context)
-        return battle.disc_lit(image, *disc), image
+                tap(context, sx, SLOT_PORTRAIT_Y, wait=GUARD_TAP_WAIT)
+        # Live (#119): 10 px moves 10 ms apart, 0.05 s settle, no dwell: 0.7 s and 30/30 guard picks; 20 ms
+        # apart with 0.3 s settle and 0.1 s dwell took 2.2 s. Twice as fast (20 px moves) picked upper skills.
+        drag(context, battle.guard_chain(xs), settle=0.05, dwell=0, pause=0.01)
+        lit = until(context, lambda im: battle.disc_lit(im, *disc), timeout=1.5)
+        return lit is not None, screen(context) if lit is None else lit
 
 
 @AgentServer.custom_action("Victory")
@@ -1362,7 +1558,9 @@ EVENT_PORTRAIT_Y = 655
 EVENT_NEUTRAL = (5, 5)  # top-left corner: nothing there on any event page
 EVENT_TEXT_TAPS = 30
 EVENT_BUTTON_LABEL = [1040, 612, 190, 66]  # the Event node's roi: empty once the event page is gone
-EVENT_LEAST = 0.5  # s after a tap before the screen counts as moved: a fade's first frames are the same page
+EVENT_LIMIT = 180  # s one event may take before recovery L1 (AALC allows 300); a boss quiz of several rounds stays well under
+EVENT_GAP = 30  # s between two Event calls after which the next call is another event
+EVENT_LEAST = 0.5 # s after a tap before the screen counts as moved: a fade's first frames are the same page
 
 
 def data(name):
@@ -1381,19 +1579,37 @@ class Event(CustomAction):
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         run = current_run(context)
         image = screen(context)
+        # One event's clock: a call more than EVENT_GAP s after the last starts the next event's (#92).
+        now = time.monotonic()
+        event = RUN.get("event")
+        if event is None or now - event["last"] > EVENT_GAP:
+            event = RUN["event"] = {"since": now, "last": now, "checked": set()}
+        event["last"] = now
+        if now - event["since"] > EVENT_LIMIT:
+            RUN.pop("event")
+            return stuck(f"one event went on over {EVENT_LIMIT} s")
         tried = RUN.setdefault("event_tried", set())  # this question's options a tap did nothing on
+        checked = event["checked"]  # portraits a tap did nothing on in this check
         if red_button(image):
             tried.clear()
+            checked.clear()
             tap(context, *EVENT_BUTTON, wait=0)
             Event.settle(context, image)
         elif "Choose a character" in text(context, image, CHECK_PROMPT):
             # One read per portrait: read as a row, neighbouring captions run together ("HighVery Low").
             captions = [(text(context, image, [x - 38, 605, 76, 24], only_rec=True), x) for x in EVENT_PORTRAIT_X]
-            i = rewards.pick_checker(captions)
-            log(f"event check: {', '.join(t for t, _ in captions) or 'no odds read'}: take {captions[i][0] if i is not None else 'the first'}")
-            tap(context, captions[i][1] if i is not None else 77, EVENT_PORTRAIT_Y, wait=0)
-            Event.settle(context, image)
+            i = rewards.pick_checker(captions, checked)
+            if i is None:  # no odds read (or all tried): the next sinner not tried yet, round again when all are
+                i = next((k for k in range(len(captions)) if k not in checked), None)
+                if i is None:
+                    checked.clear()
+                    i = 0
+            log(f"event check: {', '.join(t for t, _ in captions) or 'no odds read'}: take sinner {i + 1}")
+            tap(context, captions[i][1], EVENT_PORTRAIT_Y, wait=0)
+            if Event.settle(context, image) is None:
+                checked.add(i)
         elif "Choices" in text(context, image, CHOICES_HEADER):
+            checked.clear()
             options = [(" ".join(lines), y) for y, lines in self.rows(ocr(context, image, CHOICE_ROWS))]
             if not options:
                 return True
@@ -1427,8 +1643,11 @@ class Event(CustomAction):
 
     @staticmethod
     def settle(context, before):
-        """Wait for a tap to show on screen, at most the 1.5 s it used to wait; MirrorHub looks again after."""
-        until(context, lambda im: moved(before, im), timeout=1.5, least=EVENT_LEAST)
+        """Wait for a tap to show on screen, at most the 1.5 s it used to wait; MirrorHub looks again after.
+
+        Returns the screen that moved, None when the tap did nothing.
+        """
+        return until(context, lambda im: moved(before, im), timeout=1.5, least=EVENT_LEAST)
 
     @staticmethod
     def panel_same(before, after):
@@ -1557,12 +1776,22 @@ GET_NAME = [320, 405, 180, 80]  # the red plate under the gift's icon
 PAGE_CLOSE, PAGE_OK = (490, 585), (788, 585)  # Close, and Fuse / Sell, on the fuse and sell pages
 SHOP_BUTTONS = {"fuse": (295, 390), "sell": (395, 390), "heal": (197, 474)}
 FUSE_CENTRE, FUSE_KEYWORD_OK = (365, 340), (788, 566)
-FUSE_CELLS = [(677 + 96 * c, y) for y in (293, 385, 468) for c in range(5)]  # the third row shows half
+# Grid cells by their centre (live 2026-10-16/18). Each cell's tier numerals sit top left, its keyword badge
+# bottom right (none on a keywordless gift). The owned grids' third row shows half: its badges are cut off.
+FUSE_CELLS = [(678 + 96 * c, y) for y in (294, 385, 477) for c in range(5)]
+OFFER_CELLS = [(624 + 154 * c, y) for y in (265, 418) for c in range(4)]  # a shop at rest; the price line is 52 px under
+SELL_CELLS = [(683 + 92 * c, y) for y in (258, 363, 473) for c in range(5)]
+# page: (its icon size over the GiftSearch template's, the grid's lower edge on screen)
+CELL_PAGES = {"fuse": (1.1, 493), "sell": (1.1, 495), "offer": (0.8, 530)}
+BADGES = ["Burn", "Bleed", "Tremor", "Rupture", "Sinking", "Poise", "Charge", "Slash", "Pierce", "Blunt"]
+# On scaled cells (CCOEFF): its own badge 0.54-0.99, another keyword's up to 0.60 (the cell's best wins), a keywordless
+# cell's best 0.41; 160 cells of 60 live captures. An observed gift's icon: Spiderweb's thin lines 0.5-0.6, others 0.86+.
+BADGE_MIN, ICON_KEEP = 0.5, 0.45
 FUSE_TOOLTIP = [600, 180, 680, 440]
 FUSE_CONFIRM = [300, 150, 680, 380]  # "Selected E.G.O Gifts 3/5" over "Fuse the selected E.G.O Gifts?"
 FUSE_NEUTRAL = (715, 229)  # the E.G.O Gifts Owned label: closes a tooltip, selects nothing
-SELL_CELLS = [(683 + 96 * c, y) for y in (258, 365, 462) for c in range(5)]
 SELL_PANEL, SELL_PRICE, SELL_COST = [150, 160, 420, 360], [500, 160, 60, 45], [960, 80, 160, 45]
+SELL_GRID = [630, 210, 480, 290]  # the sell page's gifts with their prices under them
 HEAL_TITLE, HEAL_COST = [130, 30, 220, 45], [1100, 90, 110, 50]
 HEAL_OPTIONS = {"full": (1020, 330), "revive": (1020, 455)}
 SHOP_PORTRAIT_X = [98 + 77 * i for i in range(12)]  # the shop's sinner bar (step 77, not the event bar's)
@@ -1572,7 +1801,16 @@ LEAVE_DIALOG, LEAVE_CONFIRM, LEAVE_CANCEL = [440, 320, 400, 45], (765, 493), (51
 
 
 def read_cost(context, roi=SHOP_COST):
-    return number(text(context, screen(context), roi))
+    """The Cost in roi, read again on a fresh screenshot when OCR gives no digit; None when 3 reads give none (#82).
+
+    None is never a Cost of 0: a caller that needs the Cost does nothing on None and logs it.
+    """
+    for _ in range(3):
+        cost = shop.cost_value(text(context, screen(context), roi))
+        if cost is not None:
+            return cost
+        time.sleep(0.5)
+    return None
 
 
 def kept_gifts(team):
@@ -1581,6 +1819,75 @@ def kept_gifts(team):
     Keywordless gifts are told by name (data/gift_search.json's Keywordless tab): the tooltip names no keyword.
     """
     return [g["name"] for g in team["gift_search"]["gifts"]] + [g["en"] for g in gift_data() if g["keyword"] == "Keywordless"]
+
+
+def observed_gifts(team):
+    """The team's observed gifts ({"name", "keyword", "tier"}) with their icon's id in data/gift_search.json."""
+    table = gift_data()
+    out = []
+    for g in team["gift_search"]["gifts"]:
+        entry = next((e for e in table if e["keyword"] == g["keyword"] and e["tier"] == g["tier"]
+                      and run_start.match_pack(e["en"], [g["name"]])), None)
+        if entry:
+            out.append({**g, "id": entry["id"]})
+    return out
+
+
+def template_hits(context, image, template, threshold):
+    """[(score, (x, y))]: the centres where template matches on image (TemplateMatch CCOEFF, its green masked)."""
+    h, w = image.shape[:2]
+    node = {"recognition": "TemplateMatch", "template": template, "threshold": threshold, "method": 5,
+            "green_mask": True, "roi": [0, 0, w, h]}
+    detail = context.run_recognition("ShopCell", image, {"ShopCell": node})
+    return [(r.score, (r.box[0] + r.box[2] / 2, r.box[1] + r.box[3] / 2)) for r in (detail.filtered_results if detail else [])]
+
+
+def read_cells(context, image, cells, page, gifts=()):
+    """The filled cells of a shop grid read off one screenshot (#76, #112): [{"i", "x", "y", "tier", "keyword", "gift"}].
+
+    The grid is scaled so gift icons are at their GiftSearch template's size, then each keyword's badge and each
+    observed gift's icon (gifts, observed_gifts) is matched once over it. keyword: the cell's best badge,
+    "Keywordless" with none, None when the badge is below the grid's edge; gift: the observed gift whose icon
+    matched, when its keyword and tier agree with the cell's. An empty cell is flat (live: spread 1-2, a gift 41-84).
+    """
+    scale, bottom = CELL_PAGES[page]
+    half = shop.CELL_HALF
+    filled = [(i, x, y) for i, (x, y) in enumerate(cells) if image[y - 25:y + 25, x - 25:x + 25].max(axis=2).std() > 15]
+    if not filled:
+        return []
+    x0, y0 = min(x for _, x, _ in filled) - half, min(y for _, _, y in filled) - half
+    x1, y1 = max(x for _, x, _ in filled) + half, min(bottom, max(y for _, _, y in filled) + half)
+    grid = shop.rescale(image[y0:y1, x0:x1], 1 / scale)
+    out = [{"i": i, "x": x, "y": y, "tier": shop.tier(shop.cell_crop(image, x, y, scale)),
+            "keyword": "Keywordless" if y + 40 <= bottom else None, "gift": None,
+            "at": ((x - x0) / scale, (y - y0) / scale)} for i, x, y in filled]
+    best = {}
+    for keyword in BADGES:
+        for score, (bx, by) in template_hits(context, grid, f"Shop/Badge{keyword}.png", BADGE_MIN):
+            for c in out:  # a badge sits 12-40 px right of and below its cell's centre, on the scaled grid
+                cx, cy = c["at"]
+                if c["keyword"] and 12 <= bx - cx <= 40 and 12 <= by - cy <= 40 and score > best.get(c["i"], 0):
+                    best[c["i"]], c["keyword"] = score, keyword
+    for g in gifts:
+        for score, (bx, by) in template_hits(context, grid, f"GiftSearch/{g['id']}.png", ICON_KEEP):
+            for c in out:
+                cx, cy = c["at"]
+                if abs(bx - cx) < 16 and abs(by - cy) < 16 and c["keyword"] in (None, g["keyword"]) and c["tier"] in (None, g["tier"]):
+                    c["gift"] = g["name"]
+    for c in out:
+        del c["at"]
+    return out
+
+
+def offer_cell(slot):
+    """The icon centre of an offer read by shop.read_slots: its column's, 52 px over its price line."""
+    return min((x for x, _ in OFFER_CELLS[:4]), key=lambda x: abs(x - slot["x"])), slot["y"] - 52
+
+
+def cell_line(cell, role):
+    """One cell read for the log: "0 III Keywordless Spiderweb Entangled in Red: keep"."""
+    tier = "I II III IV V".split()[cell["tier"] - 1] if cell["tier"] else "?"
+    return f"{cell['i']} {tier} {cell['keyword'] or 'badge unread'}{' ' + cell['gift'] if cell['gift'] else ''}: {role}"
 
 
 def tap_keyword(context, keyword):
@@ -1606,19 +1913,21 @@ def gift_get(context):
 class Shop(CustomAction):
     """Heal, then sell -> buy and refresh -> fuse until a round does nothing, then leave (spec 03 section 13).
 
-    The visit's state (healed, refreshes used, keywords read, whether the owned gifts were scanned for a
-    fusion) lives in RUN["shop"], so a re-entry from MirrorHub carries on; leaving drops it. Every spend keeps the team's reserve_cost.
+    The visit's state (healed, refreshes used, the gift wanted and whether a sale was tried for it, whether the
+    owned gifts were scanned for a fusion) lives in RUN["shop"], so a re-entry from MirrorHub carries on; leaving drops it. Every spend keeps the team's reserve_cost.
     """
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         team = current_run(context)["team"]
         if not self.to_main(context):
             return True  # a page fading in or out: let MirrorHub look again
-        visit = RUN.setdefault("shop", {"healed": False, "refreshes": 0, "kinds": {}, "wanted": None, "sold": False})
+        visit = RUN.setdefault("shop", {"healed": False, "refreshes": 0, "wanted": None, "sold": False})
         if not visit["healed"]:
             self.heal(context, team)
             visit["healed"] = True
         for _ in range(shop.ROUNDS):
+            if not self.to_main(context):
+                break  # left already: the leave below finds the map
             acted = self.sell(context, team, visit)
             acted = self.buy(context, team, visit) or acted
             acted = self.fuse(context, team, visit) or acted
@@ -1627,6 +1936,11 @@ class Shop(CustomAction):
         else:
             log(f"shop: still acting after {shop.ROUNDS} rounds")
         for _ in range(3):
+            image = screen(context)
+            if seen(context, image, "MirrorMap") or seen(context, image, "MapNodePanel"):
+                log("shop: already out of the shop")
+                RUN.pop("shop", None)
+                return True
             tap(context, *BOTTOM_RIGHT, wait=1.5)
             if "Leave the shop" in text(context, screen(context), LEAVE_DIALOG):
                 log(f"shop: leave with {read_cost(context)} Cost")
@@ -1637,9 +1951,15 @@ class Shop(CustomAction):
 
     @staticmethod
     def to_main(context):
-        """Back out of any shop page or dialog; True once the main shop (its Refresh fee) shows."""
+        """Back out of any shop page or dialog; True once the main shop (its Refresh fee) shows.
+
+        False at once on the map: the shop was left (live 2026-10-18, by hand mid-visit), and a tap
+        meant for a shop page lands on a map node.
+        """
         for _ in range(5):
             image = screen(context)
+            if seen(context, image, "MirrorMap") or seen(context, image, "MapNodePanel"):
+                return False
             title = text(context, image, DIALOG_TITLE)
             heal = "Heal" in text(context, image, HEAL_TITLE)
             if "GET" in text(context, image, GET_TITLE):
@@ -1675,11 +1995,14 @@ class Shop(CustomAction):
         if team["heal"] == "none":
             return  # nothing to decide: skip the Cost and portrait reads
         cost = read_cost(context)
+        if cost is None:
+            log("shop: the Cost reads nothing: no heal")
+            return
         image = screen(context)
         dead = [x for x in SHOP_PORTRAIT_X if saturation(image[630:680, x - 25:x + 25]).mean() < 30]
         if "alive" in RUN and 12 - RUN["alive"] != len(dead):
             log(f"shop: {12 - RUN['alive']} dead at the last formation, {len(dead)} grey portraits")
-        plan = shop.heal_plan(team["heal"], cost or 0, team["reserve_cost"], len(dead), data("shop.yaml")["heal_cost"])
+        plan = shop.heal_plan(team["heal"], cost, team["reserve_cost"], len(dead), data("shop.yaml")["heal_cost"])
         log(f"shop: {cost} Cost, {len(dead)} dead, heal {team['heal']}: {plan or 'nothing'}")
         if not plan:
             return
@@ -1706,23 +2029,25 @@ class Shop(CustomAction):
 
     @staticmethod
     def buy(context, team, visit):
-        """Buy each affordable main-keyword gift on show, then refresh while the rules allow; True on any spend.
+        """Buy the main-keyword gifts on show (buy_offers), then refresh while the rules allow; True on any spend.
 
-        A main gift too dear for the reserve becomes visit["wanted"] for the next round's sell, and
-        holds the refresh back until that sell has been tried.
+        A first choice too dear for the reserve becomes visit["wanted"] for the next round's sell, and
+        holds the purchases and the refresh back until that sell has been tried.
         """
         keyword, reserve, acted = team["keyword"], team["reserve_cost"], False
         while True:
-            if Shop.buy_one(context, keyword, reserve, visit):
+            if Shop.buy_offers(context, team, visit):
                 acted = True
                 visit["fuse_scanned"] = False  # a new gift: the fusion grid has changed
-                continue  # live: a bought offer moves to the end of the grid, so read the offers again
             if visit["wanted"] and not visit["sold"]:
                 return True  # sell first, next round
+            cost = read_cost(context)
+            if cost is None:
+                log("shop: the Cost reads nothing: no refresh")
+                return acted
             image = screen(context)
-            cost = number(text(context, image, SHOP_COST))
             fees = {k: number(text(context, image, roi)) for k, (_, roi) in REFRESH.items()}
-            choice = shop.refresh_choice(cost or 0, reserve, visit["refreshes"], team["shop_refresh_limit"],
+            choice = shop.refresh_choice(cost, reserve, visit["refreshes"], team["shop_refresh_limit"],
                                          fees["normal"], fees["keyword"], data("shop.yaml")["refresh_margin"])
             if not choice:
                 return acted
@@ -1744,47 +2069,91 @@ class Shop(CustomAction):
             acted = True
 
     @staticmethod
-    def buy_one(context, keyword, reserve, visit):
-        """Buy the first affordable main-keyword gift on show; True when one was bought.
+    def buy_offers(context, team, visit):
+        """Read the offers once, then buy the main-keyword ones shop.buy_plan picks, last cell first; how many bought.
 
-        A gift's keyword is read from its purchase dialog (spec 03 section 12's text rule), once per name.
+        A gift's keyword is its offer's badge (read_cells, #76); only an offer whose badge is unread is opened
+        to read its purchase dialog (spec 03 section 12's text rule). Each purchase is checked on the Cost.
         """
+        keyword, reserve = team["keyword"], team["reserve_cost"]
         visit["wanted"] = None
         # ponytail: only the offers on show; a Super Shop's last 2 of 10 need a scroll first.
-        for slot in shop.read_slots(ocr(context, screen(context), OFFER_GRID)):
-            name, price = slot["name"], slot["price"]
-            if not shop.buyable(slot) or visit["kinds"].get(name) == "other":
+        cost = read_cost(context)
+        if cost is None:
+            log("shop: the Cost reads nothing: nothing bought")
+            return 0
+        image = screen(context)
+        slots = [s for s in shop.read_slots(ocr(context, image, OFFER_GRID)) if shop.on_sale(s)]
+        cells = {c["i"]: c for c in read_cells(context, image, [offer_cell(s) for s in slots], "offer")}
+        offers = []
+        for i, slot in enumerate(slots):
+            cell = cells.get(i, {"tier": None, "keyword": None})
+            slot["short"] = slot["short"] or shop.short_cell(image, *offer_cell(slot))
+            if slot["short"] and slot["price"] <= cost:
+                log(f"shop: {slot['name']!r} is tagged Not Enough Cost: its price {slot['price']} is a misread")
                 continue
-            cost = read_cost(context)
-            tap(context, slot["x"], slot["y"] - 50, wait=1.5)
-            image = screen(context)
-            if "Purchase" not in text(context, image, DIALOG_TITLE):
-                log(f"shop: {name!r} opened no purchase dialog")
-                Shop.to_main(context)
+            kind = cell["keyword"]
+            if kind is None and shop.buyable(slot, cost):
+                kind = Shop.dialog_keyword(context, slot, keyword)
+                if kind is False:
+                    return 0  # the shop is gone
+            log(f"shop: {slot['name']!r} {slot['price']}: tier {cell['tier']} {kind}")
+            if kind == keyword:
+                offers.append((i, cell["tier"], slot["price"]))
+        plan, visit["wanted"] = shop.buy_plan(offers, cost, reserve, visit["sold"])
+        if visit["wanted"]:
+            log(f"shop: the first choice costs {visit['wanted']}, {cost} Cost is short: sell first")
+        bought = 0
+        for i in plan:
+            slot = slots[i]
+            image = Shop.open_offer(context, slot)
+            if image is None:
+                if not Shop.to_main(context):
+                    return bought
                 continue
-            price = shop.dialog_price(cost, text(context, image, PURCHASE_PREVIEW)) or price
-            kind = visit["kinds"].setdefault(name, rewards.gift_kind(text(context, image, PURCHASE_TEXT), keyword, False))
-            if kind != "main" or not shop.can_spend(cost or 0, price, reserve):
+            price = shop.dialog_price(cost, text(context, image, PURCHASE_PREVIEW)) or slot["price"]
+            if not shop.can_spend(cost, price, reserve):
                 tap(context, *PURCHASE_CANCEL)
-                if kind == "main":
-                    visit["wanted"] = min(price, visit["wanted"] or price)
-                log(f"shop: {name!r} {price}: {kind}" + (f", {cost} Cost is short" if kind == "main" else ""))
+                log(f"shop: {slot['name']!r} costs {price}, {cost} Cost is short")
                 continue
             tap(context, *PURCHASE, wait=2)
             gift_get(context)
             after = read_cost(context)
-            log(f"shop: bought {name!r} for {price}: {cost} -> {after} Cost")
-            if after == cost:
+            log(f"shop: bought {slot['name']!r} for {price}: {cost} -> {after} Cost")
+            if after is None or after == cost:
                 log("shop: the Cost did not change; taking it as not bought")
-                visit["kinds"][name] = "other"  # do not try it again
                 Shop.to_main(context)
                 continue
-            return True
-        return False
+            cost, bought = after, bought + 1
+        return bought
+
+    @staticmethod
+    def open_offer(context, slot):
+        """Tap an offer; the screenshot of its purchase dialog, or None when none opened."""
+        tap(context, slot["x"], slot["y"] - 50, wait=1.5)
+        image = screen(context)
+        if "Purchase" in text(context, image, DIALOG_TITLE):
+            return image
+        log(f"shop: {slot['name']!r} opened no purchase dialog")
+        return None
+
+    @staticmethod
+    def dialog_keyword(context, slot, keyword):
+        """An offer's keyword from its purchase dialog's text: keyword when main, else "other"; None when no
+        dialog opened, False when the shop is gone (to_main). The dialog is cancelled."""
+        image = Shop.open_offer(context, slot)
+        if image is None:
+            return None if Shop.to_main(context) else False
+        kind = rewards.gift_kind(text(context, image, PURCHASE_TEXT), keyword, False)
+        tap(context, *PURCHASE_CANCEL)
+        return keyword if kind == "main" else "other"
 
     @staticmethod
     def sell(context, team, visit):
-        """Sell leftover non-main gifts (what fusion cannot group by 3) when a wanted main gift is too dear."""
+        """Sell leftover non-main gifts (what fusion cannot group by 3) when a wanted main gift is too dear.
+
+        Kept like the fusion's (read_cells, shop.gift_role): main-keyword, keywordless and observed gifts.
+        """
         wanted = visit["wanted"]
         if not wanted or visit["sold"]:
             return False
@@ -1793,9 +2162,22 @@ class Shop(CustomAction):
         if "Sell" not in text(context, screen(context), DIALOG_TITLE):
             Shop.to_main(context)
             return False
-        cost = number(text(context, screen(context), SELL_COST))
-        gifts, keep = [], kept_gifts(team)
-        for i, (x, y) in enumerate(SELL_CELLS):
+        cost = read_cost(context, SELL_COST)
+        if cost is None:
+            log("shop: the sell page's Cost reads nothing: nothing sold")
+            Shop.to_main(context)
+            return False
+        # One screenshot decides (#112): each cell's badge and icon, its price under it.
+        image = screen(context)
+        cells = read_cells(context, image, SELL_CELLS, "sell", observed_gifts(team))
+        roles = [shop.gift_role(c["keyword"], c["gift"], team["keyword"]) for c in cells]
+        prices = shop.cell_prices(ocr(context, image, SELL_GRID), SELL_CELLS)
+        log("shop: sell cells " + "; ".join(f"{cell_line(c, r)} {prices.get(c['i'])}" for c, r in zip(cells, roles)))
+        gifts = [(c["i"], prices[c["i"]]) for c, r in zip(cells, roles) if r == "material" and c["i"] in prices]
+        # A badge or price below the grid's edge: the panel a tap shows decides (spec 03 section 12's rule).
+        keep = kept_gifts(team)
+        for c in [c for c, r in zip(cells, roles) if r == "unknown" or (r == "material" and c["i"] not in prices)]:
+            i, x, y = c["i"], c["x"], c["y"]
             tap(context, x, y, wait=1.2)
             image = screen(context)
             lines = [t for t, _ in ocr(context, image, SELL_PANEL)]
@@ -1805,14 +2187,14 @@ class Shop(CustomAction):
                 log(f"shop: sell cell {i} kept: {panel[:40]!r}")
             elif price and "Select the" not in panel and rewards.gift_kind(panel, team["keyword"], False) != "main":
                 gifts.append((i, price))
-        picked = shop.to_sell(gifts, wanted, cost or 0, team["reserve_cost"])
+        picked = shop.to_sell(gifts, wanted, cost, team["reserve_cost"])
         visit["fuse_scanned"] = visit.get("fuse_scanned") and not picked
         log(f"shop: {wanted} wanted, {cost} Cost, non-main (cell, price) {gifts}: sell {picked}")
         for i in picked or []:
-            before = number(text(context, screen(context), SELL_COST))
+            before = read_cost(context, SELL_COST)
             tap(context, *SELL_CELLS[i], wait=1.2)
             tap(context, *PAGE_OK, wait=2)
-            after = number(text(context, screen(context), SELL_COST))
+            after = read_cost(context, SELL_COST)
             log(f"shop: sold cell {i}: {before} -> {after} Cost")
             if after == before:
                 break  # ponytail: no Sell confirm dialog handled; none seen yet
@@ -1837,12 +2219,28 @@ class Shop(CustomAction):
         return [], None
 
     @staticmethod
+    def recipe_shown(context, image, visit):
+        """True, and the fuse page closed for this visit's owned gifts, when it shows a Fusion Available section.
+
+        #103 (live 2026-10-17): the section lists a fixed recipe's result above E.G.O Gifts Owned and pushes
+        the owned grid down, so FUSE_CELLS miss; the bot stuck on the page. Fixed recipes are #78's.
+        """
+        if not seen(context, image, "ShopFusionAvailable"):
+            return False
+        log("shop: the fuse page shows Fusion Available (a fixed recipe): closed, no fusion")
+        visit["fuse_scanned"] = True
+        Shop.to_main(context)
+        return True
+
+    @staticmethod
     def fuse(context, team, visit):
         """Fuse 3 non-main gifts into the main keyword, Wishmaking left unticked; True when one fused.
 
-        A tap on a gift shows its tooltip (its keyword, by spec 03 section 12's text rule) and puts it
-        in the fusion, so a main gift is tapped again to take it back out. A grid that held too few
-        non-main gifts is not scanned again until a purchase or a sale changes the owned gifts (#62).
+        The cells are read off one screenshot (read_cells, #112): main-keyword, keywordless and observed gifts
+        stay, the first 3 others are tapped into the fusion. A cell whose badge is cut off is tapped for its
+        tooltip (spec 03 section 12's text rule) only while materials are short, and tapped again to take a
+        kept gift back out. A grid that held too few materials is not read again until a purchase or a sale
+        changes the owned gifts (#62).
         """
         if visit.get("fuse_scanned"):
             return False
@@ -1861,14 +2259,33 @@ class Shop(CustomAction):
             log("shop: Wishmaking is ticked (it spends owned Starlight): no fusion")
             Shop.to_main(context)
             return False
-        picked, last, keep = [], None, kept_gifts(team)
-        # ponytail: the 15 cells on show; a scroll would find more when 13+ of them are main gifts.
-        for x, y in FUSE_CELLS:
+        image = screen(context)
+        if Shop.recipe_shown(context, image, visit):
+            return False
+        # One screenshot decides (#112): a tap puts a gift in the fusion, so only the materials are tapped.
+        # ponytail: the 15 cells on show; a scroll would find more when 13+ of them are kept.
+        cells = read_cells(context, image, FUSE_CELLS, "fuse", observed_gifts(team))
+        roles = [shop.gift_role(c["keyword"], c["gift"], keyword) for c in cells]
+        log("shop: fuse cells " + "; ".join(cell_line(c, r) for c, r in zip(cells, roles)))
+        picked = []
+        for c in [c for c, r in zip(cells, roles) if r == "material"][:3]:
+            tap(context, c["x"], c["y"], wait=0.5)
+            tap(context, *FUSE_NEUTRAL)  # closes its tooltip
+            picked.append(f"cell {c['i']} ({c['keyword']} {c['tier']})")
+        # Badges below the grid's edge: the tooltip's text decides (spec 03 section 12's rule), a tap at a time.
+        last, keep = None, kept_gifts(team)
+        for c in [c for c, r in zip(cells, roles) if r == "unknown"] if len(picked) < 3 else []:
+            x, y = c["x"], c["y"]
             tap(context, x, y, wait=0)
             lines, name = Shop.tooltip(context, last)
             tap(context, *FUSE_NEUTRAL)
             if name is None:
-                continue  # an empty cell, or a tap that only closed the last tooltip
+                # Live 2026-10-18: Spiderweb Entangled in Red's long tooltip read no name and stayed in the
+                # fusion; a gift that cannot be named is taken out again.
+                log(f"shop: the gift at {x},{y} read no name: kept out of the fusion")
+                tap(context, x, y, wait=1.2)
+                tap(context, *FUSE_NEUTRAL)
+                continue
             last = name
             main = rewards.gift_kind(" ".join(t for t, _ in lines), keyword, False) == "main"
             if main or shop.protected(name, keep):
@@ -1882,12 +2299,15 @@ class Shop(CustomAction):
                 break
         fused = False
         if len(picked) == 3:
+            if Shop.recipe_shown(context, screen(context), visit):
+                return False
             tap(context, *PAGE_OK, wait=2)
             m = re.search(r"(\d)\s*/\s*\d", text(context, screen(context), FUSE_CONFIRM))
             if m and m[1] == "3":
                 tap(context, 788, 583, wait=2.5)  # the dialog's Confirm
                 fused = gift_get(context)
             log(f"shop: fuse {picked} into {keyword}: {'done' if fused else 'not confirmed'}")
+            visit["fuse_scanned"] = not fused  # unconfirmed: not the same scan again until the owned gifts change (#103)
         else:
             visit["fuse_scanned"] = True
             log(f"shop: {len(picked)} non-main gifts on show, a fusion takes 3")
