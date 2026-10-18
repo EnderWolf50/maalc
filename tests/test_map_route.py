@@ -18,8 +18,10 @@ NORMAL, HARD = WEIGHTS["normal"], WEIGHTS["hard"]
     ({"cost"}, "battle"),
     ({"event"}, "event"),
     ({"shop"}, "shop"),
-    ({"gift"}, "unknown"),
-    (set(), "unknown"),
+    # No Cost coin, no boss, Focused or shop mark: an event, its "?" missed by the templates. Live 2026-10-18,
+    # floor 2 "Lake World" (cyan): a bright "?" next to the bus; MapPanned.png: a dim one two columns out.
+    ({"gift"}, "event"),
+    (set(), "event"),
 ])
 def test_node_type(marks, expected):
     assert mr.node_type(marks) == expected
@@ -46,11 +48,22 @@ def test_boss_only_when_alone():
     assert mr.rank({"mid": ("boss", 0)}, NORMAL) == ["mid"]
 
 
-def test_unknown_last_and_risky_after_shop_on_hard():
-    slots = {"up": ("unknown", 3), "mid": ("shop", 1), "down": ("focused", 0)}
-    assert mr.rank(slots, NORMAL) == ["down", "mid", "up"]
-    assert NORMAL["risky"] < NORMAL["shop"] < HARD["risky"] < HARD["unknown"]
-    assert {k: v for k, v in NORMAL.items() if k != "risky"} == {k: v for k, v in HARD.items() if k != "risky"}
+def test_two_columns_take_the_cheapest_path():
+    # Live 2026-10-18, hard floor 1 (user's capture): battle / event / battle, then battle / battle;
+    # each battle runs straight on, the event links to both. event -> battle (1 + 2) is cheapest.
+    ahead = [{"up": ("battle", {"up", "mid"}), "down": ("battle", {"mid", "down"})}]
+    slots = {"up": ("battle", 1), "mid": ("event", 2), "down": ("battle", 1)}
+    assert mr.rank(slots, HARD, ahead)[0] == "mid"
+    # An event on to an abnormality (1 + 5) loses to a battle on to an event (2 + 1).
+    ahead = [{"up": ("abno", {"up"}), "down": ("event", {"down"})}]
+    assert mr.rank({"up": ("event", 1), "down": ("battle", 1)}, HARD, ahead) == ["down", "up"]
+    assert mr.paths({"up": ("event", 1), "down": ("battle", 1)}, HARD, ahead)["down"] == (3, ["down", "down"])
+
+
+def test_a_slot_with_no_link_read_onward_goes_on_to_the_cheapest_node():
+    # Every node leads on, so an unread link must not make a path look shorter (cheaper) than the others.
+    ahead = [{"down": ("event", {"down"})}]
+    assert mr.rank({"up": ("battle", None), "down": ("event", None)}, HARD, ahead) == ["down", "up"]
 
 
 def lit(links, size=(720, 1280)):
@@ -71,3 +84,14 @@ def test_routes_counts_drawn_links(links):
 def test_routes_unreadable_off_the_map():
     # A top-row node at rest sits under the resource bar: nothing onward can be read.
     assert mr.routes(lit(()), 725, -200) is None
+
+
+def test_the_lit_links_from_the_bus_read_at_the_far_left():
+    """Live 2026-10-18, bus at 50, 320: the chevron templates missed; the lines did not.
+
+    tests/data/map_far_left.npz is the frame's per-pixel brightness, x 0-399.
+    """
+    v = np.load(Path(__file__).resolve().parent / "data/map_far_left.npz")["v"]
+    bus, slot = (50 + 22, 320 + 37), (50 + 279, 320 + 37)
+    lit = {row: mr.line_contrast(v, *bus, slot[0], slot[1] + dy) for row, dy in mr.ROW_DY.items()}
+    assert lit["up"] >= 60 and lit["down"] >= 60 and lit["mid"] < 15
