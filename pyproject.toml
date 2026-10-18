@@ -11,11 +11,17 @@ dependencies = [
 ]
 
 [dependency-groups]
-dev = ["pytest"]
+dev = ["numpy", "pillow", "pytest", "ruff"]
+# Probe and live-test scripts: `uv run --group probe python <script>`.
+probe = ["numpy", "opencv-python-headless", "pillow", "psutil"]
 
 [tool.uv]
 package = false
 
 [tool.pytest.ini_options]
-pythonpath = ["agent"]
+pythonpath = ["agent", "tools"]
 testpaths = ["tests"]
+
+[tool.ruff.lint]
+# Syntax errors and pyflakes: undefined names, unused imports, F811 redefinition.
+select = ["E9", "F"]

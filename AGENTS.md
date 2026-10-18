@@ -11,3 +11,29 @@ Default five-role vocabulary (needs-triage, needs-info, ready-for-agent, ready-f
 ### Domain docs
 
 Single-context: one `GLOSSARY.md` + `docs/adr/` at the repo root. See `docs/agents/domain.md`.
+
+## Working here
+
+### Goal
+
+Feature parity with AALC is the target; a v1 simplification goes under **Deferred** in the map issue, not out of scope.
+
+### Public repo
+
+This repo is public. Issue, PR and commit text describes evidence by its content and attaches the files (`gh issue comment <n> --attach <file>`); it names no local path, account name, UID or e-mail. A screenshot under `tests/screens/` has the UID plate and the account e-mail blacked out before it is committed. `.claude/hooks/public-text-guard.py` checks the text, `tests/test_screens_privacy.py` the screenshots.
+
+### Pointers
+
+- Worktree setup, checks, post-land steps, `.local/` and the game data: `docs/agents/local-dev.md`.
+- Anything on the emulator: the `maalc-live-test` skill. The emulator's resolution and window stay as the user set them; MaaFramework scales screenshots to 720p by itself.
+- Subagents: `docs/agents/subagent-preamble.md` reaches each one through a SubagentStart hook.
+- Review standards: `CODING_STANDARDS.md`.
+- Pipeline JSON under `assets/resource/base/pipeline/` allows whole-line `//` comments, so `json.load` fails on it; drop those lines first, as `tests/test_pipeline.py` does.
+
+### CI
+
+A PR merges on a green `ci-ok`. When CI does not start, say so and wait; a local check does not replace it.
+
+### Acceptance
+
+When an acceptance run takes too long: verify what ran, report progress against the target, and let the user decide the next step. The bar stays where the issue put it.
