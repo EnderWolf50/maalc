@@ -125,7 +125,7 @@ def bus_at(context, x, y, linked=()):
     def run_recognition(name, image, override=None):
         if name == "MapBus":
             return SimpleNamespace(hit=True, box=[x, y, 45, 75])
-        return SimpleNamespace(hit=True) if name in linked else None
+        return SimpleNamespace(hit=True, box=[0, 0, 26, 24]) if name in linked else None
     context.run_recognition.side_effect = run_recognition
 
 
@@ -137,9 +137,10 @@ def test_a_map_not_readable_yet_is_read_again_before_any_tap(context, monkeypatc
         if name == "MapBus":
             looks.append(1)
             return SimpleNamespace(hit=True, box=[446, 248, 45, 75]) if len(looks) > 1 else None
-        return SimpleNamespace(hit=True) if name in ("MapLinkMid", "MapNodeCost") else None
+        return SimpleNamespace(hit=True, box=[0, 0, 26, 24]) if name in ("MapLinkMid", "MapNodeCost") else None
     context.run_recognition.side_effect = run_recognition
     monkeypatch.setattr(actions, "map_weights", lambda context: {"battle": 2, "unknown": 9})
+    actions.RUN["map_entered"] = True  # a node entered before: the bus is not tried first
     actions.RouteMap().run(context, None)
     first = context.tasker.controller.post_click.call_args_list[0].args
     assert first == (446 + actions.SLOT[0], 248 + actions.SLOT[1])  # the middle row's battle
@@ -207,6 +208,55 @@ def test_a_node_with_its_badges_under_the_resource_bar_is_no_event_for_showing_n
     assert actions.node_at(context, image, 329, 144) == "event"  # the top row with the bus at BUS_HOME
 
 
+def test_after_a_restart_or_recovery_the_bus_is_tapped_first(context, monkeypatch):
+    # #88: L3 or Accept results leave the bus on a node not entered yet, whose panel its tap opens.
+    monkeypatch.setattr(actions, "map_weights", lambda context: {"battle": 2, "unknown": 9})
+    bus_at(context, *actions.BUS_HOME, linked=("MapLinkMid", "MapNodeCost"))
+    actions.RouteMap().run(context, None)
+    bx, by = actions.BUS_HOME
+    assert context.tasker.controller.post_click.call_args_list[0].args == (bx + 22, by + 37)
+
+
+def test_a_bus_dragged_off_the_screen_is_found_by_dragging_the_map(context, monkeypatch):
+    # #61, live 2026-10-16: the map dragged by hand, the bus off the top; three blind rounds, L1, then L2.
+    monkeypatch.setattr(actions, "map_weights", lambda context: {"battle": 2, "unknown": 9})
+    actions.RUN["map_entered"] = True
+    ctl = context.tasker.controller
+
+    def run_recognition(name, image, override=None):
+        if name == "MapBus":
+            return SimpleNamespace(hit=True, box=[446, 320, 45, 75]) if ctl.post_touch_up.called else None
+        return SimpleNamespace(hit=True, box=[0, 0, 26, 24]) if name in ("MapLinkMid", "MapNodeCost") else None
+    context.run_recognition.side_effect = run_recognition
+    actions.RouteMap().run(context, None)
+    assert ctl.post_click.call_args_list[0].args == (446 + actions.SLOT[0], 320 + actions.SLOT[1])
+    assert actions.STUCK["flag"] is None or actions.STUCK["flag"][1] == 1  # no node panel in this fake: a miss
+
+
+def test_a_bus_not_found_even_by_dragging_goes_straight_to_l2(context, monkeypatch):
+    # #61: To Window and Resume put the map back; L1 (the back key) does nothing for a map.
+    monkeypatch.setattr(actions, "map_weights", lambda context: {"battle": 2, "unknown": 9})
+    actions.RUN["map_entered"] = True
+    actions.RouteMap().run(context, None)
+    assert context.tasker.controller.post_click.called  # the fallback taps still go first
+    assert actions.STUCK["flag"][1] == 2
+
+
+@pytest.mark.parametrize(("number", "expected"), [("85", "battle"), ("75.", "battle"), ("120", "risky"), ("50", "risky"), ("8", "battle"), ("", "battle")])
+def test_a_cost_coin_whose_number_is_no_battle_cost_is_not_a_battle(context, number, expected):
+    # #91: no Risky capture yet; a Cost coin alone read as a battle (weight 2) whatever it was.
+    def run_recognition(name, image, override=None):
+        if name == "MapNodeCost":
+            return SimpleNamespace(hit=True, box=[700, 300, 26, 24])
+        if name == "ReadText" and number:
+            return SimpleNamespace(all_results=[SimpleNamespace(text=number, box=(0, 0, 20, 20))])
+        return None
+    context.run_recognition.side_effect = run_recognition
+    assert actions.node_at(context, np.zeros((720, 1280, 3), np.uint8), 713, 380) == expected
+    # Past the first column the badges are dim (offline: MirrorMap.png's 85 read 8): no Cost read there.
+    assert actions.node_at(context, np.zeros((720, 1280, 3), np.uint8), 713, 380, costs=False) == "battle"
+
+
 def test_a_bus_at_the_far_left_is_not_dragged(context):
     bus_at(context, *actions.BUS_HOME, linked=("MapLinkMid", "MapLinkDown"))
     _, bus = actions.RouteMap.find_bus(context)
@@ -226,8 +276,9 @@ def map_world(context, nodes, links, bus_x):
 
     nodes: {(column, row): marks}, column 1 next to the bus; links: ((column, row), (column, row)) pairs.
     The bus's chevrons lead to the first column's nodes; a tap on anything but Enter opens a node panel.
-    Returns the screen's offsets after each drag.
+    The bus stands on a node already entered (no tap on it first, #88). Returns the screen's offsets after each drag.
     """
+    actions.RUN["map_entered"] = True
     bx, by = 446, actions.BUS_HOME[1]  # on the map; the screen starts at 446 - bus_x
 
     def at(column, row):
@@ -267,7 +318,7 @@ def map_world(context, nodes, links, bus_x):
         if name in actions.MARKS:
             mark, (ox, oy, _, _) = actions.MARKS[name]
             x, y = override[name]["roi"][:2]
-            return SimpleNamespace(hit=True) if (x - ox + off[0], y - oy, mark) in marks else None
+            return SimpleNamespace(hit=True, box=[x, y, 26, 24]) if (x - ox + off[0], y - oy, mark) in marks else None
         return None
     context.run_recognition.side_effect = run_recognition
     return offsets
