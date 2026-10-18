@@ -5,7 +5,7 @@ import { TEXT, type Key } from "./i18n";
 import { newSettings, parseSettings, runEnum, type Settings } from "./model";
 import { DeploymentTab, StarlightTab, ThemePackTab } from "./Plans";
 import { TeamsTab } from "./Teams";
-import { EditorContext, Field, Num, Select, useEditor, type Ctx } from "./ui";
+import { EditorContext, Field, Num, Select, ToggleNum, useEditor, type Ctx } from "./ui";
 import { validate, type Problem } from "./validate";
 
 const TABS = [
@@ -117,7 +117,7 @@ function RunTab() {
   const { s, update, t, tv, bad } = useEditor();
   const run = s.run;
   const set = (patch: Partial<Settings["run"]>) => update((d) => { Object.assign(d.run, patch); });
-  const pick = (k: "difficulty" | "weekly_bonus_use" | "weekly_bonus_amount" | "starlight_unaffordable" | "after_retries", note?: string) => (
+  const pick = (k: "difficulty" | "weekly_bonus_use" | "weekly_bonus_amount" | "starlight_unaffordable" | "after_retries" | "theme_pack_refresh", note?: string) => (
     <Field label={t(`run.${k}`)} path={`run/${k}`} note={note}>
       <Select value={run[k]} options={runEnum(k)} label={(v) => tv(k, v)} onChange={(v) => set({ [k]: v })} />
     </Field>
@@ -125,7 +125,8 @@ function RunTab() {
   return (
     <div className="grid">
       {pick("difficulty")}
-      <Field label={t("run.runs")} path="run/runs"><Num value={run.runs} min={0} onChange={(v) => set({ runs: v })} /></Field>
+      <ToggleNum label={t("run.runs")} path="run/runs" value={run.runs} on={1} min={1} note={t("run.runs_note")}
+        onChange={(v) => set({ runs: v })} />
       {pick("weekly_bonus_use", run.weekly_bonus_use === "normal" ? t("run.weekly_bonus_normal_note") : undefined)}
       {pick("weekly_bonus_amount")}
       <label className={"check" + (bad("run/stop_when_weekly_bonus_out") ? " bad" : "")}>
@@ -135,6 +136,7 @@ function RunTab() {
       {pick("starlight_unaffordable")}
       <Field label={t("run.wipe_retries")} path="run/wipe_retries"><Num value={run.wipe_retries} min={0} onChange={(v) => set({ wipe_retries: v })} /></Field>
       {pick("after_retries")}
+      {pick("theme_pack_refresh", t("run.theme_pack_refresh_note"))}
       <Field label={t("run.webhook_url")} path="run/webhook_url">
         <input type="url" value={run.webhook_url} onChange={(e) => set({ webhook_url: e.target.value })} />
       </Field>

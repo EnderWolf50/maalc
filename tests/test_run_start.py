@@ -43,10 +43,22 @@ def test_starlight_never_buys_more_than_available():
 
 
 @pytest.mark.parametrize(("floor", "run_hard", "from_floor", "expected"), [
-    (1, True, 0, True), (5, True, 0, True), (2, True, 3, False), (3, True, 3, True), (1, False, 0, False),
+    (1, True, 1, True), (5, True, 1, True), (2, True, 3, False), (3, True, 3, True), (1, False, 1, False),
+    # The switch off (#137): a hard run here is one the global difficulty "hard" forced (team_difficulty): every floor.
+    (1, True, None, True), (5, True, None, True), (1, False, None, False),
 ])
 def test_hard_wanted(floor, run_hard, from_floor, expected):
     assert rs.hard_wanted(floor, run_hard, from_floor) is expected
+
+
+@pytest.mark.parametrize(("setting", "decided", "from_floor", "expected"), [
+    ("auto", "hard", None, "normal"),  # #137: the switch off plays NORMAL under auto, weekly bonuses or not
+    ("hard", "hard", None, "hard"),  # the global "hard" wins: HARD on every floor
+    ("normal", "normal", None, "normal"),
+    ("auto", "hard", 2, "hard"), ("auto", "normal", 2, "normal"),  # the switch on: as decided
+])
+def test_a_team_with_its_switch_to_hard_off_plays_normal_unless_the_run_says_hard(setting, decided, from_floor, expected):
+    assert rs.team_difficulty(setting, decided, from_floor) == expected
 
 
 @pytest.mark.parametrize(("floor", "shown_hard", "want_hard", "expected"), [
@@ -125,6 +137,22 @@ def test_rank_and_pick():
     assert rs.pick_pack([r for _, r in ranked]) == 2
     assert rs.pick_pack(["neutral", "avoid", "neutral"]) == 0
     assert rs.pick_pack(["avoid", "avoid"]) == 0
+
+
+
+@pytest.mark.parametrize(("setting", "used", "expected"), [
+    ("all", 0, True), ("all", 3, True),  # every free refresh (#25's rule, the default)
+    ("once", 0, True), ("once", 1, False),
+    ("none", 0, False),
+])
+def test_an_all_avoid_page_is_refreshed_as_often_as_the_setting_allows(setting, used, expected):
+    # #41: none / once / all; "all" stops only when a refresh changes nothing (the caller sees that).
+    assert rs.refresh_wanted(["avoid", "avoid", "avoid"], setting, used) is expected
+
+
+@pytest.mark.parametrize("setting", ["none", "once", "all"])
+def test_a_page_with_anything_but_avoid_is_never_refreshed(setting):
+    assert rs.refresh_wanted(["avoid", "neutral", "avoid"], setting, 0) is False
 
 
 @pytest.mark.parametrize(("visible", "target", "expected"), [

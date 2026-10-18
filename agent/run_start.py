@@ -53,8 +53,21 @@ def starlight_purchases(plan, available, unaffordable):
 
 
 def hard_wanted(floor, run_hard, hard_from_floor):
-    """Whether this floor should be HARD: a hard run goes HARD from floor N on, N = 0 means all floors."""
-    return run_hard and floor >= hard_from_floor
+    """Whether this floor should be HARD: a hard run goes HARD from floor N on (1: all floors).
+
+    hard_from_floor None (the team's switch off): a hard run of that team is one the global difficulty "hard"
+    forced (team_difficulty), HARD on every floor (#137).
+    """
+    return run_hard and floor >= (hard_from_floor or 1)
+
+
+def team_difficulty(setting, difficulty, hard_from_floor):
+    """The run's difficulty once the team is picked (#137).
+
+    A team whose switch to hard is off (hard_from_floor None) plays NORMAL, unless the global setting is "hard"
+    outright: then the setting wins. Under "auto" such a team's runs are NORMAL, weekly bonuses left or not.
+    """
+    return "normal" if hard_from_floor is None and setting != "hard" else difficulty
 
 
 def difficulty_move(floor, shown_hard, want_hard):
@@ -142,6 +155,16 @@ def rank_packs(cards, names, marks):
         shared = {marks.get(n, "neutral") for n in title_candidates(title, names)}
         out.append((title, shared.pop() if len(shared) == 1 else "neutral"))
     return out
+
+
+def refresh_wanted(ranks, setting, used):
+    """Whether to use a free refresh: only when every card is avoid, then per the run's theme_pack_refresh.
+
+    "none" never, "once" for the first refresh on the floor, "all" until the caller sees a refresh change nothing.
+    """
+    if not all(r == "avoid" for r in ranks):
+        return False
+    return setting == "all" or (setting == "once" and used == 0)
 
 
 def pick_pack(ranks):

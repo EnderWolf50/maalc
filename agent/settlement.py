@@ -65,8 +65,8 @@ def counts_as_run(result):
 
 
 def runs_done(done, limit):
-    """Whether the run count is reached: limit 0 means no limit (spec 04 section 5)."""
-    return limit > 0 and done >= limit
+    """Whether the run count is reached: limit None (the switch off) means no limit (spec 04 section 5)."""
+    return limit is not None and done >= limit
 
 
 def now():

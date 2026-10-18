@@ -86,6 +86,20 @@ def test_routes_unreadable_off_the_map():
     assert mr.routes(lit(()), 725, -200) is None
 
 
+def test_a_link_along_the_top_row_under_the_resource_bar_edge_still_reads():
+    """#129, live 2026-10-18, floor 3 HARD (2 columns, map at rest: it cannot pan): the top row's centres sit at y 72.
+
+    The link from c1 up (726, 72) to c2 up (981, 72) is lit but its upper side sample (y 59) fell above the
+    readable area, so it read None and c2 up, whose badges and node the HUD covers, was left out.
+    tests/data/map_hard_f3_top.npz is the frame's per-pixel brightness, y 0-299, x 600-1099.
+    """
+    v = np.zeros((720, 1280), np.uint8)
+    v[:300, 600:1100] = np.load(Path(__file__).resolve().parent / "data/map_hard_f3_top.npz")["v"]
+    assert mr.line_contrast(v, 726, 72, 981, 72) >= mr.LINE_CONTRAST
+    assert mr.line_contrast(v, 726, 285, 981, 72) < mr.LINE_CONTRAST  # mid has no link to it
+    assert mr.routes(v, 726, 72) == 2  # c2 up and c2 mid
+
+
 def test_the_lit_links_from_the_bus_read_at_the_far_left():
     """Live 2026-10-18, bus at 50, 320: the chevron templates missed; the lines did not.
 

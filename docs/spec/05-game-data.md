@@ -19,6 +19,7 @@
 | 試煉風險表 | Boss 後的選擇評分 | 開發者每季更新；使用者在設定檔另加覆寫 | 有預設值 | #17、#19 |
 | 選路權重 | 地圖頁選下一個節點 | 開發者 | 有預設值 | #12 |
 | Cost 對照表與商店數字 | 節點 Cost 參考值（不用於辨識）、商店的刷新與治療判斷 | 開發者 | 有預設值 | #10、#12、#19 |
+| 事件表 `event_table.json` | 事件頁依選項的實際效果排序 | 開發者每季從拆包的客戶端資料重新產生（第 7 節） | 1.117.0 的 195 個事件 | #93 |
 | 觀測飾品表 `gift_search.json` 與圖示 `image/GiftSearch/<id>.png` | E.G.O Gift Search 頁找飾品（位置預測、圖示比對）；GUI 的飾品清單 | 開發者每季依遊戲客戶端的觀測表重新產生（產生方式寫在檔頭 `note` 與 [04-settings.md](04-settings.md) 第 9 節） | 這一季的 320 個 | #54 |
 
 ## 2. 主題包方案
@@ -53,7 +54,7 @@
 
 ## 3. 事件覆寫表
 
-**用途**：只放例外。沒列出的事件照通用規則處理：一般選項是「獲得主要體系 E.G.O」> 其他獲得 E.G.O 的選項 > 第一個選項；技能判定選成功率等級最高的罪人。通用規則見 [03-decisions.md](03-decisions.md)。（#11）
+**用途**：只放例外。沒列出的事件照通用規則處理：一般選項依事件表（第 7 節）的實際效果排序，比不到事件表時「獲得主要體系 E.G.O」> 其他獲得 E.G.O 的選項 > 第一個選項；技能判定選成功率等級最高的罪人。通用規則見 [03-decisions.md](03-decisions.md)。（#11、#93）
 
 **內容**：問題文字 → 選項文字。問題文字用模糊比對；選項用選項文字指定，不用位置。一開始是空的，依 `runs.jsonl` 與錯誤截圖逐步補充。不為每個事件寫動作腳本。（#11，[ADR 0005](../adr/0005-game-data-files-separate-from-user-settings.md)）
 
@@ -155,7 +156,25 @@ Risky 節點這一局沒有看到，圖示見 [03-decisions.md](03-decisions.md#
 
 實機的刷新費用（普通 15 → 30、定向 90 → 105）與治療費用（每項 100）和上表一致（實機：captures/107_shop_after_refresh.png、captures/82_shop_heal_page.png）。
 
-## 7. 每季更新檢查清單
+## 7. 事件表
+
+**用途**：事件頁依每個選項的實際效果排序（規則見 [03-decisions.md](03-decisions.md) 第 10 節）。（#93）
+
+**檔案**：`resource/base/data/event_table.json`，由 `tools/event_table.py` 從拆包的事件表（limbus-unpack 的 `scripts/events_md8.py` 產生的 `events-md8.json`，遊戲客戶端 1.117.0 的靜態資料與英文在地化）裁出。檔頭的 `note` 與 `client` 寫來源與版本。使用者不能修改；例外改用事件覆寫表。
+
+**內容**：每個有敘事文字的選擇事件一筆（195 筆，同一頁不同 id 的合併），只留 bot 要用的欄位：
+
+| 欄位 | 內容 |
+|---|---|
+| `id` | 遊戲的事件 id，只供查閱 |
+| `key` | 故事文字的最後 60 個英數字（小寫）：敘事框顯示的是故事結尾 |
+| `options[].text`、`hint` | 選項文字與下方提示（去掉標籤）；畫面上的選項靠這兩項對到表上 |
+| `options[].kind` | `direct`、`random`、`check`、`check_fail_gift`、`followup`、`battle`、`check_other`、`followup_other`、`other` |
+| `options[].gifts` | `[體系, 取得方式]`，取得方式如 `direct`、`check_pass`、`check_fail`、`win_battle`、`later_direct` |
+
+飾品的體系取自靜態資料 `ego-gift-mirrordungeon` 的 `keyword`：`events_md8.py` 取到的是同 id 第一筆、沒有 keyword 的紀錄，會把 Grimy Iron Stake 這類飾品讀成 Keywordless，`tools/event_table.py` 重新查一次。沒有敘事文字的 13 個事件（Boss 戰中途與部分後續頁）不收，照提示文字規則處理。
+
+## 8. 每季更新檢查清單
 
 新一季鏡牢開始時，開發者依序：
 
@@ -163,7 +182,8 @@ Risky 節點這一局沒有看到，圖示見 [03-decisions.md](03-decisions.md#
 2. 更新試煉風險表。（#17）
 3. 檢查選路權重、Cost 對照表與商店數字是否仍符合遊戲。（#10、#12）
 4. 依上一季的記錄補充事件覆寫表。（#11）
-5. 重截約 20 個關鍵畫面加進測試，跑 `maa-tools test`；分數餘裕小於 0.05 的節點標出來檢查。（#13）
-6. 截圖必須經 MaaFramework 控制器縮到短邊 720，遮掉 UID 與帳號名稱。（#13）
+5. 拆包新版客戶端，重跑 `events_md8.py`（換成這一季的鏡牢編號）與 `tools/event_table.py` 更新事件表，NOTICE.md 的版本一併更新。（#93）
+6. 重截約 20 個關鍵畫面加進測試，跑 `maa-tools test`；分數餘裕小於 0.05 的節點標出來檢查。（#13）
+7. 截圖必須經 MaaFramework 控制器縮到短邊 720，遮掉 UID 與帳號名稱。（#13）
 
 這一季 Mirror of Names and Spiders 在 2026-10-15 結束；主題包頁、事件頁、獎勵卡頁、地圖頁的實機截圖要等新一季開始再截。（#11、#12）主題包清單已依 1.117.0 客戶端資料更新（#89）。
