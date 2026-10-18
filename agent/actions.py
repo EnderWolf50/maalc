@@ -53,6 +53,7 @@ STARLIGHT_HEADER = [890, 30, 115, 28]  # "Available"
 STARLIGHT_DIALOG = [480, 210, 320, 35]  # "Continue with selected effects?"
 STARTING_GIFT_HEADER = [780, 145, 230, 35]  # "Selected E.G.O Gift"
 STARLIGHT_AVAILABLE = [1010, 30, 80, 28]
+STARLIGHT_OWNED = [830, 30, 90, 28]  # "4035", "4035-60" while owned starlight pays
 GRACE_ORIGIN_X, GRACE_ORIGIN_Y = (138, 152), (152, 390)  # top-left of card 1; step 198 px per column
 PACK_TITLES = [120, 400, 1040, 100]  # up to 5 cards (live: 5 with two Theme Pack Selection +1 graces)
 
@@ -460,9 +461,10 @@ def grace_selected(image, n):
 
 
 def read_available(context, image):
-    """Available starlight, or None when it reads like "0+60": then owned starlight is being spent."""
+    """Starlight left of Available; negative by what owned starlight pays when it reads like "0+60" (#96)."""
     t = text(context, image, STARLIGHT_AVAILABLE)
-    return None if "+" in t else number(t)
+    m = re.fullmatch(r"\D*(\d+)\s*\+\s*(\d+)\D*", t)
+    return int(m[1]) - int(m[2]) if m else number(t)
 
 
 @AgentServer.custom_action("BuyStarlight")
@@ -471,8 +473,9 @@ class BuyStarlight(CustomAction):
 
     Live 2026-10-14: tapping a card selects it at the level its + / ++ buttons show;
     the buttons only set the level (tapping the lit one turns it back to base).
-    A card dearer than Available is still selected, paid from owned starlight:
-    so every price is checked here first and Available re-read after every tap.
+    A card dearer than Available is still selected, paid from owned starlight: choosing the grace is the
+    user's consent to that (#96), so only Available plus Owned bounds the purchases, and Available is
+    re-read after every tap.
     """
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
@@ -481,9 +484,10 @@ class BuyStarlight(CustomAction):
         image = screen(context)
         available = read_available(context, image)
         if available is None:
-            return stop(context, "starlight page already spends owned starlight")
+            return stuck("could not read Available on the starlight page")
+        owned = re.match(r"\D*(\d+)", text(context, image, STARLIGHT_OWNED))
         unaffordable = run["settings"]["run"]["starlight_unaffordable"]
-        buys, missed = run_start.starlight_purchases(plan, available, unaffordable)
+        buys, missed = run_start.starlight_purchases(plan, available + (int(owned[1]) if owned else 0), unaffordable)
         for n, level, price in missed:
             log(f"grace {n} {level} costs {price}: not bought")
         if missed and unaffordable == "stop":
@@ -501,14 +505,11 @@ class BuyStarlight(CustomAction):
                 now = read_available(context, image)
                 if now != available:
                     break
-            if now is None:
-                tap(context, x + 92, y + 100)  # undo: never pay with owned starlight
-                return stop(context, f"grace {n} would spend owned starlight")
             if now != available - price:
                 return stop(context, f"grace {n} {level}: Available {available} -> {now}, expected -{price}")
-            log(f"grace {n} {level} for {price}, {now} left")
+            log(f"grace {n} {level} for {price}, {now} left" if now >= 0 else f"grace {n} {level} for {price}, {-now} paid from owned starlight")
             available = now
-        run["starlight_unspent"] = available  # added to the Owned box at once unless ConfirmStarlight converts it (#73)
+        run["starlight_unspent"] = max(available, 0)  # added to the Owned box at once unless ConfirmStarlight converts it (#73)
         tap_then(context, 1195, 672, shows(context, STARLIGHT_DIALOG, "Continue with selected"), timeout=3)
         return True
 
@@ -539,9 +540,6 @@ class ConfirmStarlight(CustomAction):
         want = run_start.resolve_plan(run["settings"], run["team"], "starlight")["convert_leftover"]
         for _ in range(4):
             image = screen(context)
-            if "-" in text(context, image, [870, 165, 85, 25]):
-                tap(context, 543, 530)
-                return stop(context, "the graces would spend owned starlight")
             # The line under the checkbox: "Any unspent Starlight will be added ..." when off,
             # "Coverts any remaining Starlight ..." when on.
             note = text(context, image, [660, 395, 320, 90]).lower()
