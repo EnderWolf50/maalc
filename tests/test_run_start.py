@@ -111,6 +111,13 @@ def test_every_pack_of_the_season_matches_itself_and_with_a_letter_lost():
             assert rs.match_title(name[:i] + name[i + 1:], packs) == name, name
 
 
+def test_a_title_alike_to_several_packs_takes_their_mark_when_they_share_it():
+    # Live 2026-10-18, floor 5: OCR read "Line 1" as "Line"; every Line pack is avoided, so is this card.
+    marks = {"Line 1": "avoid", "Line 2": "avoid", "Line 3": "avoid", "To be Crushed": "prefer", "To be Cleaved": "avoid"}
+    ranked = rs.rank_packs([["Line"], ["To be C"]], SHORT + NAMES, marks)
+    assert ranked == [("Line", "avoid"), ("To be C", "neutral")]
+
+
 def test_rank_and_pick():
     marks = {"To be Crushed": "avoid", "Nagel und Hammer": "prefer"}
     ranked = rs.rank_packs([["To be Crushed"], ["Lake World"], ["Nagel und Hammer"]], NAMES, marks)

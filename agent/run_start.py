@@ -95,6 +95,12 @@ def match_title(text, names, min_ratio=0.8):
     wins by a letter at least, so "Sea" inside "Mountain of Corpses, Sea of Blood" loses to the whole title;
     a tie ("Line" for Line 1-3) is None.
     """
+    best = title_candidates(text, names, min_ratio)
+    return best[0] if len(best) == 1 else None
+
+
+def title_candidates(text, names, min_ratio=0.8):
+    """The names tied for the best match of text (match_title), best first; [] when none passes."""
     key = _norm(text)
     found = []
     for name in set(names):
@@ -105,9 +111,7 @@ def match_title(text, names, min_ratio=0.8):
         if r >= min_ratio:
             found.append((r * len(n), name))
     found.sort(reverse=True)
-    if not found or (len(found) > 1 and found[0][0] - found[1][0] < 1):
-        return None
-    return found[0][1]
+    return [name for score, name in found if found[0][0] - score < 1]
 
 
 def match_card(lines, names):
@@ -124,11 +128,19 @@ def match_card(lines, names):
 
 
 def rank_packs(cards, names, marks):
-    """(title, mark) per card; a card that matches no known pack is neutral."""
+    """(title, mark) per card; a card that matches no known pack is neutral.
+
+    A title alike to several packs that share one mark takes it: live, "Line 1" read as "Line", and every
+    Line pack is avoided (#89).
+    """
     out = []
     for lines in cards:
         name, title = match_card(lines, names)
-        out.append((name or title, marks.get(name, "neutral") if name else "neutral"))
+        if name:
+            out.append((name, marks.get(name, "neutral")))
+            continue
+        shared = {marks.get(n, "neutral") for n in title_candidates(title, names)}
+        out.append((title, shared.pop() if len(shared) == 1 else "neutral"))
     return out
 
 
