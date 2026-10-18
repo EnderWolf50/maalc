@@ -564,8 +564,8 @@ class ConfirmStarlight(CustomAction):
             image = screen(context)
             # The line under the checkbox: "Any unspent Starlight will be added ..." when off,
             # "Coverts any remaining Starlight ..." when on.
-            note = normalize(text(context, image, [660, 395, 320, 90]))
-            on = True if "remaining" in note else False if "unspent" in note else None
+            note = text(context, image, [660, 395, 320, 90])
+            on = True if has(note, "remaining") else False if has(note, "unspent") else None
             if on == want:
                 if want:
                     run["starlight_unspent"] = 0
@@ -700,7 +700,7 @@ class GiftSearch(CustomAction):
         names = [g["name"] for g in wanted]
         if has(text(context, screen(context), SEARCH_DIALOG), "Consume"):
             # left open by an earlier try: check the picks again
-            tap_then(context, *SEARCH_DIALOG_BUTTONS["cancel"], lambda im: "Consume" not in text(context, im, SEARCH_DIALOG), timeout=1.5)
+            tap_then(context, *SEARCH_DIALOG_BUTTONS["cancel"], lambda im: not has(text(context, im, SEARCH_DIALOG), "Consume"), timeout=1.5)
         tried, dropped = [], 0
         while True:
             image = screen(context)
@@ -910,7 +910,7 @@ class PickThemePack(CustomAction):
         log(f"floor {floor}: pull {ranked[i][0]!r}")
         swipe(context, x, 330, x, 650, ms=600, wait=0)
         # The page fades out slowly; do not let MirrorHub pull twice.
-        until(context, lambda im: "FLOOR" not in text(context, im, [480, 100, 320, 40]), timeout=9)
+        until(context, lambda im: not has(text(context, im, [480, 100, 320, 40]), "FLOOR"), timeout=9)
         return True
 
     @staticmethod
@@ -1369,7 +1369,7 @@ class Formation(CustomAction):
             RUN["forfeit"] = True
             tap(context, *FORMATION_BACK, wait=2)
             return True
-        if "Details" not in text(context, image, DETAILS_BUTTON):
+        if not has(text(context, image, DETAILS_BUTTON), "Details"):
             tap(context, 826, 125, wait=1.5)  # its » folds the details view (skills, E.G.O), which hides the order marks
             image = screen(context)
         dead = dead_sinners(image)
@@ -1671,7 +1671,7 @@ class Wipe(CustomAction):
         for _ in range(3):
             tap(context, *DEFEAT_OPTIONS[choice], wait=1.2)  # the options are cards: pick one, then Confirm
             tap(context, *DEFEAT_CONFIRM, wait=2.5)
-            if "participating" not in text(context, screen(context), DEFEAT_TEXT):
+            if not has(text(context, screen(context), DEFEAT_TEXT), "participating"):
                 break
         else:
             return stuck(f"the DEFEAT dialog did not take {choice}")
@@ -1925,12 +1925,12 @@ class RewardCard(CustomAction):
         taken = set()
         for _ in range(5):
             image = screen(context)
-            if "Encounter Reward" not in text(context, image, REWARD_TITLE):
+            if not has(text(context, image, REWARD_TITLE), "Encounter Reward"):
                 return True  # gone (or fading in): let MirrorHub look again
             m = re.search(r"(\d)\s*/\s*(\d)", text(context, image, SELECTABLE))
             if m and m[1] == m[2]:
                 tap(context, *CARD_CONFIRM, wait=0)
-                until(context, lambda im: "Encounter Reward" not in text(context, im, REWARD_TITLE))
+                until(context, lambda im: not has(text(context, im, REWARD_TITLE), "Encounter Reward"))
                 return True
             cards = columns(ocr(context, image, CARD_TEXT))
             if not cards or len(taken) == len(cards):
@@ -1977,7 +1977,7 @@ class PickGift(CustomAction):
         lines = [[] for _ in centres]
         for t, (x, y, w, h) in results:
             i = min(range(len(centres)), key=lambda i: abs(centres[i] - x - w // 2))
-            if abs(centres[i] - x - w // 2) < 130 and "Acquire" not in t:
+            if abs(centres[i] - x - w // 2) < 130 and not has(t, "Acquire"):
                 lines[i].append((y, t))
         trials = any(has(t, "Mounting") for t, _ in results)
         risks = data("trial_risks.yaml") | {o["trial"]: o["risk"] for o in run["settings"]["trial_risk_overrides"]}
@@ -2000,7 +2000,7 @@ class PickGift(CustomAction):
         rewards.pick_gifts(ranked, lambda: gift_count(context), pick)
         for _ in range(3):
             tap(context, *GIFT_SELECT, wait=0)
-            if until(context, lambda im: "Refuse" not in text(context, im, REFUSE_GIFT)) is not None:
+            if until(context, lambda im: not has(text(context, im, REFUSE_GIFT), "Refuse")) is not None:
                 return True
         return stuck("Select did not take the gifts")
 
@@ -2267,7 +2267,7 @@ class Shop(CustomAction):
         kind, n = plan
         for x in dead[:n] if kind == "revive" else [None]:
             tap(context, *SHOP_BUTTONS["heal"], wait=2)
-            if "Heal" not in text(context, screen(context), HEAL_TITLE):
+            if not has(text(context, screen(context), HEAL_TITLE), "Heal"):
                 log("shop: the heal page did not open")
                 break
             before = read_cost(context, HEAL_COST)
@@ -2422,7 +2422,7 @@ class Shop(CustomAction):
             return False
         visit["sold"] = True
         tap(context, *SHOP_BUTTONS["sell"], wait=2)
-        if "Sell" not in text(context, screen(context), DIALOG_TITLE):
+        if not has(text(context, screen(context), DIALOG_TITLE), "Sell"):
             Shop.to_main(context)
             return False
         cost = read_cost(context, SELL_COST)
@@ -2451,7 +2451,7 @@ class Shop(CustomAction):
             kind = rewards.gift_kind(panel, team["keyword"], False, avoid)
             if kind != "avoid" and any(shop.protected(t, keep) for t in lines):
                 log(f"shop: sell cell {i} kept: {panel[:40]!r}")
-            elif price and "Select the" not in panel and kind != "main":
+            elif price and not has(panel, "Select the") and kind != "main":
                 gifts.append((i, price))
                 if kind == "avoid":
                     avoided.add(i)
@@ -2477,7 +2477,7 @@ class Shop(CustomAction):
         """
         for _ in range(8):
             time.sleep(0.2)
-            lines = [(t, b) for t, b in ocr(context, screen(context), FUSE_TOOLTIP) if "Owned" not in t]
+            lines = [(t, b) for t, b in ocr(context, screen(context), FUSE_TOOLTIP) if not has(t, "Owned")]
             head = next((b for t, b in lines if re.search(r"O\s*GIFT$", t)), None)
             if head:
                 name = min(((b[1] - head[1], t) for t, b in lines if b[1] > head[1] + 10 and re.search(r"[a-z]{3}", t)),
@@ -2514,7 +2514,7 @@ class Shop(CustomAction):
             return False
         keyword = team["keyword"]
         tap(context, *SHOP_BUTTONS["fuse"], wait=2)
-        if "Fuse" not in text(context, screen(context), DIALOG_TITLE):
+        if not has(text(context, screen(context), DIALOG_TITLE), "Fuse"):
             Shop.to_main(context)
             return False
         tap(context, *FUSE_CENTRE, wait=1.5)
@@ -2648,7 +2648,7 @@ class Settle(CustomAction):
         tap(context, *CLAIM, wait=2)
         for _ in range(5):
             image = screen(context)
-            if "Exploration Reward" not in text(context, image, REWARD_TITLE_ROI):
+            if not has(text(context, image, REWARD_TITLE_ROI), "Exploration Reward"):
                 break
             # Live: Claim asks to confirm with bonuses left and none ON (2026-10-15), and with any ON (2026-10-16).
             # Confirm only the dialog of what the toggles were set and read back to; a bonus is spent only then.

@@ -6,7 +6,7 @@ actions.py reads the pages and taps; everything here is plain data in, plain dat
 import re
 from difflib import SequenceMatcher
 
-from ocrtext import compact
+from ocrtext import compact, normalize
 from run_start import match_pack
 
 ODDS = ("very low", "low", "normal", "high", "very high")
@@ -171,7 +171,7 @@ def pick_checker(captions, skip=()):
 
 def card_type(text):
     """The reward card type its text stands for, or None (spec 03 section 11)."""
-    t = text.lower()
+    t = normalize(text)
     if "starlight" in t:
         return "Starlight"
     if "resource" in t:
