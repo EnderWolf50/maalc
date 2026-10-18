@@ -12,6 +12,11 @@ to upload (`--attach`, `-R`, `git -C`) are fine.
 
 Fails closed: text the hook cannot read (stdin, `$(...)`, a backtick, a heredoc, `--input`, a body file that
 does not exist yet) is denied, because it could carry anything.
+
+Each publishing call is cut at its own boundary, read the way bash reads it (quotes, backslashes, `$(...)`,
+`${...}`, comments). A call inside quotes (`bash -c`, `eval`) or after a heredoc is checked to the end of the
+line. This is a seatbelt against an agent's accidental leak, not a sandbox: a `$var`, a body file rewritten
+earlier in the same command, or text that `xargs` supplies to a text flag still pass.
 """
 import json
 import os
@@ -32,6 +37,7 @@ FIELD = re.compile(r"^[\w.\[\]]+=")  # `-F key=value` is an api field, not a fil
 INPUT = re.compile(r"--input(?:\s|=)")
 UNREADABLE = re.compile(r"\$\(|`|<<-?\s*[\"']?\w")  # command substitution or heredoc
 LOCAL = re.compile(r"\b[A-Za-z]:[\\/]+\w|(?<![\w.])/(?:home|Users|mnt/[a-z])/\w+|~[\\/]\.?\w|file://", re.I)
+HEREDOC = re.compile(r"<<-?\s*[\"']?\w")
 EMPTY_FLAG = re.compile(r"(?<![\w-])(?:--body-file|--notes-file|--file|-F)\s*$")  # xargs supplies the file
 UNREADABLE_REASON = "write the body to a file with the Write tool and pass its absolute Windows path to --body-file"
 
@@ -70,12 +76,27 @@ def base_dir(prefix: str, start_text: str, cwd: str) -> Path:
     return base
 
 
+def quoted(cmd: str) -> set:
+    """Positions inside a quoted argument, read with scan()'s rules."""
+    inside = set()
+    scan(cmd, 0, False, inside)
+    return inside
+
+
+def bare(m, inside: set) -> bool:
+    """The match starts a word of its own, not text in the middle of a quoted argument."""
+    return not (m.start() in inside and m.start() - 1 in inside)
+
+
 def public_text(cmd: str, base: Path) -> tuple[str, bool]:
     """(the part of the call that reaches GitHub or the commit log, whether some of it could not be read)."""
-    unreadable = bool(INPUT.search(cmd)) or bool(UNREADABLE.search(cmd)) or bool(EMPTY_FLAG.search(cmd))
+    unreadable = bool(UNREADABLE.search(cmd)) or any(bare(m, quoted(cmd)) for p in (INPUT, EMPTY_FLAG) for m in p.finditer(cmd))
     files = []
     for pat in (FILE_FLAG, FIELD_FILE):
+        inside = quoted(cmd)
         for m in pat.finditer(cmd):
+            if not bare(m, inside):
+                continue
             value = unquote(m[1])
             if pat is FILE_FLAG and FIELD.match(value):
                 continue
@@ -85,8 +106,10 @@ def public_text(cmd: str, base: Path) -> tuple[str, bool]:
             else:
                 files.append(path.read_text(encoding="utf-8", errors="replace"))
             cmd = cmd.replace(m[0], " ")
-    cmd = re.sub(rf"--attach(?:\s+|=)({ARG})", lambda m: " " + unquote(m[1]).partition("#")[2], cmd)  # keep the alt text
-    cmd = re.sub(rf"(?<![\w-])(?:--repo|-R|-C)\s+{ARG}", " ", cmd)  # on the command line only, never in a body file
+    inside = quoted(cmd)
+    cmd = re.sub(rf"--attach(?:\s+|=)({ARG})", lambda m: " " + unquote(m[1]).partition("#")[2] if bare(m, inside) else m[0], cmd)  # keep the alt text
+    inside = quoted(cmd)
+    cmd = re.sub(rf"(?<![\w-])(?:--repo|-R|-C)\s+{ARG}", lambda m: " " if bare(m, inside) else m[0], cmd)  # on the command line only, never in a body file
     return re.sub(r"https?://\S+", " ", "\n".join([cmd, *files])), unreadable  # a link names a page, never a place here
 
 
@@ -97,35 +120,43 @@ def terms(cwd: str) -> list[str]:
     return [t.strip() for t in found if len(t.strip()) >= 4]
 
 
-def scan(cmd: str, at: int, stop: bool) -> tuple[int, bool]:
+def scan(cmd: str, at: int, stop: bool, inside: set | None = None) -> tuple[int, bool]:
     """(where the call starting at `at` ends, whether a quote or `$(...)` is still open there), the way bash reads it:
     a backslash escapes the next character outside quotes, in "..." and in $'...', never in '...'."""
-    quote, depth, i = "", 0, at
+    quote, closers, i = "", [], at
     while i < len(cmd):
         c = cmd[i]
         if c == "\\" and quote != "\'":
+            if quote and inside is not None:
+                inside.update((i, i + 1))
             i += 2
             continue
         if quote:
+            if inside is not None:
+                inside.add(i)
             if c == "\'" and quote in "\'$" or c == quote:
                 quote = ""
+        elif c == "#" and (i == 0 or cmd[i - 1] in " \t\n;&|()<>"):  # a comment runs to the end of the line
+            nl = cmd.find("\n", i)
+            i = nl if nl >= 0 else len(cmd)
+            continue
         elif cmd.startswith("$\'", i):
             quote, i = "$", i + 1
         elif c in "'\"":
             quote = c
-        elif cmd.startswith("$(", i):
-            depth, i = depth + 1, i + 1
-        elif c == ")" and depth:
-            depth -= 1
-        elif stop and not depth and (c in ";|\n" or cmd.startswith("&&", i)):
+        elif cmd.startswith(("$(", "${"), i):
+            closers, i = closers + [")" if cmd[i + 1] == "(" else "}"], i + 1
+        elif closers and c == closers[-1]:
+            closers.pop()
+        elif stop and not closers and (c in ";|\n" or cmd.startswith("&&", i)):
             break
         i += 1
-    return i, bool(quote or depth)
+    return i, bool(quote or closers)
 
 
 def segment(cmd: str, at: int) -> str:
     """The one call starting at `at`; the rest of the line when the call sits inside quotes (bash -c, eval)."""
-    if scan(cmd[:at], 0, False)[1]:
+    if scan(cmd[:at], 0, False)[1] or HEREDOC.search(cmd[:at]):  # a heredoc body is not read: fail closed
         return cmd[at:]
     return cmd[at:scan(cmd, at, True)[0]]
 
