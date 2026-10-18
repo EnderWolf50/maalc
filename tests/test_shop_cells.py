@@ -1,0 +1,132 @@
+"""The shop's grid cells read by MaaFramework's own template matching (#76, #112), on live captures.
+
+Shop.read_cells runs inside a real MaaFramework task (resource bundle loaded, a still controller), so the badge
+and icon templates, the green mask and the scores are the agent's on the device. The pytest process holds
+MaaFramework in AgentServer mode (actions registers its custom actions), so the task runs in a child process:
+this file run as a script, with AgentServer stubbed before actions is imported.
+"""
+
+import json
+import subprocess
+import sys
+import traceback
+import types
+from pathlib import Path
+
+import numpy as np
+import pytest
+
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT / "agent"))  # run as a script: shop, as pytest's pythonpath has it
+from test_shop import screen_with  # noqa: E402
+SPIDERWEB = {"name": "Spiderweb Entangled in Red", "keyword": "Keywordless", "tier": 3}
+HELLTERFLY = {"name": "Hellterfly's Dream", "keyword": "Burn", "tier": 2}
+
+# name: (crop, the page's cells, the page, observed gifts)
+CASES = {
+    "fuse_spiderweb": ("fuse_spiderweb", "FUSE_CELLS", "fuse", [SPIDERWEB]),
+    "fuse": ("fuse", "FUSE_CELLS", "fuse", [SPIDERWEB, HELLTERFLY]),
+    "sell": ("sell", "SELL_CELLS", "sell", []),
+    "offers": ("offers", "OFFER_CELLS", "offer", []),
+    "offers_super": ("offers_super", "OFFER_CELLS", "offer", []),
+}
+
+
+def child():
+    """Run every case through actions.read_cells in a MaaFramework task; print {case: [(tier, keyword, gift)]}."""
+    from maa.controller import CustomController
+    from maa.custom_action import CustomAction
+    from maa.resource import Resource
+    from maa.tasker import Tasker
+
+    resource = Resource()  # MaaFramework itself, before anything loads the AgentServer library
+    stub = types.ModuleType("maa.agent.agent_server")
+    stub.AgentServer = type("AgentServer", (), {"custom_action": staticmethod(lambda name: lambda c: c),
+                                                "custom_recognition": staticmethod(lambda name: lambda c: c)})
+    sys.modules["maa.agent"] = types.ModuleType("maa.agent")
+    sys.modules["maa.agent.agent_server"] = stub
+    import actions
+
+    class Still(CustomController):
+        def connect(self):
+            return True
+
+        def request_uuid(self):
+            return "test"
+
+        def screencap(self):
+            return np.zeros((720, 1280, 3), np.uint8)
+
+        def __getattr__(self, name):  # start_app, click, swipe, touch_*, keys, text, scroll: nothing moves
+            return lambda *args: True
+
+    out = {}
+
+    class Probe(CustomAction):
+        def run(self, context, argv):
+            try:
+                for case, (crop, cells, page, gifts) in CASES.items():
+                    team = {"gift_search": {"gifts": gifts}}
+                    found = actions.read_cells(context, screen_with(crop), getattr(actions, cells), page,
+                                               actions.observed_gifts(team))
+                    out[case] = [(c["tier"], c["keyword"], c["gift"]) for c in found]
+            except Exception:  # MaaFramework swallows it: hand it to the test
+                out["error"] = traceback.format_exc()
+            return True
+
+    resource.post_bundle(ROOT / "assets" / "resource" / "base").wait()
+    resource.register_custom_action("Probe", Probe())
+    controller = Still()
+    controller.post_connection().wait()
+    tasker = Tasker()
+    tasker.bind(resource, controller)
+    tasker.post_task("Probe", {"Probe": {"action": "Custom", "custom_action": "Probe"}}).wait()
+    print(json.dumps(out))
+
+
+@pytest.fixture(scope="module")
+def read():
+    done = subprocess.run([sys.executable, __file__], capture_output=True, text=True, timeout=300, cwd=ROOT)
+    assert done.returncode == 0, done.stderr[-2000:]
+    out = json.loads(done.stdout.strip().splitlines()[-1])
+    assert "error" not in out, out["error"]
+    return {k: [tuple(c) for c in v] for k, v in out.items()}
+
+
+def test_spiderweb_is_kept_off_its_icon_with_no_tooltip(read):
+    # #112, live 2026-10-18: the observed Spiderweb Entangled in Red (keywordless, III) first; its tooltip read no name.
+    # Only 5 gifts owned: the empty cells are not read.
+    assert read["fuse_spiderweb"] == [(3, "Keywordless", SPIDERWEB["name"]), (2, "Poise", None), (2, "Keywordless", None),
+                                      (1, "Keywordless", None), (1, "Poise", None)]
+
+
+OWNED = [  # ShopFuse.png's gifts, by the game data of the names their tooltips give
+    (2, "Keywordless", None), (1, "Keywordless", None), (3, "Bleed", None),  # two Dark Vestiges, Smokes and Wires
+    (2, "Burn", HELLTERFLY["name"]), (2, "Tremor", None),  # Hellterfly's Dream (observed), Sour Liquor Aroma
+    (2, "Keywordless", None), (2, "Pierce", None), (2, "Keywordless", None),  # New Release Pamphlet, Gathering Skulls, Milepost
+    (2, "Bleed", None), (2, "Keywordless", None),  # White Gossypium, Twinkling Scrap
+    (2, None, None), (2, None, None), (2, None, None), (1, None, None), (1, None, None),  # the third row's badges are cut off
+]
+
+
+def test_the_fuse_page_cells_read_tier_badge_and_observed_icon(read):
+    assert read["fuse"] == OWNED
+
+
+def test_the_sell_page_cells_read_like_the_fuse_pages(read):
+    # The same gifts on the sell page (another layout): the observed gift is not looked for here.
+    assert read["sell"] == [(t, k, None) for t, k, _ in OWNED]
+
+
+def test_the_offers_read_tier_and_badge(read):
+    # Shop.png: Ryōshū's skill, Rags, Plume of Proof, Temporal Bridle, Reverberation.
+    assert read["offers"] == [(None, "Keywordless", None), (1, "Sinking", None), (2, "Pierce", None), (2, "Blunt", None),
+                              (2, "Tremor", None)]
+    # SuperShop.png: ID Skill Search, 2 skills, Special Catalogue; Fiery Down, Polarization, Pendant of Nostalgia,
+    # Gemstone Oscillator.
+    assert read["offers_super"] == [(None, "Keywordless", None)] * 3 + [
+        (2, "Keywordless", None), (2, "Burn", None), (1, "Burn", None), (1, "Poise", None), (1, "Tremor", None)]
+
+
+if __name__ == "__main__":
+    child()

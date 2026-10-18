@@ -3,7 +3,10 @@
 #
 # shop is not in the spec's table: the bot never seeks a shop (every floor has one before the boss),
 # so it ranks after every fight it can recognise and before unknown, on both difficulties.
-# risky: no template yet, the icon has not been seen live (spec 03, 未決 2); it reads as abno or unknown.
+# risky: no template yet, the icon has not been seen live (spec 03, 未決 2). A Cost coin alone whose number
+# is none of battle_costs reads as risky (#91); its wiki costs, 120 and 150, are no battle's.
+# A battle's Cost, either difficulty (spec 05 section 6; live: 75 normal, 85 hard).
+battle_costs: [75, 85]
 normal:
   event: 1
   battle: 2
