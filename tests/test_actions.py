@@ -4,7 +4,7 @@ import json
 import time
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import MagicMock
+from unittest.mock import DEFAULT, MagicMock
 
 import numpy as np
 import pytest
@@ -580,6 +580,68 @@ def test_the_teams_observed_gift_is_kept_out_of_a_fusion(context, monkeypatch):
     assert not actions.Shop.fuse(context, team, {})
     taps = [c.args for c in context.tasker.controller.post_click.call_args_list]
     assert taps.count(actions.FUSE_CELLS[0]) == 2  # tapped in, then out again
+
+
+class Panel:
+    """A battle's skill panel (7 slots, Win Rate label at x 984): a portrait tap swaps the slot's lower skill
+    and its guard skill; the chain drag lights the START disc. units[i] is the unit in slot i (slots
+    reorder by speed every turn); guard[u] whether unit u shows its guard skill."""
+
+    def __init__(self, context, guard):
+        self.xs = actions.battle.slot_xs(984)
+        self.units, self.guard, self.picked, self.dealt = list(range(7)), list(guard), False, 0
+        ctl = context.tasker.controller
+        ctl.post_screencap.return_value.wait.return_value.get.side_effect = self.render
+        ctl.post_click.side_effect = self.click
+        ctl.post_touch_up.side_effect = self.lift
+
+    def click(self, x, y):
+        if y == actions.SLOT_PORTRAIT_Y:
+            u = self.units[min(range(7), key=lambda i: abs(self.xs[i] - x))]
+            self.guard[u] = not self.guard[u]
+        return DEFAULT
+
+    def lift(self, *a):
+        self.picked = True
+        return DEFAULT
+
+    def next_turn(self, order=None):
+        self.picked, self.dealt = False, self.dealt + 1
+        self.units = order or self.units
+
+    def render(self):
+        image = np.zeros((720, 1280, 3), np.uint8)
+        for i, u in enumerate(self.units):
+            x, y = actions.lower_x(self.xs[i]), actions.LOWER_Y
+            if self.guard[u]:  # a flat brown icon, its own shape per unit
+                image[y - 20:y + 20, x - 20:x + 20] = (50, 100, 150)
+                image[y - 15 + u:y - 5 + u, x - 12:x + 2 * u] = (20, 40, 60)
+            else:  # line art: a new skill is dealt each turn
+                rng = np.random.default_rng(100 * u + self.dealt)
+                image[y - 20:y + 20, x - 20:x + 20] = rng.integers(0, 255, (40, 40, 3))
+        if self.picked:
+            image[547:567, 908:928] = 255  # the START disc at (918, 557)
+        return image
+
+
+def portrait_taps(context):
+    return [c for c in context.tasker.controller.post_click.call_args_list if c.args[1] == actions.SLOT_PORTRAIT_Y]
+
+
+def test_a_first_guard_turn_taps_each_portrait_once_when_every_slot_shows_its_skill(context):
+    panel = Panel(context, guard=[False] * 7)
+    lit, _ = actions.PlayTurn.guard(context, 984, (918, 557))
+    assert lit and all(panel.guard)
+    assert len(portrait_taps(context)) == 7
+
+
+
+def test_slots_already_on_guard_are_swapped_off_and_tapped_back(context):
+    # Live (2026-10-18): the swap can stay from the last turn; the first taps then take those slots off guard.
+    panel = Panel(context, guard=[True, False, True, False, False, False, True])
+    lit, _ = actions.PlayTurn.guard(context, 984, (918, 557))
+    assert lit and all(panel.guard)
+    assert len(portrait_taps(context)) == 7 + 3
 
 
 def test_the_shop_stops_tapping_once_the_map_shows(context):

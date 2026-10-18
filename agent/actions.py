@@ -121,8 +121,8 @@ def scroll(context, x, y, dx, dy):
 SCROLL_HOLD = 0.5
 
 
-def drag(context, points, settle=0.3, dwell=0.1, hold=0.0):
-    """One touch through points: down on the first, settle s, then 10 px moves (20 ms each), dwell s on each point.
+def drag(context, points, settle=0.3, dwell=0.1, hold=0.0, pause=0.02):
+    """One touch through points: down on the first, settle s, then 10 px moves pause s apart, dwell s on each point.
 
     Lifts on the last point after hold s; at once by default: a finger held on a battle skill opens its details.
     """
@@ -133,7 +133,7 @@ def drag(context, points, settle=0.3, dwell=0.1, hold=0.0):
         n = max(1, max(abs(x1 - x0), abs(y1 - y0)) // 10)
         for k in range(1, n + 1):
             ctl.post_touch_move(round(x0 + (x1 - x0) * k / n), round(y0 + (y1 - y0) * k / n)).wait()
-            time.sleep(0.02)
+            time.sleep(pause)
         if (x1, y1) != points[-1]:
             time.sleep(dwell)
     time.sleep(hold)
@@ -1248,6 +1248,9 @@ START_DISC = (-66, 26)
 TURN_NUMBER = [55, 57, 45, 30]
 SLOT_PORTRAIT_Y = 665  # tapping a slot's portrait swaps its lower skill and its guard skill
 LOWER_Y = 577  # a slot's lower skill, at rest (while a drag is down it sits at y 665: battle.guard_chain)
+# Live 2026-10-18 (#119): portrait taps 52 ms apart lost 9 of 28, 72 ms apart 1 of 28, 83-350 ms apart none
+# of 168; this wait plus ~50 ms for the tap puts them 150 ms apart.
+GUARD_TAP_WAIT = 0.1
 
 
 def lower_x(x):
@@ -1262,6 +1265,22 @@ def guard_score(image, x):
     v = p.sum(axis=2)
     texture = np.abs(np.diff(v, axis=0)).mean() + np.abs(np.diff(v, axis=1)).mean()
     return float(((r > 90) & (r - g > 20) & (g - b > 10)).mean()), float(texture)
+
+
+def lower_skills(context, xs, before=None, timeout=1.5):
+    """The first screenshot whose lower skills at xs read as they did 0.1 s before, after every one of them
+    swapped from before (battle.guard_shown tells); without before, every one shows something. The last
+    screenshot after timeout s. Live (#119): a swap shows 0.1-0.6 s after the tap and fades for ~0.4 s."""
+    last = [None]
+
+    def done(image):
+        now = [guard_score(image, x) for x in xs]
+        steady = last[0] is not None and all(abs(a[1] - b[1]) <= 2 for a, b in zip(now, last[0]))
+        last[0] = now
+        changed = None not in battle.guard_shown(before, now) if before else min(t for _, t in now) > 20
+        return steady and changed
+    image = until(context, done, timeout=timeout, every=0.1)
+    return screen(context) if image is None else image
 
 
 def win_rate_on(context, image, x, y):
@@ -1324,7 +1343,7 @@ class PlayTurn(CustomAction):
     def guard(context, x, disc):
         """Pick every slot's guard skill: (whether the START disc lit, the screen after).
 
-        A portrait tap swaps the slot's lower skill and its guard skill, and the game keeps the swap
+        A portrait tap swaps the slot's lower skill and its guard skill, and the game can keep the swap
         from turn to turn, so every portrait is tapped once and the lower skills compared before and
         after (the check that every slot shows its guard skill); the slots that went off guard are
         tapped back. Then one drag from the left gear through every slot's lower skill picks them
@@ -1332,35 +1351,34 @@ class PlayTurn(CustomAction):
         (banners, chain and glow cover them), so the picks are not read back: the lit disc says
         every slot has a pick.
         """
-        time.sleep(1)  # live: a battle's first turn slides the portraits in late
-        image = screen(context)
-        lows = [lower_x(sx) for sx in battle.slot_xs(x)]
+        xs = battle.slot_xs(x)
+        lows = [lower_x(sx) for sx in xs]
+        image = lower_skills(context, lows)  # live: a battle's first turn slides the portraits in late
         before = [guard_score(image, lx) for lx in lows]
-        for sx in battle.slot_xs(x):
-            tap(context, sx, SLOT_PORTRAIT_Y, wait=0.4)
-        time.sleep(0.8)
-        image = screen(context)
+        for sx in xs:
+            tap(context, sx, SLOT_PORTRAIT_Y, wait=GUARD_TAP_WAIT)
+        image = lower_skills(context, lows, before)
         after = [guard_score(image, lx) for lx in lows]
         shown = battle.guard_shown(before, after)
         unsure = [i for i, s in enumerate(shown) if s is None]
         if unsure:  # live: the glow on a unit's slot flickers; swap those back and compare once more
             for i in unsure:
-                tap(context, battle.slot_xs(x)[i], SLOT_PORTRAIT_Y, wait=0.4)
-            time.sleep(0.8)
-            image = screen(context)
+                tap(context, xs[i], SLOT_PORTRAIT_Y, wait=GUARD_TAP_WAIT)
+            image = lower_skills(context, [lows[i] for i in unsure], [after[i] for i in unsure])
             again = battle.guard_shown([after[i] for i in unsure], [guard_score(image, lows[i]) for i in unsure])
             for i, s in zip(unsure, again):
                 shown[i] = s
         if None in shown:
             log(f"guard: cannot tell the guard skill of slots {[i + 1 for i, s in enumerate(shown) if s is None]}")
             return False, image
-        for sx, on in zip(battle.slot_xs(x), shown):
+        for sx, on in zip(xs, shown):
             if not on:
-                tap(context, sx, SLOT_PORTRAIT_Y, wait=0.4)
-        drag(context, battle.guard_chain(battle.slot_xs(x)))
-        time.sleep(1)
-        image = screen(context)
-        return battle.disc_lit(image, *disc), image
+                tap(context, sx, SLOT_PORTRAIT_Y, wait=GUARD_TAP_WAIT)
+        # Live (#119): 10 px moves 10 ms apart, 0.05 s settle, no dwell: 0.7 s and 30/30 guard picks; 20 ms
+        # apart with 0.3 s settle and 0.1 s dwell took 2.2 s. Twice as fast (20 px moves) picked upper skills.
+        drag(context, battle.guard_chain(xs), settle=0.05, dwell=0, pause=0.01)
+        lit = until(context, lambda im: battle.disc_lit(im, *disc), timeout=1.5)
+        return lit is not None, screen(context) if lit is None else lit
 
 
 @AgentServer.custom_action("Victory")
