@@ -6,6 +6,7 @@ actions.py reads the pages and taps; everything here is plain data in, plain dat
 import re
 from difflib import SequenceMatcher
 
+from ocrtext import compact
 from run_start import match_pack
 
 ODDS = ("very low", "low", "normal", "high", "very high")
@@ -29,7 +30,7 @@ def pick_choice(options, keyword, override=None, closed=(), event=None):
     open_ = [i for i in range(len(options)) if i not in closed]
     if override:
         for i in open_:
-            if _norm(override) in _norm(options[i]):
+            if compact(override) in compact(options[i]):
                 return i
     if event:
         return min(open_, key=lambda i: (*_rank(options[i], _entry(options[i], event), keyword), i), default=None)
@@ -201,15 +202,15 @@ def gift_kind(text, keyword, owned, avoid=()):
 
 def names_gift(text, name, min_ratio=0.8):
     """Whether OCR text names the gift: the name's longest word shows in it, an OCR slip or two allowed."""
-    word, key = _norm(max(name.split(), key=len)), _norm(text)
+    word, key = compact(max(name.split(), key=len)), compact(text)
     return any(SequenceMatcher(None, key[i:i + len(word)], word).ratio() >= min_ratio
                for i in range(max(1, len(key) - len(word) + 1)))
 
 
 def trial_risk(text, risks):
     """Risk of the trial named in text (one OCR line); MAX_RISK when it is not in the table."""
-    exact = {_norm(n): n for n in risks}  # "Growth I" and "Growth II" are too alike for the fuzzy margin
-    name = exact.get(_norm(text)) or match_pack(text, list(risks))
+    exact = {compact(n): n for n in risks}  # "Growth I" and "Growth II" are too alike for the fuzzy margin
+    name = exact.get(compact(text)) or match_pack(text, list(risks))
     if name and _numeral(name) != _numeral(text):
         name = None  # fuzzy "Growth II" -> "Growth I" would understate the risk
     return risks[name] if name else MAX_RISK
@@ -255,10 +256,6 @@ def pick_gifts(ranked, read, tap):
             tap(i)
             now = read()
         count = now or count
-
-
-def _norm(s):
-    return "".join(c for c in s.lower() if c.isalnum())
 
 
 def _key(s):

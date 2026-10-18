@@ -119,7 +119,7 @@ def test_every_pack_of_the_season_matches_itself_and_with_a_letter_lost():
     for name in packs:
         assert rs.match_title(name, packs) == name
         i = len(name) // 2
-        if len(rs._norm(name)) >= 6:
+        if len(rs.compact(name)) >= 6:
             assert rs.match_title(name[:i] + name[i + 1:], packs) == name, name
 
 

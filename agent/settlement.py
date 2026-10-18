@@ -8,6 +8,8 @@ import re
 from datetime import datetime, timezone
 from pathlib import Path
 
+from ocrtext import has
+
 
 def read_result(text):
     """(floor, hard, cleared, total) from the window's result, e.g. "Floor 5 [NORMAL] 6/6"; None when unreadable."""
@@ -50,11 +52,11 @@ def claim_dialog(text):
     and none ON, or `Claim the rewards?` when none are left (live 2026-10-17); bonus: Claim with toggles
     ON, `Spend your 「Weekly Bonuses」 to claim the bonus rewards?`.
     """
-    if "without claiming" in text:
+    if has(text, "without claiming"):
         return "giveup"
-    if "without using" in text or "Claim the rewards" in text:
+    if has(text, "without using", "Claim the rewards"):
         return "no_bonus"
-    if "Spend your" in text:
+    if has(text, "Spend your"):
         return "bonus"
     return None
 
