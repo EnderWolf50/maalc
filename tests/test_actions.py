@@ -644,6 +644,32 @@ def test_slots_already_on_guard_are_swapped_off_and_tapped_back(context):
     assert len(portrait_taps(context)) == 7 + 3
 
 
+def gesture(context, clock):
+    """Record the touch events with the fake clock's time: [(kind, (x, y), t)]."""
+    events = []
+    ctl = context.tasker.controller
+    for kind in ("down", "move", "up"):
+        def record(*a, kind=kind):
+            events.append((kind, a[:2], sum(clock)))
+            return DEFAULT
+        getattr(ctl, f"post_touch_{kind}").side_effect = record
+    return events
+
+
+def test_a_scroll_stops_dead_where_it_was_sent(context, clock):
+    # #114 (live 2026-10-18): the game eats the first move (its drag threshold) and flings the content on with
+    # what speed the finger still had at the lift, decaying while the finger rests: 0.55 s still after 20 px moves
+    # 10 ms apart left at most 1 px over 126 drags; resting after the threshold move keeps the next one whole.
+    events = gesture(context, clock)
+    actions.scroll(context, 430, 590, 0, -300)
+    moves = [(xy, t) for kind, xy, t in events if kind == "move"]
+    assert moves[0][0] == (430, 580)  # 10 px: what the threshold eats
+    assert moves[-1][0] == (430, 280)  # then the 300 px asked for
+    assert moves[1][1] - moves[0][1] >= 0.05
+    assert events[-1][0] == "up" and events[-1][2] - moves[-1][1] >= 0.55
+    assert events[-1][2] - events[0][2] < 0.9  # live: 0.77 s for 300 px, 1.25 s before
+
+
 def test_the_shop_stops_tapping_once_the_map_shows(context):
     # Live 2026-10-18: the shop was left by hand mid-visit; its next taps opened a map node's panel.
     offers = [("Bone Stake", (575, 333, 90, 17)), ("120", (600, 306, 40, 24)),
