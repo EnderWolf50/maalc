@@ -1467,6 +1467,55 @@ def win_rate_on(context, image, x, y):
     return bool(detail and detail.hit)
 
 
+def start_shown(context, image, disc):
+    """Whether the START plaque hangs over the disc: the game shows it only once every slot has a skill (#145).
+
+    The disc lights as soon as any slot is linked, so it cannot tell a chain that ended short. Live 2026-10-18:
+    the plaque template scored 0.58-1.0 with it (0.58-0.66 mid-swing) and 0.20-0.35 without it on 431 screens
+    of every floor, the snow maps included; it swings in 0.53-0.7 s after the drag's lift, after START works.
+    """
+    x, y = disc
+    return seen(context, image, "BattleStart", [x - 45, y - 75, 95, 45]) is not None
+
+
+def turn_started(context, image):
+    """The turn plays out: the pause button is up, or the Win Rate label is gone."""
+    return seen(context, image, "BattlePause") is not None or seen(context, image, "BattleTurn") is None
+
+
+# Live 2026-10-18 (#145): a turn starts 0.45-0.7 s after START. Right after a drag the panel tilts back for
+# ~0.15 s and the Win Rate label does not match: the first look waits START_LEAST s.
+START_WAIT = 1.5
+START_LEAST = 0.3
+# The plaque appears tilted on the disc's right once the chain is complete, rests there ~0.3 s and swings up to
+# the top: upright (template >= 0.5) 0.33-0.47 s after the panel levels, settled from 0.40-0.53 s (30 fps
+# recording, 3 drags; 0.48-0.71 s after the lift in 73 drags polled by screenshot). A minimised emulator held it
+# mid-swing for over 2 s, so "no plaque" is only concluded after this much more polling.
+PLAQUE_WAIT = 1.5
+
+
+def press_start(context, disc):
+    """Press START: whether the turn starts. Pressed once more when it did not although the plaque shows
+    (looked for up to PLAQUE_WAIT s: it can still be swinging in)."""
+    for _ in range(2):
+        tap(context, *disc, wait=0)
+        if until(context, lambda im: turn_started(context, im), timeout=START_WAIT, least=START_LEAST) is not None:
+            return True
+        if until(context, lambda im: start_shown(context, im, disc), timeout=PLAQUE_WAIT, every=0.1) is None:
+            return False
+    return False
+
+
+# The guard chain drag, slower on each try (#145, live 2026-10-18, 12 slots). The game links a slot only if it
+# draws a frame while the finger is on it; during the drag it draws 9-30 frames a second, fewer under load
+# or with its window covered or minimised. 10 px moves 10 ms apart and no rest (#119) missed 7 of 88 drags
+# whose frames came within 90 ms (p90) and 27 of 43 slower; a 0.03 s rest on each slot 0 of 90 and 11 of 32;
+# a 0.1 s rest 14 of 14 at 9-12 frames a second (16 cores busy). A miss costs ~2 s to see and clear.
+GUARD_DRAGS = ({"settle": 0.05, "dwell": 0.03, "hold": 0.05, "pause": 0.01},
+               {"settle": 0.05, "dwell": 0.1, "hold": 0.1, "pause": 0.02},
+               {"settle": 0.05, "dwell": 0.2, "hold": 0.1, "pause": 0.02})
+
+
 @AgentServer.custom_action("PlayTurn")
 class PlayTurn(CustomAction):
     """Guard or Win Rate (one tap), press the START disc, check the turn plays (spec 03 section 8, 06)."""
@@ -1492,46 +1541,59 @@ class PlayTurn(CustomAction):
                 # with the camera; no chain starts from the ring. The guard turns wait for a battle that has one.
                 log(f"turn {turn}: hollow left gear (focused encounter): Win Rate, guard turns kept")
             else:
-                guarded, image = self.guard(context, x, (dx, dy))
+                guarded = self.guard(context, x, (dx, dy))
                 if not guarded:
                     log(f"turn {turn}: guard did not take, Win Rate instead")
-        for _ in range(2):
-            if battle.disc_lit(image, dx, dy):
-                break
-            # Win Rate toggles: a second tap clears the skills the first picked, so it is tapped again only
-            # when its label does not show pressed: live, a tap in the turn's opening did nothing (#58).
-            tap(context, x + WIN_RATE[0], y + WIN_RATE[1], wait=0)
-            lit = until(context, lambda im: battle.disc_lit(im, dx, dy), timeout=1.5)
-            image = screen(context) if lit is None else lit
-            if lit is not None or win_rate_on(context, image, x, y):
-                break
-            log(f"turn {turn}: Win Rate did not take")
-        if not battle.disc_lit(image, dx, dy):
-            # Live 2026-10-17 (#69): a ready disc that read unlit stalled the battle. The check below tells
-            # whether the press started the turn; an unready disc is not expected to (unverified live).
-            log(f"turn {turn}: START reads unlit, pressing it anyway")
-        tap(context, dx, dy, wait=0)
-        if until(context, lambda im: seen(context, im, "BattlePause") or not seen(context, im, "BattleTurn"), timeout=3) is not None:
-            if guarded:
-                RUN["guard"] = battle.guard_left(RUN["guard"], guarded)
-                log(f"turn {turn}: started on guard, {RUN['guard']} guard turns left")
-            else:
-                log(f"turn {turn}: started")
-            return True
-        log(f"turn {turn}: START did not start the turn")
+        if guarded:
+            RUN["guard"] = battle.guard_left(RUN["guard"], guarded)
+            log(f"turn {turn}: started on guard, {RUN['guard']} guard turns left")
+        elif self.win_rate(context, x, y, (dx, dy), turn):
+            log(f"turn {turn}: started")
+        else:
+            log(f"turn {turn}: START did not start the turn")
         return True
 
     @staticmethod
+    def win_rate(context, x, y, disc, turn):
+        """Win Rate (one tap), then START at once: whether the turn started. If it did not, the picks are
+        cleared at the left gear and Win Rate and START are tried once more, here rather than on MirrorHub's
+        next looks (#145: those took 3 submits, a stuck and recovery L1, ~23 s)."""
+        for attempt in range(2):
+            image = screen(context)
+            for _ in range(2):
+                if battle.disc_lit(image, *disc) or start_shown(context, image, disc):
+                    break
+                # Win Rate toggles: a second tap clears the skills the first picked, so it is tapped again only
+                # when its label does not show pressed: live, a tap in the turn's opening did nothing (#58).
+                tap(context, x + WIN_RATE[0], y + WIN_RATE[1], wait=0)
+                lit = until(context, lambda im: battle.disc_lit(im, *disc), timeout=1.5)
+                image = screen(context) if lit is None else lit
+                if lit is not None or win_rate_on(context, image, x, y):
+                    break
+                log(f"turn {turn}: Win Rate did not take")
+            if press_start(context, disc):
+                return True
+            xs = battle.slot_xs(x)
+            if attempt == 0 and xs:
+                # A chain left short (the disc lights, START does nothing) or picks the game dropped.
+                log(f"turn {turn}: START did not start the turn: clearing the picks for Win Rate again")
+                tap(context, *battle.guard_chain(xs)[0], wait=0)
+                until(context, lambda im: not battle.disc_lit(im, *disc), timeout=1)
+        return False
+
+    @staticmethod
     def guard(context, x, disc):
-        """Pick every slot's guard skill: (whether the START disc lit, the screen after).
+        """Pick every slot's guard skill and press START: whether the turn started on guard.
 
         A portrait tap swaps the slot's lower skill and its guard skill, and the game can keep the swap
         from turn to turn, so every portrait is tapped once and the lower skills compared before and
         after (the check that every slot shows its guard skill); the slots that went off guard are
         tapped back. Then one drag from the left gear through every slot's lower skill picks them
-        (battle.guard_chain); no Win Rate. Live, the picked icons could not be told apart reliably
-        (banners, chain and glow cover them), so the picks are not read back: the lit disc says
-        every slot has a pick.
+        (battle.guard_chain); no Win Rate. START is pressed right after it. The picked icons cannot be told
+        apart reliably (banners, chain and glow cover them) and the disc lights with one slot linked, so a turn
+        that does not start means the chain ended short (#145): a tap on the left gear clears it (a chain
+        cannot be continued from its last slot) and a slower drag links it again (GUARD_DRAGS). A drag that
+        links nothing (a hollow gear, #127) is not tried again.
         """
         xs = battle.slot_xs(x)
         lows = [lower_x(sx) for sx in xs]
@@ -1552,15 +1614,25 @@ class PlayTurn(CustomAction):
                 shown[i] = s
         if None in shown:
             log(f"guard: cannot tell the guard skill of slots {[i + 1 for i, s in enumerate(shown) if s is None]}")
-            return False, image
+            return False
         for sx, on in zip(xs, shown):
             if not on:
                 tap(context, sx, SLOT_PORTRAIT_Y, wait=GUARD_TAP_WAIT)
-        # Live (#119): 10 px moves 10 ms apart, 0.05 s settle, no dwell: 0.7 s and 30/30 guard picks; 20 ms
-        # apart with 0.3 s settle and 0.1 s dwell took 2.2 s. Twice as fast (20 px moves) picked upper skills.
-        drag(context, battle.guard_chain(xs), settle=0.05, dwell=0, pause=0.01)
-        lit = until(context, lambda im: battle.disc_lit(im, *disc), timeout=1.5)
-        return lit is not None, screen(context) if lit is None else lit
+        chain = battle.guard_chain(xs)
+        for n, params in enumerate(GUARD_DRAGS, 1):
+            drag(context, chain, **params)
+            # Live (#145): the panel tilts back for ~0.15 s after the lift; a START pressed in it was lost 4 times
+            # in 18. The Win Rate label matching again says it is back.
+            until(context, lambda im: seen(context, im, "BattleTurn") is not None, timeout=1, every=0.05)
+            if press_start(context, disc):
+                return True
+            if not battle.disc_lit(screen(context), *disc):
+                log("guard: the chain drag linked nothing")
+                return False
+            log(f"guard: START did not start the turn after chain drag {n} ({params['dwell']} s a slot): clearing it")
+            tap(context, *chain[0], wait=0)
+            until(context, lambda im: not battle.disc_lit(im, *disc), timeout=1)
+        return False
 
 
 @AgentServer.custom_action("Victory")

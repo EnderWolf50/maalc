@@ -1224,6 +1224,11 @@ def test_an_event_after_a_pause_starts_its_own_clock(context):
     assert actions.STUCK["flag"] is None
 
 
+GEAR = (272, 557)  # the left gear of a 7-slot panel (battle.guard_chain)
+DISC = (918, 557)  # its START disc
+WIN_RATE_XY = (1004, 545)
+
+
 class Choices:
     """An event's choice page: option cards 130 px tall, 18 apart from y 170, in the list's view y 165-512;
     more than fit show a scrollbar and scroll() moves them. options are (text, hint); OCR reads a line only
@@ -1326,29 +1331,71 @@ def test_an_option_cut_off_with_no_scrollbar_still_scrolls(context, monkeypatch)
 
 class Panel:
     """A battle's skill panel (7 slots, Win Rate label at x 984): a portrait tap swaps the slot's lower skill
-    and its guard skill; the chain drag lights the START disc. units[i] is the unit in slot i (slots
-    reorder by speed every turn); guard[u] whether unit u shows its guard skill."""
+    and its guard skill. A drag from the left gear links the chain, all but drops[k] slots on the k-th drag
+    (live #145: under load the finger crosses a slot between two frames and the chain ends there); a drag
+    from the gear or a tap on it while a chain is linked clears it. The disc lights once anything is linked,
+    the START plaque shows (and START starts the turn) only once every slot is. units[i] is the unit in
+    slot i (slots reorder by speed every turn); guard[u] whether unit u shows its guard skill. The plaque swings
+    in plaque_after s after the chain is complete (live 2026-10-18, 30 fps recording: upright 0.33-0.47 s after
+    the panel levels, ~0.5-0.65 s after the lift; a minimised emulator held it mid-swing for over 2 s)."""
 
-    def __init__(self, context, guard):
+    def __init__(self, context, guard, drops=(), lost_start=0, plaque_after=0.6):
         self.xs = actions.battle.slot_xs(984)
-        self.units, self.guard, self.picked, self.dealt = list(range(7)), list(guard), False, 0
+        self.units, self.guard, self.dealt = list(range(7)), list(guard), 0
+        self.linked, self.win_rate, self.started, self.at, self.lifted = 0, False, False, None, -1.0
+        self.drops, self.lost_start, self.plaque_after, self.complete_at = list(drops), lost_start, plaque_after, None
+        self.drags = []  # how long each chain drag took, s
         ctl = context.tasker.controller
         ctl.post_screencap.return_value.wait.return_value.get.side_effect = self.render
         ctl.post_click.side_effect = self.click
+        ctl.post_touch_down.side_effect = self.down
         ctl.post_touch_up.side_effect = self.lift
+        context.run_recognition.side_effect = self.recognise
+
+    def down(self, x, y, *a):
+        self.at, self.t0 = (x, y), actions.time.monotonic()
+        return DEFAULT
+
+    def lift(self, *a):
+        self.lifted = actions.time.monotonic()
+        if self.at == GEAR:
+            if self.linked:
+                self.linked = 0
+            else:
+                self.linked = 7 - (self.drops.pop(0) if self.drops else 0)
+                self.complete_at = self.lifted if self.linked == 7 else None
+                self.drags.append(actions.time.monotonic() - self.t0)
+        return DEFAULT
 
     def click(self, x, y):
         if y == actions.SLOT_PORTRAIT_Y:
             u = self.units[min(range(7), key=lambda i: abs(self.xs[i] - x))]
             self.guard[u] = not self.guard[u]
+        elif (x, y) == GEAR:
+            self.linked = 0
+            self.win_rate = False
+        elif (x, y) == WIN_RATE_XY:
+            self.win_rate = not self.win_rate
+            self.linked = 7 if self.win_rate else 0
+            self.complete_at = actions.time.monotonic() if self.win_rate else None
+        elif (x, y) == DISC and self.linked == 7 and actions.time.monotonic() - self.lifted >= 0.15:
+            # live #145: a press while the panel still tilts back from a drag misses the disc
+            if self.lost_start:
+                self.lost_start -= 1
+            else:
+                self.started = True
         return DEFAULT
 
-    def lift(self, *a):
-        self.picked = True
-        return DEFAULT
+    def recognise(self, name, image, override=None):
+        node = (override or {}).get(name, {})
+        plaque = self.linked == 7 and actions.time.monotonic() - self.complete_at >= self.plaque_after
+        hit = {"BattlePause": self.started, "BattleStart": plaque,
+               "BattleTurn": not self.started and actions.time.monotonic() - self.lifted >= 0.15  # live: the panel
+               and (self.win_rate or "Pressed" not in node.get("template", ""))}  # tilts back 0.15 s, the label gone
+        return SimpleNamespace(hit=True, box=[984, 531, 40, 20]) if hit.get(name) else None
 
     def next_turn(self, order=None):
-        self.picked, self.dealt = False, self.dealt + 1
+        self.linked, self.started, self.win_rate, self.dealt = 0, False, False, self.dealt + 1
         self.units = order or self.units
 
     def render(self):
@@ -1361,7 +1408,7 @@ class Panel:
             else:  # line art: a new skill is dealt each turn
                 rng = np.random.default_rng(100 * u + self.dealt)
                 image[y - 20:y + 20, x - 20:x + 20] = rng.integers(0, 255, (40, 40, 3))
-        if self.picked:
+        if self.linked:
             image[547:567, 908:928] = 255  # the START disc at (918, 557)
         return image
 
@@ -1370,20 +1417,69 @@ def portrait_taps(context):
     return [c for c in context.tasker.controller.post_click.call_args_list if c.args[1] == actions.SLOT_PORTRAIT_Y]
 
 
+def guard_turn(context, guard_left=3):
+    actions.RUN["guard"] = guard_left
+    return actions.PlayTurn().run(context, SimpleNamespace(box=[984, 531, 40, 20]))
+
+
 def test_a_first_guard_turn_taps_each_portrait_once_when_every_slot_shows_its_skill(context):
     panel = Panel(context, guard=[False] * 7)
-    lit, _ = actions.PlayTurn.guard(context, 984, (918, 557))
-    assert lit and all(panel.guard)
+    assert actions.PlayTurn.guard(context, 984, DISC)
+    assert panel.started and all(panel.guard)
     assert len(portrait_taps(context)) == 7
-
+    assert [c.args for c in context.tasker.controller.post_click.call_args_list].count(DISC) == 1
 
 
 def test_slots_already_on_guard_are_swapped_off_and_tapped_back(context):
     # Live (2026-10-18): the swap can stay from the last turn; the first taps then take those slots off guard.
     panel = Panel(context, guard=[True, False, True, False, False, False, True])
-    lit, _ = actions.PlayTurn.guard(context, 984, (918, 557))
-    assert lit and all(panel.guard)
+    assert actions.PlayTurn.guard(context, 984, DISC)
+    assert panel.started and all(panel.guard)
     assert len(portrait_taps(context)) == 7 + 3
+
+
+def test_a_chain_that_misses_its_tail_is_cleared_and_dragged_again_slower_before_the_turn_starts(context):
+    # #145 (live 2026-10-18): the chain ended two slots short, the disc lit anyway and START did nothing.
+    panel = Panel(context, guard=[False] * 7, drops=[2])
+    guard_turn(context)
+    assert panel.started and panel.linked == 7 and not panel.win_rate
+    assert len(panel.drags) == 2 and panel.drags[1] > panel.drags[0]
+    assert actions.RUN["guard"] == 2
+
+
+def test_a_chain_that_never_links_falls_back_to_win_rate_and_keeps_the_guard_turn(context):
+    # Every drag misses (a heavily loaded PC): the chain is cleared so Win Rate picks every slot; the turn does
+    # not count as a guard turn.
+    panel = Panel(context, guard=[False] * 7, drops=[1, 1, 1])
+    guard_turn(context)
+    assert panel.started and panel.win_rate
+    assert len(panel.drags) == 3
+    assert actions.RUN["guard"] == 3
+
+
+def test_start_is_pressed_again_within_the_call_when_the_first_press_is_lost(context):
+    # #145: a START that did not take went back to MirrorHub: 3 more looks, a stuck and recovery, ~23 s a time.
+    panel = Panel(context, guard=[False] * 7, lost_start=1)
+    guard_turn(context)
+    assert panel.started
+    assert actions.RUN["guard"] == 2
+    assert actions.STUCK["flag"] is None
+
+
+def test_a_plaque_still_swinging_in_is_waited_for_before_the_chain_is_dragged_again(context):
+    # PR #148 follow-up: a minimised emulator held the plaque mid-swing for over 2 s; one look after START did not
+    # take read "no plaque", cleared a complete chain and dragged it again. The plaque is waited for instead.
+    panel = Panel(context, guard=[False] * 7, lost_start=1, plaque_after=2.5)
+    guard_turn(context)
+    assert panel.started and len(panel.drags) == 1
+    assert actions.RUN["guard"] == 2
+
+
+def test_a_win_rate_turn_presses_start_at_once_and_counts_no_guard_turn(context):
+    panel = Panel(context, guard=[False] * 7)
+    guard_turn(context, guard_left=0)
+    assert panel.started and panel.win_rate
+    assert len(portrait_taps(context)) == 0 and actions.RUN["guard"] == 0
 
 
 def test_a_guard_turn_on_a_hollow_gear_plays_win_rate_and_keeps_its_guard_turn(context):

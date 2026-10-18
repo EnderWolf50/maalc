@@ -337,6 +337,13 @@
         "pre_delay": 0,
         "post_delay": 500
     },
+    // The START plaque over the disc: every slot has a skill (#145). The agent sets the roi from the disc.
+    "BattleStart": {
+        "recognition": "TemplateMatch",
+        "roi": [870, 480, 140, 60],
+        "template": "Battle/BattleStart.png",
+        "threshold": 0.5
+    },
     // After the floor 5 boss (live 1.117.0); the run's counterpart of DefeatScreen.
     "RunVictory": {
         "recognition": "OCR",
