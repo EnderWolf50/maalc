@@ -28,7 +28,8 @@ def clock(monkeypatch):
 
 
 @pytest.fixture
-def context(clock):
+def context(clock, monkeypatch):
+    monkeypatch.setattr(actions, "FEATURE_MATCH", set())  # fakes read every roi in screen coordinates: no cut-outs
     ctx = MagicMock()
     ctx.tasker.controller.post_screencap.return_value.wait.return_value.get.return_value = np.zeros((720, 1280, 3), np.uint8)
     ctx.run_recognition.return_value = None  # OCR reads nothing, no node hits
