@@ -96,6 +96,8 @@ const screens: [image: string, hits: string[]][] = [
   ['SuperShop.png', ['Shop']],
   ['ShopPurchase.png', ['Shop']],
   ['ShopFuse.png', ['Shop']],
+  // #103 (live 2026-10-17, 1080p capture scaled to 720p): a fixed recipe's Fusion Available section over the owned gifts
+  ['ShopFuseRecipe.png', ['Shop', 'ShopFusionAvailable']],
   ['ShopHeal.png', []],
 ]
 
