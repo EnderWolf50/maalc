@@ -27,6 +27,24 @@ def test_node_type(marks, expected):
     assert mr.node_type(marks) == expected
 
 
+def test_the_column_before_the_boss_is_the_shop():
+    # Live 2026-10-18 (floor 1 orange, floor 2 cyan): bus, one node read as an event, then the boss. Every path ends
+    # at the shop, the last column before the boss, whatever the node's mark reads (#146).
+    slots, ahead = {"up": ("event", 1)}, [{"up": ("boss", {"up"})}]
+    mr.shop_before_boss(slots, ahead)
+    assert slots == {"up": ("shop", 1)}
+    # Further out: only the column that holds the boss' neighbour changes; the columns before stay as read.
+    slots = {"mid": ("battle", 2), "down": ("event", 1)}
+    ahead = [{"mid": ("event", {"mid", "down"}), "down": ("battle", {"down"})}, {"mid": ("boss", {"mid", "down"})}]
+    mr.shop_before_boss(slots, ahead)
+    assert slots == {"mid": ("battle", 2), "down": ("event", 1)}
+    assert ahead[0] == {"mid": ("shop", {"mid", "down"}), "down": ("shop", {"down"})}
+    # No boss on screen: nothing is a shop by position.
+    slots = {"mid": ("event", 1)}
+    mr.shop_before_boss(slots, [{"mid": ("event", {"mid"})}])
+    assert slots == {"mid": ("event", 1)}
+
+
 def test_lowest_weight_first():
     slots = {"up": ("battle", 1), "mid": ("abno", 2), "down": ("event", 0)}
     assert mr.rank(slots, NORMAL) == ["down", "up", "mid"]
@@ -84,6 +102,20 @@ def test_routes_counts_drawn_links(links):
 def test_routes_unreadable_off_the_map():
     # A top-row node at rest sits under the resource bar: nothing onward can be read.
     assert mr.routes(lit(()), 725, -200) is None
+
+
+def test_a_link_along_the_top_row_under_the_resource_bar_edge_still_reads():
+    """#129, live 2026-10-18, floor 3 HARD (2 columns, map at rest: it cannot pan): the top row's centres sit at y 72.
+
+    The link from c1 up (726, 72) to c2 up (981, 72) is lit but its upper side sample (y 59) fell above the
+    readable area, so it read None and c2 up, whose badges and node the HUD covers, was left out.
+    tests/data/map_hard_f3_top.npz is the frame's per-pixel brightness, y 0-299, x 600-1099.
+    """
+    v = np.zeros((720, 1280), np.uint8)
+    v[:300, 600:1100] = np.load(Path(__file__).resolve().parent / "data/map_hard_f3_top.npz")["v"]
+    assert mr.line_contrast(v, 726, 72, 981, 72) >= mr.LINE_CONTRAST
+    assert mr.line_contrast(v, 726, 285, 981, 72) < mr.LINE_CONTRAST  # mid has no link to it
+    assert mr.routes(v, 726, 72) == 2  # c2 up and c2 mid
 
 
 def test_the_lit_links_from_the_bus_read_at_the_far_left():

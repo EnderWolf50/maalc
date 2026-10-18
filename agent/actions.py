@@ -4,6 +4,7 @@ The Pipeline decides which screen is up; these decide what to pick on it.
 Coordinates are on the 1280x720 screenshot (spec 07).
 """
 
+import functools
 import json
 import re
 import time
@@ -53,6 +54,7 @@ STARLIGHT_HEADER = [890, 30, 115, 28]  # "Available"
 STARLIGHT_DIALOG = [480, 210, 320, 35]  # "Continue with selected effects?"
 STARTING_GIFT_HEADER = [780, 145, 230, 35]  # "Selected E.G.O Gift"
 STARLIGHT_AVAILABLE = [1010, 30, 80, 28]
+STARLIGHT_OWNED = [830, 30, 90, 28]  # "4035", "4035-60" while owned starlight pays
 GRACE_ORIGIN_X, GRACE_ORIGIN_Y = (138, 152), (152, 390)  # top-left of card 1; step 198 px per column
 PACK_TITLES = [120, 400, 1040, 100]  # up to 5 cards (live: 5 with two Theme Pack Selection +1 graces)
 
@@ -398,6 +400,9 @@ class PlanRun(CustomAction):
         if team is None:
             log(f"stop: no enabled team may run {difficulty}")
             return False
+        if run_start.team_difficulty(run["difficulty"], difficulty, team["hard_from_floor"]) != difficulty:
+            log(f"team {team['name']!r} never switches to hard and the difficulty is {run['difficulty']}: a normal run")
+            difficulty = "normal"
         RUN.clear()
         # planned: the bot picked the team itself, so the rotation cursor may move after the claim.
         limit = recovery.floor_limit(recovery.read_runs(ROOT), team["id"])
@@ -411,17 +416,34 @@ class PlanRun(CustomAction):
         return True
 
 
+INFINITY_TITLE = [890, 330, 330, 28]  # entry page: "Parallel Superposition Mode : ON" / "OFF" (the pipeline's roi)
+INFINITY_BUTTON = (1053, 377)  # INFINITY MIRROR under it
+
+
+@AgentServer.custom_action("ParallelModeOff")
+class ParallelModeOff(CustomAction):
+    """Entry page with Parallel Superposition Mode ON: tap INFINITY MIRROR until it reads OFF (#94, spec 02).
+
+    The bot never plays past floor 5; the prompt after floor 5 (ParallelModePrompt) is cancelled as a second guard.
+    Still ON after two taps: stop, nothing else is tried.
+    """
+
+    def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
+        for _ in range(2):
+            if tap_then(context, *INFINITY_BUTTON, shows(context, INFINITY_TITLE, r":\s*[O0]FF"), timeout=3) is not None:
+                log("Parallel Superposition Mode switched OFF")
+                return True
+        return stop(context, "Parallel Superposition Mode stays ON after tapping INFINITY MIRROR")
+
+
 @AgentServer.custom_action("SelectTeam")
 class SelectTeam(CustomAction):
     """Pick the team's in-game TEAMS #N slot, check the title, press Confirm."""
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
-        if "settings" not in RUN:
-            # The plan is made on the entry page (weekly bonuses); the back arrow leads there.
-            log("team picker without a run plan: back to the entry page")
-            tap(context, 97, 42, wait=2)
-            return True
-        n = RUN["team"]["game_team"]
+        # No plan here means a run resumed on the entry page, paused before team selection: the entry page only
+        # offers Resume again, so backing out looped (#128). Make one up from settings, as after a restart.
+        n = current_run(context)["team"]["game_team"]
         for _ in range(15):
             image = screen(context)
             visible = {}
@@ -460,9 +482,10 @@ def grace_selected(image, n):
 
 
 def read_available(context, image):
-    """Available starlight, or None when it reads like "0+60": then owned starlight is being spent."""
+    """Starlight left of Available; negative by what owned starlight pays when it reads like "0+60" (#96)."""
     t = text(context, image, STARLIGHT_AVAILABLE)
-    return None if "+" in t else number(t)
+    m = re.fullmatch(r"\D*(\d+)\s*\+\s*(\d+)\D*", t)
+    return int(m[1]) - int(m[2]) if m else number(t)
 
 
 @AgentServer.custom_action("BuyStarlight")
@@ -471,8 +494,9 @@ class BuyStarlight(CustomAction):
 
     Live 2026-10-14: tapping a card selects it at the level its + / ++ buttons show;
     the buttons only set the level (tapping the lit one turns it back to base).
-    A card dearer than Available is still selected, paid from owned starlight:
-    so every price is checked here first and Available re-read after every tap.
+    A card dearer than Available is still selected, paid from owned starlight: choosing the grace is the
+    user's consent to that (#96), so only Available plus Owned bounds the purchases, and Available is
+    re-read after every tap.
     """
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
@@ -481,9 +505,10 @@ class BuyStarlight(CustomAction):
         image = screen(context)
         available = read_available(context, image)
         if available is None:
-            return stop(context, "starlight page already spends owned starlight")
+            return stuck("could not read Available on the starlight page")
+        owned = re.match(r"\D*(\d+)", text(context, image, STARLIGHT_OWNED))
         unaffordable = run["settings"]["run"]["starlight_unaffordable"]
-        buys, missed = run_start.starlight_purchases(plan, available, unaffordable)
+        buys, missed = run_start.starlight_purchases(plan, available + (int(owned[1]) if owned else 0), unaffordable)
         for n, level, price in missed:
             log(f"grace {n} {level} costs {price}: not bought")
         if missed and unaffordable == "stop":
@@ -501,14 +526,11 @@ class BuyStarlight(CustomAction):
                 now = read_available(context, image)
                 if now != available:
                     break
-            if now is None:
-                tap(context, x + 92, y + 100)  # undo: never pay with owned starlight
-                return stop(context, f"grace {n} would spend owned starlight")
             if now != available - price:
                 return stop(context, f"grace {n} {level}: Available {available} -> {now}, expected -{price}")
-            log(f"grace {n} {level} for {price}, {now} left")
+            log(f"grace {n} {level} for {price}, {now} left" if now >= 0 else f"grace {n} {level} for {price}, {-now} paid from owned starlight")
             available = now
-        run["starlight_unspent"] = available  # added to the Owned box at once unless ConfirmStarlight converts it (#73)
+        run["starlight_unspent"] = max(available, 0)  # added to the Owned box at once unless ConfirmStarlight converts it (#73)
         tap_then(context, 1195, 672, shows(context, STARLIGHT_DIALOG, "Continue with selected"), timeout=3)
         return True
 
@@ -539,9 +561,6 @@ class ConfirmStarlight(CustomAction):
         want = run_start.resolve_plan(run["settings"], run["team"], "starlight")["convert_leftover"]
         for _ in range(4):
             image = screen(context)
-            if "-" in text(context, image, [870, 165, 85, 25]):
-                tap(context, 543, 530)
-                return stop(context, "the graces would spend owned starlight")
             # The line under the checkbox: "Any unspent Starlight will be added ..." when off,
             # "Coverts any remaining Starlight ..." when on.
             note = text(context, image, [660, 395, 320, 90]).lower()
@@ -871,8 +890,9 @@ class PickThemePack(CustomAction):
             return stuck(f"floor {floor} difficulty did not switch to {'HARD' if want else 'NORMAL'}")
 
         names, marks = theme_pack_marks(run["settings"], run["team"])
+        setting = run["settings"]["run"]["theme_pack_refresh"]
         seen = None
-        for _ in range(10):  # ponytail: stop when a refresh changes nothing; read `Refresh n/m` if that misfires
+        for used in range(10):  # ponytail: stop when a refresh changes nothing; read `Refresh n/m` if that misfires
             cards = pack_titles(context, screen(context))
             if not cards:
                 return stuck("no theme pack titles read")
@@ -880,7 +900,7 @@ class PickThemePack(CustomAction):
             log(f"floor {floor} packs: " + ", ".join(f"{t} ({r})" for t, r in ranked))
             ranks = [r for _, r in ranked]
             titles = [t for t, _ in ranked]
-            if not all(r == "avoid" for r in ranks) or titles == seen:
+            if not run_start.refresh_wanted(ranks, setting, used) or titles == seen:
                 break
             seen = titles
             tap(context, 1083, 47, wait=3)
@@ -928,6 +948,7 @@ LINKS = {
     "mid": ("MapLinkMid", (95, -10, 110, 80)),
     "down": ("MapLinkDown", (85, 85, 110, 110)),
 }
+BUS_PROBE = 1.0  # s a first tap on the bus waits for the node panel (#130)
 BUS_LINK = 60  # line_contrast of a lit link from the bus; links between other nodes read up to ~50
 MARKS = {  # node -> (mark, roi around the slot centre)
     "MapNodeBoss": ("boss", (-40, -40, 80, 80)),
@@ -957,8 +978,29 @@ def seen(context, image, node, roi=None):
 
 
 def node_marks(context, image, cx, cy):
-    """The marks seen around the map node centred at (cx, cy): {mark: hit}."""
-    return {mark: hit for n, (mark, (ox, oy, w, h)) in MARKS.items() if (hit := seen(context, image, n, (cx + ox, cy + oy, w, h)))}
+    """The marks seen around the map node centred at (cx, cy): {mark: hit}.
+
+    The shop is also looked for by its icon's shape alone (shop_icon) where nothing says a fight or the boss.
+    """
+    marks = {mark: hit for n, (mark, (ox, oy, w, h)) in MARKS.items() if (hit := seen(context, image, n, (cx + ox, cy + oy, w, h)))}
+    if not marks.keys() & {"boss", "focused", "cost", "shop"} and (hit := shop_icon(context, image, cx, cy)):
+        marks["shop"] = hit
+    return marks
+
+
+def shop_icon(context, image, cx, cy):
+    """The hit of the shop's icon (MapNodeShopIcon) around the node centred at (cx, cy), whatever the pack's colours.
+
+    The icon takes the theme pack's hue: cyan and orange packs (live 2026-10-18) matched none of the colour
+    templates. TemplateMatch CCOEFF on the brightness alone (max over the channels) is blind to hue and to the
+    pack's brightness: the shop scored 0.49-1.0 on 12 packs' captures, anything else 0.31 at most.
+    """
+    ox, oy, w, h = MARKS["MapNodeShop"][1]
+    window = image[max(0, cy + oy):cy + oy + h, max(0, cx + ox):cx + ox + w]
+    if window.shape[0] < 40 or window.shape[1] < 70:
+        return None
+    grey = np.repeat(window.max(axis=2)[..., None], 3, axis=2)
+    return seen(context, grey, "MapNodeShopIcon", (0, 0, window.shape[1], window.shape[0]))
 
 
 def node_at(context, image, cx, cy, marks=None, costs=True):
@@ -1026,9 +1068,11 @@ def enter_node(context):
 
 @AgentServer.custom_action("EnterNode")
 class EnterNode(CustomAction):
-    """The node selection panel is already up (e.g. after a restart): enter the node."""
+    """The node selection panel is already up (e.g. after a restart): enter the node, or forfeit the run."""
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
+        if RUN.get("forfeit"):  # backed out of the formation page (#137): the panel may still be up
+            return forfeit(context)
         return enter_node(context)
 
 
@@ -1069,6 +1113,10 @@ class RouteMap(CustomAction):
             slots = self.read_slots(context, image, bx, by) if bus else {}
         log("map: column 1: " + (", ".join(f"{r} {t} ({'?' if n is None else n} onward)" for r, (t, n) in slots.items()) or "no linked slot read"))
         ahead = self.read_ahead(context, image, bx, by, slots) if slots else []
+        read = [t for column in (slots, *ahead) for t, _ in column.values()]
+        map_route.shop_before_boss(slots, ahead)  # #146: the shop's icon takes the theme pack's colours
+        if read != [t for column in (slots, *ahead) for t, _ in column.values()]:
+            log("map: the column before the boss is the shop")
         weights = map_weights(context)
         order = map_route.rank(slots, weights, ahead)
         steps = None
@@ -1088,9 +1136,11 @@ class RouteMap(CustomAction):
         # #88: after a restart or a recovery the bus may stand on a node not entered yet; its own tap opens it.
         tries = ranked + on_bus if RUN.get("map_entered") else on_bus + ranked
         tries += [(f"{r} slot", centre(r)) for r in map_route.ROWS if r not in order]
+        # #130: a bus tap on a node already entered shows nothing; a panel shows within ~0.5 s, so that probe is short.
+        probe = not RUN.get("map_entered")
         for name, (x, y) in tries:
             tap(context, x, y, wait=0)
-            if until(context, lambda im: seen(context, im, "MapNodePanel")) is not None:
+            if until(context, lambda im: seen(context, im, "MapNodePanel"), timeout=BUS_PROBE if probe and name == "the bus" else 2.0) is not None:
                 log(f"map: take {name}")
                 if steps is not None and (x, y) == ranked[0][1]:  # the path's first node: follow the rest
                     RUN["map_plan"] = {"floor": RUN.get("floor"), "steps": steps}
@@ -1288,6 +1338,9 @@ def order_marks(context, image):
     return marks
 
 
+FORMATION_BACK = (98, 43)  # the formation page's back arrow, top left
+
+
 @AgentServer.custom_action("Formation")
 class Formation(CustomAction):
     """Re-pick the deployment order, skipping the dead, then Chain To Battle! (spec 03 section 3).
@@ -1306,8 +1359,15 @@ class Formation(CustomAction):
             return True  # page fading in or out: let MirrorHub look again
         alive, need = count[1], run["team"]["min_alive"]
         RUN["alive"] = alive  # the shop's heal reads it (spec 03 section 13)
-        if alive < need:
-            return stop(context, f"{alive} sinners alive, team {run['team']['name']!r} stops below {need}")
+        if alive < need:  # need 0: no check
+            # Like used-up wipe retries (#137): stop, or back out to the map, where RouteMap forfeits.
+            reason = f"{alive} sinners alive, team {run['team']['name']!r} needs {need}"
+            if run["settings"]["run"]["after_retries"] == "stop":
+                return stop(context, reason)
+            log(f"{reason}: forfeit the run")
+            RUN["forfeit"] = True
+            tap(context, *FORMATION_BACK, wait=2)
+            return True
         if "Details" not in text(context, image, DETAILS_BUTTON):
             tap(context, 826, 125, wait=1.5)  # its » folds the details view (skills, E.G.O), which hides the order marks
             image = screen(context)
@@ -1476,9 +1536,14 @@ class PlayTurn(CustomAction):
             return stuck(f"turn {turn} unchanged after 3 submits")
         guarded = False
         if RUN.get("guard", 0) > 0 and RUN["turn"][1] == 1:  # a turn submitted again plays as before #52
-            guarded = self.guard(context, x, (dx, dy))
-            if not guarded:
-                log(f"turn {turn}: guard did not take, Win Rate instead")
+            if battle.gear_hollow(image, battle.slot_xs(x)[0] - 86, 576):
+                # #127: a focused encounter. Its skills are dragged one by one onto enemy skill slots that move
+                # with the camera; no chain starts from the ring. The guard turns wait for a battle that has one.
+                log(f"turn {turn}: hollow left gear (focused encounter): Win Rate, guard turns kept")
+            else:
+                guarded = self.guard(context, x, (dx, dy))
+                if not guarded:
+                    log(f"turn {turn}: guard did not take, Win Rate instead")
         if guarded:
             RUN["guard"] = battle.guard_left(RUN["guard"], guarded)
             log(f"turn {turn}: started on guard, {RUN['guard']} guard turns left")
@@ -1657,10 +1722,19 @@ EVENT_BUTTON_LABEL = [1040, 612, 190, 66]  # the Event node's roi: empty once th
 EVENT_LIMIT = 180  # s one event may take before recovery L1 (AALC allows 300); a boss quiz of several rounds stays well under
 EVENT_GAP = 30  # s between two Event calls after which the next call is another event
 EVENT_LEAST = 0.5 # s after a tap before the screen counts as moved: a fade's first frames are the same page
+CHOICE_X = 925  # the option list's middle
+CHOICE_STEP = 150  # px per drag of a list that scrolls: about a card (130-150 px), so none is skipped
+CHOICE_SCROLLS = 6  # drags at most to an end of the list
 
 
 def data(name):
     return yaml.safe_load((RESOURCE / "base" / "data" / name).read_text(encoding="utf-8")) or {}
+
+
+@functools.cache
+def event_table():
+    """data/event_table.json's events (spec 03 section 10, #93), read once."""
+    return json.loads((RESOURCE / "base" / "data" / "event_table.json").read_text(encoding="utf-8"))["events"]
 
 
 def red_button(image):
@@ -1706,22 +1780,29 @@ class Event(CustomAction):
                 checked.add(i)
         elif "Choices" in text(context, image, CHOICES_HEADER):
             checked.clear()
-            options = [(" ".join(lines), y) for y, lines in self.rows(ocr(context, image, CHOICE_ROWS))]
+            story = [t for t, _ in sorted(ocr(context, image, EVENT_STORY), key=lambda r: (r[1][1], r[1][0]))]
+            scrolls = rewards.choice_scrollbar(image) or any(None in c for c in rewards.choice_cards(image))
+            options, image = self.read_choices(context, image, scrolls)
             if not options:
                 return True
             overrides = data("events.yaml") | {o["question"]: o["option"] for o in run["settings"]["event_overrides"]}
-            story = [t for t, _ in ocr(context, image, EVENT_STORY)]
             question = next(filter(None, (run_start.match_pack(t, list(overrides)) for t in story + [" ".join(story)])), None) if overrides else None
+            known = rewards.match_event(" ".join(story), event_table())
             # Grey options (taken in an earlier round of the same questions) and ones a tap did nothing on are closed.
-            closed = {k for k, (t, y) in enumerate(options) if t in tried or not rewards.choice_open(image, y)}
-            i = rewards.pick_choice([t for t, _ in options], run["team"]["keyword"], overrides.get(question), closed)
-            shown = " | ".join(("(closed) " if k in closed else "") + t for k, (t, _) in enumerate(options))
+            closed = {k for k, (t, is_open, _) in enumerate(options) if t in tried or not is_open}
+            i = rewards.pick_choice([t for t, _, _ in options], run["team"]["keyword"], overrides.get(question), closed, known)
+            shown = " | ".join(("(closed) " if k in closed else "") + t for k, (t, _, _) in enumerate(options))
             if i is None:
                 log(f"event: {shown}: all closed, scroll for more")
-                swipe(context, 925, 520, 925, 220, wait=1.5)  # the list scrolls when it holds more than fits
+                scroll(context, CHOICE_X, 420, 0, -CHOICE_STEP)  # in case the list scrolls with no sign of it
                 return True
-            log(f"event: {shown}: take {options[i][0]!r}" + (f" (override {question!r})" if question else ""))
-            tap(context, 925, options[i][1], wait=0)
+            log(f"event: {shown}: take {options[i][0]!r}" + (f" (override {question!r})" if question else "")
+                + ("" if known else " (not in the event table: hint rules)"))
+            y, image = self.into_view(context, image, options, i) if scrolls else (options[i][2], image)
+            if y is None:
+                log(f"event: {options[i][0]!r} not found again in the list")
+                return True
+            tap(context, CHOICE_X, y, wait=0)
             if until(context, lambda im: not Event.panel_same(image, im), timeout=1.5) is None:
                 log(f"event: {options[i][0]!r} did nothing: try another")
                 tried.add(options[i][0])
@@ -1750,6 +1831,70 @@ class Event(CustomAction):
         """Whether the choice panel looks as it did: a tap on it did nothing."""
         x, y, w, h = CHOICE_ROWS
         return recovery.same_screen(*(recovery.thumb(i[y:y + h, x:x + w]) for i in (before, after)))
+
+    @staticmethod
+    def shown(context, image, scrolls):
+        """The options on screen as [(text, y of its first line)]; in a list that scrolls only those whose frame shows whole."""
+        rows = [(" ".join(lines), y) for y, lines in Event.rows(ocr(context, image, CHOICE_ROWS))]
+        if not scrolls:
+            return rows
+        whole = [(top, bottom) for top, bottom in rewards.choice_cards(image) if top is not None and bottom is not None]
+        return [(t, y) for t, y in rows if any(top < y < bottom for top, bottom in whole)]
+
+    @staticmethod
+    def drag(context, image, dy):
+        """Scroll the option list by dy px (dy < 0 shows what is below); the screen after, None when it did not move."""
+        scroll(context, CHOICE_X, 420 if dy < 0 else 260, 0, dy)
+        after = screen(context)
+        # Pixel by pixel, not panel_same's thumbnails: cards about a drag apart look alike in those.
+        y0, y1 = rewards.CHOICE_LIST_Y
+        return after if np.abs(after[y0:y1, 690:1170].astype(int) - image[y0:y1, 690:1170]).mean() >= 2 else None
+
+    @staticmethod
+    def read_choices(context, image, scrolls):
+        """Every option as [(text, open, y of its first line where read)] top to bottom, and the screen it ends on.
+
+        A list that scrolls (#93) is dragged to its top, then down a card at a time without a fling, each
+        option read once its frame shows whole; the same text read again is the same option.
+        """
+        if not scrolls:
+            return [(t, rewards.choice_open(image, y), y) for t, y in Event.shown(context, image, False)], image
+        for _ in range(CHOICE_SCROLLS):  # to the top
+            after = Event.drag(context, image, CHOICE_STEP)
+            if after is None:
+                break
+            image = after
+        options = []
+        for _ in range(CHOICE_SCROLLS):
+            for t, y in Event.shown(context, image, True):
+                if not run_start.match_pack(t, [o[0] for o in options], margin=0):
+                    options.append((t, rewards.choice_open(image, y), y))
+            after = Event.drag(context, image, -CHOICE_STEP)
+            if after is None:
+                break
+            image = after
+        if not options:  # no whole frame read: take the list as it reads
+            return Event.read_choices(context, image, False)
+        return options, image
+
+    @staticmethod
+    def into_view(context, image, options, i):
+        """(y to tap, screen) for option i of a list that scrolls, dragged until its frame shows whole; (None, screen) when not found."""
+        texts = [t for t, _, _ in options]
+        for _ in range(CHOICE_SCROLLS + 1):
+            seen = {}  # option index -> y, for the options on screen
+            for t, y in Event.shown(context, image, True):
+                if name := run_start.match_pack(t, texts, margin=0):
+                    seen.setdefault(texts.index(name), y)
+            if i in seen:
+                return seen[i], image
+            if not seen:
+                return None, image
+            after = Event.drag(context, image, CHOICE_STEP if min(seen) > i else -CHOICE_STEP)
+            if after is None:
+                return None, image
+            image = after
+        return None, image
 
     @staticmethod
     def rows(results):
@@ -1817,6 +1962,7 @@ class PickGift(CustomAction):
 
     Cards are main keyword > other > owned; when Mounting Trials hang under them (after a boss),
     each scores gift - weight x trial risk. Refuse Gift is never pressed: it hands out random trials.
+    A gift the team avoids (#90) comes last: taken only when nothing else fills the count.
     """
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
@@ -1834,13 +1980,14 @@ class PickGift(CustomAction):
                 lines[i].append((y, t))
         trials = any("Mounting" in t for t, _ in results)
         risks = data("trial_risks.yaml") | {o["trial"]: o["risk"] for o in run["settings"]["trial_risk_overrides"]}
+        avoid = [g["name"] for g in avoided_gifts(run["team"])]
         cards = []
         for card in lines:
             gift = " ".join(t for y, t in card if y < 410)
             owned = any(re.fullmatch(r"\W*Owned\W*", t) for _, t in card)
             names = [t for y, t in card if TRIAL_NAME_Y[0] <= y < TRIAL_NAME_Y[1]]
             risk = min((rewards.trial_risk(t, risks) for t in names), default=rewards.MAX_RISK) if trials else None
-            cards.append((rewards.gift_kind(gift, run["team"]["keyword"], owned), risk))
+            cards.append((rewards.gift_kind(gift, run["team"]["keyword"], owned, avoid), risk))
         ranked = rewards.rank_gifts(cards, run["team"]["trial_risk_weight"])
         log("gifts: " + ", ".join(k + ("" if r is None else f"/risk {r}") for k, r in cards) + f": order {ranked}")
 
@@ -1927,6 +2074,20 @@ def observed_gifts(team):
         if entry:
             out.append({**g, "id": entry["id"]})
     return out
+
+
+WHITE_GOSSYPIUM = 9020  # its id in data/gift_search.json
+
+
+def avoided_gifts(team):
+    """Gifts the team never takes or buys, and fuses or sells first: White Gossypium unless it allows it (#90).
+
+    Shaped like observed_gifts, for read_cells' icon match.
+    """
+    if team.get("allow_white_gossypium", True):
+        return []
+    g = next(e for e in gift_data() if e["id"] == WHITE_GOSSYPIUM)
+    return [{"name": g["en"], "keyword": g["keyword"], "tier": g["tier"], "id": g["id"]}]
 
 
 def template_hits(context, image, template, threshold):
@@ -2180,17 +2341,22 @@ class Shop(CustomAction):
             return 0
         image = screen(context)
         slots = [s for s in shop.read_slots(ocr(context, image, OFFER_GRID)) if shop.on_sale(s)]
-        cells = {c["i"]: c for c in read_cells(context, image, [offer_cell(s) for s in slots], "offer")}
+        avoided = avoided_gifts(team)
+        cells = {c["i"]: c for c in read_cells(context, image, [offer_cell(s) for s in slots], "offer", avoided)}
+        avoid = [g["name"] for g in avoided]
         offers = []
         for i, slot in enumerate(slots):
-            cell = cells.get(i, {"tier": None, "keyword": None})
+            cell = cells.get(i, {"tier": None, "keyword": None, "gift": None})
+            if cell["gift"] in avoid or any(rewards.names_gift(slot["name"], n) for n in avoid):
+                log(f"shop: {slot['name']!r} {slot['price']}: the team does not hold it (#90)")
+                continue
             slot["short"] = slot["short"] or shop.short_cell(image, *offer_cell(slot))
             if slot["short"] and slot["price"] <= cost:
                 log(f"shop: {slot['name']!r} is tagged Not Enough Cost: its price {slot['price']} is a misread")
                 continue
             kind = cell["keyword"]
             if kind is None and shop.buyable(slot, cost):
-                kind = Shop.dialog_keyword(context, slot, keyword)
+                kind = Shop.dialog_keyword(context, slot, keyword, avoid)
                 if kind is False:
                     return 0  # the shop is gone
             log(f"shop: {slot['name']!r} {slot['price']}: tier {cell['tier']} {kind}")
@@ -2234,13 +2400,13 @@ class Shop(CustomAction):
         return None
 
     @staticmethod
-    def dialog_keyword(context, slot, keyword):
-        """An offer's keyword from its purchase dialog's text: keyword when main, else "other"; None when no
-        dialog opened, False when the shop is gone (to_main). The dialog is cancelled."""
+    def dialog_keyword(context, slot, keyword, avoid=()):
+        """An offer's keyword from its purchase dialog's text: keyword when main, else "other" (an avoided gift too);
+        None when no dialog opened, False when the shop is gone (to_main). The dialog is cancelled."""
         image = Shop.open_offer(context, slot)
         if image is None:
             return None if Shop.to_main(context) else False
-        kind = rewards.gift_kind(text(context, image, PURCHASE_TEXT), keyword, False)
+        kind = rewards.gift_kind(text(context, image, PURCHASE_TEXT), keyword, False, avoid)
         tap(context, *PURCHASE_CANCEL)
         return keyword if kind == "main" else "other"
 
@@ -2265,11 +2431,13 @@ class Shop(CustomAction):
             return False
         # One screenshot decides (#112): each cell's badge and icon, its price under it.
         image = screen(context)
-        cells = read_cells(context, image, SELL_CELLS, "sell", observed_gifts(team))
-        roles = [shop.gift_role(c["keyword"], c["gift"], team["keyword"]) for c in cells]
+        avoid = [g["name"] for g in avoided_gifts(team)]
+        cells = read_cells(context, image, SELL_CELLS, "sell", observed_gifts(team) + avoided_gifts(team))
+        roles = [shop.gift_role(c["keyword"], c["gift"], team["keyword"], avoid) for c in cells]
         prices = shop.cell_prices(ocr(context, image, SELL_GRID), SELL_CELLS)
         log("shop: sell cells " + "; ".join(f"{cell_line(c, r)} {prices.get(c['i'])}" for c, r in zip(cells, roles)))
         gifts = [(c["i"], prices[c["i"]]) for c, r in zip(cells, roles) if r == "material" and c["i"] in prices]
+        avoided = {c["i"] for c in cells if c["gift"] in avoid}  # sold first (#90)
         # A badge or price below the grid's edge: the panel a tap shows decides (spec 03 section 12's rule).
         keep = kept_gifts(team)
         for c in [c for c, r in zip(cells, roles) if r == "unknown" or (r == "material" and c["i"] not in prices)]:
@@ -2279,11 +2447,14 @@ class Shop(CustomAction):
             lines = [t for t, _ in ocr(context, image, SELL_PANEL)]
             panel = " ".join(lines)
             price = number(text(context, image, SELL_PRICE))
-            if any(shop.protected(t, keep) for t in lines):
+            kind = rewards.gift_kind(panel, team["keyword"], False, avoid)
+            if kind != "avoid" and any(shop.protected(t, keep) for t in lines):
                 log(f"shop: sell cell {i} kept: {panel[:40]!r}")
-            elif price and "Select the" not in panel and rewards.gift_kind(panel, team["keyword"], False) != "main":
+            elif price and "Select the" not in panel and kind != "main":
                 gifts.append((i, price))
-        picked = shop.to_sell(gifts, wanted, cost, team["reserve_cost"])
+                if kind == "avoid":
+                    avoided.add(i)
+        picked = shop.to_sell(gifts, wanted, cost, team["reserve_cost"], avoided)
         visit["fuse_scanned"] = visit.get("fuse_scanned") and not picked
         log(f"shop: {wanted} wanted, {cost} Cost, non-main (cell, price) {gifts}: sell {picked}")
         for i in picked or []:
@@ -2360,11 +2531,13 @@ class Shop(CustomAction):
             return False
         # One screenshot decides (#112): a tap puts a gift in the fusion, so only the materials are tapped.
         # ponytail: the 15 cells on show; a scroll would find more when 13+ of them are kept.
-        cells = read_cells(context, image, FUSE_CELLS, "fuse", observed_gifts(team))
-        roles = [shop.gift_role(c["keyword"], c["gift"], keyword) for c in cells]
+        avoid = [g["name"] for g in avoided_gifts(team)]
+        cells = read_cells(context, image, FUSE_CELLS, "fuse", observed_gifts(team) + avoided_gifts(team))
+        roles = [shop.gift_role(c["keyword"], c["gift"], keyword, avoid) for c in cells]
         log("shop: fuse cells " + "; ".join(cell_line(c, r) for c, r in zip(cells, roles)))
         picked = []
-        for c in [c for c, r in zip(cells, roles) if r == "material"][:3]:
+        materials = sorted((c for c, r in zip(cells, roles) if r == "material"), key=lambda c: c["gift"] not in avoid)
+        for c in materials[:3]:  # an avoided gift first (#90)
             tap(context, c["x"], c["y"], wait=0.5)
             tap(context, *FUSE_NEUTRAL)  # closes its tooltip
             picked.append(f"cell {c['i']} ({c['keyword']} {c['tier']})")
@@ -2384,7 +2557,7 @@ class Shop(CustomAction):
                 continue
             last = name
             main = rewards.gift_kind(" ".join(t for t, _ in lines), keyword, False) == "main"
-            if main or shop.protected(name, keep):
+            if not shop.protected(name, avoid) and (main or shop.protected(name, keep)):
                 if not main:
                     log(f"shop: {name!r} kept out of the fusion")
                 tap(context, x, y, wait=1.2)  # out of the fusion again
@@ -2455,7 +2628,7 @@ class Settle(CustomAction):
 
         s, team = run["settings"]["run"], run["team"]
         left = number(text(context, image, WEEKLY_LEFT).split("/")[0])
-        all_hard = run.get("planned", False) and run["difficulty"] == "hard" and team["hard_from_floor"] <= 1
+        all_hard = run.get("planned", False) and run["difficulty"] == "hard" and team["hard_from_floor"] in (1, None)
         want = settlement.bonus_toggles(s["weekly_bonus_use"], s["weekly_bonus_amount"], hard, left or 0, all_hard)
         for _ in range(6):
             states = toggles(context, screen(context))

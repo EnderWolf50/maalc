@@ -17,7 +17,7 @@
     "trial_risk_overrides"
   ],
   "properties": {
-    "version": { "const": 3 },
+    "version": { "const": 6 },
     "language": { "enum": ["zh_tw", "en_us"], "default": "zh_tw" },
     "run": {
       "type": "object",
@@ -31,18 +31,24 @@
         "starlight_unaffordable",
         "wipe_retries",
         "after_retries",
-        "webhook_url"
+        "webhook_url",
+        "theme_pack_refresh"
       ],
       "properties": {
         "difficulty": { "enum": ["hard", "normal", "auto"], "default": "auto" },
-        "runs": { "type": "integer", "minimum": 0, "default": 1 },
+        "runs": { "type": ["integer", "null"], "minimum": 1, "default": 1, "description": "null: no limit" },
         "weekly_bonus_use": { "enum": ["none", "normal", "hard"], "default": "hard" },
         "weekly_bonus_amount": { "enum": ["one", "all"], "default": "all" },
         "stop_when_weekly_bonus_out": { "type": "boolean", "default": false },
         "starlight_unaffordable": { "enum": ["stop", "skip"], "default": "skip" },
         "wipe_retries": { "type": "integer", "minimum": 0, "default": 2 },
-        "after_retries": { "enum": ["stop", "forfeit"], "default": "stop" },
-        "webhook_url": { "type": "string", "default": "" }
+        "after_retries": { "enum": ["stop", "forfeit"], "default": "forfeit" },
+        "webhook_url": { "type": "string", "default": "" },
+        "theme_pack_refresh": {
+          "enum": ["none", "once", "all"],
+          "default": "all",
+          "description": "free theme pack refreshes on a page of only avoided packs: none, the first one, or all"
+        }
       }
     },
     "deployment_order_plans": {
@@ -118,7 +124,8 @@
           "min_alive",
           "guard_turns",
           "trial_risk_weight",
-          "gift_search"
+          "gift_search",
+          "allow_white_gossypium"
         ],
         "properties": {
           "id": { "$ref": "#/$defs/id" },
@@ -130,7 +137,13 @@
             "default": "Burn"
           },
           "usage": { "enum": ["any", "hard_only", "normal_only"], "default": "any" },
-          "hard_from_floor": { "type": "integer", "minimum": 0, "maximum": 5, "default": 0 },
+          "hard_from_floor": {
+            "type": ["integer", "null"],
+            "minimum": 1,
+            "maximum": 5,
+            "default": 1,
+            "description": "HARD from this floor of a hard run; null: this team plays the whole run NORMAL"
+          },
           "deployment_order": {
             "oneOf": [
               { "$ref": "#/$defs/plan_ref" },
@@ -181,7 +194,13 @@
           "shop_refresh_limit": { "type": "integer", "minimum": 0, "default": 2 },
           "heal": { "enum": ["none", "full", "revive"], "default": "revive" },
           "reserve_cost": { "type": "integer", "minimum": 0, "default": 0 },
-          "min_alive": { "type": "integer", "minimum": 0, "maximum": 12, "default": 0 },
+          "min_alive": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 12,
+            "default": 0,
+            "description": "fewer alive is handled like used-up wipe retries (run.after_retries); 0: no check"
+          },
           "guard_turns": { "type": "integer", "minimum": 0, "maximum": 5, "default": 0 },
           "trial_risk_weight": { "enum": ["low", "medium", "high"], "default": "high" },
           "gift_search": {
@@ -212,6 +231,11 @@
               }
             },
             "default": { "enabled": false, "gifts": [] }
+          },
+          "allow_white_gossypium": {
+            "type": "boolean",
+            "default": true,
+            "description": "off: never take or buy White Gossypium; owned ones are fused or sold first"
           }
         }
       }

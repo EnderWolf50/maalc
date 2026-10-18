@@ -112,3 +112,29 @@ def disc(name):
 ])
 def test_disc_lit(name, lit):
     assert b.disc_lit(disc(name), 20, 20) is lit
+
+
+def gear(name):
+    """tests/gears/<name>.png as BGR: 80x80 round the left gear (first slot's x - 86, y 576), written by recovery.png."""
+    data = (Path(__file__).resolve().parent / "gears" / f"{name}.png").read_bytes()
+    rows = np.frombuffer(zlib.decompress(data[8 + 25 + 8:-12 - 4]), np.uint8).reshape(80, 1 + 80 * 3)
+    return rows[:, 1:].reshape(80, 80, 3)[:, :, ::-1]
+
+
+@pytest.mark.parametrize(("name", "hollow"), [
+    # #127 (live 2026-10-18): focused encounters show a hollow ring from the turn's start, nothing picked;
+    # floor 3 boss on a dark ground, a floor 4 battle on a blue one, the floor 2 boss on an orange one.
+    ("hollow_boss", True),
+    ("hollow_floor4", True),
+    ("hollow_floor2_boss", True),
+    # Picks made by Win Rate show the ring too (BattleTurnLit.png, a normal battle; BattleTurnStagger.png).
+    ("hollow_win_rate", True),
+    ("hollow_stagger", True),
+    # The chain's gear: a toothed wheel round a glass swirl (BattleTurn, -Even, -Solo), glowing once chained.
+    ("gear_unlit", False),
+    ("gear_unlit_even", False),
+    ("gear_unlit_solo", False),
+    ("gear_chained", False),
+])
+def test_gear_hollow(name, hollow):
+    assert b.gear_hollow(gear(name), 40, 40) is hollow

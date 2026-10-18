@@ -31,6 +31,21 @@ def node_type(marks):
     return "shop" if "shop" in marks else "event"
 
 
+def shop_before_boss(slots, ahead):
+    """Type every node of the column right before the boss's as a shop, in place (#146).
+
+    The map's last column is the shop, then the boss: no node pool holds a shop (mirrordungeon-generatenodepool:
+    battle, abnormality, hard battle, event, boss), and in every capture showing the boss with a node before it,
+    that node is the shop (spec 03 section 7). Its icon takes the theme pack's colours, so its mark is not trusted.
+    slots and ahead are rank's: columns of row -> (node type, ...).
+    """
+    columns = [slots, *ahead]
+    for before, after in zip(columns, columns[1:]):
+        if any(node == "boss" for node, _ in after.values()):
+            for row, (_, rest) in before.items():
+                before[row] = ("shop", rest)
+
+
 def rank(slots, weights, ahead=()):
     """Rows of the linked slots, best first.
 
@@ -57,12 +72,12 @@ def paths(slots, weights, ahead=()):
     return best
 
 
-def line_contrast(v, x0, y0, x1, y1, top=70, bottom=615):
+def line_contrast(v, x0, y0, x1, y1, top=56, bottom=615):
     """How much brighter the straight segment between two node centres is than either side of it.
 
     v is the screenshot's per-pixel brightness (max over channels). Only the middle 40 % is read,
     clear of the nodes and their badges. None when that part is mostly off the readable map area
-    (the resource bar above y 70, the sinner bar below 615).
+    (the resource bar above y 56, its lower edge at about 58; the sinner bar below 615).
     """
     n = np.array([y0 - y1, x1 - x0], float)
     n /= np.linalg.norm(n)

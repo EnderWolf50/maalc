@@ -18,6 +18,10 @@ CROP_AT = {
     "offers_super": (560, 210),  # tests/screens/SuperShop.png
     "offers_red": (560, 210),  # live (maalc-probe s28/013): Fragment of Hellfire, a red gem, 400 orange
     "offers_short": (560, 210),  # live 2026-10-18 (maalc-probe live-all/f/shopd_2590.6): 106 Cost, 3 offers tagged Not Enough Cost
+    # Map nodes (test_map_shop.py): 200 px around the node, live 2026-10-18 maalc-probe live2/f (map_f2_c, map_f1_c, map_f1_a)
+    "map_shop_cyan": (230, 45),
+    "map_shop_orange": (230, 45),
+    "map_event_orange": (226, 44),
 }
 OWNED, OFFER = 1.1, 0.8  # a gift icon's size on the fuse / sell pages and on the offers, over its GiftSearch template's
 
@@ -94,6 +98,12 @@ def test_to_sell_only_what_fusion_leaves_over():
     assert s.to_sell([(1, 50)], 200, 300, 0) == []
     # The reserve counts too.
     assert s.to_sell([(1, 50)], 200, 200, 60) is None
+
+
+def test_to_sell_takes_an_avoided_gift_first():
+    # #90: White Gossypium (cell 7, 60) goes before the dearer leftover.
+    gifts = [(0, 50), (2, 100), (5, 90), (7, 60)]
+    assert s.to_sell(gifts, 150, 100, 0, first={7}) == [7]
 
 
 def ocr(*lines):
@@ -188,6 +198,12 @@ def test_cost_value_reads_look_alike_letters_as_digits(read, cost):
 ])
 def test_gift_role_from_the_cells_badge_and_icon(keyword, gift, role):
     assert s.gift_role(keyword, gift, "Burn") == role
+
+
+def test_an_avoided_gift_is_material_though_it_is_the_main_keyword():
+    # #90: a Bleed team that does not hold White Gossypium fuses or sells it.
+    assert s.gift_role("Bleed", "White Gossypium", "Bleed", avoid=["White Gossypium"]) == "material"
+    assert s.gift_role("Bleed", None, "Bleed", avoid=["White Gossypium"]) == "keep"
 
 
 SELL_OCR = [  # Maa OCR of the sell page's grid (crop "sell"): coins read as 米/水/*, icon art as junk

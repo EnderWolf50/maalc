@@ -30,8 +30,41 @@ def _v2_to_v3(data):
     return data
 
 
+def _v3_to_v4(data):
+    """Version 4 adds run.theme_pack_refresh (#41), "all" as before."""
+    if isinstance(data.get("run"), dict):
+        data["run"].setdefault("theme_pack_refresh", "all")
+    return data
+
+
+def _v4_to_v5(data):
+    """Version 5 adds teams[].allow_white_gossypium (#90), on as before."""
+    teams = data.get("teams")
+    for team in teams if isinstance(teams, list) else []:
+        if isinstance(team, dict):
+            team.setdefault("allow_white_gossypium", True)
+    return data
+
+
+def _v5_to_v6(data):
+    """Version 6 turns the numbers whose 0 meant something into switches (#137).
+
+    run.runs 0 (no limit) becomes null, off; teams[].hard_from_floor 0 (the whole run HARD) becomes 1,
+    which says the same. teams[].min_alive stays a number: 0 is no check.
+    """
+    run = data.get("run")
+    if isinstance(run, dict) and run.get("runs") == 0:
+        run["runs"] = None
+    teams = data.get("teams")
+    for team in teams if isinstance(teams, list) else []:
+        if isinstance(team, dict):
+            if team.get("hard_from_floor") == 0:
+                team["hard_from_floor"] = 1
+    return data
+
+
 # MIGRATIONS[n] turns a version-n dict into a version-(n + 1) dict; keep in step with gui/src/model.ts.
-MIGRATIONS = {1: _v1_to_v2, 2: _v2_to_v3}
+MIGRATIONS = {1: _v1_to_v2, 2: _v2_to_v3, 3: _v3_to_v4, 4: _v4_to_v5, 5: _v5_to_v6}
 
 NO_TEAM = "No enabled team: set up a team in the settings GUI first."
 

@@ -53,8 +53,21 @@ def starlight_purchases(plan, available, unaffordable):
 
 
 def hard_wanted(floor, run_hard, hard_from_floor):
-    """Whether this floor should be HARD: a hard run goes HARD from floor N on, N = 0 means all floors."""
-    return run_hard and floor >= hard_from_floor
+    """Whether this floor should be HARD: a hard run goes HARD from floor N on (1: all floors).
+
+    hard_from_floor None (the team's switch off): a hard run of that team is one the global difficulty "hard"
+    forced (team_difficulty), HARD on every floor (#137).
+    """
+    return run_hard and floor >= (hard_from_floor or 1)
+
+
+def team_difficulty(setting, difficulty, hard_from_floor):
+    """The run's difficulty once the team is picked (#137).
+
+    A team whose switch to hard is off (hard_from_floor None) plays NORMAL, unless the global setting is "hard"
+    outright: then the setting wins. Under "auto" such a team's runs are NORMAL, weekly bonuses left or not.
+    """
+    return "normal" if hard_from_floor is None and setting != "hard" else difficulty
 
 
 def difficulty_move(floor, shown_hard, want_hard):
@@ -86,6 +99,34 @@ def _norm(s):
     return "".join(c for c in s.lower() if c.isalnum())
 
 
+def match_title(text, names, min_ratio=0.8):
+    """The pack name a card's OCR title stands for, or None (spec 05 section 2, #89).
+
+    Each name is looked for inside the text, letters and digits only: the window of the text as long as the
+    name that is most like it scores r, so a logo fragment or a lost second line costs nothing and an OCR slip
+    or two still passes min_ratio. Of the names that pass, the one covering the most letters (r x its length)
+    wins by a letter at least, so "Sea" inside "Mountain of Corpses, Sea of Blood" loses to the whole title;
+    a tie ("Line" for Line 1-3) is None.
+    """
+    best = title_candidates(text, names, min_ratio)
+    return best[0] if len(best) == 1 else None
+
+
+def title_candidates(text, names, min_ratio=0.8):
+    """The names tied for the best match of text (match_title), best first; [] when none passes."""
+    key = _norm(text)
+    found = []
+    for name in set(names):
+        n = _norm(name)
+        if not key or not n:
+            continue
+        r = max(SequenceMatcher(None, key[i:i + len(n)], n).ratio() for i in range(max(1, len(key) - len(n) + 1)))
+        if r >= min_ratio:
+            found.append((r * len(n), name))
+    found.sort(reverse=True)
+    return [name for score, name in found if found[0][0] - score < 1]
+
+
 def match_card(lines, names):
     """(pack name or None, title text) for a card's OCR lines, top to bottom.
 
@@ -93,19 +134,37 @@ def match_card(lines, names):
     """
     for i in range(len(lines)):
         title = " ".join(lines[i:])
-        name = match_pack(title, names)
+        name = match_title(title, names)
         if name:
             return name, title
     return None, " ".join(lines)
 
 
 def rank_packs(cards, names, marks):
-    """(title, mark) per card; a card that matches no known pack is neutral."""
+    """(title, mark) per card; a card that matches no known pack is neutral.
+
+    A title alike to several packs that share one mark takes it: live, "Line 1" read as "Line", and every
+    Line pack is avoided (#89).
+    """
     out = []
     for lines in cards:
         name, title = match_card(lines, names)
-        out.append((name or title, marks.get(name, "neutral") if name else "neutral"))
+        if name:
+            out.append((name, marks.get(name, "neutral")))
+            continue
+        shared = {marks.get(n, "neutral") for n in title_candidates(title, names)}
+        out.append((title, shared.pop() if len(shared) == 1 else "neutral"))
     return out
+
+
+def refresh_wanted(ranks, setting, used):
+    """Whether to use a free refresh: only when every card is avoid, then per the run's theme_pack_refresh.
+
+    "none" never, "once" for the first refresh on the floor, "all" until the caller sees a refresh change nothing.
+    """
+    if not all(r == "avoid" for r in ranks):
+        return False
+    return setting == "all" or (setting == "once" and used == 0)
 
 
 def pick_pack(ranks):
