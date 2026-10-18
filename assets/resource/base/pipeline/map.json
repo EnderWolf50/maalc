@@ -96,5 +96,14 @@
             "Map/MapNodeShopCards.png"
         ],
         "count": 6
+    },
+    // The shop icon in grey, for a screenshot flattened to its brightness (actions.shop_icon): the colour templates above
+    // miss it on some packs (cyan, orange). Run on a crop, so the roi is the crop.
+    "MapNodeShopIcon": {
+        "recognition": "TemplateMatch",
+        "roi": [640, 0, 180, 620],
+        "template": "Map/MapNodeShopIcon.png",
+        "method": 5,
+        "threshold": 0.45
     }
 }

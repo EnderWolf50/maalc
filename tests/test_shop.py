@@ -18,6 +18,10 @@ CROP_AT = {
     "offers_super": (560, 210),  # tests/screens/SuperShop.png
     "offers_red": (560, 210),  # live (maalc-probe s28/013): Fragment of Hellfire, a red gem, 400 orange
     "offers_short": (560, 210),  # live 2026-10-18 (maalc-probe live-all/f/shopd_2590.6): 106 Cost, 3 offers tagged Not Enough Cost
+    # Map nodes (test_map_shop.py): 200 px around the node, live 2026-10-18 maalc-probe live2/f (map_f2_c, map_f1_c, map_f1_a)
+    "map_shop_cyan": (230, 45),
+    "map_shop_orange": (230, 45),
+    "map_event_orange": (226, 44),
 }
 OWNED, OFFER = 1.1, 0.8  # a gift icon's size on the fuse / sell pages and on the offers, over its GiftSearch template's
 
