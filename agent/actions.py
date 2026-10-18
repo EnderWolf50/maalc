@@ -109,20 +109,24 @@ def swipe(context, x1, y1, x2, y2, ms=500, wait=1.0):
 def scroll(context, x, y, dx, dy):
     """Drag the content under (x, y) by (dx, dy) px and let go without a fling (spec 07).
 
-    The game drops a drag's first move and flings the content on when the finger lifts while moving, so the
-    finger goes one 10 px move further and holds still SCROLL_HOLD s before lifting.
+    The game's drag threshold eats the first move, so the finger first moves 10 px and rests 0.1 s (a move
+    right after it can be eaten too), then moves (dx, dy) in 20 px moves 10 ms apart. The game flings the content
+    on with the speed the finger still has at the lift, decaying while it rests, so it rests SCROLL_HOLD s first.
     """
-    lead = 1 + 10 / max(abs(dx), abs(dy), 1)
-    drag(context, [(x, y), (x + round(dx * lead), y + round(dy * lead))], settle=0.1, hold=SCROLL_HOLD)
+    d = max(abs(dx), abs(dy), 1)
+    lx, ly = x + round(10 * dx / d), y + round(10 * dy / d)
+    drag(context, [(x, y), (lx, ly), (lx + dx, ly + dy)], settle=0, dwell=0.1, hold=SCROLL_HOLD, pause=0.01, step=20)
 
 
-# Live 2026-10-16: held 0.5 s, 10 drags of 150-300 px moved the grid 1 px more than asked, every time;
-# 0.4 s left up to 8 px of fling, 0.3 s 9 px, 0.1 s 80 px.
-SCROLL_HOLD = 0.5
+# Live 2026-10-18 (#114): with these moves (~1000 px/s) a 0.55 s rest left at most 1 px of fling in 126 drags of
+# 50-300 px on the map, the team list and the gift grid, 0.62-0.77 s each (1 px and 0.73-1.25 s before);
+# 0.5 s left 2 px, 0.4 s 6 px. Resting 0.05 s after the threshold move, 1 drag in ~200 lost a whole 20 px move.
+# At ~330 px/s the fling was +1/+6/+19/+58/+176 px for 0.5/0.3/0.2/0.1/0 s.
+SCROLL_HOLD = 0.55
 
 
-def drag(context, points, settle=0.3, dwell=0.1, hold=0.0, pause=0.02):
-    """One touch through points: down on the first, settle s, then 10 px moves pause s apart, dwell s on each point.
+def drag(context, points, settle=0.3, dwell=0.1, hold=0.0, pause=0.02, step=10):
+    """One touch through points: down on the first, settle s, then step px moves pause s apart, dwell s on each point.
 
     Lifts on the last point after hold s; at once by default: a finger held on a battle skill opens its details.
     """
@@ -130,7 +134,7 @@ def drag(context, points, settle=0.3, dwell=0.1, hold=0.0, pause=0.02):
     ctl.post_touch_down(*points[0]).wait()
     time.sleep(settle)
     for (x0, y0), (x1, y1) in zip(points, points[1:]):
-        n = max(1, max(abs(x1 - x0), abs(y1 - y0)) // 10)
+        n = max(1, max(abs(x1 - x0), abs(y1 - y0)) // step)
         for k in range(1, n + 1):
             ctl.post_touch_move(round(x0 + (x1 - x0) * k / n), round(y0 + (y1 - y0) * k / n)).wait()
             time.sleep(pause)

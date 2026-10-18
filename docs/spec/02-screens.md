@@ -38,7 +38,7 @@
 
 | 畫面 | 辨識方式 | 處理 | 可能的下一個畫面 | 來源 | 實機截圖 |
 |---|---|---|---|---|---|
-| 選隊頁 | OCR：左側 `TEAMS` 清單（`TEAMS #1`–`#40`）；模板：右下 Confirm | 選輪替游標指到的隊伍所設定的遊戲內隊伍欄位，點 Confirm（[03](03-decisions.md) 輪替）。清單一次只顯示約 7 欄，要捲動才看得到後面的欄位。右下的 `Starlight Bonus` 是這支隊伍可用的星光 | 等級警告對話框、星光頁 | #8、#9 | `captures/01_team_picker.png` |
+| 選隊頁 | OCR：左側 `TEAMS` 清單（`TEAMS #1`–`#40`）；模板：右下 Confirm | 選輪替游標指到的隊伍所設定的遊戲內隊伍欄位，點 Confirm（[03](03-decisions.md) 輪替）。清單一次只顯示約 7 欄（完整的 6 欄，列距 36.4 px），要捲動才看得到後面的欄位；`#40` 是最後一欄。實機 2026-10-18（#113）：每次捲 140 px，選 `#15`、`#30`、`#40`、`#22`、`#5` 都讀到正確標題，最多捲 8 次。右下的 `Starlight Bonus` 是這支隊伍可用的星光 | 等級警告對話框、星光頁 | #8、#9 | `captures/01_team_picker.png` |
 | 等級警告對話框 | OCR：`lower than the recommended level`、`Current Avg. Level`、`Recommended Level` | 點 Confirm 繼續 | 星光頁 | #8、#19 | `captures/02_after_team_confirm.png` |
 | 星光頁（Grace of Stars） | 模板：右側 `Select All Graces`、`Enter`；OCR：右上 `Owned` → `Available` → Cost 三個數字 | 依隊伍的星光方案逐張點 Grace 的等級，讀可用星光（`Available`，等於選隊頁的 `Starlight Bonus`，不是 `Owned`）；買不起時依全域選項停止或跳過（[03](03-decisions.md) 星光）。完成後點 Enter。10 張卡排成兩列，每張卡右上是基礎價格，底部是 `+`、`++` 兩個按鈕；右側另有 `Enhance All` 的 `+`／`++`，bot 不用。名稱與等級的對應見 [04](04-settings.md#6-星光方案6-組) | 星光確認對話框 | #8、#9 | `captures/03_starlight_page.png` |
 | 星光確認對話框 | OCR：標題 `Select Grace of Stars`、`Continue with selected effects?`；模板：`Convert Starlight to Cost` 勾選框 | 依星光方案切換 `Convert Starlight to Cost`，點 Confirm。不勾選時，沒用掉的星光會加進這局的結算獎勵（對話框文字 `Any unspent Starlight will be added to your Dungeon clear rewards.`） | 初始飾品頁 | #8、#9 | `captures/04_starlight_confirm.png` |
