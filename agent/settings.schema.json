@@ -17,7 +17,7 @@
     "trial_risk_overrides"
   ],
   "properties": {
-    "version": { "const": 5 },
+    "version": { "const": 6 },
     "language": { "enum": ["zh_tw", "en_us"], "default": "zh_tw" },
     "run": {
       "type": "object",
@@ -36,7 +36,7 @@
       ],
       "properties": {
         "difficulty": { "enum": ["hard", "normal", "auto"], "default": "auto" },
-        "runs": { "type": "integer", "minimum": 0, "default": 1 },
+        "runs": { "type": ["integer", "null"], "minimum": 1, "default": 1, "description": "null: no limit" },
         "weekly_bonus_use": { "enum": ["none", "normal", "hard"], "default": "hard" },
         "weekly_bonus_amount": { "enum": ["one", "all"], "default": "all" },
         "stop_when_weekly_bonus_out": { "type": "boolean", "default": false },
@@ -137,7 +137,13 @@
             "default": "Burn"
           },
           "usage": { "enum": ["any", "hard_only", "normal_only"], "default": "any" },
-          "hard_from_floor": { "type": "integer", "minimum": 0, "maximum": 5, "default": 0 },
+          "hard_from_floor": {
+            "type": ["integer", "null"],
+            "minimum": 1,
+            "maximum": 5,
+            "default": 1,
+            "description": "HARD from this floor of a hard run; null: this team plays the whole run NORMAL"
+          },
           "deployment_order": {
             "oneOf": [
               { "$ref": "#/$defs/plan_ref" },
@@ -188,7 +194,13 @@
           "shop_refresh_limit": { "type": "integer", "minimum": 0, "default": 2 },
           "heal": { "enum": ["none", "full", "revive"], "default": "revive" },
           "reserve_cost": { "type": "integer", "minimum": 0, "default": 0 },
-          "min_alive": { "type": "integer", "minimum": 0, "maximum": 12, "default": 0 },
+          "min_alive": {
+            "type": ["integer", "null"],
+            "minimum": 1,
+            "maximum": 12,
+            "default": null,
+            "description": "fewer alive is handled like used-up wipe retries (run.after_retries); null: no check"
+          },
           "guard_turns": { "type": "integer", "minimum": 0, "maximum": 5, "default": 0 },
           "trial_risk_weight": { "enum": ["low", "medium", "high"], "default": "high" },
           "gift_search": {

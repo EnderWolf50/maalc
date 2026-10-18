@@ -53,8 +53,11 @@ def starlight_purchases(plan, available, unaffordable):
 
 
 def hard_wanted(floor, run_hard, hard_from_floor):
-    """Whether this floor should be HARD: a hard run goes HARD from floor N on, N = 0 means all floors."""
-    return run_hard and floor >= hard_from_floor
+    """Whether this floor should be HARD: a hard run goes HARD from floor N on (1: all floors).
+
+    hard_from_floor None (the team's switch off): the team plays the whole run NORMAL (#137).
+    """
+    return run_hard and hard_from_floor is not None and floor >= hard_from_floor
 
 
 def difficulty_move(floor, shown_hard, want_hard):

@@ -98,6 +98,37 @@ def test_a_formation_page_still_fading_in_is_read_once_it_is_still(context, monk
     assert actions.RUN["alive"] == 12
 
 
+def few_alive(context, monkeypatch, after_retries, min_alive):
+    """A formation page with 4 of 12 alive; the stops and taps it leads to."""
+    actions.RUN.update(team={"min_alive": min_alive, "name": "t"}, settings={"run": {"after_retries": after_retries}})
+    stops, taps = [], []
+    monkeypatch.setattr(actions, "stop", lambda context, reason, line=None: stops.append(reason) or False)
+    monkeypatch.setattr(actions, "tap", lambda context, x, y, wait=1.0: taps.append((x, y)))
+    monkeypatch.setattr(actions.run_start, "resolve_plan", lambda *a: [])  # ends the action after the count
+    reads(context, {tuple(actions.PARTICIPANTS): [("4/4", (1125, 500, 60, 30))]})
+    result = actions.Formation().run(context, None)
+    return result, stops, taps
+
+
+def test_too_few_alive_forfeits_the_run_like_used_up_wipe_retries(context, monkeypatch):
+    # #137: fewer than K alive goes the way of after_retries; forfeit backs out to the map, RouteMap forfeits there.
+    result, stops, taps = few_alive(context, monkeypatch, "forfeit", 5)
+    assert result is True and stops == []
+    assert actions.RUN["forfeit"] is True
+    assert taps == [actions.FORMATION_BACK]
+
+
+def test_too_few_alive_stops_when_used_up_wipe_retries_stop(context, monkeypatch):
+    result, stops, taps = few_alive(context, monkeypatch, "stop", 5)
+    assert result is False and len(stops) == 1 and taps == []
+
+
+def test_no_alive_check_with_the_switch_off(context, monkeypatch):
+    result, stops, taps = few_alive(context, monkeypatch, "forfeit", None)
+    assert all("deployment order" in s for s in stops)  # only the empty order (the stub) stops it
+    assert "forfeit" not in actions.RUN
+
+
 def test_event_text_is_tapped_through_until_the_choices_show(context):
     # The user's tip: taps on a dead corner run the text on; stop once there is something to pick.
     shots = []

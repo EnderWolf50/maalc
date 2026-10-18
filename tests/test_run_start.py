@@ -43,7 +43,8 @@ def test_starlight_never_buys_more_than_available():
 
 
 @pytest.mark.parametrize(("floor", "run_hard", "from_floor", "expected"), [
-    (1, True, 0, True), (5, True, 0, True), (2, True, 3, False), (3, True, 3, True), (1, False, 0, False),
+    (1, True, 1, True), (5, True, 1, True), (2, True, 3, False), (3, True, 3, True), (1, False, 1, False),
+    (1, True, None, False), (5, True, None, False),  # the switch off: this team plays the whole run NORMAL (#137)
 ])
 def test_hard_wanted(floor, run_hard, from_floor, expected):
     assert rs.hard_wanted(floor, run_hard, from_floor) is expected

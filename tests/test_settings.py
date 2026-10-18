@@ -15,16 +15,16 @@ STARLIGHT = {"levels": ["none"] * 10, "priority": list(range(1, 11)), "convert_l
 def team(id, game_team, **kw):
     return {
         "id": id, "name": f"Team {id}", "enabled": True, "game_team": game_team, "keyword": "Burn",
-        "usage": "any", "hard_from_floor": 0, "deployment_order": {"custom": ORDER},
+        "usage": "any", "hard_from_floor": 1, "deployment_order": {"custom": ORDER},
         "starlight": {"custom": STARLIGHT}, "theme_pack_plan": "default",
         "reward_cards": ["Starlight", "Random E.G.O Gift", "Cost & Keyword Gift Chance", "Cost", "E.G.O Resource"],
-        "shop_refresh_limit": 2, "heal": "revive", "reserve_cost": 0, "min_alive": 0, "guard_turns": 0,
+        "shop_refresh_limit": 2, "heal": "revive", "reserve_cost": 0, "min_alive": None, "guard_turns": 0,
         "trial_risk_weight": "high", "gift_search": {"enabled": False, "gifts": []}, "allow_white_gossypium": True, **kw,
     }
 
 
 VALID = {
-    "version": 5,
+    "version": 6,
     "language": "zh_tw",
     "run": {
         "difficulty": "auto", "runs": 1, "weekly_bonus_use": "hard", "weekly_bonus_amount": "all",
@@ -41,6 +41,9 @@ VALID = {
     "event_overrides": [{"question": "Q?", "option": "Yes"}],
     "trial_risk_overrides": [{"trial": "Growth I", "risk": 3}],
 }
+
+
+VALID_FROM_ZEROS = {**VALID, "run": {**VALID["run"], "runs": None}}  # version 5's 0 run limit migrated
 
 
 def load(tmp_path, data):
@@ -83,6 +86,9 @@ def test_broken_json(tmp_path):
     (lambda d: d["run"].update(runs=-1), "run/runs"),
     (lambda d: d["teams"][0].update(game_team=41), "teams/0/game_team"),
     (lambda d: d["teams"][0].update(min_alive=13), "teams/0/min_alive"),
+    (lambda d: d["teams"][0].update(min_alive=0), "teams/0/min_alive"),  # off is null since version 6 (#137)
+    (lambda d: d["teams"][0].update(hard_from_floor=0), "teams/0/hard_from_floor"),
+    (lambda d: d["run"].update(runs=0), "run/runs"),
     (lambda d: d["deployment_order_plans"][0]["order"].__setitem__(1, "Yi Sang"), "deployment_order_plans/0/order"),
     (lambda d: d["teams"][1].update(reward_cards=["Cost"] * 5), "teams/1/reward_cards"),
     (lambda d: d["starlight_plans"][0]["priority"].__setitem__(0, 2), "starlight_plans/0/priority"),
@@ -98,27 +104,45 @@ def test_schema_errors_name_the_field(tmp_path, fn, where):
 
 
 def test_newer_version_is_refused(tmp_path):
-    assert "newer" in errors(tmp_path, {**VALID, "version": 6})[0]
+    assert "newer" in errors(tmp_path, {**VALID, "version": 7})[0]
 
 
 def test_version_1_gets_guard_turns_off(tmp_path):
-    old = edited(lambda d: [d["run"].pop("theme_pack_refresh")] + [(t.pop("guard_turns"), t.pop("gift_search"), t.pop("allow_white_gossypium")) for t in d["teams"]])
-    assert load(tmp_path, {**old, "version": 1}) == VALID
+    old = edited(lambda d: [old_numbers(d)] + [d["run"].pop("theme_pack_refresh")] + [(t.pop("guard_turns"), t.pop("gift_search"), t.pop("allow_white_gossypium")) for t in d["teams"]])
+    assert load(tmp_path, {**old, "version": 1}) == VALID_FROM_ZEROS
 
 
 def test_version_2_gets_gift_search_off(tmp_path):
-    old = edited(lambda d: [d["run"].pop("theme_pack_refresh")] + [(t.pop("gift_search"), t.pop("allow_white_gossypium")) for t in d["teams"]])
-    assert load(tmp_path, {**old, "version": 2}) == VALID
+    old = edited(lambda d: [old_numbers(d)] + [d["run"].pop("theme_pack_refresh")] + [(t.pop("gift_search"), t.pop("allow_white_gossypium")) for t in d["teams"]])
+    assert load(tmp_path, {**old, "version": 2}) == VALID_FROM_ZEROS
 
 
 def test_version_3_refreshes_all_avoid_theme_packs_as_before(tmp_path):
-    old = edited(lambda d: [d["run"].pop("theme_pack_refresh")] + [t.pop("allow_white_gossypium") for t in d["teams"]])
-    assert load(tmp_path, {**old, "version": 3}) == VALID
+    old = edited(lambda d: [old_numbers(d)] + [d["run"].pop("theme_pack_refresh")] + [t.pop("allow_white_gossypium") for t in d["teams"]])
+    assert load(tmp_path, {**old, "version": 3}) == VALID_FROM_ZEROS
+
+
+def old_numbers(d):
+    """VALID as version 5 wrote it: 0 for no run limit, a whole HARD run and no alive check."""
+    d["run"]["runs"] = 0
+    for t in d["teams"]:
+        t.update(hard_from_floor=0, min_alive=0)
+
+
+def test_version_5_zeros_become_switches(tmp_path):
+    # #137: runs 0 -> off (no limit); hard_from_floor 0 (the whole run HARD) -> on from floor 1; min_alive 0 -> off.
+    expected = edited(lambda d: d["run"].update(runs=None))
+    assert load(tmp_path, {**edited(old_numbers), "version": 5}) == expected
+
+
+def test_version_5_numbers_stay(tmp_path):
+    old = edited(lambda d: [d["run"].update(runs=3)] + [t.update(hard_from_floor=3, min_alive=5) for t in d["teams"]])
+    assert load(tmp_path, {**old, "version": 5}) == old | {"version": 6}
 
 
 def test_version_4_teams_may_hold_white_gossypium_as_before(tmp_path):
-    old = edited(lambda d: [t.pop("allow_white_gossypium") for t in d["teams"]])
-    assert load(tmp_path, {**old, "version": 4}) == VALID
+    old = edited(lambda d: [old_numbers(d)] + [t.pop("allow_white_gossypium") for t in d["teams"]])
+    assert load(tmp_path, {**old, "version": 4}) == VALID_FROM_ZEROS
 
 
 def test_old_version_is_migrated_in_memory(tmp_path, monkeypatch):
