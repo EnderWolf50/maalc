@@ -93,7 +93,8 @@
         "roi": [640, 0, 180, 620],
         "template": [
             "Map/MapNodeShop.png",
-            "Map/MapNodeShopCards.png"
+            "Map/MapNodeShopCards.png",
+            "Map/MapNodeShopOrange.png"
         ],
         "count": 6
     }
