@@ -96,12 +96,39 @@ def terms(cwd: str) -> list[str]:
     return [t.strip() for t in found if len(t.strip()) >= 4]
 
 
+def segment(cmd: str, at: int) -> str:
+    """The one call starting at `at`: up to the first `&&`, `||`, `;`, `|` or newline outside quotes and `$(...)`.
+    A heredoc's `<<` stays in the call, so its body still reads as unreadable."""
+    quote, depth, i = "", 0, at
+    while i < len(cmd):
+        c = cmd[i]
+        if quote:
+            if c == quote and cmd[i - 1] != "\\":
+                quote = ""
+        elif c in "'\"":
+            quote = c
+        elif cmd.startswith("$(", i):
+            depth += 1
+            i += 1
+        elif c == ")" and depth:
+            depth -= 1
+        elif not depth and (c in ";|\n" or cmd.startswith("&&", i)):
+            break
+        i += 1
+    return cmd[at:i]
+
+
 def check(cmd: str, cwd: str) -> str | None:
-    """The reason to deny the command, or None."""
-    start = START.search(cmd)
-    if not start:
-        return None
-    text, unreadable = public_text(cmd[start.start():], base_dir(cmd[:start.start()], start.group(0), cwd))
+    """The reason to deny the command, or None. Every publishing call in the line is checked on its own."""
+    for start in START.finditer(cmd):
+        reason = check_call(segment(cmd, start.start()), cmd[:start.start()], start.group(0), cwd)
+        if reason:
+            return reason
+    return None
+
+
+def check_call(call: str, prefix: str, start_text: str, cwd: str) -> str | None:
+    text, unreadable = public_text(call, base_dir(prefix, start_text, cwd))
     if unreadable:
         return "The guard cannot read this text: " + UNREADABLE_REASON + "."
     found = {m.group(0) for m in LOCAL.finditer(text)}

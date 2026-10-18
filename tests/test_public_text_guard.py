@@ -66,6 +66,8 @@ MUST_HIT = [
     'git --no-pager commit -m "see ' + WIN + '"',
     "git commit -Fdirty.md",
     "git commit --file=dirty.md",
+    f'gh pr create --title t --body ok && gh issue comment 1 --body "see {WIN}"',  # every call in a line is checked
+    f'git commit -m ok; git tag -a v1 -m "see {WIN}"',
 ]
 MUST_PASS = [
     'gh issue comment 1 --body "see https://github.com/EnderWolf50/maalc/pull/2 and tests/screens/Title.png"',
@@ -81,6 +83,10 @@ MUST_PASS = [
     "gh pr merge 3 --squash",
     "git merge side",
     "git commit -Fclean.md",
+    # a substitution in a later command is not this call's text
+    'gh pr merge 168 --merge && [ "$(gh pr view 168 --json state -q .state)" = MERGED ] && echo merged',
+    'gh pr merge 3 --merge; s=`gh pr view 3 --json state`',
+    'git commit -m "fix: tidy" && echo "$(git log -1 --format=%h)"',
 ]
 
 
