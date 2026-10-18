@@ -34,7 +34,7 @@ SOFTWARE.
 
 ## Limbus Company 遊戲素材
 
-`assets/resource/base/image/` 的模板與 `tests/screens/` 的測試截圖取自 Limbus Company 的遊戲畫面，著作權屬於 © Project Moon，不在本專案的 MIT 授權範圍內。測試截圖中的 UID 與帳號已遮蔽。`assets/resource/base/image/GiftSearch/` 的 320 個飾品圖示取自遊戲客戶端 1.117.0 的資源包（`Sprite/EgoGiftIcon`），縮成畫面上的大小、透明處填綠色作為比對遮罩，同樣屬於 © Project Moon。`assets/resource/base/data/gift_search.json` 的飾品清單、id、等級與英文名稱取自同一版客戶端的靜態資料。
+`assets/resource/base/image/` 的模板與 `tests/screens/` 的測試截圖取自 Limbus Company 的遊戲畫面，著作權屬於 © Project Moon，不在本專案的 MIT 授權範圍內。測試截圖中的 UID 與帳號已遮蔽。`assets/resource/base/image/GiftSearch/` 的 320 個飾品圖示取自遊戲客戶端 1.117.0 的資源包（`Sprite/EgoGiftIcon`），縮成畫面上的大小、透明處填綠色作為比對遮罩，同樣屬於 © Project Moon。`assets/resource/base/data/gift_search.json` 的飾品清單、id、等級與英文名稱取自同一版客戶端的靜態資料。`assets/resource/base/image/Shop/` 的 10 個體系徽章（`Badge<體系>.png`）裁自 1.117.0 實機的商店、合成頁截圖（2026-10-13 至 10-18），縮成飾品圖示模板的比例，徽章以外填綠色作為比對遮罩；`tests/shop/` 是同一批截圖的格子區域，同樣屬於 © Project Moon。
 
 本專案是非官方的粉絲作品，與 Project Moon 無關。以上素材僅供自動化辨識之用；著作權人如要求移除，會立即從 repo 移除。
 
