@@ -72,9 +72,16 @@
         "recognition": "OCR",
         "roi": [990, 140, 230, 35],
         "expected": "F\\s*\\d",
-        "action": "Click",
-        "target": [1030, 470, 160, 50],
-        "post_delay": 2000
+        "action": "Custom",
+        "custom_action": "TapUntil",
+        "custom_action_param": {
+            "target": [1030, 470, 160, 50],
+            "next": [
+                {"roi": [80, 272, 100, 28], "expected": "^TEAMS$"},
+                {"roi": [520, 380, 240, 40], "expected": "^Resume$"}
+            ],
+            "timeout": 4
+        }
     },
     // Dungeon Progress with Resume / Halt Exploration / Cancel: always Resume (spec 01 入口頁的分流).
     "ResumeDialog": {
@@ -116,17 +123,25 @@
         "recognition": "OCR",
         "roi": [400, 325, 480, 45],
         "expected": "Will you enter",
-        "action": "Click",
-        "target": [650, 465, 220, 40],
-        "post_delay": 2000
+        "action": "Custom",
+        "custom_action": "TapUntil",
+        // The entry page behind reads "Before Entry" until the run exists: leaving early plans the run twice.
+        "custom_action_param": {
+            "target": [650, 465, 220, 40],
+            "next": {"roi": [990, 140, 230, 35], "expected": "F\\s*\\d"}
+        }
     },
     "LevelWarning": {
         "recognition": "OCR",
         "roi": [400, 230, 480, 90],
         "expected": "recommended level",
-        "action": "Click",
-        "target": [665, 478, 200, 35],
-        "post_delay": 2000
+        "action": "Custom",
+        "custom_action": "TapUntil",
+        "custom_action_param": {
+            "target": [665, 478, 200, 35],
+            "next": {"roi": [890, 30, 115, 28], "expected": "Available"},
+            "timeout": 4
+        }
     },
     "TeamSelect": {
         "recognition": "OCR",
@@ -154,16 +169,15 @@
         "roi": [780, 145, 230, 35],
         "expected": "Selected E",
         "action": "Custom",
-        "custom_action": "PickStartingGift",
-        "post_delay": 1000
+        "custom_action": "PickStartingGift"
     },
+    // Confirm, then waits until the window is gone or the next gift's is up (GiftGet in actions.py).
     "GiftGet": {
         "recognition": "OCR",
         "roi": [520, 160, 240, 40],
         "expected": "Gift GET",
-        "action": "Click",
-        "target": [545, 512, 190, 40],
-        "post_delay": 1000
+        "action": "Custom",
+        "custom_action": "GiftGet"
     },
     // Selects the team's gifts with owned Starlight, or presses Refuse Gift (spec 03 section 5).
     "GiftSearch": {
@@ -171,8 +185,7 @@
         "roi": [140, 30, 220, 35],
         "expected": "Gift Search",
         "action": "Custom",
-        "custom_action": "GiftSearch",
-        "post_delay": 1500
+        "custom_action": "GiftSearch"
     },
     "GiftSearchForgo": {
         "recognition": "OCR",

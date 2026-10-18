@@ -74,6 +74,9 @@ def test_pick_checker_takes_best_odds_leftmost():
     assert r.pick_checker([("VeryLow", 77), ("Normat", 147), ("VeryHigh", 216), ("High", 286)]) == 2
     assert r.pick_checker([("??", 77)]) is None
     assert r.pick_checker([]) is None
+    # A sinner a tap did nothing on is passed over: the next best, then none.
+    assert r.pick_checker(captions, skip={3}) == 1
+    assert r.pick_checker([("Low", 77), ("High", 147)], skip={0, 1}) is None
 
 
 def test_card_type():
