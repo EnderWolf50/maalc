@@ -824,6 +824,32 @@ def team_picker(context, title, after_confirm):
                    (1160, 522, 60, 34): "63", (400, 230, 480, 90): after_confirm})
 
 
+def infinity_switch(context, monkeypatch, takes):
+    """The entry page's Parallel Superposition Mode reads ON until a tap on INFINITY MIRROR takes (if it does)."""
+    taps, stops = [], []
+    monkeypatch.setattr(actions, "tap", lambda context, x, y, wait=1.0: taps.append((x, y)))
+    monkeypatch.setattr(actions, "stop", lambda context, reason, line=None: stops.append(reason) or False)
+
+    def ocr(context, image, roi, only_rec=False):
+        if roi == actions.INFINITY_TITLE:
+            # As MaaFramework read EntryNewRun.png and the synthetic EntryParallelOn.png
+            return [(f"Alll/Parallel Superposition Mode:{'OFF' if takes and taps else 'ON'}/l", (891, 333, 324, 20))]
+        return []
+    monkeypatch.setattr(actions, "ocr", ocr)
+    return taps, stops, actions.ParallelModeOff().run(context, None)
+
+
+def test_a_parallel_superposition_switch_left_on_is_switched_off(context, clock, monkeypatch):
+    # #94: the bot never plays past floor 5.
+    taps, stops, result = infinity_switch(context, monkeypatch, takes=True)
+    assert result is True and taps == [actions.INFINITY_BUTTON] and stops == []
+
+
+def test_a_parallel_superposition_switch_that_stays_on_stops_the_task(context, clock, monkeypatch):
+    taps, stops, result = infinity_switch(context, monkeypatch, takes=False)
+    assert result is False and taps == [actions.INFINITY_BUTTON] * 2 and len(stops) == 1
+
+
 def test_select_team_waits_for_the_title_after_the_tap_and_for_the_page_after_confirm(context, clock):
     actions.RUN["team"] = {"game_team": 3}
     team_picker(context, lambda clicks, looks: "TEAMS #1" if looks < 4 else "TEAMS #3",

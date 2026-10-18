@@ -30,6 +30,7 @@
             "[JumpBack]ExplorationComplete",
             "[JumpBack]MirrorEnterDialog",
             "[JumpBack]ResumeDialog",
+            "[JumpBack]ParallelModeOn",
             "[JumpBack]MirrorEntryUnclaimed",
             "[JumpBack]MirrorEntryPaused",
             "[JumpBack]MirrorEntryNewRun",
@@ -58,6 +59,16 @@
             "[JumpBack]MirrorMap",
             "[JumpBack]GoToMirrorEntry"
         ]
+    },
+    // Entry page with Parallel Superposition Mode ON (#94): switched OFF before anything else, the bot never plays
+    // past floor 5. Texts: EN_MirrorDungeonUI_5_InfinityFloor ("Parallel Superposition Mode : " + ON / OFF).
+    // Its dialogs (Resume, Enter) come first in the hub: the label reads through them.
+    "ParallelModeOn": {
+        "recognition": "OCR",
+        "roi": [890, 330, 330, 28],
+        "expected": "Superposition.*:\\s*[O0]N\\b",
+        "action": "Custom",
+        "custom_action": "ParallelModeOff"
     },
     // Entry page: branch on the Exploring: field (spec 01, 入口頁的分流).
     "MirrorEntryNewRun": {
