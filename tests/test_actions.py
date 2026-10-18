@@ -1119,3 +1119,27 @@ def test_a_cost_that_stays_unread_is_none(context):
     cost_reads(context, [None])
     assert actions.read_cost(context) is None
     assert context.run_recognition.call_count > 1  # read again before giving up
+
+
+def test_a_forfeited_run_gives_up_its_rewards_and_the_same_team_runs_next(context, monkeypatch, tmp_path):
+    # #95: after_retries "forfeit" ends the run at Exploration Reward short of floor 5; the rotation
+    # cursor does not move on, so the team that lost runs the next run again.
+    monkeypatch.setattr(actions, "ROOT", tmp_path)
+    teams = [{"id": "a", "name": "A", "enabled": True}, {"id": "b", "name": "B", "enabled": True}]
+    actions.RUN.update(settings={"run": {}, "teams": teams}, team=teams[0], planned=True, difficulty="hard")
+    taps = []
+
+    def ocr(context, image, roi, only_rec=False):
+        if roi == actions.RESULT:
+            return [("Floor 3 [HARD] 2/6", (300, 420, 90, 20))]
+        if roi == actions.DIALOG_TEXT and taps:
+            return [("End expedition without claiming rewards?", (400, 300, 400, 30))]
+        return []
+    monkeypatch.setattr(actions, "ocr", ocr)
+    monkeypatch.setattr(actions, "tap", lambda context, x, y, wait=1.0: taps.append((x, y)))
+
+    actions.Settle().run(context, None)
+    assert taps == [actions.GIVE_UP, actions.DIALOG_CONFIRM]
+    assert not (tmp_path / "state").exists()  # no cursor written
+    line = json.loads((tmp_path / "logs" / "runs.jsonl").read_text(encoding="utf-8"))
+    assert line["result"] == "giveup" and line["team"] == "a"

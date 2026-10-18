@@ -69,7 +69,7 @@
 | 每週獎勵用完就停 | `stop_when_weekly_bonus_out` | 布林 | 開／關 | 關 | #8、#19 |
 | 星光買不起時 | `starlight_unaffordable` | 字串 | `stop` 停止任務／`skip` 跳過這個加成（見第 7 節） | `skip` | #9、#19 |
 | 全滅重打次數 N | `wipe_retries` | 整數 ≥ 0 | 同一場遭遇戰最多重打幾次 | 2 | #16 |
-| 重打用完後 | `after_retries` | 字串 | `stop` 停止／`forfeit` 放棄這局 | `stop` | #16 |
+| 重打用完後 | `after_retries` | 字串 | `stop` 停止／`forfeit` 放棄這局（不領獎勵，輪替游標不前進） | `forfeit` | #16、#95 |
 | 失敗通知 webhook | `webhook_url` | 字串 | 停止時送出摘要的網址；空字串 = 不送 | 空字串 | #14 |
 
 規則：
