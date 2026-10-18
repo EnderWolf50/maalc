@@ -548,6 +548,82 @@ def test_a_sale_reads_keywords_and_prices_off_the_grid_and_taps_only_what_it_sel
     assert actions.SELL_PANEL not in rois
 
 
+GOSSYPIUM = "White Gossypium"
+NO_GOSSYPIUM = {"keyword": "Bleed", "reserve_cost": 0, "gift_search": {"gifts": []}, "allow_white_gossypium": False}
+
+
+def test_a_team_without_white_gossypium_fuses_it_first(context, monkeypatch):
+    # #90: a Bleed team that does not hold it: its icon makes it material, ahead of the other materials.
+    reads(context, {**FUSE_PAGE, tuple(actions.KEYWORD_LABELS): [("Bleed", (300, 400, 60, 20))]})
+    cells_read(monkeypatch, ("Burn", None), ("Tremor", None), ("Pierce", None), ("Bleed", GOSSYPIUM), ("Bleed", None))
+    actions.Shop.fuse(context, NO_GOSSYPIUM, {})
+    taps = [c.args for c in context.tasker.controller.post_click.call_args_list]
+    assert [taps.count(c) for c in actions.FUSE_CELLS[:5]] == [1, 1, 0, 1, 0]
+
+
+def test_a_team_without_white_gossypium_does_not_buy_it(context, monkeypatch):
+    # #90: White Gossypium is a Bleed gift; the Bleed team buys the other Bleed offer only.
+    offers = [("White Gossypium", (570, 333, 90, 17)), ("140", (600, 306, 40, 24)),
+              ("Wound Clerid", (725, 333, 90, 17)), ("150", (755, 306, 40, 24))]
+    costs, tapped = [500], []
+
+    def click(x, y):
+        tapped.append((x, y))
+        if (x, y) == actions.PURCHASE:
+            costs.append(costs[-1] - 150)
+        return MagicMock()
+    context.tasker.controller.post_click.side_effect = click
+
+    def run_recognition(name, image, override=None):
+        roi = tuple((override or {}).get(name, {}).get("roi", ()))
+        lines = {tuple(actions.OFFER_GRID): offers, tuple(actions.SHOP_COST): [(str(costs[-1]), (560, 120, 60, 30))],
+                 tuple(actions.DIALOG_TITLE): [("Purchase E.G.O Gifts", (500, 100, 260, 40))],
+                 tuple(actions.GET_TITLE): [("E.G.O Gift GET!", (560, 165, 160, 30))]}.get(roi, [])
+        results = [SimpleNamespace(text=t, box=b) for t, b in lines]
+        return SimpleNamespace(all_results=results, hit=True, best_result=None) if results else None
+    context.run_recognition.side_effect = run_recognition
+    cells_read(monkeypatch, ("Bleed", GOSSYPIUM, 2), ("Bleed", None, 2))
+    assert actions.Shop.buy_offers(context, NO_GOSSYPIUM, {"wanted": None, "sold": False}) == 1
+    assert [t for t in tapped if t[1] == 268] == [(775, 268)]
+
+
+def gift_page(context, monkeypatch, names):
+    """A gift choice page with a Bleed card per name, Select 0/1."""
+    taps = []
+    monkeypatch.setattr(actions, "tap", lambda context, x, y, wait=1.0: taps.append((x, y)))
+
+    def ocr(context, image, roi, only_rec=False):
+        if roi == actions.GIFT_CARDS:
+            return [r for i, n in enumerate(names) for r in
+                    [("Acquire E.G.O Gift", (200 + 300 * i, 160, 150, 20)), (n, (210 + 300 * i, 250, 150, 20)),
+                     ("Inflict Bleed", (210 + 300 * i, 300, 150, 20))]]
+        picked = any(y == 300 for _, y in taps)
+        selected = actions.GIFT_SELECT in taps
+        if roi == actions.GIFT_COUNT:
+            return [(f"Select {int(picked)}/1", (1080, 565, 100, 30))]
+        if roi == actions.REFUSE_GIFT and not (selected and picked):
+            return [("Refuse Gift", (900, 570, 100, 25))]
+        return []
+    monkeypatch.setattr(actions, "ocr", ocr)
+    actions.RUN.update(settings={"trial_risk_overrides": []}, team={**NO_GOSSYPIUM, "trial_risk_weight": "high"})
+    return taps
+
+
+def test_a_team_without_white_gossypium_picks_another_gift(context, monkeypatch):
+    taps = gift_page(context, monkeypatch, [GOSSYPIUM, "Wound Clerid"])
+    actions.PickGift().run(context, None)
+    assert [t for t in taps if t[1] == 300] == [(536, 300)]  # the second card only
+
+
+def test_a_team_without_white_gossypium_takes_it_when_it_is_the_only_card(context, monkeypatch):
+    # #90 (the user, 2026-10-18): taken rather than a random trial for the choice left; the shop then
+    # fuses or sells it first (test_a_team_without_white_gossypium_fuses_it_first).
+    taps = gift_page(context, monkeypatch, [GOSSYPIUM])
+    actions.PickGift().run(context, None)
+    assert taps == [(236, 300), actions.GIFT_SELECT]
+    assert actions.STUCK["flag"] is None
+
+
 def test_the_fusion_grid_is_not_scanned_again_while_the_owned_gifts_are_the_same(context):
     # The fuse page with its keyword dialog, every cell empty: no fusion this visit.
     reads(context, {tuple(actions.DIALOG_TITLE): [("Fuse E.G.O Gift", (500, 100, 200, 40))],

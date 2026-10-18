@@ -201,14 +201,14 @@ def cell_prices(results, cells):
     return prices
 
 
-def to_sell(gifts, wanted, cost, reserve):
+def to_sell(gifts, wanted, cost, reserve, first=()):
     """Indexes of the non-main gifts to sell so the wanted gift's price fits, highest index first.
 
     gifts are [(index on the sell page, sell price)] of the non-main gifts. Only the ones fusion
-    cannot use go: what is left over after groups of 3. The dearest go first, fewest sales.
-    None when even all of those would not cover the price: then nothing is sold.
+    cannot use go: what is left over after groups of 3. The indexes in first (gifts the team avoids, #90) go
+    first, then the dearest, fewest sales. None when even all of those would not cover the price: then nothing is sold.
     """
-    spare = sorted(gifts, key=lambda g: -g[1])[:len(gifts) % 3]
+    spare = sorted(gifts, key=lambda g: (g[0] not in first, -g[1]))[:len(gifts) % 3]
     picked = []
     for i, price in spare:
         if can_spend(cost, wanted, reserve):
@@ -220,13 +220,16 @@ def to_sell(gifts, wanted, cost, reserve):
     return sorted(picked, reverse=True)  # selling from the back keeps the earlier cells in place
 
 
-def gift_role(keyword, gift, main):
+def gift_role(keyword, gift, main, avoid=()):
     """"keep", "material" or "unknown" for an owned gift read off its grid cell, on the fuse and the sell page.
 
     keyword: its badge's keyword, "Keywordless" with no badge, None when the badge is cut off or unread;
-    gift: the team's observed gift its icon matched, or None. Kept: the main keyword, every keywordless gift
-    and the observed gifts (#103, #112). Unknown is left to the tooltip.
+    gift: the gift its icon matched (an observed or an avoided one), or None. Kept: the main keyword, every
+    keywordless gift and the observed gifts (#103, #112); a gift in avoid is material whatever its keyword (#90).
+    Unknown is left to the tooltip.
     """
+    if gift in avoid:
+        return "material"
     if gift or keyword in (main, "Keywordless"):
         return "keep"
     return "unknown" if keyword is None else "material"

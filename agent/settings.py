@@ -37,8 +37,17 @@ def _v3_to_v4(data):
     return data
 
 
+def _v4_to_v5(data):
+    """Version 5 adds teams[].allow_white_gossypium (#90), on as before."""
+    teams = data.get("teams")
+    for team in teams if isinstance(teams, list) else []:
+        if isinstance(team, dict):
+            team.setdefault("allow_white_gossypium", True)
+    return data
+
+
 # MIGRATIONS[n] turns a version-n dict into a version-(n + 1) dict; keep in step with gui/src/model.ts.
-MIGRATIONS = {1: _v1_to_v2, 2: _v2_to_v3, 3: _v3_to_v4}
+MIGRATIONS = {1: _v1_to_v2, 2: _v2_to_v3, 3: _v3_to_v4, 4: _v4_to_v5}
 
 NO_TEAM = "No enabled team: set up a team in the settings GUI first."
 
