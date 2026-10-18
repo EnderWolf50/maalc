@@ -1469,7 +1469,9 @@ EVENT_PORTRAIT_Y = 655
 EVENT_NEUTRAL = (5, 5)  # top-left corner: nothing there on any event page
 EVENT_TEXT_TAPS = 30
 EVENT_BUTTON_LABEL = [1040, 612, 190, 66]  # the Event node's roi: empty once the event page is gone
-EVENT_LEAST = 0.5  # s after a tap before the screen counts as moved: a fade's first frames are the same page
+EVENT_LIMIT = 180  # s one event may take before recovery L1 (AALC allows 300); a boss quiz of several rounds stays well under
+EVENT_GAP = 30  # s between two Event calls after which the next call is another event
+EVENT_LEAST = 0.5 # s after a tap before the screen counts as moved: a fade's first frames are the same page
 
 
 def data(name):
@@ -1488,19 +1490,37 @@ class Event(CustomAction):
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         run = current_run(context)
         image = screen(context)
+        # One event's clock: a call more than EVENT_GAP s after the last starts the next event's (#92).
+        now = time.monotonic()
+        event = RUN.get("event")
+        if event is None or now - event["last"] > EVENT_GAP:
+            event = RUN["event"] = {"since": now, "last": now, "checked": set()}
+        event["last"] = now
+        if now - event["since"] > EVENT_LIMIT:
+            RUN.pop("event")
+            return stuck(f"one event went on over {EVENT_LIMIT} s")
         tried = RUN.setdefault("event_tried", set())  # this question's options a tap did nothing on
+        checked = event["checked"]  # portraits a tap did nothing on in this check
         if red_button(image):
             tried.clear()
+            checked.clear()
             tap(context, *EVENT_BUTTON, wait=0)
             Event.settle(context, image)
         elif "Choose a character" in text(context, image, CHECK_PROMPT):
             # One read per portrait: read as a row, neighbouring captions run together ("HighVery Low").
             captions = [(text(context, image, [x - 38, 605, 76, 24], only_rec=True), x) for x in EVENT_PORTRAIT_X]
-            i = rewards.pick_checker(captions)
-            log(f"event check: {', '.join(t for t, _ in captions) or 'no odds read'}: take {captions[i][0] if i is not None else 'the first'}")
-            tap(context, captions[i][1] if i is not None else 77, EVENT_PORTRAIT_Y, wait=0)
-            Event.settle(context, image)
+            i = rewards.pick_checker(captions, checked)
+            if i is None:  # no odds read (or all tried): the next sinner not tried yet, round again when all are
+                i = next((k for k in range(len(captions)) if k not in checked), None)
+                if i is None:
+                    checked.clear()
+                    i = 0
+            log(f"event check: {', '.join(t for t, _ in captions) or 'no odds read'}: take sinner {i + 1}")
+            tap(context, captions[i][1], EVENT_PORTRAIT_Y, wait=0)
+            if Event.settle(context, image) is None:
+                checked.add(i)
         elif "Choices" in text(context, image, CHOICES_HEADER):
+            checked.clear()
             options = [(" ".join(lines), y) for y, lines in self.rows(ocr(context, image, CHOICE_ROWS))]
             if not options:
                 return True
@@ -1534,8 +1554,11 @@ class Event(CustomAction):
 
     @staticmethod
     def settle(context, before):
-        """Wait for a tap to show on screen, at most the 1.5 s it used to wait; MirrorHub looks again after."""
-        until(context, lambda im: moved(before, im), timeout=1.5, least=EVENT_LEAST)
+        """Wait for a tap to show on screen, at most the 1.5 s it used to wait; MirrorHub looks again after.
+
+        Returns the screen that moved, None when the tap did nothing.
+        """
+        return until(context, lambda im: moved(before, im), timeout=1.5, least=EVENT_LEAST)
 
     @staticmethod
     def panel_same(before, after):
