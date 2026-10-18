@@ -108,7 +108,8 @@ test("version 5 zeros become switches", () => {
 test("parseThemePacks reads the season's data file", () => {
   const data = parseThemePacks(themePacksYaml);
   expect(data.packs).toContain("Walpurgis Night: Hatred and Despair");
-  expect(data.default_plan).toEqual({});
+  expect(data.default_plan["The B.E."]).toBe("prefer"); // #89: the default plan has content
+  expect(Object.keys(data.default_plan).every((p) => data.packs.includes(p))).toBe(true);
   expect(parseThemePacks("packs: [A]\ndefault_plan:\n  A: avoid\n")).toEqual({ packs: ["A"], default_plan: { A: "avoid" } });
   expect(parseThemePacks("")).toEqual({ packs: [], default_plan: {} });
 });
