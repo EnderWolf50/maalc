@@ -17,7 +17,7 @@
     "trial_risk_overrides"
   ],
   "properties": {
-    "version": { "const": 3 },
+    "version": { "const": 4 },
     "language": { "enum": ["zh_tw", "en_us"], "default": "zh_tw" },
     "run": {
       "type": "object",
@@ -31,7 +31,8 @@
         "starlight_unaffordable",
         "wipe_retries",
         "after_retries",
-        "webhook_url"
+        "webhook_url",
+        "theme_pack_refresh"
       ],
       "properties": {
         "difficulty": { "enum": ["hard", "normal", "auto"], "default": "auto" },
@@ -42,7 +43,12 @@
         "starlight_unaffordable": { "enum": ["stop", "skip"], "default": "skip" },
         "wipe_retries": { "type": "integer", "minimum": 0, "default": 2 },
         "after_retries": { "enum": ["stop", "forfeit"], "default": "forfeit" },
-        "webhook_url": { "type": "string", "default": "" }
+        "webhook_url": { "type": "string", "default": "" },
+        "theme_pack_refresh": {
+          "enum": ["none", "once", "all"],
+          "default": "all",
+          "description": "free theme pack refreshes on a page of only avoided packs: none, the first one, or all"
+        }
       }
     },
     "deployment_order_plans": {

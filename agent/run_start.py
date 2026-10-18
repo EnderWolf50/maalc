@@ -108,6 +108,16 @@ def rank_packs(cards, names, marks):
     return out
 
 
+def refresh_wanted(ranks, setting, used):
+    """Whether to use a free refresh: only when every card is avoid, then per the run's theme_pack_refresh.
+
+    "none" never, "once" for the first refresh on the floor, "all" until the caller sees a refresh change nothing.
+    """
+    if not all(r == "avoid" for r in ranks):
+        return False
+    return setting == "all" or (setting == "once" and used == 0)
+
+
 def pick_pack(ranks):
     """Index of the card to take: best mark, leftmost among equals."""
     return min(range(len(ranks)), key=lambda i: (PACK_RANK[ranks[i]], i))

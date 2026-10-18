@@ -88,6 +88,22 @@ def test_rank_and_pick():
     assert rs.pick_pack(["avoid", "avoid"]) == 0
 
 
+
+@pytest.mark.parametrize(("setting", "used", "expected"), [
+    ("all", 0, True), ("all", 3, True),  # every free refresh (#25's rule, the default)
+    ("once", 0, True), ("once", 1, False),
+    ("none", 0, False),
+])
+def test_an_all_avoid_page_is_refreshed_as_often_as_the_setting_allows(setting, used, expected):
+    # #41: none / once / all; "all" stops only when a refresh changes nothing (the caller sees that).
+    assert rs.refresh_wanted(["avoid", "avoid", "avoid"], setting, used) is expected
+
+
+@pytest.mark.parametrize("setting", ["none", "once", "all"])
+def test_a_page_with_anything_but_avoid_is_never_refreshed(setting):
+    assert rs.refresh_wanted(["avoid", "neutral", "avoid"], setting, 0) is False
+
+
 @pytest.mark.parametrize(("visible", "target", "expected"), [
     ({1: 309, 2: 345}, 2, ("tap", 345)),
     ({1: 309, 7: 527}, 13, "down"),

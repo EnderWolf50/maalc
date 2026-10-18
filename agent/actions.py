@@ -871,8 +871,9 @@ class PickThemePack(CustomAction):
             return stuck(f"floor {floor} difficulty did not switch to {'HARD' if want else 'NORMAL'}")
 
         names, marks = theme_pack_marks(run["settings"], run["team"])
+        setting = run["settings"]["run"]["theme_pack_refresh"]
         seen = None
-        for _ in range(10):  # ponytail: stop when a refresh changes nothing; read `Refresh n/m` if that misfires
+        for used in range(10):  # ponytail: stop when a refresh changes nothing; read `Refresh n/m` if that misfires
             cards = pack_titles(context, screen(context))
             if not cards:
                 return stuck("no theme pack titles read")
@@ -880,7 +881,7 @@ class PickThemePack(CustomAction):
             log(f"floor {floor} packs: " + ", ".join(f"{t} ({r})" for t, r in ranked))
             ranks = [r for _, r in ranked]
             titles = [t for t, _ in ranked]
-            if not all(r == "avoid" for r in ranks) or titles == seen:
+            if not run_start.refresh_wanted(ranks, setting, used) or titles == seen:
                 break
             seen = titles
             tap(context, 1083, 47, wait=3)
