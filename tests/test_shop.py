@@ -16,6 +16,7 @@ CROP_AT = {
     "sell": (620, 200),  # live 2026-10-16 (maalc-probe s29/025_sell): the sell page of ShopFuse.png's gifts
     "offers": (560, 210),  # tests/screens/Shop.png
     "offers_super": (560, 210),  # tests/screens/SuperShop.png
+    "offers_red": (560, 210),  # live (maalc-probe s28/013): Fragment of Hellfire, a red gem, 400 orange
     "offers_short": (560, 210),  # live 2026-10-18 (maalc-probe live-all/f/shopd_2590.6): 106 Cost, 3 offers tagged Not Enough Cost
 }
 OWNED, OFFER = 1.1, 0.8  # a gift icon's size on the fuse / sell pages and on the offers, over its GiftSearch template's
@@ -231,3 +232,13 @@ def test_an_offer_tagged_not_enough_cost_is_told_by_its_red_not_by_its_ocr():
     for name in ("offers", "offers_super"):  # affordable offers, skills and a Purchased one show no red
         image = screen_with(name)
         assert not any(s.short_cell(image, x, y) for x, y in OFFER), name
+
+
+def test_a_red_gift_on_an_affordable_offer_is_not_short():
+    # The user: a red gift must not read as never affordable. offers_red: Fragment of Hellfire, a red gem (261 red
+    # pixels in its frame), sells for an orange 400.
+    image = screen_with("offers_red")
+    assert not s.short_cell(image, 932, 265)
+    # Worst case: red art over the whole card, up to the Not Enough Cost tag's place; the price stays orange.
+    image[265 - 37:265 + 37, 932 - 37:932 + 37] = (0, 0, 200)
+    assert not s.short_cell(image, 932, 265)

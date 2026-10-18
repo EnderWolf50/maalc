@@ -276,7 +276,7 @@ def test_an_offer_with_a_red_price_is_not_tapped_though_ocr_read_it_as_affordabl
     # Live 2026-10-18: 106 Cost, Emerald Elytra's red 160 read as 16 and its Not Enough Cost tag not at all: it was
     # tapped and opened no purchase dialog. The cell's red says the Cost is short.
     image = np.zeros((720, 1280, 3), np.uint8)
-    image[265 - 40:265 - 25, 778 - 40:778 + 40] = (0, 0, 200)  # the red tag over the icon of the second cell
+    image[265 + 46:265 + 60, 778 - 15:778 + 15] = (0, 0, 200)  # the second cell's red price
     context.tasker.controller.post_screencap.return_value.wait.return_value.get.return_value = image
     reads(context, {tuple(actions.OFFER_GRID): [("Emerald Elytra", (735, 333, 90, 17)), ("16", (755, 306, 40, 24))],
                     tuple(actions.SHOP_COST): [("106", (560, 120, 60, 30))]})

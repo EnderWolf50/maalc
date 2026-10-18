@@ -111,12 +111,14 @@ def red_pixels(box):
 
 
 def short_cell(image, x, y):
-    """Whether the offer whose icon is centred at (x, y) is tagged Not Enough Cost: red label over it or red price.
+    """Whether the offer whose icon is centred at (x, y) is tagged Not Enough Cost: its price line is red.
 
-    Told by colour, as OCR misses the red tag and reads a red 160 as 16 (live 2026-10-18; 250+ red pixels in the
-    label band and 140+ in the price line, an affordable offer's orange price 10 or fewer, nothing in its label band).
+    Told by colour, as OCR misses the red tag and reads a red 160 as 16 (live 2026-10-18). The price line sits 12 px
+    under the icon's frame, so a red gift cannot colour it. 165 offers on 31 shop screens: a red price 141-167 red
+    pixels, an orange one 0-16 (up to 47 on video stills); red icons up to 261. The tag over the icon adds nothing:
+    it came with a red price every time, and the band it needs ends 3 px over the frame.
     """
-    return red_pixels(image[y - 42:y - 24, x - 45:x + 45]) >= 100 or red_pixels(image[y + 40:y + 66, x - 30:x + 30]) >= 60
+    return red_pixels(image[y + 40:y + 66, x - 30:x + 30]) >= 90
 
 
 def dialog_price(cost, preview):
