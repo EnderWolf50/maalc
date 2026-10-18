@@ -928,6 +928,7 @@ LINKS = {
     "mid": ("MapLinkMid", (95, -10, 110, 80)),
     "down": ("MapLinkDown", (85, 85, 110, 110)),
 }
+BUS_PROBE = 1.0  # s a first tap on the bus waits for the node panel (#130)
 BUS_LINK = 60  # line_contrast of a lit link from the bus; links between other nodes read up to ~50
 MARKS = {  # node -> (mark, roi around the slot centre)
     "MapNodeBoss": ("boss", (-40, -40, 80, 80)),
@@ -1088,9 +1089,11 @@ class RouteMap(CustomAction):
         # #88: after a restart or a recovery the bus may stand on a node not entered yet; its own tap opens it.
         tries = ranked + on_bus if RUN.get("map_entered") else on_bus + ranked
         tries += [(f"{r} slot", centre(r)) for r in map_route.ROWS if r not in order]
+        # #130: a bus tap on a node already entered shows nothing; a panel shows within ~0.5 s, so that probe is short.
+        probe = not RUN.get("map_entered")
         for name, (x, y) in tries:
             tap(context, x, y, wait=0)
-            if until(context, lambda im: seen(context, im, "MapNodePanel")) is not None:
+            if until(context, lambda im: seen(context, im, "MapNodePanel"), timeout=BUS_PROBE if probe and name == "the bus" else 2.0) is not None:
                 log(f"map: take {name}")
                 if steps is not None and (x, y) == ranked[0][1]:  # the path's first node: follow the rest
                     RUN["map_plan"] = {"floor": RUN.get("floor"), "steps": steps}

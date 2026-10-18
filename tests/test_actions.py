@@ -217,6 +217,20 @@ def test_after_a_restart_or_recovery_the_bus_is_tapped_first(context, monkeypatc
     assert context.tasker.controller.post_click.call_args_list[0].args == (bx + 22, by + 37)
 
 
+def test_a_bus_tap_on_a_node_already_entered_gives_up_quickly_for_the_planned_slot(context, clock, monkeypatch):
+    # #130 (live 2026-10-18 07:04:47): after an agent restart the first tap, on the bus, showed no panel
+    # (its node was entered) and waited the full 2 s before the planned slot; a panel shows within about 0.5 s.
+    monkeypatch.setattr(actions, "map_weights", lambda context: {"battle": 2, "unknown": 9})
+    bus_at(context, *actions.BUS_HOME, linked=("MapLinkMid", "MapNodeCost"))
+    ctl, at = context.tasker.controller, []
+    ctl.post_click.side_effect = lambda x, y: at.append(((x, y), actions.time.monotonic())) or DEFAULT
+    actions.RouteMap().run(context, None)
+    bx, by = actions.BUS_HOME
+    (bus, t0), (slot, t1) = at[0], at[1]
+    assert bus == (bx + 22, by + 37) and slot == (bx + actions.SLOT[0], by + actions.SLOT[1])  # the bus first, then the slot
+    assert t1 - t0 <= 1.3
+
+
 def test_a_bus_dragged_off_the_screen_is_found_by_dragging_the_map(context, monkeypatch):
     # #61, live 2026-10-16: the map dragged by hand, the bus off the top; three blind rounds, L1, then L2.
     monkeypatch.setattr(actions, "map_weights", lambda context: {"battle": 2, "unknown": 9})
