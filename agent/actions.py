@@ -420,12 +420,9 @@ class SelectTeam(CustomAction):
     """Pick the team's in-game TEAMS #N slot, check the title, press Confirm."""
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
-        if "settings" not in RUN:
-            # The plan is made on the entry page (weekly bonuses); the back arrow leads there.
-            log("team picker without a run plan: back to the entry page")
-            tap(context, 97, 42, wait=2)
-            return True
-        n = RUN["team"]["game_team"]
+        # No plan here means a run resumed on the entry page, paused before team selection: the entry page only
+        # offers Resume again, so backing out looped (#128). Make one up from settings, as after a restart.
+        n = current_run(context)["team"]["game_team"]
         for _ in range(15):
             image = screen(context)
             visible = {}
