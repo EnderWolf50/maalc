@@ -104,6 +104,21 @@ def read_slots(results):
     return slots
 
 
+def red_pixels(box):
+    """How many pixels of box (BGR) are dark-to-bright red: R over 110, G and B under 60, R over 3x G."""
+    b, g, r = (box[:, :, i].astype(int) for i in range(3))
+    return int(((r > 110) & (g < 60) & (b < 60) & (r > 3 * g)).sum())
+
+
+def short_cell(image, x, y):
+    """Whether the offer whose icon is centred at (x, y) is tagged Not Enough Cost: red label over it or red price.
+
+    Told by colour, as OCR misses the red tag and reads a red 160 as 16 (live 2026-10-18; 250+ red pixels in the
+    label band and 140+ in the price line, an affordable offer's orange price 10 or fewer, nothing in its label band).
+    """
+    return red_pixels(image[y - 42:y - 24, x - 45:x + 45]) >= 100 or red_pixels(image[y + 40:y + 66, x - 30:x + 30]) >= 60
+
+
 def dialog_price(cost, preview):
     """The price a purchase dialog's Cost preview ("2864 > 2612", read as "28642612") stands for; None when unread.
 

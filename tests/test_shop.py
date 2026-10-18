@@ -16,6 +16,7 @@ CROP_AT = {
     "sell": (620, 200),  # live 2026-10-16 (maalc-probe s29/025_sell): the sell page of ShopFuse.png's gifts
     "offers": (560, 210),  # tests/screens/Shop.png
     "offers_super": (560, 210),  # tests/screens/SuperShop.png
+    "offers_short": (560, 210),  # live 2026-10-18 (maalc-probe live-all/f/shopd_2590.6): 106 Cost, 3 offers tagged Not Enough Cost
 }
 OWNED, OFFER = 1.1, 0.8  # a gift icon's size on the fuse / sell pages and on the offers, over its GiftSearch template's
 
@@ -220,3 +221,13 @@ def test_buy_plan_sells_first_when_the_top_tier_is_too_dear():
     assert s.buy_plan(offers, 200, 0, sold=False) == ([], 250)  # nothing bought: the next round sells for it
     assert s.buy_plan(offers, 200, 0, sold=True) == ([0], None)  # sold already (or nothing to sell): what fits
     assert s.buy_plan([], 200, 0, sold=False) == ([], None)
+
+
+def test_an_offer_tagged_not_enough_cost_is_told_by_its_red_not_by_its_ocr():
+    # Live 2026-10-18: OCR missed the tag and read Elytra's red 160 as 16, so it was tapped (opened no purchase dialog).
+    OFFER = [(624 + 154 * c, y) for y in (265, 418) for c in range(4)]
+    short = screen_with("offers_short")
+    assert [s.short_cell(short, x, y) for x, y in OFFER] == [False, True, True, True, False, False, False, False]
+    for name in ("offers", "offers_super"):  # affordable offers, skills and a Purchased one show no red
+        image = screen_with(name)
+        assert not any(s.short_cell(image, x, y) for x, y in OFFER), name
