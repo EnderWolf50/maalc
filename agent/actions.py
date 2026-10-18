@@ -1779,6 +1779,10 @@ class Shop(CustomAction):
         offers = []
         for i, slot in enumerate(slots):
             cell = cells.get(i, {"tier": None, "keyword": None})
+            slot["short"] = slot["short"] or shop.short_cell(image, *offer_cell(slot))
+            if slot["short"] and slot["price"] <= cost:
+                log(f"shop: {slot['name']!r} is tagged Not Enough Cost: its price {slot['price']} is a misread")
+                continue
             kind = cell["keyword"]
             if kind is None and shop.buyable(slot, cost):
                 kind = Shop.dialog_keyword(context, slot, keyword)

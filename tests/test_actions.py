@@ -272,6 +272,21 @@ def test_offers_are_read_once_and_bought_high_tier_first_from_the_back(context, 
     assert costs[-1] == 50 and visit["wanted"] is None
 
 
+def test_an_offer_with_a_red_price_is_not_tapped_though_ocr_read_it_as_affordable(context, monkeypatch):
+    # Live 2026-10-18: 106 Cost, Emerald Elytra's red 160 read as 16 and its Not Enough Cost tag not at all: it was
+    # tapped and opened no purchase dialog. The cell's red says the Cost is short.
+    image = np.zeros((720, 1280, 3), np.uint8)
+    image[265 - 40:265 - 25, 778 - 40:778 + 40] = (0, 0, 200)  # the red tag over the icon of the second cell
+    context.tasker.controller.post_screencap.return_value.wait.return_value.get.return_value = image
+    reads(context, {tuple(actions.OFFER_GRID): [("Emerald Elytra", (735, 333, 90, 17)), ("16", (755, 306, 40, 24))],
+                    tuple(actions.SHOP_COST): [("106", (560, 120, 60, 30))]})
+    cells_read(monkeypatch, ("Burn", None, 1))
+    visit = {"wanted": None, "sold": False}
+    assert actions.Shop.buy_offers(context, {"keyword": "Burn", "reserve_cost": 0}, visit) == 0
+    assert not context.tasker.controller.post_click.called
+    assert visit["wanted"] is None
+
+
 def test_a_sale_reads_keywords_and_prices_off_the_grid_and_taps_only_what_it_sells(context, monkeypatch):
     # #112: no gift is tapped to read its panel. Non-main gifts Bleed, Tremor, Pierce, Sinking: one is left over
     # from a fusion of 3, the dearest (Tremor, 120) goes.
