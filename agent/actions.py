@@ -116,6 +116,43 @@ def still(context, timeout=2.0):
     return until(context, done, timeout=timeout, least=0.2)
 
 
+class PageGone(Exception):
+    """The page an action works on went away mid-action (#118): by hand, a popup, a disconnect."""
+
+
+def on_page(context, image, *nodes):
+    """The first of nodes (MirrorHub's screen nodes) that hits on image, or None."""
+    return next((n for n in nodes if seen(context, image, n)), None)
+
+
+def guard(context, *home, image=None):
+    """Before a tap: a screenshot that still shows one of home (MirrorHub's nodes for the action's page); else PageGone.
+
+    ADR 0002, #118: an action that taps on for long checks its page first, so a screen changed under it is
+    handed back to MirrorHub at once instead of tapped blind until the action gives up. A miss is looked at
+    again for up to 1 s: a page fading or a dialog dropping in can hide its anchor for a moment.
+    image: a screenshot just taken, looked at first.
+    """
+    if image is not None and on_page(context, image, *home):
+        return image
+    image = until(context, lambda im: on_page(context, im, *home) is not None, timeout=1.0)
+    if image is None:
+        raise PageGone(home[0])
+    return image
+
+
+def hands_back(run):
+    """An action's run(): PageGone ends it with True, for MirrorHub to look at the screen now up (#118)."""
+    @functools.wraps(run)
+    def wrapped(self, context, argv):
+        try:
+            return run(self, context, argv)
+        except PageGone as e:
+            log(f"{type(self).__name__}: {e} is gone: back to MirrorHub")
+            return True
+    return wrapped
+
+
 def grid_moved(before, after):
     """Whether the gift search grid shows other gifts: a tab switched, or a scroll went somewhere."""
     return np.abs(after[228:625, 85:775].astype(int) - before[228:625, 85:775].astype(int)).mean() >= 2
@@ -441,12 +478,13 @@ class ParallelModeOff(CustomAction):
 class SelectTeam(CustomAction):
     """Pick the team's in-game TEAMS #N slot, check the title, press Confirm."""
 
+    @hands_back
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         # No plan here means a run resumed on the entry page, paused before team selection: the entry page only
         # offers Resume again, so backing out looped (#128). Make one up from settings, as after a restart.
         n = current_run(context)["team"]["game_team"]
         for _ in range(15):
-            image = screen(context)
+            image = guard(context, "TeamSelect")
             visible = {}
             for t, (x, y, w, h) in ocr(context, image, TEAM_LIST):
                 m = re.search(r"#\s*(\d+)", t)
@@ -500,6 +538,7 @@ class BuyStarlight(CustomAction):
     re-read after every tap.
     """
 
+    @hands_back
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         run = current_run(context)
         plan = run_start.resolve_plan(run["settings"], run["team"], "starlight")
@@ -516,12 +555,14 @@ class BuyStarlight(CustomAction):
             return stop(context, "a planned grace is unaffordable")
         for n, level, price in buys:
             x, y = grace_box(n)
+            image = guard(context, "StarlightPage")
             if grace_selected(image, n):
                 log(f"grace {n} already selected")
                 continue
             if not self.set_level(context, n, level):
                 return stuck(f"could not set grace {n} to {level}")
             for _ in range(2):
+                guard(context, "StarlightPage")
                 tap(context, x + 92, y + 100)
                 image = screen(context)
                 now = read_available(context, image)
@@ -549,6 +590,7 @@ class BuyStarlight(CustomAction):
                 time.sleep(0.5)
                 continue
             button = want if want > 1 else shown  # back to base = tap the lit button again
+            guard(context, "StarlightPage")
             tap(context, x + (50 if button == 2 else 132), y + 203)
         return False
 
@@ -581,13 +623,14 @@ class ConfirmStarlight(CustomAction):
 class PickStartingGift(CustomAction):
     """Open the team keyword's cabinet, take its gifts in order until Select n/m is full, press Select."""
 
+    @hands_back
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         team = current_run(context)["team"]
         keyword = team["keyword"]
         self.set_gift_search(context, bool(team["gift_search"]["enabled"] and team["gift_search"]["gifts"]))
         if not self.full(context):
             for _ in range(3):
-                image = screen(context)
+                image = guard(context, "StartingGift")
                 label = next((b for t, b in ocr(context, image, [145, 145, 590, 430]) if compact(t) == compact(keyword)), None)
                 if label:
                     break
@@ -598,7 +641,7 @@ class PickStartingGift(CustomAction):
             tap(context, x + w // 2, y + h // 2 + 75, wait=0)
             still(context, timeout=1.5)  # the cabinet's gifts slide in
             for gift_y in (262, 370, 475):
-                before = self.count(context)
+                before = self.count(context, guard(context, "StartingGift"))
                 if before and before[0] == before[1]:
                     break
                 tap_then(context, 970, gift_y, lambda im: self.count(context, im) != before, timeout=1.5)
@@ -606,6 +649,7 @@ class PickStartingGift(CustomAction):
         # Live: the first tap on Select right after picking is often ignored.
         header, popup = shows(context, STARTING_GIFT_HEADER, "Selected"), shows(context, GET_TITLE, "GET")
         for _ in range(4):
+            guard(context, "StartingGift")
             if tap_then(context, 1080, 587, lambda im: popup(im) or not header(im), timeout=2.5) is not None:
                 log(f"starting gift: {keyword}")
                 return True
@@ -623,7 +667,7 @@ class PickStartingGift(CustomAction):
             return False if has(shown, "OFF") else True if has(shown, "ON") else None
 
         for _ in range(3):
-            on = switch(screen(context))
+            on = switch(guard(context, "StartingGift"))
             if on is None or on == want:
                 return
             tap_then(context, 1140, 158, lambda im: switch(im) == want, timeout=1.5)
@@ -693,6 +737,7 @@ class GiftSearch(CustomAction):
     the cells of its tier (pick), tapped once, and kept only when the panel names it.
     """
 
+    @hands_back
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         run = current_run(context)
         search = run["team"]["gift_search"]
@@ -703,7 +748,7 @@ class GiftSearch(CustomAction):
             tap_then(context, *SEARCH_DIALOG_BUTTONS["cancel"], lambda im: not has(text(context, im, SEARCH_DIALOG), "Consume"), timeout=1.5)
         tried, dropped = [], 0
         while True:
-            image = screen(context)
+            image = guard(context, "GiftSearch")
             count = gift_search.select_count(text(context, image, SEARCH_COUNT))
             if count is None:
                 return True  # fading in or out: let MirrorHub look again
@@ -728,6 +773,7 @@ class GiftSearch(CustomAction):
         owned = gift_search.owned_starlight(*(text(context, image, roi) for roi in SEARCH_OWNED))
         # Select asks "Consume N Starlight to search and obtain these E.G.O Gifts?"; the GET! windows are MirrorHub's.
         for _ in range(3):
+            guard(context, "GiftSearch")
             asked = tap_then(context, *SEARCH_SELECT, shows(context, SEARCH_DIALOG, "Consume"), timeout=2)
             if asked is not None:
                 ask = text(context, asked, SEARCH_DIALOG)
@@ -776,7 +822,7 @@ class GiftSearch(CustomAction):
             if y is not None and abs(y - GRID_MID) > 140:
                 GiftSearch.scroll(context, y - GRID_MID)
         for _ in range(12):
-            image = screen(context)
+            image = guard(context, "GiftSearch")
             cells = gift_search.gift_cells(image)
             for score, x, y in GiftSearch.icon_scores(context, image, entry["id"], [c for c in cells if c[2] == gift["tier"]])[:2]:
                 if score < ICON_MIN:
@@ -875,6 +921,7 @@ def columns(results):
 class PickThemePack(CustomAction):
     """Set this floor's difficulty, then pull the best pack: prefer > neutral > avoid, leftmost first (spec 03 sections 2, 6)."""
 
+    @hands_back
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         run = current_run(context)
         image = screen(context)
@@ -894,7 +941,7 @@ class PickThemePack(CustomAction):
         setting = run["settings"]["run"]["theme_pack_refresh"]
         seen = None
         for used in range(10):  # ponytail: stop when a refresh changes nothing; read `Refresh n/m` if that misfires
-            cards = pack_titles(context, screen(context))
+            cards = pack_titles(context, guard(context, "ThemePack"))
             if not cards:
                 return stuck("no theme pack titles read")
             ranked = run_start.rank_packs([lines for _, lines in cards], names, marks)
@@ -920,7 +967,7 @@ class PickThemePack(CustomAction):
             return True if has(shown, "HARD") else False if has(shown, "NORMAL") else None
 
         for _ in range(4):
-            hard = label(screen(context))
+            hard = label(guard(context, "ThemePack"))
             if hard is None:
                 until(context, lambda im: label(im) is not None, timeout=1)
                 continue
@@ -1058,6 +1105,7 @@ def enter_node(context):
     image = screen(context)
     cost = number(text(context, image, PANEL_COST)) if has(text(context, image, PANEL_REWARDS), "Rewards") else None
     log(f"node panel: Clear Rewards Cost {cost}")
+    RUN.pop("shop", None)  # a shop left without its Leave (#118): the next shop is a new visit
     for _ in range(3):
         tap(context, *ENTER, wait=0)
         if until(context, lambda im: not seen(context, im, "MapNodePanel")) is not None:
@@ -1091,6 +1139,7 @@ class RouteMap(CustomAction):
     follow it (follow) until it is used up or does not fit the map.
     """
 
+    @hands_back
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         if RUN.get("forfeit"):
             return forfeit(context)
@@ -1140,6 +1189,7 @@ class RouteMap(CustomAction):
         # #130: a bus tap on a node already entered shows nothing; a panel shows within ~0.5 s, so that probe is short.
         probe = not RUN.get("map_entered")
         for name, (x, y) in tries:
+            guard(context, "MirrorMap")
             tap(context, x, y, wait=0)
             if until(context, lambda im: seen(context, im, "MapNodePanel"), timeout=BUS_PROBE if probe and name == "the bus" else 2.0) is not None:
                 log(f"map: take {name}")
@@ -1349,6 +1399,7 @@ class Formation(CustomAction):
     The game keeps the last battle's picks: they are read off the cards and redone only when they differ.
     """
 
+    @hands_back
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         run = current_run(context)
         # A new battle: its clock and turn count start over, also when the last VICTORY went unseen (#80).
@@ -1383,6 +1434,7 @@ class Formation(CustomAction):
         elif not self.pick(context, order):
             return True  # pick() handed it to recovery
         for _ in range(3):
+            guard(context, "Formation")
             tap(context, *TO_BATTLE, wait=0)
             if until(context, lambda im: not participants(context, im), timeout=3) is not None:
                 return True
@@ -1400,6 +1452,7 @@ class Formation(CustomAction):
             return False
 
         for _ in range(3):
+            guard(context, "Formation")
             tap(context, *CLEAR_SELECTION, wait=1.5)
             if has(text(context, screen(context), RESET_DIALOG), "Reset Deployment"):
                 tap(context, *RESET_CONFIRM)
@@ -1410,6 +1463,7 @@ class Formation(CustomAction):
             return False
         for n, sinner in enumerate(order, 1):
             for _ in range(2):  # a tap within ~1 s of the last one can be lost
+                guard(context, "Formation")
                 tap(context, *card_xy(battle.SINNERS.index(sinner), CARD_TAP_Y), wait=1.2)
                 if count_reaches(n):
                     break
@@ -1521,6 +1575,7 @@ GUARD_DRAGS = ({"settle": 0.05, "dwell": 0.03, "hold": 0.05, "pause": 0.01},
 class PlayTurn(CustomAction):
     """Guard or Win Rate (one tap), press the START disc, check the turn plays (spec 03 section 8, 06)."""
 
+    @hands_back
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         x, y = argv.box[0], argv.box[1]
         dx, dy = x + START_DISC[0], y + START_DISC[1]
@@ -1560,7 +1615,7 @@ class PlayTurn(CustomAction):
         cleared at the left gear and Win Rate and START are tried once more, here rather than on MirrorHub's
         next looks (#145: those took 3 submits, a stuck and recovery L1, ~23 s)."""
         for attempt in range(2):
-            image = screen(context)
+            image = guard(context, "BattleTurn")
             for _ in range(2):
                 if battle.disc_lit(image, *disc) or start_shown(context, image, disc):
                     break
@@ -1598,6 +1653,7 @@ class PlayTurn(CustomAction):
         """
         xs = battle.slot_xs(x)
         lows = [lower_x(sx) for sx in xs]
+        guard(context, "BattleTurn")
         image = lower_skills(context, lows)  # live: a battle's first turn slides the portraits in late
         before = [guard_score(image, lx) for lx in lows]
         for sx in xs:
@@ -1621,6 +1677,7 @@ class PlayTurn(CustomAction):
                 tap(context, sx, SLOT_PORTRAIT_Y, wait=GUARD_TAP_WAIT)
         chain = battle.guard_chain(xs)
         for n, params in enumerate(GUARD_DRAGS, 1):
+            guard(context, "BattleTurn")
             drag(context, chain, **params)
             # Live (#145): the panel tilts back for ~0.15 s after the lift; a START pressed in it was lost 4 times
             # in 18. The Win Rate label matching again says it is back.
@@ -1747,6 +1804,7 @@ def red_button(image):
 class Event(CustomAction):
     """One step on an event page: press the lit button, pick a checker or an option, else advance the text (spec 03 section 10)."""
 
+    @hands_back
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         run = current_run(context)
         image = screen(context)
@@ -1812,6 +1870,7 @@ class Event(CustomAction):
             # Text running on (the button grey): taps on a dead corner show it line by line; keep tapping
             # until there is something to act on, for MirrorHub's next look.
             for _ in range(EVENT_TEXT_TAPS):
+                guard(context, "Event", image=image)
                 tap(context, *EVENT_NEUTRAL, wait=0.2)
                 image = screen(context)
                 if red_button(image) or not text(context, image, EVENT_BUTTON_LABEL) or any(k in text(context, image, roi) for k, roi in
@@ -1966,6 +2025,7 @@ class PickGift(CustomAction):
     A gift the team avoids (#90) comes last: taken only when nothing else fills the count.
     """
 
+    @hands_back
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         run = current_run(context)
         image = screen(context)
@@ -1993,12 +2053,13 @@ class PickGift(CustomAction):
         log("gifts: " + ", ".join(k + ("" if r is None else f"/risk {r}") for k, r in cards) + f": order {ranked}")
 
         def pick(i):
-            before = gift_count(context)
+            before = gift_count(context, guard(context, "GiftChoice"))
             tap(context, centres[i], 300, wait=0)
             until(context, lambda im: gift_count(context, im) != before, timeout=1.5)
 
         rewards.pick_gifts(ranked, lambda: gift_count(context), pick)
         for _ in range(3):
+            guard(context, "GiftChoice")
             tap(context, *GIFT_SELECT, wait=0)
             if until(context, lambda im: not has(text(context, im, REFUSE_GIFT), "Refuse")) is not None:
                 return True
@@ -2175,6 +2236,7 @@ class Shop(CustomAction):
     owned gifts were scanned for a fusion) lives in RUN["shop"], so a re-entry from MirrorHub carries on; leaving drops it. Every spend keeps the team's reserve_cost.
     """
 
+    @hands_back
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         team = current_run(context)["team"]
         if not self.to_main(context):
@@ -2195,7 +2257,7 @@ class Shop(CustomAction):
             log(f"shop: still acting after {shop.ROUNDS} rounds")
         for _ in range(3):
             image = screen(context)
-            if seen(context, image, "MirrorMap") or seen(context, image, "MapNodePanel"):
+            if on_page(context, image, "MirrorMap", "MapNodePanel"):
                 log("shop: already out of the shop")
                 RUN.pop("shop", None)
                 return True
@@ -2216,7 +2278,7 @@ class Shop(CustomAction):
         """
         for _ in range(5):
             image = screen(context)
-            if seen(context, image, "MirrorMap") or seen(context, image, "MapNodePanel"):
+            if on_page(context, image, "MirrorMap", "MapNodePanel"):
                 return False
             title = text(context, image, DIALOG_TITLE)
             heal = has(text(context, image, HEAL_TITLE), "Heal")
@@ -2309,6 +2371,7 @@ class Shop(CustomAction):
                                          fees["normal"], fees["keyword"], data("shop.yaml")["refresh_margin"])
             if not choice:
                 return acted
+            guard(context, "Shop")
             tap(context, *REFRESH[choice][0], wait=1.5)
             if choice == "keyword":
                 if not tap_keyword(context, keyword):
@@ -2379,6 +2442,7 @@ class Shop(CustomAction):
                 tap(context, *PURCHASE_CANCEL)
                 log(f"shop: {slot['name']!r} costs {price}, {cost} Cost is short")
                 continue
+            guard(context, "Shop")
             tap(context, *PURCHASE, wait=2)
             gift_get(context)
             after = read_cost(context)
@@ -2393,6 +2457,7 @@ class Shop(CustomAction):
     @staticmethod
     def open_offer(context, slot):
         """Tap an offer; the screenshot of its purchase dialog, or None when none opened."""
+        guard(context, "Shop")
         tap(context, slot["x"], slot["y"] - 50, wait=1.5)
         image = screen(context)
         if has(text(context, image, DIALOG_TITLE), "Purchase"):
@@ -2443,6 +2508,7 @@ class Shop(CustomAction):
         keep = kept_gifts(team)
         for c in [c for c, r in zip(cells, roles) if r == "unknown" or (r == "material" and c["i"] not in prices)]:
             i, x, y = c["i"], c["x"], c["y"]
+            guard(context, "Shop")
             tap(context, x, y, wait=1.2)
             image = screen(context)
             lines = [t for t, _ in ocr(context, image, SELL_PANEL)]
@@ -2459,6 +2525,7 @@ class Shop(CustomAction):
         visit["fuse_scanned"] = visit.get("fuse_scanned") and not picked
         log(f"shop: {wanted} wanted, {cost} Cost, non-main (cell, price) {gifts}: sell {picked}")
         for i in picked or []:
+            guard(context, "Shop")
             before = read_cost(context, SELL_COST)
             tap(context, *SELL_CELLS[i], wait=1.2)
             tap(context, *PAGE_OK, wait=2)
@@ -2539,6 +2606,7 @@ class Shop(CustomAction):
         picked = []
         materials = sorted((c for c, r in zip(cells, roles) if r == "material"), key=lambda c: c["gift"] not in avoid)
         for c in materials[:3]:  # an avoided gift first (#90)
+            guard(context, "Shop")
             tap(context, c["x"], c["y"], wait=0.5)
             tap(context, *FUSE_NEUTRAL)  # closes its tooltip
             picked.append(f"cell {c['i']} ({c['keyword']} {c['tier']})")
@@ -2546,6 +2614,7 @@ class Shop(CustomAction):
         last, keep = None, kept_gifts(team)
         for c in [c for c, r in zip(cells, roles) if r == "unknown"] if len(picked) < 3 else []:
             x, y = c["x"], c["y"]
+            guard(context, "Shop")
             tap(context, x, y, wait=0)
             lines, name = Shop.tooltip(context, last)
             tap(context, *FUSE_NEUTRAL)
@@ -2571,6 +2640,7 @@ class Shop(CustomAction):
         if len(picked) == 3:
             if Shop.recipe_shown(context, screen(context), visit):
                 return False
+            guard(context, "Shop")
             tap(context, *PAGE_OK, wait=2)
             m = re.search(r"(\d)\s*/\s*\d", text(context, screen(context), FUSE_CONFIRM))
             if m and m[1] == "3":
@@ -2612,6 +2682,7 @@ class Settle(CustomAction):
     Claim is pressed only after the toggles read back exactly as wanted; anything unexpected stops.
     """
 
+    @hands_back
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         run = current_run(context)
         image = screen(context)
@@ -2632,7 +2703,7 @@ class Settle(CustomAction):
         all_hard = run.get("planned", False) and run["difficulty"] == "hard" and team["hard_from_floor"] in (1, None)
         want = settlement.bonus_toggles(s["weekly_bonus_use"], s["weekly_bonus_amount"], hard, left or 0, all_hard)
         for _ in range(6):
-            states = toggles(context, screen(context))
+            states = toggles(context, guard(context, "ExplorationReward"))
             on = [i for i, v in enumerate(states) if v]
             if None in states and len(on) <= want:
                 time.sleep(1)  # an unread toggle may be ON: never claim on a guess

@@ -13,6 +13,8 @@ import pytest
 import actions
 import recovery
 
+REAL_GUARD = actions.guard
+
 
 @pytest.fixture
 def clock(monkeypatch):
@@ -28,7 +30,9 @@ def clock(monkeypatch):
 
 
 @pytest.fixture
-def context(clock):
+def context(clock, monkeypatch):
+    # The action's page stays up: #118's guard is driven on its own (page_until).
+    monkeypatch.setattr(actions, "guard", lambda context, *home, image=None: actions.screen(context) if image is None else image)
     ctx = MagicMock()
     ctx.tasker.controller.post_screencap.return_value.wait.return_value.get.return_value = np.zeros((720, 1280, 3), np.uint8)
     ctx.run_recognition.return_value = None  # OCR reads nothing, no node hits
@@ -1624,3 +1628,90 @@ def test_a_forfeited_run_gives_up_its_rewards_and_the_same_team_runs_next(contex
     assert not (tmp_path / "state").exists()  # no cursor written
     line = json.loads((tmp_path / "logs" / "runs.jsonl").read_text(encoding="utf-8"))
     assert line["result"] == "giveup" and line["team"] == "a"
+
+
+# #118: an action checks its page before each tap and hands a changed screen back to MirrorHub.
+@pytest.fixture
+def guarded(monkeypatch):
+    monkeypatch.setattr(actions, "guard", REAL_GUARD)
+
+
+def page_until(context, node, clicks):
+    """MirrorHub's node for the page hits until `clicks` taps went out, then the page is gone (left by hand)."""
+    inner = context.run_recognition.side_effect
+
+    def run_recognition(name, image, override=None):
+        if name == node and override is None:
+            return SimpleNamespace(hit=True, box=[0, 0, 1, 1]) if context.tasker.controller.post_click.call_count < clicks else None
+        return inner(name, image, override) if inner else None
+    context.run_recognition.side_effect = run_recognition
+
+
+def test_the_guard_passes_the_page_and_waits_out_a_moment_without_its_anchor(context, clock, guarded):
+    shown = iter([None, None, True])
+    context.run_recognition.side_effect = lambda name, image, override=None: SimpleNamespace(hit=True) if next(shown, True) else None
+    assert actions.guard(context, "Shop") is not None
+    assert sum(clock) < 1
+
+
+def test_the_guard_gives_the_page_up_after_a_second(context, clock, guarded):
+    with pytest.raises(actions.PageGone):
+        actions.guard(context, "Shop")
+    assert 1 <= sum(clock) < 1.5
+
+
+def test_the_guard_takes_a_fresh_screenshot_showing_the_page_without_another(context, guarded):
+    page_until(context, "Event", 1)
+    image = np.zeros((720, 1280, 3), np.uint8)
+    assert actions.guard(context, "Event", image=image) is image
+    assert context.tasker.controller.post_screencap.call_count == 0
+
+
+def test_event_text_taps_stop_once_the_event_is_gone(context, guarded):
+    # The text tapped on at a dead corner (up to 30 taps); the event page went away after the first.
+    reads(context, {tuple(actions.EVENT_BUTTON_LABEL): [("Continue", (1065, 625, 140, 40))]})
+    page_until(context, "Event", 1)
+    assert actions.Event().run(context, None)
+    assert len(taps(context)) == 1
+    assert actions.STUCK["flag"] is None
+
+
+def test_a_fusion_taps_no_cell_once_the_shop_is_gone(context, guarded):
+    # Live 2026-10-18: the shop left by hand mid-visit; its taps went on onto the map for ~50 s.
+    reads(context, FUSE_PAGE)
+    owned_gifts(context, actions.FUSE_CELLS[10:12])
+    page_until(context, "Shop", 4)  # gone after Fuse, the centre, Burn and its OK
+    with pytest.raises(actions.PageGone):
+        actions.Shop.fuse(context, {"keyword": "Burn", "gift_search": {"gifts": []}}, {})
+    assert not set(taps(context)) & set(actions.FUSE_CELLS)
+
+
+def test_a_shop_visit_left_by_hand_is_handed_back_and_forgotten_at_the_next_node(context, guarded, monkeypatch):
+    actions.RUN["team"] = {"heal": "none", "keyword": "Burn", "reserve_cost": 0}
+    monkeypatch.setattr(actions.Shop, "to_main", staticmethod(lambda context: True))
+    monkeypatch.setattr(actions.Shop, "sell", staticmethod(lambda *a: False))
+    monkeypatch.setattr(actions.Shop, "buy", staticmethod(lambda *a: actions.guard(context, "Shop")))
+    assert actions.Shop().run(context, argv())  # the shop is gone: True for MirrorHub, not a stuck
+    assert actions.STUCK["flag"] is None and "shop" in actions.RUN
+    actions.enter_node(context)
+    assert "shop" not in actions.RUN
+
+
+def test_a_formation_left_mid_pick_taps_no_card(context, guarded):
+    with pytest.raises(actions.PageGone):
+        actions.Formation.pick(context, ["Yi Sang"])
+    assert taps(context) == []
+
+
+def test_a_team_list_gone_is_handed_back_not_stopped_on(context, guarded, monkeypatch):
+    actions.RUN["team"] = {"game_team": 3}
+    monkeypatch.setattr(actions, "stop", lambda *a, **k: pytest.fail("stopped"))
+    team_picker(context, "TEAMS #1", lambda clicks, looks: None)
+    assert actions.SelectTeam().run(context, argv())
+    assert taps(context) == []
+
+
+def test_a_battle_gone_before_win_rate_is_handed_back(context, guarded):
+    assert actions.PlayTurn().run(context, SimpleNamespace(box=[984, 531, 40, 20]))
+    assert taps(context) == []
+    assert actions.STUCK["flag"] is None
