@@ -243,7 +243,7 @@ def check_page(context, odds=()):
     reads(context, texts)
 
 
-def portrait_taps(context):
+def event_portrait_taps(context):
     return [c.args[0] for c in context.tasker.controller.post_click.call_args_list if c.args[1] == actions.EVENT_PORTRAIT_Y]
 
 
@@ -252,14 +252,14 @@ def test_a_check_with_no_odds_read_tries_the_next_sinner_when_a_tap_did_nothing(
     check_page(context)
     for _ in range(3):
         actions.Event().run(context, None)  # the screen never changes: each tap did nothing
-    assert portrait_taps(context) == actions.EVENT_PORTRAIT_X[:3]
+    assert event_portrait_taps(context) == actions.EVENT_PORTRAIT_X[:3]
 
 
 def test_a_check_with_odds_read_takes_the_next_best_when_a_tap_did_nothing(context):
     check_page(context, [(actions.EVENT_PORTRAIT_X[0], "Low"), (actions.EVENT_PORTRAIT_X[2], "Very High"), (actions.EVENT_PORTRAIT_X[4], "High")])
     for _ in range(3):
         actions.Event().run(context, None)
-    assert portrait_taps(context) == [actions.EVENT_PORTRAIT_X[i] for i in (2, 4, 0)]
+    assert event_portrait_taps(context) == [actions.EVENT_PORTRAIT_X[i] for i in (2, 4, 0)]
 
 
 def test_a_check_tap_that_took_is_not_held_against_the_sinner(context):
@@ -267,7 +267,7 @@ def test_a_check_tap_that_took_is_not_held_against_the_sinner(context):
     screens(context, [0, 9])  # the first tap changes the screen
     actions.Event().run(context, None)
     actions.Event().run(context, None)
-    assert portrait_taps(context) == [actions.EVENT_PORTRAIT_X[0]] * 2
+    assert event_portrait_taps(context) == [actions.EVENT_PORTRAIT_X[0]] * 2
 
 
 def event_for(context, seconds):
