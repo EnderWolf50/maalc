@@ -117,7 +117,7 @@ function RunTab() {
   const { s, update, t, tv, bad } = useEditor();
   const run = s.run;
   const set = (patch: Partial<Settings["run"]>) => update((d) => { Object.assign(d.run, patch); });
-  const pick = (k: "difficulty" | "weekly_bonus_use" | "weekly_bonus_amount" | "starlight_unaffordable" | "after_retries", note?: string) => (
+  const pick = (k: "difficulty" | "weekly_bonus_use" | "weekly_bonus_amount" | "starlight_unaffordable" | "after_retries" | "theme_pack_refresh", note?: string) => (
     <Field label={t(`run.${k}`)} path={`run/${k}`} note={note}>
       <Select value={run[k]} options={runEnum(k)} label={(v) => tv(k, v)} onChange={(v) => set({ [k]: v })} />
     </Field>
@@ -135,6 +135,7 @@ function RunTab() {
       {pick("starlight_unaffordable")}
       <Field label={t("run.wipe_retries")} path="run/wipe_retries"><Num value={run.wipe_retries} min={0} onChange={(v) => set({ wipe_retries: v })} /></Field>
       {pick("after_retries")}
+      {pick("theme_pack_refresh", t("run.theme_pack_refresh_note"))}
       <Field label={t("run.webhook_url")} path="run/webhook_url">
         <input type="url" value={run.webhook_url} onChange={(e) => set({ webhook_url: e.target.value })} />
       </Field>

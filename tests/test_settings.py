@@ -24,12 +24,12 @@ def team(id, game_team, **kw):
 
 
 VALID = {
-    "version": 3,
+    "version": 4,
     "language": "zh_tw",
     "run": {
         "difficulty": "auto", "runs": 1, "weekly_bonus_use": "hard", "weekly_bonus_amount": "all",
         "stop_when_weekly_bonus_out": False, "starlight_unaffordable": "skip", "wipe_retries": 2,
-        "after_retries": "stop", "webhook_url": "",
+        "after_retries": "stop", "webhook_url": "", "theme_pack_refresh": "all",
     },
     "deployment_order_plans": [{"id": "d1", "name": "Bleed order", "order": ORDER}],
     "starlight_plans": [{"id": "s1", "name": "Cheap", **STARLIGHT}],
@@ -98,17 +98,22 @@ def test_schema_errors_name_the_field(tmp_path, fn, where):
 
 
 def test_newer_version_is_refused(tmp_path):
-    assert "newer" in errors(tmp_path, {**VALID, "version": 4})[0]
+    assert "newer" in errors(tmp_path, {**VALID, "version": 5})[0]
 
 
 def test_version_1_gets_guard_turns_off(tmp_path):
-    old = edited(lambda d: [(t.pop("guard_turns"), t.pop("gift_search")) for t in d["teams"]])
+    old = edited(lambda d: [d["run"].pop("theme_pack_refresh")] + [(t.pop("guard_turns"), t.pop("gift_search")) for t in d["teams"]])
     assert load(tmp_path, {**old, "version": 1}) == VALID
 
 
 def test_version_2_gets_gift_search_off(tmp_path):
-    old = edited(lambda d: [t.pop("gift_search") for t in d["teams"]])
+    old = edited(lambda d: [d["run"].pop("theme_pack_refresh")] + [t.pop("gift_search") for t in d["teams"]])
     assert load(tmp_path, {**old, "version": 2}) == VALID
+
+
+def test_version_3_refreshes_all_avoid_theme_packs_as_before(tmp_path):
+    old = edited(lambda d: d["run"].pop("theme_pack_refresh"))
+    assert load(tmp_path, {**old, "version": 3}) == VALID
 
 
 def test_old_version_is_migrated_in_memory(tmp_path, monkeypatch):

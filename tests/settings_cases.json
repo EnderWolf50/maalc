@@ -1,12 +1,12 @@
 {
   "description": "Shared by tests/test_settings.py and gui/src/validate.test.ts so the agent and the GUI reject the same files. Each case applies edits to valid: set (a last path segment of - appends) or delete. schema lists the error paths; every error must sit at or under one of them. cross lists the exact cross-check messages, in order.",
   "valid": {
-    "version": 3,
+    "version": 4,
     "language": "zh_tw",
     "run": {
       "difficulty": "auto", "runs": 1, "weekly_bonus_use": "hard", "weekly_bonus_amount": "all",
       "stop_when_weekly_bonus_out": false, "starlight_unaffordable": "skip", "wipe_retries": 2,
-      "after_retries": "stop", "webhook_url": ""
+      "after_retries": "stop", "webhook_url": "", "theme_pack_refresh": "all"
     },
     "deployment_order_plans": [
       {"id": "d1", "name": "Bleed order", "order": ["Yi Sang", "Faust", "Don Quixote", "Ryōshū", "Meursault", "Hong Lu", "Heathcliff", "Ishmael", "Rodion", "Sinclair", "Outis", "Gregor"]}

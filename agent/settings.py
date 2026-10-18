@@ -30,8 +30,15 @@ def _v2_to_v3(data):
     return data
 
 
+def _v3_to_v4(data):
+    """Version 4 adds run.theme_pack_refresh (#41), "all" as before."""
+    if isinstance(data.get("run"), dict):
+        data["run"].setdefault("theme_pack_refresh", "all")
+    return data
+
+
 # MIGRATIONS[n] turns a version-n dict into a version-(n + 1) dict; keep in step with gui/src/model.ts.
-MIGRATIONS = {1: _v1_to_v2, 2: _v2_to_v3}
+MIGRATIONS = {1: _v1_to_v2, 2: _v2_to_v3, 3: _v3_to_v4}
 
 NO_TEAM = "No enabled team: set up a team in the settings GUI first."
 

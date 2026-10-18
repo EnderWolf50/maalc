@@ -827,6 +827,32 @@ def test_a_difficulty_label_not_readable_yet_is_looked_at_again_not_slept_on(con
     no_fixed_wait(clock)
 
 
+REFRESH = (1083, 47)
+
+
+@pytest.mark.parametrize(("setting", "refreshes"), [("none", 0), ("once", 1), ("all", 5)])
+def test_an_all_avoid_theme_pack_page_is_refreshed_as_the_setting_says(context, monkeypatch, setting, refreshes):
+    # #41: every page shows only avoided packs (a new pair after each of 4 refreshes; a 5th changes nothing: used up).
+    actions.RUN.update(settings={"run": {"theme_pack_refresh": setting}}, team={"hard_from_floor": 0}, difficulty=None)
+    monkeypatch.setattr(actions, "theme_pack_marks", lambda settings, team: ([], {}))
+    monkeypatch.setattr(actions.run_start, "rank_packs", lambda cards, names, marks: [(c[0], "avoid") for c in cards])
+    taps = []
+    monkeypatch.setattr(actions, "tap", lambda context, x, y, wait=1.0: taps.append((x, y)))
+
+    def ocr(context, image, roi, only_rec=False):
+        page = min(taps.count(REFRESH), 4)
+        return {
+            (480, 100, 320, 40): [("FLOOR 2", (560, 110, 80, 20))] if not context.tasker.controller.post_swipe.called else [],
+            (830, 30, 160, 35): [("NORMAL", (900, 40, 60, 20))],
+            tuple(actions.PACK_TITLES): [(f"Pack {page}a", (200, 420, 90, 20)), (f"Pack {page}b", (500, 420, 90, 20))],
+        }.get(tuple(roi), [])
+    monkeypatch.setattr(actions, "ocr", ocr)
+
+    actions.PickThemePack().run(context, None)
+    assert taps.count(REFRESH) == refreshes
+    assert context.tasker.controller.post_swipe.call_count == 1  # the leftmost card is pulled all the same
+
+
 def test_a_search_tab_opens_without_fixed_waits(context, clock):
     clicks = context.tasker.controller.post_click
     context.tasker.controller.post_screencap.return_value.wait.return_value.get.side_effect =         lambda: np.full((720, 1280, 3), 20 * clicks.call_count, np.uint8)  # each tab shows at once

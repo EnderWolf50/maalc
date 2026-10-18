@@ -54,7 +54,7 @@ test("a new file asks for a team, and new teams make it valid", () => {
 });
 
 test("parseSettings refuses newer and unmigratable versions", () => {
-  expect(() => parseSettings('{"version": 4}')).toThrow("newer");
+  expect(() => parseSettings('{"version": 5}')).toThrow("newer");
   expect(() => parseSettings('{"version": 0}')).toThrow("cannot be migrated");
 });
 
@@ -73,6 +73,15 @@ test("version 2 gets gift search off", () => {
   const { data, migrated } = parseSettings(JSON.stringify({ ...old, version: 2 }));
   expect(migrated).toBe(true);
   expect(data.teams.map((t) => t.gift_search)).toEqual([{ enabled: false, gifts: [] }, { enabled: false, gifts: [] }]);
+  expect(validate(data)).toEqual([]);
+});
+
+test("version 3 refreshes all-avoid theme pack pages as before", () => {
+  const old = structuredClone(cases.valid) as Record<string, unknown> & { run: Record<string, unknown> };
+  delete old.run.theme_pack_refresh;
+  const { data, migrated } = parseSettings(JSON.stringify({ ...old, version: 3 }));
+  expect(migrated).toBe(true);
+  expect(data.run.theme_pack_refresh).toBe("all");
   expect(validate(data)).toEqual([]);
 });
 

@@ -116,7 +116,7 @@ export interface Settings {
   run: {
     difficulty: string; runs: number; weekly_bonus_use: string; weekly_bonus_amount: string;
     stop_when_weekly_bonus_out: boolean; starlight_unaffordable: string; wipe_retries: number;
-    after_retries: string; webhook_url: string;
+    after_retries: string; webhook_url: string; theme_pack_refresh: string;
   };
   deployment_order_plans: DeploymentPlan[];
   starlight_plans: StarlightPlan[];
@@ -168,6 +168,8 @@ const MIGRATIONS: Record<number, (d: Record<string, unknown>) => Record<string, 
   1: (d) => withTeamDefault(d, { guard_turns: 0 }),
   // Version 3 adds teams[].gift_search (#54), off.
   2: (d) => withTeamDefault(d, { gift_search: { enabled: false, gifts: [] } }),
+  // Version 4 adds run.theme_pack_refresh (#41), "all" as before.
+  3: (d) => (d.run && typeof d.run === "object" ? { ...d, run: { theme_pack_refresh: "all", ...d.run } } : d),
 };
 
 function withTeamDefault(d: Record<string, unknown>, field: Record<string, unknown>) {
