@@ -31,6 +31,8 @@ const screens: [image: string, hits: string[]][] = [
   ['Drive.png', ['GoToMirrorEntry', 'NavDrive']],
   ['EntryNewRun.png', ['MirrorEntryNewRun']],
   ['EntryPaused.png', ['MirrorEntryPaused']],
+  // Synthetic (#94), no live capture yet: EntryNewRun.png with the Parallel Superposition label's OFF redrawn as ON.
+  ['EntryParallelOn.png', ['ParallelModeOn', 'MirrorEntryNewRun']],
   ['ResumeDialog.png', ['ResumeDialog', 'MirrorEntryPaused', 'RecoverToWindow']],  // the entry page reads through it
   ['EnterDialog.png', ['MirrorEnterDialog', 'MirrorEntryNewRun']],
   ['TeamSelect.png', ['TeamSelect']],

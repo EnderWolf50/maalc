@@ -411,6 +411,26 @@ class PlanRun(CustomAction):
         return True
 
 
+INFINITY_TITLE = [890, 330, 330, 28]  # entry page: "Parallel Superposition Mode : ON" / "OFF" (the pipeline's roi)
+INFINITY_BUTTON = (1053, 377)  # INFINITY MIRROR under it
+
+
+@AgentServer.custom_action("ParallelModeOff")
+class ParallelModeOff(CustomAction):
+    """Entry page with Parallel Superposition Mode ON: tap INFINITY MIRROR until it reads OFF (#94, spec 02).
+
+    The bot never plays past floor 5; the prompt after floor 5 (ParallelModePrompt) is cancelled as a second guard.
+    Still ON after two taps: stop, nothing else is tried.
+    """
+
+    def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
+        for _ in range(2):
+            if tap_then(context, *INFINITY_BUTTON, shows(context, INFINITY_TITLE, r":\s*[O0]FF"), timeout=3) is not None:
+                log("Parallel Superposition Mode switched OFF")
+                return True
+        return stop(context, "Parallel Superposition Mode stays ON after tapping INFINITY MIRROR")
+
+
 @AgentServer.custom_action("SelectTeam")
 class SelectTeam(CustomAction):
     """Pick the team's in-game TEAMS #N slot, check the title, press Confirm."""

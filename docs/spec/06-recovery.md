@@ -78,6 +78,7 @@
 
 下列情況也必須直接停止，不走恢復：
 
+- 入口頁的 `Parallel Superposition Mode` 點兩次 `INFINITY MIRROR` 仍讀到 ON（[02-screens.md](02-screens.md)）。（#94）
 - 遇到維護公告。（#14）
 - 全滅後重打次數用完，且全域選項為「停止」（預設）。（#16）
 - 隊伍設定的「存活少於 K 人就停止」成立。（#16）
