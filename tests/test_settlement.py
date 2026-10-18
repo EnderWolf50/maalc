@@ -64,7 +64,7 @@ def test_only_claimed_runs_count(result, expected):
     assert counts_as_run(result) is expected
 
 
-@pytest.mark.parametrize("done, limit, expected", [(0, 1, False), (1, 1, True), (5, 0, False), (2, 3, False)])
+@pytest.mark.parametrize("done, limit, expected", [(0, 1, False), (1, 1, True), (5, None, False), (2, 3, False)])  # None: the switch off, no limit (#137)
 def test_runs_done(done, limit, expected):
     assert runs_done(done, limit) is expected
 

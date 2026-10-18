@@ -98,6 +98,37 @@ def test_a_formation_page_still_fading_in_is_read_once_it_is_still(context, monk
     assert actions.RUN["alive"] == 12
 
 
+def few_alive(context, monkeypatch, after_retries, min_alive):
+    """A formation page with 4 of 12 alive; the stops and taps it leads to."""
+    actions.RUN.update(team={"min_alive": min_alive, "name": "t"}, settings={"run": {"after_retries": after_retries}})
+    stops, taps = [], []
+    monkeypatch.setattr(actions, "stop", lambda context, reason, line=None: stops.append(reason) or False)
+    monkeypatch.setattr(actions, "tap", lambda context, x, y, wait=1.0: taps.append((x, y)))
+    monkeypatch.setattr(actions.run_start, "resolve_plan", lambda *a: [])  # ends the action after the count
+    reads(context, {tuple(actions.PARTICIPANTS): [("4/4", (1125, 500, 60, 30))]})
+    result = actions.Formation().run(context, None)
+    return result, stops, taps
+
+
+def test_too_few_alive_forfeits_the_run_like_used_up_wipe_retries(context, monkeypatch):
+    # #137: fewer than K alive goes the way of after_retries; forfeit backs out to the map, RouteMap forfeits there.
+    result, stops, taps = few_alive(context, monkeypatch, "forfeit", 5)
+    assert result is True and stops == []
+    assert actions.RUN["forfeit"] is True
+    assert taps == [actions.FORMATION_BACK]
+
+
+def test_too_few_alive_stops_when_used_up_wipe_retries_stop(context, monkeypatch):
+    result, stops, taps = few_alive(context, monkeypatch, "stop", 5)
+    assert result is False and len(stops) == 1 and taps == []
+
+
+def test_no_alive_check_at_0(context, monkeypatch):
+    result, stops, taps = few_alive(context, monkeypatch, "forfeit", 0)
+    assert all("deployment order" in s for s in stops)  # only the empty order (the stub) stops it
+    assert "forfeit" not in actions.RUN
+
+
 def test_event_text_is_tapped_through_until_the_choices_show(context):
     # The user's tip: taps on a dead corner run the text on; stop once there is something to pick.
     shots = []
@@ -742,7 +773,7 @@ def test_tap_until_gives_up_after_its_timeout_and_leaves_the_page_to_the_hub(con
 
 
 def test_plan_run_waits_for_the_enter_dialog_after_pressing_enter(context, clock, monkeypatch):
-    team = {"id": 1, "name": "t", "game_team": 1, "guard_turns": 3}
+    team = {"id": 1, "name": "t", "game_team": 1, "guard_turns": 3, "hard_from_floor": 1}
     run = {"runs": 0, "stop_when_weekly_bonus_out": False, "difficulty": "normal"}
     monkeypatch.setattr(actions, "load_settings", lambda root: {"run": run, "teams": [team]})
     monkeypatch.setattr(actions, "pick_team", lambda teams, cursor, difficulty: team)
@@ -754,6 +785,23 @@ def test_plan_run_waits_for_the_enter_dialog_after_pressing_enter(context, clock
     assert actions.PlanRun().run(context, argv())
     assert taps(context) == [(1108, 494)]
     no_fixed_wait(clock)
+
+
+@pytest.mark.parametrize(("setting", "expected"), [("auto", "normal"), ("hard", "hard")])
+def test_a_planned_run_of_a_team_that_never_switches_to_hard(context, clock, monkeypatch, setting, expected):
+    # #137: auto with weekly bonuses left decides hard, but this team's switch to hard is off: the run is NORMAL.
+    # Only the global "hard" makes it HARD (every floor, hard_wanted).
+    team = {"id": 1, "name": "t", "game_team": 1, "guard_turns": 0, "hard_from_floor": None}
+    run = {"runs": None, "stop_when_weekly_bonus_out": False, "difficulty": setting}
+    monkeypatch.setattr(actions, "load_settings", lambda root: {"run": run, "teams": [team]})
+    monkeypatch.setattr(actions, "pick_team", lambda teams, cursor, difficulty: team)
+    monkeypatch.setattr(actions, "read_cursor", lambda root, address: None)
+    monkeypatch.setattr(actions.run_start, "run_difficulty", lambda setting, weekly: "hard")
+    monkeypatch.setattr(actions.recovery, "read_runs", lambda root: [])
+    monkeypatch.setattr(actions.recovery, "floor_limit", lambda runs, team: 1800)
+    page(context, {})
+    actions.PlanRun().run(context, argv())
+    assert actions.RUN["difficulty"] == expected
 
 
 def team_picker(context, title, after_confirm):

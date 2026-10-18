@@ -37,10 +37,30 @@ export function Select({ value, options, label, onChange }: {
   );
 }
 
-export function Num({ value, min, max, onChange }: { value: number; min: number; max?: number; onChange: (v: number) => void }) {
+export function Num({ value, min, max, disabled, onChange }: {
+  value: number; min: number; max?: number; disabled?: boolean; onChange: (v: number) => void;
+}) {
   return (
-    <input type="number" value={value} min={min} max={max} step={1}
+    <input type="number" value={value} min={min} max={max} step={1} disabled={disabled}
       onChange={(e) => onChange(e.target.value === "" ? min : Math.trunc(Number(e.target.value)))} />
+  );
+}
+
+/** A switch with its number (#137): off is null and greys the number out; switched on, it starts at `on`. */
+export function ToggleNum({ label, path, value, on, min, max, note, onChange }: {
+  label: string; path: string; value: number | null; on: number; min: number; max?: number; note?: string;
+  onChange: (v: number | null) => void;
+}) {
+  const { bad } = useEditor();
+  return (
+    <div className={"toggle" + (bad(path) ? " bad" : "")}>
+      <label className="check">
+        <input type="checkbox" checked={value !== null} onChange={(e) => onChange(e.target.checked ? on : null)} />
+        {label}
+      </label>
+      <Num value={value ?? on} min={min} max={max} disabled={value === null} onChange={onChange} />
+      {note && <small>{note}</small>}
+    </div>
   );
 }
 

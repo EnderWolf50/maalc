@@ -6,7 +6,7 @@ import {
   type GiftRef, type SearchGift, type Team,
 } from "./model";
 import { SinnerGrid, StarlightEditor } from "./Plans";
-import { Field, Num, ReorderList, Select, useEditor } from "./ui";
+import { Field, Num, ReorderList, Select, ToggleNum, useEditor } from "./ui";
 
 export function TeamsTab() {
   const { s, update, t, bad } = useEditor();
@@ -141,6 +141,8 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
             </select>
             <small>{t("team.guard_turns_note")}</small>
           </div>
+          <ToggleNum label={t("team.hard_from_floor")} path={`${path}/hard_from_floor`} value={team.hard_from_floor} on={1} min={1} max={5}
+            note={t("team.hard_from_floor_note")} onChange={(v) => set({ hard_from_floor: v })} />
           <div className={"toggle" + (bad(`${path}/allow_white_gossypium`) ? " bad" : "")}>
             <label className="check">
               <input type="checkbox" checked={team.allow_white_gossypium} onChange={(e) => set({ allow_white_gossypium: e.target.checked })} />
@@ -160,9 +162,6 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
           </div>
         </div>
         <div className="grid">
-          <Field label={t("team.hard_from_floor")} path={`${path}/hard_from_floor`}>
-            <Num value={team.hard_from_floor} min={0} max={5} onChange={(v) => set({ hard_from_floor: v })} />
-          </Field>
           {pick("heal")}
           <Field label={t("team.reserve_cost")} path={`${path}/reserve_cost`}>
             <Num value={team.reserve_cost} min={0} onChange={(v) => set({ reserve_cost: v })} />

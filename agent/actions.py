@@ -398,6 +398,9 @@ class PlanRun(CustomAction):
         if team is None:
             log(f"stop: no enabled team may run {difficulty}")
             return False
+        if run_start.team_difficulty(run["difficulty"], difficulty, team["hard_from_floor"]) != difficulty:
+            log(f"team {team['name']!r} never switches to hard and the difficulty is {run['difficulty']}: a normal run")
+            difficulty = "normal"
         RUN.clear()
         # planned: the bot picked the team itself, so the rotation cursor may move after the claim.
         limit = recovery.floor_limit(recovery.read_runs(ROOT), team["id"])
@@ -1027,9 +1030,11 @@ def enter_node(context):
 
 @AgentServer.custom_action("EnterNode")
 class EnterNode(CustomAction):
-    """The node selection panel is already up (e.g. after a restart): enter the node."""
+    """The node selection panel is already up (e.g. after a restart): enter the node, or forfeit the run."""
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
+        if RUN.get("forfeit"):  # backed out of the formation page (#137): the panel may still be up
+            return forfeit(context)
         return enter_node(context)
 
 
@@ -1289,6 +1294,9 @@ def order_marks(context, image):
     return marks
 
 
+FORMATION_BACK = (98, 43)  # the formation page's back arrow, top left
+
+
 @AgentServer.custom_action("Formation")
 class Formation(CustomAction):
     """Re-pick the deployment order, skipping the dead, then Chain To Battle! (spec 03 section 3).
@@ -1307,8 +1315,15 @@ class Formation(CustomAction):
             return True  # page fading in or out: let MirrorHub look again
         alive, need = count[1], run["team"]["min_alive"]
         RUN["alive"] = alive  # the shop's heal reads it (spec 03 section 13)
-        if alive < need:
-            return stop(context, f"{alive} sinners alive, team {run['team']['name']!r} stops below {need}")
+        if alive < need:  # need 0: no check
+            # Like used-up wipe retries (#137): stop, or back out to the map, where RouteMap forfeits.
+            reason = f"{alive} sinners alive, team {run['team']['name']!r} needs {need}"
+            if run["settings"]["run"]["after_retries"] == "stop":
+                return stop(context, reason)
+            log(f"{reason}: forfeit the run")
+            RUN["forfeit"] = True
+            tap(context, *FORMATION_BACK, wait=2)
+            return True
         if "Details" not in text(context, image, DETAILS_BUTTON):
             tap(context, 826, 125, wait=1.5)  # its » folds the details view (skills, E.G.O), which hides the order marks
             image = screen(context)
@@ -2412,7 +2427,7 @@ class Settle(CustomAction):
 
         s, team = run["settings"]["run"], run["team"]
         left = number(text(context, image, WEEKLY_LEFT).split("/")[0])
-        all_hard = run.get("planned", False) and run["difficulty"] == "hard" and team["hard_from_floor"] <= 1
+        all_hard = run.get("planned", False) and run["difficulty"] == "hard" and team["hard_from_floor"] in (1, None)
         want = settlement.bonus_toggles(s["weekly_bonus_use"], s["weekly_bonus_amount"], hard, left or 0, all_hard)
         for _ in range(6):
             states = toggles(context, screen(context))
