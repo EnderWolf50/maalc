@@ -1,8 +1,8 @@
 // The click rules of the team page's sinner grid and starlight cards.
 import { expect, test } from "vitest";
 import {
-  SEARCH_GIFTS, SEARCH_TABS, buyOrder, clickCard, clickEnhance, enhanceAll, gracePrice, selectAll, starlightCost, toggleGift,
-  toggleSinner, type StarlightValues,
+  SEARCH_GIFTS, SEARCH_TABS, buyOrder, clickCard, clickEnhance, enhanceAll, gracePrice, newSettings, selectAll, starlightCost,
+  toggleGift, toggleSinner, type StarlightValues,
 } from "./model";
 
 test("clicking a sinner not in the order adds it at the end", () => {
@@ -108,4 +108,8 @@ test("a card's price is its base price times 1, 2 or 3", () => {
   expect(gracePrice(10, "base")).toBe(60);
   expect(gracePrice(1, "plus")).toBe(20);
   expect(gracePrice(10, "plus2")).toBe(180);
+});
+
+test("a new settings file forfeits a run whose wipe retries ran out instead of stopping the batch (#95)", () => {
+  expect(newSettings().run.after_retries).toBe("forfeit");
 });

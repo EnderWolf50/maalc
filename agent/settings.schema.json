@@ -41,7 +41,7 @@
         "stop_when_weekly_bonus_out": { "type": "boolean", "default": false },
         "starlight_unaffordable": { "enum": ["stop", "skip"], "default": "skip" },
         "wipe_retries": { "type": "integer", "minimum": 0, "default": 2 },
-        "after_retries": { "enum": ["stop", "forfeit"], "default": "stop" },
+        "after_retries": { "enum": ["stop", "forfeit"], "default": "forfeit" },
         "webhook_url": { "type": "string", "default": "" }
       }
     },
