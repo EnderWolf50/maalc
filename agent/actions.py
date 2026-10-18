@@ -291,7 +291,7 @@ class Recover(CustomAction):
             log(f"L{level} did not go through")
             STUCK["ladder"].failed(level)
         STUCK["watch"].reset()
-        for key in ("turn", "battle_start", "map_misses", "event_tried", "map_plan"):
+        for key in ("turn", "battle_start", "map_misses", "event_tried", "map_plan", "map_entered"):
             RUN.pop(key, None)
         return True
 
@@ -844,21 +844,52 @@ def node_marks(context, image, cx, cy):
     return {mark: hit for n, (mark, (ox, oy, w, h)) in MARKS.items() if (hit := seen(context, image, n, (cx + ox, cy + oy, w, h)))}
 
 
-def node_at(context, image, cx, cy, marks=None):
+def node_at(context, image, cx, cy, marks=None, costs=True):
     """The type of the map node centred at (cx, cy), by its marks (map_route.node_type).
 
     No mark at all where the badges (80 px above the centre) sit under the resource bar: unknown, not an
     event; a fight's Cost coin may be hidden there (the top row with the map at rest).
+    #91: Risky has no template and its Cost coin alone read as a battle. With costs, a coin alone whose
+    number reads as none of the battle costs is taken for Risky; an unread number leaves it a battle.
+    Only the column next to the bus is read so: past it the badges are dim (offline, MirrorMap.png's
+    85 two columns out read 8). A planned slot is read again once next to the bus (RouteMap.follow).
     """
     marks = node_marks(context, image, cx, cy) if marks is None else marks
-    return "unknown" if not marks and cy - 80 < 60 else map_route.node_type(set(marks))
+    if not marks and cy - 80 < 60:
+        return "unknown"
+    kind = map_route.node_type(set(marks))
+    if kind == "battle" and costs:
+        cost = coin_number(context, image, marks["cost"].box)
+        if cost is not None and cost not in map_data()["battle_costs"]:
+            log(f"map: a Cost coin alone at {cx}, {cy} reads {cost}, no battle cost: risky")
+            kind = "risky"
+    return kind
+
+
+def coin_number(context, image, box):
+    """The number printed beside a map node's Cost coin (box), or None when none reads (#91).
+
+    Offline on 13 nodes of 7 captures: OCR of the bare badge read 75 as 25 or 5; of the bright,
+    near-white digits cut out (as order_marks does) every battle's 75 or 85 right, dim ones too.
+    A 3-digit number may lose its first digit (375 read 75): only fights carrying 3-digit costs do.
+    A single digit is a part read: None.
+    """
+    x, y, w, _ = box
+    part = image[max(0, y + 8):y + 38, max(0, x + w - 8):x + w + 32]
+    mask = (part.max(axis=2) > 170) & (saturation(part) < 90)
+    plain = np.where(mask[..., None], 0, 255).astype(np.uint8).repeat(3, axis=2)
+    digits = re.sub(r"\D", "", text(context, plain, [0, 0, plain.shape[1], plain.shape[0]], only_rec=True))
+    return int(digits) if len(digits) >= 2 else None
+
+
+def map_data():
+    return yaml.safe_load((RESOURCE / "base" / "data" / "map_weights.yaml").read_text(encoding="utf-8"))
 
 
 def map_weights(context):
     run = current_run(context)
     hard = run.get("floor_hard", run["difficulty"] == "hard")
-    data = yaml.safe_load((RESOURCE / "base" / "data" / "map_weights.yaml").read_text(encoding="utf-8"))
-    return data["hard" if hard else "normal"]
+    return map_data()["hard" if hard else "normal"]
 
 
 def enter_node(context):
@@ -890,8 +921,10 @@ class RouteMap(CustomAction):
 
     Slots linked to the bus (its lit line or a chevron on it) are typed by their marks, ranked by
     map_route.rank over the columns on screen and tapped in that order until the node panel (MapNodePanel)
-    shows. After them come the fallbacks: the bus (a node reached but not entered), then the slots not tried yet.
-    Nothing taking a tap spends one of the floor's map retries; when they run out, the map is stuck (spec 06).
+    shows. After them come the fallbacks: the bus (a node reached but not entered; first after a restart or a
+    recovery, #88), then the slots not tried yet. No bus on screen: the map is dragged about for it (#61).
+    Nothing taking a tap spends one of the floor's map retries; when they run out, the map is stuck (spec 06);
+    with no bus found at all, at once at L2.
     When the best path's first node is entered, the rest of the path is the floor's plan: the next calls
     follow it (follow) until it is used up or does not fit the map.
     """
@@ -913,6 +946,10 @@ class RouteMap(CustomAction):
             if slots:
                 break
             time.sleep(1)
+        if not bus and self.search_bus(context):  # #61: the map dragged off by hand
+            image, bus = self.find_bus(context)
+            bx, by = bus or BUS_REST
+            slots = self.read_slots(context, image, bx, by) if bus else {}
         log("map: column 1: " + (", ".join(f"{r} {t} ({'?' if n is None else n} onward)" for r, (t, n) in slots.items()) or "no linked slot read"))
         ahead = self.read_ahead(context, image, bx, by, slots) if slots else []
         weights = map_weights(context)
@@ -929,15 +966,21 @@ class RouteMap(CustomAction):
         def centre(row):
             return bx + SLOT[0], by + SLOT[1] + map_route.ROW_DY[row]
 
-        tries = [(f"{r} {slots[r][0]}", centre(r)) for r in order]
-        tries += [("the bus", (bx + 22, by + 37))] + [(f"{r} slot", centre(r)) for r in map_route.ROWS if r not in order]
+        ranked = [(f"{r} {slots[r][0]}", centre(r)) for r in order]
+        on_bus = [("the bus", (bx + 22, by + 37))]
+        # #88: after a restart or a recovery the bus may stand on a node not entered yet; its own tap opens it.
+        tries = ranked + on_bus if RUN.get("map_entered") else on_bus + ranked
+        tries += [(f"{r} slot", centre(r)) for r in map_route.ROWS if r not in order]
         for name, (x, y) in tries:
             tap(context, x, y, wait=0)
             if until(context, lambda im: seen(context, im, "MapNodePanel")) is not None:
                 log(f"map: take {name}")
-                if steps is not None and (x, y) == tries[0][1]:  # the path's first node: follow the rest
+                if steps is not None and (x, y) == ranked[0][1]:  # the path's first node: follow the rest
                     RUN["map_plan"] = {"floor": RUN.get("floor"), "steps": steps}
+                RUN["map_entered"] = True
                 return enter_node(context)
+        if not bus:  # #61: L2's To Window and Resume put the map back; L1's back key does nothing here
+            return stuck("no bus on the map, even after dragging it about", level=2)
         RUN["map_misses"] = RUN.get("map_misses", 0) + 1
         if RUN["map_misses"] >= MAP_RETRIES:
             return stuck(f"no node on the map took a tap, {MAP_RETRIES} times this floor")
@@ -960,6 +1003,24 @@ class RouteMap(CustomAction):
             # between the middle and bottom rows.
             scroll(context, min(bx + SLOT[0] + map_route.COLUMN_DX // 2, 1100), by + SLOT[1] + 106, dx, dy)
             time.sleep(0.5)
+
+    @staticmethod
+    def search_bus(context):
+        """Drag the map about, looking for the bus after each drag; whether it showed (#61).
+
+        Live 2026-10-16: a map dragged by hand left the bus off the top of the screen. The drags go
+        250 px down and up, 400 px right and left of where the map was, then back.
+        """
+        at = (0, 0)
+        for to in ((0, 250), (0, -250), (400, 0), (-400, 0), (0, 0)):
+            dx, dy = to[0] - at[0], to[1] - at[1]
+            scroll(context, 640 - dx // 2, 340 - dy // 2, dx, dy)
+            time.sleep(0.5)
+            at = to
+            if seen(context, screen(context), "MapBus"):
+                log(f"map: the bus showed after dragging the map {to}")
+                return True
+        return False
 
     @staticmethod
     def read_slots(context, image, bx, by):
@@ -1042,7 +1103,7 @@ class RouteMap(CustomAction):
                           and (map_route.line_contrast(v, x - dx, y(r), x, y(row)) or 0) >= map_route.LINE_CONTRAST}
                 if linked:
                     marks = node_marks(context, image, x, y(row))
-                    column[row] = (node_at(context, image, x, y(row), marks), linked)
+                    column[row] = (node_at(context, image, x, y(row), marks, costs=False), linked)
                     # A node with no mark may still be lit: a red pack's dim "?" (live 2026-10-18) reads 48-60
                     # here; hard mode's dark columns read 0.
                     lit = lit or bool(marks) or np.percentile(v[y(row) - 45:y(row) + 45, x - 45:x + 45], 90) >= 20
