@@ -113,6 +113,11 @@ def still(context, timeout=2.0):
     return until(context, done, timeout=timeout, least=0.2)
 
 
+def grid_moved(before, after):
+    """Whether the gift search grid shows other gifts: a tab switched, or a scroll went somewhere."""
+    return np.abs(after[228:625, 85:775].astype(int) - before[228:625, 85:775].astype(int)).mean() >= 2
+
+
 def moved(before, after):
     """Whether any 40x40 block of the screen changed by more than 8 levels: a tap took (#58)."""
     return bool((np.abs(recovery.thumb(before) - recovery.thumb(after)) > 8).any())
@@ -681,6 +686,8 @@ class GiftSearch(CustomAction):
                 break
         else:
             return stuck("Select did not ask to consume starlight")
+        # Live (run13c): the dialog reads while it still drops in on its chains, and a tap then does nothing.
+        still(context, timeout=1.5)
         # The search page reads through the dialog and again before the first window: leaving early would buy twice.
         tap_then(context, *SEARCH_DIALOG_BUTTONS["confirm"], shows(context, GET_TITLE, "GET"), timeout=4)
         price = number(ask.split("Starlight")[0])
@@ -737,7 +744,7 @@ class GiftSearch(CustomAction):
             if any(tier < gift["tier"] for _, _, tier in cells):
                 return False  # the tiers below have started: the wanted tier is done
             GiftSearch.scroll(context, 300)
-            if np.abs(screen(context)[228:625, 85:775].astype(int) - image[228:625, 85:775].astype(int)).mean() < 2:
+            if not grid_moved(image, screen(context)):
                 return False  # the end of the tab
         return False
 
@@ -745,10 +752,12 @@ class GiftSearch(CustomAction):
     def open_tab(context, keyword):
         """Open keyword's tab at its top: switching tabs resets the scroll (live 2026-10-16), so via a neighbour."""
         i = SEARCH_TABS.index(keyword)
-        tap(context, 113 + 62 * (i + 1 if i == 0 else i - 1), 190, wait=0)
-        still(context, timeout=1)
-        tap(context, 113 + 62 * i, 190, wait=0)
-        still(context, timeout=1)
+        for x in (113 + 62 * (i + 1 if i == 0 else i - 1), 113 + 62 * i):
+            # Live (run13): the tab lights up at once, its gifts a few looks later; a tap sent before then was
+            # lost, or the grid read showed the last tab's gifts. Wait for the gifts to change, then the fade.
+            before = screen(context)
+            tap_then(context, x, 190, lambda im: grid_moved(before, im), timeout=1)
+            still(context, timeout=1)
 
     @staticmethod
     def scroll(context, distance):
