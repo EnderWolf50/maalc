@@ -531,9 +531,21 @@ FUSE_PAGE = {tuple(actions.DIALOG_TITLE): [("Fuse E.G.O Gift", (500, 100, 200, 4
 SPIDERWEB = {"name": "Spiderweb Entangled in Red", "keyword": "Keywordless", "tier": 3}
 
 
+def fuse_slots(context, monkeypatch, slots=3, ignored=()):
+    """The fuse page's read-back (shop.fuse_slots, placed, picked; test_shop checks them on live captures) as the
+    game would show it: a tap on a cell puts its gift in or takes it out, but not on a cell in ignored."""
+    def inside():
+        taps = [c.args for c in context.tasker.controller.post_click.call_args_list]
+        return {c for c in actions.FUSE_CELLS if c not in ignored and taps.count(c) % 2}
+    monkeypatch.setattr(actions.shop, "fuse_slots", lambda image: slots)
+    monkeypatch.setattr(actions.shop, "placed", lambda image, n: len(inside()))
+    monkeypatch.setattr(actions.shop, "picked", lambda image, x, y: (x, y) in inside())
+
+
 def test_a_fusion_taps_only_the_materials_its_cells_show(context, monkeypatch):
     # #112: one screenshot decides; no tooltip is opened. Spiderweb (observed), Burn (main) and keywordless gifts stay.
     reads(context, FUSE_PAGE)
+    fuse_slots(context, monkeypatch)
     cells_read(monkeypatch, ("Keywordless", SPIDERWEB["name"]), ("Bleed", None), ("Burn", None), ("Keywordless", None),
                ("Tremor", None), ("Pierce", None), ("Sinking", None), (None, None))
     actions.Shop.fuse(context, {"keyword": "Burn", "gift_search": {"gifts": [SPIDERWEB]}}, {})
@@ -615,6 +627,7 @@ NO_GOSSYPIUM = {"keyword": "Bleed", "reserve_cost": 0, "gift_search": {"gifts": 
 def test_a_team_without_white_gossypium_fuses_it_first(context, monkeypatch):
     # #90: a Bleed team that does not hold it: its icon makes it material, ahead of the other materials.
     reads(context, {**FUSE_PAGE, tuple(actions.KEYWORD_LABELS): [("Bleed", (300, 400, 60, 20))]})
+    fuse_slots(context, monkeypatch)
     cells_read(monkeypatch, ("Burn", None), ("Tremor", None), ("Pierce", None), ("Bleed", GOSSYPIUM), ("Bleed", None))
     actions.Shop.fuse(context, NO_GOSSYPIUM, {})
     taps = [c.args for c in context.tasker.controller.post_click.call_args_list]
@@ -684,6 +697,57 @@ def test_a_team_without_white_gossypium_takes_it_when_it_is_the_only_card(contex
     assert actions.STUCK["flag"] is None
 
 
+def fusion_taps(context, monkeypatch, team, *readings, slots=3, ignored=(), confirm=3):
+    """Shop.fuse on readings (cells_read) with the read-back of fuse_slots; (its result, how often each cell was tapped,
+    whether Fuse was pressed). The confirm dialog reads "confirm/slots"."""
+    reads(context, {**FUSE_PAGE, tuple(actions.FUSE_CONFIRM): [(f"Selected E.G.O Gifts {confirm}/{slots}", (330, 175, 320, 30))],
+                    tuple(actions.GET_TITLE): [("E.G.O Gift GET!", (560, 165, 160, 30))]})
+    fuse_slots(context, monkeypatch, slots, ignored)
+    cells_read(monkeypatch, *readings)
+    fused = actions.Shop.fuse(context, {"keyword": "Burn", "gift_search": {"gifts": []}, **team}, {})
+    taps = [c.args for c in context.tasker.controller.post_click.call_args_list]
+    return fused, [taps.count(c) for c in actions.FUSE_CELLS[:len(readings)]], actions.PAGE_OK in taps
+
+
+def test_a_fusion_puts_in_the_materials_that_make_the_highest_tier(context, monkeypatch):
+    # #77: III + III + II make a tier IV; the three I would make only a tier I.
+    fused, taps, ok = fusion_taps(context, monkeypatch, {}, ("Bleed", None, 1), ("Bleed", None, 3), ("Pierce", None, 1),
+                                  ("Tremor", None, 2), ("Slash", None, 3), ("Sinking", None, 1))
+    assert fused and ok and taps == [0, 1, 0, 1, 1, 0]
+
+
+def test_the_teams_kept_keywords_and_gifts_stay_out_of_a_fusion(context, monkeypatch):
+    # #77: Bleed is kept besides Burn; keywordless gifts may go; Spiderweb is kept by its icon (keep_gifts).
+    team = {"keep_keywords": ["Bleed"], "keep_keywordless": False, "keep_gifts": [SPIDERWEB]}
+    fused, taps, _ = fusion_taps(context, monkeypatch, team, ("Bleed", None), ("Keywordless", SPIDERWEB["name"], 3),
+                                 ("Keywordless", None), ("Tremor", None), ("Bleed", None), ("Pierce", None))
+    assert fused and taps == [0, 0, 1, 1, 0, 1]
+
+
+def test_a_super_shop_fuses_up_to_5(context, monkeypatch):
+    # #77: 5 tier I make a tier III by the Super Shop's thresholds; its confirm dialog reads 5/5.
+    fused, taps, _ = fusion_taps(context, monkeypatch, {}, *[("Bleed", None, 1)] * 5, slots=5, confirm=5)
+    assert fused and taps == [1] * 5
+
+
+def test_a_material_that_does_not_show_in_the_fusion_closes_the_page(context, monkeypatch):
+    # #77: the second tap put nothing in (or another gift): Close, no Fuse, and not the same scan again.
+    visit = {}
+    reads(context, FUSE_PAGE)
+    fuse_slots(context, monkeypatch, ignored=[actions.FUSE_CELLS[1]])
+    cells_read(monkeypatch, ("Bleed", None), ("Tremor", None), ("Pierce", None))
+    assert not actions.Shop.fuse(context, {"keyword": "Burn", "gift_search": {"gifts": []}}, visit)
+    taps = [c.args for c in context.tasker.controller.post_click.call_args_list]
+    assert actions.PAGE_OK not in taps and actions.PAGE_CLOSE in taps
+    assert [taps.count(c) for c in actions.FUSE_CELLS[:3]] == [1, 1, 0]  # stopped at the second
+    assert visit["fuse_scanned"]
+
+
+def test_a_fusion_is_not_confirmed_when_the_dialog_counts_other_materials(context, monkeypatch):
+    fused, _, ok = fusion_taps(context, monkeypatch, {}, *[("Bleed", None)] * 3, confirm=2)
+    assert ok and not fused
+
+
 def test_the_fusion_grid_is_not_scanned_again_while_the_owned_gifts_are_the_same(context):
     # The fuse page with its keyword dialog, every cell empty: no fusion this visit.
     reads(context, {tuple(actions.DIALOG_TITLE): [("Fuse E.G.O Gift", (500, 100, 200, 40))],
@@ -712,6 +776,7 @@ def test_the_teams_observed_gift_is_kept_out_of_a_fusion(context, monkeypatch):
         return SimpleNamespace(all_results=results) if results else None
     context.run_recognition.side_effect = run_recognition
     owned_gifts(context)
+    fuse_slots(context, monkeypatch)
     team = {"keyword": "Burn", "gift_search": {"gifts": [SPIDERWEB]}}
     assert not actions.Shop.fuse(context, team, {})
     taps = [c.args for c in context.tasker.controller.post_click.call_args_list]

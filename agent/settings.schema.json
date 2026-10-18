@@ -17,7 +17,7 @@
     "trial_risk_overrides"
   ],
   "properties": {
-    "version": { "const": 6 },
+    "version": { "const": 7 },
     "language": { "enum": ["zh_tw", "en_us"], "default": "zh_tw" },
     "run": {
       "type": "object",
@@ -125,7 +125,10 @@
           "guard_turns",
           "trial_risk_weight",
           "gift_search",
-          "allow_white_gossypium"
+          "allow_white_gossypium",
+          "keep_keywords",
+          "keep_keywordless",
+          "keep_gifts"
         ],
         "properties": {
           "id": { "$ref": "#/$defs/id" },
@@ -214,19 +217,7 @@
                 "type": "array",
                 "uniqueItems": true,
                 "maxItems": 3,
-                "items": {
-                  "type": "object",
-                  "additionalProperties": false,
-                  "required": ["keyword", "tier", "name"],
-                  "properties": {
-                    "keyword": {
-                      "enum": ["Burn", "Bleed", "Tremor", "Rupture", "Sinking", "Poise", "Charge", "Slash", "Pierce", "Blunt", "Keywordless"],
-                      "description": "the page's keyword tab"
-                    },
-                    "tier": { "type": "integer", "minimum": 1, "maximum": 3 },
-                    "name": { "type": "string", "minLength": 1, "description": "English name as the game shows it" }
-                  }
-                },
+                "items": { "$ref": "#/$defs/gift" },
                 "default": []
               }
             },
@@ -236,6 +227,25 @@
             "type": "boolean",
             "default": true,
             "description": "off: never take or buy White Gossypium; owned ones are fused or sold first"
+          },
+          "keep_keywords": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": { "enum": ["Burn", "Bleed", "Tremor", "Rupture", "Sinking", "Poise", "Charge", "Slash", "Pierce", "Blunt"] },
+            "default": [],
+            "description": "keywords besides the main one whose gifts the shop never fuses or sells"
+          },
+          "keep_keywordless": {
+            "type": "boolean",
+            "default": true,
+            "description": "the shop never fuses or sells keywordless gifts; off: they are materials like any other"
+          },
+          "keep_gifts": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": { "$ref": "#/$defs/gift" },
+            "default": [],
+            "description": "gifts the shop never fuses or sells, told by their icon"
           }
         }
       }
@@ -267,6 +277,20 @@
   },
   "$defs": {
     "id": { "type": "string", "minLength": 1 },
+    "gift": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["keyword", "tier", "name"],
+      "description": "a gift of the E.G.O Gift Search page (data/gift_search.json)",
+      "properties": {
+        "keyword": {
+          "enum": ["Burn", "Bleed", "Tremor", "Rupture", "Sinking", "Poise", "Charge", "Slash", "Pierce", "Blunt", "Keywordless"],
+          "description": "the page's keyword tab"
+        },
+        "tier": { "type": "integer", "minimum": 1, "maximum": 3 },
+        "name": { "type": "string", "minLength": 1, "description": "English name as the game shows it" }
+      }
+    },
     "name": { "type": "string", "minLength": 1 },
     "plan_ref": {
       "type": "object",

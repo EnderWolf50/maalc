@@ -1,7 +1,7 @@
 {
   "description": "Shared by tests/test_settings.py and gui/src/validate.test.ts so the agent and the GUI reject the same files. Each case applies edits to valid: set (a last path segment of - appends) or delete. schema lists the error paths; every error must sit at or under one of them. cross lists the exact cross-check messages, in order.",
   "valid": {
-    "version": 6,
+    "version": 7,
     "language": "zh_tw",
     "run": {
       "difficulty": "auto", "runs": null, "weekly_bonus_use": "hard", "weekly_bonus_amount": "all",
@@ -21,7 +21,8 @@
         "deployment_order": {"plan": "d1"}, "starlight": {"plan": "s1"}, "theme_pack_plan": "p1",
         "reward_cards": ["Starlight", "Random E.G.O Gift", "Cost & Keyword Gift Chance", "Cost", "E.G.O Resource"],
         "shop_refresh_limit": 2, "heal": "revive", "reserve_cost": 0, "min_alive": 0, "guard_turns": 0, "trial_risk_weight": "high",
-        "gift_search": {"enabled": false, "gifts": []}, "allow_white_gossypium": true
+        "gift_search": {"enabled": false, "gifts": []}, "allow_white_gossypium": true,
+        "keep_keywords": [], "keep_keywordless": true, "keep_gifts": []
       },
       {
         "id": "b", "name": "Team b", "enabled": true, "game_team": 2, "keyword": "Bleed", "usage": "hard_only", "hard_from_floor": 3,
@@ -31,7 +32,8 @@
         "reward_cards": ["Cost", "Starlight", "Random E.G.O Gift", "Cost & Keyword Gift Chance", "E.G.O Resource"],
         "shop_refresh_limit": 0, "heal": "none", "reserve_cost": 50, "min_alive": 3, "guard_turns": 3, "trial_risk_weight": "low",
         "gift_search": {"enabled": true, "gifts": [{"keyword": "Bleed", "tier": 3, "name": "Smokes and Wires"}, {"keyword": "Bleed", "tier": 1, "name": "Layered Bandages"}]},
-        "allow_white_gossypium": false
+        "allow_white_gossypium": false, "keep_keywords": ["Burn", "Slash"], "keep_keywordless": false,
+        "keep_gifts": [{"keyword": "Keywordless", "tier": 3, "name": "Spiderweb Entangled in Red"}]
       }
     ],
     "event_overrides": [{"question": "Q?", "option": "Yes"}],

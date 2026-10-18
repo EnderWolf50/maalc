@@ -13,6 +13,12 @@ CROP_AT = {
     "fuse_spiderweb": (620, 236),  # live 2026-10-18 (maalc-probe rec/m3/fuse-140): Spiderweb Entangled in Red first
     "fuse": (620, 236),  # tests/screens/ShopFuse.png
     "fuse_recipe": (620, 236),  # tests/screens/ShopFuseRecipe.png (#103): the owned row sits at y 427
+    # The fuse page's slots and first two columns (#77): live 2026-10-18 (maalc-probe rec/m3/fuse-152), Spiderweb tapped
+    # in; captures/97 (2 in, a tooltip over the grid), Super Shop captures/172 (cells 5 and 6 in) and 169 (empty).
+    "fuse_one_in": (180, 165),
+    "fuse_two_in": (180, 165),
+    "fuse_super_two_in": (180, 165),
+    "fuse_super_open": (180, 165),
     "sell": (620, 200),  # live 2026-10-16 (maalc-probe s29/025_sell): the sell page of ShopFuse.png's gifts
     "offers": (560, 210),  # tests/screens/Shop.png
     "offers_super": (560, 210),  # tests/screens/SuperShop.png
@@ -197,13 +203,80 @@ def test_cost_value_reads_look_alike_letters_as_digits(read, cost):
     (None, "Spiderweb Entangled in Red", "keep"),
 ])
 def test_gift_role_from_the_cells_badge_and_icon(keyword, gift, role):
-    assert s.gift_role(keyword, gift, "Burn") == role
+    assert s.gift_role(keyword, gift, {"Burn", "Keywordless"}) == role
+
+
+def test_the_kept_keywords_decide_the_role():
+    # #77: another keyword the team names is kept; keywordless gifts are material once the team lets them go.
+    assert s.gift_role("Bleed", None, {"Burn", "Bleed"}) == "keep"
+    assert s.gift_role("Keywordless", None, {"Burn"}) == "material"
+    assert s.gift_role("Keywordless", "Spiderweb Entangled in Red", {"Burn"}) == "keep"  # a kept gift's icon still keeps it
 
 
 def test_an_avoided_gift_is_material_though_it_is_the_main_keyword():
     # #90: a Bleed team that does not hold White Gossypium fuses or sells it.
-    assert s.gift_role("Bleed", "White Gossypium", "Bleed", avoid=["White Gossypium"]) == "material"
-    assert s.gift_role("Bleed", None, "Bleed", avoid=["White Gossypium"]) == "keep"
+    assert s.gift_role("Bleed", "White Gossypium", {"Bleed"}, avoid=["White Gossypium"]) == "material"
+    assert s.gift_role("Bleed", None, {"Bleed"}, avoid=["White Gossypium"]) == "keep"
+
+
+POINTS = {1: 3, 2: 6, 3: 10, 4: 15, 5: 30}  # data/shop.yaml
+SHOP, SUPER = [10, 16, 24], [9, 14, 21]
+
+
+@pytest.mark.parametrize("points, shop, super_shop", [
+    (9, 1, 1), (10, 1, 2), (11, 2, 2), (14, 2, 2), (15, 2, 3), (16, 2, 3), (17, 3, 3), (21, 3, 3), (22, 3, 4),
+    (24, 3, 4), (25, 4, 4),
+])
+def test_fusion_tier_follows_the_points(points, shop, super_shop):
+    assert (s.fusion_tier(points, SHOP), s.fusion_tier(points, SUPER)) == (shop, super_shop)
+
+
+def test_pick_fusion_makes_the_highest_tier_first():
+    # #77: III + III + II = 26 points, a tier IV; the three I left fuse into a tier I.
+    materials = [("a", 1), ("b", 3), ("c", 1), ("d", 2), ("e", 3), ("f", 1)]
+    assert s.pick_fusion(materials, 3, SHOP, POINTS) == [(["b", "d", "e"], 4), (["a", "c", "f"], 1)]
+
+
+def test_pick_fusion_of_three_tier_one_gives_tier_one():
+    assert s.pick_fusion([("a", 1), ("b", 1), ("c", 1)], 3, SHOP, POINTS) == [(["a", "b", "c"], 1)]
+    assert s.pick_fusion([("a", 1), ("b", 1)], 3, SHOP, POINTS) == []  # fewer than 3: nothing
+
+
+def test_pick_fusion_takes_the_fewest_points_for_the_tier():
+    # IV takes 25 points: III + III + II (26) rather than III + III + III (30); the III left over waits.
+    materials = [("a", 3), ("b", 3), ("c", 3), ("d", 2)]
+    assert s.pick_fusion(materials, 3, SHOP, POINTS) == [(["a", "b", "d"], 4)]
+
+
+def test_pick_fusion_on_a_super_shop_fills_its_5_slots_by_its_own_thresholds():
+    # 5 tier I are 15 points: tier III at a Super Shop (15-21), where 3 of them make only a tier I.
+    materials = [(k, 1) for k in "abcde"]
+    assert s.pick_fusion(materials, 5, SUPER, POINTS) == [(list("abcde"), 3)]
+    assert s.pick_fusion(materials, 3, SHOP, POINTS) == [(["a", "b", "c"], 1)]
+    # II + II + I = 15: tier III at a Super Shop, II at a shop.
+    assert s.pick_fusion([("a", 2), ("b", 2), ("c", 1)], 5, SUPER, POINTS) == [(["a", "b", "c"], 3)]
+
+
+def test_pick_fusion_puts_an_avoided_gift_in_first():
+    # #90: White Gossypium ("w", a II) goes in rather than the other II for the same tier.
+    materials = [("a", 2), ("b", 2), ("c", 2), ("w", 2)]
+    assert s.pick_fusion(materials, 3, SHOP, POINTS) == [(["a", "b", "c"], 3)]
+    assert s.pick_fusion(materials, 3, SHOP, POINTS, first={"w"}) == [(["a", "b", "w"], 3)]
+
+
+@pytest.mark.parametrize("name, slots, placed, picked", [
+    ("fuse_one_in", 3, 1, [0]),  # Spiderweb, cell 0, in the right slot
+    ("fuse_two_in", 3, 2, [0, 1]),
+    ("fuse_super_two_in", 5, 2, [5, 6]),
+    ("fuse_super_open", 5, 0, []),  # "Select a Keyword." over the grid
+])
+def test_the_fuse_page_reads_back_its_slots_and_the_picked_cells(name, slots, placed, picked):
+    image = screen_with(name)
+    cells = [(678 + 96 * c, y) for y in (294, 385) for c in range(2)]  # the first two columns on these crops
+    index = [0, 1, 5, 6]
+    assert s.fuse_slots(image) == slots
+    assert s.placed(image, slots) == placed
+    assert [i for i, (x, y) in zip(index, cells) if s.picked(image, x, y)] == picked
 
 
 SELL_OCR = [  # Maa OCR of the sell page's grid (crop "sell"): coins read as 米/水/*, icon art as junk

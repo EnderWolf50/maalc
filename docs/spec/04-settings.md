@@ -21,6 +21,7 @@
   - 版本 4（#41）：執行選項新增 `theme_pack_refresh`，從版本 3 遷移時填 `all`（照舊用完所有免費刷新）。
   - 版本 5（#90）：隊伍新增 `allow_white_gossypium`，從版本 4 遷移時填 `true`（照舊可以持有）。
   - 版本 6（#137）：`run.runs`、`teams[].hard_from_floor` 改成開關＋數字，關閉存成 `null`。從版本 5 遷移時 `runs` 0（不限）改成 `null`；`hard_from_floor` 0（整局困難）改成 1，意思相同。其他數字不變。`min_alive` 格式不變（0 = 不檢查），只改了成立時的處理。
+  - 版本 7（#77）：隊伍新增 `keep_keywords`、`keep_keywordless`、`keep_gifts`，從版本 6 遷移時填 `[]`、`true`、`[]`（照舊只保留主要體系、無體系與觀測飾品）。
 - 只有 GUI 寫設定檔，Agent 不回寫。寫入必須先寫暫存檔再改名，避免寫到一半損毀。（#6、#19，2026-10-14 定案）
 - 檢查分兩層。schema 負責結構檢查：（#19，2026-10-14 定案）
   - 型別、列舉值、數字範圍；
@@ -185,6 +186,9 @@
 | 開局連續防禦回合數 | `guard_turns` | 整數 0–5 | 每局最前面 N 個戰鬥回合（跨場累計）全員防禦；0 = 不用 | 0 | #52 |
 | 試煉風險權重 | `trial_risk_weight` | 字串 | `low` 低／`medium` 中／`high` 高 | `high` | #17 |
 | 可以持有 White Gossypium | `allow_white_gossypium` | 布林 | 關：選飾品時排在最後（只剩它才選，不拿隨機試煉）、商店不買，已持有的優先當合成／出售材料（[03](03-decisions.md) 第 12、13 節） | 開 | #90 |
+| 商店也保留的體系 | `keep_keywords` | 陣列，不重複 | 主要體系以外、商店不拿去合成也不出售的體系（例如副體系）；值同主要體系 | `[]` | #77 |
+| 商店保留無體系飾品 | `keep_keywordless` | 布林 | 開：無體系飾品不當合成材料、不出售；關：和其他非主要體系飾品一樣可以用掉 | 開 | #77 |
+| 商店保留的飾品 | `keep_gifts` | 陣列，不重複 | 商店不拿去合成也不出售的飾品 `[{"keyword", "tier", "name"}, …]`，格式同 `gift_search.gifts`，不限個數；用 Gift Search 圖示比對認出，所以只能選觀測表裡的飾品 | `[]` | #77 |
 | 觀測飾品 | `gift_search` | 物件 | `{"enabled": 布林, "gifts": [{"keyword", "tier", "name"}, …]}`：開關，與依優先順序排列、不重複、最多 3 個的飾品清單。`keyword` 是觀測頁的分頁（主要體系的 10 個值加 `Keywordless`），`tier` 是 1–3，`name` 是遊戲顯示的英文名 | `{"enabled": false, "gifts": []}` | #54 |
 
 規則：

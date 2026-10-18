@@ -4,6 +4,7 @@ actions.py reads the shop pages and taps; everything here is plain data in, plai
 """
 
 from difflib import SequenceMatcher
+from itertools import combinations
 
 import numpy as np
 
@@ -220,19 +221,78 @@ def to_sell(gifts, wanted, cost, reserve, first=()):
     return sorted(picked, reverse=True)  # selling from the back keeps the earlier cells in place
 
 
-def gift_role(keyword, gift, main, avoid=()):
+def gift_role(keyword, gift, kept, avoid=()):
     """"keep", "material" or "unknown" for an owned gift read off its grid cell, on the fuse and the sell page.
 
     keyword: its badge's keyword, "Keywordless" with no badge, None when the badge is cut off or unread;
-    gift: the gift its icon matched (an observed or an avoided one), or None. Kept: the main keyword, every
-    keywordless gift and the observed gifts (#103, #112); a gift in avoid is material whatever its keyword (#90).
-    Unknown is left to the tooltip.
+    gift: the gift its icon matched (an observed, a kept or an avoided one), or None; kept: the keywords the team
+    keeps (kept_keywords: the main one, the ones it names and "Keywordless" unless it lets them go, #77). Kept too:
+    the gifts whose icon matched (observed #103, #112, or named in keep_gifts #77); a gift in avoid is material
+    whatever its keyword (#90). Unknown is left to the tooltip.
     """
     if gift in avoid:
         return "material"
-    if gift or keyword in (main, "Keywordless"):
+    if gift or keyword in kept:
         return "keep"
     return "unknown" if keyword is None else "material"
+
+
+MIN_FUSION = 3  # materials a fusion takes at least: the game takes 2, spec 03 section 13 (#10) groups of 3 and up
+
+
+def fusion_tier(points, thresholds):
+    """The tier a fusion gives for its materials' points (#77): thresholds are the most points of tiers 1-3."""
+    return 1 + sum(points > t for t in thresholds)
+
+
+def pick_fusion(materials, slots, thresholds, points, first=()):
+    """The fusions to make, best first: [([keys], the tier it gives)] (#77).
+
+    materials: [(key, tier)]; slots: the page's material slots (3, a Super Shop's 5); thresholds: fusion_tier's for
+    this shop; points: {tier: a material's points}. Each fusion takes 3 to slots materials: the group giving the
+    highest tier, then holding the most of first (gifts the team avoids, #90), then worth the fewest points; then
+    again from what is left, until fewer than 3 are.
+    """
+    def rank(group):
+        total = sum(points[t] for _, t in group)
+        return -fusion_tier(total, thresholds), -sum(k in first for k, _ in group), total, len(group)
+
+    left, out = list(materials), []
+    while len(left) >= MIN_FUSION:
+        best = min((g for n in range(MIN_FUSION, slots + 1) for g in combinations(left, n)), key=rank)
+        out.append(([k for k, _ in best], -rank(best)[0]))
+        left = [m for m in left if m not in best]
+    return out
+
+
+# The fuse page's material slots by their centre (live 2026-10-16/18): a shop's 3 round its centre, a Super Shop's 5.
+FUSE_SLOTS = {3: [(367, 213), (228, 352), (505, 352)], 5: [(367, 213), (235, 262), (495, 262), (235, 367), (495, 367)]}
+
+
+def fuse_slots(image):
+    """3 or 5: a fuse page's material slots, read before a material is in (#77).
+
+    Told by the Super Shop's top-left slot: an empty slot is black (live: brightness 1), where a shop's page shows
+    the gears behind (40).
+    """
+    return 5 if image[237:287, 210:260].max(axis=2).mean() < 10 else 3
+
+
+def placed(image, slots):
+    """How many of the fuse page's slots hold a material: textured (spread 29-85 live), not an empty slot's flat black (0-1)."""
+    return sum(int(image[y - 25:y + 25, x - 25:x + 25].max(axis=2).std() > 15) for x, y in FUSE_SLOTS[slots])
+
+
+def picked(image, x, y):
+    """Whether the owned gift whose cell is centred at (x, y) is in the fusion: its frame turns orange (#77).
+
+    The ring 34-40 px out from the centre: 17-23% orange pixels on a picked cell (11% under a tooltip's shade), 0-2%
+    on the others (live 2026-10-16/18). The cell does not move: the grid is not sorted again.
+    """
+    ring = np.concatenate([image[y - 40:y - 34, x - 30:x + 30].reshape(-1, 3), image[y + 34:y + 40, x - 30:x + 30].reshape(-1, 3),
+                           image[y - 30:y + 30, x - 40:x - 34].reshape(-1, 3), image[y - 30:y + 30, x + 34:x + 40].reshape(-1, 3)])
+    b, g, r = (ring[:, i].astype(int) for i in range(3))
+    return ((r > 200) & (g > 100) & (g < 200) & (b < 80)).mean() > 0.08
 
 
 def protected(name, names, min_ratio=0.85):

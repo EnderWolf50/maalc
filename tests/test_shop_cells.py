@@ -70,7 +70,7 @@ def child():
                 for case, (crop, cells, page, gifts, *allow) in CASES.items():
                     team = {"gift_search": {"gifts": gifts}, "allow_white_gossypium": (allow or [True])[0]}
                     found = actions.read_cells(context, screen_with(crop), getattr(actions, cells), page,
-                                               actions.observed_gifts(team) + actions.avoided_gifts(team))
+                                               actions.kept_icons(team) + actions.avoided_gifts(team))
                     out[case] = [(c["tier"], c["keyword"], c["gift"]) for c in found]
             except Exception:  # MaaFramework swallows it: hand it to the test
                 out["error"] = traceback.format_exc()

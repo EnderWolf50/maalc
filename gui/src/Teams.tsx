@@ -127,6 +127,7 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
       </fieldset>
 
       <GiftSearchPanel i={i} />
+      <KeepPanel i={i} />
 
       <details className="panel" open>
         <summary>{t("team.more")}</summary>
@@ -193,22 +194,116 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
 
 const ROMAN = ["", "I", "II", "III"];
 
+const sameRef = (a: GiftRef, g: SearchGift) => a.keyword === g.keyword && a.tier === g.tier && a.name === g.en;
+
+/** A gift's name in the GUI's language: the Chinese one when the data has it. */
+function giftName(g: GiftRef, zh: boolean) {
+  const known = SEARCH_GIFTS.find((x) => sameRef(g, x));
+  return zh && known?.zh ? known.zh : g.name;
+}
+
+/** The E.G.O Gift Search page's gifts, keyword tabs and tiers like the game's page; a click adds or removes one.
+ * mark: what a picked gift shows (its place in the list), null when it is not picked. */
+function GiftGrid({ gifts, start, full, mark, onToggle }: {
+  gifts: GiftRef[]; start: string; full: boolean; mark: (g: SearchGift) => string | null; onToggle: (g: GiftRef) => void;
+}) {
+  const { s, t } = useEditor();
+  const [tab, setTab] = useState(SEARCH_TABS.includes(start) ? start : SEARCH_TABS[0]);
+  const zh = s.language === "zh_tw";
+  const count = (k: string) => gifts.filter((g) => g.keyword === k).length;
+  return (
+    <div className="gift-search">
+      <div className="gift-tabs" role="tablist">
+        {SEARCH_TABS.map((k) => (
+          <button type="button" key={k} role="tab" aria-selected={k === tab} className={k === tab ? "selected" : ""} onClick={() => setTab(k)}>
+            {k}{count(k) > 0 && <b>{count(k)}</b>}
+          </button>
+        ))}
+      </div>
+      {[3, 2, 1].map((tier) => (
+        <div key={tier} className="gift-tier">
+          <h4>{ROMAN[tier]}</h4>
+          <div className="gifts">
+            {SEARCH_GIFTS.filter((g) => g.keyword === tab && g.tier === tier).map((g) => {
+              const m = mark(g);
+              return (
+                <button type="button" key={g.en} className={"gift" + (m ? " picked" : "")} aria-pressed={!!m}
+                  disabled={!m && full} title={!m && full ? t("gift.full") : undefined}
+                  onClick={() => onToggle({ keyword: g.keyword, tier: g.tier, name: g.en })}>
+                  {m && <span className="rank">{m}</span>}
+                  <span className="name">{zh && g.zh ? g.zh : g.en}</span>
+                  {zh && g.zh && <small>{g.en}</small>}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** What the shop never fuses or sells (spec 04 section 9, #77): other keywords, keywordless gifts, single gifts. */
+function KeepPanel({ i }: { i: number }) {
+  const { s, update, t, bad } = useEditor();
+  const team = s.teams[i];
+  const path = `teams/${i}`;
+  const set = (patch: Partial<Team>) => update((d) => { Object.assign(d.teams[i], patch); });
+  const zh = s.language === "zh_tw";
+  const toggle = (g: GiftRef) => set({ keep_gifts: toggleGift(team.keep_gifts, g, Infinity) });
+  const n = team.keep_keywords.length + team.keep_gifts.length;
+  return (
+    <details className={"panel" + (["keep_keywords", "keep_keywordless", "keep_gifts"].some((k) => bad(`${path}/${k}`)) ? " bad" : "")}>
+      <summary>{t("keep.title")}{n ? ` (${n})` : ""}</summary>
+      <p className="muted">{t("keep.note")}</p>
+      <div className="options">
+        <div className={"toggle" + (bad(`${path}/keep_keywords`) ? " bad" : "")}>
+          <span>{t("keep.keywords")}</span>
+          {KEYWORDS.filter((k) => k !== team.keyword).map((k) => (
+            <label key={k} className="check">
+              <input type="checkbox" checked={team.keep_keywords.includes(k)} onChange={(e) => set({
+                keep_keywords: e.target.checked ? [...team.keep_keywords, k] : team.keep_keywords.filter((x) => x !== k),
+              })} />{k}
+            </label>
+          ))}
+        </div>
+        <div className={"toggle" + (bad(`${path}/keep_keywordless`) ? " bad" : "")}>
+          <label className="check">
+            <input type="checkbox" checked={team.keep_keywordless} onChange={(e) => set({ keep_keywordless: e.target.checked })} />
+            {t("keep.keywordless")}
+          </label>
+          <small>{t("keep.keywordless_note")}</small>
+        </div>
+      </div>
+      <h4>{t("keep.gifts")}</h4>
+      <GiftGrid gifts={team.keep_gifts} start={team.keyword} full={false}
+        mark={(g) => (team.keep_gifts.some((x) => sameRef(x, g)) ? "✓" : null)} onToggle={toggle} />
+      <div className={"rewards" + (bad(`${path}/keep_gifts`) ? " bad" : "")}>
+        {team.keep_gifts.length ? (
+          <ul>
+            {team.keep_gifts.map((g) => (
+              <li key={`${g.keyword}|${g.tier}|${g.name}`}>
+                {giftName(g, zh)} <small className="muted">{g.keyword} {ROMAN[g.tier]}</small>{" "}
+                <button type="button" className="icon" aria-label={t("remove")} title={t("remove")} onClick={() => toggle(g)}>×</button>
+              </li>
+            ))}
+          </ul>
+        ) : <p className="muted">{t("keep.none")}</p>}
+      </div>
+    </details>
+  );
+}
+
 /** E.G.O Gift Search (spec 04 section 9): keyword tabs and tiers like the game's page; a click adds or removes. */
 function GiftSearchPanel({ i }: { i: number }) {
   const { s, update, t, bad } = useEditor();
   const team = s.teams[i];
   const search = team.gift_search;
   const path = `teams/${i}/gift_search`;
-  const [tab, setTab] = useState(SEARCH_TABS.includes(team.keyword) ? team.keyword : SEARCH_TABS[0]);
   const set = (patch: Partial<Team["gift_search"]>) => update((d) => { Object.assign(d.teams[i].gift_search, patch); });
   const zh = s.language === "zh_tw";
-  const nameOf = (g: GiftRef) => {
-    const known = SEARCH_GIFTS.find((x) => x.keyword === g.keyword && x.tier === g.tier && x.en === g.name);
-    return zh && known?.zh ? known.zh : g.name;
-  };
-  const rank = (g: SearchGift) => search.gifts.findIndex((x) => x.keyword === g.keyword && x.tier === g.tier && x.name === g.en) + 1;
+  const rank = (g: SearchGift) => search.gifts.findIndex((x) => sameRef(x, g)) + 1;
   const full = search.gifts.length >= MAX_GIFTS;
-  const count = (k: string) => search.gifts.filter((g) => g.keyword === k).length;
   return (
     <details className={"panel" + (bad(path) ? " bad" : "")}>
       <summary>{t("gift.title")}{search.enabled && search.gifts.length ? ` (${search.gifts.length})` : ""}</summary>
@@ -218,34 +313,8 @@ function GiftSearchPanel({ i }: { i: number }) {
         </label>
         <small>{t("gift.note")}</small>
       </div>
-      <div className="gift-search">
-        <div className="gift-tabs" role="tablist">
-          {SEARCH_TABS.map((k) => (
-            <button type="button" key={k} role="tab" aria-selected={k === tab} className={k === tab ? "selected" : ""} onClick={() => setTab(k)}>
-              {k}{count(k) > 0 && <b>{count(k)}</b>}
-            </button>
-          ))}
-        </div>
-        {[3, 2, 1].map((tier) => (
-          <div key={tier} className="gift-tier">
-            <h4>{ROMAN[tier]}</h4>
-            <div className="gifts">
-              {SEARCH_GIFTS.filter((g) => g.keyword === tab && g.tier === tier).map((g) => {
-                const n = rank(g);
-                return (
-                  <button type="button" key={g.en} className={"gift" + (n ? " picked" : "")} aria-pressed={n > 0}
-                    disabled={!n && full} title={!n && full ? t("gift.full") : undefined}
-                    onClick={() => set({ gifts: toggleGift(search.gifts, { keyword: g.keyword, tier: g.tier, name: g.en }) })}>
-                    {n > 0 && <span className="rank">{n}</span>}
-                    <span className="name">{zh && g.zh ? g.zh : g.en}</span>
-                    {zh && g.zh && <small>{g.en}</small>}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        ))}
-      </div>
+      <GiftGrid gifts={search.gifts} start={team.keyword} full={full} mark={(g) => (rank(g) ? String(rank(g)) : null)}
+        onToggle={(g) => set({ gifts: toggleGift(search.gifts, g) })} />
       <div className={"rewards" + (bad(`${path}/gifts`) ? " bad" : "")}>
         <h4>{t("gift.order")} ({search.gifts.length}/{MAX_GIFTS})</h4>
         {full && <p className="muted">{t("gift.full")}</p>}
@@ -253,7 +322,7 @@ function GiftSearchPanel({ i }: { i: number }) {
           <ReorderList items={search.gifts} keyOf={(g) => `${g.keyword}|${g.tier}|${g.name}`} onChange={(gifts) => set({ gifts })}
             render={(g, j) => (
               <>
-                {j + 1}. {nameOf(g)} <small className="muted">{g.keyword} {ROMAN[g.tier]}</small>{" "}
+                {j + 1}. {giftName(g, zh)} <small className="muted">{g.keyword} {ROMAN[g.tier]}</small>{" "}
                 <button type="button" className="icon" aria-label={t("remove")} title={t("remove")}
                   onClick={(e) => { e.stopPropagation(); set({ gifts: toggleGift(search.gifts, g) }); }}>×</button>
               </>

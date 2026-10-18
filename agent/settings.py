@@ -63,8 +63,20 @@ def _v5_to_v6(data):
     return data
 
 
+def _v6_to_v7(data):
+    """Version 7 adds what the shop keeps out of fusions and sales (#77): teams[].keep_keywords none,
+    keep_keywordless on and keep_gifts none, as before."""
+    teams = data.get("teams")
+    for team in teams if isinstance(teams, list) else []:
+        if isinstance(team, dict):
+            team.setdefault("keep_keywords", [])
+            team.setdefault("keep_keywordless", True)
+            team.setdefault("keep_gifts", [])
+    return data
+
+
 # MIGRATIONS[n] turns a version-n dict into a version-(n + 1) dict; keep in step with gui/src/model.ts.
-MIGRATIONS = {1: _v1_to_v2, 2: _v2_to_v3, 3: _v3_to_v4, 4: _v4_to_v5, 5: _v5_to_v6}
+MIGRATIONS = {1: _v1_to_v2, 2: _v2_to_v3, 3: _v3_to_v4, 4: _v4_to_v5, 5: _v5_to_v6, 6: _v6_to_v7}
 
 NO_TEAM = "No enabled team: set up a team in the settings GUI first."
 

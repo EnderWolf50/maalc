@@ -2057,23 +2057,39 @@ def read_cost(context, roi=SHOP_COST):
 
 
 def kept_gifts(team):
-    """Gift names the shop never fuses or sells: the team's observed gifts and every keywordless gift (#103).
+    """Gift names the shop never fuses or sells, for a tooltip's text: the team's observed (#103) and kept gifts (#77),
+    and every keywordless gift unless the team lets them go.
 
     Keywordless gifts are told by name (data/gift_search.json's Keywordless tab): the tooltip names no keyword.
     """
-    return [g["name"] for g in team["gift_search"]["gifts"]] + [g["en"] for g in gift_data() if g["keyword"] == "Keywordless"]
+    names = [g["name"] for g in team["gift_search"]["gifts"] + team.get("keep_gifts", [])]
+    if team.get("keep_keywordless", True):
+        names += [g["en"] for g in gift_data() if g["keyword"] == "Keywordless"]
+    return names
 
 
-def observed_gifts(team):
-    """The team's observed gifts ({"name", "keyword", "tier"}) with their icon's id in data/gift_search.json."""
+def kept_keywords(team):
+    """The keywords whose gifts the shop never fuses or sells (#77): the main one, the team's keep_keywords and
+    "Keywordless" unless the team lets keywordless gifts go."""
+    return {team["keyword"], *team.get("keep_keywords", ())} | ({"Keywordless"} if team.get("keep_keywordless", True) else set())
+
+
+def kept_icons(team):
+    """The gifts the shop keeps by their icon ({"name", "keyword", "tier"}) with its id in data/gift_search.json:
+    the team's observed gifts (#103) and its keep_gifts (#77)."""
     table = gift_data()
     out = []
-    for g in team["gift_search"]["gifts"]:
+    for g in team["gift_search"]["gifts"] + team.get("keep_gifts", []):
         entry = next((e for e in table if e["keyword"] == g["keyword"] and e["tier"] == g["tier"]
                       and run_start.match_pack(e["en"], [g["name"]])), None)
-        if entry:
+        if entry and all(o["id"] != entry["id"] for o in out):
             out.append({**g, "id": entry["id"]})
     return out
+
+
+def kept_text(text, team):
+    """Whether a tooltip's or panel's text names a keyword the team keeps (kept_keywords; spec 03 section 12's rule)."""
+    return any(rewards.gift_kind(text, k, False) == "main" for k in kept_keywords(team) - {"Keywordless"})
 
 
 WHITE_GOSSYPIUM = 9020  # its id in data/gift_search.json
@@ -2082,7 +2098,7 @@ WHITE_GOSSYPIUM = 9020  # its id in data/gift_search.json
 def avoided_gifts(team):
     """Gifts the team never takes or buys, and fuses or sells first: White Gossypium unless it allows it (#90).
 
-    Shaped like observed_gifts, for read_cells' icon match.
+    Shaped like kept_icons, for read_cells' icon match.
     """
     if team.get("allow_white_gossypium", True):
         return []
@@ -2103,8 +2119,8 @@ def read_cells(context, image, cells, page, gifts=()):
     """The filled cells of a shop grid read off one screenshot (#76, #112): [{"i", "x", "y", "tier", "keyword", "gift"}].
 
     The grid is scaled so gift icons are at their GiftSearch template's size, then each keyword's badge and each
-    observed gift's icon (gifts, observed_gifts) is matched once over it. keyword: the cell's best badge,
-    "Keywordless" with none, None when the badge is below the grid's edge; gift: the observed gift whose icon
+    kept gift's icon (gifts, kept_icons) is matched once over it. keyword: the cell's best badge,
+    "Keywordless" with none, None when the badge is below the grid's edge; gift: the kept gift whose icon
     matched, when its keyword and tier agree with the cell's. An empty cell is flat (live: spread 1-2, a gift 41-84).
     """
     scale, bottom = CELL_PAGES[page]
@@ -2145,6 +2161,17 @@ def cell_line(cell, role):
     """One cell read for the log: "0 III Keywordless Spiderweb Entangled in Red: keep"."""
     tier = "I II III IV V".split()[cell["tier"] - 1] if cell["tier"] else "?"
     return f"{cell['i']} {tier} {cell['keyword'] or 'badge unread'}{' ' + cell['gift'] if cell['gift'] else ''}: {role}"
+
+
+def fusions(cells, roles, slots, avoid):
+    """shop.pick_fusion over the cells whose role is material and whose tier is read: [([cell index], tier)] (#77).
+
+    The thresholds are the Super Shop's when the page has its 5 slots; an avoided gift goes in first (#90).
+    """
+    d = data("shop.yaml")
+    materials = [(c["i"], c["tier"]) for c, r in zip(cells, roles) if r == "material" and c["tier"]]
+    tiers = d["fusion_tiers"]["super_shop" if slots == 5 else "shop"]
+    return shop.pick_fusion(materials, slots, tiers, d["fusion_points"], {c["i"] for c in cells if c["gift"] in avoid})
 
 
 def tap_keyword(context, keyword):
@@ -2432,8 +2459,8 @@ class Shop(CustomAction):
         # One screenshot decides (#112): each cell's badge and icon, its price under it.
         image = screen(context)
         avoid = [g["name"] for g in avoided_gifts(team)]
-        cells = read_cells(context, image, SELL_CELLS, "sell", observed_gifts(team) + avoided_gifts(team))
-        roles = [shop.gift_role(c["keyword"], c["gift"], team["keyword"], avoid) for c in cells]
+        cells = read_cells(context, image, SELL_CELLS, "sell", kept_icons(team) + avoided_gifts(team))
+        roles = [shop.gift_role(c["keyword"], c["gift"], kept_keywords(team), avoid) for c in cells]
         prices = shop.cell_prices(ocr(context, image, SELL_GRID), SELL_CELLS)
         log("shop: sell cells " + "; ".join(f"{cell_line(c, r)} {prices.get(c['i'])}" for c, r in zip(cells, roles)))
         gifts = [(c["i"], prices[c["i"]]) for c, r in zip(cells, roles) if r == "material" and c["i"] in prices]
@@ -2448,9 +2475,9 @@ class Shop(CustomAction):
             panel = " ".join(lines)
             price = number(text(context, image, SELL_PRICE))
             kind = rewards.gift_kind(panel, team["keyword"], False, avoid)
-            if kind != "avoid" and any(shop.protected(t, keep) for t in lines):
+            if kind != "avoid" and (kept_text(panel, team) or any(shop.protected(t, keep) for t in lines)):
                 log(f"shop: sell cell {i} kept: {panel[:40]!r}")
-            elif price and "Select the" not in panel and kind != "main":
+            elif price and "Select the" not in panel:
                 gifts.append((i, price))
                 if kind == "avoid":
                     avoided.add(i)
@@ -2501,13 +2528,13 @@ class Shop(CustomAction):
 
     @staticmethod
     def fuse(context, team, visit):
-        """Fuse 3 non-main gifts into the main keyword, Wishmaking left unticked; True when one fused.
+        """Fuse the materials shop.pick_fusion picks into the main keyword, Wishmaking left unticked; True when one fused.
 
-        The cells are read off one screenshot (read_cells, #112): main-keyword, keywordless and observed gifts
-        stay, the first 3 others are tapped into the fusion. A cell whose badge is cut off is tapped for its
-        tooltip (spec 03 section 12's text rule) only while materials are short, and tapped again to take a
-        kept gift back out. A grid that held too few materials is not read again until a purchase or a sale
-        changes the owned gifts (#62).
+        The cells are read off one screenshot (read_cells, #112): the gifts the team keeps stay (kept_keywords,
+        kept_icons, #77), the rest are materials. A cell whose badge is cut off is tapped for its tooltip (spec 03
+        section 12's text rule), and out again, only while the others make no fusion. Each material tapped in is read
+        back (place); one that does not show closes the page unfused. One fusion a call, as the grid changes with it.
+        A grid that made none is not read again until a purchase or a sale changes the owned gifts (#62).
         """
         if visit.get("fuse_scanned"):
             return False
@@ -2529,59 +2556,83 @@ class Shop(CustomAction):
         image = screen(context)
         if Shop.recipe_shown(context, image, visit):
             return False
-        # One screenshot decides (#112): a tap puts a gift in the fusion, so only the materials are tapped.
         # ponytail: the 15 cells on show; a scroll would find more when 13+ of them are kept.
+        visit["slots"] = slots = shop.fuse_slots(image)
         avoid = [g["name"] for g in avoided_gifts(team)]
-        cells = read_cells(context, image, FUSE_CELLS, "fuse", observed_gifts(team) + avoided_gifts(team))
-        roles = [shop.gift_role(c["keyword"], c["gift"], keyword, avoid) for c in cells]
-        log("shop: fuse cells " + "; ".join(cell_line(c, r) for c, r in zip(cells, roles)))
-        picked = []
-        materials = sorted((c for c, r in zip(cells, roles) if r == "material"), key=lambda c: c["gift"] not in avoid)
-        for c in materials[:3]:  # an avoided gift first (#90)
-            tap(context, c["x"], c["y"], wait=0.5)
-            tap(context, *FUSE_NEUTRAL)  # closes its tooltip
-            picked.append(f"cell {c['i']} ({c['keyword']} {c['tier']})")
-        # Badges below the grid's edge: the tooltip's text decides (spec 03 section 12's rule), a tap at a time.
-        last, keep = None, kept_gifts(team)
-        for c in [c for c, r in zip(cells, roles) if r == "unknown"] if len(picked) < 3 else []:
+        cells = read_cells(context, image, FUSE_CELLS, "fuse", kept_icons(team) + avoided_gifts(team))
+        roles = [shop.gift_role(c["keyword"], c["gift"], kept_keywords(team), avoid) for c in cells]
+        log(f"shop: fuse cells ({slots} slots) " + "; ".join(cell_line(c, r) for c, r in zip(cells, roles)))
+        picks = fusions(cells, roles, slots, avoid)
+        if not picks and "unknown" in roles:
+            roles = Shop.tooltip_roles(context, team, cells, roles, avoid)
+            picks = fusions(cells, roles, slots, avoid)
+        if not picks:
+            visit["fuse_scanned"] = True
+            log(f"shop: {roles.count('material')} materials on show, a fusion takes {shop.MIN_FUSION}")
+            Shop.to_main(context)
+            return False
+        group, tier = picks[0]
+        group = [next(c for c in cells if c["i"] == i) for i in group]
+        materials = ", ".join(cell_line(c, "material").rsplit(":", 1)[0] for c in group)
+        fused = False
+        if Shop.place(context, group, slots) and not Shop.recipe_shown(context, screen(context), visit):
+            tap(context, *PAGE_OK, wait=2)
+            m = re.search(r"(\d)\s*/\s*\d", text(context, screen(context), FUSE_CONFIRM))
+            if m and int(m[1]) == len(group):
+                tap(context, 788, 583, wait=2.5)  # the dialog's Confirm
+                fused = gift_get(context)
+            log(f"shop: fuse {materials} into a tier {tier} {keyword} gift: {'done' if fused else 'not confirmed'}")
+        # Unconfirmed or not read back: not the same scan again until the owned gifts change (#103).
+        visit["fuse_scanned"] = not fused
+        Shop.to_main(context)
+        return fused
+
+    @staticmethod
+    def tooltip_roles(context, team, cells, roles, avoid):
+        """roles with each "unknown" cell (its badge cut off) decided by its tooltip: tapped in for it, then out again.
+
+        A gift the tooltip does not name is kept: live 2026-10-18, Spiderweb Entangled in Red's long tooltip read none.
+        """
+        roles, last, keep = list(roles), None, kept_gifts(team)
+        for n, c in enumerate(cells):
+            if roles[n] != "unknown":
+                continue
             x, y = c["x"], c["y"]
             tap(context, x, y, wait=0)
             lines, name = Shop.tooltip(context, last)
             tap(context, *FUSE_NEUTRAL)
+            tap(context, x, y, wait=1.2)  # out of the fusion again
+            tap(context, *FUSE_NEUTRAL)
             if name is None:
-                # Live 2026-10-18: Spiderweb Entangled in Red's long tooltip read no name and stayed in the
-                # fusion; a gift that cannot be named is taken out again.
                 log(f"shop: the gift at {x},{y} read no name: kept out of the fusion")
-                tap(context, x, y, wait=1.2)
-                tap(context, *FUSE_NEUTRAL)
+                roles[n] = "keep"
                 continue
             last = name
-            main = rewards.gift_kind(" ".join(t for t, _ in lines), keyword, False) == "main"
-            if not shop.protected(name, avoid) and (main or shop.protected(name, keep)):
-                if not main:
-                    log(f"shop: {name!r} kept out of the fusion")
-                tap(context, x, y, wait=1.2)  # out of the fusion again
-                tap(context, *FUSE_NEUTRAL)
-                continue
-            picked.append(name)
-            if len(picked) == 3:
-                break
-        fused = False
-        if len(picked) == 3:
-            if Shop.recipe_shown(context, screen(context), visit):
+            kept = not shop.protected(name, avoid) and (kept_text(" ".join(t for t, _ in lines), team) or shop.protected(name, keep))
+            roles[n] = "keep" if kept else "material"
+            log(f"shop: cell {c['i']} {name!r}: {roles[n]}")
+        return roles
+
+    @staticmethod
+    def place(context, cells, slots):
+        """Tap cells into the fusion, each read back (#77); False at the first that does not show, nothing put in before.
+
+        After a tap one slot more holds a material and the tapped cell's frame turns orange: the gift went in, and
+        it is the one meant (the grid stays in place).
+        """
+        image = screen(context)
+        if shop.placed(image, slots):
+            log(f"shop: {shop.placed(image, slots)} materials in before any tap: no fusion")
+            return False
+        for n, c in enumerate(cells, 1):
+            tap(context, c["x"], c["y"], wait=0.5)
+            tap(context, *FUSE_NEUTRAL)  # closes its tooltip, which shades the grid
+            image = screen(context)
+            filled, framed = shop.placed(image, slots), shop.picked(image, c["x"], c["y"])
+            if filled != n or not framed:
+                log(f"shop: cell {c['i']} tapped: {filled} of {n} materials in, {'framed' if framed else 'not framed'}: no fusion")
                 return False
-            tap(context, *PAGE_OK, wait=2)
-            m = re.search(r"(\d)\s*/\s*\d", text(context, screen(context), FUSE_CONFIRM))
-            if m and m[1] == "3":
-                tap(context, 788, 583, wait=2.5)  # the dialog's Confirm
-                fused = gift_get(context)
-            log(f"shop: fuse {picked} into {keyword}: {'done' if fused else 'not confirmed'}")
-            visit["fuse_scanned"] = not fused  # unconfirmed: not the same scan again until the owned gifts change (#103)
-        else:
-            visit["fuse_scanned"] = True
-            log(f"shop: {len(picked)} non-main gifts on show, a fusion takes 3")
-        Shop.to_main(context)
-        return fused
+        return True
 
 
 # Settlement (spec 03 section 14): the Exploration Reward window.
