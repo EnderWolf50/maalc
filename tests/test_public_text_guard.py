@@ -66,6 +66,28 @@ MUST_HIT = [
     'git --no-pager commit -m "see ' + WIN + '"',
     "git commit -Fdirty.md",
     "git commit --file=dirty.md",
+    f'gh pr create --title t --body ok && gh issue comment 1 --body "see {WIN}"',  # every call in a line is checked
+    f'git commit -m ok; git tag -a v1 -m "see {WIN}"',
+    # bash's backslash rules: an escaped separator or a line continuation does not end the call
+    f"gh issue comment 1 --body a\\;{WIN_FWD}",
+    f"gh issue comment 1 --body a\\|{WIN_FWD}",
+    f"git commit -m fix\\;{WIN_FWD}",
+    f'gh issue comment 1 \\\n  --body "{WIN_FWD}"',
+    "gh pr create --title t \\\n  --body-file dirty.md",
+    "git commit \\\n  -F dirty.md",
+    # quotes as bash reads them: no escape inside '...', an escaped quote outside quotes opens nothing
+    f"gh issue comment 1 --body 'a\\''; {WIN_FWD}'",
+    f'gh issue comment 1 --body \\""; {WIN_FWD}"',
+    # a call inside a quoted command string (bash -c, eval) is checked through to the end of the line
+    f'bash -c "gh issue comment 1 --body a\\\\;{WIN_FWD}"',
+    # a quote inside a comment or a heredoc body must not flip the inside-quotes reading
+    f'true # "\nbash -c "gh issue comment 1 --body \\";{WIN_FWD}\\""',
+    f"cat > /dev/null <<'E'\n\"\nE\nbash -c \"gh issue comment 1 --body \\\";{WIN_FWD}\\\"\"",
+    f"gh issue comment 1 --body ${{x:-a;{WIN_FWD}}}",  # a separator inside ${...} does not end the call
+    # flags named inside a quoted body are text, so they cannot hide what follows
+    f'gh issue comment 1 --body "see -C {WIN_FWD}"',
+    f'gh issue comment 1 --body "see --attach {WIN_FWD}"',
+    'gh issue comment 1 --body "see -R secret-folder"',
 ]
 MUST_PASS = [
     'gh issue comment 1 --body "see https://github.com/EnderWolf50/maalc/pull/2 and tests/screens/Title.png"',
@@ -81,6 +103,15 @@ MUST_PASS = [
     "gh pr merge 3 --squash",
     "git merge side",
     "git commit -Fclean.md",
+    # a substitution in a later command is not this call's text
+    'gh pr merge 168 --merge && [ "$(gh pr view 168 --json state -q .state)" = MERGED ] && echo merged',
+    'gh pr merge 3 --merge; s=`gh pr view 3 --json state`',
+    'git commit -m "fix: tidy" && echo "$(git log -1 --format=%h)"',
+    # a flag named inside a quoted message is text, not a flag
+    'git commit -m "add EMPTY_FLAG for a --body-file with no value"',
+    'git commit -m "use -F to pass a file; deny the --input flag"',
+    'gh pr create --title t --body "gh -F is --body-file"',
+    "git commit -m \"fix: tidy\" # don't\nls " + WIN_FWD,  # a comment's quote does not swallow the next line
 ]
 
 
@@ -111,6 +142,8 @@ UNREADABLE_CMDS = [
     "gh pr comment 1 --body-file missing.md",  # a file created earlier in the same command does not exist yet
     "echo hi > b.md && gh pr comment 1 --body-file b.md",
     "git commit -Fmissing.md",
+    "echo dirty.md | xargs gh issue comment 1 --body-file && echo done",  # xargs supplies the file
+    "echo dirty.md | xargs gh issue comment 1 --body-file",
 ]
 
 
