@@ -84,7 +84,7 @@ def pick_card(types, order, taken=()):
 
 
 def gift_kind(text, keyword, owned, avoid=()):
-    """"main", "other", "owned" or "avoid" for a gift card's OCR text; avoid: gift names the team never takes (#90)."""
+    """"main", "other", "owned" or "avoid" for a gift card's OCR text; avoid: gift names the team takes last (#90)."""
     if any(names_gift(text, name) for name in avoid):
         return "avoid"
     if owned:
@@ -116,18 +116,19 @@ def _numeral(s):
 
 
 def rank_gifts(cards, weight):
-    """Card indexes best first, avoided gifts left out (spec 03 section 12, #90).
+    """Card indexes best first (spec 03 section 12).
 
     cards are (kind, trial risk or None); score = gift score - weight x risk, ties to the lower
-    risk, then the leftmost. Without trials (risk None) it is main > other > owned.
+    risk, then the leftmost. Without trials (risk None) it is main > other > owned. An avoided gift
+    comes after every other card: taken only to fill the count, rather than a random trial (#90).
     """
     w = RISK_WEIGHT[weight]
 
     def key(i):
         kind, risk = cards[i]
-        return (-(GIFT_SCORE[kind] - w * (risk or 0)), risk or 0, i)
+        return (kind == "avoid", -(GIFT_SCORE.get(kind, 0) - w * (risk or 0)), risk or 0, i)
 
-    return sorted((i for i in range(len(cards)) if cards[i][0] != "avoid"), key=key)
+    return sorted(range(len(cards)), key=key)
 
 
 def pick_gifts(ranked, read, tap):

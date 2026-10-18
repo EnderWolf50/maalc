@@ -118,10 +118,11 @@ def test_a_gift_like_the_avoided_one_is_not_avoided():
     assert r.gift_kind("White Bleed Potency", "Bleed", False, avoid=["White Gossypium"]) == "main"
 
 
-def test_an_avoided_gift_is_never_ranked():
-    assert r.rank_gifts([("avoid", None), ("owned", None), ("main", None)], "high") == [2, 1]
-    assert r.rank_gifts([("avoid", 0), ("other", 5)], "high") == [1]
-    assert r.rank_gifts([("avoid", None)], "high") == []
+def test_an_avoided_gift_is_ranked_last():
+    # #90 (the user, 2026-10-18): taken only when nothing else is left, rather than a random trial.
+    assert r.rank_gifts([("avoid", None), ("owned", None), ("main", None)], "high") == [2, 1, 0]
+    assert r.rank_gifts([("avoid", 0), ("other", 5)], "high") == [1, 0]  # even below a risk-5 trial
+    assert r.rank_gifts([("avoid", None)], "high") == [0]
 
 
 def test_trial_risk_unknown_is_max():

@@ -1732,8 +1732,6 @@ GIFT_CARDS = [100, 150, 1080, 410]  # 1-4 cards; on the boss page the Mounting T
 GIFT_COUNT = [1060, 555, 160, 50]  # "Select 0/2"; no count with one card
 GIFT_SELECT = (1138, 579)
 REFUSE_GIFT = [870, 560, 160, 40]
-GIFT_REMAINING = [440, 280, 400, 35]  # Select with choices left: "You have remaining E.G.O Gift choices."
-GIFT_REMAINING_CONFIRM = (763, 493)  # its Confirm: a random trial per choice left (tests/screens/GiftRefuseDialog.png)
 TRIAL_NAME_Y = (440, 475)  # top of the trial name line; the effect line under it starts ~485
 
 
@@ -1748,7 +1746,7 @@ class PickGift(CustomAction):
 
     Cards are main keyword > other > owned; when Mounting Trials hang under them (after a boss),
     each scores gift - weight x trial risk. Refuse Gift is never pressed: it hands out random trials.
-    A gift the team avoids (#90) is never taken: with only those left, Select's random trials are confirmed.
+    A gift the team avoids (#90) comes last: taken only when nothing else fills the count.
     """
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
@@ -1783,19 +1781,9 @@ class PickGift(CustomAction):
             until(context, lambda im: gift_count(context, im) != before, timeout=1.5)
 
         rewards.pick_gifts(ranked, lambda: gift_count(context), pick)
-        skipped = any(k == "avoid" for k, _ in cards)
-
-        def remaining(image):
-            return skipped and "remaining" in text(context, image, GIFT_REMAINING)
-
         for _ in range(3):
             tap(context, *GIFT_SELECT, wait=0)
-            image = until(context, lambda im: remaining(im) or "Refuse" not in text(context, im, REFUSE_GIFT))
-            if image is not None and remaining(image):
-                log("gifts: only avoided gifts left: a random trial for each choice left (#90)")
-                tap(context, *GIFT_REMAINING_CONFIRM, wait=0)
-                image = until(context, lambda im: "Refuse" not in text(context, im, REFUSE_GIFT))
-            if image is not None:
+            if until(context, lambda im: "Refuse" not in text(context, im, REFUSE_GIFT)) is not None:
                 return True
         return stuck("Select did not take the gifts")
 

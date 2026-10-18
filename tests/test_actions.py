@@ -588,7 +588,7 @@ def test_a_team_without_white_gossypium_does_not_buy_it(context, monkeypatch):
 
 
 def gift_page(context, monkeypatch, names):
-    """A gift choice page with a Bleed card per name, Select 0/1; the remaining-choices dialog after an empty Select."""
+    """A gift choice page with a Bleed card per name, Select 0/1."""
     taps = []
     monkeypatch.setattr(actions, "tap", lambda context, x, y, wait=1.0: taps.append((x, y)))
 
@@ -601,9 +601,7 @@ def gift_page(context, monkeypatch, names):
         selected = actions.GIFT_SELECT in taps
         if roi == actions.GIFT_COUNT:
             return [(f"Select {int(picked)}/1", (1080, 565, 100, 30))]
-        if roi == actions.GIFT_REMAINING and selected and not picked and actions.GIFT_REMAINING_CONFIRM not in taps:
-            return [("You have remaining E.G.O Gift choices.", (450, 285, 380, 25))]
-        if roi == actions.REFUSE_GIFT and not (selected and (picked or actions.GIFT_REMAINING_CONFIRM in taps)):
+        if roi == actions.REFUSE_GIFT and not (selected and picked):
             return [("Refuse Gift", (900, 570, 100, 25))]
         return []
     monkeypatch.setattr(actions, "ocr", ocr)
@@ -615,15 +613,14 @@ def test_a_team_without_white_gossypium_picks_another_gift(context, monkeypatch)
     taps = gift_page(context, monkeypatch, [GOSSYPIUM, "Wound Clerid"])
     actions.PickGift().run(context, None)
     assert [t for t in taps if t[1] == 300] == [(536, 300)]  # the second card only
-    assert actions.GIFT_REMAINING_CONFIRM not in taps
 
 
-def test_a_team_without_white_gossypium_takes_a_random_trial_over_it(context, monkeypatch):
-    # #90 (the user, 2026-10-18): never pick it; Select with the choice left over, then Confirm the random trial.
+def test_a_team_without_white_gossypium_takes_it_when_it_is_the_only_card(context, monkeypatch):
+    # #90 (the user, 2026-10-18): taken rather than a random trial for the choice left; the shop then
+    # fuses or sells it first (test_a_team_without_white_gossypium_fuses_it_first).
     taps = gift_page(context, monkeypatch, [GOSSYPIUM])
     actions.PickGift().run(context, None)
-    assert [t for t in taps if t[1] == 300] == []
-    assert taps == [actions.GIFT_SELECT, actions.GIFT_REMAINING_CONFIRM]
+    assert taps == [(236, 300), actions.GIFT_SELECT]
     assert actions.STUCK["flag"] is None
 
 

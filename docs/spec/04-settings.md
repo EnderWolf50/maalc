@@ -183,7 +183,7 @@
 | 存活少於 K 人就停止 | `min_alive` | 整數 0–12 | 0 = 不檢查 | 0 | #16 |
 | 開局連續防禦回合數 | `guard_turns` | 整數 0–5 | 每局最前面 N 個戰鬥回合（跨場累計）全員防禦；0 = 不用 | 0 | #52 |
 | 試煉風險權重 | `trial_risk_weight` | 字串 | `low` 低／`medium` 中／`high` 高 | `high` | #17 |
-| 可以持有 White Gossypium | `allow_white_gossypium` | 布林 | 關：選飾品不選、商店不買，已持有的優先當合成／出售材料（[03](03-decisions.md) 第 12、13 節） | 開 | #90 |
+| 可以持有 White Gossypium | `allow_white_gossypium` | 布林 | 關：選飾品時排在最後（只剩它才選，不拿隨機試煉）、商店不買，已持有的優先當合成／出售材料（[03](03-decisions.md) 第 12、13 節） | 開 | #90 |
 | 觀測飾品 | `gift_search` | 物件 | `{"enabled": 布林, "gifts": [{"keyword", "tier", "name"}, …]}`：開關，與依優先順序排列、不重複、最多 3 個的飾品清單。`keyword` 是觀測頁的分頁（主要體系的 10 個值加 `Keywordless`），`tier` 是 1–3，`name` 是遊戲顯示的英文名 | `{"enabled": false, "gifts": []}` | #54 |
 
 規則：
