@@ -582,6 +582,296 @@ def test_the_teams_observed_gift_is_kept_out_of_a_fusion(context, monkeypatch):
     assert taps.count(actions.FUSE_CELLS[0]) == 2  # tapped in, then out again
 
 
+# The run's opening (#115): every wait is a look at the next page, never a fixed delay.
+def page(context, rules):
+    """OCR reads rules[roi] there and nothing elsewhere. A rule is a text, [(text, box)], or f(clicks, looks) -> either or None."""
+    clicks = context.tasker.controller.post_click
+    shots = context.tasker.controller.post_screencap.return_value.wait.return_value.get
+
+    def run_recognition(name, image, override=None):
+        roi = tuple((override or {}).get(name, {}).get("roi", ()))
+        rule = rules.get(roi)
+        rule = rule(clicks.call_count, shots.call_count) if callable(rule) else rule
+        if not rule:
+            return None
+        results = [SimpleNamespace(text=rule, box=roi)] if isinstance(rule, str) else [SimpleNamespace(text=t, box=b) for t, b in rule]
+        return SimpleNamespace(all_results=results, hit=True, best_result=None)
+    context.run_recognition.side_effect = run_recognition
+
+
+def argv(param=None, node="Node"):
+    return SimpleNamespace(custom_action_param=json.dumps(param), node_name=node, box=[0, 0, 1, 1])
+
+
+def no_fixed_wait(clock):
+    assert max(clock, default=0) <= 0.25, clock  # only until()'s 0.2 s looks
+
+
+def taps(context):
+    return [c.args for c in context.tasker.controller.post_click.call_args_list]
+
+
+def test_tap_until_taps_the_target_and_waits_for_the_page_that_follows(context, clock):
+    page(context, {(10, 20, 30, 40): lambda clicks, looks: "Next Page" if looks >= 3 else None})
+    param = {"target": [100, 200, 40, 20], "next": {"roi": [10, 20, 30, 40], "expected": "^Next"}}
+    assert actions.TapUntil().run(context, argv(param))
+    assert taps(context) == [(120, 210)]
+    assert context.tasker.controller.post_screencap.call_count == 3
+    no_fixed_wait(clock)
+
+
+def test_tap_until_takes_any_of_several_next_pages(context, clock):
+    page(context, {(1, 1, 10, 10): "Resume"})
+    param = {"target": [100, 200, 40, 20], "next": [{"roi": [10, 20, 30, 40], "expected": "^TEAMS$"}, {"roi": [1, 1, 10, 10], "expected": "Resume"}]}
+    assert actions.TapUntil().run(context, argv(param))
+    no_fixed_wait(clock)
+    assert sum(clock) == 0
+
+
+def test_tap_until_gives_up_after_its_timeout_and_leaves_the_page_to_the_hub(context, clock):
+    page(context, {})
+    param = {"target": [100, 200, 40, 20], "next": {"roi": [10, 20, 30, 40], "expected": "Next"}, "timeout": 2}
+    assert actions.TapUntil().run(context, argv(param))
+    assert 2 <= sum(clock) < 2.5
+
+
+def test_plan_run_waits_for_the_enter_dialog_after_pressing_enter(context, clock, monkeypatch):
+    team = {"id": 1, "name": "t", "game_team": 1, "guard_turns": 3}
+    run = {"runs": 0, "stop_when_weekly_bonus_out": False, "difficulty": "normal"}
+    monkeypatch.setattr(actions, "load_settings", lambda root: {"run": run, "teams": [team]})
+    monkeypatch.setattr(actions, "pick_team", lambda teams, cursor, difficulty: team)
+    monkeypatch.setattr(actions, "read_cursor", lambda root, address: None)
+    monkeypatch.setattr(actions.settlement, "runs_done", lambda done, limit: False)
+    monkeypatch.setattr(actions.recovery, "read_runs", lambda root: [])
+    monkeypatch.setattr(actions.recovery, "floor_limit", lambda runs, team: 1800)
+    page(context, {(400, 325, 480, 45): lambda clicks, looks: "Will you enter X?" if clicks and looks >= 3 else None})
+    assert actions.PlanRun().run(context, argv())
+    assert taps(context) == [(1108, 494)]
+    no_fixed_wait(clock)
+
+
+def team_picker(context, title, after_confirm):
+    """The team list shows TEAMS #3 at y 390; title(clicks, looks) is the card's title text, after_confirm(clicks, looks) the next page."""
+    page(context, {tuple(actions.TEAM_LIST): [("TEAMS #3", (100, 380, 80, 20))], (220, 112, 210, 26): title,
+                   (1160, 522, 60, 34): "63", (400, 230, 480, 90): after_confirm})
+
+
+def test_select_team_waits_for_the_title_after_the_tap_and_for_the_page_after_confirm(context, clock):
+    actions.RUN["team"] = {"game_team": 3}
+    team_picker(context, lambda clicks, looks: "TEAMS #1" if looks < 4 else "TEAMS #3",
+                lambda clicks, looks: "lower than the recommended level" if clicks >= 2 else None)
+    assert actions.SelectTeam().run(context, argv())
+    assert taps(context) == [(130, 390), (1145, 587)]
+    no_fixed_wait(clock)
+    assert context.tasker.controller.post_screencap.call_count > 4  # looked until the title changed
+
+
+def test_select_team_taps_the_card_again_when_the_title_never_changed(context, clock):
+    actions.RUN["team"] = {"game_team": 3}
+    team_picker(context, lambda clicks, looks: "TEAMS #1" if clicks < 2 else "TEAMS #3",
+                lambda clicks, looks: "recommended level" if clicks >= 3 else None)
+    assert actions.SelectTeam().run(context, argv())
+    assert taps(context) == [(130, 390), (130, 390), (1145, 587)]
+
+
+def test_starlight_enter_waits_for_the_confirm_dialog(context, clock, monkeypatch):
+    actions.RUN["settings"] = {"run": {"starlight_unaffordable": "skip"}}
+    monkeypatch.setattr(actions.run_start, "resolve_plan", lambda *a: {"priority": [], "levels": []})  # nothing to buy
+    page(context, {tuple(actions.STARLIGHT_AVAILABLE): "63",
+                   (480, 210, 320, 35): lambda clicks, looks: "Continue with selected effects?" if clicks and looks >= 3 else None})
+    assert actions.BuyStarlight().run(context, argv())
+    assert taps(context) == [(1195, 672)]
+    no_fixed_wait(clock)
+
+
+def test_starlight_confirm_waits_for_the_starting_gift_page(context, clock, monkeypatch):
+    actions.RUN["settings"] = {}
+    monkeypatch.setattr(actions.run_start, "resolve_plan", lambda *a: {"convert_leftover": False})
+    page(context, {(660, 395, 320, 90): "Any unspent Starlight will be added to your Dungeon clear rewards",
+                   (780, 145, 230, 35): lambda clicks, looks: "Selected E.G.O Gift" if clicks and looks >= 4 else None})
+    assert actions.ConfirmStarlight().run(context, argv())
+    assert taps(context) == [(738, 530)]
+    no_fixed_wait(clock)
+
+
+SELECT_COUNT, SEARCH_SWITCH, GIFT_POPUP = (990, 565, 190, 45), (1100, 145, 85, 28), (520, 160, 240, 40)
+
+
+def starting_gift_page(context, selects_at=2, rules=None):
+    """The Burn cabinet is on the page; Select reads 0/1, 1/1 after selects_at taps, and Select (the tap after) pops the GET window up."""
+    page(context, {SELECT_COUNT: lambda clicks, looks: "1/1" if clicks >= selects_at else "0/1",
+                   (145, 145, 590, 430): [("Burn", (200, 300, 60, 20))],
+                   tuple(actions.STARTING_GIFT_HEADER): lambda clicks, looks: "Selected E.G.O Gift" if clicks <= selects_at else None,
+                   GIFT_POPUP: lambda clicks, looks: "E.G.O Gift GET!" if clicks > selects_at else None,
+                   SEARCH_SWITCH: "ON", **(rules or {})})
+    actions.RUN["team"] = {"keyword": "Burn", "gift_search": {"enabled": True, "gifts": [{"name": "x"}]}}
+
+
+def test_the_starting_gift_is_picked_without_a_fixed_wait(context, clock):
+    starting_gift_page(context)
+    assert actions.PickStartingGift().run(context, argv())
+    assert taps(context) == [(230, 385), (970, 262), (1080, 587)]  # cabinet, first gift, Select
+    assert sum(clock) < 1.5
+
+
+def test_the_gift_search_switch_is_waited_for_not_slept_on(context, clock):
+    # Select already reads 1/1 (the gift is picked); the switch reads OFF until it is tapped and the page has looked again.
+    starting_gift_page(context, selects_at=0, rules={SEARCH_SWITCH: lambda clicks, looks: "OFF" if looks < 4 else "ON"})
+    assert actions.PickStartingGift().run(context, argv())
+    assert taps(context) == [(1140, 158), (1080, 587)]  # the switch, then Select
+    assert sum(clock) < 1.5
+
+
+GIFT_NAME = (320, 405, 180, 80)
+
+
+def test_an_acquired_gift_popup_is_closed_and_waited_out_without_a_fixed_delay(context, clock):
+    page(context, {GIFT_POPUP: lambda clicks, looks: "E.G.O Gift GET!" if clicks == 0 else None, GIFT_NAME: "Wound Clerid"})
+    assert actions.GiftGet().run(context, argv())
+    assert taps(context) == [(640, 532)]
+    no_fixed_wait(clock)
+
+
+SPIDERWEB = {"name": "Spiderweb Entangled in Red", "keyword": "Burn", "tier": 2}
+
+
+def search_page(context, rules=None):
+    """The search page with Spiderweb picked (Select 1/1, 70 starlight): Select asks to consume, Confirm shows the GET window."""
+    page(context, {tuple(actions.SEARCH_COUNT): "Select 1/1", (922, 205, 270, 34): "Spiderweb Entangled in Red",
+                   tuple(actions.SEARCH_OWNED[0]): "1542-70", tuple(actions.SEARCH_OWNED[1]): "1472",
+                   tuple(actions.SEARCH_DIALOG): lambda clicks, looks: "Consume 70 Starlight to search and obtain these E.G.O Gifts?" if clicks == 1 else None,
+                   GIFT_POPUP: lambda clicks, looks: "E.G.O Gift GET!" if clicks >= 2 else None, **(rules or {})})
+    actions.RUN["team"] = {"gift_search": {"enabled": True, "gifts": [SPIDERWEB]}}
+
+
+def test_the_search_is_bought_with_looks_at_the_dialog_and_the_popup_not_fixed_waits(context, clock):
+    search_page(context)
+    assert actions.GiftSearch().run(context, argv())
+    assert taps(context) == [actions.SEARCH_SELECT, actions.SEARCH_DIALOG_BUTTONS["confirm"]]
+    no_fixed_wait(clock)
+
+
+def test_the_owned_starlight_before_the_search_leaves_out_the_starlight_not_spent_on_graces(context, clock):
+    # #73 (live 2026-10-17): the Owned box read 1542 with 1482 on the main page: the team's unspent Starlight Bonus 60 is in it.
+    search_page(context)
+    actions.RUN["starlight_unspent"] = 60
+    actions.GiftSearch().run(context, argv())
+    assert actions.RUN["gift_search"] == {"gifts": ["Spiderweb Entangled in Red"], "starlight": 70, "owned_before": 1482, "owned_after": 1412}
+
+
+def test_the_owned_starlight_is_as_read_when_nothing_was_left_unspent(context, clock):
+    search_page(context)
+    actions.GiftSearch().run(context, argv())
+    assert actions.RUN["gift_search"]["owned_before"] == 1542
+
+
+def test_refusing_the_search_waits_for_the_forgo_dialog(context, clock):
+    page(context, {tuple(actions.SEARCH_COUNT): "Select 0/3", (480, 330, 320, 35): lambda clicks, looks: "Forgo" if clicks else None})
+    actions.RUN["team"] = {"gift_search": {"enabled": False, "gifts": []}}
+    assert actions.GiftSearch().run(context, argv())
+    assert taps(context) == [actions.SEARCH_REFUSE]
+    no_fixed_wait(clock)
+
+
+def test_the_unspent_starlight_is_kept_for_the_search_unless_it_is_converted(context, clock, monkeypatch):
+    actions.RUN["settings"] = {"run": {"starlight_unaffordable": "skip"}}
+    monkeypatch.setattr(actions.run_start, "resolve_plan", lambda *a: {"priority": [], "levels": [], "convert_leftover": True})
+    page(context, {tuple(actions.STARLIGHT_AVAILABLE): "63", (660, 395, 320, 90): "Any unspent Starlight will be added"})
+    actions.BuyStarlight().run(context, argv())
+    assert actions.RUN["starlight_unspent"] == 63
+    page(context, {(660, 395, 320, 90): "Coverts any remaining Starlight"})  # Convert Starlight to Cost is on, as planned
+    actions.ConfirmStarlight().run(context, argv())
+    assert actions.RUN["starlight_unspent"] == 0
+
+
+def test_the_difficulty_switch_waits_for_the_label_not_2_5_seconds(context, clock):
+    page(context, {(830, 30, 160, 35): lambda clicks, looks: "NORMAL" if not clicks else "HARD"})
+    assert actions.PickThemePack.set_difficulty(context, 1, True)
+    assert taps(context) == [(965, 46)]
+    no_fixed_wait(clock)
+
+
+def test_a_difficulty_label_not_readable_yet_is_looked_at_again_not_slept_on(context, clock):
+    page(context, {(830, 30, 160, 35): lambda clicks, looks: "HARD" if looks >= 3 else None})
+    assert actions.PickThemePack.set_difficulty(context, 1, True)
+    no_fixed_wait(clock)
+
+
+def test_a_search_tab_opens_without_fixed_waits(context, clock):
+    clicks = context.tasker.controller.post_click
+    context.tasker.controller.post_screencap.return_value.wait.return_value.get.side_effect =         lambda: np.full((720, 1280, 3), 20 * clicks.call_count, np.uint8)  # each tab shows at once
+    actions.GiftSearch.open_tab(context, "Bleed")
+    assert len(taps(context)) == 2
+    no_fixed_wait(clock)
+    assert sum(clock) < 1  # was 1.6 s of sleep
+
+
+def test_a_picked_gift_is_checked_once_the_panel_shows_it(context, clock):
+    page(context, {(922, 205, 270, 34): lambda clicks, looks: "Spiderweb Entangled in Red" if clicks else None})
+    assert actions.GiftSearch.tap_and_check(context, np.zeros((720, 1280, 3), np.uint8), 300, 300, SPIDERWEB["name"])
+    no_fixed_wait(clock)
+
+
+def test_the_next_acquired_gift_popup_counts_as_the_last_one_closed(context, clock):
+    # n gifts, n popups: the title never leaves the screen, the gift's name changes.
+    page(context, {GIFT_POPUP: "E.G.O Gift GET!", GIFT_NAME: lambda clicks, looks: "Wound Clerid" if clicks == 0 else "Spiderweb"})
+    assert actions.GiftGet().run(context, argv())
+    assert taps(context) == [(640, 532)]
+    assert sum(clock) < 0.5
+
+
+def test_a_search_tab_tap_waits_for_the_neighbour_tab_to_show_first(context, clock):
+    # Live 2026-10-18 (run13): the tapped tab lights up at once but its gifts show a few looks later; the
+    # Keywordless tap sent before Blunt's gifts showed was lost, or the grid read still showed Blunt's, and
+    # Spiderweb was searched for on the wrong tab ("not on the page").
+    tab, pending = ["Poise"], []
+
+    def click(x, y):
+        if not pending:  # a tap while a switch is still on its way does nothing
+            pending.append([actions.SEARCH_TABS[(x - 113) // 62], 3])
+        return MagicMock()
+
+    def shot():
+        image = np.zeros((720, 1280, 3), np.uint8)
+        if pending:
+            pending[0][1] -= 1
+            if pending[0][1] < 0:
+                tab[0] = pending.pop()[0]
+            else:
+                image[165:215, 85:775] = 255  # the tap's light on the tab bar, before the gifts change
+        image[228:625, 85:775] = 20 * actions.SEARCH_TABS.index(tab[0])
+        return image
+    context.tasker.controller.post_click.side_effect = click
+    context.tasker.controller.post_screencap.return_value.wait.return_value.get.side_effect = shot
+    actions.GiftSearch.open_tab(context, "Keywordless")
+    assert tab[0] == "Keywordless" and not pending  # the Keywordless gifts show when it returns
+
+
+def test_the_consume_dialog_is_confirmed_once_it_stops_dropping_in(context, clock):
+    # Live 2026-10-18 (run13c): Confirm was tapped as soon as "Consume" read, while the dialog still slid down
+    # on its chains; the tap did nothing, no GET window came, and every GiftSearch call after it did the same.
+    shots = context.tasker.controller.post_screencap.return_value.wait.return_value.get
+    clicks, state = context.tasker.controller.post_click, {"select": None, "bought": False}
+
+    def click(x, y):
+        if (x, y) == actions.SEARCH_SELECT:
+            state["select"] = shots.call_count
+        elif (x, y) == actions.SEARCH_DIALOG_BUTTONS["confirm"] and shots.call_count >= state["select"] + 4:
+            state["bought"] = True  # the dialog has stopped: the tap takes
+        return MagicMock()
+
+    def shot():
+        moving = state["select"] is not None and shots.call_count < state["select"] + 4
+        return np.full((720, 1280, 3), 40 * (shots.call_count % 5) if moving else 0, np.uint8)
+    search_page(context, {tuple(actions.SEARCH_DIALOG): lambda c, l: "Consume 70 Starlight to search and obtain these E.G.O Gifts?"
+                            if state["select"] is not None and not state["bought"] else None,
+                          GIFT_POPUP: lambda c, l: "E.G.O Gift GET!" if state["bought"] else None})
+    clicks.side_effect = click
+    shots.side_effect = shot
+    assert actions.GiftSearch().run(context, argv())
+    assert state["bought"]
+
+
 def check_page(context, odds=()):
     """The skill-check page: `Choose a character`, and the odds caption (x -> text) over each portrait."""
     texts = {tuple(actions.CHECK_PROMPT): [("Choose a character", (860, 300, 200, 30))]}
