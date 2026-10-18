@@ -26,3 +26,4 @@ export function resetTeamTimes(teamId: string): Promise<void> {
   localStorage.setItem("runs.jsonl", (localStorage.getItem("runs.jsonl") ?? "") + line + "\n");
   return Promise.resolve();
 }
+// ci probe: gui only
