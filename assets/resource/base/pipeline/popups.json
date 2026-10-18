@@ -18,6 +18,8 @@
         "action": "Click",
         "post_delay": 2000
     },
+    // Every inline OCR has its own sub_name: MaaFramework OCRs a next list's OCR in one pass and files the boxes by
+    // name, and the default name "OCR" pooled all six here into one 7 GB, 1.5 s re-read (#149).
     // The notice window over the title (live 2026-10-15, tests/screens/MaintenanceNotice.png): "maintenance"
     // in its message and its one Close button; the word elsewhere (event text, gift tooltips) is no notice (#83).
     "MaintenanceNotice": {
@@ -25,11 +27,13 @@
         "all_of": [
             {
                 "recognition": "OCR",
+                "sub_name": "MaintenanceNoticeText",
                 "roi": [350, 230, 580, 200],
                 "expected": "(?i)maintenance"
             },
             {
                 "recognition": "OCR",
+                "sub_name": "MaintenanceNoticeClose",
                 "roi": [550, 445, 175, 45],
                 "expected": "^Close$"
             }
@@ -47,11 +51,13 @@
         "all_of": [
             {
                 "recognition": "OCR",
+                "sub_name": "DownloadDialogConfirm",
                 "roi": [345, 410, 580, 100],
                 "expected": "^Confirm$"
             },
             {
                 "recognition": "OCR",
+                "sub_name": "DownloadDialogText",
                 "roi": [350, 230, 580, 200],
                 "expected": "(?i)download|update|\\d\\s*[KMG]B"
             }
@@ -70,11 +76,13 @@
         "all_of": [
             {
                 "recognition": "OCR",
+                "sub_name": "ParallelModePromptCancel",
                 "roi": [400, 420, 480, 65],
                 "expected": "Cancel$"
             },
             {
                 "recognition": "OCR",
+                "sub_name": "ParallelModePromptText",
                 "roi": [400, 285, 480, 60],
                 "expected": "(?i)You can enter the .*Mode"
             }

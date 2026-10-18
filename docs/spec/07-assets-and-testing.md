@@ -84,11 +84,13 @@
 | 設定檢查 | GUI 與 Agent 各自的單元測試，共用同一批範例設定檔 | `settings.schema.json` 的結構檢查與跨物件檢查；兩邊對同一份檔案必須給出相同的錯誤 | #19 |
 | Agent 邏輯 | pytest，用 Python `CustomController` 餵截圖 | 輪替游標、地圖重試額度、選路、卡住偵測、恢復升級上限 | #4、#14 |
 | 回歸 | `RecordController` 錄下驗收局，`ReplayController` 重播 | 整條流程；行為不符就失敗 | #4、#14 |
+| 批次 OCR 名稱 | pytest（`tests/test_pipeline.py`） | 同一個 next 清單裡沒有兩個 OCR 用同一個名字（內嵌 OCR 都要有自己的 `sub_name`） | #149 |
 
 - `maa-tools test` 不跑 Agent；Agent 的部分由 pytest 涵蓋。（#4）
 - 不使用官方 `DbgController`：pip wheel 沒附它的動態庫。（#4）
 - 錄製檔容易隨改版失效。（#4）
 - 錄製的重播檔不放主 repo，等 testset repo 建好再放。（#19）
+- Tasker 端記憶體：`tools/ocr_memory_check.py` 用 `tests/screens` 輪流餵 `MirrorHub` 跑幾分鐘、記下行程記憶體；最後一分鐘的中位數比第二分鐘多 300 MB 以上，或任何時候超過 6 GB，就失敗。要 OCR 模型，CI 不跑，改 pipeline 的 OCR 或升級 MaaFramework 時手動跑。（#149）
 
 ### 只能實機
 
