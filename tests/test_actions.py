@@ -2,6 +2,7 @@
 
 import json
 import time
+import zlib
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import DEFAULT, MagicMock
@@ -96,6 +97,37 @@ def test_a_formation_page_still_fading_in_is_read_once_it_is_still(context, monk
     context.run_recognition.side_effect = run_recognition
     actions.Formation().run(context, None)
     assert actions.RUN["alive"] == 12
+
+
+def few_alive(context, monkeypatch, after_retries, min_alive):
+    """A formation page with 4 of 12 alive; the stops and taps it leads to."""
+    actions.RUN.update(team={"min_alive": min_alive, "name": "t"}, settings={"run": {"after_retries": after_retries}})
+    stops, taps = [], []
+    monkeypatch.setattr(actions, "stop", lambda context, reason, line=None: stops.append(reason) or False)
+    monkeypatch.setattr(actions, "tap", lambda context, x, y, wait=1.0: taps.append((x, y)))
+    monkeypatch.setattr(actions.run_start, "resolve_plan", lambda *a: [])  # ends the action after the count
+    reads(context, {tuple(actions.PARTICIPANTS): [("4/4", (1125, 500, 60, 30))]})
+    result = actions.Formation().run(context, None)
+    return result, stops, taps
+
+
+def test_too_few_alive_forfeits_the_run_like_used_up_wipe_retries(context, monkeypatch):
+    # #137: fewer than K alive goes the way of after_retries; forfeit backs out to the map, RouteMap forfeits there.
+    result, stops, taps = few_alive(context, monkeypatch, "forfeit", 5)
+    assert result is True and stops == []
+    assert actions.RUN["forfeit"] is True
+    assert taps == [actions.FORMATION_BACK]
+
+
+def test_too_few_alive_stops_when_used_up_wipe_retries_stop(context, monkeypatch):
+    result, stops, taps = few_alive(context, monkeypatch, "stop", 5)
+    assert result is False and len(stops) == 1 and taps == []
+
+
+def test_no_alive_check_at_0(context, monkeypatch):
+    result, stops, taps = few_alive(context, monkeypatch, "forfeit", 0)
+    assert all("deployment order" in s for s in stops)  # only the empty order (the stub) stops it
+    assert "forfeit" not in actions.RUN
 
 
 def test_event_text_is_tapped_through_until_the_choices_show(context):
@@ -215,6 +247,20 @@ def test_after_a_restart_or_recovery_the_bus_is_tapped_first(context, monkeypatc
     actions.RouteMap().run(context, None)
     bx, by = actions.BUS_HOME
     assert context.tasker.controller.post_click.call_args_list[0].args == (bx + 22, by + 37)
+
+
+def test_a_bus_tap_on_a_node_already_entered_gives_up_quickly_for_the_planned_slot(context, clock, monkeypatch):
+    # #130 (live 2026-10-18 07:04:47): after an agent restart the first tap, on the bus, showed no panel
+    # (its node was entered) and waited the full 2 s before the planned slot; a panel shows within about 0.5 s.
+    monkeypatch.setattr(actions, "map_weights", lambda context: {"battle": 2, "unknown": 9})
+    bus_at(context, *actions.BUS_HOME, linked=("MapLinkMid", "MapNodeCost"))
+    ctl, at = context.tasker.controller, []
+    ctl.post_click.side_effect = lambda x, y: at.append(((x, y), actions.time.monotonic())) or DEFAULT
+    actions.RouteMap().run(context, None)
+    bx, by = actions.BUS_HOME
+    (bus, t0), (slot, t1) = at[0], at[1]
+    assert bus == (bx + 22, by + 37) and slot == (bx + actions.SLOT[0], by + actions.SLOT[1])  # the bus first, then the slot
+    assert t1 - t0 <= 1.3
 
 
 def test_a_bus_dragged_off_the_screen_is_found_by_dragging_the_map(context, monkeypatch):
@@ -562,6 +608,82 @@ def test_a_sale_reads_keywords_and_prices_off_the_grid_and_taps_only_what_it_sel
     assert actions.SELL_PANEL not in rois
 
 
+GOSSYPIUM = "White Gossypium"
+NO_GOSSYPIUM = {"keyword": "Bleed", "reserve_cost": 0, "gift_search": {"gifts": []}, "allow_white_gossypium": False}
+
+
+def test_a_team_without_white_gossypium_fuses_it_first(context, monkeypatch):
+    # #90: a Bleed team that does not hold it: its icon makes it material, ahead of the other materials.
+    reads(context, {**FUSE_PAGE, tuple(actions.KEYWORD_LABELS): [("Bleed", (300, 400, 60, 20))]})
+    cells_read(monkeypatch, ("Burn", None), ("Tremor", None), ("Pierce", None), ("Bleed", GOSSYPIUM), ("Bleed", None))
+    actions.Shop.fuse(context, NO_GOSSYPIUM, {})
+    taps = [c.args for c in context.tasker.controller.post_click.call_args_list]
+    assert [taps.count(c) for c in actions.FUSE_CELLS[:5]] == [1, 1, 0, 1, 0]
+
+
+def test_a_team_without_white_gossypium_does_not_buy_it(context, monkeypatch):
+    # #90: White Gossypium is a Bleed gift; the Bleed team buys the other Bleed offer only.
+    offers = [("White Gossypium", (570, 333, 90, 17)), ("140", (600, 306, 40, 24)),
+              ("Wound Clerid", (725, 333, 90, 17)), ("150", (755, 306, 40, 24))]
+    costs, tapped = [500], []
+
+    def click(x, y):
+        tapped.append((x, y))
+        if (x, y) == actions.PURCHASE:
+            costs.append(costs[-1] - 150)
+        return MagicMock()
+    context.tasker.controller.post_click.side_effect = click
+
+    def run_recognition(name, image, override=None):
+        roi = tuple((override or {}).get(name, {}).get("roi", ()))
+        lines = {tuple(actions.OFFER_GRID): offers, tuple(actions.SHOP_COST): [(str(costs[-1]), (560, 120, 60, 30))],
+                 tuple(actions.DIALOG_TITLE): [("Purchase E.G.O Gifts", (500, 100, 260, 40))],
+                 tuple(actions.GET_TITLE): [("E.G.O Gift GET!", (560, 165, 160, 30))]}.get(roi, [])
+        results = [SimpleNamespace(text=t, box=b) for t, b in lines]
+        return SimpleNamespace(all_results=results, hit=True, best_result=None) if results else None
+    context.run_recognition.side_effect = run_recognition
+    cells_read(monkeypatch, ("Bleed", GOSSYPIUM, 2), ("Bleed", None, 2))
+    assert actions.Shop.buy_offers(context, NO_GOSSYPIUM, {"wanted": None, "sold": False}) == 1
+    assert [t for t in tapped if t[1] == 268] == [(775, 268)]
+
+
+def gift_page(context, monkeypatch, names):
+    """A gift choice page with a Bleed card per name, Select 0/1."""
+    taps = []
+    monkeypatch.setattr(actions, "tap", lambda context, x, y, wait=1.0: taps.append((x, y)))
+
+    def ocr(context, image, roi, only_rec=False):
+        if roi == actions.GIFT_CARDS:
+            return [r for i, n in enumerate(names) for r in
+                    [("Acquire E.G.O Gift", (200 + 300 * i, 160, 150, 20)), (n, (210 + 300 * i, 250, 150, 20)),
+                     ("Inflict Bleed", (210 + 300 * i, 300, 150, 20))]]
+        picked = any(y == 300 for _, y in taps)
+        selected = actions.GIFT_SELECT in taps
+        if roi == actions.GIFT_COUNT:
+            return [(f"Select {int(picked)}/1", (1080, 565, 100, 30))]
+        if roi == actions.REFUSE_GIFT and not (selected and picked):
+            return [("Refuse Gift", (900, 570, 100, 25))]
+        return []
+    monkeypatch.setattr(actions, "ocr", ocr)
+    actions.RUN.update(settings={"trial_risk_overrides": []}, team={**NO_GOSSYPIUM, "trial_risk_weight": "high"})
+    return taps
+
+
+def test_a_team_without_white_gossypium_picks_another_gift(context, monkeypatch):
+    taps = gift_page(context, monkeypatch, [GOSSYPIUM, "Wound Clerid"])
+    actions.PickGift().run(context, None)
+    assert [t for t in taps if t[1] == 300] == [(536, 300)]  # the second card only
+
+
+def test_a_team_without_white_gossypium_takes_it_when_it_is_the_only_card(context, monkeypatch):
+    # #90 (the user, 2026-10-18): taken rather than a random trial for the choice left; the shop then
+    # fuses or sells it first (test_a_team_without_white_gossypium_fuses_it_first).
+    taps = gift_page(context, monkeypatch, [GOSSYPIUM])
+    actions.PickGift().run(context, None)
+    assert taps == [(236, 300), actions.GIFT_SELECT]
+    assert actions.STUCK["flag"] is None
+
+
 def test_the_fusion_grid_is_not_scanned_again_while_the_owned_gifts_are_the_same(context):
     # The fuse page with its keyword dialog, every cell empty: no fusion this visit.
     reads(context, {tuple(actions.DIALOG_TITLE): [("Fuse E.G.O Gift", (500, 100, 200, 40))],
@@ -680,7 +802,7 @@ def test_tap_until_gives_up_after_its_timeout_and_leaves_the_page_to_the_hub(con
 
 
 def test_plan_run_waits_for_the_enter_dialog_after_pressing_enter(context, clock, monkeypatch):
-    team = {"id": 1, "name": "t", "game_team": 1, "guard_turns": 3}
+    team = {"id": 1, "name": "t", "game_team": 1, "guard_turns": 3, "hard_from_floor": 1}
     run = {"runs": 0, "stop_when_weekly_bonus_out": False, "difficulty": "normal"}
     monkeypatch.setattr(actions, "load_settings", lambda root: {"run": run, "teams": [team]})
     monkeypatch.setattr(actions, "pick_team", lambda teams, cursor, difficulty: team)
@@ -694,10 +816,53 @@ def test_plan_run_waits_for_the_enter_dialog_after_pressing_enter(context, clock
     no_fixed_wait(clock)
 
 
+@pytest.mark.parametrize(("setting", "expected"), [("auto", "normal"), ("hard", "hard")])
+def test_a_planned_run_of_a_team_that_never_switches_to_hard(context, clock, monkeypatch, setting, expected):
+    # #137: auto with weekly bonuses left decides hard, but this team's switch to hard is off: the run is NORMAL.
+    # Only the global "hard" makes it HARD (every floor, hard_wanted).
+    team = {"id": 1, "name": "t", "game_team": 1, "guard_turns": 0, "hard_from_floor": None}
+    run = {"runs": None, "stop_when_weekly_bonus_out": False, "difficulty": setting}
+    monkeypatch.setattr(actions, "load_settings", lambda root: {"run": run, "teams": [team]})
+    monkeypatch.setattr(actions, "pick_team", lambda teams, cursor, difficulty: team)
+    monkeypatch.setattr(actions, "read_cursor", lambda root, address: None)
+    monkeypatch.setattr(actions.run_start, "run_difficulty", lambda setting, weekly: "hard")
+    monkeypatch.setattr(actions.recovery, "read_runs", lambda root: [])
+    monkeypatch.setattr(actions.recovery, "floor_limit", lambda runs, team: 1800)
+    page(context, {})
+    actions.PlanRun().run(context, argv())
+    assert actions.RUN["difficulty"] == expected
+
+
 def team_picker(context, title, after_confirm):
     """The team list shows TEAMS #3 at y 390; title(clicks, looks) is the card's title text, after_confirm(clicks, looks) the next page."""
     page(context, {tuple(actions.TEAM_LIST): [("TEAMS #3", (100, 380, 80, 20))], (220, 112, 210, 26): title,
                    (1160, 522, 60, 34): "63", (400, 230, 480, 90): after_confirm})
+
+
+def infinity_switch(context, monkeypatch, takes):
+    """The entry page's Parallel Superposition Mode reads ON until a tap on INFINITY MIRROR takes (if it does)."""
+    taps, stops = [], []
+    monkeypatch.setattr(actions, "tap", lambda context, x, y, wait=1.0: taps.append((x, y)))
+    monkeypatch.setattr(actions, "stop", lambda context, reason, line=None: stops.append(reason) or False)
+
+    def ocr(context, image, roi, only_rec=False):
+        if roi == actions.INFINITY_TITLE:
+            # As MaaFramework read EntryNewRun.png and the synthetic EntryParallelOn.png
+            return [(f"Alll/Parallel Superposition Mode:{'OFF' if takes and taps else 'ON'}/l", (891, 333, 324, 20))]
+        return []
+    monkeypatch.setattr(actions, "ocr", ocr)
+    return taps, stops, actions.ParallelModeOff().run(context, None)
+
+
+def test_a_parallel_superposition_switch_left_on_is_switched_off(context, clock, monkeypatch):
+    # #94: the bot never plays past floor 5.
+    taps, stops, result = infinity_switch(context, monkeypatch, takes=True)
+    assert result is True and taps == [actions.INFINITY_BUTTON] and stops == []
+
+
+def test_a_parallel_superposition_switch_that_stays_on_stops_the_task(context, clock, monkeypatch):
+    taps, stops, result = infinity_switch(context, monkeypatch, takes=False)
+    assert result is False and taps == [actions.INFINITY_BUTTON] * 2 and len(stops) == 1
 
 
 def test_select_team_waits_for_the_title_after_the_tap_and_for_the_page_after_confirm(context, clock):
@@ -718,6 +883,20 @@ def test_select_team_taps_the_card_again_when_the_title_never_changed(context, c
     assert taps(context) == [(130, 390), (130, 390), (1145, 587)]
 
 
+def test_select_team_makes_a_plan_for_an_abandoned_empty_run_instead_of_backing_out(context, clock, monkeypatch):
+    # #128 (live 2026-10-18): Resume on a run paused before team selection reaches the picker with no plan in memory;
+    # backing out to the entry page, which only offers Resume, looped every 8 s.
+    team = {"id": 1, "name": "t", "game_team": 3, "guard_turns": 0}
+    monkeypatch.setattr(actions, "load_settings", lambda root: {"run": {"difficulty": "normal"}, "teams": [team]})
+    monkeypatch.setattr(actions, "pick_team", lambda teams, cursor, difficulty: team)
+    monkeypatch.setattr(actions, "read_cursor", lambda root, address: None)
+    actions.RUN.clear()
+    team_picker(context, "TEAMS #3", lambda clicks, looks: "recommended level" if clicks else None)
+    assert actions.SelectTeam().run(context, argv())
+    assert taps(context) == [(130, 390), (1145, 587)]  # no back arrow (97, 42)
+    assert actions.RUN["team"] is team
+
+
 def test_starlight_enter_waits_for_the_confirm_dialog(context, clock, monkeypatch):
     actions.RUN["settings"] = {"run": {"starlight_unaffordable": "skip"}}
     monkeypatch.setattr(actions.run_start, "resolve_plan", lambda *a: {"priority": [], "levels": []})  # nothing to buy
@@ -736,6 +915,51 @@ def test_starlight_confirm_waits_for_the_starting_gift_page(context, clock, monk
     assert actions.ConfirmStarlight().run(context, argv())
     assert taps(context) == [(738, 530)]
     no_fixed_wait(clock)
+
+
+def starlight_page(context, available, owned):
+    """The starlight page with Available and the Owned box as texts or f(clicks, looks); card 1's price reads 10."""
+    page(context, {tuple(actions.STARLIGHT_AVAILABLE): available, tuple(actions.STARLIGHT_OWNED): owned,
+                   (250, 149, 80, 28): "10", (480, 210, 320, 35): "Continue with selected effects?"})
+
+
+def buy_grace_1(monkeypatch, unaffordable):
+    actions.RUN["settings"] = {"run": {"starlight_unaffordable": unaffordable}}
+    monkeypatch.setattr(actions.run_start, "resolve_plan", lambda *a: {"priority": [1], "levels": ["base"] + ["none"] * 9})
+
+
+def test_a_configured_grace_is_bought_with_owned_starlight_when_available_falls_short(context, clock, monkeypatch):
+    # #96: the user chose the grace, so owned starlight pays the 5 that Available (5 of 10) cannot (live: "0+5").
+    buy_grace_1(monkeypatch, "stop")
+    starlight_page(context, lambda clicks, looks: "5" if clicks == 0 else "0+5", lambda clicks, looks: "4035" if clicks == 0 else "4035-5")
+    assert actions.BuyStarlight().run(context, argv())
+    assert taps(context) == [(230, 252), (1195, 672)]
+    assert actions.RUN["starlight_unspent"] == 0
+
+
+def test_graces_beyond_available_and_owned_follow_starlight_unaffordable_skip(context, clock, monkeypatch):
+    buy_grace_1(monkeypatch, "skip")
+    starlight_page(context, "5", "2")
+    assert actions.BuyStarlight().run(context, argv())
+    assert taps(context) == [(1195, 672)]  # nothing bought, Enter only
+
+
+def test_graces_beyond_available_and_owned_follow_starlight_unaffordable_stop(context, clock, monkeypatch):
+    stopped = []
+    monkeypatch.setattr(actions, "stop", lambda context, reason, line=None: stopped.append(reason) or False)
+    buy_grace_1(monkeypatch, "stop")
+    starlight_page(context, "5", "2")
+    assert actions.BuyStarlight().run(context, argv()) is False
+    assert stopped == ["a planned grace is unaffordable"] and taps(context) == []
+
+
+def test_the_confirm_dialog_is_confirmed_when_the_graces_spent_owned_starlight(context, clock, monkeypatch):
+    # #96: "-60" in the dialog's Owned box is the consented spend, not a reason to cancel.
+    monkeypatch.setattr(actions.run_start, "resolve_plan", lambda *a: {"convert_leftover": False})
+    page(context, {(870, 165, 85, 25): "-60", (660, 395, 320, 90): "Any unspent Starlight will be added",
+                   (780, 145, 230, 35): lambda clicks, looks: "Selected E.G.O Gift" if clicks else None})
+    assert actions.ConfirmStarlight().run(context, argv())
+    assert taps(context) == [(738, 530)]
 
 
 SELECT_COUNT, SEARCH_SWITCH, GIFT_POPUP = (990, 565, 190, 45), (1100, 145, 85, 28), (520, 160, 240, 40)
@@ -839,6 +1063,32 @@ def test_a_difficulty_label_not_readable_yet_is_looked_at_again_not_slept_on(con
     page(context, {(830, 30, 160, 35): lambda clicks, looks: "HARD" if looks >= 3 else None})
     assert actions.PickThemePack.set_difficulty(context, 1, True)
     no_fixed_wait(clock)
+
+
+REFRESH = (1083, 47)
+
+
+@pytest.mark.parametrize(("setting", "refreshes"), [("none", 0), ("once", 1), ("all", 5)])
+def test_an_all_avoid_theme_pack_page_is_refreshed_as_the_setting_says(context, monkeypatch, setting, refreshes):
+    # #41: every page shows only avoided packs (a new pair after each of 4 refreshes; a 5th changes nothing: used up).
+    actions.RUN.update(settings={"run": {"theme_pack_refresh": setting}}, team={"hard_from_floor": 0}, difficulty=None)
+    monkeypatch.setattr(actions, "theme_pack_marks", lambda settings, team: ([], {}))
+    monkeypatch.setattr(actions.run_start, "rank_packs", lambda cards, names, marks: [(c[0], "avoid") for c in cards])
+    taps = []
+    monkeypatch.setattr(actions, "tap", lambda context, x, y, wait=1.0: taps.append((x, y)))
+
+    def ocr(context, image, roi, only_rec=False):
+        page = min(taps.count(REFRESH), 4)
+        return {
+            (480, 100, 320, 40): [("FLOOR 2", (560, 110, 80, 20))] if not context.tasker.controller.post_swipe.called else [],
+            (830, 30, 160, 35): [("NORMAL", (900, 40, 60, 20))],
+            tuple(actions.PACK_TITLES): [(f"Pack {page}a", (200, 420, 90, 20)), (f"Pack {page}b", (500, 420, 90, 20))],
+        }.get(tuple(roi), [])
+    monkeypatch.setattr(actions, "ocr", ocr)
+
+    actions.PickThemePack().run(context, None)
+    assert taps.count(REFRESH) == refreshes
+    assert context.tasker.controller.post_swipe.call_count == 1  # the leftmost card is pulled all the same
 
 
 def test_a_search_tab_opens_without_fixed_waits(context, clock):
@@ -974,6 +1224,106 @@ def test_an_event_after_a_pause_starts_its_own_clock(context):
     assert actions.STUCK["flag"] is None
 
 
+class Choices:
+    """An event's choice page: option cards 130 px tall, 18 apart from y 170, in the list's view y 165-512;
+    more than fit show a scrollbar and scroll() moves them. options are (text, hint); OCR reads a line only
+    where it shows whole. tapped: the option each tap hit, None when its card was not whole in view."""
+
+    def __init__(self, context, monkeypatch, options, story=(), offset=0, scrollbar=True):
+        self.options, self.story, self.offset, self.drags, self.tapped = options, story, offset, [], []
+        self.end = max(0, 170 + 148 * len(options) - 18 - 508)
+        self.scrollbar = scrollbar and self.end > 0
+        ctl = context.tasker.controller
+        ctl.post_screencap.return_value.wait.return_value.get.side_effect = self.render
+        ctl.post_click.side_effect = self.click
+        context.run_recognition.side_effect = self.read
+        monkeypatch.setattr(actions, "scroll", self.scroll)
+
+    def scroll(self, context, x, y, dx, dy):
+        assert 690 < x < 1165 and 165 < y < 512 and 165 < y + dy < 512  # on the list
+        self.drags.append(dy)
+        self.offset = min(max(self.offset - dy, 0), self.end)
+
+    def tops(self):
+        return [170 + 148 * k - self.offset for k in range(len(self.options))]
+
+    def click(self, x, y):
+        if 690 < x < 1165:
+            whole = [k for k, t in enumerate(self.tops()) if 165 <= t and t + 130 <= 512 and t < y < t + 130]
+            self.tapped.append(self.options[whole[0]][0] if whole else None)
+        return DEFAULT
+
+    def render(self):
+        image = np.zeros((720, 1280, 3), np.uint8)
+        for t in self.tops():
+            image[max(t, 165):max(min(t + 130, 512), 165), 700:1160] = (20, 30, 60)  # red-brown: open
+            for y in [*range(t, t + 9), *range(t + 127, t + 130)]:  # top edge double, bottom edge single
+                if 165 <= y < 512:
+                    image[y, 690:1165] = 200
+        if self.scrollbar:
+            image[170:505, 1203:1213] = (26, 41, 60)
+        return image
+
+    def read(self, name, image, override=None):
+        roi = tuple((override or {}).get(name, {}).get("roi", ()))
+        lines = []
+        if roi == tuple(actions.CHOICES_HEADER):
+            lines = [("Choices", (700, 110, 100, 30))]
+        elif roi == tuple(actions.EVENT_STORY):
+            lines = [(t, (80, 340 + 30 * i, 400, 20)) for i, t in enumerate(self.story)]
+        elif roi == tuple(actions.CHOICE_ROWS):
+            for t, (text, hint) in zip(self.tops(), self.options):
+                lines += [(s, (733, y, 300, 20)) for s, y in ((text, t + 30), (hint, t + 60)) if s and 165 <= y and y + 20 <= 512]
+        results = [SimpleNamespace(text=t, box=b) for t, b in lines]
+        return SimpleNamespace(all_results=results, hit=True, best_result=None) if results else None
+
+
+DOLL = ["In this cramped room, you find a wooden doll, standing.", "Are the talismans filling the room for a wish?",
+        "Does this wooden doll wish for anything?"]  # 901013's story, as the box ends it
+
+
+def test_an_event_in_the_table_takes_a_direct_gift_over_a_check_for_the_main_keyword(context, monkeypatch):
+    # 901013 for a Poise team: the hint rules took the check that may give Poise; the table ranks the sure gift first.
+    actions.RUN["team"] = {"keyword": "Poise"}
+    actions.RUN["settings"] = {"event_overrides": []}
+    page = Choices(context, monkeypatch, [
+        ("Remove the doll's talismans.", "Select to gain a Rupture E.G.O Gift"),
+        ("Remove the wall talismans.", "Sloth & Wrath Advantage check. Then, maybe gain a Poise E.G.O Gift depending on the subsequent choice")],
+        DOLL)
+    actions.Event().run(context, None)
+    assert page.tapped == ["Remove the doll's talismans."]
+    assert page.drags == []  # two options fit: no scrolling
+
+
+SCROLLED = [(f"Option {k}.", "") for k in range(5)]
+TABLE = [{"key": "doesthiswoodendollwishforanything",
+          "options": [{"text": t, "hint": h, "kind": "other"} for t, h in SCROLLED]}]
+
+
+@pytest.mark.parametrize("best", [0, 2, 4])
+def test_a_list_that_scrolls_is_read_whole_and_the_pick_scrolled_into_view(context, monkeypatch, best):
+    # #93: more options than fit: read top to bottom anchored on their texts, the pick tapped whole in view.
+    actions.RUN["team"] = {"keyword": "Burn"}
+    actions.RUN["settings"] = {"event_overrides": []}
+    options = list(SCROLLED)
+    options[best] = (f"Option {best}.", "Select to gain a Burn E.G.O Gift")
+    table = [{"key": TABLE[0]["key"], "options": [{"text": t, "hint": h, "kind": "direct" if h else "other",
+                                                   "gifts": [["Burn", "direct"]] if h else []} for t, h in options]}]
+    monkeypatch.setattr(actions, "event_table", lambda: table)
+    page = Choices(context, monkeypatch, options, DOLL, offset=100)  # left part way down
+    actions.Event().run(context, None)
+    assert page.tapped == [f"Option {best}."]
+
+
+def test_an_option_cut_off_with_no_scrollbar_still_scrolls(context, monkeypatch):
+    actions.RUN["team"] = {"keyword": "Burn"}
+    actions.RUN["settings"] = {"event_overrides": []}
+    options = [("Option 0.", ""), ("Option 1.", ""), ("Option 2.", "Select to gain a Burn E.G.O Gift")]
+    page = Choices(context, monkeypatch, options, ["Unknown story."], scrollbar=False)
+    actions.Event().run(context, None)
+    assert page.tapped == ["Option 2."]  # the hint rules, on the option read once scrolled
+
+
 class Panel:
     """A battle's skill panel (7 slots, Win Rate label at x 984): a portrait tap swaps the slot's lower skill
     and its guard skill; the chain drag lights the START disc. units[i] is the unit in slot i (slots
@@ -1034,6 +1384,27 @@ def test_slots_already_on_guard_are_swapped_off_and_tapped_back(context):
     lit, _ = actions.PlayTurn.guard(context, 984, (918, 557))
     assert lit and all(panel.guard)
     assert len(portrait_taps(context)) == 7 + 3
+
+
+def test_a_guard_turn_on_a_hollow_gear_plays_win_rate_and_keeps_its_guard_turn(context):
+    # #127 (live 2026-10-18): in a focused encounter the left gear is a hollow ring and no chain starts from it;
+    # each skill has to be dragged onto an enemy's skill slot, which moves with the camera.
+    panel = Panel(context, guard=[False] * 7)
+    data = (Path(__file__).resolve().parent / "gears" / "hollow_boss.png").read_bytes()  # tests/test_battle.py gear()
+    rows = np.frombuffer(zlib.decompress(data[8 + 25 + 8:-12 - 4]), np.uint8).reshape(80, 1 + 80 * 3)
+    ring = rows[:, 1:].reshape(80, 80, 3)[:, :, ::-1]
+
+    def render():
+        image = panel.render()
+        image[536:616, 236:316] = ring  # round the left gear of 7 slots, (276, 576)
+        return image
+    context.tasker.controller.post_screencap.return_value.wait.return_value.get.side_effect = render
+    actions.RUN["guard"] = 3
+    actions.PlayTurn().run(context, SimpleNamespace(box=[984, 531, 40, 20]))
+    assert not portrait_taps(context)
+    assert not context.tasker.controller.post_touch_down.called
+    assert win_rate_taps(context)
+    assert actions.RUN["guard"] == 3
 
 
 def gesture(context, clock):
@@ -1133,3 +1504,27 @@ def test_a_cost_that_stays_unread_is_none(context):
     cost_reads(context, [None])
     assert actions.read_cost(context) is None
     assert context.run_recognition.call_count > 1  # read again before giving up
+
+
+def test_a_forfeited_run_gives_up_its_rewards_and_the_same_team_runs_next(context, monkeypatch, tmp_path):
+    # #95: after_retries "forfeit" ends the run at Exploration Reward short of floor 5; the rotation
+    # cursor does not move on, so the team that lost runs the next run again.
+    monkeypatch.setattr(actions, "ROOT", tmp_path)
+    teams = [{"id": "a", "name": "A", "enabled": True}, {"id": "b", "name": "B", "enabled": True}]
+    actions.RUN.update(settings={"run": {}, "teams": teams}, team=teams[0], planned=True, difficulty="hard")
+    taps = []
+
+    def ocr(context, image, roi, only_rec=False):
+        if roi == actions.RESULT:
+            return [("Floor 3 [HARD] 2/6", (300, 420, 90, 20))]
+        if roi == actions.DIALOG_TEXT and taps:
+            return [("End expedition without claiming rewards?", (400, 300, 400, 30))]
+        return []
+    monkeypatch.setattr(actions, "ocr", ocr)
+    monkeypatch.setattr(actions, "tap", lambda context, x, y, wait=1.0: taps.append((x, y)))
+
+    actions.Settle().run(context, None)
+    assert taps == [actions.GIVE_UP, actions.DIALOG_CONFIRM]
+    assert not (tmp_path / "state").exists()  # no cursor written
+    line = json.loads((tmp_path / "logs" / "runs.jsonl").read_text(encoding="utf-8"))
+    assert line["result"] == "giveup" and line["team"] == "a"

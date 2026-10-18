@@ -72,12 +72,12 @@ def paths(slots, weights, ahead=()):
     return best
 
 
-def line_contrast(v, x0, y0, x1, y1, top=70, bottom=615):
+def line_contrast(v, x0, y0, x1, y1, top=56, bottom=615):
     """How much brighter the straight segment between two node centres is than either side of it.
 
     v is the screenshot's per-pixel brightness (max over channels). Only the middle 40 % is read,
     clear of the nodes and their badges. None when that part is mostly off the readable map area
-    (the resource bar above y 70, the sinner bar below 615).
+    (the resource bar above y 56, its lower edge at about 58; the sinner bar below 615).
     """
     n = np.array([y0 - y1, x1 - x0], float)
     n /= np.linalg.norm(n)

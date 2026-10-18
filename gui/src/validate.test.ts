@@ -54,7 +54,7 @@ test("a new file asks for a team, and new teams make it valid", () => {
 });
 
 test("parseSettings refuses newer and unmigratable versions", () => {
-  expect(() => parseSettings('{"version": 4}')).toThrow("newer");
+  expect(() => parseSettings('{"version": 7}')).toThrow("newer");
   expect(() => parseSettings('{"version": 0}')).toThrow("cannot be migrated");
 });
 
@@ -76,10 +76,40 @@ test("version 2 gets gift search off", () => {
   expect(validate(data)).toEqual([]);
 });
 
+test("version 3 refreshes all-avoid theme pack pages as before", () => {
+  const old = structuredClone(cases.valid) as Record<string, unknown> & { run: Record<string, unknown> };
+  delete old.run.theme_pack_refresh;
+  const { data, migrated } = parseSettings(JSON.stringify({ ...old, version: 3 }));
+  expect(migrated).toBe(true);
+  expect(data.run.theme_pack_refresh).toBe("all");
+  expect(validate(data)).toEqual([]);
+});
+
+test("version 4 teams may hold White Gossypium as before", () => {
+  const old = structuredClone(cases.valid) as Record<string, unknown> & { teams: Record<string, unknown>[] };
+  for (const t of old.teams) delete t.allow_white_gossypium;
+  const { data, migrated } = parseSettings(JSON.stringify({ ...old, version: 4 }));
+  expect(migrated).toBe(true);
+  expect(data.teams.map((t) => t.allow_white_gossypium)).toEqual([true, true]);
+  expect(validate(data)).toEqual([]);
+});
+
+test("version 5 zeros become switches", () => {
+  const old = structuredClone(cases.valid) as Record<string, unknown> & { run: Record<string, unknown>; teams: Record<string, unknown>[] };
+  old.run.runs = 0;
+  old.teams[0].hard_from_floor = 0;
+  const { data, migrated } = parseSettings(JSON.stringify({ ...old, version: 5 }));
+  expect(migrated).toBe(true);
+  expect(data.run.runs).toBe(null); // no run limit
+  expect(data.teams.map((t) => t.hard_from_floor)).toEqual([1, 3]); // 0 was the whole run HARD: from floor 1
+  expect(validate(data)).toEqual([]);
+});
+
 test("parseThemePacks reads the season's data file", () => {
   const data = parseThemePacks(themePacksYaml);
   expect(data.packs).toContain("Walpurgis Night: Hatred and Despair");
-  expect(data.default_plan).toEqual({});
+  expect(data.default_plan["The B.E."]).toBe("prefer"); // #89: the default plan has content
+  expect(Object.keys(data.default_plan).every((p) => data.packs.includes(p))).toBe(true);
   expect(parseThemePacks("packs: [A]\ndefault_plan:\n  A: avoid\n")).toEqual({ packs: ["A"], default_plan: { A: "avoid" } });
   expect(parseThemePacks("")).toEqual({ packs: [], default_plan: {} });
 });

@@ -22,13 +22,15 @@ from test_shop import screen_with  # noqa: E402
 SPIDERWEB = {"name": "Spiderweb Entangled in Red", "keyword": "Keywordless", "tier": 3}
 HELLTERFLY = {"name": "Hellterfly's Dream", "keyword": "Burn", "tier": 2}
 
-# name: (crop, the page's cells, the page, observed gifts)
+# name: (crop, the page's cells, the page, observed gifts[, the team holds White Gossypium])
 CASES = {
     "fuse_spiderweb": ("fuse_spiderweb", "FUSE_CELLS", "fuse", [SPIDERWEB]),
     "fuse": ("fuse", "FUSE_CELLS", "fuse", [SPIDERWEB, HELLTERFLY]),
     "sell": ("sell", "SELL_CELLS", "sell", []),
     "offers": ("offers", "OFFER_CELLS", "offer", []),
     "offers_super": ("offers_super", "OFFER_CELLS", "offer", []),
+    "fuse_no_gossypium": ("fuse", "FUSE_CELLS", "fuse", [], False),
+    "sell_no_gossypium": ("sell", "SELL_CELLS", "sell", [], False),
 }
 
 
@@ -65,10 +67,10 @@ def child():
     class Probe(CustomAction):
         def run(self, context, argv):
             try:
-                for case, (crop, cells, page, gifts) in CASES.items():
-                    team = {"gift_search": {"gifts": gifts}}
+                for case, (crop, cells, page, gifts, *allow) in CASES.items():
+                    team = {"gift_search": {"gifts": gifts}, "allow_white_gossypium": (allow or [True])[0]}
                     found = actions.read_cells(context, screen_with(crop), getattr(actions, cells), page,
-                                               actions.observed_gifts(team))
+                                               actions.observed_gifts(team) + actions.avoided_gifts(team))
                     out[case] = [(c["tier"], c["keyword"], c["gift"]) for c in found]
             except Exception:  # MaaFramework swallows it: hand it to the test
                 out["error"] = traceback.format_exc()
@@ -116,6 +118,12 @@ def test_the_fuse_page_cells_read_tier_badge_and_observed_icon(read):
 def test_the_sell_page_cells_read_like_the_fuse_pages(read):
     # The same gifts on the sell page (another layout): the observed gift is not looked for here.
     assert read["sell"] == [(t, k, None) for t, k, _ in OWNED]
+
+
+def test_white_gossypium_is_told_by_its_icon_for_a_team_that_does_not_hold_it(read):
+    # #90: the 9th owned gift on both pages; no other cell takes its name.
+    for case in ("fuse_no_gossypium", "sell_no_gossypium"):
+        assert [c[2] for c in read[case]] == [None] * 8 + ["White Gossypium"] + [None] * 6
 
 
 def test_the_offers_read_tier_and_badge(read):

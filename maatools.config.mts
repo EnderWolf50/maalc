@@ -31,6 +31,8 @@ const screens: [image: string, hits: string[]][] = [
   ['Drive.png', ['GoToMirrorEntry', 'NavDrive']],
   ['EntryNewRun.png', ['MirrorEntryNewRun']],
   ['EntryPaused.png', ['MirrorEntryPaused']],
+  // Synthetic (#94), no live capture yet: EntryNewRun.png with the Parallel Superposition label's OFF redrawn as ON.
+  ['EntryParallelOn.png', ['ParallelModeOn', 'MirrorEntryNewRun']],
   ['ResumeDialog.png', ['ResumeDialog', 'MirrorEntryPaused', 'RecoverToWindow']],  // the entry page reads through it
   ['EnterDialog.png', ['MirrorEnterDialog', 'MirrorEntryNewRun']],
   ['TeamSelect.png', ['TeamSelect']],
@@ -69,6 +71,7 @@ const screens: [image: string, hits: string[]][] = [
   ['BattleTurnSolo.png', ['BattleTurn']], // 1-sinner formation: one slot, Win Rate at x ~740
   ['BattleTurnEven.png', ['BattleTurn']], // 8 slots (slot 4 a unit's second slot), Win Rate at x 1022
   ['BattleTurnStagger.png', ['BattleTurn']], // 6 of 7 slots staggered, Win Rate on, the START disc dim (#69)
+  ['BattleTurnFocused.png', ['BattleTurn']], // focused encounter (#127): hollow left gear, one sinner in 7 slots, nothing picked
   ['BattlePause.png', ['BattlePause']],
   ['Victory.png', ['Victory']],
   ['WipeDialog.png', ['WipeDialog']],
