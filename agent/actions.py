@@ -1427,9 +1427,14 @@ class PlayTurn(CustomAction):
             return stuck(f"turn {turn} unchanged after 3 submits")
         guarded = False
         if RUN.get("guard", 0) > 0 and RUN["turn"][1] == 1:  # a turn submitted again plays as before #52
-            guarded, image = self.guard(context, x, (dx, dy))
-            if not guarded:
-                log(f"turn {turn}: guard did not take, Win Rate instead")
+            if battle.gear_hollow(image, battle.slot_xs(x)[0] - 86, 576):
+                # #127: a focused encounter. Its skills are dragged one by one onto enemy skill slots that move
+                # with the camera; no chain starts from the ring. The guard turns wait for a battle that has one.
+                log(f"turn {turn}: hollow left gear (focused encounter): Win Rate, guard turns kept")
+            else:
+                guarded, image = self.guard(context, x, (dx, dy))
+                if not guarded:
+                    log(f"turn {turn}: guard did not take, Win Rate instead")
         for _ in range(2):
             if battle.disc_lit(image, dx, dy):
                 break

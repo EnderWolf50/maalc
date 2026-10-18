@@ -3,6 +3,8 @@
 actions.py reads the formation page and the DEFEAT dialog and taps; everything here is plain data.
 """
 
+import numpy as np
+
 # The 12 cards on the formation page, left to right, top row first.
 SINNERS = ("Yi Sang", "Faust", "Don Quixote", "Ryōshū", "Meursault", "Hong Lu",
            "Heathcliff", "Ishmael", "Rodion", "Sinclair", "Outis", "Gregor")
@@ -97,3 +99,27 @@ def disc_lit(image, x, y):
     picked read ~189 with the START plaque up, so the line sits at 160.
     """
     return bool(image[y - 10:y + 10, x - 10:x + 10].max(axis=2).mean() > 160)
+
+
+RING_ANGLES = np.linspace(0, 2 * np.pi, 72, endpoint=False)
+
+
+def gear_hollow(image, x, y):
+    """Whether the left gear centred near (x, y) (the first slot's x - 86, y 576) shows the hollow ring (#127).
+
+    Live 2026-10-18: in focused encounters (a floor 2 and a floor 3 boss, a floor 4 battle) the left gear is a
+    ring of round bands from the turn's start, and a drag from it only pans the camera; picks made by Win
+    Rate show the ring too. The chain's gear is a toothed wheel round a glass swirl. Told by roundness: from
+    6 to 30 px out, the mean brightness of each circle varies far more than the brightness round it (best
+    centre within 1 px: the ring 0.79-0.83 on dark, blue, orange and white ground; the gear 0.06-0.14,
+    glowing once chained 0.29).
+    """
+    v = image.astype(float).mean(axis=2)
+    r = np.arange(6, 31)[:, None]
+    best = 0.0
+    for dy in (-1, 0, 1):
+        for dx in (-1, 0, 1):
+            circles = v[np.round(y + dy + r * np.sin(RING_ANGLES)).astype(int),
+                        np.round(x + dx + r * np.cos(RING_ANGLES)).astype(int)]
+            best = max(best, circles.mean(axis=1).var() / (circles.var(axis=1).mean() + 1))
+    return bool(best > 0.5)
