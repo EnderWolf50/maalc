@@ -28,3 +28,4 @@ export function resetTeamTimes(teamId: string): Promise<void> {
 }
 // ci probe: gui only
 // ci probe 2
+// ci probe 3
