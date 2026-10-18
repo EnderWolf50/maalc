@@ -7,7 +7,8 @@
     // Dispatch: every screen is one node; [JumpBack] nodes return here to look again.
     // next order is priority: Stuck (the watchdog, which must see every pass), global popups,
     // then dialogs before the page under them.
-    // rate_limit: a pass is ~0.1-0.5 s of work; the default 1000 ms between passes saw every new screen ~0.5 s late.
+    // rate_limit: a pass is ~0.1-1.5 s of work (each OCR on its own, NoBatchOCR); the default 1000 ms between passes
+    // saw every new screen ~0.5 s late.
     "MirrorHub": {
         "timeout": 60000,
         "rate_limit": 300,
@@ -16,6 +17,7 @@
         ],
         "next": [
             "Stuck",
+            "NoBatchOCR",
             "[JumpBack]Connecting",
             "[JumpBack]RetryPopup",
             "MaintenanceNotice",
@@ -58,6 +60,30 @@
             "[JumpBack]MapNodePanel",
             "[JumpBack]MirrorMap",
             "[JumpBack]GoToMirrorEntry"
+        ]
+    },
+    // Keeps MaaFramework from batching the next list's OCR (#157). Batched, every OCR reads the text boxes of one
+    // shared pass and re-reads each box that crosses its roi edge: a battle skill text 1 px into a dialog roi became
+    // a 443 x 1 rec padded to 21264 px wide, 7.6 s and the Tasker from 4 to 12 GB for good. The batch takes the
+    // model of the list's first OCR and leaves out the others (PipelineTask::try_add_ocr_node), so this node's model,
+    // which no other OCR uses, leaves a batch of one: none. Never hits; the 1 x 1 ColorMatch fails before the OCR,
+    // so the model is never loaded. tests/test_pipeline.py checks that no next list batches.
+    "NoBatchOCR": {
+        "recognition": "And",
+        "all_of": [
+            {
+                "recognition": "ColorMatch",
+                "sub_name": "NoBatchOCRGate",
+                "roi": [0, 0, 1, 1],
+                "lower": [0, 0, 0],
+                "upper": [255, 255, 255],
+                "count": 2
+            },
+            {
+                "recognition": "OCR",
+                "sub_name": "NoBatchOCRModel",
+                "model": "no-batch"
+            }
         ]
     },
     // Entry page with Parallel Superposition Mode ON (#94): switched OFF before anything else, the bot never plays
