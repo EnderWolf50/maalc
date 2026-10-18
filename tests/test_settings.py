@@ -18,7 +18,7 @@ def team(id, game_team, **kw):
         "usage": "any", "hard_from_floor": 1, "deployment_order": {"custom": ORDER},
         "starlight": {"custom": STARLIGHT}, "theme_pack_plan": "default",
         "reward_cards": ["Starlight", "Random E.G.O Gift", "Cost & Keyword Gift Chance", "Cost", "E.G.O Resource"],
-        "shop_refresh_limit": 2, "heal": "revive", "reserve_cost": 0, "min_alive": None, "guard_turns": 0,
+        "shop_refresh_limit": 2, "heal": "revive", "reserve_cost": 0, "min_alive": 0, "guard_turns": 0,
         "trial_risk_weight": "high", "gift_search": {"enabled": False, "gifts": []}, "allow_white_gossypium": True, **kw,
     }
 
@@ -86,7 +86,7 @@ def test_broken_json(tmp_path):
     (lambda d: d["run"].update(runs=-1), "run/runs"),
     (lambda d: d["teams"][0].update(game_team=41), "teams/0/game_team"),
     (lambda d: d["teams"][0].update(min_alive=13), "teams/0/min_alive"),
-    (lambda d: d["teams"][0].update(min_alive=0), "teams/0/min_alive"),  # off is null since version 6 (#137)
+    (lambda d: d["teams"][0].update(min_alive=None), "teams/0/min_alive"),  # a number; 0 is no check (#137)
     (lambda d: d["teams"][0].update(hard_from_floor=0), "teams/0/hard_from_floor"),
     (lambda d: d["run"].update(runs=0), "run/runs"),
     (lambda d: d["deployment_order_plans"][0]["order"].__setitem__(1, "Yi Sang"), "deployment_order_plans/0/order"),
@@ -123,14 +123,14 @@ def test_version_3_refreshes_all_avoid_theme_packs_as_before(tmp_path):
 
 
 def old_numbers(d):
-    """VALID as version 5 wrote it: 0 for no run limit, a whole HARD run and no alive check."""
+    """VALID as version 5 wrote it: 0 for no run limit and a whole HARD run."""
     d["run"]["runs"] = 0
     for t in d["teams"]:
-        t.update(hard_from_floor=0, min_alive=0)
+        t.update(hard_from_floor=0)
 
 
 def test_version_5_zeros_become_switches(tmp_path):
-    # #137: runs 0 -> off (no limit); hard_from_floor 0 (the whole run HARD) -> on from floor 1; min_alive 0 -> off.
+    # #137: runs 0 -> off (no limit); hard_from_floor 0 (the whole run HARD) -> on from floor 1. min_alive 0 stays: no check.
     expected = edited(lambda d: d["run"].update(runs=None))
     assert load(tmp_path, {**edited(old_numbers), "version": 5}) == expected
 

@@ -195,11 +195,11 @@
           "heal": { "enum": ["none", "full", "revive"], "default": "revive" },
           "reserve_cost": { "type": "integer", "minimum": 0, "default": 0 },
           "min_alive": {
-            "type": ["integer", "null"],
-            "minimum": 1,
+            "type": "integer",
+            "minimum": 0,
             "maximum": 12,
-            "default": null,
-            "description": "fewer alive is handled like used-up wipe retries (run.after_retries); null: no check"
+            "default": 0,
+            "description": "fewer alive is handled like used-up wipe retries (run.after_retries); 0: no check"
           },
           "guard_turns": { "type": "integer", "minimum": 0, "maximum": 5, "default": 0 },
           "trial_risk_weight": { "enum": ["low", "medium", "high"], "default": "high" },

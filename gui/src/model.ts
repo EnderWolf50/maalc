@@ -105,7 +105,7 @@ export interface Team {
   id: string; name: string; enabled: boolean; game_team: number; keyword: string; usage: string;
   hard_from_floor: number | null; deployment_order: Ref<Order>; starlight: Ref<StarlightValues>;
   theme_pack_plan: string; reward_cards: string[]; shop_refresh_limit: number; heal: string;
-  reserve_cost: number; min_alive: number | null; guard_turns: number; trial_risk_weight: string;
+  reserve_cost: number; min_alive: number; guard_turns: number; trial_risk_weight: string;
   gift_search: { enabled: boolean; gifts: GiftRef[] }; allow_white_gossypium: boolean;
 }
 /** A gift on the E.G.O Gift Search page: its keyword tab, tier and English name (spec 04 section 9). */
@@ -172,19 +172,16 @@ const MIGRATIONS: Record<number, (d: Record<string, unknown>) => Record<string, 
   3: (d) => (d.run && typeof d.run === "object" ? { ...d, run: { theme_pack_refresh: "all", ...d.run } } : d),
   // Version 5 adds teams[].allow_white_gossypium (#90), on as before.
   4: (d) => withTeamDefault(d, { allow_white_gossypium: true }),
-  // Version 6 (#137): runs 0 (no limit) and min_alive 0 (no check) become null, off; hard_from_floor 0 (the
-  // whole run HARD) becomes 1, which says the same.
+  // Version 6 (#137): runs 0 (no limit) becomes null, off; hard_from_floor 0 (the whole run HARD) becomes 1,
+  // which says the same.
   5: (d) => {
     const run = d.run && typeof d.run === "object" ? (d.run as Record<string, unknown>) : null;
     const teams = Array.isArray(d.teams) ? d.teams : null;
     return {
       ...d,
       run: run && run.runs === 0 ? { ...run, runs: null } : d.run,
-      teams: teams ? teams.map((t) => (t && typeof t === "object" ? {
-        ...t,
-        ...(t.hard_from_floor === 0 ? { hard_from_floor: 1 } : {}),
-        ...(t.min_alive === 0 ? { min_alive: null } : {}),
-      } : t)) : d.teams,
+      teams: teams ? teams.map((t) => (t && typeof t === "object" && t.hard_from_floor === 0
+        ? { ...t, hard_from_floor: 1 } : t)) : d.teams,
     };
   },
 };

@@ -143,8 +143,6 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
           </div>
           <ToggleNum label={t("team.hard_from_floor")} path={`${path}/hard_from_floor`} value={team.hard_from_floor} on={1} min={1} max={5}
             note={t("team.hard_from_floor_note")} onChange={(v) => set({ hard_from_floor: v })} />
-          <ToggleNum label={t("team.min_alive")} path={`${path}/min_alive`} value={team.min_alive} on={1} min={1} max={12}
-            note={t("team.min_alive_note")} onChange={(v) => set({ min_alive: v })} />
           <div className={"toggle" + (bad(`${path}/allow_white_gossypium`) ? " bad" : "")}>
             <label className="check">
               <input type="checkbox" checked={team.allow_white_gossypium} onChange={(e) => set({ allow_white_gossypium: e.target.checked })} />
@@ -179,6 +177,9 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
             </select>
           </Field>
           {pick("trial_risk_weight")}
+          <Field label={t("team.min_alive")} path={`${path}/min_alive`} note={t("team.min_alive_note")}>
+            <Num value={team.min_alive} min={0} max={12} onChange={(v) => set({ min_alive: v })} />
+          </Field>
         </div>
         <div className={"rewards" + (bad(`${path}/reward_cards`) ? " bad" : "")}>
           <h4>{t("team.reward_cards")}</h4>

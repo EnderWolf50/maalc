@@ -98,12 +98,10 @@ test("version 5 zeros become switches", () => {
   const old = structuredClone(cases.valid) as Record<string, unknown> & { run: Record<string, unknown>; teams: Record<string, unknown>[] };
   old.run.runs = 0;
   old.teams[0].hard_from_floor = 0;
-  old.teams[0].min_alive = 0;
   const { data, migrated } = parseSettings(JSON.stringify({ ...old, version: 5 }));
   expect(migrated).toBe(true);
   expect(data.run.runs).toBe(null); // no run limit
   expect(data.teams.map((t) => t.hard_from_floor)).toEqual([1, 3]); // 0 was the whole run HARD: from floor 1
-  expect(data.teams.map((t) => t.min_alive)).toEqual([null, 3]);
   expect(validate(data)).toEqual([]);
 });
 

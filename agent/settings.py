@@ -49,8 +49,8 @@ def _v4_to_v5(data):
 def _v5_to_v6(data):
     """Version 6 turns the numbers whose 0 meant something into switches (#137).
 
-    run.runs 0 (no limit) and teams[].min_alive 0 (no check) become null, off; teams[].hard_from_floor 0
-    (the whole run HARD) becomes 1, which says the same.
+    run.runs 0 (no limit) becomes null, off; teams[].hard_from_floor 0 (the whole run HARD) becomes 1,
+    which says the same. teams[].min_alive stays a number: 0 is no check.
     """
     run = data.get("run")
     if isinstance(run, dict) and run.get("runs") == 0:
@@ -60,8 +60,6 @@ def _v5_to_v6(data):
         if isinstance(team, dict):
             if team.get("hard_from_floor") == 0:
                 team["hard_from_floor"] = 1
-            if team.get("min_alive") == 0:
-                team["min_alive"] = None
     return data
 
 

@@ -20,7 +20,7 @@
         "id": "a", "name": "Team a", "enabled": true, "game_team": 1, "keyword": "Burn", "usage": "any", "hard_from_floor": 1,
         "deployment_order": {"plan": "d1"}, "starlight": {"plan": "s1"}, "theme_pack_plan": "p1",
         "reward_cards": ["Starlight", "Random E.G.O Gift", "Cost & Keyword Gift Chance", "Cost", "E.G.O Resource"],
-        "shop_refresh_limit": 2, "heal": "revive", "reserve_cost": 0, "min_alive": null, "guard_turns": 0, "trial_risk_weight": "high",
+        "shop_refresh_limit": 2, "heal": "revive", "reserve_cost": 0, "min_alive": 0, "guard_turns": 0, "trial_risk_weight": "high",
         "gift_search": {"enabled": false, "gifts": []}, "allow_white_gossypium": true
       },
       {

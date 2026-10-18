@@ -123,8 +123,8 @@ def test_too_few_alive_stops_when_used_up_wipe_retries_stop(context, monkeypatch
     assert result is False and len(stops) == 1 and taps == []
 
 
-def test_no_alive_check_with_the_switch_off(context, monkeypatch):
-    result, stops, taps = few_alive(context, monkeypatch, "forfeit", None)
+def test_no_alive_check_at_0(context, monkeypatch):
+    result, stops, taps = few_alive(context, monkeypatch, "forfeit", 0)
     assert all("deployment order" in s for s in stops)  # only the empty order (the stub) stops it
     assert "forfeit" not in actions.RUN
 

@@ -1312,7 +1312,7 @@ class Formation(CustomAction):
             return True  # page fading in or out: let MirrorHub look again
         alive, need = count[1], run["team"]["min_alive"]
         RUN["alive"] = alive  # the shop's heal reads it (spec 03 section 13)
-        if need is not None and alive < need:
+        if alive < need:  # need 0: no check
             # Like used-up wipe retries (#137): stop, or back out to the map, where RouteMap forfeits.
             reason = f"{alive} sinners alive, team {run['team']['name']!r} needs {need}"
             if run["settings"]["run"]["after_retries"] == "stop":
