@@ -389,12 +389,12 @@ def test_an_acquired_gift_popup_is_closed_and_waited_out_without_a_fixed_delay(c
 SPIDERWEB = {"name": "Spiderweb Entangled in Red", "keyword": "Burn", "tier": 2}
 
 
-def search_page(context, **rules):
+def search_page(context, rules=None):
     """The search page with Spiderweb picked (Select 1/1, 70 starlight): Select asks to consume, Confirm shows the GET window."""
     page(context, {tuple(actions.SEARCH_COUNT): "Select 1/1", (922, 205, 270, 34): "Spiderweb Entangled in Red",
                    tuple(actions.SEARCH_OWNED[0]): "1542-70", tuple(actions.SEARCH_OWNED[1]): "1472",
                    tuple(actions.SEARCH_DIALOG): lambda clicks, looks: "Consume 70 Starlight to search and obtain these E.G.O Gifts?" if clicks == 1 else None,
-                   GIFT_POPUP: lambda clicks, looks: "E.G.O Gift GET!" if clicks >= 2 else None, **rules})
+                   GIFT_POPUP: lambda clicks, looks: "E.G.O Gift GET!" if clicks >= 2 else None, **(rules or {})})
     actions.RUN["team"] = {"gift_search": {"enabled": True, "gifts": [SPIDERWEB]}}
 
 
@@ -452,6 +452,8 @@ def test_a_difficulty_label_not_readable_yet_is_looked_at_again_not_slept_on(con
 
 
 def test_a_search_tab_opens_without_fixed_waits(context, clock):
+    clicks = context.tasker.controller.post_click
+    context.tasker.controller.post_screencap.return_value.wait.return_value.get.side_effect =         lambda: np.full((720, 1280, 3), 20 * clicks.call_count, np.uint8)  # each tab shows at once
     actions.GiftSearch.open_tab(context, "Bleed")
     assert len(taps(context)) == 2
     no_fixed_wait(clock)
@@ -470,3 +472,55 @@ def test_the_next_acquired_gift_popup_counts_as_the_last_one_closed(context, clo
     assert actions.GiftGet().run(context, argv())
     assert taps(context) == [(640, 532)]
     assert sum(clock) < 0.5
+
+
+def test_a_search_tab_tap_waits_for_the_neighbour_tab_to_show_first(context, clock):
+    # Live 2026-10-18 (run13): the tapped tab lights up at once but its gifts show a few looks later; the
+    # Keywordless tap sent before Blunt's gifts showed was lost, or the grid read still showed Blunt's, and
+    # Spiderweb was searched for on the wrong tab ("not on the page").
+    tab, pending = ["Poise"], []
+
+    def click(x, y):
+        if not pending:  # a tap while a switch is still on its way does nothing
+            pending.append([actions.SEARCH_TABS[(x - 113) // 62], 3])
+        return MagicMock()
+
+    def shot():
+        image = np.zeros((720, 1280, 3), np.uint8)
+        if pending:
+            pending[0][1] -= 1
+            if pending[0][1] < 0:
+                tab[0] = pending.pop()[0]
+            else:
+                image[165:215, 85:775] = 255  # the tap's light on the tab bar, before the gifts change
+        image[228:625, 85:775] = 20 * actions.SEARCH_TABS.index(tab[0])
+        return image
+    context.tasker.controller.post_click.side_effect = click
+    context.tasker.controller.post_screencap.return_value.wait.return_value.get.side_effect = shot
+    actions.GiftSearch.open_tab(context, "Keywordless")
+    assert tab[0] == "Keywordless" and not pending  # the Keywordless gifts show when it returns
+
+
+def test_the_consume_dialog_is_confirmed_once_it_stops_dropping_in(context, clock):
+    # Live 2026-10-18 (run13c): Confirm was tapped as soon as "Consume" read, while the dialog still slid down
+    # on its chains; the tap did nothing, no GET window came, and every GiftSearch call after it did the same.
+    shots = context.tasker.controller.post_screencap.return_value.wait.return_value.get
+    clicks, state = context.tasker.controller.post_click, {"select": None, "bought": False}
+
+    def click(x, y):
+        if (x, y) == actions.SEARCH_SELECT:
+            state["select"] = shots.call_count
+        elif (x, y) == actions.SEARCH_DIALOG_BUTTONS["confirm"] and shots.call_count >= state["select"] + 4:
+            state["bought"] = True  # the dialog has stopped: the tap takes
+        return MagicMock()
+
+    def shot():
+        moving = state["select"] is not None and shots.call_count < state["select"] + 4
+        return np.full((720, 1280, 3), 40 * (shots.call_count % 5) if moving else 0, np.uint8)
+    search_page(context, {tuple(actions.SEARCH_DIALOG): lambda c, l: "Consume 70 Starlight to search and obtain these E.G.O Gifts?"
+                            if state["select"] is not None and not state["bought"] else None,
+                          GIFT_POPUP: lambda c, l: "E.G.O Gift GET!" if state["bought"] else None})
+    clicks.side_effect = click
+    shots.side_effect = shot
+    assert actions.GiftSearch().run(context, argv())
+    assert state["bought"]
