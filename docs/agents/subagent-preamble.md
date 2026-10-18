@@ -8,5 +8,5 @@ The SubagentStart hook (`.claude/hooks/subagent-preamble.py`) hands this file to
 - **GitHub reads:** `gh issue view <n> --json title,body,comments`; a truncated read says so in your report.
 - **Premises:** a brief marks each fact `verified` or `unverified`. Check every unverified one first; when one does not hold, stop and report.
 - **The emulator and the account:** only through the `maalc-live-test` skill. A game update, any download, Give Up, Claim, the weekly bonus and starlight beyond the configured graces wait for the user's answer, each time.
-- **Public text:** AGENTS.md "Public repo".
+- **Public text:** AGENTS.md "Public repo". Write each issue, PR or commit body with the Write tool and pass its absolute Windows path (`--body-file`, `git commit -F`); the guard denies stdin, `$(…)`, a heredoc and a file it cannot find.
 - **Report:** acceptance numbers met / not met; paths run live and paths not run; every decision you made that the user has not; commit trailers copied from your own session's attribution reminder, never a model name from the brief.

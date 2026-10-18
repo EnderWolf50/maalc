@@ -1,10 +1,13 @@
 import importlib.util
+import json
 import os
 import subprocess
 import sys
 import threading
 import time
 from pathlib import Path
+
+import pytest
 
 # tools/live/queue.py shares its name with the stdlib module: load it by path under another name.
 spec = importlib.util.spec_from_file_location("live_queue", Path(__file__).resolve().parent.parent / "tools/live/queue.py")
@@ -45,3 +48,52 @@ def test_status_marks_the_holder_and_the_queue(tmp_path):
     (tmp_path / f"1-{os.getpid()}-first.ticket").write_text("cmd a")
     (tmp_path / f"2-{os.getpid()}-second.ticket").write_text("cmd b")
     assert [line.split(" (")[0] for line in lq.status(tmp_path)] == ["RUNNING first", "#1      second"]
+
+
+class FakeKernel:
+    """kernel32 stand-in: OpenProcess fails (or not) and the process has a given exit code and start time."""
+
+    def __init__(self, handle, exit_code=259, start=111):
+        self.handle, self.exit_code, self.start = handle, exit_code, start
+
+    def OpenProcess(self, *_):
+        return self.handle
+
+    def GetExitCodeProcess(self, _h, ref):
+        ref._obj.value = self.exit_code
+
+    def GetProcessTimes(self, _h, created, *_):
+        created._obj.value = self.start
+
+    def CloseHandle(self, _h):
+        pass
+
+
+def test_access_denied_from_openprocess_means_alive_not_dead():
+    assert lq.win_alive(FakeKernel(0), 4, None, last_error=lambda: 5)  # another user's process
+    assert not lq.win_alive(FakeKernel(0), 4, None, last_error=lambda: 87)  # ERROR_INVALID_PARAMETER: no such pid
+
+
+def test_a_reused_pid_is_not_the_holder_that_took_the_ticket():
+    k = FakeKernel(1, start=111)
+    assert lq.win_alive(k, 4, 111) and lq.win_alive(k, 4, None)
+    assert not lq.win_alive(k, 4, 222)  # a later process now owns the pid
+    assert not lq.win_alive(FakeKernel(1, exit_code=0), 4, 111)  # exited
+
+
+@pytest.mark.skipif(lq.started(os.getpid()) is None, reason="no process start time on this platform")
+def test_ticket_of_a_reused_pid_is_dropped_but_the_real_holder_stays(tmp_path):
+    mine = lq.started(os.getpid())
+    kept = tmp_path / f"1-{os.getpid()}-real.ticket"
+    kept.write_text(json.dumps({"cmd": "a", "start": mine}))
+    reused = tmp_path / f"2-{os.getpid()}-stale.ticket"
+    reused.write_text(json.dumps({"cmd": "b", "start": mine + 1}))
+    assert lq.tickets(tmp_path) == [kept] and not reused.exists()
+
+
+def test_run_writes_the_start_time_of_its_own_process_into_the_ticket(tmp_path):
+    seen = {}
+    lq.run(tmp_path, "x", [sys.executable, "-c", "pass"], is_alive=lambda pid, start: seen.update(pid=pid, start=start) or True, poll=0.01)
+    assert seen == {"pid": os.getpid(), "start": lq.started(os.getpid())}
+    assert list(tmp_path.glob("*.ticket")) == []
+

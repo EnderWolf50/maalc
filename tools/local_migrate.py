@@ -25,7 +25,9 @@ from local_dir import main_checkout
 # Where the account shows, in 1280x720 game space. The template is a button next to it that stays put.
 MASKS = [
     # (template file, screen it is cut from, crop box x0 y0 x1 y1, boxes to black out)
-    ("main-copy.png", "MainWindow.png", (255, 130, 335, 158), [[55, 126, 200, 36], [30, 620, 125, 34]]),  # UID plate
+    ("main-copy.png", "MainWindow.png", (255, 130, 335, 158), [[55, 126, 200, 36]]),  # UID plate
+    # the player name above "LV": bound to the LV label, which every screen with that panel shows (MainWindow, Drive, SinnersTab)
+    ("main-lv.png", "MainWindow.png", (30, 647, 54, 665), [[30, 620, 125, 34]]),
     ("title-change-account.png", "Title.png", (45, 638, 172, 672), [[1000, 652, 200, 38]]),  # account e-mail
 ]
 

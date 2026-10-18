@@ -58,8 +58,9 @@ def parse(lines, device_width: int = 1920) -> dict:
             elif c in open_m:
                 e = open_m.pop(c)
                 e["ms"] = round((t - e["t"]) * 1000)
+    agent = list(events)  # only the agent's own calls explain a device press; two pipeline taps never absorb each other
     for e in mumu:  # a device press an agent call at the same moment and place already explains is dropped
-        if not any(abs(a["t"] - e["t"]) < 0.25 and abs(a["x"] - e["x"]) < 12 and abs(a["y"] - e["y"]) < 12 for a in events):
+        if not any(abs(a["t"] - e["t"]) < 0.25 and abs(a["x"] - e["x"]) < 12 and abs(a["y"] - e["y"]) < 12 for a in agent):
             events.append(e)
     events.sort(key=lambda e: e["t"])
     for e in events:

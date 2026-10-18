@@ -20,7 +20,7 @@ Feature parity with AALC is the target; a v1 simplification goes under **Deferre
 
 ### Public repo
 
-This repo is public. Issue, PR and commit text describes evidence by its content and attaches the files (`gh issue comment <n> --attach <file>`); it names no local path, account name, UID or e-mail. A screenshot under `tests/screens/` has the UID plate and the account e-mail blacked out before it is committed. `.claude/hooks/public-text-guard.py` checks the text, `tests/test_screens_privacy.py` the screenshots.
+This repo is public. Issue, PR and commit text describes evidence by its content and attaches the files (`gh issue comment <n> --attach <file>`); it names no local path, account name, UID or e-mail. A screenshot under `tests/screens/` has its three identity regions blacked out before it is committed: the UID plate, the account e-mail and the player name above the LV panel at the bottom left of the main window (36,626,98,20 in game pixels). `.claude/hooks/public-text-guard.py` checks the text, `tests/test_screens_privacy.py` the screenshots.
 
 ### Pointers
 

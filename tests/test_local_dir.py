@@ -1,4 +1,5 @@
 import subprocess
+from pathlib import Path
 
 import local_dir
 
@@ -18,3 +19,9 @@ def test_every_worktree_resolves_to_the_main_checkout(tmp_path):
     assert local_dir.main_checkout(other).resolve() == main.resolve()
     made = local_dir.local_dir("queue", "bench", cwd=other)
     assert made.is_dir() and made.resolve() == (main / ".local" / "queue" / "bench").resolve()
+
+
+def test_without_a_cwd_it_uses_the_repo_of_the_script_not_the_callers_folder(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)  # outside any repo
+    here = Path(local_dir.__file__).resolve().parent
+    assert local_dir.main_checkout().resolve() == local_dir.main_checkout(here).resolve()

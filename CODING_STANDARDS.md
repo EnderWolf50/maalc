@@ -16,4 +16,4 @@ Judgement rules for review; the machine-checkable ones live in ruff (`E9`, `F`) 
 ## Tests
 
 - New tests go in the feature's own `tests/test_<feature>.py`; `tests/test_actions.py` takes only tests of `agent/actions.py` helpers that have no feature file.
-- A fixture under `tests/screens/` has the account's regions blacked out; `tests/test_screens_privacy.py` lists them.
+- A fixture under `tests/screens/` is masked as AGENTS.md "Public repo" says; `tests/test_screens_privacy.py` lists the regions.

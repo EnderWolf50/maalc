@@ -10,6 +10,7 @@ The tickets of dead processes are dropped. State: `<main checkout>/.local/queue/
 """
 import argparse
 import ctypes
+import json
 import os
 import re
 import subprocess
@@ -24,30 +25,72 @@ from local_dir import local_dir, main_checkout
 RESOURCES = ("bench", "emulator")
 
 
-def alive(pid: int) -> bool:
+ACCESS_DENIED = 5
+
+
+def kernel32():  # os.kill(pid, 0) would terminate the process on Windows, so ask the Win32 API
+    k = ctypes.WinDLL("kernel32", use_last_error=True)
+    k.OpenProcess.restype = ctypes.c_void_p
+    k.GetExitCodeProcess.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
+    k.GetProcessTimes.argtypes = [ctypes.c_void_p] * 5
+    k.CloseHandle.argtypes = [ctypes.c_void_p]
+    return k
+
+
+def win_alive(k, pid: int, start: int | None, last_error=lambda: ctypes.get_last_error()) -> bool:
+    h = k.OpenProcess(0x1000, False, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
+    if not h:
+        return last_error() == ACCESS_DENIED  # a process of another user exists; only a missing pid is dead
+    code, times = ctypes.c_ulong(), [ctypes.c_ulonglong() for _ in range(4)]
+    k.GetExitCodeProcess(h, ctypes.byref(code))
+    k.GetProcessTimes(h, *map(ctypes.byref, times))
+    k.CloseHandle(h)
+    return code.value == 259 and start in (None, times[0].value)  # STILL_ACTIVE, and not a later process with a reused pid
+
+
+def started(pid: int) -> int | None:
+    """When the process started, in the platform's own unit (None when unknown): tells a pid's owner from a reuse of it."""
+    if sys.platform == "win32":
+        k = kernel32()
+        h = k.OpenProcess(0x1000, False, pid)
+        if not h:
+            return None
+        times = [ctypes.c_ulonglong() for _ in range(4)]
+        k.GetProcessTimes(h, *map(ctypes.byref, times))
+        k.CloseHandle(h)
+        return times[0].value
+    try:
+        return int(Path(f"/proc/{pid}/stat").read_text().rpartition(")")[2].split()[19])  # starttime, in clock ticks since boot
+    except (OSError, ValueError, IndexError):
+        return None
+
+
+def alive(pid: int, start: int | None = None) -> bool:
     if sys.platform != "win32":
         try:
             os.kill(pid, 0)
         except ProcessLookupError:
             return False
         except PermissionError:
-            pass
-        return True
-    k = ctypes.windll.kernel32  # os.kill(pid, 0) would terminate the process on Windows
-    h = k.OpenProcess(0x1000, False, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
-    if not h:
-        return False
-    code = ctypes.c_ulong()
-    k.GetExitCodeProcess(h, ctypes.byref(code))
-    k.CloseHandle(h)
-    return code.value == 259  # STILL_ACTIVE
+            return True
+        return start in (None, started(pid))
+    return win_alive(kernel32(), pid, start)
+
+
+def read(p: Path) -> tuple[str, int | None]:
+    """(command, start time of the holder) of a ticket; a ticket without a start time is plain text."""
+    try:
+        doc = json.loads(p.read_text(encoding="utf-8"))
+        return doc["cmd"], doc.get("start")
+    except (ValueError, KeyError, TypeError):
+        return p.read_text(encoding="utf-8"), None
 
 
 def tickets(qdir: Path, is_alive=alive) -> list[Path]:
     """The live tickets in arrival order; tickets of dead processes are deleted."""
     out = []
     for p in sorted(qdir.glob("*.ticket")):
-        if is_alive(int(p.stem.split("-", 2)[1])):
+        if is_alive(int(p.stem.split("-", 2)[1]), read(p)[1]):
             out.append(p)
         else:
             p.unlink(missing_ok=True)
@@ -58,7 +101,7 @@ def run(qdir: Path, name: str, cmd: list[str], is_alive=alive, poll: float = 5.0
     qdir.mkdir(parents=True, exist_ok=True)
     name = re.sub(r"[^\w.]", "_", name)
     me = qdir / f"{time.time_ns()}-{os.getpid()}-{name}.ticket"
-    me.write_text(" ".join(cmd), encoding="utf-8")
+    me.write_text(json.dumps({"cmd": " ".join(cmd), "start": started(os.getpid())}), encoding="utf-8")
     try:
         said = False
         while (q := tickets(qdir, is_alive))[:1] != [me]:
@@ -76,7 +119,7 @@ def status(qdir: Path, is_alive=alive) -> list[str]:
     lines = []
     for i, p in enumerate(tickets(qdir, is_alive) if qdir.exists() else []):
         _, pid, name = p.stem.split("-", 2)
-        lines.append(("RUNNING " if i == 0 else f"#{i:<6} ") + f"{name} (pid {pid}): {p.read_text(encoding='utf-8')[:120]}")
+        lines.append(("RUNNING " if i == 0 else f"#{i:<6} ") + f"{name} (pid {pid}): {read(p)[0][:120]}")
     return lines
 
 

@@ -20,6 +20,10 @@ Land with the `ship` skill's land task. Then, in the main checkout and unless `u
 
 Done: `after_land.py` ends without a "failed" line.
 
+## Claude Code hooks
+
+`.claude/settings.json` starts both hooks in exec form (`"command": "uv"` plus an `args` list), which needs a Claude Code version that knows `args` (2.1.302 does; `claude --version`). An older version drops `args` and runs a bare `uv`, which exits 2, the code that blocks a tool call: every Bash call then fails with a hook error that shows `uv`'s usage text. Update Claude Code when you see it.
+
 ## `.local/`: machine-local state
 
 Everything that belongs to one machine lives in `.local/` of the **main checkout** (gitignored). Every worktree reaches it through `tools/local_dir.py`, which resolves `git rev-parse --path-format=absolute --git-common-dir` to the main checkout; a tool takes its folders from `local_dir("<name>", …)`.

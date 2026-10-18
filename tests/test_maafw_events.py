@@ -43,3 +43,10 @@ def test_touch_down_move_up_gives_down_and_up_at_the_last_point():
 def test_swipe_carries_its_end_point_and_duration():
     assert events([AGENT.format(t="14:30:50.340", k="swipe", req='{"duration":600,"x1":444,"x2":444,"y1":330,"y2":650}')]) == [
         {"t": "14:30:50.340", "kind": "swipe", "x": 444, "y": 330, "x2": 444, "y2": 650, "ms": 600}]
+
+
+def test_two_pipeline_taps_within_250ms_at_one_point_stay_two():
+    assert [e["t"] for e in events([
+        MUMU_DOWN.format(t="14:31:59.000", x=408, y=836), MUMU_UP.format(t="14:31:59.040"),
+        MUMU_DOWN.format(t="14:31:59.100", x=408, y=836), MUMU_UP.format(t="14:31:59.140"),
+    ])] == ["14:31:59.000", "14:31:59.100"]
