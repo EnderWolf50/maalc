@@ -21,3 +21,11 @@ assets/resource/base/model/ocr/
 /mxu/
 /.playwright-mcp/
 /.claude/worktrees/
+
+# Machine-local state of the main checkout (see docs/agents/local-dev.md)
+/.local/
+
+# maa-tools / MaaFramework side output
+maatoolsErrorDetails.json
+maa-0-*/
+NVIDIA Corporation/
