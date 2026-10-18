@@ -291,7 +291,7 @@ class Recover(CustomAction):
             log(f"L{level} did not go through")
             STUCK["ladder"].failed(level)
         STUCK["watch"].reset()
-        for key in ("turn", "battle_start", "map_misses", "event_tried"):
+        for key in ("turn", "battle_start", "map_misses", "event_tried", "map_plan"):
             RUN.pop(key, None)
         return True
 
@@ -801,7 +801,9 @@ class PickThemePack(CustomAction):
 
 
 # Map page (spec 03 section 7). Offsets are from the MapBus template's top-left corner.
-BUS_HOME = (446, 320)  # map panned ~70 px down from rest (bus at 446, 248): top-row badges clear the resource bar
+# The bus at the far left: the screen shows it and four columns (#111; the user's hard-mode capture, bus at 47, 311).
+# Panned ~70 px down from rest (bus at 446, 248): top-row badges clear the resource bar.
+BUS_HOME = (50, 320)
 BUS_REST = (446, 248)
 SLOT = (279, 37)  # middle-row slot centre; map_route.ROW_DY gives the other rows
 LINKS = {
@@ -809,6 +811,7 @@ LINKS = {
     "mid": ("MapLinkMid", (95, -10, 110, 80)),
     "down": ("MapLinkDown", (85, 85, 110, 110)),
 }
+BUS_LINK = 60  # line_contrast of a lit link from the bus; links between other nodes read up to ~50
 MARKS = {  # node -> (mark, roi around the slot centre)
     "MapNodeBoss": ("boss", (-40, -40, 80, 80)),
     "MapNodeFocusedHex": ("focused", (-80, -60, 160, 120)),
@@ -834,6 +837,21 @@ def seen(context, image, node, roi=None):
         override = {node: {"roi": [x0, y0, min(1280, x + w) - x0, min(720, y + h) - y0]}}
     detail = context.run_recognition(node, image, override)
     return detail if detail and detail.hit else None
+
+
+def node_marks(context, image, cx, cy):
+    """The marks seen around the map node centred at (cx, cy): {mark: hit}."""
+    return {mark: hit for n, (mark, (ox, oy, w, h)) in MARKS.items() if (hit := seen(context, image, n, (cx + ox, cy + oy, w, h)))}
+
+
+def node_at(context, image, cx, cy, marks=None):
+    """The type of the map node centred at (cx, cy), by its marks (map_route.node_type).
+
+    No mark at all where the badges (80 px above the centre) sit under the resource bar: unknown, not an
+    event; a fight's Cost coin may be hidden there (the top row with the map at rest).
+    """
+    marks = node_marks(context, image, cx, cy) if marks is None else marks
+    return "unknown" if not marks and cy - 80 < 60 else map_route.node_type(set(marks))
 
 
 def map_weights(context):
@@ -870,15 +888,22 @@ class EnterNode(CustomAction):
 class RouteMap(CustomAction):
     """Pick the next node and enter it (spec 03 section 7).
 
-    Slots linked to the bus (a chevron on the link) are typed by their marks, ranked by
-    map_route.rank and tapped in that order until the node panel (MapNodePanel) shows. After them come
-    the fallbacks: the bus (a node reached but not entered), then the slots not tried yet.
+    Slots linked to the bus (its lit line or a chevron on it) are typed by their marks, ranked by
+    map_route.rank over the columns on screen and tapped in that order until the node panel (MapNodePanel)
+    shows. After them come the fallbacks: the bus (a node reached but not entered), then the slots not tried yet.
     Nothing taking a tap spends one of the floor's map retries; when they run out, the map is stuck (spec 06).
+    When the best path's first node is entered, the rest of the path is the floor's plan: the next calls
+    follow it (follow) until it is used up or does not fit the map.
     """
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         if RUN.get("forfeit"):
             return forfeit(context)
+        if still(context) is None:
+            return True  # still fading in or out: let MirrorHub look again
+        if self.follow(context):
+            return enter_node(context)
+        RUN.pop("map_plan", None)
         for _ in range(MAP_LOOKS):  # live: right after a floor's theme pack, the map shows before its bus and links
             if still(context) is None:
                 return True  # still fading in or out: let MirrorHub look again
@@ -888,8 +913,18 @@ class RouteMap(CustomAction):
             if slots:
                 break
             time.sleep(1)
-        log("map: " + (", ".join(f"{r} {t} ({'?' if n is None else n} onward)" for r, (t, n) in slots.items()) or "no linked slot read"))
-        order = map_route.rank(slots, map_weights(context))
+        log("map: column 1: " + (", ".join(f"{r} {t} ({'?' if n is None else n} onward)" for r, (t, n) in slots.items()) or "no linked slot read"))
+        ahead = self.read_ahead(context, image, bx, by, slots) if slots else []
+        weights = map_weights(context)
+        order = map_route.rank(slots, weights, ahead)
+        steps = None
+        if order:
+            score, path = map_route.paths(slots, weights, ahead)[order[0]]
+            nodes = [c[r][0] for r, c in zip(path, (slots, *ahead))]
+            log(f"map: path {' > '.join(f'{r} {t}' for r, t in zip(path, nodes))}, score {score}")
+            # The rest of the path, each step's row seen from the node before it: where the bus will stand.
+            row_at = {dy: r for r, dy in map_route.ROW_DY.items()}
+            steps = [(row_at[map_route.ROW_DY[b] - map_route.ROW_DY[a]], t) for a, b, t in zip(path, path[1:], nodes[1:])]
 
         def centre(row):
             return bx + SLOT[0], by + SLOT[1] + map_route.ROW_DY[row]
@@ -900,6 +935,8 @@ class RouteMap(CustomAction):
             tap(context, x, y, wait=0)
             if until(context, lambda im: seen(context, im, "MapNodePanel")) is not None:
                 log(f"map: take {name}")
+                if steps is not None and (x, y) == tries[0][1]:  # the path's first node: follow the rest
+                    RUN["map_plan"] = {"floor": RUN.get("floor"), "steps": steps}
                 return enter_node(context)
         RUN["map_misses"] = RUN.get("map_misses", 0) + 1
         if RUN["map_misses"] >= MAP_RETRIES:
@@ -919,12 +956,9 @@ class RouteMap(CustomAction):
             dx, dy = BUS_HOME[0] - bx, BUS_HOME[1] - by
             if abs(dx) <= 30 and abs(dy) <= 25 or attempt == 3:
                 return image, (bx, by)
-            # At rest only the top row hides under the resource bar: no link up, nothing to pan for (#58).
-            rest = abs(bx - BUS_REST[0]) <= 30 and abs(by - BUS_REST[1]) <= 25
-            if rest and not seen(context, image, LINKS["up"][0], (bx + LINKS["up"][1][0], by + LINKS["up"][1][1], *LINKS["up"][1][2:])):
-                return image, (bx, by)
-            # Look again after each pan. Start left of the bus, on map background.
-            scroll(context, 300, 400, dx, dy)
+            # Look again after each pan. Start on map background: between the first and second columns,
+            # between the middle and bottom rows.
+            scroll(context, min(bx + SLOT[0] + map_route.COLUMN_DX // 2, 1100), by + SLOT[1] + 106, dx, dy)
             time.sleep(0.5)
 
     @staticmethod
@@ -933,13 +967,92 @@ class RouteMap(CustomAction):
         v = image.max(axis=2)
         slots = {}
         for row in map_route.ROWS:
-            node, (rx, ry, rw, rh) = LINKS[row]
-            if not seen(context, image, node, (bx + rx, by + ry, rw, rh)):
-                continue
-            cx, cy = bx + SLOT[0], by + SLOT[1] + map_route.ROW_DY[row]
-            marks = {mark for n, (mark, (ox, oy, w, h)) in MARKS.items() if seen(context, image, n, (cx + ox, cy + oy, w, h))}
-            slots[row] = (map_route.node_type(marks), map_route.routes(v, cx, cy))
+            if RouteMap.linked(context, image, bx, by, row):
+                cx, cy = bx + SLOT[0], by + SLOT[1] + map_route.ROW_DY[row]
+                slots[row] = (node_at(context, image, cx, cy), map_route.routes(v, cx, cy))
         return slots
+
+    @staticmethod
+    def linked(context, image, bx, by, row):
+        """Whether the slot in row is linked to the bus.
+
+        Live 2026-10-18, bus at the far left: the chevrons scored 0.75-0.84 against 0.8, the lit link
+        itself 157-171 against -2 unlinked; either one counts.
+        """
+        node, (rx, ry, rw, rh) = LINKS[row]
+        lit = map_route.line_contrast(image.max(axis=2), bx + 22, by + 37, bx + SLOT[0], by + SLOT[1] + map_route.ROW_DY[row])
+        return lit is not None and lit >= BUS_LINK or bool(seen(context, image, node, (bx + rx, by + ry, rw, rh)))
+
+    @staticmethod
+    def follow(context):
+        """Tap the next node of this floor's planned path; whether its node panel showed (#111).
+
+        Only that slot is read, and the map is dragged (bus to the far left) only when it sits under the
+        resource bar or the buttons. False, for a full read, whenever in doubt: no plan or a used-up one,
+        the slot not linked to the bus or not of the planned type (the bus not where the plan put it, or a
+        misread from afar), or its tap showing no panel.
+        """
+        plan = RUN.get("map_plan")
+        if not plan or plan["floor"] != RUN.get("floor") or not plan["steps"]:
+            return False
+        row, node = plan["steps"][0]
+        image = screen(context)
+        bus = seen(context, image, "MapBus")
+        bus = bus and tuple(bus.box[:2])
+
+        def clear(bx, by):  # the slot's node, badges included, clear of the resource bar and the buttons
+            return bx + SLOT[0] + 80 <= 1200 and by + SLOT[1] + map_route.ROW_DY[row] - 80 >= 60
+        if not bus or not clear(*bus):
+            image, bus = RouteMap.find_bus(context)
+        if not bus or not RouteMap.linked(context, image, *bus, row):
+            log(f"map: planned {row} {node} not linked to the bus; reading the map again")
+            return False
+        bx, by = bus
+        cx, cy = bx + SLOT[0], by + SLOT[1] + map_route.ROW_DY[row]
+        kind = node_at(context, image, cx, cy)
+        if kind != node:
+            log(f"map: planned {row} {node} reads {kind}; reading the map again")
+            return False
+        tap(context, cx, cy, wait=0)
+        if until(context, lambda im: seen(context, im, "MapNodePanel")) is None:
+            log(f"map: planned {row} {node} took no tap; reading the map again")
+            return False
+        log(f"map: follow plan {row} {node}")
+        plan["steps"] = plan["steps"][1:]
+        return True
+
+    @staticmethod
+    def read_ahead(context, image, bx, by, slots):
+        """The columns beyond the first on screen, for map_route.rank.
+
+        A node counts when a link into it from the column before reads (map_route.line_contrast); only rows
+        next to each other link. The read ends at the screen's edge, at a column with nothing linked or
+        dark (no mark and no light on any node: hard mode shows two columns), or after the boss.
+        """
+        dx, dy = map_route.COLUMN_DX, map_route.ROW_DY
+        v, x, ahead = image.max(axis=2), bx + SLOT[0], []
+
+        def y(row):
+            return by + SLOT[1] + dy[row]
+        while x + dx + 80 <= 1200:  # MapNodeFocusedHex reads 80 px either side; buttons from x 1205
+            x += dx
+            before, column, lit = ahead[-1] if ahead else slots, {}, False
+            for row in map_route.ROWS:
+                linked = {r for r in before if abs(dy[r] - dy[row]) <= 213
+                          and (map_route.line_contrast(v, x - dx, y(r), x, y(row)) or 0) >= map_route.LINE_CONTRAST}
+                if linked:
+                    marks = node_marks(context, image, x, y(row))
+                    column[row] = (node_at(context, image, x, y(row), marks), linked)
+                    # A node with no mark may still be lit: a red pack's dim "?" (live 2026-10-18) reads 48-60
+                    # here; hard mode's dark columns read 0.
+                    lit = lit or bool(marks) or np.percentile(v[y(row) - 45:y(row) + 45, x - 45:x + 45], 90) >= 20
+            if not lit:
+                break
+            ahead.append(column)
+            log(f"map: column {len(ahead) + 1}: " + ", ".join(f"{r} {t} (from {'/'.join(sorted(n))})" for r, (t, n) in column.items()))
+            if any(t == "boss" for t, _ in column.values()):
+                break
+        return ahead
 
 
 # Formation page (spec 03 section 3). Cards are in battle.SINNERS order, two rows of six.
