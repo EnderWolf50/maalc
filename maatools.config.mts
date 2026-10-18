@@ -114,12 +114,29 @@ const screens: [image: string, hits: string[]][] = [
   ['ShopHeal.png', []],
 ]
 
-// CI shards by node: SHARD=i SHARDS=n keeps every n-th node, and every image still runs its shard's nodes,
-// so a node not in an image's hits still must miss. Unset runs everything.
+// CI shards by node: SHARD=i of SHARDS=n keeps one n-th of the nodes, and every image still runs its shard's
+// nodes, so a node not in an image's hits still must miss. Unset runs everything.
+// Shards are filled heaviest node first by its cost per image: ms on a CI runner, from the MaaFW log of one
+// unsharded run (2026-10-18); a node not listed counts 170. A stale cost only unbalances the shards: every
+// node still runs in exactly one.
+const cost: Record<string, number> = {
+  MapNodeEvent: 2950, MapNodeShop: 1950, MaintenanceNotice: 1050, MapNodeFocusedHex: 1020, RetryPopup: 900,
+  RecoverPauseConfirm: 790, DownloadDialog: 780, Victory: 730, LevelWarning: 570, ParallelModePrompt: 440,
+  MirrorEnterDialog: 350, GiftRefuseDialog: 350, RewardCard: 340, RewardCardForgo: 340, MapNodeFocusedRound: 310,
+  MapBus: 310, ClaimPopup: 290, GiftSearchForgo: 270, WipeDialog: 270, PopupButton: 250,
+}
 const shard = Number(process.env.SHARD ?? 0)
 const shards = Number(process.env.SHARDS ?? 1)
-const nodes = [...new Set(screens.flatMap(([, hits]) => hits))].sort()
-const mine = new Set(nodes.filter((_, i) => i % shards === shard))
+const nodes = [...new Set(screens.flatMap(([, hits]) => hits))]
+  .map((node) => ({ node, cost: cost[node] ?? 170 }))
+  .sort((a, b) => b.cost - a.cost || a.node.localeCompare(b.node))
+const load = Array<number>(shards).fill(0)
+const mine = new Set<string>()
+for (const { node, cost } of nodes) {
+  const lightest = load.indexOf(Math.min(...load))
+  load[lightest] += cost
+  if (lightest === shard) mine.add(node)
+}
 
 const config: FullConfig = {
   cwd: import.meta.dirname,
