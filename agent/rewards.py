@@ -4,6 +4,7 @@ actions.py reads the pages and taps; everything here is plain data in, plain dat
 """
 
 import re
+from difflib import SequenceMatcher
 
 from run_start import match_pack
 
@@ -82,13 +83,22 @@ def pick_card(types, order, taken=()):
     return min(left, key=lambda i: (order.index(types[i]) if types[i] in order else len(order), i))
 
 
-def gift_kind(text, keyword, owned):
-    """"main", "other" or "owned" for a gift card's OCR text."""
+def gift_kind(text, keyword, owned, avoid=()):
+    """"main", "other", "owned" or "avoid" for a gift card's OCR text; avoid: gift names the team never takes (#90)."""
+    if any(names_gift(text, name) for name in avoid):
+        return "avoid"
     if owned:
         return "owned"
     # ponytail: keyword = its word anywhere in the card text; a Bleed gift that says "Slash Skill"
     # counts for a Slash team too. Read the keyword icon if that picks wrong gifts.
     return "main" if re.search(rf"\b{keyword}\b", text, re.I) else "other"
+
+
+def names_gift(text, name, min_ratio=0.8):
+    """Whether OCR text names the gift: the name's longest word shows in it, an OCR slip or two allowed."""
+    word, key = _norm(max(name.split(), key=len)), _norm(text)
+    return any(SequenceMatcher(None, key[i:i + len(word)], word).ratio() >= min_ratio
+               for i in range(max(1, len(key) - len(word) + 1)))
 
 
 def trial_risk(text, risks):
@@ -106,7 +116,7 @@ def _numeral(s):
 
 
 def rank_gifts(cards, weight):
-    """Card indexes best first (spec 03 section 12).
+    """Card indexes best first, avoided gifts left out (spec 03 section 12, #90).
 
     cards are (kind, trial risk or None); score = gift score - weight x risk, ties to the lower
     risk, then the leftmost. Without trials (risk None) it is main > other > owned.
@@ -117,7 +127,7 @@ def rank_gifts(cards, weight):
         kind, risk = cards[i]
         return (-(GIFT_SCORE[kind] - w * (risk or 0)), risk or 0, i)
 
-    return sorted(range(len(cards)), key=key)
+    return sorted((i for i in range(len(cards)) if cards[i][0] != "avoid"), key=key)
 
 
 def pick_gifts(ranked, read, tap):

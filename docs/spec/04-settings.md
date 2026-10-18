@@ -19,6 +19,7 @@
   - 版本 2（#52）：隊伍新增 `guard_turns`，從版本 1 遷移時填 0；出戰順序可以少於 12 位，舊檔不用改。
   - 版本 3（#54）：隊伍新增 `gift_search`，從版本 2 遷移時填 `{"enabled": false, "gifts": []}`（照舊 Refuse）。
   - 版本 4（#41）：執行選項新增 `theme_pack_refresh`，從版本 3 遷移時填 `all`（照舊用完所有免費刷新）。
+  - 版本 5（#90）：隊伍新增 `allow_white_gossypium`，從版本 4 遷移時填 `true`（照舊可以持有）。
 - 只有 GUI 寫設定檔，Agent 不回寫。寫入必須先寫暫存檔再改名，避免寫到一半損毀。（#6、#19，2026-10-14 定案）
 - 檢查分兩層。schema 負責結構檢查：（#19，2026-10-14 定案）
   - 型別、列舉值、數字範圍；
@@ -182,6 +183,7 @@
 | 存活少於 K 人就停止 | `min_alive` | 整數 0–12 | 0 = 不檢查 | 0 | #16 |
 | 開局連續防禦回合數 | `guard_turns` | 整數 0–5 | 每局最前面 N 個戰鬥回合（跨場累計）全員防禦；0 = 不用 | 0 | #52 |
 | 試煉風險權重 | `trial_risk_weight` | 字串 | `low` 低／`medium` 中／`high` 高 | `high` | #17 |
+| 可以持有 White Gossypium | `allow_white_gossypium` | 布林 | 關：選飾品不選、商店不買，已持有的優先當合成／出售材料（[03](03-decisions.md) 第 12、13 節） | 開 | #90 |
 | 觀測飾品 | `gift_search` | 物件 | `{"enabled": 布林, "gifts": [{"keyword", "tier", "name"}, …]}`：開關，與依優先順序排列、不重複、最多 3 個的飾品清單。`keyword` 是觀測頁的分頁（主要體系的 10 個值加 `Keywordless`），`tier` 是 1–3，`name` 是遊戲顯示的英文名 | `{"enabled": false, "gifts": []}` | #54 |
 
 規則：

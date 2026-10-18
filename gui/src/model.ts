@@ -106,7 +106,7 @@ export interface Team {
   hard_from_floor: number; deployment_order: Ref<Order>; starlight: Ref<StarlightValues>;
   theme_pack_plan: string; reward_cards: string[]; shop_refresh_limit: number; heal: string;
   reserve_cost: number; min_alive: number; guard_turns: number; trial_risk_weight: string;
-  gift_search: { enabled: boolean; gifts: GiftRef[] };
+  gift_search: { enabled: boolean; gifts: GiftRef[] }; allow_white_gossypium: boolean;
 }
 /** A gift on the E.G.O Gift Search page: its keyword tab, tier and English name (spec 04 section 9). */
 export interface GiftRef { keyword: string; tier: number; name: string }
@@ -170,6 +170,8 @@ const MIGRATIONS: Record<number, (d: Record<string, unknown>) => Record<string, 
   2: (d) => withTeamDefault(d, { gift_search: { enabled: false, gifts: [] } }),
   // Version 4 adds run.theme_pack_refresh (#41), "all" as before.
   3: (d) => (d.run && typeof d.run === "object" ? { ...d, run: { theme_pack_refresh: "all", ...d.run } } : d),
+  // Version 5 adds teams[].allow_white_gossypium (#90), on as before.
+  4: (d) => withTeamDefault(d, { allow_white_gossypium: true }),
 };
 
 function withTeamDefault(d: Record<string, unknown>, field: Record<string, unknown>) {

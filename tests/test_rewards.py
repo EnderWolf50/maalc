@@ -3,6 +3,7 @@ import zlib
 from pathlib import Path
 
 import numpy as np
+import pytest
 import yaml
 
 import rewards as r
@@ -101,6 +102,26 @@ def test_gift_kind():
     assert r.gift_kind("inflict 2 Rupture Potency", "Burn", False) == "other"
     assert r.gift_kind("When applying Burn Potency", "Burn", True) == "owned"
     assert r.gift_kind("Burning heart", "Burn", False) == "other"  # whole words only
+
+
+@pytest.mark.parametrize("text", [
+    "White Gossypium Bleed", "Whte Gossypiurn Bleed", "WhiteGossypium Bleed", "White Gossypiu Bleed",  # OCR slips
+])
+def test_a_gift_the_team_avoids_is_told_by_its_name_whatever_its_keyword(text):
+    # #90: a Bleed team that does not hold White Gossypium.
+    assert r.gift_kind(text, "Bleed", False, avoid=["White Gossypium"]) == "avoid"
+    assert r.gift_kind(text, "Bleed", True, avoid=["White Gossypium"]) == "avoid"
+    assert r.gift_kind(text, "Bleed", False) == "main"
+
+
+def test_a_gift_like_the_avoided_one_is_not_avoided():
+    assert r.gift_kind("White Bleed Potency", "Bleed", False, avoid=["White Gossypium"]) == "main"
+
+
+def test_an_avoided_gift_is_never_ranked():
+    assert r.rank_gifts([("avoid", None), ("owned", None), ("main", None)], "high") == [2, 1]
+    assert r.rank_gifts([("avoid", 0), ("other", 5)], "high") == [1]
+    assert r.rank_gifts([("avoid", None)], "high") == []
 
 
 def test_trial_risk_unknown_is_max():

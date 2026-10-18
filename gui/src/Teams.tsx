@@ -141,6 +141,13 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
             </select>
             <small>{t("team.guard_turns_note")}</small>
           </div>
+          <div className={"toggle" + (bad(`${path}/allow_white_gossypium`) ? " bad" : "")}>
+            <label className="check">
+              <input type="checkbox" checked={team.allow_white_gossypium} onChange={(e) => set({ allow_white_gossypium: e.target.checked })} />
+              {t("team.allow_white_gossypium")}
+            </label>
+            <small>{t("team.allow_white_gossypium_note")}</small>
+          </div>
           <div className={"toggle" + (bad(`${path}/usage`) ? " bad" : "")}>
             <label className="check">
               <input type="checkbox" checked={team.usage !== "any"} onChange={(e) => set({ usage: e.target.checked ? "hard_only" : "any" })} />

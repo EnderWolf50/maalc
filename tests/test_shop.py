@@ -96,6 +96,12 @@ def test_to_sell_only_what_fusion_leaves_over():
     assert s.to_sell([(1, 50)], 200, 200, 60) is None
 
 
+def test_to_sell_takes_an_avoided_gift_first():
+    # #90: White Gossypium (cell 7, 60) goes before the dearer leftover.
+    gifts = [(0, 50), (2, 100), (5, 90), (7, 60)]
+    assert s.to_sell(gifts, 150, 100, 0, first={7}) == [7]
+
+
 def ocr(*lines):
     return [(t, box) for t, box in lines]
 
@@ -188,6 +194,12 @@ def test_cost_value_reads_look_alike_letters_as_digits(read, cost):
 ])
 def test_gift_role_from_the_cells_badge_and_icon(keyword, gift, role):
     assert s.gift_role(keyword, gift, "Burn") == role
+
+
+def test_an_avoided_gift_is_material_though_it_is_the_main_keyword():
+    # #90: a Bleed team that does not hold White Gossypium fuses or sells it.
+    assert s.gift_role("Bleed", "White Gossypium", "Bleed", avoid=["White Gossypium"]) == "material"
+    assert s.gift_role("Bleed", None, "Bleed", avoid=["White Gossypium"]) == "keep"
 
 
 SELL_OCR = [  # Maa OCR of the sell page's grid (crop "sell"): coins read as 米/水/*, icon art as junk

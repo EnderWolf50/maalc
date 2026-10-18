@@ -1732,6 +1732,8 @@ GIFT_CARDS = [100, 150, 1080, 410]  # 1-4 cards; on the boss page the Mounting T
 GIFT_COUNT = [1060, 555, 160, 50]  # "Select 0/2"; no count with one card
 GIFT_SELECT = (1138, 579)
 REFUSE_GIFT = [870, 560, 160, 40]
+GIFT_REMAINING = [440, 280, 400, 35]  # Select with choices left: "You have remaining E.G.O Gift choices."
+GIFT_REMAINING_CONFIRM = (763, 493)  # its Confirm: a random trial per choice left (tests/screens/GiftRefuseDialog.png)
 TRIAL_NAME_Y = (440, 475)  # top of the trial name line; the effect line under it starts ~485
 
 
@@ -1746,6 +1748,7 @@ class PickGift(CustomAction):
 
     Cards are main keyword > other > owned; when Mounting Trials hang under them (after a boss),
     each scores gift - weight x trial risk. Refuse Gift is never pressed: it hands out random trials.
+    A gift the team avoids (#90) is never taken: with only those left, Select's random trials are confirmed.
     """
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
@@ -1763,13 +1766,14 @@ class PickGift(CustomAction):
                 lines[i].append((y, t))
         trials = any("Mounting" in t for t, _ in results)
         risks = data("trial_risks.yaml") | {o["trial"]: o["risk"] for o in run["settings"]["trial_risk_overrides"]}
+        avoid = [g["name"] for g in avoided_gifts(run["team"])]
         cards = []
         for card in lines:
             gift = " ".join(t for y, t in card if y < 410)
             owned = any(re.fullmatch(r"\W*Owned\W*", t) for _, t in card)
             names = [t for y, t in card if TRIAL_NAME_Y[0] <= y < TRIAL_NAME_Y[1]]
             risk = min((rewards.trial_risk(t, risks) for t in names), default=rewards.MAX_RISK) if trials else None
-            cards.append((rewards.gift_kind(gift, run["team"]["keyword"], owned), risk))
+            cards.append((rewards.gift_kind(gift, run["team"]["keyword"], owned, avoid), risk))
         ranked = rewards.rank_gifts(cards, run["team"]["trial_risk_weight"])
         log("gifts: " + ", ".join(k + ("" if r is None else f"/risk {r}") for k, r in cards) + f": order {ranked}")
 
@@ -1779,9 +1783,19 @@ class PickGift(CustomAction):
             until(context, lambda im: gift_count(context, im) != before, timeout=1.5)
 
         rewards.pick_gifts(ranked, lambda: gift_count(context), pick)
+        skipped = any(k == "avoid" for k, _ in cards)
+
+        def remaining(image):
+            return skipped and "remaining" in text(context, image, GIFT_REMAINING)
+
         for _ in range(3):
             tap(context, *GIFT_SELECT, wait=0)
-            if until(context, lambda im: "Refuse" not in text(context, im, REFUSE_GIFT)) is not None:
+            image = until(context, lambda im: remaining(im) or "Refuse" not in text(context, im, REFUSE_GIFT))
+            if image is not None and remaining(image):
+                log("gifts: only avoided gifts left: a random trial for each choice left (#90)")
+                tap(context, *GIFT_REMAINING_CONFIRM, wait=0)
+                image = until(context, lambda im: "Refuse" not in text(context, im, REFUSE_GIFT))
+            if image is not None:
                 return True
         return stuck("Select did not take the gifts")
 
@@ -1856,6 +1870,20 @@ def observed_gifts(team):
         if entry:
             out.append({**g, "id": entry["id"]})
     return out
+
+
+WHITE_GOSSYPIUM = 9020  # its id in data/gift_search.json
+
+
+def avoided_gifts(team):
+    """Gifts the team never takes or buys, and fuses or sells first: White Gossypium unless it allows it (#90).
+
+    Shaped like observed_gifts, for read_cells' icon match.
+    """
+    if team.get("allow_white_gossypium", True):
+        return []
+    g = next(e for e in gift_data() if e["id"] == WHITE_GOSSYPIUM)
+    return [{"name": g["en"], "keyword": g["keyword"], "tier": g["tier"], "id": g["id"]}]
 
 
 def template_hits(context, image, template, threshold):
@@ -2109,17 +2137,22 @@ class Shop(CustomAction):
             return 0
         image = screen(context)
         slots = [s for s in shop.read_slots(ocr(context, image, OFFER_GRID)) if shop.on_sale(s)]
-        cells = {c["i"]: c for c in read_cells(context, image, [offer_cell(s) for s in slots], "offer")}
+        avoided = avoided_gifts(team)
+        cells = {c["i"]: c for c in read_cells(context, image, [offer_cell(s) for s in slots], "offer", avoided)}
+        avoid = [g["name"] for g in avoided]
         offers = []
         for i, slot in enumerate(slots):
-            cell = cells.get(i, {"tier": None, "keyword": None})
+            cell = cells.get(i, {"tier": None, "keyword": None, "gift": None})
+            if cell["gift"] in avoid or any(rewards.names_gift(slot["name"], n) for n in avoid):
+                log(f"shop: {slot['name']!r} {slot['price']}: the team does not hold it (#90)")
+                continue
             slot["short"] = slot["short"] or shop.short_cell(image, *offer_cell(slot))
             if slot["short"] and slot["price"] <= cost:
                 log(f"shop: {slot['name']!r} is tagged Not Enough Cost: its price {slot['price']} is a misread")
                 continue
             kind = cell["keyword"]
             if kind is None and shop.buyable(slot, cost):
-                kind = Shop.dialog_keyword(context, slot, keyword)
+                kind = Shop.dialog_keyword(context, slot, keyword, avoid)
                 if kind is False:
                     return 0  # the shop is gone
             log(f"shop: {slot['name']!r} {slot['price']}: tier {cell['tier']} {kind}")
@@ -2163,13 +2196,13 @@ class Shop(CustomAction):
         return None
 
     @staticmethod
-    def dialog_keyword(context, slot, keyword):
-        """An offer's keyword from its purchase dialog's text: keyword when main, else "other"; None when no
-        dialog opened, False when the shop is gone (to_main). The dialog is cancelled."""
+    def dialog_keyword(context, slot, keyword, avoid=()):
+        """An offer's keyword from its purchase dialog's text: keyword when main, else "other" (an avoided gift too);
+        None when no dialog opened, False when the shop is gone (to_main). The dialog is cancelled."""
         image = Shop.open_offer(context, slot)
         if image is None:
             return None if Shop.to_main(context) else False
-        kind = rewards.gift_kind(text(context, image, PURCHASE_TEXT), keyword, False)
+        kind = rewards.gift_kind(text(context, image, PURCHASE_TEXT), keyword, False, avoid)
         tap(context, *PURCHASE_CANCEL)
         return keyword if kind == "main" else "other"
 
@@ -2194,11 +2227,13 @@ class Shop(CustomAction):
             return False
         # One screenshot decides (#112): each cell's badge and icon, its price under it.
         image = screen(context)
-        cells = read_cells(context, image, SELL_CELLS, "sell", observed_gifts(team))
-        roles = [shop.gift_role(c["keyword"], c["gift"], team["keyword"]) for c in cells]
+        avoid = [g["name"] for g in avoided_gifts(team)]
+        cells = read_cells(context, image, SELL_CELLS, "sell", observed_gifts(team) + avoided_gifts(team))
+        roles = [shop.gift_role(c["keyword"], c["gift"], team["keyword"], avoid) for c in cells]
         prices = shop.cell_prices(ocr(context, image, SELL_GRID), SELL_CELLS)
         log("shop: sell cells " + "; ".join(f"{cell_line(c, r)} {prices.get(c['i'])}" for c, r in zip(cells, roles)))
         gifts = [(c["i"], prices[c["i"]]) for c, r in zip(cells, roles) if r == "material" and c["i"] in prices]
+        avoided = {c["i"] for c in cells if c["gift"] in avoid}  # sold first (#90)
         # A badge or price below the grid's edge: the panel a tap shows decides (spec 03 section 12's rule).
         keep = kept_gifts(team)
         for c in [c for c, r in zip(cells, roles) if r == "unknown" or (r == "material" and c["i"] not in prices)]:
@@ -2208,11 +2243,14 @@ class Shop(CustomAction):
             lines = [t for t, _ in ocr(context, image, SELL_PANEL)]
             panel = " ".join(lines)
             price = number(text(context, image, SELL_PRICE))
-            if any(shop.protected(t, keep) for t in lines):
+            kind = rewards.gift_kind(panel, team["keyword"], False, avoid)
+            if kind != "avoid" and any(shop.protected(t, keep) for t in lines):
                 log(f"shop: sell cell {i} kept: {panel[:40]!r}")
-            elif price and "Select the" not in panel and rewards.gift_kind(panel, team["keyword"], False) != "main":
+            elif price and "Select the" not in panel and kind != "main":
                 gifts.append((i, price))
-        picked = shop.to_sell(gifts, wanted, cost, team["reserve_cost"])
+                if kind == "avoid":
+                    avoided.add(i)
+        picked = shop.to_sell(gifts, wanted, cost, team["reserve_cost"], avoided)
         visit["fuse_scanned"] = visit.get("fuse_scanned") and not picked
         log(f"shop: {wanted} wanted, {cost} Cost, non-main (cell, price) {gifts}: sell {picked}")
         for i in picked or []:
@@ -2289,11 +2327,13 @@ class Shop(CustomAction):
             return False
         # One screenshot decides (#112): a tap puts a gift in the fusion, so only the materials are tapped.
         # ponytail: the 15 cells on show; a scroll would find more when 13+ of them are kept.
-        cells = read_cells(context, image, FUSE_CELLS, "fuse", observed_gifts(team))
-        roles = [shop.gift_role(c["keyword"], c["gift"], keyword) for c in cells]
+        avoid = [g["name"] for g in avoided_gifts(team)]
+        cells = read_cells(context, image, FUSE_CELLS, "fuse", observed_gifts(team) + avoided_gifts(team))
+        roles = [shop.gift_role(c["keyword"], c["gift"], keyword, avoid) for c in cells]
         log("shop: fuse cells " + "; ".join(cell_line(c, r) for c, r in zip(cells, roles)))
         picked = []
-        for c in [c for c, r in zip(cells, roles) if r == "material"][:3]:
+        materials = sorted((c for c, r in zip(cells, roles) if r == "material"), key=lambda c: c["gift"] not in avoid)
+        for c in materials[:3]:  # an avoided gift first (#90)
             tap(context, c["x"], c["y"], wait=0.5)
             tap(context, *FUSE_NEUTRAL)  # closes its tooltip
             picked.append(f"cell {c['i']} ({c['keyword']} {c['tier']})")
@@ -2313,7 +2353,7 @@ class Shop(CustomAction):
                 continue
             last = name
             main = rewards.gift_kind(" ".join(t for t, _ in lines), keyword, False) == "main"
-            if main or shop.protected(name, keep):
+            if not shop.protected(name, avoid) and (main or shop.protected(name, keep)):
                 if not main:
                     log(f"shop: {name!r} kept out of the fusion")
                 tap(context, x, y, wait=1.2)  # out of the fusion again

@@ -54,7 +54,7 @@ test("a new file asks for a team, and new teams make it valid", () => {
 });
 
 test("parseSettings refuses newer and unmigratable versions", () => {
-  expect(() => parseSettings('{"version": 5}')).toThrow("newer");
+  expect(() => parseSettings('{"version": 6}')).toThrow("newer");
   expect(() => parseSettings('{"version": 0}')).toThrow("cannot be migrated");
 });
 
@@ -82,6 +82,15 @@ test("version 3 refreshes all-avoid theme pack pages as before", () => {
   const { data, migrated } = parseSettings(JSON.stringify({ ...old, version: 3 }));
   expect(migrated).toBe(true);
   expect(data.run.theme_pack_refresh).toBe("all");
+  expect(validate(data)).toEqual([]);
+});
+
+test("version 4 teams may hold White Gossypium as before", () => {
+  const old = structuredClone(cases.valid) as Record<string, unknown> & { teams: Record<string, unknown>[] };
+  for (const t of old.teams) delete t.allow_white_gossypium;
+  const { data, migrated } = parseSettings(JSON.stringify({ ...old, version: 4 }));
+  expect(migrated).toBe(true);
+  expect(data.teams.map((t) => t.allow_white_gossypium)).toEqual([true, true]);
   expect(validate(data)).toEqual([]);
 });
 

@@ -17,7 +17,7 @@
     "trial_risk_overrides"
   ],
   "properties": {
-    "version": { "const": 4 },
+    "version": { "const": 5 },
     "language": { "enum": ["zh_tw", "en_us"], "default": "zh_tw" },
     "run": {
       "type": "object",
@@ -124,7 +124,8 @@
           "min_alive",
           "guard_turns",
           "trial_risk_weight",
-          "gift_search"
+          "gift_search",
+          "allow_white_gossypium"
         ],
         "properties": {
           "id": { "$ref": "#/$defs/id" },
@@ -218,6 +219,11 @@
               }
             },
             "default": { "enabled": false, "gifts": [] }
+          },
+          "allow_white_gossypium": {
+            "type": "boolean",
+            "default": true,
+            "description": "off: never take or buy White Gossypium; owned ones are fused or sold first"
           }
         }
       }
