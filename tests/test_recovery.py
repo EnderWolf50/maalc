@@ -186,3 +186,33 @@ def test_png_round_trip():
     size = struct.unpack(">I", data[idat - 4:idat])[0]
     rows = zlib.decompress(data[idat + 4:idat + 4 + size])
     assert rows == b"\0" + bytes([0, 0, 0, 0, 0, 255, 0, 0, 0]) + b"\0" + bytes(9)  # filter byte, then RGB
+
+
+def test_watchdog_a_download_is_no_stuck_while_held():
+    # #86: the title's download dialog was confirmed: a big update can sit on one unchanged screen for minutes.
+    w = Watchdog()
+    w.hold(0, 1800)
+    assert not any(w.see("NavTitle", A, t) for t in range(0, 1800, 10))
+    assert w.see("NavTitle", A, 1801)  # the hold is over: that is stuck again
+    w.hold(2000, 600)
+    w.reset()  # a recovery wipes the hold with the rest
+    assert not w.held(2001)
+
+
+def test_ladder_the_downloading_screens_are_on_the_way_back_not_past_the_stuck_one():
+    ladder = Ladder()
+    assert ladder.stuck("NavTitle", 1, 0) == (1, None)
+    for kind in ("DownloadDialog", "PopupButton"):
+        ladder.progress(kind)  # an acknowledged dialog on the title does not end the episode
+    assert ladder.stuck("NavTitle", 1, 0) == (2, None)
+
+
+def test_keep_unknown_saves_the_screen_and_keeps_only_the_latest(tmp_path):
+    # #85/#87: a screen MirrorHub does not know is the capture the missing popup nodes need.
+    from recovery import UNKNOWN_KEEP, keep_unknown
+    for i in range(UNKNOWN_KEEP + 2):
+        keep_unknown(tmp_path, screen(i), f"2026-10-18T00-00-{i:02}.000Z")
+    saved = sorted(p.name for p in (tmp_path / "logs" / "unknown").iterdir())
+    assert len(saved) == UNKNOWN_KEEP
+    assert saved[0] == "2026-10-18T00-00-02.000Z.png"  # the two oldest went
+    assert (tmp_path / "logs" / "unknown" / saved[-1]).read_bytes().startswith(b"\x89PNG")

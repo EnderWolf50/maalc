@@ -1,7 +1,8 @@
 {
     // Global popups (spec 01, 全域彈窗): first in MirrorHub's next.
-    // Not built yet, no screenshot of them so far: tutorial tip, weekly reset notice,
-    // Infinity Mirror popup, level-up popup.
+    // Not built yet, no screenshot of them so far: tutorial tip, weekly reset notice / expired run, the
+    // "?" effect-choice page (#87), level-up popups other than Pass Level Up (ClaimPopup). PopupButton presses
+    // any lone Close / Confirm / OK meanwhile; Recover saves a screen MirrorHub does not know to logs/unknown/.
     "Connecting": {
         "recognition": "OCR",
         "roi": [1000, 50, 240, 50],
@@ -36,6 +37,60 @@
         "action": "Custom",
         "custom_action": "Halt",
         "custom_action_param": "maintenance notice"
+    },
+    // The title's data download dialog (live 2026-10-16: `Downloading N MB of data`, Close / Confirm; seen after a
+    // game restart, no capture, so both ROIs are wide). Confirm and let the download run: its progress screen is
+    // not known, so the Agent holds the stuck detection for a while (#86). Before GoToMirrorEntry in MirrorHub:
+    // the title reads through the dialog.
+    "DownloadDialog": {
+        "recognition": "And",
+        "all_of": [
+            {
+                "recognition": "OCR",
+                "roi": [345, 410, 580, 100],
+                "expected": "^Confirm$"
+            },
+            {
+                "recognition": "OCR",
+                "roi": [350, 230, 580, 200],
+                "expected": "(?i)download|update|\\d\\s*[KMG]B"
+            }
+        ],
+        "action": "Custom",
+        "custom_action": "ConfirmDownload",
+        "post_delay": 2000
+    },
+    // After clearing floor 5 (or 10) with the Parallel Superposition Mode engaged: `Enter the Parallel Superposition
+    // Mode and proceed to the next floor?` (EXTREME at floor 10), Cancel / Confirm. The bot does not go on into it:
+    // Cancel (spec 01, 無限鏡牢彈窗; AALC closes it too). Seen only as the game's help-sheet picture of the prompt
+    // (tests/screens/ParallelModePrompt.png), so its place on screen is not confirmed: both ROIs are wide and
+    // the click goes to the Cancel text found. It covers the page under it, so it sits before the pages.
+    "ParallelModePrompt": {
+        "recognition": "And",
+        "all_of": [
+            {
+                "recognition": "OCR",
+                "roi": [400, 420, 480, 65],
+                "expected": "Cancel$"
+            },
+            {
+                "recognition": "OCR",
+                "roi": [400, 285, 480, 60],
+                "expected": "(?i)You can enter the .*Mode"
+            }
+        ],
+        "action": "Click",
+        "post_delay": 1500
+    },
+    // A popup with one button in the middle (a server or network error on the title, an acknowledgement over a
+    // page): nothing to decide, press it (#86, #85). Two-button dialogs keep their buttons apart, so a Cancel /
+    // Confirm question is never answered here. The maintenance notice, also a lone Close, halts first.
+    "PopupButton": {
+        "recognition": "OCR",
+        "roi": [540, 430, 200, 70],
+        "expected": "^(Close|Confirm|OK)$",
+        "action": "Click",
+        "post_delay": 1500
     },
     "Loading": {
         "recognition": "OCR",

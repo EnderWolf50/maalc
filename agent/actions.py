@@ -302,8 +302,17 @@ class Recover(CustomAction):
     """
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
+        unknown = STUCK["flag"] is None  # MirrorHub's own timeout: a screen it has no node for
         flag = STUCK["flag"] or (f"{STUCK['kind']}, then nothing recognised", 1, "MirrorHub recognised nothing for 60 s")
         STUCK["flag"] = None
+        if unknown:  # also during a download: its progress screen is one to have a capture of
+            try:
+                recovery.keep_unknown(ROOT, screen(context), settlement.now().replace(":", "-"))
+            except OSError as e:
+                log(f"unknown screen not saved: {e}")
+        if STUCK["watch"].held(time.monotonic()):
+            log(f"{flag[2]}: a download is under way, waiting")
+            return True
         kind, start, reason = flag
         while True:
             level, why = STUCK["ladder"].stuck(kind, start, STUCK["l3"])
@@ -319,6 +328,21 @@ class Recover(CustomAction):
         STUCK["watch"].reset()
         for key in ("turn", "battle_start", "map_misses", "event_tried", "map_plan", "map_entered"):
             RUN.pop(key, None)
+        return True
+
+
+@AgentServer.custom_action("ConfirmDownload")
+class ConfirmDownload(CustomAction):
+    """Confirm the title's download dialog (the matched button), then let the download run without a stuck.
+
+    Its progress screen is not known, so MirrorHub may recognise nothing for a long while (#86).
+    """
+
+    def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
+        x, y, w, h = argv.box
+        context.tasker.controller.post_click(x + w // 2, y + h // 2).wait()
+        STUCK["watch"].hold(time.monotonic(), recovery.DOWNLOAD_HOLD)
+        log(f"download confirmed: nothing counts as stuck for {recovery.DOWNLOAD_HOLD // 60} min")
         return True
 
 
