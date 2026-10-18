@@ -227,13 +227,14 @@ def gift_role(keyword, gift, kept, avoid=()):
     gift: the gift its icon matched (an observed, a kept or an avoided one), or None; kept: the keywords the team
     keeps (kept_keywords: the main one, the ones it names and "Keywordless" unless it lets them go, #77). Kept too:
     the gifts whose icon matched (observed #103, #112, or named in keep_gifts #77); a gift in avoid is material
-    whatever its keyword (#90). Unknown is left to the tooltip.
+    whatever its keyword (#90). Unknown is left to the tooltip: a cut-off or unread badge, and no badge at all while
+    keywordless gifts may go, as a badge scoring under BADGE_MIN also reads as none (a kept keyword's gift then).
     """
     if gift in avoid:
         return "material"
     if gift or keyword in kept:
         return "keep"
-    return "unknown" if keyword is None else "material"
+    return "unknown" if keyword in (None, "Keywordless") else "material"
 
 
 MIN_FUSION = 3  # materials a fusion takes at least: the game takes 2, spec 03 section 13 (#10) groups of 3 and up
@@ -282,12 +283,14 @@ def placed(image, slots):
     return sum(int(image[y - 25:y + 25, x - 25:x + 25].max(axis=2).std() > 15) for x, y in FUSE_SLOTS[slots])
 
 
-def picked(image, x, y):
+def picked(image, x, y, bottom=720):
     """Whether the owned gift whose cell is centred at (x, y) is in the fusion: its frame turns orange (#77).
 
-    The ring 34-40 px out from the centre: 17-23% orange pixels on a picked cell (11% under a tooltip's shade), 0-2%
-    on the others (live 2026-10-16/18). The cell does not move: the grid is not sorted again.
+    The ring 34-40 px out from the centre, above bottom (the grid's lower edge cuts the third row): 17-23% orange
+    pixels on a picked cell (11% under a tooltip's shade), 0-2% on the others (live 2026-10-16/18; rows 1-2 only).
+    The cell does not move: the grid is not sorted again.
     """
+    image = image[:bottom]
     ring = np.concatenate([image[y - 40:y - 34, x - 30:x + 30].reshape(-1, 3), image[y + 34:y + 40, x - 30:x + 30].reshape(-1, 3),
                            image[y - 30:y + 30, x - 40:x - 34].reshape(-1, 3), image[y - 30:y + 30, x + 34:x + 40].reshape(-1, 3)])
     b, g, r = (ring[:, i].astype(int) for i in range(3))

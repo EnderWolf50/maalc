@@ -251,7 +251,9 @@ function KeepPanel({ i }: { i: number }) {
   const set = (patch: Partial<Team>) => update((d) => { Object.assign(d.teams[i], patch); });
   const zh = s.language === "zh_tw";
   const toggle = (g: GiftRef) => set({ keep_gifts: toggleGift(team.keep_gifts, g, Infinity) });
-  const n = team.keep_keywords.length + team.keep_gifts.length;
+  // The main keyword is always kept: one left in keep_keywords after the main keyword changed is not shown or counted.
+  const others = team.keep_keywords.filter((k) => k !== team.keyword);
+  const n = others.length + team.keep_gifts.length;
   return (
     <details className={"panel" + (["keep_keywords", "keep_keywordless", "keep_gifts"].some((k) => bad(`${path}/${k}`)) ? " bad" : "")}>
       <summary>{t("keep.title")}{n ? ` (${n})` : ""}</summary>
@@ -261,8 +263,8 @@ function KeepPanel({ i }: { i: number }) {
           <span>{t("keep.keywords")}</span>
           {KEYWORDS.filter((k) => k !== team.keyword).map((k) => (
             <label key={k} className="check">
-              <input type="checkbox" checked={team.keep_keywords.includes(k)} onChange={(e) => set({
-                keep_keywords: e.target.checked ? [...team.keep_keywords, k] : team.keep_keywords.filter((x) => x !== k),
+              <input type="checkbox" checked={others.includes(k)} onChange={(e) => set({
+                keep_keywords: e.target.checked ? [...others, k] : others.filter((x) => x !== k),
               })} />{k}
             </label>
           ))}

@@ -2558,10 +2558,10 @@ class Shop(CustomAction):
             Shop.to_main(context)
             return False
         image = screen(context)
+        visit["slots"] = slots = shop.fuse_slots(image)  # before a recipe closes the page: the sale needs it too
         if Shop.recipe_shown(context, image, visit):
             return False
         # ponytail: the 15 cells on show; a scroll would find more when 13+ of them are kept.
-        visit["slots"] = slots = shop.fuse_slots(image)
         avoid = [g["name"] for g in avoided_gifts(team)]
         cells = read_cells(context, image, FUSE_CELLS, "fuse", kept_icons(team) + avoided_gifts(team))
         roles = [shop.gift_role(c["keyword"], c["gift"], kept_keywords(team), avoid) for c in cells]
@@ -2632,7 +2632,7 @@ class Shop(CustomAction):
             tap(context, c["x"], c["y"], wait=0.5)
             tap(context, *FUSE_NEUTRAL)  # closes its tooltip, which shades the grid
             image = screen(context)
-            filled, framed = shop.placed(image, slots), shop.picked(image, c["x"], c["y"])
+            filled, framed = shop.placed(image, slots), shop.picked(image, c["x"], c["y"], CELL_PAGES["fuse"][1])
             if filled != n or not framed:
                 log(f"shop: cell {c['i']} tapped: {filled} of {n} materials in, {'framed' if framed else 'not framed'}: no fusion")
                 return False

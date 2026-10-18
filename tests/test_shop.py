@@ -206,9 +206,10 @@ def test_gift_role_from_the_cells_badge_and_icon(keyword, gift, role):
 
 
 def test_the_kept_keywords_decide_the_role():
-    # #77: another keyword the team names is kept; keywordless gifts are material once the team lets them go.
+    # #77: another keyword the team names is kept. Once keywordless gifts may go, a cell with no badge is left to its
+    # tooltip: a badge scoring under BADGE_MIN reads as none, and a main-keyword gift must not go as keywordless.
     assert s.gift_role("Bleed", None, {"Burn", "Bleed"}) == "keep"
-    assert s.gift_role("Keywordless", None, {"Burn"}) == "material"
+    assert s.gift_role("Keywordless", None, {"Burn"}) == "unknown"
     assert s.gift_role("Keywordless", "Spiderweb Entangled in Red", {"Burn"}) == "keep"  # a kept gift's icon still keeps it
 
 
