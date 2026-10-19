@@ -549,6 +549,7 @@ def test_a_fusion_taps_only_the_materials_its_cells_show(context, monkeypatch):
     fuse_slots(context, monkeypatch)
     cells_read(monkeypatch, ("Keywordless", SPIDERWEB["name"]), ("Bleed", None), ("Burn", None), ("Keywordless", None),
                ("Tremor", None), ("Pierce", None), ("Sinking", None), (None, None))
+    monkeypatch.setattr(actions.Shop, "to_main", staticmethod(lambda context: True))  # it looks for a tooltip over Close
     actions.Shop.fuse(context, {"keyword": "Burn", "gift_search": {"gifts": [SPIDERWEB]}}, {})
     taps = [c.args for c in context.tasker.controller.post_click.call_args_list]
     assert [taps.count(c) for c in actions.FUSE_CELLS[:8]] == [0, 1, 0, 2, 1, 1, 0, 0]
@@ -757,6 +758,97 @@ def test_a_sale_does_not_break_a_fusion_by_selling_white_gossypium(context, monk
     taps = sale_taps(context, monkeypatch, {"allow_white_gossypium": False}, [50, 60, 70, 80], ("Bleed", GOSSYPIUM, 1),
                      ("Tremor", None, 1), ("Pierce", None, 1), ("Sinking", None, 1))
     assert taps == []
+
+
+def live_shop(context, reads_now):
+    """A game that reacts to taps: each tap changes the screen, and OCR reads reads_now(taps)[roi]."""
+    taps = []
+
+    def click(x, y):
+        taps.append((x, y))
+        return MagicMock()
+    context.tasker.controller.post_click.side_effect = click
+    context.tasker.controller.post_screencap.return_value.wait.return_value.get.side_effect = \
+        lambda: np.full((720, 1280, 3), len(taps) * 20 % 256, np.uint8)
+
+    def run_recognition(name, image, override=None):
+        roi = tuple((override or {}).get(name, {}).get("roi", ()))
+        results = [SimpleNamespace(text=t, box=b) for t, b in reads_now(taps).get(roi, [])]
+        return SimpleNamespace(all_results=results, hit=True, best_result=None) if results else None
+    context.run_recognition.side_effect = run_recognition
+    return taps
+
+
+def sell_page(confirmed):
+    """The sell page of #174: 51 Cost, cell 0 a Bleed gift for 95; a picked cell previews the Cost as 51146.
+    Sell asks to confirm; confirmed(taps) says whether the sale went through."""
+    def reads_now(taps):
+        sold = confirmed(taps)
+        picked = actions.SELL_CELLS[0] in taps and not sold
+        asked = taps[-1:] == [actions.PAGE_OK]
+        return {tuple(actions.DIALOG_TITLE): [("Sell E.G.O Gift", (500, 90, 200, 40))],
+                tuple(actions.SELL_COST): [("146" if sold else "51146" if picked else "51", (980, 90, 60, 30))],
+                tuple(actions.SELL_GRID): [] if sold else [("95", (680, 295, 26, 20))],
+                tuple(actions.DIALOG_TEXT): [("Sell [Today's Expression] for 95 Cost?", (460, 330, 360, 25))] if asked else []}
+    return reads_now
+
+
+SELLER = {"keyword": "Burn", "reserve_cost": 0, "gift_search": {"gifts": []}}
+
+
+def test_a_sale_confirms_the_sell_dialog(context, monkeypatch):
+    # #174 (live 2026-10-19): Sell asked "Sell [Today's Expression] for 95 Cost?" and the bot cancelled it.
+    taps = live_shop(context, sell_page(lambda taps: actions.DIALOG_CONFIRM in taps))
+    cells_read(monkeypatch, ("Bleed", None))
+    logs = []
+    monkeypatch.setattr(actions, "log", logs.append)
+    assert actions.Shop.sell(context, SELLER, {"wanted": 145, "sold": False})
+    assert taps.index(actions.SELL_CELLS[0]) < taps.index(actions.PAGE_OK) < taps.index(actions.DIALOG_CONFIRM)
+    assert "shop: sold cell 0 for 95: 51 -> 146 Cost" in logs
+
+
+def test_a_cell_picked_to_read_its_panel_is_sold_from_the_cost_before_it(context, monkeypatch):
+    # Its price cut off: the panel decides, and the tap leaves the cell picked, the Cost previewing 51146.
+    page = sell_page(lambda taps: actions.DIALOG_CONFIRM in taps)
+
+    def reads_now(taps):
+        texts = page(taps) | {tuple(actions.SELL_GRID): []}
+        if taps and actions.DIALOG_CONFIRM not in taps:
+            texts |= {tuple(actions.SELL_PANEL): [("Today's Expression", (160, 170, 200, 25))],
+                      tuple(actions.SELL_PRICE): [("95", (505, 170, 40, 25))]}
+        return texts
+    live_shop(context, reads_now)
+    cells_read(monkeypatch, ("Bleed", None))
+    logs = []
+    monkeypatch.setattr(actions, "log", logs.append)
+    assert actions.Shop.sell(context, SELLER, {"wanted": 145, "sold": False})
+    assert "shop: sold cell 0 for 95: 51 -> 146 Cost" in logs
+
+
+def test_the_cost_preview_of_a_picked_cell_is_not_a_sale(context, monkeypatch):
+    # #174: the picked cell's "51 > 146" read as 51146, and the bot took the Cost as changed: sold.
+    live_shop(context, sell_page(lambda taps: False))
+    cells_read(monkeypatch, ("Bleed", None))
+    logs = []
+    monkeypatch.setattr(actions, "log", logs.append)
+    actions.Shop.sell(context, SELLER, {"wanted": 145, "sold": False})
+    assert any("not sold" in line for line in logs)
+    assert not any("sold cell" in line for line in logs)
+
+
+def test_a_keyword_refresh_waits_for_the_new_cost_not_a_fixed_time(context, clock):
+    # Live 2026-10-19: a keyword refresh slept 1.5 + 1 + 2 + 1 s; the screen stops 0.5-0.6 s after OK.
+    def reads_now(taps):
+        cost = "410" if actions.KEYWORD_REFRESH in taps else "500"
+        return {tuple(actions.SHOP_COST): [(cost, (560, 120, 60, 30))],
+                tuple(actions.REFRESH["normal"][1]): [("100", (970, 145, 40, 20))],
+                tuple(actions.REFRESH["keyword"][1]): [("90", (1110, 145, 40, 20))],
+                tuple(actions.KEYWORD_LABELS): [("Burn", (300, 400, 60, 20))]}
+    taps = live_shop(context, reads_now)
+    visit = {"wanted": None, "sold": False, "refreshes": 0}
+    assert actions.Shop.buy(context, {"keyword": "Burn", "reserve_cost": 0, "shop_refresh_limit": 1}, visit)
+    assert visit["refreshes"] == 1 and taps == [actions.REFRESH["keyword"][0], (330, 360), actions.KEYWORD_REFRESH]
+    assert sum(clock) < 1.5
 
 
 GOSSYPIUM = "White Gossypium"
