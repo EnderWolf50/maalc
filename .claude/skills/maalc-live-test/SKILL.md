@@ -7,6 +7,8 @@ A **live test** drives the user's real game account. It owns the emulator alone,
 
 Recording and annotation come from two global skills: `screen-record` and `evidence-annotate`. Read each before its step.
 
+Resolve output paths through `tools/local_dir.py` before starting a process: `.local/` below means the main checkout's folder. New probe scripts and cache go in `.local/scratch/`; `.local/probe/` holds the migrated historical scripts, environments and captures. See `docs/agents/local-dev.md` before migrating or removing old compatibility paths; another task's recording must finish first.
+
 ## Steps
 
 1. **Queue.** Take the emulator with the one non-interactive command: `uv run python tools/live/queue.py run --resource emulator --name <task> -- uv run python tools/live/backup.py hold --label <task> --done .local/scratch/<task>/done`, in the background. `hold` backs up `install/` (an md5 manifest and a copy of `settings.json`), waits until the `done` file exists, then verifies `install/` against the backup. The queue is first-come-first-served and drops dead holders; while another task holds the emulator you wait, so keep your turn open. Steps 2, 5, 6 and 8 are your own actions, taken while the command holds the emulator. Done: its output shows `[queue] start <task>` and `backed up <n> files`.

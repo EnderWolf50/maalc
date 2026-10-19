@@ -10,7 +10,7 @@
 - 標題含有季名的畫面（例如 `Will you enter Mirror of Names and Spiders?`、`Grace of the Star of Names and Spiders`），錨點必須只用不隨季節改變的部分。這一季在 2026-10-15 結束。（#11）
 - 所有輸入都用觸控；`P`／`Enter` 鍵盤在 Android 上不保證有效。（#2、#16）
 - 「待截圖確認」表示這個畫面還沒有實機截圖，辨識方式是依 ticket 的描述暫定，截圖回來後要核對本章。已實機確認的畫面來自 2026-10-13 在 Limbus 1.116.2（MuMu 12，1280×720）上的一局普通鏡牢與一局困難鏡牢。（#7、#8、#19）
-- 「實機截圖」欄列出困難鏡牢那一局的代表截圖，路徑相對於探測目錄 `~/.cache/maalc-probe/`（例如 `captures/176_f2boss_rewards_card.png`），逐張說明見該目錄的 `captures/INDEX.md`。這些截圖目前放在 repo 外，還沒有遮掉 UID 與帳號名稱；實作時依 #13 遮蔽、壓縮後搬進 `tests/`（[07](07-assets-and-testing.md#測試截圖的存放與授權)）。「—」表示這一局沒有截到。（#13）
+- 「實機截圖」欄列出困難鏡牢那一局的代表截圖，路徑相對於探測目錄 主 checkout 的 `.local/probe/`（例如 `captures/176_f2boss_rewards_card.png`），逐張說明見該目錄的 `captures/INDEX.md`。這些截圖位於 gitignored 私有資料夾，尚未遮掉 UID 與帳號名稱；實作時依 #13 遮蔽、壓縮後搬進 `tests/`（[07](07-assets-and-testing.md#測試截圖的存放與授權)）。「—」表示這一局沒有截到。（#13）
 - 截圖中的座標與數值只是實測參考，不是規則；辨識方法的實機經驗見 [07](07-assets-and-testing.md#辨識方法的實機經驗)。
 - 認不出畫面超過 60 秒（載入畫面 90 秒）、同一畫面連續處理 5 次，都交給卡住處理。（#14）
 - 用 OCR 找文字再點的按鈕（`Skip`、`Continue`、`Proceed` 這類），每個畫面最多點 5 次。（#16、#19）
