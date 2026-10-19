@@ -33,12 +33,12 @@ Everything that belongs to one machine lives in `.local/` of the **main checkout
 | `.local/scratch/` | throwaway scripts and output of a task, `install-backup/<label>/` |
 | `.local/archive/` | evidence of every live test and experiment, with `INDEX.md` (one row per folder) |
 | `.local/queue/<resource>/` | the tickets of `tools/live/queue.py` (`bench`, `emulator`) |
-| `.local/unpack/` | unpacked game data (a directory junction to an existing folder is fine) |
+| `.local/unpack/` | unpacked game data |
 | `.local/evidence/` | privacy-mask templates and `masks.json`; they can show the account, so they stay out of git |
 
 Strings that must not reach public text (the game account's e-mail, local folder names) go in the repo-local git config, once per clone: `git config --local --add maalc.privateTerm <term>`. `.claude/hooks/public-text-guard.py` reads them with `git config --get-all maalc.privateTerm`.
 
-`uv run python tools/local_migrate.py --probe <old probe folder> --unpack <unpacked data>` shows how to bring existing data under `.local/` (dry run); `--apply` points junctions at the old folders and writes `.local/evidence/masks.json` from the old templates, `--apply --move` moves the folders. Moving needs the folders idle.
+The data itself lives in `.local/`. `uv run python tools/local_migrate.py --probe <old probe folder> --unpack <unpacked data>` shows the move (dry run); `--apply` copies each folder into `.local/`, checks the copy, leaves a directory junction at the old place pointing into `.local/` (so a task still using the old path keeps working), deletes the original and writes `.local/evidence/masks.json` from the old templates. A folder in use is left as it was. Once nothing uses the old paths, `local_migrate.py --remove-links --apply` deletes the junctions it recorded in `.local/links.json`; the data stays.
 
 ## Game data
 
