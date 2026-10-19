@@ -155,10 +155,11 @@ def test_detached_status_tells_running_from_ended(tmp_path):
     log = tmp_path / "x.log"
     assert lq.detached_status(log) == (False, f"nothing was started with --log {log}")
     lq.pid_file(log).write_text('{"pid": 1')  # detach is still writing it
-    assert lq.detached_status(log)[0] is False
+    assert lq.detached_status(log)[0] is False and not lq.detached_running(log)
     lq.pid_file(log).write_text(json.dumps({"pid": os.getpid(), "start": lq.started(os.getpid()), "cmd": "me"}))
-    assert lq.detached_status(log) == (True, f"running pid {os.getpid()}: me")
+    assert lq.detached_status(log) == (True, f"running pid {os.getpid()}: me") and lq.detached_running(log)
     lq.pid_file(log).write_text(json.dumps({"pid": dead_pid(), "start": None, "cmd": "gone"}))
     log.write_text("first\nlast line\n")
     running, text = lq.detached_status(log)
     assert not running and text.startswith("ended pid ") and text.endswith(": last line")
+    assert not lq.detached_running(log)
