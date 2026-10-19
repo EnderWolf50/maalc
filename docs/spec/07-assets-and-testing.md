@@ -67,10 +67,14 @@
 
 ## 測試截圖的存放與授權
 
-- 測試截圖先放在主 repo 的 `tests/`。格式為 720p PNG，以 oxipng 壓縮，必須遮掉 UID 和帳號名稱。（#13）
+- 測試截圖放在主 repo 的 `tests/`。格式為 720p PNG，以 oxipng 壓縮，必須遮掉三個身分區域：UID 欄、帳號 e-mail、主畫面左下 LV 面板上方的玩家名稱。（#13）
 - 2026-10-13 困難鏡牢的探測截圖（[02-screens.md](02-screens.md) 的「實機截圖」欄，逐張說明在 [captures-2026-10-13.md](captures-2026-10-13.md)）只留在本機，還沒遮蔽；實作時依上一條處理後搬進 `tests/`，作為第一批測試截圖。（#13）
 - 直接傳給 `post_recognition`／`run_recognition` 的圖不會被縮放，所以測試截圖必須已經是 720p。（#4）
-- 總量超過約 50 MB 時，搬到獨立的 testset repo，用 submodule 引用。（#13）
+- 測試截圖一直放主 repo 的 `tests/screens`，探測截圖那批也一樣，不搬去 testset repo。（#13，2026-10-19 使用者確認）
+  - 原本的規則是總量超過約 50 MB 就搬。2026-10-19 量到 `tests/screens` 的工作目錄有 57 MB（`du`），git 歷史裡的截圖 blob 約 62 MB（`git cat-file` 的磁碟大小）。沒有搬，原因有三：
+    - 已提交的截圖留在 git 歷史裡，搬走也不會讓 clone 變小。
+    - CI 每個 shard 都要用到全部截圖（`maatools.config.mts`）。
+    - 放在主 repo，`tests/test_screens_privacy.py` 會在加入截圖的同一個 PR 檢查遮蔽。放到另一個公開 repo 的話，推上去就公開了，要等到更新 submodule 的 PR 才會檢查。
 - README 必須註明：遊戲素材 © Project Moon，不在 MIT 授權範圍內。（#13，[ADR 0001](../adr/0001-mit-and-no-agpl-derived-assets.md)）
 
 ## 測試策略
@@ -89,7 +93,7 @@
 - `maa-tools test` 不跑 Agent；Agent 的部分由 pytest 涵蓋。（#4）
 - 不使用官方 `DbgController`：pip wheel 沒附它的動態庫。（#4）
 - 錄製檔容易隨改版失效。（#4）
-- 錄製的重播檔不放主 repo，等 testset repo 建好再放。（#19）
+- 錄製的重播檔不放主 repo。第一批要進版本控制時，才建獨立的 testset repo，用 submodule 掛在重播檔自己的路徑，不和 `tests/screens` 混在一起。testset repo 的 CI 要對重播檔裡的畫面檢查同樣三個身分區域（`tests/test_screens_privacy.py`）。（#19，2026-10-19 使用者確認）
 - Tasker 端記憶體：`tools/ocr_memory_check.py` 用 `tests/screens` 輪流餵 `MirrorHub` 跑幾分鐘、記下行程記憶體；最後一分鐘的中位數比第二分鐘多 300 MB 以上，或任何時候超過 6 GB，就失敗。要 OCR 模型，CI 不跑，改 pipeline 的 OCR 或升級 MaaFramework 時手動跑。（#149）
 
 ### 只能實機
