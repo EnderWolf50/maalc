@@ -5,7 +5,7 @@
 ## 資料與方法
 
 - 對象：2026-10-17 本地 14:05–19:32 的 3 局連續 bot 全程通關（`install/logs/runs.jsonl` 是 UTC，本地 = +8）。A = 14:05:23–15:50:30，B = 15:50:54–17:50:49，C = 17:51:11–19:32:39。
-- 來源：`install/debug/debug/maafw.bak.2026.10.17-15.58.02.915.log`、`...-17.57.54.998.log`、`maafw.log`（依大小輪替，三個檔接起來剛好覆蓋 14:05–19:32，共約 8 億位元組）。agent 的 stdout（`run6.log`）沒有時間戳，只用來對照 shop 的行為。
+- 來源：`install/debug/debug/maafw.bak.2026.10.17-15.58.02.915.log`、`...-17.57.54.998.log`、`maafw.log`（當時的檔名，之後輪替成 `maafw.bak.2026.10.18-02.22.30.141.log`；依大小輪替，三個檔接起來剛好覆蓋 14:05–19:32，共約 8 億位元組）。agent 的 stdout（`run6.log`）沒有時間戳，只用來對照 shop 的行為。
 - 做法：逐行解析 maafw.log 的毫秒時間戳。
   - 每個 pipeline step = 相鄰兩個 `Node.PipelineNode.Succeeded` 的間隔，歸給比對到的節點（這個事件在 action 與 post_delay 之後才發出，所以間隔含「等它出現 + 動作 + 延遲」）。
   - 自訂動作的耗時取 `CustomAction::run` 的 enter/leave；動作內部拆成 agent 呼叫（`handle_context_run_recognition` = OCR / 模板比對、`handle_controller_wait` = 截圖與點擊完成、`post_click` 等）與呼叫之間的空檔。

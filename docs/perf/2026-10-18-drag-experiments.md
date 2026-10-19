@@ -157,7 +157,7 @@
 
 ## 媒體
 
-片段與圖附在 [#125](https://github.com/EnderWolf50/maalc/pull/125)（防禦）與 [#126](https://github.com/EnderWolf50/maalc/pull/126)（捲動、選隊）的留言；原檔只留在本機。
+部分片段與圖附在 [#125](https://github.com/EnderWolf50/maalc/pull/125)（防禦）與 [#126](https://github.com/EnderWolf50/maalc/pull/126)（捲動、選隊）的留言；下表其餘的檔案只留在本機。
 
 | 實驗 | 片段（`clips/`） | 圖（`stills/`） |
 |---|---|---|
