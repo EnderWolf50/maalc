@@ -108,7 +108,7 @@ def test_a_file_written_during_the_copy_stops_the_move(dirs, monkeypatch):
     real = lm.file_stats
 
     def late_write(root):
-        if root.name.endswith(".migrating") and not (root / "late.png").exists():  # right after the rename aside
+        if root == lm.aside_of(src) and not (root / "late.png").exists():  # right after the rename aside
             (root / "late.png").write_bytes(b"new")
         return real(root)
     monkeypatch.setattr(lm, "file_stats", late_write)
@@ -125,7 +125,7 @@ def test_a_copy_with_different_bytes_stops_the_move(dirs, monkeypatch):
 
     def corrupt(a, b, *args, **k):
         out = real(a, b, *args, **k)  # copytree calls itself for subfolders: corrupt only at the top
-        if not Path(b).name.endswith(".partial"):
+        if Path(b) != lm.partial_of(dst):
             return out
         f = Path(b) / "sub/clip.mp4"
         st = f.stat()
@@ -143,7 +143,7 @@ def test_a_failed_final_rename_puts_the_original_back(dirs, monkeypatch):
     real = type(src).rename
 
     def refuse(self, target):
-        if self.name.endswith(".partial"):
+        if self == lm.partial_of(dst):
             raise PermissionError(5, "denied")
         return real(self, target)
     monkeypatch.setattr(type(src), "rename", refuse)
@@ -200,14 +200,44 @@ def test_an_unchecked_copy_stops_the_tool(dirs, monkeypatch):
     assert (src / "INDEX.md").exists()
 
 
-def test_a_link_left_by_the_old_tool_stops_the_tool(dirs, tmp_path, monkeypatch):
+def test_a_link_left_by_the_old_tool_is_removed_and_the_data_moved_in(dirs, monkeypatch):
     src, dst, local = dirs
     make_tree(src)
     lm.link(src, dst)  # the old tool linked .local/ to the outside folder
     monkeypatch.setattr(lm, "write_masks", lambda *a: None)
-    with pytest.raises(SystemExit, match="older version"):
+    lm.migrate(local, src.parent, None, apply=True)
+    assert not lm.is_link(dst) and (dst / "INDEX.md").exists() and lm.points_to(src, dst)
+
+
+def test_a_link_in_local_to_some_other_folder_stops_the_tool(dirs, tmp_path, monkeypatch):
+    src, dst, local = dirs
+    make_tree(src)
+    make_tree(tmp_path / "elsewhere")
+    lm.link(tmp_path / "elsewhere", dst)
+    monkeypatch.setattr(lm, "write_masks", lambda *a: None)
+    with pytest.raises(SystemExit, match="rmdir"):
         lm.migrate(local, src.parent, None, apply=True)
-    assert (src / "INDEX.md").exists() and not lm.is_link(src)
+    assert (src / "INDEX.md").exists() and (tmp_path / "elsewhere/INDEX.md").exists()
+
+
+def test_a_checked_copy_whose_link_is_missing_is_finished_on_a_rerun(dirs, monkeypatch):
+    src, dst, local = dirs
+    make_tree(dst)
+    make_tree(lm.aside_of(src))  # stopped after the copy took its name, before the link
+    monkeypatch.setattr(lm, "write_masks", lambda *a: None)
+    lm.migrate(local, src.parent, None, apply=True)
+    assert lm.points_to(src, dst) and lm.leftovers(src, dst) == [] and lm.read_links(local) == [str(src)]
+
+
+def test_a_checked_copy_that_differs_from_the_original_stops_the_tool(dirs, monkeypatch):
+    src, dst, local = dirs
+    make_tree(dst)
+    make_tree(lm.aside_of(src))
+    (dst / "INDEX.md").write_text("other")
+    monkeypatch.setattr(lm, "write_masks", lambda *a: None)
+    with pytest.raises(SystemExit, match="differ"):
+        lm.migrate(local, src.parent, None, apply=True)
+    assert lm.aside_of(src).exists() and (dst / "INDEX.md").exists()
 
 
 def test_an_original_set_aside_behind_a_working_link_is_deleted_on_a_rerun(dirs, monkeypatch):

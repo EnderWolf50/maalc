@@ -11,10 +11,11 @@ the original is renamed aside to `<name>.migrating` and checked once more agains
 file written in between, or a bad copy, stops the move), and the copy takes its final name. Either way a
 directory junction (a symlink off Windows) then takes the old place, pointing into `.local/`, so a task still
 using the old path keeps working, and only after that is the original renamed `<name>.deleting` and deleted.
-A step that fails puts things back as they were. An interrupted run leaves one of a few states: a rerun
-finishes the known ones (an original left `.migrating` or `.deleting` behind a working link, a recorded place
-whose link is missing) and stops with a message on the rest (an unchecked `.partial` copy, a `.migrating`
-original with no link, a `.local/` target that is itself a link). `--remove-links` deletes the recorded links,
+A step that fails before the link is in puts things back as it was; after that, and after an interrupt or
+a power loss at any step, a rerun finishes the job. It finishes every state it can prove (an original left
+`.migrating` or `.deleting` behind a working link, a checked copy whose link is missing, a recorded place whose
+link is missing, a link left inside `.local/` by the older version of this tool) and stops with a message on
+the rest (an unchecked `.partial` copy, an original set aside while the old path was recreated). `--remove-links` deletes the recorded links,
 and only while they still point into `.local/`, so the data stays in `.local/`.
 
   --probe   its `archive/` moves to `.local/archive/` (with INDEX.md); its `tools/templates/` (full screens
@@ -133,8 +134,11 @@ def read_links(local: Path) -> list[str]:
 def write_links(local: Path, links: list[str]) -> None:
     f = local / LINKS
     tmp = f.with_name(f.name + ".tmp")
-    tmp.write_text(json.dumps(links, indent=1), encoding="utf-8")
-    os.replace(tmp, f)  # never a half-written file
+    with open(tmp, "w", encoding="utf-8") as w:
+        w.write(json.dumps(links, indent=1))
+        w.flush()
+        os.fsync(w.fileno())  # on disk before the swap, so a power loss leaves the old file or the new one
+    os.replace(tmp, f)
 
 
 def record_link(local: Path, path: Path) -> None:
@@ -165,11 +169,11 @@ def drop_copy(dst: Path) -> None:
     remove_tree(part)
 
 
-def link_in(src: Path, dst: Path, undo) -> None:
-    """Put the link to dst at src; on failure run `undo` and re-raise."""
+def link_in(target: Path, at: Path, undo) -> None:
+    """Put the link to target at `at`; on any failure or interrupt run `undo` and re-raise."""
     try:
-        link(dst, src)
-    except (OSError, subprocess.CalledProcessError):
+        link(target, at)
+    except BaseException:
         undo()
         raise
 
@@ -187,7 +191,7 @@ def move_and_link(src: Path, dst: Path, local: Path) -> None:
     try:
         move(src, dst)
     except BaseException:
-        if not points_to(src, dst):
+        if src.is_dir() and not is_link(src):  # the original is back in place: nothing to heal later
             forget_link(local, src)
         raise
 
@@ -195,7 +199,7 @@ def move_and_link(src: Path, dst: Path, local: Path) -> None:
 def move(src: Path, dst: Path) -> None:
     if same_drive(src, dst):
         src.rename(dst)  # one atomic step; a folder in use fails here and nothing changes
-        link_in(src, dst, undo=lambda: dst.rename(src))
+        link_in(dst, src, undo=lambda: dst.rename(src))
         return
     part = partial_of(dst)
     try:
@@ -225,7 +229,7 @@ def move(src: Path, dst: Path) -> None:
     def undo():
         aside.rename(src)
         drop_copy(dst)
-    link_in(src, dst, undo)
+    link_in(dst, src, undo)
     finish_delete(src, aside)
 
 
@@ -236,11 +240,30 @@ def heal(src: Path, dst: Path, local: Path, apply: bool) -> bool:
     did = False
     say = lambda verb, what: print(f"{verb if apply else 'would ' + verb} {what}")  # noqa: E731
     linked = points_to(src, dst)
-    for left in (aside_of(src), deleting_of(src)):
+    aside, gone = aside_of(src), deleting_of(src)
+    if aside.exists() and not linked and not os.path.lexists(src) and not partial_of(dst).exists() \
+            and dst.is_dir() and not is_link(dst):
+        # stopped after the checked copy took its name, before the link: check once more, then finish
+        if not same_content(aside, dst):
+            raise SystemExit(f"stop: {dst} and the original {aside} differ; nothing changed. Compare them by hand.")
+        say("finish", f"the move of {src}: link to {dst}, then delete {aside}")
+        if apply:
+            link_in(dst, src, undo=lambda: None)
+            record_link(local, src)
+            finish_delete(src, aside)
+        return True
+    if is_link(dst) and points_to(dst, src) and src.is_dir() and not is_link(src):
+        say("remove", f"the link {dst} left by the older version of this tool (the folder it points at stays)")
+        if apply:
+            unlink_dir(dst)
+        did = True
+    for left in (aside, gone):
         if left.exists() and linked and not partial_of(dst).exists():  # the copy was checked before the link
             say("finish deleting", f"{left}: its data is complete in {dst}")
-            if apply:
-                finish_delete(src, left) if left == aside_of(src) else remove_tree(left)
+            if apply and left == aside:
+                finish_delete(src, left)
+            elif apply:
+                remove_tree(left)
             did = True
     if (str(src) in read_links(local) and dst.is_dir() and not is_link(dst) and not os.path.lexists(src)
             and not aside_of(src).exists() and not partial_of(dst).exists()):
@@ -254,12 +277,15 @@ def heal(src: Path, dst: Path, local: Path, apply: bool) -> bool:
 def stop_reason(src: Path, dst: Path) -> str | None:
     """Why an interrupted or unexpected state needs a person, or None."""
     if is_link(dst):
-        return (f"{dst} is a link ({os.path.realpath(dst)}), from an older version of this tool. Remove that link "
-                f"(the folder it points at stays), then rerun to move the data in.")
+        return (f"{dst} is a link to {os.path.realpath(dst)}, not to {src}. Check which folder holds the data; "
+                f"remove the link with `rmdir {dst}` (no /s: that keeps the folder it points at), then rerun.")
     if partial_of(dst).exists():
         return (f"{partial_of(dst)} is an unchecked copy left by an interrupted run; the original is "
                 f"{aside_of(src) if aside_of(src).exists() else src}. Delete the copy, put the original back at "
                 f"{src} if it was set aside, then rerun.")
+    if aside_of(src).exists() and os.path.lexists(src) and not points_to(src, dst):
+        return (f"{aside_of(src)} is the original, set aside by an interrupted run, and {src} was recreated since. "
+                f"Merge the new files from {src} into {aside_of(src)}, rename it back to {src}, then rerun.")
     if aside_of(src).exists() and not points_to(src, dst):
         return f"{aside_of(src)} is the original, set aside by an interrupted run. Rename it back to {src}, then rerun."
     return None
@@ -277,7 +303,7 @@ def migrate(local: Path, probe: Path | None, unpack: Path | None, apply: bool) -
                 if apply:
                     write_masks(src, dst)
             continue
-        if heal(src, dst, local, apply):
+        if heal(src, dst, local, apply) and (not apply or os.path.lexists(dst)):
             continue
         if reason := stop_reason(src, dst):
             raise SystemExit("stop: " + reason)
