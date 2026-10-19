@@ -374,8 +374,21 @@ def migrate_folder(local: Path, src: Path, dst: Path, apply: bool) -> None:
 
 def remove_links(local: Path, apply: bool) -> None:
     links, kept = read_links(local), []
+    external = [Path(s) for s in links if not Path(s).parent.resolve().is_relative_to(local.resolve())]
+    for name, info in file_stats(local).items():
+        if info[0] != "link":
+            continue
+        # Windows readlink may return an NT namespace prefix; compare paths without following the old alias.
+        raw = info[1].removeprefix("\\\\?\\").removeprefix("\\??\\")
+        target = Path(os.path.abspath(local / Path(name).parent / raw))
+        for old in external:
+            if target.is_relative_to(old):
+                raise SystemExit(f"stop: {local / name} depends on {old}; update that link before removing compatibility paths")
     for s in links:
         p = Path(s)
+        if p not in external:
+            print(f"keep   {p}: an internal link after the root migration; retire its external record")
+            continue
         if not points_into(p, local):
             print(f"skip   {p}: not a link into {local} (kept in {LINKS})")
             kept.append(s)

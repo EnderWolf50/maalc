@@ -383,3 +383,29 @@ def test_source_containing_the_destination_is_rejected(tmp_path):
     with pytest.raises(SystemExit, match='overlaps'):
         lm.migrate(local, tmp_path, None, apply=True)
     assert not (local / lm.LINKS).exists()
+
+
+@pytest.mark.parametrize('parent_first', [False, True])
+def test_remove_links_after_interruption_keeps_nested_archive_alias(tmp_path, parent_first):
+    local, probe = tmp_path / '.local', tmp_path / 'old-probe'
+    make_tree(local / 'archive')
+    (local / 'probe').mkdir()
+    lm.link(local / 'archive', local / 'probe/archive')
+    lm.link(local / 'probe', probe)
+    records = [str(probe / 'archive'), str(probe)]
+    lm.write_links(local, records[::-1] if parent_first else records)
+    lm.remove_links(local, apply=True)
+    assert not probe.exists()
+    assert lm.points_to(local / 'probe/archive', local / 'archive')
+    assert lm.read_links(local) == []
+
+
+def test_remove_links_refuses_to_break_an_absolute_internal_link(tmp_path):
+    local, probe = tmp_path / '.local', tmp_path / 'old-probe'
+    make_tree(local / 'probe')
+    lm.link(local / 'probe', probe)
+    lm.link(probe / 'sub', local / 'probe/cache-link')
+    lm.record_link(local, probe)
+    with pytest.raises(SystemExit, match='depends on'):
+        lm.remove_links(local, apply=True)
+    assert lm.is_link(probe) and (local / 'probe/cache-link/clip.mp4').is_file()
