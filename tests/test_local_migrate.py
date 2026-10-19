@@ -164,12 +164,10 @@ def test_a_rerun_finishes_deleting_the_original_once_the_copy_is_final(dirs):
 def test_a_rerun_relinks_and_records_what_an_interrupted_run_left(dirs, monkeypatch):
     src, dst, local = dirs
     monkeypatch.setattr(lm, "write_masks", lambda *a: None)
-    make_tree(dst)  # renamed into .local, then the run stopped before the link
+    lm.record_link(local, src)  # recorded first, renamed into .local, then the run stopped before the link
+    make_tree(dst)
     lm.migrate(local, src.parent, None, apply=True)
     assert lm.points_to(src, dst) and lm.read_links(local) == [str(src)]
-    lm.write_links(local, [])  # a link made but never recorded
-    lm.migrate(local, src.parent, None, apply=True)
-    assert lm.read_links(local) == [str(src)]
 
 
 def test_a_failed_link_puts_the_original_back(dirs, drive, monkeypatch):
@@ -184,12 +182,63 @@ def test_a_failed_link_puts_the_original_back(dirs, drive, monkeypatch):
     assert lm.read_links(local) == []
 
 
-def test_leftovers_of_an_interrupted_run_stop_the_tool(dirs, monkeypatch):
+def test_an_original_set_aside_without_a_link_stops_the_tool(dirs, monkeypatch):
     src, dst, local = dirs
-    make_tree(src.with_name("archive.migrating"))
+    make_tree(lm.aside_of(src))
     monkeypatch.setattr(lm, "write_masks", lambda *a: None)
-    with pytest.raises(SystemExit, match="interrupted run"):
+    with pytest.raises(SystemExit, match="is the original"):
         lm.migrate(local, src.parent, None, apply=True)
+
+
+def test_an_unchecked_copy_stops_the_tool(dirs, monkeypatch):
+    src, dst, local = dirs
+    make_tree(src)
+    make_tree(lm.partial_of(dst))
+    monkeypatch.setattr(lm, "write_masks", lambda *a: None)
+    with pytest.raises(SystemExit, match="unchecked copy"):
+        lm.migrate(local, src.parent, None, apply=True)
+    assert (src / "INDEX.md").exists()
+
+
+def test_a_link_left_by_the_old_tool_stops_the_tool(dirs, tmp_path, monkeypatch):
+    src, dst, local = dirs
+    make_tree(src)
+    lm.link(src, dst)  # the old tool linked .local/ to the outside folder
+    monkeypatch.setattr(lm, "write_masks", lambda *a: None)
+    with pytest.raises(SystemExit, match="older version"):
+        lm.migrate(local, src.parent, None, apply=True)
+    assert (src / "INDEX.md").exists() and not lm.is_link(src)
+
+
+def test_an_original_set_aside_behind_a_working_link_is_deleted_on_a_rerun(dirs, monkeypatch):
+    src, dst, local = dirs
+    make_tree(dst)
+    lm.link(dst, src)
+    lm.record_link(local, src)
+    make_tree(lm.aside_of(src))  # stopped between the link and the rename to .deleting
+    monkeypatch.setattr(lm, "write_masks", lambda *a: None)
+    lm.migrate(local, src.parent, None, apply=True)
+    assert lm.leftovers(src, dst) == [] and (dst / "INDEX.md").exists() and lm.points_to(src, dst)
+
+
+def test_a_mistyped_path_is_never_linked(dirs, tmp_path, monkeypatch):
+    src, dst, local = dirs
+    make_tree(dst)  # .local/archive already holds data
+    monkeypatch.setattr(lm, "write_masks", lambda *a: None)
+    typo = tmp_path / "prbe"
+    lm.migrate(local, typo, None, apply=True)
+    assert not (typo / "archive").exists() and lm.read_links(local) == []
+
+
+def test_a_relative_path_is_recorded_absolute(tmp_path, monkeypatch):
+    repo = tmp_path / "repo"
+    (repo / ".local").mkdir(parents=True)
+    make_tree(tmp_path / "work/probe/archive")
+    monkeypatch.setattr(lm, "main_checkout", lambda: repo)
+    monkeypatch.setattr(lm, "write_masks", lambda *a: None)
+    monkeypatch.chdir(tmp_path / "work")
+    lm.main(["--probe", "probe", "--apply"])
+    assert lm.read_links(repo / ".local") == [str(tmp_path / "work/probe/archive")]
 
 
 def test_migrate_records_links_and_remove_links_drops_only_those(tmp_path, monkeypatch):
