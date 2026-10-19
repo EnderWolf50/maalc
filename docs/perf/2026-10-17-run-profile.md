@@ -14,7 +14,7 @@
   - B 含一次 L3 重開遊戲（17:12，`stuck: battle over 20 min`，約 2.5 分鐘恢復加約 1 分鐘 Connecting／Loading），所以 B 不算乾淨。
   - C 的第 5 次商店（447 秒，8 次開融合頁）是離群值。
   - 以下「可省」都是估計，需要實機驗證；標「未驗證」的是推論。
-- 分析腳本留在 主 checkout 的 `.local/probe/prof/`（`parse2.py`、`an4.py` 等），位於 gitignored 私有資料夾。
+- 重跑：`uv run python tools/maafw_timeline.py <上面三個 log> --range "2026-10-17 14:05:23.485" "2026-10-17 15:50:30.465" --range ...`（每局一個 `--range`）印出每個節點的 step、動作與固定等待；商店內依點擊位置的細分當時是一次性腳本，沒有收進工具。
 
 ## 1. 各階段時間（每局，分鐘）
 

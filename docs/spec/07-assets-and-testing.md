@@ -68,7 +68,7 @@
 ## 測試截圖的存放與授權
 
 - 測試截圖先放在主 repo 的 `tests/`。格式為 720p PNG，以 oxipng 壓縮，必須遮掉 UID 和帳號名稱。（#13）
-- 2026-10-13 困難鏡牢的探測截圖（`.local/probe/captures/`，[02-screens.md](02-screens.md) 的「實機截圖」欄）保存在 gitignored 私有資料夾，還沒遮蔽；實作時依上一條處理後搬進 `tests/`，作為第一批測試截圖。（#13）
+- 2026-10-13 困難鏡牢的探測截圖（`.local/probe/captures/`，[02-screens.md](02-screens.md) 的「實機截圖」欄，逐張說明在 [captures-2026-10-13.md](captures-2026-10-13.md)）保存在 gitignored 私有資料夾，還沒遮蔽；實作時依上一條處理後搬進 `tests/`，作為第一批測試截圖。（#13）
 - 直接傳給 `post_recognition`／`run_recognition` 的圖不會被縮放，所以測試截圖必須已經是 720p。（#4）
 - 總量超過約 50 MB 時，搬到獨立的 testset repo，用 submodule 引用。（#13）
 - README 必須註明：遊戲素材 © Project Moon，不在 MIT 授權範圍內。（#13，[ADR 0001](../adr/0001-mit-and-no-agpl-derived-assets.md)）
