@@ -1511,7 +1511,7 @@ def press_start(context, disc):
 # touched nothing (docs/perf/2026-10-18-guard-chain-145.md); a lift there is a tap on whatever screen follows.
 HOLD_SPOT = (1, 1)
 HOLD_EVERY = 0.3  # s between looks, MirrorHub's rate_limit
-HOLD_LIMIT = 30  # s at most per hold: then MirrorHub (its watchdog, recovery) looks; BattlePause holds again
+HOLD_LIMIT = 6  # s at most per hold (a turn is ~6 s): then MirrorHub (its watchdog, recovery) looks; BattlePause holds again
 # Screens that can follow a turn, besides the next turn: the finger lifts before their node acts.
 BATTLE_LEFT = ("Victory", "WipeDialog", "Event", "RetryPopup", "Connecting", "PopupButton", "ClaimPopup", "Loading")
 
