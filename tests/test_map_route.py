@@ -1,10 +1,17 @@
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import MagicMock
 
 import numpy as np
 import pytest
 import yaml
 
+import actions
 import map_route as mr
+import test_actions
+from test_actions import map_world
+
+clock, context = test_actions.clock, test_actions.context  # fixtures of the fake Maa context
 
 WEIGHTS = yaml.safe_load((Path(__file__).resolve().parent.parent / "assets/resource/base/data/map_weights.yaml").read_text(encoding="utf-8"))
 NORMAL, HARD = WEIGHTS["normal"], WEIGHTS["hard"]
@@ -127,3 +134,71 @@ def test_the_lit_links_from_the_bus_read_at_the_far_left():
     bus, slot = (50 + 22, 320 + 37), (50 + 279, 320 + 37)
     lit = {row: mr.line_contrast(v, *bus, slot[0], slot[1] + dy) for row, dy in mr.ROW_DY.items()}
     assert lit["up"] >= 60 and lit["down"] >= 60 and lit["mid"] < 15
+
+
+# RouteMap on a fresh floor's map, driven offline with test_actions.py's fake Maa context.
+AB_WEIGHTS = {"event": 1, "battle": 2, "abno": 5, "unknown": 9}
+
+
+def title_reads(context, shown, until=0.0, then=None):
+    """The map's floor title reads shown, then from the fake clock's until on; everything else as the fake has it."""
+    inner = context.run_recognition.side_effect
+
+    def run_recognition(name, image, override=None):
+        if name == "ReadText" and override["ReadText"]["roi"] == actions.MAP_TITLE:
+            text = then if then and actions.time.monotonic() >= until else shown
+            return SimpleNamespace(all_results=[SimpleNamespace(text=text, box=(40, 90, 220, 25))])
+        return inner(name, image, override)
+    context.run_recognition.side_effect = run_recognition
+
+
+def test_the_last_floors_map_leaving_after_a_theme_pack_is_not_read(context, monkeypatch):
+    # Live 2026-10-19 (A F2-F5, B F2-F5): after the floor 3 pull the floor 2 map stayed ~3 s, its bus driving off to
+    # the exit; RouteMap dragged it, then the new map, and read floor 3 from the bus at rest.
+    monkeypatch.setattr(actions, "map_weights", lambda context: AB_WEIGHTS)
+    actions.RUN["floor"] = 3
+    map_world(context, {(1, "mid"): {"cost"}}, [], bus_x=446)
+    ctl, gone = context.tasker.controller, actions.time.monotonic() + 3
+    title_reads(context, "Exploring Floor 2", until=gone, then="Exploring Floor 3")
+    downs = []
+    touch_down = ctl.post_touch_down.side_effect
+    ctl.post_touch_down.side_effect = lambda x, y: downs.append(actions.time.monotonic()) or touch_down(x, y)
+    while not ctl.post_click.called and actions.time.monotonic() < gone + 30:  # MirrorHub calls it again
+        actions.RouteMap().run(context, None)
+    assert downs and min(downs) >= gone  # no drag on the last floor's map
+    assert actions.RUN["floor"] == 3
+
+
+def test_a_floor_title_that_never_changes_is_believed(context, monkeypatch):
+    # A misread theme pack floor must not hold the map forever.
+    monkeypatch.setattr(actions, "map_weights", lambda context: AB_WEIGHTS)
+    actions.RUN["floor"] = 3
+    map_world(context, {(1, "mid"): {"cost"}}, [], bus_x=446)
+    title_reads(context, "Exploring Floor 2")
+    actions.RouteMap().run(context, None)
+    assert actions.RUN["floor"] == 2
+    context.tasker.controller.post_click.assert_called()
+
+
+def test_a_fresh_floors_map_that_does_not_take_drags_yet_is_dragged_until_the_bus_moves(context, monkeypatch):
+    # Live 2026-10-19: a floor's new map ignored drags for its first seconds; after four looks find_bus gave up and
+    # the floor was read and tapped with the bus at rest, its top row under the resource bar.
+    monkeypatch.setattr(actions, "map_weights", lambda context: AB_WEIGHTS)
+    actions.RUN["floor"] = 3
+    nodes = {(1, "up"): {"event"}, (1, "down"): {"cost"}}
+    offsets = map_world(context, nodes, [], bus_x=446)
+    title_reads(context, "Exploring Floor 3")
+    ctl = context.tasker.controller
+    move = ctl.post_touch_move.side_effect
+    ctl.post_touch_move.side_effect = lambda x, y: MagicMock() if ctl.post_touch_down.call_count <= 4 else move(x, y)
+    actions.RouteMap().run(context, None)
+    assert abs(446 - offsets[-1] - actions.BUS_HOME[0]) <= 30  # the bus panned home in the end
+    first = ctl.post_click.call_args_list[0].args
+    assert first == (446 - offsets[-1] + actions.SLOT[0], actions.BUS_HOME[1] + actions.SLOT[1] - 213)  # the top row's event
+
+
+@pytest.mark.parametrize(("shown", "floor"), [("Exploring Floor 3", 3), ("Exploring Floar 3", 3), ("Exploring", None), ("", None)])
+def test_the_map_title_gives_the_floor(context, shown, floor):
+    context.run_recognition.side_effect = lambda name, image, override=None: SimpleNamespace(
+        all_results=[SimpleNamespace(text=shown, box=(40, 90, 220, 25))] if shown else [])
+    assert actions.map_floor(context, np.zeros((720, 1280, 3), np.uint8)) == floor

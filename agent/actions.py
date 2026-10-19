@@ -967,6 +967,9 @@ MAP_RETRIES = 3  # RouteMap calls per floor that may enter nothing before the ma
 MAP_LOOKS = 4  # looks, 1 s apart, for a linked slot before the fallback taps
 PANEL_REWARDS = [700, 495, 110, 30]  # the "Clear Rewards" label
 PANEL_COST = [730, 545, 40, 35]  # the number by its Cost coin
+MAP_TITLE = [40, 85, 240, 35]  # "Exploring Floor 3", top left
+MAP_LEAVING = 6  # s RouteMap waits for the last floor's map to give way to this floor's
+MAP_PAN_LIMIT = 8  # s find_bus drags a map again that took none of its drags
 
 
 def seen(context, image, node, roi=None):
@@ -1067,6 +1070,16 @@ def map_weights(context):
     return map_data()["hard" if hard else "normal"]
 
 
+def map_floor(context, image):
+    """The floor number the map's title shows; None when it is covered or unreadable.
+
+    Swept 2026-10-19 over every 0.25 s from the 10 theme pack pulls of two runs: the last floor's number, a gap,
+    the new one; never a third number. tests/screens/MapBoss.png reads "Floar 3".
+    """
+    m = re.search(r"Fl\w+\s*(\d)", text(context, image, MAP_TITLE))
+    return int(m[1]) if m else None
+
+
 def enter_node(context):
     """On the node selection panel: log its Clear Rewards, press Enter until the panel is gone."""
     # Only logged: events show no Clear Rewards, a shop shows the next boss's (spec 03 section 7).
@@ -1109,8 +1122,11 @@ class RouteMap(CustomAction):
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         if RUN.get("forfeit"):
             return forfeit(context)
-        if still(context) is None:
+        image = still(context)
+        if image is None:
             return True  # still fading in or out: let MirrorHub look again
+        if not self.this_floor(context, image):
+            return True
         if self.follow(context):
             return enter_node(context)
         RUN.pop("map_plan", None)
@@ -1171,21 +1187,53 @@ class RouteMap(CustomAction):
         return True
 
     @staticmethod
+    def this_floor(context, image):
+        """Whether the map is this floor's, not the last floor's still up after a theme pack pull.
+
+        Live 2026-10-19 (8 of 8 floors after the first): the last floor's map stayed ~3 s after the pull, its bus
+        driving off to the exit; RouteMap dragged it, then read the new floor with its bus at rest.
+        A title that keeps another number for MAP_LEAVING s is believed: the floor was misread.
+        """
+        floor, shown = RUN.get("floor"), map_floor(context, image)
+        if floor is None or shown in (None, floor):
+            return True
+        log(f"map: floor {shown}'s map is up, floor {floor} next; waiting for it")
+        if until(context, lambda im: map_floor(context, im) in (None, floor), timeout=MAP_LEAVING) is not None:
+            return False  # MirrorHub looks again: the new map may still be fading in
+        log(f"map: the map stays floor {shown}; going by it")
+        RUN["floor"] = shown
+        return True
+
+    @staticmethod
     def find_bus(context):
-        """A screenshot and the bus's top-left in it, after panning the bus to BUS_HOME."""
-        for attempt in range(4):
+        """A screenshot and the bus's top-left in it, after panning the bus to BUS_HOME.
+
+        Up to three pans that move the bus. A pan that leaves it where it was is made again, for up to
+        MAP_PAN_LIMIT s: live 2026-10-19, a floor's new map took no drag for its first seconds.
+        """
+        end, pans, last = time.monotonic() + MAP_PAN_LIMIT, 0, None
+        while True:
             image = screen(context)
             bus = seen(context, image, "MapBus")
             if not bus:
                 return image, None
             bx, by = bus.box[0], bus.box[1]
             dx, dy = BUS_HOME[0] - bx, BUS_HOME[1] - by
-            if abs(dx) <= 30 and abs(dy) <= 25 or attempt == 3:
+            if abs(dx) <= 30 and abs(dy) <= 25:
                 return image, (bx, by)
+            held = last is not None and abs(bx - last[0]) <= 3 and abs(by - last[1]) <= 3
+            if held and time.monotonic() > end:
+                log(f"map: the bus stayed at {bx}, {by} through {MAP_PAN_LIMIT} s of drags")
+                return image, (bx, by)
+            if not held:
+                if pans == 3:
+                    return image, (bx, by)
+                pans += 1
             # Look again after each pan. Start on map background: between the first and second columns,
             # between the middle and bottom rows.
             scroll(context, min(bx + SLOT[0] + map_route.COLUMN_DX // 2, 1100), by + SLOT[1] + 106, dx, dy)
             time.sleep(0.5)
+            last = (bx, by)
 
     @staticmethod
     def search_bus(context):
