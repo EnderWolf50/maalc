@@ -32,8 +32,8 @@ PYTHON = ("https://www.python.org/ftp/python/3.12.10/python-3.12.10-embed-amd64.
 # 1 px slivers at roi edges (GBs of memory, MaaXYZ/MaaFramework#1568, #157). Windows only; the rest of maafw/
 # stays the wheel's. Drop both once a maafw release has the fix (MaaXYZ/MaaFramework#1573).
 MAAFW_FIX_VERSION = "5.14.3"
-MAAFW_FIX = ("https://github.com/EnderWolf50/MaaFramework/releases/download/v5.14.3-maalc.1/MaaFramework-v5.14.3-maalc.1-win-x64.zip",
-             "1be145b32c9e5338ce6802621244617c2cebdd8485f3140067ef5e3c57c97998")
+MAAFW_FIX = ("https://github.com/EnderWolf50/MaaFramework/releases/download/v5.14.3-maalc.2/MaaFramework-v5.14.3-maalc.2-win-x64.zip",
+             "84f8d9451ce9dbf36af2cd9732a912a12ac3cefc111af519bfac02c4be2de1ab")
 MXU = ("https://github.com/MistEO/MXU/releases/download/v2.7.1/MXU-win-x86_64-v2.7.1.zip",
        "825a62af7a344a7a47adca09d1414128e6f53a222a11cdf456f08d2e83d31724")
 
