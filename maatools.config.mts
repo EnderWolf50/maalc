@@ -16,6 +16,8 @@ const screens: [image: string, hits: string[]][] = [
   // is Confirmed; a one-button error box is closed by its one button. Both sit on the title, which reads through.
   ['TitleDownload.png', ['DownloadDialog', 'GoToMirrorEntry', 'NavTitle']],
   ['TitleErrorConfirm.png', ['PopupButton', 'GoToMirrorEntry', 'NavTitle']],
+  // live: Formation's parchment popup "You haven't Deployed any Sinners." (To Battle! with no sinners); PopupButton confirms it
+  ['FormationNoSinners.png', ['PopupButton', 'Formation']],  // Formation reads through it
   // Synthetic (#84), no live capture yet: the one-button notice window (MaintenanceNotice's, live) relabelled
   // as a server error with a countdown Retry or a Try Again button. They put RetryPopup on every other screen.
   ['RetryCountdown.png', ['RetryPopup', 'GoToMirrorEntry', 'NavTitle']],
@@ -44,8 +46,8 @@ const screens: [image: string, hits: string[]][] = [
   ['StartingGift.png', ['StartingGift']],
   ['StartingGiftPicked.png', ['StartingGift']],
   ['GiftGet.png', ['GiftGet']],
-  // live 2026-10-18 (a frame of a recording): the map's small E.G.O Gift GET!, below GiftGet's roi; PopupButton confirms it
-  ['GiftGetMap.png', ['PopupButton', 'MirrorMap', 'MapLinkUp']],
+  // live 2026-10-18 (a frame of a recording): E.G.O Gift GET! closing over the map, its button shrinking; the map reads through
+  ['GiftGetMap.png', ['MirrorMap', 'MapLinkUp']],
   ['StartingGiftSearchOff.png', ['StartingGift']],  // Activate Gift Search switched off (1.117.0, blue season)
   ['GiftSearch.png', ['GiftSearch', 'GiftChoice']],  // same Refuse Gift button; GiftSearch comes first in the hub
   // 3 gifts picked, Select 3/3: its Selected E.G.O Gift header is smaller and white, not the starting gift page's

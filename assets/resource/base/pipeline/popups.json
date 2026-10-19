@@ -14,8 +14,9 @@
     // RetryPopup, DownloadDialog and PopupButton read their button text only once the left end of a popup button is
     // in their roi (#157): Screen/DialogButton.png, the dark gold-edged one of MaintenanceNotice.png and
     // RewardsAcquired.png (the synthetic Retry / Download / error captures reuse it), and for PopupButton also
-    // Screen/DialogButtonThin.png, the thin-edged one of the map's small E.G.O Gift GET! (GiftGetMap.png). The texts
-    // stay OCR: Retry (5), OK and the download text have no live capture.
+    // Screen/DialogButtonParchment.png, the light parchment one of "You haven't Deployed any Sinners."
+    // (FormationNoSinners.png), which DialogButton.png scores 0.38 on. The texts stay OCR: Retry (5), OK and the
+    // download text have no live capture.
     // Unverified layout: a "Retry" button, also with a countdown ("Retry (5)"), or "Try Again", anywhere
     // mid-screen (#84). Not the DEFEAT dialog's Retry Stage.
     "RetryPopup": {
@@ -132,19 +133,30 @@
         "recognition": "And",
         "all_of": [
             {
-                "recognition": "TemplateMatch",
-                "sub_name": "PopupButtonFrame",
-                "roi": [500, 415, 220, 100],
-                "template": [
-                    "Screen/DialogButton.png",
-                    "Screen/DialogButtonThin.png"
-                ],
-                "threshold": 0.8
+                "recognition": "Or",
+                "any_of": [
+                    {
+                        "recognition": "TemplateMatch",
+                        "sub_name": "PopupButtonFrame",
+                        "roi": [500, 415, 220, 100],
+                        "template": "Screen/DialogButton.png",
+                        "threshold": 0.8
+                    },
+                    // Parchment: 1.00 on the 18 captures of it, at most 0.65 on 16,600 others (robustness corpus);
+                    // the roi hugs the button's left end, a 120x80 one reached 0.80 on ResumeDialog's buttons.
+                    {
+                        "recognition": "TemplateMatch",
+                        "sub_name": "PopupButtonParchment",
+                        "roi": [470, 456, 68, 84],
+                        "template": "Screen/DialogButtonParchment.png",
+                        "threshold": 0.9
+                    }
+                ]
             },
             {
                 "recognition": "OCR",
                 "sub_name": "PopupButtonText",
-                "roi": [540, 430, 200, 70],
+                "roi": [540, 430, 200, 90],
                 "expected": "^(Close|Confirm|OK)$"
             }
         ],

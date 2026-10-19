@@ -69,15 +69,21 @@ def test_batch_plan_follows_maaframework():
     assert batch_plan(nodes, ["NoBatchOCR", "RetryPopup", "PopupButton"]) == ["NoBatchOCRModel"]
 
 
+def is_gate(nodes, spec):
+    """A TemplateMatch, or an Or of gates only."""
+    kind, params = recognition(nodes[spec] if isinstance(spec, str) else spec)
+    return kind == "TemplateMatch" or kind == "Or" and all(is_gate(nodes, s) for s in params["any_of"])
+
+
 def ungated_ocr(nodes, name, spec=None):
     """OCR of a node that can run with no TemplateMatch hit before it: a bare OCR, or one in an Or, or in an And
-    whose first sub-recognition is no TemplateMatch."""
+    whose first sub-recognition is no gate (is_gate)."""
     kind, params = recognition(spec if spec is not None else nodes[name])
     subs = [(s, None) if isinstance(s, str) else (s.get("sub_name", recognition(s)[0]), s)
             for s in params.get("all_of", []) + params.get("any_of", [])]
     if kind == "OCR":
         return [name]
-    if kind == "And" and subs and recognition(subs[0][1] if subs[0][1] is not None else nodes[subs[0][0]])[0] == "TemplateMatch":
+    if kind == "And" and subs and is_gate(nodes, params["all_of"][0]):
         return []
     return [o for s, sp in subs for o in ungated_ocr(nodes, s, sp)]
 
