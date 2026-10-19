@@ -79,11 +79,37 @@ def test_holes_are_jumps_in_the_pts():
     assert [(round(a, 1), round(b, 1)) for a, b in va.holes(vt)] == [(9.9, 15.0)]
 
 
-def test_a_changed_frame_between_still_ones_does_not_end_a_freeze():
+def test_a_refresh_between_still_frames_does_not_end_a_freeze():
     vt = np.arange(0, 30, 0.1)
     still = np.ones(len(vt), bool)
-    still[[0, 80, 160]] = False  # the recorder refreshed its frame every 8 s
-    assert [(round(a, 1), round(b, 1)) for a, b in va.freezes(vt, still)] == [(0.1, 29.9)]
+    for k in (0, 80, 160):
+        still[k:k + 5] = False  # the recorder refreshed its frame every 8 s, five changed frames at a time
+    assert [(round(a, 1), round(b, 1)) for a, b in va.freezes(vt, still)] == [(0.5, 29.9)]
+
+
+def test_chunks_before_the_first_offset_are_fitted_around_it():
+    vt, vs, _ = video()
+    bot = bot_samples()
+    bt, bs = bot["Victory"]
+    early = bt < STARTED + 100  # the bot logged no scores in the first 100 s: nothing to anchor on there
+    segs = va.fit(vt, vs, {"Victory": (bt[~early], bs[~early])}, chunk=50, max_lost=600)
+    assert segs[0].offset is not None and segs[0].corr == -1.0  # nothing to fit: the anchor's offset
+    vs2 = {"Victory": vs["Victory"].copy()}
+    vs2["Victory"][(vt - STARTED < 50)] = 1 - vs2["Victory"][(vt - STARTED < 50)]  # a screen that fits nothing
+    segs = va.fit(vt, vs2, bot, chunk=50, max_lost=600)
+    assert segs[0].offset is None and segs[0].corr < 0.8 and segs[1].offset is not None
+
+
+def test_parse_log_sorts_the_bot_samples():
+    lines = [LOG[1].replace("00.200", "00.900"), LOG[1]]
+    _, _, bot = va.parse_log(lines, ["Victory"], "MirrorHub")
+    assert list(np.diff(bot["Victory"][0]) > 0) == [True]
+
+
+def test_intervals_merge_frames_by_the_gap_given():
+    lt = np.arange(0, 3, 0.5)  # 2 frames a second
+    assert len(va.intervals(lt, np.full(6, 0.9), 0.6, hub=[], hits=[])) == 6
+    assert len(va.intervals(lt, np.full(6, 0.9), 0.6, hub=[], hits=[], gap=0.75)) == 1
 
 
 def test_a_still_screen_the_bot_also_saw_still_is_not_a_freeze():
@@ -91,6 +117,7 @@ def test_a_still_screen_the_bot_also_saw_still_is_not_a_freeze():
     still = (vt > 10) & (vt < 25) | (vt > 30) & (vt < 50)
     bt = np.arange(0, 60, 0.5)
     bs = np.where((bt > 10) & (bt < 25), 0.9, np.where(bt > 30, np.sin(bt), 0.1))  # stuck on Loading, then changing
+    bs[(bt > 20) & (bt < 25)] = np.linspace(0.9, 0.1, 9)  # the Loading fades out at the end of the still stretch
     assert [(round(a), round(b)) for a, b in va.freezes(vt, still, {"Loading": (bt, bs)})] == [(30, 50)]
 
 

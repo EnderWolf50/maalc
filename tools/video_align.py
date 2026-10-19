@@ -1,14 +1,17 @@
 """Align a screen recording with maafw.log: how long each screen was up, and how soon the hub recognized it.
 
     uv run --group probe python tools/video_align.py VIDEO --started 2026-10-19T19:43:52.123 \\
-        --log maafw.bak.*.log maafw.log --node Victory image/Screen/Victory.png 415,275,450,150 0.6 \\
-        [--node Loading image/Screen/Loading.png 1055,620,200,50 0.7] [--hub MirrorHub] \\
+        --log install/debug/maafw.bak.2026.10.19-21.18.12.223.log install/debug/maafw.log \\
+        --node Victory victory.png 415,275,450,150 0.6 [--node Loading loading.png 1055,620,200,50 0.7] \\
+        [--hub MirrorHub] \\
         [--from "2026-10-19 19:44"] [--to "2026-10-19 21:13"] [--fps 10] [--chunk 60] [--drift 2] \\
         [--max-lost 7200] [--min-corr 0.8] -o screens.csv
 
-Each `--node NAME TEMPLATE X,Y,W,H THRESHOLD` is a template the bot matched in that run (TEMPLATE relative to
-`assets/resource/base/`, or a path): the bot's log has a `TemplateMatcher::analyze] NAME` score for it on every
-pass. The tool scores the same template and roi on every video frame (scaled to 1280x720).
+Each `--node NAME TEMPLATE X,Y,W,H THRESHOLD` is a TemplateMatch node the bot ran in that run, with the template,
+roi and threshold it had then (TEMPLATE relative to `assets/resource/base/`, or a path): the bot's log has a
+`TemplateMatcher::analyze] NAME` score for it on every pass. An OCR node logs no such score and cannot be used.
+The tool scores the same template and roi on the video frames (scaled to 1280x720). List every log file, oldest
+first (rotated `maafw.bak.*` files, then `maafw.log`); pwsh does not expand a `*` for you.
 
 **Clock.** `--started` is the wall time of the first frame (screen-record's `started`), so a frame's time is
 started + pts + offset, and the offset drifts: on 2026-10-19 it went from +0.8 s to +1.3 s over an hour. The
@@ -41,18 +44,13 @@ from typing import NamedTuple
 
 import numpy as np
 
+from maafw_timeline import TS as STAMP, stamp
+
 RESOURCE = Path(__file__).resolve().parents[1] / "assets/resource/base"
 GAP = 0.25  # s: frames up closer than this make one interval
 MIN_SAMPLES = 10  # bot samples an offset must see in a chunk
 HOLE = 1.0  # s: a jump in the pts longer than this is lost frames
 FREEZE = 10.0  # s: an unchanged frame this long is a freeze
-STAMP = re.compile(r"^\[(\d{4}-\d\d-\d\d \d\d:\d\d:\d\d\.\d+)\]")
-
-
-def stamp(text: str) -> float:
-    return dt.datetime.fromisoformat(text).timestamp()
-
-
 def parse_log(lines, names, hub: str):
     """(hub pass starts, {name: hit times}, {name: (times, scores)}) of the bot's log, in epoch seconds."""
     starts, hits, bot = [], {n: [] for n in names}, {n: ([], []) for n in names}
@@ -74,7 +72,8 @@ def parse_log(lines, names, hub: str):
                 if s := r.search(line):
                     bot[n][0].append(t)
                     bot[n][1].append(float(s[1]))
-    return starts, hits, {n: (np.array(t), np.array(s)) for n, (t, s) in bot.items()}
+    bot = {n: (np.array(t), np.array(s)) for n, (t, s) in bot.items()}
+    return starts, hits, {n: (t[o], s[o]) for n, (t, s) in bot.items() for o in [np.argsort(t, kind="stable")]}
 
 
 def video_scores(video: Path, nodes: dict, started: float, fps: float = 10.0):
@@ -193,8 +192,9 @@ def local(vt, vs, bot, v0, v1, around, drift, min_corr) -> Segment:
     return Segment(v0, v1, off if c >= min_corr else None, c)
 
 
-def freezes(vt, still, bot=None, min_s=FREEZE, blip=0.5) -> list[tuple[float, float]]:
-    """Stretches of at least `min_s` where the frame does not change while the bot's own scores do; a changed frame
+def freezes(vt, still, bot=None, min_s=FREEZE, blip=1.0) -> list[tuple[float, float]]:
+    """Stretches of at least `min_s` where the frame does not change while the bot's own scores keep changing (on
+    half its passes or more); a changed frame
     within `blip` s of the still frames on both sides does not end one (the recorder repeated its last frame,
     refreshing it now and then). A screen the game itself left still (a stuck Now Loading) keeps the bot's scores
     still too, and is no freeze."""
@@ -209,7 +209,9 @@ def freezes(vt, still, bot=None, min_s=FREEZE, blip=0.5) -> list[tuple[float, fl
 
     def bot_moved(a, b):  # 2 s in from each end: the edges still show the screen fading in or out
         inner = [bs[(bt >= a + 2) & (bt <= b - 2)] for bt, bs in (bot or {}).values()]
-        return bot is None or any(len(x) and np.ptp(x) > 0.05 for x in inner)
+        # 2026-10-19: the bot's score moved between 71 % and 80 % of its passes through the two freezes, and
+        # 0 % to 25 % through still screens of the game
+        return bot is None or any(len(x) > 1 and (np.abs(np.diff(x)) > 0.01).mean() >= 0.5 for x in inner)
 
     return [(a, b) for a, b in out if b - a >= min_s and bot_moved(a, b)]
 
@@ -223,21 +225,30 @@ def holes(vt, min_s=HOLE) -> list[tuple[float, float]]:
 def fit(vt, vs, bot, chunk=60.0, max_lost=7200.0, min_corr=0.8, drift=2.0, frozen=()) -> list[Segment]:
     """Segments of the video, `chunk` seconds each, with their offsets.
 
-    The first offset comes from a wide search (`chunk_offset`, -2 s to `max_lost`) over two chunks, sliding on
-    until one is found; each later chunk is fitted within `drift` s of the last offset found, which follows the
+    The anchor comes from a wide search (`chunk_offset`, -2 s to `max_lost`) over two chunks, sliding on until
+    one is found; then every chunk from the start is fitted within `drift` s of the last offset found (the
+    anchor, for the chunks before it), which follows the
     slow drift between the recorder's clock and the log's. A chunk mostly inside a freeze stays unaligned
     (corr -1), and so does one that shows a screen but fits no offset near the last (corr under min_corr). A
     chunk with nothing to fit (corr -1 from the fit: no screen change, too few bot samples) takes the nearest
     fitted offset, since the clock runs on through it."""
     edges = list(np.arange(vt[0], vt[-1], chunk)) + [vt[-1] + 1e-6]
-    segs, off, carry = [], None, []
-    for a, b in zip(edges, edges[1:]):
-        if sum(min(b, y) - max(a, x) for x, y in frozen if x < b and y > a) >= 0.9 * (b - a):
+    chunks = list(zip(edges, edges[1:]))
+
+    def frozen_chunk(a, b):
+        return sum(min(b, y) - max(a, x) for x, y in frozen if x < b and y > a) >= 0.9 * (b - a)
+
+    off = next((o for a, _ in chunks if not frozen_chunk(a, a + chunk)
+                for o in [chunk_offset(vt, vs, bot, a, min(a + 2 * chunk, edges[-1]), max_lost, min_corr).offset]
+                if o is not None), None)
+    if off is None:
+        return [Segment(a, b, None, -1.0) for a, b in chunks]
+    segs, carry = [], []
+    for a, b in chunks:  # from the start: the chunks before the anchor are fitted around it too
+        if frozen_chunk(a, b):
             segs.append(Segment(a, b, None, -1.0))
             continue
-        if off is None:
-            off = chunk_offset(vt, vs, bot, a, min(a + 2 * chunk, edges[-1]), max_lost, min_corr).offset
-        s = local(vt, vs, bot, a, b, off, drift, min_corr) if off is not None else Segment(a, b, None, -1.0)
+        s = local(vt, vs, bot, a, b, off, drift, min_corr)
         if s.offset is not None:
             off = s.offset
         elif s.corr == -1.0:
@@ -265,7 +276,7 @@ def log_times(vt, segs, frozen=()) -> np.ndarray:
     return lt
 
 
-def intervals(lt, scores, threshold, hub, hits) -> list[dict]:
+def intervals(lt, scores, threshold, hub, hits, gap=GAP) -> list[dict]:
     """The intervals the screen was up, in log time; an unaligned frame ends one."""
     spans = []
     for t, s in zip(lt, scores):
@@ -273,7 +284,7 @@ def intervals(lt, scores, threshold, hub, hits) -> list[dict]:
             if np.isnan(t) and spans:
                 spans[-1][2] = True  # closed
             continue
-        if spans and not spans[-1][2] and t - spans[-1][1] <= GAP:
+        if spans and not spans[-1][2] and t - spans[-1][1] <= gap:
             spans[-1][1] = t
         else:
             spans.append([t, t, False])
@@ -311,10 +322,14 @@ def main(argv=None) -> None:
     nodes = {n: (RESOURCE / f if (RESOURCE / f).exists() else Path(f), tuple(map(int, roi.split(","))), float(th))
              for n, f, roi, th in a.node}
     lo, hi = stamp(a.lo) if a.lo else 0.0, stamp(a.hi) if a.hi else float("inf")
-    lines = (line for p in a.log for line in open(p, encoding="utf-8", errors="replace"))
-    hub, hits, bot = parse_log(lines, list(nodes), a.hub)
+    def lines():
+        for path in a.log:
+            with open(path, encoding="utf-8", errors="replace") as f:
+                yield from f
+
+    hub, hits, bot = parse_log(lines(), list(nodes), a.hub)
     vt, vs, still = video_scores(a.video, nodes, stamp(a.started), a.fps)
-    frozen = freezes(vt, still, bot)
+    frozen = freezes(vt, still, bot, blip=max(1.0, 3 / a.fps))
     segs = fit(vt, vs, bot, a.chunk, a.max_lost, a.min_corr, a.drift, frozen)
     for s in segs:
         print(f"video {clock(s.v0)}-{clock(s.v1)}  " + (f"offset {s.offset:+.3f} s" if s.offset is not None else "unaligned")
@@ -324,7 +339,7 @@ def main(argv=None) -> None:
     for x, y in holes(vt):
         print(f"hole: no frames from {clock(x)} to {clock(y)} ({y - x:.1f} s)")
     lt = log_times(vt, segs, frozen)
-    rows = [{"screen": n, **r} for n in nodes for r in intervals(lt, vs[n], nodes[n][2], hub, hits[n]) if lo <= r["up_at"] <= hi]
+    rows = [{"screen": n, **r} for n in nodes for r in intervals(lt, vs[n], nodes[n][2], hub, hits[n], max(GAP, 1.5 / a.fps)) if lo <= r["up_at"] <= hi]
     rows.sort(key=lambda r: r["up_at"])
     with open(a.out, "w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, ["screen", "up_at", "up_s", "hub_passes_while_up", "passes_until_hit", "recognized", "hit_after_s"])
