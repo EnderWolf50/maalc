@@ -23,7 +23,7 @@ from pathlib import Path
 
 sys.path[0] = str(Path(__file__).resolve().parents[1])
 
-from live.queue import detached_status
+from live.queue import detached_running
 from local_dir import local_dir, main_checkout
 
 RUNTIME = {"debug", "logs", "state", "cache"}
@@ -53,7 +53,7 @@ def verify(root: Path, dest: Path) -> list[str]:
 
 
 def hold(root: Path, dest: Path, done: Path, timeout: float, poll: float = 2.0, guard: Path | None = None,
-         running=lambda log: detached_status(log)[0]) -> int:
+         running=detached_running) -> int:
     print(f"backed up {backup(root, dest)} files of {root}; waiting for {done}", flush=True)
     deadline = time.monotonic() + timeout
     while not done.exists():

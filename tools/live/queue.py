@@ -153,11 +153,20 @@ def detach(cmd: list[str], log: Path) -> int:
     return p.pid
 
 
+def detached_doc(log: Path) -> dict | None:
+    try:
+        return json.loads(pid_file(log).read_text(encoding="utf-8"))
+    except (FileNotFoundError, ValueError):  # not yet, or `detach` is still writing it
+        return None
+
+
+def detached_running(log: Path, is_alive=alive) -> bool:
+    return (doc := detached_doc(log)) is not None and is_alive(doc["pid"], doc["start"])
+
+
 def detached_status(log: Path, is_alive=alive) -> tuple[bool, str]:
     """(whether the process `detach` started with this log still runs, a line saying so)."""
-    try:
-        doc = json.loads(pid_file(log).read_text(encoding="utf-8"))
-    except (FileNotFoundError, ValueError, KeyError):  # not yet, or `detach` is still writing it
+    if (doc := detached_doc(log)) is None:
         return False, f"nothing was started with --log {log}"
     if is_alive(doc["pid"], doc["start"]):
         return True, f"running pid {doc['pid']}: {doc['cmd'][:120]}"
