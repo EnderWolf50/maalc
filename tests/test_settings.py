@@ -105,7 +105,7 @@ def test_broken_json(tmp_path):
     (lambda d: d["teams"][0].update(sell_max_tier=6), "teams/0/sell_max_tier"),
     (lambda d: d["teams"][0].update(sell_max_tier=0), "teams/0/sell_max_tier"),
     (lambda d: d["teams"][0].update(keep_keywords=["Bleed", "Bleed"]), "teams/0/keep_keywords"),
-    (lambda d: d["teams"][0]["keep_gifts"].append({"keyword": "Bleed", "tier": 4, "name": "X"}), "teams/0/keep_gifts/0/tier"),
+    (lambda d: d["teams"][0]["keep_gifts"].append({"keyword": "Bleed", "tier": 4, "name": "X"}), "teams/0/keep_gifts/0"),  # neither a Gift Search gift nor a vestige
 ])
 def test_schema_errors_name_the_field(tmp_path, fn, where):
     assert any(e.startswith(where + ":") for e in errors(tmp_path, edited(fn)))

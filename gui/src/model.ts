@@ -71,6 +71,8 @@ export function enhanceAll(v: StarlightValues, plus: 1 | 2) {
 
 /** The E.G.O Gift Search page's tabs, left to right (agent/settings.schema.json gift_search keywords). */
 export const SEARCH_TABS: string[] = schema.$defs.gift.properties.keyword.enum;
+/** Vestiges, tier I-V in this order (#161): only fusion or sale material, kept by name in keep_gifts. */
+export const VESTIGES: string[] = schema.$defs.vestige.properties.name.enum;
 /** Spec 04 section 9: the gifts the search page offers, in page order; ids, tiers and English names from the game's
  * static data, Chinese names from the wiki (data/gift_search.json carries its sources and license). */
 export const SEARCH_GIFTS: SearchGift[] = gifts.gifts;

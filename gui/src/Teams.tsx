@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { resetTeamTimes } from "./api";
 import {
-  KEYWORDS, MAX_GIFTS, SEARCH_GIFTS, SEARCH_TABS, SINNERS, defaultStarlight, freeName, newId, newTeam, teamEnum, toggleGift,
+  KEYWORDS, MAX_GIFTS, SEARCH_GIFTS, SEARCH_TABS, SINNERS, VESTIGES, defaultStarlight, freeName, newId, newTeam, teamEnum, toggleGift,
   type GiftRef, type SearchGift, type Team,
 } from "./model";
 import { SinnerGrid, StarlightEditor } from "./Plans";
@@ -194,6 +194,7 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
 
 const ROMAN = ["", "I", "II", "III"];
 const TIERS = ["", "I", "II", "III", "IV", "V"];
+const VESTIGE_ZH = ["黯淡的殘影", "微茫的殘影", "閃耀的殘影", "輝煌的殘影", "月之殘影"];
 
 const sameRef = (a: GiftRef, g: SearchGift) => a.keyword === g.keyword && a.tier === g.tier && a.name === g.en;
 
@@ -285,6 +286,16 @@ function KeepPanel({ i }: { i: number }) {
           <small>{t("keep.sell_max_tier_note")}</small>
         </div>
         <div className={"toggle" + (bad(`${path}/sell_vestiges`) ? " bad" : "")}>
+          <span>{t("keep.vestiges")}</span>
+          {VESTIGES.map((name, j) => {
+            const g = { keyword: "Keywordless", tier: j + 1, name };
+            return (
+              <label key={name} className="check" title={t("keep.vestige_keep")}>
+                <input type="checkbox" checked={team.keep_gifts.some((x) => x.name === name)} onChange={() => toggle(g)} />
+                {t("keep.vestige_keep")} {zh ? VESTIGE_ZH[j] : name} {TIERS[j + 1]}
+              </label>
+            );
+          })}
           <label className="check">
             <input type="checkbox" checked={team.sell_vestiges} onChange={(e) => set({ sell_vestiges: e.target.checked })} />
             {t("keep.sell_vestiges")}

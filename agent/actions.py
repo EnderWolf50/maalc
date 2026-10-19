@@ -27,7 +27,7 @@ import rewards
 import run_start
 import settlement
 import shop
-from settings import SettingsError, load_settings
+from settings import SCHEMA, SettingsError, load_settings
 from state import next_cursor, pick_team, read_cursor, write_cursor
 
 # Same <root> as main.ROOT; resource/ sits under it in a release, under assets/ in the repo.
@@ -2059,17 +2059,38 @@ def read_cost(context, roi=SHOP_COST):
 def kept_gifts(team, page):
     """Gift names the shop keeps on page ("fuse" or "sell"), for a tooltip's or panel's text: the team's observed
     (#103) and kept gifts (#77), the keywordless gifts while kept_keywords keeps them, and on the sell page the
-    vestiges (data/shop.yaml) unless the team sells them (#161).
+    vestiges unless the team sells them (#161).
 
     Keywordless gifts are told by name (data/gift_search.json's Keywordless tab): the tooltip names no keyword.
-    Vestiges have no badge and no icon template: only their name tells them apart from other keywordless gifts.
+    Vestiges are no keywordless gifts (#161): see vestige.
     """
     names = [g["name"] for g in team["gift_search"]["gifts"] + team.get("keep_gifts", [])]
     if "Keywordless" in kept_keywords(team, page):
         names += [g["en"] for g in gift_data() if g["keyword"] == "Keywordless"]
     if page == "sell" and not team.get("sell_vestiges", False):
-        names += data("shop.yaml")["vestiges"]
+        names += VESTIGES
     return names
+
+
+# Vestiges, tier I-V in this order (#161; LocalizeLimbusCompany EN/EGOgift_MirrorDungeon.json, ids 9991-9995): the settings
+# schema lists them for keep_gifts, so the GUI and the agent share one list.
+VESTIGES = SCHEMA["$defs"]["vestige"]["properties"]["name"]["enum"]
+
+
+def vestige(lines):
+    """Whether a tooltip's or panel's lines name a vestige (VESTIGES): a gift that is only fusion or sale material.
+
+    Vestiges are their own kind, not keywordless gifts (the user, #161): the keywordless setting never applies to them.
+    They have no badge and no icon template, so a badge-less cell is told one only by the name its tooltip shows.
+    """
+    return any(shop.protected(t, VESTIGES) for t in lines)
+
+
+def vestige_cells(cells, roles, top):
+    """Indexes of the cells kept as keywordless that may be a vestige of tier top or lower: no badge, no matched icon,
+    a tier read. Only these are opened to read a name (#161); a tier V (Lunar Vestige) is never a material."""
+    return [n for n, (c, r) in enumerate(zip(cells, roles))
+            if r == "keep" and c["keyword"] == "Keywordless" and not c["gift"] and c["tier"] and c["tier"] <= top]
 
 
 def kept_keywords(team, page):
@@ -2473,8 +2494,14 @@ class Shop(CustomAction):
         gifts = [(c["i"], prices[c["i"]]) for c, r in zip(cells, roles) if r == "material" and c["i"] in prices]
         avoided = {c["i"] for c in cells if c["gift"] in avoid}  # sold first (#90)
         # A badge or price below the grid's edge: the panel a tap shows decides (spec 03 section 12's rule).
-        keep = kept_gifts(team, "sell")
-        for c in [c for c, r in zip(cells, roles) if r == "unknown" or (r == "material" and c["i"] not in prices)]:
+        keep, named = kept_gifts(team, "sell"), [g["name"] for g in team.get("keep_gifts", [])]
+        # Vestiges are sold only when the team allows it, whatever its keywordless setting (#161): then a badge-less cell
+        # kept as keywordless is opened too, as it may be one.
+        top = team.get("sell_max_tier", 4)
+        which = vestige_cells(cells, roles, top) if team.get("sell_vestiges", False) else []
+        for n, c in enumerate(cells):
+            if not (n in which or roles[n] == "unknown" or (roles[n] == "material" and c["i"] not in prices)):
+                continue
             i, x, y = c["i"], c["x"], c["y"]
             tap(context, x, y, wait=1.2)
             image = screen(context)
@@ -2482,7 +2509,13 @@ class Shop(CustomAction):
             panel = " ".join(lines)
             price = number(text(context, image, SELL_PRICE))
             kind = rewards.gift_kind(panel, team["keyword"], False, avoid)
-            if kind != "avoid" and (kept_text(panel, team, "sell") or any(shop.protected(t, keep) for t in lines)):
+            if vestige(lines):
+                log(f"shop: sell cell {i} is a vestige: {panel[:40]!r}")
+            if vestige(lines) and (not team.get("sell_vestiges", False) or any(shop.protected(t, named) for t in lines)):
+                log(f"shop: sell cell {i} kept: the team does not sell this vestige")
+            elif n in which and not vestige(lines):
+                log(f"shop: sell cell {i} kept: no vestige, {panel[:40]!r}")
+            elif not vestige(lines) and kind != "avoid" and (kept_text(panel, team, "sell") or any(shop.protected(t, keep) for t in lines)):
                 log(f"shop: sell cell {i} kept: {panel[:40]!r}")
             elif price and "Select the" not in panel:
                 gifts.append((i, price))
@@ -2492,7 +2525,7 @@ class Shop(CustomAction):
         materials = [c for c in cells if c["i"] in dict(gifts)]
         fused = {i for group, _ in fusions(materials, ["material"] * len(materials), visit.get("slots", 3), avoid) for i in group}
         # Up to the team's sell_max_tier only (#161); an unread tier may be a V: not sold.
-        top, tiers = team.get("sell_max_tier", 4), {c["i"]: c["tier"] for c in cells}
+        tiers = {c["i"]: c["tier"] for c in cells}
         spare = [g for g in gifts if (g[0] not in fused or g[0] in avoided) and (tiers[g[0]] or 9) <= top]
         picked = shop.to_sell(spare, wanted, cost, team["reserve_cost"], avoided)
         visit["fuse_scanned"] = visit.get("fuse_scanned") and not picked
@@ -2575,9 +2608,13 @@ class Shop(CustomAction):
         cells = read_cells(context, image, FUSE_CELLS, "fuse", kept_icons(team) + avoided_gifts(team))
         roles = [shop.gift_role(c["keyword"], c["gift"], kept_keywords(team, "fuse"), avoid) for c in cells]
         log(f"shop: fuse cells ({slots} slots) " + "; ".join(cell_line(c, r) for c, r in zip(cells, roles)))
+        # Vestiges are always material (#161): a badge-less cell kept as keywordless is opened for its name.
+        which = vestige_cells(cells, roles, shop.MAX_MATERIAL_TIER)
+        if which:
+            roles = Shop.tooltip_roles(context, team, cells, roles, avoid, which)
         picks = fusions(cells, roles, slots, avoid)
         if not picks and "unknown" in roles:
-            roles = Shop.tooltip_roles(context, team, cells, roles, avoid)
+            roles = Shop.tooltip_roles(context, team, cells, roles, avoid, [n for n, r in enumerate(roles) if r == "unknown"])
             picks = fusions(cells, roles, slots, avoid)
         if not picks:
             visit["fuse_scanned"] = True
@@ -2601,15 +2638,17 @@ class Shop(CustomAction):
         return fused
 
     @staticmethod
-    def tooltip_roles(context, team, cells, roles, avoid):
-        """roles with each "unknown" cell (its badge cut off) decided by its tooltip: tapped in for it, then out again.
+    def tooltip_roles(context, team, cells, roles, avoid, which):
+        """roles with the cells at indexes which decided by their tooltip: tapped in for it, then out again.
 
-        A gift the tooltip does not name is kept: live 2026-10-18, Spiderweb Entangled in Red's long tooltip read none.
+        An "unknown" cell (its badge cut off or let go as keywordless) by its text; a "keep" one (vestige_cells) becomes
+        material only when it is a vestige (#161). A vestige the team names in keep_gifts stays. A gift the tooltip
+        does not name is kept: live 2026-10-18, Spiderweb Entangled in Red's long tooltip read none.
         """
         roles, last, keep = list(roles), None, kept_gifts(team, "fuse")
-        for n, c in enumerate(cells):
-            if roles[n] != "unknown":
-                continue
+        named = [g["name"] for g in team.get("keep_gifts", [])]
+        for n in which:
+            c = cells[n]
             x, y = c["x"], c["y"]
             tap(context, x, y, wait=0)
             lines, name = Shop.tooltip(context, last)
@@ -2621,9 +2660,12 @@ class Shop(CustomAction):
                 roles[n] = "keep"
                 continue
             last = name
-            kept = not shop.protected(name, avoid) and (kept_text(" ".join(t for t, _ in lines), team, "fuse") or shop.protected(name, keep))
-            roles[n] = "keep" if kept else "material"
-            log(f"shop: cell {c['i']} {name!r}: {roles[n]}")
+            if vestige([name]):
+                roles[n] = "keep" if shop.protected(name, named) else "material"
+            elif roles[n] == "unknown":
+                kept = not shop.protected(name, avoid) and (kept_text(" ".join(t for t, _ in lines), team, "fuse") or shop.protected(name, keep))
+                roles[n] = "keep" if kept else "material"
+            log(f"shop: cell {c['i']} tooltip names {name!r}{' (a vestige)' if vestige([name]) else ''}: {roles[n]}")
         return roles
 
     @staticmethod

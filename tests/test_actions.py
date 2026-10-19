@@ -543,17 +543,62 @@ def fuse_slots(context, monkeypatch, slots=3, ignored=()):
 
 
 def test_a_fusion_taps_only_the_materials_its_cells_show(context, monkeypatch):
-    # #112: one screenshot decides; no tooltip is opened. Spiderweb (observed), Burn (main) and keywordless gifts stay.
+    # #112: one screenshot decides. Spiderweb (observed), Burn (main) and keywordless gifts stay. #161: the badge-less
+    # cell 3 may be a vestige: tapped in and out for its tooltip, which reads no name here, so it stays.
     reads(context, FUSE_PAGE)
     fuse_slots(context, monkeypatch)
     cells_read(monkeypatch, ("Keywordless", SPIDERWEB["name"]), ("Bleed", None), ("Burn", None), ("Keywordless", None),
                ("Tremor", None), ("Pierce", None), ("Sinking", None), (None, None))
     actions.Shop.fuse(context, {"keyword": "Burn", "gift_search": {"gifts": [SPIDERWEB]}}, {})
     taps = [c.args for c in context.tasker.controller.post_click.call_args_list]
-    assert [taps.count(c) for c in actions.FUSE_CELLS[:8]] == [0, 1, 0, 0, 1, 1, 0, 0]
+    assert [taps.count(c) for c in actions.FUSE_CELLS[:8]] == [0, 1, 0, 2, 1, 1, 0, 0]
     assert actions.PAGE_OK in taps
-    rois = [(c.args[2] or {}).get(c.args[0], {}).get("roi") for c in context.run_recognition.call_args_list]
-    assert actions.FUSE_TOOLTIP not in rois
+
+
+def tooltips(monkeypatch, names):
+    """Shop.tooltip reads names[cell] for the FUSE_CELLS cell tapped last (no name for the others)."""
+    def tooltip(context, last):
+        taps = [c.args for c in context.tasker.controller.post_click.call_args_list if c.args in actions.FUSE_CELLS]
+        name = names.get(actions.FUSE_CELLS.index(taps[-1])) if taps else None
+        return ([("E.G.O GIFT", (1030, 305, 100, 25)), (name, (1010, 340, 180, 22))], name) if name else ([], None)
+    monkeypatch.setattr(actions.Shop, "tooltip", staticmethod(tooltip))
+
+
+@pytest.mark.parametrize("tier, vestige", [(1, "Dark Vestige"), (2, "Faint Vestige"), (3, "Twinkling Vestige"),
+                                           (4, "Brilliant Vestige")])
+def test_vestiges_are_fused_though_keywordless_gifts_are_kept(context, monkeypatch, tier, vestige):
+    # #161, the user: vestiges are their own kind, only fusion material; keywordless "keep" (the default) does not keep
+    # them. The badge-less cells are opened for their name: the vestige goes in, Twinkling Scrap (keywordless) stays.
+    tooltips(monkeypatch, {0: vestige, 1: "Twinkling Scrap"})
+    fused, taps, _ = fusion_taps(context, monkeypatch, {}, ("Keywordless", None, tier), ("Keywordless", None, 2),
+                                 ("Tremor", None), ("Pierce", None))
+    assert fused and taps == [3, 2, 1, 1]  # the vestige in and out for its name, then in for the fusion
+
+
+@pytest.mark.parametrize("keywordless", ["keep", "fuse_or_sell"])
+def test_lunar_vestige_is_never_fused(context, monkeypatch, keywordless):
+    # #161: a tier V is never a material (MAX_MATERIAL_TIER): its cell is not even opened.
+    tooltips(monkeypatch, {0: "Lunar Vestige"})
+    fused, taps, _ = fusion_taps(context, monkeypatch, {"keywordless": keywordless}, ("Keywordless", None, 5),
+                                 ("Tremor", None), ("Pierce", None), ("Sinking", None))
+    assert fused and taps == [0, 1, 1, 1]
+
+
+def test_a_lunar_vestige_that_alone_would_complete_a_group_stays_out(context, monkeypatch):
+    # #161: with keywordless gifts let go its cell is opened (the others make no fusion) and named, but tier V stays out.
+    tooltips(monkeypatch, {0: "Lunar Vestige"})
+    fused, taps, ok = fusion_taps(context, monkeypatch, {"keywordless": "fuse_or_sell"}, ("Keywordless", None, 5),
+                                  ("Tremor", None), ("Pierce", None))
+    assert not fused and not ok and taps == [2, 0, 0]
+
+
+def test_a_vestige_the_team_keeps_by_name_is_not_fused(context, monkeypatch):
+    # #161: the user's per-gift keep list still applies to vestiges.
+    tooltips(monkeypatch, {0: "Dark Vestige"})
+    team = {"keep_gifts": [{"keyword": "Keywordless", "tier": 1, "name": "Dark Vestige"}]}
+    fused, taps, _ = fusion_taps(context, monkeypatch, team, ("Keywordless", None, 1), ("Tremor", None), ("Pierce", None),
+                                 ("Sinking", None))
+    assert fused and taps == [2, 1, 1, 1]
 
 
 def test_offers_are_read_once_and_bought_high_tier_first_from_the_back(context, monkeypatch):
@@ -672,13 +717,26 @@ def test_a_sale_follows_the_keywordless_setting(context, monkeypatch, keywordles
     assert (actions.SELL_CELLS[3] in taps and taps.count(actions.SELL_CELLS[3]) == 2) == sold  # its panel, then the sale
 
 
-@pytest.mark.parametrize("team, sold", [({}, False), ({"sell_vestiges": True}, True)])
-def test_a_vestige_is_sold_only_when_the_team_allows_it(context, monkeypatch, team, sold):
-    # #161: Dark Vestige has no badge and no icon template: the panel's name tells it from other keywordless gifts.
-    taps = sale_taps(context, monkeypatch, {"keywordless": "fuse_or_sell", **team}, [90, 60, 70, 95], ("Bleed", None),
+@pytest.mark.parametrize("keywordless", ["keep", "fuse", "fuse_or_sell"])
+@pytest.mark.parametrize("team, sold", [({}, False), ({"sell_vestiges": True}, True),
+                                        ({"sell_vestiges": True, "sell_max_tier": 1}, True)])
+def test_a_vestige_is_sold_only_when_the_team_allows_it(context, monkeypatch, keywordless, team, sold):
+    # #161: sell_vestiges alone decides, whatever the keywordless setting. Dark Vestige has no badge and no icon
+    # template: the panel's name tells it from keywordless gifts. With sell_vestiges off and keywordless kept on the
+    # sell page, its cell is not even opened.
+    taps = sale_taps(context, monkeypatch, {"keywordless": keywordless, **team}, [90, 60, 70, 95], ("Bleed", None),
                      ("Tremor", None), ("Pierce", None), ("Keywordless", None, 1),
                      panel=["Dark Vestige", "Counts as a Tier 1 E.G.O Gift. Can be sold at a Shop"])
-    assert taps.count(actions.SELL_CELLS[3]) == (2 if sold else 1)
+    opened = sold or keywordless == "fuse_or_sell"
+    assert taps.count(actions.SELL_CELLS[3]) == int(opened) + int(sold)
+
+
+def test_a_vestige_over_the_highest_tier_sold_stays(context, monkeypatch):
+    # #161: sell_max_tier applies to vestiges too; a Twinkling Vestige (III) over a limit of II is not even opened.
+    taps = sale_taps(context, monkeypatch, {"sell_vestiges": True, "sell_max_tier": 2}, [90, 60, 70, 95],
+                     ("Bleed", None), ("Tremor", None), ("Pierce", None), ("Keywordless", None, 3),
+                     panel=["Twinkling Vestige"])
+    assert taps == []
 
 
 def test_nothing_is_sold_when_every_material_fuses(context, monkeypatch):

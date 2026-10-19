@@ -58,6 +58,8 @@
     {"name": "empty order", "edits": [{"set": "teams/1/deployment_order/custom", "value": []}], "schema": ["teams/1/deployment_order"]},
     {"name": "gift search tier out of range", "edits": [{"set": "teams/1/gift_search/gifts/0/tier", "value": 4}], "schema": ["teams/1/gift_search/gifts/0/tier"]},
     {"name": "repeated gift search gift", "edits": [{"set": "teams/1/gift_search/gifts/-", "value": {"keyword": "Bleed", "tier": 3, "name": "Smokes and Wires"}}], "schema": ["teams/1/gift_search/gifts"]},
+    {"name": "a vestige may be kept by name, tier IV too", "edits": [{"set": "teams/0/keep_gifts/-", "value": {"keyword": "Keywordless", "tier": 4, "name": "Brilliant Vestige"}}], "cross": []},
+    {"name": "only the 5 vestiges go past tier III", "edits": [{"set": "teams/0/keep_gifts/-", "value": {"keyword": "Keywordless", "tier": 4, "name": "Other Vestige"}}], "schema": ["teams/0/keep_gifts/0"]},
     {"name": "keywordless is a choice, not a switch", "edits": [{"set": "teams/0/keywordless", "value": true}], "schema": ["teams/0/keywordless"]},
     {"name": "sell max tier out of range", "edits": [{"set": "teams/1/sell_max_tier", "value": 6}], "schema": ["teams/1/sell_max_tier"]},
     {"name": "the old keep_keywordless switch is gone", "edits": [{"set": "teams/0/keep_keywordless", "value": true}], "schema": ["teams/0"]},

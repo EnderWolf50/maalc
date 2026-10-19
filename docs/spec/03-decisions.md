@@ -358,7 +358,7 @@
 - 要保留的飾品永遠不賣：主要體系、`keep_keywords`、泛用（無體系）飾品（`keywordless` 不是 `fuse_or_sell` 時）、觀測飾品與 `keep_gifts`（#77、#79）。
 - 出售的設定（#161，使用者 2026-10-19 決定）：
   - `sell_max_tier`（預設 IV）：比它高階的不賣，所以預設 V 階永遠不賣。階級讀不到的格子可能是 V 階，也不賣。
-  - `sell_vestiges`（預設關）：殘影不賣。殘影是只能當合成材料或出售的 5 個無體系飾品，各算一個階級：Dark Vestige 黯淡的殘影（I）、Faint Vestige 微茫的殘影（II）、Twinkling Vestige 閃耀的殘影（III）、Brilliant Vestige（IV）、Lunar Vestige（V），id 9991–9995（LocalizeLimbusCompany 的 `EN/EGOgift_MirrorDungeon.json`；IV、V 的中文名未確認）。名單在 `data/shop.yaml` 的 `vestiges`。殘影沒有體系徽章，也不在觀測表裡（沒有圖示模板），bot 只能靠出售頁左側說明欄的名字認出：`keywordless` 允許出售時，沒有徽章的格子都先點開看名字，是殘影就不賣。
+  - `sell_vestiges`（預設關）：殘影只在這個選項開著時才賣，也受 `sell_max_tier` 限制，不受 `keywordless` 影響（見下方「殘影」）。
   - 泛用飾品見下方 `keywordless`。
 
 **合成**（#10、#77）
@@ -367,6 +367,11 @@
 - 結果的階級由材料總點數決定，不隨機：材料 I=3、II=6、III=10、IV=15、V=30 點；一般商店 ≤10 是 I、11–16 是 II、17–24 是 III、≥25 是 IV；Super Shop ≤9、10–14、15–21、≥22。材料本身的體系不影響結果。（拆包 `mirror-dungeon-common-data-md8.json`、limbuscompany.wiki.gg；數字放在 `data/shop.yaml`）
 - 挑材料（`shop.pick_fusion`）：先挑合得出最高階級的組合，同階級時先放隊伍不持有的 White Gossypium（#90），再挑總點數最少的；剩下的材料重複挑，直到不足 3 個。V 階飾品永遠不當材料：合成最多只出 IV 階，放 V 階一定是降級（#161 使用者決定，2026-10-19）。以前任取 3 個常是 3 個 I（9 點），只合出 I。
 - 不動要保留的飾品：主要體系、隊伍設定的其他體系（`keep_keywords`）、泛用（無體系）飾品（`keywordless` 是 `keep` 時，預設）、觀測飾品與 `keep_gifts`（圖示比對）。
+- **殘影**（#161，使用者 2026-10-19 決定）：殘影自成一類，不是泛用飾品，`keywordless` 對它不起作用。
+  - 是哪些：只能當合成材料或出售的 5 個飾品，各算一個階級：Dark Vestige 黯淡的殘影（I）、Faint Vestige 微茫的殘影（II）、Twinkling Vestige 閃耀的殘影（III）、Brilliant Vestige（IV）、Lunar Vestige（V），id 9991–9995（LocalizeLimbusCompany 的 `EN/EGOgift_MirrorDungeon.json`，2026-10-19 讀取；IV、V 的中文名從簡中轉來，未確認）。名單在設定 schema 的 `$defs/vestige`，GUI 與 Agent 共用。
+  - 合成：一律是材料（這是它唯一的用途），但 V 階的 Lunar Vestige 照 `MAX_MATERIAL_TIER` 永遠不當材料；`keep_gifts` 裡指定保留的殘影也不放。
+  - 出售：只看 `sell_vestiges`（預設不賣）與 `sell_max_tier`。
+  - 怎麼認：殘影沒有體系徽章、不在觀測表裡（沒有圖示模板），只能點開格子讀名字。為了少點幾下，只點「讀成泛用飾品而且要保留」的格子：沒有徽章、沒有比對到保留飾品的圖示、讀得到階級，而且階級不高於能用的上限（合成頁是 IV；出售頁是 `sell_max_tier`，而且只在 `sell_vestiges` 開著時才點）。泛用飾品不保留的那一頁，沒有徽章的格子本來就會點開讀說明框（見下方），一併用名字判斷是不是殘影。每個點開的格子都把讀到的名字寫進 log。
 - 激進合成與固定配方合成延後到 v1 之後。（#1）
 
 **實作**（#29）
