@@ -1,6 +1,6 @@
 # 2026-10-18 拖曳與防禦回合實驗（#119、#114、#113、#111）
 
-實機：MuMu（ADB 127.0.0.1:16384，裝置 1920x1080，座標以 1280x720 計），遊戲 1.117.0。一局困難鏡牢第 3–4 層的戰鬥與地圖、之後新開一局的選隊頁與觀測頁（兩局都放棄、沒領獎）。探針腳本、記錄檔、錄影與標註圖都在 `<home>\.cache\maalc-probe\exp\`（不在 repo 內）：
+實機：MuMu（ADB 127.0.0.1:16384，裝置 1920x1080，座標以 1280x720 計），遊戲 1.117.0。一局困難鏡牢第 3–4 層的戰鬥與地圖、之後新開一局的選隊頁與觀測頁（兩局都放棄、沒領獎）。探針腳本、記錄檔、錄影與標註圖都在 主 checkout 的 `.local/probe/exp/`（gitignored）：
 
 - 錄影：04:22–05:01 是 `adb screenrecord`（`rec-adb/`），05:03–06:03 是主機端 OBS（`..\obs\2026-10-18_05-03-35.mp4`）；每個實驗剪一段放在 `clips/`，標註圖在 `stills/`。
 - 記錄：`guard_trials.log`、`drag_trials.log`、`tapw.log`、`live_guard.log`、`drag_exp.log`、`teamdrag.log`、`team113.log`、`zoom.log`。

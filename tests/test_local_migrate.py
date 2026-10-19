@@ -14,7 +14,8 @@ def test_plan_names_each_source_and_its_target(tmp_path):
     local = tmp_path / ".local"
     probe, unpack = tmp_path / "probe", tmp_path / "unpack"
     assert [(k, s.name, d.relative_to(local).as_posix()) for k, s, d in lm.plan(local, probe, unpack)] == [
-        ("folder", "archive", "archive"), ("masks", "templates", "evidence"), ("folder", "unpack", "unpack")]
+        ("folder", "probe", "probe"), ("archive", "archive", "archive"),
+        ("masks", "templates", "evidence"), ("folder", "unpack", "unpack")]
     assert lm.plan(local, None, None) == []
 
 
@@ -157,7 +158,7 @@ def test_a_rerun_finishes_deleting_the_original_once_the_copy_is_final(dirs):
     lm.link(dst, src)
     lm.record_link(local, src)
     make_tree(lm.deleting_of(src))  # an interrupted delete of the original
-    lm.migrate(local, src.parent, None, apply=True)
+    lm.migrate_folder(local, src, dst, apply=True)
     assert not lm.deleting_of(src).exists() and (dst / "INDEX.md").exists() and lm.is_link(src)
 
 
@@ -166,7 +167,7 @@ def test_a_rerun_relinks_and_records_what_an_interrupted_run_left(dirs, monkeypa
     monkeypatch.setattr(lm, "write_masks", lambda *a: None)
     lm.record_link(local, src)  # recorded first, renamed into .local, then the run stopped before the link
     make_tree(dst)
-    lm.migrate(local, src.parent, None, apply=True)
+    lm.migrate_folder(local, src, dst, apply=True)
     assert lm.points_to(src, dst) and lm.read_links(local) == [str(src)]
 
 
@@ -187,7 +188,7 @@ def test_an_original_set_aside_without_a_link_stops_the_tool(dirs, monkeypatch):
     make_tree(lm.aside_of(src))
     monkeypatch.setattr(lm, "write_masks", lambda *a: None)
     with pytest.raises(SystemExit, match="is the original"):
-        lm.migrate(local, src.parent, None, apply=True)
+        lm.migrate_folder(local, src, dst, apply=True)
 
 
 def test_an_unchecked_copy_stops_the_tool(dirs, monkeypatch):
@@ -196,7 +197,7 @@ def test_an_unchecked_copy_stops_the_tool(dirs, monkeypatch):
     make_tree(lm.partial_of(dst))
     monkeypatch.setattr(lm, "write_masks", lambda *a: None)
     with pytest.raises(SystemExit, match="unchecked copy"):
-        lm.migrate(local, src.parent, None, apply=True)
+        lm.migrate_folder(local, src, dst, apply=True)
     assert (src / "INDEX.md").exists()
 
 
@@ -205,7 +206,7 @@ def test_a_link_left_by_the_old_tool_is_removed_and_the_data_moved_in(dirs, monk
     make_tree(src)
     lm.link(src, dst)  # the old tool linked .local/ to the outside folder
     monkeypatch.setattr(lm, "write_masks", lambda *a: None)
-    lm.migrate(local, src.parent, None, apply=True)
+    lm.migrate_folder(local, src, dst, apply=True)
     assert not lm.is_link(dst) and (dst / "INDEX.md").exists() and lm.points_to(src, dst)
 
 
@@ -216,7 +217,7 @@ def test_a_link_in_local_to_some_other_folder_stops_the_tool(dirs, tmp_path, mon
     lm.link(tmp_path / "elsewhere", dst)
     monkeypatch.setattr(lm, "write_masks", lambda *a: None)
     with pytest.raises(SystemExit, match="rmdir"):
-        lm.migrate(local, src.parent, None, apply=True)
+        lm.migrate_folder(local, src, dst, apply=True)
     assert (src / "INDEX.md").exists() and (tmp_path / "elsewhere/INDEX.md").exists()
 
 
@@ -225,7 +226,7 @@ def test_a_checked_copy_whose_link_is_missing_is_finished_on_a_rerun(dirs, monke
     make_tree(dst)
     make_tree(lm.aside_of(src))  # stopped after the copy took its name, before the link
     monkeypatch.setattr(lm, "write_masks", lambda *a: None)
-    lm.migrate(local, src.parent, None, apply=True)
+    lm.migrate_folder(local, src, dst, apply=True)
     assert lm.points_to(src, dst) and lm.leftovers(src, dst) == [] and lm.read_links(local) == [str(src)]
 
 
@@ -236,7 +237,7 @@ def test_a_checked_copy_that_differs_from_the_original_stops_the_tool(dirs, monk
     (dst / "INDEX.md").write_text("other")
     monkeypatch.setattr(lm, "write_masks", lambda *a: None)
     with pytest.raises(SystemExit, match="differ"):
-        lm.migrate(local, src.parent, None, apply=True)
+        lm.migrate_folder(local, src, dst, apply=True)
     assert lm.aside_of(src).exists() and (dst / "INDEX.md").exists()
 
 
@@ -247,7 +248,7 @@ def test_an_original_set_aside_behind_a_working_link_is_deleted_on_a_rerun(dirs,
     lm.record_link(local, src)
     make_tree(lm.aside_of(src))  # stopped between the link and the rename to .deleting
     monkeypatch.setattr(lm, "write_masks", lambda *a: None)
-    lm.migrate(local, src.parent, None, apply=True)
+    lm.migrate_folder(local, src, dst, apply=True)
     assert lm.leftovers(src, dst) == [] and (dst / "INDEX.md").exists() and lm.points_to(src, dst)
 
 
@@ -268,7 +269,7 @@ def test_a_relative_path_is_recorded_absolute(tmp_path, monkeypatch):
     monkeypatch.setattr(lm, "write_masks", lambda *a: None)
     monkeypatch.chdir(tmp_path / "work")
     lm.main(["--probe", "probe", "--apply"])
-    assert lm.read_links(repo / ".local") == [str(tmp_path / "work/probe/archive")]
+    assert lm.read_links(repo / ".local") == [str(tmp_path / "work/probe")]
 
 
 def test_migrate_records_links_and_remove_links_drops_only_those(tmp_path, monkeypatch):
@@ -281,8 +282,8 @@ def test_migrate_records_links_and_remove_links_drops_only_those(tmp_path, monke
     lm.migrate(local, probe, unpack, apply=False)  # dry run changes nothing
     assert not lm.is_link(probe / "archive") and not (local / lm.LINKS).exists()
     lm.migrate(local, probe, unpack, apply=True)
-    assert lm.is_link(probe / "archive") and lm.is_link(unpack)
-    assert lm.read_links(local) == [str(probe / "archive"), str(unpack)]
+    assert lm.is_link(probe) and lm.is_link(unpack)
+    assert lm.read_links(local) == [str(probe), str(unpack)]
     lm.migrate(local, probe, unpack, apply=True)  # a second run skips what is already a link
     lm.remove_links(local, apply=False)
     assert lm.is_link(unpack)
@@ -322,3 +323,63 @@ def test_the_player_name_mask_is_bound_to_the_lv_label_and_covers_the_name_plate
     nx, ny, nw, nh = NAME_PLATE
     assert any(x <= nx and y <= ny and x + w >= nx + nw and y + h >= ny + nh for x, y, w, h in boxes)
     assert crop[0] <= nx + 2 and crop[1] >= ny + nh  # the template is the label below the plate, which Drive and SinnersTab show too
+
+
+def test_complete_probe_moves_loose_files_caches_scripts_and_experiments(tmp_path, drive):
+    local, probe = tmp_path / '.local', tmp_path / 'old-probe'
+    local.mkdir()
+    contents = ['script.py', '.venv/pyvenv.cfg', '__pycache__/script.pyc', 'exp/log.txt',
+                'captures/screen.png', 'archive/INDEX.md', 'tools/helper.py']
+    for name in contents:
+        p = probe / name
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_bytes(name.encode())
+    templates = probe / 'tools/templates'
+    templates.mkdir()
+    for name in ('MainWindow.png', 'Title.png'):
+        Image.new('RGB', (1280, 720), 'gray').save(templates / name)
+    lm.migrate(local, probe, None, apply=True)
+    assert lm.points_to(probe, local / 'probe')
+    for name in contents:
+        assert (local / 'probe' / name).read_bytes() == name.encode()
+        assert (probe / name).read_bytes() == name.encode()
+    assert lm.points_to(local / 'archive', local / 'probe/archive')
+    assert (local / 'evidence/masks.json').exists()
+    lm.migrate(local, probe, None, apply=True)
+    lm.remove_links(local, apply=True)
+    assert not probe.exists()
+    assert (local / 'archive/INDEX.md').read_bytes() == b'archive/INDEX.md'
+    assert (local / 'probe/script.py').exists()
+
+
+def test_existing_probe_destination_is_not_silently_treated_as_migrated(tmp_path):
+    local, probe = tmp_path / '.local', tmp_path / 'old-probe'
+    make_tree(local / 'probe')
+    make_tree(probe)
+    with pytest.raises(SystemExit, match='already exists'):
+        lm.migrate(local, probe, None, apply=True)
+    assert not lm.is_link(probe)
+
+
+def test_previously_migrated_archive_is_preserved_when_the_rest_moves(tmp_path, drive, monkeypatch):
+    local, probe = tmp_path / '.local', tmp_path / 'old-probe'
+    make_tree(local / 'archive')
+    probe.mkdir()
+    (probe / 'script.py').write_text('script')
+    lm.link(local / 'archive', probe / 'archive')
+    lm.record_link(local, probe / 'archive')
+    monkeypatch.setattr(lm, 'write_masks', lambda *args: None)
+    lm.migrate(local, probe, None, apply=True)
+    assert lm.points_to(local / 'probe/archive', local / 'archive')
+    assert lm.read_links(local) == [str(probe)]
+    lm.remove_links(local, apply=True)
+    assert (local / 'archive/sub/clip.mp4').stat().st_size == 300
+    assert (local / 'probe/archive/sub/clip.mp4').stat().st_size == 300
+
+
+def test_source_containing_the_destination_is_rejected(tmp_path):
+    local = tmp_path / '.local'
+    local.mkdir()
+    with pytest.raises(SystemExit, match='overlaps'):
+        lm.migrate(local, tmp_path, None, apply=True)
+    assert not (local / lm.LINKS).exists()

@@ -18,9 +18,9 @@ link is missing, a link left inside `.local/` by the older version of this tool)
 the rest (an unchecked `.partial` copy, an original set aside while the old path was recreated). `--remove-links` deletes the recorded links,
 and only while they still point into `.local/`, so the data stays in `.local/`.
 
-  --probe   its `archive/` moves to `.local/archive/` (with INDEX.md); its `tools/templates/` (full screens
-            of the main window and the title screen) yield the privacy-mask templates and
-            `.local/evidence/masks.json`, which the `evidence-annotate` skill reads (`--masks`).
+  --probe   the complete folder moves to `.local/probe/`, including loose files, caches, environments,
+            scripts and experiments. `.local/archive/` links to its `archive/` (or a previously migrated
+            archive stays in place). Its `tools/templates/` yield `.local/evidence/masks.json`.
   --unpack  moves to `.local/unpack/`: the game data, with `raw/Localize/<lang>/` in it.
 """
 import argparse
@@ -87,20 +87,46 @@ def remove_tree(p: Path) -> None:
     shutil.rmtree(p, onexc=force_writable)
 
 
-def file_stats(root: Path) -> dict[str, tuple[int, int]]:
-    """Relative path -> (size, mtime in whole seconds) of every file under root; copy2 keeps both. Fast."""
+def file_stats(root: Path) -> dict[str, tuple[int, int] | tuple[str, str]]:
+    """File sizes/times and link targets, without walking through symlinks or Windows junctions."""
     out = {}
-    for p in root.rglob("*"):
-        if p.is_file():
-            st = p.stat()
-            out[p.relative_to(root).as_posix()] = (st.st_size, int(st.st_mtime))
+    pending = [root]
+    while pending:
+        for p in pending.pop().iterdir():
+            name = p.relative_to(root).as_posix()
+            if is_link(p):
+                out[name] = ("link", os.readlink(p))
+            elif p.is_dir():
+                out[name] = ("directory", "")
+                pending.append(p)
+            else:
+                st = p.stat()
+                out[name] = (st.st_size, int(st.st_mtime))
     return out
 
 
 def same_content(a: Path, b: Path) -> bool:
     """The same files with the same sizes and times, and byte for byte the same: checked before the original goes."""
     stats = file_stats(a)
-    return stats == file_stats(b) and all(filecmp.cmp(a / n, b / n, shallow=False) for n in stats)
+    return stats == file_stats(b) and all(is_link(a / n) or (a / n).is_dir()
+                                         or filecmp.cmp(a / n, b / n, shallow=False) for n in stats)
+
+
+def copy_tree(src: Path, dst: Path) -> None:
+    """copytree preserves symlinks but follows Windows junctions: recreate those as links as well."""
+    junctions = []
+
+    def ignore_junctions(folder, names):
+        skipped = []
+        for name in names:
+            p = Path(folder) / name
+            if p.is_junction():
+                junctions.append((p.relative_to(src), os.path.realpath(p)))
+                skipped.append(name)
+        return skipped
+    shutil.copytree(src, dst, symlinks=True, ignore=ignore_junctions)
+    for name, target in junctions:
+        link(Path(target), dst / name)
 
 
 def same_drive(a: Path, b: Path) -> bool:
@@ -203,7 +229,7 @@ def move(src: Path, dst: Path) -> None:
         return
     part = partial_of(dst)
     try:
-        shutil.copytree(src, part, symlinks=True)
+        copy_tree(src, part)
     except BaseException:
         if part.exists():
             remove_tree(part)
@@ -293,6 +319,18 @@ def stop_reason(src: Path, dst: Path) -> str | None:
 
 def migrate(local: Path, probe: Path | None, unpack: Path | None, apply: bool) -> None:
     for kind, src, dst in plan(local, probe, unpack):
+        if kind == "archive":
+            if points_to(src, dst) or points_to(dst, src):  # either layout from an older migration
+                continue
+            if dst.exists() and not os.path.lexists(src):
+                src, dst = dst, src  # archive was moved by the old tool; restore its path in the probe
+            if os.path.lexists(dst):
+                raise SystemExit(f"stop: {dst} already exists and is not the archive at {src}; nothing overwritten")
+            if src.is_dir():
+                print(f"{'link ' if apply else 'would link'} {dst}: archive at {src}")
+                if apply:
+                    link(src.resolve(), dst)
+            continue
         if kind == "masks":
             if not src.exists():
                 print(f"skip   {dst}: {src} does not exist")
@@ -303,20 +341,35 @@ def migrate(local: Path, probe: Path | None, unpack: Path | None, apply: bool) -
                 if apply:
                     write_masks(src, dst)
             continue
-        if heal(src, dst, local, apply) and (not apply or os.path.lexists(dst)):
-            continue
-        if reason := stop_reason(src, dst):
-            raise SystemExit("stop: " + reason)
-        if not src.exists():
-            print(f"skip   {dst}: {src} does not exist")
-        elif is_link(src):
-            print(f"skip   {dst}: {src} is already a link")
-        elif dst.exists():
-            print(f"skip   {dst}: exists")
-        else:
-            print(f"{'do   ' if apply else 'would'}  {dst}: move here and link back from {src}")
-            if apply:
-                move_and_link(src, dst, local)
+        migrate_folder(local, src, dst, apply)
+        if probe and src == probe and points_to(src, dst) and apply:
+            # Nested compatibility links now live inside the migrated probe; keep them when removing the outer link.
+            write_links(local, [s for s in read_links(local) if Path(s) == probe or not Path(s).is_relative_to(probe)])
+
+
+def migrate_folder(local: Path, src: Path, dst: Path, apply: bool) -> None:
+    if src == dst:
+        return
+    if not is_link(src) and (src.resolve().is_relative_to(local.resolve()) or dst.absolute().is_relative_to(src.resolve())):
+        raise SystemExit(f"stop: source {src} overlaps {local}; nothing moved")
+    if heal(src, dst, local, apply) and (not apply or os.path.lexists(dst)):
+        return
+    if reason := stop_reason(src, dst):
+        raise SystemExit("stop: " + reason)
+    if points_to(src, dst):
+        print(f"skip   {src}: already linked to {dst}")
+        if apply:
+            record_link(local, src)
+    elif not src.exists():
+        print(f"skip   {dst}: {src} does not exist")
+    elif is_link(src):
+        raise SystemExit(f"stop: {src} links elsewhere; nothing moved")
+    elif dst.exists():
+        raise SystemExit(f"stop: {dst} already exists; compare with {src} before migrating")
+    else:
+        print(f"{'do   ' if apply else 'would'}  {dst}: move here and link back from {src}", flush=True)
+        if apply:
+            move_and_link(src, dst, local)
 
 
 def remove_links(local: Path, apply: bool) -> None:
@@ -350,7 +403,8 @@ def write_masks(templates: Path, evidence: Path) -> None:
 def plan(local: Path, probe: Path | None, unpack: Path | None) -> list[tuple[str, Path, Path]]:
     items = []
     if probe:
-        items += [("folder", probe / "archive", local / "archive"), ("masks", probe / "tools/templates", local / "evidence")]
+        items += [("folder", probe, local / "probe"), ("archive", local / "probe/archive", local / "archive"),
+                  ("masks", probe / "tools/templates", local / "evidence")]
     if unpack:
         items.append(("folder", unpack, local / "unpack"))
     return items
