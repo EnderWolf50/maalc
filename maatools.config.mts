@@ -20,6 +20,10 @@ const screens: [image: string, hits: string[]][] = [
   // as a server error with a countdown Retry or a Try Again button. They put RetryPopup on every other screen.
   ['RetryCountdown.png', ['RetryPopup', 'GoToMirrorEntry', 'NavTitle']],
   ['TryAgain.png', ['RetryPopup', 'GoToMirrorEntry', 'NavTitle']],
+  // Live 2026-10-20 (#84): the server error over the Mailbox after a request timed out, Close / Retry. Retry
+  // counts down "Retry 5" to "Retry 1" with a dark frame first, then reads "Retry".
+  ['ServerErrorRetryCountdown.png', ['RetryPopup']],
+  ['ServerErrorRetry.png', ['RetryPopup']],
   // The Parallel Superposition prompt after clearing floor 5 / 10 with the mode engaged (#85). Captured from the
   // game's own help sheet (the page behind it is the help text, not a map): the dialog is its live look, but where
   // it sits on screen is not confirmed. A Cancel / Confirm question, so PopupButton (one centred button) stays out.
