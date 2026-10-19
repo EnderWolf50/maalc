@@ -121,6 +121,13 @@ def test_a_still_screen_the_bot_also_saw_still_is_not_a_freeze():
     assert [(round(a), round(b)) for a, b in va.freezes(vt, still, {"Loading": (bt, bs)})] == [(30, 50)]
 
 
+def test_a_still_stretch_the_bot_logged_nothing_in_is_a_freeze():
+    vt = np.arange(0, 60, 0.1)
+    bt = np.arange(0, 20, 0.5)  # the bot stopped at 20 s; the recording ran on, still from 30 s
+    bot = {"Loading": (bt, np.sin(bt))}
+    assert [(round(a), round(b)) for a, b in va.freezes(vt, vt > 30, bot)] == [(30, 60)]
+
+
 def test_intervals_count_hub_passes_and_the_first_hit():
     lt = np.arange(0, 10, 0.1)
     scores = np.where((lt >= 2) & (lt <= 3.5), 0.9, 0.1)

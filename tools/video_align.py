@@ -15,18 +15,22 @@ first (rotated `maafw.bak.*` files, then `maafw.log`); pwsh does not expand a `*
 
 **Clock.** `--started` is the wall time of the first frame (screen-record's `started`), so a frame's time is
 started + pts + offset, and the offset drifts: on 2026-10-19 it went from +0.8 s to +1.3 s over an hour. The
-video is cut into `--chunk` seconds. The first offset is the one (-2 s to `--max-lost` s) at which the video's
-scores correlate best with the bot's own scores, if no other offset comes within 0.05; each later chunk is fitted
-within `--drift` s of the last offset found. A chunk with nothing to fit takes the nearest fitted offset; one that
-shows a screen but correlates under `--min-corr` stays unaligned and its frames are left out.
+video is cut into `--chunk` seconds. The anchor is the offset (-2 s to `--max-lost` s) at which the video's
+scores correlate best with the bot's own scores over two chunks, if no other offset comes within 0.05; then
+every chunk from the start is fitted within `--drift` s of the last offset found (the anchor, for the chunks
+before it). A chunk with nothing to fit takes the nearest fitted offset; one that shows a screen but correlates
+under `--min-corr` stays unaligned and its frames are left out.
 
 **Freezes and holes.** gfxcapture draws nothing while the display sleeps; the recorder then repeats its last frame
 (on 2026-10-19: 24 minutes, then the last 18 minutes of the video), so the pts run on but the screen is unknown.
 A freeze is `FREEZE` s or more of frames identical to the one before, pixel for pixel in greyscale (a repeated
-frame decodes to the same pixels), while the bot's scores change; its
-frames are left out and the tool prints it. A hole in the pts (over `HOLE` s without a frame) is printed too.
+frame decodes to the same pixels; a refresh of up to 1 s, or 3 frames, inside does not end it), while the bot's
+score changes on half its passes or more, or the bot logged no score at all. A screen the game itself left
+still (a stuck Now Loading) keeps the bot's score still too, and is no freeze. A freeze's frames are left out
+and the tool prints it. A hole in the pts (over `HOLE` s without a frame) is printed too.
 
-**Output.** One CSV row per interval a node was up (score over its threshold, frames under 0.25 s apart):
+**Output.** One CSV row per interval a node was up (score over its threshold, frames under 0.25 s apart, or 1.5
+frames at a lower `--fps`):
 when it came up (log time), how long it stayed, how many `--hub` passes started while it was up, how many until
 the node's first `Node.Recognition.Succeeded`, and how long after it came up that hit was logged. A summary per
 node follows. The logs go oldest first, as for `tools/maafw_timeline.py`.
@@ -51,6 +55,8 @@ GAP = 0.25  # s: frames up closer than this make one interval
 MIN_SAMPLES = 10  # bot samples an offset must see in a chunk
 HOLE = 1.0  # s: a jump in the pts longer than this is lost frames
 FREEZE = 10.0  # s: an unchanged frame this long is a freeze
+
+
 def parse_log(lines, names, hub: str):
     """(hub pass starts, {name: hit times}, {name: (times, scores)}) of the bot's log, in epoch seconds."""
     starts, hits, bot = [], {n: [] for n in names}, {n: ([], []) for n in names}
@@ -72,8 +78,10 @@ def parse_log(lines, names, hub: str):
                 if s := r.search(line):
                     bot[n][0].append(t)
                     bot[n][1].append(float(s[1]))
-    bot = {n: (np.array(t), np.array(s)) for n, (t, s) in bot.items()}
-    return starts, hits, {n: (t[o], s[o]) for n, (t, s) in bot.items() for o in [np.argsort(t, kind="stable")]}
+    for n, (t, s) in bot.items():
+        order = np.argsort(t, kind="stable")  # searchsorted needs them in time order
+        bot[n] = (np.array(t)[order], np.array(s)[order])
+    return starts, hits, bot
 
 
 def video_scores(video: Path, nodes: dict, started: float, fps: float = 10.0):
@@ -193,11 +201,10 @@ def local(vt, vs, bot, v0, v1, around, drift, min_corr) -> Segment:
 
 
 def freezes(vt, still, bot=None, min_s=FREEZE, blip=1.0) -> list[tuple[float, float]]:
-    """Stretches of at least `min_s` where the frame does not change while the bot's own scores keep changing (on
-    half its passes or more); a changed frame
-    within `blip` s of the still frames on both sides does not end one (the recorder repeated its last frame,
-    refreshing it now and then). A screen the game itself left still (a stuck Now Loading) keeps the bot's scores
-    still too, and is no freeze."""
+    """Stretches of at least `min_s` where the frame does not change while the bot's own score keeps changing (on
+    half its passes or more) or the bot logged none; a changed frame within `blip` s of the still frames on both
+    sides does not end one (the recorder repeated its last frame, refreshing it now and then). A screen the game
+    itself left still (a stuck Now Loading) keeps the bot's score still too, and is no freeze."""
     out = []
     for t, s in zip(vt, still):
         if not s:
@@ -208,10 +215,10 @@ def freezes(vt, still, bot=None, min_s=FREEZE, blip=1.0) -> list[tuple[float, fl
             out.append([t, t])
 
     def bot_moved(a, b):  # 2 s in from each end: the edges still show the screen fading in or out
-        inner = [bs[(bt >= a + 2) & (bt <= b - 2)] for bt, bs in (bot or {}).values()]
+        inner = [x for bt, bs in (bot or {}).values() if len(x := bs[(bt >= a + 2) & (bt <= b - 2)]) > 1]
         # 2026-10-19: the bot's score moved between 71 % and 80 % of its passes through the two freezes, and
-        # 0 % to 25 % through still screens of the game
-        return bot is None or any(len(x) > 1 and (np.abs(np.diff(x)) > 0.01).mean() >= 0.5 for x in inner)
+        # 0 % to 25 % through still screens of the game. A bot that logged nothing cannot tell: the screen is unknown.
+        return not inner or any((np.abs(np.diff(x)) > 0.01).mean() >= 0.5 for x in inner)
 
     return [(a, b) for a, b in out if b - a >= min_s and bot_moved(a, b)]
 
@@ -227,20 +234,22 @@ def fit(vt, vs, bot, chunk=60.0, max_lost=7200.0, min_corr=0.8, drift=2.0, froze
 
     The anchor comes from a wide search (`chunk_offset`, -2 s to `max_lost`) over two chunks, sliding on until
     one is found; then every chunk from the start is fitted within `drift` s of the last offset found (the
-    anchor, for the chunks before it), which follows the
-    slow drift between the recorder's clock and the log's. A chunk mostly inside a freeze stays unaligned
-    (corr -1), and so does one that shows a screen but fits no offset near the last (corr under min_corr). A
-    chunk with nothing to fit (corr -1 from the fit: no screen change, too few bot samples) takes the nearest
-    fitted offset, since the clock runs on through it."""
+    anchor, for the chunks before it), which follows the slow drift between the recorder's clock and the log's.
+    A chunk mostly inside a freeze stays unaligned (corr -1), and so does one that shows a screen but fits no
+    offset near the last (corr under min_corr). A chunk with nothing to fit (corr -1 from the fit: no screen
+    change, too few bot samples) takes the nearest fitted offset, since the clock runs on through it."""
     edges = list(np.arange(vt[0], vt[-1], chunk)) + [vt[-1] + 1e-6]
     chunks = list(zip(edges, edges[1:]))
 
     def frozen_chunk(a, b):
         return sum(min(b, y) - max(a, x) for x, y in frozen if x < b and y > a) >= 0.9 * (b - a)
 
-    off = next((o for a, _ in chunks if not frozen_chunk(a, a + chunk)
-                for o in [chunk_offset(vt, vs, bot, a, min(a + 2 * chunk, edges[-1]), max_lost, min_corr).offset]
-                if o is not None), None)
+    off = None
+    for a, _ in chunks:
+        if not frozen_chunk(a, a + chunk):
+            off = chunk_offset(vt, vs, bot, a, min(a + 2 * chunk, edges[-1]), max_lost, min_corr).offset
+            if off is not None:
+                break
     if off is None:
         return [Segment(a, b, None, -1.0) for a, b in chunks]
     segs, carry = [], []
@@ -322,6 +331,7 @@ def main(argv=None) -> None:
     nodes = {n: (RESOURCE / f if (RESOURCE / f).exists() else Path(f), tuple(map(int, roi.split(","))), float(th))
              for n, f, roi, th in a.node}
     lo, hi = stamp(a.lo) if a.lo else 0.0, stamp(a.hi) if a.hi else float("inf")
+
     def lines():
         for path in a.log:
             with open(path, encoding="utf-8", errors="replace") as f:
