@@ -144,6 +144,8 @@ def detach(cmd: list[str], log: Path) -> int:
             try:
                 p = subprocess.Popen(cmd, creationflags=flags | subprocess.CREATE_BREAKAWAY_FROM_JOB, **kw)
             except PermissionError:  # the caller's job forbids breakaway; still outlives a tree kill of the caller
+                out.write(b"[detach] the caller's job refused breakaway: closing that job still ends this process\n")
+                out.flush()
                 p = subprocess.Popen(cmd, creationflags=flags, **kw)
         else:
             p = subprocess.Popen(cmd, start_new_session=True, **kw)
@@ -151,15 +153,16 @@ def detach(cmd: list[str], log: Path) -> int:
     return p.pid
 
 
-def detached_status(log: Path, is_alive=alive) -> str:
+def detached_status(log: Path, is_alive=alive) -> tuple[bool, str]:
+    """(whether the process `detach` started with this log still runs, a line saying so)."""
     try:
         doc = json.loads(pid_file(log).read_text(encoding="utf-8"))
     except FileNotFoundError:
-        return f"nothing was started with --log {log}"
+        return False, f"nothing was started with --log {log}"
     if is_alive(doc["pid"], doc["start"]):
-        return f"running pid {doc['pid']}: {doc['cmd'][:120]}"
+        return True, f"running pid {doc['pid']}: {doc['cmd'][:120]}"
     lines = log.read_text(encoding="utf-8", errors="replace").splitlines() if log.exists() else []
-    return f"ended pid {doc['pid']}, last line: {lines[-1] if lines else '(no output)'}"
+    return False, f"ended pid {doc['pid']}, last line: {lines[-1] if lines else '(no output)'}"
 
 
 def main(argv=None) -> int:
@@ -173,12 +176,14 @@ def main(argv=None) -> int:
     d.add_argument("--log", type=Path, required=True)
     d.add_argument("command", nargs=argparse.REMAINDER)
     s = sub.add_parser("status")
-    s.add_argument("--resource", choices=RESOURCES)
-    s.add_argument("--log", type=Path, help="the --log of a detach: is its process still running")
+    which = s.add_mutually_exclusive_group()
+    which.add_argument("--resource", choices=RESOURCES)
+    which.add_argument("--log", type=Path, help="the --log of a detach: is its process still running")
     a = ap.parse_args(argv)
     if a.cmd == "status" and a.log:
-        print(text := detached_status(a.log))
-        return 0 if text.startswith("running") else 1
+        running, text = detached_status(a.log)
+        print(text)
+        return 0 if running else 1
     if a.cmd == "status":
         for res in [a.resource] if a.resource else RESOURCES:
             print(f"{res}:", *(status(main_checkout() / ".local" / "queue" / res) or ["free"]), sep="\n  ")

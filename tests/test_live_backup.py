@@ -35,3 +35,12 @@ def test_hold_gives_up_at_the_timeout(tmp_path, capsys):
     (tmp_path / "install").mkdir()
     assert bk.hold(tmp_path / "install", tmp_path / "bak", tmp_path / "never", timeout=0.1, poll=0.02) == 0
     assert "timed out" in capsys.readouterr().out
+
+
+def test_hold_keeps_the_emulator_past_the_timeout_while_the_guarded_bot_runs(tmp_path, capsys):
+    (tmp_path / "install").mkdir()
+    checks = iter([True, True, True, False])  # the bot runs for three polls past the timeout, then ends
+    assert bk.hold(tmp_path / "install", tmp_path / "bak", tmp_path / "never", timeout=0, poll=0.01,
+                   guard=tmp_path / "bot.log", running=lambda log: next(checks)) == 0
+    out = capsys.readouterr().out
+    assert "waiting while" in out and "timed out" in out and next(checks, "used up") == "used up"
