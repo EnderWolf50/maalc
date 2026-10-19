@@ -1134,6 +1134,9 @@ class RouteMap(CustomAction):
             if still(context) is None:
                 return True  # still fading in or out: let MirrorHub look again
             image, bus = self.find_bus(context)
+            if seen(context, image, "GiftGet"):  # live 2026-10-19: it slid in over the map after a fight
+                log("map: an E.G.O gift window covers the map; MirrorHub takes it")
+                return True
             bx, by = bus or BUS_REST  # no bus found: assume the map at rest
             slots = self.read_slots(context, image, bx, by) if bus else {}
             if slots:

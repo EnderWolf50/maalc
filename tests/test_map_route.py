@@ -202,3 +202,15 @@ def test_the_map_title_gives_the_floor(context, shown, floor):
     context.run_recognition.side_effect = lambda name, image, override=None: SimpleNamespace(
         all_results=[SimpleNamespace(text=shown, box=(40, 90, 220, 25))] if shown else [])
     assert actions.map_floor(context, np.zeros((720, 1280, 3), np.uint8)) == floor
+
+
+def test_a_gift_window_over_the_map_after_a_battle_goes_back_to_mirror_hub(context, monkeypatch):
+    # Live 2026-10-19 23:34: after an abnormality fight E.G.O Gift GET! slid in over the map (GiftGet 0.73, under its
+    # threshold, MirrorMap 0.997); RouteMap read under it, found no bus, dragged the map about and went to L2, then L3.
+    monkeypatch.setattr(actions, "map_weights", lambda context: AB_WEIGHTS)
+    actions.RUN["map_entered"] = True
+    context.run_recognition.side_effect = lambda name, image, override=None: SimpleNamespace(hit=True) if name == "GiftGet" else None
+    actions.RouteMap().run(context, None)
+    context.tasker.controller.post_touch_down.assert_not_called()
+    context.tasker.controller.post_click.assert_not_called()
+    assert actions.STUCK["flag"] is None
