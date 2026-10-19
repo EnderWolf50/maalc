@@ -1,4 +1,5 @@
 import json
+import os
 import stat
 from pathlib import Path
 
@@ -105,17 +106,70 @@ def test_a_file_written_during_the_copy_stops_the_move(dirs, monkeypatch):
     make_tree(src)
     monkeypatch.setattr(lm, "same_drive", lambda a, b: False)
     real = lm.file_stats
-    calls = []
 
     def late_write(root):
-        calls.append(root)
-        if len(calls) == 3:  # the check after the original was renamed aside
+        if root.name.endswith(".migrating") and not (root / "late.png").exists():  # right after the rename aside
             (root / "late.png").write_bytes(b"new")
         return real(root)
     monkeypatch.setattr(lm, "file_stats", late_write)
     expect_error(lambda: lm.move_and_link(src, dst, local), "changed while it was copied")
     assert (src / "late.png").read_bytes() == b"new" and not lm.is_link(src)  # nothing lost
     assert not dst.exists() and lm.leftovers(src, dst) == []
+
+
+def test_a_copy_with_different_bytes_stops_the_move(dirs, monkeypatch):
+    src, dst, local = dirs
+    make_tree(src)
+    monkeypatch.setattr(lm, "same_drive", lambda a, b: False)
+    real = lm.shutil.copytree
+
+    def corrupt(a, b, *args, **k):
+        out = real(a, b, *args, **k)  # copytree calls itself for subfolders: corrupt only at the top
+        if not Path(b).name.endswith(".partial"):
+            return out
+        f = Path(b) / "sub/clip.mp4"
+        st = f.stat()
+        f.write_bytes(b"y" * 300)  # same size
+        os.utime(f, ns=(st.st_atime_ns, st.st_mtime_ns))  # same time
+    monkeypatch.setattr(lm.shutil, "copytree", corrupt)
+    expect_error(lambda: lm.move_and_link(src, dst, local), "not identical")
+    assert (src / "sub/clip.mp4").read_bytes() == b"x" * 300 and not dst.exists()
+
+
+def test_a_failed_final_rename_puts_the_original_back(dirs, monkeypatch):
+    src, dst, local = dirs
+    make_tree(src)
+    monkeypatch.setattr(lm, "same_drive", lambda a, b: False)
+    real = type(src).rename
+
+    def refuse(self, target):
+        if self.name.endswith(".partial"):
+            raise PermissionError(5, "denied")
+        return real(self, target)
+    monkeypatch.setattr(type(src), "rename", refuse)
+    expect_error(lambda: lm.move_and_link(src, dst, local), "denied")
+    assert (src / "INDEX.md").exists() and not lm.is_link(src) and lm.leftovers(src, dst) == [] and not dst.exists()
+
+
+def test_a_rerun_finishes_deleting_the_original_once_the_copy_is_final(dirs):
+    src, dst, local = dirs
+    make_tree(dst)
+    lm.link(dst, src)
+    lm.record_link(local, src)
+    make_tree(lm.deleting_of(src))  # an interrupted delete of the original
+    lm.migrate(local, src.parent, None, apply=True)
+    assert not lm.deleting_of(src).exists() and (dst / "INDEX.md").exists() and lm.is_link(src)
+
+
+def test_a_rerun_relinks_and_records_what_an_interrupted_run_left(dirs, monkeypatch):
+    src, dst, local = dirs
+    monkeypatch.setattr(lm, "write_masks", lambda *a: None)
+    make_tree(dst)  # renamed into .local, then the run stopped before the link
+    lm.migrate(local, src.parent, None, apply=True)
+    assert lm.points_to(src, dst) and lm.read_links(local) == [str(src)]
+    lm.write_links(local, [])  # a link made but never recorded
+    lm.migrate(local, src.parent, None, apply=True)
+    assert lm.read_links(local) == [str(src)]
 
 
 def test_a_failed_link_puts_the_original_back(dirs, drive, monkeypatch):

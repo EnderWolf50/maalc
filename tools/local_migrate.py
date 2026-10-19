@@ -6,12 +6,13 @@
 
 Dry run unless `--apply`. On the same drive a folder is renamed into `.local/`. Across drives it is copied to
 `<target>.partial`, the copy is checked against the original (the same files with the same sizes and times),
-the original is renamed aside to `<name>.migrating` and checked once more against the copy (a file written
-in between stops the move), the copy takes its final name, and only then is the original deleted. Either way
-a directory junction (a symlink off Windows) is left at the old place, pointing into `.local/`, so a task still
-using the old path keeps working, and each link is recorded in `.local/links.json`. Every step that fails
-puts things back as they were. A `.partial` or `.migrating` folder left by an interrupted run stops the tool
-with a message instead of being guessed at. `--remove-links` deletes the recorded links, and only while they
+the original is renamed aside to `<name>.migrating` and checked once more against the copy, byte for byte (a
+file written in between, or a bad copy, stops the move), the copy takes its final name, the link goes in, and
+only then is the original renamed `<name>.deleting` and deleted. Either way a directory junction (a symlink
+off Windows) is left at the old place, pointing into `.local/`, so a task still using the old path keeps
+working, and each link is recorded in `.local/links.json`. Every step that fails puts things back as they
+were. A rerun finishes what an interrupted run left in a known state (a `.deleting` original, a missing or
+unrecorded link); a `.partial` or `.migrating` folder stops the tool with a message instead of being guessed at. `--remove-links` deletes the recorded links, and only while they
 still point into `.local/`, so the data stays in `.local/`. A target that already exists is left alone.
 
   --probe   its `archive/` moves to `.local/archive/` (with INDEX.md); its `tools/templates/` (full screens
@@ -20,6 +21,7 @@ still point into `.local/`, so the data stays in `.local/`. A target that alread
   --unpack  moves to `.local/unpack/`: the game data, with `raw/Localize/<lang>/` in it.
 """
 import argparse
+import filecmp
 import json
 import os
 import shutil
@@ -43,13 +45,13 @@ MASKS = [
 LINKS = "links.json"
 
 
-def link(src: Path, dst: Path) -> None:
-    """Make `dst` a directory link to `src`: a junction on Windows (no admin rights needed), a symlink elsewhere."""
-    dst.parent.mkdir(parents=True, exist_ok=True)
+def link(target: Path, at: Path) -> None:
+    """Make `at` a directory link to `target`: a junction on Windows (no admin rights needed), a symlink elsewhere."""
+    at.parent.mkdir(parents=True, exist_ok=True)
     if sys.platform == "win32":
-        subprocess.run(["cmd", "/c", "mklink", "/J", str(dst), str(src)], check=True, capture_output=True)
+        subprocess.run(["cmd", "/c", "mklink", "/J", str(at), str(target)], check=True, capture_output=True)
     else:
-        dst.symlink_to(src, target_is_directory=True)
+        at.symlink_to(target, target_is_directory=True)
 
 
 def is_link(p: Path) -> bool:
@@ -75,7 +77,8 @@ def remove_tree(p: Path) -> None:
 
 
 def file_stats(root: Path) -> dict[str, tuple[int, int]]:
-    """Relative path -> (size, mtime in whole seconds) of every file under root; copy2 keeps both."""
+    """Relative path -> (size, mtime in whole seconds) of every file under root; copy2 keeps both. Fast, for
+    spotting a file written while the folder was copied."""
     out = {}
     for p in root.rglob("*"):
         if p.is_file():
@@ -84,12 +87,55 @@ def file_stats(root: Path) -> dict[str, tuple[int, int]]:
     return out
 
 
+def same_content(a: Path, b: Path) -> bool:
+    """Every file under a and b, byte for byte: the last check before the original is deleted."""
+    names = file_stats(a)
+    return names.keys() == file_stats(b).keys() and all(
+        filecmp.cmp(a / n, b / n, shallow=False) for n in names)
+
+
 def same_drive(a: Path, b: Path) -> bool:
     return os.stat(a).st_dev == os.stat(b.parent if not b.exists() else b).st_dev
 
 
+def aside_of(src: Path) -> Path:
+    return src.with_name(src.name + ".migrating")  # the original, renamed while the copy is checked
+
+
+def deleting_of(src: Path) -> Path:
+    return src.with_name(src.name + ".deleting")  # the original once the copy is final: safe to delete
+
+
+def partial_of(dst: Path) -> Path:
+    return dst.with_name(dst.name + ".partial")  # a copy not yet checked
+
+
+def points_to(at: Path, target: Path) -> bool:
+    return is_link(at) and Path(os.path.realpath(at)) == target.resolve()
+
+
 def leftovers(src: Path, dst: Path) -> list[Path]:
-    return [p for p in (src.with_name(src.name + ".migrating"), dst.with_name(dst.name + ".partial")) if p.exists()]
+    """What an interrupted run left that needs a person: an unchecked copy, or an original set aside."""
+    return [p for p in (aside_of(src), partial_of(dst)) if p.exists()]
+
+
+def link_back(dst: Path, src: Path, local: Path, undo) -> None:
+    """Put the link to dst at src and record it; on failure run `undo` and re-raise."""
+    try:
+        link(dst, src)
+    except (OSError, subprocess.CalledProcessError):
+        undo()
+        raise
+    record_link(local, src)
+
+
+def drop_copy(dst: Path) -> None:
+    """Remove a copy that will not be used. Renamed to .partial first, so a removal that stops halfway still
+    reads as an unchecked copy, never as the finished target."""
+    part = partial_of(dst)
+    if dst != part:
+        dst.rename(part)
+    remove_tree(part)
 
 
 def move_and_link(src: Path, dst: Path, local: Path) -> None:
@@ -97,42 +143,64 @@ def move_and_link(src: Path, dst: Path, local: Path) -> None:
     dst.parent.mkdir(parents=True, exist_ok=True)
     if same_drive(src, dst):
         src.rename(dst)  # one atomic step; a folder in use fails here and nothing changes
-        try:
-            link(dst, src)
-        except (OSError, subprocess.CalledProcessError):
-            dst.rename(src)
-            raise
-        record_link(local, src)
+        link_back(dst, src, local, undo=lambda: dst.rename(src))
         return
-    partial = dst.with_name(dst.name + ".partial")
+    part = partial_of(dst)
     try:
-        shutil.copytree(src, partial, symlinks=True)
+        shutil.copytree(src, part, symlinks=True)
     except BaseException:
-        if partial.exists():
-            remove_tree(partial)
+        if part.exists():
+            remove_tree(part)
         raise
-    if file_stats(src) != file_stats(partial):
-        remove_tree(partial)
+    if file_stats(src) != file_stats(part):
+        remove_tree(part)
         raise RuntimeError(f"copy of {src} differs from the original; nothing changed")
-    aside = src.with_name(src.name + ".migrating")
+    aside = aside_of(src)
     try:
         src.rename(aside)
     except OSError as e:
-        remove_tree(partial)
+        remove_tree(part)
         raise RuntimeError(f"{src} is in use ({e}); copy removed, original kept") from e
-    if file_stats(aside) != file_stats(partial):  # written to between the check and the rename
+    if file_stats(aside) != file_stats(part) or not same_content(aside, part):  # written to, or a bad copy
         aside.rename(src)
-        remove_tree(partial)
-        raise RuntimeError(f"{src} changed while it was copied; copy removed, original kept")
-    partial.rename(dst)
+        remove_tree(part)
+        raise RuntimeError(f"{src} changed while it was copied, or the copy is not identical; copy removed, original kept")
     try:
-        link(dst, src)
-    except (OSError, subprocess.CalledProcessError):
+        part.rename(dst)
+    except OSError:
         aside.rename(src)
-        remove_tree(dst)
+        remove_tree(part)
         raise
-    record_link(local, src)
-    remove_tree(aside)
+
+    def undo():
+        aside.rename(src)
+        drop_copy(dst)
+    link_back(dst, src, local, undo)
+    gone = deleting_of(src)
+    aside.rename(gone)  # from here the copy in .local/ is the data and the original only waits to be deleted
+    remove_tree(gone)
+
+
+def heal(src: Path, dst: Path, local: Path, apply: bool) -> bool:
+    """Finish what an interrupted run left in a known state. True when there was something to finish."""
+    did = False
+    gone = deleting_of(src)
+    if gone.exists() and dst.exists():
+        print(f"{'finish' if apply else 'would finish'} deleting {gone}: the data is complete in {dst}")
+        if apply:
+            remove_tree(gone)
+        did = True
+    if dst.exists() and not src.exists() and not leftovers(src, dst):
+        print(f"{'relink' if apply else 'would relink'} {src}: its data is in {dst} but the link is missing")
+        if apply:
+            link(dst, src)
+        did = True
+    if points_to(src, dst) and str(src) not in read_links(local):
+        print(f"{'record' if apply else 'would record'} the link at {src}")
+        if apply:
+            record_link(local, src)
+        did = True
+    return did
 
 
 def read_links(local: Path) -> list[str]:
@@ -189,10 +257,12 @@ def plan(local: Path, probe: Path | None, unpack: Path | None) -> list[tuple[str
 
 def migrate(local: Path, probe: Path | None, unpack: Path | None, apply: bool) -> None:
     for kind, src, dst in plan(local, probe, unpack):
-        verb = {"masks": "write masks from", "folder": "move here and link back from"}[kind]
         if kind == "folder" and (left := leftovers(src, dst)):
-            raise SystemExit(f"stop: an interrupted run left {', '.join(map(str, left))}; the original is the "
-                             f"`.migrating` folder if there is one. Put it back by hand, then rerun.")
+            raise SystemExit(f"stop: an interrupted run left {', '.join(map(str, left))}. A `.migrating` folder is "
+                             f"the original, a `.partial` one an unchecked copy: put the original back at {src} "
+                             f"and delete the copy, then rerun.")
+        if kind == "folder" and heal(src, dst, local, apply):
+            continue
         if not src.exists():
             print(f"skip   {dst}: {src} does not exist")
         elif is_link(src):
@@ -200,6 +270,7 @@ def migrate(local: Path, probe: Path | None, unpack: Path | None, apply: bool) -
         elif dst.exists() and (kind == "folder" or (dst / "masks.json").exists()):
             print(f"skip   {dst}: exists")
         else:
+            verb = {"masks": "write masks from", "folder": "move here and link back from"}[kind]
             print(f"{'do   ' if apply else 'would'}  {dst}: {verb} {src}")
             if apply and kind == "masks":
                 write_masks(src, dst)
