@@ -909,6 +909,7 @@ class PickThemePack(CustomAction):
         x = cards[i][0]
         log(f"floor {floor}: pull {ranked[i][0]!r}")
         swipe(context, x, 330, x, 650, ms=600, wait=0)
+        RUN["fresh_floor"] = True  # find_bus: the new map takes no drag for its first seconds
         # The page fades out slowly; do not let MirrorHub pull twice.
         until(context, lambda im: "FLOOR" not in text(context, im, [480, 100, 320, 40]), timeout=9)
         return True
@@ -969,7 +970,8 @@ PANEL_REWARDS = [700, 495, 110, 30]  # the "Clear Rewards" label
 PANEL_COST = [730, 545, 40, 35]  # the number by its Cost coin
 MAP_TITLE = [40, 85, 240, 35]  # "Exploring Floor 3", top left
 MAP_LEAVING = 6  # s RouteMap waits for the last floor's map to give way to this floor's
-MAP_PAN_LIMIT = 8  # s find_bus drags a map again that took none of its drags
+MAP_PAN_LIMIT = 8  # s find_bus drags a fresh map again that took none of its drags
+BUS_JITTER = 3  # px the bus's match moves on a map that did not move
 
 
 def seen(context, image, node, roi=None):
@@ -1090,6 +1092,7 @@ def enter_node(context):
         tap(context, *ENTER, wait=0)
         if until(context, lambda im: not seen(context, im, "MapNodePanel")) is not None:
             log("entered the node")
+            RUN.pop("fresh_floor", None)
             until(context, lambda im: not seen(context, im, "MirrorMap"), timeout=3)  # the map fades out
             return True
     return stuck("Enter on the node panel did nothing")
@@ -1125,8 +1128,8 @@ class RouteMap(CustomAction):
         image = still(context)
         if image is None:
             return True  # still fading in or out: let MirrorHub look again
-        if not self.this_floor(context, image):
-            return True
+        if seen(context, image, "GiftGet") or not self.wait_for_floor(context, image):
+            return True  # MirrorHub confirms the gift window, or looks again once the map is this floor's
         if self.follow(context):
             return enter_node(context)
         RUN.pop("map_plan", None)
@@ -1190,29 +1193,30 @@ class RouteMap(CustomAction):
         return True
 
     @staticmethod
-    def this_floor(context, image):
-        """Whether the map is this floor's, not the last floor's still up after a theme pack pull.
+    def wait_for_floor(context, image):
+        """Whether the map is this floor's, after waiting out the last floor's, still up after a theme pack pull.
 
         Live 2026-10-19 (8 of 8 floors after the first): the last floor's map stayed ~3 s after the pull, its bus
         driving off to the exit; RouteMap dragged it, then read the new floor with its bus at rest.
-        A title that keeps another number for MAP_LEAVING s is believed: the floor was misread.
+        A title that keeps another number for MAP_LEAVING s is a misread: it is not looked at again this floor.
         """
         floor, shown = RUN.get("floor"), map_floor(context, image)
-        if floor is None or shown in (None, floor):
+        if floor is None or shown in (None, floor) or RUN.get("title_off") == floor:
             return True
         log(f"map: floor {shown}'s map is up, floor {floor} next; waiting for it")
-        if until(context, lambda im: map_floor(context, im) in (None, floor), timeout=MAP_LEAVING) is not None:
+        if until(context, lambda im: map_floor(context, im) == floor, timeout=MAP_LEAVING) is not None:
             return False  # MirrorHub looks again: the new map may still be fading in
-        log(f"map: the map stays floor {shown}; going by it")
-        RUN["floor"] = shown
+        log(f"map: the title stays floor {shown}; reading the map as it is")
+        RUN["title_off"] = floor
         return True
 
     @staticmethod
     def find_bus(context):
         """A screenshot and the bus's top-left in it, after panning the bus to BUS_HOME.
 
-        Up to three pans that move the bus. A pan that leaves it where it was is made again, for up to
-        MAP_PAN_LIMIT s: live 2026-10-19, a floor's new map took no drag for its first seconds.
+        Up to three pans. On a floor's fresh map (no node entered since the theme pack) a pan that leaves the
+        bus where it was does not count and is made again, for up to MAP_PAN_LIMIT s: live 2026-10-19, a new
+        map took no drag for its first seconds.
         """
         end, pans, last = time.monotonic() + MAP_PAN_LIMIT, 0, None
         while True:
@@ -1224,11 +1228,12 @@ class RouteMap(CustomAction):
             dx, dy = BUS_HOME[0] - bx, BUS_HOME[1] - by
             if abs(dx) <= 30 and abs(dy) <= 25:
                 return image, (bx, by)
-            held = last is not None and abs(bx - last[0]) <= 3 and abs(by - last[1]) <= 3
-            if held and time.monotonic() > end:
-                log(f"map: the bus stayed at {bx}, {by} through {MAP_PAN_LIMIT} s of drags")
-                return image, (bx, by)
-            if not held:
+            held = last is not None and abs(bx - last[0]) <= BUS_JITTER and abs(by - last[1]) <= BUS_JITTER
+            if held and RUN.get("fresh_floor"):
+                if time.monotonic() > end:
+                    log(f"map: the bus stayed at {bx}, {by} through {MAP_PAN_LIMIT} s of drags")
+                    return image, (bx, by)
+            else:
                 if pans == 3:
                     return image, (bx, by)
                 pans += 1

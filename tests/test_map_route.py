@@ -140,13 +140,13 @@ def test_the_lit_links_from_the_bus_read_at_the_far_left():
 AB_WEIGHTS = {"event": 1, "battle": 2, "abno": 5, "unknown": 9}
 
 
-def title_reads(context, shown, until=0.0, then=None):
-    """The map's floor title reads shown, then from the fake clock's until on; everything else as the fake has it."""
+def title_reads(context, shown, switch_at=0.0, then=None):
+    """The map's floor title reads shown, then from the fake clock's switch_at on; everything else as the fake has it."""
     inner = context.run_recognition.side_effect
 
     def run_recognition(name, image, override=None):
         if name == "ReadText" and override["ReadText"]["roi"] == actions.MAP_TITLE:
-            text = then if then and actions.time.monotonic() >= until else shown
+            text = then if then and actions.time.monotonic() >= switch_at else shown
             return SimpleNamespace(all_results=[SimpleNamespace(text=text, box=(40, 90, 220, 25))])
         return inner(name, image, override)
     context.run_recognition.side_effect = run_recognition
@@ -159,7 +159,7 @@ def test_the_last_floors_map_leaving_after_a_theme_pack_is_not_read(context, mon
     actions.RUN["floor"] = 3
     map_world(context, {(1, "mid"): {"cost"}}, [], bus_x=446)
     ctl, gone = context.tasker.controller, actions.time.monotonic() + 3
-    title_reads(context, "Exploring Floor 2", until=gone, then="Exploring Floor 3")
+    title_reads(context, "Exploring Floor 2", switch_at=gone, then="Exploring Floor 3")
     downs = []
     touch_down = ctl.post_touch_down.side_effect
     ctl.post_touch_down.side_effect = lambda x, y: downs.append(actions.time.monotonic()) or touch_down(x, y)
@@ -169,22 +169,25 @@ def test_the_last_floors_map_leaving_after_a_theme_pack_is_not_read(context, mon
     assert actions.RUN["floor"] == 3
 
 
-def test_a_floor_title_that_never_changes_is_believed(context, monkeypatch):
-    # A misread theme pack floor must not hold the map forever.
+def test_a_floor_title_that_never_changes_holds_the_map_once(context, clock, monkeypatch):
+    # A misread title must not hold the map forever, nor every read of the floor; the floor itself stays.
     monkeypatch.setattr(actions, "map_weights", lambda context: AB_WEIGHTS)
     actions.RUN["floor"] = 3
     map_world(context, {(1, "mid"): {"cost"}}, [], bus_x=446)
     title_reads(context, "Exploring Floor 2")
     actions.RouteMap().run(context, None)
-    assert actions.RUN["floor"] == 2
+    assert actions.RUN["floor"] == 3
     context.tasker.controller.post_click.assert_called()
+    waited = sum(clock)
+    actions.RouteMap().run(context, None)
+    assert sum(clock) - waited < actions.MAP_LEAVING  # not waited out again
 
 
 def test_a_fresh_floors_map_that_does_not_take_drags_yet_is_dragged_until_the_bus_moves(context, monkeypatch):
     # Live 2026-10-19: a floor's new map ignored drags for its first seconds; after four looks find_bus gave up and
     # the floor was read and tapped with the bus at rest, its top row under the resource bar.
     monkeypatch.setattr(actions, "map_weights", lambda context: AB_WEIGHTS)
-    actions.RUN["floor"] = 3
+    actions.RUN.update(floor=3, fresh_floor=True)  # set by the theme pack pull
     nodes = {(1, "up"): {"event"}, (1, "down"): {"cost"}}
     offsets = map_world(context, nodes, [], bus_x=446)
     title_reads(context, "Exploring Floor 3")
@@ -204,13 +207,25 @@ def test_the_map_title_gives_the_floor(context, shown, floor):
     assert actions.map_floor(context, np.zeros((720, 1280, 3), np.uint8)) == floor
 
 
+def test_a_map_that_does_not_pan_costs_no_extra_drags_once_a_node_is_entered(context, monkeypatch):
+    # Only a floor's fresh map waits out its drags; elsewhere three pans stay the limit.
+    nodes = {(1, "mid"): {"cost"}}
+    map_world(context, nodes, [], bus_x=446)
+    ctl = context.tasker.controller
+    ctl.post_touch_move.side_effect = lambda x, y: MagicMock()
+    actions.RouteMap.find_bus(context)
+    assert ctl.post_touch_down.call_count == 3
+
+
 def test_a_gift_window_over_the_map_after_a_battle_goes_back_to_mirror_hub(context, monkeypatch):
     # Live 2026-10-19 23:34: after an abnormality fight E.G.O Gift GET! slid in over the map (GiftGet 0.73, under its
     # threshold, MirrorMap 0.997); RouteMap read under it, found no bus, dragged the map about and went to L2, then L3.
     monkeypatch.setattr(actions, "map_weights", lambda context: AB_WEIGHTS)
-    actions.RUN["map_entered"] = True
+    plan = {"floor": 3, "steps": [("mid", "battle")]}
+    actions.RUN.update(map_entered=True, floor=3, map_plan=dict(plan))
     context.run_recognition.side_effect = lambda name, image, override=None: SimpleNamespace(hit=True) if name == "GiftGet" else None
     actions.RouteMap().run(context, None)
     context.tasker.controller.post_touch_down.assert_not_called()
     context.tasker.controller.post_click.assert_not_called()
     assert actions.STUCK["flag"] is None
+    assert actions.RUN["map_plan"] == plan  # the floor's plan survives the window
