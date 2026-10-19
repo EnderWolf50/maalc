@@ -25,7 +25,7 @@ under `--min-corr` stays unaligned and its frames are left out.
 (on 2026-10-19: 24 minutes, then the last 18 minutes of the video), so the pts run on but the screen is unknown.
 A freeze is `FREEZE` s or more of frames identical to the one before, pixel for pixel in greyscale (a repeated
 frame decodes to the same pixels; a refresh of up to 1 s, or 3 frames, inside does not end it), while the bot's
-score changes on half its passes or more, or the bot logged no score at all. A screen the game itself left
+score changes on half its passes or more, or the bot logged under two scores inside it. A screen the game itself left
 still (a stuck Now Loading) keeps the bot's score still too, and is no freeze. A freeze's frames are left out
 and the tool prints it. A hole in the pts (over `HOLE` s without a frame) is printed too.
 
