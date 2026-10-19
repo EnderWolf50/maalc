@@ -1,0 +1,100 @@
+17:03:41 1792314221.47 b1t5 cur #0 slots=8 drag=0.79s ready=True plaque_after=0.66 m={'box': (1022, 531), 'disc': 254, 'tpl': 0.84, 'at': (-21, -60)}
+17:03:44 1792314224.86 b1t5 hold1 #0 slots=8 drag=0.89s ready=True plaque_after=0.51 m={'box': (1022, 531), 'disc': 254, 'tpl': 0.91, 'at': (-20, -60)}
+17:03:48 1792314228.31 b1t5 cur #1 slots=8 drag=0.82s ready=True plaque_after=0.65 m={'box': (1022, 531), 'disc': 254, 'tpl': 0.56, 'at': (-6, -58)}
+17:03:51 1792314231.70 b1t5 hold1 #1 slots=8 drag=0.89s ready=True plaque_after=0.52 m={'box': (1022, 531), 'disc': 254, 'tpl': 0.67, 'at': (-9, -60)}
+17:03:55 1792314235.10 b1t5 cur #2 slots=8 drag=0.78s ready=True plaque_after=0.67 m={'box': (1022, 531), 'disc': 254, 'tpl': 0.86, 'at': (-22, -60)}
+17:03:58 1792314238.48 b1t5 hold1 #2 slots=8 drag=0.90s ready=True plaque_after=0.53 m={'box': (1022, 531), 'disc': 254, 'tpl': 0.56, 'at': (-6, -58)}
+17:04:03 1792314243.26 b1t5 cur #3 slots=8 drag=0.80s ready=False plaque_after=None m={'box': (1022, 531), 'disc': 254, 'tpl': 0.22, 'at': (-17, -46)}
+17:04:06 1792314246.75 b1t5 hold1 #3 slots=8 drag=0.95s ready=True plaque_after=0.54 m={'box': (1022, 531), 'disc': 254, 'tpl': 0.67, 'at': (-9, -60)}
+17:04:10 1792314250.15 b1t5 cur #4 slots=8 drag=0.80s ready=True plaque_after=0.64 m={'box': (1022, 531), 'disc': 254, 'tpl': 0.84, 'at': (-21, -60)}
+17:04:13 1792314253.52 b1t5 hold1 #4 slots=8 drag=0.88s ready=True plaque_after=0.53 m={'box': (1022, 531), 'disc': 254, 'tpl': 0.56, 'at': (-6, -58)}
+17:04:13 1792314253.52 b1t5 cur: 4/5 ready (0 not cleared)
+17:04:13 1792314253.52 b1t5 hold1: 5/5 ready (0 not cleared)
+17:04:40 1792314280.24 b1t5 cur #0 slots=8 drag=0.77s ready=True plaque_after=0.58 m={'box': (1022, 531), 'disc': 254, 'tpl': 0.56, 'at': (-6, -58)}
+17:04:43 1792314283.64 b1t5 hold1 #0 slots=8 drag=0.88s ready=True plaque_after=0.55 m={'box': (1022, 531), 'disc': 254, 'tpl': 0.56, 'at': (-6, -58)}
+17:04:47 1792314287.02 b1t5 over20 #0 slots=8 drag=0.80s ready=True plaque_after=0.6 m={'box': (1022, 531), 'disc': 254, 'tpl': 0.56, 'at': (-6, -58)}
+17:04:51 1792314291.45 b1t5 fast #0 slots=8 drag=0.43s ready=False plaque_after=None m={'box': (1022, 531), 'disc': 254, 'tpl': 0.22, 'at': (-17, -46)}
+17:04:54 1792314294.85 b1t5 cur #1 slots=8 drag=0.82s ready=True plaque_after=0.58 m={'box': (1022, 531), 'disc': 254, 'tpl': 0.91, 'at': (-20, -60)}
+17:04:58 1792314298.18 b1t5 hold1 #1 slots=8 drag=0.89s ready=True plaque_after=0.49 m={'box': (1022, 531), 'disc': 254, 'tpl': 0.56, 'at': (-6, -58)}
+17:05:01 1792314301.67 b1t5 over20 #1 slots=8 drag=0.87s ready=True plaque_after=0.65 m={'box': (1022, 531), 'disc': 254, 'tpl': 0.68, 'at': (-25, -59)}
+17:05:06 1792314306.13 b1t5 fast #1 slots=8 drag=0.47s ready=False plaque_after=None m={'box': (1022, 531), 'disc': 254, 'tpl': 0.23, 'at': (-17, -46)}
+17:05:09 1792314309.53 b1t5 cur #2 slots=8 drag=0.81s ready=True plaque_after=0.61 m={'box': (1022, 531), 'disc': 254, 'tpl': 0.91, 'at': (-20, -60)}
+17:05:12 1792314312.92 b1t5 hold1 #2 slots=8 drag=0.88s ready=True plaque_after=0.54 m={'box': (1022, 531), 'disc': 254, 'tpl': 0.56, 'at': (-6, -58)}
+17:05:16 1792314316.37 b1t5 over20 #2 slots=8 drag=0.87s ready=True plaque_after=0.62 m={'box': (1022, 531), 'disc': 254, 'tpl': 0.73, 'at': (-24, -59)}
+17:05:20 1792314320.81 b1t5 fast #2 slots=8 drag=0.47s ready=False plaque_after=None m={'box': (1022, 531), 'disc': 254, 'tpl': 0.23, 'at': (-17, -46)}
+17:05:24 1792314324.22 b1t5 cur #3 slots=8 drag=0.80s ready=True plaque_after=0.63 m={'box': (1022, 531), 'disc': 254, 'tpl': 0.56, 'at': (-6, -58)}
+17:05:27 1792314327.63 b1t5 hold1 #3 slots=8 drag=0.89s ready=True plaque_after=0.55 m={'box': (1022, 531), 'disc': 254, 'tpl': 0.68, 'at': (-25, -59)}
+17:05:31 1792314331.06 b1t5 over20 #3 slots=8 drag=0.81s ready=True plaque_after=0.65 m={'box': (1022, 531), 'disc': 254, 'tpl': 0.84, 'at': (-21, -60)}
+17:05:35 1792314335.51 b1t5 fast #3 slots=8 drag=0.47s ready=False plaque_after=None m={'box': (1022, 531), 'disc': 254, 'tpl': 0.22, 'at': (-17, -46)}
+17:05:38 1792314338.95 b1t5 cur #4 slots=8 drag=0.80s ready=True plaque_after=0.65 m={'box': (1022, 531), 'disc': 254, 'tpl': 0.68, 'at': (-25, -59)}
+17:05:42 1792314342.29 b1t5 hold1 #4 slots=8 drag=0.89s ready=True plaque_after=0.48 m={'box': (1022, 531), 'disc': 254, 'tpl': 0.91, 'at': (-20, -60)}
+17:05:47 1792314347.43 b1t5 over20 #4 slots=8 drag=1.09s ready=False plaque_after=None m={'box': (1022, 531), 'disc': 254, 'tpl': 0.22, 'at': (-17, -46)}
+17:05:52 1792314352.78 b1t5 fast #4 slots=8 drag=0.82s ready=False plaque_after=None m={'box': (1022, 531), 'disc': 254, 'tpl': 0.22, 'at': (-17, -46)}
+17:05:58 1792314358.33 b1t5 cur #5 slots=8 drag=1.31s ready=False plaque_after=None m={'box': (1022, 531), 'disc': 254, 'tpl': 0.23, 'at': (-17, -46)}
+17:06:04 1792314364.09 b1t5 hold1 #5 slots=8 drag=1.50s ready=False plaque_after=None m={'box': (1022, 531), 'disc': 254, 'tpl': 0.22, 'at': (-17, -46)}
+17:06:09 1792314369.84 b1t5 over20 #5 slots=8 drag=1.49s ready=False plaque_after=None m={'box': (1022, 531), 'disc': 254, 'tpl': 0.22, 'at': (-17, -46)}
+17:06:15 1792314375.11 b1t5 fast #5 slots=8 drag=1.04s ready=False plaque_after=None m={'box': (1022, 531), 'disc': 254, 'tpl': 0.23, 'at': (-17, -46)}
+17:06:20 1792314380.59 b1t5 cur #6 slots=8 drag=1.23s ready=False plaque_after=None m={'box': (1022, 531), 'disc': 254, 'tpl': 0.22, 'at': (-17, -46)}
+17:06:24 1792314384.92 b1t5 hold1 #6 slots=8 drag=1.50s ready=True plaque_after=0.66 m={'box': (1022, 531), 'disc': 254, 'tpl': 0.9, 'at': (-14, -60)}
+17:06:29 1792314389.86 b1t5 over20 #6 slots=8 drag=1.70s ready=True plaque_after=0.91 m={'box': (1022, 531), 'disc': 254, 'tpl': 0.84, 'at': (-21, -60)}
+17:06:34 1792314394.91 b1t5 fast #6 slots=8 drag=0.92s ready=False plaque_after=None m={'box': (1022, 531), 'disc': 254, 'tpl': 0.22, 'at': (-17, -46)}
+17:06:40 1792314400.57 b1t5 cur #7 slots=8 drag=1.40s ready=False plaque_after=None m={'box': (1022, 531), 'disc': 254, 'tpl': 0.22, 'at': (-17, -46)}
+17:06:45 1792314405.96 b1t5 hold1 #7 slots=8 drag=1.20s ready=False plaque_after=None m={'box': (1022, 531), 'disc': 254, 'tpl': 0.22, 'at': (-17, -46)}
+17:06:49 1792314409.51 b1t5 over20 #7 slots=8 drag=0.83s ready=True plaque_after=0.67 m={'box': (1022, 531), 'disc': 254, 'tpl': 0.73, 'at': (-24, -59)}
+17:06:53 1792314413.92 b1t5 fast #7 slots=8 drag=0.44s ready=False plaque_after=None m={'box': (1022, 531), 'disc': 254, 'tpl': 0.22, 'at': (-17, -46)}
+17:06:57 1792314417.29 b1t5 cur #8 slots=8 drag=0.79s ready=True plaque_after=0.6 m={'box': (1022, 531), 'disc': 254, 'tpl': 0.56, 'at': (-6, -58)}
+17:07:00 1792314420.66 b1t5 hold1 #8 slots=8 drag=0.89s ready=True plaque_after=0.52 m={'box': (1022, 531), 'disc': 254, 'tpl': 0.56, 'at': (-6, -58)}
+17:07:04 1792314424.02 b1t5 over20 #8 slots=8 drag=0.80s ready=True plaque_after=0.6 m={'box': (1022, 531), 'disc': 254, 'tpl': 0.84, 'at': (-21, -60)}
+17:07:08 1792314428.44 b1t5 fast #8 slots=8 drag=0.45s ready=False plaque_after=None m={'box': (1022, 531), 'disc': 254, 'tpl': 0.22, 'at': (-17, -46)}
+17:07:11 1792314431.83 b1t5 cur #9 slots=8 drag=0.79s ready=True plaque_after=0.62 m={'box': (1022, 531), 'disc': 254, 'tpl': 0.56, 'at': (-6, -58)}
+17:07:15 1792314435.19 b1t5 hold1 #9 slots=8 drag=0.88s ready=True plaque_after=0.52 m={'box': (1022, 531), 'disc': 254, 'tpl': 0.56, 'at': (-6, -58)}
+17:07:18 1792314438.55 b1t5 over20 #9 slots=8 drag=0.81s ready=True plaque_after=0.59 m={'box': (1022, 531), 'disc': 254, 'tpl': 0.76, 'at': (-24, -60)}
+17:07:22 1792314442.96 b1t5 fast #9 slots=8 drag=0.43s ready=False plaque_after=None m={'box': (1022, 531), 'disc': 254, 'tpl': 0.23, 'at': (-17, -46)}
+17:07:22 1792314442.99 b1t5 cur: 7/10 ready (0 not cleared)
+17:07:22 1792314442.99 b1t5 hold1: 8/10 ready (0 not cleared)
+17:07:22 1792314442.99 b1t5 over20: 8/10 ready (0 not cleared)
+17:07:22 1792314442.99 b1t5 fast: 0/10 ready (0 not cleared)
+17:08:16 1792314496.31 b1t5 dw03h #0 slots=8 drag=1.07s ready=True plaque_after=0.56 m={'box': (1022, 531), 'disc': 254, 'tpl': 0.56, 'at': (-6, -58)}
+17:08:20 1792314500.08 b1t5 dw05h #0 slots=8 drag=1.23s ready=True plaque_after=0.56 m={'box': (1022, 531), 'disc': 254, 'tpl': 0.84, 'at': (-21, -60)}
+17:08:25 1792314505.07 b1t5 old #0 slots=8 drag=2.40s ready=True plaque_after=0.58 m={'box': (1022, 531), 'disc': 254, 'tpl': 0.84, 'at': (-21, -60)}
+17:08:28 1792314508.50 b1t5 cur #0 slots=8 drag=0.80s ready=True plaque_after=0.65 m={'box': (1022, 531), 'disc': 254, 'tpl': 0.86, 'at': (-22, -60)}
+17:08:32 1792314512.12 b1t5 dw03h #1 slots=8 drag=1.06s ready=True plaque_after=0.57 m={'box': (1022, 531), 'disc': 254, 'tpl': 0.84, 'at': (-21, -60)}
+17:08:35 1792314515.95 b1t5 dw05h #1 slots=8 drag=1.26s ready=True plaque_after=0.61 m={'box': (1022, 531), 'disc': 254, 'tpl': 0.86, 'at': (-22, -60)}
+17:08:41 1792314521.01 b1t5 old #1 slots=8 drag=2.48s ready=True plaque_after=0.61 m={'box': (1022, 531), 'disc': 254, 'tpl': 0.73, 'at': (-24, -59)}
+17:08:44 1792314524.41 b1t5 cur #1 slots=8 drag=0.83s ready=True plaque_after=0.59 m={'box': (1022, 531), 'disc': 254, 'tpl': 0.56, 'at': (-6, -58)}
+17:08:48 1792314528.02 b1t5 dw03h #2 slots=8 drag=1.08s ready=True plaque_after=0.57 m={'box': (1022, 531), 'disc': 254, 'tpl': 0.56, 'at': (-6, -58)}
+17:08:51 1792314531.79 b1t5 dw05h #2 slots=8 drag=1.19s ready=True plaque_after=0.61 m={'box': (1022, 531), 'disc': 254, 'tpl': 0.84, 'at': (-21, -60)}
+17:08:56 1792314536.78 b1t5 old #2 slots=8 drag=2.43s ready=True plaque_after=0.6 m={'box': (1022, 531), 'disc': 254, 'tpl': 0.84, 'at': (-21, -60)}
+17:09:00 1792314540.19 b1t5 cur #2 slots=8 drag=0.79s ready=True plaque_after=0.65 m={'box': (1022, 531), 'disc': 254, 'tpl': 0.84, 'at': (-21, -60)}
+17:09:03 1792314543.80 b1t5 dw03h #3 slots=8 drag=1.06s ready=True plaque_after=0.58 m={'box': (1022, 531), 'disc': 254, 'tpl': 0.73, 'at': (-23, -59)}
+17:09:07 1792314547.61 b1t5 dw05h #3 slots=8 drag=1.23s ready=True plaque_after=0.6 m={'box': (1022, 531), 'disc': 254, 'tpl': 0.73, 'at': (-24, -59)}
+17:09:12 1792314552.59 b1t5 old #3 slots=8 drag=2.44s ready=True plaque_after=0.57 m={'box': (1022, 531), 'disc': 254, 'tpl': 0.56, 'at': (-6, -58)}
+17:09:15 1792314555.98 b1t5 cur #3 slots=8 drag=0.79s ready=True plaque_after=0.64 m={'box': (1022, 531), 'disc': 254, 'tpl': 0.84, 'at': (-21, -60)}
+17:09:19 1792314559.57 b1t5 dw03h #4 slots=8 drag=1.06s ready=True plaque_after=0.57 m={'box': (1022, 531), 'disc': 254, 'tpl': 0.84, 'at': (-21, -60)}
+17:09:23 1792314563.29 b1t5 dw05h #4 slots=8 drag=1.20s ready=True plaque_after=0.57 m={'box': (1022, 531), 'disc': 254, 'tpl': 0.56, 'at': (-6, -58)}
+17:09:28 1792314568.24 b1t5 old #4 slots=8 drag=2.42s ready=True plaque_after=0.57 m={'box': (1022, 531), 'disc': 254, 'tpl': 0.56, 'at': (-6, -58)}
+17:09:32 1792314573.00 b1t5 cur #4 slots=8 drag=0.80s ready=False plaque_after=None m={'box': (1022, 531), 'disc': 254, 'tpl': 0.22, 'at': (-17, -46)}
+17:09:36 1792314576.70 b1t5 dw03h #5 slots=8 drag=1.08s ready=True plaque_after=0.64 m={'box': (1022, 531), 'disc': 254, 'tpl': 0.84, 'at': (-21, -60)}
+17:09:40 1792314580.48 b1t5 dw05h #5 slots=8 drag=1.21s ready=True plaque_after=0.61 m={'box': (1022, 531), 'disc': 254, 'tpl': 0.67, 'at': (-9, -60)}
+17:09:45 1792314585.43 b1t5 old #5 slots=8 drag=2.41s ready=True plaque_after=0.58 m={'box': (1022, 531), 'disc': 254, 'tpl': 0.67, 'at': (-9, -60)}
+17:09:48 1792314588.79 b1t5 cur #5 slots=8 drag=0.78s ready=True plaque_after=0.62 m={'box': (1022, 531), 'disc': 254, 'tpl': 0.56, 'at': (-6, -58)}
+17:09:52 1792314592.41 b1t5 dw03h #6 slots=8 drag=1.06s ready=True plaque_after=0.6 m={'box': (1022, 531), 'disc': 254, 'tpl': 0.84, 'at': (-21, -60)}
+17:09:56 1792314596.11 b1t5 dw05h #6 slots=8 drag=1.22s ready=True plaque_after=0.53 m={'box': (1022, 531), 'disc': 254, 'tpl': 0.84, 'at': (-21, -60)}
+17:10:01 1792314601.09 b1t5 old #6 slots=8 drag=2.42s ready=True plaque_after=0.59 m={'box': (1022, 531), 'disc': 254, 'tpl': 0.56, 'at': (-6, -58)}
+17:10:04 1792314604.52 b1t5 cur #6 slots=8 drag=0.80s ready=True plaque_after=0.67 m={'box': (1022, 531), 'disc': 254, 'tpl': 0.84, 'at': (-21, -60)}
+17:10:08 1792314608.12 b1t5 dw03h #7 slots=8 drag=1.05s ready=True plaque_after=0.59 m={'box': (1022, 531), 'disc': 254, 'tpl': 0.56, 'at': (-6, -58)}
+17:10:11 1792314611.84 b1t5 dw05h #7 slots=8 drag=1.20s ready=True plaque_after=0.55 m={'box': (1022, 531), 'disc': 254, 'tpl': 0.56, 'at': (-6, -58)}
+17:10:16 1792314616.80 b1t5 old #7 slots=8 drag=2.41s ready=True plaque_after=0.6 m={'box': (1022, 531), 'disc': 254, 'tpl': 0.56, 'at': (-6, -58)}
+17:10:20 1792314620.17 b1t5 cur #7 slots=8 drag=0.80s ready=True plaque_after=0.61 m={'box': (1022, 531), 'disc': 254, 'tpl': 0.56, 'at': (-6, -58)}
+17:10:23 1792314623.78 b1t5 dw03h #8 slots=8 drag=1.09s ready=True plaque_after=0.58 m={'box': (1022, 531), 'disc': 254, 'tpl': 0.67, 'at': (-9, -60)}
+17:10:27 1792314627.51 b1t5 dw05h #8 slots=8 drag=1.21s ready=True plaque_after=0.56 m={'box': (1022, 531), 'disc': 254, 'tpl': 0.84, 'at': (-21, -60)}
+17:10:32 1792314632.49 b1t5 old #8 slots=8 drag=2.41s ready=True plaque_after=0.61 m={'box': (1022, 531), 'disc': 254, 'tpl': 0.73, 'at': (-24, -59)}
+17:10:35 1792314635.87 b1t5 cur #8 slots=8 drag=0.79s ready=True plaque_after=0.63 m={'box': (1022, 531), 'disc': 254, 'tpl': 0.86, 'at': (-22, -60)}
+17:10:39 1792314639.51 b1t5 dw03h #9 slots=8 drag=1.07s ready=True plaque_after=0.61 m={'box': (1022, 531), 'disc': 254, 'tpl': 0.86, 'at': (-22, -60)}
+17:10:43 1792314643.25 b1t5 dw05h #9 slots=8 drag=1.19s ready=True plaque_after=0.59 m={'box': (1022, 531), 'disc': 254, 'tpl': 0.56, 'at': (-6, -58)}
+17:10:48 1792314648.20 b1t5 old #9 slots=8 drag=2.41s ready=True plaque_after=0.59 m={'box': (1022, 531), 'disc': 254, 'tpl': 0.67, 'at': (-9, -60)}
+17:10:51 1792314651.59 b1t5 cur #9 slots=8 drag=0.81s ready=True plaque_after=0.62 m={'box': (1022, 531), 'disc': 254, 'tpl': 0.67, 'at': (-9, -60)}
+17:10:51 1792314651.59 b1t5 dw03h: 10/10 ready (0 not cleared)
+17:10:51 1792314651.59 b1t5 dw05h: 10/10 ready (0 not cleared)
+17:10:51 1792314651.59 b1t5 old: 10/10 ready (0 not cleared)
+17:10:51 1792314651.60 b1t5 cur: 9/10 ready (0 not cleared)

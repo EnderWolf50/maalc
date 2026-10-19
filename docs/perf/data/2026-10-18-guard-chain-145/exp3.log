@@ -1,0 +1,3 @@
+17:11:25 1792314685.80 b1t5 tail slots=8 k=5: after partial ready=False (0.23); after tail ready=False (0.23)
+17:11:36 1792314696.10 b1t5 full slots=8 k=5: after partial ready=False (0.23); after full ready=False (0.26)
+17:11:44 1792314704.25 b1t5 gear_tail slots=8 k=5: after partial ready=False (0.23); after gear_tail ready=False (0.26)
