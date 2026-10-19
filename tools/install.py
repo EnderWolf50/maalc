@@ -30,9 +30,9 @@ PYTHON = ("https://www.python.org/ftp/python/3.12.10/python-3.12.10-embed-amd64.
           "4acbed6dd1c744b0376e3b1cf57ce906f9dc9e95e68824584c8099a63025a3c3")
 # MaaFramework.dll from the EnderWolf50/MaaFramework fork: v5.14.3 plus a fix for batch OCR re-recognizing
 # 1 px slivers at roi edges (GBs of memory, MaaXYZ/MaaFramework#1568, #157). Windows only; the rest of maafw/
-# stays the wheel's. Drop this once a maafw release has the fix.
-MAAFW_FIX = ("5.14.3",
-             "https://github.com/EnderWolf50/MaaFramework/releases/download/v5.14.3-maalc.1/MaaFramework-v5.14.3-maalc.1-win-x64.zip",
+# stays the wheel's. Drop both once a maafw release has the fix (MaaXYZ/MaaFramework#1573).
+MAAFW_FIX_VERSION = "5.14.3"
+MAAFW_FIX = ("https://github.com/EnderWolf50/MaaFramework/releases/download/v5.14.3-maalc.1/MaaFramework-v5.14.3-maalc.1-win-x64.zip",
              "1be145b32c9e5338ce6802621244617c2cebdd8485f3140067ef5e3c57c97998")
 MXU = ("https://github.com/MistEO/MXU/releases/download/v2.7.1/MXU-win-x86_64-v2.7.1.zip",
        "825a62af7a344a7a47adca09d1414128e6f53a222a11cdf456f08d2e83d31724")
@@ -73,8 +73,12 @@ def bundle_mxu() -> None:
 
 if __name__ == "__main__":
     release = "--release" in sys.argv[1:]
-    if version("maafw").lstrip("v") != MAAFW_FIX[0]:  # the wheel's metadata says "v5.14.3"
-        sys.exit(f"maafw {version('maafw')} installed, MAAFW_FIX is built for {MAAFW_FIX[0]}: update or drop it")
+    if sys.platform == "win32":
+        if version("maafw").lstrip("v") != MAAFW_FIX_VERSION:  # the wheel's metadata says "v5.14.3"
+            sys.exit(f"maafw {version('maafw')} installed, MAAFW_FIX is built for {MAAFW_FIX_VERSION}: update or drop it")
+        # Fetched before anything is copied: a failed download or hash leaves install/ as it was,
+        # never with the wheel's unpatched DLL.
+        maafw_fix = fetch_zip(*MAAFW_FIX)
     shutil.copytree(repo / "assets", install, dirs_exist_ok=True)
     shutil.copytree(repo / "agent", install / "agent", dirs_exist_ok=True,
                     ignore=shutil.ignore_patterns("__pycache__"))
@@ -85,7 +89,7 @@ if __name__ == "__main__":
                          encoding="utf-8")
     shutil.copytree(Path(maa.__file__).parent / "bin", install / "maafw", dirs_exist_ok=True)
     if sys.platform == "win32":
-        fetch_zip(*MAAFW_FIX[1:]).extract("MaaFramework.dll", install / "maafw")
+        maafw_fix.extract("MaaFramework.dll", install / "maafw")
     for name in ("LICENSE", "NOTICE.md"):
         shutil.copy2(repo / name, install)
     # The settings GUI finds <root> from its own folder, so it sits next to agent/.
