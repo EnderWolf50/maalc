@@ -38,20 +38,24 @@ const screens: [image: string, hits: string[]][] = [
   ['TeamSelect.png', ['TeamSelect']],
   ['LevelWarning.png', ['LevelWarning', 'TeamSelect']],
   ['StarlightPage.png', ['StarlightPage']],
+  ['StarlightPageGrey.png', ['StarlightPage']],  // live 2026-10-18: the Available box grey, the label dimmer and lower
   ['StarlightConfirm.png', ['StarlightConfirm', 'StarlightPage']],
   ['StarlightConfirmConnecting.png', ['Connecting', 'StarlightConfirm', 'StarlightPage']],
   ['StartingGift.png', ['StartingGift']],
   ['StartingGiftPicked.png', ['StartingGift']],
   ['GiftGet.png', ['GiftGet']],
+  // live 2026-10-18 (a frame of a recording): the map's small E.G.O Gift GET!, below GiftGet's roi; PopupButton confirms it
+  ['GiftGetMap.png', ['PopupButton', 'MirrorMap', 'MapLinkUp']],
   ['StartingGiftSearchOff.png', ['StartingGift']],  // Activate Gift Search switched off (1.117.0, blue season)
   ['GiftSearch.png', ['GiftSearch', 'GiftChoice']],  // same Refuse Gift button; GiftSearch comes first in the hub
-  // 3 gifts picked, Select 3/3; its Selected E.G.O Gift header reads like the starting gift page's: GiftSearch comes first
-  ['GiftSearchSelected.png', ['GiftSearch', 'GiftChoice', 'StartingGift']],
+  // 3 gifts picked, Select 3/3: its Selected E.G.O Gift header is smaller and white, not the starting gift page's
+  ['GiftSearchSelected.png', ['GiftSearch', 'GiftChoice']],
   ['GiftSearchConfirm.png', ['GiftSearch', 'GiftChoice']],  // "Consume 70 Starlight ...": GiftSearch confirms it
   ['GiftSearchGet.png', ['GiftGet', 'GiftSearch']],  // GiftGet comes first in the hub
   ['GiftSearchForgo.png', ['GiftSearchForgo', 'GiftSearch', 'GiftChoice']],
   ['ThemePack.png', ['ThemePack']],
   ['ThemePackNormal.png', ['ThemePack']],
+  ['ThemePackBlue.png', ['ThemePack']],  // live 2026-10-18: the title's colour changes (blue, red, orange)
   ['MirrorMap.png', ['MirrorMap', 'MapBus', 'MapLinkUp', 'MapLinkMid', 'MapLinkDown', 'MapNodeCost', 'MapNodeEvent']],
   // Map marks: the default ROIs fit a map at rest; RouteMap moves them with the bus.
   ['MapEvent.png', ['MirrorMap', 'MapBus', 'MapLinkUp', 'MapLinkMid', 'MapLinkDown', 'MapNodeCost', 'MapNodeEvent']],
@@ -104,6 +108,8 @@ const screens: [image: string, hits: string[]][] = [
   ['EventChoicesUsed.png', ['Event']],  // floor 5 boss's second round of questions: the first answer greyed out (#34)
   ['EventCheck.png', ['Event']],
   ['EventResult.png', ['Event']],
+  ['EventProceed.png', ['Event']],  // live 2026-10-18 (captures/134): a choice's result, Proceed
+  ['EventCommence.png', ['Event']],  // live 2026-10-18 (captures/139): a check with a sinner picked, Commence
   // Shop: Leave stays readable under the shop's own dialogs and pages; the heal page has Return instead.
   ['Shop.png', ['Shop']],
   ['SuperShop.png', ['Shop']],

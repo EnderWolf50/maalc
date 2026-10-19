@@ -53,7 +53,9 @@
 | 用 | 對象 |
 |---|---|
 | OCR | 事件選項、主題包標題、飾品名稱；Cost、HP、樓層、金錢這類數字 |
-| 模板 | 圖示、按鈕、畫面的固定標記 |
+| 模板 | 圖示、按鈕、畫面的固定標記；`MirrorHub` 認畫面的固定標題與按鈕字（`image/Screen/`） |
+
+- `MirrorHub` 認畫面用文字本身的模板（#157）：從 `tests/screens` 的實機截圖裁下字。字後面的底會變的（主題色、半透明、動畫），字和周圍 2–3 px 以外塗成純綠 (0, 255, 0)，`green_mask: true` 讓 MaaFramework 不比那些像素；底固定的直接用原圖裁切（遮罩比對約慢 2.5 倍）。內容會變的字（樓層、ON／OFF、維修訊息、下載量）或沒有實機截圖的按鈕字（Retry、OK）留 OCR，但放在 And 的模板後面（`DialogButton`、`MirrorEntryPage`），只在那個畫面才讀。`tests/test_pipeline.py` 檢查清單裡沒有不經模板就跑的 OCR。改版換字型或改字時這些模板會失效：`maa-tools test` 的截圖案例會先抓到。
 
 - OCR 比對時用 `expected` 對照遊戲資料檔（見 [05-game-data.md](05-game-data.md)）。（#13，[ADR 0005](../adr/0005-game-data-files-separate-from-user-settings.md)）
 - OCR 模型預設用 `ppocr_v6/small`。散佈時必須附上 Apache-2.0 授權文件和出處。（#13）
@@ -84,7 +86,7 @@
 | 設定檢查 | GUI 與 Agent 各自的單元測試，共用同一批範例設定檔 | `settings.schema.json` 的結構檢查與跨物件檢查；兩邊對同一份檔案必須給出相同的錯誤 | #19 |
 | Agent 邏輯 | pytest，用 Python `CustomController` 餵截圖 | 輪替游標、地圖重試額度、選路、卡住偵測、恢復升級上限 | #4、#14 |
 | 回歸 | `RecordController` 錄下驗收局，`ReplayController` 重播 | 整條流程；行為不符就失敗 | #4、#14 |
-| 批次 OCR | pytest（`tests/test_pipeline.py`） | 沒有 next 清單會讓 MaaFramework 批次 OCR（照 `prepare_batch_ocr` 的規則算，批次少於 2 個）：有兩個以上 OCR 的清單要把 `NoBatchOCR` 放在第一個 OCR 前面 | #149、#157 |
+| 批次 OCR | pytest（`tests/test_pipeline.py`） | 沒有 next 清單會讓 MaaFramework 批次 OCR（照 `prepare_batch_ocr` 的規則算，批次少於 2 個）：有兩個以上 OCR 的清單要把 `NoBatchOCR` 放在第一個 OCR 前面；`MirrorHub`、`RecoverStartApp` 的 OCR 都在模板後面 | #149、#157 |
 
 - `maa-tools test` 不跑 Agent；Agent 的部分由 pytest 涵蓋。（#4）
 - 不使用官方 `DbgController`：pip wheel 沒附它的動態庫。（#4）

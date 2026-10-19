@@ -7,8 +7,8 @@
     // Dispatch: every screen is one node; [JumpBack] nodes return here to look again.
     // next order is priority: Stuck (the watchdog, which must see every pass), global popups,
     // then dialogs before the page under them.
-    // rate_limit: a pass is ~0.1-1.5 s of work (each OCR on its own, NoBatchOCR); the default 1000 ms between passes
-    // saw every new screen ~0.5 s late.
+    // Screens are told apart by templates of their labels (#157): no OCR runs until a template says its screen is up.
+    // rate_limit: a pass is ~0.1-0.2 s of work; the default 1000 ms between passes saw every new screen ~0.5 s late.
     "MirrorHub": {
         "timeout": 60000,
         "rate_limit": 300,
@@ -90,25 +90,49 @@
     // past floor 5. Texts: EN_MirrorDungeonUI_5_InfinityFloor ("Parallel Superposition Mode : " + ON / OFF).
     // Its dialogs (Resume, Enter) come first in the hub: the label reads through them.
     "ParallelModeOn": {
-        "recognition": "OCR",
-        "roi": [890, 330, 330, 28],
-        "expected": "Superposition.*:\\s*[O0]N\\b",
+        "recognition": "And",
+        "all_of": [
+            "MirrorEntryPage",
+            {
+                "recognition": "OCR",
+                "sub_name": "ParallelModeOnText",
+                "roi": [890, 330, 330, 28],
+                "expected": "Superposition.*:\\s*[O0]N\\b"
+            }
+        ],
         "action": "Custom",
         "custom_action": "ParallelModeOff"
     },
+    // The entry page's "Parallel Superposition Mode" label (live EntryNewRun.png, its ON / OFF left out). The entry
+    // nodes whose text varies (a floor, ON) or has no capture (Exploration Complete) OCR only once it is up (#157).
+    "MirrorEntryPage": {
+        "recognition": "TemplateMatch",
+        "roi": [885, 325, 340, 38],
+        "template": "Screen/ParallelLabel.png",
+        "green_mask": true,
+        "threshold": 0.8
+    },
     // Entry page: branch on the Exploring: field (spec 01, 入口頁的分流).
     "MirrorEntryNewRun": {
-        "recognition": "OCR",
-        "roi": [990, 140, 230, 35],
-        "expected": "Before Entry",
+        "recognition": "TemplateMatch",
+        "roi": [985, 135, 240, 45],
+        "template": "Screen/BeforeEntry.png",
+        "threshold": 0.8,
         "action": "Custom",
         "custom_action": "PlanRun"
     },
     // A paused run (after To Window, a restart, or by hand): Enter opens the Resume dialog.
     "MirrorEntryPaused": {
-        "recognition": "OCR",
-        "roi": [990, 140, 230, 35],
-        "expected": "F\\s*\\d",
+        "recognition": "And",
+        "all_of": [
+            "MirrorEntryPage",
+            {
+                "recognition": "OCR",
+                "sub_name": "MirrorEntryPausedText",
+                "roi": [990, 140, 230, 35],
+                "expected": "F\\s*\\d"
+            }
+        ],
         "action": "Custom",
         "custom_action": "TapUntil",
         "custom_action_param": {
@@ -122,17 +146,25 @@
     },
     // Dungeon Progress with Resume / Halt Exploration / Cancel: always Resume (spec 01 入口頁的分流).
     "ResumeDialog": {
-        "recognition": "OCR",
-        "roi": [520, 380, 240, 40],
-        "expected": "^Resume$",
+        "recognition": "TemplateMatch",
+        "roi": [515, 375, 250, 50],
+        "template": "Screen/Resume.png",
+        "threshold": 0.8,
         "action": "Click",
         "post_delay": 3000
     },
     // Unclaimed rewards: Enter opens the Exploration Reward window, settled like any other.
     "MirrorEntryUnclaimed": {
-        "recognition": "OCR",
-        "roi": [990, 140, 230, 35],
-        "expected": "Exploration Complete",
+        "recognition": "And",
+        "all_of": [
+            "MirrorEntryPage",
+            {
+                "recognition": "OCR",
+                "sub_name": "MirrorEntryUnclaimedText",
+                "roi": [990, 140, 230, 35],
+                "expected": "Exploration Complete"
+            }
+        ],
         "action": "Click",
         "target": [1030, 470, 160, 50],
         "post_delay": 2000
@@ -140,26 +172,32 @@
     // Also pops up by itself on the entry page while rewards are pending (captures/253).
     // Settle: goal check, weekly-bonus toggles, Claim or GiveUpRewards (spec 03 section 14).
     "ExplorationReward": {
-        "recognition": "OCR",
-        "roi": [500, 100, 280, 45],
-        "expected": "Exploration Reward",
+        "recognition": "TemplateMatch",
+        "roi": [495, 95, 290, 55],
+        "template": "Screen/ExplorationReward.png",
+        "threshold": 0.8,
         "action": "Custom",
         "custom_action": "Settle"
     },
     // After a Claim that spends weekly bonuses (live 2026-10-16): `Rewards Acquired`, then `Pass Level Up`,
     // each over the Exploration Complete summary and closed by its Confirm.
     "ClaimPopup": {
-        "recognition": "OCR",
-        "roi": [500, 225, 280, 50],
-        "expected": "Rewards Acquired|Pass Level Up",
+        "recognition": "TemplateMatch",
+        "roi": [495, 220, 290, 60],
+        "template": [
+            "Screen/RewardsAcquired.png",
+            "Screen/PassLevelUp.png"
+        ],
+        "threshold": 0.8,
         "action": "Click",
         "target": [575, 455, 130, 35],
         "post_delay": 2000
     },
     "MirrorEnterDialog": {
-        "recognition": "OCR",
-        "roi": [400, 325, 480, 45],
-        "expected": "Will you enter",
+        "recognition": "TemplateMatch",
+        "roi": [395, 320, 490, 55],
+        "template": "Screen/WillYouEnter.png",
+        "threshold": 0.8,
         "action": "Custom",
         "custom_action": "TapUntil",
         // The entry page behind reads "Before Entry" until the run exists: leaving early plans the run twice.
@@ -169,9 +207,10 @@
         }
     },
     "LevelWarning": {
-        "recognition": "OCR",
-        "roi": [400, 230, 480, 90],
-        "expected": "recommended level",
+        "recognition": "TemplateMatch",
+        "roi": [395, 225, 490, 100],
+        "template": "Screen/RecommendedLevel.png",
+        "threshold": 0.8,
         "action": "Custom",
         "custom_action": "TapUntil",
         "custom_action_param": {
@@ -181,121 +220,163 @@
         }
     },
     "TeamSelect": {
-        "recognition": "OCR",
-        "roi": [80, 272, 100, 28],
-        "expected": "^TEAMS$",
+        "recognition": "TemplateMatch",
+        "roi": [75, 267, 110, 38],
+        "template": "Screen/Teams.png",
+        "threshold": 0.8,
         "action": "Custom",
         "custom_action": "SelectTeam"
     },
     "StarlightPage": {
-        "recognition": "OCR",
-        "roi": [890, 30, 115, 28],
-        "expected": "Available",
+        "recognition": "TemplateMatch",
+        "roi": [885, 25, 125, 38],
+        "template": [
+            "Screen/Available.png",
+            "Screen/AvailableGrey.png"
+        ],
+        "threshold": 0.8,
         "action": "Custom",
         "custom_action": "BuyStarlight"
     },
     "StarlightConfirm": {
-        "recognition": "OCR",
-        "roi": [480, 210, 320, 35],
-        "expected": "Continue with selected effects",
+        "recognition": "TemplateMatch",
+        "roi": [475, 205, 330, 45],
+        "template": "Screen/ContinueEffects.png",
+        "threshold": 0.8,
         "action": "Custom",
         "custom_action": "ConfirmStarlight"
     },
     "StartingGift": {
-        "recognition": "OCR",
-        "roi": [780, 145, 230, 35],
-        "expected": "Selected E",
+        "recognition": "TemplateMatch",
+        "roi": [775, 140, 240, 45],
+        "template": "Screen/SelectedGift.png",
+        "green_mask": true,
+        "threshold": 0.85,
         "action": "Custom",
         "custom_action": "PickStartingGift"
     },
     // Confirm, then waits until the window is gone or the next gift's is up (GiftGet in actions.py).
     "GiftGet": {
-        "recognition": "OCR",
-        "roi": [520, 160, 240, 40],
-        "expected": "Gift GET",
+        "recognition": "TemplateMatch",
+        "roi": [515, 155, 250, 50],
+        "template": "Screen/GiftGet.png",
+        "green_mask": true,
+        "threshold": 0.88,
         "action": "Custom",
         "custom_action": "GiftGet"
     },
     // Selects the team's gifts with owned Starlight, or presses Refuse Gift (spec 03 section 5).
     "GiftSearch": {
-        "recognition": "OCR",
-        "roi": [140, 30, 220, 35],
-        "expected": "Gift Search",
+        "recognition": "TemplateMatch",
+        "roi": [135, 25, 230, 45],
+        "template": [
+            "Screen/GiftSearchRed.png",
+            "Screen/GiftSearchBlue.png"
+        ],
+        "green_mask": true,
+        "threshold": 0.86,
         "action": "Custom",
         "custom_action": "GiftSearch"
     },
     "GiftSearchForgo": {
-        "recognition": "OCR",
-        "roi": [480, 330, 320, 35],
-        "expected": "Forgo",
+        "recognition": "TemplateMatch",
+        "roi": [475, 325, 330, 45],
+        "template": "Screen/ForgoSearch.png",
+        "threshold": 0.8,
         "action": "Click",
         "target": [665, 478, 200, 35],
         "post_delay": 2000
     },
     "ThemePack": {
-        "recognition": "OCR",
-        "roi": [480, 100, 320, 40],
-        "expected": "THEME ?PACK",
+        "recognition": "TemplateMatch",
+        "roi": [475, 95, 330, 50],
+        "template": [
+            "Screen/ThemePack.png",
+            "Screen/ThemePackRed.png",
+            "Screen/ThemePackBlue.png"
+        ],
+        "green_mask": true,
+        "threshold": 0.8,
         "action": "Custom",
         "custom_action": "PickThemePack"
     },
     // Rewards and events (spec 03 sections 10-12). The bot never cancels a reward or refuses a gift;
     // landing in either dialog anyway, it backs out with Cancel.
     "RewardCardForgo": {
-        "recognition": "OCR",
-        "roi": [440, 320, 400, 35],
-        "expected": "Continue without choosing",
+        "recognition": "TemplateMatch",
+        "roi": [435, 315, 410, 45],
+        "template": "Screen/ContinueWithout.png",
+        "threshold": 0.8,
         "action": "Click",
         "target": [455, 448, 165, 37],
         "post_delay": 1500
     },
     // Select with picks left; Confirm would hand out random trials (1.117.0, also after a NORMAL boss).
     "GiftRefuseDialog": {
-        "recognition": "OCR",
-        "roi": [440, 280, 400, 35],
-        "expected": "remaining E.G.O Gift choices",
+        "recognition": "TemplateMatch",
+        "roi": [435, 275, 410, 45],
+        "template": "Screen/RemainingChoices.png",
+        "threshold": 0.8,
         "action": "Click",
         "target": [415, 476, 200, 35],
         "post_delay": 1500
     },
     "RewardCard": {
-        "recognition": "OCR",
-        "roi": [290, 112, 490, 48],
-        "expected": "Encounter Reward",
+        "recognition": "TemplateMatch",
+        "roi": [285, 107, 500, 58],
+        "template": "Screen/EncounterReward.png",
+        "green_mask": true,
+        "threshold": 0.8,
         "action": "Custom",
         "custom_action": "RewardCard"
     },
     // After a fight, an event or a boss (with Mounting Trials); the starting gift page is matched before.
     "GiftChoice": {
-        "recognition": "OCR",
-        "roi": [870, 560, 160, 40],
-        "expected": "Refuse Gift",
+        "recognition": "TemplateMatch",
+        "roi": [865, 555, 170, 50],
+        "template": [
+            "Screen/RefuseGift.png",
+            "Screen/RefuseGiftRed.png",
+            "Screen/RefuseGiftBlue.png"
+        ],
+        "green_mask": true,
+        "threshold": 0.8,
         "action": "Custom",
         "custom_action": "PickGift"
     },
     // Shop and Super Shop (spec 03 section 13): the Leave button, also under the shop's own dialogs and pages.
     // Shop heals, then sells, buys, refreshes and fuses in rounds, and leaves.
     "Shop": {
-        "recognition": "OCR",
-        "roi": [1040, 615, 180, 65],
-        "expected": "^Leave$",
+        "recognition": "TemplateMatch",
+        "roi": [1035, 610, 190, 75],
+        "template": "Screen/Leave.png",
+        "green_mask": true,
+        "threshold": 0.8,
         "action": "Custom",
         "custom_action": "Shop"
     },
     // The red button bottom right reads SKIP, Proceed, Continue or Commence, grey while it does nothing.
     "Event": {
-        "recognition": "OCR",
-        "roi": [1040, 612, 190, 66],
-        "expected": "SKIP|Proceed|Continue|Commence",
+        "recognition": "TemplateMatch",
+        "roi": [1035, 607, 245, 76],
+        "template": [
+            "Screen/Skip.png",
+            "Screen/EventContinue.png",
+            "Screen/EventProceed.png",
+            "Screen/EventCommence.png"
+        ],
+        "green_mask": true,
+        "threshold": 0.7,
         "action": "Custom",
         "custom_action": "Event"
     },
     // The map's Dungeon Progress panel (the gear, or the back key on the map): Continue closes it.
     // Over the map, whose icons still show: before MirrorMap.
     "ProgressPanel": {
-        "recognition": "OCR",
-        "roi": [600, 440, 80, 35],
-        "expected": "^Continue$",
+        "recognition": "TemplateMatch",
+        "roi": [595, 435, 90, 45],
+        "template": "Screen/Continue.png",
+        "threshold": 0.8,
         "action": "Click",
         "post_delay": 1500
     },
@@ -320,24 +401,28 @@
     },
     // Battle (spec 03 sections 3, 8, 9). The DEFEAT dialog sits over the battle: first.
     "WipeDialog": {
-        "recognition": "OCR",
-        "roi": [330, 360, 270, 50],
-        "expected": "All participating",
+        "recognition": "TemplateMatch",
+        "roi": [325, 355, 280, 60],
+        "template": "Screen/AllParticipating.png",
+        "threshold": 0.8,
         "action": "Custom",
         "custom_action": "Wipe"
     },
     "Victory": {
-        "recognition": "OCR",
-        "roi": [420, 280, 440, 140],
-        "expected": "VICTORY",
+        "recognition": "TemplateMatch",
+        "roi": [415, 275, 450, 150],
+        "template": "Screen/Victory.png",
+        "threshold": 0.6,
         "action": "Custom",
         "custom_action": "Victory",
         "post_delay": 500
     },
     "Formation": {
-        "recognition": "OCR",
-        "roi": [1065, 465, 160, 30],
-        "expected": "Clear Selection",
+        "recognition": "TemplateMatch",
+        "roi": [1060, 460, 170, 40],
+        "template": "Screen/ClearSelection.png",
+        "green_mask": true,
+        "threshold": 0.65,
         "action": "Custom",
         "custom_action": "Formation"
     },
@@ -372,26 +457,29 @@
     },
     // After the floor 5 boss (live 1.117.0); the run's counterpart of DefeatScreen.
     "RunVictory": {
-        "recognition": "OCR",
-        "roi": [990, 100, 200, 70],
-        "expected": "^Victory$",
+        "recognition": "TemplateMatch",
+        "roi": [985, 95, 210, 80],
+        "template": "Screen/RunVictory.png",
+        "threshold": 0.8,
         "action": "Click",
         "target": [1050, 550, 150, 45],
         "post_delay": 2000
     },
     // After a forfeit (captures/244, 245); Claim Rewards only opens the Exploration Reward window.
     "DefeatScreen": {
-        "recognition": "OCR",
-        "roi": [1000, 135, 200, 70],
-        "expected": "^Defeat$",
+        "recognition": "TemplateMatch",
+        "roi": [995, 130, 210, 80],
+        "template": "Screen/Defeat.png",
+        "threshold": 0.8,
         "action": "Click",
         "target": [1052, 548, 150, 40],
         "post_delay": 2000
     },
     "ExplorationComplete": {
-        "recognition": "OCR",
-        "roi": [130, 90, 210, 70],
-        "expected": "Complete",
+        "recognition": "TemplateMatch",
+        "roi": [125, 85, 220, 80],
+        "template": "Screen/Complete.png",
+        "threshold": 0.8,
         "action": "Click",
         "target": [1060, 575, 150, 45],
         "post_delay": 2000

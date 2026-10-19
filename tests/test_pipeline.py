@@ -45,6 +45,10 @@ def batch_plan(nodes, listed):
     return plan
 
 
+def strip(listed):
+    return [re.sub(r"^(\[\w+\])+", "", n) for n in listed]
+
+
 def test_no_next_list_batches_its_ocr():
     # #149, #157: batched, MaaFramework OCRs a next list's rois in one pass, and each OCR re-reads every box of that
     # pass crossing its roi edge (OCRer::handle_cached), slivers 1 px high padded to 48 px x (width / height): a
@@ -53,13 +57,37 @@ def test_no_next_list_batches_its_ocr():
     nodes = load_nodes()
     batched = {}
     for name, node in nodes.items():
-        if len(plan := batch_plan(nodes, [re.sub(r"^(\[\w+\])+", "", n) for n in node.get("next", [])])) > 1:
+        if len(plan := batch_plan(nodes, strip(node.get("next", [])))) > 1:
             batched[name] = plan
     assert batched == {}
 
 
 def test_batch_plan_follows_maaframework():
     nodes = load_nodes()
-    assert batch_plan(nodes, ["Connecting", "RetryPopup", "MaintenanceNotice"]) == [
-        "Connecting", "RetryPopup", "MaintenanceNoticeText", "MaintenanceNoticeClose"]
-    assert batch_plan(nodes, ["NoBatchOCR", "Connecting", "RetryPopup"]) == ["NoBatchOCRModel"]
+    assert batch_plan(nodes, ["Connecting", "RetryPopup", "MaintenanceNotice", "PopupButton"]) == [
+        "RetryPopupText", "MaintenanceNoticeText", "PopupButtonText"]
+    assert batch_plan(nodes, ["NoBatchOCR", "RetryPopup", "PopupButton"]) == ["NoBatchOCRModel"]
+
+
+def ungated_ocr(nodes, name, spec=None):
+    """OCR of a node that can run with no TemplateMatch hit before it: a bare OCR, or one in an Or, or in an And
+    whose first sub-recognition is no TemplateMatch."""
+    kind, params = recognition(spec if spec is not None else nodes[name])
+    subs = [(s, None) if isinstance(s, str) else (s.get("sub_name", recognition(s)[0]), s)
+            for s in params.get("all_of", []) + params.get("any_of", [])]
+    if kind == "OCR":
+        return [name]
+    if kind == "And" and subs and recognition(subs[0][1] if subs[0][1] is not None else nodes[subs[0][0]])[0] == "TemplateMatch":
+        return []
+    return [o for s, sp in subs for o in ungated_ocr(nodes, s, sp)]
+
+
+def test_screen_checks_read_no_text_until_their_screen_is_up():
+    # #157: the hub told its screens apart by 37 OCR, each a det + rec pass (~45 ms) when NoBatchOCR keeps them apart,
+    # 0.5 -> 1.2 s a pass. Fixed screen labels are TemplateMatch now (green-masked where the ground varies); text that
+    # varies or has no live capture stays OCR behind a template of its screen (a popup button's end, MirrorEntryPage),
+    # so a battle reads no text.
+    nodes = load_nodes()
+    for entry in ("MirrorHub", "RecoverStartApp"):
+        listed = [n for n in strip(nodes[entry]["next"]) if n != "NoBatchOCR"]
+        assert [o for n in listed for o in ungated_ocr(nodes, n)] == [], entry

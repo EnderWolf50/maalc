@@ -4,17 +4,38 @@
     // "?" effect-choice page (#87), level-up popups other than Pass Level Up (ClaimPopup). PopupButton presses
     // any lone Close / Confirm / OK meanwhile; Recover saves a screen MirrorHub does not know to logs/unknown/.
     "Connecting": {
-        "recognition": "OCR",
-        "roi": [1000, 50, 240, 50],
-        "expected": "CONNECTING",
+        "recognition": "TemplateMatch",
+        "roi": [995, 45, 250, 60],
+        "template": "Screen/Connecting.png",
+        "green_mask": true,
+        "threshold": 0.8,
         "post_delay": 1000
     },
+    // RetryPopup, DownloadDialog and PopupButton read their button text only once the left end of a popup button is
+    // in their roi (#157): Screen/DialogButton.png, the dark gold-edged one of MaintenanceNotice.png and
+    // RewardsAcquired.png (the synthetic Retry / Download / error captures reuse it), and for PopupButton also
+    // Screen/DialogButtonThin.png, the thin-edged one of the map's small E.G.O Gift GET! (GiftGetMap.png). The texts
+    // stay OCR: Retry (5), OK and the download text have no live capture.
     // Unverified layout: a "Retry" button, also with a countdown ("Retry (5)"), or "Try Again", anywhere
     // mid-screen (#84). Not the DEFEAT dialog's Retry Stage.
     "RetryPopup": {
-        "recognition": "OCR",
-        "roi": [340, 380, 600, 180],
-        "expected": "^(Retry(?!\\s*Stage)|Try Again)",
+        "recognition": "And",
+        "all_of": [
+            {
+                "recognition": "TemplateMatch",
+                "sub_name": "RetryPopupButton",
+                "roi": [340, 380, 600, 180],
+                "template": "Screen/DialogButton.png",
+                "threshold": 0.8
+            },
+            {
+                "recognition": "OCR",
+                "sub_name": "RetryPopupText",
+                "roi": [340, 380, 600, 180],
+                "expected": "^(Retry(?!\\s*Stage)|Try Again)"
+            }
+        ],
+        "box_index": 1,
         "action": "Click",
         "post_delay": 2000
     },
@@ -26,16 +47,18 @@
         "recognition": "And",
         "all_of": [
             {
+                "recognition": "TemplateMatch",
+                "sub_name": "MaintenanceNoticeClose",
+                "roi": [545, 440, 185, 55],
+                "template": "Screen/Close.png",
+                "green_mask": true,
+                "threshold": 0.8
+            },
+            {
                 "recognition": "OCR",
                 "sub_name": "MaintenanceNoticeText",
                 "roi": [350, 230, 580, 200],
                 "expected": "(?i)maintenance"
-            },
-            {
-                "recognition": "OCR",
-                "sub_name": "MaintenanceNoticeClose",
-                "roi": [550, 445, 175, 45],
-                "expected": "^Close$"
             }
         ],
         "action": "Custom",
@@ -50,6 +73,13 @@
         "recognition": "And",
         "all_of": [
             {
+                "recognition": "TemplateMatch",
+                "sub_name": "DownloadDialogButton",
+                "roi": [330, 400, 610, 120],
+                "template": "Screen/DialogButton.png",
+                "threshold": 0.8
+            },
+            {
                 "recognition": "OCR",
                 "sub_name": "DownloadDialogConfirm",
                 "roi": [345, 410, 580, 100],
@@ -62,6 +92,7 @@
                 "expected": "(?i)download|update|\\d\\s*[KMG]B"
             }
         ],
+        "box_index": 1,
         "action": "Custom",
         "custom_action": "ConfirmDownload",
         "post_delay": 2000
@@ -75,16 +106,20 @@
         "recognition": "And",
         "all_of": [
             {
-                "recognition": "OCR",
+                "recognition": "TemplateMatch",
                 "sub_name": "ParallelModePromptCancel",
-                "roi": [400, 420, 480, 65],
-                "expected": "Cancel$"
+                "roi": [395, 415, 490, 75],
+                "template": "Screen/PromptCancel.png",
+                "green_mask": true,
+                "threshold": 0.8
             },
             {
-                "recognition": "OCR",
+                "recognition": "TemplateMatch",
                 "sub_name": "ParallelModePromptText",
-                "roi": [400, 285, 480, 60],
-                "expected": "(?i)You can enter the .*Mode"
+                "roi": [395, 280, 490, 70],
+                "template": "Screen/PromptText.png",
+                "green_mask": true,
+                "threshold": 0.8
             }
         ],
         "action": "Click",
@@ -94,16 +129,34 @@
     // page): nothing to decide, press it (#86, #85). Two-button dialogs keep their buttons apart, so a Cancel /
     // Confirm question is never answered here. The maintenance notice, also a lone Close, halts first.
     "PopupButton": {
-        "recognition": "OCR",
-        "roi": [540, 430, 200, 70],
-        "expected": "^(Close|Confirm|OK)$",
+        "recognition": "And",
+        "all_of": [
+            {
+                "recognition": "TemplateMatch",
+                "sub_name": "PopupButtonFrame",
+                "roi": [500, 415, 220, 100],
+                "template": [
+                    "Screen/DialogButton.png",
+                    "Screen/DialogButtonThin.png"
+                ],
+                "threshold": 0.8
+            },
+            {
+                "recognition": "OCR",
+                "sub_name": "PopupButtonText",
+                "roi": [540, 430, 200, 70],
+                "expected": "^(Close|Confirm|OK)$"
+            }
+        ],
+        "box_index": 1,
         "action": "Click",
         "post_delay": 1500
     },
     "Loading": {
-        "recognition": "OCR",
-        "roi": [1060, 625, 190, 40],
-        "expected": "NOW LOADING",
+        "recognition": "TemplateMatch",
+        "roi": [1055, 620, 200, 50],
+        "template": "Screen/Loading.png",
+        "threshold": 0.7,
         "post_delay": 500
     }
 }
