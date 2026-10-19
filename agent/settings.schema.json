@@ -127,8 +127,10 @@
           "gift_search",
           "allow_white_gossypium",
           "keep_keywords",
-          "keep_keywordless",
-          "keep_gifts"
+          "keywordless",
+          "keep_gifts",
+          "sell_max_tier",
+          "sell_vestiges"
         ],
         "properties": {
           "id": { "$ref": "#/$defs/id" },
@@ -235,10 +237,10 @@
             "default": [],
             "description": "keywords besides the main one whose gifts the shop never fuses or sells"
           },
-          "keep_keywordless": {
-            "type": "boolean",
-            "default": true,
-            "description": "the shop never fuses or sells keywordless gifts; off: they are materials like any other"
+          "keywordless": {
+            "enum": ["keep", "fuse", "fuse_or_sell"],
+            "default": "keep",
+            "description": "keywordless gifts in the shop: keep (never fused or sold), fuse (fusion material, never sold), fuse_or_sell"
           },
           "keep_gifts": {
             "type": "array",
@@ -246,6 +248,18 @@
             "items": { "$ref": "#/$defs/gift" },
             "default": [],
             "description": "gifts the shop never fuses or sells, told by their icon"
+          },
+          "sell_max_tier": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5,
+            "default": 4,
+            "description": "the highest tier the shop may sell; 4: a tier V gift is never sold"
+          },
+          "sell_vestiges": {
+            "type": "boolean",
+            "default": false,
+            "description": "the shop may sell vestiges (pure fusion-material gifts, data/shop.yaml); off: never sold"
           }
         }
       }

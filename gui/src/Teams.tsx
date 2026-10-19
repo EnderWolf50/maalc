@@ -193,6 +193,7 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
 }
 
 const ROMAN = ["", "I", "II", "III"];
+const TIERS = ["", "I", "II", "III", "IV", "V"];
 
 const sameRef = (a: GiftRef, g: SearchGift) => a.keyword === g.keyword && a.tier === g.tier && a.name === g.en;
 
@@ -245,7 +246,7 @@ function GiftGrid({ gifts, start, full, mark, onToggle }: {
 
 /** What the shop never fuses or sells (spec 04 section 9, #77): other keywords, keywordless gifts, single gifts. */
 function KeepPanel({ i }: { i: number }) {
-  const { s, update, t, bad } = useEditor();
+  const { s, update, t, tv, bad } = useEditor();
   const team = s.teams[i];
   const path = `teams/${i}`;
   const set = (patch: Partial<Team>) => update((d) => { Object.assign(d.teams[i], patch); });
@@ -255,7 +256,7 @@ function KeepPanel({ i }: { i: number }) {
   const others = team.keep_keywords.filter((k) => k !== team.keyword);
   const n = others.length + team.keep_gifts.length;
   return (
-    <details className={"panel" + (["keep_keywords", "keep_keywordless", "keep_gifts"].some((k) => bad(`${path}/${k}`)) ? " bad" : "")}>
+    <details className={"panel" + (["keep_keywords", "keywordless", "keep_gifts", "sell_max_tier", "sell_vestiges"].some((k) => bad(`${path}/${k}`)) ? " bad" : "")}>
       <summary>{t("keep.title")}{n ? ` (${n})` : ""}</summary>
       <p className="muted">{t("keep.note")}</p>
       <div className="options">
@@ -269,12 +270,26 @@ function KeepPanel({ i }: { i: number }) {
             </label>
           ))}
         </div>
-        <div className={"toggle" + (bad(`${path}/keep_keywordless`) ? " bad" : "")}>
-          <label className="check">
-            <input type="checkbox" checked={team.keep_keywordless} onChange={(e) => set({ keep_keywordless: e.target.checked })} />
-            {t("keep.keywordless")}
-          </label>
+        <div className={"toggle" + (bad(`${path}/keywordless`) ? " bad" : "")}>
+          <span>{t("keep.keywordless")}</span>
+          <select value={team.keywordless} onChange={(e) => set({ keywordless: e.target.value })}>
+            {teamEnum("keywordless").map((v) => <option key={v} value={v}>{tv("keywordless", v)}</option>)}
+          </select>
           <small>{t("keep.keywordless_note")}</small>
+        </div>
+        <div className={"toggle" + (bad(`${path}/sell_max_tier`) ? " bad" : "")}>
+          <span>{t("keep.sell_max_tier")}</span>
+          <select value={team.sell_max_tier} onChange={(e) => set({ sell_max_tier: Number(e.target.value) })}>
+            {[1, 2, 3, 4, 5].map((n) => <option key={n} value={n}>{TIERS[n]}</option>)}
+          </select>
+          <small>{t("keep.sell_max_tier_note")}</small>
+        </div>
+        <div className={"toggle" + (bad(`${path}/sell_vestiges`) ? " bad" : "")}>
+          <label className="check">
+            <input type="checkbox" checked={team.sell_vestiges} onChange={(e) => set({ sell_vestiges: e.target.checked })} />
+            {t("keep.sell_vestiges")}
+          </label>
+          <small>{t("keep.sell_vestiges_note")}</small>
         </div>
       </div>
       <h4>{t("keep.gifts")}</h4>

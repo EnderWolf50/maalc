@@ -2056,22 +2056,29 @@ def read_cost(context, roi=SHOP_COST):
     return None
 
 
-def kept_gifts(team):
-    """Gift names the shop never fuses or sells, for a tooltip's text: the team's observed (#103) and kept gifts (#77),
-    and every keywordless gift unless the team lets them go.
+def kept_gifts(team, page):
+    """Gift names the shop keeps on page ("fuse" or "sell"), for a tooltip's or panel's text: the team's observed
+    (#103) and kept gifts (#77), the keywordless gifts while kept_keywords keeps them, and on the sell page the
+    vestiges (data/shop.yaml) unless the team sells them (#161).
 
     Keywordless gifts are told by name (data/gift_search.json's Keywordless tab): the tooltip names no keyword.
+    Vestiges have no badge and no icon template: only their name tells them apart from other keywordless gifts.
     """
     names = [g["name"] for g in team["gift_search"]["gifts"] + team.get("keep_gifts", [])]
-    if team.get("keep_keywordless", True):
+    if "Keywordless" in kept_keywords(team, page):
         names += [g["en"] for g in gift_data() if g["keyword"] == "Keywordless"]
+    if page == "sell" and not team.get("sell_vestiges", False):
+        names += data("shop.yaml")["vestiges"]
     return names
 
 
-def kept_keywords(team):
-    """The keywords whose gifts the shop never fuses or sells (#77): the main one, the team's keep_keywords and
-    "Keywordless" unless the team lets keywordless gifts go."""
-    return {team["keyword"], *team.get("keep_keywords", ())} | ({"Keywordless"} if team.get("keep_keywordless", True) else set())
+def kept_keywords(team, page):
+    """The keywords whose gifts the shop keeps on page ("fuse" or "sell"): the main one, the team's keep_keywords
+    (#77) and "Keywordless" as the team's keywordless setting says (#161): "keep" on both pages, "fuse" on the sell
+    page only (fusion material, never sold), "fuse_or_sell" on neither."""
+    use = team.get("keywordless", "keep")
+    keywordless = use == "keep" or (use == "fuse" and page == "sell")
+    return {team["keyword"], *team.get("keep_keywords", ())} | ({"Keywordless"} if keywordless else set())
 
 
 def kept_icons(team):
@@ -2087,9 +2094,9 @@ def kept_icons(team):
     return out
 
 
-def kept_text(text, team):
-    """Whether a tooltip's or panel's text names a keyword the team keeps (kept_keywords; spec 03 section 12's rule)."""
-    return any(rewards.gift_kind(text, k, False) == "main" for k in kept_keywords(team) - {"Keywordless"})
+def kept_text(text, team, page):
+    """Whether a tooltip's or panel's text names a keyword the team keeps on page (kept_keywords; spec 03 section 12's rule)."""
+    return any(rewards.gift_kind(text, k, False) == "main" for k in kept_keywords(team, page) - {"Keywordless"})
 
 
 WHITE_GOSSYPIUM = 9020  # its id in data/gift_search.json
@@ -2460,13 +2467,13 @@ class Shop(CustomAction):
         image = screen(context)
         avoid = [g["name"] for g in avoided_gifts(team)]
         cells = read_cells(context, image, SELL_CELLS, "sell", kept_icons(team) + avoided_gifts(team))
-        roles = [shop.gift_role(c["keyword"], c["gift"], kept_keywords(team), avoid) for c in cells]
+        roles = [shop.gift_role(c["keyword"], c["gift"], kept_keywords(team, "sell"), avoid) for c in cells]
         prices = shop.cell_prices(ocr(context, image, SELL_GRID), SELL_CELLS)
         log("shop: sell cells " + "; ".join(f"{cell_line(c, r)} {prices.get(c['i'])}" for c, r in zip(cells, roles)))
         gifts = [(c["i"], prices[c["i"]]) for c, r in zip(cells, roles) if r == "material" and c["i"] in prices]
         avoided = {c["i"] for c in cells if c["gift"] in avoid}  # sold first (#90)
         # A badge or price below the grid's edge: the panel a tap shows decides (spec 03 section 12's rule).
-        keep = kept_gifts(team)
+        keep = kept_gifts(team, "sell")
         for c in [c for c, r in zip(cells, roles) if r == "unknown" or (r == "material" and c["i"] not in prices)]:
             i, x, y = c["i"], c["x"], c["y"]
             tap(context, x, y, wait=1.2)
@@ -2475,7 +2482,7 @@ class Shop(CustomAction):
             panel = " ".join(lines)
             price = number(text(context, image, SELL_PRICE))
             kind = rewards.gift_kind(panel, team["keyword"], False, avoid)
-            if kind != "avoid" and (kept_text(panel, team) or any(shop.protected(t, keep) for t in lines)):
+            if kind != "avoid" and (kept_text(panel, team, "sell") or any(shop.protected(t, keep) for t in lines)):
                 log(f"shop: sell cell {i} kept: {panel[:40]!r}")
             elif price and "Select the" not in panel:
                 gifts.append((i, price))
@@ -2484,7 +2491,9 @@ class Shop(CustomAction):
         # ponytail: a Super Shop's 5 slots are known once its fuse page was read; 3 until then.
         materials = [c for c in cells if c["i"] in dict(gifts)]
         fused = {i for group, _ in fusions(materials, ["material"] * len(materials), visit.get("slots", 3), avoid) for i in group}
-        spare = [g for g in gifts if g[0] not in fused or g[0] in avoided]
+        # Up to the team's sell_max_tier only (#161); an unread tier may be a V: not sold.
+        top, tiers = team.get("sell_max_tier", 4), {c["i"]: c["tier"] for c in cells}
+        spare = [g for g in gifts if (g[0] not in fused or g[0] in avoided) and (tiers[g[0]] or 9) <= top]
         picked = shop.to_sell(spare, wanted, cost, team["reserve_cost"], avoided)
         visit["fuse_scanned"] = visit.get("fuse_scanned") and not picked
         log(f"shop: {wanted} wanted, {cost} Cost, materials (cell, price) {gifts}, {sorted(fused)} fuse: sell {picked}")
@@ -2564,7 +2573,7 @@ class Shop(CustomAction):
         # ponytail: the 15 cells on show; a scroll would find more when 13+ of them are kept.
         avoid = [g["name"] for g in avoided_gifts(team)]
         cells = read_cells(context, image, FUSE_CELLS, "fuse", kept_icons(team) + avoided_gifts(team))
-        roles = [shop.gift_role(c["keyword"], c["gift"], kept_keywords(team), avoid) for c in cells]
+        roles = [shop.gift_role(c["keyword"], c["gift"], kept_keywords(team, "fuse"), avoid) for c in cells]
         log(f"shop: fuse cells ({slots} slots) " + "; ".join(cell_line(c, r) for c, r in zip(cells, roles)))
         picks = fusions(cells, roles, slots, avoid)
         if not picks and "unknown" in roles:
@@ -2597,7 +2606,7 @@ class Shop(CustomAction):
 
         A gift the tooltip does not name is kept: live 2026-10-18, Spiderweb Entangled in Red's long tooltip read none.
         """
-        roles, last, keep = list(roles), None, kept_gifts(team)
+        roles, last, keep = list(roles), None, kept_gifts(team, "fuse")
         for n, c in enumerate(cells):
             if roles[n] != "unknown":
                 continue
@@ -2612,7 +2621,7 @@ class Shop(CustomAction):
                 roles[n] = "keep"
                 continue
             last = name
-            kept = not shop.protected(name, avoid) and (kept_text(" ".join(t for t, _ in lines), team) or shop.protected(name, keep))
+            kept = not shop.protected(name, avoid) and (kept_text(" ".join(t for t, _ in lines), team, "fuse") or shop.protected(name, keep))
             roles[n] = "keep" if kept else "material"
             log(f"shop: cell {c['i']} {name!r}: {roles[n]}")
         return roles

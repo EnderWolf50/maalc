@@ -107,10 +107,11 @@ test("version 5 zeros become switches", () => {
 
 test("version 6 keeps what the shop kept before", () => {
   const old = structuredClone(cases.valid) as Record<string, unknown> & { teams: Record<string, unknown>[] };
-  for (const t of old.teams) for (const k of ["keep_keywords", "keep_keywordless", "keep_gifts"]) delete t[k];
+  for (const t of old.teams) for (const k of ["keep_keywords", "keywordless", "keep_gifts", "sell_max_tier", "sell_vestiges"]) delete t[k];
   const { data, migrated } = parseSettings(JSON.stringify({ ...old, version: 6 }));
   expect(migrated).toBe(true);
-  expect(data.teams.map((t) => [t.keep_keywords, t.keep_keywordless, t.keep_gifts])).toEqual([[[], true, []], [[], true, []]]);
+  const kept = [[], "keep", [], 4, false];
+  expect(data.teams.map((t) => [t.keep_keywords, t.keywordless, t.keep_gifts, t.sell_max_tier, t.sell_vestiges])).toEqual([kept, kept]);
   expect(validate(data)).toEqual([]);
 });
 

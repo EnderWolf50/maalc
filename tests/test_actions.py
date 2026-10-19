@@ -603,11 +603,14 @@ def test_an_offer_with_a_red_price_is_not_tapped_though_ocr_read_it_as_affordabl
     assert visit["wanted"] is None
 
 
-def sale_taps(context, monkeypatch, team, prices, *readings):
-    """Shop.sell with 100 Cost and a 180 wanted, readings (cells_read) priced prices on the grid: the cells it tapped."""
+def sale_taps(context, monkeypatch, team, prices, *readings, panel=()):
+    """Shop.sell with 100 Cost and a 180 wanted, readings (cells_read) priced prices on the grid: the cells it tapped.
+    panel: the lines the sell page's panel reads for any cell tapped to read it."""
     lines = [(str(p), (x - 3, y + 37, 26, 20)) for p, (x, y) in zip(prices, actions.SELL_CELLS)]
     reads(context, {tuple(actions.DIALOG_TITLE): [("Sell E.G.O Gift", (500, 90, 200, 40))],
-                    tuple(actions.SELL_COST): [("100", (980, 90, 60, 30))], tuple(actions.SELL_GRID): lines})
+                    tuple(actions.SELL_COST): [("100", (980, 90, 60, 30))], tuple(actions.SELL_GRID): lines,
+                    tuple(actions.SELL_PANEL): [(t, (200, 200 + 40 * n, 150, 20)) for n, t in enumerate(panel)],
+                    tuple(actions.SELL_PRICE): [("90", (505, 170, 40, 25))] if panel else []})
     cells_read(monkeypatch, *readings)
     actions.Shop.sell(context, {"keyword": "Burn", "reserve_cost": 0, "gift_search": {"gifts": []}, **team},
                       {"wanted": 180, "sold": False})
@@ -627,7 +630,7 @@ def test_a_sale_reads_keywords_and_prices_off_the_grid_and_taps_only_what_it_sel
 def test_a_sale_skips_the_teams_kept_gifts(context, monkeypatch):
     # #79: Spiderweb (keep_gifts, by its icon) is the dearest and no fusion would use it once keywordless gifts may go:
     # it stays. Of Bleed, Tremor, Pierce and Sinking, 3 fuse and the one left over goes.
-    team = {"keep_keywordless": False, "keep_gifts": [SPIDERWEB]}
+    team = {"keywordless": "fuse_or_sell", "keep_gifts": [SPIDERWEB]}
     taps = sale_taps(context, monkeypatch, team, [400, 90, 60, 70, 80], ("Keywordless", SPIDERWEB["name"], 3),
                      ("Bleed", None), ("Tremor", None), ("Pierce", None), ("Sinking", None))
     assert taps == [actions.SELL_CELLS[4]]
@@ -645,6 +648,37 @@ def test_a_sale_keeps_a_gift_its_panel_names_a_kept_keyword(context, monkeypatch
     actions.Shop.sell(context, {"keyword": "Burn", "reserve_cost": 0, "gift_search": {"gifts": []}}, {"wanted": 180, "sold": False})
     taps = [c.args for c in context.tasker.controller.post_click.call_args_list if c.args in actions.SELL_CELLS]
     assert taps == [actions.SELL_CELLS[0]]  # tapped once for its panel, never sold
+
+
+@pytest.mark.parametrize("team, leftover, sold", [
+    ({}, 5, False),  # a tier V no fusion takes (pick_fusion never does) is not sold by default
+    ({"sell_max_tier": 5}, 5, True),
+    ({"sell_max_tier": 2}, 3, False),  # a tier III leftover is over a lower limit
+    ({"sell_max_tier": 3}, 3, True),
+])
+def test_a_sale_stops_at_the_teams_highest_tier(context, monkeypatch, team, leftover, sold):
+    # #161: three tier II fuse; the fourth, the leftover, would cover the price.
+    taps = sale_taps(context, monkeypatch, team, [90, 60, 70, 300], ("Bleed", None), ("Tremor", None),
+                     ("Pierce", None), ("Slash", None, leftover))
+    assert taps == ([actions.SELL_CELLS[3]] if sold else [])
+
+
+@pytest.mark.parametrize("keywordless, sold", [("keep", False), ("fuse", False), ("fuse_or_sell", True)])
+def test_a_sale_follows_the_keywordless_setting(context, monkeypatch, keywordless, sold):
+    # #161: the Vestige-free keywordless leftover (Twinkling Scrap) goes only with "fuse_or_sell"; "fuse" keeps it
+    # for fusions, and "keep" keeps it everywhere. Its badge-less cell is checked on the panel first.
+    taps = sale_taps(context, monkeypatch, {"keywordless": keywordless}, [90, 60, 70, 95], ("Bleed", None),
+                     ("Tremor", None), ("Pierce", None), ("Keywordless", None, 2), panel=["Twinkling Scrap", "Gain 1 Cost"])
+    assert (actions.SELL_CELLS[3] in taps and taps.count(actions.SELL_CELLS[3]) == 2) == sold  # its panel, then the sale
+
+
+@pytest.mark.parametrize("team, sold", [({}, False), ({"sell_vestiges": True}, True)])
+def test_a_vestige_is_sold_only_when_the_team_allows_it(context, monkeypatch, team, sold):
+    # #161: Dark Vestige has no badge and no icon template: the panel's name tells it from other keywordless gifts.
+    taps = sale_taps(context, monkeypatch, {"keywordless": "fuse_or_sell", **team}, [90, 60, 70, 95], ("Bleed", None),
+                     ("Tremor", None), ("Pierce", None), ("Keywordless", None, 1),
+                     panel=["Dark Vestige", "Counts as a Tier 1 E.G.O Gift. Can be sold at a Shop"])
+    assert taps.count(actions.SELL_CELLS[3]) == (2 if sold else 1)
 
 
 def test_nothing_is_sold_when_every_material_fuses(context, monkeypatch):
@@ -767,7 +801,7 @@ def test_the_tooltip_decides_a_cell_without_a_badge_and_keeps_what_it_names(cont
         name, line = tips[next(t for t in reversed(taps) if t in tips)]
         return [("E.G.O GIFT", (1030, 305, 100, 25)), (name, (1010, 340, 180, 22)), (line, (1000, 380, 200, 20))], name
     monkeypatch.setattr(actions.Shop, "tooltip", staticmethod(tooltip))
-    fused, taps, _ = fusion_taps(context, monkeypatch, {"keep_keywordless": False}, ("Keywordless", None),
+    fused, taps, _ = fusion_taps(context, monkeypatch, {"keywordless": "fuse"}, ("Keywordless", None),
                                  ("Keywordless", None, 1), ("Tremor", None), ("Pierce", None))
     assert fused and taps == [2, 3, 1, 1]  # the Burn gift in and out; the Vestige in, out, and in for the fusion
 

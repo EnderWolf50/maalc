@@ -20,7 +20,8 @@ def team(id, game_team, **kw):
         "reward_cards": ["Starlight", "Random E.G.O Gift", "Cost & Keyword Gift Chance", "Cost", "E.G.O Resource"],
         "shop_refresh_limit": 2, "heal": "revive", "reserve_cost": 0, "min_alive": 0, "guard_turns": 0,
         "trial_risk_weight": "high", "gift_search": {"enabled": False, "gifts": []}, "allow_white_gossypium": True,
-        "keep_keywords": [], "keep_keywordless": True, "keep_gifts": [], **kw,
+        "keep_keywords": [], "keywordless": "keep", "keep_gifts": [], "sell_max_tier": 4,
+        "sell_vestiges": False, **kw,
     }
 
 
@@ -99,7 +100,10 @@ def test_broken_json(tmp_path):
     (lambda d: d.update(extra=1), "(root)"),
     (lambda d: d["teams"][0].pop("heal"), "teams/0"),
     (lambda d: d["teams"][0]["gift_search"]["gifts"].append({"keyword": "Bleed", "tier": 4, "name": "X"}), "teams/0/gift_search/gifts/0/tier"),
-    (lambda d: d["teams"][0].update(keep_keywords=["Keywordless"]), "teams/0/keep_keywords/0"),  # keep_keywordless says it
+    (lambda d: d["teams"][0].update(keep_keywords=["Keywordless"]), "teams/0/keep_keywords/0"),  # keywordless says it
+    (lambda d: d["teams"][0].update(keywordless=True), "teams/0/keywordless"),
+    (lambda d: d["teams"][0].update(sell_max_tier=6), "teams/0/sell_max_tier"),
+    (lambda d: d["teams"][0].update(sell_max_tier=0), "teams/0/sell_max_tier"),
     (lambda d: d["teams"][0].update(keep_keywords=["Bleed", "Bleed"]), "teams/0/keep_keywords"),
     (lambda d: d["teams"][0]["keep_gifts"].append({"keyword": "Bleed", "tier": 4, "name": "X"}), "teams/0/keep_gifts/0/tier"),
 ])
@@ -137,7 +141,7 @@ def old_numbers(d):
 def no_keep(d):
     """VALID as version 6 wrote it: no keep fields."""
     for t in d["teams"]:
-        for k in ("keep_keywords", "keep_keywordless", "keep_gifts"):
+        for k in ("keep_keywords", "keywordless", "keep_gifts", "sell_max_tier", "sell_vestiges"):
             t.pop(k)
 
 

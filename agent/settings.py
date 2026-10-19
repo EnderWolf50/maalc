@@ -64,14 +64,17 @@ def _v5_to_v6(data):
 
 
 def _v6_to_v7(data):
-    """Version 7 adds what the shop keeps out of fusions and sales (#77): teams[].keep_keywords none,
-    keep_keywordless on and keep_gifts none, as before."""
+    """Version 7 adds what the shop keeps out of fusions and sales (#77, #161), as before: teams[].keep_keywords none,
+    keywordless "keep" (keep_keywordless on before #161 merged it), keep_gifts none. sell_max_tier 4 and sell_vestiges
+    off are the user's defaults (#161): a tier V and a vestige are never sold (a vestige is keywordless: "keep" kept it)."""
     teams = data.get("teams")
     for team in teams if isinstance(teams, list) else []:
         if isinstance(team, dict):
             team.setdefault("keep_keywords", [])
-            team.setdefault("keep_keywordless", True)
+            team.setdefault("keywordless", "keep")
             team.setdefault("keep_gifts", [])
+            team.setdefault("sell_max_tier", 4)
+            team.setdefault("sell_vestiges", False)
     return data
 
 

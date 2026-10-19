@@ -107,7 +107,7 @@ export interface Team {
   theme_pack_plan: string; reward_cards: string[]; shop_refresh_limit: number; heal: string;
   reserve_cost: number; min_alive: number; guard_turns: number; trial_risk_weight: string;
   gift_search: { enabled: boolean; gifts: GiftRef[] }; allow_white_gossypium: boolean;
-  keep_keywords: string[]; keep_keywordless: boolean; keep_gifts: GiftRef[];
+  keep_keywords: string[]; keywordless: string; keep_gifts: GiftRef[]; sell_max_tier: number; sell_vestiges: boolean;
 }
 /** A gift on the E.G.O Gift Search page: its keyword tab, tier and English name (spec 04 section 9). */
 export interface GiftRef { keyword: string; tier: number; name: string }
@@ -185,8 +185,9 @@ const MIGRATIONS: Record<number, (d: Record<string, unknown>) => Record<string, 
         ? { ...t, hard_from_floor: 1 } : t)) : d.teams,
     };
   },
-  // Version 7 adds what the shop keeps out of fusions and sales (#77): no other keyword, keywordless kept, no gift.
-  6: (d) => withTeamDefault(d, { keep_keywords: [], keep_keywordless: true, keep_gifts: [] }),
+  // Version 7 adds what the shop keeps out of fusions and sales (#77, #161), as before: no other keyword, keywordless
+  // kept, no gift; tier V and vestiges never sold.
+  6: (d) => withTeamDefault(d, { keep_keywords: [], keywordless: "keep", keep_gifts: [], sell_max_tier: 4, sell_vestiges: false }),
 };
 
 function withTeamDefault(d: Record<string, unknown>, field: Record<string, unknown>) {

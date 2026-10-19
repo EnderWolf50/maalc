@@ -8,3 +8,7 @@ fusion_points: {1: 3, 2: 6, 3: 10, 4: 15, 5: 30}
 fusion_tiers:
   shop: [10, 16, 24]
   super_shop: [9, 14, 21]
+# Vestiges (#161): keywordless gifts that only count as a tier I-V material for fusion or sale, ids 9991-9995
+# (LocalizeLimbusCompany EN/EGOgift_MirrorDungeon.json, read 2026-10-19). No badge and no icon template: the bot
+# tells them by the name a tooltip or the sell panel shows.
+vestiges: [Dark Vestige, Faint Vestige, Twinkling Vestige, Brilliant Vestige, Lunar Vestige]
