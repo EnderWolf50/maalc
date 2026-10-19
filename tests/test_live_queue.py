@@ -97,3 +97,47 @@ def test_run_writes_the_start_time_of_its_own_process_into_the_ticket(tmp_path):
     assert seen == {"pid": os.getpid(), "start": lq.started(os.getpid())}
     assert list(tmp_path.glob("*.ticket")) == []
 
+
+QUEUE_PY = Path(__file__).resolve().parent.parent / "tools/live/queue.py"
+HOLDER = """import importlib.util, os, sys, time
+from pathlib import Path
+spec = importlib.util.spec_from_file_location("lq", sys.argv[1])
+lq = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(lq)
+done = sys.argv[3]
+wait = "import os, time, sys\\nwhile not os.path.exists(sys.argv[1]): time.sleep(0.05)"
+sys.exit(lq.run(Path(sys.argv[2]), "holder", [sys.executable, "-c", wait, done], poll=0.05))
+"""
+
+
+def wait_for(cond, timeout=15.0):
+    deadline = time.monotonic() + timeout
+    while not cond():
+        assert time.monotonic() < deadline, "timed out"
+        time.sleep(0.05)
+
+
+def test_a_detached_holder_outlives_its_launcher_and_keeps_the_resource(tmp_path):
+    qdir, done, log, holder = tmp_path / "q", tmp_path / "done", tmp_path / "hold.log", tmp_path / "holder.py"
+    holder.write_text(HOLDER)
+    launcher = subprocess.run([sys.executable, str(QUEUE_PY), "detach", "--log", str(log), "--",
+                               sys.executable, str(holder), str(QUEUE_PY), str(qdir), str(done)],
+                              capture_output=True, text=True, timeout=30)
+    assert launcher.returncode == 0, launcher.stderr  # the launcher is gone: killing it now kills nothing
+    wait_for(lambda: log.exists() and "[queue] start holder" in log.read_text())
+    assert [line.split(" (")[0] for line in lq.status(qdir)] == ["RUNNING holder"]
+    assert lq.detached_status(log).startswith("running pid ")
+    done.touch()
+    wait_for(lambda: lq.detached_status(log).startswith("ended"))
+    assert lq.status(qdir) == []
+
+
+def test_detached_status_tells_running_from_ended(tmp_path):
+    log = tmp_path / "x.log"
+    assert lq.detached_status(log) == f"nothing was started with --log {log}"
+    lq.pid_file(log).write_text(json.dumps({"pid": os.getpid(), "start": lq.started(os.getpid()), "cmd": "me"}))
+    assert lq.detached_status(log) == f"running pid {os.getpid()}: me"
+    lq.pid_file(log).write_text(json.dumps({"pid": dead_pid(), "start": None, "cmd": "gone"}))
+    log.write_text("first\nlast line\n")
+    assert lq.detached_status(log).startswith("ended pid ") and lq.detached_status(log).endswith(": last line")
+
