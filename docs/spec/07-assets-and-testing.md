@@ -67,7 +67,7 @@
 
 ## 測試截圖的存放與授權
 
-- 測試截圖先放在主 repo 的 `tests/`。格式為 720p PNG，以 oxipng 壓縮，必須遮掉 UID 和帳號名稱。（#13）
+- 測試截圖放在主 repo 的 `tests/`。格式為 720p PNG，以 oxipng 壓縮，必須遮掉三個身分區域：UID 欄、帳號 e-mail、主畫面左下 LV 面板上方的玩家名稱。（#13）
 - 2026-10-13 困難鏡牢的探測截圖（`.local/probe/captures/`，[02-screens.md](02-screens.md) 的「實機截圖」欄）保存在 gitignored 私有資料夾，還沒遮蔽；實作時依上一條處理後搬進 `tests/`，作為第一批測試截圖。（#13）
 - 直接傳給 `post_recognition`／`run_recognition` 的圖不會被縮放，所以測試截圖必須已經是 720p。（#4）
 - 測試截圖一直放主 repo 的 `tests/screens`，探測截圖那批也一樣，不搬去 testset repo。（#13，2026-10-19 使用者確認）
