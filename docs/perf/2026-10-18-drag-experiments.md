@@ -157,6 +157,8 @@
 
 ## 媒體
 
+片段與圖附在 [#125](https://github.com/EnderWolf50/maalc/pull/125)（防禦）與 [#126](https://github.com/EnderWolf50/maalc/pull/126)（捲動、選隊）的留言；原檔只留在本機。
+
 | 實驗 | 片段（`clips/`） | 圖（`stills/`） |
 |---|---|---|
 | #119 原本 13 秒 | `119-01-baseline-guard-13s.mp4` | |
