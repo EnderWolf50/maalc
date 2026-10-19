@@ -192,7 +192,6 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
   );
 }
 
-const ROMAN = ["", "I", "II", "III"];
 const TIERS = ["", "I", "II", "III", "IV", "V"];
 const VESTIGE_ZH = ["黯淡的殘影", "微茫的殘影", "閃耀的殘影", "輝煌的殘影", "月之殘影"];
 
@@ -224,7 +223,7 @@ function GiftGrid({ gifts, start, full, mark, onToggle }: {
       </div>
       {[3, 2, 1].map((tier) => (
         <div key={tier} className="gift-tier">
-          <h4>{ROMAN[tier]}</h4>
+          <h4>{TIERS[tier]}</h4>
           <div className="gifts">
             {SEARCH_GIFTS.filter((g) => g.keyword === tab && g.tier === tier).map((g) => {
               const m = mark(g);
@@ -311,7 +310,7 @@ function KeepPanel({ i }: { i: number }) {
           <ul>
             {team.keep_gifts.map((g) => (
               <li key={`${g.keyword}|${g.tier}|${g.name}`}>
-                {giftName(g, zh)} <small className="muted">{g.keyword} {ROMAN[g.tier]}</small>{" "}
+                {giftName(g, zh)} <small className="muted">{g.keyword} {TIERS[g.tier]}</small>{" "}
                 <button type="button" className="icon" aria-label={t("remove")} title={t("remove")} onClick={() => toggle(g)}>×</button>
               </li>
             ))}
@@ -350,7 +349,7 @@ function GiftSearchPanel({ i }: { i: number }) {
           <ReorderList items={search.gifts} keyOf={(g) => `${g.keyword}|${g.tier}|${g.name}`} onChange={(gifts) => set({ gifts })}
             render={(g, j) => (
               <>
-                {j + 1}. {giftName(g, zh)} <small className="muted">{g.keyword} {ROMAN[g.tier]}</small>{" "}
+                {j + 1}. {giftName(g, zh)} <small className="muted">{g.keyword} {TIERS[g.tier]}</small>{" "}
                 <button type="button" className="icon" aria-label={t("remove")} title={t("remove")}
                   onClick={(e) => { e.stopPropagation(); set({ gifts: toggleGift(search.gifts, g) }); }}>×</button>
               </>
