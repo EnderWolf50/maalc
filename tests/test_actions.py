@@ -663,13 +663,12 @@ def sale_taps(context, monkeypatch, team, prices, *readings, panel=()):
 
 
 def test_a_sale_reads_keywords_and_prices_off_the_grid_and_taps_only_what_it_sells(context, monkeypatch):
-    # #112: no gift is tapped to read its panel. #79: Tremor III + Pierce III + Sinking II fuse into a tier IV; the
-    # Bleed I no fusion uses goes, though Tremor's price is higher.
+    # #112: no gift with a badge is tapped to read its panel; the badge-less one is, as it may be a vestige (fusion
+    # material, #161). #79: Tremor III + Pierce III + Sinking II fuse into a tier IV; the Bleed I no fusion uses goes,
+    # though Tremor's price is higher.
     taps = sale_taps(context, monkeypatch, {}, [90, 300, 200, 120, 60, 80], ("Bleed", None, 1), ("Burn", None),
                      ("Keywordless", None), ("Tremor", None, 3), ("Pierce", None, 3), ("Sinking", None, 2))
-    assert taps == [actions.SELL_CELLS[0]]
-    rois = [(c.args[2] or {}).get(c.args[0], {}).get("roi") for c in context.run_recognition.call_args_list]
-    assert actions.SELL_PANEL not in rois
+    assert taps == [actions.SELL_CELLS[2], actions.SELL_CELLS[0]]
 
 
 def test_a_sale_skips_the_teams_kept_gifts(context, monkeypatch):
@@ -722,26 +721,42 @@ def test_a_sale_follows_the_keywordless_setting(context, monkeypatch, keywordles
                                         ({"sell_vestiges": True, "sell_max_tier": 1}, True)])
 def test_a_vestige_is_sold_only_when_the_team_allows_it(context, monkeypatch, keywordless, team, sold):
     # #161: sell_vestiges alone decides, whatever the keywordless setting. Dark Vestige has no badge and no icon
-    # template: the panel's name tells it from keywordless gifts. With sell_vestiges off and keywordless kept on the
-    # sell page, its cell is not even opened.
+    # template: the panel's name tells it from keywordless gifts, so its cell is opened whatever the settings (#79: a
+    # vestige kept from the sale is still fusion material).
     taps = sale_taps(context, monkeypatch, {"keywordless": keywordless, **team}, [90, 60, 70, 95], ("Bleed", None),
                      ("Tremor", None), ("Pierce", None), ("Keywordless", None, 1),
                      panel=["Dark Vestige", "Counts as a Tier 1 E.G.O Gift. Can be sold at a Shop"])
-    opened = sold or keywordless == "fuse_or_sell"
-    assert taps.count(actions.SELL_CELLS[3]) == int(opened) + int(sold)
+    assert taps.count(actions.SELL_CELLS[3]) == 1 + int(sold)
 
 
 def test_a_vestige_over_the_highest_tier_sold_stays(context, monkeypatch):
-    # #161: sell_max_tier applies to vestiges too; a Twinkling Vestige (III) over a limit of II is not even opened.
+    # #161: sell_max_tier applies to vestiges too; a Twinkling Vestige (III) over a limit of II is opened, not sold.
     taps = sale_taps(context, monkeypatch, {"sell_vestiges": True, "sell_max_tier": 2}, [90, 60, 70, 95],
                      ("Bleed", None), ("Tremor", None), ("Pierce", None), ("Keywordless", None, 3),
                      panel=["Twinkling Vestige"])
-    assert taps == []
+    assert taps == [actions.SELL_CELLS[3]]
 
 
 def test_nothing_is_sold_when_every_material_fuses(context, monkeypatch):
     # #79: 3 materials make a fusion; a sale would only break it.
     assert sale_taps(context, monkeypatch, {}, [90, 60, 70], ("Bleed", None), ("Tremor", None), ("Pierce", None)) == []
+
+
+@pytest.mark.parametrize("team, name", [({"keywordless": "fuse"}, "Twinkling Scrap"), ({}, "Dark Vestige")])
+def test_a_sale_counts_the_fusion_materials_it_may_not_sell(context, monkeypatch, team, name):
+    # #79: a keywordless gift under "fuse", or a vestige the team does not sell, is still fusion material: Bleed and
+    # Tremor fuse with it, so neither is sold. Its badge-less cell is opened once for its name.
+    taps = sale_taps(context, monkeypatch, team, [90, 95, 60], ("Bleed", None), ("Tremor", None), ("Keywordless", None, 1),
+                     panel=[name, "Gain 1 Cost"])
+    assert taps == [actions.SELL_CELLS[2]]
+
+
+def test_a_sale_does_not_break_a_fusion_by_selling_white_gossypium(context, monkeypatch):
+    # #79, #90: White Gossypium is sold first, so the fusion is grouped without it: Tremor, Pierce and Sinking fuse.
+    # Its 50 alone does not cover the price: nothing is sold (grouped with it, Sinking would go too, and no fusion).
+    taps = sale_taps(context, monkeypatch, {"allow_white_gossypium": False}, [50, 60, 70, 80], ("Bleed", GOSSYPIUM, 1),
+                     ("Tremor", None, 1), ("Pierce", None, 1), ("Sinking", None, 1))
+    assert taps == []
 
 
 GOSSYPIUM = "White Gossypium"
@@ -862,6 +877,25 @@ def test_the_tooltip_decides_a_cell_without_a_badge_and_keeps_what_it_names(cont
     fused, taps, _ = fusion_taps(context, monkeypatch, {"keywordless": "fuse"}, ("Keywordless", None),
                                  ("Keywordless", None, 1), ("Tremor", None), ("Pierce", None))
     assert fused and taps == [2, 3, 1, 1]  # the Burn gift in and out; the Vestige in, out, and in for the fusion
+
+
+@pytest.mark.parametrize("keywordless", ["fuse", "fuse_or_sell"])
+def test_keywordless_gifts_let_go_join_the_highest_tier_pick(context, monkeypatch, keywordless):
+    # The user on #161: a keywordless gift that may be fused is a material like any other, not only when the others
+    # make no fusion. Tremor III + Pierce III + Sinking I would make a III; with the keywordless III, a IV.
+    tooltips(monkeypatch, {0: "Twinkling Scrap"})
+    fused, taps, _ = fusion_taps(context, monkeypatch, {"keywordless": keywordless}, ("Keywordless", None, 3),
+                                 ("Tremor", None, 3), ("Pierce", None, 3), ("Sinking", None, 1))
+    assert fused and taps == [3, 1, 1, 0]  # in and out for its name, then in for the fusion
+
+
+def test_a_keywordless_gift_the_team_keeps_stays_out_of_the_pick(context, monkeypatch):
+    # The user on #161: keep_gifts still applies; here Spiderweb's icon was missed, its tooltip names it.
+    tooltips(monkeypatch, {0: SPIDERWEB["name"]})
+    team = {"keywordless": "fuse", "keep_gifts": [SPIDERWEB]}
+    fused, taps, _ = fusion_taps(context, monkeypatch, team, ("Keywordless", None, 3), ("Tremor", None, 3),
+                                 ("Pierce", None, 3), ("Sinking", None, 1))
+    assert fused and taps == [2, 1, 1, 1]
 
 
 def test_a_super_shop_fuses_up_to_5(context, monkeypatch):

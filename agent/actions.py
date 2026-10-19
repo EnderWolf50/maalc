@@ -2494,11 +2494,12 @@ class Shop(CustomAction):
         gifts = [(c["i"], prices[c["i"]]) for c, r in zip(cells, roles) if r == "material" and c["i"] in prices]
         avoided = {c["i"] for c in cells if c["gift"] in avoid}  # sold first (#90)
         # A badge or price below the grid's edge: the panel a tap shows decides (spec 03 section 12's rule).
-        keep, named = kept_gifts(team, "sell"), [g["name"] for g in team.get("keep_gifts", [])]
-        # Vestiges are sold only when the team allows it, whatever its keywordless setting (#161): then a badge-less cell
-        # kept as keywordless is opened too, as it may be one.
-        top = team.get("sell_max_tier", 4)
-        which = vestige_cells(cells, roles, top) if team.get("sell_vestiges", False) else []
+        keep, fuse_keep = kept_gifts(team, "sell"), kept_gifts(team, "fuse")
+        named = [g["name"] for g in team.get("keep_gifts", [])]
+        # The fusion still uses what may not be sold (#79): a vestige the team does not sell (#161), a keywordless gift
+        # under "fuse". A badge-less cell kept as keywordless may be either: opened for its name, as on the fuse page.
+        top, sells_vestiges = team.get("sell_max_tier", 4), team.get("sell_vestiges", False)
+        which, fuse_only = vestige_cells(cells, roles, shop.MAX_MATERIAL_TIER), []
         for n, c in enumerate(cells):
             if not (n in which or roles[n] == "unknown" or (roles[n] == "material" and c["i"] not in prices)):
                 continue
@@ -2509,24 +2510,31 @@ class Shop(CustomAction):
             panel = " ".join(lines)
             price = number(text(context, image, SELL_PRICE))
             kind = rewards.gift_kind(panel, team["keyword"], False, avoid)
-            if vestige(lines):
-                log(f"shop: sell cell {i} is a vestige: {panel[:40]!r}")
-            if vestige(lines) and (not team.get("sell_vestiges", False) or any(shop.protected(t, named) for t in lines)):
-                log(f"shop: sell cell {i} kept: the team does not sell this vestige")
-            elif n in which and not vestige(lines):
-                log(f"shop: sell cell {i} kept: no vestige, {panel[:40]!r}")
-            elif not vestige(lines) and kind != "avoid" and (kept_text(panel, team, "sell") or any(shop.protected(t, keep) for t in lines)):
-                log(f"shop: sell cell {i} kept: {panel[:40]!r}")
-            elif price and "Select the" not in panel:
+            is_vestige = vestige(lines)
+            if is_vestige:
+                use = "keep" if any(shop.protected(t, named) for t in lines) else "sell" if sells_vestiges else "fuse"
+            elif kind != "avoid" and (kept_text(panel, team, "fuse") or any(shop.protected(t, fuse_keep) for t in lines)):
+                use = "keep"
+            elif n in which:  # no vestige: a keywordless gift, or a gift whose badge was missed
+                use = "keep" if team.get("keywordless", "keep") == "keep" else "fuse"
+            elif kind != "avoid" and any(shop.protected(t, keep) for t in lines):
+                use = "fuse"  # kept on the sell page only: a keywordless gift under "fuse"
+            else:
+                use = "sell"
+            if use == "sell" and price and "Select the" not in panel:
                 gifts.append((i, price))
                 if kind == "avoid":
                     avoided.add(i)
+            elif use != "keep":
+                fuse_only.append(i)
+            log(f"shop: sell cell {i}{' (a vestige)' if is_vestige else ''}: {use}, {panel[:40]!r}")
+        # The fusion is grouped without the avoided gifts, which are sold first (#90): a sale then breaks no group.
         # ponytail: a Super Shop's 5 slots are known once its fuse page was read; 3 until then.
-        materials = [c for c in cells if c["i"] in dict(gifts)]
-        fused = {i for group, _ in fusions(materials, ["material"] * len(materials), visit.get("slots", 3), avoid) for i in group}
+        materials = [c for c in cells if (c["i"] in dict(gifts) or c["i"] in fuse_only) and c["i"] not in avoided]
+        fused = {i for group, _ in fusions(materials, ["material"] * len(materials), visit.get("slots", 3), ()) for i in group}
         # Up to the team's sell_max_tier only (#161); an unread tier may be a V: not sold.
         tiers = {c["i"]: c["tier"] for c in cells}
-        spare = [g for g in gifts if (g[0] not in fused or g[0] in avoided) and (tiers[g[0]] or 9) <= top]
+        spare = [g for g in gifts if g[0] not in fused and (tiers[g[0]] or 9) <= top]
         picked = shop.to_sell(spare, wanted, cost, team["reserve_cost"], avoided)
         visit["fuse_scanned"] = visit.get("fuse_scanned") and not picked
         log(f"shop: {wanted} wanted, {cost} Cost, materials (cell, price) {gifts}, {sorted(fused)} fuse: sell {picked}")
@@ -2608,8 +2616,12 @@ class Shop(CustomAction):
         cells = read_cells(context, image, FUSE_CELLS, "fuse", kept_icons(team) + avoided_gifts(team))
         roles = [shop.gift_role(c["keyword"], c["gift"], kept_keywords(team, "fuse"), avoid) for c in cells]
         log(f"shop: fuse cells ({slots} slots) " + "; ".join(cell_line(c, r) for c, r in zip(cells, roles)))
-        # Vestiges are always material (#161): a badge-less cell kept as keywordless is opened for its name.
-        which = vestige_cells(cells, roles, shop.MAX_MATERIAL_TIER)
+        # Vestiges are always material (#161): a badge-less cell kept as keywordless is opened for its name. Keywordless
+        # gifts the team lets go join the pick like any material (the user, #161): opened up front, not only when the
+        # others make no fusion.
+        which = sorted(vestige_cells(cells, roles, shop.MAX_MATERIAL_TIER) + [
+            n for n, (c, r) in enumerate(zip(cells, roles))
+            if r == "unknown" and c["keyword"] == "Keywordless" and c["tier"] and c["tier"] <= shop.MAX_MATERIAL_TIER])
         if which:
             roles = Shop.tooltip_roles(context, team, cells, roles, avoid, which)
         picks = fusions(cells, roles, slots, avoid)
