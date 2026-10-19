@@ -154,6 +154,8 @@ def test_a_detached_holder_survives_a_tree_kill_of_its_launcher_and_keeps_the_re
 def test_detached_status_tells_running_from_ended(tmp_path):
     log = tmp_path / "x.log"
     assert lq.detached_status(log) == (False, f"nothing was started with --log {log}")
+    lq.pid_file(log).write_text('{"pid": 1')  # detach is still writing it
+    assert lq.detached_status(log)[0] is False
     lq.pid_file(log).write_text(json.dumps({"pid": os.getpid(), "start": lq.started(os.getpid()), "cmd": "me"}))
     assert lq.detached_status(log) == (True, f"running pid {os.getpid()}: me")
     lq.pid_file(log).write_text(json.dumps({"pid": dead_pid(), "start": None, "cmd": "gone"}))
