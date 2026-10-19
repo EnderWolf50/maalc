@@ -237,6 +237,7 @@ def gift_role(keyword, gift, kept, avoid=()):
     return "unknown" if keyword in (None, "Keywordless") else "material"
 
 
+MAX_MATERIAL_TIER = 4  # a fusion gives tier IV at most: a tier V material is always a downgrade (user, #161)
 MIN_FUSION = 3  # materials a fusion takes at least: the game takes 2, spec 03 section 13 (#10) groups of 3 and up
 
 
@@ -251,13 +252,13 @@ def pick_fusion(materials, slots, thresholds, points, first=()):
     materials: [(key, tier)]; slots: the page's material slots (3, a Super Shop's 5); thresholds: fusion_tier's for
     this shop; points: {tier: a material's points}. Each fusion takes 3 to slots materials: the group giving the
     highest tier, then holding the most of first (gifts the team avoids, #90), then worth the fewest points; then
-    again from what is left, until fewer than 3 are.
+    again from what is left, until fewer than 3 are. A tier V gift is never a material (MAX_MATERIAL_TIER).
     """
     def rank(group):
         total = sum(points[t] for _, t in group)
         return -fusion_tier(total, thresholds), -sum(k in first for k, _ in group), total, len(group)
 
-    left, out = list(materials), []
+    left, out = [m for m in materials if m[1] <= MAX_MATERIAL_TIER], []
     while len(left) >= MIN_FUSION:
         best = min((g for n in range(MIN_FUSION, slots + 1) for g in combinations(left, n)), key=rank)
         out.append(([k for k, _ in best], -rank(best)[0]))

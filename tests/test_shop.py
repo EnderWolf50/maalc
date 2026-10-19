@@ -257,6 +257,12 @@ def test_pick_fusion_on_a_super_shop_fills_its_5_slots_by_its_own_thresholds():
     assert s.pick_fusion([("a", 2), ("b", 2), ("c", 1)], 5, SUPER, POINTS) == [(["a", "b", "c"], 3)]
 
 
+def test_pick_fusion_never_takes_a_tier_v_gift():
+    # #161, the user: a fusion tops out at tier IV, so a tier V material is always a downgrade; not even to make a group.
+    assert s.pick_fusion([("v", 5), ("a", 1), ("b", 1)], 3, SHOP, POINTS) == []
+    assert s.pick_fusion([("v", 5), ("a", 3), ("b", 3), ("c", 2)], 5, SUPER, POINTS) == [(["a", "b", "c"], 4)]
+
+
 def test_pick_fusion_puts_an_avoided_gift_in_first():
     # #90: White Gossypium ("w", a II) goes in rather than the other II for the same tier.
     materials = [("a", 2), ("b", 2), ("c", 2), ("w", 2)]
