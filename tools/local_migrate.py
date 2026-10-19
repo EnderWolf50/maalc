@@ -4,11 +4,14 @@
   uv run python tools/local_migrate.py [--probe <old probe folder>] [--unpack <unpacked game data>] [--apply]
   uv run python tools/local_migrate.py --remove-links [--apply]
 
-Dry run unless `--apply`. Each folder is copied into `.local/`, the copy is checked (the same files with the
-same sizes), the original is renamed aside, a directory junction (a symlink off Windows) takes its place
-pointing at the `.local/` copy, and the renamed original is deleted. A task still using the old path keeps
-working through the link. When the rename fails (a file in use) the copy is removed and the original stays.
-Every link made is recorded in `.local/links.json`; `--remove-links` deletes those links, and only while they
+Dry run unless `--apply`. On the same drive a folder is renamed into `.local/`. Across drives it is copied to
+`<target>.partial`, the copy is checked against the original (the same files with the same sizes and times),
+the original is renamed aside to `<name>.migrating` and checked once more against the copy (a file written
+in between stops the move), the copy takes its final name, and only then is the original deleted. Either way
+a directory junction (a symlink off Windows) is left at the old place, pointing into `.local/`, so a task still
+using the old path keeps working, and each link is recorded in `.local/links.json`. Every step that fails
+puts things back as they were. A `.partial` or `.migrating` folder left by an interrupted run stops the tool
+with a message instead of being guessed at. `--remove-links` deletes the recorded links, and only while they
 still point into `.local/`, so the data stays in `.local/`. A target that already exists is left alone.
 
   --probe   its `archive/` moves to `.local/archive/` (with INDEX.md); its `tools/templates/` (full screens
@@ -20,6 +23,7 @@ import argparse
 import json
 import os
 import shutil
+import stat
 import subprocess
 import sys
 from pathlib import Path
@@ -49,66 +53,120 @@ def link(src: Path, dst: Path) -> None:
 
 
 def is_link(p: Path) -> bool:
-    return p.is_symlink() or (hasattr(p, "is_junction") and p.is_junction())
+    return p.is_junction() or p.is_symlink()
 
 
 def unlink_dir(p: Path) -> None:
     """Remove a directory link itself, never what it points at."""
-    if p.is_symlink() and not (hasattr(p, "is_junction") and p.is_junction()):
-        p.unlink()
-    else:
+    if p.is_junction():
         os.rmdir(p)  # a junction is removed like an empty directory; its target is untouched
+    else:
+        p.unlink()
 
 
-def tree(root: Path) -> dict[str, int]:
-    """Relative path -> size of every file under root."""
-    return {p.relative_to(root).as_posix(): p.stat().st_size for p in root.rglob("*") if p.is_file()}
+def force_writable(func, path, _exc) -> None:
+    """rmtree's onexc: Windows refuses to delete a read-only file, so clear the flag and retry."""
+    os.chmod(path, stat.S_IWRITE)
+    func(path)
 
 
-def move_and_link(src: Path, dst: Path) -> None:
-    """Copy src to dst, check it, put a link to dst where src was, then delete the original."""
+def remove_tree(p: Path) -> None:
+    shutil.rmtree(p, onexc=force_writable)
+
+
+def file_stats(root: Path) -> dict[str, tuple[int, int]]:
+    """Relative path -> (size, mtime in whole seconds) of every file under root; copy2 keeps both."""
+    out = {}
+    for p in root.rglob("*"):
+        if p.is_file():
+            st = p.stat()
+            out[p.relative_to(root).as_posix()] = (st.st_size, int(st.st_mtime))
+    return out
+
+
+def same_drive(a: Path, b: Path) -> bool:
+    return os.stat(a).st_dev == os.stat(b.parent if not b.exists() else b).st_dev
+
+
+def leftovers(src: Path, dst: Path) -> list[Path]:
+    return [p for p in (src.with_name(src.name + ".migrating"), dst.with_name(dst.name + ".partial")) if p.exists()]
+
+
+def move_and_link(src: Path, dst: Path, local: Path) -> None:
+    """Put src's data at dst and a link to it at src. Raises with everything back as it was on any failure."""
     dst.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copytree(src, dst, symlinks=True)
-    if tree(src) != tree(dst):
-        shutil.rmtree(dst)
+    if same_drive(src, dst):
+        src.rename(dst)  # one atomic step; a folder in use fails here and nothing changes
+        try:
+            link(dst, src)
+        except (OSError, subprocess.CalledProcessError):
+            dst.rename(src)
+            raise
+        record_link(local, src)
+        return
+    partial = dst.with_name(dst.name + ".partial")
+    try:
+        shutil.copytree(src, partial, symlinks=True)
+    except BaseException:
+        if partial.exists():
+            remove_tree(partial)
+        raise
+    if file_stats(src) != file_stats(partial):
+        remove_tree(partial)
         raise RuntimeError(f"copy of {src} differs from the original; nothing changed")
     aside = src.with_name(src.name + ".migrating")
     try:
         src.rename(aside)
     except OSError as e:
-        shutil.rmtree(dst)
+        remove_tree(partial)
         raise RuntimeError(f"{src} is in use ({e}); copy removed, original kept") from e
-    link(dst, src)
-    shutil.rmtree(aside)
+    if file_stats(aside) != file_stats(partial):  # written to between the check and the rename
+        aside.rename(src)
+        remove_tree(partial)
+        raise RuntimeError(f"{src} changed while it was copied; copy removed, original kept")
+    partial.rename(dst)
+    try:
+        link(dst, src)
+    except (OSError, subprocess.CalledProcessError):
+        aside.rename(src)
+        remove_tree(dst)
+        raise
+    record_link(local, src)
+    remove_tree(aside)
 
 
-def record(local: Path, path: Path) -> None:
+def read_links(local: Path) -> list[str]:
     f = local / LINKS
-    links = json.loads(f.read_text(encoding="utf-8")) if f.exists() else []
+    return json.loads(f.read_text(encoding="utf-8")) if f.exists() else []
+
+
+def write_links(local: Path, links: list[str]) -> None:
+    (local / LINKS).write_text(json.dumps(links, indent=1), encoding="utf-8")
+
+
+def record_link(local: Path, path: Path) -> None:
+    links = read_links(local)
     if str(path) not in links:
-        links.append(str(path))
-    f.write_text(json.dumps(links, indent=1), encoding="utf-8")
+        write_links(local, links + [str(path)])
 
 
 def remove_links(local: Path, apply: bool) -> None:
-    f = local / LINKS
-    links = json.loads(f.read_text(encoding="utf-8")) if f.exists() else []
-    kept = []
+    links, kept = read_links(local), []
     for s in links:
         p = Path(s)
-        inside = is_link(p) and Path(os.path.realpath(p)).is_relative_to(local.resolve())
-        if not inside:
-            print(f"skip   {p}: not a link into {local}")
+        if not (is_link(p) and Path(os.path.realpath(p)).is_relative_to(local.resolve())):
+            print(f"skip   {p}: not a link into {local} (kept in {LINKS})")
+            kept.append(s)
             continue
         print(f"{'remove' if apply else 'would remove'} {p}")
         if apply:
             unlink_dir(p)
         else:
             kept.append(s)
-    if apply:
-        f.write_text(json.dumps(kept, indent=1), encoding="utf-8")
+    if apply and links:
+        write_links(local, kept)
     if not links:
-        print(f"no links recorded in {f}")
+        print(f"no links recorded in {local / LINKS}")
 
 
 def write_masks(templates: Path, evidence: Path) -> None:
@@ -132,6 +190,9 @@ def plan(local: Path, probe: Path | None, unpack: Path | None) -> list[tuple[str
 def migrate(local: Path, probe: Path | None, unpack: Path | None, apply: bool) -> None:
     for kind, src, dst in plan(local, probe, unpack):
         verb = {"masks": "write masks from", "folder": "move here and link back from"}[kind]
+        if kind == "folder" and (left := leftovers(src, dst)):
+            raise SystemExit(f"stop: an interrupted run left {', '.join(map(str, left))}; the original is the "
+                             f"`.migrating` folder if there is one. Put it back by hand, then rerun.")
         if not src.exists():
             print(f"skip   {dst}: {src} does not exist")
         elif is_link(src):
@@ -143,8 +204,7 @@ def migrate(local: Path, probe: Path | None, unpack: Path | None, apply: bool) -
             if apply and kind == "masks":
                 write_masks(src, dst)
             elif apply:
-                move_and_link(src, dst)
-                record(local, src)
+                move_and_link(src, dst, local)
 
 
 def main(argv=None) -> None:
@@ -155,7 +215,8 @@ def main(argv=None) -> None:
     ap.add_argument("--apply", action="store_true")
     a = ap.parse_args(argv)
     local = main_checkout() / ".local"
-    local.mkdir(exist_ok=True)
+    if a.apply:
+        local.mkdir(exist_ok=True)
     if a.remove_links:
         remove_links(local, a.apply)
     else:
