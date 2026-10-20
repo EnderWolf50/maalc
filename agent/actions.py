@@ -1520,10 +1520,9 @@ def hold_turn(context):
     """Hold a finger on HOLD_SPOT while the turn plays: until the next turn waits for input, a screen of
     BATTLE_LEFT shows, the task is stopping or HOLD_LIMIT s. Always lifted on return, also on an error:
     a finger left down keeps the panel tilted and MirrorHub blind (#145)."""
-    ctl = context.tasker.controller
     end = time.monotonic() + HOLD_LIMIT
     try:
-        ctl.post_touch_down(*HOLD_SPOT).wait()
+        context.tasker.controller.post_touch_down(*HOLD_SPOT).wait()
         while time.monotonic() < end and not context.tasker.stopping:
             time.sleep(HOLD_EVERY)
             image = screen(context)
@@ -1534,7 +1533,9 @@ def hold_turn(context):
             if seen(context, image, "BattleTurn"):
                 return
     finally:
-        ctl.post_touch_up().wait()
+        # Fetched again: in the agent, one kept from before the looks failed its touch up with an access
+        # violation (live 2026-10-20, every hold), and the finger stayed down until the next tap.
+        context.tasker.controller.post_touch_up().wait()
 
 
 @AgentServer.custom_action("HoldTurn")

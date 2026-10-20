@@ -539,6 +539,24 @@ def test_a_held_finger_lifts_on_a_dialog_over_the_battle(context, clock, shown):
     assert sum(clock) < 1
 
 
+def test_a_held_finger_lifts_through_a_controller_fetched_after_the_looks(context, clock):
+    # Live 2026-10-20: in the agent, a controller kept from before the looks (screen() fetches another) failed
+    # its touch up with an access violation, every hold: the finger stayed down until the next tap.
+    fresh = []
+
+    def controller(self):
+        ctl = MagicMock()
+        fresh.append(ctl)
+        return ctl
+    hits(context, "BattleTurn")
+    type(context.tasker).controller = property(controller)
+    try:
+        actions.hold_turn(context)
+    finally:
+        del type(context.tasker).controller
+    assert [c for c in fresh if c.post_touch_up.called] == [fresh[-1]]
+
+
 def test_a_held_finger_lifts_when_the_task_is_stopping(context, clock):
     # #145: a finger left down when the bot stopped kept the panel tilted; L1-L3 and a game restart followed.
     hits(context, "BattlePause")
