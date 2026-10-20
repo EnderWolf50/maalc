@@ -1,0 +1,29 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "uv",
+            "args": ["run", "--no-project", "--quiet", "python", "${CLAUDE_PROJECT_DIR}/.claude/hooks/public-text-guard.py"],
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "SubagentStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "uv",
+            "args": ["run", "--no-project", "--quiet", "python", "${CLAUDE_PROJECT_DIR}/.claude/hooks/subagent-preamble.py"],
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}

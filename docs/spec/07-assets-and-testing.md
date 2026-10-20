@@ -33,7 +33,7 @@
 
 ## 辨識方法的實機經驗
 
-以下是 2026-10-13 困難鏡牢實機探測得到的做法，是實作指引，不是規則；括號裡的數字是實測值，門檻仍依上一節驗證。截圖路徑相對於探測目錄 `~/.cache/maalc-probe/`。
+以下是 2026-10-13 困難鏡牢實機探測得到的做法，是實作指引，不是規則；括號裡的數字是實測值，門檻仍依上一節驗證。截圖以檔名列出，逐張說明在 [captures-2026-10-13.md](captures-2026-10-13.md)，截圖本身只留在本機。
 
 - **勝率按鈕**：位置隨技能格數左右移動（實測每多一格右移約 38–40 px，x 從 966 到 1194；只派 1 人、只有 1 格時約 740，#52），所以用模板在夠寬的 ROI 裡找，不用固定座標；模板在各關卡都穩定命中（實測分數約 0.99）。開始圓盤固定在勝率按鈕左下方的同一個偏移。（實機：captures/53_battle_winrate_pressed.png、captures/56_battle_wait.png）
 - **開始圓盤亮起**：用圓盤中心一小塊的亮度判斷（實測 HSV V 亮起約 254、未亮 128–142，門檻 160）。圓盤只要選到一格就亮；每格都選好、開始鍵可按，要看圓盤上方掛著的 `START` 牌子（`Battle/BattleStart.png`，只取牌子內的字，不含背景；roi 從圓盤位置推算，門檻 0.5）：2026-10-18 在 431 張各層截圖（含雪地）裡，有牌子 0.58–1.0（0.58–0.66 是牌子剛擺進來時），沒有 0.20–0.35（#145）。牌子在拖完放手 0.53–0.7 秒才擺進來，開始鍵在那之前就能按。下面說的雪地失效是另一個整塊字樣的舊模板。大半罪人 Stagger、只剩一格能選時，可以開打的圓盤只有約 189（`START` 牌子已經出現，tests/screens/BattleTurnStagger.png，#69）。字樣模板在明亮的雪地關卡失效，迴圈空轉 80 次。（實機：captures/180_f3abno_battle_map.png、captures/182_abno_winrate_tap.png）
@@ -67,10 +67,14 @@
 
 ## 測試截圖的存放與授權
 
-- 測試截圖先放在主 repo 的 `tests/`。格式為 720p PNG，以 oxipng 壓縮，必須遮掉 UID 和帳號名稱。（#13）
-- 2026-10-13 困難鏡牢的探測截圖（`~/.cache/maalc-probe/captures/`，[02-screens.md](02-screens.md) 的「實機截圖」欄）目前放在 repo 外，還沒遮蔽；實作時依上一條處理後搬進 `tests/`，作為第一批測試截圖。（#13）
+- 測試截圖放在主 repo 的 `tests/`。格式為 720p PNG，以 oxipng 壓縮，必須遮掉三個身分區域：UID 欄、帳號 e-mail、主畫面左下 LV 面板上方的玩家名稱。（#13）
+- 2026-10-13 困難鏡牢的探測截圖（[02-screens.md](02-screens.md) 的「實機截圖」欄，逐張說明在 [captures-2026-10-13.md](captures-2026-10-13.md)）只留在本機，還沒遮蔽；實作時依上一條處理後搬進 `tests/`，作為第一批測試截圖。（#13）
 - 直接傳給 `post_recognition`／`run_recognition` 的圖不會被縮放，所以測試截圖必須已經是 720p。（#4）
-- 總量超過約 50 MB 時，搬到獨立的 testset repo，用 submodule 引用。（#13）
+- 測試截圖一直放主 repo 的 `tests/screens`，探測截圖那批也一樣，不搬去 testset repo。（#13，2026-10-19 使用者確認）
+  - 原本的規則是總量超過約 50 MB 就搬。2026-10-19 量到 `tests/screens` 的工作目錄有 57 MB（`du`），git 歷史裡的截圖 blob 約 62 MB（`git cat-file` 的磁碟大小）。沒有搬，原因有三：
+    - 已提交的截圖留在 git 歷史裡，搬走也不會讓 clone 變小。
+    - CI 每個 shard 都要用到全部截圖（`maatools.config.mts`）。
+    - 放在主 repo，`tests/test_screens_privacy.py` 會在加入截圖的同一個 PR 檢查遮蔽。放到另一個公開 repo 的話，推上去就公開了，要等到更新 submodule 的 PR 才會檢查。
 - README 必須註明：遊戲素材 © Project Moon，不在 MIT 授權範圍內。（#13，[ADR 0001](../adr/0001-mit-and-no-agpl-derived-assets.md)）
 
 ## 測試策略
@@ -89,7 +93,7 @@
 - `maa-tools test` 不跑 Agent；Agent 的部分由 pytest 涵蓋。（#4）
 - 不使用官方 `DbgController`：pip wheel 沒附它的動態庫。（#4）
 - 錄製檔容易隨改版失效。（#4）
-- 錄製的重播檔不放主 repo，等 testset repo 建好再放。（#19）
+- 錄製的重播檔不放主 repo。第一批要進版本控制時，才建獨立的 testset repo，用 submodule 掛在重播檔自己的路徑，不和 `tests/screens` 混在一起。testset repo 的 CI 要對重播檔裡的畫面檢查同樣三個身分區域（`tests/test_screens_privacy.py`）。（#19，2026-10-19 使用者確認）
 - Tasker 端記憶體：`tools/ocr_memory_check.py` 用 `tests/screens` 輪流餵 `MirrorHub` 跑幾分鐘、記下行程記憶體；最後一分鐘的中位數比第二分鐘多 300 MB 以上，或任何時候超過 6 GB，就失敗。要 OCR 模型，CI 不跑，改 pipeline 的 OCR 或升級 MaaFramework 時手動跑。（#149）
 
 ### 只能實機
