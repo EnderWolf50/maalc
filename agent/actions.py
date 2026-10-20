@@ -125,17 +125,25 @@ def on_page(context, image, *nodes):
     return next((n for n in nodes if seen(context, image, n)), None)
 
 
+POPUPS = ("Connecting", "RetryPopup", "PopupButton")  # MirrorHub's global popups: answered before any page
+
+
 def guard(context, *home, image=None):
     """Before a tap: a screenshot that still shows one of home (MirrorHub's nodes for the action's page); else PageGone.
 
     ADR 0002, #118: an action that taps on for long checks its page first, so a screen changed under it is
     handed back to MirrorHub at once instead of tapped blind until the action gives up. A miss is looked at
     again for up to 1 s: a page fading or a dialog dropping in can hide its anchor for a moment.
+    A global popup reads through to the page under it (maatools: the title's nodes hit under RetryPopup.png), so
+    one of POPUPS showing is the page gone too: MirrorHub answers it first.
     image: a screenshot just taken, looked at first.
     """
-    if image is not None and on_page(context, image, *home):
+    def shown(im):
+        return on_page(context, im, *POPUPS, *home) in home
+
+    if image is not None and shown(image):
         return image
-    image = until(context, lambda im: on_page(context, im, *home) is not None, timeout=1.0)
+    image = until(context, shown, timeout=1.0)
     if image is None:
         raise PageGone(home[0])
     return image
@@ -548,7 +556,10 @@ class BuyStarlight(CustomAction):
             return stuck("could not read Available on the starlight page")
         owned = re.match(r"\D*(\d+)", text(context, image, STARLIGHT_OWNED))
         unaffordable = run["settings"]["run"]["starlight_unaffordable"]
-        buys, missed = run_start.starlight_purchases(plan, available + (int(owned[1]) if owned else 0), unaffordable)
+        # Back from MirrorHub (#118): Available already has the graces selected so far taken off.
+        paid = sum(run_start.GRACE_BASE[n - 1] * run_start.LEVEL_MULT[level] for n, level in enumerate(plan["levels"], 1)
+                   if level != "none" and grace_selected(image, n))
+        buys, missed = run_start.starlight_purchases(plan, available + paid + (int(owned[1]) if owned else 0), unaffordable)
         for n, level, price in missed:
             log(f"grace {n} {level} costs {price}: not bought")
         if missed and unaffordable == "stop":
@@ -1232,6 +1243,7 @@ class RouteMap(CustomAction):
         at = (0, 0)
         for to in ((0, 250), (0, -250), (400, 0), (-400, 0), (0, 0)):
             dx, dy = to[0] - at[0], to[1] - at[1]
+            guard(context, "MirrorMap")
             scroll(context, 640 - dx // 2, 340 - dy // 2, dx, dy)
             time.sleep(0.5)
             at = to
@@ -1292,6 +1304,7 @@ class RouteMap(CustomAction):
         if kind != node:
             log(f"map: planned {row} {node} reads {kind}; reading the map again")
             return False
+        guard(context, "MirrorMap", image=image)
         tap(context, cx, cy, wait=0)
         if until(context, lambda im: seen(context, im, "MapNodePanel")) is None:
             log(f"map: planned {row} {node} took no tap; reading the map again")
@@ -1587,11 +1600,11 @@ class PlayTurn(CustomAction):
         if image is None:
             return True  # moving: MirrorHub looks again
         turn = text(context, image, TURN_NUMBER, only_rec=True).strip() or None
-        RUN["turn"] = battle.same_turn(RUN.get("turn"), turn)
-        if RUN["turn"][1] > 3:
+        tries = battle.same_turn(RUN.get("turn"), turn)
+        if tries[1] > 3:
             return stuck(f"turn {turn} unchanged after 3 submits")
         guarded = False
-        if RUN.get("guard", 0) > 0 and RUN["turn"][1] == 1:  # a turn submitted again plays as before #52
+        if RUN.get("guard", 0) > 0 and tries[1] == 1:  # a turn submitted again plays as before #52
             if battle.gear_hollow(image, battle.slot_xs(x)[0] - 86, 576):
                 # #127: a focused encounter. Its skills are dragged one by one onto enemy skill slots that move
                 # with the camera; no chain starts from the ring. The guard turns wait for a battle that has one.
@@ -1607,6 +1620,7 @@ class PlayTurn(CustomAction):
             log(f"turn {turn}: started")
         else:
             log(f"turn {turn}: START did not start the turn")
+        RUN["turn"] = tries  # counted once submitted: a hand-back (#118) is no submit
         return True
 
     @staticmethod
@@ -1904,6 +1918,7 @@ class Event(CustomAction):
     @staticmethod
     def drag(context, image, dy):
         """Scroll the option list by dy px (dy < 0 shows what is below); the screen after, None when it did not move."""
+        guard(context, "Event", image=image)
         scroll(context, CHOICE_X, 420 if dy < 0 else 260, 0, dy)
         after = screen(context)
         # Pixel by pixel, not panel_same's thumbnails: cards about a drag apart look alike in those.
@@ -2261,6 +2276,7 @@ class Shop(CustomAction):
                 log("shop: already out of the shop")
                 RUN.pop("shop", None)
                 return True
+            guard(context, "Shop", image=image)
             tap(context, *BOTTOM_RIGHT, wait=1.5)
             if has(text(context, screen(context), LEAVE_DIALOG), "Leave the shop"):
                 log(f"shop: leave with {read_cost(context)} Cost")
@@ -2302,6 +2318,7 @@ class Shop(CustomAction):
             elif number(text(context, image, REFRESH["normal"][1])) is not None:
                 return True
             else:
+                guard(context, "Shop", image=image)  # not a shop page MirrorHub knows: hand it back
                 time.sleep(1)
         return False
 

@@ -1649,7 +1649,8 @@ def page_until(context, node, clicks):
 
 def test_the_guard_passes_the_page_and_waits_out_a_moment_without_its_anchor(context, clock, guarded):
     shown = iter([None, None, True])
-    context.run_recognition.side_effect = lambda name, image, override=None: SimpleNamespace(hit=True) if next(shown, True) else None
+    context.run_recognition.side_effect = lambda name, image, override=None: \
+        SimpleNamespace(hit=True) if name == "Shop" and next(shown, True) else None
     assert actions.guard(context, "Shop") is not None
     assert sum(clock) < 1
 
@@ -1734,3 +1735,103 @@ def test_the_theme_pack_page_reads_its_floor_in_any_case(context, monkeypatch):
     actions.RUN["difficulty"] = None
     actions.PickThemePack().run(context, None)
     assert actions.RUN["floor"] == 3
+
+
+def moved(context):
+    """Taps, drags and swipes sent to the device."""
+    ctl = context.tasker.controller
+    return ctl.post_click.call_count + ctl.post_touch_down.call_count + ctl.post_swipe.call_count
+
+
+def test_a_global_popup_over_the_page_hands_it_back(context, guarded):
+    # A popup reads through to the page under it (maatools: the title's nodes hit under RetryPopup.png);
+    # MirrorHub answers the popup before any page, so the guard does too.
+    context.run_recognition.side_effect = lambda name, image, override=None: \
+        SimpleNamespace(hit=True, box=[0, 0, 1, 1]) if name in ("Shop", "RetryPopup") else None
+    with pytest.raises(actions.PageGone):
+        actions.guard(context, "Shop")
+
+
+@pytest.mark.parametrize("action, team", [
+    (actions.PickStartingGift, {"keyword": "Burn", "gift_search": {"enabled": False, "gifts": []}}),
+    (actions.GiftSearch, {"gift_search": {"enabled": True, "gifts": [{"name": "Phlebotomy Pack"}]}}),
+])
+def test_a_gift_page_gone_is_handed_back_untouched(context, guarded, action, team):
+    actions.RUN["team"] = team
+    assert action().run(context, argv())
+    assert moved(context) == 0 and actions.STUCK["flag"] is None
+
+
+def test_a_theme_pack_page_gone_is_handed_back_untouched(context, guarded, monkeypatch):
+    monkeypatch.setattr(actions, "text", lambda *a, **k: "FLOOR 1")
+    actions.RUN["difficulty"] = None
+    assert actions.PickThemePack().run(context, None)
+    assert moved(context) == 0 and actions.STUCK["flag"] is None
+
+
+def starlight(monkeypatch, available):
+    """A starlight page planning graces 1 and 2 at base (10 each), Available reading available in turn, nothing owned."""
+    actions.RUN["settings"] = {"run": {"starlight_unaffordable": "stop"}}
+    monkeypatch.setattr(actions.run_start, "resolve_plan", lambda *a: {"priority": [1, 2], "levels": ["base", "base"] + ["none"] * 8})
+    reads = iter(available)
+    monkeypatch.setattr(actions, "read_available", lambda context, image: next(reads))
+    monkeypatch.setattr(actions, "stop", lambda context, reason, line=None: pytest.fail(reason))
+
+
+def test_a_starlight_page_gone_is_handed_back_untouched(context, guarded, monkeypatch):
+    starlight(monkeypatch, [20])
+    assert actions.BuyStarlight().run(context, argv())
+    assert moved(context) == 0
+
+
+def test_a_starlight_page_handed_back_after_one_grace_still_buys_the_next(context, monkeypatch):
+    # #118: back from MirrorHub with grace 1 bought: Available reads 10, grace 1 already selected.
+    starlight(monkeypatch, [10, 0])
+    monkeypatch.setattr(actions, "grace_selected", lambda image, n: n == 1)
+    monkeypatch.setattr(actions.BuyStarlight, "set_level", staticmethod(lambda *a: True))
+    assert actions.BuyStarlight().run(context, argv())
+    x, y = actions.grace_box(2)
+    assert (x + 92, y + 100) in taps(context)
+
+
+def test_a_gift_choice_gone_is_handed_back_untouched(context, guarded):
+    actions.RUN["team"] = {"keyword": "Burn", "trial_risk_weight": "medium"}
+    actions.RUN["settings"] = {"trial_risk_overrides": []}
+    reads(context, {tuple(actions.GIFT_CARDS): [("Acquire E.G.O Gift", (300, 160, 150, 30)), ("Hellterfly's Dream", (200, 250, 150, 30))]})
+    assert actions.PickGift().run(context, argv())
+    assert moved(context) == 0 and actions.STUCK["flag"] is None
+
+
+def test_a_map_gone_while_looking_for_its_bus_is_not_dragged(context, guarded):
+    actions.RUN["difficulty"] = "normal"
+    assert actions.RouteMap().run(context, argv())
+    assert moved(context) == 0 and actions.STUCK["flag"] is None
+
+
+def test_an_exploration_reward_gone_is_handed_back_untouched(context, guarded, monkeypatch):
+    actions.RUN.update(settings={"run": {"weekly_bonus_use": "none", "weekly_bonus_amount": 0}}, team={"hard_from_floor": None}, difficulty="normal")
+    monkeypatch.setattr(actions.settlement, "read_result", lambda text: (5, False, 5, 5))
+    assert actions.Settle().run(context, argv())
+    assert moved(context) == 0 and actions.STUCK["flag"] is None
+
+
+def test_an_event_gone_is_not_scrolled(context, guarded):
+    with pytest.raises(actions.PageGone):
+        actions.Event.drag(context, np.zeros((720, 1280, 3), np.uint8), actions.CHOICE_STEP)
+    assert moved(context) == 0
+
+
+def test_a_shop_gone_before_leave_is_handed_back_not_stuck(context, guarded, monkeypatch):
+    actions.RUN["team"] = {"heal": "none", "keyword": "Burn", "reserve_cost": 0}
+    monkeypatch.setattr(actions.Shop, "to_main", staticmethod(lambda context: True))
+    for step in ("sell", "buy", "fuse"):
+        monkeypatch.setattr(actions.Shop, step, staticmethod(lambda *a: False))
+    assert actions.Shop().run(context, argv())
+    assert moved(context) == 0 and actions.STUCK["flag"] is None
+
+
+def test_a_battle_handed_back_again_and_again_is_no_unchanged_turn(context, guarded):
+    # Each hand-back is no submit: the turn count is for turns that START did not move on.
+    for _ in range(5):
+        assert actions.PlayTurn().run(context, SimpleNamespace(box=[984, 531, 40, 20]))
+    assert actions.STUCK["flag"] is None
