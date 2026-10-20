@@ -156,6 +156,14 @@ def test_choice_cards_and_scrollbar_show_a_list_that_scrolls():
     assert r.choice_cards(fits) == [(170, 284), (301, 414)]
 
 
+def test_choice_cards_read_a_lit_card_whole():
+    # #196 (live 2026-10-20, recording frames): the card a drag lifts over lights orange, its glow making its
+    # bottom edge 12-13 px, as thick as a top. Top: East lit, West cut. Bottom: West lit, East's top cut off.
+    assert r.choice_cards(screen("EventChoicesLitTop")) == [(170, 283), (300, 423), (431, None)]
+    assert r.choice_cards(screen("EventChoicesLitBottom")) == [(None, 237), (254, 377), (385, 498)]
+    assert r.choice_cards(screen("EventChoicesScrolledBack")) == [(None, 257), (274, 387), (405, None)]
+
+
 def screen(name):
     """tests/screens/<name>.png as BGR, for fixtures written by recovery.png (one IDAT, filter 0 on every row)."""
     data = (SCREENS / f"{name}.png").read_bytes()
