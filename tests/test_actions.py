@@ -1924,3 +1924,34 @@ def test_a_gift_search_gone_after_a_pick_does_not_press_select(context, guarded,
     page_until(context, "GiftSearch", 1)
     assert actions.GiftSearch().run(context, argv())
     assert taps(context) == [(400, 400)] and actions.STUCK["flag"] is None
+
+
+def test_an_exploration_reward_gone_mid_give_up_is_handed_back_not_stuck(context, guarded, monkeypatch):
+    monkeypatch.setattr(actions.settlement, "read_result", lambda text: (5, False, 3, 5))  # goal not met: give up
+    page_until(context, "ExplorationReward", 1)
+    assert actions.Settle().run(context, argv())
+    assert taps(context) == [actions.GIVE_UP] and actions.STUCK["flag"] is None
+
+
+def test_a_gift_search_gone_under_its_consume_dialog_is_not_confirmed(context, guarded, monkeypatch):
+    ctl = context.tasker.controller
+    actions.RUN["team"] = {"gift_search": {"enabled": True, "gifts": [{"name": "Phlebotomy Pack"}]}}
+    monkeypatch.setattr(actions.gift_search, "select_count", lambda text: (1, 1))
+    monkeypatch.setattr(actions.GiftSearch, "chosen", staticmethod(lambda *a: ["Phlebotomy Pack"]))
+    monkeypatch.setattr(actions.gift_search, "next_gift", lambda *a: None)
+    monkeypatch.setattr(actions, "text", lambda context, image, roi, only_rec=False:
+                        "Consume 70 Starlight" if roi == actions.SEARCH_DIALOG and ctl.post_click.call_count else "")
+    page_until(context, "GiftSearch", 1)  # gone once Select brought its dialog up
+    assert actions.GiftSearch().run(context, argv())
+    assert taps(context) == [actions.SEARCH_SELECT]
+
+
+def test_a_starting_gift_page_gone_after_a_gift_tap_does_not_press_select(context, guarded, monkeypatch):
+    actions.RUN["team"] = {"keyword": "Burn", "gift_search": {"enabled": False, "gifts": []}}
+    monkeypatch.setattr(actions.PickStartingGift, "set_gift_search", staticmethod(lambda *a: None))
+    monkeypatch.setattr(actions.PickStartingGift, "full", staticmethod(lambda *a: False))
+    monkeypatch.setattr(actions.PickStartingGift, "count", staticmethod(lambda *a: (0, 1)))
+    monkeypatch.setattr(actions, "ocr", lambda *a, **k: [("Burn", (200, 200, 60, 20))])
+    page_until(context, "StartingGift", 2)  # the cabinet, then its first gift
+    assert actions.PickStartingGift().run(context, argv())
+    assert taps(context) == [(230, 285), (970, 262)]

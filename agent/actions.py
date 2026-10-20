@@ -794,6 +794,7 @@ class GiftSearch(CustomAction):
             return stuck("Select did not ask to consume starlight")
         # Live (run13c): the dialog reads while it still drops in on its chains, and a tap then does nothing.
         still(context, timeout=1.5)
+        page_guard(context, "GiftSearch")  # also under its Consume dialog (maatools: GiftSearchConfirm.png)
         # The search page reads through the dialog and again before the first window: leaving early would buy twice.
         tap_then(context, *SEARCH_DIALOG_BUTTONS["confirm"], shows(context, GET_TITLE, "GET"), timeout=4)
         price = number(ask.split("Starlight")[0])
@@ -1670,7 +1671,6 @@ class PlayTurn(CustomAction):
         """
         xs = battle.slot_xs(x)
         lows = [lower_x(sx) for sx in xs]
-        page_guard(context, "BattleTurn")
         image = lower_skills(context, lows)  # live: a battle's first turn slides the portraits in late
         before = [guard_score(image, lx) for lx in lows]
         page_guard(context, "BattleTurn", image=image)
@@ -1691,7 +1691,7 @@ class PlayTurn(CustomAction):
         if None in shown:
             log(f"guard: cannot tell the guard skill of slots {[i + 1 for i, s in enumerate(shown) if s is None]}")
             return False
-        page_guard(context, "BattleTurn")
+        page_guard(context, "BattleTurn", image=image)
         for sx, on in zip(xs, shown):
             if not on:
                 tap(context, sx, SLOT_PORTRAIT_Y, wait=GUARD_TAP_WAIT)
@@ -2773,11 +2773,13 @@ class Settle(CustomAction):
     def give_up(self, context, run, result):
         """GiveUpRewards, then `End expedition without claiming rewards?` Confirm; no module is spent."""
         for _ in range(3):
+            page_guard(context, "ExplorationReward")  # also under its give-up dialog (maatools: GiveUpDialog.png)
             tap(context, *GIVE_UP, wait=1.5)
             if settlement.claim_dialog(text(context, screen(context), DIALOG_TEXT)) == "giveup":
                 break
         else:
             return stuck("GiveUpRewards brought up no `End expedition without claiming rewards?`")
+        page_guard(context, "ExplorationReward")
         tap(context, *DIALOG_CONFIRM, wait=2)
         log("goal not met: gave up the rewards")
         self.record(run, result, 0, "giveup")
