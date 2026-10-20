@@ -200,6 +200,24 @@ def test_a_fresh_floors_map_that_does_not_take_drags_yet_is_dragged_until_the_bu
     assert first == (446 - offsets[-1] + actions.SLOT[0], actions.BUS_HOME[1] + actions.SLOT[1] - 213)  # the top row's event
 
 
+def test_a_fresh_map_dragged_to_its_edge_costs_no_extra_drags(context):
+    # Live 2026-10-21 NORMAL floor 2: the first drag took the bus from 446 to 196, where the map's left edge stops
+    # it; the drags after it left the bus there and were taken for a map that takes no drags yet, for 8 s.
+    actions.RUN.update(floor=2, fresh_floor=True)
+    offsets = map_world(context, {(1, "mid"): {"cost"}}, [], bus_x=446)
+    ctl, edge, at = context.tasker.controller, 250, []  # the screen's offset stops at 250: the bus at 196
+    down, move = ctl.post_touch_down.side_effect, ctl.post_touch_move.side_effect
+
+    def down_at(x, y):
+        at[:] = [x, offsets[-1] if offsets else 0]
+        return down(x, y)
+    ctl.post_touch_down.side_effect = down_at
+    ctl.post_touch_move.side_effect = lambda x, y: move(max(x, at[0] - (edge - at[1])), y)
+    image, bus = actions.RouteMap.find_bus(context)
+    assert bus == (196, actions.BUS_HOME[1])
+    assert ctl.post_touch_down.call_count == 2  # one drag to the edge, one that shows it
+
+
 @pytest.mark.parametrize(("shown", "floor"), [("Exploring Floor 3", 3), ("Exploring Floar 3", 3), ("Exploring", None), ("", None)])
 def test_the_map_title_gives_the_floor(context, shown, floor):
     context.run_recognition.side_effect = lambda name, image, override=None: SimpleNamespace(

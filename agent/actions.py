@@ -1334,9 +1334,9 @@ class RouteMap(CustomAction):
 
         Up to three pans. On a floor's fresh map (no node entered since the theme pack) a pan that leaves the
         bus where it was does not count and is made again, for up to MAP_PAN_LIMIT s: live 2026-10-19, a new
-        map took no drag for its first seconds.
+        map took no drag for its first seconds. Once a pan has moved the bus, one that does not is the map's edge.
         """
-        end, pans, last = time.monotonic() + MAP_PAN_LIMIT, 0, None
+        end, pans, last, moved = time.monotonic() + MAP_PAN_LIMIT, 0, None, False
         while True:
             image = screen(context)
             bus = seen(context, image, "MapBus")
@@ -1347,6 +1347,9 @@ class RouteMap(CustomAction):
             if abs(dx) <= 30 and abs(dy) <= 25:
                 return image, (bx, by)
             held = last is not None and abs(bx - last[0]) <= BUS_JITTER and abs(by - last[1]) <= BUS_JITTER
+            if held and moved:
+                return image, (bx, by)  # live 2026-10-21 NORMAL: the map's left edge stopped the bus at 196
+            moved = last is not None and not held
             if held and RUN.get("fresh_floor"):
                 if time.monotonic() > end:
                     log(f"map: the bus stayed at {bx}, {by} through {MAP_PAN_LIMIT} s of drags")
