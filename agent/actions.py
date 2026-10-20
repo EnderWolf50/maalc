@@ -18,6 +18,7 @@ from maa.agent.agent_server import AgentServer
 from maa.context import Context
 from maa.custom_action import CustomAction
 from maa.custom_recognition import CustomRecognition
+from maa.define import Rect
 
 import battle
 import gift_search
@@ -968,6 +969,8 @@ MARKS = {  # node -> (mark, roi around the slot centre)
     "MapNodeEvent": ("event", (-60, -60, 120, 120)),
     "MapNodeShop": ("shop", (-60, -60, 120, 120)),
 }
+FEATURE_MATCH = {"MapNodeFocusedHex", "MapNodeEvent", "MapNodeShop"}  # the pipeline's FeatureMatch nodes
+FEATURE_PAD, FEATURE_ALIGN = 64, 32  # px of the screen kept around a FeatureMatch roi; grid of the cut's corner
 ENTER = (1133, 543)
 MAP_RETRIES = 3  # RouteMap calls per floor that may enter nothing before the map is stuck
 MAP_LOOKS = 4  # looks, 1 s apart, for a linked slot before the fallback taps
@@ -976,14 +979,28 @@ PANEL_COST = [730, 545, 40, 35]  # the number by its Cost coin
 
 
 def seen(context, image, node, roi=None):
-    """The node's hit on image, its roi overridden and clipped to the screen; None on a miss."""
-    override = None
+    """The node's hit on image, its roi overridden and clipped to the screen; None on a miss.
+
+    #156: FeatureMatch runs SIFT over the whole image it is handed, its roi only masking the keypoints:
+    ~0.18 s per template on a full screen whatever the roi (41 map captures offline, #163). So a FEATURE_MATCH node gets the roi with a
+    FEATURE_PAD margin cut out (corner on a FEATURE_ALIGN grid, as SIFT's octaves halve), the box put back.
+    Only detail.box is put back: best_result and the result lists stay in the cut-out's coordinates.
+    """
+    override, dx, dy = None, 0, 0
     if roi:
         x, y, w, h = roi
         x0, y0 = max(0, x), max(0, y)
-        override = {node: {"roi": [x0, y0, min(1280, x + w) - x0, min(720, y + h) - y0]}}
+        x1, y1 = min(1280, x + w), min(720, y + h)
+        if node in FEATURE_MATCH:
+            dx, dy = (max(0, v - FEATURE_PAD) // FEATURE_ALIGN * FEATURE_ALIGN for v in (x0, y0))
+            image = image[dy:y1 + FEATURE_PAD, dx:x1 + FEATURE_PAD]
+        override = {node: {"roi": [x0 - dx, y0 - dy, x1 - x0, y1 - y0]}}
     detail = context.run_recognition(node, image, override)
-    return detail if detail and detail.hit else None
+    if not detail or not detail.hit:
+        return None
+    if dx or dy:
+        detail.box = Rect(detail.box[0] + dx, detail.box[1] + dy, detail.box[2], detail.box[3])
+    return detail
 
 
 def node_marks(context, image, cx, cy):
