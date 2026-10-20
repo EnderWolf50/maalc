@@ -73,7 +73,7 @@ def test_mirror_hub_reads_its_ocr_screens_through_hub_text():
     assert param["tail"] == hub[hub.index("HubText") + 1:]
     for name in param["entries"]:  # OCR HubText judges (hub_text.ocr_specs): OCR, And / Or of OCR, gates in an And
         kind, params = recognition(nodes[name])
-        subs = [recognition(s if isinstance(s, dict) else nodes[s])[0] for s in params.get("all_of", []) + params.get("any_of", [])]
+        subs = [recognition(s)[0] for s in parts(nodes, params)]
         assert (kind == "OCR" or kind == "Or" and subs and all(s == "OCR" for s in subs)
                 or kind == "And" and "OCR" in subs and all(s in ("OCR", "TemplateMatch", "Or") for s in subs)), name
     assert len(batch_plan(nodes, ["NoBatchOCR", *param["entries"], *param["tail"]])) == 1
@@ -82,9 +82,14 @@ def test_mirror_hub_reads_its_ocr_screens_through_hub_text():
 def template_first(nodes, spec):
     """Whether a recognition matches a template before any OCR runs: a template, an Or of them, an And led by one."""
     kind, params = recognition(spec)
-    subs = [s if isinstance(s, dict) else nodes[s] for s in params.get("all_of", []) + params.get("any_of", [])]
-    return (kind == "TemplateMatch" or kind == "Or" and all(template_first(nodes, s) for s in subs)
+    subs = parts(nodes, params)
+    return (kind == "TemplateMatch" or kind == "Or" and subs and all(template_first(nodes, s) for s in subs)
             or kind == "And" and template_first(nodes, subs[0]))
+
+
+def parts(nodes, params):
+    """The sub-recognitions of an And / Or, a node named by reference as its own spec."""
+    return [s if isinstance(s, dict) else nodes[s] for s in params.get("all_of", []) + params.get("any_of", [])]
 
 
 def test_no_next_list_batches_two_ocr_recognitions_under_one_name():

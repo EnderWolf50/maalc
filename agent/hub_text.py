@@ -20,8 +20,9 @@ INSIDE = 0.5  # share of a box's area inside a roi for the box to count there
 
 def ocr_specs(reco):
     """[(roi, expected, threshold, replace)] of an OCR or an And/Or of OCRs (get_node_data form); None when a part is
-    anything else or reads differently (only_rec, color_filter, its own model, a roi from another node). An And's
-    other parts (a template gate) are left to the node's own check, as long as one part is an OCR to judge."""
+    anything else or reads differently (only_rec, color_filter, its own model, a roi from another node). In an And,
+    every part HubText cannot judge (a template gate, an OCR that reads differently) is left to the node's own
+    check, as long as one part is an OCR it can judge: each part of an And is necessary on its own."""
     kind, param = reco["type"], reco["param"]
     if kind == "OCR":
         if param["only_rec"] or param["color_filter"] or param["model"] or not isinstance(param["roi"], list):
@@ -29,8 +30,9 @@ def ocr_specs(reco):
         return [(param["roi"], [re.compile(e) for e in param["expected"]], param["threshold"], param["replace"])]
     if kind in ("And", "Or"):
         subs = [ocr_specs(s["recognition"]) for s in param.get("all_of", []) + param.get("any_of", [])]
-        if kind == "And":
-            subs = [s for s in subs if s is not None] or [None]
+        judged = [s for s in subs if s is not None]
+        if kind == "And" and judged:
+            subs = judged
         return None if any(s is None for s in subs) else [x for s in subs for x in s]
     return None
 
