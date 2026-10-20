@@ -2068,6 +2068,7 @@ BADGE_MIN, ICON_KEEP = 0.5, 0.45
 FUSE_TOOLTIP = [600, 180, 680, 440]
 TOOLTIP_HEAD = r"O\s*GIFT"  # a gift tooltip's "E.G.O GIFT" heading line
 FUSE_CONFIRM = [300, 150, 680, 380]  # "Selected E.G.O Gifts 3/5" over "Fuse the selected E.G.O Gifts?"
+FUSE_COUNT = r"(\d)\s*/\s*\d"  # its "3/5": the materials in
 FUSE_NEUTRAL = (715, 229)  # the E.G.O Gifts Owned label: closes a tooltip, selects nothing
 SELL_PANEL, SELL_PRICE, SELL_COST = [150, 160, 420, 360], [500, 160, 60, 45], [960, 80, 160, 45]
 SELL_GRID = [630, 210, 480, 290]  # the sell page's gifts with their prices under them
@@ -2299,9 +2300,8 @@ class Shop(CustomAction):
             # The dialog slides down; Confirm takes no tap before it stops.
             if tap_shown(context, *BOTTOM_RIGHT, shows(context, LEAVE_DIALOG, "Leave the shop"), timeout=1.5) is not None:
                 log(f"shop: leave with {read_cost(context)} Cost")
-                tap(context, *LEAVE_CONFIRM, wait=0)
                 # Up to the old 2 s for the map: MirrorHub must not find the shop fading out and start a new visit.
-                until(context, lambda im: Shop.on_map(context, im), timeout=2)
+                tap_then(context, *LEAVE_CONFIRM, lambda im: Shop.on_map(context, im), timeout=2)
                 RUN.pop("shop")
                 return True
         return stuck("Leave did not bring up `Leave the shop?`")
@@ -2703,8 +2703,9 @@ class Shop(CustomAction):
         materials = ", ".join(cell_line(c, "material").rsplit(":", 1)[0] for c in group)
         fused = False
         if Shop.place(context, group, slots) and not Shop.recipe_shown(context, screen(context), visit):
-            image = tap_shown(context, *PAGE_OK, shows(context, FUSE_CONFIRM, r"\d\s*/\s*\d"), timeout=2)
-            m = image is not None and re.search(r"(\d)\s*/\s*\d", text(context, image, FUSE_CONFIRM))
+            # Read again on the still screenshot: the one that matched was taken while the dialog zoomed in.
+            image = tap_shown(context, *PAGE_OK, shows(context, FUSE_CONFIRM, FUSE_COUNT), timeout=2)
+            m = image is not None and re.search(FUSE_COUNT, text(context, image, FUSE_CONFIRM))
             if m and int(m[1]) == len(group):
                 tap(context, 788, 583, wait=0)  # the dialog's Confirm; gift_get waits for its GET!
                 fused = gift_get(context)
