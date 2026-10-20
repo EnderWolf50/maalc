@@ -160,9 +160,10 @@ def test_event_text_is_tapped_through_until_the_choices_show(context):
     assert len(corner) == 3
 
 
-def event_text(context, choices_from=None, red_from=None, red_to=999, label_to=999):
+def event_text(context, choices_from=None, red_from=None, red_to=999, label_to=999, skip_to=0):
     """Event text running on: screenshot n (1 = Event.run's own) shows the Choices from choices_from on, the lit
-    button from red_from on until red_to and the button's label until label_to; returns the rois OCR read, in order."""
+    button from red_from on until red_to and the button's label until label_to (SKIP until skip_to, then Continue);
+    returns the rois OCR read, in order."""
     shots, reads = [], []
 
     def screencap():
@@ -180,7 +181,8 @@ def event_text(context, choices_from=None, red_from=None, red_to=999, label_to=9
         if roi == tuple(actions.CHOICES_HEADER) and choices_from and image[0, 0, 0] >= choices_from:
             return SimpleNamespace(all_results=[SimpleNamespace(text="Choices", box=(700, 110, 100, 30))])
         if roi == tuple(actions.EVENT_BUTTON_LABEL) and image[0, 0, 0] < label_to:
-            return SimpleNamespace(all_results=[SimpleNamespace(text="Continue", box=(1065, 625, 140, 40))])
+            label = "SKIP" if image[0, 0, 0] < skip_to else "Continue"
+            return SimpleNamespace(all_results=[SimpleNamespace(text=label, box=(1065, 625, 140, 40))])
         return None
     context.run_recognition.side_effect = run_recognition
     return reads
@@ -227,10 +229,16 @@ def test_the_text_is_tapped_on_right_after_the_lit_button(context, clock):
 
 def test_no_corner_tap_once_the_lit_button_left_the_event(context, clock):
     # The last Continue ends the event: the first screen without the lit button is read before another tap.
-    reads = event_text(context, red_from=1, red_to=3, label_to=3)
+    event_text(context, red_from=1, red_to=3, label_to=3)
     actions.Event().run(context, None)
     assert len(corner_taps(context)) == 2  # both on the fading event page
-    assert reads.count(tuple(actions.EVENT_BUTTON_LABEL)) == 1
+
+
+def test_a_lit_button_that_became_another_is_handed_back_at_once(context, clock):
+    # A check's result page: SKIP pressed, Continue lit in its place (spec 02), with no unlit screen between.
+    event_text(context, red_from=1, skip_to=3)
+    actions.Event().run(context, None)
+    assert len(button_taps(context)) == 1 and len(corner_taps(context)) == 2
 
 
 def test_a_press_that_did_not_take_is_handed_back_to_be_pressed_again(context, clock):

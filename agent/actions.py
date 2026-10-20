@@ -1941,7 +1941,7 @@ EVENT_TEXT_TAPS = 30
 # EVENT_READ_EVERY taps: live 2026-10-20, a screenshot and 3 OCRs after each tap made it one every 0.3-1.1 s whatever
 # the wait, and the text kept up at 0.15 s (no tap lost; the user's own taps 0.15 s).
 EVENT_TAP_EVERY, EVENT_READ_EVERY = 0.15, 3
-EVENT_PRESS_TAPS = 10  # taps the button may stay lit after its press (1.5 s, the wait for it to take before #188)
+EVENT_PRESS_TAPS = round(1.5 / EVENT_TAP_EVERY)  # taps the button may stay lit after its press: 1.5 s, the wait for it to take before #188
 EVENT_BUTTON_LABEL = [1040, 612, 190, 66]  # the Event node's roi: empty once the event page is gone
 EVENT_LIMIT = 180  # s one event may take before recovery L1 (AALC allows 300); a boss quiz of several rounds stays well under
 EVENT_GAP = 30  # s between two Event calls after which the next call is another event
@@ -2042,11 +2042,12 @@ class Event(CustomAction):
         is something to act on, for MirrorHub's next look.
 
         A Choices page or a check prompt shows up to EVENT_READ_EVERY - 1 taps late: a tap on the dead corner picks nothing.
-        pressed: time.monotonic() of a tap on the lit button just now (#188: MirrorHub's look after it paused the
-        taps 1.6-5.3 s). The button stays lit while the press fades out; the first screen without it is read
-        before the next tap, so none lands on what follows the event. Lit for EVENT_PRESS_TAPS taps, the press was lost.
+        pressed: time.monotonic() of a tap on the lit button just now, image the screen it was tapped on (#188:
+        MirrorHub's look after it paused the taps 1.6-5.3 s). The button stays lit while the press fades out; the
+        first screen without it is read before the next tap (3 OCRs). Lit with another label (SKIP, then Continue),
+        it is the next button; lit with the same for EVENT_PRESS_TAPS taps, the press was lost.
         """
-        last = 0.0 if pressed is None else pressed
+        last, fading = (0.0, None) if pressed is None else (pressed, compact(text(context, image, EVENT_BUTTON_LABEL)))
         for n in range(1, EVENT_TEXT_TAPS + 1):
             time.sleep(max(0.0, last + EVENT_TAP_EVERY - time.monotonic()))
             last = time.monotonic()
@@ -2055,10 +2056,10 @@ class Event(CustomAction):
             tap(context, *EVENT_NEUTRAL, wait=0)
             image = screen(context)
             if red_button(image):
-                if pressed is None or n >= EVENT_PRESS_TAPS:
+                if fading is None or n >= EVENT_PRESS_TAPS or compact(text(context, image, EVENT_BUTTON_LABEL)) != fading:
                     break
                 continue
-            read, pressed = n % EVENT_READ_EVERY == 0 or pressed is not None, None
+            read, fading = n % EVENT_READ_EVERY == 0 or fading is not None, None
             if read and (not text(context, image, EVENT_BUTTON_LABEL) or any(
                     has(text(context, image, roi), k) for k, roi in (("Choices", CHOICES_HEADER), ("Choose a character", CHECK_PROMPT)))):
                 break
