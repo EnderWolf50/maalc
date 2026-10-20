@@ -18,4 +18,5 @@ def test_the_map_screen_only_nodes_are_the_node_marks():
     import actions
     config = (REPO / "maatools.config.mts").read_text(encoding="utf-8")
     marks = re.search(r"const marks = new Set\(\[(.*?)\]\)", config, re.S)
+    assert marks
     assert set(re.findall(r"'(\w+)'", marks[1])) == set(actions.MARKS)

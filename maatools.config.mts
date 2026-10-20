@@ -1,8 +1,8 @@
 import { availableParallelism } from 'node:os'
 import type { FullConfig } from '@nekosu/maa-tools'
 
-// Every image runs every node named below (the node marks: the map images, below); a node not in its hits must
-// miss (07-assets-and-testing.md).
+// Every image runs every node named below, except the node marks: the map images only (below). A node not in its
+// hits must miss (07-assets-and-testing.md).
 const screens: [image: string, hits: string[]][] = [
   ['Title.png', ['GoToMirrorEntry', 'NavTitle']],
   ['TitleConnecting.png', ['Connecting', 'GoToMirrorEntry', 'NavTitle']],
