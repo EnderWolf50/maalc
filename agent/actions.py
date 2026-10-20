@@ -2001,7 +2001,8 @@ class Event(CustomAction):
         """(y to tap, screen) for option i of a list that scrolls, dragged until its frame shows whole; (None, screen) when not found.
 
         A screen with none of the options read (#196: one the read missed) is dragged on the same way, up first
-        (read_choices ends at the bottom), turning once at an end of the list.
+        (read_choices ends at the bottom), turning once at an end of the list. It gives up at an end of the
+        list the options on screen put the pick beyond, or at the second end with none of them read.
         """
         texts = [t for t, _, _ in options]
         step, turned = CHOICE_STEP, False
@@ -2016,7 +2017,7 @@ class Event(CustomAction):
                 step = CHOICE_STEP if min(seen) > i else -CHOICE_STEP
             after = Event.drag(context, image, step)
             if after is None:
-                if turned:
+                if turned or seen:  # an end of the list toward an option it read past: not there
                     return None, image
                 step, turned = -step, True
             else:

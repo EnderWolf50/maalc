@@ -1434,6 +1434,14 @@ def test_into_view_drags_on_past_options_it_did_not_read(context, monkeypatch):
     assert y is not None and page.tops()[0] < y < page.tops()[0] + 130
 
 
+def test_into_view_gives_up_at_the_end_the_pick_lies_beyond(context, monkeypatch):
+    # The options on screen put the pick above them: the top of the list ends the search, no turn back down.
+    page = Choices(context, monkeypatch, [(f"Option {k}.", "") for k in range(4)], offset=236)  # at the bottom
+    options = [("Gone.", True, 0)] + [(f"Option {k}.", True, 0) for k in range(4)]
+    y, _ = actions.Event.into_view(context, page.render(), options, 0)
+    assert y is None and page.drags == [150, 150, 150]  # two to the top, one that does not move
+
+
 def test_an_option_cut_off_with_no_scrollbar_still_scrolls(context, monkeypatch):
     actions.RUN["team"] = {"keyword": "Burn"}
     actions.RUN["settings"] = {"event_overrides": []}

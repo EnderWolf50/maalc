@@ -116,7 +116,7 @@ def choice_open(image, y):
 
 
 CHOICE_LIST_Y = (165, 512)  # the option list's view; options past it are cut off
-CARD_GAP = 50  # px between two edges at most for a card's bottom and the next card's top: 8-20 apart, a card's own ~100
+CARD_GAP = 50  # px between two edges at most for a card's bottom and the next card's top: 17-21 apart (9 under a lit card), a card's own ~100
 
 
 def choice_cards(image):
@@ -136,17 +136,19 @@ def choice_cards(image):
         else:
             edges.append([y, y])
 
-    def top(k):
+    def is_top(k):
         first, last = edges[k]
         if k and first - edges[k - 1][1] < CARD_GAP:
             return True
         if k + 1 < len(edges):
             return edges[k + 1][0] - last >= CARD_GAP
-        return k == 0 and last - first >= 6  # the last edge a card's height below another is its bottom
+        if k:
+            return False  # the last edge, a card's height below another: that card's bottom
+        return last - first >= 6  # alone in the view: a double line is a top
 
     cards = []
     for k, (first, last) in enumerate(edges):
-        if top(k):
+        if is_top(k):
             cards.append((first, None))
         elif cards and cards[-1][1] is None and cards[-1][0] is not None:
             cards[-1] = (cards[-1][0], last + 1)
