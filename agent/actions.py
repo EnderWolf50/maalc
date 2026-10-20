@@ -132,7 +132,7 @@ POPUPS = ("Connecting", "RetryPopup", "PopupButton")  # MirrorHub's global popup
 def page_guard(context, home, image=None):
     """Before a tap: a screenshot that still shows home (MirrorHub's node for the action's page); else PageGone.
 
-    ADR 0002, #118: an action that taps on for long checks its page first, so a screen changed under it is
+    ADR 0007, #118: an action that taps on for long checks its page first, so a screen changed under it is
     handed back to MirrorHub at once instead of tapped blind until the action gives up. A miss is looked at
     again for up to 1 s: a page fading or a dialog dropping in can hide its anchor for a moment.
     A global popup reads through to the page under it (maatools: the title's nodes hit under RetryCountdown.png), so
