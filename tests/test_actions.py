@@ -152,6 +152,54 @@ def test_event_text_is_tapped_through_until_the_choices_show(context):
     assert len(corner) == 3
 
 
+def event_text(context, choices_from=None, red_from=None):
+    """Event text running on: screenshot n (1 = Event.run's own) shows the Choices from choices_from on and the lit
+    button from red_from on; returns the rois OCR read, in order."""
+    shots, reads = [], []
+
+    def screencap():
+        shots.append(1)
+        image = np.zeros((720, 1280, 3), np.uint8)
+        image[0, 0, 0] = len(shots)
+        if red_from and len(shots) >= red_from:
+            image[640:650, 1080:1180] = (0, 0, 200)
+        return image
+    context.tasker.controller.post_screencap.return_value.wait.return_value.get.side_effect = screencap
+
+    def run_recognition(name, image, override=None):
+        roi = tuple((override or {}).get(name, {}).get("roi", ()))
+        reads.append(roi)
+        if roi == tuple(actions.CHOICES_HEADER) and choices_from and image[0, 0, 0] >= choices_from:
+            return SimpleNamespace(all_results=[SimpleNamespace(text="Choices", box=(700, 110, 100, 30))])
+        if roi == tuple(actions.EVENT_BUTTON_LABEL):
+            return SimpleNamespace(all_results=[SimpleNamespace(text="Continue", box=(1065, 625, 140, 40))])
+        return None
+    context.run_recognition.side_effect = run_recognition
+    return reads
+
+
+def corner_taps(context):
+    return [c for c in context.tasker.controller.post_click.call_args_list if c.args == actions.EVENT_NEUTRAL]
+
+
+def test_event_text_is_tapped_every_0_15_s_and_read_every_third_tap(context, clock):
+    # Live 2026-10-20: a screenshot and 3 OCRs after each tap made it one every 0.3-1.1 s, whatever its wait; the
+    # text keeps up with a tap every 0.15 s (the user by hand; no tap lost live). The Choices show after tap 4.
+    reads = event_text(context, choices_from=6)
+    actions.Event().run(context, None)
+    assert len(corner_taps(context)) == 6  # read at taps 3 and 6
+    assert reads.count(tuple(actions.EVENT_BUTTON_LABEL)) == 2
+    assert sum(clock) == pytest.approx(5 * actions.EVENT_TAP_EVERY)
+
+
+def test_event_text_stops_on_the_lit_button_without_reading_text(context, clock):
+    # The button's pixels are looked at after each tap: a tap after it lit is wasted (live: 1-3 a burst).
+    reads = event_text(context, red_from=3)
+    actions.Event().run(context, None)
+    assert len(corner_taps(context)) == 2
+    assert tuple(actions.EVENT_BUTTON_LABEL) not in reads
+
+
 def bus_at(context, x, y, linked=()):
     """The map's bus at (x, y); the link nodes in linked hit, nothing else does."""
     def run_recognition(name, image, override=None):
@@ -1549,9 +1597,11 @@ def test_one_event_that_goes_on_past_its_limit_goes_to_recovery(context):
 
 
 def test_an_event_after_a_pause_starts_its_own_clock(context):
-    event_for(context, actions.EVENT_LIMIT - 30)
+    # Each event alone stays under the limit (a call taps the text for up to 0.3 s on top of event_for's 1 s);
+    # together they would not.
+    event_for(context, actions.EVENT_LIMIT // 2 + 30)
     actions.time.sleep(actions.EVENT_LIMIT)  # the event ended; the next one comes later
-    event_for(context, actions.EVENT_LIMIT - 30)
+    event_for(context, actions.EVENT_LIMIT // 2 + 30)
     assert actions.STUCK["flag"] is None
 
 

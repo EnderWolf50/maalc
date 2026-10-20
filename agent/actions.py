@@ -1733,6 +1733,10 @@ EVENT_PORTRAIT_X = [77 + round(69.3 * i) for i in range(12)]  # 7 in a boss's mi
 EVENT_PORTRAIT_Y = 655
 EVENT_NEUTRAL = (5, 5)  # top-left corner: nothing there on any event page
 EVENT_TEXT_TAPS = 30
+# A text tap every EVENT_TAP_EVERY s, the lit button's pixels looked at after each, the page's text only every
+# EVENT_TEXT_READ taps: live 2026-10-20, a screenshot and 3 OCRs after each tap made it one every 0.3-1.1 s whatever
+# the wait, and the text kept up at 0.15 s (no tap lost; the user's own taps 0.15 s).
+EVENT_TAP_EVERY, EVENT_TEXT_READ = 0.15, 3
 EVENT_BUTTON_LABEL = [1040, 612, 190, 66]  # the Event node's roi: empty once the event page is gone
 EVENT_LIMIT = 180  # s one event may take before recovery L1 (AALC allows 300); a boss quiz of several rounds stays well under
 EVENT_GAP = 30  # s between two Event calls after which the next call is another event
@@ -1825,11 +1829,17 @@ class Event(CustomAction):
             tried.clear()
             # Text running on (the button grey): taps on a dead corner show it line by line; keep tapping
             # until there is something to act on, for MirrorHub's next look.
-            for _ in range(EVENT_TEXT_TAPS):
-                tap(context, *EVENT_NEUTRAL, wait=0.2)
+            # A Choices page or a check prompt shows up to EVENT_TEXT_READ - 1 taps late: a tap on the dead corner picks nothing.
+            last = 0.0
+            for n in range(1, EVENT_TEXT_TAPS + 1):
+                time.sleep(max(0.0, last + EVENT_TAP_EVERY - time.monotonic()))
+                last = time.monotonic()
+                tap(context, *EVENT_NEUTRAL, wait=0)
                 image = screen(context)
-                if red_button(image) or not text(context, image, EVENT_BUTTON_LABEL) or any(k in text(context, image, roi) for k, roi in
-                                            (("Choices", CHOICES_HEADER), ("Choose a character", CHECK_PROMPT))):
+                if red_button(image):
+                    break
+                if n % EVENT_TEXT_READ == 0 and (not text(context, image, EVENT_BUTTON_LABEL) or any(
+                        k in text(context, image, roi) for k, roi in (("Choices", CHOICES_HEADER), ("Choose a character", CHECK_PROMPT)))):
                     break
         return True
 
