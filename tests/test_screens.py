@@ -11,3 +11,12 @@ def test_every_maatools_case_image_exists():
     assert images
     missing = [i for i in images if not (REPO / "tests/screens" / i).is_file()]
     assert not missing
+
+
+def test_the_map_screen_only_nodes_are_the_node_marks():
+    # #156: a mark left out of the config's set would run on every screen again.
+    import actions
+    config = (REPO / "maatools.config.mts").read_text(encoding="utf-8")
+    marks = re.search(r"const marks = new Set\(\[(.*?)\]\)", config, re.S)
+    assert marks
+    assert set(re.findall(r"'(\w+)'", marks[1])) == set(actions.MARKS)
