@@ -1630,12 +1630,13 @@ class PlayTurn(CustomAction):
         cleared at the left gear and Win Rate and START are tried once more, here rather than on MirrorHub's
         next looks (#145: those took 3 submits, a stuck and recovery L1, ~23 s)."""
         for attempt in range(2):
-            image = page_guard(context, "BattleTurn")
+            image = screen(context)
             for _ in range(2):
                 if battle.disc_lit(image, *disc) or start_shown(context, image, disc):
                     break
                 # Win Rate toggles: a second tap clears the skills the first picked, so it is tapped again only
                 # when its label does not show pressed: live, a tap in the turn's opening did nothing (#58).
+                image = page_guard(context, "BattleTurn", image=image)
                 tap(context, x + WIN_RATE[0], y + WIN_RATE[1], wait=0)
                 lit = until(context, lambda im: battle.disc_lit(im, *disc), timeout=1.5)
                 image = screen(context) if lit is None else lit
@@ -1648,6 +1649,7 @@ class PlayTurn(CustomAction):
             if attempt == 0 and xs:
                 # A chain left short (the disc lights, START does nothing) or picks the game dropped.
                 log(f"turn {turn}: START did not start the turn: clearing the picks for Win Rate again")
+                page_guard(context, "BattleTurn")
                 tap(context, *battle.guard_chain(xs)[0], wait=0)
                 until(context, lambda im: not battle.disc_lit(im, *disc), timeout=1)
         return False
@@ -1671,13 +1673,15 @@ class PlayTurn(CustomAction):
         page_guard(context, "BattleTurn")
         image = lower_skills(context, lows)  # live: a battle's first turn slides the portraits in late
         before = [guard_score(image, lx) for lx in lows]
-        for sx in xs:
+        page_guard(context, "BattleTurn", image=image)
+        for sx in xs:  # ponytail: one check per batch of portrait taps (0.1 s apart), not a screenshot per tap
             tap(context, sx, SLOT_PORTRAIT_Y, wait=GUARD_TAP_WAIT)
         image = lower_skills(context, lows, before)
         after = [guard_score(image, lx) for lx in lows]
         shown = battle.guard_shown(before, after)
         unsure = [i for i, s in enumerate(shown) if s is None]
         if unsure:  # live: the glow on a unit's slot flickers; swap those back and compare once more
+            page_guard(context, "BattleTurn", image=image)
             for i in unsure:
                 tap(context, xs[i], SLOT_PORTRAIT_Y, wait=GUARD_TAP_WAIT)
             image = lower_skills(context, [lows[i] for i in unsure], [after[i] for i in unsure])
@@ -1687,6 +1691,7 @@ class PlayTurn(CustomAction):
         if None in shown:
             log(f"guard: cannot tell the guard skill of slots {[i + 1 for i, s in enumerate(shown) if s is None]}")
             return False
+        page_guard(context, "BattleTurn")
         for sx, on in zip(xs, shown):
             if not on:
                 tap(context, sx, SLOT_PORTRAIT_Y, wait=GUARD_TAP_WAIT)
@@ -1699,10 +1704,12 @@ class PlayTurn(CustomAction):
             until(context, lambda im: seen(context, im, "BattleTurn") is not None, timeout=1, every=0.05)
             if press_start(context, disc):
                 return True
-            if not battle.disc_lit(screen(context), *disc):
+            image = screen(context)
+            if not battle.disc_lit(image, *disc):
                 log("guard: the chain drag linked nothing")
                 return False
             log(f"guard: START did not start the turn after chain drag {n} ({params['dwell']} s a slot): clearing it")
+            page_guard(context, "BattleTurn", image=image)
             tap(context, *chain[0], wait=0)
             until(context, lambda im: not battle.disc_lit(im, *disc), timeout=1)
         return False

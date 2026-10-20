@@ -1883,3 +1883,44 @@ def test_a_gift_choice_gone_after_one_card_does_not_press_select(context, guarde
     page_until(context, "GiftChoice", 1)
     assert actions.PickGift().run(context, argv())
     assert len(taps(context)) == 1 and actions.GIFT_SELECT not in taps(context)
+
+
+def test_a_formation_gone_after_the_first_card_taps_no_more(context, guarded, monkeypatch):
+    ctl = context.tasker.controller
+    monkeypatch.setattr(actions, "participants", lambda context, image: (max(0, ctl.post_click.call_count - 1), 5))
+    page_until(context, "Formation", 2)  # Clear Selection, then Yi Sang
+    with pytest.raises(actions.PageGone):
+        actions.Formation.pick(context, ["Yi Sang", "Hong Lu"])
+    assert taps(context) == [actions.CLEAR_SELECTION, actions.card_xy(actions.battle.SINNERS.index("Yi Sang"), actions.CARD_TAP_Y)]
+
+
+def test_a_battle_gone_after_the_portrait_taps_swaps_nothing_back(context, guarded):
+    panel = Panel(context, guard=[True, False, True, False, False, False, True])  # 3 slots go off guard and want a tap back
+    page_until(context, "BattleTurn", 7)  # gone right after the first round of portrait taps
+    with pytest.raises(actions.PageGone):
+        actions.PlayTurn.guard(context, 984, DISC)
+    assert len(portrait_taps(context)) == 7 and DISC not in taps(context)
+    assert context.tasker.controller.post_touch_down.call_count == 0 and not panel.started
+
+
+def test_an_exploration_reward_gone_after_a_toggle_tap_does_not_claim(context, guarded, monkeypatch):
+    actions.RUN.update(settings={"run": {"weekly_bonus_use": "all", "weekly_bonus_amount": 3}}, team={"hard_from_floor": None}, difficulty="normal")
+    monkeypatch.setattr(actions.settlement, "read_result", lambda text: (5, False, 5, 5))
+    monkeypatch.setattr(actions.settlement, "bonus_toggles", lambda *a: 1)
+    monkeypatch.setattr(actions, "toggles", lambda context, image: [False, False, False])
+    page_until(context, "ExplorationReward", 1)
+    assert actions.Settle().run(context, argv())
+    assert taps(context) == [(actions.TOGGLE_X[0], 252)]
+
+
+def test_a_gift_search_gone_after_a_pick_does_not_press_select(context, guarded, monkeypatch):
+    gift = {"name": "Phlebotomy Pack", "keyword": "Bleed", "tier": 1}
+    actions.RUN["team"] = {"gift_search": {"enabled": True, "gifts": [gift]}}
+    monkeypatch.setattr(actions.gift_search, "select_count", lambda text: (0, 1))
+    monkeypatch.setattr(actions.GiftSearch, "chosen", staticmethod(lambda *a: ["Phlebotomy Pack"]))
+    picks = iter([gift])
+    monkeypatch.setattr(actions.gift_search, "next_gift", lambda *a: next(picks, None))
+    monkeypatch.setattr(actions.GiftSearch, "pick", staticmethod(lambda context, gift: actions.tap(context, 400, 400, wait=0) or True))
+    page_until(context, "GiftSearch", 1)
+    assert actions.GiftSearch().run(context, argv())
+    assert taps(context) == [(400, 400)] and actions.STUCK["flag"] is None
