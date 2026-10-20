@@ -211,21 +211,21 @@ def to_sell(spare, wanted, cost, reserve, first=()):
     return sorted(picked, reverse=True)  # selling from the back keeps the earlier cells in place
 
 
-def gift_role(keyword, gift, kept, avoid=()):
+def gift_role(keyword, gift, kept, avoid=(), material=()):
     """"keep", "material" or "unknown" for an owned gift read off its grid cell, on the fuse and the sell page.
 
     keyword: its badge's keyword, "Keywordless" with no badge, None when the badge is cut off or unread;
-    gift: the gift its icon matched (an observed, a kept or an avoided one), or None; kept: the keywords the team
-    keeps (kept_keywords: the main one, the ones it names and "Keywordless" unless it lets them go, #77). Kept too:
-    the gifts whose icon matched (observed #103, #112, or named in keep_gifts #77); a gift in avoid is material
-    whatever its keyword (#90). Unknown is left to the tooltip: a cut-off or unread badge, and no badge at all while
-    keywordless gifts may go, as a badge scoring under BADGE_MIN also reads as none (a kept keyword's gift then).
+    gift: the gift its icon matched (an observed, a kept, an avoided one or a vestige), or None; kept: the keywords
+    the team keeps (kept_keywords: the main one, the ones it names and "Keywordless" unless it lets them go, #77).
+    Kept too: the gifts whose icon matched (observed #103, #112, or named in keep_gifts #77); a gift in avoid (#90) or
+    material (the vestiges the team lets go, #161) is material whatever its keyword. No badge and no icon matched is a
+    keywordless gift (the user, #161). Unknown is left to the tooltip: a cut-off or unread badge.
     """
-    if gift in avoid:
+    if gift in avoid or gift in material:
         return "material"
     if gift or keyword in kept:
         return "keep"
-    return "unknown" if keyword in (None, "Keywordless") else "material"
+    return "unknown" if keyword is None else "material"
 
 
 MAX_MATERIAL_TIER = 4  # a fusion gives tier IV at most: a tier V material is always a downgrade (user, #161)

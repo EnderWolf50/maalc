@@ -200,11 +200,18 @@ def test_gift_role_from_the_cells_badge_and_icon(keyword, gift, role):
 
 
 def test_the_kept_keywords_decide_the_role():
-    # #77: another keyword the team names is kept. Once keywordless gifts may go, a cell with no badge is left to its
-    # tooltip: a badge scoring under BADGE_MIN reads as none, and a main-keyword gift must not go as keywordless.
+    # #77: another keyword the team names is kept. The user on #161: a cell with no badge and no matched icon is a
+    # keywordless gift, material once the team lets keywordless gifts go; no tooltip is read for it.
     assert s.gift_role("Bleed", None, {"Burn", "Bleed"}) == "keep"
-    assert s.gift_role("Keywordless", None, {"Burn"}) == "unknown"
+    assert s.gift_role("Keywordless", None, {"Burn"}) == "material"
     assert s.gift_role("Keywordless", "Spiderweb Entangled in Red", {"Burn"}) == "keep"  # a kept gift's icon still keeps it
+
+
+def test_a_vestige_told_by_its_icon_is_material_whatever_the_keywordless_setting():
+    # #161: a vestige is its own kind; material names the ones the team neither keeps nor (on the sell page) keeps
+    # from the sale. One left out of it is kept like any gift whose icon matched.
+    assert s.gift_role("Keywordless", "Dark Vestige", {"Burn", "Keywordless"}, material=["Dark Vestige"]) == "material"
+    assert s.gift_role("Keywordless", "Dark Vestige", {"Burn"}) == "keep"
 
 
 def test_an_avoided_gift_is_material_though_it_is_the_main_keyword():

@@ -551,14 +551,14 @@ def fuse_slots(context, monkeypatch, slots=3, ignored=()):
 
 def test_a_fusion_taps_only_the_materials_its_cells_show(context, monkeypatch):
     # #112: one screenshot decides. Spiderweb (observed), Burn (main) and keywordless gifts stay. #161: the badge-less
-    # cell 3 may be a vestige: tapped in and out for its tooltip, which reads no name here, so it stays.
+    # cell 3 matched no vestige icon: a keywordless gift, kept without a tap.
     reads(context, FUSE_PAGE)
     fuse_slots(context, monkeypatch)
     cells_read(monkeypatch, ("Keywordless", SPIDERWEB["name"]), ("Bleed", None), ("Burn", None), ("Keywordless", None),
                ("Tremor", None), ("Pierce", None), ("Sinking", None), (None, None))
     actions.Shop.fuse(context, {"keyword": "Burn", "gift_search": {"gifts": [SPIDERWEB]}}, {})
     taps = [c.args for c in context.tasker.controller.post_click.call_args_list]
-    assert [taps.count(c) for c in actions.FUSE_CELLS[:8]] == [0, 1, 0, 2, 1, 1, 0, 0]
+    assert [taps.count(c) for c in actions.FUSE_CELLS[:8]] == [0, 1, 0, 0, 1, 1, 0, 0]
     assert actions.PAGE_OK in taps
 
 
@@ -575,37 +575,33 @@ def tooltips(monkeypatch, names):
                                            (4, "Brilliant Vestige")])
 def test_vestiges_are_fused_though_keywordless_gifts_are_kept(context, monkeypatch, tier, vestige):
     # #161, the user: vestiges are their own kind, only fusion material; keywordless "keep" (the default) does not keep
-    # them. The badge-less cells are opened for their name: the vestige goes in, Twinkling Scrap (keywordless) stays.
-    tooltips(monkeypatch, {0: vestige, 1: "Twinkling Scrap"})
-    fused, taps, _ = fusion_taps(context, monkeypatch, {}, ("Keywordless", None, tier), ("Keywordless", None, 2),
+    # them. Each is told by its icon: no cell is opened; the vestige goes in, the keywordless gift stays.
+    fused, taps, _ = fusion_taps(context, monkeypatch, {}, ("Keywordless", vestige, tier), ("Keywordless", None, 2),
                                  ("Tremor", None), ("Pierce", None))
-    assert fused and taps == [3, 2, 1, 1]  # the vestige in and out for its name, then in for the fusion
+    assert fused and taps == [1, 0, 1, 1]
 
 
 @pytest.mark.parametrize("keywordless", ["keep", "fuse_or_sell"])
 def test_lunar_vestige_is_never_fused(context, monkeypatch, keywordless):
-    # #161: a tier V is never a material (MAX_MATERIAL_TIER): its cell is not even opened.
-    tooltips(monkeypatch, {0: "Lunar Vestige"})
-    fused, taps, _ = fusion_taps(context, monkeypatch, {"keywordless": keywordless}, ("Keywordless", None, 5),
+    # #161: a tier V is never a material (MAX_MATERIAL_TIER).
+    fused, taps, _ = fusion_taps(context, monkeypatch, {"keywordless": keywordless}, ("Keywordless", "Lunar Vestige", 5),
                                  ("Tremor", None), ("Pierce", None), ("Sinking", None))
     assert fused and taps == [0, 1, 1, 1]
 
 
 def test_a_lunar_vestige_that_alone_would_complete_a_group_stays_out(context, monkeypatch):
-    # #161: with keywordless gifts let go its cell is opened (the others make no fusion) and named, but tier V stays out.
-    tooltips(monkeypatch, {0: "Lunar Vestige"})
-    fused, taps, ok = fusion_taps(context, monkeypatch, {"keywordless": "fuse_or_sell"}, ("Keywordless", None, 5),
+    # #161: with keywordless gifts let go, the tier V vestige still stays out: no fusion, no cell opened.
+    fused, taps, ok = fusion_taps(context, monkeypatch, {"keywordless": "fuse_or_sell"}, ("Keywordless", "Lunar Vestige", 5),
                                   ("Tremor", None), ("Pierce", None))
-    assert not fused and not ok and taps == [2, 0, 0]
+    assert not fused and not ok and taps == [0, 0, 0]
 
 
 def test_a_vestige_the_team_keeps_by_name_is_not_fused(context, monkeypatch):
     # #161: the user's per-gift keep list still applies to vestiges.
-    tooltips(monkeypatch, {0: "Dark Vestige"})
     team = {"keep_gifts": [{"keyword": "Keywordless", "tier": 1, "name": "Dark Vestige"}]}
-    fused, taps, _ = fusion_taps(context, monkeypatch, team, ("Keywordless", None, 1), ("Tremor", None), ("Pierce", None),
-                                 ("Sinking", None))
-    assert fused and taps == [2, 1, 1, 1]
+    fused, taps, _ = fusion_taps(context, monkeypatch, team, ("Keywordless", "Dark Vestige", 1), ("Tremor", None),
+                                 ("Pierce", None), ("Sinking", None))
+    assert fused and taps == [0, 1, 1, 1]
 
 
 def test_offers_are_read_once_and_bought_high_tier_first_from_the_back(context, monkeypatch):
@@ -670,12 +666,12 @@ def sale_taps(context, monkeypatch, team, prices, *readings, panel=()):
 
 
 def test_a_sale_reads_keywords_and_prices_off_the_grid_and_taps_only_what_it_sells(context, monkeypatch):
-    # #112: no gift with a badge is tapped to read its panel; the badge-less one is, as it may be a vestige (fusion
-    # material, #161). #79: Tremor III + Pierce III + Sinking II fuse into a tier IV; the Bleed I no fusion uses goes,
-    # though Tremor's price is higher.
+    # #112: no gift is tapped to read its panel: the badge-less one matched no vestige icon, a kept keywordless gift
+    # (#161). #79: Tremor III + Pierce III + Sinking II fuse into a tier IV; the Bleed I no fusion uses goes, though
+    # Tremor's price is higher.
     taps = sale_taps(context, monkeypatch, {}, [90, 300, 200, 120, 60, 80], ("Bleed", None, 1), ("Burn", None),
                      ("Keywordless", None), ("Tremor", None, 3), ("Pierce", None, 3), ("Sinking", None, 2))
-    assert taps == [actions.SELL_CELLS[2], actions.SELL_CELLS[0]]
+    assert taps == [actions.SELL_CELLS[0]]
 
 
 def test_a_sale_skips_the_teams_kept_gifts(context, monkeypatch):
@@ -716,32 +712,29 @@ def test_a_sale_stops_at_the_teams_highest_tier(context, monkeypatch, team, left
 
 @pytest.mark.parametrize("keywordless, sold", [("keep", False), ("fuse", False), ("fuse_or_sell", True)])
 def test_a_sale_follows_the_keywordless_setting(context, monkeypatch, keywordless, sold):
-    # #161: the Vestige-free keywordless leftover (Twinkling Scrap) goes only with "fuse_or_sell"; "fuse" keeps it
-    # for fusions, and "keep" keeps it everywhere. Its badge-less cell is checked on the panel first.
+    # #161: a keywordless leftover goes only with "fuse_or_sell"; "fuse" keeps it for fusions, and "keep" keeps it
+    # everywhere. Its badge-less cell matched no vestige icon: the setting alone decides, its panel is never read.
     taps = sale_taps(context, monkeypatch, {"keywordless": keywordless}, [90, 60, 70, 95], ("Bleed", None),
-                     ("Tremor", None), ("Pierce", None), ("Keywordless", None, 2), panel=["Twinkling Scrap", "Gain 1 Cost"])
-    assert (actions.SELL_CELLS[3] in taps and taps.count(actions.SELL_CELLS[3]) == 2) == sold  # its panel, then the sale
+                     ("Tremor", None), ("Pierce", None), ("Keywordless", None, 2), panel=["Grey Coat", "Inflict 2 Burn"])
+    assert taps.count(actions.SELL_CELLS[3]) == int(sold)  # the sale's tap only
 
 
 @pytest.mark.parametrize("keywordless", ["keep", "fuse", "fuse_or_sell"])
 @pytest.mark.parametrize("team, sold", [({}, False), ({"sell_vestiges": True}, True),
                                         ({"sell_vestiges": True, "sell_max_tier": 1}, True)])
 def test_a_vestige_is_sold_only_when_the_team_allows_it(context, monkeypatch, keywordless, team, sold):
-    # #161: sell_vestiges alone decides, whatever the keywordless setting. Dark Vestige has no badge and no icon
-    # template: the panel's name tells it from keywordless gifts, so its cell is opened whatever the settings (#79: a
-    # vestige kept from the sale is still fusion material).
+    # #161: sell_vestiges alone decides, whatever the keywordless setting. Dark Vestige is told by its icon: its cell
+    # is tapped only to sell it.
     taps = sale_taps(context, monkeypatch, {"keywordless": keywordless, **team}, [90, 60, 70, 95], ("Bleed", None),
-                     ("Tremor", None), ("Pierce", None), ("Keywordless", None, 1),
-                     panel=["Dark Vestige", "Counts as a Tier 1 E.G.O Gift. Can be sold at a Shop"])
-    assert taps.count(actions.SELL_CELLS[3]) == 1 + int(sold)
+                     ("Tremor", None), ("Pierce", None), ("Keywordless", "Dark Vestige", 1))
+    assert taps.count(actions.SELL_CELLS[3]) == int(sold)
 
 
 def test_a_vestige_over_the_highest_tier_sold_stays(context, monkeypatch):
-    # #161: sell_max_tier applies to vestiges too; a Twinkling Vestige (III) over a limit of II is opened, not sold.
+    # #161: sell_max_tier applies to vestiges too; a Twinkling Vestige (III) over a limit of II is not sold.
     taps = sale_taps(context, monkeypatch, {"sell_vestiges": True, "sell_max_tier": 2}, [90, 60, 70, 95],
-                     ("Bleed", None), ("Tremor", None), ("Pierce", None), ("Keywordless", None, 3),
-                     panel=["Twinkling Vestige"])
-    assert taps == [actions.SELL_CELLS[3]]
+                     ("Bleed", None), ("Tremor", None), ("Pierce", None), ("Keywordless", "Twinkling Vestige", 3))
+    assert taps == []
 
 
 def test_nothing_is_sold_when_every_material_fuses(context, monkeypatch):
@@ -749,13 +742,21 @@ def test_nothing_is_sold_when_every_material_fuses(context, monkeypatch):
     assert sale_taps(context, monkeypatch, {}, [90, 60, 70], ("Bleed", None), ("Tremor", None), ("Pierce", None)) == []
 
 
-@pytest.mark.parametrize("team, name", [({"keywordless": "fuse"}, "Twinkling Scrap"), ({}, "Dark Vestige")])
-def test_a_sale_counts_the_fusion_materials_it_may_not_sell(context, monkeypatch, team, name):
+@pytest.mark.parametrize("team, gift", [({"keywordless": "fuse"}, None), ({}, "Dark Vestige")])
+def test_a_sale_counts_the_fusion_materials_it_may_not_sell(context, monkeypatch, team, gift):
     # #79: a keywordless gift under "fuse", or a vestige the team does not sell, is still fusion material: Bleed and
-    # Tremor fuse with it, so neither is sold. Its badge-less cell is opened once for its name.
-    taps = sale_taps(context, monkeypatch, team, [90, 95, 60], ("Bleed", None), ("Tremor", None), ("Keywordless", None, 1),
-                     panel=[name, "Gain 1 Cost"])
-    assert taps == [actions.SELL_CELLS[2]]
+    # Tremor fuse with it, so neither is sold. Neither is opened (#161).
+    taps = sale_taps(context, monkeypatch, team, [90, 95, 60], ("Bleed", None), ("Tremor", None), ("Keywordless", gift, 1))
+    assert taps == []
+
+
+@pytest.mark.parametrize("keywordless, sold", [("keep", False), ("fuse", False), ("fuse_or_sell", True)])
+def test_a_cut_off_cell_naming_a_keywordless_gift_follows_the_setting_not_its_text(context, monkeypatch, keywordless, sold):
+    # #161, the user: a keywordless gift's text never keeps it, though it says Burn (the main keyword). The cell's
+    # badge is cut off, so its panel is read for the name: Grey Coat is keywordless (data/gift_search.json).
+    taps = sale_taps(context, monkeypatch, {"keywordless": keywordless}, [90, 60, 70, 95], ("Bleed", None),
+                     ("Tremor", None), ("Pierce", None), (None, None, 2), panel=["Grey Coat", "Inflict 2 Burn"])
+    assert taps.count(actions.SELL_CELLS[3]) == 1 + int(sold)  # its panel, then the sale
 
 
 def test_a_sale_does_not_break_a_fusion_by_selling_white_gossypium(context, monkeypatch):
@@ -870,10 +871,10 @@ def test_the_teams_kept_keywords_and_gifts_stay_out_of_a_fusion(context, monkeyp
     assert fused and taps == [0, 0, 1, 1, 0, 1]
 
 
-def test_the_tooltip_decides_a_cell_without_a_badge_and_keeps_what_it_names(context, monkeypatch):
-    # #77: with keywordless gifts let go, two cells show no badge. Their tooltips: a Burn gift whose badge was missed
-    # (kept by its keyword) and Dark Vestige (keywordless, material). Each is tapped in and out for its tooltip;
-    # then only the Vestige goes in with the two others.
+def test_the_tooltip_decides_a_cell_whose_badge_is_cut_off_and_keeps_what_it_names(context, monkeypatch):
+    # #77: two cells' badges are cut off and no icon matched. Their tooltips: a Burn gift (kept by its keyword) and
+    # Dark Vestige (material). Each is tapped in and out for its tooltip; then only the Vestige goes in with the two
+    # others.
     tips = {actions.FUSE_CELLS[0]: ("Wound Clerid", "Inflict Burn"), actions.FUSE_CELLS[1]: ("Dark Vestige", "Counts as a Tier 1")}
 
     def tooltip(context, last):
@@ -881,28 +882,38 @@ def test_the_tooltip_decides_a_cell_without_a_badge_and_keeps_what_it_names(cont
         name, line = tips[next(t for t in reversed(taps) if t in tips)]
         return [("E.G.O GIFT", (1030, 305, 100, 25)), (name, (1010, 340, 180, 22)), (line, (1000, 380, 200, 20))], name
     monkeypatch.setattr(actions.Shop, "tooltip", staticmethod(tooltip))
-    fused, taps, _ = fusion_taps(context, monkeypatch, {"keywordless": "fuse"}, ("Keywordless", None),
-                                 ("Keywordless", None, 1), ("Tremor", None), ("Pierce", None))
+    fused, taps, _ = fusion_taps(context, monkeypatch, {}, (None, None), (None, None, 1), ("Tremor", None), ("Pierce", None))
     assert fused and taps == [2, 3, 1, 1]  # the Burn gift in and out; the Vestige in, out, and in for the fusion
+
+
+@pytest.mark.parametrize("keywordless, fused_in", [("keep", 0), ("fuse", 1)])
+def test_a_cut_off_cell_whose_tooltip_names_a_keywordless_gift_follows_the_setting(context, monkeypatch, keywordless, fused_in):
+    # #161, the user: the setting alone decides a keywordless gift; its tooltip's Burn does not keep it. Tremor and
+    # Pierce alone make no fusion, so the cut-off cell is opened.
+    monkeypatch.setattr(actions.Shop, "tooltip", staticmethod(lambda context, last: (
+        [("E.G.O GIFT", (1030, 305, 100, 25)), ("Grey Coat", (1010, 340, 180, 22)), ("Inflict 2 Burn", (1000, 380, 200, 20))],
+        "Grey Coat")))
+    fused, taps, _ = fusion_taps(context, monkeypatch, {"keywordless": keywordless}, (None, None, 2), ("Tremor", None),
+                                 ("Pierce", None))
+    assert fused == bool(fused_in) and taps[0] == 2 + fused_in  # in and out for its tooltip, then in for the fusion
 
 
 @pytest.mark.parametrize("keywordless", ["fuse", "fuse_or_sell"])
 def test_keywordless_gifts_let_go_join_the_highest_tier_pick(context, monkeypatch, keywordless):
     # The user on #161: a keywordless gift that may be fused is a material like any other, not only when the others
-    # make no fusion. Tremor III + Pierce III + Sinking I would make a III; with the keywordless III, a IV.
-    tooltips(monkeypatch, {0: "Twinkling Scrap"})
+    # make no fusion. Tremor III + Pierce III + Sinking I would make a III; with the keywordless III, a IV. Its cell
+    # matched no vestige icon: no tooltip is read.
     fused, taps, _ = fusion_taps(context, monkeypatch, {"keywordless": keywordless}, ("Keywordless", None, 3),
                                  ("Tremor", None, 3), ("Pierce", None, 3), ("Sinking", None, 1))
-    assert fused and taps == [3, 1, 1, 0]  # in and out for its name, then in for the fusion
+    assert fused and taps == [1, 1, 1, 0]
 
 
 def test_a_keywordless_gift_the_team_keeps_stays_out_of_the_pick(context, monkeypatch):
-    # The user on #161: keep_gifts still applies; here Spiderweb's icon was missed, its tooltip names it.
-    tooltips(monkeypatch, {0: SPIDERWEB["name"]})
+    # The user on #161: keep_gifts still applies, by the gift's icon.
     team = {"keywordless": "fuse", "keep_gifts": [SPIDERWEB]}
-    fused, taps, _ = fusion_taps(context, monkeypatch, team, ("Keywordless", None, 3), ("Tremor", None, 3),
+    fused, taps, _ = fusion_taps(context, monkeypatch, team, ("Keywordless", SPIDERWEB["name"], 3), ("Tremor", None, 3),
                                  ("Pierce", None, 3), ("Sinking", None, 1))
-    assert fused and taps == [2, 1, 1, 1]
+    assert fused and taps == [0, 1, 1, 1]
 
 
 def test_a_super_shop_fuses_up_to_5(context, monkeypatch):
