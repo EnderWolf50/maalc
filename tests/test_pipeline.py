@@ -113,6 +113,9 @@ def test_the_screens_that_lift_a_held_finger_are_hub_nodes():
     hub += nodes["HubText"]["custom_recognition_param"]["entries"]
     assert set(actions.BATTLE_LEFT) <= set(hub)
     assert nodes["BattlePause"]["custom_action"] == "HoldTurn" and "BattlePause" in nodes["BattleHUD"]["next"]
+    # A popup over a playing turn lifts the finger; BattleHUD acts on it before BattlePause holds again.
+    battle = nodes["BattleHUD"]["next"]
+    assert all(battle.index(n) < battle.index("BattlePause") for n in actions.BATTLE_POPUPS)
 
 
 def test_batch_plan_follows_maaframework():

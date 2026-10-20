@@ -537,13 +537,22 @@ def test_a_held_finger_stays_down_while_the_pause_button_shows(context, clock):
     assert sum(clock) == pytest.approx(actions.HOLD_LIMIT, abs=actions.HOLD_EVERY)
 
 
-@pytest.mark.parametrize("shown", ["WipeDialog", "Event", "RetryPopup", "Connecting"])
-def test_a_held_finger_lifts_on_a_dialog_over_the_battle(context, clock, shown):
-    # A dialog sits over the battle with the pause button still showing: lift at once, not on it 6 s later.
+@pytest.mark.parametrize("shown", actions.BATTLE_POPUPS)
+def test_a_held_finger_lifts_on_a_popup_over_the_battle(context, clock, shown):
+    # A popup over the battle with the pause button still showing: lift at once, not on it 6 s later.
     hits(context, "BattlePause", shown)
     actions.hold_turn(context)
     assert touches(context) == [("down", actions.HOLD_SPOT), ("up", ())]
     assert sum(clock) < 1
+
+
+def test_a_held_finger_reads_no_text_while_the_pause_button_shows(context, clock):
+    # #157: no OCR while a turn plays. The screens read by text (Victory, the wipe dialog, an event) hide the
+    # pause button (tests/screens: it scores under 0.5 on each, threshold 0.8); only template-gated popups are looked for.
+    hits(context, "BattlePause")
+    actions.hold_turn(context)
+    looked = {c.args[0] for c in context.run_recognition.call_args_list}
+    assert looked == {"BattlePause", *actions.BATTLE_POPUPS}
 
 
 def test_a_held_finger_lifts_through_a_controller_fetched_after_the_looks(context, clock):
