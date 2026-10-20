@@ -1062,12 +1062,12 @@ def test_the_tooltip_decides_a_cell_whose_badge_is_cut_off_and_keeps_what_it_nam
     assert fused and taps == [2, 3, 1, 1]  # the Burn gift in and out; the Vestige in, out, and in for the fusion
 
 
-def test_a_tooltip_left_up_on_the_fuse_page_is_closed_before_the_grid_is_read(context, monkeypatch):
-    # Live 2026-10-21: the fuse page came back with the last gift's tooltip up (Emerald Elytra, a third-row cell), over
-    # Leave, the Shop node's anchor: every page check handed the shop back. Up from the keyword's OK until a neutral tap.
+def stuck_tooltip(context, monkeypatch, closes):
+    """The fuse page back with a tooltip up from the keyword's OK on, over Leave: every page check fails under it.
+    closes(taps after the OK) says whether it is gone."""
     def up():
         taps = [c.args for c in context.tasker.controller.post_click.call_args_list]
-        return actions.FUSE_KEYWORD_OK in taps and actions.FUSE_NEUTRAL not in taps[taps.index(actions.FUSE_KEYWORD_OK):]
+        return actions.FUSE_KEYWORD_OK in taps and not closes(taps[taps.index(actions.FUSE_KEYWORD_OK) + 1:])
 
     def guard(context, home, image=None):
         if up():
@@ -1085,7 +1085,31 @@ def test_a_tooltip_left_up_on_the_fuse_page_is_closed_before_the_grid_is_read(co
     context.run_recognition.side_effect = run_recognition
     fuse_slots(context, monkeypatch)
     cells_read(monkeypatch, ("Bleed", None), ("Tremor", None), ("Pierce", None))
+
+
+def test_a_tooltip_left_up_on_the_fuse_page_is_closed_before_the_grid_is_read(context, monkeypatch):
+    # Live 2026-10-21: the fuse page came back with the last gift's tooltip up (Emerald Elytra, a third-row cell), over
+    # Leave, the Shop node's anchor: every page check handed the shop back. A neutral tap closes one.
+    stuck_tooltip(context, monkeypatch, lambda taps: actions.FUSE_NEUTRAL in taps)
     assert actions.Shop.fuse(context, {"keyword": "Burn", "gift_search": {"gifts": []}}, {})
+
+
+def test_a_tooltip_left_from_a_moved_cell_goes_with_a_cells_own(context, monkeypatch):
+    # Live 2026-10-21: one left from a cell the grid had moved stayed after the neutral tap; a cell's tooltip took its
+    # place, and the neutral tap closed that. The first cell goes in and out for it.
+    first = actions.FUSE_CELLS[0]
+    stuck_tooltip(context, monkeypatch, lambda taps: first in taps and actions.FUSE_NEUTRAL in taps[taps.index(first):])
+    assert actions.Shop.fuse(context, {"keyword": "Burn", "gift_search": {"gifts": []}}, {})
+
+
+def test_a_tooltip_that_stays_up_closes_the_fuse_page_for_the_visit(context, monkeypatch):
+    # No loop: with the tooltip up the shop is not handed back, the page is closed, and not read again this visit.
+    stuck_tooltip(context, monkeypatch, lambda taps: False)
+    closed = []
+    monkeypatch.setattr(actions.Shop, "to_main", staticmethod(lambda context: closed.append(True)))
+    visit = {}
+    assert not actions.Shop.fuse(context, {"keyword": "Burn", "gift_search": {"gifts": []}}, visit)
+    assert visit["fuse_scanned"] and closed
 
 
 def test_a_cut_off_cells_tooltip_is_closed_before_the_page_is_checked(context, monkeypatch):
