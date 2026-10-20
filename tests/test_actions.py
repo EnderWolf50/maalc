@@ -160,16 +160,16 @@ def test_event_text_is_tapped_through_until_the_choices_show(context):
     assert len(corner) == 3
 
 
-def event_text(context, choices_from=None, red_from=None):
-    """Event text running on: screenshot n (1 = Event.run's own) shows the Choices from choices_from on and the lit
-    button from red_from on; returns the rois OCR read, in order."""
+def event_text(context, choices_from=None, red_from=None, red_to=999, label_to=999):
+    """Event text running on: screenshot n (1 = Event.run's own) shows the Choices from choices_from on, the lit
+    button from red_from on until red_to and the button's label until label_to; returns the rois OCR read, in order."""
     shots, reads = [], []
 
     def screencap():
         shots.append(1)
         image = np.zeros((720, 1280, 3), np.uint8)
         image[0, 0, 0] = len(shots)
-        if red_from and len(shots) >= red_from:
+        if red_from and red_from <= len(shots) < red_to:
             image[640:650, 1080:1180] = (0, 0, 200)
         return image
     context.tasker.controller.post_screencap.return_value.wait.return_value.get.side_effect = screencap
@@ -179,7 +179,7 @@ def event_text(context, choices_from=None, red_from=None):
         reads.append(roi)
         if roi == tuple(actions.CHOICES_HEADER) and choices_from and image[0, 0, 0] >= choices_from:
             return SimpleNamespace(all_results=[SimpleNamespace(text="Choices", box=(700, 110, 100, 30))])
-        if roi == tuple(actions.EVENT_BUTTON_LABEL):
+        if roi == tuple(actions.EVENT_BUTTON_LABEL) and image[0, 0, 0] < label_to:
             return SimpleNamespace(all_results=[SimpleNamespace(text="Continue", box=(1065, 625, 140, 40))])
         return None
     context.run_recognition.side_effect = run_recognition
@@ -206,6 +206,39 @@ def test_event_text_stops_on_the_lit_button_without_reading_text(context, clock)
     actions.Event().run(context, None)
     assert len(corner_taps(context)) == 2
     assert tuple(actions.EVENT_BUTTON_LABEL) not in reads
+
+
+def button_taps(context):
+    return [c for c in context.tasker.controller.post_click.call_args_list if c.args == actions.EVENT_BUTTON]
+
+
+def test_the_text_is_tapped_on_right_after_the_lit_button(context, clock):
+    # The user (#188): after the red button the taps paused ~1.6-5.3 s (live 2026-10-20: a 0.5 s settle, then
+    # MirrorHub's 200 ms delays and its look). Now the corner taps go on at the same 0.15 s in the same call;
+    # the button still lit while its press fades out is no button to press again.
+    event_text(context, red_from=1, red_to=3, choices_from=7)
+    actions.Event().run(context, None)
+    clicks = context.tasker.controller.post_click.call_args_list
+    assert clicks[0].args == actions.EVENT_BUTTON and len(button_taps(context)) == 1
+    assert len(corner_taps(context)) == 6  # 2 while it fades, read at once on the first unlit screen, then every third
+    waits = [s for s in clock if s]  # tap(wait=0) sleeps 0
+    assert waits[0] == pytest.approx(actions.EVENT_TAP_EVERY) and max(waits) <= actions.EVENT_TAP_EVERY
+
+
+def test_no_corner_tap_once_the_lit_button_left_the_event(context, clock):
+    # The last Continue ends the event: the first screen without the lit button is read before another tap.
+    reads = event_text(context, red_from=1, red_to=3, label_to=3)
+    actions.Event().run(context, None)
+    assert len(corner_taps(context)) == 2  # both on the fading event page
+    assert reads.count(tuple(actions.EVENT_BUTTON_LABEL)) == 1
+
+
+def test_a_press_that_did_not_take_is_handed_back_to_be_pressed_again(context, clock):
+    # The button lit on for EVENT_PRESS_TAPS taps: the press was lost, MirrorHub presses it again.
+    event_text(context, red_from=1)
+    actions.Event().run(context, None)
+    assert len(button_taps(context)) == 1 and len(corner_taps(context)) == actions.EVENT_PRESS_TAPS
+    assert sum(clock) == pytest.approx(actions.EVENT_PRESS_TAPS * actions.EVENT_TAP_EVERY)
 
 
 def bus_at(context, x, y, linked=()):
