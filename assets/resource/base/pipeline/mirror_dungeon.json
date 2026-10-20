@@ -81,9 +81,10 @@
         "pre_delay": 0,
         "post_delay": 0,
         "rate_limit": 300,
-        // Its picks look once or twice: a screen gone by then (the last loading screen) goes back to MirrorHub, which
-        // reads the next one (#115: 1 s here held the theme pack page up 1.7 s).
-        "timeout": 400,
+        // Its picks look once: a screen gone by then (the last loading screen) goes back to MirrorHub, which reads the
+        // next one (#115: 1 s here held the theme pack page up 1.7 s, 400 ms still 0.7 s). MaaFramework ends a next
+        // list once a failed pass has taken longer than its timeout, so 0 is one pass.
+        "timeout": 0,
         "on_error": [
             "HubTextLost"
         ]

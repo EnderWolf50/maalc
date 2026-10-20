@@ -139,6 +139,8 @@ def test_the_opening_waits_for_screens_not_for_delays():
     # Nothing to act on: the hub's own rate_limit paces the looks at a loading screen.
     assert nodes["Loading"].get("pre_delay") == 0 and nodes["Loading"].get("post_delay") == 0
     # Live (2026-10-20): the last loading screen HubText picked was gone when its own OCR looked, and the hub waited
-    # out HubText's 1 s timeout and HubTextLost's delays, 1.7 s, with the theme pack page up.
-    assert nodes["HubText"]["timeout"] <= 500
+    # out HubText's 1 s timeout and HubTextLost's delays, 1.7 s, with the theme pack page up; at 400 ms still 0.7 s
+    # (2026-10-21). A timeout of 0 gives the picks one look: MaaFramework ends a next list once a failed pass has
+    # taken longer than the timeout (PipelineTask::run_next, check_timeout_and_sleep).
+    assert nodes["HubText"]["timeout"] == 0
     assert nodes["HubTextLost"].get("pre_delay") == 0 and nodes["HubTextLost"].get("post_delay") == 0
