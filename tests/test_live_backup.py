@@ -61,3 +61,11 @@ def test_hold_logs_when_the_bot_ended_and_stops_the_recording_after_the_grace(tm
             running=lambda _log: next(checks, False), stop_profile="p", grace=0.1, stop=stopped.append)
     assert stopped == ["p"]  # once
     assert capsys.readouterr().out.count("[hold] bot ended 20") == 1
+
+
+def test_hold_notes_the_end_of_a_restarted_bot_and_keeps_its_recording(tmp_path, capsys):
+    (tmp_path / "install").mkdir()
+    runs, stopped = iter([True, False, True, True, True]), []  # ends, restarts within the grace, runs on
+    bk.hold(tmp_path / "install", tmp_path / "bak", tmp_path / "never", timeout=0.2, poll=0.05, guard=tmp_path / "bot.log",
+            running=lambda _log: next(runs, False), stop_profile="p", grace=5, stop=stopped.append)
+    assert stopped == [] and capsys.readouterr().out.count("[hold] bot ended 20") == 2

@@ -208,16 +208,20 @@ def resume(task: Path, is_alive=alive, now: float | None = None) -> list[str]:
     hold_up, (bot_up, bot_text) = detached_running(hold_log, is_alive), detached_status(bot_log, is_alive)
     out = [f"hold: {detached_status(hold_log, is_alive)[1]}", f"bot: {bot_text}"]
     if detached_doc(bot_log) and not bot_up:
-        m = hold_log.exists() and BOT_ENDED.search(hold_log.read_text(encoding="utf-8", errors="replace"))
-        ended = datetime.fromisoformat(m.group(1)).timestamp() if m else bot_log.stat().st_mtime  # else its last write
+        notes = BOT_ENDED.findall(hold_log.read_text(encoding="utf-8", errors="replace")) if hold_log.exists() else []
+        ended = datetime.fromisoformat(notes[-1]).timestamp() if notes else bot_log.stat().st_mtime  # else its last write
         out.append(f"bot ended at {time.strftime('%H:%M:%S', time.localtime(ended))} ({(now - ended) / 60:.0f} min ago); outcome lines:")
         lines = [l for l in bot_log.read_text(encoding="utf-8", errors="replace").splitlines() if OUTCOME.search(l)]
         out += [f"  {l}" for l in lines[-5:]] or ["  (none matched)"]
     out.append(f"done file: {'present' if done.exists() else 'absent'}")
-    if not hold_up:
+    if not detached_doc(hold_log):
+        nxt = f"nothing was started for task '{task.name}': check the --task name, else begin at step 1"
+    elif not hold_up:
         nxt = "hold ended: the emulator is released; read its result above, then check install/ and the game settings by hand"
+    elif "[queue] start" not in hold_log.read_text(encoding="utf-8", errors="replace"):
+        nxt = "step 1: still queued behind another task; keep waiting on hold.log, do not touch the emulator"
     elif not detached_doc(bot_log):
-        nxt = "no bot started: finish steps 1-6 (pre-flight, record, start the bot)"
+        nxt = "no bot started: finish steps 2-6 (pre-flight, record, start the bot)"
     elif bot_up:
         nxt = "step 6: the bot runs; wait with one Monitor on `status --log` of bot.log"
     elif not done.exists():
@@ -245,6 +249,7 @@ def main(argv=None) -> int:
     rs.add_argument("--task", required=True)
     a = ap.parse_args(argv)
     if a.cmd == "resume":
+        # not local_dir(): it would create the folder of a mistyped task
         print("\n".join(resume(main_checkout() / ".local" / "scratch" / a.task)))
         return 0
     if a.cmd == "status" and a.log:

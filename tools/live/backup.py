@@ -27,7 +27,7 @@ from pathlib import Path
 
 sys.path[0] = str(Path(__file__).resolve().parents[1])
 
-from live.queue import detached_running
+from live.queue import detached_running, pid_file
 from local_dir import local_dir, main_checkout
 
 RUNTIME = {"debug", "logs", "state", "cache"}
@@ -71,10 +71,10 @@ def hold(root: Path, dest: Path, done: Path, timeout: float, poll: float = 2.0, 
     seen, ended = False, None  # the bot was seen running; when it ended (monotonic)
     while not done.exists():
         if guard and running(guard):
-            seen, deadline = True, time.monotonic() + timeout  # the agent's own steps after the bot get the whole timeout
+            seen, ended, deadline = True, None, time.monotonic() + timeout  # a restarted bot re-arms the end note # the agent's own steps after the bot get the whole timeout
         elif time.monotonic() >= deadline:
             break
-        elif seen and ended is None:  # durable for `queue.py resume`: nobody may have been watching
+        elif (seen or guard and pid_file(guard).exists()) and ended is None:  # a bot gone within one poll still counts  # durable for `queue.py resume`: nobody may have been watching
             ended = time.monotonic()
             print(f"[hold] bot ended {datetime.now().isoformat(timespec='seconds')}", flush=True)
         if ended is not None and stop_profile and time.monotonic() >= ended + grace:
