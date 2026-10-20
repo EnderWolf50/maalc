@@ -241,12 +241,25 @@ def test_a_lit_button_that_became_another_is_handed_back_at_once(context, clock)
     assert len(button_taps(context)) == 1 and len(corner_taps(context)) == 2
 
 
-def test_a_press_that_did_not_take_is_handed_back_to_be_pressed_again(context, clock):
-    # The button lit on for EVENT_PRESS_TAPS taps: the press was lost, MirrorHub presses it again.
-    event_text(context, red_from=1)
+def test_a_label_read_empty_while_it_fades_is_no_other_button(context, clock):
+    # Read empty mid-fade, or before the press: handed back, MirrorHub would press the fading button again.
+    event_text(context, red_from=1, red_to=5, label_to=3)
     actions.Event().run(context, None)
-    assert len(button_taps(context)) == 1 and len(corner_taps(context)) == actions.EVENT_PRESS_TAPS
-    assert sum(clock) == pytest.approx(actions.EVENT_PRESS_TAPS * actions.EVENT_TAP_EVERY)
+    assert len(button_taps(context)) == 1 and len(corner_taps(context)) == 4  # the 5th screen, unlit, has no label
+    context.reset_mock()
+    event_text(context, red_from=1, red_to=4, label_to=1)
+    actions.Event().run(context, None)
+    assert len(button_taps(context)) == 1 and len(corner_taps(context)) == 3
+
+
+def test_a_press_that_did_not_take_is_handed_back_to_be_pressed_again(context, clock):
+    # The button lit on for EVENT_TAKE s: the press was lost, MirrorHub presses it again. Counted in time, not taps:
+    # a label OCR a lit screen (0.2 s here) slows the taps.
+    event_text(context, red_from=1)
+    inner = context.run_recognition.side_effect
+    context.run_recognition.side_effect = lambda *a, **k: actions.time.sleep(0.2) or inner(*a, **k)
+    actions.Event().run(context, None)
+    assert len(button_taps(context)) == 1 and len(corner_taps(context)) == 8  # 0.2 s each: 1.6 s >= EVENT_TAKE
 
 
 def bus_at(context, x, y, linked=()):

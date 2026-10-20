@@ -1941,7 +1941,7 @@ EVENT_TEXT_TAPS = 30
 # EVENT_READ_EVERY taps: live 2026-10-20, a screenshot and 3 OCRs after each tap made it one every 0.3-1.1 s whatever
 # the wait, and the text kept up at 0.15 s (no tap lost; the user's own taps 0.15 s).
 EVENT_TAP_EVERY, EVENT_READ_EVERY = 0.15, 3
-EVENT_PRESS_TAPS = round(1.5 / EVENT_TAP_EVERY)  # taps the button may stay lit after its press: 1.5 s, the wait for it to take before #188
+EVENT_TAKE = 1.5  # s a tap on an event page has to show
 EVENT_BUTTON_LABEL = [1040, 612, 190, 66]  # the Event node's roi: empty once the event page is gone
 EVENT_LIMIT = 180  # s one event may take before recovery L1 (AALC allows 300); a boss quiz of several rounds stays well under
 EVENT_GAP = 30  # s between two Event calls after which the next call is another event
@@ -1989,7 +1989,7 @@ class Event(CustomAction):
             tried.clear()
             checked.clear()
             tap(context, *EVENT_BUTTON, wait=0)
-            Event.advance(context, image, pressed=time.monotonic())
+            Event.advance(context, image, pressed_at=time.monotonic())
         elif has(text(context, image, CHECK_PROMPT), "Choose a character"):
             # One read per portrait: read as a row, neighbouring captions run together ("HighVery Low").
             captions = [(text(context, image, [x - 38, 605, 76, 24], only_rec=True), x) for x in EVENT_PORTRAIT_X]
@@ -2028,7 +2028,7 @@ class Event(CustomAction):
                 log(f"event: {options[i][0]!r} not found again in the list")
                 return True
             tap(context, CHOICE_X, y, wait=0)
-            if until(context, lambda im: not Event.panel_same(image, im), timeout=1.5) is None:
+            if until(context, lambda im: not Event.panel_same(image, im), timeout=EVENT_TAKE) is None:
                 log(f"event: {options[i][0]!r} did nothing: try another")
                 tried.add(options[i][0])
         else:
@@ -2037,17 +2037,20 @@ class Event(CustomAction):
         return True
 
     @staticmethod
-    def advance(context, image, pressed=None):
+    def advance(context, image, pressed_at=None):
         """Text running on (the button grey): taps on a dead corner show it line by line; keep tapping until there
         is something to act on, for MirrorHub's next look.
 
         A Choices page or a check prompt shows up to EVENT_READ_EVERY - 1 taps late: a tap on the dead corner picks nothing.
-        pressed: time.monotonic() of a tap on the lit button just now, image the screen it was tapped on (#188:
-        MirrorHub's look after it paused the taps 1.6-5.3 s). The button stays lit while the press fades out; the
-        first screen without it is read before the next tap (3 OCRs). Lit with another label (SKIP, then Continue),
-        it is the next button; lit with the same for EVENT_PRESS_TAPS taps, the press was lost.
+        pressed_at: time.monotonic() of a tap on the lit button just now, image the screen it was tapped on (#188:
+        MirrorHub's look after it paused the taps 1.6-5.3 s). The button stays lit while the press fades out, its
+        label read once a screen (1 OCR); the first screen without it is read before the next tap (3 OCRs). Lit with
+        another label read (SKIP, then Continue), it is the next button; lit EVENT_TAKE s on, the press was lost.
+        A label read empty or not at all is no other label: a press handed back while it fades would be pressed twice.
         """
-        last, fading = (0.0, None) if pressed is None else (pressed, compact(text(context, image, EVENT_BUTTON_LABEL)))
+        last, fading = 0.0, None
+        if pressed_at is not None:
+            last, fading = pressed_at, compact(text(context, image, EVENT_BUTTON_LABEL))
         for n in range(1, EVENT_TEXT_TAPS + 1):
             time.sleep(max(0.0, last + EVENT_TAP_EVERY - time.monotonic()))
             last = time.monotonic()
@@ -2056,21 +2059,25 @@ class Event(CustomAction):
             tap(context, *EVENT_NEUTRAL, wait=0)
             image = screen(context)
             if red_button(image):
-                if fading is None or n >= EVENT_PRESS_TAPS or compact(text(context, image, EVENT_BUTTON_LABEL)) != fading:
+                if fading is None or time.monotonic() - pressed_at >= EVENT_TAKE:
+                    break
+                label = compact(text(context, image, EVENT_BUTTON_LABEL))
+                if label and fading and label != fading:
                     break
                 continue
-            read, fading = n % EVENT_READ_EVERY == 0 or fading is not None, None
+            read = n % EVENT_READ_EVERY == 0 or fading is not None
+            fading = None
             if read and (not text(context, image, EVENT_BUTTON_LABEL) or any(
                     has(text(context, image, roi), k) for k, roi in (("Choices", CHOICES_HEADER), ("Choose a character", CHECK_PROMPT)))):
                 break
 
     @staticmethod
     def settle(context, before):
-        """Wait for a tap to show on screen, at most the 1.5 s it used to wait; MirrorHub looks again after.
+        """Wait for a tap to show on screen, at most EVENT_TAKE s; MirrorHub looks again after.
 
         Returns the screen that moved, None when the tap did nothing.
         """
-        return until(context, lambda im: moved(before, im), timeout=1.5, least=EVENT_LEAST)
+        return until(context, lambda im: moved(before, im), timeout=EVENT_TAKE, least=EVENT_LEAST)
 
     @staticmethod
     def panel_same(before, after):
