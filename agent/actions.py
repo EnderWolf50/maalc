@@ -2796,8 +2796,9 @@ class Shop(CustomAction):
             page_guard(context, "Shop")
             tap(context, x, y, wait=0)
             lines, name = Shop.tooltip(context, last)
-            page_guard(context, "Shop")  # a tooltip that names nothing may be no shop at all
             tap(context, *FUSE_NEUTRAL)
+            # A tooltip that names nothing may be no shop at all; checked once it is closed: a third-row cell's
+            # tooltip covers Leave, the Shop node's anchor (live 2026-10-21, the bot looped on the fuse page).
             page_guard(context, "Shop")
             tap(context, x, y, wait=1.2)  # out of the fusion again
             tap(context, *FUSE_NEUTRAL)
