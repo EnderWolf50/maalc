@@ -184,6 +184,7 @@ def test_card_type():
     assert r.card_type("Gain 55~83 Cost 33% chance to gain a random Tier 2~3 Bleed E.G.O Gift") == "Cost & Keyword Gift Chance"
     assert r.card_type("Gain additional 8~10 Starlight upon clearing the Mirror Dungeon") == "Starlight"
     assert r.card_type("") is None
+    assert r.card_type("Ｇａｉｎ ８~１０ Ｓｔａｒｌｉｇｈｔ") == "Starlight"  # #138: full-width as OCR may read it
 
 
 def test_pick_card_follows_the_team_order():
