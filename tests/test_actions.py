@@ -548,7 +548,7 @@ def test_a_held_finger_lifts_on_a_popup_over_the_battle(context, clock, shown):
 
 def test_a_held_finger_reads_no_text_while_the_pause_button_shows(context, clock):
     # #157: no OCR while a turn plays. The screens read by text (Victory, the wipe dialog, an event) hide the
-    # pause button (tests/screens: it scores under 0.5 on each, threshold 0.8); only template-gated popups are looked for.
+    # pause button (maa-tools test: BattlePause misses on each; it scores 0.34 at most, threshold 0.8).
     hits(context, "BattlePause")
     actions.hold_turn(context)
     looked = {c.args[0] for c in context.run_recognition.call_args_list}

@@ -1619,8 +1619,8 @@ HOLD_SPOT = (1, 1)
 HOLD_EVERY = 0.3  # s between looks, MirrorHub's rate_limit
 HOLD_LIMIT = 6  # s at most per hold (a turn without E.G.O plays ~6 s): then MirrorHub (its watchdog, recovery) looks; BattlePause holds a longer turn again
 # Screens that can follow a turn, besides the next turn: the finger lifts before their node acts.
-BATTLE_LEFT = ("Victory", "WipeDialog", "Event", "RetryPopup", "Connecting", "PopupButton", "ClaimPopup", "Loading")
-BATTLE_POPUPS = ("Connecting", "RetryPopup", "PopupButton")  # of those, the ones a template gates: no OCR while a turn plays (#157)
+BATTLE_POPUPS = ("Connecting", "RetryPopup", "PopupButton")  # template-gated: looked for while a turn plays, no OCR (#157)
+BATTLE_LEFT = BATTLE_POPUPS + ("Victory", "WipeDialog", "Event", "ClaimPopup", "Loading")
 
 
 def hold_turn(context):
