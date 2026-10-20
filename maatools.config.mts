@@ -16,8 +16,9 @@ const screens: [image: string, hits: string[]][] = [
   // is Confirmed; a one-button error box is closed by its one button. Both sit on the title, which reads through.
   ['TitleDownload.png', ['DownloadDialog', 'GoToMirrorEntry', 'NavTitle']],
   ['TitleErrorConfirm.png', ['PopupButton', 'GoToMirrorEntry', 'NavTitle']],
-  // Synthetic (#84), no live capture yet: the one-button notice window (MaintenanceNotice's, live) relabelled
-  // as a server error with a countdown Retry or a Try Again button. They put RetryPopup on every other screen.
+  // Synthetic (#84) over the title, live captures over the Mailbox below: the one-button notice window
+  // (MaintenanceNotice's, live) relabelled as a server error with a countdown Retry or a Try Again button.
+  // They put RetryPopup on every other screen.
   ['RetryCountdown.png', ['RetryPopup', 'GoToMirrorEntry', 'NavTitle']],
   ['TryAgain.png', ['RetryPopup', 'GoToMirrorEntry', 'NavTitle']],
   // Live 2026-10-20 (#84): the server error over the Mailbox after a request timed out, Close / Retry. Retry

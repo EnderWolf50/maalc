@@ -32,7 +32,8 @@ IDENTITY = {
 # A new fixture is found by a part of the screen that stays put: it must match Title.png's "Change Account"
 # button, MainWindow.png's "Copy" button or its "LV" label (mean grey difference below the tolerance), and
 # then needs the matching mask. Over the committed fixtures the LV label is exact (0) on the four screens
-# that show it and 56+ on every other one.
+# that show it undimmed and 55+ on every other one. A main window dimmed under a popup reads like any other
+# screen, so it is listed in IDENTITY by hand.
 BUTTONS = [("Title.png", (45, 638, 127, 34), 20, TITLE_EMAIL_SMALL), ("MainWindow.png", (255, 130, 80, 28), 5, UID_PLATE),
            ("MainWindow.png", (36, 647, 18, 14), 5, NAME_PLATE)]
 
