@@ -52,6 +52,8 @@ def test_and_needs_every_part_or_any_and_others_always_check():
     own_model = ocr([0, 0, 10, 10], "x")
     own_model["param"]["model"] = "other"
     assert ht.ocr_specs(own_model) is None
+    mixed = {"type": "And", "param": {"all_of": [{"recognition": own_model}, {"recognition": CLOSE_RECO}]}}
+    assert ht.ocr_specs(mixed) == ht.ocr_specs(CLOSE_RECO)
 
 
 def test_mask_keeps_only_the_rois():
