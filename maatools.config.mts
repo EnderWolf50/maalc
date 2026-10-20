@@ -118,7 +118,7 @@ const screens: [image: string, hits: string[]][] = [
   ['EventStory.png', ['Event']],
   ['EventChoices.png', ['Event']],
   ['EventChoicesUsed.png', ['Event']],  // floor 5 boss's second round of questions: the first answer greyed out (#34)
-  // #196 (live 2026-10-20): a drag lifts one card, lit orange; the list scrolled to its top, bottom and back.
+  // Live 2026-10-20 (#196): a drag lifts one card, lit orange; the list scrolled to its top, bottom and back.
   ['EventChoicesLitTop.png', ['Event']],
   ['EventChoicesLitBottom.png', ['Event']],
   ['EventChoicesScrolledBack.png', ['Event']],
