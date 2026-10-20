@@ -24,6 +24,8 @@ const screens: [image: string, hits: string[]][] = [
   // counts down "Retry 5" to "Retry 1" with a dark frame first, then reads "Retry".
   ['ServerErrorRetryCountdown.png', ['RetryPopup']],
   ['ServerErrorRetry.png', ['RetryPopup']],
+  // Live 2026-10-20 (#84): the network-unstable popup over the Mailbox with Wi-Fi off, Close only.
+  ['NetworkUnstable.png', ['PopupButton']],
   // The Parallel Superposition prompt after clearing floor 5 / 10 with the mode engaged (#85). Captured from the
   // game's own help sheet (the page behind it is the help text, not a map): the dialog is its live look, but where
   // it sits on screen is not confirmed. A Cancel / Confirm question, so PopupButton (one centred button) stays out.
