@@ -2545,11 +2545,18 @@ def test_hands_back_clears_the_runtime_cache_of_a_long_task():
         @actions.hands_back
         def run(self, context, argv):
             context.tasker.clear_cache.assert_not_called()  # after the action: its own calls still see the detail
+            if argv.gone:
+                raise actions.PageGone("the map")
             return True
 
     context = MagicMock()
-    nodes = lambda n: SimpleNamespace(task_detail=SimpleNamespace(node_id_list=list(range(n))))  # noqa: E731
+    def nodes(n, gone=False):
+        return SimpleNamespace(task_detail=SimpleNamespace(node_id_list=list(range(n))), gone=gone)
+
     assert Act().run(context, nodes(actions.CLEAR_CACHE_AFTER_NODES - 1))
     context.tasker.clear_cache.assert_not_called()
     assert Act().run(context, nodes(actions.CLEAR_CACHE_AFTER_NODES))
+    context.tasker.clear_cache.assert_called_once()
+    context.tasker.clear_cache.reset_mock()
+    assert Act().run(context, nodes(actions.CLEAR_CACHE_AFTER_NODES, gone=True))  # PageGone hands back too
     context.tasker.clear_cache.assert_called_once()

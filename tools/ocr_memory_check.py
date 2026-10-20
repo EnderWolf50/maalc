@@ -114,8 +114,8 @@ def main():
             return True
 
     resource.register_custom_action("Clear", Clear())
-    # both arms pay the same custom action
-    nothing = {"action": "Custom", "custom_action": "Clear", "pre_delay": 0, "post_delay": 0, "on_error": []}
+    # a run with --clear-nodes and one without pay the same custom action
+    noop_or_clear = {"action": "Custom", "custom_action": "Clear", "pre_delay": 0, "post_delay": 0, "on_error": []}
     controller = Screens()
     controller.post_connection().wait()
     tasker = Tasker()
@@ -126,12 +126,12 @@ def main():
     override = {"MirrorHub": {"timeout": 2**31 - 1, "on_error": []}}
     for entry in hub["next"]:
         name, jump_back = entry["name"], entry["jump_back"]
-        override[name] = {**nothing, "next": [] if jump_back else ["MirrorHub"]}
+        override[name] = {**noop_or_clear, "next": [] if jump_back else ["MirrorHub"]}
     # BattleHUD's own list runs too (the battle screen's popups and turn); its nodes go back through the jump back.
     if hud := resource.get_node_data("BattleHUD"):  # (a bundle from before #157 has none)
         override["BattleHUD"] = {"pre_delay": 0, "post_delay": 0}
         for entry in hud["next"]:
-            override[entry["name"]] = {**nothing, "next": []}
+            override[entry["name"]] = {**noop_or_clear, "next": []}
 
     # HubText's list: the screens it picks, then the tail; they too do nothing and come back.
     if text := resource.get_node_data("HubText"):  # (a bundle from before #157 has none)
@@ -139,7 +139,7 @@ def main():
         param = text["recognition"]["param"]["custom_recognition_param"]
         param = json.loads(param) if isinstance(param, str) else param
         for name in param["entries"] + param["tail"]:
-            override[name] = {**nothing, "next": []}
+            override[name] = {**noop_or_clear, "next": []}
 
     samples = []
     t0 = time.monotonic()
@@ -161,7 +161,8 @@ def main():
     tasker.post_task("MirrorHub", override)
     end = t0 + args.minutes * 60
     # tasker.running, not the job's status: a clear drops the task's id (running turns on with the first round)
-    while time.monotonic() < end and (tasker.running or not frames[0]) and sampler.is_alive():
+    while (time.monotonic() < end and sampler.is_alive()
+           and (tasker.running or not frames[0] and time.monotonic() - t0 < 30)):
         time.sleep(0.5)
     tasker.post_stop().wait()
     stop.set()
@@ -170,20 +171,18 @@ def main():
     if args.csv:
         args.csv.write_text("seconds,screens,private_mb,working_set_mb\n"
                             + "".join(f"{t:.1f},{f},{m:.1f},{ws:.1f}\n" for t, f, m, ws in samples))
-    last = samples[-1][0]
+    end_t = samples[-1][0]
     second = statistics.median([m for t, _, m, _ in samples if 60 <= t < 120] or [samples[-1][2]])
-    final = statistics.median([m for t, _, m, _ in samples if t >= last - 60])
+    final = statistics.median([m for t, _, m, _ in samples if t >= end_t - 60])
     grew = final - second
     print(f"screens {frames[0]}, start {samples[0][2]:.0f} MB, peak {max(s[2] for s in samples):.0f} MB, "
           f"median of minute 2 {second:.0f} MB, of the last minute {final:.0f} MB, growth {grew:.0f} MB")
     after5 = [(t, m) for t, _, m, _ in samples if t >= 300]
-    if len(after5) > 1:  # least squares
-        mean_t, mean_mb = statistics.fmean(t for t, _ in after5), statistics.fmean(m for _, m in after5)
-        slope = (sum((t - mean_t) * (m - mean_mb) for t, m in after5)
-                 / sum((t - mean_t) ** 2 for t, _ in after5) * 3600)
+    if len(after5) > 1:
+        slope = statistics.linear_regression(*zip(*after5)).slope * 3600
         print(f"slope after minute 5: {slope:.0f} MB/h")
     for span, times in (("first 5 min", [ms for t, ms in rounds if t < 300]),
-                        ("last 5 min", [ms for t, ms in rounds if t >= last - 300]),
+                        ("last 5 min", [ms for t, ms in rounds if t >= end_t - 300]),
                         ("all", [ms for _, ms in rounds])):
         if len(times) > 1:
             deciles = statistics.quantiles(times, n=10)
