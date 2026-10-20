@@ -2184,7 +2184,7 @@ def kept_gifts(team):
 # Vestiges, tier I-V in this order (#161; LocalizeLimbusCompany EN/EGOgift_MirrorDungeon.json, ids 9991-9995): the settings
 # schema lists them for keep_gifts, so the GUI and the agent share one list. They have no badge; their icons
 # (image/GiftSearch/<id>.png, from the game client like the Gift Search ones) differ only in the jar's fill: the tier
-# read off the cell tells them apart (read_cells matches an icon only where it agrees).
+# read off the cell tells them apart (read_cells).
 VESTIGES = SCHEMA["$defs"]["vestige"]["properties"]["name"]["enum"]
 VESTIGE_ICONS = [{"name": n, "keyword": "Keywordless", "tier": t, "id": 9990 + t} for t, n in enumerate(VESTIGES, 1)]
 
@@ -2205,21 +2205,23 @@ def cell_role(cell, team, page, avoid):
 
 def tooltip_use(lines, team, avoid):
     """What the shop may do with a gift known only by its tooltip's or panel's lines (its badge cut off, or its price):
-    "keep", "fuse" (fusion material it does not sell) or "sell" (either).
+    "keep", "fuse" (fusion material it does not sell), "sell" (either) or "avoid" (either, first: #90).
 
-    By the name first: an avoided gift (#90), a kept one (kept_gifts), a vestige (sell_vestiges), a keywordless gift
-    (data/gift_search.json's Keywordless tab), which the keywordless setting alone decides (the user, #161). Only
-    another gift is told by its text: kept when it names a kept keyword (kept_text, spec 03 section 12's rule).
+    By the name first: an avoided gift, a kept one (kept_gifts), a vestige (loose_vestiges), a keywordless gift
+    (data/keywordless_gifts.json, tiers I-V), which the keywordless setting alone decides (kept_keywords; the user,
+    #161). Only another gift is told by its text: kept when it names a kept keyword (kept_text, spec 03 section 12).
     """
     text = " ".join(lines)
     if rewards.gift_kind(text, team["keyword"], False, avoid) == "avoid":
-        return "sell"
+        return "avoid"
     if any(shop.protected(t, kept_gifts(team)) for t in lines):
         return "keep"
     if any(shop.protected(t, VESTIGES) for t in lines):
-        return "sell" if team.get("sell_vestiges", False) else "fuse"
-    if any(shop.protected(t, [g["en"] for g in gift_data() if g["keyword"] == "Keywordless"]) for t in lines):
-        return {"keep": "keep", "fuse": "fuse"}.get(team.get("keywordless", "keep"), "sell")
+        return "sell" if loose_vestiges(team, "sell") else "fuse"
+    if any(shop.protected(t, data("keywordless_gifts.json")["names"]) for t in lines):
+        if "Keywordless" in kept_keywords(team, "fuse"):
+            return "keep"
+        return "fuse" if "Keywordless" in kept_keywords(team, "sell") else "sell"
     return "keep" if kept_text(text, team) else "sell"
 
 
@@ -2303,7 +2305,9 @@ def read_cells(context, image, cells, page, gifts=()):
         for score, (bx, by) in template_hits(context, grid, f"GiftSearch/{g['id']}.png", ICON_KEEP):
             for c in out:
                 cx, cy = c["at"]
-                if abs(bx - cx) < 16 and abs(by - cy) < 16 and c["keyword"] in (None, g["keyword"]) and c["tier"] in (None, g["tier"]):
+                # A vestige only where the tier was read: the five jars match each other's cells too (VESTIGES).
+                tiers = (g["tier"],) if g["name"] in VESTIGES else (None, g["tier"])
+                if abs(bx - cx) < 16 and abs(by - cy) < 16 and c["keyword"] in (None, g["keyword"]) and c["tier"] in tiers:
                     c["gift"] = g["name"]
     for c in out:
         del c["at"]
@@ -2648,9 +2652,9 @@ class Shop(CustomAction):
             panel = " ".join(lines)
             price = number(text(context, image, SELL_PRICE))
             use = tooltip_use(lines, team, avoid)
-            if use == "sell" and price and not has(panel, "Select the"):
+            if use in ("sell", "avoid") and price and not has(panel, "Select the"):
                 gifts.append((i, price))
-                if rewards.gift_kind(panel, team["keyword"], False, avoid) == "avoid":
+                if use == "avoid":
                     avoided.add(i)
             elif use != "keep":
                 fuse_only.append(i)
@@ -2806,9 +2810,9 @@ class Shop(CustomAction):
         After a tap one slot more holds a material and the tapped cell's frame turns orange: the gift went in, and
         it is the one meant (the grid stays in place).
         """
-        image = screen(context)
-        if shop.placed(image, slots):
-            log(f"shop: {shop.placed(image, slots)} materials in before any tap: no fusion")
+        filled = shop.placed(screen(context), slots)
+        if filled:
+            log(f"shop: {filled} materials in before any tap: no fusion")
             return False
         for n, c in enumerate(cells, 1):
             page_guard(context, "Shop")

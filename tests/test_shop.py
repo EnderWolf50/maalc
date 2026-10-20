@@ -4,27 +4,29 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+from PIL import Image
 
 import shop as s
 
 # Grid crops of live 1280x720 captures (written by recovery.png: one IDAT, filter 0), and where each sat on screen.
 CROPS = Path(__file__).resolve().parent / "shop"
+SCREENS = Path(__file__).resolve().parent / "screens"
 CROP_AT = {
-    "fuse_spiderweb": (620, 236),  # live 2026-10-18 (maalc-probe rec/m3/fuse-140): Spiderweb Entangled in Red first
+    "fuse_spiderweb": (620, 236),  # live 2026-10-18 (probe capture rec/m3/fuse-140): Spiderweb Entangled in Red first
     "fuse": (620, 236),  # tests/screens/ShopFuse.png
     "fuse_recipe": (620, 236),  # tests/screens/ShopFuseRecipe.png (#103): the owned row sits at y 427
-    # The fuse page's slots and first two columns (#77): live 2026-10-18 (maalc-probe rec/m3/fuse-152), Spiderweb tapped
+    # The fuse page's slots and first two columns (#77): live 2026-10-18 (probe capture rec/m3/fuse-152), Spiderweb tapped
     # in; captures/97 (2 in, a tooltip over the grid), Super Shop captures/172 (cells 5 and 6 in) and 169 (empty).
     "fuse_one_in": (180, 165),
     "fuse_two_in": (180, 165),
     "fuse_super_two_in": (180, 165),
     "fuse_super_open": (180, 165),
-    "sell": (620, 200),  # live 2026-10-16 (maalc-probe s29/025_sell): the sell page of ShopFuse.png's gifts
+    "sell": (620, 200),  # live 2026-10-16 (probe capture s29/025_sell): the sell page of ShopFuse.png's gifts
     "offers": (560, 210),  # tests/screens/Shop.png
     "offers_super": (560, 210),  # tests/screens/SuperShop.png
-    "offers_red": (560, 210),  # live (maalc-probe s28/013): Fragment of Hellfire, a red gem, 400 orange
-    "offers_short": (560, 210),  # live 2026-10-18 (maalc-probe live-all/f/shopd_2590.6): 106 Cost, 3 offers tagged Not Enough Cost
-    # Map nodes (test_map_shop.py): 200 px around the node, live 2026-10-18 maalc-probe live2/f (map_f2_c, map_f1_c, map_f1_a)
+    "offers_red": (560, 210),  # live (probe capture s28/013): Fragment of Hellfire, a red gem, 400 orange
+    "offers_short": (560, 210),  # live 2026-10-18 (probe capture live-all/f/shopd_2590.6): 106 Cost, 3 offers tagged Not Enough Cost
+    # Map nodes (test_map_shop.py): 200 px around the node, live 2026-10-18 probe capture live2/f (map_f2_c, map_f1_c, map_f1_a)
     "map_shop_cyan": (230, 45),
     "map_shop_orange": (230, 45),
     "map_event_orange": (226, 44),
@@ -269,6 +271,17 @@ def test_pick_fusion_puts_an_avoided_gift_in_first():
     materials = [("a", 2), ("b", 2), ("c", 2), ("w", 2)]
     assert s.pick_fusion(materials, 3, SHOP, POINTS) == [(["a", "b", "c"], 3)]
     assert s.pick_fusion(materials, 3, SHOP, POINTS, first={"w"}) == [(["a", "b", "w"], 3)]
+
+
+@pytest.mark.parametrize("name, placed, picked", [("ShopFuse", 0, []), ("ShopFuseRecipe", 3, [0])])
+def test_the_fuse_read_back_on_the_whole_fuse_pages_of_tests_screens(name, placed, picked):
+    # CODING_STANDARDS' sweep of fuse_slots, placed and picked: no false hit. ShopFuseRecipe really holds 3 materials
+    # in its slots, and its Fusion Available cell (where FUSE_CELLS' cell 0 sits) is framed orange.
+    image = np.asarray(Image.open(SCREENS / f"{name}.png").convert("RGB"))[:, :, ::-1]
+    cells = [(678 + 96 * c, y) for y in (294, 385, 477) for c in range(5)]
+    assert s.fuse_slots(image) == 3
+    assert s.placed(image, 3) == placed
+    assert [i for i, (x, y) in enumerate(cells) if s.picked(image, x, y, 493)] == picked
 
 
 @pytest.mark.parametrize("name, slots, placed, picked", [

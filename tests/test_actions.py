@@ -562,15 +562,6 @@ def test_a_fusion_taps_only_the_materials_its_cells_show(context, monkeypatch):
     assert actions.PAGE_OK in taps
 
 
-def tooltips(monkeypatch, names):
-    """Shop.tooltip reads names[cell] for the FUSE_CELLS cell tapped last (no name for the others)."""
-    def tooltip(context, last):
-        taps = [c.args for c in context.tasker.controller.post_click.call_args_list if c.args in actions.FUSE_CELLS]
-        name = names.get(actions.FUSE_CELLS.index(taps[-1])) if taps else None
-        return ([("E.G.O GIFT", (1030, 305, 100, 25)), (name, (1010, 340, 180, 22))], name) if name else ([], None)
-    monkeypatch.setattr(actions.Shop, "tooltip", staticmethod(tooltip))
-
-
 @pytest.mark.parametrize("tier, vestige", [(1, "Dark Vestige"), (2, "Faint Vestige"), (3, "Twinkling Vestige"),
                                            (4, "Brilliant Vestige")])
 def test_vestiges_are_fused_though_keywordless_gifts_are_kept(context, monkeypatch, tier, vestige):
@@ -750,12 +741,14 @@ def test_a_sale_counts_the_fusion_materials_it_may_not_sell(context, monkeypatch
     assert taps == []
 
 
+@pytest.mark.parametrize("name", ["Grey Coat", "Faith"])
 @pytest.mark.parametrize("keywordless, sold", [("keep", False), ("fuse", False), ("fuse_or_sell", True)])
-def test_a_cut_off_cell_naming_a_keywordless_gift_follows_the_setting_not_its_text(context, monkeypatch, keywordless, sold):
+def test_a_cut_off_cell_naming_a_keywordless_gift_follows_the_setting_not_its_text(context, monkeypatch, keywordless, sold, name):
     # #161, the user: a keywordless gift's text never keeps it, though it says Burn (the main keyword). The cell's
-    # badge is cut off, so its panel is read for the name: Grey Coat is keywordless (data/gift_search.json).
+    # badge is cut off, so its panel is read for the name: Grey Coat (II, a Gift Search gift) and Faith (IV, not
+    # one) are keywordless (data/keywordless_gifts.json).
     taps = sale_taps(context, monkeypatch, {"keywordless": keywordless}, [90, 60, 70, 95], ("Bleed", None),
-                     ("Tremor", None), ("Pierce", None), (None, None, 2), panel=["Grey Coat", "Inflict 2 Burn"])
+                     ("Tremor", None), ("Pierce", None), (None, None, 2), panel=[name, "Inflict 2 Burn"])
     assert taps.count(actions.SELL_CELLS[3]) == 1 + int(sold)  # its panel, then the sale
 
 

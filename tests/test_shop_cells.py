@@ -31,7 +31,16 @@ CASES = {
     "offers_super": ("offers_super", "OFFER_CELLS", "offer", []),
     "fuse_no_gossypium": ("fuse", "FUSE_CELLS", "fuse", [], False),
     "sell_no_gossypium": ("sell", "SELL_CELLS", "sell", [], False),
+    "fuse_tier_unread": ("fuse", "FUSE_CELLS", "fuse", []),  # cell 0's numerals dimmed (without_tier)
 }
+
+
+def without_tier(image, x, y):
+    """image with the yellow tier numerals of the cell at (x, y) dimmed: its tier reads None."""
+    box = image[y - 44:y - 5, x - 44:x - 14]
+    b, g, r = (box[:, :, i].astype(int) for i in range(3))
+    box[(r > 200) & (g > 140) & (b < 90)] = 40
+    return image
 
 
 def child():
@@ -71,7 +80,10 @@ def child():
                     team = {"gift_search": {"gifts": gifts}, "allow_white_gossypium": (allow or [True])[0]}
                     # The vestiges' icons on every case (#161): on the offers too, where none is, as a sweep for
                     # false hits.
-                    found = actions.read_cells(context, screen_with(crop), getattr(actions, cells), page,
+                    image = screen_with(crop)
+                    if case == "fuse_tier_unread":
+                        image = without_tier(image, *actions.FUSE_CELLS[0])
+                    found = actions.read_cells(context, image, getattr(actions, cells), page,
                                                actions.kept_icons(team) + actions.avoided_gifts(team) + actions.VESTIGE_ICONS)
                     out[case] = [(c["tier"], c["keyword"], c["gift"]) for c in found]
             except Exception:  # MaaFramework swallows it: hand it to the test
@@ -127,6 +139,12 @@ def test_vestiges_are_told_by_their_icon_and_tier(read):
     # cell decides which; each scores 0.80-0.90 on its own. No other cell of these captures matches one (0.38 at most).
     assert [c[2] for c in read["fuse"][:2]] == ["Faint Vestige", "Dark Vestige"]
     assert not [c for case in ("fuse_spiderweb", "offers", "offers_super") for c in read[case] if c[2] and "Vestige" in c[2]]
+
+
+def test_a_vestige_whose_tier_is_unread_is_not_named(read):
+    # #161: every vestige's icon matches the Faint Vestige's cell (0.69-0.80); with no tier read none is taken.
+    assert read["fuse_tier_unread"][0] == (None, "Keywordless", None)
+    assert read["fuse_tier_unread"][1] == (1, "Keywordless", "Dark Vestige")
 
 
 def test_white_gossypium_is_told_by_its_icon_for_a_team_that_does_not_hold_it(read):
