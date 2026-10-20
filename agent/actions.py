@@ -673,6 +673,7 @@ class GiftGet(CustomAction):
 
 
 # E.G.O Gift Search page (live 2026-10-16, 1.117.0). Tabs left to right, 62 px apart.
+GRID_SWITCH_TIMEOUT = 5  # s a tab's gifts may take to show; they change in well under that, an empty tab pays it all
 SEARCH_TABS = ["Burn", "Bleed", "Tremor", "Rupture", "Sinking", "Poise", "Charge", "Slash", "Pierce", "Blunt", "Keywordless"]
 SEARCH_COUNT = [1010, 550, 190, 50]  # "Select 0/3"
 SEARCH_OWNED = ([935, 26, 120, 38], [1065, 26, 80, 38])  # "1315-270" and "1045"
@@ -809,11 +810,16 @@ class GiftSearch(CustomAction):
     def open_tab(context, keyword):
         """Open keyword's tab at its top: switching tabs resets the scroll (live 2026-10-16), so via a neighbour."""
         i = SEARCH_TABS.index(keyword)
-        for x in (113 + 62 * (i + 1 if i == 0 else i - 1), 113 + 62 * i):
+        for x, attempts in ((113 + 62 * (i + 1 if i == 0 else i - 1), 1), (113 + 62 * i, 2)):
             # Live (run13): the tab lights up at once, its gifts a few looks later; a tap sent before then was
             # lost, or the grid read showed the last tab's gifts. Wait for the gifts to change, then the fade.
+            # Live 2026-10-20 (#190): Keywordless's grid took over 1.6 s, so a 1 s wait read Blunt's gifts.
             before = screen(context)
-            tap_then(context, x, 190, lambda im: grid_moved(before, im), timeout=1)
+            for _ in range(attempts):  # the wanted tab's tap may be lost: the grid then never moves, so tap it again
+                if tap_then(context, x, 190, lambda im: grid_moved(before, im), timeout=GRID_SWITCH_TIMEOUT) is not None:
+                    break
+            else:
+                log(f"gift search: the grid did not change after tapping the tab at x={x}")
             still(context, timeout=1)
 
     @staticmethod
