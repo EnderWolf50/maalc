@@ -1961,7 +1961,7 @@ class Event(CustomAction):
             for n in range(1, EVENT_TEXT_TAPS + 1):
                 time.sleep(max(0.0, last + EVENT_TAP_EVERY - time.monotonic()))
                 last = time.monotonic()
-                if n % EVENT_READ_EVERY == 1:  # with the page's read (#118): an OCR a tap would undo the 0.15 s
+                if (n - 1) % EVENT_READ_EVERY == 0:  # on the last read's screenshot (#118, ADR 0007): an OCR a tap would undo the 0.15 s
                     page_guard(context, "Event", image=image)
                 tap(context, *EVENT_NEUTRAL, wait=0)
                 image = screen(context)
@@ -2199,6 +2199,12 @@ SHOP_PORTRAIT_X = [98 + 77 * i for i in range(12)]  # the shop's sinner bar (ste
 BOTTOM_RIGHT = (1130, 647)  # Leave on the shop; Return, Select or Leave on the heal pages
 OUTSIDE = (40, 400)  # left of every shop dialog, on nothing
 LEAVE_DIALOG, LEAVE_CONFIRM, LEAVE_CANCEL = [440, 320, 400, 45], (765, 493), (515, 493)
+
+
+def tooltip_head(lines):
+    """The box of a gift tooltip's "E.G.O GIFT" heading among OCR lines [(text, box)], or None. Its end, not a part:
+    the grid's "E.G.O Gifts Owned" label sits in FUSE_TOOLTIP too."""
+    return next((b for t, b in lines if compact(t).endswith(TOOLTIP_HEAD)), None)
 
 
 def cost_in(context, image, roi=SHOP_COST):
@@ -2442,7 +2448,8 @@ class Shop(CustomAction):
                 return True
             # The dialog slides down; Confirm takes no tap before it stops.
             page_guard(context, "Shop", image=image)
-            if tap_shown(context, *BOTTOM_RIGHT, shows(context, LEAVE_DIALOG, "Leave the shop"), timeout=1.5) is not None:
+            if tap_shown(context, *BOTTOM_RIGHT, lambda im: has(text(context, im, LEAVE_DIALOG), "Leave the shop"),
+                         timeout=1.5) is not None:
                 log(f"shop: leave with {read_cost(context)} Cost")
                 # Up to the old 2 s for the map: MirrorHub must not find the shop fading out and start a new visit.
                 tap_then(context, *LEAVE_CONFIRM, lambda im: Shop.on_map(context, im), timeout=2)
@@ -2453,7 +2460,7 @@ class Shop(CustomAction):
     @staticmethod
     def on_map(context, image):
         """Whether image shows the map (or its node panel): the shop was left."""
-        return bool(seen(context, image, "MirrorMap") or seen(context, image, "MapNodePanel"))
+        return on_page(context, image, "MirrorMap", "MapNodePanel") is not None
 
     @staticmethod
     def to_main(context):
@@ -2479,7 +2486,7 @@ class Shop(CustomAction):
             elif has(title, "Gift Info"):  # a bought offer tapped: only a tap outside it closes it
                 at = OUTSIDE
             elif has(title, "E.G.O Gift"):  # the fuse or sell page; a tooltip may cover Close
-                if has(text(context, image, FUSE_TOOLTIP), TOOLTIP_HEAD):
+                if tooltip_head(ocr(context, image, FUSE_TOOLTIP)):
                     tap_settled(context, *FUSE_NEUTRAL, timeout=1.0)  # it fades: Close would land on it
                 at = PAGE_CLOSE
             elif has(text(context, image, LEAVE_DIALOG), "Leave the shop"):
@@ -2563,6 +2570,7 @@ class Shop(CustomAction):
                                          fees["normal"], fees["keyword"], data("shop.yaml")["refresh_margin"])
             if not choice:
                 return acted
+            page_guard(context, "Shop")
             if choice == "keyword":
                 tap_settled(context, *REFRESH[choice][0])  # the keyword dialog zooms in
                 if not tap_keyword(context, keyword):
@@ -2572,7 +2580,6 @@ class Shop(CustomAction):
                 page_guard(context, "Shop")
                 tap(context, *KEYWORD_REFRESH, wait=0)
             else:
-                page_guard(context, "Shop")
                 tap(context, *REFRESH[choice][0], wait=0)
             # The Cost drops, then the offers reload (CONNECTING): read them once both are done.
             until(context, lambda im: cost_in(context, im) not in (None, cost), timeout=3)
@@ -2764,7 +2771,7 @@ class Shop(CustomAction):
         for _ in range(8):
             time.sleep(0.2)
             lines = [(t, b) for t, b in ocr(context, screen(context), FUSE_TOOLTIP) if not has(t, "Owned")]
-            head = next((b for t, b in lines if compact(t).endswith(TOOLTIP_HEAD)), None)
+            head = tooltip_head(lines)
             if head:
                 name = min(((b[1] - head[1], t) for t, b in lines if b[1] > head[1] + 10 and re.search(r"[a-z]{3}", t)),
                            default=(0, "?"))[1]

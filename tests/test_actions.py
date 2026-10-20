@@ -891,9 +891,11 @@ def test_closing_the_fuse_page_taps_a_tooltip_away_only_when_one_shows(context, 
     def reads_now(taps):
         if actions.PAGE_CLOSE in taps:  # the main shop: its Refresh fee
             return {tuple(actions.REFRESH["normal"][1]): [("30", (970, 145, 40, 20))]}
-        page = {tuple(actions.DIALOG_TITLE): [("Fuse E.G.O Gift", (500, 90, 200, 40))]}
+        # The grid's "E.G.O Gifts Owned" label is in the tooltip's roi too: no tooltip heading (review of the merge).
+        page = {tuple(actions.DIALOG_TITLE): [("Fuse E.G.O Gift", (500, 90, 200, 40))],
+                tuple(actions.FUSE_TOOLTIP): [("E.G.O Gifts Owned", (640, 215, 180, 25))]}
         if tooltip and actions.FUSE_NEUTRAL not in taps:
-            page[tuple(actions.FUSE_TOOLTIP)] = [("E.G.O GIFT", (1030, 305, 100, 25))]
+            page[tuple(actions.FUSE_TOOLTIP)] += [("E.G.O GIFT", (1030, 305, 100, 25))]
         return page
     taps = live_shop(context, reads_now)
     assert actions.Shop.to_main(context)
@@ -913,6 +915,32 @@ def test_a_keyword_refresh_waits_for_the_new_cost_not_a_fixed_time(context, cloc
     assert actions.Shop.buy(context, {"keyword": "Burn", "reserve_cost": 0, "shop_refresh_limit": 1}, visit)
     assert visit["refreshes"] == 1 and taps == [actions.REFRESH["keyword"][0], (330, 360), actions.KEYWORD_REFRESH]
     assert sum(clock) < 1.5
+
+
+def test_a_keyword_refresh_checks_the_page_before_its_first_tap(context, clock, monkeypatch):
+    # #118 (ADR 0007): the shop gone after its Cost was read, the refresh's first tap does not go out.
+    def gone(context, home, image=None):
+        raise actions.PageGone(home)
+    monkeypatch.setattr(actions, "page_guard", gone)
+    taps = live_shop(context, lambda taps: {tuple(actions.SHOP_COST): [("500", (560, 120, 60, 30))],
+                                            tuple(actions.REFRESH["normal"][1]): [("100", (970, 145, 40, 20))],
+                                            tuple(actions.REFRESH["keyword"][1]): [("90", (1110, 145, 40, 20))]})
+    visit = {"wanted": None, "sold": False, "refreshes": 0}
+    with pytest.raises(actions.PageGone):
+        actions.Shop.buy(context, {"keyword": "Burn", "reserve_cost": 0, "shop_refresh_limit": 1}, visit)
+    assert taps == []
+
+
+def test_the_leave_dialog_is_read_with_its_spaces_dropped(context, clock, monkeypatch):
+    # #160: OCR drops spaces ("LEAVE THESHOP?"); has() compacts both sides, as main's Leave does.
+    actions.RUN["team"] = {"heal": "none", "keyword": "Burn", "reserve_cost": 0}
+    monkeypatch.setattr(actions.Shop, "to_main", staticmethod(lambda context: True))
+    for step in ("sell", "buy", "fuse"):
+        monkeypatch.setattr(actions.Shop, step, staticmethod(lambda *a: False))
+    taps = live_shop(context, lambda taps: {tuple(actions.LEAVE_DIALOG): [("LEAVE THESHOP?", (480, 325, 300, 35))]}
+                     if taps else {})
+    assert actions.Shop().run(context, argv())
+    assert actions.LEAVE_CONFIRM in taps and actions.STUCK["flag"] is None
 
 
 GOSSYPIUM = "White Gossypium"
