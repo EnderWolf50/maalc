@@ -58,7 +58,7 @@
 - L1 是 Android 的返回鍵，之後回到 hub，全域彈窗排在最前面。（#31）
 - L2 只在地圖頁做得到：Dungeon Progress 面板（L1 的返回鍵已經打開，或點右上齒輪）→ `To Window` → `Pause Exploration` 對話框（`Save your progress and return to the Main Menu?`）按 Confirm → 主畫面，之後由 hub 的導航回到入口頁，入口頁的暫停中的局按 Enter → Resume 對話框按 Resume。（#31）
 - L3 重啟遊戲後最多等 180 秒標題畫面出現（`timeout` 要放在等 `next` 的 `RecoverStartApp` 上；原本放在 `RecoverTitle` 上沒被讀，離線實測重啟後 33.5 秒沒出現標題就算 L3 失敗，#86），之後同樣由 hub 導航回入口頁並 Resume。標題畫面也可能蓋著對話框，hub 的 `DownloadDialog` 與 `PopupButton` 處理它們：資料下載對話框（`Downloading N MB of data`，Close/Confirm）按 Confirm（`auto_download` 關時停止），並讓卡住偵測暫停 3 分鐘，期間逾時的 `Recover` 只等不升級；之後的下載進度畫面（`Downloading`）是等待畫面，在動就一直等、完全不動 80 秒才算卡住。原本暫停 30 分鐘、進度畫面認不得：實機 2026-10-21 下載 17.77 GB 約 32 分鐘，暫停在下載完之前就到期。確認下載與下載進度畫面都讓這一層的時間上限重新起算：下載期間遊戲不在 bot 手上，32 分鐘會讓它在下載中途觸發 L3。使用者條款（`UserAgreement`）勾兩格再 Confirm；只有一個按鈕的錯誤框按那個按鈕。遊戲內的更新通知（`UpdateDialog`）按下後由 `AcceptUpdate` 直接執行 `RecoverL3` 重啟遊戲，不經 `Ladder`、不算進恢復次數（每次啟動 bot 最多 2 次，再來就停止），之後同樣由 hub 確認下載、導航回入口頁並 Resume。（#31、#85、#86）
-- 單場戰鬥的計時從該場第一個回合開始，打贏、全滅或恢復之後重新計算。每層超時每層最多觸發一次；Resume 接手、不是 bot 自己開的局不計時。（#31、#66）
+- 單場戰鬥的計時從該場第一個回合開始，打贏、全滅或恢復之後重新計算。每層超時每層最多觸發一次（下載讓時間重新起算之後，可以再觸發一次）；Resume 接手、不是 bot 自己開的局不計時。（#31、#66）
 - 每層而不是整局計時（#66）：#34 驗收的兩局困難局花了約 80 與 107 分鐘，全程有進展（每場戰鬥 3–7 分鐘、每層約 10–25 分鐘），舊的整局 60 分鐘把它們打斷。每層重新計時，持續進到下一層的局就不會被打斷；45 分鐘約是實機最慢一層的 2 倍。等回到地圖再處理，是因為 L2 只在地圖頁做得到：戰鬥中觸發時 L2 失敗、升到 L3 重啟遊戲，那場戰鬥要從編隊重來。
 - 實機（2026-10-16，1.117.0）：地圖頁按返回鍵會打開 Dungeon Progress 面板，hub 的 `ProgressPanel` 按 Continue 關閉它。戰鬥中強制關閉遊戲，L3 重啟、Resume 後回到地圖頁，Bus 停在那一場戰鬥的節點上，再進去時戰鬥從頭開始（編隊頁重來）。重啟到標題畫面約 20 秒，不需要下載資料。（實機：tests/screens/ProgressPanel.png、PauseExploration.png、ResumeDialog.png）
 
