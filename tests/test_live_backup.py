@@ -1,5 +1,6 @@
 import importlib.util
 import threading
+import time
 from pathlib import Path
 
 spec = importlib.util.spec_from_file_location("backup", Path(__file__).resolve().parent.parent / "tools/live/backup.py")
@@ -34,4 +35,20 @@ def test_hold_waits_for_the_done_file_then_verifies(tmp_path, capsys):
 def test_hold_gives_up_at_the_timeout(tmp_path, capsys):
     (tmp_path / "install").mkdir()
     assert bk.hold(tmp_path / "install", tmp_path / "bak", tmp_path / "never", timeout=0.1, poll=0.02) == 0
+    assert "timed out" in capsys.readouterr().out
+
+
+def test_hold_keeps_the_emulator_while_the_guarded_bot_runs_and_a_timeout_after_it(tmp_path, capsys):
+    (tmp_path / "install").mkdir()
+    ended = []
+    checks = iter([True] * 40)  # the bot runs for 40 polls (0.4 s or more), past the timeout, then ends
+
+    def running(_log):
+        if (r := next(checks, False)) is False and not ended:
+            ended.append(time.monotonic())
+        return r
+
+    assert bk.hold(tmp_path / "install", tmp_path / "bak", tmp_path / "never", timeout=0.3, poll=0.01,
+                   guard=tmp_path / "bot.log", running=running) == 0
+    assert time.monotonic() - ended[0] >= 0.25  # the timeout ran again from the bot's end
     assert "timed out" in capsys.readouterr().out

@@ -1,6 +1,7 @@
 import importlib.util
 import json
 import os
+import signal
 import subprocess
 import sys
 import threading
@@ -97,3 +98,68 @@ def test_run_writes_the_start_time_of_its_own_process_into_the_ticket(tmp_path):
     assert seen == {"pid": os.getpid(), "start": lq.started(os.getpid())}
     assert list(tmp_path.glob("*.ticket")) == []
 
+
+QUEUE_PY = Path(__file__).resolve().parent.parent / "tools/live/queue.py"
+HOLDER = """import importlib.util, sys
+from pathlib import Path
+spec = importlib.util.spec_from_file_location("lq", sys.argv[1])
+lq = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(lq)
+wait = "import os, time, sys\\nwhile not os.path.exists(sys.argv[1]): time.sleep(0.05)"
+sys.exit(lq.run(Path(sys.argv[2]), "holder", [sys.executable, "-c", wait, sys.argv[3]], poll=0.05))
+"""
+# the agent harness's background command: it detaches the holder, then stays until the harness kills its tree
+LAUNCHER = """import subprocess, sys, time
+subprocess.run([sys.executable, *sys.argv[1:]], check=True)
+time.sleep(120)
+"""
+
+
+def wait_for(cond, timeout=15.0):
+    deadline = time.monotonic() + timeout
+    while not cond():
+        assert time.monotonic() < deadline, "timed out"
+        time.sleep(0.05)
+
+
+def kill_tree(p: subprocess.Popen) -> None:
+    if sys.platform == "win32":
+        subprocess.run(["taskkill", "/T", "/F", "/PID", str(p.pid)], capture_output=True)
+    else:
+        os.killpg(p.pid, signal.SIGKILL)  # the launcher leads its own group, as a harness's shell would
+    p.wait(10)
+
+
+def test_a_detached_holder_survives_a_tree_kill_of_its_launcher_and_keeps_the_resource(tmp_path):
+    # POSIX: fails without detach's own session. Windows: the exited `detach` already cuts the tree taskkill
+    # walks; leaving the harness's job (CREATE_BREAKAWAY_FROM_JOB) was checked live, not here.
+    qdir, done, log = tmp_path / "q", tmp_path / "done", tmp_path / "hold.log"
+    (tmp_path / "holder.py").write_text(HOLDER)
+    (tmp_path / "launcher.py").write_text(LAUNCHER)
+    launcher = subprocess.Popen([sys.executable, str(tmp_path / "launcher.py"), str(QUEUE_PY), "detach", "--log", str(log), "--",
+                                 sys.executable, str(tmp_path / "holder.py"), str(QUEUE_PY), str(qdir), str(done)],
+                                start_new_session=sys.platform != "win32")
+    try:
+        wait_for(lambda: log.exists() and "[queue] start holder" in log.read_text())
+        kill_tree(launcher)
+        time.sleep(0.5)
+        assert [line.split(" (")[0] for line in lq.status(qdir)] == ["RUNNING holder"]
+        assert lq.detached_status(log)[0]
+    finally:
+        done.touch()
+    wait_for(lambda: not lq.detached_status(log)[0])
+    assert lq.status(qdir) == []
+
+
+def test_detached_status_tells_running_from_ended(tmp_path):
+    log = tmp_path / "x.log"
+    assert lq.detached_status(log) == (False, f"nothing was started with --log {log}")
+    lq.pid_file(log).write_text('{"pid": 1')  # detach is still writing it
+    assert lq.detached_status(log)[0] is False and not lq.detached_running(log)
+    lq.pid_file(log).write_text(json.dumps({"pid": os.getpid(), "start": lq.started(os.getpid()), "cmd": "me"}))
+    assert lq.detached_status(log) == (True, f"running pid {os.getpid()}: me") and lq.detached_running(log)
+    lq.pid_file(log).write_text(json.dumps({"pid": dead_pid(), "start": None, "cmd": "gone"}))
+    log.write_text("first\nlast line\n")
+    running, text = lq.detached_status(log)
+    assert not running and text.startswith("ended pid ") and text.endswith(": last line")
+    assert not lq.detached_running(log)
