@@ -118,6 +118,10 @@ const screens: [image: string, hits: string[]][] = [
   ['EventStory.png', ['Event']],
   ['EventChoices.png', ['Event']],
   ['EventChoicesUsed.png', ['Event']],  // floor 5 boss's second round of questions: the first answer greyed out (#34)
+  // Live 2026-10-20 (#196): a drag lifts one card, lit orange; the list scrolled to its top, bottom and back.
+  ['EventChoicesLitTop.png', ['Event']],
+  ['EventChoicesLitBottom.png', ['Event']],
+  ['EventChoicesScrolledBack.png', ['Event']],
   ['EventCheck.png', ['Event']],
   ['EventResult.png', ['Event']],
   // Shop: Leave stays readable under the shop's own dialogs and pages; the heal page has Return instead.
