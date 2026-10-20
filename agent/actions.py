@@ -158,8 +158,10 @@ def clear_long_task_cache(context, argv):
     """Clear MaaFramework's runtime cache once the task has CLEAR_CACHE_AFTER_NODES nodes (#176).
 
     The cache keeps every node's and recognition's detail until clear_cache, and a whole dungeon run is one task.
-    Only an action may clear it: the clear drops the task's own detail too, custom recognitions miss without it,
-    and the end of the action's node writes it back.
+    Only the end of an action may clear it: the clear drops the task's own detail too, and without it every custom
+    recognition and action of the task misses, including those the action's own run_recognition and run_task reach
+    (they share the task's id); the end of the action's node writes it back right after. A hands_back action run
+    inside a run_task would leave the rest of that subtask without it; none is (RecoverL1-3 have no custom node).
     """
     detail = getattr(argv, "task_detail", None)  # (the tests' argv has none)
     if detail and len(detail.node_id_list) >= CLEAR_CACHE_AFTER_NODES:
@@ -169,16 +171,17 @@ def clear_long_task_cache(context, argv):
 def hands_back(run):
     """An action's run(): PageGone ends it with True, for MirrorHub to look at the screen now up (#118).
 
-    It clears the runtime cache of a long task first (clear_long_task_cache).
+    It then clears the runtime cache of a long task (clear_long_task_cache).
     """
     @functools.wraps(run)
     def wrapped(self, context, argv):
-        clear_long_task_cache(context, argv)
         try:
             return run(self, context, argv)
         except PageGone as e:
             log(f"{type(self).__name__}: {e} is gone: back to MirrorHub")
             return True
+        finally:
+            clear_long_task_cache(context, argv)
     return wrapped
 
 

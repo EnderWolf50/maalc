@@ -2544,6 +2544,7 @@ def test_hands_back_clears_the_runtime_cache_of_a_long_task():
     class Act:
         @actions.hands_back
         def run(self, context, argv):
+            context.tasker.clear_cache.assert_not_called()  # after the action: its own calls still see the detail
             return True
 
     context = MagicMock()

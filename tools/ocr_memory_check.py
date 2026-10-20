@@ -76,6 +76,8 @@ def main():
     rounds = []  # (seconds, round time in ms)
 
     class Screens(CustomController):
+        last = None  # the previous screencap
+
         def connect(self):
             return True
 
@@ -84,7 +86,7 @@ def main():
 
         def screencap(self):
             now = time.monotonic()
-            if frames[0]:
+            if self.last is not None:
                 rounds.append((now - t0, (now - self.last) * 1000))
             self.last = now
             frames[0] += 1
@@ -156,9 +158,10 @@ def main():
 
     sampler = threading.Thread(target=sample)
     sampler.start()
-    job = tasker.post_task("MirrorHub", override)
+    tasker.post_task("MirrorHub", override)
     end = t0 + args.minutes * 60
-    while time.monotonic() < end and not job.done and sampler.is_alive():
+    # tasker.running, not the job's status: a clear drops the task's id (running turns on with the first round)
+    while time.monotonic() < end and (tasker.running or not frames[0]) and sampler.is_alive():
         time.sleep(0.5)
     tasker.post_stop().wait()
     stop.set()
@@ -173,16 +176,18 @@ def main():
     grew = final - second
     print(f"screens {frames[0]}, start {samples[0][2]:.0f} MB, peak {max(s[2] for s in samples):.0f} MB, "
           f"median of minute 2 {second:.0f} MB, of the last minute {final:.0f} MB, growth {grew:.0f} MB")
-    late = [(t, m) for t, _, m, _ in samples if t >= 300]
-    if len(late) > 1:
-        mt, mm = statistics.fmean(t for t, _ in late), statistics.fmean(m for _, m in late)
-        slope = sum((t - mt) * (m - mm) for t, m in late) / sum((t - mt) ** 2 for t, _ in late) * 3600
+    after5 = [(t, m) for t, _, m, _ in samples if t >= 300]
+    if len(after5) > 1:  # least squares
+        mean_t, mean_mb = statistics.fmean(t for t, _ in after5), statistics.fmean(m for _, m in after5)
+        slope = (sum((t - mean_t) * (m - mean_mb) for t, m in after5)
+                 / sum((t - mean_t) ** 2 for t, _ in after5) * 3600)
         print(f"slope after minute 5: {slope:.0f} MB/h")
-    for name, part in (("first 5 min", [ms for t, ms in rounds if t < 300]),
-                       ("last 5 min", [ms for t, ms in rounds if t >= last - 300]), ("all", [ms for _, ms in rounds])):
-        if len(part) > 1:
-            q = statistics.quantiles(part, n=10)
-            print(f"round time {name}: n {len(part)}, p50 {statistics.median(part):.0f} ms, p90 {q[8]:.0f} ms")
+    for span, times in (("first 5 min", [ms for t, ms in rounds if t < 300]),
+                        ("last 5 min", [ms for t, ms in rounds if t >= last - 300]),
+                        ("all", [ms for _, ms in rounds])):
+        if len(times) > 1:
+            deciles = statistics.quantiles(times, n=10)
+            print(f"round time {span}: n {len(times)}, p50 {statistics.median(times):.0f} ms, p90 {deciles[8]:.0f} ms")
     sys.exit(1 if grew > args.limit_mb or samples[-1][2] > args.cap_mb else 0)
 
 
