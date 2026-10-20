@@ -174,8 +174,10 @@ const config: FullConfig = {
   interfacePath: 'assets/interface.json',
   check: {},
   test: {
-    // maa-tools defaults to cpus/4 workers: 1 on a 4-core CI runner, where the test ran ~10 min serially.
-    job: availableParallelism(),
+    // maa-tools defaults to cpus/4 workers: 1 on a 4-core CI runner, where the test ran ~10 min serially. It forks one
+    // process per worker (~0.5 GB each, up to ~1 GB), so capped at 4: all of a 4-core runner, and ~2 GB instead of
+    // ~6.6 GB on a 16-core PC (two concurrent checks exhausted its RAM).
+    job: Math.min(4, availableParallelism()),
     cases: [
       {
         configs: { controller: 'MuMu', resource: 'base', imageRoot: 'tests/screens' },
