@@ -382,10 +382,26 @@ class Recover(CustomAction):
                 break
             log(f"L{level} did not go through")
             STUCK["ladder"].failed(level)
-        STUCK["watch"].reset()
-        for key in ("turn", "battle_start", "map_misses", "event_tried", "map_plan", "map_entered"):
-            RUN.pop(key, None)
+        restarted()
         return True
+
+
+def restarted():
+    """The game came back from a recovery or a restart: no streak, battle clock or map retries carry over."""
+    STUCK["watch"].reset()
+    for key in ("turn", "battle_start", "map_misses", "event_tried", "map_plan", "map_entered"):
+        RUN.pop(key, None)
+
+
+def allowed(key):
+    """run.<key> of the settings (auto_accept_terms, auto_download); on, the default, when they cannot be read."""
+    settings = RUN.get("settings")
+    if settings is None:
+        try:
+            settings = load_settings(ROOT)
+        except SettingsError:
+            return True
+    return settings.get("run", {}).get(key, True)
 
 
 @AgentServer.custom_action("ConfirmDownload")
@@ -396,10 +412,62 @@ class ConfirmDownload(CustomAction):
     """
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
+        if not allowed("auto_download"):
+            return stop(context, "the game asks to download data: run.auto_download is off")
         x, y, w, h = argv.box
         context.tasker.controller.post_click(x + w // 2, y + h // 2).wait()
         STUCK["watch"].hold(time.monotonic(), recovery.DOWNLOAD_HOLD)
         log(f"download confirmed: nothing counts as stuck for {recovery.DOWNLOAD_HOLD // 60} min")
+        return True
+
+
+@AgentServer.custom_action("AcceptUpdate")
+class AcceptUpdate(CustomAction):
+    """Press the game's own update notice (UpdateDialog), then restart the game: it closes itself or goes back to the
+    title, and the download dialog comes up there (ConfirmDownload). Not a stuck: no recovery level is charged."""
+
+    def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
+        if not allowed("auto_download"):
+            return stop(context, "the game has an update: run.auto_download is off")
+        x, y, w, h = argv.box
+        context.tasker.controller.post_click(x + w // 2, y + h // 2).wait()
+        log("game update accepted: restarting the game")
+        time.sleep(3)
+        detail = context.run_task("RecoverL3")
+        if not (detail and detail.status.succeeded):
+            log("the restart after the update did not reach the title")
+        restarted()
+        return True
+
+
+# The User Agreement's two "I agree." boxes (top-left of their inside, 19 x 19) and its Confirm, live 2026-10-21.
+AGREE_BOXES = ((338, 452), (828, 452))
+AGREE_CONFIRM = (831, 513)
+
+
+def agree_ticked(image, x, y):
+    """A white tick in the box; unticked it is black inside (live: 0 % of its pixels over 150 grey, ticked 26-30 %)."""
+    return (image[y:y + 19, x:x + 19].mean(axis=2) > 150).mean() > 0.1
+
+
+@AgentServer.custom_action("AcceptTerms")
+class AcceptTerms(CustomAction):
+    """Tick both boxes of the title's User Agreement, then Confirm once both read ticked (run.auto_accept_terms)."""
+
+    def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
+        if not allowed("auto_accept_terms"):
+            return stop(context, "User Agreement: run.auto_accept_terms is off")
+        image = screen(context)
+        for x, y in AGREE_BOXES:
+            if not agree_ticked(image, x, y):
+                image = tap_then(context, x + 9, y + 9, lambda i, x=x, y=y: agree_ticked(i, x, y))
+                if image is None:
+                    log("User Agreement: a box did not tick")
+                    return True  # MirrorHub looks again
+        if not all(agree_ticked(image, x, y) for x, y in AGREE_BOXES):
+            return True
+        tap(context, *AGREE_CONFIRM, wait=2)
+        log("User Agreement accepted")
         return True
 
 

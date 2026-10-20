@@ -137,6 +137,12 @@ function RunTab() {
       <Field label={t("run.wipe_retries")} path="run/wipe_retries"><Num value={run.wipe_retries} min={0} onChange={(v) => set({ wipe_retries: v })} /></Field>
       {pick("after_retries")}
       {pick("theme_pack_refresh", t("run.theme_pack_refresh_note"))}
+      {(["auto_accept_terms", "auto_download"] as const).map((k) => (
+        <label key={k} className={"check" + (bad(`run/${k}`) ? " bad" : "")}>
+          <input type="checkbox" checked={run[k]} onChange={(e) => set({ [k]: e.target.checked })} />
+          {t(`run.${k}`)}
+        </label>
+      ))}
       <Field label={t("run.webhook_url")} path="run/webhook_url">
         <input type="url" value={run.webhook_url} onChange={(e) => set({ webhook_url: e.target.value })} />
       </Field>

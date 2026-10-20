@@ -37,7 +37,10 @@
             "entries": [
                 "RetryPopup",
                 "MaintenanceNotice",
+                "UpdateDialog",
+                "UserAgreement",
                 "DownloadDialog",
+                "Downloading",
                 "Loading",
                 "ClaimPopup",
                 "ParallelModePrompt",

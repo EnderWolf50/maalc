@@ -22,6 +22,7 @@
   - 版本 5（#90）：隊伍新增 `allow_white_gossypium`，從版本 4 遷移時填 `true`（照舊可以持有）。
   - 版本 6（#137）：`run.runs`、`teams[].hard_from_floor` 改成開關＋數字，關閉存成 `null`。從版本 5 遷移時 `runs` 0（不限）改成 `null`；`hard_from_floor` 0（整局困難）改成 1，意思相同。其他數字不變。`min_alive` 格式不變（0 = 不檢查），只改了成立時的處理。
   - 版本 7（#77、#161）：隊伍新增 `keep_keywords`、`keywordless`、`keep_gifts`、`sell_max_tier`、`sell_vestiges`，從版本 6 遷移時填 `[]`、`keep`、`[]`、`4`、`false`：照舊只保留主要體系、無體系與觀測飾品；V 階與殘影不賣是使用者在 #161 定的預設。殘影自成一類，不受 `keywordless` 影響：以前它被當成無體系飾品保留，現在一律當合成材料（V 階除外）。
+  - 版本 8（#85、#86）：執行選項新增 `auto_accept_terms`、`auto_download`，從版本 7 遷移時都填開（使用者 2026-10-21 定案：bot 可以替帳號同意使用者條款、接受下載與更新）。
 - 只有 GUI 寫設定檔，Agent 不回寫。寫入必須先寫暫存檔再改名，避免寫到一半損毀。（#6、#19，2026-10-14 定案）
 - 檢查分兩層。schema 負責結構檢查：（#19，2026-10-14 定案）
   - 型別、列舉值、數字範圍；
@@ -76,6 +77,8 @@
 | 重打用完後 | `after_retries` | 字串 | `stop` 停止／`forfeit` 放棄這局（不領獎勵，輪替游標不前進） | `forfeit` | #16、#95 |
 | 失敗通知 webhook | `webhook_url` | 字串 | 停止時送出摘要的網址；空字串 = 不送 | 空字串 | #14 |
 | 主題包全是避開時刷新 | `theme_pack_refresh` | 字串 | `none` 不用／`once` 用一次／`all` 全用（見 [03](03-decisions.md#6-主題包) 第 6 節） | `all` | #41 |
+| 自動同意使用者條款 | `auto_accept_terms` | 布林 | 開：標題畫面的 User Agreement 勾兩個 I agree.、確認都勾上再按 Confirm；關：停下並通知（停止程序） | 開 | #85、2026-10-21 |
+| 自動下載與更新 | `auto_download` | 布林 | 開：標題的資料下載對話框按 Confirm，遊戲內的更新對話框按下後重啟遊戲；關：停下並通知 | 開 | #86、2026-10-21 |
 
 規則：
 
