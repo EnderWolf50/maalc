@@ -793,8 +793,7 @@ class GiftSearch(CustomAction):
         else:
             return stuck("Select did not ask to consume starlight")
         # Live (run13c): the dialog reads while it still drops in on its chains, and a tap then does nothing.
-        still(context, timeout=1.5)
-        page_guard(context, "GiftSearch")  # also under its Consume dialog (maatools: GiftSearchConfirm.png)
+        page_guard(context, "GiftSearch", image=still(context, timeout=1.5))  # also under its Consume dialog (maatools: GiftSearchConfirm.png)
         # The search page reads through the dialog and again before the first window: leaving early would buy twice.
         tap_then(context, *SEARCH_DIALOG_BUTTONS["confirm"], shows(context, GET_TITLE, "GET"), timeout=4)
         price = number(ask.split("Starlight")[0])
@@ -2403,6 +2402,7 @@ class Shop(CustomAction):
                     log("shop: no keyword dialog on the refresh")
                     Shop.to_main(context)
                     return acted
+                page_guard(context, "Shop")
                 tap(context, *KEYWORD_REFRESH, wait=2)
             time.sleep(1)
             after = read_cost(context)
@@ -2554,6 +2554,7 @@ class Shop(CustomAction):
             page_guard(context, "Shop")
             before = read_cost(context, SELL_COST)
             tap(context, *SELL_CELLS[i], wait=1.2)
+            page_guard(context, "Shop")
             tap(context, *PAGE_OK, wait=2)
             after = read_cost(context, SELL_COST)
             log(f"shop: sold cell {i}: {before} -> {after} Cost")
@@ -2644,6 +2645,7 @@ class Shop(CustomAction):
             page_guard(context, "Shop")
             tap(context, x, y, wait=0)
             lines, name = Shop.tooltip(context, last)
+            page_guard(context, "Shop")  # a tooltip that names nothing may be no shop at all
             tap(context, *FUSE_NEUTRAL)
             if name is None:
                 # Live 2026-10-18: Spiderweb Entangled in Red's long tooltip read no name and stayed in the
@@ -2775,11 +2777,12 @@ class Settle(CustomAction):
         for _ in range(3):
             page_guard(context, "ExplorationReward")  # also under its give-up dialog (maatools: GiveUpDialog.png)
             tap(context, *GIVE_UP, wait=1.5)
-            if settlement.claim_dialog(text(context, screen(context), DIALOG_TEXT)) == "giveup":
+            image = screen(context)
+            if settlement.claim_dialog(text(context, image, DIALOG_TEXT)) == "giveup":
                 break
         else:
             return stuck("GiveUpRewards brought up no `End expedition without claiming rewards?`")
-        page_guard(context, "ExplorationReward")
+        page_guard(context, "ExplorationReward", image=image)
         tap(context, *DIALOG_CONFIRM, wait=2)
         log("goal not met: gave up the rewards")
         self.record(run, result, 0, "giveup")

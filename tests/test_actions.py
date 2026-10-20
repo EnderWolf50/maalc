@@ -1955,3 +1955,13 @@ def test_a_starting_gift_page_gone_after_a_gift_tap_does_not_press_select(contex
     page_until(context, "StartingGift", 2)  # the cabinet, then its first gift
     assert actions.PickStartingGift().run(context, argv())
     assert taps(context) == [(230, 285), (970, 262)]
+
+
+def test_a_fusion_gone_after_a_cell_tap_taps_nothing_more(context, guarded, monkeypatch):
+    # A gift whose badge is cut off is named by its tooltip; with the shop gone that tooltip names nothing.
+    reads(context, FUSE_PAGE)
+    cells_read(monkeypatch, (None, None))
+    page_until(context, "Shop", 5)  # gone after Fuse, the centre, Burn, its OK and the cell
+    with pytest.raises(actions.PageGone):
+        actions.Shop.fuse(context, {"keyword": "Burn", "gift_search": {"gifts": []}}, {})
+    assert actions.FUSE_NEUTRAL not in taps(context)[5:] and len(taps(context)) == 5
