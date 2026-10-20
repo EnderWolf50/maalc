@@ -1,0 +1,169 @@
+04:30:15 d-base 0 ok=False lit=True guard=6/7 drag=2.15s lit_after=0.14s
+04:30:20 d-base 1 ok=True lit=True guard=7/7 drag=2.15s lit_after=0.14s
+04:30:26 d-base 2 ok=True lit=True guard=7/7 drag=2.15s lit_after=0.14s
+04:30:26 SUMMARY d-base slots=7 n=3 ok=2/3 drag_mean=2.15s lit_wait_mean=0.14s P={'settle': 0.3, 'dwell': 0.1, 'step': 10, 'interval': 0.02, 'save': 0}
+04:30:31 d-fastest 0 ok=False lit=True guard=1/7 drag=0.14s lit_after=0.22s
+04:30:35 d-fastest 1 ok=False lit=True guard=0/7 drag=0.14s lit_after=0.14s
+04:30:38 d-fastest 2 ok=False lit=True guard=1/7 drag=0.14s lit_after=0.22s
+04:30:38 SUMMARY d-fastest slots=7 n=3 ok=0/3 drag_mean=0.14s lit_wait_mean=0.19s P={'settle': 0.05, 'dwell': 0.0, 'step': 40.0, 'interval': 0.005, 'save': 0}
+04:31:38 d-base 0 ok=True lit=True guard=7/7 drag=2.18s lit_after=0.21s
+04:31:44 d-base 1 ok=True lit=True guard=7/7 drag=2.16s lit_after=0.15s
+04:31:49 d-base 2 ok=True lit=True guard=7/7 drag=2.11s lit_after=0.13s
+04:31:54 d-base 3 ok=True lit=True guard=7/7 drag=2.17s lit_after=0.14s
+04:32:00 d-base 4 ok=True lit=True guard=7/7 drag=2.16s lit_after=0.21s
+04:32:05 d-base 5 ok=True lit=True guard=7/7 drag=2.15s lit_after=0.14s
+04:32:11 d-base 6 ok=True lit=True guard=7/7 drag=2.16s lit_after=0.14s
+04:32:16 d-base 7 ok=True lit=True guard=7/7 drag=2.15s lit_after=0.15s
+04:32:21 d-base 8 ok=True lit=True guard=7/7 drag=2.18s lit_after=0.15s
+04:32:27 d-base 9 ok=True lit=True guard=7/7 drag=2.16s lit_after=0.20s
+04:32:27 SUMMARY d-base slots=7 n=10 ok=10/10 drag_mean=2.16s lit_wait_mean=0.16s P={'settle': 0.3, 'dwell': 0.1, 'step': 10, 'interval': 0.02, 'save': 0}
+04:32:46 s015 0 ok=True lit=True guard=7/7 drag=2.01s lit_after=0.22s
+04:32:51 s015 1 ok=True lit=True guard=7/7 drag=2.01s lit_after=0.14s
+04:32:56 s015 2 ok=True lit=True guard=7/7 drag=1.99s lit_after=0.13s
+04:33:01 s015 3 ok=True lit=True guard=7/7 drag=2.01s lit_after=0.14s
+04:33:07 s015 4 ok=True lit=True guard=7/7 drag=2.00s lit_after=0.14s
+04:33:07 SUMMARY s015 slots=7 n=5 ok=5/5 drag_mean=2.01s lit_wait_mean=0.15s P={'settle': 0.15, 'dwell': 0.1, 'step': 10, 'interval': 0.02, 'save': 0}
+04:33:14 s005 0 ok=True lit=True guard=7/7 drag=1.91s lit_after=0.14s
+04:33:19 s005 1 ok=True lit=True guard=7/7 drag=1.93s lit_after=0.15s
+04:33:24 s005 2 ok=True lit=True guard=7/7 drag=1.90s lit_after=0.14s
+04:33:29 s005 3 ok=True lit=True guard=7/7 drag=1.88s lit_after=0.14s
+04:33:34 s005 4 ok=True lit=True guard=7/7 drag=1.87s lit_after=0.14s
+04:33:34 SUMMARY s005 slots=7 n=5 ok=5/5 drag_mean=1.90s lit_wait_mean=0.14s P={'settle': 0.05, 'dwell': 0.1, 'step': 10, 'interval': 0.02, 'save': 0}
+04:33:41 st20 0 ok=True lit=True guard=7/7 drag=1.53s lit_after=0.21s
+04:33:46 st20 1 ok=True lit=True guard=7/7 drag=1.55s lit_after=0.22s
+04:33:51 st20 2 ok=True lit=True guard=7/7 drag=1.51s lit_after=0.20s
+04:33:56 st20 3 ok=True lit=True guard=7/7 drag=1.57s lit_after=0.14s
+04:34:00 st20 4 ok=True lit=True guard=7/7 drag=1.55s lit_after=0.14s
+04:34:00 SUMMARY st20 slots=7 n=5 ok=5/5 drag_mean=1.54s lit_wait_mean=0.18s P={'settle': 0.3, 'dwell': 0.1, 'step': 20.0, 'interval': 0.02, 'save': 0}
+04:34:07 st40 0 ok=True lit=True guard=7/7 drag=1.21s lit_after=0.20s
+04:34:11 st40 1 ok=False lit=True guard=5/7 drag=1.20s lit_after=0.13s
+04:34:16 st40 2 ok=True lit=True guard=7/7 drag=1.21s lit_after=0.14s
+04:34:20 st40 3 ok=False lit=True guard=5/7 drag=1.21s lit_after=0.14s
+04:34:25 st40 4 ok=True lit=True guard=7/7 drag=1.23s lit_after=0.22s
+04:34:25 SUMMARY st40 slots=7 n=5 ok=3/5 drag_mean=1.21s lit_wait_mean=0.17s P={'settle': 0.3, 'dwell': 0.1, 'step': 40.0, 'interval': 0.02, 'save': 0}
+04:34:32 i10 0 ok=True lit=True guard=7/7 drag=1.62s lit_after=0.15s
+04:34:37 i10 1 ok=True lit=True guard=7/7 drag=1.60s lit_after=0.20s
+04:34:41 i10 2 ok=True lit=True guard=7/7 drag=1.61s lit_after=0.14s
+04:34:46 i10 3 ok=True lit=True guard=7/7 drag=1.62s lit_after=0.14s
+04:34:51 i10 4 ok=True lit=True guard=7/7 drag=1.58s lit_after=0.15s
+04:34:51 SUMMARY i10 slots=7 n=5 ok=5/5 drag_mean=1.61s lit_wait_mean=0.16s P={'settle': 0.3, 'dwell': 0.1, 'step': 10, 'interval': 0.01, 'save': 0}
+04:34:58 i05 0 ok=True lit=True guard=7/7 drag=1.32s lit_after=0.22s
+04:35:03 i05 1 ok=True lit=True guard=7/7 drag=1.29s lit_after=0.21s
+04:35:07 i05 2 ok=False lit=True guard=5/7 drag=1.32s lit_after=0.14s
+04:35:12 i05 3 ok=False lit=True guard=5/7 drag=1.29s lit_after=0.14s
+04:35:16 i05 4 ok=True lit=True guard=7/7 drag=1.31s lit_after=0.22s
+04:35:16 SUMMARY i05 slots=7 n=5 ok=3/5 drag_mean=1.31s lit_wait_mean=0.19s P={'settle': 0.3, 'dwell': 0.1, 'step': 10, 'interval': 0.005, 'save': 0}
+04:35:23 dw05 0 ok=True lit=True guard=7/7 drag=1.82s lit_after=0.14s
+04:35:28 dw05 1 ok=True lit=True guard=7/7 drag=1.87s lit_after=0.14s
+04:35:33 dw05 2 ok=True lit=True guard=7/7 drag=1.86s lit_after=0.15s
+04:35:39 dw05 3 ok=True lit=True guard=7/7 drag=1.83s lit_after=0.14s
+04:35:44 dw05 4 ok=True lit=True guard=7/7 drag=1.88s lit_after=0.22s
+04:35:44 SUMMARY dw05 slots=7 n=5 ok=5/5 drag_mean=1.85s lit_wait_mean=0.16s P={'settle': 0.3, 'dwell': 0.05, 'step': 10, 'interval': 0.02, 'save': 0}
+04:35:50 dw0 0 ok=True lit=True guard=7/7 drag=1.56s lit_after=0.14s
+04:35:55 dw0 1 ok=True lit=True guard=7/7 drag=1.55s lit_after=0.15s
+04:36:00 dw0 2 ok=True lit=True guard=7/7 drag=1.56s lit_after=0.14s
+04:36:05 dw0 3 ok=True lit=True guard=7/7 drag=1.66s lit_after=0.16s
+04:36:10 dw0 4 ok=True lit=True guard=7/7 drag=1.59s lit_after=0.17s
+04:36:10 SUMMARY dw0 slots=7 n=5 ok=5/5 drag_mean=1.58s lit_wait_mean=0.15s P={'settle': 0.3, 'dwell': 0.0, 'step': 10, 'interval': 0.02, 'save': 0}
+04:36:30 cA 0 ok=True lit=True guard=7/7 drag=0.67s lit_after=0.14s
+04:36:34 cA 1 ok=True lit=True guard=7/7 drag=0.69s lit_after=0.15s
+04:36:38 cA 2 ok=False lit=True guard=6/7 drag=0.68s lit_after=0.15s
+04:36:42 cA 3 ok=True lit=True guard=7/7 drag=0.69s lit_after=0.14s
+04:36:46 cA 4 ok=True lit=True guard=7/7 drag=0.66s lit_after=0.15s
+04:36:50 cA 5 ok=False lit=True guard=6/7 drag=0.68s lit_after=0.14s
+04:36:54 cA 6 ok=True lit=True guard=7/7 drag=0.69s lit_after=0.14s
+04:36:58 cA 7 ok=True lit=True guard=7/7 drag=0.69s lit_after=0.14s
+04:37:01 cA 8 ok=True lit=True guard=7/7 drag=0.68s lit_after=0.21s
+04:37:05 cA 9 ok=True lit=True guard=7/7 drag=0.66s lit_after=0.15s
+04:37:05 SUMMARY cA slots=7 n=10 ok=8/10 drag_mean=0.68s lit_wait_mean=0.15s P={'settle': 0.05, 'dwell': 0.0, 'step': 20.0, 'interval': 0.02, 'save': 0}
+04:37:11 cB 0 ok=True lit=True guard=7/7 drag=0.71s lit_after=0.15s
+04:37:15 cB 1 ok=True lit=True guard=7/7 drag=0.72s lit_after=0.14s
+04:37:19 cB 2 ok=True lit=True guard=7/7 drag=0.72s lit_after=0.15s
+04:37:23 cB 3 ok=True lit=True guard=7/7 drag=0.71s lit_after=0.15s
+04:37:27 cB 4 ok=True lit=True guard=7/7 drag=0.71s lit_after=0.14s
+04:37:31 cB 5 ok=True lit=True guard=7/7 drag=0.71s lit_after=0.14s
+04:37:35 cB 6 ok=True lit=True guard=7/7 drag=0.72s lit_after=0.22s
+04:37:39 cB 7 ok=True lit=True guard=7/7 drag=0.74s lit_after=0.15s
+04:37:43 cB 8 ok=True lit=True guard=7/7 drag=0.75s lit_after=0.15s
+04:37:47 cB 9 ok=True lit=True guard=7/7 drag=0.72s lit_after=0.15s
+04:37:47 SUMMARY cB slots=7 n=10 ok=10/10 drag_mean=0.72s lit_wait_mean=0.15s P={'settle': 0.05, 'dwell': 0.0, 'step': 10, 'interval': 0.01, 'save': 0}
+04:37:53 cC 0 ok=False lit=True guard=5/7 drag=0.38s lit_after=0.15s
+04:37:56 cC 1 ok=False lit=True guard=4/7 drag=0.38s lit_after=0.15s
+04:38:00 cC 2 ok=False lit=True guard=5/7 drag=0.39s lit_after=0.21s
+04:38:04 cC 3 ok=False lit=True guard=5/7 drag=0.38s lit_after=0.15s
+04:38:07 cC 4 ok=False lit=True guard=5/7 drag=0.39s lit_after=0.15s
+04:38:11 cC 5 ok=False lit=True guard=5/7 drag=0.38s lit_after=0.15s
+04:38:15 cC 6 ok=False lit=True guard=2/7 drag=0.38s lit_after=0.15s
+04:38:18 cC 7 ok=False lit=True guard=3/7 drag=0.39s lit_after=0.15s
+04:38:22 cC 8 ok=False lit=True guard=3/7 drag=0.38s lit_after=0.14s
+04:38:25 cC 9 ok=False lit=True guard=2/7 drag=0.38s lit_after=0.22s
+04:38:25 SUMMARY cC slots=7 n=10 ok=0/10 drag_mean=0.38s lit_wait_mean=0.16s P={'settle': 0.05, 'dwell': 0.0, 'step': 20.0, 'interval': 0.01, 'save': 0}
+04:38:32 cD 0 ok=True lit=True guard=7/7 drag=1.09s lit_after=0.21s
+04:38:36 cD 1 ok=True lit=True guard=7/7 drag=1.09s lit_after=0.15s
+04:38:41 cD 2 ok=True lit=True guard=7/7 drag=1.11s lit_after=0.21s
+04:38:45 cD 3 ok=True lit=True guard=7/7 drag=1.09s lit_after=0.14s
+04:38:49 cD 4 ok=True lit=True guard=7/7 drag=1.11s lit_after=0.14s
+04:38:53 cD 5 ok=True lit=True guard=7/7 drag=1.07s lit_after=0.15s
+04:38:58 cD 6 ok=True lit=True guard=7/7 drag=1.10s lit_after=0.15s
+04:39:02 cD 7 ok=True lit=True guard=7/7 drag=1.13s lit_after=0.14s
+04:39:06 cD 8 ok=True lit=True guard=7/7 drag=1.10s lit_after=0.15s
+04:39:11 cD 9 ok=True lit=True guard=7/7 drag=1.10s lit_after=0.14s
+04:39:11 SUMMARY cD slots=7 n=10 ok=10/10 drag_mean=1.10s lit_wait_mean=0.16s P={'settle': 0.15, 'dwell': 0.05, 'step': 20.0, 'interval': 0.02, 'save': 0}
+04:39:27 cB2 0 ok=True lit=True guard=7/7 drag=0.73s lit_after=0.21s
+04:39:31 cB2 1 ok=True lit=True guard=7/7 drag=0.73s lit_after=0.16s
+04:39:35 cB2 2 ok=True lit=True guard=7/7 drag=0.70s lit_after=0.14s
+04:39:39 cB2 3 ok=True lit=True guard=7/7 drag=0.74s lit_after=0.15s
+04:39:43 cB2 4 ok=True lit=True guard=7/7 drag=0.70s lit_after=0.22s
+04:39:47 cB2 5 ok=False lit=True guard=6/7 drag=0.71s lit_after=0.15s
+04:39:51 cB2 6 ok=True lit=True guard=7/7 drag=0.73s lit_after=0.15s
+04:39:55 cB2 7 ok=True lit=True guard=7/7 drag=0.73s lit_after=0.22s
+04:39:59 cB2 8 ok=True lit=True guard=7/7 drag=0.75s lit_after=0.15s
+04:40:03 cB2 9 ok=True lit=True guard=7/7 drag=0.73s lit_after=0.14s
+04:40:07 cB2 10 ok=True lit=True guard=7/7 drag=0.70s lit_after=0.21s
+04:40:11 cB2 11 ok=True lit=True guard=7/7 drag=0.72s lit_after=0.22s
+04:40:15 cB2 12 ok=True lit=True guard=7/7 drag=0.73s lit_after=0.14s
+04:40:19 cB2 13 ok=True lit=True guard=7/7 drag=0.72s lit_after=0.15s
+04:40:23 cB2 14 ok=False lit=True guard=6/7 drag=0.72s lit_after=0.15s
+04:40:27 cB2 15 ok=False lit=True guard=6/7 drag=0.73s lit_after=0.15s
+04:40:31 cB2 16 ok=True lit=True guard=7/7 drag=0.71s lit_after=0.14s
+04:40:35 cB2 17 ok=True lit=True guard=7/7 drag=0.70s lit_after=0.15s
+04:40:39 cB2 18 ok=True lit=True guard=7/7 drag=0.72s lit_after=0.23s
+04:40:43 cB2 19 ok=True lit=True guard=7/7 drag=0.74s lit_after=0.15s
+04:40:43 SUMMARY cB2 slots=7 n=20 ok=17/20 drag_mean=0.72s lit_wait_mean=0.17s P={'settle': 0.05, 'dwell': 0.0, 'step': 10, 'interval': 0.01, 'save': 0}
+04:40:49 cF 0 ok=True lit=True guard=7/7 drag=1.03s lit_after=0.14s
+04:40:53 cF 1 ok=True lit=True guard=7/7 drag=1.04s lit_after=0.14s
+04:40:58 cF 2 ok=True lit=True guard=7/7 drag=1.04s lit_after=0.15s
+04:41:02 cF 3 ok=True lit=True guard=7/7 drag=1.02s lit_after=0.14s
+04:41:06 cF 4 ok=True lit=True guard=7/7 drag=1.04s lit_after=0.15s
+04:41:10 cF 5 ok=True lit=True guard=7/7 drag=1.04s lit_after=0.21s
+04:41:15 cF 6 ok=True lit=True guard=7/7 drag=1.04s lit_after=0.14s
+04:41:19 cF 7 ok=True lit=True guard=7/7 drag=1.04s lit_after=0.15s
+04:41:23 cF 8 ok=True lit=True guard=7/7 drag=1.02s lit_after=0.15s
+04:41:27 cF 9 ok=True lit=True guard=7/7 drag=1.01s lit_after=0.14s
+04:41:27 SUMMARY cF slots=7 n=10 ok=10/10 drag_mean=1.03s lit_wait_mean=0.15s P={'settle': 0.05, 'dwell': 0.0, 'step': 10, 'interval': 0.015, 'save': 0}
+04:41:34 cG 0 ok=True lit=True guard=7/7 drag=1.08s lit_after=0.14s
+04:41:38 cG 1 ok=True lit=True guard=7/7 drag=1.02s lit_after=0.14s
+04:41:42 cG 2 ok=True lit=True guard=7/7 drag=1.07s lit_after=0.15s
+04:41:47 cG 3 ok=True lit=True guard=7/7 drag=1.08s lit_after=0.14s
+04:41:51 cG 4 ok=True lit=True guard=7/7 drag=1.03s lit_after=0.15s
+04:41:55 cG 5 ok=True lit=True guard=7/7 drag=1.07s lit_after=0.16s
+04:41:59 cG 6 ok=True lit=True guard=7/7 drag=1.04s lit_after=0.15s
+04:42:04 cG 7 ok=True lit=True guard=7/7 drag=1.04s lit_after=0.15s
+04:42:08 cG 8 ok=True lit=True guard=7/7 drag=1.04s lit_after=0.22s
+04:42:12 cG 9 ok=True lit=True guard=7/7 drag=1.05s lit_after=0.14s
+04:42:12 SUMMARY cG slots=7 n=10 ok=10/10 drag_mean=1.05s lit_wait_mean=0.15s P={'settle': 0.05, 'dwell': 0.05, 'step': 10, 'interval': 0.01, 'save': 0}
+04:42:18 cH 0 ok=False lit=True guard=6/7 drag=0.65s lit_after=0.15s
+04:42:22 cH 1 ok=True lit=True guard=7/7 drag=0.68s lit_after=0.15s
+04:42:26 cH 2 ok=True lit=True guard=7/7 drag=0.66s lit_after=0.15s
+04:42:30 cH 3 ok=True lit=True guard=7/7 drag=0.71s lit_after=0.21s
+04:42:34 cH 4 ok=True lit=True guard=7/7 drag=0.66s lit_after=0.14s
+04:42:38 cH 5 ok=True lit=True guard=7/7 drag=0.70s lit_after=0.15s
+04:42:42 cH 6 ok=True lit=True guard=7/7 drag=0.65s lit_after=0.22s
+04:42:46 cH 7 ok=True lit=True guard=7/7 drag=0.65s lit_after=0.14s
+04:42:50 cH 8 ok=True lit=True guard=7/7 drag=0.67s lit_after=0.15s
+04:42:53 cH 9 ok=True lit=True guard=7/7 drag=0.67s lit_after=0.22s
+04:42:53 SUMMARY cH slots=7 n=10 ok=9/10 drag_mean=0.67s lit_wait_mean=0.17s P={'settle': 0.0, 'dwell': 0.0, 'step': 10, 'interval': 0.01, 'save': 0}
+05:22:26 L4old 0 ok=False lit=False guard=0/7 drag=2.12s lit_after=1.54s
+05:22:26 SUMMARY L4old slots=7 n=1 ok=0/1 drag_mean=2.12s lit_wait_mean=1.54s P={'settle': 0.3, 'dwell': 0.1, 'step': 10, 'interval': 0.02, 'save': 1.0}
+05:22:31 L4new 0 ok=False lit=False guard=0/7 drag=0.68s lit_after=1.54s
+05:22:31 SUMMARY L4new slots=7 n=1 ok=0/1 drag_mean=0.68s lit_wait_mean=1.54s P={'settle': 0.05, 'dwell': 0.0, 'step': 10, 'interval': 0.01, 'save': 1.0}
