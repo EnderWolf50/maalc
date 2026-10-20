@@ -157,6 +157,12 @@ def test_an_offer_too_dear_is_still_on_sale():
     assert not s.on_sale({"name": "UPS System", "price": 156, "purchased": True, "short": False})
 
 
+def test_a_skill_offer_is_not_on_sale_however_ocr_reads_its_name():
+    # #138: a stray price read next to it, the name in capitals or run together.
+    for name in ("REPLACE RYOSHU'S SKILL", "ReplaceRyōshū's Skill", "Ｒｅｐｌａｃｅ Ryōshū's Skill"):
+        assert not s.on_sale({"name": name, "price": 100, "purchased": False, "short": False}), name
+
+
 def test_dialog_price_from_the_cost_preview():
     assert s.dialog_price(2864, "28642612") == 252  # live OCR runs the two numbers together
     assert s.dialog_price(540, "540 ▶ 384") == 156

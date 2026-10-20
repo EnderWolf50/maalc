@@ -217,8 +217,8 @@ def text(context, image, roi, only_rec=False):
 
 
 def number(s):
-    digits = re.sub(r"\D", "", s)
-    return int(digits) if digits else None
+    found = re.sub(r"\D", "", s)
+    return int(found) if found else None
 
 
 def address(context):
@@ -925,7 +925,7 @@ class PickThemePack(CustomAction):
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         run = current_run(context)
         image = screen(context)
-        m = re.search(r"FLOOR\s*(\d)", text(context, image, [480, 100, 320, 40]))
+        m = re.search(r"floor\s*(\d)", normalize(text(context, image, [480, 100, 320, 40])))
         if not m:
             return True  # page fading in or out: let MirrorHub look again
         floor = int(m[1])
@@ -1085,8 +1085,8 @@ def coin_number(context, image, box):
     part = image[max(0, y + 8):y + 38, max(0, x + w - 8):x + w + 32]
     mask = (part.max(axis=2) > 170) & (saturation(part) < 90)
     plain = np.where(mask[..., None], 0, 255).astype(np.uint8).repeat(3, axis=2)
-    digits = re.sub(r"\D", "", text(context, plain, [0, 0, plain.shape[1], plain.shape[0]], only_rec=True))
-    return int(digits) if len(digits) >= 2 else None
+    found = re.sub(r"\D", "", text(context, plain, [0, 0, plain.shape[1], plain.shape[0]], only_rec=True))
+    return int(found) if len(found) >= 2 else None
 
 
 def map_data():
@@ -1757,7 +1757,7 @@ def forfeit(context):
     for xy, roi, want, shown in steps:
         for _ in range(3):
             tap(context, *xy, wait=2)
-            if (want in text(context, screen(context), roi)) == shown:
+            if has(text(context, screen(context), roi), want) == shown:
                 break
         else:
             return stuck(f"forfeit: {want!r} did not {'show' if shown else 'go'}")
@@ -1873,7 +1873,7 @@ class Event(CustomAction):
                 guard(context, "Event", image=image)
                 tap(context, *EVENT_NEUTRAL, wait=0.2)
                 image = screen(context)
-                if red_button(image) or not text(context, image, EVENT_BUTTON_LABEL) or any(k in text(context, image, roi) for k, roi in
+                if red_button(image) or not text(context, image, EVENT_BUTTON_LABEL) or any(has(text(context, image, roi), k) for k, roi in
                                             (("Choices", CHOICES_HEADER), ("Choose a character", CHECK_PROMPT))):
                     break
         return True
@@ -2045,7 +2045,7 @@ class PickGift(CustomAction):
         cards = []
         for card in lines:
             gift = " ".join(t for y, t in card if y < 410)
-            owned = any(re.fullmatch(r"\W*Owned\W*", t) for _, t in card)
+            owned = any(compact(t) == "owned" for _, t in card)
             names = [t for y, t in card if TRIAL_NAME_Y[0] <= y < TRIAL_NAME_Y[1]]
             risk = min((rewards.trial_risk(t, risks) for t in names), default=rewards.MAX_RISK) if trials else None
             cards.append((rewards.gift_kind(gift, run["team"]["keyword"], owned, avoid), risk))
@@ -2545,7 +2545,7 @@ class Shop(CustomAction):
         for _ in range(8):
             time.sleep(0.2)
             lines = [(t, b) for t, b in ocr(context, screen(context), FUSE_TOOLTIP) if not has(t, "Owned")]
-            head = next((b for t, b in lines if re.search(r"O\s*GIFT$", t)), None)
+            head = next((b for t, b in lines if compact(t).endswith("ogift")), None)
             if head:
                 name = min(((b[1] - head[1], t) for t, b in lines if b[1] > head[1] + 10 and re.search(r"[a-z]{3}", t)),
                            default=(0, "?"))[1]

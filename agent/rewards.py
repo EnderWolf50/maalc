@@ -6,7 +6,7 @@ actions.py reads the pages and taps; everything here is plain data in, plain dat
 import re
 from difflib import SequenceMatcher
 
-from ocrtext import compact, normalize
+from ocrtext import compact, has
 from run_start import match_pack
 
 ODDS = ("very low", "low", "normal", "high", "very high")
@@ -151,7 +151,7 @@ def choice_scrollbar(image):
 
 def odds_rank(caption):
     """0 (Very Low) to 4 (Very High) for a skill-check caption; None when it reads as none of them."""
-    c = re.sub(r"[^a-z]", "", caption.lower())  # OCR drops the space and may misread the tail ("Normat")
+    c = re.sub(r"[^a-z]", "", compact(caption))  # OCR drops the space and may misread the tail ("Normat")
     very = c.startswith("very")
     rest = c[4:] if very else c
     level = next((w for w in ("high", "low", "normal") if rest[:2] == w[:2]), None)
@@ -171,14 +171,13 @@ def pick_checker(captions, skip=()):
 
 def card_type(text):
     """The reward card type its text stands for, or None (spec 03 section 11)."""
-    t = normalize(text)
-    if "starlight" in t:
+    if has(text, "starlight"):
         return "Starlight"
-    if "resource" in t:
+    if has(text, "resource"):
         return "E.G.O Resource"
-    if "cost" in t:
-        return "Cost & Keyword Gift Chance" if "gift" in t or "chance" in t else "Cost"
-    if "gift" in t:
+    if has(text, "cost"):
+        return "Cost & Keyword Gift Chance" if has(text, "gift", "chance") else "Cost"
+    if has(text, "gift"):
         return "Random E.G.O Gift"
     return None
 

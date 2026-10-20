@@ -1715,3 +1715,22 @@ def test_a_battle_gone_before_win_rate_is_handed_back(context, guarded):
     assert actions.PlayTurn().run(context, SimpleNamespace(box=[984, 531, 40, 20]))
     assert taps(context) == []
     assert actions.STUCK["flag"] is None
+
+
+def test_forfeit_reads_its_dialogs_however_ocr_cases_them(context, monkeypatch):
+    # #138: the settings panel and the Quit dialog read in capitals still count as shown.
+    reads = iter(["DUNGEON PROGRESS", "QUIT EXPLORING THE DUNGEON?", ""])
+    monkeypatch.setattr(actions, "text", lambda *a, **k: next(reads))
+    monkeypatch.setattr(actions, "tap", lambda *a, **k: None)
+    actions.RUN["forfeit"] = True
+    assert actions.forfeit(context) is True
+    assert actions.STUCK["flag"] is None and "forfeit" not in actions.RUN
+
+
+def test_the_theme_pack_page_reads_its_floor_in_any_case(context, monkeypatch):
+    # #138: "Floor 3" is floor 3, as the page-gone wait after the pull already reads it.
+    monkeypatch.setattr(actions, "text", lambda *a, **k: "Floor 3")
+    monkeypatch.setattr(actions.PickThemePack, "set_difficulty", lambda *a: False)
+    actions.RUN["difficulty"] = None
+    actions.PickThemePack().run(context, None)
+    assert actions.RUN["floor"] == 3
