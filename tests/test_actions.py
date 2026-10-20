@@ -1160,6 +1160,23 @@ def test_a_search_tab_whose_gifts_take_two_seconds_is_waited_for_not_read_early(
     assert tab[0] == "Keywordless"
 
 
+def test_a_search_tab_tap_that_did_nothing_is_tapped_again(context, clock):
+    # #190: the grid not moving for the whole wait means the tap was lost: tap the tab once more, not read on.
+    tab, own_taps = ["Poise"], []
+
+    def click(x, y):
+        name = actions.SEARCH_TABS[(x - 113) // 62]
+        if name == "Keywordless":
+            own_taps.append(name)
+        if name != "Keywordless" or len(own_taps) > 1:  # the first Keywordless tap is lost
+            tab[0] = name
+        return MagicMock()
+    context.tasker.controller.post_click.side_effect = click
+    context.tasker.controller.post_screencap.return_value.wait.return_value.get.side_effect =         lambda: np.full((720, 1280, 3), 20 * actions.SEARCH_TABS.index(tab[0]), np.uint8)
+    actions.GiftSearch.open_tab(context, "Keywordless")
+    assert tab[0] == "Keywordless" and len(own_taps) == 2
+
+
 def test_the_consume_dialog_is_confirmed_once_it_stops_dropping_in(context, clock):
     # Live 2026-10-18 (run13c): Confirm was tapped as soon as "Consume" read, while the dialog still slid down
     # on its chains; the tap did nothing, no GET window came, and every GiftSearch call after it did the same.
