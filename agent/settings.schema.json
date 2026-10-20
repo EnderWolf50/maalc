@@ -17,7 +17,7 @@
     "trial_risk_overrides"
   ],
   "properties": {
-    "version": { "const": 6 },
+    "version": { "const": 7 },
     "language": { "enum": ["zh_tw", "en_us"], "default": "zh_tw" },
     "run": {
       "type": "object",
@@ -125,7 +125,12 @@
           "guard_turns",
           "trial_risk_weight",
           "gift_search",
-          "allow_white_gossypium"
+          "allow_white_gossypium",
+          "keep_keywords",
+          "keywordless",
+          "keep_gifts",
+          "sell_max_tier",
+          "sell_vestiges"
         ],
         "properties": {
           "id": { "$ref": "#/$defs/id" },
@@ -214,19 +219,7 @@
                 "type": "array",
                 "uniqueItems": true,
                 "maxItems": 3,
-                "items": {
-                  "type": "object",
-                  "additionalProperties": false,
-                  "required": ["keyword", "tier", "name"],
-                  "properties": {
-                    "keyword": {
-                      "enum": ["Burn", "Bleed", "Tremor", "Rupture", "Sinking", "Poise", "Charge", "Slash", "Pierce", "Blunt", "Keywordless"],
-                      "description": "the page's keyword tab"
-                    },
-                    "tier": { "type": "integer", "minimum": 1, "maximum": 3 },
-                    "name": { "type": "string", "minLength": 1, "description": "English name as the game shows it" }
-                  }
-                },
+                "items": { "$ref": "#/$defs/gift" },
                 "default": []
               }
             },
@@ -236,6 +229,37 @@
             "type": "boolean",
             "default": true,
             "description": "off: never take or buy White Gossypium; owned ones are fused or sold first"
+          },
+          "keep_keywords": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": { "enum": ["Burn", "Bleed", "Tremor", "Rupture", "Sinking", "Poise", "Charge", "Slash", "Pierce", "Blunt"] },
+            "default": [],
+            "description": "keywords besides the main one whose gifts the shop never fuses or sells"
+          },
+          "keywordless": {
+            "enum": ["keep", "fuse", "fuse_or_sell"],
+            "default": "keep",
+            "description": "keywordless gifts in the shop: keep (never fused or sold), fuse (fusion material, never sold), fuse_or_sell"
+          },
+          "keep_gifts": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": { "anyOf": [{ "$ref": "#/$defs/gift" }, { "$ref": "#/$defs/vestige" }] },
+            "default": [],
+            "description": "gifts the shop never fuses or sells: a Gift Search gift (told by its icon) or a vestige (by its name)"
+          },
+          "sell_max_tier": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5,
+            "default": 4,
+            "description": "the highest tier the shop may sell; 4: a tier V gift is never sold"
+          },
+          "sell_vestiges": {
+            "type": "boolean",
+            "default": false,
+            "description": "the shop may sell vestiges (pure fusion-material gifts, data/shop.yaml); off: never sold"
           }
         }
       }
@@ -267,6 +291,31 @@
   },
   "$defs": {
     "id": { "type": "string", "minLength": 1 },
+    "vestige": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["keyword", "tier", "name"],
+      "description": "a vestige: a gift that is only fusion or sale material, tier I-V in this order (ids 9991-9995, #161)",
+      "properties": {
+        "keyword": { "const": "Keywordless" },
+        "tier": { "type": "integer", "minimum": 1, "maximum": 5 },
+        "name": { "enum": ["Dark Vestige", "Faint Vestige", "Twinkling Vestige", "Brilliant Vestige", "Lunar Vestige"] }
+      }
+    },
+    "gift": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["keyword", "tier", "name"],
+      "description": "a gift of the E.G.O Gift Search page (data/gift_search.json)",
+      "properties": {
+        "keyword": {
+          "enum": ["Burn", "Bleed", "Tremor", "Rupture", "Sinking", "Poise", "Charge", "Slash", "Pierce", "Blunt", "Keywordless"],
+          "description": "the page's keyword tab"
+        },
+        "tier": { "type": "integer", "minimum": 1, "maximum": 3 },
+        "name": { "type": "string", "minLength": 1, "description": "English name as the game shows it" }
+      }
+    },
     "name": { "type": "string", "minLength": 1 },
     "plan_ref": {
       "type": "object",
