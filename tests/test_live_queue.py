@@ -6,6 +6,7 @@ import subprocess
 import sys
 import threading
 import time
+from datetime import datetime
 from pathlib import Path
 
 import pytest
@@ -163,3 +164,41 @@ def test_detached_status_tells_running_from_ended(tmp_path):
     running, text = lq.detached_status(log)
     assert not running and text.startswith("ended pid ") and text.endswith(": last line")
     assert not lq.detached_running(log)
+
+
+def test_resume_says_a_bot_that_ended_unwatched_needs_step_7(tmp_path):
+    task = tmp_path / "t"
+    task.mkdir()
+    pid = lambda log, doc: lq.pid_file(log).write_text(json.dumps(doc))  # noqa: E731
+    pid(task / "hold.log", {"pid": os.getpid(), "start": lq.started(os.getpid()), "cmd": "hold"})
+    pid(task / "bot.log", {"pid": dead_pid(), "start": None, "cmd": "bot"})
+    (task / "bot.log").write_text("[maalc] victory\n[maalc] claimed with 0 weekly bonus(es)\n[maalc] noise\n")
+    (task / "hold.log").write_text("[queue] start t\n[hold] bot ended 2020-01-01T10:00:00\n")
+    out = "\n".join(lq.resume(task, now=datetime.fromisoformat("2020-01-01T10:25:00").timestamp()))
+    assert "bot ended at 10:00:00 (25 min ago)" in out and "claimed with 0" in out and "  [maalc] noise" not in out
+    assert "done file: absent" in out and "next: bot ended while you were away: step 7" in out
+    (task / "done").touch()
+    assert "step 10" in lq.resume(task)[-1]
+
+
+def test_status_marks_a_holder_whose_bot_ended_long_ago_without_a_done_file(tmp_path):
+    bot, done = tmp_path / "bot.log", tmp_path / "done"
+    bot.write_text("x")
+    lq.pid_file(bot).write_text(json.dumps({"pid": dead_pid(), "start": None, "cmd": "bot"}))
+    (tmp_path / f"1-{os.getpid()}-t.ticket").write_text(f"hold --done {done} --guard {bot}")
+    later = bot.stat().st_mtime
+    assert "bot ended 25 min ago, waiting for the agent" in lq.status(tmp_path, now=later + 1500)[0]
+    assert "bot ended" not in lq.status(tmp_path, now=later + 60)[0]  # still within the 10 min
+    done.touch()
+    assert "bot ended" not in lq.status(tmp_path, now=later + 1500)[0]
+
+
+def test_resume_next_step_while_queued_or_when_nothing_started(tmp_path):
+    task = tmp_path / "t"
+    task.mkdir()
+    assert "nothing was started" in lq.resume(task)[-1]
+    lq.pid_file(task / "hold.log").write_text(json.dumps({"pid": os.getpid(), "start": lq.started(os.getpid()), "cmd": "hold"}))
+    (task / "hold.log").write_text("[queue] waiting, 1 ahead\n")
+    assert "still queued" in lq.resume(task)[-1]
+    (task / "hold.log").write_text("[queue] start t\n")
+    assert "no bot started" in lq.resume(task)[-1]
