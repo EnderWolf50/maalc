@@ -1,6 +1,7 @@
 """Custom actions driven offline: a fake Maa context reads nothing on a blank screen."""
 
 import json
+import math
 import time
 import zlib
 from pathlib import Path
@@ -261,7 +262,7 @@ def test_a_press_that_did_not_take_is_handed_back_to_be_pressed_again(context, c
     inner = context.run_recognition.side_effect
     context.run_recognition.side_effect = lambda *a, **k: actions.time.sleep(0.2) or inner(*a, **k)
     actions.Event().run(context, None)
-    assert len(button_taps(context)) == 1 and len(corner_taps(context)) == 8  # 0.2 s each: 1.6 s >= EVENT_TAKE
+    assert len(button_taps(context)) == 1 and len(corner_taps(context)) == math.ceil(actions.EVENT_TAKE / 0.2)
 
 
 def bus_at(context, x, y, linked=()):

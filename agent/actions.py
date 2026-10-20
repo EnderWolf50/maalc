@@ -2050,9 +2050,9 @@ class Event(CustomAction):
         Only two labels read whole tell another button: one read empty or in part while it fades ("Contnue") is not,
         as MirrorHub's Event node would still match the fading button and press it twice.
         """
-        last, fading = 0.0, None
+        last, pressed_label = 0.0, None  # None: not in a press's fade (any more)
         if pressed_at is not None:
-            last, fading = pressed_at, compact(text(context, image, EVENT_BUTTON_LABEL))
+            last, pressed_label = pressed_at, compact(text(context, image, EVENT_BUTTON_LABEL))
         for n in range(1, EVENT_TEXT_TAPS + 1):
             time.sleep(max(0.0, last + EVENT_TAP_EVERY - time.monotonic()))
             last = time.monotonic()
@@ -2061,14 +2061,14 @@ class Event(CustomAction):
             tap(context, *EVENT_NEUTRAL, wait=0)
             image = screen(context)
             if red_button(image):
-                if fading is None or time.monotonic() - pressed_at >= EVENT_TAKE:
+                if pressed_label is None or time.monotonic() - pressed_at >= EVENT_TAKE:
                     break
                 label = compact(text(context, image, EVENT_BUTTON_LABEL))
-                if fading in EVENT_LABELS and label in EVENT_LABELS and label != fading:
+                if pressed_label in EVENT_LABELS and label in EVENT_LABELS and label != pressed_label:
                     break
                 continue
-            read = n % EVENT_READ_EVERY == 0 or fading is not None
-            fading = None
+            read = n % EVENT_READ_EVERY == 0 or pressed_label is not None
+            pressed_label = None
             if read and (not text(context, image, EVENT_BUTTON_LABEL) or any(
                     has(text(context, image, roi), k) for k, roi in (("Choices", CHOICES_HEADER), ("Choose a character", CHECK_PROMPT)))):
                 break

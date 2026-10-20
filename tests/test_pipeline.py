@@ -118,6 +118,15 @@ def test_the_screens_that_lift_a_held_finger_are_hub_nodes():
     assert all(battle.index(n) < battle.index("BattlePause") for n in actions.BATTLE_POPUPS)
 
 
+def test_the_event_labels_are_the_event_nodes():
+    # #188: a press's fade tells another button by these; one the node gains and they lack waits EVENT_TAKE s.
+    import actions
+    from ocrtext import compact
+    event = load_nodes()["Event"]
+    assert {compact(s) for s in event["expected"].split("|")} == actions.EVENT_LABELS
+    assert event["roi"] == actions.EVENT_BUTTON_LABEL
+
+
 def test_batch_plan_follows_maaframework():
     nodes = load_nodes()
     assert batch_plan(nodes, ["Connecting", "RetryPopup", "MaintenanceNotice"]) == [
