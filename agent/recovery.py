@@ -112,7 +112,7 @@ class Watchdog:
         return None
 
     def hold(self, now, seconds):
-        """A download was confirmed: nothing is stuck for the next seconds (its progress screen is not known)."""
+        """A download was confirmed: nothing is stuck for the next seconds, until its progress screen is up."""
         self.hold_until = now + seconds
 
     def held(self, now):

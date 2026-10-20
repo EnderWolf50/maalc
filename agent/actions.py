@@ -44,7 +44,8 @@ SETTLED = {"runs": 0}  # runs claimed since this agent started: the run count st
 # Stuck detection and recovery (spec 06), memory only: the last node seen ("node", its id) and the
 # screen type it handled ("kind"), a pending stuck for MirrorHub's Stuck node ("flag": (kind, start
 # level, reason)), this run's Ladder, and the game restarts since this agent started ("l3").
-STUCK = {"node": None, "kind": None, "flag": None, "watch": recovery.Watchdog(), "ladder": recovery.Ladder(), "l3": 0}
+STUCK = {"node": None, "kind": None, "flag": None, "watch": recovery.Watchdog(), "ladder": recovery.Ladder(), "l3": 0,
+         "updates": 0}  # game restarts for update notices since this agent started (AcceptUpdate)
 SCREENS = deque(maxlen=20)  # the last screens MirrorHub handed out: the evidence on a stop
 LOG = deque(maxlen=500)
 
@@ -293,12 +294,7 @@ def stop(context, reason, line=None):
         log(f"evidence: {folder}")
     except OSError as e:
         log(f"evidence not saved: {e}")
-    settings = RUN.get("settings")
-    if settings is None:
-        try:
-            settings = load_settings(ROOT)
-        except SettingsError:
-            settings = None
+    settings = settings_now()
     url = settings and settings["run"]["webhook_url"]
     if url:
         body = json.dumps({**(line or {}), "reason": reason, "evidence": str(folder)}, ensure_ascii=False).encode()
@@ -382,33 +378,37 @@ class Recover(CustomAction):
                 break
             log(f"L{level} did not go through")
             STUCK["ladder"].failed(level)
-        restarted()
+        forget_game_state()
         return True
 
 
-def restarted():
-    """The game came back from a recovery or a restart: no streak, battle clock or map retries carry over."""
+def forget_game_state():
+    """The game came back from a recovery or a restart: drop the streak, the battle clock and the map retries."""
     STUCK["watch"].reset()
     for key in ("turn", "battle_start", "map_misses", "event_tried", "map_plan", "map_entered"):
         RUN.pop(key, None)
 
 
+def settings_now():
+    """This run's settings, else the file's; None when it cannot be read."""
+    if "settings" in RUN:
+        return RUN["settings"]
+    try:
+        return load_settings(ROOT)
+    except SettingsError:
+        return None
+
+
 def allowed(key):
     """run.<key> of the settings (auto_accept_terms, auto_download); on, the default, when they cannot be read."""
-    settings = RUN.get("settings")
-    if settings is None:
-        try:
-            settings = load_settings(ROOT)
-        except SettingsError:
-            return True
-    return settings.get("run", {}).get(key, True)
+    settings = settings_now()
+    return True if settings is None else settings["run"][key]
 
 
 @AgentServer.custom_action("ConfirmDownload")
 class ConfirmDownload(CustomAction):
-    """Confirm the title's download dialog (the matched button), then let the download run without a stuck.
-
-    Its progress screen is not known, so MirrorHub may recognise nothing for a long while (#86).
+    """Confirm the title's download dialog (the matched button), then hold the stuck detection until its progress
+    screen (Downloading, a waiting screen) is up. The floor's time limit goes: the download takes the game away (#86).
     """
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
@@ -417,8 +417,12 @@ class ConfirmDownload(CustomAction):
         x, y, w, h = argv.box
         context.tasker.controller.post_click(x + w // 2, y + h // 2).wait()
         STUCK["watch"].hold(time.monotonic(), recovery.DOWNLOAD_HOLD)
+        RUN.pop("deadline", None)  # live 2026-10-21: 32 min of download would trip it, and L3 mid-download
         log(f"download confirmed: nothing counts as stuck for {recovery.DOWNLOAD_HOLD // 60} min")
         return True
+
+
+UPDATE_RESTARTS = 2  # game restarts for update notices per bot launch: one that keeps coming back stops the bot
 
 
 @AgentServer.custom_action("AcceptUpdate")
@@ -429,6 +433,9 @@ class AcceptUpdate(CustomAction):
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         if not allowed("auto_download"):
             return stop(context, "the game has an update: run.auto_download is off")
+        if STUCK["updates"] >= UPDATE_RESTARTS:
+            return stop(context, f"the game asked for an update {UPDATE_RESTARTS + 1} times since the bot started")
+        STUCK["updates"] += 1
         x, y, w, h = argv.box
         context.tasker.controller.post_click(x + w // 2, y + h // 2).wait()
         log("game update accepted: restarting the game")
@@ -436,18 +443,21 @@ class AcceptUpdate(CustomAction):
         detail = context.run_task("RecoverL3")
         if not (detail and detail.status.succeeded):
             log("the restart after the update did not reach the title")
-        restarted()
+        forget_game_state()
         return True
 
 
-# The User Agreement's two "I agree." boxes (top-left of their inside, 19 x 19) and its Confirm, live 2026-10-21.
-AGREE_BOXES = ((338, 452), (828, 452))
+# The User Agreement's two "I agree." boxes (top-left of their inside, AGREE_SIZE square) and its Confirm, live 2026-10-21.
+AGREE_BOXES, AGREE_SIZE = ((338, 452), (828, 452)), 19
 AGREE_CONFIRM = (831, 513)
 
 
 def agree_ticked(image, x, y):
-    """A white tick in the box; unticked it is black inside (live: 0 % of its pixels over 150 grey, ticked 26-30 %)."""
-    return (image[y:y + 19, x:x + 19].mean(axis=2) > 150).mean() > 0.1
+    """A white tick in the box; unticked it is black inside (live: 0 % of its pixels over 150 grey, ticked 26-30 %).
+
+    Read only once UserAgreement hit: on 6 other screens of tests/screens both boxes read ticked (test_title_dialogs).
+    """
+    return (image[y:y + AGREE_SIZE, x:x + AGREE_SIZE].mean(axis=2) > 150).mean() > 0.1
 
 
 @AgentServer.custom_action("AcceptTerms")
@@ -460,7 +470,7 @@ class AcceptTerms(CustomAction):
         image = screen(context)
         for x, y in AGREE_BOXES:
             if not agree_ticked(image, x, y):
-                image = tap_then(context, x + 9, y + 9, lambda i, x=x, y=y: agree_ticked(i, x, y))
+                image = tap_then(context, x + AGREE_SIZE // 2, y + AGREE_SIZE // 2, lambda i, x=x, y=y: agree_ticked(i, x, y))
                 if image is None:
                     log("User Agreement: a box did not tick")
                     return True  # MirrorHub looks again

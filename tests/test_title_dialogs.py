@@ -31,8 +31,9 @@ def game(monkeypatch):
 
     def click(x, y):
         state.taps.append((x, y))
+        n = actions.AGREE_SIZE
         for box in actions.AGREE_BOXES:
-            if not state.frozen and box[0] <= x < box[0] + 19 and box[1] <= y < box[1] + 19:
+            if not state.frozen and box[0] <= x < box[0] + n and box[1] <= y < box[1] + n:
                 state.image = tick(state.image, box)
         return MagicMock()
     ctx.tasker.controller.post_click.side_effect = click
@@ -40,14 +41,28 @@ def game(monkeypatch):
     monkeypatch.setattr(actions, "stop", lambda context, reason, line=None: state.stops.append(reason) or False)
     actions.RUN.clear()
     actions.RUN["settings"] = {"run": {"auto_accept_terms": True, "auto_download": True}}
+    actions.STUCK["updates"] = 0
     state.ctx = ctx
     yield state
     actions.RUN.clear()
+    actions.STUCK["updates"] = 0
 
 
 def test_the_boxes_read_ticked_or_not():
     assert not any(actions.agree_ticked(UNTICKED, *b) for b in actions.AGREE_BOXES)
     assert all(actions.agree_ticked(TICKED, *b) for b in actions.AGREE_BOXES)
+
+
+def test_sweep_where_both_boxes_read_ticked():
+    # CODING_STANDARDS: the brightness test's false positives over tests/screens. Harmless: it is read only once
+    # UserAgreement hit, and a box reading ticked by mistake is only left untapped (Confirm stays dim).
+    hits = []
+    for png in sorted(SCREENS.glob("*.png")):
+        image = np.asarray(Image.open(png).convert("RGB"))[:, :, ::-1]
+        if image.shape[:2] == (720, 1280) and all(actions.agree_ticked(image, *b) for b in actions.AGREE_BOXES):
+            hits.append(png.name)
+    assert hits == ["BattleTurnLit.png", "BossGiftTrialsHard.png", "RunVictory.png", "SinnersTab.png",
+                    "TeamSelect.png", "Title.png", "UserAgreementTicked.png"]
 
 
 def test_both_boxes_are_ticked_then_confirm(game):
@@ -90,3 +105,18 @@ def test_an_update_dialog_is_pressed_and_the_game_restarted(game):
     assert game.taps == [(640, 470)]
     game.ctx.run_task.assert_called_once_with("RecoverL3")
     assert "turn" not in actions.RUN and "map_misses" not in actions.RUN  # the restarted game starts the battle over
+
+
+def test_an_update_notice_that_keeps_coming_back_stops_the_bot(game):
+    box = SimpleNamespace(box=[600, 460, 80, 20])
+    assert actions.AcceptUpdate().run(game.ctx, box) and actions.AcceptUpdate().run(game.ctx, box)
+    assert not actions.AcceptUpdate().run(game.ctx, box)
+    assert game.ctx.run_task.call_count == 2 and "update" in game.stops[0]
+
+
+def test_a_confirmed_download_drops_the_floor_time_limit(game):
+    # Live 2026-10-21: 32 min of download; the floor's limit would have restarted the game mid-download.
+    actions.RUN["deadline"] = 0
+    actions.ConfirmDownload().run(game.ctx, SimpleNamespace(box=[600, 460, 80, 20]))
+    assert "deadline" not in actions.RUN
+    actions.STUCK["watch"].reset()

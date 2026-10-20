@@ -111,6 +111,7 @@
             "NoBatchOCR",
             "Connecting",
             "RetryPopup",
+            "UpdateDialog",
             "PopupButton",
             "BattleTurn",
             "BattlePause"

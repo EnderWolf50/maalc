@@ -1161,6 +1161,7 @@ def test_the_teams_observed_gift_is_kept_out_of_a_fusion(context, monkeypatch):
 def test_confirm_download_taps_the_button_and_holds_the_watchdog(context, clock):
     # #86: after Confirm the download runs on a screen the hub does not know: it must not count as stuck.
     actions.STUCK["watch"].reset()
+    actions.RUN["settings"] = {"run": {"auto_download": True}}
     actions.ConfirmDownload().run(context, SimpleNamespace(box=[700, 450, 100, 30]))
     context.tasker.controller.post_click.assert_called_once_with(750, 465)
     assert actions.STUCK["watch"].held(actions.time.monotonic() + 60)

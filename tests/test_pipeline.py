@@ -65,7 +65,7 @@ def test_mirror_hub_reads_its_ocr_screens_through_hub_text():
     assert hud[-2:] == ["BattleTurn", "BattlePause"] and len(batch_plan(nodes, hud)) < 2
     # The server's popups before the turn run no OCR on a battle round (live A/B: 3 OCR a round, ~130 ms): a
     # template comes first, and MaaFramework's And stops at the first part that misses.
-    assert hud[0] == "NoBatchOCR" and hud[1:-2] == ["Connecting", "RetryPopup", "PopupButton"]
+    assert hud[0] == "NoBatchOCR" and hud[1:-2] == ["Connecting", "RetryPopup", "UpdateDialog", "PopupButton"]
     assert all(template_first(nodes, nodes[n]) for n in hud[1:-2])
     # Connecting is a template: it waits in MirrorHub's list, ahead of HubText, as it does in BattleHUD's.
     assert hub.index("BattleHUD") < hub.index("Connecting") < hub.index("HubText")
