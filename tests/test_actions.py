@@ -10,6 +10,8 @@ from unittest.mock import DEFAULT, MagicMock
 import numpy as np
 import pytest
 
+from maa.define import Rect
+
 import actions
 import recovery
 
@@ -33,6 +35,7 @@ def clock(monkeypatch):
 def context(clock, monkeypatch):
     # The action's page stays up: #118's guard is driven on its own (page_until).
     monkeypatch.setattr(actions, "page_guard", lambda context, home, image=None: actions.screen(context) if image is None else image)
+    monkeypatch.setattr(actions, "FEATURE_MATCH", set())  # fakes read every roi in screen coordinates: no cut-outs
     ctx = MagicMock()
     ctx.tasker.controller.post_screencap.return_value.wait.return_value.get.return_value = np.zeros((720, 1280, 3), np.uint8)
     ctx.run_recognition.return_value = None  # OCR reads nothing, no node hits
@@ -1145,6 +1148,51 @@ def test_a_search_tab_tap_waits_for_the_neighbour_tab_to_show_first(context, clo
     assert tab[0] == "Keywordless" and not pending  # the Keywordless gifts show when it returns
 
 
+def test_a_search_tab_whose_gifts_take_two_seconds_is_waited_for_not_read_early(context, clock):
+    # Live 2026-10-20 (#190): Keywordless lit at once but its grid took over 1.6 s; the 1 s wait timed out and
+    # the bot read Blunt's gifts: "Spiderweb ... not on the page", and the gift went unbought.
+    tab, tapped = ["Poise"], {}
+
+    def click(x, y):
+        tapped.update(tab=actions.SEARCH_TABS[(x - 113) // 62], at=actions.time.monotonic())
+        return MagicMock()
+
+    def shot():
+        if tapped and actions.time.monotonic() - tapped["at"] >= (2.0 if tapped["tab"] == "Keywordless" else 0.5):
+            tab[0] = tapped["tab"]
+        return np.full((720, 1280, 3), 20 * actions.SEARCH_TABS.index(tab[0]), np.uint8)
+    context.tasker.controller.post_click.side_effect = click
+    context.tasker.controller.post_screencap.return_value.wait.return_value.get.side_effect = shot
+    actions.GiftSearch.open_tab(context, "Keywordless")
+    assert tab[0] == "Keywordless"
+
+
+def test_a_search_tab_tap_that_did_nothing_is_tapped_again(context, clock):
+    # #190: the grid not moving for the whole wait means the tap was lost: tap the tab once more, not read on.
+    tab, own_taps = ["Poise"], []
+
+    def click(x, y):
+        name = actions.SEARCH_TABS[(x - 113) // 62]
+        if name == "Keywordless":
+            own_taps.append(name)
+        if name != "Keywordless" or len(own_taps) > 1:  # the first Keywordless tap is lost
+            tab[0] = name
+        return MagicMock()
+    context.tasker.controller.post_click.side_effect = click
+    context.tasker.controller.post_screencap.return_value.wait.return_value.get.side_effect = lambda: np.full((720, 1280, 3), 20 * actions.SEARCH_TABS.index(tab[0]), np.uint8)
+    actions.GiftSearch.open_tab(context, "Keywordless")
+    assert tab[0] == "Keywordless" and len(own_taps) == 2
+
+
+def test_a_search_tab_is_not_tapped_again_once_the_page_is_gone(context, clock, guarded):
+    # #118 + #190: the second tap comes after the 5 s wait; the search page may have been left by then.
+    page_until(context, "GiftSearch", 2)  # the neighbour's tap and the first Keywordless tap went out
+    context.tasker.controller.post_screencap.return_value.wait.return_value.get.side_effect = lambda: np.zeros((720, 1280, 3), np.uint8)
+    with pytest.raises(actions.PageGone):
+        actions.GiftSearch.open_tab(context, "Keywordless")
+    assert len(taps(context)) == 2
+
+
 def test_the_consume_dialog_is_confirmed_once_it_stops_dropping_in(context, clock):
     # Live 2026-10-18 (run13c): Confirm was tapped as soon as "Consume" read, while the dialog still slid down
     # on its chains; the tap did nothing, no GET window came, and every GiftSearch call after it did the same.
@@ -1716,6 +1764,27 @@ def test_a_battle_gone_before_win_rate_is_handed_back(context, guarded):
     assert actions.PlayTurn().run(context, SimpleNamespace(box=[984, 531, 40, 20]))
     assert taps(context) == []
     assert actions.STUCK["flag"] is None
+
+
+def test_a_feature_match_hit_comes_back_in_screen_coordinates():
+    # #156: the node runs on a cut-out around its roi; its box is put back where it is on the screen.
+    ctx, calls = MagicMock(), []
+
+    def recognise(node, image, override):
+        calls.append((image.shape, override[node]["roi"]))
+        return SimpleNamespace(hit=True, box=Rect(10, 20, 30, 40))
+    ctx.run_recognition.side_effect = recognise
+    hit = actions.seen(ctx, np.zeros((720, 1280, 3), np.uint8), "MapNodeEvent", [500, 300, 120, 120])
+    (h, w, _), roi = calls[0]
+    assert w < 1280 and h < 720 and roi[2:] == [120, 120]  # a cut-out, the roi's size kept
+    dx, dy = 500 - roi[0], 300 - roi[1]
+    assert dx % actions.FEATURE_ALIGN == 0 and dy % actions.FEATURE_ALIGN == 0
+    assert tuple(hit.box) == (10 + dx, 20 + dy, 30, 40)
+
+
+def test_feature_match_lists_every_feature_match_node_of_the_pipeline():
+    from test_pipeline import load_nodes, recognition
+    assert actions.FEATURE_MATCH == {n for n, spec in load_nodes().items() if recognition(spec)[0] == "FeatureMatch"}
 
 
 def test_forfeit_reads_its_dialogs_however_ocr_cases_them(context, monkeypatch):

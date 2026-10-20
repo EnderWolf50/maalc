@@ -18,6 +18,7 @@ from maa.agent.agent_server import AgentServer
 from maa.context import Context
 from maa.custom_action import CustomAction
 from maa.custom_recognition import CustomRecognition
+from maa.define import Rect
 
 import battle
 import gift_search
@@ -728,6 +729,7 @@ class GiftGet(CustomAction):
 
 
 # E.G.O Gift Search page (live 2026-10-16, 1.117.0). Tabs left to right, 62 px apart.
+GRID_SWITCH_TIMEOUT = 5  # s a tab's gifts may take to show; they change in well under that, an empty tab pays it all
 SEARCH_TABS = ["Burn", "Bleed", "Tremor", "Rupture", "Sinking", "Poise", "Charge", "Slash", "Pierce", "Blunt", "Keywordless"]
 SEARCH_COUNT = [1010, 550, 190, 50]  # "Select 0/3"
 SEARCH_OWNED = ([935, 26, 120, 38], [1065, 26, 80, 38])  # "1315-270" and "1045"
@@ -866,11 +868,18 @@ class GiftSearch(CustomAction):
     def open_tab(context, keyword):
         """Open keyword's tab at its top: switching tabs resets the scroll (live 2026-10-16), so via a neighbour."""
         i = SEARCH_TABS.index(keyword)
-        for x in (113 + 62 * (i + 1 if i == 0 else i - 1), 113 + 62 * i):
+        for x, attempts in ((113 + 62 * (i + 1 if i == 0 else i - 1), 1), (113 + 62 * i, 2)):
             # Live (run13): the tab lights up at once, its gifts a few looks later; a tap sent before then was
             # lost, or the grid read showed the last tab's gifts. Wait for the gifts to change, then the fade.
+            # Live 2026-10-20 (#190): Keywordless's grid took over 1.6 s, so a 1 s wait read Blunt's gifts.
             before = screen(context)
-            tap_then(context, x, 190, lambda im: grid_moved(before, im), timeout=1)
+            for attempt in range(attempts):  # the wanted tab's tap may be lost: the grid then never moves, so tap it again
+                if attempt:
+                    page_guard(context, "GiftSearch")  # the retry comes after GRID_SWITCH_TIMEOUT: the page may be gone by then
+                if tap_then(context, x, 190, lambda im: grid_moved(before, im), timeout=GRID_SWITCH_TIMEOUT) is not None:
+                    break
+            else:
+                log(f"gift search: the grid did not change after tapping the tab at x={x}")
             still(context, timeout=1)
 
     @staticmethod
@@ -1027,6 +1036,8 @@ MARKS = {  # node -> (mark, roi around the slot centre)
     "MapNodeEvent": ("event", (-60, -60, 120, 120)),
     "MapNodeShop": ("shop", (-60, -60, 120, 120)),
 }
+FEATURE_MATCH = {"MapNodeFocusedHex", "MapNodeEvent", "MapNodeShop"}  # the pipeline's FeatureMatch nodes
+FEATURE_PAD, FEATURE_ALIGN = 64, 32  # px of the screen kept around a FeatureMatch roi; grid of the cut's corner
 ENTER = (1133, 543)
 MAP_RETRIES = 3  # RouteMap calls per floor that may enter nothing before the map is stuck
 MAP_LOOKS = 4  # looks, 1 s apart, for a linked slot before the fallback taps
@@ -1035,14 +1046,28 @@ PANEL_COST = [730, 545, 40, 35]  # the number by its Cost coin
 
 
 def seen(context, image, node, roi=None):
-    """The node's hit on image, its roi overridden and clipped to the screen; None on a miss."""
-    override = None
+    """The node's hit on image, its roi overridden and clipped to the screen; None on a miss.
+
+    #156: FeatureMatch runs SIFT over the whole image it is handed, its roi only masking the keypoints:
+    ~0.18 s per template on a full screen whatever the roi (41 map captures offline, #163). So a FEATURE_MATCH node gets the roi with a
+    FEATURE_PAD margin cut out (corner on a FEATURE_ALIGN grid, as SIFT's octaves halve), the box put back.
+    Only detail.box is put back: best_result and the result lists stay in the cut-out's coordinates.
+    """
+    override, dx, dy = None, 0, 0
     if roi:
         x, y, w, h = roi
         x0, y0 = max(0, x), max(0, y)
-        override = {node: {"roi": [x0, y0, min(1280, x + w) - x0, min(720, y + h) - y0]}}
+        x1, y1 = min(1280, x + w), min(720, y + h)
+        if node in FEATURE_MATCH:
+            dx, dy = (max(0, v - FEATURE_PAD) // FEATURE_ALIGN * FEATURE_ALIGN for v in (x0, y0))
+            image = image[dy:y1 + FEATURE_PAD, dx:x1 + FEATURE_PAD]
+        override = {node: {"roi": [x0 - dx, y0 - dy, x1 - x0, y1 - y0]}}
     detail = context.run_recognition(node, image, override)
-    return detail if detail and detail.hit else None
+    if not detail or not detail.hit:
+        return None
+    if dx or dy:
+        detail.box = Rect(detail.box[0] + dx, detail.box[1] + dy, detail.box[2], detail.box[3])
+    return detail
 
 
 def node_marks(context, image, cx, cy):
