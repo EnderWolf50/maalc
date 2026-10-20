@@ -116,13 +116,16 @@ def choice_open(image, y):
 
 
 CHOICE_LIST_Y = (165, 512)  # the option list's view; options past it are cut off
+CARD_GAP = 50  # px between two edges at most for a card's bottom and the next card's top: 8-20 apart, a card's own ~100
 
 
 def choice_cards(image):
     """Option frames top to bottom in the list's view as (top, bottom) y, None for an edge cut off (1280x720 BGR).
 
-    Read down the frames' left edge at x 700: a top edge is a double line (~9 px), a bottom edge a single one
-    (~3 px). EventChoicesUsed.png: [(170, 302), (320, 452), (469, None)], the third cut at the bottom.
+    Read down the frames' left edge at x 700. Two edges under CARD_GAP apart are a card's bottom and the next
+    card's top; an edge alone in the view is a top when a double line (~9 px), a bottom when a single one (~3 px).
+    Not the thickness first: the card a drag lifts over glows orange, its bottom edge 12-13 px (#196).
+    EventChoicesUsed.png: [(170, 302), (320, 452), (469, None)], the third cut at the bottom.
     """
     y0, y1 = CHOICE_LIST_Y
     bright = image[y0:y1, 700].astype(int).sum(1) > 200
@@ -132,9 +135,18 @@ def choice_cards(image):
             edges[-1][1] = y
         else:
             edges.append([y, y])
+
+    def top(k):
+        first, last = edges[k]
+        if k and first - edges[k - 1][1] < CARD_GAP:
+            return True
+        if k + 1 < len(edges):
+            return edges[k + 1][0] - last >= CARD_GAP
+        return k == 0 and last - first >= 6  # the last edge a card's height below another is its bottom
+
     cards = []
-    for first, last in edges:
-        if last - first >= 6:
+    for k, (first, last) in enumerate(edges):
+        if top(k):
             cards.append((first, None))
         elif cards and cards[-1][1] is None and cards[-1][0] is not None:
             cards[-1] = (cards[-1][0], last + 1)

@@ -1998,21 +1998,29 @@ class Event(CustomAction):
 
     @staticmethod
     def into_view(context, image, options, i):
-        """(y to tap, screen) for option i of a list that scrolls, dragged until its frame shows whole; (None, screen) when not found."""
+        """(y to tap, screen) for option i of a list that scrolls, dragged until its frame shows whole; (None, screen) when not found.
+
+        A screen with none of the options read (#196: one the read missed) is dragged on the same way, up first
+        (read_choices ends at the bottom), turning once at an end of the list.
+        """
         texts = [t for t, _, _ in options]
-        for _ in range(CHOICE_SCROLLS + 1):
+        step, turned = CHOICE_STEP, False
+        for _ in range(2 * CHOICE_SCROLLS + 1):
             seen = {}  # option index -> y, for the options on screen
             for t, y in Event.shown(context, image, True):
                 if name := run_start.match_pack(t, texts, margin=0):
                     seen.setdefault(texts.index(name), y)
             if i in seen:
                 return seen[i], image
-            if not seen:
-                return None, image
-            after = Event.drag(context, image, CHOICE_STEP if min(seen) > i else -CHOICE_STEP)
+            if seen:
+                step = CHOICE_STEP if min(seen) > i else -CHOICE_STEP
+            after = Event.drag(context, image, step)
             if after is None:
-                return None, image
-            image = after
+                if turned:
+                    return None, image
+                step, turned = -step, True
+            else:
+                image = after
         return None, image
 
     @staticmethod

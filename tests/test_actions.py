@@ -1324,10 +1324,12 @@ WIN_RATE_XY = (1004, 545)
 class Choices:
     """An event's choice page: option cards 130 px tall, 18 apart from y 170, in the list's view y 165-512;
     more than fit show a scrollbar and scroll() moves them. options are (text, hint); OCR reads a line only
-    where it shows whole. tapped: the option each tap hit, None when its card was not whole in view."""
+    where it shows whole. tapped: the option each tap hit, None when its card was not whole in view.
+    The card a drag lifts over lights up (live #196): an orange glow under its bottom edge, 13 px in all."""
 
     def __init__(self, context, monkeypatch, options, story=(), offset=0, scrollbar=True):
         self.options, self.story, self.offset, self.drags, self.tapped = options, story, offset, [], []
+        self.lit = None  # y the last drag lifted at
         self.end = max(0, 170 + 148 * len(options) - 18 - 508)
         self.scrollbar = scrollbar and self.end > 0
         ctl = context.tasker.controller
@@ -1340,6 +1342,7 @@ class Choices:
         assert 690 < x < 1165 and 165 < y < 512 and 165 < y + dy < 512  # on the list
         self.drags.append(dy)
         self.offset = min(max(self.offset - dy, 0), self.end)
+        self.lit = y + dy
 
     def tops(self):
         return [170 + 148 * k - self.offset for k in range(len(self.options))]
@@ -1354,7 +1357,8 @@ class Choices:
         image = np.zeros((720, 1280, 3), np.uint8)
         for t in self.tops():
             image[max(t, 165):max(min(t + 130, 512), 165), 700:1160] = (20, 30, 60)  # red-brown: open
-            for y in [*range(t, t + 9), *range(t + 127, t + 130)]:  # top edge double, bottom edge single
+            glow = 10 if self.lit is not None and t < self.lit < t + 130 else 0
+            for y in [*range(t, t + 9), *range(t + 127, t + 130 + glow)]:  # top edge double, bottom edge single
                 if 165 <= y < 512:
                     image[y, 690:1165] = 200
         if self.scrollbar:
@@ -1410,6 +1414,24 @@ def test_a_list_that_scrolls_is_read_whole_and_the_pick_scrolled_into_view(conte
     page = Choices(context, monkeypatch, options, DOLL, offset=100)  # left part way down
     actions.Event().run(context, None)
     assert page.tapped == [f"Option {best}."]
+
+
+def test_the_card_a_drag_lights_is_read_and_taken(context, monkeypatch):
+    # #196: four options, three in view. The drags light East on every screen it shows whole on; it was never read.
+    actions.RUN["team"] = {"keyword": "Burn"}
+    actions.RUN["settings"] = {"event_overrides": []}
+    options = [("North.", ""), ("East.", "Select to gain a Burn E.G.O Gift"), ("West.", ""), ("Turn back.", "")]
+    page = Choices(context, monkeypatch, options, ["Unknown story."])
+    actions.Event().run(context, None)
+    assert page.tapped == ["East."]
+
+
+def test_into_view_drags_on_past_options_it_did_not_read(context, monkeypatch):
+    # #196: the one card whole on screen is an option the read missed; it dragged no further and gave up.
+    page = Choices(context, monkeypatch, [(f"Option {k}.", "") for k in range(4)], offset=70)  # only Option 1 whole
+    options = [(f"Option {k}.", True, 0) for k in (0, 2, 3)]
+    y, _ = actions.Event.into_view(context, page.render(), options, 0)
+    assert y is not None and page.tops()[0] < y < page.tops()[0] + 130
 
 
 def test_an_option_cut_off_with_no_scrollbar_still_scrolls(context, monkeypatch):
