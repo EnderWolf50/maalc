@@ -9,12 +9,13 @@ import subprocess
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
-AGENT = ROOT / "agent"
-PIPELINE = ROOT / "assets/resource/base/pipeline"
+from test_pipeline import load_nodes
+
+AGENT = Path(__file__).resolve().parent.parent / "agent"
+TIMEOUT = 300  # a hung import fails its test instead of stalling the whole run
 
 # A recording AgentServer in place of MaaFramework's, as test_map_shop.py does; main.py's import registers the names.
-REGISTER = """
+REGISTER_SCRIPT = """
 import json, sys, types
 names = {"action": [], "recognition": []}
 def record(kind):
@@ -27,10 +28,6 @@ sys.modules["maa.agent.agent_server"] = stub
 import main
 print(json.dumps(names))
 """
-
-
-def python(code):
-    return subprocess.run([sys.executable, "-c", code], cwd=AGENT, capture_output=True, text=True, encoding="utf-8")
 
 
 def pipeline_names():
@@ -47,14 +44,13 @@ def pipeline_names():
             for item in value:
                 walk(item)
 
-    for path in sorted(PIPELINE.glob("*.json")):
-        lines = path.read_text(encoding="utf-8").splitlines()
-        walk(json.loads("\n".join(ln for ln in lines if not ln.strip().startswith("//"))))
+    walk(load_nodes())
     return {kind: sorted(found) for kind, found in names.items()}
 
 
 def test_main_registers_every_custom_name_the_pipeline_uses_once():
-    r = python(REGISTER)
+    r = subprocess.run([sys.executable, "-c", REGISTER_SCRIPT], cwd=AGENT, capture_output=True, text=True,
+                       encoding="utf-8", timeout=TIMEOUT)
     assert r.returncode == 0, r.stderr
     registered = json.loads(r.stdout.splitlines()[-1])
     # sorted lists, not sets: a name two modules register shows up twice
@@ -66,5 +62,6 @@ def test_every_module_imports_on_its_own():
     # interpreter; they start together, as one at a time adds up to half a minute.
     runs = {p.stem: subprocess.Popen([sys.executable, "-c", f"import {p.stem}"], cwd=AGENT, stderr=subprocess.PIPE,
                                      text=True, encoding="utf-8") for p in sorted(AGENT.glob("*.py"))}
-    failed = {module: run.communicate()[1].strip().splitlines()[-1:] for module, run in runs.items()}
-    assert {module: err for module, err in failed.items() if runs[module].returncode} == {}
+    last_error_line = {module: run.communicate(timeout=TIMEOUT)[1].strip().splitlines()[-1:]
+                       for module, run in runs.items()}
+    assert {module: line for module, line in last_error_line.items() if runs[module].returncode} == {}

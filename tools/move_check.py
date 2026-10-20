@@ -2,11 +2,12 @@
 
     uv run python tools/move_check.py <base> <head>
 
-Every removed and added line of `git diff <base> <head>` is compared as a multiset, leading indentation and blank
-lines ignored, so a function cut from one file and pasted into another (or one level deeper) cancels out. What is
-left is printed as `file:line: text`, added lines first. For a move this is the new import lines and the
-`actions.X` -> `<module>.X` rewrites in the tests; anything else is a change the move did not announce. Read it
-next to `git diff --color-moved=zebra --color-moved-ws=allow-indentation-change <base> <head>`.
+Every removed and added line of `git diff <base>...<head>` (from their merge-base, so what landed on <base> since
+stays out) is compared as a multiset, leading indentation and blank lines ignored, so a function cut from one file
+and pasted into another (or one level deeper) cancels out. What is left is printed as `file:line: text`, added
+lines first. For a move this is the new import lines and the `actions.X` -> `<module>.X` rewrites in the tests;
+anything else is a change the move did not announce. Read it next to
+`git diff --color-moved=zebra --color-moved-ws=allow-indentation-change <base>...<head>`.
 
 Exit code 0 when nothing is left over, 1 otherwise.
 """
@@ -21,7 +22,9 @@ HUNK = re.compile(r"^@@ -(\d+)(?:,\d+)? \+(\d+)")
 
 def changed_lines(base, head, cwd=None):
     """(added, removed): (file, line number, text without leading whitespace) of every non-blank changed line."""
-    diff = subprocess.run(["git", "diff", "-U0", "--no-color", "--no-ext-diff", base, head], cwd=cwd, check=True,
+    # a/ b/ prefixes and unquoted paths whatever the user's diff.noprefix or core.quotepath says
+    diff = subprocess.run(["git", "-c", "core.quotepath=false", "diff", "-U0", "--no-color", "--no-ext-diff",
+                           "--src-prefix=a/", "--dst-prefix=b/", f"{base}...{head}"], cwd=cwd, check=True,
                           capture_output=True, text=True, encoding="utf-8").stdout
     added, removed = [], []
     old = new = None
@@ -50,23 +53,22 @@ def changed_lines(base, head, cwd=None):
     return added, removed
 
 
+def leftover(lines, other):
+    """The lines that no line of `other` with the same text pairs off, each line of `other` used once."""
+    spare = Counter(text for _, _, text in other)
+    left = []
+    for path, no, text in lines:
+        if spare[text]:
+            spare[text] -= 1
+        else:
+            left.append((path, no, text))
+    return left
+
+
 def unmatched(base, head, cwd=None):
-    """The added and removed lines that no removed or added line with the same text pairs off."""
+    """(added, removed): the changed lines the other side does not account for as moved."""
     added, removed = changed_lines(base, head, cwd)
-    spare_removed = Counter(text for _, _, text in removed)
-    spare_added = Counter(text for _, _, text in added)
-    left_added, left_removed = [], []
-    for line in added:
-        if spare_removed[line[2]]:
-            spare_removed[line[2]] -= 1
-        else:
-            left_added.append(line)
-    for line in removed:
-        if spare_added[line[2]]:
-            spare_added[line[2]] -= 1
-        else:
-            left_removed.append(line)
-    return left_added, left_removed
+    return leftover(added, removed), leftover(removed, added)
 
 
 def main():
