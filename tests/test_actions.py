@@ -1112,6 +1112,24 @@ def test_a_tooltip_that_stays_up_closes_the_fuse_page_for_the_visit(context, mon
     assert visit["fuse_scanned"] and closed
 
 
+def test_a_stuck_tooltip_is_not_tapped_at_once_the_fuse_page_is_gone(context, monkeypatch):
+    # #162: close_tooltip's taps are checked too, by the page's title (Leave is under the tooltip): gone after the
+    # keyword's OK, nothing more is tapped.
+    stuck_tooltip(context, monkeypatch, lambda taps: False)
+    inner = context.run_recognition.side_effect
+
+    def run_recognition(name, image, override=None):
+        taps = [c.args for c in context.tasker.controller.post_click.call_args_list]
+        if tuple((override or {}).get(name, {}).get("roi", ())) == tuple(actions.DIALOG_TITLE) and actions.FUSE_KEYWORD_OK in taps:
+            return None
+        return inner(name, image, override)
+    context.run_recognition.side_effect = run_recognition
+    with pytest.raises(actions.PageGone):
+        actions.Shop.fuse(context, {"keyword": "Burn", "gift_search": {"gifts": []}}, {})
+    taps = [c.args for c in context.tasker.controller.post_click.call_args_list]
+    assert taps[-1] == actions.FUSE_KEYWORD_OK
+
+
 def test_a_cut_off_cells_tooltip_is_closed_before_the_page_is_checked(context, monkeypatch):
     # Live 2026-10-21: a third-row cell's tooltip covers Leave, the Shop node's anchor. A page check while it showed
     # handed the shop back each time, and the bot looped on the fuse page under recovery. Here the check fails while
