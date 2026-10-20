@@ -1942,6 +1942,7 @@ EVENT_TEXT_TAPS = 30
 # the wait, and the text kept up at 0.15 s (no tap lost; the user's own taps 0.15 s).
 EVENT_TAP_EVERY, EVENT_READ_EVERY = 0.15, 3
 EVENT_TAKE = 1.5  # s a tap on an event page has to show
+EVENT_LABELS = {"skip", "proceed", "continue", "commence"}  # the Event node's expected, compact()ed
 EVENT_BUTTON_LABEL = [1040, 612, 190, 66]  # the Event node's roi: empty once the event page is gone
 EVENT_LIMIT = 180  # s one event may take before recovery L1 (AALC allows 300); a boss quiz of several rounds stays well under
 EVENT_GAP = 30  # s between two Event calls after which the next call is another event
@@ -2045,8 +2046,9 @@ class Event(CustomAction):
         pressed_at: time.monotonic() of a tap on the lit button just now, image the screen it was tapped on (#188:
         MirrorHub's look after it paused the taps 1.6-5.3 s). The button stays lit while the press fades out, its
         label read once a screen (1 OCR); the first screen without it is read before the next tap (3 OCRs). Lit with
-        another label read (SKIP, then Continue), it is the next button; lit EVENT_TAKE s on, the press was lost.
-        A label read empty or not at all is no other label: a press handed back while it fades would be pressed twice.
+        another label (SKIP, then Continue), it is the next button; lit EVENT_TAKE s on, the press was lost.
+        Only two labels read whole tell another button: one read empty or in part while it fades ("Contnue") is not,
+        as MirrorHub's Event node would still match the fading button and press it twice.
         """
         last, fading = 0.0, None
         if pressed_at is not None:
@@ -2062,7 +2064,7 @@ class Event(CustomAction):
                 if fading is None or time.monotonic() - pressed_at >= EVENT_TAKE:
                     break
                 label = compact(text(context, image, EVENT_BUTTON_LABEL))
-                if label and fading and label != fading:
+                if fading in EVENT_LABELS and label in EVENT_LABELS and label != fading:
                     break
                 continue
             read = n % EVENT_READ_EVERY == 0 or fading is not None

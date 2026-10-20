@@ -160,10 +160,10 @@ def test_event_text_is_tapped_through_until_the_choices_show(context):
     assert len(corner) == 3
 
 
-def event_text(context, choices_from=None, red_from=None, red_to=999, label_to=999, skip_to=0):
+def event_text(context, choices_from=None, red_from=None, red_to=float("inf"), label_to=float("inf"), skip_to=0, misread=()):
     """Event text running on: screenshot n (1 = Event.run's own) shows the Choices from choices_from on, the lit
-    button from red_from on until red_to and the button's label until label_to (SKIP until skip_to, then Continue);
-    returns the rois OCR read, in order."""
+    button from red_from on until red_to and the button's label until label_to (SKIP until skip_to, then Continue,
+    read "Contnue" on the screenshots in misread); returns the rois OCR read, in order."""
     shots, reads = [], []
 
     def screencap():
@@ -181,7 +181,7 @@ def event_text(context, choices_from=None, red_from=None, red_to=999, label_to=9
         if roi == tuple(actions.CHOICES_HEADER) and choices_from and image[0, 0, 0] >= choices_from:
             return SimpleNamespace(all_results=[SimpleNamespace(text="Choices", box=(700, 110, 100, 30))])
         if roi == tuple(actions.EVENT_BUTTON_LABEL) and image[0, 0, 0] < label_to:
-            label = "SKIP" if image[0, 0, 0] < skip_to else "Continue"
+            label = "SKIP" if image[0, 0, 0] < skip_to else "Contnue" if image[0, 0, 0] in misread else "Continue"
             return SimpleNamespace(all_results=[SimpleNamespace(text=label, box=(1065, 625, 140, 40))])
         return None
     context.run_recognition.side_effect = run_recognition
@@ -241,15 +241,17 @@ def test_a_lit_button_that_became_another_is_handed_back_at_once(context, clock)
     assert len(button_taps(context)) == 1 and len(corner_taps(context)) == 2
 
 
-def test_a_label_read_empty_while_it_fades_is_no_other_button(context, clock):
-    # Read empty mid-fade, or before the press: handed back, MirrorHub would press the fading button again.
-    event_text(context, red_from=1, red_to=5, label_to=3)
+@pytest.mark.parametrize("label_to, misread", [
+    (3, ()),  # read empty mid-fade
+    (1, ()),  # read empty before the press
+    (float("inf"), (1,)),  # read in part before the press
+    (3, (2,)),  # read in part mid-fade
+])
+def test_a_label_not_read_whole_while_it_fades_is_no_other_button(context, clock, label_to, misread):
+    # Handed back, MirrorHub's Event node would still match the fading button and press it again.
+    event_text(context, red_from=1, red_to=5, label_to=label_to, misread=misread)
     actions.Event().run(context, None)
-    assert len(button_taps(context)) == 1 and len(corner_taps(context)) == 4  # the 5th screen, unlit, has no label
-    context.reset_mock()
-    event_text(context, red_from=1, red_to=4, label_to=1)
-    actions.Event().run(context, None)
-    assert len(button_taps(context)) == 1 and len(corner_taps(context)) == 3
+    assert len(button_taps(context)) == 1 and len(corner_taps(context)) >= 4  # on through the fade's 3 lit screens
 
 
 def test_a_press_that_did_not_take_is_handed_back_to_be_pressed_again(context, clock):
