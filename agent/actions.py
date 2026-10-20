@@ -2337,6 +2337,11 @@ def tooltip_head(lines):
     return next((b for t, b in lines if compact(t).endswith("ogift")), None)
 
 
+def tooltip_up(context):
+    """Whether a gift tooltip shows over the fuse page now (tooltip_head on a fresh screenshot)."""
+    return tooltip_head(ocr(context, screen(context), FUSE_TOOLTIP)) is not None
+
+
 def fusions(cells, roles, slots, avoid):
     """shop.pick_fusion over the cells whose role is material and whose tier is read: [([cell index], tier)] (#77).
 
@@ -2750,7 +2755,7 @@ class Shop(CustomAction):
             Shop.to_main(context)
             return False
         tap(context, *FUSE_KEYWORD_OK, wait=1.5)
-        if tooltip_head(ocr(context, screen(context), FUSE_TOOLTIP)) and not Shop.close_tooltip(context):
+        if tooltip_up(context) and not Shop.close_tooltip(context):
             log("shop: a tooltip stays up on the fuse page: no fusion this visit")
             visit["fuse_scanned"] = True
             Shop.to_main(context)
@@ -2800,15 +2805,21 @@ class Shop(CustomAction):
         when one stays up.
 
         Live 2026-10-21: one stayed from a cell the grid had moved (Emerald Elytra) through every visit of the page. A
-        neutral tap closes a cell's tooltip but left that one; a cell's own took its place: the first cell's, in and out.
+        neutral tap closes a cell's tooltip but left that one; a cell's own took its place: the first cell's, in and out
+        (by hand: in, out with its tooltip still up, then the neutral tap). The page is told by its title before each:
+        page_guard's Leave is under the tooltip (ADR 0007).
         """
+        def on_fuse_page():
+            if not has(text(context, screen(context), DIALOG_TITLE), "Fuse"):
+                raise PageGone("Shop")
+        on_fuse_page()
         tap(context, *FUSE_NEUTRAL, wait=1)
-        if tooltip_head(ocr(context, screen(context), FUSE_TOOLTIP)):
-            x, y = FUSE_CELLS[0]
-            tap(context, x, y, wait=0.5)
-            tap(context, x, y, wait=0.5)  # out of the fusion again
+        if tooltip_up(context):
+            on_fuse_page()
+            tap(context, *FUSE_CELLS[0], wait=0.5)
+            tap(context, *FUSE_CELLS[0], wait=0.5)  # out of the fusion again
             tap(context, *FUSE_NEUTRAL, wait=1)
-        return not tooltip_head(ocr(context, screen(context), FUSE_TOOLTIP))
+        return not tooltip_up(context)
 
     @staticmethod
     def tooltip_roles(context, team, cells, roles, avoid):
