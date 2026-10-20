@@ -2819,6 +2819,10 @@ class Shop(CustomAction):
             return False
         tap_settled(context, *FUSE_KEYWORD_OK)
         image = screen(context)
+        # Live 2026-10-21: the page can come back with the last gift's tooltip up, over the third row and Leave.
+        if tooltip_head(ocr(context, image, FUSE_TOOLTIP)):
+            tap_settled(context, *FUSE_NEUTRAL, timeout=1.0)  # it fades: the grid is read once it is gone
+            image = screen(context)
         if image[495:515, 263:283].max(axis=2).mean() > 60:  # unticked: V ~30
             log("shop: Wishmaking is ticked (it spends owned Starlight): no fusion")
             Shop.to_main(context)
