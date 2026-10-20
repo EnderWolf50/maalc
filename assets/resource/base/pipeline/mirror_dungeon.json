@@ -287,7 +287,7 @@
         "custom_action": "PickStartingGift",
         "post_delay": 0
     },
-    // Confirms each window, the next gift's as soon as it is up, until none is left (GiftGet in actions.py).
+    // Confirms each window, the next gift's once the screen is still, until none is left (GiftGet in actions.py).
     "GiftGet": {
         "recognition": "OCR",
         "roi": [520, 160, 240, 40],

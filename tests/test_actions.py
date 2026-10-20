@@ -1558,8 +1558,8 @@ def test_a_picked_gift_is_checked_once_the_panel_shows_it(context, clock):
 
 
 def test_n_acquired_gift_popups_are_closed_in_one_action(context, clock):
-    # #115: n gifts, n popups: the title stays up and the gift's name changes. Each next window is closed as soon as
-    # its name shows, without a pass of MirrorHub in between (~0.7 s a window).
+    # #115: n gifts, n popups: the title stays up and the gift's name changes. Each next window is closed once the
+    # screen is still, without a pass of MirrorHub in between.
     names = ["Wound Clerid", "Spiderweb", "Ashes to Ashes"]
     page(context, {GIFT_POPUP: lambda clicks, looks: "E.G.O Gift GET!" if clicks < 3 else None,
                    GIFT_NAME: lambda clicks, looks: names[min(clicks, 2)]})
@@ -1575,6 +1575,18 @@ def test_a_name_plate_read_mid_fade_out_is_not_taken_for_the_next_window(context
                    GIFT_NAME: lambda clicks, looks: "Spiderweb" if looks < 3 else "Spiderw"})
     assert actions.GiftGet().run(context, argv())
     assert taps(context) == [(640, 532)]
+
+
+def test_the_next_gift_popup_is_tapped_once_it_has_stopped_moving(context, clock):
+    # The next window slides in (looks 2-4 differ), then holds still (looks 5, 6): its Confirm is tapped after that.
+    screens(context, [0, 40, 80, 120, 120])
+    shots = context.tasker.controller.post_screencap.return_value.wait.return_value.get
+    tapped_at = []
+    context.tasker.controller.post_click.side_effect = lambda x, y: tapped_at.append(shots.call_count) or MagicMock()
+    page(context, {GIFT_POPUP: lambda clicks, looks: "E.G.O Gift GET!" if clicks < 2 else None,
+                   GIFT_NAME: lambda clicks, looks: "Wound Clerid" if clicks == 0 else "Spiderweb"})
+    assert actions.GiftGet().run(context, argv())
+    assert len(tapped_at) == 2 and tapped_at[1] >= 5
 
 
 def test_a_gift_popup_confirm_that_did_not_take_is_left_to_the_hub(context, clock):
