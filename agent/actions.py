@@ -872,7 +872,7 @@ class GiftSearch(CustomAction):
             # Live (run13): the tab lights up at once, its gifts a few looks later; a tap sent before then was
             # lost, or the grid read showed the last tab's gifts. Wait for the gifts to change, then the fade.
             # Live 2026-10-20 (#190): Keywordless's grid took over 1.6 s, so a 1 s wait read Blunt's gifts.
-            before = screen(context)
+            before = page_guard(context, "GiftSearch")
             for attempt in range(attempts):  # the wanted tab's tap may be lost: the grid then never moves, so tap it again
                 if attempt:
                     page_guard(context, "GiftSearch")  # the retry comes after GRID_SWITCH_TIMEOUT: the page may be gone by then

@@ -1193,6 +1193,14 @@ def test_a_search_tab_is_not_tapped_again_once_the_page_is_gone(context, clock, 
     assert len(taps(context)) == 2
 
 
+def test_a_search_tab_is_not_tapped_once_the_page_is_gone_after_the_neighbours_tap(context, guarded):
+    # #118: the wait after the neighbour's tap is as long as the retry's; the wanted tab's first tap is guarded too.
+    page_until(context, "GiftSearch", 1)
+    with pytest.raises(actions.PageGone):
+        actions.GiftSearch.open_tab(context, "Keywordless")
+    assert len(taps(context)) == 1
+
+
 def test_the_consume_dialog_is_confirmed_once_it_stops_dropping_in(context, clock):
     # Live 2026-10-18 (run13c): Confirm was tapped as soon as "Consume" read, while the dialog still slid down
     # on its chains; the tap did nothing, no GET window came, and every GiftSearch call after it did the same.
