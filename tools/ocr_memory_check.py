@@ -2,8 +2,8 @@
 
 No emulator: a CustomController hands out tests/screens/*.png in turn, the repo's resource bundle (with the OCR
 model from tools/fetch_ocr.py) runs MirrorHub's next list round after round, every listed node's action does
-nothing (a custom action that only clears the cache when asked) and the agent is not started (its custom recognitions just miss). The Tasker runs in this process, so
-this process's memory is the Tasker's.
+nothing (a custom action that only clears the cache when asked) and the agent is not started (its custom
+recognitions just miss). The Tasker runs in this process, so this process's memory is the Tasker's.
 
     uv run --with opencv-python-headless python tools/ocr_memory_check.py --minutes 3 --csv mem.csv
 
@@ -160,9 +160,10 @@ def main():
     sampler.start()
     tasker.post_task("MirrorHub", override)
     end = t0 + args.minutes * 60
-    # tasker.running, not the job's status: a clear drops the task's id (running turns on with the first round)
+    # tasker.running, not the job's status: a clear drops the task's id. Before the first round the runner may
+    # not run yet; a task that gives no first screencap in 30 s has failed.
     while (time.monotonic() < end and sampler.is_alive()
-           and (tasker.running or not frames[0] and time.monotonic() - t0 < 30)):
+           and (tasker.running or (not frames[0] and time.monotonic() - t0 < 30))):
         time.sleep(0.5)
     tasker.post_stop().wait()
     stop.set()
