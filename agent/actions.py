@@ -1195,6 +1195,8 @@ class EnterNode(CustomAction):
 class RouteMap(CustomAction):
     """Pick the next node and enter it (spec 03 section 7).
 
+    A gift window over the map, or the last floor's map still up after a theme pack (wait_for_floor), goes back
+    to MirrorHub first.
     Slots linked to the bus (its lit line or a chevron on it) are typed by their marks, ranked by
     map_route.rank over the columns on screen and tapped in that order until the node panel (MapNodePanel)
     shows. After them come the fallbacks: the bus (a node reached but not entered; first after a restart or a
@@ -1223,12 +1225,12 @@ class RouteMap(CustomAction):
             return enter_node(context)
         RUN.pop("map_plan", None)
         for _ in range(MAP_LOOKS):  # live: right after a floor's theme pack, the map shows before its bus and links
-            if still(context) is None:
+            if (image := still(context)) is None:
                 return True  # still fading in or out: let MirrorHub look again
-            image, bus = self.find_bus(context)
             if seen(context, image, "GiftGet"):  # live 2026-10-19: it slid in over the map after a fight
                 log("map: an E.G.O gift window covers the map; MirrorHub takes it")
                 return True
+            image, bus = self.find_bus(context)
             bx, by = bus or BUS_REST  # no bus found: assume the map at rest
             slots = self.read_slots(context, image, bx, by) if bus else {}
             if slots:

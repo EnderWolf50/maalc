@@ -207,11 +207,14 @@ def test_the_map_title_gives_the_floor(context, shown, floor):
     assert actions.map_floor(context, np.zeros((720, 1280, 3), np.uint8)) == floor
 
 
-def test_a_map_that_does_not_pan_costs_no_extra_drags_once_a_node_is_entered(context, monkeypatch):
+def test_a_map_that_does_not_pan_costs_no_extra_drags_once_a_node_is_entered(context):
     # Only a floor's fresh map waits out its drags; elsewhere three pans stay the limit.
+    actions.RUN["fresh_floor"] = True  # set by the theme pack pull
     nodes = {(1, "mid"): {"cost"}}
     map_world(context, nodes, [], bus_x=446)
     ctl = context.tasker.controller
+    ctl.post_click(725, 391)  # a node's tap opens its panel
+    assert actions.enter_node(context)
     ctl.post_touch_move.side_effect = lambda x, y: MagicMock()
     actions.RouteMap.find_bus(context)
     assert ctl.post_touch_down.call_count == 3
@@ -229,3 +232,22 @@ def test_a_gift_window_over_the_map_after_a_battle_goes_back_to_mirror_hub(conte
     context.tasker.controller.post_click.assert_not_called()
     assert actions.STUCK["flag"] is None
     assert actions.RUN["map_plan"] == plan  # the floor's plan survives the window
+
+
+def test_a_gift_window_that_slides_in_over_the_bus_is_not_dragged_under(context, monkeypatch):
+    # The window can slide in after RouteMap's first look, with the bus still showing beside it.
+    monkeypatch.setattr(actions, "map_weights", lambda context: AB_WEIGHTS)
+    actions.RUN["floor"] = 3
+    map_world(context, {(1, "mid"): {"cost"}}, [], bus_x=446)
+    title_reads(context, "Exploring Floor 3")
+    recognize, looks = context.run_recognition.side_effect, []
+
+    def window(name, image, override=None):
+        if name != "GiftGet":
+            return recognize(name, image, override)
+        looks.append(name)
+        return SimpleNamespace(hit=True) if len(looks) > 1 else None
+    context.run_recognition.side_effect = window
+    actions.RouteMap().run(context, None)
+    context.tasker.controller.post_touch_down.assert_not_called()
+    context.tasker.controller.post_click.assert_not_called()
