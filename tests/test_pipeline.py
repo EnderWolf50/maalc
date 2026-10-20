@@ -104,6 +104,20 @@ def test_no_next_list_batches_two_ocr_recognitions_under_one_name():
     assert shared == {}
 
 
+def test_the_screens_that_lift_a_held_finger_are_hub_nodes():
+    # #150: hold_turn lifts on these; each is a MirrorHub screen (its list or HubText's entries, #157), so the hub
+    # acts on it once the finger is up. BattlePause, which holds again, is reached from BattleHUD.
+    import actions
+    nodes = load_nodes()
+    hub = [re.sub(r"^(\[\w+\])+", "", n) for n in nodes["MirrorHub"]["next"]]
+    hub += nodes["HubText"]["custom_recognition_param"]["entries"]
+    assert set(actions.BATTLE_LEFT) <= set(hub)
+    assert nodes["BattlePause"]["custom_action"] == "HoldTurn" and "BattlePause" in nodes["BattleHUD"]["next"]
+    # A popup over a playing turn lifts the finger; BattleHUD acts on it before BattlePause holds again.
+    battle = nodes["BattleHUD"]["next"]
+    assert all(battle.index(n) < battle.index("BattlePause") for n in actions.BATTLE_POPUPS)
+
+
 def test_batch_plan_follows_maaframework():
     nodes = load_nodes()
     assert batch_plan(nodes, ["Connecting", "RetryPopup", "MaintenanceNotice"]) == [

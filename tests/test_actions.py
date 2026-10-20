@@ -39,6 +39,7 @@ def context(clock, monkeypatch):
     ctx = MagicMock()
     ctx.tasker.controller.post_screencap.return_value.wait.return_value.get.return_value = np.zeros((720, 1280, 3), np.uint8)
     ctx.run_recognition.return_value = None  # OCR reads nothing, no node hits
+    ctx.tasker.stopping = False
     actions.RUN.clear()
     actions.RUN.update(settings={}, team={})  # a run plan in memory
     actions.STUCK["flag"] = None
@@ -553,6 +554,111 @@ def test_a_turn_starts_after_win_rate_lights_the_disc(context, monkeypatch):
     lit = iter([False, True])  # unlit on the turn's first look, lit after the Win Rate tap
     monkeypatch.setattr(actions.battle, "disc_lit", lambda image, x, y: next(lit, True))
     assert actions.PlayTurn().run(context, SimpleNamespace(box=[984, 531, 40, 20]))
+
+
+def touches(context):
+    """The controller's touch and tap calls, in order: ("down", (x, y)), ("up", ()), ("click", (x, y))."""
+    names = {"post_touch_down": "down", "post_touch_up": "up", "post_click": "click"}
+    return [(names[n], a) for n, a, _ in context.tasker.controller.method_calls if n in names]
+
+
+def hits(context, *shown):
+    """The nodes in shown hit on every screen; the others miss."""
+    context.run_recognition.side_effect = lambda name, image, override=None: (
+        SimpleNamespace(hit=True, box=[0, 0, 1, 1]) if name in shown else None)
+
+
+@pytest.mark.parametrize("shown", [("BattleTurn",), ("Victory",), ("WipeDialog",), ("RetryPopup",), ("Event",)])
+def test_a_held_finger_lifts_once_the_next_turn_or_another_screen_shows(context, clock, shown):
+    # #150: held from the turn's start until the next turn waits for input or the battle leaves the screen.
+    hits(context, *shown)
+    actions.hold_turn(context)
+    assert touches(context) == [("down", actions.HOLD_SPOT), ("up", ())]
+    assert sum(clock) < 1
+
+
+def test_a_held_finger_stays_down_while_the_pause_button_shows(context, clock):
+    # In a turn's first frames the Win Rate label can still match: the pause button says the turn plays.
+    hits(context, "BattlePause", "BattleTurn")
+    actions.hold_turn(context)
+    assert touches(context) == [("down", actions.HOLD_SPOT), ("up", ())]
+    assert sum(clock) == pytest.approx(actions.HOLD_LIMIT, abs=actions.HOLD_EVERY)
+
+
+@pytest.mark.parametrize("shown", actions.BATTLE_POPUPS)
+def test_a_held_finger_lifts_on_a_popup_over_the_battle(context, clock, shown):
+    # A popup over the battle with the pause button still showing: lift at once, not on it 6 s later.
+    hits(context, "BattlePause", shown)
+    actions.hold_turn(context)
+    assert touches(context) == [("down", actions.HOLD_SPOT), ("up", ())]
+    assert sum(clock) < 1
+
+
+def test_a_held_finger_reads_no_text_while_the_pause_button_shows(context, clock):
+    # #157: no OCR while a turn plays. The screens read by text (Victory, the wipe dialog, an event) hide the
+    # pause button (maa-tools test: BattlePause misses on each; it scores 0.34 at most, threshold 0.8).
+    hits(context, "BattlePause")
+    actions.hold_turn(context)
+    looked = {c.args[0] for c in context.run_recognition.call_args_list}
+    assert looked == {"BattlePause", *actions.BATTLE_POPUPS}
+
+
+def test_a_held_finger_lifts_through_a_controller_fetched_after_the_looks(context, clock):
+    # Live 2026-10-20: in the agent, a controller kept from before the looks (screen() fetches another) failed
+    # its touch up with an access violation, every hold: the finger stayed down until the next tap.
+    fresh = []
+
+    def controller(self):
+        ctl = MagicMock()
+        fresh.append(ctl)
+        return ctl
+    hits(context, "BattleTurn")
+    type(context.tasker).controller = property(controller)
+    try:
+        actions.hold_turn(context)
+    finally:
+        del type(context.tasker).controller
+    assert [c for c in fresh if c.post_touch_up.called] == [fresh[-1]]
+
+
+def test_a_held_finger_lifts_when_the_task_is_stopping(context, clock):
+    # #145: a finger left down when the bot stopped kept the panel tilted; L1-L3 and a game restart followed.
+    hits(context, "BattlePause")
+    looks = iter([False, False, True])
+    type(context.tasker).stopping = property(lambda self: next(looks))
+    try:
+        actions.hold_turn(context)
+    finally:
+        del type(context.tasker).stopping
+    assert touches(context) == [("down", actions.HOLD_SPOT), ("up", ())]
+
+
+def test_a_held_finger_lifts_on_an_error(context, clock):
+    context.tasker.controller.post_screencap.side_effect = RuntimeError("controller gone")
+    with pytest.raises(RuntimeError):
+        actions.hold_turn(context)
+    assert touches(context) == [("down", actions.HOLD_SPOT), ("up", ())]
+
+
+def test_a_turn_started_by_play_turn_is_held_until_the_next_turn(context, monkeypatch):
+    monkeypatch.setattr(actions.battle, "disc_lit", lambda image, x, y: True)
+    monkeypatch.setattr(actions, "turn_started", lambda context, image: True)
+    hits(context, "BattleTurn")
+    actions.PlayTurn().run(context, SimpleNamespace(box=[984, 531, 40, 20]))
+    assert [t for t, _ in touches(context)] == ["click", "down", "up"]  # START, then the hold
+
+
+def test_a_turn_that_did_not_start_is_not_held(context, monkeypatch):
+    monkeypatch.setattr(actions.battle, "disc_lit", lambda image, x, y: True)
+    monkeypatch.setattr(actions, "turn_started", lambda context, image: False)
+    actions.PlayTurn().run(context, SimpleNamespace(box=[984, 531, 40, 20]))
+    assert "down" not in [t for t, _ in touches(context)]
+
+
+def test_the_pause_button_holds_the_turn(context, clock):
+    hits(context, "Victory")
+    assert actions.HoldTurn().run(context, None)
+    assert touches(context) == [("down", actions.HOLD_SPOT), ("up", ())]
 
 
 def reads(context, texts):
@@ -1836,10 +1942,12 @@ WIN_RATE_XY = (1004, 545)
 class Choices:
     """An event's choice page: option cards 130 px tall, 18 apart from y 170, in the list's view y 165-512;
     more than fit show a scrollbar and scroll() moves them. options are (text, hint); OCR reads a line only
-    where it shows whole. tapped: the option each tap hit, None when its card was not whole in view."""
+    where it shows whole. tapped: the option each tap hit, None when its card was not whole in view.
+    The card a drag lifts over lights up (live #196): an orange glow under its bottom edge, 13 px in all."""
 
     def __init__(self, context, monkeypatch, options, story=(), offset=0, scrollbar=True):
         self.options, self.story, self.offset, self.drags, self.tapped = options, story, offset, [], []
+        self.lit = None  # y the last drag lifted at
         self.end = max(0, 170 + 148 * len(options) - 18 - 508)
         self.scrollbar = scrollbar and self.end > 0
         ctl = context.tasker.controller
@@ -1852,6 +1960,7 @@ class Choices:
         assert 690 < x < 1165 and 165 < y < 512 and 165 < y + dy < 512  # on the list
         self.drags.append(dy)
         self.offset = min(max(self.offset - dy, 0), self.end)
+        self.lit = y + dy
 
     def tops(self):
         return [170 + 148 * k - self.offset for k in range(len(self.options))]
@@ -1866,7 +1975,8 @@ class Choices:
         image = np.zeros((720, 1280, 3), np.uint8)
         for t in self.tops():
             image[max(t, 165):max(min(t + 130, 512), 165), 700:1160] = (20, 30, 60)  # red-brown: open
-            for y in [*range(t, t + 9), *range(t + 127, t + 130)]:  # top edge double, bottom edge single
+            glow = 10 if self.lit is not None and t < self.lit < t + 130 else 0
+            for y in [*range(t, t + 9), *range(t + 127, t + 130 + glow)]:  # top edge double, bottom edge single
                 if 165 <= y < 512:
                     image[y, 690:1165] = 200
         if self.scrollbar:
@@ -1922,6 +2032,32 @@ def test_a_list_that_scrolls_is_read_whole_and_the_pick_scrolled_into_view(conte
     page = Choices(context, monkeypatch, options, DOLL, offset=100)  # left part way down
     actions.Event().run(context, None)
     assert page.tapped == [f"Option {best}."]
+
+
+def test_the_card_a_drag_lights_is_read_and_taken(context, monkeypatch):
+    # #196: four options, three in view. The drags light East on every screen it shows whole on; it was never read.
+    actions.RUN["team"] = {"keyword": "Burn"}
+    actions.RUN["settings"] = {"event_overrides": []}
+    options = [("North.", ""), ("East.", "Select to gain a Burn E.G.O Gift"), ("West.", ""), ("Turn back.", "")]
+    page = Choices(context, monkeypatch, options, ["Unknown story."])
+    actions.Event().run(context, None)
+    assert page.tapped == ["East."]
+
+
+def test_into_view_drags_on_past_options_it_did_not_read(context, monkeypatch):
+    # #196: the one card whole on screen is an option the read missed; it dragged no further and gave up.
+    page = Choices(context, monkeypatch, [(f"Option {k}.", "") for k in range(4)], offset=70)  # only Option 1 whole
+    options = [(f"Option {k}.", True, 0) for k in (0, 2, 3)]
+    y, _ = actions.Event.into_view(context, page.render(), options, 0)
+    assert y is not None and page.tops()[0] < y < page.tops()[0] + 130
+
+
+def test_into_view_gives_up_at_the_end_the_pick_lies_beyond(context, monkeypatch):
+    # The options on screen put the pick above them: the top of the list ends the search, no turn back down.
+    page = Choices(context, monkeypatch, [(f"Option {k}.", "") for k in range(4)], offset=236)  # at the bottom
+    options = [("Gone.", True, 0)] + [(f"Option {k}.", True, 0) for k in range(4)]
+    y, _ = actions.Event.into_view(context, page.render(), options, 0)
+    assert y is None and page.drags == [150, 150, 150]  # two to the top, one that does not move
 
 
 def test_an_option_cut_off_with_no_scrollbar_still_scrolls(context, monkeypatch):
@@ -2102,7 +2238,7 @@ def test_a_guard_turn_on_a_hollow_gear_plays_win_rate_and_keeps_its_guard_turn(c
     actions.RUN["guard"] = 3
     actions.PlayTurn().run(context, SimpleNamespace(box=[984, 531, 40, 20]))
     assert not portrait_taps(context)
-    assert not context.tasker.controller.post_touch_down.called
+    assert [c.args for c in context.tasker.controller.post_touch_down.call_args_list] == [actions.HOLD_SPOT]  # no drag
     assert win_rate_taps(context)
     assert actions.RUN["guard"] == 3
 

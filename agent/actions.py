@@ -1068,6 +1068,7 @@ MARKS = {  # node -> (mark, roi around the slot centre)
 FEATURE_MATCH = {"MapNodeFocusedHex", "MapNodeEvent", "MapNodeShop"}  # the pipeline's FeatureMatch nodes
 FEATURE_PAD, FEATURE_ALIGN = 64, 32  # px of the screen kept around a FeatureMatch roi; grid of the cut's corner
 ENTER = (1133, 543)
+BACK_KEY = 4  # Android's back key (L1's too): closes the node panel
 MAP_RETRIES = 3  # RouteMap calls per floor that may enter nothing before the map is stuck
 MAP_LOOKS = 4  # looks, 1 s apart, for a linked slot before the fallback taps
 PANEL_REWARDS = [700, 495, 110, 30]  # the "Clear Rewards" label
@@ -1208,7 +1209,8 @@ class RouteMap(CustomAction):
     shows. After them come the fallbacks: the bus (a node reached but not entered; first after a restart or a
     recovery, #88), then the slots not tried yet. No bus on screen: the map is dragged about for it (#61).
     Nothing taking a tap spends one of the floor's map retries; when they run out, the map is stuck (spec 06);
-    with no bus found at all, at once at L2.
+    with no bus found at all, at once at L2. A map zoomed in on the bus is reset first (unzoom); one that stays so goes
+    to L2 at once too, or into the node when its panel stays up (L2 starts from the map's gear).
     When the best path's first node is entered, the rest of the path is the floor's plan: the next calls
     follow it (follow) until it is used up or does not fit the map.
     """
@@ -1219,6 +1221,10 @@ class RouteMap(CustomAction):
             return forfeit(context)
         if still(context) is None:
             return True  # still fading in or out: let MirrorHub look again
+        if not self.unzoom(context):  # its slots sit off where the offsets put them: L2 puts the map back
+            if seen(context, screen(context), "MapNodePanel"):  # L2 needs the map: enter the node instead
+                return enter_node(context)
+            return stuck("the map stays zoomed in on the bus", level=2)
         if self.follow(context):
             return enter_node(context)
         RUN.pop("map_plan", None)
@@ -1277,6 +1283,32 @@ class RouteMap(CustomAction):
         if RUN["map_misses"] >= MAP_RETRIES:
             return stuck(f"no node on the map took a tap, {MAP_RETRIES} times this floor")
         log("map: no node took a tap; MirrorHub looks again")
+        return True
+
+    @staticmethod
+    def unzoom(context):
+        """Whether the map is at its default zoom, after resetting it if it was zoomed in on the bus (#194).
+
+        Backing out of a node's formation leaves the camera zoomed in ~1.8x on the bus (MapBusZoomed), where
+        it stays (#162: 32 s, 5 drags and 4 taps changed nothing). The node panel zooms in the same way and
+        closing it puts the map back at rest (#111, 2026-10-18). The bus stands on the node backed out of, so
+        its tap opens that panel; closed, the bus's node is known to take a tap: it goes first (#88).
+        """
+        image = screen(context)
+        if seen(context, image, "MapBus") or not (zoomed := seen(context, image, "MapBusZoomed")):
+            return True
+        log("map: zoomed in on the bus; opening and closing its node panel")
+        x, y, w, h = zoomed.box
+        page_guard(context, "MirrorMap", image=image)
+        if tap_then(context, x + w // 2, y + h // 2, lambda im: seen(context, im, "MapNodePanel")) is None:
+            log("map: the zoomed bus took no tap")
+            return False
+        context.tasker.controller.post_click_key(BACK_KEY).wait()
+        if until(context, lambda im: seen(context, im, "MapBus"), timeout=3) is None:
+            log("map: still zoomed in after the back key")
+            return False
+        RUN["map_entered"] = False
+        RUN.pop("map_plan", None)  # its next step starts past the bus's node: read the map again
         return True
 
     @staticmethod
@@ -1637,6 +1669,48 @@ def press_start(context, disc):
     return False
 
 
+# #150: a finger held on the screen while a turn plays speeds up its E.G.O animations (user, 2026-10-18; no
+# difference seen on turns without one: 5.9 s held, 6.4 s not, over 16 turns). The top-left corner held then
+# touched nothing (docs/perf/2026-10-18-guard-chain-145.md); a lift there is a tap on whatever screen follows.
+HOLD_SPOT = (1, 1)
+HOLD_EVERY = 0.3  # s between looks, MirrorHub's rate_limit
+HOLD_LIMIT = 6  # s at most per hold (a turn without E.G.O plays ~6 s): then MirrorHub (its watchdog, recovery) looks; BattlePause holds a longer turn again
+# Screens that can follow a turn, besides the next turn: the finger lifts before their node acts.
+BATTLE_POPUPS = ("Connecting", "RetryPopup", "PopupButton")  # template-gated: looked for while a turn plays, no OCR (#157)
+BATTLE_LEFT = BATTLE_POPUPS + ("Victory", "WipeDialog", "Event", "ClaimPopup", "Loading")
+
+
+def hold_turn(context):
+    """Hold a finger on HOLD_SPOT while the turn plays: until the next turn waits for input, a screen of
+    BATTLE_LEFT shows, the task is stopping or HOLD_LIMIT s. Always lifted on return, also on an error:
+    a finger left down keeps the panel tilted and MirrorHub blind (#145)."""
+    end = time.monotonic() + HOLD_LIMIT
+    try:
+        context.tasker.controller.post_touch_down(*HOLD_SPOT).wait()
+        while time.monotonic() < end and not context.tasker.stopping:
+            time.sleep(HOLD_EVERY)
+            image = screen(context)
+            if seen(context, image, "BattlePause"):  # playing (the Win Rate label can still match in a turn's first frames)
+                if any(seen(context, image, n) for n in BATTLE_POPUPS):
+                    return  # a popup over the turn (the network)
+                continue
+            if seen(context, image, "BattleTurn") or any(seen(context, image, n) for n in BATTLE_LEFT):
+                return
+    finally:
+        # Fetched again: in the agent, one kept from before the looks failed its touch up with an access
+        # violation (live 2026-10-20, every hold), and the finger stayed down until the next tap.
+        context.tasker.controller.post_touch_up().wait()
+
+
+@AgentServer.custom_action("HoldTurn")
+class HoldTurn(CustomAction):
+    """BattlePause: a turn playing out (after a hold timed out, a recovery or an agent restart): hold_turn."""
+
+    def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
+        hold_turn(context)
+        return True
+
+
 # The guard chain drag, slower on each try (#145, live 2026-10-18, 12 slots). The game links a slot only if it
 # draws a frame while the finger is on it; during the drag it draws 9-30 frames a second, fewer under load
 # or with its window covered or minimised. 10 px moves 10 ms apart and no rest (#119) missed 7 of 88 drags
@@ -1676,14 +1750,18 @@ class PlayTurn(CustomAction):
                 guarded = self.guard(context, x, (dx, dy))
                 if not guarded:
                     log(f"turn {turn}: guard did not take, Win Rate instead")
+        started = True
         if guarded:
             RUN["guard"] = battle.guard_left(RUN["guard"], guarded)
             log(f"turn {turn}: started on guard, {RUN['guard']} guard turns left")
         elif self.win_rate(context, x, y, (dx, dy), turn):
             log(f"turn {turn}: started")
         else:
+            started = False
             log(f"turn {turn}: START did not start the turn")
         RUN["turn"] = tries  # counted once submitted: a hand-back (#118) is no submit
+        if started:
+            hold_turn(context)
         return True
 
     @staticmethod
@@ -2034,21 +2112,30 @@ class Event(CustomAction):
 
     @staticmethod
     def into_view(context, image, options, i):
-        """(y to tap, screen) for option i of a list that scrolls, dragged until its frame shows whole; (None, screen) when not found."""
+        """(y to tap, screen) for option i of a list that scrolls, dragged until its frame shows whole; (None, screen) when not found.
+
+        A screen with none of the options read (#196: one the read missed) is dragged on the same way, up first
+        (read_choices ends at the bottom), turning once at an end of the list. It gives up at an end of the
+        list the options on screen put the pick beyond, or at the second end with none of them read.
+        """
         texts = [t for t, _, _ in options]
-        for _ in range(CHOICE_SCROLLS + 1):
+        step, turned = CHOICE_STEP, False
+        for _ in range(2 * CHOICE_SCROLLS + 1):
             seen = {}  # option index -> y, for the options on screen
             for t, y in Event.shown(context, image, True):
                 if name := run_start.match_pack(t, texts, margin=0):
                     seen.setdefault(texts.index(name), y)
             if i in seen:
                 return seen[i], image
-            if not seen:
-                return None, image
-            after = Event.drag(context, image, CHOICE_STEP if min(seen) > i else -CHOICE_STEP)
+            if seen:
+                step = CHOICE_STEP if min(seen) > i else -CHOICE_STEP
+            after = Event.drag(context, image, step)
             if after is None:
-                return None, image
-            image = after
+                if turned or seen:  # both ends with none read, or the end the options on screen put it beyond
+                    return None, image
+                step, turned = -step, True
+            else:
+                image = after
         return None, image
 
     @staticmethod

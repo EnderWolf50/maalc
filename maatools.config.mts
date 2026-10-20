@@ -72,7 +72,9 @@ const screens: [image: string, hits: string[]][] = [
   ['MapCards.png', ['MirrorMap', 'MapBus', 'MapLinkUp', 'MapLinkMid', 'MapLinkDown', 'MapNodeCost', 'MapNodeGift', 'MapNodeFocusedRound', 'MapNodeEvent']],
   ['MapShop.png', ['MirrorMap', 'MapBus', 'MapLinkDown', 'MapNodeShop']],
   ['MapBoss.png', ['MirrorMap', 'MapBus', 'MapLinkMid', 'MapNodeCost', 'MapNodeGift', 'MapNodeBoss']],
-  ['MapNodePanel.png', ['MapNodePanel']],
+  ['MapNodePanel.png', ['MapNodePanel', 'MapBusZoomed']],  // the panel zooms the camera in on the bus
+  // Live 2026-10-20 (#194): the map after backing out of a node's formation, zoomed in ~1.8x on the bus.
+  ['MapZoomed.png', ['MirrorMap', 'MapBusZoomed']],
   // Battle. The forfeit screens (settings panel, Quit exploring) are read inside RouteMap's forfeit,
   // not by the hub, and the map icons still show through them.
   ['Formation.png', ['Formation']],
@@ -116,6 +118,10 @@ const screens: [image: string, hits: string[]][] = [
   ['EventStory.png', ['Event']],
   ['EventChoices.png', ['Event']],
   ['EventChoicesUsed.png', ['Event']],  // floor 5 boss's second round of questions: the first answer greyed out (#34)
+  // Live 2026-10-20 (#196): a drag lifts one card, lit orange; the list scrolled to its top, bottom and back.
+  ['EventChoicesLitTop.png', ['Event']],
+  ['EventChoicesLitBottom.png', ['Event']],
+  ['EventChoicesScrolledBack.png', ['Event']],
   ['EventCheck.png', ['Event']],
   ['EventResult.png', ['Event']],
   // Shop: Leave stays readable under the shop's own dialogs and pages; the heal page has Return instead.
