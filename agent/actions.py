@@ -1511,7 +1511,7 @@ def press_start(context, disc):
 # touched nothing (docs/perf/2026-10-18-guard-chain-145.md); a lift there is a tap on whatever screen follows.
 HOLD_SPOT = (1, 1)
 HOLD_EVERY = 0.3  # s between looks, MirrorHub's rate_limit
-HOLD_LIMIT = 6  # s at most per hold (a turn is ~6 s): then MirrorHub (its watchdog, recovery) looks; BattlePause holds again
+HOLD_LIMIT = 6  # s at most per hold (a turn without E.G.O plays ~6 s): then MirrorHub (its watchdog, recovery) looks; BattlePause holds a longer turn again
 # Screens that can follow a turn, besides the next turn: the finger lifts before their node acts.
 BATTLE_LEFT = ("Victory", "WipeDialog", "Event", "RetryPopup", "Connecting", "PopupButton", "ClaimPopup", "Loading")
 
@@ -1527,9 +1527,11 @@ def hold_turn(context):
         while time.monotonic() < end and not context.tasker.stopping:
             time.sleep(HOLD_EVERY)
             image = screen(context)
+            if any(seen(context, image, n) for n in BATTLE_LEFT):
+                return  # first: a dialog over the battle can leave the pause button showing
             if seen(context, image, "BattlePause"):
                 continue  # playing (the Win Rate label can still match in a turn's first frames)
-            if seen(context, image, "BattleTurn") or any(seen(context, image, n) for n in BATTLE_LEFT):
+            if seen(context, image, "BattleTurn"):
                 return
     finally:
         ctl.post_touch_up().wait()

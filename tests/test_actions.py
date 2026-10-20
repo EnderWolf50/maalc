@@ -509,7 +509,8 @@ def touches(context):
 
 def hits(context, *shown):
     """The nodes in shown hit on every screen; the others miss."""
-    context.run_recognition.side_effect =         lambda name, image, override=None: SimpleNamespace(hit=True, box=[0, 0, 1, 1]) if name in shown else None
+    context.run_recognition.side_effect = lambda name, image, override=None: (
+        SimpleNamespace(hit=True, box=[0, 0, 1, 1]) if name in shown else None)
 
 
 @pytest.mark.parametrize("shown", [("BattleTurn",), ("Victory",), ("WipeDialog",), ("RetryPopup",), ("Event",)])
@@ -527,6 +528,15 @@ def test_a_held_finger_stays_down_while_the_pause_button_shows(context, clock):
     actions.hold_turn(context)
     assert touches(context) == [("down", actions.HOLD_SPOT), ("up", ())]
     assert sum(clock) == pytest.approx(actions.HOLD_LIMIT, abs=actions.HOLD_EVERY)
+
+
+@pytest.mark.parametrize("shown", ["WipeDialog", "Event", "RetryPopup", "Connecting"])
+def test_a_held_finger_lifts_on_a_dialog_over_the_battle(context, clock, shown):
+    # A dialog sits over the battle with the pause button still showing: lift at once, not on it 6 s later.
+    hits(context, "BattlePause", shown)
+    actions.hold_turn(context)
+    assert touches(context) == [("down", actions.HOLD_SPOT), ("up", ())]
+    assert sum(clock) < 1
 
 
 def test_a_held_finger_lifts_when_the_task_is_stopping(context, clock):
