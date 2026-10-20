@@ -2039,13 +2039,13 @@ class Event(CustomAction):
 
     @staticmethod
     def advance(context, image, pressed_at=None):
-        """Text running on (the button grey): taps on a dead corner show it line by line; keep tapping until there
-        is something to act on, for MirrorHub's next look.
+        """Text running on (the button grey, or a press of it lit fading out): taps on a dead corner show it line by
+        line; keep tapping until there is something to act on, for MirrorHub's next look.
 
         A Choices page or a check prompt shows up to EVENT_READ_EVERY - 1 taps late: a tap on the dead corner picks nothing.
         pressed_at: time.monotonic() of a tap on the lit button just now, image the screen it was tapped on (#188:
         MirrorHub's look after it paused the taps 1.6-5.3 s). The button stays lit while the press fades out, its
-        label read once a screen (1 OCR); the first screen without it is read before the next tap (3 OCRs). Lit with
+        label read once a screen (1 OCR, besides the page check every EVENT_READ_EVERY taps); the first screen without it is read before the next tap (3 OCRs). Lit with
         another label (SKIP, then Continue), it is the next button; lit EVENT_TAKE s on, the press was lost.
         Only two labels read whole tell another button: one read empty or in part while it fades ("Contnue") is not,
         as MirrorHub's Event node would still match the fading button and press it twice.
