@@ -14,6 +14,7 @@ batch OCR can spike a few hundred MB and give it back, so peaks alone do not fai
 
 import argparse
 import ctypes
+import json
 import os
 import statistics
 import sys
@@ -25,6 +26,7 @@ ROOT = Path(__file__).resolve().parent.parent
 
 
 def memory_mb():
+    """(private, working set) in MB."""
     if sys.platform == "win32":
         class Counters(ctypes.Structure):
             _fields_ = [("cb", ctypes.c_ulong), ("PageFaultCount", ctypes.c_ulong)] + [
@@ -36,8 +38,10 @@ def memory_mb():
         k32.GetCurrentProcess.restype = ctypes.c_void_p
         k32.K32GetProcessMemoryInfo.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_ulong]
         k32.K32GetProcessMemoryInfo(k32.GetCurrentProcess(), ctypes.byref(c), c.cb)
-        return c.PagefileUsage / 2**20  # private bytes: the working set also moves when Windows trims it
-    return int(Path("/proc/self/statm").read_text().split()[1]) * os.sysconf("SC_PAGE_SIZE") / 2**20
+        # private bytes decide: the working set also moves when Windows trims it
+        return c.PagefileUsage / 2**20, c.WorkingSetSize / 2**20
+    rss = int(Path("/proc/self/statm").read_text().split()[1]) * os.sysconf("SC_PAGE_SIZE") / 2**20
+    return rss, rss
 
 
 def main():
@@ -85,6 +89,10 @@ def main():
 
     resource = Resource()
     resource.post_bundle(args.bundle).wait()
+    sys.path.insert(0, str(ROOT / "agent"))
+    from hub_text import HubText
+
+    resource.register_custom_recognition("HubText", HubText())  # the Agent's, in this process
     controller = Screens()
     controller.post_connection().wait()
     tasker = Tasker()
@@ -97,6 +105,20 @@ def main():
         name, jump_back = entry["name"], entry["jump_back"]
         override[name] = {"action": "DoNothing", "pre_delay": 0, "post_delay": 0, "on_error": [],
                           "next": [] if jump_back else ["MirrorHub"]}
+    # BattleHUD's own list runs too (the battle screen's popups and turn); its nodes go back through the jump back.
+    if hud := resource.get_node_data("BattleHUD"):  # (a bundle from before #157 has none)
+        override["BattleHUD"] = {"pre_delay": 0, "post_delay": 0}
+        for entry in hud["next"]:
+            override[entry["name"]] = {"action": "DoNothing", "pre_delay": 0, "post_delay": 0, "on_error": [],
+                                       "next": []}
+
+    # HubText's list: the screens it picks, then the tail; they too do nothing and come back.
+    if text := resource.get_node_data("HubText"):  # (a bundle from before #157 has none)
+        override["HubText"] = {"pre_delay": 0, "post_delay": 0}
+        param = text["recognition"]["param"]["custom_recognition_param"]
+        param = json.loads(param) if isinstance(param, str) else param
+        for name in param["entries"] + param["tail"]:
+            override[name] = {"action": "DoNothing", "pre_delay": 0, "post_delay": 0, "on_error": [], "next": []}
 
     samples = []
     t0 = time.monotonic()
@@ -104,10 +126,10 @@ def main():
 
     def sample():
         while not stop.is_set():
-            samples.append((time.monotonic() - t0, frames[0], memory_mb()))
+            samples.append((time.monotonic() - t0, frames[0], *memory_mb()))
             if len(samples) % 10 == 1:
-                t, f, m = samples[-1]
-                print(f"{t:6.0f} s  {f:6d} screens  {m:7.0f} MB", flush=True)
+                t, f, m, ws = samples[-1]
+                print(f"{t:6.0f} s  {f:6d} screens  {m:7.0f} MB  (working set {ws:.0f} MB)", flush=True)
             if samples[-1][2] > args.cap_mb:
                 print(f"over {args.cap_mb:.0f} MB, stopping", flush=True)
                 return
@@ -124,12 +146,13 @@ def main():
     sampler.join()
 
     if args.csv:
-        args.csv.write_text("seconds,screens,private_mb\n" + "".join(f"{t:.1f},{f},{m:.1f}\n" for t, f, m in samples))
+        args.csv.write_text("seconds,screens,private_mb,working_set_mb\n"
+                            + "".join(f"{t:.1f},{f},{m:.1f},{ws:.1f}\n" for t, f, m, ws in samples))
     last = samples[-1][0]
-    second = statistics.median([m for t, _, m in samples if 60 <= t < 120] or [samples[-1][2]])
-    final = statistics.median([m for t, _, m in samples if t >= last - 60])
+    second = statistics.median([m for t, _, m, _ in samples if 60 <= t < 120] or [samples[-1][2]])
+    final = statistics.median([m for t, _, m, _ in samples if t >= last - 60])
     grew = final - second
-    print(f"screens {frames[0]}, start {samples[0][2]:.0f} MB, peak {max(m for *_, m in samples):.0f} MB, "
+    print(f"screens {frames[0]}, start {samples[0][2]:.0f} MB, peak {max(s[2] for s in samples):.0f} MB, "
           f"median of minute 2 {second:.0f} MB, of the last minute {final:.0f} MB, growth {grew:.0f} MB")
     sys.exit(1 if grew > args.limit_mb or samples[-1][2] > args.cap_mb else 0)
 
