@@ -9,7 +9,8 @@ def reco(t, name, score, hit=True):
 
 
 def hub(t, name, score):
-    return [reco(t, "Stuck", 0, hit=False), reco(t, name, score)]
+    """One MirrorHub pass: HubText picks the OCR screens first (#157), then the screen hits."""
+    return [reco(t, "Stuck", 0, hit=False), reco(t, "HubText", 0), reco(t, name, score)]
 
 
 def test_a_span_and_its_longest_still_stretch():

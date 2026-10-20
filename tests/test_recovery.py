@@ -74,6 +74,13 @@ def test_watchdog_loading_and_connecting_in_turn_share_the_cap():
     assert w.see("Loading", dots(1), 151)
 
 
+def test_watchdog_another_screen_between_two_loads_starts_the_cap_over():
+    w = Watchdog()
+    assert not any(w.see("Loading", dots(t), t) for t in range(0, 140))
+    assert not w.see("Victory", B, 140)
+    assert not any(w.see("Loading", dots(t), t) for t in range(141, 290))
+
+
 def test_watchdog_a_still_screen_of_another_type_does_not_start_the_wait_still():
     w = Watchdog()
     for t in range(3):
