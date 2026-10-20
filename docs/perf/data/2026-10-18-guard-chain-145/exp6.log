@@ -1,0 +1,16 @@
+17:15:21 1792314921.62 b1 turn 0 slots=8 guard=True t_guard=4.00 delay=0.0 plaque_at_tap=0.23 start_after=0.65 hold=False playback=22.0s next=turn
+17:15:29 1792314929.04 b1 turn 1 slots=6 guard=True t_guard=2.45 delay=0.0 plaque_at_tap=0.23 start_after=0.46 hold=True playback=4.2s next=turn
+17:15:40 1792314940.95 b1 turn 2 slots=7 guard=True t_guard=2.76 delay=0.0 plaque_at_tap=0.23 start_after=0.50 hold=False playback=8.3s next=turn
+17:15:47 1792314947.65 b1 turn 3 slots=8 guard=True t_guard=2.98 delay=0.0 plaque_at_tap=0.21 start_after=0.47 hold=True playback=2.9s next=turn
+17:16:01 1792314961.28 b1 turn 4 slots=9 guard=True t_guard=3.25 delay=0.0 plaque_at_tap=0.22 start_after=0.45 hold=False playback=9.6s next=turn
+17:16:15 1792314975.04 b1 turn 5 slots=10 guard=True t_guard=3.59 delay=0.0 plaque_at_tap=0.19 start_after=0.59 hold=True playback=9.2s next=turn
+17:16:35 1792314995.19 b1b turn 0 slots=11 guard=True t_guard=3.81 delay=0.0 plaque_at_tap=0.22 start_after=0.47 hold=False playback=4.2s next=turn
+17:16:42 1792315002.87 b1b turn 1 slots=12 guard=True t_guard=4.03 delay=0.0 plaque_at_tap=0.21 start_after=0.43 hold=True playback=2.9s next=turn
+17:16:52 1792315012.48 b1b turn 2 slots=12 guard=True t_guard=4.04 delay=0.0 plaque_at_tap=0.22 start_after=0.45 hold=False playback=4.8s next=turn
+17:17:05 1792315025.74 b1b turn 3 slots=12 guard=True t_guard=4.15 delay=0.0 plaque_at_tap=0.22 start_after=0.53 hold=True playback=8.2s next=turn
+17:17:13 1792315033.54 b1b turn 4 slots=12 guard=True t_guard=4.13 delay=0.0 plaque_at_tap=0.22 start_after=0.46 hold=False playback=2.9s next=turn
+17:17:26 1792315046.77 b1b turn 5 slots=12 guard=True t_guard=4.16 delay=0.0 plaque_at_tap=0.22 start_after=0.46 hold=True playback=8.3s next=turn
+17:17:41 1792315061.92 b1b turn 6 slots=12 guard=True t_guard=4.06 delay=0.0 plaque_at_tap=0.22 start_after=0.58 hold=False playback=10.2s next=turn
+17:17:54 1792315074.52 b1b turn 7 slots=12 guard=True t_guard=4.08 delay=0.0 plaque_at_tap=0.22 start_after=0.45 hold=True playback=7.7s next=turn
+17:18:03 1792315083.68 b1b turn 8 slots=12 guard=True t_guard=4.16 delay=0.0 plaque_at_tap=0.22 start_after=0.12 hold=False playback=4.5s next=turn
+17:18:12 1792315092.44 b1b turn 9 slots=12 guard=True t_guard=4.09 delay=0.0 plaque_at_tap=0.22 start_after=0.46 hold=True playback=3.8s next=turn
