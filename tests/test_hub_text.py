@@ -42,6 +42,13 @@ def test_and_needs_every_part_or_any_and_others_always_check():
     close = [((560, 450, 80, 30), "OK", 0.9)]
     assert ht.pick([both, either, other], close) == ["Either", "Template"]
     assert ht.pick([both], close + [((440, 330, 100, 26), "Enter", 0.9)]) == ["Both"]
+    # A template gate in an And (#157, the battle popups) is left to the node's own check; HubText judges the text.
+    gate = {"recognition": {"type": "TemplateMatch", "param": {}}}
+    gated = node("Gated", {"type": "And", "param": {"all_of": [gate, {"recognition": CLOSE_RECO}]}})
+    assert gated[2] == ht.ocr_specs(CLOSE_RECO)
+    assert ht.pick([gated], close) == ["Gated"] and ht.pick([gated], []) == []
+    assert ht.ocr_specs({"type": "Or", "param": {"any_of": [gate, {"recognition": CLOSE_RECO}]}}) is None
+    assert ht.ocr_specs({"type": "And", "param": {"all_of": [gate]}}) is None
     own_model = ocr([0, 0, 10, 10], "x")
     own_model["param"]["model"] = "other"
     assert ht.ocr_specs(own_model) is None

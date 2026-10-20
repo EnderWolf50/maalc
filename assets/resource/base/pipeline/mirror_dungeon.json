@@ -19,6 +19,7 @@
         "next": [
             "Stuck",
             "[JumpBack]BattleHUD",
+            "[JumpBack]Connecting",
             "[JumpBack]HubText",
             "[JumpBack]MapNodePanel",
             "[JumpBack]MirrorMap",
@@ -34,7 +35,6 @@
         "custom_recognition": "HubText",
         "custom_recognition_param": {
             "entries": [
-                "Connecting",
                 "RetryPopup",
                 "MaintenanceNotice",
                 "DownloadDialog",
@@ -89,8 +89,8 @@
     // None of the screens HubText saw is up any more: back to MirrorHub (the jump back).
     "HubTextLost": {},
     // A battle screen (#157): the turn or the pause, without HubText's OCR pass over the skill text. The server's
-    // popups, which can come up mid-battle, still come before the turn here, one OCR each (~10-40 ms; batched they
-    // would slice the battle text again).
+    // popups, which can come up mid-battle, still come before the turn here, each behind a template (popups.json), so
+    // a battle round reads no text (one OCR each, ~130 ms a round in the live A/B before the gates).
     "BattleHUD": {
         "recognition": "Or",
         "any_of": [
@@ -252,10 +252,25 @@
         "action": "Custom",
         "custom_action": "ConfirmStarlight"
     },
+    // The Gift Search page has the same "Selected E.G.O Gift" header; only this page has the Activate Gift Search
+    // switch (ON or OFF). Live 2026-10-19 (#166): the search page fading in read as this page before its blue title
+    // could be read, and PickStartingGift tapped the search page.
     "StartingGift": {
-        "recognition": "OCR",
-        "roi": [780, 145, 230, 35],
-        "expected": "Selected E",
+        "recognition": "And",
+        "all_of": [
+            {
+                "recognition": "OCR",
+                "sub_name": "StartingGiftHeader",
+                "roi": [780, 145, 230, 35],
+                "expected": "Selected E"
+            },
+            {
+                "recognition": "OCR",
+                "sub_name": "StartingGiftSwitch",
+                "roi": [1040, 140, 80, 40],
+                "expected": "Activate"
+            }
+        ],
         "action": "Custom",
         "custom_action": "PickStartingGift"
     },

@@ -63,13 +63,28 @@ def test_mirror_hub_reads_its_ocr_screens_through_hub_text():
     assert batchable_ocr(nodes, "BattleHUD") == [] and nodes["BattleHUD"]["any_of"] == ["BattleTurn", "BattlePause"]
     hud = strip(nodes["BattleHUD"]["next"])
     assert hud[-2:] == ["BattleTurn", "BattlePause"] and len(batch_plan(nodes, hud)) < 2
+    # The server's popups before the turn run no OCR on a battle round (live A/B: 3 OCR a round, ~130 ms): a
+    # template comes first, and MaaFramework's And stops at the first part that misses.
+    assert hud[0] == "NoBatchOCR" and hud[1:-2] == ["Connecting", "RetryPopup", "PopupButton"]
+    assert all(template_first(nodes, nodes[n]) for n in hud[1:-2])
+    # Connecting is a template: it waits in MirrorHub's list, ahead of HubText, as it does in BattleHUD's.
+    assert hub.index("BattleHUD") < hub.index("Connecting") < hub.index("HubText")
     param = nodes["HubText"]["custom_recognition_param"]
     assert param["tail"] == hub[hub.index("HubText") + 1:]
-    for name in param["entries"]:  # all OCR, so HubText judges each (hub_text.ocr_specs)
+    for name in param["entries"]:  # OCR HubText judges (hub_text.ocr_specs): OCR, And / Or of OCR, gates in an And
         kind, params = recognition(nodes[name])
-        subs = [s if isinstance(s, dict) else nodes[s] for s in params.get("all_of", []) + params.get("any_of", [])]
-        assert kind == "OCR" or subs and all(recognition(s)[0] == "OCR" for s in subs), name
+        subs = [recognition(s if isinstance(s, dict) else nodes[s])[0] for s in params.get("all_of", []) + params.get("any_of", [])]
+        assert (kind == "OCR" or kind == "Or" and subs and all(s == "OCR" for s in subs)
+                or kind == "And" and "OCR" in subs and all(s in ("OCR", "TemplateMatch", "Or") for s in subs)), name
     assert len(batch_plan(nodes, ["NoBatchOCR", *param["entries"], *param["tail"]])) == 1
+
+
+def template_first(nodes, spec):
+    """Whether a recognition matches a template before any OCR runs: a template, an Or of them, an And led by one."""
+    kind, params = recognition(spec)
+    subs = [s if isinstance(s, dict) else nodes[s] for s in params.get("all_of", []) + params.get("any_of", [])]
+    return (kind == "TemplateMatch" or kind == "Or" and all(template_first(nodes, s) for s in subs)
+            or kind == "And" and template_first(nodes, subs[0]))
 
 
 def test_no_next_list_batches_two_ocr_recognitions_under_one_name():
@@ -87,5 +102,5 @@ def test_no_next_list_batches_two_ocr_recognitions_under_one_name():
 def test_batch_plan_follows_maaframework():
     nodes = load_nodes()
     assert batch_plan(nodes, ["Connecting", "RetryPopup", "MaintenanceNotice"]) == [
-        "Connecting", "RetryPopup", "MaintenanceNoticeText", "MaintenanceNoticeClose"]
+        "RetryPopupText", "MaintenanceNoticeText", "MaintenanceNoticeClose"]
     assert batch_plan(nodes, ["NoBatchOCR", "Connecting", "RetryPopup"]) == ["NoBatchOCRModel"]
