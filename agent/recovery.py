@@ -16,7 +16,7 @@ import numpy as np
 SAME_SCREEN = 5  # the same screen type and thumbnail this many times in a row is stuck
 # A waiting screen is stuck once it shows the very same picture WAIT_STILL s, or after WAIT_CAP s however it moves
 # (#179). Live 2026-10-19 (30 FPS, CPU 100%): Now Loading sat still up to 51 s in loads that came through on their
-# own, 59 and ~66 s in the two the back key was pressed on (#179); 2026-10-17 a dead one was still from the start.
+# own, 59 and ~66 s in the two the back key was pressed on (#179); 2026-10-17 one sat still from its start for 89.5 s.
 # The game's own server error comes ~130 s into a CONNECTING that never answers (#84): RetryPopup's, not ours.
 WAIT_SCREENS, WAIT_STILL, WAIT_CAP = {"Loading", "Connecting"}, 80, 150
 HASH_FLOOR = {"BattlePause": 30}  # a turn playing out may sit still a while: also this many seconds
