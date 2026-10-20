@@ -12,7 +12,7 @@
 - 「待截圖確認」表示這個畫面還沒有實機截圖，辨識方式是依 ticket 的描述暫定，截圖回來後要核對本章。已實機確認的畫面來自 2026-10-13 在 Limbus 1.116.2（MuMu 12，1280×720）上的一局普通鏡牢與一局困難鏡牢。（#7、#8、#19）
 - 「實機截圖」欄列出困難鏡牢那一局的代表截圖，以檔名列出（例如 `captures/176_f2boss_rewards_card.png`），逐張說明見 [captures-2026-10-13.md](captures-2026-10-13.md)。截圖本身只留在本機，尚未遮掉 UID 與帳號名稱；實作時依 #13 遮蔽、壓縮後搬進 `tests/`（[07](07-assets-and-testing.md#測試截圖的存放與授權)）。「—」表示這一局沒有截到。（#13）
 - 截圖中的座標與數值只是實測參考，不是規則；辨識方法的實機經驗見 [07](07-assets-and-testing.md#辨識方法的實機經驗)。
-- 認不出畫面超過 60 秒（載入畫面 90 秒）、同一畫面連續處理 5 次，都交給卡住處理。（#14）
+- 認不出畫面超過 60 秒（載入畫面不動 80 秒或超過 150 秒）、同一畫面連續處理 5 次，都交給卡住處理。（#14）
 - 用 OCR 找文字再點的按鈕（`Skip`、`Continue`、`Proceed` 這類），每個畫面最多點 5 次。（#16、#19）
 
 ## 導航與入口頁
@@ -79,7 +79,7 @@
 | 設定面板 Dungeon Progress | OCR：標題 `Dungeon Progress`、按鈕 `Progress`／`Forfeit`／`Continue`／`To Window`／`Config` | 讀每層難度與進度。L2 恢復時點 To Window；放棄這局時點 Forfeit；其他情況點 Continue 回地圖。面板上的 Parallel Superposition 開關不碰。實機：地圖頁按 Android 返回鍵也會打開這個面板（2026-10-16，#31） | 暫停確認對話框、地圖頁、放棄探索確認對話框、Progress 頁 | #8、#14、#17、#19 | `captures/31_gear_dungeon_progress.png`、`242_gear_before_forfeit.png` |
 | 暫停確認對話框 | OCR：標題 `Pause Exploration`、`Save your progress and return to the Main Menu?` | 點 Confirm | 主畫面（再經導航回入口頁 Resume） | #14 | `tests/screens/PauseExploration.png` |
 | 放棄探索確認對話框 | OCR：標題 `Pause Exploration`、`Quit exploring the dungeon?` | 標題和暫停確認對話框相同，必須用內文區分。這是從設定面板按 Forfeit 後出現的對話框；按 Confirm 會結束這一局。全滅後重打次數用完、全域選項為「放棄這局」時點 Confirm（[03](03-decisions.md#9-全滅與陣亡)）；其他情況點 Cancel | Defeat 畫面 → Exploration Complete → Exploration Reward 視窗（Confirm）、地圖頁（Cancel） | #8、#16、#19 | `captures/243_forfeit_dialog.png` |
-| 載入畫面 | OCR：`NOW LOADING`；OCR：右側中段 `Combat Tips`（#24 實機：不在右下） | 等待，逾時 90 秒 | 地圖頁、戰鬥、戰前編隊頁 | #14 | `captures/64_loading_combat_tips.png`、`240_after_accept_results.png` |
+| 載入畫面 | OCR：`NOW LOADING`；OCR：右側中段 `Combat Tips`（#24 實機：不在右下） | 等待，畫面不動 80 秒或超過 150 秒算卡住（#179） | 地圖頁、戰鬥、戰前編隊頁 | #14 | `captures/64_loading_combat_tips.png`、`240_after_accept_results.png` |
 
 ## 戰鬥
 

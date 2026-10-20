@@ -3,7 +3,7 @@ import json
 import numpy as np
 import pytest
 
-from recovery import Ladder, Watchdog, floor_limit, over_time, read_runs, run_limit, same_screen, thumb
+from recovery import WAIT_STILL, Ladder, Watchdog, floor_limit, over_time, read_runs, run_limit, same_screen, thumb
 
 
 def screen(level):
@@ -25,7 +25,7 @@ def test_same_screen_ignores_flicker_not_change():
 
 def test_watchdog_same_screen_five_times():
     w = Watchdog()
-    assert [w.see("MirrorMap", A, t) for t in range(5)] == [False] * 4 + [True]
+    assert [bool(w.see("MirrorMap", A, t)) for t in range(5)] == [False] * 4 + [True]
 
 
 def test_watchdog_a_change_starts_over():
@@ -34,13 +34,46 @@ def test_watchdog_a_change_starts_over():
         w.see("MirrorMap", A, t)
     assert not w.see("MirrorMap", B, 4)  # the map moved
     assert not w.see("Event", B, 5)  # same thumbnail, other screen type
-    assert [w.see("Event", B, t) for t in range(6, 10)] == [False, False, False, True]
+    assert [bool(w.see("Event", B, t)) for t in range(6, 10)] == [False, False, False, True]
 
 
-def test_watchdog_waits_go_by_time():
+def dots(n):
+    """Loading.png's NOW LOADING... as it animates: n of its 3 dots, a few pixels of one block."""
+    image = screen(100)
+    for i in range(n % 4):
+        image[648:652, 1200 + 6 * i:1204 + 6 * i] = 255
+    return thumb(image)
+
+
+def test_watchdog_a_moving_load_is_no_stuck_until_the_cap():
+    # #179: 30 FPS and a loaded CPU took 105 s over a Now Loading that kept moving.
     w = Watchdog()
-    assert not any(w.see("Loading", A, t) for t in range(0, 91, 10))  # 90 s is allowed, even unchanged
-    assert w.see("Loading", B, 91)  # whatever it shows
+    assert not any(w.see("Loading", dots(t), t) for t in range(0, 150))
+    assert w.see("Loading", dots(3), 151)  # WAIT_CAP: a load moving for ever is stuck too
+
+
+def test_watchdog_a_still_load_is_stuck_after_wait_still():
+    # #179: a load that came through sat still 59 and ~66 s on that host; #70: a dead one, 90 s still.
+    w = Watchdog()
+    assert not any(w.see("Loading", dots(t), t) for t in range(0, 30))  # moving
+    assert not any(w.see("Loading", A, t) for t in range(30, 30 + WAIT_STILL))  # still since 30
+    assert w.see("Loading", A, 30 + WAIT_STILL)
+
+
+def test_watchdog_a_load_that_moves_again_starts_the_still_clock_over():
+    w = Watchdog()
+    assert not any(w.see("Connecting", A, t) for t in range(0, 70))
+    assert not w.see("Connecting", dots(1), 70)
+    assert not any(w.see("Connecting", dots(1), t) for t in range(71, 70 + WAIT_STILL))
+    assert w.see("Connecting", dots(1), 70 + WAIT_STILL)
+
+
+def test_watchdog_a_still_screen_of_another_type_does_not_start_the_wait_still():
+    w = Watchdog()
+    for t in range(3):
+        w.see("Victory", A, t)
+    assert not any(w.see("Loading", A, t) for t in range(3, 3 + WAIT_STILL))  # the same picture, Loading since 3
+    assert w.see("Loading", A, 3 + WAIT_STILL)
 
 
 def test_watchdog_battle_pause_needs_30_s_too():
