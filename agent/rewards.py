@@ -6,6 +6,7 @@ actions.py reads the pages and taps; everything here is plain data in, plain dat
 import re
 from difflib import SequenceMatcher
 
+from ocrtext import compact, has
 from run_start import match_pack
 
 ODDS = ("very low", "low", "normal", "high", "very high")
@@ -29,7 +30,7 @@ def pick_choice(options, keyword, override=None, closed=(), event=None):
     open_ = [i for i in range(len(options)) if i not in closed]
     if override:
         for i in open_:
-            if _norm(override) in _norm(options[i]):
+            if compact(override) in compact(options[i]):
                 return i
     if event:
         return min(open_, key=lambda i: (*_rank(options[i], _entry(options[i], event), keyword), i), default=None)
@@ -150,7 +151,7 @@ def choice_scrollbar(image):
 
 def odds_rank(caption):
     """0 (Very Low) to 4 (Very High) for a skill-check caption; None when it reads as none of them."""
-    c = re.sub(r"[^a-z]", "", caption.lower())  # OCR drops the space and may misread the tail ("Normat")
+    c = re.sub(r"[^a-z]", "", compact(caption))  # OCR drops the space and may misread the tail ("Normat")
     very = c.startswith("very")
     rest = c[4:] if very else c
     level = next((w for w in ("high", "low", "normal") if rest[:2] == w[:2]), None)
@@ -170,14 +171,13 @@ def pick_checker(captions, skip=()):
 
 def card_type(text):
     """The reward card type its text stands for, or None (spec 03 section 11)."""
-    t = text.lower()
-    if "starlight" in t:
+    if has(text, "starlight"):
         return "Starlight"
-    if "resource" in t:
+    if has(text, "resource"):
         return "E.G.O Resource"
-    if "cost" in t:
-        return "Cost & Keyword Gift Chance" if "gift" in t or "chance" in t else "Cost"
-    if "gift" in t:
+    if has(text, "cost"):
+        return "Cost & Keyword Gift Chance" if has(text, "gift", "chance") else "Cost"
+    if has(text, "gift"):
         return "Random E.G.O Gift"
     return None
 
@@ -201,15 +201,15 @@ def gift_kind(text, keyword, owned, avoid=()):
 
 def names_gift(text, name, min_ratio=0.8):
     """Whether OCR text names the gift: the name's longest word shows in it, an OCR slip or two allowed."""
-    word, key = _norm(max(name.split(), key=len)), _norm(text)
+    word, key = compact(max(name.split(), key=len)), compact(text)
     return any(SequenceMatcher(None, key[i:i + len(word)], word).ratio() >= min_ratio
                for i in range(max(1, len(key) - len(word) + 1)))
 
 
 def trial_risk(text, risks):
     """Risk of the trial named in text (one OCR line); MAX_RISK when it is not in the table."""
-    exact = {_norm(n): n for n in risks}  # "Growth I" and "Growth II" are too alike for the fuzzy margin
-    name = exact.get(_norm(text)) or match_pack(text, list(risks))
+    exact = {compact(n): n for n in risks}  # "Growth I" and "Growth II" are too alike for the fuzzy margin
+    name = exact.get(compact(text)) or match_pack(text, list(risks))
     if name and _numeral(name) != _numeral(text):
         name = None  # fuzzy "Growth II" -> "Growth I" would understate the risk
     return risks[name] if name else MAX_RISK
@@ -255,10 +255,6 @@ def pick_gifts(ranked, read, tap):
             tap(i)
             now = read()
         count = now or count
-
-
-def _norm(s):
-    return "".join(c for c in s.lower() if c.isalnum())
 
 
 def _key(s):

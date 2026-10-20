@@ -7,7 +7,9 @@
     // Dispatch: every screen is one node; [JumpBack] nodes return here to look again.
     // next order is priority: Stuck (the watchdog, which must see every pass), global popups,
     // then dialogs before the page under them.
-    // rate_limit: a pass is ~0.1-0.5 s of work; the default 1000 ms between passes saw every new screen ~0.5 s late.
+    // The OCR screens sit in HubText, never in this list, where MaaFramework would batch them (#157); BattleHUD, two
+    // templates, comes before it: a battle screen needs no OCR pass over its skill text.
+    // rate_limit: a pass is ~0.05-0.5 s of work; the default 1000 ms between passes saw every new screen ~0.5 s late.
     "MirrorHub": {
         "timeout": 60000,
         "rate_limit": 300,
@@ -16,48 +18,123 @@
         ],
         "next": [
             "Stuck",
+            "[JumpBack]BattleHUD",
             "[JumpBack]Connecting",
-            "[JumpBack]RetryPopup",
-            "MaintenanceNotice",
-            "[JumpBack]DownloadDialog",
-            "[JumpBack]Loading",
-            "[JumpBack]ClaimPopup",
-            "[JumpBack]ParallelModePrompt",
-            "[JumpBack]PopupButton",
-            "[JumpBack]ExplorationReward",
-            "[JumpBack]RunVictory",
-            "[JumpBack]DefeatScreen",
-            "[JumpBack]ExplorationComplete",
-            "[JumpBack]MirrorEnterDialog",
-            "[JumpBack]ResumeDialog",
-            "[JumpBack]ParallelModeOn",
-            "[JumpBack]MirrorEntryUnclaimed",
-            "[JumpBack]MirrorEntryPaused",
-            "[JumpBack]MirrorEntryNewRun",
-            "[JumpBack]LevelWarning",
-            "[JumpBack]TeamSelect",
-            "[JumpBack]StarlightConfirm",
-            "[JumpBack]StarlightPage",
-            "[JumpBack]GiftGet",
-            "[JumpBack]GiftSearchForgo",
-            "[JumpBack]GiftSearch",
-            "[JumpBack]StartingGift",
-            "[JumpBack]ThemePack",
-            "[JumpBack]RewardCardForgo",
-            "[JumpBack]GiftRefuseDialog",
-            "[JumpBack]RewardCard",
-            "[JumpBack]GiftChoice",
-            "[JumpBack]Shop",
-            "[JumpBack]Event",
-            "[JumpBack]WipeDialog",
-            "[JumpBack]Victory",
-            "[JumpBack]Formation",
-            "[JumpBack]BattleTurn",
-            "[JumpBack]BattlePause",
-            "[JumpBack]ProgressPanel",
+            "[JumpBack]HubText",
             "[JumpBack]MapNodePanel",
             "[JumpBack]MirrorMap",
             "[JumpBack]GoToMirrorEntry"
+        ]
+    },
+    // MirrorHub's OCR screens, in priority order (#157): one OCR pass the Agent judges (agent/hub_text.py), then the
+    // screens that may be up, each with its own OCR. In MirrorHub's next list MaaFramework would batch them, and the
+    // batch re-reads every text box crossing a roi edge: a battle skill text 1 px into a dialog roi became a 443 x 1
+    // read padded to 21264 px wide, 7.6 s and the Tasker from 4 to 12 GB for good. Each entry ends back in MirrorHub.
+    "HubText": {
+        "recognition": "Custom",
+        "custom_recognition": "HubText",
+        "custom_recognition_param": {
+            "entries": [
+                "RetryPopup",
+                "MaintenanceNotice",
+                "DownloadDialog",
+                "Loading",
+                "ClaimPopup",
+                "ParallelModePrompt",
+                "PopupButton",
+                "ExplorationReward",
+                "RunVictory",
+                "DefeatScreen",
+                "ExplorationComplete",
+                "MirrorEnterDialog",
+                "ResumeDialog",
+                "ParallelModeOn",
+                "MirrorEntryUnclaimed",
+                "MirrorEntryPaused",
+                "MirrorEntryNewRun",
+                "LevelWarning",
+                "TeamSelect",
+                "StarlightConfirm",
+                "StarlightPage",
+                "GiftGet",
+                "GiftSearchForgo",
+                "GiftSearch",
+                "StartingGift",
+                "ThemePack",
+                "RewardCardForgo",
+                "GiftRefuseDialog",
+                "RewardCard",
+                "GiftChoice",
+                "Shop",
+                "Event",
+                "WipeDialog",
+                "Victory",
+                "Formation",
+                "ProgressPanel"
+            ],
+            "tail": [
+                "MapNodePanel",
+                "MirrorMap",
+                "GoToMirrorEntry"
+            ]
+        },
+        "pre_delay": 0,
+        "post_delay": 0,
+        "rate_limit": 300,
+        "timeout": 1000,
+        "on_error": [
+            "HubTextLost"
+        ]
+    },
+    // None of the screens HubText saw is up any more: back to MirrorHub (the jump back).
+    "HubTextLost": {},
+    // A battle screen (#157): the turn or the pause, without HubText's OCR pass over the skill text. The server's
+    // popups, which can come up mid-battle, still come before the turn here, each behind a template (popups.json), so
+    // a battle round reads no text (one OCR each, ~130 ms a round in the live A/B before the gates).
+    "BattleHUD": {
+        "recognition": "Or",
+        "any_of": [
+            "BattleTurn",
+            "BattlePause"
+        ],
+        "pre_delay": 0,
+        "post_delay": 0,
+        "rate_limit": 300,
+        "timeout": 3000,
+        "on_error": [
+            "BattleHUDLost"
+        ],
+        "next": [
+            "NoBatchOCR",
+            "Connecting",
+            "RetryPopup",
+            "PopupButton",
+            "BattleTurn",
+            "BattlePause"
+        ]
+    },
+    // The HUD went before its list saw anything: back to MirrorHub (the jump back), not the task's end.
+    "BattleHUDLost": {},
+    // Keeps MaaFramework from batching a next list's OCR (#157). The batch takes the model of the list's first OCR
+    // and leaves out the others (PipelineTask::try_add_ocr_node), so this node's model, which no other OCR uses,
+    // leaves a batch of one: none. Never hits; the 1 x 1 ColorMatch fails before the OCR, so the model is never
+    // loaded.
+    "NoBatchOCR": {
+        "recognition": "And",
+        "all_of": [
+            {
+                "recognition": "ColorMatch",
+                "sub_name": "NoBatchOCRGate",
+                "roi": [0, 0, 1, 1],
+                "lower": [0, 0, 0],
+                "upper": [255, 255, 255],
+                "count": 2
+            },
+            {
+                "recognition": "OCR",
+                "sub_name": "NoBatchOCRModel",
+                "model": "no-batch"
+            }
         ]
     },
     // Entry page with Parallel Superposition Mode ON (#94): switched OFF before anything else, the bot never plays
@@ -175,10 +252,25 @@
         "action": "Custom",
         "custom_action": "ConfirmStarlight"
     },
+    // The Gift Search page has the same "Selected E.G.O Gift" header; only this page has the Activate Gift Search
+    // switch (ON or OFF). Live 2026-10-19 (#166): the search page fading in read as this page before its blue title
+    // could be read, and PickStartingGift tapped the search page.
     "StartingGift": {
-        "recognition": "OCR",
-        "roi": [780, 145, 230, 35],
-        "expected": "Selected E",
+        "recognition": "And",
+        "all_of": [
+            {
+                "recognition": "OCR",
+                "sub_name": "StartingGiftHeader",
+                "roi": [780, 145, 230, 35],
+                "expected": "Selected E"
+            },
+            {
+                "recognition": "OCR",
+                "sub_name": "StartingGiftSwitch",
+                "roi": [1040, 140, 80, 40],
+                "expected": "Activate"
+            }
+        ],
         "action": "Custom",
         "custom_action": "PickStartingGift"
     },

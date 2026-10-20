@@ -4,6 +4,7 @@ import pytest
 import yaml
 
 import run_start as rs
+from ocrtext import compact
 
 LEVELS = ["plus2", "base", "plus", "base", "none", "none", "none", "none", "none", "base"]
 PRIORITY = [3, 1, 10, 4, 2, 5, 6, 7, 8, 9]
@@ -119,7 +120,7 @@ def test_every_pack_of_the_season_matches_itself_and_with_a_letter_lost():
     for name in packs:
         assert rs.match_title(name, packs) == name
         i = len(name) // 2
-        if len(rs._norm(name)) >= 6:
+        if len(compact(name)) >= 6:
             assert rs.match_title(name[:i] + name[i + 1:], packs) == name, name
 
 
