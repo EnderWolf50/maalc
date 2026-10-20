@@ -1201,6 +1201,29 @@ def test_a_search_tab_is_not_tapped_once_the_page_is_gone_after_the_neighbours_t
     assert len(taps(context)) == 1
 
 
+def test_a_search_grid_is_not_dragged_once_the_page_is_gone(context, guarded):
+    # #118: the drag after open_tab comes behind the tab's tap and fade; a page left meanwhile is not dragged.
+    page_until(context, "GiftSearch", 0)
+    with pytest.raises(actions.PageGone):
+        actions.GiftSearch.scroll(context, 600)
+    assert moved(context) == 0
+
+
+def test_the_second_icon_candidate_is_not_tapped_once_the_page_is_gone(context, guarded, monkeypatch):
+    # #118: the first candidate's tap and wait lie between the look and the second tap.
+    page_until(context, "GiftSearch", 1)
+    entry = next(g for g in actions.gift_data() if g["keyword"] == "Burn")
+    gift = {"name": entry["en"], "keyword": "Burn", "tier": entry["tier"]}
+    monkeypatch.setattr(actions.GiftSearch, "open_tab", staticmethod(lambda *a: None))
+    monkeypatch.setattr(actions.GiftSearch, "scroll", staticmethod(lambda *a: None))
+    monkeypatch.setattr(actions.gift_search, "gift_cells", lambda im: [(500, 300, gift["tier"]), (600, 300, gift["tier"])])
+    monkeypatch.setattr(actions.GiftSearch, "icon_scores", staticmethod(lambda *a: [(0.9, 500, 300), (0.9, 600, 300)]))
+    monkeypatch.setattr(actions.GiftSearch, "tap_and_check", staticmethod(lambda c, im, x, y, n: bool(c.tasker.controller.post_click(x, y)) and False))
+    with pytest.raises(actions.PageGone):
+        actions.GiftSearch.pick(context, gift)
+    assert taps(context) == [(500, 300)]
+
+
 def test_the_consume_dialog_is_confirmed_once_it_stops_dropping_in(context, clock):
     # Live 2026-10-18 (run13c): Confirm was tapped as soon as "Consume" read, while the dialog still slid down
     # on its chains; the tap did nothing, no GET window came, and every GiftSearch call after it did the same.

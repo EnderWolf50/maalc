@@ -846,9 +846,11 @@ class GiftSearch(CustomAction):
         for _ in range(12):
             image = page_guard(context, "GiftSearch")
             cells = gift_search.gift_cells(image)
-            for score, x, y in GiftSearch.icon_scores(context, image, entry["id"], [c for c in cells if c[2] == gift["tier"]])[:2]:
+            for k, (score, x, y) in enumerate(GiftSearch.icon_scores(context, image, entry["id"], [c for c in cells if c[2] == gift["tier"]])[:2]):
                 if score < ICON_MIN:
                     break
+                if k:
+                    page_guard(context, "GiftSearch")  # the first candidate's tap and wait lie behind this one
                 if GiftSearch.tap_and_check(context, image, x, y, gift["name"]):
                     log(f"gift search: {gift['name']} selected in {time.time() - start:.1f} s (icon {score:.2f})")
                     return True
@@ -888,6 +890,7 @@ class GiftSearch(CustomAction):
 
         Dragged past the tab's end, the grid springs back after the lift: wait that out.
         """
+        page_guard(context, "GiftSearch")  # the tab's tap and fade lie between the last look and this drag
         while abs(distance) > 20:
             step = max(-300, min(distance, 300))
             scroll(context, 430, 590 if step > 0 else 290, 0, -step)
