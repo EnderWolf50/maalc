@@ -336,6 +336,8 @@ class StuckFlag(CustomRecognition):
         STUCK["ladder"].progress(kind)
         if STUCK["flag"]:
             return
+        if kind == "Downloading":  # the game is away; the floor gets its whole time once the download is done
+            restart_floor_clock()
         if why := STUCK["watch"].see(kind, recovery.thumb(image), time.monotonic()):
             stuck(f"{kind}: {why}")
         elif recovery.over_time(kind, RUN.get("deadline"), time.time()):
@@ -389,6 +391,12 @@ def forget_game_state():
         RUN.pop(key, None)
 
 
+def restart_floor_clock():
+    """The floor time limit starts over (spec 06 每層超時); only in a run the bot started, which has floor_limit."""
+    if "floor_limit" in RUN:
+        RUN["deadline"] = time.time() + RUN["floor_limit"]
+
+
 def settings_now():
     """This run's settings, else the file's; None when it cannot be read."""
     if "settings" in RUN:
@@ -408,7 +416,7 @@ def allowed(key):
 @AgentServer.custom_action("ConfirmDownload")
 class ConfirmDownload(CustomAction):
     """Confirm the title's download dialog (the matched button), then hold the stuck detection until its progress
-    screen (Downloading, a waiting screen) is up. The floor's time limit goes: the download takes the game away (#86).
+    screen (Downloading, a waiting screen) is up. The floor's clock starts over: the download takes the game away (#86).
     """
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
@@ -417,7 +425,7 @@ class ConfirmDownload(CustomAction):
         x, y, w, h = argv.box
         context.tasker.controller.post_click(x + w // 2, y + h // 2).wait()
         STUCK["watch"].hold(time.monotonic(), recovery.DOWNLOAD_HOLD)
-        RUN.pop("deadline", None)  # live 2026-10-21: 32 min of download would trip it, and L3 mid-download
+        restart_floor_clock()  # live 2026-10-21: 32 min of download would trip it, and L3 mid-download
         log(f"download confirmed: nothing counts as stuck for {recovery.DOWNLOAD_HOLD // 60} min")
         return True
 
@@ -1042,8 +1050,7 @@ class PickThemePack(CustomAction):
         floor = int(m[1])
         if floor != RUN.get("floor"):
             RUN.update(floor=floor, map_misses=0)  # a new floor's map gets a fresh retry quota (spec 06)
-            if "floor_limit" in RUN:  # a run the bot started: the floor time limit starts over
-                RUN["deadline"] = time.time() + RUN["floor_limit"]
+            restart_floor_clock()
         want = None if run["difficulty"] is None else run_start.hard_wanted(floor, run["difficulty"] == "hard", run["team"]["hard_from_floor"])
         if not self.set_difficulty(context, floor, want):
             return stuck(f"floor {floor} difficulty did not switch to {'HARD' if want else 'NORMAL'}")

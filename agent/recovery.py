@@ -19,7 +19,8 @@ SAME_SCREEN = 5  # the same screen type and thumbnail this many times in a row i
 # own, 59 and ~66 s in the two the back key was pressed on (#179); 2026-10-17 one sat still from its start for 89.5 s.
 # The game's own server error comes ~130 s into a CONNECTING that never answers (#84): RetryPopup's, not ours.
 # Downloading has no cap: live 2026-10-21, 17.77 GB took ~32 min, its progress and background moving all along.
-WAIT_SCREENS, WAIT_STILL, WAIT_CAP = {"Loading", "Connecting", "Downloading"}, 80, {"Loading": 150, "Connecting": 150}
+WAIT_STILL, WAIT_CAP = 80, {"Loading": 150, "Connecting": 150}
+WAIT_SCREENS = WAIT_CAP.keys() | {"Downloading"}
 HASH_FLOOR = {"BattlePause": 30}  # a turn playing out may sit still a while: also this many seconds
 # Screens on the way back to a run after L2/L3: seeing them does not mean the stuck screen was got past.
 TRANSIT = {"Loading", "Connecting", "RetryPopup", "GoToMirrorEntry", "NavTitle", "NavMainTabs", "NavDrive",

@@ -18,7 +18,8 @@ UNTICKED, TICKED = (np.asarray(Image.open(SCREENS / f"{n}.png").convert("RGB"))[
 def tick(image, box):
     x, y = box
     out = image.copy()
-    out[y - 4:y + 23, x - 4:x + 23] = TICKED[y - 4:y + 23, x - 4:x + 23]
+    a, b = 4, actions.AGREE_SIZE + 4  # the box's frame too
+    out[y - a:y + b, x - a:x + b] = TICKED[y - a:y + b, x - a:x + b]
     return out
 
 
@@ -67,7 +68,7 @@ def test_sweep_where_both_boxes_read_ticked():
 
 def test_both_boxes_are_ticked_then_confirm(game):
     assert actions.AcceptTerms().run(game.ctx, None)
-    boxes = [(x + 9, y + 9) for x, y in actions.AGREE_BOXES]
+    boxes = [(x + actions.AGREE_SIZE // 2, y + actions.AGREE_SIZE // 2) for x, y in actions.AGREE_BOXES]
     assert game.taps == [*boxes, actions.AGREE_CONFIRM]
     assert all(actions.agree_ticked(game.image, *b) for b in actions.AGREE_BOXES)
 
@@ -114,9 +115,22 @@ def test_an_update_notice_that_keeps_coming_back_stops_the_bot(game):
     assert game.ctx.run_task.call_count == 2 and "update" in game.stops[0]
 
 
-def test_a_confirmed_download_drops_the_floor_time_limit(game):
+def test_confirm_download_taps_the_button_and_holds_the_watchdog(game):
+    # #86: until the download's progress screen is up, nothing counts as stuck.
+    actions.STUCK["watch"].reset()
+    actions.ConfirmDownload().run(game.ctx, SimpleNamespace(box=[700, 450, 100, 30]))
+    assert game.taps == [(750, 465)]
+    assert actions.STUCK["watch"].held(actions.time.monotonic() + 60)
+    actions.STUCK["watch"].reset()
+
+
+def test_a_download_starts_the_floor_clock_over(game, monkeypatch):
     # Live 2026-10-21: 32 min of download; the floor's limit would have restarted the game mid-download.
-    actions.RUN["deadline"] = 0
+    monkeypatch.setattr(actions.time, "time", lambda: 5000.0)
+    actions.RUN.update(deadline=0, floor_limit=2700)
     actions.ConfirmDownload().run(game.ctx, SimpleNamespace(box=[600, 460, 80, 20]))
-    assert "deadline" not in actions.RUN
+    assert actions.RUN["deadline"] == 7700
+    monkeypatch.setattr(actions.time, "time", lambda: 9000.0)
+    actions.StuckFlag.see("Downloading", UNTICKED)  # any picture: the clock goes by the screen type
+    assert actions.RUN["deadline"] == 11700  # still downloading: the floor's whole time is left after it
     actions.STUCK["watch"].reset()
