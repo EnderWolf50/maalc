@@ -1,0 +1,3 @@
+dw03h-0: start_shown first true at +0.37 s after the panel levelled; true on every frame of the next 0.8 s: True
+dw03h-1: start_shown first true at +0.33 s after the panel levelled; true on every frame of the next 0.8 s: True
+cur-0: start_shown first true at +0.47 s after the panel levelled; true on every frame of the next 0.8 s: True

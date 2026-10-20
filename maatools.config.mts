@@ -1,7 +1,8 @@
 import { availableParallelism } from 'node:os'
 import type { FullConfig } from '@nekosu/maa-tools'
 
-// Every image runs every node named below; a node not in its hits must miss (07-assets-and-testing.md).
+// Every image runs every node named below, except the node marks: the map images only (below). A node not in its
+// hits must miss (07-assets-and-testing.md).
 const screens: [image: string, hits: string[]][] = [
   ['Title.png', ['GoToMirrorEntry', 'NavTitle']],
   ['TitleConnecting.png', ['Connecting', 'GoToMirrorEntry', 'NavTitle']],
@@ -16,10 +17,17 @@ const screens: [image: string, hits: string[]][] = [
   // is Confirmed; a one-button error box is closed by its one button. Both sit on the title, which reads through.
   ['TitleDownload.png', ['DownloadDialog', 'GoToMirrorEntry', 'NavTitle']],
   ['TitleErrorConfirm.png', ['PopupButton', 'GoToMirrorEntry', 'NavTitle']],
-  // Synthetic (#84), no live capture yet: the one-button notice window (MaintenanceNotice's, live) relabelled
-  // as a server error with a countdown Retry or a Try Again button. They put RetryPopup on every other screen.
+  // Synthetic (#84) over the title, live captures over the Mailbox below: the one-button notice window
+  // (MaintenanceNotice's, live) relabelled as a server error with a countdown Retry or a Try Again button.
+  // They put RetryPopup on every other screen.
   ['RetryCountdown.png', ['RetryPopup', 'GoToMirrorEntry', 'NavTitle']],
   ['TryAgain.png', ['RetryPopup', 'GoToMirrorEntry', 'NavTitle']],
+  // Live 2026-10-20 (#84): the server error over the Mailbox after a request timed out, Close / Retry. Retry
+  // counts down "Retry 5" to "Retry 1" with a dark frame first, then reads "Retry".
+  ['ServerErrorRetryCountdown.png', ['RetryPopup']],
+  ['ServerErrorRetry.png', ['RetryPopup']],
+  // Live 2026-10-20 (#84): the network-unstable popup over the Mailbox with Wi-Fi off, Close only.
+  ['NetworkUnstable.png', ['PopupButton']],
   // The Parallel Superposition prompt after clearing floor 5 / 10 with the mode engaged (#85). Captured from the
   // game's own help sheet (the page behind it is the help text, not a map): the dialog is its live look, but where
   // it sits on screen is not confirmed. A Cancel / Confirm question, so PopupButton (one centred button) stays out.
@@ -45,8 +53,11 @@ const screens: [image: string, hits: string[]][] = [
   ['GiftGet.png', ['GiftGet']],
   ['StartingGiftSearchOff.png', ['StartingGift']],  // Activate Gift Search switched off (1.117.0, blue season)
   ['GiftSearch.png', ['GiftSearch', 'GiftChoice']],  // same Refuse Gift button; GiftSearch comes first in the hub
-  // 3 gifts picked, Select 3/3; its Selected E.G.O Gift header reads like the starting gift page's: GiftSearch comes first
-  ['GiftSearchSelected.png', ['GiftSearch', 'GiftChoice', 'StartingGift']],
+  // 3 gifts picked, Select 3/3. Its Selected E.G.O Gift header reads like the starting gift page's, but only that page
+  // has the Activate Gift Search switch: live 2026-10-19 (#166), the page fading in read as StartingGift before its
+  // blue title could be read. GiftSearchFadeIn.png: a frame of that fade-in (recording), the panel still sliding in.
+  ['GiftSearchSelected.png', ['GiftSearch', 'GiftChoice']],
+  ['GiftSearchFadeIn.png', ['GiftSearch', 'GiftChoice']],
   ['GiftSearchConfirm.png', ['GiftSearch', 'GiftChoice']],  // "Consume 70 Starlight ...": GiftSearch confirms it
   ['GiftSearchGet.png', ['GiftGet', 'GiftSearch']],  // GiftGet comes first in the hub
   ['GiftSearchForgo.png', ['GiftSearchForgo', 'GiftSearch', 'GiftChoice']],
@@ -66,6 +77,9 @@ const screens: [image: string, hits: string[]][] = [
   // not by the hub, and the map icons still show through them.
   ['Formation.png', ['Formation']],
   ['FormationDetails.png', ['Formation']],
+  // "You haven't Deployed any Sinners." on light parchment (live, #157): PopupButton's parchment gate; Formation reads
+  // through it
+  ['FormationNoSinners.png', ['PopupButton', 'Formation']],
   ['BattleTurn.png', ['BattleTurn']],
   ['BattleTurnLit.png', ['BattleTurn']],
   ['BattleTurnSolo.png', ['BattleTurn']], // 1-sinner formation: one slot, Win Rate at x ~740
@@ -114,11 +128,20 @@ const screens: [image: string, hits: string[]][] = [
   ['ShopHeal.png', []],
 ]
 
+// The node marks (actions.MARKS) RouteMap reads around a slot next to the bus, only on the map: they run on the
+// map screens alone (those MapBus hits), not on the other screens the bot never reads them on. #156: the
+// FeatureMatch marks SIFT the whole image whatever their roi (measured in #163), ~1-3 s per image on a CI runner.
+const marks = new Set(['MapNodeBoss', 'MapNodeFocusedHex', 'MapNodeFocusedRound', 'MapNodeCost', 'MapNodeGift',
+  'MapNodeEvent', 'MapNodeShop'])
+const mapScreens = screens.filter(([, hits]) => hits.includes('MapBus'))
+const stray = screens.filter((s) => !mapScreens.includes(s) && s[1].some((n) => marks.has(n)))
+if (stray.length) throw new Error(`node marks off the map: ${stray.map(([image]) => image)}`)
+
 // CI shards by node: SHARD=i of SHARDS=n keeps one n-th of the nodes, and every image still runs its shard's
-// nodes, so a node not in an image's hits still must miss. Unset runs everything.
-// Shards are filled heaviest node first by its cost per image: ms on a CI runner, from the MaaFW log of one
-// unsharded run (2026-10-18); a node not listed counts 170. A stale cost only unbalances the shards: every
-// node still runs in exactly one.
+// nodes (a mark: every map image), so a node not in an image's hits still must miss. Unset runs everything.
+// Shards are filled heaviest node first by its cost per image times the images it runs on; the cost is ms on a
+// CI runner, from the MaaFW log of one unsharded run (2026-10-18); a node not listed counts 170. A stale cost
+// only unbalances the shards: every node still runs in exactly one.
 const cost: Record<string, number> = {
   MapNodeEvent: 2950, MapNodeShop: 1950, MaintenanceNotice: 1050, MapNodeFocusedHex: 1020, RetryPopup: 900,
   RecoverPauseConfirm: 790, DownloadDialog: 780, Victory: 730, LevelWarning: 570, ParallelModePrompt: 440,
@@ -128,7 +151,7 @@ const cost: Record<string, number> = {
 const shard = Number(process.env.SHARD ?? 0)
 const shards = Number(process.env.SHARDS ?? 1)
 const nodes = [...new Set(screens.flatMap(([, hits]) => hits))]
-  .map((node) => ({ node, cost: cost[node] ?? 170 }))
+  .map((node) => ({ node, cost: (cost[node] ?? 170) * (marks.has(node) ? mapScreens : screens).length }))
   .sort((a, b) => b.cost - a.cost || a.node.localeCompare(b.node))
 const load = Array<number>(shards).fill(0)
 const mine = new Set<string>()
@@ -150,7 +173,11 @@ const config: FullConfig = {
     cases: [
       {
         configs: { controller: 'MuMu', resource: 'base', imageRoot: 'tests/screens' },
-        cases: screens.map(([image, hits]) => ({ image, hits: hits.filter((n) => mine.has(n)) })),
+        cases: screens.map(([image, hits]) => ({ image, hits: hits.filter((n) => mine.has(n) && !marks.has(n)) })),
+      },
+      {
+        configs: { name: 'MuMu:base map marks', controller: 'MuMu', resource: 'base', imageRoot: 'tests/screens' },
+        cases: mapScreens.map(([image, hits]) => ({ image, hits: hits.filter((n) => mine.has(n) && marks.has(n)) })),
       },
     ],
   },

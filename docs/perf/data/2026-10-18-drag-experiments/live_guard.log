@@ -1,0 +1,70 @@
+04:53:59 L1 guard turn 1 slots=7 lit=True t=3.29s icons=7
+04:54:37 L1 guard turn 2 slots=8 lit=True t=2.90s icons=15
+04:55:14 L1 guard turn 3 slots=9 lit=True t=3.23s icons=24
+04:56:06 L1 guard turn 4 slots=9 lit=True t=3.29s icons=33
+04:56:09 L1 done 4 guard turns
+04:56:32   pre-guard best icon scores [0, 0, 0, 0, 0, 0] textures [114, 100, 101, 102, 108, 109]
+04:56:34 L2 guard turn 1 slots=6 lit=True t=2.31s icons=6
+04:56:55   pre-guard best icon scores [0.13, 0.4, 0.34, 0.34, 0.27, 0.43] textures [114, 101, 106, 102, 107, 102]
+04:56:57 L2 guard turn 2 slots=6 lit=True t=2.34s icons=12
+04:57:00 L2 done 2 guard turns
+04:57:21   pre-guard best icon scores [0, 0, 0, 0, 0, 0, 0] textures [117, 99, 100, 101, 105, 99, 96]
+04:57:23 L3 guard turn 1 slots=7 lit=True t=2.49s icons=7
+04:57:47   pre-guard best icon scores [0.07, 0.38, 0.35, 0.31, 0.28, 0.37, 0.43, 0.33] textures [119, 97, 105, 100, 102, 98, 102, 98]
+04:57:50 L3 guard turn 2 slots=8 lit=True t=2.79s icons=15
+04:58:08   pre-guard best icon scores [0.06, 0.45, 0.37, 0.35, 0.32, 0.34, 0.27, 0.33, 0.36] textures [113, 97, 105, 106, 102, 106, 99, 96, 98]
+04:58:11 L3 guard turn 3 slots=9 lit=True t=3.08s icons=24
+04:58:18 L3 done 3 guard turns
+04:58:46 W1 win-rate turn slots=9 lit=True
+04:59:28 W1 win-rate turn slots=10 lit=True
+05:00:20 W1 win-rate turn slots=11 lit=True
+05:01:18 W1 done 0 guard turns
+05:21:32   pre-guard best icon scores [0, 0, 0, 0, 0, 0, 0] textures [92, 139, 132, 103, 131, 128, 86]
+05:21:36 L4 guard turn 1 slots=7 lit=False t=4.05s icons=7
+05:21:43   pre-guard best icon scores [1.0, 1.0, 1.0, 1.0, 1.0, 0.99, 0.99] textures [48, 69, 104, 54, 86, 46, 61]
+05:21:46 L4 guard turn 2 slots=7 lit=False t=2.54s icons=7
+05:21:53   pre-guard best icon scores [1.0, 1.0, 1.0, 1.0, 1.0, 0.99, 0.99] textures [48, 69, 104, 54, 86, 47, 61]
+05:21:55 L4 guard turn 3 slots=7 lit=False t=2.53s icons=7
+05:22:03 L4 done 3 guard turns
+05:25:41   pre-guard best icon scores [0, 0, 0, 0, 0, 0, 0] textures [54, 44, 104, 54, 101, 67, 63]
+05:25:46 L5 guard turn 1 slots=7 lit=False t=4.62s icons=7 portrait-taps=13
+05:26:29   pre-guard best icon scores [0.99, 0.79, 0.88, 1.0, 0.99, 0.8, 0.85] textures [51, 73, 48, 54, 53, 61, 102]
+05:26:32 L5 guard turn 2 slots=7 lit=False t=3.52s icons=11 portrait-taps=7
+05:27:28 L5 done 2 guard turns
+05:30:26   pre-guard best icon scores [0, 0, 0, 0, 0, 0, 0] textures [95, 121, 142, 123, 122, 111, 67]
+05:30:29 L6 guard turn 1 slots=7 lit=True t=2.43s icons=7 portrait-taps=7
+05:30:59   pre-guard best icon scores [0.29, 0.33, 0.42, 0.25, 0.22, 0.34, 0.2, 0.34] textures [143, 116, 139, 104, 99, 95, 109, 118]
+05:31:02 L6 guard turn 2 slots=8 lit=True t=2.93s icons=15 portrait-taps=8
+05:31:31   pre-guard best icon scores [0.26, 0.27, 0.25, 0.36, 0.46, 0.3, 0.38, 0.46, 0.6] textures [112, 107, 96, 99, 126, 91, 88, 114, 93]
+05:31:34 L6 guard turn 3 slots=9 lit=True t=2.98s icons=24 portrait-taps=9
+05:32:14   pre-guard best icon scores [0.34, 0.29, 0.3, 0.76, 0.83, 0.37, 0.31, 0.39] textures [118, 96, 102, 92, 92, 104, 122, 133]
+05:32:17 L6 guard turn 4 slots=8 lit=True t=2.99s icons=32 portrait-taps=8
+05:32:20 L6 done 4 guard turns
+05:33:22 L7 win-rate turn slots=6 lit=True
+05:34:02   pre-guard textures [96, 98, 97, 100, 112, 105, 105]
+05:34:05 L7 guard turn 1 slots=7 lit=True t=2.47s icons=0 portrait-taps=7
+05:34:24 L7 win-rate turn slots=5 lit=True
+05:35:23 L7 done 1 guard turns
+05:36:26 L8 win-rate turn slots=6 lit=True
+05:37:14   pre-guard textures [141, 98, 98, 103, 110, 95, 106]
+05:37:18 L8 guard turn 1 slots=7 lit=False t=3.80s icons=0 portrait-taps=7
+05:37:43 L8 win-rate turn slots=7 lit=True
+05:38:02   pre-guard textures [135, 46, 50, 53, 81, 48, 48]
+05:38:06 L8 guard turn 2 slots=7 lit=False t=4.67s icons=0 portrait-taps=13
+05:39:02 L8 done 2 guard turns
+05:40:12 W2 win-rate turn slots=7 lit=True
+05:40:53 W2 win-rate turn slots=7 lit=True
+05:41:52 W2 done 0 guard turns
+05:42:26 L9 win-rate turn slots=6 lit=True
+05:43:05   pre-guard textures [96, 97, 97, 139, 96, 102, 149]
+05:43:08 L9 guard turn 1 slots=7 lit=True t=2.67s icons=0 portrait-taps=7
+05:43:25 L9 win-rate turn slots=8 lit=True
+05:44:14   pre-guard textures [113, 95, 98, 98, 41, 41, 40, 35, 37]
+05:44:19   [agent] guard: cannot tell the guard skill of slots [5, 6, 7, 8, 9]
+05:44:19 L9 guard turn 2 slots=9 lit=False t=5.42s icons=0 portrait-taps=14
+05:44:56 L9 win-rate turn slots=10 lit=True
+05:45:50   pre-guard textures [100, 50, 45, 43, 108, 151, 153, 103, 41, 42, 43]
+05:45:55   [agent] guard: cannot tell the guard skill of slots [9, 10, 11]
+05:45:55 L9 guard turn 3 slots=11 lit=False t=5.40s icons=0 portrait-taps=14
+05:46:50 L9 win-rate turn slots=8 lit=True
+05:47:48 L9 done 3 guard turns
