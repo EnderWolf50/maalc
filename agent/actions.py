@@ -151,10 +151,22 @@ def page_guard(context, home, image=None):
     return image
 
 
+CACHE_NODES = 200  # ~6 min of a run's nodes
+
+
 def hands_back(run):
-    """An action's run(): PageGone ends it with True, for MirrorHub to look at the screen now up (#118)."""
+    """An action's run(): PageGone ends it with True, for MirrorHub to look at the screen now up (#118).
+
+    It also clears MaaFramework's runtime cache once the task has CACHE_NODES nodes (#176): the cache keeps every
+    node's and recognition's detail until clear_cache, and a whole dungeon run is one task. An action is the safe
+    point: the clear drops the task's own detail, custom recognitions miss without it, and the end of this node
+    writes it back.
+    """
     @functools.wraps(run)
     def wrapped(self, context, argv):
+        detail = getattr(argv, "task_detail", None)  # (the tests' argv has none)
+        if detail and len(detail.node_id_list) >= CACHE_NODES:
+            context.tasker.clear_cache()
         try:
             return run(self, context, argv)
         except PageGone as e:

@@ -2537,3 +2537,18 @@ def test_a_fusion_gone_after_a_cell_tap_taps_nothing_more(context, guarded, monk
     with pytest.raises(actions.PageGone):
         actions.Shop.fuse(context, {"keyword": "Burn", "gift_search": {"gifts": []}}, {})
     assert actions.FUSE_NEUTRAL not in taps(context)[5:] and len(taps(context)) == 5
+
+
+def test_hands_back_clears_the_runtime_cache_of_a_long_task():
+    """#176: MaaFramework keeps every node's detail until clear_cache, and a dungeon run is one task."""
+    class Act:
+        @actions.hands_back
+        def run(self, context, argv):
+            return True
+
+    context = MagicMock()
+    nodes = lambda n: SimpleNamespace(task_detail=SimpleNamespace(node_id_list=list(range(n))))  # noqa: E731
+    assert Act().run(context, nodes(actions.CACHE_NODES - 1))
+    context.tasker.clear_cache.assert_not_called()
+    assert Act().run(context, nodes(actions.CACHE_NODES))
+    context.tasker.clear_cache.assert_called_once()

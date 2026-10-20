@@ -1,11 +1,15 @@
 """Manual check for #149: run MirrorHub's dispatch over real captures offline and watch the process memory.
 
 No emulator: a CustomController hands out tests/screens/*.png in turn, the repo's resource bundle (with the OCR
-model from tools/fetch_ocr.py) runs MirrorHub's next list round after round, every listed node's action is
-DoNothing and the agent is not started (its custom recognitions just miss). The Tasker runs in this process, so
+model from tools/fetch_ocr.py) runs MirrorHub's next list round after round, every listed node's action does
+nothing (a custom action that only clears the cache when asked) and the agent is not started (its custom recognitions just miss). The Tasker runs in this process, so
 this process's memory is the Tasker's.
 
     uv run --with opencv-python-headless python tools/ocr_memory_check.py --minutes 3 --csv mem.csv
+
+`--clear-every S` calls `tasker.clear_cache()` every S seconds from the action of the node that hit, as RouteMap
+does (#176): a clear between nodes leaves the task without a detail, and custom recognitions miss until a node ends.
+The summary adds the slope after minute 5 (least squares, MB/h) and the round time (one screencap to the next).
 
 Prints a line every 10 s and a summary. Exits 1 when the memory passes --cap-mb (it stops there), or when the median
 of the last minute is more than --limit-mb over the median of the second (the first minute is warm-up; a single
@@ -53,6 +57,7 @@ def main():
     ap.add_argument("--limit-mb", type=float, default=300, help="allowed growth, last minute over the second")
     ap.add_argument("--cap-mb", type=float, default=6000, help="stop early past this much memory")
     ap.add_argument("--log-dir", type=Path, help="write MaaFramework's log here (default: no log)")
+    ap.add_argument("--clear-every", type=float, help="call tasker.clear_cache() every this many seconds")
     args = ap.parse_args()
 
     if not (args.bundle / "model/ocr/rec.onnx").is_file():
@@ -60,12 +65,15 @@ def main():
 
     import cv2
     from maa.controller import CustomController
+    from maa.custom_action import CustomAction
     from maa.resource import Resource
     from maa.tasker import Tasker
 
     screens = [cv2.imread(str(p)) for p in sorted(args.screens.glob("*.png"))]
     screens = [s for s in screens if s is not None and s.shape[:2] == (720, 1280)]
     frames = [0]
+    rounds = []  # (seconds, round time in ms)
+    cleared = [time.monotonic()]
 
     class Screens(CustomController):
         def connect(self):
@@ -75,6 +83,10 @@ def main():
             return "ocr-memory-check"
 
         def screencap(self):
+            now = time.monotonic()
+            if frames[0]:
+                rounds.append((now - t0, (now - self.last) * 1000))
+            self.last = now
             frames[0] += 1
             return screens[frames[0] % len(screens)]
 
@@ -93,6 +105,15 @@ def main():
     from hub_text import HubText
 
     resource.register_custom_recognition("HubText", HubText())  # the Agent's, in this process
+    class Clear(CustomAction):
+        def run(self, context, argv):
+            if args.clear_every and time.monotonic() - cleared[0] >= args.clear_every:
+                context.tasker.clear_cache()
+                cleared[0] = time.monotonic()
+            return True
+
+    resource.register_custom_action("Clear", Clear())
+    nothing = {"action": "Custom", "custom_action": "Clear"}  # both arms pay the same custom action
     controller = Screens()
     controller.post_connection().wait()
     tasker = Tasker()
@@ -103,13 +124,13 @@ def main():
     override = {"MirrorHub": {"timeout": 2**31 - 1, "on_error": []}}
     for entry in hub["next"]:
         name, jump_back = entry["name"], entry["jump_back"]
-        override[name] = {"action": "DoNothing", "pre_delay": 0, "post_delay": 0, "on_error": [],
+        override[name] = {**nothing, "pre_delay": 0, "post_delay": 0, "on_error": [],
                           "next": [] if jump_back else ["MirrorHub"]}
     # BattleHUD's own list runs too (the battle screen's popups and turn); its nodes go back through the jump back.
     if hud := resource.get_node_data("BattleHUD"):  # (a bundle from before #157 has none)
         override["BattleHUD"] = {"pre_delay": 0, "post_delay": 0}
         for entry in hud["next"]:
-            override[entry["name"]] = {"action": "DoNothing", "pre_delay": 0, "post_delay": 0, "on_error": [],
+            override[entry["name"]] = {**nothing, "pre_delay": 0, "post_delay": 0, "on_error": [],
                                        "next": []}
 
     # HubText's list: the screens it picks, then the tail; they too do nothing and come back.
@@ -118,7 +139,7 @@ def main():
         param = text["recognition"]["param"]["custom_recognition_param"]
         param = json.loads(param) if isinstance(param, str) else param
         for name in param["entries"] + param["tail"]:
-            override[name] = {"action": "DoNothing", "pre_delay": 0, "post_delay": 0, "on_error": [], "next": []}
+            override[name] = {**nothing, "pre_delay": 0, "post_delay": 0, "on_error": [], "next": []}
 
     samples = []
     t0 = time.monotonic()
@@ -135,6 +156,7 @@ def main():
                 return
             stop.wait(1)
 
+    cleared[0] = t0
     sampler = threading.Thread(target=sample)
     sampler.start()
     job = tasker.post_task("MirrorHub", override)
@@ -154,6 +176,16 @@ def main():
     grew = final - second
     print(f"screens {frames[0]}, start {samples[0][2]:.0f} MB, peak {max(s[2] for s in samples):.0f} MB, "
           f"median of minute 2 {second:.0f} MB, of the last minute {final:.0f} MB, growth {grew:.0f} MB")
+    late = [(t, m) for t, _, m, _ in samples if t >= 300]
+    if len(late) > 1:
+        mt, mm = statistics.fmean(t for t, _ in late), statistics.fmean(m for _, m in late)
+        slope = sum((t - mt) * (m - mm) for t, m in late) / sum((t - mt) ** 2 for t, _ in late) * 3600
+        print(f"slope after minute 5: {slope:.0f} MB/h")
+    for name, part in (("first 5 min", [ms for t, ms in rounds if t < 300]),
+                       ("last 5 min", [ms for t, ms in rounds if t >= last - 300]), ("all", [ms for _, ms in rounds])):
+        if len(part) > 1:
+            q = statistics.quantiles(part, n=10)
+            print(f"round time {name}: n {len(part)}, p50 {statistics.median(part):.0f} ms, p90 {q[8]:.0f} ms")
     sys.exit(1 if grew > args.limit_mb or samples[-1][2] > args.cap_mb else 0)
 
 
