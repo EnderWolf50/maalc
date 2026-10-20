@@ -1,7 +1,8 @@
 import { availableParallelism } from 'node:os'
 import type { FullConfig } from '@nekosu/maa-tools'
 
-// Every image runs every node named below; a node not in its hits must miss (07-assets-and-testing.md).
+// Every image runs every node named below (the node marks: the map images, below); a node not in its hits must
+// miss (07-assets-and-testing.md).
 const screens: [image: string, hits: string[]][] = [
   ['Title.png', ['GoToMirrorEntry', 'NavTitle']],
   ['TitleConnecting.png', ['Connecting', 'GoToMirrorEntry', 'NavTitle']],
@@ -129,11 +130,11 @@ const screens: [image: string, hits: string[]][] = [
 
 // The node marks (actions.MARKS) RouteMap reads around a slot next to the bus, only on the map: they run on the
 // map screens alone (those MapBus hits), not on the other screens the bot never reads them on. #156: the
-// FeatureMatch marks SIFT the whole image whatever their roi, ~1-3 s per image on a CI runner.
+// FeatureMatch marks SIFT the whole image whatever their roi (measured in #163), ~1-3 s per image on a CI runner.
 const marks = new Set(['MapNodeBoss', 'MapNodeFocusedHex', 'MapNodeFocusedRound', 'MapNodeCost', 'MapNodeGift',
   'MapNodeEvent', 'MapNodeShop'])
-const map = screens.filter(([, hits]) => hits.includes('MapBus'))
-const stray = screens.filter((s) => !map.includes(s) && s[1].some((n) => marks.has(n)))
+const mapScreens = screens.filter(([, hits]) => hits.includes('MapBus'))
+const stray = screens.filter((s) => !mapScreens.includes(s) && s[1].some((n) => marks.has(n)))
 if (stray.length) throw new Error(`node marks off the map: ${stray.map(([image]) => image)}`)
 
 // CI shards by node: SHARD=i of SHARDS=n keeps one n-th of the nodes, and every image still runs its shard's
@@ -150,7 +151,7 @@ const cost: Record<string, number> = {
 const shard = Number(process.env.SHARD ?? 0)
 const shards = Number(process.env.SHARDS ?? 1)
 const nodes = [...new Set(screens.flatMap(([, hits]) => hits))]
-  .map((node) => ({ node, cost: (cost[node] ?? 170) * (marks.has(node) ? map : screens).length }))
+  .map((node) => ({ node, cost: (cost[node] ?? 170) * (marks.has(node) ? mapScreens : screens).length }))
   .sort((a, b) => b.cost - a.cost || a.node.localeCompare(b.node))
 const load = Array<number>(shards).fill(0)
 const mine = new Set<string>()
@@ -176,7 +177,7 @@ const config: FullConfig = {
       },
       {
         configs: { name: 'MuMu:base map marks', controller: 'MuMu', resource: 'base', imageRoot: 'tests/screens' },
-        cases: map.map(([image, hits]) => ({ image, hits: hits.filter((n) => mine.has(n) && marks.has(n)) })),
+        cases: mapScreens.map(([image, hits]) => ({ image, hits: hits.filter((n) => mine.has(n) && marks.has(n)) })),
       },
     ],
   },
