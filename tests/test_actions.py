@@ -1406,7 +1406,7 @@ def test_convert_starlight_to_cost_is_switched_without_a_fixed_wait(context, clo
     # #115: the checkbox tap slept 1 s; the note under it says when it took.
     actions.RUN["settings"] = {}
     monkeypatch.setattr(actions.run_start, "resolve_plan", lambda *a: {"convert_leftover": True})
-    page(context, {(660, 395, 320, 90): lambda clicks, looks: "Coverts any remaining Starlight" if clicks and looks >= 3 else "Any unspent Starlight will be added",
+    page(context, {tuple(actions.STARLIGHT_NOTE): lambda clicks, looks: "Coverts any remaining Starlight" if clicks and looks >= 3 else "Any unspent Starlight will be added",
                    (780, 145, 230, 35): lambda clicks, looks: "Selected E.G.O Gift" if clicks >= 2 else None})
     assert actions.ConfirmStarlight().run(context, argv())
     assert taps(context) == [(727, 363), (738, 530)]
@@ -1566,6 +1566,15 @@ def test_n_acquired_gift_popups_are_closed_in_one_action(context, clock):
     assert actions.GiftGet().run(context, argv())
     assert taps(context) == [(640, 532)] * 3
     no_fixed_wait(clock)
+
+
+def test_a_name_plate_read_mid_fade_out_is_not_taken_for_the_next_window(context, clock):
+    # The last window fading out still shows its title, its plate half drawn ("Spiderw"): a tap then lands on the page
+    # under it, the search grid, and picks a gift. The next window is tapped only once the screen is still.
+    page(context, {GIFT_POPUP: lambda clicks, looks: "E.G.O Gift GET!" if looks < 4 else None,
+                   GIFT_NAME: lambda clicks, looks: "Spiderweb" if looks < 3 else "Spiderw"})
+    assert actions.GiftGet().run(context, argv())
+    assert taps(context) == [(640, 532)]
 
 
 def test_a_gift_popup_confirm_that_did_not_take_is_left_to_the_hub(context, clock):

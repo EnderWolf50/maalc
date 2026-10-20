@@ -713,8 +713,9 @@ class GiftGet(CustomAction):
     """Close the E.G.O Gift GET! popups, one after another, until none is up (#115).
 
     A search or a cabinet that gives n gifts pops n windows. The name plate tells the next window from the one
-    just closed, which is closed as soon as it shows, with no pass of MirrorHub in between. Taps are never sent
-    ahead: under the last window lies the page the gifts came from (the search grid), where one would pick.
+    just closed, which is closed once the screen is still, with no pass of MirrorHub in between. Taps are never
+    sent ahead: under the last window lies the page the gifts came from (the search grid or the starting gift
+    page), where one would pick; a window fading out still shows its title over a half-drawn plate.
     A window still up with the same name after the wait: the tap was lost, and MirrorHub looks again.
     """
 
@@ -730,6 +731,8 @@ class GiftGet(CustomAction):
                 now = text(context, im, GET_NAME).strip()
                 return bool(before and now and now != before)
             image = tap_then(context, *GET_CONFIRM, closed, timeout=2)
+            if image is not None and title(image):
+                image = still(context, timeout=1)
             if image is None or not title(image):
                 return True
         return True
