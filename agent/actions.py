@@ -1185,7 +1185,7 @@ class RouteMap(CustomAction):
     recovery, #88), then the slots not tried yet. No bus on screen: the map is dragged about for it (#61).
     Nothing taking a tap spends one of the floor's map retries; when they run out, the map is stuck (spec 06);
     with no bus found at all, at once at L2. A map zoomed in on the bus is reset first (unzoom); one that stays so goes
-    to L2 at once too.
+    to L2 at once too, or into the node when its panel stays up (L2 starts from the map's gear).
     When the best path's first node is entered, the rest of the path is the floor's plan: the next calls
     follow it (follow) until it is used up or does not fit the map.
     """
