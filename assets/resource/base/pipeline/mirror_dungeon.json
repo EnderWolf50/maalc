@@ -420,14 +420,17 @@
         "action": "Custom",
         "custom_action": "PlayTurn"
     },
-    // A turn playing out: the pause button replaces the top-right controls.
+    // A turn playing out: the pause button replaces the top-right controls. PlayTurn holds a finger down
+    // through the turn it started (#150); this holds it again after a hold timed out, a recovery or a restart.
     "BattlePause": {
         "recognition": "TemplateMatch",
         "roi": [1130, 5, 100, 75],
         "template": "Battle/BattlePause.png",
         "threshold": 0.8,
+        "action": "Custom",
+        "custom_action": "HoldTurn",
         "pre_delay": 0,
-        "post_delay": 500
+        "post_delay": 0
     },
     // The START plaque over the disc: every slot has a skill (#145). The agent sets the roi from the disc.
     "BattleStart": {

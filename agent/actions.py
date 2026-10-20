@@ -1612,6 +1612,48 @@ def press_start(context, disc):
     return False
 
 
+# #150: a finger held on the screen while a turn plays speeds up its E.G.O animations (user, 2026-10-18; no
+# difference seen on turns without one: 5.9 s held, 6.4 s not, over 16 turns). The top-left corner held then
+# touched nothing (docs/perf/2026-10-18-guard-chain-145.md); a lift there is a tap on whatever screen follows.
+HOLD_SPOT = (1, 1)
+HOLD_EVERY = 0.3  # s between looks, MirrorHub's rate_limit
+HOLD_LIMIT = 6  # s at most per hold (a turn without E.G.O plays ~6 s): then MirrorHub (its watchdog, recovery) looks; BattlePause holds a longer turn again
+# Screens that can follow a turn, besides the next turn: the finger lifts before their node acts.
+BATTLE_POPUPS = ("Connecting", "RetryPopup", "PopupButton")  # template-gated: looked for while a turn plays, no OCR (#157)
+BATTLE_LEFT = BATTLE_POPUPS + ("Victory", "WipeDialog", "Event", "ClaimPopup", "Loading")
+
+
+def hold_turn(context):
+    """Hold a finger on HOLD_SPOT while the turn plays: until the next turn waits for input, a screen of
+    BATTLE_LEFT shows, the task is stopping or HOLD_LIMIT s. Always lifted on return, also on an error:
+    a finger left down keeps the panel tilted and MirrorHub blind (#145)."""
+    end = time.monotonic() + HOLD_LIMIT
+    try:
+        context.tasker.controller.post_touch_down(*HOLD_SPOT).wait()
+        while time.monotonic() < end and not context.tasker.stopping:
+            time.sleep(HOLD_EVERY)
+            image = screen(context)
+            if seen(context, image, "BattlePause"):  # playing (the Win Rate label can still match in a turn's first frames)
+                if any(seen(context, image, n) for n in BATTLE_POPUPS):
+                    return  # a popup over the turn (the network)
+                continue
+            if seen(context, image, "BattleTurn") or any(seen(context, image, n) for n in BATTLE_LEFT):
+                return
+    finally:
+        # Fetched again: in the agent, one kept from before the looks failed its touch up with an access
+        # violation (live 2026-10-20, every hold), and the finger stayed down until the next tap.
+        context.tasker.controller.post_touch_up().wait()
+
+
+@AgentServer.custom_action("HoldTurn")
+class HoldTurn(CustomAction):
+    """BattlePause: a turn playing out (after a hold timed out, a recovery or an agent restart): hold_turn."""
+
+    def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
+        hold_turn(context)
+        return True
+
+
 # The guard chain drag, slower on each try (#145, live 2026-10-18, 12 slots). The game links a slot only if it
 # draws a frame while the finger is on it; during the drag it draws 9-30 frames a second, fewer under load
 # or with its window covered or minimised. 10 px moves 10 ms apart and no rest (#119) missed 7 of 88 drags
@@ -1651,14 +1693,18 @@ class PlayTurn(CustomAction):
                 guarded = self.guard(context, x, (dx, dy))
                 if not guarded:
                     log(f"turn {turn}: guard did not take, Win Rate instead")
+        started = True
         if guarded:
             RUN["guard"] = battle.guard_left(RUN["guard"], guarded)
             log(f"turn {turn}: started on guard, {RUN['guard']} guard turns left")
         elif self.win_rate(context, x, y, (dx, dy), turn):
             log(f"turn {turn}: started")
         else:
+            started = False
             log(f"turn {turn}: START did not start the turn")
         RUN["turn"] = tries  # counted once submitted: a hand-back (#118) is no submit
+        if started:
+            hold_turn(context)
         return True
 
     @staticmethod
