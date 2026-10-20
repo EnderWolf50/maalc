@@ -4,6 +4,7 @@
   python tools/live/queue.py status [--resource <bench|emulator>]
   python tools/live/queue.py detach --log <file> -- <command...>
   python tools/live/queue.py status --log <file>
+  python tools/live/queue.py resume --task <task>
 
 `bench` is a timing or memory measurement, `emulator` is the user's game account on the
 emulator (see the maalc-live-test skill). A run takes one ticket, waits until it is first,
@@ -13,6 +14,7 @@ The tickets of dead processes are dropped. State: `<main checkout>/.local/queue/
 `detach` starts a command (a `run`, or the bot) in a process the caller does not own and returns at once,
 so it outlives an agent harness that kills its background commands after a time limit; `status --log`
 says whether it still runs (exit 0) or ended (exit 1, with the last line of its output).
+`resume --task <task>` prints a live-test task's checklist from `.local/scratch/<task>/` (hold, bot, done, next step).
 """
 import argparse
 import ctypes
@@ -22,6 +24,7 @@ import re
 import subprocess
 import sys
 import time
+from datetime import datetime
 from pathlib import Path
 
 sys.path[0] = str(Path(__file__).resolve().parents[1])  # this file's name shadows the stdlib `queue`
@@ -121,11 +124,30 @@ def run(qdir: Path, name: str, cmd: list[str], is_alive=alive, poll: float = 5.0
         me.unlink(missing_ok=True)
 
 
-def status(qdir: Path, is_alive=alive) -> list[str]:
+STRANDED = 600  # seconds a holder may sit after its bot ended before `status` calls it stranded
+
+
+def hold_path(cmd: str, flag: str) -> Path | None:
+    """The `--guard`/`--done` path of a `backup.py hold` command line (relative: to the main checkout)."""
+    m = re.search(rf"--{flag}\s+(\S+)", cmd)  # ponytail: a path with spaces is cut at the space
+    return m and main_checkout() / m.group(1)
+
+
+def stranded(cmd: str, is_alive=alive, now: float | None = None) -> str:
+    """Why a holder waits for an agent that is not there: its guard bot ended long ago and no `done` file exists."""
+    guard, done = hold_path(cmd, "guard"), hold_path(cmd, "done")
+    if not guard or not done or done.exists() or not guard.exists() or not detached_doc(guard) or detached_running(guard, is_alive):
+        return ""
+    secs = (now or time.time()) - guard.stat().st_mtime  # the bot's last write is when it ended
+    return f" — bot ended {secs / 60:.0f} min ago, waiting for the agent" if secs > STRANDED else ""
+
+
+def status(qdir: Path, is_alive=alive, now: float | None = None) -> list[str]:
     lines = []
     for i, p in enumerate(tickets(qdir, is_alive) if qdir.exists() else []):
         _, pid, name = p.stem.split("-", 2)
-        lines.append(("RUNNING " if i == 0 else f"#{i:<6} ") + f"{name} (pid {pid}): {read(p)[0][:120]}")
+        cmd = read(p)[0]
+        lines.append(("RUNNING " if i == 0 else f"#{i:<6} ") + f"{name} (pid {pid}){stranded(cmd, is_alive, now)}: {cmd[:120]}")
     return lines
 
 
@@ -174,6 +196,37 @@ def detached_status(log: Path, is_alive=alive) -> tuple[bool, str]:
     return False, f"ended pid {doc['pid']}, last line: {lines[-1] if lines else '(no output)'}"
 
 
+OUTCOME = re.compile(r"forfeit|victory|claimed|goal not met|gave up|stop: \d+ of|Traceback|Error|failed", re.I)
+BOT_ENDED = re.compile(r"\[hold\] bot ended (\S+)")
+
+
+def resume(task: Path, is_alive=alive, now: float | None = None) -> list[str]:
+    """Where a live-test task stands, from `<task>/` (hold.log, bot.log, done): the checklist an agent reads when its
+    turn (re)starts, before it re-arms any wait."""
+    now = now or time.time()
+    hold_log, bot_log, done = task / "hold.log", task / "bot.log", task / "done"
+    hold_up, (bot_up, bot_text) = detached_running(hold_log, is_alive), detached_status(bot_log, is_alive)
+    out = [f"hold: {detached_status(hold_log, is_alive)[1]}", f"bot: {bot_text}"]
+    if detached_doc(bot_log) and not bot_up:
+        m = hold_log.exists() and BOT_ENDED.search(hold_log.read_text(encoding="utf-8", errors="replace"))
+        ended = datetime.fromisoformat(m.group(1)).timestamp() if m else bot_log.stat().st_mtime  # else its last write
+        out.append(f"bot ended at {time.strftime('%H:%M:%S', time.localtime(ended))} ({(now - ended) / 60:.0f} min ago); outcome lines:")
+        lines = [l for l in bot_log.read_text(encoding="utf-8", errors="replace").splitlines() if OUTCOME.search(l)]
+        out += [f"  {l}" for l in lines[-5:]] or ["  (none matched)"]
+    out.append(f"done file: {'present' if done.exists() else 'absent'}")
+    if not hold_up:
+        nxt = "hold ended: the emulator is released; read its result above, then check install/ and the game settings by hand"
+    elif not detached_doc(bot_log):
+        nxt = "no bot started: finish steps 1-6 (pre-flight, record, start the bot)"
+    elif bot_up:
+        nxt = "step 6: the bot runs; wait with one Monitor on `status --log` of bot.log"
+    elif not done.exists():
+        nxt = "bot ended while you were away: step 7 (stop the run tree and the recording), 8 (evidence, verdicts), 9 (restore settings, create `done`); do not re-arm a wait"
+    else:
+        nxt = "done exists: step 9 is finished; step 10 (report) once hold.log shows `install matches the backup`"
+    return out + [f"next: {nxt}"]
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -188,7 +241,12 @@ def main(argv=None) -> int:
     which = s.add_mutually_exclusive_group()
     which.add_argument("--resource", choices=RESOURCES)
     which.add_argument("--log", type=Path, help="the --log of a detach: is its process still running")
+    rs = sub.add_parser("resume", help="where a live-test task stands; run it first whenever your turn (re)starts")
+    rs.add_argument("--task", required=True)
     a = ap.parse_args(argv)
+    if a.cmd == "resume":
+        print("\n".join(resume(main_checkout() / ".local" / "scratch" / a.task)))
+        return 0
     if a.cmd == "status" and a.log:
         running, text = detached_status(a.log)
         print(text)

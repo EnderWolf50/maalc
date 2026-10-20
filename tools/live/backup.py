@@ -2,7 +2,7 @@
 
   python tools/live/backup.py backup [--label <name>] [--root <install>]
   python tools/live/backup.py verify [--label <name>] [--root <install>]
-  python tools/live/backup.py hold --done <file> [--timeout <seconds>] [--guard <log>] [--label <name>] [--root <install>]
+  python tools/live/backup.py hold --done <file> [--timeout <seconds>] [--guard <log>] [--stop-recording <profile>] [--label <name>] [--root <install>]
 
 `backup` writes an md5 manifest of every file under the install folder (default: `install/` of the
 main checkout) except the runtime output folders (debug, logs, state, cache), and copies
@@ -11,14 +11,18 @@ main checkout) except the runtime output folders (debug, logs, state, cache), an
 `hold` is backup, then a wait until `<file>` exists (or the timeout, default 2 h), then verify: the one command a
 live test queues, so the emulator stays taken while the agent does the interactive steps and then creates `<file>`.
 `--guard` names the `--log` of a `queue.py detach` (the bot): while that process runs the timeout does not run, and
-it starts again when the bot ends, so the emulator is never handed on under a running bot or right after it.
+it starts again when the bot ends, so the emulator is never handed on under a running bot or right after it. When the bot ends, `hold` prints
+`[hold] bot ended <iso time>` (read by `queue.py resume`); with `--stop-recording <profile>` it stops that screen-record
+profile 60 s later, so a recording nobody stopped does not grow for hours.
 """
 import argparse
 import hashlib
 import json
 import shutil
+import subprocess
 import sys
 import time
+from datetime import datetime
 from pathlib import Path
 
 sys.path[0] = str(Path(__file__).resolve().parents[1])
@@ -52,15 +56,30 @@ def verify(root: Path, dest: Path) -> list[str]:
             + [f"new      {f}" for f in now if f not in before])
 
 
+SCREENREC = Path.home() / ".claude/skills/screen-record/scripts/screenrec.py"  # the global screen-record skill
+
+
+def stop_recording(profile: str) -> None:
+    print(f"[hold] stopping recording '{profile}'", flush=True)
+    subprocess.run(["uv", "run", str(SCREENREC), "stop", "--profile", profile], check=False)
+
+
 def hold(root: Path, dest: Path, done: Path, timeout: float, poll: float = 2.0, guard: Path | None = None,
-         running=detached_running) -> int:
+         running=detached_running, stop_profile: str | None = None, grace: float = 60.0, stop=stop_recording) -> int:
     print(f"backed up {backup(root, dest)} files of {root}; waiting for {done}", flush=True)
     deadline = time.monotonic() + timeout
+    seen, ended = False, None  # the bot was seen running; when it ended (monotonic)
     while not done.exists():
         if guard and running(guard):
-            deadline = time.monotonic() + timeout  # the agent's own steps after the bot get the whole timeout
+            seen, deadline = True, time.monotonic() + timeout  # the agent's own steps after the bot get the whole timeout
         elif time.monotonic() >= deadline:
             break
+        elif seen and ended is None:  # durable for `queue.py resume`: nobody may have been watching
+            ended = time.monotonic()
+            print(f"[hold] bot ended {datetime.now().isoformat(timespec='seconds')}", flush=True)
+        if ended is not None and stop_profile and time.monotonic() >= ended + grace:
+            stop(stop_profile)  # a stranded recording must not grow for hours
+            stop_profile = None
         time.sleep(poll)
     print("done file found" if done.exists() else f"timed out after {timeout:.0f} s", flush=True)
     diff = verify(root, dest)
@@ -75,13 +94,14 @@ def main(argv=None) -> int:
     ap.add_argument("--done", type=Path, help="hold: the file that ends the wait")
     ap.add_argument("--timeout", type=float, default=7200)
     ap.add_argument("--guard", type=Path, help="hold: the --log of the detached bot; the timeout counts from its end")
+    ap.add_argument("--stop-recording", metavar="PROFILE", help="hold: stop this screenrec profile 60 s after the bot ended")
     ap.add_argument("--root", type=Path, default=main_checkout() / "install")
     a = ap.parse_args(argv)
     dest = local_dir("scratch", "install-backup", a.label)
     if a.cmd == "hold":
         if not a.done:
             ap.error("hold needs --done")
-        return hold(a.root, dest, a.done, a.timeout, guard=a.guard)
+        return hold(a.root, dest, a.done, a.timeout, guard=a.guard, stop_profile=a.stop_recording)
     if a.cmd == "backup":
         print(f"backed up {backup(a.root, dest)} files of {a.root} -> {dest}")
         return 0

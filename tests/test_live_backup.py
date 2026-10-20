@@ -52,3 +52,12 @@ def test_hold_keeps_the_emulator_while_the_guarded_bot_runs_and_a_timeout_after_
                    guard=tmp_path / "bot.log", running=running) == 0
     assert time.monotonic() - ended[0] >= 0.25  # the timeout ran again from the bot's end
     assert "timed out" in capsys.readouterr().out
+
+
+def test_hold_logs_when_the_bot_ended_and_stops_the_recording_after_the_grace(tmp_path, capsys):
+    (tmp_path / "install").mkdir()
+    checks, stopped = iter([True] * 5), []
+    bk.hold(tmp_path / "install", tmp_path / "bak", tmp_path / "never", timeout=0.4, poll=0.01, guard=tmp_path / "bot.log",
+            running=lambda _log: next(checks, False), stop_profile="p", grace=0.1, stop=stopped.append)
+    assert stopped == ["p"]  # once
+    assert capsys.readouterr().out.count("[hold] bot ended 20") == 1
