@@ -15,24 +15,20 @@ The `pr` skill's sections, then:
 - Fixtures: real captures, or synthetic (file name ends `.synthetic.png`)
 ```
 
-Drop a line that does not apply.
-
 ## Comments
 
-Post with `gh pr comment <n>` or `gh issue comment <n>`, `--body-file` for more than one line. An issue is referenced as `#<n>` or `Refs #<n>`; closing belongs to the PR body.
+Post with `gh pr comment <n>` or `gh issue comment <n>`; a multi-line body follows `docs/agents/issue-tracker.md` (Create an issue). An issue is referenced as `#<n>` or `Refs #<n>`.
 
-Live-test evidence, with each clip or still attached:
+Live-test evidence, with the verdicts of the `maalc-live-test` skill's Report step and each clip attached:
 
 ```markdown
-**Live test** at <short SHA>: <what was run, on what>
+**Live test** at <short SHA>: <what was run>
 
-- <path>: <expected> → <seen> (<clip or still>)
-- Not run: <path>, <why>; follow-up #<n>
-
-Result: <passed / failed at <step>>
+- <check>: pass / fail / not reached (<clip>)
+- Acceptance: `<criterion>` → met / not met
 ```
 
-Review-fix reply, one per finding, on its thread (`gh api repos/EnderWolf50/maalc/pulls/<n>/comments/<id>/replies -f body=...`):
+Review-fix reply, one per finding, on its thread: `gh api repos/{owner}/{repo}/pulls/<n>/comments/<id>/replies -f body='<one line>'`, or `-F body=@<absolute path>` for more lines:
 
 ```markdown
 Fixed in <short SHA>: <what changed, one line>
