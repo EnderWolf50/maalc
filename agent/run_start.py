@@ -32,6 +32,11 @@ def resolve_plan(settings, team, key):
     return plan["order"] if key == "deployment_order" else plan
 
 
+def grace_price(n, level):
+    """Starlight grace n (1-10) costs at level."""
+    return GRACE_BASE[n - 1] * LEVEL_MULT[level]
+
+
 def starlight_purchases(plan, available, unaffordable):
     """Graces to buy as [(grace number 1-10, level, price)] in priority order, and the ones not bought.
 
@@ -43,7 +48,7 @@ def starlight_purchases(plan, available, unaffordable):
         level = plan["levels"][n - 1]
         if level == "none":
             continue
-        price = GRACE_BASE[n - 1] * LEVEL_MULT[level]
+        price = grace_price(n, level)
         if price > available:
             missed.append((n, level, price))
             if unaffordable == "stop":
