@@ -1062,6 +1062,22 @@ def test_the_tooltip_decides_a_cell_whose_badge_is_cut_off_and_keeps_what_it_nam
     assert fused and taps == [2, 3, 1, 1]  # the Burn gift in and out; the Vestige in, out, and in for the fusion
 
 
+def test_a_cut_off_cells_tooltip_is_closed_before_the_page_is_checked(context, monkeypatch):
+    # Live 2026-10-21: a third-row cell's tooltip covers Leave, the Shop node's anchor. A page check while it showed
+    # handed the shop back each time, and the bot looped on the fuse page under recovery. Here the check fails while
+    # the last tap was a cell's (its tooltip up); the neutral tap that closes it comes first.
+    def guard(context, home, image=None):
+        taps = [c.args for c in context.tasker.controller.post_click.call_args_list]
+        if taps and taps[-1] in actions.FUSE_CELLS:
+            raise actions.PageGone(home)
+    monkeypatch.setattr(actions, "page_guard", guard)
+    monkeypatch.setattr(actions.Shop, "tooltip", staticmethod(lambda context, last: (
+        [("E.G.O GIFT", (1030, 305, 100, 25)), ("Grey Coat", (1010, 340, 180, 22))], "Grey Coat")))
+    fused, taps, _ = fusion_taps(context, monkeypatch, {"keywordless": "fuse"}, (None, None, 2), ("Tremor", None),
+                                 ("Pierce", None))
+    assert fused and taps == [3, 1, 1]  # in and out for its tooltip, then in for the fusion
+
+
 @pytest.mark.parametrize("keywordless, fused_in", [("keep", 0), ("fuse", 1)])
 def test_a_cut_off_cell_whose_tooltip_names_a_keywordless_gift_follows_the_setting(context, monkeypatch, keywordless, fused_in):
     # #161, the user: the setting alone decides a keywordless gift; its tooltip's Burn does not keep it. Tremor and
