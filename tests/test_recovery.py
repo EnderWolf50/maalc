@@ -53,7 +53,7 @@ def test_watchdog_a_moving_load_is_no_stuck_until_the_cap():
 
 
 def test_watchdog_a_still_load_is_stuck_after_wait_still():
-    # #179: a load that came through sat still 59 and ~66 s on that host; #70: a dead one, 90 s still.
+    # #179: a load that came through sat still 59 and ~66 s on that host; 2026-10-17 one sat still 89.5 s from its start.
     w = Watchdog()
     assert not any(w.see("Loading", dots(t), t) for t in range(0, 30))  # moving
     assert not any(w.see("Loading", A, t) for t in range(30, 30 + WAIT_STILL))  # still since 30
@@ -66,6 +66,12 @@ def test_watchdog_a_load_that_moves_again_starts_the_still_clock_over():
     assert not w.see("Connecting", dots(1), 70)
     assert not any(w.see("Connecting", dots(1), t) for t in range(71, 70 + WAIT_STILL))
     assert w.see("Connecting", dots(1), 70 + WAIT_STILL)
+
+
+def test_watchdog_loading_and_connecting_in_turn_share_the_cap():
+    w = Watchdog()
+    assert not any(w.see("Connecting" if t % 20 < 10 else "Loading", dots(t), t) for t in range(0, 150))
+    assert w.see("Loading", dots(1), 151)
 
 
 def test_watchdog_a_still_screen_of_another_type_does_not_start_the_wait_still():

@@ -16,40 +16,50 @@ from __future__ import annotations
 import argparse
 import json
 import re
+from dataclasses import dataclass, field
 from datetime import datetime
 
-LINE = re.compile(r"^\[(\d{4}-\d\d-\d\d \d\d:\d\d:\d\d\.\d{3})\].*Recognizer::recognize\] reco \[result=(.*)\] $")
+from maafw_timeline import TS
+
+RESULT = re.compile(r"Recognizer::recognize\] reco \[result=(.*)\] $")
 
 
-def scores(x, out):
+@dataclass
+class Pass:
+    time: datetime
+    screen: str | None = None  # the first node that hit
+    scores: dict = field(default_factory=dict)  # node -> every score it logged, to 6 decimals
+
+
+def all_scores(x):
+    """Every "score" in a recognition detail, depth first, to 6 decimals."""
     if isinstance(x, dict):
-        if isinstance(x.get("score"), (int, float)):
-            out.append(round(x["score"], 6))
-        for v in x.values():
-            scores(v, out)
-    elif isinstance(x, list):
-        for v in x:
-            scores(v, out)
-    return out
+        own = [round(x["score"], 6)] if isinstance(x.get("score"), (int, float)) else []
+        return own + [s for v in x.values() for s in all_scores(v)]
+    if isinstance(x, list):
+        return [s for v in x for s in all_scores(v)]
+    return []
 
 
 def passes(lines):
-    """[(time, screen or None, {node: scores})] for every MirrorHub pass in lines."""
+    """Every MirrorHub pass in lines, oldest first."""
     found = []
     for line in lines:
-        if "Recognizer::recognize] reco [result=" not in line or not (m := LINE.match(line.rstrip("\n"))):
+        if "Recognizer::recognize] reco [result=" not in line:
+            continue
+        if not (m := RESULT.search(line.rstrip("\n"))) or not (t := TS.match(line)):
             continue
         try:
-            result = json.loads(m[2])
+            result = json.loads(m[1])
         except ValueError:
             continue
         name = result.get("name")
         if name == "Stuck":
-            found.append([datetime.strptime(m[1], "%Y-%m-%d %H:%M:%S.%f"), None, {}])
+            found.append(Pass(datetime.fromisoformat(t[1])))
         elif found:
-            found[-1][2].setdefault(name, scores(result.get("detail"), []))
-            if result.get("box") and found[-1][1] is None and name != "NoBatchOCR":
-                found[-1][1] = name
+            found[-1].scores.setdefault(name, all_scores(result.get("detail")))
+            if result.get("box") and found[-1].screen is None and name != "NoBatchOCR":
+                found[-1].screen = name
     return found
 
 
@@ -57,20 +67,20 @@ def spans(found, kinds):
     """[(start, screen, seconds, passes, still seconds)] for each run of passes on one screen of kinds."""
     runs, prev = [], None
     for p in found:
-        if p[1] in kinds:
-            if prev and prev[1] == p[1]:
+        if p.screen in kinds:
+            if prev and prev.screen == p.screen:
                 runs[-1].append(p)
             else:
                 runs.append([p])
         prev = p
     out = []
     for run in runs:
-        still, since = 0.0, run[0][0]
+        still, since = 0.0, run[0].time
         for a, b in zip(run, run[1:]):
-            if a[2] != b[2]:
-                since = b[0]
-            still = max(still, (b[0] - since).total_seconds())
-        out.append((run[0][0], run[0][1], (run[-1][0] - run[0][0]).total_seconds(), len(run), still))
+            if a.scores != b.scores:
+                since = b.time
+            still = max(still, (b.time - since).total_seconds())
+        out.append((run[0].time, run[0].screen, (run[-1].time - run[0].time).total_seconds(), len(run), still))
     return out
 
 

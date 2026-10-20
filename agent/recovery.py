@@ -83,11 +83,13 @@ class Watchdog:
     def see(self, kind, small, now):
         """Record one screen handed out by MirrorHub (its type and thumb); why it makes the bot stuck, or None.
 
-        A waiting screen counts as moving on any change at all: a still game gives the same pixels every time
+        A waiting screen counts as moving on any change of its thumbnail: a still game gives the same pixels every time
         (live 2026-10-19: the bot's scores on it were the same to 6 decimals), its NOW LOADING... never does.
         """
         if kind != self.kind:
-            self.kind, self.kind_since, self.first, self.moved = kind, now, None, now
+            if not {kind, self.kind} <= WAIT_SCREENS:  # Loading after Connecting is one wait: WAIT_CAP runs on
+                self.kind_since = now
+            self.kind, self.first, self.moved = kind, None, now
         elif self.last is None or small is None or not np.array_equal(small, self.last):
             self.moved = now
         self.last = small
