@@ -4,27 +4,29 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+from PIL import Image
 
 import shop as s
 
 # Grid crops of live 1280x720 captures (written by recovery.png: one IDAT, filter 0), and where each sat on screen.
 CROPS = Path(__file__).resolve().parent / "shop"
+SCREENS = Path(__file__).resolve().parent / "screens"
 CROP_AT = {
-    "fuse_spiderweb": (620, 236),  # live 2026-10-18 (maalc-probe rec/m3/fuse-140): Spiderweb Entangled in Red first
+    "fuse_spiderweb": (620, 236),  # live 2026-10-18 (probe capture rec/m3/fuse-140): Spiderweb Entangled in Red first
     "fuse": (620, 236),  # tests/screens/ShopFuse.png
     "fuse_recipe": (620, 236),  # tests/screens/ShopFuseRecipe.png (#103): the owned row sits at y 427
-    # The fuse page's slots and first two columns (#77): live 2026-10-18 (maalc-probe rec/m3/fuse-152), Spiderweb tapped
+    # The fuse page's slots and first two columns (#77): live 2026-10-18 (probe capture rec/m3/fuse-152), Spiderweb tapped
     # in; captures/97 (2 in, a tooltip over the grid), Super Shop captures/172 (cells 5 and 6 in) and 169 (empty).
     "fuse_one_in": (180, 165),
     "fuse_two_in": (180, 165),
     "fuse_super_two_in": (180, 165),
     "fuse_super_open": (180, 165),
-    "sell": (620, 200),  # live 2026-10-16 (maalc-probe s29/025_sell): the sell page of ShopFuse.png's gifts
+    "sell": (620, 200),  # live 2026-10-16 (probe capture s29/025_sell): the sell page of ShopFuse.png's gifts
     "offers": (560, 210),  # tests/screens/Shop.png
     "offers_super": (560, 210),  # tests/screens/SuperShop.png
-    "offers_red": (560, 210),  # live (maalc-probe s28/013): Fragment of Hellfire, a red gem, 400 orange
-    "offers_short": (560, 210),  # live 2026-10-18 (maalc-probe live-all/f/shopd_2590.6): 106 Cost, 3 offers tagged Not Enough Cost
-    # Map nodes (test_map_shop.py): 200 px around the node, live 2026-10-18 maalc-probe live2/f (map_f2_c, map_f1_c, map_f1_a)
+    "offers_red": (560, 210),  # live (probe capture s28/013): Fragment of Hellfire, a red gem, 400 orange
+    "offers_short": (560, 210),  # live 2026-10-18 (probe capture live-all/f/shopd_2590.6): 106 Cost, 3 offers tagged Not Enough Cost
+    # Map nodes (test_map_shop.py): 200 px around the node, live 2026-10-18 probe capture live2/f (map_f2_c, map_f1_c, map_f1_a)
     "map_shop_cyan": (230, 45),
     "map_shop_orange": (230, 45),
     "map_event_orange": (226, 44),
@@ -162,6 +164,12 @@ def test_an_offer_too_dear_is_still_on_sale():
     assert not s.on_sale({"name": "UPS System", "price": 156, "purchased": True, "short": False})
 
 
+def test_a_skill_offer_is_not_on_sale_however_ocr_reads_its_name():
+    # #138: a stray price read next to it, the name in capitals or run together.
+    for name in ("REPLACE RYOSHU'S SKILL", "ReplaceRyōshū's Skill", "Ｒｅｐｌａｃｅ Ryōshū's Skill"):
+        assert not s.on_sale({"name": name, "price": 100, "purchased": False, "short": False}), name
+
+
 def test_dialog_price_from_the_cost_preview():
     assert s.dialog_price(2864, "28642612") == 252  # live OCR runs the two numbers together
     assert s.dialog_price(540, "540 ▶ 384") == 156
@@ -181,18 +189,6 @@ def test_protected_gifts_are_matched_by_name(read, kept):
     assert s.protected(read, ["Spiderweb Entangled in Red", "Sunshower"]) == kept
 
 
-@pytest.mark.parametrize("read, cost", [
-    ("3302", 3302),
-    ("33O2", 3302),  # OCR reads digits as look-alike letters (#82)
-    ("l5S", 155),
-    ("2B4", 284),
-    ("", None),
-    ("Cost", None),  # no digit at all: not a number
-])
-def test_cost_value_reads_look_alike_letters_as_digits(read, cost):
-    assert s.cost_value(read) == cost
-
-
 @pytest.mark.parametrize("keyword, gift, role", [
     ("Bleed", None, "material"),  # another keyword: fuse or sell it
     ("Burn", None, "keep"),  # the main keyword
@@ -206,11 +202,18 @@ def test_gift_role_from_the_cells_badge_and_icon(keyword, gift, role):
 
 
 def test_the_kept_keywords_decide_the_role():
-    # #77: another keyword the team names is kept. Once keywordless gifts may go, a cell with no badge is left to its
-    # tooltip: a badge scoring under BADGE_MIN reads as none, and a main-keyword gift must not go as keywordless.
+    # #77: another keyword the team names is kept. The user on #161: a cell with no badge and no matched icon is a
+    # keywordless gift, material once the team lets keywordless gifts go; no tooltip is read for it.
     assert s.gift_role("Bleed", None, {"Burn", "Bleed"}) == "keep"
-    assert s.gift_role("Keywordless", None, {"Burn"}) == "unknown"
+    assert s.gift_role("Keywordless", None, {"Burn"}) == "material"
     assert s.gift_role("Keywordless", "Spiderweb Entangled in Red", {"Burn"}) == "keep"  # a kept gift's icon still keeps it
+
+
+def test_a_vestige_told_by_its_icon_is_material_whatever_the_keywordless_setting():
+    # #161: a vestige is its own kind; material names the ones the team neither keeps nor (on the sell page) keeps
+    # from the sale. One left out of it is kept like any gift whose icon matched.
+    assert s.gift_role("Keywordless", "Dark Vestige", {"Burn", "Keywordless"}, material=["Dark Vestige"]) == "material"
+    assert s.gift_role("Keywordless", "Dark Vestige", {"Burn"}) == "keep"
 
 
 def test_an_avoided_gift_is_material_though_it_is_the_main_keyword():
@@ -268,6 +271,17 @@ def test_pick_fusion_puts_an_avoided_gift_in_first():
     materials = [("a", 2), ("b", 2), ("c", 2), ("w", 2)]
     assert s.pick_fusion(materials, 3, SHOP, POINTS) == [(["a", "b", "c"], 3)]
     assert s.pick_fusion(materials, 3, SHOP, POINTS, first={"w"}) == [(["a", "b", "w"], 3)]
+
+
+@pytest.mark.parametrize("name, placed, picked", [("ShopFuse", 0, []), ("ShopFuseRecipe", 3, [0])])
+def test_the_fuse_read_back_on_the_whole_fuse_pages_of_tests_screens(name, placed, picked):
+    # CODING_STANDARDS' sweep of fuse_slots, placed and picked: no false hit. ShopFuseRecipe really holds 3 materials
+    # in its slots, and its Fusion Available cell (where FUSE_CELLS' cell 0 sits) is framed orange.
+    image = np.asarray(Image.open(SCREENS / f"{name}.png").convert("RGB"))[:, :, ::-1]
+    cells = [(678 + 96 * c, y) for y in (294, 385, 477) for c in range(5)]
+    assert s.fuse_slots(image) == 3
+    assert s.placed(image, 3) == placed
+    assert [i for i, (x, y) in enumerate(cells) if s.picked(image, x, y, 493)] == picked
 
 
 @pytest.mark.parametrize("name, slots, placed, picked", [

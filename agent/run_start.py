@@ -5,6 +5,8 @@ actions.py reads the screen and taps; everything here is plain data in, plain da
 
 from difflib import SequenceMatcher
 
+from ocrtext import compact
+
 # Grace base prices, numbered as on the starlight page (spec 04 section 7).
 # Live 2026-10-14: base / + / ++ cost 1x / 2x / 3x the base price.
 GRACE_BASE = (10, 10, 20, 20, 30, 30, 40, 40, 50, 60)
@@ -30,6 +32,11 @@ def resolve_plan(settings, team, key):
     return plan["order"] if key == "deployment_order" else plan
 
 
+def grace_price(n, level):
+    """Starlight grace n (1-10) costs at level."""
+    return GRACE_BASE[n - 1] * LEVEL_MULT[level]
+
+
 def starlight_purchases(plan, available, unaffordable):
     """Graces to buy as [(grace number 1-10, level, price)] in priority order, and the ones not bought.
 
@@ -41,7 +48,7 @@ def starlight_purchases(plan, available, unaffordable):
         level = plan["levels"][n - 1]
         if level == "none":
             continue
-        price = GRACE_BASE[n - 1] * LEVEL_MULT[level]
+        price = grace_price(n, level)
         if price > available:
             missed.append((n, level, price))
             if unaffordable == "stop":
@@ -86,17 +93,13 @@ def difficulty_move(floor, shown_hard, want_hard):
 
 def match_pack(text, names, min_ratio=0.9, margin=0.04):
     """The pack name OCR text stands for, or None (spec 05 section 1: >= 0.9 and 0.04 ahead of the runner-up)."""
-    key = _norm(text)
-    scores = sorted(((SequenceMatcher(None, key, _norm(n)).ratio(), n) for n in set(names)), reverse=True)
+    key = compact(text)
+    scores = sorted(((SequenceMatcher(None, key, compact(n)).ratio(), n) for n in set(names)), reverse=True)
     if not scores or scores[0][0] < min_ratio:
         return None
     if len(scores) > 1 and scores[0][0] - scores[1][0] < margin:
         return None
     return scores[0][1]
-
-
-def _norm(s):
-    return "".join(c for c in s.lower() if c.isalnum())
 
 
 def match_title(text, names, min_ratio=0.8):
@@ -114,10 +117,10 @@ def match_title(text, names, min_ratio=0.8):
 
 def title_candidates(text, names, min_ratio=0.8):
     """The names tied for the best match of text (match_title), best first; [] when none passes."""
-    key = _norm(text)
+    key = compact(text)
     found = []
     for name in set(names):
-        n = _norm(name)
+        n = compact(name)
         if not key or not n:
             continue
         r = max(SequenceMatcher(None, key[i:i + len(n)], n).ratio() for i in range(max(1, len(key) - len(n) + 1)))

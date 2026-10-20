@@ -3,18 +3,41 @@
     // Not built yet, no screenshot of them so far: tutorial tip, weekly reset notice / expired run, the
     // "?" effect-choice page (#87), level-up popups other than Pass Level Up (ClaimPopup). PopupButton presses
     // any lone Close / Confirm / OK meanwhile; Recover saves a screen MirrorHub does not know to logs/unknown/.
+    // Connecting, RetryPopup and PopupButton run before the turn on every battle round (BattleHUD), so each starts with a
+    // template and reads no text on a battle screen (#157; live A/B: these three OCR cost ~130 ms a round). RetryPopup
+    // and PopupButton read their button text only once the left end of a popup button is in their roi:
+    // Screen/DialogButton.png, the dark gold-edged one of MaintenanceNotice.png and RewardsAcquired.png, also on
+    // the live server error and network popups (ServerErrorRetry.png, NetworkUnstable.png); for PopupButton also
+    // Screen/DialogButtonParchment.png, the light parchment one of "You haven't Deployed any Sinners."
+    // (FormationNoSinners.png), which DialogButton.png scores 0.38 on.
     "Connecting": {
-        "recognition": "OCR",
-        "roi": [1000, 50, 240, 50],
-        "expected": "CONNECTING",
+        "recognition": "TemplateMatch",
+        "roi": [995, 45, 250, 60],
+        "template": "Screen/Connecting.png",
+        "green_mask": true,
+        "threshold": 0.8,
         "post_delay": 1000
     },
     // Unverified layout: a "Retry" button, also with a countdown ("Retry (5)"), or "Try Again", anywhere
     // mid-screen (#84). Not the DEFEAT dialog's Retry Stage.
     "RetryPopup": {
-        "recognition": "OCR",
-        "roi": [340, 380, 600, 180],
-        "expected": "^(Retry(?!\\s*Stage)|Try Again)",
+        "recognition": "And",
+        "all_of": [
+            {
+                "recognition": "TemplateMatch",
+                "sub_name": "RetryPopupButton",
+                "roi": [340, 380, 600, 180],
+                "template": "Screen/DialogButton.png",
+                "threshold": 0.8
+            },
+            {
+                "recognition": "OCR",
+                "sub_name": "RetryPopupText",
+                "roi": [340, 380, 600, 180],
+                "expected": "^(Retry(?!\\s*Stage)|Try Again)"
+            }
+        ],
+        "box_index": 1,
         "action": "Click",
         "post_delay": 2000
     },
@@ -94,9 +117,37 @@
     // page): nothing to decide, press it (#86, #85). Two-button dialogs keep their buttons apart, so a Cancel /
     // Confirm question is never answered here. The maintenance notice, also a lone Close, halts first.
     "PopupButton": {
-        "recognition": "OCR",
-        "roi": [540, 430, 200, 70],
-        "expected": "^(Close|Confirm|OK)$",
+        "recognition": "And",
+        "all_of": [
+            {
+                "recognition": "Or",
+                "any_of": [
+                    {
+                        "recognition": "TemplateMatch",
+                        "sub_name": "PopupButtonFrame",
+                        "roi": [500, 415, 220, 100],
+                        "template": "Screen/DialogButton.png",
+                        "threshold": 0.8
+                    },
+                    // Parchment: 1.00 on the 18 captures of it, at most 0.65 on 16,600 others (robustness corpus);
+                    // the roi hugs the button's left end, a 120x80 one reached 0.80 on ResumeDialog's buttons.
+                    {
+                        "recognition": "TemplateMatch",
+                        "sub_name": "PopupButtonParchment",
+                        "roi": [470, 456, 68, 84],
+                        "template": "Screen/DialogButtonParchment.png",
+                        "threshold": 0.9
+                    }
+                ]
+            },
+            {
+                "recognition": "OCR",
+                "sub_name": "PopupButtonText",
+                "roi": [540, 430, 200, 90],
+                "expected": "^(Close|Confirm|OK)$"
+            }
+        ],
+        "box_index": 1,
         "action": "Click",
         "post_delay": 1500
     },

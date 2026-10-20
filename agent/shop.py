@@ -9,20 +9,11 @@ from itertools import combinations
 import numpy as np
 
 from gift_search import _runs
+from ocrtext import compact, has
 
 ROUNDS = 10
 CELL_HALF = 48  # screen px kept around a cell's centre: its icon, tier numerals and keyword badge
 TIERS = {(1, 1): 1, (2, 2): 2, (3, 3): 3, (3, 2): 4, (2, 1): 5}  # numeral strokes at its top and bottom row: I-V
-
-
-LOOKALIKE = str.maketrans("OoDQIl|SsBZz", "000011155822")
-
-
-def cost_value(text):
-    """The Cost an OCR read stands for, look-alike letters taken as digits (33O2 -> 3302); None without a digit (#82)."""
-    if not any(c.isdigit() for c in text):
-        return None
-    return int("".join(c for c in text.translate(LOOKALIKE) if c.isdigit()))
 
 
 def rescale(image, factor):
@@ -97,8 +88,8 @@ def read_slots(results):
         slots.append({
             "name": name,
             "price": int(digits) if digits and "?" not in t else None,
-            "purchased": any("Purchased" in u for u, uy in near if -110 < uy - y < 0),
-            "short": any("Enough" in u for u, uy in near if -110 < uy - y < 0),  # red "Not Enough Cost"
+            "purchased": any(has(u, "Purchased") for u, uy in near if -110 < uy - y < 0),
+            "short": any(has(u, "Enough") for u, uy in near if -110 < uy - y < 0),  # red "Not Enough Cost"
             "x": x,
             "y": y,
         })
@@ -149,7 +140,7 @@ def buyable(slot, cost=None):
 def on_sale(slot):
     """Whether a shop slot is a gift on sale for Cost, affordable or not: not bought, not a skill, not "??"."""
     name = slot["name"]
-    return slot["price"] is not None and not slot["purchased"] and "Replace" not in name and "ID Skill" not in name
+    return slot["price"] is not None and not slot["purchased"] and not has(name, "Replace", "ID Skill")
 
 
 def buy_plan(offers, cost, reserve, sold):
@@ -220,21 +211,21 @@ def to_sell(spare, wanted, cost, reserve, first=()):
     return sorted(picked, reverse=True)  # selling from the back keeps the earlier cells in place
 
 
-def gift_role(keyword, gift, kept, avoid=()):
+def gift_role(keyword, gift, kept, avoid=(), material=()):
     """"keep", "material" or "unknown" for an owned gift read off its grid cell, on the fuse and the sell page.
 
     keyword: its badge's keyword, "Keywordless" with no badge, None when the badge is cut off or unread;
-    gift: the gift its icon matched (an observed, a kept or an avoided one), or None; kept: the keywords the team
-    keeps (kept_keywords: the main one, the ones it names and "Keywordless" unless it lets them go, #77). Kept too:
-    the gifts whose icon matched (observed #103, #112, or named in keep_gifts #77); a gift in avoid is material
-    whatever its keyword (#90). Unknown is left to the tooltip: a cut-off or unread badge, and no badge at all while
-    keywordless gifts may go, as a badge scoring under BADGE_MIN also reads as none (a kept keyword's gift then).
+    gift: the gift its icon matched (an observed, a kept, an avoided one or a vestige), or None; kept: the keywords
+    the team keeps (kept_keywords: the main one, the ones it names and "Keywordless" unless it lets them go, #77).
+    Kept too: the gifts whose icon matched (observed #103, #112, or named in keep_gifts #77); a gift in avoid (#90) or
+    material (the vestiges the team lets go, #161) is material whatever its keyword. No badge and no icon matched is a
+    keywordless gift (the user, #161). Unknown is left to the tooltip: a cut-off or unread badge.
     """
-    if gift in avoid:
+    if gift in avoid or gift in material:
         return "material"
     if gift or keyword in kept:
         return "keep"
-    return "unknown" if keyword in (None, "Keywordless") else "material"
+    return "unknown" if keyword is None else "material"
 
 
 MAX_MATERIAL_TIER = 4  # a fusion gives tier IV at most: a tier V material is always a downgrade (user, #161)
@@ -300,9 +291,5 @@ def picked(image, x, y, bottom=720):
 
 def protected(name, names, min_ratio=0.85):
     """Whether an OCR'd gift name is one of names (fuzzy): a gift the shop must not fuse or sell (#103)."""
-    key = _norm(name)
-    return bool(key) and any(SequenceMatcher(None, key, _norm(n)).ratio() >= min_ratio for n in names)
-
-
-def _norm(s):
-    return "".join(c for c in s.lower() if c.isalnum())
+    key = compact(name)
+    return bool(key) and any(SequenceMatcher(None, key, compact(n)).ratio() >= min_ratio for n in names)

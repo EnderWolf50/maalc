@@ -31,7 +31,16 @@ CASES = {
     "offers_super": ("offers_super", "OFFER_CELLS", "offer", []),
     "fuse_no_gossypium": ("fuse", "FUSE_CELLS", "fuse", [], False),
     "sell_no_gossypium": ("sell", "SELL_CELLS", "sell", [], False),
+    "fuse_tier_unread": ("fuse", "FUSE_CELLS", "fuse", []),  # cell 0's numerals dimmed (without_tier)
 }
+
+
+def without_tier(image, x, y):
+    """image with the yellow tier numerals of the cell at (x, y) dimmed: its tier reads None."""
+    box = image[y - 44:y - 5, x - 44:x - 14]
+    b, g, r = (box[:, :, i].astype(int) for i in range(3))
+    box[(r > 200) & (g > 140) & (b < 90)] = 40
+    return image
 
 
 def child():
@@ -69,8 +78,13 @@ def child():
             try:
                 for case, (crop, cells, page, gifts, *allow) in CASES.items():
                     team = {"gift_search": {"gifts": gifts}, "allow_white_gossypium": (allow or [True])[0]}
-                    found = actions.read_cells(context, screen_with(crop), getattr(actions, cells), page,
-                                               actions.kept_icons(team) + actions.avoided_gifts(team))
+                    # The vestiges' icons on every case (#161): on the offers too, where none is, as a sweep for
+                    # false hits.
+                    image = screen_with(crop)
+                    if case == "fuse_tier_unread":
+                        image = without_tier(image, *actions.FUSE_CELLS[0])
+                    found = actions.read_cells(context, image, getattr(actions, cells), page,
+                                               actions.kept_icons(team) + actions.avoided_gifts(team) + actions.VESTIGE_ICONS)
                     out[case] = [(c["tier"], c["keyword"], c["gift"]) for c in found]
             except Exception:  # MaaFramework swallows it: hand it to the test
                 out["error"] = traceback.format_exc()
@@ -103,7 +117,7 @@ def test_spiderweb_is_kept_off_its_icon_with_no_tooltip(read):
 
 
 OWNED = [  # ShopFuse.png's gifts, by the game data of the names their tooltips give
-    (2, "Keywordless", None), (1, "Keywordless", None), (3, "Bleed", None),  # two Dark Vestiges, Smokes and Wires
+    (2, "Keywordless", "Faint Vestige"), (1, "Keywordless", "Dark Vestige"), (3, "Bleed", None),  # Smokes and Wires
     (2, "Burn", HELLTERFLY["name"]), (2, "Tremor", None),  # Hellterfly's Dream (observed), Sour Liquor Aroma
     (2, "Keywordless", None), (2, "Pierce", None), (2, "Keywordless", None),  # New Release Pamphlet, Gathering Skulls, Milepost
     (2, "Bleed", None), (2, "Keywordless", None),  # White Gossypium, Twinkling Scrap
@@ -116,14 +130,27 @@ def test_the_fuse_page_cells_read_tier_badge_and_observed_icon(read):
 
 
 def test_the_sell_page_cells_read_like_the_fuse_pages(read):
-    # The same gifts on the sell page (another layout): the observed gift is not looked for here.
-    assert read["sell"] == [(t, k, None) for t, k, _ in OWNED]
+    # The same gifts on the sell page (another layout): the observed gift is not looked for here, the vestiges are.
+    assert read["sell"] == [(t, k, g if g and "Vestige" in g else None) for t, k, g in OWNED]
+
+
+def test_vestiges_are_told_by_their_icon_and_tier(read):
+    # #161: the 5 vestige jars differ only in their fill (CCOEFF 0.5-0.86 on each other's), so the tier read off the
+    # cell decides which; each scores 0.80-0.90 on its own. No other cell of these captures matches one (0.38 at most).
+    assert [c[2] for c in read["fuse"][:2]] == ["Faint Vestige", "Dark Vestige"]
+    assert not [c for case in ("fuse_spiderweb", "offers", "offers_super") for c in read[case] if c[2] and "Vestige" in c[2]]
+
+
+def test_a_vestige_whose_tier_is_unread_is_not_named(read):
+    # #161: every vestige's icon matches the Faint Vestige's cell (0.69-0.80); with no tier read none is taken.
+    assert read["fuse_tier_unread"][0] == (None, "Keywordless", None)
+    assert read["fuse_tier_unread"][1] == (1, "Keywordless", "Dark Vestige")
 
 
 def test_white_gossypium_is_told_by_its_icon_for_a_team_that_does_not_hold_it(read):
     # #90: the 9th owned gift on both pages; no other cell takes its name.
     for case in ("fuse_no_gossypium", "sell_no_gossypium"):
-        assert [c[2] for c in read[case]] == [None] * 8 + ["White Gossypium"] + [None] * 6
+        assert [c[2] for c in read[case]] == ["Faint Vestige", "Dark Vestige"] + [None] * 6 + ["White Gossypium"] + [None] * 6
 
 
 def test_the_offers_read_tier_and_badge(read):
