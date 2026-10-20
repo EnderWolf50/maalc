@@ -81,3 +81,12 @@ def test_hold_notes_a_bot_that_ended_within_one_poll_but_not_a_pid_file_of_an_ea
             running=lambda _log: False, stop_profile="p", grace=0.05, stop=stopped.append)
     out = capsys.readouterr().out
     assert out.count("[hold] bot ended 20") == 1 and stopped == ["p"]
+
+
+def test_hold_ignores_a_pid_file_left_by_an_earlier_run(tmp_path, capsys):
+    (tmp_path / "install").mkdir()
+    bot, stopped = tmp_path / "bot.log", []
+    bot.with_name("bot.log.pid").write_text('{"pid": 1, "start": null, "cmd": "old"}')
+    bk.hold(tmp_path / "install", tmp_path / "bak", tmp_path / "never", timeout=0.2, poll=0.02, guard=bot,
+            running=lambda _log: False, stop_profile="p", grace=0.05, stop=stopped.append)
+    assert "bot ended" not in capsys.readouterr().out and stopped == []

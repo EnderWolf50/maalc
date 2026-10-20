@@ -72,10 +72,10 @@ def hold(root: Path, dest: Path, done: Path, timeout: float, poll: float = 2.0, 
     before = guard and detached_doc(guard)  # a pid file of an earlier run under this log is not this run's bot
     while not done.exists():
         if guard and running(guard):
-            seen, ended, deadline = True, None, time.monotonic() + timeout  # a restarted bot re-arms the end note # the agent's own steps after the bot get the whole timeout
+            seen, ended, deadline = True, None, time.monotonic() + timeout  # the agent's own steps after the bot get the whole timeout; a restarted bot re-arms the end note
         elif time.monotonic() >= deadline:
             break
-        elif (seen or guard and detached_doc(guard) not in (None, before)) and ended is None:  # a bot gone within one poll still counts  # durable for `queue.py resume`: nobody may have been watching
+        elif (seen or guard and detached_doc(guard) not in (None, before)) and ended is None:  # durable for `queue.py resume` (nobody may have been watching); a bot gone within one poll still counts
             ended = time.monotonic()
             print(f"[hold] bot ended {datetime.now().isoformat(timespec='seconds')}", flush=True)
         if ended is not None and stop_profile and time.monotonic() >= ended + grace:
