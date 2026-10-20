@@ -69,3 +69,15 @@ def test_hold_notes_the_end_of_a_restarted_bot_and_keeps_its_recording(tmp_path,
     bk.hold(tmp_path / "install", tmp_path / "bak", tmp_path / "never", timeout=0.2, poll=0.05, guard=tmp_path / "bot.log",
             running=lambda _log: next(runs, False), stop_profile="p", grace=5, stop=stopped.append)
     assert stopped == [] and capsys.readouterr().out.count("[hold] bot ended 20") == 2
+
+
+def test_hold_notes_a_bot_that_ended_within_one_poll_but_not_a_pid_file_of_an_earlier_run(tmp_path, capsys):
+    (tmp_path / "install").mkdir()
+    bot, stopped = tmp_path / "bot.log", []
+    pid_file = bot.with_name("bot.log.pid")
+    pid_file.write_text('{"pid": 1, "start": null, "cmd": "old"}')  # an earlier run under the same log
+    threading.Timer(0.2, lambda: pid_file.write_text('{"pid": 2, "start": null, "cmd": "new"}')).start()  # the bot, gone at once
+    bk.hold(tmp_path / "install", tmp_path / "bak", tmp_path / "never", timeout=0.5, poll=0.02, guard=bot,
+            running=lambda _log: False, stop_profile="p", grace=0.05, stop=stopped.append)
+    out = capsys.readouterr().out
+    assert out.count("[hold] bot ended 20") == 1 and stopped == ["p"]
