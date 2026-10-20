@@ -1,0 +1,9 @@
+# Once per clone: `lefthook install` (docs/agents/local-dev.md).
+pre-commit:
+  commands:
+    ruff:
+      glob: "*.py"
+      run: uv run ruff check {staged_files}
+    screens-privacy:
+      glob: "tests/screens/*.png"
+      run: uv run pytest -q tests/test_screens_privacy.py
