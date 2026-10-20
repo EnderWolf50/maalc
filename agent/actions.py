@@ -2750,9 +2750,11 @@ class Shop(CustomAction):
             Shop.to_main(context)
             return False
         tap(context, *FUSE_KEYWORD_OK, wait=1.5)
-        # Live 2026-10-21: the page can come back with the last gift's tooltip up, over the third row and Leave.
-        if tooltip_head(ocr(context, screen(context), FUSE_TOOLTIP)):
-            tap(context, *FUSE_NEUTRAL, wait=1)
+        if tooltip_head(ocr(context, screen(context), FUSE_TOOLTIP)) and not Shop.close_tooltip(context):
+            log("shop: a tooltip stays up on the fuse page: no fusion this visit")
+            visit["fuse_scanned"] = True
+            Shop.to_main(context)
+            return False
         if screen(context)[495:515, 263:283].max(axis=2).mean() > 60:  # unticked: V ~30
             log("shop: Wishmaking is ticked (it spends owned Starlight): no fusion")
             Shop.to_main(context)
@@ -2791,6 +2793,22 @@ class Shop(CustomAction):
         visit["fuse_scanned"] = not fused
         Shop.to_main(context)
         return fused
+
+    @staticmethod
+    def close_tooltip(context):
+        """Close a tooltip the fuse page came back with, over the third row and Leave (the Shop node's anchor); False
+        when one stays up.
+
+        Live 2026-10-21: one stayed from a cell the grid had moved (Emerald Elytra) through every visit of the page. A
+        neutral tap closes a cell's tooltip but left that one; a cell's own took its place: the first cell's, in and out.
+        """
+        tap(context, *FUSE_NEUTRAL, wait=1)
+        if tooltip_head(ocr(context, screen(context), FUSE_TOOLTIP)):
+            x, y = FUSE_CELLS[0]
+            tap(context, x, y, wait=0.5)
+            tap(context, x, y, wait=0.5)  # out of the fusion again
+            tap(context, *FUSE_NEUTRAL, wait=1)
+        return not tooltip_head(ocr(context, screen(context), FUSE_TOOLTIP))
 
     @staticmethod
     def tooltip_roles(context, team, cells, roles, avoid):
