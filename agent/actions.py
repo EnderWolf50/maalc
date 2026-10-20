@@ -1744,9 +1744,9 @@ EVENT_PORTRAIT_Y = 655
 EVENT_NEUTRAL = (5, 5)  # top-left corner: nothing there on any event page
 EVENT_TEXT_TAPS = 30
 # A text tap every EVENT_TAP_EVERY s, the lit button's pixels looked at after each, the page's text only every
-# EVENT_TEXT_READ taps: live 2026-10-20, a screenshot and 3 OCRs after each tap made it one every 0.3-1.1 s whatever
+# EVENT_READ_EVERY taps: live 2026-10-20, a screenshot and 3 OCRs after each tap made it one every 0.3-1.1 s whatever
 # the wait, and the text kept up at 0.15 s (no tap lost; the user's own taps 0.15 s).
-EVENT_TAP_EVERY, EVENT_TEXT_READ = 0.15, 3
+EVENT_TAP_EVERY, EVENT_READ_EVERY = 0.15, 3
 EVENT_BUTTON_LABEL = [1040, 612, 190, 66]  # the Event node's roi: empty once the event page is gone
 EVENT_LIMIT = 180  # s one event may take before recovery L1 (AALC allows 300); a boss quiz of several rounds stays well under
 EVENT_GAP = 30  # s between two Event calls after which the next call is another event
@@ -1839,7 +1839,7 @@ class Event(CustomAction):
             tried.clear()
             # Text running on (the button grey): taps on a dead corner show it line by line; keep tapping
             # until there is something to act on, for MirrorHub's next look.
-            # A Choices page or a check prompt shows up to EVENT_TEXT_READ - 1 taps late: a tap on the dead corner picks nothing.
+            # A Choices page or a check prompt shows up to EVENT_READ_EVERY - 1 taps late: a tap on the dead corner picks nothing.
             last = 0.0
             for n in range(1, EVENT_TEXT_TAPS + 1):
                 time.sleep(max(0.0, last + EVENT_TAP_EVERY - time.monotonic()))
@@ -1848,7 +1848,7 @@ class Event(CustomAction):
                 image = screen(context)
                 if red_button(image):
                     break
-                if n % EVENT_TEXT_READ == 0 and (not text(context, image, EVENT_BUTTON_LABEL) or any(
+                if n % EVENT_READ_EVERY == 0 and (not text(context, image, EVENT_BUTTON_LABEL) or any(
                         k in text(context, image, roi) for k, roi in (("Choices", CHOICES_HEADER), ("Choose a character", CHECK_PROMPT)))):
                     break
         return True
@@ -2066,6 +2066,7 @@ BADGES = ["Burn", "Bleed", "Tremor", "Rupture", "Sinking", "Poise", "Charge", "S
 # cell's best 0.41; 160 cells of 60 live captures. An observed gift's icon: Spiderweb's thin lines 0.5-0.6, others 0.86+.
 BADGE_MIN, ICON_KEEP = 0.5, 0.45
 FUSE_TOOLTIP = [600, 180, 680, 440]
+TOOLTIP_HEAD = r"O\s*GIFT"  # a gift tooltip's "E.G.O GIFT" heading line
 FUSE_CONFIRM = [300, 150, 680, 380]  # "Selected E.G.O Gifts 3/5" over "Fuse the selected E.G.O Gifts?"
 FUSE_NEUTRAL = (715, 229)  # the E.G.O Gifts Owned label: closes a tooltip, selects nothing
 SELL_PANEL, SELL_PRICE, SELL_COST = [150, 160, 420, 360], [500, 160, 60, 45], [960, 80, 160, 45]
@@ -2078,13 +2079,18 @@ OUTSIDE = (40, 400)  # left of every shop dialog, on nothing
 LEAVE_DIALOG, LEAVE_CONFIRM, LEAVE_CANCEL = [440, 320, 400, 45], (765, 493), (515, 493)
 
 
+def cost_in(context, image, roi=SHOP_COST):
+    """The Cost OCR reads in roi of image (shop.cost_value), None without a digit."""
+    return shop.cost_value(text(context, image, roi))
+
+
 def read_cost(context, roi=SHOP_COST):
     """The Cost in roi, read again on a fresh screenshot when OCR gives no digit; None when 3 reads give none (#82).
 
     None is never a Cost of 0: a caller that needs the Cost does nothing on None and logs it.
     """
     for _ in range(3):
-        cost = shop.cost_value(text(context, screen(context), roi))
+        cost = cost_in(context, screen(context), roi)
         if cost is not None:
             return cost
         time.sleep(0.5)
@@ -2286,7 +2292,7 @@ class Shop(CustomAction):
             log(f"shop: still acting after {shop.ROUNDS} rounds")
         for _ in range(3):
             image = screen(context)
-            if seen(context, image, "MirrorMap") or seen(context, image, "MapNodePanel"):
+            if Shop.on_map(context, image):
                 log("shop: already out of the shop")
                 RUN.pop("shop", None)
                 return True
@@ -2295,10 +2301,15 @@ class Shop(CustomAction):
                 log(f"shop: leave with {read_cost(context)} Cost")
                 tap(context, *LEAVE_CONFIRM, wait=0)
                 # Up to the old 2 s for the map: MirrorHub must not find the shop fading out and start a new visit.
-                until(context, lambda im: seen(context, im, "MirrorMap") or seen(context, im, "MapNodePanel"), timeout=2)
+                until(context, lambda im: Shop.on_map(context, im), timeout=2)
                 RUN.pop("shop")
                 return True
         return stuck("Leave did not bring up `Leave the shop?`")
+
+    @staticmethod
+    def on_map(context, image):
+        """Whether image shows the map (or its node panel): the shop was left."""
+        return bool(seen(context, image, "MirrorMap") or seen(context, image, "MapNodePanel"))
 
     @staticmethod
     def to_main(context):
@@ -2309,7 +2320,7 @@ class Shop(CustomAction):
         """
         for _ in range(5):
             image = screen(context)
-            if seen(context, image, "MirrorMap") or seen(context, image, "MapNodePanel"):
+            if Shop.on_map(context, image):
                 return False
             title = text(context, image, DIALOG_TITLE)
             heal = "Heal" in text(context, image, HEAL_TITLE)
@@ -2324,8 +2335,8 @@ class Shop(CustomAction):
             elif "Gift Info" in title:  # a bought offer tapped: only a tap outside it closes it
                 at = OUTSIDE
             elif "E.G.O Gift" in title:  # the fuse or sell page; a tooltip may cover Close
-                if re.search(r"O\s*GIFT", text(context, image, FUSE_TOOLTIP)):
-                    tap_moved(context, *FUSE_NEUTRAL)
+                if re.search(TOOLTIP_HEAD, text(context, image, FUSE_TOOLTIP)):
+                    tap_settled(context, *FUSE_NEUTRAL, timeout=1.0)  # it fades: Close would land on it
                 at = PAGE_CLOSE
             elif "Leave the shop" in text(context, image, LEAVE_DIALOG):
                 at = LEAVE_CANCEL
@@ -2416,7 +2427,7 @@ class Shop(CustomAction):
             else:
                 tap(context, *REFRESH[choice][0], wait=0)
             # The Cost drops, then the offers reload (CONNECTING): read them once both are done.
-            until(context, lambda im: shop.cost_value(text(context, im, SHOP_COST)) not in (None, cost), timeout=3)
+            until(context, lambda im: cost_in(context, im) not in (None, cost), timeout=3)
             still(context, timeout=1.5)
             after = read_cost(context)
             log(f"shop: {choice} refresh for {fees[choice]}: {cost} -> {after} Cost")
@@ -2593,7 +2604,7 @@ class Shop(CustomAction):
             if tap_shown(context, *PAGE_OK, shows(context, DIALOG_TEXT, r"Sell.*Cost"), timeout=2) is not None:
                 tap(context, *DIALOG_CONFIRM, wait=0)
             # Only before + price is a sale: the preview of an unconfirmed one reads as 51146 (#174).
-            sold = until(context, lambda im: shop.cost_value(text(context, im, SELL_COST)) == before + price, timeout=2)
+            sold = until(context, lambda im: cost_in(context, im, SELL_COST) == before + price, timeout=2)
             if sold is None:
                 log(f"shop: sell cell {i} for {price}: not sold, {before} -> {read_cost(context, SELL_COST)} Cost")
                 break
@@ -2612,7 +2623,7 @@ class Shop(CustomAction):
         for _ in range(8):
             time.sleep(0.2)
             lines = [(t, b) for t, b in ocr(context, screen(context), FUSE_TOOLTIP) if "Owned" not in t]
-            head = next((b for t, b in lines if re.search(r"O\s*GIFT$", t)), None)
+            head = next((b for t, b in lines if re.search(TOOLTIP_HEAD + "$", t)), None)
             if head:
                 name = min(((b[1] - head[1], t) for t, b in lines if b[1] > head[1] + 10 and re.search(r"[a-z]{3}", t)),
                            default=(0, "?"))[1]
@@ -2692,8 +2703,8 @@ class Shop(CustomAction):
         materials = ", ".join(cell_line(c, "material").rsplit(":", 1)[0] for c in group)
         fused = False
         if Shop.place(context, group, slots) and not Shop.recipe_shown(context, screen(context), visit):
-            tap_shown(context, *PAGE_OK, shows(context, FUSE_CONFIRM, r"\d\s*/\s*\d"), timeout=2)
-            m = re.search(r"(\d)\s*/\s*\d", text(context, screen(context), FUSE_CONFIRM))
+            image = tap_shown(context, *PAGE_OK, shows(context, FUSE_CONFIRM, r"\d\s*/\s*\d"), timeout=2)
+            m = image is not None and re.search(r"(\d)\s*/\s*\d", text(context, image, FUSE_CONFIRM))
             if m and int(m[1]) == len(group):
                 tap(context, 788, 583, wait=0)  # the dialog's Confirm; gift_get waits for its GET!
                 fused = gift_get(context)
