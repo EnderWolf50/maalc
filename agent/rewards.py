@@ -116,7 +116,7 @@ def choice_open(image, y):
 
 
 CHOICE_LIST_Y = (165, 512)  # the option list's view; options past it are cut off
-CARD_GAP = 50  # px between two edges at most for a card's bottom and the next card's top: 17-21 apart (9 under a lit card), a card's own ~100
+CARD_GAP = 50  # px between two edges at most for a card's bottom and the next card's top: 17-21 apart (9 under a lit card), a card's own 100-121
 
 
 def choice_cards(image):
@@ -124,7 +124,7 @@ def choice_cards(image):
 
     Read down the frames' left edge at x 700. Two edges under CARD_GAP apart are a card's bottom and the next
     card's top; an edge alone in the view is a top when a double line (~9 px), a bottom when a single one (~3 px).
-    Not the thickness first: the card a drag lifts over glows orange, its bottom edge 12-13 px (#196).
+    The gap goes before the thickness: the card a drag lifts over glows orange, its bottom edge 12-13 px (#196).
     EventChoicesUsed.png: [(170, 302), (320, 452), (469, None)], the third cut at the bottom.
     """
     y0, y1 = CHOICE_LIST_Y

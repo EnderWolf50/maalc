@@ -2017,7 +2017,7 @@ class Event(CustomAction):
                 step = CHOICE_STEP if min(seen) > i else -CHOICE_STEP
             after = Event.drag(context, image, step)
             if after is None:
-                if turned or seen:  # an end of the list toward an option it read past: not there
+                if turned or seen:  # both ends with none read, or the end the options on screen put it beyond
                     return None, image
                 step, turned = -step, True
             else:
