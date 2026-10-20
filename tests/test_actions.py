@@ -1639,7 +1639,7 @@ def test_a_feature_match_hit_comes_back_in_screen_coordinates():
     ctx.run_recognition.side_effect = recognise
     hit = actions.seen(ctx, np.zeros((720, 1280, 3), np.uint8), "MapNodeEvent", [500, 300, 120, 120])
     (h, w, _), roi = calls[0]
-    assert (w, h) < (1280, 720) and roi[2:] == [120, 120]  # a cut-out, the roi's size kept
+    assert w < 1280 and h < 720 and roi[2:] == [120, 120]  # a cut-out, the roi's size kept
     dx, dy = 500 - roi[0], 300 - roi[1]
     assert dx % actions.FEATURE_ALIGN == 0 and dy % actions.FEATURE_ALIGN == 0
     assert tuple(hit.box) == (10 + dx, 20 + dy, 30, 40)
