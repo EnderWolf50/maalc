@@ -9,6 +9,14 @@
         "template": "Map/MapBus.png",
         "threshold": 0.8
     },
+    // #194: the bus with the camera zoomed in on it (~1.8x), as backing out of a node's formation leaves the map.
+    // Only tells RouteMap the map is zoomed; the node panel zooms in the same way, so it hits there too.
+    "MapBusZoomed": {
+        "recognition": "TemplateMatch",
+        "roi": [0, 60, 1100, 560],
+        "template": "Map/MapBusZoomed.png",
+        "threshold": 0.8
+    },
     // Chevrons sit only on the lit links from the bus: the slots the bus can move to.
     // Green-masked: the link line behind them takes the theme pack's colour.
     "MapLinkUp": {

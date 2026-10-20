@@ -1043,6 +1043,7 @@ MARKS = {  # node -> (mark, roi around the slot centre)
 FEATURE_MATCH = {"MapNodeFocusedHex", "MapNodeEvent", "MapNodeShop"}  # the pipeline's FeatureMatch nodes
 FEATURE_PAD, FEATURE_ALIGN = 64, 32  # px of the screen kept around a FeatureMatch roi; grid of the cut's corner
 ENTER = (1133, 543)
+BACK_KEY = 4  # Android's back key (L1's too): closes the node panel
 MAP_RETRIES = 3  # RouteMap calls per floor that may enter nothing before the map is stuck
 MAP_LOOKS = 4  # looks, 1 s apart, for a linked slot before the fallback taps
 PANEL_REWARDS = [700, 495, 110, 30]  # the "Clear Rewards" label
@@ -1183,7 +1184,8 @@ class RouteMap(CustomAction):
     shows. After them come the fallbacks: the bus (a node reached but not entered; first after a restart or a
     recovery, #88), then the slots not tried yet. No bus on screen: the map is dragged about for it (#61).
     Nothing taking a tap spends one of the floor's map retries; when they run out, the map is stuck (spec 06);
-    with no bus found at all, at once at L2.
+    with no bus found at all, at once at L2. A map zoomed in on the bus is reset first (unzoom); one that stays so goes
+    to L2 at once too, or into the node when its panel stays up (L2 starts from the map's gear).
     When the best path's first node is entered, the rest of the path is the floor's plan: the next calls
     follow it (follow) until it is used up or does not fit the map.
     """
@@ -1194,6 +1196,10 @@ class RouteMap(CustomAction):
             return forfeit(context)
         if still(context) is None:
             return True  # still fading in or out: let MirrorHub look again
+        if not self.unzoom(context):  # its slots sit off where the offsets put them: L2 puts the map back
+            if seen(context, screen(context), "MapNodePanel"):  # L2 needs the map: enter the node instead
+                return enter_node(context)
+            return stuck("the map stays zoomed in on the bus", level=2)
         if self.follow(context):
             return enter_node(context)
         RUN.pop("map_plan", None)
@@ -1252,6 +1258,32 @@ class RouteMap(CustomAction):
         if RUN["map_misses"] >= MAP_RETRIES:
             return stuck(f"no node on the map took a tap, {MAP_RETRIES} times this floor")
         log("map: no node took a tap; MirrorHub looks again")
+        return True
+
+    @staticmethod
+    def unzoom(context):
+        """Whether the map is at its default zoom, after resetting it if it was zoomed in on the bus (#194).
+
+        Backing out of a node's formation leaves the camera zoomed in ~1.8x on the bus (MapBusZoomed), where
+        it stays (#162: 32 s, 5 drags and 4 taps changed nothing). The node panel zooms in the same way and
+        closing it puts the map back at rest (#111, 2026-10-18). The bus stands on the node backed out of, so
+        its tap opens that panel; closed, the bus's node is known to take a tap: it goes first (#88).
+        """
+        image = screen(context)
+        if seen(context, image, "MapBus") or not (zoomed := seen(context, image, "MapBusZoomed")):
+            return True
+        log("map: zoomed in on the bus; opening and closing its node panel")
+        x, y, w, h = zoomed.box
+        page_guard(context, "MirrorMap", image=image)
+        if tap_then(context, x + w // 2, y + h // 2, lambda im: seen(context, im, "MapNodePanel")) is None:
+            log("map: the zoomed bus took no tap")
+            return False
+        context.tasker.controller.post_click_key(BACK_KEY).wait()
+        if until(context, lambda im: seen(context, im, "MapBus"), timeout=3) is None:
+            log("map: still zoomed in after the back key")
+            return False
+        RUN["map_entered"] = False
+        RUN.pop("map_plan", None)  # its next step starts past the bus's node: read the map again
         return True
 
     @staticmethod
