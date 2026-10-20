@@ -115,6 +115,16 @@ def tap_settled(context, x, y, timeout=1.5):
     return still(context, timeout=timeout)
 
 
+def tap_shown(context, x, y, done, timeout=2.0, rest=1.5):
+    """tap_then(), then still(): a page or dialog read or tapped on once it stops moving. Its last screenshot, or None
+    when done(image) never held."""
+    image = tap_then(context, x, y, done, timeout=timeout)
+    if image is None:
+        return None
+    settled = still(context, timeout=rest)
+    return image if settled is None else settled
+
+
 def still(context, timeout=2.0):
     """The first screenshot that looks like the one 0.2 s before it: a fade in or out has ended; None after timeout s.
 
@@ -2238,7 +2248,7 @@ def tap_keyword(context, keyword):
 
 def gift_get(context):
     """Confirm the E.G.O Gift GET! popup after a purchase or a fusion; False when none comes up in 4.5 s."""
-    title = shows(context, GET_TITLE, "GET", 0)
+    title = shows(context, GET_TITLE, "GET", flags=0)  # capitals: as the old `"GET" in text`
     if until(context, title, timeout=4.5) is None:
         return False
     for _ in range(3):  # a tap while the popup zooms in is lost
@@ -2280,14 +2290,14 @@ class Shop(CustomAction):
                 log("shop: already out of the shop")
                 RUN.pop("shop", None)
                 return True
-            if tap_then(context, *BOTTOM_RIGHT, shows(context, LEAVE_DIALOG, "Leave the shop"), timeout=1.5) is not None:
+            # The dialog slides down; Confirm takes no tap before it stops.
+            if tap_shown(context, *BOTTOM_RIGHT, shows(context, LEAVE_DIALOG, "Leave the shop"), timeout=1.5) is not None:
                 log(f"shop: leave with {read_cost(context)} Cost")
-                still(context, timeout=1.5)  # the dialog slides down; Confirm takes no tap before it stops
                 tap(context, *LEAVE_CONFIRM, wait=0)
-                # Until the map shows: MirrorHub must not find the shop fading out and start a new visit.
-                if until(context, lambda im: seen(context, im, "MirrorMap") or seen(context, im, "MapNodePanel"), timeout=2) is not None:
-                    RUN.pop("shop")
-                    return True
+                # Up to the old 2 s for the map: MirrorHub must not find the shop fading out and start a new visit.
+                until(context, lambda im: seen(context, im, "MirrorMap") or seen(context, im, "MapNodePanel"), timeout=2)
+                RUN.pop("shop")
+                return True
         return stuck("Leave did not bring up `Leave the shop?`")
 
     @staticmethod
@@ -2320,7 +2330,8 @@ class Shop(CustomAction):
             elif "Leave the shop" in text(context, image, LEAVE_DIALOG):
                 at = LEAVE_CANCEL
             elif heal:
-                at = BOTTOM_RIGHT
+                tap(context, *BOTTOM_RIGHT, wait=1.5)  # the heal pages keep their fixed waits: not seen live
+                continue
             elif number(text(context, image, REFRESH["normal"][1])) is not None:
                 return True
             else:
@@ -2483,9 +2494,10 @@ class Shop(CustomAction):
     @staticmethod
     def open_offer(context, slot):
         """Tap an offer; the screenshot of its purchase dialog, or None when none opened."""
-        if tap_then(context, slot["x"], slot["y"] - 50, shows(context, DIALOG_TITLE, "Purchase"), timeout=1.5) is not None:
-            still(context, timeout=1.0)  # its text and Cost preview are read once it stops
-            return screen(context)
+        # Its text and Cost preview are read once it stops.
+        image = tap_shown(context, slot["x"], slot["y"] - 50, shows(context, DIALOG_TITLE, "Purchase"), timeout=1.5, rest=1.0)
+        if image is not None:
+            return image
         log(f"shop: {slot['name']!r} opened no purchase dialog")
         return None
 
@@ -2510,10 +2522,9 @@ class Shop(CustomAction):
         if not wanted or visit["sold"]:
             return False
         visit["sold"] = True
-        if tap_then(context, *SHOP_BUTTONS["sell"], shows(context, DIALOG_TITLE, "Sell"), timeout=2) is None:
+        if tap_shown(context, *SHOP_BUTTONS["sell"], shows(context, DIALOG_TITLE, "Sell"), timeout=2) is None:  # the grid slides in
             Shop.to_main(context)
             return False
-        still(context, timeout=1.5)  # the grid slides in
         cost = read_cost(context, SELL_COST)
         if cost is None:
             log("shop: the sell page's Cost reads nothing: nothing sold")
@@ -2579,8 +2590,7 @@ class Shop(CustomAction):
             price = dict(gifts)[i]
             tap_settled(context, *SELL_CELLS[i], timeout=1.2)
             # Sell asks "Sell [<gift>] for <price> Cost?"; it slides down from the top before Confirm takes a tap (#174).
-            if tap_then(context, *PAGE_OK, shows(context, DIALOG_TEXT, r"Sell.*Cost"), timeout=2) is not None:
-                still(context, timeout=1.5)
+            if tap_shown(context, *PAGE_OK, shows(context, DIALOG_TEXT, r"Sell.*Cost"), timeout=2) is not None:
                 tap(context, *DIALOG_CONFIRM, wait=0)
             # Only before + price is a sale: the preview of an unconfirmed one reads as 51146 (#174).
             sold = until(context, lambda im: shop.cost_value(text(context, im, SELL_COST)) == before + price, timeout=2)
@@ -2589,6 +2599,7 @@ class Shop(CustomAction):
                 break
             log(f"shop: sold cell {i} for {price}: {before} -> {before + price} Cost")
             before += price
+            still(context, timeout=1.5)  # the dialog goes as the Cost turns: the next cell's tap waits for it
         Shop.to_main(context)
         return bool(picked)
 
@@ -2636,10 +2647,10 @@ class Shop(CustomAction):
         if visit.get("fuse_scanned"):
             return False
         keyword = team["keyword"]
-        if tap_then(context, *SHOP_BUTTONS["fuse"], shows(context, DIALOG_TITLE, "Fuse"), timeout=2) is None:
+        # The page zooms in: a tap before it stops is lost.
+        if tap_shown(context, *SHOP_BUTTONS["fuse"], shows(context, DIALOG_TITLE, "Fuse"), timeout=2) is None:
             Shop.to_main(context)
             return False
-        still(context, timeout=1.5)  # the page zooms in: a tap before it stops is lost
         tap_settled(context, *FUSE_CENTRE)
         if not tap_keyword(context, keyword):
             log("shop: no keyword dialog on the fusion")
@@ -2681,8 +2692,7 @@ class Shop(CustomAction):
         materials = ", ".join(cell_line(c, "material").rsplit(":", 1)[0] for c in group)
         fused = False
         if Shop.place(context, group, slots) and not Shop.recipe_shown(context, screen(context), visit):
-            if tap_then(context, *PAGE_OK, shows(context, FUSE_CONFIRM, r"\d\s*/\s*\d"), timeout=2) is not None:
-                still(context, timeout=1.5)
+            tap_shown(context, *PAGE_OK, shows(context, FUSE_CONFIRM, r"\d\s*/\s*\d"), timeout=2)
             m = re.search(r"(\d)\s*/\s*\d", text(context, screen(context), FUSE_CONFIRM))
             if m and int(m[1]) == len(group):
                 tap(context, 788, 583, wait=0)  # the dialog's Confirm; gift_get waits for its GET!
@@ -2708,9 +2718,9 @@ class Shop(CustomAction):
             x, y = c["x"], c["y"]
             tap(context, x, y, wait=0)
             lines, name = Shop.tooltip(context, last)
-            tap_moved(context, *FUSE_NEUTRAL)  # its tooltip goes
+            tap_settled(context, *FUSE_NEUTRAL, timeout=1.0)  # its tooltip fades: the next tap would land on it
             tap_moved(context, x, y, timeout=1.2)  # out of the fusion again
-            tap_moved(context, *FUSE_NEUTRAL)
+            tap_settled(context, *FUSE_NEUTRAL, timeout=1.0)
             if name is None:
                 log(f"shop: the gift at {x},{y} read no name: kept out of the fusion")
                 roles[n] = "keep"

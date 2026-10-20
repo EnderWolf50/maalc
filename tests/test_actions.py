@@ -884,6 +884,21 @@ def test_the_cost_preview_of_a_picked_cell_is_not_a_sale(context, monkeypatch):
     assert not any("sold cell" in line for line in logs)
 
 
+@pytest.mark.parametrize("tooltip", [True, False])
+def test_closing_the_fuse_page_taps_a_tooltip_away_only_when_one_shows(context, clock, tooltip):
+    # The neutral tap waits for the tooltip to go; with none it would wait out its whole timeout for nothing.
+    def reads_now(taps):
+        if actions.PAGE_CLOSE in taps:  # the main shop: its Refresh fee
+            return {tuple(actions.REFRESH["normal"][1]): [("30", (970, 145, 40, 20))]}
+        page = {tuple(actions.DIALOG_TITLE): [("Fuse E.G.O Gift", (500, 90, 200, 40))]}
+        if tooltip and actions.FUSE_NEUTRAL not in taps:
+            page[tuple(actions.FUSE_TOOLTIP)] = [("E.G.O GIFT", (1030, 305, 100, 25))]
+        return page
+    taps = live_shop(context, reads_now)
+    assert actions.Shop.to_main(context)
+    assert taps == ([actions.FUSE_NEUTRAL] if tooltip else []) + [actions.PAGE_CLOSE]
+
+
 def test_a_keyword_refresh_waits_for_the_new_cost_not_a_fixed_time(context, clock):
     # Live 2026-10-19: a keyword refresh slept 1.5 + 1 + 2 + 1 s; the screen stops 0.5-0.6 s after OK.
     def reads_now(taps):
