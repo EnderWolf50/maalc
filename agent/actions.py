@@ -2217,12 +2217,18 @@ def tooltip_use(lines, team, avoid):
     if any(shop.protected(t, kept_gifts(team)) for t in lines):
         return "keep"
     if any(shop.protected(t, VESTIGES) for t in lines):
-        return "sell" if loose_vestiges(team, "sell") else "fuse"
-    if any(shop.protected(t, data("keywordless_gifts.json")["names"]) for t in lines):
+        return "sell" if team.get("sell_vestiges", False) else "fuse"  # one the team keeps returned above
+    if any(shop.protected(t, keywordless_names()) for t in lines):
         if "Keywordless" in kept_keywords(team, "fuse"):
             return "keep"
         return "fuse" if "Keywordless" in kept_keywords(team, "sell") else "sell"
     return "keep" if kept_text(text, team) else "sell"
+
+
+@functools.cache
+def keywordless_names():
+    """data/keywordless_gifts.json: the keywordless Mirror Dungeon gifts' English names, tiers I-V (#161)."""
+    return data("keywordless_gifts.json")["names"]
 
 
 def kept_keywords(team, page):
@@ -2792,6 +2798,7 @@ class Shop(CustomAction):
             lines, name = Shop.tooltip(context, last)
             page_guard(context, "Shop")  # a tooltip that names nothing may be no shop at all
             tap(context, *FUSE_NEUTRAL)
+            page_guard(context, "Shop")
             tap(context, x, y, wait=1.2)  # out of the fusion again
             tap(context, *FUSE_NEUTRAL)
             if name is None:
