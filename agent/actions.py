@@ -151,22 +151,29 @@ def page_guard(context, home, image=None):
     return image
 
 
-CACHE_NODES = 200  # ~6 min of a run's nodes
+CLEAR_CACHE_AFTER_NODES = 200  # ~6 min: a 24-min stretch of a live run's log had 784 nodes
+
+
+def clear_long_task_cache(context, argv):
+    """Clear MaaFramework's runtime cache once the task has CLEAR_CACHE_AFTER_NODES nodes (#176).
+
+    The cache keeps every node's and recognition's detail until clear_cache, and a whole dungeon run is one task.
+    Only an action may clear it: the clear drops the task's own detail too, custom recognitions miss without it,
+    and the end of the action's node writes it back.
+    """
+    detail = getattr(argv, "task_detail", None)  # (the tests' argv has none)
+    if detail and len(detail.node_id_list) >= CLEAR_CACHE_AFTER_NODES:
+        context.tasker.clear_cache()
 
 
 def hands_back(run):
     """An action's run(): PageGone ends it with True, for MirrorHub to look at the screen now up (#118).
 
-    It also clears MaaFramework's runtime cache once the task has CACHE_NODES nodes (#176): the cache keeps every
-    node's and recognition's detail until clear_cache, and a whole dungeon run is one task. An action is the safe
-    point: the clear drops the task's own detail, custom recognitions miss without it, and the end of this node
-    writes it back.
+    It clears the runtime cache of a long task first (clear_long_task_cache).
     """
     @functools.wraps(run)
     def wrapped(self, context, argv):
-        detail = getattr(argv, "task_detail", None)  # (the tests' argv has none)
-        if detail and len(detail.node_id_list) >= CACHE_NODES:
-            context.tasker.clear_cache()
+        clear_long_task_cache(context, argv)
         try:
             return run(self, context, argv)
         except PageGone as e:

@@ -2548,7 +2548,7 @@ def test_hands_back_clears_the_runtime_cache_of_a_long_task():
 
     context = MagicMock()
     nodes = lambda n: SimpleNamespace(task_detail=SimpleNamespace(node_id_list=list(range(n))))  # noqa: E731
-    assert Act().run(context, nodes(actions.CACHE_NODES - 1))
+    assert Act().run(context, nodes(actions.CLEAR_CACHE_AFTER_NODES - 1))
     context.tasker.clear_cache.assert_not_called()
-    assert Act().run(context, nodes(actions.CACHE_NODES))
+    assert Act().run(context, nodes(actions.CLEAR_CACHE_AFTER_NODES))
     context.tasker.clear_cache.assert_called_once()

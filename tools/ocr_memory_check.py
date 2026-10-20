@@ -7,8 +7,9 @@ this process's memory is the Tasker's.
 
     uv run --with opencv-python-headless python tools/ocr_memory_check.py --minutes 3 --csv mem.csv
 
-`--clear-every S` calls `tasker.clear_cache()` every S seconds from the action of the node that hit, as RouteMap
-does (#176): a clear between nodes leaves the task without a detail, and custom recognitions miss until a node ends.
+`--clear-nodes N` calls `tasker.clear_cache()` from the action of the node that hit once the task has N nodes, as
+the Agent's hands_back does (#176): a clear between nodes leaves the task without a detail, and custom recognitions
+miss until a node ends.
 The summary adds the slope after minute 5 (least squares, MB/h) and the round time (one screencap to the next).
 
 Prints a line every 10 s and a summary. Exits 1 when the memory passes --cap-mb (it stops there), or when the median
@@ -57,7 +58,7 @@ def main():
     ap.add_argument("--limit-mb", type=float, default=300, help="allowed growth, last minute over the second")
     ap.add_argument("--cap-mb", type=float, default=6000, help="stop early past this much memory")
     ap.add_argument("--log-dir", type=Path, help="write MaaFramework's log here (default: no log)")
-    ap.add_argument("--clear-every", type=float, help="call tasker.clear_cache() every this many seconds")
+    ap.add_argument("--clear-nodes", type=int, help="call tasker.clear_cache() once the task has this many nodes")
     args = ap.parse_args()
 
     if not (args.bundle / "model/ocr/rec.onnx").is_file():
@@ -73,7 +74,6 @@ def main():
     screens = [s for s in screens if s is not None and s.shape[:2] == (720, 1280)]
     frames = [0]
     rounds = []  # (seconds, round time in ms)
-    cleared = [time.monotonic()]
 
     class Screens(CustomController):
         def connect(self):
@@ -107,13 +107,13 @@ def main():
     resource.register_custom_recognition("HubText", HubText())  # the Agent's, in this process
     class Clear(CustomAction):
         def run(self, context, argv):
-            if args.clear_every and time.monotonic() - cleared[0] >= args.clear_every:
+            if args.clear_nodes and len(argv.task_detail.node_id_list) >= args.clear_nodes:
                 context.tasker.clear_cache()
-                cleared[0] = time.monotonic()
             return True
 
     resource.register_custom_action("Clear", Clear())
-    nothing = {"action": "Custom", "custom_action": "Clear"}  # both arms pay the same custom action
+    # both arms pay the same custom action
+    nothing = {"action": "Custom", "custom_action": "Clear", "pre_delay": 0, "post_delay": 0, "on_error": []}
     controller = Screens()
     controller.post_connection().wait()
     tasker = Tasker()
@@ -124,14 +124,12 @@ def main():
     override = {"MirrorHub": {"timeout": 2**31 - 1, "on_error": []}}
     for entry in hub["next"]:
         name, jump_back = entry["name"], entry["jump_back"]
-        override[name] = {**nothing, "pre_delay": 0, "post_delay": 0, "on_error": [],
-                          "next": [] if jump_back else ["MirrorHub"]}
+        override[name] = {**nothing, "next": [] if jump_back else ["MirrorHub"]}
     # BattleHUD's own list runs too (the battle screen's popups and turn); its nodes go back through the jump back.
     if hud := resource.get_node_data("BattleHUD"):  # (a bundle from before #157 has none)
         override["BattleHUD"] = {"pre_delay": 0, "post_delay": 0}
         for entry in hud["next"]:
-            override[entry["name"]] = {**nothing, "pre_delay": 0, "post_delay": 0, "on_error": [],
-                                       "next": []}
+            override[entry["name"]] = {**nothing, "next": []}
 
     # HubText's list: the screens it picks, then the tail; they too do nothing and come back.
     if text := resource.get_node_data("HubText"):  # (a bundle from before #157 has none)
@@ -139,7 +137,7 @@ def main():
         param = text["recognition"]["param"]["custom_recognition_param"]
         param = json.loads(param) if isinstance(param, str) else param
         for name in param["entries"] + param["tail"]:
-            override[name] = {**nothing, "pre_delay": 0, "post_delay": 0, "on_error": [], "next": []}
+            override[name] = {**nothing, "next": []}
 
     samples = []
     t0 = time.monotonic()
@@ -156,7 +154,6 @@ def main():
                 return
             stop.wait(1)
 
-    cleared[0] = t0
     sampler = threading.Thread(target=sample)
     sampler.start()
     job = tasker.post_task("MirrorHub", override)
