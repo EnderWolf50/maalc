@@ -879,6 +879,32 @@ def test_the_tooltip_decides_a_cell_whose_badge_is_cut_off_and_keeps_what_it_nam
     assert fused and taps == [2, 3, 1, 1]  # the Burn gift in and out; the Vestige in, out, and in for the fusion
 
 
+def test_a_tooltip_left_up_on_the_fuse_page_is_closed_before_the_grid_is_read(context, monkeypatch):
+    # Live 2026-10-21: the fuse page came back with the last gift's tooltip up (Emerald Elytra, a third-row cell), over
+    # Leave, the Shop node's anchor: every page check handed the shop back. Up from the keyword's OK until a neutral tap.
+    def up():
+        taps = [c.args for c in context.tasker.controller.post_click.call_args_list]
+        return actions.FUSE_KEYWORD_OK in taps and actions.FUSE_NEUTRAL not in taps[taps.index(actions.FUSE_KEYWORD_OK):]
+
+    def guard(context, home, image=None):
+        if up():
+            raise actions.PageGone(home)
+    monkeypatch.setattr(actions, "page_guard", guard)
+    reads(context, {**FUSE_PAGE, tuple(actions.FUSE_CONFIRM): [("Selected E.G.O Gifts 3/3", (330, 175, 320, 30))],
+                    tuple(actions.GET_TITLE): [("E.G.O Gift GET!", (560, 165, 160, 30))]})
+    inner = context.run_recognition.side_effect
+
+    def run_recognition(name, image, override=None):
+        if tuple((override or {}).get(name, {}).get("roi", ())) == tuple(actions.FUSE_TOOLTIP) and up():
+            return SimpleNamespace(all_results=[SimpleNamespace(text="E.G.O GIFT", box=(900, 460, 100, 25))], hit=True,
+                                   best_result=None)
+        return inner(name, image, override)
+    context.run_recognition.side_effect = run_recognition
+    fuse_slots(context, monkeypatch)
+    cells_read(monkeypatch, ("Bleed", None), ("Tremor", None), ("Pierce", None))
+    assert actions.Shop.fuse(context, {"keyword": "Burn", "gift_search": {"gifts": []}}, {})
+
+
 def test_a_cut_off_cells_tooltip_is_closed_before_the_page_is_checked(context, monkeypatch):
     # Live 2026-10-21: a third-row cell's tooltip covers Leave, the Shop node's anchor. A page check while it showed
     # handed the shop back each time, and the bot looped on the fuse page under recovery. Here the check fails while

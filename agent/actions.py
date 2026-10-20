@@ -2331,6 +2331,12 @@ def cell_line(cell, role):
     return f"{cell['i']} {tier} {cell['keyword'] or 'badge unread'}{' ' + cell['gift'] if cell['gift'] else ''}: {role}"
 
 
+def tooltip_head(lines):
+    """The box of a gift tooltip's "E.G.O GIFT" heading among OCR lines [(text, box)], or None. Its end, not a part:
+    the grid's "E.G.O Gifts Owned" label sits in FUSE_TOOLTIP too."""
+    return next((b for t, b in lines if compact(t).endswith("ogift")), None)
+
+
 def fusions(cells, roles, slots, avoid):
     """shop.pick_fusion over the cells whose role is material and whose tier is read: [([cell index], tier)] (#77).
 
@@ -2697,7 +2703,7 @@ class Shop(CustomAction):
         for _ in range(8):
             time.sleep(0.2)
             lines = [(t, b) for t, b in ocr(context, screen(context), FUSE_TOOLTIP) if not has(t, "Owned")]
-            head = next((b for t, b in lines if compact(t).endswith("ogift")), None)
+            head = tooltip_head(lines)
             if head:
                 name = min(((b[1] - head[1], t) for t, b in lines if b[1] > head[1] + 10 and re.search(r"[a-z]{3}", t)),
                            default=(0, "?"))[1]
@@ -2744,6 +2750,9 @@ class Shop(CustomAction):
             Shop.to_main(context)
             return False
         tap(context, *FUSE_KEYWORD_OK, wait=1.5)
+        # Live 2026-10-21: the page can come back with the last gift's tooltip up, over the third row and Leave.
+        if tooltip_head(ocr(context, screen(context), FUSE_TOOLTIP)):
+            tap(context, *FUSE_NEUTRAL, wait=1)
         if screen(context)[495:515, 263:283].max(axis=2).mean() > 60:  # unticked: V ~30
             log("shop: Wishmaking is ticked (it spends owned Starlight): no fusion")
             Shop.to_main(context)
