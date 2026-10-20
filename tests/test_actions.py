@@ -1224,6 +1224,15 @@ def test_the_second_icon_candidate_is_not_tapped_once_the_page_is_gone(context, 
     assert taps(context) == [(500, 300)]
 
 
+def test_a_lookalike_pick_is_not_unselected_on_a_page_that_is_gone(context, guarded, monkeypatch):
+    # #118: the tap that picked the wrong gift waited up to 1 s; the tap that undoes it is guarded.
+    page_until(context, "GiftSearch", 1)
+    monkeypatch.setattr(actions.GiftSearch, "chosen", staticmethod(lambda c, im, names: ["Other"] if c.tasker.controller.post_click.called else []))
+    with pytest.raises(actions.PageGone):
+        actions.GiftSearch.tap_and_check(context, np.zeros((720, 1280, 3), np.uint8), 500, 300, "Wanted")
+    assert taps(context) == [(500, 300)]
+
+
 def test_the_consume_dialog_is_confirmed_once_it_stops_dropping_in(context, clock):
     # Live 2026-10-18 (run13c): Confirm was tapped as soon as "Consume" read, while the dialog still slid down
     # on its chains; the tap did nothing, no GET window came, and every GiftSearch call after it did the same.

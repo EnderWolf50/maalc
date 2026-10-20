@@ -850,7 +850,7 @@ class GiftSearch(CustomAction):
                 if score < ICON_MIN:
                     break
                 if k:
-                    page_guard(context, "GiftSearch")  # the first candidate's tap and wait lie behind this one
+                    image = page_guard(context, "GiftSearch")  # the first candidate's tap and wait lie behind this one
                 if GiftSearch.tap_and_check(context, image, x, y, gift["name"]):
                     log(f"gift search: {gift['name']} selected in {time.time() - start:.1f} s (icon {score:.2f})")
                     return True
@@ -917,6 +917,7 @@ class GiftSearch(CustomAction):
             return True
         if new:
             log(f"gift search: the icon match picked {new[0]}, not {name}: unselected")
+            page_guard(context, "GiftSearch")  # the tap above waited up to 1 s
             tap_then(context, x, y, lambda im: GiftSearch.chosen(context, im, []) == before, timeout=1)
         return False
 
