@@ -52,6 +52,8 @@ def test_bonus_toggles(use, amount, hard, left, all_hard, expected):
     ("Spend your 'Weekly Bonuses, to claim the bonus rewards?", "bonus"),  # live 2026-10-16
     ("Spend your 「Weekly Bonuses」 to claim the bonus rewards?", "bonus"),
     ("Claim the rewards? UIEIR", "no_bonus"),  # live 2026-10-17: no weekly bonus left
+    ("CLAIM THE REWARDS?", "no_bonus"),  # #138: case and spacing as OCR reads them
+    ("End expedition withoutclaiming rewards?", "giveup"),
     ("", None),
     ("Would you like to move to the Window?", None),
 ])
