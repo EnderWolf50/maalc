@@ -1578,7 +1578,7 @@ def test_a_name_plate_read_mid_fade_out_is_not_taken_for_the_next_window(context
 
 
 def test_the_next_gift_popup_is_tapped_once_it_has_stopped_moving(context, clock):
-    # The next window slides in (looks 2-4 differ), then holds still (looks 5, 6): its Confirm is tapped after that.
+    # The next window slides in (looks 2-4 differ), then holds still (looks 4 and 5 match): its Confirm is tapped after that.
     screens(context, [0, 40, 80, 120, 120])
     shots = context.tasker.controller.post_screencap.return_value.wait.return_value.get
     tapped_at = []
