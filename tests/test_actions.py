@@ -1648,3 +1648,22 @@ def test_a_feature_match_hit_comes_back_in_screen_coordinates():
 def test_feature_match_lists_every_feature_match_node_of_the_pipeline():
     from test_pipeline import load_nodes, recognition
     assert actions.FEATURE_MATCH == {n for n, spec in load_nodes().items() if recognition(spec)[0] == "FeatureMatch"}
+
+
+def test_forfeit_reads_its_dialogs_however_ocr_cases_them(context, monkeypatch):
+    # #138: the settings panel and the Quit dialog read in capitals still count as shown.
+    reads = iter(["DUNGEON PROGRESS", "QUIT EXPLORING THE DUNGEON?", ""])
+    monkeypatch.setattr(actions, "text", lambda *a, **k: next(reads))
+    monkeypatch.setattr(actions, "tap", lambda *a, **k: None)
+    actions.RUN["forfeit"] = True
+    assert actions.forfeit(context) is True
+    assert actions.STUCK["flag"] is None and "forfeit" not in actions.RUN
+
+
+def test_the_theme_pack_page_reads_its_floor_in_any_case(context, monkeypatch):
+    # #138: "Floor 3" is floor 3, as the page-gone wait after the pull already reads it.
+    monkeypatch.setattr(actions, "text", lambda *a, **k: "Floor 3")
+    monkeypatch.setattr(actions.PickThemePack, "set_difficulty", lambda *a: False)
+    actions.RUN["difficulty"] = None
+    actions.PickThemePack().run(context, None)
+    assert actions.RUN["floor"] == 3

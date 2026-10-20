@@ -16,10 +16,17 @@ const screens: [image: string, hits: string[]][] = [
   // is Confirmed; a one-button error box is closed by its one button. Both sit on the title, which reads through.
   ['TitleDownload.png', ['DownloadDialog', 'GoToMirrorEntry', 'NavTitle']],
   ['TitleErrorConfirm.png', ['PopupButton', 'GoToMirrorEntry', 'NavTitle']],
-  // Synthetic (#84), no live capture yet: the one-button notice window (MaintenanceNotice's, live) relabelled
-  // as a server error with a countdown Retry or a Try Again button. They put RetryPopup on every other screen.
+  // Synthetic (#84) over the title, live captures over the Mailbox below: the one-button notice window
+  // (MaintenanceNotice's, live) relabelled as a server error with a countdown Retry or a Try Again button.
+  // They put RetryPopup on every other screen.
   ['RetryCountdown.png', ['RetryPopup', 'GoToMirrorEntry', 'NavTitle']],
   ['TryAgain.png', ['RetryPopup', 'GoToMirrorEntry', 'NavTitle']],
+  // Live 2026-10-20 (#84): the server error over the Mailbox after a request timed out, Close / Retry. Retry
+  // counts down "Retry 5" to "Retry 1" with a dark frame first, then reads "Retry".
+  ['ServerErrorRetryCountdown.png', ['RetryPopup']],
+  ['ServerErrorRetry.png', ['RetryPopup']],
+  // Live 2026-10-20 (#84): the network-unstable popup over the Mailbox with Wi-Fi off, Close only.
+  ['NetworkUnstable.png', ['PopupButton']],
   // The Parallel Superposition prompt after clearing floor 5 / 10 with the mode engaged (#85). Captured from the
   // game's own help sheet (the page behind it is the help text, not a map): the dialog is its live look, but where
   // it sits on screen is not confirmed. A Cancel / Confirm question, so PopupButton (one centred button) stays out.
@@ -45,8 +52,11 @@ const screens: [image: string, hits: string[]][] = [
   ['GiftGet.png', ['GiftGet']],
   ['StartingGiftSearchOff.png', ['StartingGift']],  // Activate Gift Search switched off (1.117.0, blue season)
   ['GiftSearch.png', ['GiftSearch', 'GiftChoice']],  // same Refuse Gift button; GiftSearch comes first in the hub
-  // 3 gifts picked, Select 3/3; its Selected E.G.O Gift header reads like the starting gift page's: GiftSearch comes first
-  ['GiftSearchSelected.png', ['GiftSearch', 'GiftChoice', 'StartingGift']],
+  // 3 gifts picked, Select 3/3. Its Selected E.G.O Gift header reads like the starting gift page's, but only that page
+  // has the Activate Gift Search switch: live 2026-10-19 (#166), the page fading in read as StartingGift before its
+  // blue title could be read. GiftSearchFadeIn.png: a frame of that fade-in (recording), the panel still sliding in.
+  ['GiftSearchSelected.png', ['GiftSearch', 'GiftChoice']],
+  ['GiftSearchFadeIn.png', ['GiftSearch', 'GiftChoice']],
   ['GiftSearchConfirm.png', ['GiftSearch', 'GiftChoice']],  // "Consume 70 Starlight ...": GiftSearch confirms it
   ['GiftSearchGet.png', ['GiftGet', 'GiftSearch']],  // GiftGet comes first in the hub
   ['GiftSearchForgo.png', ['GiftSearchForgo', 'GiftSearch', 'GiftChoice']],
@@ -66,6 +76,9 @@ const screens: [image: string, hits: string[]][] = [
   // not by the hub, and the map icons still show through them.
   ['Formation.png', ['Formation']],
   ['FormationDetails.png', ['Formation']],
+  // "You haven't Deployed any Sinners." on light parchment (live, #157): PopupButton's parchment gate; Formation reads
+  // through it
+  ['FormationNoSinners.png', ['PopupButton', 'Formation']],
   ['BattleTurn.png', ['BattleTurn']],
   ['BattleTurnLit.png', ['BattleTurn']],
   ['BattleTurnSolo.png', ['BattleTurn']], // 1-sinner formation: one slot, Win Rate at x ~740
