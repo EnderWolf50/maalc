@@ -978,8 +978,9 @@ def seen(context, image, node, roi=None):
     """The node's hit on image, its roi overridden and clipped to the screen; None on a miss.
 
     #156: FeatureMatch runs SIFT over the whole image it is handed, its roi only masking the keypoints:
-    ~0.47 s per template on a full screen whatever the roi. So a FEATURE_MATCH node gets the roi with a
+    ~0.18 s per template on a full screen whatever the roi (41 map captures offline, #163). So a FEATURE_MATCH node gets the roi with a
     FEATURE_PAD margin cut out (corner on a FEATURE_ALIGN grid, as SIFT's octaves halve), the box put back.
+    Only detail.box is put back: best_result and the result lists stay in the cut-out's coordinates.
     """
     override, dx, dy = None, 0, 0
     if roi:
