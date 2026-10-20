@@ -123,3 +123,22 @@ def test_batch_plan_follows_maaframework():
     assert batch_plan(nodes, ["Connecting", "RetryPopup", "MaintenanceNotice"]) == [
         "RetryPopupText", "MaintenanceNoticeText", "MaintenanceNoticeClose"]
     assert batch_plan(nodes, ["NoBatchOCR", "Connecting", "RetryPopup"]) == ["NoBatchOCRModel"]
+
+
+OPENING = ["MirrorEntryNewRun", "MirrorEnterDialog", "MirrorEntryPaused", "TeamSelect", "LevelWarning", "StarlightPage",
+           "StarlightConfirm", "StartingGift", "GiftGet", "GiftSearch", "GiftSearchForgo", "ThemePack"]
+
+
+def test_the_opening_waits_for_screens_not_for_delays():
+    # #115: each opening action ends once the next screen is up, so MaaFramework's default 200 ms post_delay only
+    # held MirrorHub back; GiftSearchForgo waited 2 s after its tap instead of for the loading screen.
+    nodes = load_nodes()
+    for name in OPENING:
+        assert nodes[name].get("action") == "Custom" and nodes[name].get("post_delay") == 0, name
+    assert nodes["GiftSearchForgo"]["custom_action"] == "TapUntil"
+    # Nothing to act on: the hub's own rate_limit paces the looks at a loading screen.
+    assert nodes["Loading"].get("pre_delay") == 0 and nodes["Loading"].get("post_delay") == 0
+    # Live (2026-10-20): the last loading screen HubText picked was gone when its own OCR looked, and the hub waited
+    # out HubText's 1 s timeout and HubTextLost's delays, 1.7 s, with the theme pack page up.
+    assert nodes["HubText"]["timeout"] <= 500
+    assert nodes["HubTextLost"].get("pre_delay") == 0 and nodes["HubTextLost"].get("post_delay") == 0

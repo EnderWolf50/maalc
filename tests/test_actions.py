@@ -1402,6 +1402,17 @@ def test_the_confirm_dialog_is_confirmed_when_the_graces_spent_owned_starlight(c
     assert taps(context) == [(738, 530)]
 
 
+def test_convert_starlight_to_cost_is_switched_without_a_fixed_wait(context, clock, monkeypatch):
+    # #115: the checkbox tap slept 1 s; the note under it says when it took.
+    actions.RUN["settings"] = {}
+    monkeypatch.setattr(actions.run_start, "resolve_plan", lambda *a: {"convert_leftover": True})
+    page(context, {(660, 395, 320, 90): lambda clicks, looks: "Coverts any remaining Starlight" if clicks and looks >= 3 else "Any unspent Starlight will be added",
+                   (780, 145, 230, 35): lambda clicks, looks: "Selected E.G.O Gift" if clicks >= 2 else None})
+    assert actions.ConfirmStarlight().run(context, argv())
+    assert taps(context) == [(727, 363), (738, 530)]
+    no_fixed_wait(clock)
+
+
 SELECT_COUNT, SEARCH_SWITCH, GIFT_POPUP = (990, 565, 190, 45), (1100, 145, 85, 28), (520, 160, 240, 40)
 
 
@@ -1546,12 +1557,22 @@ def test_a_picked_gift_is_checked_once_the_panel_shows_it(context, clock):
     no_fixed_wait(clock)
 
 
-def test_the_next_acquired_gift_popup_counts_as_the_last_one_closed(context, clock):
-    # n gifts, n popups: the title never leaves the screen, the gift's name changes.
-    page(context, {GIFT_POPUP: "E.G.O Gift GET!", GIFT_NAME: lambda clicks, looks: "Wound Clerid" if clicks == 0 else "Spiderweb"})
+def test_n_acquired_gift_popups_are_closed_in_one_action(context, clock):
+    # #115: n gifts, n popups: the title stays up and the gift's name changes. Each next window is closed as soon as
+    # its name shows, without a pass of MirrorHub in between (~0.7 s a window).
+    names = ["Wound Clerid", "Spiderweb", "Ashes to Ashes"]
+    page(context, {GIFT_POPUP: lambda clicks, looks: "E.G.O Gift GET!" if clicks < 3 else None,
+                   GIFT_NAME: lambda clicks, looks: names[min(clicks, 2)]})
+    assert actions.GiftGet().run(context, argv())
+    assert taps(context) == [(640, 532)] * 3
+    no_fixed_wait(clock)
+
+
+def test_a_gift_popup_confirm_that_did_not_take_is_left_to_the_hub(context, clock):
+    # Same title, same name for the whole wait: the tap was lost; MirrorHub sees the window again.
+    page(context, {GIFT_POPUP: "E.G.O Gift GET!", GIFT_NAME: "Wound Clerid"})
     assert actions.GiftGet().run(context, argv())
     assert taps(context) == [(640, 532)]
-    assert sum(clock) < 0.5
 
 
 def test_a_search_tab_tap_waits_for_the_neighbour_tab_to_show_first(context, clock):
