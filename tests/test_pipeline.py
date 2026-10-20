@@ -20,30 +20,92 @@ def recognition(spec):
     return (reco, spec) if isinstance(reco, str) else (reco["type"], reco.get("param", {}))
 
 
-def batched_ocr_names(nodes, name, spec=None):
-    """The names MaaFramework 5.14.3 files a node's OCR under in a next list's batch (PipelineTask::collect_ocr_from_reco)."""
+def batchable_ocr(nodes, name, spec=None):
+    """(name, params) of a node's OCR MaaFramework 5.14.3 may batch (PipelineTask::collect_ocr_from_reco)."""
     kind, params = recognition(spec if spec is not None else nodes[name])
     if kind == "OCR":
-        return [] if params.get("only_rec") or params.get("color_filter") else [name]
-    names = []
+        return [] if params.get("only_rec") or params.get("color_filter") else [(name, params)]
+    found = []
     for sub in params.get("all_of", []) + params.get("any_of", []):
         if isinstance(sub, str):
-            names += batched_ocr_names(nodes, sub)
+            found += batchable_ocr(nodes, sub)
         else:  # an inline sub-recognition goes by its sub_name, which defaults to its type: "OCR"
-            names += batched_ocr_names(nodes, sub.get("sub_name", recognition(sub)[0]), sub)
-    return names
+            found += batchable_ocr(nodes, sub.get("sub_name", recognition(sub)[0]), sub)
+    return found
+
+
+def batch_plan(nodes, listed):
+    """The OCR a next list batches (PipelineTask::prepare_batch_ocr / try_add_ocr_node); fewer than 2 is no batch."""
+    plan, model = [], None
+    for name, params in (o for n in listed if nodes[n].get("enabled", True) for o in batchable_ocr(nodes, n)):
+        if isinstance(params.get("roi"), str) and params["roi"] in plan:
+            continue
+        model = params.get("model", "") if model is None else model
+        if params.get("model", "") == model:  # the first one's model; the others are left out
+            plan.append(name)
+    return plan
+
+
+def strip(listed):
+    return [re.sub(r"^(\[\w+\])+", "", n) for n in listed]
+
+
+def test_mirror_hub_reads_its_ocr_screens_through_hub_text():
+    # #149, #157: batched, MaaFramework OCRs a next list's rois in one pass, and each OCR re-reads every box of that
+    # pass crossing its roi edge (OCRer::handle_cached), slivers 1 px high padded to 48 px x (width / height): a
+    # battle skill text 1 px into MirrorEnterDialog's roi, 443 x 1, took 7.6 s and the Tasker from 4 to 12 GB.
+    # MirrorHub lists no OCR; HubText (agent/hub_text.py) reads its screens and lists the ones that may be up behind
+    # NoBatchOCR. BattleHUD, two templates, comes before HubText, and its own list does not batch.
+    nodes = load_nodes()
+    hub = strip(nodes["MirrorHub"]["next"])
+    assert [o for n in hub for o in batchable_ocr(nodes, n)] == []
+    assert hub.index("BattleHUD") < hub.index("HubText")
+    assert batchable_ocr(nodes, "BattleHUD") == [] and nodes["BattleHUD"]["any_of"] == ["BattleTurn", "BattlePause"]
+    hud = strip(nodes["BattleHUD"]["next"])
+    assert hud[-2:] == ["BattleTurn", "BattlePause"] and len(batch_plan(nodes, hud)) < 2
+    # The server's popups before the turn run no OCR on a battle round (live A/B: 3 OCR a round, ~130 ms): a
+    # template comes first, and MaaFramework's And stops at the first part that misses.
+    assert hud[0] == "NoBatchOCR" and hud[1:-2] == ["Connecting", "RetryPopup", "PopupButton"]
+    assert all(template_first(nodes, nodes[n]) for n in hud[1:-2])
+    # Connecting is a template: it waits in MirrorHub's list, ahead of HubText, as it does in BattleHUD's.
+    assert hub.index("BattleHUD") < hub.index("Connecting") < hub.index("HubText")
+    param = nodes["HubText"]["custom_recognition_param"]
+    assert param["tail"] == hub[hub.index("HubText") + 1:]
+    for name in param["entries"]:  # OCR HubText judges (hub_text.ocr_specs): OCR, And / Or of OCR, gates in an And
+        kind, params = recognition(nodes[name])
+        subs = [recognition(s)[0] for s in parts(nodes, params)]
+        assert (kind == "OCR" or kind == "Or" and subs and all(s == "OCR" for s in subs)
+                or kind == "And" and "OCR" in subs and all(s in ("OCR", "TemplateMatch", "Or") for s in subs)), name
+    assert len(batch_plan(nodes, ["NoBatchOCR", *param["entries"], *param["tail"]])) == 1
+
+
+def template_first(nodes, spec):
+    """Whether a recognition matches a template before any OCR runs: a template, an Or of them, an And led by one."""
+    kind, params = recognition(spec)
+    subs = parts(nodes, params)
+    return (kind == "TemplateMatch" or kind == "Or" and subs and all(template_first(nodes, s) for s in subs)
+            or kind == "And" and template_first(nodes, subs[0]))
+
+
+def parts(nodes, params):
+    """The sub-recognitions of an And / Or, a node named by reference as its own spec."""
+    return [s if isinstance(s, dict) else nodes[s] for s in params.get("all_of", []) + params.get("any_of", [])]
 
 
 def test_no_next_list_batches_two_ocr_recognitions_under_one_name():
-    # #149: MaaFramework OCRs a next list's OCR rois in one pass and files the text boxes by recognition name. Two
-    # under one name (inline subs without a sub_name are all "OCR") pool their boxes, each copied once per roi it
-    # touches; each then re-reads every pooled box that crosses its roi, slivers 1 px high batched at one width,
-    # 48 px x (width / height) each: 1.5 s an OCR and the Tasker from 0.6 to 7.4 GB.
+    # #149: the batch files its text boxes by recognition name. Two under one name (inline subs without a sub_name
+    # are all "OCR") pool their boxes, and each re-reads every pooled box crossing its roi: 0.6 -> 7.4 GB.
     nodes = load_nodes()
     shared = {}
     for name, node in nodes.items():
-        listed = [re.sub(r"^(\[\w+\])+", "", n) for n in node.get("next", [])]
-        names = [o for n in listed if nodes[n].get("enabled", True) for o in batched_ocr_names(nodes, n)]
+        names = [o for n in strip(node.get("next", [])) if nodes[n].get("enabled", True) for o, _ in batchable_ocr(nodes, n)]
         if dupes := sorted(o for o, k in Counter(names).items() if k > 1):
             shared[name] = dupes
     assert shared == {}
+
+
+def test_batch_plan_follows_maaframework():
+    nodes = load_nodes()
+    assert batch_plan(nodes, ["Connecting", "RetryPopup", "MaintenanceNotice"]) == [
+        "RetryPopupText", "MaintenanceNoticeText", "MaintenanceNoticeClose"]
+    assert batch_plan(nodes, ["NoBatchOCR", "Connecting", "RetryPopup"]) == ["NoBatchOCRModel"]

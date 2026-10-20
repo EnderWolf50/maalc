@@ -21,6 +21,7 @@ from maa.custom_recognition import CustomRecognition
 
 import battle
 import gift_search
+import hub_text
 import map_route
 import recovery
 import rewards
@@ -263,6 +264,10 @@ def stop(context, reason, line=None):
     return False
 
 
+# MirrorHub's own steps, no screen: the watchdog keeps the screen handled before them.
+PASS_NODES = ("BattleHUD", "BattleHUDLost", "HubText", "HubTextLost")
+
+
 @AgentServer.custom_recognition("StuckFlag")
 class StuckFlag(CustomRecognition):
     """MirrorHub's Stuck node: watches every screen it hands out, hits while a stuck waits for recovery.
@@ -276,7 +281,7 @@ class StuckFlag(CustomRecognition):
         if ids and ids[-1] != STUCK["node"]:
             STUCK["node"] = ids[-1]
             node = context.tasker.get_node_detail(ids[-1])
-            if node and node.name not in ("MirrorDungeon", "MirrorHub", "Stuck", "GlobalStuck"):
+            if node and node.name not in ("MirrorDungeon", "MirrorHub", "Stuck", "GlobalStuck", *PASS_NODES):
                 self.see(node.name, argv.image)
         if STUCK["flag"] and STUCK["flag"][0] is None:
             STUCK["flag"] = (STUCK["kind"], *STUCK["flag"][1:])  # reported by the action of the node just handled
@@ -294,6 +299,9 @@ class StuckFlag(CustomRecognition):
         elif recovery.over_time(kind, RUN.get("deadline"), time.time()):
             RUN.pop("deadline")  # once a floor: the next floor starts the clock again
             stuck(f"floor {RUN.get('floor', '?')} over its time limit", level=2)
+
+
+AgentServer.custom_recognition("HubText")(hub_text.HubText)
 
 
 @AgentServer.custom_action("Recover")
