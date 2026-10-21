@@ -315,6 +315,16 @@ def test_a_map_that_does_not_pan_costs_no_extra_drags_once_a_node_is_entered(con
     assert ctl.post_touch_down.call_count == 3
 
 
+def test_a_fresh_hard_map_that_cannot_pan_costs_no_extra_drags(context, clock):
+    # A HARD floor's map shows two columns and does not pan (#129): its drags are not waited out.
+    actions.RUN.update(fresh_floor=True, floor_hard=True)
+    map_world(context, {(1, "mid"): {"cost"}}, [], bus_x=446)
+    ctl = context.tasker.controller
+    ctl.post_touch_move.side_effect = lambda x, y: MagicMock()
+    actions.RouteMap.find_bus(context)
+    assert ctl.post_touch_down.call_count == 3
+
+
 def test_a_gift_window_over_the_map_after_a_battle_goes_back_to_mirror_hub(context, monkeypatch):
     # Live 2026-10-19 23:34: after an abnormality fight E.G.O Gift GET! slid in over the map (GiftGet 0.73, under its
     # threshold, MirrorMap 0.997); RouteMap read under it, found no bus, dragged the map about and went to L2, then L3.
