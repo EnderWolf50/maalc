@@ -2,9 +2,18 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-import yaml
+from types import SimpleNamespace
 
+import yaml
+from PIL import Image
+
+import actions
 import map_route as mr
+import test_actions
+
+clock, context = test_actions.clock, test_actions.context  # its fixtures
+
+SCREENS = Path(__file__).resolve().parent / "screens"
 
 WEIGHTS = yaml.safe_load((Path(__file__).resolve().parent.parent / "assets/resource/base/data/map_weights.yaml").read_text(encoding="utf-8"))
 NORMAL, HARD = WEIGHTS["normal"], WEIGHTS["hard"]
@@ -82,6 +91,80 @@ def test_a_slot_with_no_link_read_onward_goes_on_to_the_cheapest_node():
     # Every node leads on, so an unread link must not make a path look shorter (cheaper) than the others.
     ahead = [{"down": ("event", {"down"})}]
     assert mr.rank({"up": ("battle", None), "down": ("event", None)}, HARD, ahead) == ["down", "up"]
+
+
+def test_a_path_never_steps_two_rows():
+    """#212, live 2026-10-21 floor 4: column 3's lower event went unread, so column 2's lower event had no link
+    read onward; the path stepped from it to column 3's upper event, two rows apart, which no link joins."""
+    slots = {"mid": ("abno", 2)}
+    ahead = [{"up": ("event", {"mid"}), "down": ("event", {"mid"})}, {"up": ("event", {"up"})}, {"mid": ("abno", {"up"})}]
+    for _, path in mr.paths(slots, NORMAL, ahead).values():
+        assert all(abs(mr.ROW_DY[a] - mr.ROW_DY[b]) <= 213 for a, b in zip(path, path[1:]))
+    # The cheapest node of the next column still scores the rest; only rows next to each other are assumed linked.
+    down = mr.paths({"down": ("event", None)}, NORMAL, [{"up": ("event", {"mid"}), "mid": ("abno", {"up"})}])["down"]
+    assert down == (NORMAL["event"] + NORMAL["abno"], ["down", "mid"])
+
+
+def test_a_node_with_no_link_read_onward_takes_its_brightest_faint_one():
+    # #212: down -> down read 14.4 over a bright nebula; down -> mid -1.6. up's 30 links as before.
+    reads = {("down", "down"): 14.4, ("down", "mid"): -1.6, ("up", "up"): 30, ("up", "mid"): 12}
+    assert mr.links(reads) == {("down", "down"), ("up", "up")}
+    assert mr.links({("down", "down"): 7.9, ("down", "mid"): 0}) == set()
+    # A diagonal crossed by a link read the other way (mid -> up) reads its crossing, not a link of its own.
+    assert mr.links({("up", "up"): 9, ("up", "mid"): 13, ("mid", "up"): 40, ("mid", "mid"): 30}) == {("mid", "up"), ("mid", "mid"), ("up", "up")}
+    # Two faint diagonals crossing: only a link read at LINE_CONTRAST rules a crossing out, so both are taken.
+    reads = {("up", "up"): 9, ("up", "mid"): 13, ("mid", "up"): 12, ("mid", "mid"): 10, ("mid", "down"): 0}
+    assert mr.links(reads) == {("up", "mid"), ("mid", "up")}
+
+
+# The map frames of tests/screens and the bus's top-left in each (MapBus matched with cv2, 0.97 and up).
+MAP_SCREENS = {"MapBoss": (446, 248), "MapCards": (446, 248), "MapEvent": (446, 248), "MapFocused": (446, 248),
+               "MapPanned": (446, 282), "MapRock": (446, 248), "MapShop": (446, 248), "MirrorMap": (446, 248)}
+
+
+@pytest.mark.parametrize(("name", "bus"), MAP_SCREENS.items())
+def test_the_faint_link_fallback_on_the_map_frames_of_tests_screens(name, bus):
+    """CODING_STANDARDS' sweep of FAINT_LINK: every slot of every column on screen, node or not, as a node with
+    no link read onward. Its one false link: MapBoss, from the empty middle slot behind the bus (a purple pack's
+    glow, 11.9); read_ahead only reads on from nodes ahead of the bus. Slot centres: actions.SLOT (279, 37)."""
+    v = np.asarray(Image.open(SCREENS / f"{name}.png").convert("RGB")).max(axis=2)
+    x, y0, extra = (bus[0] + 279) % mr.COLUMN_DX, bus[1] + 37, {}
+    while x + mr.COLUMN_DX + 80 <= 1200:
+        reads = {(a, b): mr.line_contrast(v, x, y0 + mr.ROW_DY[a], x + mr.COLUMN_DX, y0 + mr.ROW_DY[b]) or 0
+                 for a in mr.ROWS for b in mr.ROWS if mr.near(a, b)}
+        if added := mr.links(reads) - {pair for pair, c in reads.items() if c >= mr.LINE_CONTRAST}:
+            extra[x - bus[0]] = added
+        x += mr.COLUMN_DX
+    assert extra == ({-231: {("mid", "mid")}} if name == "MapBoss" else {})
+
+
+def test_the_faint_links_between_events_of_a_diamond_read(context):
+    # #212, live 2026-10-21 floor 4 (Full-Stopped by a Bullet): bus, abnormality, two events above and two below,
+    # abnormality. Column 2's lower event links on to column 3's along a faint line over a bright nebula (14.4);
+    # it went unread, and the path stepped from it to column 3's upper event, two rows apart.
+    # tests/data/map_f4_diamond.npz: that frame's per-pixel brightness, y 70-614, x 0-1179; bus at 48, 320.
+    v = np.zeros((720, 1280), np.uint8)
+    v[70:615, :1180] = np.load(Path(__file__).resolve().parent / "data/map_f4_diamond.npz")["v"]
+    abno = {(327, 357), (1092, 357)}
+
+    def run_recognition(name, image, override=None):
+        if name in actions.MARKS:
+            mark, (ox, oy, _, _) = actions.MARKS[name]
+            x, y = override[name]["roi"][:2]
+            return SimpleNamespace(hit=True, box=[x, y, 26, 24]) if mark in ("cost", "gift") and (x - ox, y - oy) in abno else None
+        return None
+    context.run_recognition.side_effect = run_recognition
+    ahead = actions.RouteMap.read_ahead(context, v[..., None].repeat(3, axis=2), 48, 320, {"mid": ("abno", 2)})
+    assert ahead == [{"up": ("event", {"mid"}), "down": ("event", {"mid"})}, {"up": ("event", {"up"}), "down": ("event", {"down"})},
+                     {"mid": ("abno", {"up", "down"})}]
+    score, path = mr.paths({"mid": ("abno", 2)}, NORMAL, ahead)["mid"]
+    assert score == 12 and path[1] == path[2] and path[3] == "mid"  # abno, two events in one row, abno
+
+
+def test_steps_are_rows_seen_from_the_node_before():
+    assert mr.steps(["down", "mid", "mid"], ["battle", "battle", "event"]) == [("up", "battle"), ("mid", "event")]
+    assert mr.steps(["mid"], ["abno"]) == []
+    assert mr.steps(["mid", "down", "up"], ["abno", "event", "event"]) is None  # #212: no link joins two rows apart
 
 
 def lit(links, size=(720, 1280)):
