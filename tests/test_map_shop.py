@@ -1,4 +1,5 @@
-"""The shop node on the map, read by MaaFramework's own template matching (#146), on live captures.
+"""The shop node on the map, read by MaaFramework's own template matching (#146), on live captures; and fights by
+their Cost where a drag brings them next to the bus (#238).
 
 actions.node_at runs inside a real MaaFramework task (resource bundle loaded, a still controller), so the
 MapNodeShop and MapNodeShopIcon templates and their scores are the agent's on the device. The pytest process holds MaaFramework in
@@ -14,6 +15,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+from PIL import Image
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "agent"))  # run as a script: as pytest's pythonpath has it
@@ -26,6 +28,9 @@ CASES = {
     "map_shop_orange": (330, 145),  # floor 1, orange theme: read as an event too
     "map_event_orange": (326, 144),  # a "?" in the same theme and place must stay an event
 }
+# #238, live 2026-10-22 floor 4: column 3's Risky (120) and Abnormality (150), read from afar by their marks as
+# Focused (MapFloor4.png, x 837), then two columns on, where a drag of read_on brings them (MapFloor4Panned.png).
+FRAMES = {"MapFloor4Panned 328 357": "risky", "MapFloor4Panned 328 570": "abno", "MapFloor4 582 357": "battle"}  # frame, node centre
 
 
 def child():
@@ -63,6 +68,12 @@ def child():
             try:
                 for case, (cx, cy) in CASES.items():
                     out[case] = actions.node_at(context, screen_with(case), cx, cy, costs=False)
+                actions.RUN.update(settings={}, difficulty="normal", floor_hard=False)
+                for case in FRAMES:
+                    name, cx, cy = case.split()
+                    cx, cy = int(cx), int(cy)
+                    image = np.asarray(Image.open(ROOT / "tests" / "screens" / f"{name}.png").convert("RGB"))[:, :, ::-1].copy()
+                    out[case] = actions.node_at(context, image, cx, cy, costs=cx <= actions.MAP_NEAR)
             except Exception:  # MaaFramework swallows it: hand it to the test
                 out["error"] = traceback.format_exc()
             return True
@@ -92,6 +103,11 @@ def read():
     ("map_event_orange", "event"),
 ])
 def test_the_shop_node_is_a_shop_in_every_theme_pack_colour_and_a_question_mark_stays_an_event(read, case, kind):
+    assert read[case] == kind
+
+
+@pytest.mark.parametrize(("case", "kind"), FRAMES.items())
+def test_a_fight_a_drag_brings_next_to_the_bus_is_typed_by_its_cost(read, case, kind):
     assert read[case] == kind
 
 

@@ -1220,6 +1220,10 @@ ENTER = (1133, 543)
 BACK_KEY = 4  # Android's back key (L1's too): closes the node panel
 MAP_RETRIES = 3  # RouteMap calls per floor that may enter nothing before the map is stuck
 MAP_LOOKS = 4  # looks, 1 s apart, for a linked slot before the fallback taps
+# #202: columns up to this x are typed by their Cost too: with the bus at the far left, its two columns (329, 584).
+# Past them only the marks, which miss the WARNING ring (#238); a drag brings those columns here to be read again.
+MAP_NEAR = 650
+MAP_DRAGS = 3  # drags of two columns RouteMap.read_on makes at most: the first screen shows four, a floor ~7 and the boss
 PANEL_REWARDS = [700, 495, 110, 30]  # the "Clear Rewards" label
 PANEL_COST = [730, 545, 40, 35]  # the number by its Cost coin
 MAP_TITLE = [40, 85, 240, 35]  # "Exploring Floor 3", top left
@@ -1287,8 +1291,9 @@ def node_at(context, image, cx, cy, marks=None, costs=True):
     #91: with costs, a fight's kind is its Cost number looked up in the floor's difficulty's node_costs
     (map_weights.yaml), matched on the last two digits too: a 3-digit number may lose its first (offline,
     120 read 20, 150 read 50). A number unread or not in the table leaves the marks to decide.
-    Only the column next to the bus is read so: past it the badges are dim (offline, MirrorMap.png's
-    85 two columns out read 8). A planned slot is read again once next to the bus (RouteMap.follow).
+    Only the columns up to MAP_NEAR are read so: further out the badges may be dim (offline, MirrorMap.png's
+    85 two columns out read 8). Those come near as RouteMap.read_on drags the map, and a planned slot is read
+    again once next to the bus (RouteMap.follow).
     """
     marks = node_marks(context, image, cx, cy) if marks is None else marks
     if not marks and cy - 80 < 60:
@@ -1376,7 +1381,8 @@ class RouteMap(CustomAction):
     A gift window over the map, or the last floor's map still up after a theme pack (wait_for_floor), goes back
     to MirrorHub first.
     Slots linked to the bus (its lit line or a chevron on it) are typed by their marks, ranked by
-    map_route.rank over the columns on screen and tapped in that order until the node panel (MapNodePanel)
+    map_route.rank over the columns read (on screen, then on a NORMAL floor the rest, two columns a drag: read_on)
+    and, the map dragged back to the bus, tapped in that order until the node panel (MapNodePanel)
     shows. After them come the fallbacks: the bus (a node reached but not entered; first after a restart or a
     recovery, #88), then the slots not tried yet. No bus on screen: the map is dragged about for it (#61).
     Nothing taking a tap spends one of the floor's map retries; when they run out, the map is stuck (spec 06);
@@ -1422,7 +1428,10 @@ class RouteMap(CustomAction):
             bx, by = bus or BUS_REST
             slots = self.read_slots(context, image, bx, by) if bus else {}
         log("map: column 1: " + (", ".join(f"{r} {t} ({'?' if n is None else n} onward)" for r, (t, n) in slots.items()) or "no linked slot read"))
-        ahead = self.read_ahead(context, image, bx, by, slots) if slots else []
+        ahead = self.read_ahead(context, image, bx + SLOT[0], by + SLOT[1], slots) if slots else []
+        if slots and not RUN.get("floor_hard"):  # #202: the rest of the floor, two columns a drag; a HARD map does not pan (#129)
+            ahead, bus = self.read_on(context, image, bus, slots, ahead)
+            bx, by = bus or BUS_REST
         read = [t for column in (slots, *ahead) for t, _ in column.values()]
         map_route.shop_before_boss(slots, ahead)  # #146: the shop's icon takes the theme pack's colours
         if read != [t for column in (slots, *ahead) for t, _ in column.values()]:
@@ -1628,39 +1637,83 @@ class RouteMap(CustomAction):
         return True
 
     @staticmethod
-    def read_ahead(context, image, bx, by, slots):
-        """The columns beyond the first on screen, for map_route.rank.
+    def read_ahead(context, image, x, y, before, first=2):
+        """The columns on screen past the one at x (its middle row's centre at y), whose nodes are before's rows.
 
-        A node counts when a link into it from the column before reads (map_route.line_contrast); only rows
-        next to each other link. Every node leads on, so one with no link read onward takes its brightest
-        (map_route.FAINT_LINK, #212). The read ends at the screen's edge, at a column with nothing linked or
-        dark (no mark and no light on any node: hard mode shows two columns), or after the boss.
+        For map_route.rank. A node counts when a link into it from the column before reads (map_route.line_contrast);
+        only rows next to each other link. Every node leads on, so one with no link read onward takes its brightest
+        (map_route.FAINT_LINK, #212). A node up to MAP_NEAR is typed by its Cost too, past it by its marks (#238).
+        The read ends at the screen's edge, at a column with nothing linked or dark (no mark and no light on any
+        node: hard mode shows two columns), or after the boss. first: the first column's number, for the log.
         """
         dx, dy = map_route.COLUMN_DX, map_route.ROW_DY
-        v, x, ahead = image.max(axis=2), bx + SLOT[0], []
-
-        def y(row):
-            return by + SLOT[1] + dy[row]
+        v, ahead = image.max(axis=2), []
         while x + dx + 80 <= 1200:  # MapNodeFocusedHex reads 80 px either side; buttons from x 1205
             x += dx
-            before, column, lit = ahead[-1] if ahead else slots, {}, False
-            links = map_route.links({(r, row): map_route.line_contrast(v, x - dx, y(r), x, y(row)) or 0
+            column, lit = {}, False
+            links = map_route.links({(r, row): map_route.line_contrast(v, x - dx, y + dy[r], x, y + dy[row]) or 0
                                      for r in map_route.ROWS for row in map_route.ROWS if map_route.near(r, row)})
             for row in map_route.ROWS:
                 linked = {src for src, dst in links if dst == row and src in before}
                 if linked:
-                    marks = node_marks(context, image, x, y(row))
-                    column[row] = (node_at(context, image, x, y(row), marks, costs=False), linked)
+                    marks = node_marks(context, image, x, y + dy[row])
+                    column[row] = (node_at(context, image, x, y + dy[row], marks, costs=x <= MAP_NEAR), linked)
                     # A node with no mark may still be lit: a red pack's dim "?" (live 2026-10-18) reads 48-60
                     # here; hard mode's dark columns read 0.
-                    lit = lit or bool(marks) or np.percentile(v[y(row) - 45:y(row) + 45, x - 45:x + 45], 90) >= 20
+                    lit = lit or bool(marks) or np.percentile(v[y + dy[row] - 45:y + dy[row] + 45, x - 45:x + 45], 90) >= 20
             if not lit:
                 break
             ahead.append(column)
-            log(f"map: column {len(ahead) + 1}: " + ", ".join(f"{r} {t} (from {'/'.join(sorted(n))})" for r, (t, n) in column.items()))
+            log(f"map: column {first + len(ahead) - 1}: " + ", ".join(f"{r} {t} (from {'/'.join(sorted(n))})" for r, (t, n) in column.items()))
             if any(t == "boss" for t, _ in column.values()):
                 break
+            before = column
         return ahead
+
+    @staticmethod
+    def read_on(context, image, bus, slots, ahead):
+        """The floor past the screen's right edge (#202): (ahead read on, two columns a drag; the bus, back home).
+
+        Each drag moves the map two columns left, measured on the frames before and after it (map_route.shift).
+        The read goes on (read_ahead) from the last column read left of column 1's place, so the columns that
+        come to the bus's two near the left edge are read again with their Cost (#238) and replace what was read of
+        them from afar, and the links into them join them to the columns read before. The read ends at the boss, a
+        read that ends short of the screen's edge (hard mode's two columns), a drag that moves the map less than
+        half a column (its edge) or cannot be measured (what was read stands), or after MAP_DRAGS drags.
+        The map is then dragged back as far and the bus found again (find_bus).
+        """
+        dx, (bx, by) = map_route.COLUMN_DX, bus
+        x0, y, moved, back = bx + SLOT[0], by + SLOT[1], 0, 0
+        for _ in range(MAP_DRAGS):
+            columns = [slots, *ahead]
+            if x0 + len(ahead) * dx - moved + dx + 80 <= 1200 or any(t == "boss" for t, _ in columns[-1].values()):
+                break
+            page_guard(context, "MirrorMap", image=image)
+            scroll(context, x0 + 5 * dx // 2, y + 106, -2 * dx, 0)  # from map background, as find_bus
+            time.sleep(0.5)
+            after = screen(context)
+            s = map_route.shift(image.max(axis=2), after.max(axis=2), 2 * dx + 20)
+            back += 2 * dx if s is None else s
+            if s is None or s < dx // 2:
+                log(f"map: a drag moved the map {'an unknown distance' if s is None else f'{s} px'}; planning on what was read")
+                break
+            moved, image = moved + s, after
+            k = max(i for i in range(len(columns)) if x0 + i * dx - moved <= x0 - dx // 2)
+            log(f"map: dragged the map {s} px; reading on from column {k + 2}")
+            if not (more := RouteMap.read_ahead(context, image, x0 + k * dx - moved, y, columns[k], first=k + 2)):
+                break
+            ahead = ahead[:k] + more
+        if not back:
+            return ahead, bus
+        while back > 0:
+            page_guard(context, "MirrorMap")
+            scroll(context, x0 + dx // 2, y + 106, min(back, 2 * dx), 0)
+            time.sleep(0.5)
+            back -= 2 * dx
+        bus = RouteMap.find_bus(context)[1]
+        if not bus and RouteMap.search_bus(context):
+            bus = RouteMap.find_bus(context)[1]
+        return ahead, bus
 
 
 # Formation page (spec 03 section 3). Cards are in battle.SINNERS order, two rows of six.

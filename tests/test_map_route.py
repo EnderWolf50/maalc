@@ -219,7 +219,7 @@ def test_the_faint_links_between_events_of_a_diamond_read(context):
             return SimpleNamespace(hit=True, box=[x, y, 26, 24]) if mark in ("cost", "gift") and (x - ox, y - oy) in focused else None
         return None
     context.run_recognition.side_effect = run_recognition
-    ahead = actions.RouteMap.read_ahead(context, v[..., None].repeat(3, axis=2), 48, 320, {"mid": ("focused", 2)})
+    ahead = actions.RouteMap.read_ahead(context, v[..., None].repeat(3, axis=2), 48 + 279, 320 + 37, {"mid": ("focused", 2)})
     assert ahead == [{"up": ("event", {"mid"}), "down": ("event", {"mid"})}, {"up": ("event", {"up"}), "down": ("event", {"down"})},
                      {"mid": ("focused", {"up", "down"})}]
     score, path = mr.paths({"mid": ("focused", 2)}, NORMAL, ahead)["mid"]
@@ -473,3 +473,113 @@ def test_a_gift_window_that_comes_up_after_the_last_tap_is_not_taken_for_a_map_w
     actions.RouteMap().run(context, None)
     assert context.tasker.controller.post_click.call_count == 4
     assert actions.STUCK["flag"] is None
+
+
+def brightness(name):
+    return np.asarray(Image.open(SCREENS / f"{name}.png").convert("RGB")).max(axis=2)
+
+
+def test_a_drag_of_the_map_is_measured_on_the_frames_before_and_after_it():
+    """#202, live 2026-10-22 NORMAL floor 4: the bus at the far left (48, 320), then two columns on (49, 320).
+
+    Column 3 of MapFloor4.png (x 837) is column 1 of MapFloor4Panned.png (x 328): the map moved 509 px, give or
+    take the bus match. The bus and the nodes behind it changed in between; the HUD stayed put."""
+    assert abs(mr.shift(brightness("MapFloor4"), brightness("MapFloor4Panned"), 530) - 509) <= 3
+    assert mr.shift(brightness("MapFloor4"), brightness("MapFloor4"), 530) == 0  # the map's edge: it did not move
+
+
+def test_a_drag_that_cannot_be_measured_is_none():
+    # Another map altogether (a pack's art over the whole screen changed): no shift stands out.
+    assert mr.shift(brightness("MapFloor4"), brightness("MirrorMap"), 530) is None
+
+
+def test_two_different_map_frames_never_measure_a_drag():
+    """CODING_STANDARDS' sweep of SHIFT_CLEAR over every ordered pair of map frames in tests/screens.
+
+    Only the live drag measures one. Four pairs of one theme pack's map at rest (MapBoss and MapFocused,
+    MirrorMap and MapEvent, both ways; 0.2-0.54 of the median) read 0: the map did not move, so read_on stops."""
+    names = [*MAP_SCREENS, "MapFloor4", "MapFloor4Panned", "GiftGetOverMap", "MapZoomed"]
+    frames = {n: brightness(n) for n in names}
+    moved = {(a, b): s for a in names for b in names if a != b and (s := mr.shift(frames[a], frames[b], 530))}
+    assert moved.keys() == {("MapFloor4", "MapFloor4Panned")}
+
+
+# #202: a NORMAL floor wider than the screen, read two columns per drag. Two rows run straight on: the first
+# screen (columns 1-4) favours the top one (events), columns 5-6 the bottom one; then the shop and the boss.
+WIDE = {**{(c, "up"): {"event"} for c in (1, 2, 3, 4)}, (5, "up"): {"cost", "gift"}, (6, "up"): {"cost", "gift"},
+        **{(c, "down"): {"cost"} for c in (1, 2, 3, 4)}, (5, "down"): {"event"}, (6, "down"): {"event"},
+        (7, "mid"): {"shop"}, (8, "mid"): {"boss"}}
+WIDE_LINKS = [((c, r), (c + 1, r)) for c in range(1, 6) for r in ("up", "down")] + [((6, "up"), (7, "mid")), ((6, "down"), (7, "mid")),
+                                                                                   ((7, "mid"), (8, "mid"))]
+WIDE_WEIGHTS = {"event": 1, "battle": 2, "focused": 4, "shop": 0, "boss": 0, "unknown": 9}
+
+
+def test_a_floor_wider_than_the_screen_is_read_two_columns_a_drag_and_planned_whole(context, monkeypatch):
+    monkeypatch.setattr(actions, "map_weights", lambda context: WIDE_WEIGHTS)
+    logs = []
+    monkeypatch.setattr(actions, "log", logs.append)
+    actions.RUN["floor"] = 1
+    offsets = map_world(context, WIDE, WIDE_LINKS, bus_x=446, width=2900)
+    actions.RouteMap().run(context, None)
+    # The bus to the far left, two drags of two columns on to the boss, then back to the bus. The fake map takes
+    # each drag's 10 px threshold move too (actions.scroll): 520 px a drag, and back a little past where it was.
+    assert [o - offsets[0] for o in offsets[:3]] == [0, 520, 1040] and abs(446 - offsets[-1] - actions.BUS_HOME[0]) <= 30
+    # up: 4 events, 2 focused (12); down: 4 battles, 2 events (10). The first screen alone took the top row.
+    assert context.tasker.controller.post_click.call_args_list[0].args == (446 - offsets[-1] + actions.SLOT[0], actions.BUS_HOME[1] + actions.SLOT[1] + 213)
+    assert actions.RUN["map_plan"]["steps"] == [("mid", "battle")] * 3 + [("mid", "event")] * 2 + [("up", "shop"), ("mid", "boss")]
+    assert "map: path down battle > down battle > down battle > down battle > down event > down event > mid shop > mid boss, score 10" in logs
+    assert [line for line in logs if line.startswith("map: dragged")] == ["map: dragged the map 520 px; reading on from column 3", "map: dragged the map 520 px; reading on from column 5"]
+
+
+def test_a_drag_that_moves_too_little_leaves_the_first_screens_read(context, monkeypatch):
+    # The map's right edge two columns on: the first screen showed all there was to read; the plan is as before #202.
+    monkeypatch.setattr(actions, "map_weights", lambda context: WIDE_WEIGHTS)
+    actions.RUN["floor"] = 1
+    offsets = map_world(context, WIDE, WIDE_LINKS, bus_x=446, width=1800)
+    actions.RouteMap().run(context, None)
+    assert len(offsets) == 3 and abs(446 - offsets[-1] - actions.BUS_HOME[0]) <= 30  # to the far left, on to the edge, back
+    assert context.tasker.controller.post_click.call_args_list[0].args == (446 - offsets[-1] + actions.SLOT[0], actions.BUS_HOME[1] + actions.SLOT[1] - 213)
+    assert actions.RUN["map_plan"]["steps"] == [("mid", "event")] * 3
+
+
+def test_a_drag_that_cannot_be_measured_leaves_the_first_screens_read(context, monkeypatch):
+    # A drag whose frames match nowhere (a window over the map, a fade): what was read stands; the map goes back.
+    monkeypatch.setattr(actions, "map_weights", lambda context: WIDE_WEIGHTS)
+    monkeypatch.setattr(mr, "shift", lambda *args: None)
+    actions.RUN["floor"] = 1
+    offsets = map_world(context, WIDE, WIDE_LINKS, bus_x=446, width=2900)
+    actions.RouteMap().run(context, None)
+    assert [o - offsets[0] for o in offsets] == [0, 520, 0]
+    assert actions.RUN["map_plan"]["steps"] == [("mid", "event")] * 3
+
+
+def test_the_cost_is_read_on_the_two_columns_next_to_the_bus_and_only_marks_beyond(context):
+    """#238, live 2026-10-22 floor 4: column 3's Risky (Cost 120) and Abnormality (150) read from their marks as
+    Focused; their WARNING rings were missed. Read near, as a drag brings them, their Cost types them."""
+    def run_recognition(name, image, override=None):
+        if name in ("MapNodeCost", "MapNodeGift"):
+            return SimpleNamespace(hit=True, box=[*override[name]["roi"][:2], 26, 24])
+        if name == "ReadText":
+            return SimpleNamespace(all_results=[SimpleNamespace(text="120", box=(0, 0, 20, 20))])
+        return None
+    context.run_recognition.side_effect = run_recognition
+    actions.RUN.update(settings={}, difficulty="normal", floor_hard=False)
+    x, y = 50 + actions.SLOT[0], 320 + actions.SLOT[1]  # column 1 with the bus at the far left
+    image = np.zeros((720, 1280, 3), np.uint8)
+    for c in range(3):  # each row runs straight on through columns 2-4
+        for dy in mr.ROW_DY.values():
+            image[y + dy - 2:y + dy + 3, x + c * mr.COLUMN_DX:x + (c + 1) * mr.COLUMN_DX] = 200
+    ahead = actions.RouteMap.read_ahead(context, image, x, y, {r: ("risky", 1) for r in mr.ROWS})
+    assert [{r: t for r, (t, _) in c.items()} for c in ahead] == [dict.fromkeys(mr.ROWS, "risky")] + [dict.fromkeys(mr.ROWS, "focused")] * 2
+
+
+def test_a_hard_floor_that_cannot_pan_is_not_dragged_on(context, monkeypatch):
+    # #129: a HARD map stays at rest, its two columns ending at the screen's edge (980); read_on makes no drag.
+    monkeypatch.setattr(actions, "map_weights", lambda context: WIDE_WEIGHTS)
+    logs = []
+    monkeypatch.setattr(actions, "log", logs.append)
+    actions.RUN.update(floor=1, floor_hard=True)
+    map_world(context, {(1, "up"): {"event"}, (2, "up"): {"cost"}}, [((1, "up"), (2, "up"))], bus_x=446, width=1280)
+    actions.RouteMap().run(context, None)
+    assert "map: column 2: up battle (from up)" in logs
+    assert not [line for line in logs if line.startswith(("map: a drag", "map: dragged"))]

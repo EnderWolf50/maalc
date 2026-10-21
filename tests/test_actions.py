@@ -313,7 +313,7 @@ def test_a_bright_event_its_templates_miss_is_still_an_event(context):
         return None
     context.run_recognition.side_effect = run_recognition
     slots = actions.RouteMap.read_slots(context, image, 50, 320)
-    ahead = actions.RouteMap.read_ahead(context, image, 50, 320, slots)
+    ahead = actions.RouteMap.read_ahead(context, image, 50 + actions.SLOT[0], 320 + actions.SLOT[1], slots)
     weights = {"event": 1, "battle": 2, "focused": 4, "shop": 7, "unknown": 9}
     assert slots["up"][0] == "event"
     score, path = actions.map_route.paths(slots, weights, ahead)[actions.map_route.rank(slots, weights, ahead)[0]]
@@ -328,7 +328,7 @@ def test_a_column_of_lit_events_its_templates_miss_is_read_and_a_dark_one_ends_t
     v = np.zeros((720, 1280), np.uint8)
     v[70:615, :1180] = np.load(RED)["h1_v"]
     context.run_recognition.return_value = None  # no mark on any node past the first column
-    ahead = actions.RouteMap.read_ahead(context, v[..., None].repeat(3, axis=2), 50, 320, {"mid": ("focused", 2)})
+    ahead = actions.RouteMap.read_ahead(context, v[..., None].repeat(3, axis=2), 50 + actions.SLOT[0], 320 + actions.SLOT[1], {"mid": ("focused", 2)})
     assert ahead == [{"up": ("event", {"mid"}), "down": ("event", {"mid"})}]
 
 
@@ -418,7 +418,7 @@ def test_a_map_at_rest_is_dragged(context):
     context.tasker.controller.post_touch_down.assert_called()
 
 
-def map_world(context, nodes, links, bus_x):
+def map_world(context, nodes, links, bus_x, width=1800):
     """A map wider than the screen, the bus at (bus_x, BUS_HOME's y) on screen; drags move the screen over it.
 
     nodes: {(column, row): marks}, column 1 next to the bus; links: ((column, row), (column, row)) pairs.
@@ -430,7 +430,7 @@ def map_world(context, nodes, links, bus_x):
 
     def at(column, row):
         return bx + actions.SLOT[0] + (column - 1) * 255, by + actions.SLOT[1] + {"up": -213, "mid": 0, "down": 213}[row]
-    world = np.random.default_rng(2).integers(0, 30, size=(720, 1800, 3)).astype(np.uint8)
+    world = np.random.default_rng(2).integers(0, 30, size=(720, width, 3)).astype(np.uint8)
     for a, b in links:
         (x0, y0), (x1, y1) = at(*a), at(*b)
         for t in np.linspace(0, 1, 600):
@@ -443,7 +443,7 @@ def map_world(context, nodes, links, bus_x):
         return MagicMock()
 
     def move(x, y):
-        off[0] = min(max(0, start[1] + start[0] - x), 1800 - 1280)
+        off[0] = min(max(0, start[1] + start[0] - x), width - 1280)
         return MagicMock()
 
     def up():
@@ -483,9 +483,10 @@ def test_the_bus_is_dragged_to_the_far_left_and_the_cheapest_path_over_four_colu
     links = [((c, r), (c + 1, r)) for c in (1, 2, 3) for r in ("up", "down")]
     offsets = map_world(context, nodes, links, bus_x=446)
     actions.RouteMap().run(context, None)
-    assert len(offsets) == 1 and abs(446 - offsets[0] - actions.BUS_HOME[0]) <= 30  # one drag, none back
+    # To the far left, then (#202) a drag two columns on that stops at the map's edge, and back.
+    assert len(offsets) == 3 and abs(446 - offsets[-1] - actions.BUS_HOME[0]) <= 30
     first = context.tasker.controller.post_click.call_args_list[0].args
-    assert first == (446 - offsets[0] + actions.SLOT[0], actions.BUS_HOME[1] + actions.SLOT[1] + 213)  # the bottom row's battle
+    assert first == (446 - offsets[-1] + actions.SLOT[0], actions.BUS_HOME[1] + actions.SLOT[1] + 213)  # the bottom row's battle
 
 
 def test_the_node_before_the_boss_is_a_shop_whatever_its_mark_reads(context, monkeypatch):
