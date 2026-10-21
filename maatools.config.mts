@@ -35,11 +35,11 @@ const screens: [image: string, hits: string[]][] = [
   ['ParallelModePrompt.png', ['ParallelModePrompt', 'HelpPager']],
   ['ParallelModeExtreme.png', ['ParallelModePrompt', 'HelpPager']],
   // Live 2026-10-21 (#85, 1080p captures scaled to 720p): the main window's own popups and the help pager behind
-  // every "i" button (Mirror Dungeon page 1 and its last page, Extract, Sinners). The main window under the popups
-  // still reads as the main window: the popups come first in the hub.
-  ['EventNotices.png', ['Notices', 'GoToMirrorEntry', 'NavMainTabs']],
-  ['SystemNotices.png', ['Notices', 'GoToMirrorEntry', 'NavMainTabs']],
-  ['Mailbox.png', ['Mailbox', 'GoToMirrorEntry', 'NavMainTabs']],
+  // every "i" button (Mirror Dungeon page 1 and its last page, Extract, Sinners). The tab bar dimmed under the
+  // notices and the Mailbox misses NavMainTabs' 0.9; under the menu it still reads. The popups come first in the hub.
+  ['EventNotices.png', ['Notices']],
+  ['SystemNotices.png', ['Notices']],
+  ['Mailbox.png', ['Mailbox']],
   ['SettingsMenu.png', ['SettingsMenu', 'GoToMirrorEntry', 'NavMainTabs']],
   ['HelpPager.png', ['HelpPager']],
   ['HelpPagerLast.png', ['HelpPager']],
