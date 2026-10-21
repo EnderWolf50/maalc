@@ -22,18 +22,30 @@ NORMAL, HARD = WEIGHTS["normal"], WEIGHTS["hard"]
 @pytest.mark.parametrize(("marks", "expected"), [
     ({"boss", "cost", "gift"}, "boss"),
     ({"boss"}, "boss"),  # floor 5 boss: no badges
-    ({"focused", "cost", "gift"}, "focused"),
-    ({"cost", "gift"}, "abno"),
+    # #91: no Cost read, the marks decide. The WARNING ring is Risky's or Abnormality's: the later, Risky.
+    ({"ring", "cost", "gift"}, "risky"),
+    ({"ring"}, "risky"),  # its Cost coin under the resource bar
+    ({"cost", "gift"}, "focused"),
     ({"cost"}, "battle"),
     ({"event"}, "event"),
     ({"shop"}, "shop"),
-    # No Cost coin, no boss, Focused or shop mark: an event, its "?" missed by the templates. Live 2026-10-18,
+    # No Cost coin, no boss, ring or shop mark: an event, its "?" missed by the templates. Live 2026-10-18,
     # floor 2 "Lake World" (cyan): a bright "?" next to the bus; MapPanned.png: a dim one two columns out.
     ({"gift"}, "event"),
     (set(), "event"),
 ])
 def test_node_type(marks, expected):
     assert mr.node_type(marks) == expected
+
+
+@pytest.mark.parametrize(("marks", "expected"), [
+    ({"ring", "cost", "gift"}, "abno"),
+    ({"cost"}, "abno"),  # the Cost outranks the marks: ring and gift box are both missed live (#91)
+    ({"boss", "cost", "gift"}, "boss"),
+    ({"event"}, "event"),
+])
+def test_node_type_by_cost(marks, expected):
+    assert mr.node_type(marks, "abno") == expected
 
 
 def test_the_column_before_the_boss_is_the_shop():
@@ -139,26 +151,26 @@ def test_the_faint_link_fallback_on_the_map_frames_of_tests_screens(name, bus):
 
 
 def test_the_faint_links_between_events_of_a_diamond_read(context):
-    # #212, live 2026-10-21 floor 4 (Full-Stopped by a Bullet): bus, abnormality, two events above and two below,
-    # abnormality. Column 2's lower event links on to column 3's along a faint line over a bright nebula (14.4);
+    # #212, live 2026-10-21 floor 4 (Full-Stopped by a Bullet): bus, a gift box node (maalc's abno then,
+    # Focused by #91), two events above and two below, another. Column 2's lower event links on to column 3's along a faint line over a bright nebula (14.4);
     # it went unread, and the path stepped from it to column 3's upper event, two rows apart.
     # tests/data/map_f4_diamond.npz: that frame's per-pixel brightness, y 70-614, x 0-1179; bus at 48, 320.
     v = np.zeros((720, 1280), np.uint8)
     v[70:615, :1180] = np.load(Path(__file__).resolve().parent / "data/map_f4_diamond.npz")["v"]
-    abno = {(327, 357), (1092, 357)}
+    focused = {(327, 357), (1092, 357)}
 
     def run_recognition(name, image, override=None):
         if name in actions.MARKS:
             mark, (ox, oy, _, _) = actions.MARKS[name]
             x, y = override[name]["roi"][:2]
-            return SimpleNamespace(hit=True, box=[x, y, 26, 24]) if mark in ("cost", "gift") and (x - ox, y - oy) in abno else None
+            return SimpleNamespace(hit=True, box=[x, y, 26, 24]) if mark in ("cost", "gift") and (x - ox, y - oy) in focused else None
         return None
     context.run_recognition.side_effect = run_recognition
-    ahead = actions.RouteMap.read_ahead(context, v[..., None].repeat(3, axis=2), 48, 320, {"mid": ("abno", 2)})
+    ahead = actions.RouteMap.read_ahead(context, v[..., None].repeat(3, axis=2), 48, 320, {"mid": ("focused", 2)})
     assert ahead == [{"up": ("event", {"mid"}), "down": ("event", {"mid"})}, {"up": ("event", {"up"}), "down": ("event", {"down"})},
-                     {"mid": ("abno", {"up", "down"})}]
-    score, path = mr.paths({"mid": ("abno", 2)}, NORMAL, ahead)["mid"]
-    assert score == 12 and path[1] == path[2] and path[3] == "mid"  # abno, two events in one row, abno
+                     {"mid": ("focused", {"up", "down"})}]
+    score, path = mr.paths({"mid": ("focused", 2)}, NORMAL, ahead)["mid"]
+    assert score == 10 and path[1] == path[2] and path[3] == "mid"  # focused, two events in one row, focused
 
 
 def test_steps_are_rows_seen_from_the_node_before():

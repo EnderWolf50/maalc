@@ -401,19 +401,56 @@ def test_a_bus_not_found_even_by_dragging_goes_straight_to_l2(context, monkeypat
     assert actions.STUCK["flag"][1] == 2
 
 
-@pytest.mark.parametrize(("number", "expected"), [("85", "battle"), ("75.", "battle"), ("120", "risky"), ("50", "risky"), ("8", "battle"), ("", "battle")])
-def test_a_cost_coin_whose_number_is_no_battle_cost_is_not_a_battle(context, number, expected):
-    # #91: no Risky capture yet; a Cost coin alone read as a battle (weight 2) whatever it was.
+@pytest.mark.parametrize(("hard", "marks", "number", "expected"), [
+    (False, {"MapNodeCost"}, "75.", "battle"),
+    (False, {"MapNodeCost", "MapNodeGift"}, "100", "focused"),
+    (False, {"MapNodeCost", "MapNodeGift"}, "00", "focused"),
+    # 3-digit costs lose their first digit (offline: MapPanned.png's 120 read 20, map_f3's 150 read 50)
+    (False, {"MapNodeCost", "MapNodeGift", "MapNodeFocusedHex"}, "120", "risky"),
+    (False, {"MapNodeCost", "MapNodeGift", "MapNodeFocusedHex"}, "20", "risky"),
+    (False, {"MapNodeCost", "MapNodeGift"}, "20", "risky"),  # its ring missed (live logs: 10 of 19)
+    (False, {"MapNodeCost", "MapNodeGift", "MapNodeFocusedHex"}, "150", "abno"),
+    (False, {"MapNodeCost", "MapNodeGift", "MapNodeFocusedHex"}, "50", "abno"),
+    (True, {"MapNodeCost"}, "85", "battle"),
+    (True, {"MapNodeCost", "MapNodeGift"}, "120", "focused"),
+    (True, {"MapNodeCost", "MapNodeGift", "MapNodeFocusedRound"}, "150", "risky"),
+    (True, {"MapNodeCost", "MapNodeGift", "MapNodeFocusedHex"}, "180", "abno"),
+    (False, {"MapNodeCost"}, "25", "battle"),  # OCR noise: no cost of the table, the marks decide
+    (False, {"MapNodeCost"}, "8", "battle"),  # a single digit is a part read
+    (False, {"MapNodeCost", "MapNodeGift", "MapNodeFocusedHex"}, "", "risky"),  # unread: the ring's later kind
+])
+def test_a_node_is_typed_by_its_cost_on_the_floors_difficulty(context, hard, marks, number, expected):
+    # #91: a Risky node carries the ring, gift box and Cost coin, and read as Focused (weight 4) by its ring.
     def run_recognition(name, image, override=None):
-        if name == "MapNodeCost":
+        if name in marks:
             return SimpleNamespace(hit=True, box=[700, 300, 26, 24])
         if name == "ReadText" and number:
             return SimpleNamespace(all_results=[SimpleNamespace(text=number, box=(0, 0, 20, 20))])
         return None
     context.run_recognition.side_effect = run_recognition
+    actions.RUN.update(settings={}, difficulty="normal", floor_hard=hard)
     assert actions.node_at(context, np.zeros((720, 1280, 3), np.uint8), 713, 380) == expected
-    # Past the first column the badges are dim (offline: MirrorMap.png's 85 read 8): no Cost read there.
-    assert actions.node_at(context, np.zeros((720, 1280, 3), np.uint8), 713, 380, costs=False) == "battle"
+
+
+@pytest.mark.parametrize(("marks", "expected"), [
+    ({"MapNodeCost"}, "battle"), ({"MapNodeCost", "MapNodeGift"}, "focused"), ({"MapNodeCost", "MapNodeGift", "MapNodeFocusedHex"}, "risky"),
+])
+def test_past_the_first_column_no_cost_is_read(context, marks, expected):
+    # The badges are dim there (offline: MirrorMap.png's 85 read 8): a ring stands for Risky until read next to the bus.
+    def run_recognition(name, image, override=None):
+        return SimpleNamespace(hit=True, box=[700, 300, 26, 24]) if name in marks else None
+    context.run_recognition.side_effect = run_recognition
+    assert actions.node_at(context, np.zeros((720, 1280, 3), np.uint8), 713, 380, costs=False) == expected
+    assert all(c.args[0] != "ReadText" for c in context.run_recognition.call_args_list)
+
+
+@pytest.mark.parametrize(("run", "hard"), [
+    ({"difficulty": "hard"}, True), ({"difficulty": "normal"}, False), ({"difficulty": None}, False),
+    ({"difficulty": "hard", "floor_hard": False}, False), ({"difficulty": None, "floor_hard": True}, True),
+])
+def test_is_hard_takes_the_floors_difficulty_first(context, run, hard):
+    actions.RUN.update(settings={}, **run)
+    assert actions.is_hard(context) is hard
 
 
 def test_a_bus_at_the_far_left_is_not_dragged(context):
