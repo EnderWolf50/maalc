@@ -585,20 +585,29 @@ def test_a_hard_floor_that_cannot_pan_is_not_dragged_on(context, monkeypatch):
     assert not [line for line in logs if line.startswith(("map: a drag", "map: dragged"))]
 
 
+def cost_reads(monkeypatch, offsets):
+    """The map_world columns node_at reads, as (column, costs) pairs, the screen's offset on the map taken at each read."""
+    node_at, reads = actions.node_at, []
+
+    def read(context, image, cx, cy, marks=None, costs=True):
+        reads.append(((cx + (offsets[-1] if offsets else 0) - 446 - actions.SLOT[0]) // mr.COLUMN_DX + 1, costs))
+        return node_at(context, image, cx, cy, marks, costs)
+    monkeypatch.setattr(actions, "node_at", read)
+    return reads
+
+
 def test_a_short_drag_still_brings_every_column_near_before_it_is_joined_on(context, monkeypatch):
     # Review of #202: a first drag that moves 382 px (the game ate part of it) left column 4 at x 712, read from its
     # marks; the next drag put it at 202, where it was joined on from, not read again. Every column reads its Cost.
     monkeypatch.setattr(actions, "map_weights", lambda context: WIDE_WEIGHTS)
     actions.RUN["floor"] = 1
     offsets = map_world(context, WIDE, WIDE_LINKS, bus_x=446, width=3200)
-    drags, scroll, node_at, reads = [], actions.scroll, actions.node_at, []
+    drags, scroll, reads = [], actions.scroll, cost_reads(monkeypatch, offsets)
 
     def short_first(context, x, y, dx, dy):
         drags.append(dx)
         scroll(context, x, y, dx + 138 if len(drags) == 2 else dx, dy)  # the first two-column drag: 382 px
     monkeypatch.setattr(actions, "scroll", short_first)
-    monkeypatch.setattr(actions, "node_at", lambda context, image, cx, cy, marks=None, costs=True: (
-        reads.append(((cx + (offsets[-1] if offsets else 0) - 446 - actions.SLOT[0]) // 255 + 1, costs)), node_at(context, image, cx, cy, marks, costs))[1])
     actions.RouteMap().run(context, None)
     assert {c for c, costs in reads if costs} >= set(range(1, 7))
     assert actions.RUN["map_plan"]["steps"][-2:] == [("up", "shop"), ("mid", "boss")]
@@ -606,12 +615,20 @@ def test_a_short_drag_still_brings_every_column_near_before_it_is_joined_on(cont
 
 def test_a_near_read_that_ends_short_keeps_the_columns_read_before(context, monkeypatch):
     # #202's "never worse": a link unread up close ends the near read at its first column; the columns the first
-    # screen read past it stay, and the floor is read on from them.
+    # screen read past it stay, and the floor is read on from them. The one kept near the bus reads its Cost there
+    # (review of #239: it was joined on from, its Cost never read).
     monkeypatch.setattr(actions, "map_weights", lambda context: WIDE_WEIGHTS)
     actions.RUN["floor"] = 1
-    map_world(context, WIDE, WIDE_LINKS, bus_x=446, width=2900)
+    offsets = map_world(context, WIDE, WIDE_LINKS, bus_x=446, width=2900)
+    reads = cost_reads(monkeypatch, offsets)
     read_ahead = actions.RouteMap.read_ahead
-    monkeypatch.setattr(actions.RouteMap, "read_ahead", staticmethod(
-        lambda context, image, x, y, before, first=2: read_ahead(context, image, x, y, before, first)[:1 if first == 3 else None]))
+
+    def near_read(context, image, x, y, before, first=2):
+        if first == 3:  # the frame dark past column 3's node: no link onward reads
+            image = image.copy()
+            image[:, x + mr.COLUMN_DX + 60:] = 0
+        return read_ahead(context, image, x, y, before, first)
+    monkeypatch.setattr(actions.RouteMap, "read_ahead", staticmethod(near_read))
     actions.RouteMap().run(context, None)
     assert actions.RUN["map_plan"]["steps"] == [("mid", "battle")] * 3 + [("mid", "event")] * 2 + [("up", "shop"), ("mid", "boss")]
+    assert {c for c, costs in reads if costs} >= set(range(1, 7))

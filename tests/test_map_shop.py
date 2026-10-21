@@ -112,7 +112,7 @@ def test_the_shop_node_is_a_shop_in_every_theme_pack_colour_and_a_question_mark_
 
 
 @pytest.mark.parametrize(("case", "kind"), FRAMES.items())
-def test_a_fight_a_drag_brings_next_to_the_bus_is_typed_by_its_cost(read, case, kind):
+def test_every_slot_up_to_map_near_is_typed_by_its_cost_on_the_far_left_frames(read, case, kind):
     assert read[case] == kind
 
 

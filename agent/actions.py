@@ -1677,9 +1677,11 @@ class RouteMap(CustomAction):
         Each drag moves the map two columns left, measured on the frames before and after it (map_route.shift).
         The read goes on (read_ahead) from the last column read whose next two then sit up to MAP_NEAR, so they are
         read again with their Cost (#238) and replace what was read of them from afar, and the links into them
-        join them to the columns read before; a near read that ends sooner keeps what was read past it. The read ends at the boss, a
-        read that ends short of the screen's edge (hard mode's two columns), a drag that moves the map less than
-        half a column (its edge) or cannot be measured (what was read stands), or after MAP_DRAGS drags.
+        join them to the columns read before; a near read that ends sooner keeps what was read past it, those up to
+        MAP_NEAR typed again by their Cost. The read ends at the boss, a read that ends short of the screen's edge
+        with nothing read past it (hard mode's two columns), a drag that moves the map less than half a column or
+        leaves no column to read on from (its edge), or one that cannot be measured (what was read stands), or after
+        MAP_DRAGS drags.
         The map is then dragged back as far and the bus found again (find_bus).
         """
         dx, (bx, by) = map_route.COLUMN_DX, bus
@@ -1705,9 +1707,13 @@ class RouteMap(CustomAction):
             if not (more := RouteMap.read_ahead(context, image, x0 + k * dx - moved, y, columns[k], first=k + 2)):
                 break
             edge = x0 + (k + len(more)) * dx - moved + dx + 80 > 1200
-            if ahead[k + len(more):] and not any(t == "boss" for t, _ in more[-1].values()):
-                more += ahead[k + len(more):]  # a near read ending short: what was read past it stays, up to an edge
-                edge = True
+            if (tail := ahead[k + len(more):]) and not any(t == "boss" for t, _ in more[-1].values()):
+                # A near read ending short: what was read past it stays, up to an edge; near now, by its Cost.
+                for i, column in enumerate(tail, start=k + len(more) + 1):
+                    if (x := x0 + i * dx - moved) <= MAP_NEAR:
+                        for row, (_, linked) in column.items():
+                            column[row] = (node_at(context, image, x, y + map_route.ROW_DY[row]), linked)
+                more, edge = more + tail, True
             ahead = ahead[:k] + more
         if not back:
             return ahead, bus
