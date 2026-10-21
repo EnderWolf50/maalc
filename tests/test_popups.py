@@ -1,6 +1,5 @@
 import re
 
-import recovery
 from test_pipeline import load_nodes
 
 
@@ -22,8 +21,3 @@ def test_a_popup_over_the_mailbox_is_answered_before_the_mailbox():
     # live #84: the server error and the network popup came up over the Mailbox, which still reads under them.
     entries = load_nodes()["HubText"]["custom_recognition_param"]["entries"]
     assert entries.index("RetryPopup") < entries.index("PopupButton") < entries.index("Mailbox")
-
-
-def test_notices_at_login_do_not_end_a_stuck_spell():
-    # spec 06: screens on the way back to a run (a login may open the notices) are not progress.
-    assert "Notices" in recovery.TRANSIT

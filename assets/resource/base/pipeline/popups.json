@@ -1,8 +1,8 @@
 {
     // Global popups (spec 01, 全域彈窗): first in MirrorHub's next.
     // Not built yet, no screenshot of them so far: a tutorial that opens by itself (HelpPager is the one an "i" opens),
-    // weekly reset notice / expired run, the
-    // "?" effect-choice page (#87), level-up popups other than Pass Level Up (ClaimPopup). PopupButton presses
+    // weekly reset notice / expired run, the "?" effect-choice page (#87), level-up popups other than Pass Level Up
+    // (ClaimPopup). PopupButton presses
     // any lone Close / Confirm / OK meanwhile; Recover saves a screen MirrorHub does not know to logs/unknown/.
     // Connecting, RetryPopup and PopupButton run before the turn on every battle round (BattleHUD), so each starts with a
     // template and reads no text on a battle screen (#157; live A/B: these three OCR cost ~130 ms a round). RetryPopup

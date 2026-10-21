@@ -148,7 +148,7 @@
 |---|---|---|---|---|---|
 | 連線中 | OCR：`CONNECTING` | 等待 | 前一個畫面、Retry 彈窗 | #7、#8 | — |
 | Retry 彈窗（待截圖確認） | OCR：按鈕文字以 `Retry`（可接倒數，例如 `Retry (5)`；不含 DEFEAT 的 `Retry Stage`）或 `Try Again` 開頭 | 點那個按鈕 | 連線中、前一個畫面 | #8、#84 | —（`tests/screens/RetryCountdown.png`、`TryAgain.png` 是合成圖） |
-| 說明頁（`HelpPager`） | 每個 `i` 按鈕後面的同一種說明頁（鏡牢 34 頁、Refraction Railway 18、Sinners 17、Extract 4、Dispense 5；第一次進某畫面時自己跳出的教學是不是同一種畫面還沒截到）。標題隨頁改變，所以認外框：左上的返回按鈕（`Screen/HelpBack.png`）與下方一排頁碼點（`Screen/HelpDot.png`），兩個模板都中（返回按鈕單獨在入口頁的返回鍵上也有 0.98，靠頁碼點區分）。鏡牢的第 1 頁是入口頁的圖，所以它排在 `MirrorHub` 的 `HubText` 之前 | Android 返回鍵關閉（左上 ← 也可以；右側 ▶ 只翻頁） | 前一個畫面 | #8、#85 | `tests/screens/HelpPager.png`、`HelpPagerLast.png`、`HelpPagerExtract.png`、`HelpPagerSinners.png`（實機 2026-10-21） |
+| 說明頁（`HelpPager`） | 每個 `i` 按鈕後面的同一種說明頁（鏡牢 34 頁、Refraction Railway 18、Sinners 17、Extract 4、Dispense 5；第一次進某畫面時自己跳出的教學是不是同一種畫面還沒截到）。標題隨頁改變，所以認外框：左上的返回按鈕（`Screen/HelpPagerBack.png`）與下方一排頁碼點（`Screen/HelpPagerDot.png`），兩個模板都中（返回按鈕單獨在入口頁的返回鍵上也有 0.98，靠頁碼點區分）。鏡牢的第 1 頁是入口頁的圖，所以它排在 `MirrorHub` 的 `HubText` 之前 | Android 返回鍵關閉（左上 ← 也可以；右側 ▶ 只翻頁） | 前一個畫面 | #8、#85 | `tests/screens/HelpPager.png`、`HelpPagerLast.png`、`HelpPagerExtract.png`、`HelpPagerSinners.png`（實機 2026-10-21） |
 | 公告（`Notices`） | OCR：上方分頁 `Event Notifs`／`System Notifs` | Android 返回鍵關閉 | 主畫面 | #85 | `tests/screens/EventNotices.png`、`SystemNotices.png`（實機 2026-10-21） |
 | 信箱（`Mailbox`） | OCR：標題 `Mailbox`，且按鈕 `Close` | 點 Close；旁邊的 Claim All 不按，不領信 | 主畫面 | #85 | `tests/screens/Mailbox.png`（實機 2026-10-21） |
 | 設定選單（`SettingsMenu`，主畫面右上齒輪） | OCR：標題 `Settings`，且按鈕 `Return` | 點 Return；下方的 Quit Game 不按（沒有確認對話框，直接結束遊戲），也不進 Settings 改設定 | 主畫面 | #85 | `tests/screens/SettingsMenu.png`（實機 2026-10-21） |

@@ -3,7 +3,7 @@ import json
 import numpy as np
 import pytest
 
-from recovery import WAIT_STILL, Ladder, Watchdog, floor_limit, over_time, read_runs, run_limit, same_screen, thumb
+from recovery import TRANSIT, WAIT_STILL, Ladder, Watchdog, floor_limit, over_time, read_runs, run_limit, same_screen, thumb
 
 
 def screen(level):
@@ -262,3 +262,8 @@ def test_keep_unknown_saves_the_screen_and_keeps_only_the_latest(tmp_path):
     assert len(saved) == UNKNOWN_KEEP
     assert saved[0] == "2026-10-18T00-00-02.000Z.png"  # the two oldest went
     assert (tmp_path / "logs" / "unknown" / saved[-1]).read_bytes().startswith(b"\x89PNG")
+
+
+def test_notices_at_login_do_not_end_a_stuck_spell():
+    # spec 06: screens on the way back to a run (a login may open the notices) are not progress.
+    assert "Notices" in TRANSIT
