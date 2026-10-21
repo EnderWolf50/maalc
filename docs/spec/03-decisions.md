@@ -138,7 +138,7 @@
 **節點辨識**（#12）
 
 - 先找 Bus，再對相鄰的固定格位做模板比對。
-- 戰鬥節點的種類看 Cost 數字＋這一層的難度（#91，2026-10-21 改；原本「只看圖示模板，Cost 只寫進記錄」）。遊戲的名稱（`EN_BattleUIText`、節點池、獎勵機率三者一致）：`BATTLE`＝Regular（普通戰鬥）、`AB_BATTLE`＝Focused（集中）、`HARD_BATTLE`＝Risky（精锐）、`HARD_AB_BATTLE`＝Abnormality（異想體戰）；maalc 的類型名稱 `battle`／`focused`／`risky`／`abno` 照這個對應。#91 之前外圈叫 `focused`、禮物盒無外圈叫 `abno`，和遊戲相反：Risky 有外圈，被判成 `focused`（權重 4）。
+- 戰鬥節點的種類看 Cost 數字＋這一層的難度（#91，2026-10-21 改；原本「只看圖示模板，Cost 只寫進記錄」）。遊戲的名稱（`EN_BattleUIText`、節點池、獎勵機率三者一致）：`BATTLE`＝Regular（普通戰鬥）、`AB_BATTLE`＝Focused（集中）、`HARD_BATTLE`＝Risky（精銳）、`HARD_AB_BATTLE`＝Abnormality（異想體戰）；maalc 的類型名稱 `battle`／`focused`／`risky`／`abno` 照這個對應。#91 之前外圈叫 `focused`、禮物盒無外圈叫 `abno`，和遊戲相反：Risky 有外圈，被判成 `focused`（權重 4）。
   - 同一難度內四種 Cost 各不相同（下表，資料檔 `node_costs`），只有跨難度有歧義（120：困難 Focused／普通 Risky；150：普通 Abnormality／困難 Risky），所以查表用這一層的難度（`is_hard`：`set_difficulty` 每層寫的 `floor_hard`，沒有就用這局的難度）。Cost 幣旁的數字先把亮的近白色數字挖出來再 OCR；三位數常掉第一位（離線：120 讀成 20、150 讀成 50），所以後兩位也算（普通 75／00／20／50、困難 85／20／50／80，各自不衝突）。讀不到、只讀到一位數或不在表內（OCR 雜訊如 25）就看標記：有 WARNING 外圈算 Risky（Risky 或 Abnormality 還分不出，取較後面的），有禮物盒算 Focused，只有 Cost 幣算普通戰鬥；Cost 幣被資源列蓋住、只有外圈也算 Risky。外圈與禮物盒不當主要依據：實機 log 裡普通 Risky 120 有 10/19 次、Abnormality 5/5 次沒認到外圈。圖示也不用：Risky 在預設主題包是七邊形寶石，部分主題包（Mnestic Experience）換成交叉雙劍。
   - 只讀 Bus 旁那一欄的數字：更遠的徽章變暗，離線時 MirrorMap.png 兩欄外的 85 讀成 8。遠欄只看標記（外圈先當 Risky）；照計畫走到那一格旁邊時會再讀一次，類型不同就重新規劃。
 - 每一欄裡，和前一欄相連、卻沒有 Cost 幣也沒有 Boss、外圈、商店標記的節點算事件：戰鬥類都有亮的 Cost 幣，而「?」隨主題包變樣、離遠了變暗，模板不一定認得出來。事件模板認出來時照樣是事件。例外：徽章位置在資源列底下（節點中心 y < 140，地圖靜止時的上列）時算無法辨識，因為 Cost 幣可能被蓋住。（實機 2026-10-18 第 2 層「Lake World」青色主題：Bus 旁上列明亮的「?」三個事件模板都沒認出，讀成無法辨識，結果走了異想體；擷圖的亮度存在 `tests/data/map_lake_world.npz`。遠處的暗「?」：MapPanned.png）
@@ -151,7 +151,7 @@
 | 普通戰鬥 Regular（`battle`） | 75 | 85 | – | – | 2 |
 | Focused 集中（`focused`） | 100 | 120 | – | ✔ | 4 |
 | 異想體戰 Abnormality（`abno`） | 150 | 180 | ✔ | ✔ | 5 |
-| Risky 精锐（`risky`） | 120 | 150 | ✔ | ✔ | 6（困難模式 8） |
+| Risky 精銳（`risky`） | 120 | 150 | ✔ | ✔ | 6（困難模式 8） |
 | 無法辨識 | — | — | | | 9 |
 
 Cost 表是 wiki 與簡中客戶端的表，實機 log 的節點面板 Cost 沒有矛盾；解包資料裡沒有這張表（#91）。權重放在資料檔（[05-game-data.md](05-game-data.md)）。困難鏡牢實機看到的 Cost 列在 [05-game-data.md](05-game-data.md#6-cost-對照表與商店數字)。（#12、#19）

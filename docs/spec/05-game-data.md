@@ -110,7 +110,7 @@
 | 普通戰鬥 | 2 | 2 |
 | Focused 集中（`AB_BATTLE`） | 4 | 4 |
 | 異想體戰 Abnormality（`HARD_AB_BATTLE`） | 5 | 5 |
-| Risky 精锐（`HARD_BATTLE`） | 6 | 8 |
+| Risky 精銳（`HARD_BATTLE`） | 6 | 8 |
 | 無法辨識 | 9 | 9 |
 
 - 困難模式的權重和普通模式相同，只把 Risky 改為 8，所以無法辨識仍然排最後。（#12、#19）
@@ -128,7 +128,7 @@
 |---|---|---|---|---|
 | 普通戰鬥 Regular（`battle`） | 75 | 85 | – | – |
 | Focused 集中（`focused`） | 100 | 120 | – | ✔ |
-| Risky 精锐（`risky`） | 120 | 150 | ✔ | ✔ |
+| Risky 精銳（`risky`） | 120 | 150 | ✔ | ✔ |
 | 異想體戰 Abnormality（`abno`） | 150 | 180 | ✔ | ✔ |
 
 **困難模式的實測 Cost**：下表是 2026-10-13 困難鏡牢實機看到的節點 Cost 標記，不是資料檔的預設值，也不是 wiki 的數字。節點欄是當時的稱呼；照上表（#91）重新對照後與上表一致：外圈 150 是困難 Risky、180 是困難 Abnormality，禮物盒無外圈的 120 是困難 Focused。
@@ -136,8 +136,8 @@
 | 節點 | 實測 Cost | 實機截圖 |
 |---|---|---|
 | 普通戰鬥 | 85 | `captures/23_after_pack_pull.png`、`178_f3_map.png` |
-| Focused（橘色 `WARNING` 環） | 150、180 | `captures/152_focused_node_selected.png`、`178_f3_map.png`、`223_f5_map.png` |
-| 異想體戰 | 120 | `captures/179_f3_abno_node_selected.png`、`225_f5ev_map.png` |
+| 橘色 `WARNING` 外圈（當時稱 Focused；Risky、Abnormality） | 150、180 | `captures/152_focused_node_selected.png`、`178_f3_map.png`、`223_f5_map.png` |
+| 禮物盒、無外圈（當時稱異想體戰；Focused） | 120 | `captures/179_f3_abno_node_selected.png`、`225_f5ev_map.png` |
 | 事件、商店 | 沒有 Cost 標記 | `captures/131_f2_event_selected.png`、`74_battle4_map.png` |
 | Boss | 第 1–4 層依序 250、300、375、500；第 5 層沒有標記 | `captures/74_battle4_map.png`、`175_f2_map_after_supershop.png`、`196_f3_map_before_boss.png`、`216_f4_map_before_boss.png`、`230_f5abno_rewards_map.png` |
 

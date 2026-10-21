@@ -507,7 +507,7 @@ def test_two_columns_on_a_hard_floor_take_the_cheapest_path(context, monkeypatch
     actions.RouteMap().run(context, None)
     first = context.tasker.controller.post_click.call_args_list[0].args
     bx, by = actions.BUS_HOME
-    assert first == (bx + actions.SLOT[0], by + actions.SLOT[1] + 213)  # battle -> event (3), not event -> abno (6)
+    assert first == (bx + actions.SLOT[0], by + actions.SLOT[1] + 213)  # battle -> event (3), not event -> focused (5)
     context.tasker.controller.post_touch_down.assert_not_called()
 
 
@@ -519,7 +519,7 @@ def test_a_full_read_plans_the_path_and_the_next_step_follows_it_without_a_drag(
              (3, "up"): {"cost", "gift"}, (3, "mid"): {"event"}}
     links = [((1, "up"), (2, "up")), ((1, "down"), (2, "mid")), ((2, "up"), (3, "up")), ((2, "mid"), (3, "mid"))]
     map_world(context, nodes, links, bus_x=actions.BUS_HOME[0])
-    actions.RouteMap().run(context, None)  # down battle > mid battle > mid event (5), not up event > battle > abno (8)
+    actions.RouteMap().run(context, None)  # down battle > mid battle > mid event (5), not up event > battle > focused (7)
     # Steps go from the node before: up from the bottom row to the middle one, then straight on.
     assert actions.RUN["map_plan"] == {"floor": 1, "steps": [("up", "battle"), ("mid", "event")]}
 
