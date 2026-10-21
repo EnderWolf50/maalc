@@ -17,7 +17,7 @@
     "trial_risk_overrides"
   ],
   "properties": {
-    "version": { "const": 7 },
+    "version": { "const": 8 },
     "language": { "enum": ["zh_tw", "en_us"], "default": "zh_tw" },
     "run": {
       "type": "object",
@@ -32,7 +32,9 @@
         "wipe_retries",
         "after_retries",
         "webhook_url",
-        "theme_pack_refresh"
+        "theme_pack_refresh",
+        "auto_accept_terms",
+        "auto_download"
       ],
       "properties": {
         "difficulty": { "enum": ["hard", "normal", "auto"], "default": "auto" },
@@ -48,7 +50,9 @@
           "enum": ["none", "once", "all"],
           "default": "all",
           "description": "free theme pack refreshes on a page of only avoided packs: none, the first one, or all"
-        }
+        },
+        "auto_accept_terms": { "type": "boolean", "default": true, "description": "tick both boxes of the title's User Agreement and Confirm; off: stop" },
+        "auto_download": { "type": "boolean", "default": true, "description": "accept game data downloads and updates; off: stop" }
       }
     },
     "deployment_order_plans": {

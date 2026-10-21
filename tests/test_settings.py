@@ -26,12 +26,13 @@ def team(id, game_team, **kw):
 
 
 VALID = {
-    "version": 7,
+    "version": 8,
     "language": "zh_tw",
     "run": {
         "difficulty": "auto", "runs": 1, "weekly_bonus_use": "hard", "weekly_bonus_amount": "all",
         "stop_when_weekly_bonus_out": False, "starlight_unaffordable": "skip", "wipe_retries": 2,
         "after_retries": "stop", "webhook_url": "", "theme_pack_refresh": "all",
+        "auto_accept_terms": True, "auto_download": True,
     },
     "deployment_order_plans": [{"id": "d1", "name": "Bleed order", "order": ORDER}],
     "starlight_plans": [{"id": "s1", "name": "Cheap", **STARLIGHT}],
@@ -112,7 +113,7 @@ def test_schema_errors_name_the_field(tmp_path, fn, where):
 
 
 def test_newer_version_is_refused(tmp_path):
-    assert "newer" in errors(tmp_path, {**VALID, "version": 8})[0]
+    assert "newer" in errors(tmp_path, {**VALID, "version": 9})[0]
 
 
 def test_version_1_gets_guard_turns_off(tmp_path):
@@ -162,6 +163,12 @@ def test_version_5_numbers_stay(tmp_path):
 def test_version_6_keeps_what_the_shop_kept_before(tmp_path):
     # #77: only the main keyword's and keywordless gifts (and the observed ones) stayed out of fusions and sales.
     assert load(tmp_path, {**edited(no_keep), "version": 6}) == VALID
+
+
+def test_version_7_accepts_terms_and_downloads(tmp_path):
+    # The user's decision (2026-10-21): the bot may tick the User Agreement and accept downloads.
+    old = edited(lambda d: [d["run"].pop("auto_accept_terms"), d["run"].pop("auto_download")])
+    assert load(tmp_path, {**old, "version": 7}) == VALID
 
 
 def test_version_4_teams_may_hold_white_gossypium_as_before(tmp_path):

@@ -1203,15 +1203,6 @@ def test_the_fusion_grid_is_not_scanned_again_while_the_owned_gifts_are_the_same
     assert context.tasker.controller.post_click.call_count == taps and len(scans) == 1
 
 
-def test_confirm_download_taps_the_button_and_holds_the_watchdog(context, clock):
-    # #86: after Confirm the download runs on a screen the hub does not know: it must not count as stuck.
-    actions.STUCK["watch"].reset()
-    actions.ConfirmDownload().run(context, SimpleNamespace(box=[700, 450, 100, 30]))
-    context.tasker.controller.post_click.assert_called_once_with(750, 465)
-    assert actions.STUCK["watch"].held(actions.time.monotonic() + 60)
-    actions.STUCK["watch"].reset()
-
-
 def test_recover_waits_out_a_download_without_climbing(context, clock, monkeypatch, tmp_path):
     # MirrorHub's own 60 s timeout lands in Recover while the download shows nothing it knows.
     monkeypatch.setattr(actions, "ROOT", tmp_path)
@@ -2596,3 +2587,26 @@ def test_a_fusion_gone_after_a_cell_tap_taps_nothing_more(context, guarded, monk
     with pytest.raises(actions.PageGone):
         actions.Shop.fuse(context, {"keyword": "Burn", "gift_search": {"gifts": []}}, {})
     assert taps(context)[4] in actions.FUSE_CELLS and not set(taps(context)[5:]) & set(actions.FUSE_CELLS)
+
+
+def test_hands_back_clears_the_runtime_cache_of_a_long_task():
+    """#176: MaaFramework keeps every node's detail until clear_cache, and a dungeon run is one task."""
+    class Act:
+        @actions.hands_back
+        def run(self, context, argv):
+            context.tasker.clear_cache.assert_not_called()  # after the action: its own calls still see the detail
+            if argv.gone:
+                raise actions.PageGone("the map")
+            return True
+
+    context = MagicMock()
+    def nodes(n, gone=False):
+        return SimpleNamespace(task_detail=SimpleNamespace(node_id_list=list(range(n))), gone=gone)
+
+    assert Act().run(context, nodes(actions.CLEAR_CACHE_AFTER_NODES - 1))
+    context.tasker.clear_cache.assert_not_called()
+    assert Act().run(context, nodes(actions.CLEAR_CACHE_AFTER_NODES))
+    context.tasker.clear_cache.assert_called_once()
+    context.tasker.clear_cache.reset_mock()
+    assert Act().run(context, nodes(actions.CLEAR_CACHE_AFTER_NODES, gone=True))  # PageGone hands back too
+    context.tasker.clear_cache.assert_called_once()

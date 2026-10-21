@@ -18,13 +18,18 @@ SAME_SCREEN = 5  # the same screen type and thumbnail this many times in a row i
 # (#179). Live 2026-10-19 (30 FPS, CPU 100%): Now Loading sat still up to 51 s in loads that came through on their
 # own, 59 and ~66 s in the two the back key was pressed on (#179); 2026-10-17 one sat still from its start for 89.5 s.
 # The game's own server error comes ~130 s into a CONNECTING that never answers (#84): RetryPopup's, not ours.
-WAIT_SCREENS, WAIT_STILL, WAIT_CAP = {"Loading", "Connecting"}, 80, 150
+# Downloading has no cap: live 2026-10-21, 17.77 GB took ~32 min, its progress and background moving all along.
+WAIT_STILL, WAIT_CAP = 80, {"Loading": 150, "Connecting": 150}
+WAIT_SCREENS = WAIT_CAP.keys() | {"Downloading"}
 HASH_FLOOR = {"BattlePause": 30}  # a turn playing out may sit still a while: also this many seconds
 # Screens on the way back to a run after L2/L3: seeing them does not mean the stuck screen was got past.
 TRANSIT = {"Loading", "Connecting", "RetryPopup", "GoToMirrorEntry", "NavTitle", "NavMainTabs", "NavDrive",
-           "MirrorEntryPaused", "ResumeDialog", "ProgressPanel", "DownloadDialog", "PopupButton"}
+           "MirrorEntryPaused", "ResumeDialog", "ProgressPanel", "DownloadDialog", "PopupButton",
+           "Downloading", "UpdateDialog", "UserAgreement"}
 UNKNOWN_KEEP = 30  # screens MirrorHub did not recognise that logs/unknown/ keeps
-DOWNLOAD_HOLD = 30 * 60  # seconds after confirming the title's download dialog in which nothing is stuck
+# Seconds after confirming the title's download dialog in which nothing is stuck: until its progress screen
+# (Downloading, a waiting screen) is up, 22 s live 2026-10-21. 30 min ran out there before the download was done.
+DOWNLOAD_HOLD = 3 * 60
 L2_PER_RUN, L3_PER_RUN, L3_PER_EXECUTION = 3, 2, 3
 BATTLE = {"BattleTurn", "BattlePause"}  # L2 cannot go through mid-battle: only the map has To Window
 BATTLE_LIMIT = 20 * 60
@@ -87,7 +92,7 @@ class Watchdog:
         (live 2026-10-19: the bot's scores on it were the same to 6 decimals), its NOW LOADING... never does.
         """
         if kind != self.kind:
-            if not {kind, self.kind} <= WAIT_SCREENS:  # Loading after Connecting is one wait: WAIT_CAP runs on
+            if not {kind, self.kind} <= WAIT_CAP.keys():  # Loading after Connecting is one wait: WAIT_CAP runs on
                 self.kind_since = now
             self.kind, self.first, self.moved = kind, None, now
         elif self.last is None or small is None or not np.array_equal(small, self.last):
@@ -101,13 +106,14 @@ class Watchdog:
         if kind in WAIT_SCREENS:
             if now - self.moved >= WAIT_STILL:
                 return f"the screen did not change for {WAIT_STILL} s"
-            return f"still up after {WAIT_CAP} s" if now - self.kind_since > WAIT_CAP else None
+            cap = WAIT_CAP.get(kind)
+            return f"still up after {cap} s" if cap and now - self.kind_since > cap else None
         if self.count >= SAME_SCREEN and now - self.since >= HASH_FLOOR.get(kind, 0):
             return "the screen did not change"
         return None
 
     def hold(self, now, seconds):
-        """A download was confirmed: nothing is stuck for the next seconds (its progress screen is not known)."""
+        """A download was confirmed: nothing is stuck for the next seconds, until its progress screen is up."""
         self.hold_until = now + seconds
 
     def held(self, now):
