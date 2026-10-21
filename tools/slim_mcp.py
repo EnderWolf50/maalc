@@ -1,4 +1,4 @@
-"""Keep rea, playwright and tempad-dev out of agent sessions in this repo and every worktree.
+"""Keep rea, playwright, cua-driver and tempad-dev out of agent sessions in this repo and every worktree.
 
 Claude Code reads `.claude/settings.local.json` from the session's own folder (on Windows a
 worktree does not use the main checkout's file), so write it into each worktree. Idempotent;
@@ -11,7 +11,7 @@ from datetime import date
 from pathlib import Path
 
 DISABLED_PLUGINS = {"tempad-dev@tempad-dev": False}
-DENIED = [{"serverName": "rea"}, {"serverName": "playwright"}]
+DENIED = [{"serverName": "rea"}, {"serverName": "playwright"}, {"serverName": "cua-driver"}]
 
 
 def worktrees():

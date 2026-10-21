@@ -14,5 +14,5 @@ def test_slim_writes_merges_and_is_idempotent(tmp_path):
     assert slim_mcp.slim(tmp_path)[1]
     got = json.loads(f.read_text("utf8"))
     assert got["permissions"] == {"allow": ["x"]}
-    assert got["deniedMcpServers"] == [{"serverName": "rea"}, {"serverName": "mine"}, {"serverName": "playwright"}]
+    assert got["deniedMcpServers"] == [{"serverName": "rea"}, {"serverName": "mine"}, {"serverName": "playwright"}, {"serverName": "cua-driver"}]
     assert len(list(f.parent.glob("*.bak-*"))) == 1
