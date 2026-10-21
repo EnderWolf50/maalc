@@ -2310,6 +2310,9 @@ OFFER_CELLS = [(624 + 154 * c, y) for y in (265, 418) for c in range(4)]  # a sh
 GRID_DRAG_X = 728  # a drag of the owned grid starts between its first two columns
 GRID_STROKE = 215  # px a drag stroke moves the owned grid at most: it starts and ends inside the grid
 GRID_SCROLLS = 12  # drags at most to the owned grid's end: 2 rows each
+GRID_MARGIN = 6  # px a drag stops short of putting a row at the first row's place: a few px too far does not hide it
+GRID_SLIP = 12  # px a drag may move the grid past the finger, either way, and still be measured
+GRID_SAME = 20  # most mean grey difference of a cell's centre between its read and its tap: the same gift
 # page: (its icon size over the GiftSearch template's, the grid's lower edge on screen)
 CELL_PAGES = {"fuse": (1.1, 493), "sell": (1.1, 495), "offer": (0.8, 530)}
 BADGES = ["Burn", "Bleed", "Tremor", "Rupture", "Sinking", "Poise", "Charge", "Slash", "Pierce", "Blunt"]
@@ -2474,8 +2477,9 @@ def owned_cells(context, image, page, gifts):
 
     The grid is read on show (read_cells, and the prices on the sell page), then dragged to bring its first cut-off
     row up to the first row's place, until no cut-off cell holds a gift or a drag moves it no more. A cell is
-    {"i", "x", "y", "tier", "keyword", "gift", "price"}: i its place in the grid's order, y with the grid at its top
-    (cell_at finds it again); grid is {"page", "at": px scrolled}. The grid is at its top when the page opens.
+    {"i", "x", "y", "tier", "keyword", "gift", "price", "look"}: i its place in the grid's order, y with the grid at its
+    top, look its centre as read (cell_at finds it again by both); grid is {"page", "at": px scrolled}. The grid is at
+    its top when the page opens.
     """
     (x0, y0), (dx, dy), under = OWNED_GRID[page]
     bottom = CELL_PAGES[page][1]
@@ -2489,11 +2493,11 @@ def owned_cells(context, image, page, gifts):
         prices = shop.cell_prices(ocr(context, image, SELL_GRID), spots) if page == "sell" and spots else {}
         for c in read_cells(context, image, spots, page, gifts):
             i, _, y = fresh[c["i"]]
-            out.append({**c, "i": i, "y": y + grid["at"], "price": prices.get(c["i"])})
+            out.append({**c, "i": i, "y": y + grid["at"], "price": prices.get(c["i"]), "look": centre(image, c["x"], y)})
         cut = [y for _, x, y in shown if y + under > bottom and y - 25 < bottom and shop.filled(image[:bottom], x, y)]
         if not cut:
             break
-        moved, image = drag_grid(context, page, min(cut) - y0)
+        moved, image = drag_grid(context, page, min(cut) - y0 - GRID_MARGIN)
         grid["at"] += moved
         if abs(moved) <= 3:
             log(f"shop: the {page} grid does not move: its cut-off cells stay unread")
@@ -2509,8 +2513,8 @@ def whole(page, y):
 
 
 def grid_shift(before, after, page, most):
-    """How many px page's owned grid moved up from before to after (down: negative), 0 to most: the shift under which
-    the two screenshots' grids differ least."""
+    """How many px page's owned grid moved up from before to after (down: negative), 0 to most give or take GRID_SLIP:
+    the shift under which the two screenshots' grids differ least."""
     (x0, y0), (dx, _), _ = OWNED_GRID[page]
     rows, cols = slice(y0 - 45, CELL_PAGES[page][1]), slice(x0 - 40, x0 + 4 * dx + 40, 3)
     a, b = (im[rows, cols].astype(np.int16).sum(axis=2) for im in (before, after))
@@ -2518,7 +2522,7 @@ def grid_shift(before, after, page, most):
 
     def diff(s):
         return np.abs(a[s:] - b[:n - s]).mean() if s >= 0 else np.abs(a[:n + s] - b[-s:]).mean()
-    return min(range(min(0, most) - 2, max(0, most) + 3), key=diff)
+    return min(range(min(0, most) - GRID_SLIP, max(0, most) + GRID_SLIP + 1), key=diff)
 
 
 def drag_grid(context, page, d):
@@ -2543,15 +2547,25 @@ def drag_grid(context, page, d):
     return moved, image
 
 
+def centre(image, x, y):
+    """The grey centre of the grid cell at (x, y), inside its frame (a picked cell's orange stays out)."""
+    return image[y - 20:y + 20, x - 20:x + 20].astype(np.int16).sum(axis=2) // 3
+
+
 def cell_at(context, grid, cell):
-    """Where cell (owned_cells) shows now: (x, y) on screen, the grid dragged first to bring it whole into view."""
+    """Where cell (owned_cells) shows now: (x, y) on screen, the grid dragged first to bring it whole into view; None
+    when its centre there is not the one read (the grid is not where it was measured to be): nothing is tapped."""
     (_, y0), _, _ = OWNED_GRID[grid["page"]]
     for _ in range(3):  # a drag stopped short (an end, a stroke the game took less of) is followed by another
         y = cell["y"] - grid["at"]
         if whole(grid["page"], y):
             break
-        grid["at"] += drag_grid(context, grid["page"], y - y0)[0]
-    return cell["x"], cell["y"] - grid["at"]
+        grid["at"] += drag_grid(context, grid["page"], y - y0 - GRID_MARGIN)[0]
+    x, y = cell["x"], cell["y"] - grid["at"]
+    if np.abs(centre(screen(context), x, y) - cell["look"]).mean() > GRID_SAME:
+        log(f"shop: cell {cell['i']} is not where the grid puts it ({grid['page']} grid at {grid['at']} px)")
+        return None
+    return x, y
 
 
 def fusions(cells, roles, slots, avoid):
@@ -2660,6 +2674,7 @@ class Shop(CustomAction):
             elif has(title, "Gift Info"):  # a bought offer tapped: only a tap outside it closes it
                 at = OUTSIDE
             elif has(title, "E.G.O Gift"):  # the fuse or sell page, a keyword picked or not (#214)
+                log(f"shop: {title!r} closed")
                 at = PAGE_CLOSE
             elif has(text(context, image, LEAVE_DIALOG), "Leave the shop"):
                 at = LEAVE_CANCEL
@@ -2897,8 +2912,11 @@ class Shop(CustomAction):
         before, by_i = cost, {c["i"]: c for c in cells}
         for i in picked or []:
             price = dict(gifts)[i]
+            at = cell_at(context, grid, by_i[i])
+            if at is None:
+                break
             page_guard(context, "Shop")
-            tap_settled(context, *cell_at(context, grid, by_i[i]), timeout=1.2)
+            tap_settled(context, *at, timeout=1.2)
             # Sell asks "Sell [<gift>] for <price> Cost?"; it slides down from the top before Confirm takes a tap (#174).
             page_guard(context, "Shop")
             asked = tap_shown(context, *PAGE_OK, shows(context, DIALOG_TEXT, r"Sell.*Cost"), timeout=2)
@@ -3002,14 +3020,17 @@ class Shop(CustomAction):
         """Tap cells into the fusion, each read back (#77); False at the first that does not show, nothing put in before.
 
         Each is dragged into view first (cell_at). After a tap one slot more holds a material and the tapped cell's
-        frame turns orange: the gift went in, and it is the one meant (the grid is not sorted again).
+        frame turns orange: the gift went in, and it is the one meant (cell_at found it, the grid is not sorted again).
         """
         filled = shop.placed(screen(context), slots)
         if filled:
             log(f"shop: {filled} materials in before any tap: no fusion")
             return False
         for n, c in enumerate(cells, 1):
-            x, y = cell_at(context, grid, c)
+            at = cell_at(context, grid, c)
+            if at is None:
+                return False
+            x, y = at
             page_guard(context, "Shop")
             tap_moved(context, x, y, timeout=0.5)
             tap_settled(context, *FUSE_NEUTRAL, timeout=1.0)  # closes its tooltip, which shades the grid

@@ -16,13 +16,14 @@ KEYWORDS = ["Bleed", "Tremor", "Pierce", "Sinking", "Slash", "Blunt", "Poise", "
 class Grid:
     """The owned grid of page as the game shows it: n gifts, 5 a row, each a unique icon in the same frame. A drag
     moves it by the finger's travel after the drag threshold's first move (1 px more every other drag: the fling
-    left), stopped at its ends; a tap lands on the gift under it. The grid ends 8 px under its last row's frame or price."""
+    left, or fling px more each drag), stopped at its ends; a tap lands on the gift under it. The grid ends 8 px under
+    its last row's frame or price."""
 
-    def __init__(self, context, page, n):
+    def __init__(self, context, page, n, fling=None):
         (self.x0, self.y0), (self.dx, self.dy), under = actions.OWNED_GRID[page]
         self.top, self.bottom = self.y0 - 52, actions.CELL_PAGES[page][1]
         self.max_at = max(0, self.y0 + self.dy * ((n - 1) // 5) + max(48, under) + 8 - self.bottom)
-        self.at, self.drags, self.taps, self.reads = 0, 0, [], []
+        self.at, self.drags, self.taps, self.reads, self.fling = 0, 0, [], [], fling
         rng = np.random.default_rng(1)
         self.icons = [rng.integers(40, 255, (76, 76, 3), np.uint8) for _ in range(n)]
         for icon in self.icons:
@@ -64,7 +65,8 @@ class Grid:
 
     def up(self):
         self.drags += 1
-        self.at = min(max(self.at + self.moves[0] - self.moves[-1] + self.drags % 2, 0), self.max_at)
+        fling = self.drags % 2 if self.fling is None else self.fling
+        self.at = min(max(self.at + self.moves[0] - self.moves[-1] + fling, 0), self.max_at)
         return DONE
 
     def click(self, x, y):
@@ -87,8 +89,8 @@ class Grid:
 
 @pytest.fixture
 def grid(context, monkeypatch):
-    def make(page, n):
-        g = Grid(context, page, n)
+    def make(page, n, fling=None):
+        g = Grid(context, page, n, fling)
         monkeypatch.setattr(actions, "read_cells", g.read_cells)
         return g
     return make
@@ -113,6 +115,14 @@ def test_a_cell_read_further_down_is_found_again_after_the_grid_moved(context, g
     for i in (22, 0, 12, 4, 21):
         g.click(*actions.cell_at(context, at, cells[i]))
     assert g.taps == [22, 0, 12, 4, 21]
+
+
+@pytest.mark.parametrize("fling", [-8, 8])
+def test_a_drag_a_few_px_off_still_reads_every_gift_once(context, grid, fling):
+    # A drag stops GRID_MARGIN px short of the first row's place: a row that lands a few px higher is still whole.
+    g = grid("fuse", 31, fling)
+    actions.owned_cells(context, g.screen(), "fuse", [])
+    assert g.reads == list(range(31))
 
 
 @pytest.mark.parametrize("s", [0, 1, 46, 91, 92, 183, 184, -92, -184])
@@ -213,3 +223,66 @@ def test_a_sale_whose_dialog_names_another_price_is_cancelled(context, grid, mon
     actions.Shop.sell(context, {"keyword": "Burn", "reserve_cost": 0, "gift_search": {"gifts": []}},
                       {"wanted": 180, "sold": False})
     assert actions.DIALOG_CANCEL in g.taps and actions.DIALOG_CONFIRM not in g.taps and state["cost"] == 100
+
+
+def test_a_fusion_taps_nothing_when_the_grid_is_not_where_it_was_measured(context, grid, monkeypatch):
+    # The grid moved a row more than measured (a drag the game took more of): the cell where gift 22 should be shows
+    # another gift, so nothing is tapped and the page is closed unfused.
+    g = grid("fuse", 23)
+    reader = g.read_cells
+
+    def read_cells(context, image, cells, page, gifts=()):
+        return [{**c, "keyword": c["keyword"] if g.at_screen(c["x"], c["y"]) in (1, 12, 22) else "Burn"}
+                for c in reader(context, image, cells, page, gifts)]
+    monkeypatch.setattr(actions, "read_cells", read_cells)
+    scan = actions.owned_cells
+
+    def owned_cells(*args):
+        out = scan(*args)
+        g.at -= g.dy  # unseen by the shift measured
+        return out
+    monkeypatch.setattr(actions, "owned_cells", owned_cells)
+    assert not fusion(context, monkeypatch, g)
+    assert not [i for i in g.taps if isinstance(i, int)] and actions.PAGE_OK not in g.taps
+
+
+def test_a_sale_never_taps_a_gift_whose_badge_is_unread(context, monkeypatch):
+    # #205: the first cell's badge is unread: neither sold nor opened, though as a tier I it is the one the fusion of
+    # the 3 others leaves over.
+    assert test_actions.sale_taps(context, monkeypatch, {}, [500, 90, 60, 70], (None, None, 1), ("Bleed", None),
+                                  ("Tremor", None), ("Pierce", None)) == []
+
+
+def test_a_material_whose_price_is_unread_is_not_sold_but_still_fused(context, monkeypatch):
+    # #205: Bleed's price is unread (no panel is opened for it): it is not sold, and still counts for the fusion, so
+    # Tremor and Pierce make a group with it and none is sold.
+    assert test_actions.sale_taps(context, monkeypatch, {}, [], ("Bleed", None), ("Tremor", None), ("Pierce", None)) == []
+
+
+def test_a_gift_whose_badge_is_unread_stays_out_of_a_fusion_untapped(context, monkeypatch):
+    # #205: no cell is opened to read it; with the others it would make a fusion, without them none is made.
+    fused, taps, ok = test_actions.fusion_taps(context, monkeypatch, {}, (None, None), ("Tremor", None), ("Pierce", None))
+    assert not fused and not ok and taps == [0, 0, 0]
+
+
+def test_no_cell_of_the_fusion_grid_is_tapped_to_read_it(context):
+    # Live 2026-10-18: 5 gifts owned, 10 empty cells tapped at 3.4 s each. #205: two gifts in the third row, whose
+    # badges the grid's edge cuts off: the grid is dragged for them (this screen does not move), never tapped.
+    test_actions.reads(context, test_actions.FUSE_PAGE)
+    test_actions.owned_gifts(context, actions.FUSE_CELLS[10:12])
+    assert not actions.Shop.fuse(context, {"keyword": "Burn", "gift_search": {"gifts": []}}, {})
+    taps = [c.args for c in context.tasker.controller.post_click.call_args_list]
+    assert not set(taps) & set(actions.FUSE_CELLS) and context.tasker.controller.post_touch_down.called
+
+
+def test_a_fuse_page_with_no_keyword_picked_is_closed_with_one_tap(context, clock):
+    # #214 (live 2026-10-21): on "Select a Keyword" a line in the old tooltip check's roi ended in "E.G.O Gift", its
+    # neutral tap on the grid opened Keyword Selection, and Close then hit its Cancel: 12 rounds, 31 s. Close alone.
+    def reads_now(taps):
+        if actions.PAGE_CLOSE in taps:  # the main shop: its Refresh fee
+            return {tuple(actions.REFRESH["normal"][1]): [("30", (970, 145, 40, 20))]}
+        return {tuple(actions.DIALOG_TITLE): [("Fuse E.G.O Gift", (500, 90, 200, 40))],
+                (600, 180, 680, 440): [("Select a Keyword to fuse an E.G.O Gift", (700, 330, 400, 25))]}
+    taps = test_actions.live_shop(context, reads_now)
+    assert actions.Shop.to_main(context)
+    assert taps == [actions.PAGE_CLOSE]

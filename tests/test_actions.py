@@ -883,19 +883,6 @@ def test_a_sale_skips_the_teams_kept_gifts(context, monkeypatch):
     assert taps == [actions.SELL_CELLS[4]]
 
 
-def test_a_sale_never_taps_a_gift_whose_badge_is_unread(context, monkeypatch):
-    # #205: the first cell's badge is unread: neither sold nor opened, though as a tier I it is the one the fusion of
-    # the 3 others leaves over.
-    assert sale_taps(context, monkeypatch, {}, [500, 90, 60, 70], (None, None, 1), ("Bleed", None), ("Tremor", None),
-                     ("Pierce", None)) == []
-
-
-def test_a_material_whose_price_is_unread_is_not_sold_but_still_fused(context, monkeypatch):
-    # #205: Bleed's price is unread (no panel is opened for it): it is not sold, and still counts for the fusion, so
-    # Tremor and Pierce make a group with it and none is sold.
-    assert sale_taps(context, monkeypatch, {}, [], ("Bleed", None), ("Tremor", None), ("Pierce", None)) == []
-
-
 @pytest.mark.parametrize("team, leftover, sold", [
     ({}, 5, False),  # a tier V no fusion takes (pick_fusion never does) is not sold by default
     ({"sell_max_tier": 5}, 5, True),
@@ -1013,18 +1000,6 @@ def test_the_cost_preview_of_a_picked_cell_is_not_a_sale(context, monkeypatch):
     actions.Shop.sell(context, SELLER, {"wanted": 145, "sold": False})
     assert any("not sold" in line for line in logs)
     assert not any("sold cell" in line for line in logs)
-
-
-def test_a_fuse_page_with_no_keyword_picked_is_closed_with_one_tap(context, clock):
-    # #214 (live 2026-10-21): on "Select a Keyword" a tap on the grid opened Keyword Selection, and Close then hit its
-    # Cancel: 12 rounds, 31 s. Close alone, as on any fuse or sell page.
-    def reads_now(taps):
-        if actions.PAGE_CLOSE in taps:  # the main shop: its Refresh fee
-            return {tuple(actions.REFRESH["normal"][1]): [("30", (970, 145, 40, 20))]}
-        return {tuple(actions.DIALOG_TITLE): [("Fuse E.G.O Gift", (500, 90, 200, 40))]}
-    taps = live_shop(context, reads_now)
-    assert actions.Shop.to_main(context)
-    assert taps == [actions.PAGE_CLOSE]
 
 
 def test_a_keyword_refresh_waits_for_the_new_cost_not_a_fixed_time(context, clock):
@@ -1225,12 +1200,6 @@ def test_the_fusion_grid_is_not_scanned_again_while_the_owned_gifts_are_the_same
     assert len(scans) == 1
     assert not actions.Shop.fuse(context, team, visit)  # nothing bought or sold since
     assert context.tasker.controller.post_click.call_count == taps and len(scans) == 1
-
-
-def test_a_gift_whose_badge_is_unread_stays_out_of_a_fusion_untapped(context, monkeypatch):
-    # #205: no cell is opened to read it; with the others it would make a fusion, without them none is made.
-    fused, taps, ok = fusion_taps(context, monkeypatch, {}, (None, None), ("Tremor", None), ("Pierce", None))
-    assert not fused and not ok and taps == [0, 0, 0]
 
 
 def test_confirm_download_taps_the_button_and_holds_the_watchdog(context, clock):
@@ -2219,16 +2188,6 @@ def test_the_shop_stops_tapping_once_the_map_shows(context):
     visit = {"wanted": None, "sold": False}
     assert not actions.Shop.buy_offers(context, {"keyword": "Burn", "reserve_cost": 0}, visit)
     assert context.tasker.controller.post_click.call_count == 1  # the second offer is never tapped
-
-
-def test_no_cell_of_the_fusion_grid_is_tapped_to_read_it(context):
-    # Live 2026-10-18: 5 gifts owned, 10 empty cells tapped at 3.4 s each. #205: two gifts in the third row, whose
-    # badges the grid's edge cuts off: the grid is dragged for them (this screen does not move), never tapped.
-    reads(context, FUSE_PAGE)
-    owned_gifts(context, actions.FUSE_CELLS[10:12])
-    assert not actions.Shop.fuse(context, {"keyword": "Burn", "gift_search": {"gifts": []}}, {})
-    taps = [c.args for c in context.tasker.controller.post_click.call_args_list]
-    assert not set(taps) & set(actions.FUSE_CELLS) and context.tasker.controller.post_touch_down.called
 
 
 def test_a_fuse_page_showing_a_fixed_recipe_is_closed_and_not_tried_again(context):
