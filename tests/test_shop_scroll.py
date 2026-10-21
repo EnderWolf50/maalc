@@ -98,12 +98,15 @@ def grid(context, monkeypatch):
 
 @pytest.mark.parametrize("page", ["fuse", "sell"])
 @pytest.mark.parametrize("n", [3, 10, 13, 20, 23, 31])
-def test_every_gift_is_read_once_whatever_the_grid_holds(context, grid, page, n):
+def test_every_gift_is_read_once_whatever_the_grid_holds(context, grid, monkeypatch, page, n):
     # Two rows a drag, the first cut-off one to the first's place; the last drag stops at the grid's end. A last row
     # full at the end takes one drag more: it might be a drag the game took less of.
     g = grid(page, n)
+    logs = []
+    monkeypatch.setattr(actions, "log", logs.append)
     cells, _ = actions.owned_cells(context, g.screen(), page, [])
     assert g.reads == list(range(n))  # each gift once, in the grid's order
+    assert (f"shop: the {page} grid does not move: at its end" in logs) == (n == 20)
     assert [c["i"] for c in cells] == list(range(n))
     assert [c["keyword"] for c in cells] == [KEYWORDS[i % len(KEYWORDS)] for i in range(n)]
     assert g.drags == (0 if n <= 10 else -(-(n - 10) // 10)) + (n == 20)  # rows 3-4, 5-6: a drag each
@@ -295,14 +298,17 @@ def test_a_gift_whose_badge_is_unread_stays_out_of_a_fusion_untapped(context, mo
     assert not fused and not ok and taps == [0, 0, 0]
 
 
-def test_no_cell_of_the_fusion_grid_is_tapped_to_read_it(context):
+def test_no_cell_of_the_fusion_grid_is_tapped_to_read_it(context, monkeypatch):
     # Live 2026-10-18: 5 gifts owned, 10 empty cells tapped at 3.4 s each. #205: two gifts in the third row, whose
     # badges the grid's edge cuts off: the grid is dragged for them (this screen does not move), never tapped.
     test_actions.reads(context, test_actions.FUSE_PAGE)
     test_actions.owned_gifts(context, actions.FUSE_CELLS[10:12])
+    logs = []
+    monkeypatch.setattr(actions, "log", logs.append)
     assert not actions.Shop.fuse(context, {"keyword": "Burn", "gift_search": {"gifts": []}}, {})
     taps = [c.args for c in context.tasker.controller.post_click.call_args_list]
     assert not set(taps) & set(actions.FUSE_CELLS) and context.tasker.controller.post_touch_down.called
+    assert "shop: the fuse grid does not move: its cut-off cells stay unread" in logs
 
 
 def test_a_fuse_page_with_no_keyword_picked_is_closed_with_one_tap(context, clock):

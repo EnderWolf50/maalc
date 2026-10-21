@@ -2479,7 +2479,8 @@ def owned_cells(context, image, page, gifts):
     """Every gift of the fuse or sell page's owned grid, each read once where it shows whole (#205): ([cells], grid).
 
     The grid is read on show (read_cells, and the prices on the sell page), then dragged to bring its first cut-off
-    row up to the first row's place, until no cut-off cell holds a gift or a drag moves it no more. A cell is
+    row up to the first row's place (with none, the row under a full last row), until no cut-off cell holds a gift or a
+    drag moves it no more. A cell is
     {"i", "x", "y", "tier", "keyword", "gift", "price", "look"}: i its place in the grid's order, y with the grid at its
     top, look its centre as read (cell_at finds it again by both); grid is {"page", "at": px scrolled}. The grid is at
     its top when the page opens.
