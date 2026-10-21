@@ -1,12 +1,14 @@
 """Keep rea, playwright, cua-driver and tempad-dev out of agent sessions in this repo and every worktree.
 
 Claude Code reads `.claude/settings.local.json` from the session's own folder (on Windows a
-worktree does not use the main checkout's file), so write it into each worktree. Idempotent;
-merges into an existing file and keeps `<file>.bak-<date>` of one it changes.
+worktree does not use the main checkout's file), so write it into the worktree of the current
+folder, or with `--all` into every worktree. Idempotent; merges into an existing file and keeps
+`<file>.bak-<date>` of one it changes.
 """
 import json
 import shutil
 import subprocess
+import sys
 from datetime import date
 from pathlib import Path
 
@@ -18,6 +20,13 @@ def worktrees():
     out = subprocess.run(["git", "worktree", "list", "--porcelain"], cwd=Path(__file__).parent, capture_output=True, text=True, check=True).stdout
     paths = [Path(line[9:]) for line in out.splitlines() if line.startswith("worktree ")]
     return [p for p in paths if p.is_dir()]  # a deleted, unpruned worktree is still listed
+
+
+def targets(cwd, all_worktrees):
+    if all_worktrees:
+        return worktrees()
+    top = subprocess.run(["git", "rev-parse", "--show-toplevel"], cwd=cwd, capture_output=True, text=True, check=True).stdout.strip()
+    return [Path(top).resolve()]
 
 
 def merged(cur):
@@ -41,7 +50,7 @@ def slim(wt):
 
 
 if __name__ == "__main__":
-    for wt in worktrees():
+    for wt in targets(Path.cwd(), "--all" in sys.argv[1:]):
         try:
             f, changed = slim(wt)
             print("written" if changed else "ok     ", f)
