@@ -148,7 +148,10 @@
 |---|---|---|---|---|---|
 | 連線中 | OCR：`CONNECTING` | 等待 | 前一個畫面、Retry 彈窗 | #7、#8 | — |
 | Retry 彈窗（待截圖確認） | OCR：按鈕文字以 `Retry`（可接倒數，例如 `Retry (5)`；不含 DEFEAT 的 `Retry Stage`）或 `Try Again` 開頭 | 點那個按鈕 | 連線中、前一個畫面 | #8、#84 | —（`tests/screens/RetryCountdown.png`、`TryAgain.png` 是合成圖） |
-| 教學提示（待截圖確認，沒有專用節點） | 第一次進某畫面的說明頁，整頁圖片，右側有 ▶ 翻頁。AALC 用 Android 返回鍵關閉（`close_first_prompt`） | 還沒做：沒有截圖。卡住後 L1 的返回鍵會關掉它；截圖會存在 `logs/unknown/` | 前一個畫面 | #8、#85 | — |
+| 說明頁（`HelpPager`） | 每個 `i` 按鈕後面的同一種說明頁（鏡牢 34 頁、Refraction Railway 18、Sinners 17、Extract 4、Dispense 5；第一次進某畫面時自己跳出的教學是不是同一種畫面還沒截到）。標題隨頁改變，所以認外框：左上的返回按鈕（`Screen/HelpPagerBack.png`）與下方一排頁碼點（`Screen/HelpPagerDot.png`），兩個模板都中（返回按鈕單獨在入口頁的返回鍵上也有 0.98，靠頁碼點區分）。鏡牢的第 1 頁是入口頁的圖，所以它排在 `MirrorHub` 的 `HubText` 之前 | Android 返回鍵關閉（左上 ← 也可以；右側 ▶ 只翻頁） | 前一個畫面 | #8、#85 | `tests/screens/HelpPager.png`、`HelpPagerLast.png`、`HelpPagerExtract.png`、`HelpPagerSinners.png`（實機 2026-10-21） |
+| 公告（`Notices`） | OCR：上方分頁 `Event Notifs`／`System Notifs` | Android 返回鍵關閉 | 主畫面 | #85 | `tests/screens/EventNotices.png`、`SystemNotices.png`（實機 2026-10-21） |
+| 信箱（`Mailbox`） | OCR：標題 `Mailbox`，且按鈕 `Close` | 點 Close；旁邊的 Claim All 不按，不領信 | 主畫面 | #85 | `tests/screens/Mailbox.png`（實機 2026-10-21） |
+| 設定選單（`SettingsMenu`，主畫面右上齒輪） | OCR：標題 `Settings`，且按鈕 `Return` | 點 Return；下方的 Quit Game 不按（沒有確認對話框，直接結束遊戲），也不進 Settings 改設定 | 主畫面 | #85 | `tests/screens/SettingsMenu.png`（實機 2026-10-21） |
 | 每週重置通知／舊局過期（待截圖確認，沒有專用節點） | AALC：主畫面上只有一個打勾按鈕的 renew 對話框，確認後回主畫面（`renew_confirm`，AALC `mirror.py`） | 還沒做：沒有截圖，按鈕是圖示不是文字，`PopupButton` 讀不到。下次重置時看 `logs/unknown/` | 前一個畫面、主畫面 | #8、#14、#85 | — |
 | 無限鏡牢（Parallel Superposition）彈窗 | OCR：`You can enter the … Mode`，按鈕 `Cancel`（兩個按鈕：Cancel／Confirm）。只有「Parallel Superposition Mode」開著、通過第 5 層（EXTREME 是第 10 層）才會出現 | 點 Cancel，不開啟（`ParallelModePrompt`，排在各頁之前，它蓋在頁面上） | 前一個畫面 | #8、#17、#85 | `tests/screens/ParallelModePrompt.png`、`ParallelModeExtreme.png`（遊戲說明頁裡的彈窗圖，位置待實機確認） |
 | 升級彈窗 | 結算後的 `Pass Level Up` 是 `ClaimPopup`；其他升級彈窗沒有截圖 | `ClaimPopup` 按 Confirm；其他的由 `PopupButton` 擋住單鈕的，其餘還沒做 | 前一個畫面 | #16、#85 | `tests/screens/PassLevelUp.png` |
@@ -171,7 +174,7 @@
 | Active Effects（Trials／Grace of Stars／Choice Effects／Adversity 分頁） | 主題包頁、地圖頁或商店右側 `?` | Confirm | `captures/16_theme_pack_help.png`、`108_shop_help.png` |
 | 隊伍配置檢視（12 張人格卡） | 主題包頁或地圖頁右側罪人按鈕 | 返回 | `captures/18_sinner_button_panel.png` |
 | E.G.O Gifts Owned／E.G.O Gifts（Owned、Clear Rewards、Current Theme Pack-Exclusive、Featured 分頁） | 主題包頁或地圖頁左上飾品欄 | Confirm | `captures/20_ego_gift_inventory.png`、`37_map_topleft_gift_panel.png` |
-| 教學頁（鏡牢說明、`Creating your Team`） | 地圖頁、入口頁、選隊頁、編隊頁的 `i` | 返回 | `captures/28_map_info_i.png`、`47_formation_info_i.png` |
+| 教學頁（鏡牢說明、`Creating your Team`） | 地圖頁、入口頁、選隊頁、編隊頁的 `i` | 返回（`HelpPager`，見全域彈窗） | `captures/28_map_info_i.png`、`47_formation_info_i.png` |
 | Progress（`Exploring` 進度頁） | Dungeon Progress 面板的 Progress | Close（直接回到地圖） | `captures/32_gear_progress_view.png` |
 | Encounter Reward Cards Guide | 獎勵卡頁右上 | Confirm | `captures/116_reward_card_guide.png` |
 | 人格詳情（戰鬥中） | 戰鬥中點到單位 | 點面板外 | `captures/219_battle_sinner_detail_panel.png`、`220_after_close_detail.png` |

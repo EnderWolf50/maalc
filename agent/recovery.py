@@ -25,7 +25,8 @@ HASH_FLOOR = {"BattlePause": 30}  # a turn playing out may sit still a while: al
 # Screens on the way back to a run after L2/L3: seeing them does not mean the stuck screen was got past.
 TRANSIT = {"Loading", "Connecting", "RetryPopup", "GoToMirrorEntry", "NavTitle", "NavMainTabs", "NavDrive",
            "MirrorEntryPaused", "ResumeDialog", "ProgressPanel", "DownloadDialog", "PopupButton",
-           "Downloading", "UpdateDialog", "UserAgreement"}
+           "Downloading", "UpdateDialog", "UserAgreement",
+           "Notices"}  # the notices may open by themselves at login (unverified, #85)
 UNKNOWN_KEEP = 30  # screens MirrorHub did not recognise that logs/unknown/ keeps
 # Seconds after confirming the title's download dialog in which nothing is stuck: until its progress screen
 # (Downloading, a waiting screen) is up, 22 s live 2026-10-21. 30 min ran out there before the download was done.

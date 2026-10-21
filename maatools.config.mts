@@ -32,16 +32,29 @@ const screens: [image: string, hits: string[]][] = [
   ['RetryCountdown.png', ['RetryPopup', 'GoToMirrorEntry', 'NavTitle']],
   ['TryAgain.png', ['RetryPopup', 'GoToMirrorEntry', 'NavTitle']],
   // Live 2026-10-20 (#84): the server error over the Mailbox after a request timed out, Close / Retry. Retry
-  // counts down "Retry 5" to "Retry 1" with a dark frame first, then reads "Retry".
-  ['ServerErrorRetryCountdown.png', ['RetryPopup']],
-  ['ServerErrorRetry.png', ['RetryPopup']],
+  // counts down "Retry 5" to "Retry 1" with a dark frame first, then reads "Retry". The Mailbox under these
+  // popups still reads: they come before it in the hub.
+  ['ServerErrorRetryCountdown.png', ['RetryPopup', 'Mailbox']],
+  ['ServerErrorRetry.png', ['RetryPopup', 'Mailbox']],
   // Live 2026-10-20 (#84): the network-unstable popup over the Mailbox with Wi-Fi off, Close only.
-  ['NetworkUnstable.png', ['PopupButton']],
+  ['NetworkUnstable.png', ['PopupButton', 'Mailbox']],
   // The Parallel Superposition prompt after clearing floor 5 / 10 with the mode engaged (#85). Captured from the
   // game's own help sheet (the page behind it is the help text, not a map): the dialog is its live look, but where
   // it sits on screen is not confirmed. A Cancel / Confirm question, so PopupButton (one centred button) stays out.
-  ['ParallelModePrompt.png', ['ParallelModePrompt']],
-  ['ParallelModeExtreme.png', ['ParallelModePrompt']],
+  // Both are help pager pages, so HelpPager (ahead of HubText) closes them there.
+  ['ParallelModePrompt.png', ['ParallelModePrompt', 'HelpPager']],
+  ['ParallelModeExtreme.png', ['ParallelModePrompt', 'HelpPager']],
+  // Live 2026-10-21 (#85, 1080p captures scaled to 720p): the main window's own popups and the help pager behind
+  // every "i" button (Mirror Dungeon page 1 and its last page, Extract, Sinners). The tab bar dimmed under the
+  // notices and the Mailbox misses NavMainTabs' 0.9; under the menu it still reads. The popups come first in the hub.
+  ['EventNotices.png', ['Notices']],
+  ['SystemNotices.png', ['Notices']],
+  ['Mailbox.png', ['Mailbox']],
+  ['SettingsMenu.png', ['SettingsMenu', 'GoToMirrorEntry', 'NavMainTabs']],
+  ['HelpPager.png', ['HelpPager']],
+  ['HelpPagerLast.png', ['HelpPager']],
+  ['HelpPagerExtract.png', ['HelpPager']],
+  ['HelpPagerSinners.png', ['HelpPager']],
   ['MainWindow.png', ['GoToMirrorEntry', 'NavMainTabs']],
   ['MainWindowFadeIn.png', ['GoToMirrorEntry', 'NavMainTabs']],
   ['SinnersTab.png', ['GoToMirrorEntry', 'NavMainTabs']],
