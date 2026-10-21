@@ -180,8 +180,28 @@ def page_guard(context, home, image=None):
     return image
 
 
+CLEAR_CACHE_AFTER_NODES = 200  # ~6 min: a 24-min stretch of a live run's log had 784 nodes
+
+
+def clear_long_task_cache(context, argv):
+    """Clear MaaFramework's runtime cache once the task has CLEAR_CACHE_AFTER_NODES nodes (#176).
+
+    The cache keeps every node's and recognition's detail until clear_cache, and a whole dungeon run is one task.
+    Only the end of an action may clear it: the clear drops the task's own detail too, and without it every custom
+    recognition and action of the task misses, including those the action's own run_recognition and run_task reach
+    (they share the task's id); the end of the action's node writes it back right after. A hands_back action run
+    inside a run_task would leave the rest of that subtask without it; none is (RecoverL1-3 have no custom node).
+    """
+    detail = getattr(argv, "task_detail", None)  # (the tests' argv has none)
+    if detail and len(detail.node_id_list) >= CLEAR_CACHE_AFTER_NODES:
+        context.tasker.clear_cache()
+
+
 def hands_back(run):
-    """An action's run(): PageGone ends it with True, for MirrorHub to look at the screen now up (#118)."""
+    """An action's run(): PageGone ends it with True, for MirrorHub to look at the screen now up (#118).
+
+    It then clears the runtime cache of a long task (clear_long_task_cache).
+    """
     @functools.wraps(run)
     def wrapped(self, context, argv):
         try:
@@ -189,6 +209,8 @@ def hands_back(run):
         except PageGone as e:
             log(f"{type(self).__name__}: {e} is gone: back to MirrorHub")
             return True
+        finally:
+            clear_long_task_cache(context, argv)
     return wrapped
 
 
@@ -1294,9 +1316,9 @@ class RouteMap(CustomAction):
             score, path = map_route.paths(slots, weights, ahead)[order[0]]
             nodes = [c[r][0] for r, c in zip(path, (slots, *ahead))]
             log(f"map: path {' > '.join(f'{r} {t}' for r, t in zip(path, nodes))}, score {score}")
-            # The rest of the path, each step's row seen from the node before it: where the bus will stand.
-            row_at = {dy: r for r, dy in map_route.ROW_DY.items()}
-            steps = [(row_at[map_route.ROW_DY[b] - map_route.ROW_DY[a]], t) for a, b, t in zip(path, path[1:], nodes[1:])]
+            steps = map_route.steps(path, nodes)
+            if steps is None:  # #212: a path no link joins; take its first node and read the map again after
+                log("map: the path steps two rows; no plan")
 
         def centre(row):
             return bx + SLOT[0], by + SLOT[1] + map_route.ROW_DY[row]
@@ -1492,7 +1514,8 @@ class RouteMap(CustomAction):
         """The columns beyond the first on screen, for map_route.rank.
 
         A node counts when a link into it from the column before reads (map_route.line_contrast); only rows
-        next to each other link. The read ends at the screen's edge, at a column with nothing linked or
+        next to each other link. Every node leads on, so one with no link read onward takes its brightest
+        (map_route.FAINT_LINK, #212). The read ends at the screen's edge, at a column with nothing linked or
         dark (no mark and no light on any node: hard mode shows two columns), or after the boss.
         """
         dx, dy = map_route.COLUMN_DX, map_route.ROW_DY
@@ -1503,9 +1526,10 @@ class RouteMap(CustomAction):
         while x + dx + 80 <= 1200:  # MapNodeFocusedHex reads 80 px either side; buttons from x 1205
             x += dx
             before, column, lit = ahead[-1] if ahead else slots, {}, False
+            links = map_route.links({(r, row): map_route.line_contrast(v, x - dx, y(r), x, y(row)) or 0
+                                     for r in map_route.ROWS for row in map_route.ROWS if map_route.near(r, row)})
             for row in map_route.ROWS:
-                linked = {r for r in before if abs(dy[r] - dy[row]) <= 213
-                          and (map_route.line_contrast(v, x - dx, y(r), x, y(row)) or 0) >= map_route.LINE_CONTRAST}
+                linked = {src for src, dst in links if dst == row and src in before}
                 if linked:
                     marks = node_marks(context, image, x, y(row))
                     column[row] = (node_at(context, image, x, y(row), marks, costs=False), linked)
