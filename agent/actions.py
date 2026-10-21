@@ -130,16 +130,22 @@ def tap_shown(context, x, y, done, timeout=2.0, rest=1.5):
     return image if settled is None else settled
 
 
-def still(context, timeout=2.0):
+def still(context, timeout=2.0, roi=None, share=0.03):
     """The first screenshot that looks like the one 0.2 s before it: a fade in or out has ended; None after timeout s.
+    With roi (x, y, w, h), only that part is compared; share is recovery.same_screen's.
 
     MirrorHub, polling every 300 ms, can hand out a page while it is still fading in or the last one fading out.
     """
-    last = [recovery.thumb(screen(context))]
+    def thumb(image):
+        if roi:
+            x, y, w, h = roi
+            image = image[y:y + h, x:x + w]
+        return recovery.thumb(image)
+    last = [thumb(screen(context))]
 
     def done(image):
-        small = recovery.thumb(image)
-        same = recovery.same_screen(last[0], small)
+        small = thumb(image)
+        same = recovery.same_screen(last[0], small, share)
         last[0] = small
         return same
     return until(context, done, timeout=timeout, least=0.2)
@@ -1928,8 +1934,9 @@ class PlayTurn(CustomAction):
         if time.time() - RUN.setdefault("battle_start", time.time()) > recovery.BATTLE_LIMIT:
             return stuck(f"battle over {recovery.BATTLE_LIMIT // 60} min", level=2)  # skips L1 (spec 06)
         # Live 2026-10-17: the Win Rate label also matches in the first frames of a turn playing out (the
-        # screen moving), and a tap in the turn's opening can do nothing: act on a still screen only.
-        image = still(context, timeout=1)
+        # screen moving), and a tap in the turn's opening can do nothing: act on a still HUD only. Live
+        # 2026-10-21 (#229): a swarm of enemies kept the battlefield moving for good; turn 3 waited 18 min, twice.
+        image = still(context, timeout=1, roi=battle.hud_band(argv.box), share=battle.HUD_MOVED)
         if image is None:
             return True  # moving: MirrorHub looks again
         turn = text(context, image, TURN_NUMBER, only_rec=True).strip() or None

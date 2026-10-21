@@ -3,10 +3,13 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+from PIL import Image
 
 import battle as b
+import recovery
 
 DISCS = Path(__file__).resolve().parent / "discs"
+SCREENS = Path(__file__).resolve().parent / "screens"
 
 PLAN = ["Ryōshū", "Yi Sang", "Faust", "Hong Lu", "Rodion", "Ishmael",
         "Outis", "Heathcliff", "Sinclair", "Don Quixote", "Meursault", "Gregor"]
@@ -74,6 +77,16 @@ def test_guard_chain_starts_on_the_left_gear_and_runs_along_the_lower_row():
     # down the panel tilts and the lower skills (the guard skills) sit at y ~665 under the slots' x.
     xs = b.slot_xs(1022)
     assert b.guard_chain(xs) == [(232, 557)] + [(x, 665) for x in xs]
+
+
+def test_the_hud_band_rests_while_a_swarm_moves_the_battlefield():
+    # #229: two turn screens 3 s apart; the swarm moved 6.9% of the band's blocks, the most over 319 such pairs.
+    frames = [np.asarray(Image.open(SCREENS / f"BattleTurnSwarm{s}.png"))[:, :, ::-1] for s in ("", "Next")]
+    x, y, w, h = b.hud_band([946, 531, 40, 29])
+    band = [recovery.thumb(f[y:y + h, x:x + w]) for f in frames]
+    assert recovery.same_screen(*band, b.HUD_MOVED)
+    assert not recovery.same_screen(*band)  # the whole-screen share
+    assert not recovery.same_screen(*map(recovery.thumb, frames), b.HUD_MOVED)
 
 
 def test_guard_shown_compares_each_slot_before_and_after_the_tap():

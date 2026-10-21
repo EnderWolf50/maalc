@@ -1,5 +1,6 @@
 """Custom actions driven offline: a fake Maa context reads nothing on a blank screen."""
 
+import itertools
 import json
 import math
 import time
@@ -10,6 +11,7 @@ from unittest.mock import DEFAULT, MagicMock
 
 import numpy as np
 import pytest
+from PIL import Image
 
 from maa.define import Rect
 
@@ -17,6 +19,7 @@ import actions
 import recovery
 
 REAL_GUARD = actions.page_guard
+SCREENS = Path(__file__).resolve().parent / "screens"
 
 
 @pytest.fixture
@@ -568,6 +571,18 @@ def test_a_turn_label_on_a_moving_screen_is_not_played(context):
     screens(context, [0, 60, 120, 180, 240, 30, 90, 150, 210, 20, 80, 140])
     actions.PlayTurn().run(context, SimpleNamespace(box=[984, 531, 40, 20]))
     context.tasker.controller.post_click.assert_not_called()
+
+
+def test_a_turn_over_a_moving_battlefield_is_played(context, monkeypatch):
+    # Live 2026-10-21: a swarm of enemies moved over the whole battlefield, the HUD at rest; the screen never
+    # read still and turn 3 waited 18 min, twice (BattleTurnSwarm*.png, 3 s apart).
+    frames = [np.asarray(Image.open(SCREENS / f"BattleTurnSwarm{s}.png"))[:, :, ::-1] for s in ("", "Next")]
+    shots = itertools.cycle(frames)
+    context.tasker.controller.post_screencap.return_value.wait.return_value.get.side_effect = lambda: next(shots)
+    clicks = context.tasker.controller.post_click.call_args_list
+    monkeypatch.setattr(actions.battle, "disc_lit", lambda image, x, y: bool(clicks))  # lit by the Win Rate tap
+    actions.PlayTurn().run(context, SimpleNamespace(box=[946, 531, 40, 29]))
+    assert [c.args for c in clicks[:2]] == [(946 + 20, 531 + 14), (946 + actions.START_DISC[0], 531 + actions.START_DISC[1])]
 
 
 def test_a_win_rate_tap_lost_in_the_turns_opening_is_tapped_again(context, monkeypatch):

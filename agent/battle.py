@@ -59,6 +59,25 @@ def slot_xs(win_rate_x):
     return [round(605 + 81 * (i - (n - 1) / 2)) for i in range(max(n, 0))]
 
 
+# The share of hud_band's blocks that may move on a turn screen at rest. Live 2026-10-21 (#229), screenshots 3 s
+# apart: at most 6.9% over 319 pairs of a swarm battle (9.4% with the 1-slot band on the same frames), 62-94% as
+# each turn started.
+HUD_MOVED = 0.2
+
+
+def hud_band(box):
+    """(x, y, w, h) of the HUD that rests on a turn screen, from the BattleTurn box (1280x720).
+
+    Live 2026-10-21 (#229): a swarm of enemies kept the battlefield moving for good. The band runs from the
+    left gear (centred 86 px left of the first slot, 40 px wide either side) to the Win Rate label's right
+    edge, over the lower skills and the portraits: the battlefield shows between the skills above y 560.
+    Its width is whole 40 px blocks, as recovery.thumb drops the rest.
+    """
+    x, _, w, _ = box
+    left = (slot_xs(x) or [605])[0] - 86 - 40
+    return left, 560, -(-(x + w - left) // 40) * 40, 160
+
+
 def guard_chain(xs):
     """The points of the drag that picks every slot's lower skill, left to right (spec 03 section 8).
 
