@@ -53,6 +53,7 @@ def child():
     from maa.custom_action import CustomAction
     from maa.resource import Resource
     from maa.tasker import Tasker
+    from PIL import Image
 
     resource = Resource()  # MaaFramework itself, before anything loads the AgentServer library
     stub = types.ModuleType("maa.agent.agent_server")
@@ -91,7 +92,6 @@ def child():
                                                actions.kept_icons(team) + actions.avoided_gifts(team) + actions.VESTIGE_ICONS)
                     out[case] = [(c["tier"], c["keyword"], c["gift"]) for c in found]
                 for name in LABELS:  # #205: the fuse page's owned gifts found by their label's OCR
-                    from PIL import Image
                     screen = np.array(Image.open(ROOT / "tests" / "screens" / f"{name}.png").convert("RGB"))[:, :, ::-1]
                     out[name] = actions.owned_label(context, np.ascontiguousarray(screen))[0]
             except Exception:  # MaaFramework swallows it: hand it to the test
@@ -171,13 +171,13 @@ def test_the_offers_read_tier_and_badge(read):
         (2, "Keywordless", None), (2, "Burn", None), (1, "Burn", None), (1, "Poise", None), (1, "Tremor", None)]
 
 
-if __name__ == "__main__":
-    child()
-
-
 @pytest.mark.parametrize("name", LABELS)
 def test_the_owned_gifts_are_found_under_their_label(read, name):
     # #205: "E.G.O Gifts Owned" read by OCR, OWNED_LABEL px over the first owned row, with a recipe's section over it or not.
     sys.path.insert(0, str(ROOT / "agent"))
     import actions  # noqa: PLC0415  # the pytest process's own import, for the constant
     assert abs(read[name] + actions.OWNED_LABEL - LABELS[name]) <= 3
+
+
+if __name__ == "__main__":
+    child()

@@ -41,6 +41,7 @@ jobs:
       - uses: astral-sh/setup-uv@v6
       - run: uv sync --locked
       - run: uv run ruff check
+      - run: python3 tools/fetch_ocr.py  # test_shop_cells reads the fuse page's labels by OCR (#205)
       - run: uv run pytest
 
   pipeline:
