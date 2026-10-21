@@ -366,8 +366,8 @@ class StuckFlag(CustomRecognition):
         STUCK["ladder"].progress(kind)
         if STUCK["flag"]:
             return
-        if STUCK["watch"].see(kind, recovery.thumb(image), time.monotonic()):
-            stuck(f"{kind}: the screen did not change")
+        if why := STUCK["watch"].see(kind, recovery.thumb(image), time.monotonic()):
+            stuck(f"{kind}: {why}")
         elif recovery.over_time(kind, RUN.get("deadline"), time.time()):
             RUN.pop("deadline")  # once a floor: the next floor starts the clock again
             stuck(f"floor {RUN.get('floor', '?')} over its time limit", level=2)
