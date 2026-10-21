@@ -1554,6 +1554,37 @@ def test_select_team_taps_the_card_again_when_the_title_never_changed(context, c
     assert taps(context) == [(130, 390), (130, 390), (1145, 587)]
 
 
+@pytest.mark.parametrize("left_at", [0, 4, 10])
+def test_select_team_drags_the_list_to_its_top_before_it_looks_for_the_team(context, clock, monkeypatch, left_at):
+    # #226: the list opens wherever it was left; it goes to the top first, then down to the slot.
+    actions.RUN["team"] = {"game_team": 8}
+    state = {"first": left_at, "tapped": None, "drags": []}  # first: the number of the first row on show
+    rows = lambda: {n: 309 + 36 * (n - state["first"]) for n in range(state["first"], state["first"] + 7)}
+
+    def ocr(context, image, roi, only_rec=False):
+        if roi == actions.TEAM_LIST:
+            return [(f"TEAMS #{n}", (100, y - 10, 80, 20)) for n, y in rows().items()]
+        return [(f"TEAMS #{state['tapped']}", tuple(roi))] if roi == actions.TEAM_TITLE and state["tapped"] else []
+
+    def scroll(context, x, y, dx, dy):
+        state["drags"].append(dy)
+        state["first"] = min(max(state["first"] - 4 * (1 if dy > 0 else -1), 0), 20)  # 140 px = 4 rows
+
+    def click(x, y):
+        if x == 130:
+            state["tapped"] = next((n for n, ry in rows().items() if abs(ry - y) < 18), None)
+        return MagicMock()
+    monkeypatch.setattr(actions, "ocr", ocr)
+    monkeypatch.setattr(actions, "scroll", scroll)
+    context.tasker.controller.post_click.side_effect = click
+    assert actions.SelectTeam().run(context, argv())
+    assert state["tapped"] == 8
+    drags = state["drags"]
+    assert drags[0] > 0  # the first drag moves the content down, towards the top, even from the top itself
+    top = max(i for i, d in enumerate(drags) if d > 0)
+    assert all(d > 0 for d in drags[:top + 1]) and all(d < 0 for d in drags[top + 1:])  # all the way up, then down
+
+
 def test_select_team_makes_a_plan_for_an_abandoned_empty_run_instead_of_backing_out(context, clock, monkeypatch):
     # #128 (live 2026-10-18): Resume on a run paused before team selection reaches the picker with no plan in memory;
     # backing out to the entry page, which only offers Resume, looped every 8 s.
