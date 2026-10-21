@@ -2302,11 +2302,16 @@ FUSE_CENTRE, FUSE_KEYWORD_OK = (365, 340), (788, 566)
 # Grid cells by their centre (live 2026-10-16/18). Each cell's tier numerals sit top left, its keyword badge
 # bottom right (none on a keywordless gift). The owned grids' third row shows half, its badges cut off: they scroll (#205).
 # page: (the first cell's centre with the grid at its top, the step to the next column and row, the px under a centre
-# that must show for the cell to be read: its badge, on the sell page its price). Rows 92 and 107 px apart on captures.
-OWNED_GRID = {"fuse": ((678, 294), (96, 92), 40), "sell": ((683, 258), (92, 107), 60)}
+# that must show for the cell to be read: its badge, on the sell page its price). Rows 92 and 107 px apart on captures;
+# a sell price's digits 38-53 px under the centre, and a sell grid of 3 rows scrolls 31 px to show its last whole (live
+# 2026-10-21, #205).
+OWNED_GRID = {"fuse": ((678, 294), (96, 92), 40), "sell": ((683, 258), (92, 107), 52)}
 FUSE_CELLS, SELL_CELLS = ([(x + dx * c, y + dy * r) for r in range(3) for c in range(5)]
                           for (x, y), (dx, dy), _ in OWNED_GRID.values())
 OFFER_CELLS = [(624 + 154 * c, y) for y in (265, 418) for c in range(4)]  # a shop at rest; the price line is 52 px under
+# The fuse page's list: sections over the owned gifts (a fixed recipe's Fusion Available, #103) push them down. Their
+# "E.G.O Gifts Owned" label's centre sits 66 px over the first owned row's (live: 228 and 294).
+FUSE_LIST, OWNED_LABEL = [630, 195, 480, 305], 66
 GRID_DRAG_X = 728  # a drag of the owned grid starts between its first two columns
 GRID_STROKE = 215  # px a drag stroke moves the owned grid at most: it starts and ends inside the grid
 GRID_SCROLLS = 20  # drags at most to the owned grid's end: 2 rows each, fewer when the game takes less of one
@@ -2488,6 +2493,16 @@ def owned_cells(context, image, page, gifts):
     (x0, y0), (dx, dy), under = OWNED_GRID[page]
     bottom = CELL_PAGES[page][1]
     grid, out, done = {"page": page, "at": 0}, [], set()
+    if page == "fuse":
+        label, image = owned_label(context, image)
+        if label is None:
+            log("shop: no E.G.O Gifts Owned on the fuse page: nothing read")
+            return [], grid
+        grid["at"] = y0 - label - OWNED_LABEL  # negative: sections over the owned gifts push them down
+        if not whole(page, y0 - grid["at"]):
+            log(f"shop: the owned gifts start at y {y0 - grid['at']}, under the sections over them")
+            moved, image = drag_grid(context, page, -grid["at"] - GRID_MARGIN)
+            grid["at"] += moved
     for _ in range(GRID_SCROLLS):
         rows = range(max(0, grid["at"] // dy), grid["at"] // dy + 5)  # the last one all under the edge
         shown = [(5 * r + c, x0 + dx * c, y0 + dy * r - grid["at"]) for r in rows for c in range(5)]
@@ -2514,6 +2529,20 @@ def owned_cells(context, image, page, gifts):
         log(f"shop: the {page} grid still has cut-off cells after {GRID_SCROLLS} drags: they stay unread")
     log(f"shop: {page} grid read down {grid['at']} px")
     return out, grid
+
+
+def owned_label(context, image):
+    """(the centre y of the fuse page's "E.G.O Gifts Owned" label, the screenshot it shows on), the list dragged up a
+    stroke at a time until it shows: a fixed recipe's section (#103, #78) or a limited fusion's sits over it, neither
+    used (#205). (None, the last screenshot) when the list ends without it."""
+    for _ in range(GRID_SCROLLS):
+        box = next((b for t, b in ocr(context, image, FUSE_LIST) if has(t, "Gifts Owned")), None)
+        if box:
+            return box[1] + box[3] // 2, image
+        moved, image = drag_grid(context, "fuse", GRID_STROKE)
+        if abs(moved) <= 3:
+            break
+    return None, image
 
 
 def whole(page, y):
@@ -2958,20 +2987,6 @@ class Shop(CustomAction):
         return bool(picked)
 
     @staticmethod
-    def recipe_shown(context, image, visit):
-        """True, and the fuse page closed for this visit's owned gifts, when it shows a Fusion Available section.
-
-        #103 (live 2026-10-17): the section lists a fixed recipe's result above E.G.O Gifts Owned and pushes
-        the owned grid down, so FUSE_CELLS miss; the bot stuck on the page. Fixed recipes are #78's.
-        """
-        if not seen(context, image, "ShopFusionAvailable"):
-            return False
-        log("shop: the fuse page shows Fusion Available (a fixed recipe): closed, no fusion")
-        visit["fuse_scanned"] = True
-        Shop.to_main(context)
-        return True
-
-    @staticmethod
     def fuse(context, team, visit):
         """Fuse the materials shop.pick_fusion picks into the main keyword, Wishmaking left unticked; True when one fused.
 
@@ -3001,9 +3016,9 @@ class Shop(CustomAction):
             log("shop: Wishmaking is ticked (it spends owned Starlight): no fusion")
             Shop.to_main(context)
             return False
-        visit["slots"] = slots = shop.fuse_slots(image)  # before a recipe closes the page: the sale needs it too
-        if Shop.recipe_shown(context, image, visit):
-            return False
+        visit["slots"] = slots = shop.fuse_slots(image)  # the sale needs it too
+        if seen(context, image, "ShopFusionAvailable"):
+            log("shop: the fuse page shows Fusion Available (a fixed recipe, #78): not used, the owned gifts are read under it")
         avoid = [g["name"] for g in avoided_gifts(team)]
         cells, grid = owned_cells(context, image, "fuse", kept_icons(team) + avoided_gifts(team) + VESTIGE_ICONS)
         roles = [cell_role(c, team, "fuse", avoid) for c in cells]
@@ -3018,7 +3033,7 @@ class Shop(CustomAction):
         group = sorted((next(c for c in cells if c["i"] == i) for i in group), key=lambda c: -c["y"])  # the grid's end first
         materials = ", ".join(cell_line(c, "material").rsplit(":", 1)[0] for c in group)
         fused = False
-        if Shop.place(context, group, slots, grid) and not Shop.recipe_shown(context, screen(context), visit):
+        if Shop.place(context, group, slots, grid):
             # Read again on the still screenshot: the one that matched was taken while the dialog zoomed in.
             page_guard(context, "Shop")
             image = tap_shown(context, *PAGE_OK, shows(context, FUSE_CONFIRM, FUSE_COUNT), timeout=2)

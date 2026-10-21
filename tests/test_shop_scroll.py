@@ -10,6 +10,9 @@ from test_shop import screen_with
 
 clock, context = test_actions.clock, test_actions.context  # its fixtures
 DONE = SimpleNamespace(wait=lambda: None)
+# Live 2026-10-21: a sell grid of 13 gifts scrolls 31 px, its last row's price just inside; the fuse page's end is a guess.
+END = {"fuse": 56, "sell": 495 + 31 - 472}
+TOP = {"fuse": 200, "sell": 215}  # the lists' upper edge (live: the fuse page's label at 216-240, sell rows cut at 215)
 KEYWORDS = ["Bleed", "Tremor", "Pierce", "Sinking", "Slash", "Blunt", "Poise", "Rupture", "Charge"]
 
 
@@ -17,15 +20,20 @@ class Grid:
     """The owned grid of page as the game shows it: n gifts, 5 a row, each a unique icon in the same frame. A drag
     moves it by the finger's travel after the drag threshold's first move (1 px more every other drag: the fling
     left, or fling px more each drag; or only share of it), stopped at its ends; a tap lands on the gift under it. The
-    grid ends 8 px under its last row's frame or price."""
+    grid ends END px under its last row's centre. On the fuse page OCR reads the "E.G.O Gifts Owned" label over the gifts
+    where it shows; recipes: a section of that many cells over it (a fixed recipe's Fusion Available), each a gift
+    of its own, its label as tall as the owned gifts'."""
 
-    def __init__(self, context, page, n, fling=None, share=1.0):
-        (self.x0, self.y0), (self.dx, self.dy), under = actions.OWNED_GRID[page]
-        self.top, self.bottom = self.y0 - 52, actions.CELL_PAGES[page][1]
-        self.max_at = max(0, self.y0 + self.dy * ((n - 1) // 5) + max(48, under) + 8 - self.bottom)
+    def __init__(self, context, page, n, fling=None, share=1.0, recipes=0):
+        (self.x0, self.y0), (self.dx, self.dy), _ = actions.OWNED_GRID[page]
+        self.page, self.above = page, (1 + (recipes - 1) // 5) * self.dy + actions.OWNED_LABEL if recipes else 0
+        self.recipes = [(self.x0 + self.dx * (k % 5), self.y0 + self.dy * (k // 5)) for k in range(recipes)]
+        self.top, self.bottom = TOP[page], actions.CELL_PAGES[page][1]
+        self.max_at = max(0, self.y0 + self.above + self.dy * ((n - 1) // 5) + END[page] - self.bottom)
         self.at, self.drags, self.taps, self.reads, self.fling, self.share = 0, 0, [], [], fling, share
         rng = np.random.default_rng(1)
-        self.icons = [np.kron(rng.integers(40, 255, (19, 19, 3), np.uint8), np.ones((4, 4, 1), np.uint8)) for _ in range(n)]
+        self.icons = [np.kron(rng.integers(40, 255, (19, 19, 3), np.uint8), np.ones((4, 4, 1), np.uint8))
+                      for _ in range(n + recipes)]
         for icon in self.icons:
             icon[:5], icon[-5:], icon[:, :5], icon[:, -5:] = (0, 200, 230), (0, 200, 230), (0, 200, 230), (0, 200, 230)
         ctl = context.tasker.controller
@@ -36,8 +44,17 @@ class Grid:
         ctl.post_click.side_effect = self.click
 
     def place(self, i):
-        """Gift i's centre with the grid at its top."""
-        return self.x0 + self.dx * (i % 5), self.y0 + self.dy * (i // 5)
+        """Gift i's centre with the grid at its top (the recipe cells' after the owned gifts')."""
+        n = len(self.icons) - len(self.recipes)
+        return self.recipes[i - n] if i >= n else (self.x0 + self.dx * (i % 5), self.y0 + self.above + self.dy * (i // 5))
+
+    def recognition(self, name, image, override=None):
+        """OCR of FUSE_LIST: the owned gifts' label, where it shows whole on the fuse page; None for anything else."""
+        roi = tuple((override or {}).get(name, {}).get("roi", ()))
+        y = self.y0 + self.above - actions.OWNED_LABEL - self.at
+        if self.page != "fuse" or roi != tuple(actions.FUSE_LIST) or not self.top <= y - 12 <= y + 12 <= self.bottom:
+            return None
+        return SimpleNamespace(all_results=[SimpleNamespace(text="E.G.O Gifts Owned", box=(635, y - 12, 161, 24))])
 
     def at_screen(self, x, y):
         """The gift whose cell is under (x, y) on screen now, or None."""
@@ -79,8 +96,9 @@ class Grid:
         Only cells shown whole are asked for (test_shop_cells checks the matching itself)."""
         out = []
         for k, (x, y) in enumerate(cells):
-            assert actions.whole(page, y) and y - 48 >= self.top, (x, y)
+            assert actions.whole(page, y) and y - 38 >= self.top, (x, y)  # its frame shows whole
             i = self.at_screen(x, y)
+            assert i is None or i < len(self.icons) - len(self.recipes), f"a recipe cell read as an owned gift at {x, y}"
             if i is not None:
                 self.reads.append(i)
                 out.append({"i": k, "x": x, "y": y, "tier": 1, "keyword": KEYWORDS[i % len(KEYWORDS)], "gift": None})
@@ -89,9 +107,10 @@ class Grid:
 
 @pytest.fixture
 def grid(context, monkeypatch):
-    def make(page, n, fling=None, share=1.0):
-        g = Grid(context, page, n, fling, share)
+    def make(page, n, fling=None, share=1.0, recipes=0):
+        g = Grid(context, page, n, fling, share, recipes)
         monkeypatch.setattr(actions, "read_cells", g.read_cells)
+        context.run_recognition.side_effect = g.recognition
         return g
     return make
 
@@ -179,9 +198,12 @@ def fusion(context, monkeypatch, g):
     """Shop.fuse on g with the fuse page's read-back as the game would show it (a tap puts a gift in or takes it out)."""
     def inside():
         return {i for i in g.taps if isinstance(i, int) and g.taps.count(i) % 2}
-    test_actions.reads(context, {**test_actions.FUSE_PAGE,
-                                 tuple(actions.FUSE_CONFIRM): [("Selected E.G.O Gifts 3/3", (330, 175, 320, 30))],
-                                 tuple(actions.GET_TITLE): [("E.G.O Gift GET!", (560, 165, 160, 30))]})
+    page = {**test_actions.FUSE_PAGE, tuple(actions.FUSE_CONFIRM): [("Selected E.G.O Gifts 3/3", (330, 175, 320, 30))],
+            tuple(actions.GET_TITLE): [("E.G.O Gift GET!", (560, 165, 160, 30))]}
+    del page[tuple(actions.FUSE_LIST)]  # the grid's own label
+    test_actions.reads(context, page)
+    inner = context.run_recognition.side_effect
+    context.run_recognition.side_effect = lambda *a, **k: g.recognition(*a, **k) or inner(*a, **k)
     monkeypatch.setattr(actions.shop, "fuse_slots", lambda image: 3)
     monkeypatch.setattr(actions.shop, "placed", lambda image, n: len(inside()))
     monkeypatch.setattr(actions.shop, "picked", lambda image, x, y, bottom=720: g.at_screen(x, y) in inside())
@@ -200,6 +222,31 @@ def test_a_fusion_puts_in_gifts_from_both_ends_of_the_grid(context, grid, monkey
     assert fusion(context, monkeypatch, g)
     assert sorted(i for i in g.taps if isinstance(i, int)) == [1, 12, 22]
     assert actions.PAGE_OK in g.taps
+
+
+@pytest.mark.parametrize("recipes", [1, 7, 15])
+def test_a_fusion_reads_the_owned_gifts_under_a_fixed_recipes_section(context, grid, monkeypatch, recipes):
+    # Live 2026-10-21 (F4, F5): a fixed recipe's Fusion Available section over the owned gifts closed the fuse page
+    # unread (#103). The owned gifts are found by their label under 1, 2 or 3 rows of recipe cells (3: the label is
+    # under the list's edge when it opens); no recipe cell is read or tapped (#78 is the recipes' own issue).
+    g = grid("fuse", 23, recipes=recipes)
+    reader = g.read_cells
+
+    def read_cells(context, image, cells, page, gifts=()):
+        return [{**c, "keyword": c["keyword"] if g.at_screen(c["x"], c["y"]) in (1, 12, 22) else "Burn"}
+                for c in reader(context, image, cells, page, gifts)]
+    monkeypatch.setattr(actions, "read_cells", read_cells)
+    assert fusion(context, monkeypatch, g)
+    assert g.reads == list(range(23))
+    assert sorted(i for i in g.taps if isinstance(i, int)) == [1, 12, 22]
+
+
+def test_a_fuse_page_without_its_owned_gifts_label_is_not_read(context, grid, monkeypatch):
+    # The label never shows (OCR misses it, or a list it does not know): no gift is read or tapped.
+    g = grid("fuse", 13)
+    monkeypatch.setattr(g, "recognition", lambda *a, **k: None)
+    assert not fusion(context, monkeypatch, g)
+    assert not g.reads and not [i for i in g.taps if isinstance(i, int)]
 
 
 def sell_page(context, g, prices, cost=100):
@@ -224,8 +271,8 @@ def sell_page(context, g, prices, cost=100):
                  tuple(actions.SELL_COST): [(str(state["cost"]), (980, 90, 60, 30))]}.get(roi, [])
         if roi == tuple(actions.SELL_GRID):
             spots = [(i, *g.place(i)) for i in range(len(g.icons))]
-            lines = [(str(prices[i]), (x - 13, y - g.at + 40, 26, 20)) for i, x, y in spots
-                     if y - g.at + 60 <= actions.CELL_PAGES["sell"][1] and y - g.at - 48 >= g.top]
+            lines = [(str(prices[i]), (x - 13, y - g.at + 38, 26, 16)) for i, x, y in spots  # digits 38-53 px under (live)
+                     if y - g.at + 53 <= actions.CELL_PAGES["sell"][1] and y - g.at - 38 >= g.top]
         if roi == tuple(actions.DIALOG_TEXT) and state["asked"] is not None:
             lines = [(f"Sell [Gift] for {prices[state['asked']]} Cost?", (460, 330, 360, 25))]
         results = [SimpleNamespace(text=t, box=b) for t, b in lines]

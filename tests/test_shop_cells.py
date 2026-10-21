@@ -35,6 +35,10 @@ CASES = {
 }
 
 
+# tests/screens fuse pages: the first owned row's centre y (#103: the Fusion Available section pushes it down).
+LABELS = {"ShopFuse": 294, "ShopFuseRecipe": 427}
+
+
 def without_tier(image, x, y):
     """image with the yellow tier numerals of the cell at (x, y) dimmed: its tier reads None."""
     box = image[y - 44:y - 5, x - 44:x - 14]
@@ -86,6 +90,10 @@ def child():
                     found = actions.read_cells(context, image, getattr(actions, cells), page,
                                                actions.kept_icons(team) + actions.avoided_gifts(team) + actions.VESTIGE_ICONS)
                     out[case] = [(c["tier"], c["keyword"], c["gift"]) for c in found]
+                for name in LABELS:  # #205: the fuse page's owned gifts found by their label's OCR
+                    from PIL import Image
+                    screen = np.array(Image.open(ROOT / "tests" / "screens" / f"{name}.png").convert("RGB"))[:, :, ::-1]
+                    out[name] = actions.owned_label(context, np.ascontiguousarray(screen))[0]
             except Exception:  # MaaFramework swallows it: hand it to the test
                 out["error"] = traceback.format_exc()
             return True
@@ -106,7 +114,7 @@ def read():
     assert done.returncode == 0, done.stderr[-2000:]
     out = json.loads(done.stdout.strip().splitlines()[-1])
     assert "error" not in out, out["error"]
-    return {k: [tuple(c) for c in v] for k, v in out.items()}
+    return {k: [tuple(c) for c in v] if isinstance(v, list) else v for k, v in out.items()}
 
 
 def test_spiderweb_is_kept_off_its_icon_with_no_tooltip(read):
@@ -165,3 +173,11 @@ def test_the_offers_read_tier_and_badge(read):
 
 if __name__ == "__main__":
     child()
+
+
+@pytest.mark.parametrize("name", LABELS)
+def test_the_owned_gifts_are_found_under_their_label(read, name):
+    # #205: "E.G.O Gifts Owned" read by OCR, OWNED_LABEL px over the first owned row, with a recipe's section over it or not.
+    sys.path.insert(0, str(ROOT / "agent"))
+    import actions  # noqa: PLC0415  # the pytest process's own import, for the constant
+    assert abs(read[name] + actions.OWNED_LABEL - LABELS[name]) <= 3
