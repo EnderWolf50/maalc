@@ -60,6 +60,9 @@ const screens: [image: string, hits: string[]][] = [
   ['StartingGift.png', ['StartingGift']],
   ['StartingGiftPicked.png', ['StartingGift']],
   ['GiftGet.png', ['GiftGet']],
+  // Live 2026-10-21 (#213): after an abnormality fight, over the map. The map's buttons read through (MirrorMap), so
+  // RouteMap's guard looks for GiftGet first (COVERS in actions.py).
+  ['GiftGetOverMap.png', ['GiftGet', 'MirrorMap']],
   ['StartingGiftSearchOff.png', ['StartingGift']],  // Activate Gift Search switched off (1.117.0, blue season)
   ['GiftSearch.png', ['GiftSearch', 'GiftChoice']],  // same Refuse Gift button; GiftSearch comes first in the hub
   // 3 gifts picked, Select 3/3. Its Selected E.G.O Gift header reads like the starting gift page's, but only that page
@@ -183,8 +186,10 @@ const config: FullConfig = {
   interfacePath: 'assets/interface.json',
   check: {},
   test: {
-    // maa-tools defaults to cpus/4 workers: 1 on a 4-core CI runner, where the test ran ~10 min serially.
-    job: availableParallelism(),
+    // maa-tools defaults to cpus/4 workers: 1 on a 4-core CI runner, where the test ran ~10 min serially. It forks one
+    // process per worker (~0.5 GiB each), so capped at 4: all of a 4-core runner, ~2 GiB instead of ~6.6 GiB on a
+    // 16-core PC.
+    job: Math.min(4, availableParallelism()),
     cases: [
       {
         configs: { controller: 'MuMu', resource: 'base', imageRoot: 'tests/screens' },

@@ -84,13 +84,19 @@
         "pre_delay": 0,
         "post_delay": 0,
         "rate_limit": 300,
-        "timeout": 1000,
+        // Its picks look once: a screen gone by then (the last loading screen) goes back to MirrorHub, which reads the
+        // next one (#115: 1 s here held the theme pack page up 1.7 s, 400 ms still 0.7 s). MaaFramework ends a next
+        // list once a failed pass has taken longer than its timeout, so 0 is one pass.
+        "timeout": 0,
         "on_error": [
             "HubTextLost"
         ]
     },
     // None of the screens HubText saw is up any more: back to MirrorHub (the jump back).
-    "HubTextLost": {},
+    "HubTextLost": {
+        "pre_delay": 0,
+        "post_delay": 0
+    },
     // A battle screen (#157): the turn or the pause, without HubText's OCR pass over the skill text. The server's
     // popups, which can come up mid-battle, still come before the turn here, each behind a template (popups.json), so
     // a battle round reads no text (one OCR each, ~130 ms a round in the live A/B before the gates).
@@ -157,7 +163,8 @@
         "roi": [990, 140, 230, 35],
         "expected": "Before Entry",
         "action": "Custom",
-        "custom_action": "PlanRun"
+        "custom_action": "PlanRun",
+        "post_delay": 0
     },
     // A paused run (after To Window, a restart, or by hand): Enter opens the Resume dialog.
     "MirrorEntryPaused": {
@@ -166,6 +173,7 @@
         "expected": "F\\s*\\d",
         "action": "Custom",
         "custom_action": "TapUntil",
+        "post_delay": 0,
         "custom_action_param": {
             "target": [1030, 470, 160, 50],
             "next": [
@@ -217,6 +225,7 @@
         "expected": "Will you enter",
         "action": "Custom",
         "custom_action": "TapUntil",
+        "post_delay": 0,
         // The entry page behind reads "Before Entry" until the run exists: leaving early plans the run twice.
         "custom_action_param": {
             "target": [650, 465, 220, 40],
@@ -229,6 +238,7 @@
         "expected": "recommended level",
         "action": "Custom",
         "custom_action": "TapUntil",
+        "post_delay": 0,
         "custom_action_param": {
             "target": [665, 478, 200, 35],
             "next": {"roi": [890, 30, 115, 28], "expected": "Available"},
@@ -240,21 +250,24 @@
         "roi": [80, 272, 100, 28],
         "expected": "^TEAMS$",
         "action": "Custom",
-        "custom_action": "SelectTeam"
+        "custom_action": "SelectTeam",
+        "post_delay": 0
     },
     "StarlightPage": {
         "recognition": "OCR",
         "roi": [890, 30, 115, 28],
         "expected": "Available",
         "action": "Custom",
-        "custom_action": "BuyStarlight"
+        "custom_action": "BuyStarlight",
+        "post_delay": 0
     },
     "StarlightConfirm": {
         "recognition": "OCR",
         "roi": [480, 210, 320, 35],
         "expected": "Continue with selected effects",
         "action": "Custom",
-        "custom_action": "ConfirmStarlight"
+        "custom_action": "ConfirmStarlight",
+        "post_delay": 0
     },
     // The Gift Search page has the same "Selected E.G.O Gift" header; only this page has the Activate Gift Search
     // switch (ON or OFF). Live 2026-10-19 (#166): the search page fading in read as this page before its blue title
@@ -276,15 +289,17 @@
             }
         ],
         "action": "Custom",
-        "custom_action": "PickStartingGift"
+        "custom_action": "PickStartingGift",
+        "post_delay": 0
     },
-    // Confirm, then waits until the window is gone or the next gift's is up (GiftGet in actions.py).
+    // Confirms each window, the next gift's once the screen is still, until none is left (GiftGet in actions.py).
     "GiftGet": {
         "recognition": "OCR",
         "roi": [520, 160, 240, 40],
         "expected": "Gift GET",
         "action": "Custom",
-        "custom_action": "GiftGet"
+        "custom_action": "GiftGet",
+        "post_delay": 0
     },
     // Selects the team's gifts with owned Starlight, or presses Refuse Gift (spec 03 section 5).
     "GiftSearch": {
@@ -292,22 +307,33 @@
         "roi": [140, 30, 220, 35],
         "expected": "Gift Search",
         "action": "Custom",
-        "custom_action": "GiftSearch"
+        "custom_action": "GiftSearch",
+        "post_delay": 0
     },
     "GiftSearchForgo": {
         "recognition": "OCR",
         "roi": [480, 330, 320, 35],
         "expected": "Forgo",
-        "action": "Click",
-        "target": [665, 478, 200, 35],
-        "post_delay": 2000
+        "action": "Custom",
+        "custom_action": "TapUntil",
+        "post_delay": 0,
+        // The dialog reads through its fade-out: leaving early, MirrorHub would confirm it twice.
+        "custom_action_param": {
+            "target": [665, 478, 200, 35],
+            "next": [
+                {"roi": [1060, 625, 190, 40], "expected": "NOW LOADING"},
+                {"roi": [480, 100, 320, 40], "expected": "THEME ?PACK"}
+            ],
+            "timeout": 2
+        }
     },
     "ThemePack": {
         "recognition": "OCR",
         "roi": [480, 100, 320, 40],
         "expected": "THEME ?PACK",
         "action": "Custom",
-        "custom_action": "PickThemePack"
+        "custom_action": "PickThemePack",
+        "post_delay": 0
     },
     // Rewards and events (spec 03 sections 10-12). The bot never cancels a reward or refuses a gift;
     // landing in either dialog anyway, it backs out with Cancel.

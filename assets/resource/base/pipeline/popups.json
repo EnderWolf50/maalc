@@ -217,6 +217,8 @@
         "recognition": "OCR",
         "roi": [1060, 625, 190, 40],
         "expected": "NOW LOADING",
-        "post_delay": 500
+        // MirrorHub's rate_limit paces the looks; a delay here only saw the next screen late (#115).
+        "pre_delay": 0,
+        "post_delay": 0
     }
 }
