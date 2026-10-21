@@ -118,8 +118,38 @@ def test_the_screens_that_lift_a_held_finger_are_hub_nodes():
     assert all(battle.index(n) < battle.index("BattlePause") for n in actions.BATTLE_POPUPS)
 
 
+def test_the_event_labels_are_the_event_nodes():
+    # #188: a press's fade tells another button by these; one the node gains and they lack waits EVENT_TAKE s.
+    import actions
+    from ocrtext import compact
+    event = load_nodes()["Event"]
+    assert {compact(s) for s in event["expected"].split("|")} == actions.EVENT_LABELS
+    assert event["roi"] == actions.EVENT_BUTTON_LABEL
+
+
 def test_batch_plan_follows_maaframework():
     nodes = load_nodes()
     assert batch_plan(nodes, ["Connecting", "RetryPopup", "MaintenanceNotice"]) == [
         "RetryPopupText", "MaintenanceNoticeText", "MaintenanceNoticeClose"]
     assert batch_plan(nodes, ["NoBatchOCR", "Connecting", "RetryPopup"]) == ["NoBatchOCRModel"]
+
+
+OPENING = ["MirrorEntryNewRun", "MirrorEnterDialog", "MirrorEntryPaused", "TeamSelect", "LevelWarning", "StarlightPage",
+           "StarlightConfirm", "StartingGift", "GiftGet", "GiftSearch", "GiftSearchForgo", "ThemePack"]
+
+
+def test_the_opening_waits_for_screens_not_for_delays():
+    # #115: each opening action ends once the next screen is up, so MaaFramework's default 200 ms post_delay only
+    # held MirrorHub back; GiftSearchForgo waited 2 s after its tap instead of for the loading screen.
+    nodes = load_nodes()
+    for name in OPENING:
+        assert nodes[name].get("action") == "Custom" and nodes[name].get("post_delay") == 0, name
+    assert nodes["GiftSearchForgo"]["custom_action"] == "TapUntil"
+    # Nothing to act on: the hub's own rate_limit paces the looks at a loading screen.
+    assert nodes["Loading"].get("pre_delay") == 0 and nodes["Loading"].get("post_delay") == 0
+    # Live (2026-10-20): the last loading screen HubText picked was gone when its own OCR looked, and the hub waited
+    # out HubText's 1 s timeout and HubTextLost's delays, 1.7 s, with the theme pack page up; at 400 ms still 0.7 s
+    # (2026-10-21). A timeout of 0 gives the picks one look: MaaFramework ends a next list once a failed pass has
+    # taken longer than the timeout (PipelineTask::run_next, check_timeout_and_sleep).
+    assert nodes["HubText"]["timeout"] == 0
+    assert nodes["HubTextLost"].get("pre_delay") == 0 and nodes["HubTextLost"].get("post_delay") == 0

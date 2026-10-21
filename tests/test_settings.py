@@ -19,12 +19,14 @@ def team(id, game_team, **kw):
         "starlight": {"custom": STARLIGHT}, "theme_pack_plan": "default",
         "reward_cards": ["Starlight", "Random E.G.O Gift", "Cost & Keyword Gift Chance", "Cost", "E.G.O Resource"],
         "shop_refresh_limit": 2, "heal": "revive", "reserve_cost": 0, "min_alive": 0, "guard_turns": 0,
-        "trial_risk_weight": "high", "gift_search": {"enabled": False, "gifts": []}, "allow_white_gossypium": True, **kw,
+        "trial_risk_weight": "high", "gift_search": {"enabled": False, "gifts": []}, "allow_white_gossypium": True,
+        "keep_keywords": [], "keywordless": "keep", "keep_gifts": [], "sell_max_tier": 4,
+        "sell_vestiges": False, **kw,
     }
 
 
 VALID = {
-    "version": 6,
+    "version": 7,
     "language": "zh_tw",
     "run": {
         "difficulty": "auto", "runs": 1, "weekly_bonus_use": "hard", "weekly_bonus_amount": "all",
@@ -98,13 +100,19 @@ def test_broken_json(tmp_path):
     (lambda d: d.update(extra=1), "(root)"),
     (lambda d: d["teams"][0].pop("heal"), "teams/0"),
     (lambda d: d["teams"][0]["gift_search"]["gifts"].append({"keyword": "Bleed", "tier": 4, "name": "X"}), "teams/0/gift_search/gifts/0/tier"),
+    (lambda d: d["teams"][0].update(keep_keywords=["Keywordless"]), "teams/0/keep_keywords/0"),  # keywordless says it
+    (lambda d: d["teams"][0].update(keywordless=True), "teams/0/keywordless"),
+    (lambda d: d["teams"][0].update(sell_max_tier=6), "teams/0/sell_max_tier"),
+    (lambda d: d["teams"][0].update(sell_max_tier=0), "teams/0/sell_max_tier"),
+    (lambda d: d["teams"][0].update(keep_keywords=["Bleed", "Bleed"]), "teams/0/keep_keywords"),
+    (lambda d: d["teams"][0]["keep_gifts"].append({"keyword": "Bleed", "tier": 4, "name": "X"}), "teams/0/keep_gifts/0"),  # neither a Gift Search gift nor a vestige
 ])
 def test_schema_errors_name_the_field(tmp_path, fn, where):
     assert any(e.startswith(where + ":") for e in errors(tmp_path, edited(fn)))
 
 
 def test_newer_version_is_refused(tmp_path):
-    assert "newer" in errors(tmp_path, {**VALID, "version": 7})[0]
+    assert "newer" in errors(tmp_path, {**VALID, "version": 8})[0]
 
 
 def test_version_1_gets_guard_turns_off(tmp_path):
@@ -123,10 +131,18 @@ def test_version_3_refreshes_all_avoid_theme_packs_as_before(tmp_path):
 
 
 def old_numbers(d):
-    """VALID as version 5 wrote it: 0 for no run limit and a whole HARD run."""
+    """VALID as version 5 wrote it: 0 for no run limit and a whole HARD run, nothing kept out of the shop."""
     d["run"]["runs"] = 0
     for t in d["teams"]:
         t.update(hard_from_floor=0)
+    no_keep(d)
+
+
+def no_keep(d):
+    """VALID as version 6 wrote it: no keep fields."""
+    for t in d["teams"]:
+        for k in ("keep_keywords", "keywordless", "keep_gifts", "sell_max_tier", "sell_vestiges"):
+            t.pop(k)
 
 
 def test_version_5_zeros_become_switches(tmp_path):
@@ -136,8 +152,16 @@ def test_version_5_zeros_become_switches(tmp_path):
 
 
 def test_version_5_numbers_stay(tmp_path):
-    old = edited(lambda d: [d["run"].update(runs=3)] + [t.update(hard_from_floor=3, min_alive=5) for t in d["teams"]])
-    assert load(tmp_path, {**old, "version": 5}) == old | {"version": 6}
+    def numbers(d):
+        d["run"].update(runs=3)
+        for t in d["teams"]:
+            t.update(hard_from_floor=3, min_alive=5)
+    assert load(tmp_path, {**edited(lambda d: [numbers(d), no_keep(d)]), "version": 5}) == edited(numbers)
+
+
+def test_version_6_keeps_what_the_shop_kept_before(tmp_path):
+    # #77: only the main keyword's and keywordless gifts (and the observed ones) stayed out of fusions and sales.
+    assert load(tmp_path, {**edited(no_keep), "version": 6}) == VALID
 
 
 def test_version_4_teams_may_hold_white_gossypium_as_before(tmp_path):

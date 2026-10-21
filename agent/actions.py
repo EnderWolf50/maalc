@@ -30,7 +30,7 @@ import run_start
 import settlement
 import shop
 from ocrtext import compact, digits, has, normalize
-from settings import SettingsError, load_settings
+from settings import SCHEMA, SettingsError, load_settings
 from state import next_cursor, pick_team, read_cursor, write_cursor
 
 # Same <root> as main.ROOT; resource/ sits under it in a release, under assets/ in the repo.
@@ -57,6 +57,7 @@ STARLIGHT_HEADER = [890, 30, 115, 28]  # "Available"
 STARLIGHT_DIALOG = [480, 210, 320, 35]  # "Continue with selected effects?"
 STARTING_GIFT_HEADER = [780, 145, 230, 35]  # "Selected E.G.O Gift"
 STARLIGHT_AVAILABLE = [1010, 30, 80, 28]
+STARLIGHT_NOTE = [660, 395, 320, 90]  # the line under Convert Starlight to Cost: "unspent" when off, "remaining" when on
 STARLIGHT_OWNED = [830, 30, 90, 28]  # "4035", "4035-60" while owned starlight pays
 GRACE_ORIGIN_X, GRACE_ORIGIN_Y = (138, 152), (152, 390)  # top-left of card 1; step 198 px per column
 PACK_TITLES = [120, 400, 1040, 100]  # up to 5 cards (live: 5 with two Theme Pack Selection +1 graces)
@@ -101,6 +102,31 @@ def tap_then(context, x, y, done, timeout=2.0):
     """Tap, then until() done(image) holds: that image, or None after timeout s (#115)."""
     tap(context, x, y, wait=0)
     return until(context, done, timeout=timeout)
+
+
+def tap_moved(context, x, y, timeout=1.0):
+    """Tap, then until() the screen moves: that screen, or None after timeout s (nothing took the tap)."""
+    before = screen(context)
+    return tap_then(context, x, y, lambda im: moved(before, im), timeout=timeout)
+
+
+def tap_settled(context, x, y, timeout=1.5):
+    """Tap, wait for the screen to move, then for it to stop (still): a page or dialog that animates in or out.
+
+    A still() straight after the tap can look before the animation starts and see a screen at rest.
+    """
+    tap_moved(context, x, y, timeout)
+    return still(context, timeout=timeout)
+
+
+def tap_shown(context, x, y, done, timeout=2.0, rest=1.5):
+    """tap_then(), then still(): a page or dialog read or tapped on once it stops moving. Its last screenshot, or None
+    when done(image) never held."""
+    image = tap_then(context, x, y, done, timeout=timeout)
+    if image is None:
+        return None
+    settled = still(context, timeout=rest)
+    return image if settled is None else settled
 
 
 def still(context, timeout=2.0):
@@ -340,8 +366,8 @@ class StuckFlag(CustomRecognition):
         STUCK["ladder"].progress(kind)
         if STUCK["flag"]:
             return
-        if STUCK["watch"].see(kind, recovery.thumb(image), time.monotonic()):
-            stuck(f"{kind}: the screen did not change")
+        if why := STUCK["watch"].see(kind, recovery.thumb(image), time.monotonic()):
+            stuck(f"{kind}: {why}")
         elif recovery.over_time(kind, RUN.get("deadline"), time.time()):
             RUN.pop("deadline")  # once a floor: the next floor starts the clock again
             stuck(f"floor {RUN.get('floor', '?')} over its time limit", level=2)
@@ -627,7 +653,7 @@ class ConfirmStarlight(CustomAction):
             image = screen(context)
             # The line under the checkbox: "Any unspent Starlight will be added ..." when off,
             # "Coverts any remaining Starlight ..." when on.
-            note = text(context, image, [660, 395, 320, 90])
+            note = text(context, image, STARLIGHT_NOTE)
             on = True if has(note, "remaining") else False if has(note, "unspent") else None
             if on == want:
                 if want:
@@ -636,7 +662,7 @@ class ConfirmStarlight(CustomAction):
                 tap_then(context, 738, 530, shows(context, STARTING_GIFT_HEADER, "Selected E"), timeout=4)
                 return True
             if on is not None:
-                tap(context, 727, 363)
+                tap_then(context, 727, 363, lambda im: has(text(context, im, STARLIGHT_NOTE), "remaining" if want else "unspent"))
         return stuck("could not set Convert Starlight to Cost")
 
 
@@ -709,23 +735,35 @@ class PickStartingGift(CustomAction):
 
 @AgentServer.custom_action("GiftGet")
 class GiftGet(CustomAction):
-    """Close an E.G.O Gift GET! popup and wait until it is gone or the next gift's popup is up (#115).
+    """Close the E.G.O Gift GET! popups, one after another, until none is up (#115).
 
-    A search or a cabinet that gives n gifts pops n windows. The name plate tells the next window from the
-    one just closed; MirrorHub closes it in its next pass.
+    A search or a cabinet that gives n gifts pops n windows. The name plate tells the next window from the one
+    just closed, which is closed once the screen is still, with no pass of MirrorHub in between. Taps are never
+    sent ahead: under the last window lies the page the gifts came from (the search grid or the starting gift
+    page), where one would pick; a window fading out still shows its title over a half-drawn plate.
+    A window still up with the same name after the wait: the tap was lost, and MirrorHub looks again.
     """
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         title = shows(context, GET_TITLE, "GET")
-        before = text(context, screen(context), GET_NAME).strip()
+        image = screen(context)
+        for _ in range(GIFT_WINDOWS):
+            before = text(context, image, GET_NAME).strip()
 
-        def closed(image):
-            if not title(image):
+            def closed(im):
+                if not title(im):
+                    return True
+                now = text(context, im, GET_NAME).strip()
+                return bool(before and now and now != before)
+            image = tap_then(context, *GET_CONFIRM, closed, timeout=2)
+            if image is not None and title(image):
+                image = still(context, timeout=1)
+            if image is None or not title(image):
                 return True
-            now = text(context, image, GET_NAME).strip()
-            return bool(before and now and now != before)
-        tap_then(context, *GET_CONFIRM, closed, timeout=2)
         return True
+
+
+GIFT_WINDOWS = 6  # GET! windows GiftGet closes in one go: a cabinet's gifts or a search's 3, with room to spare
 
 
 # E.G.O Gift Search page (live 2026-10-16, 1.117.0). Tabs left to right, 62 px apart.
@@ -1973,6 +2011,12 @@ EVENT_PORTRAIT_X = [77 + round(69.3 * i) for i in range(12)]  # 7 in a boss's mi
 EVENT_PORTRAIT_Y = 655
 EVENT_NEUTRAL = (5, 5)  # top-left corner: nothing there on any event page
 EVENT_TEXT_TAPS = 30
+# A text tap every EVENT_TAP_EVERY s, the lit button's pixels looked at after each, the page's text only every
+# EVENT_READ_EVERY taps: live 2026-10-20, a screenshot and 3 OCRs after each tap made it one every 0.3-1.1 s whatever
+# the wait, and the text kept up at 0.15 s (no tap lost; the user's own taps 0.15 s).
+EVENT_TAP_EVERY, EVENT_READ_EVERY = 0.15, 3
+EVENT_TAKE = 1.5  # s a tap on an event page has to show
+EVENT_LABELS = {"skip", "proceed", "continue", "commence"}  # the Event node's expected, compact()ed
 EVENT_BUTTON_LABEL = [1040, 612, 190, 66]  # the Event node's roi: empty once the event page is gone
 EVENT_LIMIT = 180  # s one event may take before recovery L1 (AALC allows 300); a boss quiz of several rounds stays well under
 EVENT_GAP = 30  # s between two Event calls after which the next call is another event
@@ -2020,7 +2064,7 @@ class Event(CustomAction):
             tried.clear()
             checked.clear()
             tap(context, *EVENT_BUTTON, wait=0)
-            Event.settle(context, image)
+            Event.advance(context, image, pressed_at=time.monotonic())
         elif has(text(context, image, CHECK_PROMPT), "Choose a character"):
             # One read per portrait: read as a row, neighbouring captions run together ("HighVery Low").
             captions = [(text(context, image, [x - 38, 605, 76, 24], only_rec=True), x) for x in EVENT_PORTRAIT_X]
@@ -2059,29 +2103,58 @@ class Event(CustomAction):
                 log(f"event: {options[i][0]!r} not found again in the list")
                 return True
             tap(context, CHOICE_X, y, wait=0)
-            if until(context, lambda im: not Event.panel_same(image, im), timeout=1.5) is None:
+            if until(context, lambda im: not Event.panel_same(image, im), timeout=EVENT_TAKE) is None:
                 log(f"event: {options[i][0]!r} did nothing: try another")
                 tried.add(options[i][0])
         else:
             tried.clear()
-            # Text running on (the button grey): taps on a dead corner show it line by line; keep tapping
-            # until there is something to act on, for MirrorHub's next look.
-            for _ in range(EVENT_TEXT_TAPS):
-                page_guard(context, "Event", image=image)
-                tap(context, *EVENT_NEUTRAL, wait=0.2)
-                image = screen(context)
-                if red_button(image) or not text(context, image, EVENT_BUTTON_LABEL) or any(has(text(context, image, roi), k) for k, roi in
-                                            (("Choices", CHOICES_HEADER), ("Choose a character", CHECK_PROMPT))):
-                    break
+            Event.advance(context, image)
         return True
 
     @staticmethod
+    def advance(context, image, pressed_at=None):
+        """Text running on (the button grey, or a press of it lit fading out): taps on a dead corner show it line by
+        line; keep tapping until there is something to act on, for MirrorHub's next look.
+
+        A Choices page or a check prompt shows up to EVENT_READ_EVERY - 1 taps late: a tap on the dead corner picks nothing.
+        pressed_at: time.monotonic() of a tap on the lit button just now, image the screen it was tapped on (#188:
+        MirrorHub's look after it paused the taps 1.6-5.3 s). The button stays lit while the press fades out, its
+        label read once a screen (1 OCR, besides the page check every EVENT_READ_EVERY taps); the first screen
+        without it is read before the next tap (3 OCRs). Lit with another label (SKIP, then Continue), it is the
+        next button; lit EVENT_TAKE s on, the press was lost.
+        Only two labels read whole tell another button: one read empty or in part while it fades ("Contnue") is not,
+        as MirrorHub's Event node would still match the fading button and press it twice.
+        """
+        last, pressed_label = 0.0, None  # None: not in a press's fade (any more)
+        if pressed_at is not None:
+            last, pressed_label = pressed_at, compact(text(context, image, EVENT_BUTTON_LABEL))
+        for n in range(1, EVENT_TEXT_TAPS + 1):
+            time.sleep(max(0.0, last + EVENT_TAP_EVERY - time.monotonic()))
+            last = time.monotonic()
+            if (n - 1) % EVENT_READ_EVERY == 0:  # on the last read's screenshot (#118, ADR 0007): an OCR a tap would undo the 0.15 s
+                page_guard(context, "Event", image=image)
+            tap(context, *EVENT_NEUTRAL, wait=0)
+            image = screen(context)
+            if red_button(image):
+                if pressed_label is None or time.monotonic() - pressed_at >= EVENT_TAKE:
+                    break
+                label = compact(text(context, image, EVENT_BUTTON_LABEL))
+                if pressed_label in EVENT_LABELS and label in EVENT_LABELS and label != pressed_label:
+                    break
+                continue
+            read = n % EVENT_READ_EVERY == 0 or pressed_label is not None
+            pressed_label = None
+            if read and (not text(context, image, EVENT_BUTTON_LABEL) or any(
+                    has(text(context, image, roi), k) for k, roi in (("Choices", CHOICES_HEADER), ("Choose a character", CHECK_PROMPT)))):
+                break
+
+    @staticmethod
     def settle(context, before):
-        """Wait for a tap to show on screen, at most the 1.5 s it used to wait; MirrorHub looks again after.
+        """Wait for a tap to show on screen, at most EVENT_TAKE s; MirrorHub looks again after.
 
         Returns the screen that moved, None when the tap did nothing.
         """
-        return until(context, lambda im: moved(before, im), timeout=1.5, least=EVENT_LEAST)
+        return until(context, lambda im: moved(before, im), timeout=EVENT_TAKE, least=EVENT_LEAST)
 
     @staticmethod
     def panel_same(before, after):
@@ -2299,7 +2372,9 @@ BADGES = ["Burn", "Bleed", "Tremor", "Rupture", "Sinking", "Poise", "Charge", "S
 # cell's best 0.41; 160 cells of 60 live captures. An observed gift's icon: Spiderweb's thin lines 0.5-0.6, others 0.86+.
 BADGE_MIN, ICON_KEEP = 0.5, 0.45
 FUSE_TOOLTIP = [600, 180, 680, 440]
+TOOLTIP_HEAD = "ogift"  # a gift tooltip's "E.G.O GIFT" heading line, compacted
 FUSE_CONFIRM = [300, 150, 680, 380]  # "Selected E.G.O Gifts 3/5" over "Fuse the selected E.G.O Gifts?"
+FUSE_COUNT = r"(\d)\s*/\s*\d"  # its "3/5": the materials in
 FUSE_NEUTRAL = (715, 229)  # the E.G.O Gifts Owned label: closes a tooltip, selects nothing
 SELL_PANEL, SELL_PRICE, SELL_COST = [150, 160, 420, 360], [500, 160, 60, 45], [960, 80, 160, 45]
 SELL_GRID = [630, 210, 480, 290]  # the sell page's gifts with their prices under them
@@ -2311,13 +2386,24 @@ OUTSIDE = (40, 400)  # left of every shop dialog, on nothing
 LEAVE_DIALOG, LEAVE_CONFIRM, LEAVE_CANCEL = [440, 320, 400, 45], (765, 493), (515, 493)
 
 
+def tooltip_head(lines):
+    """The box of a gift tooltip's "E.G.O GIFT" heading among OCR lines [(text, box)], or None. Its end, not a part:
+    the grid's "E.G.O Gifts Owned" label sits in FUSE_TOOLTIP too."""
+    return next((b for t, b in lines if compact(t).endswith(TOOLTIP_HEAD)), None)
+
+
+def cost_in(context, image, roi=SHOP_COST):
+    """The Cost OCR reads in roi of image (digits), None without a digit."""
+    return digits(text(context, image, roi))
+
+
 def read_cost(context, roi=SHOP_COST):
     """The Cost in roi, read again on a fresh screenshot when OCR gives no digit; None when 3 reads give none (#82).
 
     None is never a Cost of 0: a caller that needs the Cost does nothing on None and logs it.
     """
     for _ in range(3):
-        cost = digits(text(context, screen(context), roi))
+        cost = cost_in(context, screen(context), roi)
         if cost is not None:
             return cost
         time.sleep(0.5)
@@ -2325,23 +2411,85 @@ def read_cost(context, roi=SHOP_COST):
 
 
 def kept_gifts(team):
-    """Gift names the shop never fuses or sells: the team's observed gifts and every keywordless gift (#103).
+    """Gift names the shop keeps, for a tooltip's or panel's text: the team's observed (#103) and kept gifts (#77)."""
+    return [g["name"] for g in team["gift_search"]["gifts"] + team.get("keep_gifts", [])]
 
-    Keywordless gifts are told by name (data/gift_search.json's Keywordless tab): the tooltip names no keyword.
+
+# Vestiges, tier I-V in this order (#161; LocalizeLimbusCompany EN/EGOgift_MirrorDungeon.json, ids 9991-9995): the settings
+# schema lists them for keep_gifts, so the GUI and the agent share one list. They have no badge; their icons
+# (image/GiftSearch/<id>.png, from the game client like the Gift Search ones) differ only in the jar's fill: the tier
+# read off the cell tells them apart (read_cells).
+VESTIGES = SCHEMA["$defs"]["vestige"]["properties"]["name"]["enum"]
+VESTIGE_ICONS = [{"name": n, "keyword": "Keywordless", "tier": t, "id": 9990 + t} for t, n in enumerate(VESTIGES, 1)]
+
+
+def loose_vestiges(team, page):
+    """The vestiges the shop uses on page ("fuse" or "sell"): only fusion or sale material, their own kind, so the
+    keywordless setting never applies to them (the user, #161). Those the team names in keep_gifts stay; on the sell
+    page all stay unless the team sells them (sell_vestiges)."""
+    if page == "sell" and not team.get("sell_vestiges", False):
+        return []
+    return [v for v in VESTIGES if v not in kept_gifts(team)]
+
+
+def cell_role(cell, team, page, avoid):
+    """shop.gift_role of a cell read_cells read on page ("fuse" or "sell"), by the team's settings."""
+    return shop.gift_role(cell["keyword"], cell["gift"], kept_keywords(team, page), avoid, loose_vestiges(team, page))
+
+
+def tooltip_use(lines, team, avoid):
+    """What the shop may do with a gift known only by its tooltip's or panel's lines (its badge cut off, or its price):
+    "keep", "fuse" (fusion material it does not sell), "sell" (either) or "avoid" (either, first: #90).
+
+    By the name first: an avoided gift, a kept one (kept_gifts), a vestige (loose_vestiges), a keywordless gift
+    (data/keywordless_gifts.json, tiers I-V), which the keywordless setting alone decides (kept_keywords; the user,
+    #161). Only another gift is told by its text: kept when it names a kept keyword (kept_text, spec 03 section 12).
     """
-    return [g["name"] for g in team["gift_search"]["gifts"]] + [g["en"] for g in gift_data() if g["keyword"] == "Keywordless"]
+    text = " ".join(lines)
+    if rewards.gift_kind(text, team["keyword"], False, avoid) == "avoid":
+        return "avoid"
+    if any(shop.protected(t, kept_gifts(team)) for t in lines):
+        return "keep"
+    if any(shop.protected(t, VESTIGES) for t in lines):
+        return "sell" if team.get("sell_vestiges", False) else "fuse"  # one the team keeps returned above
+    if any(shop.protected(t, keywordless_names()) for t in lines):
+        if "Keywordless" in kept_keywords(team, "fuse"):
+            return "keep"
+        return "fuse" if "Keywordless" in kept_keywords(team, "sell") else "sell"
+    return "keep" if kept_text(text, team) else "sell"
 
 
-def observed_gifts(team):
-    """The team's observed gifts ({"name", "keyword", "tier"}) with their icon's id in data/gift_search.json."""
+@functools.cache
+def keywordless_names():
+    """data/keywordless_gifts.json: the keywordless Mirror Dungeon gifts' English names, tiers I-V (#161)."""
+    return data("keywordless_gifts.json")["names"]
+
+
+def kept_keywords(team, page):
+    """The keywords whose gifts the shop keeps on page ("fuse" or "sell"): the main one, the team's keep_keywords
+    (#77) and "Keywordless" as the team's keywordless setting says (#161): "keep" on both pages, "fuse" on the sell
+    page only (fusion material, never sold), "fuse_or_sell" on neither."""
+    use = team.get("keywordless", "keep")
+    keywordless = use == "keep" or (use == "fuse" and page == "sell")
+    return {team["keyword"], *team.get("keep_keywords", ())} | ({"Keywordless"} if keywordless else set())
+
+
+def kept_icons(team):
+    """The gifts the shop keeps by their icon ({"name", "keyword", "tier"}) with its id in data/gift_search.json:
+    the team's observed gifts (#103) and its keep_gifts (#77)."""
     table = gift_data()
     out = []
-    for g in team["gift_search"]["gifts"]:
+    for g in team["gift_search"]["gifts"] + team.get("keep_gifts", []):
         entry = next((e for e in table if e["keyword"] == g["keyword"] and e["tier"] == g["tier"]
                       and run_start.match_pack(e["en"], [g["name"]])), None)
-        if entry:
+        if entry and all(o["id"] != entry["id"] for o in out):
             out.append({**g, "id": entry["id"]})
     return out
+
+
+def kept_text(text, team):
+    """Whether a tooltip's or panel's text names a keyword the team keeps (kept_keywords; spec 03 section 12's rule)."""
+    return any(rewards.gift_kind(text, k, False) == "main" for k in kept_keywords(team, "fuse") - {"Keywordless"})
 
 
 WHITE_GOSSYPIUM = 9020  # its id in data/gift_search.json
@@ -2350,7 +2498,7 @@ WHITE_GOSSYPIUM = 9020  # its id in data/gift_search.json
 def avoided_gifts(team):
     """Gifts the team never takes or buys, and fuses or sells first: White Gossypium unless it allows it (#90).
 
-    Shaped like observed_gifts, for read_cells' icon match.
+    Shaped like kept_icons, for read_cells' icon match.
     """
     if team.get("allow_white_gossypium", True):
         return []
@@ -2371,8 +2519,8 @@ def read_cells(context, image, cells, page, gifts=()):
     """The filled cells of a shop grid read off one screenshot (#76, #112): [{"i", "x", "y", "tier", "keyword", "gift"}].
 
     The grid is scaled so gift icons are at their GiftSearch template's size, then each keyword's badge and each
-    observed gift's icon (gifts, observed_gifts) is matched once over it. keyword: the cell's best badge,
-    "Keywordless" with none, None when the badge is below the grid's edge; gift: the observed gift whose icon
+    kept gift's icon (gifts, kept_icons) is matched once over it. keyword: the cell's best badge,
+    "Keywordless" with none, None when the badge is below the grid's edge; gift: the kept gift whose icon
     matched, when its keyword and tier agree with the cell's. An empty cell is flat (live: spread 1-2, a gift 41-84).
     """
     scale, bottom = CELL_PAGES[page]
@@ -2397,7 +2545,9 @@ def read_cells(context, image, cells, page, gifts=()):
         for score, (bx, by) in template_hits(context, grid, f"GiftSearch/{g['id']}.png", ICON_KEEP):
             for c in out:
                 cx, cy = c["at"]
-                if abs(bx - cx) < 16 and abs(by - cy) < 16 and c["keyword"] in (None, g["keyword"]) and c["tier"] in (None, g["tier"]):
+                # A vestige only where the tier was read: the five jars match each other's cells too (VESTIGES).
+                tiers = (g["tier"],) if g["name"] in VESTIGES else (None, g["tier"])
+                if abs(bx - cx) < 16 and abs(by - cy) < 16 and c["keyword"] in (None, g["keyword"]) and c["tier"] in tiers:
                     c["gift"] = g["name"]
     for c in out:
         del c["at"]
@@ -2415,23 +2565,42 @@ def cell_line(cell, role):
     return f"{cell['i']} {tier} {cell['keyword'] or 'badge unread'}{' ' + cell['gift'] if cell['gift'] else ''}: {role}"
 
 
+def tooltip_up(context):
+    """Whether a gift tooltip shows over the fuse page now (tooltip_head on a fresh screenshot)."""
+    return tooltip_head(ocr(context, screen(context), FUSE_TOOLTIP)) is not None
+
+
+def fusions(cells, roles, slots, avoid):
+    """shop.pick_fusion over the cells whose role is material and whose tier is read: [([cell index], tier)] (#77).
+
+    The thresholds are the Super Shop's when the page has its 5 slots; an avoided gift goes in first (#90).
+    """
+    d = data("shop.yaml")
+    materials = [(c["i"], c["tier"]) for c, r in zip(cells, roles) if r == "material" and c["tier"]]
+    tiers = d["fusion_tiers"]["super_shop" if slots == 5 else "shop"]
+    return shop.pick_fusion(materials, slots, tiers, d["fusion_points"], {c["i"] for c in cells if c["gift"] in avoid})
+
+
 def tap_keyword(context, keyword):
     """Tap the keyword's card in an open keyword dialog; False when its label is not read."""
     label = next((b for t, b in ocr(context, screen(context), KEYWORD_LABELS) if compact(t) == compact(keyword)), None)
     if label:
         x, y, w, h = label
-        tap(context, x + w // 2, y - 40)
+        tap_moved(context, x + w // 2, y - 40)  # the card lights up
     return bool(label)
 
 
 def gift_get(context):
-    """Confirm the E.G.O Gift GET! popup after a purchase or a fusion."""
-    for _ in range(4):
-        if has(text(context, screen(context), GET_TITLE), "GET"):
-            tap(context, *GET_CONFIRM, wait=1.5)
-            return True
-        time.sleep(0.5)
-    return False
+    """Confirm the E.G.O Gift GET! popup after a purchase or a fusion; False when none comes up in 4.5 s."""
+    def title(image):
+        return has(text(context, image, GET_TITLE), "GET")
+    if until(context, title, timeout=4.5) is None:
+        return False
+    for _ in range(3):  # a tap while the popup zooms in is lost
+        if tap_then(context, *GET_CONFIRM, lambda im: not title(im), timeout=1.5) is not None:
+            still(context, timeout=1.0)  # the popup fades out over the Cost
+            break
+    return True
 
 
 @AgentServer.custom_action("Shop")
@@ -2463,18 +2632,25 @@ class Shop(CustomAction):
             log(f"shop: still acting after {shop.ROUNDS} rounds")
         for _ in range(3):
             image = screen(context)
-            if on_page(context, image, "MirrorMap", "MapNodePanel"):
+            if Shop.on_map(context, image):
                 log("shop: already out of the shop")
                 RUN.pop("shop", None)
                 return True
+            # The dialog slides down; Confirm takes no tap before it stops.
             page_guard(context, "Shop", image=image)
-            tap(context, *BOTTOM_RIGHT, wait=1.5)
-            if has(text(context, screen(context), LEAVE_DIALOG), "Leave the shop"):
+            if tap_shown(context, *BOTTOM_RIGHT, lambda im: has(text(context, im, LEAVE_DIALOG), "Leave the shop"),
+                         timeout=1.5) is not None:
                 log(f"shop: leave with {read_cost(context)} Cost")
-                tap(context, *LEAVE_CONFIRM, wait=2)
+                # Up to the old 2 s for the map: MirrorHub must not find the shop fading out and start a new visit.
+                tap_then(context, *LEAVE_CONFIRM, lambda im: Shop.on_map(context, im), timeout=2)
                 RUN.pop("shop")
                 return True
         return stuck("Leave did not bring up `Leave the shop?`")
+
+    @staticmethod
+    def on_map(context, image):
+        """Whether image shows the map (or its node panel): the shop was left."""
+        return on_page(context, image, "MirrorMap", "MapNodePanel") is not None
 
     @staticmethod
     def to_main(context):
@@ -2485,32 +2661,36 @@ class Shop(CustomAction):
         """
         for _ in range(5):
             image = screen(context)
-            if on_page(context, image, "MirrorMap", "MapNodePanel"):
+            if Shop.on_map(context, image):
                 return False
             title = text(context, image, DIALOG_TITLE)
             heal = has(text(context, image, HEAL_TITLE), "Heal")
             if has(text(context, image, GET_TITLE), "GET"):
-                tap(context, *GET_CONFIRM, wait=1.5)
+                at = GET_CONFIRM
             elif has(title, "Purchase"):
-                tap(context, *PURCHASE_CANCEL)
+                at = PURCHASE_CANCEL
             elif has(title, "Keyword Refresh"):
-                tap(context, *KEYWORD_CANCEL)
+                at = KEYWORD_CANCEL
             elif has(title, "Keyword Selection"):
-                tap(context, 490, 566)  # its Cancel
+                at = (490, 566)  # its Cancel
             elif has(title, "Gift Info"):  # a bought offer tapped: only a tap outside it closes it
-                tap(context, *OUTSIDE)
+                at = OUTSIDE
             elif has(title, "E.G.O Gift"):  # the fuse or sell page; a tooltip may cover Close
-                tap(context, *FUSE_NEUTRAL)
-                tap(context, *PAGE_CLOSE, wait=1.5)
+                if tooltip_head(ocr(context, image, FUSE_TOOLTIP)):
+                    tap_settled(context, *FUSE_NEUTRAL, timeout=1.0)  # it fades: Close would land on it
+                at = PAGE_CLOSE
             elif has(text(context, image, LEAVE_DIALOG), "Leave the shop"):
-                tap(context, *LEAVE_CANCEL)
+                at = LEAVE_CANCEL
             elif heal:
-                tap(context, *BOTTOM_RIGHT, wait=1.5)
+                tap(context, *BOTTOM_RIGHT, wait=1.5)  # the heal pages keep their fixed waits: not seen live
+                continue
             elif number(text(context, image, REFRESH["normal"][1])) is not None:
                 return True
             else:
                 page_guard(context, "Shop", image=image)  # not a shop page MirrorHub knows: hand it back
-                time.sleep(1)
+                still(context, timeout=1.5)  # a page fading in or out
+                continue
+            tap_settled(context, *at)
         return False
 
     @staticmethod
@@ -2581,15 +2761,19 @@ class Shop(CustomAction):
             if not choice:
                 return acted
             page_guard(context, "Shop")
-            tap(context, *REFRESH[choice][0], wait=1.5)
             if choice == "keyword":
+                tap_settled(context, *REFRESH[choice][0])  # the keyword dialog zooms in
                 if not tap_keyword(context, keyword):
                     log("shop: no keyword dialog on the refresh")
                     Shop.to_main(context)
                     return acted
                 page_guard(context, "Shop")
-                tap(context, *KEYWORD_REFRESH, wait=2)
-            time.sleep(1)
+                tap(context, *KEYWORD_REFRESH, wait=0)
+            else:
+                tap(context, *REFRESH[choice][0], wait=0)
+            # The Cost drops, then the offers reload (CONNECTING): read them once both are done.
+            until(context, lambda im: cost_in(context, im) not in (None, cost), timeout=3)
+            still(context, timeout=1.5)
             after = read_cost(context)
             log(f"shop: {choice} refresh for {fees[choice]}: {cost} -> {after} Cost")
             if after == cost:
@@ -2649,11 +2833,11 @@ class Shop(CustomAction):
                 continue
             price = shop.dialog_price(cost, text(context, image, PURCHASE_PREVIEW)) or slot["price"]
             if not shop.can_spend(cost, price, reserve):
-                tap(context, *PURCHASE_CANCEL)
+                tap_settled(context, *PURCHASE_CANCEL, timeout=1.0)
                 log(f"shop: {slot['name']!r} costs {price}, {cost} Cost is short")
                 continue
             page_guard(context, "Shop")
-            tap(context, *PURCHASE, wait=2)
+            tap(context, *PURCHASE, wait=0)
             gift_get(context)
             after = read_cost(context)
             log(f"shop: bought {slot['name']!r} for {price}: {cost} -> {after} Cost")
@@ -2667,10 +2851,10 @@ class Shop(CustomAction):
     @staticmethod
     def open_offer(context, slot):
         """Tap an offer; the screenshot of its purchase dialog, or None when none opened."""
+        # Its text and Cost preview are read once it stops.
         page_guard(context, "Shop")
-        tap(context, slot["x"], slot["y"] - 50, wait=1.5)
-        image = screen(context)
-        if has(text(context, image, DIALOG_TITLE), "Purchase"):
+        image = tap_shown(context, slot["x"], slot["y"] - 50, shows(context, DIALOG_TITLE, "Purchase"), timeout=1.5, rest=1.0)
+        if image is not None:
             return image
         log(f"shop: {slot['name']!r} opened no purchase dialog")
         return None
@@ -2683,22 +2867,22 @@ class Shop(CustomAction):
         if image is None:
             return None if Shop.to_main(context) else False
         kind = rewards.gift_kind(text(context, image, PURCHASE_TEXT), keyword, False, avoid)
-        tap(context, *PURCHASE_CANCEL)
+        tap_settled(context, *PURCHASE_CANCEL, timeout=1.0)
         return keyword if kind == "main" else "other"
 
     @staticmethod
     def sell(context, team, visit):
-        """Sell leftover non-main gifts (what fusion cannot group by 3) when a wanted main gift is too dear.
+        """Sell the materials no fusion uses (fusions' leftovers, #79) when a wanted main gift is too dear.
 
-        Kept like the fusion's (read_cells, shop.gift_role): main-keyword, keywordless and observed gifts.
+        Kept like the fusion's (read_cells, cell_role): the team's kept keywords and gifts (#77) are never sold. A cell
+        is tapped for its panel only when its badge or its price is below the grid's edge (tooltip_use).
         """
         wanted = visit["wanted"]
         if not wanted or visit["sold"]:
             return False
         visit["sold"] = True
         page_guard(context, "Shop")
-        tap(context, *SHOP_BUTTONS["sell"], wait=2)
-        if not has(text(context, screen(context), DIALOG_TITLE), "Sell"):
+        if tap_shown(context, *SHOP_BUTTONS["sell"], shows(context, DIALOG_TITLE, "Sell"), timeout=2) is None:  # the grid slides in
             Shop.to_main(context)
             return False
         cost = read_cost(context, SELL_COST)
@@ -2709,42 +2893,62 @@ class Shop(CustomAction):
         # One screenshot decides (#112): each cell's badge and icon, its price under it.
         image = screen(context)
         avoid = [g["name"] for g in avoided_gifts(team)]
-        cells = read_cells(context, image, SELL_CELLS, "sell", observed_gifts(team) + avoided_gifts(team))
-        roles = [shop.gift_role(c["keyword"], c["gift"], team["keyword"], avoid) for c in cells]
+        cells = read_cells(context, image, SELL_CELLS, "sell", kept_icons(team) + avoided_gifts(team) + VESTIGE_ICONS)
+        roles = [cell_role(c, team, "sell", avoid) for c in cells]
         prices = shop.cell_prices(ocr(context, image, SELL_GRID), SELL_CELLS)
         log("shop: sell cells " + "; ".join(f"{cell_line(c, r)} {prices.get(c['i'])}" for c, r in zip(cells, roles)))
         gifts = [(c["i"], prices[c["i"]]) for c, r in zip(cells, roles) if r == "material" and c["i"] in prices]
         avoided = {c["i"] for c in cells if c["gift"] in avoid}  # sold first (#90)
-        # A badge or price below the grid's edge: the panel a tap shows decides (spec 03 section 12's rule).
-        keep = kept_gifts(team)
-        for c in [c for c, r in zip(cells, roles) if r == "unknown" or (r == "material" and c["i"] not in prices)]:
+        # The fusion still uses what may not be sold (#79): a vestige the team does not sell, a keywordless gift under
+        # "fuse" (#161). Both are told off the grid: kept on the sell page, material on the fuse page.
+        fuse_only = [c["i"] for c, r in zip(cells, roles) if r == "keep" and cell_role(c, team, "fuse", avoid) == "material"]
+        # A badge or price below the grid's edge: the panel a tap shows decides (tooltip_use).
+        for c, r in zip(cells, roles):
+            if not (r == "unknown" or (r == "material" and c["i"] not in prices)):
+                continue
             i, x, y = c["i"], c["x"], c["y"]
             page_guard(context, "Shop")
-            tap(context, x, y, wait=1.2)
+            tap_settled(context, x, y, timeout=1.2)
             image = screen(context)
             lines = [t for t, _ in ocr(context, image, SELL_PANEL)]
             panel = " ".join(lines)
             price = number(text(context, image, SELL_PRICE))
-            kind = rewards.gift_kind(panel, team["keyword"], False, avoid)
-            if kind != "avoid" and any(shop.protected(t, keep) for t in lines):
-                log(f"shop: sell cell {i} kept: {panel[:40]!r}")
-            elif price and not has(panel, "Select the") and kind != "main":
+            use = tooltip_use(lines, team, avoid)
+            if use in ("sell", "avoid") and price and not has(panel, "Select the"):
                 gifts.append((i, price))
-                if kind == "avoid":
+                if use == "avoid":
                     avoided.add(i)
-        picked = shop.to_sell(gifts, wanted, cost, team["reserve_cost"], avoided)
+            elif use != "keep":
+                fuse_only.append(i)
+            log(f"shop: sell cell {i}: {use}, {panel[:40]!r}")
+        # The fusion is grouped without the avoided gifts, which are sold first (#90): a sale then breaks no group.
+        # ponytail: a Super Shop's 5 slots are known once its fuse page was read; 3 until then.
+        materials = [c for c in cells if (c["i"] in dict(gifts) or c["i"] in fuse_only) and c["i"] not in avoided]
+        fused = {i for group, _ in fusions(materials, ["material"] * len(materials), visit.get("slots", 3), ()) for i in group}
+        # Up to the team's sell_max_tier only (#161); an unread tier may be a V: not sold.
+        tiers, top = {c["i"]: c["tier"] for c in cells}, team.get("sell_max_tier", 4)
+        spare = [g for g in gifts if g[0] not in fused and (tiers[g[0]] or 9) <= top]
+        picked = shop.to_sell(spare, wanted, cost, team["reserve_cost"], avoided)
         visit["fuse_scanned"] = visit.get("fuse_scanned") and not picked
-        log(f"shop: {wanted} wanted, {cost} Cost, non-main (cell, price) {gifts}: sell {picked}")
+        log(f"shop: {wanted} wanted, {cost} Cost, materials (cell, price) {gifts}, {sorted(fused)} fuse: sell {picked}")
+        # The Cost read before any cell was picked: a picked cell shows "51 > 146", read as 51146 (#174).
+        before = cost
         for i in picked or []:
+            price = dict(gifts)[i]
             page_guard(context, "Shop")
-            before = read_cost(context, SELL_COST)
-            tap(context, *SELL_CELLS[i], wait=1.2)
+            tap_settled(context, *SELL_CELLS[i], timeout=1.2)
+            # Sell asks "Sell [<gift>] for <price> Cost?"; it slides down from the top before Confirm takes a tap (#174).
             page_guard(context, "Shop")
-            tap(context, *PAGE_OK, wait=2)
-            after = read_cost(context, SELL_COST)
-            log(f"shop: sold cell {i}: {before} -> {after} Cost")
-            if after == before:
-                break  # ponytail: no Sell confirm dialog handled; none seen yet
+            if tap_shown(context, *PAGE_OK, shows(context, DIALOG_TEXT, r"Sell.*Cost"), timeout=2) is not None:
+                tap(context, *DIALOG_CONFIRM, wait=0)
+            # Only before + price is a sale: the preview of an unconfirmed one reads as 51146 (#174).
+            sold = until(context, lambda im: cost_in(context, im, SELL_COST) == before + price, timeout=2)
+            if sold is None:
+                log(f"shop: sell cell {i} for {price}: not sold, {before} -> {read_cost(context, SELL_COST)} Cost")
+                break
+            log(f"shop: sold cell {i} for {price}: {before} -> {before + price} Cost")
+            before += price
+            still(context, timeout=1.5)  # the dialog goes as the Cost turns: the next cell's tap waits for it
         Shop.to_main(context)
         return bool(picked)
 
@@ -2757,7 +2961,7 @@ class Shop(CustomAction):
         for _ in range(8):
             time.sleep(0.2)
             lines = [(t, b) for t, b in ocr(context, screen(context), FUSE_TOOLTIP) if not has(t, "Owned")]
-            head = next((b for t, b in lines if compact(t).endswith("ogift")), None)
+            head = tooltip_head(lines)
             if head:
                 name = min(((b[1] - head[1], t) for t, b in lines if b[1] > head[1] + 10 and re.search(r"[a-z]{3}", t)),
                            default=(0, "?"))[1]
@@ -2781,92 +2985,147 @@ class Shop(CustomAction):
 
     @staticmethod
     def fuse(context, team, visit):
-        """Fuse 3 non-main gifts into the main keyword, Wishmaking left unticked; True when one fused.
+        """Fuse the materials shop.pick_fusion picks into the main keyword, Wishmaking left unticked; True when one fused.
 
-        The cells are read off one screenshot (read_cells, #112): main-keyword, keywordless and observed gifts
-        stay, the first 3 others are tapped into the fusion. A cell whose badge is cut off is tapped for its
-        tooltip (spec 03 section 12's text rule) only while materials are short, and tapped again to take a
-        kept gift back out. A grid that held too few materials is not read again until a purchase or a sale
-        changes the owned gifts (#62).
+        The cells are read off one screenshot (read_cells, #112): the gifts the team keeps stay (kept_keywords,
+        kept_icons, #77), the rest are materials, the vestiges by their icon and the keywordless gifts by the team's
+        setting (cell_role, #161). A cell whose badge is cut off is tapped for its tooltip (tooltip_use), and out
+        again, only while the others make no fusion. Each material tapped in is read
+        back (place); one that does not show closes the page unfused. One fusion a call, as the grid changes with it.
+        A grid that made none is not read again until a purchase or a sale changes the owned gifts (#62).
         """
         if visit.get("fuse_scanned"):
             return False
         keyword = team["keyword"]
+        # The page zooms in: a tap before it stops is lost.
         page_guard(context, "Shop")
-        tap(context, *SHOP_BUTTONS["fuse"], wait=2)
-        if not has(text(context, screen(context), DIALOG_TITLE), "Fuse"):
+        if tap_shown(context, *SHOP_BUTTONS["fuse"], shows(context, DIALOG_TITLE, "Fuse"), timeout=2) is None:
             Shop.to_main(context)
             return False
-        tap(context, *FUSE_CENTRE, wait=1.5)
+        tap_settled(context, *FUSE_CENTRE)
         if not tap_keyword(context, keyword):
             log("shop: no keyword dialog on the fusion")
             Shop.to_main(context)
             return False
-        tap(context, *FUSE_KEYWORD_OK, wait=1.5)
-        if screen(context)[495:515, 263:283].max(axis=2).mean() > 60:  # unticked: V ~30
-            log("shop: Wishmaking is ticked (it spends owned Starlight): no fusion")
+        tap_settled(context, *FUSE_KEYWORD_OK)
+        if tooltip_up(context) and not Shop.close_tooltip(context):
+            log("shop: a tooltip stays up on the fuse page: no fusion this visit")
+            visit["fuse_scanned"] = True
             Shop.to_main(context)
             return False
         image = screen(context)
+        if image[495:515, 263:283].max(axis=2).mean() > 60:  # unticked: V ~30
+            log("shop: Wishmaking is ticked (it spends owned Starlight): no fusion")
+            Shop.to_main(context)
+            return False
+        visit["slots"] = slots = shop.fuse_slots(image)  # before a recipe closes the page: the sale needs it too
         if Shop.recipe_shown(context, image, visit):
             return False
-        # One screenshot decides (#112): a tap puts a gift in the fusion, so only the materials are tapped.
         # ponytail: the 15 cells on show; a scroll would find more when 13+ of them are kept.
         avoid = [g["name"] for g in avoided_gifts(team)]
-        cells = read_cells(context, image, FUSE_CELLS, "fuse", observed_gifts(team) + avoided_gifts(team))
-        roles = [shop.gift_role(c["keyword"], c["gift"], keyword, avoid) for c in cells]
-        log("shop: fuse cells " + "; ".join(cell_line(c, r) for c, r in zip(cells, roles)))
-        picked = []
-        materials = sorted((c for c, r in zip(cells, roles) if r == "material"), key=lambda c: c["gift"] not in avoid)
-        for c in materials[:3]:  # an avoided gift first (#90)
+        cells = read_cells(context, image, FUSE_CELLS, "fuse", kept_icons(team) + avoided_gifts(team) + VESTIGE_ICONS)
+        roles = [cell_role(c, team, "fuse", avoid) for c in cells]
+        log(f"shop: fuse cells ({slots} slots) " + "; ".join(cell_line(c, r) for c, r in zip(cells, roles)))
+        picks = fusions(cells, roles, slots, avoid)
+        if not picks and "unknown" in roles:
+            roles = Shop.tooltip_roles(context, team, cells, roles, avoid)
+            picks = fusions(cells, roles, slots, avoid)
+        if not picks:
+            visit["fuse_scanned"] = True
+            log(f"shop: {roles.count('material')} materials on show, a fusion takes {shop.MIN_FUSION}")
+            Shop.to_main(context)
+            return False
+        group, tier = picks[0]
+        group = [next(c for c in cells if c["i"] == i) for i in group]
+        materials = ", ".join(cell_line(c, "material").rsplit(":", 1)[0] for c in group)
+        fused = False
+        if Shop.place(context, group, slots) and not Shop.recipe_shown(context, screen(context), visit):
+            # Read again on the still screenshot: the one that matched was taken while the dialog zoomed in.
             page_guard(context, "Shop")
-            tap(context, c["x"], c["y"], wait=0.5)
-            tap(context, *FUSE_NEUTRAL)  # closes its tooltip
-            picked.append(f"cell {c['i']} ({c['keyword']} {c['tier']})")
-        # Badges below the grid's edge: the tooltip's text decides (spec 03 section 12's rule), a tap at a time.
-        last, keep = None, kept_gifts(team)
-        for c in [c for c, r in zip(cells, roles) if r == "unknown"] if len(picked) < 3 else []:
+            image = tap_shown(context, *PAGE_OK, shows(context, FUSE_CONFIRM, FUSE_COUNT), timeout=2)
+            m = image is not None and re.search(FUSE_COUNT, text(context, image, FUSE_CONFIRM))
+            if m and int(m[1]) == len(group):
+                tap(context, 788, 583, wait=0)  # the dialog's Confirm; gift_get waits for its GET!
+                fused = gift_get(context)
+            log(f"shop: fuse {materials} into a tier {tier} {keyword} gift: {'done' if fused else 'not confirmed'}")
+        # Unconfirmed or not read back: not the same scan again until the owned gifts change (#103).
+        visit["fuse_scanned"] = not fused
+        Shop.to_main(context)
+        return fused
+
+    @staticmethod
+    def close_tooltip(context):
+        """Close a tooltip the fuse page came back with, over the third row and Leave (the Shop node's anchor); False
+        when one stays up.
+
+        Live 2026-10-21: one stayed from a cell the grid had moved (Emerald Elytra) through every visit of the page. A
+        neutral tap closes a cell's tooltip but left that one; a cell's own took its place: the first cell's, in and out
+        (by hand: in, out with its tooltip still up, then the neutral tap). The page is told by its title before each:
+        page_guard's Leave is under the tooltip (ADR 0007).
+        """
+        def on_fuse_page():
+            if not has(text(context, screen(context), DIALOG_TITLE), "Fuse"):
+                raise PageGone("Shop")
+        on_fuse_page()
+        tap_settled(context, *FUSE_NEUTRAL, timeout=1.0)  # a tooltip fades
+        if tooltip_up(context):
+            on_fuse_page()
+            tap_moved(context, *FUSE_CELLS[0], timeout=0.5)
+            tap_moved(context, *FUSE_CELLS[0], timeout=1.2)  # out of the fusion again
+            tap_settled(context, *FUSE_NEUTRAL, timeout=1.0)
+        return not tooltip_up(context)
+
+    @staticmethod
+    def tooltip_roles(context, team, cells, roles, avoid):
+        """roles with each "unknown" cell (its badge cut off, no icon matched) decided by its tooltip (tooltip_use):
+        tapped in for it, then out again. A gift the tooltip does not name is kept: live 2026-10-18, Spiderweb
+        Entangled in Red's long tooltip read none.
+        """
+        roles, last = list(roles), None
+        for n in [n for n, r in enumerate(roles) if r == "unknown"]:
+            c = cells[n]
             x, y = c["x"], c["y"]
             page_guard(context, "Shop")
             tap(context, x, y, wait=0)
             lines, name = Shop.tooltip(context, last)
-            page_guard(context, "Shop")  # a tooltip that names nothing may be no shop at all
-            tap(context, *FUSE_NEUTRAL)
             if name is None:
-                # Live 2026-10-18: Spiderweb Entangled in Red's long tooltip read no name and stayed in the
-                # fusion; a gift that cannot be named is taken out again.
+                page_guard(context, "Shop")  # a tooltip that names nothing may be no shop at all
+            tap_settled(context, *FUSE_NEUTRAL, timeout=1.0)  # its tooltip fades: the next tap would land on it
+            # A tooltip read is the fuse page, checked again once it is closed: a third-row cell's tooltip covers
+            # Leave, the Shop node's anchor (live 2026-10-21, the bot looped on the fuse page under recovery).
+            page_guard(context, "Shop")
+            tap_moved(context, x, y, timeout=1.2)  # out of the fusion again
+            tap_settled(context, *FUSE_NEUTRAL, timeout=1.0)
+            if name is None:
                 log(f"shop: the gift at {x},{y} read no name: kept out of the fusion")
-                tap(context, x, y, wait=1.2)
-                tap(context, *FUSE_NEUTRAL)
+                roles[n] = "keep"
                 continue
             last = name
-            main = rewards.gift_kind(" ".join(t for t, _ in lines), keyword, False) == "main"
-            if not shop.protected(name, avoid) and (main or shop.protected(name, keep)):
-                if not main:
-                    log(f"shop: {name!r} kept out of the fusion")
-                tap(context, x, y, wait=1.2)  # out of the fusion again
-                tap(context, *FUSE_NEUTRAL)
-                continue
-            picked.append(name)
-            if len(picked) == 3:
-                break
-        fused = False
-        if len(picked) == 3:
-            if Shop.recipe_shown(context, screen(context), visit):
-                return False
+            roles[n] = "keep" if tooltip_use([t for t, _ in lines], team, avoid) == "keep" else "material"
+            log(f"shop: cell {c['i']} tooltip names {name!r}: {roles[n]}")
+        return roles
+
+    @staticmethod
+    def place(context, cells, slots):
+        """Tap cells into the fusion, each read back (#77); False at the first that does not show, nothing put in before.
+
+        After a tap one slot more holds a material and the tapped cell's frame turns orange: the gift went in, and
+        it is the one meant (the grid stays in place).
+        """
+        filled = shop.placed(screen(context), slots)
+        if filled:
+            log(f"shop: {filled} materials in before any tap: no fusion")
+            return False
+        for n, c in enumerate(cells, 1):
             page_guard(context, "Shop")
-            tap(context, *PAGE_OK, wait=2)
-            m = re.search(r"(\d)\s*/\s*\d", text(context, screen(context), FUSE_CONFIRM))
-            if m and m[1] == "3":
-                tap(context, 788, 583, wait=2.5)  # the dialog's Confirm
-                fused = gift_get(context)
-            log(f"shop: fuse {picked} into {keyword}: {'done' if fused else 'not confirmed'}")
-            visit["fuse_scanned"] = not fused  # unconfirmed: not the same scan again until the owned gifts change (#103)
-        else:
-            visit["fuse_scanned"] = True
-            log(f"shop: {len(picked)} non-main gifts on show, a fusion takes 3")
-        Shop.to_main(context)
-        return fused
+            tap_moved(context, c["x"], c["y"], timeout=0.5)
+            tap_settled(context, *FUSE_NEUTRAL, timeout=1.0)  # closes its tooltip, which shades the grid
+            image = screen(context)
+            filled, framed = shop.placed(image, slots), shop.picked(image, c["x"], c["y"], CELL_PAGES["fuse"][1])
+            if filled != n or not framed:
+                log(f"shop: cell {c['i']} tapped: {filled} of {n} materials in, {'framed' if framed else 'not framed'}: no fusion")
+                return False
+        return True
 
 
 # Settlement (spec 03 section 14): the Exploration Reward window.

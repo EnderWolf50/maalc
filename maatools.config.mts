@@ -118,6 +118,10 @@ const screens: [image: string, hits: string[]][] = [
   ['EventStory.png', ['Event']],
   ['EventChoices.png', ['Event']],
   ['EventChoicesUsed.png', ['Event']],  // floor 5 boss's second round of questions: the first answer greyed out (#34)
+  // Live 2026-10-20 (#196): a drag lifts one card, lit orange; the list scrolled to its top, bottom and back.
+  ['EventChoicesLitTop.png', ['Event']],
+  ['EventChoicesLitBottom.png', ['Event']],
+  ['EventChoicesScrolledBack.png', ['Event']],
   ['EventCheck.png', ['Event']],
   ['EventResult.png', ['Event']],
   // Shop: Leave stays readable under the shop's own dialogs and pages; the heal page has Return instead.
@@ -170,8 +174,10 @@ const config: FullConfig = {
   interfacePath: 'assets/interface.json',
   check: {},
   test: {
-    // maa-tools defaults to cpus/4 workers: 1 on a 4-core CI runner, where the test ran ~10 min serially.
-    job: availableParallelism(),
+    // maa-tools defaults to cpus/4 workers: 1 on a 4-core CI runner, where the test ran ~10 min serially. It forks one
+    // process per worker (~0.5 GiB each), so capped at 4: all of a 4-core runner, ~2 GiB instead of ~6.6 GiB on a
+    // 16-core PC.
+    job: Math.min(4, availableParallelism()),
     cases: [
       {
         configs: { controller: 'MuMu', resource: 'base', imageRoot: 'tests/screens' },

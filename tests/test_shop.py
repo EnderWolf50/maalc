@@ -4,21 +4,29 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+from PIL import Image
 
 import shop as s
 
 # Grid crops of live 1280x720 captures (written by recovery.png: one IDAT, filter 0), and where each sat on screen.
 CROPS = Path(__file__).resolve().parent / "shop"
+SCREENS = Path(__file__).resolve().parent / "screens"
 CROP_AT = {
-    "fuse_spiderweb": (620, 236),  # live 2026-10-18 (maalc-probe rec/m3/fuse-140): Spiderweb Entangled in Red first
+    "fuse_spiderweb": (620, 236),  # live 2026-10-18 (probe capture rec/m3/fuse-140): Spiderweb Entangled in Red first
     "fuse": (620, 236),  # tests/screens/ShopFuse.png
     "fuse_recipe": (620, 236),  # tests/screens/ShopFuseRecipe.png (#103): the owned row sits at y 427
-    "sell": (620, 200),  # live 2026-10-16 (maalc-probe s29/025_sell): the sell page of ShopFuse.png's gifts
+    # The fuse page's slots and first two columns (#77): live 2026-10-18 (probe capture rec/m3/fuse-152), Spiderweb tapped
+    # in; captures/97 (2 in, a tooltip over the grid), Super Shop captures/172 (cells 5 and 6 in) and 169 (empty).
+    "fuse_one_in": (180, 165),
+    "fuse_two_in": (180, 165),
+    "fuse_super_two_in": (180, 165),
+    "fuse_super_open": (180, 165),
+    "sell": (620, 200),  # live 2026-10-16 (probe capture s29/025_sell): the sell page of ShopFuse.png's gifts
     "offers": (560, 210),  # tests/screens/Shop.png
     "offers_super": (560, 210),  # tests/screens/SuperShop.png
-    "offers_red": (560, 210),  # live (maalc-probe s28/013): Fragment of Hellfire, a red gem, 400 orange
-    "offers_short": (560, 210),  # live 2026-10-18 (maalc-probe live-all/f/shopd_2590.6): 106 Cost, 3 offers tagged Not Enough Cost
-    # Map nodes (test_map_shop.py): 200 px around the node, live 2026-10-18 maalc-probe live2/f (map_f2_c, map_f1_c, map_f1_a)
+    "offers_red": (560, 210),  # live (probe capture s28/013): Fragment of Hellfire, a red gem, 400 orange
+    "offers_short": (560, 210),  # live 2026-10-18 (probe capture live-all/f/shopd_2590.6): 106 Cost, 3 offers tagged Not Enough Cost
+    # Map nodes (test_map_shop.py): 200 px around the node, live 2026-10-18 probe capture live2/f (map_f2_c, map_f1_c, map_f1_a)
     "map_shop_cyan": (230, 45),
     "map_shop_orange": (230, 45),
     "map_event_orange": (226, 44),
@@ -86,13 +94,12 @@ def test_refresh_choice_unread_fee_is_skipped():
     assert s.refresh_choice(3000, 0, 0, 2, None, None, 120) is None
 
 
-def test_to_sell_only_what_fusion_leaves_over():
-    # 4 non-main gifts: 3 fuse, 1 may go; the dearest one.
+def test_to_sell_the_dearest_spare_first():
     gifts = [(0, 50), (2, 100), (5, 90), (7, 60)]
     assert s.to_sell(gifts, 200, 120, 0) == [2]
-    # 3 non-main gifts all fuse: nothing to sell, so no sale helps.
-    assert s.to_sell(gifts[:3], 200, 120, 0) is None
-    # Two leftovers, both needed; sold from the back so earlier cells stay put.
+    # Nothing spare: no sale helps.
+    assert s.to_sell([], 200, 120, 0) is None
+    # Two spare, both needed; sold from the back so earlier cells stay put.
     assert s.to_sell([(1, 50), (4, 60)], 200, 100, 0) == [4, 1]
     # Already affordable: nothing to sell.
     assert s.to_sell([(1, 50)], 200, 300, 0) == []
@@ -191,13 +198,105 @@ def test_protected_gifts_are_matched_by_name(read, kept):
     (None, "Spiderweb Entangled in Red", "keep"),
 ])
 def test_gift_role_from_the_cells_badge_and_icon(keyword, gift, role):
-    assert s.gift_role(keyword, gift, "Burn") == role
+    assert s.gift_role(keyword, gift, {"Burn", "Keywordless"}) == role
+
+
+def test_the_kept_keywords_decide_the_role():
+    # #77: another keyword the team names is kept. The user on #161: a cell with no badge and no matched icon is a
+    # keywordless gift, material once the team lets keywordless gifts go; no tooltip is read for it.
+    assert s.gift_role("Bleed", None, {"Burn", "Bleed"}) == "keep"
+    assert s.gift_role("Keywordless", None, {"Burn"}) == "material"
+    assert s.gift_role("Keywordless", "Spiderweb Entangled in Red", {"Burn"}) == "keep"  # a kept gift's icon still keeps it
+
+
+def test_a_vestige_told_by_its_icon_is_material_whatever_the_keywordless_setting():
+    # #161: a vestige is its own kind; material names the ones the team neither keeps nor (on the sell page) keeps
+    # from the sale. One left out of it is kept like any gift whose icon matched.
+    assert s.gift_role("Keywordless", "Dark Vestige", {"Burn", "Keywordless"}, material=["Dark Vestige"]) == "material"
+    assert s.gift_role("Keywordless", "Dark Vestige", {"Burn"}) == "keep"
 
 
 def test_an_avoided_gift_is_material_though_it_is_the_main_keyword():
     # #90: a Bleed team that does not hold White Gossypium fuses or sells it.
-    assert s.gift_role("Bleed", "White Gossypium", "Bleed", avoid=["White Gossypium"]) == "material"
-    assert s.gift_role("Bleed", None, "Bleed", avoid=["White Gossypium"]) == "keep"
+    assert s.gift_role("Bleed", "White Gossypium", {"Bleed"}, avoid=["White Gossypium"]) == "material"
+    assert s.gift_role("Bleed", None, {"Bleed"}, avoid=["White Gossypium"]) == "keep"
+
+
+POINTS = {1: 3, 2: 6, 3: 10, 4: 15, 5: 30}  # data/shop.yaml
+SHOP, SUPER = [10, 16, 24], [9, 14, 21]
+
+
+@pytest.mark.parametrize("points, shop, super_shop", [
+    (9, 1, 1), (10, 1, 2), (11, 2, 2), (14, 2, 2), (15, 2, 3), (16, 2, 3), (17, 3, 3), (21, 3, 3), (22, 3, 4),
+    (24, 3, 4), (25, 4, 4),
+])
+def test_fusion_tier_follows_the_points(points, shop, super_shop):
+    assert (s.fusion_tier(points, SHOP), s.fusion_tier(points, SUPER)) == (shop, super_shop)
+
+
+def test_pick_fusion_makes_the_highest_tier_first():
+    # #77: III + III + II = 26 points, a tier IV; the three I left fuse into a tier I.
+    materials = [("a", 1), ("b", 3), ("c", 1), ("d", 2), ("e", 3), ("f", 1)]
+    assert s.pick_fusion(materials, 3, SHOP, POINTS) == [(["b", "d", "e"], 4), (["a", "c", "f"], 1)]
+
+
+def test_pick_fusion_of_three_tier_one_gives_tier_one():
+    assert s.pick_fusion([("a", 1), ("b", 1), ("c", 1)], 3, SHOP, POINTS) == [(["a", "b", "c"], 1)]
+    assert s.pick_fusion([("a", 1), ("b", 1)], 3, SHOP, POINTS) == []  # fewer than 3: nothing
+
+
+def test_pick_fusion_takes_the_fewest_points_for_the_tier():
+    # IV takes 25 points: III + III + II (26) rather than III + III + III (30); the III left over waits.
+    materials = [("a", 3), ("b", 3), ("c", 3), ("d", 2)]
+    assert s.pick_fusion(materials, 3, SHOP, POINTS) == [(["a", "b", "d"], 4)]
+
+
+def test_pick_fusion_on_a_super_shop_fills_its_5_slots_by_its_own_thresholds():
+    # 5 tier I are 15 points: tier III at a Super Shop (15-21), where 3 of them make only a tier I.
+    materials = [(k, 1) for k in "abcde"]
+    assert s.pick_fusion(materials, 5, SUPER, POINTS) == [(list("abcde"), 3)]
+    assert s.pick_fusion(materials, 3, SHOP, POINTS) == [(["a", "b", "c"], 1)]
+    # II + II + I = 15: tier III at a Super Shop, II at a shop.
+    assert s.pick_fusion([("a", 2), ("b", 2), ("c", 1)], 5, SUPER, POINTS) == [(["a", "b", "c"], 3)]
+
+
+def test_pick_fusion_never_takes_a_tier_v_gift():
+    # #161, the user: a fusion tops out at tier IV, so a tier V material is always a downgrade; not even to make a group.
+    assert s.pick_fusion([("v", 5), ("a", 1), ("b", 1)], 3, SHOP, POINTS) == []
+    assert s.pick_fusion([("v", 5), ("a", 3), ("b", 3), ("c", 2)], 5, SUPER, POINTS) == [(["a", "b", "c"], 4)]
+
+
+def test_pick_fusion_puts_an_avoided_gift_in_first():
+    # #90: White Gossypium ("w", a II) goes in rather than the other II for the same tier.
+    materials = [("a", 2), ("b", 2), ("c", 2), ("w", 2)]
+    assert s.pick_fusion(materials, 3, SHOP, POINTS) == [(["a", "b", "c"], 3)]
+    assert s.pick_fusion(materials, 3, SHOP, POINTS, first={"w"}) == [(["a", "b", "w"], 3)]
+
+
+@pytest.mark.parametrize("name, placed, picked", [("ShopFuse", 0, []), ("ShopFuseRecipe", 3, [0])])
+def test_the_fuse_read_back_on_the_whole_fuse_pages_of_tests_screens(name, placed, picked):
+    # CODING_STANDARDS' sweep of fuse_slots, placed and picked: no false hit. ShopFuseRecipe really holds 3 materials
+    # in its slots, and its Fusion Available cell (where FUSE_CELLS' cell 0 sits) is framed orange.
+    image = np.asarray(Image.open(SCREENS / f"{name}.png").convert("RGB"))[:, :, ::-1]
+    cells = [(678 + 96 * c, y) for y in (294, 385, 477) for c in range(5)]
+    assert s.fuse_slots(image) == 3
+    assert s.placed(image, 3) == placed
+    assert [i for i, (x, y) in enumerate(cells) if s.picked(image, x, y, 493)] == picked
+
+
+@pytest.mark.parametrize("name, slots, placed, picked", [
+    ("fuse_one_in", 3, 1, [0]),  # Spiderweb, cell 0, in the right slot
+    ("fuse_two_in", 3, 2, [0, 1]),
+    ("fuse_super_two_in", 5, 2, [5, 6]),
+    ("fuse_super_open", 5, 0, []),  # "Select a Keyword." over the grid
+])
+def test_the_fuse_page_reads_back_its_slots_and_the_picked_cells(name, slots, placed, picked):
+    image = screen_with(name)
+    cells = [(678 + 96 * c, y) for y in (294, 385) for c in range(2)]  # the first two columns on these crops
+    index = [0, 1, 5, 6]
+    assert s.fuse_slots(image) == slots
+    assert s.placed(image, slots) == placed
+    assert [i for i, (x, y) in zip(index, cells) if s.picked(image, x, y)] == picked
 
 
 SELL_OCR = [  # Maa OCR of the sell page's grid (crop "sell"): coins read as 米/水/*, icon art as junk
