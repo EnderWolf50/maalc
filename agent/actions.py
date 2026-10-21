@@ -1278,8 +1278,11 @@ class RouteMap(CustomAction):
         image = still(context)
         if image is None:
             return True  # still fading in or out: let MirrorHub look again
-        if seen(context, image, "GiftGet") or not self.wait_for_floor(context, image):
-            return True  # MirrorHub confirms the gift window, or looks again once the map is this floor's
+        if seen(context, image, "GiftGet"):
+            log("map: an E.G.O gift window covers the map; MirrorHub takes it")
+            return True
+        if not self.wait_for_floor(context, image):
+            return True  # MirrorHub looks again once the map is this floor's
         if not self.unzoom(context):  # its slots sit off where the offsets put them: L2 puts the map back
             if seen(context, screen(context), "MapNodePanel"):  # L2 needs the map: enter the node instead
                 return enter_node(context)
@@ -1414,7 +1417,7 @@ class RouteMap(CustomAction):
             if held and moved:
                 return image, (bx, by)  # live 2026-10-21 NORMAL: the map's left edge stopped the bus at 196
             moved = last is not None and not held
-            if held and RUN.get("fresh_floor"):
+            if held and RUN.get("fresh_floor") and not RUN.get("floor_hard"):  # a HARD map does not pan (#129)
                 if time.monotonic() > end:
                     log(f"map: the bus stayed at {bx}, {by} through {MAP_PAN_LIMIT} s of drags")
                     return image, (bx, by)
