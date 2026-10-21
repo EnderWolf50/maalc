@@ -74,7 +74,7 @@ const zh_tw = {
   "packs.weightPrompt": "分數（−10 到 10 的整數）：",
   "packs.weightRange": "分數必須是 −10 到 10 的整數。",
   "packs.eventPacks": "活動卡包",
-  "packs.eventPacksNote": "活動卡包是資料檔列出的活動劇情主題包（標「活動」）。資料分不出這一期正在開的活動包，所以先固定照分數。",
+  "packs.eventPacksNote": "活動卡包是資料檔列出的活動劇情主題包（標「活動」）。資料分不出這一期正在開的活動包，所以 GUI 暫時不能改這一項；新方案照分數。",
   "event_packs.weight": "照分數", "event_packs.prefer": "優先選", "event_packs.avoid": "避開（還有別的包時）",
   // teams
   teamName: "隊伍",
@@ -211,7 +211,7 @@ const en_us: typeof zh_tw = {
   "packs.weightPrompt": "Weight (a whole number from -10 to 10):",
   "packs.weightRange": "The weight must be a whole number from -10 to 10.",
   "packs.eventPacks": "Event packs",
-  "packs.eventPacksNote": "Event packs are the event story packs the data file lists (marked event). The data cannot tell which event runs now, so this stays By weight for now.",
+  "packs.eventPacksNote": "Event packs are the event story packs the data file lists (marked event). The data cannot tell which event runs now, so the GUI cannot change this for now; new plans go by weight.",
   "event_packs.weight": "By weight", "event_packs.prefer": "Take when shown", "event_packs.avoid": "Avoid (while another pack shows)",
   teamName: "Team",
   noTeams: "No teams yet. Add a team so the bot can run.",

@@ -53,7 +53,7 @@
 - 選分數最高的，同分選最左邊。（#240）
 - 卡片上標記 NEW，或標題比對不到清單的，用方案的「沒列出的包」分數。
 - 標題比對（`run_start.match_title`，#89）：只比英數字、不分大小寫。每個主題包名稱在 OCR 文字裡找一段同樣長度、最像它的片段，相似度 ≥ 0.8 才算候選；所以標題上方的 logo 碎字、沒讀到的第二行都不影響，短標題錯一兩個字（`Lime 2`、`Lake Wor1d`）仍比對得到。候選之中取「相似度 × 名稱長度」最大的，而且要比第二名多 1 個字以上：`Mountain of Corpses, Sea of Blood` 裡的 `Sea` 不會被認成 `S.E.A.`；`Line` 這種分不出 Line 1–3 的就算比對不到。
-  - 離線檢查（#240，2026-10-22）：用現行的標題 OCR 與比對跑 `tests/screens/` 與實機截圖的 10 張主題包頁（其中 3 張是同一個畫面），32 張卡全部比對正確，包括有 logo 碎字（`LImBUS`、`enUPAm`）和標題分兩行的卡。以前實機 log 的 353 張卡中有 21 張比對不到：BokGak 後綴與 logo 前綴是舊版比對造成的，現行比對已經比得到；`World Lake`／`Abyss Crawling` 是兩行標題的順序讀反（推測是卡片傾斜，unverified）；`HellOBus`、`Mirac inDistrict…`、`WalpurgisN The Noon of`、`Emotio` 是藝術字標題讀錯或讀不完整；另有一張 `Time` 是同一張卡的標題被拆成兩欄。AALC 的片段只救得回順序讀反的兩張（`lake`、`abyss`），救不回藝術字那幾張，還會把拆出來的 `Time` 當成 `Timekilling Time`，所以不加片段比對當後備。順序讀反可以另外修（例如同一張卡的各行依位置重排），待實機證據。逐卡的 OCR 原文與比對結果列在 PR #243；截圖、實機 log 和離線檢查用的腳本留在本機。
+  - 離線檢查（#240，2026-10-22）：用現行的標題 OCR 與比對跑 `tests/screens/` 與實機截圖的 10 張主題包頁（其中 3 張是同一個畫面），32 張卡全部比對正確，包括有 logo 碎字（`LImBUS`、`enUPAm`）和標題分兩行的卡。以前實機 log 的 353 張卡中有 21 張比對不到：BokGak 後綴與 logo 前綴是舊版比對造成的，現行比對已經比得到；`World Lake`／`Abyss Crawling` 是兩行標題的順序讀反（推測是卡片傾斜，unverified）；`HellOBus`、`Mirac inDistrict…`、`WalpurgisN The Noon of`、`Emotio` 是藝術字標題讀錯或讀不完整；另有一張 `Time` 是同一張卡的標題被拆成兩欄。AALC 的片段只救得回順序讀反的兩張（`lake`、`abyss`），救不回藝術字那幾張，還會把拆出來的 `Time` 當成 `Timekilling Time`，所以不加片段比對當後備。順序讀反可以另外修（例如同一張卡的各行依位置重排），待實機證據。逐卡的 OCR 原文與比對結果、比對不到的 log 讀法在 [theme-pack-ocr.md](../perf/data/05-game-data/theme-pack-ocr.md)；截圖、實機 log 和離線檢查用的腳本留在本機。
 - 畫面上最好的包分數低於方案的刷新門檻時，才用免費刷新，次數照執行選項 `theme_pack_refresh`；刷新用完後選分數最高的，絕不卡住。（#11、#19、#240）
 
 ## 3. 事件覆寫表

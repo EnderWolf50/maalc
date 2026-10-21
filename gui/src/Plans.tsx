@@ -244,6 +244,7 @@ function PackPlanEditor({ data, plan, path, onChange }: {
       </>}
     </div>
   );
+  const gapOrLine = (g: number) => (g === line ? lineBar : <div className="gap" {...target(drag === LINE, lanes[g - 1])} />);
   const chips = <T extends string | number>(values: T[], value: T, label: (v: T) => string, pick: (v: T) => void) =>
     values.map((v) => (
       <button type="button" key={String(v)} className="chip" aria-pressed={v === value} onClick={() => pick(v)}>{label(v)}</button>
@@ -261,7 +262,7 @@ function PackPlanEditor({ data, plan, path, onChange }: {
       {line === 0 && lineBar}
       {lanes.map((w, i) => (
         <Fragment key={w}>
-          {i > 0 && (i === line ? lineBar : <div className="gap" {...target(drag === LINE, lanes[i - 1])} />)}
+          {i > 0 && gapOrLine(i)}
           <div className="lane" {...target(drag !== LINE, w)}>
             <span className={"w" + (w > 0 ? " pos" : w < 0 ? " neg" : "")}>{w > 0 ? `+${w}` : w}</span>
             <div className="packs">
@@ -277,7 +278,7 @@ function PackPlanEditor({ data, plan, path, onChange }: {
           </div>
         </Fragment>
       ))}
-      {line === lanes.length ? lineBar : <div className="gap" {...target(drag === LINE, lanes[lanes.length - 1])} />}
+      {gapOrLine(lanes.length)}
       {onChange && <div className="lane add" {...target(drag !== null && drag !== LINE, null)}>＋ {t("packs.newLane")}</div>}
     </div>
     {/* #240: the data tells event story packs apart, not the event running now, so the GUI keeps "weight" until the
