@@ -613,10 +613,11 @@ def test_a_short_drag_still_brings_every_column_near_before_it_is_joined_on(cont
     assert actions.RUN["map_plan"]["steps"][-2:] == [("up", "shop"), ("mid", "boss")]
 
 
-def test_a_near_read_that_ends_short_keeps_the_columns_read_before(context, monkeypatch):
-    # #202's "never worse": a link unread up close ends the near read at its first column; the columns the first
-    # screen read past it stay, and the floor is read on from them. The one kept near the bus reads its Cost there
-    # (review of #239: it was joined on from, its Cost never read).
+@pytest.mark.parametrize("dark_from", [mr.COLUMN_DX + 60, 60], ids=["after column 3", "after column 2"])
+def test_a_near_read_that_ends_short_keeps_the_columns_read_before(context, monkeypatch, dark_from):
+    # #202's "never worse": a link unread up close ends the near read at its first column, or before it; the columns
+    # the first screen read past it stay, and the floor is read on from them. Those kept near the bus read their Cost
+    # there (review of #239: one was joined on from, its Cost never read; with no column read near, none was).
     monkeypatch.setattr(actions, "map_weights", lambda context: WIDE_WEIGHTS)
     actions.RUN["floor"] = 1
     offsets = map_world(context, WIDE, WIDE_LINKS, bus_x=446, width=2900)
@@ -624,9 +625,9 @@ def test_a_near_read_that_ends_short_keeps_the_columns_read_before(context, monk
     read_ahead = actions.RouteMap.read_ahead
 
     def near_read(context, image, x, y, before, first=2):
-        if first == 3:  # the frame dark past column 3's node: no link onward reads
+        if first == 3:  # the frame dark past the node: no link onward reads
             image = image.copy()
-            image[:, x + mr.COLUMN_DX + 60:] = 0
+            image[:, x + dark_from:] = 0
         return read_ahead(context, image, x, y, before, first)
     monkeypatch.setattr(actions.RouteMap, "read_ahead", staticmethod(near_read))
     actions.RouteMap().run(context, None)

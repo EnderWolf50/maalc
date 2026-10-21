@@ -1664,11 +1664,15 @@ class RouteMap(CustomAction):
             if not lit:
                 break
             ahead.append(column)
-            log(f"map: column {first + len(ahead) - 1}: " + ", ".join(f"{r} {t} (from {'/'.join(sorted(n))})" for r, (t, n) in column.items()))
+            RouteMap.log_column(first + len(ahead) - 1, column)
             if any(t == "boss" for t, _ in column.values()):
                 break
             before = column
         return ahead
+
+    @staticmethod
+    def log_column(n, column):
+        log(f"map: column {n}: " + ", ".join(f"{r} {t} (from {'/'.join(sorted(src))})" for r, (t, src) in column.items()))
 
     @staticmethod
     def read_on(context, image, bus, slots, ahead):
@@ -1704,16 +1708,18 @@ class RouteMap(CustomAction):
                 break
             moved, image = moved + s, after
             log(f"map: dragged the map {s} px; reading on from column {k + 2}")
-            if not (more := RouteMap.read_ahead(context, image, x0 + k * dx - moved, y, columns[k], first=k + 2)):
-                break
+            more = RouteMap.read_ahead(context, image, x0 + k * dx - moved, y, columns[k], first=k + 2)
             edge = x0 + (k + len(more)) * dx - moved + dx + 80 > 1200
-            if (tail := ahead[k + len(more):]) and not any(t == "boss" for t, _ in more[-1].values()):
+            if (tail := ahead[k + len(more):]) and not (more and any(t == "boss" for t, _ in more[-1].values())):
                 # A near read ending short: what was read past it stays, up to an edge; near now, by its Cost.
                 for i, column in enumerate(tail, start=k + len(more) + 1):
                     if (x := x0 + i * dx - moved) <= MAP_NEAR:
                         for row, (_, linked) in column.items():
                             column[row] = (node_at(context, image, x, y + map_route.ROW_DY[row]), linked)
+                        RouteMap.log_column(i + 1, column)
                 more, edge = more + tail, True
+            if not more:
+                break
             ahead = ahead[:k] + more
         if not back:
             return ahead, bus
