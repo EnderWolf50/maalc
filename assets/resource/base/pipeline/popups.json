@@ -1,6 +1,7 @@
 {
     // Global popups (spec 01, 全域彈窗): first in MirrorHub's next.
-    // Not built yet, no screenshot of them so far: weekly reset notice / expired run, the
+    // Not built yet, no screenshot of them so far: a tutorial that opens by itself (HelpPager is the one an "i" opens),
+    // weekly reset notice / expired run, the
     // "?" effect-choice page (#87), level-up popups other than Pass Level Up (ClaimPopup). PopupButton presses
     // any lone Close / Confirm / OK meanwhile; Recover saves a screen MirrorHub does not know to logs/unknown/.
     // Connecting, RetryPopup and PopupButton run before the turn on every battle round (BattleHUD), so each starts with a
@@ -205,7 +206,8 @@
     },
     // The help pager behind every "i" button (#85, live 2026-10-21: Mirror Dungeon 34 pages, Refraction Railway 18,
     // Sinners 17, Extract 4, Dispense 5; tests/screens/HelpPager*.png). Its title changes with the page, so it is found
-    // by its frame: the back button at the top left and the page dots along the bottom. The back key closes it; the
+    // by its frame: the back button at the top left and the page dots along the bottom. The back button alone also
+    // scores 0.98 on the entry page's own back button (EntryPaused.png); the dots are what tell the pager apart. The back key closes it; the
     // arrow at the right only turns the page. Page 1 of the Mirror Dungeon one is a picture of the entry page, so it
     // sits in MirrorHub before HubText.
     "HelpPager": {
@@ -215,14 +217,14 @@
                 "recognition": "TemplateMatch",
                 "sub_name": "HelpPagerBack",
                 "roi": [40, 10, 110, 75],
-                "template": "Screen/HelpBack.png",
+                "template": "Screen/HelpPagerBack.png",
                 "threshold": 0.8
             },
             {
                 "recognition": "TemplateMatch",
                 "sub_name": "HelpPagerDot",
                 "roi": [250, 595, 780, 40],
-                "template": "Screen/HelpDot.png",
+                "template": "Screen/HelpPagerDot.png",
                 "threshold": 0.8
             }
         ],

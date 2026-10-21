@@ -31,8 +31,9 @@ const screens: [image: string, hits: string[]][] = [
   // The Parallel Superposition prompt after clearing floor 5 / 10 with the mode engaged (#85). Captured from the
   // game's own help sheet (the page behind it is the help text, not a map): the dialog is its live look, but where
   // it sits on screen is not confirmed. A Cancel / Confirm question, so PopupButton (one centred button) stays out.
-  ['ParallelModePrompt.png', ['ParallelModePrompt']],
-  ['ParallelModeExtreme.png', ['ParallelModePrompt']],
+  // Both are help pager pages, so HelpPager (ahead of HubText) closes them there.
+  ['ParallelModePrompt.png', ['ParallelModePrompt', 'HelpPager']],
+  ['ParallelModeExtreme.png', ['ParallelModePrompt', 'HelpPager']],
   // Live 2026-10-21 (#85, 1080p captures scaled to 720p): the main window's own popups and the help pager behind
   // every "i" button (Mirror Dungeon page 1 and its last page, Extract, Sinners). The main window under the popups
   // still reads as the main window: the popups come first in the hub.
