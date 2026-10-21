@@ -57,6 +57,7 @@ STARLIGHT_HEADER = [890, 30, 115, 28]  # "Available"
 STARLIGHT_DIALOG = [480, 210, 320, 35]  # "Continue with selected effects?"
 STARTING_GIFT_HEADER = [780, 145, 230, 35]  # "Selected E.G.O Gift"
 STARLIGHT_AVAILABLE = [1010, 30, 80, 28]
+STARLIGHT_NOTE = [660, 395, 320, 90]  # the line under Convert Starlight to Cost: "unspent" when off, "remaining" when on
 STARLIGHT_OWNED = [830, 30, 90, 28]  # "4035", "4035-60" while owned starlight pays
 GRACE_ORIGIN_X, GRACE_ORIGIN_Y = (138, 152), (152, 390)  # top-left of card 1; step 198 px per column
 PACK_TITLES = [120, 400, 1040, 100]  # up to 5 cards (live: 5 with two Theme Pack Selection +1 graces)
@@ -652,7 +653,7 @@ class ConfirmStarlight(CustomAction):
             image = screen(context)
             # The line under the checkbox: "Any unspent Starlight will be added ..." when off,
             # "Coverts any remaining Starlight ..." when on.
-            note = text(context, image, [660, 395, 320, 90])
+            note = text(context, image, STARLIGHT_NOTE)
             on = True if has(note, "remaining") else False if has(note, "unspent") else None
             if on == want:
                 if want:
@@ -661,7 +662,7 @@ class ConfirmStarlight(CustomAction):
                 tap_then(context, 738, 530, shows(context, STARTING_GIFT_HEADER, "Selected E"), timeout=4)
                 return True
             if on is not None:
-                tap(context, 727, 363)
+                tap_then(context, 727, 363, lambda im: has(text(context, im, STARLIGHT_NOTE), "remaining" if want else "unspent"))
         return stuck("could not set Convert Starlight to Cost")
 
 
@@ -734,23 +735,35 @@ class PickStartingGift(CustomAction):
 
 @AgentServer.custom_action("GiftGet")
 class GiftGet(CustomAction):
-    """Close an E.G.O Gift GET! popup and wait until it is gone or the next gift's popup is up (#115).
+    """Close the E.G.O Gift GET! popups, one after another, until none is up (#115).
 
-    A search or a cabinet that gives n gifts pops n windows. The name plate tells the next window from the
-    one just closed; MirrorHub closes it in its next pass.
+    A search or a cabinet that gives n gifts pops n windows. The name plate tells the next window from the one
+    just closed, which is closed once the screen is still, with no pass of MirrorHub in between. Taps are never
+    sent ahead: under the last window lies the page the gifts came from (the search grid or the starting gift
+    page), where one would pick; a window fading out still shows its title over a half-drawn plate.
+    A window still up with the same name after the wait: the tap was lost, and MirrorHub looks again.
     """
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         title = shows(context, GET_TITLE, "GET")
-        before = text(context, screen(context), GET_NAME).strip()
+        image = screen(context)
+        for _ in range(GIFT_WINDOWS):
+            before = text(context, image, GET_NAME).strip()
 
-        def closed(image):
-            if not title(image):
+            def closed(im):
+                if not title(im):
+                    return True
+                now = text(context, im, GET_NAME).strip()
+                return bool(before and now and now != before)
+            image = tap_then(context, *GET_CONFIRM, closed, timeout=2)
+            if image is not None and title(image):
+                image = still(context, timeout=1)
+            if image is None or not title(image):
                 return True
-            now = text(context, image, GET_NAME).strip()
-            return bool(before and now and now != before)
-        tap_then(context, *GET_CONFIRM, closed, timeout=2)
         return True
+
+
+GIFT_WINDOWS = 6  # GET! windows GiftGet closes in one go: a cabinet's gifts or a search's 3, with room to spare
 
 
 # E.G.O Gift Search page (live 2026-10-16, 1.117.0). Tabs left to right, 62 px apart.
