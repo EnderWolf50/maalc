@@ -142,6 +142,7 @@
 - 輸入方式的 `Default` 不含 `EmulatorExtras`，但 PI V2 的 ADB 控制器沒有輸入方式欄位，GUI 會沿用 Toolkit 找到的裝置 `input_methods`。不強制 `EmulatorExtras`，能連上、能點擊即可。（#7、#22）
 - 使用者必須在遊戲設定裡關掉戰鬥中的旁白等待。（#16）
 - 使用者必須把遊戲設定的 Change UI Design 維持 Default；Dark 未驗證。（#48）
+- 建議把遊戲設定的 Normal FPS 與 Combat FPS 設為 60：30 FPS 時每次等待會慢約 0.045 秒（#191 實測）。
 
 ## 未決
 
