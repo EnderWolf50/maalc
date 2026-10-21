@@ -3,5 +3,12 @@
   "identifier": "default",
   "description": "Capability for the main window",
   "windows": ["main"],
-  "permissions": ["core:default"]
+  "permissions": [
+    "core:default",
+    "allow-root-dir",
+    "allow-load-settings",
+    "allow-load-theme-packs",
+    "allow-save-settings",
+    "allow-append-runs-log"
+  ]
 }
