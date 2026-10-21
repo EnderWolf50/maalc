@@ -1,10 +1,11 @@
 // Named plans (spec 04 sections 6–8) and the editors teams reuse for their custom values.
-import { useEffect, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useState, type DragEvent, type KeyboardEvent, type ReactNode } from "react";
 import { loadThemePacks } from "./api";
 import {
-  GRACES, LEVELS, MARKS, SINNERS, buyOrder, clickCard, clickEnhance, defaultStarlight, enhanceAll, freeName, gracePrice,
-  newId, selectAll, starlightCost, toggleSinner,
-  type DeploymentPlan, type Order, type StarlightPlan, type StarlightValues, type ThemePackPlan, type ThemePacks,
+  EVENT_MODES, GRACES, LEVELS, SINNERS, buyOrder, clickCard, clickEnhance, defaultStarlight, enhanceAll, freeName, gracePrice,
+  lanesOf, lineAt, newId, newPackPlan, onFloor, parseThemePacks, selectAll, starlightCost, toggleSinner, weightOf,
+  type DeploymentPlan, type Order, type PackPlanValues, type StarlightPlan, type StarlightValues, type ThemePackPlan,
+  type ThemePacks,
 } from "./model";
 import { Field, ReorderList, Select, useEditor } from "./ui";
 
@@ -148,48 +149,140 @@ export const StarlightTab = () => (
 
 export function ThemePackTab() {
   const { t } = useEditor();
-  const [data, setData] = useState<ThemePacks>({ packs: [], default_plan: {} });
+  const [data, setData] = useState<ThemePacks>(() => parseThemePacks(""));
   const [error, setError] = useState("");
   useEffect(() => { loadThemePacks().then(setData, (e) => setError(String(e))); }, []);
   const note = error && <p className="bad">{t("themePacksError")}: {error}</p>;
   return (
-    <PlanTab<ThemePackPlan> planKey="theme_pack_plans" tab="tab.themepacks" make={() => ({ marks: {} })}
+    <PlanTab<ThemePackPlan> planKey="theme_pack_plans" tab="tab.themepacks" make={newPackPlan}
       lead={{ label: t("defaultPlanLocked"), body: <>
         <p className="muted">{t("defaultPlanNote")}</p>{note}
-        <MarksTable packs={data.packs} marks={data.default_plan} path="" />
+        <PackPlanEditor data={data} plan={data.default_plan} path="" />
       </> }}
       editor={(p, change, path) => <>
-        <p className="muted">{t("marksNote")}</p>{note}
-        <MarksTable packs={data.packs} marks={p.marks} path={`${path}/marks`} onChange={(marks) => change({ ...p, marks })} />
+        {note}
+        <PackPlanEditor data={data} plan={p} path={path} onChange={(v) => change({ ...p, ...v })} />
       </>} />
   );
 }
 
-/** Every pack of the season, then marked packs the data file no longer lists. Read-only without onChange. */
-function MarksTable({ packs, marks, path, onChange }: {
-  packs: string[]; marks: Record<string, string>; path: string; onChange?: (marks: Record<string, string>) => void;
+// #241's covers (theme_pack_covers/index.json: pack name -> file), bundled at build time; a pack without one, or a
+// build before they exist, shows a blank card. The name always shows: some packs share one cover (1201/1203/1205).
+const COVERS_DIR = "../../assets/resource/base/data/theme_pack_covers/";
+const COVER_URLS = import.meta.glob<string>("../../assets/resource/base/data/theme_pack_covers/*.webp",
+  { eager: true, query: "?url", import: "default" });
+const COVER_INDEX = Object.values(import.meta.glob<Record<string, string>>("../../assets/resource/base/data/theme_pack_covers/index.json",
+  { eager: true, import: "default" }))[0] ?? {};
+const coverOf = (name: string): string | undefined => COVER_URLS[COVERS_DIR + COVER_INDEX[name]];
+
+const UNLISTED = "\u0000unlisted"; // what the "unlisted packs" chip drags: no pack name starts with NUL
+const LINE = "\u0000line";
+
+/** Design A of #240: one lane per weight in use (0 always), highest first, and the threshold line between lanes.
+ * Drag a pack to another lane, or onto + for a new weight; click one to type its weight. Read-only without onChange. */
+function PackPlanEditor({ data, plan, path, onChange }: {
+  data: ThemePacks; plan: PackPlanValues; path: string; onChange?: (p: PackPlanValues) => void;
 }) {
   const { t, tv, bad } = useEditor();
-  const rows = [...packs, ...Object.keys(marks).filter((name) => !packs.includes(name))];
-  const set = (name: string, mark: string) => {
-    const next = { ...marks, [name]: mark };
-    if (mark === "neutral") delete next[name]; // unlisted packs are neutral (spec 04 section 8)
-    onChange?.(next);
+  const [difficulty, setDifficulty] = useState<"" | "normal" | "hard">("");
+  const [floor, setFloor] = useState(0);
+  const [images, setImages] = useState(false);
+  const [drag, setDrag] = useState<string | null>(null);
+  const lanes = lanesOf(plan);
+  const line = lineAt(lanes, plan.threshold);
+  const extra = Object.keys(plan.weights).filter((n) => !(n in data.packs)); // weighed, gone from the data file
+  const shown = [...Object.keys(data.packs).filter((n) => onFloor(data.packs[n], difficulty, floor)), ...extra];
+  const set = (patch: Partial<PackPlanValues>) => onChange?.({ ...plan, ...patch });
+  const weigh = (what: string, w: number) => (what === UNLISTED ? set({ unlisted: w }) : set({ weights: { ...plan.weights, [what]: w } }));
+  const ask = (what: string, current?: number) => {
+    const text = prompt(t("packs.weightPrompt"), current === undefined ? "" : String(current));
+    if (text === null || text.trim() === "") return;
+    const w = Number(text);
+    if (Number.isInteger(w) && w >= -10 && w <= 10) weigh(what, w);
+    else alert(t("packs.weightRange"));
   };
-  return (
-    <table>
-      <tbody>
-        {rows.map((name) => (
-          <tr key={name} className={path && bad(`${path}/${name}`) ? "bad" : ""}>
-            <td>{name}{!packs.includes(name) && <em className="tag">{t("packNotInData")}</em>}</td>
-            <td>
-              {onChange
-                ? <Select value={marks[name] ?? "neutral"} options={MARKS} label={(v) => tv("mark", v)} onChange={(v) => set(name, v)} />
-                : tv("mark", marks[name] ?? "neutral")}
-            </td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
+  const dropOn = (w: number | null) => (e: DragEvent) => {
+    e.preventDefault();
+    if (drag === LINE && w !== null) set({ threshold: w });
+    else if (drag && drag !== LINE) (w === null ? ask(drag) : weigh(drag, w));
+    setDrag(null);
+  };
+  const target = (accepts: boolean, w: number | null) => (onChange && accepts
+    ? { onDragOver: (e: DragEvent) => e.preventDefault(), onDrop: dropOn(w) } : {});
+  const dragged = (what: string) => (onChange ? {
+    draggable: true,
+    onDragStart: (e: DragEvent) => { setDrag(what); e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", what); },
+    onDragEnd: () => setDrag(null),
+  } : {});
+  const clickable = (what: string, current: number) => (onChange ? {
+    role: "button", tabIndex: 0, onClick: () => ask(what, current),
+    onKeyDown: (e: KeyboardEvent) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); ask(what, current); } },
+  } : {});
+  // The line stops only between two lanes: gap g (1..lanes-1) sits under lane g-1, so its threshold is that lane's weight.
+  const toGap = (g: number) => set({ threshold: lanes[g - 1] });
+  const chip = (name: string) => {
+    const floors = data.packs[name];
+    const event = data.event_packs.includes(name);
+    return (
+      <span key={name} className={"pk" + (event ? " event" : "") + (path && bad(`${path}/weights/${name}`) ? " bad" : "")}
+        title={floors} {...dragged(name)} {...clickable(name, weightOf(plan, name))}>
+        {images && (coverOf(name) ? <img className="img" src={coverOf(name)} alt="" draggable={false} /> : <span className="img" aria-hidden />)}
+        <span className="nm">{name}</span>
+        <small>{floors}{event && <em>{t("packs.event")}</em>}{floors === undefined && <em>{t("packNotInData")}</em>}</small>
+      </span>
+    );
+  };
+  const lineBar = (
+    <div className={"thr" + (path && bad(`${path}/threshold`) ? " bad" : "")} {...dragged(LINE)}>
+      <span>{t("packs.threshold").replace("{n}", String(plan.threshold))}</span>
+      {onChange && <>
+        <button type="button" className="icon" aria-label={t("up")} title={t("up")} disabled={line - 1 < 1}
+          onClick={() => toGap(line - 1)}>↑</button>
+        <button type="button" className="icon" aria-label={t("down")} title={t("down")} disabled={line + 1 > lanes.length - 1}
+          onClick={() => toGap(line + 1)}>↓</button>
+      </>}
+    </div>
   );
+  const chips = <T extends string | number>(values: T[], value: T, label: (v: T) => string, pick: (v: T) => void) =>
+    values.map((v) => (
+      <button type="button" key={String(v)} className="chip" aria-pressed={v === value} onClick={() => pick(v)}>{label(v)}</button>
+    ));
+  return (<>
+    <div className="packbar">
+      {chips<"" | "normal" | "hard">(["", "normal", "hard"], difficulty, (v) => (v ? v.toUpperCase() : t("packs.anyDifficulty")), setDifficulty)}
+      <span className="gap" />
+      {chips([0, 1, 2, 3, 4, 5], floor, (v) => (v ? t("packs.floor").replace("{n}", String(v)) : t("packs.anyFloor")), setFloor)}
+      <span className="spacer" />
+      {chips([false, true].map(String), String(images), (v) => t(v === "true" ? "packs.images" : "packs.names"), (v) => setImages(v === "true"))}
+    </div>
+    {onChange && <p className="muted">{t("packs.hint")}</p>}
+    <div className={"lanes" + (images ? " images" : "") + (drag === LINE ? " moving" : "")}>
+      {line === 0 && lineBar}
+      {lanes.map((w, i) => (
+        <Fragment key={w}>
+          {i > 0 && (i === line ? lineBar : <div className="gap" {...target(drag === LINE, lanes[i - 1])} />)}
+          <div className="lane" {...target(drag !== LINE, w)}>
+            <span className={"w" + (w > 0 ? " pos" : w < 0 ? " neg" : "")}>{w > 0 ? `+${w}` : w}</span>
+            <div className="packs">
+              {shown.filter((n) => weightOf(plan, n) === w).map(chip)}
+              {w === plan.unlisted && (
+                <span className={"pk unlisted" + (path && bad(`${path}/unlisted`) ? " bad" : "")}
+                  {...dragged(UNLISTED)} {...clickable(UNLISTED, plan.unlisted)}>
+                  {images && <span className="img" aria-hidden />}
+                  <span className="nm">{t("packs.unlisted")}</span>
+                </span>
+              )}
+            </div>
+          </div>
+        </Fragment>
+      ))}
+      {line === lanes.length && lanes.length > 0 && lineBar}
+      {onChange && <div className="lane add" {...target(drag !== null && drag !== LINE, null)}>＋ {t("packs.newLane")}</div>}
+    </div>
+    <Field label={t("packs.eventPacks")} path={path && `${path}/event_packs`} note={t("packs.eventPacksNote")}>
+      {onChange
+        ? <Select value={plan.event_packs} options={EVENT_MODES} label={(v) => tv("event_packs", v)} onChange={(v) => set({ event_packs: v })} />
+        : <span>{tv("event_packs", plan.event_packs)}</span>}
+    </Field>
+  </>);
 }

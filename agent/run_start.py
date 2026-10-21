@@ -12,8 +12,6 @@ from ocrtext import compact
 GRACE_BASE = (10, 10, 20, 20, 30, 30, 40, 40, 50, 60)
 LEVEL_MULT = {"base": 1, "plus": 2, "plus2": 3}
 
-PACK_RANK = {"prefer": 0, "neutral": 1, "avoid": 2}
-
 
 def run_difficulty(setting, weekly_left):
     """"hard" or "normal" for this run; auto runs hard while weekly bonuses remain (spec 03 section 2)."""
@@ -143,36 +141,43 @@ def match_card(lines, names):
     return None, " ".join(lines)
 
 
-def rank_packs(cards, names, marks):
-    """(title, mark) per card; a card that matches no known pack is neutral.
+def rank_packs(cards, names, weights, unlisted):
+    """(title, weight) per card; a card that matches no weighed pack takes the plan's unlisted weight.
 
-    A title alike to several packs that share one mark takes it: live, "Line 1" read as "Line", and every
-    Line pack is avoided (#89).
+    A title alike to several packs that share one weight takes it: live, "Line 1" read as "Line", and every
+    Line pack is avoided (#89). A matched card's title is the pack's name.
     """
     out = []
     for lines in cards:
         name, title = match_card(lines, names)
         if name:
-            out.append((name, marks.get(name, "neutral")))
+            out.append((name, weights.get(name, unlisted)))
             continue
-        shared = {marks.get(n, "neutral") for n in title_candidates(title, names)}
-        out.append((title, shared.pop() if len(shared) == 1 else "neutral"))
+        shared = {weights.get(n, unlisted) for n in title_candidates(title, names)}
+        out.append((title, shared.pop() if len(shared) == 1 else unlisted))
     return out
 
 
-def refresh_wanted(ranks, setting, used):
-    """Whether to use a free refresh: only when every card is avoid, then per the run's theme_pack_refresh.
+def pick_pack(weights, events, plan):
+    """(index of the card to take, whether it meets the plan's threshold) (spec 03 section 6, #240).
+
+    The highest weight, leftmost among equals. events[i] says card i is an event pack: plan "event_packs" "prefer"
+    takes the best event pack shown, threshold or not; "avoid" leaves them out while another card shows.
+    """
+    mode = plan["event_packs"]
+    pool = range(len(weights))
+    if mode != "weight" and any(events) and not all(events):
+        pool = [i for i in pool if events[i] == (mode == "prefer")]
+    i = max(pool, key=lambda i: (weights[i], -i))
+    return i, (mode == "prefer" and events[i]) or weights[i] >= plan["threshold"]
+
+
+def refresh_wanted(good, setting, used):
+    """Whether to use a free refresh: only when the best card is below the threshold, then per theme_pack_refresh.
 
     "none" never, "once" for the first refresh on the floor, "all" until the caller sees a refresh change nothing.
     """
-    if not all(r == "avoid" for r in ranks):
-        return False
-    return setting == "all" or (setting == "once" and used == 0)
-
-
-def pick_pack(ranks):
-    """Index of the card to take: best mark, leftmost among equals."""
-    return min(range(len(ranks)), key=lambda i: (PACK_RANK[ranks[i]], i))
+    return not good and (setting == "all" or (setting == "once" and used == 0))
 
 
 def team_list_move(visible, target):

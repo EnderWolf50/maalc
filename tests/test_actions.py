@@ -1589,11 +1589,15 @@ REFRESH = (1083, 47)
 
 
 @pytest.mark.parametrize(("setting", "refreshes"), [("none", 0), ("once", 1), ("all", 5)])
-def test_an_all_avoid_theme_pack_page_is_refreshed_as_the_setting_says(context, monkeypatch, setting, refreshes):
-    # #41: every page shows only avoided packs (a new pair after each of 4 refreshes; a 5th changes nothing: used up).
+def test_a_theme_pack_page_below_the_threshold_is_refreshed_as_the_setting_says(context, monkeypatch, setting, refreshes):
+    # #41, #240: every page's best pack is below the threshold (a new pair after each of 4 refreshes; a 5th changes
+    # nothing: used up). The log gives each card's weight, the threshold and the pulled card.
     actions.RUN.update(settings={"run": {"theme_pack_refresh": setting}}, team={"hard_from_floor": 0}, difficulty=None)
-    monkeypatch.setattr(actions, "theme_pack_marks", lambda settings, team: ([], {}))
-    monkeypatch.setattr(actions.run_start, "rank_packs", lambda cards, names, marks: [(c[0], "avoid") for c in cards])
+    plan = {"weights": {}, "threshold": 0, "unlisted": -5, "event_packs": "weight"}
+    monkeypatch.setattr(actions, "theme_pack_plan", lambda settings, team: (plan, [], {"Pack 0b"}))
+    monkeypatch.setattr(actions.run_start, "rank_packs", lambda cards, names, weights, unlisted: [(c[0], -5) for c in cards])
+    lines = []
+    monkeypatch.setattr(actions, "log", lines.append)
     taps = []
     monkeypatch.setattr(actions, "tap", lambda context, x, y, wait=1.0: taps.append((x, y)))
 
@@ -1609,6 +1613,8 @@ def test_an_all_avoid_theme_pack_page_is_refreshed_as_the_setting_says(context, 
     actions.PickThemePack().run(context, None)
     assert taps.count(REFRESH) == refreshes
     assert context.tasker.controller.post_swipe.call_count == 1  # the leftmost card is pulled all the same
+    assert "floor 2 packs, threshold 0: Pack 0a (-5), Pack 0b (-5, event)" in lines
+    assert lines[-1] == f"floor 2: pull 'Pack {min(refreshes, 4)}a' (-5, below the threshold)"
 
 
 def test_a_search_tab_opens_without_fixed_waits(context, clock):

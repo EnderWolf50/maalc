@@ -54,7 +54,7 @@ test("a new file asks for a team, and new teams make it valid", () => {
 });
 
 test("parseSettings refuses newer and unmigratable versions", () => {
-  expect(() => parseSettings('{"version": 9}')).toThrow("newer");
+  expect(() => parseSettings('{"version": 10}')).toThrow("newer");
   expect(() => parseSettings('{"version": 0}')).toThrow("cannot be migrated");
 });
 
@@ -125,11 +125,26 @@ test("version 7 accepts the User Agreement and downloads", () => {
   expect(validate(data)).toEqual([]);
 });
 
+test("version 8 theme pack marks become weights that pick as before", () => {
+  // #240: prefer / neutral / avoid -> 5 / 0 / -5, threshold 0, unlisted 0, event packs by weight.
+  const old = structuredClone(cases.valid) as Record<string, unknown> & { theme_pack_plans: Record<string, unknown>[] };
+  old.theme_pack_plans = [{ id: "p1", name: "Mine", marks: { "Automated Factory": "avoid", "The Forgotten": "prefer", "Lake World": "neutral" } }];
+  const { data, migrated } = parseSettings(JSON.stringify({ ...old, version: 8 }));
+  expect(migrated).toBe(true);
+  expect(data.theme_pack_plans).toEqual([{
+    id: "p1", name: "Mine", weights: { "Automated Factory": -5, "The Forgotten": 5, "Lake World": 0 },
+    threshold: 0, unlisted: 0, event_packs: "weight",
+  }]);
+  expect(validate(data)).toEqual([]);
+});
+
 test("parseThemePacks reads the season's data file", () => {
   const data = parseThemePacks(themePacksYaml);
-  expect(data.packs).toContain("Walpurgis Night: Hatred and Despair");
-  expect(data.default_plan["The B.E."]).toBe("prefer"); // #89: the default plan has content
-  expect(Object.keys(data.default_plan).every((p) => data.packs.includes(p))).toBe(true);
-  expect(parseThemePacks("packs: [A]\ndefault_plan:\n  A: avoid\n")).toEqual({ packs: ["A"], default_plan: { A: "avoid" } });
-  expect(parseThemePacks("")).toEqual({ packs: [], default_plan: {} });
+  expect(data.packs["Walpurgis Night: Hatred and Despair"]).toBe("N34 H34");
+  expect(data.event_packs).toContain("Walpurgis Night: Hatred and Despair");
+  // #240: AALC's weights, threshold 0, unlisted 0.
+  expect(data.default_plan).toMatchObject({ threshold: 0, unlisted: 0, event_packs: "weight" });
+  expect(data.default_plan.weights["The B.E."]).toBe(10);
+  expect(Object.keys(data.default_plan.weights).every((p) => p in data.packs)).toBe(true);
+  expect(parseThemePacks("")).toEqual({ packs: {}, event_packs: [], default_plan: { weights: {}, threshold: 0, unlisted: 0, event_packs: "weight" } });
 });

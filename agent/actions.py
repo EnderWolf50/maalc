@@ -1096,11 +1096,12 @@ class GiftSearch(CustomAction):
         return False
 
 
-def theme_pack_marks(settings, team):
+def theme_pack_plan(settings, team):
+    """(the team's plan, every pack name to match, the event packs): the data file's default or the user's (spec 04 section 8)."""
     data = yaml.safe_load((RESOURCE / "base" / "data" / "theme_packs.yaml").read_text(encoding="utf-8"))
-    plan = team["theme_pack_plan"]
-    marks = data["default_plan"] if plan == "default" else next(p["marks"] for p in settings["theme_pack_plans"] if p["id"] == plan)
-    return data["packs"] + list(marks), marks or {}
+    ref = team["theme_pack_plan"]
+    plan = data["default_plan"] if ref == "default" else next(p for p in settings["theme_pack_plans"] if p["id"] == ref)
+    return plan, list(data["packs"]) + list(plan["weights"]), set(data["event_packs"])
 
 
 def pack_titles(context, image):
@@ -1126,7 +1127,7 @@ def columns(results):
 
 @AgentServer.custom_action("PickThemePack")
 class PickThemePack(CustomAction):
-    """Set this floor's difficulty, then pull the best pack: prefer > neutral > avoid, leftmost first (spec 03 sections 2, 6)."""
+    """Set this floor's difficulty, then pull the best pack: highest weight, leftmost first (spec 03 sections 2, 6)."""
 
     @hands_back
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
@@ -1143,24 +1144,25 @@ class PickThemePack(CustomAction):
         if not self.set_difficulty(context, floor, want):
             return stuck(f"floor {floor} difficulty did not switch to {'HARD' if want else 'NORMAL'}")
 
-        names, marks = theme_pack_marks(run["settings"], run["team"])
+        plan, names, event_packs = theme_pack_plan(run["settings"], run["team"])
         setting = run["settings"]["run"]["theme_pack_refresh"]
         seen = None
         for used in range(10):  # ponytail: stop when a refresh changes nothing; read `Refresh n/m` if that misfires
             cards = pack_titles(context, page_guard(context, "ThemePack"))
             if not cards:
                 return stuck("no theme pack titles read")
-            ranked = run_start.rank_packs([lines for _, lines in cards], names, marks)
-            log(f"floor {floor} packs: " + ", ".join(f"{t} ({r})" for t, r in ranked))
-            ranks = [r for _, r in ranked]
+            ranked = run_start.rank_packs([lines for _, lines in cards], names, plan["weights"], plan["unlisted"])
+            events = [t in event_packs for t, _ in ranked]
+            log(f"floor {floor} packs, threshold {plan['threshold']}: "
+                + ", ".join(f"{t} ({w}{', event' if e else ''})" for (t, w), e in zip(ranked, events)))
             titles = [t for t, _ in ranked]
-            if not run_start.refresh_wanted(ranks, setting, used) or titles == seen:
+            i, good = run_start.pick_pack([w for _, w in ranked], events, plan)
+            if not run_start.refresh_wanted(good, setting, used) or titles == seen:
                 break
             seen = titles
             tap(context, 1083, 47, wait=3)
-        i = run_start.pick_pack(ranks)
         x = cards[i][0]
-        log(f"floor {floor}: pull {ranked[i][0]!r}")
+        log(f"floor {floor}: pull {ranked[i][0]!r} ({ranked[i][1]}{'' if good else ', below the threshold'})")
         swipe(context, x, 330, x, 650, ms=600, wait=0)
         RUN["fresh_floor"] = True  # find_bus: the new map takes no drag for its first seconds
         # The page fades out slowly; do not let MirrorHub pull twice.

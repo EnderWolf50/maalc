@@ -17,7 +17,7 @@
     "trial_risk_overrides"
   ],
   "properties": {
-    "version": { "const": 8 },
+    "version": { "const": 9 },
     "language": { "enum": ["zh_tw", "en_us"], "default": "zh_tw" },
     "run": {
       "type": "object",
@@ -49,7 +49,7 @@
         "theme_pack_refresh": {
           "enum": ["none", "once", "all"],
           "default": "all",
-          "description": "free theme pack refreshes on a page of only avoided packs: none, the first one, or all"
+          "description": "free theme pack refreshes a floor may use while the best pack is below the plan's threshold: none, the first one, or all"
         },
         "auto_accept_terms": { "type": "boolean", "default": true, "description": "tick both boxes of the title's User Agreement and Confirm; off: stop" },
         "auto_download": { "type": "boolean", "default": true, "description": "accept game data downloads and updates; off: stop" }
@@ -88,7 +88,7 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["id", "name", "marks"],
+        "required": ["id", "name", "weights", "threshold", "unlisted", "event_packs"],
         "properties": {
           "id": {
             "$ref": "#/$defs/id",
@@ -96,10 +96,22 @@
             "description": "\"default\" names the data-file plan in teams[].theme_pack_plan"
           },
           "name": { "$ref": "#/$defs/name" },
-          "marks": {
+          "weights": {
             "type": "object",
-            "additionalProperties": { "enum": ["prefer", "neutral", "avoid"] },
-            "default": {}
+            "additionalProperties": { "$ref": "#/$defs/pack_weight" },
+            "default": {},
+            "description": "pack name -> weight; the highest is taken, leftmost among equals"
+          },
+          "threshold": {
+            "$ref": "#/$defs/pack_weight",
+            "default": 0,
+            "description": "a page whose best pack weighs less is refreshed while run.theme_pack_refresh allows"
+          },
+          "unlisted": { "$ref": "#/$defs/pack_weight", "default": 0, "description": "the weight of a pack not in weights or not read" },
+          "event_packs": {
+            "enum": ["weight", "prefer", "avoid"],
+            "default": "weight",
+            "description": "the data file's event packs: by weight, taken when shown, or left out while another pack shows"
           }
         }
       }
@@ -295,6 +307,7 @@
   },
   "$defs": {
     "id": { "type": "string", "minLength": 1 },
+    "pack_weight": { "type": "integer", "minimum": -10, "maximum": 10 },
     "vestige": {
       "type": "object",
       "additionalProperties": false,
