@@ -21,25 +21,17 @@ def pick_choice(options, keyword, override=None, closed=(), event=None):
 
     options are each option's OCR text (its line plus the hint under it); closed are the indices that
     cannot be taken (greyed out, or a tap left the page as it was). Among the rest an override's option
-    text wins when it matches. With the event's table options (match_event) each option is ranked by its
-    own entry, found by its texts: direct gain of the main keyword > direct gain > ??? / random > check
-    pass > follow-up page > win battle > the rest, ties to the main keyword, then the screen order; an
-    option no entry matches is ranked by its hint. Without them: a main-keyword E.G.O Gift > any E.G.O
-    Gift > the first option.
+    text wins when it matches. Then AALC's order (#233): ??? / random > direct gain > advantage check
+    (pass to gain) > "gain ... depending on ..." > the rest; inside a tier an option with a main-keyword gift
+    first, then the screen order. With the event's table options (match_event) each option is ranked by its
+    own entry, found by its texts; an option no entry matches (or no table at all) is ranked by its hint.
     """
     open_ = [i for i in range(len(options)) if i not in closed]
     if override:
         for i in open_:
             if compact(override) in compact(options[i]):
                 return i
-    if event:
-        return min(open_, key=lambda i: (*_rank(options[i], _entry(options[i], event), keyword), i), default=None)
-    gift = [i for i in open_ if _gift(options[i])]
-    main = [i for i in gift if re.search(rf"\b{keyword}\b", options[i], re.I)]
-    return (main or gift or open_ or [None])[0]
-
-
-KIND_TIER = {"random": 2, "check": 3, "followup": 4, "battle": 5}  # direct 0-1, the rest 6
+    return min(open_, key=lambda i: (*_rank(options[i], _entry(options[i], event) if event else None, keyword), i), default=None)
 
 
 def _gift(text):
@@ -48,22 +40,27 @@ def _gift(text):
 
 
 def _rank(text, entry, keyword):
-    """(tier, 0 when the main keyword is in it) of an option: by its table entry, else by its OCR'd hint."""
+    """(tier, 0 when the main keyword is in it) of an option: by its table entry, else by its OCR'd hint.
+
+    Tiers: 0 ???, 1 direct gain, 2 check (pass to gain), 3 "gain ... depending on", 4 the rest. A battle and a
+    gift only when a check fails have no AALC tier: the rest, where the main keyword is no tie-break.
+    """
     if entry:
+        kind = entry["kind"]
         main = any(k == keyword for k, _ in entry.get("gifts", ()))
-        if entry["kind"] == "direct":
-            return (0 if any(k == keyword and how == "direct" for k, how in entry["gifts"]) else 1), not main
-        tier = KIND_TIER.get(entry["kind"], 6)
-        return tier, tier == 6 or not main  # the rest gain nothing: a gift when a check fails is no tie-break
+        if kind in ("random", "direct"):
+            return (0 if kind == "random" else 1), not main
+        if kind in ("check", "followup"):  # AALC matches "Advantage check" before "Gain ... depending on"
+            return (2 if re.search(r"\bcheck\b", entry["hint"], re.I) else 3), not main
+        return 4, True
     main = bool(re.search(rf"\b{keyword}\b", text, re.I))
     if "???" in text:
+        return 0, not main
+    if not _gift(text) or re.search(r"\bwin the battle", text, re.I):
+        return 4, True
+    if re.search(r"\bcheck\b", text, re.I):
         return 2, not main
-    if not _gift(text):
-        return 6, not main
-    for tier, word in ((5, r"\bwin the battle"), (3, r"\bcheck\b"), (4, r"\bdepending on\b")):
-        if re.search(word, text, re.I):
-            return tier, not main
-    return (0 if main else 1), not main
+    return (3 if re.search(r"\bdepending on\b", text, re.I) else 1), not main
 
 
 def _entry(text, event, min_ratio=0.8):
