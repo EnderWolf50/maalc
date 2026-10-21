@@ -1,0 +1,40 @@
+import pytest
+
+import after_land
+
+
+def fake_git(branch="main", dirty="", fail=None):
+    calls = []
+
+    def git(*args):
+        calls.append(args)
+        if args[0] == fail:
+            return 1, "boom"
+        if args[0] == "rev-parse":
+            return 0, branch + "\n"
+        if args[0] == "status":
+            return 0, dirty
+        return 0, ""
+
+    return git, calls
+
+
+def test_sync_fetches_then_fast_forwards():
+    git, calls = fake_git()
+    after_land.sync_main(git)
+    assert [c[0] for c in calls][-2:] == ["fetch", "pull"]
+    assert "--ff-only" in calls[-1]
+
+
+@pytest.mark.parametrize("kw, msg", [
+    ({"branch": "feature"}, "not on main"),
+    ({"dirty": " M agent/x.py\n"}, "not clean"),
+    ({"fail": "pull"}, "fast-forward"),
+    ({"fail": "fetch"}, "fetch"),
+])
+def test_sync_refuses(kw, msg):
+    git, calls = fake_git(**kw)
+    with pytest.raises(SystemExit, match=msg):
+        after_land.sync_main(git)
+    if "fail" not in kw:
+        assert not any(c[0] in ("fetch", "pull") for c in calls)
