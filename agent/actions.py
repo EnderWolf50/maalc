@@ -1675,14 +1675,21 @@ class RouteMap(CustomAction):
         log(f"map: column {n}: " + ", ".join(f"{r} {t} (from {'/'.join(sorted(src))})" for r, (t, src) in column.items()))
 
     @staticmethod
+    def retype(context, image, column, x, y, n):
+        """Type column n, read from afar, again by its Cost now that it sits at x, up to MAP_NEAR (in place)."""
+        for row, (_, linked) in column.items():
+            column[row] = (node_at(context, image, x, y + map_route.ROW_DY[row]), linked)
+        RouteMap.log_column(n, column)
+
+    @staticmethod
     def read_on(context, image, bus, slots, ahead):
         """The floor past the screen's right edge (#202): (ahead read on, two columns a drag; the bus, back home).
 
         Each drag moves the map two columns left, measured on the frames before and after it (map_route.shift).
         The read goes on (read_ahead) from the last column read whose next two then sit up to MAP_NEAR, so they are
         read again with their Cost (#238) and replace what was read of them from afar, and the links into them
-        join them to the columns read before; a near read that ends sooner keeps what was read past it, those up to
-        MAP_NEAR typed again by their Cost. The read ends at the boss, a read that ends short of the screen's edge
+        join them to the columns read before; the column read on from, if it was past MAP_NEAR before the drag, and
+        what a near read ending sooner keeps past it, up to MAP_NEAR, are typed again by their Cost (retype). The read ends at the boss, a read that ends short of the screen's edge
         with nothing read past it (hard mode's two columns), a drag that moves the map less than half a column or
         leaves no column to read on from (its edge), or one that cannot be measured (what was read stands), or after
         MAP_DRAGS drags.
@@ -1708,15 +1715,15 @@ class RouteMap(CustomAction):
                 break
             moved, image = moved + s, after
             log(f"map: dragged the map {s} px; reading on from column {k + 2}")
+            if k and x0 + k * dx - moved + s > MAP_NEAR:  # read from afar before this drag; at x 120 or more now
+                RouteMap.retype(context, image, columns[k], x0 + k * dx - moved, y, k + 1)
             more = RouteMap.read_ahead(context, image, x0 + k * dx - moved, y, columns[k], first=k + 2)
             edge = x0 + (k + len(more)) * dx - moved + dx + 80 > 1200
             if (tail := ahead[k + len(more):]) and not (more and any(t == "boss" for t, _ in more[-1].values())):
                 # A near read ending short: what was read past it stays, up to an edge; near now, by its Cost.
                 for i, column in enumerate(tail, start=k + len(more) + 1):
                     if (x := x0 + i * dx - moved) <= MAP_NEAR:
-                        for row, (_, linked) in column.items():
-                            column[row] = (node_at(context, image, x, y + map_route.ROW_DY[row]), linked)
-                        RouteMap.log_column(i + 1, column)
+                        RouteMap.retype(context, image, column, x, y, i + 1)
                 more, edge = more + tail, True
             if not more:
                 break

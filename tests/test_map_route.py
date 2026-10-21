@@ -596,9 +596,11 @@ def cost_reads(monkeypatch, offsets):
     return reads
 
 
-def test_a_short_drag_still_brings_every_column_near_before_it_is_joined_on(context, monkeypatch):
-    # Review of #202: a first drag that moves 382 px (the game ate part of it) left column 4 at x 712, read from its
-    # marks; the next drag put it at 202, where it was joined on from, not read again. Every column reads its Cost.
+@pytest.mark.parametrize("eaten", [(138, 0), (90, -10)], ids=["382 then 520 px", "430 then 530 px"])
+def test_a_short_drag_still_brings_every_column_near_before_it_is_joined_on(context, monkeypatch, eaten):
+    # Review of #239: a first drag that moves 382 px (the game ate part of it) left column 4 at x 712, read from its
+    # marks; the next drag put it at 202, where it was joined on from, not read again. One of 430 px left it at 664,
+    # and one of 530 px after it at 134. Every column reads its Cost.
     monkeypatch.setattr(actions, "map_weights", lambda context: WIDE_WEIGHTS)
     actions.RUN["floor"] = 1
     offsets = map_world(context, WIDE, WIDE_LINKS, bus_x=446, width=3200)
@@ -606,7 +608,7 @@ def test_a_short_drag_still_brings_every_column_near_before_it_is_joined_on(cont
 
     def short_first(context, x, y, dx, dy):
         drags.append(dx)
-        scroll(context, x, y, dx + 138 if len(drags) == 2 else dx, dy)  # the first two-column drag: 382 px
+        scroll(context, x, y, dx + eaten[0] if len(drags) == 2 else dx + eaten[1] if len(drags) == 3 else dx, dy)
     monkeypatch.setattr(actions, "scroll", short_first)
     actions.RouteMap().run(context, None)
     assert {c for c, costs in reads if costs} >= set(range(1, 7))
