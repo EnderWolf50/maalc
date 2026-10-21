@@ -130,7 +130,7 @@ def grid(context, monkeypatch):
 @pytest.mark.parametrize("n", [3, 10, 13, 20, 23, 31])
 def test_every_gift_is_read_once_whatever_the_grid_holds(context, grid, monkeypatch, page, n):
     # Two rows a drag, the first cut-off one to the first's place; the last drag stops at the grid's end. A last row
-    # full at the end takes one drag more: it might be a drag the game took less of. The sell page is first dragged to
+    # full at the end takes one drag more: it might be a drag the game took less of. Every page is first dragged to
     # its top (a drag that does not move it here).
     g = grid(page, n)
     logs = []
@@ -140,7 +140,7 @@ def test_every_gift_is_read_once_whatever_the_grid_holds(context, grid, monkeypa
     assert (f"shop: the {page} grid does not move: at its end" in logs) == (n == 20)
     assert [c["i"] for c in cells] == list(range(n))
     assert [c["keyword"] for c in cells] == [KEYWORDS[i % len(KEYWORDS)] for i in range(n)]
-    assert g.drags == (0 if n <= 10 else -(-(n - 10) // 10)) + (n == 20) + (page == "sell")  # rows 3-4, 5-6: a drag each
+    assert g.drags == (0 if n <= 10 else -(-(n - 10) // 10)) + (n == 20) + 1  # rows 3-4, 5-6: a drag each
 
 
 def test_a_cell_read_further_down_is_found_again_after_the_grid_moved(context, grid):
