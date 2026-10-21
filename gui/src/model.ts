@@ -120,6 +120,7 @@ export interface Settings {
     difficulty: string; runs: number | null; weekly_bonus_use: string; weekly_bonus_amount: string;
     stop_when_weekly_bonus_out: boolean; starlight_unaffordable: string; wipe_retries: number;
     after_retries: string; webhook_url: string; theme_pack_refresh: string;
+    auto_accept_terms: boolean; auto_download: boolean;
   };
   deployment_order_plans: DeploymentPlan[];
   starlight_plans: StarlightPlan[];
@@ -190,6 +191,8 @@ const MIGRATIONS: Record<number, (d: Record<string, unknown>) => Record<string, 
   // Version 7 adds what the shop keeps out of fusions and sales (#77, #161), as before: no other keyword, keywordless
   // kept, no gift; tier V and vestiges never sold.
   6: (d) => withTeamDefault(d, { keep_keywords: [], keywordless: "keep", keep_gifts: [], sell_max_tier: 4, sell_vestiges: false }),
+  // Version 8 adds run.auto_accept_terms and run.auto_download (#85, #86), on: the user's decision (2026-10-21).
+  7: (d) => (d.run && typeof d.run === "object" ? { ...d, run: { auto_accept_terms: true, auto_download: true, ...d.run } } : d),
 };
 
 function withTeamDefault(d: Record<string, unknown>, field: Record<string, unknown>) {

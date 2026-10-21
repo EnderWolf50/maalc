@@ -17,6 +17,15 @@ const screens: [image: string, hits: string[]][] = [
   // is Confirmed; a one-button error box is closed by its one button. Both sit on the title, which reads through.
   ['TitleDownload.png', ['DownloadDialog', 'GoToMirrorEntry', 'NavTitle']],
   ['TitleErrorConfirm.png', ['PopupButton', 'GoToMirrorEntry', 'NavTitle']],
+  // Synthetic, no capture: TitleErrorConfirm.png with the client's own mid-run update text (EN_MainUIText
+  // remote_download_quit_game). DownloadDialog and PopupButton read it too; UpdateDialog comes first in the hub.
+  ['UpdateDialog.synthetic.png', ['UpdateDialog', 'DownloadDialog', 'PopupButton', 'GoToMirrorEntry', 'NavTitle']],
+  // Live 2026-10-21 (a new account): the title's User Agreement, unticked and both boxes ticked; the title reads through.
+  ['UserAgreement.png', ['UserAgreement', 'GoToMirrorEntry', 'NavTitle']],
+  ['UserAgreementTicked.png', ['UserAgreement', 'GoToMirrorEntry', 'NavTitle']],
+  // Live 2026-10-21: the 17.77 GB download after the title's dialog, its two stages.
+  ['DownloadingUpdate.png', ['Downloading']],
+  ['DownloadingResources.png', ['Downloading']],
   // Synthetic (#84) over the title, live captures over the Mailbox below: the one-button notice window
   // (MaintenanceNotice's, live) relabelled as a server error with a countdown Retry or a Try Again button.
   // They put RetryPopup on every other screen.

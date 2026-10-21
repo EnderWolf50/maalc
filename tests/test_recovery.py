@@ -81,6 +81,20 @@ def test_watchdog_another_screen_between_two_loads_starts_the_cap_over():
     assert not any(w.see("Loading", dots(t), t) for t in range(141, 290))
 
 
+def test_watchdog_a_download_waits_as_long_as_it_moves():
+    # Live 2026-10-21: 17.77 GB took ~32 min over DOWNLOADING UPDATE, then DOWNLOADING RESOURCES; no cap.
+    w = Watchdog()
+    assert not any(w.see("Downloading", dots(t), t) for t in range(0, 3600, 5))
+    assert not any(w.see("Downloading", A, t) for t in range(3600, 3600 + WAIT_STILL))
+    assert w.see("Downloading", A, 3600 + WAIT_STILL)  # a download that stopped moving is stuck
+
+
+def test_watchdog_a_load_after_a_long_download_has_its_own_cap():
+    w = Watchdog()
+    assert not any(w.see("Downloading", dots(t), t) for t in range(0, 1800, 5))
+    assert not any(w.see("Loading", dots(t), t) for t in range(1800, 1900))
+
+
 def test_watchdog_a_still_screen_of_another_type_does_not_start_the_wait_still():
     w = Watchdog()
     for t in range(3):
