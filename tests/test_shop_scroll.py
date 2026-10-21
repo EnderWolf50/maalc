@@ -97,15 +97,16 @@ def grid(context, monkeypatch):
 
 
 @pytest.mark.parametrize("page", ["fuse", "sell"])
-@pytest.mark.parametrize("n", [3, 10, 13, 23, 31])
+@pytest.mark.parametrize("n", [3, 10, 13, 20, 23, 31])
 def test_every_gift_is_read_once_whatever_the_grid_holds(context, grid, page, n):
-    # Two rows a drag, the first cut-off one to the first's place; the last drag stops at the grid's end.
+    # Two rows a drag, the first cut-off one to the first's place; the last drag stops at the grid's end. A last row
+    # full at the end takes one drag more: it might be a drag the game took less of.
     g = grid(page, n)
     cells, _ = actions.owned_cells(context, g.screen(), page, [])
     assert g.reads == list(range(n))  # each gift once, in the grid's order
     assert [c["i"] for c in cells] == list(range(n))
     assert [c["keyword"] for c in cells] == [KEYWORDS[i % len(KEYWORDS)] for i in range(n)]
-    assert g.drags == (0 if n <= 10 else -(-(n - 10) // 10))  # rows 3-4, 5-6: a drag each
+    assert g.drags == (0 if n <= 10 else -(-(n - 10) // 10)) + (n == 20)  # rows 3-4, 5-6: a drag each
 
 
 def test_a_cell_read_further_down_is_found_again_after_the_grid_moved(context, grid):

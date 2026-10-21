@@ -2499,14 +2499,15 @@ def owned_cells(context, image, page, gifts):
             out.append({**c, "i": i, "y": y + grid["at"], "price": prices.get(c["i"]), "look": centre(image, c["x"], y)})
         cut = [y for _, x, y in shown if y + under > bottom and y - 25 < bottom and shop.filled(image[:bottom], x, y)]
         hidden = min(y for _, _, y in shown if y - 25 >= bottom)
-        if not cut and all(shop.filled(image[:bottom], x0 + dx * c, hidden - dy) for c in range(5)):
-            cut = [hidden]  # a full row over the edge, the next one all under it (a drag the game took less of): more may follow
-        if not cut:
+        # A full row over the edge and the next one all under it (a drag the game took less of, or the grid's end): one
+        # drag more tells them apart.
+        full = not cut and all(shop.filled(image[:bottom], x0 + dx * c, hidden - dy) for c in range(5))
+        if not cut and not full:
             break
-        moved, image = drag_grid(context, page, min(cut) - y0 - GRID_MARGIN)
+        moved, image = drag_grid(context, page, (min(cut) if cut else hidden) - y0 - GRID_MARGIN)
         grid["at"] += moved
         if abs(moved) <= 3:
-            log(f"shop: the {page} grid does not move: at its end")
+            log(f"shop: the {page} grid does not move: " + ("at its end" if full else "its cut-off cells stay unread"))
             break
     else:
         log(f"shop: the {page} grid still has cut-off cells after {GRID_SCROLLS} drags: they stay unread")
