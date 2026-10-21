@@ -2487,13 +2487,17 @@ def owned_cells(context, image, page, gifts):
     row up to the first row's place (with none, the row under a full last row), until no cut-off cell holds a gift or a
     drag moves it no more. A cell is
     {"i", "x", "y", "tier", "keyword", "gift", "price", "look"}: i its place in the grid's order, y with the grid at its
-    top, look its centre as read (cell_at finds it again by both); grid is {"page", "at": px scrolled}. The grid is at
-    its top when the page opens.
+    top, look its centre as read (cell_at finds it again by both); grid is {"page", "at": px scrolled}. A page opens
+    where its list was left (live
+    2026-10-21: the fuse page after a fusion): the fuse page's is placed by its owned gifts' label (owned_label), the
+    sell page's dragged to its top first (grid_top).
     """
     (x0, y0), (dx, dy), under = OWNED_GRID[page]
     bottom = CELL_PAGES[page][1]
     grid, out, done = {"page": page, "at": 0}, [], set()
-    if page == "fuse":
+    if page == "sell":
+        image = grid_top(context, page)
+    else:
         label, image = owned_label(context, image)
         if label is None:
             log("shop: no E.G.O Gifts Owned on the fuse page: nothing read")
@@ -2532,17 +2536,29 @@ def owned_cells(context, image, page, gifts):
 
 
 def owned_label(context, image):
-    """(the centre y of the fuse page's "E.G.O Gifts Owned" label, the screenshot it shows on), the list dragged up a
-    stroke at a time until it shows: a fixed recipe's section (#103, #78) or a limited fusion's sits over it, neither
-    used (#205). (None, the last screenshot) when the list ends without it."""
-    for _ in range(GRID_SCROLLS):
+    """(the centre y of the fuse page's "E.G.O Gifts Owned" label, the screenshot it shows on). Not on show, the list is
+    dragged to its top, then up a stroke at a time until it shows: a fixed recipe's section (#103, #78) or a limited
+    fusion's sits over it, neither used (#205). (None, the last screenshot) when the list ends without it."""
+    for k in range(GRID_SCROLLS):
         box = next((b for t, b in ocr(context, image, FUSE_LIST) if has(t, "Gifts Owned")), None)
         if box:
             return box[1] + box[3] // 2, image
+        if k == 0:
+            image = grid_top(context, "fuse")
+            continue
         moved, image = drag_grid(context, "fuse", GRID_STROKE)
         if abs(moved) <= 3:
             break
     return None, image
+
+
+def grid_top(context, page):
+    """The screenshot of page's list dragged down to its top, a stroke at a time until one moves it no more."""
+    for _ in range(GRID_SCROLLS):
+        moved, image = drag_grid(context, page, -GRID_STROKE)
+        if abs(moved) <= 3:
+            return image
+    return image
 
 
 def whole(page, y):

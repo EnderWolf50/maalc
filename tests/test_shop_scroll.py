@@ -119,7 +119,8 @@ def grid(context, monkeypatch):
 @pytest.mark.parametrize("n", [3, 10, 13, 20, 23, 31])
 def test_every_gift_is_read_once_whatever_the_grid_holds(context, grid, monkeypatch, page, n):
     # Two rows a drag, the first cut-off one to the first's place; the last drag stops at the grid's end. A last row
-    # full at the end takes one drag more: it might be a drag the game took less of.
+    # full at the end takes one drag more: it might be a drag the game took less of. The sell page is first dragged to
+    # its top (a drag that does not move it here).
     g = grid(page, n)
     logs = []
     monkeypatch.setattr(actions, "log", logs.append)
@@ -128,7 +129,7 @@ def test_every_gift_is_read_once_whatever_the_grid_holds(context, grid, monkeypa
     assert (f"shop: the {page} grid does not move: at its end" in logs) == (n == 20)
     assert [c["i"] for c in cells] == list(range(n))
     assert [c["keyword"] for c in cells] == [KEYWORDS[i % len(KEYWORDS)] for i in range(n)]
-    assert g.drags == (0 if n <= 10 else -(-(n - 10) // 10)) + (n == 20)  # rows 3-4, 5-6: a drag each
+    assert g.drags == (0 if n <= 10 else -(-(n - 10) // 10)) + (n == 20) + (page == "sell")  # rows 3-4, 5-6: a drag each
 
 
 def test_a_cell_read_further_down_is_found_again_after_the_grid_moved(context, grid):
@@ -138,6 +139,17 @@ def test_a_cell_read_further_down_is_found_again_after_the_grid_moved(context, g
     for i in (22, 0, 12, 4, 21):
         g.click(*actions.cell_at(context, at, cells[i]))
     assert g.taps == [22, 0, 12, 4, 21]
+
+
+@pytest.mark.parametrize("page", ["fuse", "sell"])
+@pytest.mark.parametrize("recipes", [0, 7])
+def test_a_page_opened_where_its_list_was_left_is_read_from_its_top(context, grid, page, recipes):
+    # Live 2026-10-21 (F4): the fuse page opened again after a fusion with its list still scrolled, its owned gifts'
+    # label above the edge: the scan dragged on down and found no label. The list goes back to its top first.
+    g = grid(page, 23, recipes=recipes if page == "fuse" else 0)
+    g.at = g.max_at
+    actions.owned_cells(context, g.screen(), page, [])
+    assert g.reads == list(range(23))
 
 
 @pytest.mark.parametrize("fling", [-8, 8])
