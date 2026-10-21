@@ -91,11 +91,14 @@ def links(reads):
 
     A pair reading LINE_CONTRAST links. Every node leads on (#212), so a row before with none takes its
     brightest pair when it reads FAINT_LINK, but not a diagonal that a link read the other way crosses:
-    the crossing alone reads 11.9-14.2 (the bus's links in tests/screens), as high as a faint link.
+    the crossing alone reads 11.9-14.2 (the bus's links in tests/screens), as high as a faint link. A real faint
+    diagonal crossed so is lost too; the path then goes on as paths says. reads covers every row of both columns
+    (read_ahead keeps the pairs from its nodes), so a crossing from a node not read still counts.
     """
-    found = {pair for pair, c in reads.items() if c >= LINE_CONTRAST}
-    for src in {src for src, _ in reads} - {src for src, _ in found}:
-        c, pair = max((c, (a, b)) for (a, b), c in reads.items() if a == src and (b, a) not in found)
+    read = {pair for pair, c in reads.items() if c >= LINE_CONTRAST}
+    found = set(read)
+    for src in {src for src, _ in reads} - {src for src, _ in read}:
+        c, pair = max((c, (a, b)) for (a, b), c in reads.items() if a == src and (b, a) not in read)
         if c >= FAINT_LINK:
             found.add(pair)
     return found

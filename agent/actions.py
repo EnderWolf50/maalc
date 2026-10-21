@@ -1439,9 +1439,9 @@ class RouteMap(CustomAction):
             x += dx
             before, column, lit = ahead[-1] if ahead else slots, {}, False
             links = map_route.links({(r, row): map_route.line_contrast(v, x - dx, y(r), x, y(row)) or 0
-                                     for r in before for row in map_route.ROWS if map_route.near(r, row)})
+                                     for r in map_route.ROWS for row in map_route.ROWS if map_route.near(r, row)})
             for row in map_route.ROWS:
-                linked = {src for src, dst in links if dst == row}
+                linked = {src for src, dst in links if dst == row and src in before}
                 if linked:
                     marks = node_marks(context, image, x, y(row))
                     column[row] = (node_at(context, image, x, y(row), marks, costs=False), linked)
