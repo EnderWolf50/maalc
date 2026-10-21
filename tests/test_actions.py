@@ -1,5 +1,6 @@
 """Custom actions driven offline: a fake Maa context reads nothing on a blank screen."""
 
+import itertools
 import json
 import math
 import time
@@ -576,9 +577,8 @@ def test_a_turn_over_a_moving_battlefield_is_played(context, monkeypatch):
     # Live 2026-10-21: a swarm of enemies moved over the whole battlefield, the HUD at rest; the screen never
     # read still and turn 3 waited 18 min, twice (BattleTurnSwarm*.png, 3 s apart).
     frames = [np.asarray(Image.open(SCREENS / f"BattleTurnSwarm{s}.png"))[:, :, ::-1] for s in ("", "Next")]
-    shots = iter(range(100))
-    context.tasker.controller.post_screencap.return_value.wait.return_value.get.side_effect = \
-        lambda: frames[next(shots) % 2]
+    shots = itertools.cycle(frames)
+    context.tasker.controller.post_screencap.return_value.wait.return_value.get.side_effect = lambda: next(shots)
     monkeypatch.setattr(actions.battle, "disc_lit", lambda image, x, y: True)
     actions.PlayTurn().run(context, SimpleNamespace(box=[946, 531, 40, 29]))
     context.tasker.controller.post_click.assert_called()

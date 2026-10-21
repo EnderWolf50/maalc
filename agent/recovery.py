@@ -44,12 +44,12 @@ def thumb(image):
     return image[:h, :w].reshape(h // 40, 40, w // 40, 40, -1).mean(axis=(1, 3, 4))
 
 
-def same_screen(a, b):
-    """Whether two thumbnails show the same screen: under 3% of the blocks moved by more than 8 levels.
+def same_screen(a, b, share=0.03):
+    """Whether two thumbnails show the same screen: under share (3%) of the blocks moved by more than 8 levels.
 
     Live: the map's bus flame and glows flicker every frame, so an exact match never repeats.
     """
-    return a is not None and b is not None and a.shape == b.shape and (abs(a - b) > 8).mean() < 0.03
+    return a is not None and b is not None and a.shape == b.shape and (abs(a - b) > 8).mean() < share
 
 
 def png(image):

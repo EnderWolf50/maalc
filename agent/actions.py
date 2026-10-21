@@ -130,9 +130,9 @@ def tap_shown(context, x, y, done, timeout=2.0, rest=1.5):
     return image if settled is None else settled
 
 
-def still(context, timeout=2.0, roi=None):
+def still(context, timeout=2.0, roi=None, share=0.03):
     """The first screenshot that looks like the one 0.2 s before it: a fade in or out has ended; None after timeout s.
-    With roi (x, y, w, h), only that part is compared.
+    With roi (x, y, w, h), only that part is compared; share is recovery.same_screen's.
 
     MirrorHub, polling every 300 ms, can hand out a page while it is still fading in or the last one fading out.
     """
@@ -145,7 +145,7 @@ def still(context, timeout=2.0, roi=None):
 
     def done(image):
         small = thumb(image)
-        same = recovery.same_screen(last[0], small)
+        same = recovery.same_screen(last[0], small, share)
         last[0] = small
         return same
     return until(context, done, timeout=timeout, least=0.2)
@@ -1935,11 +1935,8 @@ class PlayTurn(CustomAction):
             return stuck(f"battle over {recovery.BATTLE_LIMIT // 60} min", level=2)  # skips L1 (spec 06)
         # Live 2026-10-17: the Win Rate label also matches in the first frames of a turn playing out (the
         # screen moving), and a tap in the turn's opening can do nothing: act on a still HUD only. Live
-        # 2026-10-21: a swarm of enemies kept the battlefield moving for good (turn 3 waited 18 min, twice). The
-        # HUD band, from the left gear to the Win Rate label and under the skill tops the swarm shows between,
-        # read still on 305 of 319 pairs of its screenshots 3 s apart, and moving as each turn started.
-        left = (battle.slot_xs(x) or [605])[0] - 126
-        image = still(context, timeout=1, roi=(left, 530, x + 40 - left, 190))
+        # 2026-10-21 (#229): a swarm of enemies kept the battlefield moving for good; turn 3 waited 18 min, twice.
+        image = still(context, timeout=1, roi=battle.hud_band(argv.box), share=battle.HUD_MOVED)
         if image is None:
             return True  # moving: MirrorHub looks again
         turn = text(context, image, TURN_NUMBER, only_rec=True).strip() or None
