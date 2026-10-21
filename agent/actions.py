@@ -1175,14 +1175,13 @@ def node_at(context, image, cx, cy, marks=None, costs=True):
     marks = node_marks(context, image, cx, cy) if marks is None else marks
     if not marks and cy - 80 < 60:
         return "unknown"
-    by_cost = None
-    if costs and "cost" in marks and "boss" not in marks:
-        cost = coin_number(context, image, marks["cost"].box)
-        if cost is not None:
-            table = map_data()["node_costs"]["hard" if is_hard(context) else "normal"]
-            by_cost = next((kind for c, kind in table.items() if cost in (c, c % 100)), None)
-            log(f"map: node at {cx}, {cy} reads Cost {cost}: {by_cost or 'none of the table'}")
-    return map_route.node_type(set(marks), by_cost)
+    if not (costs and "cost" in marks and "boss" not in marks):
+        return map_route.node_type(set(marks))
+    cost = coin_number(context, image, marks["cost"].box)
+    table = map_data()["node_costs"]["hard" if is_hard(context) else "normal"] if cost is not None else {}
+    kind = map_route.node_type(set(marks), next((k for c, k in table.items() if cost in (c, c % 100)), None))
+    log(f"map: node at {cx}, {cy} reads Cost {cost}: {kind}")
+    return kind
 
 
 def coin_number(context, image, box):

@@ -48,6 +48,58 @@ def test_node_type_by_cost(marks, expected):
     assert mr.node_type(marks, "abno") == expected
 
 
+@pytest.mark.parametrize(("hard", "marks", "number", "expected"), [
+    (False, {"MapNodeCost"}, "75.", "battle"),
+    (False, {"MapNodeCost", "MapNodeGift"}, "100", "focused"),
+    (False, {"MapNodeCost", "MapNodeGift"}, "00", "focused"),
+    # 3-digit costs lose their first digit (offline: MapPanned.png's 120 read 20, map_f3's 150 read 50)
+    (False, {"MapNodeCost", "MapNodeGift", "MapNodeFocusedHex"}, "120", "risky"),
+    (False, {"MapNodeCost", "MapNodeGift", "MapNodeFocusedHex"}, "20", "risky"),
+    (False, {"MapNodeCost", "MapNodeGift"}, "20", "risky"),  # its ring missed (live logs: 10 of 19)
+    (False, {"MapNodeCost", "MapNodeGift", "MapNodeFocusedHex"}, "150", "abno"),
+    (False, {"MapNodeCost", "MapNodeGift", "MapNodeFocusedHex"}, "50", "abno"),
+    (True, {"MapNodeCost"}, "85", "battle"),
+    (True, {"MapNodeCost", "MapNodeGift"}, "120", "focused"),
+    (True, {"MapNodeCost", "MapNodeGift", "MapNodeFocusedRound"}, "150", "risky"),
+    (True, {"MapNodeCost", "MapNodeGift", "MapNodeFocusedHex"}, "180", "abno"),
+    (False, {"MapNodeCost"}, "25", "battle"),  # OCR noise: no cost of the table, the marks decide
+    (False, {"MapNodeCost"}, "8", "battle"),  # a single digit is a part read
+    (False, {"MapNodeCost", "MapNodeGift", "MapNodeFocusedHex"}, "", "risky"),  # unread: the ring's later kind
+])
+def test_a_node_is_typed_by_its_cost_on_the_floors_difficulty(context, hard, marks, number, expected):
+    # #91: a Risky node carries the ring, gift box and Cost coin, and read as Focused (weight 4) by its ring.
+    def run_recognition(name, image, override=None):
+        if name in marks:
+            return SimpleNamespace(hit=True, box=[700, 300, 26, 24])
+        if name == "ReadText" and number:
+            return SimpleNamespace(all_results=[SimpleNamespace(text=number, box=(0, 0, 20, 20))])
+        return None
+    context.run_recognition.side_effect = run_recognition
+    actions.RUN.update(settings={}, difficulty="normal", floor_hard=hard)
+    assert actions.node_at(context, np.zeros((720, 1280, 3), np.uint8), 713, 380) == expected
+
+
+@pytest.mark.parametrize(("marks", "expected"), [
+    ({"MapNodeCost"}, "battle"), ({"MapNodeCost", "MapNodeGift"}, "focused"), ({"MapNodeCost", "MapNodeGift", "MapNodeFocusedHex"}, "risky"),
+])
+def test_past_the_first_column_no_cost_is_read(context, marks, expected):
+    # The badges are dim there (offline: MirrorMap.png's 85 read 8): a ring stands for Risky until read next to the bus.
+    def run_recognition(name, image, override=None):
+        return SimpleNamespace(hit=True, box=[700, 300, 26, 24]) if name in marks else None
+    context.run_recognition.side_effect = run_recognition
+    assert actions.node_at(context, np.zeros((720, 1280, 3), np.uint8), 713, 380, costs=False) == expected
+    assert all(c.args[0] != "ReadText" for c in context.run_recognition.call_args_list)
+
+
+@pytest.mark.parametrize(("run", "hard"), [
+    ({"difficulty": "hard"}, True), ({"difficulty": "normal"}, False), ({"difficulty": None}, False),
+    ({"difficulty": "hard", "floor_hard": False}, False), ({"difficulty": None, "floor_hard": True}, True),
+])
+def test_is_hard_takes_the_floors_difficulty_first(context, run, hard):
+    actions.RUN.update(settings={}, **run)
+    assert actions.is_hard(context) is hard
+
+
 def test_the_column_before_the_boss_is_the_shop():
     # Live 2026-10-18 (floor 1 orange, floor 2 cyan): bus, one node read as an event, then the boss. Every path ends
     # at the shop, the last column before the boss, whatever the node's mark reads (#146).
