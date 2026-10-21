@@ -2309,10 +2309,13 @@ FUSE_CELLS, SELL_CELLS = ([(x + dx * c, y + dy * r) for r in range(3) for c in r
 OFFER_CELLS = [(624 + 154 * c, y) for y in (265, 418) for c in range(4)]  # a shop at rest; the price line is 52 px under
 GRID_DRAG_X = 728  # a drag of the owned grid starts between its first two columns
 GRID_STROKE = 215  # px a drag stroke moves the owned grid at most: it starts and ends inside the grid
-GRID_SCROLLS = 12  # drags at most to the owned grid's end: 2 rows each
+GRID_SCROLLS = 20  # drags at most to the owned grid's end: 2 rows each, fewer when the game takes less of one
 GRID_MARGIN = 6  # px a drag stops short of putting a row at the first row's place: a few px too far does not hide it
 GRID_SLIP = 12  # px a drag may move the grid past the finger, either way, and still be measured
-GRID_SAME = 20  # most mean grey difference of a cell's centre between its read and its tap: the same gift
+# A cell's centre at its tap against its read (centre, matched): the same gift 0-3 px off, the grid moved by a fraction
+# of a px (resampled to 720p), differs by 9.9 at most, two gifts by 15.2 at least (Faint and Dark Vestige's jars), 24.6
+# for 95 in 100; tests/shop's 5 fuse and sell captures (test_shop_scroll).
+GRID_SAME = 12.5
 # page: (its icon size over the GiftSearch template's, the grid's lower edge on screen)
 CELL_PAGES = {"fuse": (1.1, 493), "sell": (1.1, 495), "offer": (0.8, 530)}
 BADGES = ["Burn", "Bleed", "Tremor", "Rupture", "Sinking", "Poise", "Charge", "Slash", "Pierce", "Blunt"]
@@ -2485,7 +2488,7 @@ def owned_cells(context, image, page, gifts):
     bottom = CELL_PAGES[page][1]
     grid, out, done = {"page": page, "at": 0}, [], set()
     for _ in range(GRID_SCROLLS):
-        rows = range(max(0, grid["at"] // dy), grid["at"] // dy + 4)
+        rows = range(max(0, grid["at"] // dy), grid["at"] // dy + 5)  # the last one all under the edge
         shown = [(5 * r + c, x0 + dx * c, y0 + dy * r - grid["at"]) for r in rows for c in range(5)]
         fresh = [(i, x, y) for i, x, y in shown if i not in done and whole(page, y)]
         done |= {i for i, _, _ in fresh}
@@ -2495,13 +2498,18 @@ def owned_cells(context, image, page, gifts):
             i, _, y = fresh[c["i"]]
             out.append({**c, "i": i, "y": y + grid["at"], "price": prices.get(c["i"]), "look": centre(image, c["x"], y)})
         cut = [y for _, x, y in shown if y + under > bottom and y - 25 < bottom and shop.filled(image[:bottom], x, y)]
+        hidden = min(y for _, _, y in shown if y - 25 >= bottom)
+        if not cut and all(shop.filled(image[:bottom], x0 + dx * c, hidden - dy) for c in range(5)):
+            cut = [hidden]  # a full row over the edge, the next one all under it (a drag the game took less of): more may follow
         if not cut:
             break
         moved, image = drag_grid(context, page, min(cut) - y0 - GRID_MARGIN)
         grid["at"] += moved
         if abs(moved) <= 3:
-            log(f"shop: the {page} grid does not move: its cut-off cells stay unread")
+            log(f"shop: the {page} grid does not move: at its end")
             break
+    else:
+        log(f"shop: the {page} grid still has cut-off cells after {GRID_SCROLLS} drags: they stay unread")
     log(f"shop: {page} grid read down {grid['at']} px")
     return out, grid
 
@@ -2548,8 +2556,14 @@ def drag_grid(context, page, d):
 
 
 def centre(image, x, y):
-    """The grey centre of the grid cell at (x, y), inside its frame (a picked cell's orange stays out)."""
-    return image[y - 20:y + 20, x - 20:x + 20].astype(np.int16).sum(axis=2) // 3
+    """The grey centre of the grid cell at (x, y) in 4 px blocks, inside its frame (a picked cell's orange stays out):
+    a fraction of a px moved blurs edges the blocks average out."""
+    return image[y - 20:y + 20, x - 20:x + 20].astype(np.float32).mean(axis=2).reshape(10, 4, 10, 4).mean(axis=(1, 3))
+
+
+def matched(image, x, y, look):
+    """(difference, dy): where within 3 px of (x, y) the cell's centre is likeliest the one look was read from."""
+    return min(((np.abs(centre(image, x, y + k) - look).mean(), k) for k in range(-3, 4)), key=lambda m: (m[0], abs(m[1])))
 
 
 def cell_at(context, grid, cell):
@@ -2562,10 +2576,11 @@ def cell_at(context, grid, cell):
             break
         grid["at"] += drag_grid(context, grid["page"], y - y0 - GRID_MARGIN)[0]
     x, y = cell["x"], cell["y"] - grid["at"]
-    if np.abs(centre(screen(context), x, y) - cell["look"]).mean() > GRID_SAME:
-        log(f"shop: cell {cell['i']} is not where the grid puts it ({grid['page']} grid at {grid['at']} px)")
+    diff, k = matched(screen(context), x, y, cell["look"])
+    if diff > GRID_SAME:
+        log(f"shop: cell {cell['i']} is not where the grid puts it ({grid['page']} grid at {grid['at']} px, {diff:.1f})")
         return None
-    return x, y
+    return x, y + k
 
 
 def fusions(cells, roles, slots, avoid):

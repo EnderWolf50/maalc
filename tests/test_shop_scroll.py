@@ -16,16 +16,16 @@ KEYWORDS = ["Bleed", "Tremor", "Pierce", "Sinking", "Slash", "Blunt", "Poise", "
 class Grid:
     """The owned grid of page as the game shows it: n gifts, 5 a row, each a unique icon in the same frame. A drag
     moves it by the finger's travel after the drag threshold's first move (1 px more every other drag: the fling
-    left, or fling px more each drag), stopped at its ends; a tap lands on the gift under it. The grid ends 8 px under
-    its last row's frame or price."""
+    left, or fling px more each drag; or only share of it), stopped at its ends; a tap lands on the gift under it. The
+    grid ends 8 px under its last row's frame or price."""
 
-    def __init__(self, context, page, n, fling=None):
+    def __init__(self, context, page, n, fling=None, share=1.0):
         (self.x0, self.y0), (self.dx, self.dy), under = actions.OWNED_GRID[page]
         self.top, self.bottom = self.y0 - 52, actions.CELL_PAGES[page][1]
         self.max_at = max(0, self.y0 + self.dy * ((n - 1) // 5) + max(48, under) + 8 - self.bottom)
-        self.at, self.drags, self.taps, self.reads, self.fling = 0, 0, [], [], fling
+        self.at, self.drags, self.taps, self.reads, self.fling, self.share = 0, 0, [], [], fling, share
         rng = np.random.default_rng(1)
-        self.icons = [rng.integers(40, 255, (76, 76, 3), np.uint8) for _ in range(n)]
+        self.icons = [np.kron(rng.integers(40, 255, (19, 19, 3), np.uint8), np.ones((4, 4, 1), np.uint8)) for _ in range(n)]
         for icon in self.icons:
             icon[:5], icon[-5:], icon[:, :5], icon[:, -5:] = (0, 200, 230), (0, 200, 230), (0, 200, 230), (0, 200, 230)
         ctl = context.tasker.controller
@@ -66,7 +66,7 @@ class Grid:
     def up(self):
         self.drags += 1
         fling = self.drags % 2 if self.fling is None else self.fling
-        self.at = min(max(self.at + self.moves[0] - self.moves[-1] + fling, 0), self.max_at)
+        self.at = min(max(self.at + round((self.moves[0] - self.moves[-1]) * self.share) + fling, 0), self.max_at)
         return DONE
 
     def click(self, x, y):
@@ -89,8 +89,8 @@ class Grid:
 
 @pytest.fixture
 def grid(context, monkeypatch):
-    def make(page, n, fling=None):
-        g = Grid(context, page, n, fling)
+    def make(page, n, fling=None, share=1.0):
+        g = Grid(context, page, n, fling, share)
         monkeypatch.setattr(actions, "read_cells", g.read_cells)
         return g
     return make
@@ -123,6 +123,35 @@ def test_a_drag_a_few_px_off_still_reads_every_gift_once(context, grid, fling):
     g = grid("fuse", 31, fling)
     actions.owned_cells(context, g.screen(), "fuse", [])
     assert g.reads == list(range(31))
+
+
+@pytest.mark.parametrize("page", ["fuse", "sell"])
+@pytest.mark.parametrize("share", [0.25, 0.6])
+def test_a_drag_the_game_took_less_of_still_reads_on(context, grid, page, share):
+    # A short drag (a quarter: 44-52 px) can leave a full row over the edge and the next one all under it: nothing cut
+    # off shows, yet the grid goes on (review of #221).
+    g = grid(page, 31, 0, share)
+    actions.owned_cells(context, g.screen(), page, [])
+    assert g.reads == list(range(31))
+
+
+def test_the_same_gift_check_holds_on_live_captures():
+    # GRID_SAME's sweep: each filled cell of tests/shop's captures against itself 0-3 px off and moved a fraction of a
+    # px (resampled), and against every other cell of its capture. The closest two gifts are Faint and Dark Vestige.
+    grids = {"fuse": "FUSE_CELLS", "fuse_one_in": "FUSE_CELLS", "fuse_two_in": "FUSE_CELLS", "fuse_spiderweb": "FUSE_CELLS",
+             "sell": "SELL_CELLS"}
+    same, other = [], []
+    for name, cells in grids.items():
+        image = screen_with(name)
+        cells = [(x, y) for x, y in getattr(actions, cells)[:10] if actions.shop.filled(image, x, y)]
+        for x, y in cells:
+            look = actions.centre(image, x, y)
+            for f in (0.33, 0.5, 0.67):
+                moved = (image * (1 - f) + np.roll(image, -1, axis=0) * f).astype(np.uint8)
+                same += [actions.matched(moved, x, y + e, look)[0] for e in range(4)]
+            other += [actions.matched(image, x2, y2, look)[0] for x2, y2 in cells if (x2, y2) != (x, y)]
+    assert len(same) == 348 and len(other) == 204
+    assert max(same) < actions.GRID_SAME < min(other)
 
 
 @pytest.mark.parametrize("s", [0, 1, 46, 91, 92, 183, 184, -92, -184])
