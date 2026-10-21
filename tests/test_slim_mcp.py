@@ -16,3 +16,7 @@ def test_slim_writes_merges_and_is_idempotent(tmp_path):
     assert got["permissions"] == {"allow": ["x"]}
     assert got["deniedMcpServers"] == [{"serverName": "rea"}, {"serverName": "mine"}, {"serverName": "playwright"}]
     assert len(list(f.parent.glob("*.bak-*"))) == 1
+
+
+def test_worktrees_skip_deleted_folder():
+    assert all(p.is_dir() for p in slim_mcp.worktrees())

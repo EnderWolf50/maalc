@@ -10,35 +10,40 @@ import subprocess
 from datetime import date
 from pathlib import Path
 
-PLUGINS = {"tempad-dev@tempad-dev": False}
+DISABLED_PLUGINS = {"tempad-dev@tempad-dev": False}
 DENIED = [{"serverName": "rea"}, {"serverName": "playwright"}]
 
 
-def worktrees(cwd=None):
-    out = subprocess.run(["git", "worktree", "list", "--porcelain"], cwd=cwd, capture_output=True, text=True, check=True).stdout
-    return [Path(line[9:]) for line in out.splitlines() if line.startswith("worktree ")]
+def worktrees():
+    out = subprocess.run(["git", "worktree", "list", "--porcelain"], cwd=Path(__file__).parent, capture_output=True, text=True, check=True).stdout
+    paths = [Path(line[9:]) for line in out.splitlines() if line.startswith("worktree ")]
+    return [p for p in paths if p.is_dir()]  # a deleted, unpruned worktree is still listed
 
 
 def merged(cur):
     denied = cur.get("deniedMcpServers", [])
-    return {**cur, "enabledPlugins": {**cur.get("enabledPlugins", {}), **PLUGINS},
+    return {**cur, "enabledPlugins": {**cur.get("enabledPlugins", {}), **DISABLED_PLUGINS},
             "deniedMcpServers": denied + [s for s in DENIED if s not in denied]}
 
 
 def slim(wt):
     f = wt / ".claude" / "settings.local.json"
-    cur = json.loads(f.read_text(encoding="utf8")) if f.exists() else {}
+    cur = json.loads(f.read_text(encoding="utf-8-sig")) if f.exists() else {}
     new = merged(cur)
     if new == cur:
         return f, False
     f.parent.mkdir(exist_ok=True)
-    if f.exists():
-        shutil.copy2(f, f.with_name(f"{f.name}.bak-{date.today():%Y%m%d}"))
-    f.write_text(json.dumps(new, indent=2) + "\n", encoding="utf8")
+    bak = f.with_name(f"{f.name}.bak-{date.today():%Y%m%d}")
+    if f.exists() and not bak.exists():
+        shutil.copy2(f, bak)
+    f.write_text(json.dumps(new, indent=2, ensure_ascii=False) + "\n", encoding="utf8")
     return f, True
 
 
 if __name__ == "__main__":
     for wt in worktrees():
-        f, changed = slim(wt)
-        print("written" if changed else "ok     ", f)
+        try:
+            f, changed = slim(wt)
+            print("written" if changed else "ok     ", f)
+        except (OSError, ValueError, TypeError, AttributeError) as e:
+            print("skip   ", wt, e)
