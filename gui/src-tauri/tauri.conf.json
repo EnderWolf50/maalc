@@ -12,8 +12,7 @@
   "app": {
     "windows": [{ "title": "maalc", "width": 1100, "height": 760, "dragDropEnabled": false }],
     "security": {
-      "csp": "default-src 'self'; script-src 'self' 'unsafe-eval'; connect-src 'self' ipc: http://ipc.localhost",
-      "devCsp": "default-src 'self'; script-src 'self' 'unsafe-eval'; connect-src 'self' ipc: http://ipc.localhost ws://localhost:1420; style-src 'self' 'unsafe-inline'"
+      "csp": "default-src 'self'; script-src 'self' 'unsafe-eval'; connect-src 'self' ipc: http://ipc.localhost"
     }
   },
   "bundle": {
