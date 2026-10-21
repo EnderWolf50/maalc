@@ -23,18 +23,82 @@ NORMAL, HARD = WEIGHTS["normal"], WEIGHTS["hard"]
 @pytest.mark.parametrize(("marks", "expected"), [
     ({"boss", "cost", "gift"}, "boss"),
     ({"boss"}, "boss"),  # floor 5 boss: no badges
-    ({"focused", "cost", "gift"}, "focused"),
-    ({"cost", "gift"}, "abno"),
+    # #91: no Cost read, the marks decide. The WARNING ring is Risky's or Abnormality's: the later, Risky.
+    ({"ring", "cost", "gift"}, "risky"),
+    ({"ring"}, "risky"),  # its Cost coin under the resource bar
+    ({"cost", "gift"}, "focused"),
     ({"cost"}, "battle"),
     ({"event"}, "event"),
     ({"shop"}, "shop"),
-    # No Cost coin, no boss, Focused or shop mark: an event, its "?" missed by the templates. Live 2026-10-18,
+    # No Cost coin, no boss, ring or shop mark: an event, its "?" missed by the templates. Live 2026-10-18,
     # floor 2 "Lake World" (cyan): a bright "?" next to the bus; MapPanned.png: a dim one two columns out.
     ({"gift"}, "event"),
     (set(), "event"),
 ])
 def test_node_type(marks, expected):
     assert mr.node_type(marks) == expected
+
+
+@pytest.mark.parametrize(("marks", "expected"), [
+    ({"ring", "cost", "gift"}, "abno"),
+    ({"cost"}, "abno"),  # the Cost outranks the marks: ring and gift box are both missed live (#91)
+    ({"boss", "cost", "gift"}, "boss"),
+    ({"event"}, "event"),
+])
+def test_node_type_by_cost(marks, expected):
+    assert mr.node_type(marks, "abno") == expected
+
+
+@pytest.mark.parametrize(("hard", "marks", "number", "expected"), [
+    (False, {"MapNodeCost"}, "75.", "battle"),
+    (False, {"MapNodeCost", "MapNodeGift"}, "100", "focused"),
+    (False, {"MapNodeCost", "MapNodeGift"}, "00", "focused"),
+    # 3-digit costs lose their first digit (offline: MapPanned.png's 120 read 20, map_f3's 150 read 50)
+    (False, {"MapNodeCost", "MapNodeGift", "MapNodeFocusedHex"}, "120", "risky"),
+    (False, {"MapNodeCost", "MapNodeGift", "MapNodeFocusedHex"}, "20", "risky"),
+    (False, {"MapNodeCost", "MapNodeGift"}, "20", "risky"),  # its ring missed (live logs: 10 of 19)
+    (False, {"MapNodeCost", "MapNodeGift", "MapNodeFocusedHex"}, "150", "abno"),
+    (False, {"MapNodeCost", "MapNodeGift", "MapNodeFocusedHex"}, "50", "abno"),
+    (True, {"MapNodeCost"}, "85", "battle"),
+    (True, {"MapNodeCost", "MapNodeGift"}, "120", "focused"),
+    (True, {"MapNodeCost", "MapNodeGift", "MapNodeFocusedRound"}, "150", "risky"),
+    (True, {"MapNodeCost", "MapNodeGift", "MapNodeFocusedHex"}, "180", "abno"),
+    (False, {"MapNodeCost"}, "25", "battle"),  # OCR noise: no cost of the table, the marks decide
+    (False, {"MapNodeCost"}, "8", "battle"),  # a single digit is a part read
+    (False, {"MapNodeCost", "MapNodeGift", "MapNodeFocusedHex"}, "", "risky"),  # unread: the ring's later kind
+])
+def test_a_node_is_typed_by_its_cost_on_the_floors_difficulty(context, hard, marks, number, expected):
+    # #91: a Risky node carries the ring, gift box and Cost coin, and read as Focused (weight 4) by its ring.
+    def run_recognition(name, image, override=None):
+        if name in marks:
+            return SimpleNamespace(hit=True, box=[700, 300, 26, 24])
+        if name == "ReadText" and number:
+            return SimpleNamespace(all_results=[SimpleNamespace(text=number, box=(0, 0, 20, 20))])
+        return None
+    context.run_recognition.side_effect = run_recognition
+    actions.RUN.update(settings={}, difficulty="normal", floor_hard=hard)
+    assert actions.node_at(context, np.zeros((720, 1280, 3), np.uint8), 713, 380) == expected
+
+
+@pytest.mark.parametrize(("marks", "expected"), [
+    ({"MapNodeCost"}, "battle"), ({"MapNodeCost", "MapNodeGift"}, "focused"), ({"MapNodeCost", "MapNodeGift", "MapNodeFocusedHex"}, "risky"),
+])
+def test_past_the_first_column_no_cost_is_read(context, marks, expected):
+    # The badges are dim there (offline: MirrorMap.png's 85 read 8): a ring stands for Risky until read next to the bus.
+    def run_recognition(name, image, override=None):
+        return SimpleNamespace(hit=True, box=[700, 300, 26, 24]) if name in marks else None
+    context.run_recognition.side_effect = run_recognition
+    assert actions.node_at(context, np.zeros((720, 1280, 3), np.uint8), 713, 380, costs=False) == expected
+    assert all(c.args[0] != "ReadText" for c in context.run_recognition.call_args_list)
+
+
+@pytest.mark.parametrize(("run", "hard"), [
+    ({"difficulty": "hard"}, True), ({"difficulty": "normal"}, False), ({"difficulty": None}, False),
+    ({"difficulty": "hard", "floor_hard": False}, False), ({"difficulty": None, "floor_hard": True}, True),
+])
+def test_is_hard_takes_the_floors_difficulty_first(context, run, hard):
+    actions.RUN.update(settings={}, **run)
+    assert actions.is_hard(context) is hard
 
 
 def test_the_column_before_the_boss_is_the_shop():
@@ -140,26 +204,26 @@ def test_the_faint_link_fallback_on_the_map_frames_of_tests_screens(name, bus):
 
 
 def test_the_faint_links_between_events_of_a_diamond_read(context):
-    # #212, live 2026-10-21 floor 4 (Full-Stopped by a Bullet): bus, abnormality, two events above and two below,
-    # abnormality. Column 2's lower event links on to column 3's along a faint line over a bright nebula (14.4);
+    # #212, live 2026-10-21 floor 4 (Full-Stopped by a Bullet): bus, a gift box node (maalc's abno then,
+    # Focused by #91), two events above and two below, another. Column 2's lower event links on to column 3's along a faint line over a bright nebula (14.4);
     # it went unread, and the path stepped from it to column 3's upper event, two rows apart.
     # tests/data/map_f4_diamond.npz: that frame's per-pixel brightness, y 70-614, x 0-1179; bus at 48, 320.
     v = np.zeros((720, 1280), np.uint8)
     v[70:615, :1180] = np.load(Path(__file__).resolve().parent / "data/map_f4_diamond.npz")["v"]
-    abno = {(327, 357), (1092, 357)}
+    focused = {(327, 357), (1092, 357)}
 
     def run_recognition(name, image, override=None):
         if name in actions.MARKS:
             mark, (ox, oy, _, _) = actions.MARKS[name]
             x, y = override[name]["roi"][:2]
-            return SimpleNamespace(hit=True, box=[x, y, 26, 24]) if mark in ("cost", "gift") and (x - ox, y - oy) in abno else None
+            return SimpleNamespace(hit=True, box=[x, y, 26, 24]) if mark in ("cost", "gift") and (x - ox, y - oy) in focused else None
         return None
     context.run_recognition.side_effect = run_recognition
-    ahead = actions.RouteMap.read_ahead(context, v[..., None].repeat(3, axis=2), 48, 320, {"mid": ("abno", 2)})
+    ahead = actions.RouteMap.read_ahead(context, v[..., None].repeat(3, axis=2), 48, 320, {"mid": ("focused", 2)})
     assert ahead == [{"up": ("event", {"mid"}), "down": ("event", {"mid"})}, {"up": ("event", {"up"}), "down": ("event", {"down"})},
-                     {"mid": ("abno", {"up", "down"})}]
-    score, path = mr.paths({"mid": ("abno", 2)}, NORMAL, ahead)["mid"]
-    assert score == 12 and path[1] == path[2] and path[3] == "mid"  # abno, two events in one row, abno
+                     {"mid": ("focused", {"up", "down"})}]
+    score, path = mr.paths({"mid": ("focused", 2)}, NORMAL, ahead)["mid"]
+    assert score == 10 and path[1] == path[2] and path[3] == "mid"  # focused, two events in one row, focused
 
 
 def test_steps_are_rows_seen_from_the_node_before():

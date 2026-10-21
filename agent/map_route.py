@@ -17,20 +17,23 @@ LINE_CONTRAST = 15  # live: drawn links 22-173, no link -14-4
 FAINT_LINK = 8
 
 
-def node_type(marks):
-    """The node type for the set of marks seen on a slot.
+def node_type(marks, by_cost=None):
+    """The node type for the set of marks seen on a slot, and the fight's kind its Cost number gives, if read.
 
-    boss: red glow; focused: WARNING ring; abno: Cost coin and gift box; battle: Cost coin alone.
-    Only the icons count, never the Cost number (spec 03 section 7). Every fight carries a lit Cost coin,
+    boss: red glow. A fight (Cost coin or WARNING ring) is by_cost when given (#91): the ring and the gift box
+    are often missed live. Else by its marks: the ring is Risky's or Abnormality's, taken for the later, risky;
+    a gift box with no ring is Focused's; the Cost coin alone a battle. Every fight carries a lit Cost coin,
     so a node with none and no shop mark is an event, matched or not: its "?" takes the theme pack's look
     (live 2026-10-18, a bright cyan one missed every template) and dims with distance (MapPanned.png).
     """
     if "boss" in marks:
         return "boss"
-    if "focused" in marks:
-        return "focused"
-    if "cost" in marks:
-        return "abno" if "gift" in marks else "battle"
+    if "cost" in marks or "ring" in marks:
+        if by_cost:
+            return by_cost
+        if "ring" in marks:
+            return "risky"
+        return "focused" if "gift" in marks else "battle"
     return "shop" if "shop" in marks else "event"
 
 

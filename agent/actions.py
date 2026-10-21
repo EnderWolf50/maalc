@@ -1182,8 +1182,8 @@ BUS_PROBE = 1.0  # s a first tap on the bus waits for the node panel (#130)
 BUS_LINK = 60  # line_contrast of a lit link from the bus; links between other nodes read up to ~50
 MARKS = {  # node -> (mark, roi around the slot centre)
     "MapNodeBoss": ("boss", (-40, -40, 80, 80)),
-    "MapNodeFocusedHex": ("focused", (-80, -60, 160, 120)),
-    "MapNodeFocusedRound": ("focused", (-75, -60, 150, 120)),
+    "MapNodeFocusedHex": ("ring", (-80, -60, 160, 120)),  # the WARNING ring: Risky's and Abnormality's (#91)
+    "MapNodeFocusedRound": ("ring", (-75, -60, 150, 120)),
     "MapNodeCost": ("cost", (-60, -80, 120, 60)),
     "MapNodeGift": ("gift", (-60, -80, 120, 60)),
     "MapNodeEvent": ("event", (-60, -60, 120, 120)),
@@ -1234,7 +1234,7 @@ def node_marks(context, image, cx, cy):
     The shop is also looked for by its icon's shape alone (shop_icon) where nothing says a fight or the boss.
     """
     marks = {mark: hit for n, (mark, (ox, oy, w, h)) in MARKS.items() if (hit := seen(context, image, n, (cx + ox, cy + oy, w, h)))}
-    if not marks.keys() & {"boss", "focused", "cost", "shop"} and (hit := shop_icon(context, image, cx, cy)):
+    if not marks.keys() & {"boss", "ring", "cost", "shop"} and (hit := shop_icon(context, image, cx, cy)):
         marks["shop"] = hit
     return marks
 
@@ -1255,24 +1255,25 @@ def shop_icon(context, image, cx, cy):
 
 
 def node_at(context, image, cx, cy, marks=None, costs=True):
-    """The type of the map node centred at (cx, cy), by its marks (map_route.node_type).
+    """The type of the map node centred at (cx, cy), by its marks and Cost number (map_route.node_type).
 
     No mark at all where the badges (80 px above the centre) sit under the resource bar: unknown, not an
     event; a fight's Cost coin may be hidden there (the top row with the map at rest).
-    #91: Risky has no template and its Cost coin alone read as a battle. With costs, a coin alone whose
-    number reads as none of the battle costs is taken for Risky; an unread number leaves it a battle.
+    #91: with costs, a fight's kind is its Cost number looked up in the floor's difficulty's node_costs
+    (map_weights.yaml), matched on the last two digits too: a 3-digit number may lose its first (offline,
+    120 read 20, 150 read 50). A number unread or not in the table leaves the marks to decide.
     Only the column next to the bus is read so: past it the badges are dim (offline, MirrorMap.png's
     85 two columns out read 8). A planned slot is read again once next to the bus (RouteMap.follow).
     """
     marks = node_marks(context, image, cx, cy) if marks is None else marks
     if not marks and cy - 80 < 60:
         return "unknown"
-    kind = map_route.node_type(set(marks))
-    if kind == "battle" and costs:
-        cost = coin_number(context, image, marks["cost"].box)
-        if cost is not None and cost not in map_data()["battle_costs"]:
-            log(f"map: a Cost coin alone at {cx}, {cy} reads {cost}, no battle cost: risky")
-            kind = "risky"
+    if not (costs and "cost" in marks and "boss" not in marks):
+        return map_route.node_type(set(marks))
+    cost = coin_number(context, image, marks["cost"].box)
+    table = map_data()["node_costs"]["hard" if is_hard(context) else "normal"] if cost is not None else {}
+    kind = map_route.node_type(set(marks), next((k for c, k in table.items() if cost in (c, c % 100)), None))
+    log(f"map: node at {cx}, {cy} reads Cost {cost}: {kind}")
     return kind
 
 
@@ -1281,7 +1282,7 @@ def coin_number(context, image, box):
 
     Offline on 13 nodes of 7 captures: OCR of the bare badge read 75 as 25 or 5; of the bright,
     near-white digits cut out (as order_marks does) every battle's 75 or 85 right, dim ones too.
-    A 3-digit number may lose its first digit (375 read 75): only fights carrying 3-digit costs do.
+    A 3-digit number may lose its first digit (375 read 75, 120 read 20): node_at matches the last two digits.
     A single digit is a part read: None.
     """
     x, y, w, _ = box
@@ -1296,10 +1297,14 @@ def map_data():
     return yaml.safe_load((RESOURCE / "base" / "data" / "map_weights.yaml").read_text(encoding="utf-8"))
 
 
-def map_weights(context):
+def is_hard(context):
+    """Whether this floor is on hard: set_difficulty's floor_hard, else the run's difficulty."""
     run = current_run(context)
-    hard = run.get("floor_hard", run["difficulty"] == "hard")
-    return map_data()["hard" if hard else "normal"]
+    return run.get("floor_hard", run["difficulty"] == "hard")
+
+
+def map_weights(context):
+    return map_data()["hard" if is_hard(context) else "normal"]
 
 
 def map_floor(context, image):

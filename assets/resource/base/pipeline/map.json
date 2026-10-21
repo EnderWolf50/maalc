@@ -54,7 +54,7 @@
         "template": "Map/MapNodeGift.png",
         "threshold": 0.8
     },
-    // The orange WARNING ring of a Focused encounter, hexagonal on most packs, round on some.
+    // The orange WARNING ring of a Risky or Abnormality encounter (#91), hexagonal on most packs, round on some.
     // The hexagonal one is matched by shape: its colours shift with the pack's glow
     // (live: a colour template scored 0.67 on an orange pack).
     "MapNodeFocusedHex": {
