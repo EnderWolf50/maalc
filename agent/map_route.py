@@ -12,6 +12,9 @@ ROWS = ("mid", "up", "down")
 ROW_DY = {"up": -213, "mid": 0, "down": 213}  # node centres, 720p
 COLUMN_DX = 255
 LINE_CONTRAST = 15  # live: drawn links 22-173, no link -14-4
+# A node with no link read onward takes its brightest one from this (#212): faint links over a bright
+# background read 13-14.4, the background alone up to 12.5 (a purple pack's grid), so no one bar parts them.
+FAINT_LINK = 8
 
 
 def node_type(marks):
@@ -52,8 +55,8 @@ def rank(slots, weights, ahead=()):
     slots maps row -> (node type, routes onward or None); ahead lists the columns read beyond them,
     each row -> (node type, rows of the column before it linked to that node). A slot scores the
     weights on its cheapest path through those columns, lowest first; a node with no link read
-    onward goes on as if linked to the cheapest node of the next column. With no column ahead the score
-    is the slot's own weight. On equal score the node with more routes into the next column;
+    onward goes on as if linked to the cheapest node of the next column in a row next to its own (paths).
+    With no column ahead the score is the slot's own weight. On equal score the node with more routes into the next column;
     then middle, top, bottom. The boss only when it is the only linked node.
     """
     best = paths(slots, weights, ahead)
@@ -62,14 +65,53 @@ def rank(slots, weights, ahead=()):
 
 
 def paths(slots, weights, ahead=()):
-    """row -> (score, rows of the cheapest path from that slot, one per column) for each slot; see rank."""
+    """row -> (score, rows of the cheapest path from that slot, one per column) for each slot; see rank.
+
+    Only rows next to each other link (#212): with no link read onward, a node goes on to the cheapest node
+    of a row next to its own; with none there, the cheapest of the column still scores but the path ends.
+    """
     best = {}  # the same for the nodes of the column after the one being scored
     for column, after in reversed(list(zip((slots, *ahead), (*ahead, {})))):
         nxt, best = best, {}
         for r, (node, _) in column.items():
-            score, path = min([nxt[u] for u in nxt if r in after[u][1]] or nxt.values() or [(0, [])])
+            linked = [nxt[u] for u in nxt if r in after[u][1]]
+            close = [nxt[u] for u in nxt if near(r, u)]
+            score, path = min(linked or close or [(s, []) for s, _ in nxt.values()] or [(0, [])])
             best[r] = (weights.get(node, weights["unknown"]) + score, [r, *path])
     return best
+
+
+def near(a, b):
+    """Whether rows a and b are the same or next to each other: only those link (#212)."""
+    return abs(ROW_DY[a] - ROW_DY[b]) <= ROW_DY["down"]
+
+
+def links(reads):
+    """The links between two columns, as (row before, row) pairs, from reads: pair -> line_contrast (0 if unread).
+
+    A pair reading LINE_CONTRAST links. Every node leads on (#212), so a row before with none takes its
+    brightest pair when it reads FAINT_LINK, but not a diagonal that a link read the other way crosses:
+    the crossing alone reads 11.9-14.2 (the bus's links in tests/screens), as high as a faint link. A real faint
+    diagonal crossed so is lost too; the path then goes on as paths says. reads covers every row of both columns
+    (read_ahead keeps the pairs from its nodes), so a crossing from a node not read still counts.
+    """
+    read = {pair for pair, c in reads.items() if c >= LINE_CONTRAST}
+    found = set(read)
+    for src in {src for src, _ in reads} - {src for src, _ in read}:
+        c, pair = max((c, (a, b)) for (a, b), c in reads.items() if a == src and (b, a) not in read)
+        if c >= FAINT_LINK:
+            found.add(pair)
+    return found
+
+
+def steps(path, nodes):
+    """The rest of a path as (row seen from the node before, node type): where the bus will stand.
+
+    None when a step joins rows two apart, which no link does (#212): no plan to follow.
+    """
+    row_at = {dy: r for r, dy in ROW_DY.items()}
+    out = [(row_at.get(ROW_DY[b] - ROW_DY[a]), t) for a, b, t in zip(path, path[1:], nodes[1:])]
+    return None if any(r is None for r, _ in out) else out
 
 
 def line_contrast(v, x0, y0, x1, y1, top=56, bottom=615):

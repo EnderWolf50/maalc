@@ -1289,9 +1289,9 @@ class RouteMap(CustomAction):
             score, path = map_route.paths(slots, weights, ahead)[order[0]]
             nodes = [c[r][0] for r, c in zip(path, (slots, *ahead))]
             log(f"map: path {' > '.join(f'{r} {t}' for r, t in zip(path, nodes))}, score {score}")
-            # The rest of the path, each step's row seen from the node before it: where the bus will stand.
-            row_at = {dy: r for r, dy in map_route.ROW_DY.items()}
-            steps = [(row_at[map_route.ROW_DY[b] - map_route.ROW_DY[a]], t) for a, b, t in zip(path, path[1:], nodes[1:])]
+            steps = map_route.steps(path, nodes)
+            if steps is None:  # #212: a path no link joins; take its first node and read the map again after
+                log("map: the path steps two rows; no plan")
 
         def centre(row):
             return bx + SLOT[0], by + SLOT[1] + map_route.ROW_DY[row]
@@ -1448,7 +1448,8 @@ class RouteMap(CustomAction):
         """The columns beyond the first on screen, for map_route.rank.
 
         A node counts when a link into it from the column before reads (map_route.line_contrast); only rows
-        next to each other link. The read ends at the screen's edge, at a column with nothing linked or
+        next to each other link. Every node leads on, so one with no link read onward takes its brightest
+        (map_route.FAINT_LINK, #212). The read ends at the screen's edge, at a column with nothing linked or
         dark (no mark and no light on any node: hard mode shows two columns), or after the boss.
         """
         dx, dy = map_route.COLUMN_DX, map_route.ROW_DY
@@ -1459,9 +1460,10 @@ class RouteMap(CustomAction):
         while x + dx + 80 <= 1200:  # MapNodeFocusedHex reads 80 px either side; buttons from x 1205
             x += dx
             before, column, lit = ahead[-1] if ahead else slots, {}, False
+            links = map_route.links({(r, row): map_route.line_contrast(v, x - dx, y(r), x, y(row)) or 0
+                                     for r in map_route.ROWS for row in map_route.ROWS if map_route.near(r, row)})
             for row in map_route.ROWS:
-                linked = {r for r in before if abs(dy[r] - dy[row]) <= 213
-                          and (map_route.line_contrast(v, x - dx, y(r), x, y(row)) or 0) >= map_route.LINE_CONTRAST}
+                linked = {src for src, dst in links if dst == row and src in before}
                 if linked:
                     marks = node_marks(context, image, x, y(row))
                     column[row] = (node_at(context, image, x, y(row), marks, costs=False), linked)
