@@ -2485,12 +2485,11 @@ def owned_cells(context, image, page, gifts):
 
     The grid is read on show (read_cells, and the prices on the sell page), then dragged to bring its first cut-off
     row up to the first row's place (with none, the row under a full last row), until no cut-off cell holds a gift or a
-    drag moves it no more. A cell is
-    {"i", "x", "y", "tier", "keyword", "gift", "price", "look"}: i its place in the grid's order, y with the grid at its
-    top, look its centre as read (cell_at finds it again by both); grid is {"page", "at": px scrolled}. A page opens
-    where its list was left (live
-    2026-10-21: the fuse page after a fusion): the fuse page's is placed by its owned gifts' label (owned_label), the
-    sell page's dragged to its top first (grid_top).
+    drag moves it no more. A cell is {"i", "x", "y", "tier", "keyword", "gift", "price", "look"}: i its place in the
+    grid's order, y with the grid at its top, look its centre as read (cell_at finds it again by both); grid is
+    {"page", "at": px scrolled}. A page opens where its list was left (live 2026-10-21: the fuse page after a fusion):
+    the fuse page's is placed by its owned gifts' label (owned_label) on image, the page as opened; the sell page's is
+    dragged to its top first (grid_top), image unused.
     """
     (x0, y0), (dx, dy), under = OWNED_GRID[page]
     bottom = CELL_PAGES[page][1]
@@ -2951,7 +2950,7 @@ class Shop(CustomAction):
             return False
         # The grid decides (#112, #205): each cell's badge and icon, its price under it.
         avoid = [g["name"] for g in avoided_gifts(team)]
-        cells, grid = owned_cells(context, screen(context), "sell", kept_icons(team) + avoided_gifts(team) + VESTIGE_ICONS)
+        cells, grid = owned_cells(context, None, "sell", kept_icons(team) + avoided_gifts(team) + VESTIGE_ICONS)
         roles = [cell_role(c, team, "sell", avoid) for c in cells]
         log("shop: sell cells " + "; ".join(f"{cell_line(c, r)} {c['price']}" for c, r in zip(cells, roles)))
         gifts = [(c["i"], c["price"]) for c, r in zip(cells, roles) if r == "material" and c["price"]]
@@ -2997,7 +2996,7 @@ class Shop(CustomAction):
             before += price
             still(context, timeout=1.5)  # the dialog goes as the Cost turns: the next cell's tap waits for it
             if grid["at"]:  # the grid lost a cell, and may have moved up from its end: from its top again
-                drag_grid(context, "sell", -grid["at"] - OWNED_GRID["sell"][1][1])
+                grid_top(context, "sell")
                 grid["at"] = 0
         Shop.to_main(context)
         return bool(picked)
