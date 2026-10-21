@@ -29,7 +29,7 @@ class Grid:
         self.page, self.above = page, (1 + (recipes - 1) // 5) * self.dy + actions.OWNED_LABEL if recipes else 0
         self.recipes = [(self.x0 + self.dx * (k % 5), self.y0 + self.dy * (k // 5)) for k in range(recipes)]
         self.top, self.bottom = TOP[page], actions.CELL_PAGES[page][1]
-        self.max_at = max(0, self.y0 + self.above + self.dy * ((n - 1) // 5) + END[page] - self.bottom)
+        self.end = END[page]
         self.at, self.drags, self.taps, self.reads, self.fling, self.share = 0, 0, [], [], fling, share
         rng = np.random.default_rng(1)
         self.icons = [np.kron(rng.integers(40, 255, (19, 19, 3), np.uint8), np.ones((4, 4, 1), np.uint8))
@@ -42,6 +42,17 @@ class Grid:
         ctl.post_touch_move.side_effect = self.move
         ctl.post_touch_up.side_effect = self.up
         ctl.post_click.side_effect = self.click
+
+    @property
+    def max_at(self):
+        """How far the grid scrolls: its last row's END under the list's edge."""
+        n = len(self.icons) - len(self.recipes)
+        return max(0, self.y0 + self.above + self.dy * ((n - 1) // 5) + self.end - self.bottom)
+
+    def sold(self, i):
+        """Gift i sold: the gifts after it move up a cell, and a grid scrolled past its new end springs back."""
+        del self.icons[i]
+        self.at = min(self.at, self.max_at)
 
     def place(self, i):
         """Gift i's centre with the grid at its top (the recipe cells' after the owned gifts')."""
@@ -272,7 +283,8 @@ def sell_page(context, g, prices, cost=100):
         if (x, y) == actions.PAGE_OK:
             state["asked"] = next(i for i in reversed(g.taps) if isinstance(i, int))
         elif (x, y) == actions.DIALOG_CONFIRM and state["asked"] is not None:
-            state["cost"] += prices[state["asked"]]
+            state["cost"] += prices.pop(state["asked"])
+            g.sold(state["asked"])
             state["asked"] = None
         return DONE
     context.tasker.controller.post_click.side_effect = tap
@@ -307,16 +319,17 @@ def test_a_sale_taps_the_gift_it_picked_far_down_the_grid(context, grid, monkeyp
 
 
 def test_two_sales_far_down_the_grid_go_back_to_its_top_between_them(context, grid, monkeypatch):
-    # 18 gifts, the last two Bleed (no fusion takes 2): the 180 wanted with 100 Cost needs both. After the first sale
-    # the grid goes back to its top (grid_top), and the second is dragged into view again: each tapped once, sold.
-    g = grid("sell", 18)
+    # 16 gifts, the last two Bleed (no fusion takes 2): the 180 wanted with 100 Cost needs both. Sold, the last one
+    # empties its row and the grid springs back from its end; the grid goes back to its top (grid_top) and the second
+    # is dragged into view again: each tapped once, sold.
+    g = grid("sell", 16)
     reader = g.read_cells
     monkeypatch.setattr(actions, "read_cells", lambda *a, **k: [
-        {**c, "keyword": "Bleed" if g.at_screen(c["x"], c["y"]) in (16, 17) else "Burn"} for c in reader(*a, **k)])
-    state = sell_page(context, g, [50 + i for i in range(16)] + [45, 40])
+        {**c, "keyword": "Bleed" if g.at_screen(c["x"], c["y"]) in (14, 15) else "Burn"} for c in reader(*a, **k)])
+    state = sell_page(context, g, [50 + i for i in range(14)] + [45, 40])
     assert actions.Shop.sell(context, {"keyword": "Burn", "reserve_cost": 0, "gift_search": {"gifts": []}},
                              {"wanted": 180, "sold": False})
-    assert [i for i in g.taps if isinstance(i, int)] == [17, 16] and state["cost"] == 185
+    assert [i for i in g.taps if isinstance(i, int)] == [15, 14] and state["cost"] == 185
 
 
 def test_a_sale_whose_dialog_names_another_price_is_cancelled(context, grid, monkeypatch):
