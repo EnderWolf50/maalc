@@ -317,6 +317,29 @@ def test_a_bright_event_its_templates_miss_is_still_an_event(context):
     assert (path, score) == (["up", "mid", "mid", "mid"], 19)
 
 
+def test_the_faint_links_between_events_of_a_diamond_read(context):
+    # #212, live 2026-10-21 floor 4 (Full-Stopped by a Bullet): bus, abnormality, two events above and two below,
+    # abnormality. Column 2's lower event links on to column 3's along a faint line over a bright nebula (14.4);
+    # it went unread, and the path stepped from it to column 3's upper event, two rows apart.
+    # tests/data/map_f4_diamond.npz: that frame's per-pixel brightness, y 70-614, x 0-1179; bus at 48, 320.
+    v = np.zeros((720, 1280), np.uint8)
+    v[70:615, :1180] = np.load(Path(__file__).resolve().parent / "data/map_f4_diamond.npz")["v"]
+    abno = {(327, 357), (1092, 357)}
+
+    def run_recognition(name, image, override=None):
+        if name in actions.MARKS:
+            mark, (ox, oy, _, _) = actions.MARKS[name]
+            x, y = override[name]["roi"][:2]
+            return SimpleNamespace(hit=True, box=[x, y, 26, 24]) if mark in ("cost", "gift") and (x - ox, y - oy) in abno else None
+        return None
+    context.run_recognition.side_effect = run_recognition
+    ahead = actions.RouteMap.read_ahead(context, v[..., None].repeat(3, axis=2), 48, 320, {"mid": ("abno", 2)})
+    assert ahead == [{"up": ("event", {"mid"}), "down": ("event", {"mid"})}, {"up": ("event", {"up"}), "down": ("event", {"down"})},
+                     {"mid": ("abno", {"up", "down"})}]
+    score, path = actions.map_route.paths({"mid": ("abno", 2)}, WEIGHTS, ahead)["mid"]
+    assert score == 12 and path[1] == path[2] and path[3] == "mid"  # abno, two events in one row, abno
+
+
 RED = Path(__file__).resolve().parent / "data/map_red_theme.npz"  # live 2026-10-18, floor 3 hard, red theme
 
 

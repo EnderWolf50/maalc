@@ -12,6 +12,9 @@ ROWS = ("mid", "up", "down")
 ROW_DY = {"up": -213, "mid": 0, "down": 213}  # node centres, 720p
 COLUMN_DX = 255
 LINE_CONTRAST = 15  # live: drawn links 22-173, no link -14-4
+# A node with no link read onward takes its brightest one from this (#212): faint links over a bright
+# background read 13-14.4, the background alone up to 12.5 (a purple pack's grid), so no one bar parts them.
+FAINT_LINK = 8
 
 
 def node_type(marks):
@@ -62,14 +65,30 @@ def rank(slots, weights, ahead=()):
 
 
 def paths(slots, weights, ahead=()):
-    """row -> (score, rows of the cheapest path from that slot, one per column) for each slot; see rank."""
+    """row -> (score, rows of the cheapest path from that slot, one per column) for each slot; see rank.
+
+    Only rows next to each other link (#212): with no link read onward, a node goes on to the cheapest node
+    of a row next to its own; with none there, the cheapest of the column still scores but the path ends.
+    """
     best = {}  # the same for the nodes of the column after the one being scored
     for column, after in reversed(list(zip((slots, *ahead), (*ahead, {})))):
         nxt, best = best, {}
         for r, (node, _) in column.items():
-            score, path = min([nxt[u] for u in nxt if r in after[u][1]] or nxt.values() or [(0, [])])
+            linked = [nxt[u] for u in nxt if r in after[u][1]]
+            near = [nxt[u] for u in nxt if abs(ROW_DY[u] - ROW_DY[r]) <= 213]
+            score, path = min(linked or near or [(s, []) for s, _ in nxt.values()] or [(0, [])])
             best[r] = (weights.get(node, weights["unknown"]) + score, [r, *path])
     return best
+
+
+def steps(path, types):
+    """The rest of a path as (row seen from the node before, node type): where the bus will stand.
+
+    None when a step joins rows two apart, which no link does (#212): no plan to follow.
+    """
+    row_at = {dy: r for r, dy in ROW_DY.items()}
+    out = [(row_at.get(ROW_DY[b] - ROW_DY[a]), t) for a, b, t in zip(path, path[1:], types[1:])]
+    return None if any(r is None for r, _ in out) else out
 
 
 def line_contrast(v, x0, y0, x1, y1, top=56, bottom=615):

@@ -84,6 +84,24 @@ def test_a_slot_with_no_link_read_onward_goes_on_to_the_cheapest_node():
     assert mr.rank({"up": ("battle", None), "down": ("event", None)}, HARD, ahead) == ["down", "up"]
 
 
+def test_a_path_never_steps_two_rows():
+    """#212, live 2026-10-21 floor 4: column 3's lower event went unread, so column 2's lower event had no link
+    read onward; the path stepped from it to column 3's upper event, two rows apart, which no link joins."""
+    slots = {"mid": ("abno", 2)}
+    ahead = [{"up": ("event", {"mid"}), "down": ("event", {"mid"})}, {"up": ("event", {"up"})}, {"mid": ("abno", {"up"})}]
+    for _, path in mr.paths(slots, NORMAL, ahead).values():
+        assert all(abs(mr.ROW_DY[a] - mr.ROW_DY[b]) <= 213 for a, b in zip(path, path[1:]))
+    # The cheapest node of the next column still scores the rest; only rows next to each other are assumed linked.
+    down = mr.paths({"down": ("event", None)}, NORMAL, [{"up": ("event", {"mid"}), "mid": ("abno", {"up"})}])["down"]
+    assert down == (NORMAL["event"] + NORMAL["abno"], ["down", "mid"])
+
+
+def test_steps_are_rows_seen_from_the_node_before():
+    assert mr.steps(["down", "mid", "mid"], ["battle", "battle", "event"]) == [("up", "battle"), ("mid", "event")]
+    assert mr.steps(["mid"], ["abno"]) == []
+    assert mr.steps(["mid", "down", "up"], ["abno", "event", "event"]) is None  # #212: no link joins two rows apart
+
+
 def lit(links, size=(720, 1280)):
     """A dark map with bright 5 px links from (725, 285) into the next column, plus faint noise."""
     v = np.random.default_rng(0).integers(0, 30, size=size).astype(np.uint8)
