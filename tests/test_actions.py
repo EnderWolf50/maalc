@@ -579,9 +579,10 @@ def test_a_turn_over_a_moving_battlefield_is_played(context, monkeypatch):
     frames = [np.asarray(Image.open(SCREENS / f"BattleTurnSwarm{s}.png"))[:, :, ::-1] for s in ("", "Next")]
     shots = itertools.cycle(frames)
     context.tasker.controller.post_screencap.return_value.wait.return_value.get.side_effect = lambda: next(shots)
-    monkeypatch.setattr(actions.battle, "disc_lit", lambda image, x, y: True)
+    clicks = context.tasker.controller.post_click.call_args_list
+    monkeypatch.setattr(actions.battle, "disc_lit", lambda image, x, y: bool(clicks))  # lit by the Win Rate tap
     actions.PlayTurn().run(context, SimpleNamespace(box=[946, 531, 40, 29]))
-    context.tasker.controller.post_click.assert_called()
+    assert [c.args for c in clicks[:2]] == [(946 + 20, 531 + 14), (946 + actions.START_DISC[0], 531 + actions.START_DISC[1])]
 
 
 def test_a_win_rate_tap_lost_in_the_turns_opening_is_tapped_again(context, monkeypatch):
