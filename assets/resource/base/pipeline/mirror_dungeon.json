@@ -38,7 +38,10 @@
             "entries": [
                 "RetryPopup",
                 "MaintenanceNotice",
+                "UpdateDialog",
+                "UserAgreement",
                 "DownloadDialog",
+                "Downloading",
                 "Loading",
                 "ClaimPopup",
                 "ParallelModePrompt",
@@ -118,6 +121,7 @@
             "NoBatchOCR",
             "Connecting",
             "RetryPopup",
+            "UpdateDialog",
             "PopupButton",
             "BattleTurn",
             "BattlePause"

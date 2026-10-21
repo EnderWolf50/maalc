@@ -66,9 +66,63 @@
         "custom_action": "Halt",
         "custom_action_param": "maintenance notice"
     },
+    // The game's own update notices mid-run (strings of the client, EN_MainUIText; no capture, so both ROIs are wide):
+    // "A new download has been added. The game will be closed ..." / "... Returning to the title screen." and
+    // "Version update available. Please download new resources and try again.". Before PopupButton, which would press
+    // their one button and leave the bot on a closed game. AcceptUpdate presses it (run.auto_download, else stops) and
+    // restarts the game (RecoverL3); the title's download dialog follows.
+    "UpdateDialog": {
+        "recognition": "And",
+        "all_of": [
+            // A template first, as RetryPopup: BattleHUD runs it on every battle round (#157).
+            {
+                "recognition": "TemplateMatch",
+                "sub_name": "UpdateDialogFrame",
+                "roi": [340, 380, 600, 180],
+                "template": "Screen/DialogButton.png",
+                "threshold": 0.8
+            },
+            {
+                "recognition": "OCR",
+                "sub_name": "UpdateDialogText",
+                "roi": [350, 230, 580, 200],
+                "expected": "(?i)new download has been added|Version update available"
+            },
+            {
+                "recognition": "OCR",
+                "sub_name": "UpdateDialogButton",
+                "roi": [340, 380, 600, 180],
+                "expected": "^(Close|Confirm|OK)$"
+            }
+        ],
+        "box_index": 2,
+        "action": "Custom",
+        "custom_action": "AcceptUpdate"
+    },
+    // The title's User Agreement (live 2026-10-21, a new account: tests/screens/UserAgreement.png): two "I agree."
+    // boxes, Confirm lit once both are ticked. AcceptTerms ticks them (run.auto_accept_terms, else stops).
+    "UserAgreement": {
+        "recognition": "And",
+        "all_of": [
+            {
+                "recognition": "OCR",
+                "sub_name": "UserAgreementTitle",
+                "roi": [500, 100, 280, 45],
+                "expected": "^User Agreement$"
+            },
+            {
+                "recognition": "OCR",
+                "sub_name": "UserAgreementAgree",
+                "roi": [360, 445, 100, 32],
+                "expected": "agree"
+            }
+        ],
+        "action": "Custom",
+        "custom_action": "AcceptTerms"
+    },
     // The title's data download dialog (live 2026-10-16: `Downloading N MB of data`, Close / Confirm; seen after a
-    // game restart, no capture, so both ROIs are wide). Confirm and let the download run: its progress screen is
-    // not known, so the Agent holds the stuck detection for a while (#86). Before GoToMirrorEntry in MirrorHub:
+    // game restart, no capture, so both ROIs are wide). Confirm and let the download run: the Agent holds the stuck
+    // detection until its progress screen (Downloading) is up (#86). Before GoToMirrorEntry in MirrorHub:
     // the title reads through the dialog.
     "DownloadDialog": {
         "recognition": "And",
@@ -231,6 +285,14 @@
         "action": "ClickKey",
         "key": 4,
         "post_delay": 1500
+    },
+    // The download after the title's dialog (live 2026-10-21, 17.77 GB): DOWNLOADING UPDATE n% 0/1, then DOWNLOADING
+    // RESOURCES n% k/1741, ~32 min in all, NOW LOADING... beside it. A waiting screen: stuck only once it stops moving.
+    "Downloading": {
+        "recognition": "OCR",
+        "roi": [40, 600, 440, 36],
+        "expected": "DOWNLOADING (UPDATE|RESOURCES)",
+        "post_delay": 1000
     },
     "Loading": {
         "recognition": "OCR",

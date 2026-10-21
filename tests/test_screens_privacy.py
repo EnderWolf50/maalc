@@ -21,6 +21,7 @@ NAME_PLATE = (36, 626, 98, 20)  # the player name above "LV", on every screen th
 IDENTITY = {
     "TryAgain": [TITLE_EMAIL], "RetryCountdown": [TITLE_EMAIL], "MaintenanceNotice": [TITLE_EMAIL],
     "TitleDownload": [TITLE_EMAIL], "TitleErrorConfirm": [TITLE_EMAIL],
+    "UserAgreement": [TITLE_EMAIL], "UserAgreementTicked": [TITLE_EMAIL], "UpdateDialog.synthetic": [TITLE_EMAIL],
     "Title": [TITLE_EMAIL_SMALL], "TitleConnecting": [TITLE_EMAIL_SMALL], "TitleFading": [TITLE_EMAIL_SMALL],
     "MainWindow": [UID_PLATE, NAME_PLATE], "MainWindowFadeIn": [UID_PLATE, NAME_PLATE],
     "Drive": [NAME_PLATE], "SinnersTab": [NAME_PLATE],
