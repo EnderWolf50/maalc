@@ -70,7 +70,9 @@ export function enhanceAll(v: StarlightValues, plus: 1 | 2) {
 }
 
 /** The E.G.O Gift Search page's tabs, left to right (agent/settings.schema.json gift_search keywords). */
-export const SEARCH_TABS: string[] = TEAM.gift_search.properties.gifts.items.properties.keyword.enum;
+export const SEARCH_TABS: string[] = schema.$defs.gift.properties.keyword.enum;
+/** Vestiges, tier I-V in this order (#161): only fusion or sale material, kept by name in keep_gifts. */
+export const VESTIGES: string[] = schema.$defs.vestige.properties.name.enum;
 /** Spec 04 section 9: the gifts the search page offers, in page order; ids, tiers and English names from the game's
  * static data, Chinese names from the wiki (data/gift_search.json carries its sources and license). */
 export const SEARCH_GIFTS: SearchGift[] = gifts.gifts;
@@ -79,10 +81,10 @@ export interface SearchGift { id: number; keyword: string; tier: number; en: str
 /** The game searches 3 gifts at most; agent/settings.schema.json caps gift_search.gifts the same. */
 export const MAX_GIFTS: number = TEAM.gift_search.properties.gifts.maxItems;
 const sameGift = (a: GiftRef, b: GiftRef) => a.keyword === b.keyword && a.tier === b.tier && a.name === b.name;
-/** A gift card's click: add the gift at the end of the search list, or take it out. */
-export const toggleGift = (list: GiftRef[], gift: GiftRef) =>
+/** A gift card's click: add the gift at the end of the list (up to max), or take it out. */
+export const toggleGift = (list: GiftRef[], gift: GiftRef, max = MAX_GIFTS) =>
   list.some((g) => sameGift(g, gift)) ? list.filter((g) => !sameGift(g, gift))
-    : list.length >= MAX_GIFTS ? list : [...list, gift];
+    : list.length >= max ? list : [...list, gift];
 
 /** The sinner grid's click (spec 04 section 6): add at the end, or leave out; the last one stays. */
 export function toggleSinner(order: Order, sinner: string): Order {
@@ -107,6 +109,7 @@ export interface Team {
   theme_pack_plan: string; reward_cards: string[]; shop_refresh_limit: number; heal: string;
   reserve_cost: number; min_alive: number; guard_turns: number; trial_risk_weight: string;
   gift_search: { enabled: boolean; gifts: GiftRef[] }; allow_white_gossypium: boolean;
+  keep_keywords: string[]; keywordless: string; keep_gifts: GiftRef[]; sell_max_tier: number; sell_vestiges: boolean;
 }
 /** A gift on the E.G.O Gift Search page: its keyword tab, tier and English name (spec 04 section 9). */
 export interface GiftRef { keyword: string; tier: number; name: string }
@@ -184,6 +187,9 @@ const MIGRATIONS: Record<number, (d: Record<string, unknown>) => Record<string, 
         ? { ...t, hard_from_floor: 1 } : t)) : d.teams,
     };
   },
+  // Version 7 adds what the shop keeps out of fusions and sales (#77, #161), as before: no other keyword, keywordless
+  // kept, no gift; tier V and vestiges never sold.
+  6: (d) => withTeamDefault(d, { keep_keywords: [], keywordless: "keep", keep_gifts: [], sell_max_tier: 4, sell_vestiges: false }),
 };
 
 function withTeamDefault(d: Record<string, unknown>, field: Record<string, unknown>) {

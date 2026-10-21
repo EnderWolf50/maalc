@@ -1,7 +1,7 @@
 {
   "description": "Shared by tests/test_settings.py and gui/src/validate.test.ts so the agent and the GUI reject the same files. Each case applies edits to valid: set (a last path segment of - appends) or delete. schema lists the error paths; every error must sit at or under one of them. cross lists the exact cross-check messages, in order.",
   "valid": {
-    "version": 6,
+    "version": 7,
     "language": "zh_tw",
     "run": {
       "difficulty": "auto", "runs": null, "weekly_bonus_use": "hard", "weekly_bonus_amount": "all",
@@ -21,7 +21,8 @@
         "deployment_order": {"plan": "d1"}, "starlight": {"plan": "s1"}, "theme_pack_plan": "p1",
         "reward_cards": ["Starlight", "Random E.G.O Gift", "Cost & Keyword Gift Chance", "Cost", "E.G.O Resource"],
         "shop_refresh_limit": 2, "heal": "revive", "reserve_cost": 0, "min_alive": 0, "guard_turns": 0, "trial_risk_weight": "high",
-        "gift_search": {"enabled": false, "gifts": []}, "allow_white_gossypium": true
+        "gift_search": {"enabled": false, "gifts": []}, "allow_white_gossypium": true,
+        "keep_keywords": [], "keywordless": "keep", "keep_gifts": [], "sell_max_tier": 4, "sell_vestiges": false
       },
       {
         "id": "b", "name": "Team b", "enabled": true, "game_team": 2, "keyword": "Bleed", "usage": "hard_only", "hard_from_floor": 3,
@@ -31,7 +32,8 @@
         "reward_cards": ["Cost", "Starlight", "Random E.G.O Gift", "Cost & Keyword Gift Chance", "E.G.O Resource"],
         "shop_refresh_limit": 0, "heal": "none", "reserve_cost": 50, "min_alive": 3, "guard_turns": 3, "trial_risk_weight": "low",
         "gift_search": {"enabled": true, "gifts": [{"keyword": "Bleed", "tier": 3, "name": "Smokes and Wires"}, {"keyword": "Bleed", "tier": 1, "name": "Layered Bandages"}]},
-        "allow_white_gossypium": false
+        "allow_white_gossypium": false, "keep_keywords": ["Burn", "Slash"], "keywordless": "fuse_or_sell", "sell_max_tier": 5, "sell_vestiges": true,
+        "keep_gifts": [{"keyword": "Keywordless", "tier": 3, "name": "Spiderweb Entangled in Red"}]
       }
     ],
     "event_overrides": [{"question": "Q?", "option": "Yes"}],
@@ -56,6 +58,11 @@
     {"name": "empty order", "edits": [{"set": "teams/1/deployment_order/custom", "value": []}], "schema": ["teams/1/deployment_order"]},
     {"name": "gift search tier out of range", "edits": [{"set": "teams/1/gift_search/gifts/0/tier", "value": 4}], "schema": ["teams/1/gift_search/gifts/0/tier"]},
     {"name": "repeated gift search gift", "edits": [{"set": "teams/1/gift_search/gifts/-", "value": {"keyword": "Bleed", "tier": 3, "name": "Smokes and Wires"}}], "schema": ["teams/1/gift_search/gifts"]},
+    {"name": "a vestige may be kept by name, tier IV too", "edits": [{"set": "teams/0/keep_gifts/-", "value": {"keyword": "Keywordless", "tier": 4, "name": "Brilliant Vestige"}}], "cross": []},
+    {"name": "only the 5 vestiges go past tier III", "edits": [{"set": "teams/0/keep_gifts/-", "value": {"keyword": "Keywordless", "tier": 4, "name": "Other Vestige"}}], "schema": ["teams/0/keep_gifts/0"]},
+    {"name": "keywordless is a choice, not a switch", "edits": [{"set": "teams/0/keywordless", "value": true}], "schema": ["teams/0/keywordless"]},
+    {"name": "sell max tier out of range", "edits": [{"set": "teams/1/sell_max_tier", "value": 6}], "schema": ["teams/1/sell_max_tier"]},
+    {"name": "the old keep_keywordless switch is gone", "edits": [{"set": "teams/0/keep_keywordless", "value": true}], "schema": ["teams/0"]},
     {"name": "guard turns out of range", "edits": [{"set": "teams/0/guard_turns", "value": 6}], "schema": ["teams/0/guard_turns"]},
     {"name": "repeated starlight priority", "edits": [{"set": "starlight_plans/0/priority/0", "value": 2}], "schema": ["starlight_plans/0/priority"]},
     {"name": "bad custom starlight level", "edits": [{"set": "teams/1/starlight/custom/levels/0", "value": "max"}], "schema": ["teams/1/starlight"]},
