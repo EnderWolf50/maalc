@@ -634,22 +634,41 @@ class ParallelModeOff(CustomAction):
         return stop(context, "Parallel Superposition Mode stays ON after tapping INFINITY MIRROR")
 
 
+def team_rows(context, image):
+    """The picker list's fully shown rows: {slot number: y of its centre}."""
+    visible = {}
+    for t, (x, y, w, h) in ocr(context, image, TEAM_LIST):
+        m = re.search(r"#\s*(\d+)", t)
+        if m and 300 <= y + h // 2 <= 515:  # rows cut off at the list edge do not count
+            visible[int(m[1])] = y + h // 2
+    return visible
+
+
+def team_list_top(context):
+    """Drag the picker list to its top, a stroke at a time until the rows on show stay (#226): it opens where it was left."""
+    seen = None
+    for k in range(15):
+        rows = team_rows(context, page_guard(context, "TeamSelect"))
+        if rows and rows == seen:  # no rows read is not a list at rest
+            log(f"team list at its top after {k - 1} drags that moved it")
+            return
+        seen = rows
+        scroll(context, 130, 340, 0, 140)
+    log("team list still moving after 15 drags: looking for the team from here")
+
+
 @AgentServer.custom_action("SelectTeam")
 class SelectTeam(CustomAction):
-    """Pick the team's in-game TEAMS #N slot, check the title, press Confirm."""
+    """Drag the team list to its top, pick the team's in-game TEAMS #N slot, check the title, press Confirm."""
 
     @hands_back
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         # No plan here means a run resumed on the entry page, paused before team selection: the entry page only
         # offers Resume again, so backing out looped (#128). Make one up from settings, as after a restart.
         n = current_run(context)["team"]["game_team"]
+        team_list_top(context)
         for _ in range(15):
-            image = page_guard(context, "TeamSelect")
-            visible = {}
-            for t, (x, y, w, h) in ocr(context, image, TEAM_LIST):
-                m = re.search(r"#\s*(\d+)", t)
-                if m and 300 <= y + h // 2 <= 515:  # rows cut off at the list edge do not count
-                    visible[int(m[1])] = y + h // 2
+            visible = team_rows(context, page_guard(context, "TeamSelect"))
             move = run_start.team_list_move(visible, n)
             if move == "down":
                 scroll(context, 130, 480, 0, -140)
