@@ -1,6 +1,7 @@
 """Custom actions driven offline: a fake Maa context reads nothing on a blank screen."""
 
 import json
+import math
 import time
 import zlib
 from pathlib import Path
@@ -158,6 +159,110 @@ def test_event_text_is_tapped_through_until_the_choices_show(context):
     actions.Event().run(context, None)
     corner = [c for c in context.tasker.controller.post_click.call_args_list if c.args == actions.EVENT_NEUTRAL]
     assert len(corner) == 3
+
+
+def event_text(context, choices_from=None, red_from=None, red_to=float("inf"), label_to=float("inf"), skip_to=0, misread=()):
+    """Event text running on: screenshot n (1 = Event.run's own) shows the Choices from choices_from on, the lit
+    button from red_from on until red_to and the button's label until label_to (SKIP until skip_to, then Continue,
+    read "Contnue" on the screenshots in misread); returns the rois OCR read, in order."""
+    shots, reads = [], []
+
+    def screencap():
+        shots.append(1)
+        image = np.zeros((720, 1280, 3), np.uint8)
+        image[0, 0, 0] = len(shots)
+        if red_from and red_from <= len(shots) < red_to:
+            image[640:650, 1080:1180] = (0, 0, 200)
+        return image
+    context.tasker.controller.post_screencap.return_value.wait.return_value.get.side_effect = screencap
+
+    def run_recognition(name, image, override=None):
+        roi = tuple((override or {}).get(name, {}).get("roi", ()))
+        reads.append(roi)
+        if roi == tuple(actions.CHOICES_HEADER) and choices_from and image[0, 0, 0] >= choices_from:
+            return SimpleNamespace(all_results=[SimpleNamespace(text="Choices", box=(700, 110, 100, 30))])
+        if roi == tuple(actions.EVENT_BUTTON_LABEL) and image[0, 0, 0] < label_to:
+            label = "SKIP" if image[0, 0, 0] < skip_to else "Contnue" if image[0, 0, 0] in misread else "Continue"
+            return SimpleNamespace(all_results=[SimpleNamespace(text=label, box=(1065, 625, 140, 40))])
+        return None
+    context.run_recognition.side_effect = run_recognition
+    return reads
+
+
+def corner_taps(context):
+    return [c for c in context.tasker.controller.post_click.call_args_list if c.args == actions.EVENT_NEUTRAL]
+
+
+def test_event_text_is_tapped_every_0_15_s_and_read_every_third_tap(context, clock):
+    # Live 2026-10-20: a screenshot and 3 OCRs after each tap made it one every 0.3-1.1 s, whatever its wait; the
+    # text keeps up with a tap every 0.15 s (the user by hand; no tap lost live). The Choices show after tap 4.
+    reads = event_text(context, choices_from=6)
+    actions.Event().run(context, None)
+    assert len(corner_taps(context)) == 6  # read at taps 3 and 6
+    assert reads.count(tuple(actions.EVENT_BUTTON_LABEL)) == 2
+    assert sum(clock) == pytest.approx(5 * actions.EVENT_TAP_EVERY)
+
+
+def test_event_text_stops_on_the_lit_button_without_reading_text(context, clock):
+    # The button's pixels are looked at after each tap: a tap after it lit is wasted (live: 1-3 a burst).
+    reads = event_text(context, red_from=3)
+    actions.Event().run(context, None)
+    assert len(corner_taps(context)) == 2
+    assert tuple(actions.EVENT_BUTTON_LABEL) not in reads
+
+
+def button_taps(context):
+    return [c for c in context.tasker.controller.post_click.call_args_list if c.args == actions.EVENT_BUTTON]
+
+
+def test_the_text_is_tapped_on_right_after_the_lit_button(context, clock):
+    # The user (#188): after the red button the taps paused ~1.6-5.3 s (live 2026-10-20: a 0.5 s settle, then
+    # MirrorHub's 200 ms delays and its look). Now the corner taps go on at the same 0.15 s in the same call;
+    # the button still lit while its press fades out is no button to press again.
+    event_text(context, red_from=1, red_to=3, choices_from=7)
+    actions.Event().run(context, None)
+    clicks = context.tasker.controller.post_click.call_args_list
+    assert clicks[0].args == actions.EVENT_BUTTON and len(button_taps(context)) == 1
+    assert len(corner_taps(context)) == 6  # 2 while it fades, read at once on the first unlit screen, then every third
+    waits = [s for s in clock if s]  # tap(wait=0) sleeps 0
+    assert waits[0] == pytest.approx(actions.EVENT_TAP_EVERY) and max(waits) <= actions.EVENT_TAP_EVERY
+
+
+def test_no_corner_tap_once_the_lit_button_left_the_event(context, clock):
+    # The last Continue ends the event: the first screen without the lit button is read before another tap.
+    event_text(context, red_from=1, red_to=3, label_to=3)
+    actions.Event().run(context, None)
+    assert len(corner_taps(context)) == 2  # both on the fading event page
+
+
+def test_a_lit_button_that_became_another_is_handed_back_at_once(context, clock):
+    # A check's result page: SKIP pressed, Continue lit in its place (spec 02), with no unlit screen between.
+    event_text(context, red_from=1, skip_to=3)
+    actions.Event().run(context, None)
+    assert len(button_taps(context)) == 1 and len(corner_taps(context)) == 2
+
+
+@pytest.mark.parametrize("label_to, misread", [
+    (3, ()),  # read empty mid-fade
+    (1, ()),  # read empty before the press
+    (float("inf"), (1,)),  # read in part before the press
+    (3, (2,)),  # read in part mid-fade
+])
+def test_a_label_not_read_whole_while_it_fades_is_no_other_button(context, clock, label_to, misread):
+    # Handed back, MirrorHub's Event node would still match the fading button and press it again.
+    event_text(context, red_from=1, red_to=5, label_to=label_to, misread=misread)
+    actions.Event().run(context, None)
+    assert len(button_taps(context)) == 1 and len(corner_taps(context)) >= 4  # on through the fade's 3 lit screens
+
+
+def test_a_press_that_did_not_take_is_handed_back_to_be_pressed_again(context, clock):
+    # The button lit on for EVENT_TAKE s: the press was lost, MirrorHub presses it again. Counted in time, not taps:
+    # a label OCR a lit screen (0.2 s here) slows the taps.
+    event_text(context, red_from=1)
+    inner = context.run_recognition.side_effect
+    context.run_recognition.side_effect = lambda *a, **k: actions.time.sleep(0.2) or inner(*a, **k)
+    actions.Event().run(context, None)
+    assert len(button_taps(context)) == 1 and len(corner_taps(context)) == math.ceil(actions.EVENT_TAKE / 0.2)
 
 
 def bus_at(context, x, y, linked=()):
@@ -662,6 +767,7 @@ def test_a_fusion_taps_only_the_materials_its_cells_show(context, monkeypatch):
     fuse_slots(context, monkeypatch)
     cells_read(monkeypatch, ("Keywordless", SPIDERWEB["name"]), ("Bleed", None), ("Burn", None), ("Keywordless", None),
                ("Tremor", None), ("Pierce", None), ("Sinking", None), (None, None))
+    monkeypatch.setattr(actions.Shop, "to_main", staticmethod(lambda context: True))  # it looks for a tooltip over Close
     actions.Shop.fuse(context, {"keyword": "Burn", "gift_search": {"gifts": [SPIDERWEB]}}, {})
     taps = [c.args for c in context.tasker.controller.post_click.call_args_list]
     assert [taps.count(c) for c in actions.FUSE_CELLS[:8]] == [0, 1, 0, 0, 1, 1, 0, 0]
@@ -864,6 +970,140 @@ def test_a_sale_does_not_break_a_fusion_by_selling_white_gossypium(context, monk
     taps = sale_taps(context, monkeypatch, {"allow_white_gossypium": False}, [50, 60, 70, 80], ("Bleed", GOSSYPIUM, 1),
                      ("Tremor", None, 1), ("Pierce", None, 1), ("Sinking", None, 1))
     assert taps == []
+
+
+def live_shop(context, reads_now):
+    """A game that reacts to taps: each tap changes the screen, and OCR reads reads_now(taps)[roi]."""
+    taps = []
+
+    def click(x, y):
+        taps.append((x, y))
+        return MagicMock()
+    context.tasker.controller.post_click.side_effect = click
+    context.tasker.controller.post_screencap.return_value.wait.return_value.get.side_effect = \
+        lambda: np.full((720, 1280, 3), len(taps) * 20 % 256, np.uint8)
+
+    def run_recognition(name, image, override=None):
+        roi = tuple((override or {}).get(name, {}).get("roi", ()))
+        results = [SimpleNamespace(text=t, box=b) for t, b in reads_now(taps).get(roi, [])]
+        return SimpleNamespace(all_results=results, hit=True, best_result=None) if results else None
+    context.run_recognition.side_effect = run_recognition
+    return taps
+
+
+def sell_page(confirmed):
+    """The sell page of #174: 51 Cost, cell 0 a Bleed gift for 95; a picked cell previews the Cost as 51146.
+    Sell asks to confirm; confirmed(taps) says whether the sale went through."""
+    def reads_now(taps):
+        sold = confirmed(taps)
+        picked = actions.SELL_CELLS[0] in taps and not sold
+        asked = taps[-1:] == [actions.PAGE_OK]
+        return {tuple(actions.DIALOG_TITLE): [("Sell E.G.O Gift", (500, 90, 200, 40))],
+                tuple(actions.SELL_COST): [("146" if sold else "51146" if picked else "51", (980, 90, 60, 30))],
+                tuple(actions.SELL_GRID): [] if sold else [("95", (680, 295, 26, 20))],
+                tuple(actions.DIALOG_TEXT): [("Sell [Today's Expression] for 95 Cost?", (460, 330, 360, 25))] if asked else []}
+    return reads_now
+
+
+SELLER = {"keyword": "Burn", "reserve_cost": 0, "gift_search": {"gifts": []}}
+
+
+def test_a_sale_confirms_the_sell_dialog(context, monkeypatch):
+    # #174 (live 2026-10-19): Sell asked "Sell [Today's Expression] for 95 Cost?" and the bot cancelled it.
+    taps = live_shop(context, sell_page(lambda taps: actions.DIALOG_CONFIRM in taps))
+    cells_read(monkeypatch, ("Bleed", None))
+    logs = []
+    monkeypatch.setattr(actions, "log", logs.append)
+    assert actions.Shop.sell(context, SELLER, {"wanted": 145, "sold": False})
+    assert taps.index(actions.SELL_CELLS[0]) < taps.index(actions.PAGE_OK) < taps.index(actions.DIALOG_CONFIRM)
+    assert "shop: sold cell 0 for 95: 51 -> 146 Cost" in logs
+
+
+def test_a_cell_picked_to_read_its_panel_is_sold_from_the_cost_before_it(context, monkeypatch):
+    # Its price cut off: the panel decides, and the tap leaves the cell picked, the Cost previewing 51146.
+    page = sell_page(lambda taps: actions.DIALOG_CONFIRM in taps)
+
+    def reads_now(taps):
+        texts = page(taps) | {tuple(actions.SELL_GRID): []}
+        if taps and actions.DIALOG_CONFIRM not in taps:
+            texts |= {tuple(actions.SELL_PANEL): [("Today's Expression", (160, 170, 200, 25))],
+                      tuple(actions.SELL_PRICE): [("95", (505, 170, 40, 25))]}
+        return texts
+    live_shop(context, reads_now)
+    cells_read(monkeypatch, ("Bleed", None))
+    logs = []
+    monkeypatch.setattr(actions, "log", logs.append)
+    assert actions.Shop.sell(context, SELLER, {"wanted": 145, "sold": False})
+    assert "shop: sold cell 0 for 95: 51 -> 146 Cost" in logs
+
+
+def test_the_cost_preview_of_a_picked_cell_is_not_a_sale(context, monkeypatch):
+    # #174: the picked cell's "51 > 146" read as 51146, and the bot took the Cost as changed: sold.
+    live_shop(context, sell_page(lambda taps: False))
+    cells_read(monkeypatch, ("Bleed", None))
+    logs = []
+    monkeypatch.setattr(actions, "log", logs.append)
+    actions.Shop.sell(context, SELLER, {"wanted": 145, "sold": False})
+    assert any("not sold" in line for line in logs)
+    assert not any("sold cell" in line for line in logs)
+
+
+@pytest.mark.parametrize("tooltip", [True, False])
+def test_closing_the_fuse_page_taps_a_tooltip_away_only_when_one_shows(context, clock, tooltip):
+    # The neutral tap waits for the tooltip to go; with none it would wait out its whole timeout for nothing.
+    def reads_now(taps):
+        if actions.PAGE_CLOSE in taps:  # the main shop: its Refresh fee
+            return {tuple(actions.REFRESH["normal"][1]): [("30", (970, 145, 40, 20))]}
+        # The grid's "E.G.O Gifts Owned" label is in the tooltip's roi too: no tooltip heading (review of the merge).
+        page = {tuple(actions.DIALOG_TITLE): [("Fuse E.G.O Gift", (500, 90, 200, 40))],
+                tuple(actions.FUSE_TOOLTIP): [("E.G.O Gifts Owned", (640, 215, 180, 25))]}
+        if tooltip and actions.FUSE_NEUTRAL not in taps:
+            page[tuple(actions.FUSE_TOOLTIP)] += [("E.G.O GIFT", (1030, 305, 100, 25))]
+        return page
+    taps = live_shop(context, reads_now)
+    assert actions.Shop.to_main(context)
+    assert taps == ([actions.FUSE_NEUTRAL] if tooltip else []) + [actions.PAGE_CLOSE]
+
+
+def test_a_keyword_refresh_waits_for_the_new_cost_not_a_fixed_time(context, clock):
+    # Live 2026-10-19: a keyword refresh slept 1.5 + 1 + 2 + 1 s; the screen stops 0.5-0.6 s after OK.
+    def reads_now(taps):
+        cost = "410" if actions.KEYWORD_REFRESH in taps else "500"
+        return {tuple(actions.SHOP_COST): [(cost, (560, 120, 60, 30))],
+                tuple(actions.REFRESH["normal"][1]): [("100", (970, 145, 40, 20))],
+                tuple(actions.REFRESH["keyword"][1]): [("90", (1110, 145, 40, 20))],
+                tuple(actions.KEYWORD_LABELS): [("Burn", (300, 400, 60, 20))]}
+    taps = live_shop(context, reads_now)
+    visit = {"wanted": None, "sold": False, "refreshes": 0}
+    assert actions.Shop.buy(context, {"keyword": "Burn", "reserve_cost": 0, "shop_refresh_limit": 1}, visit)
+    assert visit["refreshes"] == 1 and taps == [actions.REFRESH["keyword"][0], (330, 360), actions.KEYWORD_REFRESH]
+    assert sum(clock) < 1.5
+
+
+def test_a_keyword_refresh_checks_the_page_before_its_first_tap(context, clock, monkeypatch):
+    # #118 (ADR 0007): the shop gone after its Cost was read, the refresh's first tap does not go out.
+    def gone(context, home, image=None):
+        raise actions.PageGone(home)
+    monkeypatch.setattr(actions, "page_guard", gone)
+    taps = live_shop(context, lambda taps: {tuple(actions.SHOP_COST): [("500", (560, 120, 60, 30))],
+                                            tuple(actions.REFRESH["normal"][1]): [("100", (970, 145, 40, 20))],
+                                            tuple(actions.REFRESH["keyword"][1]): [("90", (1110, 145, 40, 20))]})
+    visit = {"wanted": None, "sold": False, "refreshes": 0}
+    with pytest.raises(actions.PageGone):
+        actions.Shop.buy(context, {"keyword": "Burn", "reserve_cost": 0, "shop_refresh_limit": 1}, visit)
+    assert taps == []
+
+
+def test_the_leave_dialog_is_read_with_its_spaces_dropped(context, clock, monkeypatch):
+    # #160: OCR drops spaces ("LEAVE THESHOP?"); has() compacts both sides, as main's Leave does.
+    actions.RUN["team"] = {"heal": "none", "keyword": "Burn", "reserve_cost": 0}
+    monkeypatch.setattr(actions.Shop, "to_main", staticmethod(lambda context: True))
+    for step in ("sell", "buy", "fuse"):
+        monkeypatch.setattr(actions.Shop, step, staticmethod(lambda *a: False))
+    taps = live_shop(context, lambda taps: {tuple(actions.LEAVE_DIALOG): [("LEAVE THESHOP?", (480, 325, 300, 35))]}
+                     if taps else {})
+    assert actions.Shop().run(context, argv())
+    assert actions.LEAVE_CONFIRM in taps and actions.STUCK["flag"] is None
 
 
 GOSSYPIUM = "White Gossypium"
@@ -1743,9 +1983,11 @@ def test_one_event_that_goes_on_past_its_limit_goes_to_recovery(context):
 
 
 def test_an_event_after_a_pause_starts_its_own_clock(context):
-    event_for(context, actions.EVENT_LIMIT - 30)
+    # Each event alone stays under the limit (a call taps the text for up to 0.3 s on top of event_for's 1 s);
+    # together they would not.
+    event_for(context, actions.EVENT_LIMIT // 2 + 30)
     actions.time.sleep(actions.EVENT_LIMIT)  # the event ended; the next one comes later
-    event_for(context, actions.EVENT_LIMIT - 30)
+    event_for(context, actions.EVENT_LIMIT // 2 + 30)
     assert actions.STUCK["flag"] is None
 
 
@@ -2220,11 +2462,13 @@ def test_the_guard_takes_a_fresh_screenshot_showing_the_page_without_another(con
 
 
 def test_event_text_taps_stop_once_the_event_is_gone(context, guarded):
-    # The text tapped on at a dead corner (up to 30 taps); the event page went away after the first.
+    # The text tapped on at a dead corner (up to 30 taps); the event page went away after the first. The page is
+    # looked at with its text, every EVENT_READ_EVERY taps (#174: one OCR a tap undid the 0.15 s): the taps in
+    # between land on the dead corner, which takes none.
     reads(context, {tuple(actions.EVENT_BUTTON_LABEL): [("Continue", (1065, 625, 140, 40))]})
     page_until(context, "Event", 1)
     assert actions.Event().run(context, None)
-    assert len(taps(context)) == 1
+    assert len(taps(context)) == actions.EVENT_READ_EVERY
     assert actions.STUCK["flag"] is None
 
 
