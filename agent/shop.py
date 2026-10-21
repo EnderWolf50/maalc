@@ -3,13 +3,12 @@
 actions.py reads the shop pages and taps; everything here is plain data in, plain data out.
 """
 
-from difflib import SequenceMatcher
 from itertools import combinations
 
 import numpy as np
 
 from gift_search import _runs
-from ocrtext import compact, has
+from ocrtext import has
 
 ROUNDS = 10
 CELL_HALF = 48  # screen px kept around a cell's centre: its icon, tier numerals and keyword badge
@@ -31,6 +30,11 @@ def cell_crop(image, x, y, scale):
     The cell's centre is the crop's centre.
     """
     return rescale(image[y - CELL_HALF:y + CELL_HALF, x - CELL_HALF:x + CELL_HALF], 1 / scale)
+
+
+def filled(image, x, y):
+    """Whether the grid cell centred at (x, y) holds a gift: textured (live: spread 41-84), an empty one flat (1-2)."""
+    return bool(image[y - 25:y + 25, x - 25:x + 25].max(axis=2).std() > 15)
 
 
 def tier(cell):
@@ -219,7 +223,7 @@ def gift_role(keyword, gift, kept, avoid=(), material=()):
     the team keeps (kept_keywords: the main one, the ones it names and "Keywordless" unless it lets them go, #77).
     Kept too: the gifts whose icon matched (observed #103, #112, or named in keep_gifts #77); a gift in avoid (#90) or
     material (the vestiges the team lets go, #161) is material whatever its keyword. No badge and no icon matched is a
-    keywordless gift (the user, #161). Unknown is left to the tooltip: a cut-off or unread badge.
+    keywordless gift (the user, #161). Unknown, a cut-off or unread badge, is neither fused nor sold.
     """
     if gift in avoid or gift in material:
         return "material"
@@ -287,9 +291,3 @@ def picked(image, x, y, bottom=720):
                            image[y - 30:y + 30, x - 40:x - 34].reshape(-1, 3), image[y - 30:y + 30, x + 34:x + 40].reshape(-1, 3)])
     b, g, r = (ring[:, i].astype(int) for i in range(3))
     return ((r > 200) & (g > 100) & (g < 200) & (b < 80)).mean() > 0.08
-
-
-def protected(name, names, min_ratio=0.85):
-    """Whether an OCR'd gift name is one of names (fuzzy): a gift the shop must not fuse or sell (#103)."""
-    key = compact(name)
-    return bool(key) and any(SequenceMatcher(None, key, compact(n)).ratio() >= min_ratio for n in names)

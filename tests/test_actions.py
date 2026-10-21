@@ -745,7 +745,8 @@ def cells_read(monkeypatch, *readings):
 
 
 FUSE_PAGE = {tuple(actions.DIALOG_TITLE): [("Fuse E.G.O Gift", (500, 100, 200, 40))],
-             tuple(actions.KEYWORD_LABELS): [("Burn", (300, 400, 60, 20))]}
+             tuple(actions.KEYWORD_LABELS): [("Burn", (300, 400, 60, 20))],
+             tuple(actions.FUSE_LIST): [("E.G.O Gifts Owned", (635, 216, 161, 24))]}  # at its place: nothing over it
 SPIDERWEB = {"name": "Spiderweb Entangled in Red", "keyword": "Keywordless", "tier": 3}
 
 
@@ -767,7 +768,7 @@ def test_a_fusion_taps_only_the_materials_its_cells_show(context, monkeypatch):
     fuse_slots(context, monkeypatch)
     cells_read(monkeypatch, ("Keywordless", SPIDERWEB["name"]), ("Bleed", None), ("Burn", None), ("Keywordless", None),
                ("Tremor", None), ("Pierce", None), ("Sinking", None), (None, None))
-    monkeypatch.setattr(actions.Shop, "to_main", staticmethod(lambda context: True))  # it looks for a tooltip over Close
+    monkeypatch.setattr(actions.Shop, "to_main", staticmethod(lambda context: True))
     actions.Shop.fuse(context, {"keyword": "Burn", "gift_search": {"gifts": [SPIDERWEB]}}, {})
     taps = [c.args for c in context.tasker.controller.post_click.call_args_list]
     assert [taps.count(c) for c in actions.FUSE_CELLS[:8]] == [0, 1, 0, 0, 1, 1, 0, 0]
@@ -854,14 +855,11 @@ def test_an_offer_with_a_red_price_is_not_tapped_though_ocr_read_it_as_affordabl
     assert visit["wanted"] is None
 
 
-def sale_taps(context, monkeypatch, team, prices, *readings, panel=()):
-    """Shop.sell with 100 Cost and a 180 wanted, readings (cells_read) priced prices on the grid: the cells it tapped.
-    panel: the lines the sell page's panel reads for any cell tapped to read it."""
+def sale_taps(context, monkeypatch, team, prices, *readings):
+    """Shop.sell with 100 Cost and a 180 wanted, readings (cells_read) priced prices on the grid: the cells it tapped."""
     lines = [(str(p), (x - 3, y + 37, 26, 20)) for p, (x, y) in zip(prices, actions.SELL_CELLS)]
     reads(context, {tuple(actions.DIALOG_TITLE): [("Sell E.G.O Gift", (500, 90, 200, 40))],
-                    tuple(actions.SELL_COST): [("100", (980, 90, 60, 30))], tuple(actions.SELL_GRID): lines,
-                    tuple(actions.SELL_PANEL): [(t, (200, 200 + 40 * n, 150, 20)) for n, t in enumerate(panel)],
-                    tuple(actions.SELL_PRICE): [("90", (505, 170, 40, 25))] if panel else []})
+                    tuple(actions.SELL_COST): [("100", (980, 90, 60, 30))], tuple(actions.SELL_GRID): lines})
     cells_read(monkeypatch, *readings)
     actions.Shop.sell(context, {"keyword": "Burn", "reserve_cost": 0, "gift_search": {"gifts": []}, **team},
                       {"wanted": 180, "sold": False})
@@ -886,20 +884,6 @@ def test_a_sale_skips_the_teams_kept_gifts(context, monkeypatch):
     assert taps == [actions.SELL_CELLS[4]]
 
 
-def test_a_sale_keeps_a_gift_its_panel_names_a_kept_keyword(context, monkeypatch):
-    # #79: the first cell's badge is unread; its panel says Burn (the main keyword): kept, though as a tier I it is the
-    # one the fusion of the 3 others leaves over.
-    lines = [(str(p), (x - 3, y + 37, 26, 20)) for p, (x, y) in zip([500, 90, 60, 70], actions.SELL_CELLS)]
-    reads(context, {tuple(actions.DIALOG_TITLE): [("Sell E.G.O Gift", (500, 90, 200, 40))],
-                    tuple(actions.SELL_COST): [("100", (980, 90, 60, 30))], tuple(actions.SELL_GRID): lines,
-                    tuple(actions.SELL_PANEL): [("Wound Clerid", (200, 200, 150, 20)), ("Inflict 2 Burn", (200, 240, 150, 20))],
-                    tuple(actions.SELL_PRICE): [("500", (505, 170, 40, 25))]})
-    cells_read(monkeypatch, (None, None, 1), ("Bleed", None), ("Tremor", None), ("Pierce", None))
-    actions.Shop.sell(context, {"keyword": "Burn", "reserve_cost": 0, "gift_search": {"gifts": []}}, {"wanted": 180, "sold": False})
-    taps = [c.args for c in context.tasker.controller.post_click.call_args_list if c.args in actions.SELL_CELLS]
-    assert taps == [actions.SELL_CELLS[0]]  # tapped once for its panel, never sold
-
-
 @pytest.mark.parametrize("team, leftover, sold", [
     ({}, 5, False),  # a tier V no fusion takes (pick_fusion never does) is not sold by default
     ({"sell_max_tier": 5}, 5, True),
@@ -916,9 +900,9 @@ def test_a_sale_stops_at_the_teams_highest_tier(context, monkeypatch, team, left
 @pytest.mark.parametrize("keywordless, sold", [("keep", False), ("fuse", False), ("fuse_or_sell", True)])
 def test_a_sale_follows_the_keywordless_setting(context, monkeypatch, keywordless, sold):
     # #161: a keywordless leftover goes only with "fuse_or_sell"; "fuse" keeps it for fusions, and "keep" keeps it
-    # everywhere. Its badge-less cell matched no vestige icon: the setting alone decides, its panel is never read.
+    # everywhere. Its badge-less cell matched no vestige icon: the setting alone decides.
     taps = sale_taps(context, monkeypatch, {"keywordless": keywordless}, [90, 60, 70, 95], ("Bleed", None),
-                     ("Tremor", None), ("Pierce", None), ("Keywordless", None, 2), panel=["Grey Coat", "Inflict 2 Burn"])
+                     ("Tremor", None), ("Pierce", None), ("Keywordless", None, 2))
     assert taps.count(actions.SELL_CELLS[3]) == int(sold)  # the sale's tap only
 
 
@@ -951,17 +935,6 @@ def test_a_sale_counts_the_fusion_materials_it_may_not_sell(context, monkeypatch
     # Tremor fuse with it, so neither is sold. Neither is opened (#161).
     taps = sale_taps(context, monkeypatch, team, [90, 95, 60], ("Bleed", None), ("Tremor", None), ("Keywordless", gift, 1))
     assert taps == []
-
-
-@pytest.mark.parametrize("name", ["Grey Coat", "Faith"])
-@pytest.mark.parametrize("keywordless, sold", [("keep", False), ("fuse", False), ("fuse_or_sell", True)])
-def test_a_cut_off_cell_naming_a_keywordless_gift_follows_the_setting_not_its_text(context, monkeypatch, keywordless, sold, name):
-    # #161, the user: a keywordless gift's text never keeps it, though it says Burn (the main keyword). The cell's
-    # badge is cut off, so its panel is read for the name: Grey Coat (II, a Gift Search gift) and Faith (IV, not
-    # one) are keywordless (data/keywordless_gifts.json).
-    taps = sale_taps(context, monkeypatch, {"keywordless": keywordless}, [90, 60, 70, 95], ("Bleed", None),
-                     ("Tremor", None), ("Pierce", None), (None, None, 2), panel=[name, "Inflict 2 Burn"])
-    assert taps.count(actions.SELL_CELLS[3]) == 1 + int(sold)  # its panel, then the sale
 
 
 def test_a_sale_does_not_break_a_fusion_by_selling_white_gossypium(context, monkeypatch):
@@ -1019,24 +992,6 @@ def test_a_sale_confirms_the_sell_dialog(context, monkeypatch):
     assert "shop: sold cell 0 for 95: 51 -> 146 Cost" in logs
 
 
-def test_a_cell_picked_to_read_its_panel_is_sold_from_the_cost_before_it(context, monkeypatch):
-    # Its price cut off: the panel decides, and the tap leaves the cell picked, the Cost previewing 51146.
-    page = sell_page(lambda taps: actions.DIALOG_CONFIRM in taps)
-
-    def reads_now(taps):
-        texts = page(taps) | {tuple(actions.SELL_GRID): []}
-        if taps and actions.DIALOG_CONFIRM not in taps:
-            texts |= {tuple(actions.SELL_PANEL): [("Today's Expression", (160, 170, 200, 25))],
-                      tuple(actions.SELL_PRICE): [("95", (505, 170, 40, 25))]}
-        return texts
-    live_shop(context, reads_now)
-    cells_read(monkeypatch, ("Bleed", None))
-    logs = []
-    monkeypatch.setattr(actions, "log", logs.append)
-    assert actions.Shop.sell(context, SELLER, {"wanted": 145, "sold": False})
-    assert "shop: sold cell 0 for 95: 51 -> 146 Cost" in logs
-
-
 def test_the_cost_preview_of_a_picked_cell_is_not_a_sale(context, monkeypatch):
     # #174: the picked cell's "51 > 146" read as 51146, and the bot took the Cost as changed: sold.
     live_shop(context, sell_page(lambda taps: False))
@@ -1046,23 +1001,6 @@ def test_the_cost_preview_of_a_picked_cell_is_not_a_sale(context, monkeypatch):
     actions.Shop.sell(context, SELLER, {"wanted": 145, "sold": False})
     assert any("not sold" in line for line in logs)
     assert not any("sold cell" in line for line in logs)
-
-
-@pytest.mark.parametrize("tooltip", [True, False])
-def test_closing_the_fuse_page_taps_a_tooltip_away_only_when_one_shows(context, clock, tooltip):
-    # The neutral tap waits for the tooltip to go; with none it would wait out its whole timeout for nothing.
-    def reads_now(taps):
-        if actions.PAGE_CLOSE in taps:  # the main shop: its Refresh fee
-            return {tuple(actions.REFRESH["normal"][1]): [("30", (970, 145, 40, 20))]}
-        # The grid's "E.G.O Gifts Owned" label is in the tooltip's roi too: no tooltip heading (review of the merge).
-        page = {tuple(actions.DIALOG_TITLE): [("Fuse E.G.O Gift", (500, 90, 200, 40))],
-                tuple(actions.FUSE_TOOLTIP): [("E.G.O Gifts Owned", (640, 215, 180, 25))]}
-        if tooltip and actions.FUSE_NEUTRAL not in taps:
-            page[tuple(actions.FUSE_TOOLTIP)] += [("E.G.O GIFT", (1030, 305, 100, 25))]
-        return page
-    taps = live_shop(context, reads_now)
-    assert actions.Shop.to_main(context)
-    assert taps == ([actions.FUSE_NEUTRAL] if tooltip else []) + [actions.PAGE_CLOSE]
 
 
 def test_a_keyword_refresh_waits_for_the_new_cost_not_a_fixed_time(context, clock):
@@ -1210,122 +1148,11 @@ def test_the_teams_kept_keywords_and_gifts_stay_out_of_a_fusion(context, monkeyp
     assert fused and taps == [0, 0, 1, 1, 0, 1]
 
 
-def test_the_tooltip_decides_a_cell_whose_badge_is_cut_off_and_keeps_what_it_names(context, monkeypatch):
-    # #77: two cells' badges are cut off and no icon matched. Their tooltips: a Burn gift (kept by its keyword) and
-    # Dark Vestige (material). Each is tapped in and out for its tooltip; then only the Vestige goes in with the two
-    # others.
-    tips = {actions.FUSE_CELLS[0]: ("Wound Clerid", "Inflict Burn"), actions.FUSE_CELLS[1]: ("Dark Vestige", "Counts as a Tier 1")}
-
-    def tooltip(context, last):
-        taps = [c.args for c in context.tasker.controller.post_click.call_args_list]
-        name, line = tips[next(t for t in reversed(taps) if t in tips)]
-        return [("E.G.O GIFT", (1030, 305, 100, 25)), (name, (1010, 340, 180, 22)), (line, (1000, 380, 200, 20))], name
-    monkeypatch.setattr(actions.Shop, "tooltip", staticmethod(tooltip))
-    fused, taps, _ = fusion_taps(context, monkeypatch, {}, (None, None), (None, None, 1), ("Tremor", None), ("Pierce", None))
-    assert fused and taps == [2, 3, 1, 1]  # the Burn gift in and out; the Vestige in, out, and in for the fusion
-
-
-def stuck_tooltip(context, monkeypatch, closes):
-    """The fuse page back with a tooltip up from the keyword's OK on, over Leave: every page check fails under it.
-    closes(taps after the OK) says whether it is gone."""
-    def up():
-        taps = [c.args for c in context.tasker.controller.post_click.call_args_list]
-        return actions.FUSE_KEYWORD_OK in taps and not closes(taps[taps.index(actions.FUSE_KEYWORD_OK) + 1:])
-
-    def guard(context, home, image=None):
-        if up():
-            raise actions.PageGone(home)
-    monkeypatch.setattr(actions, "page_guard", guard)
-    reads(context, {**FUSE_PAGE, tuple(actions.FUSE_CONFIRM): [("Selected E.G.O Gifts 3/3", (330, 175, 320, 30))],
-                    tuple(actions.GET_TITLE): [("E.G.O Gift GET!", (560, 165, 160, 30))]})
-    inner = context.run_recognition.side_effect
-
-    def run_recognition(name, image, override=None):
-        if tuple((override or {}).get(name, {}).get("roi", ())) == tuple(actions.FUSE_TOOLTIP) and up():
-            return SimpleNamespace(all_results=[SimpleNamespace(text="E.G.O GIFT", box=(900, 460, 100, 25))], hit=True,
-                                   best_result=None)
-        return inner(name, image, override)
-    context.run_recognition.side_effect = run_recognition
-    fuse_slots(context, monkeypatch)
-    cells_read(monkeypatch, ("Bleed", None), ("Tremor", None), ("Pierce", None))
-
-
-def test_a_tooltip_left_up_on_the_fuse_page_is_closed_before_the_grid_is_read(context, monkeypatch):
-    # Live 2026-10-21: the fuse page came back with the last gift's tooltip up (Emerald Elytra, a third-row cell), over
-    # Leave, the Shop node's anchor: every page check handed the shop back. A neutral tap closes one.
-    stuck_tooltip(context, monkeypatch, lambda taps: actions.FUSE_NEUTRAL in taps)
-    assert actions.Shop.fuse(context, {"keyword": "Burn", "gift_search": {"gifts": []}}, {})
-
-
-def test_a_tooltip_left_from_a_moved_cell_goes_with_a_cells_own(context, monkeypatch):
-    # Live 2026-10-21: one left from a cell the grid had moved stayed after the neutral tap; a cell's tooltip took its
-    # place, and the neutral tap closed that. The first cell goes in and out for it.
-    first = actions.FUSE_CELLS[0]
-    stuck_tooltip(context, monkeypatch, lambda taps: first in taps and actions.FUSE_NEUTRAL in taps[taps.index(first):])
-    assert actions.Shop.fuse(context, {"keyword": "Burn", "gift_search": {"gifts": []}}, {})
-
-
-def test_a_tooltip_that_stays_up_closes_the_fuse_page_for_the_visit(context, monkeypatch):
-    # No loop: with the tooltip up the shop is not handed back, the page is closed, and not read again this visit.
-    stuck_tooltip(context, monkeypatch, lambda taps: False)
-    closed = []
-    monkeypatch.setattr(actions.Shop, "to_main", staticmethod(lambda context: closed.append(True)))
-    visit = {}
-    assert not actions.Shop.fuse(context, {"keyword": "Burn", "gift_search": {"gifts": []}}, visit)
-    assert visit["fuse_scanned"] and closed
-
-
-def test_a_stuck_tooltip_is_not_tapped_at_once_the_fuse_page_is_gone(context, monkeypatch):
-    # #162: close_tooltip's taps are checked too, by the page's title (Leave is under the tooltip): gone after the
-    # keyword's OK, nothing more is tapped.
-    stuck_tooltip(context, monkeypatch, lambda taps: False)
-    inner = context.run_recognition.side_effect
-
-    def run_recognition(name, image, override=None):
-        taps = [c.args for c in context.tasker.controller.post_click.call_args_list]
-        if tuple((override or {}).get(name, {}).get("roi", ())) == tuple(actions.DIALOG_TITLE) and actions.FUSE_KEYWORD_OK in taps:
-            return None
-        return inner(name, image, override)
-    context.run_recognition.side_effect = run_recognition
-    with pytest.raises(actions.PageGone):
-        actions.Shop.fuse(context, {"keyword": "Burn", "gift_search": {"gifts": []}}, {})
-    taps = [c.args for c in context.tasker.controller.post_click.call_args_list]
-    assert taps[-1] == actions.FUSE_KEYWORD_OK
-
-
-def test_a_cut_off_cells_tooltip_is_closed_before_the_page_is_checked(context, monkeypatch):
-    # Live 2026-10-21: a third-row cell's tooltip covers Leave, the Shop node's anchor. A page check while it showed
-    # handed the shop back each time, and the bot looped on the fuse page under recovery. Here the check fails while
-    # the last tap was a cell's (its tooltip up); the neutral tap that closes it comes first.
-    def guard(context, home, image=None):
-        taps = [c.args for c in context.tasker.controller.post_click.call_args_list]
-        if taps and taps[-1] in actions.FUSE_CELLS:
-            raise actions.PageGone(home)
-    monkeypatch.setattr(actions, "page_guard", guard)
-    monkeypatch.setattr(actions.Shop, "tooltip", staticmethod(lambda context, last: (
-        [("E.G.O GIFT", (1030, 305, 100, 25)), ("Grey Coat", (1010, 340, 180, 22))], "Grey Coat")))
-    fused, taps, _ = fusion_taps(context, monkeypatch, {"keywordless": "fuse"}, (None, None, 2), ("Tremor", None),
-                                 ("Pierce", None))
-    assert fused and taps == [3, 1, 1]  # in and out for its tooltip, then in for the fusion
-
-
-@pytest.mark.parametrize("keywordless, fused_in", [("keep", 0), ("fuse", 1)])
-def test_a_cut_off_cell_whose_tooltip_names_a_keywordless_gift_follows_the_setting(context, monkeypatch, keywordless, fused_in):
-    # #161, the user: the setting alone decides a keywordless gift; its tooltip's Burn does not keep it. Tremor and
-    # Pierce alone make no fusion, so the cut-off cell is opened.
-    monkeypatch.setattr(actions.Shop, "tooltip", staticmethod(lambda context, last: (
-        [("E.G.O GIFT", (1030, 305, 100, 25)), ("Grey Coat", (1010, 340, 180, 22)), ("Inflict 2 Burn", (1000, 380, 200, 20))],
-        "Grey Coat")))
-    fused, taps, _ = fusion_taps(context, monkeypatch, {"keywordless": keywordless}, (None, None, 2), ("Tremor", None),
-                                 ("Pierce", None))
-    assert fused == bool(fused_in) and taps[0] == 2 + fused_in  # in and out for its tooltip, then in for the fusion
-
-
 @pytest.mark.parametrize("keywordless", ["fuse", "fuse_or_sell"])
 def test_keywordless_gifts_let_go_join_the_highest_tier_pick(context, monkeypatch, keywordless):
     # The user on #161: a keywordless gift that may be fused is a material like any other, not only when the others
     # make no fusion. Tremor III + Pierce III + Sinking I would make a III; with the keywordless III, a IV. Its cell
-    # matched no vestige icon: no tooltip is read.
+    # matched no vestige icon: the setting decides.
     fused, taps, _ = fusion_taps(context, monkeypatch, {"keywordless": keywordless}, ("Keywordless", None, 3),
                                  ("Tremor", None, 3), ("Pierce", None, 3), ("Sinking", None, 1))
     assert fused and taps == [1, 1, 1, 0]
@@ -1363,39 +1190,17 @@ def test_a_fusion_is_not_confirmed_when_the_dialog_counts_other_materials(contex
     assert ok and not fused
 
 
-def test_the_fusion_grid_is_not_scanned_again_while_the_owned_gifts_are_the_same(context):
-    # The fuse page with its keyword dialog, every cell empty: no fusion this visit.
-    reads(context, {tuple(actions.DIALOG_TITLE): [("Fuse E.G.O Gift", (500, 100, 200, 40))],
-                    tuple(actions.KEYWORD_LABELS): [("Burn", (300, 400, 60, 20))]})
-    owned_gifts(context)
+def test_the_fusion_grid_is_not_scanned_again_while_the_owned_gifts_are_the_same(context, monkeypatch):
+    # The fuse page with its keyword dialog, no materials: no fusion this visit.
+    reads(context, FUSE_PAGE)
+    scans = []
+    monkeypatch.setattr(actions, "owned_cells", lambda *a: scans.append(a) or ([], {"page": "fuse", "at": 0}))
     team, visit = {"keyword": "Burn", "gift_search": {"gifts": []}}, {}
     assert not actions.Shop.fuse(context, team, visit)
     taps = context.tasker.controller.post_click.call_count
-    assert taps > len(actions.FUSE_CELLS)  # the grid was scanned
+    assert len(scans) == 1
     assert not actions.Shop.fuse(context, team, visit)  # nothing bought or sold since
-    assert context.tasker.controller.post_click.call_count == taps
-
-
-def test_the_teams_observed_gift_is_kept_out_of_a_fusion(context, monkeypatch):
-    # The user (#103): Spiderweb Entangled in Red, found by gift search, kept getting fused away.
-    # A cell whose badge is unread falls back to its tooltip: the name keeps it.
-    cells_read(monkeypatch, (None, None))
-    gift = [("E.G.O GIFT", (1030, 305, 100, 25)), ("Spiderweb Entangled in Red", (1010, 340, 180, 22)),
-            ("Slash damage +10%", (1000, 380, 200, 20))]
-    reads = {tuple(actions.DIALOG_TITLE): [("Fuse E.G.O Gift", (500, 100, 200, 40))],
-             tuple(actions.KEYWORD_LABELS): [("Burn", (300, 400, 60, 20))], tuple(actions.FUSE_TOOLTIP): gift}
-
-    def run_recognition(name, image, override=None):
-        roi = tuple((override or {}).get(name, {}).get("roi", ()))
-        results = [SimpleNamespace(text=t, box=b) for t, b in reads.get(roi, [])]
-        return SimpleNamespace(all_results=results) if results else None
-    context.run_recognition.side_effect = run_recognition
-    owned_gifts(context)
-    fuse_slots(context, monkeypatch)
-    team = {"keyword": "Burn", "gift_search": {"gifts": [SPIDERWEB]}}
-    assert not actions.Shop.fuse(context, team, {})
-    taps = [c.args for c in context.tasker.controller.post_click.call_args_list]
-    assert taps.count(actions.FUSE_CELLS[0]) == 2  # tapped in, then out again
+    assert context.tasker.controller.post_click.call_count == taps and len(scans) == 1
 
 
 def test_recover_waits_out_a_download_without_climbing(context, clock, monkeypatch, tmp_path):
@@ -2377,39 +2182,6 @@ def test_the_shop_stops_tapping_once_the_map_shows(context):
     assert context.tasker.controller.post_click.call_count == 1  # the second offer is never tapped
 
 
-def test_only_the_filled_fusion_cells_are_tapped_and_an_unnamed_gift_comes_out_again(context):
-    # Live 2026-10-18: 5 gifts owned, 10 empty cells tapped at 3.4 s each; Spiderweb read no name and stayed in.
-    # Two gifts in the third row, whose badges the grid's edge cuts off: their tooltips decide.
-    reads(context, FUSE_PAGE)
-    owned_gifts(context, actions.FUSE_CELLS[10:12])
-    assert not actions.Shop.fuse(context, {"keyword": "Burn", "gift_search": {"gifts": []}}, {})
-    taps = [c.args for c in context.tasker.controller.post_click.call_args_list]
-    assert [taps.count(c) for c in actions.FUSE_CELLS] == [0] * 10 + [2, 2] + [0] * 3
-
-
-def test_a_fuse_page_showing_a_fixed_recipe_is_closed_and_not_tried_again(context):
-    # #103 (tests/screens/ShopFuseRecipe.png): a "Fusion Available" section pushed the owned gifts down and
-    # the bot stuck on the fuse page. It is closed untouched; the owned gifts must change before another try.
-    texts = {tuple(actions.DIALOG_TITLE): [("Fuse E.G.O Gift", (500, 100, 200, 40))],
-             tuple(actions.KEYWORD_LABELS): [("Burn", (300, 400, 60, 20))]}
-
-    def run_recognition(name, image, override=None):
-        if name == "ShopFusionAvailable":
-            return SimpleNamespace(hit=True, box=[640, 215, 150, 30])
-        roi = tuple((override or {}).get(name, {}).get("roi", ()))
-        results = [SimpleNamespace(text=t, box=b) for t, b in texts.get(roi, [])]
-        return SimpleNamespace(all_results=results, hit=True, best_result=None) if results else None
-    context.run_recognition.side_effect = run_recognition
-    owned_gifts(context)
-    team, visit = {"keyword": "Burn", "gift_search": {"gifts": []}}, {}
-    assert not actions.Shop.fuse(context, team, visit)
-    taps = [c.args for c in context.tasker.controller.post_click.call_args_list]
-    assert not set(taps) & set(actions.FUSE_CELLS)
-    assert actions.PAGE_CLOSE in taps
-    assert not actions.Shop.fuse(context, team, visit)
-    assert context.tasker.controller.post_click.call_count == len(taps)
-
-
 def cost_reads(context, values):
     """The shop's Cost reads each of values in turn (None: nothing read), the last one from then on."""
     def run_recognition(name, image, override=None):
@@ -2807,13 +2579,14 @@ def test_a_starting_gift_page_gone_after_a_gift_tap_does_not_press_select(contex
 
 
 def test_a_fusion_gone_after_a_cell_tap_taps_nothing_more(context, guarded, monkeypatch):
-    # A gift whose badge is cut off is named by its tooltip; with the shop gone that tooltip names nothing.
+    # The first material went in; with the shop gone then, the next material does not go out.
     reads(context, FUSE_PAGE)
-    cells_read(monkeypatch, (None, None))
-    page_until(context, "Shop", 5)  # gone after Fuse, the centre, Burn, its OK and the cell
+    fuse_slots(context, monkeypatch)
+    cells_read(monkeypatch, ("Bleed", None), ("Tremor", None), ("Pierce", None))
+    page_until(context, "Shop", 5)  # gone after Fuse, the centre, Burn, its OK and the first cell
     with pytest.raises(actions.PageGone):
         actions.Shop.fuse(context, {"keyword": "Burn", "gift_search": {"gifts": []}}, {})
-    assert actions.FUSE_NEUTRAL not in taps(context)[5:] and len(taps(context)) == 5
+    assert taps(context)[4] in actions.FUSE_CELLS and not set(taps(context)[5:]) & set(actions.FUSE_CELLS)
 
 
 def test_hands_back_clears_the_runtime_cache_of_a_long_task():

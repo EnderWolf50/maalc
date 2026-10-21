@@ -178,23 +178,12 @@ def test_dialog_price_from_the_cost_preview():
     assert s.dialog_price(None, "28642612") is None
 
 
-@pytest.mark.parametrize("read, kept", [
-    ("Spiderweb Entangled in Red", True),
-    ("Spiderweb Entangledin Red", True),  # OCR runs words together
-    ("SpiderwebEntangled in Rcd", True),
-    ("Hellterfly's Dream", False),
-    ("", False),
-])
-def test_protected_gifts_are_matched_by_name(read, kept):
-    assert s.protected(read, ["Spiderweb Entangled in Red", "Sunshower"]) == kept
-
-
 @pytest.mark.parametrize("keyword, gift, role", [
     ("Bleed", None, "material"),  # another keyword: fuse or sell it
     ("Burn", None, "keep"),  # the main keyword
     ("Keywordless", None, "keep"),  # no badge: every keywordless gift is kept (#103)
     ("Bleed", "Hellterfly's Dream", "keep"),  # its icon is one of the team's observed gifts
-    (None, None, "unknown"),  # badge cut off or unread: the tooltip decides
+    (None, None, "unknown"),  # badge unread: neither fused nor sold
     (None, "Spiderweb Entangled in Red", "keep"),
 ])
 def test_gift_role_from_the_cells_badge_and_icon(keyword, gift, role):
@@ -203,7 +192,7 @@ def test_gift_role_from_the_cells_badge_and_icon(keyword, gift, role):
 
 def test_the_kept_keywords_decide_the_role():
     # #77: another keyword the team names is kept. The user on #161: a cell with no badge and no matched icon is a
-    # keywordless gift, material once the team lets keywordless gifts go; no tooltip is read for it.
+    # keywordless gift, material once the team lets keywordless gifts go.
     assert s.gift_role("Bleed", None, {"Burn", "Bleed"}) == "keep"
     assert s.gift_role("Keywordless", None, {"Burn"}) == "material"
     assert s.gift_role("Keywordless", "Spiderweb Entangled in Red", {"Burn"}) == "keep"  # a kept gift's icon still keeps it
