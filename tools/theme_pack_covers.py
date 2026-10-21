@@ -1,7 +1,8 @@
 """Cut the theme pack covers (#241) out of the game's asset bundles into assets/resource/base/data/theme_pack_covers/.
 
 Usage: uv run --group unpack python tools/theme_pack_covers.py [--width 120] [--contact-sheet FILE]
-Reads `.local/unpack/` (the pulled UnityCache bundles and the static data, see docs/spec/05-game-data.md section 2);
+Reads `.local/unpack/` (the pulled UnityCache bundles and the static data, see docs/agents/local-dev.md "Game data";
+the yearly rerun is docs/spec/05-game-data.md section 8);
 writes `<pack id>.webp` per pack of theme_packs.yaml plus `index.json` ({pack name: file}), and lists every pack without a cover.
 Run it as a `bench` ticket (tools/live/queue.py), it reads all 12 GB of bundles.
 """
@@ -84,7 +85,8 @@ def main():
     ap.add_argument("--width", type=int, default=120)
     ap.add_argument("--contact-sheet", type=Path)
     args = ap.parse_args()
-    ctypes.windll.kernel32.SetPriorityClass(ctypes.windll.kernel32.GetCurrentProcess(), 0x4000)  # below normal: a bench job beside a live run
+    if sys.platform == "win32":  # below normal: a bench job beside a live run
+        ctypes.windll.kernel32.SetPriorityClass(ctypes.windll.kernel32.GetCurrentProcess(), 0x4000)
 
     unpack = local_dir("unpack")
     packs = pack_ids((DATA / "theme_packs.yaml").read_text(encoding="utf-8"))
@@ -109,7 +111,7 @@ def main():
     for m in missing:
         print("no cover:", m)
     if args.contact_sheet:
-        contact_sheet([(f.split(".")[0], OUT / f) for f in index.values()], args.contact_sheet)
+        contact_sheet([(str(packs[n]), OUT / f) for n, f in index.items()], args.contact_sheet)
 
 
 if __name__ == "__main__":
