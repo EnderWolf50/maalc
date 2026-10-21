@@ -1049,6 +1049,7 @@ class PickThemePack(CustomAction):
         x = cards[i][0]
         log(f"floor {floor}: pull {ranked[i][0]!r}")
         swipe(context, x, 330, x, 650, ms=600, wait=0)
+        RUN["fresh_floor"] = True  # find_bus: the new map takes no drag for its first seconds
         # The page fades out slowly; do not let MirrorHub pull twice.
         until(context, lambda im: not has(text(context, im, [480, 100, 320, 40]), "FLOOR"), timeout=9)
         return True
@@ -1108,6 +1109,10 @@ MAP_RETRIES = 3  # RouteMap calls per floor that may enter nothing before the ma
 MAP_LOOKS = 4  # looks, 1 s apart, for a linked slot before the fallback taps
 PANEL_REWARDS = [700, 495, 110, 30]  # the "Clear Rewards" label
 PANEL_COST = [730, 545, 40, 35]  # the number by its Cost coin
+MAP_TITLE = [40, 85, 240, 35]  # "Exploring Floor 3", top left
+MAP_LEAVING = 6  # s RouteMap waits for the last floor's map to give way to this floor's
+MAP_PAN_LIMIT = 8  # s find_bus drags a fresh map again that took none of its drags
+BUS_JITTER = 3  # px the bus's match moves on a map that did not move
 
 
 def seen(context, image, node, roi=None):
@@ -1209,6 +1214,16 @@ def map_weights(context):
     return map_data()["hard" if hard else "normal"]
 
 
+def map_floor(context, image):
+    """The floor number the map's title shows; None when it is covered or unreadable.
+
+    Swept 2026-10-19 over every 0.25 s from the 10 theme pack pulls of two runs: the last floor's number, a gap,
+    the new one; never a third number. tests/screens/MapBoss.png reads "Floar 3".
+    """
+    m = re.search(r"Fl\w+\s*(\d)", text(context, image, MAP_TITLE))
+    return int(m[1]) if m else None
+
+
 def enter_node(context):
     """On the node selection panel: log its Clear Rewards, press Enter until the panel is gone."""
     # Only logged: events show no Clear Rewards, a shop shows the next boss's (spec 03 section 7).
@@ -1220,6 +1235,7 @@ def enter_node(context):
         tap(context, *ENTER, wait=0)
         if until(context, lambda im: not seen(context, im, "MapNodePanel")) is not None:
             log("entered the node")
+            RUN.pop("fresh_floor", None)
             until(context, lambda im: not seen(context, im, "MirrorMap"), timeout=3)  # the map fades out
             return True
     return stuck("Enter on the node panel did nothing")
@@ -1239,6 +1255,8 @@ class EnterNode(CustomAction):
 class RouteMap(CustomAction):
     """Pick the next node and enter it (spec 03 section 7).
 
+    A gift window over the map, or the last floor's map still up after a theme pack (wait_for_floor), goes back
+    to MirrorHub first.
     Slots linked to the bus (its lit line or a chevron on it) are typed by their marks, ranked by
     map_route.rank over the columns on screen and tapped in that order until the node panel (MapNodePanel)
     shows. After them come the fallbacks: the bus (a node reached but not entered; first after a restart or a
@@ -1254,8 +1272,14 @@ class RouteMap(CustomAction):
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         if RUN.get("forfeit"):
             return forfeit(context)
-        if still(context) is None:
+        image = still(context)
+        if image is None:
             return True  # still fading in or out: let MirrorHub look again
+        if seen(context, image, "GiftGet"):
+            log("map: an E.G.O gift window covers the map; MirrorHub takes it")
+            return True
+        if not self.wait_for_floor(context, image):
+            return True  # MirrorHub looks again once the map is this floor's
         if not self.unzoom(context):  # its slots sit off where the offsets put them: L2 puts the map back
             if seen(context, screen(context), "MapNodePanel"):  # L2 needs the map: enter the node instead
                 return enter_node(context)
@@ -1264,8 +1288,11 @@ class RouteMap(CustomAction):
             return enter_node(context)
         RUN.pop("map_plan", None)
         for _ in range(MAP_LOOKS):  # live: right after a floor's theme pack, the map shows before its bus and links
-            if still(context) is None:
+            if (image := still(context)) is None:
                 return True  # still fading in or out: let MirrorHub look again
+            if seen(context, image, "GiftGet"):  # live 2026-10-19: it slid in over the map after a fight
+                log("map: an E.G.O gift window covers the map; MirrorHub takes it")
+                return True
             image, bus = self.find_bus(context)
             bx, by = bus or BUS_REST  # no bus found: assume the map at rest
             slots = self.read_slots(context, image, bx, by) if bus else {}
@@ -1321,6 +1348,24 @@ class RouteMap(CustomAction):
         return True
 
     @staticmethod
+    def wait_for_floor(context, image):
+        """Whether the map is this floor's, after waiting out the last floor's, still up after a theme pack pull.
+
+        Live 2026-10-19 (8 of 8 floors after the first): the last floor's map stayed ~3 s after the pull, its bus
+        driving off to the exit; RouteMap dragged it, then read the new floor with its bus at rest.
+        A title that keeps another number for MAP_LEAVING s is a misread: it is not looked at again this floor.
+        """
+        floor, shown = RUN.get("floor"), map_floor(context, image)
+        if floor is None or shown in (None, floor) or RUN.get("title_off") == floor:
+            return True
+        log(f"map: floor {shown}'s map is up, floor {floor} next; waiting for it")
+        if until(context, lambda im: map_floor(context, im) == floor, timeout=MAP_LEAVING) is not None:
+            return False  # MirrorHub looks again: the new map may still be fading in
+        log(f"map: the title stays floor {shown}; reading the map as it is")
+        RUN["title_off"] = floor
+        return True
+
+    @staticmethod
     def unzoom(context):
         """Whether the map is at its default zoom, after resetting it if it was zoomed in on the bus (#194).
 
@@ -1348,20 +1393,39 @@ class RouteMap(CustomAction):
 
     @staticmethod
     def find_bus(context):
-        """A screenshot and the bus's top-left in it, after panning the bus to BUS_HOME."""
-        for attempt in range(4):
+        """A screenshot and the bus's top-left in it, after panning the bus to BUS_HOME.
+
+        Up to three pans. On a floor's fresh map (no node entered since the theme pack) a pan that leaves the
+        bus where it was does not count and is made again, for up to MAP_PAN_LIMIT s: live 2026-10-19, a new
+        map took no drag for its first seconds. Once a pan has moved the bus, one that does not is the map's edge.
+        """
+        end, pans, last, moved = time.monotonic() + MAP_PAN_LIMIT, 0, None, False
+        while True:
             image = screen(context)
             bus = seen(context, image, "MapBus")
             if not bus:
                 return image, None
             bx, by = bus.box[0], bus.box[1]
             dx, dy = BUS_HOME[0] - bx, BUS_HOME[1] - by
-            if abs(dx) <= 30 and abs(dy) <= 25 or attempt == 3:
+            if abs(dx) <= 30 and abs(dy) <= 25:
                 return image, (bx, by)
+            held = last is not None and abs(bx - last[0]) <= BUS_JITTER and abs(by - last[1]) <= BUS_JITTER
+            if held and moved:
+                return image, (bx, by)  # live 2026-10-21 NORMAL: the map's left edge stopped the bus at 196
+            moved = last is not None and not held
+            if held and RUN.get("fresh_floor") and not RUN.get("floor_hard"):  # a HARD map does not pan (#129)
+                if time.monotonic() > end:
+                    log(f"map: the bus stayed at {bx}, {by} through {MAP_PAN_LIMIT} s of drags")
+                    return image, (bx, by)
+            else:
+                if pans == 3:
+                    return image, (bx, by)
+                pans += 1
             # Look again after each pan. Start on map background: between the first and second columns,
             # between the middle and bottom rows.
             scroll(context, min(bx + SLOT[0] + map_route.COLUMN_DX // 2, 1100), by + SLOT[1] + 106, dx, dy)
             time.sleep(0.5)
+            last = (bx, by)
 
     @staticmethod
     def search_bus(context):
