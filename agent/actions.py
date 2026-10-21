@@ -44,7 +44,8 @@ SETTLED = {"runs": 0}  # runs claimed since this agent started: the run count st
 # Stuck detection and recovery (spec 06), memory only: the last node seen ("node", its id) and the
 # screen type it handled ("kind"), a pending stuck for MirrorHub's Stuck node ("flag": (kind, start
 # level, reason)), this run's Ladder, and the game restarts since this agent started ("l3").
-STUCK = {"node": None, "kind": None, "flag": None, "watch": recovery.Watchdog(), "ladder": recovery.Ladder(), "l3": 0}
+STUCK = {"node": None, "kind": None, "flag": None, "watch": recovery.Watchdog(), "ladder": recovery.Ladder(), "l3": 0,
+         "updates": 0}  # game restarts for update notices since this agent started (AcceptUpdate)
 SCREENS = deque(maxlen=20)  # the last screens MirrorHub handed out: the evidence on a stop
 LOG = deque(maxlen=500)
 
@@ -154,6 +155,9 @@ def on_page(context, image, *nodes):
 
 
 POPUPS = ("Connecting", "RetryPopup", "PopupButton")  # MirrorHub's global popups: answered before any page
+# Windows that leave a page's anchor readable under them, answered by MirrorHub before that page. #213: a GET! window
+# over the map after a fight leaves its buttons (MirrorMap) lit. Not the shop's: Shop closes its own GET! windows.
+COVERS = {"MirrorMap": ("GiftGet",)}
 
 
 def page_guard(context, home, image=None):
@@ -163,11 +167,11 @@ def page_guard(context, home, image=None):
     handed back to MirrorHub at once instead of tapped blind until the action gives up. A miss is looked at
     again for up to 1 s: a page fading or a dialog dropping in can hide its anchor for a moment.
     A global popup reads through to the page under it (maatools: the title's nodes hit under RetryCountdown.png), so
-    one of POPUPS showing is the page gone too: MirrorHub answers it first.
+    one of POPUPS showing is the page gone too: MirrorHub answers it first. So is one of home's COVERS.
     image: a screenshot just taken, looked at first.
     """
     def shown(im):
-        return on_page(context, im, *POPUPS, home) == home
+        return on_page(context, im, *POPUPS, *COVERS.get(home, ()), home) == home
 
     if image is not None and shown(image):
         return image
@@ -341,12 +345,7 @@ def stop(context, reason, line=None):
         log(f"evidence: {folder}")
     except OSError as e:
         log(f"evidence not saved: {e}")
-    settings = RUN.get("settings")
-    if settings is None:
-        try:
-            settings = load_settings(ROOT)
-        except SettingsError:
-            settings = None
+    settings = settings_now()
     url = settings and settings["run"]["webhook_url"]
     if url:
         body = json.dumps({**(line or {}), "reason": reason, "evidence": str(folder)}, ensure_ascii=False).encode()
@@ -388,6 +387,8 @@ class StuckFlag(CustomRecognition):
         STUCK["ladder"].progress(kind)
         if STUCK["flag"]:
             return
+        if kind == "Downloading":  # the game is away; the floor gets its whole time once the download is done
+            restart_floor_clock()
         if why := STUCK["watch"].see(kind, recovery.thumb(image), time.monotonic()):
             stuck(f"{kind}: {why}")
         elif recovery.over_time(kind, RUN.get("deadline"), time.time()):
@@ -430,24 +431,112 @@ class Recover(CustomAction):
                 break
             log(f"L{level} did not go through")
             STUCK["ladder"].failed(level)
-        STUCK["watch"].reset()
-        for key in ("turn", "battle_start", "map_misses", "event_tried", "map_plan", "map_entered"):
-            RUN.pop(key, None)
+        forget_game_state()
         return True
+
+
+def forget_game_state():
+    """The game came back from a recovery or a restart: drop the streak, the battle clock and the map retries."""
+    STUCK["watch"].reset()
+    for key in ("turn", "battle_start", "map_misses", "event_tried", "map_plan", "map_entered"):
+        RUN.pop(key, None)
+
+
+def restart_floor_clock():
+    """The floor time limit starts over (spec 06 每層超時); only in a run the bot started, which has floor_limit."""
+    if "floor_limit" in RUN:
+        RUN["deadline"] = time.time() + RUN["floor_limit"]
+
+
+def settings_now():
+    """This run's settings, else the file's; None when it cannot be read."""
+    if "settings" in RUN:
+        return RUN["settings"]
+    try:
+        return load_settings(ROOT)
+    except SettingsError:
+        return None
+
+
+def allowed(key):
+    """run.<key> of the settings (auto_accept_terms, auto_download); on, the default, when they cannot be read."""
+    settings = settings_now()
+    return True if settings is None else settings["run"][key]
 
 
 @AgentServer.custom_action("ConfirmDownload")
 class ConfirmDownload(CustomAction):
-    """Confirm the title's download dialog (the matched button), then let the download run without a stuck.
-
-    Its progress screen is not known, so MirrorHub may recognise nothing for a long while (#86).
+    """Confirm the title's download dialog (the matched button), then hold the stuck detection until its progress
+    screen (Downloading, a waiting screen) is up. The floor's clock starts over: the download takes the game away (#86).
     """
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
+        if not allowed("auto_download"):
+            return stop(context, "the game asks to download data: run.auto_download is off")
         x, y, w, h = argv.box
         context.tasker.controller.post_click(x + w // 2, y + h // 2).wait()
         STUCK["watch"].hold(time.monotonic(), recovery.DOWNLOAD_HOLD)
+        restart_floor_clock()  # live 2026-10-21: 32 min of download would trip it, and L3 mid-download
         log(f"download confirmed: nothing counts as stuck for {recovery.DOWNLOAD_HOLD // 60} min")
+        return True
+
+
+UPDATE_RESTARTS = 2  # game restarts for update notices per bot launch: one that keeps coming back stops the bot
+
+
+@AgentServer.custom_action("AcceptUpdate")
+class AcceptUpdate(CustomAction):
+    """Press the game's own update notice (UpdateDialog), then restart the game: it closes itself or goes back to the
+    title, and the download dialog comes up there (ConfirmDownload). Not a stuck: no recovery level is charged."""
+
+    def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
+        if not allowed("auto_download"):
+            return stop(context, "the game has an update: run.auto_download is off")
+        if STUCK["updates"] >= UPDATE_RESTARTS:
+            return stop(context, f"the game asked for an update {UPDATE_RESTARTS + 1} times since the bot started")
+        STUCK["updates"] += 1
+        x, y, w, h = argv.box
+        context.tasker.controller.post_click(x + w // 2, y + h // 2).wait()
+        log("game update accepted: restarting the game")
+        time.sleep(3)
+        detail = context.run_task("RecoverL3")
+        if not (detail and detail.status.succeeded):
+            log("the restart after the update did not reach the title")
+        forget_game_state()
+        return True
+
+
+# The User Agreement's two "I agree." boxes (top-left of their inside, AGREE_SIZE square) and its Confirm, live 2026-10-21.
+AGREE_BOXES, AGREE_SIZE = ((338, 452), (828, 452)), 19
+AGREE_CONFIRM = (831, 513)
+
+
+def agree_ticked(image, x, y):
+    """A white tick in the box; unticked it is black inside (live: 0 % of its pixels over 150 grey, ticked 26-30 %).
+
+    Read only once UserAgreement hit: on 6 other screens of tests/screens both boxes read ticked (test_title_dialogs).
+    """
+    return (image[y:y + AGREE_SIZE, x:x + AGREE_SIZE].mean(axis=2) > 150).mean() > 0.1
+
+
+@AgentServer.custom_action("AcceptTerms")
+class AcceptTerms(CustomAction):
+    """Tick both boxes of the title's User Agreement, then Confirm once both read ticked (run.auto_accept_terms)."""
+
+    def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
+        if not allowed("auto_accept_terms"):
+            return stop(context, "User Agreement: run.auto_accept_terms is off")
+        image = screen(context)
+        for x, y in AGREE_BOXES:
+            if not agree_ticked(image, x, y):
+                image = tap_then(context, x + AGREE_SIZE // 2, y + AGREE_SIZE // 2, lambda i, x=x, y=y: agree_ticked(i, x, y))
+                if image is None:
+                    log("User Agreement: a box did not tick")
+                    return True  # MirrorHub looks again
+        if not all(agree_ticked(image, x, y) for x, y in AGREE_BOXES):
+            return True
+        tap(context, *AGREE_CONFIRM, wait=2)
+        log("User Agreement accepted")
         return True
 
 
@@ -1024,8 +1113,7 @@ class PickThemePack(CustomAction):
         floor = int(m[1])
         if floor != RUN.get("floor"):
             RUN.update(floor=floor, map_misses=0)  # a new floor's map gets a fresh retry quota (spec 06)
-            if "floor_limit" in RUN:  # a run the bot started: the floor time limit starts over
-                RUN["deadline"] = time.time() + RUN["floor_limit"]
+            restart_floor_clock()
         want = None if run["difficulty"] is None else run_start.hard_wanted(floor, run["difficulty"] == "hard", run["team"]["hard_from_floor"])
         if not self.set_difficulty(context, floor, want):
             return stuck(f"floor {floor} difficulty did not switch to {'HARD' if want else 'NORMAL'}")
@@ -1049,6 +1137,7 @@ class PickThemePack(CustomAction):
         x = cards[i][0]
         log(f"floor {floor}: pull {ranked[i][0]!r}")
         swipe(context, x, 330, x, 650, ms=600, wait=0)
+        RUN["fresh_floor"] = True  # find_bus: the new map takes no drag for its first seconds
         # The page fades out slowly; do not let MirrorHub pull twice.
         until(context, lambda im: not has(text(context, im, [480, 100, 320, 40]), "FLOOR"), timeout=9)
         return True
@@ -1108,6 +1197,10 @@ MAP_RETRIES = 3  # RouteMap calls per floor that may enter nothing before the ma
 MAP_LOOKS = 4  # looks, 1 s apart, for a linked slot before the fallback taps
 PANEL_REWARDS = [700, 495, 110, 30]  # the "Clear Rewards" label
 PANEL_COST = [730, 545, 40, 35]  # the number by its Cost coin
+MAP_TITLE = [40, 85, 240, 35]  # "Exploring Floor 3", top left
+MAP_LEAVING = 6  # s RouteMap waits for the last floor's map to give way to this floor's
+MAP_PAN_LIMIT = 8  # s find_bus drags a fresh map again that took none of its drags
+BUS_JITTER = 3  # px the bus's match moves on a map that did not move
 
 
 def seen(context, image, node, roi=None):
@@ -1214,6 +1307,16 @@ def map_weights(context):
     return map_data()["hard" if is_hard(context) else "normal"]
 
 
+def map_floor(context, image):
+    """The floor number the map's title shows; None when it is covered or unreadable.
+
+    Swept 2026-10-19 over every 0.25 s from the 10 theme pack pulls of two runs: the last floor's number, a gap,
+    the new one; never a third number. tests/screens/MapBoss.png reads "Floar 3".
+    """
+    m = re.search(r"Fl\w+\s*(\d)", text(context, image, MAP_TITLE))
+    return int(m[1]) if m else None
+
+
 def enter_node(context):
     """On the node selection panel: log its Clear Rewards, press Enter until the panel is gone."""
     # Only logged: events show no Clear Rewards, a shop shows the next boss's (spec 03 section 7).
@@ -1225,6 +1328,7 @@ def enter_node(context):
         tap(context, *ENTER, wait=0)
         if until(context, lambda im: not seen(context, im, "MapNodePanel")) is not None:
             log("entered the node")
+            RUN.pop("fresh_floor", None)
             until(context, lambda im: not seen(context, im, "MirrorMap"), timeout=3)  # the map fades out
             return True
     return stuck("Enter on the node panel did nothing")
@@ -1244,6 +1348,8 @@ class EnterNode(CustomAction):
 class RouteMap(CustomAction):
     """Pick the next node and enter it (spec 03 section 7).
 
+    A gift window over the map, or the last floor's map still up after a theme pack (wait_for_floor), goes back
+    to MirrorHub first.
     Slots linked to the bus (its lit line or a chevron on it) are typed by their marks, ranked by
     map_route.rank over the columns on screen and tapped in that order until the node panel (MapNodePanel)
     shows. After them come the fallbacks: the bus (a node reached but not entered; first after a restart or a
@@ -1259,8 +1365,14 @@ class RouteMap(CustomAction):
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         if RUN.get("forfeit"):
             return forfeit(context)
-        if still(context) is None:
+        image = still(context)
+        if image is None:
             return True  # still fading in or out: let MirrorHub look again
+        if seen(context, image, "GiftGet"):
+            log("map: an E.G.O gift window covers the map; MirrorHub takes it")
+            return True
+        if not self.wait_for_floor(context, image):
+            return True  # MirrorHub looks again once the map is this floor's
         if not self.unzoom(context):  # its slots sit off where the offsets put them: L2 puts the map back
             if seen(context, screen(context), "MapNodePanel"):  # L2 needs the map: enter the node instead
                 return enter_node(context)
@@ -1269,8 +1381,11 @@ class RouteMap(CustomAction):
             return enter_node(context)
         RUN.pop("map_plan", None)
         for _ in range(MAP_LOOKS):  # live: right after a floor's theme pack, the map shows before its bus and links
-            if still(context) is None:
+            if (image := still(context)) is None:
                 return True  # still fading in or out: let MirrorHub look again
+            if seen(context, image, "GiftGet"):  # live 2026-10-19: it slid in over the map after a fight
+                log("map: an E.G.O gift window covers the map; MirrorHub takes it")
+                return True
             image, bus = self.find_bus(context)
             bx, by = bus or BUS_REST  # no bus found: assume the map at rest
             slots = self.read_slots(context, image, bx, by) if bus else {}
@@ -1317,12 +1432,31 @@ class RouteMap(CustomAction):
                     RUN["map_plan"] = {"floor": RUN.get("floor"), "steps": steps}
                 RUN["map_entered"] = True
                 return enter_node(context)
+        page_guard(context, "MirrorMap")  # #213: a GET! window that rose during the last tap's wait is no miss
         if not bus:  # #61: L2's To Window and Resume put the map back; L1's back key does nothing here
             return stuck("no bus on the map, even after dragging it about", level=2)
         RUN["map_misses"] = RUN.get("map_misses", 0) + 1
         if RUN["map_misses"] >= MAP_RETRIES:
             return stuck(f"no node on the map took a tap, {MAP_RETRIES} times this floor")
         log("map: no node took a tap; MirrorHub looks again")
+        return True
+
+    @staticmethod
+    def wait_for_floor(context, image):
+        """Whether the map is this floor's, after waiting out the last floor's, still up after a theme pack pull.
+
+        Live 2026-10-19 (8 of 8 floors after the first): the last floor's map stayed ~3 s after the pull, its bus
+        driving off to the exit; RouteMap dragged it, then read the new floor with its bus at rest.
+        A title that keeps another number for MAP_LEAVING s is a misread: it is not looked at again this floor.
+        """
+        floor, shown = RUN.get("floor"), map_floor(context, image)
+        if floor is None or shown in (None, floor) or RUN.get("title_off") == floor:
+            return True
+        log(f"map: floor {shown}'s map is up, floor {floor} next; waiting for it")
+        if until(context, lambda im: map_floor(context, im) == floor, timeout=MAP_LEAVING) is not None:
+            return False  # MirrorHub looks again: the new map may still be fading in
+        log(f"map: the title stays floor {shown}; reading the map as it is")
+        RUN["title_off"] = floor
         return True
 
     @staticmethod
@@ -1353,20 +1487,40 @@ class RouteMap(CustomAction):
 
     @staticmethod
     def find_bus(context):
-        """A screenshot and the bus's top-left in it, after panning the bus to BUS_HOME."""
-        for attempt in range(4):
+        """A screenshot and the bus's top-left in it, after panning the bus to BUS_HOME.
+
+        Up to three pans. On a floor's fresh map (no node entered since the theme pack) a pan that leaves the
+        bus where it was does not count and is made again, for up to MAP_PAN_LIMIT s: live 2026-10-19, a new
+        map took no drag for its first seconds. Once a pan has moved the bus, one that does not is the map's edge.
+        """
+        end, pans, last, moved = time.monotonic() + MAP_PAN_LIMIT, 0, None, False
+        while True:
             image = screen(context)
             bus = seen(context, image, "MapBus")
             if not bus:
                 return image, None
             bx, by = bus.box[0], bus.box[1]
             dx, dy = BUS_HOME[0] - bx, BUS_HOME[1] - by
-            if abs(dx) <= 30 and abs(dy) <= 25 or attempt == 3:
+            if abs(dx) <= 30 and abs(dy) <= 25:
                 return image, (bx, by)
+            held = last is not None and abs(bx - last[0]) <= BUS_JITTER and abs(by - last[1]) <= BUS_JITTER
+            if held and moved:
+                return image, (bx, by)  # live 2026-10-21 NORMAL: the map's left edge stopped the bus at 196
+            moved = last is not None and not held
+            if held and RUN.get("fresh_floor") and not RUN.get("floor_hard"):  # a HARD map does not pan (#129)
+                if time.monotonic() > end:
+                    log(f"map: the bus stayed at {bx}, {by} through {MAP_PAN_LIMIT} s of drags")
+                    return image, (bx, by)
+            else:
+                if pans == 3:
+                    return image, (bx, by)
+                pans += 1
             # Look again after each pan. Start on map background: between the first and second columns,
-            # between the middle and bottom rows.
+            # between the middle and bottom rows. #213: a GET! window rising over the map ends the pans.
+            page_guard(context, "MirrorMap", image=image)
             scroll(context, min(bx + SLOT[0] + map_route.COLUMN_DX // 2, 1100), by + SLOT[1] + 106, dx, dy)
             time.sleep(0.5)
+            last = (bx, by)
 
     @staticmethod
     def search_bus(context):

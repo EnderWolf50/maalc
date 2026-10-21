@@ -5,6 +5,7 @@
 1. `uv sync` and `pnpm install --frozen-lockfile`.
 2. `uv run python tools/fetch_ocr.py`: the OCR model is gitignored, and `maa-tools test` misses every OCR node without it.
 3. Scripts that need cv2, Pillow, numpy or psutil run as `uv run --group probe python <script>`.
+4. `python tools/slim_mcp.py` (from any checkout): writes the gitignored `.claude/settings.local.json` that keeps the rea, playwright, cua-driver and tempad-dev MCP servers out of agent sessions (each agent spawns its own copies, GBs of RAM). Claude Code reads that file per folder on Windows, so every new worktree needs it.
 
 Done: `uv run python tools/check.py` passes in the worktree.
 
@@ -16,7 +17,7 @@ Once per clone, `lefthook install` turns on the pre-commit hook (`lefthook.yml`)
 
 ## After landing a PR
 
-Land with the `ship` skill's land task. Then, in the main checkout and unless `uv run python tools/live/queue.py status` shows a holder for `emulator` (a live run is using `install/`): `uv run python tools/after_land.py`. It builds the settings GUI, assembles `install/` and checks that `install/config/settings.json` still loads.
+Land with the `ship` skill's land task. Then, in the main checkout and unless `uv run python tools/live/queue.py status` shows a holder for `emulator` (a live run is using `install/`): `uv run python tools/after_land.py`. It first fetches and fast-forwards the checkout's `main` (refusing off main, with local changes, or when it cannot fast-forward), then builds the settings GUI, assembles `install/` and checks that `install/config/settings.json` still loads.
 
 Done: `after_land.py` ends without a "failed" line.
 

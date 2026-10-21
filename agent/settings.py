@@ -78,8 +78,16 @@ def _v6_to_v7(data):
     return data
 
 
+def _v7_to_v8(data):
+    """Version 8 adds run.auto_accept_terms and run.auto_download (#85, #86), on: the user's decision (2026-10-21)."""
+    if isinstance(data.get("run"), dict):
+        data["run"].setdefault("auto_accept_terms", True)
+        data["run"].setdefault("auto_download", True)
+    return data
+
+
 # MIGRATIONS[n] turns a version-n dict into a version-(n + 1) dict; keep in step with gui/src/model.ts.
-MIGRATIONS = {1: _v1_to_v2, 2: _v2_to_v3, 3: _v3_to_v4, 4: _v4_to_v5, 5: _v5_to_v6, 6: _v6_to_v7}
+MIGRATIONS = {1: _v1_to_v2, 2: _v2_to_v3, 3: _v3_to_v4, 4: _v4_to_v5, 5: _v5_to_v6, 6: _v6_to_v7, 7: _v7_to_v8}
 
 NO_TEAM = "No enabled team: set up a team in the settings GUI first."
 
