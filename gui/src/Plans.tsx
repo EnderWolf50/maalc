@@ -2,12 +2,12 @@
 import { Fragment, useEffect, useState, type DragEvent, type KeyboardEvent, type ReactNode } from "react";
 import { loadThemePacks } from "./api";
 import {
-  EVENT_MODES, GRACES, LEVELS, SINNERS, buyOrder, clickCard, clickEnhance, defaultStarlight, enhanceAll, freeName, gracePrice,
+  GRACES, LEVELS, SINNERS, buyOrder, clickCard, clickEnhance, defaultStarlight, enhanceAll, freeName, gracePrice,
   lanesOf, lineAt, newId, newPackPlan, onFloor, parseThemePacks, selectAll, starlightCost, toggleSinner, weightOf,
   type DeploymentPlan, type Order, type PackPlanValues, type StarlightPlan, type StarlightValues, type ThemePackPlan,
   type ThemePacks,
 } from "./model";
-import { Field, ReorderList, Select, useEditor } from "./ui";
+import { Field, ReorderList, useEditor } from "./ui";
 
 /** The 12 sinners in the game's grid; clicking adds one at the end of the order or leaves it out
  * (spec 04 section 6). Read-only without onChange. */
@@ -218,7 +218,8 @@ function PackPlanEditor({ data, plan, path, onChange }: {
     role: "button", tabIndex: 0, onClick: () => ask(what, current),
     onKeyDown: (e: KeyboardEvent) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); ask(what, current); } },
   } : {});
-  // The line stops only between two lanes: gap g (1..lanes-1) sits under lane g-1, so its threshold is that lane's weight.
+  // The line stops between two lanes, or under the last one (never refresh): gap g (1..lanes) sits under lane g-1, so its
+  // threshold is that lane's weight.
   const toGap = (g: number) => set({ threshold: lanes[g - 1] });
   const chip = (name: string) => {
     const floors = data.packs[name];
@@ -238,7 +239,7 @@ function PackPlanEditor({ data, plan, path, onChange }: {
       {onChange && <>
         <button type="button" className="icon" aria-label={t("up")} title={t("up")} disabled={line - 1 < 1}
           onClick={() => toGap(line - 1)}>↑</button>
-        <button type="button" className="icon" aria-label={t("down")} title={t("down")} disabled={line + 1 > lanes.length - 1}
+        <button type="button" className="icon" aria-label={t("down")} title={t("down")} disabled={line + 1 > lanes.length}
           onClick={() => toGap(line + 1)}>↓</button>
       </>}
     </div>
@@ -276,13 +277,13 @@ function PackPlanEditor({ data, plan, path, onChange }: {
           </div>
         </Fragment>
       ))}
-      {line === lanes.length && lanes.length > 0 && lineBar}
+      {line === lanes.length ? lineBar : <div className="gap" {...target(drag === LINE, lanes[lanes.length - 1])} />}
       {onChange && <div className="lane add" {...target(drag !== null && drag !== LINE, null)}>＋ {t("packs.newLane")}</div>}
     </div>
+    {/* #240: the data tells event story packs apart, not the event running now, so the GUI keeps "weight" until the
+        user decides; the agent already honours "prefer" and "avoid". */}
     <Field label={t("packs.eventPacks")} path={path && `${path}/event_packs`} note={t("packs.eventPacksNote")}>
-      {onChange
-        ? <Select value={plan.event_packs} options={EVENT_MODES} label={(v) => tv("event_packs", v)} onChange={(v) => set({ event_packs: v })} />
-        : <span>{tv("event_packs", plan.event_packs)}</span>}
+      <span>{tv("event_packs", plan.event_packs)}</span>
     </Field>
   </>);
 }

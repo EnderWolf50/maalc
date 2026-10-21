@@ -13,7 +13,6 @@ export const SINNERS: string[] = schema.$defs.order.default;
 export const REWARD_CARDS: string[] = TEAM.reward_cards.default;
 export const KEYWORDS: string[] = TEAM.keyword.enum;
 export const LEVELS: string[] = schema.$defs.levels.items.enum;
-export const EVENT_MODES: string[] = P.theme_pack_plans.items.properties.event_packs.enum;
 export const VERSION: number = P.version.const;
 /** Spec 04 section 7: the graces numbered 1-10, English names as the game shows them, Chinese name and
  * effect text from the wiki (graces.json carries its source and license). */

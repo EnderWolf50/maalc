@@ -141,12 +141,13 @@ def match_card(lines, names):
     return None, " ".join(lines)
 
 
-def rank_packs(cards, names, weights, unlisted):
+def rank_packs(cards, names, plan):
     """(title, weight) per card; a card that matches no weighed pack takes the plan's unlisted weight.
 
     A title alike to several packs that share one weight takes it: live, "Line 1" read as "Line", and every
     Line pack is avoided (#89). A matched card's title is the pack's name.
     """
+    weights, unlisted = plan["weights"], plan["unlisted"]
     out = []
     for lines in cards:
         name, title = match_card(lines, names)
@@ -172,12 +173,12 @@ def pick_pack(weights, events, plan):
     return i, (mode == "prefer" and events[i]) or weights[i] >= plan["threshold"]
 
 
-def refresh_wanted(good, setting, used):
+def refresh_wanted(meets, setting, used):
     """Whether to use a free refresh: only when the best card is below the threshold, then per theme_pack_refresh.
 
     "none" never, "once" for the first refresh on the floor, "all" until the caller sees a refresh change nothing.
     """
-    return not good and (setting == "all" or (setting == "once" and used == 0))
+    return not meets and (setting == "all" or (setting == "once" and used == 0))
 
 
 def team_list_move(visible, target):

@@ -128,12 +128,13 @@ def test_every_pack_of_the_season_matches_itself_and_with_a_letter_lost():
 def test_a_title_alike_to_several_packs_takes_their_weight_when_they_share_it():
     # Live 2026-10-18, floor 5: OCR read "Line 1" as "Line"; every Line pack weighs -5, so does this card.
     weights = {"Line 1": -5, "Line 2": -5, "Line 3": -5, "To be Crushed": 5, "To be Cleaved": -5}
-    ranked = rs.rank_packs([["Line"], ["To be C"]], SHORT + NAMES, weights, 2)
+    ranked = rs.rank_packs([["Line"], ["To be C"]], SHORT + NAMES, {"weights": weights, "unlisted": 2})
     assert ranked == [("Line", -5), ("To be C", 2)]  # the second is alike to two weights: unlisted
 
 
 def test_a_card_matching_no_pack_or_an_unweighed_one_takes_the_unlisted_weight():
-    ranked = rs.rank_packs([["To be Crushed"], ["Lake World"], ["Brand New Pack"]], NAMES, {"To be Crushed": -3}, -1)
+    plan = {"weights": {"To be Crushed": -3}, "unlisted": -1}
+    ranked = rs.rank_packs([["To be Crushed"], ["Lake World"], ["Brand New Pack"]], NAMES, plan)
     assert ranked == [("To be Crushed", -3), ("Lake World", -1), ("Brand New Pack", -1)]
 
 
@@ -185,8 +186,8 @@ def test_marks_migrated_to_weights_pick_and_refresh_as_before(marks, refresh, pi
     # #240: prefer / neutral / avoid became +5 / 0 / -5 with threshold 0; v8's rule was "refresh only when all avoid,
     # take the best mark, leftmost".
     weights = [{"prefer": 5, "neutral": 0, "avoid": -5}[m] for m in marks]
-    i, good = rs.pick_pack(weights, [False] * len(marks), PLAN)
-    assert (i, rs.refresh_wanted(good, "all", 0)) == (pick, refresh)
+    i, meets = rs.pick_pack(weights, [False] * len(marks), PLAN)
+    assert (i, rs.refresh_wanted(meets, "all", 0)) == (pick, refresh)
 
 
 @pytest.mark.parametrize(("visible", "target", "expected"), [

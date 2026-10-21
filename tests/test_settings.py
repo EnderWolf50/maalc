@@ -172,20 +172,26 @@ def test_version_7_accepts_terms_and_downloads(tmp_path):
     assert load(tmp_path, {**old, "version": 7}) == VALID
 
 
+def v8_plan(marks):
+    """VALID as version 8 wrote it, its theme pack plan holding these marks."""
+    def fn(d):
+        plan = d["theme_pack_plans"][0]
+        for k in ("weights", "threshold", "unlisted", "event_packs"):
+            plan.pop(k)
+        plan["marks"] = marks
+    return {**edited(fn), "version": 8}
+
+
 def test_version_8_theme_pack_marks_become_weights(tmp_path):
     # #240: prefer / neutral / avoid -> 5 / 0 / -5, threshold 0, unlisted 0, event packs by weight: picks as before.
     marks = {"Automated Factory": "avoid", "The Forgotten": "prefer", "Lake World": "neutral"}
-    old = edited(lambda d: d["theme_pack_plans"][0].update(marks=marks) or [d["theme_pack_plans"][0].pop(k) for k in
-                                                                             ("weights", "threshold", "unlisted", "event_packs")])
-    plan = load(tmp_path, {**old, "version": 8})["theme_pack_plans"][0]
+    plan = load(tmp_path, v8_plan(marks))["theme_pack_plans"][0]
     assert plan == {"id": "p1", "name": "Mine", "weights": {"Automated Factory": -5, "The Forgotten": 5, "Lake World": 0},
                     "threshold": 0, "unlisted": 0, "event_packs": "weight"}
 
 
 def test_version_8_bad_mark_stays_an_error(tmp_path):
-    old = edited(lambda d: d["theme_pack_plans"][0].update(marks={"X": "love"}) or [d["theme_pack_plans"][0].pop(k) for k in
-                                                                                     ("weights", "threshold", "unlisted", "event_packs")])
-    assert any(e.startswith("theme_pack_plans/0/weights/X:") for e in errors(tmp_path, {**old, "version": 8}))
+    assert any(e.startswith("theme_pack_plans/0/weights/X:") for e in errors(tmp_path, v8_plan({"X": "love"})))
 
 
 def test_version_4_teams_may_hold_white_gossypium_as_before(tmp_path):

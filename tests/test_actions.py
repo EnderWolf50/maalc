@@ -1595,7 +1595,7 @@ def test_a_theme_pack_page_below_the_threshold_is_refreshed_as_the_setting_says(
     actions.RUN.update(settings={"run": {"theme_pack_refresh": setting}}, team={"hard_from_floor": 0}, difficulty=None)
     plan = {"weights": {}, "threshold": 0, "unlisted": -5, "event_packs": "weight"}
     monkeypatch.setattr(actions, "theme_pack_plan", lambda settings, team: (plan, [], {"Pack 0b"}))
-    monkeypatch.setattr(actions.run_start, "rank_packs", lambda cards, names, weights, unlisted: [(c[0], -5) for c in cards])
+    monkeypatch.setattr(actions.run_start, "rank_packs", lambda cards, names, plan: [(c[0], -5) for c in cards])
     lines = []
     monkeypatch.setattr(actions, "log", lines.append)
     taps = []

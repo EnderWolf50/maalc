@@ -1151,18 +1151,18 @@ class PickThemePack(CustomAction):
             cards = pack_titles(context, page_guard(context, "ThemePack"))
             if not cards:
                 return stuck("no theme pack titles read")
-            ranked = run_start.rank_packs([lines for _, lines in cards], names, plan["weights"], plan["unlisted"])
+            ranked = run_start.rank_packs([lines for _, lines in cards], names, plan)
             events = [t in event_packs for t, _ in ranked]
             log(f"floor {floor} packs, threshold {plan['threshold']}: "
                 + ", ".join(f"{t} ({w}{', event' if e else ''})" for (t, w), e in zip(ranked, events)))
             titles = [t for t, _ in ranked]
-            i, good = run_start.pick_pack([w for _, w in ranked], events, plan)
-            if not run_start.refresh_wanted(good, setting, used) or titles == seen:
+            i, meets = run_start.pick_pack([w for _, w in ranked], events, plan)
+            if not run_start.refresh_wanted(meets, setting, used) or titles == seen:
                 break
             seen = titles
             tap(context, 1083, 47, wait=3)
         x = cards[i][0]
-        log(f"floor {floor}: pull {ranked[i][0]!r} ({ranked[i][1]}{'' if good else ', below the threshold'})")
+        log(f"floor {floor}: pull {ranked[i][0]!r} ({ranked[i][1]}{'' if meets else ', below the threshold'})")
         swipe(context, x, 330, x, 650, ms=600, wait=0)
         RUN["fresh_floor"] = True  # find_bus: the new map takes no drag for its first seconds
         # The page fades out slowly; do not let MirrorHub pull twice.
