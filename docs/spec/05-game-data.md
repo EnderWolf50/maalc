@@ -35,6 +35,7 @@
 - 活動包：資料裡 `unlockCode` 為 9xxx 的 22 個主題包是活動劇情通關後永久加入的，其中 15 個出現在一般鏡牢。資料沒有限時欄位，所以活動包用英文名稱辨認，另列在 `event_packs`；預設方案一律中立。只在第 5 層出現的是 `Spring Cultivation`、`Twining Threads`、`Mnestic Experience`。（#89，2026-10-18 定案）
 - 預設主題包方案：主題包名稱 → 偏好／中立／避開，開發者每季提供，使用者不能修改。沒列出的主題包視為中立。（#11、#19，2026-10-14 定案）
   - 1.117.0 的內容（#89）：偏好 `The B.E.`（困難第 3–5 層的隱藏主題包）；避開遊戲資料標為 `difficulty: DIFFICULT` 的 29 個（活動包除外）；其餘中立。這是開發者自己依遊戲資料整理的規則，不沿用其他專案的權重表（[ADR 0001](../adr/0001-mit-and-no-agpl-derived-assets.md)）。卡片上的 CAUTION 標記和 DIFFICULT 無關（`Nagel und Hammer` 也有），不拿來判斷。
+- 封面縮圖（#241）：`resource/base/data/theme_pack_covers/<主題包 id>.webp`（寬 120，約 0.7 MB）與 `index.json`（主題包名稱 → 檔名），給設定 GUI 顯示主題包用，清單裡 94 個包都有。封面是遊戲的 `card_pack` 精靈圖，主題包的 `packSpriteId`（`mirrordungeon-theme-floor`）就是精靈圖名稱，分散在卡包、鏡牢、活動 bundle，隱藏包 `The B.E.`（`HiddenTheme`）在 `skinpreview-new-pack`。`tools/theme_pack_covers.py` 一次產生，見 §8 第 1 點。版權屬 © Project Moon（NOTICE.md）。
 - 使用者的主題包方案不在資料檔，存在設定檔，格式見 [04-settings.md](04-settings.md#8-主題包方案theme_pack_plans)。方案裡沒列出的主題包（例如新一季才出現的）視為中立；空的方案等於全部中立，不報錯。（#11、#19，2026-10-14 定案）
 
 **範例**（主題包名稱取自先前季節，僅示意；「燒傷隊」是使用者在設定檔建立的方案）：
@@ -178,6 +179,7 @@
 新一季鏡牢開始時，開發者依序：
 
 1. 更新主題包清單，並提供這一季的預設主題包方案。使用者方案裡沒有的新主題包自動視為中立，不必改設定檔。（#11、#19）
+   - 重產封面縮圖：先把新版客戶端的 `UnityCache` 與靜態資料拆到 `.local/unpack/`（見 `docs/agents/local-dev.md`），再 `uv run python tools/live/queue.py run --resource bench --name theme_covers -- uv run --group unpack python tools/theme_pack_covers.py --contact-sheet <檔名>.png`（約 2 分鐘，要 `bench` 號碼牌）。工具依 `theme_packs.yaml` 每行註解的 id 找封面，印出 `no cover:` 的包（新包沒有封面時 GUI 顯示名稱）；`tests/test_theme_pack_covers.py` 檢查每個包都有檔。（#241）
 2. 更新試煉風險表。（#17）
 3. 檢查選路權重、Cost 對照表與商店數字是否仍符合遊戲。（#10、#12）
 4. 依上一季的記錄補充事件覆寫表。（#11）
