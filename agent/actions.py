@@ -641,12 +641,14 @@ def team_rows(context, image):
 def team_list_top(context):
     """Drag the picker list to its top, a stroke at a time until the rows on show stay (#226): it opens where it was left."""
     seen = None
-    for _ in range(15):
+    for k in range(15):
         rows = team_rows(context, page_guard(context, "TeamSelect"))
-        if rows == seen:
+        if rows and rows == seen:  # no rows read is not a list at rest
+            log(f"team list at its top after {k - 1} drags that moved it")
             return
         seen = rows
         scroll(context, 130, 340, 0, 140)
+    log("team list still moving after 15 drags: looking for the team from here")
 
 
 @AgentServer.custom_action("SelectTeam")

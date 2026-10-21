@@ -1584,6 +1584,7 @@ def test_select_team_drags_the_list_to_its_top_before_it_looks_for_the_team(cont
     assert drags[0] > 0  # the first drag moves the content down, towards the top, even from the top itself
     top = max(i for i, d in enumerate(drags) if d > 0)
     assert all(d > 0 for d in drags[:top + 1]) and all(d < 0 for d in drags[top + 1:])  # all the way up, then down
+    assert (top == 0) == (left_at == 0)  # already at the top: one drag that moves nothing
 
 
 def test_select_team_makes_a_plan_for_an_abandoned_empty_run_instead_of_backing_out(context, clock, monkeypatch):
