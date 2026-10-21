@@ -2658,7 +2658,7 @@ def cell_line(cell, role):
     return f"{cell['i']} {tier} {cell['keyword'] or 'badge unread'}{' ' + cell['gift'] if cell['gift'] else ''}: {role}"
 
 
-def owned_cells(context, image, page, gifts):
+def owned_cells(context, page, gifts):
     """Every gift of the fuse or sell page's owned grid, each read once where it shows whole (#205): ([cells], grid).
 
     The grid is read on show (read_cells, and the prices on the sell page), then dragged to bring its first cut-off
@@ -2666,7 +2666,7 @@ def owned_cells(context, image, page, gifts):
     drag moves it no more. A cell is {"i", "x", "y", "tier", "keyword", "gift", "price", "look"}: i its place in the
     grid's order, y with the grid at its top, look its centre as read (cell_at finds it again by both); grid is
     {"page", "at": px scrolled}. A page opens where its list was left (live 2026-10-21: the fuse page after a fusion),
-    so every list is dragged to its top first (grid_top, image unused); the fuse page's owned gifts are then placed by
+    so every list is dragged to its top first (grid_top); the fuse page's owned gifts are then placed by
     their label (owned_label).
     """
     (x0, y0), (dx, dy), under = OWNED_GRID[page]
@@ -3124,7 +3124,7 @@ class Shop(CustomAction):
             return False
         # The grid decides (#112, #205): each cell's badge and icon, its price under it.
         avoid = [g["name"] for g in avoided_gifts(team)]
-        cells, grid = owned_cells(context, None, "sell", kept_icons(team) + avoided_gifts(team) + VESTIGE_ICONS)
+        cells, grid = owned_cells(context, "sell", kept_icons(team) + avoided_gifts(team) + VESTIGE_ICONS)
         roles = [cell_role(c, team, "sell", avoid) for c in cells]
         log("shop: sell cells " + "; ".join(f"{cell_line(c, r)} {c['price']}" for c, r in zip(cells, roles)))
         gifts = [(c["i"], c["price"]) for c, r in zip(cells, roles) if r == "material" and c["price"]]
@@ -3209,7 +3209,7 @@ class Shop(CustomAction):
         if seen(context, image, "ShopFusionAvailable"):
             log("shop: the fuse page shows Fusion Available (a fixed recipe, #78): not used, the owned gifts are read under it")
         avoid = [g["name"] for g in avoided_gifts(team)]
-        cells, grid = owned_cells(context, image, "fuse", kept_icons(team) + avoided_gifts(team) + VESTIGE_ICONS)
+        cells, grid = owned_cells(context, "fuse", kept_icons(team) + avoided_gifts(team) + VESTIGE_ICONS)
         roles = [cell_role(c, team, "fuse", avoid) for c in cells]
         log(f"shop: fuse cells ({slots} slots) " + "; ".join(cell_line(c, r) for c, r in zip(cells, roles)))
         picks = fusions(cells, roles, slots, avoid)
