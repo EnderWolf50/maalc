@@ -38,3 +38,12 @@ def test_sync_refuses(kw, msg):
         after_land.sync_main(git)
     if "fail" not in kw:
         assert not any(c[0] in ("fetch", "pull") for c in calls)
+
+
+def test_main_refuses_on_emulator_ticket_before_touching_git(tmp_path, monkeypatch):
+    (tmp_path / ".local/queue/emulator").mkdir(parents=True)
+    (tmp_path / ".local/queue/emulator/x.ticket").write_text("1")
+    monkeypatch.setattr(after_land, "REPO", tmp_path)
+    monkeypatch.setattr(after_land, "sync_main", lambda: pytest.fail("git touched"))
+    with pytest.raises(SystemExit, match="emulator queue"):
+        after_land.main()
