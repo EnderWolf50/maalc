@@ -3,8 +3,11 @@ from pathlib import Path
 import numpy as np
 import pytest
 import yaml
+from PIL import Image
 
 import map_route as mr
+
+SCREENS = Path(__file__).resolve().parent / "screens"
 
 WEIGHTS = yaml.safe_load((Path(__file__).resolve().parent.parent / "assets/resource/base/data/map_weights.yaml").read_text(encoding="utf-8"))
 NORMAL, HARD = WEIGHTS["normal"], WEIGHTS["hard"]
@@ -94,6 +97,30 @@ def test_a_path_never_steps_two_rows():
     # The cheapest node of the next column still scores the rest; only rows next to each other are assumed linked.
     down = mr.paths({"down": ("event", None)}, NORMAL, [{"up": ("event", {"mid"}), "mid": ("abno", {"up"})}])["down"]
     assert down == (NORMAL["event"] + NORMAL["abno"], ["down", "mid"])
+
+
+def test_a_node_with_no_link_read_onward_takes_its_brightest_faint_one():
+    # #212: down -> down read 14.4 over a bright nebula; down -> mid -1.6. up's 30 links as before.
+    reads = {("down", "down"): 14.4, ("down", "mid"): -1.6, ("up", "up"): 30, ("up", "mid"): 12}
+    assert mr.links(reads) == {("down", "down"), ("up", "up")}
+    assert mr.links({("down", "down"): 7.9, ("down", "mid"): 0}) == set()
+
+
+# The map frames of tests/screens and the bus's top-left in each (MapBus matched with cv2, 0.97 and up).
+MAP_SCREENS = {"MapBoss": (446, 248), "MapCards": (446, 248), "MapEvent": (446, 248), "MapFocused": (446, 248),
+               "MapPanned": (446, 282), "MapRock": (446, 248), "MapShop": (446, 248), "MirrorMap": (446, 248)}
+
+
+@pytest.mark.parametrize(("name", "bus"), MAP_SCREENS.items())
+def test_the_faint_link_fallback_adds_no_link_on_the_map_frames_of_tests_screens(name, bus):
+    # CODING_STANDARDS' sweep of FAINT_LINK: from every slot on screen, node or not, no pair under LINE_CONTRAST is taken.
+    v = np.asarray(Image.open(SCREENS / f"{name}.png").convert("RGB")).max(axis=2)
+    x, y0 = bus[0] + 279, bus[1] + 37
+    while x + mr.COLUMN_DX + 80 <= 1200:
+        reads = {(a, b): mr.line_contrast(v, x, y0 + mr.ROW_DY[a], x + mr.COLUMN_DX, y0 + mr.ROW_DY[b]) or 0
+                 for a in mr.ROWS for b in mr.ROWS if mr.near(a, b)}
+        assert mr.links(reads) == {pair for pair, c in reads.items() if c >= mr.LINE_CONTRAST}
+        x += mr.COLUMN_DX
 
 
 def test_steps_are_rows_seen_from_the_node_before():

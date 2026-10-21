@@ -1438,16 +1438,10 @@ class RouteMap(CustomAction):
         while x + dx + 80 <= 1200:  # MapNodeFocusedHex reads 80 px either side; buttons from x 1205
             x += dx
             before, column, lit = ahead[-1] if ahead else slots, {}, False
-            reads = {(r, row): map_route.line_contrast(v, x - dx, y(r), x, y(row)) or 0
-                     for r in before for row in map_route.ROWS if abs(dy[r] - dy[row]) <= 213}
-            links = {k for k, c in reads.items() if c >= map_route.LINE_CONTRAST}
-            for r in before:  # every node leads on (#212): one with no link read takes its brightest, if faint
-                if not any(a == r for a, _ in links):
-                    c, k = max((c, k) for k, c in reads.items() if k[0] == r)
-                    if c >= map_route.FAINT_LINK:
-                        links.add(k)
+            links = map_route.links({(r, row): map_route.line_contrast(v, x - dx, y(r), x, y(row)) or 0
+                                     for r in before for row in map_route.ROWS if map_route.near(r, row)})
             for row in map_route.ROWS:
-                linked = {r for r, b in links if b == row}
+                linked = {src for src, dst in links if dst == row}
                 if linked:
                     marks = node_marks(context, image, x, y(row))
                     column[row] = (node_at(context, image, x, y(row), marks, costs=False), linked)

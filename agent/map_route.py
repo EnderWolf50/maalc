@@ -55,7 +55,8 @@ def rank(slots, weights, ahead=()):
     slots maps row -> (node type, routes onward or None); ahead lists the columns read beyond them,
     each row -> (node type, rows of the column before it linked to that node). A slot scores the
     weights on its cheapest path through those columns, lowest first; a node with no link read
-    onward goes on as if linked to the cheapest node of the next column. With no column ahead the score
+    onward goes on as if linked to the cheapest node of the next column in a row next to its own (paths).
+    With no column ahead the score
     is the slot's own weight. On equal score the node with more routes into the next column;
     then middle, top, bottom. The boss only when it is the only linked node.
     """
@@ -75,19 +76,38 @@ def paths(slots, weights, ahead=()):
         nxt, best = best, {}
         for r, (node, _) in column.items():
             linked = [nxt[u] for u in nxt if r in after[u][1]]
-            near = [nxt[u] for u in nxt if abs(ROW_DY[u] - ROW_DY[r]) <= 213]
-            score, path = min(linked or near or [(s, []) for s, _ in nxt.values()] or [(0, [])])
+            close = [nxt[u] for u in nxt if near(r, u)]
+            score, path = min(linked or close or [(s, []) for s, _ in nxt.values()] or [(0, [])])
             best[r] = (weights.get(node, weights["unknown"]) + score, [r, *path])
     return best
 
 
-def steps(path, types):
+def near(a, b):
+    """Whether rows a and b are the same or next to each other: only those link (#212)."""
+    return abs(ROW_DY[a] - ROW_DY[b]) <= ROW_DY["down"]
+
+
+def links(reads):
+    """The links between two columns, as (row before, row) pairs, from reads: pair -> line_contrast (0 if unread).
+
+    A pair reading LINE_CONTRAST links. Every node leads on (#212), so a row before with none takes its
+    brightest pair when it reads FAINT_LINK.
+    """
+    found = {pair for pair, c in reads.items() if c >= LINE_CONTRAST}
+    for src in {src for src, _ in reads} - {src for src, _ in found}:
+        c, pair = max((c, pair) for pair, c in reads.items() if pair[0] == src)
+        if c >= FAINT_LINK:
+            found.add(pair)
+    return found
+
+
+def steps(path, nodes):
     """The rest of a path as (row seen from the node before, node type): where the bus will stand.
 
     None when a step joins rows two apart, which no link does (#212): no plan to follow.
     """
     row_at = {dy: r for r, dy in ROW_DY.items()}
-    out = [(row_at.get(ROW_DY[b] - ROW_DY[a]), t) for a, b, t in zip(path, path[1:], types[1:])]
+    out = [(row_at.get(ROW_DY[b] - ROW_DY[a]), t) for a, b, t in zip(path, path[1:], nodes[1:])]
     return None if any(r is None for r, _ in out) else out
 
 
