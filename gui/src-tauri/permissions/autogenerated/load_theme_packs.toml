@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-load-theme-packs"
+description = "Enables the load_theme_packs command without any pre-configured scope."
+commands.allow = ["load_theme_packs"]
+
+[[permission]]
+identifier = "deny-load-theme-packs"
+description = "Denies the load_theme_packs command without any pre-configured scope."
+commands.deny = ["load_theme_packs"]

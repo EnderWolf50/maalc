@@ -2823,3 +2823,26 @@ def test_a_fusion_gone_after_a_cell_tap_taps_nothing_more(context, guarded, monk
     with pytest.raises(actions.PageGone):
         actions.Shop.fuse(context, {"keyword": "Burn", "gift_search": {"gifts": []}}, {})
     assert actions.FUSE_NEUTRAL not in taps(context)[5:] and len(taps(context)) == 5
+
+
+def test_hands_back_clears_the_runtime_cache_of_a_long_task():
+    """#176: MaaFramework keeps every node's detail until clear_cache, and a dungeon run is one task."""
+    class Act:
+        @actions.hands_back
+        def run(self, context, argv):
+            context.tasker.clear_cache.assert_not_called()  # after the action: its own calls still see the detail
+            if argv.gone:
+                raise actions.PageGone("the map")
+            return True
+
+    context = MagicMock()
+    def nodes(n, gone=False):
+        return SimpleNamespace(task_detail=SimpleNamespace(node_id_list=list(range(n))), gone=gone)
+
+    assert Act().run(context, nodes(actions.CLEAR_CACHE_AFTER_NODES - 1))
+    context.tasker.clear_cache.assert_not_called()
+    assert Act().run(context, nodes(actions.CLEAR_CACHE_AFTER_NODES))
+    context.tasker.clear_cache.assert_called_once()
+    context.tasker.clear_cache.reset_mock()
+    assert Act().run(context, nodes(actions.CLEAR_CACHE_AFTER_NODES, gone=True))  # PageGone hands back too
+    context.tasker.clear_cache.assert_called_once()
