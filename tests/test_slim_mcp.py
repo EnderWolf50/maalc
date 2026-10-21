@@ -23,3 +23,8 @@ def test_default_target_is_the_worktree_of_the_current_folder(tmp_path):
     subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
     (tmp_path / "sub").mkdir()
     assert slim_mcp.targets(tmp_path / "sub", False) == [tmp_path.resolve()]
+
+
+def test_all_sweeps_every_worktree(monkeypatch, tmp_path):
+    monkeypatch.setattr(slim_mcp, "worktrees", lambda: [tmp_path, tmp_path / "b"])
+    assert slim_mcp.targets(tmp_path, True) == [tmp_path, tmp_path / "b"]

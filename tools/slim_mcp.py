@@ -5,10 +5,10 @@ worktree does not use the main checkout's file), so write it into the worktree o
 folder, or with `--all` into every worktree. Idempotent; merges into an existing file and keeps
 `<file>.bak-<date>` of one it changes.
 """
+import argparse
 import json
 import shutil
 import subprocess
-import sys
 from datetime import date
 from pathlib import Path
 
@@ -50,7 +50,13 @@ def slim(wt):
 
 
 if __name__ == "__main__":
-    for wt in targets(Path.cwd(), "--all" in sys.argv[1:]):
+    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    ap.add_argument("--all", action="store_true", help="every worktree of this clone, not just the current one")
+    try:
+        todo = targets(Path.cwd(), ap.parse_args().all)
+    except subprocess.CalledProcessError:
+        raise SystemExit(f"not inside a git worktree: {Path.cwd()}")
+    for wt in todo:
         try:
             f, changed = slim(wt)
             print("written" if changed else "ok     ", f)
