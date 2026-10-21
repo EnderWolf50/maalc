@@ -306,6 +306,19 @@ def test_a_sale_taps_the_gift_it_picked_far_down_the_grid(context, grid, monkeyp
     assert [i for i in g.taps if isinstance(i, int)] == [17] and state["cost"] == 190
 
 
+def test_two_sales_far_down_the_grid_go_back_to_its_top_between_them(context, grid, monkeypatch):
+    # 18 gifts, the last two Bleed (no fusion takes 2): the 180 wanted with 100 Cost needs both. After the first sale
+    # the grid goes back to its top (grid_top), and the second is dragged into view again: each tapped once, sold.
+    g = grid("sell", 18)
+    reader = g.read_cells
+    monkeypatch.setattr(actions, "read_cells", lambda *a, **k: [
+        {**c, "keyword": "Bleed" if g.at_screen(c["x"], c["y"]) in (16, 17) else "Burn"} for c in reader(*a, **k)])
+    state = sell_page(context, g, [50 + i for i in range(16)] + [45, 40])
+    assert actions.Shop.sell(context, {"keyword": "Burn", "reserve_cost": 0, "gift_search": {"gifts": []}},
+                             {"wanted": 180, "sold": False})
+    assert [i for i in g.taps if isinstance(i, int)] == [17, 16] and state["cost"] == 185
+
+
 def test_a_sale_whose_dialog_names_another_price_is_cancelled(context, grid, monkeypatch):
     # The tap picked another gift than the one meant (the grid moved under it): the dialog's price says so.
     g = grid("sell", 4)
