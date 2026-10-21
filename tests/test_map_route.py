@@ -310,3 +310,15 @@ def test_a_gift_window_that_comes_up_between_two_pans_ends_the_pans(context, mon
     assert len(offsets) == 1
     context.tasker.controller.post_click.assert_not_called()
     assert actions.STUCK["flag"] is None
+
+
+def test_a_gift_window_that_comes_up_after_the_last_tap_is_not_taken_for_a_map_with_no_bus(context, monkeypatch):
+    # #213 review: the window can rise while the last fallback tap waits for a node panel; "no bus on the map" went to L2.
+    monkeypatch.setattr(actions, "page_guard", test_actions.REAL_GUARD)
+    monkeypatch.setattr(actions, "map_weights", lambda context: AB_WEIGHTS)
+    actions.RUN.update(map_entered=True, floor=3)
+    # Missed by RouteMap's first look, the looks for a slot, search_bus's 5 drags and the 4 fallback taps' guards.
+    gift_window_after(context, 1 + actions.MAP_LOOKS + 5 + 4 + 1)
+    actions.RouteMap().run(context, None)
+    assert context.tasker.controller.post_click.call_count == 4
+    assert actions.STUCK["flag"] is None

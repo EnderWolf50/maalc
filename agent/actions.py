@@ -1317,6 +1317,7 @@ class RouteMap(CustomAction):
                     RUN["map_plan"] = {"floor": RUN.get("floor"), "steps": steps}
                 RUN["map_entered"] = True
                 return enter_node(context)
+        page_guard(context, "MirrorMap")  # #213: a GET! window that rose during the last tap's wait is no miss
         if not bus:  # #61: L2's To Window and Resume put the map back; L1's back key does nothing here
             return stuck("no bus on the map, even after dragging it about", level=2)
         RUN["map_misses"] = RUN.get("map_misses", 0) + 1
