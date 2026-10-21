@@ -263,7 +263,7 @@ Cost 表是 wiki 與簡中客戶端的表，實機 log 的節點面板 Cost 沒�
   2. 直接獲得飾品（`Select to gain …`，所有體系）
   3. 優勢判定，通過才給飾品（提示寫 `Advantage check`）
   4. `Gain … E.G.O Gift depending on …`（下一頁再選才給；follow-up，以及提示只寫 `depending on`、沒寫 `check` 的判定；所有體系）
-  5. 其餘：畫面順序。AALC 沒有打贏戰鬥才給（battle）和只有判定失敗才給（check_fail_gift）的級別，所以兩者都落在這裡。
+  5. 其餘：畫面順序。AALC 沒有打贏戰鬥才給（battle）和只有判定失敗才給（check_fail_gift）的級別，所以兩者都落在這裡；`check_other`（不給飾品的判定）也在這裡。有表時第 3、4 級以提示有沒有 `check` 分，只寫 `depending on` 的判定歸第 4 級。提示文字分級（沒有表）看不出判定是成功還是失敗才給，`Advantage check … to gain` 一律第 3 級。
 
   同一級裡先選有主要體系飾品的，再選畫面上較上面的；主要體系不跨級往前排，第 5 級只依畫面順序。提示文字和資料不一致時以資料為準：例如 971041 的提示寫判定通過給飾品，資料是失敗才給；`Then, maybe gain … depending on the subsequent choice` 是兩階段，不是保證獲得。（#93）
 - 敘事框比不到事件表（新一季的事件、OCR 讀錯太多）時整頁照提示文字套同樣的 5 級（下一條），沒有任何一級的選項就選第一個。（#233）
