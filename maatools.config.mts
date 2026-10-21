@@ -33,6 +33,17 @@ const screens: [image: string, hits: string[]][] = [
   // it sits on screen is not confirmed. A Cancel / Confirm question, so PopupButton (one centred button) stays out.
   ['ParallelModePrompt.png', ['ParallelModePrompt']],
   ['ParallelModeExtreme.png', ['ParallelModePrompt']],
+  // Live 2026-10-21 (#85, 1080p captures scaled to 720p): the main window's own popups and the help pager behind
+  // every "i" button (Mirror Dungeon page 1 and its last page, Extract, Sinners). The main window under the popups
+  // still reads as the main window: the popups come first in the hub.
+  ['EventNotices.png', ['Notices', 'GoToMirrorEntry', 'NavMainTabs']],
+  ['SystemNotices.png', ['Notices', 'GoToMirrorEntry', 'NavMainTabs']],
+  ['Mailbox.png', ['Mailbox', 'GoToMirrorEntry', 'NavMainTabs']],
+  ['SettingsMenu.png', ['SettingsMenu', 'GoToMirrorEntry', 'NavMainTabs']],
+  ['HelpPager.png', ['HelpPager']],
+  ['HelpPagerLast.png', ['HelpPager']],
+  ['HelpPagerExtract.png', ['HelpPager']],
+  ['HelpPagerSinners.png', ['HelpPager']],
   ['MainWindow.png', ['GoToMirrorEntry', 'NavMainTabs']],
   ['MainWindowFadeIn.png', ['GoToMirrorEntry', 'NavMainTabs']],
   ['SinnersTab.png', ['GoToMirrorEntry', 'NavMainTabs']],

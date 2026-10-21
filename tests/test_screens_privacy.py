@@ -27,6 +27,8 @@ IDENTITY = {
     # the main window dimmed under the Mailbox and the popup: the Copy button and LV label do not match
     "ServerErrorRetry": [UID_PLATE, NAME_PLATE], "ServerErrorRetryCountdown": [UID_PLATE, NAME_PLATE],
     "NetworkUnstable": [UID_PLATE, NAME_PLATE],
+    "EventNotices": [UID_PLATE, NAME_PLATE], "SystemNotices": [UID_PLATE, NAME_PLATE],
+    "Mailbox": [UID_PLATE, NAME_PLATE], "SettingsMenu": [UID_PLATE, NAME_PLATE],
 }
 
 # A new fixture is found by a part of the screen that stays put: it must match Title.png's "Change Account"
@@ -70,7 +72,7 @@ def test_every_listed_fixture_exists():
 def test_the_name_plate_detector_finds_every_screen_that_shows_the_lv_panel():
     shown = {p.stem for p in SCREENS.glob("*.png") if NAME_PLATE in required_boxes(p)}
     assert shown == {"MainWindow", "MainWindowFadeIn", "Drive", "SinnersTab", "ServerErrorRetry", "ServerErrorRetryCountdown",
-                     "NetworkUnstable"}
+                     "NetworkUnstable", "EventNotices", "SystemNotices", "Mailbox", "SettingsMenu"}
 
 
 def test_an_unmasked_copy_of_a_fixture_fails(tmp_path):
