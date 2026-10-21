@@ -14,7 +14,11 @@ from pathlib import Path
 import numpy as np
 
 SAME_SCREEN = 5  # the same screen type and thumbnail this many times in a row is stuck
-WAIT_LIMITS = {"Loading": 90, "Connecting": 90}  # seconds a waiting screen may last, whatever it shows
+# A waiting screen is stuck once it shows the very same picture WAIT_STILL s, or after WAIT_CAP s however it moves
+# (#179). Live 2026-10-19 (30 FPS, CPU 100%): Now Loading sat still up to 51 s in loads that came through on their
+# own, 59 and ~66 s in the two the back key was pressed on (#179); 2026-10-17 one sat still from its start for 89.5 s.
+# The game's own server error comes ~130 s into a CONNECTING that never answers (#84): RetryPopup's, not ours.
+WAIT_SCREENS, WAIT_STILL, WAIT_CAP = {"Loading", "Connecting"}, 80, 150
 HASH_FLOOR = {"BattlePause": 30}  # a turn playing out may sit still a while: also this many seconds
 # Screens on the way back to a run after L2/L3: seeing them does not mean the stuck screen was got past.
 TRANSIT = {"Loading", "Connecting", "RetryPopup", "GoToMirrorEntry", "NavTitle", "NavMainTabs", "NavDrive",
@@ -73,20 +77,34 @@ class Watchdog:
     def __init__(self):
         self.kind, self.kind_since = None, 0.0
         self.first, self.count, self.since = None, 0, 0.0  # the streak's first thumbnail
+        self.last, self.moved = None, 0.0  # the last thumbnail, and when the screen last changed at all
         self.hold_until = 0.0  # a download is under way until then: no screen counts as stuck
 
     def see(self, kind, small, now):
-        """Record one screen handed out by MirrorHub (its type and thumb); True when it makes the bot stuck."""
+        """Record one screen handed out by MirrorHub (its type and thumb); why it makes the bot stuck, or None.
+
+        A waiting screen counts as moving on any change of its thumbnail: a still game gives the same pixels every time
+        (live 2026-10-19: the bot's scores on it were the same to 6 decimals), its NOW LOADING... never does.
+        """
         if kind != self.kind:
-            self.kind, self.kind_since, self.first = kind, now, None
+            if not {kind, self.kind} <= WAIT_SCREENS:  # Loading after Connecting is one wait: WAIT_CAP runs on
+                self.kind_since = now
+            self.kind, self.first, self.moved = kind, None, now
+        elif self.last is None or small is None or not np.array_equal(small, self.last):
+            self.moved = now
+        self.last = small
         if not same_screen(small, self.first):
             self.first, self.count, self.since = small, 0, now
         self.count += 1
         if self.held(now):
-            return False
-        if kind in WAIT_LIMITS:
-            return now - self.kind_since > WAIT_LIMITS[kind]
-        return self.count >= SAME_SCREEN and now - self.since >= HASH_FLOOR.get(kind, 0)
+            return None
+        if kind in WAIT_SCREENS:
+            if now - self.moved >= WAIT_STILL:
+                return f"the screen did not change for {WAIT_STILL} s"
+            return f"still up after {WAIT_CAP} s" if now - self.kind_since > WAIT_CAP else None
+        if self.count >= SAME_SCREEN and now - self.since >= HASH_FLOOR.get(kind, 0):
+            return "the screen did not change"
+        return None
 
     def hold(self, now, seconds):
         """A download was confirmed: nothing is stuck for the next seconds (its progress screen is not known)."""

@@ -12,7 +12,7 @@
 - 「待截圖確認」表示這個畫面還沒有實機截圖，辨識方式是依 ticket 的描述暫定，截圖回來後要核對本章。已實機確認的畫面來自 2026-10-13 在 Limbus 1.116.2（MuMu 12，1280×720）上的一局普通鏡牢與一局困難鏡牢。（#7、#8、#19）
 - 「實機截圖」欄列出困難鏡牢那一局的代表截圖，以檔名列出（例如 `captures/176_f2boss_rewards_card.png`），逐張說明見 [captures-2026-10-13.md](captures-2026-10-13.md)。截圖本身只留在本機，尚未遮掉 UID 與帳號名稱；實作時依 #13 遮蔽、壓縮後搬進 `tests/`（[07](07-assets-and-testing.md#測試截圖的存放與授權)）。「—」表示這一局沒有截到。（#13）
 - 截圖中的座標與數值只是實測參考，不是規則；辨識方法的實機經驗見 [07](07-assets-and-testing.md#辨識方法的實機經驗)。
-- 認不出畫面超過 60 秒（載入畫面 90 秒）、同一畫面連續處理 5 次，都交給卡住處理。（#14）
+- 認不出畫面超過 60 秒（載入畫面不動 80 秒或超過 150 秒）、同一畫面連續處理 5 次，都交給卡住處理。（#14）
 - 用 OCR 找文字再點的按鈕（`Skip`、`Continue`、`Proceed` 這類），每個畫面最多點 5 次。（#16、#19）
 
 ## 導航與入口頁
@@ -79,7 +79,7 @@
 | 設定面板 Dungeon Progress | OCR：標題 `Dungeon Progress`、按鈕 `Progress`／`Forfeit`／`Continue`／`To Window`／`Config` | 讀每層難度與進度。L2 恢復時點 To Window；放棄這局時點 Forfeit；其他情況點 Continue 回地圖。面板上的 Parallel Superposition 開關不碰。實機：地圖頁按 Android 返回鍵也會打開這個面板（2026-10-16，#31） | 暫停確認對話框、地圖頁、放棄探索確認對話框、Progress 頁 | #8、#14、#17、#19 | `captures/31_gear_dungeon_progress.png`、`242_gear_before_forfeit.png` |
 | 暫停確認對話框 | OCR：標題 `Pause Exploration`、`Save your progress and return to the Main Menu?` | 點 Confirm | 主畫面（再經導航回入口頁 Resume） | #14 | `tests/screens/PauseExploration.png` |
 | 放棄探索確認對話框 | OCR：標題 `Pause Exploration`、`Quit exploring the dungeon?` | 標題和暫停確認對話框相同，必須用內文區分。這是從設定面板按 Forfeit 後出現的對話框；按 Confirm 會結束這一局。全滅後重打次數用完、全域選項為「放棄這局」時點 Confirm（[03](03-decisions.md#9-全滅與陣亡)）；其他情況點 Cancel | Defeat 畫面 → Exploration Complete → Exploration Reward 視窗（Confirm）、地圖頁（Cancel） | #8、#16、#19 | `captures/243_forfeit_dialog.png` |
-| 載入畫面 | OCR：`NOW LOADING`；OCR：右側中段 `Combat Tips`（#24 實機：不在右下） | 等待，逾時 90 秒 | 地圖頁、戰鬥、戰前編隊頁 | #14 | `captures/64_loading_combat_tips.png`、`240_after_accept_results.png` |
+| 載入畫面 | OCR：`NOW LOADING`；OCR：右側中段 `Combat Tips`（#24 實機：不在右下） | 等待，畫面不動 80 秒或超過 150 秒算卡住（#179） | 地圖頁、戰鬥、戰前編隊頁 | #14 | `captures/64_loading_combat_tips.png`、`240_after_accept_results.png` |
 
 ## 戰鬥
 
@@ -116,8 +116,8 @@
 | 購買確認 | OCR：標題 `Purchase E.G.O Gifts`、Cost 的扣款預覽；模板：Cancel／Purchase | 點 Purchase | 飾品獲得視窗 | #10 | `captures/78_shop_item_tap.png` |
 | 飾品資訊（`E.G.O Gift Info`） | OCR：標題 `E.G.O Gift Info` | 點 `Purchased` 的格子才會出現；點對話框外面關閉（#29 實機，1.117.0） | 商店主畫面 | #29 | — |
 | 治療頁 | OCR：標題 `Heal Sinners`；三個選項 `Greatly heal a single Sinner`（HP 50% + SP 45）、`Moderately heal every Sinner`（HP 20% + SP 15）、`Revive a single Sinner`，各 100 Cost | 依隊伍的治療方式：不治療／錢 ≥ 100 + 預留時全體治療／有罪人陣亡時復活（預設）。復活也不得花到預留金額。實機：沒有人陣亡時 Revive 是灰的；復活要先點陣亡罪人的頭像，`Select` 才會出現，點活著的罪人沒反應；復活後 HP 全滿、SP 為 0。商店罪人列的頭像間距和事件頁不同 | 商店主畫面 | #10 | `captures/82_shop_heal_page.png`、`191_heal_page_with_dead.png`、`213_revive_selected.png`、`194_revive_result.png`、`109_heal_all_result.png` |
-| 出售畫面 | OCR：標題 `Sell E.G.O Gift`、飾品名稱與售價；模板：重複飾品標記（`Sale & Fusion-only`，實機未見）、Close／Sell | 只在想買的飾品買不起時出售；只賣無法湊滿 3 個的非主要體系飾品，以及 `Sale & Fusion-only` 的重複飾品 | 商店主畫面 | #10 | `captures/88_shop_sell_page.png`、`89_sell_gift_selected.png` |
-| 合成畫面 | OCR：標題 `Fuse E.G.O Gift`、預測列；模板：中央的體系選擇格、周圍的材料格、Close／Fuse | 非主要體系的飾品每 3 個合成一個，指定主要體系。實機：點中央格開 `Fusion - Keyword Selection` 選體系；材料最多 5 格；`Wishmaking` 勾選框要花持有的星光，必須保持不勾；按 Fuse 後還有確認頁 `Fuse the selected E.G.O Gifts?`。合成本身不花 Cost。點飾品出現的說明框會蓋住 Fuse，Close 在容易誤觸的位置 | 飾品獲得視窗、商店主畫面 | #10 | `captures/94_shop_fuse_try2.png`、`95_fuse_center_tap.png`、`173_fuse_confirm.png`、`174_fuse_result.png` |
+| 出售畫面 | OCR：標題 `Sell E.G.O Gift`、飾品名稱與售價；模板：重複飾品標記（`Sale & Fusion-only`，實機未見）、Close／Sell | 只在想買的飾品買不起時出售；只賣合成挑剩的材料（[03](03-decisions.md) 第 13 節），以及 `Sale & Fusion-only` 的重複飾品 | 商店主畫面 | #10 | `captures/88_shop_sell_page.png`、`89_sell_gift_selected.png` |
+| 合成畫面 | OCR：標題 `Fuse E.G.O Gift`、預測列；模板：中央的體系選擇格、周圍的材料格、Close／Fuse | 依點數挑 3 個到材料槽數的非主要體系飾品合成，指定主要體系；每放一個就回讀材料槽與格子外框（[03](03-decisions.md) 第 13 節，#77）。實機：點中央格開 `Fusion - Keyword Selection` 選體系；材料最多 5 格；`Wishmaking` 勾選框要花持有的星光，必須保持不勾；按 Fuse 後還有確認頁 `Fuse the selected E.G.O Gifts?`。合成本身不花 Cost。點飾品出現的說明框會蓋住 Fuse，Close 在容易誤觸的位置 | 飾品獲得視窗、商店主畫面 | #10 | `captures/94_shop_fuse_try2.png`、`95_fuse_center_tap.png`、`173_fuse_confirm.png`、`174_fuse_result.png` |
 | 定向刷新對話框 | OCR：標題 `Shop - Keyword Refresh`、`Spend <n> Cost to Keyword Refresh?`；模板：10 個體系選項、Cancel／Refresh | 指定主要體系；條件是錢 ≥ 定向刷新費用 + 120 | 商店主畫面 | #10 | `captures/79_shop_keyword_refresh_dialog.png`、`80_shop_keyword_bleed_selected.png` |
 | 離開確認 | OCR：`Leave the shop?` | 點 Confirm | 地圖頁 | #10 | `captures/111_shop_leave.png` |
 | Super Shop（困難） | 同商店主畫面，標題改為紅色 `Super Shop` | 和一般商店同一套流程；規則不依賴格數，每格都從畫面讀價格和體系。實機：10 格分兩列，要捲動；有一格 `ID Skill Search` 用星光計價；`Special Catalogue` 會讓獎勵卡多一張 | 同商店主畫面 | #17 | `captures/162_f2shop_entered.png`、`163_supershop_scrolled.png`、`190_f3shop_entered.png` |
