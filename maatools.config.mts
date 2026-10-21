@@ -113,6 +113,8 @@ const screens: [image: string, hits: string[]][] = [
   ['BattleTurnEven.png', ['BattleTurn']], // 8 slots (slot 4 a unit's second slot), Win Rate at x 1022
   ['BattleTurnStagger.png', ['BattleTurn']], // 6 of 7 slots staggered, Win Rate on, the START disc dim (#69)
   ['BattleTurnFocused.png', ['BattleTurn']], // focused encounter (#127): hollow left gear, one sinner in 7 slots, nothing picked
+  ['BattleTurnSwarm.png', ['BattleTurn']], // a swarm of enemies over the battlefield, one sinner in 6 slots (live 2026-10-21)
+  ['BattleTurnSwarmNext.png', ['BattleTurn']], // the same turn 3 s later: the swarm moved, the HUD did not
   ['BattlePause.png', ['BattlePause']],
   ['Victory.png', ['Victory']],
   ['WipeDialog.png', ['WipeDialog']],
