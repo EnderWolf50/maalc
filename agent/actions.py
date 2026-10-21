@@ -154,6 +154,9 @@ def on_page(context, image, *nodes):
 
 
 POPUPS = ("Connecting", "RetryPopup", "PopupButton")  # MirrorHub's global popups: answered before any page
+# Windows that leave a page's anchor readable under them, answered by MirrorHub before that page. #213: a GET! window
+# over the map after a fight leaves its buttons (MirrorMap) lit. Not the shop's: Shop closes its own GET! windows.
+COVERS = {"MirrorMap": ("GiftGet",)}
 
 
 def page_guard(context, home, image=None):
@@ -163,11 +166,11 @@ def page_guard(context, home, image=None):
     handed back to MirrorHub at once instead of tapped blind until the action gives up. A miss is looked at
     again for up to 1 s: a page fading or a dialog dropping in can hide its anchor for a moment.
     A global popup reads through to the page under it (maatools: the title's nodes hit under RetryCountdown.png), so
-    one of POPUPS showing is the page gone too: MirrorHub answers it first.
+    one of POPUPS showing is the page gone too: MirrorHub answers it first. So is one of home's COVERS.
     image: a screenshot just taken, looked at first.
     """
     def shown(im):
-        return on_page(context, im, *POPUPS, home) == home
+        return on_page(context, im, *POPUPS, *COVERS.get(home, ()), home) == home
 
     if image is not None and shown(image):
         return image
@@ -1339,6 +1342,7 @@ class RouteMap(CustomAction):
                     RUN["map_plan"] = {"floor": RUN.get("floor"), "steps": steps}
                 RUN["map_entered"] = True
                 return enter_node(context)
+        page_guard(context, "MirrorMap")  # #213: a GET! window that rose during the last tap's wait is no miss
         if not bus:  # #61: L2's To Window and Resume put the map back; L1's back key does nothing here
             return stuck("no bus on the map, even after dragging it about", level=2)
         RUN["map_misses"] = RUN.get("map_misses", 0) + 1
@@ -1422,7 +1426,8 @@ class RouteMap(CustomAction):
                     return image, (bx, by)
                 pans += 1
             # Look again after each pan. Start on map background: between the first and second columns,
-            # between the middle and bottom rows.
+            # between the middle and bottom rows. #213: a GET! window rising over the map ends the pans.
+            page_guard(context, "MirrorMap", image=image)
             scroll(context, min(bx + SLOT[0] + map_route.COLUMN_DX // 2, 1100), by + SLOT[1] + 106, dx, dy)
             time.sleep(0.5)
             last = (bx, by)

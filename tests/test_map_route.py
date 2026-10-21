@@ -356,3 +356,56 @@ def test_a_gift_window_that_slides_in_over_the_bus_is_not_dragged_under(context,
     actions.RouteMap().run(context, None)
     context.tasker.controller.post_touch_down.assert_not_called()
     context.tasker.controller.post_click.assert_not_called()
+
+
+def gift_window_after(context, looks):
+    """MirrorMap's buttons stay readable (the GET! window dims the map under it); GiftGet reads from its looks-th look on."""
+    inner, seen = context.run_recognition.side_effect, []
+
+    def run_recognition(name, image, override=None):
+        if name == "MirrorMap" and override is None:
+            return SimpleNamespace(hit=True, box=[1200, 70, 60, 120])
+        if name == "GiftGet":
+            seen.append(name)
+            return SimpleNamespace(hit=True) if len(seen) >= looks else None
+        return inner(name, image, override) if inner else None
+    context.run_recognition.side_effect = run_recognition
+
+
+def test_a_gift_window_that_comes_up_while_the_bus_is_searched_for_is_not_dragged_under(context, monkeypatch):
+    # #213, live 2026-10-21 09:20:41: after an abnormality fight the GET! window came up over the map while RouteMap
+    # looked for the bus; it dragged the map about under the window ~20 s, "no bus on the map" went to L2, then L3.
+    monkeypatch.setattr(actions, "page_guard", test_actions.REAL_GUARD)
+    monkeypatch.setattr(actions, "map_weights", lambda context: AB_WEIGHTS)
+    actions.RUN.update(map_entered=True, floor=3)
+    gift_window_after(context, actions.MAP_LOOKS + 2)  # read only once the looks for a linked slot are done
+    actions.RouteMap().run(context, None)
+    context.tasker.controller.post_touch_down.assert_not_called()
+    context.tasker.controller.post_click.assert_not_called()
+    assert actions.STUCK["flag"] is None
+
+
+def test_a_gift_window_that_comes_up_between_two_pans_ends_the_pans(context, monkeypatch):
+    # #213: the bus far out takes several pans to the far left; the window rose between two of them.
+    monkeypatch.setattr(actions, "page_guard", test_actions.REAL_GUARD)
+    monkeypatch.setattr(actions, "map_weights", lambda context: AB_WEIGHTS)
+    offsets = map_world(context, {(1, "mid"): {"cost"}}, [], bus_x=446)
+    monkeypatch.setattr(actions, "scroll", lambda *a, **k: offsets.append(None))  # a drag that moves nothing
+    gift_window_after(context, 4)  # RouteMap's first look, the look for a slot, the first pan's guard miss it
+    actions.RUN["fresh_floor"] = True  # drags that leave the bus in place are made again
+    actions.RouteMap().run(context, None)
+    assert len(offsets) == 1
+    context.tasker.controller.post_click.assert_not_called()
+    assert actions.STUCK["flag"] is None
+
+
+def test_a_gift_window_that_comes_up_after_the_last_tap_is_not_taken_for_a_map_with_no_bus(context, monkeypatch):
+    # #213 review: the window can rise while the last fallback tap waits for a node panel; "no bus on the map" went to L2.
+    monkeypatch.setattr(actions, "page_guard", test_actions.REAL_GUARD)
+    monkeypatch.setattr(actions, "map_weights", lambda context: AB_WEIGHTS)
+    actions.RUN.update(map_entered=True, floor=3)
+    # Missed by RouteMap's first look, the looks for a slot, search_bus's 5 drags and the 4 fallback taps' guards.
+    gift_window_after(context, 1 + actions.MAP_LOOKS + 5 + 4 + 1)
+    actions.RouteMap().run(context, None)
+    assert context.tasker.controller.post_click.call_count == 4
+    assert actions.STUCK["flag"] is None
