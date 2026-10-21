@@ -1536,7 +1536,8 @@ def test_a_parallel_superposition_switch_that_stays_on_stops_the_task(context, c
     assert result is False and taps == [actions.INFINITY_BUTTON] * 2 and len(stops) == 1
 
 
-def test_select_team_waits_for_the_title_after_the_tap_and_for_the_page_after_confirm(context, clock):
+def test_select_team_waits_for_the_title_after_the_tap_and_for_the_page_after_confirm(context, clock, monkeypatch):
+    monkeypatch.setattr(actions, "scroll", lambda *a: None)  # the drag to the top has its own waits
     actions.RUN["team"] = {"game_team": 3}
     team_picker(context, lambda clicks, looks: "TEAMS #1" if looks < 4 else "TEAMS #3",
                 lambda clicks, looks: "lower than the recommended level" if clicks >= 2 else None)
