@@ -104,6 +104,8 @@ def test_a_node_with_no_link_read_onward_takes_its_brightest_faint_one():
     reads = {("down", "down"): 14.4, ("down", "mid"): -1.6, ("up", "up"): 30, ("up", "mid"): 12}
     assert mr.links(reads) == {("down", "down"), ("up", "up")}
     assert mr.links({("down", "down"): 7.9, ("down", "mid"): 0}) == set()
+    # A diagonal crossed by a link read the other way (mid -> up) reads its crossing, not a link of its own.
+    assert mr.links({("up", "up"): 9, ("up", "mid"): 13, ("mid", "up"): 40, ("mid", "mid"): 30}) == {("mid", "up"), ("mid", "mid"), ("up", "up")}
 
 
 # The map frames of tests/screens and the bus's top-left in each (MapBus matched with cv2, 0.97 and up).
@@ -112,15 +114,19 @@ MAP_SCREENS = {"MapBoss": (446, 248), "MapCards": (446, 248), "MapEvent": (446, 
 
 
 @pytest.mark.parametrize(("name", "bus"), MAP_SCREENS.items())
-def test_the_faint_link_fallback_adds_no_link_on_the_map_frames_of_tests_screens(name, bus):
-    # CODING_STANDARDS' sweep of FAINT_LINK: from every slot on screen, node or not, no pair under LINE_CONTRAST is taken.
+def test_the_faint_link_fallback_on_the_map_frames_of_tests_screens(name, bus):
+    """CODING_STANDARDS' sweep of FAINT_LINK: every slot of every column on screen, node or not, as a node with
+    no link read onward. Its one false link: MapBoss, from the empty middle slot behind the bus (a purple pack's
+    glow, 11.9); read_ahead only reads on from nodes ahead of the bus. Slot centres: actions.SLOT (279, 37)."""
     v = np.asarray(Image.open(SCREENS / f"{name}.png").convert("RGB")).max(axis=2)
-    x, y0 = bus[0] + 279, bus[1] + 37
+    x, y0, extra = (bus[0] + 279) % mr.COLUMN_DX, bus[1] + 37, {}
     while x + mr.COLUMN_DX + 80 <= 1200:
         reads = {(a, b): mr.line_contrast(v, x, y0 + mr.ROW_DY[a], x + mr.COLUMN_DX, y0 + mr.ROW_DY[b]) or 0
                  for a in mr.ROWS for b in mr.ROWS if mr.near(a, b)}
-        assert mr.links(reads) == {pair for pair, c in reads.items() if c >= mr.LINE_CONTRAST}
+        if added := mr.links(reads) - {pair for pair, c in reads.items() if c >= mr.LINE_CONTRAST}:
+            extra[x - bus[0]] = added
         x += mr.COLUMN_DX
+    assert extra == ({-231: {("mid", "mid")}} if name == "MapBoss" else {})
 
 
 def test_steps_are_rows_seen_from_the_node_before():

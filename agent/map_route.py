@@ -56,8 +56,7 @@ def rank(slots, weights, ahead=()):
     each row -> (node type, rows of the column before it linked to that node). A slot scores the
     weights on its cheapest path through those columns, lowest first; a node with no link read
     onward goes on as if linked to the cheapest node of the next column in a row next to its own (paths).
-    With no column ahead the score
-    is the slot's own weight. On equal score the node with more routes into the next column;
+    With no column ahead the score is the slot's own weight. On equal score the node with more routes into the next column;
     then middle, top, bottom. The boss only when it is the only linked node.
     """
     best = paths(slots, weights, ahead)
@@ -91,11 +90,12 @@ def links(reads):
     """The links between two columns, as (row before, row) pairs, from reads: pair -> line_contrast (0 if unread).
 
     A pair reading LINE_CONTRAST links. Every node leads on (#212), so a row before with none takes its
-    brightest pair when it reads FAINT_LINK.
+    brightest pair when it reads FAINT_LINK, but not a diagonal that a link read the other way crosses:
+    the crossing alone reads 11.9-14.2 (the bus's links in tests/screens), as high as a faint link.
     """
     found = {pair for pair, c in reads.items() if c >= LINE_CONTRAST}
     for src in {src for src, _ in reads} - {src for src, _ in found}:
-        c, pair = max((c, pair) for pair, c in reads.items() if pair[0] == src)
+        c, pair = max((c, (a, b)) for (a, b), c in reads.items() if a == src and (b, a) not in found)
         if c >= FAINT_LINK:
             found.add(pair)
     return found
