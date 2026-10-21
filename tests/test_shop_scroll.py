@@ -1,0 +1,215 @@
+"""#205: the fuse and sell pages' owned grids are scrolled to read their cut-off rows; no cell is opened to read it."""
+from types import SimpleNamespace
+
+import numpy as np
+import pytest
+
+import actions
+import test_actions
+from test_shop import screen_with
+
+clock, context = test_actions.clock, test_actions.context  # its fixtures
+DONE = SimpleNamespace(wait=lambda: None)
+KEYWORDS = ["Bleed", "Tremor", "Pierce", "Sinking", "Slash", "Blunt", "Poise", "Rupture", "Charge"]
+
+
+class Grid:
+    """The owned grid of page as the game shows it: n gifts, 5 a row, each a unique icon in the same frame. A drag
+    moves it by the finger's travel after the drag threshold's first move (1 px more every other drag: the fling
+    left), stopped at its ends; a tap lands on the gift under it. The grid ends 8 px under its last row's frame or price."""
+
+    def __init__(self, context, page, n):
+        (self.x0, self.y0), (self.dx, self.dy), under = actions.OWNED_GRID[page]
+        self.top, self.bottom = self.y0 - 52, actions.CELL_PAGES[page][1]
+        self.max_at = max(0, self.y0 + self.dy * ((n - 1) // 5) + max(48, under) + 8 - self.bottom)
+        self.at, self.drags, self.taps, self.reads = 0, 0, [], []
+        rng = np.random.default_rng(1)
+        self.icons = [rng.integers(40, 255, (76, 76, 3), np.uint8) for _ in range(n)]
+        for icon in self.icons:
+            icon[:5], icon[-5:], icon[:, :5], icon[:, -5:] = (0, 200, 230), (0, 200, 230), (0, 200, 230), (0, 200, 230)
+        ctl = context.tasker.controller
+        ctl.post_screencap.return_value.wait.return_value.get.side_effect = self.screen
+        ctl.post_touch_down.side_effect = self.down
+        ctl.post_touch_move.side_effect = self.move
+        ctl.post_touch_up.side_effect = self.up
+        ctl.post_click.side_effect = self.click
+
+    def place(self, i):
+        """Gift i's centre with the grid at its top."""
+        return self.x0 + self.dx * (i % 5), self.y0 + self.dy * (i // 5)
+
+    def at_screen(self, x, y):
+        """The gift whose cell is under (x, y) on screen now, or None."""
+        return next((i for i in range(len(self.icons)) if abs(self.place(i)[0] - x) < 38
+                     and abs(self.place(i)[1] - self.at - y) < 38 and self.top <= y < self.bottom), None)
+
+    def screen(self):
+        image = np.zeros((720, 1280, 3), np.uint8)
+        for i, icon in enumerate(self.icons):
+            x, y = self.place(i)
+            y -= self.at
+            lo, hi = max(y - 38, self.top), min(y + 38, self.bottom)
+            if lo < hi:
+                image[lo:hi, x - 38:x + 38] = icon[lo - y + 38:hi - y + 38]
+        return image
+
+    def down(self, x, y):
+        assert self.top <= y <= self.bottom, "a drag starts inside the grid"
+        self.moves = []
+        return DONE
+
+    def move(self, x, y):
+        self.moves.append(y)
+        return DONE
+
+    def up(self):
+        self.drags += 1
+        self.at = min(max(self.at + self.moves[0] - self.moves[-1] + self.drags % 2, 0), self.max_at)
+        return DONE
+
+    def click(self, x, y):
+        i = self.at_screen(x, y)
+        self.taps.append((x, y) if i is None else i)
+        return DONE
+
+    def read_cells(self, context, image, cells, page, gifts=()):
+        """actions.read_cells as the badge and icon matching would: each gift's keyword, by the gift on screen there.
+        Only cells shown whole are asked for (test_shop_cells checks the matching itself)."""
+        out = []
+        for k, (x, y) in enumerate(cells):
+            assert actions.whole(page, y) and y - 48 >= self.top, (x, y)
+            i = self.at_screen(x, y)
+            if i is not None:
+                self.reads.append(i)
+                out.append({"i": k, "x": x, "y": y, "tier": 1, "keyword": KEYWORDS[i % len(KEYWORDS)], "gift": None})
+        return out
+
+
+@pytest.fixture
+def grid(context, monkeypatch):
+    def make(page, n):
+        g = Grid(context, page, n)
+        monkeypatch.setattr(actions, "read_cells", g.read_cells)
+        return g
+    return make
+
+
+@pytest.mark.parametrize("page", ["fuse", "sell"])
+@pytest.mark.parametrize("n", [3, 10, 13, 23, 31])
+def test_every_gift_is_read_once_whatever_the_grid_holds(context, grid, page, n):
+    # Two rows a drag, the first cut-off one to the first's place; the last drag stops at the grid's end.
+    g = grid(page, n)
+    cells, _ = actions.owned_cells(context, g.screen(), page, [])
+    assert g.reads == list(range(n))  # each gift once, in the grid's order
+    assert [c["i"] for c in cells] == list(range(n))
+    assert [c["keyword"] for c in cells] == [KEYWORDS[i % len(KEYWORDS)] for i in range(n)]
+    assert g.drags == (0 if n <= 10 else -(-(n - 10) // 10))  # rows 3-4, 5-6: a drag each
+
+
+def test_a_cell_read_further_down_is_found_again_after_the_grid_moved(context, grid):
+    # cell_at drags the grid back to bring a cell read before the last drag whole into view; its tap hits that gift.
+    g = grid("fuse", 23)
+    cells, at = actions.owned_cells(context, g.screen(), "fuse", [])
+    for i in (22, 0, 12, 4, 21):
+        g.click(*actions.cell_at(context, at, cells[i]))
+    assert g.taps == [22, 0, 12, 4, 21]
+
+
+@pytest.mark.parametrize("s", [0, 1, 46, 91, 92, 183, 184, -92, -184])
+def test_the_grid_shift_is_measured_on_a_live_capture(s):
+    # The fuse page of tests/shop/fuse.png moved up by s px (down when negative): the frames repeat every row, the
+    # icons do not.
+    before = screen_with("fuse")
+    after = np.zeros_like(before)
+    top, bottom = actions.OWNED_GRID["fuse"][0][1] - 48, actions.CELL_PAGES["fuse"][1]
+    src = np.zeros_like(before)
+    src[top:bottom] = before[top:bottom]
+    if s >= 0:
+        after[top:bottom - s] = src[top + s:bottom]
+    else:
+        after[top - s:bottom] = src[top:bottom + s]
+    most = 184 if s >= 0 else -184
+    assert actions.grid_shift(src, after, "fuse", most) == s
+
+
+def fusion(context, monkeypatch, g):
+    """Shop.fuse on g with the fuse page's read-back as the game would show it (a tap puts a gift in or takes it out)."""
+    def inside():
+        return {i for i in g.taps if isinstance(i, int) and g.taps.count(i) % 2}
+    test_actions.reads(context, {**test_actions.FUSE_PAGE,
+                                 tuple(actions.FUSE_CONFIRM): [("Selected E.G.O Gifts 3/3", (330, 175, 320, 30))],
+                                 tuple(actions.GET_TITLE): [("E.G.O Gift GET!", (560, 165, 160, 30))]})
+    monkeypatch.setattr(actions.shop, "fuse_slots", lambda image: 3)
+    monkeypatch.setattr(actions.shop, "placed", lambda image, n: len(inside()))
+    monkeypatch.setattr(actions.shop, "picked", lambda image, x, y, bottom=720: g.at_screen(x, y) in inside())
+    return actions.Shop.fuse(context, {"keyword": "Burn", "gift_search": {"gifts": []}}, {})
+
+
+def test_a_fusion_puts_in_gifts_from_both_ends_of_the_grid(context, grid, monkeypatch):
+    # 23 gifts: all Burn (kept) but 1, 12 and 22. They fuse; each is dragged into view and tapped once, no other cell.
+    g = grid("fuse", 23)
+    reader = g.read_cells
+
+    def read_cells(context, image, cells, page, gifts=()):
+        return [{**c, "keyword": c["keyword"] if g.at_screen(c["x"], c["y"]) in (1, 12, 22) else "Burn"}
+                for c in reader(context, image, cells, page, gifts)]
+    monkeypatch.setattr(actions, "read_cells", read_cells)
+    assert fusion(context, monkeypatch, g)
+    assert sorted(i for i in g.taps if isinstance(i, int)) == [1, 12, 22]
+    assert actions.PAGE_OK in g.taps
+
+
+def sell_page(context, g, prices, cost=100):
+    """The sell page over g: Cost, each whole cell's price under it, the sale's dialog naming the price of the gift last
+    tapped, and Confirm adding it to the Cost."""
+    state = {"cost": cost, "asked": None}
+    click = g.click
+
+    def tap(x, y):
+        click(x, y)
+        if (x, y) == actions.PAGE_OK:
+            state["asked"] = next(i for i in reversed(g.taps) if isinstance(i, int))
+        elif (x, y) == actions.DIALOG_CONFIRM and state["asked"] is not None:
+            state["cost"] += prices[state["asked"]]
+            state["asked"] = None
+        return DONE
+    context.tasker.controller.post_click.side_effect = tap
+
+    def run_recognition(name, image, override=None):
+        roi = tuple((override or {}).get(name, {}).get("roi", ()))
+        lines = {tuple(actions.DIALOG_TITLE): [("Sell E.G.O Gift", (500, 90, 200, 40))],
+                 tuple(actions.SELL_COST): [(str(state["cost"]), (980, 90, 60, 30))]}.get(roi, [])
+        if roi == tuple(actions.SELL_GRID):
+            spots = [(i, *g.place(i)) for i in range(len(g.icons))]
+            lines = [(str(prices[i]), (x - 13, y - g.at + 40, 26, 20)) for i, x, y in spots
+                     if y - g.at + 60 <= actions.CELL_PAGES["sell"][1] and y - g.at - 48 >= g.top]
+        if roi == tuple(actions.DIALOG_TEXT) and state["asked"] is not None:
+            lines = [(f"Sell [Gift] for {prices[state['asked']]} Cost?", (460, 330, 360, 25))]
+        results = [SimpleNamespace(text=t, box=b) for t, b in lines]
+        return SimpleNamespace(all_results=results, hit=True, best_result=None) if results else None
+    context.run_recognition.side_effect = run_recognition
+    return state
+
+
+def test_a_sale_taps_the_gift_it_picked_far_down_the_grid(context, grid, monkeypatch):
+    # 18 gifts, all Burn (kept) but the last: no fusion takes it, and its 90 makes the wanted 180 with 100 Cost. Its
+    # price shows only once the grid is dragged; it is tapped there and sold, nothing else tapped.
+    g = grid("sell", 18)
+    reader = g.read_cells
+    monkeypatch.setattr(actions, "read_cells", lambda *a, **k: [
+        {**c, "keyword": "Bleed" if g.at_screen(c["x"], c["y"]) == 17 else "Burn"} for c in reader(*a, **k)])
+    state = sell_page(context, g, [50 + i for i in range(17)] + [90])
+    assert actions.Shop.sell(context, {"keyword": "Burn", "reserve_cost": 0, "gift_search": {"gifts": []}},
+                             {"wanted": 180, "sold": False})
+    assert [i for i in g.taps if isinstance(i, int)] == [17] and state["cost"] == 190
+
+
+def test_a_sale_whose_dialog_names_another_price_is_cancelled(context, grid, monkeypatch):
+    # The tap picked another gift than the one meant (the grid moved under it): the dialog's price says so.
+    g = grid("sell", 4)
+    monkeypatch.setattr(actions, "read_cells", lambda *a, **k: [{**c, "keyword": "Bleed"} for c in g.read_cells(*a, **k)])
+    state = sell_page(context, g, [10, 20, 30, 90])
+    monkeypatch.setattr(actions, "cell_at", lambda context, grid, cell: g.place(0))
+    actions.Shop.sell(context, {"keyword": "Burn", "reserve_cost": 0, "gift_search": {"gifts": []}},
+                      {"wanted": 180, "sold": False})
+    assert actions.DIALOG_CANCEL in g.taps and actions.DIALOG_CONFIRM not in g.taps and state["cost"] == 100
