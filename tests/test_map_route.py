@@ -192,7 +192,7 @@ def test_the_faint_link_fallback_on_the_map_frames_of_tests_screens(name, bus):
     """CODING_STANDARDS' sweep of FAINT_LINK: every slot of every column on screen, node or not, as a node with
     no link read onward. Its one false link: MapBoss, from the empty middle slot behind the bus (a purple pack's
     glow, 11.9); read_ahead only reads on from nodes ahead of the bus. Slot centres: actions.SLOT (279, 37)."""
-    v = np.asarray(Image.open(SCREENS / f"{name}.png").convert("RGB")).max(axis=2)
+    v = brightness(name)
     x, y0, extra = (bus[0] + 279) % mr.COLUMN_DX, bus[1] + 37, {}
     while x + mr.COLUMN_DX + 80 <= 1200:
         reads = {(a, b): mr.line_contrast(v, x, y0 + mr.ROW_DY[a], x + mr.COLUMN_DX, y0 + mr.ROW_DY[b]) or 0
@@ -583,3 +583,35 @@ def test_a_hard_floor_that_cannot_pan_is_not_dragged_on(context, monkeypatch):
     actions.RouteMap().run(context, None)
     assert "map: column 2: up battle (from up)" in logs
     assert not [line for line in logs if line.startswith(("map: a drag", "map: dragged"))]
+
+
+def test_a_short_drag_still_brings_every_column_near_before_it_is_joined_on(context, monkeypatch):
+    # Review of #202: a first drag that moves 382 px (the game ate part of it) left column 4 at x 712, read from its
+    # marks; the next drag put it at 202, where it was joined on from, not read again. Every column reads its Cost.
+    monkeypatch.setattr(actions, "map_weights", lambda context: WIDE_WEIGHTS)
+    actions.RUN["floor"] = 1
+    offsets = map_world(context, WIDE, WIDE_LINKS, bus_x=446, width=3200)
+    drags, scroll, node_at, reads = [], actions.scroll, actions.node_at, []
+
+    def short_first(context, x, y, dx, dy):
+        drags.append(dx)
+        scroll(context, x, y, dx + 138 if len(drags) == 2 else dx, dy)  # the first two-column drag: 382 px
+    monkeypatch.setattr(actions, "scroll", short_first)
+    monkeypatch.setattr(actions, "node_at", lambda context, image, cx, cy, marks=None, costs=True: (
+        reads.append(((cx + (offsets[-1] if offsets else 0) - 446 - actions.SLOT[0]) // 255 + 1, costs)), node_at(context, image, cx, cy, marks, costs))[1])
+    actions.RouteMap().run(context, None)
+    assert {c for c, costs in reads if costs} >= set(range(1, 7))
+    assert actions.RUN["map_plan"]["steps"][-2:] == [("up", "shop"), ("mid", "boss")]
+
+
+def test_a_near_read_that_ends_short_keeps_the_columns_read_before(context, monkeypatch):
+    # #202's "never worse": a link unread up close ends the near read at its first column; the columns the first
+    # screen read past it stay, and the floor is read on from them.
+    monkeypatch.setattr(actions, "map_weights", lambda context: WIDE_WEIGHTS)
+    actions.RUN["floor"] = 1
+    map_world(context, WIDE, WIDE_LINKS, bus_x=446, width=2900)
+    read_ahead = actions.RouteMap.read_ahead
+    monkeypatch.setattr(actions.RouteMap, "read_ahead", staticmethod(
+        lambda context, image, x, y, before, first=2: read_ahead(context, image, x, y, before, first)[:1 if first == 3 else None]))
+    actions.RouteMap().run(context, None)
+    assert actions.RUN["map_plan"]["steps"] == [("mid", "battle")] * 3 + [("mid", "event")] * 2 + [("up", "shop"), ("mid", "boss")]

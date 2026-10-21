@@ -1654,13 +1654,13 @@ class RouteMap(CustomAction):
             links = map_route.links({(r, row): map_route.line_contrast(v, x - dx, y + dy[r], x, y + dy[row]) or 0
                                      for r in map_route.ROWS for row in map_route.ROWS if map_route.near(r, row)})
             for row in map_route.ROWS:
-                linked = {src for src, dst in links if dst == row and src in before}
+                linked, ry = {src for src, dst in links if dst == row and src in before}, y + dy[row]
                 if linked:
-                    marks = node_marks(context, image, x, y + dy[row])
-                    column[row] = (node_at(context, image, x, y + dy[row], marks, costs=x <= MAP_NEAR), linked)
+                    marks = node_marks(context, image, x, ry)
+                    column[row] = (node_at(context, image, x, ry, marks, costs=x <= MAP_NEAR), linked)
                     # A node with no mark may still be lit: a red pack's dim "?" (live 2026-10-18) reads 48-60
                     # here; hard mode's dark columns read 0.
-                    lit = lit or bool(marks) or np.percentile(v[y + dy[row] - 45:y + dy[row] + 45, x - 45:x + 45], 90) >= 20
+                    lit = lit or bool(marks) or np.percentile(v[ry - 45:ry + 45, x - 45:x + 45], 90) >= 20
             if not lit:
                 break
             ahead.append(column)
@@ -1675,33 +1675,39 @@ class RouteMap(CustomAction):
         """The floor past the screen's right edge (#202): (ahead read on, two columns a drag; the bus, back home).
 
         Each drag moves the map two columns left, measured on the frames before and after it (map_route.shift).
-        The read goes on (read_ahead) from the last column read left of column 1's place, so the columns that
-        come to the bus's two near the left edge are read again with their Cost (#238) and replace what was read of
-        them from afar, and the links into them join them to the columns read before. The read ends at the boss, a
+        The read goes on (read_ahead) from the last column read whose next two then sit up to MAP_NEAR, so they are
+        read again with their Cost (#238) and replace what was read of them from afar, and the links into them
+        join them to the columns read before; a near read that ends sooner keeps what was read past it. The read ends at the boss, a
         read that ends short of the screen's edge (hard mode's two columns), a drag that moves the map less than
         half a column (its edge) or cannot be measured (what was read stands), or after MAP_DRAGS drags.
         The map is then dragged back as far and the bus found again (find_bus).
         """
         dx, (bx, by) = map_route.COLUMN_DX, bus
         x0, y, moved, back = bx + SLOT[0], by + SLOT[1], 0, 0
+        edge = x0 + len(ahead) * dx + dx + 80 > 1200  # the last column read was the last on screen: more may follow
         for _ in range(MAP_DRAGS):
             columns = [slots, *ahead]
-            if x0 + len(ahead) * dx - moved + dx + 80 <= 1200 or any(t == "boss" for t, _ in columns[-1].values()):
+            if not edge or any(t == "boss" for t, _ in columns[-1].values()):
                 break
             page_guard(context, "MirrorMap", image=image)
-            scroll(context, x0 + 5 * dx // 2, y + 106, -2 * dx, 0)  # from map background, as find_bus
+            scroll(context, x0 + 5 * dx // 2, y + 106, -2 * dx, 0)  # from map background, as find_bus: between columns and rows
             time.sleep(0.5)
             after = screen(context)
-            s = map_route.shift(image.max(axis=2), after.max(axis=2), 2 * dx + 20)
+            s = map_route.shift(image.max(axis=2), after.max(axis=2), 2 * dx + 20)  # the drag, its threshold move and some fling
             back += 2 * dx if s is None else s
-            if s is None or s < dx // 2:
+            # Read on from the last column whose next two come up to MAP_NEAR, typed by their Cost.
+            k = None if s is None else max((i for i in range(len(columns)) if x0 + i * dx - moved - s <= MAP_NEAR - 2 * dx), default=None)
+            if k is None or s < dx // 2:
                 log(f"map: a drag moved the map {'an unknown distance' if s is None else f'{s} px'}; planning on what was read")
                 break
             moved, image = moved + s, after
-            k = max(i for i in range(len(columns)) if x0 + i * dx - moved <= x0 - dx // 2)
             log(f"map: dragged the map {s} px; reading on from column {k + 2}")
             if not (more := RouteMap.read_ahead(context, image, x0 + k * dx - moved, y, columns[k], first=k + 2)):
                 break
+            edge = x0 + (k + len(more)) * dx - moved + dx + 80 > 1200
+            if ahead[k + len(more):] and not any(t == "boss" for t, _ in more[-1].values()):
+                more += ahead[k + len(more):]  # a near read ending short: what was read past it stays, up to an edge
+                edge = True
             ahead = ahead[:k] + more
         if not back:
             return ahead, bus

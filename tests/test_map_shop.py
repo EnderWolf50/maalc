@@ -30,7 +30,12 @@ CASES = {
 }
 # #238, live 2026-10-22 floor 4: column 3's Risky (120) and Abnormality (150), read from afar by their marks as
 # Focused (MapFloor4.png, x 837), then two columns on, where a drag of read_on brings them (MapFloor4Panned.png).
-FRAMES = {"MapFloor4Panned 328 357": "risky", "MapFloor4Panned 328 570": "abno", "MapFloor4 582 357": "battle"}  # frame, node centre
+# CODING_STANDARDS' sweep of MAP_NEAR: every slot up to it on the two frames with the bus at the far left (column 2's
+# empty slots read as events; RouteMap reads only the linked ones). frame, slot centre: the type on screen.
+FRAMES = {"MapFloor4 327 144": "event", "MapFloor4 327 357": "focused", "MapFloor4 327 570": "focused",
+          "MapFloor4 582 144": "event", "MapFloor4 582 357": "battle", "MapFloor4 582 570": "event",
+          "MapFloor4Panned 328 144": "battle", "MapFloor4Panned 328 357": "risky", "MapFloor4Panned 328 570": "abno",
+          "MapFloor4Panned 583 144": "battle", "MapFloor4Panned 583 357": "event", "MapFloor4Panned 583 570": "event"}
 
 
 def child():
