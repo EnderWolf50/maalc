@@ -52,8 +52,8 @@ and 22 are the same scene.
 | `Timekilling Time BokGak`, `Yield My Flesh to Claim Their Bones BokGak` | 2 | re-run suffix (older matcher) | matches | — |
 | `LImBUS Rising Power Supply`, `mBU! Addicting Lust` | 2 | logo prefix (older matcher) | matches | — |
 | `World Lake`, `Abyss Crawling`, `WONr Abyss Crawling` | 3 | two-line title read in reverse order (likely the tilted card; unverified) | matches since #240 (lines also read bottom up) | `lake`, `abyss` |
-| `HellOBus`, `HellBus`, `aHelIOBis` | 7 | stylized title art: S.E.A.'s card says "The Magic Hello Bus" (#246, recordings; the guess Hell's Chicken was wrong) | `HellOBus`, `HellBus` match since #246 (`titles`) | no |
-| `Mirac inDistrict niiaco m uistir` | 1 | stylized title art read mid-swing (#246) | no | no |
+| `HellOBus`, `HellBus`, `aHelIOBis` | 7 | stylized title art: S.E.A.'s card says "The Magic Hello Bus" (#246, recordings; the guess Hell's Chicken was wrong) | `HellOBus`, `HellBus` match since #246 (`titles`); `aHelIOBis` scores 0.75 against `Hello Bus`, under 0.8 (a page without a recording; whether a still card reads so is unverified) | no |
+| `Mirac inDistrict niiaco m uistir` | 1 | stylized title art; the recordings read Miracle in District 20 so only in some mid-swing frames (`Mirac! InDistrict …`), the right name in the others (#246) | no | no |
 | `WalpurgisN The Noon of` | 1 | The Noon of Violet, "Walpurgis Night" above its name (#246, recordings) | matches since #246 (`titles`) | no |
 | `Emotio` | 1 | read before the third card slid in: Emotional Judgment cut, Hell's Chicken missed (#246, recordings) | waits for the cards since #246 | no |
 | `Time` beside `Timekilling Time` | 2 | one title line split into two boxes 81 px apart on a tilted card (#246, recordings) | waits for the cards since #246 | would read it as Timekilling Time |
@@ -66,7 +66,10 @@ and 22 are the same scene.
 the card names read most often across a page's frames, checked by eye where they disagree (S.E.A., The Noon of Violet).
 Baseline: the bot's own log lines for those pages. Swing window: from the first frame that reads every card to 300 ms
 before the pull (1354 frames, 918 ms on average). "All right": every card named right; "pick": the default plan's pick
-has the best true weight. The recordings, frames and scripts stayed on the developer's machine.
+has the best true weight. Per page, [theme-pack-ocr-246.csv](theme-pack-ocr-246.csv) gives the truth, the bot's log
+read, the swing frames and how many were all right (as is, and with `titles`), the pull time and when the still detector
+fired (once / twice in a row; empty: not before the page left), in ms after the page header. The recordings, frames and
+the scripts that read them stayed on the developer's machine: they run on those recordings only.
 
 What the cards do: dealt cards slide in for ~0.6 s and then swing; per-card motion between frames 100 ms apart stays at
 13–30 grey levels until ~2.6 s and drops under 0.4 at 2.7–2.9 s after the deal (two deals of one page: before and after

@@ -1624,8 +1624,8 @@ def test_theme_pack_titles_are_read_once_the_cards_stop_swinging(context, monkey
     # #246, recordings: dealt cards swing for ~2.8 s. Read mid-swing, a card not landed yet was left out and title
     # art was misread. Every read waits for the cards to stop, the refreshed page's too.
     order = []
-    monkeypatch.setattr(actions, "still", lambda context, timeout=2.0, roi=None, share=0.03, runs=1:
-                        order.append(("still", tuple(roi or ()), runs, timeout)) or actions.screen(context))
+    monkeypatch.setattr(actions, "still", lambda context, **kw:
+                        order.append(("still", tuple(kw.get("roi") or ()), kw.get("runs"), kw.get("timeout"))) or actions.screen(context))
     real = actions.pack_titles
     monkeypatch.setattr(actions, "pack_titles", lambda context, image: order.append("read") or real(context, image))
     pack_page(context, monkeypatch, 2, "once", "weight")
@@ -1633,6 +1633,14 @@ def test_theme_pack_titles_are_read_once_the_cards_stop_swinging(context, monkey
     assert len(reads) == 2  # the page and the refreshed page
     assert all(order[i - 1] == ("still", tuple(actions.PACK_CARDS), 2, actions.CARDS_SETTLE) for i in reads)
     assert actions.CARDS_SETTLE >= 3  # the swing's ~2.8 s fits
+
+
+def test_cards_still_moving_after_the_wait_are_read_anyway_and_logged(context, monkeypatch):
+    # #246: a card that never stops (an animated one) costs CARDS_SETTLE, not the floor.
+    monkeypatch.setattr(actions, "still", lambda context, **kw: None)
+    _, lines = pack_page(context, monkeypatch, 2, "none", "weight")
+    assert "floor 2: the cards still moved after 4 s" in lines
+    assert lines[-1] == "floor 2: pull 'Pack 0a' (-5, below the threshold)"
 
 
 @pytest.mark.parametrize(("setting", "refreshes"), [("none", 0), ("once", 1), ("all", 5)])

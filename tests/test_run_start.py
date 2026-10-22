@@ -269,8 +269,8 @@ def test_team_list_move(visible, target, expected):
 
 
 DATA = Path(__file__).resolve().parent.parent / "assets/resource/base/data/theme_packs.yaml"
-DATA_NAMES = list(yaml.safe_load(DATA.read_text(encoding="utf-8"))["packs"])
-DATA_TITLES = yaml.safe_load(DATA.read_text(encoding="utf-8"))["titles"]
+DATA_YAML = yaml.safe_load(DATA.read_text(encoding="utf-8"))
+DATA_NAMES, DATA_TITLES = list(DATA_YAML["packs"]), DATA_YAML["titles"]
 
 
 def test_theme_pack_data_file():

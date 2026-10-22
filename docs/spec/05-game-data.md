@@ -37,7 +37,7 @@
 - 預設主題包方案：和使用者方案同樣的欄位（[04-settings.md](04-settings.md#8-主題包方案theme_pack_plans) 第 8 節）：每包的分數、刷新門檻、沒列出的包的分數、活動卡包的處理方式。開發者每季提供，使用者不能修改。（#11、#19、#240）
   - 1.117.0 的內容（#240，使用者 2026-10-22 決定）：分數沿用 AALC 的預設權重（`assets/config/theme_pack_list.example.yaml`，最後修改的 commit `45d9a58`，AGPL-3.0，見 NOTICE.md）；門檻 0、沒列出的包 0（不用 AALC 的 unknown −5）、活動包照分數。只取每包一個數字，屬於 [ADR 0001](../adr/0001-mit-and-no-agpl-derived-assets.md) 說的參數；檔案與程式不複製。#89 原本「不沿用其他專案的權重表」的規則由這個決定取代。
   - AALC 的鍵是標題的片段（`forgot`、`gambl`、`chick`），比對時找 OCR 文字裡第一個出現的片段（不分大小寫，困難模式是普通表再疊上困難表）。推測原因是卡面標題用了特殊字體，整串名稱不容易 OCR 完整（unverified，AALC 沒有寫原因）。對應的作法是照 AALC 的比對規則，把每個片段套到這一季 94 個完整名稱，資料檔每個分數後面的註解寫出它來自哪個片段。普通與困難兩份表沒有對同一包給不同分數。同一包的備用片段（`nag`、`dev`、`deg`、`shed`、`ssed`、`tread`、`mne`、`b·e`、`xte`、`unch`）分數相同；`compassion`（`Pilgrimage of Compassion`，1.117.0 沒有普通或困難樓層）不收；`Storefront Campout`、`An Anarchy of Colors`、`Creed of Preservation`、`Readvent of Gluttony` 沒有對應的片段，用沒列出的包的分數 0。
-- 標題藝術字（`titles`，#246）：卡面藝術字拼不出包名時，OCR 讀到的字 → 那個包。比對規則和包名相同。1.117.0 有兩個，都從 2026-10-22 的實機錄影確認：S.E.A. 卡面寫 `The Magic Hello Bus`（讀成 `HellOBus`、`HellBus`）；The Noon of Violet 名稱上方有 `Walpurgis Night`，常讀成 `WalpurgisN The Noon of`。每季換資料時，從 log 裡比對不到的標題找新的。
+- 標題藝術字（`titles`，#246）：卡面藝術字拼不出包名時，OCR 讀到的字 → 那個包。比對規則和包名相同，比的是左邊的字（同分時算它的長度），比到後換成右邊的包名。1.117.0 有兩個，都從 2026-10-22 的實機錄影確認：S.E.A. 卡面寫 `The Magic Hello Bus`（讀成 `HellOBus`、`HellBus`）；The Noon of Violet 名稱上方有 `Walpurgis Night`，常讀成 `WalpurgisN The Noon of`。每季換資料時，從 log 裡比對不到的標題找新的。
 - 使用者的主題包方案不在資料檔，存在設定檔，格式見 [04-settings.md](04-settings.md#8-主題包方案theme_pack_plans)。方案裡沒列出的主題包（例如新一季才出現的）用方案的「沒列出的包」分數；空的方案等於全部用這個分數，不報錯。（#11、#19，2026-10-14 定案；#240）
 
 **範例**（主題包名稱取自先前季節，僅示意；「燒傷隊」是使用者在設定檔建立的方案）：
