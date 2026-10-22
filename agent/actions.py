@@ -1232,7 +1232,7 @@ LINKS = {
 BUS_PROBE = 1.0  # s a first tap on the bus waits for the node panel (#130)
 BUS_LINK = 60  # line_contrast of a lit link from the bus; links between other nodes read up to ~50
 MARKS = {  # node -> (mark, roi around the slot centre)
-    "MapNodeBoss": ("boss", (-40, -40, 80, 80)),
+    "MapNodeBoss": ("boss", (-46, -46, 92, 92)),
     "MapNodeFocusedHex": ("ring", (-80, -60, 160, 120)),  # the WARNING ring: Risky's and Abnormality's (#91)
     "MapNodeFocusedRound": ("ring", (-75, -60, 150, 120)),
     "MapNodeCost": ("cost", (-60, -80, 120, 60)),

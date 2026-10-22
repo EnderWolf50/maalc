@@ -356,6 +356,24 @@ def test_only_the_boss_glows_red_enough_for_map_node_boss(node, boss):
     assert (hits >= params["count"]) == boss
 
 
+DARK = Path(__file__).resolve().parent / "data/map_boss_dark.npz"  # 100 x 100 px round the node's centre
+
+
+@pytest.mark.parametrize(("node", "boss"), [
+    # #268, live 2026-10-22 floor 5 hard: the boss next to the bus, its hex black inside, only the ring and glyph red.
+    # 658 px in range over the old 80 x 80 roi, below the 1000 it needed: read as an event.
+    ("boss_dark_f5", True), ("boss_dark_f4", True),
+    ("focused_lit", False),  # a lit Focused, the most red any non-boss of 6 runs' captures had
+])
+def test_a_boss_with_a_black_hex_glows_red_enough_over_the_roi_actions_reads_it_by(node, boss):
+    ox, oy, w, h = actions.MARKS["MapNodeBoss"][1]
+    params, rgb = map_node_boss(), np.load(DARK)[node]
+    assert params["roi"][2:] == [w, h]  # the pipeline's default roi and MARKS' size stay the one
+    cut = rgb[50 + oy:50 + oy + h, 50 + ox:50 + ox + w]
+    hits = ((cut >= params["lower"]) & (cut <= params["upper"])).all(axis=2).sum()
+    assert (hits >= params["count"]) == boss
+
+
 def test_a_node_with_its_badges_under_the_resource_bar_is_no_event_for_showing_none(context):
     # At rest (bus at 446, 248) the top row's badges hide under the resource bar: a fight would show no coin.
     image = np.zeros((720, 1280, 3), np.uint8)

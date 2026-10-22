@@ -75,15 +75,18 @@
         "threshold": 0.8
     },
     // The boss node glows saturated red on every pack seen. So do the red packs' "?" nodes, less:
-    // live 2026-10-18 ("Charm, Wander, Doubt") 388-506 px in range against 1530-1783 for three bosses.
+    // live 2026-10-18 ("Charm, Wander, Doubt") 388-506 px in range over 80 x 80 against 1530-1783 for three bosses.
+    // Live 2026-10-22 (#268, floor 5 hard): a boss whose hex is black inside, only its ring and glyph red, had 658
+    // there; over 92 x 92, which takes in more of the ring, 1157-1299 for the darkest two bosses against 636 at most
+    // for any other node of 6 runs' captures.
     // Default roi: the middle slot's body at rest; red affinity icons sit outside it.
     "MapNodeBoss": {
         "recognition": "ColorMatch",
-        "roi": [685, 245, 80, 80],
+        "roi": [679, 239, 92, 92],
         "method": 4,
         "lower": [170, 0, 0],
         "upper": [255, 70, 70],
-        "count": 1000
+        "count": 900
     },
     // Glyphs take the pack's colour, so they are matched by shape (SIFT works on grey).
     "MapNodeEvent": {
