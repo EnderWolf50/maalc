@@ -47,6 +47,7 @@
     - 卡片根的寬度是 680，prefab 寫 650：徽章格的位置（`0.128 × 寬 + 48`）和標題的最大寬度（485）兩項獨立量測都指向 680；高度照 prefab 的 1069。原因 unverified。
     - 自動縮放的 `lineSpacingMax`（−20）沒套用：套用的話 `Flat-broke Gamblers` 會排成兩行，和截圖不符；不套用的結果（`Flat-broke Gamblers` 一行、`Charm, Wander, Doubt` 兩行、`Nest, Workshop, and / Technology` 兩行）和截圖一致。TMP 實際的規則 unverified。
     - 警告三角（`isShowWarning`）不在卡片 prefab 裡，位置 (0.38, 0.79)–(0.62, 0.92) 是對照兩張截圖估的；徽章比 96 格大約 12 %；`attributeType` 的四個（`CRIMSON`、`AMBER`、`SHAMROCK`、`VIOLET`）圖示和填色是對照截圖認的（火焰、裂岩、葉、荊棘圈），`SCARLET`、`AZURE`、`INDIGO` 的圖示和填色是猜的（unverified）。
+  - 沒對照過：`isShowBaton` 的「Long Battle」疊圖（位置、字級照 prefab，沒有截圖有 Line 系列的包，unverified）。
   - 沒做：頂端吊夾、放大鏡紅章、傾斜；依帳號狀態變的部分：截圖裡的 `1404`、`1412` 實機把 boss 圖畫成黑色剪影（bundle 裡有 `<boss>_silhouette` 精靈圖；什麼條件換成剪影 unverified，推測是帳號還沒見過那個 boss），縮圖畫完整的 boss；卡片左上角的紅點（`[Script]RedDot`，新包提示）也不畫；`iconYPos`（全部 121 個資料項裡只有 6 個有，用途 unverified）；`uiRotation`、`unlockHintTextKey`、`sidePopupUnlockHintTextKey`、`nextImageColor`（地圖節點和鎖定提示用，不影響卡片外觀，unverified）；卡片上的 `Chip`、`rect_level`（執行中才出現的提示，沒有截圖）。
   - 同一份封面的 `1201`／`1203`／`1205`（`AttackType_normal`）和 `1202`／`1204`／`1206`（`AttackType_effective`）靠 boss 圖、攻擊類型圖示和標題分辨。版權屬 © Project Moon（NOTICE.md）。
 - 標題藝術字（`title_art`，#246）：卡面藝術字拼不出包名時，OCR 讀到的字 → 那個包。比對規則和包名相同，比的是左邊的字（同分時算它的長度），比到後換成右邊的包名。1.117.0 有兩個，都從 2026-10-22 的實機錄影確認：S.E.A. 卡面寫 `The Magic Hello Bus`（讀成 `HellOBus`、`HellBus`）；The Noon of Violet 名稱上方有 `Walpurgis Night`，常讀成 `WalpurgisN The Noon of`。每季換資料時，從 log 裡比對不到的標題找新的。

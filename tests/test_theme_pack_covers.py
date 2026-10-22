@@ -8,7 +8,7 @@ import theme_pack_covers as tpc
 
 DATA = Path(__file__).resolve().parent.parent / "assets/resource/base/data"
 COVERS = DATA / "theme_pack_covers"
-WIDTH = 180  # tools/theme_pack_covers.py --width, and the aspect-ratio of `.img` in gui/src/index.css (180 / 322): change all three together
+WIDTH, HEIGHT = 180, 322  # tools/theme_pack_covers.py --width, and the aspect-ratio of `.img` in gui/src/index.css (180 / 322): change all together
 # 94 cards weigh 1.59 MB (16.9 KB each); the static data holds 121 packs, so a season that lists all of them needs about 2.1 MB
 MAX_BYTES = 2_200_000
 
@@ -67,7 +67,7 @@ def test_every_pack_of_the_yaml_has_a_card():
     assert set(index) == set(packs)
     for name, file in index.items():
         assert file == f"{packs[name]}.webp"
-        assert Image.open(COVERS / file).size[0] == WIDTH
+        assert Image.open(COVERS / file).size == (WIDTH, HEIGHT)
 
 
 def test_the_thumbnails_stay_small():

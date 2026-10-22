@@ -116,7 +116,7 @@ def font_files(data: Path, dest: Path) -> dict[str, Path]:
     return {key: need[name] for key, name in FONTS.items()}
 
 
-def covers(cache: Path, wanted: set[str]) -> dict[str, Image.Image]:
+def bundle_sprites(cache: Path, wanted: set[str]) -> dict[str, Image.Image]:
     """Sprite name -> image (a Sprite wins over its Texture2D)."""
     out = {}
     for p in sorted(cache.glob("*/*/__data")):  # UnityCache/<hash of the bundle name>/<content hash>/__data; 1556 bundles, ~2 minutes
@@ -159,7 +159,7 @@ def main():
     parts = game_parts(unpack / PLAYER_DATA)
     fonts = font_files(unpack / PLAYER_DATA, local_dir("unpack", "fonts"))
     wanted = {n for i in packs.values() for n in (ui.get(i, {}).get("packSpriteId"), ui.get(i, {}).get("bossSpriteId")) if n}
-    images = covers(unpack / "raw/UnityCache", wanted | {BATON})
+    images = bundle_sprites(unpack / "raw/UnityCache", wanted | {BATON})
     if BATON not in images:
         raise SystemExit("sprite Baton (the Long Battle overlay) not found in the bundles")
     parts["baton"] = images[BATON]

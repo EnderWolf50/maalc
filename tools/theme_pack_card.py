@@ -119,6 +119,11 @@ def text_height(lines, size: float, glyphs) -> float:
     return ascent + (len(lines) - 1) * line_advance(size) + descent
 
 
+def round_size(size: float) -> float:
+    """TMP keeps the auto-size in steps of 0.05."""
+    return int(size * 20 + 0.5) / 20
+
+
 def fit_title(tokens: list[tuple[str, str]], box_w: float, box_h: float, glyphs):
     """TMP's auto-size: bisect the font size between the largest size that fitted and the smallest that overflowed.
     The prefab's `lineSpacingMax` (-20, tighten the lines before shrinking) is not applied: with it the solver picks
@@ -130,10 +135,10 @@ def fit_title(tokens: list[tuple[str, str]], box_w: float, box_h: float, glyphs)
             lo = size
             if hi - size <= 0.051:
                 break
-            size = int((size + max((hi - size) / 2, 0.05)) * 20 + 0.5) / 20
+            size = round_size(size + max((hi - size) / 2, 0.05))
         else:
             hi = size
-            nxt = max(int((size - max((size - lo) / 2, 0.05)) * 20 + 0.5) / 20, TMP["min"])
+            nxt = max(round_size(size - max((size - lo) / 2, 0.05)), TMP["min"])
             if nxt >= size:
                 break
             size = nxt
@@ -156,12 +161,6 @@ def draw_title(img: Image.Image, tokens, font_path: Path, k: float, rect: tuple[
         for c, color, x in ln:
             for off, fill in (((shift, shift), SHADOW["color"]), ((0.0, 0.0), "#" + color)):
                 d.text(((left + x + off[0]) * k, (base + off[1]) * k), c, font=font, fill=fill, anchor="ls")
-
-
-def inset(frac, margin: float):
-    """The anchor box `frac` shrunk by `margin` (a fraction of its own size) on every side."""
-    dx, dy = margin * (frac[2] - frac[0]), margin * (frac[3] - frac[1])
-    return frac[0] + dx, frac[1] + dy, frac[2] - dx, frac[3] - dy
 
 
 def scaled(frac, factor: float):
