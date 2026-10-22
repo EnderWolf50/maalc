@@ -99,6 +99,18 @@ def test_pick_choice_depending_on_check_text_is_the_fourth_tier():
     assert r.pick_choice(shown(event[::-1]), "Bleed", event=event) == 0
 
 
+def test_pick_choice_a_check_or_followup_without_the_aalc_text_is_the_rest():
+    # 901061 (check, empty hint), 971088 and 901023 (follow-ups whose hint says neither check nor depending on)
+    blank = opt("Open it.", "", "check", ("Sinking", "check_pass"))
+    cost = opt("Gamble.", "Choose to gain or lose Cost", "followup", ("Keywordless", "later_direct"))
+    chance = opt("Reach in.", "Select for a chance to gain a Rupture E.G.O Gift", "followup", ("Rupture", "later_direct"))
+    depending = opt("Wait.", "Gain a Keywordless E.G.O Gift depending on the result of the following choice", "followup", ("Keywordless", "later_direct"))
+    for odd in (blank, cost, chance):
+        event = [odd, depending]
+        assert r.pick_choice(shown(event), "Rupture", event=event) == 1
+        assert r.pick_choice(shown(event[::-1]), "Rupture", event=event) == 0
+
+
 def test_pick_choice_a_random_option_with_a_stated_chance_is_no_question_mark_tier():
     # 971003 (the real entries): "Select for a 50% chance to gain" is not AALC's ??? template; the direct gain wins
     alert = opt("Alert it truthfully.", "Gain a Bleed E.G.O Gift depending on the result of the following choice", "check", ("Bleed", "check_pass"))
