@@ -27,14 +27,15 @@
 
 ### `MirrorMap`：`pre_delay` 0、`post_delay` 0（改）
 
-- 動作 `RouteMap` 第一件事是 `still()`：畫面還在淡入淡出就交回 hub，不點任何東西。所以 `pre_delay` 不是防誤點，只是讓 `still()` 少失敗。有 200 ms 的 `pre_delay` 時，205 次命中只有 3 次動作少於 1 s：2 次是 GET! 視窗蓋在地圖上（`GiftGet` 接著命中），1 次是地圖還沒靜止。沒有 `pre_delay` 時失敗會多一些，每一次的代價是 hub 再看一輪（約 0.3–0.5 s），比省下的 0.2 s 大不了多少；失敗率要高過約 40% 才會打平，而現在是 1.5%。
-- `post_delay`：`enter_node` 點完 Enter 後等節點面板消失，再等地圖淡出（最多 3 s）才回來，所以下一個命中不會是還在淡出的地圖。
+- 動作 `RouteMap` 第一件事是 `still()`（除了 forfeit 路徑：一局結束後點齒輪，沒有 `still()`，原本就是點了檢查對話框、最多重試 3 次，`pre_delay` 0 讓它早 0.2 s 點）：畫面還在淡入淡出就交回 hub，不點任何東西。所以 `pre_delay` 不是防誤點，只是讓 `still()` 少失敗。有 200 ms 的 `pre_delay` 時，205 次命中只有 3 次動作少於 1 s：2 次是 GET! 視窗蓋在地圖上（`GiftGet` 接著命中），只有 1 次是地圖還沒靜止（0.5%）。沒有 `pre_delay` 時失敗會多一些，每一次的代價是 hub 再看一輪（約 0.3–0.5 s），比省下的 0.2 s 大不了多少；地圖未靜止的比例要高過約 40% 才會打平。
+- `post_delay`：`enter_node` 點完 Enter 後等節點面板消失，再等地圖淡出（最多 3 s）才回來，所以下一個命中不會是還在淡出的地圖。不經 `enter_node` 的回傳（`GiftGet` 蓋住、`wait_for_floor`、沒有節點接受點擊）靠 hub 的 `rate_limit` 300 ms 隔開兩次看，這點沒有 log 證據，驗收時看。
 - 預估節省（估計，未實機量）：每局約 34 次（205 ÷ 6）× 0.4 s ≈ 14 s，一局 30 分鐘的 0.7%。
 
 ### `BattleTurn`：兩個都留 200 ms（不改，明確寫出）
 
-- `PlayTurn` 一開頭也有 `still()`，所以 `pre_delay` 看起來同樣可以拿掉；`post_delay` 不行：log 裡 232 次命中有 **223 次** 的下一個畫面是 `BattlePause`（動作結束後 0.26 s），只有 3 次是 `BattleTurn`。`hold_turn` 在回合最初的幾格就因為 Win Rate 標籤還讀得到而回來（`hold_turn` 的註解也這麼說）；這是推論，log 只顯示結果的 223 比 3，回合開始後 `BattlePause` 才出現。0.2 s 的 `post_delay` 剛好讓 hub 的下一次看到的是 `BattlePause`；早 0.2 s 看就可能再次命中 `BattleTurn`，`PlayTurn` 把同一回合算成第二次送出（`same_turn`），又點一次 Win Rate（推論：Win Rate 是開關，第二下會把剛選好的技能清掉）。
-- `pre_delay` 單獨拿掉大概也安全（`still()` 擋住），省約 8 s 一局，但它同樣把動作往回合最初的移動畫面推 0.2 s，我沒有證據量它；這個機制要實機才看得到，所以兩個一起留。寫出 200 讓之後的人看得出是決定，不是漏寫。
+- log：232 次命中，動作中位數 7.41 s（`hold_turn` 撐滿 `HOLD_LIMIT` 6 s 才放開手指，加上 Win Rate 與 START 約 1.4 s），`short` 為 0；下一個畫面 **223 次** 是 `BattlePause`（動作結束後 0.26 s，它再按住一次），3 次是 `BattleTurn`。所以 223 次是 hold 逾時、回合還在播；只有那 3 次是回合很快結束，hub 看到的下一個又是 `BattleTurn`。
+- `PlayTurn` 一開頭也有 `still()`（限定 HUD 條），`pre_delay` 看起來可以拿掉。但沒有任何 log 顯示早 0.2 s 看會發生什麼，尤其是那 3 次的情形：同一回合若被算成第二次送出（`same_turn`），會再點一次 Win Rate（推論：它是開關，第二下清掉剛選好的技能）。省下的是每次命中的 0.4 s（一局約 15 s），沒有證據就不動。
+- 寫出 200 讓之後的人看得出是決定，不是漏寫。要動的話先做實機試：只改 `post_delay` 或只改 `pre_delay` 各跑一局，看 `BattleTurn` 之後的 `turn N: started` 有沒有重複、有沒有 `unchanged after 3 submits`。
 
 ### `Event`：兩個都留 200 ms（不改，明確寫出）
 
@@ -49,6 +50,6 @@
 ## 實機驗收（未做：這次不用模擬器）
 
 - 跑一局 NORMAL（#269 還要一次暫停的局：To Window 後 Resume）。
-- `uv run python tools/action_gaps.py <maafw logs> --nodes MirrorMap` 的 pre、post 應為 0.00；`MirrorMap` 的 short（少於 1 s 的動作）與 `to next` 跟上表比：short 不該明顯增加，`to next` 約少 0.4 s。
+- `uv run python tools/action_gaps.py <maafw logs> --nodes MirrorMap` 的 pre、post 應為 0.00；`MirrorMap` 的 short（少於 1 s 的動作）與 `to next` 跟上表比：short 不該明顯增加，`to next` 約少 0.2 s（`post_delay` 那一半）、`action` 中位數仍約 2.9 s：`pre_delay` 的 0.2 s 本來在動作之前，拿掉後 `still()` 的 0.2 s 仍在，所以每次命中省 0.4 s，而動作時間不變。
 - `MirrorMap` 命中之後沒有同一張圖的重複 `map: take ...`、沒有 `no node took a tap`。
 - `MirrorEntryPaused: screen changed after <秒> s` 在 3.6–3.9 s，沒有 `no change`；`no change` 出現的話，看它之後 hub 是否又命中 `MirrorEntryPaused`（重複點 Enter）。

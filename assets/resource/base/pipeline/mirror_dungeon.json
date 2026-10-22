@@ -445,8 +445,9 @@
     },
     // Right-hand icon column (pack detail, team); the Exploring Floor title is often covered.
     // RouteMap picks and enters the next node, or forfeits the run after a wipe's Accept results.
-    // No delays (#258): RouteMap starts with still(), which returns to the hub while the map fades, and enter_node waits
-    // for the map to fade out; a still-fading map was seen on 3 of 205 live hits with the 200 ms pre_delay.
+    // No delays (#258): RouteMap starts with still(), which returns to the hub while the map fades (1 of 205 live hits with
+    // the 200 ms pre_delay; 2 more handed back at once under a GET! window), and enter_node waits for the map to fade out.
+    // The forfeit path (the run's end) taps the gear with no still() first, as before: it checks its dialog and tries 3 times.
     "MirrorMap": {
         "recognition": "TemplateMatch",
         "roi": [1195, 65, 75, 130],
@@ -483,9 +484,9 @@
     },
     // Waiting for input: the Win Rate label, off or on. It moves half a slot (~40 px) right with every
     // extra skill slot: x 984 with 7 slots, ~740 with 1 (a 1-sinner formation, live 2026-10-16).
-    // Both delays stay at 200 ms (#258): hold_turn returns on the Win Rate label of a turn's first frames, and 223 of 232
-    // live hits were followed by BattlePause 0.26 s after the action, 3 by BattleTurn again; a look 0.2 s sooner could be
-    // the second, a second submit of the same turn that taps Win Rate again.
+    // Both delays stay at 200 ms (#258): the action is 7.4 s (hold_turn lifts the finger after HOLD_LIMIT, 6 s, and 223 of
+    // 232 live hits are followed by BattlePause, which holds again), and no log shows what a look 0.2 s sooner finds: the
+    // 3 hits followed by BattleTurn again would be a second submit of the same turn, a second tap on Win Rate.
     "BattleTurn": {
         "recognition": "TemplateMatch",
         "roi": [700, 515, 580, 60],
