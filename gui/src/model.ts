@@ -230,6 +230,8 @@ const MIGRATIONS: Record<number, (d: Record<string, unknown>) => Record<string, 
 
 const MARK_WEIGHTS: Record<string, number> = { prefer: 5, neutral: 0, avoid: -5 };
 
+export const EVENT_MODES: string[] = P.theme_pack_plans.items.properties.event_packs.enum;
+
 function withTeamDefault(d: Record<string, unknown>, field: Record<string, unknown>) {
   return {
     ...d,

@@ -159,11 +159,25 @@ def rank_packs(cards, names, plan):
     return out
 
 
+def event_slots(floor, titles, event_packs, names):
+    """Per card, whether the plan's event_packs mode applies to it (spec 03 section 6, #240).
+
+    Only floor 5's leftmost card: while an event runs, its pack sits there (the user, 2026-10-22). It counts when it is
+    an event story pack (event_packs) or a pack the data file lacks, as a running event's new pack is; an ended
+    event's pack, or one anywhere else, is one pack among others. A title alike to known packs is not new.
+    """
+    slots = [False] * len(titles)
+    if floor == 5 and titles:
+        first = titles[0]
+        slots[0] = first in event_packs or (first not in names and not title_candidates(first, names))
+    return slots
+
+
 def pick_pack(weights, events, plan):
     """(index of the card to take, whether it meets the plan's threshold) (spec 03 section 6, #240).
 
-    The highest weight, leftmost among equals. events[i] says card i is an event pack: plan "event_packs" "prefer"
-    takes the best event pack shown, threshold or not; "avoid" leaves them out while another card shows.
+    The highest weight, leftmost among equals. events[i] says the plan's event_packs mode applies to card i
+    (event_slots): "prefer" takes it, threshold or not; "avoid" leaves it out while another card shows.
     """
     mode = plan["event_packs"]
     pool = range(len(weights))

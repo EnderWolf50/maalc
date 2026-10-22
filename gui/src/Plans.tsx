@@ -2,12 +2,12 @@
 import { Fragment, useEffect, useState, type DragEvent, type KeyboardEvent, type ReactNode } from "react";
 import { loadThemePacks } from "./api";
 import {
-  GRACES, LEVELS, SINNERS, buyOrder, clickCard, clickEnhance, defaultStarlight, enhanceAll, freeName, gracePrice,
+  EVENT_MODES, GRACES, LEVELS, SINNERS, buyOrder, clickCard, clickEnhance, defaultStarlight, enhanceAll, freeName, gracePrice,
   lanesOf, lineAt, newId, newPackPlan, onFloor, parseThemePacks, selectAll, starlightCost, toggleSinner, weightOf,
   type DeploymentPlan, type Order, type PackPlanValues, type StarlightPlan, type StarlightValues, type ThemePackPlan,
   type ThemePacks,
 } from "./model";
-import { Field, ReorderList, useEditor } from "./ui";
+import { Field, ReorderList, Select, useEditor } from "./ui";
 
 /** The 12 sinners in the game's grid; clicking adds one at the end of the order or leaves it out
  * (spec 04 section 6). Read-only without onChange. */
@@ -281,10 +281,10 @@ function PackPlanEditor({ data, plan, path, onChange }: {
       {gapOrLine(lanes.length)}
       {onChange && <div className="lane add" {...target(drag !== null && drag !== LINE, null)}>＋ {t("packs.newLane")}</div>}
     </div>
-    {/* #240: the data tells event story packs apart, not the event running now, so the GUI keeps "weight" until the
-        user decides; the agent already honours "prefer" and "avoid". */}
     <Field label={t("packs.eventPacks")} path={path && `${path}/event_packs`} note={t("packs.eventPacksNote")}>
-      <span>{tv("event_packs", plan.event_packs)}</span>
+      {onChange
+        ? <Select value={plan.event_packs} options={EVENT_MODES} label={(v) => tv("event_packs", v)} onChange={(v) => set({ event_packs: v })} />
+        : <span>{tv("event_packs", plan.event_packs)}</span>}
     </Field>
   </>);
 }

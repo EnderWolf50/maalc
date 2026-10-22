@@ -111,7 +111,7 @@
           "event_packs": {
             "enum": ["weight", "prefer", "avoid"],
             "default": "weight",
-            "description": "the data file's event packs: by weight, taken when shown, or left out while another pack shows"
+            "description": "floor 5's leftmost card, when an event story pack or a pack the data file lacks: by weight, taken, or left out while another pack shows"
           }
         }
       }

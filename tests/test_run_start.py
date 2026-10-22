@@ -164,6 +164,40 @@ def test_event_packs_by_weight_preferred_or_avoided(mode, weights, events, expec
     assert rs.pick_pack(weights, events, {**PLAN, "event_packs": mode}) == expected
 
 
+EVENTS = {"Hell's Chicken", "Twining Threads"}
+KNOWN = NAMES + ["Hell's Chicken", "Twining Threads", "Repressed Wrath"]
+
+
+@pytest.mark.parametrize(("floor", "titles", "expected"), [
+    (5, ["Twining Threads", "Repressed Wrath", "To be Crushed"], [True, False, False]),  # an event story pack
+    (5, ["Brand New Event Pack", "Repressed Wrath"], [True, False]),  # a pack the data file lacks: a running event's
+    (5, ["Repressed Wrath", "Twining Threads"], [False, False]),  # a plain pack leftmost; an event pack elsewhere
+    (5, ["Line", "Twining Threads"], [False, False]),  # alike to known packs: not new
+    (3, ["Hell's Chicken", "Repressed Wrath"], [False, False]),  # another floor: an ended event's pack, by weight
+    (4, ["Brand New Event Pack", "Repressed Wrath"], [False, False]),
+    (5, [], []),
+])
+def test_only_floor_5s_leftmost_event_or_new_pack_takes_the_event_mode(floor, titles, expected):
+    # #240, the user (2026-10-22): a running event's pack sits on floor 5, leftmost; an ended one is a plain pack.
+    assert rs.event_slots(floor, titles, EVENTS, KNOWN + SHORT) == expected
+
+
+@pytest.mark.parametrize(("floor", "titles", "mode", "expected"), [
+    (5, ["Twining Threads", "Repressed Wrath"], "prefer", (0, True)),  # taken although -5
+    (5, ["Twining Threads", "Repressed Wrath"], "avoid", (1, True)),  # left out: the next best
+    (5, ["Twining Threads", "Repressed Wrath"], "weight", (1, True)),
+    (5, ["Brand New Event Pack", "Repressed Wrath"], "prefer", (0, True)),
+    (5, ["Repressed Wrath", "Twining Threads"], "prefer", (0, True)),  # plain leftmost: by weight, Repressed Wrath 3
+    (3, ["Hell's Chicken", "Repressed Wrath"], "avoid", (0, True)),  # another floor: by weight, Hell's Chicken 4
+])
+def test_the_event_mode_on_floor_5s_leftmost_card(floor, titles, mode, expected):
+    plan = {**PLAN, "event_packs": mode, "weights": {"Twining Threads": -5, "Repressed Wrath": 3, "Hell's Chicken": 4},
+            "unlisted": 0}
+    ranked = rs.rank_packs([[t] for t in titles], KNOWN, plan)
+    events = rs.event_slots(floor, [t for t, _ in ranked], EVENTS, KNOWN)
+    assert rs.pick_pack([w for _, w in ranked], events, plan) == expected
+
+
 @pytest.mark.parametrize(("setting", "used", "expected"), [
     ("all", 0, True), ("all", 3, True),  # every free refresh (#25's rule, the default)
     ("once", 0, True), ("once", 1, False),
