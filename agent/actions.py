@@ -102,6 +102,16 @@ def shows(context, roi, pattern, flags=re.I):
     return lambda image: re.search(pattern, normalize(text(context, image, roi)), flags) is not None
 
 
+def gone(context, spec, image):
+    """A done(image) for until(): the words of spec ({"roi", "expected"}) that matched in image read there no more.
+
+    Their own words, not the whole pattern: ClaimPopup's Rewards Acquired turns into Pass Level Up, which the same
+    pattern matches. Nothing matching in image: nothing to wait for, done at once.
+    """
+    found = re.search(spec["expected"], normalize(text(context, image, spec["roi"])), re.I)
+    return lambda image: found is None or found[0] not in normalize(text(context, image, spec["roi"]))
+
+
 def tap_then(context, x, y, done, timeout=2.0):
     """Tap, then until() done(image) holds: that image, or None after timeout s (#115)."""
     tap(context, x, y, wait=0)
@@ -577,15 +587,22 @@ class Halt(CustomAction):
 class TapUntil(CustomAction):
     """A Click node that waits for the page that follows instead of a post_delay (#115).
 
-    Param: {"target": [x, y, w, h], "next": {"roi": [...], "expected": regex} or a list of them (any), "timeout": s (default 3)}.
+    Param: {"target": [x, y, w, h], "next": {"roi": [...], "expected": regex} or a list of them (any),
+    "gone": {"roi": [...], "expected": regex}, "timeout": s (default 3)}; "next" or "gone" or both, the first to hold ends it.
     The page it leaves may still read like itself for a moment; MirrorHub would act on it twice.
+    gone: the node's own roi and expected (#254), for a page whose next one is not known or reads the same (ClaimPopup).
     """
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         p = json.loads(argv.custom_action_param)
         x, y, w, h = p["target"]
-        pages = [shows(context, n["roi"], n["expected"]) for n in (p["next"] if isinstance(p["next"], list) else [p["next"]])]
-        tap_then(context, x + w // 2, y + h // 2, lambda im: any(page(im) for page in pages), timeout=p.get("timeout", 3))
+        nxt = p.get("next", [])
+        pages = [shows(context, n["roi"], n["expected"]) for n in (nxt if isinstance(nxt, list) else [nxt])]
+        if "gone" in p:
+            pages.append(gone(context, p["gone"], screen(context)))
+        began = time.monotonic()
+        changed = tap_then(context, x + w // 2, y + h // 2, lambda im: any(page(im) for page in pages), timeout=p.get("timeout", 3))
+        log(f"{argv.node_name}: {'screen changed' if changed is not None else 'no change'} after {time.monotonic() - began:.1f} s")
         return True
 
 

@@ -193,17 +193,27 @@
         "recognition": "OCR",
         "roi": [520, 380, 240, 40],
         "expected": "^Resume$",
-        "action": "Click",
-        "post_delay": 3000
+        "action": "Custom",
+        "custom_action": "TapUntil",
+        "post_delay": 0,
+        "custom_action_param": {
+            "target": [520, 380, 240, 40],
+            "gone": {"roi": [520, 380, 240, 40], "expected": "^Resume$"},
+            "timeout": 4
+        }
     },
     // Unclaimed rewards: Enter opens the Exploration Reward window, settled like any other.
     "MirrorEntryUnclaimed": {
         "recognition": "OCR",
         "roi": [990, 140, 230, 35],
         "expected": "Exploration Complete",
-        "action": "Click",
-        "target": [1030, 470, 160, 50],
-        "post_delay": 2000
+        "action": "Custom",
+        "custom_action": "TapUntil",
+        "post_delay": 0,
+        "custom_action_param": {
+            "target": [1030, 470, 160, 50],
+            "next": {"roi": [500, 100, 280, 45], "expected": "Exploration Reward"}
+        }
     },
     // Also pops up by itself on the entry page while rewards are pending (captures/253).
     // Settle: goal check, weekly-bonus toggles, Claim or GiveUpRewards (spec 03 section 14).
@@ -220,9 +230,13 @@
         "recognition": "OCR",
         "roi": [500, 225, 280, 50],
         "expected": "Rewards Acquired|Pass Level Up",
-        "action": "Click",
-        "target": [575, 455, 130, 35],
-        "post_delay": 2000
+        "action": "Custom",
+        "custom_action": "TapUntil",
+        "post_delay": 0,
+        "custom_action_param": {
+            "target": [575, 455, 130, 35],
+            "gone": {"roi": [500, 225, 280, 50], "expected": "Rewards Acquired|Pass Level Up"}
+        }
     },
     "MirrorEnterDialog": {
         "recognition": "OCR",
@@ -346,18 +360,26 @@
         "recognition": "OCR",
         "roi": [440, 320, 400, 35],
         "expected": "Continue without choosing",
-        "action": "Click",
-        "target": [455, 448, 165, 37],
-        "post_delay": 1500
+        "action": "Custom",
+        "custom_action": "TapUntil",
+        "post_delay": 0,
+        "custom_action_param": {
+            "target": [455, 448, 165, 37],
+            "gone": {"roi": [440, 320, 400, 35], "expected": "Continue without choosing"}
+        }
     },
     // Select with picks left; Confirm would hand out random trials (1.117.0, also after a NORMAL boss).
     "GiftRefuseDialog": {
         "recognition": "OCR",
         "roi": [440, 280, 400, 35],
         "expected": "remaining E.G.O Gift choices",
-        "action": "Click",
-        "target": [415, 476, 200, 35],
-        "post_delay": 1500
+        "action": "Custom",
+        "custom_action": "TapUntil",
+        "post_delay": 0,
+        "custom_action_param": {
+            "target": [415, 476, 200, 35],
+            "gone": {"roi": [440, 280, 400, 35], "expected": "remaining E.G.O Gift choices"}
+        }
     },
     "RewardCard": {
         "recognition": "OCR",
@@ -397,8 +419,13 @@
         "recognition": "OCR",
         "roi": [600, 440, 80, 35],
         "expected": "^Continue$",
-        "action": "Click",
-        "post_delay": 1500
+        "action": "Custom",
+        "custom_action": "TapUntil",
+        "post_delay": 0,
+        "custom_action_param": {
+            "target": [600, 440, 80, 35],
+            "gone": {"roi": [600, 440, 80, 35], "expected": "^Continue$"}
+        }
     },
     // Node selection panel: right-hand Enter. Before MirrorMap: the panel hides part of its icons.
     "MapNodePanel": {
@@ -433,7 +460,8 @@
         "expected": "VICTORY",
         "action": "Custom",
         "custom_action": "Victory",
-        "post_delay": 500
+        "pre_delay": 0,
+        "post_delay": 0
     },
     "Formation": {
         "recognition": "OCR",
@@ -479,25 +507,38 @@
         "recognition": "OCR",
         "roi": [990, 100, 200, 70],
         "expected": "^Victory$",
-        "action": "Click",
-        "target": [1050, 550, 150, 45],
-        "post_delay": 2000
+        "action": "Custom",
+        "custom_action": "TapUntil",
+        "post_delay": 0,
+        "custom_action_param": {
+            "target": [1050, 550, 150, 45],
+            "gone": {"roi": [990, 100, 200, 70], "expected": "^Victory$"}
+        }
     },
     // After a forfeit (captures/244, 245); Claim Rewards only opens the Exploration Reward window.
     "DefeatScreen": {
         "recognition": "OCR",
         "roi": [1000, 135, 200, 70],
         "expected": "^Defeat$",
-        "action": "Click",
-        "target": [1052, 548, 150, 40],
-        "post_delay": 2000
+        "action": "Custom",
+        "custom_action": "TapUntil",
+        "post_delay": 0,
+        "custom_action_param": {
+            "target": [1052, 548, 150, 40],
+            "gone": {"roi": [1000, 135, 200, 70], "expected": "^Defeat$"}
+        }
     },
     "ExplorationComplete": {
         "recognition": "OCR",
         "roi": [130, 90, 210, 70],
         "expected": "Complete",
-        "action": "Click",
-        "target": [1060, 575, 150, 45],
-        "post_delay": 2000
+        "action": "Custom",
+        "custom_action": "TapUntil",
+        "post_delay": 0,
+        "custom_action_param": {
+            "target": [1060, 575, 150, 45],
+            "next": {"roi": [500, 100, 280, 45], "expected": "Exploration Reward"},
+            "gone": {"roi": [130, 90, 210, 70], "expected": "Complete"}
+        }
     }
 }
