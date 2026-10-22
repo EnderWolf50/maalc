@@ -11,7 +11,7 @@ dependencies = [
 ]
 
 [dependency-groups]
-dev = ["numpy", "pillow", "pytest", "ruff"]
+dev = ["numpy", "opencc-python-reimplemented", "pillow", "pytest", "ruff"]
 # Probe and live-test scripts: `uv run --group probe python <script>`.
 probe = ["numpy", "opencv-python-headless", "pillow", "psutil"]
 unpack = [

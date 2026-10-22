@@ -33,7 +33,6 @@ def test_the_chinese_text_credits_llc_under_its_non_commercial_license_and_not_t
 
 
 def test_the_data_matches_the_llc_release_when_it_is_downloaded():
-    pytest.importorskip("opencc")
     import llc_text
     from local_dir import local_dir
     path = local_dir("llc") / f"{DATA['graces']['zh_release']}.zip"
@@ -45,8 +44,19 @@ def test_the_data_matches_the_llc_release_when_it_is_downloaded():
 
 
 def test_traditional_conversion_keeps_the_game_s_words():
-    pytest.importorskip("opencc")
     import llc_text
     assert llc_text.to_traditional("生锈的指针 通过阶层 镜像迷宫 刷新") == "生鏽的指針 通過階層 鏡像迷宮 刷新"
     assert llc_text.effect_line("<color=#5bffde>初始经费</color> +{0}(最多{1})", {"value": 150, "value2": 100}, {}) == "初始經費 +150(最多100)"
     assert llc_text.effect_line("获得{2}层 {1}", {"referenceData": {"buffKeyword": "K", "stack": 2, "turn": 0}}, {"K": "守护"}) == "獲得2層 守護"
+
+
+def test_the_graces_match_the_llc_release_and_the_client_values_when_both_are_there():
+    import llc_text
+    from local_dir import local_dir
+    zip_path = local_dir("llc") / f"{DATA['graces']['zh_release']}.zip"
+    static = local_dir("unpack") / "static/Assets/Resources_moved/StaticData/static-data/mirrordungeon-start-buffs/mirrordungeon-start-buffs-08.json"
+    if not (zip_path.is_file() and static.is_file()):
+        pytest.skip("release zip or unpacked client data missing")
+    titles, effects = llc_text.grace_texts(zipfile.ZipFile(zip_path), json.loads(static.read_text(encoding="utf-8-sig")))
+    got = {g["zh"]: g["effects"] for g in DATA["graces"]["graces"]}
+    assert got == {titles[i]: effects[i] for i in titles}

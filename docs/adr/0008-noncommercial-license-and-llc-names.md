@@ -5,7 +5,7 @@
 LLC 採 CC BY-NC-SA 4.0，非商用且相同方式共享，與 MIT 不相容，所以：
 
 - 程式碼改用 [PolyForm Noncommercial 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0)（`LICENSE`）。
-- 取自 LLC 的資料檔（`gift_search.json`、`gift_recipes.json`、`gui/src/graces.json`）標 CC BY-NC-SA 4.0，NOTICE.md 寫明作者、release、授權連結與修改（OpenCC s2twp 簡轉繁，加四個用詞修正）。
+- 取自 LLC 的資料檔（`gift_search.json`、`gift_recipes.json`、`gui/src/graces.json`）標 CC BY-NC-SA 4.0，NOTICE.md 寫明作者、release、授權連結與修改（OpenCC s2twp 簡轉繁，加五個用詞修正）。
 - 中文名稱由 `tools/llc_text.py` 從 LLC 的 release 產生，檔頭記下所用 release；不再使用灰機 wiki。
 - 不沿用 AGPL 專案程式碼、圖片與模型的規則（[ADR 0001](0001-mit-and-no-agpl-derived-assets.md)）不變：授權改為非商用並沒有讓複製 AGPL 程式碼變得可行。
 

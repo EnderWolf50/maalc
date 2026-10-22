@@ -28,7 +28,7 @@ LANG = "LimbusCompany_Data/Lang/LLC_zh-CN/"
 URL = "https://github.com/LocalizeLimbusCompany/LocalizeLimbusCompany/releases/download/{0}/LimbusLocalize_{0}.zip"
 LEVELS = {1: "base", 2: "plus", 3: "plus2"}
 _S2TWP = opencc.OpenCC("s2twp")
-FIXES = {"指標": "指針", "重新整理": "刷新", "映象": "鏡像", "透過階層": "通過階層"}  # s2twp's computing terms where the game means something else
+FIXES = {"指標": "指針", "重新整理": "刷新", "映象": "鏡像", "透過階層": "通過階層", "松肉": "鬆肉"}  # s2twp's computing terms where the game means something else
 
 
 def to_traditional(text):
@@ -38,17 +38,20 @@ def to_traditional(text):
     return text
 
 
+FIXES_NOTE = ", ".join(f"{a}->{b}" for a, b in FIXES.items())
 NOTE_ZH = ("Chinese names: the Localize Limbus Company release's LLC_zh-CN/EGOgift_*.json by gift id (Simplified Chinese), "
-           "converted with OpenCC s2twp, then 指標->指針, 重新整理->刷新, 映象->鏡像, 透過階層->通過階層. Chinese names licensed CC BY-NC-SA 4.0 (see NOTICE.md).")
+           "converted with OpenCC s2twp, then " + FIXES_NOTE + ". Chinese names licensed CC BY-NC-SA 4.0 (see NOTICE.md).")
 NOTE_GRACES = ("Chinese names and effect text: the Localize Limbus Company release (Simplified Chinese): MirrorDungeonUI_5 titles and "
-               "DungeonStartBuffs_MD7 templates filled with the client's start-buff values, converted with OpenCC s2twp, then 指標->指針, 重新整理->刷新, 映象->鏡像, 透過階層->通過階層. English "
+               "DungeonStartBuffs_MD7 templates filled with the client's start-buff values, converted with OpenCC s2twp, then " + FIXES_NOTE + ". English "
                "names: the game's starlight page. Licensed CC BY-NC-SA 4.0 (see NOTICE.md).")
 
 
 def release_zip(release):
     path = local_dir("llc") / f"{release}.zip"
     if not path.is_file():
-        urllib.request.urlretrieve(URL.format(release), path)
+        part = path.with_suffix(".part")
+        urllib.request.urlretrieve(URL.format(release), part)
+        part.replace(path)
     return zipfile.ZipFile(path)
 
 
@@ -90,7 +93,7 @@ def grace_texts(z, static):
         names[b["baseId"]] = to_traditional(titles[b["localizeId"]])
         lines = []
         for e in b["effects"]:
-            key = e.get("customLocalizeTextId", e["type"]).removesuffix("_TEXT_HIGHLIGHT")
+            key = e.get("customLocalizeTextId", e["type"])
             lines += effect_line(templates[key], e, keywords).splitlines()
         out.setdefault(b["baseId"], {})[LEVELS[b["level"]]] = lines
     return names, out
@@ -136,9 +139,11 @@ def main():
                          "mirrordungeon-start-buffs-08.json").read_text(encoding="utf-8-sig"))
     titles, effects = grace_texts(z, static)
     graces = json.loads(GRACES.read_text(encoding="utf-8"))
-    assert len(graces["graces"]) == len(titles)
-    for g, base_id in zip(graces["graces"], sorted(titles)):
-        g["zh"], g["effects"] = titles[base_id], effects[base_id]
+    english = json.loads((local_dir("unpack") / "raw/Localize/en/EN_MirrorDungeonUI_5.json").read_text(encoding="utf-8-sig"))["dataList"]
+    base_ids = {x["content"]: i for i in titles for x in english if x["id"] == f"mirror_dungeon_5_buffs_title_{i}"}  # grace en name -> base id
+    assert sorted(base_ids) == sorted(g["en"] for g in graces["graces"]), "graces.json and the client disagree on the grace names"
+    for g in graces["graces"]:
+        g["zh"], g["effects"] = titles[base_ids[g["en"]]], effects[base_ids[g["en"]]]
     GRACES.write_text(json.dumps(retitled(graces, args.release, NOTE_GRACES), ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(f"release {args.release}: {len(names)} gift names, {len(titles)} graces")
 

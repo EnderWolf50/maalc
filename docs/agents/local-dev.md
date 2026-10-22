@@ -35,6 +35,7 @@ Everything that belongs to one machine lives in `.local/` of the **main checkout
 | `.local/archive/` | evidence of every live test and experiment, with `INDEX.md` (one row per folder) |
 | `.local/queue/<resource>/` | the tickets of `tools/live/queue.py` (`bench`, `emulator`) |
 | `.local/unpack/` | unpacked game data |
+| `.local/llc/` | the Localize Limbus Company release zips `tools/llc_text.py` downloads |
 | `.local/evidence/` | privacy-mask templates and `masks.json`; they can show the account, so they stay out of git |
 | `.local/probe/` | the complete migrated probe: loose files, scripts, environments, caches, captures and experiments, preserving their relative paths |
 
@@ -50,4 +51,4 @@ Before applying, `uv run python tools/live/queue.py status` must show no holder 
 
 `tools/live/dialogs.py` lists the confirm-style dialog strings of `.local/unpack/`, to diff against the pipeline's known dialogs; run it before an unattended run.
 
-Look in `.local/unpack/` first (gift tables, prices, theme packs, every dialog string, under `raw/` and `static/`; its `NOTES.md` says what is where). The Simplified Chinese strings come from the Localize project, https://github.com/LocalizeLimbusCompany: clone it next to the other data, no Taiwan-usage rewrite needed. Reach for a wiki only when neither has it.
+Look in `.local/unpack/` first (gift tables, prices, theme packs, every dialog string, under `raw/` and `static/`; its `NOTES.md` says what is where). The Simplified Chinese strings come from the Localize project, https://github.com/LocalizeLimbusCompany: clone it next to the other data to read them. The Chinese names the data files ship come from its release zip through `tools/llc_text.py`, which converts them to Traditional (OpenCC `s2twp` plus a few fixes). Reach for a wiki only when neither has it.

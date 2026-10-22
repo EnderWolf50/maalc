@@ -1,5 +1,5 @@
 {
-  "note": "Chinese names and effect text: the Localize Limbus Company release (Simplified Chinese): MirrorDungeonUI_5 titles and DungeonStartBuffs_MD7 templates filled with the client's start-buff values, converted with OpenCC s2twp, then 指標->指針, 重新整理->刷新, 映象->鏡像, 透過階層->通過階層. English names: the game's starlight page. Licensed CC BY-NC-SA 4.0 (see NOTICE.md).",
+  "note": "Chinese names and effect text: the Localize Limbus Company release (Simplified Chinese): MirrorDungeonUI_5 titles and DungeonStartBuffs_MD7 templates filled with the client's start-buff values, converted with OpenCC s2twp, then 指標->指針, 重新整理->刷新, 映象->鏡像, 透過階層->通過階層, 松肉->鬆肉. English names: the game's starlight page. Licensed CC BY-NC-SA 4.0 (see NOTICE.md).",
   "zh_source": "https://github.com/LocalizeLimbusCompany/LocalizeLimbusCompany",
   "zh_release": "2026101602",
   "license": "CC BY-NC-SA 4.0",
@@ -25,7 +25,7 @@
           "初始經費 +250",
           "主題卡包出現數量 +1",
           "商店裡展出的飾品數量 +1",
-          "可免費進行商店普通刷新2次"
+          "可免費進行商店普通刷新 2次"
         ]
       }
     },
@@ -127,7 +127,7 @@
           "特殊商店出現機率 +10%"
         ],
         "plus2": [
-          "可免費進行商店關鍵詞刷新 2次",
+          "可免費進行商店關鍵詞刷新2次",
           "進入第1層時，隨機獲得3件1級飾品",
           "特殊商店出現機率 +25%"
         ]
