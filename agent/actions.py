@@ -1097,11 +1097,11 @@ class GiftSearch(CustomAction):
 
 
 def theme_pack_plan(settings, team):
-    """(the team's plan, every pack name to match, the event packs): the data file's default or the user's (spec 04 section 8)."""
+    """(the team's plan, the data file's packs, its event packs): the default plan or the user's (spec 04 section 8)."""
     data = yaml.safe_load((RESOURCE / "base" / "data" / "theme_packs.yaml").read_text(encoding="utf-8"))
     ref = team["theme_pack_plan"]
     plan = data["default_plan"] if ref == "default" else next(p for p in settings["theme_pack_plans"] if p["id"] == ref)
-    return plan, list(data["packs"]) + list(plan["weights"]), set(data["event_packs"])
+    return plan, list(data["packs"]), set(data["event_packs"])
 
 
 def pack_titles(context, image):
@@ -1144,7 +1144,8 @@ class PickThemePack(CustomAction):
         if not self.set_difficulty(context, floor, want):
             return stuck(f"floor {floor} difficulty did not switch to {'HARD' if want else 'NORMAL'}")
 
-        plan, names, event_packs = theme_pack_plan(run["settings"], run["team"])
+        plan, packs, event_packs = theme_pack_plan(run["settings"], run["team"])
+        names = packs + list(plan["weights"])  # a weighed pack the data file dropped still matches
         setting = run["settings"]["run"]["theme_pack_refresh"]
         seen = None
         for used in range(10):  # ponytail: stop when a refresh changes nothing; read `Refresh n/m` if that misfires
@@ -1152,11 +1153,11 @@ class PickThemePack(CustomAction):
             if not cards:
                 return stuck("no theme pack titles read")
             ranked = run_start.rank_packs([lines for _, lines in cards], names, plan)
-            events = run_start.event_slots(floor, [t for t, _ in ranked], event_packs, names)
+            slots = run_start.event_slots(floor, [t for t, _ in ranked], event_packs, packs)
             log(f"floor {floor} packs, threshold {plan['threshold']}: "
-                + ", ".join(f"{t} ({w}{', event' if e else ''})" for (t, w), e in zip(ranked, events)))
+                + ", ".join(f"{t} ({w}{', event' if e else ''})" for (t, w), e in zip(ranked, slots)))
             titles = [t for t, _ in ranked]
-            i, meets = run_start.pick_pack([w for _, w in ranked], events, plan)
+            i, meets = run_start.pick_pack([w for _, w in ranked], slots, plan)
             if not run_start.refresh_wanted(meets, setting, used) or titles == seen:
                 break
             seen = titles

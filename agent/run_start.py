@@ -131,13 +131,15 @@ def title_candidates(text, names, min_ratio=0.8):
 def match_card(lines, names):
     """(pack name or None, title text) for a card's OCR lines, top to bottom.
 
-    Logo fragments read above the title are dropped by trying the lines from each start.
+    Logo fragments read above the title are dropped by trying the lines from each start. Failing that, the lines are
+    tried bottom up: live, a tilted card's two title boxes sorted "World", "Lake" (#240).
     """
-    for i in range(len(lines)):
-        title = " ".join(lines[i:])
-        name = match_title(title, names)
-        if name:
-            return name, title
+    for order in (lines, lines[::-1]):
+        for i in range(len(order)):
+            title = " ".join(order[i:])
+            name = match_title(title, names)
+            if name:
+                return name, title
     return None, " ".join(lines)
 
 
@@ -159,32 +161,33 @@ def rank_packs(cards, names, plan):
     return out
 
 
-def event_slots(floor, titles, event_packs, names):
+def event_slots(floor, titles, event_packs, packs):
     """Per card, whether the plan's event_packs mode applies to it (spec 03 section 6, #240).
 
     Only floor 5's leftmost card: while an event runs, its pack sits there (the user, 2026-10-22). It counts when it is
     an event story pack (event_packs) or a pack the data file lacks, as a running event's new pack is; an ended
-    event's pack, or one anywhere else, is one pack among others. A title alike to known packs is not new.
+    event's pack, or one anywhere else, is one pack among others. packs: the data file's; a title alike to one is not
+    new. Leftmost is the leftmost card whose title was read, and a title misread past matching counts as new.
     """
     slots = [False] * len(titles)
     if floor == 5 and titles:
         first = titles[0]
-        slots[0] = first in event_packs or (first not in names and not title_candidates(first, names))
+        slots[0] = first in event_packs or (first not in packs and not title_candidates(first, packs))
     return slots
 
 
-def pick_pack(weights, events, plan):
+def pick_pack(weights, slots, plan):
     """(index of the card to take, whether it meets the plan's threshold) (spec 03 section 6, #240).
 
-    The highest weight, leftmost among equals. events[i] says the plan's event_packs mode applies to card i
+    The highest weight, leftmost among equals. slots[i] says the plan's event_packs mode applies to card i
     (event_slots): "prefer" takes it, threshold or not; "avoid" leaves it out while another card shows.
     """
     mode = plan["event_packs"]
     pool = range(len(weights))
-    if mode != "weight" and any(events) and not all(events):
-        pool = [i for i in pool if events[i] == (mode == "prefer")]
+    if mode != "weight" and any(slots) and not all(slots):
+        pool = [i for i in pool if slots[i] == (mode == "prefer")]
     i = max(pool, key=lambda i: (weights[i], -i))
-    return i, (mode == "prefer" and events[i]) or weights[i] >= plan["threshold"]
+    return i, (mode == "prefer" and slots[i]) or weights[i] >= plan["threshold"]
 
 
 def refresh_wanted(meets, setting, used):

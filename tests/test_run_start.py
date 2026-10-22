@@ -115,6 +115,15 @@ def test_a_title_is_found_despite_ocr_slips(text, expected):
     assert rs.match_title(text, SHORT) == expected
 
 
+@pytest.mark.parametrize(("lines", "expected"), [
+    (["World", "Lake"], "Lake World"),  # live logs: a tilted card's two title boxes sorted bottom word first
+    (["WONr", "Abyss", "Crawling"], "Crawling Abyss"),  # with a logo fragment
+    (["Lake", "World"], "Lake World"),
+])
+def test_a_title_read_in_reverse_order_still_matches(lines, expected):
+    assert rs.match_card(lines, DATA_NAMES)[0] == expected
+
+
 def test_every_pack_of_the_season_matches_itself_and_with_a_letter_lost():
     # The data file's own names: each one read back, and read with one letter dropped, finds itself.
     packs = yaml.safe_load(DATA.read_text(encoding="utf-8"))["packs"]
@@ -165,7 +174,7 @@ def test_event_packs_by_weight_preferred_or_avoided(mode, weights, events, expec
 
 
 EVENTS = {"Hell's Chicken", "Twining Threads"}
-KNOWN = NAMES + ["Hell's Chicken", "Twining Threads", "Repressed Wrath"]
+KNOWN = NAMES + ["Hell's Chicken", "Twining Threads", "Repressed Wrath", "Crawling Abyss"]
 
 
 @pytest.mark.parametrize(("floor", "titles", "expected"), [
@@ -173,6 +182,7 @@ KNOWN = NAMES + ["Hell's Chicken", "Twining Threads", "Repressed Wrath"]
     (5, ["Brand New Event Pack", "Repressed Wrath"], [True, False]),  # a pack the data file lacks: a running event's
     (5, ["Repressed Wrath", "Twining Threads"], [False, False]),  # a plain pack leftmost; an event pack elsewhere
     (5, ["Line", "Twining Threads"], [False, False]),  # alike to known packs: not new
+    (5, ["Crawling Abyss", "Twining Threads"], [False, False]),  # a plain pack, as rank_packs names a reversed read
     (3, ["Hell's Chicken", "Repressed Wrath"], [False, False]),  # another floor: an ended event's pack, by weight
     (4, ["Brand New Event Pack", "Repressed Wrath"], [False, False]),
     (5, [], []),
@@ -189,11 +199,12 @@ def test_only_floor_5s_leftmost_event_or_new_pack_takes_the_event_mode(floor, ti
     (5, ["Brand New Event Pack", "Repressed Wrath"], "prefer", (0, True)),
     (5, ["Repressed Wrath", "Twining Threads"], "prefer", (0, True)),  # plain leftmost: by weight, Repressed Wrath 3
     (3, ["Hell's Chicken", "Repressed Wrath"], "avoid", (0, True)),  # another floor: by weight, Hell's Chicken 4
+    (5, ["Abyss Crawling", "Repressed Wrath"], "prefer", (1, True)),  # a plain pack read in reverse: not taken
 ])
 def test_the_event_mode_on_floor_5s_leftmost_card(floor, titles, mode, expected):
     plan = {**PLAN, "event_packs": mode, "weights": {"Twining Threads": -5, "Repressed Wrath": 3, "Hell's Chicken": 4},
             "unlisted": 0}
-    ranked = rs.rank_packs([[t] for t in titles], KNOWN, plan)
+    ranked = rs.rank_packs([t.split(" ", 1) for t in titles], KNOWN, plan)  # two OCR boxes per title
     events = rs.event_slots(floor, [t for t, _ in ranked], EVENTS, KNOWN)
     assert rs.pick_pack([w for _, w in ranked], events, plan) == expected
 
@@ -235,6 +246,7 @@ def test_team_list_move(visible, target, expected):
 
 
 DATA = Path(__file__).resolve().parent.parent / "assets/resource/base/data/theme_packs.yaml"
+DATA_NAMES = list(yaml.safe_load(DATA.read_text(encoding="utf-8"))["packs"])
 
 
 def test_theme_pack_data_file():

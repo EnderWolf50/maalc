@@ -101,6 +101,7 @@ export interface ThemePackPlan extends PackPlanValues { id: string; name: string
  * the event packs and the locked default plan. */
 export interface ThemePacks { packs: Record<string, string>; event_packs: string[]; default_plan: PackPlanValues }
 
+export const EVENT_MODES: string[] = P.theme_pack_plans.items.properties.event_packs.enum;
 export const newPackPlan = (): PackPlanValues => ({ weights: {}, threshold: 0, unlisted: 0, event_packs: "weight" });
 
 export function parseThemePacks(text: string): ThemePacks {
@@ -229,8 +230,6 @@ const MIGRATIONS: Record<number, (d: Record<string, unknown>) => Record<string, 
 };
 
 const MARK_WEIGHTS: Record<string, number> = { prefer: 5, neutral: 0, avoid: -5 };
-
-export const EVENT_MODES: string[] = P.theme_pack_plans.items.properties.event_packs.enum;
 
 function withTeamDefault(d: Record<string, unknown>, field: Record<string, unknown>) {
   return {
