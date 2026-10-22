@@ -1326,25 +1326,45 @@ def node_at(context, image, cx, cy, marks=None, costs=True):
         return "unknown"
     if not (costs and "cost" in marks and "boss" not in marks):
         return map_route.node_type(set(marks))
-    cost = coin_number(context, image, marks["cost"].box)
-    table = map_data()["node_costs"]["hard" if is_hard(context) else "normal"] if cost is not None else {}
-    kind = map_route.node_type(set(marks), next((k for c, k in table.items() if cost in (c, c % 100)), None))
+    table = map_data()["node_costs"]["hard" if is_hard(context) else "normal"]
+    cost = coin_cost(context, image, marks["cost"].box, table)
+    kind = map_route.node_type(set(marks), table.get(cost))
     log(f"map: node at {cx}, {cy} reads Cost {cost}: {kind}")
     return kind
 
 
-def coin_number(context, image, box):
-    """The number printed beside a map node's Cost coin (box), or None when none reads (#91).
+# The digits of a Cost number cut out of its badge: (brightness floor, saturation ceiling), tried in turn (#257).
+COIN_MASKS = ((100, 120), (120, 110))
 
-    Offline on 13 nodes of 7 captures: OCR of the bare badge read 75 as 25 or 5; of the bright,
-    near-white digits cut out (as order_marks does) every battle's 75 or 85 right, dim ones too.
-    A 3-digit number may lose its first digit (375 read 75, 120 read 20): node_at matches the last two digits.
-    A single digit is a part read: None.
+
+def coin_cost(context, image, box, table):
+    """The key of table (a difficulty's node_costs) the number beside a Cost coin (box) reads as; None if none does.
+
+    #257: a number the first mask cuts out badly (an 8 read as a 5) is read again with the second; one that matches
+    no key on either (OCR noise, a dim badge) stays None and the marks decide. A 3-digit number may still lose its
+    first digit (375 read 75, 120 read 20): matched on the last two digits too.
+    """
+    for bright, sat in COIN_MASKS:
+        cost = coin_number(context, image, box, bright, sat)
+        if hit := next((c for c in table if cost in (c, c % 100)), None):
+            return hit
+    return None
+
+
+def coin_number(context, image, box, bright, sat):
+    """The number printed beside a map node's Cost coin (box), or None when fewer than two digits read (#91).
+
+    The digits are cream, bright and barely saturated over any theme pack's backdrop: cut out (as order_marks does)
+    and read as one line. #257, live 2026-10-22: a 100 read None and a 120 read 20. The crop began 8 px inside the
+    coin's right edge, where the stem of a 3-digit number's 1 starts, and a brightness floor of 170 left the digits'
+    shaded lower half ragged (a 7 read as a 1). It now begins 16 px in and has a white margin (the OCR reads a glyph
+    on the crop's edge badly). A single digit is a part read: None.
     """
     x, y, w, _ = box
-    part = image[max(0, y + 8):y + 38, max(0, x + w - 8):x + w + 32]
-    mask = (part.max(axis=2) > 170) & (saturation(part) < 90)
+    part = image[max(0, y + 8):y + 38, max(0, x + w - 16):x + w + 32]
+    mask = (part.max(axis=2) > bright) & (saturation(part) < sat)
     plain = np.where(mask[..., None], 0, 255).astype(np.uint8).repeat(3, axis=2)
+    plain = np.pad(plain, ((6, 6), (6, 6), (0, 0)), constant_values=255)
     found = re.sub(r"\D", "", text(context, plain, [0, 0, plain.shape[1], plain.shape[0]], only_rec=True))
     return int(found) if len(found) >= 2 else None
 
@@ -1356,7 +1376,7 @@ def map_data():
 def is_hard(context):
     """Whether this floor is on hard: set_difficulty's floor_hard, else the run's difficulty."""
     run = current_run(context)
-    return run.get("floor_hard", run["difficulty"] == "hard")
+    return run.get("floor_hard", run.get("difficulty") == "hard")
 
 
 def map_weights(context):
