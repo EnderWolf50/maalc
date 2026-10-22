@@ -1691,6 +1691,8 @@ class RouteMap(CustomAction):
         """
         dx, dy = map_route.COLUMN_DX, map_route.ROW_DY
         v, ahead = image.max(axis=2), []
+        if any(t == "boss" for t, _ in before.values()):  # #279: its red glow reads 8-12.4 towards the next column, as a faint link
+            return ahead
         while x + dx + 80 <= 1200:  # MapNodeFocusedHex reads 80 px either side; buttons from x 1205
             x += dx
             column, lit = {}, False

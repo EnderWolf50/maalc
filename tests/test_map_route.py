@@ -226,6 +226,18 @@ def test_the_faint_links_between_events_of_a_diamond_read(context):
     assert score == 10 and path[1] == path[2] and path[3] == "mid"  # focused, two events in one row, focused
 
 
+def test_nothing_is_read_past_the_boss(context):
+    # #279, live 2026-10-22 HARD floor 1 (campaign1): the boss in column 1, the bus beside it. Its red glow reads 12.4
+    # towards the empty slot behind it (FAINT_LINK 8 to LINE_CONTRAST 15) and p90 38 there: a phantom event was read past the boss.
+    # tests/data/map_boss_glow.npz: that frame's per-pixel brightness, y 56-614, x 250-699; the boss's centre at 327, 357.
+    v = np.zeros((720, 1280), np.uint8)
+    v[56:615, 250:700] = np.load(Path(__file__).resolve().parent / "data/map_boss_glow.npz")["v"]
+    x, y = 327, 357
+    assert mr.links({("mid", r): mr.line_contrast(v, x, y, x + mr.COLUMN_DX, y + dy) or 0 for r, dy in mr.ROW_DY.items()}) == {("mid", "mid")}  # the glow reads as a link
+    context.run_recognition.side_effect = lambda name, image, override=None: None
+    assert actions.RouteMap.read_ahead(context, v[..., None].repeat(3, axis=2), x, y, {"mid": ("boss", None)}) == []
+
+
 def test_steps_are_rows_seen_from_the_node_before():
     assert mr.steps(["down", "mid", "mid"], ["battle", "battle", "event"]) == [("up", "battle"), ("mid", "event")]
     assert mr.steps(["mid"], ["abno"]) == []
