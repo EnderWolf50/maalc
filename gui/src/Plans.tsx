@@ -2,7 +2,7 @@
 import { Fragment, useEffect, useState, type DragEvent, type KeyboardEvent, type ReactNode } from "react";
 import { loadThemePacks } from "./api";
 import {
-  EVENT_MODES, GRACES, LEVELS, SINNERS, buyOrder, clickCard, clickEnhance, defaultStarlight, enhanceAll, floorLabel, freeName,
+  EVENT_MODES, GRACES, LEVELS, SINNERS, buyOrder, clickCard, clickEnhance, defaultStarlight, enhanceAll, floorBadges, freeName,
   gracePrice,
   lanesOf, lineAt, newId, newPackPlan, onFloor, parseThemePacks, selectAll, starlightCost, toggleSinner, weightOf,
   type DeploymentPlan, type Order, type PackPlanValues, type StarlightPlan, type StarlightValues, type ThemePackPlan,
@@ -189,7 +189,6 @@ function PackPlanEditor({ data, plan, path, onChange }: {
   const [floor, setFloor] = useState(0);
   const [images, setImages] = useState(false);
   const [drag, setDrag] = useState<string | null>(null);
-  const floorText = { normal: t("packs.floorsNormal"), hard: t("packs.floorsHard"), sep: t("packs.floorSep"), join: " · " };
   const lanes = lanesOf(plan);
   const line = lineAt(lanes, plan.threshold);
   const extra = Object.keys(plan.weights).filter((n) => !(n in data.packs)); // weighed, gone from the data file
@@ -224,13 +223,15 @@ function PackPlanEditor({ data, plan, path, onChange }: {
   // threshold is that lane's weight.
   const toGap = (g: number) => set({ threshold: lanes[g - 1] });
   const chip = (name: string) => {
-    const floors = data.packs[name] === undefined ? undefined : floorLabel(data.packs[name], floorText);
+    const floors = data.packs[name] === undefined ? undefined : floorBadges(data.packs[name], t("packs.floorSep"));
     return (
       <span key={name} className={"pk" + (path && bad(`${path}/weights/${name}`) ? " bad" : "")}
         {...dragged(name)} {...clickable(name, weightOf(plan, name))}>
         {images && (coverOf(name) ? <img className="img" src={coverOf(name)} alt="" draggable={false} /> : <span className="img" aria-hidden />)}
         <span className="nm">{name}</span>
-        <small>{floors ?? <em>{t("packNotInData")}</em>}</small>
+        {floors
+          ? floors.map((f) => <small key={+f.hard} className={"fl" + (f.hard ? " hard" : "")}>{f.text}</small>)
+          : <small><em>{t("packNotInData")}</em></small>}
       </span>
     );
   };
@@ -259,6 +260,9 @@ function PackPlanEditor({ data, plan, path, onChange }: {
       {chips([false, true].map(String), String(images), (v) => t(v === "true" ? "packs.images" : "packs.names"), (v) => setImages(v === "true"))}
     </div>
     {onChange && <p className="muted">{t("packs.hint")}</p>}
+    <p className="muted floorkey">
+      <small className="fl">{t("packs.floorsNormal")}</small><small className="fl hard">{t("packs.floorsHard")}</small>{t("packs.floorsKey")}
+    </p>
     <div className={"lanes" + (images ? " images" : "") + (drag === LINE ? " moving" : "")}>
       {line === 0 && lineBar}
       {lanes.map((w, i) => (
