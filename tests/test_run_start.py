@@ -134,9 +134,9 @@ def test_a_title_read_in_reverse_order_still_matches(lines, expected):
     (["WalpurgisN The Noon of"], "The Noon of Violet"), (["Walpurgis Night", "The Noon of Violet"], "The Noon of Violet"),
     (["Walpurgis", "Hatred and 'Despair"], "Walpurgis Night: Hatred and Despair"),  # the other Walpurgis pack stays
 ])
-def test_title_art_finds_its_pack_through_the_data_files_titles(lines, expected):
+def test_title_art_finds_its_pack_through_the_data_file(lines, expected):
     plan = {"weights": {}, "unlisted": 0}
-    assert rs.rank_packs([lines], DATA_NAMES, plan, DATA_TITLES)[0][0] == expected
+    assert rs.rank_packs([lines], DATA_NAMES, plan, DATA_TITLE_ART)[0][0] == expected
 
 
 def test_every_pack_of_the_season_matches_itself_and_with_a_letter_lost():
@@ -270,7 +270,7 @@ def test_team_list_move(visible, target, expected):
 
 DATA = Path(__file__).resolve().parent.parent / "assets/resource/base/data/theme_packs.yaml"
 DATA_YAML = yaml.safe_load(DATA.read_text(encoding="utf-8"))
-DATA_NAMES, DATA_TITLES = list(DATA_YAML["packs"]), DATA_YAML["titles"]
+DATA_NAMES, DATA_TITLE_ART = list(DATA_YAML["packs"]), DATA_YAML["title_art"]
 
 
 def test_theme_pack_data_file():
@@ -286,4 +286,4 @@ def test_theme_pack_data_file():
     assert len(packs) >= 90
     assert set(data["event_packs"]) <= set(packs) and len(data["event_packs"]) == 15
     # #246: each title art read names a pack of the season.
-    assert data["titles"] and set(data["titles"].values()) <= set(packs)
+    assert data["title_art"] and set(data["title_art"].values()) <= set(packs)

@@ -125,7 +125,7 @@ event_packs:
 # What OCR reads off a card whose title art does not spell its pack's name -> that pack (#246). Matched like a name
 # (spec 05 section 2). Read off the 2026-10-22 recordings: S.E.A.'s art says "The Magic Hello Bus" (live reads
 # HellOBus, HellBus); The Noon of Violet's tops its name with "Walpurgis Night" (live: WalpurgisN The Noon of).
-titles:
+title_art:
   Hello Bus: S.E.A.
   Walpurgis Night The Noon of: The Noon of Violet
 

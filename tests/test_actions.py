@@ -1600,7 +1600,10 @@ def pack_page(context, monkeypatch, floor, setting, mode):
     actions.RUN.update(settings={"run": {"theme_pack_refresh": setting}}, team={"hard_from_floor": 0}, difficulty=None)
     plan = {"weights": {}, "threshold": 0, "unlisted": -5, "event_packs": mode}
     monkeypatch.setattr(actions, "theme_pack_plan", lambda settings, team: (plan, [], set(), {}))
-    monkeypatch.setattr(actions.run_start, "rank_packs", lambda cards, names, plan, titles: [(c[0], -5) for c in cards])
+    def rank_packs(cards, names, plan, title_art):
+        assert title_art == {}  # every page, a refreshed one too, gets the data file's title art (#246)
+        return [(c[0], -5) for c in cards]
+    monkeypatch.setattr(actions.run_start, "rank_packs", rank_packs)
     lines = []
     monkeypatch.setattr(actions, "log", lines.append)
     taps = []
@@ -1639,7 +1642,7 @@ def test_cards_still_moving_after_the_wait_are_read_anyway_and_logged(context, m
     # #246: a card that never stops (an animated one) costs CARDS_SETTLE, not the floor.
     monkeypatch.setattr(actions, "still", lambda context, **kw: None)
     _, lines = pack_page(context, monkeypatch, 2, "none", "weight")
-    assert "floor 2: the cards still moved after 4 s" in lines
+    assert f"floor 2: the cards still moved after {actions.CARDS_SETTLE:g} s" in lines
     assert lines[-1] == "floor 2: pull 'Pack 0a' (-5, below the threshold)"
 
 

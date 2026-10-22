@@ -1106,7 +1106,7 @@ def theme_pack_plan(settings, team):
     data = yaml.safe_load((RESOURCE / "base" / "data" / "theme_packs.yaml").read_text(encoding="utf-8"))
     ref = team["theme_pack_plan"]
     plan = data["default_plan"] if ref == "default" else next(p for p in settings["theme_pack_plans"] if p["id"] == ref)
-    return plan, list(data["packs"]), set(data["event_packs"]), data["titles"]
+    return plan, list(data["packs"]), set(data["event_packs"]), data["title_art"]
 
 
 def pack_titles(context, image):
@@ -1149,7 +1149,7 @@ class PickThemePack(CustomAction):
         if not self.set_difficulty(context, floor, want):
             return stuck(f"floor {floor} difficulty did not switch to {'HARD' if want else 'NORMAL'}")
 
-        plan, packs, event_packs, titles = theme_pack_plan(run["settings"], run["team"])
+        plan, packs, event_packs, title_art = theme_pack_plan(run["settings"], run["team"])
         names = packs + list(plan["weights"])  # a weighed pack the data file dropped still matches
         setting = run["settings"]["run"]["theme_pack_refresh"]
         seen = None
@@ -1160,7 +1160,7 @@ class PickThemePack(CustomAction):
             cards = pack_titles(context, page_guard(context, "ThemePack", settled))
             if not cards:
                 return stuck("no theme pack titles read")
-            ranked = run_start.rank_packs([lines for _, lines in cards], names, plan, titles)
+            ranked = run_start.rank_packs([lines for _, lines in cards], names, plan, title_art)
             slots = run_start.event_slots(floor, [t for t, _ in ranked], event_packs, packs)
             log(f"floor {floor} packs, threshold {plan['threshold']}: "
                 + ", ".join(f"{t} ({w}{', event' if e else ''})" for (t, w), e in zip(ranked, slots)))
