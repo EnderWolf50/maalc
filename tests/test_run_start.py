@@ -205,8 +205,8 @@ def test_the_event_mode_on_floor_5s_leftmost_card(floor, titles, mode, expected)
     plan = {**PLAN, "event_packs": mode, "weights": {"Twining Threads": -5, "Repressed Wrath": 3, "Hell's Chicken": 4},
             "unlisted": 0}
     ranked = rs.rank_packs([t.split(" ", 1) for t in titles], KNOWN, plan)  # two OCR boxes per title
-    events = rs.event_slots(floor, [t for t, _ in ranked], EVENTS, KNOWN)
-    assert rs.pick_pack([w for _, w in ranked], events, plan) == expected
+    slots = rs.event_slots(floor, [t for t, _ in ranked], EVENTS, KNOWN)
+    assert rs.pick_pack([w for _, w in ranked], slots, plan) == expected
 
 
 @pytest.mark.parametrize(("setting", "used", "expected"), [
