@@ -1710,7 +1710,7 @@ class RouteMap(CustomAction):
                     # A node with no mark may still be lit: a red pack's dim "?" (live 2026-10-18) reads 48-60
                     # here; hard mode's dark columns read 0.
                     lit = lit or bool(marks) or np.percentile(v[ry - 45:ry + 45, x - 45:x + 45], 90) >= 20
-            if not lit:
+            if not lit and not (column and any(t == "shop" for t, _ in before.values())):  # #279: the boss after a shop may read dark
                 break
             n = first + len(ahead)
             glow = [row for row, (t, _) in column.items() if t == "boss"]

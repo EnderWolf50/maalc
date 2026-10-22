@@ -648,12 +648,12 @@ def test_a_near_read_that_ends_short_keeps_the_columns_read_before(context, monk
     assert {c for c, costs in reads if costs} >= set(range(1, 7))
 
 
-def shop_world(context, monkeypatch, nodes, links=(((1, "mid"), (2, "mid")),)):
-    """A fresh floor 1 map, the bus at the far left, run once; the log lines it wrote."""
+def shop_world(context, monkeypatch, nodes, links=(((1, "mid"), (2, "mid")),), **run):
+    """A fresh floor 1 map, the bus at the far left, run once; the log lines it wrote. run: more of RUN's keys."""
     monkeypatch.setattr(actions, "map_weights", lambda context: {**NORMAL, "shop": 0, "boss": 0})
     logs = []
     monkeypatch.setattr(actions, "log", logs.append)
-    actions.RUN["floor"] = 1
+    actions.RUN.update(floor=1, **run)
     map_world(context, nodes, list(links), bus_x=actions.BUS_HOME[0])
     actions.RouteMap().run(context, None)
     return logs
@@ -690,38 +690,20 @@ def test_nothing_is_read_past_the_column_after_the_shop(context, monkeypatch):
 def test_left_the_shop_the_only_node_is_the_boss(context, monkeypatch):
     # #279: HARD, the page handled last was the shop: the bus's one slot is the boss, however dark it reads.
     # ADR 0003: the fact comes from the screen handled (Shop.run), memory only; a restarted agent reads the colour.
-    actions.RUN.update(after_shop=True, floor_hard=True)
-    monkeypatch.setattr(actions, "map_weights", lambda context: {**NORMAL, "boss": 0})
-    logs = []
-    monkeypatch.setattr(actions, "log", logs.append)
-    actions.RUN["floor"] = 1
-    map_world(context, {(1, "mid"): set()}, [], bus_x=actions.BUS_HOME[0])
-    actions.RouteMap().run(context, None)
+    logs = shop_world(context, monkeypatch, {(1, "mid"): set()}, links=(), after_shop=True, floor_hard=True)
     assert "map: left the shop; column 1 mid read as something else than the boss" in logs
     assert any(line.startswith("map: path mid boss") for line in logs)
     assert "after_shop" not in actions.RUN  # entering the node ends it
 
 
 def test_left_the_shop_a_boss_read_by_its_glow_is_logged_as_agreeing(context, monkeypatch):
-    actions.RUN.update(after_shop=True, floor_hard=True)
-    monkeypatch.setattr(actions, "map_weights", lambda context: {**NORMAL, "boss": 0})
-    logs = []
-    monkeypatch.setattr(actions, "log", logs.append)
-    actions.RUN["floor"] = 1
-    map_world(context, {(1, "mid"): {"boss"}}, [], bus_x=actions.BUS_HOME[0])
-    actions.RouteMap().run(context, None)
+    logs = shop_world(context, monkeypatch, {(1, "mid"): {"boss"}}, links=(), after_shop=True, floor_hard=True)
     assert "map: left the shop; column 1 is the boss" in logs
 
 
 def test_without_the_shop_behind_it_a_dark_boss_in_the_first_column_reads_as_it_looks(context, monkeypatch):
     # No page memory (a restart, ADR 0003): the colour alone decides, the old behaviour.
-    actions.RUN["floor_hard"] = True
-    monkeypatch.setattr(actions, "map_weights", lambda context: {**NORMAL, "boss": 0})
-    logs = []
-    monkeypatch.setattr(actions, "log", logs.append)
-    actions.RUN["floor"] = 1
-    map_world(context, {(1, "mid"): set()}, [], bus_x=actions.BUS_HOME[0])
-    actions.RouteMap().run(context, None)
+    logs = shop_world(context, monkeypatch, {(1, "mid"): set()}, links=(), floor_hard=True)
     assert any(line.startswith("map: path mid event") for line in logs)
 
 
@@ -741,3 +723,16 @@ def test_a_boss_told_by_the_shop_is_not_typed_again_by_its_cost(context):
     column = {"mid": ("boss", {"mid"}), "up": ("abno", {"mid"})}
     actions.RouteMap.retype(context, np.zeros((720, 1280, 3), np.uint8), column, 400, 357, 3)
     assert column == {"mid": ("boss", {"mid"}), "up": ("event", {"mid"})}
+
+
+@pytest.mark.parametrize(("before", "expected"), [
+    ({"mid": ("shop", 1)}, [{"mid": ("boss", {"mid"})}]),  # a boss as dark as hard mode's dark columns: still the boss
+    ({"mid": ("event", 1)}, []),  # no shop before it: a dark column ends the read as ever
+])
+def test_a_dark_column_after_a_shop_is_still_the_boss(context, before, expected):
+    # #279: no mark and no light (p90 under 20) around it, only the link into it: `lit` alone would end the read there.
+    context.run_recognition.side_effect = lambda name, image, override=None: None
+    x, y = 50 + actions.SLOT[0], 320 + actions.SLOT[1]
+    image = np.zeros((720, 1280, 3), np.uint8)
+    image[y - 2:y + 3, x:x + mr.COLUMN_DX] = 200  # the link, 5 px wide
+    assert actions.RouteMap.read_ahead(context, image, x, y, before) == expected
