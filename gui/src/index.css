@@ -227,8 +227,7 @@ details.panel > * + * { margin-top: 12px; }
 }
 .pk[draggable="true"] { cursor: grab; }
 .pk small { color: var(--muted); font-size: 10.5px; }
-.pk small em { font-style: normal; color: var(--accent); margin-left: 6px; }
-.pk.event { border-color: #c47f00; }
+.pk small em { font-style: normal; color: var(--accent); }
 .pk.unlisted { border-style: dashed; color: var(--muted); }
 .pk.bad { border-color: var(--bad); outline: 1px solid var(--bad); }
 .lanes.images .pk { width: 96px; text-align: center; padding: 4px; }

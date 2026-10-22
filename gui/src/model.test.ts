@@ -2,7 +2,7 @@
 import { expect, test } from "vitest";
 import {
   SEARCH_GIFTS, SEARCH_TABS, buyOrder, clickCard, clickEnhance, enhanceAll, gracePrice, lanesOf, lineAt, newPackPlan, newSettings,
-  onFloor, selectAll, starlightCost, toggleGift, toggleSinner, weightOf, type StarlightValues,
+  floorLabel, onFloor, selectAll, starlightCost, toggleGift, toggleSinner, weightOf, type StarlightValues,
 } from "./model";
 
 test("a pack shows on the floors the data file gives it", () => {
@@ -11,6 +11,16 @@ test("a pack shows on the floors the data file gives it", () => {
   expect(onFloor("N12 H1", "hard", 2)).toBe(false);
   expect(onFloor("H345", "normal", 0)).toBe(false); // HARD only
   expect(onFloor("H345", "", 4)).toBe(true);
+});
+
+test("a pack's floors read in words: ranges for runs, the rest listed, only the difficulties it has", () => {
+  const zh = { normal: "普通 {f} 層", hard: "困難 {f} 層", sep: "、", join: " · " };
+  expect(floorLabel("N12 H1", zh)).toBe("普通 1–2 層 · 困難 1 層");
+  expect(floorLabel("H13", zh)).toBe("困難 1、3 層");
+  expect(floorLabel("H345", zh)).toBe("困難 3–5 層");
+  expect(floorLabel("N124 H5", zh)).toBe("普通 1–2、4 層 · 困難 5 層");
+  expect(floorLabel("N5", zh)).toBe("普通 5 層");
+  expect(floorLabel("N45 H34", { normal: "NORMAL {f}", hard: "HARD {f}", sep: ", ", join: " · " })).toBe("NORMAL 4–5 · HARD 3–4");
 });
 
 test("lanes are the weights in use and 0, highest first; the line sits under the lanes at or over the threshold", () => {

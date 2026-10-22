@@ -2,7 +2,8 @@
 import { Fragment, useEffect, useState, type DragEvent, type KeyboardEvent, type ReactNode } from "react";
 import { loadThemePacks } from "./api";
 import {
-  EVENT_MODES, GRACES, LEVELS, SINNERS, buyOrder, clickCard, clickEnhance, defaultStarlight, enhanceAll, freeName, gracePrice,
+  EVENT_MODES, GRACES, LEVELS, SINNERS, buyOrder, clickCard, clickEnhance, defaultStarlight, enhanceAll, floorLabel, freeName,
+  gracePrice,
   lanesOf, lineAt, newId, newPackPlan, onFloor, parseThemePacks, selectAll, starlightCost, toggleSinner, weightOf,
   type DeploymentPlan, type Order, type PackPlanValues, type StarlightPlan, type StarlightValues, type ThemePackPlan,
   type ThemePacks,
@@ -188,6 +189,7 @@ function PackPlanEditor({ data, plan, path, onChange }: {
   const [floor, setFloor] = useState(0);
   const [images, setImages] = useState(false);
   const [drag, setDrag] = useState<string | null>(null);
+  const floorText = { normal: t("packs.floorsNormal"), hard: t("packs.floorsHard"), sep: t("packs.floorSep"), join: " · " };
   const lanes = lanesOf(plan);
   const line = lineAt(lanes, plan.threshold);
   const extra = Object.keys(plan.weights).filter((n) => !(n in data.packs)); // weighed, gone from the data file
@@ -222,14 +224,13 @@ function PackPlanEditor({ data, plan, path, onChange }: {
   // threshold is that lane's weight.
   const toGap = (g: number) => set({ threshold: lanes[g - 1] });
   const chip = (name: string) => {
-    const floors = data.packs[name];
-    const event = data.event_packs.includes(name);
+    const floors = data.packs[name] === undefined ? undefined : floorLabel(data.packs[name], floorText);
     return (
-      <span key={name} className={"pk" + (event ? " event" : "") + (path && bad(`${path}/weights/${name}`) ? " bad" : "")}
+      <span key={name} className={"pk" + (path && bad(`${path}/weights/${name}`) ? " bad" : "")}
         title={floors} {...dragged(name)} {...clickable(name, weightOf(plan, name))}>
         {images && (coverOf(name) ? <img className="img" src={coverOf(name)} alt="" draggable={false} /> : <span className="img" aria-hidden />)}
         <span className="nm">{name}</span>
-        <small>{floors}{event && <em>{t("packs.event")}</em>}{floors === undefined && <em>{t("packNotInData")}</em>}</small>
+        <small>{floors ?? <em>{t("packNotInData")}</em>}</small>
       </span>
     );
   };

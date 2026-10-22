@@ -116,6 +116,24 @@ export function onFloor(floors: string, difficulty: "" | "normal" | "hard", floo
   return sets.some((f) => floor === 0 || f!.includes(String(floor)));
 }
 
+/** A pack's floors ("N12 H1") in words, per text: each difficulty it has, its runs of floors as ranges ("1–2"), the
+ * rest joined by text.sep ("1–2、4"). */
+export function floorLabel(floors: string, text: { normal: string; hard: string; sep: string; join: string }) {
+  const runs = (digits: string) => {
+    const groups: number[][] = [];
+    for (const n of [...digits].map(Number).sort((a, b) => a - b)) {
+      const last = groups[groups.length - 1];
+      if (last && n === last[last.length - 1] + 1) last.push(n);
+      else groups.push([n]);
+    }
+    return groups.map((g) => (g.length > 1 ? `${g[0]}–${g[g.length - 1]}` : `${g[0]}`)).join(text.sep);
+  };
+  return (["N", "H"] as const).flatMap((d) => {
+    const digits = floors.match(new RegExp(d + "(\\d+)"))?.[1];
+    return digits ? [(d === "N" ? text.normal : text.hard).replace("{f}", runs(digits))] : [];
+  }).join(text.join);
+}
+
 /** A pack's weight: its own, else the plan's unlisted weight (the agent's rule, spec 03 section 6). */
 export const weightOf = (plan: PackPlanValues, name: string) => plan.weights[name] ?? plan.unlisted;
 
