@@ -47,7 +47,7 @@
     - 卡片根的寬度是 680，prefab 寫 650：徽章格的位置（`0.128 × 寬 + 48`）和標題的最大寬度（485）兩項獨立量測都指向 680；高度照 prefab 的 1069。原因 unverified。
     - 自動縮放的 `lineSpacingMax`（−20）沒套用：套用的話 `Flat-broke Gamblers` 會排成兩行，和截圖不符；不套用的結果（`Flat-broke Gamblers` 一行、`Charm, Wander, Doubt` 兩行、`Nest, Workshop, and / Technology` 兩行）和截圖一致。TMP 實際的規則 unverified。
     - 警告三角（`isShowWarning`）不在卡片 prefab 裡，位置 (0.38, 0.79)–(0.62, 0.92) 是對照兩張截圖估的；徽章比 96 格大約 12 %；`attributeType` 的四個（`CRIMSON`、`AMBER`、`SHAMROCK`、`VIOLET`）圖示和填色是對照截圖認的（火焰、裂岩、葉、荊棘圈），`SCARLET`、`AZURE`、`INDIGO` 的圖示和填色是猜的（unverified）。
-  - 沒做：頂端吊夾、放大鏡紅章、傾斜；`iconYPos`（全部 121 個資料項裡只有 6 個有，用途 unverified）；`uiRotation`、`unlockHintTextKey`、`sidePopupUnlockHintTextKey`、`nextImageColor`（地圖節點和鎖定提示用，不影響卡片外觀，unverified）；卡片上的 `Chip`、`rect_level`（執行中才出現的提示，沒有截圖）。
+  - 沒做：頂端吊夾、放大鏡紅章、傾斜；依帳號狀態變的部分：截圖裡的 `1404`、`1412` 實機把 boss 圖畫成黑色剪影（bundle 裡有 `<boss>_silhouette` 精靈圖；什麼條件換成剪影 unverified，推測是帳號還沒見過那個 boss），縮圖畫完整的 boss；卡片左上角的紅點（`[Script]RedDot`，新包提示）也不畫；`iconYPos`（全部 121 個資料項裡只有 6 個有，用途 unverified）；`uiRotation`、`unlockHintTextKey`、`sidePopupUnlockHintTextKey`、`nextImageColor`（地圖節點和鎖定提示用，不影響卡片外觀，unverified）；卡片上的 `Chip`、`rect_level`（執行中才出現的提示，沒有截圖）。
   - 同一份封面的 `1201`／`1203`／`1205`（`AttackType_normal`）和 `1202`／`1204`／`1206`（`AttackType_effective`）靠 boss 圖、攻擊類型圖示和標題分辨。版權屬 © Project Moon（NOTICE.md）。
 - 使用者的主題包方案不在資料檔，存在設定檔，格式見 [04-settings.md](04-settings.md#8-主題包方案theme_pack_plans)。方案裡沒列出的主題包（例如新一季才出現的）用方案的「沒列出的包」分數；空的方案等於全部用這個分數，不報錯。（#11、#19，2026-10-14 定案；#240）
 
