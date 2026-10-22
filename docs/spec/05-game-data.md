@@ -41,7 +41,7 @@
   - 封面：`card_pack` 精靈圖，`mirrordungeon-theme-floor` 的 `uiConfigs.packSpriteId` 就是精靈圖名稱，分散在卡包、鏡牢、活動 bundle；隱藏包 `The B.E.`（`HiddenTheme`）在 `skinpreview-new-pack`。
   - boss 圖（`bossSpriteId`）、logo（`isHideLogo` 為真的包不畫）、警告三角（`isShowWarning`）、攻擊類型圖示（`attackType`）、卡片外框：外框與圖示在 APK 玩家資料（`sharedassets2/1`），按名稱抽並檢查尺寸，客戶端改編號時工具會報錯。
   - 標題：英文在地化的 `name`（有 `specialName` 的用它，例如 `1119` 的雙色字），顏色取 `uiConfigs.textColor`，字型 Mikodacs（OFL 1.1，從玩家資料讀，不進 repo），依遊戲的自動縮放排成一行或兩行。這樣 `1201`／`1203`／`1205` 共用同一張封面（`AttackType_normal`）的 6 包也分得出來（標題、boss 圖不同）。
-  - 沒做：頂端吊夾、放大鏡紅章、傾斜（實機卡片會左右搖擺）、屬性（`attributeType`）圖示（沒找到圖示精靈圖，unverified）、`isShowBaton`、`iconYPos`。警告三角與攻擊圖示的位置、顏色是對照實機截圖估的，不是 prefab 的值。
+  - 沒做：頂端吊夾、放大鏡紅章、傾斜（實機卡片會左右搖擺）、屬性（`attributeType`）圖示（沒找到圖示精靈圖，unverified）、`isShowBaton`、`iconYPos`。警告三角與攻擊圖示的位置、顏色是對照實機截圖估的，不是 prefab 的值。`1119` 的標題用 `specialName` 的 `<color>` 標籤分段上單色（粉、藍）；遊戲是否另外疊漸層沒查（unverified）。長標題的換行可能和遊戲不同（`Charm, Wander, Doubt` 這裡排成一行較小的字，實機是兩行；原因 unverified）。
   - 版權屬 © Project Moon（NOTICE.md）。
 - 使用者的主題包方案不在資料檔，存在設定檔，格式見 [04-settings.md](04-settings.md#8-主題包方案theme_pack_plans)。方案裡沒列出的主題包（例如新一季才出現的）用方案的「沒列出的包」分數；空的方案等於全部用這個分數，不報錯。（#11、#19，2026-10-14 定案；#240）
 

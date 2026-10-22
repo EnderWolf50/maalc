@@ -8,7 +8,7 @@ import theme_pack_covers as tpc
 
 DATA = Path(__file__).resolve().parent.parent / "assets/resource/base/data"
 COVERS = DATA / "theme_pack_covers"
-WIDTH = 180
+WIDTH = 180  # tools/theme_pack_covers.py --width, and the aspect-ratio of `.img` in gui/src/index.css (180 / 322): change all three together
 # 94 cards weigh 1.56 MB (16.6 KB each); the static data holds 121 packs, so a season that lists all of them needs about 2.0 MB
 MAX_BYTES = 2_000_000
 

@@ -17,6 +17,7 @@ BOSS, LOGO, NAME = (0.13, 0.25, 0.875, 0.836), (0.34, 0.26, 0.66, 0.34), (0.15, 
 WARNING = (0.38, 0.79, 0.62, 0.92)  # read off a screenshot, the prefab does not hold it
 BADGE = (0.209, 0.035, 0.346, 0.118)  # likewise: where "To be Pierced" shows its attack type
 BADGE_TINT = (217, 149, 74)  # likewise
+BADGE_MARGIN = 0.2  # the icon sits this far inside the badge, likewise
 MAX_FONT = 62  # px on the 650 px card: a one-line title is width-limited, the cap keeps short titles from growing past the game's
 OUTLINE = (16, 24, 32)
 ATTACK_ICON = {"PENETRATE": "pierce", "HIT": "hit", "SLASH": "slash"}
@@ -50,6 +51,10 @@ def wrap(tokens: list[tuple[str, str]], font, width: float) -> list[list[tuple[s
     return lines + [cur] if cur else lines
 
 
+def line_width(font, line: list[tuple[str, str]]) -> float:
+    return sum(font.getlength(w) for w, _ in line)
+
+
 def draw_title(img: Image.Image, box, tokens, font_path: Path, cap: float):
     """Largest font up to `cap` whose wrapped title fits `box`; centred, with a dark outline."""
     size = int(cap)
@@ -57,17 +62,23 @@ def draw_title(img: Image.Image, box, tokens, font_path: Path, cap: float):
         font = ImageFont.truetype(str(font_path), size)
         lines = wrap(tokens, font, box[2] - box[0])
         height = len(lines) * size * 1.1
-        if size <= 6 or (height <= box[3] - box[1] and all(sum(font.getlength(w) for w, _ in ln) <= box[2] - box[0] for ln in lines)):
+        if size <= 6 or (height <= box[3] - box[1] and all(line_width(font, ln) <= box[2] - box[0] for ln in lines)):
             break
         size -= 1
     d = ImageDraw.Draw(img)
     y = (box[1] + box[3]) / 2 - height / 2 + size * 0.55
     for ln in lines:
-        x = (box[0] + box[2]) / 2 - sum(font.getlength(w) for w, _ in ln) / 2
+        x = (box[0] + box[2]) / 2 - line_width(font, ln) / 2
         for w, c in ln:
             d.text((x, y), w, font=font, fill="#" + c, anchor="lm", stroke_width=max(1, size // 14), stroke_fill=OUTLINE)
             x += font.getlength(w)
         y += size * 1.1
+
+
+def inset(frac, margin: float):
+    """The anchor box `frac` shrunk by `margin` (a fraction of its own size) on every side."""
+    dx, dy = margin * (frac[2] - frac[0]), margin * (frac[3] - frac[1])
+    return frac[0] + dx, frac[1] + dy, frac[2] - dx, frac[3] - dy
 
 
 def fit(im: Image.Image, frac, k: float) -> tuple[Image.Image, tuple[int, int]]:
@@ -105,7 +116,7 @@ def card(parts: dict[str, Image.Image], art: Image.Image, boss: Image.Image | No
         put(base, badge, pos)
         icon = parts["attack_" + ATTACK_ICON[ui["attackType"]]]
         icon = Image.composite(Image.new("RGBA", icon.size, BADGE_TINT + (255,)), Image.new("RGBA", icon.size, (0, 0, 0, 0)), icon.getchannel("A"))
-        icon, _ = fit(icon, (BADGE[0] + 0.2 * (BADGE[2] - BADGE[0]), BADGE[1] + 0.2 * (BADGE[3] - BADGE[1]), BADGE[2] - 0.2 * (BADGE[2] - BADGE[0]), BADGE[3] - 0.2 * (BADGE[3] - BADGE[1])), k)
+        icon, _ = fit(icon, inset(BADGE, BADGE_MARGIN), k)
         put(base, icon, (pos[0] + (badge.width - icon.width) // 2, pos[1] + (badge.height - icon.height) // 2))
     put(base, *fit(parts["front"], FRONT, k))
     box = (NAME[0] * size[0], (1 - NAME[3]) * size[1], NAME[2] * size[0], (1 - NAME[1]) * size[1])

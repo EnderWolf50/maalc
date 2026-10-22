@@ -4,7 +4,7 @@
 
 1. `uv sync` and `pnpm install --frozen-lockfile`.
 2. `uv run python tools/fetch_ocr.py`: the OCR model is gitignored, and `maa-tools test` misses every OCR node without it.
-3. Scripts that need cv2, Pillow, numpy or psutil run as `uv run --group probe python <script>`.
+3. Scripts that need cv2, Pillow, numpy or psutil run as `uv run --group probe python <script>`; `tools/theme_pack_covers.py` (game files, Unity) needs `--group unpack`.
 4. `python tools/slim_mcp.py` (from any checkout): writes the gitignored `.claude/settings.local.json` that keeps the rea, playwright, cua-driver and tempad-dev MCP servers out of agent sessions (each agent spawns its own copies, GBs of RAM). Claude Code reads that file per folder on Windows, so every new worktree needs it.
 
 Done: `uv run python tools/check.py` passes in the worktree.
