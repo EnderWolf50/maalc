@@ -328,3 +328,13 @@ def test_a_card_titled_in_capitals_is_listed_and_the_logo_alone_is_not_a_card():
     assert [lines for _, lines in cards] == [["The Surrendered", "Witnessing"], ["MADNESS"],
                                               ["Four", "Houses and", "Greed"], ["Tangling Lust"]]
     assert rs.pack_cards([("LIMBUS", (311, 414, 37, 15)), ("WYAM", (871, 445, 16, 8))]) == []
+
+
+@pytest.mark.parametrize(("gap", "cards"), [(rs.CARD_GAP - 1, 1), (rs.CARD_GAP, 2)])
+def test_two_boxes_are_one_card_below_the_gap(gap, cards):
+    assert len(rs.pack_cards([("Lake", (100, 440, 50, 20)), ("World", (150 + gap, 440, 50, 20))])) == cards
+
+
+@pytest.mark.parametrize(("width", "cards"), [(rs.ART_WIDTH - 1, 0), (rs.ART_WIDTH, 1)])
+def test_a_capitals_only_box_is_a_title_art_from_the_art_width(width, cards):
+    assert len(rs.pack_cards([("MADNESS", (100, 400, width, 60))])) == cards
