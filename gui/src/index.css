@@ -235,6 +235,6 @@ small.fl.hard { background: var(--fl-h-bg); color: var(--fl-h-fg); }
 .floorkey { display: flex; align-items: center; gap: 4px; }
 .pk.unlisted { border-style: dashed; color: var(--muted); }
 .pk.bad { border-color: var(--bad); outline: 1px solid var(--bad); }
-.lanes.images .pk { flex-wrap: wrap; justify-content: center; width: 96px; text-align: center; padding: 4px; }
-.lanes.images .pk .img { display: block; flex: none; width: 88px; aspect-ratio: 120 / 218; object-fit: cover; border-radius: 4px; margin-bottom: 4px; background: linear-gradient(160deg, #3a3f4b, #151821); }
+.lanes.images .pk { flex-wrap: wrap; justify-content: center; width: 128px; text-align: center; padding: 4px; }
+.lanes.images .pk .img { display: block; flex: none; width: 120px; aspect-ratio: 180 / 322; object-fit: cover; border-radius: 4px; margin-bottom: 4px; background: linear-gradient(160deg, #3a3f4b, #151821); }
 .lanes.images .pk .nm { font-weight: 600; flex-basis: 100%; }

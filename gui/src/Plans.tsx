@@ -167,8 +167,8 @@ export function ThemePackTab() {
   );
 }
 
-// #241's covers (theme_pack_covers/index.json: pack name -> file), bundled at build time; a pack without one, or a
-// build before they exist, shows a blank card. The name always shows: some packs share one cover (1201/1203/1205).
+// #241's cards (theme_pack_covers/index.json: pack name -> file), bundled at build time; a pack without one, or a
+// build before they exist, shows its name on a blank card. The title is printed on the card, so the name is the tooltip.
 const COVERS_DIR = "../../assets/resource/base/data/theme_pack_covers/";
 const COVER_URLS = import.meta.glob<string>("../../assets/resource/base/data/theme_pack_covers/*.webp",
   { eager: true, query: "?url", import: "default" });
@@ -224,11 +224,12 @@ function PackPlanEditor({ data, plan, path, onChange }: {
   const toGap = (g: number) => set({ threshold: lanes[g - 1] });
   const chip = (name: string) => {
     const floors = data.packs[name] === undefined ? undefined : floorBadges(data.packs[name], t("packs.floorSep"));
+    const cover = images ? coverOf(name) : undefined; // the card has its title printed on it: the name moves to the tooltip
     return (
       <span key={name} className={"pk" + (path && bad(`${path}/weights/${name}`) ? " bad" : "")}
-        {...dragged(name)} {...clickable(name, weightOf(plan, name))}>
-        {images && (coverOf(name) ? <img className="img" src={coverOf(name)} alt="" draggable={false} /> : <span className="img" aria-hidden />)}
-        <span className="nm">{name}</span>
+        {...dragged(name)} {...clickable(name, weightOf(plan, name))} title={cover ? name : undefined}>
+        {cover ? <img className="img" src={cover} alt={name} draggable={false} /> : images && <span className="img" aria-hidden />}
+        {!cover && <span className="nm">{name}</span>}
         {floors
           ? floors.map((f) => {
             const label = `${t(f.hard ? "packs.floorsHard" : "packs.floorsNormal")} ${f.text}`;

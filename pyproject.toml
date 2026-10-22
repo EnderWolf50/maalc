@@ -14,6 +14,10 @@ dependencies = [
 dev = ["numpy", "pillow", "pytest", "ruff"]
 # Probe and live-test scripts: `uv run --group probe python <script>`.
 probe = ["numpy", "opencv-python-headless", "pillow", "psutil"]
+unpack = [
+    "pillow>=13.0.0",
+    "unitypy>=1.25.4",
+]
 
 [tool.uv]
 package = false

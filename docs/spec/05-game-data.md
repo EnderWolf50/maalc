@@ -37,6 +37,19 @@
 - 預設主題包方案：和使用者方案同樣的欄位（[04-settings.md](04-settings.md#8-主題包方案theme_pack_plans) 第 8 節）：每包的分數、刷新門檻、沒列出的包的分數、活動卡包的處理方式。開發者每季提供，使用者不能修改。（#11、#19、#240）
   - 1.117.0 的內容（#240，使用者 2026-10-22 決定）：分數沿用 AALC 的預設權重（`assets/config/theme_pack_list.example.yaml`，最後修改的 commit `45d9a58`，AGPL-3.0，見 NOTICE.md）；門檻 0、沒列出的包 0（不用 AALC 的 unknown −5）、活動包照分數。只取每包一個數字，屬於 [ADR 0001](../adr/0001-mit-and-no-agpl-derived-assets.md) 說的參數；檔案與程式不複製。#89 原本「不沿用其他專案的權重表」的規則由這個決定取代。
   - AALC 的鍵是標題的片段（`forgot`、`gambl`、`chick`），比對時找 OCR 文字裡第一個出現的片段（不分大小寫，困難模式是普通表再疊上困難表）。推測原因是卡面標題用了特殊字體，整串名稱不容易 OCR 完整（unverified，AALC 沒有寫原因）。對應的作法是照 AALC 的比對規則，把每個片段套到這一季 94 個完整名稱，資料檔每個分數後面的註解寫出它來自哪個片段。普通與困難兩份表沒有對同一包給不同分數。同一包的備用片段（`nag`、`dev`、`deg`、`shed`、`ssed`、`tread`、`mne`、`b·e`、`xte`、`unch`）分數相同；`compassion`（`Pilgrimage of Compassion`，1.117.0 沒有普通或困難樓層）不收；`Storefront Campout`、`An Anarchy of Colors`、`Creed of Preservation`、`Readvent of Gluttony` 沒有對應的片段，用沒列出的包的分數 0。
+- 卡片縮圖（#241）：`resource/base/data/theme_pack_covers/<主題包 id>.webp`（寬 180，94 張共 1.59 MB）與 `index.json`（主題包名稱 → 檔名），給設定 GUI 的圖片模式用，清單裡 94 個包都有，沒有缺的。縮圖是遊戲內卡片的樣子（正面；不含頂端吊夾、放大鏡紅章，也不傾斜：實機的卡片會左右搖擺），由 `tools/theme_pack_covers.py`（排版在 `tools/theme_pack_card.py`）照卡片 prefab `MirrorDungeonThemeCardUI`（APK 玩家資料 `sharedassets7`）的疊法合成。每個欄位是讀到的值還是量到的值，分開記：
+  - 讀自資料與 prefab：
+    - 封面：`card_pack` 精靈圖，`mirrordungeon-theme-floor` 的 `uiConfigs.packSpriteId` 就是精靈圖名稱，分散在卡包、鏡牢、活動 bundle；隱藏包 `The B.E.`（`HiddenTheme`）在 `skinpreview-new-pack`。
+    - `bossSpriteId`：boss 圖（`Everydungeon/boss/`），錨點 (0.13, 0.25)–(0.875, 0.836)。`isHideLogo`：不畫 Limbus Company logo（`MainUI_MirrorDungeon4_4_16`，錨點 (0.34, 0.26)–(0.66, 0.34)）。`isShowBaton`：疊 `Sprite/UI/ThemePack/Baton.png`（「CHAIN BATTLE」三角與青色虛線）和「Long Battle」標籤（`mirror_theme_pack_baton`，Pretendard，`#73fbed`，自動縮放 5–35）。外框是 `_4_8`（塑膠膜），輪廓遮罩是 `_4_7`，警告三角是 `_4_6`，徽章底是 `_4_4`。這些精靈圖按名稱抽並檢查尺寸，客戶端改編號時工具會報錯。
+    - 徽章：`[Rect]Attributes` 是一個 GridLayoutGroup，格子 96 × 96、左上起、無間距：`attackType` 的圖示（`Icon_AttackType_pierce/hit/slash`，`sharedassets1`）在第一格，顏色是 `mapOptions` 的 `SetColor_Cleared`（1204 的 `a16a3b`，和截圖上量到的完全一致）；`attributeType` 的圖示是 `Icon_evil_2_8`–`14`，只有屬性的包放第一格，兩者都有時放第二格（順序 unverified）。
+    - 標題（`[Text]Name`，TextMeshProUGUI）：矩形錨點 (0.15, 0.17)–(0.85, 0.255)、sizeDelta (9, 0)、anchoredPosition (4.5, 0)；自動縮放 1–65、換行開、置中、垂直置中、overflow、字距 −2、字間 1、行距 −5、行高 1.09 em（字型資產 `Mikodacs SDF` 的 FaceInfo：點數 195、lineHeight 212.55），字型資產另有 `normalSpacingOffset` 6，所以每個字多 +0.04 em；材質 `Mikodacs SDF UnderLine` 只有 Underlay（深色 `#040001`、偏移 (1, −1)、柔化 0，一個硬陰影），沒有外框、沒有光暈；`m_enableVertexGradient` 是關的，沒有漸層。英文名稱取自 `EN_MirrorDungeonTheme-1`（有 `specialName` 的用它，TMP 的 `<color>` 標籤分段上色，`1119` 的粉、藍兩色就是這樣來的），顏色取 `uiConfigs.textColor`，沒有時是 `ebcaa2`（截圖上量到 `ebcaa2`）。字型 Mikodacs（OFL 1.1）從玩家資料讀，不進 repo，見 NOTICE.md。
+  - 量自截圖（prefab 讀不到或和 prefab 不同）：
+    - 卡片根的寬度是 680，prefab 寫 650：徽章格的位置（`0.128 × 寬 + 48`）和標題的最大寬度（485）兩項獨立量測都指向 680；高度照 prefab 的 1069。原因 unverified。
+    - 自動縮放的 `lineSpacingMax`（−20）沒套用：套用的話 `Flat-broke Gamblers` 會排成兩行，和截圖不符；不套用的結果（`Flat-broke Gamblers` 一行、`Charm, Wander, Doubt` 兩行、`Nest, Workshop, and / Technology` 兩行）和截圖一致。TMP 實際的規則 unverified。
+    - 警告三角（`isShowWarning`）不在卡片 prefab 裡，位置 (0.38, 0.79)–(0.62, 0.92) 是對照兩張截圖估的；徽章比 96 格大約 12 %；`attributeType` 的四個（`CRIMSON`、`AMBER`、`SHAMROCK`、`VIOLET`）圖示和填色是對照截圖認的（火焰、裂岩、葉、荊棘圈），`SCARLET`、`AZURE`、`INDIGO` 的圖示和填色是猜的（unverified）。
+  - 沒對照過：`isShowBaton` 的「Long Battle」疊圖（位置、字級照 prefab，沒有截圖有 Line 系列的包，unverified）。
+  - 沒做：頂端吊夾、放大鏡紅章、傾斜；依帳號狀態變的部分：截圖裡的 `1404`、`1412` 實機把 boss 圖畫成黑色剪影（bundle 裡有 `<boss>_silhouette` 精靈圖；什麼條件換成剪影 unverified，推測是帳號還沒見過那個 boss），縮圖畫完整的 boss；卡片左上角的紅點（`[Script]RedDot`，新包提示）也不畫；`iconYPos`（全部 121 個資料項裡只有 6 個有，用途 unverified）；`uiRotation`、`unlockHintTextKey`、`sidePopupUnlockHintTextKey`、`nextImageColor`（地圖節點和鎖定提示用，不影響卡片外觀，unverified）；卡片上的 `Chip`、`rect_level`（執行中才出現的提示，沒有截圖）。
+  - 同一份封面的 `1201`／`1203`／`1205`（`AttackType_normal`）和 `1202`／`1204`／`1206`（`AttackType_effective`）靠 boss 圖、攻擊類型圖示和標題分辨。版權屬 © Project Moon（NOTICE.md）。
 - 標題藝術字（`title_art`，#246）：卡面藝術字拼不出包名時，OCR 讀到的字 → 那個包。比對規則和包名相同，比的是左邊的字（同分時算它的長度），比到後換成右邊的包名。1.117.0 有兩個，都從 2026-10-22 的實機錄影確認：S.E.A. 卡面寫 `The Magic Hello Bus`（讀成 `HellOBus`、`HellBus`）；The Noon of Violet 名稱上方有 `Walpurgis Night`，常讀成 `WalpurgisN The Noon of`。每季換資料時，從 log 裡比對不到的標題找新的。
 - 使用者的主題包方案不在資料檔，存在設定檔，格式見 [04-settings.md](04-settings.md#8-主題包方案theme_pack_plans)。方案裡沒列出的主題包（例如新一季才出現的）用方案的「沒列出的包」分數；空的方案等於全部用這個分數，不報錯。（#11、#19，2026-10-14 定案；#240）
 
@@ -184,6 +197,7 @@
 新一季鏡牢開始時，開發者依序：
 
 1. 更新主題包清單（含樓層），並提供這一季的預設主題包方案。使用者方案裡沒有的新主題包自動用方案的「沒列出的包」分數，不必改設定檔。（#11、#19、#240）
+   - 重產卡片縮圖：先把新版客戶端的 `UnityCache`、APK 玩家資料（`apk-data/assets/bin/Data`）、靜態資料與英文在地化拆到 `.local/unpack/`（見 `docs/agents/local-dev.md`），再 `uv run python tools/live/queue.py run --resource bench --name theme_covers -- uv run --group unpack python tools/theme_pack_covers.py --contact-sheet <檔名>.png`（要 `bench` 號碼牌，讀 12 GB bundle 與玩家資料）。工具依 `theme_packs.yaml` 每行註解的 id 找資料，印出 `no cover:` 的包（新包沒有封面時 GUI 顯示名稱）；卡片零件的精靈圖名稱或尺寸對不上時直接報錯，表示客戶端改了圖集編號，要重讀卡片 prefab（`MirrorDungeonThemeCardUI`，在 `sharedassets7`）。`tests/test_theme_pack_covers.py` 檢查每個包都有檔、寬度和總量。（#241）
 2. 更新試煉風險表。（#17）
 3. 檢查選路權重、Cost 對照表與商店數字是否仍符合遊戲。（#10、#12）
 4. 依上一季的記錄補充事件覆寫表。（#11）
