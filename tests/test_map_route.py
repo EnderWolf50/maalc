@@ -648,13 +648,13 @@ def test_a_near_read_that_ends_short_keeps_the_columns_read_before(context, monk
     assert {c for c, costs in reads if costs} >= set(range(1, 7))
 
 
-def shop_world(context, monkeypatch, nodes, links=((("1", "mid"), ("2", "mid")),)):
+def shop_world(context, monkeypatch, nodes, links=(((1, "mid"), (2, "mid")),)):
     """A fresh floor 1 map, the bus at the far left, run once; the log lines it wrote."""
     monkeypatch.setattr(actions, "map_weights", lambda context: {**NORMAL, "shop": 0, "boss": 0})
     logs = []
     monkeypatch.setattr(actions, "log", logs.append)
     actions.RUN["floor"] = 1
-    map_world(context, nodes, [((1, "mid"), (2, "mid"))], bus_x=actions.BUS_HOME[0])
+    map_world(context, nodes, list(links), bus_x=actions.BUS_HOME[0])
     actions.RouteMap().run(context, None)
     return logs
 
@@ -682,7 +682,8 @@ def test_the_boss_reads_alone_when_no_shop_stands_before_it(context, monkeypatch
 
 def test_nothing_is_read_past_the_column_after_the_shop(context, monkeypatch):
     # The boss column is the last: a column read past it (its glow makes a faint link, see above) is never read.
-    logs = shop_world(context, monkeypatch, {(1, "mid"): {"shop"}, (2, "mid"): set(), (3, "mid"): {"cost"}})
+    logs = shop_world(context, monkeypatch, {(1, "mid"): {"shop"}, (2, "mid"): set(), (3, "mid"): {"cost"}},
+                      links=(((1, "mid"), (2, "mid")), ((2, "mid"), (3, "mid"))))
     assert not [line for line in logs if line.startswith("map: column 3")]
 
 
