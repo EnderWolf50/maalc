@@ -50,6 +50,10 @@ SOFTWARE.
 
 `assets/resource/base/data/gift_search.json` 的中文名稱取自 [灰機 Limbus Company 維基](https://limbuscompany.huijiwiki.com/) 的飾品資料表 [Data:Giftchoose.tabx](https://limbuscompany.huijiwiki.com/wiki/Data:Giftchoose.tabx)（最後編輯 2026-08-06，2026-10-16 取用），依飾品 id 對應，由維基的貢獻者撰寫，採 [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/) 授權。本專案以 OpenCC `s2twp` 轉成繁體並修改一個用詞（「指標」改回「指針」）；這份檔案的中文名稱同樣以 CC BY-SA 4.0 授權。飾品清單、id、等級、英文名稱與排列順序取自遊戲客戶端 1.117.0 的靜態資料（© Project Moon），只摘錄這些欄位。
 
+## 合成飾品的資料與中文名稱
+
+`assets/resource/base/data/gift_recipes.json` 的配方、id、等級、體系與英文名稱取自遊戲客戶端 1.117.0 的靜態資料與英文在地化（© Project Moon），只摘錄這些欄位；`assets/resource/base/image/GiftRecipe/` 的 72 個圖示取自同一版資源包的 `Sprite/EgoGiftIcon`，縮 0.21 倍、透明處填綠色，同屬 © Project Moon。中文名稱取自 [灰機 Limbus Company 維基](https://limbuscompany.huijiwiki.com/) 的飾品資料表 [Data:Giftchoose.tabx](https://limbuscompany.huijiwiki.com/wiki/Data:Giftchoose.tabx)（2026-10-23 取用），依飾品 id 對應，由維基的貢獻者撰寫，採 [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/) 授權；本專案以 OpenCC `s2twp` 轉成繁體並把「指標」改回「指針」，這份檔案的中文名稱同樣以 CC BY-SA 4.0 授權。
+
 ## 發佈 zip 內附的第三方程式
 
 `tools/install.py --release` 組出的發佈 zip 另外附上以下程式，都是原樣下載、不經修改：
