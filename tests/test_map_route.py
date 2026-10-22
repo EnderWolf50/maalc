@@ -101,22 +101,21 @@ def test_is_hard_takes_the_floors_difficulty_first(context, run, hard):
     assert actions.is_hard(context) is hard
 
 
-def test_the_column_before_the_boss_is_the_shop():
-    # Live 2026-10-18 (floor 1 orange, floor 2 cyan): bus, one node read as an event, then the boss. Every path ends
-    # at the shop, the last column before the boss, whatever the node's mark reads (#146).
-    slots, ahead = {"up": ("event", 1)}, [{"up": ("boss", {"up"})}]
-    mr.shop_before_boss(slots, ahead)
-    assert slots == {"up": ("shop", 1)}
-    # Further out: only the column that holds the boss' neighbour changes; the columns before stay as read.
-    slots = {"mid": ("battle", 2), "down": ("event", 1)}
-    ahead = [{"mid": ("event", {"mid", "down"}), "down": ("battle", {"down"})}, {"mid": ("boss", {"mid", "down"})}]
-    mr.shop_before_boss(slots, ahead)
-    assert slots == {"mid": ("battle", 2), "down": ("event", 1)}
-    assert ahead[0] == {"mid": ("shop", {"mid", "down"}), "down": ("shop", {"down"})}
-    # No boss on screen: nothing is a shop by position.
-    slots = {"mid": ("event", 1)}
-    mr.shop_before_boss(slots, [{"mid": ("event", {"mid"})}])
-    assert slots == {"mid": ("event", 1)}
+def test_the_column_after_a_shop_is_the_boss():
+    # #279: the shop decides, whatever the next column reads; one that already reads boss stays it.
+    after = {"mid": ("event", {"mid"}), "down": ("boss", {"mid"})}
+    assert mr.boss_after_shop({"up": ("shop", 1)}, after) == ["mid"]
+    assert after == {"mid": ("boss", {"mid"}), "down": ("boss", {"mid"})}
+    after = {"mid": ("boss", {"mid"})}
+    assert mr.boss_after_shop({"mid": ("shop", 1), "down": ("event", 1)}, after) == []  # nothing changed
+    assert after == {"mid": ("boss", {"mid"})}
+
+
+def test_the_column_after_anything_but_a_shop_is_left_as_read():
+    # A boss read by its glow after a node that is no shop stays the boss (RouteMap logs the disagreement); no node is made a shop by the boss.
+    before, after = {"mid": ("event", 1)}, {"mid": ("boss", {"mid"}), "up": ("battle", {"mid"})}
+    assert mr.boss_after_shop(before, after) == []
+    assert before == {"mid": ("event", 1)} and after == {"mid": ("boss", {"mid"}), "up": ("battle", {"mid"})}
 
 
 def test_lowest_weight_first():
@@ -647,3 +646,97 @@ def test_a_near_read_that_ends_short_keeps_the_columns_read_before(context, monk
     actions.RouteMap().run(context, None)
     assert actions.RUN["map_plan"]["steps"] == [("mid", "battle")] * 3 + [("mid", "event")] * 2 + [("up", "shop"), ("mid", "boss")]
     assert {c for c, costs in reads if costs} >= set(range(1, 7))
+
+
+def shop_world(context, monkeypatch, nodes, links=((("1", "mid"), ("2", "mid")),)):
+    """A fresh floor 1 map, the bus at the far left, run once; the log lines it wrote."""
+    monkeypatch.setattr(actions, "map_weights", lambda context: {**NORMAL, "shop": 0, "boss": 0})
+    logs = []
+    monkeypatch.setattr(actions, "log", logs.append)
+    actions.RUN["floor"] = 1
+    map_world(context, nodes, [((1, "mid"), (2, "mid"))], bus_x=actions.BUS_HOME[0])
+    actions.RouteMap().run(context, None)
+    return logs
+
+
+def test_a_dark_boss_after_the_shop_is_the_boss_by_position(context, monkeypatch):
+    # #279: 722-850 red pixels on a dark boss, 842 on a node that is none; the shop (a shape, #146) says where it is.
+    logs = shop_world(context, monkeypatch, {(1, "mid"): {"shop"}, (2, "mid"): set()})
+    assert "map: column 2: after the shop, so the boss; mid read as something else" in logs
+    assert actions.RUN["map_plan"] == {"floor": 1, "steps": [("mid", "boss")]}
+    assert any(line.startswith("map: path mid shop > mid boss") for line in logs)
+
+
+def test_a_boss_read_by_its_glow_after_the_shop_needs_no_log(context, monkeypatch):
+    logs = shop_world(context, monkeypatch, {(1, "mid"): {"shop"}, (2, "mid"): {"boss"}})
+    assert not [line for line in logs if "after the shop" in line or "glow" in line]
+    assert actions.RUN["map_plan"] == {"floor": 1, "steps": [("mid", "boss")]}
+
+
+def test_the_boss_reads_alone_when_no_shop_stands_before_it(context, monkeypatch):
+    # The glow still counts (#279), the node before it is not made a shop; the two readings disagree: one line.
+    logs = shop_world(context, monkeypatch, {(1, "mid"): set(), (2, "mid"): {"boss"}})
+    assert "map: column 2: the boss' glow without a shop before it" in logs
+    assert any(line.startswith("map: path mid event > mid boss") for line in logs)
+
+
+def test_nothing_is_read_past_the_column_after_the_shop(context, monkeypatch):
+    # The boss column is the last: a column read past it (its glow makes a faint link, see above) is never read.
+    logs = shop_world(context, monkeypatch, {(1, "mid"): {"shop"}, (2, "mid"): set(), (3, "mid"): {"cost"}})
+    assert not [line for line in logs if line.startswith("map: column 3")]
+
+
+def test_left_the_shop_the_only_node_is_the_boss(context, monkeypatch):
+    # #279: HARD, the page handled last was the shop: the bus's one slot is the boss, however dark it reads.
+    # ADR 0003: the fact comes from the screen handled (Shop.run), memory only; a restarted agent reads the colour.
+    actions.RUN.update(after_shop=True, floor_hard=True)
+    monkeypatch.setattr(actions, "map_weights", lambda context: {**NORMAL, "boss": 0})
+    logs = []
+    monkeypatch.setattr(actions, "log", logs.append)
+    actions.RUN["floor"] = 1
+    map_world(context, {(1, "mid"): set()}, [], bus_x=actions.BUS_HOME[0])
+    actions.RouteMap().run(context, None)
+    assert "map: left the shop; column 1 mid read as something else than the boss" in logs
+    assert any(line.startswith("map: path mid boss") for line in logs)
+    assert "after_shop" not in actions.RUN  # entering the node ends it
+
+
+def test_left_the_shop_a_boss_read_by_its_glow_is_logged_as_agreeing(context, monkeypatch):
+    actions.RUN.update(after_shop=True, floor_hard=True)
+    monkeypatch.setattr(actions, "map_weights", lambda context: {**NORMAL, "boss": 0})
+    logs = []
+    monkeypatch.setattr(actions, "log", logs.append)
+    actions.RUN["floor"] = 1
+    map_world(context, {(1, "mid"): {"boss"}}, [], bus_x=actions.BUS_HOME[0])
+    actions.RouteMap().run(context, None)
+    assert "map: left the shop; column 1 is the boss" in logs
+
+
+def test_without_the_shop_behind_it_a_dark_boss_in_the_first_column_reads_as_it_looks(context, monkeypatch):
+    # No page memory (a restart, ADR 0003): the colour alone decides, the old behaviour.
+    actions.RUN["floor_hard"] = True
+    monkeypatch.setattr(actions, "map_weights", lambda context: {**NORMAL, "boss": 0})
+    logs = []
+    monkeypatch.setattr(actions, "log", logs.append)
+    actions.RUN["floor"] = 1
+    map_world(context, {(1, "mid"): set()}, [], bus_x=actions.BUS_HOME[0])
+    actions.RouteMap().run(context, None)
+    assert any(line.startswith("map: path mid event") for line in logs)
+
+
+def test_a_planned_boss_after_the_shop_is_followed_whatever_it_reads(context, monkeypatch):
+    # follow() types the planned node again; the dark boss reads as an event, so the plan was dropped and the map read again.
+    monkeypatch.setattr(actions, "map_weights", lambda context: {**NORMAL, "boss": 0})
+    actions.RUN.update(floor=1, after_shop=True, map_plan={"floor": 1, "steps": [("mid", "boss")]})
+    map_world(context, {(1, "mid"): set()}, [], bus_x=446)
+    assert actions.RouteMap.follow(context)
+    context.tasker.controller.post_touch_down.assert_not_called()  # followed: no drag for a full read
+    assert actions.RUN["map_plan"]["steps"] == []
+
+
+def test_a_boss_told_by_the_shop_is_not_typed_again_by_its_cost(context):
+    # #279: read_on types the columns now near again (retype); a dark boss reads as an event on its own.
+    context.run_recognition.side_effect = lambda name, image, override=None: None
+    column = {"mid": ("boss", {"mid"}), "up": ("abno", {"mid"})}
+    actions.RouteMap.retype(context, np.zeros((720, 1280, 3), np.uint8), column, 400, 357, 3)
+    assert column == {"mid": ("boss", {"mid"}), "up": ("event", {"mid"})}
