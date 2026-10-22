@@ -532,6 +532,8 @@ def main(argv=None) -> None:
             apply_masks(grab(footage, secs(t)), found).save(f)
             print(f)
     elif a.cmd == "clip":
+        if local_dir().resolve() not in Path(a.out).resolve().parents:
+            sys.exit(f"{a.out}: a cut is unmasked, so it goes under .local/ (annotate.py masks it on the way out)")
         cut(Footage(a.video), secs(a.t0), secs(a.t1), a.out)
     elif a.cmd == "map":
         map_cmd(a)

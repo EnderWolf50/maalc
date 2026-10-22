@@ -59,11 +59,14 @@ def test_events_read_maafw_log_through_maafw_events(tmp_path):
     assert json.loads(out.read_text())["events"] == [{"t": "14:30:14.710", "kind": "tap", "x": 1108, "y": 494}]
 
 
-def test_steps_caption_each_maalc_line_until_the_next_or_hold(log):
+def test_steps_caption_each_maalc_line_until_the_next_or_hold(log, tmp_path):
     steps = ev.captions(log, ev.secs("15:53:00"), ev.secs("15:53:10"), "map: (path|take)", hold=1.5)
     assert steps == [
         {"from": "15:53:03.523", "to": "15:53:05.023", "title": "map: path up event > mid risky > up event > mid shop, score 22"},
         {"from": "15:53:05.492", "to": "15:53:06.992", "title": "map: take up event"}]
+    ev.main(["steps", str(tmp_path / "run.log"), "--from", "15:53:00", "--to", "15:53:10", "--grep", "map: (path|take)",
+             "--hold", "1.5", "-o", str(tmp_path / "steps.json")])
+    assert json.loads((tmp_path / "steps.json").read_text(encoding="utf-8")) == steps
 
 
 def test_footage_finds_the_piece_that_covers_a_time():
@@ -79,15 +82,20 @@ def test_frames_and_clip_seek_into_the_right_piece(tmp_path, monkeypatch):
     monkeypatch.setattr(ev, "decode", lambda path, ss, dur, fps, gray=False: (calls.append((path, ss, dur, fps)),
                                                                               np.zeros((1, 720, 1280, 3), np.uint8))[1])
     monkeypatch.setattr(ev.subprocess, "run", lambda cmd, check: calls.append(cmd))
-    monkeypatch.setattr(ev, "masks_path", lambda a: "masks.json")
+    (masks := tmp_path / "masks.json").write_text("{}")
     monkeypatch.setattr(ev, "load_masks", lambda path: ("masks", path))
     masked = []
-    monkeypatch.setattr(ev, "apply_masks", lambda im, masks: (masked.append(masks), im)[1])
-    ev.main(["frames", "--video", "a.mp4@10:00:00", "-o", str(tmp_path), "10:00:02.5"])
+    monkeypatch.setattr(ev, "apply_masks", lambda im, found: (masked.append(found), im)[1])
+    ev.main(["frames", "--video", "a.mp4@10:00:00", "--masks", str(masks), "-o", str(tmp_path), "10:00:02.5"])
     assert calls[0] == ("a.mp4", 2.5, None, None) and (tmp_path / "10-00-02.500.png").exists()
-    assert masked == [("masks", "masks.json")]  # a frame leaves masked
-    ev.main(["clip", "--video", "a.mp4@10:00:00", "--from", "10:00:01", "--to", "10:00:04", "-o", "c.mp4"])
+    assert masked == [("masks", masks)]  # a frame leaves masked
+    monkeypatch.setattr(ev, "local_dir", lambda *parts: tmp_path)
+    ev.main(["clip", "--video", "a.mp4@10:00:00", "--from", "10:00:01", "--to", "10:00:04", "-o", str(tmp_path / "c.mp4")])
     assert calls[1][calls[1].index("-ss") + 1] == "1.000" and calls[1][calls[1].index("-t") + 1] == "3.000"
+    with pytest.raises(SystemExit):  # an unmasked cut stays in .local/
+        ev.main(["clip", "--video", "a.mp4@10:00:00", "--from", "10:00:01", "--to", "10:00:04", "-o", str(tmp_path.parent / "c.mp4")])
+    with pytest.raises(SystemExit):  # clip takes no masks: annotate.py masks it
+        ev.main(["clip", "--video", "a.mp4@10:00:00", "--masks", "m.json", "--from", "10:00:01", "--to", "10:00:04", "-o", "c.mp4"])
 
 
 def test_map_block_reads_columns_costs_drags_and_path(log):
