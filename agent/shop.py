@@ -232,6 +232,19 @@ def gift_role(keyword, gift, kept, avoid=(), material=()):
     return "unknown" if keyword is None else "material"
 
 
+SHOP_TITLE = (190, 108, 130, 30)  # x, y, w, h: the title on the main page's plate, top left
+
+
+def is_super(image):
+    """Whether the main shop page is a Super Shop: its title is red, a shop's is tan (#263).
+
+    Red pixels in the title's box: 20% on SuperShop.png, 0 on Shop.png (tests/screens). Only a shop's main page is asked.
+    """
+    x, y, w, h = SHOP_TITLE
+    b, g, r = (image[y:y + h, x:x + w, i].astype(int) for i in range(3))
+    return bool(((r > 150) & (g < 70) & (b < 70)).mean() > 0.1)
+
+
 FUSION_TOP_TIER = 4  # a fusion gives tier IV at most
 MAX_MATERIAL_TIER = FUSION_TOP_TIER  # so a tier V material is always a downgrade (user, #161)
 MIN_FUSION = 3  # materials a fusion takes at least: the game takes 2, spec 03 section 13 (#10) groups of 3 and up

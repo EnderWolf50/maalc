@@ -380,6 +380,10 @@ Cost 表是 wiki 與簡中客戶端的表，實機 log 的節點面板 Cost 沒�
 
 - 把非主要體系的飾品合成，指定主要體系（材料 3 個時成功率 90%）。每次合成 3 個到材料槽數（一般商店 3 格、Super Shop 5 格）的材料。
 - 結果的階級由材料總點數決定，不隨機：材料 I=3、II=6、III=10、IV=15、V=30 點；一般商店 ≤10 是 I、11–16 是 II、17–24 是 III、≥25 是 IV；Super Shop ≤9、10–14、15–21、≥22。材料本身的體系不影響結果。（拆包 `mirror-dungeon-common-data-md8.json`、limbuscompany.wiki.gg；數字放在 `data/shop.yaml`）
+  - 兩張表各自對應的商店（#263，2026-10-22 查，client 1.117.0）：`combineTierResultByCombineScore` 是一般商店；`enhancedCombineTierResultByCombineScore` 是 Super Shop。依據是遊戲自己的「Fusion Guide」字串：一般商店的 `mirrordungeon_egogift_combine_guide_result_total_1..4` 寫 10-／11~16／17~24／25+ 點，Super Shop 的 `..._upgrade` 版（說明文字 `Fusing in a Super Shop adds a special modifier to the required tally of the Points`，`mirrordungeon_upgrade_shop_title` 就是 `Super Shop`）寫 9-／10~14／15~21／22+ 點，和兩張表的範圍一字不差；client 也有 `EgoGiftCombinePanelUI_Upgrade` 這個面板類別。**挑哪張表的判斷程式沒有反組譯**，所以「Super Shop 用 enhanced」是字串與命名的證據，不是程式碼。
+  - **困難難度沒有另一張表**：遊戲資料與字串裡，合成只有「一般」與「Super Shop」兩組門檻，沒有依難度分的版本（沒找到不等於沒有；需要實機驗證，見下）。HARD 的一般商店照一般商店的表算，HARD 的 Super Shop 照 Super Shop 的表算。
+  - `combineTwo`、`combineThree` 是按材料階級直接查結果的預測表（遊戲說明 `new_ego_gift_combine_guide_table_2_*`、`_3_*` 列的就是這些，不經過點數；是否仍被程式使用沒有查）：兩個材料 6 列、三個材料 10 列，**每一列都等於一般商店的點數表算出來的階級**（2026-10-22 逐列算過，`tests/test_shop.py` 釘住）。所以一般商店放 2 或 3 個材料時，查表與算點數結果相同；說明文字也寫「兩個材料最高 III、三個材料最高 IV」，同樣符合點數表。Super Shop 放 2–3 個材料時，是查這兩張舊表還是照 enhanced 點數表，**unverified**：兩者不同的組合有 (I, III)、(I, I, III)、(I, II, II)、(I, III, III)、(II, II, III)、(II, III)（enhanced 較高）。maalc 在 Super Shop 一律照 enhanced 算。
+  - `starlightInfo.rateUpCombinePoint` 5 是 `Wishmaking` 的星光價格（遊戲字串 `Spend 5 Starlight to improve Fusion chance?`），不影響階級；合成頁上的機率（兩個材料 60%、三個 90%、四個以上 99%）是「拿到所選體系」的機率，不是階級（`egogiftRandomCombineProbs`、`new_ego_gift_combine_guide_table_1_*`）。
 - 挑材料（`shop.pick_fusion`）：先挑合得出最高階級的組合，同階級時先放隊伍不持有的 White Gossypium（#90），再挑總點數最少的；剩下的材料重複挑，直到不足 3 個。V 階飾品永遠不當材料：合成最多只出 IV 階，放 V 階一定是降級（#161 使用者決定，2026-10-19）。以前任取 3 個常是 3 個 I（9 點），只合出 I。
 - 不動要保留的飾品：主要體系、隊伍設定的其他體系（`keep_keywords`）、泛用（無體系）飾品（`keywordless` 是 `keep` 時，預設）、觀測飾品與 `keep_gifts`（圖示比對）。
 - **殘影**（#161，使用者 2026-10-19 決定）：殘影自成一類，不是泛用飾品，`keywordless` 對它不起作用。
@@ -391,7 +395,7 @@ Cost 表是 wiki 與簡中客戶端的表，實機 log 的節點面板 Cost 沒�
   - `any`（預設）：材料夠就合，照上面的挑法，合出材料能做到的最高階，不看結果比材料高不高。
   - `upgrade`：結果階級要比這組材料的最高階還高才合。例：III + III + II（26 點）是 IV，合；I + I + I 還是 I，不合；IV + II + II 是 IV，沒有比 IV 材料高，不合，改挑 II + II + II（III，比 II 高）。
   - `tier4`：只在能合出 IV 級時才合。一般商店 ≥25 點，Super Shop ≥22 點。
-  - 不符條件的組合不列入候選：先濾掉，再照上面的順序挑最好的，直到沒有符合的組合。階級只靠點數模型判斷，不花星光（`Wishmaking` 維持不勾）；畫面上讀得到的結果階級或機率還沒查（合成頁放好材料後的樣子沒有截圖）。
+  - 不符條件的組合不列入候選：先濾掉，再照上面的順序挑最好的，直到沒有符合的組合。階級照上面兩張點數表判斷（一般商店或 Super Shop 各用自己的門檻），不花星光（`Wishmaking` 維持不勾）。合成頁放好材料後，左下的 `Forecasts` 欄會顯示結果階級的羅馬數字與取得所選體系的機率（實機截圖 `tests/screens/ShopFuseRecipe.png`：IV、Guaranteed、100%；`tests/shop/fuse_two_in.png`、`fuse_super_two_in.png`：I、60%），所以階級讀得到；目前 Agent 還沒讀它來核對，只靠點數模型（unverified）。
   - 不合成的材料照一般規則：出售分組用同一個條件算，不會合的材料算多餘的，在想買的飾品買不起時可能被賣掉；合成頁沒有符合的組合時，這次造訪不再讀合成頁，直到持有的飾品改變（#62）。
   - 對照 AALC（e1d1749，`tasks/mirror/in_shop.py`）的「激進合成」：它逐個加材料到畫面顯示成功率 90%，結果不是 IV 就放棄，最多花 5 次星光提高機率。maalc 的 `tier4` 只取「只合 IV」這個條件，不讀畫面機率、不花星光；「激進」這個名稱太模糊，選項改寫出條件。
 - 固定配方合成延後到 v1 之後。（#1）
@@ -412,7 +416,7 @@ Cost 表是 wiki 與簡中客戶端的表，實機 log 的節點面板 Cost 沒�
 - Cost 讀不到數字時換一張截圖重讀，最多 3 次；OCR 把數字讀成形似的字母（`O`→0、`l`→1、`S`→5、`B`→8 等）時照數字算。仍讀不到就記 log、這一步不花錢（不治療、不刷新、不買、不賣），不把它當成 0。（#82）
 - 預留金額加在門檻上：刷新的條件是 Cost ≥ 刷新費用 + 120 + 預留金額，全體治療是 Cost ≥ 100 + 預留金額，復活每人 100、復活後也不得低於預留金額。刷新費用從按鈕下方讀，不用資料檔的數字。
 - 想買的主要體系飾品買不起時，先不刷新，下一圈先出售；出售過了仍然買不起才照常刷新。
-- 出售的是 `shop.pick_fusion` 挑剩、湊不成一組的材料（#79），加上隊伍不持有的 White Gossypium（#90，先賣）。分組照合成頁的材料算：不能賣但會被合成的（不出售的殘影、`keywordless` 是 `fuse` 的泛用飾品）也算進去，兩種都從格子認出，不點開；White Gossypium 不算進分組，賣掉它不會拆散一組；從售價高的賣起，賣到買得起為止；全部賣掉也不夠就不賣。挑組用的材料槽數取這次造訪讀過的合成頁，還沒讀過時當一般商店的 3 格。#78 使用者選的固定配方材料還沒有，做 #78 時要一併排除。
+- 出售的是 `shop.pick_fusion` 挑剩、湊不成一組的材料（#79），加上隊伍不持有的 White Gossypium（#90，先賣）。分組照合成頁的材料算：不能賣但會被合成的（不出售的殘影、`keywordless` 是 `fuse` 的泛用飾品）也算進去，兩種都從格子認出，不點開；White Gossypium 不算進分組，賣掉它不會拆散一組；從售價高的賣起，賣到買得起為止；全部賣掉也不夠就不賣。挑組用的材料槽數與門檻：進商店主頁時看標題，紅色的 `Super Shop` 是 5 格、Super Shop 的門檻，一般商店的標題是淡黃色（`shop.is_super`，#263）；讀過合成頁後以合成頁的槽數為準。#78 使用者選的固定配方材料還沒有，做 #78 時要一併排除。
 - 合成時讀合成頁的所有持有飾品（捲動讀完，見「讀格子」）與材料槽數（選好體系、還沒放材料時讀：Super Shop 左上的空槽是黑的，一般商店那裡是背景的齒輪），用 `shop.pick_fusion` 挑一組；`keywordless` 不是 `keep` 時，泛用飾品和其他材料一起挑最高階級，不點開（使用者 2026-10-19、10-20 在 #161 決定；`keep_gifts` 指定的照樣保留）。放材料從列表後面的格子放起（捲動停在後面）。每次只合一組：合成後格子會變，下一圈重讀。`Wishmaking` 已勾選時不合成。隊伍的 `fusion_condition` 不是 `any` 時，沒有符合條件的組合就不合（#263）。（#77）
 - **放入後回讀**（#77）：放材料前材料槽必須是空的；每點一格（再點列表上方 Recipes 與 Fusion Guide 之間的空白處關掉說明框；列表裡的標籤捲動後可能是別的格子）就截圖確認：有材料的槽多 1 個（空槽是純黑，亮度標準差 0–1，有材料 29–85），而且點的那格外框變橘（外框一圈橘色像素 17–23%，被說明框遮暗時 11%，沒選的 0–2%）。實機截圖顯示點了的格子留在原位、格子不重排，所以外框變橘就表示放進去的是預期的那格。任何一格不符就 Close 整頁、不按 Fuse，這次造訪在持有飾品改變前不再試。確認對話框的 `n/m` 的 n 要等於放入的個數才確認。log 記放入的材料（格子、階級、體系）與預期的結果階級。
 - 合成頁的列表上方可能多出其他區塊：持有的飾品湊得出固定配方時的 `Fusion Available`（配方產物列在上面，#103；實機：tests/screens/ShopFuseRecipe.png），也可能有主題包限定合成（`Theme Pack Exclusive Fusion Gift`，遊戲資料有字串，實機還沒看過）。持有飾品整區因此往下移，所以合成頁先拖回列表最上面，再用 OCR 找 `E.G.O Gifts Owned` 標題（找不到就往上拖一筆再找，拖不動就不讀、不合成），第一列持有飾品的中心在標題中心下方 66 px（實機：無區塊時 228 → 294，有固定配方時約 361 → 427），再照「讀格子」捲動讀完。標題上方的區塊不讀、不點：固定配方見 #78，限定合成另開 issue。（#205；以前讀到 `Fusion Available` 就直接 Close，2026-10-21 實機 F4、F5 兩次因此沒有合成。）這次造訪在持有飾品改變（買或賣）前不再試合成；確認對話框的 `n/m` 的 n 不等於放入的個數、沒合成成功時也一樣。

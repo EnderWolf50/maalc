@@ -2987,6 +2987,8 @@ class Shop(CustomAction):
         if not self.to_main(context):
             return True  # a page fading in or out: let MirrorHub look again
         visit = RUN.setdefault("shop", {"healed": False, "refreshes": 0, "wanted": None, "sold": False})
+        # The sale groups by the fuse page's slots and thresholds before that page was read: a Super Shop's red title tells (#263).
+        visit.setdefault("slots", 5 if shop.is_super(screen(context)) else 3)
         if not visit["healed"]:
             visit["healed"] = True  # first: a heal handed back mid-way (#118) is not paid twice
             self.heal(context, team)
@@ -3271,7 +3273,6 @@ class Shop(CustomAction):
         fuse_only = [c["i"] for c, r in zip(cells, roles)
                      if (r == "keep" and cell_role(c, team, "fuse", avoid) == "material") or (r == "material" and not c["price"])]
         # The fusion is grouped without the avoided gifts, which are sold first (#90): a sale then breaks no group.
-        # ponytail: a Super Shop's 5 slots are known once its fuse page was read; 3 until then.
         materials = [c for c in cells if (c["i"] in dict(gifts) or c["i"] in fuse_only) and c["i"] not in avoided]
         condition = team.get("fusion_condition", "any")  # a group the condition refuses makes no fusion: its gifts are spare
         fused = {i for group, _ in fusions(materials, ["material"] * len(materials), visit.get("slots", 3), (), condition) for i in group}

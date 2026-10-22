@@ -863,14 +863,14 @@ def test_an_offer_with_a_red_price_is_not_tapped_though_ocr_read_it_as_affordabl
     assert visit["wanted"] is None
 
 
-def sale_taps(context, monkeypatch, team, prices, *readings):
+def sale_taps(context, monkeypatch, team, prices, *readings, slots=None):
     """Shop.sell with 100 Cost and a 180 wanted, readings (cells_read) priced prices on the grid: the cells it tapped."""
     lines = [(str(p), (x - 3, y + 37, 26, 20)) for p, (x, y) in zip(prices, actions.SELL_CELLS)]
     reads(context, {tuple(actions.DIALOG_TITLE): [("Sell E.G.O Gift", (500, 90, 200, 40))],
                     tuple(actions.SELL_COST): [("100", (980, 90, 60, 30))], tuple(actions.SELL_GRID): lines})
     cells_read(monkeypatch, *readings)
     actions.Shop.sell(context, {"keyword": "Burn", "reserve_cost": 0, "gift_search": {"gifts": []}, **team},
-                      {"wanted": 180, "sold": False})
+                      {"wanted": 180, "sold": False, **({"slots": slots} if slots else {})})
     return [c.args for c in context.tasker.controller.post_click.call_args_list if c.args in actions.SELL_CELLS]
 
 
@@ -952,6 +952,48 @@ def test_a_sale_counts_only_the_fusions_the_condition_makes(context, monkeypatch
     taps = sale_taps(context, monkeypatch, {"fusion_condition": condition}, [300, 60, 70, 90],
                      *[(k, None, 1) for k in ("Bleed", "Tremor", "Pierce", "Slash")])
     assert taps == [actions.SELL_CELLS[sold]]
+
+
+@pytest.mark.parametrize("slots, condition, sells", [
+    (None, "any", 3), (5, "any", 3),
+    (None, "tier4", 0), (3, "tier4", 0), (5, "tier4", 3),
+    (None, "upgrade", 0), (3, "upgrade", 0), (5, "upgrade", 3),
+])
+def test_a_sale_groups_by_the_slots_and_thresholds_of_the_shop(context, monkeypatch, slots, condition, sells):
+    # #263: III + III + I is 23 points: a III in a shop, a IV in a Super Shop. Where the condition refuses it (tier4 and
+    # upgrade in a shop) nothing fuses and the dearest gift (cell 0, 300) goes; where it holds, the Bleed I left over (cell
+    # 3, 90) does. A visit that read no fuse page counts a shop's 3 slots.
+    taps = sale_taps(context, monkeypatch, {"fusion_condition": condition}, [300, 60, 70, 90],
+                     ("Bleed", None, 3), ("Tremor", None, 3), ("Pierce", None, 1), ("Slash", None, 1), slots=slots)
+    assert taps == [actions.SELL_CELLS[sells]]
+
+
+@pytest.mark.parametrize("slots, condition, made", [
+    (3, "any", True), (5, "any", True), (3, "upgrade", False), (5, "upgrade", True), (3, "tier4", False), (5, "tier4", True),
+])
+def test_a_fusion_reads_the_tier_by_the_shop_it_is_in(context, monkeypatch, slots, condition, made):
+    # #263: III + III + I (23 points) is a III in a shop and a IV in a Super Shop.
+    fused, taps, _ = fusion_taps(context, monkeypatch, {"fusion_condition": condition}, ("Bleed", None, 3),
+                                 ("Tremor", None, 3), ("Pierce", None, 1), slots=slots)
+    assert fused == made and taps == [int(made)] * 3
+
+
+def test_a_shop_visit_counts_a_super_shops_five_slots_from_its_red_title(context, monkeypatch):
+    # #263: before any fuse page was read, the sale already groups by the Super Shop's table.
+    actions.RUN["team"] = {"heal": "none", "keyword": "Burn", "reserve_cost": 0}
+    monkeypatch.setattr(actions.Shop, "to_main", staticmethod(lambda context: True))
+    for name, slots in (("Shop", 3), ("SuperShop", 5)):
+        actions.RUN.pop("shop", None)
+        image = np.asarray(Image.open(SCREENS / f"{name}.png").convert("RGB"))[:, :, ::-1]
+        context.tasker.controller.post_screencap.return_value.wait.return_value.get.return_value = image
+
+        def sell(context, team, visit):
+            seen.append(visit["slots"])
+            raise actions.PageGone("Shop")  # ends the visit here: what sell saw is what is asked
+        seen = []
+        monkeypatch.setattr(actions.Shop, "sell", staticmethod(sell))
+        assert actions.Shop().run(context, argv())
+        assert seen == [slots]
 
 
 def test_a_sale_does_not_break_a_fusion_by_selling_white_gossypium(context, monkeypatch):
