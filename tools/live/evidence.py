@@ -69,9 +69,7 @@ def secs(hms: str) -> float:
     return int(h) * 3600 + int(m) * 60 + float(s)
 
 
-def hms(t: float) -> str:
-    ms = round(t * 1000)
-    return f"{ms // 3600000:02d}:{ms // 60000 % 60:02d}:{ms // 1000 % 60:02d}.{ms % 1000:03d}"
+hms = maafw_events.clock  # seconds since midnight -> HH:MM:SS.fff
 
 
 def parse_log(lines) -> list[tuple[float, str]]:
@@ -201,9 +199,11 @@ def load_masks(path: Path):
 
 def apply_masks(im: Image.Image, masks) -> Image.Image:
     """im with every box blacked out whose template matches it (TM_CCOEFF_NORMED, as annotate.py does)."""
+    space, items = masks
+    if not items:
+        return im
     import cv2  # the probe group's
 
-    space, items = masks
     g = np.asarray(im.convert("L").resize(tuple(space)))
     sx, sy = im.width / space[0], im.height / space[1]
     d = ImageDraw.Draw(im)
@@ -236,7 +236,7 @@ def parse_map(block):
     stages, drags, path = [{"cols": {}, "costs": [], "t0": block[0][0]}], [], None
     for t, x in block:
         if m := re.match(r"map: node at (\d+), (\d+) reads Cost (\S+): (\w+)", x):
-            stages[-1]["costs"].append((int(m[1]), int(m[2]), None if m[3] == "None" else m[3]))
+            stages[-1]["costs"].append((int(m[1]), int(m[2]), m[3]))  # "None": the bot saw a coin but read no number
         elif m := re.match(r"map: column (\d+): (.*)", x):
             stages[-1]["cols"][int(m[1])] = {c[1]: c[2] for c in re.finditer(r"(up|mid|down) (\w+) \(", m[2])}
             stages[-1]["t1"] = t
@@ -316,7 +316,7 @@ def draw_map(shots, drags, nodes, path, fix, floor: int) -> Image.Image:
         x, y, real = COLX(k), ROWY[row], fix.get(f"c{k}/{row}")
         col = GREEN if not real else ORANGE if real[0] == "cost" else RED
         d.rectangle([x - 52, y - 52, x + 52, y + 52], outline=col + (255,), width=4)
-        lines = [n["type"] + (f" {n['cost']}" if n["cost"] else "")]
+        lines = [n["type"] + (" (Cost 沒讀到)" if n["cost"] == "None" else f" {n['cost']}" if n["cost"] else "")]
         if n["first"] != n["type"]:
             lines.append(f"先讀成 {n['first']}，拖近後改正")
         if real and real[0] == "cost":
@@ -363,9 +363,9 @@ def map_cmd(a) -> None:
     stages, drags, path = parse_map(block)
     nodes, fix = node_table(stages, drags), json.loads(Path(a.fix).read_text(encoding="utf-8")) if a.fix else {}
     footage, masks = Footage(a.video), load_masks(masks_path(a))
-    times, rgb = frames(footage, stages[0].get("t1", block[0][0]) - 0.5, block[-1][0] + 0.5, 10)
-    idx = pick_shots(times, motion(rgb.mean(axis=3)), drags)
-    shots = [apply_masks(Image.fromarray(rgb[i]), masks) for i in idx]
+    times, grays = frames(footage, stages[0].get("t1", block[0][0]) - 0.5, block[-1][0] + 0.5, 10, gray=True)
+    idx = pick_shots(times, motion(grays), drags)
+    shots = [apply_masks(grab(footage, times[i]), masks) for i in idx]
     for n, im in enumerate(shots):
         im.save(out / ("before-1.png" if n == 0 else f"after-{n}.png"))
     draw_map(shots, drags, nodes, path, fix, a.floor).save(out / "stitched.png")
@@ -481,18 +481,14 @@ def main(argv=None) -> None:
     common.add_argument("--video", action="append", default=[], help="PATH@START, the wall time of its first frame")
     common.add_argument("--masks", help="masks.json (default .local/evidence/masks.json)")
     common.add_argument("--annotate", type=Path, default=ANNOTATE, help="evidence-annotate's annotate.py")
-    p = sub.add_parser("events", parents=[common])
-    p.add_argument("log")
-    p.add_argument("--from", dest="t0", default="00:00:00")
-    p.add_argument("--to", dest="t1", default="23:59:59.999")
-    p.add_argument("-o", "--out", required=True)
-    p = sub.add_parser("steps", parents=[common])
-    p.add_argument("log")
-    p.add_argument("--from", dest="t0", default="00:00:00")
-    p.add_argument("--to", dest="t1", default="23:59:59.999")
+    for name in ("events", "steps"):
+        p = sub.add_parser(name)
+        p.add_argument("log")
+        p.add_argument("--from", dest="t0", default="00:00:00")
+        p.add_argument("--to", dest="t1", default="23:59:59.999")
+        p.add_argument("-o", "--out", required=True)
     p.add_argument("--grep", default="")
     p.add_argument("--hold", type=float, default=3.0)
-    p.add_argument("-o", "--out", required=True)
     p = sub.add_parser("frames", parents=[common])
     p.add_argument("times", nargs="+")
     p.add_argument("-o", "--out", required=True)

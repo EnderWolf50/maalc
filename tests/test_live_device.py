@@ -89,6 +89,22 @@ def test_freeze_suspends_the_bot_tree_and_resumes_it(tmp_path, monkeypatch):
     monkeypatch.setattr(dv, "connect", lambda port: FakeCtl())
     monkeypatch.setattr(dv, "bot_tree", lambda pid: procs)
     monkeypatch.setattr(dv, "tail", lambda path: iter(["x", "[maalc] floor 1 packs, threshold 0: A (0)"]))
-    (tmp_path / "cmd.txt").write_text("resume\n")
-    dv.main(["freeze", "--log", "run.log", "--fire", "packs", "--pid", "9", "--cmd", str(tmp_path / "cmd.txt"), "--out", str(tmp_path)])
+    (tmp_path / "cmd.txt").write_text("tap 1 1\n")  # left from an earlier freeze: cleared, not run
+    dv.main(["freeze", "--log", "run.log", "--fire", "packs", "--pid", "9", "--cmd", str(tmp_path / "cmd.txt"), "--out", str(tmp_path),
+             "--max", "0.1"])
     assert log == [("suspend", 1), ("suspend", 2), ("resume", 1), ("resume", 2)]
+
+
+def test_freeze_resumes_the_rest_when_one_process_ended(tmp_path, monkeypatch):
+    log = []
+
+    def gone():
+        raise ProcessLookupError("ended")
+
+    procs = [SimpleNamespace(pid=1, suspend=lambda: log.append("suspend 1"), resume=lambda: log.append("resume 1")),
+             SimpleNamespace(pid=2, suspend=gone, resume=gone)]
+    monkeypatch.setattr(dv, "connect", lambda port: FakeCtl())
+    monkeypatch.setattr(dv, "bot_tree", lambda pid: procs)
+    monkeypatch.setattr(dv, "tail", lambda path: iter(["packs"]))
+    dv.main(["freeze", "--log", str(tmp_path / "run.log"), "--fire", "packs", "--pid", "9", "--max", "0.1"])
+    assert log == ["suspend 1", "resume 1"]

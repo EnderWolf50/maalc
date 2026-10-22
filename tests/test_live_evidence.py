@@ -12,6 +12,7 @@ RUN = """\
 15:52:51.700 [maalc] floor 1: pull Flat-broke Gamblers (0)
 15:52:55.967 [maalc] map: node at 328, 357 reads Cost 75: battle
 15:52:56.365 [maalc] map: column 1: mid battle (1 onward), up event (2 onward)
+15:52:56.600 [maalc] map: node at 583, 357 reads Cost None: risky
 15:52:56.916 [maalc] map: column 2: mid risky (from mid/up)
 15:52:57.531 [maalc] map: column 3: up battle (from up)
 15:52:58.000 x: 1600, y: 540, width: 1920, height: 1080, rotation: 90.000000, product_major: 0
@@ -91,7 +92,48 @@ def test_map_block_reads_columns_costs_drags_and_path(log):
     nodes = ev.node_table(stages, drags)
     assert nodes[(1, "mid")] == {"type": "battle", "first": "battle", "cost": "75"}
     assert nodes[(3, "up")] == {"type": "event", "first": "battle", "cost": "120"}  # read again after the drag
-    assert nodes[(4, "mid")]["cost"] is None
+    assert nodes[(2, "mid")]["cost"] == "None"  # a coin with no number read: labelled "Cost 沒讀到"
+    assert nodes[(4, "mid")]["cost"] is None  # no Cost line at all
+
+
+@pytest.fixture
+def footage(monkeypatch):
+    """A recording of the fixture's floor: the map slides 15:52:58.5-59.0, the pack cards deal 15:52:48.6-50.6."""
+    drag, deal, still = ev.secs("15:52:58.5"), ev.secs("15:52:48.6"), ev.secs("15:52:50.6")
+
+    def fake_frames(f, t0, t1, fps, gray=False):
+        times = [t0 + i / fps for i in range(round((t1 - t0) * fps))]
+        out = []
+        for i, t in enumerate(times):
+            if t0 > ev.secs("15:52:55"):  # the map
+                v = 40 * min(5, max(0, int((t - drag) * 10)))
+            else:  # the pack page: empty, dealing (every frame differs), standing still
+                v = 0 if t < deal else 30 + 10 * (i % 2) if t < still else 40
+            out.append(np.full((720, 1280), v, np.uint8))
+        return times, np.array(out)
+
+    monkeypatch.setattr(ev, "frames", fake_frames)
+    monkeypatch.setattr(ev, "grab", lambda f, t: Image.new("RGB", (1280, 720), (20, 20, 20)))
+    monkeypatch.setattr(ev, "masks_path", lambda a: None)
+    monkeypatch.setattr(ev, "load_masks", lambda path: ([1280, 720], []))
+    return ["--video", "rec.mp4@15:50:00"]
+
+
+def test_map_command_writes_the_stitched_floor_and_its_nodes(tmp_path, footage):
+    (tmp_path / "run.log").write_text(RUN, encoding="utf-8")
+    ev.main(["map", str(tmp_path / "run.log"), "--floor", "1", "-o", str(tmp_path / "route"), *footage])
+    route = json.loads((tmp_path / "route/route.json").read_text(encoding="utf-8"))
+    assert Image.open(tmp_path / "route/stitched.png").size == (1790, 720)
+    assert route["path"]["score"] == 22 and len(route["nodes"]) == 5 and len(route["shots"]) == 2
+    assert (tmp_path / "route/before-1.png").exists() and (tmp_path / "route/after-1.png").exists()
+
+
+def test_packs_command_measures_deal_to_still(tmp_path, footage):
+    (tmp_path / "run.log").write_text(RUN, encoding="utf-8")
+    ev.main(["packs", str(tmp_path / "run.log"), "--floor", "1", "-o", str(tmp_path / "packs"), *footage])
+    [r] = json.loads((tmp_path / "packs/packs.json").read_text(encoding="utf-8"))
+    assert r["pull"] == "Flat-broke Gamblers" and r["settle_s"] == pytest.approx(2.0, abs=0.05)
+    assert (tmp_path / "packs/pack-1.png").exists()
 
 
 def test_map_picks_the_still_frame_before_and_after_each_drag():

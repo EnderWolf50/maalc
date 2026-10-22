@@ -85,9 +85,8 @@ def bot_tree(pid: int):
 
 def run_commands(ctl, cmd: Path, out: Path, deadline: float, poll: float = 0.2) -> None:
     """Run the lines written to cmd until `resume` or the deadline; each read empties the file."""
-    cmd.write_text(cmd.read_text() if cmd.exists() else "")
     while time.time() < deadline:
-        lines = cmd.read_text().splitlines()
+        lines = cmd.read_text().splitlines() if cmd.exists() else []
         if lines:
             cmd.write_text("")
         for line in lines:
@@ -115,16 +114,29 @@ def run_commands(ctl, cmd: Path, out: Path, deadline: float, poll: float = 0.2) 
 def freeze(a, ctl) -> None:
     line = wait_fire(tail(a.log), re.compile(a.fire), a.arm and re.compile(a.arm))
     print("fire", stamp(), line.strip()[:150], flush=True)
-    procs = bot_tree(a.pid)
-    for p in procs:
-        p.suspend()
-    print("frozen", stamp(), [p.pid for p in procs], flush=True)
+    cmd = Path(a.cmd or Path(a.log).with_name("cmd.txt"))
+    cmd.write_text("")  # a command left from an earlier freeze would run at once
+    procs = []
     try:
-        run_commands(ctl, Path(a.cmd or Path(a.log).with_name("cmd.txt")), Path(a.out or Path(a.log).parent), time.time() + a.max)
+        for p in bot_tree(a.pid):
+            if each(p.suspend):
+                procs.append(p)
+        print("frozen", stamp(), [p.pid for p in procs], flush=True)
+        run_commands(ctl, cmd, Path(a.out or Path(a.log).parent), time.time() + a.max)
     finally:
         for p in procs:
-            p.resume()
+            each(p.resume)
         print("resumed", stamp(), flush=True)
+
+
+def each(call) -> bool:
+    """call() for one process of the tree: one that ended meanwhile is skipped, and the rest are not left frozen."""
+    try:
+        call()
+        return True
+    except Exception as e:  # psutil.NoSuchProcess, AccessDenied
+        print("skipped", e, flush=True)
+        return False
 
 
 def main(argv=None) -> None:

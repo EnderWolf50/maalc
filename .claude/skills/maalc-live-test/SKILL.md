@@ -39,7 +39,7 @@ Resolve output paths through `tools/local_dir.py` before starting a process: `.l
    - **Other checks**: `events` and `steps` turn `run.log` into evidence-annotate's events and captions (`maafw_events.py` reads a maafw.log, the main checkout's), then `evidence-annotate`: `annotate.py VIDEO -o OUT --start <started> --events events.json [--steps steps.json] --masks .local/evidence/masks.json [--from T --to T] [--frames T,…]`. A device screenshot goes through `evidence.py mask` before it is shared.
    - **Post**: each floor's route stills and drag clip to #251, its pack stills to #252 (`gh issue comment <n> --attach '<file>#<alt>'`), or to the PR the run verifies. Add one row to `.local/archive/INDEX.md`.
 
-   Done: each floor played has a `stitched.png` with every node it read boxed and judged, a drag clip and a `pack-K.png` per pack reading, posted to #251 and #252 (or the PR), and the INDEX row exists.
+   Done: every check of the brief has its annotated clip; each floor played has a `stitched.png` with every node it read boxed and judged, a drag clip and a `pack-K.png` per pack reading, posted to #251 and #252 (or the PR); the INDEX row exists.
 9. **Restore.** Game settings back as written down in step 4, then create the `done` file of step 1 (the Write tool). `hold` verifies `install/` and the queue command ends. Done: `hold.log` ends with `install matches the backup (md5)` and `queue.py status --log .local/scratch/<task>/hold.log` says `ended`.
 10. **Report.** Per check: pass / fail / not reached, with its clip. Acceptance numbers: met or not met. Upload clips and frames with `--attach` (AGENTS.md "Public repo"); a failure opens an issue with its evidence attached.
 
