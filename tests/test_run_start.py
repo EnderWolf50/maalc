@@ -133,6 +133,7 @@ def test_a_title_read_in_reverse_order_still_matches(lines, expected):
     (["HellOBus"], "S.E.A."), (["HellBus"], "S.E.A."), (["HelIOBus"], "S.E.A."), (["The Magic SHellBus"], "S.E.A."),
     (["WalpurgisN The Noon of"], "The Noon of Violet"), (["Walpurgis Night", "The Noon of Violet"], "The Noon of Violet"),
     (["Walpurgis", "Hatred and 'Despair"], "Walpurgis Night: Hatred and Despair"),  # the other Walpurgis pack stays
+    (["MADNESS"], "Line 1"),  # #266: "LINE 1 MADNESS" reads only as its capitals
 ])
 def test_title_art_finds_its_pack_through_the_data_file(lines, expected):
     plan = {"weights": {}, "unlisted": 0}
@@ -287,3 +288,10 @@ def test_theme_pack_data_file():
     assert set(data["event_packs"]) <= set(packs) and len(data["event_packs"]) == 15
     # #246: each title art read names a pack of the season.
     assert data["title_art"] and set(data["title_art"].values()) <= set(packs)
+
+
+def test_a_card_nothing_names_takes_the_unlisted_weight_and_keeps_its_place():
+    # #266: a read that names no pack ("ZZZ") is still a card in the ranking, with the plan's unlisted weight.
+    plan = {"weights": {"Line 1": -5}, "unlisted": 3}
+    ranked = rs.rank_packs([["Tearful Things"], ["MADNESS"], ["ZZZ"]], DATA_NAMES, plan, DATA_TITLE_ART)
+    assert ranked == [("Tearful Things", 3), ("Line 1", -5), ("ZZZ", 3)]

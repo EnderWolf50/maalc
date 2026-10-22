@@ -1627,6 +1627,39 @@ def pack_page(context, monkeypatch, floor, setting, mode):
     return taps.count(REFRESH), lines
 
 
+# OCR boxes read off 2026-10-22 captures (title strip), the logo and noise reads kept: #266, #267
+TIMEKILLING_PAGE = [
+    ("Tearful Things", (143, 443, 148, 24)), ("WIOPIS", (203, 413, 42, 25)), ("Degraded Gloom", (349, 444, 158, 22)),
+    ("H", (401, 413, 54, 24)), ("Timekilling", (560, 446, 108, 18)), ("TIMKILLING", (563, 400, 151, 19)),
+    ("TME", (605, 416, 65, 26)), ("Time", (672, 447, 44, 16)), ("Crawling Abyss", (773, 445, 154, 22)),
+    ("WOPIS", (835, 413, 42, 24)), ("Walpurgis Night", (986, 412, 142, 22)), ("Full-Stopped by a", (986, 438, 139, 22)),
+    ("Bullet", (1038, 457, 45, 14)),
+]
+LINE_1_PAGE = [
+    ("The Surrendered", (261, 440, 123, 16)), ("Witnessing", (282, 454, 82, 17)), ("LIMBUS", (311, 414, 37, 15)),
+    ("MADNESS", (458, 400, 161, 60)), ("Four", (684, 442, 34, 15)), ("Houses and", (720, 443, 85, 14)),
+    ("Greed", (721, 456, 45, 16)), ("LIMBUS", (733, 414, 35, 15)), ("WYAM", (871, 445, 16, 8)),
+    ("Tangling Lust", (880, 444, 148, 22)),
+]
+
+
+def test_a_title_split_into_two_boxes_on_one_line_is_one_card():
+    # #267: "Timekilling" and "Time" sit 4 px apart but their centres 80 px: the old 80 px test made two cards.
+    cards = actions.columns(TIMEKILLING_PAGE)
+    assert [lines for _, lines in cards] == [["Tearful Things"], ["Degraded Gloom"], ["Timekilling", "Time"],
+                                              ["Crawling Abyss"], ["Walpurgis Night", "Full-Stopped by a", "Bullet"]]
+    assert [x for x, _ in cards][2] == 638  # the swipe lands in the middle of the card's text, not on its first box
+
+
+def test_a_card_titled_in_capitals_is_listed_and_the_logo_alone_is_not_a_card():
+    # #266: LINE 1 MADNESS reads only as MADNESS; the capitals were dropped and the whole card with them. The
+    # narrow LIMBUS logo and noise beside a lowercase title add no card.
+    cards = actions.columns(LINE_1_PAGE)
+    assert [lines for _, lines in cards] == [["The Surrendered", "Witnessing"], ["MADNESS"],
+                                              ["Four", "Houses and", "Greed"], ["Tangling Lust"]]
+    assert actions.columns([("LIMBUS", (311, 414, 37, 15)), ("WYAM", (871, 445, 16, 8))]) == []
+
+
 def test_theme_pack_titles_are_read_once_the_cards_stop_swinging(context, monkeypatch):
     # #246, recordings: dealt cards swing for ~2.8 s. Read mid-swing, a card not landed yet was left out and title
     # art was misread. Every read waits for the cards to stop, the refreshed page's too.
