@@ -2,7 +2,7 @@
 name = "maalc"
 version = "0.0.0"
 description = "MaaFramework automation for Limbus Company Mirror Dungeon"
-license = "MIT"
+license = "PolyForm-Noncommercial-1.0.0"
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "jsonschema>=4.26.0",

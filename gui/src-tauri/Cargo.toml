@@ -2,7 +2,7 @@
 name = "maalc-gui"
 version = "0.1.0"
 description = "maalc settings GUI"
-license = "MIT"
+license = "PolyForm-Noncommercial-1.0.0"
 edition = "2024"
 
 [lib]

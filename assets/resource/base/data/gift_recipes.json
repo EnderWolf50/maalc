@@ -1,8 +1,9 @@
 {
- "note": "Fusion gifts and their recipes. Recipes: combineFixed (any one of a gift's `recipes` fuses it; each is a list of the required gift ids) and combineMixed (`groups`: take `need` of each group's `ids`) of the game client 1.117.0's mirror-dungeon-common-data-md8. Ids, tiers, keywords and English names: the same client's ego-gift static data and EN_EGOgift localization. `materials` are the recipe ingredients gift_search.json does not list. Icons: image/GiftRecipe/<id>.png, the game's EgoGiftIcon sprites (by the ego-gift iconId) scaled by 0.21 with transparency filled green. Chinese names: the 灰機 Limbus Company wiki's gift table by id (Simplified Chinese), converted with OpenCC s2twp, 指標 -> 指針; empty where it has no entry. Chinese names licensed CC BY-SA 4.0 (see NOTICE.md). Written by tools/gift_recipes.py.",
- "source": "https://limbuscompany.huijiwiki.com/wiki/Data:Giftchoose.tabx",
- "license": "CC BY-SA 4.0",
- "license_url": "https://creativecommons.org/licenses/by-sa/4.0/",
+ "note": "Fusion gifts and their recipes. Recipes: combineFixed (any one of a gift's `recipes` fuses it; each is a list of the required gift ids) and combineMixed (`groups`: take `need` of each group's `ids`) of the game client 1.117.0's mirror-dungeon-common-data-md8. Ids, tiers, keywords and English names: the same client's ego-gift static data and EN_EGOgift localization. `materials` are the recipe ingredients gift_search.json does not list. Icons: image/GiftRecipe/<id>.png, the game's EgoGiftIcon sprites (by the ego-gift iconId) scaled by 0.21 with transparency filled green. Chinese names: the Localize Limbus Company release's LLC_zh-CN/EGOgift_*.json by gift id (Simplified Chinese), converted with OpenCC s2twp, then 指標->指針, 重新整理->刷新, 映象->鏡像, 透過階層->通過階層. Chinese names licensed CC BY-NC-SA 4.0 (see NOTICE.md). Written by tools/gift_recipes.py.",
+ "zh_source": "https://github.com/LocalizeLimbusCompany/LocalizeLimbusCompany",
+ "zh_release": "2026101602",
+ "license": "CC BY-NC-SA 4.0",
+ "license_url": "https://creativecommons.org/licenses/by-nc-sa/4.0/",
  "gifts": [
   {
    "id": 9083,
@@ -168,7 +169,7 @@
    "keyword": "Bleed",
    "tier": 4,
    "en": "Hemorrhagic Shock",
-   "zh": "出血性休克",
+   "zh": "失血性休克",
    "recipes": [
     [
      9008,
@@ -391,7 +392,7 @@
    "keyword": "Bleed",
    "tier": 4,
    "en": "Artwork: Evolving Pulsation",
-   "zh": "傑作：進化的躍動",
+   "zh": "傑作：正在進化的躍動",
    "recipes": [
     [
      9260,
@@ -404,7 +405,7 @@
    "keyword": "Bleed",
    "tier": 4,
    "en": "Artwork: Taxidermied Ferity",
-   "zh": "傑作：剝製的野性",
+   "zh": "傑作：製成標本的野性",
    "recipes": [
     [
      9261,
@@ -589,7 +590,7 @@
    "keyword": "Charge",
    "tier": 4,
    "en": "Automated Joints",
-   "zh": "自動關節",
+   "zh": "自動式關節",
    "recipes": [
     [
      9736,
@@ -787,7 +788,7 @@
    "keyword": "Tremor",
    "tier": 3,
    "en": "Epicenter",
-   "zh": "震中",
+   "zh": "震源",
    "recipes": [
     [
      9163,
