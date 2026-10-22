@@ -172,6 +172,9 @@
         "post_delay": 0
     },
     // A paused run (after To Window, a restart, or by hand): Enter opens the Resume dialog.
+    // The game plays its chains for ~3.7 s before the team page (3.6-3.9 s in six live runs, #269) and the entry page, "F1"
+    // and Enter still showing, reads like itself until then: a timeout under that, and MirrorHub taps Enter again. The
+    // wait ends the moment a page shows, so a long timeout costs nothing.
     "MirrorEntryPaused": {
         "recognition": "OCR",
         "roi": [990, 140, 230, 35],
@@ -185,7 +188,7 @@
                 {"roi": [80, 272, 100, 28], "expected": "^TEAMS$"},
                 {"roi": [520, 380, 240, 40], "expected": "^Resume$"}
             ],
-            "timeout": 4
+            "timeout": 8
         }
     },
     // Dungeon Progress with Resume / Halt Exploration / Cancel: always Resume (spec 01 入口頁的分流).
@@ -406,12 +409,16 @@
         "custom_action": "Shop"
     },
     // The red button bottom right reads SKIP, Proceed, Continue or Commence, grey while it does nothing.
+    // Both delays stay at MaaFramework's 200 ms (#258): the action reads the screen at once, with no still() before it,
+    // so pre_delay lets a page finish fading in, and a Choices page it has just tapped is still fading out when it returns.
     "Event": {
         "recognition": "OCR",
         "roi": [1040, 612, 190, 66],
         "expected": "SKIP|Proceed|Continue|Commence",
         "action": "Custom",
-        "custom_action": "Event"
+        "custom_action": "Event",
+        "pre_delay": 200,
+        "post_delay": 200
     },
     // The map's Dungeon Progress panel (the gear, or the back key on the map): Continue closes it.
     // Over the map, whose icons still show: before MirrorMap.
@@ -438,13 +445,17 @@
     },
     // Right-hand icon column (pack detail, team); the Exploring Floor title is often covered.
     // RouteMap picks and enters the next node, or forfeits the run after a wipe's Accept results.
+    // No delays (#258): RouteMap starts with still(), which returns to the hub while the map fades, and enter_node waits
+    // for the map to fade out; a still-fading map was seen on 3 of 205 live hits with the 200 ms pre_delay.
     "MirrorMap": {
         "recognition": "TemplateMatch",
         "roi": [1195, 65, 75, 130],
         "template": "Map/MirrorMap.png",
         "threshold": 0.8,
         "action": "Custom",
-        "custom_action": "RouteMap"
+        "custom_action": "RouteMap",
+        "pre_delay": 0,
+        "post_delay": 0
     },
     // Battle (spec 03 sections 3, 8, 9). The DEFEAT dialog sits over the battle: first.
     "WipeDialog": {
@@ -472,6 +483,9 @@
     },
     // Waiting for input: the Win Rate label, off or on. It moves half a slot (~40 px) right with every
     // extra skill slot: x 984 with 7 slots, ~740 with 1 (a 1-sinner formation, live 2026-10-16).
+    // Both delays stay at 200 ms (#258): hold_turn returns on the Win Rate label of a turn's first frames, and 223 of 232
+    // live hits were followed by BattlePause 0.26 s after the action, 3 by BattleTurn again; a look 0.2 s sooner could be
+    // the second, a second submit of the same turn that taps Win Rate again.
     "BattleTurn": {
         "recognition": "TemplateMatch",
         "roi": [700, 515, 580, 60],
@@ -481,7 +495,9 @@
         ],
         "threshold": 0.8,
         "action": "Custom",
-        "custom_action": "PlayTurn"
+        "custom_action": "PlayTurn",
+        "pre_delay": 200,
+        "post_delay": 200
     },
     // A turn playing out: the pause button replaces the top-right controls. PlayTurn holds a finger down
     // through the turn it started (#150); this holds it again after a hold timed out, a recovery or a restart.

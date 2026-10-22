@@ -127,6 +127,8 @@ def test_the_event_labels_are_the_event_nodes():
     assert event["roi"] == actions.EVENT_BUTTON_LABEL
 
 
+KEPT_DELAYS = ["Event", "BattleTurn"]  # #258: the default 200 ms, written out with the reason in the pipeline
+
 SETTLEMENT = ["ProgressPanel", "RewardCardForgo", "GiftRefuseDialog", "RunVictory", "DefeatScreen", "ExplorationComplete",
               "ClaimPopup", "ResumeDialog"]
 
@@ -156,7 +158,7 @@ def test_mirror_dungeon_waits_for_the_screen_not_for_delays():
     assert unclaimed["custom_action_param"]["target"] == [1030, 470, 160, 50]  # the Enter button
     # VICTORY ends by itself: no tap, so neither delay (MaaFramework's default 200 ms pre_delay and post_delay included).
     assert nodes["Victory"].get("pre_delay") == 0 and nodes["Victory"].get("post_delay") == 0
-    assert [n for n, spec in nodes.items() if spec.get("post_delay", 0) > 0] == []
+    assert [n for n, spec in nodes.items() if spec.get("post_delay", 0) > 0 and n not in KEPT_DELAYS] == []
 
 
 def test_batch_plan_follows_maaframework():
@@ -185,3 +187,22 @@ def test_the_opening_waits_for_screens_not_for_delays():
     # taken longer than the timeout (PipelineTask::run_next, check_timeout_and_sleep).
     assert nodes["HubText"]["timeout"] == 0
     assert nodes["HubTextLost"].get("pre_delay") == 0 and nodes["HubTextLost"].get("post_delay") == 0
+
+
+def test_the_busiest_nodes_state_their_delays():
+    # #258: a node that says nothing sleeps MaaFramework's 200 ms before and after every hit. MirrorMap's action starts
+    # with still() and its enter_node waits out the map's fade, so it needs neither. Event and BattleTurn have no such
+    # guard (Event reads at once; PlayTurn's hold_turn returns in a turn's first frames): their 200 ms stay, written out.
+    nodes = load_nodes("mirror_dungeon.json")
+    assert (nodes["MirrorMap"].get("pre_delay"), nodes["MirrorMap"].get("post_delay")) == (0, 0)
+    for name in KEPT_DELAYS:
+        assert (nodes[name].get("pre_delay"), nodes[name].get("post_delay")) == (200, 200), name
+
+
+def test_mirror_entry_paused_outwaits_the_chains():
+    # #269: Enter on a paused run plays the chains for 3.6-3.9 s (six live runs) with the entry page still readable; a
+    # timeout near that returns to the hub, which taps Enter again. TapUntil ends at the first page, so the timeout
+    # costs nothing but a stuck game's wait: at least twice the slowest run.
+    param = load_nodes("mirror_dungeon.json")["MirrorEntryPaused"]["custom_action_param"]
+    assert param["timeout"] >= 2 * 3.9
+
