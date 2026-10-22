@@ -51,6 +51,11 @@
   - 沒做：頂端吊夾、放大鏡紅章、傾斜；依帳號狀態變的部分：截圖裡的 `1404`、`1412` 實機把 boss 圖畫成黑色剪影（bundle 裡有 `<boss>_silhouette` 精靈圖；什麼條件換成剪影 unverified，推測是帳號還沒見過那個 boss），縮圖畫完整的 boss；卡片左上角的紅點（`[Script]RedDot`，新包提示）也不畫；`iconYPos`（全部 121 個資料項裡只有 6 個有，用途 unverified）；`uiRotation`、`unlockHintTextKey`、`sidePopupUnlockHintTextKey`、`nextImageColor`（地圖節點和鎖定提示用，不影響卡片外觀，unverified）；卡片上的 `Chip`、`rect_level`（執行中才出現的提示，沒有截圖）。
   - 同一份封面的 `1201`／`1203`／`1205`（`AttackType_normal`）和 `1202`／`1204`／`1206`（`AttackType_effective`）靠 boss 圖、攻擊類型圖示和標題分辨。版權屬 © Project Moon（NOTICE.md）。
 - 標題藝術字（`title_art`，#246）：卡面藝術字拼不出包名時，OCR 讀到的字 → 那個包。比對規則和包名相同，比的是左邊的字（同分時算它的長度），比到後換成右邊的包名。1.117.0 有三個，前兩個從 2026-10-22 的實機錄影確認：S.E.A. 卡面寫 `The Magic Hello Bus`（讀成 `HellOBus`、`HellBus`）；The Noon of Violet 名稱上方有 `Walpurgis Night`，常讀成 `WalpurgisN The Noon of`；Line 1 的藝術字是大寫的 `LINE 1 MADNESS`，只讀得到 `MADNESS`（#266）。每季換資料時，從 log 裡比對不到的標題找新的。
+- 一張卡怎麼認（#274，`run_start.pack_cards`／`rank_packs`、`pack_cover.py`）：
+  - 文字框分組與過濾：OCR 框重疊或相距 < 15 px 併成一張卡，兩段文字的中心距離 < 105 px（`CARD_SPAN`；卡片寬 182、間距 211）也算同一張，所以單獨的雜訊框（`M`、等級徽章的 `IV`）不會自成一張。**只丟掉完全等於已知非標題字詞的框**（`NOT_TITLE`：`LIMBUS`、`COMPANY`、`LIMBUS COMPANY`、`CAUTION`、`CLEAR BONUS`、`LV`，只比英數字、不分大小寫）；其餘大寫字都留作那張卡的一行，交給下面各條路判斷。以前的規則是「沒有小寫字母就丟掉」（#270 另留下寬 ≥ 80 px 的大寫框），會把大寫的標題字（`MADNESS`、`THE DUSK OF AMBER`、`WARP EXPRESS`）一起丟掉；logo 第二個字讀壞的雜訊（`WOPIS` 之類）現在留著，由名稱比對跳過。112 頁的詞表與兩種過濾的比較在 [theme-pack-recognition.md](../perf/data/05-game-data/theme-pack-recognition.md)。
+  - 認的路徑（每張卡取第一個認出的，log 的 `floor N card reads` 一行寫每張卡走哪條）：`name` 整個標題（上面的標題比對）→ `title_art` → `keyword` → `cover N` → `shared`（標題像好幾個包而它們分數相同）→ `unread`（用「沒列出的包」分數）。
+  - `keyword`：每個包取一個全表唯一的關鍵字（`run_start.pack_keywords`）：名稱裡最短、且沒有其他名稱（含 `title_art` 的字）包含它的單字（至少 4 個英數字），沒有這樣的單字時取名稱裡最短的唯一片段（`Line 1` → `ine1`）；全表沒有的包就沒有（`S.E.A.`：`sea` 在 `Mountain of Corpses, Sea of Blood` 裡）。OCR 只讀到一部分標題時，卡片文字裡找到關鍵字就認那個包（`match_keyword`：關鍵字原樣出現的優先，同一張卡有兩個包的關鍵字就不猜；沒有原樣的，7 個字以上的關鍵字容許錯一個字，相似度 ≥ 0.85，覆蓋字數最多的贏）。112 頁 531 張卡掃過，關鍵字從沒指向別的包（誤認 0）。
+  - `cover`：整個標題都對不上時，用卡面圖案比對封面（#241 的縮圖）。`data/theme_pack_signatures.json` 每個包一張 12×16 的彩色縮圖（卡面圖案區，BGR），畫面上的卡切同一塊區域、同樣縮圖，比相關係數；最高的 ≥ 0.5 且領先第二名 ≥ 0.1 才算（`pack_cover.read_cover`），標題已經縮小範圍（`Line` 像 Line 1–3、5）時只在那幾個包裡比。卡片位置取標題中心貼齊以 x = 640 為中心、半個間距（105 px）為格的格線。限制：boss 還沒見過的包，實機把 boss 畫成黑色剪影，封面是彩色的，相關性低，這種卡 cover 不出聲（112 頁裡 64 張）；圖案相同、只有標題字不同的包也分不出（`Line 4 - Section #3`／`#4`、`Repressed Wrath`／`Unbound Wrath`）；卡片左右搖擺時（傾斜、重疊）不出聲，所以先等卡片停下再讀（spec 03 第 6 節）。
 - 使用者的主題包方案不在資料檔，存在設定檔，格式見 [04-settings.md](04-settings.md#8-主題包方案theme_pack_plans)。方案裡沒列出的主題包（例如新一季才出現的）用方案的「沒列出的包」分數；空的方案等於全部用這個分數，不報錯。（#11、#19，2026-10-14 定案；#240）
 
 **範例**（主題包名稱取自先前季節，僅示意；「燒傷隊」是使用者在設定檔建立的方案）：
@@ -198,6 +203,7 @@
 
 1. 更新主題包清單（含樓層），並提供這一季的預設主題包方案。使用者方案裡沒有的新主題包自動用方案的「沒列出的包」分數，不必改設定檔。（#11、#19、#240）
    - 重產卡片縮圖：先把新版客戶端的 `UnityCache`、APK 玩家資料（`apk-data/assets/bin/Data`）、靜態資料與英文在地化拆到 `.local/unpack/`（見 `docs/agents/local-dev.md`），再 `uv run python tools/live/queue.py run --resource bench --name theme_covers -- uv run --group unpack python tools/theme_pack_covers.py --contact-sheet <檔名>.png`（要 `bench` 號碼牌，讀 12 GB bundle 與玩家資料）。工具依 `theme_packs.yaml` 每行註解的 id 找資料，印出 `no cover:` 的包（新包沒有封面時 GUI 顯示名稱）；卡片零件的精靈圖名稱或尺寸對不上時直接報錯，表示客戶端改了圖集編號，要重讀卡片 prefab（`MirrorDungeonThemeCardUI`，在 `sharedassets7`）。`tests/test_theme_pack_covers.py` 檢查每個包都有檔、寬度和總量。（#241）
+   - 重產卡片縮圖之後，再跑 `uv run python tools/theme_pack_signatures.py` 更新 `theme_pack_signatures.json`（只讀縮圖，不需要遊戲檔）；`tests/test_pack_cover.py` 檢查檔案和縮圖一致。新一季的 `NOT_TITLE`、關鍵字和 cover 效果用 `uv run python tools/pack_stats.py <截圖資料夾> --glob "*raw*.png"` 重跑（離線 OCR）。（#274）
 2. 更新試煉風險表。（#17）
 3. 檢查選路權重、Cost 對照表與商店數字是否仍符合遊戲。（#10、#12）
 4. 依上一季的記錄補充事件覆寫表。（#11）
