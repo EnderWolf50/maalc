@@ -342,9 +342,11 @@ def test_pick_fusion_any_makes_an_upgrade_before_a_higher_tier_that_is_none():
     # user 2026-10-23: IV + II + II is a IV (the highest) but no upgrade; II + II + II is a III over its II: made first.
     materials = [("a", 4), ("b", 2), ("c", 2), ("d", 2)]
     assert s.pick_fusion(materials, 3, SHOP, POINTS) == [(["b", "c", "d"], 3)]
-    # a Super Shop uses its own thresholds for what upgrades.
-    assert s.pick_fusion(materials, 3, SUPER, POINTS) == [(["b", "c", "d"], tier := s.fusion_tier(3 * POINTS[2], SUPER))]
-    assert tier > 2
+
+    # each shop's own thresholds say what upgrades: bce (II + II + I, 15 points) is a II in a shop, a III in a Super Shop.
+    materials = [("a", 4), ("b", 2), ("c", 2), ("e", 1)]
+    assert s.pick_fusion(materials, 3, SHOP, POINTS) == [(["a", "b", "c"], 4)]
+    assert s.pick_fusion(materials, 3, SUPER, POINTS) == [(["b", "c", "e"], 3)]
 
 
 def test_pick_fusion_tier4_makes_only_a_tier_iv():
