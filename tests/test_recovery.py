@@ -1,8 +1,10 @@
 import json
+from unittest.mock import MagicMock
 
 import numpy as np
 import pytest
 
+import actions
 from recovery import (GAME, TRANSIT, WAIT_STILL, Ladder, Watchdog, floor_limit, focused_package, over_time, read_runs,
                       run_limit, same_screen, thumb)
 from test_pipeline import load_nodes
@@ -310,3 +312,53 @@ def test_ladder_a_game_not_in_front_goes_straight_to_l3():
     assert ladder.stuck("MirrorMap", 1, 0) == (1, None)
     assert ladder.stuck("MirrorMap", 3, 0) == (3, None)  # in an open episode too: L2 cannot help
     assert ladder.counts == {1: 1, 2: 0, 3: 1}
+
+
+@pytest.fixture
+def hub(monkeypatch):
+    """Recover after MirrorHub recognised nothing: a blank screen, every recovery level goes through."""
+    monkeypatch.setattr(actions.time, "sleep", lambda s: None)
+    ctx = MagicMock()
+    ctx.tasker.controller.post_screencap.return_value.wait.return_value.get.return_value = np.zeros((720, 1280, 3), np.uint8)
+    ctx.tasker.controller.post_shell.return_value.wait.return_value.get.return_value = ""  # focus not read
+    actions.RUN.clear()
+    actions.STUCK["flag"] = None
+    yield ctx
+    actions.RUN.clear()
+    actions.STUCK["flag"] = None
+
+
+@pytest.mark.parametrize("focus, flag, first", [
+    ("com.android.vending/x", None, "RecoverL3"),  # #86: the Play Store in front; the back key would only work it
+    ("null", None, "RecoverL3"),  # #86 live: the game alive, black, no window focused for 5 min
+    ("com.ProjectMoon.LimbusCompany/x", None, "RecoverL1"),
+    ("com.android.vending/x", ("MirrorMap", 1, "the map did not change"), "RecoverL1"),  # a screen of the game was read
+])
+def test_recover_restarts_the_game_when_it_is_not_in_front(hub, monkeypatch, tmp_path, focus, flag, first):
+    monkeypatch.setattr(actions, "ROOT", tmp_path)
+    actions.STUCK["flag"] = flag
+    actions.STUCK["watch"].reset()
+    actions.STUCK["ladder"].__init__()
+    shell = hub.tasker.controller.post_shell
+    window = "null" if focus == "null" else "Window{1 u0 " + focus + "}"
+    shell.return_value.wait.return_value.get.return_value = f"  mCurrentFocus={window}\n"
+    actions.Recover().run(hub, None)
+    assert hub.run_task.call_args_list[0].args == (first,)
+    assert shell.called == (flag is None)
+    actions.STUCK["ladder"].__init__()
+
+
+@pytest.mark.parametrize("failed", ["raises", "not succeeded"])
+def test_recover_climbs_as_before_when_the_focus_cannot_be_read(hub, monkeypatch, tmp_path, failed):
+    monkeypatch.setattr(actions, "ROOT", tmp_path)
+    actions.STUCK["watch"].reset()
+    actions.STUCK["ladder"].__init__()
+    job = hub.tasker.controller.post_shell.return_value.wait.return_value
+    if failed == "raises":  # not an adb controller
+        job.get.side_effect = RuntimeError("no adb")
+    else:  # adb failed: the output may be the last command's
+        job.succeeded = False
+        job.get.return_value = "  mCurrentFocus=Window{1 u0 com.android.vending/x}\n"
+    actions.Recover().run(hub, None)
+    assert hub.run_task.call_args_list[0].args == ("RecoverL1",)
+    actions.STUCK["ladder"].__init__()

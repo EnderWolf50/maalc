@@ -1225,42 +1225,6 @@ def test_recover_keeps_the_screen_when_the_hub_recognised_nothing(context, clock
     actions.STUCK["ladder"].__init__()
 
 
-@pytest.mark.parametrize("focus, flag, first", [
-    ("com.android.vending/x", None, "RecoverL3"),  # #86: the Play Store in front; the back key would only work it
-    ("null", None, "RecoverL3"),  # #86 live: the game alive, black, no window focused for 5 min
-    ("com.ProjectMoon.LimbusCompany/x", None, "RecoverL1"),
-    ("com.android.vending/x", ("MirrorMap", 1, "the map did not change"), "RecoverL1"),  # a screen of the game was read
-])
-def test_recover_restarts_the_game_when_it_is_not_in_front(context, monkeypatch, tmp_path, focus, flag, first):
-    monkeypatch.setattr(actions, "ROOT", tmp_path)
-    actions.STUCK["flag"] = flag
-    actions.STUCK["watch"].reset()
-    actions.STUCK["ladder"].__init__()
-    shell = context.tasker.controller.post_shell
-    window = "null" if focus == "null" else "Window{1 u0 " + focus + "}"
-    shell.return_value.wait.return_value.get.return_value = f"  mCurrentFocus={window}\n"
-    actions.Recover().run(context, None)
-    assert context.run_task.call_args_list[0].args == (first,)
-    assert shell.called == (flag is None)
-    actions.STUCK["ladder"].__init__()
-
-
-@pytest.mark.parametrize("failed", ["raises", "not succeeded"])
-def test_recover_climbs_as_before_when_the_focus_cannot_be_read(context, monkeypatch, tmp_path, failed):
-    monkeypatch.setattr(actions, "ROOT", tmp_path)
-    actions.STUCK["watch"].reset()
-    actions.STUCK["ladder"].__init__()
-    job = context.tasker.controller.post_shell.return_value.wait.return_value
-    if failed == "raises":  # not an adb controller
-        job.get.side_effect = RuntimeError("no adb")
-    else:  # adb failed: the output may be the last command's
-        job.succeeded = False
-        job.get.return_value = "  mCurrentFocus=Window{1 u0 com.android.vending/x}\n"
-    actions.Recover().run(context, None)
-    assert context.run_task.call_args_list[0].args == ("RecoverL1",)
-    actions.STUCK["ladder"].__init__()
-
-
 # The run's opening (#115): every wait is a look at the next page, never a fixed delay.
 def page(context, rules):
     """OCR reads rules[roi] there and nothing elsewhere. A rule is a text, [(text, box)], or f(clicks, looks) -> either or None."""
