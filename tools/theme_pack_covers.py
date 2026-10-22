@@ -27,7 +27,7 @@ from theme_pack_card import card  # noqa: E402
 REPO = Path(__file__).resolve().parent.parent
 DATA = REPO / "assets/resource/base/data"
 OUT = DATA / "theme_pack_covers"
-THEME_PACK_LINE = re.compile(r'^\s+- ("[^"]*"|[^#"]+?)\s*#\s*(\d+)\b')  # `  - Name  # 1001 N1 H1`: the comment carries the pack id
+THEME_PACK_LINE = re.compile(r'^\s+("[^"]*"|[^"#:]+?):\s+(?:[NH]\d+\s*)+#\s*(\d+)\b')  # `  Name: N1 H1  # 1001`: name -> floors, the comment carries the pack id
 PLAYER_DATA = "apk-data/assets/bin/Data"
 THEME_FLOOR_DIR = "static/Assets/Resources_moved/StaticData/static-data/mirrordungeon-theme-floor"
 ATLAS_PARTS = {  # key -> (sprite name, size): MirrorDungeonThemeCardUI's layers, in sharedassets2

@@ -14,8 +14,18 @@ MAX_BYTES = 2_000_000
 
 
 def test_pack_ids_reads_the_id_from_each_pack_comment():
-    text = 'packs:\n  - The B.E.  # 3001 H345\n  - "Hell\'s Chicken"  # 1101 N2 H2\n  - S.E.A.  # 1102\n  - "Line 4 - Section #3"  # 1208 N4\n\nevent_packs:\n  - S.E.A.  # 9999\n'
-    assert tpc.pack_ids(text) == {"The B.E.": 3001, "Hell's Chicken": 1101, "S.E.A.": 1102, "Line 4 - Section #3": 1208}
+    text = (
+        "packs:\n  The B.E.: H345  # 3001\n  \"Hell's Chicken\": N2 H2  # 1101\n  S.E.A.: N2 H23  # 1102 DIFFICULT\n"
+        '  "Line 4 - Section #3": N4  # 1208\n  "Walpurgis Night: Hatred and Despair": N34 H34  # 1119\n\n'
+        "event_packs:\n  - S.E.A.\n"
+    )
+    assert tpc.pack_ids(text) == {
+        "The B.E.": 3001,
+        "Hell's Chicken": 1101,
+        "S.E.A.": 1102,
+        "Line 4 - Section #3": 1208,
+        "Walpurgis Night: Hatred and Despair": 1119,
+    }
 
 
 def test_rich_text_title_splits_into_coloured_runs():
