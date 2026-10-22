@@ -3354,7 +3354,7 @@ class Shop(CustomAction):
         picks = fusions(cells, roles, slots, avoid, condition)
         if not picks:
             visit["fuse_scanned"] = True
-            log(f"shop: {roles.count('material')} materials on show, no fusion of {shop.MIN_FUSION} or more meets the condition {condition}")
+            log(f"shop: {roles.count('material')} materials on show, a fusion takes {shop.MIN_FUSION}" + ("" if condition == "any" else f", and none meets the condition {condition}"))
             Shop.to_main(context)
             return False
         group, tier = picks[0]

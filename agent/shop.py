@@ -232,7 +232,8 @@ def gift_role(keyword, gift, kept, avoid=(), material=()):
     return "unknown" if keyword is None else "material"
 
 
-MAX_MATERIAL_TIER = 4  # a fusion gives tier IV at most: a tier V material is always a downgrade (user, #161)
+FUSION_TOP_TIER = 4  # a fusion gives tier IV at most
+MAX_MATERIAL_TIER = FUSION_TOP_TIER  # so a tier V material is always a downgrade (user, #161)
 MIN_FUSION = 3  # materials a fusion takes at least: the game takes 2, spec 03 section 13 (#10) groups of 3 and up
 
 
@@ -243,10 +244,10 @@ def fusion_tier(points, thresholds):
 
 def fusion_wanted(condition, tier, materials):
     """Whether a fusion giving tier is made (#263): any one is; upgrade, only over the highest of its materials' tiers
-    (materials: [(key, tier)]); tier4, only a tier IV (MAX_MATERIAL_TIER: the most a fusion gives)."""
+    (materials: [(key, tier)]); tier4, only a tier IV (FUSION_TOP_TIER)."""
     if condition == "upgrade":
         return tier > max(t for _, t in materials)
-    return condition != "tier4" or tier >= MAX_MATERIAL_TIER
+    return condition != "tier4" or tier >= FUSION_TOP_TIER
 
 
 def pick_fusion(materials, slots, thresholds, points, first=(), condition="any"):
@@ -259,11 +260,14 @@ def pick_fusion(materials, slots, thresholds, points, first=(), condition="any")
     condition (the team's fusion_condition, #263) keeps out the groups fusion_wanted refuses: the best of the rest is
     made, and none when no group is left.
     """
+    def total(group):
+        return sum(points[t] for _, t in group)
+
     def tier_of(group):
-        return fusion_tier(sum(points[t] for _, t in group), thresholds)
+        return fusion_tier(total(group), thresholds)
 
     def rank(group):
-        return -tier_of(group), -sum(k in first for k, _ in group), sum(points[t] for _, t in group), len(group)
+        return -tier_of(group), -sum(k in first for k, _ in group), total(group), len(group)
 
     left, out = [m for m in materials if m[1] <= MAX_MATERIAL_TIER], []
     while len(left) >= MIN_FUSION:
