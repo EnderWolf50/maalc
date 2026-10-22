@@ -90,6 +90,13 @@ def test_a_tap_that_took_late_and_was_repeated_is_tapped_a_third_time_when_the_c
     assert "2 taps repeated" in actions.LOG[-1]
 
 
+def test_after_a_tap_that_took_late_the_next_cards_wait_for_their_first_tap_longer(context, monkeypatch):
+    # The count shows 1.1 s after each tap: without it every card would be repeated, picked off and tapped a third time.
+    game = Game(monkeypatch, lag=1.1)
+    assert actions.Formation.pick(context, ORDER)
+    assert [len(game.card_taps(s)) for s in ORDER] == [3, 1, 1] and game.count == 3
+
+
 def test_a_count_that_is_never_readable_is_stuck_after_two_taps(context, monkeypatch):
     game = Game(monkeypatch, blind=99)
     assert not actions.Formation.pick(context, ORDER[:1])

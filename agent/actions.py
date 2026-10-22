@@ -1882,8 +1882,9 @@ class Formation(CustomAction):
         Every tap is followed at once by until()'s looks at the count. A card whose count was read but is not n after
         PICK_RETAP s is tapped again. A second tap on a card that took the first one picks it off, so after a repeated
         tap the count is watched PICK_SETTLE s for a fall back, which is one more tap (the repeats wait PICK_SETTLE s
-        for the count too). A count that could not be read for the whole wait (a page still moving) is waited for
-        once more before the card is tapped again; two such taps and the pick is stuck, for recovery.
+        for the count too); once that fall back shows, the later cards wait PICK_SETTLE s for their first tap as well.
+        A count that could not be read for the whole wait (a page still moving) is waited for once more before the
+        card is tapped again. Two taps after which the count was not n end the pick as stuck, for recovery.
         """
         def count_is(n, seen=None):
             def done(image):
@@ -1902,7 +1903,7 @@ class Formation(CustomAction):
             dialog[:] = [has(text(context, image, RESET_DIALOG), "Reset Deployment")]
             return dialog[0] or count_is(0)(image)
 
-        start, retaps = time.monotonic(), 0
+        start, retaps, first_wait = time.monotonic(), 0, PICK_RETAP
         for _ in range(3):
             page_guard(context, "Formation")
             image = tap_then(context, *CLEAR_SELECTION, cleared, timeout=1.5)
@@ -1919,13 +1920,15 @@ class Formation(CustomAction):
                 page_guard(context, "Formation")
                 seen = []
                 done = count_is(n, seen)
-                wait = PICK_RETAP if attempt == 0 else PICK_SETTLE  # a repeat has nothing to gain by hurrying
+                wait = first_wait if attempt == 0 else PICK_SETTLE  # a repeat has nothing to gain by hurrying
                 image = tap_then(context, *card_xy(battle.SINNERS.index(sinner), CARD_TAP_Y), done, timeout=wait)
                 if image is None and not seen:
                     image = until(context, done, timeout=wait)
-                if image is not None and (attempt == 0 or until(context, fell_from(n), timeout=PICK_SETTLE) is None):
-                    picked = True
-                    break
+                if image is not None:
+                    if attempt == 0 or until(context, fell_from(n), timeout=PICK_SETTLE) is None:
+                        picked = True
+                        break
+                    first_wait = PICK_SETTLE  # a tap took late: the next cards' first taps wait as long
                 retaps += 1
                 misses += image is None
                 if misses == 2:
