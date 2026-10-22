@@ -15,14 +15,15 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+import yaml
 from PIL import Image
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "agent"))  # run as a script: as pytest's pythonpath has it
 
 COIN = (26, 24)  # the Cost coin template's size: the box node_at hands coin_cost
-NORMAL = {75: "battle", 100: "focused", 120: "risky", 150: "abno"}  # map_weights.yaml node_costs
-HARD = {85: "battle", 120: "focused", 150: "risky", 180: "abno"}
+NODE_COSTS = yaml.safe_load((ROOT / "assets" / "resource" / "base" / "data" / "map_weights.yaml").read_text(encoding="utf-8"))["node_costs"]
+NORMAL, HARD = NODE_COSTS["normal"], NODE_COSTS["hard"]
 # Labelled by eye: image -> [x, y, the number printed] of each lit or dimmed node coin (not the boss's, not the
 # resource bar's). 2026-10-22 live, floor 3 (MapCostFloor3) and floor 4 (MapCostFloor4): a 100 read None, a 120 read 20.
 COINS = json.loads((ROOT / "tests" / "data" / "map_costs.json").read_text(encoding="utf-8"))
@@ -159,6 +160,19 @@ def test_a_first_read_that_fits_is_not_read_again(monkeypatch):
     monkeypatch.setattr(actions, "coin_number", script)
     assert actions.coin_cost(None, None, (0, 0, 26, 24), NORMAL) == 120
     assert script.masks == [actions.COIN_MASKS[0]]
+
+
+@pytest.mark.parametrize(("run", "hard"), [
+    ({}, False),  # no difficulty yet: normal, as "auto" (None) is
+    ({"difficulty": None}, False),
+    ({"difficulty": "hard"}, True),
+    ({"difficulty": "hard", "floor_hard": False}, False),  # the floor's own difficulty wins
+    ({"difficulty": "normal", "floor_hard": True}, True),
+])
+def test_is_hard_reads_the_floors_difficulty_then_the_runs_and_a_missing_one_as_normal(monkeypatch, run, hard):
+    import actions
+    monkeypatch.setattr(actions, "current_run", lambda context: run)
+    assert actions.is_hard(None) is hard
 
 
 if __name__ == "__main__":

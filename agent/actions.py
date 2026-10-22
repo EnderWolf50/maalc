@@ -1355,10 +1355,9 @@ def coin_number(context, image, box, bright, sat):
     """The number printed beside a map node's Cost coin (box), or None when fewer than two digits read (#91).
 
     The digits are cream, bright and barely saturated over any theme pack's backdrop: cut out (as order_marks does)
-    and read as one line. #257, live 2026-10-22: a 100 read None and a 120 read 20. The crop began 8 px inside the
-    coin's right edge, where the stem of a 3-digit number's 1 starts, and a brightness floor of 170 left the digits'
-    shaded lower half ragged (a 7 read as a 1). It now begins 16 px in and has a white margin (the OCR reads a glyph
-    on the crop's edge badly). A single digit is a part read: None.
+    and read as one line. The crop starts 16 px inside the coin's right edge, where a 3-digit number's 1 begins, and
+    has a white margin: the OCR reads a glyph on the crop's edge badly (#257; spec 03 section 7). A single digit is
+    a part read: None.
     """
     x, y, w, _ = box
     part = image[max(0, y + 8):y + 38, max(0, x + w - 16):x + w + 32]
