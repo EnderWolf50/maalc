@@ -272,7 +272,7 @@ def pick_fusion(materials, slots, thresholds, points, first=(), condition="any")
     highest tier, then holding the most of first (gifts the team avoids, #90), then worth the fewest points; then
     again from what is left, until fewer than 3 are. A tier V gift is never a material (MAX_MATERIAL_TIER).
     condition (the team's fusion_condition, #263) keeps out the groups fusion_wanted refuses: the best of the rest is
-    made, and none when no group is left.
+    made, and none when no group is left. "any" ranks the groups that upgrade (user, 2026-10-23) before the rest.
     """
     def total(group):
         return sum(points[t] for _, t in group)
@@ -281,7 +281,8 @@ def pick_fusion(materials, slots, thresholds, points, first=(), condition="any")
         return fusion_tier(total(group), thresholds)
 
     def rank(group):
-        return -tier_of(group), -sum(k in first for k, _ in group), total(group), len(group)
+        no_upgrade = condition == "any" and not fusion_wanted("upgrade", tier_of(group), group)
+        return no_upgrade, -tier_of(group), -sum(k in first for k, _ in group), total(group), len(group)
 
     left, out = [m for m in materials if m[1] <= MAX_MATERIAL_TIER], []
     while len(left) >= MIN_FUSION:

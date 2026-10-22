@@ -281,7 +281,7 @@
           "fusion_condition": {
             "enum": ["any", "upgrade", "tier4"],
             "default": "any",
-            "description": "when the shop fuses (#263): any (whenever the materials make the highest tier they can), upgrade (only a tier above the highest material), tier4 (only a tier IV)"
+            "description": "when the shop fuses (#263): any (whenever there are materials, groups that upgrade first), upgrade (only a tier above the highest material), tier4 (only a tier IV)"
           }
         }
       }

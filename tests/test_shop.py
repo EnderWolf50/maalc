@@ -334,8 +334,17 @@ def test_pick_fusion_upgrade_wants_a_tier_over_the_highest_material():
 def test_pick_fusion_upgrade_skips_the_best_group_when_it_is_no_upgrade():
     # #263: IV + II + II is a IV (27 points), the most; but a IV material cannot be topped, so II + II + II (a III) is made.
     materials = [("a", 4), ("b", 2), ("c", 2), ("d", 2)]
-    assert s.pick_fusion(materials, 3, SHOP, POINTS) == [(["a", "b", "c"], 4)]
+    assert s.pick_fusion(materials, 3, SHOP, POINTS, condition="tier4") == [(["a", "b", "c"], 4)]
     assert s.pick_fusion(materials, 3, SHOP, POINTS, condition="upgrade") == [(["b", "c", "d"], 3)]
+
+
+def test_pick_fusion_any_makes_an_upgrade_before_a_higher_tier_that_is_none():
+    # user 2026-10-23: IV + II + II is a IV (the highest) but no upgrade; II + II + II is a III over its II: made first.
+    materials = [("a", 4), ("b", 2), ("c", 2), ("d", 2)]
+    assert s.pick_fusion(materials, 3, SHOP, POINTS) == [(["b", "c", "d"], 3)]
+    # a Super Shop uses its own thresholds for what upgrades.
+    assert s.pick_fusion(materials, 3, SUPER, POINTS) == [(["b", "c", "d"], tier := s.fusion_tier(3 * POINTS[2], SUPER))]
+    assert tier > 2
 
 
 def test_pick_fusion_tier4_makes_only_a_tier_iv():

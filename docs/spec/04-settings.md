@@ -199,7 +199,7 @@
 | 泛用（無體系）飾品 | `keywordless` | 字串 | `keep` 不合成、不出售／`fuse` 可以當合成材料、不出售／`fuse_or_sell` 合成、出售都可以。#161 把原本的開關 `keep_keywordless`（開＝`keep`、關＝`fuse_or_sell`）和「要不要賣泛用飾品」合成這一個選項，兩個開關會多出「不合成卻可以賣」這種幾乎用不到的組合 | `keep` | #77、#161 |
 | 出售的最高階級 | `sell_max_tier` | 整數 1–5 | 比它高階的飾品不出售；4 = V 階永遠不賣 | 4 | #161 |
 | 可以出售殘影 | `sell_vestiges` | 布林 | 殘影（只能當合成材料或出售的 5 個飾品，自成一類，不是泛用飾品，見 [03](03-decisions.md) 第 13 節）可以出售，仍受 `sell_max_tier` 限制；不管 `keywordless` 怎麼設。殘影一律當合成材料（V 階除外），要保留某個殘影就把它加進 `keep_gifts` | 關 | #161 |
-| 合成條件 | `fusion_condition` | 字串 | `any` 材料夠就合（合出材料能做到的最高階）／`upgrade` 合出的階級比這組材料的最高階還高才合／`tier4` 只在能合出 IV 級時才合。階級由材料點數算出（[03](03-decisions.md) 第 13 節），不花星光；不合成的材料照一般規則仍可能被出售。GUI 的名稱（使用者 2026-10-22 定案）：任意合成／升階才合／只合 IV，英文 Any／Upgrades only／Tier IV only | `any` | #263 |
+| 合成條件 | `fusion_condition` | 字串 | `any` 材料夠就合（能升階的組合先合，再合出材料能做到的最高階）／`upgrade` 合出的階級比這組材料的最高階還高才合／`tier4` 只在能合出 IV 級時才合。階級由材料點數算出（[03](03-decisions.md) 第 13 節），不花星光；不合成的材料照一般規則仍可能被出售。GUI 的名稱（使用者 2026-10-22 定案）：任意合成／升階才合／只合 IV，英文 Any／Upgrades only／Tier IV only | `any` | #263 |
 | 商店保留的飾品 | `keep_gifts` | 陣列，不重複 | 商店不拿去合成也不出售的飾品 `[{"keyword", "tier", "name"}, …]`，格式同 `gift_search.gifts`，不限個數；觀測表裡的飾品用 Gift Search 圖示比對認出；另外可以放 5 個殘影（`$defs/vestige`，階級 1–5），也用圖示認出 | `[]` | #77 |
 | 觀測飾品 | `gift_search` | 物件 | `{"enabled": 布林, "gifts": [{"keyword", "tier", "name"}, …]}`：開關，與依優先順序排列、不重複、最多 3 個的飾品清單。`keyword` 是觀測頁的分頁（主要體系的 10 個值加 `Keywordless`），`tier` 是 1–3，`name` 是遊戲顯示的英文名 | `{"enabled": false, "gifts": []}` | #54 |
 
