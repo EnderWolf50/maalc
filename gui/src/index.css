@@ -6,6 +6,7 @@
   --panel: #fff;
   --accent: #2f5bd3;
   --bad: #c62828;
+  --fl-n-bg: #e3edff; --fl-n-fg: #2457c5; --fl-h-bg: #ffe5e0; --fl-h-fg: #b23a1e; /* floor badges: NORMAL blue, HARD red */
   font: 14px/1.45 "Segoe UI", "Microsoft JhengHei UI", system-ui, sans-serif;
   color: var(--fg);
   background: var(--bg);
@@ -229,8 +230,8 @@ details.panel > * + * { margin-top: 12px; }
 .pk small { color: var(--muted); font-size: 10.5px; }
 .pk small em { font-style: normal; color: var(--accent); }
 /* Floor badges: blue NORMAL, red HARD, only the floors inside. */
-small.fl { background: #e3edff; color: #2457c5; font-size: 10.5px; font-weight: 600; padding: 0 4px; border-radius: 3px; }
-small.fl.hard { background: #ffe5e0; color: #b23a1e; }
+small.fl { background: var(--fl-n-bg); color: var(--fl-n-fg); font-size: 10.5px; font-weight: 600; padding: 0 4px; border-radius: 3px; }
+small.fl.hard { background: var(--fl-h-bg); color: var(--fl-h-fg); }
 .floorkey { display: flex; align-items: center; gap: 4px; }
 .pk.unlisted { border-style: dashed; color: var(--muted); }
 .pk.bad { border-color: var(--bad); outline: 1px solid var(--bad); }
