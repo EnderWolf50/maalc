@@ -227,7 +227,7 @@ function PackPlanEditor({ data, plan, path, onChange }: {
     const floors = data.packs[name] === undefined ? undefined : floorLabel(data.packs[name], floorText);
     return (
       <span key={name} className={"pk" + (path && bad(`${path}/weights/${name}`) ? " bad" : "")}
-        title={floors} {...dragged(name)} {...clickable(name, weightOf(plan, name))}>
+        {...dragged(name)} {...clickable(name, weightOf(plan, name))}>
         {images && (coverOf(name) ? <img className="img" src={coverOf(name)} alt="" draggable={false} /> : <span className="img" aria-hidden />)}
         <span className="nm">{name}</span>
         <small>{floors ?? <em>{t("packNotInData")}</em>}</small>

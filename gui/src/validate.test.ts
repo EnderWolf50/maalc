@@ -141,10 +141,9 @@ test("version 8 theme pack marks become weights that pick as before", () => {
 test("parseThemePacks reads the season's data file", () => {
   const data = parseThemePacks(themePacksYaml);
   expect(data.packs["Walpurgis Night: Hatred and Despair"]).toBe("N34 H34");
-  expect(data.event_packs).toContain("Walpurgis Night: Hatred and Despair");
   // #240: AALC's weights, threshold 0, unlisted 0.
   expect(data.default_plan).toMatchObject({ threshold: 0, unlisted: 0, event_packs: "weight" });
   expect(data.default_plan.weights["The B.E."]).toBe(10);
   expect(Object.keys(data.default_plan.weights).every((p) => p in data.packs)).toBe(true);
-  expect(parseThemePacks("")).toEqual({ packs: {}, event_packs: [], default_plan: { weights: {}, threshold: 0, unlisted: 0, event_packs: "weight" } });
+  expect(parseThemePacks("")).toEqual({ packs: {}, default_plan: { weights: {}, threshold: 0, unlisted: 0, event_packs: "weight" } });
 });

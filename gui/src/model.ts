@@ -97,21 +97,24 @@ export interface StarlightPlan extends StarlightValues { id: string; name: strin
  * read, and the event packs' mode. */
 export interface PackPlanValues { weights: Record<string, number>; threshold: number; unlisted: number; event_packs: string }
 export interface ThemePackPlan extends PackPlanValues { id: string; name: string }
-/** assets/resource/base/data/theme_packs.yaml (spec 05 section 2): the season's packs with their floors ("N12 H1"),
- * the event packs and the locked default plan. */
-export interface ThemePacks { packs: Record<string, string>; event_packs: string[]; default_plan: PackPlanValues }
+/** assets/resource/base/data/theme_packs.yaml (spec 05 section 2): the season's packs with their floors ("N12 H1")
+ * and the locked default plan. */
+export interface ThemePacks { packs: Record<string, string>; default_plan: PackPlanValues }
 
 export const EVENT_MODES: string[] = P.theme_pack_plans.items.properties.event_packs.enum;
 export const newPackPlan = (): PackPlanValues => ({ weights: {}, threshold: 0, unlisted: 0, event_packs: "weight" });
 
 export function parseThemePacks(text: string): ThemePacks {
   const data = (parseYaml(text) ?? {}) as Partial<ThemePacks>;
-  return { packs: data.packs ?? {}, event_packs: data.event_packs ?? [], default_plan: { ...newPackPlan(), ...data.default_plan } };
+  return { packs: data.packs ?? {}, default_plan: { ...newPackPlan(), ...data.default_plan } };
 }
+
+/** The floor digits of one difficulty in a pack's floors: "N12 H1", "N" -> "12"; undefined when it has none. */
+const floorDigits = (floors: string, letter: "N" | "H") => floors.match(new RegExp(letter + "(\\d+)"))?.[1];
 
 /** Whether a pack with these floors ("N12 H1": NORMAL 1-2, HARD 1) shows on difficulty ("" any) and floor (0 any). */
 export function onFloor(floors: string, difficulty: "" | "normal" | "hard", floor: number) {
-  const on = (letter: string) => floors.match(new RegExp(letter + "(\\d+)"))?.[1];
+  const on = (letter: "N" | "H") => floorDigits(floors, letter);
   const sets = (difficulty ? [on(difficulty === "hard" ? "H" : "N")] : [on("N"), on("H")]).filter((x) => x !== undefined);
   return sets.some((f) => floor === 0 || f!.includes(String(floor)));
 }
@@ -129,7 +132,7 @@ export function floorLabel(floors: string, text: { normal: string; hard: string;
     return groups.map((g) => (g.length > 1 ? `${g[0]}–${g[g.length - 1]}` : `${g[0]}`)).join(text.sep);
   };
   return (["N", "H"] as const).flatMap((d) => {
-    const digits = floors.match(new RegExp(d + "(\\d+)"))?.[1];
+    const digits = floorDigits(floors, d);
     return digits ? [(d === "N" ? text.normal : text.hard).replace("{f}", runs(digits))] : [];
   }).join(text.join);
 }
