@@ -35,7 +35,12 @@
 - 活動包：資料裡 `unlockCode` 為 9xxx 的 22 個主題包是活動劇情通關後永久加入的，其中 15 個出現在一般鏡牢。資料沒有限時欄位，所以活動包用英文名稱辨認，另列在 `event_packs`；預設方案一律中立。只在第 5 層出現的是 `Spring Cultivation`、`Twining Threads`、`Mnestic Experience`。（#89，2026-10-18 定案）
 - 預設主題包方案：主題包名稱 → 偏好／中立／避開，開發者每季提供，使用者不能修改。沒列出的主題包視為中立。（#11、#19，2026-10-14 定案）
   - 1.117.0 的內容（#89）：偏好 `The B.E.`（困難第 3–5 層的隱藏主題包）；避開遊戲資料標為 `difficulty: DIFFICULT` 的 29 個（活動包除外）；其餘中立。這是開發者自己依遊戲資料整理的規則，不沿用其他專案的權重表（[ADR 0001](../adr/0001-mit-and-no-agpl-derived-assets.md)）。卡片上的 CAUTION 標記和 DIFFICULT 無關（`Nagel und Hammer` 也有），不拿來判斷。
-- 封面縮圖（#241）：`resource/base/data/theme_pack_covers/<主題包 id>.webp`（寬 120，約 0.7 MB）與 `index.json`（主題包名稱 → 檔名），給設定 GUI 顯示主題包用，清單裡 94 個包都有，沒有缺封面的包。`1201`／`1203`／`1205` 共用同一張圖，`1202`／`1204`／`1206` 也是（遊戲資料裡它們的 `packSpriteId` 就相同：`AttackType_normal`、`AttackType_effective`），圖片模式分不出這些包，要靠名稱。封面是遊戲的 `card_pack` 精靈圖，主題包的 `packSpriteId`（`mirrordungeon-theme-floor`）就是精靈圖名稱，分散在卡包、鏡牢、活動 bundle，隱藏包 `The B.E.`（`HiddenTheme`）在 `skinpreview-new-pack`。`tools/theme_pack_covers.py` 一次產生，見 §8 第 1 點。版權屬 © Project Moon（NOTICE.md）。
+- 卡片縮圖（#241）：`resource/base/data/theme_pack_covers/<主題包 id>.webp`（寬 180，94 張共 1.56 MB）與 `index.json`（主題包名稱 → 檔名），給設定 GUI 的圖片模式用，清單裡 94 個包都有，沒有缺的。縮圖是遊戲內卡片的樣子（正面、不含吊夾和放大鏡紅章），由 `tools/theme_pack_covers.py` 照遊戲卡片 prefab（`MirrorDungeonThemeCardUI`）的疊法合成：
+  - 封面：`card_pack` 精靈圖，`mirrordungeon-theme-floor` 的 `uiConfigs.packSpriteId` 就是精靈圖名稱，分散在卡包、鏡牢、活動 bundle；隱藏包 `The B.E.`（`HiddenTheme`）在 `skinpreview-new-pack`。
+  - boss 圖（`bossSpriteId`）、logo（`isHideLogo` 為真的包不畫）、警告三角（`isShowWarning`）、攻擊類型圖示（`attackType`）、卡片外框：外框與圖示在 APK 玩家資料（`sharedassets2/1`），按名稱抽並檢查尺寸，客戶端改編號時工具會報錯。
+  - 標題：英文在地化的 `name`（有 `specialName` 的用它，例如 `1119` 的雙色字），顏色取 `uiConfigs.textColor`，字型 Mikodacs（OFL 1.1，從玩家資料讀，不進 repo），依遊戲的自動縮放排成一行或兩行。這樣 `1201`／`1203`／`1205` 共用同一張封面（`AttackType_normal`）的 6 包也分得出來（標題、boss 圖不同）。
+  - 沒做：頂端吊夾、放大鏡紅章、傾斜（實機卡片會左右搖擺）、屬性（`attributeType`）圖示（沒找到圖示精靈圖，unverified）、`isShowBaton`、`iconYPos`。警告三角與攻擊圖示的位置、顏色是對照實機截圖估的，不是 prefab 的值。
+  - 版權屬 © Project Moon（NOTICE.md）。
 - 使用者的主題包方案不在資料檔，存在設定檔，格式見 [04-settings.md](04-settings.md#8-主題包方案theme_pack_plans)。方案裡沒列出的主題包（例如新一季才出現的）視為中立；空的方案等於全部中立，不報錯。（#11、#19，2026-10-14 定案）
 
 **範例**（主題包名稱取自先前季節，僅示意；「燒傷隊」是使用者在設定檔建立的方案）：
@@ -179,7 +184,7 @@
 新一季鏡牢開始時，開發者依序：
 
 1. 更新主題包清單，並提供這一季的預設主題包方案。使用者方案裡沒有的新主題包自動視為中立，不必改設定檔。（#11、#19）
-   - 重產封面縮圖：先把新版客戶端的 `UnityCache` 與靜態資料拆到 `.local/unpack/`（見 `docs/agents/local-dev.md`），再 `uv run python tools/live/queue.py run --resource bench --name theme_covers -- uv run --group unpack python tools/theme_pack_covers.py --contact-sheet <檔名>.png`（約 2 分鐘，要 `bench` 號碼牌）。工具依 `theme_packs.yaml` 每行註解的 id 找封面，印出 `no cover:` 的包（新包沒有封面時 GUI 顯示名稱）；`tests/test_theme_pack_covers.py` 檢查每個包都有檔。（#241）
+   - 重產卡片縮圖：先把新版客戶端的 `UnityCache`、APK 玩家資料（`apk-data/assets/bin/Data`）、靜態資料與英文在地化拆到 `.local/unpack/`（見 `docs/agents/local-dev.md`），再 `uv run python tools/live/queue.py run --resource bench --name theme_covers -- uv run --group unpack python tools/theme_pack_covers.py --contact-sheet <檔名>.png`（要 `bench` 號碼牌，讀 12 GB bundle 與玩家資料）。工具依 `theme_packs.yaml` 每行註解的 id 找資料，印出 `no cover:` 的包（新包沒有封面時 GUI 顯示名稱）；卡片零件的精靈圖名稱或尺寸對不上時直接報錯，表示客戶端改了圖集編號，要重讀卡片 prefab（`MirrorDungeonThemeCardUI`，在 `sharedassets7`）。`tests/test_theme_pack_covers.py` 檢查每個包都有檔、寬度和總量。（#241）
 2. 更新試煉風險表。（#17）
 3. 檢查選路權重、Cost 對照表與商店數字是否仍符合遊戲。（#10、#12）
 4. 依上一季的記錄補充事件覆寫表。（#11）

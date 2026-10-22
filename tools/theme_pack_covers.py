@@ -1,10 +1,13 @@
-"""Cut the theme pack covers (#241) out of the game's asset bundles into assets/resource/base/data/theme_pack_covers/.
+"""Compose the theme pack cards (#241) from the game files into assets/resource/base/data/theme_pack_covers/.
 
-Usage: uv run --group unpack python tools/theme_pack_covers.py [--width 120] [--contact-sheet FILE]
-Reads `.local/unpack/` (the pulled UnityCache bundles and the static data, see docs/agents/local-dev.md "Game data";
-the yearly rerun is docs/spec/05-game-data.md section 8);
-writes `<pack id>.webp` per pack of theme_packs.yaml plus `index.json` ({pack name: file}), and lists every pack without a cover.
-Run it as a `bench` ticket (tools/live/queue.py), it reads all 12 GB of bundles.
+Usage: uv run --group unpack python tools/theme_pack_covers.py [--width 180] [--contact-sheet FILE]
+Reads `.local/unpack/` (the pulled UnityCache bundles, the APK's player data and the static data, see
+docs/agents/local-dev.md "Game data"; the yearly rerun is docs/spec/05-game-data.md section 8).
+Each card stacks the game's own layers (tools/theme_pack_card.py): the cover art and boss picture from the bundles, the
+frame, logo, warning and badge sprites and the Mikodacs font from the player data, the title from the English localization,
+the colours and flags from `uiConfigs`. Writes `<pack id>.webp` per pack of theme_packs.yaml plus `index.json`
+({pack name: file}) and lists every pack without a cover.
+Run it as a `bench` ticket (tools/live/queue.py): it reads all 12 GB of bundles and the player data.
 """
 
 import argparse
@@ -19,12 +22,26 @@ from PIL import Image
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from local_dir import local_dir  # noqa: E402
+from theme_pack_card import card  # noqa: E402
 
 REPO = Path(__file__).resolve().parent.parent
 DATA = REPO / "assets/resource/base/data"
 OUT = DATA / "theme_pack_covers"
 THEME_PACK_LINE = re.compile(r'^\s+- ("[^"]*"|[^#"]+?)\s*#\s*(\d+)\b')  # `  - Name  # 1001 N1 H1`: the comment carries the pack id
+PLAYER_DATA = "apk-data/assets/bin/Data"
 THEME_FLOOR_DIR = "static/Assets/Resources_moved/StaticData/static-data/mirrordungeon-theme-floor"
+ATLAS_PARTS = {  # key -> (sprite name, size): MirrorDungeonThemeCardUI's layers, in sharedassets2
+    "badge": ("MainUI_MirrorDungeon4_4_4", (46, 46)),
+    "warning": ("MainUI_MirrorDungeon4_4_6", (128, 115)),
+    "silhouette": ("MainUI_MirrorDungeon4_4_7", (190, 340)),
+    "front": ("MainUI_MirrorDungeon4_4_8", (190, 336)),
+    "logo": ("MainUI_MirrorDungeon4_4_16", (127, 66)),
+}
+ICON_PARTS = {  # the attack type icons, in sharedassets1
+    "attack_pierce": ("Icon_AttackType_pierce", (90, 70)),
+    "attack_hit": ("Icon_AttackType_hit", (78, 79)),
+    "attack_slash": ("Icon_AttackType_slash", (80, 69)),
+}
 
 
 def pack_ids(yaml_text: str) -> dict[str, int]:
@@ -40,23 +57,65 @@ def pack_ids(yaml_text: str) -> dict[str, int]:
     return packs
 
 
-def sprite_ids(floor_dir: Path) -> dict[int, str]:
-    """Pack id -> `packSpriteId`, the cover's sprite name, from the static data."""
+def ui_configs(floor_dir: Path) -> dict[int, dict]:
+    """Pack id -> `uiConfigs` (cover and boss sprite names, title colour, logo and warning flags), from the static data."""
     out = {}
     for f in floor_dir.glob("*.json"):
         for t in json.loads(f.read_text(encoding="utf-8-sig"))["list"]:
-            out[t["id"]] = t["uiConfigs"]["packSpriteId"]
+            out[t["id"]] = t["uiConfigs"]
     return out
+
+
+def titles(localize: Path) -> dict[int, str]:
+    """Pack id -> the title the card shows: `specialName` (TMP rich text) when the pack has one, else `name`."""
+    rows = json.loads(localize.read_text(encoding="utf-8-sig"))["dataList"]
+    return {r["id"]: r.get("specialName") or r["name"] for r in rows}
+
+
+def player_files(data: Path) -> list[Path]:
+    """The player data files, each once: a file the APK split into `<name>.splitN` loads whole from `.split0`."""
+    return sorted(p for p in data.iterdir() if p.suffix not in (".resS", ".resource") and not re.search(r"\.split(?!0$)\d+$", p.name))
+
+
+def unity(path: Path):
+    import UnityPy
+
+    UnityPy.config.FALLBACK_UNITY_VERSION = "6000.3.12f1"  # the files carry a stripped version, 1.117.0's engine
+    return UnityPy.load(str(path))
+
+
+def game_parts(data: Path) -> dict[str, Image.Image]:
+    """The card's layer sprites from the player data, found by name and checked by size (a renumbered atlas fails here)."""
+    out = {}
+    for file, wanted in (("sharedassets2.assets.split0", ATLAS_PARTS), ("sharedassets1.assets.split0", ICON_PARTS)):
+        names = {sprite: key for key, (sprite, _) in wanted.items()}
+        for o in unity(data / file).objects:
+            if o.type.name == "Sprite" and (r := o.read()).m_Name in names:
+                out[names[r.m_Name]] = r.image
+    for key, (sprite, size) in {**ATLAS_PARTS, **ICON_PARTS}.items():
+        if key not in out or out[key].size != size:
+            got = out[key].size if key in out else "missing"
+            raise SystemExit(f"card part {sprite}: {got}, expected {size}: the client renumbered its sprites, re-read the card prefab (docs/spec/05-game-data.md section 8)")
+    return out
+
+
+def font_file(data: Path, dest: Path) -> Path:
+    """The title font, Mikodacs (gluk, SIL OFL 1.1), cut out of the player data once and kept next to it."""
+    if not dest.exists():
+        for p in player_files(data):
+            for o in unity(p).objects:
+                if o.type.name == "Font" and (r := o.read()).m_Name == "Mikodacs":
+                    dest.write_bytes(bytes(r.m_FontData))
+                    return dest
+        raise SystemExit("font Mikodacs not found in the player data")
+    return dest
 
 
 def covers(cache: Path, wanted: set[str]) -> dict[str, Image.Image]:
     """Sprite name -> image (a Sprite wins over its Texture2D)."""
-    import UnityPy
-
-    UnityPy.config.FALLBACK_UNITY_VERSION = "6000.3.12f1"  # the bundles carry a stripped version, 1.117.0's engine
     out = {}
     for p in sorted(cache.glob("*/*/__data")):  # UnityCache/<hash of the bundle name>/<content hash>/__data; 1556 bundles, ~2 minutes
-        for o in UnityPy.load(str(p)).objects:
+        for o in unity(p).objects:
             if o.type.name in ("Sprite", "Texture2D"):
                 r = o.read()
                 if r.m_Name in wanted and (o.type.name == "Sprite" or r.m_Name not in out):
@@ -70,7 +129,7 @@ def contact_sheet(files: list[tuple[str, Path]], dest: Path):
 
     ims = [(name, Image.open(f).convert("RGBA")) for name, f in files]
     w, h = ims[0][1].size
-    cols = 16
+    cols = 12
     sheet = Image.new("RGB", (cols * (w + 6) + 6, -(-len(ims) // cols) * (h + 22) + 6), "#222")
     d = ImageDraw.Draw(sheet)
     for i, (name, im) in enumerate(ims):
@@ -82,7 +141,7 @@ def contact_sheet(files: list[tuple[str, Path]], dest: Path):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--width", type=int, default=120)
+    ap.add_argument("--width", type=int, default=180)
     ap.add_argument("--contact-sheet", type=Path)
     args = ap.parse_args()
     if sys.platform == "win32":  # below normal: a bench job beside a live run
@@ -90,19 +149,24 @@ def main():
 
     unpack = local_dir("unpack")
     packs = pack_ids((DATA / "theme_packs.yaml").read_text(encoding="utf-8"))
-    sprite = sprite_ids(unpack / THEME_FLOOR_DIR)
-    images = covers(unpack / "raw/UnityCache", {sprite[i] for i in packs.values() if i in sprite})
+    ui = ui_configs(unpack / THEME_FLOOR_DIR)
+    name = titles(unpack / "raw/Localize/en/EN_MirrorDungeonTheme-1.json")
+    parts = game_parts(unpack / PLAYER_DATA)
+    font = font_file(unpack / PLAYER_DATA, local_dir("unpack", "fonts") / "Mikodacs.ttf")
+    wanted = {n for i in packs.values() for n in (ui.get(i, {}).get("packSpriteId"), ui.get(i, {}).get("bossSpriteId")) if n}
+    images = covers(unpack / "raw/UnityCache", wanted)
 
     OUT.mkdir(exist_ok=True)
     index, missing = {}, []
-    for name, pid in packs.items():
-        im = images.get(sprite.get(pid, ""))
-        if im is None:
-            missing.append(f"{pid} {name} ({sprite.get(pid)})")
+    for pack, pid in packs.items():
+        u = ui.get(pid, {})
+        art, boss = images.get(u.get("packSpriteId", "")), images.get(u.get("bossSpriteId", ""))
+        if art is None or (u.get("bossSpriteId") and boss is None) or pid not in name:
+            missing.append(f"{pid} {pack} (cover {u.get('packSpriteId')}, boss {u.get('bossSpriteId')})")
             continue
-        im = im.convert("RGBA").resize((args.width, round(im.height * args.width / im.width)), Image.LANCZOS)
-        im.save(OUT / f"{pid}.webp", quality=80, method=6)
-        index[name] = f"{pid}.webp"
+        im = card(parts, art, boss, u, name[pid], font)
+        im.resize((args.width, round(im.height * args.width / im.width)), Image.LANCZOS).save(OUT / f"{pid}.webp", quality=80, method=6)
+        index[pack] = f"{pid}.webp"
     (OUT / "index.json").write_text(json.dumps(index, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
     for stale in set(OUT.glob("*.webp")) - {OUT / f for f in index.values()}:
         stale.unlink()
