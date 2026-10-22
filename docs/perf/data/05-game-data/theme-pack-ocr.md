@@ -52,9 +52,33 @@ and 22 are the same scene.
 | `Timekilling Time BokGak`, `Yield My Flesh to Claim Their Bones BokGak` | 2 | re-run suffix (older matcher) | matches | — |
 | `LImBUS Rising Power Supply`, `mBU! Addicting Lust` | 2 | logo prefix (older matcher) | matches | — |
 | `World Lake`, `Abyss Crawling`, `WONr Abyss Crawling` | 3 | two-line title read in reverse order (likely the tilted card; unverified) | matches since #240 (lines also read bottom up) | `lake`, `abyss` |
-| `HellOBus`, `HellBus`, `aHelIOBis` | 7 | stylized title art; a floor 2 card, likely Hell's Chicken (unverified) | no | no |
-| `Mirac inDistrict niiaco m uistir` | 1 | stylized title art | no | no |
-| `WalpurgisN The Noon of` | 1 | stylized title art, last word lost | no | no |
-| `Emotio` | 1 | title cut | no | no |
-| `Time` beside `Timekilling Time` | 2 | one title split into two cards | no | would read it as Timekilling Time |
+| `HellOBus`, `HellBus`, `aHelIOBis` | 7 | stylized title art: S.E.A.'s card says "The Magic Hello Bus" (#246, recordings; the guess Hell's Chicken was wrong) | `HellOBus`, `HellBus` match since #246 (`titles`) | no |
+| `Mirac inDistrict niiaco m uistir` | 1 | stylized title art read mid-swing (#246) | no | no |
+| `WalpurgisN The Noon of` | 1 | The Noon of Violet, "Walpurgis Night" above its name (#246, recordings) | matches since #246 (`titles`) | no |
+| `Emotio` | 1 | read before the third card slid in: Emotional Judgment cut, Hell's Chicken missed (#246, recordings) | waits for the cards since #246 | no |
+| `Time` beside `Timekilling Time` | 2 | one title line split into two boxes 81 px apart on a tilted card (#246, recordings) | waits for the cards since #246 | would read it as Timekilling Time |
 | `Line` | 2 | Line 1–5 alike | shares their weight | — |
+
+## Recordings: fixes compared (#246, 2026-10-22)
+
+49 pack pages from the screen recordings of four live sessions (adb `screenrecord` segments and two window captures;
+2026-10-19 to 2026-10-22, NORMAL and HARD), every frame scaled to 720p and read with the agent's own OCR node and matcher. Truth:
+the card names read most often across a page's frames, checked by eye where they disagree (S.E.A., The Noon of Violet).
+Baseline: the bot's own log lines for those pages. Swing window: from the first frame that reads every card to 300 ms
+before the pull (1354 frames, 918 ms on average). "All right": every card named right; "pick": the default plan's pick
+has the best true weight. The recordings, frames and scripts stayed on the developer's machine.
+
+What the cards do: dealt cards slide in for ~0.6 s and then swing; per-card motion between frames 100 ms apart stays at
+13–30 grey levels until ~2.6 s and drops under 0.4 at 2.7–2.9 s after the deal (two deals of one page: before and after
+a difficulty switch). The bot read 0.6–1.1 s after the page header showed.
+
+| Fix | Measured | Extra time | Complexity | Taken |
+|---|---|---|---|---|
+| Baseline (log) | 138/147 cards, 41/49 pages all right, pick 46/49 | — | — | — |
+| Single frame in the swing window | cards 87.6%, all right 75.4%, pick 93.8% | — | — | — |
+| a. Wait until the cards stop | still frames 43/43 all right (and #240's 12 stills, 32/32 cards); detector "card band alike to 0.2 s before, twice in a row" fired before the pull on 0 of the 47 other pages, at 2.9 s after the deal on the re-dealt page; once in a row fired mid-swing (2.3 s, cards still moving) | ~+2 s per floor | `still(runs=2)`, one call | yes |
+| b. Vote 3 frames 100 ms apart | swing window: all right 83.0%, pick 98.6% (3×200 ms 80.1%, 5×150 ms 78.9%); no gain on still frames | +0.2–0.6 s | slots by index (cards slide >100 px) | no: a. makes it redundant |
+| c. Regroup boxes: chain 110 px / join boxes ≤ 15 px apart on a row | all right 74.0% / 55.1% (slid-in cards touch) | 0 | small | no |
+| d. Covers (#242), SIFT, ratio 0.6, scale 1.55 | 298/459 cards (64.9%) in the swing window: event art strong (S.E.A. 6/6, The Noon of Violet 7/7, LCB Regular Check-up 7/7, Hell's Chicken 6/6), sin packs weak (Addicting Lust 0/13, Treadwheel Sloth 0/10); grey template match at best 27.9% | ~116 ms per card for 94 covers (Python cv2) | covers in the bundle, a fallback for unmatched cards | later: needs #242 |
+| e1. Title art reads (`titles`) | all right 78.9%, cards 88.9%; S.E.A. frames 4/51 → 42/51, The Noon of Violet 44/62 → 53/62 | 0 | two data lines | yes |
+| e2. Only the floor's packs as candidates | no change (75.4%) | 0 | small | no |

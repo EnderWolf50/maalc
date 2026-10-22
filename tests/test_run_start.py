@@ -127,6 +127,18 @@ def test_a_title_read_in_reverse_order_still_matches(lines, expected):
     assert rs.match_card(lines, DATA_NAMES)[0] == expected
 
 
+@pytest.mark.parametrize(("lines", "expected"), [
+    # #246, recordings 2026-10-22: S.E.A.'s card art reads "The Magic Hello Bus"; The Noon of Violet's tops its name
+    # with "Walpurgis Night" and OCR often loses the last word.
+    (["HellOBus"], "S.E.A."), (["HellBus"], "S.E.A."), (["HelIOBus"], "S.E.A."), (["The Magic SHellBus"], "S.E.A."),
+    (["WalpurgisN The Noon of"], "The Noon of Violet"), (["Walpurgis Night", "The Noon of Violet"], "The Noon of Violet"),
+    (["Walpurgis", "Hatred and 'Despair"], "Walpurgis Night: Hatred and Despair"),  # the other Walpurgis pack stays
+])
+def test_title_art_finds_its_pack_through_the_data_files_titles(lines, expected):
+    plan = {"weights": {}, "unlisted": 0}
+    assert rs.rank_packs([lines], DATA_NAMES, plan, DATA_TITLES)[0][0] == expected
+
+
 def test_every_pack_of_the_season_matches_itself_and_with_a_letter_lost():
     # The data file's own names: each one read back, and read with one letter dropped, finds itself.
     packs = yaml.safe_load(DATA.read_text(encoding="utf-8"))["packs"]
@@ -258,6 +270,7 @@ def test_team_list_move(visible, target, expected):
 
 DATA = Path(__file__).resolve().parent.parent / "assets/resource/base/data/theme_packs.yaml"
 DATA_NAMES = list(yaml.safe_load(DATA.read_text(encoding="utf-8"))["packs"])
+DATA_TITLES = yaml.safe_load(DATA.read_text(encoding="utf-8"))["titles"]
 
 
 def test_theme_pack_data_file():
@@ -272,3 +285,5 @@ def test_theme_pack_data_file():
     # #89: the 1.117.0 client's packs with a NORMAL or HARD floor.
     assert len(packs) >= 90
     assert set(data["event_packs"]) <= set(packs) and len(data["event_packs"]) == 15
+    # #246: each title art read names a pack of the season.
+    assert data["titles"] and set(data["titles"].values()) <= set(packs)

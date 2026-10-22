@@ -62,6 +62,9 @@ STARLIGHT_NOTE = [660, 395, 320, 90]  # the line under Convert Starlight to Cost
 STARLIGHT_OWNED = [830, 30, 90, 28]  # "4035", "4035-60" while owned starlight pays
 GRACE_ORIGIN_X, GRACE_ORIGIN_Y = (138, 152), (152, 390)  # top-left of card 1; step 198 px per column
 PACK_TITLES = [120, 400, 1040, 100]  # up to 5 cards (live: 5 with two Theme Pack Selection +1 graces)
+# #246, recordings: dealt cards slide in and swing until ~2.8 s after the deal; their titles are read once they stop.
+PACK_CARDS = [120, 170, 1040, 360]
+CARDS_SETTLE = 4.0  # s; a page still swinging by then is read anyway
 
 
 def log(msg):
@@ -130,9 +133,10 @@ def tap_shown(context, x, y, done, timeout=2.0, rest=1.5):
     return image if settled is None else settled
 
 
-def still(context, timeout=2.0, roi=None, share=0.03):
+def still(context, timeout=2.0, roi=None, share=0.03, runs=1):
     """The first screenshot that looks like the one 0.2 s before it: a fade in or out has ended; None after timeout s.
-    With roi (x, y, w, h), only that part is compared; share is recovery.same_screen's.
+    With roi (x, y, w, h), only that part is compared; share is recovery.same_screen's. runs: that many alike pairs
+    in a row, for a swing, which looks alike 0.1 s either side of its turn (#246).
 
     MirrorHub, polling every 300 ms, can hand out a page while it is still fading in or the last one fading out.
     """
@@ -141,13 +145,13 @@ def still(context, timeout=2.0, roi=None, share=0.03):
             x, y, w, h = roi
             image = image[y:y + h, x:x + w]
         return recovery.thumb(image)
-    last = [thumb(screen(context))]
+    last, alike = [thumb(screen(context))], [0]
 
     def done(image):
         small = thumb(image)
-        same = recovery.same_screen(last[0], small, share)
+        alike[0] = alike[0] + 1 if recovery.same_screen(last[0], small, share) else 0
         last[0] = small
-        return same
+        return alike[0] >= runs
     return until(context, done, timeout=timeout, least=0.2)
 
 
@@ -1097,11 +1101,12 @@ class GiftSearch(CustomAction):
 
 
 def theme_pack_plan(settings, team):
-    """(the team's plan, the data file's packs, its event packs): the default plan or the user's (spec 04 section 8)."""
+    """(the team's plan, the data file's packs, its event packs, its title art reads): the default plan or the user's
+    (spec 04 section 8)."""
     data = yaml.safe_load((RESOURCE / "base" / "data" / "theme_packs.yaml").read_text(encoding="utf-8"))
     ref = team["theme_pack_plan"]
     plan = data["default_plan"] if ref == "default" else next(p for p in settings["theme_pack_plans"] if p["id"] == ref)
-    return plan, list(data["packs"]), set(data["event_packs"])
+    return plan, list(data["packs"]), set(data["event_packs"]), data["titles"]
 
 
 def pack_titles(context, image):
@@ -1144,15 +1149,18 @@ class PickThemePack(CustomAction):
         if not self.set_difficulty(context, floor, want):
             return stuck(f"floor {floor} difficulty did not switch to {'HARD' if want else 'NORMAL'}")
 
-        plan, packs, event_packs = theme_pack_plan(run["settings"], run["team"])
+        plan, packs, event_packs, titles = theme_pack_plan(run["settings"], run["team"])
         names = packs + list(plan["weights"])  # a weighed pack the data file dropped still matches
         setting = run["settings"]["run"]["theme_pack_refresh"]
         seen = None
         for used in range(10):  # ponytail: stop when a refresh changes nothing; read `Refresh n/m` if that misfires
-            cards = pack_titles(context, page_guard(context, "ThemePack"))
+            settled = still(context, timeout=CARDS_SETTLE, roi=PACK_CARDS, runs=2)
+            if settled is None:
+                log(f"floor {floor}: the cards still moved after {CARDS_SETTLE:g} s")
+            cards = pack_titles(context, page_guard(context, "ThemePack", settled))
             if not cards:
                 return stuck("no theme pack titles read")
-            ranked = run_start.rank_packs([lines for _, lines in cards], names, plan)
+            ranked = run_start.rank_packs([lines for _, lines in cards], names, plan, titles)
             slots = run_start.event_slots(floor, [t for t, _ in ranked], event_packs, packs)
             log(f"floor {floor} packs, threshold {plan['threshold']}: "
                 + ", ".join(f"{t} ({w}{', event' if e else ''})" for (t, w), e in zip(ranked, slots)))
