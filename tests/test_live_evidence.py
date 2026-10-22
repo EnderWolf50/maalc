@@ -127,6 +127,9 @@ def test_packs_settle_runs_from_the_deal_to_eight_still_frames():
     rows = [(0, 0)] * 5 + [(30, 9)] * 20 + [(40, 1)] * 20  # empty, dealing and swinging, standing still
     assert ev.settle(rows, k_log=30) == (5, 25, False)
     assert ev.settle([(40, 1)] * 20, k_log=5) == (0, 0, True)  # the deal started before the footage
+    # floor 1 of 2026-10-22: the screen fades in, then the cards leave a starfield of mean 6.7 before the deal
+    rows = [(0.4, 0)] * 3 + [(35, 3)] * 10 + [(6.7, 9)] * 4 + [(30, 9)] * 20 + [(40, 1)] * 20
+    assert ev.settle(rows, k_log=50)[0] == 17
 
 
 def test_packs_draw_puts_a_thick_border_on_the_pulled_card():

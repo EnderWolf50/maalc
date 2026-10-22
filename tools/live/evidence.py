@@ -26,7 +26,7 @@ route is numbered and the banner has the drags, the path and its score. FIX is w
 before-1.png, after-N.png, route.json; `--clip` adds drag-clip.mp4 (read, drag, read on, plan, with the touches).
 
 **packs** writes one still per `floor N packs` reading (refreshes included): each card's name and weight, the
-pulled card's thick border, and how long the cards took from the deal (card area empty) to standing still
+pulled card's thick border, and how long the cards took from the deal (card area empty: mean under 8) to standing still
 (mean frame difference under 2 for 8 frames at 30 fps), measured on the video. Writes pack-K.png,
 pack-K-raw.png, packs.json; `--clip` adds pack-K-clip.mp4.
 
@@ -404,10 +404,13 @@ def card_rows(grays) -> list[tuple[float, float]]:
     return out
 
 
+EMPTY = 8  # mean brightness of an empty card area: black is 0, the starfield behind the cards 6.7 (floor 1, 2026-10-22)
+
+
 def settle(rows, k_log: int):
     """(deal frame, settle frame or None, deal before the footage): the deal follows the last empty card area
     before the log line; the cards stand still from the first of 8 frames each under 2 apart."""
-    empties = [i for i in range(min(k_log, len(rows) - 1) + 1) if rows[i][0] < 5]
+    empties = [i for i in range(min(k_log, len(rows) - 1) + 1) if rows[i][0] < EMPTY]
     deal = empties[-1] + 1 if empties else 0
     still = next((i for i in range(deal, len(rows) - 7) if rows[i][0] > 20 and all(rows[j][1] < 2 for j in range(i, i + 8))), None)
     return deal, still, not empties
