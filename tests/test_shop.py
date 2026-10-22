@@ -133,6 +133,46 @@ def test_read_slots_from_live_ocr():
     assert [s.buyable(x) for x in slots] == [False, True, True, True, True]
 
 
+# #216: the OCR lines of two live shops (2026-10-22, NORMAL, replayed from the recordings) whose first slot is a skill
+# replacement. A stray glyph from a gift icon's corner (the keyword badge: "3", "5", "8") reads as a tall line without
+# letters, so it passed for a price and the real price just under it became its name ('196' 3, '214' 3).
+STONE_TOMB_SHOP = ocr(
+    ("Replace Ryōshū's Skill", (557, 330, 131, 19)), ("Pendant of Nostalgia", (557, 484, 132, 19)),
+    ("Purchased", (581, 372, 85, 18)), (" 145", (595, 459, 48, 23)), ("米??", (599, 305, 42, 24)),
+    ("8", (635, 426, 20, 23)), ("Melted Paraffin", (727, 334, 99, 15)), ("150", (750, 307, 46, 20)),
+    ("Stone Tomb", (890, 332, 82, 18)), ("196", (903, 307, 47, 20)), ("3", (945, 275, 15, 18)),
+    ("Bloody Gadget", (1035, 331, 99, 18)), ("163", (1057, 307, 46, 20)),
+)
+OLD_DOLL_SHOP = ocr(
+    ("Replace Gregor's Skill", (558, 331, 131, 18)), ("Deathseeker", (580, 485, 85, 18)), ("271", (597, 459, 46, 23)),
+    ("??", (599, 306, 42, 23)), ("Portable Battery Socket", (711, 332, 131, 16)), ("190", (750, 307, 46, 20)),
+    ("Old Wooden Doll", (877, 332, 109, 18)), ("214", (903, 306, 48, 23)), ("3", (945, 275, 14, 18)),
+    ("Rusted Muzzle", (1036, 332, 98, 18)), ("164", (1057, 307, 46, 20)), ("5", (1097, 277, 18, 18)),
+)
+
+
+def test_a_glyph_on_an_icon_is_not_a_price_and_the_real_price_is_not_its_name():
+    slots = s.read_slots(OLD_DOLL_SHOP)
+    assert [(x["name"], x["price"]) for x in slots] == [
+        ("Replace Gregor's Skill", None), ("Portable Battery Socket", 190), ("Old Wooden Doll", 214), ("Rusted Muzzle", 164),
+        ("Deathseeker", 271),
+    ]
+    assert [s.on_sale(x) for x in slots] == [False, True, True, True, True]
+
+
+def test_a_glyph_over_the_price_of_a_bought_slot_is_not_a_slot_either():
+    slots = s.read_slots(STONE_TOMB_SHOP)
+    assert [(x["name"], x["price"]) for x in slots] == [
+        ("Replace Ryōshū's Skill", None), ("Melted Paraffin", 150), ("Stone Tomb", 196), ("Bloody Gadget", 163),
+        ("Pendant of Nostalgia", 145),
+    ]
+    assert [s.on_sale(x) for x in slots] == [False, True, True, True, False]  # the Replace slot, the bought one
+
+
+def test_a_price_whose_name_is_not_read_is_still_a_slot():
+    assert [(x["name"], x["price"]) for x in s.read_slots(ocr(("150", (750, 307, 46, 20))))] == [("", 150)]
+
+
 def test_read_slots_purchased():
     results = ocr(("UPS System", (581, 483, 84, 20)), ("Purchased", (582, 373, 83, 18)), ("156", (595, 457, 49, 25)),
                   ("Thorny Path", (737, 332, 81, 17)), ("160", (749, 306, 48, 23)))

@@ -74,20 +74,29 @@ def heal_plan(mode, cost, reserve, dead, heal_cost):
     return None
 
 
+def has_letters(t):
+    """Whether OCR text t has an ASCII letter: a name or a tag, not a price, a numeral or a glyph."""
+    return any(c.isascii() and c.isalpha() for c in t)
+
+
 def read_slots(results):
     """Shop slots from the OCR results [(text, (x, y, w, h))] of the offer grid, top row first.
 
     Each is {"name", "price", "purchased", "x", "y"}, x and y the price line's centre. A price is the
     tall line with no letters (a "??" price is None); the name is the line just under it; a bought
     slot has "Purchased" over its icon. Lines are found relative to each other, not at fixed rows.
+    A stray glyph of an icon (a badge read as "3") is as tall as a price, but the line under it is the
+    real price, not a name (#216): it is no slot.
     """
     lines = [(t, x + w // 2, y + h // 2, h) for t, (x, y, w, h) in results]
     slots = []
     for t, x, y, h in sorted(lines, key=lambda line: (line[2] // 40, line[1])):
-        if h < 18 or any(c.isascii() and c.isalpha() for c in t):
+        if h < 18 or has_letters(t):
             continue  # tier numerals on the icons read as short lines
         near = [(u, uy) for u, ux, uy, _ in lines if abs(ux - x) < 75 and u != t]
         name = next((u for u, uy in near if 10 < uy - y < 40), "")
+        if name and not has_letters(name):
+            continue
         digits = "".join(c for c in t if c.isdigit())
         slots.append({
             "name": name,
