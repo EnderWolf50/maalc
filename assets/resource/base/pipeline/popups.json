@@ -66,6 +66,17 @@
         "custom_action": "Halt",
         "custom_action_param": "maintenance notice"
     },
+    // The client too old for the server (live 2026-10-22 over the title, tests/screens/TitleClientOutdated.png): "Game
+    // client is not up to date. Please update to the latest version.", Close / Go to Store. Close brings it back, the
+    // store's update is not the bot's (#86): stop, the webhook says why. Before DownloadDialog and PopupButton.
+    "ClientOutdated": {
+        "recognition": "OCR",
+        "roi": [350, 230, 580, 200],
+        "expected": "(?i)client is not up to date",
+        "action": "Custom",
+        "custom_action": "Halt",
+        "custom_action_param": "the game client is out of date: update it from the Play Store, then start the bot again"
+    },
     // The game's own update notices mid-run (strings of the client, EN_MainUIText; no capture, so both ROIs are wide):
     // "A new download has been added. The game will be closed ..." / "... Returning to the title screen." and
     // "Version update available. Please download new resources and try again.". Before PopupButton, which would press

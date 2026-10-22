@@ -12,10 +12,12 @@ const screens: [image: string, hits: string[]][] = [
   // Synthetic (#83): EventStory with the notice's message line pasted into its text box. Only the
   // notice window stops the task, not the word in other text.
   ['EventMaintenanceText.png', ['Event']],
-  // Synthetic (#86), no live capture yet: the one-button notice window (live) as the title's dialogs. The
-  // download dialog (live 2026-10-16: `Downloading N MB of data`, Close / Confirm; the layout is a guess)
-  // is Confirmed; a one-button error box is closed by its one button. Both sit on the title, which reads through.
+  // Live 2026-10-22 (#86, 1080p scaled to 720p) over the title, which reads through: the download dialog
+  // (`Downloading 539.76 MB of data`, Close / Confirm) is Confirmed; the client too old for the server
+  // (`Game client is not up to date`, Close / Go to Store) stops the bot, no button pressed.
   ['TitleDownload.png', ['DownloadDialog', 'GoToMirrorEntry', 'NavTitle']],
+  ['TitleClientOutdated.png', ['ClientOutdated', 'GoToMirrorEntry', 'NavTitle']],
+  // Synthetic (#86): the one-button notice window (live) as a one-button error box on the title; its one button.
   ['TitleErrorConfirm.png', ['PopupButton', 'GoToMirrorEntry', 'NavTitle']],
   // Synthetic, no capture: TitleErrorConfirm.png with the client's own mid-run update text (EN_MainUIText
   // remote_download_quit_game). DownloadDialog and PopupButton read it too; UpdateDialog comes first in the hub.
