@@ -79,8 +79,13 @@ def test_frames_and_clip_seek_into_the_right_piece(tmp_path, monkeypatch):
     monkeypatch.setattr(ev, "decode", lambda path, ss, dur, fps, gray=False: (calls.append((path, ss, dur, fps)),
                                                                               np.zeros((1, 720, 1280, 3), np.uint8))[1])
     monkeypatch.setattr(ev.subprocess, "run", lambda cmd, check: calls.append(cmd))
+    monkeypatch.setattr(ev, "masks_path", lambda a: "masks.json")
+    monkeypatch.setattr(ev, "load_masks", lambda path: ("masks", path))
+    masked = []
+    monkeypatch.setattr(ev, "apply_masks", lambda im, masks: (masked.append(masks), im)[1])
     ev.main(["frames", "--video", "a.mp4@10:00:00", "-o", str(tmp_path), "10:00:02.5"])
     assert calls[0] == ("a.mp4", 2.5, None, None) and (tmp_path / "10-00-02.500.png").exists()
+    assert masked == [("masks", "masks.json")]  # a frame leaves masked
     ev.main(["clip", "--video", "a.mp4@10:00:00", "--from", "10:00:01", "--to", "10:00:04", "-o", "c.mp4"])
     assert calls[1][calls[1].index("-ss") + 1] == "1.000" and calls[1][calls[1].index("-t") + 1] == "3.000"
 

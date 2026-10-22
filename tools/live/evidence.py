@@ -30,8 +30,9 @@ pulled card's thick border, and how long the cards took from the deal (card area
 (mean frame difference under 2 for 8 frames at 30 fps), measured on the video. Writes pack-K.png,
 pack-K-raw.png, packs.json; `--clip` adds pack-K-clip.mp4.
 
-Stills and clips are masked with `--masks` (default `.local/evidence/masks.json`); clips go through
-evidence-annotate's annotate.py (`--annotate`, default its global skill folder).
+Stills and the clips of map and packs are masked with `--masks` (default `.local/evidence/masks.json`);
+those clips go through evidence-annotate's annotate.py (`--annotate`, default its global skill folder).
+`clip` is a raw cut for annotate.py, unmasked: it stays in `.local/` until annotate.py has masked it.
 """
 from __future__ import annotations
 
@@ -477,27 +478,28 @@ def packs_cmd(a, fps: int = 30) -> None:
 def main(argv=None) -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
-    common = argparse.ArgumentParser(add_help=False)
-    common.add_argument("--video", action="append", default=[], help="PATH@START, the wall time of its first frame")
-    common.add_argument("--masks", help="masks.json (default .local/evidence/masks.json)")
-    common.add_argument("--annotate", type=Path, default=ANNOTATE, help="evidence-annotate's annotate.py")
+    video, masks, annotate = (argparse.ArgumentParser(add_help=False) for _ in range(3))
+    video.add_argument("--video", action="append", default=[], help="PATH@START, the wall time of its first frame")
+    masks.add_argument("--masks", help="masks.json (default .local/evidence/masks.json)")
+    annotate.add_argument("--annotate", type=Path, default=ANNOTATE, help="evidence-annotate's annotate.py")
     for name in ("events", "steps"):
         p = sub.add_parser(name)
         p.add_argument("log")
         p.add_argument("--from", dest="t0", default="00:00:00")
         p.add_argument("--to", dest="t1", default="23:59:59.999")
         p.add_argument("-o", "--out", required=True)
-    p.add_argument("--grep", default="")
-    p.add_argument("--hold", type=float, default=3.0)
-    p = sub.add_parser("frames", parents=[common])
+        if name == "steps":
+            p.add_argument("--grep", default="")
+            p.add_argument("--hold", type=float, default=3.0)
+    p = sub.add_parser("frames", parents=[video, masks])
     p.add_argument("times", nargs="+")
     p.add_argument("-o", "--out", required=True)
-    p = sub.add_parser("clip", parents=[common])
+    p = sub.add_parser("clip", parents=[video])
     p.add_argument("--from", dest="t0", required=True)
     p.add_argument("--to", dest="t1", required=True)
     p.add_argument("-o", "--out", required=True)
     for name in ("map", "packs"):
-        p = sub.add_parser(name, parents=[common])
+        p = sub.add_parser(name, parents=[video, masks, annotate])
         p.add_argument("log")
         p.add_argument("--floor", type=int, required=True)
         p.add_argument("-o", "--out", required=True)
@@ -505,7 +507,7 @@ def main(argv=None) -> None:
         if name == "map":
             p.add_argument("--after", help="the floor's next reading after this time")
             p.add_argument("--fix", help="FIX.json: misreads judged on the frames")
-    p = sub.add_parser("mask", parents=[common])
+    p = sub.add_parser("mask", parents=[masks])
     p.add_argument("images", nargs="+")
     a = ap.parse_args(argv)
 
@@ -524,9 +526,10 @@ def main(argv=None) -> None:
         print(f"{len(steps)} steps -> {a.out}")
     elif a.cmd == "frames":
         Path(a.out).mkdir(parents=True, exist_ok=True)
+        footage, found = Footage(a.video), load_masks(masks_path(a))
         for t in a.times:
             f = Path(a.out) / f"{hms(secs(t)).replace(':', '-')}.png"
-            grab(Footage(a.video), secs(t)).save(f)
+            apply_masks(grab(footage, secs(t)), found).save(f)
             print(f)
     elif a.cmd == "clip":
         cut(Footage(a.video), secs(a.t0), secs(a.t1), a.out)

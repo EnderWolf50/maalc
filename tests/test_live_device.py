@@ -86,13 +86,14 @@ def test_freeze_suspends_the_bot_tree_and_resumes_it(tmp_path, monkeypatch):
     log = []
     procs = [SimpleNamespace(pid=n, suspend=lambda n=n: log.append(("suspend", n)), resume=lambda n=n: log.append(("resume", n)))
              for n in (1, 2)]
-    monkeypatch.setattr(dv, "connect", lambda port: FakeCtl())
+    ctl = FakeCtl()
+    monkeypatch.setattr(dv, "connect", lambda port: ctl)
     monkeypatch.setattr(dv, "bot_tree", lambda pid: procs)
     monkeypatch.setattr(dv, "tail", lambda path: iter(["x", "[maalc] floor 1 packs, threshold 0: A (0)"]))
     (tmp_path / "cmd.txt").write_text("tap 1 1\n")  # left from an earlier freeze: cleared, not run
     dv.main(["freeze", "--log", "run.log", "--fire", "packs", "--pid", "9", "--cmd", str(tmp_path / "cmd.txt"), "--out", str(tmp_path),
              "--max", "0.1"])
-    assert log == [("suspend", 1), ("suspend", 2), ("resume", 1), ("resume", 2)]
+    assert log == [("suspend", 1), ("suspend", 2), ("resume", 1), ("resume", 2)] and ctl.calls == []
 
 
 def test_freeze_resumes_the_rest_when_one_process_ended(tmp_path, monkeypatch):
