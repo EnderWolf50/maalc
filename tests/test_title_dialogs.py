@@ -1,5 +1,6 @@
 """The title's User Agreement and the game's download and update dialogs (#85, #86), on the live captures."""
 
+import json
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock
@@ -9,6 +10,7 @@ import pytest
 from PIL import Image
 
 import actions
+from test_pipeline import load_nodes
 
 SCREENS = Path(__file__).parent / "screens"
 UNTICKED, TICKED = (np.asarray(Image.open(SCREENS / f"{n}.png").convert("RGB"))[:, :, ::-1].copy()
@@ -134,3 +136,17 @@ def test_a_download_starts_the_floor_clock_over(game, monkeypatch):
     actions.StuckFlag.see("Downloading", UNTICKED)  # any picture: the clock goes by the screen type
     assert actions.RUN["deadline"] == 11700  # still downloading: the floor's whole time is left after it
     actions.STUCK["watch"].reset()
+
+
+def test_a_client_too_old_for_the_server_stops_the_bot_without_a_tap(game):
+    # #86 live 2026-10-22: `Game client is not up to date`, Close / Go to Store. The bot leaves the store alone
+    # (Close only brings the dialog back): it stops, the webhook says why.
+    nodes = load_nodes()
+    node = nodes["ClientOutdated"]
+    assert node["action"] == "Custom" and node["custom_action"] == "Halt"
+    entries = nodes["HubText"]["custom_recognition_param"]["entries"]
+    assert entries.index("ClientOutdated") < min(entries.index("DownloadDialog"), entries.index("PopupButton"))
+    assert "ClientOutdated" in nodes["RecoverTitle"]["any_of"]  # a restart that lands on it ends L3 there
+    argv = SimpleNamespace(node_name="ClientOutdated", custom_action_param=json.dumps(node["custom_action_param"]))
+    assert not actions.Halt().run(game.ctx, argv)
+    assert game.taps == [] and "Play Store" in game.stops[0]

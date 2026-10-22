@@ -5,6 +5,7 @@ recover with, and does the taps; everything here is plain data in, plain data ou
 """
 
 import json
+import re
 import statistics
 import struct
 import zlib
@@ -13,6 +14,7 @@ from pathlib import Path
 
 import numpy as np
 
+GAME = "com.ProjectMoon.LimbusCompany"
 SAME_SCREEN = 5  # the same screen type and thumbnail this many times in a row is stuck
 # A waiting screen is stuck once it shows the very same picture WAIT_STILL s, or after WAIT_CAP s however it moves
 # (#179). Live 2026-10-19 (30 FPS, CPU 100%): Now Loading sat still up to 51 s in loads that came through on their
@@ -141,8 +143,8 @@ class Ladder:
 
     def stuck(self, kind, start, l3_this_execution):
         """(level, None) to recover with, or (None, why) to stop."""
-        if self.open:
-            kind, level = self.open[0], min(self.open[1] + 1, 3)  # L3 repeats while its limits allow
+        if self.open:  # L3 repeats while its limits allow; start stays the least level (L3: the game not in front)
+            kind, level = self.open[0], max(start, min(self.open[1] + 1, 3))
         else:
             level = start
         if level == 2 and kind in BATTLE:
@@ -169,6 +171,19 @@ class Ladder:
         """MirrorHub handed out kind: a screen other than the stuck one closes the episode."""
         if self.open and kind != self.open[0] and kind not in TRANSIT:
             self.open = None
+
+
+def focused_package(dumpsys):
+    """The package whose window has the input focus in `dumpsys window` output (its mCurrentFocus lines, one per
+    display): GAME when the game has it on any display, "" when no window has it, None when no line was read.
+
+    Live 2026-10-22 (#86): the game's first launch after a Play Store update stayed black 5 min, its process up but
+    mCurrentFocus=null; a force-stop and a start brought the title in 20 s.
+    """
+    found = re.findall(r"mCurrentFocus=(?:null|Window\{\S+ \S+ ([^/\s}]+))", dumpsys)
+    if not found:
+        return None
+    return GAME if GAME in found else next((p for p in found if p), "")
 
 
 def read_runs(root):

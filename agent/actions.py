@@ -426,6 +426,10 @@ class Recover(CustomAction):
             log(f"{flag[2]}: a download is under way, waiting")
             return True
         kind, start, reason = flag
+        if unknown and (app := foreground(context)) not in (None, recovery.GAME):
+            # #86: the Play Store, the home screen, or a game whose window never took focus (live, black 5 min after
+            # an update): the back key and To Window do nothing there, so the game is restarted at once.
+            start, reason = 3, f"{reason}; the game is not in front ({app or 'no window has focus'})"
         while True:
             level, why = STUCK["ladder"].stuck(kind, start, STUCK["l3"])
             if level is None:
@@ -439,6 +443,14 @@ class Recover(CustomAction):
             STUCK["ladder"].failed(level)
         forget_game_state()
         return True
+
+
+def foreground(context):
+    """The package in front (recovery.focused_package), None when it cannot be read (not an adb controller)."""
+    try:
+        return recovery.focused_package(context.tasker.controller.post_shell("dumpsys window").wait().get())
+    except RuntimeError:
+        return None
 
 
 def forget_game_state():
@@ -548,7 +560,8 @@ class AcceptTerms(CustomAction):
 
 @AgentServer.custom_action("Halt")
 class Halt(CustomAction):
-    """Stop on a screen the bot must not act on (the maintenance notice); the reason goes to the log."""
+    """Stop on a screen the bot must not act on (the maintenance notice, a client too old for the server); the reason
+    goes to the log and the webhook."""
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         return stop(context, f"{argv.node_name}: {json.loads(argv.custom_action_param or '""')}")

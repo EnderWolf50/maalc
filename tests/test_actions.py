@@ -43,6 +43,7 @@ def context(clock, monkeypatch):
     ctx = MagicMock()
     ctx.tasker.controller.post_screencap.return_value.wait.return_value.get.return_value = np.zeros((720, 1280, 3), np.uint8)
     ctx.run_recognition.return_value = None  # OCR reads nothing, no node hits
+    ctx.tasker.controller.post_shell.return_value.wait.return_value.get.return_value = ""  # focus not read
     ctx.tasker.stopping = False
     actions.RUN.clear()
     actions.RUN.update(settings={}, team={})  # a run plan in memory
@@ -1221,6 +1222,36 @@ def test_recover_keeps_the_screen_when_the_hub_recognised_nothing(context, clock
     actions.STUCK["watch"].reset()
     actions.Recover().run(context, None)
     assert len(list((tmp_path / "logs" / "unknown").glob("*.png"))) == 1
+    actions.STUCK["ladder"].__init__()
+
+
+@pytest.mark.parametrize("focus, flag, first", [
+    ("com.android.vending/x", None, "RecoverL3"),  # #86: the Play Store in front; the back key would only work it
+    ("null", None, "RecoverL3"),  # #86 live: the game alive, black, no window focused for 5 min
+    ("com.ProjectMoon.LimbusCompany/x", None, "RecoverL1"),
+    ("com.android.vending/x", ("MirrorMap", 1, "the map did not change"), "RecoverL1"),  # a screen of the game was read
+])
+def test_recover_restarts_the_game_when_it_is_not_in_front(context, monkeypatch, tmp_path, focus, flag, first):
+    monkeypatch.setattr(actions, "ROOT", tmp_path)
+    actions.STUCK["flag"] = flag
+    actions.STUCK["watch"].reset()
+    actions.STUCK["ladder"].__init__()
+    shell = context.tasker.controller.post_shell
+    window = "null" if focus == "null" else "Window{1 u0 " + focus + "}"
+    shell.return_value.wait.return_value.get.return_value = f"  mCurrentFocus={window}\n"
+    actions.Recover().run(context, None)
+    assert context.run_task.call_args_list[0].args == (first,)
+    assert shell.called == (flag is None)
+    actions.STUCK["ladder"].__init__()
+
+
+def test_recover_climbs_as_before_when_the_focus_cannot_be_read(context, monkeypatch, tmp_path):
+    monkeypatch.setattr(actions, "ROOT", tmp_path)
+    actions.STUCK["watch"].reset()
+    actions.STUCK["ladder"].__init__()
+    context.tasker.controller.post_shell.return_value.wait.return_value.get.side_effect = RuntimeError("no adb")
+    actions.Recover().run(context, None)
+    assert context.run_task.call_args_list[0].args == ("RecoverL1",)
     actions.STUCK["ladder"].__init__()
 
 

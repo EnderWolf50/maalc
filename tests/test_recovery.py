@@ -3,7 +3,8 @@ import json
 import numpy as np
 import pytest
 
-from recovery import TRANSIT, WAIT_STILL, Ladder, Watchdog, floor_limit, over_time, read_runs, run_limit, same_screen, thumb
+from recovery import (GAME, TRANSIT, WAIT_STILL, Ladder, Watchdog, floor_limit, focused_package, over_time, read_runs,
+                      run_limit, same_screen, thumb)
 
 
 def screen(level):
@@ -281,3 +282,25 @@ def test_keep_unknown_saves_the_screen_and_keeps_only_the_latest(tmp_path):
 def test_notices_at_login_do_not_end_a_stuck_spell():
     # spec 06: screens on the way back to a run (a login may open the notices) are not progress.
     assert "Notices" in TRANSIT
+
+
+GAME_FOCUS = "  mCurrentFocus=Window{1d4e2f0 u0 com.ProjectMoon.LimbusCompany/com.unity3d.player.UnityPlayerActivity}\n"
+
+
+@pytest.mark.parametrize("dumpsys, expected", [
+    (GAME_FOCUS, GAME),
+    ("  mCurrentFocus=Window{9a1b u0 com.android.vending/com.google.android.finsky.activities.MainActivity}\n",
+     "com.android.vending"),
+    ("  mCurrentFocus=null\n", ""),  # live 2026-10-22: the game's first launch after an update, black for 5 min
+    ("  mCurrentFocus=null\n" + GAME_FOCUS, GAME),  # one line per display: the game on any of them is in front
+    ("", None),  # not read (no adb, or no such line): unknown
+])
+def test_focused_package(dumpsys, expected):
+    assert focused_package(dumpsys) == expected
+
+
+def test_ladder_a_game_not_in_front_goes_straight_to_l3():
+    ladder = Ladder()
+    assert ladder.stuck("MirrorMap", 1, 0) == (1, None)
+    assert ladder.stuck("MirrorMap", 3, 0) == (3, None)  # in an open episode too: L2 cannot help
+    assert ladder.counts == {1: 1, 2: 0, 3: 1}
