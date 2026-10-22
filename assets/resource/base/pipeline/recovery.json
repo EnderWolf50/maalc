@@ -86,13 +86,11 @@
         ]
     },
     // The title, also under its dialogs (they only tint it); a download dialog, the User Agreement or an error box that
-    // hides it counts too. MirrorHub answers them: DownloadDialog confirms, UserAgreement ticks, PopupButton presses,
-    // ClientOutdated stops.
+    // hides it counts too. MirrorHub answers them: DownloadDialog confirms, UserAgreement ticks, PopupButton presses.
     "RecoverTitle": {
         "recognition": "Or",
         "any_of": [
             "NavTitle",
-            "ClientOutdated",
             "DownloadDialog",
             "UserAgreement",
             "PopupButton"

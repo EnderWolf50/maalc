@@ -447,8 +447,9 @@ class Recover(CustomAction):
 
 def foreground(context):
     """The package in front (recovery.focused_package), None when it cannot be read (not an adb controller)."""
-    try:
-        return recovery.focused_package(context.tasker.controller.post_shell("dumpsys window").wait().get())
+    job = context.tasker.controller.post_shell("dumpsys window").wait()
+    try:  # a failed job may still hand out the last command's output
+        return recovery.focused_package(job.get()) if job.succeeded else None
     except RuntimeError:
         return None
 

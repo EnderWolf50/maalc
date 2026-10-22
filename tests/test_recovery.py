@@ -5,6 +5,7 @@ import pytest
 
 from recovery import (GAME, TRANSIT, WAIT_STILL, Ladder, Watchdog, floor_limit, focused_package, over_time, read_runs,
                       run_limit, same_screen, thumb)
+from test_pipeline import load_nodes
 
 
 def screen(level):
@@ -297,6 +298,11 @@ GAME_FOCUS = "  mCurrentFocus=Window{1d4e2f0 u0 com.ProjectMoon.LimbusCompany/co
 ])
 def test_focused_package(dumpsys, expected):
     assert focused_package(dumpsys) == expected
+
+
+def test_the_game_package_is_the_one_l3_restarts():
+    nodes = load_nodes()
+    assert nodes["RecoverL3"]["package"] == nodes["RecoverStartApp"]["package"] == GAME
 
 
 def test_ladder_a_game_not_in_front_goes_straight_to_l3():

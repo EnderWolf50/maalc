@@ -1245,11 +1245,17 @@ def test_recover_restarts_the_game_when_it_is_not_in_front(context, monkeypatch,
     actions.STUCK["ladder"].__init__()
 
 
-def test_recover_climbs_as_before_when_the_focus_cannot_be_read(context, monkeypatch, tmp_path):
+@pytest.mark.parametrize("failed", ["raises", "not succeeded"])
+def test_recover_climbs_as_before_when_the_focus_cannot_be_read(context, monkeypatch, tmp_path, failed):
     monkeypatch.setattr(actions, "ROOT", tmp_path)
     actions.STUCK["watch"].reset()
     actions.STUCK["ladder"].__init__()
-    context.tasker.controller.post_shell.return_value.wait.return_value.get.side_effect = RuntimeError("no adb")
+    job = context.tasker.controller.post_shell.return_value.wait.return_value
+    if failed == "raises":  # not an adb controller
+        job.get.side_effect = RuntimeError("no adb")
+    else:  # adb failed: the output may be the last command's
+        job.succeeded = False
+        job.get.return_value = "  mCurrentFocus=Window{1 u0 com.android.vending/x}\n"
     actions.Recover().run(context, None)
     assert context.run_task.call_args_list[0].args == ("RecoverL1",)
     actions.STUCK["ladder"].__init__()

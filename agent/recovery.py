@@ -142,7 +142,7 @@ class Ladder:
         self.open = None  # (screen type, level) of the episode under way
 
     def stuck(self, kind, start, l3_this_execution):
-        """(level, None) to recover with, or (None, why) to stop."""
+        """(level, None) to recover with, or (None, why) to stop. start is the least level, in an open episode too."""
         if self.open:  # L3 repeats while its limits allow; start stays the least level (L3: the game not in front)
             kind, level = self.open[0], max(start, min(self.open[1] + 1, 3))
         else:
