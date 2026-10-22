@@ -45,7 +45,7 @@ def test_the_data_matches_the_llc_release_when_it_is_downloaded():
 
 def test_traditional_conversion_keeps_the_game_s_words():
     import llc_text
-    assert llc_text.to_traditional("生锈的指针 通过阶层 镜像迷宫 刷新") == "生鏽的指針 通過階層 鏡像迷宮 刷新"
+    assert llc_text.to_traditional("生锈的指针 通过阶层 镜像迷宫 刷新 松肉锤") == "生鏽的指針 通過階層 鏡像迷宮 刷新 鬆肉錘"
     assert llc_text.effect_line("<color=#5bffde>初始经费</color> +{0}(最多{1})", {"value": 150, "value2": 100}, {}) == "初始經費 +150(最多100)"
     assert llc_text.effect_line("获得{2}层 {1}", {"referenceData": {"buffKeyword": "K", "stack": 2, "turn": 0}}, {"K": "守护"}) == "獲得2層 守護"
 

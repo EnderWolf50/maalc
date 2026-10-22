@@ -21,7 +21,7 @@ import cv2
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from llc_text import RELEASE, NOTE_ZH, credit, gift_names, release_zip  # noqa: E402
+from llc_text import NOTE_ZH, credit, gift_names, release_zip  # noqa: E402
 from local_dir import local_dir  # noqa: E402
 
 REPO = Path(__file__).resolve().parent.parent
@@ -147,7 +147,7 @@ def scaled(rgba, out):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--release", default=RELEASE, help="the LLC release tag the Chinese names come from")
+    parser.add_argument("--release", default=load(DATA / "gift_search.json")["zh_release"], help="the LLC release tag the Chinese names come from")
     parser.add_argument("--no-icons", action="store_true", help="write the json only")
     args = parser.parse_args()
     unpack = local_dir("unpack")

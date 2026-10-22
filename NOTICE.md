@@ -55,7 +55,7 @@ SOFTWARE.
 - `assets/resource/base/data/gift_search.json` 與 `assets/resource/base/data/gift_recipes.json` 的飾品中文名稱：`LLC_zh-CN/EGOgift_*.json` 的 `name`，依飾品 id 對應。
 - `gui/src/graces.json` 的星之恩惠名稱：`LLC_zh-CN/MirrorDungeonUI_5.json` 的 `mirror_dungeon_5_buffs_title_<id>`。效果文字：`LLC_zh-CN/DungeonStartBuffs_MD7.json` 的句型，填入遊戲客戶端 1.117.0 靜態資料（`mirrordungeon-start-buffs-08`）的效果數值與 `LLC_zh-CN/Bufs*.json`、`BattleKeywords*.json` 的狀態名稱。英文名稱取自遊戲畫面。
 
-修改：以 OpenCC `s2twp` 由簡體轉成繁體，再改五個用詞（「指標」改回「指針」、「重新整理」改回「刷新」、「映象」改為「鏡像」、「透過階層」改為「通過階層」、「松肉」改為「鬆肉」）；星之恩惠的效果文字去掉顏色標籤並填入數值。轉換由 `tools/llc_text.py` 完成，所用 release 記在各資料檔的 `zh_release`。這三個資料檔同樣以 CC BY-NC-SA 4.0 授權。
+修改：以 OpenCC `s2twp` 由簡體轉成繁體，再改五個用詞（「指標」改回「指針」、「重新整理」改回「刷新」、「映象」改為「鏡像」、「透過階層」改為「通過階層」、「松肉」改為「鬆肉」）；星之恩惠的效果文字去掉顏色標籤並填入數值。轉換由 `tools/llc_text.py` 完成，所用 release 記在各資料檔的 `zh_release`。這三個資料檔的中文名稱與效果文字同樣以 CC BY-NC-SA 4.0 授權；檔內的 id、英文名稱與數值仍是 © Project Moon。
 
 ## 發佈 zip 內附的第三方程式
 

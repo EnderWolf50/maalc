@@ -28,7 +28,7 @@ LANG = "LimbusCompany_Data/Lang/LLC_zh-CN/"
 URL = "https://github.com/LocalizeLimbusCompany/LocalizeLimbusCompany/releases/download/{0}/LimbusLocalize_{0}.zip"
 LEVELS = {1: "base", 2: "plus", 3: "plus2"}
 _S2TWP = opencc.OpenCC("s2twp")
-FIXES = {"指標": "指針", "重新整理": "刷新", "映象": "鏡像", "透過階層": "通過階層", "松肉": "鬆肉"}  # s2twp's computing terms where the game means something else
+FIXES = {"指標": "指針", "重新整理": "刷新", "映象": "鏡像", "透過階層": "通過階層", "松肉": "鬆肉"}  # where s2twp's Taiwan wording is wrong for the game text
 
 
 def to_traditional(text):
@@ -72,11 +72,16 @@ def gift_names(z):
     return names
 
 
+def needed(value, template):
+    assert value is not None, f"template needs a value the effect lacks: {template}"
+    return value
+
+
 def effect_line(template, values, keyword_names):
     ref = values.get("referenceData")
     args = [values.get("value"), values.get("value2")] if not ref else [None, keyword_names[ref["buffKeyword"]], ref["stack"], ref["turn"], ref.get("limit")]
     text = re.sub(r"</?color[^>]*>", "", template)
-    return to_traditional(re.sub(r"\{(\d)\}", lambda m: str(args[int(m[1])]), text))
+    return to_traditional(re.sub(r"\{(\d)\}", lambda m: str(needed(args[int(m[1])], template)), text))
 
 
 def grace_texts(z, static):
@@ -107,7 +112,7 @@ def credit(release):
 
 def retitled(data, release, note):
     """data with the wiki keys dropped and `note`, the credit first; the other keys keep their order."""
-    drop = {"note", "source", "source_section", "accessed", "license", "license_url", "zh_source", "zh_release"}
+    drop = {"note", "license", "license_url", "zh_source", "zh_release"}
     return {"note": note, **credit(release), **{k: v for k, v in data.items() if k not in drop}}
 
 
