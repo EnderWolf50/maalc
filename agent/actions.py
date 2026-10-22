@@ -1125,38 +1125,20 @@ def theme_pack_plan(settings, team):
 
 
 def pack_titles(context, image):
-    """Cards left to right as (x centre, [text lines top to bottom]); see columns."""
-    return columns(ocr(context, image, PACK_TITLES))
-
-
-CARD_GAP = 15  # px between two OCR boxes of one card's text; adjacent cards' texts sit 25+ px apart (pitch 211)
-ART_WIDTH = 80  # a card whose only reads are capitals counts when one is this wide: a title art, not logo noise
+    """Cards left to right as (x centre, [text lines top to bottom]); see run_start.pack_cards."""
+    return run_start.pack_cards(ocr(context, image, PACK_TITLES))
 
 
 def columns(results):
-    """OCR results (text, (x, y, w, h)) grouped into cards left to right as (x centre, [lines top to bottom]).
-
-    Boxes that overlap or sit within CARD_GAP px sideways are one card: live, a tilted "Timekilling Time" came as two
-    boxes 80 px apart by centre and made two cards (#267). A card's lines are those with a lowercase letter; all-caps
-    lines are the LIMBUS logo or a CAUTION stamp. A card whose title is art read in capitals ("LINE 1 MADNESS") keeps
-    them, so it is listed, as an unlisted pack when no name matches (#266). A card with no box read at all is lost.
-    """
-    boxes = sorted((x, x + w, y, t) for t, (x, y, w, h) in results)
+    """OCR results grouped into cards left to right as (x centre, [lines top to bottom]); lines within 80 px are one card."""
+    lines = sorted((x + w // 2, y, t) for t, (x, y, w, h) in results)
     groups = []
-    for box in boxes:
-        if groups and box[0] - groups[-1][1] < CARD_GAP:
-            groups[-1][1] = max(groups[-1][1], box[1])
-            groups[-1][2].append(box)
+    for line in lines:
+        if groups and line[0] - groups[-1][-1][0] < 80:
+            groups[-1].append(line)
         else:
-            groups.append([box[0], box[1], [box]])
-    cards = []
-    for left, right, group in groups:
-        lines = [(y, t) for _, _, y, t in group if re.search(r"[a-z]", t)]
-        if not lines and max(x1 - x0 for x0, x1, _, _ in group) >= ART_WIDTH:
-            lines = [(y, t) for _, _, y, t in group]
-        if lines:
-            cards.append(((left + right) // 2, [t for _, t in sorted(lines)]))
-    return cards
+            groups.append([line])
+    return [(g[0][0], [t for _, _, t in sorted(g, key=lambda line: line[1])]) for g in groups]
 
 
 @AgentServer.custom_action("PickThemePack")
