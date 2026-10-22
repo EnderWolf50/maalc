@@ -99,6 +99,24 @@ def test_pick_choice_depending_on_check_text_is_the_fourth_tier():
     assert r.pick_choice(shown(event[::-1]), "Bleed", event=event) == 0
 
 
+def test_pick_choice_a_random_option_with_a_stated_chance_is_no_question_mark_tier():
+    # 971003 (the real entries): "Select for a 50% chance to gain" is not AALC's ??? template; the direct gain wins
+    alert = opt("Alert it truthfully.", "Gain a Bleed E.G.O Gift depending on the result of the following choice", "check", ("Bleed", "check_pass"))
+    nothing = opt("You saw nothing.", "Select to gain a Keywordless E.G.O Gift", "direct", ("Keywordless", "direct"))
+    chance = opt("Give a few subtle hints.", "Select for a 50% chance to gain a Keywordless E.G.O Gift.", "random", ("Keywordless", "direct_random"))
+    event = [alert, nothing, chance]
+    for kw in r.KEYWORDS:
+        assert r.pick_choice(shown(event), kw, event=event) == 1
+        assert r.pick_choice(shown(event[::-1]), kw, event=event[::-1]) == 1
+    # a ??? random option (971055) is still the first tier, with or without the table
+    coin = opt("Insert the coin in the slot.", "???", "random", ("Keywordless", "direct_random"))
+    assert r.pick_choice(shown([nothing, coin]), "Burn", event=[nothing, coin]) == 1
+    # no table (or an option it does not know): the hint text ranks by the same rule
+    assert r.pick_choice(shown(event), "Burn") == 1
+    assert r.pick_choice(shown([nothing, coin]), "Burn") == 1
+    assert r.pick_choice(["Hints. Select for a 50% chance to gain a Burn E.G.O Gift.", "Leave."], "Burn") == 0  # the rest: screen order
+
+
 def test_pick_choice_ties_go_to_the_main_keyword_then_the_screen_order():
     event = [opt("Pull.", "Wrath check. Pass to gain a Burn E.G.O Gift.", "check", ("Burn", "check_pass")),
              opt("Push.", "Wrath check. Pass to gain a Bleed E.G.O Gift.", "check", ("Bleed", "check_pass"))]

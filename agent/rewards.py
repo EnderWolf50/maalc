@@ -43,12 +43,13 @@ def _rank(text, entry, keyword):
     """(tier, 0 when the main keyword is in it) of an option: by its table entry, else by its OCR'd hint.
 
     Tiers: 0 ???, 1 direct gain, 2 check (pass to gain), 3 "gain ... depending on", 4 the rest. A battle and a
-    gift only when a check fails have no AALC tier: the rest, where the main keyword is no tie-break.
+    gift only when a check fails have no AALC tier: the rest, where the main keyword is no tie-break. So has a
+    random gain whose hint states its chance ("Select for a 50% chance to gain"): it is not AALC's ??? template.
     """
     if entry:
         kind = entry["kind"]
         main = any(k == keyword for k, _ in entry.get("gifts", ()))
-        if kind in ("random", "direct"):
+        if kind == "direct" or (kind == "random" and "???" in entry["hint"]):
             return (0 if kind == "random" else 1), not main
         if kind in ("check", "followup"):  # AALC matches "Advantage check" before "Gain ... depending on"
             return (2 if re.search(r"\bcheck\b", entry["hint"], re.I) else 3), not main
@@ -56,7 +57,7 @@ def _rank(text, entry, keyword):
     main = bool(re.search(rf"\b{keyword}\b", text, re.I))
     if "???" in text:
         return 0, not main
-    if not _gift(text) or re.search(r"\bwin the battle", text, re.I):
+    if not _gift(text) or re.search(r"\bwin the battle|\d%\s*chance", text, re.I):
         return 4, True
     if re.search(r"\bcheck\b", text, re.I):
         return 2, not main

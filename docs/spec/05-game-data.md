@@ -168,7 +168,7 @@
 | `id` | 遊戲的事件 id，只供查閱 |
 | `key` | 故事文字的最後 60 個英數字（小寫）：敘事框顯示的是故事結尾 |
 | `options[].text`、`hint` | 選項文字與下方提示（去掉標籤）；畫面上的選項靠這兩項對到表上 |
-| `options[].kind` | `direct`、`random`、`check`、`check_fail_gift`、`followup`、`battle`、`check_other`、`followup_other`、`other` |
+| `options[].kind` | `direct`、`random`、`check`、`check_fail_gift`、`followup`、`battle`、`check_other`、`followup_other`、`other`；`random` 的提示是 `???`（971055）或寫明機率（971003），兩者在 03 第 10 節分屬不同級 |
 | `options[].gifts` | `[體系, 取得方式]`，取得方式如 `direct`、`check_pass`、`check_fail`、`win_battle`、`later_direct` |
 
 飾品的體系取自靜態資料 `ego-gift-mirrordungeon` 的 `keyword`：`events_md8.py` 取到的是同 id 第一筆、沒有 keyword 的紀錄，會把 Grimy Iron Stake 這類飾品讀成 Keywordless，`tools/event_table.py` 重新查一次。沒有敘事文字的 13 個事件（Boss 戰中途與部分後續頁）不收，照提示文字規則處理。
