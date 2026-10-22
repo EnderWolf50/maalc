@@ -38,6 +38,7 @@
             "entries": [
                 "RetryPopup",
                 "MaintenanceNotice",
+                "ClientOutdated",
                 "UpdateDialog",
                 "UserAgreement",
                 "DownloadDialog",

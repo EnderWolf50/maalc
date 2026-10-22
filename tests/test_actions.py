@@ -43,6 +43,7 @@ def context(clock, monkeypatch):
     ctx = MagicMock()
     ctx.tasker.controller.post_screencap.return_value.wait.return_value.get.return_value = np.zeros((720, 1280, 3), np.uint8)
     ctx.run_recognition.return_value = None  # OCR reads nothing, no node hits
+    ctx.tasker.controller.post_shell.return_value.wait.return_value.get.return_value = ""  # focus not read
     ctx.tasker.stopping = False
     actions.RUN.clear()
     actions.RUN.update(settings={}, team={})  # a run plan in memory

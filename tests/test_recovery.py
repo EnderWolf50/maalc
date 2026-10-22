@@ -1,9 +1,13 @@
 import json
+from unittest.mock import MagicMock
 
 import numpy as np
 import pytest
 
-from recovery import TRANSIT, WAIT_STILL, Ladder, Watchdog, floor_limit, over_time, read_runs, run_limit, same_screen, thumb
+import actions
+from recovery import (GAME, TRANSIT, WAIT_STILL, Ladder, Watchdog, floor_limit, focused_package, over_time, read_runs,
+                      run_limit, same_screen, thumb)
+from test_pipeline import load_nodes
 
 
 def screen(level):
@@ -281,3 +285,75 @@ def test_keep_unknown_saves_the_screen_and_keeps_only_the_latest(tmp_path):
 def test_notices_at_login_do_not_end_a_stuck_spell():
     # spec 06: screens on the way back to a run (a login may open the notices) are not progress.
     assert "Notices" in TRANSIT
+
+
+GAME_FOCUS = "  mCurrentFocus=Window{1d4e2f0 u0 com.ProjectMoon.LimbusCompany/com.unity3d.player.UnityPlayerActivity}\n"
+
+
+@pytest.mark.parametrize("dumpsys, expected", [
+    (GAME_FOCUS, GAME),
+    ("  mCurrentFocus=Window{9a1b u0 com.android.vending/com.google.android.finsky.activities.MainActivity}\n",
+     "com.android.vending"),
+    ("  mCurrentFocus=null\n", ""),  # live 2026-10-22: the game's first launch after an update, black for 5 min
+    ("  mCurrentFocus=null\n" + GAME_FOCUS, GAME),  # one line per display: the game on any of them is in front
+    ("", None),  # not read (no adb, or no such line): unknown
+])
+def test_focused_package(dumpsys, expected):
+    assert focused_package(dumpsys) == expected
+
+
+def test_the_game_package_is_the_one_l3_restarts():
+    nodes = load_nodes()
+    assert nodes["RecoverL3"]["package"] == nodes["RecoverStartApp"]["package"] == GAME
+
+
+def test_ladder_a_game_not_in_front_goes_straight_to_l3():
+    ladder = Ladder()
+    assert ladder.stuck("MirrorMap", 1, 0) == (1, None)
+    assert ladder.stuck("MirrorMap", 3, 0) == (3, None)  # in an open episode too: L2 cannot help
+    assert ladder.counts == {1: 1, 2: 0, 3: 1}
+
+
+@pytest.fixture
+def hub(monkeypatch, tmp_path):
+    """A fake Maa context for Recover: a blank screen, every recovery level goes through; a fresh ladder."""
+    monkeypatch.setattr(actions.time, "sleep", lambda s: None)
+    monkeypatch.setattr(actions, "ROOT", tmp_path)
+    ctx = MagicMock()
+    ctx.tasker.controller.post_screencap.return_value.wait.return_value.get.return_value = np.zeros((720, 1280, 3), np.uint8)
+    actions.RUN.clear()
+    actions.STUCK["flag"] = None
+    actions.STUCK["watch"].reset()
+    actions.STUCK["ladder"].__init__()
+    yield ctx
+    actions.RUN.clear()
+    actions.STUCK["flag"] = None
+    actions.STUCK["ladder"].__init__()
+
+
+@pytest.mark.parametrize("focus, flag, first", [
+    ("com.android.vending/x", None, "RecoverL3"),  # #86: the Play Store in front; the back key would only work it
+    ("null", None, "RecoverL3"),  # #86 live: the game alive, black, no window focused for 5 min
+    ("com.ProjectMoon.LimbusCompany/x", None, "RecoverL1"),
+    ("com.android.vending/x", ("MirrorMap", 1, "the map did not change"), "RecoverL1"),  # a screen of the game was read
+])
+def test_recover_restarts_the_game_when_it_is_not_in_front(hub, focus, flag, first):
+    actions.STUCK["flag"] = flag  # None: MirrorHub recognised nothing
+    shell = hub.tasker.controller.post_shell
+    window = "null" if focus == "null" else "Window{1 u0 " + focus + "}"
+    shell.return_value.wait.return_value.get.return_value = f"  mCurrentFocus={window}\n"
+    actions.Recover().run(hub, None)
+    assert hub.run_task.call_args_list[0].args == (first,)
+    assert shell.called == (flag is None)
+
+
+@pytest.mark.parametrize("failed", ["raises", "not succeeded"])
+def test_recover_climbs_as_before_when_the_focus_cannot_be_read(hub, failed):
+    job = hub.tasker.controller.post_shell.return_value.wait.return_value
+    if failed == "raises":  # not an adb controller
+        job.get.side_effect = RuntimeError("no adb")
+    else:  # adb failed: the output may be the last command's
+        job.succeeded = False
+        job.get.return_value = "  mCurrentFocus=Window{1 u0 com.android.vending/x}\n"
+    actions.Recover().run(hub, None)
+    assert hub.run_task.call_args_list[0].args == ("RecoverL1",)
