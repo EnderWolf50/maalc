@@ -10,7 +10,7 @@ from PIL import Image
 import actions
 import map_route as mr
 import test_actions
-from test_actions import map_world
+from test_actions import map_node_boss, map_world, red_hits
 
 clock, context = test_actions.clock, test_actions.context  # fixtures of the fake Maa context
 
@@ -635,3 +635,20 @@ def test_a_near_read_that_ends_short_keeps_the_columns_read_before(context, monk
     actions.RouteMap().run(context, None)
     assert actions.RUN["map_plan"]["steps"] == [("mid", "battle")] * 3 + [("mid", "event")] * 2 + [("up", "shop"), ("mid", "boss")]
     assert {c for c, costs in reads if costs} >= set(range(1, 7))
+
+
+DARK = Path(__file__).resolve().parent / "data/map_boss_dark.npz"  # 100 x 100 px round the node's centre
+
+
+@pytest.mark.parametrize(("node", "boss"), [
+    # #268, live 2026-10-22 floor 5 hard: the boss next to the bus, its hex black inside, only the ring and glyph red.
+    # 658-694 px in range over the old 80 x 80 roi, below the 1000 it needed: read as an event.
+    ("boss_dark_f5", True), ("boss_dark_f4", True),
+    ("focused_lit", False),  # a lit Focused, the most red any non-boss of 6 runs' captures had
+])
+def test_a_boss_with_a_black_hex_glows_red_enough_over_the_roi_actions_reads_it_by(node, boss):
+    ox, oy, w, h = actions.MARKS["MapNodeBoss"][1]
+    params, rgb = map_node_boss(), np.load(DARK)[node]
+    assert params["roi"] == [725 + ox, 285 + oy, w, h]  # the pipeline's default roi is MARKS' round the middle slot at rest
+    cut = rgb[50 + oy:50 + oy + h, 50 + ox:50 + ox + w]
+    assert (red_hits(cut, params) >= params["count"]) == boss

@@ -339,6 +339,11 @@ def test_a_column_of_lit_events_its_templates_miss_is_read_and_a_dark_one_ends_t
     assert ahead == [{"up": ("event", {"mid"}), "down": ("event", {"mid"})}]
 
 
+def red_hits(rgb, params):
+    """Pixels of rgb in MapNodeBoss's colour range."""
+    return ((rgb >= params["lower"]) & (rgb <= params["upper"])).all(axis=2).sum()
+
+
 def map_node_boss():
     lines = (Path(actions.__file__).resolve().parent.parent / "assets/resource/base/pipeline/map.json").read_text(encoding="utf-8").splitlines()
     return json.loads("\n".join(ln for ln in lines if not ln.strip().startswith("//")))["MapNodeBoss"]
@@ -352,26 +357,7 @@ def map_node_boss():
 def test_only_the_boss_glows_red_enough_for_map_node_boss(node, boss):
     # MapNodeBoss is a ColorMatch (RGB, method 4) over 80 x 80 px around the node: its pixels in range, counted.
     params, rgb = map_node_boss(), np.load(RED)[node]
-    hits = ((rgb >= params["lower"]) & (rgb <= params["upper"])).all(axis=2).sum()
-    assert (hits >= params["count"]) == boss
-
-
-DARK = Path(__file__).resolve().parent / "data/map_boss_dark.npz"  # 100 x 100 px round the node's centre
-
-
-@pytest.mark.parametrize(("node", "boss"), [
-    # #268, live 2026-10-22 floor 5 hard: the boss next to the bus, its hex black inside, only the ring and glyph red.
-    # 658 px in range over the old 80 x 80 roi, below the 1000 it needed: read as an event.
-    ("boss_dark_f5", True), ("boss_dark_f4", True),
-    ("focused_lit", False),  # a lit Focused, the most red any non-boss of 6 runs' captures had
-])
-def test_a_boss_with_a_black_hex_glows_red_enough_over_the_roi_actions_reads_it_by(node, boss):
-    ox, oy, w, h = actions.MARKS["MapNodeBoss"][1]
-    params, rgb = map_node_boss(), np.load(DARK)[node]
-    assert params["roi"][2:] == [w, h]  # the pipeline's default roi and MARKS' size stay the one
-    cut = rgb[50 + oy:50 + oy + h, 50 + ox:50 + ox + w]
-    hits = ((cut >= params["lower"]) & (cut <= params["upper"])).all(axis=2).sum()
-    assert (hits >= params["count"]) == boss
+    assert (red_hits(rgb, params) >= params["count"]) == boss  # 80 x 80 crops: the roi is wider now, so more red px each
 
 
 def test_a_node_with_its_badges_under_the_resource_bar_is_no_event_for_showing_none(context):
