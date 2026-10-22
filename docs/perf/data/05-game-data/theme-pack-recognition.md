@@ -3,39 +3,50 @@
 The numbers in [05-game-data.md](../../../spec/05-game-data.md) section 2 ("every pack recognised") come from here. Run:
 
 ```
-uv run python tools/pack_stats.py tests/screens/ThemePack*.png <captures> --glob "*raw*.png" --base <captures' parent> --csv theme-pack-recognition-cards.csv
+uv run python tools/pack_stats.py tests/screens/ThemePack*.png <captures> --glob "*raw*.png" --csv theme-pack-recognition-cards.csv
 ```
 
 on 112 distinct theme pack pages: the six `tests/screens/ThemePack*.png` and the card pages of the six live runs of 2026-10-22
 (each `floor N packs` reading's screenshot, pages with the same pixels counted once). The captures other than `tests/screens/`
 stayed on the developer's machine; every card of them is listed in
-[theme-pack-recognition-cards.csv](theme-pack-recognition-cards.csv) with its OCR lines, its pack and the path that read it.
-The OCR runs in a MaaFramework task on the still image (`actions.ocr` on `PACK_TITLES`), the cover art on the same image.
+[theme-pack-recognition-cards.csv](theme-pack-recognition-cards.csv) (a capture by the hash of its file) with its OCR lines, its pack,
+the path that read it and two independent verdicts. The OCR runs in a MaaFramework task on the still image (`actions.ocr` on
+`PACK_TITLES`), the cover art on the same image.
 
 ## Truth, and what it does not show
 
-- A card's truth is the pack the full reading (`+cover`) names. Where the cover art reads (467 of 531 cards) it agrees with that
-  pack on every one (0 disagree); the other 64 are cards the cover stays silent on (a boss silhouette or a look-alike cover, see
-  below), whose pack is the title OCR read. No card was checked by eye one by one: unverified where the cover is silent.
+- A card's truth is the pack the full reading (`+cover`) names. That is the reading under test, so each card also gets two verdicts
+  that do not rest on the whole-title match: the cover art alone agrees on 467 of the 531 cards and is silent on 64 (a boss silhouette or
+  a look-alike cover, see below); the keyword alone agrees on 526 and is silent on 5. None disagrees, and every card is confirmed by one
+  of the two (0 of 531 by neither). The keyword reads the same OCR text as the title match, the cover reads the pixels. No card was
+  checked by eye one by one: a pack both of them misread the same way would pass (unverified).
 - The captures show **74 of the 94 packs** of the season; the 20 never dealt in them (The B.E., The Evil Defining, The
   Heartbreaking, La Manchaland Re-opening, Textbook, Storefront Campout, An Anarchy of Colors, Creed of Preservation, Readvent of
   Gluttony, Line 4 - Section #4, Crushers & Breakers, Unbound Wrath, Inert Sloth, Excessive Gluttony, Sunk Gloom, Pitiful Envy,
   Burning Haze, Dizzying Waves, Spring Cultivation, Mnestic Experience) are only covered by the per-pack table below: a pack's own
   name, its own cover pasted on a page and single words of its name, not a capture. "Every pack recognised" on a live page is not
   shown for them.
-- The cover's threshold (`pack_cover.MIN_SCORE`, `MIN_LEAD`) was picked on these captures (precision first: 0 wrong of 485 cards
-  at 0.5 / 0.1, 425 read; 4 wrong at a lead of 0.05), not on held-out pages.
+- The cover's threshold (`pack_cover.MIN_SCORE`, `MIN_LEAD`) was picked on these captures, not on held-out pages: the gate table
+  below is the sweep (at 0.5 / 0.1, 467 cards read and 0 wrong; at a lead of 0.05, 4 wrong).
 - A card that has no OCR box at all is lost: none of the 112 pages shows one.
+- `S.E.A.` has no keyword (`sea` is inside `Mountain of Corpses, Sea of Blood`); its art title and its cover name it.
 
 ## Readings
 
 `main` main's `pack_titles` (boxes with a lowercase letter, columns within 80 px); `#270` PR #270's `pack_cards` (the same filter,
-boxes within 15 px one card, a capitals-only card kept from 80 px wide); `list` `pack_cards` now: only a box reading exactly a word
-of `NOT_TITLE` (`LIMBUS`, `COMPANY`, `LIMBUS COMPANY`, `CAUTION`, `CLEAR BONUS`, `LV`) or nothing is dropped, name and title art
-match; `+key` adds the keyword path, `+cover` the cover path (what `PickThemePack` runs); `#270+all` the #270 cards with both new
+boxes within 15 px one card, a capitals-only card kept from 80 px wide); `list, no span` `pack_cards` now with the `CARD_SPAN` rule
+off, the filter alone; `list` `pack_cards` now: only a box reading exactly a word of `NOT_TITLE` (`LIMBUS`, `COMPANY`, `LIMBUS
+COMPANY`, `CAUTION`, `CLEAR BONUS`, `LV`) or nothing is dropped, texts within `CARD_SPAN` of each other are one card, name and title
+art match; `+key` adds the keyword path, `+cover` the cover path (what `PickThemePack` runs); `#270+all` the #270 cards with both new
 paths. "listed, no pack": the card is in the ranking but no pack names it (it takes the plan's unlisted weight, or the weight its
 alike titles share); "not listed": no card of the reading stands within `CARD_SPAN` of it, so the bot cannot pull it; "extra
 cards": cards of the reading with no card of the truth.
+
+Where the cards were lost, by step (from the same run): `main` leaves out Line 1's capitals `MADNESS` three times (grouping: the card
+is not listed) and cannot name `Line` twice (Line 1 and Line 5, name matching: Line 1-3, 5 alike), Miracle in District 20 twice (OCR:
+art title read `InDistrict` / `miiracle` among noise) and Four Houses and Greed once (name matching: the `LImBUS` logo above the
+title, which the new filter drops by name, and the title's lines read out of order). `#270` fixes the three capitals and leaves the other five. `list` leaves Miracle in District 20 three
+times and Line 5 once (`ROLIND` is capitals under noise); `+key` names Miracle (keyword `miracle`), `+cover` Line 5.
 
 ## The two filters
 
@@ -45,8 +56,10 @@ wide. The new filter drops 94: `LIMBUS` 83 times (the logo, also read `LImBUS`),
 strip); the logo's second word reads as noise (185 distinct texts among the no-lowercase boxes, most of them such misreads: `WOPIS`,
 `CIMPINS`), which the old filter dropped and now stays a line of its card, read past by the name match. The capitals the old filter threw away that are
 part of a title: `MADNESS` (Line 1), `THE DUSK OF AMBER`, `DUSK OF AMBER`, `OF AMBER`, `AMBER`, `MURDER`, `ON THE`, `WARP EXPRESS`, `LINE 2`,
-`TIMKILLING`, `VIOLET`, `HATRED`, `S.E.A`, `ROLIND` (Merry-Go-Round, Line 5) and the Chinese art title of Nocturnal Sweeping. A lone noise box (`M`, the badge's `IV`, `2`) is a card of its own without the lowercase rule: 3 pages show it, so
-texts nearer than `CARD_SPAN` (105 px) by centre are one card.
+`TIMKILLING`, `VIOLET`, `HATRED`, `S.E.A`, `ROLIND` (Merry-Go-Round, Line 5) and the Chinese art title of Nocturnal Sweeping. A lone
+noise box (`M`, the badge's `IV`, `2`) is a card of its own without the lowercase rule: the `list, no span` row shows it, 3 extra
+cards, so texts nearer than `CARD_SPAN` (105 px) by centre are one card. With that rule the filter alone gains a card over #270 (527
+against 526); without it, it loses one (525).
 
 ## Results
 
@@ -56,6 +69,7 @@ texts nearer than `CARD_SPAN` (105 px) by centre are one card.
 |---|---|---|---|---|---|---|
 | main | 523 | 0 | 5 | 3 | 3 | 98.5 % |
 | #270 | 526 | 0 | 5 | 0 | 0 | 99.1 % |
+| list, no span | 525 | 0 | 6 | 0 | 3 | 98.9 % |
 | list | 527 | 0 | 4 | 0 | 0 | 99.2 % |
 | +key | 530 | 0 | 1 | 0 | 0 | 99.8 % |
 | +cover | 531 | 0 | 0 | 0 | 0 | 100.0 % |
@@ -65,6 +79,7 @@ texts nearer than `CARD_SPAN` (105 px) by centre are one card.
 |---|---|---|---|---|
 | main | 509 | 14 | 0 | 0 |
 | #270 | 509 | 17 | 0 | 0 |
+| list, no span | 508 | 17 | 0 | 0 |
 | list | 510 | 17 | 0 | 0 |
 | +key | 510 | 17 | 3 | 0 |
 | +cover | 510 | 17 | 3 | 1 |
@@ -169,4 +184,14 @@ per pack (the keyword; cards among the captures; its own cover pasted on a page;
 | Twining Threads | twining | 5 | read | 0/2 | 1/2 |
 | Mnestic Experience | mnestic | 0 | read | 0/2 | 1/2 |
 
-cover art against the truth: {'agree': 467, 'silent': 64}
+the cover's gate (MIN_SCORE, MIN_LEAD), on every card against its truth:
+
+| best correlation at least | lead over the next at least | cards read | read wrong |
+|---|---|---|---|
+| 0.5 | 0.05 | 499 | 4 |
+| 0.5 | 0.1 | 467 | 0 |
+| 0.5 | 0.15 | 391 | 0 |
+| 0.6 | 0.1 | 467 | 0 |
+| 0.7 | 0.1 | 450 | 0 |
+
+cover art alone against the truth: {'agree': 467, 'silent': 64}; keyword alone: {'agree': 526, 'silent': 5}; confirmed by neither: 0 of 531 (0 packs)

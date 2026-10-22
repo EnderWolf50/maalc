@@ -146,14 +146,14 @@ def test_the_cover_alone_names_most_cards_of_a_real_page_and_never_a_wrong_one()
     # the cover path on pages whose titles all read: right where it speaks. Silent on the dark silhouette cards
     # (a boss not yet beaten shows as a black shape, the cover has the picture) and on look-alike covers.
     spoke = right = 0
-    for page in ("ThemePackNormal", "ThemePackHardLine1", "ThemePackHardLineCover", "ThemePackMiracle"):
+    for page in ("ThemePackNormal", "ThemePackHardLine1", "ThemePackHardLineCover", "ThemePackHardLine5", "ThemePackMiracle"):
         image = np.asarray(Image.open(SCREENS / f"{page}.png").convert("RGB"))[:, :, ::-1]
         n = len(PAGES[page])
         for (name, _), x in zip(PAGES[page], [640 + (i - (n - 1) / 2) * pc.PITCH for i in range(n)]):
             found = pc.read_cover(image, x)
             spoke += found is not None
             right += found is not None and found[0] == name
-    assert (spoke, right) == (15, 15)  # of 19 cards; silent: The Outcast, Tangling Lust, Sinking Deluge, Thunder and Lightning
+    assert (spoke, right) == (17, 17)  # of 24 cards; the silent ones are boss silhouettes (Sinking Deluge, Thunder and Lightning, ...)
 
 
 def tiny_page(seed, x=640):

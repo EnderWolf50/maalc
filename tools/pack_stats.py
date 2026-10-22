@@ -1,6 +1,6 @@
 """How well the theme pack page is read, offline (#274): every card of the given screenshots through each way of reading it.
 
-Usage: uv run python tools/pack_stats.py IMAGE_OR_DIR... [--base DIR] [--glob PATTERN] [--cache FILE] [--csv FILE] [--md FILE]
+Usage: uv run python tools/pack_stats.py IMAGE_OR_DIR... [--glob PATTERN] [--cache FILE] [--csv FILE] [--md FILE]
 
 No emulator: actions.ocr runs in a MaaFramework task over still images (the pattern of tests/test_shop_cells.py), on the
 card strip PACK_TITLES of every page, pages with the same pixels counted once. The OCR boxes of a page are kept in --cache
@@ -9,13 +9,15 @@ card strip PACK_TITLES of every page, pages with the same pixels counted once. T
 Readings, each with the matcher it names (docs/spec/05-game-data.md section 2):
   main    main's pack_titles: boxes with a lowercase letter, columns within 80 px, name and title-art match
   #270    pack_cards of PR #270: the same filter, boxes within 15 px one card, a capitals-only card kept from 80 px wide
-  list    pack_cards now: only boxes reading a NOT_TITLE word dropped; name and title-art match
+  list, no span  pack_cards now with CARD_SPAN off: the filter alone (15 px grouping as in #270), name and title-art match
+  list    pack_cards now: only boxes reading a NOT_TITLE word dropped, texts within CARD_SPAN one card; name and title-art match
   +key    list + the keyword of the pack (run_start.match_keyword)
   +cover  +key + the cover art (pack_cover.read_cover): the agent's PickThemePack
   #270+all  the #270 cards with the keyword and cover paths: what the new paths give without the new filter
-A card's truth is the pack of the `+cover` reading, which every card of the captures names, confirmed by the cover art
-where it reads (--csv lists each card with the cover's verdict); a card of another reading is listed when a card of the
-truth stands within CARD_SPAN px of its centre, then named right, wrong or not at all.
+A card's truth is the pack of the `+cover` reading, which every card of the captures names. That is not independent of the
+readings compared, so each card also gets two verdicts that do not rest on the whole-title match: the cover art alone and the
+keyword alone (--csv lists them); the summary counts the cards neither confirms. A card of another reading is listed when a
+card of the truth stands within CARD_SPAN px of its centre, then named right, wrong or not at all.
 """
 
 import argparse
@@ -40,7 +42,7 @@ import run_start  # noqa: E402
 DATA = yaml.safe_load((ROOT / "assets/resource/base/data/theme_packs.yaml").read_text(encoding="utf-8"))
 NAMES, ART = list(DATA["packs"]), DATA["title_art"]
 PLAN = {"weights": DATA["default_plan"]["weights"], "unlisted": 0}
-READINGS = ("main", "#270", "list", "+key", "+cover", "#270+all")
+READINGS = ("main", "#270", "list, no span", "list", "+key", "+cover", "#270+all")
 
 
 def read_ocr(images):
@@ -126,23 +128,42 @@ def pr270_cards(results):
     return cards
 
 
-def image_id(path, bases):
-    """The path below the first of bases it lies under (no local folder names in the output), else its file name."""
-    for base in bases:
-        try:
-            return Path(path).resolve().relative_to(base.resolve()).as_posix()
-        except ValueError:
-            pass
-    return Path(path).name
+def image_id(path):
+    """A page of this repo by its path in it; any other capture by the hash of its file (no local folder names in the output)."""
+    try:
+        return Path(path).resolve().relative_to(ROOT).as_posix()
+    except ValueError:
+        return "capture-" + hashlib.md5(Path(path).read_bytes()).hexdigest()[:8]
+
+
+def gate_sweep(cards):
+    """cards: [(page, x, pack)]. For each (score, lead) gate: cards the cover reads, and the ones it reads wrong."""
+    covers = pack_cover.covers()
+    best = []
+    for page, x, pack in cards:
+        sig = pack_cover.signature(pack_cover.card_image(page, x))
+        scores = sorted(((pack_cover.correlation(sig, c), n) for n, c in covers.items()), reverse=True)
+        best.append((scores[0][0], scores[0][0] - scores[1][0], scores[0][1] == pack))
+    rows = []
+    for score, lead in [(0.5, 0.05), (0.5, 0.1), (0.5, 0.15), (0.6, 0.1), (0.7, 0.1)]:
+        read = [ok for s_, l_, ok in best if s_ >= score and l_ >= lead]
+        rows.append([score, lead, len(read), read.count(False)])
+    return rows
 
 
 def read(reading, results, page):
     """[(x, lines, pack or None, how)] of a page under a reading."""
-    cards = {"main": main_cards, "#270": pr270_cards, "#270+all": pr270_cards}.get(reading, run_start.pack_cards)(results)
-    art = {k: v for k, v in ART.items() if reading != "main" or k != "MADNESS"}
-    real_keyword = run_start.match_keyword
+    make = {"main": main_cards, "#270": pr270_cards, "#270+all": pr270_cards}.get(reading, run_start.pack_cards)
+    span, real_keyword = run_start.CARD_SPAN, run_start.match_keyword
     try:
-        if reading in ("main", "#270", "list"):  # no keyword path
+        if reading == "list, no span":
+            run_start.CARD_SPAN = -1  # no two texts are nearer than that: only the 15 px grouping remains
+        cards = make(results)
+    finally:
+        run_start.CARD_SPAN = span
+    art = {k: v for k, v in ART.items() if reading != "main" or k != "MADNESS"}
+    try:
+        if reading in ("main", "#270", "list, no span", "list"):  # no keyword path
             run_start.match_keyword = lambda text, names: None
         cover = (lambda i, allowed: pack_cover.read_cover(page, cards[i][0], allowed)) if reading in ("+cover", "#270+all") else None
         ranked = run_start.rank_packs([lines for _, lines in cards], NAMES, PLAN, art, cover)
@@ -181,7 +202,6 @@ def table(rows, head):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("images", nargs="+", type=Path)
-    ap.add_argument("--base", type=Path, default=Path.cwd(), help="image ids in the output are paths relative to this")
     ap.add_argument("--glob", default="*.png", help="which files of a directory (an annotated copy of a page is not a page)")
     ap.add_argument("--cache", type=Path)
     ap.add_argument("--csv", type=Path)
@@ -195,7 +215,7 @@ def main():
         if args.cache:
             args.cache.write_text(json.dumps(ocr, ensure_ascii=False), encoding="utf-8")
 
-    rows, truth_cards = [], 0
+    rows, truth_cards, covered = [], 0, []
     stats = {r: Counter() for r in READINGS}
     seen_by = Counter()
     for path, boxes in ocr.items():
@@ -207,8 +227,12 @@ def main():
             truth_cards += 1
             seen_by[name] += 1
             verdict = pack_cover.read_cover(page, x)
-            rows.append([image_id(path, [args.base, ROOT]), x, " / ".join(lines), name, how.split()[0], verdict[0] if verdict else "",
-                         "agree" if verdict and verdict[0] == name else ("silent" if not verdict else "DISAGREE")])
+            word = run_start.match_keyword(" ".join(lines), NAMES + list(ART))
+            word = ART.get(word, word)
+            covered.append((page, x, name))
+            rows.append([image_id(path), x, " / ".join(lines), name, how.split()[0], verdict[0] if verdict else "",
+                         "agree" if verdict and verdict[0] == name else ("silent" if not verdict else "DISAGREE"),
+                         word or "", "agree" if word == name else ("silent" if not word else "DISAGREE")])
             for r in READINGS:
                 near = [c for c in reads[r] if abs(c[0] - x) < run_start.CARD_SPAN]
                 if not near:
@@ -230,8 +254,12 @@ def main():
                      ["reading", "name", "title_art", "keyword", "cover"]))
     out.append("\nper pack (the keyword; cards among the captures; its own cover pasted on a page; single words of its name read alone):\n")
     out.append(table(per_pack(seen_by), ["pack", "keyword", "cards seen", "own cover", "words by title", "words by title or keyword"]))
-    verdicts = Counter(r[-1] for r in rows)
-    out.append(f"\ncover art against the truth: {dict(verdicts)}")
+    out.append("\nthe cover's gate (MIN_SCORE, MIN_LEAD), on every card against its truth:\n")
+    out.append(table(gate_sweep(covered), ["best correlation at least", "lead over the next at least", "cards read", "read wrong"]))
+    cover_says, keyword_says = Counter(r[6] for r in rows), Counter(r[8] for r in rows)
+    neither = [r for r in rows if r[6] != "agree" and r[8] != "agree"]
+    out.append(f"\ncover art alone against the truth: {dict(cover_says)}; keyword alone: {dict(keyword_says)}; "
+               f"confirmed by neither: {len(neither)} of {len(rows)} ({len({r[3] for r in neither})} packs)")
     text = "\n".join(out)
     print(text)
     if args.md:
@@ -239,7 +267,7 @@ def main():
     if args.csv:
         with args.csv.open("w", newline="", encoding="utf-8") as f:
             w = csv.writer(f)
-            w.writerow(["image", "x", "ocr lines", "pack", "path", "cover", "cover verdict"])
+            w.writerow(["image", "x", "ocr lines", "pack", "path", "cover", "cover verdict", "keyword", "keyword verdict"])
             w.writerows(rows)
 
 
