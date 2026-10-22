@@ -77,8 +77,8 @@ def test_the_battle_menu_roi_holds_the_resume_bar_and_no_other():
 
 
 def test_no_other_screen_reads_as_the_battle_menu():
-    # CODING_STANDARDS: a template heuristic ships with a sweep over tests/screens. Live sweep (2026-10-22, 119 images):
-    # 1.000 and 0.986 on the two captures of the menu, 0.50 at most on every other screen.
+    # CODING_STANDARDS: a template heuristic ships with a sweep over tests/screens. Sweep (OpenCV, colour, 2026-10-22):
+    # 1.000 and 0.986 on the two captures of the menu, 0.50 at most on every other 1280 x 720 screen.
     node = load_nodes()["BattleMenu"]
     template = gray(IMAGES / node["template"])
     others = [p for p in sorted(SCREENS.glob("*.png")) if p.name not in BATTLE_MENU_SHOTS]
