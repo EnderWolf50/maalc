@@ -70,7 +70,7 @@ def test_a_card_tap_not_counted_within_a_second_is_tapped_again(context, monkeyp
     game = Game(monkeypatch, eaten=1)
     assert actions.Formation.pick(context, ORDER)
     first, again = game.card_taps("Yi Sang")
-    assert actions.PICK_RETAP <= again - first < actions.PICK_RETAP + 1.0
+    assert 1.0 <= again - first < 1.7  # #253: about a second (the looks end after the first one past PICK_RETAP)
     assert [len(game.card_taps(s)) for s in ORDER] == [2, 1, 1] and game.count == 3
     assert "1 taps repeated" in actions.LOG[-1]
 
@@ -80,6 +80,21 @@ def test_a_slow_tap_is_not_tapped_again_before_the_second_is_up(context, monkeyp
     game = Game(monkeypatch, lag=0.8)
     assert actions.Formation.pick(context, ORDER)
     assert [len(game.card_taps(s)) for s in ORDER] == [1, 1, 1] and game.count == 3
+
+
+def test_a_tap_that_took_late_and_was_repeated_is_tapped_a_third_time_when_the_card_falls_back(context, monkeypatch):
+    # The count shows 1.3 s after the first tap: the repeat at 1 s picks the card off again.
+    game = Game(monkeypatch, lag=1.3)
+    assert actions.Formation.pick(context, ORDER[:1])
+    assert len(game.card_taps("Yi Sang")) == 3 and game.count == 1
+    assert "2 taps repeated" in actions.LOG[-1]
+
+
+def test_a_count_that_is_never_readable_is_stuck_after_two_taps(context, monkeypatch):
+    game = Game(monkeypatch, blind=99)
+    assert not actions.Formation.pick(context, ORDER[:1])
+    assert len(game.card_taps("Yi Sang")) == 2
+    assert actions.STUCK["flag"][2] == "tapping Yi Sang did not pick them"
 
 
 def test_a_count_that_cannot_be_read_is_waited_for_not_tapped_on(context, monkeypatch):

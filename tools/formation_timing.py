@@ -7,6 +7,7 @@ ReadText OCR of the participants ROI in maafw.log. Per pick (Clear Selection to 
 one row per card tap: the gap to the tap before, and the first reading that shows the count up by one with its
 delay after the tap. A reading is stamped when its OCR request starts (the screenshot is taken just before).
 With fixed waits the delay is bounded by how often the old code looked, so it is an upper bound, not the lag.
+`count` is the card tap's number in its pick: a pick with a repeated tap (the new code's) misaligns it.
 """
 
 from __future__ import annotations
@@ -17,9 +18,9 @@ import sys
 CLICK = re.compile(r"^(\d\d:\d\d:\d\d\.\d{3}) x: (\d+), y: (\d+), width: (\d+)")
 MARK = re.compile(r"^(\d\d:\d\d:\d\d\.\d{3}) \[maalc\] (formation re-picked.*)")
 TS = re.compile(r"^\[\d{4}-\d\d-\d\d (\d\d:\d\d:\d\d\.\d{3})\]")
-ROI = '"roi":[1125,500,100,45]'
 TEXT = re.compile(r'"text":"(\d+)\s*/\s*(\d+)"')
-# Copies of agent/actions.py's CLEAR_SELECTION, CARD_TAP_Y, CARD_X and PARTICIPANTS: this tool reads logs, not the agent.
+# Copies of agent/actions.py's PARTICIPANTS, CLEAR_SELECTION, CARD_TAP_Y and CARD_X: this tool reads logs, not the agent.
+ROI = '"roi":[1125,500,100,45]'
 CLEAR, CARD_Y = (1145, 479), (290, 488)
 CARD_X = [295 + round(132.2 * i) for i in range(6)]
 
