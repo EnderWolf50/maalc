@@ -1,9 +1,39 @@
 // The click rules of the team page's sinner grid and starlight cards.
 import { expect, test } from "vitest";
 import {
-  SEARCH_GIFTS, SEARCH_TABS, buyOrder, clickCard, clickEnhance, enhanceAll, gracePrice, newSettings, selectAll, starlightCost,
-  toggleGift, toggleSinner, type StarlightValues,
+  SEARCH_GIFTS, SEARCH_TABS, buyOrder, clickCard, clickEnhance, enhanceAll, gracePrice, lanesOf, lineAt, newPackPlan, newSettings,
+  floorLabel, onFloor, selectAll, starlightCost, toggleGift, toggleSinner, weightOf, type StarlightValues,
 } from "./model";
+
+test("a pack shows on the floors the data file gives it", () => {
+  expect(onFloor("N12 H1", "", 0)).toBe(true);
+  expect(onFloor("N12 H1", "normal", 2)).toBe(true);
+  expect(onFloor("N12 H1", "hard", 2)).toBe(false);
+  expect(onFloor("H345", "normal", 0)).toBe(false); // HARD only
+  expect(onFloor("H345", "", 4)).toBe(true);
+});
+
+test("a pack's floors read in words: ranges for runs, the rest listed, only the difficulties it has", () => {
+  const zh = { normal: "普通 {f} 層", hard: "困難 {f} 層", sep: "、", join: " · " };
+  expect(floorLabel("N12 H1", zh)).toBe("普通 1–2 層 · 困難 1 層");
+  expect(floorLabel("H13", zh)).toBe("困難 1、3 層");
+  expect(floorLabel("H345", zh)).toBe("困難 3–5 層");
+  expect(floorLabel("N124 H5", zh)).toBe("普通 1–2、4 層 · 困難 5 層");
+  expect(floorLabel("N5", zh)).toBe("普通 5 層");
+  expect(floorLabel("N45 H34", { normal: "NORMAL {f}", hard: "HARD {f}", sep: ", ", join: " · " })).toBe("NORMAL 4–5 · HARD 3–4");
+});
+
+test("lanes are the weights in use and 0, highest first; the line sits under the lanes at or over the threshold", () => {
+  const plan = { ...newPackPlan(), weights: { A: 5, B: -5, C: 5 }, unlisted: -2 };
+  expect(lanesOf(plan)).toEqual([5, 0, -2, -5]);
+  expect(lanesOf(newPackPlan())).toEqual([0]); // 0 always stays
+  expect(weightOf(plan, "A")).toBe(5);
+  expect(weightOf(plan, "Z")).toBe(-2); // unlisted
+  expect(lineAt(lanesOf(plan), 0)).toBe(2); // under 5 and 0: a best of -2 refreshes
+  expect(lineAt(lanesOf(plan), 3)).toBe(1);
+  expect(lineAt(lanesOf(plan), 6)).toBe(0); // over every lane: always refresh
+  expect(lineAt(lanesOf(plan), -10)).toBe(4); // under every lane: never
+});
 
 test("clicking a sinner not in the order adds it at the end", () => {
   expect(toggleSinner(["Ryōshū", "Yi Sang"], "Faust")).toEqual(["Ryōshū", "Yi Sang", "Faust"]);

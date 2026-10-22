@@ -1,7 +1,7 @@
 {
   "description": "Shared by tests/test_settings.py and gui/src/validate.test.ts so the agent and the GUI reject the same files. Each case applies edits to valid: set (a last path segment of - appends) or delete. schema lists the error paths; every error must sit at or under one of them. cross lists the exact cross-check messages, in order.",
   "valid": {
-    "version": 8,
+    "version": 9,
     "language": "zh_tw",
     "run": {
       "difficulty": "auto", "runs": null, "weekly_bonus_use": "hard", "weekly_bonus_amount": "all",
@@ -15,7 +15,7 @@
     "starlight_plans": [
       {"id": "s1", "name": "Cheap", "levels": ["none", "none", "none", "none", "none", "none", "none", "none", "none", "none"], "priority": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], "convert_leftover": false}
     ],
-    "theme_pack_plans": [{"id": "p1", "name": "Mine", "marks": {"Automated Factory": "avoid"}}],
+    "theme_pack_plans": [{"id": "p1", "name": "Mine", "weights": {"Automated Factory": -5}, "threshold": 0, "unlisted": 0, "event_packs": "weight"}],
     "teams": [
       {
         "id": "a", "name": "Team a", "enabled": true, "game_team": 1, "keyword": "Burn", "usage": "any", "hard_from_floor": 1,
@@ -41,11 +41,11 @@
     "trial_risk_overrides": [{"trial": "Growth I", "risk": 3}]
   },
   "cases": [
-    {"name": "disabled teams may share a slot, plan names are per kind, empty marks",
+    {"name": "disabled teams may share a slot, plan names are per kind, empty weights",
      "edits": [
        {"set": "teams/1/game_team", "value": 1}, {"set": "teams/1/enabled", "value": false},
        {"set": "starlight_plans/-", "value": {"id": "s2", "name": "Bleed order", "levels": ["none", "none", "none", "none", "none", "none", "none", "none", "none", "none"], "priority": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], "convert_leftover": false}},
-       {"set": "theme_pack_plans/0/marks", "value": {}}
+       {"set": "theme_pack_plans/0/weights", "value": {}}
      ],
      "cross": []},
     {"name": "bad enum", "edits": [{"set": "run/difficulty", "value": "extreme"}], "schema": ["run/difficulty"]},
@@ -67,7 +67,11 @@
     {"name": "guard turns out of range", "edits": [{"set": "teams/0/guard_turns", "value": 6}], "schema": ["teams/0/guard_turns"]},
     {"name": "repeated starlight priority", "edits": [{"set": "starlight_plans/0/priority/0", "value": 2}], "schema": ["starlight_plans/0/priority"]},
     {"name": "bad custom starlight level", "edits": [{"set": "teams/1/starlight/custom/levels/0", "value": "max"}], "schema": ["teams/1/starlight"]},
-    {"name": "bad theme pack mark", "edits": [{"set": "theme_pack_plans/0/marks/X", "value": "love"}], "schema": ["theme_pack_plans/0/marks/X"]},
+    {"name": "theme pack weight out of range", "edits": [{"set": "theme_pack_plans/0/weights/X", "value": 11}], "schema": ["theme_pack_plans/0/weights/X"]},
+    {"name": "theme pack weight not a whole number", "edits": [{"set": "theme_pack_plans/0/weights/X", "value": 1.5}], "schema": ["theme_pack_plans/0/weights/X"]},
+    {"name": "theme pack threshold and unlisted out of range", "edits": [{"set": "theme_pack_plans/0/threshold", "value": -11}, {"set": "theme_pack_plans/0/unlisted", "value": 12}], "schema": ["theme_pack_plans/0/threshold", "theme_pack_plans/0/unlisted"]},
+    {"name": "bad event pack mode", "edits": [{"set": "theme_pack_plans/0/event_packs", "value": "skip"}], "schema": ["theme_pack_plans/0/event_packs"]},
+    {"name": "the old marks are gone", "edits": [{"set": "theme_pack_plans/0/marks", "value": {}}], "schema": ["theme_pack_plans/0"]},
     {"name": "user plan named default", "edits": [{"set": "theme_pack_plans/0/id", "value": "default"}], "schema": ["theme_pack_plans/0/id"]},
     {"name": "missing team field", "edits": [{"delete": "teams/0/heal"}], "schema": ["teams/0"]},
     {"name": "unknown top-level key", "edits": [{"set": "extra", "value": 1}], "schema": ["(root)"]},

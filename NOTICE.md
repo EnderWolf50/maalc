@@ -38,6 +38,10 @@ SOFTWARE.
 
 本專案是非官方的粉絲作品，與 Project Moon 無關。以上素材僅供自動化辨識之用；著作權人如要求移除，會立即從 repo 移除。
 
+## 預設主題包分數
+
+`assets/resource/base/data/theme_packs.yaml` 預設方案（`default_plan`）的每包分數取自 [AhabAssistantLimbusCompany](https://github.com/KIYI671/AhabAssistantLimbusCompany)（AALC）的預設權重表 [assets/config/theme_pack_list.example.yaml](https://github.com/KIYI671/AhabAssistantLimbusCompany/blob/45d9a5809456d008fc2c16f28d52882bf388cd1d/assets/config/theme_pack_list.example.yaml)（commit `45d9a58`，2026-08-05；2026-10-22 取用時 `main` 為 `e1d1749`，這個檔案沒有更動）。AALC 採 [AGPL-3.0](https://www.gnu.org/licenses/agpl-3.0.html) 授權。本專案只取每個主題包的分數（數字），依 AALC 自己的片段比對規則對到本專案的主題包完整名稱，不複製它的檔案或程式碼（[ADR 0001](docs/adr/0001-mit-and-no-agpl-derived-assets.md)：權重這類參數可以參考）。
+
 ## 星光加成的中文名稱與效果文字
 
 `gui/src/graces.json` 的中文名稱與效果文字取自 [灰機 Limbus Company 維基](https://limbuscompany.huijiwiki.com/) 的頁面 [名与蛛之镜](https://limbuscompany.huijiwiki.com/wiki/%E5%90%8D%E4%B8%8E%E8%9B%9B%E4%B9%8B%E9%95%9C)「名与蛛的星之恩惠」一節（修訂 133560，2026-10-16 取用），由維基的貢獻者撰寫，採 [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/) 授權。本專案以 OpenCC `s2twp` 轉成繁體並修改兩個用詞（「重新整理」改回「刷新」、「映象」改為「鏡像」）；修改後的 `gui/src/graces.json` 同樣以 CC BY-SA 4.0 授權。英文名稱取自遊戲畫面。

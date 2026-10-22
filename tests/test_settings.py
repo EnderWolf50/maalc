@@ -26,7 +26,7 @@ def team(id, game_team, **kw):
 
 
 VALID = {
-    "version": 8,
+    "version": 9,
     "language": "zh_tw",
     "run": {
         "difficulty": "auto", "runs": 1, "weekly_bonus_use": "hard", "weekly_bonus_amount": "all",
@@ -36,7 +36,7 @@ VALID = {
     },
     "deployment_order_plans": [{"id": "d1", "name": "Bleed order", "order": ORDER}],
     "starlight_plans": [{"id": "s1", "name": "Cheap", **STARLIGHT}],
-    "theme_pack_plans": [{"id": "p1", "name": "Mine", "marks": {"Automated Factory": "avoid"}}],
+    "theme_pack_plans": [{"id": "p1", "name": "Mine", "weights": {"Automated Factory": -5}, "threshold": 0, "unlisted": 0, "event_packs": "weight"}],
     "teams": [
         team("a", 1, deployment_order={"plan": "d1"}, starlight={"plan": "s1"}, theme_pack_plan="p1"),
         team("b", 2),
@@ -96,7 +96,8 @@ def test_broken_json(tmp_path):
     (lambda d: d["teams"][1].update(reward_cards=["Cost"] * 5), "teams/1/reward_cards"),
     (lambda d: d["starlight_plans"][0]["priority"].__setitem__(0, 2), "starlight_plans/0/priority"),
     (lambda d: d["teams"][1].update(starlight={"custom": {**STARLIGHT, "levels": ["max"] * 10}}), "teams/1/starlight"),
-    (lambda d: d["theme_pack_plans"][0]["marks"].update(X="love"), "theme_pack_plans/0/marks/X"),
+    (lambda d: d["theme_pack_plans"][0]["weights"].update(X=11), "theme_pack_plans/0/weights/X"),
+    (lambda d: d["theme_pack_plans"][0].update(event_packs="skip"), "theme_pack_plans/0/event_packs"),
     (lambda d: d["theme_pack_plans"][0].update(id="default"), "theme_pack_plans/0/id"),
     (lambda d: d.update(extra=1), "(root)"),
     (lambda d: d["teams"][0].pop("heal"), "teams/0"),
@@ -113,7 +114,7 @@ def test_schema_errors_name_the_field(tmp_path, fn, where):
 
 
 def test_newer_version_is_refused(tmp_path):
-    assert "newer" in errors(tmp_path, {**VALID, "version": 9})[0]
+    assert "newer" in errors(tmp_path, {**VALID, "version": 10})[0]
 
 
 def test_version_1_gets_guard_turns_off(tmp_path):
@@ -171,6 +172,28 @@ def test_version_7_accepts_terms_and_downloads(tmp_path):
     assert load(tmp_path, {**old, "version": 7}) == VALID
 
 
+def v8_plan(marks):
+    """VALID as version 8 wrote it, its theme pack plan holding these marks."""
+    def fn(d):
+        plan = d["theme_pack_plans"][0]
+        for k in ("weights", "threshold", "unlisted", "event_packs"):
+            plan.pop(k)
+        plan["marks"] = marks
+    return {**edited(fn), "version": 8}
+
+
+def test_version_8_theme_pack_marks_become_weights(tmp_path):
+    # #240: prefer / neutral / avoid -> 5 / 0 / -5, threshold 0, unlisted 0, event packs by weight: picks as before.
+    marks = {"Automated Factory": "avoid", "The Forgotten": "prefer", "Lake World": "neutral"}
+    plan = load(tmp_path, v8_plan(marks))["theme_pack_plans"][0]
+    assert plan == {"id": "p1", "name": "Mine", "weights": {"Automated Factory": -5, "The Forgotten": 5, "Lake World": 0},
+                    "threshold": 0, "unlisted": 0, "event_packs": "weight"}
+
+
+def test_version_8_bad_mark_stays_an_error(tmp_path):
+    assert any(e.startswith("theme_pack_plans/0/weights/X:") for e in errors(tmp_path, v8_plan({"X": "love"})))
+
+
 def test_version_4_teams_may_hold_white_gossypium_as_before(tmp_path):
     old = edited(lambda d: [old_numbers(d)] + [t.pop("allow_white_gossypium") for t in d["teams"]])
     assert load(tmp_path, {**old, "version": 4}) == VALID_FROM_ZEROS
@@ -213,7 +236,7 @@ def test_cross_check_allows_what_the_spec_allows(tmp_path):
     def fn(d):
         d["teams"][1].update(game_team=1, enabled=False)  # disabled teams may share a slot
         d["teams"].append(team("c", 3, name="Team a"))  # team names are not checked
-        d["theme_pack_plans"][0]["marks"] = {}  # empty plan = all neutral
+        d["theme_pack_plans"][0]["weights"] = {}  # empty plan = every pack unlisted
         d["starlight_plans"].append({**d["starlight_plans"][0], "id": "s2", "name": "Bleed order"})  # names per kind
     load(tmp_path, edited(fn))
 
