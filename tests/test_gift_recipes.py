@@ -29,6 +29,20 @@ def test_every_fusion_gift_and_material_has_its_icon_and_an_english_name():
         assert g["en"] and 1 <= g["tier"] <= 5, g["id"]
 
 
+def test_recipes_match_the_game_data_when_it_is_unpacked():
+    import pytest
+    path = Path(__file__).resolve().parent.parent / ".local/unpack/static/Assets/Resources_moved/StaticData/static-data/mirror-dungeon-common-data/mirror-dungeon-common-data-md8.json"
+    if not path.is_file():
+        pytest.skip("no unpacked game data")
+    table = json.loads(path.read_text(encoding="utf-8-sig"))["egoGiftCombineFixedTable"]
+    got = {(g["id"], tuple(r)) for g in DATA["gifts"] for r in g.get("recipes", [])}
+    assert got == {(c["resultEgoGiftId"], tuple(c["requiredEgoGiftIds"])) for c in table["combineFixed"]}
+    mixed = table["combineMixed"][0]
+    assert next(g for g in DATA["gifts"] if "groups" in g)["groups"] == [
+        {"ids": mixed["aEgoGiftIds"], "need": mixed["aEgoGiftRequiredNum"]}, {"ids": mixed["bEgoGiftIds"], "need": mixed["bEgoGiftRequiredNum"]}]
+
+
 def test_chinese_names_are_traditional():
+    assert all(g["zh"] for g in DATA["gifts"] + DATA["materials"])
     assert next(g for g in DATA["gifts"] if g["id"] == 9083)["zh"] == "月之記憶"
     assert not [g["id"] for g in DATA["gifts"] + DATA["materials"] if "记" in g["zh"] or "镜" in g["zh"]]

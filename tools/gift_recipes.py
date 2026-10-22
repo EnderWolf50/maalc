@@ -7,7 +7,7 @@ Reads `.local/unpack/` (static data, English localization, the pulled UnityCache
 HTTP clients: save it from a browser). Recipes: `combineFixed` and `combineMixed` of mirror-dungeon-common-data-md8.json.
 Icons: the game's EgoGiftIcon sprite of each fusion gift and of each recipe material that gift_search.json lacks, scaled
 by 0.21, transparency filled green, as the Gift Search icons. The first run indexes the 12 GB of bundles into
-`.local/unpack/out/sprite-index.tsv` (run it as a `bench` ticket, tools/live/queue.py); the yearly rerun is docs/spec/05-game-data.md section 8.
+`.local/unpack/out/sprite-index.tsv` (run it as a `bench` ticket, tools/live/queue.py); the quarterly rerun is docs/spec/05-game-data.md section 8.
 """
 
 import argparse
@@ -99,6 +99,8 @@ def sprite_index(cache, index_path):
     import UnityPy
 
     UnityPy.config.FALLBACK_UNITY_VERSION = "6000.3.12f1"  # the bundles carry a stripped version, 1.117.0's engine
+    if index_path.is_file() and any(not (cache / h.split("\t")[0]).is_dir() for h in index_path.read_text(encoding="utf-8").splitlines()):
+        index_path.unlink()  # a new client has new bundle folders: reindex
     if not index_path.is_file():
         with index_path.open("w", encoding="utf-8") as f:
             for root, _, files in os.walk(cache):
