@@ -230,8 +230,10 @@ function PackPlanEditor({ data, plan, path, onChange }: {
         {images && (coverOf(name) ? <img className="img" src={coverOf(name)} alt="" draggable={false} /> : <span className="img" aria-hidden />)}
         <span className="nm">{name}</span>
         {floors
-          ? floors.map((f) => <small key={+f.hard} className={"fl" + (f.hard ? " hard" : "")}
-            aria-label={`${t(f.hard ? "packs.floorsHard" : "packs.floorsNormal")} ${f.text}`}>{f.text}</small>)
+          ? floors.map((f) => {
+            const label = `${t(f.hard ? "packs.floorsHard" : "packs.floorsNormal")} ${f.text}`;
+            return <small key={+f.hard} className={"fl" + (f.hard ? " hard" : "")} role="img" title={label} aria-label={label}>{f.text}</small>;
+          })
           : <small><em>{t("packNotInData")}</em></small>}
       </span>
     );
