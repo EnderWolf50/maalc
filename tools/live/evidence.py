@@ -38,6 +38,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import subprocess
 import sys
@@ -176,11 +177,13 @@ def annotated_clip(footage: Footage, t0: float, t1: float, out: Path, events: di
     files = {k: Path(f"{stem}-{k}.json") for k in ("events", "steps")}
     files["events"].write_text(json.dumps(events, indent=1), encoding="utf-8")
     files["steps"].write_text(json.dumps(steps, ensure_ascii=False, indent=1), encoding="utf-8")
-    raw = Path(f"{stem}-cut.mp4")
-    cut(footage, t0, t1, raw)
-    subprocess.run(["uv", "run", str(a.annotate), str(raw), "-o", str(out), "--start", hms(t0), "--events", str(files["events"]),
-                    "--steps", str(files["steps"]), "--masks", str(masks_path(a))], check=True)
-    raw.unlink()
+    raw = local_dir("scratch") / f"cut-{os.getpid()}-{out.stem}.mp4"  # unmasked: never beside out, which may be shared
+    try:
+        cut(footage, t0, t1, raw)
+        subprocess.run(["uv", "run", str(a.annotate), str(raw), "-o", str(out), "--start", hms(t0), "--events", str(files["events"]),
+                        "--steps", str(files["steps"]), "--masks", str(masks_path(a))], check=True)
+    finally:
+        raw.unlink(missing_ok=True)
 
 
 # --- masks -----------------------------------------------------------------------------------------------

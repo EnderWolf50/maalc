@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -94,8 +95,10 @@ def test_frames_and_clip_seek_into_the_right_piece(tmp_path, monkeypatch):
     assert calls[1][calls[1].index("-ss") + 1] == "1.000" and calls[1][calls[1].index("-t") + 1] == "3.000"
     with pytest.raises(SystemExit):  # an unmasked cut stays in .local/
         ev.main(["clip", "--video", "a.mp4@10:00:00", "--from", "10:00:01", "--to", "10:00:04", "-o", str(tmp_path.parent / "c.mp4")])
-    with pytest.raises(SystemExit):  # clip takes no masks: annotate.py masks it
-        ev.main(["clip", "--video", "a.mp4@10:00:00", "--masks", "m.json", "--from", "10:00:01", "--to", "10:00:04", "-o", "c.mp4"])
+    with pytest.raises(SystemExit) as e:  # clip takes no masks: annotate.py masks it
+        ev.main(["clip", "--video", "a.mp4@10:00:00", "--masks", "m.json", "--from", "10:00:01", "--to", "10:00:04",
+                 "-o", str(tmp_path / "c.mp4")])
+    assert e.value.code == 2  # argparse's unknown option, not the .local/ check
 
 
 def test_map_block_reads_columns_costs_drags_and_path(log):
@@ -139,6 +142,18 @@ def test_map_command_writes_the_stitched_floor_and_its_nodes(tmp_path, footage):
     assert Image.open(tmp_path / "route/stitched.png").size == (1790, 720)
     assert route["path"]["score"] == 22 and len(route["nodes"]) == 5 and len(route["shots"]) == 2
     assert (tmp_path / "route/before-1.png").exists() and (tmp_path / "route/after-1.png").exists()
+
+
+def test_map_clip_cuts_into_local_not_beside_the_output(tmp_path, footage, monkeypatch):
+    (tmp_path / "run.log").write_text(RUN, encoding="utf-8")
+    local, cuts, runs = tmp_path / "local", [], []
+    local.mkdir()
+    monkeypatch.setattr(ev, "local_dir", lambda *parts: local)
+    monkeypatch.setattr(ev, "cut", lambda f, t0, t1, out: (cuts.append(Path(out)), Path(out).write_text("raw")))
+    monkeypatch.setattr(ev.subprocess, "run", lambda cmd, check: runs.append(cmd))
+    ev.main(["map", str(tmp_path / "run.log"), "--floor", "1", "-o", str(tmp_path / "route"), "--clip", *footage])
+    assert cuts[0].parent == local and not cuts[0].exists()  # the unmasked cut is gone once annotate.py ran
+    assert runs[0][runs[0].index("-o") + 1] == str(tmp_path / "route/drag-clip.mp4")
 
 
 def test_packs_command_measures_deal_to_still(tmp_path, footage):
