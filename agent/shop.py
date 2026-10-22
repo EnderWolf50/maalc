@@ -238,7 +238,8 @@ SHOP_TITLE = (190, 108, 130, 30)  # x, y, w, h: the title on the main page's pla
 def is_super(image):
     """Whether the main shop page is a Super Shop: its title is red, a shop's is tan (#263).
 
-    Red pixels in the title's box: 20% on SuperShop.png, 0 on Shop.png (tests/screens). Only a shop's main page is asked.
+    Red pixels in the title's box: 20% on SuperShop.png, 0 on Shop.png (tests/screens): one sample of each, so a Super
+    Shop on another theme's background is unverified. Only a shop's main page is asked.
     """
     x, y, w, h = SHOP_TITLE
     b, g, r = (image[y:y + h, x:x + w, i].astype(int) for i in range(3))

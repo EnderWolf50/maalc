@@ -2988,7 +2988,8 @@ class Shop(CustomAction):
             return True  # a page fading in or out: let MirrorHub look again
         visit = RUN.setdefault("shop", {"healed": False, "refreshes": 0, "wanted": None, "sold": False})
         # The sale groups by the fuse page's slots and thresholds before that page was read: a Super Shop's red title tells (#263).
-        visit.setdefault("slots", 5 if shop.is_super(screen(context)) else 3)
+        if "slots" not in visit:
+            visit["slots"] = 5 if shop.is_super(screen(context)) else 3
         if not visit["healed"]:
             visit["healed"] = True  # first: a heal handed back mid-way (#118) is not paid twice
             self.heal(context, team)

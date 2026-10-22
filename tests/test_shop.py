@@ -267,13 +267,14 @@ def test_the_data_file_holds_the_games_points_and_thresholds():
 
 @pytest.mark.parametrize("tiers", [row[:-1] for row in GAME_TWO + GAME_THREE])
 def test_the_points_of_a_shop_give_the_games_own_table_for_two_and_three_materials(tiers):
-    # combineTwo / combineThree hold no result the shop's points table does not give (the legacy forecast tables).
+    # combineTwo / combineThree hold no result the shop's points table does not give.
     want = {row[:-1]: row[-1] for row in GAME_TWO + GAME_THREE}[tiers]
     assert s.fusion_tier(sum(POINTS[t] for t in tiers), SHOP) == want
 
 
 @pytest.mark.parametrize("tiers, shop, super_shop", [
-    ((1, 1, 3), 2, 3), ((1, 2, 2), 2, 3), ((1, 3, 3), 3, 4), ((2, 2, 3), 3, 4), ((2, 2, 2), 3, 3), ((1, 1, 1), 1, 1),
+    ((1, 1, 3), 2, 3), ((1, 2, 2), 2, 3), ((1, 3, 3), 3, 4), ((2, 2, 3), 3, 4), ((2, 3), 2, 3), ((2, 2, 2), 3, 3),
+    ((1, 1, 1), 1, 1), ((1, 3), 2, 2),
 ])
 def test_a_super_shop_gives_a_higher_tier_for_some_of_the_same_materials(tiers, shop, super_shop):
     points = sum(POINTS[t] for t in tiers)

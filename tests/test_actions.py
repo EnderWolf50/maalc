@@ -982,18 +982,18 @@ def test_a_shop_visit_counts_a_super_shops_five_slots_from_its_red_title(context
     # #263: before any fuse page was read, the sale already groups by the Super Shop's table.
     actions.RUN["team"] = {"heal": "none", "keyword": "Burn", "reserve_cost": 0}
     monkeypatch.setattr(actions.Shop, "to_main", staticmethod(lambda context: True))
-    for name, slots in (("Shop", 3), ("SuperShop", 5)):
+    seen = []
+
+    def sell(context, team, visit):
+        seen.append(visit["slots"])
+        raise actions.PageGone("Shop")  # ends the visit here: what sell saw is what is asked
+    monkeypatch.setattr(actions.Shop, "sell", staticmethod(sell))
+    for name in ("Shop", "SuperShop"):
         actions.RUN.pop("shop", None)
         image = np.asarray(Image.open(SCREENS / f"{name}.png").convert("RGB"))[:, :, ::-1]
         context.tasker.controller.post_screencap.return_value.wait.return_value.get.return_value = image
-
-        def sell(context, team, visit):
-            seen.append(visit["slots"])
-            raise actions.PageGone("Shop")  # ends the visit here: what sell saw is what is asked
-        seen = []
-        monkeypatch.setattr(actions.Shop, "sell", staticmethod(sell))
         assert actions.Shop().run(context, argv())
-        assert seen == [slots]
+    assert seen == [3, 5]
 
 
 def test_a_sale_does_not_break_a_fusion_by_selling_white_gossypium(context, monkeypatch):
