@@ -241,22 +241,37 @@ def fusion_tier(points, thresholds):
     return 1 + sum(points > t for t in thresholds)
 
 
-def pick_fusion(materials, slots, thresholds, points, first=()):
+def fusion_wanted(condition, tier, materials):
+    """Whether a fusion giving tier is made (#263): any one is; upgrade, only over the highest of its materials' tiers
+    (materials: [(key, tier)]); tier4, only a tier IV (MAX_MATERIAL_TIER: the most a fusion gives)."""
+    if condition == "upgrade":
+        return tier > max(t for _, t in materials)
+    return condition != "tier4" or tier >= MAX_MATERIAL_TIER
+
+
+def pick_fusion(materials, slots, thresholds, points, first=(), condition="any"):
     """The fusions to make, best first: [([keys], the tier it gives)] (#77).
 
     materials: [(key, tier)]; slots: the page's material slots (3, a Super Shop's 5); thresholds: fusion_tier's for
     this shop; points: {tier: a material's points}. Each fusion takes 3 to slots materials: the group giving the
     highest tier, then holding the most of first (gifts the team avoids, #90), then worth the fewest points; then
     again from what is left, until fewer than 3 are. A tier V gift is never a material (MAX_MATERIAL_TIER).
+    condition (the team's fusion_condition, #263) keeps out the groups fusion_wanted refuses: the best of the rest is
+    made, and none when no group is left.
     """
+    def tier_of(group):
+        return fusion_tier(sum(points[t] for _, t in group), thresholds)
+
     def rank(group):
-        total = sum(points[t] for _, t in group)
-        return -fusion_tier(total, thresholds), -sum(k in first for k, _ in group), total, len(group)
+        return -tier_of(group), -sum(k in first for k, _ in group), sum(points[t] for _, t in group), len(group)
 
     left, out = [m for m in materials if m[1] <= MAX_MATERIAL_TIER], []
     while len(left) >= MIN_FUSION:
-        best = min((g for n in range(MIN_FUSION, slots + 1) for g in combinations(left, n)), key=rank)
-        out.append(([k for k, _ in best], -rank(best)[0]))
+        groups = [g for n in range(MIN_FUSION, slots + 1) for g in combinations(left, n) if fusion_wanted(condition, tier_of(g), g)]
+        if not groups:
+            break
+        best = min(groups, key=rank)
+        out.append(([k for k, _ in best], tier_of(best)))
         left = [m for m in left if m not in best]
     return out
 

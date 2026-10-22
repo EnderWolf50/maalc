@@ -21,12 +21,12 @@ def team(id, game_team, **kw):
         "shop_refresh_limit": 2, "heal": "revive", "reserve_cost": 0, "min_alive": 0, "guard_turns": 0,
         "trial_risk_weight": "high", "gift_search": {"enabled": False, "gifts": []}, "allow_white_gossypium": True,
         "keep_keywords": [], "keywordless": "keep", "keep_gifts": [], "sell_max_tier": 4,
-        "sell_vestiges": False, **kw,
+        "sell_vestiges": False, "fusion_condition": "any", **kw,
     }
 
 
 VALID = {
-    "version": 9,
+    "version": 10,
     "language": "zh_tw",
     "run": {
         "difficulty": "auto", "runs": 1, "weekly_bonus_use": "hard", "weekly_bonus_amount": "all",
@@ -105,6 +105,8 @@ def test_broken_json(tmp_path):
     (lambda d: d["teams"][0].update(keep_keywords=["Keywordless"]), "teams/0/keep_keywords/0"),  # keywordless says it
     (lambda d: d["teams"][0].update(keywordless=True), "teams/0/keywordless"),
     (lambda d: d["teams"][0].update(sell_max_tier=6), "teams/0/sell_max_tier"),
+    (lambda d: d["teams"][0].update(fusion_condition="aggressive"), "teams/0/fusion_condition"),
+    (lambda d: d["teams"][0].pop("fusion_condition"), "teams/0"),
     (lambda d: d["teams"][0].update(sell_max_tier=0), "teams/0/sell_max_tier"),
     (lambda d: d["teams"][0].update(keep_keywords=["Bleed", "Bleed"]), "teams/0/keep_keywords"),
     (lambda d: d["teams"][0]["keep_gifts"].append({"keyword": "Bleed", "tier": 4, "name": "X"}), "teams/0/keep_gifts/0"),  # neither a Gift Search gift nor a vestige
@@ -114,7 +116,7 @@ def test_schema_errors_name_the_field(tmp_path, fn, where):
 
 
 def test_newer_version_is_refused(tmp_path):
-    assert "newer" in errors(tmp_path, {**VALID, "version": 10})[0]
+    assert "newer" in errors(tmp_path, {**VALID, "version": 11})[0]
 
 
 def test_version_1_gets_guard_turns_off(tmp_path):
@@ -170,6 +172,12 @@ def test_version_7_accepts_terms_and_downloads(tmp_path):
     # The user's decision (2026-10-21): the bot may tick the User Agreement and accept downloads.
     old = edited(lambda d: [d["run"].pop("auto_accept_terms"), d["run"].pop("auto_download")])
     assert load(tmp_path, {**old, "version": 7}) == VALID
+
+
+def test_version_9_fuses_as_before(tmp_path):
+    # #263: any, the fusion the shop made before the condition existed.
+    old = edited(lambda d: [t.pop("fusion_condition") for t in d["teams"]])
+    assert load(tmp_path, {**old, "version": 9}) == VALID
 
 
 def v8_plan(marks):

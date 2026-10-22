@@ -249,6 +249,45 @@ def test_pick_fusion_on_a_super_shop_fills_its_5_slots_by_its_own_thresholds():
     assert s.pick_fusion([("a", 2), ("b", 2), ("c", 1)], 5, SUPER, POINTS) == [(["a", "b", "c"], 3)]
 
 
+def test_pick_fusion_any_makes_every_group_it_can():
+    # #263: the default fuses a group that gives no higher tier than its materials: three I make a I.
+    assert s.pick_fusion([("a", 1), ("b", 1), ("c", 1)], 3, SHOP, POINTS, condition="any") == [(["a", "b", "c"], 1)]
+
+
+def test_pick_fusion_upgrade_wants_a_tier_over_the_highest_material():
+    # #263: three I stay a I, IV + I + I (21 points) is a III: neither is worth the materials.
+    assert s.pick_fusion([("a", 1), ("b", 1), ("c", 1)], 3, SHOP, POINTS, condition="upgrade") == []
+    assert s.pick_fusion([("a", 4), ("b", 1), ("c", 1)], 3, SHOP, POINTS, condition="upgrade") == []
+    # II + II + I = 15 is a II, no better than its II; II + II + II = 18 is a III.
+    assert s.pick_fusion([("a", 2), ("b", 2), ("c", 1)], 3, SHOP, POINTS, condition="upgrade") == []
+    assert s.pick_fusion([("a", 2), ("b", 2), ("c", 2)], 3, SHOP, POINTS, condition="upgrade") == [(list("abc"), 3)]
+
+
+def test_pick_fusion_upgrade_skips_the_best_group_when_it_is_no_upgrade():
+    # #263: IV + II + II is a IV (27 points), the most; but a IV material cannot be topped, so II + II + II (a III) is made.
+    materials = [("a", 4), ("b", 2), ("c", 2), ("d", 2)]
+    assert s.pick_fusion(materials, 3, SHOP, POINTS) == [(["a", "b", "c"], 4)]
+    assert s.pick_fusion(materials, 3, SHOP, POINTS, condition="upgrade") == [(["b", "c", "d"], 3)]
+
+
+def test_pick_fusion_tier4_makes_only_a_tier_iv():
+    # #263: III + III + II (26 points) is a IV; the three I left would make a I and stay.
+    materials = [("a", 1), ("b", 3), ("c", 1), ("d", 2), ("e", 3), ("f", 1)]
+    assert s.pick_fusion(materials, 3, SHOP, POINTS, condition="tier4") == [(["b", "d", "e"], 4)]
+    assert s.pick_fusion([(k, 3) for k in "abc"], 3, SHOP, POINTS, condition="tier4") == [(list("abc"), 4)]
+    assert s.pick_fusion([(k, 1) for k in "abc"], 3, SHOP, POINTS, condition="tier4") == []
+    # III + III + I is 23 points: a III in a shop, a IV in a Super Shop (22 and up).
+    materials = [("a", 3), ("b", 3), ("c", 1)]
+    assert s.pick_fusion(materials, 3, SHOP, POINTS, condition="tier4") == []
+    assert s.pick_fusion(materials, 5, SUPER, POINTS, condition="tier4") == [(list("abc"), 4)]
+
+
+def test_pick_fusion_tier4_can_use_more_slots_to_get_there():
+    # #263: a Super Shop's 5 slots: 5 x III is 50 points; with 5 II (30 points) a IV needs only 22.
+    assert s.pick_fusion([(k, 2) for k in "abcde"], 5, SUPER, POINTS, condition="tier4") == [(list("abcd"), 4)]
+    assert s.pick_fusion([(k, 2) for k in "abcde"], 3, SHOP, POINTS, condition="tier4") == []
+
+
 def test_pick_fusion_never_takes_a_tier_v_gift():
     # #161, the user: a fusion tops out at tier IV, so a tier V material is always a downgrade; not even to make a group.
     assert s.pick_fusion([("v", 5), ("a", 1), ("b", 1)], 3, SHOP, POINTS) == []

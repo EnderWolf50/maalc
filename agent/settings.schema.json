@@ -17,7 +17,7 @@
     "trial_risk_overrides"
   ],
   "properties": {
-    "version": { "const": 9 },
+    "version": { "const": 10 },
     "language": { "enum": ["zh_tw", "en_us"], "default": "zh_tw" },
     "run": {
       "type": "object",
@@ -146,7 +146,8 @@
           "keywordless",
           "keep_gifts",
           "sell_max_tier",
-          "sell_vestiges"
+          "sell_vestiges",
+          "fusion_condition"
         ],
         "properties": {
           "id": { "$ref": "#/$defs/id" },
@@ -276,6 +277,11 @@
             "type": "boolean",
             "default": false,
             "description": "the shop may sell vestiges (pure fusion-material gifts, data/shop.yaml); off: never sold"
+          },
+          "fusion_condition": {
+            "enum": ["any", "upgrade", "tier4"],
+            "default": "any",
+            "description": "when the shop fuses (#263): any (whenever the materials make the highest tier they can), upgrade (only a tier above the highest material), tier4 (only a tier IV)"
           }
         }
       }
