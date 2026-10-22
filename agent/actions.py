@@ -1878,20 +1878,29 @@ class Formation(CustomAction):
     def pick(context, order):
         """Clear Selection, then tap the order card by card, each tap checked by the count going up by one (#253).
 
-        Every tap is followed at once by until()'s looks at the count; one that has not raised it after PICK_RETAP s is
-        tapped again, once.
+        Every tap is followed at once by until()'s looks at the count. A card whose count was read but is not n after
+        PICK_RETAP s is tapped again, once; a count that could not be read (a page still moving) is waited for, not
+        tapped on: a second tap on a card that took the first one picks it off again.
         """
-        def count_is(n):
-            return lambda image: (count := participants(context, image)) is not None and count[0] == n
+        def count_is(n, seen=None):
+            def done(image):
+                count = participants(context, image)
+                if count and seen is not None:
+                    seen.append(count[0])
+                return count is not None and count[0] == n
+            return done
+
+        dialog = []
 
         def cleared(image):
-            return has(text(context, image, RESET_DIALOG), "Reset Deployment") or count_is(0)(image)
+            dialog[:] = [has(text(context, image, RESET_DIALOG), "Reset Deployment")]
+            return dialog[0] or count_is(0)(image)
 
         start, retaps = time.monotonic(), 0
         for _ in range(3):
             page_guard(context, "Formation")
             image = tap_then(context, *CLEAR_SELECTION, cleared, timeout=1.5)
-            if image is not None and has(text(context, image, RESET_DIALOG), "Reset Deployment"):
+            if image is not None and dialog[0]:
                 image = tap_then(context, *RESET_CONFIRM, count_is(0), timeout=3)
             if image is not None:  # the count 0 it waited for
                 break
@@ -1901,7 +1910,12 @@ class Formation(CustomAction):
         for n, sinner in enumerate(order, 1):
             for _ in range(2):
                 page_guard(context, "Formation")
-                if tap_then(context, *card_xy(battle.SINNERS.index(sinner), CARD_TAP_Y), count_is(n), timeout=PICK_RETAP) is not None:
+                seen = []
+                done = count_is(n, seen)
+                image = tap_then(context, *card_xy(battle.SINNERS.index(sinner), CARD_TAP_Y), done, timeout=PICK_RETAP)
+                if image is None and not seen:
+                    image = until(context, done, timeout=PICK_RETAP)
+                if image is not None:
                     break
                 retaps += 1
             else:

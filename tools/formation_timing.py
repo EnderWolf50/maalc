@@ -2,7 +2,7 @@
 
     uv run python tools/formation_timing.py <run.log> <maafw.log>
 
-Taps come from run.log (the controller prints each click in 1080p; this divides by 1.5), the readings from the
+Taps come from run.log (the controller prints each click in the emulator's pixels; this scales them to 1280 wide), the readings from the
 ReadText OCR of the participants ROI in maafw.log. Per pick (Clear Selection to `formation re-picked`) it prints
 one row per card tap: the gap to the tap before, and the first reading that shows the count up by one with its
 delay after the tap. A reading is stamped when its OCR request starts (the screenshot is taken just before).
@@ -14,11 +14,12 @@ from __future__ import annotations
 import re
 import sys
 
-CLICK = re.compile(r"^(\d\d:\d\d:\d\d\.\d{3}) x: (\d+), y: (\d+), width: 1920")
-MARK = re.compile(r"^(\d\d:\d\d:\d\d\.\d{3}) \[maalc\] (formation re-picked.*|tapping .* did not pick them)")
+CLICK = re.compile(r"^(\d\d:\d\d:\d\d\.\d{3}) x: (\d+), y: (\d+), width: (\d+)")
+MARK = re.compile(r"^(\d\d:\d\d:\d\d\.\d{3}) \[maalc\] (formation re-picked.*)")
 TS = re.compile(r"^\[\d{4}-\d\d-\d\d (\d\d:\d\d:\d\d\.\d{3})\]")
 ROI = '"roi":[1125,500,100,45]'
 TEXT = re.compile(r'"text":"(\d+)\s*/\s*(\d+)"')
+# Copies of agent/actions.py's CLEAR_SELECTION, CARD_TAP_Y, CARD_X and PARTICIPANTS: this tool reads logs, not the agent.
 CLEAR, CARD_Y = (1145, 479), (290, 488)
 CARD_X = [295 + round(132.2 * i) for i in range(6)]
 
@@ -34,7 +35,8 @@ def taps(path):
     for line in open(path, encoding="utf-8", errors="replace"):
         m = CLICK.match(line)
         if m:
-            out.append((secs(m[1]), round(int(m[2]) / 1.5), round(int(m[3]) / 1.5)))
+            scale = 1280 / int(m[4])
+            out.append((secs(m[1]), round(int(m[2]) * scale), round(int(m[3]) * scale)))
     return out
 
 
@@ -70,7 +72,7 @@ def card(x, y):
 def main(run_log, maafw_log):
     tap_list, mark_list, reads = taps(run_log), marks(run_log), readings(maafw_log)
     print("pick\tcard\ttap\tgap_s\tcount\tfirst_up_s\treads_before_up")
-    for p, (end, label) in enumerate(m for m in mark_list if m[1].startswith("formation re-picked")):
+    for p, (end, _) in enumerate(mark_list):
         clears = [t for t, x, y in tap_list if t < end and abs(x - CLEAR[0]) < 6 and abs(y - CLEAR[1]) < 6]
         if not clears:
             continue

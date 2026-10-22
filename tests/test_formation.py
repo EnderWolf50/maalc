@@ -4,17 +4,22 @@ import test_actions
 
 clock, context = test_actions.clock, test_actions.context  # its fixtures
 ORDER = ["Yi Sang", "Hong Lu", "Rodion"]
-OCR = 0.3  # s one look at the count costs (live: ~0.33 s)
+OCR = 0.3  # s one look at the count costs (live: ~0.33 s); the screenshot is taken before it
+
+
+def card(sinner):
+    return actions.card_xy(actions.battle.SINNERS.index(sinner), actions.CARD_TAP_Y)
 
 
 class Game:
-    """The formation page's Total Participants. A card tap raises the count `lag` s later, unless it is eaten (the first
-    `eaten` of them). Clear Selection opens the Reset dialog (`dialog`) that Confirm answers by emptying the selection
-    (`clears`); without the dialog it empties the selection itself."""
+    """The formation page's Total Participants. A card tap shows `lag` s later, unless it is eaten (the first `eaten`
+    of them); a tap on a card that is picked picks it off again. Clear Selection opens the Reset dialog (`dialog`) that
+    Confirm answers by emptying the selection (`clears`); without the dialog it empties the selection itself. `blind`:
+    s after a card tap that the count cannot be read (the page moving)."""
 
-    def __init__(self, monkeypatch, start=7, lag=0.3, eaten=0, dialog=True, clears=True):
-        self.count, self.lag, self.eaten, self.dialog, self.clears = start, lag, eaten, dialog, clears
-        self.open, self.pending, self.taps = False, [], []
+    def __init__(self, monkeypatch, start=7, lag=0.3, eaten=0, dialog=True, clears=True, blind=0.0):
+        self.count, self.lag, self.eaten, self.dialog, self.clears, self.blind = start, lag, eaten, dialog, clears, blind
+        self.open, self.pending, self.taps, self.picked, self.last_card = False, [], [], set(), -99.0
         monkeypatch.setattr(actions, "tap", self.tap)
         monkeypatch.setattr(actions, "participants", self.read)
         monkeypatch.setattr(actions, "text", lambda context, image, roi, only_rec=False: "Reset Deployment Order?" if self.open else "")
@@ -29,36 +34,36 @@ class Game:
         elif (x, y) == actions.RESET_CONFIRM and self.open:
             self.open = False
             if self.clears:
+                self.picked.clear()
                 self.pending.append((now + self.lag, lambda: 0))
         elif (x, y) in [actions.card_xy(i, actions.CARD_TAP_Y) for i in range(12)]:
+            self.last_card = now
             if self.eaten:
                 self.eaten -= 1
             else:
-                self.pending.append((now + self.lag, lambda: self.count + 1))
+                step = -1 if (x, y) in self.picked else 1
+                self.picked ^= {(x, y)}
+                self.pending.append((now + self.lag, lambda: self.count + step))
         actions.time.sleep(wait)
 
     def read(self, context, image):
+        shot = actions.time.monotonic()
         actions.time.sleep(OCR)
-        now = actions.time.monotonic()
-        for due, value in [p for p in self.pending if p[0] <= now]:
+        for due, value in [p for p in self.pending if p[0] <= shot]:
             self.count = value()
             self.pending.remove((due, value))
-        return self.count, 12
-
-    def cards(self):
-        return [t for t, xy in self.taps if xy not in (actions.CLEAR_SELECTION, actions.RESET_CONFIRM)]
+        return None if shot < self.last_card + self.blind else (self.count, 12)
 
     def card_taps(self, sinner):
-        return [t for t, xy in self.taps if xy == actions.card_xy(actions.battle.SINNERS.index(sinner), actions.CARD_TAP_Y)]
+        return [t for t, xy in self.taps if xy == card(sinner)]
 
 
 def test_each_card_is_checked_at_once_and_the_next_one_follows_the_count(context, monkeypatch, clock):
     game = Game(monkeypatch)
     assert actions.Formation.pick(context, ORDER)
-    assert [xy for _, xy in game.taps] == [actions.CLEAR_SELECTION, actions.RESET_CONFIRM] + \
-        [actions.card_xy(actions.battle.SINNERS.index(s), actions.CARD_TAP_Y) for s in ORDER]
+    assert [xy for _, xy in game.taps] == [actions.CLEAR_SELECTION, actions.RESET_CONFIRM] + [card(s) for s in ORDER]
     assert game.count == 3
-    assert sum(clock) < 4.0  # the fixed waits alone were 1.5 + 3 * 1.2 s, plus a look at the count after each
+    assert sum(clock) < 4.0  # the fixed waits alone were 1.5 + 1.0 + 3 * 1.2 s, plus a look at the count after each
 
 
 def test_a_card_tap_not_counted_within_a_second_is_tapped_again(context, monkeypatch):
@@ -74,7 +79,14 @@ def test_a_slow_tap_is_not_tapped_again_before_the_second_is_up(context, monkeyp
     # A second tap on a card that took the first one would pick it off again.
     game = Game(monkeypatch, lag=0.8)
     assert actions.Formation.pick(context, ORDER)
-    assert [len(game.card_taps(s)) for s in ORDER] == [1, 1, 1]
+    assert [len(game.card_taps(s)) for s in ORDER] == [1, 1, 1] and game.count == 3
+
+
+def test_a_count_that_cannot_be_read_is_waited_for_not_tapped_on(context, monkeypatch):
+    # Live (#253 measurement): once the count read as unreadable 1.57 s after a tap that had taken.
+    game = Game(monkeypatch, blind=1.4)
+    assert actions.Formation.pick(context, ORDER)
+    assert [len(game.card_taps(s)) for s in ORDER] == [1, 1, 1] and game.count == 3
 
 
 def test_a_card_that_two_taps_do_not_pick_is_stuck_and_no_later_card_is_tapped(context, monkeypatch):
@@ -101,5 +113,6 @@ def test_clear_selection_without_the_dialog_goes_on_at_a_zero_count(context, mon
 def test_a_formation_that_does_not_clear_after_three_tries_is_stuck_and_no_card_is_tapped(context, monkeypatch):
     game = Game(monkeypatch, clears=False)
     assert not actions.Formation.pick(context, ORDER)
-    assert [xy for _, xy in game.taps].count(actions.CLEAR_SELECTION) == 3 and game.cards() == []
+    assert [xy for _, xy in game.taps].count(actions.CLEAR_SELECTION) == 3
+    assert not any(xy == card(s) for _, xy in game.taps for s in ORDER)
     assert actions.STUCK["flag"][2] == "Clear Selection did not clear the formation"
