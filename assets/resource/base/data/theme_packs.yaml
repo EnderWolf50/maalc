@@ -122,6 +122,13 @@ event_packs:
   - Twining Threads
   - Mnestic Experience
 
+# What OCR reads off a card whose title art does not spell its pack's name -> that pack (#246). Matched like a name
+# (spec 05 section 2). Read off the 2026-10-22 recordings: S.E.A.'s art says "The Magic Hello Bus" (live reads
+# HellOBus, HellBus); The Noon of Violet's tops its name with "Walpurgis Night" (live: WalpurgisN The Noon of).
+title_art:
+  Hello Bus: S.E.A.
+  Walpurgis Night The Noon of: The Noon of Violet
+
 # The default theme pack plan (spec 04 section 8 has the fields). Its weights are AALC's defaults
 # (KIYI671/AhabAssistantLimbusCompany, assets/config/theme_pack_list.example.yaml at 45d9a58, AGPL-3.0; see
 # NOTICE.md): only the number per pack, keyed by our full names. AALC keys its table by a fragment of the title

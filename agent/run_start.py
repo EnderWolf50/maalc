@@ -148,20 +148,24 @@ def match_card(lines, names):
     return max(found, key=lambda f: len(compact(f[0])))  # max keeps the top-down read on a tie
 
 
-def rank_packs(cards, names, plan):
+def rank_packs(cards, names, plan, title_art=None):
     """(title, weight) per card; a card that matches no weighed pack takes the plan's unlisted weight.
 
     A title alike to several packs that share one weight takes it: live, "Line 1" read as "Line", and every
-    Line pack is avoided (#89). A matched card's title is the pack's name.
+    Line pack is avoided (#89). A matched card's title is the pack's name. title_art: what OCR reads off title art
+    that does not spell its pack's name -> that pack (the data file's title_art, #246).
     """
+    title_art = title_art or {}
     weights, unlisted = plan["weights"], plan["unlisted"]
+    names = list(names) + list(title_art)
     out = []
     for lines in cards:
         name, title = match_card(lines, names)
         if name:
+            name = title_art.get(name, name)
             out.append((name, weights.get(name, unlisted)))
             continue
-        shared = {weights.get(n, unlisted) for n in title_candidates(title, names)}
+        shared = {weights.get(title_art.get(n, n), unlisted) for n in title_candidates(title, names)}
         out.append((title, shared.pop() if len(shared) == 1 else unlisted))
     return out
 
