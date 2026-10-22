@@ -1778,6 +1778,7 @@ CLEAR_SELECTION = (1145, 479)
 RESET_DIALOG = [450, 330, 380, 35]  # Clear Selection asks "Reset Deployment Order?"
 RESET_CONFIRM = (767, 497)
 TO_BATTLE = (1145, 588)
+PICK_RETAP = 1.0  # s; a card tap that has not raised the count by then is tapped again (the old fixed wait guessed a tap within ~1 s of the last is lost, #253)
 
 
 def card_xy(i, ys):
@@ -1875,35 +1876,39 @@ class Formation(CustomAction):
 
     @staticmethod
     def pick(context, order):
-        """Clear Selection, then tap the order card by card, each tap checked by the count going up by one."""
-        def count_reaches(n):
-            for _ in range(6):
-                count = participants(context, screen(context))
-                if count and count[0] == n:
-                    return True
-                time.sleep(0.5)
-            return False
+        """Clear Selection, then tap the order card by card, each tap checked by the count going up by one (#253).
 
+        Every tap is followed at once by until()'s looks at the count; one that has not raised it after PICK_RETAP s is
+        tapped again, once.
+        """
+        def count_is(n):
+            return lambda image: (count := participants(context, image)) is not None and count[0] == n
+
+        def cleared(image):
+            return has(text(context, image, RESET_DIALOG), "Reset Deployment") or count_is(0)(image)
+
+        start, retaps = time.monotonic(), 0
         for _ in range(3):
             page_guard(context, "Formation")
-            tap(context, *CLEAR_SELECTION, wait=1.5)
-            if has(text(context, screen(context), RESET_DIALOG), "Reset Deployment"):
-                tap(context, *RESET_CONFIRM)
-            if count_reaches(0):
+            image = tap_then(context, *CLEAR_SELECTION, cleared, timeout=1.5)
+            if image is not None and has(text(context, image, RESET_DIALOG), "Reset Deployment"):
+                image = tap_then(context, *RESET_CONFIRM, count_is(0), timeout=3)
+            if image is not None:  # the count 0 it waited for
                 break
         else:
             stuck("Clear Selection did not clear the formation")
             return False
         for n, sinner in enumerate(order, 1):
-            for _ in range(2):  # a tap within ~1 s of the last one can be lost
+            for _ in range(2):
                 page_guard(context, "Formation")
-                tap(context, *card_xy(battle.SINNERS.index(sinner), CARD_TAP_Y), wait=1.2)
-                if count_reaches(n):
+                if tap_then(context, *card_xy(battle.SINNERS.index(sinner), CARD_TAP_Y), count_is(n), timeout=PICK_RETAP) is not None:
                     break
+                retaps += 1
             else:
                 stuck(f"tapping {sinner} did not pick them")
                 return False
         log(f"formation re-picked: {', '.join(order)}")
+        log(f"formation pick took {time.monotonic() - start:.1f} s, {retaps} taps repeated")
         return True
 
 
