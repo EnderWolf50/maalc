@@ -1687,11 +1687,11 @@ class RouteMap(CustomAction):
         only rows next to each other link. Every node leads on, so one with no link read onward takes its brightest
         (map_route.FAINT_LINK, #212). A node up to MAP_NEAR is typed by its Cost too, past it by its marks (#238).
         The read ends at the screen's edge, at a column with nothing linked or dark (no mark and no light on any
-        node: hard mode shows two columns), or after the boss. first: the first column's number, for the log.
+        node: hard mode shows two columns), or after the boss: none at all when before holds it (#279). first: the first column's number, for the log.
         """
         dx, dy = map_route.COLUMN_DX, map_route.ROW_DY
         v, ahead = image.max(axis=2), []
-        if any(t == "boss" for t, _ in before.values()):  # #279: its red glow reads 8-12.4 towards the next column, as a faint link
+        if any(t == "boss" for t, _ in before.values()):  # #279: its red glow reads 7.7-12.4 towards the next column, as a faint link
             return ahead
         while x + dx + 80 <= 1200:  # MapNodeFocusedHex reads 80 px either side; buttons from x 1205
             x += dx
