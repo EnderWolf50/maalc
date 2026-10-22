@@ -1285,6 +1285,49 @@ def test_tap_until_gives_up_after_its_timeout_and_leaves_the_page_to_the_hub(con
     assert 2 <= sum(clock) < 2.5
 
 
+CLOSING = {"roi": [600, 440, 80, 35], "expected": "^Continue$"}
+
+
+def test_tap_until_gone_waits_for_the_text_the_tap_closes_to_go(context, clock):
+    # #254: a dialog fades out for a while with its text still readable; the hub would press it again.
+    page(context, {(600, 440, 80, 35): lambda clicks, looks: "Continue" if looks < 4 else None})
+    param = {"target": [600, 440, 80, 35], "gone": CLOSING}
+    assert actions.TapUntil().run(context, argv(param))
+    assert taps(context) == [(640, 457)]
+    assert context.tasker.controller.post_screencap.call_count == 4  # one before the tap, then until()'s looks
+    no_fixed_wait(clock)
+
+
+def test_tap_until_gone_counts_the_next_popup_in_the_same_place_as_gone(context, clock):
+    # ClaimPopup: Rewards Acquired is followed by Pass Level Up in the same roi, both matching the node's expected.
+    roi, both = [500, 225, 280, 50], "Rewards Acquired|Pass Level Up"
+    page(context, {tuple(roi): lambda clicks, looks: "Rewards Acquired" if looks < 3 else "Pass Level Up"})
+    assert actions.TapUntil().run(context, argv({"target": [575, 455, 130, 35], "gone": {"roi": roi, "expected": both}}))
+    assert context.tasker.controller.post_screencap.call_count == 3
+    no_fixed_wait(clock)
+
+
+def test_tap_until_gone_has_nothing_to_wait_for_when_the_text_is_already_gone(context, clock):
+    page(context, {})
+    assert actions.TapUntil().run(context, argv({"target": [600, 440, 80, 35], "gone": CLOSING}))
+    assert taps(context) == [(640, 457)]
+    assert context.tasker.controller.post_screencap.call_count == 2  # the look before the tap, the one after it
+    assert sum(clock) == 0
+
+
+def test_tap_until_gone_gives_up_after_its_timeout(context, clock):
+    page(context, {(600, 440, 80, 35): "Continue"})
+    assert actions.TapUntil().run(context, argv({"target": [600, 440, 80, 35], "gone": CLOSING, "timeout": 2}))
+    assert 2 <= sum(clock) < 2.5
+
+
+def test_tap_until_logs_how_long_the_screen_took(context, clock):
+    # #254: the live run reads the wait from the log; the fixed delay it replaces was never measured.
+    page(context, {(600, 440, 80, 35): lambda clicks, looks: "Continue" if looks < 4 else None})
+    actions.TapUntil().run(context, argv({"target": [600, 440, 80, 35], "gone": CLOSING}, node="ProgressPanel"))
+    assert "ProgressPanel: screen changed after 0.4 s" in actions.LOG[-1]
+
+
 def test_plan_run_waits_for_the_enter_dialog_after_pressing_enter(context, clock, monkeypatch):
     team = {"id": 1, "name": "t", "game_team": 1, "guard_turns": 3, "hard_from_floor": 1}
     run = {"runs": 0, "stop_when_weekly_bonus_out": False, "difficulty": "normal"}
