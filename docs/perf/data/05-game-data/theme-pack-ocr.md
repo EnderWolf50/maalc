@@ -51,7 +51,7 @@ and 22 are the same scene.
 |---|---|---|---|---|
 | `Timekilling Time BokGak`, `Yield My Flesh to Claim Their Bones BokGak` | 2 | re-run suffix (older matcher) | matches | — |
 | `LImBUS Rising Power Supply`, `mBU! Addicting Lust` | 2 | logo prefix (older matcher) | matches | — |
-| `World Lake`, `Abyss Crawling`, `WONr Abyss Crawling` | 3 | two-line title read in reverse order (likely the tilted card; unverified) | matches since #240 (lines retried bottom up) | `lake`, `abyss` |
+| `World Lake`, `Abyss Crawling`, `WONr Abyss Crawling` | 3 | two-line title read in reverse order (likely the tilted card; unverified) | matches since #240 (lines also read bottom up) | `lake`, `abyss` |
 | `HellOBus`, `HellBus`, `aHelIOBis` | 7 | stylized title art; a floor 2 card, likely Hell's Chicken (unverified) | no | no |
 | `Mirac inDistrict niiaco m uistir` | 1 | stylized title art | no | no |
 | `WalpurgisN The Noon of` | 1 | stylized title art, last word lost | no | no |

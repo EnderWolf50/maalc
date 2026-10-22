@@ -119,6 +119,9 @@ def test_a_title_is_found_despite_ocr_slips(text, expected):
     (["World", "Lake"], "Lake World"),  # live logs: a tilted card's two title boxes sorted bottom word first
     (["WONr", "Abyss", "Crawling"], "Crawling Abyss"),  # with a logo fragment
     (["Lake", "World"], "Lake World"),
+    (["Sea of Blood", "Mountain of Corpses,"], "Mountain of Corpses, Sea of Blood"),  # not S.E.A., found top-down
+    (["Mountain of Corpses,", "Sea of Blood"], "Mountain of Corpses, Sea of Blood"),
+    (["Defining", "The Evil"], "The Evil Defining"),  # not The B.E.
 ])
 def test_a_title_read_in_reverse_order_still_matches(lines, expected):
     assert rs.match_card(lines, DATA_NAMES)[0] == expected
@@ -201,12 +204,20 @@ def test_only_floor_5s_leftmost_event_or_new_pack_takes_the_event_mode(floor, ti
     (3, ["Hell's Chicken", "Repressed Wrath"], "avoid", (0, True)),  # another floor: by weight, Hell's Chicken 4
     (5, ["Abyss Crawling", "Repressed Wrath"], "prefer", (1, True)),  # a plain pack read in reverse: not taken
 ])
+
 def test_the_event_mode_on_floor_5s_leftmost_card(floor, titles, mode, expected):
     plan = {**PLAN, "event_packs": mode, "weights": {"Twining Threads": -5, "Repressed Wrath": 3, "Hell's Chicken": 4},
             "unlisted": 0}
     ranked = rs.rank_packs([t.split(" ", 1) for t in titles], KNOWN, plan)  # two OCR boxes per title
     slots = rs.event_slots(floor, [t for t, _ in ranked], EVENTS, KNOWN)
     assert rs.pick_pack([w for _, w in ranked], slots, plan) == expected
+
+
+def test_a_reversed_title_holding_an_event_packs_name_is_not_floor_5s_event_slot():
+    # Read bottom up, "Mountain of Corpses, Sea of Blood" holds "Sea": not S.E.A., an event story pack (#240 review).
+    ranked = rs.rank_packs([["Sea of Blood", "Mountain of Corpses,"]], DATA_NAMES, PLAN | {"weights": {}})
+    assert ranked[0][0] == "Mountain of Corpses, Sea of Blood"
+    assert rs.event_slots(5, [ranked[0][0]], {"S.E.A."}, DATA_NAMES) == [False]
 
 
 @pytest.mark.parametrize(("setting", "used", "expected"), [

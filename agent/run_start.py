@@ -131,16 +131,21 @@ def title_candidates(text, names, min_ratio=0.8):
 def match_card(lines, names):
     """(pack name or None, title text) for a card's OCR lines, top to bottom.
 
-    Logo fragments read above the title are dropped by trying the lines from each start. Failing that, the lines are
-    tried bottom up: live, a tilted card's two title boxes sorted "World", "Lake" (#240).
+    Logo fragments read above the title are dropped by trying the lines from each start. The lines are also tried
+    bottom up: live, a tilted card's two title boxes sorted "World", "Lake" (#240). Of the two reads the longer name
+    wins, as it covers more of the card: "Sea of Blood" over "Mountain of Corpses," finds S.E.A. top-down.
     """
+    found = []
     for order in (lines, lines[::-1]):
         for i in range(len(order)):
             title = " ".join(order[i:])
             name = match_title(title, names)
             if name:
-                return name, title
-    return None, " ".join(lines)
+                found.append((name, title))
+                break
+    if not found:
+        return None, " ".join(lines)
+    return max(found, key=lambda f: len(compact(f[0])))  # max keeps the top-down read on a tie
 
 
 def rank_packs(cards, names, plan):
