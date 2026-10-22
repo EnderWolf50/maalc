@@ -1599,9 +1599,11 @@ def pack_page(context, monkeypatch, floor, setting, mode):
     after each of 4 refreshes; a 5th changes nothing: used up). Returns (refresh taps, log lines)."""
     actions.RUN.update(settings={"run": {"theme_pack_refresh": setting}}, team={"hard_from_floor": 0}, difficulty=None)
     plan = {"weights": {}, "threshold": 0, "unlisted": -5, "event_packs": mode}
-    monkeypatch.setattr(actions, "theme_pack_plan", lambda settings, team: (plan, [], set(), {}))
+    art = {"Hello Bus": "S.E.A."}
+    monkeypatch.setattr(actions, "theme_pack_plan", lambda settings, team: (plan, [], set(), art))
+
     def rank_packs(cards, names, plan, title_art):
-        assert title_art == {}  # every page, a refreshed one too, gets the data file's title art (#246)
+        assert title_art is art  # every page, a refreshed one too, gets the data file's title art (#246)
         return [(c[0], -5) for c in cards]
     monkeypatch.setattr(actions.run_start, "rank_packs", rank_packs)
     lines = []
