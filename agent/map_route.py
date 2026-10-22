@@ -15,6 +15,7 @@ LINE_CONTRAST = 15  # live: drawn links 22-173, no link -14-4
 # A node with no link read onward takes its brightest one from this (#212): faint links over a bright
 # background read 13-14.4, the background alone up to 12.5 (a purple pack's grid), so no one bar parts them.
 FAINT_LINK = 8
+SHIFT_CLEAR = 0.6  # shift: the best shift's difference, at most this share of the median (a drag 0.46, other maps 0.77+)
 
 
 def node_type(marks, by_cost=None):
@@ -139,6 +140,19 @@ def line_contrast(v, x0, y0, x1, y1, top=56, bottom=615):
     if None in on or None in sides:
         return None
     return max(on) - max(sides)
+
+
+def shift(before, after, most, top=230, bottom=600, right=1200):
+    """How many px (0 to most) a drag moved the map leftward between two frames' brightness, or None when unclear (#202).
+
+    The shift where the map band (below the floor's title, above the sinner bar, left of the buttons) differs least,
+    every 4th row. Live 2026-10-22 (MapFloor4*.png, a drag of two columns): 0.46 of the median over all shifts; two
+    different maps of tests/screens 0.77-0.88. A still HUD part only adds a little to every shift.
+    """
+    a, b = (f[top:bottom:4, :right].astype(np.int16) for f in (before, after))
+    errs = np.array([np.abs(a[:, s:] - b[:, :right - s]).mean() for s in range(most + 1)])
+    s = int(errs.argmin())
+    return s if errs[s] < SHIFT_CLEAR * np.median(errs) else None
 
 
 def routes(v, cx, cy):

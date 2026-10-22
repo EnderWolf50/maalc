@@ -49,6 +49,7 @@
     - 警告三角（`isShowWarning`）不在卡片 prefab 裡，位置 (0.38, 0.79)–(0.62, 0.92) 是對照兩張截圖估的；徽章比 96 格大約 12 %；`attributeType` 的四個（`CRIMSON`、`AMBER`、`SHAMROCK`、`VIOLET`）圖示和填色是對照截圖認的（火焰、裂岩、葉、荊棘圈），`SCARLET`、`AZURE`、`INDIGO` 的圖示和填色是猜的（unverified）。
   - 沒做：頂端吊夾、放大鏡紅章、傾斜；依帳號狀態變的部分：截圖裡的 `1404`、`1412` 實機把 boss 圖畫成黑色剪影（bundle 裡有 `<boss>_silhouette` 精靈圖；什麼條件換成剪影 unverified，推測是帳號還沒見過那個 boss），縮圖畫完整的 boss；卡片左上角的紅點（`[Script]RedDot`，新包提示）也不畫；`iconYPos`（全部 121 個資料項裡只有 6 個有，用途 unverified）；`uiRotation`、`unlockHintTextKey`、`sidePopupUnlockHintTextKey`、`nextImageColor`（地圖節點和鎖定提示用，不影響卡片外觀，unverified）；卡片上的 `Chip`、`rect_level`（執行中才出現的提示，沒有截圖）。
   - 同一份封面的 `1201`／`1203`／`1205`（`AttackType_normal`）和 `1202`／`1204`／`1206`（`AttackType_effective`）靠 boss 圖、攻擊類型圖示和標題分辨。版權屬 © Project Moon（NOTICE.md）。
+- 標題藝術字（`title_art`，#246）：卡面藝術字拼不出包名時，OCR 讀到的字 → 那個包。比對規則和包名相同，比的是左邊的字（同分時算它的長度），比到後換成右邊的包名。1.117.0 有兩個，都從 2026-10-22 的實機錄影確認：S.E.A. 卡面寫 `The Magic Hello Bus`（讀成 `HellOBus`、`HellBus`）；The Noon of Violet 名稱上方有 `Walpurgis Night`，常讀成 `WalpurgisN The Noon of`。每季換資料時，從 log 裡比對不到的標題找新的。
 - 使用者的主題包方案不在資料檔，存在設定檔，格式見 [04-settings.md](04-settings.md#8-主題包方案theme_pack_plans)。方案裡沒列出的主題包（例如新一季才出現的）用方案的「沒列出的包」分數；空的方案等於全部用這個分數，不報錯。（#11、#19，2026-10-14 定案；#240）
 
 **範例**（主題包名稱取自先前季節，僅示意；「燒傷隊」是使用者在設定檔建立的方案）：
@@ -66,6 +67,7 @@
 - 卡片上標記 NEW，或標題比對不到清單的，用方案的「沒列出的包」分數。
 - 標題比對（`run_start.match_title`，#89）：只比英數字、不分大小寫。每個主題包名稱在 OCR 文字裡找一段同樣長度、最像它的片段，相似度 ≥ 0.8 才算候選；所以標題上方的 logo 碎字、沒讀到的第二行都不影響，短標題錯一兩個字（`Lime 2`、`Lake Wor1d`）仍比對得到。候選之中取「相似度 × 名稱長度」最大的，而且要比第二名多 1 個字以上：`Mountain of Corpses, Sea of Blood` 裡的 `Sea` 不會被認成 `S.E.A.`；`Line` 這種分不出 Line 1–3 的就算比對不到；分不出的幾個包分數相同時，用那個分數（預設方案的 Line 1–5 都是 −5），否則用「沒列出的包」的分數。
   - 離線檢查（#240，2026-10-22）：用現行的標題 OCR 與比對跑 `tests/screens/` 與實機截圖的 10 張主題包頁（其中 3 張是同一個畫面），32 張卡全部比對正確，包括有 logo 碎字（`LImBUS`、`enUPAm`）和標題分兩行的卡。以前實機 log 的 353 張卡中有 21 張比對不到：BokGak 後綴與 logo 前綴（共 4 張）是舊版比對造成的，現行比對已經比得到；`World Lake`／`Abyss Crawling`（共 3 張）是兩行標題的順序讀反（推測是卡片傾斜，unverified）；`HellOBus`、`Mirac inDistrict…`、`WalpurgisN The Noon of`、`Emotio`（共 10 張）是藝術字標題讀錯或讀不完整；2 張 `Time` 是同一張卡的標題被拆成兩欄；2 張 `Line` 分不出是哪個 Line 包，照它們共同的分數。AALC 的片段只救得回順序讀反的 3 張（`lake`、`abyss`），救不回藝術字那幾張，還會把拆出來的 `Time` 當成 `Timekilling Time`，所以不加片段比對當後備。順序讀反改成各行也倒過來比一次、取名稱較長的那個（`run_start.match_card`，#240）：第 5 層最左邊的一般包要是讀反，否則會被當成資料檔沒收錄的活動包。逐卡的 OCR 原文與比對結果、比對不到的 log 讀法在 [theme-pack-ocr.md](../perf/data/05-game-data/theme-pack-ocr.md)；截圖、實機 log 和離線檢查用的腳本留在本機。
+  - 錄影檢查（#246，2026-10-22）：49 次讀包的錄影逐幀重跑 OCR。卡片發下後先滑入再左右搖擺，約 2.8 s 才停；bot 原本在標題出現後 0.6–1.1 s 就讀，搖擺中單幀只有 75% 的畫面每張卡都對，停下後 43/43 幀全對。所以先等卡片停下才讀（spec 03 第 6 節）。上面的推測更正：`HellOBus` 是 S.E.A. 不是 Hell's Chicken，`WalpurgisN The Noon of` 是 The Noon of Violet（兩者改用 `title_art` 認）；`Emotio` 是第三張卡還沒滑進來就讀了，漏掉整張 Hell's Chicken；`Time` 是卡片傾斜時同一行標題拆成兩個框。比較表與方法在 [theme-pack-ocr.md](../perf/data/05-game-data/theme-pack-ocr.md)。
 - 畫面上最好的包分數低於方案的刷新門檻時，才用免費刷新，次數照執行選項 `theme_pack_refresh`；刷新用完後選分數最高的，絕不卡住。（#11、#19、#240）
 
 ## 3. 事件覆寫表
