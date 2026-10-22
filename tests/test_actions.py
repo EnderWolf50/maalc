@@ -355,7 +355,7 @@ def map_node_boss():
     ("event_h2_up", False), ("event_h2_down", False), ("event_h3_mid", False),
 ])
 def test_only_the_boss_glows_red_enough_for_map_node_boss(node, boss):
-    # MapNodeBoss is a ColorMatch (RGB, method 4) over 80 x 80 px around the node: its pixels in range, counted.
+    # MapNodeBoss is a ColorMatch (RGB, method 4) over its roi round the node: its pixels in range, counted (these crops: 80 x 80).
     params, rgb = map_node_boss(), np.load(RED)[node]
     assert (red_hits(rgb, params) >= params["count"]) == boss  # 80 x 80 crops: the roi is wider now, so more red px each
 

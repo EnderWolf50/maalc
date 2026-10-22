@@ -642,7 +642,7 @@ DARK = Path(__file__).resolve().parent / "data/map_boss_dark.npz"  # 100 x 100 p
 
 @pytest.mark.parametrize(("node", "boss"), [
     # #268, live 2026-10-22 floor 5 hard: the boss next to the bus, its hex black inside, only the ring and glyph red.
-    # 658-694 px in range over the old 80 x 80 roi, below the 1000 it needed: read as an event.
+    # 694 and 873 px in range over the old 80 x 80 roi, below the 1000 it needed: read as an event; 1189, 1299 over 92 x 92.
     ("boss_dark_f5", True), ("boss_dark_f4", True),
     ("focused_lit", False),  # a lit Focused, the most red any non-boss of 6 runs' captures had
 ])
