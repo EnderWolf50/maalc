@@ -34,7 +34,7 @@ UNKNOWN_KEEP = 30  # screens MirrorHub did not recognise that logs/unknown/ keep
 # (Downloading, a waiting screen) is up, 22 s live 2026-10-21. 30 min ran out there before the download was done.
 DOWNLOAD_HOLD = 3 * 60
 L2_PER_RUN, L3_PER_RUN, L3_PER_EXECUTION = 3, 2, 3
-BATTLE = {"BattleTurn", "BattlePause"}  # L2 cannot go through mid-battle: only the map has To Window
+BATTLE = {"BattleTurn", "BattlePause", "BattleMenu"}  # L2 cannot go through mid-battle: only the map has To Window
 BATTLE_LIMIT = 20 * 60
 RUN_LIMIT_DEFAULT, RUN_LIMIT_MIN_RUNS = 60 * 60, 10
 FLOOR_LIMIT, FLOORS = 45 * 60, 5  # live (#34): a HARD floor took up to ~25 min of real progress

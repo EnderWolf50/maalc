@@ -60,12 +60,13 @@ def test_mirror_hub_reads_its_ocr_screens_through_hub_text():
     hub = strip(nodes["MirrorHub"]["next"])
     assert [o for n in hub for o in batchable_ocr(nodes, n)] == []
     assert hub.index("BattleHUD") < hub.index("HubText")
-    assert batchable_ocr(nodes, "BattleHUD") == [] and nodes["BattleHUD"]["any_of"] == ["BattleTurn", "BattlePause"]
+    assert batchable_ocr(nodes, "BattleHUD") == []
+    assert nodes["BattleHUD"]["any_of"] == ["BattleMenu", "BattleTurn", "BattlePause"]  # the pause menu (#215)
     hud = strip(nodes["BattleHUD"]["next"])
-    assert hud[-2:] == ["BattleTurn", "BattlePause"] and len(batch_plan(nodes, hud)) < 2
+    assert hud[-3:] == ["BattleMenu", "BattleTurn", "BattlePause"] and len(batch_plan(nodes, hud)) < 2
     # The server's popups before the turn run no OCR on a battle round (live A/B: 3 OCR a round, ~130 ms): a
     # template comes first, and MaaFramework's And stops at the first part that misses.
-    assert hud[0] == "NoBatchOCR" and hud[1:-2] == ["Connecting", "RetryPopup", "UpdateDialog", "PopupButton"]
+    assert hud[0] == "NoBatchOCR" and hud[1:-3] == ["Connecting", "RetryPopup", "UpdateDialog", "PopupButton"]
     assert all(template_first(nodes, nodes[n]) for n in hud[1:-2])
     # Connecting is a template: it waits in MirrorHub's list, ahead of HubText, as it does in BattleHUD's.
     assert hub.index("BattleHUD") < hub.index("Connecting") < hub.index("HubText")

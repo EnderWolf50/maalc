@@ -150,7 +150,7 @@ def test_ladder_time_limits_start_at_l2():
     assert ladder.counts == {1: 0, 2: 1, 3: 0}
 
 
-@pytest.mark.parametrize("kind", ["BattleTurn", "BattlePause"])
+@pytest.mark.parametrize("kind", ["BattleTurn", "BattlePause", "BattleMenu"])  # BattleMenu: the pause menu (#215)
 def test_ladder_skips_l2_in_battle(kind):
     # L2 only goes through on the map: mid-battle it failed after 20 s and the L3 restart followed anyway
     # (live 2026-10-17, #70). A battle climbs from L1 straight to L3; its time limit starts there.
