@@ -4,7 +4,7 @@ Usage: uv run --group unpack python tools/theme_pack_covers.py [--width 180] [--
 Reads `.local/unpack/` (the pulled UnityCache bundles, the APK's player data and the static data, see
 docs/agents/local-dev.md "Game data"; the yearly rerun is docs/spec/05-game-data.md section 8).
 Each card stacks the game's own layers (tools/theme_pack_card.py): the cover art and boss picture from the bundles, the
-frame, logo, warning and badge sprites and the Mikodacs font from the player data, the title from the English localization,
+frame, logo, warning and badge sprites and the Mikodacs and Pretendard fonts from the player data, the title from the English localization,
 the colours and flags from `uiConfigs`. Writes `<pack id>.webp` per pack of theme_packs.yaml plus `index.json`
 ({pack name: file}) and lists every pack without a cover.
 Run it as a `bench` ticket (tools/live/queue.py): it reads all 12 GB of bundles and the player data.
@@ -37,11 +37,14 @@ ATLAS_PARTS = {  # key -> (sprite name, size): MirrorDungeonThemeCardUI's layers
     "front": ("MainUI_MirrorDungeon4_4_8", (190, 336)),
     "logo": ("MainUI_MirrorDungeon4_4_16", (127, 66)),
 }
-ICON_PARTS = {  # the attack type icons, in sharedassets1
+ICON_PARTS = {  # the attack type icons and the attribute silhouettes (Icon_evil_2_8..14), in sharedassets1
     "attack_pierce": ("Icon_AttackType_pierce", (90, 70)),
     "attack_hit": ("Icon_AttackType_hit", (78, 79)),
     "attack_slash": ("Icon_AttackType_slash", (80, 69)),
+    **{f"sin_{i}": (f"Icon_evil_2_{i}", size) for i, size in zip(range(8, 15), [(102, 94), (91, 90), (86, 110), (88, 100), (70, 95), (76, 94), (89, 89)])},
 }
+FONTS = {"title": "Mikodacs", "baton": "Pretendard-Regular"}  # the EN fonts of the card's title and the baton label (OFL 1.1 both)
+BATON = "Baton"  # the "Long Battle" overlay, a bundle sprite (Sprite/UI/ThemePack/Baton.png)
 
 
 def pack_ids(yaml_text: str) -> dict[str, int]:
@@ -99,16 +102,18 @@ def game_parts(data: Path) -> dict[str, Image.Image]:
     return out
 
 
-def font_file(data: Path, dest: Path) -> Path:
-    """The title font, Mikodacs (gluk, SIL OFL 1.1), cut out of the player data once and kept next to it."""
-    if not dest.exists():
+def font_files(data: Path, dest: Path) -> dict[str, Path]:
+    """The card's fonts cut out of the player data once and kept next to it: key -> file."""
+    need = {name: dest / f"{name}.ttf" for name in FONTS.values()}
+    if not all(p.exists() for p in need.values()):
         for p in player_files(data):
             for o in unity(p).objects:
-                if o.type.name == "Font" and (r := o.read()).m_Name == "Mikodacs":
-                    dest.write_bytes(bytes(r.m_FontData))
-                    return dest
-        raise SystemExit("font Mikodacs not found in the player data")
-    return dest
+                if o.type.name == "Font" and (r := o.read()).m_Name in need:
+                    need[r.m_Name].write_bytes(bytes(r.m_FontData))
+        missing = [n for n, p in need.items() if not p.exists()]
+        if missing:
+            raise SystemExit(f"fonts {missing} not found in the player data")
+    return {key: need[name] for key, name in FONTS.items()}
 
 
 def covers(cache: Path, wanted: set[str]) -> dict[str, Image.Image]:
@@ -152,9 +157,12 @@ def main():
     ui = ui_configs(unpack / THEME_FLOOR_DIR)
     name = titles(unpack / "raw/Localize/en/EN_MirrorDungeonTheme-1.json")
     parts = game_parts(unpack / PLAYER_DATA)
-    font = font_file(unpack / PLAYER_DATA, local_dir("unpack", "fonts") / "Mikodacs.ttf")
+    fonts = font_files(unpack / PLAYER_DATA, local_dir("unpack", "fonts"))
     wanted = {n for i in packs.values() for n in (ui.get(i, {}).get("packSpriteId"), ui.get(i, {}).get("bossSpriteId")) if n}
-    images = covers(unpack / "raw/UnityCache", wanted)
+    images = covers(unpack / "raw/UnityCache", wanted | {BATON})
+    if BATON not in images:
+        raise SystemExit("sprite Baton (the Long Battle overlay) not found in the bundles")
+    parts["baton"] = images[BATON]
 
     OUT.mkdir(exist_ok=True)
     index, missing = {}, []
@@ -164,7 +172,7 @@ def main():
         if art is None or (u.get("bossSpriteId") and boss is None) or pid not in name:
             missing.append(f"{pid} {pack} (cover {u.get('packSpriteId')}, boss {u.get('bossSpriteId')})")
             continue
-        im = card(parts, art, boss, u, name[pid], font)
+        im = card(parts, art, boss, u, name[pid], fonts)
         im.resize((args.width, round(im.height * args.width / im.width)), Image.LANCZOS).save(OUT / f"{pid}.webp", quality=80, method=6)
         index[pack] = f"{pid}.webp"
     (OUT / "index.json").write_text(json.dumps(index, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
