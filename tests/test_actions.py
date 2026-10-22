@@ -1588,27 +1588,47 @@ def test_a_difficulty_label_not_readable_yet_is_looked_at_again_not_slept_on(con
 REFRESH = (1083, 47)
 
 
-@pytest.mark.parametrize(("setting", "refreshes"), [("none", 0), ("once", 1), ("all", 5)])
-def test_an_all_avoid_theme_pack_page_is_refreshed_as_the_setting_says(context, monkeypatch, setting, refreshes):
-    # #41: every page shows only avoided packs (a new pair after each of 4 refreshes; a 5th changes nothing: used up).
+def pack_page(context, monkeypatch, floor, setting, mode):
+    """PickThemePack on a fake floor page of two cards weighing -5 and read as packs the data file lacks (a new pair
+    after each of 4 refreshes; a 5th changes nothing: used up). Returns (refresh taps, log lines)."""
     actions.RUN.update(settings={"run": {"theme_pack_refresh": setting}}, team={"hard_from_floor": 0}, difficulty=None)
-    monkeypatch.setattr(actions, "theme_pack_marks", lambda settings, team: ([], {}))
-    monkeypatch.setattr(actions.run_start, "rank_packs", lambda cards, names, marks: [(c[0], "avoid") for c in cards])
+    plan = {"weights": {}, "threshold": 0, "unlisted": -5, "event_packs": mode}
+    monkeypatch.setattr(actions, "theme_pack_plan", lambda settings, team: (plan, [], set()))
+    monkeypatch.setattr(actions.run_start, "rank_packs", lambda cards, names, plan: [(c[0], -5) for c in cards])
+    lines = []
+    monkeypatch.setattr(actions, "log", lines.append)
     taps = []
     monkeypatch.setattr(actions, "tap", lambda context, x, y, wait=1.0: taps.append((x, y)))
 
     def ocr(context, image, roi, only_rec=False):
         page = min(taps.count(REFRESH), 4)
         return {
-            (480, 100, 320, 40): [("FLOOR 2", (560, 110, 80, 20))] if not context.tasker.controller.post_swipe.called else [],
+            (480, 100, 320, 40): [(f"FLOOR {floor}", (560, 110, 80, 20))] if not context.tasker.controller.post_swipe.called else [],
             (830, 30, 160, 35): [("NORMAL", (900, 40, 60, 20))],
             tuple(actions.PACK_TITLES): [(f"Pack {page}a", (200, 420, 90, 20)), (f"Pack {page}b", (500, 420, 90, 20))],
         }.get(tuple(roi), [])
     monkeypatch.setattr(actions, "ocr", ocr)
 
     actions.PickThemePack().run(context, None)
-    assert taps.count(REFRESH) == refreshes
-    assert context.tasker.controller.post_swipe.call_count == 1  # the leftmost card is pulled all the same
+    assert context.tasker.controller.post_swipe.call_count == 1  # one card is pulled whatever the page
+    return taps.count(REFRESH), lines
+
+
+@pytest.mark.parametrize(("setting", "refreshes"), [("none", 0), ("once", 1), ("all", 5)])
+def test_a_theme_pack_page_below_the_threshold_is_refreshed_as_the_setting_says(context, monkeypatch, setting, refreshes):
+    # #41, #240: every page's best pack is below the threshold. The log gives each card's weight, the threshold and the
+    # pulled card; floor 2's new packs are plain packs.
+    used, lines = pack_page(context, monkeypatch, 2, setting, "prefer")
+    assert used == refreshes
+    assert "floor 2 packs, threshold 0: Pack 0a (-5), Pack 0b (-5)" in lines
+    assert lines[-1] == f"floor 2: pull 'Pack {min(refreshes, 4)}a' (-5, below the threshold)"
+
+
+def test_floor_5s_leftmost_new_pack_is_taken_when_event_packs_are_preferred(context, monkeypatch):
+    # #240: a pack the data file lacks, leftmost on floor 5, is a running event's: "prefer" takes it, no refresh.
+    used, lines = pack_page(context, monkeypatch, 5, "all", "prefer")
+    assert used == 0
+    assert lines[-2:] == ["floor 5 packs, threshold 0: Pack 0a (-5, event), Pack 0b (-5)", "floor 5: pull 'Pack 0a' (-5)"]
 
 
 def test_a_search_tab_opens_without_fixed_waits(context, clock):

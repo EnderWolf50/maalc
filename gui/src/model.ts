@@ -13,7 +13,6 @@ export const SINNERS: string[] = schema.$defs.order.default;
 export const REWARD_CARDS: string[] = TEAM.reward_cards.default;
 export const KEYWORDS: string[] = TEAM.keyword.enum;
 export const LEVELS: string[] = schema.$defs.levels.items.enum;
-export const MARKS: string[] = P.theme_pack_plans.items.properties.marks.additionalProperties.enum;
 export const VERSION: number = P.version.const;
 /** Spec 04 section 7: the graces numbered 1-10, English names as the game shows them, Chinese name and
  * effect text from the wiki (graces.json carries its source and license). */
@@ -94,14 +93,59 @@ export function toggleSinner(order: Order, sinner: string): Order {
 export interface StarlightValues { levels: string[]; priority: number[]; convert_leftover: boolean }
 export interface DeploymentPlan { id: string; name: string; order: Order }
 export interface StarlightPlan extends StarlightValues { id: string; name: string }
-export interface ThemePackPlan { id: string; name: string; marks: Record<string, string> }
-/** assets/resource/base/data/theme_packs.yaml (spec 05 section 2): the season's packs and the locked default plan. */
-export interface ThemePacks { packs: string[]; default_plan: Record<string, string> }
+/** Spec 04 section 8 (#240): a weight -10..10 per pack, the refresh threshold, the weight of a pack not listed or not
+ * read, and the event packs' mode. */
+export interface PackPlanValues { weights: Record<string, number>; threshold: number; unlisted: number; event_packs: string }
+export interface ThemePackPlan extends PackPlanValues { id: string; name: string }
+/** assets/resource/base/data/theme_packs.yaml (spec 05 section 2): the season's packs with their floors ("N12 H1")
+ * and the locked default plan. */
+export interface ThemePacks { packs: Record<string, string>; default_plan: PackPlanValues }
+
+export const EVENT_MODES: string[] = P.theme_pack_plans.items.properties.event_packs.enum;
+export const newPackPlan = (): PackPlanValues => ({ weights: {}, threshold: 0, unlisted: 0, event_packs: "weight" });
 
 export function parseThemePacks(text: string): ThemePacks {
   const data = (parseYaml(text) ?? {}) as Partial<ThemePacks>;
-  return { packs: data.packs ?? [], default_plan: data.default_plan ?? {} };
+  return { packs: data.packs ?? {}, default_plan: { ...newPackPlan(), ...data.default_plan } };
 }
+
+/** The floor digits of one difficulty in a pack's floors: "N12 H1", "N" -> "12"; undefined when it has none. */
+const floorDigits = (floors: string, letter: "N" | "H") => floors.match(new RegExp(letter + "(\\d+)"))?.[1];
+
+/** Whether a pack with these floors ("N12 H1": NORMAL 1-2, HARD 1) shows on difficulty ("" any) and floor (0 any). */
+export function onFloor(floors: string, difficulty: "" | "normal" | "hard", floor: number) {
+  const on = (letter: "N" | "H") => floorDigits(floors, letter);
+  const sets = (difficulty ? [on(difficulty === "hard" ? "H" : "N")] : [on("N"), on("H")]).filter((x) => x !== undefined);
+  return sets.some((f) => floor === 0 || f!.includes(String(floor)));
+}
+
+/** A pack's floors ("N12 H1") in words, per text: each difficulty it has, its runs of floors as ranges ("1–2"), the
+ * rest joined by text.sep ("1–2、4"). */
+export function floorLabel(floors: string, text: { normal: string; hard: string; sep: string; join: string }) {
+  const runs = (digits: string) => {
+    const groups: number[][] = [];
+    for (const n of [...digits].map(Number).sort((a, b) => a - b)) {
+      const last = groups[groups.length - 1];
+      if (last && n === last[last.length - 1] + 1) last.push(n);
+      else groups.push([n]);
+    }
+    return groups.map((g) => (g.length > 1 ? `${g[0]}–${g[g.length - 1]}` : `${g[0]}`)).join(text.sep);
+  };
+  return (["N", "H"] as const).flatMap((d) => {
+    const digits = floorDigits(floors, d);
+    return digits ? [(d === "N" ? text.normal : text.hard).replace("{f}", runs(digits))] : [];
+  }).join(text.join);
+}
+
+/** A pack's weight: its own, else the plan's unlisted weight (the agent's rule, spec 03 section 6). */
+export const weightOf = (plan: PackPlanValues, name: string) => plan.weights[name] ?? plan.unlisted;
+
+/** The weights that get a lane: every one in use and 0, highest first. */
+export const lanesOf = (plan: PackPlanValues) =>
+  [...new Set([0, plan.unlisted, ...Object.values(plan.weights)])].sort((a, b) => b - a);
+
+/** How many lanes sit above the threshold line: those whose packs meet it. */
+export const lineAt = (lanes: number[], threshold: number) => lanes.filter((w) => w >= threshold).length;
 export type Ref<T> = { plan: string } | { custom: T };
 export interface Team {
   id: string; name: string; enabled: boolean; game_team: number; keyword: string; usage: string;
@@ -193,7 +237,20 @@ const MIGRATIONS: Record<number, (d: Record<string, unknown>) => Record<string, 
   6: (d) => withTeamDefault(d, { keep_keywords: [], keywordless: "keep", keep_gifts: [], sell_max_tier: 4, sell_vestiges: false }),
   // Version 8 adds run.auto_accept_terms and run.auto_download (#85, #86), on: the user's decision (2026-10-21).
   7: (d) => (d.run && typeof d.run === "object" ? { ...d, run: { auto_accept_terms: true, auto_download: true, ...d.run } } : d),
+  // Version 9 weighs theme packs (#240): prefer / neutral / avoid become 5 / 0 / -5, threshold 0, unlisted 0, event packs
+  // by weight: the same picks as before. A bad mark stays as it is for the checks to name.
+  8: (d) => ({
+    ...d,
+    theme_pack_plans: Array.isArray(d.theme_pack_plans) ? d.theme_pack_plans.map((p) => {
+      if (!p || typeof p !== "object" || !p.marks || typeof p.marks !== "object") return p;
+      const { marks, ...rest } = p as { marks: Record<string, unknown> };
+      const weights = Object.fromEntries(Object.entries(marks).map(([k, v]) => [k, MARK_WEIGHTS[v as string] ?? v]));
+      return { ...rest, weights, threshold: 0, unlisted: 0, event_packs: "weight" };
+    }) : d.theme_pack_plans,
+  }),
 };
+
+const MARK_WEIGHTS: Record<string, number> = { prefer: 5, neutral: 0, avoid: -5 };
 
 function withTeamDefault(d: Record<string, unknown>, field: Record<string, unknown>) {
   return {

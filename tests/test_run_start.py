@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 
 import pytest
@@ -114,6 +115,18 @@ def test_a_title_is_found_despite_ocr_slips(text, expected):
     assert rs.match_title(text, SHORT) == expected
 
 
+@pytest.mark.parametrize(("lines", "expected"), [
+    (["World", "Lake"], "Lake World"),  # live logs: a tilted card's two title boxes sorted bottom word first
+    (["WONr", "Abyss", "Crawling"], "Crawling Abyss"),  # with a logo fragment
+    (["Lake", "World"], "Lake World"),
+    (["Sea of Blood", "Mountain of Corpses,"], "Mountain of Corpses, Sea of Blood"),  # not S.E.A., found top-down
+    (["Mountain of Corpses,", "Sea of Blood"], "Mountain of Corpses, Sea of Blood"),
+    (["Defining", "The Evil"], "The Evil Defining"),  # not The B.E.
+])
+def test_a_title_read_in_reverse_order_still_matches(lines, expected):
+    assert rs.match_card(lines, DATA_NAMES)[0] == expected
+
+
 def test_every_pack_of_the_season_matches_itself_and_with_a_letter_lost():
     # The data file's own names: each one read back, and read with one letter dropped, finds itself.
     packs = yaml.safe_load(DATA.read_text(encoding="utf-8"))["packs"]
@@ -124,21 +137,87 @@ def test_every_pack_of_the_season_matches_itself_and_with_a_letter_lost():
             assert rs.match_title(name[:i] + name[i + 1:], packs) == name, name
 
 
-def test_a_title_alike_to_several_packs_takes_their_mark_when_they_share_it():
-    # Live 2026-10-18, floor 5: OCR read "Line 1" as "Line"; every Line pack is avoided, so is this card.
-    marks = {"Line 1": "avoid", "Line 2": "avoid", "Line 3": "avoid", "To be Crushed": "prefer", "To be Cleaved": "avoid"}
-    ranked = rs.rank_packs([["Line"], ["To be C"]], SHORT + NAMES, marks)
-    assert ranked == [("Line", "avoid"), ("To be C", "neutral")]
+def test_a_title_alike_to_several_packs_takes_their_weight_when_they_share_it():
+    # Live 2026-10-18, floor 5: OCR read "Line 1" as "Line"; every Line pack weighs -5, so does this card.
+    weights = {"Line 1": -5, "Line 2": -5, "Line 3": -5, "To be Crushed": 5, "To be Cleaved": -5}
+    ranked = rs.rank_packs([["Line"], ["To be C"]], SHORT + NAMES, {"weights": weights, "unlisted": 2})
+    assert ranked == [("Line", -5), ("To be C", 2)]  # the second is alike to two weights: unlisted
 
 
-def test_rank_and_pick():
-    marks = {"To be Crushed": "avoid", "Nagel und Hammer": "prefer"}
-    ranked = rs.rank_packs([["To be Crushed"], ["Lake World"], ["Nagel und Hammer"]], NAMES, marks)
-    assert ranked == [("To be Crushed", "avoid"), ("Lake World", "neutral"), ("Nagel und Hammer", "prefer")]
-    assert rs.pick_pack([r for _, r in ranked]) == 2
-    assert rs.pick_pack(["neutral", "avoid", "neutral"]) == 0
-    assert rs.pick_pack(["avoid", "avoid"]) == 0
+def test_a_card_matching_no_pack_or_an_unweighed_one_takes_the_unlisted_weight():
+    plan = {"weights": {"To be Crushed": -3}, "unlisted": -1}
+    ranked = rs.rank_packs([["To be Crushed"], ["Lake World"], ["Brand New Pack"]], NAMES, plan)
+    assert ranked == [("To be Crushed", -3), ("Lake World", -1), ("Brand New Pack", -1)]
 
+
+PLAN = {"threshold": 0, "unlisted": 0, "event_packs": "weight"}
+
+
+@pytest.mark.parametrize(("weights", "threshold", "expected"), [
+    ([-5, 0, 7], 0, (2, True)),  # the highest weight
+    ([3, 7, 7], 0, (1, True)),  # leftmost among equals
+    ([-5, -2, -5], 0, (1, False)),  # below the threshold: refresh if one is left, else take the best
+    ([4, 2], 5, (0, False)),
+    ([-10, -10], -10, (0, True)),  # a threshold at the lowest weight never refreshes
+])
+def test_the_best_card_is_taken_and_checked_against_the_threshold(weights, threshold, expected):
+    assert rs.pick_pack(weights, [False] * len(weights), {**PLAN, "threshold": threshold}) == expected
+
+
+@pytest.mark.parametrize(("mode", "weights", "events", "expected"), [
+    ("weight", [5, -5], [False, True], (0, True)),  # an event pack is one pack among others
+    ("weight", [-5, 5], [False, True], (1, True)),
+    ("prefer", [5, -5, -3], [False, True, True], (2, True)),  # the best event pack, threshold or not
+    ("prefer", [5, 3], [False, False], (0, True)),  # none shown: by weight
+    ("avoid", [-5, 5], [False, True], (0, False)),  # left out while another card shows
+    ("avoid", [5, -5], [True, True], (0, True)),  # only event packs: by weight
+])
+def test_event_packs_by_weight_preferred_or_avoided(mode, weights, events, expected):
+    assert rs.pick_pack(weights, events, {**PLAN, "event_packs": mode}) == expected
+
+
+EVENTS = {"Hell's Chicken", "Twining Threads"}
+KNOWN = NAMES + ["Hell's Chicken", "Twining Threads", "Repressed Wrath", "Crawling Abyss"]
+
+
+@pytest.mark.parametrize(("floor", "titles", "expected"), [
+    (5, ["Twining Threads", "Repressed Wrath", "To be Crushed"], [True, False, False]),  # an event story pack
+    (5, ["Brand New Event Pack", "Repressed Wrath"], [True, False]),  # a pack the data file lacks: a running event's
+    (5, ["Repressed Wrath", "Twining Threads"], [False, False]),  # a plain pack leftmost; an event pack elsewhere
+    (5, ["Line", "Twining Threads"], [False, False]),  # alike to known packs: not new
+    (5, ["Crawling Abyss", "Twining Threads"], [False, False]),  # a plain pack, as rank_packs names a reversed read
+    (3, ["Hell's Chicken", "Repressed Wrath"], [False, False]),  # another floor: an ended event's pack, by weight
+    (4, ["Brand New Event Pack", "Repressed Wrath"], [False, False]),
+    (5, [], []),
+])
+def test_only_floor_5s_leftmost_event_or_new_pack_takes_the_event_mode(floor, titles, expected):
+    # #240, the user (2026-10-22): a running event's pack sits on floor 5, leftmost; an ended one is a plain pack.
+    assert rs.event_slots(floor, titles, EVENTS, KNOWN + SHORT) == expected
+
+
+@pytest.mark.parametrize(("floor", "titles", "mode", "expected"), [
+    (5, ["Twining Threads", "Repressed Wrath"], "prefer", (0, True)),  # taken although -5
+    (5, ["Twining Threads", "Repressed Wrath"], "avoid", (1, True)),  # left out: the next best
+    (5, ["Twining Threads", "Repressed Wrath"], "weight", (1, True)),
+    (5, ["Brand New Event Pack", "Repressed Wrath"], "prefer", (0, True)),
+    (5, ["Repressed Wrath", "Twining Threads"], "prefer", (0, True)),  # plain leftmost: by weight, Repressed Wrath 3
+    (3, ["Hell's Chicken", "Repressed Wrath"], "avoid", (0, True)),  # another floor: by weight, Hell's Chicken 4
+    (5, ["Abyss Crawling", "Repressed Wrath"], "prefer", (1, True)),  # a plain pack read in reverse: not taken
+])
+
+def test_the_event_mode_on_floor_5s_leftmost_card(floor, titles, mode, expected):
+    plan = {**PLAN, "event_packs": mode, "weights": {"Twining Threads": -5, "Repressed Wrath": 3, "Hell's Chicken": 4},
+            "unlisted": 0}
+    ranked = rs.rank_packs([t.split(" ", 1) for t in titles], KNOWN, plan)  # two OCR boxes per title
+    slots = rs.event_slots(floor, [t for t, _ in ranked], EVENTS, KNOWN)
+    assert rs.pick_pack([w for _, w in ranked], slots, plan) == expected
+
+
+def test_a_reversed_title_holding_an_event_packs_name_is_not_floor_5s_event_slot():
+    # Read bottom up, "Mountain of Corpses, Sea of Blood" holds "Sea": not S.E.A., an event story pack (#240 review).
+    ranked = rs.rank_packs([["Sea of Blood", "Mountain of Corpses,"]], DATA_NAMES, PLAN | {"weights": {}})
+    assert ranked[0][0] == "Mountain of Corpses, Sea of Blood"
+    assert rs.event_slots(5, [ranked[0][0]], {"S.E.A."}, DATA_NAMES) == [False]
 
 
 @pytest.mark.parametrize(("setting", "used", "expected"), [
@@ -146,14 +225,25 @@ def test_rank_and_pick():
     ("once", 0, True), ("once", 1, False),
     ("none", 0, False),
 ])
-def test_an_all_avoid_page_is_refreshed_as_often_as_the_setting_allows(setting, used, expected):
+def test_a_page_below_the_threshold_is_refreshed_as_often_as_the_setting_allows(setting, used, expected):
     # #41: none / once / all; "all" stops only when a refresh changes nothing (the caller sees that).
-    assert rs.refresh_wanted(["avoid", "avoid", "avoid"], setting, used) is expected
+    assert rs.refresh_wanted(False, setting, used) is expected
 
 
 @pytest.mark.parametrize("setting", ["none", "once", "all"])
-def test_a_page_with_anything_but_avoid_is_never_refreshed(setting):
-    assert rs.refresh_wanted(["avoid", "neutral", "avoid"], setting, 0) is False
+def test_a_page_meeting_the_threshold_is_never_refreshed(setting):
+    assert rs.refresh_wanted(True, setting, 0) is False
+
+
+@pytest.mark.parametrize(("marks", "refresh", "pick"), [
+    (["avoid", "avoid"], True, 0), (["avoid", "neutral", "prefer"], False, 2), (["neutral", "avoid", "neutral"], False, 0),
+])
+def test_marks_migrated_to_weights_pick_and_refresh_as_before(marks, refresh, pick):
+    # #240: prefer / neutral / avoid became +5 / 0 / -5 with threshold 0; v8's rule was "refresh only when all avoid,
+    # take the best mark, leftmost".
+    weights = [{"prefer": 5, "neutral": 0, "avoid": -5}[m] for m in marks]
+    i, meets = rs.pick_pack(weights, [False] * len(marks), PLAN)
+    assert (i, rs.refresh_wanted(meets, "all", 0)) == (pick, refresh)
 
 
 @pytest.mark.parametrize(("visible", "target", "expected"), [
@@ -167,14 +257,18 @@ def test_team_list_move(visible, target, expected):
 
 
 DATA = Path(__file__).resolve().parent.parent / "assets/resource/base/data/theme_packs.yaml"
+DATA_NAMES = list(yaml.safe_load(DATA.read_text(encoding="utf-8"))["packs"])
 
 
 def test_theme_pack_data_file():
     data = yaml.safe_load(DATA.read_text(encoding="utf-8"))
-    assert data["packs"] and all(isinstance(p, str) for p in data["packs"])  # unquoted "a: b" parses as a dict
-    assert all(p in data["packs"] and m in rs.PACK_RANK for p, m in data["default_plan"].items())
-    assert len(set(data["packs"])) == len(data["packs"])
-    # #89: the 1.117.0 client's packs with a NORMAL or HARD floor, the default plan filled in, event packs neutral.
-    assert len(data["packs"]) >= 90 and data["default_plan"]
-    assert set(data["event_packs"]) <= set(data["packs"]) and len(data["event_packs"]) == 15
-    assert not set(data["event_packs"]) & set(data["default_plan"])
+    packs, plan = data["packs"], data["default_plan"]
+    # Each pack maps to its floors; an unquoted "a: b" name would parse as a nested dict.
+    assert packs and all(isinstance(p, str) and re.fullmatch(r"(N[1-5]+)?( ?H[1-5]+)?", f) for p, f in packs.items())
+    # #240: the default plan is AALC's weights, threshold 0, unlisted 0, event packs by weight.
+    assert (plan["threshold"], plan["unlisted"], plan["event_packs"]) == (0, 0, "weight")
+    assert all(p in packs and isinstance(w, int) and -10 <= w <= 10 for p, w in plan["weights"].items())
+    assert plan["weights"]["The B.E."] == 10 and plan["weights"]["Hell's Chicken"] == 1
+    # #89: the 1.117.0 client's packs with a NORMAL or HARD floor.
+    assert len(packs) >= 90
+    assert set(data["event_packs"]) <= set(packs) and len(data["event_packs"]) == 15
