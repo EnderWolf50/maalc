@@ -513,7 +513,7 @@ class DismissShot(CustomAction):
                 log(f"{argv.node_name}: screen kept in logs/dismissed/{stamp}.png")
             except OSError as e:
                 log(f"{argv.node_name}: screen not saved: {e}")
-        if argv.custom_action_param:
+        if json.loads(argv.custom_action_param or "null") == "back":
             context.tasker.controller.post_click_key(BACK_KEY).wait()
         else:
             x, y, w, h = argv.box
