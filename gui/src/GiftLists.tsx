@@ -91,10 +91,17 @@ export function GiftListsTab() {
             </label>
           </div>
           <div className="gl-apply">
-            <div className="gl-pick" role="radiogroup" aria-label={t("gl.apply")}>
+            <div className="gl-pick" role="radiogroup" aria-label={t("gl.apply")} onKeyDown={(e) => {
+              const step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key];
+              if (!step) return;
+              e.preventDefault();
+              const next = (STATES.indexOf(pick) + step + STATES.length) % STATES.length;
+              setPick(STATES[next]);
+              e.currentTarget.querySelectorAll<HTMLElement>("[role=radio]")[next].focus();
+            }}>
               <span className="gl-label">{t("gl.apply")}</span>
               {STATES.map((v, i) => (
-                <button type="button" key={v} role="radio" aria-checked={pick === v} aria-keyshortcuts={String(i + 1)}
+                <button type="button" key={v} role="radio" aria-checked={pick === v} aria-keyshortcuts={String(i + 1)} tabIndex={pick === v ? 0 : -1}
                   className={`gl-state ${v}${pick === v ? " on" : ""}`} onClick={() => setPick(v)}>
                   <i aria-hidden />{t(`state.${v}`)}<kbd aria-hidden>{i + 1}</kbd>
                 </button>

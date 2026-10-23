@@ -28,7 +28,8 @@ function counts(list: ListRules, keyword: string) {
     for (const id of ids) {
       const { shown } = look(list, id);
       if (shown === "drop") continue;
-      if (GIFT_BY_ID.get(id)!.kind === "fusion") { if (shown === "want") c.fusion++; } else c[shown]++;
+      if (shown === "want" && GIFT_BY_ID.get(id)!.kind === "fusion") c.fusion++;
+      else c[shown]++;
     }
   }
   return c;

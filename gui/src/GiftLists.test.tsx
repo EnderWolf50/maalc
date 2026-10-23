@@ -113,6 +113,25 @@ describe("applying a state", () => {
     expect(list(r)).toMatchObject({ want: [], keep: [a] });
   });
 
+  test("the apply bar is one tab stop; the arrow keys move the choice", async () => {
+    const r = await open([mine()]);
+    const radio = (s: string) => screen.getByRole("radio", { name: zh[`state.${s}` as Text] });
+    expect(radio("keep")).toHaveAttribute("tabindex", "-1");
+    radio("want").focus();
+    await r.user.keyboard("{ArrowRight}");
+    expect(radio("keep")).toBeChecked();
+    expect(radio("keep")).toHaveFocus();
+    await r.user.keyboard("{ArrowLeft}{ArrowLeft}");
+    expect(radio("drop")).toBeChecked();
+  });
+
+  test("the badge and the header count a kept fusion gift as kept", async () => {
+    const r = await open([mine({ keep: [fixed.id] })]);
+    await tile(r, fixed.id);
+    expect(screen.getByRole("heading", { level: 3 })).toHaveTextContent(say(zh["gl.n_keep"], { n: 1 }));
+    expect(screen.getByRole("tab", { name: new RegExp("^" + zh[`kw.${fixed.keyword}` as Text]) })).toHaveTextContent("1");
+  });
+
   test("a tile's accessible name is the gift, its tier and its state", async () => {
     const [a] = burnIII;
     const r = await open([mine({ keep: [a] })]);
