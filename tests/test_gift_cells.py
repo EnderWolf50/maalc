@@ -40,8 +40,7 @@ def test_the_table_holds_every_named_gift_of_the_game_data_when_it_is_unpacked()
     from local_dir import local_dir  # noqa: PLC0415  # the pytest process only (the child below has no tools/ path)
     if not (unpack := local_dir("unpack")).joinpath("static").is_dir():
         pytest.skip("no unpacked game data")
-    for dep in ("cv2", "opencc"):  # the unpack group's; a checkout with the game data but without `uv sync --group unpack` skips
-        pytest.importorskip(dep, reason=f"{dep} is in the unpack dependency group")
+    pytest.importorskip("cv2", reason="cv2 is in the unpack group: `uv sync --group unpack` to run this check")
     import gift_recipes  # noqa: PLC0415
     named = gift_recipes.english_names(unpack)
     ids = {i for i in gift_recipes.gift_table(unpack) if 9000 <= i <= 9999}
