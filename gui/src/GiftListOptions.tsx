@@ -24,14 +24,15 @@ export function GiftListOptions({ at, readOnly, choose, flash }: {
   const names = s.gift_lists.map((l) => l.name);
 
   const show = (v: View | null, initial = "") => { setView(v); setText(initial); setError(""); };
-  // Esc or a click outside closes it.
+  // Esc, a click outside, or focus moving outside (Tab to another control) closes it.
   useEffect(() => {
     if (!view) return;
     const out = (e: Event) => { if (!box.current?.contains(e.target as Node)) setView(null); };
     const esc = (e: KeyboardEvent) => { if (e.key === "Escape") setView(null); };
     document.addEventListener("mousedown", out);
+    document.addEventListener("focusin", out);
     document.addEventListener("keydown", esc);
-    return () => { document.removeEventListener("mousedown", out); document.removeEventListener("keydown", esc); };
+    return () => { document.removeEventListener("mousedown", out); document.removeEventListener("focusin", out); document.removeEventListener("keydown", esc); };
   }, [view]);
 
   const add = (list: GiftList, message: "gl.copied_list" | "gl.blank_made" | "gl.imported") => {

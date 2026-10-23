@@ -147,6 +147,20 @@ describe("delete", () => {
   });
 });
 
+describe("the menu", () => {
+  test("tabbing out of the open menu to the purchase order button and pressing Enter closes it", async () => {
+    const r = await open([mine()]);
+    await r.menu();
+    expect(screen.getByRole("menu")).toBeInTheDocument();
+    const buy = screen.getByRole("button", { name: new RegExp("^" + zh["gl.buy"].slice(0, 4)) });
+    for (let i = 0; i < 20 && document.activeElement !== buy; i++) await r.user.tab();
+    expect(buy).toHaveFocus();
+    await r.user.keyboard("{Enter}");
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+  });
+});
+
 describe("the read-only default", () => {
   test("rename, reset and delete are disabled; copy, new, export and import work", async () => {
     const r = await open([], "default");
