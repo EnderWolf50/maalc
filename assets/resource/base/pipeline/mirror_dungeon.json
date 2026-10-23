@@ -359,6 +359,8 @@
         "custom_action": "PickThemePack",
         "post_delay": 0
     },
+    // The free refresh button's count "n/3" (#319): spent (0); unread or some left: no hit.
+    "PackRefreshSpent": {"recognition": "OCR", "roi": [1105, 32, 60, 30], "expected": "^0 ?/ ?\\d"},
     // Rewards and events (spec 03 sections 10-12). The bot never cancels a reward or refuses a gift;
     // landing in either dialog anyway, it backs out with Cancel.
     "RewardCardForgo": {
