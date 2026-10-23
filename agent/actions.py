@@ -2636,6 +2636,8 @@ class RewardCard(CustomAction):
                 tap(context, *CARD_CONFIRM, wait=0)
                 until(context, lambda im: not has(text(context, im, REWARD_TITLE), "Encounter Reward"))
                 return True
+            if not m:  # no count to tell a tap by: the page is not up
+                continue
             cards = columns(ocr(context, image, CARD_TEXT))
             if not cards or len(taken) == len(cards):
                 time.sleep(1)
@@ -2647,7 +2649,7 @@ class RewardCard(CustomAction):
             i = rewards.pick_card(types, order, taken)
             log(f"reward cards: {', '.join(str(t) for t in types)}: take {types[i] or ' '.join(cards[i][1])!r}")
             tap(context, cards[i][0], 300, wait=0)
-            before = int(m[1]) if m else -1
+            before = int(m[1])
 
             def picked(im):  # Selectable's count went up: not a misread digit, not a tap that dropped the card again
                 n = re.search(r"(\d)\s*/\s*\d", text(context, im, SELECTABLE))

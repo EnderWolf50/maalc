@@ -100,3 +100,18 @@ def test_a_card_that_never_reads_is_taken_as_it_reads_after_a_few_looks(context,
     assert len(page.reads) == actions.CARD_REREADS + 1  # looked at again twice, then the best of what reads
     assert page.taps == [(400, 300), actions.CARD_CONFIRM]  # Cost: a card that reads as nothing ranks last
     assert actions.STUCK["flag"] is None
+
+
+def test_a_look_that_cannot_read_selectable_taps_nothing(context, monkeypatch):
+    # With no count to read, a swallowed tap would pass for a card taken.
+    page = RewardPage(context, monkeypatch, deal=0, ignore=1)
+    ocr, unread = page.ocr, [True]
+
+    def read(context, image, roi, only_rec=False):
+        if roi == actions.SELECTABLE and unread:
+            unread.pop()
+            return []
+        return ocr(context, image, roi, only_rec)
+    monkeypatch.setattr(actions, "ocr", read)
+    assert actions.RewardCard().run(context, None)
+    assert page.taps == [(660, 300), (660, 300), actions.CARD_CONFIRM]
