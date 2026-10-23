@@ -1182,8 +1182,8 @@ class PickThemePack(CustomAction):
         plan, packs, event_packs, title_art = theme_pack_plan(run["settings"], run["team"])
         names = packs + list(plan["weights"])  # a weighed pack the data file dropped still matches
         setting = run["settings"]["run"]["theme_pack_refresh"]
-        seen = None
-        for used in range(10):  # ponytail: stop when a refresh changes nothing; read `Refresh n/m` if that misfires
+        prev = None
+        for used in range(10):  # the button's `Refresh 0/m` ends it; unread, a refresh that changes nothing does (#319)
             settled = still(context, timeout=CARDS_SETTLE, roi=PACK_CARDS, runs=2)
             if settled is None:
                 log(f"floor {floor}: the cards still moved after {CARDS_SETTLE:g} s")
@@ -1199,9 +1199,12 @@ class PickThemePack(CustomAction):
             log(f"floor {floor} card reads: " + ", ".join(f"{t} <- {how}" for t, _, how in ranked))  # #274: which path named each card
             titles = [t for t, _, _ in ranked]
             i, meets = run_start.pick_pack([w for _, w, _ in ranked], slots, plan)
-            if not run_start.refresh_wanted(meets, setting, used) or titles == seen:
+            if not run_start.refresh_wanted(meets, setting, used) or titles == prev:
                 break
-            seen = titles
+            if seen(context, page, "PackRefreshSpent"):
+                log(f"floor {floor}: no free refresh left")
+                break
+            prev = titles
             tap(context, 1083, 47, wait=3)
         x = cards[i][0]
         log(f"floor {floor}: pull {ranked[i][0]!r} ({ranked[i][1]}{'' if meets else ', below the threshold'})")
