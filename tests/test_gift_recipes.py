@@ -1,6 +1,8 @@
 import json
 from pathlib import Path
 
+from local_dir import local_dir
+
 BASE = Path(__file__).resolve().parent.parent / "assets" / "resource" / "base"
 DATA = json.loads((BASE / "data" / "gift_recipes.json").read_text(encoding="utf-8"))
 SEARCHABLE = {g["id"] for g in json.loads((BASE / "data" / "gift_search.json").read_text(encoding="utf-8"))["gifts"]}
@@ -31,7 +33,7 @@ def test_every_fusion_gift_and_material_has_its_icon_and_an_english_name():
 
 def test_recipes_match_the_game_data_when_it_is_unpacked():
     import pytest
-    path = Path(__file__).resolve().parent.parent / ".local/unpack/static/Assets/Resources_moved/StaticData/static-data/mirror-dungeon-common-data/mirror-dungeon-common-data-md8.json"
+    path = local_dir("unpack") / "static/Assets/Resources_moved/StaticData/static-data/mirror-dungeon-common-data/mirror-dungeon-common-data-md8.json"
     if not path.is_file():
         pytest.skip("no unpacked game data")
     table = json.loads(path.read_text(encoding="utf-8-sig"))["egoGiftCombineFixedTable"]
@@ -46,3 +48,30 @@ def test_chinese_names_are_traditional():
     assert all(g["zh"] for g in DATA["gifts"] + DATA["materials"])
     assert next(g for g in DATA["gifts"] if g["id"] == 9083)["zh"] == "月之記憶"
     assert not [g["id"] for g in DATA["gifts"] + DATA["materials"] if "记" in g["zh"] or "镜" in g["zh"]]
+
+
+def test_39_recipes_use_a_theme_pack_exclusive_gift():
+    specific = [g for g in DATA["gifts"] if g.get("specific")]
+    assert sum(len(g["recipes"]) for g in specific) == 39
+    assert all(g["packs"] == sorted(g["packs"]) and g["packs"] for g in specific)
+    assert not [g for g in DATA["gifts"] if "packs" in g and not g.get("specific")]
+    by_id = {g["id"]: g for g in DATA["gifts"]}
+    assert by_id[9410]["packs"] == [1004, 1005] and by_id[9717]["packs"] == [1104, 1116] and by_id[9248]["packs"] == [1010, 1012]
+
+
+def test_specific_and_packs_match_the_game_data_when_it_is_unpacked():
+    import pytest
+    static = local_dir("unpack") / "static/Assets/Resources_moved/StaticData/static-data"
+    common = static / "mirror-dungeon-common-data/mirror-dungeon-common-data-md8.json"
+    if not common.is_file():
+        pytest.skip("no unpacked game data")
+    pools = {x["id"]: set(x["specificEgoGiftPool"]) for p in (static / "mirrordungeon-theme-floor").glob("*.json")
+             for x in json.loads(p.read_text(encoding="utf-8-sig"))["list"] if x.get("specificEgoGiftPool")}
+    fixed = json.loads(common.read_text(encoding="utf-8-sig"))["egoGiftCombineFixedTable"]["combineFixed"]
+    for g in (g for g in DATA["gifts"] if "recipes" in g):
+        mine = [c for c in fixed if c["resultEgoGiftId"] == g["id"]]
+        assert g.get("specific", False) == any(c.get("isSpecific") for c in mine) == all(c.get("isSpecific") for c in mine), g["id"]
+        if g.get("specific"):  # the packs of all the gift's recipes' exclusive ingredients
+            used = {i for c in mine for i in c["requiredEgoGiftIds"]}
+            assert g["packs"] == sorted(p for p, pool in pools.items() if pool & used), g["id"]
+    assert sum(1 for c in fixed if c.get("isSpecific")) == 39

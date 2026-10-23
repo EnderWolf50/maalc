@@ -3,7 +3,8 @@
 Usage: uv run --group unpack python tools/gift_recipes.py [--release 2026101602] [--no-icons]
 Reads `.local/unpack/` (static data, English localization, the pulled UnityCache bundles; see docs/agents/local-dev.md).
 Chinese names: tools/llc_text.py (the Localize Limbus Company release; this tool only fills `zh` from it).
-Recipes: `combineFixed` and `combineMixed` of mirror-dungeon-common-data-md8.json.
+Recipes: `combineFixed` and `combineMixed` of mirror-dungeon-common-data-md8.json; `specific` is its `isSpecific`, `packs` the
+theme packs whose `specificEgoGiftPool` (mirrordungeon-theme-floor-*.json) holds a recipe ingredient.
 Icons: the game's EgoGiftIcon sprite of each fusion gift and of each recipe material that gift_search.json lacks, scaled
 by 0.21, transparency filled green, as the Gift Search icons. The first run indexes the 12 GB of bundles into
 `.local/unpack/out/sprite-index.tsv` (run it as a `bench` ticket, tools/live/queue.py); the quarterly rerun is docs/spec/05-game-data.md section 8.
@@ -32,7 +33,8 @@ KEYWORDS = {"Combustion": "Burn", "Laceration": "Bleed", "Vibration": "Tremor", 
             "Breath": "Poise", "Charge": "Charge", "Slash": "Slash", "Penetrate": "Pierce", "Hit": "Blunt"}  # the rest: Keywordless
 SCALE = 0.21  # the icon on the Gift Search page, as for GiftSearch/<id>.png
 NOTE = ("Fusion gifts and their recipes. Recipes: combineFixed (any one of a gift's `recipes` fuses it; each is a list of the "
-        "required gift ids) and combineMixed (`groups`: take `need` of each group's `ids`) of the game client 1.117.0's "
+        "required gift ids; `specific` marks a gift whose recipe uses a theme pack's exclusive gift, `packs` is the union of the "
+        "theme pack ids of those gifts (one recipe can need several packs), from isSpecific and the packs' specificEgoGiftPool) and combineMixed (`groups`: take `need` of each group's `ids`) of the game client 1.117.0's "
         "mirror-dungeon-common-data-md8. Ids, tiers, keywords and English names: the same client's ego-gift static data and "
         "EN_EGOgift localization. `materials` are the recipe ingredients gift_search.json does not list. Icons: "
         "image/GiftRecipe/<id>.png, the game's EgoGiftIcon sprites (by the ego-gift iconId) scaled by 0.21 with transparency "
@@ -64,13 +66,22 @@ def english_names(unpack):
     return names
 
 
+def pack_pools(unpack):
+    """Theme pack id -> its `specificEgoGiftPool` (the pack-exclusive gifts), from mirrordungeon-theme-floor-*.json."""
+    return {x["id"]: set(x["specificEgoGiftPool"]) for p in glob.glob(str(unpack / STATIC / "mirrordungeon-theme-floor/*.json"))
+            for x in load(p)["list"] if x.get("specificEgoGiftPool")}
+
+
 def build(unpack, release):
     combine = load(unpack / STATIC / "mirror-dungeon-common-data/mirror-dungeon-common-data-md8.json")["egoGiftCombineFixedTable"]
     table, en, zh = gift_table(unpack), english_names(unpack), gift_names(release_zip(release))
     searchable = {g["id"] for g in load(DATA / "gift_search.json")["gifts"]}
-    recipes = defaultdict(list)
+    recipes, specific = defaultdict(list), set()
     for c in combine["combineFixed"]:
         recipes[c["resultEgoGiftId"]].append(c["requiredEgoGiftIds"])
+        if c.get("isSpecific"):
+            specific.add(c["resultEgoGiftId"])
+    pools = pack_pools(unpack)
     groups = {m["resultEgoGiftId"]: [{"ids": m["aEgoGiftIds"], "need": m["aEgoGiftRequiredNum"]},
                                      {"ids": m["bEgoGiftIds"], "need": m["bEgoGiftRequiredNum"]}] for m in combine["combineMixed"]}
 
@@ -79,7 +90,13 @@ def build(unpack, release):
         return {"id": gid, "keyword": keyword, "tier": tier, "en": en[gid], "zh": zh[gid]}  # a gift the release lacks stops the run
 
     results = sorted(recipes.keys() | groups.keys(), key=lambda g: (-table[g][0], g))
-    gifts = [{**entry(g), **({"recipes": recipes[g]} if g in recipes else {"groups": groups[g]})} for g in results]
+    def pack_fields(g):  # a gift's recipes are all flagged or none are (the test checks it)
+        if g not in specific:
+            return {}
+        used_ids = {i for rec in recipes[g] for i in rec}
+        return {"specific": True, "packs": sorted(p for p, pool in pools.items() if pool & used_ids)}
+
+    gifts = [{**entry(g), **({"recipes": recipes[g]} if g in recipes else {"groups": groups[g]}), **pack_fields(g)} for g in results]
     used = {i for r in recipes.values() for rec in r for i in rec} | {i for gs in groups.values() for grp in gs for i in grp["ids"]}
     materials = [entry(i) for i in sorted(used - searchable - set(results))]
     return {"note": NOTE, **credit(release), "gifts": gifts, "materials": materials}, table
