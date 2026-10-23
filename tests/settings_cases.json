@@ -62,7 +62,7 @@
     ],
     "teams": [
       {
-        "id": "a", "name": "Team a", "enabled": true, "game_team": 1, "keyword": "Burn", "usage": "any", "hard_from_floor": 1,
+        "id": "a", "name": "Team a", "enabled": true, "game_team": 1, "usage": "any", "hard_from_floor": 1,
         "deployment_order": {"plan": "d1"}, "starlight": {"plan": "s1"}, "theme_pack_plan": "p1",
         "reward_cards": ["Starlight", "Random E.G.O Gift", "Cost & Keyword Gift Chance", "Cost", "E.G.O Resource"],
         "shop_refresh_limit": 2, "heal": "revive", "reserve_cost": 0, "min_alive": 0, "guard_turns": 0, "trial_risk_weight": "high",
@@ -70,7 +70,7 @@
         "gift_list": "g1", "sell_max_tier": 4, "sell_vestiges": false
       },
       {
-        "id": "b", "name": "Team b", "enabled": true, "game_team": 2, "keyword": "Bleed", "usage": "hard_only", "hard_from_floor": 3,
+        "id": "b", "name": "Team b", "enabled": true, "game_team": 2, "usage": "hard_only", "hard_from_floor": 3,
         "deployment_order": {"custom": ["Gregor", "Outis", "Sinclair", "Rodion", "Ishmael", "Heathcliff", "Hong Lu", "Meursault", "Ryōshū", "Don Quixote", "Faust", "Yi Sang"]},
         "starlight": {"custom": {"levels": ["base", "plus", "plus2", "none", "none", "none", "none", "none", "none", "none"], "priority": [10, 9, 8, 7, 6, 5, 4, 3, 2, 1], "convert_leftover": true}},
         "theme_pack_plan": "default",
@@ -102,6 +102,7 @@
     {"name": "empty order", "edits": [{"set": "teams/1/deployment_order/custom", "value": []}], "schema": ["teams/1/deployment_order"]},
     {"name": "gift search tier out of range", "edits": [{"set": "teams/1/gift_search/gifts/0/tier", "value": 4}], "schema": ["teams/1/gift_search/gifts/0/tier"]},
     {"name": "repeated gift search gift", "edits": [{"set": "teams/1/gift_search/gifts/-", "value": {"keyword": "Bleed", "tier": 3, "name": "Smokes and Wires"}}], "schema": ["teams/1/gift_search/gifts"]},
+    {"name": "the main keyword moved to the gift list", "edits": [{"set": "teams/0/keyword", "value": "Burn"}], "schema": ["teams/0"]},
     {"name": "the keep settings moved to the gift list", "edits": [{"set": "teams/0/keep_gifts", "value": []}, {"set": "teams/0/keywordless", "value": "keep"}], "schema": ["teams/0"]},
     {"name": "a team names a gift list, not empty", "edits": [{"set": "teams/0/gift_list", "value": ""}], "schema": ["teams/0/gift_list"]},
     {"name": "team without gift_list", "edits": [{"delete": "teams/0/gift_list"}], "schema": ["teams/0"]},

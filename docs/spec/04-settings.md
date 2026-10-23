@@ -25,8 +25,8 @@
   - 版本 8（#85、#86）：執行選項新增 `auto_accept_terms`、`auto_download`，從版本 7 遷移時都填開（使用者 2026-10-21 定案：bot 可以替帳號同意使用者條款、接受下載與更新）。
   - 版本 9（#240）：主題包方案的 `marks`（偏好／中立／避開）改成 `weights`（數字分數），並新增 `threshold`、`unlisted`、`event_packs`。從版本 8 遷移時偏好、中立、避開分別轉成 5、0、−5，門檻 0、沒列出的包 0、活動包照分數；選擇和刷新的結果和以前完全一樣（以前「全部是避開才刷新」就是「最好的包低於 0」）。
   - 版本 10（#263）：隊伍新增 `fusion_condition`，從版本 9 遷移時填 `any`（照舊材料夠就合）。
-  - 版本 11（#291、#292）：商店的保留設定從隊伍搬到飾品清單（第 13 節）。頂層新增 `gift_lists`；隊伍新增 `gift_list`，移除 `keep_keywords`、`keywordless`、`keep_gifts`、`fusion_condition`。從版本 10 遷移時每支隊伍產生一份清單，保留的東西完全相同的隊伍共用同一份（名稱用第一支隊伍的名稱，撞名加 ` 2`；id 是 `gift-list-1`、`gift-list-2`、…），隊伍的 `gift_list` 指向它。清單內容：
-    - `order`：主要體系第一，其餘照預設順序，`Keywordless` 最後；
+  - 版本 11（#291、#292）：商店的保留設定從隊伍搬到飾品清單（第 13 節）。頂層新增 `gift_lists`；隊伍新增 `gift_list`，移除 `keyword`、`keep_keywords`、`keywordless`、`keep_gifts`、`fusion_condition`（主要體系改由清單決定，見第 13 節；版本 11 還沒發版，所以併在版本 11，不另升版本）。從版本 10 遷移時每支隊伍產生一份清單，保留的東西完全相同的隊伍共用同一份（名稱用第一支隊伍的名稱，撞名加 ` 2`；id 是 `gift-list-1`、`gift-list-2`、…），隊伍的 `gift_list` 指向它。清單內容：
+    - `order`：隊伍原本的主要體系第一，其餘照預設順序，`Keywordless` 最後，所以遷移後的主要體系和遷移前相同；
     - `want`：主要體系的所有可購買飾品（`gift_search.json` 裡該體系的 I–III 階）；
     - `keep`：主要體系與 `keep_keywords` 的其餘飾品（`gift_recipes.json` 裡該體系的合成品與配方材料；`keep_keywords` 體系的可購買飾品也是）、所有無體系飾品（`gift_search.json` 的 `Keywordless` 分頁與 `gift_recipes.json` 裡無體系的）、`keep_gifts` 對得到 id 的飾品（用 `keyword`、`tier`、英文名對照 `gift_search.json`；殘影用名字對到 9991–9995）。已在 `want` 的不重複放進 `keep`。`keep_gifts` 對不到的丟掉並計數，GUI 遷移後在標頭的狀態列顯示「有 N 個對不到，已丟掉」，直到使用者改動設定或儲存；
     - `gorder` 用預設（每體系 III、II、I 階），`fusion_condition` 沿用該隊的值。
@@ -195,7 +195,6 @@
 | 名稱 | `name` | 字串 | 使用者自取 | `隊伍 N`（N 是新增時的位置） | #19 |
 | 啟用 | `enabled` | 布林 | 開／關 | 開 | #9、#19 |
 | 遊戲內隊伍欄位 | `game_team` | 整數 1–40 | `TEAMS #1`–`#40` | `TEAMS #N`（N 是新增時的位置，最大 40） | #9、#19 |
-| 主要體系 | `keyword` | 字串 | `Burn`、`Bleed`、`Tremor`、`Rupture`、`Sinking`、`Poise`、`Charge`、`Slash`、`Pierce`、`Blunt` | `Burn` | #9、#19 |
 | 用途 | `usage` | 字串 | `any` 都可／`hard_only` 只跑困難／`normal_only` 只跑普通 | `any` | #9、#19 |
 | 困難局從第 N 層起轉困難 | `hard_from_floor` | 開關＋整數 1–5（關 = `null`） | 開：困難局從第 N 層起困難，N = 1 是整局困難；關：這隊整局普通，除非全域難度是「困難」（見下） | 開，1 | #9、#19、#137 |
 | 出戰順序 | `deployment_order` | 物件 | `{"plan": <方案 id>}`，或自訂 `{"custom": <order>}`（第 6 節） | 自訂，遊戲格子的順序 | #9、#19 |
@@ -212,7 +211,7 @@
 | 出售的最高階級 | `sell_max_tier` | 整數 1–5 | 比它高階的飾品不出售；4 = V 階永遠不賣 | 4 | #161 |
 | 飾品清單 | `gift_list` | 字串 | `default` 資料檔的預設清單，或 `gift_lists[].id`（第 13 節）：商店買、留、賣、合成哪些飾品，以及合成條件 | `default` | #291 |
 | 可以出售殘影 | `sell_vestiges` | 布林 | 殘影（只能當合成材料或出售的 5 個飾品，自成一類，見 [03](03-decisions.md) 第 13 節）可以出售，仍受 `sell_max_tier` 限制；清單裡是 `keep` 的殘影不賣，也不當材料 | 關 | #161、#291 |
-| 觀測飾品 | `gift_search` | 物件 | `{"enabled": 布林, "gifts": [{"keyword", "tier", "name"}, …]}`：開關，與依優先順序排列、不重複、最多 3 個的飾品清單。`keyword` 是觀測頁的分頁（主要體系的 10 個值加 `Keywordless`），`tier` 是 1–3，`name` 是遊戲顯示的英文名 | `{"enabled": false, "gifts": []}` | #54 |
+| 觀測飾品 | `gift_search` | 物件 | `{"enabled": 布林, "gifts": [{"keyword", "tier", "name"}, …]}`：開關，與依優先順序排列、不重複、最多 3 個的飾品清單。`keyword` 是觀測頁的分頁（10 個體系加 `Keywordless`），`tier` 是 1–3，`name` 是遊戲顯示的英文名 | `{"enabled": false, "gifts": []}` | #54 |
 
 規則：
 
@@ -301,6 +300,7 @@ GUI 用表格編輯，存在設定檔，疊加在資料檔的試煉風險表上�
 - `want` 裡出現殘影或不能購買的非合成品不報錯：GUI 不讓選，Agent 的購買清單略過它們，因為資料檔換季後可能變動。（#292，未驗證換季時的實際情形）
 - schema 檢查型別、`order` 的列舉與不重複（11 項）、`want`／`keep` 的不重複、`gorder` 的鍵是 11 個體系之一。跨物件檢查（GUI 與 Agent 各做一份，訊息一致）：清單的 id 或名稱重複（`gift_lists: id 'x' appears 2 times`）；隊伍引用不存在的清單（`teams/0/gift_list: team 'T' uses missing plan 'x' (not in gift_lists)`）；同一個 id 同時在 `want` 與 `keep`（`gift_lists/0: list 'L' has gift 9053 in both want and keep`）。（#292）
 - 匯出是這份清單去掉 `id` 的 JSON（`name`、`order`、`want`、`keep`、`gorder`、`fusion_condition`）。匯入建立一份新清單：名稱加「（匯入）」、撞名加數字，不覆蓋現有清單；壞的或不認得的 id 略過並提示個數，同時在 `want` 與 `keep` 的留在 `want`，`order` 不是 11 個體系各一次就用預設，`fusion_condition` 不是三個值之一就用 `any`。（#292）
+- **主要體系**：隊伍不再有自己的主要體系設定。主要體系是隊伍的 `gift_list` 指到的清單（「預設」是資料檔的預設清單，主要體系 `Burn`）`order` 裡第一個不是 `Keywordless` 的體系。無體系排第一時它照樣最先買，但主要體系取下一個，因為初始飾品頁、定向刷新與合成的體系選單只有 10 個體系，沒有無體系。開局飾品的體系欄、事件選項的同級主體系優先、戰後選飾品的主體系優先、商店的定向刷新、一般合成的指定體系，GUI 觀測飾品挑選畫面的起始分頁，都讀這個主要體系。（#305）
 - 購買、出售、合成怎麼讀清單是 [03-decisions.md](03-decisions.md) 第 13 節的事，隨 Agent 的後續子議題（#291）改寫。
 
 ## 未決
