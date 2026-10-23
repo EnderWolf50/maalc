@@ -2826,20 +2826,30 @@ def cell_id(context, grid, at, keyword, tier):
     The icons of the gifts of the cell's keyword and tier (gift_cells.candidates) are matched in turn, CCOEFF with its
     green masked, within CELL_ICON_ROI of the centre; the best is the cell's gift when gift_cells.best accepts it. The
     matching stops at an icon of gift_cells.ICON_SURE: another candidate cannot tie it (a cell's lookalikes score 0.66 at most).
-    A cell with no tier or badge read, or none of whose candidates match, is unknown: shops treat it as a gift to keep.
+    When none of them is accepted, the keyword's gifts of the other tiers are matched too (the tier numeral may be misread,
+    #330), the earlier scores kept for the lead; there is no early stop, the twin of another tier (Faint and Dark Vestige)
+    scores as high. A cell with no tier or badge read, or none of whose candidates match, is unknown: shops treat it as a gift to keep.
     """
     cx, cy = round(at[0]), round(at[1])
     h, w = grid.shape[:2]
     x, y = max(0, cx - CELL_ICON_ROI // 2), max(0, cy - CELL_ICON_ROI // 2)
     roi = [x, y, min(CELL_ICON_ROI, w - x), min(CELL_ICON_ROI, h - y)]
     scores = []
-    for e in gift_cells.candidates(GIFTS, keyword, tier):
-        node = {"recognition": "TemplateMatch", "template": e["template"], "threshold": 0.0, "method": 5, "green_mask": True, "roi": roi}
-        detail = context.run_recognition("ShopCellIcon", grid, {"ShopCellIcon": node})
-        scores.append((e["id"], detail.best_result.score if detail and detail.best_result else 0.0))
-        if scores[-1][1] >= gift_cells.ICON_SURE:
-            break
-    return gift_cells.best(scores), max((s for _, s in scores), default=0.0)
+
+    def score(pool, sure):
+        for e in pool:
+            node = {"recognition": "TemplateMatch", "template": e["template"], "threshold": 0.0, "method": 5, "green_mask": True, "roi": roi}
+            detail = context.run_recognition("ShopCellIcon", grid, {"ShopCellIcon": node})
+            scores.append((e["id"], detail.best_result.score if detail and detail.best_result else 0.0))
+            if sure and scores[-1][1] >= gift_cells.ICON_SURE:
+                break
+
+    score(gift_cells.candidates(GIFTS, keyword, tier), True)
+    found = gift_cells.best(scores)
+    if found is None:  # the tier may be misread (#330): the keyword's other tiers, all scored, a twin of another tier may tie
+        score(gift_cells.other_tiers(GIFTS, keyword, tier), False)
+        found = gift_cells.best(scores)
+    return found, max((s for _, s in scores), default=0.0)
 
 
 def read_cells(context, image, cells, page, gifts=()):
