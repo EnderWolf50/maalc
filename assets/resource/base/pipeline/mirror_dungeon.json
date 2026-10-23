@@ -172,6 +172,9 @@
         "post_delay": 0
     },
     // A paused run (after To Window, a restart, or by hand): Enter opens the Resume dialog.
+    // The game plays its chains for ~3.7 s before the team page (3.6-3.9 s in six live runs, #269) and the entry page, "F1"
+    // and Enter still showing, reads like itself until then: a timeout under that, and MirrorHub taps Enter again. The
+    // wait ends the moment a page shows, so a long timeout costs nothing.
     "MirrorEntryPaused": {
         "recognition": "OCR",
         "roi": [990, 140, 230, 35],
@@ -185,7 +188,7 @@
                 {"roi": [80, 272, 100, 28], "expected": "^TEAMS$"},
                 {"roi": [520, 380, 240, 40], "expected": "^Resume$"}
             ],
-            "timeout": 4
+            "timeout": 8
         }
     },
     // Dungeon Progress with Resume / Halt Exploration / Cancel: always Resume (spec 01 入口頁的分流).
@@ -193,17 +196,27 @@
         "recognition": "OCR",
         "roi": [520, 380, 240, 40],
         "expected": "^Resume$",
-        "action": "Click",
-        "post_delay": 3000
+        "action": "Custom",
+        "custom_action": "TapUntil",
+        "post_delay": 0,
+        "custom_action_param": {
+            "target": [520, 380, 240, 40],
+            "gone": {"roi": [520, 380, 240, 40], "expected": "^Resume$"},
+            "timeout": 4
+        }
     },
     // Unclaimed rewards: Enter opens the Exploration Reward window, settled like any other.
     "MirrorEntryUnclaimed": {
         "recognition": "OCR",
         "roi": [990, 140, 230, 35],
         "expected": "Exploration Complete",
-        "action": "Click",
-        "target": [1030, 470, 160, 50],
-        "post_delay": 2000
+        "action": "Custom",
+        "custom_action": "TapUntil",
+        "post_delay": 0,
+        "custom_action_param": {
+            "target": [1030, 470, 160, 50],
+            "next": {"roi": [500, 100, 280, 45], "expected": "Exploration Reward"}
+        }
     },
     // Also pops up by itself on the entry page while rewards are pending (captures/253).
     // Settle: goal check, weekly-bonus toggles, Claim or GiveUpRewards (spec 03 section 14).
@@ -220,9 +233,13 @@
         "recognition": "OCR",
         "roi": [500, 225, 280, 50],
         "expected": "Rewards Acquired|Pass Level Up",
-        "action": "Click",
-        "target": [575, 455, 130, 35],
-        "post_delay": 2000
+        "action": "Custom",
+        "custom_action": "TapUntil",
+        "post_delay": 0,
+        "custom_action_param": {
+            "target": [575, 455, 130, 35],
+            "gone": {"roi": [500, 225, 280, 50], "expected": "Rewards Acquired|Pass Level Up"}
+        }
     },
     "MirrorEnterDialog": {
         "recognition": "OCR",
@@ -346,18 +363,26 @@
         "recognition": "OCR",
         "roi": [440, 320, 400, 35],
         "expected": "Continue without choosing",
-        "action": "Click",
-        "target": [455, 448, 165, 37],
-        "post_delay": 1500
+        "action": "Custom",
+        "custom_action": "TapUntil",
+        "post_delay": 0,
+        "custom_action_param": {
+            "target": [455, 448, 165, 37],
+            "gone": {"roi": [440, 320, 400, 35], "expected": "Continue without choosing"}
+        }
     },
     // Select with picks left; Confirm would hand out random trials (1.117.0, also after a NORMAL boss).
     "GiftRefuseDialog": {
         "recognition": "OCR",
         "roi": [440, 280, 400, 35],
         "expected": "remaining E.G.O Gift choices",
-        "action": "Click",
-        "target": [415, 476, 200, 35],
-        "post_delay": 1500
+        "action": "Custom",
+        "custom_action": "TapUntil",
+        "post_delay": 0,
+        "custom_action_param": {
+            "target": [415, 476, 200, 35],
+            "gone": {"roi": [440, 280, 400, 35], "expected": "remaining E.G.O Gift choices"}
+        }
     },
     "RewardCard": {
         "recognition": "OCR",
@@ -384,12 +409,16 @@
         "custom_action": "Shop"
     },
     // The red button bottom right reads SKIP, Proceed, Continue or Commence, grey while it does nothing.
+    // Both delays stay at MaaFramework's 200 ms (#258): the action reads the screen at once, with no still() before it,
+    // so pre_delay lets a page finish fading in, and a Choices page it has just tapped is still fading out when it returns.
     "Event": {
         "recognition": "OCR",
         "roi": [1040, 612, 190, 66],
         "expected": "SKIP|Proceed|Continue|Commence",
         "action": "Custom",
-        "custom_action": "Event"
+        "custom_action": "Event",
+        "pre_delay": 200,
+        "post_delay": 200
     },
     // The map's Dungeon Progress panel (the gear, or the back key on the map): Continue closes it.
     // Over the map, whose icons still show: before MirrorMap.
@@ -397,8 +426,13 @@
         "recognition": "OCR",
         "roi": [600, 440, 80, 35],
         "expected": "^Continue$",
-        "action": "Click",
-        "post_delay": 1500
+        "action": "Custom",
+        "custom_action": "TapUntil",
+        "post_delay": 0,
+        "custom_action_param": {
+            "target": [600, 440, 80, 35],
+            "gone": {"roi": [600, 440, 80, 35], "expected": "^Continue$"}
+        }
     },
     // Node selection panel: right-hand Enter. Before MirrorMap: the panel hides part of its icons.
     "MapNodePanel": {
@@ -411,13 +445,18 @@
     },
     // Right-hand icon column (pack detail, team); the Exploring Floor title is often covered.
     // RouteMap picks and enters the next node, or forfeits the run after a wipe's Accept results.
+    // No delays (#258): RouteMap starts with still(), which returns to the hub while the map fades (1 of 205 live hits with
+    // the 200 ms pre_delay; 2 more handed back at once under a GET! window), and enter_node waits for the map to fade out.
+    // The forfeit path (the run's end) taps the gear with no still() first, as before: it checks its dialog and tries 3 times.
     "MirrorMap": {
         "recognition": "TemplateMatch",
         "roi": [1195, 65, 75, 130],
         "template": "Map/MirrorMap.png",
         "threshold": 0.8,
         "action": "Custom",
-        "custom_action": "RouteMap"
+        "custom_action": "RouteMap",
+        "pre_delay": 0,
+        "post_delay": 0
     },
     // Battle (spec 03 sections 3, 8, 9). The DEFEAT dialog sits over the battle: first.
     "WipeDialog": {
@@ -433,7 +472,8 @@
         "expected": "VICTORY",
         "action": "Custom",
         "custom_action": "Victory",
-        "post_delay": 500
+        "pre_delay": 0,
+        "post_delay": 0
     },
     "Formation": {
         "recognition": "OCR",
@@ -444,6 +484,9 @@
     },
     // Waiting for input: the Win Rate label, off or on. It moves half a slot (~40 px) right with every
     // extra skill slot: x 984 with 7 slots, ~740 with 1 (a 1-sinner formation, live 2026-10-16).
+    // Both delays stay at 200 ms (#258): the action is 7.4 s (hold_turn lifts the finger after HOLD_LIMIT, 6 s, and 223 of
+    // 232 live hits are followed by BattlePause, which holds again), and no log shows what a look 0.2 s sooner finds: the
+    // 3 hits followed by BattleTurn again would be a second submit of the same turn, a second tap on Win Rate.
     "BattleTurn": {
         "recognition": "TemplateMatch",
         "roi": [700, 515, 580, 60],
@@ -453,7 +496,9 @@
         ],
         "threshold": 0.8,
         "action": "Custom",
-        "custom_action": "PlayTurn"
+        "custom_action": "PlayTurn",
+        "pre_delay": 200,
+        "post_delay": 200
     },
     // A turn playing out: the pause button replaces the top-right controls. PlayTurn holds a finger down
     // through the turn it started (#150); this holds it again after a hold timed out, a recovery or a restart.
@@ -479,25 +524,38 @@
         "recognition": "OCR",
         "roi": [990, 100, 200, 70],
         "expected": "^Victory$",
-        "action": "Click",
-        "target": [1050, 550, 150, 45],
-        "post_delay": 2000
+        "action": "Custom",
+        "custom_action": "TapUntil",
+        "post_delay": 0,
+        "custom_action_param": {
+            "target": [1050, 550, 150, 45],
+            "gone": {"roi": [990, 100, 200, 70], "expected": "^Victory$"}
+        }
     },
     // After a forfeit (captures/244, 245); Claim Rewards only opens the Exploration Reward window.
     "DefeatScreen": {
         "recognition": "OCR",
         "roi": [1000, 135, 200, 70],
         "expected": "^Defeat$",
-        "action": "Click",
-        "target": [1052, 548, 150, 40],
-        "post_delay": 2000
+        "action": "Custom",
+        "custom_action": "TapUntil",
+        "post_delay": 0,
+        "custom_action_param": {
+            "target": [1052, 548, 150, 40],
+            "gone": {"roi": [1000, 135, 200, 70], "expected": "^Defeat$"}
+        }
     },
     "ExplorationComplete": {
         "recognition": "OCR",
         "roi": [130, 90, 210, 70],
         "expected": "Complete",
-        "action": "Click",
-        "target": [1060, 575, 150, 45],
-        "post_delay": 2000
+        "action": "Custom",
+        "custom_action": "TapUntil",
+        "post_delay": 0,
+        "custom_action_param": {
+            "target": [1060, 575, 150, 45],
+            "next": {"roi": [500, 100, 280, 45], "expected": "Exploration Reward"},
+            "gone": {"roi": [130, 90, 210, 70], "expected": "Complete"}
+        }
     }
 }

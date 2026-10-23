@@ -74,20 +74,29 @@ def heal_plan(mode, cost, reserve, dead, heal_cost):
     return None
 
 
+def has_letters(t):
+    """Whether OCR text t has an ASCII letter: a name or a tag, not a price, a numeral or a glyph."""
+    return any(c.isascii() and c.isalpha() for c in t)
+
+
 def read_slots(results):
     """Shop slots from the OCR results [(text, (x, y, w, h))] of the offer grid, top row first.
 
     Each is {"name", "price", "purchased", "x", "y"}, x and y the price line's centre. A price is the
     tall line with no letters (a "??" price is None); the name is the line just under it; a bought
     slot has "Purchased" over its icon. Lines are found relative to each other, not at fixed rows.
+    A stray glyph of an icon (a badge read as "3") is as tall as a price, but the line under it is the
+    real price, not a name (#216): it is no slot.
     """
     lines = [(t, x + w // 2, y + h // 2, h) for t, (x, y, w, h) in results]
     slots = []
     for t, x, y, h in sorted(lines, key=lambda line: (line[2] // 40, line[1])):
-        if h < 18 or any(c.isascii() and c.isalpha() for c in t):
+        if h < 18 or has_letters(t):
             continue  # tier numerals on the icons read as short lines
         near = [(u, uy) for u, ux, uy, _ in lines if abs(ux - x) < 75 and u != t]
         name = next((u for u, uy in near if 10 < uy - y < 40), "")
+        if name and not has_letters(name):
+            continue
         digits = "".join(c for c in t if c.isdigit())
         slots.append({
             "name": name,
@@ -232,7 +241,22 @@ def gift_role(keyword, gift, kept, avoid=(), material=()):
     return "unknown" if keyword is None else "material"
 
 
-MAX_MATERIAL_TIER = 4  # a fusion gives tier IV at most: a tier V material is always a downgrade (user, #161)
+SHOP_TITLE = (190, 108, 130, 30)  # x, y, w, h: the title on the main page's plate, top left
+
+
+def is_super(image):
+    """Whether the main shop page is a Super Shop: its title is red, a shop's is tan (#263).
+
+    Red pixels in the title's box: 20% on SuperShop.png, 0 on Shop.png (tests/screens): one sample of each, so a Super
+    Shop on another theme's background is unverified. Only a shop's main page is asked.
+    """
+    x, y, w, h = SHOP_TITLE
+    b, g, r = (image[y:y + h, x:x + w, i].astype(int) for i in range(3))
+    return bool(((r > 150) & (g < 70) & (b < 70)).mean() > 0.1)
+
+
+FUSION_TOP_TIER = 4  # a fusion gives tier IV at most
+MAX_MATERIAL_TIER = FUSION_TOP_TIER  # so a tier V material is always a downgrade (user, #161)
 MIN_FUSION = 3  # materials a fusion takes at least: the game takes 2, spec 03 section 13 (#10) groups of 3 and up
 
 
@@ -241,22 +265,41 @@ def fusion_tier(points, thresholds):
     return 1 + sum(points > t for t in thresholds)
 
 
-def pick_fusion(materials, slots, thresholds, points, first=()):
+def fusion_wanted(condition, tier, materials):
+    """Whether a fusion giving tier is made (#263): any one is; upgrade, only over the highest of its materials' tiers
+    (materials: [(key, tier)]); tier4, only a tier IV (FUSION_TOP_TIER)."""
+    if condition == "upgrade":
+        return tier > max(t for _, t in materials)
+    return condition != "tier4" or tier >= FUSION_TOP_TIER
+
+
+def pick_fusion(materials, slots, thresholds, points, first=(), condition="any"):
     """The fusions to make, best first: [([keys], the tier it gives)] (#77).
 
     materials: [(key, tier)]; slots: the page's material slots (3, a Super Shop's 5); thresholds: fusion_tier's for
     this shop; points: {tier: a material's points}. Each fusion takes 3 to slots materials: the group giving the
     highest tier, then holding the most of first (gifts the team avoids, #90), then worth the fewest points; then
     again from what is left, until fewer than 3 are. A tier V gift is never a material (MAX_MATERIAL_TIER).
+    condition (the team's fusion_condition, #263) keeps out the groups fusion_wanted refuses: the best of the rest is
+    made, and none when no group is left. "any" puts the groups that upgrade (user, 2026-10-23) ahead of that order.
     """
+    def total(group):
+        return sum(points[t] for _, t in group)
+
+    def tier_of(group):
+        return fusion_tier(total(group), thresholds)
+
     def rank(group):
-        total = sum(points[t] for _, t in group)
-        return -fusion_tier(total, thresholds), -sum(k in first for k, _ in group), total, len(group)
+        no_upgrade = condition == "any" and not fusion_wanted("upgrade", tier_of(group), group)
+        return no_upgrade, -tier_of(group), -sum(k in first for k, _ in group), total(group), len(group)
 
     left, out = [m for m in materials if m[1] <= MAX_MATERIAL_TIER], []
     while len(left) >= MIN_FUSION:
-        best = min((g for n in range(MIN_FUSION, slots + 1) for g in combinations(left, n)), key=rank)
-        out.append(([k for k, _ in best], -rank(best)[0]))
+        groups = [g for n in range(MIN_FUSION, slots + 1) for g in combinations(left, n) if fusion_wanted(condition, tier_of(g), g)]
+        if not groups:
+            break
+        best = min(groups, key=rank)
+        out.append(([k for k, _ in best], tier_of(best)))
         left = [m for m in left if m not in best]
     return out
 

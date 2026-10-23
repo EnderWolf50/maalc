@@ -6,9 +6,9 @@ from pathlib import Path
 PIPELINE = Path(__file__).resolve().parent.parent / "assets/resource/base/pipeline"
 
 
-def load_nodes():
+def load_nodes(pattern="*.json"):
     nodes = {}
-    for path in sorted(PIPELINE.glob("*.json")):
+    for path in sorted(PIPELINE.glob(pattern)):
         lines = path.read_text(encoding="utf-8").splitlines()
         nodes |= json.loads("\n".join(ln for ln in lines if not ln.strip().startswith("//")))
     return nodes
@@ -127,6 +127,40 @@ def test_the_event_labels_are_the_event_nodes():
     assert event["roi"] == actions.EVENT_BUTTON_LABEL
 
 
+KEPT_DELAYS = ["Event", "BattleTurn"]  # #258: the default 200 ms, written out with the reason in the pipeline
+
+SETTLEMENT = ["ProgressPanel", "RewardCardForgo", "GiftRefuseDialog", "RunVictory", "DefeatScreen", "ExplorationComplete",
+              "ClaimPopup", "ResumeDialog"]
+
+
+def test_mirror_dungeon_waits_for_the_screen_not_for_delays():
+    # #254: a Click node with a post_delay slept 1.5-3 s whatever the game did. TapUntil taps, then reads the node's own
+    # text every 0.2 s until it goes (the screen moved on); a node with no tap (Victory) has nothing to wait for, and the
+    # hub's rate_limit paces its looks.
+    nodes = load_nodes("mirror_dungeon.json")
+    for name in SETTLEMENT:
+        node = nodes[name]
+        assert node["action"] == "Custom" and node["custom_action"] == "TapUntil" and node.get("post_delay") == 0, name
+        param = node["custom_action_param"]
+        assert param["gone"] == {"roi": node["roi"], "expected": node["expected"]}, name  # reads what the node recognised
+        x, y, w, h = param["target"]
+        assert 0 <= x and x + w <= 1280 and 0 <= y and y + h <= 720, name
+    assert nodes["ProgressPanel"]["custom_action_param"]["target"] == nodes["ProgressPanel"]["roi"]  # the old Click's box
+    assert nodes["ResumeDialog"]["custom_action_param"]["target"] == nodes["ResumeDialog"]["roi"]
+    # Claim Rewards and Enter on the unclaimed-reward entry page open the Exploration Reward window: its title ends the
+    # wait too (the summary's own title may stay readable under it).
+    reward = nodes["ExplorationReward"]
+    title = {"roi": reward["roi"], "expected": reward["expected"]}
+    assert nodes["ExplorationComplete"]["custom_action_param"]["next"] == title
+    unclaimed = nodes["MirrorEntryUnclaimed"]
+    assert unclaimed["custom_action"] == "TapUntil" and unclaimed.get("post_delay") == 0
+    assert unclaimed["custom_action_param"]["next"] == title
+    assert unclaimed["custom_action_param"]["target"] == [1030, 470, 160, 50]  # the Enter button
+    # VICTORY ends by itself: no tap, so neither delay (MaaFramework's default 200 ms pre_delay and post_delay included).
+    assert nodes["Victory"].get("pre_delay") == 0 and nodes["Victory"].get("post_delay") == 0
+    assert [n for n, spec in nodes.items() if spec.get("post_delay", 0) > 0 and n not in KEPT_DELAYS] == []
+
+
 def test_batch_plan_follows_maaframework():
     nodes = load_nodes()
     assert batch_plan(nodes, ["Connecting", "RetryPopup", "MaintenanceNotice"]) == [
@@ -153,3 +187,22 @@ def test_the_opening_waits_for_screens_not_for_delays():
     # taken longer than the timeout (PipelineTask::run_next, check_timeout_and_sleep).
     assert nodes["HubText"]["timeout"] == 0
     assert nodes["HubTextLost"].get("pre_delay") == 0 and nodes["HubTextLost"].get("post_delay") == 0
+
+
+def test_the_busiest_nodes_state_their_delays():
+    # #258: a node that says nothing sleeps MaaFramework's 200 ms before and after every hit. MirrorMap's action starts
+    # with still() and its enter_node waits out the map's fade, so it needs neither. Event and BattleTurn have no such
+    # guard (Event reads at once; no log shows what an earlier look at BattleTurn finds): their 200 ms stay, written out.
+    nodes = load_nodes("mirror_dungeon.json")
+    assert (nodes["MirrorMap"].get("pre_delay"), nodes["MirrorMap"].get("post_delay")) == (0, 0)
+    for name in KEPT_DELAYS:
+        assert (nodes[name].get("pre_delay"), nodes[name].get("post_delay")) == (200, 200), name
+
+
+def test_mirror_entry_paused_outwaits_the_chains():
+    # #269: Enter on a paused run plays the chains for 3.6-3.9 s (six live runs) with the entry page still readable; a
+    # timeout near that returns to the hub, which taps Enter again. TapUntil ends at the first page, so the timeout
+    # costs nothing but a stuck game's wait: at least twice the slowest run.
+    param = load_nodes("mirror_dungeon.json")["MirrorEntryPaused"]["custom_action_param"]
+    assert param["timeout"] >= 2 * 3.9
+

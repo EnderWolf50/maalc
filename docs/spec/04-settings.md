@@ -24,6 +24,7 @@
   - 版本 7（#77、#161）：隊伍新增 `keep_keywords`、`keywordless`、`keep_gifts`、`sell_max_tier`、`sell_vestiges`，從版本 6 遷移時填 `[]`、`keep`、`[]`、`4`、`false`：照舊只保留主要體系、無體系與觀測飾品；V 階與殘影不賣是使用者在 #161 定的預設。殘影自成一類，不受 `keywordless` 影響：以前它被當成無體系飾品保留，現在一律當合成材料（V 階除外）。
   - 版本 8（#85、#86）：執行選項新增 `auto_accept_terms`、`auto_download`，從版本 7 遷移時都填開（使用者 2026-10-21 定案：bot 可以替帳號同意使用者條款、接受下載與更新）。
   - 版本 9（#240）：主題包方案的 `marks`（偏好／中立／避開）改成 `weights`（數字分數），並新增 `threshold`、`unlisted`、`event_packs`。從版本 8 遷移時偏好、中立、避開分別轉成 5、0、−5，門檻 0、沒列出的包 0、活動包照分數；選擇和刷新的結果和以前完全一樣（以前「全部是避開才刷新」就是「最好的包低於 0」）。
+  - 版本 10（#263）：隊伍新增 `fusion_condition`，從版本 9 遷移時填 `any`（照舊材料夠就合）。
 - 只有 GUI 寫設定檔，Agent 不回寫。寫入必須先寫暫存檔再改名，避免寫到一半損毀。（#6、#19，2026-10-14 定案）
 - 檢查分兩層。schema 負責結構檢查：（#19，2026-10-14 定案）
   - 型別、列舉值、數字範圍；
@@ -43,7 +44,7 @@
 
 - GUI 與 PI 都提供 `zh_tw` 與 `en_us` 兩種語言，預設 `zh_tw`。GUI 的語言存在設定檔的 `language`。PI 只剩少數標籤，`interface.json` 手寫，翻譯放 `interface_zh_tw.json` 與 `interface_en_us.json`。（#18、#19）
 - 遊戲名詞保留英文原文，兩種語言都一樣：罪人名、體系、主題包、飾品、獎勵卡種類、試煉。只翻譯 bot 自己的說明文字。（#18）
-- 例外是星光加成：`zh_tw` 的星光卡片以維基的中文名稱為主、英文名稱為輔，並列出該等級的效果文字（資料在 `gui/src/graces.json`，來源與授權見 NOTICE.md）；`en_us` 只顯示英文名稱。設定檔與 Agent 仍只用編號與英文名稱。（#52）
+- 例外是星光加成：`zh_tw` 的星光卡片以都市零漢化組（LLC）的中文名稱為主、英文名稱為輔，並列出該等級的效果文字（資料在 `gui/src/graces.json`，來源與授權見 NOTICE.md）；`en_us` 只顯示英文名稱。設定檔與 Agent 仍只用編號與英文名稱。（#52）
 
 ## 4. 設定檔的頂層結構
 
@@ -198,6 +199,7 @@
 | 泛用（無體系）飾品 | `keywordless` | 字串 | `keep` 不合成、不出售／`fuse` 可以當合成材料、不出售／`fuse_or_sell` 合成、出售都可以。#161 把原本的開關 `keep_keywordless`（開＝`keep`、關＝`fuse_or_sell`）和「要不要賣泛用飾品」合成這一個選項，兩個開關會多出「不合成卻可以賣」這種幾乎用不到的組合 | `keep` | #77、#161 |
 | 出售的最高階級 | `sell_max_tier` | 整數 1–5 | 比它高階的飾品不出售；4 = V 階永遠不賣 | 4 | #161 |
 | 可以出售殘影 | `sell_vestiges` | 布林 | 殘影（只能當合成材料或出售的 5 個飾品，自成一類，不是泛用飾品，見 [03](03-decisions.md) 第 13 節）可以出售，仍受 `sell_max_tier` 限制；不管 `keywordless` 怎麼設。殘影一律當合成材料（V 階除外），要保留某個殘影就把它加進 `keep_gifts` | 關 | #161 |
+| 合成條件 | `fusion_condition` | 字串 | `any` 材料夠就合（能升階的組合先合，再合出材料能做到的最高階）／`upgrade` 合出的階級比這組材料的最高階還高才合／`tier4` 只在能合出 IV 級時才合。階級由材料點數算出（[03](03-decisions.md) 第 13 節），不花星光；不合成的材料照一般規則仍可能被出售。GUI 的名稱（使用者 2026-10-22 定案）：任意合成／升階才合／只合 IV，英文 Any／Upgrades only／Tier IV only | `any` | #263 |
 | 商店保留的飾品 | `keep_gifts` | 陣列，不重複 | 商店不拿去合成也不出售的飾品 `[{"keyword", "tier", "name"}, …]`，格式同 `gift_search.gifts`，不限個數；觀測表裡的飾品用 Gift Search 圖示比對認出；另外可以放 5 個殘影（`$defs/vestige`，階級 1–5），也用圖示認出 | `[]` | #77 |
 | 觀測飾品 | `gift_search` | 物件 | `{"enabled": 布林, "gifts": [{"keyword", "tier", "name"}, …]}`：開關，與依優先順序排列、不重複、最多 3 個的飾品清單。`keyword` 是觀測頁的分頁（主要體系的 10 個值加 `Keywordless`），`tier` 是 1–3，`name` 是遊戲顯示的英文名 | `{"enabled": false, "gifts": []}` | #54 |
 
@@ -211,7 +213,7 @@
 - 試煉風險權重用於 Boss 後的選擇評分：飾品分數 − 權重 × 試煉風險。（#17）
 - 開局連續防禦的做法、失敗時的退路與 Agent 重啟後的處理見 [03-decisions.md](03-decisions.md#8-戰鬥) 第 8 節。（#52）
 - 觀測飾品花的是持有的星光；在 GUI 選了飾品就表示同意花費；遊戲一次最多觀測 3 個（觀測表只有 1／2／3 個的價格 70／160／270），所以清單最多 3 個：GUI 選滿後其餘飾品停用，schema 的 `gifts` 為 `maxItems: 3`，Agent 也以 3 為上限。舊設定超過 3 個時不默默丟掉，而是驗證報錯，使用者自己移除多的才能儲存（2026-10-16 使用者確認同意花費，#63）。選取規則見 [03-decisions.md](03-decisions.md#5-初始飾品與-gift-search) 第 5 節。（#54）
-- GUI 的觀測飾品區塊預設收合，和遊戲的觀測頁一樣分體系分頁、III／II／I 三段；點飾品加到清單最後，再點一次移除，清單可拖曳排序。飾品列表是 `assets/resource/base/data/gift_search.json`（320 個）：清單、id、等級與英文名取自遊戲客戶端 1.117.0 靜態資料的觀測表 `mirror-dungeon-egogift-observation-data-md8`（分頁順序即表的 `uiKeyword` 順序；表裡等級空白的用 `ego-gift*.json` 的 `TIER_n` 標籤補上；英文名來自 `EN_EGOgift_*` 在地化檔），依等級 III → I、表內順序排列；中文名依 id 取自灰機 wiki（見 `NOTICE.md`），wiki 還沒收錄的 8 個只有英文名。2026-10-16 實機逐格點過整頁對照：順序與等級一致，只有 5 個沒出現在頁面上（見 [02-screens.md](02-screens.md#ego-gift-search-頁的版面)）。換季時要依新的觀測表重新產生。（#54）
+- GUI 的觀測飾品區塊預設收合，和遊戲的觀測頁一樣分體系分頁、III／II／I 三段；點飾品加到清單最後，再點一次移除，清單可拖曳排序。飾品列表是 `assets/resource/base/data/gift_search.json`（320 個）：清單、id、等級與英文名取自遊戲客戶端 1.117.0 靜態資料的觀測表 `mirror-dungeon-egogift-observation-data-md8`（分頁順序即表的 `uiKeyword` 順序；表裡等級空白的用 `ego-gift*.json` 的 `TIER_n` 標籤補上；英文名來自 `EN_EGOgift_*` 在地化檔），依等級 III → I、表內順序排列；中文名依 id 取自都市零漢化組（LLC）的 release（`tools/llc_text.py`，見 `NOTICE.md`）。2026-10-16 實機逐格點過整頁對照：順序與等級一致，只有 5 個沒出現在頁面上（見 [02-screens.md](02-screens.md#ego-gift-search-頁的版面)）。換季時要依新的觀測表重新產生。（#54）
 - 刷新次數記在 Agent 記憶體，以層為單位，不存檔。（#10）
 - 預留金額適用於所有花費：治療、購買、刷新。（#10、#19）
 - 每支隊伍在 GUI 有「重置時間記錄」按鈕，見第 12 節。（#14、#19，2026-10-14 定案）

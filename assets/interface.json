@@ -9,7 +9,7 @@
     "label": "$maalc",
     "github": "https://github.com/EnderWolf50/maalc",
     "version": "v0.0.0",
-    "license": "MIT",
+    "license": "PolyForm-Noncommercial-1.0.0",
     "controller": [
         {
             "name": "MuMu",

@@ -24,6 +24,7 @@ import battle
 import gift_search
 import hub_text
 import map_route
+import pack_cover
 import recovery
 import rewards
 import run_start
@@ -100,6 +101,16 @@ def until(context, done, timeout=2.0, least=0.0, every=0.2):
 def shows(context, roi, pattern, flags=re.I):
     """A done(image) for until(): the OCR text in roi matches pattern."""
     return lambda image: re.search(pattern, normalize(text(context, image, roi)), flags) is not None
+
+
+def gone(context, spec, image):
+    """A done(image) for until(): the words of spec ({"roi", "expected"}) that matched in image read there no more.
+
+    Their own words, not the whole pattern: ClaimPopup's Rewards Acquired turns into Pass Level Up, which the same
+    pattern matches. Nothing matching in image: nothing to wait for, done at once.
+    """
+    found = re.search(spec["expected"], normalize(text(context, image, spec["roi"])), re.I)
+    return lambda image: found is None or found[0] not in normalize(text(context, image, spec["roi"]))
 
 
 def tap_then(context, x, y, done, timeout=2.0):
@@ -577,15 +588,22 @@ class Halt(CustomAction):
 class TapUntil(CustomAction):
     """A Click node that waits for the page that follows instead of a post_delay (#115).
 
-    Param: {"target": [x, y, w, h], "next": {"roi": [...], "expected": regex} or a list of them (any), "timeout": s (default 3)}.
+    Param: {"target": [x, y, w, h], "next": {"roi": [...], "expected": regex} or a list of them (any),
+    "gone": {"roi": [...], "expected": regex}, "timeout": s (default 3)}; "next" or "gone" or both, the first to hold ends it.
     The page it leaves may still read like itself for a moment; MirrorHub would act on it twice.
+    gone: the node's own roi and expected (#254), for a page whose next one is not known or reads the same (ClaimPopup).
     """
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         p = json.loads(argv.custom_action_param)
         x, y, w, h = p["target"]
-        pages = [shows(context, n["roi"], n["expected"]) for n in (p["next"] if isinstance(p["next"], list) else [p["next"]])]
-        tap_then(context, x + w // 2, y + h // 2, lambda im: any(page(im) for page in pages), timeout=p.get("timeout", 3))
+        nxt = p.get("next", [])
+        pages = [shows(context, n["roi"], n["expected"]) for n in (nxt if isinstance(nxt, list) else [nxt])]
+        if "gone" in p:
+            pages.append(gone(context, p["gone"], screen(context)))
+        began = time.monotonic()
+        changed = tap_then(context, x + w // 2, y + h // 2, lambda im: any(page(im) for page in pages), timeout=p.get("timeout", 3))
+        log(f"{argv.node_name}: {'screen changed' if changed is not None else 'no change'} after {time.monotonic() - began:.1f} s")
         return True
 
 
@@ -1125,12 +1143,8 @@ def theme_pack_plan(settings, team):
 
 
 def pack_titles(context, image):
-    """Cards left to right as (x centre, [text lines top to bottom]).
-
-    All-caps lines are CAUTION stamps or CLEAR BONUS, never a title; the LIMBUS COMPANY logo
-    above the title may still slip in as the top line (run_start.match_card drops it).
-    """
-    return columns([r for r in ocr(context, image, PACK_TITLES) if re.search(r"[a-z]", r[0])])
+    """Cards left to right as (x centre, [text lines top to bottom]); see run_start.pack_cards."""
+    return run_start.pack_cards(ocr(context, image, PACK_TITLES))
 
 
 def columns(results):
@@ -1158,6 +1172,7 @@ class PickThemePack(CustomAction):
             return True  # page fading in or out: let MirrorHub look again
         floor = int(m[1])
         if floor != RUN.get("floor"):
+            RUN.pop("after_shop", None)
             RUN.update(floor=floor, map_misses=0)  # a new floor's map gets a fresh retry quota (spec 06)
             restart_floor_clock()
         want = None if run["difficulty"] is None else run_start.hard_wanted(floor, run["difficulty"] == "hard", run["team"]["hard_from_floor"])
@@ -1172,15 +1187,18 @@ class PickThemePack(CustomAction):
             settled = still(context, timeout=CARDS_SETTLE, roi=PACK_CARDS, runs=2)
             if settled is None:
                 log(f"floor {floor}: the cards still moved after {CARDS_SETTLE:g} s")
-            cards = pack_titles(context, page_guard(context, "ThemePack", settled))
+            page = page_guard(context, "ThemePack", settled)
+            cards = pack_titles(context, page)
             if not cards:
                 return stuck("no theme pack titles read")
-            ranked = run_start.rank_packs([lines for _, lines in cards], names, plan, title_art)
-            slots = run_start.event_slots(floor, [t for t, _ in ranked], event_packs, packs)
+            ranked = run_start.rank_packs([lines for _, lines in cards], names, plan, title_art,
+                                          lambda i, allowed: pack_cover.read_cover(page, cards[i][0], allowed))
+            slots = run_start.event_slots(floor, [t for t, _, _ in ranked], event_packs, packs)
             log(f"floor {floor} packs, threshold {plan['threshold']}: "
-                + ", ".join(f"{t} ({w}{', event' if e else ''})" for (t, w), e in zip(ranked, slots)))
-            titles = [t for t, _ in ranked]
-            i, meets = run_start.pick_pack([w for _, w in ranked], slots, plan)
+                + ", ".join(f"{t} ({w}{', event' if e else ''})" for (t, w, _), e in zip(ranked, slots)))
+            log(f"floor {floor} card reads: " + ", ".join(f"{t} <- {how}" for t, _, how in ranked))  # #274: which path named each card
+            titles = [t for t, _, _ in ranked]
+            i, meets = run_start.pick_pack([w for _, w, _ in ranked], slots, plan)
             if not run_start.refresh_wanted(meets, setting, used) or titles == seen:
                 break
             seen = titles
@@ -1404,6 +1422,7 @@ def enter_node(context):
         if until(context, lambda im: not seen(context, im, "MapNodePanel")) is not None:
             log("entered the node")
             RUN.pop("fresh_floor", None)
+            RUN.pop("after_shop", None)
             until(context, lambda im: not seen(context, im, "MirrorMap"), timeout=3)  # the map fades out
             return True
     return stuck("Enter on the node panel did nothing")
@@ -1473,14 +1492,15 @@ class RouteMap(CustomAction):
             bx, by = bus or BUS_REST
             slots = self.read_slots(context, image, bx, by) if bus else {}
         log("map: column 1: " + (", ".join(f"{r} {t} ({'?' if n is None else n} onward)" for r, (t, n) in slots.items()) or "no linked slot read"))
+        if slots and RUN.get("after_shop"):  # #279: the page handled last was the shop, so the only node to take is the boss
+            if changed := map_route.boss_after_shop({"bus": ("shop", None)}, slots):
+                log(f"map: left the shop; column 1 {', '.join(changed)} read as something else than the boss")
+            else:
+                log("map: left the shop; column 1 is the boss")
         ahead = self.read_ahead(context, image, bx + SLOT[0], by + SLOT[1], slots) if slots else []
         if slots and not RUN.get("floor_hard"):  # #202: the rest of the floor, two columns a drag; a HARD map does not pan (#129)
             ahead, bus = self.read_on(context, image, bus, slots, ahead)
             bx, by = bus or BUS_REST
-        read = [t for column in (slots, *ahead) for t, _ in column.values()]
-        map_route.shop_before_boss(slots, ahead)  # #146: the shop's icon takes the theme pack's colours
-        if read != [t for column in (slots, *ahead) for t, _ in column.values()]:
-            log("map: the column before the boss is the shop")
         weights = map_weights(context)
         order = map_route.rank(slots, weights, ahead)
         steps = None
@@ -1668,7 +1688,7 @@ class RouteMap(CustomAction):
             return False
         bx, by = bus
         cx, cy = bx + SLOT[0], by + SLOT[1] + map_route.ROW_DY[row]
-        kind = node_at(context, image, cx, cy)
+        kind = "boss" if RUN.get("after_shop") else node_at(context, image, cx, cy)  # #279: the shop was the last page
         if kind != node:
             log(f"map: planned {row} {node} reads {kind}; reading the map again")
             return False
@@ -1689,10 +1709,13 @@ class RouteMap(CustomAction):
         only rows next to each other link. Every node leads on, so one with no link read onward takes its brightest
         (map_route.FAINT_LINK, #212). A node up to MAP_NEAR is typed by its Cost too, past it by its marks (#238).
         The read ends at the screen's edge, at a column with nothing linked or dark (no mark and no light on any
-        node: hard mode shows two columns), or after the boss. first: the first column's number, for the log.
+        node: hard mode shows two columns), or after the boss: none at all when before holds it (#279), and none past
+        the column after a shop (map_route.boss_after_shop). first: the first column's number, for the log.
         """
         dx, dy = map_route.COLUMN_DX, map_route.ROW_DY
         v, ahead = image.max(axis=2), []
+        if any(t == "boss" for t, _ in before.values()):  # #279: its red glow reads 7.7-12.4 towards the next column, as a faint link
+            return ahead
         while x + dx + 80 <= 1200:  # MapNodeFocusedHex reads 80 px either side; buttons from x 1205
             x += dx
             column, lit = {}, False
@@ -1706,10 +1729,16 @@ class RouteMap(CustomAction):
                     # A node with no mark may still be lit: a red pack's dim "?" (live 2026-10-18) reads 48-60
                     # here; hard mode's dark columns read 0.
                     lit = lit or bool(marks) or np.percentile(v[ry - 45:ry + 45, x - 45:x + 45], 90) >= 20
-            if not lit:
+            if not lit and not (column and any(t == "shop" for t, _ in before.values())):  # #279: the boss after a shop may read dark
                 break
+            n = first + len(ahead)
+            glow = [row for row, (t, _) in column.items() if t == "boss"]
+            if changed := map_route.boss_after_shop(before, column):  # #279: the shop decides, the boss' glow only helps
+                log(f"map: column {n}: after the shop, so the boss; {', '.join(changed)} read as something else")
+            elif glow and not any(t == "shop" for t, _ in before.values()):
+                log(f"map: column {n}: the boss' glow without a shop before it")
             ahead.append(column)
-            RouteMap.log_column(first + len(ahead) - 1, column)
+            RouteMap.log_column(n, column)
             if any(t == "boss" for t, _ in column.values()):
                 break
             before = column
@@ -1721,9 +1750,12 @@ class RouteMap(CustomAction):
 
     @staticmethod
     def retype(context, image, column, x, y, n):
-        """Type column n, read from afar, again by its Cost now that it sits at x, up to MAP_NEAR (in place)."""
-        for row, (_, linked) in column.items():
-            column[row] = (node_at(context, image, x, y + map_route.ROW_DY[row]), linked)
+        """Type column n, read from afar, again by its Cost now that it sits at x, up to MAP_NEAR (in place).
+
+        The boss stays one: it was told by the shop before it (#279), a dark one reads as an event here.
+        """
+        for row, (kind, linked) in column.items():
+            column[row] = (kind if kind == "boss" else node_at(context, image, x, y + map_route.ROW_DY[row]), linked)
         RouteMap.log_column(n, column)
 
     @staticmethod
@@ -1797,6 +1829,8 @@ CLEAR_SELECTION = (1145, 479)
 RESET_DIALOG = [450, 330, 380, 35]  # Clear Selection asks "Reset Deployment Order?"
 RESET_CONFIRM = (767, 497)
 TO_BATTLE = (1145, 588)
+PICK_RETAP = 1.0  # s; a card tap that has not raised the count by then is tapped again (the old fixed wait guessed a tap within ~1 s of the last is lost, #253)
+PICK_SETTLE = 1.5  # s; after a repeated tap the count is watched this long for a fall back: the first tap may have taken late (#253: the count showed 0.3-1.2 s after a tap, recordings, unverified)
 
 
 def card_xy(i, ys):
@@ -1894,35 +1928,67 @@ class Formation(CustomAction):
 
     @staticmethod
     def pick(context, order):
-        """Clear Selection, then tap the order card by card, each tap checked by the count going up by one."""
-        def count_reaches(n):
-            for _ in range(6):
-                count = participants(context, screen(context))
-                if count and count[0] == n:
-                    return True
-                time.sleep(0.5)
-            return False
+        """Clear Selection, then tap the order card by card, each tap checked by the count going up by one (#253).
 
+        Every tap is followed at once by until()'s looks at the count. A card whose count was read but is not n after
+        PICK_RETAP s is tapped again. A second tap on a card that took the first one picks it off, so after a repeated
+        tap the count is watched PICK_SETTLE s for a fall back, which is one more tap (the repeats wait PICK_SETTLE s
+        for the count too); once that fall back shows, the later cards wait PICK_SETTLE s for their first tap as well.
+        A count that could not be read for the whole wait (a page still moving) is waited for once more before the
+        card is tapped again. Two taps after which the count was not n end the pick as stuck, for recovery.
+        """
+        def count_is(n, seen=None):
+            def done(image):
+                count = participants(context, image)
+                if count and seen is not None:
+                    seen.append(count[0])
+                return count is not None and count[0] == n
+            return done
+
+        def fell_from(n):
+            return lambda image: (count := participants(context, image)) is not None and count[0] != n
+
+        dialog = []
+
+        def cleared(image):
+            dialog[:] = [has(text(context, image, RESET_DIALOG), "Reset Deployment")]
+            return dialog[0] or count_is(0)(image)
+
+        start, retaps, first_wait = time.monotonic(), 0, PICK_RETAP
         for _ in range(3):
             page_guard(context, "Formation")
-            tap(context, *CLEAR_SELECTION, wait=1.5)
-            if has(text(context, screen(context), RESET_DIALOG), "Reset Deployment"):
-                tap(context, *RESET_CONFIRM)
-            if count_reaches(0):
+            image = tap_then(context, *CLEAR_SELECTION, cleared, timeout=1.5)
+            if image is not None and dialog[0]:
+                image = tap_then(context, *RESET_CONFIRM, count_is(0), timeout=3)
+            if image is not None:  # the count 0 it waited for
                 break
         else:
             stuck("Clear Selection did not clear the formation")
             return False
         for n, sinner in enumerate(order, 1):
-            for _ in range(2):  # a tap within ~1 s of the last one can be lost
+            picked, misses = False, 0  # taps (3 at most) after which the count was not n, 2 of them end the pick
+            for attempt in range(3):
                 page_guard(context, "Formation")
-                tap(context, *card_xy(battle.SINNERS.index(sinner), CARD_TAP_Y), wait=1.2)
-                if count_reaches(n):
+                seen = []
+                done = count_is(n, seen)
+                wait = first_wait if attempt == 0 else PICK_SETTLE  # a repeat has nothing to gain by hurrying
+                image = tap_then(context, *card_xy(battle.SINNERS.index(sinner), CARD_TAP_Y), done, timeout=wait)
+                if image is None and not seen:
+                    image = until(context, done, timeout=wait)
+                if image is not None:
+                    if attempt == 0 or until(context, fell_from(n), timeout=PICK_SETTLE) is None:
+                        picked = True
+                        break
+                    first_wait = PICK_SETTLE  # a tap took late: the next cards' first taps wait as long
+                retaps += 1
+                misses += image is None
+                if misses == 2:
                     break
-            else:
+            if not picked:
                 stuck(f"tapping {sinner} did not pick them")
                 return False
         log(f"formation re-picked: {', '.join(order)}")
+        log(f"formation pick took {time.monotonic() - start:.1f} s, {retaps} taps repeated")
         return True
 
 
@@ -2957,15 +3023,17 @@ def cell_at(context, grid, cell):
     return x, y + k
 
 
-def fusions(cells, roles, slots, avoid):
+def fusions(cells, roles, slots, avoid, condition="any"):
     """shop.pick_fusion over the cells whose role is material and whose tier is read: [([cell index], tier)] (#77).
 
-    The thresholds are the Super Shop's when the page has its 5 slots; an avoided gift goes in first (#90).
+    The thresholds are the Super Shop's when the page has its 5 slots; an avoided gift goes in first (#90); condition
+    is the team's fusion_condition (#263).
     """
     d = data("shop.yaml")
     materials = [(c["i"], c["tier"]) for c, r in zip(cells, roles) if r == "material" and c["tier"]]
     tiers = d["fusion_tiers"]["super_shop" if slots == 5 else "shop"]
-    return shop.pick_fusion(materials, slots, tiers, d["fusion_points"], {c["i"] for c in cells if c["gift"] in avoid})
+    return shop.pick_fusion(materials, slots, tiers, d["fusion_points"], {c["i"] for c in cells if c["gift"] in avoid},
+                            condition)
 
 
 def tap_keyword(context, keyword):
@@ -3003,7 +3071,11 @@ class Shop(CustomAction):
         team = current_run(context)["team"]
         if not self.to_main(context):
             return True  # a page fading in or out: let MirrorHub look again
+        RUN["after_shop"] = True  # #279: the next map's only node is the boss; cleared by the next node entered
         visit = RUN.setdefault("shop", {"healed": False, "refreshes": 0, "wanted": None, "sold": False})
+        # The sale groups by the fuse page's slots and thresholds before that page was read: a Super Shop's red title tells (#263).
+        if "slots" not in visit:
+            visit["slots"] = 5 if shop.is_super(screen(context)) else 3
         if not visit["healed"]:
             visit["healed"] = True  # first: a heal handed back mid-way (#118) is not paid twice
             self.heal(context, team)
@@ -3288,9 +3360,9 @@ class Shop(CustomAction):
         fuse_only = [c["i"] for c, r in zip(cells, roles)
                      if (r == "keep" and cell_role(c, team, "fuse", avoid) == "material") or (r == "material" and not c["price"])]
         # The fusion is grouped without the avoided gifts, which are sold first (#90): a sale then breaks no group.
-        # ponytail: a Super Shop's 5 slots are known once its fuse page was read; 3 until then.
         materials = [c for c in cells if (c["i"] in dict(gifts) or c["i"] in fuse_only) and c["i"] not in avoided]
-        fused = {i for group, _ in fusions(materials, ["material"] * len(materials), visit.get("slots", 3), ()) for i in group}
+        condition = team.get("fusion_condition", "any")  # a group the condition refuses makes no fusion: its gifts are spare
+        fused = {i for group, _ in fusions(materials, ["material"] * len(materials), visit.get("slots", 3), (), condition) for i in group}
         # Up to the team's sell_max_tier only (#161); an unread tier may be a V: not sold.
         tiers, top = {c["i"]: c["tier"] for c in cells}, team.get("sell_max_tier", 4)
         spare = [g for g in gifts if g[0] not in fused and (tiers[g[0]] or 9) <= top]
@@ -3366,10 +3438,11 @@ class Shop(CustomAction):
         cells, grid = owned_cells(context, "fuse", kept_icons(team) + avoided_gifts(team) + VESTIGE_ICONS)
         roles = [cell_role(c, team, "fuse", avoid) for c in cells]
         log(f"shop: fuse cells ({slots} slots) " + "; ".join(cell_line(c, r) for c, r in zip(cells, roles)))
-        picks = fusions(cells, roles, slots, avoid)
+        condition = team.get("fusion_condition", "any")
+        picks = fusions(cells, roles, slots, avoid, condition)
         if not picks:
             visit["fuse_scanned"] = True
-            log(f"shop: {roles.count('material')} materials on show, a fusion takes {shop.MIN_FUSION}")
+            log(f"shop: {roles.count('material')} materials on show, a fusion takes {shop.MIN_FUSION}" + ("" if condition == "any" else f", and none meets the condition {condition}"))
             Shop.to_main(context)
             return False
         group, tier = picks[0]
@@ -3384,7 +3457,7 @@ class Shop(CustomAction):
             if m and int(m[1]) == len(group):
                 tap(context, 788, 583, wait=0)  # the dialog's Confirm; gift_get waits for its GET!
                 fused = gift_get(context)
-            log(f"shop: fuse {materials} into a tier {tier} {keyword} gift: {'done' if fused else 'not confirmed'}")
+            log(f"shop: fuse {materials} into a tier {tier} {keyword} gift (condition {condition}): {'done' if fused else 'not confirmed'}")
         # Unconfirmed or not read back: not the same scan again until the owned gifts change (#103).
         visit["fuse_scanned"] = not fused
         Shop.to_main(context)

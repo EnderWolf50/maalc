@@ -17,6 +17,7 @@ from maa.define import Rect
 
 import actions
 import recovery
+from test_shop import OLD_DOLL_SHOP
 
 REAL_GUARD = actions.page_guard
 SCREENS = Path(__file__).resolve().parent / "screens"
@@ -496,20 +497,6 @@ def test_the_bus_is_dragged_to_the_far_left_and_the_cheapest_path_over_four_colu
     assert first == (446 - offsets[-1] + actions.SLOT[0], actions.BUS_HOME[1] + actions.SLOT[1] + 213)  # the bottom row's battle
 
 
-def test_the_node_before_the_boss_is_a_shop_whatever_its_mark_reads(context, monkeypatch):
-    # #146 (live 2026-10-18, cyan and orange packs): bus, a shop none of whose templates matched, the boss.
-    monkeypatch.setattr(actions, "map_weights", lambda context: {**WEIGHTS, "shop": 0, "boss": 0})
-    logs = []
-    monkeypatch.setattr(actions, "log", logs.append)
-    actions.RUN["floor"] = 1
-    nodes = {(1, "mid"): set(), (2, "mid"): {"boss"}}
-    map_world(context, nodes, [((1, "mid"), (2, "mid"))], bus_x=actions.BUS_HOME[0])
-    actions.RouteMap().run(context, None)
-    assert "map: the column before the boss is the shop" in logs
-    assert actions.RUN["map_plan"] == {"floor": 1, "steps": [("mid", "boss")]}
-    assert any(line.startswith("map: path mid shop > mid boss") for line in logs)
-
-
 def test_two_columns_on_a_hard_floor_take_the_cheapest_path(context, monkeypatch):
     # Hard mode shows two columns; nothing past them is lit to read.
     monkeypatch.setattr(actions, "map_weights", lambda context: WEIGHTS)
@@ -848,6 +835,18 @@ def test_offers_are_read_once_and_bought_high_tier_first_from_the_back(context, 
     assert costs[-1] == 50 and visit["wanted"] is None
 
 
+def test_a_glyph_on_an_offers_icon_opens_no_purchase_dialog(context, monkeypatch):
+    # #216, live 2026-10-22: a "3" read in Old Wooden Doll's icon corner made a slot priced 3 named '214' whose cell
+    # (read_cells found no badge) was opened to read its keyword. Skill slot first, the glyph, four gifts.
+    context.tasker.controller.post_screencap.return_value.wait.return_value.get.return_value = np.zeros((720, 1280, 3), np.uint8)
+    reads(context, {tuple(actions.OFFER_GRID): OLD_DOLL_SHOP, tuple(actions.SHOP_COST): [("787", (560, 120, 60, 30))]})
+    cells_read(monkeypatch, ("Burn", None, 2), ("Bleed", None, 2), ("Pierce", None, 2), ("Blunt", None, 2))
+    visit = {"wanted": None, "sold": False}
+    assert actions.Shop.buy_offers(context, {"keyword": "Keywordless", "reserve_cost": 0}, visit) == 0
+    assert not context.tasker.controller.post_click.called  # no cell opened to read its keyword
+    assert visit["wanted"] is None
+
+
 def test_an_offer_with_a_red_price_is_not_tapped_though_ocr_read_it_as_affordable(context, monkeypatch):
     # Live 2026-10-18: 106 Cost, Emerald Elytra's red 160 read as 16 and its Not Enough Cost tag not at all: it was
     # tapped and opened no purchase dialog. The cell's red says the Cost is short.
@@ -863,14 +862,14 @@ def test_an_offer_with_a_red_price_is_not_tapped_though_ocr_read_it_as_affordabl
     assert visit["wanted"] is None
 
 
-def sale_taps(context, monkeypatch, team, prices, *readings):
+def sale_taps(context, monkeypatch, team, prices, *readings, slots=None):
     """Shop.sell with 100 Cost and a 180 wanted, readings (cells_read) priced prices on the grid: the cells it tapped."""
     lines = [(str(p), (x - 3, y + 37, 26, 20)) for p, (x, y) in zip(prices, actions.SELL_CELLS)]
     reads(context, {tuple(actions.DIALOG_TITLE): [("Sell E.G.O Gift", (500, 90, 200, 40))],
                     tuple(actions.SELL_COST): [("100", (980, 90, 60, 30))], tuple(actions.SELL_GRID): lines})
     cells_read(monkeypatch, *readings)
     actions.Shop.sell(context, {"keyword": "Burn", "reserve_cost": 0, "gift_search": {"gifts": []}, **team},
-                      {"wanted": 180, "sold": False})
+                      {"wanted": 180, "sold": False, **({"slots": slots} if slots else {})})
     return [c.args for c in context.tasker.controller.post_click.call_args_list if c.args in actions.SELL_CELLS]
 
 
@@ -943,6 +942,57 @@ def test_a_sale_counts_the_fusion_materials_it_may_not_sell(context, monkeypatch
     # Tremor fuse with it, so neither is sold. Neither is opened (#161).
     taps = sale_taps(context, monkeypatch, team, [90, 95, 60], ("Bleed", None), ("Tremor", None), ("Keywordless", gift, 1))
     assert taps == []
+
+
+@pytest.mark.parametrize("condition, sold", [("any", 3), ("upgrade", 0), ("tier4", 0)])
+def test_a_sale_counts_only_the_fusions_the_condition_makes(context, monkeypatch, condition, sold):
+    # #263: four tier I (9 points: a I, no upgrade, no IV). By "any" three fuse and the fourth, the 90 that covers
+    # the price, goes; by the others none fuses, so the dearest (300) goes.
+    taps = sale_taps(context, monkeypatch, {"fusion_condition": condition}, [300, 60, 70, 90],
+                     *[(k, None, 1) for k in ("Bleed", "Tremor", "Pierce", "Slash")])
+    assert taps == [actions.SELL_CELLS[sold]]
+
+
+@pytest.mark.parametrize("slots, condition, sells", [
+    (None, "any", 3), (5, "any", 3),
+    (None, "tier4", 0), (3, "tier4", 0), (5, "tier4", 3),
+    (None, "upgrade", 0), (3, "upgrade", 0), (5, "upgrade", 3),
+])
+def test_a_sale_groups_by_the_slots_and_thresholds_of_the_shop(context, monkeypatch, slots, condition, sells):
+    # #263: III + III + I is 23 points: a III in a shop, a IV in a Super Shop. Where the condition refuses it (tier4 and
+    # upgrade in a shop) nothing fuses and the dearest gift (cell 0, 300) goes; where it holds, the Bleed I left over (cell
+    # 3, 90) does. A visit that read no fuse page counts a shop's 3 slots.
+    taps = sale_taps(context, monkeypatch, {"fusion_condition": condition}, [300, 60, 70, 90],
+                     ("Bleed", None, 3), ("Tremor", None, 3), ("Pierce", None, 1), ("Slash", None, 1), slots=slots)
+    assert taps == [actions.SELL_CELLS[sells]]
+
+
+@pytest.mark.parametrize("slots, condition, made", [
+    (3, "any", True), (5, "any", True), (3, "upgrade", False), (5, "upgrade", True), (3, "tier4", False), (5, "tier4", True),
+])
+def test_a_fusion_reads_the_tier_by_the_shop_it_is_in(context, monkeypatch, slots, condition, made):
+    # #263: III + III + I (23 points) is a III in a shop and a IV in a Super Shop.
+    fused, taps, _ = fusion_taps(context, monkeypatch, {"fusion_condition": condition}, ("Bleed", None, 3),
+                                 ("Tremor", None, 3), ("Pierce", None, 1), slots=slots)
+    assert fused == made and taps == [int(made)] * 3
+
+
+def test_a_shop_visit_counts_a_super_shops_five_slots_from_its_red_title(context, monkeypatch):
+    # #263: before any fuse page was read, the sale already groups by the Super Shop's table.
+    actions.RUN["team"] = {"heal": "none", "keyword": "Burn", "reserve_cost": 0}
+    monkeypatch.setattr(actions.Shop, "to_main", staticmethod(lambda context: True))
+    seen = []
+
+    def sell(context, team, visit):
+        seen.append(visit["slots"])
+        raise actions.PageGone("Shop")  # ends the visit here: what sell saw is what is asked
+    monkeypatch.setattr(actions.Shop, "sell", staticmethod(sell))
+    for name in ("Shop", "SuperShop"):
+        actions.RUN.pop("shop", None)
+        image = np.asarray(Image.open(SCREENS / f"{name}.png").convert("RGB"))[:, :, ::-1]
+        context.tasker.controller.post_screencap.return_value.wait.return_value.get.return_value = image
+        assert actions.Shop().run(context, argv())
+    assert seen == [3, 5]
 
 
 def test_a_sale_does_not_break_a_fusion_by_selling_white_gossypium(context, monkeypatch):
@@ -1174,6 +1224,47 @@ def test_a_keywordless_gift_the_team_keeps_stays_out_of_the_pick(context, monkey
     assert fused and taps == [0, 1, 1, 1]
 
 
+@pytest.mark.parametrize("condition, made", [(None, True), ("any", True), ("upgrade", False), ("tier4", False)])
+def test_the_fusion_condition_decides_whether_three_tier_i_fuse(context, monkeypatch, condition, made):
+    # #263: three I make a tier I (9 points): no upgrade, no IV. A team with no fusion_condition fuses as before.
+    team = {"fusion_condition": condition} if condition else {}
+    fused, taps, ok = fusion_taps(context, monkeypatch, team, *[("Bleed", None, 1)] * 3)
+    assert (fused, ok, taps) == (made, made, [int(made)] * 3)
+
+
+@pytest.mark.parametrize("condition, taps", [("any", [1, 1, 1]), ("upgrade", [0, 0, 0]), ("tier4", [0, 0, 0])])
+def test_the_fusion_condition_on_a_tier_iii_that_makes_a_tier_iii(context, monkeypatch, condition, taps):
+    # #263: III + II + I is 19 points: a tier III, no better than its III.
+    fused, tapped, _ = fusion_taps(context, monkeypatch, {"fusion_condition": condition},
+                                   ("Bleed", None, 3), ("Tremor", None, 2), ("Pierce", None, 1))
+    assert fused == (condition == "any") and tapped == taps
+
+
+@pytest.mark.parametrize("condition", ["any", "upgrade", "tier4"])
+def test_the_fusion_condition_lets_an_upgrade_to_tier_iv_through(context, monkeypatch, condition):
+    # #263: III + III + II is 26 points: a tier IV, over its III.
+    fused, taps, ok = fusion_taps(context, monkeypatch, {"fusion_condition": condition},
+                                  ("Bleed", None, 3), ("Tremor", None, 3), ("Pierce", None, 2))
+    assert fused and ok and taps == [1, 1, 1]
+
+
+def test_the_upgrade_condition_picks_the_group_that_is_one(context, monkeypatch):
+    # #263: IV + II + II is the most (a IV), no upgrade of its IV; II + II + II (a III) is.
+    fused, taps, _ = fusion_taps(context, monkeypatch, {"fusion_condition": "upgrade"},
+                                 ("Bleed", None, 4), ("Tremor", None, 2), ("Pierce", None, 2), ("Slash", None, 2))
+    assert fused and taps == [0, 1, 1, 1]
+
+
+def test_a_refused_fusion_is_not_read_again_until_the_owned_gifts_change(context, monkeypatch):
+    # #263: the same as a grid that makes none (#62).
+    visit = {}
+    reads(context, FUSE_PAGE)
+    fuse_slots(context, monkeypatch)
+    cells_read(monkeypatch, *[("Bleed", None, 1)] * 3)
+    assert not actions.Shop.fuse(context, {"keyword": "Burn", "gift_search": {"gifts": []}, "fusion_condition": "tier4"}, visit)
+    assert visit["fuse_scanned"]
+
+
 def test_a_super_shop_fuses_up_to_5(context, monkeypatch):
     # #77: 5 tier I make a tier III by the Super Shop's thresholds; its confirm dialog reads 5/5.
     fused, taps, _ = fusion_taps(context, monkeypatch, {}, *[("Bleed", None, 1)] * 5, slots=5, confirm=5)
@@ -1283,6 +1374,49 @@ def test_tap_until_gives_up_after_its_timeout_and_leaves_the_page_to_the_hub(con
     param = {"target": [100, 200, 40, 20], "next": {"roi": [10, 20, 30, 40], "expected": "Next"}, "timeout": 2}
     assert actions.TapUntil().run(context, argv(param))
     assert 2 <= sum(clock) < 2.5
+
+
+CLOSING = {"roi": [600, 440, 80, 35], "expected": "^Continue$"}
+
+
+def test_tap_until_gone_waits_for_the_text_the_tap_closes_to_go(context, clock):
+    # #254: a dialog fades out for a while with its text still readable; the hub would press it again.
+    page(context, {(600, 440, 80, 35): lambda clicks, looks: "Continue" if looks < 4 else None})
+    param = {"target": [600, 440, 80, 35], "gone": CLOSING}
+    assert actions.TapUntil().run(context, argv(param))
+    assert taps(context) == [(640, 457)]
+    assert context.tasker.controller.post_screencap.call_count == 4  # one before the tap, then until()'s looks
+    no_fixed_wait(clock)
+
+
+def test_tap_until_gone_counts_the_next_popup_in_the_same_place_as_gone(context, clock):
+    # ClaimPopup: Rewards Acquired is followed by Pass Level Up in the same roi, both matching the node's expected.
+    roi, both = [500, 225, 280, 50], "Rewards Acquired|Pass Level Up"
+    page(context, {tuple(roi): lambda clicks, looks: "Rewards Acquired" if looks < 3 else "Pass Level Up"})
+    assert actions.TapUntil().run(context, argv({"target": [575, 455, 130, 35], "gone": {"roi": roi, "expected": both}}))
+    assert context.tasker.controller.post_screencap.call_count == 3
+    no_fixed_wait(clock)
+
+
+def test_tap_until_gone_has_nothing_to_wait_for_when_the_text_is_already_gone(context, clock):
+    page(context, {})
+    assert actions.TapUntil().run(context, argv({"target": [600, 440, 80, 35], "gone": CLOSING}))
+    assert taps(context) == [(640, 457)]
+    assert context.tasker.controller.post_screencap.call_count == 2  # the look before the tap, the one after it
+    assert sum(clock) == 0
+
+
+def test_tap_until_gone_gives_up_after_its_timeout(context, clock):
+    page(context, {(600, 440, 80, 35): "Continue"})
+    assert actions.TapUntil().run(context, argv({"target": [600, 440, 80, 35], "gone": CLOSING, "timeout": 2}))
+    assert 2 <= sum(clock) < 2.5
+
+
+def test_tap_until_logs_how_long_the_screen_took(context, clock):
+    # #254: the live run reads the wait from the log; the fixed delay it replaces was never measured.
+    page(context, {(600, 440, 80, 35): lambda clicks, looks: "Continue" if looks < 4 else None})
+    actions.TapUntil().run(context, argv({"target": [600, 440, 80, 35], "gone": CLOSING}, node="ProgressPanel"))
+    assert "ProgressPanel: screen changed after 0.4 s" in actions.LOG[-1]
 
 
 def test_plan_run_waits_for_the_enter_dialog_after_pressing_enter(context, clock, monkeypatch):
@@ -1596,18 +1730,22 @@ def test_a_difficulty_label_not_readable_yet_is_looked_at_again_not_slept_on(con
 REFRESH = (1083, 47)
 
 
-def pack_page(context, monkeypatch, floor, setting, mode):
+def pack_page(context, monkeypatch, floor, setting, mode, covers=None):
     """PickThemePack on a fake floor page of two cards weighing -5 and read as packs the data file lacks (a new pair
-    after each of 4 refreshes; a 5th changes nothing: used up). Returns (refresh taps, log lines)."""
+    after each of 4 refreshes; a 5th changes nothing: used up). Returns (refresh taps, log lines); covers collects the
+    cover reader each page's ranking is handed (#274)."""
     actions.RUN.update(settings={"run": {"theme_pack_refresh": setting}}, team={"hard_from_floor": 0}, difficulty=None)
     plan = {"weights": {}, "threshold": 0, "unlisted": -5, "event_packs": mode}
     art = {"Hello Bus": "S.E.A."}
     monkeypatch.setattr(actions, "theme_pack_plan", lambda settings, team: (plan, [], set(), art))
 
-    def rank_packs(cards, names, plan, title_art):
+    def rank_packs(cards, names, plan, title_art, cover):
         assert title_art is art  # every page, a refreshed one too, gets the data file's title art (#246)
-        return [(c[0], -5) for c in cards]
+        covers.append(cover)
+        return [(c[0], -5, "name") for c in cards]
     monkeypatch.setattr(actions.run_start, "rank_packs", rank_packs)
+    covers = [] if covers is None else covers
+    monkeypatch.setattr(actions.pack_cover, "read_cover", lambda page, x, allowed: ("Cover pack", page, x, allowed))
     lines = []
     monkeypatch.setattr(actions, "log", lines.append)
     taps = []
@@ -1660,11 +1798,26 @@ def test_a_theme_pack_page_below_the_threshold_is_refreshed_as_the_setting_says(
     assert lines[-1] == f"floor 2: pull 'Pack {min(refreshes, 4)}a' (-5, below the threshold)"
 
 
+def test_each_card_of_a_theme_pack_page_is_logged_with_the_path_that_read_it(context, monkeypatch):
+    # #274: which of the paths (name, title_art, keyword, cover N, shared, unread) named each card
+    _, lines = pack_page(context, monkeypatch, 2, "none", "weight")
+    assert "floor 2 card reads: Pack 0a <- name, Pack 0b <- name" in lines
+
+
+def test_the_cover_reader_of_a_theme_pack_page_looks_at_that_pages_card(context, monkeypatch):
+    # #274: rank_packs gets a reader of the page just read: card i's x centre (the 2nd title spans 500-590) on that image
+    covers = []
+    pack_page(context, monkeypatch, 2, "none", "weight", covers)
+    found = covers[0](1, {"Line 1"})
+    assert found[0] == "Cover pack" and found[2] == 545 and found[3] == {"Line 1"}
+    assert found[1].shape == (720, 1280, 3)
+
+
 def test_floor_5s_leftmost_new_pack_is_taken_when_event_packs_are_preferred(context, monkeypatch):
     # #240: a pack the data file lacks, leftmost on floor 5, is a running event's: "prefer" takes it, no refresh.
     used, lines = pack_page(context, monkeypatch, 5, "all", "prefer")
     assert used == 0
-    assert lines[-2:] == ["floor 5 packs, threshold 0: Pack 0a (-5, event), Pack 0b (-5)", "floor 5: pull 'Pack 0a' (-5)"]
+    assert [lines[-3], lines[-1]] == ["floor 5 packs, threshold 0: Pack 0a (-5, event), Pack 0b (-5)", "floor 5: pull 'Pack 0a' (-5)"]
 
 
 def test_a_search_tab_opens_without_fixed_waits(context, clock):
@@ -2383,8 +2536,9 @@ def test_a_shop_visit_left_by_hand_is_handed_back_and_forgotten_at_the_next_node
     monkeypatch.setattr(actions.Shop, "buy", staticmethod(lambda *a: actions.page_guard(context, "Shop")))
     assert actions.Shop().run(context, argv())  # the shop is gone: True for MirrorHub, not a stuck
     assert actions.STUCK["flag"] is None and "shop" in actions.RUN
+    assert actions.RUN["after_shop"]  # #279: the page handled last, so RouteMap's one node is the boss
     actions.enter_node(context)
-    assert "shop" not in actions.RUN
+    assert "shop" not in actions.RUN and "after_shop" not in actions.RUN
 
 
 def test_a_formation_left_mid_pick_taps_no_card(context, guarded):
@@ -2445,6 +2599,15 @@ def test_the_theme_pack_page_reads_its_floor_in_any_case(context, monkeypatch):
     actions.RUN["difficulty"] = None
     actions.PickThemePack().run(context, None)
     assert actions.RUN["floor"] == 3
+
+
+def test_a_new_floor_forgets_the_shop_left_before_the_boss(context, monkeypatch):
+    # #279: the boss' floor ends with the boss; the next floor's first map is read by its marks again.
+    monkeypatch.setattr(actions, "text", lambda *a, **k: "Floor 3")
+    monkeypatch.setattr(actions.PickThemePack, "set_difficulty", lambda *a: False)
+    actions.RUN.update(difficulty=None, floor=2, after_shop=True)
+    actions.PickThemePack().run(context, None)
+    assert actions.RUN["floor"] == 3 and "after_shop" not in actions.RUN
 
 
 def moved(context):

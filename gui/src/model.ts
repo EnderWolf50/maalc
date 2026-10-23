@@ -15,7 +15,7 @@ export const KEYWORDS: string[] = TEAM.keyword.enum;
 export const LEVELS: string[] = schema.$defs.levels.items.enum;
 export const VERSION: number = P.version.const;
 /** Spec 04 section 7: the graces numbered 1-10, English names as the game shows them, Chinese name and
- * effect text from the wiki (graces.json carries its source and license). */
+ * effect text from LLC (graces.json carries its source and license). */
 export const GRACES: Grace[] = graces.graces;
 export const BOOSTS = GRACES.map((g) => g.en);
 export interface Grace { en: string; zh: string; effects: { base: string[]; plus?: string[]; plus2?: string[] } }
@@ -73,7 +73,7 @@ export const SEARCH_TABS: string[] = schema.$defs.gift.properties.keyword.enum;
 /** Vestiges, tier I-V in this order (#161): only fusion or sale material, kept by name in keep_gifts. */
 export const VESTIGES: string[] = schema.$defs.vestige.properties.name.enum;
 /** Spec 04 section 9: the gifts the search page offers, in page order; ids, tiers and English names from the game's
- * static data, Chinese names from the wiki (data/gift_search.json carries its sources and license). */
+ * static data, Chinese names from LLC (data/gift_search.json carries its sources and license). */
 export const SEARCH_GIFTS: SearchGift[] = gifts.gifts;
 export interface SearchGift { id: number; keyword: string; tier: number; en: string; zh: string }
 
@@ -154,6 +154,7 @@ export interface Team {
   reserve_cost: number; min_alive: number; guard_turns: number; trial_risk_weight: string;
   gift_search: { enabled: boolean; gifts: GiftRef[] }; allow_white_gossypium: boolean;
   keep_keywords: string[]; keywordless: string; keep_gifts: GiftRef[]; sell_max_tier: number; sell_vestiges: boolean;
+  fusion_condition: string;
 }
 /** A gift on the E.G.O Gift Search page: its keyword tab, tier and English name (spec 04 section 9). */
 export interface GiftRef { keyword: string; tier: number; name: string }
@@ -248,6 +249,8 @@ const MIGRATIONS: Record<number, (d: Record<string, unknown>) => Record<string, 
       return { ...rest, weights, threshold: 0, unlisted: 0, event_packs: "weight" };
     }) : d.theme_pack_plans,
   }),
+  // Version 10 adds teams[].fusion_condition (#263), "any": the shop fuses as before.
+  9: (d) => withTeamDefault(d, { fusion_condition: "any" }),
 };
 
 const MARK_WEIGHTS: Record<string, number> = { prefer: 5, neutral: 0, avoid: -5 };

@@ -38,8 +38,8 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
   const team = s.teams[i];
   const path = `teams/${i}`;
   const set = (patch: Partial<Team>) => update((d) => { Object.assign(d.teams[i], patch); });
-  const pick = (field: "heal" | "trial_risk_weight") => (
-    <Field label={t(`team.${field}`)} path={`${path}/${field}`}>
+  const pick = (field: "heal" | "trial_risk_weight" | "fusion_condition") => (
+    <Field label={t(`team.${field}`)} path={`${path}/${field}`} note={field === "fusion_condition" ? t("team.fusion_condition_note") : undefined}>
       <Select value={team[field]} options={teamEnum(field)} label={(v) => tv(field, v)} onChange={(v) => set({ [field]: v })} />
     </Field>
   );
@@ -170,6 +170,7 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
           <Field label={t("team.shop_refresh_limit")} path={`${path}/shop_refresh_limit`}>
             <Num value={team.shop_refresh_limit} min={0} onChange={(v) => set({ shop_refresh_limit: v })} />
           </Field>
+          {pick("fusion_condition")}
           <Field label={t("team.theme_pack_plan")} path={`${path}/theme_pack_plan`}>
             <select value={team.theme_pack_plan} onChange={(e) => set({ theme_pack_plan: e.target.value })}>
               <option value="default">{t("defaultPlan")}</option>

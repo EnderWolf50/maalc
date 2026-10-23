@@ -3,7 +3,9 @@
 actions.py reads the screen and taps; everything here is plain data in, plain data out.
 """
 
+import re
 from difflib import SequenceMatcher
+from functools import lru_cache
 
 from ocrtext import compact
 
@@ -128,6 +130,85 @@ def title_candidates(text, names, min_ratio=0.8):
     return [name for score, name in found if found[0][0] - score < 1]
 
 
+KEYWORD_MIN = 4  # letters; a shorter fragment turns up in OCR noise
+KEYWORD_RATIO = 0.85  # a keyword of 4 to 6 letters must read exactly; from 7 letters on, one slip passes
+
+
+@lru_cache(maxsize=8)
+def _keywords(names):
+    compacts = {n: compact(n) for n in names}
+    out = {}
+    for name in names:
+        c = compacts[name]
+        words = sorted((compact(w) for w in re.split(r"[\W_]+", name)), key=len)
+        stretches = [c[i:i + n] for n in range(KEYWORD_MIN, len(c) + 1) for i in range(len(c) - n + 1)]
+        # a word first (OCR reads a word whole or not at all), else the shortest stretch of the name
+        for found in ([w for w in words if len(w) >= KEYWORD_MIN], stretches):
+            unique = [k for k in found if not any(k in other for n, other in compacts.items() if n != name)]
+            if unique:
+                out[name] = unique[0]
+                break
+    return out
+
+
+def pack_keywords(names):
+    """{pack name: its keyword} (#274): the shortest word of the name, or else the shortest stretch of it, of at least
+    KEYWORD_MIN letters and digits that no other name contains. A name whose every stretch another contains has none."""
+    return _keywords(tuple(sorted(set(names))))
+
+
+def match_keyword(text, names):
+    """The one pack whose keyword shows in text (letters and digits only), else None.
+
+    For a card whose whole title did not match (match_title): a half-read title still holds the word that sets its pack
+    apart. A keyword read exactly wins; two of them in one text is None. With none exact, a slip is allowed in a long
+    one (KEYWORD_RATIO), and the keyword covering the most letters wins, "crushers" over "crushed".
+    """
+    keywords = pack_keywords(names)
+    key = compact(text)
+    exact = [n for n, k in keywords.items() if k in key]
+    if exact:
+        return exact[0] if len(exact) == 1 else None
+    by_keyword = {k: n for n, k in keywords.items()}
+    found = title_candidates(text, list(by_keyword), KEYWORD_RATIO)
+    return by_keyword[found[0]] if len(found) == 1 else None
+
+
+CARD_GAP = 15  # px between two OCR boxes of one card's text; adjacent cards' texts sit 25+ px apart (pitch 211)
+CARD_SPAN = 105  # px: texts of two cards are at least this far apart by centre (cards 182 px wide on a 211 px pitch)
+# What the card shows besides its title, as OCR reads it (compared letters and digits only): the logo, the CAUTION stamp,
+# the "CLEAR BONUS" caption, the level badge. Read off 112 captures (#274): LIMBUS 83 times (LImBUS too) and LV twice, the
+# others 0 (the stamp and caption sit behind or below the title strip; the logo's second word reads as noise like WOPIS).
+NOT_TITLE = {compact(t) for t in ("LIMBUS", "COMPANY", "LIMBUS COMPANY", "CAUTION", "CLEAR BONUS", "LV")}
+
+
+def pack_cards(results):
+    """The theme pack page's OCR results (text, (x, y, w, h)) as cards left to right: (x centre, [lines top to bottom]).
+
+    Boxes that overlap or sit within CARD_GAP px sideways are one card: live, a tilted "Timekilling Time" came as two
+    boxes 80 px apart by centre and made two cards (#267). Only a box that reads exactly a word of NOT_TITLE (or nothing)
+    is dropped; every other read, capitals too, stays a line of its card for the name, keyword and cover paths to
+    judge: a title art read in capitals ("LINE 1 MADNESS", "THE DUSK OF AMBER") is still a card (#266, #274). Without
+    the lowercase rule, noise boxes (a lone "M", the badge's "IV") would be cards of their own: texts nearer than
+    CARD_SPAN by centre are one card. A card with no box read at all is lost.
+    """
+    boxes = sorted((x, x + w, y, t) for t, (x, y, w, h) in results if compact(t) and compact(t) not in NOT_TITLE)
+    groups = []
+    for box in boxes:
+        if groups and box[0] - groups[-1][1] < CARD_GAP:
+            groups[-1][1] = max(groups[-1][1], box[1])
+            groups[-1][2].append(box)
+        else:
+            groups.append([box[0], box[1], [box]])
+    cards = []
+    for left, right, group in groups:
+        if cards and (left + right) / 2 - (cards[-1][0] + cards[-1][1]) / 2 < CARD_SPAN:
+            cards[-1] = [cards[-1][0], max(cards[-1][1], right), cards[-1][2] + group]
+        else:
+            cards.append([left, right, group])
+    return [((left + right) // 2, [t for _, t in sorted((y, t) for _, _, y, t in group)]) for left, right, group in cards]
+
+
 def match_card(lines, names):
     """(pack name or None, title text) for a card's OCR lines, top to bottom.
 
@@ -148,25 +229,35 @@ def match_card(lines, names):
     return max(found, key=lambda f: len(compact(f[0])))  # max keeps the top-down read on a tie
 
 
-def rank_packs(cards, names, plan, title_art=None):
-    """(title, weight) per card; a card that matches no weighed pack takes the plan's unlisted weight.
+def rank_packs(cards, names, plan, title_art=None, cover=None):
+    """(title, weight, how) per card; a card that matches no weighed pack takes the plan's unlisted weight.
 
-    A title alike to several packs that share one weight takes it: live, "Line 1" read as "Line", and every
-    Line pack is avoided (#89). A matched card's title is the pack's name. title_art: what OCR reads off title art
-    that does not spell its pack's name -> that pack (the data file's title_art, #246).
+    A card is named by the first of these paths that reads it, and how says which: "name" (its whole title), "title_art"
+    (what OCR reads off title art that does not spell its pack's name -> that pack, the data file's title_art, #246),
+    "keyword" (the word that sets its pack apart, pack_keywords #274), "cover N" (cover(i, allowed) is the pack its
+    art looks like and the correlation, or None; allowed: the packs the title is alike to, None when to none, #274).
+    A title alike to several packs that share one weight takes it ("shared"): live, "Line 1" read as "Line", and every
+    Line pack is avoided (#89); else "unread". A matched card's title is the pack's name.
     """
     title_art = title_art or {}
     weights, unlisted = plan["weights"], plan["unlisted"]
     names = list(names) + list(title_art)
     out = []
-    for lines in cards:
+    for i, lines in enumerate(cards):
         name, title = match_card(lines, names)
+        how = "title_art" if name in title_art else "name"
+        if not name:
+            name, how = match_keyword(title, names), "keyword"
+        candidates = [] if name else title_candidates(title, names)
+        if not name and cover:
+            found = cover(i, {title_art.get(n, n) for n in candidates} or None)
+            name, how = found and found[0], found and f"cover {found[1]:.2f}"
         if name:
             name = title_art.get(name, name)
-            out.append((name, weights.get(name, unlisted)))
+            out.append((name, weights.get(name, unlisted), how))
             continue
-        shared = {weights.get(title_art.get(n, n), unlisted) for n in title_candidates(title, names)}
-        out.append((title, shared.pop() if len(shared) == 1 else unlisted))
+        shared = {weights.get(title_art.get(n, n), unlisted) for n in candidates}
+        out.append((title, *((shared.pop(), "shared") if len(shared) == 1 else (unlisted, "unread"))))
     return out
 
 

@@ -20,3 +20,9 @@ uv run python tools/install.py --release  # 發佈用：再加上內嵌 Python �
 ```
 
 推送 `v*` tag 時，[release workflow](.github/workflows/release.yml) 會在 windows-latest 上跑同樣的步驟，把 `install/` 壓成 zip 附到 draft release。
+
+## 授權
+
+- 程式碼：[PolyForm Noncommercial 1.0.0](LICENSE)，只限非商業用途。
+- 飾品與星之恩惠的中文名稱、效果文字取自[都市零漢化組](https://github.com/LocalizeLimbusCompany/LocalizeLimbusCompany)，採 [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/)，用法與修改見 [NOTICE.md](NOTICE.md)。
+- 遊戲素材 © Project Moon，不在本專案的授權範圍內；本專案是非官方的粉絲作品。其餘第三方內容各依其授權，見 [NOTICE.md](NOTICE.md)。

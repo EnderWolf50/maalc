@@ -4,6 +4,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+import yaml
 from PIL import Image
 
 import shop as s
@@ -133,6 +134,46 @@ def test_read_slots_from_live_ocr():
     assert [s.buyable(x) for x in slots] == [False, True, True, True, True]
 
 
+# #216: the OCR lines of two live shops (2026-10-22, NORMAL, replayed from the recordings) whose first slot is a skill
+# replacement. A stray glyph from a gift icon's corner (the keyword badge: "3", "5", "8") reads as a tall line without
+# letters, so it passed for a price and the real price just under it became its name ('196' 3, '214' 3).
+STONE_TOMB_SHOP = ocr(
+    ("Replace Ryōshū's Skill", (557, 330, 131, 19)), ("Pendant of Nostalgia", (557, 484, 132, 19)),
+    ("Purchased", (581, 372, 85, 18)), (" 145", (595, 459, 48, 23)), ("米??", (599, 305, 42, 24)),
+    ("8", (635, 426, 20, 23)), ("Melted Paraffin", (727, 334, 99, 15)), ("150", (750, 307, 46, 20)),
+    ("Stone Tomb", (890, 332, 82, 18)), ("196", (903, 307, 47, 20)), ("3", (945, 275, 15, 18)),
+    ("Bloody Gadget", (1035, 331, 99, 18)), ("163", (1057, 307, 46, 20)),
+)
+OLD_DOLL_SHOP = ocr(
+    ("Replace Gregor's Skill", (558, 331, 131, 18)), ("Deathseeker", (580, 485, 85, 18)), ("271", (597, 459, 46, 23)),
+    ("??", (599, 306, 42, 23)), ("Portable Battery Socket", (711, 332, 131, 16)), ("190", (750, 307, 46, 20)),
+    ("Old Wooden Doll", (877, 332, 109, 18)), ("214", (903, 306, 48, 23)), ("3", (945, 275, 14, 18)),
+    ("Rusted Muzzle", (1036, 332, 98, 18)), ("164", (1057, 307, 46, 20)), ("5", (1097, 277, 18, 18)),
+)
+
+
+def test_a_glyph_on_an_icon_is_not_a_price_and_the_real_price_is_not_its_name():
+    slots = s.read_slots(OLD_DOLL_SHOP)
+    assert [(x["name"], x["price"]) for x in slots] == [
+        ("Replace Gregor's Skill", None), ("Portable Battery Socket", 190), ("Old Wooden Doll", 214), ("Rusted Muzzle", 164),
+        ("Deathseeker", 271),
+    ]
+    assert [s.on_sale(x) for x in slots] == [False, True, True, True, True]
+
+
+def test_a_glyph_over_the_price_of_a_bought_slot_is_not_a_slot_either():
+    slots = s.read_slots(STONE_TOMB_SHOP)
+    assert [(x["name"], x["price"]) for x in slots] == [
+        ("Replace Ryōshū's Skill", None), ("Melted Paraffin", 150), ("Stone Tomb", 196), ("Bloody Gadget", 163),
+        ("Pendant of Nostalgia", 145),
+    ]
+    assert [s.on_sale(x) for x in slots] == [False, True, True, True, False]  # the Replace slot, the bought one
+
+
+def test_a_price_whose_name_is_not_read_is_still_a_slot():
+    assert [(x["name"], x["price"]) for x in s.read_slots(ocr(("150", (750, 307, 46, 20))))] == [("", 150)]
+
+
 def test_read_slots_purchased():
     results = ocr(("UPS System", (581, 483, 84, 20)), ("Purchased", (582, 373, 83, 18)), ("156", (595, 457, 49, 25)),
                   ("Thorny Path", (737, 332, 81, 17)), ("160", (749, 306, 48, 23)))
@@ -247,6 +288,123 @@ def test_pick_fusion_on_a_super_shop_fills_its_5_slots_by_its_own_thresholds():
     assert s.pick_fusion(materials, 3, SHOP, POINTS) == [(["a", "b", "c"], 1)]
     # II + II + I = 15: tier III at a Super Shop, II at a shop.
     assert s.pick_fusion([("a", 2), ("b", 2), ("c", 1)], 5, SUPER, POINTS) == [(["a", "b", "c"], 3)]
+
+
+ASSETS = Path(__file__).resolve().parents[1] / "assets" / "resource" / "base" / "data"
+# mirror-dungeon-common-data-md8.json (client 1.117.0, read 2026-10-22) egoGiftCombineTierTable: combineTwo and combineThree.
+GAME_TWO = [(1, 1, 1), (1, 2, 1), (1, 3, 2), (2, 2, 2), (2, 3, 2), (3, 3, 3)]  # a, b, the tier it gives
+GAME_THREE = [(1, 1, 1, 1), (1, 1, 2, 2), (1, 1, 3, 2), (1, 2, 2, 2), (1, 2, 3, 3), (1, 3, 3, 3), (2, 2, 2, 3), (2, 2, 3, 3),
+              (2, 3, 3, 4), (3, 3, 3, 4)]
+
+
+def test_the_data_file_holds_the_games_points_and_thresholds():
+    # The guide in the game (mirrordungeon_egogift_combine_guide_result_total_*): 10-/11~16/17~24/25+ in a shop, and with
+    # the _upgrade keys (the Super Shop, mirrordungeon_upgrade_shop_title) 9-/10~14/15~21/22+.
+    d = yaml.safe_load((ASSETS / "shop.yaml").read_text(encoding="utf-8"))
+    assert d["fusion_points"] == POINTS
+    assert d["fusion_tiers"] == {"shop": SHOP, "super_shop": SUPER}
+
+
+@pytest.mark.parametrize("tiers", [row[:-1] for row in GAME_TWO + GAME_THREE])
+def test_the_points_of_a_shop_give_the_games_own_table_for_two_and_three_materials(tiers):
+    # combineTwo / combineThree hold no result the shop's points table does not give.
+    want = {row[:-1]: row[-1] for row in GAME_TWO + GAME_THREE}[tiers]
+    assert s.fusion_tier(sum(POINTS[t] for t in tiers), SHOP) == want
+
+
+@pytest.mark.parametrize("tiers, shop, super_shop", [
+    ((1, 1, 3), 2, 3), ((1, 2, 2), 2, 3), ((1, 3, 3), 3, 4), ((2, 2, 3), 3, 4), ((2, 3), 2, 3), ((2, 2, 2), 3, 3),
+    ((1, 1, 1), 1, 1), ((1, 3), 2, 2),
+])
+def test_a_super_shop_gives_a_higher_tier_for_some_of_the_same_materials(tiers, shop, super_shop):
+    points = sum(POINTS[t] for t in tiers)
+    assert (s.fusion_tier(points, SHOP), s.fusion_tier(points, SUPER)) == (shop, super_shop)
+
+
+@pytest.mark.parametrize("condition, in_shop, in_super_shop", [
+    ("any", [(list("abc"), 3)], [(list("abc"), 4)]),
+    ("upgrade", [], [(list("abc"), 4)]),  # III + III + I: a III is no upgrade of a III; a Super Shop's IV is
+    ("tier4", [], [(list("abc"), 4)]),
+])
+def test_the_fusion_condition_reads_the_tier_of_the_shop_it_is_in(condition, in_shop, in_super_shop):
+    materials = [("a", 3), ("b", 3), ("c", 1)]
+    assert s.pick_fusion(materials, 3, SHOP, POINTS, condition=condition) == in_shop
+    assert s.pick_fusion(materials, 3, SUPER, POINTS, condition=condition) == in_super_shop
+
+
+def test_the_upgrade_condition_in_a_super_shop_with_the_materials_of_a_shop_iii():
+    # II + II + I is 15 points: a II in a shop (no upgrade of a II), a III in a Super Shop.
+    materials = [("a", 2), ("b", 2), ("c", 1)]
+    assert s.pick_fusion(materials, 3, SHOP, POINTS, condition="upgrade") == []
+    assert s.pick_fusion(materials, 3, SUPER, POINTS, condition="upgrade") == [(list("abc"), 3)]
+
+
+@pytest.mark.parametrize("name, is_super", [("SuperShop", True), ("Shop", False)])
+def test_a_super_shop_is_told_by_its_red_title(name, is_super):
+    image = np.asarray(Image.open(SCREENS / f"{name}.png").convert("RGB"))[:, :, ::-1]
+    assert s.is_super(image) == is_super
+
+
+def test_the_super_shop_title_sweep_over_tests_screens():
+    # CODING_STANDARDS "Recognition": is_super only runs on a shop's main page, but over every 1280x720 screen of tests/screens
+    # its one false positive is not a shop page: the update download, a red screen (the resource download and a battle
+    # turn have a few red pixels, under the threshold).
+    hits = []
+    for path in sorted(SCREENS.glob("*.png")):
+        image = np.asarray(Image.open(path).convert("RGB"))[:, :, ::-1]
+        if image.shape[:2] == (720, 1280) and s.is_super(image):
+            hits.append(path.stem)
+    assert hits == ["DownloadingUpdate", "SuperShop"]
+
+
+def test_pick_fusion_any_makes_every_group_it_can():
+    # #263: the default fuses a group that gives no higher tier than its materials: three I make a I.
+    assert s.pick_fusion([("a", 1), ("b", 1), ("c", 1)], 3, SHOP, POINTS, condition="any") == [(["a", "b", "c"], 1)]
+
+
+def test_pick_fusion_upgrade_wants_a_tier_over_the_highest_material():
+    # #263: three I stay a I, IV + I + I (21 points) is a III: neither is worth the materials.
+    assert s.pick_fusion([("a", 1), ("b", 1), ("c", 1)], 3, SHOP, POINTS, condition="upgrade") == []
+    assert s.pick_fusion([("a", 4), ("b", 1), ("c", 1)], 3, SHOP, POINTS, condition="upgrade") == []
+    # II + II + I = 15 is a II, no better than its II; II + II + II = 18 is a III.
+    assert s.pick_fusion([("a", 2), ("b", 2), ("c", 1)], 3, SHOP, POINTS, condition="upgrade") == []
+    assert s.pick_fusion([("a", 2), ("b", 2), ("c", 2)], 3, SHOP, POINTS, condition="upgrade") == [(list("abc"), 3)]
+
+
+def test_pick_fusion_upgrade_skips_the_best_group_when_it_is_no_upgrade():
+    # #263: IV + II + II is a IV (27 points), the most; but a IV material cannot be topped, so II + II + II (a III) is made.
+    materials = [("a", 4), ("b", 2), ("c", 2), ("d", 2)]
+    assert s.pick_fusion(materials, 3, SHOP, POINTS, condition="tier4") == [(["a", "b", "c"], 4)]
+    assert s.pick_fusion(materials, 3, SHOP, POINTS, condition="upgrade") == [(["b", "c", "d"], 3)]
+
+
+def test_pick_fusion_any_makes_an_upgrade_before_a_higher_tier_that_is_none():
+    # user 2026-10-23: IV + II + II is a IV (the highest) but no upgrade; II + II + II is a III over its II: made first.
+    materials = [("a", 4), ("b", 2), ("c", 2), ("d", 2)]
+    assert s.pick_fusion(materials, 3, SHOP, POINTS) == [(["b", "c", "d"], 3)]
+
+    # each shop's own thresholds say what upgrades: bce (II + II + I, 15 points) is a II in a shop, a III in a Super Shop.
+    materials = [("a", 4), ("b", 2), ("c", 2), ("e", 1)]
+    assert s.pick_fusion(materials, 3, SHOP, POINTS) == [(["a", "b", "c"], 4)]
+    assert s.pick_fusion(materials, 3, SUPER, POINTS) == [(["b", "c", "e"], 3)]
+
+
+def test_pick_fusion_tier4_makes_only_a_tier_iv():
+    # #263: III + III + II (26 points) is a IV; the three I left would make a I and stay.
+    materials = [("a", 1), ("b", 3), ("c", 1), ("d", 2), ("e", 3), ("f", 1)]
+    assert s.pick_fusion(materials, 3, SHOP, POINTS, condition="tier4") == [(["b", "d", "e"], 4)]
+    assert s.pick_fusion([(k, 3) for k in "abc"], 3, SHOP, POINTS, condition="tier4") == [(list("abc"), 4)]
+    assert s.pick_fusion([(k, 1) for k in "abc"], 3, SHOP, POINTS, condition="tier4") == []
+    # III + III + I is 23 points: a III in a shop, a IV in a Super Shop (22 and up).
+    materials = [("a", 3), ("b", 3), ("c", 1)]
+    assert s.pick_fusion(materials, 3, SHOP, POINTS, condition="tier4") == []
+    assert s.pick_fusion(materials, 5, SUPER, POINTS, condition="tier4") == [(list("abc"), 4)]
+
+
+def test_pick_fusion_tier4_can_use_more_slots_to_get_there():
+    # #263: a Super Shop's 5 slots: 5 x III is 50 points; with 5 II (30 points) a IV needs only 22.
+    assert s.pick_fusion([(k, 2) for k in "abcde"], 5, SUPER, POINTS, condition="tier4") == [(list("abcd"), 4)]
+    assert s.pick_fusion([(k, 2) for k in "abcde"], 3, SHOP, POINTS, condition="tier4") == []
 
 
 def test_pick_fusion_never_takes_a_tier_v_gift():

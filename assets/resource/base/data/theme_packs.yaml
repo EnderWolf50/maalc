@@ -124,10 +124,12 @@ event_packs:
 
 # What OCR reads off a card whose title art does not spell its pack's name -> that pack (#246). Matched like a name
 # (spec 05 section 2). Read off the 2026-10-22 recordings: S.E.A.'s art says "The Magic Hello Bus" (live reads
-# HellOBus, HellBus); The Noon of Violet's tops its name with "Walpurgis Night" (live: WalpurgisN The Noon of).
+# HellOBus, HellBus); The Noon of Violet's tops its name with "Walpurgis Night" (live: WalpurgisN The Noon of);
+# Line 1's is the capitals "LINE 1 MADNESS" (live: MADNESS, #266).
 title_art:
   Hello Bus: S.E.A.
   Walpurgis Night The Noon of: The Noon of Violet
+  MADNESS: Line 1
 
 # The default theme pack plan (spec 04 section 8 has the fields). Its weights are AALC's defaults
 # (KIYI671/AhabAssistantLimbusCompany, assets/config/theme_pack_list.example.yaml at 45d9a58, AGPL-3.0; see

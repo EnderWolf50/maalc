@@ -1,0 +1,964 @@
+{
+ "note": "Fusion gifts and their recipes. Recipes: combineFixed (any one of a gift's `recipes` fuses it; each is a list of the required gift ids) and combineMixed (`groups`: take `need` of each group's `ids`) of the game client 1.117.0's mirror-dungeon-common-data-md8. Ids, tiers, keywords and English names: the same client's ego-gift static data and EN_EGOgift localization. `materials` are the recipe ingredients gift_search.json does not list. Icons: image/GiftRecipe/<id>.png, the game's EgoGiftIcon sprites (by the ego-gift iconId) scaled by 0.21 with transparency filled green. Chinese names: the Localize Limbus Company release's LLC_zh-CN/EGOgift_*.json by gift id (Simplified Chinese), converted with OpenCC s2twp, then 指標->指針, 重新整理->刷新, 映象->鏡像, 透過階層->通過階層, 松肉->鬆肉. Chinese names licensed CC BY-NC-SA 4.0 (see NOTICE.md). Written by tools/gift_recipes.py.",
+ "zh_source": "https://github.com/LocalizeLimbusCompany/LocalizeLimbusCompany",
+ "zh_release": "2026101602",
+ "license": "CC BY-NC-SA 4.0",
+ "license_url": "https://creativecommons.org/licenses/by-nc-sa/4.0/",
+ "gifts": [
+  {
+   "id": 9083,
+   "keyword": "Keywordless",
+   "tier": 5,
+   "en": "Lunar Memory",
+   "zh": "月之記憶",
+   "groups": [
+    {
+     "ids": [
+      9105,
+      9110,
+      9116,
+      9121,
+      9126,
+      9131,
+      9136
+     ],
+     "need": 2
+    },
+    {
+     "ids": [
+      9142,
+      9147,
+      9152
+     ],
+     "need": 3
+    }
+   ]
+  },
+  {
+   "id": 9088,
+   "keyword": "Burn",
+   "tier": 4,
+   "en": "Soothe the Dead",
+   "zh": "鎮魂",
+   "recipes": [
+    [
+     9003,
+     9053,
+     9157
+    ],
+    [
+     9003,
+     9053,
+     9101,
+     9155
+    ]
+   ]
+  },
+  {
+   "id": 9090,
+   "keyword": "Bleed",
+   "tier": 4,
+   "en": "Bloody Mist",
+   "zh": "血霧",
+   "recipes": [
+    [
+     9042,
+     9089,
+     9161
+    ],
+    [
+     9042,
+     9089,
+     9106,
+     9159
+    ]
+   ]
+  },
+  {
+   "id": 9092,
+   "keyword": "Tremor",
+   "tier": 4,
+   "en": "Coupled Oscillation",
+   "zh": "震顫耦合",
+   "recipes": [
+    [
+     9031,
+     9091,
+     9165
+    ]
+   ]
+  },
+  {
+   "id": 9094,
+   "keyword": "Rupture",
+   "tier": 4,
+   "en": "Enrapturing Trance",
+   "zh": "恍惚鏡",
+   "recipes": [
+    [
+     9013,
+     9033,
+     9169
+    ]
+   ]
+  },
+  {
+   "id": 9096,
+   "keyword": "Sinking",
+   "tier": 4,
+   "en": "Black Sheet Music",
+   "zh": "黑色樂譜",
+   "recipes": [
+    [
+     9059,
+     9074,
+     9174
+    ]
+   ]
+  },
+  {
+   "id": 9098,
+   "keyword": "Poise",
+   "tier": 4,
+   "en": "Lucky Pouch",
+   "zh": "福袋",
+   "recipes": [
+    [
+     9056,
+     9097,
+     9179
+    ],
+    [
+     9056,
+     9063,
+     9097,
+     9177
+    ]
+   ]
+  },
+  {
+   "id": 9100,
+   "keyword": "Charge",
+   "tier": 4,
+   "en": "T-1 Perpetual Motion Machine",
+   "zh": "第一類永動機",
+   "recipes": [
+    [
+     9069,
+     9099,
+     9182
+    ]
+   ]
+  },
+  {
+   "id": 9158,
+   "keyword": "Burn",
+   "tier": 4,
+   "en": "Purloined Flame",
+   "zh": "盜來的火焰",
+   "recipes": [
+    [
+     9071,
+     9087,
+     9156
+    ]
+   ]
+  },
+  {
+   "id": 9162,
+   "keyword": "Bleed",
+   "tier": 4,
+   "en": "Hemorrhagic Shock",
+   "zh": "失血性休克",
+   "recipes": [
+    [
+     9008,
+     9048,
+     9160
+    ]
+   ]
+  },
+  {
+   "id": 9167,
+   "keyword": "Tremor",
+   "tier": 4,
+   "en": "Omnivibro-octovecti-bell",
+   "zh": "無振八方鍾",
+   "recipes": [
+    [
+     9112,
+     9115,
+     9166
+    ],
+    [
+     9112,
+     9115,
+     9163,
+     9164
+    ]
+   ]
+  },
+  {
+   "id": 9171,
+   "keyword": "Rupture",
+   "tier": 4,
+   "en": "Ruin",
+   "zh": "破滅",
+   "recipes": [
+    [
+     9023,
+     9064,
+     9170
+    ],
+    [
+     9023,
+     9064,
+     9118,
+     9168
+    ]
+   ]
+  },
+  {
+   "id": 9176,
+   "keyword": "Sinking",
+   "tier": 4,
+   "en": "Impending Wave",
+   "zh": "襲來的浪潮",
+   "recipes": [
+    [
+     9049,
+     9125,
+     9175
+    ],
+    [
+     9049,
+     9125,
+     9172,
+     9173
+    ]
+   ]
+  },
+  {
+   "id": 9180,
+   "keyword": "Poise",
+   "tier": 4,
+   "en": "Cask Spirits",
+   "zh": "桶裝烈酒",
+   "recipes": [
+    [
+     9073,
+     9127,
+     9178
+    ]
+   ]
+  },
+  {
+   "id": 9184,
+   "keyword": "Charge",
+   "tier": 4,
+   "en": "T-5 Perpetual Motion Machine",
+   "zh": "第五類永動機",
+   "recipes": [
+    [
+     9062,
+     9072,
+     9183
+    ],
+    [
+     9062,
+     9072,
+     9132,
+     9181
+    ]
+   ]
+  },
+  {
+   "id": 9212,
+   "keyword": "Poise",
+   "tier": 4,
+   "en": "The End of all Evil",
+   "zh": "萬惡之終結",
+   "recipes": [
+    [
+     9427,
+     9428
+    ]
+   ]
+  },
+  {
+   "id": 9213,
+   "keyword": "Bleed",
+   "tier": 4,
+   "en": "Miniature Ferris Wheel",
+   "zh": "微型摩天輪",
+   "recipes": [
+    [
+     9192,
+     9205,
+     9440
+    ]
+   ]
+  },
+  {
+   "id": 9216,
+   "keyword": "Burn",
+   "tier": 4,
+   "en": "Uniform - Liu Assoc.",
+   "zh": "制式服裝-六協會",
+   "recipes": [
+    [
+     9027,
+     9102,
+     9215
+    ]
+   ]
+  },
+  {
+   "id": 9224,
+   "keyword": "Bleed",
+   "tier": 4,
+   "en": "Exquisite Artwork",
+   "zh": "傑作",
+   "recipes": [
+    [
+     9039,
+     9222,
+     9223
+    ]
+   ]
+  },
+  {
+   "id": 9235,
+   "keyword": "Pierce",
+   "tier": 4,
+   "en": "Desperado",
+   "zh": "亡命之徒",
+   "recipes": [
+    [
+     9233,
+     9234,
+     9145
+    ]
+   ]
+  },
+  {
+   "id": 9239,
+   "keyword": "Sinking",
+   "tier": 4,
+   "en": "Pink Bouquet",
+   "zh": "粉紅花束",
+   "recipes": [
+    [
+     9144,
+     9086,
+     9238
+    ]
+   ]
+  },
+  {
+   "id": 9248,
+   "keyword": "Rupture",
+   "tier": 4,
+   "en": "Spicebush, Glasses, and Mailed Letter",
+   "zh": "山茶花、眼鏡和送達的信",
+   "recipes": [
+    [
+     9419,
+     9424
+    ],
+    [
+     9419,
+     9119,
+     9423
+    ]
+   ]
+  },
+  {
+   "id": 9249,
+   "keyword": "Keywordless",
+   "tier": 4,
+   "en": "A Small, Lovely Violin",
+   "zh": "小巧而精緻的小提琴",
+   "recipes": [
+    [
+     9706,
+     9707,
+     9431
+    ]
+   ]
+  },
+  {
+   "id": 9263,
+   "keyword": "Bleed",
+   "tier": 4,
+   "en": "Artwork: Evolving Pulsation",
+   "zh": "傑作：正在進化的躍動",
+   "recipes": [
+    [
+     9260,
+     9262
+    ]
+   ]
+  },
+  {
+   "id": 9264,
+   "keyword": "Bleed",
+   "tier": 4,
+   "en": "Artwork: Taxidermied Ferity",
+   "zh": "傑作：製成標本的野性",
+   "recipes": [
+    [
+     9261,
+     9268
+    ]
+   ]
+  },
+  {
+   "id": 9270,
+   "keyword": "Blunt",
+   "tier": 4,
+   "en": "ENTER: The B.B.",
+   "zh": "幼·兄登場",
+   "recipes": [
+    [
+     9109,
+     9206,
+     9269
+    ]
+   ]
+  },
+  {
+   "id": 9272,
+   "keyword": "Rupture",
+   "tier": 4,
+   "en": "Shadowlurking",
+   "zh": "暗中行動",
+   "recipes": [
+    [
+     9271,
+     9788,
+     9791
+    ]
+   ]
+  },
+  {
+   "id": 9280,
+   "keyword": "Slash",
+   "tier": 4,
+   "en": "The Book of the Homeland Swordplay [本國劍譜]",
+   "zh": "本國劍譜",
+   "recipes": [
+    [
+     9193,
+     9716,
+     9279
+    ]
+   ]
+  },
+  {
+   "id": 9410,
+   "keyword": "Sinking",
+   "tier": 4,
+   "en": "Hoarfrost Footprint",
+   "zh": "霜凍足跡",
+   "recipes": [
+    [
+     9408,
+     9409
+    ]
+   ]
+  },
+  {
+   "id": 9416,
+   "keyword": "Bleed",
+   "tier": 4,
+   "en": "Wholeness",
+   "zh": "完全性",
+   "recipes": [
+    [
+     9413,
+     9415
+    ]
+   ]
+  },
+  {
+   "id": 9424,
+   "keyword": "Rupture",
+   "tier": 4,
+   "en": "Unmailed Letter",
+   "zh": "未寄出的信",
+   "recipes": [
+    [
+     9119,
+     9423
+    ]
+   ]
+  },
+  {
+   "id": 9430,
+   "keyword": "Poise",
+   "tier": 4,
+   "en": "Guiding Gas Lamp",
+   "zh": "照亮前方的汽燈",
+   "recipes": [
+    [
+     9066,
+     9429
+    ]
+   ]
+  },
+  {
+   "id": 9717,
+   "keyword": "Slash",
+   "tier": 4,
+   "en": "Sublimity",
+   "zh": "壯觀",
+   "recipes": [
+    [
+     9713,
+     9714
+    ]
+   ]
+  },
+  {
+   "id": 9718,
+   "keyword": "Slash",
+   "tier": 4,
+   "en": "Unbending",
+   "zh": "不動",
+   "recipes": [
+    [
+     9713,
+     9715
+    ]
+   ]
+  },
+  {
+   "id": 9728,
+   "keyword": "Tremor",
+   "tier": 4,
+   "en": "Pocket Watch : Type L",
+   "zh": "懷錶：Type L",
+   "recipes": [
+    [
+     9721,
+     9724
+    ]
+   ]
+  },
+  {
+   "id": 9729,
+   "keyword": "Tremor",
+   "tier": 4,
+   "en": "Pocket Watch : Type E",
+   "zh": "懷錶：Type E",
+   "recipes": [
+    [
+     9721,
+     9725
+    ]
+   ]
+  },
+  {
+   "id": 9730,
+   "keyword": "Tremor",
+   "tier": 4,
+   "en": "Pocket Watch : Type Y",
+   "zh": "懷錶：Type Y",
+   "recipes": [
+    [
+     9722,
+     9724
+    ]
+   ]
+  },
+  {
+   "id": 9731,
+   "keyword": "Tremor",
+   "tier": 4,
+   "en": "Pocket Watch : Type P",
+   "zh": "懷錶：Type P",
+   "recipes": [
+    [
+     9722,
+     9725
+    ]
+   ]
+  },
+  {
+   "id": 9740,
+   "keyword": "Charge",
+   "tier": 4,
+   "en": "Automated Joints",
+   "zh": "自動式關節",
+   "recipes": [
+    [
+     9736,
+     9738
+    ]
+   ]
+  },
+  {
+   "id": 9741,
+   "keyword": "Charge",
+   "tier": 4,
+   "en": "Overcharged Battery",
+   "zh": "過度充能電池",
+   "recipes": [
+    [
+     9736,
+     9739
+    ]
+   ]
+  },
+  {
+   "id": 9742,
+   "keyword": "Charge",
+   "tier": 4,
+   "en": "Perpetual Generator Servos",
+   "zh": "永動伺服電機",
+   "recipes": [
+    [
+     9737,
+     9738
+    ]
+   ]
+  },
+  {
+   "id": 9743,
+   "keyword": "Charge",
+   "tier": 4,
+   "en": "Hearts-powered Jewel",
+   "zh": "心動力寶石",
+   "recipes": [
+    [
+     9737,
+     9739
+    ]
+   ]
+  },
+  {
+   "id": 9764,
+   "keyword": "Keywordless",
+   "tier": 4,
+   "en": "Gift",
+   "zh": "禮物",
+   "recipes": [
+    [
+     9762,
+     9763
+    ]
+   ]
+  },
+  {
+   "id": 9765,
+   "keyword": "Poise",
+   "tier": 4,
+   "en": "Jolly Plushie",
+   "zh": "快樂的毛絨玩偶",
+   "recipes": [
+    [
+     9709,
+     9710,
+     9711
+    ]
+   ]
+  },
+  {
+   "id": 9780,
+   "keyword": "Keywordless",
+   "tier": 4,
+   "en": "High-risk Operational Gear",
+   "zh": "高危作戰用裝備",
+   "recipes": [
+    [
+     9778,
+     9779
+    ]
+   ]
+  },
+  {
+   "id": 9783,
+   "keyword": "Bleed",
+   "tier": 4,
+   "en": "Resplendence",
+   "zh": "絕景",
+   "recipes": [
+    [
+     9714,
+     9782
+    ]
+   ]
+  },
+  {
+   "id": 9784,
+   "keyword": "Slash",
+   "tier": 4,
+   "en": "Cultivation",
+   "zh": "琢磨",
+   "recipes": [
+    [
+     9715,
+     9782
+    ]
+   ]
+  },
+  {
+   "id": 9792,
+   "keyword": "Blunt",
+   "tier": 4,
+   "en": "Everlasting Chains of Bond",
+   "zh": "永恆的緣分鎖鏈",
+   "recipes": [
+    [
+     9786,
+     9789
+    ]
+   ]
+  },
+  {
+   "id": 9793,
+   "keyword": "Rupture",
+   "tier": 4,
+   "en": "Glyph of Glass Shards",
+   "zh": "漆字琉璃鈿",
+   "recipes": [
+    [
+     9787,
+     9790
+    ]
+   ]
+  },
+  {
+   "id": 9825,
+   "keyword": "Rupture",
+   "tier": 4,
+   "en": "Cultivation: Cut, File, Carve, Polish",
+   "zh": "切磋琢磨",
+   "recipes": [
+    [
+     9822,
+     9823,
+     9824
+    ]
+   ]
+  },
+  {
+   "id": 9841,
+   "keyword": "Charge",
+   "tier": 4,
+   "en": "Cleanup Agent Gear Set C",
+   "zh": "C型清掃人員裝備套組",
+   "recipes": [
+    [
+     9734,
+     9735,
+     9840
+    ]
+   ]
+  },
+  {
+   "id": 9157,
+   "keyword": "Burn",
+   "tier": 3,
+   "en": "Secret Cookbook",
+   "zh": "烹飪秘訣書",
+   "recipes": [
+    [
+     9101,
+     9155
+    ]
+   ]
+  },
+  {
+   "id": 9161,
+   "keyword": "Bleed",
+   "tier": 3,
+   "en": "Devotion",
+   "zh": "虔誠",
+   "recipes": [
+    [
+     9106,
+     9159
+    ]
+   ]
+  },
+  {
+   "id": 9166,
+   "keyword": "Tremor",
+   "tier": 3,
+   "en": "Epicenter",
+   "zh": "震源",
+   "recipes": [
+    [
+     9163,
+     9164
+    ]
+   ]
+  },
+  {
+   "id": 9170,
+   "keyword": "Rupture",
+   "tier": 3,
+   "en": "Eerie Effigy",
+   "zh": "奇怪的石像",
+   "recipes": [
+    [
+     9118,
+     9168
+    ]
+   ]
+  },
+  {
+   "id": 9175,
+   "keyword": "Sinking",
+   "tier": 3,
+   "en": "Surging Globe",
+   "zh": "浪景球",
+   "recipes": [
+    [
+     9172,
+     9173
+    ]
+   ]
+  },
+  {
+   "id": 9179,
+   "keyword": "Poise",
+   "tier": 3,
+   "en": "Reminiscence",
+   "zh": "追憶",
+   "recipes": [
+    [
+     9063,
+     9177
+    ]
+   ]
+  },
+  {
+   "id": 9183,
+   "keyword": "Charge",
+   "tier": 3,
+   "en": "Insulator",
+   "zh": "絕緣子",
+   "recipes": [
+    [
+     9132,
+     9181
+    ]
+   ]
+  },
+  {
+   "id": 9434,
+   "keyword": "Tremor",
+   "tier": 3,
+   "en": "Handheld Mirror",
+   "zh": "手鏡",
+   "recipes": [
+    [
+     9114,
+     9433
+    ]
+   ]
+  },
+  {
+   "id": 9761,
+   "keyword": "Tremor",
+   "tier": 3,
+   "en": "Shadow Monster",
+   "zh": "影子怪物",
+   "recipes": [
+    [
+     9759,
+     9760
+    ]
+   ]
+  }
+ ],
+ "materials": [
+  {
+   "id": 9105,
+   "keyword": "Burn",
+   "tier": 4,
+   "en": "Fragment of Hellfire",
+   "zh": "業火殘片"
+  },
+  {
+   "id": 9110,
+   "keyword": "Bleed",
+   "tier": 4,
+   "en": "Fragment of Allurement",
+   "zh": "魅惑殘片"
+  },
+  {
+   "id": 9116,
+   "keyword": "Tremor",
+   "tier": 4,
+   "en": "Fragment of Inertia",
+   "zh": "惰性殘片"
+  },
+  {
+   "id": 9121,
+   "keyword": "Rupture",
+   "tier": 4,
+   "en": "Fragment of Desire",
+   "zh": "慾望殘片"
+  },
+  {
+   "id": 9126,
+   "keyword": "Sinking",
+   "tier": 4,
+   "en": "Fragment of Decay",
+   "zh": "蠶食殘片"
+  },
+  {
+   "id": 9131,
+   "keyword": "Poise",
+   "tier": 4,
+   "en": "Fragment of Conceit",
+   "zh": "驕慢殘片"
+  },
+  {
+   "id": 9136,
+   "keyword": "Charge",
+   "tier": 4,
+   "en": "Fragment of Friction",
+   "zh": "摩擦殘片"
+  },
+  {
+   "id": 9142,
+   "keyword": "Slash",
+   "tier": 4,
+   "en": "Sundered Memory",
+   "zh": "切開的記憶"
+  },
+  {
+   "id": 9147,
+   "keyword": "Pierce",
+   "tier": 4,
+   "en": "Punctured Memory",
+   "zh": "洞穿的記憶"
+  },
+  {
+   "id": 9152,
+   "keyword": "Blunt",
+   "tier": 4,
+   "en": "Crushed Memory",
+   "zh": "粉碎的記憶"
+  },
+  {
+   "id": 9428,
+   "keyword": "Poise",
+   "tier": 4,
+   "en": "Cetacean Heart",
+   "zh": "鯨心"
+  },
+  {
+   "id": 9440,
+   "keyword": "Bleed",
+   "tier": 4,
+   "en": "Mask of the Parade",
+   "zh": "遊行的面具"
+  }
+ ]
+}

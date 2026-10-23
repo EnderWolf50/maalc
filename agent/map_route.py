@@ -38,19 +38,22 @@ def node_type(marks, by_cost=None):
     return "shop" if "shop" in marks else "event"
 
 
-def shop_before_boss(slots, ahead):
-    """Type every node of the column right before the boss's as a shop, in place (#146).
+def boss_after_shop(before, column):
+    """Type every node of column, the one right after before's, as the boss when before holds a shop, in place (#279).
 
-    The map's last column is the shop, then the boss: no node pool holds a shop (mirrordungeon-generatenodepool:
-    battle, abnormality, hard battle, event, boss), and in every capture showing the boss with a node before it,
-    that node is the shop (spec 03 section 7). Its icon takes the theme pack's colours, so its mark is not trusted.
-    slots and ahead are rank's: columns of row -> (node type, ...).
+    The map's last two columns are the shop, then the boss, one node each (22 floors read; the game data's
+    fixedEncounters target sector -2). The shop is told by its shape (actions.shop_icon: 0.47-1.0 on the shops
+    it finds, 0.32 at most on any other slot of 98 captures that show it); the boss' red glow is not: 722-850 red pixels on a
+    dark one against 842 on a node that is not the boss.
+    So the shop decides and the glow only helps (a node reading as the boss stays one). Both columns are rank's:
+    row -> (node type, ...). Returns the rows whose type it changed.
     """
-    columns = [slots, *ahead]
-    for before, after in zip(columns, columns[1:]):
-        if any(node == "boss" for node, _ in after.values()):
-            for row, (_, rest) in before.items():
-                before[row] = ("shop", rest)
+    if not any(node == "shop" for node, _ in before.values()):
+        return []
+    changed = [row for row, (node, _) in column.items() if node != "boss"]
+    for row, (_, rest) in column.items():
+        column[row] = ("boss", rest)
+    return changed
 
 
 def rank(slots, weights, ahead=()):
