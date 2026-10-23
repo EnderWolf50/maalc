@@ -3300,12 +3300,13 @@ class Shop(CustomAction):
             if slot["short"] and slot["price"] <= cost:
                 log(f"shop: {slot['name']!r} is tagged Not Enough Cost: its price {slot['price']} is a misread")
                 continue
+            dimmed = cell["id"] is None and slot["short"]  # Not Enough Cost: tier and icon unread
             rank = place.get(cell["id"])
-            if cell["id"] is None and slot["short"] and rank is None:
+            if dimmed:
                 rank = queue_place(gift_list, cell["keyword"], cell["tier"])
-            log(f"shop: {slot['name']!r} {slot['price']}: tier {cell['tier']} {cell['keyword']} {gift_shown(cell)}, "
-                f"{effective(gift_list, cell['id']) if cell['id'] else 'unknown'}"
-                f"{'' if rank is None else f', place {rank}'}{' (dimmed, may be any)' if cell['id'] is None and rank is not None else ''}")
+            state = effective(gift_list, cell["id"]) if cell["id"] else "unknown"
+            log(f"shop: {slot['name']!r} {slot['price']}: tier {cell['tier']} {cell['keyword']} {gift_shown(cell)}, {state}"
+                f"{'' if rank is None else f', place {rank}'}{' (dimmed: the best place it may hold)' if dimmed and rank is not None else ''}")
             if rank is not None:
                 offers.append((i, rank, slot["price"]))
         plan, visit["wanted"] = shop.buy_plan(offers, cost, reserve, visit["sold"])
