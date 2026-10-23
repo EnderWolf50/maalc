@@ -2901,11 +2901,14 @@ def gift_shown(cell):
 
 
 def close_tooltip(context, page):
-    """A screenshot of page after a tap on its TOOLTIP_CLOSE spot (a page without one: as it is), #331."""
+    """A screenshot of page after a tap on its TOOLTIP_CLOSE spot (a page without one: as it is), #331.
+
+    The tap comes first and the guard after it (ADR 0007): a tooltip over the fuse page hides Leave, so the page node
+    reads nothing until it is closed.
+    """
     if page in TOOLTIP_CLOSE:
-        page_guard(context, "Shop")
         tap_settled(context, *TOOLTIP_CLOSE[page], timeout=1.0)
-    return screen(context)
+    return page_guard(context, "Shop")
 
 
 def read_clear(context, image, spots, page, gifts):

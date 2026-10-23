@@ -116,7 +116,7 @@ class Grid:
             if i is not None:
                 self.reads.append(i)
                 out.append({"i": k, "x": x, "y": y, "tier": 1, "keyword": KEYWORDS[i % len(KEYWORDS)], "gift": None,
-                            "id": None if self.tooltip else i, "score": 0.0})
+                            "id": None if self.tooltip and i % 2 else i, "score": 0.0})
         return out
 
 
@@ -149,7 +149,7 @@ def test_every_gift_is_read_once_whatever_the_grid_holds(context, grid, monkeypa
 
 @pytest.mark.parametrize("stuck", [0, 1, 2])
 def test_a_fuse_pages_tooltip_is_closed_before_its_cells_are_read(context, grid, stuck):
-    # #331: a gift's tooltip hides the cells under it (10 of 217 live): they read as unknown. The neutral spot is
+    # #331: a gift's tooltip hides some of the cells (10 of 217 live): they read as unknown. The neutral spot is
     # tapped first; when taps did not close it (stuck of them) and a cell still reads unknown, it is read again after
     # one more. Only the neutral spot is tapped.
     g = grid("fuse", 13)
