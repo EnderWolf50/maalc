@@ -1,6 +1,6 @@
 // The gift list tab's keyword tabs and the grid of one keyword: tier blocks of icon tiles, one tile per gift.
 import { useRef, useState, type KeyboardEvent } from "react";
-import { GIFT_BY_ID, giftName, iconUrl, tiersOf } from "./giftCatalog";
+import { CATALOG, GIFT_BY_ID, giftName, iconUrl, tiersOf } from "./giftCatalog";
 import { useDragSort, type DragProps } from "./dragSort";
 import { moveGift, useGiftEdit } from "./giftEdit";
 import { effective, mainKeyword, state, type GiftState, type ListRules } from "./gifts";
@@ -43,7 +43,7 @@ export function KeywordTabs({ tab, onTab }: { tab: string; onTab: (k: string) =>
   const refs = useRef<Record<string, HTMLButtonElement | null>>({});
   const move = (e: KeyboardEvent) => {
     const step = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0;
-    const next = GIFT_KEYWORDS[GIFT_KEYWORDS.indexOf(tab) + step];
+    const next = tab ? GIFT_KEYWORDS[GIFT_KEYWORDS.indexOf(tab) + step] : GIFT_KEYWORDS[0]; // no tab chosen (searching): the first
     if (!step || !next) return;
     e.preventDefault();
     onTab(next);
@@ -54,7 +54,7 @@ export function KeywordTabs({ tab, onTab }: { tab: string; onTab: (k: string) =>
       {GIFT_KEYWORDS.map((k) => {
         const c = counts(list, k), n = c.want + c.keep + c.fusion, on = k === tab;
         return (
-          <button type="button" key={k} id={`gl-tab-${k}`} role="tab" aria-selected={on} aria-controls="gl-panel" tabIndex={on ? 0 : -1}
+          <button type="button" key={k} id={`gl-tab-${k}`} role="tab" aria-selected={on} aria-controls="gl-panel" tabIndex={on || (!tab && k === GIFT_KEYWORDS[0]) ? 0 : -1}
             className={"gl-tab" + (on ? " on" : "")} ref={(el) => { refs.current[k] = el; }} onClick={() => onTab(k)}>
             <i className="gl-dot" style={{ background: KEYWORD_COLOR[k] }} aria-hidden />
             <span>{t(kwText(k))}</span>
@@ -66,16 +66,12 @@ export function KeywordTabs({ tab, onTab }: { tab: string; onTab: (k: string) =>
   );
 }
 
-/** One keyword's header and its tier blocks. Roving tabindex: one tile is the tab stop; the arrow keys move between tiles. */
-export function KeywordPanel({ keyword }: { keyword: string }) {
-  const { s, t } = useEditor();
-  const { list, change, editable } = useGiftEdit();
-  const dragItem = useDragSort((from, to) => change((l) => moveGift(l, Number(from), Number(to))), editable);
+/** Roving tabindex and arrow-key walking over the tiles of one grid: one tile is the tab stop (the one that last had focus if
+ * `owns` it, else `first`); the arrow keys move between tiles. */
+function useTileGrid(owns: (id: number) => boolean, first: number | undefined) {
   const grid = useRef<HTMLDivElement>(null);
   const [focused, setFocused] = useState<number | null>(null);
-  const zh = s.language === "zh_tw";
-  const c = counts(list, keyword), blocks = tiersOf(list.gorder, keyword);
-  const stop = focused !== null && GIFT_BY_ID.get(focused)?.keyword === keyword ? focused : blocks[0]?.ids[0];
+  const stop = focused !== null && owns(focused) ? focused : first;
 
   const walk = (e: KeyboardEvent) => {
     if (!e.key.startsWith("Arrow")) return;
@@ -95,6 +91,17 @@ export function KeywordPanel({ keyword }: { keyword: string }) {
     }
     if (next) { e.preventDefault(); next.focus(); }
   };
+  return { grid, stop, walk, onFocus: setFocused };
+}
+
+/** One keyword's header and its tier blocks. */
+export function KeywordPanel({ keyword }: { keyword: string }) {
+  const { s, t } = useEditor();
+  const { list, change, editable } = useGiftEdit();
+  const dragItem = useDragSort((from, to) => change((l) => moveGift(l, Number(from), Number(to))), editable);
+  const zh = s.language === "zh_tw";
+  const c = counts(list, keyword), blocks = tiersOf(list.gorder, keyword);
+  const { grid, stop, walk, onFocus } = useTileGrid((id) => GIFT_BY_ID.get(id)?.keyword === keyword, blocks[0]?.ids[0]);
 
   return (
     <div ref={grid} onKeyDown={walk}>
@@ -118,7 +125,7 @@ export function KeywordPanel({ keyword }: { keyword: string }) {
             <div className="gl-wall">
               {/* A gift the shop sells can be dragged onto another of its tier to change its place in the buy order. */}
               {ids.map((id) => (
-                <GiftTile key={id} id={id} zh={zh} tabStop={id === stop} onFocus={() => setFocused(id)}
+                <GiftTile key={id} id={id} zh={zh} tabStop={id === stop} onFocus={() => onFocus(id)}
                   drag={GIFT_BY_ID.get(id)!.kind === "buyable" ? dragItem(String(id), `${keyword}:${tier}`) : undefined} />
               ))}
             </div>
@@ -129,22 +136,62 @@ export function KeywordPanel({ keyword }: { keyword: string }) {
   );
 }
 
+/** The gifts whose Chinese name, English name or id (all of it) match what was typed, grouped by keyword in the list's order. */
+export function SearchResults({ query, onClear }: { query: string; onClear: () => void }) {
+  const { s, t } = useEditor();
+  const { list } = useGiftEdit();
+  const zh = s.language === "zh_tw", q = query.trim().toLowerCase();
+  const hit = new Set(CATALOG.filter((g) => g.zh.toLowerCase().includes(q) || g.en.toLowerCase().includes(q) || String(g.id) === q).map((g) => g.id));
+  const groups = list.order
+    .map((keyword) => ({ keyword, ids: tiersOf(list.gorder, keyword).flatMap((b) => b.ids).filter((id) => hit.has(id)) }))
+    .filter((grp) => grp.ids.length);
+  const total = groups.reduce((n, grp) => n + grp.ids.length, 0);
+  const { grid, stop, walk, onFocus } = useTileGrid((id) => hit.has(id), groups[0]?.ids[0]);
+  if (!total) {
+    return (
+      <div className="gl-empty">
+        <b>{fill(t("gl.search_none"), { q: query })}</b>
+        <p>{t("gl.search_none_note")}</p>
+        <button type="button" onClick={onClear}>{t("gl.search_clear")}</button>
+      </div>
+    );
+  }
+  return (
+    <div ref={grid} onKeyDown={walk}>
+      <div className="gl-sh"><b>{fill(t("gl.search_n"), { n: total })}</b><button type="button" onClick={onClear}>{t("gl.search_clear")}</button></div>
+      {groups.map(({ keyword, ids }) => (
+        <section key={keyword} className="gl-tier" aria-label={t(kwText(keyword))}>
+          <h3 className="gl-kwh"><i className="gl-dot" style={{ background: KEYWORD_COLOR[keyword] }} aria-hidden /><b>{t(kwText(keyword))}</b></h3>
+          <div className="gl-wall">{ids.map((id) => <GiftTile key={id} id={id} zh={zh} tabStop={id === stop} onFocus={() => onFocus(id)} />)}</div>
+        </section>
+      ))}
+    </div>
+  );
+}
+
+/** The padlock of a gift locked by a wanted fusion (on its tile, and in the popover). */
+export const LockIcon = ({ className }: { className: string }) => (
+  <svg className={className} viewBox="0 0 16 16" aria-hidden><path d="M5 7V5a3 3 0 016 0v2h1v7H4V7zm1.5 0h3V5a1.5 1.5 0 00-3 0z" fill="currentColor" /></svg>
+);
+
 /** One gift: its icon in a frame that shows its state (want thick and striped, keep solid, drop faded, locked dashed with a padlock). */
 function GiftTile({ id, zh, tabStop, onFocus, drag }: {
   id: number; zh: boolean; tabStop: boolean; onFocus: () => void; drag?: DragProps;
 }) {
   const { t } = useEditor();
-  const { list, apply } = useGiftEdit();
+  const { list, apply, tip } = useGiftEdit();
   const g = GIFT_BY_ID.get(id)!;
   const { shown, locked } = look(list, id);
   const label = fill(t("gl.tile"), { name: giftName(g, zh), tier: TIERS[g.tier], state: t(`state.${shown}`), lock: locked ? t("gl.locked") : "" });
   return (
     <button type="button" className={`gl-tile ${shown}${locked ? " locked" : ""}`} aria-label={label} data-gift={id} tabIndex={tabStop ? 0 : -1}
-      draggable={false} {...drag} onFocus={onFocus} onClick={() => apply(id)}>
+      draggable={false} {...drag}
+      onDragStart={(e) => { tip.hide(); drag?.onDragStart(e); }}
+      onFocus={(e) => { onFocus(); tip.show(id, e.currentTarget); }}
+      onBlur={(e) => { if (!(e.relatedTarget as Element | null)?.closest(".gl-tip")) tip.hide(); }}
+      onMouseEnter={(e) => tip.show(id, e.currentTarget)} onMouseLeave={tip.leave} onClick={() => apply(id)}>
       <img src={iconUrl(id)} alt="" loading="lazy" />
-      {locked && (
-        <svg className="gl-lock" viewBox="0 0 16 16" aria-hidden><path d="M5 7V5a3 3 0 016 0v2h1v7H4V7zm1.5 0h3V5a1.5 1.5 0 00-3 0z" fill="currentColor" /></svg>
-      )}
+      {locked && <LockIcon className="gl-lock" />}
     </button>
   );
 }

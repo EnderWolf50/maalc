@@ -86,6 +86,64 @@
 }
 .gl .gl-tile.keep { border-color: var(--gl-keep); background: var(--gl-keepbg); }
 .gl .gl-tile.locked { border-style: dashed; cursor: not-allowed; }
+/* Search box, search results header, the help popover (#307). */
+.gl .gl-search { border: 1px solid var(--gl-line); border-radius: 6px; padding: 4px 8px; background: var(--gl-panel); color: var(--gl-fg); width: 260px; max-width: 100%; }
+.gl-sh { display: flex; align-items: center; gap: 10px; padding: 2px 0 6px; }
+.gl-helpwrap { position: relative; display: inline-block; }
+.gl .gl-helpwrap > button.on { background: var(--gl-sel); }
+.gl-pop {
+  position: absolute; right: 0; top: calc(100% + 6px); z-index: 40; width: 380px; max-width: calc(100vw - 24px); max-height: 70vh; overflow: auto;
+  background: var(--gl-panel); border: 1px solid var(--gl-line); border-radius: 10px; box-shadow: 0 8px 24px #0004; padding: 10px 12px; text-align: left; font-size: 12.5px;
+}
+.gl-lg { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.gl-lg b { flex: none; }
+.gl-sw { box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; flex: none; width: 22px; height: 22px; border-radius: 5px; border: 2px solid var(--gl-line); background: var(--gl-tile); font-style: normal; font-size: 11px; font-weight: 700; }
+.gl-sw.want { border: 3px solid var(--gl-want); background: repeating-linear-gradient(45deg, var(--gl-wantbg) 0 3px, var(--gl-stripe) 3px 5px); box-shadow: 0 0 0 1px var(--gl-panel), 0 0 0 2px var(--gl-want); }
+.gl-sw.keep { border-color: var(--gl-keep); background: var(--gl-keepbg); }
+.gl-sw.drop { border-width: 1px; opacity: 0.7; }
+.gl-sw.locked { border: 2px dashed var(--gl-keep); background: var(--gl-keepbg); }
+.gl-sw.fusion { border-radius: 50%; background: #4a5163; border-color: var(--gl-line); color: #fff; }
+.gl-sech { margin: 10px 0 4px; font-weight: 700; color: var(--gl-muted); }
+.gl-pop p { margin: 4px 0; }
+.gl-pop .gl-note { color: var(--gl-muted); }
+.gl-keys { list-style: none; margin: 4px 0; padding: 0; display: grid; gap: 3px; }
+.gl-keys kbd { margin-right: 3px; }
+
+/* The hover popover of a tile: fixed against the window, placed by GiftPopover's `place`. */
+.gl-tip {
+  position: fixed; z-index: 60; width: 340px; max-height: calc(100vh - 12px); overflow: auto; padding: 10px 12px; font-size: 12.5px;
+  background: var(--gl-panel); color: var(--gl-fg); border: 1px solid var(--gl-line); border-radius: 10px; box-shadow: 0 8px 24px #0004;
+}
+.gl-tip:focus { outline: none; }
+.gl-tip-head { display: flex; align-items: center; gap: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--gl-line); }
+.gl-tip-head img { width: 44px; height: 44px; object-fit: contain; }
+.gl-tip-head > div { display: flex; flex-direction: column; justify-content: center; flex: 1; line-height: 1.35; }
+.gl-tip-head b { font-size: 14.5px; }
+.gl-tip-head small, .gl-tip-why { color: var(--gl-muted); }
+.gl-tip-set { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 0 2px; }
+.gl-tip .k { color: var(--gl-muted); font-weight: 600; width: 36px; flex: none; }
+.gl-tip-seg { display: inline-flex; gap: 5px; }
+.gl-tip .gl-state { padding: 2px 10px; }
+.gl-tip button:disabled { opacity: 0.45; }
+.gl-tip-why { flex-basis: 100%; }
+.gl-tip-rows { display: flex; flex-direction: column; gap: 7px; padding-top: 8px; }
+.gl-tip-row { display: grid; grid-template-columns: 36px 1fr; column-gap: 8px; align-items: center; }
+.gl-tip-row > .v { min-width: 0; display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+.gl-tip-lockwhy { display: inline-flex; align-items: center; gap: 5px; color: var(--gl-keep); font-weight: 600; }
+.gl-tip-acts { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 5px; }
+.gl-tip-acts button { padding: 1px 8px; font-size: 12px; }
+.gl .gl-tip-acts button.warn { color: var(--gl-bad); border-color: var(--gl-bad); }
+.gl-lk { width: 11px; height: 11px; color: var(--gl-keep); flex: none; }
+.gl-tip-recipes { display: flex; flex-direction: column; gap: 6px; width: 100%; }
+.gl-tip-recipe, .gl-tip-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.gl-tip-recipe i { font-style: normal; color: var(--gl-muted); }
+.gl-tip-no { width: 16px; height: 16px; border-radius: 50%; background: var(--gl-accent); color: var(--gl-on-accent); font-size: 10px; text-align: center; line-height: 16px; font-weight: 700; }
+.gl-tip-group { display: flex; flex-direction: column; gap: 3px; }
+.gl-tip-need { align-self: flex-start; background: var(--gl-accent); color: var(--gl-on-accent); border-radius: 4px; padding: 0 6px; font-size: 11.5px; font-weight: 700; }
+.gl-tip-need.all { background: var(--gl-keep); }
+.gl-mat { display: inline-flex; align-items: center; gap: 3px; background: var(--gl-panel2); border: 1px solid var(--gl-line); border-radius: 5px; padding: 1px 5px 1px 2px; font-size: 11.5px; line-height: 1.2; }
+.gl-mat.locked { background: var(--gl-keepbg); }
+.gl-mat img { width: 18px; height: 18px; object-fit: contain; }
 .gl-lock { position: absolute; left: 2px; bottom: 2px; width: 16px; height: 16px; padding: 2px; border-radius: 50%; color: var(--gl-keep); background: var(--gl-panel); }
 
 /* Drag and drop: the tile or row being dragged fades, the one it would land on takes the selection fill. */

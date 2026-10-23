@@ -20,6 +20,18 @@ export function setState(list: GiftList, id: number, to: GiftState) {
   if (to !== "drop") list[to].push(id);
 }
 
+/** The three states, in the order the apply bar and the popover list them. */
+export const STATES: GiftState[] = ["want", "keep", "drop"];
+
+/** The hover popover of a gift tile: `show` it for a tile (it stays while the pointer is on the tile or the popover), `leave` starts
+ * the close delay (`keep` cancels it), `hide` closes it at once (a drag, #296, calls this). */
+export interface GiftTip {
+  show: (id: number, anchor: HTMLElement) => void;
+  keep: () => void;
+  leave: () => void;
+  hide: () => void;
+}
+
 /** The gifts of one keyword in buy order: the ones the list wants and the shop sells. */
 export const buyList = (list: ListRules, keyword: string) => queue({ ...list, order: [keyword] });
 
@@ -53,6 +65,9 @@ export interface GiftEdit {
   apply: (id: number, to?: GiftState) => void;
   /** Show a line in the status area under the apply bar. */
   flash: (message: string, warn?: boolean) => void;
+  tip: GiftTip;
+  /** Show a gift: its keyword's tab, its tile focused. */
+  goto: (id: number) => void;
   /** True when the list can change; otherwise shows the read-only notice. */
   editable: () => boolean;
   /** Change the list being shown; false (with the read-only notice) when it cannot change. */
