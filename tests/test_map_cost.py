@@ -30,6 +30,10 @@ COINS = json.loads((ROOT / "tests" / "data" / "map_costs.json").read_text(encodi
 # The coins that stay unread (None, and the marks decide): dim behind a popup at the right edge. Two coins:
 # PauseExploration and ProgressPanel show the same one.
 UNREAD = {("GiftGetOverMap.png", 1221, 438), ("PauseExploration.png", 1221, 438), ("ProgressPanel.png", 1221, 438)}
+# Live crops of coins the pale link's arrow tip touched (#284), read as '7', '8', '.175' or nothing; the coin sits at (8, 8)
+# in a crop. File name: the number printed.
+CROPS = sorted((ROOT / "tests" / "data" / "cost_crops").glob("*.png"))
+CROP_COIN = (8, 8, *COIN)
 # node_at end to end on a floor of the given difficulty: (image, node centre, hard) -> type
 NODES = {("MapBossCost500.png", 583, 357, True): "boss"}
 
@@ -74,6 +78,8 @@ def child():
                     image = load(name)
                     for x, y, _ in coins:
                         out[f"{name} {x} {y}"] = actions.coin_number(actions.coin_text(context, image, (x, y, *COIN)))
+                for crop in CROPS:
+                    out[f"crop {crop.name}"] = actions.coin_number(actions.coin_text(context, load(crop), CROP_COIN))
                 with tempfile.TemporaryDirectory() as logs:
                     actions.ROOT = Path(logs)  # a miss keeps its crop under logs/cost
                     for name, cx, cy, hard in NODES:
@@ -124,8 +130,14 @@ def test_the_live_misreads_read_right(read):
     assert read["MirrorMap.png 709 438"] == 85
 
 
+@pytest.mark.parametrize("crop", [pytest.param(c, id=c.stem) for c in CROPS])
+def test_a_coin_under_a_link_arrow_reads_whole(read, crop):
+    # #284: the arrow's tip, as cream as the digits, touched the 5 and the OCR read '7' or '8' (8 + 3 live misses)
+    assert read[f"crop {crop.name}"] == (75 if crop.name.startswith("normal") else 85)
+
+
 def test_the_sweep_has_no_unlisted_miss(read):
-    missed = {tuple(k.split()[:3]) for k, v in read.items() if v is None and not k.startswith("node ")}
+    missed = {tuple(k.split()[:3]) for k, v in read.items() if v is None and not k.startswith(("node ", "crop "))}
     assert missed <= {(n, str(x), str(y)) for n, x, y in UNREAD}
 
 

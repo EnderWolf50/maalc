@@ -1367,15 +1367,17 @@ def node_at(context, image, cx, cy, marks=None, costs=True):
 def coin_text(context, image, box):
     """The OCR text of the number printed beside a map node's Cost coin (box): coin_number makes it a number.
 
-    The game's font, right-aligned, 8 px a digit and 16 rows tall: the digits fill x+w-12 .. x+w+12, y+24 .. y+40,
-    and the crop keeps to them with a pixel or two to spare (#284): a lit link's pale line runs under the number and
-    past its right edge, as cream as the digits, and wider crops kept it (an 85 read 5 or B5). The digits are the
+    The game's font, right-aligned, 8 px a digit and 14 rows tall: the digits fill x+w-12 .. x+w+12, y+24 .. y+37
+    (measured on every labelled coin: the glyph rows never move), and the crop ends on their last row (#284): a lit
+    link's pale arrow starts on y+38, right under the number, as cream as the digits, and the crop that kept it joined
+    the 5 of a 75 or 85 to the arrow's tip (read '7' or '8'); a crop one row shorter clips the digits (a 180 read 18T).
+    A row more above (the coin's frame) read an 85 as B5 once. The digits are the
     bright, barely saturated pixels; each keeps its own shading, dark on white, rather than going plain black: its
     1 px counters are what tell an 8 from a 0, and a black cut-out loses them (8 read B). A white margin: the OCR
     reads a glyph on the crop's edge badly (#257; spec 03 section 7).
     """
     x, y, w, _ = box
-    part = image[y + 22:y + 41, max(0, x + w - 13):x + w + 13]
+    part = image[y + 24:y + 38, max(0, x + w - 13):x + w + 13]
     bright = part.max(axis=2)
     mask = (bright > 100) & (saturation(part) < 120)
     plain = np.where(mask, 255 - bright, 255).astype(np.uint8)[..., None].repeat(3, axis=2)
