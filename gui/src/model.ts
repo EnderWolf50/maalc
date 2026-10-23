@@ -1,4 +1,5 @@
 // Settings types and the values that come from agent/settings.schema.json (docs/spec/04-settings.md).
+import Ajv2020 from "ajv/dist/2020";
 import { parse as parseYaml } from "yaml";
 import schema from "../../agent/settings.schema.json";
 import gifts from "../../assets/resource/base/data/gift_search.json";
@@ -178,13 +179,9 @@ export function cleanGiftList(list: GiftList): { list: GiftList; dropped: number
   return { list: { ...list, want, keep, gorder }, dropped: list.want.length - want.length + list.keep.length - keep.length };
 }
 
-/** Whether a loaded gift list has the shape the schema asks of want, keep and gorder, so cleaning it hides no schema error. */
-function wellFormed(l: GiftList) {
-  const ids = (v: unknown) => Array.isArray(v) && v.every((i) => Number.isInteger(i));
-  const gorder = l?.gorder;
-  return ids(l?.want) && ids(l?.keep) && !!gorder && typeof gorder === "object" && !Array.isArray(gorder)
-    && Object.entries(gorder).every(([k, v]) => GIFT_KEYWORDS.includes(k) && ids(v));
-}
+/** Whether a loaded gift list passes the schema, so cleaning it hides no schema error (the agent cleans after the schema check too). */
+const giftListCheck = new Ajv2020({ strict: false }).compile({ $ref: "#/$defs/gift_list", $defs: schema.$defs });
+const wellFormed = (l: unknown): l is GiftList => giftListCheck(l);
 
 /** The gift list a version 10 team's keep settings come to, without id and name; lost: its keep_gifts that match no gift
  * (agent/settings.py _team_gift_list). */
@@ -422,7 +419,7 @@ export function parseSettings(text: string): { data: Settings; migrated: boolean
   let unknown = 0; // ids in a list that no data file has (a new season): dropped, the caller warns
   data = {
     ...data,
-    gift_lists: lists.map((l: GiftList) => {
+    gift_lists: lists.map((l: unknown) => {
       if (!wellFormed(l)) return l; // the schema check names what is wrong
       const cleaned = cleanGiftList(l);
       unknown += cleaned.dropped;

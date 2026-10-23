@@ -228,3 +228,22 @@ test("loading drops gift ids no data file has, fills gorder and counts them", ()
   expect(Object.keys(data.gift_lists[0].gorder)).toHaveLength(11); // a keyword the file lacks gets the default order
   expect(validate(data)).toEqual([]);
 });
+
+test("version 10 teams that are not objects get no list and stay for the schema check", () => {
+  const old = structuredClone(cases.valid10) as unknown as { teams: unknown[] };
+  old.teams.unshift([1]);
+  const { data } = parseSettings(JSON.stringify(old));
+  expect(data.gift_lists).toHaveLength(2); // the two real teams keep different things
+  expect(data.teams[0]).toEqual([1]);
+  expect(validate(data).some((p) => p.paths[0].startsWith("teams/0"))).toBe(true);
+});
+
+test("loading leaves ids below 1 and repeated ids to the schema check", () => {
+  const file = structuredClone(cases.valid) as unknown as { gift_lists: { want: number[]; keep: number[]; gorder: Record<string, number[]> }[] };
+  file.gift_lists[0].want = [9053, 0];
+  file.gift_lists[0].keep = [424242, 424242];
+  file.gift_lists[0].gorder = { Burn: [-3] };
+  const { data, unknown } = parseSettings(JSON.stringify(file));
+  expect(unknown).toBe(0);
+  expect(validate(data).map((p) => p.text.split(": ")[0]).sort()).toEqual(["gift_lists/0/gorder/Burn/0", "gift_lists/0/keep", "gift_lists/0/want/1"]);
+});

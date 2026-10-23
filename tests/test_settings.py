@@ -417,3 +417,10 @@ def test_version_10_one_team_one_list_no_team_no_list(tmp_path):
     one = load(tmp_path, edited(lambda d: d.update(teams=d["teams"][:1]), V10))
     assert [g["name"] for g in one["gift_lists"]] == ["Team a"]
     assert settings.gift_lists_from_v10([]) == ([], [], 0)
+
+
+def test_version_10_skips_what_is_not_a_team(tmp_path):
+    # A broken file is left to the schema check: only the object teams get lists, the rest stays as it is.
+    data = settings._v10_to_v11(edited(lambda d: d["teams"].insert(0, [1]), V10))
+    assert data["teams"][0] == [1] and [t["gift_list"] for t in data["teams"][1:]] == ["gift-list-1", "gift-list-1"]
+    assert errors(tmp_path, {**data, "version": 11}) and len(data["gift_lists"]) == 1

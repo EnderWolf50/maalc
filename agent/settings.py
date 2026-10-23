@@ -166,7 +166,8 @@ def _team_gift_list(team):
     dropped = 0
     for kept in listed("keep_gifts"):
         kept = kept if isinstance(kept, dict) else {}
-        by_name = {g["en"]: g["id"] for g in search if (g["keyword"], g["tier"]) == (kept.get("keyword"), kept.get("tier"))}
+        tier = None if isinstance(kept.get("tier"), bool) else kept.get("tier")  # True == 1 in Python only
+        by_name = {g["en"]: g["id"] for g in search if (g["keyword"], g["tier"]) == (kept.get("keyword"), tier)}
         name = kept.get("name") if isinstance(kept.get("name"), str) else None
         found = by_name.get(name) or dict(zip(VESTIGES, VESTIGE_IDS)).get(name)
         if found:
