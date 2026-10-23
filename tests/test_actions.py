@@ -17,6 +17,7 @@ from maa.define import Rect
 
 import actions
 import recovery
+from test_shop import OLD_DOLL_SHOP
 
 REAL_GUARD = actions.page_guard
 SCREENS = Path(__file__).resolve().parent / "screens"
@@ -846,6 +847,18 @@ def test_offers_are_read_once_and_bought_high_tier_first_from_the_back(context, 
     offer_taps = [t for t in tapped if t[1] == 268]
     assert offer_taps == [(1084, 268), (930, 268)]
     assert costs[-1] == 50 and visit["wanted"] is None
+
+
+def test_a_glyph_on_an_offers_icon_opens_no_purchase_dialog(context, monkeypatch):
+    # #216, live 2026-10-22: a "3" read in Old Wooden Doll's icon corner made a slot priced 3 named '214' whose cell
+    # (read_cells found no badge) was opened to read its keyword. Skill slot first, the glyph, four gifts.
+    context.tasker.controller.post_screencap.return_value.wait.return_value.get.return_value = np.zeros((720, 1280, 3), np.uint8)
+    reads(context, {tuple(actions.OFFER_GRID): OLD_DOLL_SHOP, tuple(actions.SHOP_COST): [("787", (560, 120, 60, 30))]})
+    cells_read(monkeypatch, ("Burn", None, 2), ("Bleed", None, 2), ("Pierce", None, 2), ("Blunt", None, 2))
+    visit = {"wanted": None, "sold": False}
+    assert actions.Shop.buy_offers(context, {"keyword": "Keywordless", "reserve_cost": 0}, visit) == 0
+    assert not context.tasker.controller.post_click.called  # no cell opened to read its keyword
+    assert visit["wanted"] is None
 
 
 def test_an_offer_with_a_red_price_is_not_tapped_though_ocr_read_it_as_affordable(context, monkeypatch):
