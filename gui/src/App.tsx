@@ -34,10 +34,12 @@ export default function App() {
     api.loadSettings().then(async (text) => {
       if (text === null) return setS(newSettings());
       try {
-        const { data, migrated } = parseSettings(text);
+        const { data, migrated, dropped, unknown } = parseSettings(text);
         setS(data);
         if (migrated && !validate(data).length) await api.saveSettings(toText(data));
         setSavedText(toText(data)); // dirty = content changed, not formatting
+        const warn = (key: Key, n: number) => (n ? [TEXT[data.language][key].replace("{n}", String(n))] : []);
+        setStatus([...warn("migrate.dropped", dropped), ...warn("migrate.unknown", unknown)].join(" "));
       } catch (e) {
         setLoadError(String(e));
       }

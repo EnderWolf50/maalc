@@ -1,7 +1,9 @@
 // Settings types and the values that come from agent/settings.schema.json (docs/spec/04-settings.md).
+import Ajv2020 from "ajv/dist/2020";
 import { parse as parseYaml } from "yaml";
 import schema from "../../agent/settings.schema.json";
 import gifts from "../../assets/resource/base/data/gift_search.json";
+import recipes from "../../assets/resource/base/data/gift_recipes.json";
 import graces from "./graces.json";
 
 export { schema };
@@ -70,12 +72,15 @@ export function enhanceAll(v: StarlightValues, plus: 1 | 2) {
 
 /** The E.G.O Gift Search page's tabs, left to right (agent/settings.schema.json gift_search keywords). */
 export const SEARCH_TABS: string[] = schema.$defs.gift.properties.keyword.enum;
-/** Vestiges, tier I-V in this order (#161): only fusion or sale material, kept by name in keep_gifts. */
+/** Vestiges, tier I-V in this order (#161): the old keep_gifts named them; ids 9991-9995. */
 export const VESTIGES: string[] = schema.$defs.vestige.properties.name.enum;
+const VESTIGE_IDS = VESTIGES.map((_, i) => 9991 + i);
 /** Spec 04 section 9: the gifts the search page offers, in page order; ids, tiers and English names from the game's
  * static data, Chinese names from LLC (data/gift_search.json carries its sources and license). */
 export const SEARCH_GIFTS: SearchGift[] = gifts.gifts;
 export interface SearchGift { id: number; keyword: string; tier: number; en: string; zh: string }
+/** The fusion gifts and the recipe materials the search page lacks (data/gift_recipes.json, spec 05). */
+const RECIPE_GIFTS: { id: number; keyword: string }[] = [...recipes.gifts, ...recipes.materials];
 
 /** The game searches 3 gifts at most; agent/settings.schema.json caps gift_search.gifts the same. */
 export const MAX_GIFTS: number = TEAM.gift_search.properties.gifts.maxItems;
@@ -146,6 +151,131 @@ export const lanesOf = (plan: PackPlanValues) =>
 
 /** How many lanes sit above the threshold line: those whose packs meet it. */
 export const lineAt = (lanes: number[], threshold: number) => lanes.filter((w) => w >= threshold).length;
+
+/** Spec 04 section 13: the Gift Search page's tabs, which is the order a new gift list buys them in. */
+export const GIFT_KEYWORDS: string[] = schema.$defs.gift_list.properties.order.items.enum;
+export const FUSION_CONDITIONS: string[] = schema.$defs.gift_list.properties.fusion_condition.enum;
+/** A gift list (spec 04 section 13): the gifts neither in want nor in keep are drop. */
+export interface GiftList {
+  id: string; name: string; order: string[]; want: number[]; keep: number[]; gorder: Record<string, number[]>; fusion_condition: string;
+}
+
+/** Every keyword's buyable gifts, tier III first, within a tier in data-file order (agent/settings.py default_gorder). */
+export const defaultGorder = (): Record<string, number[]> => Object.fromEntries(GIFT_KEYWORDS.map((k) => [
+  k, [3, 2, 1].flatMap((tier) => SEARCH_GIFTS.filter((g) => g.keyword === k && g.tier === tier).map((g) => g.id)),
+]));
+
+const KNOWN_GIFTS = new Set([...SEARCH_GIFTS, ...RECIPE_GIFTS].map((g) => g.id).concat(VESTIGE_IDS));
+
+/** A gift list as the GUI uses it, and how many ids it dropped (agent/settings.py clean_gift_list): ids no data file has
+ * leave want and keep; a gorder keyword lacking gifts gets them last, ids the keyword does not have are dropped. */
+export function cleanGiftList(list: GiftList): { list: GiftList; dropped: number } {
+  const known = (ids: number[]) => ids.filter((i) => KNOWN_GIFTS.has(i));
+  const gorder = Object.fromEntries(Object.entries(defaultGorder()).map(([k, all]) => {
+    const given = [...new Set(Array.isArray(list.gorder[k]) ? list.gorder[k] : [])].filter((i) => all.includes(i));
+    return [k, [...given, ...all.filter((i) => !given.includes(i))]];
+  }));
+  const want = known(list.want), keep = known(list.keep);
+  return { list: { ...list, want, keep, gorder }, dropped: list.want.length - want.length + list.keep.length - keep.length };
+}
+
+/** Whether a loaded gift list passes the schema, so cleaning it hides no schema error (the agent cleans after the schema check too). */
+const giftListCheck = new Ajv2020({ strict: false }).compile({ $ref: "#/$defs/gift_list", $defs: schema.$defs });
+const wellFormed = (l: unknown): l is GiftList => giftListCheck(l);
+
+/** The gift list a version 10 team's keep settings come to, without id and name; lost: its keep_gifts that match no gift
+ * (agent/settings.py _team_gift_list). */
+function listFromV10Team(team: Record<string, unknown>): { content: Omit<GiftList, "id" | "name">; lost: number } {
+  const arr = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
+  const main = typeof team.keyword === "string" ? team.keyword : null;
+  const keptKeywords = new Set([main, ...arr(team.keep_keywords).filter((k) => typeof k === "string")]);
+  const want = new Set(SEARCH_GIFTS.filter((g) => g.keyword === main).map((g) => g.id));
+  const keep = new Set([...SEARCH_GIFTS, ...RECIPE_GIFTS].filter((g) => keptKeywords.has(g.keyword) || g.keyword === "Keywordless").map((g) => g.id));
+  let lost = 0;
+  for (const raw of arr(team.keep_gifts)) {
+    const kept = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
+    const found = SEARCH_GIFTS.find((g) => g.keyword === kept.keyword && g.tier === kept.tier && g.en === kept.name)?.id
+      ?? VESTIGE_IDS[VESTIGES.indexOf(kept.name as string)];
+    if (found) keep.add(found);
+    else lost++;
+  }
+  const byId = (a: number, b: number) => a - b;
+  return {
+    content: {
+      order: main && GIFT_KEYWORDS.includes(main) ? [main, ...GIFT_KEYWORDS.filter((k) => k !== main)] : [...GIFT_KEYWORDS],
+      want: [...want].sort(byId), keep: [...keep].filter((i) => !want.has(i)).sort(byId), gorder: defaultGorder(),
+      fusion_condition: ("fusion_condition" in team ? team.fusion_condition : "any") as string, // a bad value is for the checks
+    },
+    lost,
+  };
+}
+
+/** Version 10 teams to version 11 (agent/settings.py gift_lists_from_v10): a list per team, teams that keep the same share the
+ * first one's list, named after the first team, "Name 2" when the name is taken. Returns each team's list id too. */
+function giftListsFromV10(teams: Record<string, unknown>[]) {
+  const lists: GiftList[] = [], ids: string[] = [];
+  let dropped = 0;
+  for (const team of teams) {
+    const { content, lost } = listFromV10Team(team);
+    dropped += lost;
+    let list = lists.find((g) => (Object.keys(content) as (keyof typeof content)[]).every((k) => JSON.stringify(g[k]) === JSON.stringify(content[k])));
+    if (!list) {
+      const base = typeof team.name === "string" && team.name ? team.name : "Gift list";
+      list = { id: `gift-list-${lists.length + 1}`, name: freeName(base, lists.map((g) => g.name)), ...content };
+      lists.push(list);
+    }
+    ids.push(list.id);
+  }
+  return { lists, ids, dropped };
+}
+
+function migrateV10(d: Record<string, unknown>) {
+  const teams = Array.isArray(d.teams) ? d.teams : [];
+  const objects = teams.filter((t): t is Record<string, unknown> => !!t && typeof t === "object" && !Array.isArray(t));
+  const { lists, ids, dropped } = giftListsFromV10(objects);
+  const gift_list = new Map(objects.map((t, i) => [t, ids[i]]));
+  return {
+    data: {
+      ...d, gift_lists: lists,
+      teams: Array.isArray(d.teams) ? d.teams.map((t) => {
+        if (!gift_list.has(t)) return t;
+        const { keep_keywords, keywordless, keep_gifts, fusion_condition, ...rest } = t;
+        return { ...rest, gift_list: gift_list.get(t) };
+      }) : d.teams,
+    },
+    dropped,
+  };
+}
+
+/** Spec 04 section 13: a gift list as text for a friend, without the id. */
+export const exportGiftList = (list: GiftList) => {
+  const { id, ...rest } = list;
+  return JSON.stringify(rest, null, 2);
+};
+
+/** A pasted gift list as a new list (spec 04 section 13): "(匯入)" after its name, unknown ids dropped, an order that is not all
+ * the keywords once the default, a want that is also in keep stays wanted, an unknown fusion condition "any". skipped counts
+ * the ids dropped. Throws a message for text that is not a gift list. */
+export function importGiftList(text: string, taken: string[], suffix: string): { list: GiftList; skipped: number } {
+  const raw: unknown = JSON.parse(text);
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) throw new Error("not a gift list");
+  const o = raw as Record<string, unknown>;
+  const ids = (v: unknown) => (Array.isArray(v) ? [...new Set(v)] : []);
+  const isId = (v: unknown): v is number => Number.isInteger(v) && (v as number) > 0;
+  const bad = (v: unknown) => ids(v).filter((i) => !isId(i)).length;
+  const want = ids(o.want).filter(isId);
+  const gorder = o.gorder && typeof o.gorder === "object" && !Array.isArray(o.gorder) ? o.gorder as Record<string, unknown> : {};
+  const order = Array.isArray(o.order) && o.order.length === GIFT_KEYWORDS.length && GIFT_KEYWORDS.every((k) => (o.order as unknown[]).includes(k))
+    ? o.order as string[] : [...GIFT_KEYWORDS];
+  const { list, dropped } = cleanGiftList({
+    id: newId(), name: freeName(`${typeof o.name === "string" ? o.name : ""}${suffix}`, taken), order,
+    want, keep: ids(o.keep).filter(isId).filter((i) => !want.includes(i)),
+    gorder: Object.fromEntries(Object.entries(gorder).map(([k, v]) => [k, ids(v).filter(isId)])),
+    fusion_condition: typeof o.fusion_condition === "string" && FUSION_CONDITIONS.includes(o.fusion_condition) ? o.fusion_condition : "any",
+  });
+  return { list, skipped: dropped + bad(o.want) + bad(o.keep) };
+}
+
 export type Ref<T> = { plan: string } | { custom: T };
 export interface Team {
   id: string; name: string; enabled: boolean; game_team: number; keyword: string; usage: string;
@@ -153,8 +283,7 @@ export interface Team {
   theme_pack_plan: string; reward_cards: string[]; shop_refresh_limit: number; heal: string;
   reserve_cost: number; min_alive: number; guard_turns: number; trial_risk_weight: string;
   gift_search: { enabled: boolean; gifts: GiftRef[] }; allow_white_gossypium: boolean;
-  keep_keywords: string[]; keywordless: string; keep_gifts: GiftRef[]; sell_max_tier: number; sell_vestiges: boolean;
-  fusion_condition: string;
+  gift_list: string; sell_max_tier: number; sell_vestiges: boolean;
 }
 /** A gift on the E.G.O Gift Search page: its keyword tab, tier and English name (spec 04 section 9). */
 export interface GiftRef { keyword: string; tier: number; name: string }
@@ -170,6 +299,7 @@ export interface Settings {
   deployment_order_plans: DeploymentPlan[];
   starlight_plans: StarlightPlan[];
   theme_pack_plans: ThemePackPlan[];
+  gift_lists: GiftList[];
   teams: Team[];
   event_overrides: { question: string; option: string }[];
   trial_risk_overrides: { trial: string; risk: number }[];
@@ -185,7 +315,7 @@ export const newId = () => crypto.randomUUID();
 export function newSettings(): Settings {
   return {
     version: VERSION, language: "zh_tw", run: defaultsOf(P.run.properties) as Settings["run"],
-    deployment_order_plans: [], starlight_plans: [], theme_pack_plans: [], teams: [],
+    deployment_order_plans: [], starlight_plans: [], theme_pack_plans: [], gift_lists: [], teams: [],
     event_overrides: [], trial_risk_overrides: [],
   };
 }
@@ -251,7 +381,16 @@ const MIGRATIONS: Record<number, (d: Record<string, unknown>) => Record<string, 
   }),
   // Version 10 adds teams[].fusion_condition (#263), "any": the shop fuses as before.
   9: (d) => withTeamDefault(d, { fusion_condition: "any" }),
+  // Version 11 (#291) moves the shop's keep settings from the teams to gift lists: a list per team, teams that kept the same
+  // share one; keep_keywords, keywordless, keep_gifts and fusion_condition go. A keywordless gift is always kept now.
+  10: (d) => {
+    const { data, dropped } = migrateV10(d);
+    v10Dropped = dropped;
+    return data;
+  },
 };
+/** The version 10 keep_gifts the last migration found no gift for (parseSettings returns it). */
+let v10Dropped = 0;
 
 const MARK_WEIGHTS: Record<string, number> = { prefer: 5, neutral: 0, avoid: -5 };
 
@@ -264,15 +403,28 @@ function withTeamDefault(d: Record<string, unknown>, field: Record<string, unkno
 }
 
 /** Parse a settings file; an older version is migrated and the caller writes it back (spec 04 section 2). */
-export function parseSettings(text: string): { data: Settings; migrated: boolean } {
+export function parseSettings(text: string): { data: Settings; migrated: boolean; dropped: number; unknown: number } {
   let data = JSON.parse(text);
   let version = data?.version;
   if (!Number.isInteger(version)) throw new Error(`version must be an integer, got ${JSON.stringify(version)}`);
   if (version > VERSION) throw new Error(`settings version ${version} is newer than this GUI supports (${VERSION}); update maalc`);
   const migrated = version < VERSION;
+  v10Dropped = 0;
   for (; version < VERSION; version++) {
     if (!MIGRATIONS[version]) throw new Error(`settings version ${version} cannot be migrated`);
     data = { ...MIGRATIONS[version](data), version: version + 1 };
   }
-  return { data, migrated };
+  const dropped = v10Dropped;
+  const lists = Array.isArray(data.gift_lists) ? data.gift_lists : [];
+  let unknown = 0; // ids in a list that no data file has (a new season): dropped, the caller warns
+  data = {
+    ...data,
+    gift_lists: lists.map((l: unknown) => {
+      if (!wellFormed(l)) return l; // the schema check names what is wrong
+      const cleaned = cleanGiftList(l);
+      unknown += cleaned.dropped;
+      return cleaned.list;
+    }),
+  };
+  return { data, migrated, dropped, unknown };
 }

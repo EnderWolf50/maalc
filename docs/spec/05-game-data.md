@@ -22,7 +22,7 @@
 | 事件表 `event_table.json` | 事件頁依選項的實際效果排序 | 開發者每季從拆包的客戶端資料重新產生（第 7 節） | 1.117.0 的 195 個事件 | #93 |
 | 觀測飾品表 `gift_search.json` 與圖示 `image/GiftSearch/<id>.png` | E.G.O Gift Search 頁找飾品（位置預測、圖示比對）；GUI 的飾品清單 | 開發者每季依遊戲客戶端的觀測表重新產生（產生方式寫在檔頭 `note` 與 [04-settings.md](04-settings.md) 第 9 節） | 這一季的 320 個，另有 5 個殘影圖示（9991–9995，#161） | #54 |
 | 合成飾品表 `gift_recipes.json` 與圖示 `image/GiftRecipe/<id>.png` | 飾品清單把合成品標成想要時，查它的配方與材料（固定配方、月之記憶的 N 選 K） | 開發者每季跑 `tools/gift_recipes.py`（中文名取自 LLC release）（用法寫在工具檔頭與 `note`，要 `bench` 號碼牌） | 這一季 60 個合成品（59 個固定配方共 67 條，月之記憶 1 條 N 選 K），其中 39 條固定配方（`isSpecific`）用到主題包專屬飾品，該合成品帶 `specific: true` 與 `packs`（那些主題包的 id，取自各包 `specificEgoGiftPool`）；另有 12 個 `gift_search.json` 沒有的材料，72 個圖示，中文名全齊 | #277、#286 |
-| 預設飾品清單 `gift_lists.yaml` 與 GUI 圖示 `gift_icons/<id>.webp` | 飾品清單的「預設」；GUI 顯示 397 個飾品的圖示（第 9 節） | 開發者每季確認 id 還在、重跑 `tools/gift_icons.py` | 預設清單 23 個想要、90 個保留；397 個圖示 | #291、#293 |
+| 預設飾品清單 `gift_lists.yaml` 與 GUI 圖示 `gift_icons/<id>.webp` | 飾品清單的「預設」；GUI 顯示 397 個飾品的圖示（第 9 節） | 開發者每季確認 id 還在、重跑 `tools/gift_icons.py` | 預設清單 23 個想要、86 個保留；397 個圖示 | #291、#293 |
 
 ## 2. 主題包方案
 
@@ -226,7 +226,7 @@
 
 - `order`：Gift Search 頁的分頁順序，Burn 第一、`Keywordless` 最後。
 - `want`：Burn 在商店買得到的 22 個（I–III 階）與月之記憶（9083），共 23 個。
-- `keep`：所有無體系飾品，共 90 個：`gift_search.json` 的 82 個、`gift_recipes.json` 其餘 3 個無體系合成品、5 個殘影（9991–9995）。無體系飾品一律 `keep`：不賣，也不當合成材料。
+- `keep`：所有無體系飾品，共 86 個：`gift_search.json` 的 82 個、`gift_recipes.json` 其餘 3 個無體系合成品、月之殘影（9995）。無體系飾品一律 `keep`：不賣，也不當合成材料。月之殘影是 V 階，本來就永遠不當合成材料，所以保留；殘影 I–IV（9991–9994）是 `drop`，讓用預設清單的隊伍照舊把它們當合成材料（出售仍看隊伍的「可以出售殘影」）。（#292，使用者 2026-10-23 決定）
 - 其餘是 `drop`。`gorder`：每個體系 III、II、I 階，階內照 `gift_search.json` 的順序。`fusion_condition`：`any`。
 
 **圖示**：`resource/base/data/gift_icons/<id>.webp` 與 `index.json`（`{id: 檔名}`），由 `tools/gift_icons.py` 產生。涵蓋 `gift_search.json` 的 320 個、`gift_recipes.json` 的 60 個合成品與 12 個材料、5 個殘影，共 397 個。圖示取自遊戲的 EgoGiftIcon 精靈圖，保留透明，縮成 56 px（最長邊）、WebP quality 72；整批 574,696 位元組，平均約 1.4 KB。`image/GiftSearch/`、`image/GiftRecipe/` 的綠底模板是 Agent 比對用，不動。`tests/test_gift_lists.py` 檢查預設清單的 id 與內容、圖示齊全與總量。（#293）
