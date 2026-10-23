@@ -5,11 +5,12 @@
 import { useEffect, useRef, useState } from "react";
 import "./giftlists.css";
 import { GIFT_BY_ID, giftName } from "./giftCatalog";
-import { plan, setState, GiftEditContext, type GiftEdit } from "./giftEdit";
 import { BuyOrderDialog } from "./BuyOrder";
+import { plan, resetToDefault, setState, GiftEditContext, type GiftEdit } from "./giftEdit";
 import { DEFAULT_LIST, queue, type GiftState } from "./gifts";
 import { fill } from "./i18n";
 import { FUSION_CONDITIONS, GIFT_KEYWORDS, type GiftList } from "./model";
+import { GiftListOptions } from "./GiftListOptions";
 import { KeywordPanel, KeywordTabs } from "./KeywordGrid";
 import { useEditor } from "./ui";
 
@@ -71,10 +72,7 @@ export function GiftListsTab() {
   }, []);
 
   const empty = !readOnly && !list.want.length && !list.keep.length;
-  const startFromDefault = () => update((d) => {
-    const { order, want, keep, gorder, fusion_condition } = structuredClone(DEFAULT_LIST);
-    Object.assign(d.gift_lists[at], { order, want, keep, gorder, fusion_condition });
-  });
+  const startFromDefault = () => update((d) => resetToDefault(d.gift_lists[at]));
 
   return (
     <GiftEditContext.Provider value={edit}>
@@ -87,7 +85,8 @@ export function GiftListsTab() {
                 {s.gift_lists.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
               </select>
             </label>
-            {/* #308: the list options menu goes here; #307: search and help at the end of the bar. */}
+            <GiftListOptions at={at} readOnly={readOnly} choose={setChosen} flash={flash} />
+            {/* #307: search and help at the end of the bar. */}
             {readOnly && <span className="gl-readonly">{t("gl.readonly")}</span>}
             <span className="spacer" />
             <label title={t("team.fusion_condition_note")}>{t("team.fusion_condition")}{" "}
