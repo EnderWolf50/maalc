@@ -16,8 +16,8 @@ the path that read it and two independent verdicts. The OCR runs in a MaaFramewo
 ## Truth, and what it does not show
 
 - A card's truth is the pack the full reading (`+cover`) names. That is the reading under test, so each card also gets two verdicts
-  that do not rest on the whole-title match: the cover art alone agrees on 467 of the 531 cards and is silent on 64 (a boss silhouette or
-  a look-alike cover, see below); the keyword alone agrees on 526 and is silent on 5. None disagrees, and every card is confirmed by one
+  that do not rest on the whole-title match: the cover art alone agrees on 467 of the 531 cards and is silent on 64 (boss silhouettes, look-alike
+  covers and others; not classified card by card); the keyword alone agrees on 526 and is silent on 5. None disagrees, and every card is confirmed by one
   of the two (0 of 531 by neither). The keyword reads the same OCR text as the title match, the cover reads the pixels. No card was
   checked by eye one by one: a pack both of them misread the same way would pass (unverified).
 - The captures show **74 of the 94 packs** of the season; the 20 never dealt in them (The B.E., The Evil Defining, The
@@ -29,7 +29,7 @@ the path that read it and two independent verdicts. The OCR runs in a MaaFramewo
 - The cover's threshold (`pack_cover.MIN_SCORE`, `MIN_LEAD`) was picked on these captures, not on held-out pages: the gate table
   below is the sweep (at 0.5 / 0.1, 467 cards read and 0 wrong; at a lead of 0.05, 4 wrong).
 - A card that has no OCR box at all is lost: none of the 112 pages shows one.
-- `S.E.A.` has no keyword (`sea` is inside `Mountain of Corpses, Sea of Blood`); its art title and its cover name it.
+- `S.E.A.` has no keyword of its own (`sea` is inside `Mountain of Corpses, Sea of Blood`); the keyword of its art title (`Hello Bus`, keyword `hello`) names its cards (10 keyword verdicts agree), and so does its cover.
 
 ## Readings
 
@@ -46,7 +46,7 @@ Where the cards were lost, by step (from the same run): `main` leaves out Line 1
 is not listed) and cannot name `Line` twice (Line 1 and Line 5, name matching: Line 1-3, 5 alike), Miracle in District 20 twice (OCR:
 art title read `InDistrict` / `miiracle` among noise) and Four Houses and Greed once (name matching: the `LImBUS` logo above the
 title, which the new filter drops by name, and the title's lines read out of order). `#270` fixes the three capitals and leaves the other five. `list` leaves Miracle in District 20 three
-times and Line 5 once (`ROLIND` is capitals under noise); `+key` names Miracle (keyword `miracle`), `+cover` Line 5.
+times (the third is the card with capitals between its lines, which #270 named by name) and Line 5 once (`ROLIND` is capitals under noise); `+key` names Miracle (keyword `miracle`), `+cover` Line 5.
 
 ## The two filters
 
@@ -54,7 +54,7 @@ The 112 pages hold 1191 OCR boxes; 453 have no lowercase letter, which the #270 
 wide. The new filter drops 94: `LIMBUS` 83 times (the logo, also read `LImBUS`), `LV` twice (the level badge), 9 reads of nothing.
 `COMPANY`, `LIMBUS COMPANY`, `CAUTION` and `CLEAR BONUS` appear 0 times (listed from the card's look: they sit behind and below the title
 strip); the logo's second word reads as noise (185 distinct texts among the no-lowercase boxes, most of them such misreads: `WOPIS`,
-`CIMPINS`), which the old filter dropped and now stays a line of its card, read past by the name match. The capitals the old filter threw away that are
+`CIMPINS`), which the old filter dropped and now stays a line of its card: the name match reads past it when it comes before the title, but noise between the title's lines (one Miracle in District 20 card: `inDistrict`, `OROAOZO`, `中R电`, `0`, `miracle`) makes the whole-title match fail, and the keyword names the card. The capitals the old filter threw away that are
 part of a title: `MADNESS` (Line 1), `THE DUSK OF AMBER`, `DUSK OF AMBER`, `OF AMBER`, `AMBER`, `MURDER`, `ON THE`, `WARP EXPRESS`, `LINE 2`,
 `TIMKILLING`, `VIOLET`, `HATRED`, `S.E.A`, `ROLIND` (Merry-Go-Round, Line 5) and the Chinese art title of Nocturnal Sweeping. A lone
 noise box (`M`, the badge's `IV`, `2`) is a card of its own without the lowercase rule: the `list, no span` row shows it, 3 extra
