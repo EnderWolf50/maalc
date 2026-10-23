@@ -39,8 +39,8 @@ FRAMES = {"MapFloor4 327 144": "event", "MapFloor4 327 357": "focused", "MapFloo
           "MapFloor4 582 144": "event", "MapFloor4 582 357": "battle", "MapFloor4 582 570": "event",
           "MapFloor4Panned 328 144": "battle", "MapFloor4Panned 328 357": "risky", "MapFloor4Panned 328 570": "abno",
           "MapFloor4Panned 583 144": "battle", "MapFloor4Panned 583 357": "event", "MapFloor4Panned 583 570": "event"}
-# #268, live 2026-10-23 floor 4 (NORMAL): the boss' glow sums to 741 red pixels in MapNodeBoss's 80 px box against its 1000
-# (a thin ring, mostly outside the box), so the dark boss is typed by its marks, as a fight. It is the boss all the same: the shop
+# #268, live 2026-10-23 floor 4 (NORMAL): the boss' glow is a thin ring, mostly outside MapNodeBoss's 80 px box: 502 red pixels in it
+# against its 1000 (741 in 92 px, 1448 in 120 px), so the dark boss is typed by its marks, as a fight. It is the boss all the same: the shop
 # 255 px before it says so (map_route.boss_after_shop, #279). The shop at x 837 and the boss at x 1092, both middle row.
 BOSS_SHOP, BOSS = (837, 357), (1092, 357)
 
