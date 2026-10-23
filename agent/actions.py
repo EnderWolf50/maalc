@@ -2613,7 +2613,7 @@ REWARD_CARDS = [130, 190, 1020, 280]  # the cards, for still(): they slide in ov
 CARD_TEXT = [130, 340, 1020, 120]
 SELECTABLE = [880, 115, 170, 40]
 CARD_CONFIRM = (808, 528)
-CARD_ROUNDS = 8  # a tap the game ignores costs a round
+CARD_ROUNDS = 12  # a look is a round: per tap up to CARD_REREADS rereads and the tap (a card of 3 that never reads: 9), then Confirm
 CARD_REREADS = 2  # a card that reads as nothing is looked at again this often per tap before it is taken as it reads
 
 
