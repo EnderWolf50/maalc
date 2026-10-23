@@ -22,6 +22,7 @@
 | 事件表 `event_table.json` | 事件頁依選項的實際效果排序 | 開發者每季從拆包的客戶端資料重新產生（第 7 節） | 1.117.0 的 195 個事件 | #93 |
 | 觀測飾品表 `gift_search.json` 與圖示 `image/GiftSearch/<id>.png` | E.G.O Gift Search 頁找飾品（位置預測、圖示比對）；GUI 的飾品清單 | 開發者每季依遊戲客戶端的觀測表重新產生（產生方式寫在檔頭 `note` 與 [04-settings.md](04-settings.md) 第 9 節） | 這一季的 320 個，另有 5 個殘影圖示（9991–9995，#161） | #54 |
 | 合成飾品表 `gift_recipes.json` 與圖示 `image/GiftRecipe/<id>.png` | 飾品清單把合成品標成想要時，查它的配方與材料（固定配方、月之記憶的 N 選 K） | 開發者每季跑 `tools/gift_recipes.py`（中文名取自 LLC release）（用法寫在工具檔頭與 `note`，要 `bench` 號碼牌） | 這一季 60 個合成品（59 個固定配方共 67 條，月之記憶 1 條 N 選 K），其中 39 條固定配方（`isSpecific`）用到主題包專屬飾品，該合成品帶 `specific: true` 與 `packs`（那些主題包的 id，取自各包 `specificEgoGiftPool`）；另有 12 個 `gift_search.json` 沒有的材料，72 個圖示，中文名全齊 | #277、#286 |
+| 預設飾品清單 `gift_lists.yaml` 與 GUI 圖示 `gift_icons/<id>.webp` | 飾品清單的「預設」；GUI 顯示 397 個飾品的圖示（第 9 節） | 開發者每季確認 id 還在、重跑 `tools/gift_icons.py` | 預設清單 23 個想要、90 個保留；397 個圖示 | #291、#293 |
 
 ## 2. 主題包方案
 
@@ -211,7 +212,21 @@
 5. 拆包新版客戶端，重跑 `events_md8.py`（換成這一季的鏡牢編號）與 `tools/event_table.py` 更新事件表，NOTICE.md 的版本一併更新。（#93）
    - 重產合成飾品表：`uv run python tools/live/queue.py run --resource bench --name gift_recipes -- uv run --group unpack python tools/gift_recipes.py`（用法見工具檔頭）。（#277）
    - 更新中文名：`uv run --group unpack python tools/llc_text.py --release <LLC 最新 release>`，改寫 `gift_search.json`、`gift_recipes.json`、`gui/src/graces.json` 的中文名與星之恩惠效果文字，並記下所用 release；NOTICE.md 的 release 一併更新。（#280）
+   - 預設飾品清單：確認 `gift_lists.yaml` 的 id 都還在 `gift_search.json`、`gift_recipes.json`、殘影裡（`tests/test_gift_lists.py` 會檢查，也檢查內容符合第 9 節）；重產 GUI 圖示：`uv run python tools/live/queue.py run --resource bench --name gift_icons -- uv run --group unpack python tools/gift_icons.py`。（#293）
 6. 重截約 20 個關鍵畫面加進測試，跑 `maa-tools test`；分數餘裕小於 0.05 的節點標出來檢查。（#13）
 7. 截圖必須經 MaaFramework 控制器縮到短邊 720，遮掉 UID 與帳號名稱。（#13）
 
 這一季 Mirror of Names and Spiders 在 2026-10-15 結束；主題包頁、事件頁、獎勵卡頁、地圖頁的實機截圖要等新一季開始再截。（#11、#12）主題包清單已依 1.117.0 客戶端資料更新（#89）。
+
+## 9. 預設飾品清單與圖示
+
+**用途**：設定的飾品清單（[04-settings.md](04-settings.md)，#291）有一份唯讀的「預設」，使用者只能複製；設定 GUI 的飾品格要顯示每個飾品的圖示。（#291、#293）
+
+**預設清單**：`resource/base/data/gift_lists.yaml` 的 `default_list`，欄位同設定檔 v11 `gift_lists[]` 的一項去掉 `id`、`name`（格式由 #292 寫進 04-settings.md）（`order`、`want`、`keep`、`gorder`、`fusion_condition`）。內容照原本的預設隊伍轉過來（使用者 2026-10-23 決定）：
+
+- `order`：Gift Search 頁的分頁順序，Burn 第一、`Keywordless` 最後。
+- `want`：Burn 在商店買得到的 22 個（I–III 階）與月之記憶（9083），共 23 個。
+- `keep`：所有無體系飾品，共 90 個：`gift_search.json` 的 82 個、`gift_recipes.json` 其餘 3 個無體系合成品、5 個殘影（9991–9995）。無體系飾品一律 `keep`：不賣，也不當合成材料。
+- 其餘是 `drop`。`gorder`：每個體系 III、II、I 階，階內照 `gift_search.json` 的順序。`fusion_condition`：`any`。
+
+**圖示**：`resource/base/data/gift_icons/<id>.webp` 與 `index.json`（`{id: 檔名}`），由 `tools/gift_icons.py` 產生。涵蓋 `gift_search.json` 的 320 個、`gift_recipes.json` 的 60 個合成品與 12 個材料、5 個殘影，共 397 個。圖示取自遊戲的 EgoGiftIcon 精靈圖，保留透明，縮成 56 px（最長邊）、WebP quality 72；整批 574,696 位元組，平均約 1.4 KB。`image/GiftSearch/`、`image/GiftRecipe/` 的綠底模板是 Agent 比對用，不動。`tests/test_gift_lists.py` 檢查預設清單的 id 與內容、圖示齊全與總量。（#293）

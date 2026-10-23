@@ -127,8 +127,8 @@ def sprite_index(cache, index_path):
     return where
 
 
-def extract_icons(unpack, ids_to_icon):
-    """Write ICONS/<gift id>.png for each {gift id: iconId}; returns the gift ids without a sprite."""
+def extract_icons(unpack, ids_to_icon, write=None):
+    """Write ICONS/<gift id>.png for each {gift id: iconId} (or call `write(sprite image, gift id)`); returns the gift ids without a sprite."""
     import UnityPy
 
     UnityPy.config.FALLBACK_UNITY_VERSION = "6000.3.12f1"
@@ -137,7 +137,14 @@ def extract_icons(unpack, ids_to_icon):
     by_icon = defaultdict(list)
     for gid, icon in ids_to_icon.items():
         by_icon[icon].append(gid)
-    ICONS.mkdir(parents=True, exist_ok=True)
+    if write is None:
+        ICONS.mkdir(parents=True, exist_ok=True)
+
+        def png(image, gid):
+            scaled(np.array(image.convert("RGBA")), ICONS / f"{gid}.png")
+
+        write = png
+
     done = set()
     for h, names in where.items():
         if not names & by_icon.keys() - done:
@@ -147,7 +154,7 @@ def extract_icons(unpack, ids_to_icon):
             name = p.rsplit("/", 1)[-1][:-4]
             if obj.type.name == "Sprite" and "/egogifticon/" in p.lower() and name.isdigit() and int(name) in by_icon and int(name) not in done:
                 for gid in by_icon[int(name)]:
-                    scaled(np.array(obj.read().image.convert("RGBA")), ICONS / f"{gid}.png")
+                    write(obj.read().image, gid)
                 done.add(int(name))
     return sorted(g for icon, gs in by_icon.items() if icon not in done for g in gs)
 
