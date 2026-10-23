@@ -55,7 +55,7 @@
   {"name": "a material counts once", "fn": "recipe_fusion", "list": "fixed", "args": {"owned": [101, 101, 901]}, "expect": null},
   {"name": "only wanted fusions are made", "fn": "recipe_fusion", "list": "plain", "args": {"owned": [101, 102, 901, 103]}, "expect": null},
   {"name": "a kept fusion is not made", "fn": "recipe_fusion", "list": "keeps-fusion", "args": {"owned": [101, 102, 901]}, "expect": null},
-  {"name": "of two wanted fusions the one first in the data file is made", "fn": "recipe_fusion", "list": "two-fusions", "args": {"owned": [103, 104, 101, 102, 901]}, "expect": {"gift": 501, "materials": [101, 102, 901]}},
+  {"name": "of two wanted fusions of one keyword the one first in the data file is made", "fn": "recipe_fusion", "list": "two-fusions", "args": {"owned": [103, 104, 101, 102, 901]}, "expect": {"gift": 501, "materials": [101, 102, 901]}},
   {"name": "the second wanted fusion is made when the first is incomplete", "fn": "recipe_fusion", "list": "two-fusions", "args": {"owned": [103, 104]}, "expect": {"gift": 505, "materials": [103, 104]}},
   {"name": "a specific fusion is made whatever the packs", "fn": "recipe_fusion", "list": "specific", "args": {"owned": [903, 401]}, "expect": {"gift": 503, "materials": [401, 903]}},
   {"name": "a mixed recipe takes the first fragments in data-file order", "fn": "recipe_fusion", "list": "lunar", "args": {"owned": [913, 911, 912, 922, 921, 999]}, "expect": {"gift": 504, "materials": [911, 912, 921, 922]}},
