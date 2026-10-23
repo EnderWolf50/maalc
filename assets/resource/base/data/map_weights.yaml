@@ -5,11 +5,13 @@
 # so it ranks after every fight it can recognise and before unknown, on both difficulties.
 # The game's names (EN_BattleUIText): battle Regular, focused Focused (AB_BATTLE), risky Risky (HARD_BATTLE),
 # abno Abnormality (HARD_AB_BATTLE).
-# A fight's kind by the number by its Cost coin, per difficulty (#91; spec 05 section 6): unique within one,
+# A node's kind by the number by its Cost coin, per difficulty (#91; spec 05 section 6): unique within one,
 # from the wiki and the CN client's table; the live node panels' Costs agree.
+# The boss' Cost grows by floor: mirror-dungeon-common-data's BOSS cost (normal 200, hard 250) times
+# battleCostWeightsByFloor (1, 1.2, 1.5, 2, 2). The live node panels showed 200/240/300 and 250/300/375/500.
 node_costs:
-  normal: {75: battle, 100: focused, 120: risky, 150: abno}
-  hard: {85: battle, 120: focused, 150: risky, 180: abno}
+  normal: {75: battle, 100: focused, 120: risky, 150: abno, 200: boss, 240: boss, 300: boss, 400: boss}
+  hard: {85: battle, 120: focused, 150: risky, 180: abno, 250: boss, 300: boss, 375: boss, 500: boss}
 normal:
   event: 1
   battle: 2

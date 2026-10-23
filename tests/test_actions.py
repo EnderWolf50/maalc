@@ -37,8 +37,9 @@ def clock(monkeypatch):
 
 
 @pytest.fixture
-def context(clock, monkeypatch):
+def context(clock, monkeypatch, tmp_path):
     # The action's page stays up: #118's guard is driven on its own (page_until).
+    monkeypatch.setattr(actions, "ROOT", tmp_path)  # what the agent keeps under logs/ (a Cost miss's crop) stays out of the repo
     monkeypatch.setattr(actions, "page_guard", lambda context, home, image=None: actions.screen(context) if image is None else image)
     monkeypatch.setattr(actions, "FEATURE_MATCH", set())  # fakes read every roi in screen coordinates: no cut-outs
     ctx = MagicMock()
