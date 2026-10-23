@@ -265,6 +265,9 @@ describe("search", () => {
     const r = await open([mine()]);
     await r.user.type(box(), String(a));
     expect(shownIds()).toEqual([a]);
+    await r.user.clear(box());
+    await r.user.type(box(), String(a).slice(0, -1)); // part of an id is no match
+    expect(shownIds()).toEqual([]);
   });
 
   test("results are grouped by keyword in the list's order, and no tab is selected", async () => {
