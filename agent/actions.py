@@ -499,6 +499,28 @@ def allowed(key):
     return True if settings is None else settings["run"][key]
 
 
+@AgentServer.custom_action("DismissShot")
+class DismissShot(CustomAction):
+    """Keep the screen in logs/dismissed/ (run.keep_dismissed_screens), then close it (#244): the back key when the
+    param is "back", else a tap on the recognised box. File name: time and node, so what the bot closed can be told later.
+    """
+
+    def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
+        if allowed("keep_dismissed_screens"):
+            stamp = f"{settlement.now().replace(':', '-')}-{argv.node_name}"
+            try:
+                recovery.keep_capture(ROOT, "dismissed", screen(context), stamp, recovery.DISMISSED_KEEP)
+                log(f"{argv.node_name}: screen kept in logs/dismissed/{stamp}.png")
+            except OSError as e:
+                log(f"{argv.node_name}: screen not saved: {e}")
+        if argv.custom_action_param:
+            context.tasker.controller.post_click_key(BACK_KEY).wait()
+        else:
+            x, y, w, h = argv.box
+            context.tasker.controller.post_click(x + w // 2, y + h // 2).wait()
+        return True
+
+
 @AgentServer.custom_action("ConfirmDownload")
 class ConfirmDownload(CustomAction):
     """Confirm the title's download dialog (the matched button), then hold the stuck detection until its progress

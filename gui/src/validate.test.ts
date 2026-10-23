@@ -54,7 +54,7 @@ test("a new file asks for a team, and new teams make it valid", () => {
 });
 
 test("parseSettings refuses newer and unmigratable versions", () => {
-  expect(() => parseSettings('{"version": 11}')).toThrow("newer");
+  expect(() => parseSettings('{"version": 12}')).toThrow("newer");
   expect(() => parseSettings('{"version": 0}')).toThrow("cannot be migrated");
 });
 
@@ -112,6 +112,15 @@ test("version 6 keeps what the shop kept before", () => {
   expect(migrated).toBe(true);
   const kept = [[], "keep", [], 4, false];
   expect(data.teams.map((t) => [t.keep_keywords, t.keywordless, t.keep_gifts, t.sell_max_tier, t.sell_vestiges])).toEqual([kept, kept]);
+  expect(validate(data)).toEqual([]);
+});
+
+test("version 10 keeps the dismissed screens", () => {
+  const old = structuredClone(cases.valid) as Record<string, unknown> & { run: Record<string, unknown> };
+  delete old.run.keep_dismissed_screens;
+  const { data, migrated } = parseSettings(JSON.stringify({ ...old, version: 10 }));
+  expect(migrated).toBe(true);
+  expect(data.run.keep_dismissed_screens).toBe(true);
   expect(validate(data)).toEqual([]);
 });
 

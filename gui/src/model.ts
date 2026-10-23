@@ -165,7 +165,7 @@ export interface Settings {
     difficulty: string; runs: number | null; weekly_bonus_use: string; weekly_bonus_amount: string;
     stop_when_weekly_bonus_out: boolean; starlight_unaffordable: string; wipe_retries: number;
     after_retries: string; webhook_url: string; theme_pack_refresh: string;
-    auto_accept_terms: boolean; auto_download: boolean;
+    auto_accept_terms: boolean; auto_download: boolean; keep_dismissed_screens: boolean;
   };
   deployment_order_plans: DeploymentPlan[];
   starlight_plans: StarlightPlan[];
@@ -251,6 +251,8 @@ const MIGRATIONS: Record<number, (d: Record<string, unknown>) => Record<string, 
   }),
   // Version 10 adds teams[].fusion_condition (#263), "any": the shop fuses as before.
   9: (d) => withTeamDefault(d, { fusion_condition: "any" }),
+  // Version 11 adds run.keep_dismissed_screens (#244), on.
+  10: (d) => (d.run && typeof d.run === "object" ? { ...d, run: { keep_dismissed_screens: true, ...d.run } } : d),
 };
 
 const MARK_WEIGHTS: Record<string, number> = { prefer: 5, neutral: 0, avoid: -5 };
