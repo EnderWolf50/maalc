@@ -3,7 +3,7 @@
 import { fireEvent, screen, within } from "@testing-library/react";
 import { describe, expect, test } from "vitest";
 import recipes from "../../assets/resource/base/data/gift_recipes.json";
-import { GIFT_BY_ID, iconUrl } from "./giftCatalog";
+import { GIFT_BY_ID, iconUrl, keywordIconUrl } from "./giftCatalog";
 import { GiftListsTab } from "./GiftLists";
 import { DEFAULT_LIST, queue } from "./gifts";
 import { TEXT } from "./i18n";
@@ -56,6 +56,13 @@ function drag(from: Element, to: Element) {
 const tileOf = (id: number) => screen.getByRole("button", { name: new RegExp("^" + escape(nameOf(id)) + "，") });
 
 describe("opening and closing", () => {
+  test("a keyword's section row shows its game icon", async () => {
+    const r = await open(mine());
+    await r.user.click(buyButton());
+    const k = GIFT_KEYWORDS.find((x) => x !== "Keywordless" && within(dialog()).queryByRole("button", { name: new RegExp("^" + zh[`kw.${x}` as keyof typeof zh] + "第") }))!;
+    expect(section(k).querySelector("img")).toHaveAttribute("src", keywordIconUrl(k));
+  });
+
   test("the button counts the buy queue; the dialog is modal, focuses its close button, and shows the first keyword open", async () => {
     const r = await open(mine());
     expect(buyButton()).toHaveTextContent("購買排序（5）");

@@ -48,8 +48,10 @@
 .gl-tab { display: inline-flex; align-items: center; gap: 6px; padding: 5px 9px; border-radius: 8px; color: var(--gl-muted); }
 .gl-tab:hover { color: var(--gl-fg); }
 .gl .gl-tab.on { color: var(--gl-fg); font-weight: 700; background: var(--gl-sel); }
-.gl-dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; flex: none; }
+.gl-dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; flex: none; background: #7a8194; }
 .gl-dot.big { width: 22px; height: 22px; }
+.gl-kwi { width: 16px; height: 16px; object-fit: contain; flex: none; }
+.gl-kwi.big { width: 26px; height: 26px; }
 .gl-n { background: var(--gl-want); color: var(--gl-on-accent); border-radius: 999px; font-size: 10px; font-weight: 600; padding: 0 5px; line-height: 15px; }
 
 .gl-panel { background: var(--gl-panel); border: 1px solid var(--gl-line); border-radius: 8px; padding: 8px 12px 12px; min-height: 200px; }

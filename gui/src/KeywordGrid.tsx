@@ -1,6 +1,6 @@
 // The gift list tab's keyword tabs and the grid of one keyword: tier blocks of icon tiles, one tile per gift.
 import { useRef, useState, type KeyboardEvent } from "react";
-import { CATALOG, GIFT_BY_ID, giftName, iconUrl, tiersOf } from "./giftCatalog";
+import { CATALOG, GIFT_BY_ID, giftName, iconUrl, keywordIconUrl, tiersOf } from "./giftCatalog";
 import { useDragSort, type DragProps } from "./dragSort";
 import { moveGift, useGiftEdit } from "./giftEdit";
 import { effective, mainKeyword, state, type GiftState, type ListRules } from "./gifts";
@@ -9,11 +9,11 @@ import { GIFT_KEYWORDS } from "./model";
 import { useEditor } from "./ui";
 
 export const TIERS = ["", "I", "II", "III", "IV", "V"];
-// The keyword colours of the mockup; a dot stands in for the keyword icon, which the repo has no art for.
-export const KEYWORD_COLOR: Record<string, string> = {
-  Bleed: "#bc1b1f", Blunt: "#99704e", Burn: "#db213f", Charge: "#0dbed7", Pierce: "#926a46", Poise: "#67a8a8", Rupture: "#15d0ae",
-  Sinking: "#1e77e9", Slash: "#9b7351", Tremor: "#fb9e23", Keywordless: "#7a8194",
-};
+/** A keyword's game icon; Keywordless has none and gets a neutral dot. */
+export function KeywordIcon({ keyword, big }: { keyword: string; big?: boolean }) {
+  const src = keywordIconUrl(keyword);
+  return src ? <img className={"gl-kwi" + (big ? " big" : "")} src={src} alt="" /> : <i className={"gl-dot" + (big ? " big" : "")} aria-hidden />;
+}
 export const kwText = (k: string) => `kw.${k}` as Key;
 
 /** What the list makes of a gift for display: its effective state, and whether a wanted fusion locks it (shown kept). */
@@ -56,7 +56,7 @@ export function KeywordTabs({ tab, onTab }: { tab: string; onTab: (k: string) =>
         return (
           <button type="button" key={k} id={`gl-tab-${k}`} role="tab" aria-selected={on} aria-controls="gl-panel" tabIndex={on || (!tab && k === GIFT_KEYWORDS[0]) ? 0 : -1}
             className={"gl-tab" + (on ? " on" : "")} ref={(el) => { refs.current[k] = el; }} onClick={() => onTab(k)}>
-            <i className="gl-dot" style={{ background: KEYWORD_COLOR[k] }} aria-hidden />
+            <KeywordIcon keyword={k} />
             <span>{t(kwText(k))}</span>
             {n > 0 && <b className="gl-n" title={fill(t("gl.tier_set"), { n })}>{n}</b>}
           </button>
@@ -106,7 +106,7 @@ export function KeywordPanel({ keyword }: { keyword: string }) {
   return (
     <div ref={grid} onKeyDown={walk}>
       <h3 className="gl-kwh">
-        <i className="gl-dot big" style={{ background: KEYWORD_COLOR[keyword] }} aria-hidden />
+        <KeywordIcon keyword={keyword} big />
         <b>{t(kwText(keyword))}</b>{zh && keyword !== "Keywordless" && <small>{keyword}</small>}
         {keyword === mainKeyword(list) && <span className="gl-tag main">{t("gl.main")}</span>}
         <span className="gl-tag">{fill(t("gl.rank"), { n: list.order.indexOf(keyword) + 1 })}</span>
@@ -161,7 +161,7 @@ export function SearchResults({ query, onClear }: { query: string; onClear: () =
       <div className="gl-sh"><b>{fill(t("gl.search_n"), { n: total })}</b><button type="button" onClick={onClear}>{t("gl.search_clear")}</button></div>
       {groups.map(({ keyword, ids }) => (
         <section key={keyword} className="gl-tier" aria-label={t(kwText(keyword))}>
-          <h3 className="gl-kwh"><i className="gl-dot" style={{ background: KEYWORD_COLOR[keyword] }} aria-hidden /><b>{t(kwText(keyword))}</b></h3>
+          <h3 className="gl-kwh"><KeywordIcon keyword={keyword} /><b>{t(kwText(keyword))}</b></h3>
           <div className="gl-wall">{ids.map((id) => <GiftTile key={id} id={id} zh={zh} tabStop={id === stop} onFocus={() => onFocus(id)} />)}</div>
         </section>
       ))}
