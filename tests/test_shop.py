@@ -487,12 +487,14 @@ def test_the_forecasts_row_sweep_over_tests_screens_finds_no_unlisted_hit():
 
 
 def test_pick_fusion_leaves_out_a_refused_group():
-    # #285: the page turned down abc (a IV by the points); the next best is made, and none when every group was turned down.
+    # #285: the page turned down a III + III + II (a IV by the points); the next best is made, and none when every group
+    # was turned down. The forecast depends on the tiers only: another III + III + II is left out, too.
     materials = [("a", 3), ("b", 3), ("c", 2), ("d", 1)]
     assert s.pick_fusion(materials, 3, SHOP, POINTS, condition="tier4") == [(list("abc"), 4)]
-    assert s.pick_fusion(materials, 3, SHOP, POINTS, condition="tier4", refused=[frozenset("abc")]) == []
+    assert s.pick_fusion(materials, 3, SHOP, POINTS, condition="tier4", refused=[(2, 3, 3)]) == []
     assert s.pick_fusion(materials, 3, SHOP, POINTS) == [(list("abc"), 4)]
-    assert s.pick_fusion(materials, 3, SHOP, POINTS, refused=[frozenset("abc")]) == [(list("acd"), 3)]  # fewest points of the III
+    assert s.pick_fusion(materials, 3, SHOP, POINTS, refused=[(2, 3, 3)]) == [(list("acd"), 3)]  # fewest points of the III
+    assert s.pick_fusion(materials + [("e", 2)], 3, SHOP, POINTS, condition="tier4", refused=[(2, 3, 3)]) == []
 
 
 SELL_OCR = [  # Maa OCR of the sell page's grid (crop "sell"): coins read as 米/水/*, icon art as junk

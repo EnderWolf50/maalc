@@ -307,7 +307,8 @@ def pick_fusion(materials, slots, thresholds, points, first=(), condition="any",
     again from what is left, until fewer than 3 are. A tier V gift is never a material (MAX_MATERIAL_TIER).
     condition (the team's fusion_condition, #263) keeps out the groups fusion_wanted refuses: the best of the rest is
     made, and none when no group is left. "any" puts the groups that upgrade (user, 2026-10-23) ahead of that order.
-    refused: [frozenset of keys] the groups the page's own forecast turned down (#285): never picked again.
+    refused: [tuple of sorted tiers] the groups the page's own forecast turned down (#285): the result depends on the
+    materials' tiers only, so no group of those tiers is picked again.
     """
     def total(group):
         return sum(points[t] for _, t in group)
@@ -322,7 +323,7 @@ def pick_fusion(materials, slots, thresholds, points, first=(), condition="any",
     left, out = [m for m in materials if m[1] <= MAX_MATERIAL_TIER], []
     while len(left) >= MIN_FUSION:
         groups = [g for n in range(MIN_FUSION, slots + 1) for g in combinations(left, n)
-                  if frozenset(k for k, _ in g) not in refused and fusion_wanted(condition, tier_of(g), g)]
+                  if tuple(sorted(t for _, t in g)) not in refused and fusion_wanted(condition, tier_of(g), g)]
         if not groups:
             break
         best = min(groups, key=rank)

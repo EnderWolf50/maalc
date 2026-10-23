@@ -1,5 +1,5 @@
 """#285: the fuse page's Forecasts row is read before Fuse; a tier the team's fusion_condition refuses is not fused."""
-import itertools
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -64,20 +64,21 @@ def test_a_forecast_the_condition_refuses_is_not_fused_and_the_materials_come_ou
 
 
 def test_a_refused_group_is_left_out_and_the_next_one_is_tried(context, monkeypatch):
-    # upgrade: III + III + II (abc) is the best group; the page turns it down; III + III + II again (abd, the other II)
-    # is the next, and the page takes it. abc is never put in a second time.
+    # upgrade: III + III + II (cells 0, 1, 2) is the best group; the page turns it down. III + III + II with the other II
+    # (cells 0, 1, 3) would read the same: not tried. II + II + II (a III over a II) is, and the page takes it.
     cells = [("Bleed", None, 3), ("Tremor", None, 3), ("Pierce", None, 2), ("Slash", None, 2), ("Sinking", None, 2)]
-    fused, taps, ok, lines = fuse(context, monkeypatch, {"fusion_condition": "upgrade"}, cells, {(0, 1, 2): 3, (0, 1, 3): 4})
+    fused, taps, ok, lines = fuse(context, monkeypatch, {"fusion_condition": "upgrade"}, cells, {(0, 1, 2): 3, (2, 3, 4): 3})
     assert fused and ok
-    assert taps == [3, 3, 2, 1, 0]  # in, out, in for the two III; the first II in and out; the second II in; the last never
+    assert taps == [2, 2, 3, 1, 1]  # the III in and out; the first II in, out, in; the others in once
     assert [m.rsplit(": ", 1)[1] for m in forecast_line(lines)] == ["turned down, taken out", "fuse"]
 
 
 def test_the_page_turns_down_at_most_fuse_tries_groups_then_closes(context, monkeypatch):
-    # Every group the points allow reads as a I on the page: FUSE_TRIES of them are tried, then the page is closed.
-    cells = [("Bleed", None, 3), ("Tremor", None, 3), ("Pierce", None, 2), ("Slash", None, 2), ("Sinking", None, 2)]
-    page = {g: 1 for g in itertools.combinations(range(5), 3)}
-    fused, taps, ok, lines = fuse(context, monkeypatch, {"fusion_condition": "upgrade"}, cells, page, get=False)
+    # Every group the points allow reads as a III on the page: five groups of different tiers are allowed (tier4), only
+    # FUSE_TRIES of them are tried, then the page is closed.
+    cells = [("Bleed", None, t) for t in (4, 3, 3, 2, 2, 2, 1, 1, 1)]
+    page = SimpleNamespace(get=lambda key: 3)
+    fused, taps, ok, lines = fuse(context, monkeypatch, {"fusion_condition": "tier4"}, cells, page, get=False)
     assert not fused and not ok
     assert len(forecast_line(lines)) == actions.FUSE_TRIES
     assert actions.PAGE_CLOSE in [c.args for c in context.tasker.controller.post_click.call_args_list]

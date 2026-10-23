@@ -3010,7 +3010,7 @@ def fusions(cells, roles, slots, avoid, condition="any", refused=()):
     """shop.pick_fusion over the cells whose role is material and whose tier is read: [([cell index], tier)] (#77).
 
     The thresholds are the Super Shop's when the page has its 5 slots; an avoided gift goes in first (#90); condition
-    is the team's fusion_condition (#263); refused, the groups of cell indexes the page's forecast turned down (#285).
+    is the team's fusion_condition (#263); refused, the tiers (sorted) of the groups the page's forecast turned down (#285).
     """
     d = data("shop.yaml")
     materials = [(c["i"], c["tier"]) for c, r in zip(cells, roles) if r == "material" and c["tier"]]
@@ -3465,7 +3465,7 @@ class Shop(CustomAction):
                     fused = gift_get(context)
                 log(f"shop: fuse {materials} into a tier {page_tier or tier} {keyword} gift (condition {condition}): {'done' if fused else 'not confirmed'}")
                 break
-            refused.append(frozenset(c["i"] for c in group))
+            refused.append(tuple(sorted(c["tier"] for c in group)))
             if len(refused) >= FUSE_TRIES or not Shop.place(context, group, slots, grid, out=True):
                 break  # the page is closed, which empties it too
         # Unconfirmed, refused or not read back: not the same scan again until the owned gifts change (#103).
