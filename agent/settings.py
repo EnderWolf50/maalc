@@ -126,7 +126,8 @@ def gift_tables():
 
 def default_gorder():
     """Spec 04 section 13: every keyword's buyable gifts, tier III first, within a tier in data-file order."""
-    return {k: [g["id"] for g in sorted(gift_tables()[0], key=lambda g: -g["tier"]) if g["keyword"] == k] for k in GIFT_KEYWORDS}
+    search = gift_tables()[0]
+    return {k: [g["id"] for tier in (3, 2, 1) for g in search if g["keyword"] == k and g["tier"] == tier] for k in GIFT_KEYWORDS}
 
 
 def known_gift_ids():
@@ -135,7 +136,7 @@ def known_gift_ids():
 
 
 def clean_gift_list(gift_list):
-    """(the list as the agent and the GUI use it, number of ids dropped from want and keep), spec 04 section 13: ids no data
+    """(the list as the shop logic (agent/gifts.py) and the GUI use it, number of ids dropped from want and keep), spec 04 section 13: ids no data
     file has are dropped; a gorder keyword lacks gifts: they go last in data-file order, ids that keyword does not have are
     dropped (a missing keyword gets the default order). Else it stays: want may hold a gift that cannot be bought."""
     known = known_gift_ids()

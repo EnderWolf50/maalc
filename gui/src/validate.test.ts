@@ -2,7 +2,7 @@
 import { describe, expect, test } from "vitest";
 import cases from "../../tests/settings_cases.json";
 import themePacksYaml from "../../assets/resource/base/data/theme_packs.yaml?raw";
-import { cleanGiftList, newSettings, newTeam, parseSettings, parseThemePacks, type GiftList } from "./model";
+import { cleanGiftList, defaultGorder, newSettings, newTeam, parseSettings, parseThemePacks, type GiftList } from "./model";
 import { pyRepr, validate } from "./validate";
 
 type Edit = { set: string; value: unknown } | { delete: string };
@@ -149,10 +149,12 @@ test("version 8 theme pack marks become weights that pick as before", () => {
   expect(validate(data)).toEqual([]);
 });
 
+const sum = (ids: number[]) => ids.reduce((a, b) => a + b, 0);
+
 type MigrationCase = {
   name: string; edits: Edit[]; teams: string[]; dropped: number;
   lists: { id: string; name: string; order_first: string; fusion_condition: string; want_count: number; keep_count: number;
-    want_has: number[]; keep_has: number[]; keep_lacks: number[] }[];
+    want_sum: number; keep_sum: number; want_has: number[]; keep_has: number[]; keep_lacks: number[] }[];
 };
 
 describe("version 10 teams become gift lists (tests/settings_cases.json migrations)", () => {
@@ -167,6 +169,8 @@ describe("version 10 teams become gift lists (tests/settings_cases.json migratio
         const want = c.lists[i];
         expect([got.id, got.name, got.order[0], got.fusion_condition]).toEqual([want.id, want.name, want.order_first, want.fusion_condition]);
         expect([got.want.length, got.keep.length]).toEqual([want.want_count, want.keep_count]);
+        expect([sum(got.want), sum(got.keep)]).toEqual([want.want_sum, want.keep_sum]);
+        expect(got.gorder).toEqual(defaultGorder());
         for (const id of want.want_has) expect(got.want).toContain(id);
         for (const id of want.keep_has) expect(got.keep).toContain(id);
         for (const id of want.keep_lacks) expect(got.keep).not.toContain(id);
@@ -202,4 +206,16 @@ test("parseThemePacks reads the season's data file", () => {
   expect(data.default_plan.weights["The B.E."]).toBe(10);
   expect(Object.keys(data.default_plan.weights).every((p) => p in data.packs)).toBe(true);
   expect(parseThemePacks("")).toEqual({ packs: {}, default_plan: { weights: {}, threshold: 0, unlisted: 0, event_packs: "weight" } });
+});
+
+test("loading a file drops gift ids no data file has, fills gorder and counts them", () => {
+  const file = structuredClone(cases.valid) as unknown as { gift_lists: { want: number[]; keep: number[]; gorder: Record<string, number[]> }[] };
+  file.gift_lists[0].want = [9053, 424242];
+  file.gift_lists[0].keep = [9071, 5];
+  const { data, migrated, unknown } = parseSettings(JSON.stringify(file));
+  expect(migrated).toBe(false);
+  expect(unknown).toBe(2);
+  expect([data.gift_lists[0].want, data.gift_lists[0].keep]).toEqual([[9053], [9071]]);
+  expect(Object.keys(data.gift_lists[0].gorder)).toHaveLength(11); // a keyword the file lacks gets the default order
+  expect(validate(data)).toEqual([]);
 });

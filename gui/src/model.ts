@@ -171,7 +171,7 @@ const KNOWN_GIFTS = new Set([...SEARCH_GIFTS, ...RECIPE_GIFTS].map((g) => g.id).
 export function cleanGiftList(list: GiftList): { list: GiftList; dropped: number } {
   const known = (ids: number[]) => ids.filter((i) => KNOWN_GIFTS.has(i));
   const gorder = Object.fromEntries(Object.entries(defaultGorder()).map(([k, all]) => {
-    const given = [...new Set(list.gorder[k] ?? [])].filter((i) => all.includes(i));
+    const given = [...new Set(Array.isArray(list.gorder[k]) ? list.gorder[k] : [])].filter((i) => all.includes(i));
     return [k, [...given, ...all.filter((i) => !given.includes(i))]];
   }));
   const want = known(list.want), keep = known(list.keep);
@@ -199,7 +199,7 @@ function listFromV10Team(team: Record<string, unknown>): { content: Omit<GiftLis
     content: {
       order: main && GIFT_KEYWORDS.includes(main) ? [main, ...GIFT_KEYWORDS.filter((k) => k !== main)] : [...GIFT_KEYWORDS],
       want: [...want].sort(byId), keep: [...keep].filter((i) => !want.has(i)).sort(byId), gorder: defaultGorder(),
-      fusion_condition: typeof team.fusion_condition === "string" ? team.fusion_condition : "any",
+      fusion_condition: ("fusion_condition" in team ? team.fusion_condition : "any") as string, // a bad value is for the checks
     },
     lost,
   };
@@ -392,7 +392,7 @@ function withTeamDefault(d: Record<string, unknown>, field: Record<string, unkno
 }
 
 /** Parse a settings file; an older version is migrated and the caller writes it back (spec 04 section 2). */
-export function parseSettings(text: string): { data: Settings; migrated: boolean; dropped: number } {
+export function parseSettings(text: string): { data: Settings; migrated: boolean; dropped: number; unknown: number } {
   let data = JSON.parse(text);
   let version = data?.version;
   if (!Number.isInteger(version)) throw new Error(`version must be an integer, got ${JSON.stringify(version)}`);
@@ -404,5 +404,16 @@ export function parseSettings(text: string): { data: Settings; migrated: boolean
     if (version === 10) dropped = migrateV10(data).dropped;
     data = { ...MIGRATIONS[version](data), version: version + 1 };
   }
-  return { data, migrated, dropped };
+  const lists = Array.isArray(data.gift_lists) ? data.gift_lists : [];
+  let unknown = 0; // ids in a list that no data file has (a new season): dropped, the caller warns
+  data = {
+    ...data,
+    gift_lists: lists.map((l: GiftList) => {
+      if (!l || !Array.isArray(l.want) || !Array.isArray(l.keep) || !l.gorder || typeof l.gorder !== "object") return l; // for the checks
+      const cleaned = cleanGiftList(l);
+      unknown += cleaned.dropped;
+      return cleaned.list;
+    }),
+  };
+  return { data, migrated, dropped, unknown };
 }

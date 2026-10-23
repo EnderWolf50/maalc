@@ -180,9 +180,9 @@
      "teams": ["gift-list-1", "gift-list-2"], "dropped": 0,
      "lists": [
        {"id": "gift-list-1", "name": "Team a", "order_first": "Burn", "fusion_condition": "any", "want_count": 22, "keep_count": 91,
-        "want_has": [9053], "keep_has": [9273, 9105], "keep_lacks": [9053, 9042, 9995]},
+        "want_sum": 203801, "keep_sum": 852677, "want_has": [9053], "keep_has": [9273, 9105], "keep_lacks": [9053, 9042, 9995]},
        {"id": "gift-list-2", "name": "Team b", "order_first": "Bleed", "fusion_condition": "tier4", "want_count": 36, "keep_count": 146,
-        "want_has": [9042], "keep_has": [9053, 9141, 9110, 9273], "keep_lacks": [9042, 9994, 9995]}]},
+        "want_sum": 334464, "keep_sum": 1365211, "want_has": [9042], "keep_has": [9053, 9141, 9110, 9273], "keep_lacks": [9042, 9994, 9995]}]},
     {"name": "teams that keep the same share a list, whatever keywordless said",
      "edits": [
        {"set": "teams/1/keyword", "value": "Burn"}, {"set": "teams/1/keep_keywords", "value": []}, {"set": "teams/1/keywordless", "value": "fuse"},
@@ -190,15 +190,15 @@
      "teams": ["gift-list-1", "gift-list-1"], "dropped": 0,
      "lists": [
        {"id": "gift-list-1", "name": "Team a", "order_first": "Burn", "fusion_condition": "any", "want_count": 22, "keep_count": 91,
-        "want_has": [9053], "keep_has": [9273], "keep_lacks": [9053, 9995]}]},
+        "want_sum": 203801, "keep_sum": 852677, "want_has": [9053], "keep_has": [9273], "keep_lacks": [9053, 9995]}]},
     {"name": "a taken name gets a number",
      "edits": [{"set": "teams/1/name", "value": "Team a"}],
      "teams": ["gift-list-1", "gift-list-2"], "dropped": 0,
      "lists": [
        {"id": "gift-list-1", "name": "Team a", "order_first": "Burn", "fusion_condition": "any", "want_count": 22, "keep_count": 91,
-        "want_has": [9053], "keep_has": [9273], "keep_lacks": [9053]},
+        "want_sum": 203801, "keep_sum": 852677, "want_has": [9053], "keep_has": [9273], "keep_lacks": [9053]},
        {"id": "gift-list-2", "name": "Team a 2", "order_first": "Bleed", "fusion_condition": "tier4", "want_count": 36, "keep_count": 146,
-        "want_has": [9042], "keep_has": [9053], "keep_lacks": [9042]}]},
+        "want_sum": 334464, "keep_sum": 1365211, "want_has": [9042], "keep_has": [9053], "keep_lacks": [9042]}]},
     {"name": "keep_gifts that match no gift are dropped and counted, a vestige is told by its name",
      "edits": [
        {"set": "teams/1/keep_gifts/-", "value": {"keyword": "Bleed", "tier": 3, "name": "No Such Gift"}},
@@ -208,9 +208,9 @@
      "teams": ["gift-list-1", "gift-list-2"], "dropped": 2,
      "lists": [
        {"id": "gift-list-1", "name": "Team a", "order_first": "Burn", "fusion_condition": "any", "want_count": 22, "keep_count": 92,
-        "want_has": [9053], "keep_has": [9995], "keep_lacks": [9042]},
+        "want_sum": 203801, "keep_sum": 862672, "want_has": [9053], "keep_has": [9995], "keep_lacks": [9042]},
        {"id": "gift-list-2", "name": "Team b", "order_first": "Bleed", "fusion_condition": "tier4", "want_count": 36, "keep_count": 146,
-        "want_has": [9042], "keep_has": [9053], "keep_lacks": [9042]}]}
+        "want_sum": 334464, "keep_sum": 1365211, "want_has": [9042], "keep_has": [9053], "keep_lacks": [9042]}]}
   ],
   "clean_gift_list": [
     {"name": "ids no data file has are dropped and counted",

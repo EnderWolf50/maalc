@@ -363,8 +363,10 @@ def test_shared_migrations(tmp_path, case):
     for got, want in zip(data["gift_lists"], case["lists"]):
         assert (got["id"], got["name"], got["order"][0], got["fusion_condition"]) == (want["id"], want["name"], want["order_first"], want["fusion_condition"])
         assert (len(got["want"]), len(got["keep"])) == (want["want_count"], want["keep_count"])
+        assert (sum(got["want"]), sum(got["keep"])) == (want["want_sum"], want["keep_sum"])
         assert set(want["want_has"]) <= set(got["want"]) and set(want["keep_has"]) <= set(got["keep"])
         assert not set(want["keep_lacks"]) & set(got["keep"])
+    assert all(g["gorder"] == gift_list()["gorder"] for g in data["gift_lists"])
     assert all(not {"keep_keywords", "keywordless", "keep_gifts", "fusion_condition"} & t.keys() for t in data["teams"])
 
 
@@ -399,6 +401,7 @@ def test_version_10_keeps_what_the_team_kept(tmp_path):
     assert second == {"id": "gift-list-2", "name": "Team b", **expected}
 
 
-def test_version_10_without_teams_has_no_lists(tmp_path):
-    assert load(tmp_path, edited(lambda d: d.update(teams=[{**d["teams"][0]}]), V10))["gift_lists"][0]["name"] == "Team a"
+def test_version_10_one_team_one_list_no_team_no_list(tmp_path):
+    one = load(tmp_path, edited(lambda d: d.update(teams=d["teams"][:1]), V10))
+    assert [g["name"] for g in one["gift_lists"]] == ["Team a"]
     assert settings.gift_lists_from_v10([]) == ([], [], 0)
