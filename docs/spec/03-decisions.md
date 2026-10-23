@@ -400,7 +400,7 @@ Cost 表是 wiki 與簡中客戶端的表，實機 log 的節點面板 Cost 沒�
   - `upgrade`（「升階才合」）：結果階級要比這組材料的最高階還高才合。例：III + III + II（26 點）是 IV，合；I + I + I 還是 I，不合；IV + II + II 是 IV，沒有比 IV 材料高，不合，改挑 II + II + II（III，比 II 高）。
   - `tier4`（「只合 IV」）：只在能合出 IV 級時才合。一般商店 ≥25 點，Super Shop ≥22 點。
   - 不符條件的組合不列入候選：先濾掉，再照上面的順序挑最好的，直到沒有符合的組合。階級照上面兩張點數表判斷（一般商店或 Super Shop 各用自己的門檻），不花星光（`Wishmaking` 維持不勾）。合成頁放好材料後，左下的 `Forecasts` 欄會顯示結果階級的羅馬數字與取得所選體系的機率（實機截圖 `tests/screens/ShopFuseRecipe.png`：IV、Guaranteed、100%；`tests/shop/fuse_two_in.png`、`fuse_super_two_in.png`：I、60%），所以階級讀得到（#285，使用者 2026-10-23 決定）：
-    - 放好材料後讀這一欄（`shop.forecast_tier`，數字的筆畫同讀格子階級；機率用 OCR，只寫進 log，不影響決定）。畫面預測的階級照上面三種條件再判斷一次（`shop.fusion_wanted`，材料的階級是格子讀到的）：符合就照常按 Fuse；不符合就不按 Fuse，把這一組材料點回來（逐格回讀，`Shop.place(out=True)`），把這一組排除，同一頁再挑下一組。結果只看材料的階級，所以排除的是「這個階級組成」：例如 III + III + II 被退回後，另一組 III + III + II 也不再試。一頁最多退回 3 組（`FUSE_TRIES`，#285 新定的上限），再不行就關頁，這次造訪不再讀合成頁，直到持有的飾品改變（#62）；材料拿不回來也關頁。`any` 不拒絕任何階級。
+    - 放好材料後讀這一欄（`shop.forecast_tier`，數字的筆畫同讀格子階級；機率用 OCR，只寫進 log，不影響決定）。畫面預測的階級照上面三種條件再判斷一次（`shop.fusion_wanted`，材料的階級是格子讀到的）：符合就照常按 Fuse；不符合就不按 Fuse，把這一組材料點回來（逐格回讀，`Shop.place(out=True)`），把這一組排除，同一頁再挑下一組。結果只看材料的階級（遊戲說明寫體系不影響結果；預測列沒有用實機逐項驗過，unverified），所以排除的是「這個階級組成」：例如 III + III + II 被退回後，另一組 III + III + II 也不再試。一頁最多退回 3 組（`FUSE_TRIES`，#285 新定的上限，等使用者確認），退回第 3 組時不再點回來，直接關頁（關頁也會清空材料，同樣是從頁面行為推的），這次造訪不再讀合成頁，直到持有的飾品改變（#62）；材料拿不回來也關頁。`any` 不拒絕任何階級。
     - 讀不到（沒有數字、被蓋住、筆畫不是 I–IV）：退回點數推算的階級，照點數的結果按 Fuse，並在 log 寫「unread」。
     - 每次嘗試寫一行 log：`shop: fuse forecast <組合>: points tier <點數推算>, page tier <畫面預測或 unread>, chance <機率或 unread>, condition <條件>: <fuse | fuse on the points tier | turned down, taken out>`。
     - 只退回「點數推算符合、畫面不符合」的組合；畫面預測符合、點數推算不符合的組合不會被找出來（點數模型漏掉的升階機會，延後）。把點回來的材料當成可逆（再點一次取消）是從合成頁的行為推的，還沒有實機驗過（unverified）：點不回來就關頁。

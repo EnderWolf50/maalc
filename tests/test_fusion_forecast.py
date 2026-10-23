@@ -14,8 +14,8 @@ THREE_THREE_TWO = [("Bleed", None, 3), ("Tremor", None, 3), ("Pierce", None, 2)]
 
 
 def fuse(context, monkeypatch, team, readings, page, chance=True, slots=3, stuck=False, framed=False, visit=None, get=True):
-    """Shop.fuse on readings (test_actions.cells_read), the page forecasting page[the cells in, as a tuple] (a tier, or
-    nothing: the row does not read). get: the page reads "GET!" after a fusion; stuck: a material tapped in cannot be taken out again, framed: it goes out but its frame stays lit; visit: the shop visit's dict.
+    """Shop.fuse on readings (test_actions.cells_read), the page forecasting page.get(the cells in, as a sorted tuple) (a tier, or
+    nothing: the row does not read; page: a dict, or anything with .get). get: the page reads "GET!" after a fusion; stuck: a material tapped in cannot be taken out again, framed: it goes out but its frame stays lit; visit: the shop visit's dict.
     Returns (fused, how often each cell was tapped, whether Fuse was pressed, the log lines)."""
     lines = []
     monkeypatch.setattr(actions, "log", lines.append)
