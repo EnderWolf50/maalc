@@ -24,6 +24,7 @@ import battle
 import gift_search
 import hub_text
 import map_route
+import pack_cover
 import recovery
 import rewards
 import run_start
@@ -1185,15 +1186,18 @@ class PickThemePack(CustomAction):
             settled = still(context, timeout=CARDS_SETTLE, roi=PACK_CARDS, runs=2)
             if settled is None:
                 log(f"floor {floor}: the cards still moved after {CARDS_SETTLE:g} s")
-            cards = pack_titles(context, page_guard(context, "ThemePack", settled))
+            page = page_guard(context, "ThemePack", settled)
+            cards = pack_titles(context, page)
             if not cards:
                 return stuck("no theme pack titles read")
-            ranked = run_start.rank_packs([lines for _, lines in cards], names, plan, title_art)
-            slots = run_start.event_slots(floor, [t for t, _ in ranked], event_packs, packs)
+            ranked = run_start.rank_packs([lines for _, lines in cards], names, plan, title_art,
+                                          lambda i, allowed: pack_cover.read_cover(page, cards[i][0], allowed))
+            slots = run_start.event_slots(floor, [t for t, _, _ in ranked], event_packs, packs)
             log(f"floor {floor} packs, threshold {plan['threshold']}: "
-                + ", ".join(f"{t} ({w}{', event' if e else ''})" for (t, w), e in zip(ranked, slots)))
-            titles = [t for t, _ in ranked]
-            i, meets = run_start.pick_pack([w for _, w in ranked], slots, plan)
+                + ", ".join(f"{t} ({w}{', event' if e else ''})" for (t, w, _), e in zip(ranked, slots)))
+            log(f"floor {floor} card reads: " + ", ".join(f"{t} <- {how}" for t, _, how in ranked))  # #274: which path named each card
+            titles = [t for t, _, _ in ranked]
+            i, meets = run_start.pick_pack([w for _, w, _ in ranked], slots, plan)
             if not run_start.refresh_wanted(meets, setting, used) or titles == seen:
                 break
             seen = titles

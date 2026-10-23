@@ -1744,18 +1744,22 @@ def test_a_difficulty_label_not_readable_yet_is_looked_at_again_not_slept_on(con
 REFRESH = (1083, 47)
 
 
-def pack_page(context, monkeypatch, floor, setting, mode):
+def pack_page(context, monkeypatch, floor, setting, mode, covers=None):
     """PickThemePack on a fake floor page of two cards weighing -5 and read as packs the data file lacks (a new pair
-    after each of 4 refreshes; a 5th changes nothing: used up). Returns (refresh taps, log lines)."""
+    after each of 4 refreshes; a 5th changes nothing: used up). Returns (refresh taps, log lines); covers collects the
+    cover reader each page's ranking is handed (#274)."""
     actions.RUN.update(settings={"run": {"theme_pack_refresh": setting}}, team={"hard_from_floor": 0}, difficulty=None)
     plan = {"weights": {}, "threshold": 0, "unlisted": -5, "event_packs": mode}
     art = {"Hello Bus": "S.E.A."}
     monkeypatch.setattr(actions, "theme_pack_plan", lambda settings, team: (plan, [], set(), art))
 
-    def rank_packs(cards, names, plan, title_art):
+    def rank_packs(cards, names, plan, title_art, cover):
         assert title_art is art  # every page, a refreshed one too, gets the data file's title art (#246)
-        return [(c[0], -5) for c in cards]
+        covers.append(cover)
+        return [(c[0], -5, "name") for c in cards]
     monkeypatch.setattr(actions.run_start, "rank_packs", rank_packs)
+    covers = [] if covers is None else covers
+    monkeypatch.setattr(actions.pack_cover, "read_cover", lambda page, x, allowed: ("Cover pack", page, x, allowed))
     lines = []
     monkeypatch.setattr(actions, "log", lines.append)
     taps = []
@@ -1808,11 +1812,26 @@ def test_a_theme_pack_page_below_the_threshold_is_refreshed_as_the_setting_says(
     assert lines[-1] == f"floor 2: pull 'Pack {min(refreshes, 4)}a' (-5, below the threshold)"
 
 
+def test_each_card_of_a_theme_pack_page_is_logged_with_the_path_that_read_it(context, monkeypatch):
+    # #274: which of the paths (name, title_art, keyword, cover N, shared, unread) named each card
+    _, lines = pack_page(context, monkeypatch, 2, "none", "weight")
+    assert "floor 2 card reads: Pack 0a <- name, Pack 0b <- name" in lines
+
+
+def test_the_cover_reader_of_a_theme_pack_page_looks_at_that_pages_card(context, monkeypatch):
+    # #274: rank_packs gets a reader of the page just read: card i's x centre (the 2nd title spans 500-590) on that image
+    covers = []
+    pack_page(context, monkeypatch, 2, "none", "weight", covers)
+    found = covers[0](1, {"Line 1"})
+    assert found[0] == "Cover pack" and found[2] == 545 and found[3] == {"Line 1"}
+    assert found[1].shape == (720, 1280, 3)
+
+
 def test_floor_5s_leftmost_new_pack_is_taken_when_event_packs_are_preferred(context, monkeypatch):
     # #240: a pack the data file lacks, leftmost on floor 5, is a running event's: "prefer" takes it, no refresh.
     used, lines = pack_page(context, monkeypatch, 5, "all", "prefer")
     assert used == 0
-    assert lines[-2:] == ["floor 5 packs, threshold 0: Pack 0a (-5, event), Pack 0b (-5)", "floor 5: pull 'Pack 0a' (-5)"]
+    assert [lines[-3], lines[-1]] == ["floor 5 packs, threshold 0: Pack 0a (-5, event), Pack 0b (-5)", "floor 5: pull 'Pack 0a' (-5)"]
 
 
 def test_a_search_tab_opens_without_fixed_waits(context, clock):

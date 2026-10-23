@@ -154,13 +154,13 @@ def test_a_title_alike_to_several_packs_takes_their_weight_when_they_share_it():
     # Live 2026-10-18, floor 5: OCR read "Line 1" as "Line"; every Line pack weighs -5, so does this card.
     weights = {"Line 1": -5, "Line 2": -5, "Line 3": -5, "To be Crushed": 5, "To be Cleaved": -5}
     ranked = rs.rank_packs([["Line"], ["To be C"]], SHORT + NAMES, {"weights": weights, "unlisted": 2})
-    assert ranked == [("Line", -5), ("To be C", 2)]  # the second is alike to two weights: unlisted
+    assert ranked == [("Line", -5, "shared"), ("To be C", 2, "unread")]  # the second is alike to two weights: unlisted
 
 
 def test_a_card_matching_no_pack_or_an_unweighed_one_takes_the_unlisted_weight():
     plan = {"weights": {"To be Crushed": -3}, "unlisted": -1}
     ranked = rs.rank_packs([["To be Crushed"], ["Lake World"], ["Brand New Pack"]], NAMES, plan)
-    assert ranked == [("To be Crushed", -3), ("Lake World", -1), ("Brand New Pack", -1)]
+    assert ranked == [("To be Crushed", -3, "name"), ("Lake World", -1, "unread"), ("Brand New Pack", -1, "unread")]
 
 
 PLAN = {"threshold": 0, "unlisted": 0, "event_packs": "weight"}
@@ -222,8 +222,8 @@ def test_the_event_mode_on_floor_5s_leftmost_card(floor, titles, mode, expected)
     plan = {**PLAN, "event_packs": mode, "weights": {"Twining Threads": -5, "Repressed Wrath": 3, "Hell's Chicken": 4},
             "unlisted": 0}
     ranked = rs.rank_packs([t.split(" ", 1) for t in titles], KNOWN, plan)  # two OCR boxes per title
-    slots = rs.event_slots(floor, [t for t, _ in ranked], EVENTS, KNOWN)
-    assert rs.pick_pack([w for _, w in ranked], slots, plan) == expected
+    slots = rs.event_slots(floor, [t for t, _, _ in ranked], EVENTS, KNOWN)
+    assert rs.pick_pack([w for _, w, _ in ranked], slots, plan) == expected
 
 
 def test_a_reversed_title_holding_an_event_packs_name_is_not_floor_5s_event_slot():
@@ -294,7 +294,7 @@ def test_a_card_nothing_names_takes_the_unlisted_weight_and_keeps_its_place():
     # #266: a read that names no pack ("ZZZ") is still a card in the ranking, with the plan's unlisted weight.
     plan = {"weights": {"Line 1": -5}, "unlisted": 3}
     ranked = rs.rank_packs([["Tearful Things"], ["MADNESS"], ["ZZZ"]], DATA_NAMES, plan, DATA_TITLE_ART)
-    assert ranked == [("Tearful Things", 3), ("Line 1", -5), ("ZZZ", 3)]
+    assert ranked == [("Tearful Things", 3, "name"), ("Line 1", -5, "title_art"), ("ZZZ", 3, "unread")]
 
 
 # OCR boxes read off 2026-10-22 captures (title strip), the logo and noise reads kept: #266, #267
@@ -316,25 +316,121 @@ LINE_1_PAGE = [
 def test_a_title_split_into_two_boxes_on_one_line_is_one_card():
     # #267: "Timekilling" and "Time" sit 4 px apart but their centres 80 px: the old 80 px test made two cards.
     cards = rs.pack_cards(TIMEKILLING_PAGE)
-    assert [lines for _, lines in cards] == [["Tearful Things"], ["Degraded Gloom"], ["Timekilling", "Time"],
-                                              ["Crawling Abyss"], ["Walpurgis Night", "Full-Stopped by a", "Bullet"]]
+    # (the logo's misreads and the art's capitals stay lines of their card, #274)
+    assert [lines for _, lines in cards] == [["WIOPIS", "Tearful Things"], ["H", "Degraded Gloom"],
+                                              ["TIMKILLING", "TME", "Timekilling", "Time"], ["WOPIS", "Crawling Abyss"],
+                                              ["Walpurgis Night", "Full-Stopped by a", "Bullet"]]
     assert [x for x, _ in cards][2] == 638  # the swipe lands in the middle of the card's text, not on its first box
 
 
-def test_a_card_titled_in_capitals_is_listed_and_the_logo_alone_is_not_a_card():
-    # #266: LINE 1 MADNESS reads only as MADNESS; the capitals were dropped and the whole card with them. The
-    # narrow LIMBUS logo and noise beside a lowercase title add no card.
+def test_a_card_titled_in_capitals_is_listed_and_the_known_logo_alone_is_not_a_card():
+    # #266: LINE 1 MADNESS reads only as MADNESS; the capitals were dropped and the whole card with them. #274: the
+    # filter is the words the card shows besides its title (NOT_TITLE), not "no lowercase letter": noise beside a title
+    # stays a line of that card (it is read past), and the logo's own word alone is no card.
     cards = rs.pack_cards(LINE_1_PAGE)
     assert [lines for _, lines in cards] == [["The Surrendered", "Witnessing"], ["MADNESS"],
-                                              ["Four", "Houses and", "Greed"], ["Tangling Lust"]]
-    assert rs.pack_cards([("LIMBUS", (311, 414, 37, 15)), ("WYAM", (871, 445, 16, 8))]) == []
+                                              ["Four", "Houses and", "Greed"], ["Tangling Lust", "WYAM"]]
+    assert rs.pack_cards([("LIMBUS", (311, 414, 37, 15)), ("LIMBUS COMPANY", (500, 414, 90, 15)), ("", (700, 414, 20, 15))]) == []
+
+
+@pytest.mark.parametrize("word", ["LIMBUS", "limbus", "COMPANY", "LIMBUS COMPANY", "Limbus  Company", "CAUTION", "CLEAR BONUS", "LV"])
+def test_a_box_reading_exactly_a_non_title_word_is_dropped(word):
+    assert rs.pack_cards([(word, (300, 414, 90, 15)), ("Lake World", (300, 440, 90, 15))]) == [(345, ["Lake World"])]
+
+
+@pytest.mark.parametrize("text", ["THE DUSK OF AMBER", "AMBER", "MURDER", "WARP EXPRESS", "LINE 2", "LIMBUS RISING", "CAUTION IV", "WOPIS", "深夜清扫"])
+def test_every_other_read_stays_a_card_capitals_included(text):
+    # read off the captures (#274): capitals that are a title (the old rule kept only a box 80 px wide or more, and none
+    # with a lowercase letter beside it), the logo's second word misread, a Chinese art title
+    assert rs.pack_cards([(text, (300, 420, 40, 15))]) == [(320, [text])]
+
+
+@pytest.mark.parametrize(("noise_x", "cards"), [(rs.CARD_SPAN - 2, 1), (rs.CARD_SPAN + 2, 2)])
+def test_a_noise_box_near_a_title_belongs_to_its_card(noise_x, cards):
+    # #274: with no lowercase rule, a lone "M" beside a card (live: 70 px from the centre) must not be a card
+    title = ("Lake World", (200, 440, 80, 20))  # centre 240
+    noise = ("M", (240 + noise_x - 10, 400, 20, 20))
+    found = rs.pack_cards([title, noise])
+    assert len(found) == cards
+    if cards == 1:
+        assert found[0][1] == ["M", "Lake World"]
+
+
+def test_texts_of_neighbouring_cards_stay_apart():
+    # the cards' pitch is 211 px: two titles are two cards, long or short
+    found = rs.pack_cards([("The Surrendered Witnessing", (150, 440, 130, 20)), ("Tangling Lust", (380, 444, 148, 22))])
+    assert [lines for _, lines in found] == [["The Surrendered Witnessing"], ["Tangling Lust"]]
 
 
 @pytest.mark.parametrize(("gap", "cards"), [(rs.CARD_GAP - 1, 1), (rs.CARD_GAP, 2)])
 def test_two_boxes_are_one_card_below_the_gap(gap, cards):
-    assert len(rs.pack_cards([("Lake", (100, 440, 50, 20)), ("World", (150 + gap, 440, 50, 20))])) == cards
+    # wide boxes, whose centres are past CARD_SPAN either way: the gap alone decides
+    assert len(rs.pack_cards([("Lake", (100, 440, 120, 20)), ("World", (220 + gap, 440, 120, 20))])) == cards
 
 
-@pytest.mark.parametrize(("width", "cards"), [(rs.ART_WIDTH - 1, 0), (rs.ART_WIDTH, 1)])
-def test_a_capitals_only_box_is_a_title_art_from_the_art_width(width, cards):
-    assert len(rs.pack_cards([("MADNESS", (100, 400, width, 60))])) == cards
+# keywords and the paths a card is read by (#274)
+ALL_NAMES = DATA_NAMES + list(DATA_TITLE_ART)
+
+
+def test_a_keyword_is_the_shortest_word_no_other_name_contains():
+    assert rs.pack_keywords(["To be Cleaved", "To be Pierced"]) == {"To be Cleaved": "cleaved", "To be Pierced": "pierced"}
+    # "flood" sits inside no other name; "emotional" is in both, "craving" and "flood" are the shortest words left
+    assert rs.pack_keywords(["Emotional Flood", "Emotional Craving"]) == {"Emotional Flood": "flood", "Emotional Craving": "craving"}
+    # a word another name contains is out ("sink" is in "Sinking"): the next word
+    assert rs.pack_keywords(["Sink Hole", "Sinking Pang"]) == {"Sink Hole": "hole", "Sinking Pang": "pang"}
+    # no word is its own: the shortest stretch of the name instead
+    assert rs.pack_keywords(["Line 1", "Line 2"]) == {"Line 1": "ine1", "Line 2": "ine2"}
+    # a name every stretch of which another holds, or too short a one, has none
+    assert rs.pack_keywords(["Sea", "Sea of Blood"]) == {"Sea of Blood": "blood"}
+
+
+def test_every_keyword_of_the_season_is_in_one_name_only_and_every_pack_but_one_has_one():
+    keywords = rs.pack_keywords(ALL_NAMES)
+    for name, keyword in keywords.items():
+        assert len(keyword) >= rs.KEYWORD_MIN
+        assert [n for n in ALL_NAMES if keyword in compact(n)] == [name]
+    assert [n for n in DATA_NAMES if n not in keywords] == ["S.E.A."]  # "sea" is in Mountain of Corpses, Sea of Blood
+
+
+def test_every_keyword_finds_its_pack_and_no_other():
+    # sweep: each pack's keyword alone, and inside noise; the name it finds is its own, never a neighbour's
+    for name, keyword in rs.pack_keywords(ALL_NAMES).items():
+        for text in (keyword, f"LImBUS {keyword}", f"{keyword.upper()} wopis"):
+            assert rs.match_keyword(text, ALL_NAMES) == name, (name, text)
+
+
+@pytest.mark.parametrize(("text", "expected"), [
+    ("miiracle InDistrict", "Miracle in District 20"),  # live: a slip inside a 7-letter keyword
+    ("Houses and Four Greed", "Four Houses and Greed"),
+    ("Tangling", "Tangling Lust"),
+    ("Tang1ing", "Tangling Lust"),  # one slip in an 8-letter keyword passes
+    ("Tangl", None), ("lake", "Lake World"), ("Lakx", None),  # a 4-letter keyword reads exactly
+    ("LImBUS", None), ("WOPIS", None), ("", None),  # logo and noise
+    ("Nagel cleaved", None),  # two packs' keywords: no guess
+])
+def test_a_half_read_title_is_named_by_its_keyword(text, expected):
+    assert rs.match_keyword(text, ALL_NAMES) == expected
+
+
+def test_each_path_of_a_card_is_named_in_the_ranking_and_a_failed_path_falls_through_to_the_next():
+    plan = {"weights": {"Line 1": -5, "Line 2": -5, "Line 3": -5, "Line 5": -5}, "unlisted": 0}
+    asked = []
+
+    def cover(i, allowed):
+        asked.append((i, allowed))
+        return ("Line 5", 0.93) if i == 3 else None
+
+    cards = [["Nagel und Hammer"], ["MADNESS"], ["WOPIS", "Four"], ["WOPIS", "Line"], ["Line"], ["ZZZ"]]
+    ranked = rs.rank_packs(cards, DATA_NAMES, plan, DATA_TITLE_ART, cover)
+    assert ranked == [("Nagel und Hammer", 0, "name"), ("Line 1", -5, "title_art"), ("Four Houses and Greed", 0, "keyword"),
+                      ("Line 5", -5, "cover 0.93"), ("Line", -5, "shared"), ("ZZZ", 0, "unread")]
+    # the first three never ask the cover; the title narrows it to the packs it is alike to; a title like none leaves it free
+    assert [i for i, _ in asked] == [3, 4, 5]
+    assert asked[0][1] == {"Line 1", "Line 2", "Line 3", "Line 5"} == asked[1][1]
+    assert asked[2][1] is None
+
+
+def test_without_a_cover_a_card_no_title_path_reads_is_unlisted_as_before():
+    ranked = rs.rank_packs([["WOPIS", "Line"]], DATA_NAMES, {"weights": {"Line 1": -5, "Line 2": -9}, "unlisted": 3})
+    assert ranked == [("WOPIS Line", 3, "unread")]  # alike titles with two weights: unlisted
+
