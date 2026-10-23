@@ -19,8 +19,13 @@ wall time of its first frame (screen-record's `started`); give one per piece of 
 
 **map** stitches the floor from the frames before and after each `map: dragged the map N px` and boxes every
 node the bot read, at its column and row: green read right, red a wrong type, orange a wrong Cost or a node
-the bot did not list (from FIX), with the Cost it read and the first read when a later one replaced it; the
-route is numbered and the banner has the drags, the path and its score. FIX is what you judged on the frames:
+the bot did not list (from FIX), with the Cost it read and the first read when a later one replaced it. Reads
+that took more than the marks have their own colour and line: violet a type corrected once the map was dragged
+near, magenta a Cost that read no number or missed, white a boss told by its Cost, cyan a boss told by its red
+glow or by the shop before it; a legend under the picture says so. The route is numbered and the banner has the
+drags, the path and its score. Each shot is the still map the bot read (the still stretch of the footage around
+the read, never a motion run: a drag back is not a drag), and the shots are laid side by side by the slide
+measured between them on the frames (template match), the log's px where none matches. FIX is what you judged on the frames:
 `{"c4/down": ["risky"], "c2/mid": ["cost", "<what it read and what the screen shows>"], "c3/up": ["missed", "<label>"]}`.
 `--after T` takes the floor's next reading after T (a restart re-reads the map). Writes stitched.png,
 before-1.png, after-N.png, route.json; `--clip` adds drag-clip.mp4 (read, drag, read on, plan, with the touches).
@@ -61,6 +66,12 @@ ANNOTATE = Path.home() / ".claude/skills/evidence-annotate/scripts/annotate.py"
 FONTS = ["C:/Windows/Fonts/msjh.ttc", "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc"]
 W, H = 1280, 720  # frames are scaled to the game's own 720p grid
 GREEN, RED, ORANGE, YELLOW, GREY, BLUE = (60, 220, 60), (255, 60, 60), (255, 160, 0), (255, 220, 0), (170, 170, 170), (90, 200, 255)
+VIOLET, MAGENTA, WHITE, CYAN = (170, 110, 255), (255, 70, 200), (245, 245, 245), (0, 225, 225)
+# a node's notes, in the order they ring its box: tag -> colour
+NOTE_COLOUR = {"boss_shop": CYAN, "boss_glow": CYAN, "boss_by_cost": WHITE, "cost_miss": MAGENTA, "cost_none": MAGENTA, "retyped": VIOLET}
+LEGEND = [(GREEN, "綠＝讀對"), (RED, "紅＝類型錯"), (ORANGE, "橘＝Cost 錯或漏列"), (VIOLET, "紫＝先讀錯，拖近後改正"),
+          (MAGENTA, "洋紅＝Cost 沒讀到或 miss"), (WHITE, "白＝靠 Cost 判成 Boss"), (CYAN, "青＝Boss 紅光或商店判定"), (BLUE, "藍線＝路線")]
+SHIFT_MIN = 0.6  # TM_CCOEFF_NORMED of a slide to trust: the real one scored 0.91-0.94 (run 11, floor 1), another place 0.5 at most
 COLX = lambda k: 328 + 255 * (k - 1)  # noqa: E731  x of map column k (1-based) before any drag
 ROWY = {"up": 144, "mid": 357, "down": 570}
 BUS = (110, 357)
@@ -236,34 +247,63 @@ def floor_block(msgs, floor: int, after: float | None = None) -> list[tuple[floa
 
 
 def parse_map(block):
-    """(stages [{cols: {k: {row: type}}, costs: [(x, y, cost)], t0, t1}], drags [(t, px, from column)], path)."""
-    stages, drags, path = [{"cols": {}, "costs": [], "t0": block[0][0]}], [], None
+    """(stages [{cols: {k: {row: type}}, costs: [(x, y, cost, type)], misses: [(x, y, why)], boss: {k: tag}, t0, t1}],
+    drags [(t, px, from column)], path)."""
+    new = lambda t: {"cols": {}, "costs": [], "misses": [], "boss": {}, "t0": t}  # noqa: E731
+    stages, drags, path = [new(block[0][0])], [], None
     for t, x in block:
         if m := re.match(r"map: node at (\d+), (\d+) reads Cost (\S+): (\w+)", x):
-            stages[-1]["costs"].append((int(m[1]), int(m[2]), m[3]))  # "None": the bot saw a coin but read no number
+            stages[-1]["costs"].append((int(m[1]), int(m[2]), m[3], m[4]))  # "None": the bot saw a coin but read no number
+        elif m := re.match(r"map: Cost miss at (\d+), (\d+) \(\w+\): (.*?), crop ", x):
+            stages[-1]["misses"].append((int(m[1]), int(m[2]), m[3]))
+        elif m := re.match(r"map: column (\d+): the boss' glow without", x):
+            stages[-1]["boss"][int(m[1])] = "boss_glow"
+        elif m := re.match(r"map: column (\d+): after the shop, so the boss|map: left the shop; column (\d+)", x):
+            stages[-1]["boss"][int(m[1] or m[2])] = "boss_shop"
         elif m := re.match(r"map: column (\d+): (.*)", x):
             stages[-1]["cols"][int(m[1])] = {c[1]: c[2] for c in re.finditer(r"(up|mid|down) (\w+) \(", m[2])}
             stages[-1]["t1"] = t
         elif m := re.match(r"map: dragged the map (\d+) px; reading on from column (\d+)", x):
             drags.append((t, int(m[1]), int(m[2])))
-            stages.append({"cols": {}, "costs": [], "t0": t})
+            stages.append(new(t))
         elif m := re.match(r"map: path (.*), score (-?\d+)", x):
             path = ([tuple(p.split(" ", 1)) for p in m[1].split(" > ")], int(m[2]))
     return stages, drags, path
 
 
 def node_table(stages, drags) -> dict:
-    """{(column, row): {type: last read, first: first read, cost: the Cost read there or None}}."""
+    """{(column, row): {type: last read, first: first read, cost: the Cost read there or None, stage: the stage of the
+    last read, notes: [(tag, detail)] in NOTE_COLOUR's order}}."""
     offsets = list(accumulate((px for _, px, _ in drags), initial=0))
-    nodes = {}
-    for st, off in zip(stages, offsets):
+    nodes, notes = {}, {}
+    cell = lambda x, y, off: (round((x + off - COLX(1)) / 255) + 1, min(ROWY, key=lambda r: abs(ROWY[r] - y)))  # noqa: E731
+    for s, (st, off) in enumerate(zip(stages, offsets)):
         for k, cells in st["cols"].items():
             for row, typ in cells.items():
-                nodes.setdefault((k, row), {"type": typ, "first": typ, "cost": None})["type"] = typ
-        for x, y, cost in st["costs"]:
-            key = (round((x + off - COLX(1)) / 255) + 1, min(ROWY, key=lambda r: abs(ROWY[r] - y)))
-            if key in nodes:
+                n = nodes.setdefault((k, row), {"type": typ, "first": typ, "cost": None, "stage": s})
+                n["type"], n["stage"] = typ, s
+        for x, y, cost, kind in st["costs"]:
+            if (key := cell(x, y, off)) in nodes:
                 nodes[key]["cost"] = cost
+                found = notes.setdefault(key, {})
+                if cost == "None":
+                    found["cost_none"] = None
+                if kind == "boss":
+                    found["boss_by_cost"] = None
+        for x, y, why in st["misses"]:
+            if (key := cell(x, y, off)) in nodes:
+                notes.setdefault(key, {})["cost_miss"] = why
+        for k, tag in st["boss"].items():
+            for row in ROWY:
+                if (k, row) in nodes:
+                    notes.setdefault((k, row), {})[tag] = None
+    for key, n in nodes.items():
+        found = notes.get(key, {})
+        if n["first"] != n["type"]:
+            found["retyped"] = None
+        if n["type"] != "boss":  # a boss note belongs to a node that ended as the boss
+            found = {t: d for t, d in found.items() if not t.startswith("boss")}
+        n["notes"] = [(t, found[t]) for t in NOTE_COLOUR if t in found]
     return nodes
 
 
@@ -292,15 +332,49 @@ def runs(mov) -> list[tuple[int, int]]:
     return out
 
 
-def pick_shots(times, mov, drags) -> list[int]:
-    """Frame indices: the still map before the first drag, then the still map after each drag."""
-    if not drags:
-        return [len(times) // 2]
-    rs, picks = runs(mov), []
-    for t, _, _ in drags:
-        a, b = max((r for r in rs if times[r[1]] <= t + 1.0), key=lambda r: times[r[1]])
-        picks.append((max(a - 2, 0), min(b + 3, len(times) - 1)))
-    return [picks[0][0]] + [b for _, b in picks]
+def still_spans(mov, margin: int = 2) -> list[tuple[int, int]]:
+    """(first, last) frame of each stretch between motion runs, a margin of frames off the sides that touch one."""
+    spans, lo = [], 0
+    for a, b in runs(mov):
+        spans.append((lo, a - 1 - margin))
+        lo = b + 1 + margin
+    spans.append((lo, len(mov) - 1))
+    return [(a, b) for a, b in spans if a <= b]
+
+
+def pick_shots(times, mov, reads) -> list[int]:
+    """Frame index of the still map each reading (a wall time) saw: its frame, clipped into the still stretch that
+    holds it, or into the nearest one when the footage shows the map moving then (the clocks differ by a fraction of a second).
+
+    Run 11, floor 1 (2026-10-24): the map is dragged twice, then back. The log's `dragged` line comes about a second
+    after the drag ended and the drag back starts 0.4 s later: the last motion run within a second of the line is the
+    drag back, so a pick by motion runs showed the map of the first drag for the second.
+    """
+    spans = still_spans(mov) or [(0, len(times) - 1)]
+    picks = []
+    for t in reads:
+        k = min(range(len(times)), key=lambda i: abs(times[i] - t))
+        a, b = min(spans, key=lambda s: max(s[0] - k, k - s[1], 0))
+        picks.append(min(max(k, a), b))
+    return picks
+
+
+def measure_shift(prev, cur, expect: int, reach: int = 100, rows=(150, 560), cols=(40, 440)):
+    """(shift, score): how far the map slid from the gray frame prev to cur (cur's x is prev's x minus shift), by the
+    best match of cur's left part within reach px of expect; None when it scores under SHIFT_MIN or cur is flat.
+
+    Rows 150-560 leave the HUD and the party bar out. The columns repeat every 255 px, so the search stays near expect.
+    """
+    import cv2  # the probe group's
+
+    (y0, y1), (x0, x1) = rows, cols
+    tpl = np.ascontiguousarray(cur[y0:y1, x0:x1])
+    if tpl.std() < 3:
+        return None
+    lo, hi = max(0, x0 + expect - reach), min(prev.shape[1], x1 + expect + reach)
+    score = cv2.matchTemplate(np.ascontiguousarray(prev[y0:y1, lo:hi]), tpl, cv2.TM_CCOEFF_NORMED)[0]
+    best = int(score.argmax())
+    return (lo + best - x0, float(score[best])) if score[best] >= SHIFT_MIN else None
 
 
 def label(d, x, y, lines, colours, f):
@@ -310,33 +384,81 @@ def label(d, x, y, lines, colours, f):
         d.text((x + 4, y + j * 26), line, font=f, fill=col)
 
 
-def draw_map(shots, drags, nodes, path, fix, floor: int) -> Image.Image:
-    offsets = list(accumulate((px for _, px, _ in drags), initial=0))
-    canvas = Image.new("RGB", (W + int(offsets[-1]), H))
+def note_text(tag: str, detail, n) -> str:
+    return {"retyped": f"先讀成 {n['first']}，拖近後改正", "cost_none": "Cost 沒讀到", "cost_miss": f"Cost miss：{detail}",
+            "boss_by_cost": f"靠 Cost {n['cost']} 判成 boss", "boss_glow": "Boss 紅光判斷，前面沒有商店",
+            "boss_shop": "商店後面，判成 boss"}[tag]
+
+
+def legend_layout(d, f, width: int):
+    """([(x, y, colour, text)], height): the legend's entries, flowing over rows of the picture's width."""
+    x, y, items = 8, 6, []
+    for col, text in LEGEND:
+        w = 34 + d.textlength(text, font=f) + 24
+        if x + w > width and x > 8:
+            x, y = 8, y + 32
+        items.append((x, y, col, text))
+        x += w
+    return items, y + 38
+
+
+def drag_banner(drags, offsets, measured) -> str:
+    """`512px(從第 3 欄接)` per drag, with the slide the frames show where it differs from the log's or was not measured."""
+    parts = []
+    for n, (_, px, col) in enumerate(drags):
+        step = offsets[n + 1] - offsets[n]
+        extra = f"，畫面量得 {step}px" if abs(step - px) > 2 else "，位移沒量到" if measured and measured[n] is None else ""
+        parts.append(f"{px}px(從第 {col} 欄接{extra})")
+    return " + ".join(parts) or "無"
+
+
+def draw_map(shots, offsets, drags, nodes, path, fix, floor: int, measured=()) -> Image.Image:
+    """offsets: the x of each shot on the picture (the slides measured, or the log's px); drags: the log's."""
+    logged = list(accumulate((px for _, px, _ in drags), initial=0))
+    f, fb = font(22), font(26)
+    items, legend_h = legend_layout(ImageDraw.Draw(Image.new("RGB", (1, 1))), f, W + int(offsets[-1]))
+    canvas = Image.new("RGB", (W + int(offsets[-1]), H + legend_h))
     for im, off in zip(shots, offsets):
         canvas.paste(im.convert("RGB"), (int(off), 0))
-    d, f, fb = ImageDraw.Draw(canvas, "RGBA"), font(22), font(26)
+    d = ImageDraw.Draw(canvas, "RGBA")
+
+    def where(k, row):
+        """A node sits where the shot it was last read in shows it: the log's column grid, moved by what that shot's
+        offset differs from the log's px."""
+        s = nodes[k, row]["stage"] if (k, row) in nodes else 0
+        return COLX(k) + offsets[s] - logged[s], ROWY[row]
+
     for (k, row), n in sorted(nodes.items()):
-        x, y, real = COLX(k), ROWY[row], fix.get(f"c{k}/{row}")
-        col = GREEN if not real else ORANGE if real[0] == "cost" else RED
-        d.rectangle([x - 52, y - 52, x + 52, y + 52], outline=col + (255,), width=4)
-        lines = [n["type"] + (" (Cost 沒讀到)" if n["cost"] == "None" else f" {n['cost']}" if n["cost"] else "")]
-        if n["first"] != n["type"]:
-            lines.append(f"先讀成 {n['first']}，拖近後改正")
+        (x, y), real = where(k, row), fix.get(f"c{k}/{row}")
+        notes = [(t, det) for t, det in n["notes"] if not (t == "cost_none" and any(u == "cost_miss" for u, _ in n["notes"]))]
+        rings = ([ORANGE if real[0] == "cost" else RED] if real else []) + list(dict.fromkeys(NOTE_COLOUR[t] for t, _ in notes)) or [GREEN]
+        for i, col in enumerate(rings):
+            e = 52 - 5 * i
+            d.rectangle([x - e, y - e, x + e, y + e], outline=col + (255,), width=4)
+        cost = n["cost"] if n["cost"] not in (None, "None") else ""
+        lines, colours = [n["type"] + (f" {cost}" if cost else "")], [rings[0]]
+        for tag, detail in notes:
+            lines.append(note_text(tag, detail, n))
+            colours.append(NOTE_COLOUR[tag])
         if real and real[0] == "cost":
             lines.append(f"Cost 讀錯：{real[1]}，類型讀對")
+            colours.append(ORANGE)
         elif real:
             lines.append(f"讀錯：實為 {real[0]}")
-        label(d, x - 52, y + 54, lines, [col] + [YELLOW if not real else col] * (len(lines) - 1), f)
+            colours.append(RED)
+        label(d, x - 52, y + 54, lines, colours, f)
     for key, real in fix.items():
         if real[0] == "missed":
             k, row = int(key[1:].split("/")[0]), key.split("/")[1]
             x, y = COLX(k), ROWY[row]
             d.rectangle([x - 52, y - 52, x + 52, y + 52], outline=ORANGE + (255,), width=4)
             label(d, x - 52, y + 54, [real[1]], [ORANGE], f)
-    banner = f"第 {floor} 層  拖曳 " + (" + ".join(f"{px}px(從第 {c} 欄接)" for _, px, c in drags) or "無")
+    for x, y, col, text in items:
+        d.rectangle([x, H + y + 3, x + 24, H + y + 27], fill=col)
+        d.text((x + 32, H + y), text, font=f, fill=(255, 255, 255))
+    banner = f"第 {floor} 層  拖曳 " + drag_banner(drags, offsets, measured)
     if path:
-        pts = [BUS] + [(COLX(k), ROWY[row]) for k, (row, _) in enumerate(path[0], 1)]
+        pts = [BUS] + [where(k, row) for k, (row, _) in enumerate(path[0], 1)]
         d.line(pts, fill=BLUE + (255,), width=8)
         for n, (x, y) in enumerate(pts[1:], 1):
             d.ellipse([x - 66, y - 66, x - 38, y - 38], fill=BLUE + (255,))
@@ -367,14 +489,22 @@ def map_cmd(a) -> None:
     stages, drags, path = parse_map(block)
     nodes, fix = node_table(stages, drags), json.loads(Path(a.fix).read_text(encoding="utf-8")) if a.fix else {}
     footage, masks = Footage(a.video), load_masks(masks_path(a))
-    times, grays = frames(footage, stages[0].get("t1", block[0][0]) - 0.5, block[-1][0] + 0.5, 10, gray=True)
-    idx = pick_shots(times, motion(grays), drags)
+    # The floor's first reading (a floor's block opens at `floor N's map is up, floor N+1 next; waiting`, while the
+    # last floor's map still shows), then the first after each `dragged` line.
+    reads = [next(t for t, x in block if x.startswith(("map: node at", "map: column")))] + [t + 0.1 for t, _, _ in drags]
+    times, grays = frames(footage, reads[0] - 0.5, block[-1][0] + 0.5, 10, gray=True)
+    idx = pick_shots(times, motion(grays), reads)
     shots = [apply_masks(grab(footage, times[i]), masks) for i in idx]
     for n, im in enumerate(shots):
         im.save(out / ("before-1.png" if n == 0 else f"after-{n}.png"))
-    draw_map(shots, drags, nodes, path, fix, a.floor).save(out / "stitched.png")
+    gray = [np.asarray(im.convert("L")) for im in shots]
+    slides = [measure_shift(gray[n], gray[n + 1], px) for n, (_, px, _) in enumerate(drags)]
+    offsets = list(accumulate((s[0] if s else px for s, (_, px, _) in zip(slides, drags)), initial=0))
+    measured = [s and s[0] for s in slides]
+    draw_map(shots, offsets, drags, nodes, path, fix, a.floor, measured).save(out / "stitched.png")
     (out / "route.json").write_text(json.dumps({
-        "floor": a.floor, "drags": [{"t": hms(t), "px": px, "from_column": c} for t, px, c in drags],
+        "floor": a.floor, "drags": [{"t": hms(t), "px": px, "from_column": c, "measured": m, "score": s and round(s[1], 3)}
+                                    for (t, px, c), m, s in zip(drags, measured, slides)],
         "path": path and {"nodes": [" ".join(p) for p in path[0]], "score": path[1]},
         "nodes": [{"column": k, "row": row, **n, "fix": fix.get(f"c{k}/{row}")} for (k, row), n in sorted(nodes.items())],
         "shots": [hms(times[i]) for i in idx]}, ensure_ascii=False, indent=1), encoding="utf-8")

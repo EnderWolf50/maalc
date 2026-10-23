@@ -106,8 +106,9 @@ def test_map_block_reads_columns_costs_drags_and_path(log):
     assert drags == [(ev.secs("15:52:59.245"), 510, 3)]
     assert path == ([("up", "event"), ("mid", "risky"), ("up", "event"), ("mid", "shop")], 22)
     nodes = ev.node_table(stages, drags)
-    assert nodes[(1, "mid")] == {"type": "battle", "first": "battle", "cost": "75"}
-    assert nodes[(3, "up")] == {"type": "event", "first": "battle", "cost": "120"}  # read again after the drag
+    read = lambda key: {k: nodes[key][k] for k in ("type", "first", "cost", "stage")}  # noqa: E731
+    assert read((1, "mid")) == {"type": "battle", "first": "battle", "cost": "75", "stage": 0}
+    assert read((3, "up")) == {"type": "event", "first": "battle", "cost": "120", "stage": 1}  # read again after the drag
     assert nodes[(2, "mid")]["cost"] == "None"  # a coin with no number read: labelled "Cost 沒讀到"
     assert nodes[(4, "mid")]["cost"] is None  # no Cost line at all
 
@@ -139,7 +140,7 @@ def test_map_command_writes_the_stitched_floor_and_its_nodes(tmp_path, footage):
     (tmp_path / "run.log").write_text(RUN, encoding="utf-8")
     ev.main(["map", str(tmp_path / "run.log"), "--floor", "1", "-o", str(tmp_path / "route"), *footage])
     route = json.loads((tmp_path / "route/route.json").read_text(encoding="utf-8"))
-    assert Image.open(tmp_path / "route/stitched.png").size == (1790, 720)
+    assert Image.open(tmp_path / "route/stitched.png").size[0] == 1790  # 1280 + the 510 px drag: no frame to measure, the log's px stand
     assert route["path"]["score"] == 22 and len(route["nodes"]) == 5 and len(route["shots"]) == 2
     assert (tmp_path / "route/before-1.png").exists() and (tmp_path / "route/after-1.png").exists()
 
@@ -164,27 +165,128 @@ def test_packs_command_measures_deal_to_still(tmp_path, footage):
     assert (tmp_path / "packs/pack-1.png").exists()
 
 
-def test_map_picks_the_still_frame_before_and_after_each_drag():
-    still = np.zeros((720, 1280), np.uint8)
-    sliding = [np.full((720, 1280), 40 * k, np.uint8) for k in range(1, 6)]
-    grays = [still] * 10 + sliding + [still] * 10  # the map slides from frame 10 to 14
+def test_map_picks_the_still_map_each_reading_saw_not_the_drag_back():
+    """Run 11, floor 1 (2026-10-24): two drags, then the bot drags the map back. The old pick took the last motion
+    run that ended within a second of the second `dragged` line: the drag back, so after-2 showed the map of after-1."""
+    grey = lambda v, n: [np.full((720, 1280), v, np.uint8)] * n  # noqa: E731
+    grays = (grey(0, 10) + grey(99, 3) + grey(10, 12)  # still; drag 1 (frames 10-12); still 13-24
+             + grey(150, 3) + grey(20, 12)  # drag 2 (25-27); still 28-39
+             + grey(190, 3) + grey(30, 10))  # the drag back (40-42), the map as it was after drag 1
     times = [100 + i / 10 for i in range(len(grays))]
-    mov = ev.motion(grays)
-    assert ev.runs(mov) == [(10, 15)]
-    assert ev.pick_shots(times, mov, [(101.6, 510, 3)]) == [8, 18]
+    # the readings: the floor's first (100.5), after drag 1 (log 101.9), after drag 2 (log 103.8, the drag back starts at 104.0)
+    idx = ev.pick_shots(times, ev.motion(grays), [100.5, 101.9, 103.8])
+    assert [int(grays[i][0, 0]) for i in idx] == [0, 10, 20]
+
+
+def noise(w, seed=1):
+    return np.random.default_rng(seed).integers(0, 255, (720, w), dtype=np.uint8)
+
+
+def test_map_measures_the_slide_between_two_still_frames():
+    world = noise(2000)
+    prev, cur = world[:, 0:1280], world[:, 507:1787]
+    shift, score = ev.measure_shift(prev, cur, 512)
+    assert shift == 507 and score > 0.95
+    assert ev.measure_shift(prev, noise(1280, 2), 512) is None  # unrelated frames: nothing to trust
+
+
+def test_map_stitches_by_the_measured_slide_and_the_still_frames(tmp_path, monkeypatch):
+    """Two drags the log calls 512 px each (the second really moved 480: the map's end), then a drag back."""
+    world = noise(1280 + 512 + 480)
+    moves = [(5.0, 512), (9.0, 992), (13.0, 512)]  # the map slides to this scroll over 0.4 s from this second
+
+    def scroll(t):
+        cur = 0
+        for t0, to in moves:
+            cur = to if t >= t0 + 0.4 else int(cur + (to - cur) * (t - t0) / 0.4) if t >= t0 else cur
+        return cur
+
+    base = ev.secs("12:00:00")
+    stale = noise(1280, 3)  # the last floor's map, still up while the log waits for this floor's (until 0.9 s)
+    frame = lambda t: stale if t - base < 0.9 else world[:, scroll(t - base):scroll(t - base) + 1280]  # noqa: E731
+
+    def fake_frames(f, t0, t1, fps, gray=False):
+        times = [t0 + i / fps for i in range(round((t1 - t0) * fps))]
+        return times, np.array([frame(t) for t in times])
+
+    monkeypatch.setattr(ev, "frames", fake_frames)
+    monkeypatch.setattr(ev, "grab", lambda f, t: Image.fromarray(np.repeat(frame(t)[..., None], 3, axis=2)))
+    monkeypatch.setattr(ev, "masks_path", lambda a: None)
+    monkeypatch.setattr(ev, "load_masks", lambda path: ([1280, 720], []))
+    (tmp_path / "run.log").write_text(MULTI_DRAG, encoding="utf-8")
+    ev.main(["map", str(tmp_path / "run.log"), "--floor", "1", "-o", str(tmp_path / "r"), "--video", "x.mp4@12:00:00"])
+    route = json.loads((tmp_path / "r/route.json").read_text(encoding="utf-8"))
+    assert [d["px"] for d in route["drags"]] == [512, 512] and [d["measured"] for d in route["drags"]] == [512, 480]
+    stitched = np.asarray(Image.open(tmp_path / "r/stitched.png").convert("RGB"))
+    assert stitched.shape[1] == world.shape[1]  # 1280 + 512 + 480
+    assert (stitched[40:80, :, 0] == world[40:80]).all()  # the world seamless, rows between the banner and the boxes
+    assert len(set(route["shots"])) == 3
+
+
+MULTI_DRAG = """\
+12:00:00.500 [maalc] floor 1: pull Pack (0)
+12:00:00.600 [maalc] map: floor 0's map is up, floor 1 next; waiting for it
+12:00:01.000 [maalc] map: column 1: mid battle (1 onward)
+12:00:01.200 [maalc] map: column 4: mid battle (from mid)
+12:00:06.200 [maalc] map: dragged the map 512 px; reading on from column 3
+12:00:06.400 [maalc] map: column 6: mid event (from mid)
+12:00:10.200 [maalc] map: dragged the map 512 px; reading on from column 5
+12:00:10.400 [maalc] map: column 6: mid boss (from mid)
+12:00:14.300 [maalc] map: path mid battle > mid event > mid boss, score 9
+"""
+
+NOTES = """\
+15:00:00.100 [maalc] map: node at 328, 357 reads Cost None: battle
+15:00:00.200 [maalc] map: Cost miss at 328, 570 (normal): one digit, OCR '7', crop logs/cost/a.png
+15:00:00.300 [maalc] map: node at 328, 570 reads Cost None: battle
+15:00:00.400 [maalc] map: column 1: mid battle (1 onward), down battle (2 onward), up event (2 onward)
+15:00:00.500 [maalc] map: node at 583, 357 reads Cost 200: boss
+15:00:00.600 [maalc] map: column 2: the boss' glow without a shop before it
+15:00:00.700 [maalc] map: column 2: mid boss (from mid)
+15:00:00.800 [maalc] map: column 3: after the shop, so the boss; up event read as something else
+15:00:00.900 [maalc] map: column 3: up boss (from mid)
+15:00:01.000 [maalc] map: dragged the map 512 px; reading on from column 3
+15:00:01.100 [maalc] map: column 3: up battle (from mid)
+15:00:01.200 [maalc] map: path mid battle > mid boss > up battle, score 1
+"""
+
+
+def test_map_notes_come_from_the_log():
+    nodes = ev.node_table(*ev.parse_map(ev.floor_block(ev.maalc(ev.parse_log(NOTES.splitlines())), 1, 0.0))[:2])
+    notes = lambda key: sorted(tag for tag, _ in nodes[key]["notes"])  # noqa: E731
+    assert notes((1, "mid")) == ["cost_none"]  # a coin seen, no number read
+    assert notes((1, "down")) == ["cost_miss", "cost_none"]  # the OCR's reason is kept
+    assert dict(nodes[(1, "down")]["notes"])["cost_miss"] == "one digit, OCR '7'"
+    assert notes((1, "up")) == []  # no mark, no note
+    assert notes((2, "mid")) == ["boss_by_cost", "boss_glow"]
+    assert notes((3, "up")) == ["retyped"]  # read as a boss from afar, a battle once near: the later read wins
 
 
 def test_map_draw_boxes_every_read_node_and_marks_a_fix():
     shots = [Image.new("RGB", (1280, 720)), Image.new("RGB", (1280, 720), (40, 40, 40))]
-    nodes = {(1, "mid"): {"type": "battle", "first": "battle", "cost": "75"},
-             (2, "down"): {"type": "risky", "first": "event", "cost": "20"}}
+    nodes = {(1, "mid"): {"type": "battle", "first": "battle", "cost": "75", "stage": 0, "notes": []},
+             (2, "down"): {"type": "risky", "first": "event", "cost": "20", "stage": 1, "notes": []}}
     fix = {"c2/down": ["cost", "讀成 20（畫面是 120）"], "c3/up": ["missed", "沒讀到的 event"]}
-    im = ev.draw_map(shots, [(0, 510, 3)], nodes, ([("mid", "battle"), ("down", "risky")], 7), fix, 1)
-    assert im.size == (1790, 720)
+    im = ev.draw_map(shots, [0, 510], [(0, 510, 3)], nodes, ([("mid", "battle"), ("down", "risky")], 7), fix, 1)
+    assert im.size[0] == 1790 and im.size[1] > 720  # the legend strip is below the map
     px = np.asarray(im)
     assert tuple(px[357 - 52, 328]) == ev.GREEN  # read right
     assert tuple(px[570 - 52, 583]) == ev.ORANGE  # Cost read wrong
     assert tuple(px[144 - 52, 838]) == ev.ORANGE  # a node the bot did not list
+
+
+def test_map_draw_gives_each_special_read_its_own_colour_and_a_legend():
+    shots = [Image.new("RGB", (1280, 720)), Image.new("RGB", (1280, 720))]
+    kinds = {"retyped": ev.VIOLET, "cost_none": ev.MAGENTA, "cost_miss": ev.MAGENTA, "boss_by_cost": ev.WHITE,
+             "boss_glow": ev.CYAN, "boss_shop": ev.CYAN}
+    nodes = {(k, row): {"type": "battle", "first": "battle", "cost": None, "stage": 0, "notes": [(tag, "x")]}
+             for k, (tag, row) in enumerate(zip(kinds, ["up", "mid", "down", "up", "mid", "down"]), 1)}
+    im = np.asarray(ev.draw_map(shots, [0, 512], [(0, 512, 3)], nodes, None, {}, 1))
+    for (k, row), n in nodes.items():
+        assert tuple(im[ev.ROWY[row] - 52, ev.COLX(k)]) == kinds[n["notes"][0][0]]
+    legend = im[720:]
+    colours = {tuple(c) for c in legend.reshape(-1, 3)}
+    assert {ev.GREEN, ev.RED, ev.ORANGE, ev.VIOLET, ev.MAGENTA, ev.WHITE, ev.CYAN} <= colours
 
 
 def test_packs_reading_names_weights_event_and_pull(log):
