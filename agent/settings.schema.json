@@ -133,7 +133,6 @@
           "name",
           "enabled",
           "game_team",
-          "keyword",
           "usage",
           "hard_from_floor",
           "deployment_order",
@@ -157,10 +156,6 @@
           "name": { "$ref": "#/$defs/name" },
           "enabled": { "type": "boolean", "default": true },
           "game_team": { "type": "integer", "minimum": 1, "maximum": 40 },
-          "keyword": {
-            "enum": ["Burn", "Bleed", "Tremor", "Rupture", "Sinking", "Poise", "Charge", "Slash", "Pierce", "Blunt"],
-            "default": "Burn"
-          },
           "usage": { "enum": ["any", "hard_only", "normal_only"], "default": "any" },
           "hard_from_floor": {
             "type": ["integer", "null"],
