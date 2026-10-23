@@ -36,7 +36,7 @@ CASES = {
 
 
 # tests/screens fuse pages: the first owned row's centre y (#103: the Fusion Available section pushes it down).
-LABELS = {"ShopFuse": 294, "ShopFuseRecipe": 427}
+LABELS = {"ShopFuse": 294, "ShopFuseRecipe": 427, "ShopFuseAvailable": 427, "ShopFuseRecipeTwo": 427, "ShopFuseLocked": 427}
 
 
 def without_tier(image, x, y):

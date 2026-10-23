@@ -160,6 +160,12 @@ const screens: [image: string, hits: string[]][] = [
   ['ShopFuse.png', ['Shop']],
   // #103 (live 2026-10-17, 1080p capture scaled to 720p): a fixed recipe's Fusion Available section over the owned gifts
   ['ShopFuseRecipe.png', ['Shop', 'ShopFusionAvailable']],
+  // #304 (live 2026-10-23, 720p): the same page before a keyword is picked ("Select a Keyword." dims the list), with the
+  // keyword picked, with a Fusion Available cell tapped (its 2 materials are in the slots), and the Fusion Recipes popup.
+  ['ShopFuseLocked.png', ['Shop', 'ShopFusionAvailable']],
+  ['ShopFuseAvailable.png', ['Shop', 'ShopFusionAvailable']],
+  ['ShopFuseRecipeTwo.png', ['Shop', 'ShopFusionAvailable']],
+  ['ShopFusionRecipes.png', ['Shop']],
   ['ShopHeal.png', []],
 ]
 

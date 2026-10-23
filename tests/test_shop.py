@@ -421,7 +421,12 @@ def test_pick_fusion_puts_an_avoided_gift_in_first():
     assert s.pick_fusion(materials, 3, SHOP, POINTS, first={"w"}) == [(["a", "b", "w"], 3)]
 
 
-@pytest.mark.parametrize("name, placed, picked", [("ShopFuse", 0, []), ("ShopFuseRecipe", 3, [0])])
+@pytest.mark.parametrize("name, placed, picked", [
+    ("ShopFuse", 0, []), ("ShopFuseRecipe", 3, [0]),
+    ("ShopFuseLocked", 0, []),  # #304: "Select a Keyword." dims the list; nothing is placed or framed
+    ("ShopFuseAvailable", 0, []),  # #304: keyword picked, the Fusion Available cell is not framed until its materials go in
+    ("ShopFuseRecipeTwo", 2, [0]),  # #304: tapping the Fusion Available cell put its 2 materials in the slots and framed it
+])
 def test_the_fuse_read_back_on_the_whole_fuse_pages_of_tests_screens(name, placed, picked):
     # CODING_STANDARDS' sweep of fuse_slots, placed and picked: no false hit. ShopFuseRecipe really holds 3 materials
     # in its slots, and its Fusion Available cell (where FUSE_CELLS' cell 0 sits) is framed orange.

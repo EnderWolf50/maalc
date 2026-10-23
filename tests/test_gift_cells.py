@@ -214,6 +214,9 @@ def test_no_other_capture_names_a_gift(read):
     assert read["sweep"] == {
         "Shop offer": [[1, 9123], [2, 9198], [3, 9150], [4, 9086]],
         "ShopFuse fuse": [[i, gift] for i, gift in enumerate(OWNED)],
+        # #304: the Fusion Available cell (cell 0) is Reminiscence (III) on both, the real captures of a fixed recipe on offer.
+        "ShopFuseAvailable fuse": [[0, 9179]],
+        "ShopFuseRecipeTwo fuse": [[0, 9179]],
         "SuperShop offer": [[3, 9187], [4, 9009], [5, 9102], [6, 9063], [7, 9163]],
     }
 
