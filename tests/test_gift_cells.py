@@ -212,7 +212,7 @@ def child():
         def __getattr__(self, name):  # start_app, click, swipe, touch_*, keys, text, scroll: nothing moves
             return lambda *args: True
 
-    out = {"cases": {}, "sweep": {}, "plates": {}, "plate_sweep": {}, "plate_ms": []}
+    out = {"cases": {}, "sweep": {}, "plates": {}, "plate_sweep": {}, "plate_ms": [], "default_ms": []}
 
     class Probe(CustomAction):
         def run(self, context, argv):
@@ -227,6 +227,11 @@ def child():
                     started = time.perf_counter()
                     plates = actions.read_plates(context, image, cells)
                     out["plate_ms"].append((time.perf_counter() - started) * 1000 / len(cells))
+                    own, actions.gift_cells.PLATE_MODEL = actions.gift_cells.PLATE_MODEL, None  # the default instance, for comparison
+                    started = time.perf_counter()
+                    actions.read_plates(context, image, cells)
+                    out["default_ms"].append((time.perf_counter() - started) * 1000 / len(cells))
+                    actions.gift_cells.PLATE_MODEL = own
                     out["plates"][case] = [[i, p["text"], p["id"]] for i, p in enumerate(plates)]
                 for path in sorted((ROOT / "tests" / "screens").glob("*.png")):
                     image = np.ascontiguousarray(np.array(Image.open(path).convert("RGB"))[:, :, ::-1])
@@ -293,9 +298,27 @@ def test_the_name_plate_names_what_the_icon_names(read, case):
 
 def test_a_plate_reads_fast_after_a_full_ocr_pass(read):
     # #329: the default OCR instance reads a line in 31 ms on DirectML once a det+rec pass has used it (4 ms before); the plates'
-    # own instance (gift_cells.PLATE_MODEL) keeps the 4 ms. The first case pays the model's load: the later ones are timed.
-    # Each time is a case's mean per cell, name matching (1.4 ms) included, the bar 10 ms plus what a busy CI machine adds.
-    assert sorted(read["plate_ms"][1:])[len(read["plate_ms"][1:]) // 2] < 20, read["plate_ms"]
+    # own instance (gift_cells.PLATE_MODEL) keeps the 4 ms. Timed against the default instance on the same machine (a CPU-only
+    # runner reads both alike, slowly), the first case left out: it pays the model's load. Each time is a case's mean per cell.
+    own, default = (sorted(read[k][1:])[len(read[k][1:]) // 2] for k in ("plate_ms", "default_ms"))
+    assert own < default * 1.5, read
+
+
+def test_a_plate_is_read_one_line_by_the_plates_own_ocr_instance():
+    # #329: only_rec in the plate's box under the cell's centre, with the folder of its own (the default one is slow once a
+    # det+rec pass has used it); every other read keeps the default folder.
+    import actions  # noqa: PLC0415
+    asked = []
+
+    def run_recognition(name, image, override):
+        asked.append(override[name])
+        return types.SimpleNamespace(all_results=[types.SimpleNamespace(text="Arrested Hymn", box=(0, 0, 10, 10))])
+    context = types.SimpleNamespace(run_recognition=run_recognition)
+    assert actions.read_plates(context, None, [(778, 265)]) == [{"text": "Arrested Hymn", "id": 9106}]
+    assert asked == [{"recognition": "OCR", "roi": [702, 329, 152, 26], "only_rec": True, "model": g.PLATE_MODEL}]
+    asked.clear()
+    actions.ocr(context, None, [0, 0, 5, 5])
+    assert "model" not in asked[0]
 
 
 def test_the_plates_ocr_folder_holds_a_model_copy():
