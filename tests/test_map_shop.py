@@ -23,10 +23,13 @@ from test_shop import screen_with  # noqa: E402
 
 # case: node centre. The crops sit where the live frames had them: the pre-boss shop at the left of a map panned
 # toward the boss, a bus 260 px behind it.
+PLUS_SHOPS = [f"map_shop_plus{n}" for n in range(6)] + ["map_shop_torn"]  # hard floors: a star and a "+", the plain template scores 0.33-0.39
+NOT_SHOPS = [f"map_notshop{n}" for n in range(4)]  # the slots that scored highest on the "+" templates (0.41-0.42, 3) and on the torn one (0.33, 1) of 1187
 CASES = {
     "map_shop_cyan": (330, 145),  # live 2026-10-18 floor 2, cyan theme: read as an event (#146)
     "map_shop_orange": (330, 145),  # floor 1, orange theme: read as an event too
     "map_event_orange": (326, 144),  # a "?" in the same theme and place must stay an event
+    **{name: (330, 145) for name in PLUS_SHOPS + NOT_SHOPS},  # #287
 }
 # #238, live 2026-10-22 floor 4: column 3's Risky (120) and Abnormality (150), read from afar by their marks as
 # Focused (MapFloor4.png, x 837), then two columns on, where a drag of read_on brings them (MapFloor4Panned.png).
@@ -109,6 +112,16 @@ def read():
 ])
 def test_the_shop_node_is_a_shop_in_every_theme_pack_colour_and_a_question_mark_stays_an_event(read, case, kind):
     assert read[case] == kind
+
+
+@pytest.mark.parametrize("case", PLUS_SHOPS)
+def test_the_plus_variant_of_the_shop_is_a_shop(read, case):
+    assert read[case] == "shop"
+
+
+@pytest.mark.parametrize("case", NOT_SHOPS)
+def test_the_slots_most_like_the_plus_variant_are_not_shops(read, case):
+    assert read[case] != "shop"
 
 
 @pytest.mark.parametrize(("case", "kind"), FRAMES.items())

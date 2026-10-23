@@ -1258,6 +1258,9 @@ MARKS = {  # node -> (mark, roi around the slot centre)
     "MapNodeEvent": ("event", (-60, -60, 120, 120)),
     "MapNodeShop": ("shop", (-60, -60, 120, 120)),
 }
+# The shop's icon in grey, each with its own threshold: the plain one, the "+" variant (a star at the top left, a "+" at the
+# bottom right, hard floors) and one torn-frame capture (#287)
+SHOP_ICONS = ("MapNodeShopIcon", "MapNodeShopIconPlus", "MapNodeShopIconTorn")
 FEATURE_MATCH = {"MapNodeFocusedHex", "MapNodeEvent", "MapNodeShop"}  # the pipeline's FeatureMatch nodes
 FEATURE_PAD, FEATURE_ALIGN = 64, 32  # px of the screen kept around a FeatureMatch roi; grid of the cut's corner
 ENTER = (1133, 543)
@@ -1318,13 +1321,16 @@ def shop_icon(context, image, cx, cy):
     The icon takes the theme pack's hue: cyan and orange packs (live 2026-10-18) matched none of the colour
     templates. TemplateMatch CCOEFF on the brightness alone (max over the channels) is blind to hue and to the
     pack's brightness: the shop scored 0.49-1.0 on 12 packs' captures, anything else 0.31 at most.
+    The "+" variant of the hard floors scored 0.33-0.39 on it, so it has its own templates; the best score of the three decides.
     """
     ox, oy, w, h = MARKS["MapNodeShop"][1]
     window = image[max(0, cy + oy):cy + oy + h, max(0, cx + ox):cx + ox + w]
     if window.shape[0] < 40 or window.shape[1] < 70:
         return None
     grey = np.repeat(window.max(axis=2)[..., None], 3, axis=2)
-    return seen(context, grey, "MapNodeShopIcon", (0, 0, window.shape[1], window.shape[0]))
+    box = (0, 0, window.shape[1], window.shape[0])
+    hits = [hit for n in SHOP_ICONS if (hit := seen(context, grey, n, box))]
+    return max(hits, key=lambda hit: hit.best_result.score, default=None)
 
 
 def node_at(context, image, cx, cy, marks=None, costs=True):
