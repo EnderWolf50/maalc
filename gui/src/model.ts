@@ -15,7 +15,7 @@ export const KEYWORDS: string[] = TEAM.keyword.enum;
 export const LEVELS: string[] = schema.$defs.levels.items.enum;
 export const VERSION: number = P.version.const;
 /** Spec 04 section 7: the graces numbered 1-10, English names as the game shows them, Chinese name and
- * effect text from the wiki (graces.json carries its source and license). */
+ * effect text from LLC (graces.json carries its source and license). */
 export const GRACES: Grace[] = graces.graces;
 export const BOOSTS = GRACES.map((g) => g.en);
 export interface Grace { en: string; zh: string; effects: { base: string[]; plus?: string[]; plus2?: string[] } }
@@ -73,7 +73,7 @@ export const SEARCH_TABS: string[] = schema.$defs.gift.properties.keyword.enum;
 /** Vestiges, tier I-V in this order (#161): only fusion or sale material, kept by name in keep_gifts. */
 export const VESTIGES: string[] = schema.$defs.vestige.properties.name.enum;
 /** Spec 04 section 9: the gifts the search page offers, in page order; ids, tiers and English names from the game's
- * static data, Chinese names from the wiki (data/gift_search.json carries its sources and license). */
+ * static data, Chinese names from LLC (data/gift_search.json carries its sources and license). */
 export const SEARCH_GIFTS: SearchGift[] = gifts.gifts;
 export interface SearchGift { id: number; keyword: string; tier: number; en: string; zh: string }
 

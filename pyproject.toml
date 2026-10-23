@@ -2,7 +2,7 @@
 name = "maalc"
 version = "0.0.0"
 description = "MaaFramework automation for Limbus Company Mirror Dungeon"
-license = "MIT"
+license = "PolyForm-Noncommercial-1.0.0"
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "jsonschema>=4.26.0",
@@ -11,7 +11,7 @@ dependencies = [
 ]
 
 [dependency-groups]
-dev = ["numpy", "pillow", "pytest", "ruff"]
+dev = ["numpy", "opencc-python-reimplemented", "pillow", "pytest", "ruff"]
 # Probe and live-test scripts: `uv run --group probe python <script>`.
 probe = ["numpy", "opencv-python-headless", "pillow", "psutil"]
 unpack = [

@@ -235,6 +235,7 @@ dependencies = [
 [package.dev-dependencies]
 dev = [
     { name = "numpy" },
+    { name = "opencc-python-reimplemented" },
     { name = "pillow" },
     { name = "pytest" },
     { name = "ruff" },
@@ -263,6 +264,7 @@ requires-dist = [
 [package.metadata.requires-dev]
 dev = [
     { name = "numpy" },
+    { name = "opencc-python-reimplemented" },
     { name = "pillow" },
     { name = "pytest" },
     { name = "ruff" },
