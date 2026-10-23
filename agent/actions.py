@@ -31,6 +31,7 @@ import rewards
 import run_start
 import settlement
 import shop
+from gifts import main_keyword, resolve_list
 from ocrtext import compact, digits, has, normalize
 from settings import SCHEMA, SettingsError, load_settings
 from state import next_cursor, pick_team, read_cursor, write_cursor
@@ -309,6 +310,11 @@ def address(context):
     return context.tasker.controller.info.get("adb_serial", "default")
 
 
+def run_team(settings, team):
+    """The team a run plays: the settings' team plus `keyword`, its main keyword, which the gift list it uses decides (spec 04 section 13)."""
+    return {**team, "keyword": main_keyword(resolve_list(team["gift_list"], settings["gift_lists"]))}
+
+
 def current_run(context):
     """The run plan; made up from settings and the rotation cursor when the agent restarted mid-run."""
     if "settings" not in RUN:  # a run plan, not just counters left by an action
@@ -317,7 +323,7 @@ def current_run(context):
         difficulty = None if difficulty == "auto" else difficulty
         cursor = read_cursor(ROOT, address(context))
         team = pick_team(settings["teams"], cursor, difficulty or "hard") or pick_team(settings["teams"], cursor, "normal")
-        RUN.update(settings=settings, team=team, difficulty=difficulty)
+        RUN.update(settings=settings, team=run_team(settings, team), difficulty=difficulty)
         # The guard turns left are unknown after a restart: they count as used up (spec 03 section 8).
         log(f"no run plan in memory: assuming team {team['name']!r}, difficulty {difficulty or 'unknown'}, no guard turns")
     return RUN
@@ -644,7 +650,7 @@ class PlanRun(CustomAction):
         limit = recovery.floor_limit(recovery.read_runs(ROOT), team["id"])
         # guard: the run's guard turns left (spec 03 section 8), counted across its battles.
         # floor_limit: each floor's time; the first clock runs from here, PickThemePack restarts it (spec 06).
-        RUN.update(settings=settings, team=team, difficulty=difficulty, planned=True, start=settlement.now(), deadline=time.time() + limit,
+        RUN.update(settings=settings, team=run_team(settings, team), difficulty=difficulty, planned=True, start=settlement.now(), deadline=time.time() + limit,
                    floor_limit=limit, guard=team["guard_turns"])
         STUCK["ladder"] = recovery.Ladder()
         log(f"new run: {difficulty}, team {team['name']!r} (TEAMS #{team['game_team']}), weekly bonuses left {weekly}, time limit {limit / 60:.0f} min a floor")

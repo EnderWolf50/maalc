@@ -1432,9 +1432,9 @@ def test_tap_until_logs_how_long_the_screen_took(context, clock):
 
 
 def test_plan_run_waits_for_the_enter_dialog_after_pressing_enter(context, clock, monkeypatch):
-    team = {"id": 1, "name": "t", "game_team": 1, "guard_turns": 3, "hard_from_floor": 1}
+    team = {"id": 1, "name": "t", "game_team": 1, "guard_turns": 3, "hard_from_floor": 1, "gift_list": "default"}
     run = {"runs": 0, "stop_when_weekly_bonus_out": False, "difficulty": "normal"}
-    monkeypatch.setattr(actions, "load_settings", lambda root: {"run": run, "teams": [team]})
+    monkeypatch.setattr(actions, "load_settings", lambda root: {"run": run, "teams": [team], "gift_lists": []})
     monkeypatch.setattr(actions, "pick_team", lambda teams, cursor, difficulty: team)
     monkeypatch.setattr(actions, "read_cursor", lambda root, address: None)
     monkeypatch.setattr(actions.settlement, "runs_done", lambda done, limit: False)
@@ -1450,9 +1450,9 @@ def test_plan_run_waits_for_the_enter_dialog_after_pressing_enter(context, clock
 def test_a_planned_run_of_a_team_that_never_switches_to_hard(context, clock, monkeypatch, setting, expected):
     # #137: auto with weekly bonuses left decides hard, but this team's switch to hard is off: the run is NORMAL.
     # Only the global "hard" makes it HARD (every floor, hard_wanted).
-    team = {"id": 1, "name": "t", "game_team": 1, "guard_turns": 0, "hard_from_floor": None}
+    team = {"id": 1, "name": "t", "game_team": 1, "guard_turns": 0, "hard_from_floor": None, "gift_list": "default"}
     run = {"runs": None, "stop_when_weekly_bonus_out": False, "difficulty": setting}
-    monkeypatch.setattr(actions, "load_settings", lambda root: {"run": run, "teams": [team]})
+    monkeypatch.setattr(actions, "load_settings", lambda root: {"run": run, "teams": [team], "gift_lists": []})
     monkeypatch.setattr(actions, "pick_team", lambda teams, cursor, difficulty: team)
     monkeypatch.setattr(actions, "read_cursor", lambda root, address: None)
     monkeypatch.setattr(actions.run_start, "run_difficulty", lambda setting, weekly: "hard")
@@ -1549,15 +1549,15 @@ def test_select_team_drags_the_list_to_its_top_before_it_looks_for_the_team(cont
 def test_select_team_makes_a_plan_for_an_abandoned_empty_run_instead_of_backing_out(context, clock, monkeypatch):
     # #128 (live 2026-10-18): Resume on a run paused before team selection reaches the picker with no plan in memory;
     # backing out to the entry page, which only offers Resume, looped every 8 s.
-    team = {"id": 1, "name": "t", "game_team": 3, "guard_turns": 0}
-    monkeypatch.setattr(actions, "load_settings", lambda root: {"run": {"difficulty": "normal"}, "teams": [team]})
+    team = {"id": 1, "name": "t", "game_team": 3, "guard_turns": 0, "gift_list": "default"}
+    monkeypatch.setattr(actions, "load_settings", lambda root: {"run": {"difficulty": "normal"}, "teams": [team], "gift_lists": []})
     monkeypatch.setattr(actions, "pick_team", lambda teams, cursor, difficulty: team)
     monkeypatch.setattr(actions, "read_cursor", lambda root, address: None)
     actions.RUN.clear()
     team_picker(context, "TEAMS #3", lambda clicks, looks: "recommended level" if clicks else None)
     assert actions.SelectTeam().run(context, argv())
     assert taps(context) == [(130, 390), (1145, 587)]  # no back arrow (97, 42)
-    assert actions.RUN["team"] is team
+    assert actions.RUN["team"] == {**team, "keyword": "Burn"}
 
 
 def test_starlight_enter_waits_for_the_confirm_dialog(context, clock, monkeypatch):
@@ -1662,6 +1662,51 @@ def test_the_gift_search_switch_is_waited_for_not_slept_on(context, clock):
     assert actions.PickStartingGift().run(context, argv())
     assert taps(context) == [(1140, 158), (1080, 587)]  # the switch, then Select
     assert sum(clock) < 1.5
+
+
+ORDER = ["Burn", "Bleed", "Tremor", "Rupture", "Sinking", "Poise", "Charge", "Slash", "Pierce", "Blunt", "Keywordless"]
+
+
+def listed(*first):
+    """Settings with a team on gift list "g" whose order starts with first, the other keywords after them."""
+    order = [*first, *(k for k in ORDER if k not in first)]
+    team = {"id": "a", "name": "t", "enabled": True, "usage": "any", "game_team": 1, "guard_turns": 0, "hard_from_floor": 1, "gift_list": "g"}
+    return {"run": {}, "teams": [team], "gift_lists": [{"id": "g", "name": "G", "order": order}]}
+
+
+@pytest.mark.parametrize(("first", "main"), [(("Bleed",), "Bleed"), (("Keywordless", "Pierce"), "Pierce"), ((), "Burn")])
+def test_the_main_keyword_is_the_first_keyword_of_the_teams_list(first, main):
+    # #305: the team has no keyword of its own; Keywordless is never the main one.
+    settings = listed(*first)
+    assert actions.run_team(settings, settings["teams"][0])["keyword"] == main
+
+
+def test_the_default_list_makes_burn_the_main_keyword():
+    team = {"gift_list": "default"}
+    assert actions.run_team({"gift_lists": []}, team)["keyword"] == "Burn"
+
+
+def test_a_planned_run_plays_the_main_keyword_of_the_teams_list(context, clock, monkeypatch):
+    settings = {**listed("Bleed"), "run": {"runs": None, "stop_when_weekly_bonus_out": False, "difficulty": "normal"}}
+    monkeypatch.setattr(actions, "load_settings", lambda root: settings)
+    monkeypatch.setattr(actions, "read_cursor", lambda root, address: None)
+    monkeypatch.setattr(actions.recovery, "read_runs", lambda root: [])
+    monkeypatch.setattr(actions.recovery, "floor_limit", lambda runs, team: 1800)
+    monkeypatch.setattr(actions.settlement, "runs_done", lambda done, limit: False)
+    actions.RUN.clear()
+    assert actions.current_run(context)["team"]["keyword"] == "Bleed"  # the agent restarted mid-run
+    actions.RUN.clear()
+    page(context, {})
+    actions.PlanRun().run(context, argv())
+    assert actions.RUN["team"]["keyword"] == "Bleed"
+
+
+def test_the_starting_gift_comes_from_the_cabinet_of_the_lists_first_keyword(context, clock):
+    settings = listed("Bleed")
+    starting_gift_page(context, rules={(145, 145, 590, 430): [("Burn", (200, 300, 60, 20)), ("Bleed", (200, 400, 60, 20))]})
+    actions.RUN["team"] = {**actions.RUN["team"], **actions.run_team(settings, settings["teams"][0])}
+    assert actions.PickStartingGift().run(context, argv())
+    assert taps(context)[0] == (230, 485)  # the Bleed label's centre, 75 px down
 
 
 GIFT_NAME = (320, 405, 180, 80)
