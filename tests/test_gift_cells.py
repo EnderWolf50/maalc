@@ -98,6 +98,39 @@ def test_a_cell_takes_only_an_icon_of_its_own_keyword_and_tier():
     assert actions.cell_id(fake_context({"GiftSearch/9001.png": 0.9}), grid, (100, 100), "Burn", None) == (None, 0.0)
 
 
+def test_a_misread_tier_is_made_up_by_matching_the_whole_keyword():
+    import actions  # noqa: PLC0415
+    grid = np.zeros((200, 200, 3), np.uint8)
+    # Smokes and Wires is Bleed III, read as II (sell page, the tier numeral cut short): no Bleed II icon is on the cell.
+    icons = {"GiftSearch/9042.png": 0.9}
+    assert actions.cell_id(fake_context(icons), grid, (100, 100), "Bleed", 2) == (9042, 0.9)
+    # still nothing when the keyword's other tiers do not show it either, or when no tier was read at all
+    assert actions.cell_id(fake_context({}), grid, (100, 100), "Bleed", 2)[0] is None
+    assert actions.cell_id(fake_context(icons), grid, (100, 100), "Bleed", None) == (None, 0.0)
+
+
+def test_the_keyword_fallback_never_overrules_a_cell_its_tier_names():
+    import actions  # noqa: PLC0415
+    grid = np.zeros((200, 200, 3), np.uint8)
+    # Dark (I) and Faint (II) Vestige are one jar, only the fill differs: the cell read as I is Dark even where Faint's icon scores more.
+    seen = []
+    assert actions.cell_id(fake_context({"GiftSearch/9991.png": 0.8, "GiftSearch/9992.png": 0.85}, seen), grid, (100, 100), "Keywordless", 1)[0] == 9991
+    tier_one = {e["template"] for e in g.candidates(actions.GIFTS, "Keywordless", 1)}
+    assert "GiftSearch/9992.png" not in seen and set(seen) <= tier_one  # the fallback was not consulted
+    # a tier-III cell without a badge is not matched against the jars of the other tiers: Keywordless is no badge read
+    assert actions.cell_id(fake_context({"GiftSearch/9991.png": 0.8, "GiftSearch/9992.png": 0.78}), grid, (100, 100), "Keywordless", 3)[0] is None
+    # a read badge's other tiers all score: two as good as each other leave the cell unknown instead of picking one
+    assert actions.cell_id(fake_context({"GiftSearch/9042.png": 0.8, "GiftSearch/9048.png": 0.78}), grid, (100, 100), "Bleed", 2)[0] is None
+
+
+def test_the_fallback_also_scores_the_candidates_an_early_stop_skipped():
+    import actions  # noqa: PLC0415
+    a, b, c = (e["template"] for e in g.candidates(actions.GIFTS, "Burn", 2)[:3])
+    # a 0.70 and b 0.76 stop the first pass 0.06 apart (unknown); c, never reached there, is the 0.90 gift
+    found = actions.cell_id(fake_context({a: 0.70, b: 0.76, c: 0.90}), np.zeros((200, 200, 3), np.uint8), (100, 100), "Burn", 2)
+    assert found == (int(c.split("/")[1].split(".")[0]), 0.90)
+
+
 def test_matching_stops_at_an_icon_that_cannot_be_a_lookalike():
     import actions  # noqa: PLC0415
     seen = []
@@ -264,6 +297,8 @@ def test_no_other_capture_names_a_gift(read):
         "ShopFuse fuse": [[i, gift] for i, gift in enumerate(OWNED)],
         # #304: the Fusion Available cell (cell 0) is Reminiscence (III) on both, the real captures of a fixed recipe on offer.
         "ShopFuseAvailable fuse": [[0, 9179]],
+        # #330: Cask Spirits (IV), the Fusion Available cell of ShopFuseRecipe, read as II: found by its Poise badge alone.
+        "ShopFuseRecipe fuse": [[0, 9180]],
         "ShopFuseRecipeTwo fuse": [[0, 9179]],
         "SuperShop offer": [[3, 9187], [4, 9009], [5, 9102], [6, 9063], [7, 9163]],
     }

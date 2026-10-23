@@ -38,6 +38,17 @@ def candidates(table, keyword, tier):
     return [e for e in table if e["keyword"] == keyword and e["tier"] == tier]
 
 
+def of_keyword(table, keyword, tier):
+    """The table's gifts of the cell's keyword at any tier (#330): where a misread tier hides the cell's gift.
+
+    Empty when the tier is unread (see candidates), or the badge: "Keywordless" is no badge found, which is also what a covered
+    badge or a screen that is no shop reads (BattleTurnFocused's cell scored 0.51 on a gift), so it names no keyword.
+    """
+    if keyword in (None, "Keywordless") or tier is None:
+        return []
+    return [e for e in table if e["keyword"] == keyword]
+
+
 def best(scores):
     """The id of the best [(id, icon score)] when it reaches ICON_MIN and leads the next by ICON_MARGIN, else None.
 
