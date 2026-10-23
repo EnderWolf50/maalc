@@ -2905,7 +2905,7 @@ OCR_DIR = data_dir().parent / "model" / "ocr"
 def plate_model():
     """gift_cells.PLATE_MODEL when its folder holds a model, else None: the default instance reads the plates, 7x slower on
     DirectML. A missing folder is no error to MaaFramework: it reads nothing, so every plate would be blank (#329)."""
-    if (OCR_DIR / gift_cells.PLATE_MODEL / "rec.onnx").is_file():
+    if all((OCR_DIR / gift_cells.PLATE_MODEL / name).is_file() for name in ("det.onnx", "rec.onnx", "keys.txt")):
         return gift_cells.PLATE_MODEL
     if not RUN.get("plate_model_logged"):
         RUN["plate_model_logged"] = True
