@@ -114,6 +114,7 @@
   position: fixed; z-index: 60; width: 340px; max-height: calc(100vh - 12px); overflow: auto; padding: 10px 12px; font-size: 12.5px;
   background: var(--gl-panel); color: var(--gl-fg); border: 1px solid var(--gl-line); border-radius: 10px; box-shadow: 0 8px 24px #0004;
 }
+.gl-tip:focus { outline: none; }
 .gl-tip-head { display: flex; align-items: center; gap: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--gl-line); }
 .gl-tip-head img { width: 44px; height: 44px; object-fit: contain; }
 .gl-tip-head > div { display: flex; flex-direction: column; justify-content: center; flex: 1; line-height: 1.35; }

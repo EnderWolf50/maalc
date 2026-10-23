@@ -163,6 +163,11 @@ export function SearchResults({ query, onClear }: { query: string; onClear: () =
   );
 }
 
+/** The padlock of a gift locked by a wanted fusion (on its tile, and in the popover). */
+export const LockIcon = ({ className }: { className: string }) => (
+  <svg className={className} viewBox="0 0 16 16" aria-hidden><path d="M5 7V5a3 3 0 016 0v2h1v7H4V7zm1.5 0h3V5a1.5 1.5 0 00-3 0z" fill="currentColor" /></svg>
+);
+
 /** One gift: its icon in a frame that shows its state (want thick and striped, keep solid, drop faded, locked dashed with a padlock). */
 function GiftTile({ id, zh, tabStop, onFocus }: { id: number; zh: boolean; tabStop: boolean; onFocus: () => void }) {
   const { t } = useEditor();
@@ -176,9 +181,7 @@ function GiftTile({ id, zh, tabStop, onFocus }: { id: number; zh: boolean; tabSt
       onBlur={(e) => { if (!(e.relatedTarget as Element | null)?.closest(".gl-tip")) tip.hide(); }}
       onMouseEnter={(e) => tip.show(id, e.currentTarget)} onMouseLeave={tip.leave} onDragStart={tip.hide} onClick={() => apply(id)}>
       <img src={iconUrl(id)} alt="" loading="lazy" />
-      {locked && (
-        <svg className="gl-lock" viewBox="0 0 16 16" aria-hidden><path d="M5 7V5a3 3 0 016 0v2h1v7H4V7zm1.5 0h3V5a1.5 1.5 0 00-3 0z" fill="currentColor" /></svg>
-      )}
+      {locked && <LockIcon className="gl-lock" />}
     </button>
   );
 }

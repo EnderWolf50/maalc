@@ -9,13 +9,14 @@ const LEGEND: { swatch: string; name: Key; text: Key }[] = [
   { swatch: "locked", name: "gl.help_locked_name", text: "gl.help_locked" },
   { swatch: "fusion", name: "gl.help_fusion_name", text: "gl.help_fusion" },
 ];
-// Keys and what they do; a key shown as "gl.k_space" is a word, not a symbol.
-const KEYS: { keys: string[]; text: Key }[] = [
+// Keys and what they do; a key is its cap as it is, or `{ word }`: the text of that key, for a key whose cap is a word to translate.
+type Cap = string | { word: Key };
+const KEYS: { keys: Cap[]; text: Key }[] = [
   { keys: ["/"], text: "gl.k_search" },
   { keys: ["1", "2", "3"], text: "gl.k_state" },
   { keys: ["←", "→"], text: "gl.k_move" },
   { keys: ["↑", "↓"], text: "gl.k_row" },
-  { keys: ["Enter", "gl.k_space"], text: "gl.k_apply" },
+  { keys: ["Enter", { word: "gl.k_space" }], text: "gl.k_apply" },
   { keys: ["Esc"], text: "gl.k_esc" },
 ];
 
@@ -33,7 +34,7 @@ export function HelpPopover() {
       <p>{t("gl.help_keys")}</p>
       <ul className="gl-keys">
         {KEYS.map(({ keys, text }) => (
-          <li key={text}>{keys.map((k) => <kbd key={k}>{k.startsWith("gl.") ? t(k as Key) : k}</kbd>)} {t(text)}</li>
+          <li key={text}>{keys.map((k) => { const cap = typeof k === "string" ? k : t(k.word); return <kbd key={cap}>{cap}</kbd>; })} {t(text)}</li>
         ))}
       </ul>
       <p className="gl-note">{t("gl.help_order")}</p>

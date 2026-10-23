@@ -5,7 +5,7 @@
 import { useEffect, useRef, useState } from "react";
 import "./giftlists.css";
 import { GIFT_BY_ID, giftName } from "./giftCatalog";
-import { plan, setState, GiftEditContext, type GiftEdit } from "./giftEdit";
+import { plan, setState, GiftEditContext, STATES, type GiftEdit } from "./giftEdit";
 import { DEFAULT_LIST, type GiftState } from "./gifts";
 import { fill } from "./i18n";
 import { FUSION_CONDITIONS, GIFT_KEYWORDS } from "./model";
@@ -14,7 +14,6 @@ import { GiftPopover, useGiftTip } from "./GiftPopover";
 import { KeywordPanel, KeywordTabs, SearchResults } from "./KeywordGrid";
 import { useEditor } from "./ui";
 
-const STATES: GiftState[] = ["want", "keep", "drop"];
 const FLASH_MS = 4200;
 
 export function GiftListsTab() {
@@ -65,8 +64,9 @@ export function GiftListsTab() {
     const el = document.querySelector<HTMLElement>(`[data-gift="${jump}"]`);
     el?.focus();
     el?.scrollIntoView?.({ block: "center" });
+    tip.hide(); // focusing the tile opened its popover, and the scroll would close it a moment later: close it now
     setJump(null);
-  }, [jump]);
+  }, [jump, tip]);
   const edit: GiftEdit = { list, readOnly, pick, apply, flash, tip, goto };
 
   // 1, 2 and 3 pick the state, unless the user is typing or choosing in a field; / jumps to the search box; Esc closes the popover,

@@ -20,6 +20,9 @@ export function setState(list: GiftList, id: number, to: GiftState) {
   if (to !== "drop") list[to].push(id);
 }
 
+/** The three states, in the order the apply bar and the popover list them. */
+export const STATES: GiftState[] = ["want", "keep", "drop"];
+
 /** The hover popover of a gift tile: `show` it for a tile (it stays while the pointer is on the tile or the popover), `leave` starts
  * the close delay (`keep` cancels it), `hide` closes it at once (a drag, #296, calls this). */
 export interface GiftTip {

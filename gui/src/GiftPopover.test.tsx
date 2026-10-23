@@ -97,6 +97,15 @@ describe("hover popover: closing at once", () => {
     act(() => getTile(burnIII[0]).blur());
     expect(popover()).toBeNull();
   });
+  test("focus inside the popover keeps it; focus going elsewhere closes it", async () => {
+    const r = await open([mine()]);
+    await r.user.hover(getTile(burnIII[0]));
+    const keep = within(popover()!).getByRole("button", { name: zh["state.keep"] });
+    act(() => keep.focus());
+    expect(popover()).not.toBeNull();
+    await r.user.click(screen.getByRole("radio", { name: zh["state.drop"] }));
+    expect(popover()).toBeNull();
+  });
   test("showing another tile replaces the popover", async () => {
     const r = await open([mine()]);
     await r.user.hover(getTile(burnIII[0]));
@@ -173,6 +182,7 @@ describe("hover popover: what it says", () => {
     await r.user.click(p.getByRole("button", { name: say(zh["gl.tip_goto"], { name: nameOf(fixed.id) }) }));
     expect(screen.getByRole("tab", { name: new RegExp("^" + zh[`kw.${fixed.keyword}` as Text]) })).toHaveAttribute("aria-selected", "true");
     expect(getTile(fixed.id)).toHaveFocus();
+    expect(popover()).toBeNull(); // the popover of the old tile is gone, and the new tile's does not open under the scroll
     const q = await hover(r, material);
     await r.user.click(q.getByRole("button", { name: zh["gl.tip_unwant"] }));
     expect(list(r).want).toEqual([]);

@@ -2,16 +2,15 @@
 // One popover for the whole tab: a tile shows it for itself (GiftEdit.tip), the tab renders it.
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { FUSION_BY_ID, GIFT_BY_ID, giftName, iconUrl, materialsOf, packName, usedIn } from "./giftCatalog";
-import { useGiftEdit, type GiftTip } from "./giftEdit";
-import { lockers, queue, type GiftState } from "./gifts";
+import { STATES, useGiftEdit, type GiftTip } from "./giftEdit";
+import { lockers, queue } from "./gifts";
 import { fill, TEXT, type Key } from "./i18n";
-import { look, TIERS } from "./KeywordGrid";
+import { LockIcon, look, TIERS } from "./KeywordGrid";
 import { useEditor } from "./ui";
 
 /** How long the popover stays after the pointer leaves the tile and the popover. */
 export const LEAVE_MS = 160;
 const OFFSET_X = 14, OFFSET_Y = 2, MARGIN = 6;
-const STATES: GiftState[] = ["want", "keep", "drop"];
 /** At most this many uses are named; the rest are a count. */
 const USED_MAX = 4;
 
@@ -66,10 +65,6 @@ export function usedText(names: string[], text: Record<Key, string>): string {
     : fill(text["gl.tip_used_list"], { names: names.join(sep) });
 }
 
-const LockIcon = () => (
-  <svg className="gl-lk" viewBox="0 0 16 16" aria-hidden><path d="M5 7V5a3 3 0 016 0v2h1v7H4V7zm1.5 0h3V5a1.5 1.5 0 00-3 0z" fill="currentColor" /></svg>
-);
-
 function Row({ label, children }: { label: string; children: ReactNode }) {
   return <div className="gl-tip-row"><span className="k">{label}</span><div className="v">{children}</div></div>;
 }
@@ -82,8 +77,8 @@ export function GiftPopover({ id, anchor }: { id: number; anchor: HTMLElement })
   const g = GIFT_BY_ID.get(id)!, fusion = FUSION_BY_ID.get(id);
   const name = (x: number) => giftName(GIFT_BY_ID.get(x)!, zh);
   const { shown, locked } = look(list, id);
-  const by = lockers(list, id);
-  const why = locked ? fill(t("gl.tip_locked"), { by: by.map(name).join(t("gl.sep")) }) : readOnly ? t("gl.tip_ro") : "";
+  const by = lockers(list, id), byNames = by.map(name).join(t("gl.sep"));
+  const why = locked ? fill(t("gl.tip_locked"), { by: byNames }) : readOnly ? t("gl.tip_ro") : "";
   const users = usedIn(id);
   const buy = queue(list), at = buy.indexOf(id) + 1;
 
@@ -98,14 +93,16 @@ export function GiftPopover({ id, anchor }: { id: number; anchor: HTMLElement })
   /** A material of the recipe; locked (tinted, padlock) while the fusion is wanted. */
   const chip = (m: number) => (
     <span key={m} className={"gl-mat" + (shown === "want" ? " locked" : "")}>
-      <img src={iconUrl(m)} alt="" />{name(m)}{shown === "want" && <LockIcon />}
+      <img src={iconUrl(m)} alt="" />{name(m)}{shown === "want" && <LockIcon className="gl-lk" />}
     </span>
   );
   const rank = g.kind === "fusion" ? t(shown === "want" ? "gl.tip_fusion_want" : "gl.tip_fusion_no")
     : at ? fill(t("gl.tip_buy_rank"), { n: at, total: buy.length }) : t("gl.tip_buy_none");
 
   return (
-    <div ref={box} className="gl-tip" role="dialog" aria-label={name(id)} onMouseEnter={tip.keep} onMouseLeave={tip.leave}>
+    // tabIndex -1: a click on the popover's own text keeps the focus inside it. Focus going anywhere but its tile or itself closes it.
+    <div ref={box} className="gl-tip" role="dialog" aria-label={name(id)} tabIndex={-1} onMouseEnter={tip.keep} onMouseLeave={tip.leave}
+      onBlur={(e) => { const to = e.relatedTarget as Element | null; if (to !== anchor && !to?.closest(".gl-tip")) tip.hide(); }}>
       <div className="gl-tip-head">
         <img src={iconUrl(id)} alt="" />
         <div><b>{name(id)}</b>{zh && <small>{g.en}</small>}</div>
@@ -127,16 +124,17 @@ export function GiftPopover({ id, anchor }: { id: number; anchor: HTMLElement })
         {locked && (
           <Row label={t("gl.tip_lock")}>
             <div>
-              <span className="gl-tip-lockwhy"><LockIcon />{fill(t("gl.tip_lock_why"), { by: by.map(name).join(t("gl.sep")) })}</span>
-              {by.map((f) => (
-                <div key={f} className="gl-tip-acts">
-                  <button type="button" onClick={() => goto(f)}>{fill(t("gl.tip_goto"), { name: name(f) })}</button>
-                  <button type="button" className="warn" onClick={() => apply(f, "drop")}>{t("gl.tip_unwant")}</button>
-                  {FUSION_BY_ID.get(f)!.specific && (
-                    <small>{fill(t("gl.tip_pack"), { packs: FUSION_BY_ID.get(f)!.packs!.map(packName).join(t("gl.sep")) })}</small>
-                  )}
-                </div>
-              ))}
+              <span className="gl-tip-lockwhy"><LockIcon className="gl-lk" />{fill(t("gl.tip_lock_why"), { by: byNames })}</span>
+              {by.map((f) => {
+                const { specific, packs } = FUSION_BY_ID.get(f)!;
+                return (
+                  <div key={f} className="gl-tip-acts">
+                    <button type="button" onClick={() => goto(f)}>{fill(t("gl.tip_goto"), { name: name(f) })}</button>
+                    <button type="button" className="warn" onClick={() => apply(f, "drop")}>{t("gl.tip_unwant")}</button>
+                    {specific && <small>{fill(t("gl.tip_pack"), { packs: packs!.map(packName).join(t("gl.sep")) })}</small>}
+                  </div>
+                );
+              })}
             </div>
           </Row>
         )}
