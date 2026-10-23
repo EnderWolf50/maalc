@@ -2753,7 +2753,7 @@ GRID_SAME = 12.5
 CELL_PAGES = {"fuse": (1.1, 493), "sell": (1.1, 495), "offer": (0.8, 530)}
 BADGES = ["Burn", "Bleed", "Tremor", "Rupture", "Sinking", "Poise", "Charge", "Slash", "Pierce", "Blunt"]
 # On scaled cells (CCOEFF): its own badge 0.54-0.99, another keyword's up to 0.60 (the cell's best wins), a keywordless
-# cell's best 0.41; 160 cells of 60 live captures. An observed gift's icon: Spiderweb's thin lines 0.5-0.6, others 0.86+.
+# cell's best 0.41; 160 cells of 60 live captures.
 BADGE_MIN = 0.5
 GIFTS = gift_cells.load()  # every gift a cell may show (#297)
 GIFT_NAMES = {e["id"]: e["en"] for e in GIFTS}
@@ -2852,7 +2852,7 @@ def cell_id(context, grid, at, keyword, tier):
 
 
 def read_cells(context, image, cells, page):
-    """The filled cells of a shop grid read off one screenshot (#76, #112): [{"i", "x", "y", "tier", "keyword", "gift", "id", "score"}].
+    """The filled cells of a shop grid read off one screenshot (#76, #112): [{"i", "x", "y", "tier", "keyword", "id", "score"}].
 
     The grid is scaled so gift icons are at their GiftSearch template's size, then each keyword's badge is matched once
     over it. keyword: the cell's best badge, "Keywordless" with none, None when the badge is below the grid's edge. An

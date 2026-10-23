@@ -288,7 +288,7 @@ def pick_fusion(materials, slots, thresholds, points, first=(), condition="any",
     this shop; points: {tier: a material's points}. Each fusion takes 3 to slots materials: the group giving the
     highest tier, then holding the most of first (gifts the team avoids, #90), then worth the fewest points; then
     again from what is left, until fewer than 3 are. A tier V gift is never a material (MAX_MATERIAL_TIER).
-    condition (the team's fusion_condition, #263) keeps out the groups fusion_wanted refuses: the best of the rest is
+    condition (the gift list's fusion_condition, #263) keeps out the groups fusion_wanted refuses: the best of the rest is
     made, and none when no group is left. "any" puts the groups that upgrade (user, 2026-10-23) ahead of that order.
     refused: [tuple of sorted tiers] the groups the page's own forecast turned down (#285): the result depends on the
     materials' tiers only, so no group of those tiers is picked again.

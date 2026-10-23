@@ -35,8 +35,8 @@ def test_a_lunar_vestige_is_never_fused(context, monkeypatch):
 
 def test_a_vestige_the_list_keeps_is_not_fused(context, monkeypatch):
     fused, taps, _ = fusion_taps(context, monkeypatch, {"list": wants(keep=[9991])}, ("Keywordless", 1, 9991),
-                                 ("Tremor",), ("Pierce",), ("Sinking",))
-    assert fused and taps == [0, 1, 1, 1]
+                                 ("Tremor", 1), ("Pierce", 1), ("Sinking", 1))
+    assert fused and taps == [0, 1, 1, 1]  # kept, it would be the first of four tier I
 
 
 @pytest.mark.parametrize("wanted, locked", LOCKS)

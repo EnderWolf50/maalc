@@ -13,7 +13,7 @@ DONE = SimpleNamespace(wait=lambda: None)
 # Live 2026-10-21: a sell grid of 13 gifts scrolls 31 px, its last row's price just inside; the fuse page's end is a guess.
 END = {"fuse": 56, "sell": 495 + 31 - 472}
 TOP = {"fuse": 200, "sell": 215}  # the lists' upper edge (live: the fuse page's label at 216-240, sell rows cut at 215)
-ID = test_actions.UNLISTED  # gift i of a grid reads as id ID + i, which no gift list mentions
+UNLISTED = test_actions.UNLISTED  # gift i of a grid reads as id UNLISTED + i, which no gift list mentions
 KEYWORDS = ["Bleed", "Tremor", "Pierce", "Sinking", "Slash", "Blunt", "Poise", "Rupture", "Charge"]
 
 
@@ -114,7 +114,7 @@ class Grid:
             if i is not None:
                 self.reads.append(i)
                 out.append({"i": k, "x": x, "y": y, "tier": 1, "keyword": KEYWORDS[i % len(KEYWORDS)],
-                            "id": ID + i, "score": 0.9})
+                            "id": UNLISTED + i, "score": 0.9})
         return out
 
 
@@ -221,7 +221,7 @@ def test_the_grid_shift_is_measured_on_a_live_capture(s):
 
 def kept_but(n, *free):
     """The team of a grid of n gifts whose list keeps every gift but the free ones (they drop)."""
-    return test_actions.shop_team({"list": test_actions.wants(keep=[ID + i for i in range(n) if i not in free])})
+    return test_actions.shop_team({"list": test_actions.wants(keep=[UNLISTED + i for i in range(n) if i not in free])})
 
 
 def fusion(context, monkeypatch, g, team):
