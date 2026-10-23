@@ -2,6 +2,7 @@
 // The read-only default cannot be renamed, reset or deleted. Delete just deletes: a team that still uses the list is caught by
 // the cross-object check on save (validate.ts), as with the other plans.
 import { useEffect, useRef, useState } from "react";
+import { resetToDefault } from "./giftEdit";
 import { DEFAULT_LIST } from "./gifts";
 import { fill } from "./i18n";
 import { GIFT_KEYWORDS, defaultGorder, exportGiftList, freeName, importGiftList, newId, type GiftList } from "./model";
@@ -33,10 +34,10 @@ export function GiftListOptions({ at, readOnly, choose, flash }: {
     return () => { document.removeEventListener("mousedown", out); document.removeEventListener("keydown", esc); };
   }, [view]);
 
-  const add = (list: GiftList, message: string) => {
+  const add = (list: GiftList, message: "gl.copied_list" | "gl.blank_made" | "gl.imported") => {
     update((d) => { d.gift_lists.push(list); });
     choose(list.id);
-    flash(fill(t(message as "gl.copied_list"), { name: list.name }));
+    flash(fill(t(message), { name: list.name }));
     show(null);
   };
   const copy = () => {
@@ -55,10 +56,7 @@ export function GiftListOptions({ at, readOnly, choose, flash }: {
     show(null);
   };
   const reset = () => {
-    update((d) => {
-      const { order, want, keep, gorder, fusion_condition } = structuredClone(DEFAULT_LIST);
-      Object.assign(d.gift_lists[at], { order, want, keep, gorder, fusion_condition });
-    });
+    update((d) => resetToDefault(d.gift_lists[at]));
     flash(fill(t("gl.reset_done"), { name }));
     show(null);
   };
@@ -78,7 +76,9 @@ export function GiftListOptions({ at, readOnly, choose, flash }: {
     }
   };
   const exported = current ? exportGiftList(current) : exportGiftList({ id: "default", name, ...DEFAULT_LIST });
-  const copyText = async () => { await navigator.clipboard.writeText(exported); flash(t("gl.copied_text")); };
+  const copyText = async () => {
+    try { await navigator.clipboard.writeText(exported); flash(t("gl.copied_text")); } catch { flash(t("gl.copy_failed"), true); }
+  };
 
   const back = <button type="button" onClick={() => show("menu")}>{t("gl.back")}</button>;
   const item = (v: View | "copy" | "blank", label: string, off = false) => (

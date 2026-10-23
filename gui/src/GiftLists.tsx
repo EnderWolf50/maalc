@@ -5,7 +5,7 @@
 import { useEffect, useRef, useState } from "react";
 import "./giftlists.css";
 import { GIFT_BY_ID, giftName } from "./giftCatalog";
-import { plan, setState, GiftEditContext, type GiftEdit } from "./giftEdit";
+import { plan, resetToDefault, setState, GiftEditContext, type GiftEdit } from "./giftEdit";
 import { DEFAULT_LIST, type GiftState } from "./gifts";
 import { fill } from "./i18n";
 import { FUSION_CONDITIONS, GIFT_KEYWORDS } from "./model";
@@ -65,10 +65,7 @@ export function GiftListsTab() {
   }, []);
 
   const empty = !readOnly && !list.want.length && !list.keep.length;
-  const startFromDefault = () => update((d) => {
-    const { order, want, keep, gorder, fusion_condition } = structuredClone(DEFAULT_LIST);
-    Object.assign(d.gift_lists[at], { order, want, keep, gorder, fusion_condition });
-  });
+  const startFromDefault = () => update((d) => resetToDefault(d.gift_lists[at]));
 
   return (
     <GiftEditContext.Provider value={edit}>

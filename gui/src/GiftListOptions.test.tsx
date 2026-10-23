@@ -33,6 +33,8 @@ describe("rename", () => {
     await r.item("rename");
     const box = screen.getByRole("textbox", { name: zh["gl.opt_rename"] });
     await r.user.clear(box);
+    await r.user.click(screen.getByRole("button", { name: zh["gl.ok"] }));
+    expect(screen.getByRole("alert").textContent).toBe(zh["gl.name_empty"]);
     await r.user.type(box, "Other");
     await r.user.click(screen.getByRole("button", { name: zh["gl.ok"] }));
     expect(screen.getByRole("alert").textContent).toBe(zh["gl.name_taken"]);

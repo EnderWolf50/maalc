@@ -1,7 +1,7 @@
 // Editing a gift list from the gift list tab: what applying a state does, and the context its components share.
 import { createContext, useContext } from "react";
 import { GIFT_BY_ID, wantable } from "./giftCatalog";
-import { lockers, type GiftState, type ListRules } from "./gifts";
+import { DEFAULT_LIST, lockers, type GiftState, type ListRules } from "./gifts";
 import type { GiftList } from "./model";
 
 /** What a click with this state does to a gift: refused because wanted fusions lock it, set to `to`, or set to keep because
@@ -33,3 +33,9 @@ export interface GiftEdit {
 }
 export const GiftEditContext = createContext<GiftEdit>(null!);
 export const useGiftEdit = () => useContext(GiftEditContext);
+
+/** Give a list (a draft in the settings) the default list's content; its id and name stay. */
+export function resetToDefault(list: GiftList) {
+  const { order, want, keep, gorder, fusion_condition } = structuredClone(DEFAULT_LIST);
+  Object.assign(list, { order, want, keep, gorder, fusion_condition });
+}
