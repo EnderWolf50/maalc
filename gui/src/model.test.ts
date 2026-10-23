@@ -1,7 +1,7 @@
 // The click rules of the team page's sinner grid and starlight cards.
 import { expect, test } from "vitest";
 import {
-  GIFT_KEYWORDS, SEARCH_GIFTS, SEARCH_TABS, buyOrder, clickCard, clickEnhance, defaultGorder, enhanceAll, exportGiftList, gracePrice,
+  FUSION_CONDITIONS, GIFT_KEYWORDS, SEARCH_GIFTS, SEARCH_TABS, buyOrder, clickCard, clickEnhance, defaultGorder, enhanceAll, exportGiftList, gracePrice,
   importGiftList, lanesOf, lineAt, newPackPlan, newSettings, newTeam, floorBadges, onFloor, selectAll, starlightCost, toggleGift, toggleSinner,
   weightOf, type GiftList, type StarlightValues,
 } from "./model";
@@ -171,6 +171,13 @@ test("a gift list exports without its id and imports as a new list that passes t
   s.gift_lists.push(list);
   s.teams.push({ ...newTeam(1, "T"), gift_list: list.id });
   expect(validate(s)).toEqual([]);
+});
+
+test("every fusion condition survives an export and an import", () => {
+  for (const fusion_condition of FUSION_CONDITIONS) {
+    expect(importGiftList(exportGiftList({ ...SHARED, fusion_condition }), [], "").list.fusion_condition).toBe(fusion_condition);
+  }
+  expect(FUSION_CONDITIONS).toEqual(["any", "upgrade", "tier4"]);
 });
 
 test("an import skips bad ids and falls back to the defaults", () => {
