@@ -46,7 +46,7 @@ SOFTWARE.
 
 ## 觀測飾品與合成飾品的資料
 
-`assets/resource/base/data/gift_recipes.json` 與 `assets/resource/base/data/gift_search.json` 的飾品清單、id、等級、體系與英文名稱、配方、主題包專屬標記（`isSpecific`、`specificEgoGiftPool`）取自遊戲客戶端 1.117.0 的靜態資料與英文在地化（© Project Moon），只摘錄這些欄位；`assets/resource/base/image/GiftRecipe/` 的 72 個圖示取自同一版資源包的 `Sprite/EgoGiftIcon`，縮 0.21 倍、透明處填綠色，同屬 © Project Moon。`assets/resource/base/data/gift_icons/` 的 397 個圖示（56 px WebP，保留透明）取自同一版資源包的 `Sprite/EgoGiftIcon`，同屬 © Project Moon。`assets/resource/base/data/keyword_icons/` 的 10 個體系圖示（64 px WebP，保留透明）取自遊戲客戶端的體系圖示，同屬 © Project Moon。
+`assets/resource/base/data/gift_recipes.json` 與 `assets/resource/base/data/gift_search.json` 的飾品清單、id、等級、體系與英文名稱、配方、主題包專屬標記（`isSpecific`、`specificEgoGiftPool`）取自遊戲客戶端 1.117.0 的靜態資料與英文在地化（© Project Moon），只摘錄這些欄位；`assets/resource/base/image/GiftRecipe/` 的 139 個圖示（含 `extra_gifts` 的 67 個）取自同一版資源包的 `Sprite/EgoGiftIcon`，縮 0.21 倍、透明處填綠色，同屬 © Project Moon。`assets/resource/base/data/gift_icons/` 的 464 個圖示（56 px WebP，保留透明）取自同一版資源包的 `Sprite/EgoGiftIcon`，同屬 © Project Moon。`assets/resource/base/data/keyword_icons/` 的 10 個體系圖示（64 px WebP，保留透明）取自遊戲客戶端的體系圖示，同屬 © Project Moon。
 
 ## 都市零漢化組（LLC）的中文名稱與效果文字
 

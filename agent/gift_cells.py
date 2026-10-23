@@ -4,7 +4,7 @@ actions.read_cells reads a cell's tier and keyword badge; the gifts of that keyw
 their icons are matched on the cell. Everything here is plain data in, plain data out.
 """
 
-from settings import VESTIGE_IDS, VESTIGES, gift_tables
+from settings import VESTIGE_IDS, VESTIGES, extra_gifts, gift_tables
 # CCOEFF score of an icon on its own cell and on another's: the gifts of the table's cells score 0.51-0.96, a gift the table
 # lacks 0.30-0.38, a lookalike 0.54 at most with the gift covered (#297, docs/spec/03-decisions.md section 13)
 ICON_MIN = 0.5
@@ -15,12 +15,12 @@ ICON_SURE = 0.75  # an icon this good ends the matching of a cell's candidates: 
 def load():
     """Every gift a cell may show: [{"id", "keyword", "tier", "en", "template"}], the template under image/.
 
-    The shop's gifts (gift_search.json), the fusion gifts and their materials (gift_recipes.json) and the five vestiges.
-    A gift the table lacks (a theme pack's exclusive one no recipe uses) is no candidate: its cell stays unknown.
+    The shop's gifts (gift_search.json), the fusion gifts, their materials and the other gifts of the game data
+    (gift_recipes.json) and the five vestiges. A gift of a newer client the table lacks is no candidate: its cell stays unknown.
     """
     search, fusions, materials = gift_tables()
     table = [{**_entry(g), "template": f"GiftSearch/{g['id']}.png"} for g in search]
-    table += [{**_entry(g), "template": f"GiftRecipe/{g['id']}.png"} for g in fusions + materials]
+    table += [{**_entry(g), "template": f"GiftRecipe/{g['id']}.png"} for g in fusions + materials + extra_gifts()]
     table += [{"id": i, "keyword": "Keywordless", "tier": tier, "en": n, "template": f"GiftSearch/{i}.png"}
               for tier, (i, n) in enumerate(zip(VESTIGE_IDS, VESTIGES), 1)]
     return table
