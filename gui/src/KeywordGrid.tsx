@@ -2,7 +2,7 @@
 import { useRef, useState, type KeyboardEvent } from "react";
 import { GIFT_BY_ID, giftName, iconUrl, tiersOf } from "./giftCatalog";
 import { useGiftEdit } from "./giftEdit";
-import { lockers, mainKeyword, state, type GiftState, type ListRules } from "./gifts";
+import { effective, mainKeyword, state, type GiftState, type ListRules } from "./gifts";
 import { fill, type Key } from "./i18n";
 import { GIFT_KEYWORDS } from "./model";
 import { useEditor } from "./ui";
@@ -17,8 +17,8 @@ const kwText = (k: string) => `kw.${k}` as Key;
 
 /** What the list makes of a gift for display: its effective state, and whether a wanted fusion locks it (shown kept). */
 export function look(list: ListRules, id: number): { shown: GiftState; locked: boolean } {
-  const locked = lockers(list, id).length > 0;
-  return { shown: locked ? "keep" : state(list, id), locked };
+  const shown = effective(list, id);
+  return { shown, locked: shown === "keep" && state(list, id) === "drop" };
 }
 
 /** What a keyword has set: wanted and kept gifts, wanted fusion gifts. */

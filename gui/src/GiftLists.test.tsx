@@ -1,6 +1,6 @@
 // Component tests of the gift list tab: what the user sees and does, and what the settings hold afterwards.
 import { screen, within } from "@testing-library/react";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import recipes from "../../assets/resource/base/data/gift_recipes.json";
 import { CATALOG, GIFT_BY_ID, iconUrl } from "./giftCatalog";
 import { GiftListsTab } from "./GiftLists";
@@ -136,6 +136,25 @@ describe("applying a state", () => {
     expect(getTile(b)).toHaveAttribute("tabindex", "-1");
   });
 
+  test("the up and down keys go to the tile in the row above or below (jsdom has no layout: three tiles a row are laid out by hand)", async () => {
+    const rect = vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
+      const tiles = [...document.querySelectorAll("[data-gift]")], i = tiles.indexOf(this);
+      const [row, col] = [Math.floor(i / 3), i % 3];
+      return { top: row * 70, left: col * 70, bottom: row * 70 + 64, right: col * 70 + 64, width: 64, height: 64, x: col * 70, y: row * 70, toJSON() {} };
+    });
+    try {
+      const r = await open([mine()]);
+      const tiles = [...document.querySelectorAll<HTMLElement>("[data-gift]")];
+      tiles[4].focus();
+      await r.user.keyboard("{ArrowDown}");
+      expect(tiles[7]).toHaveFocus();
+      await r.user.keyboard("{ArrowUp}{ArrowUp}");
+      expect(tiles[1]).toHaveFocus();
+    } finally {
+      rect.mockRestore();
+    }
+  });
+
   test("a digit typed in a select is not a state choice", async () => {
     const r = await open([mine()]);
     await r.user.click(screen.getByRole("combobox", { name: zh["team.fusion_condition"] }));
@@ -154,6 +173,13 @@ describe("locked gifts", () => {
     await r.user.click(t);
     expect(flash()).toBe(say(zh["gl.lock_why"], { name: g.zh, by: nameOf(fixed.id) }));
     expect(list(r)).toMatchObject({ want: [fixed.id], keep: [] });
+  });
+
+  test("the GUI does not know the run's packs: a pack-specific fusion locks its materials too", async () => {
+    const specific = recipes.gifts.find((g) => g.specific && g.recipes)!;
+    const m = specific.recipes![0][0];
+    const r = await open([mine({ want: [specific.id] })]);
+    expect((await tile(r, m)).getAttribute("aria-label")).toContain(zh["gl.locked"]);
   });
 
   test("a material the list keeps itself is not locked", async () => {

@@ -1,7 +1,7 @@
 // The gift list tab (spec 04 section 13; #291, #295): pick a list, pick a state, click gifts to give them that state.
-// Parts, for the tickets that build on it: ListBar (list choice, fusion condition), ApplyBar (the state a click applies),
-// KeywordTabs and KeywordPanel (KeywordGrid.tsx; its GiftTile is what a hover popover attaches to), all reading GiftEdit
-// (giftEdit.ts) for the list being shown, the picked state, and `apply`/`flash`.
+// Parts, for the tickets that build on it: the top bar (list choice, fusion condition) and the apply bar (the state a click
+// applies) below, KeywordTabs and KeywordPanel (KeywordGrid.tsx; its GiftTile is what a hover popover attaches to), all reading
+// GiftEdit (giftEdit.ts) for the list being shown, the picked state, and `apply`/`flash`.
 import { useEffect, useRef, useState } from "react";
 import "./giftlists.css";
 import { GIFT_BY_ID, giftName } from "./giftCatalog";
@@ -26,7 +26,8 @@ export function GiftListsTab() {
   useEffect(() => () => clearTimeout(timer.current), []);
 
   const at = s.gift_lists.findIndex((l) => l.id === chosen);
-  const readOnly = at < 0;
+  const readOnly = at < 0; // also when the chosen list is gone (deleted): back to the default, and the select says so
+  const shownId = readOnly ? "default" : chosen;
   const list = readOnly ? DEFAULT_LIST : s.gift_lists[at];
   const zh = s.language === "zh_tw";
 
@@ -74,7 +75,7 @@ export function GiftListsTab() {
         <div className="gl-top">
           <div className="gl-bar">
             <label>{t("gl.list")}{" "}
-              <select value={chosen} onChange={(e) => setChosen(e.target.value)}>
+              <select value={shownId} onChange={(e) => setChosen(e.target.value)}>
                 <option value="default">{t("defaultPlanLocked")}</option>
                 {s.gift_lists.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
               </select>
