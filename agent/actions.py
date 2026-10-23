@@ -31,7 +31,7 @@ import rewards
 import run_start
 import settlement
 import shop
-from gifts import main_keyword, resolve_list
+from gifts import effective, main_keyword, queue, queue_place, resolve_list
 from ocrtext import compact, digits, has, normalize
 from settings import SCHEMA, SettingsError, load_settings
 from state import next_cursor, pick_team, read_cursor, write_cursor
@@ -311,8 +311,10 @@ def address(context):
 
 
 def run_team(settings, team):
-    """The team a run plays: the settings' team plus `keyword`, its main keyword, which the gift list it uses decides (spec 04 section 13)."""
-    return {**team, "keyword": main_keyword(resolve_list(team["gift_list"], settings["gift_lists"]))}
+    """The team a run plays: the settings' team plus `list`, the gift list it uses, and `keyword`, its main keyword, which
+    that list decides (spec 04 section 13)."""
+    gift_list = resolve_list(team["gift_list"], settings["gift_lists"])
+    return {**team, "list": gift_list, "keyword": main_keyword(gift_list)}
 
 
 def current_run(context):
@@ -3215,12 +3217,16 @@ class Shop(CustomAction):
 
     @staticmethod
     def buy(context, team, visit):
-        """Buy the main-keyword gifts on show (buy_offers), then refresh while the rules allow; True on any spend.
+        """Buy the gifts of the team's list on show (buy_offers), then refresh while the rules allow; True on any spend.
 
         A first choice too dear for the reserve becomes visit["wanted"] for the next round's sell, and
-        holds the purchases and the refresh back until that sell has been tried.
+        holds the purchases and the refresh back until that sell has been tried. A list that wants nothing the
+        shop sells buys nothing and never refreshes (#298).
         """
         keyword, reserve, acted = team["keyword"], team["reserve_cost"], False
+        if not queue(team["list"]):
+            log("shop: the gift list wants nothing the shop sells: nothing bought, no refresh")
+            return False
         while True:
             if Shop.buy_offers(context, team, visit):
                 acted = True
@@ -3262,12 +3268,16 @@ class Shop(CustomAction):
 
     @staticmethod
     def buy_offers(context, team, visit):
-        """Read the offers once, then buy the main-keyword ones shop.buy_plan picks, last cell first; how many bought.
+        """Read the offers once, then buy the ones of the team's list shop.buy_plan picks, last cell first; how many bought.
 
-        A gift's keyword is its offer's badge (read_cells, #76); only an offer whose badge is unread is opened
-        to read its purchase dialog (spec 03 section 12's text rule). Each purchase is checked on the Cost.
+        A gift is told by its icon (read_cells, #297): only an offer whose id is known, that the list wants and the shop
+        sells (gifts.queue) is bought, in the queue's order (#298). An offer too dear to be read (Not Enough Cost dims it: no
+        tier, no id) whose badge is a keyword the list wants stands for the best place a gift of that keyword holds
+        (gifts.queue_place): it may be the first choice, so the shop sells for it; it is never bought. Each purchase is
+        checked on the Cost.
         """
-        keyword, reserve = team["keyword"], team["reserve_cost"]
+        gift_list, reserve = team["list"], team["reserve_cost"]
+        place = {i: n for n, i in enumerate(queue(gift_list))}
         visit["wanted"] = None
         # ponytail: only the offers on show; a Super Shop's last 2 of 10 need a scroll first.
         cost = read_cost(context)
@@ -3279,19 +3289,26 @@ class Shop(CustomAction):
         avoided = avoided_gifts(team)
         cells = {c["i"]: c for c in read_cells(context, image, [offer_cell(s) for s in slots], "offer", avoided)}
         avoid = [g["name"] for g in avoided]
+        avoid_ids = [g["id"] for g in avoided]
         offers = []
         for i, slot in enumerate(slots):
             cell = cells.get(i, {"tier": None, "keyword": None, "gift": None, "id": None, "score": 0.0})
-            if cell["gift"] in avoid or any(rewards.names_gift(slot["name"], n) for n in avoid):
+            if cell["id"] in avoid_ids or cell["gift"] in avoid or any(rewards.names_gift(slot["name"], n) for n in avoid):
                 log(f"shop: {slot['name']!r} {slot['price']}: the team does not hold it (#90)")
                 continue
             slot["short"] = slot["short"] or shop.short_cell(image, *offer_cell(slot))
             if slot["short"] and slot["price"] <= cost:
                 log(f"shop: {slot['name']!r} is tagged Not Enough Cost: its price {slot['price']} is a misread")
                 continue
-            log(f"shop: {slot['name']!r} {slot['price']}: tier {cell['tier']} {cell['keyword']} {gift_shown(cell)}")
-            if cell["keyword"] == keyword:
-                offers.append((i, cell["tier"], slot["price"]))
+            dimmed = cell["id"] is None and slot["short"]  # Not Enough Cost: tier and icon unread
+            rank = place.get(cell["id"])
+            if dimmed:
+                rank = queue_place(gift_list, cell["keyword"], cell["tier"])
+            state = effective(gift_list, cell["id"]) if cell["id"] else "unknown"
+            log(f"shop: {slot['name']!r} {slot['price']}: tier {cell['tier']} {cell['keyword']} {gift_shown(cell)}, {state}"
+                f"{'' if rank is None else f', place {rank}'}{' (dimmed: the best place it may hold)' if dimmed and rank is not None else ''}")
+            if rank is not None:
+                offers.append((i, rank, slot["price"]))
         plan, visit["wanted"] = shop.buy_plan(offers, cost, reserve, visit["sold"])
         if visit["wanted"]:
             log(f"shop: the first choice costs {visit['wanted']}, {cost} Cost is short: sell first")

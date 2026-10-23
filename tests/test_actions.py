@@ -731,10 +731,11 @@ def owned_gifts(context, cells=actions.FUSE_CELLS):
 
 
 def cells_read(monkeypatch, *readings):
-    """read_cells reads the first cells of any grid as readings [(keyword, observed gift[, tier])], tier 2 by default
-    (test_shop_cells checks the reading itself on live captures)."""
+    """read_cells reads the first cells of any grid as readings [(keyword, observed gift[, tier[, gift id]])], tier 2 and no id
+    by default (test_shop_cells checks the reading itself on live captures)."""
     def read_cells(context, image, cells, page, gifts=()):
-        return [{"i": i, "x": cells[i][0], "y": cells[i][1], "tier": (t or [2])[0], "keyword": k, "gift": g, "id": None, "score": 0.0}
+        return [{"i": i, "x": cells[i][0], "y": cells[i][1], "tier": t[0] if t else 2, "keyword": k, "gift": g,
+                 "id": t[1] if len(t) > 1 else None, "score": 0.9 if len(t) > 1 else 0.0}
                 for i, (k, g, *t) in enumerate(readings)]
     monkeypatch.setattr(actions, "read_cells", read_cells)
 
@@ -803,9 +804,26 @@ def test_a_vestige_the_team_keeps_by_name_is_not_fused(context, monkeypatch):
     assert fused and taps == [0, 1, 1, 1]
 
 
-def test_offers_are_read_once_and_bought_high_tier_first_from_the_back(context, monkeypatch):
-    # #76: no purchase dialog is opened to read a keyword. Burn T1 140, Bleed T2 150, Burn T2 200, Burn T3 250 with
-    # 500 Cost: T3 then T2 (the T1 no longer fits), the last cell first so the other stays in place.
+ORDER = ["Burn", "Bleed", "Tremor", "Rupture", "Sinking", "Poise", "Charge", "Slash", "Pierce", "Blunt", "Keywordless"]
+
+
+def wants(*ids, order=("Burn", "Bleed")):
+    """A gift list wanting ids, bought in this order (all under the first keyword of `order` that lists them)."""
+    gorder = {k: [] for k in ORDER}
+    for i in ids:
+        gorder[next(g["keyword"] for g in actions.gift_data() if g["id"] == i)].append(i)
+    return {"order": [*order, *(k for k in ORDER if k not in order)], "want": list(ids), "keep": [], "gorder": gorder}
+
+
+def buying(list_, **team):
+    """A team that plays gift list `list_` (run_team puts it in the team), reserve 0."""
+    return {"keyword": "Burn", "reserve_cost": 0, "list": list_, **team}
+
+
+def test_offers_are_read_once_and_bought_in_the_lists_order_from_the_back(context, monkeypatch):
+    # #298: no purchase dialog is opened to read a keyword. Burn I 140 (9003), Bleed II 150 (9005, not wanted), Burn II
+    # 200 (9009), Burn III 250 (9053) with 500 Cost; the list wants 9009, 9003, 9053 in that order: tier and price do not
+    # count. 9009 then 9003 (the 9053 no longer fits), the last cell first so the other stays in place.
     offers = [("Ashes", (570, 333, 90, 17)), ("140", (600, 306, 40, 24)), ("Wound", (725, 333, 90, 17)),
               ("150", (755, 306, 40, 24)), ("Fiery", (880, 333, 90, 17)), ("200", (910, 306, 40, 24)),
               ("Dust", (1035, 333, 90, 17)), ("250", (1064, 306, 40, 24))]
@@ -827,12 +845,12 @@ def test_offers_are_read_once_and_bought_high_tier_first_from_the_back(context, 
         results = [SimpleNamespace(text=t, box=b) for t, b in lines]
         return SimpleNamespace(all_results=results, hit=True, best_result=None) if results else None
     context.run_recognition.side_effect = run_recognition
-    cells_read(monkeypatch, ("Burn", None, 1), ("Bleed", None, 2), ("Burn", None, 2), ("Burn", None, 3))
+    cells_read(monkeypatch, ("Burn", None, 1, 9003), ("Bleed", None, 2, 9005), ("Burn", None, 2, 9009), ("Burn", None, 3, 9053))
     visit = {"wanted": None, "sold": False}
-    assert actions.Shop.buy_offers(context, {"keyword": "Burn", "reserve_cost": 0}, visit) == 2
+    assert actions.Shop.buy_offers(context, buying(wants(9009, 9003, 9053)), visit) == 2
     offer_taps = [t for t in tapped if t[1] == 268]
-    assert offer_taps == [(1084, 268), (930, 268)]
-    assert costs[-1] == 50 and visit["wanted"] is None
+    assert offer_taps == [(930, 268), (620, 268)]
+    assert costs[-1] == 160 and visit["wanted"] is None
 
 
 def test_a_glyph_on_an_offers_icon_opens_no_purchase_dialog(context, monkeypatch):
@@ -842,7 +860,7 @@ def test_a_glyph_on_an_offers_icon_opens_no_purchase_dialog(context, monkeypatch
     reads(context, {tuple(actions.OFFER_GRID): OLD_DOLL_SHOP, tuple(actions.SHOP_COST): [("787", (560, 120, 60, 30))]})
     cells_read(monkeypatch, ("Burn", None, 2), ("Bleed", None, 2), ("Pierce", None, 2), ("Blunt", None, 2))
     visit = {"wanted": None, "sold": False}
-    assert actions.Shop.buy_offers(context, {"keyword": "Keywordless", "reserve_cost": 0}, visit) == 0
+    assert actions.Shop.buy_offers(context, buying(wants(9009)), visit) == 0
     assert not context.tasker.controller.post_click.called  # no cell opened to read its keyword
     assert visit["wanted"] is None
 
@@ -855,7 +873,7 @@ def test_an_offer_whose_badge_reads_nothing_is_not_opened_to_read_its_keyword(co
     reads(context, {tuple(actions.OFFER_GRID): OLD_DOLL_SHOP, tuple(actions.SHOP_COST): [("787", (560, 120, 60, 30))]})
     monkeypatch.setattr(actions, "read_cells", lambda *args: [])
     visit = {"wanted": None, "sold": False}
-    assert actions.Shop.buy_offers(context, {"keyword": "Burn", "reserve_cost": 0}, visit) == 0
+    assert actions.Shop.buy_offers(context, buying(wants(9009)), visit) == 0
     assert not context.tasker.controller.post_click.called
     assert visit["wanted"] is None
 
@@ -868,9 +886,9 @@ def test_an_offer_with_a_red_price_is_not_tapped_though_ocr_read_it_as_affordabl
     context.tasker.controller.post_screencap.return_value.wait.return_value.get.return_value = image
     reads(context, {tuple(actions.OFFER_GRID): [("Emerald Elytra", (735, 333, 90, 17)), ("16", (755, 306, 40, 24))],
                     tuple(actions.SHOP_COST): [("106", (560, 120, 60, 30))]})
-    cells_read(monkeypatch, ("Burn", None, 1))
+    cells_read(monkeypatch, ("Burn", None, 1, 9003))
     visit = {"wanted": None, "sold": False}
-    assert actions.Shop.buy_offers(context, {"keyword": "Burn", "reserve_cost": 0}, visit) == 0
+    assert actions.Shop.buy_offers(context, buying(wants(9003)), visit) == 0
     assert not context.tasker.controller.post_click.called
     assert visit["wanted"] is None
 
@@ -1084,7 +1102,7 @@ def test_a_keyword_refresh_waits_for_the_new_cost_not_a_fixed_time(context, cloc
                 tuple(actions.KEYWORD_LABELS): [("Burn", (300, 400, 60, 20))]}
     taps = live_shop(context, reads_now)
     visit = {"wanted": None, "sold": False, "refreshes": 0}
-    assert actions.Shop.buy(context, {"keyword": "Burn", "reserve_cost": 0, "shop_refresh_limit": 1}, visit)
+    assert actions.Shop.buy(context, buying(wants(9053), shop_refresh_limit=1), visit)
     assert visit["refreshes"] == 1 and taps == [actions.REFRESH["keyword"][0], (330, 360), actions.KEYWORD_REFRESH]
     assert sum(clock) < 1.5
 
@@ -1099,7 +1117,7 @@ def test_a_keyword_refresh_checks_the_page_before_its_first_tap(context, clock, 
                                             tuple(actions.REFRESH["keyword"][1]): [("90", (1110, 145, 40, 20))]})
     visit = {"wanted": None, "sold": False, "refreshes": 0}
     with pytest.raises(actions.PageGone):
-        actions.Shop.buy(context, {"keyword": "Burn", "reserve_cost": 0, "shop_refresh_limit": 1}, visit)
+        actions.Shop.buy(context, buying(wants(9053), shop_refresh_limit=1), visit)
     assert taps == []
 
 
@@ -1116,7 +1134,8 @@ def test_the_leave_dialog_is_read_with_its_spaces_dropped(context, clock, monkey
 
 
 GOSSYPIUM = "White Gossypium"
-NO_GOSSYPIUM = {"keyword": "Bleed", "reserve_cost": 0, "gift_search": {"gifts": []}, "allow_white_gossypium": False}
+NO_GOSSYPIUM = {"keyword": "Bleed", "reserve_cost": 0, "gift_search": {"gifts": []}, "allow_white_gossypium": False,
+                "list": wants(9020, 9005, order=("Bleed",))}
 
 
 def test_a_team_without_white_gossypium_fuses_it_first(context, monkeypatch):
@@ -1150,7 +1169,7 @@ def test_a_team_without_white_gossypium_does_not_buy_it(context, monkeypatch):
         results = [SimpleNamespace(text=t, box=b) for t, b in lines]
         return SimpleNamespace(all_results=results, hit=True, best_result=None) if results else None
     context.run_recognition.side_effect = run_recognition
-    cells_read(monkeypatch, ("Bleed", GOSSYPIUM, 2), ("Bleed", None, 2))
+    cells_read(monkeypatch, ("Bleed", GOSSYPIUM, 2, 9020), ("Bleed", None, 2, 9005))
     assert actions.Shop.buy_offers(context, NO_GOSSYPIUM, {"wanted": None, "sold": False}) == 1
     assert [t for t in tapped if t[1] == 268] == [(775, 268)]
 
@@ -1558,7 +1577,7 @@ def test_select_team_makes_a_plan_for_an_abandoned_empty_run_instead_of_backing_
     team_picker(context, "TEAMS #3", lambda clicks, looks: "recommended level" if clicks else None)
     assert actions.SelectTeam().run(context, argv())
     assert taps(context) == [(130, 390), (1145, 587)]  # no back arrow (97, 42)
-    assert actions.RUN["team"] == {**team, "keyword": "Burn"}
+    assert actions.RUN["team"] == {**team, "keyword": "Burn", "list": actions.resolve_list("default", [])}
 
 
 def test_starlight_enter_waits_for_the_confirm_dialog(context, clock, monkeypatch):
@@ -1663,9 +1682,6 @@ def test_the_gift_search_switch_is_waited_for_not_slept_on(context, clock):
     assert actions.PickStartingGift().run(context, argv())
     assert taps(context) == [(1140, 158), (1080, 587)]  # the switch, then Select
     assert sum(clock) < 1.5
-
-
-ORDER = ["Burn", "Bleed", "Tremor", "Rupture", "Sinking", "Poise", "Charge", "Slash", "Pierce", "Blunt", "Keywordless"]
 
 
 def listed(*first):
@@ -2466,7 +2482,7 @@ def test_a_scroll_stops_dead_where_it_was_sent(context, clock):
 
 def test_the_shop_stops_tapping_once_the_map_shows(context, monkeypatch):
     # Live 2026-10-18: the shop was left by hand mid-visit; its next taps opened a map node's panel.
-    cells_read(monkeypatch, ("Burn", None, 1), ("Burn", None, 1))
+    cells_read(monkeypatch, ("Burn", None, 1, 9003), ("Burn", None, 1, 9087))
     offers = [("Bone Stake", (575, 333, 90, 17)), ("120", (600, 306, 40, 24)),
               ("Wrist Guards", (730, 333, 90, 17)), ("130", (755, 306, 40, 24))]
 
@@ -2479,7 +2495,7 @@ def test_the_shop_stops_tapping_once_the_map_shows(context, monkeypatch):
         return SimpleNamespace(all_results=results, hit=True, best_result=None) if results else None
     context.run_recognition.side_effect = run_recognition
     visit = {"wanted": None, "sold": False}
-    assert not actions.Shop.buy_offers(context, {"keyword": "Burn", "reserve_cost": 0}, visit)
+    assert not actions.Shop.buy_offers(context, buying(wants(9003, 9087)), visit)
     assert context.tasker.controller.post_click.call_count == 1  # the second offer is never tapped
 
 

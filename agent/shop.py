@@ -157,14 +157,14 @@ def on_sale(slot):
 
 
 def buy_plan(offers, cost, reserve, sold):
-    """(grid indexes to buy, last first; the wanted price or None) for the main-keyword offers on show (#76).
+    """(grid indexes to buy, last first; the wanted price or None) for the offers on show the gift list wants (#298).
 
-    offers: [(grid index, tier or None, price)]. Highest tier first, cheapest first within a tier, each only
-    while the reserve stays. When the first choice is too dear and no sale has been tried for it, nothing is
+    offers: [(grid index, place in the buy queue, price)]. The queue's order, cheapest first for one gift on show twice,
+    each only while the reserve stays. When the first choice is too dear and no sale has been tried for it, nothing is
     bought: wanted asks the next round to sell first. Bought from the back, a purchase (moved to the grid's
     end) leaves the offers before it in place, so the grid is read once.
     """
-    order = sorted(offers, key=lambda o: (-(o[1] or 0), o[2]))
+    order = sorted(offers, key=lambda o: o[1:])
     if order and not sold and not can_spend(cost, order[0][2], reserve):
         return [], order[0][2]
     picked = []
