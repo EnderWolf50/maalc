@@ -275,6 +275,19 @@ def test_map_draw_boxes_every_read_node_and_marks_a_fix():
     assert tuple(px[144 - 52, 838]) == ev.ORANGE  # a node the bot did not list
 
 
+def test_map_draw_puts_a_missed_node_where_the_shot_that_shows_its_column_has_it():
+    shots = [Image.new("RGB", (1280, 720)), Image.new("RGB", (1280, 720))]
+    im = ev.draw_map(shots, [0, 480], [(0, 512, 3)], {}, None, {"c5/mid": ["missed", "x"]}, 1)  # the drag moved 480, not 512
+    assert tuple(np.asarray(im)[357 - 52, ev.COLX(5) - 512 + 480]) == ev.ORANGE
+
+
+def test_map_command_survives_a_floor_block_with_no_reading(tmp_path, footage):
+    (tmp_path / "run.log").write_text(
+        "15:52:51.700 [maalc] floor 1: pull Pack (0)\n15:52:56.000 [maalc] map: path mid battle, score 1\n", encoding="utf-8")
+    ev.main(["map", str(tmp_path / "run.log"), "--floor", "1", "-o", str(tmp_path / "route"), *footage])
+    assert (tmp_path / "route/stitched.png").exists()
+
+
 def test_map_draw_gives_each_special_read_its_own_colour_and_a_legend():
     shots = [Image.new("RGB", (1280, 720)), Image.new("RGB", (1280, 720))]
     kinds = {"retyped": ev.VIOLET, "cost_none": ev.MAGENTA, "cost_miss": ev.MAGENTA, "boss_by_cost": ev.WHITE,

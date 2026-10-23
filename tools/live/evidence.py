@@ -369,7 +369,7 @@ def measure_shift(prev, cur, expect: int, reach: int = 100, rows=(150, 560), col
     tpl = np.ascontiguousarray(cur[y0:y1, x0:x1])
     if tpl.std() < 3:
         return None
-    import cv2  # the probe group's
+    import cv2  # the default group's since #325; imported here so a flat frame needs none
 
     lo, hi = max(0, x0 + expect - reach), min(prev.shape[1], x1 + expect + reach)
     score = cv2.matchTemplate(np.ascontiguousarray(prev[y0:y1, lo:hi]), tpl, cv2.TM_CCOEFF_NORMED)[0]
@@ -425,7 +425,8 @@ def draw_map(shots, offsets, drags, nodes, path, fix, floor: int, measured=()) -
     def where(k, row):
         """A node sits where the shot it was last read in shows it: the log's column grid, moved by what that shot's
         offset differs from the log's px."""
-        s = nodes[k, row]["stage"] if (k, row) in nodes else 0
+        # a node the bot did not list: the last shot that shows its column
+        s = nodes[k, row]["stage"] if (k, row) in nodes else max((i for i in range(len(offsets)) if 60 <= COLX(k) - logged[i] <= 1200), default=0)
         return COLX(k) + offsets[s] - logged[s], ROWY[row]
 
     for (k, row), n in sorted(nodes.items()):
@@ -450,7 +451,7 @@ def draw_map(shots, offsets, drags, nodes, path, fix, floor: int, measured=()) -
     for key, real in fix.items():
         if real[0] == "missed":
             k, row = int(key[1:].split("/")[0]), key.split("/")[1]
-            x, y = COLX(k), ROWY[row]
+            x, y = where(k, row)
             d.rectangle([x - 52, y - 52, x + 52, y + 52], outline=ORANGE + (255,), width=4)
             label(d, x - 52, y + 54, [real[1]], [ORANGE], f)
     for x, y, col, text in items:
@@ -491,7 +492,8 @@ def map_cmd(a) -> None:
     footage, masks = Footage(a.video), load_masks(masks_path(a))
     # The floor's first reading (a floor's block opens at `floor N's map is up, floor N+1 next; waiting`, while the
     # last floor's map still shows), then the first after each `dragged` line.
-    reads = [next(t for t, x in block if x.startswith(("map: node at", "map: column")))] + [t + 0.1 for t, _, _ in drags]
+    first = next((t for t, x in block if x.startswith(("map: node at", "map: column"))), block[0][0])  # none read: the block's first line
+    reads = [first] + [t + 0.1 for t, _, _ in drags]
     times, grays = frames(footage, reads[0] - 0.5, block[-1][0] + 0.5, 10, gray=True)
     idx = pick_shots(times, motion(grays), reads)
     shots = [apply_masks(grab(footage, times[i]), masks) for i in idx]
