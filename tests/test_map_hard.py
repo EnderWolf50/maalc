@@ -43,6 +43,8 @@ FRAMES = {
 # map moved (+396, -72) under the HUD, which stays put (the title and relic bar, resource bar, star panel and party strip pasted back; the
 # strip the move left behind painted out): c1 up sits under the resource bar, c2 up under the star panel, its coin and badge out of
 # sight. Each is read, as a node of no known type: "unknown" ranks after every fight (map_weights.yaml), it is not left out.
+# Limits of the frame: the real 2026-10-18 capture only lost c2 up (c1 up was clear), a badge half under the HUD is not covered, and the HUD's
+# edges are pasted. With map_route.line_contrast's top back at y 70 (before #136) c2 up loses its link from c1 up and this test fails.
 REST = ({"mid": ["abno", None], "up": ["unknown", None], "down": ["focused", None]},
         {"mid": ["event", ["down", "mid"]], "up": ["unknown", ["mid", "up"]]})
 
