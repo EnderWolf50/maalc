@@ -497,20 +497,6 @@ def test_the_bus_is_dragged_to_the_far_left_and_the_cheapest_path_over_four_colu
     assert first == (446 - offsets[-1] + actions.SLOT[0], actions.BUS_HOME[1] + actions.SLOT[1] + 213)  # the bottom row's battle
 
 
-def test_the_node_before_the_boss_is_a_shop_whatever_its_mark_reads(context, monkeypatch):
-    # #146 (live 2026-10-18, cyan and orange packs): bus, a shop none of whose templates matched, the boss.
-    monkeypatch.setattr(actions, "map_weights", lambda context: {**WEIGHTS, "shop": 0, "boss": 0})
-    logs = []
-    monkeypatch.setattr(actions, "log", logs.append)
-    actions.RUN["floor"] = 1
-    nodes = {(1, "mid"): set(), (2, "mid"): {"boss"}}
-    map_world(context, nodes, [((1, "mid"), (2, "mid"))], bus_x=actions.BUS_HOME[0])
-    actions.RouteMap().run(context, None)
-    assert "map: the column before the boss is the shop" in logs
-    assert actions.RUN["map_plan"] == {"floor": 1, "steps": [("mid", "boss")]}
-    assert any(line.startswith("map: path mid shop > mid boss") for line in logs)
-
-
 def test_two_columns_on_a_hard_floor_take_the_cheapest_path(context, monkeypatch):
     # Hard mode shows two columns; nothing past them is lit to read.
     monkeypatch.setattr(actions, "map_weights", lambda context: WEIGHTS)
@@ -2550,8 +2536,9 @@ def test_a_shop_visit_left_by_hand_is_handed_back_and_forgotten_at_the_next_node
     monkeypatch.setattr(actions.Shop, "buy", staticmethod(lambda *a: actions.page_guard(context, "Shop")))
     assert actions.Shop().run(context, argv())  # the shop is gone: True for MirrorHub, not a stuck
     assert actions.STUCK["flag"] is None and "shop" in actions.RUN
+    assert actions.RUN["after_shop"]  # #279: the page handled last, so RouteMap's one node is the boss
     actions.enter_node(context)
-    assert "shop" not in actions.RUN
+    assert "shop" not in actions.RUN and "after_shop" not in actions.RUN
 
 
 def test_a_formation_left_mid_pick_taps_no_card(context, guarded):
@@ -2612,6 +2599,15 @@ def test_the_theme_pack_page_reads_its_floor_in_any_case(context, monkeypatch):
     actions.RUN["difficulty"] = None
     actions.PickThemePack().run(context, None)
     assert actions.RUN["floor"] == 3
+
+
+def test_a_new_floor_forgets_the_shop_left_before_the_boss(context, monkeypatch):
+    # #279: the boss' floor ends with the boss; the next floor's first map is read by its marks again.
+    monkeypatch.setattr(actions, "text", lambda *a, **k: "Floor 3")
+    monkeypatch.setattr(actions.PickThemePack, "set_difficulty", lambda *a: False)
+    actions.RUN.update(difficulty=None, floor=2, after_shop=True)
+    actions.PickThemePack().run(context, None)
+    assert actions.RUN["floor"] == 3 and "after_shop" not in actions.RUN
 
 
 def moved(context):

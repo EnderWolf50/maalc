@@ -1172,6 +1172,7 @@ class PickThemePack(CustomAction):
             return True  # page fading in or out: let MirrorHub look again
         floor = int(m[1])
         if floor != RUN.get("floor"):
+            RUN.pop("after_shop", None)
             RUN.update(floor=floor, map_misses=0)  # a new floor's map gets a fresh retry quota (spec 06)
             restart_floor_clock()
         want = None if run["difficulty"] is None else run_start.hard_wanted(floor, run["difficulty"] == "hard", run["team"]["hard_from_floor"])
@@ -1402,6 +1403,7 @@ def enter_node(context):
         if until(context, lambda im: not seen(context, im, "MapNodePanel")) is not None:
             log("entered the node")
             RUN.pop("fresh_floor", None)
+            RUN.pop("after_shop", None)
             until(context, lambda im: not seen(context, im, "MirrorMap"), timeout=3)  # the map fades out
             return True
     return stuck("Enter on the node panel did nothing")
@@ -1471,14 +1473,15 @@ class RouteMap(CustomAction):
             bx, by = bus or BUS_REST
             slots = self.read_slots(context, image, bx, by) if bus else {}
         log("map: column 1: " + (", ".join(f"{r} {t} ({'?' if n is None else n} onward)" for r, (t, n) in slots.items()) or "no linked slot read"))
+        if slots and RUN.get("after_shop"):  # #279: the page handled last was the shop, so the only node to take is the boss
+            if changed := map_route.boss_after_shop({"bus": ("shop", None)}, slots):
+                log(f"map: left the shop; column 1 {', '.join(changed)} read as something else than the boss")
+            else:
+                log("map: left the shop; column 1 is the boss")
         ahead = self.read_ahead(context, image, bx + SLOT[0], by + SLOT[1], slots) if slots else []
         if slots and not RUN.get("floor_hard"):  # #202: the rest of the floor, two columns a drag; a HARD map does not pan (#129)
             ahead, bus = self.read_on(context, image, bus, slots, ahead)
             bx, by = bus or BUS_REST
-        read = [t for column in (slots, *ahead) for t, _ in column.values()]
-        map_route.shop_before_boss(slots, ahead)  # #146: the shop's icon takes the theme pack's colours
-        if read != [t for column in (slots, *ahead) for t, _ in column.values()]:
-            log("map: the column before the boss is the shop")
         weights = map_weights(context)
         order = map_route.rank(slots, weights, ahead)
         steps = None
@@ -1666,7 +1669,7 @@ class RouteMap(CustomAction):
             return False
         bx, by = bus
         cx, cy = bx + SLOT[0], by + SLOT[1] + map_route.ROW_DY[row]
-        kind = node_at(context, image, cx, cy)
+        kind = "boss" if RUN.get("after_shop") else node_at(context, image, cx, cy)  # #279: the shop was the last page
         if kind != node:
             log(f"map: planned {row} {node} reads {kind}; reading the map again")
             return False
@@ -1687,7 +1690,8 @@ class RouteMap(CustomAction):
         only rows next to each other link. Every node leads on, so one with no link read onward takes its brightest
         (map_route.FAINT_LINK, #212). A node up to MAP_NEAR is typed by its Cost too, past it by its marks (#238).
         The read ends at the screen's edge, at a column with nothing linked or dark (no mark and no light on any
-        node: hard mode shows two columns), or after the boss: none at all when before holds it (#279). first: the first column's number, for the log.
+        node: hard mode shows two columns), or after the boss: none at all when before holds it (#279), and none past
+        the column after a shop (map_route.boss_after_shop). first: the first column's number, for the log.
         """
         dx, dy = map_route.COLUMN_DX, map_route.ROW_DY
         v, ahead = image.max(axis=2), []
@@ -1706,10 +1710,16 @@ class RouteMap(CustomAction):
                     # A node with no mark may still be lit: a red pack's dim "?" (live 2026-10-18) reads 48-60
                     # here; hard mode's dark columns read 0.
                     lit = lit or bool(marks) or np.percentile(v[ry - 45:ry + 45, x - 45:x + 45], 90) >= 20
-            if not lit:
+            if not lit and not (column and any(t == "shop" for t, _ in before.values())):  # #279: the boss after a shop may read dark
                 break
+            n = first + len(ahead)
+            glow = [row for row, (t, _) in column.items() if t == "boss"]
+            if changed := map_route.boss_after_shop(before, column):  # #279: the shop decides, the boss' glow only helps
+                log(f"map: column {n}: after the shop, so the boss; {', '.join(changed)} read as something else")
+            elif glow and not any(t == "shop" for t, _ in before.values()):
+                log(f"map: column {n}: the boss' glow without a shop before it")
             ahead.append(column)
-            RouteMap.log_column(first + len(ahead) - 1, column)
+            RouteMap.log_column(n, column)
             if any(t == "boss" for t, _ in column.values()):
                 break
             before = column
@@ -1721,9 +1731,12 @@ class RouteMap(CustomAction):
 
     @staticmethod
     def retype(context, image, column, x, y, n):
-        """Type column n, read from afar, again by its Cost now that it sits at x, up to MAP_NEAR (in place)."""
-        for row, (_, linked) in column.items():
-            column[row] = (node_at(context, image, x, y + map_route.ROW_DY[row]), linked)
+        """Type column n, read from afar, again by its Cost now that it sits at x, up to MAP_NEAR (in place).
+
+        The boss stays one: it was told by the shop before it (#279), a dark one reads as an event here.
+        """
+        for row, (kind, linked) in column.items():
+            column[row] = (kind if kind == "boss" else node_at(context, image, x, y + map_route.ROW_DY[row]), linked)
         RouteMap.log_column(n, column)
 
     @staticmethod
@@ -3039,6 +3052,7 @@ class Shop(CustomAction):
         team = current_run(context)["team"]
         if not self.to_main(context):
             return True  # a page fading in or out: let MirrorHub look again
+        RUN["after_shop"] = True  # #279: the next map's only node is the boss; cleared by the next node entered
         visit = RUN.setdefault("shop", {"healed": False, "refreshes": 0, "wanted": None, "sold": False})
         # The sale groups by the fuse page's slots and thresholds before that page was read: a Super Shop's red title tells (#263).
         if "slots" not in visit:
