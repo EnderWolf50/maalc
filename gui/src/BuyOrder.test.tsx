@@ -97,6 +97,14 @@ describe("opening and closing", () => {
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
+  test("1, 2 and 3 do not change the apply state behind the dialog", async () => {
+    const r = await open(mine());
+    await openDialog(r);
+    await r.user.keyboard("2");
+    await r.user.click(within(dialog()).getByRole("button", { name: zh["gl.close"] }));
+    expect(screen.getByRole("radio", { name: zh["state.want"] })).toBeChecked();
+  });
+
   test("a gift row shows the gift's icon", async () => {
     const r = await open(mine());
     await openDialog(r);

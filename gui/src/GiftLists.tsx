@@ -63,7 +63,7 @@ export function GiftListsTab() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const state = STATES[Number(e.key) - 1];
-      if (!state || e.ctrlKey || e.metaKey || e.altKey || (e.target as HTMLElement).closest("input, select, textarea")) return;
+      if (!state || e.ctrlKey || e.metaKey || e.altKey || (e.target as HTMLElement).closest("input, select, textarea, [role=dialog]")) return;
       setPick(state);
     };
     document.addEventListener("keydown", onKey);
