@@ -12,6 +12,7 @@ import numpy as np
 import pytest
 
 import gift_cells as g
+import settings
 from test_shop import screen_with
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -35,7 +36,7 @@ def test_a_cell_whose_tier_or_badge_is_unread_has_no_candidates():
 
 
 def test_every_candidate_has_an_icon_template_in_the_bundle():
-    assert all(g.TEMPLATES_DIR.joinpath(e["template"]).is_file() for e in g.load())
+    assert all((settings.data_dir().parent / "image" / e["template"]).is_file() for e in g.load())
 
 
 def test_the_best_icon_over_the_minimum_names_the_cell():

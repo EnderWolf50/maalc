@@ -4,9 +4,7 @@ actions.read_cells reads a cell's tier and keyword badge; the gifts of that keyw
 their icons are matched on the cell. Everything here is plain data in, plain data out.
 """
 
-from settings import VESTIGE_IDS, VESTIGES, data_dir, gift_tables
-
-TEMPLATES_DIR = data_dir().parent / "image"
+from settings import VESTIGE_IDS, VESTIGES, gift_tables
 # CCOEFF score of an icon on its own cell and on another's: the gifts of the table's cells score 0.51-0.96, a gift the table
 # lacks 0.30-0.38, a lookalike 0.54 at most with the gift covered (#297, docs/spec/03-decisions.md section 13)
 ICON_MIN = 0.5
