@@ -28,6 +28,7 @@ export default function App() {
   const [loadError, setLoadError] = useState("");
   const [root, setRoot] = useState("");
   const [tab, setTab] = useState<(typeof TABS)[number][0]>("teams");
+  const [giftList, setGiftList] = useState("default"); // what the gift list tab shows; the teams tab can point it at a list
   const [checked, setChecked] = useState(false); // marks show after the first save attempt
   const [status, setStatus] = useState("");
 
@@ -66,7 +67,8 @@ export default function App() {
   const marked = new Set(checked ? problems.flatMap((p) => p.paths) : []);
   const bad = (path: string) => [...marked].some((m) => m === path || m.startsWith(path + "/"));
   const ctx: Ctx = {
-    s, t, bad,
+    s, t, bad, giftList,
+    chooseList: (id, open) => { setGiftList(id); if (open) setTab("gifts"); },
     update: (fn) => setS((prev) => { const next = structuredClone(prev!); fn(next); return next; }),
     tv: (field, v) => TEXT[lang][`${field}.${v}` as Key] ?? v,
   };

@@ -1,19 +1,20 @@
 // The gift list tab's keyword tabs and the grid of one keyword: tier blocks of icon tiles, one tile per gift.
 import { useRef, useState, type KeyboardEvent } from "react";
 import { GIFT_BY_ID, giftName, iconUrl, tiersOf } from "./giftCatalog";
-import { useGiftEdit } from "./giftEdit";
+import { useDragSort } from "./dragSort";
+import { moveGift, useGiftEdit } from "./giftEdit";
 import { effective, mainKeyword, state, type GiftState, type ListRules } from "./gifts";
 import { fill, type Key } from "./i18n";
 import { GIFT_KEYWORDS } from "./model";
 import { useEditor } from "./ui";
 
-const TIERS = ["", "I", "II", "III", "IV", "V"];
+export const TIERS = ["", "I", "II", "III", "IV", "V"];
 // The keyword colours of the mockup; a dot stands in for the keyword icon, which the repo has no art for.
-const KEYWORD_COLOR: Record<string, string> = {
+export const KEYWORD_COLOR: Record<string, string> = {
   Bleed: "#bc1b1f", Blunt: "#99704e", Burn: "#db213f", Charge: "#0dbed7", Pierce: "#926a46", Poise: "#67a8a8", Rupture: "#15d0ae",
   Sinking: "#1e77e9", Slash: "#9b7351", Tremor: "#fb9e23", Keywordless: "#7a8194",
 };
-const kwText = (k: string) => `kw.${k}` as Key;
+export const kwText = (k: string) => `kw.${k}` as Key;
 
 /** What the list makes of a gift for display: its effective state, and whether a wanted fusion locks it (shown kept). */
 export function look(list: ListRules, id: number): { shown: GiftState; locked: boolean } {
@@ -68,7 +69,8 @@ export function KeywordTabs({ tab, onTab }: { tab: string; onTab: (k: string) =>
 /** One keyword's header and its tier blocks. Roving tabindex: one tile is the tab stop; the arrow keys move between tiles. */
 export function KeywordPanel({ keyword }: { keyword: string }) {
   const { s, t } = useEditor();
-  const { list } = useGiftEdit();
+  const { list, change, editable } = useGiftEdit();
+  const dragItem = useDragSort((from, to) => change((l) => moveGift(l, Number(from), Number(to))), editable);
   const grid = useRef<HTMLDivElement>(null);
   const [focused, setFocused] = useState<number | null>(null);
   const zh = s.language === "zh_tw";
@@ -114,7 +116,11 @@ export function KeywordPanel({ keyword }: { keyword: string }) {
             <h4><span className={"gl-tierno" + (tier >= 4 ? " fusion" : "")}>{TIERS[tier]}</span>
               <small>{note && `${note}・`}{fill(t("gl.tier_n"), { n: ids.length })}{set > 0 && `・${fill(t("gl.tier_set"), { n: set })}`}</small></h4>
             <div className="gl-wall">
-              {ids.map((id) => <GiftTile key={id} id={id} zh={zh} tabStop={id === stop} onFocus={() => setFocused(id)} />)}
+              {/* A gift the shop sells can be dragged onto another of its tier to change its place in the buy order. */}
+              {ids.map((id) => (
+                <GiftTile key={id} id={id} zh={zh} tabStop={id === stop} onFocus={() => setFocused(id)}
+                  drag={GIFT_BY_ID.get(id)!.kind === "buyable" ? dragItem(String(id), `${keyword}:${tier}`) : undefined} />
+              ))}
             </div>
           </section>
         );
@@ -124,7 +130,9 @@ export function KeywordPanel({ keyword }: { keyword: string }) {
 }
 
 /** One gift: its icon in a frame that shows its state (want thick and striped, keep solid, drop faded, locked dashed with a padlock). */
-function GiftTile({ id, zh, tabStop, onFocus }: { id: number; zh: boolean; tabStop: boolean; onFocus: () => void }) {
+function GiftTile({ id, zh, tabStop, onFocus, drag }: {
+  id: number; zh: boolean; tabStop: boolean; onFocus: () => void; drag?: ReturnType<ReturnType<typeof useDragSort>>;
+}) {
   const { t } = useEditor();
   const { list, apply } = useGiftEdit();
   const g = GIFT_BY_ID.get(id)!;
@@ -132,7 +140,7 @@ function GiftTile({ id, zh, tabStop, onFocus }: { id: number; zh: boolean; tabSt
   const label = fill(t("gl.tile"), { name: giftName(g, zh), tier: TIERS[g.tier], state: t(`state.${shown}`), lock: locked ? t("gl.locked") : "" });
   return (
     <button type="button" className={`gl-tile ${shown}${locked ? " locked" : ""}`} aria-label={label} data-gift={id} tabIndex={tabStop ? 0 : -1}
-      onFocus={onFocus} onClick={() => apply(id)}>
+      draggable={false} {...drag} onFocus={onFocus} onClick={() => apply(id)}>
       <img src={iconUrl(id)} alt="" loading="lazy" />
       {locked && (
         <svg className="gl-lock" viewBox="0 0 16 16" aria-hidden><path d="M5 7V5a3 3 0 016 0v2h1v7H4V7zm1.5 0h3V5a1.5 1.5 0 00-3 0z" fill="currentColor" /></svg>
