@@ -2763,6 +2763,7 @@ FUSE_COUNT = r"(\d)\s*/\s*\d"  # its "3/5": the materials in
 FUSE_NEUTRAL = (815, 160)  # above the owned grid, between Recipes and Fusion Guide: closes a tooltip, selects nothing
 FORECAST_CHANCE = [428, 455, 62, 28]  # "90%" at the Forecasts row's right: the keyword's chance (60 / 90 / 99, 100 on a recipe)
 FUSE_TRIES = 3  # groups one fuse page's forecast may turn down before the page is closed (#285)
+TOOLTIP_CLOSE = {"fuse": FUSE_NEUTRAL}  # per page: where a tap closes a gift's tooltip, which hides the cells under it (#331)
 SELL_COST = [960, 80, 160, 45]
 SELL_GRID = [630, 210, 480, 290]  # the sell page's gifts with their prices under them
 HEAL_TITLE, HEAL_COST = [130, 30, 220, 45], [1100, 90, 110, 50]
@@ -2869,20 +2870,31 @@ def cell_id(context, grid, at, keyword, tier):
     The icons of the gifts of the cell's keyword and tier (gift_cells.candidates) are matched in turn, CCOEFF with its
     green masked, within CELL_ICON_ROI of the centre; the best is the cell's gift when gift_cells.best accepts it. The
     matching stops at an icon of gift_cells.ICON_SURE: another candidate cannot tie it (a cell's lookalikes score 0.66 at most).
-    A cell with no tier or badge read, or none of whose candidates match, is unknown: shops treat it as a gift to keep.
+    When none of them is accepted, the keyword's other gifts are matched too (gift_cells.of_keyword: the tier numeral may be
+    misread, #330), the earlier scores kept for the lead; there is no early stop, the twin of another tier (Dark and Faint
+    Vestige) scores as high. A cell with no tier or badge read, or none of whose candidates match, is unknown: shops treat it as a gift to keep.
     """
     cx, cy = round(at[0]), round(at[1])
     h, w = grid.shape[:2]
     x, y = max(0, cx - CELL_ICON_ROI // 2), max(0, cy - CELL_ICON_ROI // 2)
     roi = [x, y, min(CELL_ICON_ROI, w - x), min(CELL_ICON_ROI, h - y)]
     scores = []
-    for e in gift_cells.candidates(GIFTS, keyword, tier):
-        node = {"recognition": "TemplateMatch", "template": e["template"], "threshold": 0.0, "method": 5, "green_mask": True, "roi": roi}
-        detail = context.run_recognition("ShopCellIcon", grid, {"ShopCellIcon": node})
-        scores.append((e["id"], detail.best_result.score if detail and detail.best_result else 0.0))
-        if scores[-1][1] >= gift_cells.ICON_SURE:
-            break
-    return gift_cells.best(scores), max((s for _, s in scores), default=0.0)
+
+    def match_icons(pool, stop_when_sure):
+        for e in pool:
+            node = {"recognition": "TemplateMatch", "template": e["template"], "threshold": 0.0, "method": 5, "green_mask": True, "roi": roi}
+            detail = context.run_recognition("ShopCellIcon", grid, {"ShopCellIcon": node})
+            scores.append((e["id"], detail.best_result.score if detail and detail.best_result else 0.0))
+            if stop_when_sure and scores[-1][1] >= gift_cells.ICON_SURE:
+                break
+
+    match_icons(gift_cells.candidates(GIFTS, keyword, tier), stop_when_sure=True)
+    found = gift_cells.best(scores)
+    if found is None:  # #330
+        tried = {i for i, _ in scores}
+        match_icons([e for e in gift_cells.of_keyword(GIFTS, keyword, tier) if e["id"] not in tried], stop_when_sure=False)
+        found = gift_cells.best(scores)
+    return found, max((s for _, s in scores), default=0.0)
 
 
 def read_cells(context, image, cells, page, gifts=()):
@@ -2942,6 +2954,31 @@ def gift_shown(cell):
     return f"{cell['id']} {named} ({cell['score']:.2f})" if named else f"unknown (best {cell['score']:.2f})"
 
 
+def close_tooltip(context, page):
+    """A screenshot of page after a tap on its TOOLTIP_CLOSE spot (a page without one: as it is), #331.
+
+    The tap comes first and the guard after it (ADR 0007): a tooltip over the fuse page hides Leave, so the page node
+    reads nothing until it is closed.
+    """
+    if page in TOOLTIP_CLOSE:
+        tap_settled(context, *TOOLTIP_CLOSE[page], timeout=1.0)
+    return page_guard(context, "Shop")
+
+
+def read_clear(context, image, spots, page, gifts):
+    """read_cells of spots on image, the cells that read unknown read again on a screenshot taken after one more tap
+    on the page's TOOLTIP_CLOSE spot (#331): ([cell], [the screenshot each was read from])."""
+    cells = read_cells(context, image, spots, page, gifts)
+    shots = [image] * len(cells)
+    unknown = [k for k, c in enumerate(cells) if c["id"] is None]
+    if unknown and page in TOOLTIP_CLOSE:
+        again = close_tooltip(context, page)
+        for c in read_cells(context, again, [(cells[k]["x"], cells[k]["y"]) for k in unknown], page, gifts):
+            k = unknown[c["i"]]
+            cells[k], shots[k] = {**c, "i": cells[k]["i"]}, again
+    return cells, shots
+
+
 def owned_cells(context, page, gifts):
     """Every gift of the fuse or sell page's owned grid, each read once where it shows whole (#205): ([cells], grid).
 
@@ -2956,6 +2993,7 @@ def owned_cells(context, page, gifts):
     (x0, y0), (dx, dy), under = OWNED_GRID[page]
     bottom = CELL_PAGES[page][1]
     grid, out, done = {"page": page, "at": 0}, [], set()
+    close_tooltip(context, page)
     image = grid_top(context, page)
     if page == "fuse":
         label, image = owned_label(context, image)
@@ -2968,15 +3006,17 @@ def owned_cells(context, page, gifts):
             moved, image = drag_grid(context, page, -grid["at"] - GRID_MARGIN)
             grid["at"] += moved
     for _ in range(GRID_SCROLLS):
+        image = close_tooltip(context, page)
         rows = range(max(0, grid["at"] // dy), grid["at"] // dy + 5)  # the last one all under the edge
         shown = [(5 * r + c, x0 + dx * c, y0 + dy * r - grid["at"]) for r in rows for c in range(5)]
         fresh = [(i, x, y) for i, x, y in shown if i not in done and whole(page, y)]
         done |= {i for i, _, _ in fresh}
         spots = [(x, y) for _, x, y in fresh]
         prices = shop.cell_prices(ocr(context, image, SELL_GRID), spots) if page == "sell" and spots else {}
-        for c in read_cells(context, image, spots, page, gifts):
+        cells, shots = read_clear(context, image, spots, page, gifts)
+        for c, shot in zip(cells, shots):
             i, _, y = fresh[c["i"]]
-            out.append({**c, "i": i, "y": y + grid["at"], "price": prices.get(c["i"]), "look": centre(image, c["x"], y)})
+            out.append({**c, "i": i, "y": y + grid["at"], "price": prices.get(c["i"]), "look": centre(shot, c["x"], y)})
         cut = [y for _, x, y in shown if y + under > bottom and y - 25 < bottom and shop.filled(image[:bottom], x, y)]
         hidden = min(y for _, _, y in shown if y - 25 >= bottom)
         # A full row over the edge and the next one all under it (a drag the game took less of, or the grid's end): one

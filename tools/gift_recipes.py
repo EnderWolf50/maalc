@@ -31,6 +31,8 @@ ICONS = REPO / "assets/resource/base/image/GiftRecipe"
 STATIC = "static/Assets/Resources_moved/StaticData/static-data"
 KEYWORDS = {"Combustion": "Burn", "Laceration": "Bleed", "Vibration": "Tremor", "Burst": "Rupture", "Sinking": "Sinking",
             "Breath": "Poise", "Charge": "Charge", "Slash": "Slash", "Penetrate": "Pierce", "Hit": "Blunt"}  # the rest: Keywordless
+GIFT_IDS = range(9000, 10000)  # the game's gift ids; `extra_gifts` holds those neither the shop, a recipe nor the vestiges list (#332)
+VESTIGE_IDS = range(9991, 9996)
 SCALE = 0.21  # the icon on the Gift Search page, as for GiftSearch/<id>.png
 NOTE = ("Fusion gifts and their recipes. Recipes: combineFixed (any one of a gift's `recipes` fuses it; each is a list of the "
         "required gift ids; `specific` marks a gift whose recipe uses a theme pack's exclusive gift, `packs` is the union of the "
@@ -38,7 +40,10 @@ NOTE = ("Fusion gifts and their recipes. Recipes: combineFixed (any one of a gif
         "mirror-dungeon-common-data-md8. Ids, tiers, keywords and English names: the same client's ego-gift static data and "
         "EN_EGOgift localization. `materials` are the recipe ingredients gift_search.json does not list. Icons: "
         "image/GiftRecipe/<id>.png, the game's EgoGiftIcon sprites (by the ego-gift iconId) scaled by 0.21 with transparency "
-        "filled green. "+NOTE_ZH+" "
+        "filled green. `extra_gifts` (#332) are the rest of the client's gift ids 9000-9999 (static data ego-gift*, "
+        "465 in 1.117.0, 464 with a name: 9247 has neither a name nor an icon sprite, so it is left out): no shop sells "
+        "them and no recipe uses them, so a shop cell may still show one (some are the theme packs' specificEgoGiftPool gifts); "
+        "the Gift Search icons and the GUI ignore them, the shop cell match (agent/gift_cells.py) takes them as candidates. "+NOTE_ZH+" "
         "Written by tools/gift_recipes.py.")
 
 
@@ -99,7 +104,9 @@ def build(unpack, release):
     gifts = [{**entry(g), **({"recipes": recipes[g]} if g in recipes else {"groups": groups[g]}), **pack_fields(g)} for g in results]
     used = {i for r in recipes.values() for rec in r for i in rec} | {i for gs in groups.values() for grp in gs for i in grp["ids"]}
     materials = [entry(i) for i in sorted(used - searchable - set(results))]
-    return {"note": NOTE, **credit(release), "gifts": gifts, "materials": materials}, table
+    listed = searchable | set(results) | {m["id"] for m in materials} | set(VESTIGE_IDS)
+    extra = [entry(i) for i in sorted(table) if i in GIFT_IDS and i in en and i not in listed]
+    return {"note": NOTE, **credit(release), "gifts": gifts, "materials": materials, "extra_gifts": extra}, table
 
 
 def sprite_index(cache, index_path):
@@ -177,8 +184,8 @@ def main():
     unpack = local_dir("unpack")
     data, table = build(unpack, args.release)
     (DATA / "gift_recipes.json").write_text(json.dumps(data, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
-    entries = data["gifts"] + data["materials"]
-    print(f"{len(data['gifts'])} fusion gifts, {len(data['materials'])} materials; no zh name: {[g['id'] for g in entries if not g['zh']]}")
+    entries = data["gifts"] + data["materials"] + data["extra_gifts"]
+    print(f"{len(data['gifts'])} fusion gifts, {len(data['materials'])} materials, {len(data['extra_gifts'])} extra gifts; no zh name: {[g['id'] for g in entries if not g['zh']]}")
     if not args.no_icons:
         print("no icon:", extract_icons(unpack, {g["id"]: table[g["id"]][2] for g in entries}))
 

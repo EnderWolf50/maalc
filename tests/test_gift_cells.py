@@ -25,8 +25,27 @@ def test_a_cell_is_matched_against_the_gifts_of_its_keyword_and_tier():
     assert {9088, 9105} <= ids("Burn", 4) and 9053 not in ids("Burn", 4)
     assert 9053 in ids("Burn", 3)  # Dust to Dust, bought in the shop
     # the vestiges are Keywordless I-V, Lunar Memory the other Keywordless V
-    assert ids("Keywordless", 5) == {9083, 9995}
+    assert ids("Keywordless", 5) == {9083, 9995, 9799, 9800}  # and two tier V gifts of the game data (#332)
     assert {9991} <= ids("Keywordless", 1)
+
+
+def test_no_two_candidates_share_an_id_or_an_english_name():
+    table = g.load()
+    assert len({e["id"] for e in table}) == len(table)
+    assert len({e["en"] for e in table}) == len(table)  # the name tag match (#329) needs a name to name one gift
+
+
+def test_the_table_holds_every_named_gift_of_the_game_data_when_it_is_unpacked():
+    # #332: ids 9000-9999 of the static data; only 9247 (no name, no icon sprite) is left out, so a new unnamed id fails here.
+    from local_dir import local_dir  # noqa: PLC0415  # the pytest process only (the child below has no tools/ path)
+    if not (unpack := local_dir("unpack")).joinpath("static").is_dir():
+        pytest.skip("no unpacked game data")
+    pytest.importorskip("cv2", reason="cv2 is in the unpack group: `uv sync --group unpack` to run this check")
+    import gift_recipes  # noqa: PLC0415
+    named = gift_recipes.english_names(unpack)
+    ids = {i for i in gift_recipes.gift_table(unpack) if 9000 <= i <= 9999}
+    assert ids - set(named) == {9247}
+    assert {e["id"] for e in g.load()} == ids & set(named)
 
 
 def test_a_cell_whose_tier_or_badge_is_unread_has_no_candidates():
@@ -73,6 +92,39 @@ def test_a_cell_takes_only_an_icon_of_its_own_keyword_and_tier():
     # the same icon on a Pierce II cell is a lookalike, not a Burn gift: the cell is unknown
     assert actions.cell_id(fake_context(icons), grid, (100, 100), "Pierce", 2)[0] is None
     assert actions.cell_id(fake_context({"GiftSearch/9001.png": 0.9}), grid, (100, 100), "Burn", None) == (None, 0.0)
+
+
+def test_a_misread_tier_is_made_up_by_matching_the_whole_keyword():
+    import actions  # noqa: PLC0415
+    grid = np.zeros((200, 200, 3), np.uint8)
+    # Smokes and Wires is Bleed III, read as II (sell page, the tier numeral cut short): no Bleed II icon is on the cell.
+    icons = {"GiftSearch/9042.png": 0.9}
+    assert actions.cell_id(fake_context(icons), grid, (100, 100), "Bleed", 2) == (9042, 0.9)
+    # still nothing when the keyword's other tiers do not show it either, or when no tier was read at all
+    assert actions.cell_id(fake_context({}), grid, (100, 100), "Bleed", 2)[0] is None
+    assert actions.cell_id(fake_context(icons), grid, (100, 100), "Bleed", None) == (None, 0.0)
+
+
+def test_the_keyword_fallback_never_overrules_a_cell_its_tier_names():
+    import actions  # noqa: PLC0415
+    grid = np.zeros((200, 200, 3), np.uint8)
+    # Dark (I) and Faint (II) Vestige are one jar, only the fill differs: the cell read as I is Dark even where Faint's icon scores more.
+    seen = []
+    assert actions.cell_id(fake_context({"GiftSearch/9991.png": 0.8, "GiftSearch/9992.png": 0.85}, seen), grid, (100, 100), "Keywordless", 1)[0] == 9991
+    tier_one = {e["template"] for e in g.candidates(actions.GIFTS, "Keywordless", 1)}
+    assert "GiftSearch/9992.png" not in seen and set(seen) <= tier_one  # the fallback was not consulted
+    # a tier-III cell without a badge is not matched against the jars of the other tiers: Keywordless is no badge read
+    assert actions.cell_id(fake_context({"GiftSearch/9991.png": 0.8, "GiftSearch/9992.png": 0.78}), grid, (100, 100), "Keywordless", 3)[0] is None
+    # a read badge's other tiers all score: two as good as each other leave the cell unknown instead of picking one
+    assert actions.cell_id(fake_context({"GiftSearch/9042.png": 0.8, "GiftSearch/9048.png": 0.78}), grid, (100, 100), "Bleed", 2)[0] is None
+
+
+def test_the_fallback_also_scores_the_candidates_an_early_stop_skipped():
+    import actions  # noqa: PLC0415
+    a, b, c = (e["template"] for e in g.candidates(actions.GIFTS, "Burn", 2)[:3])
+    # a 0.70 and b 0.76 stop the first pass 0.06 apart (unknown); c, never reached there, is the 0.90 gift
+    found = actions.cell_id(fake_context({a: 0.70, b: 0.76, c: 0.90}), np.zeros((200, 200, 3), np.uint8), (100, 100), "Burn", 2)
+    assert found == (int(c.split("/")[1].split(".")[0]), 0.90)
 
 
 def test_matching_stops_at_an_icon_that_cannot_be_a_lookalike():
@@ -194,10 +246,10 @@ def test_a_cell_is_named_by_its_icon_on_each_page(read, case, ids):
     assert read["cases"][case] == ids
 
 
-def test_a_gift_the_table_lacks_or_a_cell_with_no_tier_read_is_unknown(read):
-    # Fuse page with a recipe on offer: a tier IV Poise globe and a tier IV Keywordless paper that no table lists score
-    # 0.38 and 0.34 on their candidates; the Fusion Available cell is Cask Spirits (IV).
-    assert read["cases"]["fuse_recipe"] == [9991, None, None, 9073, 9109, 9180]
+def test_a_pack_exclusive_gift_is_named_and_a_cell_with_no_tier_read_is_unknown(read):
+    # Fuse page with a recipe on offer: a tier IV Poise globe (Clear Mirror, Calm Water) and a tier IV Keywordless paper
+    # (Non-disclosure Agreement) were unknown until #332 listed every gift of the game data; the Fusion Available cell is Cask Spirits (IV).
+    assert read["cases"]["fuse_recipe"] == [9991, 9070, 9085, 9073, 9109, 9180]
     # Offers dimmed by Not Enough Cost show no tier (the numerals fade): nothing is named, all are kept.
     assert read["cases"]["offers_short"] == [None] * 5
 
@@ -216,6 +268,8 @@ def test_no_other_capture_names_a_gift(read):
         "ShopFuse fuse": [[i, gift] for i, gift in enumerate(OWNED)],
         # #304: the Fusion Available cell (cell 0) is Reminiscence (III) on both, the real captures of a fixed recipe on offer.
         "ShopFuseAvailable fuse": [[0, 9179]],
+        # #330: Cask Spirits (IV), the Fusion Available cell of ShopFuseRecipe, read as II: found by its Poise badge alone.
+        "ShopFuseRecipe fuse": [[0, 9180]],
         "ShopFuseRecipeTwo fuse": [[0, 9179]],
         "SuperShop offer": [[3, 9187], [4, 9009], [5, 9102], [6, 9063], [7, 9163]],
     }

@@ -9,7 +9,7 @@ import { SEARCH_GIFTS, type GiftList } from "./model";
 export type ListRules = Pick<GiftList, "order" | "want" | "keep" | "gorder">;
 export type GiftState = "want" | "keep" | "drop";
 export interface Fusion {
-  id: number; recipes?: number[][]; groups?: { ids: number[]; need: number }[]; specific?: boolean; packs?: number[];
+  id: number; keyword: string; recipes?: number[][]; groups?: { ids: number[]; need: number }[]; specific?: boolean; packs?: number[];
 }
 /** gift_search.json's gifts (the buyable ones) and gift_recipes.json's gifts, the game files' unless a test passes its own. */
 export interface GiftTables { buyable: { id: number }[]; fusions: Fusion[] }
@@ -69,12 +69,17 @@ function pick(f: Fusion, owned: Map<number, number>): number[] | undefined {
   if (picked.length && picked.every((p, i) => p.length === f.groups![i].need)) return picked.flat();
 }
 
-/** {gift, materials} for the first wanted fusion in data-file order whose materials `ownedIds` (repeats count) hold, else
- * null. A pack-specific fusion is made whatever the run packs. */
+/** {gift, materials} for the first wanted fusion in list order whose materials `ownedIds` (repeats count) hold, else null.
+ * List order = the keyword's place in `order` (`queue`'s), then data-file order: a fusion is in no `gorder` (that holds the
+ * shop's gifts). A pack-specific fusion is made whatever the run packs. */
 export function recipeFusion(list: ListRules, ownedIds: number[], tables: GiftTables = GAME_TABLES): { gift: number; materials: number[] } | null {
   const owned = new Map<number, number>();
   for (const id of ownedIds) owned.set(id, (owned.get(id) ?? 0) + 1);
-  for (const f of tables.fusions) {
+  const place = (f: Fusion) => {
+    const n = list.order.indexOf(f.keyword);
+    return n < 0 ? list.order.length : n;
+  };
+  for (const f of [...tables.fusions].sort((a, b) => place(a) - place(b))) {
     const materials = state(list, f.id) === "want" ? pick(f, owned) : undefined;
     if (materials) return { gift: f.id, materials };
   }
