@@ -4,14 +4,17 @@ from unittest.mock import MagicMock
 
 import actions
 import test_actions
-from test_actions import buying, cells_read, live_shop, wants
+from test_actions import NO_GOSSYPIUM, buying, cells_read, live_shop, wants
 
 clock, context = test_actions.clock, test_actions.context  # its fixtures
 
 
 def plates_read(monkeypatch, *ids):
     """read_plates reads the name plates of the offers as ids (None: unread); test_gift_cells reads real ones (#329)."""
-    monkeypatch.setattr(actions, "read_plates", lambda context, image, centres: [{"text": f"plate {i}", "id": i} for i in ids])
+    def read_plates(context, image, centres):
+        assert len(centres) == len(ids)  # one plate per slot, on the slot's own cell
+        return [{"text": f"plate {i}", "id": i} for i in ids]
+    monkeypatch.setattr(actions, "read_plates", read_plates)
 
 
 def shelf(context, prices, cost, short=(), purchased=()):
@@ -134,6 +137,16 @@ def test_every_cell_of_the_shop_is_logged_with_its_id_purchased_ones_too(context
     assert actions.Shop.buy_offers(context, buying(wants(9053, 9003, 9009)), {"wanted": None, "sold": True}) == 1
     shown = "\n".join(lines)
     assert "9053 Dust to Dust" in shown and "9009" in shown and "Purchased" in shown
+    taps = [c.args for c in context.tasker.controller.post_click.call_args_list if c.args[1] == 268]
+    assert [x for x, _ in taps] == [725 + 50]
+
+
+def test_white_gossypium_known_only_by_its_plate_is_not_bought(context, monkeypatch):
+    # #329, #90: the icon is unread and the slot's line says only "Gift"; the plate reads White Gossypium (9020).
+    shelf(context, [100, 100], 500)
+    cells_read(monkeypatch, ("Bleed", None, 2), ("Bleed", None, 2, 9005))
+    plates_read(monkeypatch, 9020, 9005)
+    assert actions.Shop.buy_offers(context, NO_GOSSYPIUM, {"wanted": None, "sold": False}) == 1
     taps = [c.args for c in context.tasker.controller.post_click.call_args_list if c.args[1] == 268]
     assert [x for x, _ in taps] == [725 + 50]
 

@@ -2921,7 +2921,7 @@ def cell_line(cell, role):
 def gift_shown(cell):
     """The gift a read cell was taken for, for the log: "9042 Smokes and Wires (0.77)", or "unknown (best 0.38)" (#297)."""
     named = GIFT_NAMES.get(cell["id"])
-    if named and cell.get("plate"):  # told by its name plate alone (a dimmed cell, #329)
+    if named and cell.get("by_plate"):  # told by its name plate alone (a dimmed cell, #329)
         return f"{cell['id']} {named} (plate)"
     return f"{cell['id']} {named} ({cell['score']:.2f})" if named else f"unknown (best {cell['score']:.2f})"
 
@@ -3313,9 +3313,9 @@ class Shop(CustomAction):
             return 0
         image = screen(context)
         shown = shop.read_slots(ocr(context, image, OFFER_GRID))
-        for slot, plate in zip(shown, read_plates(context, image, [offer_cell(s) for s in shown])):
+        for slot, plate in zip(shown, read_plates(context, image, [offer_cell(s) for s in shown]), strict=True):
             slot["plate"] = plate
-            if not shop.on_sale(slot) and (slot["name"] or plate["id"]):  # bought, a skill or "??": never bought, its plate logged (#329)
+            if not shop.on_sale(slot):  # bought, a skill or "??": never bought, its plate logged (#329)
                 log(f"shop: {slot['name']!r}: {'Purchased' if slot['purchased'] else 'not on sale'}, plate {plate['text']!r} "
                     f"{GIFT_NAMES.get(plate['id'], 'unknown')}" + ("" if plate["id"] is None else f" ({plate['id']})"))
         slots = [s for s in shown if shop.on_sale(s)]
@@ -3331,13 +3331,13 @@ class Shop(CustomAction):
             if split:
                 log(f"shop: {slot['name']!r}: the icon says {icon} {GIFT_NAMES.get(icon)}, the plate {plate['text']!r} says "
                     f"{plate['id']} {GIFT_NAMES.get(plate['id'])}: unknown")
-            cell = {**cell, "id": named, "plate": icon is None and named is not None}
+            cell = {**cell, "id": named, "by_plate": icon is None and named is not None}
             if cell["id"] in avoid_ids or cell["gift"] in avoid or any(rewards.names_gift(slot["name"], n) for n in avoid):
-                log(f"shop: {slot['name']!r} {slot['price']}: the team does not hold it (#90)")
+                log(f"shop: {slot['name']!r} {slot['price']}: {gift_shown(cell)}, the team does not hold it (#90)")
                 continue
             slot["short"] = slot["short"] or shop.short_cell(image, *offer_cell(slot))
             if slot["short"] and slot["price"] <= cost:
-                log(f"shop: {slot['name']!r} is tagged Not Enough Cost: its price {slot['price']} is a misread")
+                log(f"shop: {slot['name']!r} {gift_shown(cell)} is tagged Not Enough Cost: its price {slot['price']} is a misread")
                 continue
             rank = place.get(cell["id"])
             state = effective(gift_list, cell["id"]) if cell["id"] else "unknown"

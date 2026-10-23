@@ -91,9 +91,10 @@ def difficulty_move(floor, shown_hard, want_hard):
     return "normal" if floor == 1 else None
 
 
-@lru_cache(maxsize=None)
+@lru_cache(maxsize=1024)
 def _compact(name):
-    """compact(name), once per name: the gifts' 400 names are matched against every name plate (#329)."""
+    """compact(name), once per name: the gifts' 400 names are matched against every name plate (#329). Bounded: some callers
+    match against texts the screen showed."""
     return compact(name)
 
 
