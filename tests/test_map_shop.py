@@ -24,7 +24,7 @@ from test_shop import screen_with  # noqa: E402
 # case: node centre. The crops sit where the live frames had them: the pre-boss shop at the left of a map panned
 # toward the boss, a bus 260 px behind it.
 PLUS_SHOPS = [f"map_shop_plus{n}" for n in range(6)] + ["map_shop_torn"]  # hard floors: a star and a "+", the plain template scores 0.33-0.39
-NOT_SHOPS = [f"map_notshop{n}" for n in range(3)]  # the slots that scored highest on the "+" templates (0.41-0.42) of 1187
+NOT_SHOPS = [f"map_notshop{n}" for n in range(4)]  # the slots that scored highest on the "+" templates (0.41-0.42, 3) and on the torn one (0.33, 1) of 1187
 CASES = {
     "map_shop_cyan": (330, 145),  # live 2026-10-18 floor 2, cyan theme: read as an event (#146)
     "map_shop_orange": (330, 145),  # floor 1, orange theme: read as an event too
