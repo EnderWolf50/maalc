@@ -178,6 +178,14 @@ export function cleanGiftList(list: GiftList): { list: GiftList; dropped: number
   return { list: { ...list, want, keep, gorder }, dropped: list.want.length - want.length + list.keep.length - keep.length };
 }
 
+/** Whether a loaded gift list has the shape the schema asks of want, keep and gorder, so cleaning it hides no schema error. */
+function wellFormed(l: GiftList) {
+  const ids = (v: unknown) => Array.isArray(v) && v.every((i) => Number.isInteger(i));
+  const gorder = l?.gorder;
+  return ids(l?.want) && ids(l?.keep) && !!gorder && typeof gorder === "object" && !Array.isArray(gorder)
+    && Object.entries(gorder).every(([k, v]) => GIFT_KEYWORDS.includes(k) && ids(v));
+}
+
 /** The gift list a version 10 team's keep settings come to, without id and name; lost: its keep_gifts that match no gift
  * (agent/settings.py _team_gift_list). */
 function listFromV10Team(team: Record<string, unknown>): { content: Omit<GiftList, "id" | "name">; lost: number } {
@@ -226,7 +234,7 @@ function giftListsFromV10(teams: Record<string, unknown>[]) {
 
 function migrateV10(d: Record<string, unknown>) {
   const teams = Array.isArray(d.teams) ? d.teams : [];
-  const objects = teams.filter((t): t is Record<string, unknown> => !!t && typeof t === "object");
+  const objects = teams.filter((t): t is Record<string, unknown> => !!t && typeof t === "object" && !Array.isArray(t));
   const { lists, ids, dropped } = giftListsFromV10(objects);
   const gift_list = new Map(objects.map((t, i) => [t, ids[i]]));
   return {
@@ -378,8 +386,14 @@ const MIGRATIONS: Record<number, (d: Record<string, unknown>) => Record<string, 
   9: (d) => withTeamDefault(d, { fusion_condition: "any" }),
   // Version 11 (#291) moves the shop's keep settings from the teams to gift lists: a list per team, teams that kept the same
   // share one; keep_keywords, keywordless, keep_gifts and fusion_condition go. A keywordless gift is always kept now.
-  10: (d) => migrateV10(d).data,
+  10: (d) => {
+    const { data, dropped } = migrateV10(d);
+    v10Dropped = dropped;
+    return data;
+  },
 };
+/** The version 10 keep_gifts the last migration found no gift for (parseSettings returns it). */
+let v10Dropped = 0;
 
 const MARK_WEIGHTS: Record<string, number> = { prefer: 5, neutral: 0, avoid: -5 };
 
@@ -398,18 +412,18 @@ export function parseSettings(text: string): { data: Settings; migrated: boolean
   if (!Number.isInteger(version)) throw new Error(`version must be an integer, got ${JSON.stringify(version)}`);
   if (version > VERSION) throw new Error(`settings version ${version} is newer than this GUI supports (${VERSION}); update maalc`);
   const migrated = version < VERSION;
-  let dropped = 0; // the version 10 keep_gifts that matched no gift
+  v10Dropped = 0;
   for (; version < VERSION; version++) {
     if (!MIGRATIONS[version]) throw new Error(`settings version ${version} cannot be migrated`);
-    if (version === 10) dropped = migrateV10(data).dropped;
     data = { ...MIGRATIONS[version](data), version: version + 1 };
   }
+  const dropped = v10Dropped;
   const lists = Array.isArray(data.gift_lists) ? data.gift_lists : [];
   let unknown = 0; // ids in a list that no data file has (a new season): dropped, the caller warns
   data = {
     ...data,
     gift_lists: lists.map((l: GiftList) => {
-      if (!l || !Array.isArray(l.want) || !Array.isArray(l.keep) || !l.gorder || typeof l.gorder !== "object") return l; // for the checks
+      if (!wellFormed(l)) return l; // the schema check names what is wrong
       const cleaned = cleanGiftList(l);
       unknown += cleaned.dropped;
       return cleaned.list;

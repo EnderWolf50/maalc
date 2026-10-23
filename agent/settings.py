@@ -236,6 +236,8 @@ def load_settings(root):
         f"{'/'.join(map(str, e.absolute_path)) or '(root)'}: {e.message}"
         for e in sorted(Draft202012Validator(SCHEMA).iter_errors(data), key=lambda e: list(map(str, e.absolute_path)))
     ]
+    if not errors:  # ids a new season dropped are ignored, as the GUI drops them on load
+        data["gift_lists"] = [clean_gift_list(gift_list)[0] for gift_list in data["gift_lists"]]
     # Cross-checks assume the structure is valid.
     errors = errors or cross_check(data)
     if errors:

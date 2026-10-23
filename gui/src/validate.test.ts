@@ -208,7 +208,16 @@ test("parseThemePacks reads the season's data file", () => {
   expect(parseThemePacks("")).toEqual({ packs: {}, default_plan: { weights: {}, threshold: 0, unlisted: 0, event_packs: "weight" } });
 });
 
-test("loading a file drops gift ids no data file has, fills gorder and counts them", () => {
+test("loading leaves a gift list with a wrong shape to the schema check", () => {
+  const file = structuredClone(cases.valid) as unknown as { gift_lists: Record<string, unknown>[] };
+  file.gift_lists[0].want = ["x"];
+  file.gift_lists[0].gorder = [];
+  const { data, unknown } = parseSettings(JSON.stringify(file));
+  expect(unknown).toBe(0);
+  expect(validate(data).map((p) => p.text.split(": ")[0]).sort()).toEqual(["gift_lists/0/gorder", "gift_lists/0/want/0"]);
+});
+
+test("loading drops gift ids no data file has, fills gorder and counts them", () => {
   const file = structuredClone(cases.valid) as unknown as { gift_lists: { want: number[]; keep: number[]; gorder: Record<string, number[]> }[] };
   file.gift_lists[0].want = [9053, 424242];
   file.gift_lists[0].keep = [9071, 5];

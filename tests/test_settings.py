@@ -105,7 +105,18 @@ def edited10(fn):
 
 
 def test_valid_settings_load(tmp_path):
-    assert load(tmp_path, VALID) == VALID
+    loaded = load(tmp_path, VALID)
+    assert {**loaded, "gift_lists": None} == {**VALID, "gift_lists": None}
+    assert loaded["gift_lists"] == [{**VALID["gift_lists"][0], "gorder": {**gift_list()["gorder"], "Burn": [9071, 9053] + [i for i in gift_list()["gorder"]["Burn"] if i not in (9071, 9053)]}}]
+
+
+def test_loading_drops_ids_no_data_file_has_and_fills_gorder(tmp_path):
+    # An id a new season removed is ignored, even when it is in want and keep (the GUI drops it on load and warns).
+    data = edited(lambda d: d["gift_lists"][0].update(want=[9053, 424242], keep=[9071, 424242], gorder={"Burn": [9071, 5]}))
+    loaded = load(tmp_path, data)["gift_lists"][0]
+    assert (loaded["want"], loaded["keep"]) == ([9053], [9071])
+    assert loaded["gorder"]["Burn"][:2] == [9071, 9053] and sorted(loaded["gorder"]["Burn"]) == sorted(gift_list()["gorder"]["Burn"])
+    assert list(loaded["gorder"]) == KEYWORDS
 
 
 def test_missing_file_asks_for_a_team(tmp_path):
@@ -344,7 +355,8 @@ def test_shared_cases(tmp_path, case):
 
 
 def test_shared_valid_loads(tmp_path):
-    assert load(tmp_path, CASES["valid"]) == CASES["valid"]
+    loaded = load(tmp_path, CASES["valid"])
+    assert {**loaded, "gift_lists": None} == {**CASES["valid"], "gift_lists": None}  # the list is cleaned on load
 
 
 def test_shared_valid10_migrates_and_loads(tmp_path):
