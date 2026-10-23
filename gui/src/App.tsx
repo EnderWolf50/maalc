@@ -4,6 +4,7 @@ import * as api from "./api";
 import { TEXT, type Key } from "./i18n";
 import { newSettings, parseSettings, runEnum, type Settings } from "./model";
 import { DeploymentTab, StarlightTab, ThemePackTab } from "./Plans";
+import { GiftListsTab } from "./GiftLists";
 import { TeamsTab } from "./Teams";
 import { EditorContext, Field, Num, Select, ToggleNum, useEditor, type Ctx } from "./ui";
 import { validate, type Problem } from "./validate";
@@ -11,6 +12,7 @@ import { validate, type Problem } from "./validate";
 const TABS = [
   ["run", "tab.run", RunTab, ["run"]],
   ["teams", "tab.teams", TeamsTab, ["teams"]],
+  ["gifts", "tab.gifts", GiftListsTab, ["gift_lists"]],
   ["deployment", "tab.deployment", DeploymentTab, ["deployment_order_plans"]],
   ["starlight", "tab.starlight", StarlightTab, ["starlight_plans"]],
   ["themepacks", "tab.themepacks", ThemePackTab, ["theme_pack_plans"]],

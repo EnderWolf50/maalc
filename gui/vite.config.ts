@@ -1,4 +1,4 @@
-import { defineConfig } from "vite";
+import { defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react";
 
 // Tauri expects a fixed port (tauri.conf.json devUrl).
@@ -12,4 +12,6 @@ export default defineConfig({
     fs: { allow: [".."] },
     watch: { ignored: ["**/src-tauri/**"] },
   },
+  // Component tests (src/*.test.tsx) render into jsdom; the pure-function tests do not care which environment they run in.
+  test: { environment: "jsdom", setupFiles: ["./src/test-setup.ts"] },
 });

@@ -16,7 +16,7 @@ export interface GiftTables { buyable: { id: number }[]; fusions: Fusion[] }
 const GAME_TABLES: GiftTables = { buyable: SEARCH_GIFTS, fusions: recipes.gifts };
 
 /** The data file's default list: the fields of a gift list without id and name. */
-export const DEFAULT_LIST: ListRules = parseYaml(listsYaml).default_list;
+export const DEFAULT_LIST: Omit<GiftList, "id" | "name"> = parseYaml(listsYaml).default_list;
 
 /** The list a team's `gift_list` names: "default" is the data file's list; undefined when no list has that id. */
 export const resolveList = (ref: string, lists: GiftList[]): ListRules | undefined =>
