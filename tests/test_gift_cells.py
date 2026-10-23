@@ -55,15 +55,13 @@ def test_two_icons_that_both_match_leave_the_cell_unknown():
 def fake_context(scores, seen=None):
     """A context whose run_recognition scores each template by `scores` ({template: score}), 0 for any other; it
     appends the templates asked for to `seen`."""
-    from types import SimpleNamespace
-
     def run_recognition(name, image, override):
         node = override[name]
         if seen is not None:
             seen.append(node["template"])
         score = scores.get(node["template"], 0.0)
-        return SimpleNamespace(best_result=SimpleNamespace(score=score))
-    return SimpleNamespace(run_recognition=run_recognition)
+        return types.SimpleNamespace(best_result=types.SimpleNamespace(score=score))
+    return types.SimpleNamespace(run_recognition=run_recognition)
 
 
 def test_a_cell_takes_only_an_icon_of_its_own_keyword_and_tier():
@@ -214,7 +212,7 @@ def test_no_other_capture_names_a_gift(read):
     # Every tests/screens capture at the three layouts (a false id on a gift-less screen would fail here).
     assert read["sweep"] == {
         "Shop offer": [[1, 9123], [2, 9198], [3, 9150], [4, 9086]],
-        "ShopFuse fuse": [[i, g_] for i, g_ in enumerate(OWNED)],
+        "ShopFuse fuse": [[i, gift] for i, gift in enumerate(OWNED)],
         "SuperShop offer": [[3, 9187], [4, 9009], [5, 9102], [6, 9063], [7, 9163]],
     }
 

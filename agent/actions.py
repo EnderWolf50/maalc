@@ -2713,6 +2713,7 @@ BADGES = ["Burn", "Bleed", "Tremor", "Rupture", "Sinking", "Poise", "Charge", "S
 # cell's best 0.41; 160 cells of 60 live captures. An observed gift's icon: Spiderweb's thin lines 0.5-0.6, others 0.86+.
 BADGE_MIN, ICON_KEEP = 0.5, 0.45
 GIFTS = gift_cells.load()  # every gift a cell may show (#297)
+GIFT_NAMES = {e["id"]: e["en"] for e in GIFTS}
 CELL_ICON_ROI = 70  # px square around a cell's centre on the scaled grid where its icon is looked for: the biggest icon (54 px) +-8
 FUSE_CONFIRM = [300, 150, 680, 380]  # "Selected E.G.O Gifts 3/5" over "Fuse the selected E.G.O Gifts?"
 FUSE_COUNT = r"(\d)\s*/\s*\d"  # its "3/5": the materials in
@@ -2885,14 +2886,14 @@ def offer_cell(slot):
 
 
 def cell_line(cell, role):
-    """One cell read for the log: "0 III Keywordless Spiderweb Entangled in Red 9273 (0.63): keep"; an unknown gift "unknown (best 0.38)" (#297)."""
+    """One cell read for the log: "2 III Bleed 9042 Smokes and Wires (0.77): keep", an unknown gift "unknown (best 0.38)" (#297)."""
     tier = "I II III IV V".split()[cell["tier"] - 1] if cell["tier"] else "?"
     return f"{cell['i']} {tier} {cell['keyword'] or 'badge unread'}{' ' + cell['gift'] if cell['gift'] else ''} {gift_shown(cell)}: {role}"
 
 
 def gift_shown(cell):
     """The gift a read cell was taken for, for the log: "9042 Smokes and Wires (0.77)", or "unknown (best 0.38)" (#297)."""
-    named = next((e["en"] for e in GIFTS if e["id"] == cell["id"]), None)
+    named = GIFT_NAMES.get(cell["id"])
     return f"{cell['id']} {named} ({cell['score']:.2f})" if named else f"unknown (best {cell['score']:.2f})"
 
 
