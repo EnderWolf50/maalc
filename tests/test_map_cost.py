@@ -7,6 +7,7 @@ child process: this file run as a script, as test_map_shop.py does.
 """
 
 import json
+import re
 import subprocess
 import sys
 import tempfile
@@ -21,6 +22,7 @@ from PIL import Image
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "agent"))  # run as a script: as pytest's pythonpath has it
 
+SCREENS = ROOT / "tests" / "screens"
 COIN = (26, 24)  # the Cost coin template's size: the box node_at hands coin_text
 # Labelled by eye: image -> [x, y, the number printed] of each lit or dimmed node coin (not the resource bar's).
 # 2026-10-22 live, floor 3 (MapCostFloor3) and floor 4 (MapCostFloor4): a 100 read None, a 120 read 20.
@@ -31,7 +33,7 @@ COINS = json.loads((ROOT / "tests" / "data" / "map_costs.json").read_text(encodi
 # PauseExploration and ProgressPanel show the same one.
 UNREAD = {("GiftGetOverMap.png", 1221, 438), ("PauseExploration.png", 1221, 438), ("ProgressPanel.png", 1221, 438)}
 # Live crops of coins the pale link's arrow tip touched (#284), read as '7', '8', '.175' or nothing; the coin sits at (8, 8)
-# in a crop. File name: the number printed.
+# in a crop. File name: <difficulty><number printed>-<tag>.
 CROPS = sorted((ROOT / "tests" / "data" / "cost_crops").glob("*.png"))
 CROP_COIN = (8, 8, *COIN)
 # node_at end to end on a floor of the given difficulty: (image, node centre, hard) -> type
@@ -68,14 +70,14 @@ def child():
 
     out = {}
 
-    def load(name):
-        return np.asarray(Image.open(ROOT / "tests" / "screens" / name).convert("RGB"))[:, :, ::-1].copy()
+    def load(path):
+        return np.asarray(Image.open(path).convert("RGB"))[:, :, ::-1].copy()
 
     class Probe(CustomAction):
         def run(self, context, argv):
             try:
                 for name, coins in COINS.items():
-                    image = load(name)
+                    image = load(SCREENS / name)
                     for x, y, _ in coins:
                         out[f"{name} {x} {y}"] = actions.coin_number(actions.coin_text(context, image, (x, y, *COIN)))
                 for crop in CROPS:
@@ -84,7 +86,7 @@ def child():
                     actions.ROOT = Path(logs)  # a miss keeps its crop under logs/cost
                     for name, cx, cy, hard in NODES:
                         actions.RUN.update(settings={}, difficulty="hard" if hard else "normal", floor_hard=hard)
-                        out[f"node {name} {cx} {cy}"] = actions.node_at(context, load(name), cx, cy)
+                        out[f"node {name} {cx} {cy}"] = actions.node_at(context, load(SCREENS / name), cx, cy)
             except Exception:  # MaaFramework swallows it: hand it to the test
                 out["error"] = traceback.format_exc()
             return True
@@ -132,8 +134,8 @@ def test_the_live_misreads_read_right(read):
 
 @pytest.mark.parametrize("crop", [pytest.param(c, id=c.stem) for c in CROPS])
 def test_a_coin_under_a_link_arrow_reads_whole(read, crop):
-    # #284: the arrow's tip, as cream as the digits, touched the 5 and the OCR read '7' or '8' (8 + 3 live misses)
-    assert read[f"crop {crop.name}"] == (75 if crop.name.startswith("normal") else 85)
+    # #284: the arrow's tip, as cream as the digits, touched the 5 and the OCR read '7' or '8' (7 + 3 distinct live misses)
+    assert read[f"crop {crop.name}"] == int(re.search(r"\d+", crop.stem)[0])
 
 
 def test_the_sweep_has_no_unlisted_miss(read):
