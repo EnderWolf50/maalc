@@ -12,12 +12,13 @@
     "deployment_order_plans",
     "starlight_plans",
     "theme_pack_plans",
+    "gift_lists",
     "teams",
     "event_overrides",
     "trial_risk_overrides"
   ],
   "properties": {
-    "version": { "const": 10 },
+    "version": { "const": 11 },
     "language": { "enum": ["zh_tw", "en_us"], "default": "zh_tw" },
     "run": {
       "type": "object",
@@ -116,6 +117,11 @@
         }
       }
     },
+    "gift_lists": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/gift_list" },
+      "description": "the user's gift lists (docs/spec/04-settings.md section 13); teams[].gift_list \"default\" names the data-file list"
+    },
     "teams": {
       "type": "array",
       "description": "Order is rotation order.",
@@ -142,12 +148,9 @@
           "trial_risk_weight",
           "gift_search",
           "allow_white_gossypium",
-          "keep_keywords",
-          "keywordless",
-          "keep_gifts",
+          "gift_list",
           "sell_max_tier",
-          "sell_vestiges",
-          "fusion_condition"
+          "sell_vestiges"
         ],
         "properties": {
           "id": { "$ref": "#/$defs/id" },
@@ -247,24 +250,11 @@
             "default": true,
             "description": "off: never take or buy White Gossypium; owned ones are fused or sold first"
           },
-          "keep_keywords": {
-            "type": "array",
-            "uniqueItems": true,
-            "items": { "enum": ["Burn", "Bleed", "Tremor", "Rupture", "Sinking", "Poise", "Charge", "Slash", "Pierce", "Blunt"] },
-            "default": [],
-            "description": "keywords besides the main one whose gifts the shop never fuses or sells"
-          },
-          "keywordless": {
-            "enum": ["keep", "fuse", "fuse_or_sell"],
-            "default": "keep",
-            "description": "keywordless gifts in the shop: keep (never fused or sold), fuse (fusion material, never sold), fuse_or_sell"
-          },
-          "keep_gifts": {
-            "type": "array",
-            "uniqueItems": true,
-            "items": { "anyOf": [{ "$ref": "#/$defs/gift" }, { "$ref": "#/$defs/vestige" }] },
-            "default": [],
-            "description": "gifts the shop never fuses or sells: a Gift Search gift (told by its icon) or a vestige (by its name)"
+          "gift_list": {
+            "type": "string",
+            "minLength": 1,
+            "default": "default",
+            "description": "\"default\" or the id of a gift_lists entry: what the shop buys, keeps, sells and fuses"
           },
           "sell_max_tier": {
             "type": "integer",
@@ -277,11 +267,6 @@
             "type": "boolean",
             "default": false,
             "description": "the shop may sell vestiges (pure fusion-material gifts, data/shop.yaml); off: never sold"
-          },
-          "fusion_condition": {
-            "enum": ["any", "upgrade", "tier4"],
-            "default": "any",
-            "description": "when the shop fuses (#263): any (whenever there are materials, groups that upgrade first), upgrade (only a tier above the highest material), tier4 (only a tier IV)"
           }
         }
       }
@@ -337,6 +322,44 @@
         },
         "tier": { "type": "integer", "minimum": 1, "maximum": 3 },
         "name": { "type": "string", "minLength": 1, "description": "English name as the game shows it" }
+      }
+    },
+    "gift_id": { "type": "integer", "minimum": 1, "description": "a gift's id in data/gift_search.json, data/gift_recipes.json or the vestiges 9991-9995" },
+    "gift_list": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "order", "want", "keep", "gorder", "fusion_condition"],
+      "description": "a gift list (#291): every gift not in want or keep is drop. Ids are not checked against the data files (a season change drops some); gorder is not checked to be a permutation",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id",
+          "not": { "const": "default" },
+          "description": "\"default\" names the data-file list in teams[].gift_list"
+        },
+        "name": { "$ref": "#/$defs/name" },
+        "order": {
+          "type": "array",
+          "minItems": 11,
+          "maxItems": 11,
+          "uniqueItems": true,
+          "items": { "enum": ["Burn", "Bleed", "Tremor", "Rupture", "Sinking", "Poise", "Charge", "Slash", "Pierce", "Blunt", "Keywordless"] },
+          "default": ["Burn", "Bleed", "Tremor", "Rupture", "Sinking", "Poise", "Charge", "Slash", "Pierce", "Blunt", "Keywordless"],
+          "description": "the keywords in buying order, the first bought first"
+        },
+        "want": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/gift_id" }, "default": [], "description": "buy; a fusion gift is fused once its materials are there" },
+        "keep": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/gift_id" }, "default": [], "description": "never bought, fused or sold" },
+        "gorder": {
+          "type": "object",
+          "propertyNames": { "enum": ["Burn", "Bleed", "Tremor", "Rupture", "Sinking", "Poise", "Charge", "Slash", "Pierce", "Blunt", "Keywordless"] },
+          "additionalProperties": { "type": "array", "items": { "$ref": "#/$defs/gift_id" } },
+          "default": {},
+          "description": "keyword -> its gifts in buying order, across tiers; a gift it lacks goes last in data-file order, an id the keyword does not have is dropped"
+        },
+        "fusion_condition": {
+          "enum": ["any", "upgrade", "tier4"],
+          "default": "any",
+          "description": "when the shop fuses (#263): any (whenever there are materials, groups that upgrade first), upgrade (only a tier above the highest material), tier4 (only a tier IV)"
+        }
       }
     },
     "name": { "type": "string", "minLength": 1 },

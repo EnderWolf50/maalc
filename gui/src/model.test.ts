@@ -1,9 +1,11 @@
 // The click rules of the team page's sinner grid and starlight cards.
 import { expect, test } from "vitest";
 import {
-  SEARCH_GIFTS, SEARCH_TABS, buyOrder, clickCard, clickEnhance, enhanceAll, gracePrice, lanesOf, lineAt, newPackPlan, newSettings,
-  floorBadges, onFloor, selectAll, starlightCost, toggleGift, toggleSinner, weightOf, type StarlightValues,
+  GIFT_KEYWORDS, SEARCH_GIFTS, SEARCH_TABS, buyOrder, clickCard, clickEnhance, defaultGorder, enhanceAll, exportGiftList, gracePrice,
+  importGiftList, lanesOf, lineAt, newPackPlan, newSettings, newTeam, floorBadges, onFloor, selectAll, starlightCost, toggleGift, toggleSinner,
+  weightOf, type GiftList, type StarlightValues,
 } from "./model";
+import { validate } from "./validate";
 
 test("a pack shows on the floors the data file gives it", () => {
   expect(onFloor("N12 H1", "", 0)).toBe(true);
@@ -142,4 +144,53 @@ test("a card's price is its base price times 1, 2 or 3", () => {
 
 test("a new settings file forfeits a run whose wipe retries ran out instead of stopping the batch (#95)", () => {
   expect(newSettings().run.after_retries).toBe("forfeit");
+});
+
+const SHARED: GiftList = {
+  id: "g1", name: "Fire", order: GIFT_KEYWORDS, want: [9053], keep: [9071], gorder: { Burn: [9071, 9053] }, fusion_condition: "tier4",
+};
+
+test("the default gorder lists a keyword's buyable gifts tier III first, in data-file order", () => {
+  const burn = defaultGorder().Burn;
+  expect(burn).toHaveLength(22);
+  expect(burn.slice(0, 2)).toEqual([9053, 9071]);
+  expect(Object.keys(defaultGorder())).toEqual(GIFT_KEYWORDS);
+});
+
+test("a gift list exports without its id and imports as a new list that passes the checks", () => {
+  const text = exportGiftList(SHARED);
+  expect(JSON.parse(text)).toEqual({ name: "Fire", order: GIFT_KEYWORDS, want: [9053], keep: [9071], gorder: { Burn: [9071, 9053] }, fusion_condition: "tier4" });
+  const { list, skipped } = importGiftList(text, ["Fire（匯入）"], "（匯入）");
+  expect(skipped).toBe(0);
+  expect(list.name).toBe("Fire（匯入） 2");
+  expect(list.id).not.toBe("g1");
+  expect(list.fusion_condition).toBe("tier4");
+  expect(list.gorder.Burn.slice(0, 2)).toEqual([9071, 9053]);
+  expect(list.gorder.Bleed).toEqual(defaultGorder().Bleed);
+  const s = newSettings();
+  s.gift_lists.push(list);
+  s.teams.push({ ...newTeam(1, "T"), gift_list: list.id });
+  expect(validate(s)).toEqual([]);
+});
+
+test("an import skips bad ids and falls back to the defaults", () => {
+  const messy = JSON.stringify({
+    name: "X", order: ["Burn"], want: [9053, 9053, 12345, "9071", 1.5], keep: [9053, 9071, 9991, 77], gorder: { Burn: "no", Fire: [1] },
+    fusion_condition: "aggressive",
+  });
+  const { list, skipped } = importGiftList(messy, [], "（匯入）");
+  expect(list.name).toBe("X（匯入）");
+  expect(list.order).toEqual(GIFT_KEYWORDS); // not all 11 keywords once
+  expect(list.want).toEqual([9053]); // the repeat, an unknown id and the ones that are not ids go
+  expect(list.keep).toEqual([9071, 9991]); // a wanted gift is not kept too
+  expect(skipped).toBe(4); // "9071" and 1.5 are not ids, 12345 and 77 are no gift
+  expect(list.fusion_condition).toBe("any");
+  expect(list.gorder.Burn).toEqual(defaultGorder().Burn);
+  expect(Object.keys(list.gorder)).toEqual(GIFT_KEYWORDS);
+});
+
+test("an import of something that is not a gift list throws", () => {
+  expect(() => importGiftList("{", [], "")).toThrow();
+  expect(() => importGiftList("[1]", [], "")).toThrow("not a gift list");
+  expect(() => importGiftList("null", [], "")).toThrow("not a gift list");
 });

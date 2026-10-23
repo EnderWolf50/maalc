@@ -43,7 +43,7 @@ export function crossCheck(data: Settings): Problem[] {
     }
   };
 
-  const planKeys = ["deployment_order_plans", "starlight_plans", "theme_pack_plans"] as const;
+  const planKeys = ["deployment_order_plans", "starlight_plans", "theme_pack_plans", "gift_lists"] as const;
   const planIds: Record<string, Set<string>> = {};
   for (const key of planKeys) {
     planIds[key] = new Set(data[key].map((p) => p.id));
@@ -69,12 +69,20 @@ export function crossCheck(data: Settings): Problem[] {
       ["deployment_order", plan(t.deployment_order), "deployment_order_plans"],
       ["starlight", plan(t.starlight), "starlight_plans"],
       ["theme_pack_plan", t.theme_pack_plan === "default" ? null : t.theme_pack_plan, "theme_pack_plans"],
+      ["gift_list", t.gift_list === "default" ? null : t.gift_list, "gift_lists"],
     ];
     for (const [field, ref, key] of refs) {
       if (ref !== null && !planIds[key].has(ref)) {
         const path = `teams/${i}/${field}`;
         errors.push({ paths: [path], text: `${path}: team ${pyRepr(t.name)} uses missing plan ${pyRepr(ref)} (not in ${key})` });
       }
+    }
+  });
+
+  data.gift_lists.forEach((list, i) => {
+    for (const id of list.want.filter((g) => list.keep.includes(g))) {
+      const path = `gift_lists/${i}`;
+      errors.push({ paths: [path], text: `${path}: list ${pyRepr(list.name)} has gift ${id} in both want and keep` });
     }
   });
 
