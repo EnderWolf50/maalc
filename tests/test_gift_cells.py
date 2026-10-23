@@ -29,18 +29,22 @@ def test_a_cell_is_matched_against_the_gifts_of_its_keyword_and_tier():
     assert {9991} <= ids("Keywordless", 1)
 
 
-def test_the_table_holds_every_gift_of_the_game_data_with_a_name_of_its_own():
-    # #332: the 464 named ids of 9000-9999 in the unpacked static data (9247 has no name nor icon), the pack-exclusive gifts no recipe uses included.
-    from local_dir import local_dir  # noqa: PLC0415  # the pytest process only (the child below has no tools/ path)
+def test_no_two_candidates_share_an_id_or_an_english_name():
     table = g.load()
-    ids = [e["id"] for e in table]
-    assert len(ids) == len(set(ids))
-    if (unpack := local_dir("unpack")).joinpath("static").is_dir():
-        import gift_recipes  # noqa: PLC0415
-        named = gift_recipes.english_names(unpack)
-        assert {i for i in gift_recipes.gift_table(unpack) if 9000 <= i <= 9999 and i in named} == set(ids)
-    names = [e["en"] for e in table if e["en"]]
-    assert len(names) == len(set(names))  # the name tag match (#329) needs a name to name one gift
+    assert len({e["id"] for e in table}) == len(table)
+    assert len({e["en"] for e in table}) == len(table)  # the name tag match (#329) needs a name to name one gift
+
+
+def test_the_table_holds_every_named_gift_of_the_game_data_when_it_is_unpacked():
+    # #332: ids 9000-9999 of the static data; only 9247 (no name, no icon sprite) is left out, so a new unnamed id fails here.
+    from local_dir import local_dir  # noqa: PLC0415  # the pytest process only (the child below has no tools/ path)
+    import gift_recipes  # noqa: PLC0415
+    if not (unpack := local_dir("unpack")).joinpath("static").is_dir():
+        pytest.skip("no unpacked game data")
+    named = gift_recipes.english_names(unpack)
+    ids = {i for i in gift_recipes.gift_table(unpack) if 9000 <= i <= 9999}
+    assert ids - set(named) == {9247}
+    assert {e["id"] for e in g.load()} == ids & set(named)
 
 
 def test_a_cell_whose_tier_or_badge_is_unread_has_no_candidates():

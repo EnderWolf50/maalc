@@ -31,7 +31,7 @@ ICONS = REPO / "assets/resource/base/image/GiftRecipe"
 STATIC = "static/Assets/Resources_moved/StaticData/static-data"
 KEYWORDS = {"Combustion": "Burn", "Laceration": "Bleed", "Vibration": "Tremor", "Burst": "Rupture", "Sinking": "Sinking",
             "Breath": "Poise", "Charge": "Charge", "Slash": "Slash", "Penetrate": "Pierce", "Hit": "Blunt"}  # the rest: Keywordless
-EXTRA_IDS = range(9000, 10000)  # the game's gift ids; `extra_gifts` holds those neither the shop, a recipe nor the vestiges list (#332)
+GIFT_IDS = range(9000, 10000)  # the game's gift ids; `extra_gifts` holds those neither the shop, a recipe nor the vestiges list (#332)
 VESTIGE_IDS = range(9991, 9996)
 SCALE = 0.21  # the icon on the Gift Search page, as for GiftSearch/<id>.png
 NOTE = ("Fusion gifts and their recipes. Recipes: combineFixed (any one of a gift's `recipes` fuses it; each is a list of the "
@@ -105,7 +105,7 @@ def build(unpack, release):
     used = {i for r in recipes.values() for rec in r for i in rec} | {i for gs in groups.values() for grp in gs for i in grp["ids"]}
     materials = [entry(i) for i in sorted(used - searchable - set(results))]
     listed = searchable | set(results) | {m["id"] for m in materials} | set(VESTIGE_IDS)
-    extra = [entry(i) for i in sorted(table) if i in EXTRA_IDS and i in en and i not in listed]
+    extra = [entry(i) for i in sorted(table) if i in GIFT_IDS and i in en and i not in listed]
     return {"note": NOTE, **credit(release), "gifts": gifts, "materials": materials, "extra_gifts": extra}, table
 
 
