@@ -9,7 +9,9 @@ import { plan, setState, GiftEditContext, type GiftEdit } from "./giftEdit";
 import { DEFAULT_LIST, type GiftState } from "./gifts";
 import { fill } from "./i18n";
 import { FUSION_CONDITIONS, GIFT_KEYWORDS } from "./model";
-import { KeywordPanel, KeywordTabs } from "./KeywordGrid";
+import { HelpPopover } from "./GiftHelp";
+import { GiftPopover, useGiftTip } from "./GiftPopover";
+import { KeywordPanel, KeywordTabs, SearchResults } from "./KeywordGrid";
 import { useEditor } from "./ui";
 
 const STATES: GiftState[] = ["want", "keep", "drop"];
@@ -50,18 +52,53 @@ export function GiftListsTab() {
     if (result.downgraded) flash(fill(t("gl.unbuyable_keep"), { name }), true);
     else setMessage({ text: "", warn: false });
   };
-  const edit: GiftEdit = { list, readOnly, pick, apply, flash };
+  const { open, tip } = useGiftTip();
+  const [query, setQuery] = useState("");
+  const [help, setHelp] = useState(false);
+  const [jump, setJump] = useState<number | null>(null);
+  const searchBox = useRef<HTMLInputElement>(null);
+  const searching = query.trim() !== "";
+  /** Show a gift: its keyword's tab (leaving the search), then its tile focused once the tab is on screen. */
+  const goto = (id: number) => { tip.hide(); setQuery(""); setTab(GIFT_BY_ID.get(id)!.keyword); setJump(id); };
+  useEffect(() => {
+    if (jump === null) return;
+    const el = document.querySelector<HTMLElement>(`[data-gift="${jump}"]`);
+    el?.focus();
+    el?.scrollIntoView?.({ block: "center" });
+    setJump(null);
+  }, [jump]);
+  const edit: GiftEdit = { list, readOnly, pick, apply, flash, tip, goto };
 
-  // 1, 2 and 3 pick the state, unless the user is typing or choosing in a field.
+  // 1, 2 and 3 pick the state, unless the user is typing or choosing in a field; / jumps to the search box; Esc closes the popover,
+  // then the help, then clears the search.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        if (open) tip.hide();
+        else if (help) setHelp(false);
+        else if (query) setQuery("");
+        return;
+      }
+      const typing = (e.target as HTMLElement).closest("input, select, textarea");
+      if (e.key === "/" && !typing && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        e.preventDefault();
+        searchBox.current?.focus();
+        return;
+      }
       const state = STATES[Number(e.key) - 1];
-      if (!state || e.ctrlKey || e.metaKey || e.altKey || (e.target as HTMLElement).closest("input, select, textarea")) return;
+      if (!state || e.ctrlKey || e.metaKey || e.altKey || typing) return;
       setPick(state);
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, []);
+  }, [open, help, query, tip]);
+  // A click anywhere but the help closes it.
+  useEffect(() => {
+    if (!help) return;
+    const onDown = (e: MouseEvent) => { if (!(e.target as HTMLElement).closest(".gl-helpwrap")) setHelp(false); };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [help]);
 
   const empty = !readOnly && !list.want.length && !list.keep.length;
   const startFromDefault = () => update((d) => {
@@ -80,8 +117,10 @@ export function GiftListsTab() {
                 {s.gift_lists.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
               </select>
             </label>
-            {/* #308: the list options menu goes here; #307: search and help at the end of the bar. */}
+            {/* #308: the list options menu goes here. */}
             {readOnly && <span className="gl-readonly">{t("gl.readonly")}</span>}
+            <input ref={searchBox} type="search" className="gl-search" aria-label={t("gl.search")} placeholder={t("gl.search_ph")}
+              value={query} onChange={(e) => setQuery(e.target.value)} />
             <span className="spacer" />
             <label title={t("team.fusion_condition_note")}>{t("team.fusion_condition")}{" "}
               <select value={list.fusion_condition}
@@ -89,6 +128,12 @@ export function GiftListsTab() {
                 {FUSION_CONDITIONS.map((v) => <option key={v} value={v}>{tv("fusion_condition", v)}</option>)}
               </select>
             </label>
+            <span className="gl-helpwrap">
+              <button type="button" aria-haspopup="dialog" aria-expanded={help} className={help ? "on" : ""} onClick={() => setHelp(!help)}>
+                {t("gl.help")} ▾
+              </button>
+              {help && <HelpPopover />}
+            </span>
           </div>
           <div className="gl-apply">
             <div className="gl-pick" role="radiogroup" aria-label={t("gl.apply")} onKeyDown={(e) => {
@@ -112,17 +157,18 @@ export function GiftListsTab() {
           </div>
           <div className={"gl-flash" + (message.warn ? " warn" : "")} role="status" aria-live="polite">{message.text}</div>
         </div>
-        <KeywordTabs tab={tab} onTab={setTab} />
-        <section className="gl-panel" id="gl-panel" role="tabpanel" aria-labelledby={`gl-tab-${tab}`}>
-          {empty && (
+        <KeywordTabs tab={searching ? "" : tab} onTab={(k) => { setQuery(""); setTab(k); }} />
+        <section className="gl-panel" id="gl-panel" role="tabpanel" aria-labelledby={searching ? undefined : `gl-tab-${tab}`}>
+          {empty && !searching && (
             <div className="gl-empty">
               <b>{t("gl.empty")}</b>
               <p>{t("gl.empty_note")}</p>
               <button type="button" onClick={startFromDefault}>{t("gl.from_default")}</button>
             </div>
           )}
-          <KeywordPanel keyword={tab} />
+          {searching ? <SearchResults query={query} onClear={() => setQuery("")} /> : <KeywordPanel keyword={tab} />}
         </section>
+        {open && <GiftPopover id={open.id} anchor={open.anchor} />}
       </div>
     </GiftEditContext.Provider>
   );

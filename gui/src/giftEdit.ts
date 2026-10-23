@@ -20,6 +20,15 @@ export function setState(list: GiftList, id: number, to: GiftState) {
   if (to !== "drop") list[to].push(id);
 }
 
+/** The hover popover of a gift tile: `show` it for a tile (it stays while the pointer is on the tile or the popover), `leave` starts
+ * the close delay (`keep` cancels it), `hide` closes it at once (a drag, #296, calls this). */
+export interface GiftTip {
+  show: (id: number, anchor: HTMLElement) => void;
+  keep: () => void;
+  leave: () => void;
+  hide: () => void;
+}
+
 /** What the tab hands its parts: the list being shown, whether it can change, the state a click applies. */
 export interface GiftEdit {
   list: ListRules;
@@ -30,6 +39,9 @@ export interface GiftEdit {
   apply: (id: number, to?: GiftState) => void;
   /** Show a line in the status area under the apply bar. */
   flash: (message: string, warn?: boolean) => void;
+  tip: GiftTip;
+  /** Show a gift: its keyword's tab, its tile focused. */
+  goto: (id: number) => void;
 }
 export const GiftEditContext = createContext<GiftEdit>(null!);
 export const useGiftEdit = () => useContext(GiftEditContext);
