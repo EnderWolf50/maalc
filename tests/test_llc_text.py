@@ -50,6 +50,20 @@ def test_traditional_conversion_keeps_the_game_s_words():
     assert llc_text.effect_line("获得{2}层 {1}", {"referenceData": {"buffKeyword": "K", "stack": 2, "turn": 0}}, {"K": "守护"}) == "獲得2層 守護"
 
 
+def test_a_rerun_without_a_release_keeps_the_one_the_data_carries(tmp_path, monkeypatch):
+    import llc_text
+    assert llc_text.current_release() == DATA["gift_search"]["zh_release"]
+    (tmp_path / "gift_search.json").write_text('{"zh_release": "2099010101"}', encoding="utf-8")
+    monkeypatch.setattr(llc_text, "DATA", tmp_path)
+    assert llc_text.current_release() == "2099010101"
+
+
+def test_an_effect_missing_a_value_its_template_needs_is_an_error():
+    import llc_text
+    with pytest.raises(ValueError):
+        llc_text.effect_line("获得{0}层", {"referenceData": {"buffKeyword": "K", "stack": 2, "turn": 0}}, {"K": "守护"})
+
+
 def test_the_graces_match_the_llc_release_and_the_client_values_when_both_are_there():
     import llc_text
     from local_dir import local_dir

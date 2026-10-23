@@ -1,6 +1,6 @@
 """Chinese names and starlight-grace text from the Localize Limbus Company (LLC) release, written into the data files.
 
-Usage: uv run --group unpack python tools/llc_text.py [--release 2026101602]
+Usage: uv run --group unpack python tools/llc_text.py [--release <tag>]  (default: the release the data files carry)
 Downloads `LimbusLocalize_<release>.zip` from https://github.com/LocalizeLimbusCompany/LocalizeLimbusCompany/releases
 (cached under `.local/llc/`) and rewrites the `zh` of assets/resource/base/data/gift_search.json and gift_recipes.json
 (from `LLC_zh-CN/EGOgift_*.json`, by gift id) and gui/src/graces.json (names: `MirrorDungeonUI_5.json`
@@ -23,7 +23,6 @@ from local_dir import local_dir
 REPO = Path(__file__).resolve().parent.parent
 DATA = REPO / "assets/resource/base/data"
 GRACES = REPO / "gui/src/graces.json"
-RELEASE = "2026101602"
 LANG = "LimbusCompany_Data/Lang/LLC_zh-CN/"
 URL = "https://github.com/LocalizeLimbusCompany/LocalizeLimbusCompany/releases/download/{0}/LimbusLocalize_{0}.zip"
 LEVELS = {1: "base", 2: "plus", 3: "plus2"}
@@ -44,6 +43,11 @@ NOTE_ZH = ("Chinese names: the Localize Limbus Company release's LLC_zh-CN/EGOgi
 NOTE_GRACES = ("Chinese names and effect text: the Localize Limbus Company release (Simplified Chinese): MirrorDungeonUI_5 titles and "
                "DungeonStartBuffs_MD7 templates filled with the client's start-buff values, converted with OpenCC s2twp, then " + FIXES_NOTE + ". English "
                "names: the game's starlight page. Licensed CC BY-NC-SA 4.0 (see NOTICE.md).")
+
+
+def current_release():
+    """The release the data files were last written from (what a rerun without --release keeps)."""
+    return json.loads((DATA / "gift_search.json").read_text(encoding="utf-8"))["zh_release"]
 
 
 def release_zip(release):
@@ -73,7 +77,8 @@ def gift_names(z):
 
 
 def needed(value, template):
-    assert value is not None, f"template needs a value the effect lacks: {template}"
+    if value is None:
+        raise ValueError(f"template needs a value the effect lacks: {template}")
     return value
 
 
@@ -85,7 +90,7 @@ def effect_line(template, values, keyword_names):
 
 
 def grace_texts(z, static):
-    """buff level -> grace base id -> [effect lines], and base id -> title, in the game's own wording."""
+    """(base id -> title, base id -> {base, plus, plus2} -> [effect lines]) of the start-buff graces, in the game's own wording."""
     templates = {x["id"]: x["description"] for x in read(z, "DungeonStartBuffs_MD7.json")}
     keywords = {}
     for f in files(z, "Bufs") + files(z, "BattleKeywords"):
@@ -111,7 +116,7 @@ def credit(release):
 
 
 def retitled(data, release, note):
-    """data with the wiki keys dropped and `note`, the credit first; the other keys keep their order."""
+    """data with `note` and the credit (replacing any earlier credit keys) first; the other keys keep their order."""
     drop = {"note", "license", "license_url", "zh_source", "zh_release"}
     return {"note": note, **credit(release), **{k: v for k, v in data.items() if k not in drop}}
 
@@ -125,7 +130,7 @@ def dump_search(data):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--release", default=RELEASE)
+    parser.add_argument("--release", default=current_release(), help="the LLC release tag; default: the one the data files carry")
     args = parser.parse_args()
     z = release_zip(args.release)
     names = gift_names(z)

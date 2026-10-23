@@ -76,7 +76,7 @@ def build(unpack, release):
 
     def entry(gid):
         tier, keyword, _ = table[gid]
-        return {"id": gid, "keyword": keyword, "tier": tier, "en": en[gid], "zh": zh.get(gid, "")}
+        return {"id": gid, "keyword": keyword, "tier": tier, "en": en[gid], "zh": zh[gid]}  # a gift the release lacks stops the run
 
     results = sorted(recipes.keys() | groups.keys(), key=lambda g: (-table[g][0], g))
     gifts = [{**entry(g), **({"recipes": recipes[g]} if g in recipes else {"groups": groups[g]})} for g in results]
