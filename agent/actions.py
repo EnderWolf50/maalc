@@ -2709,6 +2709,8 @@ BADGE_MIN, ICON_KEEP = 0.5, 0.45
 FUSE_CONFIRM = [300, 150, 680, 380]  # "Selected E.G.O Gifts 3/5" over "Fuse the selected E.G.O Gifts?"
 FUSE_COUNT = r"(\d)\s*/\s*\d"  # its "3/5": the materials in
 FUSE_NEUTRAL = (815, 160)  # above the owned grid, between Recipes and Fusion Guide: closes a tooltip, selects nothing
+FORECAST_CHANCE = [428, 455, 62, 28]  # "90%" at the Forecasts row's right: the keyword's chance (60 / 90 / 99, 100 on a recipe)
+FUSE_TRIES = 3  # groups one fuse page's forecast may turn down before the page is closed (#285)
 SELL_COST = [960, 80, 160, 45]
 SELL_GRID = [630, 210, 480, 290]  # the sell page's gifts with their prices under them
 HEAL_TITLE, HEAL_COST = [130, 30, 220, 45], [1100, 90, 110, 50]
@@ -3004,17 +3006,28 @@ def cell_at(context, grid, cell):
     return x, y + k
 
 
-def fusions(cells, roles, slots, avoid, condition="any"):
+def fusions(cells, roles, slots, avoid, condition="any", refused=()):
     """shop.pick_fusion over the cells whose role is material and whose tier is read: [([cell index], tier)] (#77).
 
     The thresholds are the Super Shop's when the page has its 5 slots; an avoided gift goes in first (#90); condition
-    is the team's fusion_condition (#263).
+    is the team's fusion_condition (#263); refused, the groups of cell indexes the page's forecast turned down (#285).
     """
     d = data("shop.yaml")
     materials = [(c["i"], c["tier"]) for c, r in zip(cells, roles) if r == "material" and c["tier"]]
     tiers = d["fusion_tiers"]["super_shop" if slots == 5 else "shop"]
     return shop.pick_fusion(materials, slots, tiers, d["fusion_points"], {c["i"] for c in cells if c["gift"] in avoid},
-                            condition)
+                            condition, refused)
+
+
+def read_forecast(context):
+    """(the tier the fuse page's Forecasts row predicts, the keyword's chance in %), each None when unread (#285).
+
+    The row shows once a material is in: waited for a second, not longer (a page whose row never reads is no loss).
+    """
+    image = until(context, shop.forecast_tier, timeout=1.0)
+    if image is None:
+        return None, None
+    return shop.forecast_tier(image), number(text(context, image, FORECAST_CHANCE, only_rec=True))
 
 
 def tap_keyword(context, keyword):
@@ -3420,40 +3433,57 @@ class Shop(CustomAction):
         roles = [cell_role(c, team, "fuse", avoid) for c in cells]
         log(f"shop: fuse cells ({slots} slots) " + "; ".join(cell_line(c, r) for c, r in zip(cells, roles)))
         condition = team.get("fusion_condition", "any")
-        picks = fusions(cells, roles, slots, avoid, condition)
-        if not picks:
-            visit["fuse_scanned"] = True
-            log(f"shop: {roles.count('material')} materials on show, a fusion takes {shop.MIN_FUSION}" + ("" if condition == "any" else f", and none meets the condition {condition}"))
-            Shop.to_main(context)
-            return False
-        group, tier = picks[0]
-        group = sorted((next(c for c in cells if c["i"] == i) for i in group), key=lambda c: -c["y"])  # the grid's end first
-        materials = ", ".join(cell_line(c, "material").rsplit(":", 1)[0] for c in group)
-        fused = False
-        if Shop.place(context, group, slots, grid):
-            # Read again on the still screenshot: the one that matched was taken while the dialog zoomed in.
-            page_guard(context, "Shop")
-            image = tap_shown(context, *PAGE_OK, shows(context, FUSE_CONFIRM, FUSE_COUNT), timeout=2)
-            m = image is not None and re.search(FUSE_COUNT, text(context, image, FUSE_CONFIRM))
-            if m and int(m[1]) == len(group):
-                tap(context, 788, 583, wait=0)  # the dialog's Confirm; gift_get waits for its GET!
-                fused = gift_get(context)
-            log(f"shop: fuse {materials} into a tier {tier} {keyword} gift (condition {condition}): {'done' if fused else 'not confirmed'}")
-        # Unconfirmed or not read back: not the same scan again until the owned gifts change (#103).
+        refused, fused = [], False
+        while True:
+            picks = fusions(cells, roles, slots, avoid, condition, refused)
+            if not picks:
+                visit["fuse_scanned"] = True
+                log(f"shop: {roles.count('material')} materials on show, a fusion takes {shop.MIN_FUSION}"
+                    + ("" if condition == "any" else f", and none meets the condition {condition}")
+                    + (f", {len(refused)} turned down by the page's forecast" if refused else ""))
+                Shop.to_main(context)
+                return False
+            group, tier = picks[0]
+            group = sorted((next(c for c in cells if c["i"] == i) for i in group), key=lambda c: -c["y"])  # the grid's end first
+            materials = ", ".join(cell_line(c, "material").rsplit(":", 1)[0] for c in group)
+            if not Shop.place(context, group, slots, grid):
+                break
+            # The page's own forecast beats the points (#285): a tier the condition refuses is not fused, whichever table
+            # the game used. An unread row falls back to the points tier, which pick_fusion already checked.
+            page_tier, chance = read_forecast(context)
+            wanted = page_tier is None or shop.fusion_wanted(condition, page_tier, [(c["i"], c["tier"]) for c in group])
+            act = ("fuse on the points tier" if page_tier is None else "fuse") if wanted else "turned down, taken out"
+            log(f"shop: fuse forecast {materials}: points tier {tier}, page tier {page_tier or 'unread'}, chance "
+                f"{f'{chance}%' if chance else 'unread'}, condition {condition}: {act}")
+            if wanted:
+                # Read again on the still screenshot: the one that matched was taken while the dialog zoomed in.
+                page_guard(context, "Shop")
+                image = tap_shown(context, *PAGE_OK, shows(context, FUSE_CONFIRM, FUSE_COUNT), timeout=2)
+                m = image is not None and re.search(FUSE_COUNT, text(context, image, FUSE_CONFIRM))
+                if m and int(m[1]) == len(group):
+                    tap(context, 788, 583, wait=0)  # the dialog's Confirm; gift_get waits for its GET!
+                    fused = gift_get(context)
+                log(f"shop: fuse {materials} into a tier {page_tier or tier} {keyword} gift (condition {condition}): {'done' if fused else 'not confirmed'}")
+                break
+            refused.append(frozenset(c["i"] for c in group))
+            if len(refused) >= FUSE_TRIES or not Shop.place(context, group, slots, grid, out=True):
+                break  # the page is closed, which empties it too
+        # Unconfirmed, refused or not read back: not the same scan again until the owned gifts change (#103).
         visit["fuse_scanned"] = not fused
         Shop.to_main(context)
         return fused
 
     @staticmethod
-    def place(context, cells, slots, grid):
+    def place(context, cells, slots, grid, out=False):
         """Tap cells into the fusion, each read back (#77); False at the first that does not show, nothing put in before.
 
         Each is dragged into view first (cell_at). After a tap one slot more holds a material and the tapped cell's
         frame turns orange: the gift went in, and it is the one meant (cell_at found it, the grid is not sorted again).
+        out: the other way round (#285), the materials in taken out again: one slot fewer, the frame gone.
         """
         filled = shop.placed(screen(context), slots)
-        if filled:
-            log(f"shop: {filled} materials in before any tap: no fusion")
+        if filled != (len(cells) if out else 0):
+            log(f"shop: {filled} materials in before any tap: " + ("not the group to take out" if out else "no fusion"))
             return False
         for n, c in enumerate(cells, 1):
             at = cell_at(context, grid, c)
@@ -3465,8 +3495,9 @@ class Shop(CustomAction):
             tap_settled(context, *FUSE_NEUTRAL, timeout=1.0)  # closes its tooltip, which shades the grid
             image = screen(context)
             filled, framed = shop.placed(image, slots), shop.picked(image, x, y, CELL_PAGES["fuse"][1])
-            if filled != n or not framed:
-                log(f"shop: cell {c['i']} tapped: {filled} of {n} materials in, {'framed' if framed else 'not framed'}: no fusion")
+            if filled != (len(cells) - n if out else n) or framed == out:
+                log(f"shop: cell {c['i']} tapped: {filled} materials in, {'framed' if framed else 'not framed'}: "
+                    + ("not taken out" if out else "no fusion"))
                 return False
         return True
 

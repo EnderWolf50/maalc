@@ -37,22 +37,47 @@ def filled(image, x, y):
     return bool(image[y - 25:y + 25, x - 25:x + 25].max(axis=2).std() > 15)
 
 
-def tier(cell):
-    """A cell's tier (1-5) from its yellow numerals top left (cell_crop), or None (no numerals: a skill, a dim page).
+def yellow(box):
+    """The numerals' yellow pixels of box (BGR)."""
+    b, g, r = (box[:, :, i].astype(int) for i in range(3))
+    return (r > 200) & (g > 140) & (b < 90)
+
+
+def numeral(mask, top, bottom):
+    """A tier (1-5) from a yellow mask's rows top and bottom, or None: the bars at each row (an unseen reading is no tier).
 
     I, II and III are 1-3 bars top to bottom; IV and V end in a V, so the bottom row has a stroke fewer.
     """
-    mid = cell.shape[0] // 2
-    box = cell[mid - 36:mid - 8, mid - 36:mid - 16].astype(int)
-    b, g, r = box[:, :, 0], box[:, :, 1], box[:, :, 2]
-    yellow = (r > 200) & (g > 140) & (b < 90)
-    top, bottom = 9, 19  # rows inside every numeral on both scales
-    bars = [(x, n) for x, n in _runs(np.flatnonzero(yellow[top])) if n >= 2]
+    bars = [(x, n) for x, n in _runs(np.flatnonzero(mask[top])) if n >= 2]
     if not bars:
         return None
     lo, hi = bars[0][0] - 1, bars[-1][0] + bars[-1][1] + 1  # icon art beside the numerals stays out
-    ends = [n for _, n in _runs(np.flatnonzero(yellow[bottom, lo:hi])) if n >= 2]
+    ends = [n for _, n in _runs(np.flatnonzero(mask[bottom, lo:hi])) if n >= 2]
     return TIERS.get((len(bars), len(ends)))
+
+
+def tier(cell):
+    """A cell's tier (1-5) from its yellow numerals top left (cell_crop), or None (no numerals: a skill, a dim page)."""
+    mid = cell.shape[0] // 2
+    return numeral(yellow(cell[mid - 36:mid - 8, mid - 36:mid - 16]), 9, 19)  # rows inside every numeral on both scales
+
+
+FORECAST_NUMERAL = (298, 452, 34, 34)  # x, y, w, h: the Forecasts row's numeral on the fuse page, centred at x 315
+
+
+def forecast_tier(image):
+    """The tier (1-4) the fuse page's Forecasts row predicts, or None (no numeral: no material in, or the row is covered).
+
+    The row's numeral is the cells' (numeral), 19 px tall, its top and bottom rows found from its own yellow. Live
+    2026-10-23: I, II and IV on a shop's and a Super Shop's page, IV on a fixed recipe's (tests/shop, ShopFuseRecipe).
+    """
+    x, y, w, h = FORECAST_NUMERAL
+    mask = yellow(image[y:y + h, x:x + w])
+    rows = np.flatnonzero(mask.any(axis=1))
+    if len(rows) < 8:
+        return None
+    t = numeral(mask, rows[0] + 2, rows[-1] - 3)
+    return t if t and t <= FUSION_TOP_TIER else None  # a fusion gives a V never
 
 
 def can_spend(cost, price, reserve):
@@ -273,7 +298,7 @@ def fusion_wanted(condition, tier, materials):
     return condition != "tier4" or tier >= FUSION_TOP_TIER
 
 
-def pick_fusion(materials, slots, thresholds, points, first=(), condition="any"):
+def pick_fusion(materials, slots, thresholds, points, first=(), condition="any", refused=()):
     """The fusions to make, best first: [([keys], the tier it gives)] (#77).
 
     materials: [(key, tier)]; slots: the page's material slots (3, a Super Shop's 5); thresholds: fusion_tier's for
@@ -282,6 +307,7 @@ def pick_fusion(materials, slots, thresholds, points, first=(), condition="any")
     again from what is left, until fewer than 3 are. A tier V gift is never a material (MAX_MATERIAL_TIER).
     condition (the team's fusion_condition, #263) keeps out the groups fusion_wanted refuses: the best of the rest is
     made, and none when no group is left. "any" puts the groups that upgrade (user, 2026-10-23) ahead of that order.
+    refused: [frozenset of keys] the groups the page's own forecast turned down (#285): never picked again.
     """
     def total(group):
         return sum(points[t] for _, t in group)
@@ -295,7 +321,8 @@ def pick_fusion(materials, slots, thresholds, points, first=(), condition="any")
 
     left, out = [m for m in materials if m[1] <= MAX_MATERIAL_TIER], []
     while len(left) >= MIN_FUSION:
-        groups = [g for n in range(MIN_FUSION, slots + 1) for g in combinations(left, n) if fusion_wanted(condition, tier_of(g), g)]
+        groups = [g for n in range(MIN_FUSION, slots + 1) for g in combinations(left, n)
+                  if frozenset(k for k, _ in g) not in refused and fusion_wanted(condition, tier_of(g), g)]
         if not groups:
             break
         best = min(groups, key=rank)
