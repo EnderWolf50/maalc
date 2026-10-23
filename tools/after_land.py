@@ -47,6 +47,7 @@ def main() -> None:
         sys.exit(f"after_land: the emulator queue holds {len(held)} ticket(s); install/ is in use. Run tools/live/queue.py status.")
     sync_main()
     step("build the settings GUI", "pnpm", "--dir", "gui", "tauri", "build", "--no-bundle")
+    step("the OCR model and its plate copy (#329)", sys.executable, "tools/fetch_ocr.py")  # skips what is there
     step("assemble install/", sys.executable, "tools/install.py")
     step("install/config/settings.json loads", sys.executable, "-c",
          "import sys; sys.path.insert(0, 'agent'); from settings import load_settings; load_settings('install')")

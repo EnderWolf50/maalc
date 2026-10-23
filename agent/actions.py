@@ -33,7 +33,7 @@ import settlement
 import shop
 from gifts import effective, main_keyword, queue, resolve_list
 from ocrtext import compact, digits, has, normalize
-from settings import SCHEMA, SettingsError, load_settings
+from settings import SCHEMA, SettingsError, data_dir, load_settings
 from state import next_cursor, pick_team, read_cursor, write_cursor
 
 # Same <root> as main.ROOT; resource/ sits under it in a release, under assets/ in the repo.
@@ -2899,17 +2899,31 @@ def read_cells(context, image, cells, page, gifts=()):
     return out
 
 
+OCR_DIR = data_dir().parent / "model" / "ocr"
+
+
+def plate_model():
+    """gift_cells.PLATE_MODEL when its folder holds a model, else None: the default instance reads the plates, 7x slower on
+    DirectML. A missing folder is no error to MaaFramework: it reads nothing, so every plate would be blank (#329)."""
+    if (OCR_DIR / gift_cells.PLATE_MODEL / "rec.onnx").is_file():
+        return gift_cells.PLATE_MODEL
+    if not RUN.get("plate_model_logged"):
+        RUN["plate_model_logged"] = True
+        log(f"shop: no model/ocr/{gift_cells.PLATE_MODEL}/ (tools/fetch_ocr.py makes it): the plates are read with the default OCR instance")
+    return None
+
+
 def read_plates(context, image, centres):
     """The name plate under each offer cell centred at a (x, y) of centres: [{"text", "id"}], id None when it names no gift (#329).
 
     One OCR line per plate (only_rec) in the box gift_cells.plate_roi gives, dimmed and Purchased cells included. The box
     is relative to the cell's centre, so a grid dragged to another row reads just the same. It reads with its own OCR
-    instance (gift_cells.PLATE_MODEL): on DirectML the default one reads a line in 31 ms once a det+rec pass has used it, this
+    instance (plate_model): on DirectML the default one reads a line in 31 ms once a det+rec pass has used it, this
     one in 4 ms whatever ran before (#329).
     """
     plates = []
     for x, y in centres:
-        t = text(context, image, gift_cells.plate_roi(x, y), only_rec=True, model=gift_cells.PLATE_MODEL)
+        t = text(context, image, gift_cells.plate_roi(x, y), only_rec=True, model=plate_model())
         plates.append({"text": t, "id": gift_cells.name_id(t, GIFT_IDS)})
     return plates
 
@@ -3352,7 +3366,7 @@ class Shop(CustomAction):
             slot["plate"] = plate
             if not shop.on_sale(slot):  # bought, a skill or "??": never bought, its plate logged (#329)
                 log(f"shop: {slot['name']!r}: {'Purchased' if slot['purchased'] else 'not on sale'}, plate {plate['text']!r} "
-                    + gift_shown({"id": plate["id"], "by_plate": True, "score": 0.0}))
+                    + (gift_shown({"id": plate["id"], "by_plate": True, "score": 0.0}) if plate["id"] else "unknown"))
         slots = [s for s in shown if shop.on_sale(s)]
         avoided = avoided_gifts(team)
         cells = {c["i"]: c for c in read_cells(context, image, [offer_cell(s) for s in slots], "offer", avoided)}
