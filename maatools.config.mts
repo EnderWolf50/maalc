@@ -89,9 +89,9 @@ const screens: [image: string, hits: string[]][] = [
   ['GiftSearchGet.png', ['GiftGet', 'GiftSearch']],  // GiftGet comes first in the hub
   ['GiftSearchForgo.png', ['GiftSearchForgo', 'GiftSearch', 'GiftChoice']],
   ['ThemePack.png', ['ThemePack']],
-  ['ThemePackNormal.png', ['ThemePack', 'PackRefreshLeft']],
+  ['ThemePackNormal.png', ['ThemePack']],
   ['ThemePackRefresh0.png', ['ThemePack', 'PackRefreshSpent']],  // live 2026-10-23 (#319): Refresh 0/3, greyed
-  ['ThemePackRefresh1.png', ['ThemePack', 'PackRefreshLeft']],  // the same floor, Refresh 1/3
+  ['ThemePackRefresh1.png', ['ThemePack']],  // the same floor, Refresh 1/3
   ['MirrorMap.png', ['MirrorMap', 'MapBus', 'MapLinkUp', 'MapLinkMid', 'MapLinkDown', 'MapNodeCost', 'MapNodeEvent']],
   // Map marks: the default ROIs fit a map at rest; RouteMap moves them with the bus.
   ['MapEvent.png', ['MirrorMap', 'MapBus', 'MapLinkUp', 'MapLinkMid', 'MapLinkDown', 'MapNodeCost', 'MapNodeEvent']],
