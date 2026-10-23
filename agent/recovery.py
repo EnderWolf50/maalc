@@ -30,6 +30,7 @@ TRANSIT = {"Loading", "Connecting", "RetryPopup", "GoToMirrorEntry", "NavTitle",
            "Downloading", "UpdateDialog", "UserAgreement",
            "Notices"}  # the notices may open by themselves at login (unverified, #85)
 UNKNOWN_KEEP = 30  # screens MirrorHub did not recognise that logs/unknown/ keeps
+COST_KEEP = 50  # crops of map Cost coins that read as no Cost that logs/cost/ keeps (#284)
 # Seconds after confirming the title's download dialog in which nothing is stuck: until its progress screen
 # (Downloading, a waiting screen) is up, 22 s live 2026-10-21. 30 min ran out there before the download was done.
 DOWNLOAD_HOLD = 3 * 60
@@ -71,7 +72,7 @@ def keep_capture(root, name, image, stamp, keep):
 
     "unknown": a screen MirrorHub recognised nothing on (UNKNOWN_KEEP). A popup nobody has a capture of (weekly
     reset, tutorial tip, an event's choice page) is otherwise lost once the back key closes it; this is the
-    capture its node needs. "cost": a map node's Cost coin that read as no Cost (actions.cost_miss, #284).
+    capture its node needs. "cost": a map node's Cost coin that read as no Cost (COST_KEEP, #284).
     """
     folder = Path(root) / "logs" / name
     folder.mkdir(parents=True, exist_ok=True)

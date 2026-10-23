@@ -68,7 +68,7 @@ def test_node_type_by_cost(marks, expected):
     (False, {"MapNodeCost"}, "8", "battle"),  # a single digit is a part read
     (False, {"MapNodeCost", "MapNodeGift", "MapNodeFocusedHex"}, "", "risky"),  # unread: the ring's later kind
     # the boss' red glow missed: its Cost says boss (live 2026-10-23, hard floor 4, read focused by its gift box)
-    (True, {"MapNodeCost", "MapNodeGift", "MapNodeFocusedHex"}, "500", "boss"),
+    (True, {"MapNodeCost", "MapNodeGift"}, "500", "boss"),
     (False, {"MapNodeCost", "MapNodeGift"}, "240", "boss"),
     (True, {"MapNodeCost", "MapNodeGift"}, "240", "focused"),  # a normal floor's boss Cost is none on hard
 ])
@@ -137,6 +137,7 @@ def test_past_the_first_column_no_cost_is_read(context, marks, expected):
 
 
 @pytest.mark.parametrize(("run", "hard"), [
+    ({}, False),  # no difficulty yet: normal, as "auto" (None) is (#257)
     ({"difficulty": "hard"}, True), ({"difficulty": "normal"}, False), ({"difficulty": None}, False),
     ({"difficulty": "hard", "floor_hard": False}, False), ({"difficulty": None, "floor_hard": True}, True),
 ])

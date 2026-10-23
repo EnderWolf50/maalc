@@ -1358,11 +1358,12 @@ def node_at(context, image, cx, cy, marks=None, costs=True):
 def coin_text(context, image, box):
     """The OCR text of the number printed beside a map node's Cost coin (box): coin_number makes it a number.
 
-    The game's font, right-aligned, 8 px a digit and 16 rows tall: the digits fill x+w-12 .. x+w+12, y+24 .. y+40.
-    The crop keeps to them (#284): a lit link's pale line runs under the number and past its right edge, as cream
-    as the digits, and wider crops kept it (an 85 read 5 or B5). Inside the cream, barely saturated digit mask the
-    digit's own shading stays (dark on white): its 1 px counters are what tell an 8 from a 0, which a black-on-white
-    cut-out loses (8 read B). A white margin: the OCR reads a glyph on the crop's edge badly (#257; spec 03 section 7).
+    The game's font, right-aligned, 8 px a digit and 16 rows tall: the digits fill x+w-12 .. x+w+12, y+24 .. y+40,
+    and the crop keeps to them with a pixel or two to spare (#284): a lit link's pale line runs under the number and
+    past its right edge, as cream as the digits, and wider crops kept it (an 85 read 5 or B5). The digits are the
+    bright, barely saturated pixels; each keeps its own shading, dark on white, rather than going plain black: its
+    1 px counters are what tell an 8 from a 0, and a black cut-out loses them (8 read B). A white margin: the OCR
+    reads a glyph on the crop's edge badly (#257; spec 03 section 7).
     """
     x, y, w, _ = box
     part = image[y + 22:y + 41, max(0, x + w - 13):x + w + 13]
@@ -1374,23 +1375,24 @@ def coin_text(context, image, box):
 
 
 def coin_number(found):
-    """The Cost number in coin_text's OCR text; None for fewer than two digits or a leading 0 (a part read)."""
+    """The Cost number in coin_text's OCR text; None for a part read (coin_part says which)."""
     digits = re.sub(r"\D", "", found)
-    return int(digits) if len(digits) >= 2 and digits[0] != "0" else None
+    return None if coin_part(digits) else int(digits)
 
 
-COST_MISS_KEEP = 50  # coin crops logs/cost keeps
+def coin_part(digits):
+    """Why the digits of a Cost read are only part of a number, or None when they make one."""
+    return "no digits" if not digits else "one digit" if len(digits) < 2 else "leading 0" if digits[0] == "0" else None
 
 
 def cost_miss(image, box, cx, cy, found, difficulty):
     """Log why a Cost coin's read is no Cost of the floor's difficulty, and keep its crop in logs/cost (#284)."""
     digits = re.sub(r"\D", "", found)
-    why = ("no digits" if not digits else "one digit" if len(digits) < 2 else "leading 0" if digits[0] == "0"
-           else f"{digits} is no {difficulty} Cost")
+    why = coin_part(digits) or f"{digits} is no {difficulty} Cost"
     x, y, w, h = box
     stamp = f"{settlement.now().replace(':', '-')}_{cx}_{cy}"
     try:
-        recovery.keep_capture(ROOT, "cost", image[max(0, y - 8):y + h + 24, max(0, x - 8):x + w + 24], stamp, COST_MISS_KEEP)
+        recovery.keep_capture(ROOT, "cost", image[max(0, y - 8):y + h + 24, max(0, x - 8):x + w + 24], stamp, recovery.COST_KEEP)
         kept = f", crop logs/cost/{stamp}.png"
     except OSError as e:
         kept = f", crop not saved: {e}"

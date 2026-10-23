@@ -27,7 +27,8 @@ COIN = (26, 24)  # the Cost coin template's size: the box node_at hands coin_tex
 # 2026-10-23 live, hard (#284): MapCostHard85, two 85s over a lit link's pale line (the left one read None live);
 # MapBossCost500, floor 4's boss, its red glow unmatched (typed focused live).
 COINS = json.loads((ROOT / "tests" / "data" / "map_costs.json").read_text(encoding="utf-8"))
-# The coins that stay unread (None, and the marks decide): dim behind a popup at the right edge.
+# The coins that stay unread (None, and the marks decide): dim behind a popup at the right edge. Two coins:
+# PauseExploration and ProgressPanel show the same one.
 UNREAD = {("GiftGetOverMap.png", 1221, 438), ("PauseExploration.png", 1221, 438), ("ProgressPanel.png", 1221, 438)}
 # node_at end to end on a floor of the given difficulty: (image, node centre, hard) -> type
 NODES = {("MapBossCost500.png", 583, 357, True): "boss"}
@@ -73,10 +74,11 @@ def child():
                     image = load(name)
                     for x, y, _ in coins:
                         out[f"{name} {x} {y}"] = actions.coin_number(actions.coin_text(context, image, (x, y, *COIN)))
-                actions.ROOT = Path(tempfile.mkdtemp())  # a miss keeps its crop under logs/cost
-                for name, cx, cy, hard in NODES:
-                    actions.RUN.update(settings={}, difficulty="hard" if hard else "normal", floor_hard=hard)
-                    out[f"node {name} {cx} {cy}"] = actions.node_at(context, load(name), cx, cy)
+                with tempfile.TemporaryDirectory() as logs:
+                    actions.ROOT = Path(logs)  # a miss keeps its crop under logs/cost
+                    for name, cx, cy, hard in NODES:
+                        actions.RUN.update(settings={}, difficulty="hard" if hard else "normal", floor_hard=hard)
+                        out[f"node {name} {cx} {cy}"] = actions.node_at(context, load(name), cx, cy)
             except Exception:  # MaaFramework swallows it: hand it to the test
                 out["error"] = traceback.format_exc()
             return True
@@ -140,19 +142,6 @@ def test_node_at_types_by_the_cost_as_read(read, name, cx, cy, hard):
 def test_coin_number_takes_two_digits_or_more_and_no_leading_zero(found, number):
     import actions
     assert actions.coin_number(found) == number
-
-
-@pytest.mark.parametrize(("run", "hard"), [
-    ({}, False),  # no difficulty yet: normal, as "auto" (None) is
-    ({"difficulty": None}, False),
-    ({"difficulty": "hard"}, True),
-    ({"difficulty": "hard", "floor_hard": False}, False),  # the floor's own difficulty wins
-    ({"difficulty": "normal", "floor_hard": True}, True),
-])
-def test_is_hard_reads_the_floors_difficulty_then_the_runs_and_a_missing_one_as_normal(monkeypatch, run, hard):
-    import actions
-    monkeypatch.setattr(actions, "current_run", lambda context: run)
-    assert actions.is_hard(None) is hard
 
 
 if __name__ == "__main__":
