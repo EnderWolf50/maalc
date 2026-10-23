@@ -128,6 +128,11 @@ def gift_tables():
     return json.loads((data / "gift_search.json").read_text(encoding="utf-8"))["gifts"], recipes["gifts"], recipes["materials"]
 
 
+def extra_gifts():
+    """data/gift_recipes.json's `extra_gifts`: the game's other gift ids 9000-9999, no shop sells and no recipe uses (#332)."""
+    return json.loads((data_dir() / "gift_recipes.json").read_text(encoding="utf-8"))["extra_gifts"]
+
+
 def default_gorder():
     """Spec 04 section 13: every keyword's buyable gifts, tier III first, within a tier in data-file order."""
     search = gift_tables()[0]

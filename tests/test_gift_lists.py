@@ -14,8 +14,8 @@ ICONS = DATA / "gift_icons"
 KEYWORDS = ["Burn", "Bleed", "Tremor", "Rupture", "Sinking", "Poise", "Charge", "Slash", "Pierce", "Blunt", "Keywordless"]
 VESTIGES = set(gift_icons.VESTIGES)
 BUYABLE = {g["id"] for g in SEARCH}
-KNOWN = BUYABLE | {g["id"] for g in RECIPES["gifts"] + RECIPES["materials"]} | VESTIGES
-MAX_BYTES = 800_000  # 397 icons weigh 575 KB (1.4 KB each)
+KNOWN = BUYABLE | {g["id"] for g in RECIPES["gifts"] + RECIPES["materials"] + RECIPES["extra_gifts"]} | VESTIGES
+MAX_BYTES = 900_000  # 464 icons weigh 675 KB (1.4 KB each)
 
 
 def test_default_list_ids_all_exist():

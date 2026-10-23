@@ -25,8 +25,22 @@ def test_a_cell_is_matched_against_the_gifts_of_its_keyword_and_tier():
     assert {9088, 9105} <= ids("Burn", 4) and 9053 not in ids("Burn", 4)
     assert 9053 in ids("Burn", 3)  # Dust to Dust, bought in the shop
     # the vestiges are Keywordless I-V, Lunar Memory the other Keywordless V
-    assert ids("Keywordless", 5) == {9083, 9995}
+    assert ids("Keywordless", 5) == {9083, 9995, 9799, 9800}  # and two tier V gifts of the game data (#332)
     assert {9991} <= ids("Keywordless", 1)
+
+
+def test_the_table_holds_every_gift_of_the_game_data_with_a_name_of_its_own():
+    # #332: the 464 named ids of 9000-9999 in the unpacked static data (9247 has no name nor icon), the pack-exclusive gifts no recipe uses included.
+    from local_dir import local_dir  # noqa: PLC0415  # the pytest process only (the child below has no tools/ path)
+    table = g.load()
+    ids = [e["id"] for e in table]
+    assert len(ids) == len(set(ids))
+    if (unpack := local_dir("unpack")).joinpath("static").is_dir():
+        import gift_recipes  # noqa: PLC0415
+        named = gift_recipes.english_names(unpack)
+        assert {i for i in gift_recipes.gift_table(unpack) if 9000 <= i <= 9999 and i in named} == set(ids)
+    names = [e["en"] for e in table if e["en"]]
+    assert len(names) == len(set(names))  # the name tag match (#329) needs a name to name one gift
 
 
 def test_a_cell_whose_tier_or_badge_is_unread_has_no_candidates():
@@ -194,10 +208,10 @@ def test_a_cell_is_named_by_its_icon_on_each_page(read, case, ids):
     assert read["cases"][case] == ids
 
 
-def test_a_gift_the_table_lacks_or_a_cell_with_no_tier_read_is_unknown(read):
-    # Fuse page with a recipe on offer: a tier IV Poise globe and a tier IV Keywordless paper that no table lists score
-    # 0.38 and 0.34 on their candidates; the Fusion Available cell is Cask Spirits (IV).
-    assert read["cases"]["fuse_recipe"] == [9991, None, None, 9073, 9109, 9180]
+def test_a_pack_exclusive_gift_is_named_and_a_cell_with_no_tier_read_is_unknown(read):
+    # Fuse page with a recipe on offer: a tier IV Poise globe (Clear Mirror, Calm Water) and a tier IV Keywordless paper
+    # (Non-disclosure Agreement) were unknown until #332 listed every gift of the game data; the Fusion Available cell is Cask Spirits (IV).
+    assert read["cases"]["fuse_recipe"] == [9991, 9070, 9085, 9073, 9109, 9180]
     # Offers dimmed by Not Enough Cost show no tier (the numerals fade): nothing is named, all are kept.
     assert read["cases"]["offers_short"] == [None] * 5
 
