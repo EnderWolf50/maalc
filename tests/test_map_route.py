@@ -52,13 +52,14 @@ def test_node_type_by_cost(marks, expected):
 @pytest.mark.parametrize(("hard", "marks", "number", "expected"), [
     (False, {"MapNodeCost"}, "75.", "battle"),
     (False, {"MapNodeCost", "MapNodeGift"}, "100", "focused"),
-    (False, {"MapNodeCost", "MapNodeGift"}, "00", "focused"),
-    # 3-digit costs lose their first digit (offline: MapPanned.png's 120 read 20, map_f3's 150 read 50)
+    (False, {"MapNodeCost", "MapNodeGift"}, "00", "focused"),  # a leading 0 is a part read: the gift box decides
     (False, {"MapNodeCost", "MapNodeGift", "MapNodeFocusedHex"}, "120", "risky"),
-    (False, {"MapNodeCost", "MapNodeGift", "MapNodeFocusedHex"}, "20", "risky"),
-    (False, {"MapNodeCost", "MapNodeGift"}, "20", "risky"),  # its ring missed (live logs: 10 of 19)
+    (False, {"MapNodeCost", "MapNodeGift"}, "120", "risky"),  # its ring missed (live logs: 10 of 19)
+    # #262: the number is taken as read, not snapped to the table on its last two digits: a 120 read 20 is no
+    # Cost and the marks decide (the gift box alone: focused)
+    (False, {"MapNodeCost", "MapNodeGift"}, "20", "focused"),
     (False, {"MapNodeCost", "MapNodeGift", "MapNodeFocusedHex"}, "150", "abno"),
-    (False, {"MapNodeCost", "MapNodeGift", "MapNodeFocusedHex"}, "50", "abno"),
+    (False, {"MapNodeCost", "MapNodeGift", "MapNodeFocusedHex"}, "50", "risky"),
     (True, {"MapNodeCost"}, "85", "battle"),
     (True, {"MapNodeCost", "MapNodeGift"}, "120", "focused"),
     (True, {"MapNodeCost", "MapNodeGift", "MapNodeFocusedRound"}, "150", "risky"),
@@ -66,6 +67,10 @@ def test_node_type_by_cost(marks, expected):
     (False, {"MapNodeCost"}, "25", "battle"),  # OCR noise: no cost of the table, the marks decide
     (False, {"MapNodeCost"}, "8", "battle"),  # a single digit is a part read
     (False, {"MapNodeCost", "MapNodeGift", "MapNodeFocusedHex"}, "", "risky"),  # unread: the ring's later kind
+    # the boss' red glow missed: its Cost says boss (live 2026-10-23, hard floor 4, read focused by its gift box)
+    (True, {"MapNodeCost", "MapNodeGift", "MapNodeFocusedHex"}, "500", "boss"),
+    (False, {"MapNodeCost", "MapNodeGift"}, "240", "boss"),
+    (True, {"MapNodeCost", "MapNodeGift"}, "240", "focused"),  # a normal floor's boss Cost is none on hard
 ])
 def test_a_node_is_typed_by_its_cost_on_the_floors_difficulty(context, hard, marks, number, expected):
     # #91: a Risky node carries the ring, gift box and Cost coin, and read as Focused (weight 4) by its ring.
@@ -78,6 +83,45 @@ def test_a_node_is_typed_by_its_cost_on_the_floors_difficulty(context, hard, mar
     context.run_recognition.side_effect = run_recognition
     actions.RUN.update(settings={}, difficulty="normal", floor_hard=hard)
     assert actions.node_at(context, np.zeros((720, 1280, 3), np.uint8), 713, 380) == expected
+
+
+@pytest.mark.parametrize(("hard", "number", "why"), [
+    (False, "", "no digits"),
+    (False, ".8", "one digit"),
+    (False, "00", "leading 0"),
+    (False, "85", "85 is no normal Cost"),
+    (True, "20", "20 is no hard Cost"),
+])
+def test_a_cost_read_as_no_cost_is_logged_with_its_text_and_crop(context, monkeypatch, tmp_path, hard, number, why):
+    # #284: each way a Cost misses gets a line with the node, the OCR's own text and the difficulty, and its crop.
+    def run_recognition(name, image, override=None):
+        if name == "MapNodeCost":
+            return SimpleNamespace(hit=True, box=[700, 300, 26, 24])
+        if name == "ReadText":
+            return SimpleNamespace(all_results=[SimpleNamespace(text=number, box=(0, 0, 20, 20))])
+        return None
+    context.run_recognition.side_effect = run_recognition
+    actions.RUN.update(settings={}, difficulty="normal", floor_hard=hard)
+    logs = []
+    monkeypatch.setattr(actions, "log", logs.append)
+    assert actions.node_at(context, np.zeros((720, 1280, 3), np.uint8), 713, 380) == "battle"
+    miss = [line for line in logs if "Cost miss" in line]
+    difficulty = "hard" if hard else "normal"
+    assert len(miss) == 1 and miss[0].startswith(f"map: Cost miss at 713, 380 ({difficulty}): {why}, OCR {number!r}, crop logs/cost/")
+    assert len(list((tmp_path / "logs" / "cost").glob("*_713_380.png"))) == 1
+
+
+def test_a_cost_of_the_table_logs_no_miss(context, monkeypatch, tmp_path):
+    def run_recognition(name, image, override=None):
+        if name == "MapNodeCost":
+            return SimpleNamespace(hit=True, box=[700, 300, 26, 24])
+        return SimpleNamespace(all_results=[SimpleNamespace(text="75", box=(0, 0, 20, 20))]) if name == "ReadText" else None
+    context.run_recognition.side_effect = run_recognition
+    actions.RUN.update(settings={}, difficulty="normal", floor_hard=False)
+    logs = []
+    monkeypatch.setattr(actions, "log", logs.append)
+    assert actions.node_at(context, np.zeros((720, 1280, 3), np.uint8), 713, 380) == "battle"
+    assert not any("Cost miss" in line for line in logs) and not (tmp_path / "logs" / "cost").exists()
 
 
 @pytest.mark.parametrize(("marks", "expected"), [

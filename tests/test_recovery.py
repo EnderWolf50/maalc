@@ -273,9 +273,9 @@ def test_ladder_the_downloading_screens_are_on_the_way_back_not_past_the_stuck_o
 
 def test_keep_unknown_saves_the_screen_and_keeps_only_the_latest(tmp_path):
     # #85/#87: a screen MirrorHub does not know is the capture the missing popup nodes need.
-    from recovery import UNKNOWN_KEEP, keep_unknown
+    from recovery import UNKNOWN_KEEP, keep_capture
     for i in range(UNKNOWN_KEEP + 2):
-        keep_unknown(tmp_path, screen(i), f"2026-10-18T00-00-{i:02}.000Z")
+        keep_capture(tmp_path, "unknown", screen(i), f"2026-10-18T00-00-{i:02}.000Z", UNKNOWN_KEEP)
     saved = sorted(p.name for p in (tmp_path / "logs" / "unknown").iterdir())
     assert len(saved) == UNKNOWN_KEEP
     assert saved[0] == "2026-10-18T00-00-02.000Z.png"  # the two oldest went

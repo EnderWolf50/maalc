@@ -434,7 +434,7 @@ class Recover(CustomAction):
         STUCK["flag"] = None
         if unknown:  # also during a download: its progress screen is one to have a capture of
             try:
-                recovery.keep_unknown(ROOT, screen(context), settlement.now().replace(":", "-"))
+                recovery.keep_capture(ROOT, "unknown", screen(context), settlement.now().replace(":", "-"), recovery.UNKNOWN_KEEP)
             except OSError as e:
                 log(f"unknown screen not saved: {e}")
         if STUCK["watch"].held(time.monotonic()):
@@ -1333,10 +1333,10 @@ def node_at(context, image, cx, cy, marks=None, costs=True):
     No mark at all where the badges (80 px above the centre) sit under the resource bar: unknown, not an
     event; a fight's Cost coin may be hidden there (the top row with the map at rest).
     #91: with costs, a fight's kind is its Cost number looked up in the floor's difficulty's node_costs
-    (map_weights.yaml), matched on the last two digits too: a 3-digit number may lose its first (offline,
-    120 read 20, 150 read 50). A number unread or not in the table leaves the marks to decide.
+    (map_weights.yaml), as read: a number unread or not in the table leaves the marks to decide (cost_miss logs it).
+    The boss' Costs are in the table too: a boss whose red glow went unmatched reads as the boss by its Cost.
     Only the columns up to MAP_NEAR are read so: further out the badges may be dim (offline, MirrorMap.png's
-    85 two columns out read 8). Those come near as RouteMap.read_on drags the map, and a planned slot is read
+    85 two columns out read 8 with the crop before #284). Those come near as RouteMap.read_on drags the map, and a planned slot is read
     again once next to the bus (RouteMap.follow).
     """
     marks = node_marks(context, image, cx, cy) if marks is None else marks
@@ -1344,46 +1344,57 @@ def node_at(context, image, cx, cy, marks=None, costs=True):
         return "unknown"
     if not (costs and "cost" in marks and "boss" not in marks):
         return map_route.node_type(set(marks))
-    table = map_data()["node_costs"]["hard" if is_hard(context) else "normal"]
-    cost = coin_cost(context, image, marks["cost"].box, table)
+    difficulty = "hard" if is_hard(context) else "normal"
+    table = map_data()["node_costs"][difficulty]
+    found = coin_text(context, image, marks["cost"].box)
+    cost = coin_number(found)
     kind = map_route.node_type(set(marks), table.get(cost))
     log(f"map: node at {cx}, {cy} reads Cost {cost}: {kind}")
+    if cost not in table:
+        cost_miss(image, marks["cost"].box, cx, cy, found, difficulty)
     return kind
 
 
-# The digits of a Cost number cut out of its badge: (brightness floor, saturation ceiling), tried in turn (#257).
-COIN_MASKS = ((100, 120), (120, 110))
+def coin_text(context, image, box):
+    """The OCR text of the number printed beside a map node's Cost coin (box): coin_number makes it a number.
 
-
-def coin_cost(context, image, box, table):
-    """The key of table (a difficulty's node_costs) the number beside a Cost coin (box) reads as; None if none does.
-
-    #257: a number the first mask cuts out badly (an 8 read as a 5) is read again with the second; one that matches
-    no key on either (OCR noise, a dim badge) stays None and the marks decide. A 3-digit number may still lose its
-    first digit (375 read 75, 120 read 20): matched on the last two digits too.
-    """
-    for bright, sat in COIN_MASKS:
-        cost = coin_number(context, image, box, bright, sat)
-        if hit := next((c for c in table if cost in (c, c % 100)), None):
-            return hit
-    return None
-
-
-def coin_number(context, image, box, bright, sat):
-    """The number printed beside a map node's Cost coin (box), or None when fewer than two digits read (#91).
-
-    The digits are cream, bright and barely saturated over any theme pack's backdrop: cut out (as order_marks does)
-    and read as one line. The crop starts 16 px inside the coin's right edge, where a 3-digit number's 1 begins, and
-    has a white margin: the OCR reads a glyph on the crop's edge badly (#257; spec 03 section 7). A single digit is
-    a part read: None.
+    The game's font, right-aligned, 8 px a digit and 16 rows tall: the digits fill x+w-12 .. x+w+12, y+24 .. y+40.
+    The crop keeps to them (#284): a lit link's pale line runs under the number and past its right edge, as cream
+    as the digits, and wider crops kept it (an 85 read 5 or B5). Inside the cream, barely saturated digit mask the
+    digit's own shading stays (dark on white): its 1 px counters are what tell an 8 from a 0, which a black-on-white
+    cut-out loses (8 read B). A white margin: the OCR reads a glyph on the crop's edge badly (#257; spec 03 section 7).
     """
     x, y, w, _ = box
-    part = image[max(0, y + 8):y + 38, max(0, x + w - 16):x + w + 32]
-    mask = (part.max(axis=2) > bright) & (saturation(part) < sat)
-    plain = np.where(mask[..., None], 0, 255).astype(np.uint8).repeat(3, axis=2)
+    part = image[y + 22:y + 41, max(0, x + w - 13):x + w + 13]
+    bright = part.max(axis=2)
+    mask = (bright > 100) & (saturation(part) < 120)
+    plain = np.where(mask, 255 - bright, 255).astype(np.uint8)[..., None].repeat(3, axis=2)
     plain = np.pad(plain, ((6, 6), (6, 6), (0, 0)), constant_values=255)
-    found = re.sub(r"\D", "", text(context, plain, [0, 0, plain.shape[1], plain.shape[0]], only_rec=True))
-    return int(found) if len(found) >= 2 else None
+    return text(context, plain, [0, 0, plain.shape[1], plain.shape[0]], only_rec=True)
+
+
+def coin_number(found):
+    """The Cost number in coin_text's OCR text; None for fewer than two digits or a leading 0 (a part read)."""
+    digits = re.sub(r"\D", "", found)
+    return int(digits) if len(digits) >= 2 and digits[0] != "0" else None
+
+
+COST_MISS_KEEP = 50  # coin crops logs/cost keeps
+
+
+def cost_miss(image, box, cx, cy, found, difficulty):
+    """Log why a Cost coin's read is no Cost of the floor's difficulty, and keep its crop in logs/cost (#284)."""
+    digits = re.sub(r"\D", "", found)
+    why = ("no digits" if not digits else "one digit" if len(digits) < 2 else "leading 0" if digits[0] == "0"
+           else f"{digits} is no {difficulty} Cost")
+    x, y, w, h = box
+    stamp = f"{settlement.now().replace(':', '-')}_{cx}_{cy}"
+    try:
+        recovery.keep_capture(ROOT, "cost", image[max(0, y - 8):y + h + 24, max(0, x - 8):x + w + 24], stamp, COST_MISS_KEEP)
+        kept = f", crop logs/cost/{stamp}.png"
+    except OSError as e:
+        kept = f", crop not saved: {e}"
+    log(f"map: Cost miss at {cx}, {cy} ({difficulty}): {why}, OCR {found!r}{kept}")
 
 
 def map_data():

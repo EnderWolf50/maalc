@@ -66,16 +66,17 @@ def png(image):
             + chunk(b"IDAT", zlib.compress(rows.tobytes(), 6)) + chunk(b"IEND", b""))
 
 
-def keep_unknown(root, image, stamp):
-    """Save a screen MirrorHub recognised nothing on to <root>/logs/unknown/<stamp>.png, the newest UNKNOWN_KEEP.
+def keep_capture(root, name, image, stamp, keep):
+    """Save image to <root>/logs/<name>/<stamp>.png, keeping the newest keep there.
 
-    A popup nobody has a capture of (weekly reset, tutorial tip, an event's choice page) is otherwise lost once
-    the back key closes it; this is the capture its node needs.
+    "unknown": a screen MirrorHub recognised nothing on (UNKNOWN_KEEP). A popup nobody has a capture of (weekly
+    reset, tutorial tip, an event's choice page) is otherwise lost once the back key closes it; this is the
+    capture its node needs. "cost": a map node's Cost coin that read as no Cost (actions.cost_miss, #284).
     """
-    folder = Path(root) / "logs" / "unknown"
+    folder = Path(root) / "logs" / name
     folder.mkdir(parents=True, exist_ok=True)
     (folder / f"{stamp}.png").write_bytes(png(image))
-    for old in sorted(folder.glob("*.png"))[:-UNKNOWN_KEEP]:
+    for old in sorted(folder.glob("*.png"))[:-keep]:
         old.unlink()
 
 
