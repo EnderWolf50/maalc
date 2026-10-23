@@ -2,7 +2,7 @@
 import { screen, within } from "@testing-library/react";
 import { describe, expect, test, vi } from "vitest";
 import recipes from "../../assets/resource/base/data/gift_recipes.json";
-import { CATALOG, GIFT_BY_ID, iconUrl } from "./giftCatalog";
+import { CATALOG, GIFT_BY_ID, iconUrl, keywordIconUrl } from "./giftCatalog";
 import { GiftListsTab } from "./GiftLists";
 import { DEFAULT_LIST } from "./gifts";
 import { TEXT } from "./i18n";
@@ -53,6 +53,21 @@ describe("the catalog", () => {
 });
 
 describe("tabs", () => {
+  test("a keyword's tab and heading show its game icon; Keywordless has none", async () => {
+    await open([mine()]);
+    for (const tab of screen.getAllByRole("tab")) {
+      const k = GIFT_KEYWORDS.find((x) => tab.textContent!.startsWith(zh[`kw.${x}` as Text]))!;
+      const img = tab.querySelector("img");
+      if (k === "Keywordless") expect(img).toBeNull();
+      else {
+        expect(keywordIconUrl(k)).toBeTruthy();
+        expect(img).toHaveAttribute("src", keywordIconUrl(k));
+      }
+      expect(tab).toHaveAccessibleName(new RegExp("^" + zh[`kw.${k}` as Text]));
+    }
+    expect(screen.getByRole("heading", { name: new RegExp("^" + zh[`kw.${GIFT_KEYWORDS[0]}` as Text]) }).querySelector("img")).toHaveAttribute("src", keywordIconUrl(GIFT_KEYWORDS[0]));
+  });
+
   test("eleven keyword tabs in the game's order; the first is open, a click or an arrow key moves", async () => {
     const r = await open([mine()]);
     const tabs = screen.getAllByRole("tab");
