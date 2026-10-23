@@ -876,14 +876,14 @@ def test_an_offer_with_a_red_price_is_not_tapped_though_ocr_read_it_as_affordabl
     assert visit["wanted"] is None
 
 
-def sale_taps(context, monkeypatch, team, prices, *readings):
+def sale_taps(context, monkeypatch, team, prices, *readings, slots=None):
     """Shop.sell with 100 Cost and a 180 wanted, readings (cells_read) priced prices on the grid: the cells it tapped."""
     lines = [(str(p), (x - 3, y + 37, 26, 20)) for p, (x, y) in zip(prices, actions.SELL_CELLS)]
     reads(context, {tuple(actions.DIALOG_TITLE): [("Sell E.G.O Gift", (500, 90, 200, 40))],
                     tuple(actions.SELL_COST): [("100", (980, 90, 60, 30))], tuple(actions.SELL_GRID): lines})
     cells_read(monkeypatch, *readings)
     actions.Shop.sell(context, {"keyword": "Burn", "reserve_cost": 0, "gift_search": {"gifts": []}, **team},
-                      {"wanted": 180, "sold": False})
+                      {"wanted": 180, "sold": False, **({"slots": slots} if slots else {})})
     return [c.args for c in context.tasker.controller.post_click.call_args_list if c.args in actions.SELL_CELLS]
 
 
@@ -956,6 +956,57 @@ def test_a_sale_counts_the_fusion_materials_it_may_not_sell(context, monkeypatch
     # Tremor fuse with it, so neither is sold. Neither is opened (#161).
     taps = sale_taps(context, monkeypatch, team, [90, 95, 60], ("Bleed", None), ("Tremor", None), ("Keywordless", gift, 1))
     assert taps == []
+
+
+@pytest.mark.parametrize("condition, sold", [("any", 3), ("upgrade", 0), ("tier4", 0)])
+def test_a_sale_counts_only_the_fusions_the_condition_makes(context, monkeypatch, condition, sold):
+    # #263: four tier I (9 points: a I, no upgrade, no IV). By "any" three fuse and the fourth, the 90 that covers
+    # the price, goes; by the others none fuses, so the dearest (300) goes.
+    taps = sale_taps(context, monkeypatch, {"fusion_condition": condition}, [300, 60, 70, 90],
+                     *[(k, None, 1) for k in ("Bleed", "Tremor", "Pierce", "Slash")])
+    assert taps == [actions.SELL_CELLS[sold]]
+
+
+@pytest.mark.parametrize("slots, condition, sells", [
+    (None, "any", 3), (5, "any", 3),
+    (None, "tier4", 0), (3, "tier4", 0), (5, "tier4", 3),
+    (None, "upgrade", 0), (3, "upgrade", 0), (5, "upgrade", 3),
+])
+def test_a_sale_groups_by_the_slots_and_thresholds_of_the_shop(context, monkeypatch, slots, condition, sells):
+    # #263: III + III + I is 23 points: a III in a shop, a IV in a Super Shop. Where the condition refuses it (tier4 and
+    # upgrade in a shop) nothing fuses and the dearest gift (cell 0, 300) goes; where it holds, the Bleed I left over (cell
+    # 3, 90) does. A visit that read no fuse page counts a shop's 3 slots.
+    taps = sale_taps(context, monkeypatch, {"fusion_condition": condition}, [300, 60, 70, 90],
+                     ("Bleed", None, 3), ("Tremor", None, 3), ("Pierce", None, 1), ("Slash", None, 1), slots=slots)
+    assert taps == [actions.SELL_CELLS[sells]]
+
+
+@pytest.mark.parametrize("slots, condition, made", [
+    (3, "any", True), (5, "any", True), (3, "upgrade", False), (5, "upgrade", True), (3, "tier4", False), (5, "tier4", True),
+])
+def test_a_fusion_reads_the_tier_by_the_shop_it_is_in(context, monkeypatch, slots, condition, made):
+    # #263: III + III + I (23 points) is a III in a shop and a IV in a Super Shop.
+    fused, taps, _ = fusion_taps(context, monkeypatch, {"fusion_condition": condition}, ("Bleed", None, 3),
+                                 ("Tremor", None, 3), ("Pierce", None, 1), slots=slots)
+    assert fused == made and taps == [int(made)] * 3
+
+
+def test_a_shop_visit_counts_a_super_shops_five_slots_from_its_red_title(context, monkeypatch):
+    # #263: before any fuse page was read, the sale already groups by the Super Shop's table.
+    actions.RUN["team"] = {"heal": "none", "keyword": "Burn", "reserve_cost": 0}
+    monkeypatch.setattr(actions.Shop, "to_main", staticmethod(lambda context: True))
+    seen = []
+
+    def sell(context, team, visit):
+        seen.append(visit["slots"])
+        raise actions.PageGone("Shop")  # ends the visit here: what sell saw is what is asked
+    monkeypatch.setattr(actions.Shop, "sell", staticmethod(sell))
+    for name in ("Shop", "SuperShop"):
+        actions.RUN.pop("shop", None)
+        image = np.asarray(Image.open(SCREENS / f"{name}.png").convert("RGB"))[:, :, ::-1]
+        context.tasker.controller.post_screencap.return_value.wait.return_value.get.return_value = image
+        assert actions.Shop().run(context, argv())
+    assert seen == [3, 5]
 
 
 def test_a_sale_does_not_break_a_fusion_by_selling_white_gossypium(context, monkeypatch):
@@ -1185,6 +1236,47 @@ def test_a_keywordless_gift_the_team_keeps_stays_out_of_the_pick(context, monkey
     fused, taps, _ = fusion_taps(context, monkeypatch, team, ("Keywordless", SPIDERWEB["name"], 3), ("Tremor", None, 3),
                                  ("Pierce", None, 3), ("Sinking", None, 1))
     assert fused and taps == [0, 1, 1, 1]
+
+
+@pytest.mark.parametrize("condition, made", [(None, True), ("any", True), ("upgrade", False), ("tier4", False)])
+def test_the_fusion_condition_decides_whether_three_tier_i_fuse(context, monkeypatch, condition, made):
+    # #263: three I make a tier I (9 points): no upgrade, no IV. A team with no fusion_condition fuses as before.
+    team = {"fusion_condition": condition} if condition else {}
+    fused, taps, ok = fusion_taps(context, monkeypatch, team, *[("Bleed", None, 1)] * 3)
+    assert (fused, ok, taps) == (made, made, [int(made)] * 3)
+
+
+@pytest.mark.parametrize("condition, taps", [("any", [1, 1, 1]), ("upgrade", [0, 0, 0]), ("tier4", [0, 0, 0])])
+def test_the_fusion_condition_on_a_tier_iii_that_makes_a_tier_iii(context, monkeypatch, condition, taps):
+    # #263: III + II + I is 19 points: a tier III, no better than its III.
+    fused, tapped, _ = fusion_taps(context, monkeypatch, {"fusion_condition": condition},
+                                   ("Bleed", None, 3), ("Tremor", None, 2), ("Pierce", None, 1))
+    assert fused == (condition == "any") and tapped == taps
+
+
+@pytest.mark.parametrize("condition", ["any", "upgrade", "tier4"])
+def test_the_fusion_condition_lets_an_upgrade_to_tier_iv_through(context, monkeypatch, condition):
+    # #263: III + III + II is 26 points: a tier IV, over its III.
+    fused, taps, ok = fusion_taps(context, monkeypatch, {"fusion_condition": condition},
+                                  ("Bleed", None, 3), ("Tremor", None, 3), ("Pierce", None, 2))
+    assert fused and ok and taps == [1, 1, 1]
+
+
+def test_the_upgrade_condition_picks_the_group_that_is_one(context, monkeypatch):
+    # #263: IV + II + II is the most (a IV), no upgrade of its IV; II + II + II (a III) is.
+    fused, taps, _ = fusion_taps(context, monkeypatch, {"fusion_condition": "upgrade"},
+                                 ("Bleed", None, 4), ("Tremor", None, 2), ("Pierce", None, 2), ("Slash", None, 2))
+    assert fused and taps == [0, 1, 1, 1]
+
+
+def test_a_refused_fusion_is_not_read_again_until_the_owned_gifts_change(context, monkeypatch):
+    # #263: the same as a grid that makes none (#62).
+    visit = {}
+    reads(context, FUSE_PAGE)
+    fuse_slots(context, monkeypatch)
+    cells_read(monkeypatch, *[("Bleed", None, 1)] * 3)
+    assert not actions.Shop.fuse(context, {"keyword": "Burn", "gift_search": {"gifts": []}, "fusion_condition": "tier4"}, visit)
+    assert visit["fuse_scanned"]
 
 
 def test_a_super_shop_fuses_up_to_5(context, monkeypatch):

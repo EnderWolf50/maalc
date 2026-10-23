@@ -154,6 +154,7 @@ export interface Team {
   reserve_cost: number; min_alive: number; guard_turns: number; trial_risk_weight: string;
   gift_search: { enabled: boolean; gifts: GiftRef[] }; allow_white_gossypium: boolean;
   keep_keywords: string[]; keywordless: string; keep_gifts: GiftRef[]; sell_max_tier: number; sell_vestiges: boolean;
+  fusion_condition: string;
 }
 /** A gift on the E.G.O Gift Search page: its keyword tab, tier and English name (spec 04 section 9). */
 export interface GiftRef { keyword: string; tier: number; name: string }
@@ -248,6 +249,8 @@ const MIGRATIONS: Record<number, (d: Record<string, unknown>) => Record<string, 
       return { ...rest, weights, threshold: 0, unlisted: 0, event_packs: "weight" };
     }) : d.theme_pack_plans,
   }),
+  // Version 10 adds teams[].fusion_condition (#263), "any": the shop fuses as before.
+  9: (d) => withTeamDefault(d, { fusion_condition: "any" }),
 };
 
 const MARK_WEIGHTS: Record<string, number> = { prefer: 5, neutral: 0, avoid: -5 };

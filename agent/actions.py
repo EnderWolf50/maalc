@@ -2989,15 +2989,17 @@ def cell_at(context, grid, cell):
     return x, y + k
 
 
-def fusions(cells, roles, slots, avoid):
+def fusions(cells, roles, slots, avoid, condition="any"):
     """shop.pick_fusion over the cells whose role is material and whose tier is read: [([cell index], tier)] (#77).
 
-    The thresholds are the Super Shop's when the page has its 5 slots; an avoided gift goes in first (#90).
+    The thresholds are the Super Shop's when the page has its 5 slots; an avoided gift goes in first (#90); condition
+    is the team's fusion_condition (#263).
     """
     d = data("shop.yaml")
     materials = [(c["i"], c["tier"]) for c, r in zip(cells, roles) if r == "material" and c["tier"]]
     tiers = d["fusion_tiers"]["super_shop" if slots == 5 else "shop"]
-    return shop.pick_fusion(materials, slots, tiers, d["fusion_points"], {c["i"] for c in cells if c["gift"] in avoid})
+    return shop.pick_fusion(materials, slots, tiers, d["fusion_points"], {c["i"] for c in cells if c["gift"] in avoid},
+                            condition)
 
 
 def tap_keyword(context, keyword):
@@ -3036,6 +3038,9 @@ class Shop(CustomAction):
         if not self.to_main(context):
             return True  # a page fading in or out: let MirrorHub look again
         visit = RUN.setdefault("shop", {"healed": False, "refreshes": 0, "wanted": None, "sold": False})
+        # The sale groups by the fuse page's slots and thresholds before that page was read: a Super Shop's red title tells (#263).
+        if "slots" not in visit:
+            visit["slots"] = 5 if shop.is_super(screen(context)) else 3
         if not visit["healed"]:
             visit["healed"] = True  # first: a heal handed back mid-way (#118) is not paid twice
             self.heal(context, team)
@@ -3320,9 +3325,9 @@ class Shop(CustomAction):
         fuse_only = [c["i"] for c, r in zip(cells, roles)
                      if (r == "keep" and cell_role(c, team, "fuse", avoid) == "material") or (r == "material" and not c["price"])]
         # The fusion is grouped without the avoided gifts, which are sold first (#90): a sale then breaks no group.
-        # ponytail: a Super Shop's 5 slots are known once its fuse page was read; 3 until then.
         materials = [c for c in cells if (c["i"] in dict(gifts) or c["i"] in fuse_only) and c["i"] not in avoided]
-        fused = {i for group, _ in fusions(materials, ["material"] * len(materials), visit.get("slots", 3), ()) for i in group}
+        condition = team.get("fusion_condition", "any")  # a group the condition refuses makes no fusion: its gifts are spare
+        fused = {i for group, _ in fusions(materials, ["material"] * len(materials), visit.get("slots", 3), (), condition) for i in group}
         # Up to the team's sell_max_tier only (#161); an unread tier may be a V: not sold.
         tiers, top = {c["i"]: c["tier"] for c in cells}, team.get("sell_max_tier", 4)
         spare = [g for g in gifts if g[0] not in fused and (tiers[g[0]] or 9) <= top]
@@ -3398,10 +3403,11 @@ class Shop(CustomAction):
         cells, grid = owned_cells(context, "fuse", kept_icons(team) + avoided_gifts(team) + VESTIGE_ICONS)
         roles = [cell_role(c, team, "fuse", avoid) for c in cells]
         log(f"shop: fuse cells ({slots} slots) " + "; ".join(cell_line(c, r) for c, r in zip(cells, roles)))
-        picks = fusions(cells, roles, slots, avoid)
+        condition = team.get("fusion_condition", "any")
+        picks = fusions(cells, roles, slots, avoid, condition)
         if not picks:
             visit["fuse_scanned"] = True
-            log(f"shop: {roles.count('material')} materials on show, a fusion takes {shop.MIN_FUSION}")
+            log(f"shop: {roles.count('material')} materials on show, a fusion takes {shop.MIN_FUSION}" + ("" if condition == "any" else f", and none meets the condition {condition}"))
             Shop.to_main(context)
             return False
         group, tier = picks[0]
@@ -3416,7 +3422,7 @@ class Shop(CustomAction):
             if m and int(m[1]) == len(group):
                 tap(context, 788, 583, wait=0)  # the dialog's Confirm; gift_get waits for its GET!
                 fused = gift_get(context)
-            log(f"shop: fuse {materials} into a tier {tier} {keyword} gift: {'done' if fused else 'not confirmed'}")
+            log(f"shop: fuse {materials} into a tier {tier} {keyword} gift (condition {condition}): {'done' if fused else 'not confirmed'}")
         # Unconfirmed or not read back: not the same scan again until the owned gifts change (#103).
         visit["fuse_scanned"] = not fused
         Shop.to_main(context)

@@ -2,8 +2,14 @@
 # Refresh fees are not listed: the bot reads them off the shop's two refresh buttons.
 heal_cost: 100  # each of the three heal options
 refresh_margin: 120  # a refresh must leave this much (plus the reserve) to buy with: about a tier I gift
-# Fusion (#77; the game's mirror-dungeon-common-data-md8.json, limbuscompany.wiki.gg): a material's points by its
-# tier, and the most points that still fuse into tier 1, 2 and 3 (more is tier 4). The tier follows the points.
+# Fusion (#77; the game's mirror-dungeon-common-data-md8.json, client 1.117.0): a material's points by its tier, and
+# the most points that still fuse into tier 1, 2 and 3 (more is tier 4). The tier follows the points.
+# shop = combineTierResultByCombineScore (6-10, 11-16, 17-24, 25+); super_shop = enhancedCombineTierResultByCombineScore
+# (6-9, 10-14, 15-21, 22+). The enhanced table applies only in a Super Shop, which appears only on HARD, by chance
+# (the user, 2026-10-22; the game's Fusion Guide shows it with its `_upgrade` strings, and the tutorial says "In Hard
+# difficulty, there is a chance for a Super Shop to appear"). A NORMAL run only has the shop table.
+# combineTwo / combineThree (a tier lookup by the materials' tiers) equal the shop table on every row (tests/test_shop.py);
+# when the game uses them is unverified.
 fusion_points: {1: 3, 2: 6, 3: 10, 4: 15, 5: 30}
 fusion_tiers:
   shop: [10, 16, 24]
