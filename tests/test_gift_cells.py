@@ -38,9 +38,9 @@ def test_no_two_candidates_share_an_id_or_an_english_name():
 def test_the_table_holds_every_named_gift_of_the_game_data_when_it_is_unpacked():
     # #332: ids 9000-9999 of the static data; only 9247 (no name, no icon sprite) is left out, so a new unnamed id fails here.
     from local_dir import local_dir  # noqa: PLC0415  # the pytest process only (the child below has no tools/ path)
-    import gift_recipes  # noqa: PLC0415
     if not (unpack := local_dir("unpack")).joinpath("static").is_dir():
         pytest.skip("no unpacked game data")
+    import gift_recipes  # noqa: PLC0415  # needs cv2, which CI's dev group lacks
     named = gift_recipes.english_names(unpack)
     ids = {i for i in gift_recipes.gift_table(unpack) if 9000 <= i <= 9999}
     assert ids - set(named) == {9247}
