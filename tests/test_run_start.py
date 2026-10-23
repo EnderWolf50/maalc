@@ -1,9 +1,11 @@
 import re
+from difflib import SequenceMatcher
 from pathlib import Path
 
 import pytest
 import yaml
 
+import gift_cells
 import run_start as rs
 from ocrtext import compact
 
@@ -434,3 +436,18 @@ def test_without_a_cover_a_card_no_title_path_reads_is_unlisted_as_before():
     ranked = rs.rank_packs([["WOPIS", "Line"]], DATA_NAMES, {"weights": {"Line 1": -5, "Line 2": -9}, "unlisted": 3})
     assert ranked == [("WOPIS Line", 3, "unread")]  # alike titles with two weights: unlisted
 
+
+
+def test_match_pack_skips_only_names_that_cannot_be_the_answer():
+    # #329: names whose quick_ratio is under min_ratio - margin are not scored; the answer is the plain definition's.
+    names = [e["en"] for e in gift_cells.load()]
+
+    def plain(text, min_ratio=0.9, margin=0.04):
+        scores = sorted(((SequenceMatcher(None, compact(text), compact(n)).ratio(), n) for n in set(names)), reverse=True)
+        if scores[0][0] < min_ratio or scores[0][0] - scores[1][0] < margin:
+            return None
+        return scores[0][1]
+
+    for n in names[::7]:
+        for text in (n, n[:-1], n[1:], n.replace("e", "c", 1), n[: len(n) * 2 // 3], n.upper() + "x"):
+            assert rs.match_pack(text, names) == plain(text), text

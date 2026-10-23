@@ -91,10 +91,22 @@ def difficulty_move(floor, shown_hard, want_hard):
     return "normal" if floor == 1 else None
 
 
+@lru_cache(maxsize=None)
+def _compact(name):
+    """compact(name), once per name: the gifts' 400 names are matched against every name plate (#329)."""
+    return compact(name)
+
+
 def match_pack(text, names, min_ratio=0.9, margin=0.04):
     """The pack name OCR text stands for, or None (spec 05 section 1: >= 0.9 and 0.04 ahead of the runner-up)."""
     key = compact(text)
-    scores = sorted(((SequenceMatcher(None, key, compact(n)).ratio(), n) for n in set(names)), reverse=True)
+    scores = []
+    for n in set(names):
+        m = SequenceMatcher(None, key, _compact(n))
+        # ratio() <= quick_ratio(): a name below min_ratio - margin is neither the best nor within margin of it
+        if m.real_quick_ratio() >= min_ratio - margin and m.quick_ratio() >= min_ratio - margin:
+            scores.append((m.ratio(), n))
+    scores.sort(reverse=True)
     if not scores or scores[0][0] < min_ratio:
         return None
     if len(scores) > 1 and scores[0][0] - scores[1][0] < margin:

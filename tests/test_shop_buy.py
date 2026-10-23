@@ -9,12 +9,19 @@ from test_actions import buying, cells_read, live_shop, wants
 clock, context = test_actions.clock, test_actions.context  # its fixtures
 
 
-def shelf(context, prices, cost, short=()):
-    """A shop showing offers priced prices (the first four in a row), `cost` Cost, those of index `short` tagged Not Enough Cost;
+def plates_read(monkeypatch, *ids):
+    """read_plates reads the name plates of the offers as ids (None: unread); test_gift_cells reads real ones (#329)."""
+    monkeypatch.setattr(actions, "read_plates", lambda context, image, centres: [{"text": f"plate {i}", "id": i} for i in ids])
+
+
+def shelf(context, prices, cost, short=(), purchased=()):
+    """A shop showing offers priced prices (the first four in a row), `cost` Cost, those of index `short` tagged Not Enough Cost
+    and those of `purchased` Purchased;
     a purchase takes its price off the Cost. The offer cells tapped are in the list returned."""
     xs = [570, 725, 880, 1035]
     lines = [r for x, p in zip(xs, prices) for r in [("Gift", (x, 333, 90, 17)), (str(p), (x + 30, 306, 40, 24))]]
     lines += [("Not Enough Cost", (xs[i] + 10, 260, 80, 17)) for i in short]
+    lines += [("Purchased", (xs[i] + 10, 260, 80, 17)) for i in purchased]
     costs, tapped = [cost], []
 
     def click(x, y):
@@ -74,17 +81,61 @@ def test_the_first_in_the_queue_too_dear_is_sold_for_before_anything_is_bought(c
     assert actions.Shop.buy_offers(context, buying(wants(9053, 9003)), visit) == 1 and visit["wanted"] is None
 
 
-def test_a_dimmed_offer_of_a_wanted_keyword_is_sold_for_when_it_may_be_the_first(context, monkeypatch):
-    # #298 (the user did not decide it): a Not Enough Cost offer is dimmed, its tier and icon unread (id None). Its badge
-    # says Burn, so it may be 9053, first of the queue: sell first, buy nothing. A dimmed Bleed one, no wanted keyword,
-    # holds nothing back.
+def test_a_dimmed_offer_is_told_by_its_plate_and_sold_for_when_it_is_the_first(context, monkeypatch):
+    # #329: a Not Enough Cost offer is dimmed, its tier and icon unread (id None); its name plate still reads. The plate
+    # says 9053, first of the queue: sell first, buy nothing.
     shelf(context, [300, 120], 250, short=[0])
     cells_read(monkeypatch, ("Burn", None, None), ("Burn", None, 1, 9003))
+    plates_read(monkeypatch, 9053, 9003)
     visit = {"wanted": None, "sold": False}
     assert actions.Shop.buy_offers(context, buying(wants(9053, 9003)), visit) == 0 and visit["wanted"] == 300
-    cells_read(monkeypatch, ("Bleed", None, None), ("Burn", None, 1, 9003))
+
+
+def test_a_dimmed_offer_that_is_not_wanted_or_unread_holds_nothing_back(context, monkeypatch):
+    # #329: the plate says 9005 (Bleed II, not wanted); the badge alone no longer stands for the first Burn gift (#298's guess).
+    shelf(context, [300, 120], 250, short=[0])
+    cells_read(monkeypatch, ("Burn", None, None), ("Burn", None, 1, 9003))
+    plates_read(monkeypatch, 9005, 9003)
     visit = {"wanted": None, "sold": False}
     assert actions.Shop.buy_offers(context, buying(wants(9053, 9003)), visit) == 1 and visit["wanted"] is None
+    # an unread plate on a dimmed Burn badge: unknown, not guessed to be 9053
+    shelf(context, [300, 120], 250, short=[0])
+    plates_read(monkeypatch, None, 9003)
+    visit = {"wanted": None, "sold": False}
+    assert actions.Shop.buy_offers(context, buying(wants(9053, 9003)), visit) == 1 and visit["wanted"] is None
+
+
+def test_the_plate_names_a_gift_the_icon_could_not(context, monkeypatch):
+    # #329: the icon is unread, the plate reads 9053: bought.
+    shelf(context, [100], 500)
+    cells_read(monkeypatch, ("Burn", None, 3))
+    plates_read(monkeypatch, 9053)
+    assert actions.Shop.buy_offers(context, buying(wants(9053)), {"wanted": None, "sold": False}) == 1
+
+
+def test_an_offer_whose_icon_and_plate_name_two_gifts_is_unknown_and_not_bought(context, monkeypatch):
+    # #329: the icon says 9053 and the plate 9009, both wanted: neither is trusted, the log has both.
+    shelf(context, [100], 500)
+    cells_read(monkeypatch, ("Burn", None, 3, 9053))
+    plates_read(monkeypatch, 9009)
+    lines = []
+    monkeypatch.setattr(actions, "log", lines.append)
+    assert actions.Shop.buy_offers(context, buying(wants(9053, 9009)), {"wanted": None, "sold": False}) == 0
+    assert any("9053" in line and "9009" in line and "unknown" in line for line in lines)
+
+
+def test_every_cell_of_the_shop_is_logged_with_its_id_purchased_ones_too(context, monkeypatch):
+    # #329: a Not Enough Cost cell and a Purchased one name their gift in the log; the Purchased one is never bought.
+    shelf(context, [300, 120, 100], 250, short=[0], purchased=[2])
+    cells_read(monkeypatch, ("Burn", None, None), ("Burn", None, 1, 9003))
+    plates_read(monkeypatch, 9053, 9003, 9009)
+    lines = []
+    monkeypatch.setattr(actions, "log", lines.append)
+    assert actions.Shop.buy_offers(context, buying(wants(9053, 9003, 9009)), {"wanted": None, "sold": True}) == 1
+    shown = "\n".join(lines)
+    assert "9053 Dust to Dust" in shown and "9009" in shown and "Purchased" in shown
+    taps = [c.args for c in context.tasker.controller.post_click.call_args_list if c.args[1] == 268]
+    assert [x for x, _ in taps] == [725 + 50]
 
 
 def test_the_shop_does_not_refresh_when_the_list_buys_nothing(context):

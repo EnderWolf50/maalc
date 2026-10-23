@@ -31,7 +31,7 @@ import rewards
 import run_start
 import settlement
 import shop
-from gifts import effective, main_keyword, queue, queue_place, resolve_list
+from gifts import effective, main_keyword, queue, resolve_list
 from ocrtext import compact, digits, has, normalize
 from settings import SCHEMA, SettingsError, load_settings
 from state import next_cursor, pick_team, read_cursor, write_cursor
@@ -2716,6 +2716,7 @@ BADGES = ["Burn", "Bleed", "Tremor", "Rupture", "Sinking", "Poise", "Charge", "S
 BADGE_MIN, ICON_KEEP = 0.5, 0.45
 GIFTS = gift_cells.load()  # every gift a cell may show (#297)
 GIFT_NAMES = {e["id"]: e["en"] for e in GIFTS}
+GIFT_IDS = {e["en"]: e["id"] for e in GIFTS}  # an English name plate's gift (#329)
 CELL_ICON_ROI = 70  # px square around a cell's centre on the scaled grid where its icon is looked for: the biggest icon (54 px) +-8
 FUSE_CONFIRM = [300, 150, 680, 380]  # "Selected E.G.O Gifts 3/5" over "Fuse the selected E.G.O Gifts?"
 FUSE_COUNT = r"(\d)\s*/\s*\d"  # its "3/5": the materials in
@@ -2882,6 +2883,19 @@ def read_cells(context, image, cells, page, gifts=()):
     return out
 
 
+def read_plates(context, image, centres):
+    """The name plate under each offer cell centred at a (x, y) of centres: [{"text", "id"}], id None when it names no gift (#329).
+
+    One OCR line per plate (only_rec) in the box gift_cells.plate_roi gives, dimmed and Purchased cells included. The box
+    is relative to the cell's centre, so a grid dragged to another row reads just the same.
+    """
+    plates = []
+    for x, y in centres:
+        t = text(context, image, gift_cells.plate_roi(x, y), only_rec=True)
+        plates.append({"text": t, "id": gift_cells.name_id(t, GIFT_IDS)})
+    return plates
+
+
 def offer_cell(slot):
     """The icon centre of an offer read by shop.read_slots: its column's, 52 px over its price line."""
     return min((x for x, _ in OFFER_CELLS[:4]), key=lambda x: abs(x - slot["x"])), slot["y"] - 52
@@ -2896,6 +2910,8 @@ def cell_line(cell, role):
 def gift_shown(cell):
     """The gift a read cell was taken for, for the log: "9042 Smokes and Wires (0.77)", or "unknown (best 0.38)" (#297)."""
     named = GIFT_NAMES.get(cell["id"])
+    if named and cell.get("plate"):  # told by its name plate alone (a dimmed cell, #329)
+        return f"{cell['id']} {named} (plate)"
     return f"{cell['id']} {named} ({cell['score']:.2f})" if named else f"unknown (best {cell['score']:.2f})"
 
 
@@ -3270,11 +3286,11 @@ class Shop(CustomAction):
     def buy_offers(context, team, visit):
         """Read the offers once, then buy the ones of the team's list shop.buy_plan picks, last cell first; how many bought.
 
-        A gift is told by its icon (read_cells, #297): only an offer whose id is known, that the list wants and the shop
-        sells (gifts.queue) is bought, in the queue's order (#298). An offer too dear to be read (Not Enough Cost dims it: no
-        tier, no id) whose badge is a keyword the list wants stands for the best place a gift of that keyword holds
-        (gifts.queue_place): it may be the first choice, so the shop sells for it; it is never bought. Each purchase is
-        checked on the Cost.
+        A gift is told by its icon (read_cells, #297) and by its name plate (read_plates, #329): one vote is enough, two that
+        differ leave the cell unknown. Only an offer whose id is known, that the list wants and the shop sells (gifts.queue)
+        is bought, in the queue's order (#298). A Not Enough Cost offer is dimmed (no icon read) but its plate reads: with its
+        id it may be the first choice, so the shop sells for it; it is never bought. Every cell, Purchased ones too, is
+        logged with its id. Each purchase is checked on the Cost.
         """
         gift_list, reserve = team["list"], team["reserve_cost"]
         place = {i: n for n, i in enumerate(queue(gift_list))}
@@ -3285,7 +3301,13 @@ class Shop(CustomAction):
             log("shop: the Cost reads nothing: nothing bought")
             return 0
         image = screen(context)
-        slots = [s for s in shop.read_slots(ocr(context, image, OFFER_GRID)) if shop.on_sale(s)]
+        shown = shop.read_slots(ocr(context, image, OFFER_GRID))
+        for slot, plate in zip(shown, read_plates(context, image, [offer_cell(s) for s in shown])):
+            slot["plate"] = plate
+            if not shop.on_sale(slot) and (slot["name"] or plate["id"]):  # bought, a skill or "??": never bought, its plate logged (#329)
+                log(f"shop: {slot['name']!r}: {'Purchased' if slot['purchased'] else 'not on sale'}, plate {plate['text']!r} "
+                    f"{GIFT_NAMES.get(plate['id'], 'unknown')}" + ("" if plate["id"] is None else f" ({plate['id']})"))
+        slots = [s for s in shown if shop.on_sale(s)]
         avoided = avoided_gifts(team)
         cells = {c["i"]: c for c in read_cells(context, image, [offer_cell(s) for s in slots], "offer", avoided)}
         avoid = [g["name"] for g in avoided]
@@ -3293,6 +3315,12 @@ class Shop(CustomAction):
         offers = []
         for i, slot in enumerate(slots):
             cell = cells.get(i, {"tier": None, "keyword": None, "gift": None, "id": None, "score": 0.0})
+            plate = slot["plate"]
+            icon, (named, split) = cell["id"], gift_cells.vote(cell["id"], plate["id"])
+            if split:
+                log(f"shop: {slot['name']!r}: the icon says {icon} {GIFT_NAMES.get(icon)}, the plate {plate['text']!r} says "
+                    f"{plate['id']} {GIFT_NAMES.get(plate['id'])}: unknown")
+            cell = {**cell, "id": named, "plate": icon is None and named is not None}
             if cell["id"] in avoid_ids or cell["gift"] in avoid or any(rewards.names_gift(slot["name"], n) for n in avoid):
                 log(f"shop: {slot['name']!r} {slot['price']}: the team does not hold it (#90)")
                 continue
@@ -3300,13 +3328,10 @@ class Shop(CustomAction):
             if slot["short"] and slot["price"] <= cost:
                 log(f"shop: {slot['name']!r} is tagged Not Enough Cost: its price {slot['price']} is a misread")
                 continue
-            dimmed = cell["id"] is None and slot["short"]  # Not Enough Cost: tier and icon unread
             rank = place.get(cell["id"])
-            if dimmed:
-                rank = queue_place(gift_list, cell["keyword"], cell["tier"])
             state = effective(gift_list, cell["id"]) if cell["id"] else "unknown"
             log(f"shop: {slot['name']!r} {slot['price']}: tier {cell['tier']} {cell['keyword']} {gift_shown(cell)}, {state}"
-                f"{'' if rank is None else f', place {rank}'}{' (dimmed: the best place it may hold)' if dimmed and rank is not None else ''}")
+                f"{'' if rank is None else f', place {rank}'}")
             if rank is not None:
                 offers.append((i, rank, slot["price"]))
         plan, visit["wanted"] = shop.buy_plan(offers, cost, reserve, visit["sold"])
