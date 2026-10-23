@@ -59,7 +59,7 @@ def test_a_forecast_the_condition_refuses_is_not_fused_and_the_materials_come_ou
     fused, taps, ok, lines = fuse(context, monkeypatch, {"fusion_condition": condition}, THREE_THREE_TWO, {(0, 1, 2): 3}, get=False)
     assert not fused and not ok
     assert taps == [2, 2, 2]  # each in, then out
-    assert "page tier 3, chance 90%" in forecast_line(lines)[0] and forecast_line(lines)[0].endswith("turned down, taken out")
+    assert "page tier 3, chance 90%" in forecast_line(lines)[0] and forecast_line(lines)[0].endswith("turned down")
     assert any("1 turned down by the page's forecast" in m for m in lines)
 
 
@@ -70,7 +70,7 @@ def test_a_refused_group_is_left_out_and_the_next_one_is_tried(context, monkeypa
     fused, taps, ok, lines = fuse(context, monkeypatch, {"fusion_condition": "upgrade"}, cells, {(0, 1, 2): 3, (2, 3, 4): 3})
     assert fused and ok
     assert taps == [2, 2, 3, 1, 1]  # the III in and out; the first II in, out, in; the others in once
-    assert [m.rsplit(": ", 1)[1] for m in forecast_line(lines)] == ["turned down, taken out", "fuse"]
+    assert [m.rsplit(": ", 1)[1] for m in forecast_line(lines)] == ["turned down", "fuse"]
 
 
 def test_the_page_turns_down_at_most_fuse_tries_groups_then_closes(context, monkeypatch):

@@ -3452,7 +3452,7 @@ class Shop(CustomAction):
             # the game used. An unread row falls back to the points tier, which pick_fusion already checked.
             page_tier, chance = read_forecast(context)
             wanted = page_tier is None or shop.fusion_wanted(condition, page_tier, [(c["i"], c["tier"]) for c in group])
-            act = ("fuse on the points tier" if page_tier is None else "fuse") if wanted else "turned down, taken out"
+            act = ("fuse on the points tier" if page_tier is None else "fuse") if wanted else "turned down"
             log(f"shop: fuse forecast {materials}: points tier {tier}, page tier {page_tier or 'unread'}, chance "
                 f"{f'{chance}%' if chance else 'unread'}, condition {condition}: {act}")
             if wanted:
