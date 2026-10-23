@@ -4,6 +4,7 @@ import json
 import os
 import subprocess
 import sys
+import time
 import traceback
 import types
 from pathlib import Path
@@ -211,7 +212,7 @@ def child():
         def __getattr__(self, name):  # start_app, click, swipe, touch_*, keys, text, scroll: nothing moves
             return lambda *args: True
 
-    out = {"cases": {}, "sweep": {}, "plates": {}, "plate_sweep": {}}
+    out = {"cases": {}, "sweep": {}, "plates": {}, "plate_sweep": {}, "plate_ms": []}
 
     class Probe(CustomAction):
         def run(self, context, argv):
@@ -219,10 +220,14 @@ def child():
                 for case, (crop, cells, page) in CASES.items():
                     found = actions.read_cells(context, screen_with(crop), cells if isinstance(cells, list) else getattr(actions, cells), page)
                     out["cases"][case] = [c["id"] for c in found]
+                actions.ocr(context, screen_with("offers"), actions.OFFER_GRID)  # the agent's order: a det+rec pass reads before any plate
                 for case in PLATE_CASES:  # the offers' name plates (#329), one per filled cell
                     image = screen_with(case)
                     cells = [(x, y) for x, y in actions.OFFER_CELLS if shop.filled(image, x, y)]
-                    out["plates"][case] = [[i, p["text"], p["id"]] for i, p in enumerate(actions.read_plates(context, image, cells))]
+                    started = time.perf_counter()
+                    plates = actions.read_plates(context, image, cells)
+                    out["plate_ms"].append((time.perf_counter() - started) * 1000 / len(cells))
+                    out["plates"][case] = [[i, p["text"], p["id"]] for i, p in enumerate(plates)]
                 for path in sorted((ROOT / "tests" / "screens").glob("*.png")):
                     image = np.ascontiguousarray(np.array(Image.open(path).convert("RGB"))[:, :, ::-1])
                     cells = [(x, y) for x, y in actions.OFFER_CELLS if shop.filled(image, x, y)]
@@ -286,6 +291,18 @@ def test_the_name_plate_names_what_the_icon_names(read, case):
     assert plates == read["cases"][case]
 
 
+def test_a_plate_reads_fast_after_a_full_ocr_pass(read):
+    # #329: the default OCR instance reads a line in 31 ms on DirectML once a det+rec pass has used it (4 ms before); the plates'
+    # own instance (gift_cells.PLATE_MODEL) keeps the 4 ms. The first case pays the model's load: the later ones are timed.
+    # Each time is a case's mean per cell, name matching (1.4 ms) included, the bar 10 ms plus what a busy CI machine adds.
+    assert sorted(read["plate_ms"][1:])[len(read["plate_ms"][1:]) // 2] < 20, read["plate_ms"]
+
+
+def test_the_plates_ocr_folder_holds_a_model_copy():
+    ocr = settings.data_dir().parent / "model" / "ocr"
+    assert all((ocr / g.PLATE_MODEL / name).is_file() for name in ("det.onnx", "rec.onnx", "keys.txt"))
+
+
 def test_the_name_plate_names_dimmed_and_purchased_cells(read):
     # #329, live 2026-10-18 (106 Cost): three Not Enough Cost offers (Emerald Elytra, Lithograph, Reverberation) show no tier,
     # so no icon id; a Purchased one (Ornamental Horseshoe) shows its name just the same. The skill slot names none.
@@ -324,7 +341,7 @@ def test_no_other_capture_names_a_gift(read):
 
 def test_no_capture_but_the_shops_has_a_name_plate_that_names_a_gift(read):
     # #329: the plates of every tests/screens capture's offer cells (a false id on a screen with no shop would fail here).
-    # ShopPurchase: the dialog covers the shop but Lowest Star's plate (cell 3) still shows, dimmed, and is read right.
+    # ShopPurchase: the dialog covers the shop but Lowest Star's plate (the filled cell at index 3) still shows, dimmed, and is read right.
     assert read["plate_sweep"] == {"Shop": [[1, 9123], [2, 9198], [3, 9150], [4, 9086]], "ShopPurchase": [[3, 9027]],
                                    "SuperShop": [[3, 9187], [4, 9009], [5, 9102], [6, 9063], [7, 9163]]}
 

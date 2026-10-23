@@ -291,14 +291,18 @@ def drag(context, points, settle=0.3, dwell=0.1, hold=0.0, pause=0.02, step=10):
     ctl.post_touch_up().wait()
 
 
-def ocr(context, image, roi, only_rec=False):
-    """Every OCR result in roi as (text, (x, y, w, h)); only_rec reads roi as one line, no text detection."""
-    detail = context.run_recognition("ReadText", image, {"ReadText": {"recognition": "OCR", "roi": roi, "only_rec": only_rec}})
+def ocr(context, image, roi, only_rec=False, model=None):
+    """Every OCR result in roi as (text, (x, y, w, h)); only_rec reads roi as one line, no text detection.
+
+    model: a folder of model/ocr/ (the default is its root): MaaFramework keeps one OCR instance per folder.
+    """
+    node = {"recognition": "OCR", "roi": roi, "only_rec": only_rec, **({"model": model} if model else {})}
+    detail = context.run_recognition("ReadText", image, {"ReadText": node})
     return [(r.text, tuple(r.box)) for r in (detail.all_results if detail else [])]
 
 
-def text(context, image, roi, only_rec=False):
-    return " ".join(t for t, _ in ocr(context, image, roi, only_rec))
+def text(context, image, roi, only_rec=False, model=None):
+    return " ".join(t for t, _ in ocr(context, image, roi, only_rec, model))
 
 
 def number(s):
@@ -2899,11 +2903,13 @@ def read_plates(context, image, centres):
     """The name plate under each offer cell centred at a (x, y) of centres: [{"text", "id"}], id None when it names no gift (#329).
 
     One OCR line per plate (only_rec) in the box gift_cells.plate_roi gives, dimmed and Purchased cells included. The box
-    is relative to the cell's centre, so a grid dragged to another row reads just the same.
+    is relative to the cell's centre, so a grid dragged to another row reads just the same. It reads with its own OCR
+    instance (gift_cells.PLATE_MODEL): on DirectML the default one reads a line in 31 ms once a det+rec pass has used it, this
+    one in 4 ms whatever ran before (#329).
     """
     plates = []
     for x, y in centres:
-        t = text(context, image, gift_cells.plate_roi(x, y), only_rec=True)
+        t = text(context, image, gift_cells.plate_roi(x, y), only_rec=True, model=gift_cells.PLATE_MODEL)
         plates.append({"text": t, "id": gift_cells.name_id(t, GIFT_IDS)})
     return plates
 
@@ -3346,7 +3352,7 @@ class Shop(CustomAction):
             slot["plate"] = plate
             if not shop.on_sale(slot):  # bought, a skill or "??": never bought, its plate logged (#329)
                 log(f"shop: {slot['name']!r}: {'Purchased' if slot['purchased'] else 'not on sale'}, plate {plate['text']!r} "
-                    f"{GIFT_NAMES.get(plate['id'], 'unknown')}" + ("" if plate["id"] is None else f" ({plate['id']})"))
+                    + gift_shown({"id": plate["id"], "by_plate": True, "score": 0.0}))
         slots = [s for s in shown if shop.on_sale(s)]
         avoided = avoided_gifts(team)
         cells = {c["i"]: c for c in read_cells(context, image, [offer_cell(s) for s in slots], "offer", avoided)}
@@ -3370,7 +3376,7 @@ class Shop(CustomAction):
                 continue
             rank = place.get(cell["id"])
             state = effective(gift_list, cell["id"]) if cell["id"] else "unknown"
-            log(f"shop: {slot['name']!r} {slot['price']}: tier {cell['tier']} {cell['keyword']} {gift_shown(cell)}, {state}"
+            log(f"shop: {slot['name']!r} {slot['price']}: tier {cell['tier']} {cell['keyword']} {gift_shown(cell)}, plate {plate['text']!r}, {state}"
                 f"{'' if rank is None else f', place {rank}'}")
             if rank is not None:
                 offers.append((i, rank, slot["price"]))

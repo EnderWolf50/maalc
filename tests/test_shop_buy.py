@@ -137,6 +137,7 @@ def test_every_cell_of_the_shop_is_logged_with_its_id_purchased_ones_too(context
     assert actions.Shop.buy_offers(context, buying(wants(9053, 9003, 9009)), {"wanted": None, "sold": True}) == 1
     shown = "\n".join(lines)
     assert "9053 Dust to Dust" in shown and "9009" in shown and "Purchased" in shown
+    assert "plate 'plate 9003'" in shown and "plate 'plate 9009' 9009" in shown  # an on-sale cell's line names its plate too
     taps = [c.args for c in context.tasker.controller.post_click.call_args_list if c.args[1] == 268]
     assert [x for x, _ in taps] == [725 + 50]
 
