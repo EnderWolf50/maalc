@@ -113,5 +113,21 @@
         "template": "Map/MapNodeShopIcon.png",
         "method": 5,
         "threshold": 0.45
+    },
+    // The same shop icon with the "+" variant's star and plus (hard floors; the plain template scores 0.33-0.39 on it): 6 captures averaged.
+    "MapNodeShopIconPlus": {
+        "recognition": "TemplateMatch",
+        "roi": [640, 0, 180, 620],
+        "template": "Map/MapNodeShopIconPlus.png",
+        "method": 5,
+        "threshold": 0.6
+    },
+    // The "+" variant's torn red frame (LCB Regular Check-up, floor 5): one capture, the "+" template scores 0.35 on it.
+    "MapNodeShopIconTorn": {
+        "recognition": "TemplateMatch",
+        "roi": [640, 0, 180, 620],
+        "template": "Map/MapNodeShopIconTorn.png",
+        "method": 5,
+        "threshold": 0.6
     }
 }

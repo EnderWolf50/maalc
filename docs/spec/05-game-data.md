@@ -147,7 +147,7 @@
 
 這些數字放在資料檔，不寫成程式常數。（#19）
 
-**節點 Cost**：戰鬥節點的種類由 Cost 數字＋難度查這張表（資料檔 `map_weights.yaml` 的 `node_costs`，#91，2026-10-21；原本只供參考）。同一難度內各不相同；外圈與禮物盒只在數字讀不到時才用，見 [03-decisions.md](03-decisions.md) 第 7 節。
+**節點 Cost**：戰鬥節點與 Boss 的種類由 Cost 數字＋難度查這張表（資料檔 `map_weights.yaml` 的 `node_costs`，#91，2026-10-21；原本只供參考；Boss 自 #284 起）。同一難度內各不相同；外圈與禮物盒只在數字讀不到時才用，見 [03-decisions.md](03-decisions.md) 第 7 節。
 
 | 節點類型 | 普通 | 困難 | 外圈 | 禮物盒 |
 |---|---|---|---|---|
@@ -155,6 +155,9 @@
 | Focused 集中（`focused`） | 100 | 120 | – | ✔ |
 | Risky 精銳（`risky`） | 120 | 150 | ✔ | ✔ |
 | 異想體戰 Abnormality（`abno`） | 150 | 180 | ✔ | ✔ |
+| Boss（`boss`），第 1／2／3／4–5 層 | 200／240／300／400 | 250／300／375／500 | – | – |
+
+Boss 的 Cost 是遊戲資料 `mirror-dungeon-common-data-md8.json` 的 BOSS cost（`originbattlevictorycostvalueList` 200、`…HardLevel` 250）乘 `battleCostWeightsByFloor` 的 BOSS 權重（第 1–5 層 1、1.2、1.5、2、2）。2026-10-23 實機的節點面板：普通 200／240／300（第 1–3 層），困難 250／300／375／500（第 1–4 層）；普通第 4、5 層的 400 和困難第 5 層的 500 還沒在實機看過。
 
 **困難模式的實測 Cost**：下表是 2026-10-13 困難鏡牢實機看到的節點 Cost 標記，不是資料檔的預設值，也不是 wiki 的數字。節點欄是當時的稱呼；照上表（#91）重新對照後與上表一致：外圈 150 是困難 Risky、180 是困難 Abnormality，禮物盒無外圈的 120 是困難 Focused。
 

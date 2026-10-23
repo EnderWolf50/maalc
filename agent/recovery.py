@@ -30,11 +30,12 @@ TRANSIT = {"Loading", "Connecting", "RetryPopup", "GoToMirrorEntry", "NavTitle",
            "Downloading", "UpdateDialog", "UserAgreement",
            "Notices"}  # the notices may open by themselves at login (unverified, #85)
 UNKNOWN_KEEP = 30  # screens MirrorHub did not recognise that logs/unknown/ keeps
+COST_KEEP = 50  # crops of map Cost coins that read as no Cost that logs/cost/ keeps (#284)
 # Seconds after confirming the title's download dialog in which nothing is stuck: until its progress screen
 # (Downloading, a waiting screen) is up, 22 s live 2026-10-21. 30 min ran out there before the download was done.
 DOWNLOAD_HOLD = 3 * 60
 L2_PER_RUN, L3_PER_RUN, L3_PER_EXECUTION = 3, 2, 3
-BATTLE = {"BattleTurn", "BattlePause"}  # L2 cannot go through mid-battle: only the map has To Window
+BATTLE = {"BattleTurn", "BattlePause", "BattleMenu"}  # L2 cannot go through mid-battle: only the map has To Window
 BATTLE_LIMIT = 20 * 60
 RUN_LIMIT_DEFAULT, RUN_LIMIT_MIN_RUNS = 60 * 60, 10
 FLOOR_LIMIT, FLOORS = 45 * 60, 5  # live (#34): a HARD floor took up to ~25 min of real progress
@@ -66,16 +67,17 @@ def png(image):
             + chunk(b"IDAT", zlib.compress(rows.tobytes(), 6)) + chunk(b"IEND", b""))
 
 
-def keep_unknown(root, image, stamp):
-    """Save a screen MirrorHub recognised nothing on to <root>/logs/unknown/<stamp>.png, the newest UNKNOWN_KEEP.
+def keep_capture(root, name, image, stamp, keep):
+    """Save image to <root>/logs/<name>/<stamp>.png, keeping the newest keep there.
 
-    A popup nobody has a capture of (weekly reset, tutorial tip, an event's choice page) is otherwise lost once
-    the back key closes it; this is the capture its node needs.
+    "unknown": a screen MirrorHub recognised nothing on (UNKNOWN_KEEP). A popup nobody has a capture of (weekly
+    reset, tutorial tip, an event's choice page) is otherwise lost once the back key closes it; this is the
+    capture its node needs. "cost": a map node's Cost coin that read as no Cost (COST_KEEP, #284).
     """
-    folder = Path(root) / "logs" / "unknown"
+    folder = Path(root) / "logs" / name
     folder.mkdir(parents=True, exist_ok=True)
     (folder / f"{stamp}.png").write_bytes(png(image))
-    for old in sorted(folder.glob("*.png"))[:-UNKNOWN_KEEP]:
+    for old in sorted(folder.glob("*.png"))[:-keep]:
         old.unlink()
 
 

@@ -50,6 +50,7 @@
                 "Notices",
                 "Mailbox",
                 "SettingsMenu",
+                "ProgressPanel",
                 "ExplorationReward",
                 "RunVictory",
                 "DefeatScreen",
@@ -77,8 +78,7 @@
                 "Event",
                 "WipeDialog",
                 "Victory",
-                "Formation",
-                "ProgressPanel"
+                "Formation"
             ],
             "tail": [
                 "MapNodePanel",
@@ -108,6 +108,7 @@
     "BattleHUD": {
         "recognition": "Or",
         "any_of": [
+            "BattleMenu",
             "BattleTurn",
             "BattlePause"
         ],
@@ -124,6 +125,7 @@
             "RetryPopup",
             "UpdateDialog",
             "PopupButton",
+            "BattleMenu",
             "BattleTurn",
             "BattlePause"
         ]
@@ -357,6 +359,8 @@
         "custom_action": "PickThemePack",
         "post_delay": 0
     },
+    // The free refresh button's count "n/3" (#319): spent (0); unread or some left: no hit.
+    "PackRefreshSpent": {"recognition": "OCR", "roi": [1105, 32, 60, 30], "expected": "^0 ?/ ?\\d"},
     // Rewards and events (spec 03 sections 10-12). The bot never cancels a reward or refuses a gift;
     // landing in either dialog anyway, it backs out with Cancel.
     "RewardCardForgo": {
@@ -420,8 +424,9 @@
         "pre_delay": 200,
         "post_delay": 200
     },
-    // The map's Dungeon Progress panel (the gear, or the back key on the map): Continue closes it.
-    // Over the map, whose icons still show: before MirrorMap.
+    // The Dungeon Progress panel (the gear, or the back key on the map or an event): Continue closes it, never Forfeit
+    // (gives the run up) or To Window. Over the map, whose icons still show, or an event, whose button still reads:
+    // before every page, in HubText's entries (#215).
     "ProgressPanel": {
         "recognition": "OCR",
         "roi": [600, 440, 80, 35],
@@ -481,6 +486,19 @@
         "expected": "Clear Selection",
         "action": "Custom",
         "custom_action": "Formation"
+    },
+    // The pause menu behind the top-right gear (#215, live 2026-10-22, tests/screens/BattleMenu.png): Settings / Resume /
+    // Retry Stage / Give Up, over the turn, whose Win Rate label still reads (a tap there only closed it by chance).
+    // Resume closes it. The roi is the Resume bar alone, so the click can land on no other button; Give Up and Retry
+    // Stage end the stage. A template, as the popups before it: BattleHUD runs it on every battle round.
+    "BattleMenu": {
+        "recognition": "TemplateMatch",
+        "roi": [505, 296, 270, 41],
+        "template": "Battle/BattleMenuResume.png",
+        "threshold": 0.8,
+        "action": "Click",
+        "pre_delay": 0,
+        "post_delay": 1000
     },
     // Waiting for input: the Win Rate label, off or on. It moves half a slot (~40 px) right with every
     // extra skill slot: x 984 with 7 slots, ~740 with 1 (a 1-sinner formation, live 2026-10-16).
