@@ -494,7 +494,8 @@ def test_the_forecasts_row_sweep_over_tests_screens_finds_no_unlisted_hit():
         img = Image.open(png)
         if img.size == (1280, 720):
             hits[png.stem] = s.forecast_tier(np.asarray(img.convert("RGB"))[:, :, ::-1])
-    assert {k: v for k, v in hits.items() if v} == {"GiftGetOverMap": 1, "ShopFuseRecipe": 4}
+    # ShopFuseRecipeTwo (#304) is a fuse page with a recipe placed: its row reads III Guaranteed.
+    assert {k: v for k, v in hits.items() if v} == {"GiftGetOverMap": 1, "ShopFuseRecipe": 4, "ShopFuseRecipeTwo": 3}
 
 
 def test_pick_fusion_leaves_out_a_refused_group():
