@@ -1,6 +1,7 @@
 // Teams (spec 04 section 9): list order is rotation order.
 import { useState } from "react";
 import { resetTeamTimes } from "./api";
+import { kwText } from "./KeywordGrid";
 import { teamKeyword } from "./gifts";
 import {
   MAX_GIFTS, SEARCH_GIFTS, SEARCH_TABS, SINNERS, defaultStarlight, freeName, newId, newTeam, teamEnum, toggleGift,
@@ -35,7 +36,7 @@ export function TeamsTab() {
 }
 
 function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
-  const { s, update, t, tv, bad } = useEditor();
+  const { s, update, t, tv, bad, chooseList } = useEditor();
   const team = s.teams[i];
   const path = `teams/${i}`;
   const set = (patch: Partial<Team>) => update((d) => { Object.assign(d.teams[i], patch); });
@@ -175,7 +176,8 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
               {s.gift_lists.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
               {missing(team.gift_list !== "default" && team.gift_list, s.gift_lists)}
             </select>
-            {main && <small>{t("team.main_keyword")}: <b>{main}</b></small>}
+            {main && <small>{t("team.main_keyword")}: <b>{t(kwText(main))}</b></small>}
+            <button type="button" disabled={!main} onClick={() => chooseList(team.gift_list, true)}>{t("team.edit_list")}</button>
           </Field>
           <Field label={t("team.theme_pack_plan")} path={`${path}/theme_pack_plan`}>
             <select value={team.theme_pack_plan} onChange={(e) => set({ theme_pack_plan: e.target.value })}>

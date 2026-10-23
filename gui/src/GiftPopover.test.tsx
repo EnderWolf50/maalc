@@ -84,7 +84,7 @@ describe("hover popover: closing at once", () => {
   }
   test("a scroll of the page", async () => { await opened(); fireEvent.scroll(window); expect(popover()).toBeNull(); });
   test("the window losing focus", async () => { await opened(); fireEvent.blur(window); expect(popover()).toBeNull(); });
-  test("a drag of the tile", async () => { await opened(); fireEvent.dragStart(getTile(burnIII[0])); expect(popover()).toBeNull(); });
+  test("a drag of the tile", async () => { await opened(); fireEvent.dragStart(getTile(burnIII[0]), { dataTransfer: { setData() {}, effectAllowed: "" } }); expect(popover()).toBeNull(); });
   test("a scroll inside the popover is not the page moving", async () => {
     await opened();
     fireEvent.scroll(popover()!);

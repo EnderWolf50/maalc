@@ -12,6 +12,10 @@ export interface Ctx {
   tv: (field: string, v: string) => string;
   /** A failed check points at this path or something under it. */
   bad: (path: string) => boolean;
+  /** The gift list the gift list tab shows: "default" or a list's id. Kept here so another tab can send the user to a list. */
+  giftList: string;
+  /** Show that list in the gift list tab; with `open`, also switch to the tab. */
+  chooseList: (id: string, open?: boolean) => void;
 }
 export const EditorContext = createContext<Ctx>(null!);
 export const useEditor = () => useContext(EditorContext);

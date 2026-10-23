@@ -5,11 +5,13 @@
 import { useEffect, useRef, useState } from "react";
 import "./giftlists.css";
 import { GIFT_BY_ID, giftName } from "./giftCatalog";
-import { plan, setState, GiftEditContext, STATES, type GiftEdit } from "./giftEdit";
-import { DEFAULT_LIST, type GiftState } from "./gifts";
+import { BuyOrderDialog } from "./BuyOrder";
+import { plan, resetToDefault, setState, GiftEditContext, STATES, type GiftEdit } from "./giftEdit";
+import { DEFAULT_LIST, queue, type GiftState } from "./gifts";
 import { fill } from "./i18n";
-import { FUSION_CONDITIONS, GIFT_KEYWORDS } from "./model";
+import { FUSION_CONDITIONS, GIFT_KEYWORDS, type GiftList } from "./model";
 import { HelpPopover } from "./GiftHelp";
+import { GiftListOptions } from "./GiftListOptions";
 import { GiftPopover, useGiftTip } from "./GiftPopover";
 import { KeywordPanel, KeywordTabs, SearchResults } from "./KeywordGrid";
 import { useEditor } from "./ui";
@@ -17,12 +19,13 @@ import { useEditor } from "./ui";
 const FLASH_MS = 4200;
 
 export function GiftListsTab() {
-  const { s, update, t, tv } = useEditor();
-  // What is being edited is UI state, not saved: "default" (the data file's list, read-only) or the id of one of the user's lists.
-  const [chosen, setChosen] = useState("default");
+  const { s, update, t, tv, giftList: chosen, chooseList: setChosen } = useEditor();
+  // What is being edited is UI state, not saved (the editor keeps it): "default" (the data file's list, read-only) or the id of one of the user's lists.
   const [pick, setPick] = useState<GiftState>("want");
   const [tab, setTab] = useState(GIFT_KEYWORDS[0]);
   const [message, setMessage] = useState({ text: "", warn: false });
+  const [buying, setBuying] = useState(false); // the purchase order dialog is open
+  const buyButton = useRef<HTMLButtonElement>(null);
   const timer = useRef<number>(undefined);
   useEffect(() => () => clearTimeout(timer.current), []);
 
@@ -51,6 +54,11 @@ export function GiftListsTab() {
     if (result.downgraded) flash(fill(t("gl.unbuyable_keep"), { name }), true);
     else setMessage({ text: "", warn: false });
   };
+  const change = (fn: (l: GiftList) => void) => {
+    const ok = editable();
+    if (ok) update((d) => fn(d.gift_lists[at]));
+    return ok;
+  };
   const { open, tip } = useGiftTip();
   const [query, setQuery] = useState("");
   const [help, setHelp] = useState(false);
@@ -67,19 +75,20 @@ export function GiftListsTab() {
     tip.hide(); // focusing the tile opened its popover, and the scroll would close it a moment later: close it now
     setJump(null);
   }, [jump, tip]);
-  const edit: GiftEdit = { list, readOnly, pick, apply, flash, tip, goto };
+  const edit: GiftEdit = { list, readOnly, pick, apply, flash, tip, goto, editable, change };
 
   // 1, 2 and 3 pick the state, unless the user is typing or choosing in a field; / jumps to the search box; Esc closes the popover,
   // then the help, then clears the search.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
+        if (buying) return; // the purchase order dialog closes itself
         if (open) tip.hide();
         else if (help) setHelp(false);
         else if (query) setQuery("");
         return;
       }
-      const typing = (e.target as HTMLElement).closest("input, select, textarea");
+      const typing = (e.target as HTMLElement).closest("input, select, textarea, [role=dialog]"); // a field or a dialog has its own keys
       if (e.key === "/" && !typing && !e.ctrlKey && !e.metaKey && !e.altKey) {
         e.preventDefault();
         searchBox.current?.focus();
@@ -91,7 +100,7 @@ export function GiftListsTab() {
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [open, help, query, tip]);
+  }, [open, help, query, buying, tip]);
   // A click anywhere but the help closes it.
   useEffect(() => {
     if (!help) return;
@@ -101,10 +110,7 @@ export function GiftListsTab() {
   }, [help]);
 
   const empty = !readOnly && !list.want.length && !list.keep.length;
-  const startFromDefault = () => update((d) => {
-    const { order, want, keep, gorder, fusion_condition } = structuredClone(DEFAULT_LIST);
-    Object.assign(d.gift_lists[at], { order, want, keep, gorder, fusion_condition });
-  });
+  const startFromDefault = () => update((d) => resetToDefault(d.gift_lists[at]));
 
   return (
     <GiftEditContext.Provider value={edit}>
@@ -117,7 +123,7 @@ export function GiftListsTab() {
                 {s.gift_lists.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
               </select>
             </label>
-            {/* #308: the list options menu goes here. */}
+            <GiftListOptions at={at} readOnly={readOnly} choose={setChosen} flash={flash} />
             {readOnly && <span className="gl-readonly">{t("gl.readonly")}</span>}
             <input ref={searchBox} type="search" className="gl-search" aria-label={t("gl.search")} placeholder={t("gl.search_ph")}
               value={query} onChange={(e) => setQuery(e.target.value)} />
@@ -153,7 +159,9 @@ export function GiftListsTab() {
               ))}
             </div>
             <span className="gl-hint">{t("gl.hint")}</span>
-            {/* #296: the "purchase order" button goes at the end of this row. */}
+            <button type="button" className="gl-buy" ref={buyButton} aria-haspopup="dialog" onClick={() => setBuying(true)}>
+              {fill(t("gl.buy"), { n: queue(list).length })}
+            </button>
           </div>
           <div className={"gl-flash" + (message.warn ? " warn" : "")} role="status" aria-live="polite">{message.text}</div>
         </div>
@@ -169,6 +177,7 @@ export function GiftListsTab() {
           {searching ? <SearchResults query={query} onClear={() => setQuery("")} /> : <KeywordPanel keyword={tab} />}
         </section>
         {open && <GiftPopover id={open.id} anchor={open.anchor} />}
+        {buying && <BuyOrderDialog onClose={() => { setBuying(false); buyButton.current?.focus(); }} />}
       </div>
     </GiftEditContext.Provider>
   );

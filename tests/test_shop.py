@@ -16,6 +16,7 @@ CROP_AT = {
     "fuse_spiderweb": (620, 236),  # live 2026-10-18 (probe capture rec/m3/fuse-140): Spiderweb Entangled in Red first
     "fuse": (620, 236),  # tests/screens/ShopFuse.png
     "fuse_recipe": (620, 236),  # tests/screens/ShopFuseRecipe.png (#103): the owned row sits at y 427
+    "fuse_tooltip": (620, 236),  # a tooltip (Hellterfly's Dream's) over the first row's right half and the row under it (#297)
     # The fuse page's slots and first two columns (#77): live 2026-10-18 (probe capture rec/m3/fuse-152), Spiderweb tapped
     # in; captures/97 (2 in, a tooltip over the grid), Super Shop captures/172 (cells 5 and 6 in) and 169 (empty).
     "fuse_one_in": (180, 165),
@@ -463,18 +464,19 @@ def test_sell_prices_are_the_numbers_under_each_cell():
     assert s.cell_prices(SELL_OCR, cells) == {0: 100, 1: 50, 2: 131, 3: 99, 4: 93, 5: 100, 6: 97, 7: 91, 8: 101, 9: 96}
 
 
-def test_buy_plan_takes_high_tier_first_and_buys_from_the_back():
-    # #76: (grid index, tier, price) of the main-keyword offers on show.
-    offers = [(0, 1, 140), (1, 2, 200), (3, 2, 180), (4, 3, 250)]
-    # Tier 3, then the cheaper tier 2, then the dearer one; tier 1 no longer fits. Bought last cell first,
+def test_buy_plan_takes_the_queue_order_not_the_tier_or_the_price_and_buys_from_the_back():
+    # #298: (grid index, place in the buy queue, price) of the offers on show the list wants.
+    offers = [(0, 3, 140), (1, 1, 200), (3, 0, 250), (4, 2, 180)]
+    # Queue order 3, 1, 4, 0 though 0 is the cheapest; 140 no longer fits after them. Bought last cell first,
     # so the offers before it keep their places (a bought one moves to the end of the grid).
     assert s.buy_plan(offers, 700, 0, sold=False) == ([4, 3, 1], None)
-    assert s.buy_plan(offers, 700, 100, sold=False) == ([4, 3, 0], None)  # the reserve: 200 no longer fits, 140 does
-    assert s.buy_plan([(2, None, 150), (5, 1, 160)], 200, 0, sold=False) == ([5], None)  # an unread tier comes last
+    assert s.buy_plan(offers, 700, 100, sold=False) == ([3, 1, 0], None)  # the reserve: 180 no longer fits, the cheaper 140 does
+    assert s.buy_plan(offers, 600, 100, sold=False) == ([3, 1], None)
+    assert s.buy_plan([(2, 1, 150), (5, 1, 140)], 200, 0, sold=False) == ([5], None)  # one gift twice on show: the cheaper
 
 
-def test_buy_plan_sells_first_when_the_top_tier_is_too_dear():
-    offers = [(0, 1, 140), (2, 3, 250)]
+def test_buy_plan_sells_first_when_the_first_in_the_queue_is_too_dear():
+    offers = [(0, 4, 140), (2, 0, 250)]
     assert s.buy_plan(offers, 200, 0, sold=False) == ([], 250)  # nothing bought: the next round sells for it
     assert s.buy_plan(offers, 200, 0, sold=True) == ([0], None)  # sold already (or nothing to sell): what fits
     assert s.buy_plan([], 200, 0, sold=False) == ([], None)

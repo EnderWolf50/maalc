@@ -51,3 +51,13 @@ def test_gifts_needs_no_maafw():
     code = "import sys, gifts; assert not any(m == 'maa' or m.startswith('maa.') for m in sys.modules)"
     env = {**os.environ, "PYTHONPATH": str(ROOT / "agent")}
     subprocess.run([sys.executable, "-c", code], env=env, check=True, capture_output=True)
+
+
+def test_queue_place_is_the_best_place_a_cell_of_that_keyword_could_hold():
+    # #298: a dimmed offer's tier is unread, so every wanted gift of its keyword is a candidate; a read tier narrows it.
+    gift_list = {"order": ["Burn", "Bleed"], "want": [9053, 9003, 9005], "keep": [], "gorder": {"Burn": [9053, 9003], "Bleed": [9005]}}
+    assert gifts.queue_place(gift_list, "Burn") == 0
+    assert gifts.queue_place(gift_list, "Burn", 1) == 1
+    assert gifts.queue_place(gift_list, "Bleed") == 2
+    assert gifts.queue_place(gift_list, "Burn", 2) is None  # no wanted tier II
+    assert gifts.queue_place(gift_list, "Pierce") is None
