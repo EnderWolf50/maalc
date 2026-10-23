@@ -116,10 +116,14 @@ VESTIGES = SCHEMA["$defs"]["vestige"]["properties"]["name"]["enum"]  # tier I-V,
 VESTIGE_IDS = [9990 + t for t in range(1, len(VESTIGES) + 1)]
 
 
+def data_dir():
+    return next(p for p in (ROOT / "resource", ROOT / "assets" / "resource") if p.is_dir()) / "base" / "data"
+
+
 @cache
 def gift_tables():
     """data/gift_search.json's gifts (the buyable ones, page order) and data/gift_recipes.json's gifts and materials."""
-    data = next(p for p in (ROOT / "resource", ROOT / "assets" / "resource") if p.is_dir()) / "base" / "data"
+    data = data_dir()
     recipes = json.loads((data / "gift_recipes.json").read_text(encoding="utf-8"))
     return json.loads((data / "gift_search.json").read_text(encoding="utf-8"))["gifts"], recipes["gifts"], recipes["materials"]
 

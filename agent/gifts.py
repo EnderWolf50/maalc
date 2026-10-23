@@ -23,8 +23,7 @@ def _game_tables():
 @cache
 def default_list():
     """data/gift_lists.yaml's default list: the fields of a settings gift list without id and name."""
-    data = next(p for p in (settings.ROOT / "resource", settings.ROOT / "assets" / "resource") if p.is_dir()) / "base" / "data"
-    return yaml.safe_load((data / "gift_lists.yaml").read_text(encoding="utf-8"))["default_list"]
+    return yaml.safe_load((settings.data_dir() / "gift_lists.yaml").read_text(encoding="utf-8"))["default_list"]
 
 
 def resolve_list(ref, gift_lists):
