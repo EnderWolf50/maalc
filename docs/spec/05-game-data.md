@@ -79,7 +79,7 @@
 
 ## 3. 事件覆寫表
 
-**用途**：只放例外。沒列出的事件照通用規則處理：一般選項依事件表（第 7 節）的實際效果排序，比不到事件表時「獲得主要體系 E.G.O」> 其他獲得 E.G.O 的選項 > 第一個選項；技能判定選成功率等級最高的罪人。通用規則見 [03-decisions.md](03-decisions.md)。（#11、#93）
+**用途**：只放例外。沒列出的事件照通用規則處理：一般選項依事件表（第 7 節）的實際效果排序，比不到事件表時照提示文字套同樣的 5 級（03 第 10 節）；技能判定選成功率等級最高的罪人。通用規則見 [03-decisions.md](03-decisions.md)。（#11、#93）
 
 **內容**：問題文字 → 選項文字。問題文字用模糊比對；選項用選項文字指定，不用位置。一開始是空的，依 `runs.jsonl` 與錯誤截圖逐步補充。不為每個事件寫動作腳本。（#11，[ADR 0005](../adr/0005-game-data-files-separate-from-user-settings.md)）
 
@@ -193,7 +193,7 @@
 | `id` | 遊戲的事件 id，只供查閱 |
 | `key` | 故事文字的最後 60 個英數字（小寫）：敘事框顯示的是故事結尾 |
 | `options[].text`、`hint` | 選項文字與下方提示（去掉標籤）；畫面上的選項靠這兩項對到表上 |
-| `options[].kind` | `direct`、`random`、`check`、`check_fail_gift`、`followup`、`battle`、`check_other`、`followup_other`、`other` |
+| `options[].kind` | `direct`、`random`、`check`、`check_fail_gift`、`followup`、`battle`、`check_other`、`followup_other`、`other`；`random` 的提示是 `???`（971055）或寫明機率（971003），兩者在 03 第 10 節分屬不同級 |
 | `options[].gifts` | `[體系, 取得方式]`，取得方式如 `direct`、`check_pass`、`check_fail`、`win_battle`、`later_direct` |
 
 飾品的體系取自靜態資料 `ego-gift-mirrordungeon` 的 `keyword`：`events_md8.py` 取到的是同 id 第一筆、沒有 keyword 的紀錄，會把 Grimy Iron Stake 這類飾品讀成 Keywordless，`tools/event_table.py` 重新查一次。沒有敘事文字的 13 個事件（Boss 戰中途與部分後續頁）不收，照提示文字規則處理。
