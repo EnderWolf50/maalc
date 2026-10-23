@@ -222,7 +222,7 @@
 
 **用途**：設定的飾品清單（[04-settings.md](04-settings.md)，#291）有一份唯讀的「預設」，使用者只能複製；設定 GUI 的飾品格要顯示每個飾品的圖示。（#291、#293）
 
-**預設清單**：`resource/base/data/gift_lists.yaml` 的 `default_list`，欄位同設定檔 `gift_lists[]` 的一項去掉 `id`、`name`（`order`、`want`、`keep`、`gorder`、`fusion_condition`）。內容照原本的預設隊伍轉過來（使用者 2026-10-23 決定）：
+**預設清單**：`resource/base/data/gift_lists.yaml` 的 `default_list`，欄位同設定檔 v11 `gift_lists[]` 的一項去掉 `id`、`name`（格式由 #292 寫進 04-settings.md）（`order`、`want`、`keep`、`gorder`、`fusion_condition`）。內容照原本的預設隊伍轉過來（使用者 2026-10-23 決定）：
 
 - `order`：Gift Search 頁的分頁順序，Burn 第一、`Keywordless` 最後。
 - `want`：Burn 在商店買得到的 22 個（I–III 階）與月之記憶（9083），共 23 個。

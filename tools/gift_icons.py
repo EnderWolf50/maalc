@@ -10,9 +10,7 @@ sprite with its transparency (the image/GiftSearch templates are green-filled fo
 
 import io
 import json
-import os
 import sys
-from collections import defaultdict
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -43,33 +41,13 @@ def webp(sprite) -> bytes:
 
 
 def main():
-    import UnityPy
-
     import gift_recipes as gr
 
-    UnityPy.config.FALLBACK_UNITY_VERSION = "6000.3.12f1"  # the bundles carry a stripped version, 1.117.0's engine
     unpack = local_dir("unpack")
     table = gr.gift_table(unpack)
     ids = gift_ids()
-    by_icon = defaultdict(list)
-    for i in ids:
-        by_icon[table[i][2]].append(i)
-    cache = unpack / "raw/UnityCache"
-    where = gr.sprite_index(cache, unpack / "out/sprite-index.tsv")
     OUT.mkdir(exist_ok=True)
-    done = set()
-    for h, names in where.items():
-        if not names & by_icon.keys() - done:
-            continue
-        path = next(os.path.join(r, "__data") for r, _, f in os.walk(cache / h) if "__data" in f)
-        for p, obj in UnityPy.load(path).container.items():
-            name = p.rsplit("/", 1)[-1][:-4]
-            if obj.type.name == "Sprite" and "/egogifticon/" in p.lower() and name.isdigit() and int(name) in by_icon and int(name) not in done:
-                data = webp(obj.read().image)
-                for gid in by_icon[int(name)]:
-                    (OUT / f"{gid}.webp").write_bytes(data)
-                done.add(int(name))
-    missing = sorted(g for icon, gs in by_icon.items() if icon not in done for g in gs)
+    missing = gr.extract_icons(unpack, {i: table[i][2] for i in ids}, lambda image, gid: (OUT / f"{gid}.webp").write_bytes(webp(image)))
     if missing:
         raise SystemExit(f"no EgoGiftIcon sprite for {missing}")
     index = {str(i): f"{i}.webp" for i in sorted(ids)}

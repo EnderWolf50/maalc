@@ -12,7 +12,7 @@ RECIPES = json.loads((DATA / "gift_recipes.json").read_text(encoding="utf-8"))
 LIST = yaml.safe_load((DATA / "gift_lists.yaml").read_text(encoding="utf-8"))["default_list"]
 ICONS = DATA / "gift_icons"
 KEYWORDS = ["Burn", "Bleed", "Tremor", "Rupture", "Sinking", "Poise", "Charge", "Slash", "Pierce", "Blunt", "Keywordless"]
-VESTIGES = set(range(9991, 9996))
+VESTIGES = set(gift_icons.VESTIGES)
 BUYABLE = {g["id"] for g in SEARCH}
 KNOWN = BUYABLE | {g["id"] for g in RECIPES["gifts"] + RECIPES["materials"]} | VESTIGES
 MAX_BYTES = 800_000  # 397 icons weigh 575 KB (1.4 KB each)
