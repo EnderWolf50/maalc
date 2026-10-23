@@ -61,7 +61,7 @@ def battle_menu_match(image):
 
 
 @pytest.mark.parametrize("shot", BATTLE_MENU_SHOTS)
-def test_the_battle_menu_is_found_and_tapped_on_resume_only(shot):
+def test_the_battle_menu_is_found_on_resume_only(shot):
     (score, box), node = battle_menu_match(gray(SCREENS / shot))
     assert score >= node["threshold"]
     center = (box[0] + box[2] // 2, box[1] + box[3] // 2, 1, 1)
@@ -81,7 +81,7 @@ def test_the_battle_menu_taps_resume_and_waits_for_the_screen():
 
 
 def test_the_battle_menu_roi_holds_the_resume_bar_and_no_other():
-    # Whatever the template matches inside the roi, the click cannot reach Give Up or Retry Stage.
+    # Whatever the template matches inside the roi, the tap (the roi's centre) cannot reach Give Up or Retry Stage.
     node = load_nodes()["BattleMenu"]
     assert inside(node["roi"], BATTLE_BARS["Resume"])
     assert not any(touches(node["roi"], rect) for name, rect in BATTLE_BARS.items() if name != "Resume")
@@ -110,14 +110,14 @@ def test_the_battle_menu_is_answered_before_the_turn_under_it():
     assert template_first(nodes, nodes["BattleMenu"])
 
 
-def test_the_progress_panel_clicks_continue_only():
+def test_the_progress_panel_taps_continue_only():
     node = load_nodes()["ProgressPanel"]
     # TapUntil since #254 (a Click with a post_delay waited a guess); it taps the roi's centre, as the Click did.
     assert node["custom_action"] == "TapUntil" and node["custom_action_param"]["target"] == node["roi"]
     assert re.search(node["expected"], "Continue")
     for other in ["Forfeit", "To Window", "Progress", "Config"]:
         assert not re.search(node["expected"], other)
-    # The roi lies within Continue and touches none of the other four buttons: the OCR box clicked is inside it.
+    # The roi lies within Continue and touches none of the other four buttons: the tap (the roi's centre) is inside it.
     assert inside(node["roi"], PANEL_BUTTONS["Continue"])
     assert not any(touches(node["roi"], rect) for name, rect in PANEL_BUTTONS.items() if name != "Continue")
 
