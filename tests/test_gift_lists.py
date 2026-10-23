@@ -29,7 +29,8 @@ def test_default_list_is_the_former_default_team():
     burn = {g["id"] for g in SEARCH if g["keyword"] == "Burn"}
     assert set(LIST["want"]) == burn | {9083}
     keywordless = {g["id"] for g in SEARCH + RECIPES["gifts"] + RECIPES["materials"] if g["keyword"] == "Keywordless"}
-    assert set(LIST["keep"]) == (keywordless | VESTIGES) - {9083}
+    # vestiges I-IV (9991-9994) are fusion materials, so `drop`; Lunar Vestige (V, 9995) is never a material, so `keep`
+    assert set(LIST["keep"]) == (keywordless | {max(VESTIGES)}) - {9083}
     assert LIST["order"] == KEYWORDS and LIST["fusion_condition"] == "any"
 
 
