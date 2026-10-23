@@ -112,7 +112,8 @@ class Grid:
             assert i is None or i < len(self.icons) - len(self.recipes), f"a recipe cell read as an owned gift at {x, y}"
             if i is not None:
                 self.reads.append(i)
-                out.append({"i": k, "x": x, "y": y, "tier": 1, "keyword": KEYWORDS[i % len(KEYWORDS)], "gift": None})
+                out.append({"i": k, "x": x, "y": y, "tier": 1, "keyword": KEYWORDS[i % len(KEYWORDS)], "gift": None,
+                            "id": None, "score": 0.0})
         return out
 
 
