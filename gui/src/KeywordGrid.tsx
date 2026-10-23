@@ -42,7 +42,7 @@ export function KeywordTabs({ tab, onTab }: { tab: string; onTab: (k: string) =>
   const refs = useRef<Record<string, HTMLButtonElement | null>>({});
   const move = (e: KeyboardEvent) => {
     const step = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0;
-    const next = GIFT_KEYWORDS[GIFT_KEYWORDS.indexOf(tab) + step];
+    const next = tab ? GIFT_KEYWORDS[GIFT_KEYWORDS.indexOf(tab) + step] : GIFT_KEYWORDS[0]; // no tab chosen (searching): the first
     if (!step || !next) return;
     e.preventDefault();
     onTab(next);

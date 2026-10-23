@@ -84,6 +84,7 @@ export function GiftPopover({ id, anchor }: { id: number; anchor: HTMLElement })
 
   // After every render (its height changes with the content): place it against the tile.
   useLayoutEffect(() => {
+    if (!anchor.isConnected) return tip.hide(); // its tile left the page (a search, another tab): no mouseleave or blur comes
     const el = box.current!, a = anchor.getBoundingClientRect();
     const { left, top } = place(a, { w: el.offsetWidth, h: el.offsetHeight }, { w: window.innerWidth, h: window.innerHeight });
     el.style.left = `${left}px`;

@@ -333,6 +333,27 @@ describe("search", () => {
     expect(box()).toHaveFocus();
   });
 
+  test("a popover whose tile the search takes away goes with it", async () => {
+    const r = await open([mine()]);
+    act(() => (document.activeElement as HTMLElement).blur()); // the list choice has focus after open()
+    await r.user.hover(getTile(a));
+    expect(popover()).not.toBeNull();
+    await r.user.keyboard("/e");
+    expect(box()).toHaveValue("e");
+    expect(popover()).toBeNull();
+  });
+
+  test("an arrow key on the tabs while searching goes to the first tab, either way", async () => {
+    const r = await open([mine()]);
+    for (const key of ["{ArrowRight}", "{ArrowLeft}"]) {
+      await r.user.type(box(), String(a));
+      screen.getAllByRole("tab")[0].focus();
+      await r.user.keyboard(key);
+      expect(box()).toHaveValue("");
+      expect(screen.getAllByRole("tab")[0]).toHaveAttribute("aria-selected", "true");
+    }
+  });
+
   test("in English", async () => {
     const en = TEXT.en_us;
     const r = await open([mine()], "en_us");
