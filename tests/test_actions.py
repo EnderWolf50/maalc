@@ -732,19 +732,18 @@ def owned_gifts(context, cells=actions.FUSE_CELLS):
 
 
 def cells_read(monkeypatch, *readings):
-    """read_cells reads the first cells of any grid as readings [(keyword, observed gift[, tier[, gift id]])], tier 2 and no id
+    """read_cells reads the first cells of any grid as readings [(keyword[, tier[, gift id]])], tier 2 and no id
     by default (test_shop_cells checks the reading itself on live captures)."""
-    def read_cells(context, image, cells, page, gifts=()):
-        return [{"i": i, "x": cells[i][0], "y": cells[i][1], "tier": t[0] if t else 2, "keyword": k, "gift": g,
+    def read_cells(context, image, cells, page):
+        return [{"i": i, "x": cells[i][0], "y": cells[i][1], "tier": t[0] if t else 2, "keyword": k,
                  "id": t[1] if len(t) > 1 else None, "score": 0.9 if len(t) > 1 else 0.0}
-                for i, (k, g, *t) in enumerate(readings)]
+                for i, (k, *t) in enumerate(readings)]
     monkeypatch.setattr(actions, "read_cells", read_cells)
 
 
 FUSE_PAGE = {tuple(actions.DIALOG_TITLE): [("Fuse E.G.O Gift", (500, 100, 200, 40))],
              tuple(actions.KEYWORD_LABELS): [("Burn", (300, 400, 60, 20))],
              tuple(actions.FUSE_LIST): [("E.G.O Gifts Owned", (635, 216, 161, 24))]}  # at its place: nothing over it
-SPIDERWEB = {"name": "Spiderweb Entangled in Red", "keyword": "Keywordless", "tier": 3}
 
 
 def fuse_slots(context, monkeypatch, slots=3, ignored=()):
@@ -756,52 +755,6 @@ def fuse_slots(context, monkeypatch, slots=3, ignored=()):
     monkeypatch.setattr(actions.shop, "fuse_slots", lambda image: slots)
     monkeypatch.setattr(actions.shop, "placed", lambda image, n: len(inside()))
     monkeypatch.setattr(actions.shop, "picked", lambda image, x, y, bottom=720: (x, y) in inside())
-
-
-def test_a_fusion_taps_only_the_drop_gifts_it_knows(context, monkeypatch):
-    # #299: one screenshot decides. The list wants 9009 and keeps 9053; the cell whose icon no candidate matched (id None)
-    # is kept too. Three known drop gifts are left, whatever their badges: a Keywordless one joins (no special setting).
-    fused, taps, ok = fusion_taps(context, monkeypatch, {"list": wants(9009, keep=[9053])}, ("Burn", None, 2, 9009),
-                                  ("Burn", None, 3, 9053), ("Bleed", None, 2, None), ("Keywordless", None, 3),
-                                  ("Tremor", None, 2), ("Pierce", None, 2))
-    assert fused and ok and taps == [0, 0, 0, 1, 1, 1]
-
-
-@pytest.mark.parametrize("tier, vestige_id", [(1, 9991), (2, 9992), (3, 9993), (4, 9994)])
-def test_a_vestige_the_list_lets_go_is_fused(context, monkeypatch, tier, vestige_id):
-    # #299: a vestige I-IV is a drop gift in the default list: material like any other, told by its id.
-    fused, taps, _ = fusion_taps(context, monkeypatch, {}, ("Keywordless", None, tier, vestige_id), ("Tremor", None, tier),
-                                 ("Pierce", None, tier))
-    assert fused and taps == [1, 1, 1]
-
-
-def test_a_lunar_vestige_is_never_fused(context, monkeypatch):
-    # #161, #299: a tier V is never a material (MAX_MATERIAL_TIER), though the list lets it go.
-    fused, taps, ok = fusion_taps(context, monkeypatch, {}, ("Keywordless", None, 5, 9995), ("Tremor", None), ("Pierce", None))
-    assert not fused and not ok and taps == [0, 0, 0]
-
-
-def test_a_vestige_the_list_keeps_is_not_fused(context, monkeypatch):
-    fused, taps, _ = fusion_taps(context, monkeypatch, {"list": wants(keep=[9991])}, ("Keywordless", None, 1, 9991),
-                                 ("Tremor", None), ("Pierce", None), ("Sinking", None))
-    assert fused and taps == [0, 1, 1, 1]
-
-
-# Wanted fusions and what they lock (#294): 9092 Coupled Oscillation (9031, 9091, 9165), 9212 The End of all Evil (a pack's
-# exclusive: 9427, 9428), 9083 Lunar Memory (seven fragments 9105.. and three memories 9142..).
-@pytest.mark.parametrize("wanted, locked", [
-    (9092, (9031, 9091, 9165)), (9212, (9427, 9428)), (9083, (9105, 9110, 9142, 9147))])
-def test_the_materials_of_a_wanted_fusion_are_locked_for_fusing(context, monkeypatch, wanted, locked):
-    # #299: a pack's exclusive recipe locks all the same, the run's pack being unknown (#306 unlocks it by the run's pack).
-    fused, taps, _ = fusion_taps(context, monkeypatch, {"list": wants(wanted)}, *[("Burn", None, 2, i) for i in locked],
-                                 ("Tremor", None), ("Pierce", None), ("Sinking", None))
-    assert fused and taps == [0] * len(locked) + [1, 1, 1]
-
-
-def test_a_gift_nothing_locks_is_fused_though_a_fusion_is_wanted(context, monkeypatch):
-    fused, taps, _ = fusion_taps(context, monkeypatch, {"list": wants(9092)}, ("Burn", None, 2, 9003), ("Tremor", None),
-                                 ("Pierce", None))
-    assert fused and taps == [1, 1, 1]
 
 
 ORDER = ["Burn", "Bleed", "Tremor", "Rupture", "Sinking", "Poise", "Charge", "Slash", "Pierce", "Blunt", "Keywordless"]
@@ -820,18 +773,21 @@ def wants(*ids, order=("Burn", "Bleed"), keep=(), condition="any"):
 
 
 def shop_team(team):
-    """The team Shop.sell and Shop.fuse get (run_team's): its list drops everything unless `list` says; a `fusion_condition` given
-    here goes into that list."""
+    """The team Shop.sell and Shop.fuse get (run_team's): its list drops everything, fusing under `fusion_condition`, unless
+    `list` says (then its own condition counts)."""
     team = dict(team)
     condition = team.pop("fusion_condition", None) or "any"
     return {"keyword": "Burn", "reserve_cost": 0, "list": wants(condition=condition), **team}
 
 
+UNLISTED = 800000  # a cell given no id reads as UNLISTED + its place: an id no gift list mentions
+
+
 def with_ids(readings):
-    """readings (keyword, gift, tier, id) all: a cell given no id gets one of its own that no list mentions, so the list drops it;
-    a cell whose badge is unread (keyword None) has none, as read_cells gives it."""
-    return [(k, g, *(t[:1] or [2]), t[1] if len(t) > 1 else None if k is None else 800000 + n)
-            for n, (k, g, *t) in enumerate(readings)]
+    """readings (keyword, tier, id) all: a cell given no id gets one no list mentions, so the list drops it; a cell whose
+    badge is unread (keyword None) has none, as read_cells gives it."""
+    return [(k, *(t[:1] or [2]), t[1] if len(t) > 1 else None if k is None else UNLISTED + n)
+            for n, (k, *t) in enumerate(readings)]
 
 
 def buying(list_, **team):
@@ -864,7 +820,7 @@ def test_offers_are_read_once_and_bought_in_the_lists_order_from_the_back(contex
         results = [SimpleNamespace(text=t, box=b) for t, b in lines]
         return SimpleNamespace(all_results=results, hit=True, best_result=None) if results else None
     context.run_recognition.side_effect = run_recognition
-    cells_read(monkeypatch, ("Burn", None, 1, 9003), ("Bleed", None, 2, 9005), ("Burn", None, 2, 9009), ("Burn", None, 3, 9053))
+    cells_read(monkeypatch, ("Burn", 1, 9003), ("Bleed", 2, 9005), ("Burn", 2, 9009), ("Burn", 3, 9053))
     visit = {"wanted": None, "sold": False}
     assert actions.Shop.buy_offers(context, buying(wants(9009, 9003, 9053)), visit) == 2
     offer_taps = [t for t in tapped if t[1] == 268]
@@ -877,7 +833,7 @@ def test_a_glyph_on_an_offers_icon_opens_no_purchase_dialog(context, monkeypatch
     # (read_cells found no badge) was opened to read its keyword. Skill slot first, the glyph, four gifts.
     context.tasker.controller.post_screencap.return_value.wait.return_value.get.return_value = np.zeros((720, 1280, 3), np.uint8)
     reads(context, {tuple(actions.OFFER_GRID): OLD_DOLL_SHOP, tuple(actions.SHOP_COST): [("787", (560, 120, 60, 30))]})
-    cells_read(monkeypatch, ("Burn", None, 2), ("Bleed", None, 2), ("Pierce", None, 2), ("Blunt", None, 2))
+    cells_read(monkeypatch, ("Burn", 2), ("Bleed", 2), ("Pierce", 2), ("Blunt", 2))
     visit = {"wanted": None, "sold": False}
     assert actions.Shop.buy_offers(context, buying(wants(9009)), visit) == 0
     assert not context.tasker.controller.post_click.called  # no cell opened to read its keyword
@@ -905,7 +861,7 @@ def test_an_offer_with_a_red_price_is_not_tapped_though_ocr_read_it_as_affordabl
     context.tasker.controller.post_screencap.return_value.wait.return_value.get.return_value = image
     reads(context, {tuple(actions.OFFER_GRID): [("Emerald Elytra", (735, 333, 90, 17)), ("16", (755, 306, 40, 24))],
                     tuple(actions.SHOP_COST): [("106", (560, 120, 60, 30))]})
-    cells_read(monkeypatch, ("Burn", None, 1, 9003))
+    cells_read(monkeypatch, ("Burn", 1, 9003))
     visit = {"wanted": None, "sold": False}
     assert actions.Shop.buy_offers(context, buying(wants(9003)), visit) == 0
     assert not context.tasker.controller.post_click.called
@@ -922,35 +878,6 @@ def sale_taps(context, monkeypatch, team, prices, *readings, slots=None):
     return [c.args for c in context.tasker.controller.post_click.call_args_list if c.args in actions.SELL_CELLS]
 
 
-def test_a_sale_reads_ids_and_prices_off_the_grid_and_taps_only_what_it_sells(context, monkeypatch):
-    # #112: no gift is tapped to read its panel. #299: the list wants 9009 and keeps 9053; the cell with no id is kept too.
-    # #79: Tremor III + Pierce III + Sinking II fuse into a tier IV; the Bleed I no fusion uses goes, though Tremor's price is higher.
-    taps = sale_taps(context, monkeypatch, {"list": wants(9009, keep=[9053])}, [90, 300, 200, 250, 120, 60, 80],
-                     ("Bleed", None, 1), ("Burn", None, 2, 9009), ("Burn", None, 3, 9053), ("Keywordless", None, 3, None),
-                     ("Tremor", None, 3), ("Pierce", None, 3), ("Sinking", None, 2))
-    assert taps == [actions.SELL_CELLS[0]]
-
-
-@pytest.mark.parametrize("list_, kept", [
-    (wants(9003), "wants it"), (wants(keep=[9003]), "keeps it"),
-    (wants(9092), "locked by a wanted fusion"), (wants(9212), "locked by a pack's exclusive fusion"),
-])
-def test_a_sale_never_sells_what_the_list_wants_keeps_or_locks(context, monkeypatch, list_, kept):
-    # #299: the dearest gift (400) would cover the price, and no fusion would use it (the others are 3 of a kind): it stays.
-    # 9003 is wanted/kept itself; 9031 (a material of 9092) and 9427 (of 9212) are locked.
-    gift = {"wants it": 9003, "keeps it": 9003, "locked by a wanted fusion": 9031, "locked by a pack's exclusive fusion": 9427}[kept]
-    taps = sale_taps(context, monkeypatch, {"list": list_}, [400, 90, 60, 70, 80], ("Bleed", None, 1, gift),
-                     ("Bleed", None), ("Tremor", None), ("Pierce", None), ("Sinking", None))
-    assert taps == [actions.SELL_CELLS[4]]  # of the 4 drop gifts, 3 fuse and the one left over goes
-
-
-def test_a_gift_nothing_recognises_is_not_sold(context, monkeypatch):
-    # #299: no id (the icon matched no candidate): kept, though it is the dearest and no fusion would use it.
-    taps = sale_taps(context, monkeypatch, {}, [400, 90, 60, 70, 80], ("Bleed", None, 1, None), ("Bleed", None), ("Tremor", None),
-                     ("Pierce", None), ("Sinking", None))
-    assert taps == [actions.SELL_CELLS[4]]
-
-
 @pytest.mark.parametrize("team, leftover, sold", [
     ({}, 5, False),  # a tier V no fusion takes (pick_fusion never does) is not sold by default
     ({"sell_max_tier": 5}, 5, True),
@@ -959,48 +886,35 @@ def test_a_gift_nothing_recognises_is_not_sold(context, monkeypatch):
 ])
 def test_a_sale_stops_at_the_teams_highest_tier(context, monkeypatch, team, leftover, sold):
     # #161: three tier II fuse; the fourth, the leftover, would cover the price.
-    taps = sale_taps(context, monkeypatch, team, [90, 60, 70, 300], ("Bleed", None), ("Tremor", None),
-                     ("Pierce", None), ("Slash", None, leftover))
+    taps = sale_taps(context, monkeypatch, team, [90, 60, 70, 300], ("Bleed",), ("Tremor",),
+                     ("Pierce",), ("Slash", leftover))
     assert taps == ([actions.SELL_CELLS[3]] if sold else [])
-
-
-def test_a_keywordless_drop_gift_is_sold_like_any_other(context, monkeypatch):
-    # #299: no keywordless setting any more: only the list says. A Keywordless leftover that the list lets go goes.
-    taps = sale_taps(context, monkeypatch, {}, [90, 60, 70, 95], ("Bleed", None), ("Tremor", None), ("Pierce", None),
-                     ("Keywordless", None, 2))
-    assert taps == [actions.SELL_CELLS[3]]
 
 
 @pytest.mark.parametrize("team, sold", [({}, False), ({"sell_vestiges": True}, True),
                                         ({"sell_vestiges": True, "sell_max_tier": 1}, True)])
 def test_a_vestige_is_sold_only_when_the_team_allows_it(context, monkeypatch, team, sold):
     # #161: sell_vestiges alone decides (the list lets Dark Vestige go).
-    taps = sale_taps(context, monkeypatch, team, [90, 60, 70, 95], ("Bleed", None),
-                     ("Tremor", None), ("Pierce", None), ("Keywordless", None, 1, 9991))
+    taps = sale_taps(context, monkeypatch, team, [90, 60, 70, 95], ("Bleed",),
+                     ("Tremor",), ("Pierce",), ("Keywordless", 1, 9991))
     assert taps.count(actions.SELL_CELLS[3]) == int(sold)
-
-
-def test_a_vestige_the_list_keeps_is_not_sold_though_the_team_sells_vestiges(context, monkeypatch):
-    taps = sale_taps(context, monkeypatch, {"sell_vestiges": True, "list": wants(keep=[9991])}, [90, 60, 70, 95],
-                     ("Bleed", None), ("Tremor", None), ("Pierce", None), ("Keywordless", None, 1, 9991))
-    assert taps == []
 
 
 def test_a_vestige_over_the_highest_tier_sold_stays(context, monkeypatch):
     # #161: sell_max_tier applies to vestiges too; a Twinkling Vestige (III) over a limit of II is not sold.
     taps = sale_taps(context, monkeypatch, {"sell_vestiges": True, "sell_max_tier": 2}, [90, 60, 70, 95],
-                     ("Bleed", None), ("Tremor", None), ("Pierce", None), ("Keywordless", None, 3, 9993))
+                     ("Bleed",), ("Tremor",), ("Pierce",), ("Keywordless", 3, 9993))
     assert taps == []
 
 
 def test_nothing_is_sold_when_every_material_fuses(context, monkeypatch):
     # #79: 3 materials make a fusion; a sale would only break it.
-    assert sale_taps(context, monkeypatch, {}, [90, 60, 70], ("Bleed", None), ("Tremor", None), ("Pierce", None)) == []
+    assert sale_taps(context, monkeypatch, {}, [90, 60, 70], ("Bleed",), ("Tremor",), ("Pierce",)) == []
 
 
 def test_a_sale_counts_the_fusion_materials_it_may_not_sell(context, monkeypatch):
     # #79: a vestige the team does not sell is still fusion material: Bleed and Tremor fuse with it, so neither is sold.
-    taps = sale_taps(context, monkeypatch, {}, [90, 95, 60], ("Bleed", None), ("Tremor", None), ("Keywordless", None, 1, 9991))
+    taps = sale_taps(context, monkeypatch, {}, [90, 95, 60], ("Bleed",), ("Tremor",), ("Keywordless", 1, 9991))
     assert taps == []
 
 
@@ -1009,7 +923,7 @@ def test_a_sale_counts_only_the_fusions_the_condition_makes(context, monkeypatch
     # #263: four tier I (9 points: a I, no upgrade, no IV). By "any" three fuse and the fourth, the 90 that covers
     # the price, goes; by the others none fuses, so the dearest (300) goes.
     taps = sale_taps(context, monkeypatch, {"fusion_condition": condition}, [300, 60, 70, 90],
-                     *[(k, None, 1) for k in ("Bleed", "Tremor", "Pierce", "Slash")])
+                     *[(k, 1) for k in ("Bleed", "Tremor", "Pierce", "Slash")])
     assert taps == [actions.SELL_CELLS[sold]]
 
 
@@ -1023,7 +937,7 @@ def test_a_sale_groups_by_the_slots_and_thresholds_of_the_shop(context, monkeypa
     # upgrade in a shop) nothing fuses and the dearest gift (cell 0, 300) goes; where it holds, the Bleed I left over (cell
     # 3, 90) does. A visit that read no fuse page counts a shop's 3 slots.
     taps = sale_taps(context, monkeypatch, {"fusion_condition": condition}, [300, 60, 70, 90],
-                     ("Bleed", None, 3), ("Tremor", None, 3), ("Pierce", None, 1), ("Slash", None, 1), slots=slots)
+                     ("Bleed", 3), ("Tremor", 3), ("Pierce", 1), ("Slash", 1), slots=slots)
     assert taps == [actions.SELL_CELLS[sells]]
 
 
@@ -1032,8 +946,8 @@ def test_a_sale_groups_by_the_slots_and_thresholds_of_the_shop(context, monkeypa
 ])
 def test_a_fusion_reads_the_tier_by_the_shop_it_is_in(context, monkeypatch, slots, condition, made):
     # #263: III + III + I (23 points) is a III in a shop and a IV in a Super Shop.
-    fused, taps, _ = fusion_taps(context, monkeypatch, {"fusion_condition": condition}, ("Bleed", None, 3),
-                                 ("Tremor", None, 3), ("Pierce", None, 1), slots=slots)
+    fused, taps, _ = fusion_taps(context, monkeypatch, {"fusion_condition": condition}, ("Bleed", 3),
+                                 ("Tremor", 3), ("Pierce", 1), slots=slots)
     assert fused == made and taps == [int(made)] * 3
 
 
@@ -1058,8 +972,8 @@ def test_a_shop_visit_counts_a_super_shops_five_slots_from_its_red_title(context
 def test_a_sale_does_not_break_a_fusion_by_selling_white_gossypium(context, monkeypatch):
     # #79, #90: White Gossypium is sold first, so the fusion is grouped without it: Tremor, Pierce and Sinking fuse.
     # Its 50 alone does not cover the price: nothing is sold (grouped with it, Sinking would go too, and no fusion).
-    taps = sale_taps(context, monkeypatch, {"allow_white_gossypium": False}, [50, 60, 70, 80], ("Bleed", None, 1, 9020),
-                     ("Tremor", None, 1), ("Pierce", None, 1), ("Sinking", None, 1))
+    taps = sale_taps(context, monkeypatch, {"allow_white_gossypium": False}, [50, 60, 70, 80], ("Bleed", 1, 9020),
+                     ("Tremor", 1), ("Pierce", 1), ("Sinking", 1))
     assert taps == []
 
 
@@ -1102,7 +1016,7 @@ SELLER = shop_team({})
 def test_a_sale_confirms_the_sell_dialog(context, monkeypatch):
     # #174 (live 2026-10-19): Sell asked "Sell [Today's Expression] for 95 Cost?" and the bot cancelled it.
     taps = live_shop(context, sell_page(lambda taps: actions.DIALOG_CONFIRM in taps))
-    cells_read(monkeypatch, *with_ids([("Bleed", None)]))
+    cells_read(monkeypatch, *with_ids([("Bleed",)]))
     logs = []
     monkeypatch.setattr(actions, "log", logs.append)
     assert actions.Shop.sell(context, SELLER, {"wanted": 145, "sold": False})
@@ -1113,7 +1027,7 @@ def test_a_sale_confirms_the_sell_dialog(context, monkeypatch):
 def test_the_cost_preview_of_a_picked_cell_is_not_a_sale(context, monkeypatch):
     # #174: the picked cell's "51 > 146" read as 51146, and the bot took the Cost as changed: sold.
     live_shop(context, sell_page(lambda taps: False))
-    cells_read(monkeypatch, *with_ids([("Bleed", None)]))
+    cells_read(monkeypatch, *with_ids([("Bleed",)]))
     logs = []
     monkeypatch.setattr(actions, "log", logs.append)
     actions.Shop.sell(context, SELLER, {"wanted": 145, "sold": False})
@@ -1171,7 +1085,7 @@ def test_a_team_without_white_gossypium_fuses_it_first(context, monkeypatch):
     # #90: a Bleed team that does not hold it: its icon makes it material, ahead of the other materials.
     reads(context, {**FUSE_PAGE, tuple(actions.KEYWORD_LABELS): [("Bleed", (300, 400, 60, 20))]})
     fuse_slots(context, monkeypatch)
-    cells_read(monkeypatch, *with_ids([("Burn", None), ("Tremor", None), ("Pierce", None)]), ("Bleed", None, 2, 9020), ("Bleed", None, 2, 9005))
+    cells_read(monkeypatch, *with_ids([("Burn",), ("Tremor",), ("Pierce",)]), ("Bleed", 2, 9020), ("Bleed", 2, 9005))
     actions.Shop.fuse(context, NO_GOSSYPIUM, {})
     taps = [c.args for c in context.tasker.controller.post_click.call_args_list]
     assert [taps.count(c) for c in actions.FUSE_CELLS[:5]] == [1, 1, 0, 1, 0]
@@ -1198,7 +1112,7 @@ def test_a_team_without_white_gossypium_does_not_buy_it(context, monkeypatch):
         results = [SimpleNamespace(text=t, box=b) for t, b in lines]
         return SimpleNamespace(all_results=results, hit=True, best_result=None) if results else None
     context.run_recognition.side_effect = run_recognition
-    cells_read(monkeypatch, ("Bleed", GOSSYPIUM, 2, 9020), ("Bleed", None, 2, 9005))
+    cells_read(monkeypatch, ("Bleed", 2, 9020), ("Bleed", 2, 9005))
     assert actions.Shop.buy_offers(context, NO_GOSSYPIUM, {"wanted": None, "sold": False}) == 1
     assert [t for t in tapped if t[1] == 268] == [(775, 268)]
 
@@ -1254,24 +1168,16 @@ def fusion_taps(context, monkeypatch, team, *readings, slots=3, ignored=(), conf
 
 def test_a_fusion_puts_in_the_materials_that_make_the_highest_tier(context, monkeypatch):
     # #77: III + III + II make a tier IV; the three I would make only a tier I.
-    fused, taps, ok = fusion_taps(context, monkeypatch, {}, ("Bleed", None, 1), ("Bleed", None, 3), ("Pierce", None, 1),
-                                  ("Tremor", None, 2), ("Slash", None, 3), ("Sinking", None, 1))
+    fused, taps, ok = fusion_taps(context, monkeypatch, {}, ("Bleed", 1), ("Bleed", 3), ("Pierce", 1),
+                                  ("Tremor", 2), ("Slash", 3), ("Sinking", 1))
     assert fused and ok and taps == [0, 1, 0, 1, 1, 0]
-
-
-def test_keywordless_and_other_keyword_gifts_join_the_highest_tier_pick(context, monkeypatch):
-    # #299: no keyword is kept by the team any more: the list alone decides. Tremor III + Pierce III + Sinking I would make
-    # a III; with the keywordless III, a IV.
-    fused, taps, _ = fusion_taps(context, monkeypatch, {}, ("Keywordless", None, 3), ("Tremor", None, 3), ("Pierce", None, 3),
-                                 ("Sinking", None, 1))
-    assert fused and taps == [1, 1, 1, 0]
 
 
 @pytest.mark.parametrize("condition, made", [(None, True), ("any", True), ("upgrade", False), ("tier4", False)])
 def test_the_fusion_condition_decides_whether_three_tier_i_fuse(context, monkeypatch, condition, made):
     # #263: three I make a tier I (9 points): no upgrade, no IV. A team with no fusion_condition fuses as before.
     team = {"fusion_condition": condition} if condition else {}
-    fused, taps, ok = fusion_taps(context, monkeypatch, team, *[("Bleed", None, 1)] * 3)
+    fused, taps, ok = fusion_taps(context, monkeypatch, team, *[("Bleed", 1)] * 3)
     assert (fused, ok, taps) == (made, made, [int(made)] * 3)
 
 
@@ -1279,7 +1185,7 @@ def test_the_fusion_condition_decides_whether_three_tier_i_fuse(context, monkeyp
 def test_the_fusion_condition_on_a_tier_iii_that_makes_a_tier_iii(context, monkeypatch, condition, taps):
     # #263: III + II + I is 19 points: a tier III, no better than its III.
     fused, tapped, _ = fusion_taps(context, monkeypatch, {"fusion_condition": condition},
-                                   ("Bleed", None, 3), ("Tremor", None, 2), ("Pierce", None, 1))
+                                   ("Bleed", 3), ("Tremor", 2), ("Pierce", 1))
     assert fused == (condition == "any") and tapped == taps
 
 
@@ -1287,14 +1193,14 @@ def test_the_fusion_condition_on_a_tier_iii_that_makes_a_tier_iii(context, monke
 def test_the_fusion_condition_lets_an_upgrade_to_tier_iv_through(context, monkeypatch, condition):
     # #263: III + III + II is 26 points: a tier IV, over its III.
     fused, taps, ok = fusion_taps(context, monkeypatch, {"fusion_condition": condition},
-                                  ("Bleed", None, 3), ("Tremor", None, 3), ("Pierce", None, 2))
+                                  ("Bleed", 3), ("Tremor", 3), ("Pierce", 2))
     assert fused and ok and taps == [1, 1, 1]
 
 
 def test_the_upgrade_condition_picks_the_group_that_is_one(context, monkeypatch):
     # #263: IV + II + II is the most (a IV), no upgrade of its IV; II + II + II (a III) is.
     fused, taps, _ = fusion_taps(context, monkeypatch, {"fusion_condition": "upgrade"},
-                                 ("Bleed", None, 4), ("Tremor", None, 2), ("Pierce", None, 2), ("Slash", None, 2))
+                                 ("Bleed", 4), ("Tremor", 2), ("Pierce", 2), ("Slash", 2))
     assert fused and taps == [0, 1, 1, 1]
 
 
@@ -1303,14 +1209,14 @@ def test_a_refused_fusion_is_not_read_again_until_the_owned_gifts_change(context
     visit = {}
     reads(context, FUSE_PAGE)
     fuse_slots(context, monkeypatch)
-    cells_read(monkeypatch, *with_ids([("Bleed", None, 1)] * 3))
+    cells_read(monkeypatch, *with_ids([("Bleed", 1)] * 3))
     assert not actions.Shop.fuse(context, shop_team({"fusion_condition": "tier4"}), visit)
     assert visit["fuse_scanned"]
 
 
 def test_a_super_shop_fuses_up_to_5(context, monkeypatch):
     # #77: 5 tier I make a tier III by the Super Shop's thresholds; its confirm dialog reads 5/5.
-    fused, taps, _ = fusion_taps(context, monkeypatch, {}, *[("Bleed", None, 1)] * 5, slots=5, confirm=5)
+    fused, taps, _ = fusion_taps(context, monkeypatch, {}, *[("Bleed", 1)] * 5, slots=5, confirm=5)
     assert fused and taps == [1] * 5
 
 
@@ -1319,7 +1225,7 @@ def test_a_material_that_does_not_show_in_the_fusion_closes_the_page(context, mo
     visit = {}
     reads(context, FUSE_PAGE)
     fuse_slots(context, monkeypatch, ignored=[actions.FUSE_CELLS[1]])
-    cells_read(monkeypatch, *with_ids([("Bleed", None), ("Tremor", None), ("Pierce", None)]))
+    cells_read(monkeypatch, *with_ids([("Bleed",), ("Tremor",), ("Pierce",)]))
     assert not actions.Shop.fuse(context, shop_team({}), visit)
     taps = [c.args for c in context.tasker.controller.post_click.call_args_list]
     assert actions.PAGE_OK not in taps and actions.PAGE_CLOSE in taps
@@ -1328,7 +1234,7 @@ def test_a_material_that_does_not_show_in_the_fusion_closes_the_page(context, mo
 
 
 def test_a_fusion_is_not_confirmed_when_the_dialog_counts_other_materials(context, monkeypatch):
-    fused, _, ok = fusion_taps(context, monkeypatch, {}, *[("Bleed", None)] * 3, confirm=2)
+    fused, _, ok = fusion_taps(context, monkeypatch, {}, *[("Bleed",)] * 3, confirm=2)
     assert ok and not fused
 
 
@@ -2511,7 +2417,7 @@ def test_a_scroll_stops_dead_where_it_was_sent(context, clock):
 
 def test_the_shop_stops_tapping_once_the_map_shows(context, monkeypatch):
     # Live 2026-10-18: the shop was left by hand mid-visit; its next taps opened a map node's panel.
-    cells_read(monkeypatch, ("Burn", None, 1, 9003), ("Burn", None, 1, 9087))
+    cells_read(monkeypatch, ("Burn", 1, 9003), ("Burn", 1, 9087))
     offers = [("Bone Stake", (575, 333, 90, 17)), ("120", (600, 306, 40, 24)),
               ("Wrist Guards", (730, 333, 90, 17)), ("130", (755, 306, 40, 24))]
 
@@ -2938,7 +2844,7 @@ def test_a_fusion_gone_after_a_cell_tap_taps_nothing_more(context, guarded, monk
     # The first material went in; with the shop gone then, the next material does not go out.
     reads(context, FUSE_PAGE)
     fuse_slots(context, monkeypatch)
-    cells_read(monkeypatch, *with_ids([("Bleed", None), ("Tremor", None), ("Pierce", None)]))
+    cells_read(monkeypatch, *with_ids([("Bleed",), ("Tremor",), ("Pierce",)]))
     page_until(context, "Shop", 5)  # gone after Fuse, the centre, Burn, its OK and the first cell
     with pytest.raises(actions.PageGone):
         actions.Shop.fuse(context, shop_team({}), {})

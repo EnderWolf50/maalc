@@ -86,7 +86,7 @@ def test_matching_stops_at_an_icon_that_cannot_be_a_lookalike():
 
 def test_a_cell_log_line_names_the_gift_or_says_unknown():
     import actions  # noqa: PLC0415
-    cell = {"i": 2, "tier": 3, "keyword": "Bleed", "gift": None, "id": 9042, "score": 0.77}
+    cell = {"i": 2, "tier": 3, "keyword": "Bleed", "id": 9042, "score": 0.77}
     assert actions.cell_line(cell, "keep") == "2 III Bleed 9042 Smokes and Wires (0.77): keep"
     assert actions.cell_line({**cell, "id": None, "score": 0.38}, "keep") == "2 III Bleed unknown (best 0.38): keep"
 

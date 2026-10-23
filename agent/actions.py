@@ -33,7 +33,7 @@ import settlement
 import shop
 from gifts import effective, main_keyword, queue, queue_place, resolve_list
 from ocrtext import compact, digits, has, normalize
-from settings import SCHEMA, VESTIGE_IDS, SettingsError, load_settings
+from settings import VESTIGE_IDS, SettingsError, load_settings
 from state import next_cursor, pick_team, read_cursor, write_cursor
 
 # Same <root> as main.ROOT; resource/ sits under it in a release, under assets/ in the repo.
@@ -2754,7 +2754,7 @@ CELL_PAGES = {"fuse": (1.1, 493), "sell": (1.1, 495), "offer": (0.8, 530)}
 BADGES = ["Burn", "Bleed", "Tremor", "Rupture", "Sinking", "Poise", "Charge", "Slash", "Pierce", "Blunt"]
 # On scaled cells (CCOEFF): its own badge 0.54-0.99, another keyword's up to 0.60 (the cell's best wins), a keywordless
 # cell's best 0.41; 160 cells of 60 live captures. An observed gift's icon: Spiderweb's thin lines 0.5-0.6, others 0.86+.
-BADGE_MIN, ICON_KEEP = 0.5, 0.45
+BADGE_MIN = 0.5
 GIFTS = gift_cells.load()  # every gift a cell may show (#297)
 GIFT_NAMES = {e["id"]: e["en"] for e in GIFTS}
 CELL_ICON_ROI = 70  # px square around a cell's centre on the scaled grid where its icon is looked for: the biggest icon (54 px) +-8
@@ -2791,14 +2791,7 @@ def read_cost(context, roi=SHOP_COST):
     return None
 
 
-# Vestiges, tier I-V in this order (#161; LocalizeLimbusCompany EN/EGOgift_MirrorDungeon.json, ids 9991-9995): the settings
-# schema lists them, so the GUI and the agent share one list. They have no badge; their icons (image/GiftSearch/<id>.png,
-# from the game client like the Gift Search ones) differ only in the jar's fill: the tier read off the cell tells them
-# apart (read_cells).
-VESTIGES = SCHEMA["$defs"]["vestige"]["properties"]["name"]["enum"]
-
-
-def cell_role(cell, team, page, avoid=()):
+def cell_role(cell, team, page, avoid):
     """"material" or "keep": what the shop may do with the owned gift a cell of page ("fuse" or "sell") shows (#299).
 
     Material only when the gift is known (its id was read, #297) and its effective state in the team's gift list is "drop"
@@ -2820,10 +2813,7 @@ WHITE_GOSSYPIUM = 9020  # its id in data/gift_search.json
 
 
 def avoided_gifts(team):
-    """Gifts the team never takes or buys, and fuses or sells first: White Gossypium unless it allows it (#90).
-
-    Shaped for read_cells' icon match.
-    """
+    """Gifts the team never takes or buys, and fuses or sells first: White Gossypium unless it allows it (#90)."""
     if team.get("allow_white_gossypium", True):
         return []
     g = next(e for e in gift_data() if e["id"] == WHITE_GOSSYPIUM)
@@ -2861,13 +2851,12 @@ def cell_id(context, grid, at, keyword, tier):
     return gift_cells.best(scores), max((s for _, s in scores), default=0.0)
 
 
-def read_cells(context, image, cells, page, gifts=()):
+def read_cells(context, image, cells, page):
     """The filled cells of a shop grid read off one screenshot (#76, #112): [{"i", "x", "y", "tier", "keyword", "gift", "id", "score"}].
 
-    The grid is scaled so gift icons are at their GiftSearch template's size, then each keyword's badge and each
-    gift's icon (gifts: the avoided ones) is matched once over it. keyword: the cell's best badge,
-    "Keywordless" with none, None when the badge is below the grid's edge; gift: the kept gift whose icon
-    matched, when its keyword and tier agree with the cell's. An empty cell is flat (live: spread 1-2, a gift 41-84).
+    The grid is scaled so gift icons are at their GiftSearch template's size, then each keyword's badge is matched once
+    over it. keyword: the cell's best badge, "Keywordless" with none, None when the badge is below the grid's edge. An
+    empty cell is flat (live: spread 1-2, a gift 41-84).
     id: the data's id of the gift the cell shows (cell_id), None when unknown, score the best icon's.
     """
     scale, bottom = CELL_PAGES[page]
@@ -2879,7 +2868,7 @@ def read_cells(context, image, cells, page, gifts=()):
     x1, y1 = max(x for _, x, _ in filled) + half, min(bottom, max(y for _, _, y in filled) + half)
     grid = shop.rescale(image[y0:y1, x0:x1], 1 / scale)
     out = [{"i": i, "x": x, "y": y, "tier": shop.tier(shop.cell_crop(image, x, y, scale)),
-            "keyword": "Keywordless" if y + 40 <= bottom else None, "gift": None,
+            "keyword": "Keywordless" if y + 40 <= bottom else None,
             "at": ((x - x0) / scale, (y - y0) / scale)} for i, x, y in filled]
     best = {}
     for keyword in BADGES:
@@ -2888,14 +2877,6 @@ def read_cells(context, image, cells, page, gifts=()):
                 cx, cy = c["at"]
                 if c["keyword"] and 12 <= bx - cx <= 40 and 12 <= by - cy <= 40 and score > best.get(c["i"], 0):
                     best[c["i"]], c["keyword"] = score, keyword
-    for g in gifts:
-        for score, (bx, by) in template_hits(context, grid, f"GiftSearch/{g['id']}.png", ICON_KEEP):
-            for c in out:
-                cx, cy = c["at"]
-                # A vestige only where the tier was read: the five jars match each other's cells too (VESTIGES).
-                tiers = (g["tier"],) if g["name"] in VESTIGES else (None, g["tier"])
-                if abs(bx - cx) < 16 and abs(by - cy) < 16 and c["keyword"] in (None, g["keyword"]) and c["tier"] in tiers:
-                    c["gift"] = g["name"]
     for c in out:
         c["id"], c["score"] = cell_id(context, grid, c.pop("at"), c["keyword"], c["tier"])
     return out
@@ -2909,7 +2890,7 @@ def offer_cell(slot):
 def cell_line(cell, role):
     """One cell read for the log: "2 III Bleed 9042 Smokes and Wires (0.77): keep", an unknown gift "unknown (best 0.38)" (#297)."""
     tier = "I II III IV V".split()[cell["tier"] - 1] if cell["tier"] else "?"
-    return f"{cell['i']} {tier} {cell['keyword'] or 'badge unread'}{' ' + cell['gift'] if cell['gift'] else ''} {gift_shown(cell)}: {role}"
+    return f"{cell['i']} {tier} {cell['keyword'] or 'badge unread'} {gift_shown(cell)}: {role}"
 
 
 def gift_shown(cell):
@@ -2918,12 +2899,12 @@ def gift_shown(cell):
     return f"{cell['id']} {named} ({cell['score']:.2f})" if named else f"unknown (best {cell['score']:.2f})"
 
 
-def owned_cells(context, page, gifts):
+def owned_cells(context, page):
     """Every gift of the fuse or sell page's owned grid, each read once where it shows whole (#205): ([cells], grid).
 
     The grid is read on show (read_cells, and the prices on the sell page), then dragged to bring its first cut-off
     row up to the first row's place (with none, the row under a full last row), until no cut-off cell holds a gift or a
-    drag moves it no more. A cell is {"i", "x", "y", "tier", "keyword", "gift", "price", "look"}: i its place in the
+    drag moves it no more. A cell is {"i", "x", "y", "tier", "keyword", "id", "score", "price", "look"}: i its place in the
     grid's order, y with the grid at its top, look its centre as read (cell_at finds it again by both); grid is
     {"page", "at": px scrolled}. A page opens where its list was left (live 2026-10-21: the fuse page after a fusion),
     so every list is dragged to its top first (grid_top); the fuse page's owned gifts are then placed by
@@ -2950,7 +2931,7 @@ def owned_cells(context, page, gifts):
         done |= {i for i, _, _ in fresh}
         spots = [(x, y) for _, x, y in fresh]
         prices = shop.cell_prices(ocr(context, image, SELL_GRID), spots) if page == "sell" and spots else {}
-        for c in read_cells(context, image, spots, page, gifts):
+        for c in read_cells(context, image, spots, page):
             i, _, y = fresh[c["i"]]
             out.append({**c, "i": i, "y": y + grid["at"], "price": prices.get(c["i"]), "look": centre(image, c["x"], y)})
         cut = [y for _, x, y in shown if y + under > bottom and y - 25 < bottom and shop.filled(image[:bottom], x, y)]
@@ -3318,13 +3299,13 @@ class Shop(CustomAction):
         image = screen(context)
         slots = [s for s in shop.read_slots(ocr(context, image, OFFER_GRID)) if shop.on_sale(s)]
         avoided = avoided_gifts(team)
-        cells = {c["i"]: c for c in read_cells(context, image, [offer_cell(s) for s in slots], "offer", avoided)}
+        cells = {c["i"]: c for c in read_cells(context, image, [offer_cell(s) for s in slots], "offer")}
         avoid = [g["name"] for g in avoided]
         avoid_ids = [g["id"] for g in avoided]
         offers = []
         for i, slot in enumerate(slots):
-            cell = cells.get(i, {"tier": None, "keyword": None, "gift": None, "id": None, "score": 0.0})
-            if cell["id"] in avoid_ids or cell["gift"] in avoid or any(rewards.names_gift(slot["name"], n) for n in avoid):
+            cell = cells.get(i, {"tier": None, "keyword": None, "id": None, "score": 0.0})
+            if cell["id"] in avoid_ids or any(rewards.names_gift(slot["name"], n) for n in avoid):
                 log(f"shop: {slot['name']!r} {slot['price']}: the team does not hold it (#90)")
                 continue
             slot["short"] = slot["short"] or shop.short_cell(image, *offer_cell(slot))
@@ -3401,7 +3382,7 @@ class Shop(CustomAction):
             return False
         # The grid decides (#112, #205): each cell's tier, badge and icon (its id), its price under it.
         avoid = [g["id"] for g in avoided_gifts(team)]
-        cells, grid = owned_cells(context, "sell", ())
+        cells, grid = owned_cells(context, "sell")
         roles = [cell_role(c, team, "sell", avoid) for c in cells]
         log("shop: sell cells " + "; ".join(f"{cell_line(c, r)} {c['price']}" for c, r in zip(cells, roles)))
         gifts = [(c["i"], c["price"]) for c, r in zip(cells, roles) if r == "material" and c["price"]]
@@ -3485,7 +3466,7 @@ class Shop(CustomAction):
         if seen(context, image, "ShopFusionAvailable"):
             log("shop: the fuse page shows Fusion Available (a fixed recipe, #78): not used, the owned gifts are read under it")
         avoid = [g["id"] for g in avoided_gifts(team)]
-        cells, grid = owned_cells(context, "fuse", ())
+        cells, grid = owned_cells(context, "fuse")
         roles = [cell_role(c, team, "fuse", avoid) for c in cells]
         log(f"shop: fuse cells ({slots} slots) " + "; ".join(cell_line(c, r) for c, r in zip(cells, roles)))
         condition = team["list"]["fusion_condition"]

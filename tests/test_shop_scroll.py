@@ -13,7 +13,7 @@ DONE = SimpleNamespace(wait=lambda: None)
 # Live 2026-10-21: a sell grid of 13 gifts scrolls 31 px, its last row's price just inside; the fuse page's end is a guess.
 END = {"fuse": 56, "sell": 495 + 31 - 472}
 TOP = {"fuse": 200, "sell": 215}  # the lists' upper edge (live: the fuse page's label at 216-240, sell rows cut at 215)
-ID = 700000  # gift i of a grid reads as id ID + i, which no gift list mentions
+ID = test_actions.UNLISTED  # gift i of a grid reads as id ID + i, which no gift list mentions
 KEYWORDS = ["Bleed", "Tremor", "Pierce", "Sinking", "Slash", "Blunt", "Poise", "Rupture", "Charge"]
 
 
@@ -103,7 +103,7 @@ class Grid:
         self.taps.append((x, y) if i is None else i)
         return DONE
 
-    def read_cells(self, context, image, cells, page, gifts=()):
+    def read_cells(self, context, image, cells, page):
         """actions.read_cells as the badge and icon matching would: each gift's keyword, by the gift on screen there.
         Only cells shown whole are asked for (test_shop_cells checks the matching itself)."""
         out = []
@@ -113,7 +113,7 @@ class Grid:
             assert i is None or i < len(self.icons) - len(self.recipes), f"a recipe cell read as an owned gift at {x, y}"
             if i is not None:
                 self.reads.append(i)
-                out.append({"i": k, "x": x, "y": y, "tier": 1, "keyword": KEYWORDS[i % len(KEYWORDS)], "gift": None,
+                out.append({"i": k, "x": x, "y": y, "tier": 1, "keyword": KEYWORDS[i % len(KEYWORDS)],
                             "id": ID + i, "score": 0.9})
         return out
 
@@ -137,7 +137,7 @@ def test_every_gift_is_read_once_whatever_the_grid_holds(context, grid, monkeypa
     g = grid(page, n)
     logs = []
     monkeypatch.setattr(actions, "log", logs.append)
-    cells, _ = actions.owned_cells(context, page, [])
+    cells, _ = actions.owned_cells(context, page)
     assert g.reads == list(range(n))  # each gift once, in the grid's order
     assert (f"shop: the {page} grid does not move: at its end" in logs) == (n == 20)
     assert [c["i"] for c in cells] == list(range(n))
@@ -148,7 +148,7 @@ def test_every_gift_is_read_once_whatever_the_grid_holds(context, grid, monkeypa
 def test_a_cell_read_further_down_is_found_again_after_the_grid_moved(context, grid):
     # cell_at drags the grid back to bring a cell read before the last drag whole into view; its tap hits that gift.
     g = grid("fuse", 23)
-    cells, at = actions.owned_cells(context, "fuse", [])
+    cells, at = actions.owned_cells(context, "fuse")
     for i in (22, 0, 12, 4, 21):
         g.click(*actions.cell_at(context, at, cells[i]))
     assert g.taps == [22, 0, 12, 4, 21]
@@ -161,7 +161,7 @@ def test_a_page_opened_where_its_list_was_left_is_read_from_its_top(context, gri
     # label above the edge: the scan dragged on down and found no label. The list goes back to its top first.
     g = grid(page, 23, recipes=recipes if page == "fuse" else 0)
     g.at = g.max_at
-    actions.owned_cells(context, page, [])
+    actions.owned_cells(context, page)
     assert g.reads == list(range(23))
 
 
@@ -169,7 +169,7 @@ def test_a_page_opened_where_its_list_was_left_is_read_from_its_top(context, gri
 def test_a_drag_a_few_px_off_still_reads_every_gift_once(context, grid, fling):
     # A drag stops GRID_MARGIN px short of the first row's place: a row that lands a few px higher is still whole.
     g = grid("fuse", 31, fling)
-    actions.owned_cells(context, "fuse", [])
+    actions.owned_cells(context, "fuse")
     assert g.reads == list(range(31))
 
 
@@ -179,7 +179,7 @@ def test_a_drag_the_game_took_less_of_still_reads_on(context, grid, page, share)
     # A short drag (a quarter: 44-52 px) can leave a full row over the edge and the next one all under it: nothing cut
     # off shows, yet the grid goes on (review of #221).
     g = grid(page, 31, 0, share)
-    actions.owned_cells(context, page, [])
+    actions.owned_cells(context, page)
     assert g.reads == list(range(31))
 
 

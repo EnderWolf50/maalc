@@ -10,7 +10,7 @@ from test_shop import screen_with
 
 clock, context = test_actions.clock, test_actions.context  # its fixtures
 CHANCE = {tuple(actions.FORECAST_CHANCE): [("90%", (430, 456, 40, 24))]}
-THREE_THREE_TWO = [("Bleed", None, 3), ("Tremor", None, 3), ("Pierce", None, 2)]  # 26 points: a IV by the points
+THREE_THREE_TWO = [("Bleed", 3), ("Tremor", 3), ("Pierce", 2)]  # 26 points: a IV by the points
 
 
 def fuse(context, monkeypatch, team, readings, page, chance=True, slots=3, stuck=False, framed=False, visit=None, get=True):
@@ -66,7 +66,7 @@ def test_a_forecast_the_condition_refuses_is_not_fused_and_the_materials_come_ou
 def test_a_refused_group_is_left_out_and_the_next_one_is_tried(context, monkeypatch):
     # upgrade: III + III + II (cells 0, 1, 2) is the best group; the page turns it down. III + III + II with the other II
     # (cells 0, 1, 3) would read the same: not tried. II + II + II (a III over a II) is, and the page takes it.
-    cells = [("Bleed", None, 3), ("Tremor", None, 3), ("Pierce", None, 2), ("Slash", None, 2), ("Sinking", None, 2)]
+    cells = [("Bleed", 3), ("Tremor", 3), ("Pierce", 2), ("Slash", 2), ("Sinking", 2)]
     fused, taps, ok, lines = fuse(context, monkeypatch, {"fusion_condition": "upgrade"}, cells, {(0, 1, 2): 3, (2, 3, 4): 3})
     assert fused and ok
     assert taps == [2, 2, 3, 1, 1]  # the III in and out; the first II in, out, in; the others in once
@@ -76,7 +76,7 @@ def test_a_refused_group_is_left_out_and_the_next_one_is_tried(context, monkeypa
 def test_the_page_turns_down_at_most_fuse_tries_groups_then_closes(context, monkeypatch):
     # Every group the points allow reads as a III on the page: five groups of different tiers are allowed (tier4), only
     # FUSE_TRIES of them are tried, then the page is closed.
-    cells = [("Bleed", None, t) for t in (4, 3, 3, 2, 2, 2, 1, 1, 1)]
+    cells = [("Bleed", t) for t in (4, 3, 3, 2, 2, 2, 1, 1, 1)]
     page = SimpleNamespace(get=lambda key: 3)
     fused, taps, ok, lines = fuse(context, monkeypatch, {"fusion_condition": "tier4"}, cells, page, get=False)
     assert not fused and not ok
@@ -100,7 +100,7 @@ def test_the_condition_any_fuses_whatever_the_page_forecasts(context, monkeypatc
 def test_materials_that_will_not_come_out_close_the_page(context, monkeypatch):
     # A refused group whose gifts stay in: nothing more is tapped but the Close, and the grid is not read again.
     visit = {}
-    cells = [("Bleed", None, 3), ("Tremor", None, 3), ("Pierce", None, 2), ("Slash", None, 2), ("Sinking", None, 2)]
+    cells = [("Bleed", 3), ("Tremor", 3), ("Pierce", 2), ("Slash", 2), ("Sinking", 2)]
     fused, taps, ok, lines = fuse(context, monkeypatch, {"fusion_condition": "upgrade"}, cells, {(0, 1, 2): 3}, stuck=True, visit=visit, get=False)
     assert not fused and not ok
     assert taps == [2, 1, 1, 0, 0]  # the first tap out did not show: the rest stay, the next group is not tried
@@ -110,7 +110,7 @@ def test_materials_that_will_not_come_out_close_the_page(context, monkeypatch):
 
 
 def test_a_taken_out_material_whose_frame_stays_lit_closes_the_page(context, monkeypatch):
-    cells = [("Bleed", None, 3), ("Tremor", None, 3), ("Pierce", None, 2), ("Slash", None, 2), ("Sinking", None, 2)]
+    cells = [("Bleed", 3), ("Tremor", 3), ("Pierce", 2), ("Slash", 2), ("Sinking", 2)]
     fused, taps, ok, lines = fuse(context, monkeypatch, {"fusion_condition": "upgrade"}, cells, {(0, 1, 2): 3}, framed=True, get=False)
     assert not fused and not ok and taps == [2, 1, 1, 0, 0]
     assert any("cell 0 tapped: 2 materials in, framed: not taken out" in m for m in lines)
@@ -119,7 +119,7 @@ def test_a_taken_out_material_whose_frame_stays_lit_closes_the_page(context, mon
 def test_a_group_is_judged_by_its_highest_material_not_its_first(context, monkeypatch):
     # A Super Shop's II + II + III (22 points, a IV by the points) forecast as a III: no upgrade over the III, though over a II.
     fused, taps, ok, lines = fuse(context, monkeypatch, {"fusion_condition": "upgrade"},
-                                  [("Bleed", None, 2), ("Tremor", None, 2), ("Pierce", None, 3)], {(0, 1, 2): 3}, slots=5, get=False)
+                                  [("Bleed", 2), ("Tremor", 2), ("Pierce", 3)], {(0, 1, 2): 3}, slots=5, get=False)
     assert not fused and not ok and taps == [2, 2, 2]
 
 

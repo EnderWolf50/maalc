@@ -19,19 +19,14 @@ import pytest
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "agent"))  # run as a script: shop, as pytest's pythonpath has it
 from test_shop import screen_with  # noqa: E402
-SPIDERWEB = {"name": "Spiderweb Entangled in Red", "keyword": "Keywordless", "tier": 3}
-HELLTERFLY = {"name": "Hellterfly's Dream", "keyword": "Burn", "tier": 2}
 
-# name: (crop, the page's cells, the page, observed gifts[, the team holds White Gossypium])
+# name: (crop, the page's cells, the page). The icons (which gift) are read and checked in test_gift_cells.
 CASES = {
-    "fuse_spiderweb": ("fuse_spiderweb", "FUSE_CELLS", "fuse", [SPIDERWEB]),
-    "fuse": ("fuse", "FUSE_CELLS", "fuse", [SPIDERWEB, HELLTERFLY]),
-    "sell": ("sell", "SELL_CELLS", "sell", []),
-    "offers": ("offers", "OFFER_CELLS", "offer", []),
-    "offers_super": ("offers_super", "OFFER_CELLS", "offer", []),
-    "fuse_no_gossypium": ("fuse", "FUSE_CELLS", "fuse", [], False),
-    "sell_no_gossypium": ("sell", "SELL_CELLS", "sell", [], False),
-    "fuse_tier_unread": ("fuse", "FUSE_CELLS", "fuse", []),  # cell 0's numerals dimmed (without_tier)
+    "fuse": ("fuse", "FUSE_CELLS", "fuse"),
+    "sell": ("sell", "SELL_CELLS", "sell"),
+    "offers": ("offers", "OFFER_CELLS", "offer"),
+    "offers_super": ("offers_super", "OFFER_CELLS", "offer"),
+    "fuse_tier_unread": ("fuse", "FUSE_CELLS", "fuse"),  # cell 0's numerals dimmed (without_tier)
 }
 
 
@@ -48,7 +43,7 @@ def without_tier(image, x, y):
 
 
 def child():
-    """Run every case through actions.read_cells in a MaaFramework task; print {case: [(tier, keyword, gift)]}."""
+    """Run every case through actions.read_cells in a MaaFramework task; print {case: [(tier, keyword)]}."""
     from maa.controller import CustomController
     from maa.custom_action import CustomAction
     from maa.resource import Resource
@@ -81,20 +76,12 @@ def child():
     class Probe(CustomAction):
         def run(self, context, argv):
             try:
-                for case, (crop, cells, page, gifts, *allow) in CASES.items():
-                    team = {"allow_white_gossypium": (allow or [True])[0]}
-                    # The observed gifts', the vestiges' and White Gossypium's icons on every case (#161): on the offers too,
-                    # where none is, as a sweep for false hits.
-                    table = actions.gift_data()
-                    observed = [{**g, "id": next(e["id"] for e in table if e["keyword"] == g["keyword"] and e["tier"] == g["tier"]
-                                                 and e["en"] == g["name"])} for g in gifts]
-                    vestiges = [{"name": n, "keyword": "Keywordless", "tier": t, "id": 9990 + t} for t, n in enumerate(actions.VESTIGES, 1)]
+                for case, (crop, cells, page) in CASES.items():
                     image = screen_with(crop)
                     if case == "fuse_tier_unread":
                         image = without_tier(image, *actions.FUSE_CELLS[0])
-                    found = actions.read_cells(context, image, getattr(actions, cells), page,
-                                               observed + actions.avoided_gifts(team) + vestiges)
-                    out[case] = [(c["tier"], c["keyword"], c["gift"]) for c in found]
+                    found = actions.read_cells(context, image, getattr(actions, cells), page)
+                    out[case] = [(c["tier"], c["keyword"]) for c in found]
                 for name in LABELS:  # #205: the fuse page's owned gifts found by their label's OCR
                     screen = np.array(Image.open(ROOT / "tests" / "screens" / f"{name}.png").convert("RGB"))[:, :, ::-1]
                     out[name] = actions.owned_label(context, np.ascontiguousarray(screen))[0]
@@ -121,58 +108,34 @@ def read():
     return {k: [tuple(c) for c in v] if isinstance(v, list) else v for k, v in out.items()}
 
 
-def test_spiderweb_is_kept_off_its_icon_with_no_tooltip(read):
-    # #112, live 2026-10-18: the observed Spiderweb Entangled in Red (keywordless, III) first; its tooltip read no name.
-    # Only 5 gifts owned: the empty cells are not read.
-    assert read["fuse_spiderweb"] == [(3, "Keywordless", SPIDERWEB["name"]), (2, "Poise", None), (2, "Keywordless", None),
-                                      (1, "Keywordless", None), (1, "Poise", None)]
-
-
-OWNED = [  # ShopFuse.png's gifts, by the game data of the names their tooltips give
-    (2, "Keywordless", "Faint Vestige"), (1, "Keywordless", "Dark Vestige"), (3, "Bleed", None),  # Smokes and Wires
-    (2, "Burn", HELLTERFLY["name"]), (2, "Tremor", None),  # Hellterfly's Dream (observed), Sour Liquor Aroma
-    (2, "Keywordless", None), (2, "Pierce", None), (2, "Keywordless", None),  # New Release Pamphlet, Gathering Skulls, Milepost
-    (2, "Bleed", None), (2, "Keywordless", None),  # White Gossypium, Twinkling Scrap
-    (2, None, None), (2, None, None), (2, None, None), (1, None, None), (1, None, None),  # the third row's badges are cut off
+OWNED = [  # ShopFuse.png's gifts: tier and badge (the third row's badges are cut off by the list's edge)
+    (2, "Keywordless"), (1, "Keywordless"), (3, "Bleed"), (2, "Burn"), (2, "Tremor"), (2, "Keywordless"), (2, "Pierce"),
+    (2, "Keywordless"), (2, "Bleed"), (2, "Keywordless"), (2, None), (2, None), (2, None), (1, None), (1, None),
 ]
 
 
-def test_the_fuse_page_cells_read_tier_badge_and_observed_icon(read):
+def test_the_fuse_page_cells_read_tier_and_badge(read):
     assert read["fuse"] == OWNED
 
 
 def test_the_sell_page_cells_read_like_the_fuse_pages(read):
-    # The same gifts on the sell page (another layout): the observed gift is not looked for here, the vestiges are.
-    assert read["sell"] == [(t, k, g if g and "Vestige" in g else None) for t, k, g in OWNED]
+    # The same gifts on the sell page (another layout).
+    assert read["sell"] == OWNED
 
 
-def test_vestiges_are_told_by_their_icon_and_tier(read):
-    # #161: the 5 vestige jars differ only in their fill (CCOEFF 0.5-0.86 on each other's), so the tier read off the
-    # cell decides which; each scores 0.80-0.90 on its own. No other cell of these captures matches one (0.38 at most).
-    assert [c[2] for c in read["fuse"][:2]] == ["Faint Vestige", "Dark Vestige"]
-    assert not [c for case in ("fuse_spiderweb", "offers", "offers_super") for c in read[case] if c[2] and "Vestige" in c[2]]
-
-
-def test_a_vestige_whose_tier_is_unread_is_not_named(read):
-    # #161: every vestige's icon matches the Faint Vestige's cell (0.69-0.80); with no tier read none is taken.
-    assert read["fuse_tier_unread"][0] == (None, "Keywordless", None)
-    assert read["fuse_tier_unread"][1] == (1, "Keywordless", "Dark Vestige")
-
-
-def test_white_gossypium_is_told_by_its_icon_for_a_team_that_does_not_hold_it(read):
-    # #90: the 9th owned gift on both pages; no other cell takes its name.
-    for case in ("fuse_no_gossypium", "sell_no_gossypium"):
-        assert [c[2] for c in read[case]] == ["Faint Vestige", "Dark Vestige"] + [None] * 6 + ["White Gossypium"] + [None] * 6
+def test_a_cell_whose_tier_is_unread_reads_none(read):
+    # #161: cell 0's numerals dimmed.
+    assert read["fuse_tier_unread"][0] == (None, "Keywordless")
+    assert read["fuse_tier_unread"][1] == (1, "Keywordless")
 
 
 def test_the_offers_read_tier_and_badge(read):
     # Shop.png: Ryōshū's skill, Rags, Plume of Proof, Temporal Bridle, Reverberation.
-    assert read["offers"] == [(None, "Keywordless", None), (1, "Sinking", None), (2, "Pierce", None), (2, "Blunt", None),
-                              (2, "Tremor", None)]
+    assert read["offers"] == [(None, "Keywordless"), (1, "Sinking"), (2, "Pierce"), (2, "Blunt"), (2, "Tremor")]
     # SuperShop.png: ID Skill Search, 2 skills, Special Catalogue; Fiery Down, Polarization, Pendant of Nostalgia,
     # Gemstone Oscillator.
-    assert read["offers_super"] == [(None, "Keywordless", None)] * 3 + [
-        (2, "Keywordless", None), (2, "Burn", None), (1, "Burn", None), (1, "Poise", None), (1, "Tremor", None)]
+    assert read["offers_super"] == [(None, "Keywordless")] * 3 + [
+        (2, "Keywordless"), (2, "Burn"), (1, "Burn"), (1, "Poise"), (1, "Tremor")]
 
 
 @pytest.mark.parametrize("name", LABELS)
