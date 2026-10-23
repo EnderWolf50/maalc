@@ -25,6 +25,12 @@ export const resolveList = (ref: string, lists: GiftList[]): ListRules | undefin
 /** The first keyword of `order` that is not Keywordless: the team's main keyword. */
 export const mainKeyword = (list: ListRules): string => list.order.find((k) => k !== "Keywordless")!;
 
+/** The main keyword of the list a team's `gift_list` names; undefined when no list has that id. */
+export const teamKeyword = (ref: string, lists: GiftList[]): string | undefined => {
+  const list = resolveList(ref, lists);
+  return list && mainKeyword(list);
+};
+
 /** "want", "keep" or "drop" (everything the list does not mention). */
 export const state = (list: ListRules, id: number): GiftState => (list.want.includes(id) ? "want" : list.keep.includes(id) ? "keep" : "drop");
 

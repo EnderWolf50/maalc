@@ -175,7 +175,7 @@ describe("version 10 teams become gift lists (tests/settings_cases.json migratio
         for (const id of want.keep_has) expect(got.keep).toContain(id);
         for (const id of want.keep_lacks) expect(got.keep).not.toContain(id);
       });
-      for (const t of data.teams) for (const k of ["keep_keywords", "keywordless", "keep_gifts", "fusion_condition"]) expect(t).not.toHaveProperty(k);
+      for (const t of data.teams) for (const k of ["keyword", "keep_keywords", "keywordless", "keep_gifts", "fusion_condition"]) expect(t).not.toHaveProperty(k);
       expect(validate(data)).toEqual([]);
     });
   }

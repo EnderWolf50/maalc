@@ -18,7 +18,7 @@ STARLIGHT = {"levels": ["none"] * 10, "priority": list(range(1, 11)), "convert_l
 
 def team(id, game_team, **kw):
     return {
-        "id": id, "name": f"Team {id}", "enabled": True, "game_team": game_team, "keyword": "Burn",
+        "id": id, "name": f"Team {id}", "enabled": True, "game_team": game_team,
         "usage": "any", "hard_from_floor": 1, "deployment_order": {"custom": ORDER},
         "starlight": {"custom": STARLIGHT}, "theme_pack_plan": "default",
         "reward_cards": ["Starlight", "Random E.G.O Gift", "Cost & Keyword Gift Chance", "Cost", "E.G.O Resource"],
@@ -71,7 +71,7 @@ def as_v10(valid):
     del old["gift_lists"]
     for t in old["teams"]:
         del t["gift_list"]
-        t.update(keep_keywords=[], keywordless="keep", keep_gifts=[], fusion_condition="any")
+        t.update(keyword="Burn", keep_keywords=[], keywordless="keep", keep_gifts=[], fusion_condition="any")
     return old
 
 
@@ -379,7 +379,7 @@ def test_shared_migrations(tmp_path, case):
         assert set(want["want_has"]) <= set(got["want"]) and set(want["keep_has"]) <= set(got["keep"])
         assert not set(want["keep_lacks"]) & set(got["keep"])
     assert all(g["gorder"] == gift_list()["gorder"] for g in data["gift_lists"])
-    assert all(not {"keep_keywords", "keywordless", "keep_gifts", "fusion_condition"} & t.keys() for t in data["teams"])
+    assert all(not {"keyword", "keep_keywords", "keywordless", "keep_gifts", "fusion_condition"} & t.keys() for t in data["teams"])
 
 
 @pytest.mark.parametrize("case", CASES["clean_gift_list"], ids=lambda c: c["name"])

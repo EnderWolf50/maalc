@@ -1,8 +1,9 @@
 // Teams (spec 04 section 9): list order is rotation order.
 import { useState } from "react";
 import { resetTeamTimes } from "./api";
+import { teamKeyword } from "./gifts";
 import {
-  KEYWORDS, MAX_GIFTS, SEARCH_GIFTS, SEARCH_TABS, SINNERS, defaultStarlight, freeName, newId, newTeam, teamEnum, toggleGift,
+  MAX_GIFTS, SEARCH_GIFTS, SEARCH_TABS, SINNERS, defaultStarlight, freeName, newId, newTeam, teamEnum, toggleGift,
   type GiftRef, type SearchGift, type Team,
 } from "./model";
 import { SinnerGrid, StarlightEditor } from "./Plans";
@@ -43,6 +44,7 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
       <Select value={team[field]} options={teamEnum(field)} label={(v) => tv(field, v)} onChange={(v) => set({ [field]: v })} />
     </Field>
   );
+  const main = teamKeyword(team.gift_list, s.gift_lists);
   const [notice, setNotice] = useState("");
 
   // "plan id" or "" for custom. Switching to custom copies the plan's values (spec 04 section 9).
@@ -82,9 +84,6 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
         </Field>
         <Field label={t("team.game_team")} path={`${path}/game_team`}>
           <Num value={team.game_team} min={1} max={40} onChange={(v) => set({ game_team: v })} />
-        </Field>
-        <Field label={t("team.keyword")} path={`${path}/keyword`}>
-          <Select value={team.keyword} options={KEYWORDS} onChange={(v) => set({ keyword: v })} />
         </Field>
         <label className="check"><input type="checkbox" checked={team.enabled} onChange={(e) => set({ enabled: e.target.checked })} />{t("team.enabled")}</label>
         <span className="spacer" />
@@ -176,6 +175,7 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
               {s.gift_lists.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
               {missing(team.gift_list !== "default" && team.gift_list, s.gift_lists)}
             </select>
+            {main && <small>{t("team.main_keyword")}: <b>{main}</b></small>}
           </Field>
           <Field label={t("team.theme_pack_plan")} path={`${path}/theme_pack_plan`}>
             <select value={team.theme_pack_plan} onChange={(e) => set({ theme_pack_plan: e.target.value })}>
@@ -286,6 +286,7 @@ function GiftSearchPanel({ i }: { i: number }) {
   const { s, update, t, bad } = useEditor();
   const team = s.teams[i];
   const search = team.gift_search;
+  const main = teamKeyword(team.gift_list, s.gift_lists);
   const path = `teams/${i}/gift_search`;
   const set = (patch: Partial<Team["gift_search"]>) => update((d) => { Object.assign(d.teams[i].gift_search, patch); });
   const zh = s.language === "zh_tw";
@@ -300,7 +301,7 @@ function GiftSearchPanel({ i }: { i: number }) {
         </label>
         <small>{t("gift.note")}</small>
       </div>
-      <GiftGrid gifts={search.gifts} start={team.keyword} full={full} mark={(g) => (rank(g) ? String(rank(g)) : null)}
+      <GiftGrid gifts={search.gifts} start={main ?? SEARCH_TABS[0]} full={full} mark={(g) => (rank(g) ? String(rank(g)) : null)}
         onToggle={(g) => set({ gifts: toggleGift(search.gifts, g) })} />
       <div className={"rewards" + (bad(`${path}/gifts`) ? " bad" : "")}>
         <h4>{t("gift.order")} ({search.gifts.length}/{MAX_GIFTS})</h4>

@@ -13,7 +13,6 @@ const TEAM = P.teams.items.properties;
 
 export const SINNERS: string[] = schema.$defs.order.default;
 export const REWARD_CARDS: string[] = TEAM.reward_cards.default;
-export const KEYWORDS: string[] = TEAM.keyword.enum;
 export const LEVELS: string[] = schema.$defs.levels.items.enum;
 export const VERSION: number = P.version.const;
 /** Spec 04 section 7: the graces numbered 1-10, English names as the game shows them, Chinese name and
@@ -239,7 +238,7 @@ function migrateV10(d: Record<string, unknown>) {
       ...d, gift_lists: lists,
       teams: Array.isArray(d.teams) ? d.teams.map((t) => {
         if (!gift_list.has(t)) return t;
-        const { keep_keywords, keywordless, keep_gifts, fusion_condition, ...rest } = t;
+        const { keyword, keep_keywords, keywordless, keep_gifts, fusion_condition, ...rest } = t;
         return { ...rest, gift_list: gift_list.get(t) };
       }) : d.teams,
     },
@@ -278,7 +277,7 @@ export function importGiftList(text: string, taken: string[], suffix: string): {
 
 export type Ref<T> = { plan: string } | { custom: T };
 export interface Team {
-  id: string; name: string; enabled: boolean; game_team: number; keyword: string; usage: string;
+  id: string; name: string; enabled: boolean; game_team: number; usage: string;
   hard_from_floor: number | null; deployment_order: Ref<Order>; starlight: Ref<StarlightValues>;
   theme_pack_plan: string; reward_cards: string[]; shop_refresh_limit: number; heal: string;
   reserve_cost: number; min_alive: number; guard_turns: number; trial_risk_weight: string;
@@ -382,7 +381,8 @@ const MIGRATIONS: Record<number, (d: Record<string, unknown>) => Record<string, 
   // Version 10 adds teams[].fusion_condition (#263), "any": the shop fuses as before.
   9: (d) => withTeamDefault(d, { fusion_condition: "any" }),
   // Version 11 (#291) moves the shop's keep settings from the teams to gift lists: a list per team, teams that kept the same
-  // share one; keep_keywords, keywordless, keep_gifts and fusion_condition go. A keywordless gift is always kept now.
+  // share one; keyword (the list's order starts with it), keep_keywords, keywordless, keep_gifts and fusion_condition go. A keywordless
+  // gift is always kept now.
   10: (d) => {
     const { data, dropped } = migrateV10(d);
     v10Dropped = dropped;
