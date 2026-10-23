@@ -784,10 +784,10 @@ UNLISTED = 800000  # a cell given no id reads as UNLISTED + its place: an id no 
 
 
 def with_ids(readings):
-    """readings (keyword, tier, id) all: a cell given no id gets one no list mentions, so the list drops it; a cell whose
-    badge is unread (keyword None) has none, as read_cells gives it."""
-    def one(n, k, tier=2, id=...):
-        return (k, tier, (None if k is None else UNLISTED + n) if id is ... else id)
+    """readings (keyword, tier, id) all, tier 2 by default: a cell given no id gets one no list mentions, so the list drops it;
+    a cell whose badge is unread (keyword None) has none, as read_cells gives it; an id given as None stays None (unknown)."""
+    def one(n, k, tier=2, gift_id=...):
+        return (k, tier, (None if k is None else UNLISTED + n) if gift_id is ... else gift_id)
     return [one(n, *r) for n, r in enumerate(readings)]
 
 

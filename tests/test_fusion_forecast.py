@@ -1,4 +1,4 @@
-"""#285: the fuse page's Forecasts row is read before Fuse; a tier the team's fusion_condition refuses is not fused."""
+"""#285: the fuse page's Forecasts row is read before Fuse; a tier the gift list's fusion_condition refuses is not fused."""
 from types import SimpleNamespace
 
 import numpy as np
