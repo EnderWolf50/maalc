@@ -2614,7 +2614,7 @@ CARD_TEXT = [130, 340, 1020, 120]
 SELECTABLE = [880, 115, 170, 40]
 CARD_CONFIRM = (808, 528)
 CARD_ROUNDS = 8  # a tap the game ignores costs a round
-CARD_REREADS = 2  # a card that reads as nothing is looked at again this often before it is taken as it reads
+CARD_REREADS = 2  # a card that reads as nothing is looked at again this often per tap before it is taken as it reads
 
 
 @AgentServer.custom_action("RewardCard")
@@ -2622,7 +2622,7 @@ class RewardCard(CustomAction):
     """Take reward cards in the team's order until Selectable n/m is full, then Confirm; never Cancel (spec 03 section 11).
 
     #334: each look waits for the cards to stop moving, which the game ignores taps during. A card counts as taken
-    when Selectable moved; a tap that did not move it is made again on the same card.
+    when Selectable's count went up; a tap that did not raise it is made again on the same card.
     """
 
     @hands_back
@@ -2647,9 +2647,14 @@ class RewardCard(CustomAction):
             i = rewards.pick_card(types, order, taken)
             log(f"reward cards: {', '.join(str(t) for t in types)}: take {types[i] or ' '.join(cards[i][1])!r}")
             tap(context, cards[i][0], 300, wait=0)
-            moved_on = until(context, lambda im: text(context, im, SELECTABLE) != text(context, image, SELECTABLE), timeout=1.5)
-            if moved_on is not None:
+            before = int(m[1]) if m else -1
+
+            def picked(im):  # Selectable's count went up: not a misread digit, not a tap that dropped the card again
+                n = re.search(r"(\d)\s*/\s*\d", text(context, im, SELECTABLE))
+                return n is not None and int(n[1]) > before
+            if until(context, picked, timeout=1.5) is not None:
                 taken.add(i)
+                rereads = 0
         return stuck("reward card page did not fill Selectable")
 
 

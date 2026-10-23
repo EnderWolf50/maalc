@@ -71,19 +71,32 @@ def test_a_tap_the_game_ignored_is_taken_again_not_counted_as_a_card_taken(conte
     assert actions.STUCK["flag"] is None
 
 
-def test_a_card_that_reads_as_nothing_is_read_again(context, monkeypatch):
-    # The page's cards still swinging when the screenshots look alike: the third card unread; the next look has it.
-    page = RewardPage(context, monkeypatch, deal=0)
-    reads = iter([[CARDS[0][1], CARDS[1][1], "a"]])
-    ocr = page.ocr
+def misread(context, monkeypatch, page, wrong_reads):
+    """RewardPage's first len(wrong_reads) card readings are wrong_reads (one text per card), the rest are the page's."""
+    reads, ocr = iter(wrong_reads), page.ocr
 
-    def read_once_wrong(context, image, roi, only_rec=False):
+    def read(context, image, roi, only_rec=False):
         wrong = next(reads, None) if roi == actions.CARD_TEXT else None
         if wrong is None:
             return ocr(context, image, roi, only_rec)
         page.reads.append(wrong)
         return [(t, (x - 60, 380, 120, 30)) for (x, _), t in zip(CARDS, wrong)]
-    monkeypatch.setattr(actions, "ocr", read_once_wrong)
+    monkeypatch.setattr(actions, "ocr", read)
+
+
+def test_a_card_that_reads_as_nothing_is_read_again(context, monkeypatch):
+    # The team's best card unread on the first look (cards still swinging when the screenshots look alike): the old code took the next best.
+    page = RewardPage(context, monkeypatch, deal=0)
+    misread(context, monkeypatch, page, [[CARDS[0][1], "a", CARDS[2][1]]])
     assert actions.RewardCard().run(context, None)
-    assert page.reads[0][2] == "a" and page.reads[1] == [t for _, t in CARDS]
+    assert page.reads[0][1] == "a" and page.reads[1] == [t for _, t in CARDS]
     assert page.taps == [(660, 300), actions.CARD_CONFIRM]
+
+
+def test_a_card_that_never_reads_is_taken_as_it_reads_after_a_few_looks(context, monkeypatch):
+    page = RewardPage(context, monkeypatch, deal=0)
+    misread(context, monkeypatch, page, [[CARDS[0][1], "a", CARDS[2][1]]] * 5)
+    assert actions.RewardCard().run(context, None)
+    assert len(page.reads) == actions.CARD_REREADS + 1  # looked at again twice, then the best of what reads
+    assert page.taps == [(400, 300), actions.CARD_CONFIRM]  # Cost: a card that reads as nothing ranks last
+    assert actions.STUCK["flag"] is None
