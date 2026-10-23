@@ -31,6 +31,10 @@ CROP_AT = {
     "map_shop_cyan": (230, 45),
     "map_shop_orange": (230, 45),
     "map_event_orange": (226, 44),
+    # The shop's "+" variant on hard floors (#287): the 120 px window around the node, live captures of 2026-10-22; the notshop
+    # ones are the slots that scored highest on its templates among 1187 others
+    **{name: (270, 85) for name in ("map_shop_plus0", "map_shop_plus1", "map_shop_plus2", "map_shop_plus3", "map_shop_plus4",
+                                    "map_shop_plus5", "map_shop_torn", "map_notshop0", "map_notshop1", "map_notshop2")},
 }
 OWNED, OFFER = 1.1, 0.8  # a gift icon's size on the fuse / sell pages and on the offers, over its GiftSearch template's
 
