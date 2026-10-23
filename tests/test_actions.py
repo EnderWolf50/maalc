@@ -734,7 +734,7 @@ def cells_read(monkeypatch, *readings):
     """read_cells reads the first cells of any grid as readings [(keyword, observed gift[, tier])], tier 2 by default
     (test_shop_cells checks the reading itself on live captures)."""
     def read_cells(context, image, cells, page, gifts=()):
-        return [{"i": i, "x": cells[i][0], "y": cells[i][1], "tier": (t or [2])[0], "keyword": k, "gift": g}
+        return [{"i": i, "x": cells[i][0], "y": cells[i][1], "tier": (t or [2])[0], "keyword": k, "gift": g, "id": None, "score": 0.0}
                 for i, (k, g, *t) in enumerate(readings)]
     monkeypatch.setattr(actions, "read_cells", read_cells)
 
@@ -844,6 +844,19 @@ def test_a_glyph_on_an_offers_icon_opens_no_purchase_dialog(context, monkeypatch
     visit = {"wanted": None, "sold": False}
     assert actions.Shop.buy_offers(context, {"keyword": "Keywordless", "reserve_cost": 0}, visit) == 0
     assert not context.tasker.controller.post_click.called  # no cell opened to read its keyword
+    assert visit["wanted"] is None
+
+
+def test_an_offer_whose_badge_reads_nothing_is_not_opened_to_read_its_keyword(context, monkeypatch):
+    # #297: the purchase dialog is no longer a second reading of the keyword: of 205 offer cells on 55 live pages, 155 read a
+    # tier and badge (154 named by their icon) and 50 are skills or dimmed offers; none had its badge cut off. A cell that is
+    # not read at all is not a gift to buy.
+    context.tasker.controller.post_screencap.return_value.wait.return_value.get.return_value = np.zeros((720, 1280, 3), np.uint8)
+    reads(context, {tuple(actions.OFFER_GRID): OLD_DOLL_SHOP, tuple(actions.SHOP_COST): [("787", (560, 120, 60, 30))]})
+    monkeypatch.setattr(actions, "read_cells", lambda *args: [])
+    visit = {"wanted": None, "sold": False}
+    assert actions.Shop.buy_offers(context, {"keyword": "Burn", "reserve_cost": 0}, visit) == 0
+    assert not context.tasker.controller.post_click.called
     assert visit["wanted"] is None
 
 
@@ -2451,8 +2464,9 @@ def test_a_scroll_stops_dead_where_it_was_sent(context, clock):
     assert events[-1][2] - events[0][2] < 0.9  # live: 0.77 s for 300 px, 1.25 s before
 
 
-def test_the_shop_stops_tapping_once_the_map_shows(context):
+def test_the_shop_stops_tapping_once_the_map_shows(context, monkeypatch):
     # Live 2026-10-18: the shop was left by hand mid-visit; its next taps opened a map node's panel.
+    cells_read(monkeypatch, ("Burn", None, 1), ("Burn", None, 1))
     offers = [("Bone Stake", (575, 333, 90, 17)), ("120", (600, 306, 40, 24)),
               ("Wrist Guards", (730, 333, 90, 17)), ("130", (755, 306, 40, 24))]
 
