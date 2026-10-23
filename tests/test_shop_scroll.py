@@ -31,6 +31,7 @@ class Grid:
         self.top, self.bottom = TOP[page], actions.CELL_PAGES[page][1]
         self.end = END[page]
         self.at, self.drags, self.taps, self.reads, self.fling, self.share = 0, 0, [], [], fling, share
+        self.tooltip, self.stuck = False, 0  # a gift's tooltip over the cells; taps on the neutral spot that do not close it
         rng = np.random.default_rng(1)
         self.icons = [np.kron(rng.integers(40, 255, (19, 19, 3), np.uint8), np.ones((4, 4, 1), np.uint8))
                       for _ in range(n + recipes)]
@@ -100,6 +101,8 @@ class Grid:
     def click(self, x, y):
         i = self.at_screen(x, y)
         self.taps.append((x, y) if i is None else i)
+        if (x, y) == actions.FUSE_NEUTRAL:
+            self.stuck, self.tooltip = max(0, self.stuck - 1), self.tooltip and self.stuck > 0
         return DONE
 
     def read_cells(self, context, image, cells, page, gifts=()):
@@ -113,7 +116,7 @@ class Grid:
             if i is not None:
                 self.reads.append(i)
                 out.append({"i": k, "x": x, "y": y, "tier": 1, "keyword": KEYWORDS[i % len(KEYWORDS)], "gift": None,
-                            "id": None, "score": 0.0})
+                            "id": None if self.tooltip else i, "score": 0.0})
         return out
 
 
@@ -144,13 +147,25 @@ def test_every_gift_is_read_once_whatever_the_grid_holds(context, grid, monkeypa
     assert g.drags == (0 if n <= 10 else -(-(n - 10) // 10)) + (n == 20) + 1  # rows 3-4, 5-6: a drag each
 
 
+@pytest.mark.parametrize("stuck", [0, 1, 2])
+def test_a_fuse_pages_tooltip_is_closed_before_its_cells_are_read(context, grid, stuck):
+    # #331: a gift's tooltip hides the cells under it (10 of 217 live): they read as unknown. The neutral spot is
+    # tapped first; when taps did not close it (stuck of them) and a cell still reads unknown, it is read again after
+    # one more. Only the neutral spot is tapped.
+    g = grid("fuse", 13)
+    g.tooltip, g.stuck = True, stuck
+    cells, _ = actions.owned_cells(context, "fuse", [])
+    assert [c["id"] for c in cells] == list(range(13))
+    assert g.taps and set(g.taps) == {actions.FUSE_NEUTRAL}
+
+
 def test_a_cell_read_further_down_is_found_again_after_the_grid_moved(context, grid):
     # cell_at drags the grid back to bring a cell read before the last drag whole into view; its tap hits that gift.
     g = grid("fuse", 23)
     cells, at = actions.owned_cells(context, "fuse", [])
     for i in (22, 0, 12, 4, 21):
         g.click(*actions.cell_at(context, at, cells[i]))
-    assert g.taps == [22, 0, 12, 4, 21]
+    assert [t for t in g.taps if t != actions.FUSE_NEUTRAL] == [22, 0, 12, 4, 21]
 
 
 @pytest.mark.parametrize("page", ["fuse", "sell"])

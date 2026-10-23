@@ -2720,6 +2720,7 @@ CELL_ICON_ROI = 70  # px square around a cell's centre on the scaled grid where 
 FUSE_CONFIRM = [300, 150, 680, 380]  # "Selected E.G.O Gifts 3/5" over "Fuse the selected E.G.O Gifts?"
 FUSE_COUNT = r"(\d)\s*/\s*\d"  # its "3/5": the materials in
 FUSE_NEUTRAL = (815, 160)  # above the owned grid, between Recipes and Fusion Guide: closes a tooltip, selects nothing
+TOOLTIP_CLOSE = {"fuse": FUSE_NEUTRAL}  # per page: where a tap closes a gift's tooltip, which hides the cells under it (#331)
 SELL_COST = [960, 80, 160, 45]
 SELL_GRID = [630, 210, 480, 290]  # the sell page's gifts with their prices under them
 HEAL_TITLE, HEAL_COST = [130, 30, 220, 45], [1100, 90, 110, 50]
@@ -2899,6 +2900,28 @@ def gift_shown(cell):
     return f"{cell['id']} {named} ({cell['score']:.2f})" if named else f"unknown (best {cell['score']:.2f})"
 
 
+def close_tooltip(context, page):
+    """A screenshot of page after a tap on its TOOLTIP_CLOSE spot (a page without one: as it is), #331."""
+    if page in TOOLTIP_CLOSE:
+        page_guard(context, "Shop")
+        tap_settled(context, *TOOLTIP_CLOSE[page], timeout=1.0)
+    return screen(context)
+
+
+def read_clear(context, image, spots, page, gifts):
+    """read_cells of spots on image, the cells that read unknown read again on a screenshot taken after one more tap
+    on the page's TOOLTIP_CLOSE spot (#331): ([cell], [the screenshot each was read from])."""
+    cells = read_cells(context, image, spots, page, gifts)
+    shots = [image] * len(cells)
+    unknown = [k for k, c in enumerate(cells) if c["id"] is None]
+    if unknown and page in TOOLTIP_CLOSE:
+        again = close_tooltip(context, page)
+        for c in read_cells(context, again, [(cells[k]["x"], cells[k]["y"]) for k in unknown], page, gifts):
+            k = unknown[c["i"]]
+            cells[k], shots[k] = {**c, "i": cells[k]["i"]}, again
+    return cells, shots
+
+
 def owned_cells(context, page, gifts):
     """Every gift of the fuse or sell page's owned grid, each read once where it shows whole (#205): ([cells], grid).
 
@@ -2913,6 +2936,7 @@ def owned_cells(context, page, gifts):
     (x0, y0), (dx, dy), under = OWNED_GRID[page]
     bottom = CELL_PAGES[page][1]
     grid, out, done = {"page": page, "at": 0}, [], set()
+    close_tooltip(context, page)
     image = grid_top(context, page)
     if page == "fuse":
         label, image = owned_label(context, image)
@@ -2925,15 +2949,17 @@ def owned_cells(context, page, gifts):
             moved, image = drag_grid(context, page, -grid["at"] - GRID_MARGIN)
             grid["at"] += moved
     for _ in range(GRID_SCROLLS):
+        image = close_tooltip(context, page)
         rows = range(max(0, grid["at"] // dy), grid["at"] // dy + 5)  # the last one all under the edge
         shown = [(5 * r + c, x0 + dx * c, y0 + dy * r - grid["at"]) for r in rows for c in range(5)]
         fresh = [(i, x, y) for i, x, y in shown if i not in done and whole(page, y)]
         done |= {i for i, _, _ in fresh}
         spots = [(x, y) for _, x, y in fresh]
         prices = shop.cell_prices(ocr(context, image, SELL_GRID), spots) if page == "sell" and spots else {}
-        for c in read_cells(context, image, spots, page, gifts):
+        cells, shots = read_clear(context, image, spots, page, gifts)
+        for c, shot in zip(cells, shots):
             i, _, y = fresh[c["i"]]
-            out.append({**c, "i": i, "y": y + grid["at"], "price": prices.get(c["i"]), "look": centre(image, c["x"], y)})
+            out.append({**c, "i": i, "y": y + grid["at"], "price": prices.get(c["i"]), "look": centre(shot, c["x"], y)})
         cut = [y for _, x, y in shown if y + under > bottom and y - 25 < bottom and shop.filled(image[:bottom], x, y)]
         hidden = min(y for _, _, y in shown if y - 25 >= bottom)
         # A full row over the edge and the next one all under it (a drag the game took less of, or the grid's end): one
