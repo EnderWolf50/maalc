@@ -88,6 +88,44 @@
 .gl .gl-tile.locked { border-style: dashed; cursor: not-allowed; }
 .gl-lock { position: absolute; left: 2px; bottom: 2px; width: 16px; height: 16px; padding: 2px; border-radius: 50%; color: var(--gl-keep); background: var(--gl-panel); }
 
+/* Drag and drop: the tile or row being dragged fades, the one it would land on takes the selection fill. */
+.gl [data-dragging] { opacity: 0.3; }
+.gl .gl-tile[data-over], .gl .gl-sortrow[data-over] { background: var(--gl-sel); }
+
+/* Purchase order dialog (BuyOrder.tsx): one column, collapsible keyword sections. */
+.gl .gl-buy { margin-left: auto; }
+.gl-dlgback { position: fixed; inset: 0; z-index: 80; background: #0008; display: flex; align-items: center; justify-content: center; padding: 20px; }
+.gl-dlg {
+  background: var(--gl-panel); border: 1px solid var(--gl-line); border-radius: 12px; width: min(640px, 100%); max-height: 88vh;
+  display: flex; flex-direction: column; box-shadow: 0 12px 40px #000a;
+}
+.gl-dlgtop { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--gl-line); background: var(--gl-panel2); border-radius: 12px 12px 0 0; }
+.gl-dlgtop small { color: var(--gl-muted); flex: 1; }
+.gl .gl-x { border: 0; background: none; font-size: 16px; padding: 0 6px; }
+.gl-dlgbody { overflow: auto; padding: 8px 10px; flex: 1; }
+.gl-accbar { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.gl-accbar small { color: var(--gl-muted); }
+.gl-dlgnote { color: var(--gl-muted); font-size: 12.5px; margin: 4px 0 4px 26px; }
+.gl-dlgnote.warn { color: var(--gl-bad); font-weight: 600; margin: 0 0 0 auto; }
+.gl-dlgfoot { margin: 0; padding: 8px 14px; border-top: 1px solid var(--gl-line); color: var(--gl-muted); font-size: 12.5px; }
+.gl-agrp { margin-bottom: 6px; }
+.gl-sortrow { display: flex; align-items: center; gap: 8px; padding: 3px 4px; border-radius: 5px; }
+.gl-sortrow:hover { background: var(--gl-hov); }
+.gl-ahead { background: var(--gl-panel2); padding: 3px 6px; }
+.gl-rows { list-style: none; margin: 0 0 0 26px; padding: 0; }
+.gl-grip { cursor: grab; color: var(--gl-muted); }
+.gl .gl-dnb { display: flex; flex: 1; min-width: 0; align-items: center; gap: 8px; text-align: left; border: 0; background: none; padding: 3px 0; border-radius: 6px; }
+.gl .gl-dnb:hover:not(:disabled) { background: none; }
+.gl-dnb b { font-size: 14px; }
+.gl-dnb small { color: var(--gl-muted); }
+.gl-chev { width: 12px; color: var(--gl-muted); text-align: center; }
+.gl-ord { min-width: 24px; text-align: center; background: var(--gl-accent); color: var(--gl-on-accent); border-radius: 999px; font-size: 11px; font-weight: 700; flex: none; }
+.gl-qn { flex: 0 1 auto; }
+.gl-ico { width: 24px; height: 24px; object-fit: contain; flex: none; pointer-events: none; }
+.gl-gr small { color: var(--gl-muted); }
+/* The arrow buttons are small, as in the mockup. */
+.gl .gl-mini { padding: 0 4px; min-width: 20px; font-size: 9px; line-height: 15px; border-radius: 5px; }
+.gl .gl-accbar .gl-mini { font-size: 12px; padding: 0 8px; }
 /* List options menu (GiftListOptions.tsx): a popover under its button. */
 .gl-opts { position: relative; }
 .gl-opt-pop {

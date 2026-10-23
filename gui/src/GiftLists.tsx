@@ -5,10 +5,11 @@
 import { useEffect, useRef, useState } from "react";
 import "./giftlists.css";
 import { GIFT_BY_ID, giftName } from "./giftCatalog";
+import { BuyOrderDialog } from "./BuyOrder";
 import { plan, resetToDefault, setState, GiftEditContext, type GiftEdit } from "./giftEdit";
-import { DEFAULT_LIST, type GiftState } from "./gifts";
+import { DEFAULT_LIST, queue, type GiftState } from "./gifts";
 import { fill } from "./i18n";
-import { FUSION_CONDITIONS, GIFT_KEYWORDS } from "./model";
+import { FUSION_CONDITIONS, GIFT_KEYWORDS, type GiftList } from "./model";
 import { GiftListOptions } from "./GiftListOptions";
 import { KeywordPanel, KeywordTabs } from "./KeywordGrid";
 import { useEditor } from "./ui";
@@ -17,12 +18,13 @@ const STATES: GiftState[] = ["want", "keep", "drop"];
 const FLASH_MS = 4200;
 
 export function GiftListsTab() {
-  const { s, update, t, tv } = useEditor();
-  // What is being edited is UI state, not saved: "default" (the data file's list, read-only) or the id of one of the user's lists.
-  const [chosen, setChosen] = useState("default");
+  const { s, update, t, tv, giftList: chosen, chooseList: setChosen } = useEditor();
+  // What is being edited is UI state, not saved (the editor keeps it): "default" (the data file's list, read-only) or the id of one of the user's lists.
   const [pick, setPick] = useState<GiftState>("want");
   const [tab, setTab] = useState(GIFT_KEYWORDS[0]);
   const [message, setMessage] = useState({ text: "", warn: false });
+  const [buying, setBuying] = useState(false); // the purchase order dialog is open
+  const buyButton = useRef<HTMLButtonElement>(null);
   const timer = useRef<number>(undefined);
   useEffect(() => () => clearTimeout(timer.current), []);
 
@@ -51,13 +53,18 @@ export function GiftListsTab() {
     if (result.downgraded) flash(fill(t("gl.unbuyable_keep"), { name }), true);
     else setMessage({ text: "", warn: false });
   };
-  const edit: GiftEdit = { list, readOnly, pick, apply, flash };
+  const change = (fn: (l: GiftList) => void) => {
+    const ok = editable();
+    if (ok) update((d) => fn(d.gift_lists[at]));
+    return ok;
+  };
+  const edit: GiftEdit = { list, readOnly, pick, apply, flash, editable, change };
 
   // 1, 2 and 3 pick the state, unless the user is typing or choosing in a field.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const state = STATES[Number(e.key) - 1];
-      if (!state || e.ctrlKey || e.metaKey || e.altKey || (e.target as HTMLElement).closest("input, select, textarea")) return;
+      if (!state || e.ctrlKey || e.metaKey || e.altKey || (e.target as HTMLElement).closest("input, select, textarea, [role=dialog]")) return;
       setPick(state);
     };
     document.addEventListener("keydown", onKey);
@@ -107,7 +114,9 @@ export function GiftListsTab() {
               ))}
             </div>
             <span className="gl-hint">{t("gl.hint")}</span>
-            {/* #296: the "purchase order" button goes at the end of this row. */}
+            <button type="button" className="gl-buy" ref={buyButton} aria-haspopup="dialog" onClick={() => setBuying(true)}>
+              {fill(t("gl.buy"), { n: queue(list).length })}
+            </button>
           </div>
           <div className={"gl-flash" + (message.warn ? " warn" : "")} role="status" aria-live="polite">{message.text}</div>
         </div>
@@ -122,6 +131,7 @@ export function GiftListsTab() {
           )}
           <KeywordPanel keyword={tab} />
         </section>
+        {buying && <BuyOrderDialog onClose={() => { setBuying(false); buyButton.current?.focus(); }} />}
       </div>
     </GiftEditContext.Provider>
   );
