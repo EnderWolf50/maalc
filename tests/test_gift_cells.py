@@ -89,7 +89,7 @@ def test_a_misread_tier_is_made_up_by_matching_the_whole_keyword():
 def test_the_keyword_fallback_never_overrules_a_cell_its_tier_names():
     import actions  # noqa: PLC0415
     grid = np.zeros((200, 200, 3), np.uint8)
-    # Faint (I) and Dark (II) Vestige are one jar, only the fill differs: the cell read as I is Faint even where Dark's icon scores more.
+    # Dark (I) and Faint (II) Vestige are one jar, only the fill differs: the cell read as I is Dark even where Faint's icon scores more.
     seen = []
     assert actions.cell_id(fake_context({"GiftSearch/9991.png": 0.8, "GiftSearch/9992.png": 0.85}, seen), grid, (100, 100), "Keywordless", 1)[0] == 9991
     tier_one = {e["template"] for e in g.candidates(actions.GIFTS, "Keywordless", 1)}
@@ -98,6 +98,14 @@ def test_the_keyword_fallback_never_overrules_a_cell_its_tier_names():
     assert actions.cell_id(fake_context({"GiftSearch/9991.png": 0.8, "GiftSearch/9992.png": 0.78}), grid, (100, 100), "Keywordless", 3)[0] is None
     # a read badge's other tiers all score: two as good as each other leave the cell unknown instead of picking one
     assert actions.cell_id(fake_context({"GiftSearch/9042.png": 0.8, "GiftSearch/9048.png": 0.78}), grid, (100, 100), "Bleed", 2)[0] is None
+
+
+def test_the_fallback_also_scores_the_candidates_an_early_stop_skipped():
+    import actions  # noqa: PLC0415
+    a, b, c = (e["template"] for e in g.candidates(actions.GIFTS, "Burn", 2)[:3])
+    # a 0.70 and b 0.76 stop the first pass 0.06 apart (unknown); c, never reached there, is the 0.90 gift
+    found = actions.cell_id(fake_context({a: 0.70, b: 0.76, c: 0.90}), np.zeros((200, 200, 3), np.uint8), (100, 100), "Burn", 2)
+    assert found == (int(c.split("/")[1].split(".")[0]), 0.90)
 
 
 def test_matching_stops_at_an_icon_that_cannot_be_a_lookalike():
