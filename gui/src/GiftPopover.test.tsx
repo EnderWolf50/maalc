@@ -319,6 +319,18 @@ describe("search", () => {
     expect(screen.getByRole("tab", { name: /^流血/ })).toHaveAttribute("aria-selected", "true");
   });
 
+  test("Esc that closes the list options does not also clear the search", async () => {
+    const r = await open([mine()]);
+    await r.user.type(box(), String(a));
+    await r.user.click(screen.getByRole("button", { name: zh["gl.opts"] }));
+    expect(screen.getByRole("menu")).toBeInTheDocument();
+    await r.user.keyboard("{Escape}");
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+    expect(box()).toHaveValue(String(a));
+    await r.user.keyboard("{Escape}"); // nothing else is open now: this one clears it
+    expect(box()).toHaveValue("");
+  });
+
   test("/ jumps to the box, unless the user is typing somewhere", async () => {
     const r = await open([mine()]);
     act(() => (document.activeElement as HTMLElement).blur()); // the list choice has focus after open()

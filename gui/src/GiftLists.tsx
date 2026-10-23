@@ -82,7 +82,7 @@ export function GiftListsTab() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
-        if (buying) return; // the purchase order dialog closes itself
+        if (buying || document.querySelector(".gl-opt-pop")) return; // the purchase order dialog and the list options close themselves
         if (open) tip.hide();
         else if (help) setHelp(false);
         else if (query) setQuery("");
