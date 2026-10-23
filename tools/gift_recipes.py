@@ -3,7 +3,8 @@
 Usage: uv run --group unpack python tools/gift_recipes.py [--release 2026101602] [--no-icons]
 Reads `.local/unpack/` (static data, English localization, the pulled UnityCache bundles; see docs/agents/local-dev.md).
 Chinese names: tools/llc_text.py (the Localize Limbus Company release; this tool only fills `zh` from it).
-Recipes: `combineFixed` and `combineMixed` of mirror-dungeon-common-data-md8.json.
+Recipes: `combineFixed` and `combineMixed` of mirror-dungeon-common-data-md8.json; `specific` is its `isSpecific`, `packs` the
+theme packs whose `specificEgoGiftPool` (mirrordungeon-theme-floor-*.json) holds a recipe ingredient.
 Icons: the game's EgoGiftIcon sprite of each fusion gift and of each recipe material that gift_search.json lacks, scaled
 by 0.21, transparency filled green, as the Gift Search icons. The first run indexes the 12 GB of bundles into
 `.local/unpack/out/sprite-index.tsv` (run it as a `bench` ticket, tools/live/queue.py); the quarterly rerun is docs/spec/05-game-data.md section 8.
