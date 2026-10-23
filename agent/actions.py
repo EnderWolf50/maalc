@@ -302,7 +302,7 @@ def ocr(context, image, roi, only_rec=False, model=None):
 
 
 def text(context, image, roi, only_rec=False, model=None):
-    return " ".join(t for t, _ in ocr(context, image, roi, only_rec, model))
+    return " ".join(t for t, _ in ocr(context, image, roi, only_rec, **({"model": model} if model else {})))
 
 
 def number(s):
