@@ -31,6 +31,10 @@ const ICONS = import.meta.glob<string>("../../assets/resource/base/data/gift_ico
 /** The icon's URL (assets/.../gift_icons/<id>.webp). */
 export const iconUrl = (id: number): string | undefined => ICONS[`../../assets/resource/base/data/gift_icons/${id}.webp`];
 
+const KW_ICONS = import.meta.glob<string>("../../assets/resource/base/data/keyword_icons/*.webp", { eager: true, query: "?url", import: "default" });
+/** The keyword's game icon URL (assets/.../keyword_icons/<keyword>.webp); Keywordless has none. */
+export const keywordIconUrl = (keyword: string): string | undefined => KW_ICONS[`../../assets/resource/base/data/keyword_icons/${keyword}.webp`];
+
 /** A keyword's gifts by tier, highest tier first: the list's own order (`gorder`) for what the shop sells, then the rest in data order. */
 export function tiersOf(gorder: Record<string, number[]>, keyword: string): { tier: number; ids: number[] }[] {
   const rest = CATALOG.filter((g) => g.keyword === keyword && g.kind !== "buyable").map((g) => g.id);
