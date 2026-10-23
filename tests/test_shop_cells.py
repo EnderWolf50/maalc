@@ -82,14 +82,18 @@ def child():
         def run(self, context, argv):
             try:
                 for case, (crop, cells, page, gifts, *allow) in CASES.items():
-                    team = {"gift_search": {"gifts": gifts}, "allow_white_gossypium": (allow or [True])[0]}
-                    # The vestiges' icons on every case (#161): on the offers too, where none is, as a sweep for
-                    # false hits.
+                    team = {"allow_white_gossypium": (allow or [True])[0]}
+                    # The observed gifts', the vestiges' and White Gossypium's icons on every case (#161): on the offers too,
+                    # where none is, as a sweep for false hits.
+                    table = actions.gift_data()
+                    observed = [{**g, "id": next(e["id"] for e in table if e["keyword"] == g["keyword"] and e["tier"] == g["tier"]
+                                                 and e["en"] == g["name"])} for g in gifts]
+                    vestiges = [{"name": n, "keyword": "Keywordless", "tier": t, "id": 9990 + t} for t, n in enumerate(actions.VESTIGES, 1)]
                     image = screen_with(crop)
                     if case == "fuse_tier_unread":
                         image = without_tier(image, *actions.FUSE_CELLS[0])
                     found = actions.read_cells(context, image, getattr(actions, cells), page,
-                                               actions.kept_icons(team) + actions.avoided_gifts(team) + actions.VESTIGE_ICONS)
+                                               observed + actions.avoided_gifts(team) + vestiges)
                     out[case] = [(c["tier"], c["keyword"], c["gift"]) for c in found]
                 for name in LABELS:  # #205: the fuse page's owned gifts found by their label's OCR
                     screen = np.array(Image.open(ROOT / "tests" / "screens" / f"{name}.png").convert("RGB"))[:, :, ::-1]

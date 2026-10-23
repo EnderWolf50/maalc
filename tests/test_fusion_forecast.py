@@ -34,8 +34,8 @@ def fuse(context, monkeypatch, team, readings, page, chance=True, slots=3, stuck
     monkeypatch.setattr(actions.shop, "picked", lambda image, x, y, bottom=720: actions.FUSE_CELLS.index((x, y)) in (
         {i for i, c in enumerate(actions.FUSE_CELLS) if taps().count(c)} if framed else inside()))
     monkeypatch.setattr(actions.shop, "forecast_tier", lambda image: page.get(tuple(sorted(inside()))))
-    test_actions.cells_read(monkeypatch, *readings)
-    fused = actions.Shop.fuse(context, {"keyword": "Burn", "gift_search": {"gifts": []}, **team}, {} if visit is None else visit)
+    test_actions.cells_read(monkeypatch, *test_actions.with_ids(readings))
+    fused = actions.Shop.fuse(context, test_actions.shop_team(team), {} if visit is None else visit)
     return fused, [taps().count(c) for c in actions.FUSE_CELLS[:len(readings)]], actions.PAGE_OK in taps(), lines
 
 

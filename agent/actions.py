@@ -33,7 +33,7 @@ import settlement
 import shop
 from gifts import effective, main_keyword, queue, queue_place, resolve_list
 from ocrtext import compact, digits, has, normalize
-from settings import SCHEMA, SettingsError, load_settings
+from settings import SCHEMA, VESTIGE_IDS, SettingsError, load_settings
 from state import next_cursor, pick_team, read_cursor, write_cursor
 
 # Same <root> as main.ROOT; resource/ sits under it in a release, under assets/ in the repo.
@@ -2791,53 +2791,29 @@ def read_cost(context, roi=SHOP_COST):
     return None
 
 
-def kept_gifts(team):
-    """Gift names the shop keeps: the team's observed (#103) and kept gifts (#77)."""
-    return [g["name"] for g in team["gift_search"]["gifts"] + team.get("keep_gifts", [])]
-
-
 # Vestiges, tier I-V in this order (#161; LocalizeLimbusCompany EN/EGOgift_MirrorDungeon.json, ids 9991-9995): the settings
-# schema lists them for keep_gifts, so the GUI and the agent share one list. They have no badge; their icons
-# (image/GiftSearch/<id>.png, from the game client like the Gift Search ones) differ only in the jar's fill: the tier
-# read off the cell tells them apart (read_cells).
+# schema lists them, so the GUI and the agent share one list. They have no badge; their icons (image/GiftSearch/<id>.png,
+# from the game client like the Gift Search ones) differ only in the jar's fill: the tier read off the cell tells them
+# apart (read_cells).
 VESTIGES = SCHEMA["$defs"]["vestige"]["properties"]["name"]["enum"]
-VESTIGE_ICONS = [{"name": n, "keyword": "Keywordless", "tier": t, "id": 9990 + t} for t, n in enumerate(VESTIGES, 1)]
 
 
-def loose_vestiges(team, page):
-    """The vestiges the shop uses on page ("fuse" or "sell"): only fusion or sale material, their own kind, so the
-    keywordless setting never applies to them (the user, #161). Those the team names in keep_gifts stay; on the sell
-    page all stay unless the team sells them (sell_vestiges)."""
-    if page == "sell" and not team.get("sell_vestiges", False):
-        return []
-    return [v for v in VESTIGES if v not in kept_gifts(team)]
+def cell_role(cell, team, page, avoid=()):
+    """"material" or "keep": what the shop may do with the owned gift a cell of page ("fuse" or "sell") shows (#299).
 
-
-def cell_role(cell, team, page, avoid):
-    """shop.gift_role of a cell read_cells read on page ("fuse" or "sell"), by the team's settings."""
-    return shop.gift_role(cell["keyword"], cell["gift"], kept_keywords(team, page), avoid, loose_vestiges(team, page))
-
-
-def kept_keywords(team, page):
-    """The keywords whose gifts the shop keeps on page ("fuse" or "sell"): the main one, the team's keep_keywords
-    (#77) and "Keywordless" as the team's keywordless setting says (#161): "keep" on both pages, "fuse" on the sell
-    page only (fusion material, never sold), "fuse_or_sell" on neither."""
-    use = team.get("keywordless", "keep")
-    keywordless = use == "keep" or (use == "fuse" and page == "sell")
-    return {team["keyword"], *team.get("keep_keywords", ())} | ({"Keywordless"} if keywordless else set())
-
-
-def kept_icons(team):
-    """The gifts the shop keeps by their icon ({"name", "keyword", "tier"}) with its id in data/gift_search.json:
-    the team's observed gifts (#103) and its keep_gifts (#77)."""
-    table = gift_data()
-    out = []
-    for g in team["gift_search"]["gifts"] + team.get("keep_gifts", []):
-        entry = next((e for e in table if e["keyword"] == g["keyword"] and e["tier"] == g["tier"]
-                      and run_start.match_pack(e["en"], [g["name"]])), None)
-        if entry and all(o["id"] != entry["id"] for o in out):
-            out.append({**g, "id": entry["id"]})
-    return out
+    Material only when the gift is known (its id was read, #297) and its effective state in the team's gift list is "drop"
+    (not wanted, not kept, and no wanted fusion's material: gifts.effective; the run's pack is unknown, so a pack's exclusive
+    fusion locks its materials all the same until #306). A gift whose id is in `avoid` (White Gossypium for a team that does
+    not hold it, #90) is material whatever the list says: the team's setting comes before the list's, as on the shelf. A
+    vestige is never sold unless the team sells vestiges (sell_vestiges, #161), but still fuses.
+    """
+    if cell["id"] in avoid:
+        return "material"
+    if cell["id"] is None or effective(team["list"], cell["id"]) != "drop":
+        return "keep"
+    if page == "sell" and cell["id"] in VESTIGE_IDS and not team.get("sell_vestiges", False):
+        return "keep"
+    return "material"
 
 
 WHITE_GOSSYPIUM = 9020  # its id in data/gift_search.json
@@ -2846,7 +2822,7 @@ WHITE_GOSSYPIUM = 9020  # its id in data/gift_search.json
 def avoided_gifts(team):
     """Gifts the team never takes or buys, and fuses or sells first: White Gossypium unless it allows it (#90).
 
-    Shaped like kept_icons, for read_cells' icon match.
+    Shaped for read_cells' icon match.
     """
     if team.get("allow_white_gossypium", True):
         return []
@@ -2889,7 +2865,7 @@ def read_cells(context, image, cells, page, gifts=()):
     """The filled cells of a shop grid read off one screenshot (#76, #112): [{"i", "x", "y", "tier", "keyword", "gift", "id", "score"}].
 
     The grid is scaled so gift icons are at their GiftSearch template's size, then each keyword's badge and each
-    kept gift's icon (gifts, kept_icons) is matched once over it. keyword: the cell's best badge,
+    gift's icon (gifts: the avoided ones) is matched once over it. keyword: the cell's best badge,
     "Keywordless" with none, None when the badge is below the grid's edge; gift: the kept gift whose icon
     matched, when its keyword and tier agree with the cell's. An empty cell is flat (live: spread 1-2, a gift 41-84).
     id: the data's id of the gift the cell shows (cell_id), None when unknown, score the best icon's.
@@ -3090,13 +3066,14 @@ def cell_at(context, grid, cell):
 def fusions(cells, roles, slots, avoid, condition="any", refused=()):
     """shop.pick_fusion over the cells whose role is material and whose tier is read: [([cell index], tier)] (#77).
 
-    The thresholds are the Super Shop's when the page has its 5 slots; an avoided gift goes in first (#90); condition
-    is the team's fusion_condition (#263); refused, the tiers (sorted) of the groups the page's forecast turned down (#285).
+    The thresholds are the Super Shop's when the page has its 5 slots; a gift whose id is in avoid goes in first (#90);
+    condition is the gift list's fusion_condition (#263); refused, the tiers (sorted) of the groups the page's forecast
+    turned down (#285).
     """
     d = data("shop.yaml")
     materials = [(c["i"], c["tier"]) for c, r in zip(cells, roles) if r == "material" and c["tier"]]
     tiers = d["fusion_tiers"]["super_shop" if slots == 5 else "shop"]
-    return shop.pick_fusion(materials, slots, tiers, d["fusion_points"], {c["i"] for c in cells if c["gift"] in avoid},
+    return shop.pick_fusion(materials, slots, tiers, d["fusion_points"], {c["i"] for c in cells if c["id"] in avoid},
                             condition, refused)
 
 
@@ -3404,10 +3381,10 @@ class Shop(CustomAction):
 
     @staticmethod
     def sell(context, team, visit):
-        """Sell the materials no fusion uses (fusions' leftovers, #79) when a wanted main gift is too dear.
+        """Sell the materials no fusion uses (fusions' leftovers, #79) when a wanted gift is too dear.
 
-        Kept like the fusion's (owned_cells, cell_role): the team's kept keywords and gifts (#77) are never sold. No cell
-        is tapped but to sell it: the grid is scrolled for the cut-off rows (#205).
+        Only a gift the team's list lets go is sold (owned_cells, cell_role, #299): one it wants, keeps, a wanted fusion
+        locks or whose icon is unknown stays. No cell is tapped but to sell it: the grid is scrolled for the cut-off rows (#205).
         """
         wanted = visit["wanted"]
         if not wanted or visit["sold"]:
@@ -3422,20 +3399,20 @@ class Shop(CustomAction):
             log("shop: the sell page's Cost reads nothing: nothing sold")
             Shop.to_main(context)
             return False
-        # The grid decides (#112, #205): each cell's badge and icon, its price under it.
-        avoid = [g["name"] for g in avoided_gifts(team)]
-        cells, grid = owned_cells(context, "sell", kept_icons(team) + avoided_gifts(team) + VESTIGE_ICONS)
+        # The grid decides (#112, #205): each cell's tier, badge and icon (its id), its price under it.
+        avoid = [g["id"] for g in avoided_gifts(team)]
+        cells, grid = owned_cells(context, "sell", ())
         roles = [cell_role(c, team, "sell", avoid) for c in cells]
         log("shop: sell cells " + "; ".join(f"{cell_line(c, r)} {c['price']}" for c, r in zip(cells, roles)))
         gifts = [(c["i"], c["price"]) for c, r in zip(cells, roles) if r == "material" and c["price"]]
-        avoided = {c["i"] for c in cells if c["gift"] in avoid}  # sold first (#90)
-        # The fusion still uses what may not be sold (#79): a vestige the team does not sell, a keywordless gift under
-        # "fuse" (#161), both kept on the sell page and material on the fuse page; and a material whose price is unread.
+        avoided = {c["i"] for c in cells if c["id"] in avoid}  # sold first (#90)
+        # The fusion still uses what may not be sold (#79): a vestige the team does not sell (kept on the sell page, material
+        # on the fuse page, #161), and a material whose price is unread.
         fuse_only = [c["i"] for c, r in zip(cells, roles)
                      if (r == "keep" and cell_role(c, team, "fuse", avoid) == "material") or (r == "material" and not c["price"])]
         # The fusion is grouped without the avoided gifts, which are sold first (#90): a sale then breaks no group.
         materials = [c for c in cells if (c["i"] in dict(gifts) or c["i"] in fuse_only) and c["i"] not in avoided]
-        condition = team.get("fusion_condition", "any")  # a group the condition refuses makes no fusion: its gifts are spare
+        condition = team["list"]["fusion_condition"]  # a group the condition refuses makes no fusion: its gifts are spare
         fused = {i for group, _ in fusions(materials, ["material"] * len(materials), visit.get("slots", 3), (), condition) for i in group}
         # Up to the team's sell_max_tier only (#161); an unread tier may be a V: not sold.
         tiers, top = {c["i"]: c["tier"] for c in cells}, team.get("sell_max_tier", 4)
@@ -3479,9 +3456,8 @@ class Shop(CustomAction):
     def fuse(context, team, visit):
         """Fuse the materials shop.pick_fusion picks into the main keyword, Wishmaking left unticked; True when one fused.
 
-        The cells are read off the grid, scrolled for the cut-off rows (owned_cells, #112, #205): the gifts the team
-        keeps stay (kept_keywords, kept_icons, #77), the rest are materials, the vestiges by their icon and the
-        keywordless gifts by the team's setting (cell_role, #161). No cell is tapped but to put it in. Each material
+        The cells are read off the grid, scrolled for the cut-off rows (owned_cells, #112, #205): the gifts the team's list
+        lets go and whose icon is known are the materials, the rest stay (cell_role, #299). No cell is tapped but to put it in. Each material
         tapped in is read back (place); one that does not show closes the page unfused. One fusion a call, as the grid
         changes with it.
         A grid that made none is not read again until a purchase or a sale changes the owned gifts (#62).
@@ -3508,11 +3484,11 @@ class Shop(CustomAction):
         visit["slots"] = slots = shop.fuse_slots(image)  # the sale needs it too
         if seen(context, image, "ShopFusionAvailable"):
             log("shop: the fuse page shows Fusion Available (a fixed recipe, #78): not used, the owned gifts are read under it")
-        avoid = [g["name"] for g in avoided_gifts(team)]
-        cells, grid = owned_cells(context, "fuse", kept_icons(team) + avoided_gifts(team) + VESTIGE_ICONS)
+        avoid = [g["id"] for g in avoided_gifts(team)]
+        cells, grid = owned_cells(context, "fuse", ())
         roles = [cell_role(c, team, "fuse", avoid) for c in cells]
         log(f"shop: fuse cells ({slots} slots) " + "; ".join(cell_line(c, r) for c, r in zip(cells, roles)))
-        condition = team.get("fusion_condition", "any")
+        condition = team["list"]["fusion_condition"]
         refused, fused = [], False
         while True:
             picks = fusions(cells, roles, slots, avoid, condition, refused)

@@ -13,6 +13,7 @@ DONE = SimpleNamespace(wait=lambda: None)
 # Live 2026-10-21: a sell grid of 13 gifts scrolls 31 px, its last row's price just inside; the fuse page's end is a guess.
 END = {"fuse": 56, "sell": 495 + 31 - 472}
 TOP = {"fuse": 200, "sell": 215}  # the lists' upper edge (live: the fuse page's label at 216-240, sell rows cut at 215)
+ID = 700000  # gift i of a grid reads as id ID + i, which no gift list mentions
 KEYWORDS = ["Bleed", "Tremor", "Pierce", "Sinking", "Slash", "Blunt", "Poise", "Rupture", "Charge"]
 
 
@@ -113,7 +114,7 @@ class Grid:
             if i is not None:
                 self.reads.append(i)
                 out.append({"i": k, "x": x, "y": y, "tier": 1, "keyword": KEYWORDS[i % len(KEYWORDS)], "gift": None,
-                            "id": None, "score": 0.0})
+                            "id": ID + i, "score": 0.9})
         return out
 
 
@@ -218,7 +219,12 @@ def test_the_grid_shift_is_measured_on_a_live_capture(s):
     assert actions.grid_shift(src, after, "fuse", most) == s
 
 
-def fusion(context, monkeypatch, g):
+def kept_but(n, *free):
+    """The team of a grid of n gifts whose list keeps every gift but the free ones (they drop)."""
+    return test_actions.shop_team({"list": test_actions.wants(keep=[ID + i for i in range(n) if i not in free])})
+
+
+def fusion(context, monkeypatch, g, team):
     """Shop.fuse on g with the fuse page's read-back as the game would show it (a tap puts a gift in or takes it out)."""
     def inside():
         return {i for i in g.taps if isinstance(i, int) and g.taps.count(i) % 2}
@@ -231,19 +237,13 @@ def fusion(context, monkeypatch, g):
     monkeypatch.setattr(actions.shop, "fuse_slots", lambda image: 3)
     monkeypatch.setattr(actions.shop, "placed", lambda image, n: len(inside()))
     monkeypatch.setattr(actions.shop, "picked", lambda image, x, y, bottom=720: g.at_screen(x, y) in inside())
-    return actions.Shop.fuse(context, {"keyword": "Burn", "gift_search": {"gifts": []}}, {})
+    return actions.Shop.fuse(context, team, {})
 
 
 def test_a_fusion_puts_in_gifts_from_both_ends_of_the_grid(context, grid, monkeypatch):
-    # 23 gifts: all Burn (kept) but 1, 12 and 22. They fuse; each is dragged into view and tapped once, no other cell.
+    # 23 gifts: all kept by the list but 1, 12 and 22. They fuse; each is dragged into view and tapped once, no other cell.
     g = grid("fuse", 23)
-    reader = g.read_cells
-
-    def read_cells(context, image, cells, page, gifts=()):
-        return [{**c, "keyword": c["keyword"] if g.at_screen(c["x"], c["y"]) in (1, 12, 22) else "Burn"}
-                for c in reader(context, image, cells, page, gifts)]
-    monkeypatch.setattr(actions, "read_cells", read_cells)
-    assert fusion(context, monkeypatch, g)
+    assert fusion(context, monkeypatch, g, kept_but(23, 1, 12, 22))
     assert sorted(i for i in g.taps if isinstance(i, int)) == [1, 12, 22]
     assert actions.PAGE_OK in g.taps
 
@@ -254,13 +254,7 @@ def test_a_fusion_reads_the_owned_gifts_under_a_fixed_recipes_section(context, g
     # unread (#103). The owned gifts are found by their label under 1, 2 or 3 rows of recipe cells (3: the label is
     # under the list's edge when it opens); no recipe cell is read or tapped (#78 is the recipes' own issue).
     g = grid("fuse", 23, recipes=recipes)
-    reader = g.read_cells
-
-    def read_cells(context, image, cells, page, gifts=()):
-        return [{**c, "keyword": c["keyword"] if g.at_screen(c["x"], c["y"]) in (1, 12, 22) else "Burn"}
-                for c in reader(context, image, cells, page, gifts)]
-    monkeypatch.setattr(actions, "read_cells", read_cells)
-    assert fusion(context, monkeypatch, g)
+    assert fusion(context, monkeypatch, g, kept_but(23, 1, 12, 22))
     assert g.reads == list(range(23))
     assert sorted(i for i in g.taps if isinstance(i, int)) == [1, 12, 22]
 
@@ -269,7 +263,7 @@ def test_a_fuse_page_without_its_owned_gifts_label_is_not_read(context, grid, mo
     # The label never shows (OCR misses it, or a list it does not know): no gift is read or tapped.
     g = grid("fuse", 13)
     monkeypatch.setattr(g, "recognition", lambda *a, **k: None)
-    assert not fusion(context, monkeypatch, g)
+    assert not fusion(context, monkeypatch, g, kept_but(13))
     assert not g.reads and not [i for i in g.taps if isinstance(i, int)]
 
 
@@ -307,39 +301,30 @@ def sell_page(context, g, prices, cost=100):
 
 
 def test_a_sale_taps_the_gift_it_picked_far_down_the_grid(context, grid, monkeypatch):
-    # 18 gifts, all Burn (kept) but the last: no fusion takes it, and its 90 makes the wanted 180 with 100 Cost. Its
+    # 18 gifts, all kept by the list but the last: no fusion takes it, and its 90 makes the wanted 180 with 100 Cost. Its
     # price shows only once the grid is dragged; it is tapped there and sold, nothing else tapped.
     g = grid("sell", 18)
-    reader = g.read_cells
-    monkeypatch.setattr(actions, "read_cells", lambda *a, **k: [
-        {**c, "keyword": "Bleed" if g.at_screen(c["x"], c["y"]) == 17 else "Burn"} for c in reader(*a, **k)])
     state = sell_page(context, g, [50 + i for i in range(17)] + [90])
-    assert actions.Shop.sell(context, {"keyword": "Burn", "reserve_cost": 0, "gift_search": {"gifts": []}},
-                             {"wanted": 180, "sold": False})
+    assert actions.Shop.sell(context, kept_but(18, 17), {"wanted": 180, "sold": False})
     assert [i for i in g.taps if isinstance(i, int)] == [17] and state["cost"] == 190
 
 
 def test_two_sales_far_down_the_grid_go_back_to_its_top_between_them(context, grid, monkeypatch):
-    # 16 gifts, the last two Bleed (no fusion takes 2): the 180 wanted with 100 Cost needs both. Sold, the last one
+    # 16 gifts, the last two the list lets go (no fusion takes 2): the 180 wanted with 100 Cost needs both. Sold, the last one
     # empties its row and the grid springs back from its end; the grid goes back to its top (grid_top) and the second
     # is dragged into view again: each tapped once, sold.
     g = grid("sell", 16)
-    reader = g.read_cells
-    monkeypatch.setattr(actions, "read_cells", lambda *a, **k: [
-        {**c, "keyword": "Bleed" if g.at_screen(c["x"], c["y"]) in (14, 15) else "Burn"} for c in reader(*a, **k)])
     state = sell_page(context, g, [50 + i for i in range(14)] + [45, 40])
-    assert actions.Shop.sell(context, {"keyword": "Burn", "reserve_cost": 0, "gift_search": {"gifts": []}},
-                             {"wanted": 180, "sold": False})
+    assert actions.Shop.sell(context, kept_but(16, 14, 15), {"wanted": 180, "sold": False})
     assert [i for i in g.taps if isinstance(i, int)] == [15, 14] and state["cost"] == 185
 
 
 def test_a_sale_whose_dialog_names_another_price_is_cancelled(context, grid, monkeypatch):
     # The tap picked another gift than the one meant (the grid moved under it): the dialog's price says so.
     g = grid("sell", 4)
-    monkeypatch.setattr(actions, "read_cells", lambda *a, **k: [{**c, "keyword": "Bleed"} for c in g.read_cells(*a, **k)])
     state = sell_page(context, g, [10, 20, 30, 90])
     monkeypatch.setattr(actions, "cell_at", lambda context, grid, cell: g.place(0))
-    actions.Shop.sell(context, {"keyword": "Burn", "reserve_cost": 0, "gift_search": {"gifts": []}},
+    actions.Shop.sell(context, test_actions.shop_team({}),
                       {"wanted": 180, "sold": False})
     assert actions.DIALOG_CANCEL in g.taps and actions.DIALOG_CONFIRM not in g.taps and state["cost"] == 100
 
@@ -348,12 +333,6 @@ def test_a_fusion_taps_nothing_when_the_grid_is_not_where_it_was_measured(contex
     # The grid moved a row more than measured (a drag the game took more of): the cell where gift 22 should be shows
     # another gift, so nothing is tapped and the page is closed unfused.
     g = grid("fuse", 23)
-    reader = g.read_cells
-
-    def read_cells(context, image, cells, page, gifts=()):
-        return [{**c, "keyword": c["keyword"] if g.at_screen(c["x"], c["y"]) in (1, 12, 22) else "Burn"}
-                for c in reader(context, image, cells, page, gifts)]
-    monkeypatch.setattr(actions, "read_cells", read_cells)
     scan = actions.owned_cells
 
     def owned_cells(*args):
@@ -361,7 +340,7 @@ def test_a_fusion_taps_nothing_when_the_grid_is_not_where_it_was_measured(contex
         g.at -= g.dy  # unseen by the shift measured
         return out
     monkeypatch.setattr(actions, "owned_cells", owned_cells)
-    assert not fusion(context, monkeypatch, g)
+    assert not fusion(context, monkeypatch, g, kept_but(23, 1, 12, 22))
     assert not [i for i in g.taps if isinstance(i, int)] and actions.PAGE_OK not in g.taps
 
 
@@ -391,7 +370,7 @@ def test_no_cell_of_the_fusion_grid_is_tapped_to_read_it(context, monkeypatch):
     test_actions.owned_gifts(context, actions.FUSE_CELLS[10:12])
     logs = []
     monkeypatch.setattr(actions, "log", logs.append)
-    assert not actions.Shop.fuse(context, {"keyword": "Burn", "gift_search": {"gifts": []}}, {})
+    assert not actions.Shop.fuse(context, test_actions.shop_team({}), {})
     taps = [c.args for c in context.tasker.controller.post_click.call_args_list]
     assert not set(taps) & set(actions.FUSE_CELLS) and context.tasker.controller.post_touch_down.called
     assert "shop: the fuse grid does not move: its cut-off cells stay unread" in logs
