@@ -1142,12 +1142,8 @@ def theme_pack_plan(settings, team):
 
 
 def pack_titles(context, image):
-    """Cards left to right as (x centre, [text lines top to bottom]).
-
-    All-caps lines are CAUTION stamps or CLEAR BONUS, never a title; the LIMBUS COMPANY logo
-    above the title may still slip in as the top line (run_start.match_card drops it).
-    """
-    return columns([r for r in ocr(context, image, PACK_TITLES) if re.search(r"[a-z]", r[0])])
+    """Cards left to right as (x centre, [text lines top to bottom]); see run_start.pack_cards."""
+    return run_start.pack_cards(ocr(context, image, PACK_TITLES))
 
 
 def columns(results):

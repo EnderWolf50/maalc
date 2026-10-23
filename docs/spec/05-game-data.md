@@ -51,7 +51,7 @@
   - 沒對照過：`isShowBaton` 的「Long Battle」疊圖（位置、字級照 prefab，沒有截圖有 Line 系列的包，unverified）。
   - 沒做：頂端吊夾、放大鏡紅章、傾斜；依帳號狀態變的部分：截圖裡的 `1404`、`1412` 實機把 boss 圖畫成黑色剪影（bundle 裡有 `<boss>_silhouette` 精靈圖；什麼條件換成剪影 unverified，推測是帳號還沒見過那個 boss），縮圖畫完整的 boss；卡片左上角的紅點（`[Script]RedDot`，新包提示）也不畫；`iconYPos`（全部 121 個資料項裡只有 6 個有，用途 unverified）；`uiRotation`、`unlockHintTextKey`、`sidePopupUnlockHintTextKey`、`nextImageColor`（地圖節點和鎖定提示用，不影響卡片外觀，unverified）；卡片上的 `Chip`、`rect_level`（執行中才出現的提示，沒有截圖）。
   - 同一份封面的 `1201`／`1203`／`1205`（`AttackType_normal`）和 `1202`／`1204`／`1206`（`AttackType_effective`）靠 boss 圖、攻擊類型圖示和標題分辨。版權屬 © Project Moon（NOTICE.md）。
-- 標題藝術字（`title_art`，#246）：卡面藝術字拼不出包名時，OCR 讀到的字 → 那個包。比對規則和包名相同，比的是左邊的字（同分時算它的長度），比到後換成右邊的包名。1.117.0 有兩個，都從 2026-10-22 的實機錄影確認：S.E.A. 卡面寫 `The Magic Hello Bus`（讀成 `HellOBus`、`HellBus`）；The Noon of Violet 名稱上方有 `Walpurgis Night`，常讀成 `WalpurgisN The Noon of`。每季換資料時，從 log 裡比對不到的標題找新的。
+- 標題藝術字（`title_art`，#246）：卡面藝術字拼不出包名時，OCR 讀到的字 → 那個包。比對規則和包名相同，比的是左邊的字（同分時算它的長度），比到後換成右邊的包名。1.117.0 有三個，前兩個從 2026-10-22 的實機錄影確認：S.E.A. 卡面寫 `The Magic Hello Bus`（讀成 `HellOBus`、`HellBus`）；The Noon of Violet 名稱上方有 `Walpurgis Night`，常讀成 `WalpurgisN The Noon of`；Line 1 的藝術字是大寫的 `LINE 1 MADNESS`，只讀得到 `MADNESS`（#266）。每季換資料時，從 log 裡比對不到的標題找新的。
 - 使用者的主題包方案不在資料檔，存在設定檔，格式見 [04-settings.md](04-settings.md#8-主題包方案theme_pack_plans)。方案裡沒列出的主題包（例如新一季才出現的）用方案的「沒列出的包」分數；空的方案等於全部用這個分數，不報錯。（#11、#19，2026-10-14 定案；#240）
 
 **範例**（主題包名稱取自先前季節，僅示意；「燒傷隊」是使用者在設定檔建立的方案）：
