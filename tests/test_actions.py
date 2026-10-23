@@ -2910,10 +2910,11 @@ def test_a_fusion_gone_after_a_cell_tap_taps_nothing_more(context, guarded, monk
     reads(context, FUSE_PAGE)
     fuse_slots(context, monkeypatch)
     cells_read(monkeypatch, ("Bleed", None), ("Tremor", None), ("Pierce", None))
-    page_until(context, "Shop", 5)  # gone after Fuse, the centre, Burn, its OK and the first cell
+    page_until(context, "Shop", 5 + 3)  # gone after Fuse, the centre, Burn, its OK, the first cell and the 3 taps on the neutral spot (#331)
     with pytest.raises(actions.PageGone):
         actions.Shop.fuse(context, {"keyword": "Burn", "gift_search": {"gifts": []}}, {})
-    assert taps(context)[4] in actions.FUSE_CELLS and not set(taps(context)[5:]) & set(actions.FUSE_CELLS)
+    taps_made = [t for t in taps(context) if t != actions.FUSE_NEUTRAL]
+    assert taps_made[4] in actions.FUSE_CELLS and not set(taps_made[5:]) & set(actions.FUSE_CELLS)
 
 
 def test_hands_back_clears_the_runtime_cache_of_a_long_task():
