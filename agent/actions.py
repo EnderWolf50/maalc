@@ -21,6 +21,7 @@ from maa.custom_recognition import CustomRecognition
 from maa.define import Rect
 
 import battle
+import gift_cells
 import gift_search
 import hub_text
 import map_route
@@ -30,6 +31,7 @@ import rewards
 import run_start
 import settlement
 import shop
+from gifts import effective, main_keyword, queue, queue_place, resolve_list
 from ocrtext import compact, digits, has, normalize
 from settings import SCHEMA, SettingsError, load_settings
 from state import next_cursor, pick_team, read_cursor, write_cursor
@@ -308,6 +310,13 @@ def address(context):
     return context.tasker.controller.info.get("adb_serial", "default")
 
 
+def run_team(settings, team):
+    """The team a run plays: the settings' team plus `list`, the gift list it uses, and `keyword`, its main keyword, which
+    that list decides (spec 04 section 13)."""
+    gift_list = resolve_list(team["gift_list"], settings["gift_lists"])
+    return {**team, "list": gift_list, "keyword": main_keyword(gift_list)}
+
+
 def current_run(context):
     """The run plan; made up from settings and the rotation cursor when the agent restarted mid-run."""
     if "settings" not in RUN:  # a run plan, not just counters left by an action
@@ -316,7 +325,7 @@ def current_run(context):
         difficulty = None if difficulty == "auto" else difficulty
         cursor = read_cursor(ROOT, address(context))
         team = pick_team(settings["teams"], cursor, difficulty or "hard") or pick_team(settings["teams"], cursor, "normal")
-        RUN.update(settings=settings, team=team, difficulty=difficulty)
+        RUN.update(settings=settings, team=run_team(settings, team), difficulty=difficulty)
         # The guard turns left are unknown after a restart: they count as used up (spec 03 section 8).
         log(f"no run plan in memory: assuming team {team['name']!r}, difficulty {difficulty or 'unknown'}, no guard turns")
     return RUN
@@ -643,7 +652,7 @@ class PlanRun(CustomAction):
         limit = recovery.floor_limit(recovery.read_runs(ROOT), team["id"])
         # guard: the run's guard turns left (spec 03 section 8), counted across its battles.
         # floor_limit: each floor's time; the first clock runs from here, PickThemePack restarts it (spec 06).
-        RUN.update(settings=settings, team=team, difficulty=difficulty, planned=True, start=settlement.now(), deadline=time.time() + limit,
+        RUN.update(settings=settings, team=run_team(settings, team), difficulty=difficulty, planned=True, start=settlement.now(), deadline=time.time() + limit,
                    floor_limit=limit, guard=team["guard_turns"])
         STUCK["ladder"] = recovery.Ladder()
         log(f"new run: {difficulty}, team {team['name']!r} (TEAMS #{team['game_team']}), weekly bonuses left {weekly}, time limit {limit / 60:.0f} min a floor")
@@ -2668,7 +2677,6 @@ SHOP_COST = [540, 112, 110, 45]
 REFRESH = {"normal": ((997, 122), [960, 140, 80, 30]), "keyword": ((1140, 122), [1100, 140, 80, 30])}  # button, fee
 OFFER_GRID = [545, 215, 620, 300]
 DIALOG_TITLE = [360, 80, 560, 115]  # Purchase E.G.O Gifts, Shop - Keyword Refresh, Fuse / Sell E.G.O Gift
-PURCHASE_TEXT = [525, 210, 400, 220]
 PURCHASE_PREVIEW = [780, 145, 140, 40]  # "2864 > 2612": the Cost before and after
 PURCHASE, PURCHASE_CANCEL = (747, 482), (525, 482)
 KEYWORD_LABELS = [270, 300, 740, 200]  # the 10 keyword cards of both keyword dialogs
@@ -2706,6 +2714,9 @@ BADGES = ["Burn", "Bleed", "Tremor", "Rupture", "Sinking", "Poise", "Charge", "S
 # On scaled cells (CCOEFF): its own badge 0.54-0.99, another keyword's up to 0.60 (the cell's best wins), a keywordless
 # cell's best 0.41; 160 cells of 60 live captures. An observed gift's icon: Spiderweb's thin lines 0.5-0.6, others 0.86+.
 BADGE_MIN, ICON_KEEP = 0.5, 0.45
+GIFTS = gift_cells.load()  # every gift a cell may show (#297)
+GIFT_NAMES = {e["id"]: e["en"] for e in GIFTS}
+CELL_ICON_ROI = 70  # px square around a cell's centre on the scaled grid where its icon is looked for: the biggest icon (54 px) +-8
 FUSE_CONFIRM = [300, 150, 680, 380]  # "Selected E.G.O Gifts 3/5" over "Fuse the selected E.G.O Gifts?"
 FUSE_COUNT = r"(\d)\s*/\s*\d"  # its "3/5": the materials in
 FUSE_NEUTRAL = (815, 160)  # above the owned grid, between Recipes and Fusion Guide: closes a tooltip, selects nothing
@@ -2809,13 +2820,36 @@ def template_hits(context, image, template, threshold):
     return [(r.score, (r.box[0] + r.box[2] / 2, r.box[1] + r.box[3] / 2)) for r in (detail.filtered_results if detail else [])]
 
 
+def cell_id(context, grid, at, keyword, tier):
+    """(the id of the gift whose icon is on the cell centred at `at` of the scaled grid, its score): None when unknown (#297).
+
+    The icons of the gifts of the cell's keyword and tier (gift_cells.candidates) are matched in turn, CCOEFF with its
+    green masked, within CELL_ICON_ROI of the centre; the best is the cell's gift when gift_cells.best accepts it. The
+    matching stops at an icon of gift_cells.ICON_SURE: another candidate cannot tie it (a cell's lookalikes score 0.66 at most).
+    A cell with no tier or badge read, or none of whose candidates match, is unknown: shops treat it as a gift to keep.
+    """
+    cx, cy = round(at[0]), round(at[1])
+    h, w = grid.shape[:2]
+    x, y = max(0, cx - CELL_ICON_ROI // 2), max(0, cy - CELL_ICON_ROI // 2)
+    roi = [x, y, min(CELL_ICON_ROI, w - x), min(CELL_ICON_ROI, h - y)]
+    scores = []
+    for e in gift_cells.candidates(GIFTS, keyword, tier):
+        node = {"recognition": "TemplateMatch", "template": e["template"], "threshold": 0.0, "method": 5, "green_mask": True, "roi": roi}
+        detail = context.run_recognition("ShopCellIcon", grid, {"ShopCellIcon": node})
+        scores.append((e["id"], detail.best_result.score if detail and detail.best_result else 0.0))
+        if scores[-1][1] >= gift_cells.ICON_SURE:
+            break
+    return gift_cells.best(scores), max((s for _, s in scores), default=0.0)
+
+
 def read_cells(context, image, cells, page, gifts=()):
-    """The filled cells of a shop grid read off one screenshot (#76, #112): [{"i", "x", "y", "tier", "keyword", "gift"}].
+    """The filled cells of a shop grid read off one screenshot (#76, #112): [{"i", "x", "y", "tier", "keyword", "gift", "id", "score"}].
 
     The grid is scaled so gift icons are at their GiftSearch template's size, then each keyword's badge and each
     kept gift's icon (gifts, kept_icons) is matched once over it. keyword: the cell's best badge,
     "Keywordless" with none, None when the badge is below the grid's edge; gift: the kept gift whose icon
     matched, when its keyword and tier agree with the cell's. An empty cell is flat (live: spread 1-2, a gift 41-84).
+    id: the data's id of the gift the cell shows (cell_id), None when unknown, score the best icon's.
     """
     scale, bottom = CELL_PAGES[page]
     half = shop.CELL_HALF
@@ -2844,7 +2878,7 @@ def read_cells(context, image, cells, page, gifts=()):
                 if abs(bx - cx) < 16 and abs(by - cy) < 16 and c["keyword"] in (None, g["keyword"]) and c["tier"] in tiers:
                     c["gift"] = g["name"]
     for c in out:
-        del c["at"]
+        c["id"], c["score"] = cell_id(context, grid, c.pop("at"), c["keyword"], c["tier"])
     return out
 
 
@@ -2854,9 +2888,15 @@ def offer_cell(slot):
 
 
 def cell_line(cell, role):
-    """One cell read for the log: "0 III Keywordless Spiderweb Entangled in Red: keep"."""
+    """One cell read for the log: "2 III Bleed 9042 Smokes and Wires (0.77): keep", an unknown gift "unknown (best 0.38)" (#297)."""
     tier = "I II III IV V".split()[cell["tier"] - 1] if cell["tier"] else "?"
-    return f"{cell['i']} {tier} {cell['keyword'] or 'badge unread'}{' ' + cell['gift'] if cell['gift'] else ''}: {role}"
+    return f"{cell['i']} {tier} {cell['keyword'] or 'badge unread'}{' ' + cell['gift'] if cell['gift'] else ''} {gift_shown(cell)}: {role}"
+
+
+def gift_shown(cell):
+    """The gift a read cell was taken for, for the log: "9042 Smokes and Wires (0.77)", or "unknown (best 0.38)" (#297)."""
+    named = GIFT_NAMES.get(cell["id"])
+    return f"{cell['id']} {named} ({cell['score']:.2f})" if named else f"unknown (best {cell['score']:.2f})"
 
 
 def owned_cells(context, page, gifts):
@@ -3177,12 +3217,16 @@ class Shop(CustomAction):
 
     @staticmethod
     def buy(context, team, visit):
-        """Buy the main-keyword gifts on show (buy_offers), then refresh while the rules allow; True on any spend.
+        """Buy the gifts of the team's list on show (buy_offers), then refresh while the rules allow; True on any spend.
 
         A first choice too dear for the reserve becomes visit["wanted"] for the next round's sell, and
-        holds the purchases and the refresh back until that sell has been tried.
+        holds the purchases and the refresh back until that sell has been tried. A list that wants nothing the
+        shop sells buys nothing and never refreshes (#298).
         """
         keyword, reserve, acted = team["keyword"], team["reserve_cost"], False
+        if not queue(team["list"]):
+            log("shop: the gift list wants nothing the shop sells: nothing bought, no refresh")
+            return False
         while True:
             if Shop.buy_offers(context, team, visit):
                 acted = True
@@ -3224,12 +3268,16 @@ class Shop(CustomAction):
 
     @staticmethod
     def buy_offers(context, team, visit):
-        """Read the offers once, then buy the main-keyword ones shop.buy_plan picks, last cell first; how many bought.
+        """Read the offers once, then buy the ones of the team's list shop.buy_plan picks, last cell first; how many bought.
 
-        A gift's keyword is its offer's badge (read_cells, #76); only an offer whose badge is unread is opened
-        to read its purchase dialog (spec 03 section 12's text rule). Each purchase is checked on the Cost.
+        A gift is told by its icon (read_cells, #297): only an offer whose id is known, that the list wants and the shop
+        sells (gifts.queue) is bought, in the queue's order (#298). An offer too dear to be read (Not Enough Cost dims it: no
+        tier, no id) whose badge is a keyword the list wants stands for the best place a gift of that keyword holds
+        (gifts.queue_place): it may be the first choice, so the shop sells for it; it is never bought. Each purchase is
+        checked on the Cost.
         """
-        keyword, reserve = team["keyword"], team["reserve_cost"]
+        gift_list, reserve = team["list"], team["reserve_cost"]
+        place = {i: n for n, i in enumerate(queue(gift_list))}
         visit["wanted"] = None
         # ponytail: only the offers on show; a Super Shop's last 2 of 10 need a scroll first.
         cost = read_cost(context)
@@ -3241,24 +3289,26 @@ class Shop(CustomAction):
         avoided = avoided_gifts(team)
         cells = {c["i"]: c for c in read_cells(context, image, [offer_cell(s) for s in slots], "offer", avoided)}
         avoid = [g["name"] for g in avoided]
+        avoid_ids = [g["id"] for g in avoided]
         offers = []
         for i, slot in enumerate(slots):
-            cell = cells.get(i, {"tier": None, "keyword": None, "gift": None})
-            if cell["gift"] in avoid or any(rewards.names_gift(slot["name"], n) for n in avoid):
+            cell = cells.get(i, {"tier": None, "keyword": None, "gift": None, "id": None, "score": 0.0})
+            if cell["id"] in avoid_ids or cell["gift"] in avoid or any(rewards.names_gift(slot["name"], n) for n in avoid):
                 log(f"shop: {slot['name']!r} {slot['price']}: the team does not hold it (#90)")
                 continue
             slot["short"] = slot["short"] or shop.short_cell(image, *offer_cell(slot))
             if slot["short"] and slot["price"] <= cost:
                 log(f"shop: {slot['name']!r} is tagged Not Enough Cost: its price {slot['price']} is a misread")
                 continue
-            kind = cell["keyword"]
-            if kind is None and shop.buyable(slot, cost):
-                kind = Shop.dialog_keyword(context, slot, keyword, avoid)
-                if kind is False:
-                    return 0  # the shop is gone
-            log(f"shop: {slot['name']!r} {slot['price']}: tier {cell['tier']} {kind}")
-            if kind == keyword:
-                offers.append((i, cell["tier"], slot["price"]))
+            dimmed = cell["id"] is None and slot["short"]  # Not Enough Cost: tier and icon unread
+            rank = place.get(cell["id"])
+            if dimmed:
+                rank = queue_place(gift_list, cell["keyword"], cell["tier"])
+            state = effective(gift_list, cell["id"]) if cell["id"] else "unknown"
+            log(f"shop: {slot['name']!r} {slot['price']}: tier {cell['tier']} {cell['keyword']} {gift_shown(cell)}, {state}"
+                f"{'' if rank is None else f', place {rank}'}{' (dimmed: the best place it may hold)' if dimmed and rank is not None else ''}")
+            if rank is not None:
+                offers.append((i, rank, slot["price"]))
         plan, visit["wanted"] = shop.buy_plan(offers, cost, reserve, visit["sold"])
         if visit["wanted"]:
             log(f"shop: the first choice costs {visit['wanted']}, {cost} Cost is short: sell first")
@@ -3297,17 +3347,6 @@ class Shop(CustomAction):
             return image
         log(f"shop: {slot['name']!r} opened no purchase dialog")
         return None
-
-    @staticmethod
-    def dialog_keyword(context, slot, keyword, avoid=()):
-        """An offer's keyword from its purchase dialog's text: keyword when main, else "other" (an avoided gift too);
-        None when no dialog opened, False when the shop is gone (to_main). The dialog is cancelled."""
-        image = Shop.open_offer(context, slot)
-        if image is None:
-            return None if Shop.to_main(context) else False
-        kind = rewards.gift_kind(text(context, image, PURCHASE_TEXT), keyword, False, avoid)
-        tap_settled(context, *PURCHASE_CANCEL, timeout=1.0)
-        return keyword if kind == "main" else "other"
 
     @staticmethod
     def sell(context, team, visit):
