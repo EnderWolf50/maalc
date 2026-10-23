@@ -1,8 +1,8 @@
 // The purchase order dialog of the gift list tab (#296, spec 04 section 13): one collapsible section per keyword, in buy order,
 // each listing the gifts the list wants and the shop sells. Drag a keyword or a gift, or use its ▲▼, to change the order.
-import { useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useDragSort } from "./dragSort";
-import { GIFT_BY_ID, giftName } from "./giftCatalog";
+import { GIFT_BY_ID, giftName, iconUrl } from "./giftCatalog";
 import { buyList, moveGift, moveKeyword, nudgeGift, useGiftEdit } from "./giftEdit";
 import { mainKeyword, queue } from "./gifts";
 import { fill } from "./i18n";
@@ -49,18 +49,25 @@ export function BuyOrderDialog({ onClose }: { onClose: () => void }) {
     () => { const ok = editable(); setNotice(ok ? "" : t("gl.ro")); return ok; },
   );
 
-  const keydown = (e: KeyboardEvent) => {
-    if (e.key === "Escape") { e.stopPropagation(); onClose(); }
+  // Esc and the Tab loop work from the document, so they still do when the focus fell to the page (a button went disabled).
+  const onKey = useRef<(e: KeyboardEvent) => void>(undefined);
+  onKey.current = (e) => {
+    if (e.key === "Escape") onClose();
     if (e.key !== "Tab") return;
     const focusable = [...box.current!.querySelectorAll<HTMLElement>("button:not(:disabled)")];
     const at = focusable.indexOf(document.activeElement as HTMLElement);
-    if (e.shiftKey ? at <= 0 : at === focusable.length - 1) { e.preventDefault(); focusable[e.shiftKey ? focusable.length - 1 : 0].focus(); }
+    if (at < 0 || (e.shiftKey ? at === 0 : at === focusable.length - 1)) { e.preventDefault(); focusable[e.shiftKey ? focusable.length - 1 : 0].focus(); }
   };
+  useEffect(() => {
+    const listener = (e: KeyboardEvent) => onKey.current!(e);
+    document.addEventListener("keydown", listener);
+    return () => document.removeEventListener("keydown", listener);
+  }, []);
 
   const main = mainKeyword(list), all = queue(list);
   let before = 0; // gifts bought before the keyword in view: where its range in the whole buy list starts
   return (
-    <div className="gl-dlgback" onClick={(e) => e.target === e.currentTarget && onClose()} onKeyDown={keydown}>
+    <div className="gl-dlgback" onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div className="gl-dlg" role="dialog" aria-modal="true" aria-label={t("gl.buy_title")} ref={box}>
         <div className="gl-dlgtop">
           <b>{t("gl.buy_title")}</b><small>{t("gl.buy_sub")}</small>
@@ -101,6 +108,7 @@ export function BuyOrderDialog({ onClose }: { onClose: () => void }) {
                         <li key={id} className="gl-sortrow gl-gr" data-gift={id} {...dragItem(String(id), k)}>
                           <span className="gl-grip" aria-hidden>⠿</span>
                           <span className="gl-ord" title={fill(t("gl.queue_pos"), { n })}>{n}</span>
+                          <img className="gl-ico" src={iconUrl(id)} alt="" loading="lazy" />
                           <span className="gl-qn">{label}</span>
                           <small>{TIERS[g.tier]}</small>
                           <span className="spacer" />

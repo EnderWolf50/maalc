@@ -1,7 +1,7 @@
 // The gift list tab's keyword tabs and the grid of one keyword: tier blocks of icon tiles, one tile per gift.
 import { useRef, useState, type KeyboardEvent } from "react";
 import { GIFT_BY_ID, giftName, iconUrl, tiersOf } from "./giftCatalog";
-import { useDragSort } from "./dragSort";
+import { useDragSort, type DragProps } from "./dragSort";
 import { moveGift, useGiftEdit } from "./giftEdit";
 import { effective, mainKeyword, state, type GiftState, type ListRules } from "./gifts";
 import { fill, type Key } from "./i18n";
@@ -131,7 +131,7 @@ export function KeywordPanel({ keyword }: { keyword: string }) {
 
 /** One gift: its icon in a frame that shows its state (want thick and striped, keep solid, drop faded, locked dashed with a padlock). */
 function GiftTile({ id, zh, tabStop, onFocus, drag }: {
-  id: number; zh: boolean; tabStop: boolean; onFocus: () => void; drag?: ReturnType<ReturnType<typeof useDragSort>>;
+  id: number; zh: boolean; tabStop: boolean; onFocus: () => void; drag?: DragProps;
 }) {
   const { t } = useEditor();
   const { list, apply } = useGiftEdit();

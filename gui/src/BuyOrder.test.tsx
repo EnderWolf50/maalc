@@ -3,7 +3,7 @@
 import { fireEvent, screen, within } from "@testing-library/react";
 import { describe, expect, test } from "vitest";
 import recipes from "../../assets/resource/base/data/gift_recipes.json";
-import { GIFT_BY_ID } from "./giftCatalog";
+import { GIFT_BY_ID, iconUrl } from "./giftCatalog";
 import { GiftListsTab } from "./GiftLists";
 import { DEFAULT_LIST, queue } from "./gifts";
 import { TEXT } from "./i18n";
@@ -84,6 +84,23 @@ describe("opening and closing", () => {
     await openDialog(r);
     await r.user.click(dialog()); // inside the dialog is not the backdrop
     expect(dialog()).toBeInTheDocument();
+  });
+
+  test("Esc and Tab still work when the focus fell to the page", async () => {
+    const r = await open(mine());
+    await openDialog(r);
+    (document.activeElement as HTMLElement).blur();
+    await r.user.tab();
+    expect(dialog()).toContainElement(document.activeElement as HTMLElement);
+    (document.activeElement as HTMLElement).blur();
+    await r.user.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  test("a gift row shows the gift's icon", async () => {
+    const r = await open(mine());
+    await openDialog(r);
+    expect(rows()[0].querySelector("img")).toHaveAttribute("src", iconUrl(b1));
   });
 
   test("Tab cycles inside the dialog", async () => {
