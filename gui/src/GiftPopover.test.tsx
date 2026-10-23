@@ -1,6 +1,6 @@
 // Component tests of the gift list tab's hover popover, search and help (#307): what the user sees and does, and what the
 // settings hold afterwards.
-import { act, fireEvent, screen, within } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import recipes from "../../assets/resource/base/data/gift_recipes.json";
 import { CATALOG, GIFT_BY_ID, packName } from "./giftCatalog";
@@ -324,6 +324,10 @@ describe("search", () => {
     await r.user.type(box(), String(a));
     await r.user.click(screen.getByRole("button", { name: zh["gl.opts"] }));
     expect(screen.getByRole("menu")).toBeInTheDocument();
+    // A popover opening and closing re-registers the tab's key listener after the menu's own: its order must not matter.
+    await r.user.hover(getTile(a));
+    await r.user.unhover(getTile(a));
+    await waitFor(() => expect(popover()).toBeNull());
     await r.user.keyboard("{Escape}");
     expect(screen.queryByRole("menu")).not.toBeInTheDocument();
     expect(box()).toHaveValue(String(a));

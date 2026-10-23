@@ -98,8 +98,10 @@ export function GiftListsTab() {
       if (!state || e.ctrlKey || e.metaKey || e.altKey || typing) return;
       setPick(state);
     };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
+    // In the capture phase: it must see the keys before the menu's and the dialog's own listeners, which may already have closed
+    // what the Esc check looks for; the listener is registered again whenever the popover opens or closes, so bubbling order would vary.
+    document.addEventListener("keydown", onKey, true);
+    return () => document.removeEventListener("keydown", onKey, true);
   }, [open, help, query, buying, tip]);
   // A click anywhere but the help closes it.
   useEffect(() => {
