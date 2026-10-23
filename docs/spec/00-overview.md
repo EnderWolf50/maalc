@@ -83,7 +83,7 @@
 | 設定 GUI | Tauri 2 + React/TypeScript，放在 `gui/`，是 v1 新增的交付物。第一階段只編輯設定，不執行 bot（[ADR 0006](../adr/0006-settings-gui-writes-one-settings-file.md)） | #19 |
 | 設定 | 使用者設定全部放在 `<root>/config/settings.json`，由設定 GUI 寫入、Agent 讀取，格式由 `settings.schema.json` 描述（[ADR 0006](../adr/0006-settings-gui-writes-one-settings-file.md)）；遊戲資料放資料檔（[ADR 0005](../adr/0005-game-data-files-separate-from-user-settings.md)） | #9、#11、#19 |
 | 辨識 | 文字與數字用 OCR（`ppocr_v6/small`），圖示與按鈕用自製模板；地圖節點先找 Bus 再比對相鄰格位，不用整張地圖的偵測模型 | #3、#13 |
-| 授權 | MIT。AGPL 專案（AALC、MaaLimbus、Lix）可以讀、不能抄，程式碼、圖片和模型都不複製；不用 Ultralytics 訓練模型（[ADR 0001](../adr/0001-mit-and-no-agpl-derived-assets.md)） | #1、#3 |
+| 授權 | 程式碼 PolyForm Noncommercial 1.0.0（非商用，[ADR 0008](../adr/0008-noncommercial-license-and-llc-names.md)）；LLC 衍生的資料檔 CC BY-NC-SA 4.0。AGPL 專案（AALC、MaaLimbus、Lix）可以讀、不能抄，程式碼、圖片和模型都不複製；不用 Ultralytics 訓練模型（[ADR 0001](../adr/0001-mit-and-no-agpl-derived-assets.md)） | #1、#3 |
 
 ## 用語
 

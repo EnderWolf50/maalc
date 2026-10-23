@@ -1,10 +1,9 @@
 """Write the fusion gift data: assets/resource/base/data/gift_recipes.json and image/GiftRecipe/<id>.png.
 
-Usage: uv run --group unpack python tools/gift_recipes.py --wiki <Giftchoose jsondata file>
+Usage: uv run --group unpack python tools/gift_recipes.py [--release 2026101602] [--no-icons]
 Reads `.local/unpack/` (static data, English localization, the pulled UnityCache bundles; see docs/agents/local-dev.md).
---wiki is the 灰機 wiki's table Data:Giftchoose.tabx as the JSON of
-`https://limbuscompany.huijiwiki.com/api.php?action=jsondata&title=Giftchoose.tabx&format=json` (Cloudflare blocks plain
-HTTP clients: save it from a browser). Recipes: `combineFixed` and `combineMixed` of mirror-dungeon-common-data-md8.json.
+Chinese names: tools/llc_text.py (the Localize Limbus Company release; this tool only fills `zh` from it).
+Recipes: `combineFixed` and `combineMixed` of mirror-dungeon-common-data-md8.json.
 Icons: the game's EgoGiftIcon sprite of each fusion gift and of each recipe material that gift_search.json lacks, scaled
 by 0.21, transparency filled green, as the Gift Search icons. The first run indexes the 12 GB of bundles into
 `.local/unpack/out/sprite-index.tsv` (run it as a `bench` ticket, tools/live/queue.py); the quarterly rerun is docs/spec/05-game-data.md section 8.
@@ -20,9 +19,9 @@ from pathlib import Path
 
 import cv2
 import numpy as np
-import opencc
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from llc_text import NOTE_ZH, credit, gift_names, release_zip  # noqa: E402
 from local_dir import local_dir  # noqa: E402
 
 REPO = Path(__file__).resolve().parent.parent
@@ -33,13 +32,12 @@ KEYWORDS = {"Combustion": "Burn", "Laceration": "Bleed", "Vibration": "Tremor", 
             "Breath": "Poise", "Charge": "Charge", "Slash": "Slash", "Penetrate": "Pierce", "Hit": "Blunt"}  # the rest: Keywordless
 SCALE = 0.21  # the icon on the Gift Search page, as for GiftSearch/<id>.png
 NOTE = ("Fusion gifts and their recipes. Recipes: combineFixed (any one of a gift's `recipes` fuses it; each is a list of the "
-        "required gift ids; `specific` marks a gift whose recipe uses a theme pack's exclusive gift, `packs` is the union of the theme "
-        "pack ids of those gifts (one recipe can need several packs), from isSpecific and the packs' specificEgoGiftPool) and combineMixed (`groups`: take `need` of each group's `ids`) of the game client 1.117.0's "
+        "required gift ids; `specific` marks a gift whose recipe uses a theme pack's exclusive gift, `packs` is the union of the "
+        "theme pack ids of those gifts (one recipe can need several packs), from isSpecific and the packs' specificEgoGiftPool) and combineMixed (`groups`: take `need` of each group's `ids`) of the game client 1.117.0's "
         "mirror-dungeon-common-data-md8. Ids, tiers, keywords and English names: the same client's ego-gift static data and "
         "EN_EGOgift localization. `materials` are the recipe ingredients gift_search.json does not list. Icons: "
         "image/GiftRecipe/<id>.png, the game's EgoGiftIcon sprites (by the ego-gift iconId) scaled by 0.21 with transparency "
-        "filled green. Chinese names: the 灰機 Limbus Company wiki's gift table by id (Simplified Chinese), converted with "
-        "OpenCC s2twp, 指標 -> 指針; empty where it has no entry. Chinese names licensed CC BY-SA 4.0 (see NOTICE.md). "
+        "filled green. "+NOTE_ZH+" "
         "Written by tools/gift_recipes.py.")
 
 
@@ -67,21 +65,15 @@ def english_names(unpack):
     return names
 
 
-def chinese_names(wiki_path):
-    s2t = opencc.OpenCC("s2twp")
-    rows = load(wiki_path)["jsondata"]["data"]
-    return {int(r[0]): s2t.convert(r[1]).replace("指標", "指針") for r in rows if r[1]}
-
-
 def pack_pools(unpack):
     """Theme pack id -> its `specificEgoGiftPool` (the pack-exclusive gifts), from mirrordungeon-theme-floor-*.json."""
     return {x["id"]: set(x["specificEgoGiftPool"]) for p in glob.glob(str(unpack / STATIC / "mirrordungeon-theme-floor/*.json"))
             for x in load(p)["list"] if x.get("specificEgoGiftPool")}
 
 
-def build(unpack, wiki_path):
+def build(unpack, release):
     combine = load(unpack / STATIC / "mirror-dungeon-common-data/mirror-dungeon-common-data-md8.json")["egoGiftCombineFixedTable"]
-    table, en, zh = gift_table(unpack), english_names(unpack), chinese_names(wiki_path)
+    table, en, zh = gift_table(unpack), english_names(unpack), gift_names(release_zip(release))
     searchable = {g["id"] for g in load(DATA / "gift_search.json")["gifts"]}
     recipes, specific = defaultdict(list), set()
     for c in combine["combineFixed"]:
@@ -94,7 +86,7 @@ def build(unpack, wiki_path):
 
     def entry(gid):
         tier, keyword, _ = table[gid]
-        return {"id": gid, "keyword": keyword, "tier": tier, "en": en[gid], "zh": zh.get(gid, "")}
+        return {"id": gid, "keyword": keyword, "tier": tier, "en": en[gid], "zh": zh[gid]}  # a gift the release lacks stops the run
 
     results = sorted(recipes.keys() | groups.keys(), key=lambda g: (-table[g][0], g))
     def pack_fields(g):  # a gift's recipes are all flagged or none are (the test checks it)
@@ -106,8 +98,7 @@ def build(unpack, wiki_path):
     gifts = [{**entry(g), **({"recipes": recipes[g]} if g in recipes else {"groups": groups[g]}), **pack_fields(g)} for g in results]
     used = {i for r in recipes.values() for rec in r for i in rec} | {i for gs in groups.values() for grp in gs for i in grp["ids"]}
     materials = [entry(i) for i in sorted(used - searchable - set(results))]
-    return {"note": NOTE, "source": "https://limbuscompany.huijiwiki.com/wiki/Data:Giftchoose.tabx", "license": "CC BY-SA 4.0",
-            "license_url": "https://creativecommons.org/licenses/by-sa/4.0/", "gifts": gifts, "materials": materials}, table
+    return {"note": NOTE, **credit(release), "gifts": gifts, "materials": materials}, table
 
 
 def sprite_index(cache, index_path):
@@ -172,11 +163,11 @@ def scaled(rgba, out):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--wiki", required=True, help="the Giftchoose.tabx jsondata JSON")
+    parser.add_argument("--release", default=load(DATA / "gift_search.json")["zh_release"], help="the LLC release tag the Chinese names come from")
     parser.add_argument("--no-icons", action="store_true", help="write the json only")
     args = parser.parse_args()
     unpack = local_dir("unpack")
-    data, table = build(unpack, args.wiki)
+    data, table = build(unpack, args.release)
     (DATA / "gift_recipes.json").write_text(json.dumps(data, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
     entries = data["gifts"] + data["materials"]
     print(f"{len(data['gifts'])} fusion gifts, {len(data['materials'])} materials; no zh name: {[g['id'] for g in entries if not g['zh']]}")

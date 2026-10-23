@@ -60,15 +60,15 @@ def opt(text, hint, kind, *gifts):
     return {"text": text, "hint": hint, "kind": kind, "gifts": [list(g) for g in gifts]}
 
 
-RANKED = [  # the user's order (#93), best last; on screen as "<text> <hint>"
+RANKED = [  # AALC's order (#233), best last; on screen as "<text> <hint>"
     opt("Leave.", "", "other"),
     opt("Read it.", "Run a Wrath check to gain an E.G.O Gift.", "check_fail_gift", ("Burn", "check_fail")),
     opt("Fight.", "Win the battle to earn a Burn E.G.O Gift", "battle", ("Burn", "win_battle")),
-    opt("Wait.", "Then, maybe gain a Burn E.G.O Gift depending on the subsequent choice", "followup", ("Burn", "later_direct")),
+    opt("Wait.", "Then, maybe gain a Bleed E.G.O Gift depending on the subsequent choice", "followup", ("Bleed", "later_direct")),
     opt("Open it.", "Lust check. Pass to gain a Burn E.G.O Gift.", "check", ("Burn", "check_pass")),
-    opt("Insert the coin.", "???", "random", ("Keywordless", "direct_random")),
     opt("Take it.", "Select to gain a Bleed E.G.O Gift", "direct", ("Bleed", "direct")),
     opt("Hold it.", "Select to gain a Burn E.G.O Gift", "direct", ("Burn", "direct")),
+    opt("Insert the coin.", "???", "random", ("Keywordless", "direct_random")),
 ]
 
 
@@ -77,14 +77,56 @@ def shown(event):
 
 
 def test_pick_choice_ranks_by_the_event_table():
-    # direct main > direct other > ??? / random > check pass > follow-up page > win battle > the rest
+    # ??? / random > direct gain > check pass > "gain ... depending on" > the rest (AALC's order, #233)
     options = shown(RANKED)
-    for best in range(len(RANKED) - 1, 1, -1):
+    for best in range(len(RANKED) - 1, 2, -1):
         assert r.pick_choice(options, "Burn", closed=range(best + 1, len(RANKED)), event=RANKED) == best
-    # a gift only when a check fails is no gain: the first of the rest
-    assert r.pick_choice(options, "Burn", closed=range(2, len(RANKED)), event=RANKED) == 0
-    assert r.pick_choice(options, "Bleed", event=RANKED) == 6  # the direct Bleed gift is the main one now
+    # a battle or a gift only when a check fails is no tier: the first of the rest
+    assert r.pick_choice(options, "Burn", closed=range(3, len(RANKED)), event=RANKED) == 0
+    assert r.pick_choice(options, "Bleed", event=RANKED) == 7  # the main keyword never lifts an option across tiers
+    assert r.pick_choice(options, "Burn", closed={7}, event=RANKED) == 6
+    assert r.pick_choice(options, "Bleed", closed={7}, event=RANKED) == 5
+    assert r.pick_choice(options, "Burn", closed={5, 6, 7}, event=RANKED) == 4
     assert r.pick_choice(options, "Burn", "Leave", event=RANKED) == 0  # an override still wins
+
+
+def test_pick_choice_depending_on_check_text_is_the_fourth_tier():
+    # 971003: a check entry whose hint only says "Gain ... depending on" ranks with the follow-ups, below a plain check
+    depending = opt("Alert it.", "Gain a Bleed E.G.O Gift depending on the result of the following choice", "check", ("Bleed", "check_pass"))
+    plain = opt("Pull.", "Wrath check. Pass to gain a Burn E.G.O Gift.", "check", ("Burn", "check_pass"))
+    event = [depending, plain]
+    assert r.pick_choice(shown(event), "Bleed", event=event) == 1
+    assert r.pick_choice(shown(event[::-1]), "Bleed", event=event) == 0
+
+
+def test_pick_choice_a_check_or_followup_without_the_aalc_text_is_the_rest():
+    # 901061 (check, empty hint), 971088 and 901023 (follow-ups whose hint says neither check nor depending on)
+    blank = opt("Open it.", "", "check", ("Sinking", "check_pass"))
+    cost = opt("Gamble.", "Choose to gain or lose Cost", "followup", ("Keywordless", "later_direct"))
+    chance = opt("Reach in.", "Select for a chance to gain a Rupture E.G.O Gift", "followup", ("Rupture", "later_direct"))
+    depending = opt("Wait.", "Gain a Keywordless E.G.O Gift depending on the result of the following choice", "followup", ("Keywordless", "later_direct"))
+    for odd in (blank, cost, chance):
+        event = [odd, depending]
+        assert r.pick_choice(shown(event), "Rupture", event=event) == 1
+        assert r.pick_choice(shown(event[::-1]), "Rupture", event=event) == 0
+
+
+def test_pick_choice_a_random_option_with_a_stated_chance_is_no_question_mark_tier():
+    # 971003 (the real entries): "Select for a 50% chance to gain" is not AALC's ??? template; the direct gain wins
+    alert = opt("Alert it truthfully.", "Gain a Bleed E.G.O Gift depending on the result of the following choice", "check", ("Bleed", "check_pass"))
+    nothing = opt("You saw nothing.", "Select to gain a Keywordless E.G.O Gift", "direct", ("Keywordless", "direct"))
+    chance = opt("Give a few subtle hints.", "Select for a 50% chance to gain a Keywordless E.G.O Gift.", "random", ("Keywordless", "direct_random"))
+    event = [alert, nothing, chance]
+    for kw in r.KEYWORDS:
+        assert r.pick_choice(shown(event), kw, event=event) == 1
+        assert r.pick_choice(shown(event[::-1]), kw, event=event[::-1]) == 1
+    # a ??? random option (971055) is still the first tier, with or without the table
+    coin = opt("Insert the coin in the slot.", "???", "random", ("Keywordless", "direct_random"))
+    assert r.pick_choice(shown([nothing, coin]), "Burn", event=[nothing, coin]) == 1
+    # no table (or an option it does not know): the hint text ranks by the same rule
+    assert r.pick_choice(shown(event), "Burn") == 1
+    assert r.pick_choice(shown([nothing, coin]), "Burn") == 1
+    assert r.pick_choice(["Hints. Select for a 50% chance to gain a Burn E.G.O Gift.", "Leave."], "Burn") == 0  # the rest: screen order
 
 
 def test_pick_choice_ties_go_to_the_main_keyword_then_the_screen_order():
@@ -113,9 +155,9 @@ def test_pick_choice_an_option_not_in_the_entry_falls_back_to_its_hint():
     event = [opt("Stay.", "", "other"), opt("Go.", "Select to gain a Burn E.G.O Gift", "direct", ("Burn", "direct"))]
     # never by position: the first option on screen is an OCR miss, not "Stay."
     assert r.pick_choice(["Qwerty plugh.", "Stay."], "Burn", event=event) == 0
-    assert r.pick_choice(["Stay.", "Grab it. Win the battle to earn a Burn E.G.O Gift"], "Burn", event=event) == 1
+    assert r.pick_choice(["Stay.", "Grab it. Win the battle to earn a Burn E.G.O Gift"], "Burn", event=event) == 0  # a battle is no tier
     assert r.pick_choice(["Fight. Win the battle to earn a Burn E.G.O Gift", "Grab it. Select to gain a Bleed E.G.O Gift",
-                          "Coin. ???"], "Burn", event=event) == 1
+                          "Coin. ???"], "Burn", event=event) == 2
 
 
 def test_pick_choice_override_wins():

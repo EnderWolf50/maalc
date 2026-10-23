@@ -75,7 +75,7 @@
     - 已提交的截圖留在 git 歷史裡，搬走也不會讓 clone 變小。
     - CI 每個 shard 都要用到全部截圖（`maatools.config.mts`）。
     - 放在主 repo，`tests/test_screens_privacy.py` 會在加入截圖的同一個 PR 檢查遮蔽。放到另一個公開 repo 的話，推上去就公開了，要等到更新 submodule 的 PR 才會檢查。
-- README 必須註明：遊戲素材 © Project Moon，不在 MIT 授權範圍內。（#13，[ADR 0001](../adr/0001-mit-and-no-agpl-derived-assets.md)）
+- README 必須註明：遊戲素材 © Project Moon，不在本專案的授權範圍內。（#13，[ADR 0001](../adr/0001-mit-and-no-agpl-derived-assets.md)）
 
 ## 測試策略
 
