@@ -6,6 +6,7 @@ pack_cover.read_cover as the agent's PickThemePack does.
 """
 
 import json
+import shutil
 import subprocess
 import sys
 import traceback
@@ -214,6 +215,17 @@ def test_every_cover_is_read_as_itself_but_look_alikes_and_none_as_another():
     # The Dream Ending lead each other by 0.101)
     assert {"Line 4 - Section #3", "Line 4 - Section #4", "Repressed Wrath", "Unbound Wrath"} <= set(silent)
     assert len(silent) <= 6
+
+
+def test_the_signatures_load_from_an_installed_tree(tmp_path):
+    # tools/install.py puts assets/resource at <root>/resource, beside agent/ (#323); the repo has <root>/assets/resource
+    shutil.copytree(ROOT / "agent", tmp_path / "agent", ignore=shutil.ignore_patterns("__pycache__"))
+    (tmp_path / "resource" / "base" / "data").mkdir(parents=True)
+    shutil.copy2(pc.SIGNATURES, tmp_path / "resource" / "base" / "data")
+    done = subprocess.run([sys.executable, "-c", "import pack_cover; print(len(pack_cover.covers()))"],
+                          cwd=tmp_path / "agent", capture_output=True, text=True, timeout=60)
+    assert done.returncode == 0, done.stderr[-500:]
+    assert int(done.stdout) == len(json.loads(pc.SIGNATURES.read_text(encoding="utf-8")))
 
 
 def test_the_signature_file_is_the_one_the_covers_make():
