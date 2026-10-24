@@ -20,19 +20,12 @@ class Glyphs:
         return (0.5, 0.0, 0.0) if c == " " else (0.5, 0.7, 0.0)
 
 
-def test_pack_ids_reads_the_id_from_each_pack_comment():
+def test_pack_ids_reads_the_id_of_each_listed_pack():
     text = (
-        "packs:\n  The B.E.: H345  # 3001\n  \"Hell's Chicken\": N2 H2  # 1101\n  S.E.A.: N2 H23  # 1102 DIFFICULT\n"
-        '  "Line 4 - Section #3": N4  # 1208\n  "Walpurgis Night: Hatred and Despair": N34 H34  # 1119\n\n'
-        "event_packs:\n  - S.E.A.\n"
+        "packs:\n  The B.E.: H345\n  S.E.A.: N2 H23  # DIFFICULT\n  \"Line 4 - Section #3\": N4\n\n"
+        'pack_ids:\n  The B.E.: 3001\n  S.E.A.: 1102\n  "Line 4 - Section #3": 1208\n  S.E.A. BokGak: 1113\n'
     )
-    assert tpc.pack_ids(text) == {
-        "The B.E.": 3001,
-        "Hell's Chicken": 1101,
-        "S.E.A.": 1102,
-        "Line 4 - Section #3": 1208,
-        "Walpurgis Night: Hatred and Despair": 1119,
-    }
+    assert tpc.pack_ids(text) == {"The B.E.": 3001, "S.E.A.": 1102, "Line 4 - Section #3": 1208}  # BokGak is not listed
 
 
 def test_rich_text_title_splits_into_coloured_runs():

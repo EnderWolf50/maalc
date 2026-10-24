@@ -205,7 +205,9 @@ test("parseThemePacks reads the season's data file", () => {
   expect(data.default_plan).toMatchObject({ threshold: 0, unlisted: 0, event_packs: "weight" });
   expect(data.default_plan.weights["The B.E."]).toBe(10);
   expect(Object.keys(data.default_plan.weights).every((p) => p in data.packs)).toBe(true);
-  expect(parseThemePacks("")).toEqual({ packs: {}, default_plan: { weights: {}, threshold: 0, unlisted: 0, event_packs: "weight" } });
+  expect(data.pack_ids["The B.E."]).toBe(3001); // #306: every listed pack has an id
+  expect(Object.keys(data.packs).every((p) => p in data.pack_ids)).toBe(true);
+  expect(parseThemePacks("")).toEqual({ packs: {}, pack_ids: {}, default_plan: { weights: {}, threshold: 0, unlisted: 0, event_packs: "weight" } });
 });
 
 test("loading leaves a gift list with a wrong shape to the schema check", () => {
