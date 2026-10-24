@@ -17,6 +17,7 @@ from maa.define import Rect
 
 import actions
 import recovery
+from settings import gift_tables
 from test_shop import OLD_DOLL_SHOP
 
 REAL_GUARD = actions.page_guard
@@ -772,7 +773,7 @@ def wants(*ids, order=("Burn", "Bleed"), keep=(), condition="any"):
     everything else it drops. Fusions (ids the shop does not sell) are wanted, not bought."""
     gorder = {k: [] for k in ORDER}
     for i in ids:
-        for g in actions.gift_data():
+        for g in gift_tables()[0]:
             if g["id"] == i:
                 gorder[g["keyword"]].append(i)
     return {"order": [*order, *(k for k in ORDER if k not in order)], "want": list(ids), "keep": list(keep), "gorder": gorder,
@@ -2017,7 +2018,7 @@ def test_a_search_grid_is_not_dragged_once_the_page_is_gone(context, guarded):
 def test_the_second_icon_candidate_is_not_tapped_once_the_page_is_gone(context, guarded, monkeypatch):
     # #118: the first candidate's tap and wait lie between the look and the second tap.
     page_until(context, "GiftSearch", 1)
-    entry = next(g for g in actions.gift_data() if g["keyword"] == "Burn")
+    entry = next(g for g in gift_tables()[0] if g["keyword"] == "Burn")
     gift = {"name": entry["en"], "keyword": "Burn", "tier": entry["tier"]}
     monkeypatch.setattr(actions.GiftSearch, "open_tab", staticmethod(lambda *a: None))
     monkeypatch.setattr(actions.GiftSearch, "scroll", staticmethod(lambda *a: None))

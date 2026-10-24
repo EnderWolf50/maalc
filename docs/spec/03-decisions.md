@@ -393,7 +393,7 @@ Cost 表是 wiki 與簡中客戶端的表，實機 log 的節點面板 Cost 沒�
 - 挑材料（`shop.pick_fusion`）：先挑合得出最高階級的組合（`any` 先挑能升階的，見「合成條件」），同階級時先放隊伍不持有的 White Gossypium（#90），再挑總點數最少的；剩下的材料重複挑，直到不足 3 個。V 階飾品永遠不當材料：合成最多只出 IV 階，放 V 階一定是降級（#161 使用者決定，2026-10-19）。以前任取 3 個常是 3 個 I（9 點），只合出 I。
 - 不動想要、保留、被鎖住與認不出的飾品（同「出售」）。
 - **殘影**（#161，使用者 2026-10-19 決定）：殘影自成一類，不是泛用飾品。
-  - 是哪些：只能當合成材料或出售的 5 個飾品，各算一個階級：Dark Vestige 黯淡的殘影（I）、Faint Vestige 微茫的殘影（II）、Twinkling Vestige 閃耀的殘影（III）、Brilliant Vestige（IV）、Lunar Vestige（V），id 9991–9995（LocalizeLimbusCompany 的 `EN/EGOgift_MirrorDungeon.json`，2026-10-19 讀取；IV、V 的中文名從簡中轉來，未確認）。名單在設定 schema 的 `$defs/vestige`，GUI 與 Agent 共用。
+  - 是哪些：只能當合成材料或出售的 5 個飾品，各算一個階級：Dark Vestige 黯淡的殘影（I）、Faint Vestige 微茫的殘影（II）、Twinkling Vestige 閃耀的殘影（III）、Brilliant Vestige（IV）、Lunar Vestige（V），id 9991–9995（LocalizeLimbusCompany 的 `EN/EGOgift_MirrorDungeon.json`，2026-10-19 讀取；IV、V 的中文名從簡中轉來，未確認）。名單（id、階級、英中文名）在資料檔 `gift_recipes.json` 的 `vestiges`（`tools/gift_recipes.py` 寫入），GUI 與 Agent 共用。
   - 合成：預設清單把 I–IV 階放在「不要」，所以是材料（這是它唯一的用途）；V 階的 Lunar Vestige 照 `MAX_MATERIAL_TIER` 永遠不當材料；清單保留的殘影也不放。
   - 出售：看 `sell_vestiges`（預設不賣）、`sell_max_tier`，以及清單的狀態。
   - 怎麼認：殘影沒有體系徽章，逐格認 id（`image/GiftSearch/9991.png`–`9995.png`，見「讀格子」），不點格子（使用者 2026-10-20 在 #161 決定）。5 個殘影的瓶子只差在填色：tests/shop 的截圖裡，殘影格對自己階級的圖示 0.80–0.90、對別的殘影 0.5–0.86，其他飾品格最高 0.38，所以是哪一個看格子讀到的階級；讀不到階級的格子不認成殘影。

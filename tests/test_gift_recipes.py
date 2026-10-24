@@ -98,3 +98,11 @@ def test_specific_and_packs_match_the_game_data_when_it_is_unpacked():
             used = {i for c in mine for i in c["requiredEgoGiftIds"]}
             assert g["packs"] == sorted(p for p, pool in pools.items() if pool & used), g["id"]
     assert sum(1 for c in fixed if c.get("isSpecific")) == 39
+
+
+def test_the_five_vestiges_are_data_ids_9991_to_9995_keywordless_tier_i_to_v():
+    # #161: agent/settings.py and the GUI take the vestiges (ids, names, tiers) from here, not from the schema.
+    assert [(v["id"], v["tier"], v["keyword"], v["en"]) for v in DATA["vestiges"]] == [
+        (9991, 1, "Keywordless", "Dark Vestige"), (9992, 2, "Keywordless", "Faint Vestige"), (9993, 3, "Keywordless", "Twinkling Vestige"),
+        (9994, 4, "Keywordless", "Brilliant Vestige"), (9995, 5, "Keywordless", "Lunar Vestige")]
+    assert all(v["zh"] for v in DATA["vestiges"])

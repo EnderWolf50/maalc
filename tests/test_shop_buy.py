@@ -6,6 +6,7 @@ import numpy as np
 
 import actions
 import test_actions
+from settings import gift_tables
 from test_actions import NO_GOSSYPIUM, OLD_DOLL_SHOP, buying, cells_read, live_shop, reads, wants
 
 clock, context = test_actions.clock, test_actions.context  # its fixtures
@@ -182,7 +183,7 @@ def super_shop(context, monkeypatch, n=10, red=True, reset_on_buy=False, cost=20
     """A shop of n offers, 4 a row, priced 100 + index, over gifts of the first Burn ids; its grid drags (actions.scroll) from 0
     to SCROLL_END and the OCR reads the offers that show whole. red: the title is a Super Shop's. reset_on_buy: a
     purchase puts the grid back to its top. The game's state is in the dict returned: "at", "cost", "bought", "scrolls"."""
-    ids = [g["id"] for g in actions.gift_data() if g["keyword"] == "Burn"][:n]
+    ids = [g["id"] for g in gift_tables()[0] if g["keyword"] == "Burn"][:n]
     xs = [570, 725, 880, 1035]
     game = {"at": 0, "cost": cost, "opened": None, "bought": [], "scrolls": 0, "ids": ids}
     image = np.zeros((720, 1280, 3), np.uint8)

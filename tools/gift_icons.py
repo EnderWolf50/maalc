@@ -21,14 +21,13 @@ DATA = REPO / "assets/resource/base/data"
 OUT = DATA / "gift_icons"
 SIZE = 56
 QUALITY = 72
-VESTIGES = range(9991, 9996)
 
 
 def gift_ids() -> list[int]:
     """Every id with an icon: gift_search.json, the fusion gifts, materials and extra gifts of gift_recipes.json, the vestiges."""
     search = json.loads((DATA / "gift_search.json").read_text(encoding="utf-8"))["gifts"]
     recipes = json.loads((DATA / "gift_recipes.json").read_text(encoding="utf-8"))
-    return [g["id"] for g in search] + [g["id"] for g in recipes["gifts"] + recipes["materials"] + recipes["extra_gifts"]] + list(VESTIGES)
+    return [g["id"] for g in search] + [g["id"] for g in recipes["gifts"] + recipes["materials"] + recipes["extra_gifts"] + recipes["vestiges"]]
 
 
 def webp(sprite) -> bytes:

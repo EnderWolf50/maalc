@@ -112,8 +112,6 @@ def _v9_to_v10(data):
 
 ROOT = Path(__file__).resolve().parent.parent  # resource/ sits under it in a release, under assets/ in the repo
 GIFT_KEYWORDS = SCHEMA["$defs"]["gift_list"]["properties"]["order"]["items"]["enum"]  # the Gift Search page's tabs
-VESTIGES = SCHEMA["$defs"]["vestige"]["properties"]["name"]["enum"]  # tier I-V, ids 9991-9995
-VESTIGE_IDS = [9990 + t for t in range(1, len(VESTIGES) + 1)]
 
 
 def data_dir():
@@ -121,17 +119,30 @@ def data_dir():
 
 
 @cache
-def gift_tables():
-    """data/gift_search.json's gifts (the buyable ones, page order) and data/gift_recipes.json's gifts and materials."""
-    data = data_dir()
-    recipes = json.loads((data / "gift_recipes.json").read_text(encoding="utf-8"))
-    return json.loads((data / "gift_search.json").read_text(encoding="utf-8"))["gifts"], recipes["gifts"], recipes["materials"]
+def _recipes():
+    return json.loads((data_dir() / "gift_recipes.json").read_text(encoding="utf-8"))
 
 
 @cache
+def gift_tables():
+    """data/gift_search.json's gifts (the buyable ones, page order) and data/gift_recipes.json's gifts and materials."""
+    recipes = _recipes()
+    return json.loads((data_dir() / "gift_search.json").read_text(encoding="utf-8"))["gifts"], recipes["gifts"], recipes["materials"]
+
+
 def extra_gifts():
     """data/gift_recipes.json's `extra_gifts`: the game's other gift ids 9000-9999, no shop sells and no recipe uses (#332)."""
-    return json.loads((data_dir() / "gift_recipes.json").read_text(encoding="utf-8"))["extra_gifts"]
+    return _recipes()["extra_gifts"]
+
+
+def vestiges():
+    """data/gift_recipes.json's `vestiges`: the five gifts that are only fusion or sale material, tier I-V (ids 9991-9995, #161)."""
+    return _recipes()["vestiges"]
+
+
+@cache
+def vestige_ids():
+    return frozenset(v["id"] for v in vestiges())
 
 
 def default_gorder():
@@ -142,7 +153,7 @@ def default_gorder():
 
 def known_gift_ids():
     search, fusions, materials = gift_tables()
-    return {g["id"] for g in search + fusions + materials} | set(VESTIGE_IDS)
+    return {g["id"] for g in search + fusions + materials} | vestige_ids()
 
 
 def clean_gift_list(gift_list):
@@ -179,7 +190,7 @@ def _team_gift_list(team):
         tier = None if isinstance(kept.get("tier"), bool) else kept.get("tier")  # True == 1 in Python only
         by_name = {g["en"]: g["id"] for g in search if (g["keyword"], g["tier"]) == (kept.get("keyword"), tier)}
         name = kept.get("name") if isinstance(kept.get("name"), str) else None
-        found = by_name.get(name) or dict(zip(VESTIGES, VESTIGE_IDS)).get(name)
+        found = by_name.get(name) or {v["en"]: v["id"] for v in vestiges()}.get(name)
         if found:
             keep.add(found)
         else:

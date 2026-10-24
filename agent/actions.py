@@ -33,12 +33,11 @@ import settlement
 import shop
 from gifts import effective, main_keyword, queue, recipe_fusion, resolve_list, state
 from ocrtext import compact, digits, has, normalize
-from settings import VESTIGE_IDS, SettingsError, load_settings
+from settings import SettingsError, data_dir, gift_tables, load_settings, vestige_ids
 from state import next_cursor, pick_team, read_cursor, write_cursor
 
 # Same <root> as main.ROOT; resource/ sits under it in a release, under assets/ in the repo.
 ROOT = Path(__file__).resolve().parent.parent
-RESOURCE = next(p for p in (ROOT / "resource", ROOT / "assets" / "resource") if p.is_dir())
 
 # This run's plan, made on the entry page: {"settings", "team", "difficulty"}.
 # Memory only (ADR 0003); an agent restarted mid-run falls back to current_run's guess.
@@ -965,11 +964,6 @@ SEARCH_ICON_MIN = 0.65
 GRID_MID = 420  # a dragged-to gift's row lands here: whole rows above and below it
 
 
-def gift_data():
-    """data/gift_search.json: the observation table, tab by tab, in page order."""
-    return json.loads((RESOURCE / "base" / "data" / "gift_search.json").read_text(encoding="utf-8"))["gifts"]
-
-
 @AgentServer.custom_action("GiftSearch")
 class GiftSearch(CustomAction):
     """E.G.O Gift Search (spec 03 section 5): the team's gifts in its order until Select n/m is full, then Select.
@@ -1048,7 +1042,7 @@ class GiftSearch(CustomAction):
         straight there; when the icon is not on that screen (the account lacks a gift above it, or the drag
         fell short) the tab is searched from the top, screen by screen. Cells are never tapped to read names.
         """
-        tab = [g for g in gift_data() if g["keyword"] == gift["keyword"]]
+        tab = [g for g in gift_tables()[0] if g["keyword"] == gift["keyword"]]
         entry = next((g for g in tab if g["tier"] == gift["tier"] and run_start.match_pack(g["en"], [gift["name"]])), None)
         if entry is None:
             log(f"gift search: {gift['name']} is not in data/gift_search.json")
@@ -1142,10 +1136,15 @@ class GiftSearch(CustomAction):
         return False
 
 
+def theme_packs():
+    """data/theme_packs.yaml, read from the file."""
+    return yaml.safe_load((data_dir() / "theme_packs.yaml").read_text(encoding="utf-8"))
+
+
 def theme_pack_plan(settings, team):
     """(the team's plan, the data file's packs, its event packs, its title art reads): the default plan or the user's
     (spec 04 section 8)."""
-    data = yaml.safe_load((RESOURCE / "base" / "data" / "theme_packs.yaml").read_text(encoding="utf-8"))
+    data = theme_packs()
     ref = team["theme_pack_plan"]
     plan = data["default_plan"] if ref == "default" else next(p for p in settings["theme_pack_plans"] if p["id"] == ref)
     return plan, list(data["packs"]), set(data["event_packs"]), data["title_art"]
@@ -1154,7 +1153,7 @@ def theme_pack_plan(settings, team):
 @functools.cache
 def pack_ids():
     """Pack name -> id, every pack of the data file's `pack_ids`."""
-    return yaml.safe_load((RESOURCE / "base" / "data" / "theme_packs.yaml").read_text(encoding="utf-8"))["pack_ids"]
+    return theme_packs()["pack_ids"]
 
 
 def run_packs():
@@ -1444,7 +1443,7 @@ def cost_miss(image, box, cx, cy, found, difficulty):
 
 
 def map_data():
-    return yaml.safe_load((RESOURCE / "base" / "data" / "map_weights.yaml").read_text(encoding="utf-8"))
+    return yaml.safe_load((data_dir() / "map_weights.yaml").read_text(encoding="utf-8"))
 
 
 def is_hard(context):
@@ -2421,13 +2420,13 @@ CHOICE_SCROLLS = 6  # drags at most to an end of the list
 
 
 def data(name):
-    return yaml.safe_load((RESOURCE / "base" / "data" / name).read_text(encoding="utf-8")) or {}
+    return yaml.safe_load((data_dir() / name).read_text(encoding="utf-8")) or {}
 
 
 @functools.cache
 def event_table():
     """data/event_table.json's events (spec 03 section 10, #93), read once."""
-    return json.loads((RESOURCE / "base" / "data" / "event_table.json").read_text(encoding="utf-8"))["events"]
+    return json.loads((data_dir() / "event_table.json").read_text(encoding="utf-8"))["events"]
 
 
 def red_button(image):
@@ -2851,7 +2850,7 @@ def cell_role(cell, team, page, avoid):
         return "material"
     if cell["id"] is None or effective(team["list"], cell["id"], run_packs()) != "drop":
         return "keep"
-    if page == "sell" and cell["id"] in VESTIGE_IDS and not team.get("sell_vestiges", False):
+    if page == "sell" and cell["id"] in vestige_ids() and not team.get("sell_vestiges", False):
         return "keep"
     return "material"
 
@@ -2863,7 +2862,7 @@ def avoided_gifts(team):
     """Gifts the team never takes or buys, and fuses or sells first: White Gossypium unless it allows it (#90)."""
     if team.get("allow_white_gossypium", True):
         return []
-    g = next(e for e in gift_data() if e["id"] == WHITE_GOSSYPIUM)
+    g = next(e for e in gift_tables()[0] if e["id"] == WHITE_GOSSYPIUM)
     return [{"name": g["en"], "keyword": g["keyword"], "tier": g["tier"], "id": g["id"]}]
 
 
