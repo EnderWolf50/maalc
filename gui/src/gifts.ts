@@ -59,20 +59,21 @@ export function queue(list: ListRules, tables: GiftTables = GAME_TABLES): number
 }
 
 /** The materials to put in for a fusion, or undefined: the first recipe `owned` (id to count) has all of; for groups the
- * first `need` owned ids of each group in data-file order. */
-function pick(f: Fusion, owned: Map<number, number>): number[] | undefined {
+ * first `need` owned ids of each group in data-file order. A set needing more than `slots` materials (none: any) is passed over. */
+function pick(f: Fusion, owned: Map<number, number>, slots = Infinity): number[] | undefined {
   const have = (id: number) => owned.get(id) ?? 0;
   for (const recipe of f.recipes ?? []) {
-    if (recipe.every((id) => have(id) >= recipe.filter((x) => x === id).length)) return [...recipe];
+    if (recipe.length <= slots && recipe.every((id) => have(id) >= recipe.filter((x) => x === id).length)) return [...recipe];
   }
   const picked = (f.groups ?? []).map((g) => g.ids.filter(have).slice(0, g.need));
-  if (picked.length && picked.every((p, i) => p.length === f.groups![i].need)) return picked.flat();
+  if (picked.length && picked.every((p, i) => p.length === f.groups![i].need) && picked.flat().length <= slots) return picked.flat();
 }
 
 /** {gift, materials} for the first wanted fusion in list order whose materials `ownedIds` (repeats count) hold, else null.
  * List order = the keyword's place in `order` (`queue`'s), then data-file order: a fusion is in no `gorder` (that holds the
- * shop's gifts). A pack-specific fusion is made whatever the run packs. */
-export function recipeFusion(list: ListRules, ownedIds: number[], tables: GiftTables = GAME_TABLES): { gift: number; materials: number[] } | null {
+ * shop's gifts). A pack-specific fusion is made whatever the run packs.
+ * `slots`: the fuse page's material slots; a recipe needing more is passed over (the next wanted one is tried). */
+export function recipeFusion(list: ListRules, ownedIds: number[], tables: GiftTables = GAME_TABLES, slots?: number): { gift: number; materials: number[] } | null {
   const owned = new Map<number, number>();
   for (const id of ownedIds) owned.set(id, (owned.get(id) ?? 0) + 1);
   const place = (f: Fusion) => {
@@ -80,7 +81,7 @@ export function recipeFusion(list: ListRules, ownedIds: number[], tables: GiftTa
     return n < 0 ? list.order.length : n;
   };
   for (const f of [...tables.fusions].sort((a, b) => place(a) - place(b))) {
-    const materials = state(list, f.id) === "want" ? pick(f, owned) : undefined;
+    const materials = state(list, f.id) === "want" ? pick(f, owned, slots) : undefined;
     if (materials) return { gift: f.id, materials };
   }
   return null;
