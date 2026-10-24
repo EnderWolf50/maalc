@@ -83,14 +83,21 @@ def _pick(fusion, owned, slots):
     return None
 
 
-def recipe_fusion(gift_list, owned_ids, tables=None, slots=None):
+def recipe_fusion(gift_list, owned_ids, tables=None, slots=None, skip=(), blocked=None):
     """{"gift": id, "materials": [ids]} for the first wanted fusion in list order whose materials `owned_ids` (a list,
     repeats count) hold, else None. List order = the keyword's place in `order` (`queue`'s), then data-file order: a fusion
     is in no `gorder` (that holds the shop's gifts). A pack-specific fusion is made whatever the run packs. `slots`: the fuse page's material slots; a recipe needing more is passed over (the next
-    wanted one is tried)."""
-    owned = Counter(owned_ids)
+    wanted one is tried). `skip`: fusion ids not to make (the page refused them this visit). Only gifts the list neither
+    wants nor keeps are materials (a drop gift, locked by a wanted fusion or not): a recipe that needs one that is, is passed
+    over for the next. `blocked`: a list that gets (fusion id, the wanted or kept gifts it lacks) for each fusion that only
+    those gifts keep from being made."""
+    owned = Counter(i for i in owned_ids if state(gift_list, i) == "drop")
     place = {k: n for n, k in enumerate(gift_list["order"])}
     for fusion in sorted((tables or _game_tables())["fusions"], key=lambda f: place.get(f["keyword"], len(place))):
-        if state(gift_list, fusion["id"]) == "want" and (materials := _pick(fusion, owned, slots)):
+        if fusion["id"] in skip or state(gift_list, fusion["id"]) != "want":
+            continue
+        if materials := _pick(fusion, owned, slots):
             return {"gift": fusion["id"], "materials": materials}
+        if blocked is not None and (held := _pick(fusion, Counter(owned_ids), slots)):
+            blocked.append((fusion["id"], [i for i in held if state(gift_list, i) != "drop"]))
     return None

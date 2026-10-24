@@ -32,13 +32,13 @@ STATIC = "static/Assets/Resources_moved/StaticData/static-data"
 KEYWORDS = {"Combustion": "Burn", "Laceration": "Bleed", "Vibration": "Tremor", "Burst": "Rupture", "Sinking": "Sinking",
             "Breath": "Poise", "Charge": "Charge", "Slash": "Slash", "Penetrate": "Pierce", "Hit": "Blunt"}  # the rest: Keywordless
 GIFT_IDS = range(9000, 10000)  # the game's gift ids; `extra_gifts` holds those neither the shop, a recipe nor the vestiges list (#332)
-VESTIGE_IDS = range(9991, 9996)
+VESTIGE_IDS = range(9991, 9996)  # written to `vestiges`: the one place the ids are named, every reader takes them from the data file
 SCALE = 0.21  # the icon on the Gift Search page, as for GiftSearch/<id>.png
 NOTE = ("Fusion gifts and their recipes. Recipes: combineFixed (any one of a gift's `recipes` fuses it; each is a list of the "
         "required gift ids; `specific` marks a gift whose recipe uses a theme pack's exclusive gift, `packs` is the union of the "
         "theme pack ids of those gifts (one recipe can need several packs), from isSpecific and the packs' specificEgoGiftPool) and combineMixed (`groups`: take `need` of each group's `ids`) of the game client 1.117.0's "
         "mirror-dungeon-common-data-md8. Ids, tiers, keywords and English names: the same client's ego-gift static data and "
-        "EN_EGOgift localization. `materials` are the recipe ingredients gift_search.json does not list. Icons: "
+        "EN_EGOgift localization. `materials` are the recipe ingredients gift_search.json does not list. `vestiges` (#161) are the five gifts 9991-9995 (tier I-V, keywordless) that are only fusion or sale material. Icons: "
         "image/GiftRecipe/<id>.png, the game's EgoGiftIcon sprites (by the ego-gift iconId) scaled by 0.21 with transparency "
         "filled green. `extra_gifts` (#332) are the rest of the client's gift ids 9000-9999 (static data ego-gift*, "
         "465 in 1.117.0, 464 with a name: 9247 has neither a name nor an icon sprite, so it is left out): no shop sells "
@@ -106,7 +106,8 @@ def build(unpack, release):
     materials = [entry(i) for i in sorted(used - searchable - set(results))]
     listed = searchable | set(results) | {m["id"] for m in materials} | set(VESTIGE_IDS)
     extra = [entry(i) for i in sorted(table) if i in GIFT_IDS and i in en and i not in listed]
-    return {"note": NOTE, **credit(release), "gifts": gifts, "materials": materials, "extra_gifts": extra}, table
+    vestiges = [entry(i) for i in VESTIGE_IDS]
+    return {"note": NOTE, **credit(release), "gifts": gifts, "materials": materials, "extra_gifts": extra, "vestiges": vestiges}, table
 
 
 def sprite_index(cache, index_path):

@@ -294,17 +294,6 @@
   "$defs": {
     "id": { "type": "string", "minLength": 1 },
     "pack_weight": { "type": "integer", "minimum": -10, "maximum": 10 },
-    "vestige": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["keyword", "tier", "name"],
-      "description": "a vestige: a gift that is only fusion or sale material, tier I-V in this order (ids 9991-9995, #161)",
-      "properties": {
-        "keyword": { "const": "Keywordless" },
-        "tier": { "type": "integer", "minimum": 1, "maximum": 5 },
-        "name": { "enum": ["Dark Vestige", "Faint Vestige", "Twinkling Vestige", "Brilliant Vestige", "Lunar Vestige"] }
-      }
-    },
     "gift": {
       "type": "object",
       "additionalProperties": false,

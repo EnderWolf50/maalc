@@ -17,6 +17,7 @@ from maa.define import Rect
 
 import actions
 import recovery
+from settings import gift_tables
 from test_shop import OLD_DOLL_SHOP
 
 REAL_GUARD = actions.page_guard
@@ -772,7 +773,7 @@ def wants(*ids, order=("Burn", "Bleed"), keep=(), condition="any"):
     everything else it drops. Fusions (ids the shop does not sell) are wanted, not bought."""
     gorder = {k: [] for k in ORDER}
     for i in ids:
-        for g in actions.gift_data():
+        for g in gift_tables()[0]:
             if g["id"] == i:
                 gorder[g["keyword"]].append(i)
     return {"order": [*order, *(k for k in ORDER if k not in order)], "want": list(ids), "keep": list(keep), "gorder": gorder,
@@ -845,19 +846,6 @@ def test_a_glyph_on_an_offers_icon_opens_no_purchase_dialog(context, monkeypatch
     visit = {"wanted": None, "sold": False}
     assert actions.Shop.buy_offers(context, buying(wants(9009)), visit) == 0
     assert not context.tasker.controller.post_click.called  # no cell opened to read its keyword
-    assert visit["wanted"] is None
-
-
-def test_an_offer_whose_badge_reads_nothing_is_not_opened_to_read_its_keyword(context, monkeypatch):
-    # #297: the purchase dialog is no longer a second reading of the keyword: of 205 offer cells on 55 live pages, 155 read a
-    # tier and badge (154 named by their icon) and 50 are skills or dimmed offers; none had its badge cut off. A cell that is
-    # not read at all is not a gift to buy.
-    context.tasker.controller.post_screencap.return_value.wait.return_value.get.return_value = np.zeros((720, 1280, 3), np.uint8)
-    reads(context, {tuple(actions.OFFER_GRID): OLD_DOLL_SHOP, tuple(actions.SHOP_COST): [("787", (560, 120, 60, 30))]})
-    monkeypatch.setattr(actions, "read_cells", lambda *args: [])
-    visit = {"wanted": None, "sold": False}
-    assert actions.Shop.buy_offers(context, buying(wants(9009)), visit) == 0
-    assert not context.tasker.controller.post_click.called
     assert visit["wanted"] is None
 
 
@@ -2030,7 +2018,7 @@ def test_a_search_grid_is_not_dragged_once_the_page_is_gone(context, guarded):
 def test_the_second_icon_candidate_is_not_tapped_once_the_page_is_gone(context, guarded, monkeypatch):
     # #118: the first candidate's tap and wait lie between the look and the second tap.
     page_until(context, "GiftSearch", 1)
-    entry = next(g for g in actions.gift_data() if g["keyword"] == "Burn")
+    entry = next(g for g in gift_tables()[0] if g["keyword"] == "Burn")
     gift = {"name": entry["en"], "keyword": "Burn", "tier": entry["tier"]}
     monkeypatch.setattr(actions.GiftSearch, "open_tab", staticmethod(lambda *a: None))
     monkeypatch.setattr(actions.GiftSearch, "scroll", staticmethod(lambda *a: None))

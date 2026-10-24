@@ -71,9 +71,8 @@ export function enhanceAll(v: StarlightValues, plus: 1 | 2) {
 
 /** The E.G.O Gift Search page's tabs, left to right (agent/settings.schema.json gift_search keywords). */
 export const SEARCH_TABS: string[] = schema.$defs.gift.properties.keyword.enum;
-/** Vestiges, tier I-V in this order (#161): the old keep_gifts named them; ids 9991-9995. */
-export const VESTIGES: string[] = schema.$defs.vestige.properties.name.enum;
-const VESTIGE_IDS = VESTIGES.map((_, i) => 9991 + i);
+/** Vestiges, tier I-V in this order (#161): the old keep_gifts named them; ids 9991-9995, from data/gift_recipes.json. */
+export const VESTIGES = recipes.vestiges;
 /** Spec 04 section 9: the gifts the search page offers, in page order; ids, tiers and English names from the game's
  * static data, Chinese names from LLC (data/gift_search.json carries its sources and license). */
 export const SEARCH_GIFTS: SearchGift[] = gifts.gifts;
@@ -164,7 +163,7 @@ export const defaultGorder = (): Record<string, number[]> => Object.fromEntries(
   k, [3, 2, 1].flatMap((tier) => SEARCH_GIFTS.filter((g) => g.keyword === k && g.tier === tier).map((g) => g.id)),
 ]));
 
-const KNOWN_GIFTS = new Set([...SEARCH_GIFTS, ...RECIPE_GIFTS].map((g) => g.id).concat(VESTIGE_IDS));
+const KNOWN_GIFTS = new Set([...SEARCH_GIFTS, ...RECIPE_GIFTS].map((g) => g.id).concat(VESTIGES.map((v) => v.id)));
 
 /** A gift list as the GUI uses it, and how many ids it dropped (agent/settings.py clean_gift_list): ids no data file has
  * leave want and keep; a gorder keyword lacking gifts gets them last, ids the keyword does not have are dropped. */
@@ -194,7 +193,7 @@ function listFromV10Team(team: Record<string, unknown>): { content: Omit<GiftLis
   for (const raw of arr(team.keep_gifts)) {
     const kept = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
     const found = SEARCH_GIFTS.find((g) => g.keyword === kept.keyword && g.tier === kept.tier && g.en === kept.name)?.id
-      ?? VESTIGE_IDS[VESTIGES.indexOf(kept.name as string)];
+      ?? VESTIGES.find((v) => v.en === kept.name)?.id;
     if (found) keep.add(found);
     else lost++;
   }

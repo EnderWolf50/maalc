@@ -1,7 +1,7 @@
 // Teams (spec 04 section 9): list order is rotation order.
 import { useState } from "react";
 import { resetTeamTimes } from "./api";
-import { kwText } from "./KeywordGrid";
+import { TIERS, kwText } from "./KeywordGrid";
 import { teamKeyword } from "./gifts";
 import {
   MAX_GIFTS, SEARCH_GIFTS, SEARCH_TABS, SINNERS, defaultStarlight, freeName, newId, newTeam, teamEnum, toggleGift,
@@ -201,12 +201,10 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
   );
 }
 
-const TIERS = ["", "I", "II", "III", "IV", "V"];
-
 const sameRef = (a: GiftRef, g: SearchGift) => a.keyword === g.keyword && a.tier === g.tier && a.name === g.en;
 
 /** A gift's name in the GUI's language: the Chinese one when the data has it. */
-function giftName(g: GiftRef, zh: boolean) {
+function refName(g: GiftRef, zh: boolean) {
   const known = SEARCH_GIFTS.find((x) => sameRef(g, x));
   return zh && known?.zh ? known.zh : g.name;
 }
@@ -312,7 +310,7 @@ function GiftSearchPanel({ i }: { i: number }) {
           <ReorderList items={search.gifts} keyOf={(g) => `${g.keyword}|${g.tier}|${g.name}`} onChange={(gifts) => set({ gifts })}
             render={(g, j) => (
               <>
-                {j + 1}. {giftName(g, zh)} <small className="muted">{g.keyword} {TIERS[g.tier]}</small>{" "}
+                {j + 1}. {refName(g, zh)} <small className="muted">{g.keyword} {TIERS[g.tier]}</small>{" "}
                 <button type="button" className="icon" aria-label={t("remove")} title={t("remove")}
                   onClick={(e) => { e.stopPropagation(); set({ gifts: toggleGift(search.gifts, g) }); }}>×</button>
               </>

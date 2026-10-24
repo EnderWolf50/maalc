@@ -33,12 +33,11 @@ import settlement
 import shop
 from gifts import effective, main_keyword, queue, recipe_fusion, resolve_list, state
 from ocrtext import compact, digits, has, normalize
-from settings import VESTIGE_IDS, SettingsError, load_settings
+from settings import SettingsError, data_dir, gift_tables, load_settings, vestige_ids
 from state import next_cursor, pick_team, read_cursor, write_cursor
 
 # Same <root> as main.ROOT; resource/ sits under it in a release, under assets/ in the repo.
 ROOT = Path(__file__).resolve().parent.parent
-RESOURCE = next(p for p in (ROOT / "resource", ROOT / "assets" / "resource") if p.is_dir())
 
 # This run's plan, made on the entry page: {"settings", "team", "difficulty"}.
 # Memory only (ADR 0003); an agent restarted mid-run falls back to current_run's guess.
@@ -961,13 +960,8 @@ FORGO_DIALOG = [480, 330, 320, 35]  # Refuse Gift's "Forgo ...?"
 SEARCH_DIALOG_BUTTONS = {"cancel": (513, 495), "confirm": (765, 495)}
 # A gift's icon (image/GiftSearch/<id>.png) scores 0.71-0.97 on its own cell, other cells up to ~0.75 (2026-10-16):
 # low enough to try a dark icon; the panel name check undoes a lookalike.
-ICON_MIN = 0.65
+SEARCH_ICON_MIN = 0.65
 GRID_MID = 420  # a dragged-to gift's row lands here: whole rows above and below it
-
-
-def gift_data():
-    """data/gift_search.json: the observation table, tab by tab, in page order."""
-    return json.loads((RESOURCE / "base" / "data" / "gift_search.json").read_text(encoding="utf-8"))["gifts"]
 
 
 @AgentServer.custom_action("GiftSearch")
@@ -1048,7 +1042,7 @@ class GiftSearch(CustomAction):
         straight there; when the icon is not on that screen (the account lacks a gift above it, or the drag
         fell short) the tab is searched from the top, screen by screen. Cells are never tapped to read names.
         """
-        tab = [g for g in gift_data() if g["keyword"] == gift["keyword"]]
+        tab = [g for g in gift_tables()[0] if g["keyword"] == gift["keyword"]]
         entry = next((g for g in tab if g["tier"] == gift["tier"] and run_start.match_pack(g["en"], [gift["name"]])), None)
         if entry is None:
             log(f"gift search: {gift['name']} is not in data/gift_search.json")
@@ -1067,7 +1061,7 @@ class GiftSearch(CustomAction):
             image = page_guard(context, "GiftSearch")
             cells = gift_search.gift_cells(image)
             for k, (score, x, y) in enumerate(GiftSearch.icon_scores(context, image, entry["id"], [c for c in cells if c[2] == gift["tier"]])[:2]):
-                if score < ICON_MIN:
+                if score < SEARCH_ICON_MIN:
                     break
                 if k:
                     image = page_guard(context, "GiftSearch")  # the first candidate's tap and wait lie behind this one
@@ -1145,16 +1139,16 @@ class GiftSearch(CustomAction):
 def theme_pack_plan(settings, team):
     """(the team's plan, the data file's packs, its event packs, its title art reads): the default plan or the user's
     (spec 04 section 8)."""
-    data = yaml.safe_load((RESOURCE / "base" / "data" / "theme_packs.yaml").read_text(encoding="utf-8"))
+    file = data("theme_packs.yaml")
     ref = team["theme_pack_plan"]
-    plan = data["default_plan"] if ref == "default" else next(p for p in settings["theme_pack_plans"] if p["id"] == ref)
-    return plan, list(data["packs"]), set(data["event_packs"]), data["title_art"]
+    plan = file["default_plan"] if ref == "default" else next(p for p in settings["theme_pack_plans"] if p["id"] == ref)
+    return plan, list(file["packs"]), set(file["event_packs"]), file["title_art"]
 
 
 @functools.cache
 def pack_ids():
     """Pack name -> id, every pack of the data file's `pack_ids`."""
-    return yaml.safe_load((RESOURCE / "base" / "data" / "theme_packs.yaml").read_text(encoding="utf-8"))["pack_ids"]
+    return data("theme_packs.yaml")["pack_ids"]
 
 
 def run_packs():
@@ -1444,7 +1438,7 @@ def cost_miss(image, box, cx, cy, found, difficulty):
 
 
 def map_data():
-    return yaml.safe_load((RESOURCE / "base" / "data" / "map_weights.yaml").read_text(encoding="utf-8"))
+    return data("map_weights.yaml")
 
 
 def is_hard(context):
@@ -2421,13 +2415,13 @@ CHOICE_SCROLLS = 6  # drags at most to an end of the list
 
 
 def data(name):
-    return yaml.safe_load((RESOURCE / "base" / "data" / name).read_text(encoding="utf-8")) or {}
+    return yaml.safe_load((data_dir() / name).read_text(encoding="utf-8")) or {}
 
 
 @functools.cache
 def event_table():
     """data/event_table.json's events (spec 03 section 10, #93), read once."""
-    return json.loads((RESOURCE / "base" / "data" / "event_table.json").read_text(encoding="utf-8"))["events"]
+    return json.loads((data_dir() / "event_table.json").read_text(encoding="utf-8"))["events"]
 
 
 def red_button(image):
@@ -2869,7 +2863,7 @@ def cell_role(cell, team, page, avoid):
         return "material"
     if cell["id"] is None or effective(team["list"], cell["id"], run_packs()) != "drop":
         return "keep"
-    if page == "sell" and cell["id"] in VESTIGE_IDS and not team.get("sell_vestiges", False):
+    if page == "sell" and cell["id"] in vestige_ids() and not team.get("sell_vestiges", False):
         return "keep"
     return "material"
 
@@ -2881,7 +2875,7 @@ def avoided_gifts(team):
     """Gifts the team never takes or buys, and fuses or sells first: White Gossypium unless it allows it (#90)."""
     if team.get("allow_white_gossypium", True):
         return []
-    g = next(e for e in gift_data() if e["id"] == WHITE_GOSSYPIUM)
+    g = next(e for e in gift_tables()[0] if e["id"] == WHITE_GOSSYPIUM)
     return [{"name": g["en"], "keyword": g["keyword"], "tier": g["tier"], "id": g["id"]}]
 
 
@@ -3676,11 +3670,14 @@ class Shop(CustomAction):
         cells, grid = owned_cells(context, "fuse")
         roles = [cell_role(c, team, "fuse", avoid) for c in cells]
         log(f"shop: fuse cells ({slots} slots) " + "; ".join(cell_line(c, f"{r}, {cell_state(c, team['list'])}") for c, r in zip(cells, roles)))
-        made = Shop.fuse_recipe(context, team, cells, grid, slots)  # a wanted fusion comes before the ordinary one (#300)
-        if made is not None:
-            visit["fuse_scanned"] = not made  # made: the owned gifts changed, the next call reads them again
+        made = Shop.fuse_recipe(context, team, cells, grid, slots, visit)  # a wanted fusion comes before the ordinary one (#300)
+        if made is False:  # the page did not take the recipe, and may hold some of its materials: close it, then the ordinary fusion
             Shop.to_main(context)
-            return made
+            return Shop.fuse(context, team, visit)  # fuse_recipe put the recipe in visit["recipes_failed"]: it is not tried again
+        if made:
+            visit["fuse_scanned"] = False  # the owned gifts changed, the next call reads them again
+            Shop.to_main(context)
+            return True
         condition = team["list"]["fusion_condition"]
         refused, fused = [], False
         while True:
@@ -3729,25 +3726,33 @@ class Shop(CustomAction):
         return gift_get(context)
 
     @staticmethod
-    def fuse_recipe(context, team, cells, grid, slots):
+    def fuse_recipe(context, team, cells, grid, slots, visit):
         """Fuse the wanted fusion the owned cells hold the materials of (gifts.recipe_fusion, #300): True when made, False when
-        tried and not, None when the list has none to make (or the page cannot hold it).
+        tried and not (the recipe is added to visit["recipes_failed"], so this visit does not try it again), None when the list
+        has none to make (or the page cannot hold it).
 
         The page needs a keyword picked before it unlocks, but a recipe's result does not depend on it (#304): the page's
         keyword stays, and the materials go in as for an ordinary fusion, each read back (place). The page recognises the
         recipe by itself once they are in (its Forecasts row reads III Guaranteed 100%, logged), and the dialog's count must
         be theirs. A recipe the page cannot hold (a Lunar Memory's 5 materials on 3 slots) is passed over for the next wanted one.
         """
-        recipe = recipe_fusion(team["list"], [c["id"] for c in cells if c["id"] is not None], slots=slots)
+        failed, blocked = visit.setdefault("recipes_failed", []), []
+        recipe = recipe_fusion(team["list"], [c["id"] for c in cells if c["id"] is not None], slots=slots, skip=failed, blocked=blocked)
+        for gift, lacks in blocked:
+            log(f"shop: recipe {gift} {GIFT_NAMES.get(gift)}: skip, missing " + ", ".join(f"{i} {GIFT_NAMES.get(i)}" for i in lacks)
+                + " (on the list as want/keep)")
         if recipe is None:
             return None
         group = pick_cells(cells, recipe["materials"])
         group.sort(key=lambda c: -c["y"])  # the grid's end first, as an ordinary fusion's
         names = ", ".join(cell_line(c, "material").rsplit(":", 1)[0] for c in group)
         if not Shop.place(context, group, slots, grid):
+            failed.append(recipe["gift"])
             return False
         tier, chance = read_forecast(context)
         made = Shop.press_fuse(context, len(group))
+        if not made:
+            failed.append(recipe["gift"])
         log(f"shop: recipe fusion {recipe['gift']} {GIFT_NAMES.get(recipe['gift'])} from {names}: page tier {tier or 'unread'}, chance "
             f"{f'{chance}%' if chance else 'unread'}: {'done' if made else 'not confirmed'}")
         return made

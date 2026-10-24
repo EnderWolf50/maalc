@@ -5,7 +5,7 @@ their icons are matched on the cell. Everything here is plain data in, plain dat
 """
 
 from run_start import match_pack
-from settings import VESTIGE_IDS, VESTIGES, extra_gifts, gift_tables
+from settings import extra_gifts, gift_tables, vestiges
 # CCOEFF score of an icon on its own cell and on another's: the gifts of the table's cells score 0.51-0.96, a gift the table
 # lacks 0.30-0.38, a lookalike 0.54 at most with the gift covered (#297, docs/spec/03-decisions.md section 13)
 ICON_MIN = 0.5
@@ -22,8 +22,7 @@ def load():
     search, fusions, materials = gift_tables()
     table = [{**_entry(g), "template": f"GiftSearch/{g['id']}.png"} for g in search]
     table += [{**_entry(g), "template": f"GiftRecipe/{g['id']}.png"} for g in fusions + materials + extra_gifts()]
-    table += [{"id": i, "keyword": "Keywordless", "tier": tier, "en": n, "template": f"GiftSearch/{i}.png"}
-              for tier, (i, n) in enumerate(zip(VESTIGE_IDS, VESTIGES), 1)]
+    table += [{**_entry(g), "template": f"GiftSearch/{g['id']}.png"} for g in vestiges()]
     return table
 
 

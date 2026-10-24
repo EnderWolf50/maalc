@@ -191,7 +191,7 @@ describe("applying a state", () => {
 
   test("a digit typed in a select is not a state choice", async () => {
     const r = await open([mine()]);
-    await r.user.click(screen.getByRole("combobox", { name: zh["team.fusion_condition"] }));
+    await r.user.click(screen.getByRole("combobox", { name: zh["gl.fusion_condition"] }));
     await r.user.keyboard("2");
     expect(screen.getByRole("radio", { name: zh["state.want"] })).toBeChecked();
   });
@@ -207,6 +207,19 @@ describe("locked gifts", () => {
     await r.user.click(t);
     expect(flash()).toBe(say(zh["gl.lock_why"], { name: g.zh, by: nameOf(fixed.id) }));
     expect(list(r)).toMatchObject({ want: [fixed.id], keep: [] });
+  });
+
+  test("a locked material is no gift the list set: the tab count and the heading's kept count leave it out", async () => {
+    const r = await open([mine({ want: [fixed.id] })]);
+    await tile(r, material);
+    const kept = screen.getByRole("heading", { level: 3 }).textContent!;
+    expect(kept).not.toContain(say(zh["gl.n_keep"], { n: 1 }));
+    const tab = screen.getByRole("tab", { name: new RegExp("^" + zh[`kw.${GIFT_BY_ID.get(material)!.keyword}` as Text]) });
+    const same = GIFT_BY_ID.get(material)!.keyword === GIFT_BY_ID.get(fixed.id)!.keyword;
+    expect(tab.querySelector(".gl-n")?.textContent ?? "").toBe(same ? "1" : ""); // the wanted fusion alone, if it is under this keyword
+    const tier = screen.getByRole("region", { name: ROMAN[GIFT_BY_ID.get(material)!.tier] }); // the tier heading counts the same way
+    const fusionHere = same && GIFT_BY_ID.get(material)!.tier === GIFT_BY_ID.get(fixed.id)!.tier;
+    expect(tier.querySelector("h4 small")!.textContent!.includes(zh["gl.tier_set"].replace("{n}", ""))).toBe(fusionHere);
   });
 
   test("the GUI does not know the run's packs: a pack-specific fusion locks its materials too", async () => {
@@ -233,7 +246,7 @@ describe("read-only default", () => {
     await r.user.keyboard("3");
     await r.user.click(getTile(wanted));
     expect(flash()).toBe(zh["gl.ro"]);
-    await r.user.selectOptions(screen.getByRole("combobox", { name: zh["team.fusion_condition"] }), "tier4");
+    await r.user.selectOptions(screen.getByRole("combobox", { name: zh["gl.fusion_condition"] }), "tier4");
     expect(flash()).toBe(zh["gl.ro"]);
     expect(JSON.stringify(r.settings())).toBe(before);
   });
@@ -241,7 +254,7 @@ describe("read-only default", () => {
   test("the user's own list is editable, and its fusion condition is stored", async () => {
     const r = await open([mine()]);
     expect(screen.queryByText(zh["gl.readonly"])).not.toBeInTheDocument();
-    await r.user.selectOptions(screen.getByRole("combobox", { name: zh["team.fusion_condition"] }), "tier4");
+    await r.user.selectOptions(screen.getByRole("combobox", { name: zh["gl.fusion_condition"] }), "tier4");
     expect(list(r).fusion_condition).toBe("tier4");
   });
 });

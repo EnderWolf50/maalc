@@ -22,15 +22,15 @@ export function look(list: ListRules, id: number): { shown: GiftState; locked: b
   return { shown, locked: shown === "keep" && state(list, id) === "drop" };
 }
 
-/** What a keyword has set: wanted and kept gifts, wanted fusion gifts. */
+/** What a keyword has set in the list itself: wanted and kept gifts, wanted fusion gifts (a locked material is not set). */
 function counts(list: ListRules, keyword: string) {
   const c = { want: 0, keep: 0, fusion: 0 };
   for (const { ids } of tiersOf(list.gorder, keyword)) {
     for (const id of ids) {
-      const { shown } = look(list, id);
-      if (shown === "drop") continue;
-      if (shown === "want" && GIFT_BY_ID.get(id)!.kind === "fusion") c.fusion++;
-      else c[shown]++;
+      const set = state(list, id);
+      if (set === "drop") continue;
+      if (set === "want" && GIFT_BY_ID.get(id)!.kind === "fusion") c.fusion++;
+      else c[set]++;
     }
   }
   return c;
@@ -116,7 +116,7 @@ export function KeywordPanel({ keyword }: { keyword: string }) {
       </h3>
       {blocks.map(({ tier, ids }) => {
         const kinds = ids.map((id) => GIFT_BY_ID.get(id)!.kind);
-        const set = ids.filter((id) => look(list, id).shown !== "drop").length;
+        const set = ids.filter((id) => state(list, id) !== "drop").length;
         const note = kinds.includes("fusion") ? t("gl.tier_fusion") : kinds.some((k) => k === "material" || k === "vestige") ? t("gl.tier_unbuyable") : "";
         return (
           <section key={tier} className="gl-tier" aria-label={TIERS[tier]}>

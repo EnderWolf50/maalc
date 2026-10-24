@@ -1,5 +1,5 @@
 {
- "note": "Fusion gifts and their recipes. Recipes: combineFixed (any one of a gift's `recipes` fuses it; each is a list of the required gift ids; `specific` marks a gift whose recipe uses a theme pack's exclusive gift, `packs` is the union of the theme pack ids of those gifts (one recipe can need several packs), from isSpecific and the packs' specificEgoGiftPool) and combineMixed (`groups`: take `need` of each group's `ids`) of the game client 1.117.0's mirror-dungeon-common-data-md8. Ids, tiers, keywords and English names: the same client's ego-gift static data and EN_EGOgift localization. `materials` are the recipe ingredients gift_search.json does not list. Icons: image/GiftRecipe/<id>.png, the game's EgoGiftIcon sprites (by the ego-gift iconId) scaled by 0.21 with transparency filled green. `extra_gifts` (#332) are the rest of the client's gift ids 9000-9999 (static data ego-gift*, 465 in 1.117.0, 464 with a name: 9247 has neither a name nor an icon sprite, so it is left out): no shop sells them and no recipe uses them, so a shop cell may still show one (some are the theme packs' specificEgoGiftPool gifts); the Gift Search icons and the GUI ignore them, the shop cell match (agent/gift_cells.py) takes them as candidates. Chinese names: the Localize Limbus Company release's LLC_zh-CN/EGOgift_*.json by gift id (Simplified Chinese), converted with OpenCC s2twp, then 指標->指針, 重新整理->刷新, 映象->鏡像, 透過階層->通過階層, 松肉->鬆肉. Chinese names licensed CC BY-NC-SA 4.0 (see NOTICE.md). Written by tools/gift_recipes.py.",
+ "note": "Fusion gifts and their recipes. Recipes: combineFixed (any one of a gift's `recipes` fuses it; each is a list of the required gift ids; `specific` marks a gift whose recipe uses a theme pack's exclusive gift, `packs` is the union of the theme pack ids of those gifts (one recipe can need several packs), from isSpecific and the packs' specificEgoGiftPool) and combineMixed (`groups`: take `need` of each group's `ids`) of the game client 1.117.0's mirror-dungeon-common-data-md8. Ids, tiers, keywords and English names: the same client's ego-gift static data and EN_EGOgift localization. `materials` are the recipe ingredients gift_search.json does not list. `vestiges` (#161) are the five gifts 9991-9995 (tier I-V, keywordless) that are only fusion or sale material. Icons: image/GiftRecipe/<id>.png, the game's EgoGiftIcon sprites (by the ego-gift iconId) scaled by 0.21 with transparency filled green. `extra_gifts` (#332) are the rest of the client's gift ids 9000-9999 (static data ego-gift*, 465 in 1.117.0, 464 with a name: 9247 has neither a name nor an icon sprite, so it is left out): no shop sells them and no recipe uses them, so a shop cell may still show one (some are the theme packs' specificEgoGiftPool gifts); the Gift Search icons and the GUI ignore them, the shop cell match (agent/gift_cells.py) takes them as candidates. Chinese names: the Localize Limbus Company release's LLC_zh-CN/EGOgift_*.json by gift id (Simplified Chinese), converted with OpenCC s2twp, then 指標->指針, 重新整理->刷新, 映象->鏡像, 透過階層->通過階層, 松肉->鬆肉. Chinese names licensed CC BY-NC-SA 4.0 (see NOTICE.md). Written by tools/gift_recipes.py.",
  "zh_source": "https://github.com/LocalizeLimbusCompany/LocalizeLimbusCompany",
  "zh_release": "2026101602",
  "license": "CC BY-NC-SA 4.0",
@@ -1611,6 +1611,43 @@
    "tier": 4,
    "en": "Classical-design Letter Opener",
    "zh": "造型古典的拆信刀"
+  }
+ ],
+ "vestiges": [
+  {
+   "id": 9991,
+   "keyword": "Keywordless",
+   "tier": 1,
+   "en": "Dark Vestige",
+   "zh": "黯淡的殘影"
+  },
+  {
+   "id": 9992,
+   "keyword": "Keywordless",
+   "tier": 2,
+   "en": "Faint Vestige",
+   "zh": "微茫的殘影"
+  },
+  {
+   "id": 9993,
+   "keyword": "Keywordless",
+   "tier": 3,
+   "en": "Twinkling Vestige",
+   "zh": "閃耀的殘影"
+  },
+  {
+   "id": 9994,
+   "keyword": "Keywordless",
+   "tier": 4,
+   "en": "Brilliant Vestige",
+   "zh": "輝煌的殘影"
+  },
+  {
+   "id": 9995,
+   "keyword": "Keywordless",
+   "tier": 5,
+   "en": "Lunar Vestige",
+   "zh": "月之殘影"
   }
  ]
 }

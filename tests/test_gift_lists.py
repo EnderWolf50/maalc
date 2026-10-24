@@ -12,7 +12,7 @@ RECIPES = json.loads((DATA / "gift_recipes.json").read_text(encoding="utf-8"))
 LIST = yaml.safe_load((DATA / "gift_lists.yaml").read_text(encoding="utf-8"))["default_list"]
 ICONS = DATA / "gift_icons"
 KEYWORDS = ["Burn", "Bleed", "Tremor", "Rupture", "Sinking", "Poise", "Charge", "Slash", "Pierce", "Blunt", "Keywordless"]
-VESTIGES = set(gift_icons.VESTIGES)
+VESTIGES = {g["id"] for g in RECIPES["vestiges"]}
 BUYABLE = {g["id"] for g in SEARCH}
 KNOWN = BUYABLE | {g["id"] for g in RECIPES["gifts"] + RECIPES["materials"]} | VESTIGES  # what a list may name
 ICON_IDS = KNOWN | {g["id"] for g in RECIPES["extra_gifts"]}

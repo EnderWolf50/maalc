@@ -36,7 +36,7 @@ def run(case):
             queue = gifts.queue(gift_list, tables)
             return {"first": queue[:3], "has_9083": 9083 in queue}
         case "recipe_fusion":
-            return gifts.recipe_fusion(gift_list, args["owned"], tables)
+            return gifts.recipe_fusion(gift_list, args["owned"], tables, args.get("slots"))
     raise AssertionError(case["fn"])
 
 

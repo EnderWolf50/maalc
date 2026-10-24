@@ -13,7 +13,9 @@ export interface Fusion {
 }
 /** gift_search.json's gifts (the buyable ones) and gift_recipes.json's gifts, the game files' unless a test passes its own. */
 export interface GiftTables { buyable: { id: number }[]; fusions: Fusion[] }
-const GAME_TABLES: GiftTables = { buyable: SEARCH_GIFTS, fusions: recipes.gifts };
+/** The fusion gifts' recipe data (gift_recipes.json), in data order. */
+export const FUSIONS: Fusion[] = recipes.gifts;
+const GAME_TABLES: GiftTables = { buyable: SEARCH_GIFTS, fusions: FUSIONS };
 
 /** The data file's default list: the fields of a gift list without id and name. */
 export const DEFAULT_LIST: Omit<GiftList, "id" | "name"> = parseYaml(listsYaml).default_list;
@@ -34,14 +36,15 @@ export const teamKeyword = (ref: string, lists: GiftList[]): string | undefined 
 /** "want", "keep" or "drop" (everything the list does not mention). */
 export const state = (list: ListRules, id: number): GiftState => (list.want.includes(id) ? "want" : list.keep.includes(id) ? "keep" : "drop");
 
-const materials = (f: Fusion) => [...(f.recipes ?? []).flat(), ...(f.groups ?? []).flatMap((g) => g.ids)];
+/** Every gift in a fusion's recipes (all of a group's too), once each. */
+export const materialsOf = (f: Fusion): number[] => [...new Set([...(f.recipes ?? []).flat(), ...(f.groups ?? []).flatMap((g) => g.ids)])];
 
 /** The wanted fusions that lock a drop gift, in data-file order: it is a material of any of their recipes, or of any group.
  * A pack-specific fusion (data `specific`) only when runPacks and its `packs` share one, or runPacks is null (unknown). */
 export function lockers(list: ListRules, id: number, runPacks: number[] | null = null, tables: GiftTables = GAME_TABLES): number[] {
   if (state(list, id) !== "drop") return [];
   return tables.fusions
-    .filter((f) => state(list, f.id) === "want" && materials(f).includes(id)
+    .filter((f) => state(list, f.id) === "want" && materialsOf(f).includes(id)
       && (!f.specific || runPacks === null || (f.packs ?? []).some((p) => runPacks.includes(p))))
     .map((f) => f.id);
 }
@@ -59,28 +62,30 @@ export function queue(list: ListRules, tables: GiftTables = GAME_TABLES): number
 }
 
 /** The materials to put in for a fusion, or undefined: the first recipe `owned` (id to count) has all of; for groups the
- * first `need` owned ids of each group in data-file order. */
-function pick(f: Fusion, owned: Map<number, number>): number[] | undefined {
+ * first `need` owned ids of each group in data-file order. A set needing more than `slots` materials (none: any) is passed over. */
+function pick(f: Fusion, owned: Map<number, number>, slots = Infinity): number[] | undefined {
   const have = (id: number) => owned.get(id) ?? 0;
   for (const recipe of f.recipes ?? []) {
-    if (recipe.every((id) => have(id) >= recipe.filter((x) => x === id).length)) return [...recipe];
+    if (recipe.length <= slots && recipe.every((id) => have(id) >= recipe.filter((x) => x === id).length)) return [...recipe];
   }
   const picked = (f.groups ?? []).map((g) => g.ids.filter(have).slice(0, g.need));
-  if (picked.length && picked.every((p, i) => p.length === f.groups![i].need)) return picked.flat();
+  if (picked.length && picked.every((p, i) => p.length === f.groups![i].need) && picked.flat().length <= slots) return picked.flat();
 }
 
 /** {gift, materials} for the first wanted fusion in list order whose materials `ownedIds` (repeats count) hold, else null.
  * List order = the keyword's place in `order` (`queue`'s), then data-file order: a fusion is in no `gorder` (that holds the
- * shop's gifts). A pack-specific fusion is made whatever the run packs. */
-export function recipeFusion(list: ListRules, ownedIds: number[], tables: GiftTables = GAME_TABLES): { gift: number; materials: number[] } | null {
+ * shop's gifts). A pack-specific fusion is made whatever the run packs. Only gifts the list neither wants nor keeps are materials
+ * (a drop gift, locked by a wanted fusion or not): a recipe that needs one that is, is passed over for the next.
+ * `slots`: the fuse page's material slots; a recipe needing more is passed over (the next wanted one is tried). */
+export function recipeFusion(list: ListRules, ownedIds: number[], tables: GiftTables = GAME_TABLES, slots?: number): { gift: number; materials: number[] } | null {
   const owned = new Map<number, number>();
-  for (const id of ownedIds) owned.set(id, (owned.get(id) ?? 0) + 1);
+  for (const id of ownedIds) if (state(list, id) === "drop") owned.set(id, (owned.get(id) ?? 0) + 1); // a wanted or kept gift is no material
   const place = (f: Fusion) => {
     const n = list.order.indexOf(f.keyword);
     return n < 0 ? list.order.length : n;
   };
   for (const f of [...tables.fusions].sort((a, b) => place(a) - place(b))) {
-    const materials = state(list, f.id) === "want" ? pick(f, owned) : undefined;
+    const materials = state(list, f.id) === "want" ? pick(f, owned, slots) : undefined;
     if (materials) return { gift: f.id, materials };
   }
   return null;

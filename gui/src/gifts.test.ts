@@ -23,7 +23,7 @@ function run(c: Case) {
       const q = queue(list, tables);
       return { first: q.slice(0, 3), has_9083: q.includes(9083) };
     }
-    case "recipe_fusion": return recipeFusion(list, c.args.owned, tables);
+    case "recipe_fusion": return recipeFusion(list, c.args.owned, tables, c.args.slots);
   }
   throw new Error(c.fn);
 }
