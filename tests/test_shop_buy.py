@@ -144,6 +144,17 @@ def test_every_cell_of_the_shop_is_logged_with_its_id_purchased_ones_too(context
     assert [x for x, _ in taps] == [725 + 50]
 
 
+def test_an_offer_a_wanted_fusion_locks_is_logged_as_locked_and_not_bought(context, monkeypatch):
+    # #299: 9031 is a material of the wanted 9092; the shop does not sell 9092, so the queue is empty. The log names why.
+    shelf(context, [100], 500)
+    cells_read(monkeypatch, ("Tremor", 1, 9031))
+    plates_read(monkeypatch, 9031)
+    lines = []
+    monkeypatch.setattr(actions, "log", lines.append)
+    assert actions.Shop.buy_offers(context, buying(wants(9092)), {"wanted": None, "sold": False}) == 0
+    assert any("9031" in line and line.endswith("locked") for line in lines)
+
+
 def test_white_gossypium_known_only_by_its_plate_is_not_bought(context, monkeypatch):
     # #329, #90: the icon is unread and the slot's line says only "Gift"; the plate reads White Gossypium (9020).
     shelf(context, [100, 100], 500)
