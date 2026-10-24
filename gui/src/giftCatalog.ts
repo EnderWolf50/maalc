@@ -2,7 +2,7 @@
 import recipes from "../../assets/resource/base/data/gift_recipes.json";
 import packsYaml from "../../assets/resource/base/data/theme_packs.yaml?raw";
 import type { Fusion } from "./gifts";
-import { SEARCH_GIFTS, VESTIGES } from "./model";
+import { SEARCH_GIFTS, VESTIGES, parseThemePacks } from "./model";
 
 /** buyable: on the Gift Search page (tier I-III); fusion: made by fusing, so wantable but never bought; material: a recipe's
  * material the shop does not sell; vestige: sold or fused only. Only a buyable or fusion gift can be "want". */
@@ -54,9 +54,6 @@ export const materialsOf = (f: Fusion): number[] => [...new Set([...(f.recipes ?
 /** The fusion gifts that have this gift among their materials, in data order. */
 export const usedIn = (id: number): Fusion[] => FUSIONS.filter((f) => materialsOf(f).includes(id));
 
-// A theme pack's id is only in the comment after its line in theme_packs.yaml ("  Falling Flowers: N3 H23  # 1010"), until the
-// data file has an id field (#306).
-const PACK_LINE = /^ {2}(?:"([^"]+)"|([^:#\n]+?)):[^#\n]*#\s*(\d+)/gm;
-const PACK_NAMES = new Map([...packsYaml.matchAll(PACK_LINE)].map((m): [number, string] => [Number(m[3]), m[1] ?? m[2]]));
-/** A theme pack's name in the season's file; its id as "#1234" for a pack the file does not list (an Extreme-only pack). */
+const PACK_NAMES = new Map(Object.entries(parseThemePacks(packsYaml).pack_ids).map(([name, id]): [number, string] => [id, name]));
+/** A theme pack's name in the season's file (its `pack_ids`); its id as "#1234" for a pack the file does not know. */
 export const packName = (id: number): string => PACK_NAMES.get(id) ?? `#${id}`;

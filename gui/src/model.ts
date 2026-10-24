@@ -102,15 +102,15 @@ export interface StarlightPlan extends StarlightValues { id: string; name: strin
 export interface PackPlanValues { weights: Record<string, number>; threshold: number; unlisted: number; event_packs: string }
 export interface ThemePackPlan extends PackPlanValues { id: string; name: string }
 /** assets/resource/base/data/theme_packs.yaml (spec 05 section 2): the season's packs with their floors ("N12 H1")
- * and the locked default plan. */
-export interface ThemePacks { packs: Record<string, string>; default_plan: PackPlanValues }
+ * every pack's id by name (also packs the list leaves out, #306) and the locked default plan. */
+export interface ThemePacks { packs: Record<string, string>; pack_ids: Record<string, number>; default_plan: PackPlanValues }
 
 export const EVENT_MODES: string[] = P.theme_pack_plans.items.properties.event_packs.enum;
 export const newPackPlan = (): PackPlanValues => ({ weights: {}, threshold: 0, unlisted: 0, event_packs: "weight" });
 
 export function parseThemePacks(text: string): ThemePacks {
   const data = (parseYaml(text) ?? {}) as Partial<ThemePacks>;
-  return { packs: data.packs ?? {}, default_plan: { ...newPackPlan(), ...data.default_plan } };
+  return { packs: data.packs ?? {}, pack_ids: data.pack_ids ?? {}, default_plan: { ...newPackPlan(), ...data.default_plan } };
 }
 
 /** The floor digits of one difficulty in a pack's floors: "N12 H1", "N" -> "12"; undefined when it has none. */
