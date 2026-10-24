@@ -41,10 +41,12 @@ def test_a_vestige_the_list_keeps_is_not_fused(context, monkeypatch):
 
 @pytest.mark.parametrize("wanted, locked", LOCKS)
 def test_the_materials_of_a_wanted_fusion_are_locked_for_fusing(context, monkeypatch, wanted, locked):
-    # A pack's exclusive recipe locks all the same, the run's pack being unknown (#306 unlocks it by the run's pack).
-    fused, taps, _ = fusion_taps(context, monkeypatch, {"list": wants(wanted)}, *[("Burn", 2, i) for i in locked],
+    # A pack's exclusive recipe locks all the same, the run's pack being unknown (#306 unlocks it by the run's pack). One
+    # material short: a complete recipe would be made (test_recipe_fusion), not left alone.
+    held = locked[:-1]
+    fused, taps, _ = fusion_taps(context, monkeypatch, {"list": wants(wanted)}, *[("Burn", 2, i) for i in held],
                                  ("Tremor",), ("Pierce",), ("Sinking",))
-    assert fused and taps == [0] * len(locked) + [1, 1, 1]
+    assert fused and taps == [0] * len(held) + [1, 1, 1]
 
 
 def test_a_gift_nothing_locks_is_fused_though_a_fusion_is_wanted(context, monkeypatch):
