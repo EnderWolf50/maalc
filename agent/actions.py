@@ -3204,9 +3204,9 @@ def pick_cells(cells, materials):
     return picked
 
 
-def recipe_cells(team, cells, slots):
-    """The places (`i`) of the cells every wanted fusion the owned cells hold the materials of would take (#300), one
-    fusion's cells after another's: what the fuse page makes by recipe, so a sale leaves it."""
+def recipe_places(team, cells, slots):
+    """The places (`i`) of the cells the fuse page will make wanted fusions from (#300): every fusion the owned cells hold
+    the materials of, one after another. A sale leaves them, and they are no ordinary fusion's materials."""
     left, held = list(cells), set()
     while recipe := recipe_fusion(team["list"], [c["id"] for c in left if c["id"] is not None], slots=slots):
         group = pick_cells(left, recipe["materials"])
@@ -3571,15 +3571,15 @@ class Shop(CustomAction):
         roles = [cell_role(c, team, "sell", avoid) for c in cells]
         # A pack-exclusive fusion the run did not pull does not lock its materials (#306), but the fuse page still makes it
         # (#300): what a held recipe takes is not sold, which runs before the fusion.
-        held = recipe_cells(team, cells, visit.get("slots", 3))
+        held = recipe_places(team, cells, visit.get("slots", 3))
         roles = ["keep" if c["i"] in held else r for c, r in zip(cells, roles)]
         log("shop: sell cells " + "; ".join(f"{cell_line(c, f'{r}, {cell_state(c, team['list'])}')} {c['price']}" for c, r in zip(cells, roles)))
         gifts = [(c["i"], c["price"]) for c, r in zip(cells, roles) if r == "material" and c["price"]]
         avoided = {c["i"] for c in cells if c["id"] in avoid}  # sold first (#90)
         # The fusion still uses what may not be sold (#79): a vestige the team does not sell (kept on the sell page, material
         # on the fuse page, #161), and a material whose price is unread.
-        fuse_only = [c["i"] for c, r in zip(cells, roles)
-                     if (r == "keep" and cell_role(c, team, "fuse", avoid) == "material") or (r == "material" and not c["price"])]
+        fuse_only = [c["i"] for c, r in zip(cells, roles) if c["i"] not in held
+                     and ((r == "keep" and cell_role(c, team, "fuse", avoid) == "material") or (r == "material" and not c["price"]))]
         # The fusion is grouped without the avoided gifts, which are sold first (#90): a sale then breaks no group.
         materials = [c for c in cells if (c["i"] in dict(gifts) or c["i"] in fuse_only) and c["i"] not in avoided]
         condition = team["list"]["fusion_condition"]  # a group the condition refuses makes no fusion: its gifts are spare

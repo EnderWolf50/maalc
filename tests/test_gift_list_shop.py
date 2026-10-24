@@ -150,3 +150,12 @@ def test_a_sale_spares_the_materials_of_an_exclusive_recipe_the_fuse_page_will_m
     actions.RUN["packs"] = []
     taps = sale_taps(context, monkeypatch, {"list": wants(9410)}, [300, 90], ("Sinking", 2, 9408), ("Sinking", 2, 9409))
     assert taps == []
+
+
+def test_a_sale_does_not_count_a_held_recipes_materials_in_an_ordinary_fusion(context, monkeypatch):
+    # #300 with #306: 9408 and 9409 go to the recipe, so the Bleed II next to them (300 on a 180 wanted) is no ordinary fusion's
+    # third material and is sold.
+    actions.RUN["packs"] = []
+    taps = sale_taps(context, monkeypatch, {"list": wants(9410)}, [90, 90, 300],
+                     ("Sinking", 2, 9408), ("Sinking", 2, 9409), ("Bleed", 2))
+    assert taps == [actions.SELL_CELLS[2]]
