@@ -33,7 +33,7 @@ import settlement
 import shop
 from gifts import effective, main_keyword, queue, resolve_list, state
 from ocrtext import compact, digits, has, normalize
-from settings import VESTIGE_IDS, SettingsError, data_dir, load_settings
+from settings import VESTIGE_IDS, SettingsError, load_settings
 from state import next_cursor, pick_team, read_cursor, write_cursor
 
 # Same <root> as main.ROOT; resource/ sits under it in a release, under assets/ in the repo.
@@ -291,18 +291,14 @@ def drag(context, points, settle=0.3, dwell=0.1, hold=0.0, pause=0.02, step=10):
     ctl.post_touch_up().wait()
 
 
-def ocr(context, image, roi, only_rec=False, model=None):
-    """Every OCR result in roi as (text, (x, y, w, h)); only_rec reads roi as one line, no text detection.
-
-    model: a folder of model/ocr/ (the default is its root): MaaFramework keeps one OCR instance per folder.
-    """
-    node = {"recognition": "OCR", "roi": roi, "only_rec": only_rec, **({"model": model} if model else {})}
-    detail = context.run_recognition("ReadText", image, {"ReadText": node})
+def ocr(context, image, roi, only_rec=False):
+    """Every OCR result in roi as (text, (x, y, w, h)); only_rec reads roi as one line, no text detection."""
+    detail = context.run_recognition("ReadText", image, {"ReadText": {"recognition": "OCR", "roi": roi, "only_rec": only_rec}})
     return [(r.text, tuple(r.box)) for r in (detail.all_results if detail else [])]
 
 
-def text(context, image, roi, only_rec=False, model=None):
-    return " ".join(t for t, _ in ocr(context, image, roi, only_rec, **({"model": model} if model else {})))
+def text(context, image, roi, only_rec=False):
+    return " ".join(t for t, _ in ocr(context, image, roi, only_rec))
 
 
 def number(s):
@@ -2920,31 +2916,17 @@ def read_cells(context, image, cells, page):
     return out
 
 
-OCR_DIR = data_dir().parent / "model" / "ocr"
-
-
-def plate_model():
-    """gift_cells.PLATE_MODEL when its folder holds a model, else None: the default instance reads the plates, 7x slower on
-    DirectML. A missing folder is no error to MaaFramework: it reads nothing, so every plate would be blank (#329)."""
-    if all((OCR_DIR / gift_cells.PLATE_MODEL / name).is_file() for name in ("det.onnx", "rec.onnx", "keys.txt")):
-        return gift_cells.PLATE_MODEL
-    if not RUN.get("plate_model_logged"):
-        RUN["plate_model_logged"] = True
-        log(f"shop: no model/ocr/{gift_cells.PLATE_MODEL}/ (tools/fetch_ocr.py makes it): the plates are read with the default OCR instance")
-    return None
-
-
 def read_plates(context, image, centres):
     """The name plate under each offer cell centred at a (x, y) of centres: [{"text", "id"}], id None when it names no gift (#329).
 
     One OCR line per plate (only_rec) in the box gift_cells.plate_roi gives, dimmed and Purchased cells included. The box
-    is relative to the cell's centre, so a grid dragged to another row reads just the same. It reads with its own OCR
-    instance (plate_model): on DirectML the default one reads a line in 31 ms once a det+rec pass has used it, this
-    one in 4 ms whatever ran before (#329).
+    is relative to the cell's centre, so a grid dragged to another row reads just the same. On DirectML a line takes about
+    31 ms once a det+rec pass has used the OCR instance; a plate-only instance read in 5 ms but cost 150 MB and 31 MB of
+    package, so the plates share the default one (#329).
     """
     plates = []
     for x, y in centres:
-        t = text(context, image, gift_cells.plate_roi(x, y), only_rec=True, model=plate_model())
+        t = text(context, image, gift_cells.plate_roi(x, y), only_rec=True)
         plates.append({"text": t, "id": gift_cells.name_id(t, GIFT_IDS)})
     return plates
 
