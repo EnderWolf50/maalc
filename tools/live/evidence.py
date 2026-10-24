@@ -369,7 +369,7 @@ def measure_shift(prev, cur, expect: int, reach: int = 100, rows=(150, 560), col
     tpl = np.ascontiguousarray(cur[y0:y1, x0:x1])
     if tpl.std() < 3:
         return None
-    import cv2  # the default group's since #325; imported here so a flat frame needs none
+    import cv2  # the dev and probe groups' since #325; imported here so a flat frame needs none
 
     lo, hi = max(0, x0 + expect - reach), min(prev.shape[1], x1 + expect + reach)
     score = cv2.matchTemplate(np.ascontiguousarray(prev[y0:y1, lo:hi]), tpl, cv2.TM_CCOEFF_NORMED)[0]
