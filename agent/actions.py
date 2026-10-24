@@ -513,10 +513,10 @@ class DismissShot(CustomAction):
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         now = time.monotonic()
         if allowed("keep_dismissed_screens") and now - DISMISSED_AT.get(argv.node_name, -DISMISSED_GAP) >= DISMISSED_GAP:
-            DISMISSED_AT[argv.node_name] = now
             stamp = f"{settlement.now().replace(':', '-')}-{argv.node_name}"
             try:
                 recovery.keep_capture(ROOT, "dismissed", screen(context), stamp, recovery.DISMISSED_KEEP)
+                DISMISSED_AT[argv.node_name] = now
                 log(f"{argv.node_name}: screen kept in logs/dismissed/{stamp}.png")
             except OSError as e:
                 log(f"{argv.node_name}: screen not saved: {e}")

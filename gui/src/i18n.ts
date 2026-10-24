@@ -175,7 +175,7 @@ const en_us: typeof zh_tw = {
   "run.webhook_url": "Failure webhook (empty = none)",
   "run.auto_accept_terms": "Accept the title's User Agreement (off: stop and notify)",
   "run.auto_download": "Accept game data downloads and updates (off: stop and notify)",
-  "run.keep_dismissed_screens": "Save the screen before closing a notice or popup, or before recovery presses back (local logs/dismissed only; shows the account, do not share)",
+  "run.keep_dismissed_screens": "Save the screen before closing a notice, popup, mailbox, settings menu, help page or parallel-mode prompt, or before recovery presses back (local logs/dismissed only; shows the account, do not share)",
   "run.theme_pack_refresh": "Theme pack refreshes per floor",
   "run.theme_pack_refresh_note": "The floor's free refreshes are used only while the best pack on the page is below the plan's threshold; then the highest weight is taken, leftmost among equals.",
   "difficulty.hard": "Hard", "difficulty.normal": "Normal", "difficulty.auto": "Auto",
