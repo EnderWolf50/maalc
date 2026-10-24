@@ -191,6 +191,27 @@ def test_the_cover_art_sits_where_the_live_card_has_it(page, i, name):
     assert abs(dx) <= 2 and abs(dy) <= 2, (dx, dy)
 
 
+
+@pytest.mark.parametrize("page, i, name", [
+    ("ThemePackHardLine1", 1, "Line 1"),
+    ("ThemePackHardLineCover", 2, "Line 1"),
+    ("ThemePackHardLine5", 4, "Line 5"),
+])
+def test_the_long_battle_overlay_sits_where_the_live_card_has_it(page, i, name):
+    # the Baton sprite is tight-packed like the boss pictures: drawn from its trimmed texture, the triangle and its label
+    # stood off the live card's (pixel correlation of that band 0.65 on these cards; 0.78 with the whole rect)
+    assert PAGES[page][i][0] == name
+    n = len(PAGES[page])
+    image = np.asarray(Image.open(SCREENS / f"{page}.png").convert("RGB"))[:, :, ::-1]
+    card = pc.card_image(image, 640 + (i - (n - 1) / 2) * pc.PITCH)
+    file = json.loads((DATA / "theme_pack_covers" / "index.json").read_text(encoding="utf-8"))[name]
+    cover = Image.new("RGBA", pc.CARD, (0, 0, 0, 255))
+    cover.alpha_composite(Image.open(DATA / "theme_pack_covers" / file).convert("RGBA").resize(pc.CARD))
+    w, h = pc.CARD
+    band = (slice(int(0.18 * h), int(0.36 * h)), slice(int(0.25 * w), int(0.75 * w)))  # the triangle and "Long Battle"
+    assert pc.correlation(card[band], np.asarray(cover.convert("RGB"))[:, :, ::-1][band]) >= 0.72
+
+
 def tiny_page(seed, x=640):
     """A 720p page whose card at x is noise of this seed: pack_cover reads the card art off it."""
     page = np.zeros((720, 1280, 3), np.uint8)
