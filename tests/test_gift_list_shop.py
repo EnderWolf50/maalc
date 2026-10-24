@@ -41,10 +41,12 @@ def test_a_vestige_the_list_keeps_is_not_fused(context, monkeypatch):
 
 @pytest.mark.parametrize("wanted, locked", LOCKS)
 def test_the_materials_of_a_wanted_fusion_are_locked_for_fusing(context, monkeypatch, wanted, locked):
-    # A pack's exclusive recipe locks all the same, the run's pack being unknown (#306 unlocks it by the run's pack).
-    fused, taps, _ = fusion_taps(context, monkeypatch, {"list": wants(wanted)}, *[("Burn", 2, i) for i in locked],
+    # A pack's exclusive recipe locks all the same, the run's pack being unknown (#306 unlocks it by the run's pack). One
+    # material short: a complete recipe would be made (test_recipe_fusion), not left alone.
+    held = locked[:-1]
+    fused, taps, _ = fusion_taps(context, monkeypatch, {"list": wants(wanted)}, *[("Burn", 2, i) for i in held],
                                  ("Tremor",), ("Pierce",), ("Sinking",))
-    assert fused and taps == [0] * len(locked) + [1, 1, 1]
+    assert fused and taps == [0] * len(held) + [1, 1, 1]
 
 
 def test_a_gift_nothing_locks_is_fused_though_a_fusion_is_wanted(context, monkeypatch):
@@ -140,3 +142,20 @@ def test_a_sale_spares_an_exclusive_recipes_material_only_in_a_run_that_took_its
     actions.RUN["packs"] = packs
     taps = sale_taps(context, monkeypatch, {"list": wants(9410)}, [300], ("Sinking", 2, 9408))
     assert taps == ([actions.SELL_CELLS[0]] if sold else [])
+
+
+def test_a_sale_spares_the_materials_of_an_exclusive_recipe_the_fuse_page_will_make(context, monkeypatch):
+    # #300 with #306: both materials of 9410 are held in a run that took none of its packs (so nothing locks them), but the fuse
+    # page makes the recipe whatever the packs: the sale, which runs first, leaves them although 9408 would cover the price.
+    actions.RUN["packs"] = []
+    taps = sale_taps(context, monkeypatch, {"list": wants(9410)}, [300, 90], ("Sinking", 2, 9408), ("Sinking", 2, 9409))
+    assert taps == []
+
+
+def test_a_sale_does_not_count_a_held_recipes_materials_in_an_ordinary_fusion(context, monkeypatch):
+    # #300 with #306: 9408 and 9409 go to the recipe, so the Bleed II next to them (300 on a 180 wanted) is no ordinary fusion's
+    # third material and is sold.
+    actions.RUN["packs"] = []
+    taps = sale_taps(context, monkeypatch, {"list": wants(9410)}, [90, 90, 300],
+                     ("Sinking", 2, 9408), ("Sinking", 2, 9409), ("Bleed", 2))
+    assert taps == [actions.SELL_CELLS[2]]

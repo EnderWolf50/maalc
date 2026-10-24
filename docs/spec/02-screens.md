@@ -133,7 +133,7 @@
 - **固定配方和選的體系無關（只試了 Burn）**：材料放好後再開 `Fusion - Keyword Selection` 改選 Burn（原本是 Poise）並 Confirm，結果仍是 Poise 的 `Reminiscence`、`Forecasts` 仍是 `Guaranteed 100%`。選的體系留著：合成完中央槽與 `Forecasts` 顯示的是 Burn 的火焰圖示。所以固定配方看起來不需要選對的體系，但**進頁後一定要先選一個體系才能點列表**；現有流程的順序（點中央格 → 選體系 → Confirm）本來就是先選體系。
 - **按 Fuse 與確認框**：`Fuse`（約 (790, 585)）跳出 `Fuse the selected E.G.O Gifts?`，左邊 `Selected E.G.O Gifts n/3`（兩件材料時是 `2/3`，分母是槽數），右邊 `Prediction` 框列出產物；Cancel 約 (490, 583)、Confirm 約 (790, 583)。Confirm 後跳 `E.G.O Gift GET!`（產物名、說明，說明長時有往下箭頭），再按它的 Confirm（這次說明框的 Confirm 在約 (640, 532)，位置看說明長短）。回到合成頁：頁面還開著、材料槽清空、`Fusion Available` 消失、持有飾品列表多了產物、少了兩件材料。（合成不花 Cost。）
 - **`Recipes` 按鈕（約 (668, 160)）**：開 `Fusion Recipes` 彈窗，**只是唯讀的配方表**：右上有篩選鈕（約 (955, 165)，展開後是 Keywords 的 Burn、Bleed、Tremor、Rupture、Sinking、Poise、Charge，Attack Type 的 Slash、Pierce、Blunt，Other 的 Keywordless 開關；開關的效果沒試），底部 `Confirm`（約 (640, 570)）關閉。列表可上下拖動；最上面可能有 `Theme Pack Exclusive Fusion Gift` 區（同一天另一局的截圖看到，沒有附檔：一個專屬配方，產物還是黑色剪影；本節附的 `ShopFusionRecipes.png` 沒有這一區），之後每個體系一區（體系圖示加名稱），每條配方一列「材料 + 材料（+ 材料）= 產物」，材料與產物的左上是階級；部分飾品上方有紅色 `HARD` 小標（應是困難模式限定，未驗證）；部分飾品是黑色剪影（另一局的截圖，沒有附檔；應是還沒取得過，未驗證）。點材料或產物沒有任何反應（點了兩次，沒有說明框）。體系區的順序不跟著目前選的體系（選 Burn 時 Poise 區在最前；更早一次實機是 Bleed 在最前，截圖沒有附檔），什麼決定順序**沒看出來**。Confirm 關閉。（`ShopFusionRecipes.png`）
-- **月之記憶（混合配方，`Lunar Memory`）沒有驗證**：需要 IV 階殘片與記憶，這個帳號的一般商店流程湊不到；怎麼放、`Fusion Available` 是否列出它、`Forecasts` 顯示什麼都沒看到。放法等拿到殘片實機看過再補（#300）。
+- **月之記憶（混合配方，`Lunar Memory`）沒有驗證**：需要 IV 階殘片與記憶，這個帳號的一般商店流程湊不到；怎麼放、`Fusion Available` 是否列出它、`Forecasts` 顯示什麼都沒看到。Agent（#300）把它和固定配方一樣一件一件點進槽；需要 5 個材料，一般商店 3 槽放不下就不合。第一次湊到殘片時要實機核對放法與 `Forecasts`。
 
 ## 困難模式與結算
 

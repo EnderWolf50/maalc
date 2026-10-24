@@ -31,7 +31,7 @@ import rewards
 import run_start
 import settlement
 import shop
-from gifts import effective, main_keyword, queue, resolve_list, state
+from gifts import effective, main_keyword, queue, recipe_fusion, resolve_list, state
 from ocrtext import compact, digits, has, normalize
 from settings import VESTIGE_IDS, SettingsError, load_settings
 from state import next_cursor, pick_team, read_cursor, write_cursor
@@ -3196,6 +3196,25 @@ def gift_get(context):
     return True
 
 
+def pick_cells(cells, materials):
+    """One cell of `cells` per gift id of `materials` (repeats take another cell each)."""
+    left, picked = list(cells), []
+    for gift_id in materials:
+        picked.append(left.pop(next(n for n, c in enumerate(left) if c["id"] == gift_id)))
+    return picked
+
+
+def recipe_places(team, cells, slots):
+    """The places (`i`) of the cells the fuse page will make wanted fusions from (#300): every fusion the owned cells hold
+    the materials of, one after another. A sale leaves them, and they are no ordinary fusion's materials."""
+    left, held = list(cells), set()
+    while recipe := recipe_fusion(team["list"], [c["id"] for c in left if c["id"] is not None], slots=slots):
+        group = pick_cells(left, recipe["materials"])
+        held |= {c["i"] for c in group}
+        left = [c for c in left if c["i"] not in held]
+    return held
+
+
 @AgentServer.custom_action("Shop")
 class Shop(CustomAction):
     """Heal, then sell -> buy and refresh -> fuse until a round does nothing, then leave (spec 03 section 13).
@@ -3550,13 +3569,17 @@ class Shop(CustomAction):
         avoid = [g["id"] for g in avoided_gifts(team)]
         cells, grid = owned_cells(context, "sell")
         roles = [cell_role(c, team, "sell", avoid) for c in cells]
+        # A pack-exclusive fusion the run did not pull does not lock its materials (#306), but the fuse page still makes it
+        # (#300): what a held recipe takes is not sold, which runs before the fusion.
+        held = recipe_places(team, cells, visit.get("slots", 3))
+        roles = ["keep" if c["i"] in held else r for c, r in zip(cells, roles)]
         log("shop: sell cells " + "; ".join(f"{cell_line(c, f'{r}, {cell_state(c, team['list'])}')} {c['price']}" for c, r in zip(cells, roles)))
         gifts = [(c["i"], c["price"]) for c, r in zip(cells, roles) if r == "material" and c["price"]]
         avoided = {c["i"] for c in cells if c["id"] in avoid}  # sold first (#90)
         # The fusion still uses what may not be sold (#79): a vestige the team does not sell (kept on the sell page, material
         # on the fuse page, #161), and a material whose price is unread.
-        fuse_only = [c["i"] for c, r in zip(cells, roles)
-                     if (r == "keep" and cell_role(c, team, "fuse", avoid) == "material") or (r == "material" and not c["price"])]
+        fuse_only = [c["i"] for c, r in zip(cells, roles) if c["i"] not in held
+                     and ((r == "keep" and cell_role(c, team, "fuse", avoid) == "material") or (r == "material" and not c["price"]))]
         # The fusion is grouped without the avoided gifts, which are sold first (#90): a sale then breaks no group.
         materials = [c for c in cells if (c["i"] in dict(gifts) or c["i"] in fuse_only) and c["i"] not in avoided]
         condition = team["list"]["fusion_condition"]  # a group the condition refuses makes no fusion: its gifts are spare
@@ -3630,11 +3653,16 @@ class Shop(CustomAction):
             return False
         visit["slots"] = slots = shop.fuse_slots(image)  # the sale needs it too
         if seen(context, image, "ShopFusionAvailable"):
-            log("shop: the fuse page shows Fusion Available (a fixed recipe, #78): not used, the owned gifts are read under it")
+            log("shop: the fuse page shows Fusion Available: the owned gifts are read under it")
         avoid = [g["id"] for g in avoided_gifts(team)]
         cells, grid = owned_cells(context, "fuse")
         roles = [cell_role(c, team, "fuse", avoid) for c in cells]
         log(f"shop: fuse cells ({slots} slots) " + "; ".join(cell_line(c, f"{r}, {cell_state(c, team['list'])}") for c, r in zip(cells, roles)))
+        made = Shop.fuse_recipe(context, team, cells, grid, slots)  # a wanted fusion comes before the ordinary one (#300)
+        if made is not None:
+            visit["fuse_scanned"] = not made  # made: the owned gifts changed, the next call reads them again
+            Shop.to_main(context)
+            return made
         condition = team["list"]["fusion_condition"]
         refused, fused = [], False
         while True:
@@ -3659,13 +3687,7 @@ class Shop(CustomAction):
             log(f"shop: fuse forecast {materials}: points tier {tier}, page tier {page_tier or 'unread'}, chance "
                 f"{f'{chance}%' if chance else 'unread'}, condition {condition}: {act}")
             if wanted:
-                # Read again on the still screenshot: the one that matched was taken while the dialog zoomed in.
-                page_guard(context, "Shop")
-                image = tap_shown(context, *PAGE_OK, shows(context, FUSE_CONFIRM, FUSE_COUNT), timeout=2)
-                m = image is not None and re.search(FUSE_COUNT, text(context, image, FUSE_CONFIRM))
-                if m and int(m[1]) == len(group):
-                    tap(context, 788, 583, wait=0)  # the dialog's Confirm; gift_get waits for its GET!
-                    fused = gift_get(context)
+                fused = Shop.press_fuse(context, len(group))
                 log(f"shop: fuse {materials} into a tier {page_tier or tier} {keyword} gift (condition {condition}): {'done' if fused else 'not confirmed'}")
                 break
             refused.append(tuple(sorted(c["tier"] for c in group)))
@@ -3675,6 +3697,42 @@ class Shop(CustomAction):
         visit["fuse_scanned"] = not fused
         Shop.to_main(context)
         return fused
+
+    @staticmethod
+    def press_fuse(context, count):
+        """Press Fuse with `count` materials in and confirm it when the dialog counts as many; True when the GET! popup came."""
+        # Read again on the still screenshot: the one that matched was taken while the dialog zoomed in.
+        page_guard(context, "Shop")
+        image = tap_shown(context, *PAGE_OK, shows(context, FUSE_CONFIRM, FUSE_COUNT), timeout=2)
+        m = image is not None and re.search(FUSE_COUNT, text(context, image, FUSE_CONFIRM))
+        if not (m and int(m[1]) == count):
+            return False
+        tap(context, 788, 583, wait=0)  # the dialog's Confirm; gift_get waits for its GET!
+        return gift_get(context)
+
+    @staticmethod
+    def fuse_recipe(context, team, cells, grid, slots):
+        """Fuse the wanted fusion the owned cells hold the materials of (gifts.recipe_fusion, #300): True when made, False when
+        tried and not, None when the list has none to make (or the page cannot hold it).
+
+        The page needs a keyword picked before it unlocks, but a recipe's result does not depend on it (#304): the page's
+        keyword stays, and the materials go in as for an ordinary fusion, each read back (place). The page recognises the
+        recipe by itself once they are in (its Forecasts row reads III Guaranteed 100%, logged), and the dialog's count must
+        be theirs. A recipe the page cannot hold (a Lunar Memory's 5 materials on 3 slots) is passed over for the next wanted one.
+        """
+        recipe = recipe_fusion(team["list"], [c["id"] for c in cells if c["id"] is not None], slots=slots)
+        if recipe is None:
+            return None
+        group = pick_cells(cells, recipe["materials"])
+        group.sort(key=lambda c: -c["y"])  # the grid's end first, as an ordinary fusion's
+        names = ", ".join(cell_line(c, "material").rsplit(":", 1)[0] for c in group)
+        if not Shop.place(context, group, slots, grid):
+            return False
+        tier, chance = read_forecast(context)
+        made = Shop.press_fuse(context, len(group))
+        log(f"shop: recipe fusion {recipe['gift']} {GIFT_NAMES.get(recipe['gift'])} from {names}: page tier {tier or 'unread'}, chance "
+            f"{f'{chance}%' if chance else 'unread'}: {'done' if made else 'not confirmed'}")
+        return made
 
     @staticmethod
     def place(context, cells, slots, grid, out=False):
