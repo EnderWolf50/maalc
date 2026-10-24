@@ -51,7 +51,7 @@ def test_an_offer_too_dear_is_skipped_for_the_next_in_the_queue_with_the_reserve
     # #298: queue 9053, 9009, 9003 priced 150, 200, 120 on a 400 Cost with 100 reserve: 9053 fits (250 left), 9009 would
     # leave 50, 9003 leaves 130.
     shelf(context, [150, 200, 120], 400)
-    cells_read(monkeypatch, ("Burn", None, 3, 9053), ("Burn", None, 2, 9009), ("Burn", None, 1, 9003))
+    cells_read(monkeypatch, ("Burn", 3, 9053), ("Burn", 2, 9009), ("Burn", 1, 9003))
     assert actions.Shop.buy_offers(context, buying(wants(9053, 9009, 9003), reserve_cost=100), {"wanted": None, "sold": False}) == 2
     taps = [c.args for c in context.tasker.controller.post_click.call_args_list if c.args[1] == 268]
     assert [x for x, _ in taps] == [880 + 50, 620]
@@ -60,7 +60,7 @@ def test_an_offer_too_dear_is_skipped_for_the_next_in_the_queue_with_the_reserve
 def test_gifts_of_one_tier_are_bought_in_the_queue_order_not_the_cheaper_first(context, monkeypatch):
     # #298: 9053 and 9071 are both Burn III; the list puts the dearer 9053 first and 300 Cost holds only one of them.
     shelf(context, [250, 100], 300)
-    cells_read(monkeypatch, ("Burn", None, 3, 9071), ("Burn", None, 3, 9053))
+    cells_read(monkeypatch, ("Burn", 3, 9071), ("Burn", 3, 9053))
     assert actions.Shop.buy_offers(context, buying(wants(9053, 9071)), {"wanted": None, "sold": False}) == 1
     taps = [c.args for c in context.tasker.controller.post_click.call_args_list if c.args[1] == 268]
     assert [x for x, _ in taps] == [775]
@@ -69,7 +69,7 @@ def test_gifts_of_one_tier_are_bought_in_the_queue_order_not_the_cheaper_first(c
 def test_an_offer_the_shop_cannot_tell_is_not_bought(context, monkeypatch):
     # #298: an id the icon match did not find (a gift the table lacks, a covered cell) is kept, not bought.
     shelf(context, [100, 90], 500)
-    cells_read(monkeypatch, ("Burn", None, 3), ("Burn", None, 3, 9053))
+    cells_read(monkeypatch, ("Burn", 3), ("Burn", 3, 9053))
     assert actions.Shop.buy_offers(context, buying(wants(9053)), {"wanted": None, "sold": False}) == 1
     taps = [c.args for c in context.tasker.controller.post_click.call_args_list if c.args[1] == 268]
     assert [x for x, _ in taps] == [775]
@@ -79,7 +79,7 @@ def test_the_first_in_the_queue_too_dear_is_sold_for_before_anything_is_bought(c
     # #298: 9053 is first and costs 300 on a 250 Cost; 9003 (120) would fit but waits for the sale. Once the sale was tried
     # (visit["sold"]), 9003 is bought.
     shelf(context, [300, 120], 250, short=[0])
-    cells_read(monkeypatch, ("Burn", None, 3, 9053), ("Burn", None, 1, 9003))
+    cells_read(monkeypatch, ("Burn", 3, 9053), ("Burn", 1, 9003))
     visit = {"wanted": None, "sold": False}
     assert actions.Shop.buy_offers(context, buying(wants(9053, 9003)), visit) == 0 and visit["wanted"] == 300
     visit = {"wanted": None, "sold": True}
@@ -90,7 +90,7 @@ def test_a_dimmed_offer_is_told_by_its_plate_and_sold_for_when_it_is_the_first(c
     # #329: a Not Enough Cost offer is dimmed, its tier and icon unread (id None); its name plate still reads. The plate
     # says 9053, first of the queue: sell first, buy nothing.
     shelf(context, [300, 120], 250, short=[0])
-    cells_read(monkeypatch, ("Burn", None, None), ("Burn", None, 1, 9003))
+    cells_read(monkeypatch, ("Burn", None), ("Burn", 1, 9003))
     plates_read(monkeypatch, 9053, 9003)
     visit = {"wanted": None, "sold": False}
     assert actions.Shop.buy_offers(context, buying(wants(9053, 9003)), visit) == 0 and visit["wanted"] == 300
@@ -99,7 +99,7 @@ def test_a_dimmed_offer_is_told_by_its_plate_and_sold_for_when_it_is_the_first(c
 def test_a_dimmed_offer_that_is_not_wanted_or_unread_holds_nothing_back(context, monkeypatch):
     # #329: the plate says 9005 (Bleed II, not wanted); the badge alone no longer stands for the first Burn gift (#298's guess).
     shelf(context, [300, 120], 250, short=[0])
-    cells_read(monkeypatch, ("Burn", None, None), ("Burn", None, 1, 9003))
+    cells_read(monkeypatch, ("Burn", None), ("Burn", 1, 9003))
     plates_read(monkeypatch, 9005, 9003)
     visit = {"wanted": None, "sold": False}
     assert actions.Shop.buy_offers(context, buying(wants(9053, 9003)), visit) == 1 and visit["wanted"] is None
@@ -113,7 +113,7 @@ def test_a_dimmed_offer_that_is_not_wanted_or_unread_holds_nothing_back(context,
 def test_the_plate_names_a_gift_the_icon_could_not(context, monkeypatch):
     # #329: the icon is unread, the plate reads 9053: bought.
     shelf(context, [100], 500)
-    cells_read(monkeypatch, ("Burn", None, 3))
+    cells_read(monkeypatch, ("Burn", 3))
     plates_read(monkeypatch, 9053)
     assert actions.Shop.buy_offers(context, buying(wants(9053)), {"wanted": None, "sold": False}) == 1
 
@@ -121,7 +121,7 @@ def test_the_plate_names_a_gift_the_icon_could_not(context, monkeypatch):
 def test_an_offer_whose_icon_and_plate_name_two_gifts_is_unknown_and_not_bought(context, monkeypatch):
     # #329: the icon says 9053 and the plate 9009, both wanted: neither is trusted, the log has both.
     shelf(context, [100], 500)
-    cells_read(monkeypatch, ("Burn", None, 3, 9053))
+    cells_read(monkeypatch, ("Burn", 3, 9053))
     plates_read(monkeypatch, 9009)
     lines = []
     monkeypatch.setattr(actions, "log", lines.append)
@@ -132,7 +132,7 @@ def test_an_offer_whose_icon_and_plate_name_two_gifts_is_unknown_and_not_bought(
 def test_every_cell_of_the_shop_is_logged_with_its_id_purchased_ones_too(context, monkeypatch):
     # #329: a Not Enough Cost cell and a Purchased one name their gift in the log; the Purchased one is never bought.
     shelf(context, [300, 120, 100], 250, short=[0], purchased=[2])
-    cells_read(monkeypatch, ("Burn", None, None), ("Burn", None, 1, 9003))
+    cells_read(monkeypatch, ("Burn", None), ("Burn", 1, 9003))
     plates_read(monkeypatch, 9053, 9003, 9009)
     lines = []
     monkeypatch.setattr(actions, "log", lines.append)
@@ -144,10 +144,21 @@ def test_every_cell_of_the_shop_is_logged_with_its_id_purchased_ones_too(context
     assert [x for x, _ in taps] == [725 + 50]
 
 
+def test_an_offer_a_wanted_fusion_locks_is_logged_as_locked_and_not_bought(context, monkeypatch):
+    # #299: 9031 is a material of the wanted 9092; the shop does not sell 9092, so the queue is empty. The log names why.
+    shelf(context, [100], 500)
+    cells_read(monkeypatch, ("Tremor", 1, 9031))
+    plates_read(monkeypatch, 9031)
+    lines = []
+    monkeypatch.setattr(actions, "log", lines.append)
+    assert actions.Shop.buy_offers(context, buying(wants(9092)), {"wanted": None, "sold": False}) == 0
+    assert any("9031" in line and line.endswith("locked") for line in lines)
+
+
 def test_white_gossypium_known_only_by_its_plate_is_not_bought(context, monkeypatch):
     # #329, #90: the icon is unread and the slot's line says only "Gift"; the plate reads White Gossypium (9020).
     shelf(context, [100, 100], 500)
-    cells_read(monkeypatch, ("Bleed", None, 2), ("Bleed", None, 2, 9005))
+    cells_read(monkeypatch, ("Bleed", 2), ("Bleed", 2, 9005))
     plates_read(monkeypatch, 9020, 9005)
     assert actions.Shop.buy_offers(context, NO_GOSSYPIUM, {"wanted": None, "sold": False}) == 1
     taps = [c.args for c in context.tasker.controller.post_click.call_args_list if c.args[1] == 268]
@@ -215,8 +226,8 @@ def super_shop(context, monkeypatch, n=10, red=True, reset_on_buy=False, cost=20
     def offer_at(x, y):  # the offer whose cell centre (x, y) is, by the grid's position now
         return ids[round((y + game["at"] - 266) / ROW) * 4 + round((x - 624) / 154)]
 
-    def read_cells(context, image, cells, page, gifts=()):
-        return [{"i": i, "x": x, "y": y, "tier": 2, "keyword": "Burn", "gift": None, "id": offer_at(x, y), "score": 0.9}
+    def read_cells(context, image, cells, page):
+        return [{"i": i, "x": x, "y": y, "tier": 2, "keyword": "Burn", "id": offer_at(x, y), "score": 0.9}
                 for i, (x, y) in enumerate(cells)]
     monkeypatch.setattr(actions, "read_cells", read_cells)
     monkeypatch.setattr(actions, "read_plates", lambda context, image, centres: [{"text": f"plate {offer_at(x, y)}", "id": offer_at(x, y)}

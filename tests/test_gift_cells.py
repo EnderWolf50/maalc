@@ -162,7 +162,7 @@ def test_matching_stops_at_an_icon_that_cannot_be_a_lookalike():
 
 def test_a_cell_log_line_names_the_gift_or_says_unknown():
     import actions  # noqa: PLC0415
-    cell = {"i": 2, "tier": 3, "keyword": "Bleed", "gift": None, "id": 9042, "score": 0.77}
+    cell = {"i": 2, "tier": 3, "keyword": "Bleed", "id": 9042, "score": 0.77}
     assert actions.cell_line(cell, "keep") == "2 III Bleed 9042 Smokes and Wires (0.77): keep"
     assert actions.cell_line({**cell, "id": None, "score": 0.38}, "keep") == "2 III Bleed unknown (best 0.38): keep"
 
@@ -222,8 +222,8 @@ def child():
                     found = actions.read_cells(context, screen_with(crop), cells if isinstance(cells, list) else getattr(actions, cells), page)
                     out["cases"][case] = [c["id"] for c in found]
                 actions.ocr(context, screen_with("offers"), actions.OFFER_GRID)  # the agent's order: a det+rec pass reads before any plate
-                first = actions.Shop.read_offers(context, screen_with("offers_super"), [])  # a Super Shop at rest, then scrolled (#341)
-                more = actions.Shop.read_offers(context, screen_with("offers_super_scrolled"), [], first)
+                first = actions.Shop.read_offers(context, screen_with("offers_super"))  # a Super Shop at rest, then scrolled (#341)
+                more = actions.Shop.read_offers(context, screen_with("offers_super_scrolled"), first)
                 out["super"] = [[[s["name"], s["price"], s["plate"]["id"], s["cell"]["id"] if "cell" in s else None] for s in page]
                                 for page in (first, more)]
                 for case in PLATE_CASES:  # the offers' name plates (#329), one per filled cell

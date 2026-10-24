@@ -230,39 +230,6 @@ def test_dialog_price_from_the_cost_preview():
     assert s.dialog_price(None, "28642612") is None
 
 
-@pytest.mark.parametrize("keyword, gift, role", [
-    ("Bleed", None, "material"),  # another keyword: fuse or sell it
-    ("Burn", None, "keep"),  # the main keyword
-    ("Keywordless", None, "keep"),  # no badge: every keywordless gift is kept (#103)
-    ("Bleed", "Hellterfly's Dream", "keep"),  # its icon is one of the team's observed gifts
-    (None, None, "unknown"),  # badge unread: neither fused nor sold
-    (None, "Spiderweb Entangled in Red", "keep"),
-])
-def test_gift_role_from_the_cells_badge_and_icon(keyword, gift, role):
-    assert s.gift_role(keyword, gift, {"Burn", "Keywordless"}) == role
-
-
-def test_the_kept_keywords_decide_the_role():
-    # #77: another keyword the team names is kept. The user on #161: a cell with no badge and no matched icon is a
-    # keywordless gift, material once the team lets keywordless gifts go.
-    assert s.gift_role("Bleed", None, {"Burn", "Bleed"}) == "keep"
-    assert s.gift_role("Keywordless", None, {"Burn"}) == "material"
-    assert s.gift_role("Keywordless", "Spiderweb Entangled in Red", {"Burn"}) == "keep"  # a kept gift's icon still keeps it
-
-
-def test_a_vestige_told_by_its_icon_is_material_whatever_the_keywordless_setting():
-    # #161: a vestige is its own kind; material names the ones the team neither keeps nor (on the sell page) keeps
-    # from the sale. One left out of it is kept like any gift whose icon matched.
-    assert s.gift_role("Keywordless", "Dark Vestige", {"Burn", "Keywordless"}, material=["Dark Vestige"]) == "material"
-    assert s.gift_role("Keywordless", "Dark Vestige", {"Burn"}) == "keep"
-
-
-def test_an_avoided_gift_is_material_though_it_is_the_main_keyword():
-    # #90: a Bleed team that does not hold White Gossypium fuses or sells it.
-    assert s.gift_role("Bleed", "White Gossypium", {"Bleed"}, avoid=["White Gossypium"]) == "material"
-    assert s.gift_role("Bleed", None, {"Bleed"}, avoid=["White Gossypium"]) == "keep"
-
-
 POINTS = {1: 3, 2: 6, 3: 10, 4: 15, 5: 30}  # data/shop.yaml
 SHOP, SUPER = [10, 16, 24], [9, 14, 21]
 

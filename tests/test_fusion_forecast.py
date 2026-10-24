@@ -1,4 +1,4 @@
-"""#285: the fuse page's Forecasts row is read before Fuse; a tier the team's fusion_condition refuses is not fused."""
+"""#285: the fuse page's Forecasts row is read before Fuse; a tier the gift list's fusion_condition refuses is not fused."""
 from types import SimpleNamespace
 
 import numpy as np
@@ -10,7 +10,7 @@ from test_shop import screen_with
 
 clock, context = test_actions.clock, test_actions.context  # its fixtures
 CHANCE = {tuple(actions.FORECAST_CHANCE): [("90%", (430, 456, 40, 24))]}
-THREE_THREE_TWO = [("Bleed", None, 3), ("Tremor", None, 3), ("Pierce", None, 2)]  # 26 points: a IV by the points
+THREE_THREE_TWO = [("Bleed", 3), ("Tremor", 3), ("Pierce", 2)]  # 26 points: a IV by the points
 
 
 def fuse(context, monkeypatch, team, readings, page, chance=True, slots=3, stuck=False, framed=False, visit=None, get=True):
@@ -34,8 +34,8 @@ def fuse(context, monkeypatch, team, readings, page, chance=True, slots=3, stuck
     monkeypatch.setattr(actions.shop, "picked", lambda image, x, y, bottom=720: actions.FUSE_CELLS.index((x, y)) in (
         {i for i, c in enumerate(actions.FUSE_CELLS) if taps().count(c)} if framed else inside()))
     monkeypatch.setattr(actions.shop, "forecast_tier", lambda image: page.get(tuple(sorted(inside()))))
-    test_actions.cells_read(monkeypatch, *readings)
-    fused = actions.Shop.fuse(context, {"keyword": "Burn", "gift_search": {"gifts": []}, **team}, {} if visit is None else visit)
+    test_actions.cells_read(monkeypatch, *test_actions.with_ids(readings))
+    fused = actions.Shop.fuse(context, test_actions.shop_team(team), {} if visit is None else visit)
     return fused, [taps().count(c) for c in actions.FUSE_CELLS[:len(readings)]], actions.PAGE_OK in taps(), lines
 
 
@@ -66,7 +66,7 @@ def test_a_forecast_the_condition_refuses_is_not_fused_and_the_materials_come_ou
 def test_a_refused_group_is_left_out_and_the_next_one_is_tried(context, monkeypatch):
     # upgrade: III + III + II (cells 0, 1, 2) is the best group; the page turns it down. III + III + II with the other II
     # (cells 0, 1, 3) would read the same: not tried. II + II + II (a III over a II) is, and the page takes it.
-    cells = [("Bleed", None, 3), ("Tremor", None, 3), ("Pierce", None, 2), ("Slash", None, 2), ("Sinking", None, 2)]
+    cells = [("Bleed", 3), ("Tremor", 3), ("Pierce", 2), ("Slash", 2), ("Sinking", 2)]
     fused, taps, ok, lines = fuse(context, monkeypatch, {"fusion_condition": "upgrade"}, cells, {(0, 1, 2): 3, (2, 3, 4): 3})
     assert fused and ok
     assert taps == [2, 2, 3, 1, 1]  # the III in and out; the first II in, out, in; the others in once
@@ -76,7 +76,7 @@ def test_a_refused_group_is_left_out_and_the_next_one_is_tried(context, monkeypa
 def test_the_page_turns_down_at_most_fuse_tries_groups_then_closes(context, monkeypatch):
     # Every group the points allow reads as a III on the page: five groups of different tiers are allowed (tier4), only
     # FUSE_TRIES of them are tried, then the page is closed.
-    cells = [("Bleed", None, t) for t in (4, 3, 3, 2, 2, 2, 1, 1, 1)]
+    cells = [("Bleed", t) for t in (4, 3, 3, 2, 2, 2, 1, 1, 1)]
     page = SimpleNamespace(get=lambda key: 3)
     fused, taps, ok, lines = fuse(context, monkeypatch, {"fusion_condition": "tier4"}, cells, page, get=False)
     assert not fused and not ok
@@ -100,7 +100,7 @@ def test_the_condition_any_fuses_whatever_the_page_forecasts(context, monkeypatc
 def test_materials_that_will_not_come_out_close_the_page(context, monkeypatch):
     # A refused group whose gifts stay in: nothing more is tapped but the Close, and the grid is not read again.
     visit = {}
-    cells = [("Bleed", None, 3), ("Tremor", None, 3), ("Pierce", None, 2), ("Slash", None, 2), ("Sinking", None, 2)]
+    cells = [("Bleed", 3), ("Tremor", 3), ("Pierce", 2), ("Slash", 2), ("Sinking", 2)]
     fused, taps, ok, lines = fuse(context, monkeypatch, {"fusion_condition": "upgrade"}, cells, {(0, 1, 2): 3}, stuck=True, visit=visit, get=False)
     assert not fused and not ok
     assert taps == [2, 1, 1, 0, 0]  # the first tap out did not show: the rest stay, the next group is not tried
@@ -110,7 +110,7 @@ def test_materials_that_will_not_come_out_close_the_page(context, monkeypatch):
 
 
 def test_a_taken_out_material_whose_frame_stays_lit_closes_the_page(context, monkeypatch):
-    cells = [("Bleed", None, 3), ("Tremor", None, 3), ("Pierce", None, 2), ("Slash", None, 2), ("Sinking", None, 2)]
+    cells = [("Bleed", 3), ("Tremor", 3), ("Pierce", 2), ("Slash", 2), ("Sinking", 2)]
     fused, taps, ok, lines = fuse(context, monkeypatch, {"fusion_condition": "upgrade"}, cells, {(0, 1, 2): 3}, framed=True, get=False)
     assert not fused and not ok and taps == [2, 1, 1, 0, 0]
     assert any("cell 0 tapped: 2 materials in, framed: not taken out" in m for m in lines)
@@ -119,7 +119,7 @@ def test_a_taken_out_material_whose_frame_stays_lit_closes_the_page(context, mon
 def test_a_group_is_judged_by_its_highest_material_not_its_first(context, monkeypatch):
     # A Super Shop's II + II + III (22 points, a IV by the points) forecast as a III: no upgrade over the III, though over a II.
     fused, taps, ok, lines = fuse(context, monkeypatch, {"fusion_condition": "upgrade"},
-                                  [("Bleed", None, 2), ("Tremor", None, 2), ("Pierce", None, 3)], {(0, 1, 2): 3}, slots=5, get=False)
+                                  [("Bleed", 2), ("Tremor", 2), ("Pierce", 3)], {(0, 1, 2): 3}, slots=5, get=False)
     assert not fused and not ok and taps == [2, 2, 2]
 
 
@@ -140,3 +140,42 @@ def test_the_forecast_waits_for_its_row_but_not_for_long(context, clock):
     context.tasker.controller.post_screencap.return_value.wait.return_value.get.return_value = np.zeros((720, 1280, 3), np.uint8)
     assert actions.read_forecast(context) == (None, None)
     assert 1.0 <= sum(clock) < 2.0
+
+
+CASK_SPIRITS = 9180  # Poise, tier IV
+
+
+def real_read_cells(monkeypatch, tiers, ids):
+    """actions.read_cells itself over the first cells of any grid, whose numerals read `tiers` and whose icons cell_id names
+    `ids`: only the pixel reading is replaced."""
+    spots = actions.FUSE_CELLS[:len(tiers)]
+    named = iter(ids)
+    monkeypatch.setattr(actions.shop, "filled", lambda image, x, y: (x, y) in spots)
+    monkeypatch.setattr(actions.shop, "cell_crop", lambda image, x, y, scale: (x, y))
+    monkeypatch.setattr(actions.shop, "rescale", lambda image, factor: image)
+    monkeypatch.setattr(actions.shop, "tier", lambda crop: tiers[spots.index(crop)])
+    monkeypatch.setattr(actions, "template_hits", lambda *args: [])
+    monkeypatch.setattr(actions, "cell_id", lambda context, grid, at, keyword, tier: (next(named), 0.9))
+
+
+def test_a_cell_named_by_a_gift_of_another_tier_takes_that_gifts_tier(context, monkeypatch):
+    # #330: the numeral read II, the icon is Cask Spirits (IV): the cell is a IV, not what the numeral said.
+    real_read_cells(monkeypatch, [2, 3, 3], [CASK_SPIRITS, 9071, 9053])
+    cells = actions.read_cells(context, np.zeros((720, 1280, 3), np.uint8), actions.FUSE_CELLS[:3], "fuse")
+    assert [(c["id"], c["tier"]) for c in cells] == [(CASK_SPIRITS, 4), (9071, 3), (9053, 3)]
+
+
+def test_a_misread_tier_does_not_make_a_fusion_the_condition_refuses(context, monkeypatch):
+    # #330 with #285: Cask Spirits (IV) read as II, with two III: by the points II + III + III is a IV, an upgrade, and the page
+    # forecasts IV, so it would be fused. It is IV + III + III: a IV again, no upgrade over its IV. Nothing is tapped in.
+    real_read_cells(monkeypatch, [2, 3, 3], [CASK_SPIRITS, 9071, 9053])
+    lines = []
+    monkeypatch.setattr(actions, "log", lines.append)
+    test_actions.reads(context, {**test_actions.FUSE_PAGE, tuple(actions.FUSE_CONFIRM): [("Selected E.G.O Gifts 3/3", (330, 175, 320, 30))],
+                                 tuple(actions.GET_TITLE): [("E.G.O Gift GET!", (560, 165, 160, 30))], **CHANCE})
+    test_actions.fuse_slots(context, monkeypatch)
+    monkeypatch.setattr(actions.shop, "forecast_tier", lambda image: 4)
+    fused = actions.Shop.fuse(context, test_actions.shop_team({"fusion_condition": "upgrade"}), {})
+    taps = [c.args for c in context.tasker.controller.post_click.call_args_list]
+    assert not fused and not set(taps[4:]) & set(actions.FUSE_CELLS)
+    assert actions.PAGE_OK not in taps

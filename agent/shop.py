@@ -70,7 +70,7 @@ def forecast_tier(image):
     """The tier (1-4) the fuse page's Forecasts row predicts, or None (no numeral: no material in, or the row is covered).
 
     The row's numeral is the cells' (numeral), 19 px tall, its top and bottom rows found from its own yellow. Live
-    2026-10-23: I, II and IV on a shop's and a Super Shop's page, IV on a fixed recipe's (tests/shop, ShopFuseRecipe).
+    2026-10-23: I, II and IV on a shop's and a Super Shop's page, IV and III on a fixed recipe's (tests/shop, tests/screens ShopFuseRecipe, ShopFuseRecipeTwo).
     """
     x, y, w, h = FORECAST_NUMERAL
     mask = yellow(image[y:y + h, x:x + w])
@@ -256,23 +256,6 @@ def to_sell(spare, wanted, cost, reserve, first=()):
     return sorted(picked, reverse=True)  # selling from the back keeps the earlier cells in place
 
 
-def gift_role(keyword, gift, kept, avoid=(), material=()):
-    """"keep", "material" or "unknown" for an owned gift read off its grid cell, on the fuse and the sell page.
-
-    keyword: its badge's keyword, "Keywordless" with no badge, None when the badge is cut off or unread;
-    gift: the gift its icon matched (an observed, a kept, an avoided one or a vestige), or None; kept: the keywords
-    the team keeps (kept_keywords: the main one, the ones it names and "Keywordless" unless it lets them go, #77).
-    Kept too: the gifts whose icon matched (observed #103, #112, or named in keep_gifts #77); a gift in avoid (#90) or
-    material (the vestiges the team lets go, #161) is material whatever its keyword. No badge and no icon matched is a
-    keywordless gift (the user, #161). Unknown, a cut-off or unread badge, is neither fused nor sold.
-    """
-    if gift in avoid or gift in material:
-        return "material"
-    if gift or keyword in kept:
-        return "keep"
-    return "unknown" if keyword is None else "material"
-
-
 SHOP_TITLE = (190, 108, 130, 30)  # x, y, w, h: the title on the main page's plate, top left
 
 
@@ -312,7 +295,7 @@ def pick_fusion(materials, slots, thresholds, points, first=(), condition="any",
     this shop; points: {tier: a material's points}. Each fusion takes 3 to slots materials: the group giving the
     highest tier, then holding the most of first (gifts the team avoids, #90), then worth the fewest points; then
     again from what is left, until fewer than 3 are. A tier V gift is never a material (MAX_MATERIAL_TIER).
-    condition (the team's fusion_condition, #263) keeps out the groups fusion_wanted refuses: the best of the rest is
+    condition (the gift list's fusion_condition, #263) keeps out the groups fusion_wanted refuses: the best of the rest is
     made, and none when no group is left. "any" puts the groups that upgrade (user, 2026-10-23) ahead of that order.
     refused: [tuple of sorted tiers] the groups the page's own forecast turned down (#285): the result depends on the
     materials' tiers only, so no group of those tiers is picked again.
