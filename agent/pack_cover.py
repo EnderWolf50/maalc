@@ -11,7 +11,9 @@ from pathlib import Path
 
 import numpy as np
 
-SIGNATURES = Path(__file__).resolve().parent.parent / "assets" / "resource" / "base" / "data" / "theme_pack_signatures.json"
+ROOT = Path(__file__).resolve().parent.parent
+# as actions.RESOURCE: resource/ sits under <root> in a release, under assets/ in the repo (#323)
+SIGNATURES = next(p for p in (ROOT / "resource", ROOT / "assets" / "resource") if p.is_dir()) / "base" / "data" / "theme_pack_signatures.json"
 GRID = (16, 12)  # rows, columns of a signature
 ART = (0.05, 0.18, 0.95, 0.62)  # the part of a card that is its picture (left, top, right, bottom as shares): below the
 # search button and warning mark, above the logo and the title
