@@ -30,6 +30,7 @@ CROP_AT = {
     "sell": (620, 200),  # live 2026-10-16 (probe capture s29/025_sell): the sell page of ShopFuse.png's gifts
     "offers": (560, 210),  # tests/screens/Shop.png
     "offers_super": (560, 210),  # tests/screens/SuperShop.png
+    "offers_super_scrolled": (560, 210),  # the same shop scrolled 150 px (live 2026-10-15, probe capture 163): its last two offers show
     "offers_red": (560, 210),  # live (probe capture s28/013): Fragment of Hellfire, a red gem, 400 orange
     "offers_short": (560, 210),  # live 2026-10-18 (probe capture live-all/f/shopd_2590.6): 106 Cost, 3 offers tagged Not Enough Cost
     # Map nodes (test_map_shop.py): 200 px around the node, live 2026-10-18 probe capture live2/f (map_f2_c, map_f1_c, map_f1_a)

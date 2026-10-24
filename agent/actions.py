@@ -31,9 +31,9 @@ import rewards
 import run_start
 import settlement
 import shop
-from gifts import effective, main_keyword, queue, queue_place, resolve_list
+from gifts import effective, main_keyword, queue, resolve_list
 from ocrtext import compact, digits, has, normalize
-from settings import VESTIGE_IDS, SettingsError, load_settings
+from settings import VESTIGE_IDS, SettingsError, data_dir, load_settings
 from state import next_cursor, pick_team, read_cursor, write_cursor
 
 # Same <root> as main.ROOT; resource/ sits under it in a release, under assets/ in the repo.
@@ -291,14 +291,18 @@ def drag(context, points, settle=0.3, dwell=0.1, hold=0.0, pause=0.02, step=10):
     ctl.post_touch_up().wait()
 
 
-def ocr(context, image, roi, only_rec=False):
-    """Every OCR result in roi as (text, (x, y, w, h)); only_rec reads roi as one line, no text detection."""
-    detail = context.run_recognition("ReadText", image, {"ReadText": {"recognition": "OCR", "roi": roi, "only_rec": only_rec}})
+def ocr(context, image, roi, only_rec=False, model=None):
+    """Every OCR result in roi as (text, (x, y, w, h)); only_rec reads roi as one line, no text detection.
+
+    model: a folder of model/ocr/ (the default is its root): MaaFramework keeps one OCR instance per folder.
+    """
+    node = {"recognition": "OCR", "roi": roi, "only_rec": only_rec, **({"model": model} if model else {})}
+    detail = context.run_recognition("ReadText", image, {"ReadText": node})
     return [(r.text, tuple(r.box)) for r in (detail.all_results if detail else [])]
 
 
-def text(context, image, roi, only_rec=False):
-    return " ".join(t for t, _ in ocr(context, image, roi, only_rec))
+def text(context, image, roi, only_rec=False, model=None):
+    return " ".join(t for t, _ in ocr(context, image, roi, only_rec, **({"model": model} if model else {})))
 
 
 def number(s):
@@ -2737,6 +2741,15 @@ OWNED_GRID = {"fuse": ((678, 294), (96, 92), 40), "sell": ((683, 258), (92, 107)
 FUSE_CELLS, SELL_CELLS = ([(x + dx * c, y + dy * r) for r in range(3) for c in range(5)]
                           for (x, y), (dx, dy), _ in OWNED_GRID.values())
 OFFER_CELLS = [(624 + 154 * c, y) for y in (265, 418) for c in range(4)]  # a shop at rest; the price line is 52 px under
+# A Super Shop's grid scrolls to show its third row (live 2026-10-15, SuperShop.png and its scrolled capture): by 150 px, the
+# second row where the first was. A drag from between the first two columns, 250 px, goes to either end.
+OFFER_DRAG_X, OFFER_DRAG_PX = 701, 250
+OFFER_ABOVE, OFFER_UNDER = 90, 25  # px a price line has its icon's top over it and its name's foot under it: what must show in the grid's box
+
+
+def offer_whole(y):
+    """Whether the offer whose price line is at y shows whole in OFFER_GRID's box (#341)."""
+    return OFFER_GRID[1] + OFFER_ABOVE <= y <= OFFER_GRID[1] + OFFER_GRID[3] - OFFER_UNDER
 # The fuse page's list: sections over the owned gifts (a fixed recipe's Fusion Available, #103) push them down. Their
 # "E.G.O Gifts Owned" label's centre sits 66 px over the first owned row's (live: 228 and 294).
 FUSE_LIST, OWNED_LABEL = [630, 195, 480, 305], 66
@@ -2757,12 +2770,14 @@ BADGES = ["Burn", "Bleed", "Tremor", "Rupture", "Sinking", "Poise", "Charge", "S
 BADGE_MIN = 0.5
 GIFTS = gift_cells.load()  # every gift a cell may show (#297)
 GIFT_NAMES = {e["id"]: e["en"] for e in GIFTS}
+GIFT_IDS = {e["en"]: e["id"] for e in GIFTS}  # an English name plate's gift (#329)
 CELL_ICON_ROI = 70  # px square around a cell's centre on the scaled grid where its icon is looked for: the biggest icon (54 px) +-8
 FUSE_CONFIRM = [300, 150, 680, 380]  # "Selected E.G.O Gifts 3/5" over "Fuse the selected E.G.O Gifts?"
 FUSE_COUNT = r"(\d)\s*/\s*\d"  # its "3/5": the materials in
 FUSE_NEUTRAL = (815, 160)  # above the owned grid, between Recipes and Fusion Guide: closes a tooltip, selects nothing
 FORECAST_CHANCE = [428, 455, 62, 28]  # "90%" at the Forecasts row's right: the keyword's chance (60 / 90 / 99, 100 on a recipe)
 FUSE_TRIES = 3  # groups one fuse page's forecast may turn down before the page is closed (#285)
+TOOLTIP_CLOSE = {"fuse": FUSE_NEUTRAL}  # per page: where a tap closes a gift's tooltip, which hides the cells under it (#331)
 SELL_COST = [960, 80, 160, 45]
 SELL_GRID = [630, 210, 480, 290]  # the sell page's gifts with their prices under them
 HEAL_TITLE, HEAL_COST = [130, 30, 220, 45], [1100, 90, 110, 50]
@@ -2835,20 +2850,31 @@ def cell_id(context, grid, at, keyword, tier):
     The icons of the gifts of the cell's keyword and tier (gift_cells.candidates) are matched in turn, CCOEFF with its
     green masked, within CELL_ICON_ROI of the centre; the best is the cell's gift when gift_cells.best accepts it. The
     matching stops at an icon of gift_cells.ICON_SURE: another candidate cannot tie it (a cell's lookalikes score 0.66 at most).
-    A cell with no tier or badge read, or none of whose candidates match, is unknown: shops treat it as a gift to keep.
+    When none of them is accepted, the keyword's other gifts are matched too (gift_cells.of_keyword: the tier numeral may be
+    misread, #330), the earlier scores kept for the lead; there is no early stop, the twin of another tier (Dark and Faint
+    Vestige) scores as high. A cell with no tier or badge read, or none of whose candidates match, is unknown: shops treat it as a gift to keep.
     """
     cx, cy = round(at[0]), round(at[1])
     h, w = grid.shape[:2]
     x, y = max(0, cx - CELL_ICON_ROI // 2), max(0, cy - CELL_ICON_ROI // 2)
     roi = [x, y, min(CELL_ICON_ROI, w - x), min(CELL_ICON_ROI, h - y)]
     scores = []
-    for e in gift_cells.candidates(GIFTS, keyword, tier):
-        node = {"recognition": "TemplateMatch", "template": e["template"], "threshold": 0.0, "method": 5, "green_mask": True, "roi": roi}
-        detail = context.run_recognition("ShopCellIcon", grid, {"ShopCellIcon": node})
-        scores.append((e["id"], detail.best_result.score if detail and detail.best_result else 0.0))
-        if scores[-1][1] >= gift_cells.ICON_SURE:
-            break
-    return gift_cells.best(scores), max((s for _, s in scores), default=0.0)
+
+    def match_icons(pool, stop_when_sure):
+        for e in pool:
+            node = {"recognition": "TemplateMatch", "template": e["template"], "threshold": 0.0, "method": 5, "green_mask": True, "roi": roi}
+            detail = context.run_recognition("ShopCellIcon", grid, {"ShopCellIcon": node})
+            scores.append((e["id"], detail.best_result.score if detail and detail.best_result else 0.0))
+            if stop_when_sure and scores[-1][1] >= gift_cells.ICON_SURE:
+                break
+
+    match_icons(gift_cells.candidates(GIFTS, keyword, tier), stop_when_sure=True)
+    found = gift_cells.best(scores)
+    if found is None:  # #330
+        tried = {i for i, _ in scores}
+        match_icons([e for e in gift_cells.of_keyword(GIFTS, keyword, tier) if e["id"] not in tried], stop_when_sure=False)
+        found = gift_cells.best(scores)
+    return found, max((s for _, s in scores), default=0.0)
 
 
 def read_cells(context, image, cells, page):
@@ -2882,6 +2908,35 @@ def read_cells(context, image, cells, page):
     return out
 
 
+OCR_DIR = data_dir().parent / "model" / "ocr"
+
+
+def plate_model():
+    """gift_cells.PLATE_MODEL when its folder holds a model, else None: the default instance reads the plates, 7x slower on
+    DirectML. A missing folder is no error to MaaFramework: it reads nothing, so every plate would be blank (#329)."""
+    if all((OCR_DIR / gift_cells.PLATE_MODEL / name).is_file() for name in ("det.onnx", "rec.onnx", "keys.txt")):
+        return gift_cells.PLATE_MODEL
+    if not RUN.get("plate_model_logged"):
+        RUN["plate_model_logged"] = True
+        log(f"shop: no model/ocr/{gift_cells.PLATE_MODEL}/ (tools/fetch_ocr.py makes it): the plates are read with the default OCR instance")
+    return None
+
+
+def read_plates(context, image, centres):
+    """The name plate under each offer cell centred at a (x, y) of centres: [{"text", "id"}], id None when it names no gift (#329).
+
+    One OCR line per plate (only_rec) in the box gift_cells.plate_roi gives, dimmed and Purchased cells included. The box
+    is relative to the cell's centre, so a grid dragged to another row reads just the same. It reads with its own OCR
+    instance (plate_model): on DirectML the default one reads a line in 31 ms once a det+rec pass has used it, this
+    one in 4 ms whatever ran before (#329).
+    """
+    plates = []
+    for x, y in centres:
+        t = text(context, image, gift_cells.plate_roi(x, y), only_rec=True, model=plate_model())
+        plates.append({"text": t, "id": gift_cells.name_id(t, GIFT_IDS)})
+    return plates
+
+
 def offer_cell(slot):
     """The icon centre of an offer read by shop.read_slots: its column's, 52 px over its price line."""
     return min((x for x, _ in OFFER_CELLS[:4]), key=lambda x: abs(x - slot["x"])), slot["y"] - 52
@@ -2896,7 +2951,34 @@ def cell_line(cell, role):
 def gift_shown(cell):
     """The gift a read cell was taken for, for the log: "9042 Smokes and Wires (0.77)", or "unknown (best 0.38)" (#297)."""
     named = GIFT_NAMES.get(cell["id"])
+    if named and cell.get("by_plate"):  # told by its name plate alone (a dimmed cell, #329)
+        return f"{cell['id']} {named} (plate)"
     return f"{cell['id']} {named} ({cell['score']:.2f})" if named else f"unknown (best {cell['score']:.2f})"
+
+
+def close_tooltip(context, page):
+    """A screenshot of page after a tap on its TOOLTIP_CLOSE spot (a page without one: as it is), #331.
+
+    The tap comes first and the guard after it (ADR 0007): a tooltip over the fuse page hides Leave, so the page node
+    reads nothing until it is closed.
+    """
+    if page in TOOLTIP_CLOSE:
+        tap_settled(context, *TOOLTIP_CLOSE[page], timeout=1.0)
+    return page_guard(context, "Shop")
+
+
+def read_clear(context, image, spots, page):
+    """read_cells of spots on image, the cells that read unknown read again on a screenshot taken after one more tap
+    on the page's TOOLTIP_CLOSE spot (#331): ([cell], [the screenshot each was read from])."""
+    cells = read_cells(context, image, spots, page)
+    shots = [image] * len(cells)
+    unknown = [k for k, c in enumerate(cells) if c["id"] is None]
+    if unknown and page in TOOLTIP_CLOSE:
+        again = close_tooltip(context, page)
+        for c in read_cells(context, again, [(cells[k]["x"], cells[k]["y"]) for k in unknown], page):
+            k = unknown[c["i"]]
+            cells[k], shots[k] = {**c, "i": cells[k]["i"]}, again
+    return cells, shots
 
 
 def owned_cells(context, page):
@@ -2913,6 +2995,7 @@ def owned_cells(context, page):
     (x0, y0), (dx, dy), under = OWNED_GRID[page]
     bottom = CELL_PAGES[page][1]
     grid, out, done = {"page": page, "at": 0}, [], set()
+    close_tooltip(context, page)
     image = grid_top(context, page)
     if page == "fuse":
         label, image = owned_label(context, image)
@@ -2925,15 +3008,17 @@ def owned_cells(context, page):
             moved, image = drag_grid(context, page, -grid["at"] - GRID_MARGIN)
             grid["at"] += moved
     for _ in range(GRID_SCROLLS):
+        image = close_tooltip(context, page)
         rows = range(max(0, grid["at"] // dy), grid["at"] // dy + 5)  # the last one all under the edge
         shown = [(5 * r + c, x0 + dx * c, y0 + dy * r - grid["at"]) for r in rows for c in range(5)]
         fresh = [(i, x, y) for i, x, y in shown if i not in done and whole(page, y)]
         done |= {i for i, _, _ in fresh}
         spots = [(x, y) for _, x, y in fresh]
         prices = shop.cell_prices(ocr(context, image, SELL_GRID), spots) if page == "sell" and spots else {}
-        for c in read_cells(context, image, spots, page):
+        cells, shots = read_clear(context, image, spots, page)
+        for c, shot in zip(cells, shots):
             i, _, y = fresh[c["i"]]
-            out.append({**c, "i": i, "y": y + grid["at"], "price": prices.get(c["i"]), "look": centre(image, c["x"], y)})
+            out.append({**c, "i": i, "y": y + grid["at"], "price": prices.get(c["i"]), "look": centre(shot, c["x"], y)})
         cut = [y for _, x, y in shown if y + under > bottom and y - 25 < bottom and shop.filled(image[:bottom], x, y)]
         hidden = min(y for _, _, y in shown if y - 25 >= bottom)
         # A full row over the edge and the next one all under it (a drag the game took less of, or the grid's end): one
@@ -3282,43 +3367,54 @@ class Shop(CustomAction):
     def buy_offers(context, team, visit):
         """Read the offers once, then buy the ones of the team's list shop.buy_plan picks, last cell first; how many bought.
 
-        A gift is told by its icon (read_cells, #297): only an offer whose id is known, that the list wants and the shop
-        sells (gifts.queue) is bought, in the queue's order (#298). An offer too dear to be read (Not Enough Cost dims it: no
-        tier, no id) whose badge is a keyword the list wants stands for the best place a gift of that keyword holds
-        (gifts.queue_place): it may be the first choice, so the shop sells for it; it is never bought. Each purchase is
-        checked on the Cost.
+        A gift is told by its icon (read_cells, #297) and by its name plate (read_plates, #329): one vote is enough, two that
+        differ leave the cell unknown. Only an offer whose id is known, that the list wants and the shop sells (gifts.queue)
+        is bought, in the queue's order (#298). A Not Enough Cost offer is dimmed (no icon read) but its plate reads: with its
+        id it may be the first choice, so the shop sells for it; it is never bought. Every cell, Purchased ones too, is
+        logged with its id. Each purchase is checked on the Cost.
         """
         gift_list, reserve = team["list"], team["reserve_cost"]
         place = {i: n for n, i in enumerate(queue(gift_list))}
         visit["wanted"] = None
-        # ponytail: only the offers on show; a Super Shop's last 2 of 10 need a scroll first.
         cost = read_cost(context)
         if cost is None:
             log("shop: the Cost reads nothing: nothing bought")
             return 0
-        image = screen(context)
-        slots = [s for s in shop.read_slots(ocr(context, image, OFFER_GRID)) if shop.on_sale(s)]
         avoided = avoided_gifts(team)
-        cells = {c["i"]: c for c in read_cells(context, image, [offer_cell(s) for s in slots], "offer")}
+        image = screen(context)
+        scrolls = shop.is_super(image)  # a Super Shop's third row shows after a scroll (#341)
+        if scrolls:
+            image = Shop.drag_offers(context, down=False)
+        shown = Shop.read_offers(context, image)
+        if scrolls:
+            for slot in shown:
+                slot["page"] = 0
+            lower = Shop.read_offers(context, Shop.drag_offers(context, down=True), shown)
+            log(f"shop: Super Shop scrolled: {len(lower)} more offers")
+            for slot in lower:
+                slot["page"] = 1
+            shown += lower
+        slots = [s for s in shown if shop.on_sale(s)]
         avoid = [g["name"] for g in avoided]
         avoid_ids = [g["id"] for g in avoided]
         offers = []
         for i, slot in enumerate(slots):
-            cell = cells.get(i, {"tier": None, "keyword": None, "id": None, "score": 0.0})
+            cell, plate = slot["cell"], slot["plate"]
+            icon, (named, split) = cell["id"], gift_cells.vote(cell["id"], plate["id"])
+            if split:
+                log(f"shop: {slot['name']!r}: the icon says {icon} {GIFT_NAMES.get(icon)}, the plate {plate['text']!r} says "
+                    f"{plate['id']} {GIFT_NAMES.get(plate['id'])}: unknown")
+            cell = {**cell, "id": named, "by_plate": icon is None and named is not None}
             if cell["id"] in avoid_ids or any(rewards.names_gift(slot["name"], n) for n in avoid):
-                log(f"shop: {slot['name']!r} {slot['price']}: the team does not hold it (#90)")
+                log(f"shop: {slot['name']!r} {slot['price']}: {gift_shown(cell)}, the team does not hold it (#90)")
                 continue
-            slot["short"] = slot["short"] or shop.short_cell(image, *offer_cell(slot))
             if slot["short"] and slot["price"] <= cost:
-                log(f"shop: {slot['name']!r} is tagged Not Enough Cost: its price {slot['price']} is a misread")
+                log(f"shop: {slot['name']!r} {gift_shown(cell)} is tagged Not Enough Cost: its price {slot['price']} is a misread")
                 continue
-            dimmed = cell["id"] is None and slot["short"]  # Not Enough Cost: tier and icon unread
             rank = place.get(cell["id"])
-            if dimmed:
-                rank = queue_place(gift_list, cell["keyword"], cell["tier"])
             state = effective(gift_list, cell["id"]) if cell["id"] else "unknown"
-            log(f"shop: {slot['name']!r} {slot['price']}: tier {cell['tier']} {cell['keyword']} {gift_shown(cell)}, {state}"
-                f"{'' if rank is None else f', place {rank}'}{' (dimmed: the best place it may hold)' if dimmed and rank is not None else ''}")
+            log(f"shop: {slot['name']!r} {slot['price']}: tier {cell['tier']} {cell['keyword']} {gift_shown(cell)}, plate {plate['text']!r}, {state}"
+                f"{'' if rank is None else f', place {rank}'}")
             if rank is not None:
                 offers.append((i, rank, slot["price"]))
         plan, visit["wanted"] = shop.buy_plan(offers, cost, reserve, visit["sold"])
@@ -3350,10 +3446,60 @@ class Shop(CustomAction):
         return bought
 
     @staticmethod
+    def drag_offers(context, down):
+        """Drag the offer grid to its last rows (down) or back to its top; the screenshot once it rests (#341)."""
+        top, height = OFFER_GRID[1], OFFER_GRID[3]
+        scroll(context, OFFER_DRAG_X, top + height - 15 if down else top + 15, 0, -OFFER_DRAG_PX if down else OFFER_DRAG_PX)
+        image = still(context, timeout=1.0)
+        return screen(context) if image is None else image
+
+    @staticmethod
+    def read_offers(context, image, known=None):
+        """The offers of the grid on image as slots (shop.read_slots) with their "plate", and on-sale ones their "cell" and "short".
+
+        known: the offers read off the grid before it was scrolled (#341): those are left out, and so is a cut-off one.
+        Bought ones, skills and "??" log their plate (#329).
+        """
+        shown = shop.read_slots(ocr(context, image, OFFER_GRID))
+        if known is not None:
+            shown = [s for s in shown if offer_whole(s["y"]) and not any(shop.same_offer(s, k) for k in known)]
+        for slot, plate in zip(shown, read_plates(context, image, [offer_cell(s) for s in shown]), strict=True):
+            slot["plate"] = plate
+            if not shop.on_sale(slot):  # bought, a skill or "??": never bought, its plate logged (#329)
+                log(f"shop: {slot['name']!r}: {'Purchased' if slot['purchased'] else 'not on sale'}, plate {plate['text']!r} "
+                    + (gift_shown({"id": plate["id"], "by_plate": True, "score": 0.0}) if plate["id"] else "unknown"))
+        on_sale = [s for s in shown if shop.on_sale(s)]
+        cells = {c["i"]: c for c in read_cells(context, image, [offer_cell(s) for s in on_sale], "offer")}
+        for i, slot in enumerate(on_sale):
+            slot["cell"] = cells.get(i, {"tier": None, "keyword": None, "id": None, "score": 0.0})
+            slot["short"] = slot["short"] or shop.short_cell(image, *offer_cell(slot))
+        return shown
+
+    @staticmethod
+    def find_offer(context, slot):
+        """slot as the grid shows it now, whole in the grid's box; None when it is not found there (#341).
+
+        A Super Shop's grid may be anywhere (a purchase can put it back): the offer is looked for by its column, price and name,
+        and the grid is dragged to the end its page is at (slot["page"]: 1 the last rows) until it shows whole.
+        """
+        for _ in range(3):
+            found = next((s for s in shop.read_slots(ocr(context, screen(context), OFFER_GRID))
+                          if shop.same_offer(s, slot) and offer_whole(s["y"])), None)
+            if found:
+                return {**slot, "x": found["x"], "y": found["y"]}
+            Shop.drag_offers(context, down=slot["page"] == 1)
+        log(f"shop: {slot['name']!r} {slot['price']} not found in the grid")
+        return None
+
+    @staticmethod
     def open_offer(context, slot):
         """Tap an offer; the screenshot of its purchase dialog, or None when none opened."""
         # Its text and Cost preview are read once it stops.
         page_guard(context, "Shop")
+        if "page" in slot:  # a Super Shop's grid scrolls: the offer is brought into view and read back first (#341)
+            slot = Shop.find_offer(context, slot)
+            if slot is None:
+                return None
         image = tap_shown(context, slot["x"], slot["y"] - 50, shows(context, DIALOG_TITLE, "Purchase"), timeout=1.5, rest=1.0)
         if image is not None:
             return image

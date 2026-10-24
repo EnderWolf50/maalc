@@ -32,6 +32,7 @@ class Grid:
         self.top, self.bottom = TOP[page], actions.CELL_PAGES[page][1]
         self.end = END[page]
         self.at, self.drags, self.taps, self.reads, self.fling, self.share = 0, 0, [], [], fling, share
+        self.tooltip, self.stuck = False, 0  # a gift's tooltip over the cells; taps on the neutral spot that do not close it
         rng = np.random.default_rng(1)
         self.icons = [np.kron(rng.integers(40, 255, (19, 19, 3), np.uint8), np.ones((4, 4, 1), np.uint8))
                       for _ in range(n + recipes)]
@@ -101,6 +102,8 @@ class Grid:
     def click(self, x, y):
         i = self.at_screen(x, y)
         self.taps.append((x, y) if i is None else i)
+        if (x, y) == actions.FUSE_NEUTRAL:
+            self.stuck, self.tooltip = max(0, self.stuck - 1), self.tooltip and self.stuck > 0
         return DONE
 
     def read_cells(self, context, image, cells, page):
@@ -114,7 +117,7 @@ class Grid:
             if i is not None:
                 self.reads.append(i)
                 out.append({"i": k, "x": x, "y": y, "tier": 1, "keyword": KEYWORDS[i % len(KEYWORDS)],
-                            "id": UNLISTED + i, "score": 0.9})
+                            "id": None if self.tooltip and i % 2 else UNLISTED + i, "score": 0.9})
         return out
 
 
@@ -145,13 +148,25 @@ def test_every_gift_is_read_once_whatever_the_grid_holds(context, grid, monkeypa
     assert g.drags == (0 if n <= 10 else -(-(n - 10) // 10)) + (n == 20) + 1  # rows 3-4, 5-6: a drag each
 
 
+@pytest.mark.parametrize("stuck", [0, 1, 2])
+def test_a_fuse_pages_tooltip_is_closed_before_its_cells_are_read(context, grid, stuck):
+    # #331: a gift's tooltip hides some of the cells (10 of 217 live): they read as unknown. The neutral spot is
+    # tapped first; when taps did not close it (stuck of them) and a cell still reads unknown, it is read again after
+    # one more. Only the neutral spot is tapped.
+    g = grid("fuse", 13)
+    g.tooltip, g.stuck = True, stuck
+    cells, _ = actions.owned_cells(context, "fuse")
+    assert [c["id"] for c in cells] == [UNLISTED + i for i in range(13)]
+    assert g.taps and set(g.taps) == {actions.FUSE_NEUTRAL}
+
+
 def test_a_cell_read_further_down_is_found_again_after_the_grid_moved(context, grid):
     # cell_at drags the grid back to bring a cell read before the last drag whole into view; its tap hits that gift.
     g = grid("fuse", 23)
     cells, at = actions.owned_cells(context, "fuse")
     for i in (22, 0, 12, 4, 21):
         g.click(*actions.cell_at(context, at, cells[i]))
-    assert g.taps == [22, 0, 12, 4, 21]
+    assert [t for t in g.taps if t != actions.FUSE_NEUTRAL] == [22, 0, 12, 4, 21]
 
 
 @pytest.mark.parametrize("page", ["fuse", "sell"])
@@ -347,19 +362,19 @@ def test_a_fusion_taps_nothing_when_the_grid_is_not_where_it_was_measured(contex
 def test_a_sale_never_taps_a_gift_whose_badge_is_unread(context, monkeypatch):
     # #205: the first cell's badge is unread: neither sold nor opened, though as a tier I it is the one the fusion of
     # the 3 others leaves over.
-    assert test_actions.sale_taps(context, monkeypatch, {}, [500, 90, 60, 70], (None, None, 1), ("Bleed", None),
-                                  ("Tremor", None), ("Pierce", None)) == []
+    assert test_actions.sale_taps(context, monkeypatch, {}, [500, 90, 60, 70], (None, 1), ("Bleed",),
+                                  ("Tremor",), ("Pierce",)) == []
 
 
 def test_a_material_whose_price_is_unread_is_not_sold_but_still_fused(context, monkeypatch):
     # #205: Bleed's price is unread (no panel is opened for it): it is not sold, and still counts for the fusion, so
     # Tremor and Pierce make a group with it and none is sold.
-    assert test_actions.sale_taps(context, monkeypatch, {}, [], ("Bleed", None), ("Tremor", None), ("Pierce", None)) == []
+    assert test_actions.sale_taps(context, monkeypatch, {}, [], ("Bleed",), ("Tremor",), ("Pierce",)) == []
 
 
 def test_a_gift_whose_badge_is_unread_stays_out_of_a_fusion_untapped(context, monkeypatch):
     # #205: no cell is opened to read it; with the others it would make a fusion, without them none is made.
-    fused, taps, ok = test_actions.fusion_taps(context, monkeypatch, {}, (None, None), ("Tremor", None), ("Pierce", None))
+    fused, taps, ok = test_actions.fusion_taps(context, monkeypatch, {}, (None,), ("Tremor",), ("Pierce",))
     assert not fused and not ok and taps == [0, 0, 0]
 
 

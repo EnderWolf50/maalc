@@ -40,6 +40,17 @@ def test_sync_refuses(kw, msg):
         assert not any(c[0] in ("fetch", "pull") for c in calls)
 
 
+def test_main_fetches_the_ocr_model_and_its_plate_copy_before_it_assembles_install(tmp_path, monkeypatch):
+    # #329: an install made before the plate copy existed lacks model/ocr/plate/, and MaaFramework reads blanks from a missing folder.
+    (tmp_path / ".local/queue/emulator").mkdir(parents=True)
+    monkeypatch.setattr(after_land, "REPO", tmp_path)
+    monkeypatch.setattr(after_land, "sync_main", lambda: None)
+    steps = []
+    monkeypatch.setattr(after_land, "step", lambda what, *cmd: steps.append(cmd[-1]))
+    after_land.main()
+    assert steps.index("tools/fetch_ocr.py") < steps.index("tools/install.py")
+
+
 def test_main_refuses_on_emulator_ticket_before_touching_git(tmp_path, monkeypatch):
     (tmp_path / ".local/queue/emulator").mkdir(parents=True)
     (tmp_path / ".local/queue/emulator/x.ticket").write_text("1")

@@ -6,7 +6,7 @@ import { GIFT_BY_ID, giftName, iconUrl } from "./giftCatalog";
 import { buyList, moveGift, moveKeyword, nudgeGift, useGiftEdit } from "./giftEdit";
 import { mainKeyword, queue } from "./gifts";
 import { fill } from "./i18n";
-import { KEYWORD_COLOR, TIERS, kwText } from "./KeywordGrid";
+import { KeywordIcon, TIERS, kwText } from "./KeywordGrid";
 import { useEditor } from "./ui";
 
 type Dir = "up" | "down";
@@ -90,7 +90,7 @@ export function BuyOrderDialog({ onClose }: { onClose: () => void }) {
                   <button type="button" className="gl-dnb" aria-expanded={isOpen}
                     onClick={() => setOpen((o) => { const n = new Set(o); if (!n.delete(k)) n.add(k); return n; })}>
                     <span className="gl-chev" aria-hidden>{isOpen ? "▾" : "▸"}</span>
-                    <i className="gl-dot" style={{ background: KEYWORD_COLOR[k] }} aria-hidden />
+                    <KeywordIcon keyword={k} />
                     <b>{name}</b>
                     <small>{fill(t("gl.rank"), { n: i + 1 })}・{fill(t("gl.tier_n"), { n: gifts.length })}</small>
                     <span className="spacer" />

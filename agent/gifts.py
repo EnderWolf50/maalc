@@ -69,16 +69,6 @@ def queue(gift_list, tables=None):
     return [i for k in gift_list["order"] for i in gift_list["gorder"][k] if i in buyable and state(gift_list, i) == "want"]
 
 
-def queue_place(gift_list, keyword, tier=None, tables=None):
-    """The place in `queue` of the first gift of that keyword (and tier, when the cell's was read) it holds, else None.
-
-    For an offer too dear to read (a Not Enough Cost cell is dimmed: its tier and icon are unread, #298): the best place
-    it could hold, so the shop sells for it when a gift it may be comes first. Agent only, no GUI twin.
-    """
-    buyable = {g["id"]: g for g in (tables or _game_tables())["buyable"]}
-    return next((n for n, i in enumerate(queue(gift_list, tables)) if buyable[i]["keyword"] == keyword and tier in (None, buyable[i]["tier"])), None)
-
-
 def _pick(fusion, owned):
     """The materials to put in for `fusion`, or None: the first recipe `owned` (a Counter) has all of; for groups the first
     `need` owned ids of each group in data-file order."""
@@ -92,10 +82,12 @@ def _pick(fusion, owned):
 
 
 def recipe_fusion(gift_list, owned_ids, tables=None):
-    """{"gift": id, "materials": [ids]} for the first wanted fusion in data-file order whose materials `owned_ids` (a list,
-    repeats count) hold, else None. A pack-specific fusion is made whatever the run packs."""
+    """{"gift": id, "materials": [ids]} for the first wanted fusion in list order whose materials `owned_ids` (a list,
+    repeats count) hold, else None. List order = the keyword's place in `order` (`queue`'s), then data-file order: a fusion
+    is in no `gorder` (that holds the shop's gifts). A pack-specific fusion is made whatever the run packs."""
     owned = Counter(owned_ids)
-    for fusion in (tables or _game_tables())["fusions"]:
+    place = {k: n for n, k in enumerate(gift_list["order"])}
+    for fusion in sorted((tables or _game_tables())["fusions"], key=lambda f: place.get(f["keyword"], len(place))):
         if state(gift_list, fusion["id"]) == "want" and (materials := _pick(fusion, owned)):
             return {"gift": fusion["id"], "materials": materials}
     return None

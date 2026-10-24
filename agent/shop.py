@@ -3,6 +3,7 @@
 actions.py reads the shop pages and taps; everything here is plain data in, plain data out.
 """
 
+from difflib import SequenceMatcher
 from itertools import combinations
 
 import numpy as np
@@ -116,8 +117,8 @@ def read_slots(results):
     lines = [(t, x + w // 2, y + h // 2, h) for t, (x, y, w, h) in results]
     slots = []
     for t, x, y, h in sorted(lines, key=lambda line: (line[2] // 40, line[1])):
-        if h < 18 or has_letters(t):
-            continue  # tier numerals on the icons read as short lines
+        if (h < 18 and sum(c.isdigit() for c in t) < 3) or has_letters(t):
+            continue  # tier numerals on the icons read as short lines; a price read 17 px tall (Burning Intellect's 141, #341) has 3 digits
         near = [(u, uy) for u, ux, uy, _ in lines if abs(ux - x) < 75 and u != t]
         name = next((u for u, uy in near if 10 < uy - y < 40), "")
         if name and not has_letters(name):
@@ -173,6 +174,12 @@ def buyable(slot, cost=None):
     if not on_sale(slot) or slot.get("short"):
         return False
     return cost is None or slot["price"] <= cost
+
+
+def same_offer(a, b):
+    """Whether two reads of the offer grid are one offer: the same column and price, and a name that differs by a misread letter at most."""
+    return (abs(a["x"] - b["x"]) < 30 and a["price"] == b["price"]
+            and SequenceMatcher(None, a["name"].lower(), b["name"].lower()).ratio() >= 0.8)
 
 
 def on_sale(slot):

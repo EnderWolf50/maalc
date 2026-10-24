@@ -734,10 +734,17 @@ def owned_gifts(context, cells=actions.FUSE_CELLS):
 def cells_read(monkeypatch, *readings):
     """read_cells reads the first cells of any grid as readings [(keyword[, tier[, gift id]])], tier 2 and no id
     by default (test_shop_cells checks the reading itself on live captures)."""
+    places = {}
+
     def read_cells(context, image, cells, page):
-        return [{"i": i, "x": cells[i][0], "y": cells[i][1], "tier": t[0] if t else 2, "keyword": k,
+        # A grid's cells that read unknown are read again (read_clear): the same cells, a subset of the first read's.
+        if not all(c in places for c in cells):
+            places.clear()
+            places.update({c: j for j, c in enumerate(cells)})
+        return [{"i": i, "x": x, "y": y, "tier": t[0] if t else 2, "keyword": k,
                  "id": t[1] if len(t) > 1 else None, "score": 0.9 if len(t) > 1 else 0.0}
-                for i, (k, *t) in enumerate(readings)]
+                for i, (x, y) in enumerate(cells) if places[(x, y)] < len(readings)
+                for k, *t in [readings[places[(x, y)]]]]
     monkeypatch.setattr(actions, "read_cells", read_cells)
 
 
@@ -2846,10 +2853,11 @@ def test_a_fusion_gone_after_a_cell_tap_taps_nothing_more(context, guarded, monk
     reads(context, FUSE_PAGE)
     fuse_slots(context, monkeypatch)
     cells_read(monkeypatch, *with_ids([("Bleed",), ("Tremor",), ("Pierce",)]))
-    page_until(context, "Shop", 5)  # gone after Fuse, the centre, Burn, its OK and the first cell
+    page_until(context, "Shop", 5 + 3)  # gone after Fuse, the centre, Burn, its OK, the first cell and the 3 taps on the neutral spot (#331)
     with pytest.raises(actions.PageGone):
         actions.Shop.fuse(context, shop_team({}), {})
-    assert taps(context)[4] in actions.FUSE_CELLS and not set(taps(context)[5:]) & set(actions.FUSE_CELLS)
+    taps_made = [t for t in taps(context) if t != actions.FUSE_NEUTRAL]
+    assert taps_made[4] in actions.FUSE_CELLS and not set(taps_made[5:]) & set(actions.FUSE_CELLS)
 
 
 def test_hands_back_clears_the_runtime_cache_of_a_long_task():

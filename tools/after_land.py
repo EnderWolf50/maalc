@@ -4,8 +4,8 @@
 
 Run it from the main checkout. It refuses while a task holds the emulator queue (a live run is using
 `install/`), fast-forwards the checkout to `origin/main` (refusing off main, with local changes, or when
-it cannot fast-forward), then builds the settings GUI, assembles `install/`
-and checks that `install/config/settings.json` still loads. Stops at the first failing step.
+it cannot fast-forward), then builds the settings GUI, fetches the OCR model and its plate copy (what is
+there is skipped), assembles `install/` and checks that `install/config/settings.json` still loads. Stops at the first failing step.
 """
 import shutil
 import subprocess
@@ -47,6 +47,7 @@ def main() -> None:
         sys.exit(f"after_land: the emulator queue holds {len(held)} ticket(s); install/ is in use. Run tools/live/queue.py status.")
     sync_main()
     step("build the settings GUI", "pnpm", "--dir", "gui", "tauri", "build", "--no-bundle")
+    step("the OCR model and its plate copy (#329)", sys.executable, "tools/fetch_ocr.py")  # skips what is there
     step("assemble install/", sys.executable, "tools/install.py")
     step("install/config/settings.json loads", sys.executable, "-c",
          "import sys; sys.path.insert(0, 'agent'); from settings import load_settings; load_settings('install')")
