@@ -209,6 +209,16 @@ describe("locked gifts", () => {
     expect(list(r)).toMatchObject({ want: [fixed.id], keep: [] });
   });
 
+  test("a locked material is no gift the list set: the tab count and the heading's kept count leave it out", async () => {
+    const r = await open([mine({ want: [fixed.id] })]);
+    await tile(r, material);
+    const kept = screen.getByRole("heading", { level: 3 }).textContent!;
+    expect(kept).not.toContain(say(zh["gl.n_keep"], { n: 1 }));
+    const tab = screen.getByRole("tab", { name: new RegExp("^" + zh[`kw.${GIFT_BY_ID.get(material)!.keyword}` as Text]) });
+    const same = GIFT_BY_ID.get(material)!.keyword === GIFT_BY_ID.get(fixed.id)!.keyword;
+    expect(tab.querySelector(".gl-n")?.textContent ?? "").toBe(same ? "1" : ""); // the wanted fusion alone, if it is under this keyword
+  });
+
   test("the GUI does not know the run's packs: a pack-specific fusion locks its materials too", async () => {
     const specific = recipes.gifts.find((g) => g.specific && g.recipes)!;
     const m = specific.recipes![0][0];
