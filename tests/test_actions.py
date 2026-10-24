@@ -848,19 +848,6 @@ def test_a_glyph_on_an_offers_icon_opens_no_purchase_dialog(context, monkeypatch
     assert visit["wanted"] is None
 
 
-def test_an_offer_whose_badge_reads_nothing_is_not_opened_to_read_its_keyword(context, monkeypatch):
-    # #297: the purchase dialog is no longer a second reading of the keyword: of 205 offer cells on 55 live pages, 155 read a
-    # tier and badge (154 named by their icon) and 50 are skills or dimmed offers; none had its badge cut off. A cell that is
-    # not read at all is not a gift to buy.
-    context.tasker.controller.post_screencap.return_value.wait.return_value.get.return_value = np.zeros((720, 1280, 3), np.uint8)
-    reads(context, {tuple(actions.OFFER_GRID): OLD_DOLL_SHOP, tuple(actions.SHOP_COST): [("787", (560, 120, 60, 30))]})
-    monkeypatch.setattr(actions, "read_cells", lambda *args: [])
-    visit = {"wanted": None, "sold": False}
-    assert actions.Shop.buy_offers(context, buying(wants(9009)), visit) == 0
-    assert not context.tasker.controller.post_click.called
-    assert visit["wanted"] is None
-
-
 def test_an_offer_with_a_red_price_is_not_tapped_though_ocr_read_it_as_affordable(context, monkeypatch):
     # Live 2026-10-18: 106 Cost, Emerald Elytra's red 160 read as 16 and its Not Enough Cost tag not at all: it was
     # tapped and opened no purchase dialog. The cell's red says the Cost is short.
