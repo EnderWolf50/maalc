@@ -76,3 +76,11 @@ def test_an_exclusive_recipe_is_made_though_the_run_took_none_of_its_packs(conte
     actions.RUN["packs"] = []
     fused, taps, ok = fusion_taps(context, monkeypatch, team(9410), ("Sinking", 2, 9408), ("Sinking", 2, 9409), *junk(2), confirm=2)
     assert fused and ok and taps == [1, 1, 0, 0]
+
+
+def test_a_recipe_that_does_not_go_in_leaves_the_ordinary_fusion_to_be_made_the_same_call(context, monkeypatch):
+    # The page ignores the taps on the recipe's cells (9003, 9053, 9157): it is passed over for this visit, not tried
+    # again and again, and the three junk gifts fuse as the round's order says (recipe first, then the ordinary one).
+    readings = [("Burn", 3, 9003), ("Burn", 3, 9053), ("Burn", 3, 9157), *junk(3)]
+    fused, taps, ok = fusion_taps(context, monkeypatch, team(SOOTHE), *readings, ignored=actions.FUSE_CELLS[:3])
+    assert fused and ok and taps[3:] == [1, 1, 1]

@@ -3658,11 +3658,14 @@ class Shop(CustomAction):
         cells, grid = owned_cells(context, "fuse")
         roles = [cell_role(c, team, "fuse", avoid) for c in cells]
         log(f"shop: fuse cells ({slots} slots) " + "; ".join(cell_line(c, f"{r}, {cell_state(c, team['list'])}") for c, r in zip(cells, roles)))
-        made = Shop.fuse_recipe(context, team, cells, grid, slots)  # a wanted fusion comes before the ordinary one (#300)
-        if made is not None:
-            visit["fuse_scanned"] = not made  # made: the owned gifts changed, the next call reads them again
+        made = Shop.fuse_recipe(context, team, cells, grid, slots, visit)  # a wanted fusion comes before the ordinary one (#300)
+        if made is False:  # the page did not take the recipe, and may hold some of its materials: close it, then the ordinary fusion
             Shop.to_main(context)
-            return made
+            return Shop.fuse(context, team, visit)  # fuse_recipe put the recipe in visit["recipes_failed"]: it is not tried again
+        if made:
+            visit["fuse_scanned"] = False  # the owned gifts changed, the next call reads them again
+            Shop.to_main(context)
+            return True
         condition = team["list"]["fusion_condition"]
         refused, fused = [], False
         while True:
@@ -3711,25 +3714,30 @@ class Shop(CustomAction):
         return gift_get(context)
 
     @staticmethod
-    def fuse_recipe(context, team, cells, grid, slots):
+    def fuse_recipe(context, team, cells, grid, slots, visit):
         """Fuse the wanted fusion the owned cells hold the materials of (gifts.recipe_fusion, #300): True when made, False when
-        tried and not, None when the list has none to make (or the page cannot hold it).
+        tried and not (the recipe is added to visit["recipes_failed"], so this visit does not try it again), None when the list
+        has none to make (or the page cannot hold it).
 
         The page needs a keyword picked before it unlocks, but a recipe's result does not depend on it (#304): the page's
         keyword stays, and the materials go in as for an ordinary fusion, each read back (place). The page recognises the
         recipe by itself once they are in (its Forecasts row reads III Guaranteed 100%, logged), and the dialog's count must
         be theirs. A recipe the page cannot hold (a Lunar Memory's 5 materials on 3 slots) is passed over for the next wanted one.
         """
-        recipe = recipe_fusion(team["list"], [c["id"] for c in cells if c["id"] is not None], slots=slots)
+        recipe = recipe_fusion(team["list"], [c["id"] for c in cells if c["id"] is not None], slots=slots,
+                              skip=visit.setdefault("recipes_failed", []))
         if recipe is None:
             return None
         group = pick_cells(cells, recipe["materials"])
         group.sort(key=lambda c: -c["y"])  # the grid's end first, as an ordinary fusion's
         names = ", ".join(cell_line(c, "material").rsplit(":", 1)[0] for c in group)
         if not Shop.place(context, group, slots, grid):
+            visit["recipes_failed"].append(recipe["gift"])
             return False
         tier, chance = read_forecast(context)
         made = Shop.press_fuse(context, len(group))
+        if not made:
+            visit["recipes_failed"].append(recipe["gift"])
         log(f"shop: recipe fusion {recipe['gift']} {GIFT_NAMES.get(recipe['gift'])} from {names}: page tier {tier or 'unread'}, chance "
             f"{f'{chance}%' if chance else 'unread'}: {'done' if made else 'not confirmed'}")
         return made
