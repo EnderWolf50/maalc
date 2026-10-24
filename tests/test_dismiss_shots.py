@@ -58,6 +58,7 @@ def test_a_full_disk_does_not_keep_the_popup_open(game, monkeypatch):
     monkeypatch.setattr(recovery, "keep_capture", fail)
     assert actions.DismissShot().run(game.ctx, arg("PopupButton"))
     assert game.taps == [(120, 210)]
+    assert "PopupButton" not in actions.DISMISSED_AT  # a failed save does not start the gap
 
 
 def test_a_node_coming_back_is_kept_once_a_minute(game, monkeypatch):
