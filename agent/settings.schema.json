@@ -53,7 +53,7 @@
         },
         "auto_accept_terms": { "type": "boolean", "default": true, "description": "tick both boxes of the title's User Agreement and Confirm; off: stop" },
         "auto_download": { "type": "boolean", "default": true, "description": "accept game data downloads and updates; off: stop" },
-        "keep_dismissed_screens": { "type": "boolean", "default": true, "description": "save the screen to logs/dismissed/ before the bot closes a notice, a popup or an unknown window" }
+        "keep_dismissed_screens": { "type": "boolean", "default": true, "description": "save the screen to logs/dismissed/ before the bot closes a notice or a popup, or presses the back key in recovery" }
       }
     },
     "deployment_order_plans": {
