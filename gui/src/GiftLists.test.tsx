@@ -191,7 +191,7 @@ describe("applying a state", () => {
 
   test("a digit typed in a select is not a state choice", async () => {
     const r = await open([mine()]);
-    await r.user.click(screen.getByRole("combobox", { name: zh["team.fusion_condition"] }));
+    await r.user.click(screen.getByRole("combobox", { name: zh["gl.fusion_condition"] }));
     await r.user.keyboard("2");
     expect(screen.getByRole("radio", { name: zh["state.want"] })).toBeChecked();
   });
@@ -243,7 +243,7 @@ describe("read-only default", () => {
     await r.user.keyboard("3");
     await r.user.click(getTile(wanted));
     expect(flash()).toBe(zh["gl.ro"]);
-    await r.user.selectOptions(screen.getByRole("combobox", { name: zh["team.fusion_condition"] }), "tier4");
+    await r.user.selectOptions(screen.getByRole("combobox", { name: zh["gl.fusion_condition"] }), "tier4");
     expect(flash()).toBe(zh["gl.ro"]);
     expect(JSON.stringify(r.settings())).toBe(before);
   });
@@ -251,7 +251,7 @@ describe("read-only default", () => {
   test("the user's own list is editable, and its fusion condition is stored", async () => {
     const r = await open([mine()]);
     expect(screen.queryByText(zh["gl.readonly"])).not.toBeInTheDocument();
-    await r.user.selectOptions(screen.getByRole("combobox", { name: zh["team.fusion_condition"] }), "tier4");
+    await r.user.selectOptions(screen.getByRole("combobox", { name: zh["gl.fusion_condition"] }), "tier4");
     expect(list(r).fusion_condition).toBe("tier4");
   });
 });

@@ -130,7 +130,7 @@ export function GiftListsTab() {
             <input ref={searchBox} type="search" className="gl-search" aria-label={t("gl.search")} placeholder={t("gl.search_ph")}
               value={query} onChange={(e) => setQuery(e.target.value)} />
             <span className="spacer" />
-            <label title={t("team.fusion_condition_note")}>{t("team.fusion_condition")}{" "}
+            <label title={t("gl.fusion_condition_note")}>{t("gl.fusion_condition")}{" "}
               <select value={list.fusion_condition}
                 onChange={(e) => editable() && update((d) => { d.gift_lists[at].fusion_condition = e.target.value; })}>
                 {FUSION_CONDITIONS.map((v) => <option key={v} value={v}>{tv("fusion_condition", v)}</option>)}

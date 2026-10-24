@@ -961,7 +961,7 @@ FORGO_DIALOG = [480, 330, 320, 35]  # Refuse Gift's "Forgo ...?"
 SEARCH_DIALOG_BUTTONS = {"cancel": (513, 495), "confirm": (765, 495)}
 # A gift's icon (image/GiftSearch/<id>.png) scores 0.71-0.97 on its own cell, other cells up to ~0.75 (2026-10-16):
 # low enough to try a dark icon; the panel name check undoes a lookalike.
-ICON_MIN = 0.65
+SEARCH_ICON_MIN = 0.65
 GRID_MID = 420  # a dragged-to gift's row lands here: whole rows above and below it
 
 
@@ -1067,7 +1067,7 @@ class GiftSearch(CustomAction):
             image = page_guard(context, "GiftSearch")
             cells = gift_search.gift_cells(image)
             for k, (score, x, y) in enumerate(GiftSearch.icon_scores(context, image, entry["id"], [c for c in cells if c[2] == gift["tier"]])[:2]):
-                if score < ICON_MIN:
+                if score < SEARCH_ICON_MIN:
                     break
                 if k:
                     image = page_guard(context, "GiftSearch")  # the first candidate's tap and wait lie behind this one
