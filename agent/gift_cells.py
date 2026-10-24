@@ -4,6 +4,7 @@ actions.read_cells reads a cell's tier and keyword badge; the gifts of that keyw
 their icons are matched on the cell. Everything here is plain data in, plain data out.
 """
 
+from run_start import match_pack
 from settings import VESTIGE_IDS, VESTIGES, extra_gifts, gift_tables
 # CCOEFF score of an icon on its own cell and on another's: the gifts of the table's cells score 0.51-0.96, a gift the table
 # lacks 0.30-0.38, a lookalike 0.54 at most with the gift covered (#297, docs/spec/03-decisions.md section 13)
@@ -57,3 +58,34 @@ def best(scores):
     if not ranked or ranked[0][1] < ICON_MIN or (len(ranked) > 1 and ranked[0][1] - ranked[1][1] < ICON_MARGIN):
         return None
     return ranked[0][0]
+
+
+# The English name plate under every cell of the shop's buy page, dimmed (Not Enough Cost) and Purchased cells too (#329):
+# a box 64 px under the cell's centre, 152 px wide and 26 high, one line. Relative to the centre, so a scrolled grid has it.
+PLATE_DX, PLATE_DY, PLATE_W, PLATE_H = -76, 64, 152, 26
+PLATE_MODEL = "plate"  # its OCR folder under model/ocr/, a copy of the default one that tools/fetch_ocr.py makes (#329); actions.plate_model
+
+
+def plate_roi(x, y):
+    """The OCR box [x, y, w, h] of the name plate of the cell centred at (x, y)."""
+    return [x + PLATE_DX, y + PLATE_DY, PLATE_W, PLATE_H]
+
+
+def name_id(text, ids):
+    """The id of the gift whose English name `text` (a plate's OCR) stands for, else None; ids: {English name: id}.
+
+    run_start.match_pack's bar (0.9, 0.04 ahead). A two-line name shows its first line only; a skill slot ("Replace ...
+    Skill") is no gift's name.
+    """
+    name = match_pack(text, ids) if text else None
+    return ids.get(name)
+
+
+def vote(icon, name):
+    """(the cell's id, whether the two disagreed) from the icon's id and the plate's id (None: unread).
+
+    Both read and different: neither is trusted, the cell is unknown. One read: that one (a dimmed cell has no readable icon).
+    """
+    if icon is not None and name is not None and icon != name:
+        return None, True
+    return (icon if icon is not None else name), False

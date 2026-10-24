@@ -4,6 +4,7 @@ import json
 import os
 import subprocess
 import sys
+import time
 import traceback
 import types
 from pathlib import Path
@@ -70,6 +71,29 @@ def test_two_icons_that_both_match_leave_the_cell_unknown():
     # Tattoo 0.53 are neither the gift; a tie is no answer.
     assert g.best([(9769, 0.54), (9026, 0.53)]) is None
     assert g.best([(9769, 0.62), (9026, 0.50)]) == 9769  # 0.12 ahead
+
+
+def test_the_name_plate_of_a_cell_is_read_in_a_box_under_its_centre():
+    # #329: 64 px under the centre, 152 wide and 26 high, relative to the centre: a scrolled grid has it just the same (#341).
+    assert g.plate_roi(624, 265) == [548, 329, 152, 26]
+    assert g.plate_roi(100, 50) == [24, 114, 152, 26]
+
+
+def test_a_plate_names_the_gift_it_reads_and_a_non_gift_or_a_slip_names_none():
+    ids = {e["en"]: e["id"] for e in g.load()}
+    assert g.name_id("Arrested Hymn", ids) == 9106
+    assert g.name_id("Arrested Hymm", ids) == 9106  # one letter off: 0.9 and 0.04 ahead pass
+    assert g.name_id("Recollection of Certain", ids) == 9177  # a two-line name: only its first line fits the box
+    assert g.name_id("Replace Gregor's Skill", ids) is None  # a skill slot is no gift
+    assert g.name_id("", ids) is None
+
+
+def test_the_icon_and_the_plate_each_vote_and_a_disagreement_is_unknown():
+    assert g.vote(9053, 9053) == (9053, False)
+    assert g.vote(9053, None) == (9053, False)  # one vote is enough
+    assert g.vote(None, 9053) == (9053, False)  # a dimmed cell: the icon unread
+    assert g.vote(None, None) == (None, False)
+    assert g.vote(9053, 9009) == (None, True)  # two different gifts: neither is trusted
 
 
 def fake_context(scores, seen=None):
@@ -155,6 +179,9 @@ CASES = {  # name: (crop under tests/shop, the page's cells, the page)
 }
 
 
+PLATE_CASES = ["offers", "offers_super", "offers_red", "offers_short"]
+
+
 def child():
     """Print {"cases": {case: [id]}, "sweep": {"<capture> <page>": [[cell, id]]}}: read_cells on the crops, and on every
     tests/screens capture at the three layouts (a capture whose cells show no tier cannot name a gift: not read)."""
@@ -186,7 +213,7 @@ def child():
         def __getattr__(self, name):  # start_app, click, swipe, touch_*, keys, text, scroll: nothing moves
             return lambda *args: True
 
-    out = {"cases": {}, "sweep": {}}
+    out = {"cases": {}, "sweep": {}, "plates": {}, "plate_sweep": {}, "plate_ms": [], "default_ms": []}
 
     class Probe(CustomAction):
         def run(self, context, argv):
@@ -194,8 +221,25 @@ def child():
                 for case, (crop, cells, page) in CASES.items():
                     found = actions.read_cells(context, screen_with(crop), cells if isinstance(cells, list) else getattr(actions, cells), page)
                     out["cases"][case] = [c["id"] for c in found]
+                actions.ocr(context, screen_with("offers"), actions.OFFER_GRID)  # the agent's order: a det+rec pass reads before any plate
+                for case in PLATE_CASES:  # the offers' name plates (#329), one per filled cell
+                    image = screen_with(case)
+                    cells = [(x, y) for x, y in actions.OFFER_CELLS if shop.filled(image, x, y)]
+                    started = time.perf_counter()
+                    plates = actions.read_plates(context, image, cells)
+                    out["plate_ms"].append((time.perf_counter() - started) * 1000 / len(cells))
+                    own, actions.plate_model = actions.plate_model, lambda: None  # the default instance, for comparison
+                    started = time.perf_counter()
+                    actions.read_plates(context, image, cells)
+                    out["default_ms"].append((time.perf_counter() - started) * 1000 / len(cells))
+                    actions.plate_model = own
+                    out["plates"][case] = [[i, p["text"], p["id"]] for i, p in enumerate(plates)]
                 for path in sorted((ROOT / "tests" / "screens").glob("*.png")):
                     image = np.ascontiguousarray(np.array(Image.open(path).convert("RGB"))[:, :, ::-1])
+                    cells = [(x, y) for x, y in actions.OFFER_CELLS if shop.filled(image, x, y)]
+                    named = [[i, p["id"]] for i, p in enumerate(actions.read_plates(context, image, cells)) if p["id"]]
+                    if named:
+                        out["plate_sweep"][path.stem] = named
                     for cells, page in ((FUSE, "fuse"), (SELL, "sell"), (OFFER, "offer")):
                         cells, scale = getattr(actions, cells), actions.CELL_PAGES[page][0]
                         if not any(shop.filled(image, x, y) and shop.tier(shop.cell_crop(image, x, y, scale)) for x, y in cells):
@@ -246,6 +290,61 @@ def test_a_cell_is_named_by_its_icon_on_each_page(read, case, ids):
     assert read["cases"][case] == ids
 
 
+@pytest.mark.parametrize("case", ["offers", "offers_super", "offers_red"])
+def test_the_name_plate_names_what_the_icon_names(read, case):
+    # #329: wherever the icon names a gift, the plate names the same one; a skill slot's plate names none.
+    plates = [p[2] for p in read["plates"][case]]
+    assert plates == read["cases"][case]
+
+
+def test_a_plate_is_no_slower_than_the_default_instance_after_a_full_ocr_pass(read):
+    # #329: the default OCR instance reads a line in 31 ms on DirectML once a det+rec pass has used it (4 ms before); the plates'
+    # own instance (gift_cells.PLATE_MODEL) keeps the 4 ms. That the plates ask for it is test_a_plate_is_read_one_line_...; this
+    # one is the instance's behaviour on this machine, 5 ms against 31 on DirectML. Timed against the default instance on the same machine (a CPU-only
+    # runner reads both alike, slowly), the first case left out: it pays the model's load. Each time is a case's mean per cell.
+    own, default = (sorted(read[k][1:])[len(read[k][1:]) // 2] for k in ("plate_ms", "default_ms"))
+    assert own < default * 1.5, read
+
+
+def test_a_plate_is_read_one_line_by_the_plates_own_ocr_instance(tmp_path, monkeypatch):
+    # #329: only_rec in the plate's box under the cell's centre, with the folder of its own (the default one is slow once a
+    # det+rec pass has used it); every other read keeps the default folder.
+    import actions  # noqa: PLC0415
+    asked = []
+
+    def run_recognition(name, image, override):
+        asked.append(override[name])
+        return types.SimpleNamespace(all_results=[types.SimpleNamespace(text="Arrested Hymn", box=(0, 0, 10, 10))])
+    context = types.SimpleNamespace(run_recognition=run_recognition)
+    assert actions.read_plates(context, None, [(778, 265)]) == [{"text": "Arrested Hymn", "id": 9106}]
+    assert asked == [{"recognition": "OCR", "roi": [702, 329, 152, 26], "only_rec": True, "model": g.PLATE_MODEL}]
+    asked.clear()
+    # a checkout whose model folder lacks the copy (MaaFramework reads nothing from a folder that is not there): the default
+    # instance reads, and the log says so once
+    lines = []
+    monkeypatch.setattr(actions, "OCR_DIR", tmp_path)
+    monkeypatch.setattr(actions, "log", lines.append)
+    monkeypatch.setitem(actions.RUN, "plate_model_logged", False)
+    actions.read_plates(context, None, [(778, 265), (932, 265)])
+    assert [n["only_rec"] for n in asked] == [True, True] and all("model" not in n for n in asked)
+    assert len(lines) == 1 and "fetch_ocr" in lines[0]
+    asked.clear()
+    actions.ocr(context, None, [0, 0, 5, 5])
+    assert "model" not in asked[0]
+
+
+def test_the_plates_ocr_folder_holds_a_model_copy():
+    ocr = settings.data_dir().parent / "model" / "ocr"
+    assert all((ocr / g.PLATE_MODEL / name).is_file() for name in ("det.onnx", "rec.onnx", "keys.txt"))
+
+
+def test_the_name_plate_names_dimmed_and_purchased_cells(read):
+    # #329, live 2026-10-18 (106 Cost): three Not Enough Cost offers (Emerald Elytra, Lithograph, Reverberation) show no tier,
+    # so no icon id; a Purchased one (Ornamental Horseshoe) shows its name just the same. The skill slot names none.
+    assert read["plates"]["offers_short"] == [[0, "Replace Meursault's Skill", None], [1, "Emerald Elytra", 9128],
+                                              [2, "Lithograph", 9017], [3, "Reverberation", 9086], [4, "Ornamental Horseshoe", 9097]]
+
+
 def test_a_pack_exclusive_gift_is_named_and_a_cell_with_no_tier_read_is_unknown(read):
     # Fuse page with a recipe on offer: a tier IV Poise globe (Clear Mirror, Calm Water) and a tier IV Keywordless paper
     # (Non-disclosure Agreement) were unknown until #332 listed every gift of the game data; the Fusion Available cell is Cask Spirits (IV).
@@ -273,6 +372,13 @@ def test_no_other_capture_names_a_gift(read):
         "ShopFuseRecipeTwo fuse": [[0, 9179]],
         "SuperShop offer": [[3, 9187], [4, 9009], [5, 9102], [6, 9063], [7, 9163]],
     }
+
+
+def test_no_capture_but_the_shops_has_a_name_plate_that_names_a_gift(read):
+    # #329: the plates of every tests/screens capture's offer cells (a false id on a screen with no shop would fail here).
+    # ShopPurchase: the dialog covers the shop but Lowest Star's plate (the filled cell at index 3) still shows, dimmed, and is read right.
+    assert read["plate_sweep"] == {"Shop": [[1, 9123], [2, 9198], [3, 9150], [4, 9086]], "ShopPurchase": [[3, 9027]],
+                                   "SuperShop": [[3, 9187], [4, 9009], [5, 9102], [6, 9063], [7, 9163]]}
 
 
 if __name__ == "__main__":
