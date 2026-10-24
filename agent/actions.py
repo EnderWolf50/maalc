@@ -31,7 +31,7 @@ import rewards
 import run_start
 import settlement
 import shop
-from gifts import effective, main_keyword, queue, resolve_list
+from gifts import effective, main_keyword, queue, resolve_list, state
 from ocrtext import compact, digits, has, normalize
 from settings import VESTIGE_IDS, SettingsError, data_dir, load_settings
 from state import next_cursor, pick_team, read_cursor, write_cursor
@@ -2806,6 +2806,15 @@ def read_cost(context, roi=SHOP_COST):
     return None
 
 
+def cell_state(cell, gift_list):
+    """What the list makes of the gift a cell shows, for the log (#299): "want", "keep", "locked" (a drop gift a wanted
+    fusion needs), "drop", or "unknown" (the icon was not told)."""
+    if cell["id"] is None:
+        return "unknown"
+    own = state(gift_list, cell["id"])
+    return "locked" if own == "drop" and effective(gift_list, cell["id"]) != "drop" else own
+
+
 def cell_role(cell, team, page, avoid):
     """"material" or "keep": what the shop may do with the owned gift a cell of page ("fuse" or "sell") shows (#299).
 
@@ -3530,7 +3539,7 @@ class Shop(CustomAction):
         avoid = [g["id"] for g in avoided_gifts(team)]
         cells, grid = owned_cells(context, "sell")
         roles = [cell_role(c, team, "sell", avoid) for c in cells]
-        log("shop: sell cells " + "; ".join(f"{cell_line(c, r)} {c['price']}" for c, r in zip(cells, roles)))
+        log("shop: sell cells " + "; ".join(f"{cell_line(c, f'{r}, {cell_state(c, team['list'])}')} {c['price']}" for c, r in zip(cells, roles)))
         gifts = [(c["i"], c["price"]) for c, r in zip(cells, roles) if r == "material" and c["price"]]
         avoided = {c["i"] for c in cells if c["id"] in avoid}  # sold first (#90)
         # The fusion still uses what may not be sold (#79): a vestige the team does not sell (kept on the sell page, material
@@ -3614,7 +3623,7 @@ class Shop(CustomAction):
         avoid = [g["id"] for g in avoided_gifts(team)]
         cells, grid = owned_cells(context, "fuse")
         roles = [cell_role(c, team, "fuse", avoid) for c in cells]
-        log(f"shop: fuse cells ({slots} slots) " + "; ".join(cell_line(c, r) for c, r in zip(cells, roles)))
+        log(f"shop: fuse cells ({slots} slots) " + "; ".join(cell_line(c, f"{r}, {cell_state(c, team['list'])}") for c, r in zip(cells, roles)))
         condition = team["list"]["fusion_condition"]
         refused, fused = [], False
         while True:
