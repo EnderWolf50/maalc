@@ -14,7 +14,7 @@ Taken on 2026-10-22: every `.py`, `.sh` and `.ps1` under `.local/`, leaving out 
 | Cut a clip | 13 | `scratch/combined-verify/mkclip.py`, `packclip.py` | yes | `evidence.py clip`, `map --clip`, `packs --clip` |
 | Frames at wall times | 19 | `scratch/top-live-video4/grabframes.py`, `scratch/combined-verify/common.py` (`frames`) | yes | `evidence.py frames` |
 | Recording against the log | 29 | `scratch/combined-verify/common.py` (`locate`), `scratch/video-align/fit_block*.py` | yes | `--video PATH@START` of `evidence.py`; the offset fits are `tools/video_align.py` already |
-| Map: stitched floor, every node marked | 24 | `scratch/combined-verify/route.py` | yes | `evidence.py map` |
+| Map: stitched floor, every node marked (special reads in colour, legend, slide measured from the frames) | 24 | `scratch/combined-verify/route.py` | yes | `evidence.py map` |
 | Pack page: names, weights, pick, settle time | 41 | `scratch/combined-verify/packs.py` | yes | `evidence.py packs` |
 | Identity masks | 8 | `scratch/top-live-video4/mask85.py`, `scratch/retry-capture/mask_still.py` | yes | `evidence.py mask` (the templates of `.local/evidence/masks.json`, not fixed boxes) |
 | Start the bot, run the tasker | 94 | `scratch/combined-verify/tasker.py`, `tsrun.py`, `start_game.py` | yes | `bot.py run`; `device.py start` |
