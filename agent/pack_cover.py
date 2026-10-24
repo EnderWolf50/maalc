@@ -7,13 +7,12 @@ from the cover images of #242 by tools/theme_pack_signatures.py with the same si
 import base64
 import json
 from functools import lru_cache
-from pathlib import Path
 
 import numpy as np
 
-ROOT = Path(__file__).resolve().parent.parent
-# as actions.RESOURCE: resource/ sits under <root> in a release, under assets/ in the repo (#323)
-SIGNATURES = next(p for p in (ROOT / "resource", ROOT / "assets" / "resource") if p.is_dir()) / "base" / "data" / "theme_pack_signatures.json"
+from settings import data_dir
+
+SIGNATURES = data_dir() / "theme_pack_signatures.json"  # (#323)
 GRID = (16, 12)  # rows, columns of a signature
 ART = (0.05, 0.18, 0.95, 0.62)  # the part of a card that is its picture (left, top, right, bottom as shares): below the
 # search button and warning mark, above the logo and the title
