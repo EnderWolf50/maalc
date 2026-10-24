@@ -37,8 +37,9 @@ def clock(monkeypatch):
 
 
 @pytest.fixture
-def context(clock, monkeypatch):
+def context(clock, monkeypatch, tmp_path):
     # The action's page stays up: #118's guard is driven on its own (page_until).
+    monkeypatch.setattr(actions, "ROOT", tmp_path)  # what the agent keeps under logs/ (a Cost miss's crop) stays out of the repo
     monkeypatch.setattr(actions, "page_guard", lambda context, home, image=None: actions.screen(context) if image is None else image)
     monkeypatch.setattr(actions, "FEATURE_MATCH", set())  # fakes read every roi in screen coordinates: no cut-outs
     ctx = MagicMock()
@@ -1804,10 +1805,11 @@ def test_a_difficulty_label_not_readable_yet_is_looked_at_again_not_slept_on(con
 REFRESH = (1083, 47)
 
 
-def pack_page(context, monkeypatch, floor, setting, mode, covers=None):
+def pack_page(context, monkeypatch, floor, setting, mode, covers=None, spent_after=None):
     """PickThemePack on a fake floor page of two cards weighing -5 and read as packs the data file lacks (a new pair
     after each of 4 refreshes; a 5th changes nothing: used up). Returns (refresh taps, log lines); covers collects the
-    cover reader each page's ranking is handed (#274)."""
+    cover reader each page's ranking is handed (#274). The button reads `0/3` after spent_after refreshes, unread if None
+    (#319)."""
     actions.RUN.update(settings={"run": {"theme_pack_refresh": setting}}, team={"hard_from_floor": 0}, difficulty=None)
     plan = {"weights": {}, "threshold": 0, "unlisted": -5, "event_packs": mode}
     art = {"Hello Bus": "S.E.A."}
@@ -1824,6 +1826,8 @@ def pack_page(context, monkeypatch, floor, setting, mode, covers=None):
     monkeypatch.setattr(actions, "log", lines.append)
     taps = []
     monkeypatch.setattr(actions, "tap", lambda context, x, y, wait=1.0: taps.append((x, y)))
+    monkeypatch.setattr(actions, "seen", lambda context, image, node: node == "PackRefreshSpent" and spent_after is not None
+                        and len(taps) >= spent_after)
 
     def ocr(context, image, roi, only_rec=False):
         page = min(taps.count(REFRESH), 4)
@@ -1870,6 +1874,21 @@ def test_a_theme_pack_page_below_the_threshold_is_refreshed_as_the_setting_says(
     assert used == refreshes
     assert "floor 2 packs, threshold 0: Pack 0a (-5), Pack 0b (-5)" in lines
     assert lines[-1] == f"floor 2: pull 'Pack {min(refreshes, 4)}a' (-5, below the threshold)"
+
+
+def test_a_spent_refresh_button_is_not_pressed_again(context, monkeypatch):
+    # #319: `Refresh 0/3` greyed after the 3rd refresh: no 4th tap (was one more, then the unchanged cards stopped it)
+    used, lines = pack_page(context, monkeypatch, 2, "all", "prefer", spent_after=3)
+    assert used == 3
+    assert "floor 2: no free refresh left" in lines
+    assert lines[-1] == "floor 2: pull 'Pack 3a' (-5, below the threshold)"
+
+
+def test_a_theme_pack_page_is_not_refreshed_by_a_spent_button_it_did_not_need(context, monkeypatch):
+    # #319: a button not asked about (the best pack meets the threshold, or "none") is not read for its count
+    used, lines = pack_page(context, monkeypatch, 2, "none", "weight", spent_after=0)
+    assert used == 0
+    assert "floor 2: no free refresh left" not in lines
 
 
 def test_each_card_of_a_theme_pack_page_is_logged_with_the_path_that_read_it(context, monkeypatch):

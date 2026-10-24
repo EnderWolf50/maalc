@@ -43,7 +43,7 @@ def boss_after_shop(before, column):
 
     The map's last two columns are the shop, then the boss, one node each (22 floors read; the game data's
     fixedEncounters target sector -2). The shop is told by its shape (actions.shop_icon: 0.47-1.0 on the shops
-    it finds, 0.32 at most on any other slot of 98 captures that show it); the boss' red glow is not: 722-850 red pixels on a
+    it finds, 0.42 at most on any other of 1187 slots of 98 shop captures; the "+" variant has its own templates, #287); the boss' red glow is not: 722-850 red pixels on a
     dark one against 842 on a node that is not the boss.
     So the shop decides and the glow only helps (a node reading as the boss stays one). Both columns are rank's:
     row -> (node type, ...). Returns the rows whose type it changed.

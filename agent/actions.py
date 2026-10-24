@@ -443,7 +443,7 @@ class Recover(CustomAction):
         STUCK["flag"] = None
         if unknown:  # also during a download: its progress screen is one to have a capture of
             try:
-                recovery.keep_unknown(ROOT, screen(context), settlement.now().replace(":", "-"))
+                recovery.keep_capture(ROOT, "unknown", screen(context), settlement.now().replace(":", "-"), recovery.UNKNOWN_KEEP)
             except OSError as e:
                 log(f"unknown screen not saved: {e}")
         if STUCK["watch"].held(time.monotonic()):
@@ -1191,8 +1191,8 @@ class PickThemePack(CustomAction):
         plan, packs, event_packs, title_art = theme_pack_plan(run["settings"], run["team"])
         names = packs + list(plan["weights"])  # a weighed pack the data file dropped still matches
         setting = run["settings"]["run"]["theme_pack_refresh"]
-        seen = None
-        for used in range(10):  # ponytail: stop when a refresh changes nothing; read `Refresh n/m` if that misfires
+        prev = None
+        for used in range(10):  # the button's `Refresh 0/m` ends it; unread, a refresh that changes nothing does (#319)
             settled = still(context, timeout=CARDS_SETTLE, roi=PACK_CARDS, runs=2)
             if settled is None:
                 log(f"floor {floor}: the cards still moved after {CARDS_SETTLE:g} s")
@@ -1208,9 +1208,12 @@ class PickThemePack(CustomAction):
             log(f"floor {floor} card reads: " + ", ".join(f"{t} <- {how}" for t, _, how in ranked))  # #274: which path named each card
             titles = [t for t, _, _ in ranked]
             i, meets = run_start.pick_pack([w for _, w, _ in ranked], slots, plan)
-            if not run_start.refresh_wanted(meets, setting, used) or titles == seen:
+            if not run_start.refresh_wanted(meets, setting, used) or titles == prev:
                 break
-            seen = titles
+            if seen(context, page, "PackRefreshSpent"):
+                log(f"floor {floor}: no free refresh left")
+                break
+            prev = titles
             tap(context, 1083, 47, wait=3)
         x = cards[i][0]
         log(f"floor {floor}: pull {ranked[i][0]!r} ({ranked[i][1]}{'' if meets else ', below the threshold'})")
@@ -1267,6 +1270,9 @@ MARKS = {  # node -> (mark, roi around the slot centre)
     "MapNodeEvent": ("event", (-60, -60, 120, 120)),
     "MapNodeShop": ("shop", (-60, -60, 120, 120)),
 }
+# The shop's icon in grey, each with its own threshold: the plain one, the "+" variant (a star at the top left, a "+" at the
+# bottom right, hard floors) and one torn-frame capture (#287)
+SHOP_ICONS = ("MapNodeShopIcon", "MapNodeShopIconPlus", "MapNodeShopIconTorn")
 FEATURE_MATCH = {"MapNodeFocusedHex", "MapNodeEvent", "MapNodeShop"}  # the pipeline's FeatureMatch nodes
 FEATURE_PAD, FEATURE_ALIGN = 64, 32  # px of the screen kept around a FeatureMatch roi; grid of the cut's corner
 ENTER = (1133, 543)
@@ -1327,13 +1333,16 @@ def shop_icon(context, image, cx, cy):
     The icon takes the theme pack's hue: cyan and orange packs (live 2026-10-18) matched none of the colour
     templates. TemplateMatch CCOEFF on the brightness alone (max over the channels) is blind to hue and to the
     pack's brightness: the shop scored 0.49-1.0 on 12 packs' captures, anything else 0.31 at most.
+    The "+" variant of the hard floors scored 0.33-0.39 on it, so it has its own templates; the best score of the three decides.
     """
     ox, oy, w, h = MARKS["MapNodeShop"][1]
     window = image[max(0, cy + oy):cy + oy + h, max(0, cx + ox):cx + ox + w]
     if window.shape[0] < 40 or window.shape[1] < 70:
         return None
     grey = np.repeat(window.max(axis=2)[..., None], 3, axis=2)
-    return seen(context, grey, "MapNodeShopIcon", (0, 0, window.shape[1], window.shape[0]))
+    box = (0, 0, window.shape[1], window.shape[0])
+    hits = [hit for n in SHOP_ICONS if (hit := seen(context, grey, n, box))]
+    return max(hits, key=lambda hit: hit.best_result.score, default=None)
 
 
 def node_at(context, image, cx, cy, marks=None, costs=True):
@@ -1342,10 +1351,10 @@ def node_at(context, image, cx, cy, marks=None, costs=True):
     No mark at all where the badges (80 px above the centre) sit under the resource bar: unknown, not an
     event; a fight's Cost coin may be hidden there (the top row with the map at rest).
     #91: with costs, a fight's kind is its Cost number looked up in the floor's difficulty's node_costs
-    (map_weights.yaml), matched on the last two digits too: a 3-digit number may lose its first (offline,
-    120 read 20, 150 read 50). A number unread or not in the table leaves the marks to decide.
+    (map_weights.yaml), as read: a number unread or not in the table leaves the marks to decide (cost_miss logs it).
+    The boss' Costs are in the table too: a boss whose red glow went unmatched reads as the boss by its Cost.
     Only the columns up to MAP_NEAR are read so: further out the badges may be dim (offline, MirrorMap.png's
-    85 two columns out read 8). Those come near as RouteMap.read_on drags the map, and a planned slot is read
+    85 two columns out read 8 with the crop before #284). Those come near as RouteMap.read_on drags the map, and a planned slot is read
     again once next to the bus (RouteMap.follow).
     """
     marks = node_marks(context, image, cx, cy) if marks is None else marks
@@ -1353,27 +1362,59 @@ def node_at(context, image, cx, cy, marks=None, costs=True):
         return "unknown"
     if not (costs and "cost" in marks and "boss" not in marks):
         return map_route.node_type(set(marks))
-    cost = coin_number(context, image, marks["cost"].box)
-    table = map_data()["node_costs"]["hard" if is_hard(context) else "normal"] if cost is not None else {}
-    kind = map_route.node_type(set(marks), next((k for c, k in table.items() if cost in (c, c % 100)), None))
+    difficulty = "hard" if is_hard(context) else "normal"
+    table = map_data()["node_costs"][difficulty]
+    found = coin_text(context, image, marks["cost"].box)
+    cost = coin_number(found)
+    kind = map_route.node_type(set(marks), table.get(cost))
     log(f"map: node at {cx}, {cy} reads Cost {cost}: {kind}")
+    if cost not in table:
+        cost_miss(image, marks["cost"].box, cx, cy, found, difficulty)
     return kind
 
 
-def coin_number(context, image, box):
-    """The number printed beside a map node's Cost coin (box), or None when none reads (#91).
+def coin_text(context, image, box):
+    """The OCR text of the number printed beside a map node's Cost coin (box): coin_number makes it a number.
 
-    Offline on 13 nodes of 7 captures: OCR of the bare badge read 75 as 25 or 5; of the bright,
-    near-white digits cut out (as order_marks does) every battle's 75 or 85 right, dim ones too.
-    A 3-digit number may lose its first digit (375 read 75, 120 read 20): node_at matches the last two digits.
-    A single digit is a part read: None.
+    The game's font, right-aligned, 8 px a digit and 16 rows tall: the digits fill x+w-12 .. x+w+12, y+24 .. y+40,
+    and the crop keeps to them with a pixel or two to spare (#284): a lit link's pale line runs under the number and
+    past its right edge, as cream as the digits, and wider crops kept it (an 85 read 5 or B5). The digits are the
+    bright, barely saturated pixels; each keeps its own shading, dark on white, rather than going plain black: its
+    1 px counters are what tell an 8 from a 0, and a black cut-out loses them (8 read B). A white margin: the OCR
+    reads a glyph on the crop's edge badly (#257; spec 03 section 7).
     """
     x, y, w, _ = box
-    part = image[max(0, y + 8):y + 38, max(0, x + w - 8):x + w + 32]
-    mask = (part.max(axis=2) > 170) & (saturation(part) < 90)
-    plain = np.where(mask[..., None], 0, 255).astype(np.uint8).repeat(3, axis=2)
-    found = re.sub(r"\D", "", text(context, plain, [0, 0, plain.shape[1], plain.shape[0]], only_rec=True))
-    return int(found) if len(found) >= 2 else None
+    part = image[y + 22:y + 41, max(0, x + w - 13):x + w + 13]
+    bright = part.max(axis=2)
+    mask = (bright > 100) & (saturation(part) < 120)
+    plain = np.where(mask, 255 - bright, 255).astype(np.uint8)[..., None].repeat(3, axis=2)
+    plain = np.pad(plain, ((6, 6), (6, 6), (0, 0)), constant_values=255)
+    return text(context, plain, [0, 0, plain.shape[1], plain.shape[0]], only_rec=True)
+
+
+def coin_number(found):
+    """The Cost number in coin_text's OCR text; None for a part read (coin_part says which)."""
+    digits = re.sub(r"\D", "", found)
+    return None if coin_part(digits) else int(digits)
+
+
+def coin_part(digits):
+    """Why the digits of a Cost read are only part of a number, or None when they make one."""
+    return "no digits" if not digits else "one digit" if len(digits) < 2 else "leading 0" if digits[0] == "0" else None
+
+
+def cost_miss(image, box, cx, cy, found, difficulty):
+    """Log why a Cost coin's read is no Cost of the floor's difficulty, and keep its crop in logs/cost (#284)."""
+    digits = re.sub(r"\D", "", found)
+    why = coin_part(digits) or f"{digits} is no {difficulty} Cost"
+    x, y, w, h = box
+    stamp = f"{settlement.now().replace(':', '-')}_{cx}_{cy}"
+    try:
+        recovery.keep_capture(ROOT, "cost", image[max(0, y - 8):y + h + 24, max(0, x - 8):x + w + 24], stamp, recovery.COST_KEEP)
+        kept = f", crop logs/cost/{stamp}.png"
+    except OSError as e:
+        kept = f", crop not saved: {e}"
+    log(f"map: Cost miss at {cx}, {cy} ({difficulty}): {why}, OCR {found!r}{kept}")
 
 
 def map_data():
@@ -1383,7 +1424,7 @@ def map_data():
 def is_hard(context):
     """Whether this floor is on hard: set_difficulty's floor_hard, else the run's difficulty."""
     run = current_run(context)
-    return run.get("floor_hard", run["difficulty"] == "hard")
+    return run.get("floor_hard", run.get("difficulty") == "hard")
 
 
 def map_weights(context):
@@ -2730,6 +2771,8 @@ CELL_ICON_ROI = 70  # px square around a cell's centre on the scaled grid where 
 FUSE_CONFIRM = [300, 150, 680, 380]  # "Selected E.G.O Gifts 3/5" over "Fuse the selected E.G.O Gifts?"
 FUSE_COUNT = r"(\d)\s*/\s*\d"  # its "3/5": the materials in
 FUSE_NEUTRAL = (815, 160)  # above the owned grid, between Recipes and Fusion Guide: closes a tooltip, selects nothing
+FORECAST_CHANCE = [428, 455, 62, 28]  # "90%" at the Forecasts row's right: the keyword's chance (60 / 90 / 99, 100 on a recipe)
+FUSE_TRIES = 3  # groups one fuse page's forecast may turn down before the page is closed (#285)
 TOOLTIP_CLOSE = {"fuse": FUSE_NEUTRAL}  # per page: where a tap closes a gift's tooltip, which hides the cells under it (#331)
 SELL_COST = [960, 80, 160, 45]
 SELL_GRID = [630, 210, 480, 290]  # the sell page's gifts with their prices under them
@@ -3111,17 +3154,28 @@ def cell_at(context, grid, cell):
     return x, y + k
 
 
-def fusions(cells, roles, slots, avoid, condition="any"):
+def fusions(cells, roles, slots, avoid, condition="any", refused=()):
     """shop.pick_fusion over the cells whose role is material and whose tier is read: [([cell index], tier)] (#77).
 
     The thresholds are the Super Shop's when the page has its 5 slots; an avoided gift goes in first (#90); condition
-    is the team's fusion_condition (#263).
+    is the team's fusion_condition (#263); refused, the tiers (sorted) of the groups the page's forecast turned down (#285).
     """
     d = data("shop.yaml")
     materials = [(c["i"], c["tier"]) for c, r in zip(cells, roles) if r == "material" and c["tier"]]
     tiers = d["fusion_tiers"]["super_shop" if slots == 5 else "shop"]
     return shop.pick_fusion(materials, slots, tiers, d["fusion_points"], {c["i"] for c in cells if c["gift"] in avoid},
-                            condition)
+                            condition, refused)
+
+
+def read_forecast(context):
+    """(the tier the fuse page's Forecasts row predicts, the keyword's chance in %), each None when unread (#285).
+
+    The row shows once a material is in: waited for a second, not longer (a page whose row never reads is no loss).
+    """
+    image = until(context, shop.forecast_tier, timeout=1.0)
+    if image is None:
+        return None, None
+    return shop.forecast_tier(image), number(text(context, image, FORECAST_CHANCE, only_rec=True))
 
 
 def tap_keyword(context, keyword):
@@ -3587,40 +3641,57 @@ class Shop(CustomAction):
         roles = [cell_role(c, team, "fuse", avoid) for c in cells]
         log(f"shop: fuse cells ({slots} slots) " + "; ".join(cell_line(c, r) for c, r in zip(cells, roles)))
         condition = team.get("fusion_condition", "any")
-        picks = fusions(cells, roles, slots, avoid, condition)
-        if not picks:
-            visit["fuse_scanned"] = True
-            log(f"shop: {roles.count('material')} materials on show, a fusion takes {shop.MIN_FUSION}" + ("" if condition == "any" else f", and none meets the condition {condition}"))
-            Shop.to_main(context)
-            return False
-        group, tier = picks[0]
-        group = sorted((next(c for c in cells if c["i"] == i) for i in group), key=lambda c: -c["y"])  # the grid's end first
-        materials = ", ".join(cell_line(c, "material").rsplit(":", 1)[0] for c in group)
-        fused = False
-        if Shop.place(context, group, slots, grid):
-            # Read again on the still screenshot: the one that matched was taken while the dialog zoomed in.
-            page_guard(context, "Shop")
-            image = tap_shown(context, *PAGE_OK, shows(context, FUSE_CONFIRM, FUSE_COUNT), timeout=2)
-            m = image is not None and re.search(FUSE_COUNT, text(context, image, FUSE_CONFIRM))
-            if m and int(m[1]) == len(group):
-                tap(context, 788, 583, wait=0)  # the dialog's Confirm; gift_get waits for its GET!
-                fused = gift_get(context)
-            log(f"shop: fuse {materials} into a tier {tier} {keyword} gift (condition {condition}): {'done' if fused else 'not confirmed'}")
-        # Unconfirmed or not read back: not the same scan again until the owned gifts change (#103).
+        refused, fused = [], False
+        while True:
+            picks = fusions(cells, roles, slots, avoid, condition, refused)
+            if not picks:
+                visit["fuse_scanned"] = True
+                log(f"shop: {roles.count('material')} materials on show, a fusion takes {shop.MIN_FUSION}"
+                    + ("" if condition == "any" else f", and none meets the condition {condition}")
+                    + (f", {len(refused)} turned down by the page's forecast" if refused else ""))
+                Shop.to_main(context)
+                return False
+            group, tier = picks[0]
+            group = sorted((next(c for c in cells if c["i"] == i) for i in group), key=lambda c: -c["y"])  # the grid's end first
+            materials = ", ".join(cell_line(c, "material").rsplit(":", 1)[0] for c in group)
+            if not Shop.place(context, group, slots, grid):
+                break
+            # The page's own forecast beats the points (#285): a tier the condition refuses is not fused, whichever table
+            # the game used. An unread row falls back to the points tier, which pick_fusion already checked.
+            page_tier, chance = read_forecast(context)
+            wanted = page_tier is None or shop.fusion_wanted(condition, page_tier, [(c["i"], c["tier"]) for c in group])
+            act = ("fuse on the points tier" if page_tier is None else "fuse") if wanted else "turned down"
+            log(f"shop: fuse forecast {materials}: points tier {tier}, page tier {page_tier or 'unread'}, chance "
+                f"{f'{chance}%' if chance else 'unread'}, condition {condition}: {act}")
+            if wanted:
+                # Read again on the still screenshot: the one that matched was taken while the dialog zoomed in.
+                page_guard(context, "Shop")
+                image = tap_shown(context, *PAGE_OK, shows(context, FUSE_CONFIRM, FUSE_COUNT), timeout=2)
+                m = image is not None and re.search(FUSE_COUNT, text(context, image, FUSE_CONFIRM))
+                if m and int(m[1]) == len(group):
+                    tap(context, 788, 583, wait=0)  # the dialog's Confirm; gift_get waits for its GET!
+                    fused = gift_get(context)
+                log(f"shop: fuse {materials} into a tier {page_tier or tier} {keyword} gift (condition {condition}): {'done' if fused else 'not confirmed'}")
+                break
+            refused.append(tuple(sorted(c["tier"] for c in group)))
+            if len(refused) >= FUSE_TRIES or not Shop.place(context, group, slots, grid, out=True):
+                break  # the page is closed, which empties it too
+        # Unconfirmed, refused or not read back: not the same scan again until the owned gifts change (#103).
         visit["fuse_scanned"] = not fused
         Shop.to_main(context)
         return fused
 
     @staticmethod
-    def place(context, cells, slots, grid):
+    def place(context, cells, slots, grid, out=False):
         """Tap cells into the fusion, each read back (#77); False at the first that does not show, nothing put in before.
 
         Each is dragged into view first (cell_at). After a tap one slot more holds a material and the tapped cell's
         frame turns orange: the gift went in, and it is the one meant (cell_at found it, the grid is not sorted again).
+        out: the other way round (#285), the materials in taken out again: one slot fewer, the frame gone.
         """
         filled = shop.placed(screen(context), slots)
-        if filled:
-            log(f"shop: {filled} materials in before any tap: no fusion")
+        if filled != (len(cells) if out else 0):
+            log(f"shop: {filled} materials in before any tap: " + ("not the group to take out" if out else "no fusion"))
             return False
         for n, c in enumerate(cells, 1):
             at = cell_at(context, grid, c)
@@ -3632,8 +3703,9 @@ class Shop(CustomAction):
             tap_settled(context, *FUSE_NEUTRAL, timeout=1.0)  # closes its tooltip, which shades the grid
             image = screen(context)
             filled, framed = shop.placed(image, slots), shop.picked(image, x, y, CELL_PAGES["fuse"][1])
-            if filled != n or not framed:
-                log(f"shop: cell {c['i']} tapped: {filled} of {n} materials in, {'framed' if framed else 'not framed'}: no fusion")
+            if filled != (len(cells) - n if out else n) or framed == out:
+                log(f"shop: cell {c['i']} tapped: {filled} materials in, {'framed' if framed else 'not framed'}: "
+                    + ("not taken out" if out else "no fusion"))
                 return False
         return True
 
