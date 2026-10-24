@@ -3684,8 +3684,7 @@ class Shop(CustomAction):
             x, y = at
             page_guard(context, "Shop")
             tap_moved(context, x, y, timeout=0.5)
-            tap_settled(context, *FUSE_NEUTRAL, timeout=1.0)  # closes its tooltip, which shades the grid
-            image = screen(context)
+            image = close_tooltip(context, "fuse")  # its tooltip shades the grid
             filled, framed = shop.placed(image, slots), shop.picked(image, x, y, CELL_PAGES["fuse"][1])
             if filled != (len(cells) - n if out else n) or framed == out:
                 log(f"shop: cell {c['i']} tapped: {filled} materials in, {'framed' if framed else 'not framed'}: "
