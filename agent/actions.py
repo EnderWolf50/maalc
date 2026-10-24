@@ -653,7 +653,7 @@ class PlanRun(CustomAction):
         # guard: the run's guard turns left (spec 03 section 8), counted across its battles.
         # floor_limit: each floor's time; the first clock runs from here, PickThemePack restarts it (spec 06).
         RUN.update(settings=settings, team=run_team(settings, team), difficulty=difficulty, planned=True, start=settlement.now(), deadline=time.time() + limit,
-                   floor_limit=limit, guard=team["guard_turns"])
+                   floor_limit=limit, guard=team["guard_turns"], packs=[])
         STUCK["ladder"] = recovery.Ladder()
         log(f"new run: {difficulty}, team {team['name']!r} (TEAMS #{team['game_team']}), weekly bonuses left {weekly}, time limit {limit / 60:.0f} min a floor")
         tap_then(context, 1108, 494, shows(context, ENTER_DIALOG, "Will you enter"), timeout=3)
@@ -1151,6 +1151,31 @@ def theme_pack_plan(settings, team):
     return plan, list(data["packs"]), set(data["event_packs"]), data["title_art"]
 
 
+@functools.cache
+def pack_ids():
+    """Pack name -> id, every pack of the data file's `pack_ids`."""
+    return yaml.safe_load((RESOURCE / "base" / "data" / "theme_packs.yaml").read_text(encoding="utf-8"))["pack_ids"]
+
+
+def run_packs():
+    """The ids of the theme packs the run pulled so far, or None when unknown: the agent restarted mid-run (ADR 0003) or a pulled
+    pack has no id. The gift list's exclusive recipes lock their materials all the same when it is None (gifts.lockers, #306)."""
+    return RUN.get("packs")
+
+
+def note_pack(name):
+    """Note the pack PickThemePack pulled in the run; a run that lost its earlier floors, or a pack without an id, leaves it unknown."""
+    if "packs" not in RUN:
+        return
+    ids = pack_ids()
+    if name not in ids:
+        log(f"pack {name!r} has no id: the run's packs are unknown")
+        del RUN["packs"]
+        return
+    # A re-run (BokGak) shows the original's title, so the pull may be either: note both (some recipes name only the re-run).
+    RUN["packs"] += [i for i in (ids[name], ids.get(f"{name} BokGak")) if i is not None and i not in RUN["packs"]]
+
+
 def pack_titles(context, image):
     """Cards left to right as (x centre, [text lines top to bottom]); see run_start.pack_cards."""
     return run_start.pack_cards(ocr(context, image, PACK_TITLES))
@@ -1218,6 +1243,7 @@ class PickThemePack(CustomAction):
         x = cards[i][0]
         log(f"floor {floor}: pull {ranked[i][0]!r} ({ranked[i][1]}{'' if meets else ', below the threshold'})")
         swipe(context, x, 330, x, 650, ms=600, wait=0)
+        note_pack(ranked[i][0])
         RUN["fresh_floor"] = True  # find_bus: the new map takes no drag for its first seconds
         # The page fades out slowly; do not let MirrorHub pull twice.
         until(context, lambda im: not has(text(context, im, [480, 100, 320, 40]), "FLOOR"), timeout=9)
@@ -2809,21 +2835,21 @@ def cell_state(cell, gift_list):
     if cell["id"] is None:
         return "unknown"
     own = state(gift_list, cell["id"])
-    return "locked" if own == "drop" and effective(gift_list, cell["id"]) != "drop" else own
+    return "locked" if own == "drop" and effective(gift_list, cell["id"], run_packs()) != "drop" else own
 
 
 def cell_role(cell, team, page, avoid):
     """"material" or "keep": what the shop may do with the owned gift a cell of page ("fuse" or "sell") shows (#299).
 
     Material only when the gift is known (its id was read, #297) and its effective state in the team's gift list is "drop"
-    (not wanted, not kept, and no wanted fusion's material: gifts.effective; the run's pack is unknown, so a pack's exclusive
-    fusion locks its materials all the same until #306). A gift whose id is in `avoid` (White Gossypium for a team that does
+    (not wanted, not kept, and no wanted fusion's material: gifts.effective; a pack's exclusive fusion locks its materials only
+    when the run pulled one of its packs, or run_packs is unknown, #306). A gift whose id is in `avoid` (White Gossypium for a team that does
     not hold it, #90) is material whatever the list says: the team's setting comes before the list's, as on the shelf. A
     vestige is never sold unless the team sells vestiges (sell_vestiges, #161), but still fuses.
     """
     if cell["id"] in avoid:
         return "material"
-    if cell["id"] is None or effective(team["list"], cell["id"]) != "drop":
+    if cell["id"] is None or effective(team["list"], cell["id"], run_packs()) != "drop":
         return "keep"
     if page == "sell" and cell["id"] in VESTIGE_IDS and not team.get("sell_vestiges", False):
         return "keep"

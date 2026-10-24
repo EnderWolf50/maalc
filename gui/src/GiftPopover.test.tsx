@@ -49,7 +49,7 @@ const burnIII = SEARCH_GIFTS.filter((g) => g.keyword === "Burn" && g.tier === 3)
 const fixed = recipes.gifts.find((g) => g.recipes && !g.specific && g.recipes.length === 2)!; // fixed recipes, two of them
 const material = fixed.recipes![0][0];
 const lunar = recipes.gifts.find((g) => g.groups)!;
-const specific = recipes.gifts.find((g) => g.specific && g.recipes && g.packs!.every((p) => !packName(p).startsWith("#")))!;
+const specific = recipes.gifts.find((g) => g.specific && g.recipes)!;
 
 afterEach(() => vi.useRealTimers());
 
@@ -192,6 +192,12 @@ describe("hover popover: what it says", () => {
     const r = await open([mine({ want: [specific.id] })]);
     const p = await hover(r, specific.recipes![0][0]);
     expect(p.getByText(say(zh["gl.tip_pack"], { packs: specific.packs!.map(packName).join(zh["gl.sep"]) }))).toBeInTheDocument();
+  });
+
+  test("every pack a recipe names shows by its name: the re-run copies and the Extreme-only packs too", () => {
+    expect(recipes.gifts.flatMap((g) => g.packs ?? []).filter((p) => packName(p).startsWith("#"))).toEqual([]);
+    expect([1004, 1113, 1507].map(packName)).toEqual(["Automated Factory", "Miracle in District 20 BokGak", "Who Couldn't be Bloodfiends"]);
+    expect(packName(1)).toBe("#1"); // an id the file does not know stays an id
   });
 
   test("a wanted fusion says its recipe's gifts are all locked", async () => {
