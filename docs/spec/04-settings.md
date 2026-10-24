@@ -31,7 +31,7 @@
     - `keep`：主要體系與 `keep_keywords` 的其餘飾品（`gift_recipes.json` 裡該體系的合成品與配方材料；`keep_keywords` 體系的可購買飾品也是）、所有無體系飾品（`gift_search.json` 的 `Keywordless` 分頁與 `gift_recipes.json` 裡無體系的）、`keep_gifts` 對得到 id 的飾品（用 `keyword`、`tier`、英文名對照 `gift_search.json`；殘影用名字對到 9991–9995）。已在 `want` 的不重複放進 `keep`。`keep_gifts` 對不到的丟掉並計數，GUI 遷移後在標頭的狀態列顯示「有 N 個對不到，已丟掉」，直到使用者改動設定或儲存；
     - `gorder` 用預設（每體系 III、II、I 階），`fusion_condition` 沿用該隊的值。
 
-    遷移後的行為差異（Agent 依清單買、賣、合成是後續子議題，這幾點是清單做完之後使用者會看到的）：
+    遷移後的行為差異（Agent 已依清單買、賣、合成，這幾點是使用者會看到的）：
 
     1. 購買順序以前是「階級高到低、價格低到高」；現在是清單順序。遷移出的清單階級順序相同，但**同階內不再以價格低者優先**，改成資料檔順序。
     2. 無體系飾品遷移後一律 `keep`（使用者 2026-10-23 定案，不做第四種「只合成、不賣」的狀態）：不賣，**也不當合成材料**。舊的 `keywordless: keep` 行為不變；舊的 `fuse`（材料、不賣）與 `fuse_or_sell`（材料、可賣）都變成「不當材料」，這是**有損**的行為差異。
@@ -301,7 +301,7 @@ GUI 用表格編輯，存在設定檔，疊加在資料檔的試煉風險表上�
 - schema 檢查型別、`order` 的列舉與不重複（11 項）、`want`／`keep` 的不重複、`gorder` 的鍵是 11 個體系之一。跨物件檢查（GUI 與 Agent 各做一份，訊息一致）：清單的 id 或名稱重複（`gift_lists: id 'x' appears 2 times`）；隊伍引用不存在的清單（`teams/0/gift_list: team 'T' uses missing plan 'x' (not in gift_lists)`）；同一個 id 同時在 `want` 與 `keep`（`gift_lists/0: list 'L' has gift 9053 in both want and keep`）。（#292）
 - 匯出是這份清單去掉 `id` 的 JSON（`name`、`order`、`want`、`keep`、`gorder`、`fusion_condition`）。匯入建立一份新清單：名稱加「（匯入）」、撞名加數字，不覆蓋現有清單；壞的或不認得的 id 略過並提示個數，同時在 `want` 與 `keep` 的留在 `want`，`order` 不是 11 個體系各一次就用預設，`fusion_condition` 不是三個值之一就用 `any`。（#292）
 - **主要體系**：隊伍不再有自己的主要體系設定。主要體系是隊伍的 `gift_list` 指到的清單（「預設」是資料檔的預設清單，主要體系 `Burn`）`order` 裡第一個不是 `Keywordless` 的體系。無體系排第一時它照樣最先買，但主要體系取下一個，因為初始飾品頁、定向刷新與合成的體系選單只有 10 個體系，沒有無體系。開局飾品的體系欄、事件選項的同級主體系優先、戰後選飾品的主體系優先、商店的定向刷新、一般合成的指定體系，GUI 觀測飾品挑選畫面的起始分頁，都讀這個主要體系。（#305）
-- 購買、出售、合成怎麼讀清單是 [03-decisions.md](03-decisions.md) 第 13 節的事，隨 Agent 的後續子議題（#291）改寫。
+- 購買、出售、合成怎麼讀清單見 [03-decisions.md](03-decisions.md) 第 13 節。
 
 ## 未決
 
