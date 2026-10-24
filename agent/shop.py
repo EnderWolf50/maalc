@@ -70,7 +70,7 @@ def forecast_tier(image):
     """The tier (1-4) the fuse page's Forecasts row predicts, or None (no numeral: no material in, or the row is covered).
 
     The row's numeral is the cells' (numeral), 19 px tall, its top and bottom rows found from its own yellow. Live
-    2026-10-23: I, II and IV on a shop's and a Super Shop's page, IV on a fixed recipe's (tests/shop, ShopFuseRecipe).
+    2026-10-23: I, II and IV on a shop's and a Super Shop's page, IV and III on a fixed recipe's (tests/shop, tests/screens ShopFuseRecipe, ShopFuseRecipeTwo).
     """
     x, y, w, h = FORECAST_NUMERAL
     mask = yellow(image[y:y + h, x:x + w])
