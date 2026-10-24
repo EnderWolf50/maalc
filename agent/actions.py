@@ -500,19 +500,21 @@ def allowed(key):
 
 
 DISMISSED_AT = {}  # node name -> time.monotonic() of its last kept screen
-DISMISSED_GAP = 60  # seconds: a node that keeps coming back (RetryPopup on a dropped link) is kept once per gap
+DISMISSED_GAP = 60  # seconds: RetryPopup keeps coming back on a dropped link, so it is kept once per gap
+GAPPED = {"RetryPopup"}  # the only node kept at most once per gap; every other node is kept each time
 
 
 @AgentServer.custom_action("DismissShot")
 class DismissShot(CustomAction):
     """Keep the screen in logs/dismissed/ (run.keep_dismissed_screens), then close it (#244): the back key when the
     param is "back", else a tap on the recognised box. File name: time and node, so what the bot closed can be told later.
-    One screen per node per DISMISSED_GAP, or a dropped link fills the folder with one popup.
+    RetryPopup: one screen per DISMISSED_GAP, or a dropped link fills the folder with one popup.
     """
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         now = time.monotonic()
-        if allowed("keep_dismissed_screens") and now - DISMISSED_AT.get(argv.node_name, -DISMISSED_GAP) >= DISMISSED_GAP:
+        gap = DISMISSED_GAP if argv.node_name in GAPPED else 0
+        if allowed("keep_dismissed_screens") and now - DISMISSED_AT.get(argv.node_name, -gap) >= gap:
             stamp = f"{settlement.now().replace(':', '-')}-{argv.node_name}"
             try:
                 recovery.keep_capture(ROOT, "dismissed", screen(context), stamp, recovery.DISMISSED_KEEP)

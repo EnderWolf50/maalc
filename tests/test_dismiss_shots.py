@@ -61,15 +61,16 @@ def test_a_full_disk_does_not_keep_the_popup_open(game, monkeypatch):
     assert "PopupButton" not in actions.DISMISSED_AT  # a failed save does not start the gap
 
 
-def test_a_node_coming_back_is_kept_once_a_minute(game, monkeypatch):
-    clock = iter([100.0, 130.0, 159.9, 160.0, 161.0])
+def test_only_retry_popup_is_kept_once_a_minute(game, monkeypatch):
+    clock = iter([100.0, 130.0, 159.9, 160.0, 161.0, 161.0, 161.0])
     monkeypatch.setattr(actions.time, "monotonic", lambda: next(clock))
-    stamps = iter(f"2026-10-24T00:00:0{i}Z" for i in range(5))
+    stamps = iter(f"2026-10-24T00:00:0{i}Z" for i in range(7))
     monkeypatch.setattr(actions.settlement, "now", lambda: next(stamps))
-    for node in ("RetryPopup", "RetryPopup", "RetryPopup", "RetryPopup", "Notices"):
+    for node in ("RetryPopup", "RetryPopup", "RetryPopup", "RetryPopup", "Notices", "Notices", "PopupButton"):
         actions.DismissShot().run(game.ctx, arg(node))
-    assert sorted(p.name[20:] for p in game.folder.iterdir()) == ["-Notices.png", "-RetryPopup.png", "-RetryPopup.png"]
-    assert len(game.taps) == 5  # every popup is still closed
+    names = sorted(p.name[20:] for p in game.folder.iterdir())
+    assert names == ["-Notices.png"] * 2 + ["-PopupButton.png"] + ["-RetryPopup.png"] * 2  # RetryPopup at 100 and 160 s
+    assert len(game.taps) == 7  # every popup is still closed
 
 
 def test_the_folder_keeps_only_the_latest(game):

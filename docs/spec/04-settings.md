@@ -81,7 +81,7 @@
 | 失敗通知 webhook | `webhook_url` | 字串 | 停止時送出摘要的網址；空字串 = 不送 | 空字串 | #14 |
 | 每層最多刷新主題包 | `theme_pack_refresh` | 字串 | `none` 不用／`once` 用一次／`all` 全用：最好的包低於方案的刷新門檻時用的免費刷新次數（見 [03](03-decisions.md#6-主題包) 第 6 節） | `all` | #41、#240 |
 | 自動同意使用者條款 | `auto_accept_terms` | 布林 | 開：標題畫面的 User Agreement 勾兩個 I agree.、確認都勾上再按 Confirm；關：停下並通知（停止程序） | 開 | #85、2026-10-21 |
-| 關掉前先存截圖 | `keep_dismissed_screens` | 布林 | 開：bot 關掉公告、彈窗（Notices、Mailbox、設定選單、說明頁、單鈕彈窗、重試、平行模式提示）或 recovery 按返回之前，先把畫面存到 install 的 `logs/dismissed/<時間>-<節點>.png`，最多留 100 張，同一個節點 60 秒內只存一張；`logs/unknown/` 的圖不受這個選項控制；截圖含帳號畫面（UID 等），只存本機；關：不存 | 開 | #244 |
+| 關掉前先存截圖 | `keep_dismissed_screens` | 布林 | 開：bot 關掉公告、彈窗（Notices、Mailbox、設定選單、說明頁、單鈕彈窗、重試、平行模式提示）或 recovery 按返回之前，先把畫面存到 install 的 `logs/dismissed/<時間>-<節點>.png`，最多留 100 張，只有重試（`RetryPopup`）同一種 60 秒內只存一張，其他節點每次都存；`logs/unknown/` 的圖不受這個選項控制；截圖含帳號畫面（UID 等），只存本機；關：不存 | 開 | #244 |
 | 自動下載與更新 | `auto_download` | 布林 | 開：標題的資料下載對話框按 Confirm，遊戲內的更新對話框按下後重啟遊戲；關：停下並通知 | 開 | #86、2026-10-21 |
 
 規則：
