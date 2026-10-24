@@ -213,7 +213,7 @@ def child():
         def __getattr__(self, name):  # start_app, click, swipe, touch_*, keys, text, scroll: nothing moves
             return lambda *args: True
 
-    out = {"cases": {}, "sweep": {}, "plates": {}, "plate_sweep": {}, "plate_ms": [], "default_ms": []}
+    out = {"cases": {}, "sweep": {}, "plates": {}, "plate_sweep": {}, "plate_ms": [], "default_ms": [], "short_prices": {}}
 
     class Probe(CustomAction):
         def run(self, context, argv):
@@ -241,6 +241,10 @@ def child():
                 for path in sorted((ROOT / "tests" / "screens").glob("*.png")):
                     image = np.ascontiguousarray(np.array(Image.open(path).convert("RGB"))[:, :, ::-1])
                     cells = [(x, y) for x, y in actions.OFFER_CELLS if shop.filled(image, x, y)]
+                    short = [t for t, (_, _, _, h) in actions.ocr(context, image, actions.OFFER_GRID)
+                             if h < 18 and not shop.has_letters(t) and sum(c.isdigit() for c in t) >= 3]
+                    if short:  # read_slots keeps a price line under 18 px tall that has 3 digits (#341): what else is one
+                        out["short_prices"][path.stem] = short
                     named = [[i, p["id"]] for i, p in enumerate(actions.read_plates(context, image, cells)) if p["id"]]
                     if named:
                         out["plate_sweep"][path.stem] = named
@@ -394,6 +398,12 @@ def test_a_scrolled_super_shop_adds_its_last_two_offers_to_the_eight_at_rest(rea
                                                  ("Special Catalogue", 200), ("Fiery Down", 203), ("Polarization", 158),
                                                  ("Pendant of Nostalgia", 145), ("Gemstone Oscillator", 153)]
     assert more == [["Uncapped Defibrilator", 147, 9133, 9133], ["Burning Intellect", 141, 9087, 9087]]  # a price read 17 px tall too
+
+
+def test_no_shop_capture_has_a_short_line_of_digits_that_is_not_a_price(read):
+    # #341: read_slots takes a digits-only line under 18 px tall for a price when it has 3 digits. Over every tests/screens capture
+    # the OFFER_GRID box reads such lines only on battle, map and settings screens (a turn counter, a date), which no shop page is.
+    assert [k for k in read["short_prices"] if "Shop" in k] == []
 
 
 if __name__ == "__main__":

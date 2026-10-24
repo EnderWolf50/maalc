@@ -2702,8 +2702,13 @@ FUSE_CELLS, SELL_CELLS = ([(x + dx * c, y + dy * r) for r in range(3) for c in r
 OFFER_CELLS = [(624 + 154 * c, y) for y in (265, 418) for c in range(4)]  # a shop at rest; the price line is 52 px under
 # A Super Shop's grid scrolls to show its third row (live 2026-10-15, SuperShop.png and its scrolled capture): by 150 px, the
 # second row where the first was. A drag from between the first two columns, 250 px, goes to either end.
-OFFER_DRAG_X, OFFER_DRAG = 701, 250
+OFFER_DRAG_X, OFFER_DRAG_PX = 701, 250
 OFFER_ABOVE, OFFER_UNDER = 90, 25  # px a price line has its icon's top over it and its name's foot under it: what must show in the grid's box
+
+
+def offer_whole(y):
+    """Whether the offer whose price line is at y shows whole in OFFER_GRID's box (#341)."""
+    return OFFER_GRID[1] + OFFER_ABOVE <= y <= OFFER_GRID[1] + OFFER_GRID[3] - OFFER_UNDER
 # The fuse page's list: sections over the owned gifts (a fixed recipe's Fusion Available, #103) push them down. Their
 # "E.G.O Gifts Owned" label's centre sits 66 px over the first owned row's (live: 228 and 294).
 FUSE_LIST, OWNED_LABEL = [630, 195, 480, 305], 66
@@ -3432,7 +3437,7 @@ class Shop(CustomAction):
     def drag_offers(context, down):
         """Drag the offer grid to its last rows (down) or back to its top; the screenshot once it rests (#341)."""
         top, height = OFFER_GRID[1], OFFER_GRID[3]
-        scroll(context, OFFER_DRAG_X, top + height - 15 if down else top + 15, 0, -OFFER_DRAG if down else OFFER_DRAG)
+        scroll(context, OFFER_DRAG_X, top + height - 15 if down else top + 15, 0, -OFFER_DRAG_PX if down else OFFER_DRAG_PX)
         image = still(context, timeout=1.0)
         return screen(context) if image is None else image
 
@@ -3445,9 +3450,7 @@ class Shop(CustomAction):
         """
         shown = shop.read_slots(ocr(context, image, OFFER_GRID))
         if known is not None:
-            top, height = OFFER_GRID[1], OFFER_GRID[3]
-            shown = [s for s in shown if top + OFFER_ABOVE <= s["y"] <= top + height - OFFER_UNDER
-                     and not any(shop.same_offer(s, k) for k in known)]
+            shown = [s for s in shown if offer_whole(s["y"]) and not any(shop.same_offer(s, k) for k in known)]
         for slot, plate in zip(shown, read_plates(context, image, [offer_cell(s) for s in shown]), strict=True):
             slot["plate"] = plate
             if not shop.on_sale(slot):  # bought, a skill or "??": never bought, its plate logged (#329)
@@ -3467,10 +3470,10 @@ class Shop(CustomAction):
         A Super Shop's grid may be anywhere (a purchase can put it back): the offer is looked for by its column, price and name,
         and the grid is dragged to the end its page is at (slot["page"]: 1 the last rows) until it shows whole.
         """
-        top, height = OFFER_GRID[1], OFFER_GRID[3]
         for _ in range(3):
-            found = next((s for s in shop.read_slots(ocr(context, screen(context), OFFER_GRID)) if shop.same_offer(s, slot)), None)
-            if found and top + OFFER_ABOVE <= found["y"] <= top + height - OFFER_UNDER:
+            found = next((s for s in shop.read_slots(ocr(context, screen(context), OFFER_GRID))
+                          if shop.same_offer(s, slot) and offer_whole(s["y"])), None)
+            if found:
                 return {**slot, "x": found["x"], "y": found["y"]}
             Shop.drag_offers(context, down=slot["page"] == 1)
         log(f"shop: {slot['name']!r} {slot['price']} not found in the grid")
