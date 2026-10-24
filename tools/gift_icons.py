@@ -1,8 +1,8 @@
 """Write the settings GUI's gift icons: assets/resource/base/data/gift_icons/<id>.webp and index.json (#293).
 
 Usage: uv run --group unpack python tools/gift_icons.py
-Reads `.local/unpack/` (see docs/agents/local-dev.md "Game data"). One icon per gift id the GUI lists: the 320 of gift_search.json,
-the 60 fusion gifts and 12 recipe materials of gift_recipes.json and the 5 vestiges (9991-9995). The icon is the game's EgoGiftIcon
+Reads `.local/unpack/` (see docs/agents/local-dev.md "Game data"). One icon per gift id (the GUI lists all but the extra gifts): the 320 of gift_search.json,
+the 60 fusion gifts, 12 recipe materials and 67 extra gifts (#332) of gift_recipes.json and the 5 vestiges (9991-9995). The icon is the game's EgoGiftIcon
 sprite with its transparency (the image/GiftSearch templates are green-filled for matching and stay as they are), 56 px, WebP.
 `index.json` lists the ids ({id: file}). Run it as a `bench` ticket (tools/live/queue.py): it opens the UnityCache bundles
 (the first run indexes them, ~12 GB; the quarterly rerun is docs/spec/05-game-data.md section 8).
@@ -25,10 +25,10 @@ VESTIGES = range(9991, 9996)
 
 
 def gift_ids() -> list[int]:
-    """Every id the GUI lists: gift_search.json, the fusion gifts and materials of gift_recipes.json, the vestiges."""
+    """Every id with an icon: gift_search.json, the fusion gifts, materials and extra gifts of gift_recipes.json, the vestiges."""
     search = json.loads((DATA / "gift_search.json").read_text(encoding="utf-8"))["gifts"]
     recipes = json.loads((DATA / "gift_recipes.json").read_text(encoding="utf-8"))
-    return [g["id"] for g in search] + [g["id"] for g in recipes["gifts"] + recipes["materials"]] + list(VESTIGES)
+    return [g["id"] for g in search] + [g["id"] for g in recipes["gifts"] + recipes["materials"] + recipes["extra_gifts"]] + list(VESTIGES)
 
 
 def webp(sprite) -> bytes:

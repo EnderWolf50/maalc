@@ -5,6 +5,7 @@ The agent never writes settings: old versions are migrated in memory only.
 
 import json
 from collections import Counter
+from functools import cache
 from pathlib import Path
 
 from jsonschema import Draft202012Validator
@@ -109,8 +110,118 @@ def _v9_to_v10(data):
     return data
 
 
+ROOT = Path(__file__).resolve().parent.parent  # resource/ sits under it in a release, under assets/ in the repo
+GIFT_KEYWORDS = SCHEMA["$defs"]["gift_list"]["properties"]["order"]["items"]["enum"]  # the Gift Search page's tabs
+VESTIGES = SCHEMA["$defs"]["vestige"]["properties"]["name"]["enum"]  # tier I-V, ids 9991-9995
+VESTIGE_IDS = [9990 + t for t in range(1, len(VESTIGES) + 1)]
+
+
+def data_dir():
+    return next(p for p in (ROOT / "resource", ROOT / "assets" / "resource") if p.is_dir()) / "base" / "data"
+
+
+@cache
+def gift_tables():
+    """data/gift_search.json's gifts (the buyable ones, page order) and data/gift_recipes.json's gifts and materials."""
+    data = data_dir()
+    recipes = json.loads((data / "gift_recipes.json").read_text(encoding="utf-8"))
+    return json.loads((data / "gift_search.json").read_text(encoding="utf-8"))["gifts"], recipes["gifts"], recipes["materials"]
+
+
+@cache
+def extra_gifts():
+    """data/gift_recipes.json's `extra_gifts`: the game's other gift ids 9000-9999, no shop sells and no recipe uses (#332)."""
+    return json.loads((data_dir() / "gift_recipes.json").read_text(encoding="utf-8"))["extra_gifts"]
+
+
+def default_gorder():
+    """Spec 04 section 13: every keyword's buyable gifts, tier III first, within a tier in data-file order."""
+    search = gift_tables()[0]
+    return {k: [g["id"] for tier in (3, 2, 1) for g in search if g["keyword"] == k and g["tier"] == tier] for k in GIFT_KEYWORDS}
+
+
+def known_gift_ids():
+    search, fusions, materials = gift_tables()
+    return {g["id"] for g in search + fusions + materials} | set(VESTIGE_IDS)
+
+
+def clean_gift_list(gift_list):
+    """(the list as the shop logic (agent/gifts.py) and the GUI use it, number of ids dropped from want and keep), spec 04 section 13: ids no data
+    file has are dropped; a gorder keyword lacks gifts: they go last in data-file order, ids that keyword does not have are
+    dropped (a missing keyword gets the default order). Else it stays: want may hold a gift that cannot be bought."""
+    known = known_gift_ids()
+    dropped = 0
+
+    def known_only(ids):
+        nonlocal dropped
+        dropped += sum(i not in known for i in ids)
+        return [i for i in ids if i in known]
+
+    gorder = {}
+    for kw, default in default_gorder().items():
+        given = [i for i in gift_list["gorder"].get(kw, []) if i in default]
+        gorder[kw] = list(dict.fromkeys(given)) + [i for i in default if i not in given]
+    return {**gift_list, "want": known_only(gift_list["want"]), "keep": known_only(gift_list["keep"]), "gorder": gorder}, dropped
+
+
+def _team_gift_list(team):
+    """The version 11 gift list the shop's keep settings of a version 10 team come to (spec 04 section 2, version 11):
+    (list without id and name, number of keep_gifts that match no gift)."""
+    search, fusions, materials = gift_tables()
+    listed = lambda key: team[key] if isinstance(team.get(key), list) else []  # a broken file is left to the checks
+    main = team.get("keyword") if isinstance(team.get("keyword"), str) else None
+    kept_kw = {main, *(k for k in listed("keep_keywords") if isinstance(k, str))}
+    want = {g["id"] for g in search if g["keyword"] == main}
+    keep = {g["id"] for g in search + fusions + materials if g["keyword"] in kept_kw or g["keyword"] == "Keywordless"}
+    dropped = 0
+    for kept in listed("keep_gifts"):
+        kept = kept if isinstance(kept, dict) else {}
+        tier = None if isinstance(kept.get("tier"), bool) else kept.get("tier")  # True == 1 in Python only
+        by_name = {g["en"]: g["id"] for g in search if (g["keyword"], g["tier"]) == (kept.get("keyword"), tier)}
+        name = kept.get("name") if isinstance(kept.get("name"), str) else None
+        found = by_name.get(name) or dict(zip(VESTIGES, VESTIGE_IDS)).get(name)
+        if found:
+            keep.add(found)
+        else:
+            dropped += 1
+    order = [main, *(k for k in GIFT_KEYWORDS if k != main)] if main in GIFT_KEYWORDS else list(GIFT_KEYWORDS)
+    fusion_condition = team.get("fusion_condition", "any")
+    return {"order": order, "want": sorted(want), "keep": sorted(keep - want), "gorder": default_gorder(), "fusion_condition": fusion_condition}, dropped
+
+
+def gift_lists_from_v10(teams):
+    """(gift_lists, each team's gift_list id, dropped keep_gifts) for version 10 teams: one list per team, teams with the
+    same content share the first one's list, named after the first team, "Name 2" when the name is taken."""
+    lists, ids, dropped = [], [], 0
+    for team in teams:
+        content, lost = _team_gift_list(team)
+        dropped += lost
+        same = next((g for g in lists if {k: g[k] for k in content} == content), None)
+        if not same:
+            names = {g["name"] for g in lists}
+            base = team.get("name") if isinstance(team.get("name"), str) and team["name"] else "Gift list"
+            name = next(n for n in (base, *(f"{base} {i}" for i in range(2, len(names) + 3))) if n not in names)
+            same = {"id": f"gift-list-{len(lists) + 1}", "name": name, **content}
+            lists.append(same)
+        ids.append(same["id"])
+    return lists, ids, dropped
+
+
+def _v10_to_v11(data):
+    """Version 11 (#291) moves the shop's keep settings from the teams to gift lists: a list per team (teams that kept the same
+    share one), teams[].gift_list names it; keyword (the list's order starts with it), keep_keywords, keywordless, keep_gifts and
+    fusion_condition go. A keywordless gift is always kept now, whatever keywordless said: "fuse" and "fuse_or_sell" no longer make it material."""
+    teams = [t for t in data.get("teams") if isinstance(t, dict)] if isinstance(data.get("teams"), list) else []
+    data["gift_lists"], ids, _ = gift_lists_from_v10(teams)
+    for team, gift_list in zip(teams, ids):
+        for old in ("keyword", "keep_keywords", "keywordless", "keep_gifts", "fusion_condition"):
+            team.pop(old, None)
+        team["gift_list"] = gift_list
+    return data
+
+
 # MIGRATIONS[n] turns a version-n dict into a version-(n + 1) dict; keep in step with gui/src/model.ts.
-MIGRATIONS = {1: _v1_to_v2, 2: _v2_to_v3, 3: _v3_to_v4, 4: _v4_to_v5, 5: _v5_to_v6, 6: _v6_to_v7, 7: _v7_to_v8, 8: _v8_to_v9, 9: _v9_to_v10}
+MIGRATIONS = {1: _v1_to_v2, 2: _v2_to_v3, 3: _v3_to_v4, 4: _v4_to_v5, 5: _v5_to_v6, 6: _v6_to_v7, 7: _v7_to_v8, 8: _v8_to_v9, 9: _v9_to_v10, 10: _v10_to_v11}
 
 NO_TEAM = "No enabled team: set up a team in the settings GUI first."
 
@@ -136,6 +247,8 @@ def load_settings(root):
         f"{'/'.join(map(str, e.absolute_path)) or '(root)'}: {e.message}"
         for e in sorted(Draft202012Validator(SCHEMA).iter_errors(data), key=lambda e: list(map(str, e.absolute_path)))
     ]
+    if not errors:  # ids a new season dropped are ignored, as the GUI drops them on load
+        data["gift_lists"] = [clean_gift_list(gift_list)[0] for gift_list in data["gift_lists"]]
     # Cross-checks assume the structure is valid.
     errors = errors or cross_check(data)
     if errors:
@@ -166,7 +279,7 @@ def cross_check(data):
         errors.extend(f"{path}: {what} {v!r} appears {n} times" for v, n in Counter(values).items() if n > 1)
 
     plan_ids = {}
-    for key in ("deployment_order_plans", "starlight_plans", "theme_pack_plans"):
+    for key in ("deployment_order_plans", "starlight_plans", "theme_pack_plans", "gift_lists"):
         plan_ids[key] = {p["id"] for p in data[key]}
         dupes(key, [p["id"] for p in data[key]], "id")
         dupes(key, [p["name"] for p in data[key]], "name")
@@ -186,10 +299,17 @@ def cross_check(data):
             ("deployment_order", t["deployment_order"].get("plan"), "deployment_order_plans"),
             ("starlight", t["starlight"].get("plan"), "starlight_plans"),
             ("theme_pack_plan", None if t["theme_pack_plan"] == "default" else t["theme_pack_plan"], "theme_pack_plans"),
+            ("gift_list", None if t["gift_list"] == "default" else t["gift_list"], "gift_lists"),
         ]
         for field, ref, key in refs:
             if ref is not None and ref not in plan_ids[key]:
                 errors.append(f"teams/{i}/{field}: team {t['name']!r} uses missing plan {ref!r} (not in {key})")
+
+    for i, gift_list in enumerate(data["gift_lists"]):
+        errors.extend(
+            f"gift_lists/{i}: list {gift_list['name']!r} has gift {gid} in both want and keep"
+            for gid in gift_list["want"] if gid in gift_list["keep"]
+        )
 
     dupes("event_overrides", [o["question"] for o in data["event_overrides"]], "question")
     dupes("trial_risk_overrides", [o["trial"] for o in data["trial_risk_overrides"]], "trial")

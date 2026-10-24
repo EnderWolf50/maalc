@@ -4,8 +4,7 @@
 
 Run it from the main checkout. It refuses while a task holds the emulator queue (a live run is using
 `install/`), fast-forwards the checkout to `origin/main` (refusing off main, with local changes, or when
-it cannot fast-forward), then builds the settings GUI, assembles `install/`
-and checks that `install/config/settings.json` still loads. Stops at the first failing step.
+it cannot fast-forward), then builds the settings GUI, assembles `install/` and checks that `install/config/settings.json` still loads. Stops at the first failing step.
 """
 import shutil
 import subprocess
