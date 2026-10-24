@@ -150,7 +150,7 @@ def test_ladder_time_limits_start_at_l2():
     assert ladder.counts == {1: 0, 2: 1, 3: 0}
 
 
-@pytest.mark.parametrize("kind", ["BattleTurn", "BattlePause"])
+@pytest.mark.parametrize("kind", ["BattleTurn", "BattlePause", "BattleMenu"])  # BattleMenu: the pause menu (#215)
 def test_ladder_skips_l2_in_battle(kind):
     # L2 only goes through on the map: mid-battle it failed after 20 s and the L3 restart followed anyway
     # (live 2026-10-17, #70). A battle climbs from L1 straight to L3; its time limit starts there.
@@ -271,11 +271,11 @@ def test_ladder_the_downloading_screens_are_on_the_way_back_not_past_the_stuck_o
     assert ladder.stuck("NavTitle", 1, 0) == (2, None)
 
 
-def test_keep_unknown_saves_the_screen_and_keeps_only_the_latest(tmp_path):
+def test_keep_capture_saves_the_screen_and_keeps_only_the_latest(tmp_path):
     # #85/#87: a screen MirrorHub does not know is the capture the missing popup nodes need.
-    from recovery import UNKNOWN_KEEP, keep_unknown
+    from recovery import UNKNOWN_KEEP, keep_capture
     for i in range(UNKNOWN_KEEP + 2):
-        keep_unknown(tmp_path, screen(i), f"2026-10-18T00-00-{i:02}.000Z")
+        keep_capture(tmp_path, "unknown", screen(i), f"2026-10-18T00-00-{i:02}.000Z", UNKNOWN_KEEP)
     saved = sorted(p.name for p in (tmp_path / "logs" / "unknown").iterdir())
     assert len(saved) == UNKNOWN_KEEP
     assert saved[0] == "2026-10-18T00-00-02.000Z.png"  # the two oldest went
