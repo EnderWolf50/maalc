@@ -382,7 +382,7 @@ def test_a_scrolled_super_shop_adds_its_last_two_offers_to_the_eight_at_rest(rea
 def test_no_shop_capture_has_a_short_line_of_digits_that_is_not_a_price(read):
     # #341: read_slots takes a digits-only line under 18 px tall for a price when it has 3 digits. Over every tests/screens capture
     # the OFFER_GRID box reads such lines only on battle, map and settings screens (a turn counter, a date), which no shop page is.
-    assert [k for k in read["short_prices"] if "Shop" in k] == []
+    assert [k for k in read["short_prices"] if k.startswith(("Shop", "SuperShop"))] == []  # the shop pages: not MapShop, MapBossDarkAfterShop
 
 
 if __name__ == "__main__":
