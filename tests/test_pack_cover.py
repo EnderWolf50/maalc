@@ -154,7 +154,41 @@ def test_the_cover_alone_names_most_cards_of_a_real_page_and_never_a_wrong_one()
             found = pc.read_cover(image, x)
             spoke += found is not None
             right += found is not None and found[0] == name
-    assert (spoke, right) == (17, 17)  # of 24 cards; the silent ones are boss silhouettes (Sinking Deluge, Thunder and Lightning, ...)
+    # of 24 cards; silent: the boss silhouettes (Sinking Deluge, Tangling Lust), The Outcast and The Dream Ending (look-alikes)
+    # and Miracle in District 20 on the HARD page
+    assert (spoke, right) == (19, 19)
+
+
+
+def art_shift(page, x, name):
+    """(dx, dy) in px from the art of `name`'s cover to the art of the card at x: phase correlation on the ART band."""
+    import cv2  # noqa: PLC0415
+
+    w, h = pc.CARD
+    left, top, right, bottom = pc.ART
+    band = (slice(int(top * h), int(bottom * h)), slice(int(left * w), int(right * w)))
+    file = json.loads((DATA / "theme_pack_covers" / "index.json").read_text(encoding="utf-8"))[name]
+    cover = Image.new("RGBA", pc.CARD, (0, 0, 0, 255))
+    cover.alpha_composite(Image.open(DATA / "theme_pack_covers" / file).convert("RGBA").resize(pc.CARD))
+    grey = [cv2.cvtColor(np.ascontiguousarray(im), cv2.COLOR_BGR2GRAY)[band].astype(np.float32)
+            for im in (np.asarray(cover.convert("RGB"))[:, :, ::-1], pc.card_image(page, x))]
+    window = cv2.createHanningWindow((grey[0].shape[1], grey[0].shape[0]), cv2.CV_32F)
+    return cv2.phaseCorrelate(grey[0], grey[1], window)[0]
+
+
+@pytest.mark.parametrize("page, i, name", [
+    ("ThemePackHardLineCover", 4, "Thunder and Lightning"),  # boss packs: the boss sprite is tight-packed
+    ("ThemePackHardLine5", 3, "Mountain of Corpses, Sea of Blood"),
+    ("ThemePackMiracle", 2, "Vain Pride"),
+    ("ThemePackNormal", 1, "The Outcast"),  # no boss
+])
+def test_the_cover_art_sits_where_the_live_card_has_it(page, i, name):
+    # the boss picture drawn from its trimmed texture sat 5 to 14 px low on the 335 px card (and a few px aside)
+    assert PAGES[page][i][0] == name
+    n = len(PAGES[page])
+    image = np.asarray(Image.open(SCREENS / f"{page}.png").convert("RGB"))[:, :, ::-1]
+    dx, dy = art_shift(image, 640 + (i - (n - 1) / 2) * pc.PITCH, name)
+    assert abs(dx) <= 2 and abs(dy) <= 2, (dx, dy)
 
 
 def tiny_page(seed, x=640):

@@ -12,11 +12,13 @@ stayed on the developer's machine; every card of them is listed in
 [theme-pack-recognition-cards.csv](theme-pack-recognition-cards.csv) (a capture by the hash of its file) with its OCR lines, its pack,
 the path that read it and two independent verdicts. The OCR runs in a MaaFramework task on the still image (`actions.ocr` on
 `PACK_TITLES`), the cover art on the same image.
+Rerun on 2026-10-25 on the same 112 pages after the covers' boss layer was fixed (the boss picture sat 5 to 14 px low): the OCR
+readings are unchanged; the cover verdicts and the gate table below are the new covers'.
 
 ## Truth, and what it does not show
 
 - A card's truth is the pack the full reading (`+cover`) names. That is the reading under test, so each card also gets two verdicts
-  that do not rest on the whole-title match: the cover art alone agrees on 467 of the 531 cards and is silent on 64 (boss silhouettes, look-alike
+  that do not rest on the whole-title match: the cover art alone agrees on 490 of the 531 cards and is silent on 41 (boss silhouettes, look-alike
   covers and others; not classified card by card); the keyword alone agrees on 526 and is silent on 5. None disagrees, and every card is confirmed by one
   of the two (0 of 531 by neither). The keyword reads the same OCR text as the title match, the cover reads the pixels. No card was
   checked by eye one by one: a pack both of them misread the same way would pass (unverified).
@@ -27,7 +29,7 @@ the path that read it and two independent verdicts. The OCR runs in a MaaFramewo
   name, its own cover pasted on a page and single words of its name, not a capture. "Every pack recognised" on a live page is not
   shown for them.
 - The cover's threshold (`pack_cover.MIN_SCORE`, `MIN_LEAD`) was picked on these captures, not on held-out pages: the gate table
-  below is the sweep (at 0.5 / 0.1, 467 cards read and 0 wrong; at a lead of 0.05, 4 wrong).
+  below is the sweep (at 0.5 / 0.1, 490 cards read and 0 wrong; at a lead of 0.05, 5 wrong).
 - A card that has no OCR box at all is lost: none of the 112 pages shows one.
 - `S.E.A.` has no keyword of its own (`sea` is inside `Mountain of Corpses, Sea of Blood`); the keyword of its art title (`Hello Bus`, keyword `hello`) names its cards (10 keyword verdicts agree), and so does its cover.
 
@@ -188,10 +190,10 @@ the cover's gate (MIN_SCORE, MIN_LEAD), on every card against its truth:
 
 | best correlation at least | lead over the next at least | cards read | read wrong |
 |---|---|---|---|
-| 0.5 | 0.05 | 499 | 4 |
-| 0.5 | 0.1 | 467 | 0 |
-| 0.5 | 0.15 | 391 | 0 |
-| 0.6 | 0.1 | 467 | 0 |
-| 0.7 | 0.1 | 450 | 0 |
+| 0.5 | 0.05 | 513 | 5 |
+| 0.5 | 0.1 | 490 | 0 |
+| 0.5 | 0.15 | 464 | 0 |
+| 0.6 | 0.1 | 490 | 0 |
+| 0.7 | 0.1 | 490 | 0 |
 
-cover art alone against the truth: {'agree': 467, 'silent': 64}; keyword alone: {'agree': 526, 'silent': 5}; confirmed by neither: 0 of 531 (0 packs)
+cover art alone against the truth: {'agree': 490, 'silent': 41}; keyword alone: {'agree': 526, 'silent': 5}; confirmed by neither: 0 of 531 (0 packs)
