@@ -3406,8 +3406,8 @@ class Shop(CustomAction):
                 log(f"shop: {slot['name']!r} {gift_shown(cell)} is tagged Not Enough Cost: its price {slot['price']} is a misread")
                 continue
             rank = place.get(cell["id"])
-            state = effective(gift_list, cell["id"]) if cell["id"] else "unknown"
-            log(f"shop: {slot['name']!r} {slot['price']}: tier {cell['tier']} {cell['keyword']} {gift_shown(cell)}, plate {plate['text']!r}, {state}"
+            listed = cell_state(cell, gift_list)
+            log(f"shop: {slot['name']!r} {slot['price']}: tier {cell['tier']} {cell['keyword']} {gift_shown(cell)}, plate {plate['text']!r}, {listed}"
                 f"{'' if rank is None else f', place {rank}'}")
             if rank is not None:
                 offers.append((i, rank, slot["price"]))

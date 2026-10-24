@@ -160,6 +160,22 @@ def test_a_fuse_pages_tooltip_is_closed_before_its_cells_are_read(context, grid,
     assert g.taps and set(g.taps) == {actions.FUSE_NEUTRAL}
 
 
+def test_the_tap_that_closes_a_materials_tooltip_is_followed_by_the_page_guard(context, monkeypatch):
+    # ADR 0007, #331: the neutral spot is tapped through close_tooltip (the tap, then the guard: a tooltip over the fuse page
+    # hides Leave, so the page node reads nothing until it is closed), after each material tapped in.
+    events = []
+    monkeypatch.setattr(actions, "cell_at", lambda context, grid, c: (c["x"], c["y"]))
+    monkeypatch.setattr(actions, "tap_moved", lambda context, x, y, timeout=0.5: events.append("cell"))
+    monkeypatch.setattr(actions, "tap_settled", lambda context, x, y, timeout=1.0: events.append((x, y)))
+    monkeypatch.setattr(actions, "page_guard", lambda context, home, image=None: events.append("guard") or np.zeros((720, 1280, 3), np.uint8))
+    monkeypatch.setattr(actions, "screen", lambda context: np.zeros((720, 1280, 3), np.uint8))
+    monkeypatch.setattr(actions.shop, "placed", lambda image, n: events.count("cell"))
+    monkeypatch.setattr(actions.shop, "picked", lambda image, x, y, bottom=720: True)
+    cells = [{"i": i, "x": x, "y": y} for i, (x, y) in enumerate(actions.FUSE_CELLS[:3])]
+    assert actions.Shop.place(context, cells, 3, {"page": "fuse", "at": 0})
+    assert events == ["guard", "cell", actions.FUSE_NEUTRAL, "guard"] * 3
+
+
 def test_a_cell_read_further_down_is_found_again_after_the_grid_moved(context, grid):
     # cell_at drags the grid back to bring a cell read before the last drag whole into view; its tap hits that gift.
     g = grid("fuse", 23)

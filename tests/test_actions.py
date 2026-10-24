@@ -2860,22 +2860,6 @@ def test_a_fusion_gone_after_a_cell_tap_taps_nothing_more(context, guarded, monk
     assert taps_made[4] in actions.FUSE_CELLS and not set(taps_made[5:]) & set(actions.FUSE_CELLS)
 
 
-def test_the_tap_that_closes_a_materials_tooltip_is_followed_by_the_page_guard(context, monkeypatch):
-    # ADR 0007, #331: the neutral spot is tapped through close_tooltip (the tap, then the guard: a tooltip over the fuse page
-    # hides Leave, so the page node reads nothing until it is closed), after each material tapped in.
-    events = []
-    monkeypatch.setattr(actions, "cell_at", lambda context, grid, c: (c["x"], c["y"]))
-    monkeypatch.setattr(actions, "tap_moved", lambda context, x, y, timeout=0.5: events.append("cell"))
-    monkeypatch.setattr(actions, "tap_settled", lambda context, x, y, timeout=1.0: events.append((x, y)))
-    monkeypatch.setattr(actions, "page_guard", lambda context, home, image=None: events.append("guard") or np.zeros((720, 1280, 3), np.uint8))
-    monkeypatch.setattr(actions, "screen", lambda context: np.zeros((720, 1280, 3), np.uint8))
-    monkeypatch.setattr(actions.shop, "placed", lambda image, n: events.count("cell"))
-    monkeypatch.setattr(actions.shop, "picked", lambda image, x, y, bottom=720: True)
-    cells = [{"i": i, "x": x, "y": y} for i, (x, y) in enumerate(actions.FUSE_CELLS[:3])]
-    assert actions.Shop.place(context, cells, 3, {"page": "fuse", "at": 0})
-    assert events == ["guard", "cell", actions.FUSE_NEUTRAL, "guard"] * 3
-
-
 def test_hands_back_clears_the_runtime_cache_of_a_long_task():
     """#176: MaaFramework keeps every node's detail until clear_cache, and a dungeon run is one task."""
     class Act:

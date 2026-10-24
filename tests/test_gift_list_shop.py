@@ -102,12 +102,12 @@ def test_the_cells_of_the_sell_and_fuse_pages_are_logged_with_their_state_in_the
     # #291 user story 68: each cell's id and what the list makes of it: wanted, kept, locked by a wanted fusion, dropped, unknown.
     lines = []
     monkeypatch.setattr(actions, "log", lines.append)
-    readings = [("Burn", 2, 9009), ("Burn", 3, 9053), ("Tremor", 2, 9031), ("Bleed", 2), ("Pierce", 2, None)]
+    readings = [("Burn", 2, 9009), ("Burn", 3, 9053), ("Tremor", 2, 9031), ("Bleed", 2, 9005), ("Pierce", 2, None)]
     team = {"list": wants(9009, 9092, keep=[9053])}
     sale_taps(context, monkeypatch, team, [90, 80, 70, 60, 50], *readings)
     fusion_taps(context, monkeypatch, team, *readings)
     for page in ("sell cells", "fuse cells"):
         (line,) = [m for m in lines if f"shop: {page}" in m]
         for text in ("9009 Fiery Down (0.90): keep, want", "9053 Dust to Dust (0.90): keep, keep",
-                     "(0.90): keep, locked", "(best 0.90): material, drop", "(best 0.90): keep, unknown"):
+                     "(0.90): keep, locked", "9005 Wound Clerid (0.90): material, drop", "(best 0.90): keep, unknown"):
             assert text in line, (page, text, line)
