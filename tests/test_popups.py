@@ -9,7 +9,7 @@ def test_the_main_window_popups_click_their_close_button_only():
     for name, button in [("Mailbox", "Close"), ("SettingsMenu", "Return")]:
         node = nodes[name]
         clicked = node["all_of"][node["box_index"]]["expected"]
-        assert node["action"] == "Click" and re.search(clicked, button) and not re.search(clicked, "Claim All")
+        assert node.get("custom_action") == "DismissShot" and re.search(clicked, button) and not re.search(clicked, "Claim All")
 
 
 def test_the_help_pager_is_looked_at_before_the_entry_page_under_it():
