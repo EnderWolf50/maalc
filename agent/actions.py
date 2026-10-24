@@ -2770,6 +2770,7 @@ BADGES = ["Burn", "Bleed", "Tremor", "Rupture", "Sinking", "Poise", "Charge", "S
 BADGE_MIN = 0.5
 GIFTS = gift_cells.load()  # every gift a cell may show (#297)
 GIFT_NAMES = {e["id"]: e["en"] for e in GIFTS}
+GIFT_TIERS = {e["id"]: e["tier"] for e in GIFTS}
 GIFT_IDS = {e["en"]: e["id"] for e in GIFTS}  # an English name plate's gift (#329)
 CELL_ICON_ROI = 70  # px square around a cell's centre on the scaled grid where its icon is looked for: the biggest icon (54 px) +-8
 FUSE_CONFIRM = [300, 150, 680, 380]  # "Selected E.G.O Gifts 3/5" over "Fuse the selected E.G.O Gifts?"
@@ -2892,7 +2893,7 @@ def read_cells(context, image, cells, page):
     The grid is scaled so gift icons are at their GiftSearch template's size, then each keyword's badge is matched once
     over it. keyword: the cell's best badge, "Keywordless" with none, None when the badge is below the grid's edge. An
     empty cell is flat (live: spread 1-2, a gift 41-84).
-    id: the data's id of the gift the cell shows (cell_id), None when unknown, score the best icon's.
+    id: the data's id of the gift the cell shows (cell_id), None when unknown, score the best icon's; tier is then that gift's.
     """
     scale, bottom = CELL_PAGES[page]
     half = shop.CELL_HALF
@@ -2914,6 +2915,8 @@ def read_cells(context, image, cells, page):
                     best[c["i"]], c["keyword"] = score, keyword
     for c in out:
         c["id"], c["score"] = cell_id(context, grid, c.pop("at"), c["keyword"], c["tier"])
+        if c["id"] is not None:
+            c["tier"] = GIFT_TIERS[c["id"]]  # the numeral may be misread (#330): the gift's own tier decides
     return out
 
 

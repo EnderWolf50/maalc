@@ -140,3 +140,42 @@ def test_the_forecast_waits_for_its_row_but_not_for_long(context, clock):
     context.tasker.controller.post_screencap.return_value.wait.return_value.get.return_value = np.zeros((720, 1280, 3), np.uint8)
     assert actions.read_forecast(context) == (None, None)
     assert 1.0 <= sum(clock) < 2.0
+
+
+CASK_SPIRITS = 9180  # Poise, tier IV
+
+
+def real_read_cells(monkeypatch, tiers, ids):
+    """actions.read_cells itself over the first cells of any grid, whose numerals read `tiers` and whose icons cell_id names
+    `ids`: only the pixel reading is replaced."""
+    spots = actions.FUSE_CELLS[:len(tiers)]
+    named = iter(ids)
+    monkeypatch.setattr(actions.shop, "filled", lambda image, x, y: (x, y) in spots)
+    monkeypatch.setattr(actions.shop, "cell_crop", lambda image, x, y, scale: (x, y))
+    monkeypatch.setattr(actions.shop, "rescale", lambda image, factor: image)
+    monkeypatch.setattr(actions.shop, "tier", lambda crop: tiers[spots.index(crop)])
+    monkeypatch.setattr(actions, "template_hits", lambda *args: [])
+    monkeypatch.setattr(actions, "cell_id", lambda context, grid, at, keyword, tier: (next(named), 0.9))
+
+
+def test_a_cell_named_by_a_gift_of_another_tier_takes_that_gifts_tier(context, monkeypatch):
+    # #330: the numeral read II, the icon is Cask Spirits (IV): the cell is a IV, not what the numeral said.
+    real_read_cells(monkeypatch, [2, 3, 3], [CASK_SPIRITS, 9071, 9053])
+    cells = actions.read_cells(context, np.zeros((720, 1280, 3), np.uint8), actions.FUSE_CELLS[:3], "fuse")
+    assert [(c["id"], c["tier"]) for c in cells] == [(CASK_SPIRITS, 4), (9071, 3), (9053, 3)]
+
+
+def test_a_misread_tier_does_not_make_a_fusion_the_condition_refuses(context, monkeypatch):
+    # #330 with #285: Cask Spirits (IV) read as II, with two III: by the points II + III + III is a IV, an upgrade, and the page
+    # forecasts IV, so it would be fused. It is IV + III + III: a IV again, no upgrade over its IV. Nothing is tapped in.
+    real_read_cells(monkeypatch, [2, 3, 3], [CASK_SPIRITS, 9071, 9053])
+    lines = []
+    monkeypatch.setattr(actions, "log", lines.append)
+    test_actions.reads(context, {**test_actions.FUSE_PAGE, tuple(actions.FUSE_CONFIRM): [("Selected E.G.O Gifts 3/3", (330, 175, 320, 30))],
+                                 tuple(actions.GET_TITLE): [("E.G.O Gift GET!", (560, 165, 160, 30))], **CHANCE})
+    test_actions.fuse_slots(context, monkeypatch)
+    monkeypatch.setattr(actions.shop, "forecast_tier", lambda image: 4)
+    fused = actions.Shop.fuse(context, test_actions.shop_team({"fusion_condition": "upgrade"}), {})
+    taps = [c.args for c in context.tasker.controller.post_click.call_args_list]
+    assert not fused and not set(taps[4:]) & set(actions.FUSE_CELLS)
+    assert actions.PAGE_OK not in taps
