@@ -69,25 +69,28 @@ def queue(gift_list, tables=None):
     return [i for k in gift_list["order"] for i in gift_list["gorder"][k] if i in buyable and state(gift_list, i) == "want"]
 
 
-def _pick(fusion, owned):
+def _pick(fusion, owned, slots):
     """The materials to put in for `fusion`, or None: the first recipe `owned` (a Counter) has all of; for groups the first
-    `need` owned ids of each group in data-file order."""
+    `need` owned ids of each group in data-file order. A set needing more than `slots` materials (None: any) is passed over."""
+    room = slots or 99
     for recipe in fusion.get("recipes", []):
-        if all(owned[i] >= n for i, n in Counter(recipe).items()):
+        if len(recipe) <= room and all(owned[i] >= n for i, n in Counter(recipe).items()):
             return list(recipe)
     groups = [[i for i in group["ids"] if owned[i]][:group["need"]] for group in fusion.get("groups", [])]
     if groups and all(len(picked) == group["need"] for picked, group in zip(groups, fusion["groups"])):
-        return [i for picked in groups for i in picked]
+        picks = [i for picked in groups for i in picked]
+        return picks if len(picks) <= room else None
     return None
 
 
-def recipe_fusion(gift_list, owned_ids, tables=None):
+def recipe_fusion(gift_list, owned_ids, tables=None, slots=None):
     """{"gift": id, "materials": [ids]} for the first wanted fusion in list order whose materials `owned_ids` (a list,
     repeats count) hold, else None. List order = the keyword's place in `order` (`queue`'s), then data-file order: a fusion
-    is in no `gorder` (that holds the shop's gifts). A pack-specific fusion is made whatever the run packs."""
+    is in no `gorder` (that holds the shop's gifts). A pack-specific fusion is made whatever the run packs. `slots`: the fuse page's material slots; a recipe needing more is passed over (the next
+    wanted one is tried)."""
     owned = Counter(owned_ids)
     place = {k: n for n, k in enumerate(gift_list["order"])}
     for fusion in sorted((tables or _game_tables())["fusions"], key=lambda f: place.get(f["keyword"], len(place))):
-        if state(gift_list, fusion["id"]) == "want" and (materials := _pick(fusion, owned)):
+        if state(gift_list, fusion["id"]) == "want" and (materials := _pick(fusion, owned, slots)):
             return {"gift": fusion["id"], "materials": materials}
     return None

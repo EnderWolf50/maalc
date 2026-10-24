@@ -3669,13 +3669,10 @@ class Shop(CustomAction):
         The page needs a keyword picked before it unlocks, but a recipe's result does not depend on it (#304): the page's
         keyword stays, and the materials go in as for an ordinary fusion, each read back (place). The page recognises the
         recipe by itself once they are in (its Forecasts row reads III Guaranteed 100%, logged), and the dialog's count must
-        be theirs. A recipe the page cannot hold (a Lunar Memory's 5 materials on 3 slots) is left alone.
+        be theirs. A recipe the page cannot hold (a Lunar Memory's 5 materials on 3 slots) is passed over for the next wanted one.
         """
-        recipe = recipe_fusion(team["list"], [c["id"] for c in cells if c["id"] is not None])
+        recipe = recipe_fusion(team["list"], [c["id"] for c in cells if c["id"] is not None], slots=slots)
         if recipe is None:
-            return None
-        if len(recipe["materials"]) > slots:
-            log(f"shop: fusion {recipe['gift']} needs {len(recipe['materials'])} materials, the page holds {slots}: not made")
             return None
         left, group = list(cells), []
         for gift_id in recipe["materials"]:

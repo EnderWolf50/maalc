@@ -46,11 +46,12 @@ def test_materials_that_fall_short_make_no_recipe_and_the_ordinary_fusion_goes_o
     assert fused and ok and taps == [0, 0, 1, 1, 1]
 
 
-def test_a_recipe_the_page_cannot_hold_is_not_tried(context, monkeypatch):
-    # Lunar Memory takes 5 materials; a 3-slot fuse page holds three.
-    readings = [("Burn", 4, i) for i in (9105, 9110, 9142, 9147, 9152)]
-    fused, taps, ok = fusion_taps(context, monkeypatch, team(LUNAR), *readings)
-    assert not fused and not ok and taps == [0] * 5
+def test_a_recipe_the_page_cannot_hold_does_not_block_the_next_wanted_one(context, monkeypatch):
+    # Lunar Memory (first in the list's order) takes 5 materials, a 3-slot fuse page holds three: Soothe the Dead goes in.
+    readings = [("Burn", 4, i) for i in (9105, 9110, 9142, 9147, 9152)] + [("Burn", 3, 9003), ("Burn", 3, 9053), ("Burn", 3, 9157)]
+    wanted = {"list": wants(LUNAR, SOOTHE, order=("Keywordless", "Burn"))}
+    fused, taps, ok = fusion_taps(context, monkeypatch, wanted, *readings)
+    assert fused and ok and taps == [0] * 5 + [1, 1, 1]
 
 
 def test_a_recipe_the_dialog_counts_wrong_is_not_confirmed(context, monkeypatch):
