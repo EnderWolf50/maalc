@@ -63,7 +63,6 @@ def best(scores):
 # The English name plate under every cell of the shop's buy page, dimmed (Not Enough Cost) and Purchased cells too (#329):
 # a box 64 px under the cell's centre, 152 px wide and 26 high, one line. Relative to the centre, so a scrolled grid has it.
 PLATE_DX, PLATE_DY, PLATE_W, PLATE_H = -76, 64, 152, 26
-PLATE_MODEL = "plate"  # its OCR folder under model/ocr/, a copy of the default one that tools/fetch_ocr.py makes (#329); actions.plate_model
 
 
 def plate_roi(x, y):
