@@ -3196,6 +3196,25 @@ def gift_get(context):
     return True
 
 
+def pick_cells(cells, materials):
+    """One cell of `cells` per gift id of `materials` (repeats take another cell each)."""
+    left, picked = list(cells), []
+    for gift_id in materials:
+        picked.append(left.pop(next(n for n, c in enumerate(left) if c["id"] == gift_id)))
+    return picked
+
+
+def recipe_cells(team, cells, slots):
+    """The places (`i`) of the cells every wanted fusion the owned cells hold the materials of would take (#300), one
+    fusion's cells after another's: what the fuse page makes by recipe, so a sale leaves it."""
+    left, held = list(cells), set()
+    while recipe := recipe_fusion(team["list"], [c["id"] for c in left if c["id"] is not None], slots=slots):
+        group = pick_cells(left, recipe["materials"])
+        held |= {c["i"] for c in group}
+        left = [c for c in left if c["i"] not in held]
+    return held
+
+
 @AgentServer.custom_action("Shop")
 class Shop(CustomAction):
     """Heal, then sell -> buy and refresh -> fuse until a round does nothing, then leave (spec 03 section 13).
@@ -3550,6 +3569,10 @@ class Shop(CustomAction):
         avoid = [g["id"] for g in avoided_gifts(team)]
         cells, grid = owned_cells(context, "sell")
         roles = [cell_role(c, team, "sell", avoid) for c in cells]
+        # A pack-exclusive fusion the run did not pull does not lock its materials (#306), but the fuse page still makes it
+        # (#300): what a held recipe takes is not sold, which runs before the fusion.
+        held = recipe_cells(team, cells, visit.get("slots", 3))
+        roles = ["keep" if c["i"] in held else r for c, r in zip(cells, roles)]
         log("shop: sell cells " + "; ".join(f"{cell_line(c, f'{r}, {cell_state(c, team['list'])}')} {c['price']}" for c, r in zip(cells, roles)))
         gifts = [(c["i"], c["price"]) for c, r in zip(cells, roles) if r == "material" and c["price"]]
         avoided = {c["i"] for c in cells if c["id"] in avoid}  # sold first (#90)
@@ -3700,9 +3723,7 @@ class Shop(CustomAction):
         recipe = recipe_fusion(team["list"], [c["id"] for c in cells if c["id"] is not None], slots=slots)
         if recipe is None:
             return None
-        left, group = list(cells), []
-        for gift_id in recipe["materials"]:
-            group.append(left.pop(next(n for n, c in enumerate(left) if c["id"] == gift_id)))
+        group = pick_cells(cells, recipe["materials"])
         group.sort(key=lambda c: -c["y"])  # the grid's end first, as an ordinary fusion's
         names = ", ".join(cell_line(c, "material").rsplit(":", 1)[0] for c in group)
         if not Shop.place(context, group, slots, grid):

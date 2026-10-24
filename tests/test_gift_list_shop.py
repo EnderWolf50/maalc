@@ -142,3 +142,11 @@ def test_a_sale_spares_an_exclusive_recipes_material_only_in_a_run_that_took_its
     actions.RUN["packs"] = packs
     taps = sale_taps(context, monkeypatch, {"list": wants(9410)}, [300], ("Sinking", 2, 9408))
     assert taps == ([actions.SELL_CELLS[0]] if sold else [])
+
+
+def test_a_sale_spares_the_materials_of_an_exclusive_recipe_the_fuse_page_will_make(context, monkeypatch):
+    # #300 with #306: both materials of 9410 are held in a run that took none of its packs (so nothing locks them), but the fuse
+    # page makes the recipe whatever the packs: the sale, which runs first, leaves them although 9408 would cover the price.
+    actions.RUN["packs"] = []
+    taps = sale_taps(context, monkeypatch, {"list": wants(9410)}, [300, 90], ("Sinking", 2, 9408), ("Sinking", 2, 9409))
+    assert taps == []

@@ -69,3 +69,10 @@ def test_a_made_recipe_leaves_the_owned_gifts_to_be_read_again(context, monkeypa
     test_actions.cells_read(monkeypatch, ("Burn", 3, 9003), ("Burn", 3, 9053), ("Burn", 3, 9157))
     assert actions.Shop.fuse(context, test_actions.shop_team(team(SOOTHE)), visit)
     assert not visit["fuse_scanned"]
+
+
+def test_an_exclusive_recipe_is_made_though_the_run_took_none_of_its_packs(context, monkeypatch):
+    # #306 unlocks the materials of a pack's exclusive recipe in a run without the pack; the recipe is made all the same.
+    actions.RUN["packs"] = []
+    fused, taps, ok = fusion_taps(context, monkeypatch, team(9410), ("Sinking", 2, 9408), ("Sinking", 2, 9409), *junk(2), confirm=2)
+    assert fused and ok and taps == [1, 1, 0, 0]
