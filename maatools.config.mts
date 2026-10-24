@@ -90,6 +90,8 @@ const screens: [image: string, hits: string[]][] = [
   ['GiftSearchForgo.png', ['GiftSearchForgo', 'GiftSearch', 'GiftChoice']],
   ['ThemePack.png', ['ThemePack']],
   ['ThemePackNormal.png', ['ThemePack']],
+  ['ThemePackRefresh0.png', ['ThemePack', 'PackRefreshSpent']],  // live 2026-10-23 (#319): Refresh 0/3, greyed
+  ['ThemePackRefresh1.png', ['ThemePack']],  // the same floor, Refresh 1/3
   ['MirrorMap.png', ['MirrorMap', 'MapBus', 'MapLinkUp', 'MapLinkMid', 'MapLinkDown', 'MapNodeCost', 'MapNodeEvent']],
   // Map marks: the default ROIs fit a map at rest; RouteMap moves them with the bus.
   ['MapEvent.png', ['MirrorMap', 'MapBus', 'MapLinkUp', 'MapLinkMid', 'MapLinkDown', 'MapNodeCost', 'MapNodeEvent']],
@@ -118,9 +120,18 @@ const screens: [image: string, hits: string[]][] = [
   ['BattleTurnSwarm.png', ['BattleTurn']], // a swarm of enemies over the battlefield, one sinner in 6 slots (live 2026-10-21)
   ['BattleTurnSwarmNext.png', ['BattleTurn']], // the same turn 3 s later: the swarm moved, the HUD did not
   ['BattlePause.png', ['BattlePause']],
+  // Live 2026-10-22 (#215): the pause menu behind the gear, over the planning screen (Settings / Resume / Retry Stage /
+  // Give Up). BattleMenu clicks Resume; the second frame is the menu fading out after that click. The Win Rate label
+  // reads through the menu, so BattleTurn hits too: BattleHUD tries BattleMenu first.
+  ['BattleMenu.png', ['BattleMenu', 'BattleTurn']],
+  ['BattleMenuClosing.png', ['BattleMenu', 'BattleTurn']],
   ['Victory.png', ['Victory']],
   ['WipeDialog.png', ['WipeDialog']],
   ['DungeonProgress.png', ['MirrorMap', 'ProgressPanel', 'RecoverToWindow']],
+  // Live 2026-10-22 (#215): the back key on the map, NORMAL floor 2. Synthetic: the same panel over a dimmed event
+  // result page (live the back key opens it there too, #118); the page's own Continue button still reads.
+  ['DungeonProgressNormal.png', ['MirrorMap', 'MapBus', 'ProgressPanel', 'RecoverToWindow']],
+  ['EventProgressPanel.synthetic.png', ['Event', 'ProgressPanel', 'RecoverToWindow']],
   ['ForfeitDialog.png', ['MirrorMap']],
   // Recovery L2 (run by Recover, not the hub): Dungeon Progress -> To Window -> Pause Exploration.
   ['ProgressPanel.png', ['MirrorMap', 'ProgressPanel', 'RecoverToWindow']],

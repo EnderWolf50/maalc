@@ -22,6 +22,10 @@ CROP_AT = {
     "fuse_two_in": (180, 165),
     "fuse_super_two_in": (180, 165),
     "fuse_super_open": (180, 165),
+    # The Forecasts row of live 2026-10-23 captures (1080p scaled to 720p, #285): a shop's I + II + I (II Guaranteed, 90%)
+    # and a Super Shop's II + II + III (IV Guaranteed, 90%).
+    "forecast_shop_ii": (180, 165),
+    "forecast_super_iv": (180, 165),
     "sell": (620, 200),  # live 2026-10-16 (probe capture s29/025_sell): the sell page of ShopFuse.png's gifts
     "offers": (560, 210),  # tests/screens/Shop.png
     "offers_super": (560, 210),  # tests/screens/SuperShop.png
@@ -31,6 +35,11 @@ CROP_AT = {
     "map_shop_cyan": (230, 45),
     "map_shop_orange": (230, 45),
     "map_event_orange": (226, 44),
+    # The shop's "+" variant on hard floors (#287): the 120 px window around the node, live captures of 2026-10-22; the notshop
+    # ones are the slots that scored highest on its templates among 1187 others
+    **{name: (270, 85) for name in ("map_shop_plus0", "map_shop_plus1", "map_shop_plus2", "map_shop_plus3", "map_shop_plus4",
+                                    "map_shop_plus5", "map_shop_torn", "map_notshop0", "map_notshop1", "map_notshop2",
+                                    "map_notshop3")},
 }
 OWNED, OFFER = 1.1, 0.8  # a gift icon's size on the fuse / sell pages and on the offers, over its GiftSearch template's
 
@@ -444,6 +453,53 @@ def test_the_fuse_page_reads_back_its_slots_and_the_picked_cells(name, slots, pl
     assert s.fuse_slots(image) == slots
     assert s.placed(image, slots) == placed
     assert [i for i, (x, y) in zip(index, cells) if s.picked(image, x, y)] == picked
+
+
+@pytest.mark.parametrize("name, tier", [
+    ("fuse_two_in", 1), ("fuse_super_two_in", 1),  # captures/97 and 172: "I Guaranteed, Bleed 60%"
+    ("forecast_shop_ii", 2), ("forecast_super_iv", 4),
+    ("fuse_super_open", None), ("fuse_one_in", None),  # the row shows nothing before a second material is in
+])
+def test_the_forecasts_row_tier_is_read_from_the_fuse_page(name, tier):
+    assert s.forecast_tier(screen_with(name)) == tier
+
+
+@pytest.mark.parametrize("name, tier", [("ShopFuse", None), ("ShopFuseRecipe", 4)])  # a fixed recipe: IV, 100%
+def test_the_forecasts_row_tier_on_the_whole_fuse_pages_of_tests_screens(name, tier):
+    assert s.forecast_tier(np.asarray(Image.open(SCREENS / f"{name}.png").convert("RGB"))[:, :, ::-1]) == tier
+
+
+def test_the_forecasts_row_tier_reads_a_tier_iii_and_never_a_tier_v():
+    # No live capture shows a III or a V: a third bar painted next to the II's, and the IV's I bar taken away.
+    ii = screen_with("forecast_shop_ii")
+    iii = ii.copy()
+    iii[459:477, 321:324] = ii[459:477, 316:319]
+    assert s.forecast_tier(iii) == 3
+    v = screen_with("forecast_super_iv")
+    v[459:477, 308:311] = 0  # the IV's I bar (x 308-310 at this size)
+    assert s.forecast_tier(v) is None  # a V is no tier a fusion gives
+
+
+def test_the_forecasts_row_sweep_over_tests_screens_finds_no_unlisted_hit():
+    # CODING_STANDARDS' sweep: the reading is asked on the fuse page only, yet of the 1280x720 screens of tests/screens
+    # one other reads a tier (a yellow numeral in the box on the gift-get page over the map).
+    hits = {}
+    for png in sorted(SCREENS.glob("*.png")):
+        img = Image.open(png)
+        if img.size == (1280, 720):
+            hits[png.stem] = s.forecast_tier(np.asarray(img.convert("RGB"))[:, :, ::-1])
+    assert {k: v for k, v in hits.items() if v} == {"GiftGetOverMap": 1, "ShopFuseRecipe": 4}
+
+
+def test_pick_fusion_leaves_out_a_refused_group():
+    # #285: the page turned down a III + III + II (a IV by the points); the next best is made, and none when every group
+    # was turned down. The forecast depends on the tiers only: another III + III + II is left out, too.
+    materials = [("a", 3), ("b", 3), ("c", 2), ("d", 1)]
+    assert s.pick_fusion(materials, 3, SHOP, POINTS, condition="tier4") == [(list("abc"), 4)]
+    assert s.pick_fusion(materials, 3, SHOP, POINTS, condition="tier4", refused=[(2, 3, 3)]) == []
+    assert s.pick_fusion(materials, 3, SHOP, POINTS) == [(list("abc"), 4)]
+    assert s.pick_fusion(materials, 3, SHOP, POINTS, refused=[(2, 3, 3)]) == [(list("acd"), 3)]  # fewest points of the III
+    assert s.pick_fusion(materials + [("e", 2)], 3, SHOP, POINTS, condition="tier4", refused=[(2, 3, 3)]) == []
 
 
 SELL_OCR = [  # Maa OCR of the sell page's grid (crop "sell"): coins read as 米/水/*, icon art as junk
