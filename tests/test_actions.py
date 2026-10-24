@@ -1847,6 +1847,14 @@ def test_the_pulled_pack_is_noted_by_id_for_the_run(context, monkeypatch):
     assert actions.RUN["packs"] == [1011, 1004]
 
 
+def test_a_pack_with_a_bokgak_re_run_notes_both_ids(context, monkeypatch):
+    # #306: the re-run's card shows the same title, so a pull of "Pack 0a" may be either; some recipes name only the re-run.
+    monkeypatch.setattr(actions, "pack_ids", lambda: {"Pack 0a": 1103, "Pack 0a BokGak": 1113})
+    actions.RUN["packs"] = []
+    pack_page(context, monkeypatch, 2, "none", "weight")
+    assert actions.RUN["packs"] == [1103, 1113]
+
+
 def test_a_pulled_pack_without_an_id_makes_the_run_packs_unknown(context, monkeypatch):
     # #306: a name the data file lacks (an event's, a plan's own) has no id: the exclusive recipes lock as after a restart.
     monkeypatch.setattr(actions, "pack_ids", lambda: {})
@@ -1875,35 +1883,6 @@ def test_a_new_run_starts_with_no_packs_taken(context, clock, monkeypatch):
     page(context, {})
     actions.PlanRun().run(context, argv())
     assert actions.run_packs() == []
-
-
-def exclusive_team(*, keep=()):
-    """A team that wants Hoarfrost Footprint (9410, exclusive to packs 1004 and 1005; materials 9408, 9409), nothing else."""
-    return shop_team({"list": wants(9410, keep=keep)})
-
-
-@pytest.mark.parametrize("packs, role", [
-    ([], "material"),  # a new run, nothing taken yet
-    ([1011], "material"),  # other packs only
-    ([1011, 1005], "keep"),  # one of the fusion's packs was taken
-    (None, "keep"),  # unknown (the agent restarted): locked all the same
-])
-def test_an_exclusive_recipes_material_is_locked_only_by_the_packs_the_run_took(packs, role):
-    # #306: lockers' run_packs comes from the run.
-    if packs is not None:
-        actions.RUN["packs"] = packs
-    team = exclusive_team()
-    for page_name in ("sell", "fuse"):
-        assert actions.cell_role({"id": 9408}, team, page_name, ()) == role
-    assert actions.cell_state({"id": 9408}, team["list"]) == ("locked" if role == "keep" else "drop")
-
-
-@pytest.mark.parametrize("packs, sold", [([], True), ([1004], False)])
-def test_a_sale_spares_an_exclusive_recipes_material_only_in_a_run_that_took_its_pack(context, monkeypatch, packs, sold):
-    # #306: the tier II material 9408 is priced 300 on a 180 wanted: sold when the run took no pack of 9410, spared when it did.
-    actions.RUN["packs"] = packs
-    taps = sale_taps(context, monkeypatch, {"list": wants(9410)}, [300], ("Sinking", 2, 9408))
-    assert taps == ([actions.SELL_CELLS[0]] if sold else [])
 
 
 def test_a_search_tab_opens_without_fixed_waits(context, clock):

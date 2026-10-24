@@ -1167,12 +1167,13 @@ def note_pack(name):
     """Note the pack PickThemePack pulled in the run; a run that lost its earlier floors, or a pack without an id, leaves it unknown."""
     if "packs" not in RUN:
         return
-    pack = pack_ids().get(name)
-    if pack is None:
+    ids = pack_ids()
+    if name not in ids:
         log(f"pack {name!r} has no id: the run's packs are unknown")
         del RUN["packs"]
-    elif pack not in RUN["packs"]:
-        RUN["packs"].append(pack)
+        return
+    # A re-run (BokGak) shows the original's title, so the pull may be either: note both (some recipes name only the re-run).
+    RUN["packs"] += [i for i in (ids[name], ids.get(f"{name} BokGak")) if i is not None and i not in RUN["packs"]]
 
 
 def pack_titles(context, image):

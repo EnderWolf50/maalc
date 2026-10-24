@@ -111,3 +111,32 @@ def test_the_cells_of_the_sell_and_fuse_pages_are_logged_with_their_state_in_the
         for text in ("9009 Fiery Down (0.90): keep, want", "9053 Dust to Dust (0.90): keep, keep",
                      "(0.90): keep, locked", "9005 Wound Clerid (0.90): material, drop", "(best 0.90): keep, unknown"):
             assert text in line, (page, text, line)
+
+
+def exclusive_team(*, keep=()):
+    """A team that wants Hoarfrost Footprint (9410, exclusive to packs 1004 and 1005; materials 9408, 9409), nothing else."""
+    return test_actions.shop_team({"list": wants(9410, keep=keep)})
+
+
+@pytest.mark.parametrize("packs, role", [
+    ([], "material"),  # a new run, nothing taken yet
+    ([1011], "material"),  # other packs only
+    ([1011, 1005], "keep"),  # one of the fusion's packs was taken
+    (None, "keep"),  # unknown (the agent restarted): locked all the same
+])
+def test_an_exclusive_recipes_material_is_locked_only_by_the_packs_the_run_took(packs, role):
+    # #306: lockers' run_packs comes from the run.
+    if packs is not None:
+        actions.RUN["packs"] = packs
+    team = exclusive_team()
+    for page_name in ("sell", "fuse"):
+        assert actions.cell_role({"id": 9408}, team, page_name, ()) == role
+    assert actions.cell_state({"id": 9408}, team["list"]) == ("locked" if role == "keep" else "drop")
+
+
+@pytest.mark.parametrize("packs, sold", [([], True), ([1004], False)])
+def test_a_sale_spares_an_exclusive_recipes_material_only_in_a_run_that_took_its_pack(context, monkeypatch, packs, sold):
+    # #306: the tier II material 9408 is priced 300 on a 180 wanted: sold when the run took no pack of 9410, spared when it did.
+    actions.RUN["packs"] = packs
+    taps = sale_taps(context, monkeypatch, {"list": wants(9410)}, [300], ("Sinking", 2, 9408))
+    assert taps == ([actions.SELL_CELLS[0]] if sold else [])
