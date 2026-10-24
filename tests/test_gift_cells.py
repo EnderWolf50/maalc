@@ -213,7 +213,7 @@ def child():
         def __getattr__(self, name):  # start_app, click, swipe, touch_*, keys, text, scroll: nothing moves
             return lambda *args: True
 
-    out = {"cases": {}, "sweep": {}, "plates": {}, "plate_sweep": {}, "plate_ms": [], "default_ms": []}
+    out = {"cases": {}, "sweep": {}, "plates": {}, "plate_sweep": {}, "plate_ms": [], "default_ms": [], "short_prices": {}}
 
     class Probe(CustomAction):
         def run(self, context, argv):
@@ -222,6 +222,10 @@ def child():
                     found = actions.read_cells(context, screen_with(crop), cells if isinstance(cells, list) else getattr(actions, cells), page)
                     out["cases"][case] = [c["id"] for c in found]
                 actions.ocr(context, screen_with("offers"), actions.OFFER_GRID)  # the agent's order: a det+rec pass reads before any plate
+                first = actions.Shop.read_offers(context, screen_with("offers_super"), [])  # a Super Shop at rest, then scrolled (#341)
+                more = actions.Shop.read_offers(context, screen_with("offers_super_scrolled"), [], first)
+                out["super"] = [[[s["name"], s["price"], s["plate"]["id"], s["cell"]["id"] if "cell" in s else None] for s in page]
+                                for page in (first, more)]
                 for case in PLATE_CASES:  # the offers' name plates (#329), one per filled cell
                     image = screen_with(case)
                     cells = [(x, y) for x, y in actions.OFFER_CELLS if shop.filled(image, x, y)]
@@ -237,6 +241,10 @@ def child():
                 for path in sorted((ROOT / "tests" / "screens").glob("*.png")):
                     image = np.ascontiguousarray(np.array(Image.open(path).convert("RGB"))[:, :, ::-1])
                     cells = [(x, y) for x, y in actions.OFFER_CELLS if shop.filled(image, x, y)]
+                    short = [t for t, (_, _, _, h) in actions.ocr(context, image, actions.OFFER_GRID)
+                             if h < 18 and not shop.has_letters(t) and sum(c.isdigit() for c in t) >= 3]
+                    if short:  # read_slots keeps a price line under 18 px tall that has 3 digits (#341): what else is one
+                        out["short_prices"][path.stem] = short
                     named = [[i, p["id"]] for i, p in enumerate(actions.read_plates(context, image, cells)) if p["id"]]
                     if named:
                         out["plate_sweep"][path.stem] = named
@@ -379,6 +387,23 @@ def test_no_capture_but_the_shops_has_a_name_plate_that_names_a_gift(read):
     # ShopPurchase: the dialog covers the shop but Lowest Star's plate (the filled cell at index 3) still shows, dimmed, and is read right.
     assert read["plate_sweep"] == {"Shop": [[1, 9123], [2, 9198], [3, 9150], [4, 9086]], "ShopPurchase": [[3, 9027]],
                                    "SuperShop": [[3, 9187], [4, 9009], [5, 9102], [6, 9063], [7, 9163]]}
+
+
+def test_a_scrolled_super_shop_adds_its_last_two_offers_to_the_eight_at_rest(read):
+    # #341: SuperShop.png and its capture scrolled 150 px (live 2026-10-15): the second row shows where the first was, the third
+    # under it. The scrolled read leaves out the 4 offers the first one had and adds the 2 new, whose icons and plates (cells
+    # 150 px up, the plate's box relative to the cell) name Uncapped Defibrilator (the game's spelling) and Burning Intellect.
+    first, more = read["super"]
+    assert [(n, p) for n, p, _, _ in first] == [("ID Skill Search", None), ("Replace Gregor's Skill", None), ("Replace Don Quixote's Skill", None),
+                                                 ("Special Catalogue", 200), ("Fiery Down", 203), ("Polarization", 158),
+                                                 ("Pendant of Nostalgia", 145), ("Gemstone Oscillator", 153)]
+    assert more == [["Uncapped Defibrilator", 147, 9133, 9133], ["Burning Intellect", 141, 9087, 9087]]  # a price read 17 px tall too
+
+
+def test_no_shop_capture_has_a_short_line_of_digits_that_is_not_a_price(read):
+    # #341: read_slots takes a digits-only line under 18 px tall for a price when it has 3 digits. Over every tests/screens capture
+    # the OFFER_GRID box reads such lines only on battle, map and settings screens (a turn counter, a date), which no shop page is.
+    assert [k for k in read["short_prices"] if "Shop" in k] == []
 
 
 if __name__ == "__main__":

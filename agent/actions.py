@@ -2700,6 +2700,15 @@ OWNED_GRID = {"fuse": ((678, 294), (96, 92), 40), "sell": ((683, 258), (92, 107)
 FUSE_CELLS, SELL_CELLS = ([(x + dx * c, y + dy * r) for r in range(3) for c in range(5)]
                           for (x, y), (dx, dy), _ in OWNED_GRID.values())
 OFFER_CELLS = [(624 + 154 * c, y) for y in (265, 418) for c in range(4)]  # a shop at rest; the price line is 52 px under
+# A Super Shop's grid scrolls to show its third row (live 2026-10-15, SuperShop.png and its scrolled capture): by 150 px, the
+# second row where the first was. A drag from between the first two columns, 250 px, goes to either end.
+OFFER_DRAG_X, OFFER_DRAG_PX = 701, 250
+OFFER_ABOVE, OFFER_UNDER = 90, 25  # px a price line has its icon's top over it and its name's foot under it: what must show in the grid's box
+
+
+def offer_whole(y):
+    """Whether the offer whose price line is at y shows whole in OFFER_GRID's box (#341)."""
+    return OFFER_GRID[1] + OFFER_ABOVE <= y <= OFFER_GRID[1] + OFFER_GRID[3] - OFFER_UNDER
 # The fuse page's list: sections over the owned gifts (a fixed recipe's Fusion Available, #103) push them down. Their
 # "E.G.O Gifts Owned" label's centre sits 66 px over the first owned row's (live: 228 and 294).
 FUSE_LIST, OWNED_LABEL = [630, 195, 480, 305], 66
@@ -3355,27 +3364,30 @@ class Shop(CustomAction):
         gift_list, reserve = team["list"], team["reserve_cost"]
         place = {i: n for n, i in enumerate(queue(gift_list))}
         visit["wanted"] = None
-        # ponytail: only the offers on show; a Super Shop's last 2 of 10 need a scroll first.
         cost = read_cost(context)
         if cost is None:
             log("shop: the Cost reads nothing: nothing bought")
             return 0
-        image = screen(context)
-        shown = shop.read_slots(ocr(context, image, OFFER_GRID))
-        for slot, plate in zip(shown, read_plates(context, image, [offer_cell(s) for s in shown]), strict=True):
-            slot["plate"] = plate
-            if not shop.on_sale(slot):  # bought, a skill or "??": never bought, its plate logged (#329)
-                log(f"shop: {slot['name']!r}: {'Purchased' if slot['purchased'] else 'not on sale'}, plate {plate['text']!r} "
-                    + (gift_shown({"id": plate["id"], "by_plate": True, "score": 0.0}) if plate["id"] else "unknown"))
-        slots = [s for s in shown if shop.on_sale(s)]
         avoided = avoided_gifts(team)
-        cells = {c["i"]: c for c in read_cells(context, image, [offer_cell(s) for s in slots], "offer", avoided)}
+        image = screen(context)
+        scrolls = shop.is_super(image)  # a Super Shop's third row shows after a scroll (#341)
+        if scrolls:
+            image = Shop.drag_offers(context, down=False)
+        shown = Shop.read_offers(context, image, avoided)
+        if scrolls:
+            for slot in shown:
+                slot["page"] = 0
+            lower = Shop.read_offers(context, Shop.drag_offers(context, down=True), avoided, shown)
+            log(f"shop: Super Shop scrolled: {len(lower)} more offers")
+            for slot in lower:
+                slot["page"] = 1
+            shown += lower
+        slots = [s for s in shown if shop.on_sale(s)]
         avoid = [g["name"] for g in avoided]
         avoid_ids = [g["id"] for g in avoided]
         offers = []
         for i, slot in enumerate(slots):
-            cell = cells.get(i, {"tier": None, "keyword": None, "gift": None, "id": None, "score": 0.0})
-            plate = slot["plate"]
+            cell, plate = slot["cell"], slot["plate"]
             icon, (named, split) = cell["id"], gift_cells.vote(cell["id"], plate["id"])
             if split:
                 log(f"shop: {slot['name']!r}: the icon says {icon} {GIFT_NAMES.get(icon)}, the plate {plate['text']!r} says "
@@ -3384,7 +3396,6 @@ class Shop(CustomAction):
             if cell["id"] in avoid_ids or cell["gift"] in avoid or any(rewards.names_gift(slot["name"], n) for n in avoid):
                 log(f"shop: {slot['name']!r} {slot['price']}: {gift_shown(cell)}, the team does not hold it (#90)")
                 continue
-            slot["short"] = slot["short"] or shop.short_cell(image, *offer_cell(slot))
             if slot["short"] and slot["price"] <= cost:
                 log(f"shop: {slot['name']!r} {gift_shown(cell)} is tagged Not Enough Cost: its price {slot['price']} is a misread")
                 continue
@@ -3423,10 +3434,60 @@ class Shop(CustomAction):
         return bought
 
     @staticmethod
+    def drag_offers(context, down):
+        """Drag the offer grid to its last rows (down) or back to its top; the screenshot once it rests (#341)."""
+        top, height = OFFER_GRID[1], OFFER_GRID[3]
+        scroll(context, OFFER_DRAG_X, top + height - 15 if down else top + 15, 0, -OFFER_DRAG_PX if down else OFFER_DRAG_PX)
+        image = still(context, timeout=1.0)
+        return screen(context) if image is None else image
+
+    @staticmethod
+    def read_offers(context, image, avoided, known=None):
+        """The offers of the grid on image as slots (shop.read_slots) with their "plate", and on-sale ones their "cell" and "short".
+
+        known: the offers read off the grid before it was scrolled (#341): those are left out, and so is a cut-off one.
+        Bought ones, skills and "??" log their plate (#329).
+        """
+        shown = shop.read_slots(ocr(context, image, OFFER_GRID))
+        if known is not None:
+            shown = [s for s in shown if offer_whole(s["y"]) and not any(shop.same_offer(s, k) for k in known)]
+        for slot, plate in zip(shown, read_plates(context, image, [offer_cell(s) for s in shown]), strict=True):
+            slot["plate"] = plate
+            if not shop.on_sale(slot):  # bought, a skill or "??": never bought, its plate logged (#329)
+                log(f"shop: {slot['name']!r}: {'Purchased' if slot['purchased'] else 'not on sale'}, plate {plate['text']!r} "
+                    + (gift_shown({"id": plate["id"], "by_plate": True, "score": 0.0}) if plate["id"] else "unknown"))
+        on_sale = [s for s in shown if shop.on_sale(s)]
+        cells = {c["i"]: c for c in read_cells(context, image, [offer_cell(s) for s in on_sale], "offer", avoided)}
+        for i, slot in enumerate(on_sale):
+            slot["cell"] = cells.get(i, {"tier": None, "keyword": None, "gift": None, "id": None, "score": 0.0})
+            slot["short"] = slot["short"] or shop.short_cell(image, *offer_cell(slot))
+        return shown
+
+    @staticmethod
+    def find_offer(context, slot):
+        """slot as the grid shows it now, whole in the grid's box; None when it is not found there (#341).
+
+        A Super Shop's grid may be anywhere (a purchase can put it back): the offer is looked for by its column, price and name,
+        and the grid is dragged to the end its page is at (slot["page"]: 1 the last rows) until it shows whole.
+        """
+        for _ in range(3):
+            found = next((s for s in shop.read_slots(ocr(context, screen(context), OFFER_GRID))
+                          if shop.same_offer(s, slot) and offer_whole(s["y"])), None)
+            if found:
+                return {**slot, "x": found["x"], "y": found["y"]}
+            Shop.drag_offers(context, down=slot["page"] == 1)
+        log(f"shop: {slot['name']!r} {slot['price']} not found in the grid")
+        return None
+
+    @staticmethod
     def open_offer(context, slot):
         """Tap an offer; the screenshot of its purchase dialog, or None when none opened."""
         # Its text and Cost preview are read once it stops.
         page_guard(context, "Shop")
+        if "page" in slot:  # a Super Shop's grid scrolls: the offer is brought into view and read back first (#341)
+            slot = Shop.find_offer(context, slot)
+            if slot is None:
+                return None
         image = tap_shown(context, slot["x"], slot["y"] - 50, shows(context, DIALOG_TITLE, "Purchase"), timeout=1.5, rest=1.0)
         if image is not None:
             return image
