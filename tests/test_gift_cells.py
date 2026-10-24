@@ -305,8 +305,9 @@ def test_the_name_plate_names_what_the_icon_names(read, case):
 
 def test_a_plate_costs_no_more_per_cell_than_the_det_rec_pass_over_the_page(read):
     # #329: a plate line is about 31 ms on DirectML once a det+rec pass has used the shared instance (the 40 ms of the issue; a
-    # CPU runner reads it in 8 ms and is slower overall), so no absolute bound: only_rec over one fixed box must cost less per
-    # cell than the det+rec pass over the whole page, else it reads more than a line. First case left out: it pays the model's load.
+    # CPU runner reads it in 8 ms and is slower overall), so no absolute bound: a plate must cost no more than 4x a cell's share
+    # of the det+rec pass over the whole page, measured back to back on the same instance. That it is one line is the test below.
+    # First case left out: its timings still carry warm-up.
     plate, page = (sorted(read[k][1:])[len(read[k][1:]) // 2] for k in ("plate_ms", "page_ms"))
     assert plate < page * 4, read
 
