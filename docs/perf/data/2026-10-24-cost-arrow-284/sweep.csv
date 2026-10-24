@@ -1,0 +1,458 @@
+frame,x,y,old_crop_read,new_crop_read,class
+r1/140415.257.png,311,84,.75,75,coin read as a Cost
+r1/140415.257.png,311,297,.75,.75,coin read as a Cost
+r1/140415.257.png,311,510,.75,.75,coin read as a Cost
+r1/140415.257.png,567,84,75,75,coin read as a Cost
+r1/140415.257.png,567,510,75,75,coin read as a Cost
+r1/140415.257.png,823,84,75,75,coin read as a Cost
+r1/140415.257.png,823,510,75,75,coin read as a Cost
+r1/140415.257.png,1061,30,一,,"UI icon, not a coin (resource bar / panel)"
+r1/140928.564.png,197,11,,,"real coin dimmed or covered, empty read"
+r1/140928.564.png,197,438,75,75,coin read as a Cost
+r1/140928.564.png,453,438,75,75,coin read as a Cost
+r1/140928.564.png,1061,30,一,,"UI icon, not a coin (resource bar / panel)"
+r1/140952.586.png,537,121,,,"UI icon, not a coin (resource bar / panel)"
+r1/141004.597.png,537,121,,,"UI icon, not a coin (resource bar / panel)"
+r1/141128.742.png,479,225,,,"boss art / coin covered, OCR noise"
+r1/141128.742.png,1061,30,,,"UI icon, not a coin (resource bar / panel)"
+r1/141152.764.png,453,438,75,75,coin read as a Cost
+r1/141152.764.png,709,225,75,75,coin read as a Cost
+r1/141152.764.png,709,438,75,75,coin read as a Cost
+r1/141152.764.png,965,438,75,75,coin read as a Cost
+r1/141152.764.png,991,225,100,100,coin read as a Cost
+r1/141152.764.png,1061,30,一,,"UI icon, not a coin (resource bar / panel)"
+r1/141328.900.png,223,438,100,100,coin read as a Cost
+r1/141328.900.png,453,438,75,75,coin read as a Cost
+r1/141328.900.png,991,438,240,240,coin read as a Cost
+r1/141328.900.png,1061,30,一,,"UI icon, not a coin (resource bar / panel)"
+r1/141352.922.png,537,121,,,"UI icon, not a coin (resource bar / panel)"
+r1/141529.044.png,312,297,.75,75,coin read as a Cost
+r1/141529.044.png,337,510,120,.120,coin read as a Cost
+r1/141529.044.png,568,84,75,75,coin read as a Cost
+r1/141529.044.png,593,297,100,100,coin read as a Cost
+r1/141529.044.png,824,84,75,75,coin read as a Cost
+r1/141529.044.png,849,510,100,100,coin read as a Cost
+r1/141529.044.png,1061,30,一,,"UI icon, not a coin (resource bar / panel)"
+r1/141529.044.png,1079,84,75,75,coin read as a Cost
+r1/141754.307.png,197,225,75,75,coin read as a Cost
+r1/141754.307.png,223,438,100,100,coin read as a Cost
+r1/141754.307.png,709,225,7,75,coin read as a Cost
+r1/141754.307.png,1061,30,一,,"UI icon, not a coin (resource bar / panel)"
+r1/141907.045.png,537,121,,,"UI icon, not a coin (resource bar / panel)"
+r1/142031.501.png,709,225,,,"real coin dimmed or covered, empty read"
+r1/142031.501.png,965,225,,,"real coin dimmed or covered, empty read"
+r1/142031.501.png,991,438,,,"real coin dimmed or covered, empty read"
+r1/142219.589.png,1061,30,,,"UI icon, not a coin (resource bar / panel)"
+r1/142355.673.png,1061,30,,,"UI icon, not a coin (resource bar / panel)"
+r1/142419.692.png,537,121,,,"UI icon, not a coin (resource bar / panel)"
+r1/142736.803.png,312,510,.75,.75,coin read as a Cost
+r1/142736.803.png,337,83,100,100,coin read as a Cost
+r1/142736.803.png,567,297,75,75,coin read as a Cost
+r1/142736.803.png,849,297,120,120,coin read as a Cost
+r1/142736.803.png,849,510,100,100,coin read as a Cost
+r1/142736.803.png,1061,30,一,,"UI icon, not a coin (resource bar / panel)"
+r1/142736.803.png,1079,297,75,75,coin read as a Cost
+r1/142736.803.png,1079,510,75,75,coin read as a Cost
+r1/142810.229.png,197,225,75,75,coin read as a Cost
+r1/142810.229.png,735,225,100,100,coin read as a Cost
+r1/142810.229.png,965,11,,1,"UI icon, not a coin (resource bar / panel)"
+r1/142810.229.png,965,225,75,75,coin read as a Cost
+r1/142810.229.png,1061,30,一,,"UI icon, not a coin (resource bar / panel)"
+r1/142923.802.png,709,225,7,75,coin read as a Cost
+r1/142923.802.png,1061,30,一,,"UI icon, not a coin (resource bar / panel)"
+r1/143104.997.png,537,121,,,"UI icon, not a coin (resource bar / panel)"
+r1/143129.020.png,1061,30,,,"UI icon, not a coin (resource bar / panel)"
+r1/143620.448.png,57,510,75,75,coin read as a Cost
+r1/143620.448.png,312,84,75,75,coin read as a Cost
+r1/143620.448.png,312,297,75,75,coin read as a Cost
+r1/143620.448.png,313,510,75,75,coin read as a Cost
+r1/143620.448.png,1061,30,一,,"UI icon, not a coin (resource bar / panel)"
+r1/143620.448.png,1106,297,200,200,coin read as a Cost
+r1/144010.773.png,400,221,75,75,coin read as a Cost
+r1/144010.773.png,400,449,75,75,coin read as a Cost
+r1/144010.773.png,674,449,75,75,coin read as a Cost
+r1/144010.773.png,948,221,,,"real coin dimmed or covered, empty read"
+r1/144010.773.png,948,449,,,"real coin dimmed or covered, empty read"
+r1/144010.773.png,1061,30,,,"UI icon, not a coin (resource bar / panel)"
+r1/144228.759.png,1061,30,,,"UI icon, not a coin (resource bar / panel)"
+r1/144252.778.png,537,121,,,"UI icon, not a coin (resource bar / panel)"
+r1/144616.116.png,1061,30,,,"UI icon, not a coin (resource bar / panel)"
+r1/144730.433.png,197,438,,,"real coin dimmed or covered, empty read"
+r1/144730.433.png,223,225,,,"real coin dimmed or covered, empty read"
+r1/144730.433.png,1061,30,,,"UI icon, not a coin (resource bar / panel)"
+r1/144754.452.png,1061,30,一,,"UI icon, not a coin (resource bar / panel)"
+r1/144806.462.png,537,121,,,"UI icon, not a coin (resource bar / panel)"
+r1/145007.610.png,57,297,75,75,coin read as a Cost
+r1/145007.610.png,339,297,100,100,coin read as a Cost
+r1/145007.610.png,569,84,75,75,coin read as a Cost
+r1/145007.610.png,595,510,100,100,coin read as a Cost
+r1/145007.610.png,1061,30,一,,"UI icon, not a coin (resource bar / panel)"
+r1/145007.610.png,1107,297,300,300,coin read as a Cost
+r1/145031.630.png,1061,30,,,"UI icon, not a coin (resource bar / panel)"
+r1/145156.936.png,197,225,75,75,coin read as a Cost
+r1/145156.936.png,197,438,75,75,coin read as a Cost
+r1/145156.936.png,479,438,100,100,coin read as a Cost
+r1/145156.936.png,709,225,75,75,coin read as a Cost
+r1/145156.936.png,1061,30,一,,"UI icon, not a coin (resource bar / panel)"
+r1/145309.203.png,537,121,,,"UI icon, not a coin (resource bar / panel)"
+r1/145609.785.png,735,225,120:,120,coin read as a Cost
+r1/145609.785.png,1061,30,enfu,enfu,"UI icon, not a coin (resource bar / panel)"
+r1/145722.486.png,1061,30,一,,"UI icon, not a coin (resource bar / panel)"
+r1/145758.523.png,1061,30,一,,"UI icon, not a coin (resource bar / panel)"
+r1/145922.673.png,537,121,,,"UI icon, not a coin (resource bar / panel)"
+r1/150437.036.png,1061,30,一,,"UI icon, not a coin (resource bar / panel)"
+r1/150449.048.png,1061,30,一,,"UI icon, not a coin (resource bar / panel)"
+r1/150838.578.png,709,225,7,75,coin read as a Cost
+r1/150838.578.png,1061,30,一,,"UI icon, not a coin (resource bar / panel)"
+r1/151039.476.png,537,121,,,"UI icon, not a coin (resource bar / panel)"
+r1/151115.504.png,197,438,75,75,coin read as a Cost
+r1/151115.504.png,1061,30,一,,"UI icon, not a coin (resource bar / panel)"
+r1/151530.942.png,312,84,75,75,coin read as a Cost
+r1/151530.942.png,312,297,75,75,coin read as a Cost
+r1/151530.942.png,568,297,75,75,coin read as a Cost
+r1/151530.942.png,824,84,75,75,coin read as a Cost
+r1/151530.942.png,824,297,75,75,coin read as a Cost
+r1/151530.942.png,1061,30,一,,"UI icon, not a coin (resource bar / panel)"
+r1/151530.942.png,1080,297,75,75,coin read as a Cost
+r1/151912.042.png,56,297,;,:,"real coin, glow, read ':'"
+r1/151912.042.png,312,297,75,75,coin read as a Cost
+r1/151912.042.png,568,84,75,75,coin read as a Cost
+r1/151912.042.png,568,297,75,75,coin read as a Cost
+r1/151912.042.png,824,297,75,75,coin read as a Cost
+r1/151912.042.png,1061,30,,,"UI icon, not a coin (resource bar / panel)"
+r1/152113.746.png,537,121,,,"UI icon, not a coin (resource bar / panel)"
+r1/152125.758.png,197,225,75,75,coin read as a Cost
+r1/152125.758.png,735,225,200,200,coin read as a Cost
+r1/152125.758.png,1061,30,,,"UI icon, not a coin (resource bar / panel)"
+r1/152238.378.png,312,297,75,75,coin read as a Cost
+r1/152238.378.png,337,510,100,100,coin read as a Cost
+r1/152238.378.png,567,510,75,75,coin read as a Cost
+r1/152238.378.png,823,84,75,75,coin read as a Cost
+r1/152238.378.png,849,297,120,120,coin read as a Cost
+r1/152238.378.png,1061,30,一,,"UI icon, not a coin (resource bar / panel)"
+r1/152238.378.png,1079,84,75,75,coin read as a Cost
+r1/152238.378.png,1079,297,75,75,coin read as a Cost
+r1/152302.400.png,453,438,75,75,coin read as a Cost
+r1/152302.400.png,965,225,75,75,coin read as a Cost
+r1/152302.400.png,991,438,120,120,coin read as a Cost
+r1/152302.400.png,1061,30,一,,"UI icon, not a coin (resource bar / panel)"
+r1/152326.423.png,197,438,75,75,coin read as a Cost
+r1/152326.423.png,709,225,75,75,coin read as a Cost
+r1/152326.423.png,735,438,120,120,coin read as a Cost
+r1/152326.423.png,965,225,75,75,coin read as a Cost
+r1/152326.423.png,965,438,75,75,coin read as a Cost
+r1/152326.423.png,1061,30,一,,"UI icon, not a coin (resource bar / panel)"
+r1/152742.526.png,335,84,150,150,coin read as a Cost
+r1/152742.526.png,335,297,120,120,coin read as a Cost
+r1/152742.526.png,335,510,100,100,coin read as a Cost
+r1/152742.526.png,565,84,75,75,coin read as a Cost
+r1/152742.526.png,1061,30,一,,"UI icon, not a coin (resource bar / panel)"
+r1/152742.526.png,1077,84,75,75,coin read as a Cost
+r1/152742.526.png,1077,510,75,75,coin read as a Cost
+r1/152919.121.png,223,225,100,100,coin read as a Cost
+r1/152919.121.png,965,225,75,75,coin read as a Cost
+r1/152919.121.png,1061,30,一,,"UI icon, not a coin (resource bar / panel)"
+r1/153055.332.png,720,60,300,300,coin read as a Cost
+r1/153055.332.png,1061,30,一,,"UI icon, not a coin (resource bar / panel)"
+r1/153107.343.png,537,121,,,"UI icon, not a coin (resource bar / panel)"
+r1/153306.157.png,1061,30,一,,"UI icon, not a coin (resource bar / panel)"
+r1/153645.513.png,197,438,75,75,coin read as a Cost
+r1/153645.513.png,223,225,150,150,coin read as a Cost
+r1/153645.513.png,709,438,75,75,coin read as a Cost
+r1/153645.513.png,735,225,100,100,coin read as a Cost
+r1/153645.513.png,965,11,★,1,"UI icon, not a coin (resource bar / panel)"
+r1/153645.513.png,1061,30,一,,"UI icon, not a coin (resource bar / panel)"
+r1/153851.562.png,197,438,75,75,coin read as a Cost
+r1/153851.562.png,223,225,100,100,coin read as a Cost
+r1/153851.562.png,991,225,400,400,coin read as a Cost
+r1/153851.562.png,1061,30,一,,"UI icon, not a coin (resource bar / panel)"
+r1/153903.572.png,537,121,,,"UI icon, not a coin (resource bar / panel)"
+r1/153915.585.png,537,121,,,"UI icon, not a coin (resource bar / panel)"
+r1/153927.596.png,537,121,,,"UI icon, not a coin (resource bar / panel)"
+r1/154058.854.png,479,225,L,LA,"boss art / coin covered, OCR noise"
+r1/154058.854.png,1061,30,一,,"UI icon, not a coin (resource bar / panel)"
+r1/154111.895.png,313,510,.75,.75,coin read as a Cost
+r1/154111.895.png,338,83,100,100,coin read as a Cost
+r1/154111.895.png,338,297,120,120,coin read as a Cost
+r1/154111.895.png,824,83,75,75,coin read as a Cost
+r1/154111.895.png,824,510,75,75,coin read as a Cost
+r1/154111.895.png,1061,30,一,,"UI icon, not a coin (resource bar / panel)"
+r1/154111.895.png,1080,510,75,75,coin read as a Cost
+r1/154111.895.png,1106,83,150,150,coin read as a Cost
+r1/154111.895.png,1106,297,100,100,coin read as a Cost
+r1/154307.503.png,965,225,75,75,coin read as a Cost
+r1/154307.503.png,1061,30,一,,"UI icon, not a coin (resource bar / panel)"
+r1/154901.862.png,1061,30,一,,"UI icon, not a coin (resource bar / panel)"
+r1/154913.970.png,537,121,,,"UI icon, not a coin (resource bar / panel)"
+r1/160121.141.png,197,11,,,"real coin dimmed or covered, empty read"
+r1/160121.141.png,197,225,85,85,coin read as a Cost
+r1/160121.141.png,709,225,8旺,85,coin read as a Cost
+r1/160121.141.png,1061,30,一,,"UI icon, not a coin (resource bar / panel)"
+r1/160316.964.png,593,84,250,250,coin read as a Cost
+r1/160316.964.png,1061,30,一,,"UI icon, not a coin (resource bar / panel)"
+r1/160328.976.png,537,121,,,"UI icon, not a coin (resource bar / panel)"
+r1/160538.179.png,1061,30,一,,"UI icon, not a coin (resource bar / panel)"
+r1/160602.311.png,453,438,85,85,coin read as a Cost
+r1/160602.311.png,965,11,★,と,"UI icon, not a coin (resource bar / panel)"
+r1/160602.311.png,965,225,85,85,coin read as a Cost
+r1/160602.311.png,991,438,120,120,coin read as a Cost
+r1/160602.311.png,1061,30,一,,"UI icon, not a coin (resource bar / panel)"
+r1/160733.654.png,55,84,,b,"real coin under banner text, OCR noise"
+r1/160733.654.png,81,510,120,120,coin read as a Cost
+r1/160733.654.png,311,510,.85,.85,coin read as a Cost
+r1/160733.654.png,337,297,150,150,coin read as a Cost
+r1/160733.654.png,1061,30,一,,"UI icon, not a coin (resource bar / panel)"
+r1/160924.253.png,537,121,,,"UI icon, not a coin (resource bar / panel)"
+r1/161216.951.png,453,438,85,85,coin read as a Cost
+r1/161216.951.png,965,438,,,"real coin dimmed or covered, empty read"
+r1/161216.951.png,1061,30,一,,"UI icon, not a coin (resource bar / panel)"
+r1/161241.076.png,197,225,85,85,coin read as a Cost
+r1/161241.076.png,223,438,180,180,coin read as a Cost
+r1/161241.076.png,709,225,8旺,85,coin read as a Cost
+r1/161241.076.png,709,438,85,85,coin read as a Cost
+r1/161241.076.png,991,225,120,120,coin read as a Cost
+r1/161241.076.png,1061,30,一,,"UI icon, not a coin (resource bar / panel)"
+r1/161720.287.png,593,297,375,375,coin read as a Cost
+r1/161720.287.png,1061,30,,,"UI icon, not a coin (resource bar / panel)"
+r1/161732.297.png,537,121,,,"UI icon, not a coin (resource bar / panel)"
+r1/162046.055.png,312,83,85,85,coin read as a Cost
+r1/162046.055.png,338,297,150,150,coin read as a Cost
+r1/162046.055.png,568,83,85,85,coin read as a Cost
+r1/162046.055.png,593,297,120,120,coin read as a Cost
+r1/162046.055.png,1061,30,一,,"UI icon, not a coin (resource bar / panel)"
+r1/162122.089.png,82,83,icu,i¿u,"real coin under banner text, OCR noise"
+r1/162122.089.png,312,83,85,85,coin read as a Cost
+r1/162122.089.png,312,297,85,85,coin read as a Cost
+r1/162122.089.png,594,297,120,120,coin read as a Cost
+r1/162122.089.png,1061,30,一,,"UI icon, not a coin (resource bar / panel)"
+r1/162322.892.png,735,225,120,120,coin read as a Cost
+r1/162322.892.png,1061,30,一,,"UI icon, not a coin (resource bar / panel)"
+r1/162550.767.png,593,84,500,500,coin read as a Cost
+r1/162550.767.png,1061,30,一,,"UI icon, not a coin (resource bar / panel)"
+r6/202714.669.png,312,83,75,75,coin read as a Cost
+r6/202714.669.png,312,297,75,75,coin read as a Cost
+r6/202714.669.png,568,83,75,75,coin read as a Cost
+r6/202714.669.png,568,297,75,75,coin read as a Cost
+r6/202714.669.png,824,83,75,75,coin read as a Cost
+r6/202714.669.png,824,297,75,75,coin read as a Cost
+r6/202714.669.png,1061,30,一,,"UI icon, not a coin (resource bar / panel)"
+r6/202714.669.png,1080,83,75,75,coin read as a Cost
+r6/202714.669.png,1080,297,75,75,coin read as a Cost
+r6/203116.204.png,197,11,,,"real coin dimmed or covered, empty read"
+r6/203116.204.png,1061,30,一,,"UI icon, not a coin (resource bar / panel)"
+r6/203316.477.png,57,297,75,75,coin read as a Cost
+r6/203316.477.png,313,510,75,75,coin read as a Cost
+r6/203316.477.png,338,297,120,120,coin read as a Cost
+r6/203316.477.png,569,84,75,75,coin read as a Cost
+r6/203316.477.png,569,297,75,75,coin read as a Cost
+r6/203316.477.png,594,510,100,100,coin read as a Cost
+r6/203316.477.png,1061,30,一,,"UI icon, not a coin (resource bar / panel)"
+r6/203316.477.png,1106,297,240,240,coin read as a Cost
+r6/203541.527.png,537,121,,,"UI icon, not a coin (resource bar / panel)"
+r6/203605.548.png,537,121,,,"UI icon, not a coin (resource bar / panel)"
+r6/203729.620.png,312,297,75,75,coin read as a Cost
+r6/203729.620.png,312,510,75,75,coin read as a Cost
+r6/203729.620.png,338,84,100,100,coin read as a Cost
+r6/203729.620.png,568,84,75,75,coin read as a Cost
+r6/203729.620.png,594,297,150,150,coin read as a Cost
+r6/203729.620.png,849,84,120,120,coin read as a Cost
+r6/203729.620.png,850,297,100,100,coin read as a Cost
+r6/203729.620.png,1061,30,一,,"UI icon, not a coin (resource bar / panel)"
+r6/203829.922.png,453,438,75,75,coin read as a Cost
+r6/203829.922.png,735,225,150,150,coin read as a Cost
+r6/203829.922.png,991,225,100,100,coin read as a Cost
+r6/203829.922.png,1061,30,一,,"UI icon, not a coin (resource bar / panel)"
+r6/204006.103.png,595,83,300,300,coin read as a Cost
+r6/204006.103.png,1061,30,一,,"UI icon, not a coin (resource bar / panel)"
+r6/204018.203.png,537,121,,,"UI icon, not a coin (resource bar / panel)"
+r6/204030.214.png,537,121,,,"UI icon, not a coin (resource bar / panel)"
+r6/204142.277.png,1061,30,一,,"UI icon, not a coin (resource bar / panel)"
+r6/204318.357.png,337,84,120,120,coin read as a Cost
+r6/204318.357.png,849,84,400,400,coin read as a Cost
+r6/204318.357.png,1061,30,一,,"UI icon, not a coin (resource bar / panel)"
+r6/204430.418.png,537,121,,,"UI icon, not a coin (resource bar / panel)"
+r6/204518.452.png,537,121,,,"UI icon, not a coin (resource bar / panel)"
+r6/204530.533.png,537,121,,,"UI icon, not a coin (resource bar / panel)"
+r6/204918.764.png,1061,30,一,,"UI icon, not a coin (resource bar / panel)"
+r6/204942.784.png,313,297,75,75,coin read as a Cost
+r6/204942.784.png,339,83,120,120,coin read as a Cost
+r6/204942.784.png,339,510,100,100,coin read as a Cost
+r6/204942.784.png,569,297,75,75,coin read as a Cost
+r6/204942.784.png,569,510,75,75,coin read as a Cost
+r6/204942.784.png,825,83,75,75,coin read as a Cost
+r6/204942.784.png,851,510,100,100,coin read as a Cost
+r6/204942.784.png,1061,30,一,,"UI icon, not a coin (resource bar / panel)"
+r6/204942.784.png,1107,297,150,150,coin read as a Cost
+r6/205419.560.png,115,239,75,75,coin read as a Cost
+r6/205419.560.png,115,453,75,75,coin read as a Cost
+r6/205419.560.png,370,26,75,75,coin read as a Cost
+r6/205419.560.png,396,453,100,100,coin read as a Cost
+r6/205419.560.png,652,239,150,150,coin read as a Cost
+r6/205419.560.png,1061,30,一,,"UI icon, not a coin (resource bar / panel)"
+r6/205443.604.png,197,225,75,75,coin read as a Cost
+r6/205443.604.png,479,438,150,150,coin read as a Cost
+r6/205443.604.png,1061,30,一,,"UI icon, not a coin (resource bar / panel)"
+r6/205455.617.png,537,121,,,"UI icon, not a coin (resource bar / panel)"
+r6/205856.718.png,312,84,75,75,coin read as a Cost
+r6/205856.718.png,312,297,75,75,coin read as a Cost
+r6/205856.718.png,312,510,75,75,coin read as a Cost
+r6/205856.718.png,568,84,75,75,coin read as a Cost
+r6/205856.718.png,824,510,75,75,coin read as a Cost
+r6/205856.718.png,1061,30,一,,"UI icon, not a coin (resource bar / panel)"
+r6/205856.718.png,1079,84,75,75,coin read as a Cost
+r6/205856.718.png,1079,297,75,75,coin read as a Cost
+r6/205856.718.png,1080,510,75,75,coin read as a Cost
+r6/210221.854.png,1061,30,,,"UI icon, not a coin (resource bar / panel)"
+r6/210422.129.png,537,121,,,"UI icon, not a coin (resource bar / panel)"
+r6/210622.590.png,311,84,75,75,coin read as a Cost
+r6/210622.590.png,337,297,100,100,coin read as a Cost
+r6/210622.590.png,567,297,75,75,coin read as a Cost
+r6/210622.590.png,823,297,75,75,coin read as a Cost
+r6/210622.590.png,823,510,75,75,coin read as a Cost
+r6/210622.590.png,1061,30,一,,"UI icon, not a coin (resource bar / panel)"
+r6/210622.590.png,1079,297,75,75,coin read as a Cost
+r6/210622.590.png,1104,84,120,120,coin read as a Cost
+r6/210910.803.png,537,121,,,"UI icon, not a coin (resource bar / panel)"
+r6/210934.820.png,537,121,,,"UI icon, not a coin (resource bar / panel)"
+r6/210958.841.png,1061,30,,,"UI icon, not a coin (resource bar / panel)"
+r6/211135.495.png,107,297,75,75,coin read as a Cost
+r6/211135.495.png,363,84,75,75,coin read as a Cost
+r6/211135.495.png,363,510,75,75,coin read as a Cost
+r6/211135.495.png,619,510,75,75,coin read as a Cost
+r6/211135.495.png,645,297,120,120,coin read as a Cost
+r6/211135.495.png,875,510,75,75,coin read as a Cost
+r6/211135.495.png,901,297,100,100,coin read as a Cost
+r6/211135.495.png,1061,30,一,,"UI icon, not a coin (resource bar / panel)"
+r6/211323.701.png,1061,30,一,,"UI icon, not a coin (resource bar / panel)"
+r6/211600.632.png,537,121,,,"UI icon, not a coin (resource bar / panel)"
+r6/211612.644.png,537,121,,,"UI icon, not a coin (resource bar / panel)"
+r6/211801.386.png,709,225,75,75,coin read as a Cost
+r6/211801.386.png,965,225,75,75,coin read as a Cost
+r6/211801.386.png,991,438,100,100,coin read as a Cost
+r6/211801.386.png,1061,30,enfu,enfu,"UI icon, not a coin (resource bar / panel)"
+r6/212202.131.png,537,121,,,"UI icon, not a coin (resource bar / panel)"
+r6/212214.143.png,223,225,100,100,coin read as a Cost
+r6/212214.143.png,735,225,400,400,coin read as a Cost
+r6/212214.143.png,1061,30,一,,"UI icon, not a coin (resource bar / panel)"
+r6/212338.213.png,56,84,5,1,"real coin under banner text, OCR noise"
+r6/212338.213.png,82,297,100,100,coin read as a Cost
+r6/212338.213.png,312,297,75,75,coin read as a Cost
+r6/212338.213.png,338,510,120,120,coin read as a Cost
+r6/212338.213.png,568,297,75,75,coin read as a Cost
+r6/212338.213.png,568,510,75,75,coin read as a Cost
+r6/212338.213.png,1061,30,一,,"UI icon, not a coin (resource bar / panel)"
+r6/212950.713.png,537,121,,,"UI icon, not a coin (resource bar / panel)"
+r6/213404.675.png,709,225,85,85,coin read as a Cost
+r6/213404.675.png,965,11,★,と,"UI icon, not a coin (resource bar / panel)"
+r6/213404.675.png,1061,30,一,,"UI icon, not a coin (resource bar / panel)"
+r6/213428.698.png,161,64,羽,羽,"real coin under banner text, OCR noise"
+r6/213428.698.png,161,491,85,85,coin read as a Cost
+r6/213428.698.png,417,64,85,85,coin read as a Cost
+r6/213428.698.png,417,277,85,85,coin read as a Cost
+r6/213428.698.png,673,64,85,85,coin read as a Cost
+r6/213428.698.png,1061,30,一,,"UI icon, not a coin (resource bar / panel)"
+r6/213842.908.png,197,11,,,"real coin dimmed or covered, empty read"
+r6/213842.908.png,197,225,85,85,coin read as a Cost
+r6/213842.908.png,991,225,250,250,coin read as a Cost
+r6/213842.908.png,1061,30,一,,"UI icon, not a coin (resource bar / panel)"
+r6/213854.917.png,537,121,,,"UI icon, not a coin (resource bar / panel)"
+r6/213906.927.png,537,121,,,"UI icon, not a coin (resource bar / panel)"
+r6/214143.915.png,339,510,120,120,coin read as a Cost
+r6/214143.915.png,569,83,85,85,coin read as a Cost
+r6/214143.915.png,569,297,85,85,coin read as a Cost
+r6/214143.915.png,1061,30,一,,"UI icon, not a coin (resource bar / panel)"
+r6/214207.938.png,709,225,85,85,coin read as a Cost
+r6/214207.938.png,709,438,85,85,coin read as a Cost
+r6/214207.938.png,965,225,85,85,coin read as a Cost
+r6/214207.938.png,1061,30,一,,"UI icon, not a coin (resource bar / panel)"
+r6/214357.229.png,709,225,85,85,coin read as a Cost
+r6/214357.229.png,1061,30,一,,"UI icon, not a coin (resource bar / panel)"
+r6/214534.433.png,537,121,,,"UI icon, not a coin (resource bar / panel)"
+r6/214546.445.png,537,121,,,"UI icon, not a coin (resource bar / panel)"
+r6/214710.590.png,735,225,180,180,coin read as a Cost
+r6/214710.590.png,735,438,120,120,coin read as a Cost
+r6/214710.590.png,965,11,★,↓,"UI icon, not a coin (resource bar / panel)"
+r6/214710.590.png,1061,30,一,,"UI icon, not a coin (resource bar / panel)"
+r6/214911.003.png,479,438,180,180,coin read as a Cost
+r6/214911.003.png,709,225,85,85,coin read as a Cost
+r6/214911.003.png,991,438,120,120,coin read as a Cost
+r6/214911.003.png,1061,30,一,,"UI icon, not a coin (resource bar / panel)"
+r6/215147.417.png,197,225,85,85,coin read as a Cost
+r6/215147.417.png,223,438,180,180,coin read as a Cost
+r6/215147.417.png,735,438,120,120,coin read as a Cost
+r6/215147.417.png,965,225,85,85,coin read as a Cost
+r6/215147.417.png,1061,30,一,,"UI icon, not a coin (resource bar / panel)"
+r6/215159.427.png,197,225,85,85,coin read as a Cost
+r6/215159.427.png,479,438,120,120,coin read as a Cost
+r6/215159.427.png,709,225,85,85,coin read as a Cost
+r6/215159.427.png,1061,30,一,,"UI icon, not a coin (resource bar / panel)"
+r6/215223.446.png,537,121,,,"UI icon, not a coin (resource bar / panel)"
+r6/215235.456.png,537,121,,,"UI icon, not a coin (resource bar / panel)"
+r6/215247.464.png,223,438,150,150,coin read as a Cost
+r6/215247.464.png,735,225,375,375,coin read as a Cost
+r6/215247.464.png,1061,30,一,,"UI icon, not a coin (resource bar / panel)"
+r6/215435.678.png,1061,30,一,,"UI icon, not a coin (resource bar / panel)"
+r6/215523.718.png,537,121,,,"UI icon, not a coin (resource bar / panel)"
+r6/215611.755.png,537,121,,,"UI icon, not a coin (resource bar / panel)"
+r6/220412.662.png,337,84,150,150,coin read as a Cost
+r6/220412.662.png,337,297,180,180,coin read as a Cost
+r6/220412.662.png,567,297,85,85,coin read as a Cost
+r6/220412.662.png,1061,30,一,,"UI icon, not a coin (resource bar / panel)"
+r6/220512.714.png,223,225,120,120,coin read as a Cost
+r6/220512.714.png,965,11,+,+,"UI icon, not a coin (resource bar / panel)"
+r6/220512.714.png,1061,30,,,"UI icon, not a coin (resource bar / panel)"
+r6/221001.351.png,313,297,85,85,coin read as a Cost
+r6/221001.351.png,1061,30,一,,"UI icon, not a coin (resource bar / panel)"
+r6/221025.370.png,537,121,,,"UI icon, not a coin (resource bar / panel)"
+r6/221037.380.png,537,121,,,"UI icon, not a coin (resource bar / panel)"
+r6/221237.478.png,197,438,85,85,coin read as a Cost
+r6/221237.478.png,1061,30,一,,"UI icon, not a coin (resource bar / panel)"
+r6/221814.184.png,312,84,85,85,coin read as a Cost
+r6/221814.184.png,312,297,B5,85,coin read as a Cost
+r6/221814.184.png,312,510,85,85,coin read as a Cost
+r6/221814.184.png,568,84,85,85,coin read as a Cost
+r6/221814.184.png,1061,30,一,,"UI icon, not a coin (resource bar / panel)"
+r6/222327.099.png,537,121,,,"UI icon, not a coin (resource bar / panel)"
+r6/222339.108.png,537,121,,,"UI icon, not a coin (resource bar / panel)"
+r6/222727.479.png,197,11,月,,"real coin dimmed or covered, empty read"
+r6/222727.479.png,1061,30,一,,"UI icon, not a coin (resource bar / panel)"
+r6/222739.521.png,197,225,85,85,coin read as a Cost
+r6/222739.521.png,1061,30,,,"UI icon, not a coin (resource bar / panel)"
+r6/222803.539.png,1061,30,,,"UI icon, not a coin (resource bar / panel)"
+r6/222827.557.png,1061,30,,,"UI icon, not a coin (resource bar / panel)"
+r6/222939.871.png,311,510,85,85,coin read as a Cost
+r6/222939.871.png,567,84,85,85,coin read as a Cost
+r6/222939.871.png,567,510,85,85,coin read as a Cost
+r6/222939.871.png,1061,30,一,,"UI icon, not a coin (resource bar / panel)"
+r6/223408.750.png,537,121,,,"UI icon, not a coin (resource bar / panel)"
+r6/223420.762.png,537,121,,,"UI icon, not a coin (resource bar / panel)"
+r6/223958.263.png,1061,30,,,"UI icon, not a coin (resource bar / panel)"
+r6/224158.899.png,197,438,85,85,coin read as a Cost
+r6/224158.899.png,479,438,120,120,coin read as a Cost
+r6/224158.899.png,991,438,500,500,coin read as a Cost
+r6/224158.899.png,1061,30,一,,"UI icon, not a coin (resource bar / panel)"
+r6/224210.910.png,537,121,,,"UI icon, not a coin (resource bar / panel)"
+r6/224459.048.png,709,225,85,85,coin read as a Cost
+r6/224459.048.png,709,438,85,85,coin read as a Cost
+r6/224459.048.png,991,225,120,120,coin read as a Cost
+r6/224459.048.png,991,438,180,180,coin read as a Cost
+r6/224459.048.png,1061,30,一,,"UI icon, not a coin (resource bar / panel)"
+r6/224659.720.png,453,438,85,85,coin read as a Cost
+r6/224659.720.png,735,225,120,120,coin read as a Cost
+r6/224659.720.png,735,438,180,180,coin read as a Cost
+r6/224659.720.png,965,225,85,85,coin read as a Cost
+r6/224659.720.png,1061,30,一,,"UI icon, not a coin (resource bar / panel)"
+r6/224923.840.png,197,225,85,85,coin read as a Cost
+r6/224923.840.png,479,438,150,150,coin read as a Cost
+r6/224923.840.png,735,225,120,120,coin read as a Cost
+r6/224923.840.png,1061,30,一,,"UI icon, not a coin (resource bar / panel)"
+r6/225047.905.png,1061,30,一,,"UI icon, not a coin (resource bar / panel)"
+r4b/190128.753.png,537,121,,,"UI icon, not a coin (resource bar / panel)"
+r4b/190205.720.png,537,121,,,"UI icon, not a coin (resource bar / panel)"
+r4b/190209.725.png,337,297,500,500,coin read as a Cost
+r4b/190209.725.png,1061,30,一,,"UI icon, not a coin (resource bar / panel)"
+r4b/190340.835.png,1061,30,,,"UI icon, not a coin (resource bar / panel)"
+r4b/190417.016.png,311,84,85,85,coin read as a Cost
+r4b/190417.016.png,567,297,85,85,coin read as a Cost
+r4b/190417.016.png,567,510,85,85,coin read as a Cost
+r4b/190417.016.png,1061,30,一,,"UI icon, not a coin (resource bar / panel)"
