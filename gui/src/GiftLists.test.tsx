@@ -217,6 +217,9 @@ describe("locked gifts", () => {
     const tab = screen.getByRole("tab", { name: new RegExp("^" + zh[`kw.${GIFT_BY_ID.get(material)!.keyword}` as Text]) });
     const same = GIFT_BY_ID.get(material)!.keyword === GIFT_BY_ID.get(fixed.id)!.keyword;
     expect(tab.querySelector(".gl-n")?.textContent ?? "").toBe(same ? "1" : ""); // the wanted fusion alone, if it is under this keyword
+    const tier = screen.getByRole("region", { name: ROMAN[GIFT_BY_ID.get(material)!.tier] }); // the tier heading counts the same way
+    const fusionHere = same && GIFT_BY_ID.get(material)!.tier === GIFT_BY_ID.get(fixed.id)!.tier;
+    expect(tier.querySelector("h4 small")!.textContent!.includes(zh["gl.tier_set"].replace("{n}", ""))).toBe(fusionHere);
   });
 
   test("the GUI does not know the run's packs: a pack-specific fusion locks its materials too", async () => {
