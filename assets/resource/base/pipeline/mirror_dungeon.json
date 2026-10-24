@@ -489,16 +489,23 @@
     },
     // The pause menu behind the top-right gear (#215, live 2026-10-22, tests/screens/BattleMenu.png): Settings / Resume /
     // Retry Stage / Give Up, over the turn, whose Win Rate label still reads (a tap there only closed it by chance).
-    // Resume closes it. The roi is the Resume bar alone, so the click can land on no other button; Give Up and Retry
-    // Stage end the stage. A template, as the popups before it: BattleHUD runs it on every battle round.
+    // Resume closes it. The roi is the Resume bar alone, so the tap can land on no other button; Give Up and Retry
+    // Stage end the stage. A template, as the popups before it: BattleHUD runs it on every battle round. The menu fades
+    // out for a moment and its template still hits then (BattleMenuClosing.png): TapUntil waits for the bar's text to go
+    // (#254) where a Click waited a fixed 1 s. The arrow before the text rules out an anchored pattern.
     "BattleMenu": {
         "recognition": "TemplateMatch",
         "roi": [505, 296, 270, 41],
         "template": "Battle/BattleMenuResume.png",
         "threshold": 0.8,
-        "action": "Click",
+        "action": "Custom",
+        "custom_action": "TapUntil",
         "pre_delay": 0,
-        "post_delay": 1000
+        "post_delay": 0,
+        "custom_action_param": {
+            "target": [505, 296, 270, 41],
+            "gone": {"roi": [505, 296, 270, 41], "expected": "Resume"}
+        }
     },
     // Waiting for input: the Win Rate label, off or on. It moves half a slot (~40 px) right with every
     // extra skill slot: x 984 with 7 slots, ~740 with 1 (a 1-sinner formation, live 2026-10-16).
