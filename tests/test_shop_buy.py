@@ -2,6 +2,8 @@
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
+import numpy as np
+
 import actions
 import test_actions
 from test_actions import NO_GOSSYPIUM, buying, cells_read, live_shop, wants
@@ -159,3 +161,106 @@ def test_the_shop_does_not_refresh_when_the_list_buys_nothing(context):
                                             tuple(actions.REFRESH["keyword"][1]): [("90", (1110, 145, 40, 20))]})
     team = buying(wants(), shop_refresh_limit=3)
     assert not actions.Shop.buy(context, team, {"wanted": None, "sold": False, "refreshes": 0}) and taps == []
+
+
+ROW = 153  # px between the offer rows; a Super Shop's grid scrolls 150 px at most (live 2026-10-15: SuperShop.png and its scrolled capture)
+SCROLL_END = 150
+
+
+def super_shop(context, monkeypatch, n=10, red=True, reset_on_buy=False, cost=2000):
+    """A shop of n offers, 4 a row, priced 100 + index, over gifts of the first Burn ids; its grid drags (actions.scroll) from 0
+    to SCROLL_END and the OCR reads the offers that show whole. red: the title is a Super Shop's. reset_on_buy: a
+    purchase puts the grid back to its top. The game's state is in the dict returned: "at", "cost", "bought", "scrolls"."""
+    ids = [g["id"] for g in actions.gift_data() if g["keyword"] == "Burn"][:n]
+    xs = [570, 725, 880, 1035]
+    game = {"at": 0, "cost": cost, "opened": None, "bought": [], "scrolls": 0, "ids": ids}
+    image = np.zeros((720, 1280, 3), np.uint8)
+    if red:
+        image[108:138, 190:320] = (0, 0, 200)
+    context.tasker.controller.post_screencap.return_value.wait.return_value.get.return_value = image
+
+    def scroll(context, x, y, dx, dy):
+        game["scrolls"] += 1
+        game["at"] = min(max(game["at"] - dy, 0), SCROLL_END)
+    monkeypatch.setattr(actions, "scroll", scroll)
+
+    def click(x, y):
+        if (x, y) == actions.PURCHASE:
+            game["bought"].append(game["opened"])
+            game["cost"] -= 100 + game["opened"]
+            game["at"] = 0 if reset_on_buy else game["at"]
+            game["opened"] = None
+        else:  # an offer's icon, 50 px over its price line
+            game["opened"] = next((i for i in range(n) if abs(xs[i % 4] + 50 - x) < 30 and abs(268 + ROW * (i // 4) - game["at"] - y) < 25), None)
+        return MagicMock()
+    context.tasker.controller.post_click.side_effect = click
+
+    def offers():
+        lines = []
+        for i in range(n):
+            dy = ROW * (i // 4) - game["at"]
+            if 306 + dy >= 215 and 333 + dy + 17 <= 515:  # whole in the grid's box
+                lines += [(f"Gift {i}", (xs[i % 4], 333 + dy, 90, 17)), (str(100 + i), (xs[i % 4] + 30, 306 + dy, 40, 24))]
+        return lines
+
+    def run_recognition(name, image, override=None):
+        roi = tuple((override or {}).get(name, {}).get("roi", ()))
+        shown = {tuple(actions.OFFER_GRID): offers(), tuple(actions.SHOP_COST): [(str(game["cost"]), (560, 120, 60, 30))],
+                 tuple(actions.DIALOG_TITLE): [("Purchase E.G.O Gifts", (500, 100, 260, 40))] if game["opened"] is not None else [],
+                 tuple(actions.GET_TITLE): [("E.G.O Gift GET!", (560, 165, 160, 30))]}.get(roi, [])
+        results = [SimpleNamespace(text=t, box=b) for t, b in shown]
+        return SimpleNamespace(all_results=results, hit=True, best_result=None) if results else None
+    context.run_recognition.side_effect = run_recognition
+
+    def offer_at(x, y):  # the offer whose cell centre (x, y) is, by the grid's position now
+        return ids[round((y + game["at"] - 266) / ROW) * 4 + round((x - 624) / 154)]
+
+    def read_cells(context, image, cells, page, gifts=()):
+        return [{"i": i, "x": x, "y": y, "tier": 2, "keyword": "Burn", "gift": None, "id": offer_at(x, y), "score": 0.9}
+                for i, (x, y) in enumerate(cells)]
+    monkeypatch.setattr(actions, "read_cells", read_cells)
+    monkeypatch.setattr(actions, "read_plates", lambda context, image, centres: [{"text": f"plate {offer_at(x, y)}", "id": offer_at(x, y)}
+                                                                                 for x, y in centres])
+    return game
+
+
+def test_a_super_shops_last_two_offers_are_read_after_a_scroll_and_bought(context, monkeypatch):
+    # #341: 10 offers, the last 2 only show with the grid scrolled; the list wants exactly them.
+    game = super_shop(context, monkeypatch)
+    lines = []
+    monkeypatch.setattr(actions, "log", lines.append)
+    ids = game["ids"]
+    assert actions.Shop.buy_offers(context, buying(wants(ids[9], ids[8])), {"wanted": None, "sold": False}) == 2
+    assert sorted(game["bought"]) == [8, 9]
+    for i in range(10):  # every offer is read, once: the 2 rows both screens show are not counted twice
+        assert len([line for line in lines if f"'Gift {i}' {100 + i}:" in line]) == 1, i
+
+
+def test_an_offer_on_both_screens_is_bought_once(context, monkeypatch):
+    # #341: Gift 5 sits in the second row, which the grid shows before and after the scroll.
+    game = super_shop(context, monkeypatch)
+    assert actions.Shop.buy_offers(context, buying(wants(game["ids"][5])), {"wanted": None, "sold": False}) == 1
+    assert game["bought"] == [5]
+
+
+def test_the_offer_bought_is_the_one_read_when_a_purchase_puts_the_grid_back_on_top(context, monkeypatch):
+    # #341: after Gift 9 is bought the game shows the grid at its top; Gift 8 (first screen's row 3... read after the scroll)
+    # is brought into view again and checked by its name and price before the tap, not tapped at its old place.
+    game = super_shop(context, monkeypatch, reset_on_buy=True)
+    ids = game["ids"]
+    assert actions.Shop.buy_offers(context, buying(wants(ids[9], ids[8], ids[1])), {"wanted": None, "sold": False}) == 3
+    assert sorted(game["bought"]) == [1, 8, 9]
+
+
+def test_a_shop_of_8_offers_is_not_scrolled(context, monkeypatch):
+    # #341: a shop's title is tan: nothing scrolls.
+    game = super_shop(context, monkeypatch, n=8, red=False)
+    assert actions.Shop.buy_offers(context, buying(wants(game["ids"][5])), {"wanted": None, "sold": False}) == 1
+    assert game["bought"] == [5] and game["scrolls"] == 0
+
+
+def test_a_super_shop_of_8_offers_reads_nothing_new_after_the_scroll(context, monkeypatch):
+    # #341: the grid does not move when there is no third row: the second read adds no offer, the first one is still bought.
+    game = super_shop(context, monkeypatch, n=8)
+    assert actions.Shop.buy_offers(context, buying(wants(game["ids"][0])), {"wanted": None, "sold": False}) == 1
+    assert game["bought"] == [0]
