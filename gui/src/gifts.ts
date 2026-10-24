@@ -74,11 +74,12 @@ function pick(f: Fusion, owned: Map<number, number>, slots = Infinity): number[]
 
 /** {gift, materials} for the first wanted fusion in list order whose materials `ownedIds` (repeats count) hold, else null.
  * List order = the keyword's place in `order` (`queue`'s), then data-file order: a fusion is in no `gorder` (that holds the
- * shop's gifts). A pack-specific fusion is made whatever the run packs.
+ * shop's gifts). A pack-specific fusion is made whatever the run packs. Only gifts the list neither wants nor keeps are materials
+ * (a drop gift, locked by a wanted fusion or not): a recipe that needs one that is, is passed over for the next.
  * `slots`: the fuse page's material slots; a recipe needing more is passed over (the next wanted one is tried). */
 export function recipeFusion(list: ListRules, ownedIds: number[], tables: GiftTables = GAME_TABLES, slots?: number): { gift: number; materials: number[] } | null {
   const owned = new Map<number, number>();
-  for (const id of ownedIds) owned.set(id, (owned.get(id) ?? 0) + 1);
+  for (const id of ownedIds) if (state(list, id) === "drop") owned.set(id, (owned.get(id) ?? 0) + 1); // a wanted or kept gift is no material
   const place = (f: Fusion) => {
     const n = list.order.indexOf(f.keyword);
     return n < 0 ? list.order.length : n;

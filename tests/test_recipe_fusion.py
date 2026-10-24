@@ -84,3 +84,13 @@ def test_a_recipe_that_does_not_go_in_leaves_the_ordinary_fusion_to_be_made_the_
     readings = [("Burn", 3, 9003), ("Burn", 3, 9053), ("Burn", 3, 9157), *junk(3)]
     fused, taps, ok = fusion_taps(context, monkeypatch, team(SOOTHE), *readings, ignored=actions.FUSE_CELLS[:3])
     assert fused and ok and taps[3:] == [1, 1, 1]
+
+
+def test_a_recipe_that_needs_a_gift_the_list_wants_is_skipped_and_the_log_says_why(context, monkeypatch):
+    # The list wants Soothe the Dead and also 9003, one of its materials: 9003 is no material (state table: want/keep are not).
+    logs = []
+    monkeypatch.setattr(actions, "log", logs.append)
+    readings = [("Burn", 3, 9003), ("Burn", 3, 9053), ("Burn", 3, 9157)]
+    fused, taps, ok = fusion_taps(context, monkeypatch, team(SOOTHE, 9003), *readings)
+    assert not fused and not ok and taps == [0, 0, 0]
+    assert any(f"recipe {SOOTHE} " in line and "skip, missing 9003 " in line and line.endswith("(on the list as want/keep)") for line in logs)

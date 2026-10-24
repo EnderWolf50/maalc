@@ -1136,24 +1136,19 @@ class GiftSearch(CustomAction):
         return False
 
 
-def theme_packs():
-    """data/theme_packs.yaml, read from the file."""
-    return yaml.safe_load((data_dir() / "theme_packs.yaml").read_text(encoding="utf-8"))
-
-
 def theme_pack_plan(settings, team):
     """(the team's plan, the data file's packs, its event packs, its title art reads): the default plan or the user's
     (spec 04 section 8)."""
-    data = theme_packs()
+    file = data("theme_packs.yaml")
     ref = team["theme_pack_plan"]
-    plan = data["default_plan"] if ref == "default" else next(p for p in settings["theme_pack_plans"] if p["id"] == ref)
-    return plan, list(data["packs"]), set(data["event_packs"]), data["title_art"]
+    plan = file["default_plan"] if ref == "default" else next(p for p in settings["theme_pack_plans"] if p["id"] == ref)
+    return plan, list(file["packs"]), set(file["event_packs"]), file["title_art"]
 
 
 @functools.cache
 def pack_ids():
     """Pack name -> id, every pack of the data file's `pack_ids`."""
-    return theme_packs()["pack_ids"]
+    return data("theme_packs.yaml")["pack_ids"]
 
 
 def run_packs():
@@ -1443,7 +1438,7 @@ def cost_miss(image, box, cx, cy, found, difficulty):
 
 
 def map_data():
-    return yaml.safe_load((data_dir() / "map_weights.yaml").read_text(encoding="utf-8"))
+    return data("map_weights.yaml")
 
 
 def is_hard(context):
@@ -3723,20 +3718,23 @@ class Shop(CustomAction):
         recipe by itself once they are in (its Forecasts row reads III Guaranteed 100%, logged), and the dialog's count must
         be theirs. A recipe the page cannot hold (a Lunar Memory's 5 materials on 3 slots) is passed over for the next wanted one.
         """
-        recipe = recipe_fusion(team["list"], [c["id"] for c in cells if c["id"] is not None], slots=slots,
-                              skip=visit.setdefault("recipes_failed", []))
+        failed, blocked = visit.setdefault("recipes_failed", []), []
+        recipe = recipe_fusion(team["list"], [c["id"] for c in cells if c["id"] is not None], slots=slots, skip=failed, blocked=blocked)
+        for gift, lacks in blocked:
+            log(f"shop: recipe {gift} {GIFT_NAMES.get(gift)}: skip, missing " + ", ".join(f"{i} {GIFT_NAMES.get(i)}" for i in lacks)
+                + " (on the list as want/keep)")
         if recipe is None:
             return None
         group = pick_cells(cells, recipe["materials"])
         group.sort(key=lambda c: -c["y"])  # the grid's end first, as an ordinary fusion's
         names = ", ".join(cell_line(c, "material").rsplit(":", 1)[0] for c in group)
         if not Shop.place(context, group, slots, grid):
-            visit["recipes_failed"].append(recipe["gift"])
+            failed.append(recipe["gift"])
             return False
         tier, chance = read_forecast(context)
         made = Shop.press_fuse(context, len(group))
         if not made:
-            visit["recipes_failed"].append(recipe["gift"])
+            failed.append(recipe["gift"])
         log(f"shop: recipe fusion {recipe['gift']} {GIFT_NAMES.get(recipe['gift'])} from {names}: page tier {tier or 'unread'}, chance "
             f"{f'{chance}%' if chance else 'unread'}: {'done' if made else 'not confirmed'}")
         return made
