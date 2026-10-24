@@ -1,9 +1,9 @@
 // The hover popover of a gift tile (#291 GUI, #307): the gift's name, a "set to" row and what the list and the recipes make of it.
 // One popover for the whole tab: a tile shows it for itself (GiftEdit.tip), the tab renders it.
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { FUSION_BY_ID, GIFT_BY_ID, giftName, iconUrl, materialsOf, packName, usedIn } from "./giftCatalog";
+import { FUSION_BY_ID, GIFT_BY_ID, giftName, iconUrl, packName, usedIn } from "./giftCatalog";
 import { STATES, useGiftEdit, type GiftTip } from "./giftEdit";
-import { lockers, queue } from "./gifts";
+import { lockers, materialsOf, queue } from "./gifts";
 import { fill, TEXT, type Key } from "./i18n";
 import { LockIcon, look, TIERS } from "./KeywordGrid";
 import { useEditor } from "./ui";

@@ -13,7 +13,9 @@ export interface Fusion {
 }
 /** gift_search.json's gifts (the buyable ones) and gift_recipes.json's gifts, the game files' unless a test passes its own. */
 export interface GiftTables { buyable: { id: number }[]; fusions: Fusion[] }
-const GAME_TABLES: GiftTables = { buyable: SEARCH_GIFTS, fusions: recipes.gifts };
+/** The fusion gifts' recipe data (gift_recipes.json), in data order. */
+export const FUSIONS: Fusion[] = recipes.gifts;
+const GAME_TABLES: GiftTables = { buyable: SEARCH_GIFTS, fusions: FUSIONS };
 
 /** The data file's default list: the fields of a gift list without id and name. */
 export const DEFAULT_LIST: Omit<GiftList, "id" | "name"> = parseYaml(listsYaml).default_list;
@@ -34,14 +36,15 @@ export const teamKeyword = (ref: string, lists: GiftList[]): string | undefined 
 /** "want", "keep" or "drop" (everything the list does not mention). */
 export const state = (list: ListRules, id: number): GiftState => (list.want.includes(id) ? "want" : list.keep.includes(id) ? "keep" : "drop");
 
-const materials = (f: Fusion) => [...(f.recipes ?? []).flat(), ...(f.groups ?? []).flatMap((g) => g.ids)];
+/** Every gift in a fusion's recipes (all of a group's too), once each. */
+export const materialsOf = (f: Fusion): number[] => [...new Set([...(f.recipes ?? []).flat(), ...(f.groups ?? []).flatMap((g) => g.ids)])];
 
 /** The wanted fusions that lock a drop gift, in data-file order: it is a material of any of their recipes, or of any group.
  * A pack-specific fusion (data `specific`) only when runPacks and its `packs` share one, or runPacks is null (unknown). */
 export function lockers(list: ListRules, id: number, runPacks: number[] | null = null, tables: GiftTables = GAME_TABLES): number[] {
   if (state(list, id) !== "drop") return [];
   return tables.fusions
-    .filter((f) => state(list, f.id) === "want" && materials(f).includes(id)
+    .filter((f) => state(list, f.id) === "want" && materialsOf(f).includes(id)
       && (!f.specific || runPacks === null || (f.packs ?? []).some((p) => runPacks.includes(p))))
     .map((f) => f.id);
 }

@@ -1,7 +1,7 @@
 // Every gift the gift list tab shows: what the shop sells, the fusion gifts, the recipe materials and the vestiges, with their icons.
 import recipes from "../../assets/resource/base/data/gift_recipes.json";
 import packsYaml from "../../assets/resource/base/data/theme_packs.yaml?raw";
-import type { Fusion } from "./gifts";
+import { FUSIONS, materialsOf, type Fusion } from "./gifts";
 import { SEARCH_GIFTS, VESTIGES, parseThemePacks } from "./model";
 
 /** buyable: on the Gift Search page (tier I-III); fusion: made by fusing, so wantable but never bought; material: a recipe's
@@ -46,11 +46,7 @@ export function tiersOf(gorder: Record<string, number[]>, keyword: string): { ti
   return [...byTier].sort((a, b) => b[0] - a[0]).map(([tier, ids]) => ({ tier, ids }));
 }
 
-/** The fusion gifts' recipe data (gift_recipes.json), in data order. */
-export const FUSIONS: Fusion[] = recipes.gifts;
 export const FUSION_BY_ID = new Map(FUSIONS.map((f) => [f.id, f]));
-/** Every gift in a fusion's recipes (all of a group's too), once each. */
-export const materialsOf = (f: Fusion): number[] => [...new Set([...(f.recipes ?? []).flat(), ...(f.groups ?? []).flatMap((g) => g.ids)])];
 /** The fusion gifts that have this gift among their materials, in data order. */
 export const usedIn = (id: number): Fusion[] => FUSIONS.filter((f) => materialsOf(f).includes(id));
 

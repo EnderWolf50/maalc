@@ -1,7 +1,7 @@
 // Teams (spec 04 section 9): list order is rotation order.
 import { useState } from "react";
 import { resetTeamTimes } from "./api";
-import { kwText } from "./KeywordGrid";
+import { TIERS, kwText } from "./KeywordGrid";
 import { teamKeyword } from "./gifts";
 import {
   MAX_GIFTS, SEARCH_GIFTS, SEARCH_TABS, SINNERS, defaultStarlight, freeName, newId, newTeam, teamEnum, toggleGift,
@@ -200,8 +200,6 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
     </div>
   );
 }
-
-const TIERS = ["", "I", "II", "III", "IV", "V"];
 
 const sameRef = (a: GiftRef, g: SearchGift) => a.keyword === g.keyword && a.tier === g.tier && a.name === g.en;
 
