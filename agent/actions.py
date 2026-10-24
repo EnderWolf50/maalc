@@ -2644,36 +2644,54 @@ class Event(CustomAction):
 
 
 REWARD_TITLE = [290, 112, 490, 48]
+REWARD_CARDS = [130, 190, 1020, 280]  # the cards, for still(): they slide in over 0.27-0.97 s (#334)
 CARD_TEXT = [130, 340, 1020, 120]
 SELECTABLE = [880, 115, 170, 40]
 CARD_CONFIRM = (808, 528)
+CARD_ROUNDS = 12  # a look is a round: per tap up to CARD_REREADS rereads and the tap (a card of 3 that never reads: 9), then Confirm
+CARD_REREADS = 2  # a card that reads as nothing is looked at again this often per tap before it is taken as it reads
 
 
 @AgentServer.custom_action("RewardCard")
 class RewardCard(CustomAction):
-    """Take reward cards in the team's order until Selectable n/m is full, then Confirm; never Cancel (spec 03 section 11)."""
+    """Take reward cards in the team's order until Selectable n/m is full, then Confirm; never Cancel (spec 03 section 11).
+
+    #334: each look waits for the cards to stop moving, which the game ignores taps during. A card counts as taken
+    when Selectable's count went up; a tap that did not raise it is made again on the same card.
+    """
 
     @hands_back
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         order = current_run(context)["team"]["reward_cards"]
-        taken = set()
-        for _ in range(5):
-            image = page_guard(context, "RewardCard")
+        taken, rereads = set(), 0
+        for _ in range(CARD_ROUNDS):
+            image = page_guard(context, "RewardCard", image=still(context, roi=REWARD_CARDS, runs=2))
             m = re.search(r"(\d)\s*/\s*(\d)", text(context, image, SELECTABLE))
             if m and m[1] == m[2]:
                 tap(context, *CARD_CONFIRM, wait=0)
                 until(context, lambda im: not has(text(context, im, REWARD_TITLE), "Encounter Reward"))
                 return True
+            if not m:  # no count to tell a tap by: the page is not up
+                continue
             cards = columns(ocr(context, image, CARD_TEXT))
             if not cards or len(taken) == len(cards):
                 time.sleep(1)
                 continue
             types = [rewards.card_type(" ".join(lines)) for _, lines in cards]
+            if None in types and rereads < CARD_REREADS:  # still sliding in, or misread: not ready
+                rereads += 1
+                continue
             i = rewards.pick_card(types, order, taken)
             log(f"reward cards: {', '.join(str(t) for t in types)}: take {types[i] or ' '.join(cards[i][1])!r}")
             tap(context, cards[i][0], 300, wait=0)
-            until(context, lambda im: text(context, im, SELECTABLE) != text(context, image, SELECTABLE), timeout=1.5)
-            taken.add(i)
+            before = int(m[1])
+
+            def picked(im):  # Selectable's count went up: not a misread digit, not a tap that dropped the card again
+                n = re.search(r"(\d)\s*/\s*\d", text(context, im, SELECTABLE))
+                return n is not None and int(n[1]) > before
+            if until(context, picked, timeout=1.5) is not None:
+                taken.add(i)
+                rereads = 0
         return stuck("reward card page did not fill Selectable")
 
 
