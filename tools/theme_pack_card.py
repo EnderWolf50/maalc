@@ -14,7 +14,8 @@ from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 CARD = (680, 1069)  # the prefab says 650 wide; the screenshots say 680 (badge grid and title width), see docs/spec/05-game-data.md section 2. Every box below is (x0, y0, x1, y1) as a fraction of it, y up
 MAIN, FRONT = (-0.045, 0.033, 1.054, 0.98), (-0.045, 0.059, 1.054, 0.98)
-BOSS, LOGO = (0.13, 0.25, 0.875, 0.836), (0.34, 0.26, 0.66, 0.34)
+BOSS = (0.13, 0.25, 0.875, 0.836)  # of MAIN: [Image]Boss is a child of `main`
+LOGO = (0.34, 0.26, 0.66, 0.34)
 # Image_baton is a child of `main` (anchors (0,0.1)-(1,0.9) of it); its Text_Content (0.3,0.715)-(0.7,0.815) of that
 BATON = (MAIN[0], MAIN[1] + 0.1 * (MAIN[3] - MAIN[1]), MAIN[2], MAIN[1] + 0.9 * (MAIN[3] - MAIN[1]))
 BATON_TEXT = (0.3, 0.715, 0.7, 0.815)  # of BATON
@@ -228,7 +229,7 @@ def card(parts: dict[str, Image.Image], art: Image.Image, boss: Image.Image | No
     base = Image.new("RGBA", size, (0, 0, 0, 0))
     put(base, *fit(art.convert("RGBA"), MAIN, k), clip=True)
     if boss is not None:
-        put(base, *fit(boss.convert("RGBA"), BOSS, k), clip=True)
+        put(base, *fit(boss.convert("RGBA"), sub(MAIN, BOSS), k), clip=True)
     if ui.get("isShowBaton"):
         put(base, *fit(parts["baton"], BATON, k, stretch=True), clip=True)
         x0, y0, x1, y1 = px(sub(BATON, BATON_TEXT))
