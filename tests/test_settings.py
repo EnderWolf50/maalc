@@ -233,8 +233,8 @@ def test_version_7_accepts_terms_and_downloads(tmp_path):
 
 def test_version_10_keeps_the_dismissed_screens(tmp_path):
     # #244: on, so the first run after the update already keeps them.
-    old = edited(lambda d: d["run"].pop("keep_dismissed_screens"))
-    assert load(tmp_path, {**old, "version": 10}) == VALID
+    old = edited10(lambda d: d["run"].pop("keep_dismissed_screens"))
+    assert load(tmp_path, old) == MIGRATED
 
 
 def test_version_9_fuses_as_before(tmp_path):

@@ -118,9 +118,9 @@ test("version 6 keeps what the shop kept before", () => {
 });
 
 test("version 10 keeps the dismissed screens", () => {
-  const old = structuredClone(cases.valid) as Record<string, unknown> & { run: Record<string, unknown> };
+  const old = structuredClone(cases.valid10) as Record<string, unknown> & { run: Record<string, unknown> };
   delete old.run.keep_dismissed_screens;
-  const { data, migrated } = parseSettings(JSON.stringify({ ...old, version: 10 }));
+  const { data, migrated } = parseSettings(JSON.stringify(old));
   expect(migrated).toBe(true);
   expect(data.run.keep_dismissed_screens).toBe(true);
   expect(validate(data)).toEqual([]);

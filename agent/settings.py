@@ -219,7 +219,7 @@ def gift_lists_from_v10(teams):
 
 
 def _v10_to_v11(data):
-    """Version 11 (#291) moves the shop's keep settings from the teams to gift lists: a list per team (teams that kept the same
+    """Version 11 adds run.keep_dismissed_screens (#244), on. It also (#291) moves the shop's keep settings from the teams to gift lists: a list per team (teams that kept the same
     share one), teams[].gift_list names it; keyword (the list's order starts with it), keep_keywords, keywordless, keep_gifts and
     fusion_condition go. A keywordless gift is always kept now, whatever keywordless said: "fuse" and "fuse_or_sell" no longer make it material."""
     teams = [t for t in data.get("teams") if isinstance(t, dict)] if isinstance(data.get("teams"), list) else []
@@ -228,6 +228,8 @@ def _v10_to_v11(data):
         for old in ("keyword", "keep_keywords", "keywordless", "keep_gifts", "fusion_condition"):
             team.pop(old, None)
         team["gift_list"] = gift_list
+    if isinstance(data.get("run"), dict):
+        data["run"].setdefault("keep_dismissed_screens", True)
     return data
 
 

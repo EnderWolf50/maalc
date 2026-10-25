@@ -383,9 +383,9 @@ const MIGRATIONS: Record<number, (d: Record<string, unknown>) => Record<string, 
   // list per team, teams that kept the same share one; keyword (the list's order starts with it), keep_keywords, keywordless,
   // keep_gifts and fusion_condition go. A keywordless gift is always kept now.
   10: (d) => {
-    const { data, dropped } = migrateV10(d);
+    const { data, dropped } = migrateV10(d.run && typeof d.run === "object" ? { ...d, run: { keep_dismissed_screens: true, ...d.run } } : d);
     v10Dropped = dropped;
-    return data.run && typeof data.run === "object" ? { ...data, run: { keep_dismissed_screens: true, ...data.run } } : data;
+    return data;
   },
 };
 /** The version 10 keep_gifts the last migration found no gift for (parseSettings returns it). */
