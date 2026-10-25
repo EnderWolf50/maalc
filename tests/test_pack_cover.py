@@ -54,8 +54,8 @@ PAGES = {
 BLANKED = {
     "ThemePackNormal/2": ("ThemePackNormal", 2, [("Automated Factory", "name"), ("The Outcast", "name"), ("The Unloving", "cover"),
                                                  ("Nagel und Hammer", "name"), ("The Forgotten", "name")]),
-    # The Outcast's cover is one the card is not read by (too close to The Dream Ending's): listed, no pack
-    "ThemePackNormal/1": ("ThemePackNormal", 1, [("Automated Factory", "name"), ("WOPIS", "unread"), ("The Unloving", "name"),
+    # The Outcast's picture is The Dream Ending's: the title band tells them apart (with the picture alone it stayed unread)
+    "ThemePackNormal/1": ("ThemePackNormal", 1, [("Automated Factory", "name"), ("The Outcast", "cover"), ("The Unloving", "name"),
                                                  ("Nagel und Hammer", "name"), ("The Forgotten", "name")]),
 }
 
@@ -138,9 +138,9 @@ def test_a_card_whose_title_is_lost_is_read_by_its_cover_or_left_unread(read, ke
 
 
 def test_the_page_swinging_in_is_not_guessed_by_its_covers():
-    # cards tilted and overlapping: no cover stands clear of the next, so none is read from the art
+    # cards tilted and overlapping: the overlapped ones stand clear of no cover; the first, tilted but whole, reads right
     page = np.asarray(Image.open(SCREENS / "ThemePack.png").convert("RGB"))[:, :, ::-1]
-    assert [pc.read_cover(page, x) for x in (310, 485, 684)] == [None, None, None]
+    assert [(pc.read_cover(page, x) or [None])[0] for x in (310, 485, 684)] == ["To be Crushed", None, None]
 
 
 def test_the_cover_alone_names_most_cards_of_a_real_page_and_never_a_wrong_one():
@@ -154,9 +154,9 @@ def test_the_cover_alone_names_most_cards_of_a_real_page_and_never_a_wrong_one()
             found = pc.read_cover(image, x)
             spoke += found is not None
             right += found is not None and found[0] == name
-    # of 24 cards; silent: the boss silhouettes (Sinking Deluge, Tangling Lust), The Outcast and The Dream Ending (look-alikes)
-    # and Miracle in District 20 on the HARD page
-    assert (spoke, right) == (19, 19)
+    # of 24 cards; silent: the boss silhouette of Sinking Deluge, Miracle in District 20 and The Dream Ending on the HARD page.
+    # The picture alone left 5 silent: Tangling Lust's silhouette and The Outcast and The Dream Ending (the same picture) too
+    assert (spoke, right) == (21, 21)
 
 
 
@@ -238,6 +238,18 @@ def test_a_card_like_no_cover_is_not_read(three_covers):
 
 def test_look_alike_covers_are_not_told_apart(three_covers):
     assert pc.read_cover(tiny_page(1), 640) is None  # A and A2 tie: under MIN_LEAD
+
+
+def test_covers_with_the_same_picture_are_told_apart_by_the_title_band(monkeypatch):
+    # The Outcast and The Dream Ending, or a re-run and its original: the picture alike, the title not
+    page, other = tiny_page(1), tiny_page(2)
+    top = pc.CARD_TOP + int(0.70 * pc.CARD[1])
+    twin = page.copy()
+    twin[top:pc.CARD_TOP + pc.CARD[1]] = other[top:pc.CARD_TOP + pc.CARD[1]]  # the same picture, another title
+    cut = lambda im: pc.signature(im[pc.CARD_TOP:pc.CARD_TOP + pc.CARD[1], 549:731])
+    monkeypatch.setattr(pc, "covers", lambda: {"A": cut(page), "A twin": cut(twin)})
+    assert pc.read_cover(page, 640)[0] == "A"
+    assert pc.read_cover(twin, 640)[0] == "A twin"
 
 
 def test_the_title_narrows_the_covers_a_card_can_be_read_as(three_covers):

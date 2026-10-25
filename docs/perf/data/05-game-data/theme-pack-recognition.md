@@ -13,13 +13,16 @@ stayed on the developer's machine; every card of them is listed in
 the path that read it and two independent verdicts. The OCR runs in a MaaFramework task on the still image (`actions.ocr` on
 `PACK_TITLES`), the cover art on the same image.
 Rerun on 2026-10-25 on the same 112 pages after the covers' boss layer was fixed (the boss picture sat 5 to 14 px low): the OCR
-readings are unchanged; the cover verdicts and the gate table below are the new covers'.
+readings are unchanged; the cover verdicts and the gate table below are the new covers'. Rerun again the same day after the
+signature took the title band beside the picture (`pack_cover.BANDS`): cover verdicts and the gate table changed, nothing else.
 
 ## Truth, and what it does not show
 
 - A card's truth is the pack the full reading (`+cover`) names. That is the reading under test, so each card also gets two verdicts
-  that do not rest on the whole-title match: the cover art alone agrees on 490 of the 531 cards and is silent on 41 (boss silhouettes, look-alike
-  covers and others; not classified card by card); the keyword alone agrees on 526 and is silent on 5. None disagrees, and every card is confirmed by one
+  that do not rest on the whole-title match: the cover art alone agrees on 509 of the 531 cards, is silent on 21 (boss silhouettes, look-alike
+  covers and others; not classified card by card) and disagrees on 1: a HARD card of Timekilling Time BokGak, the re-run copy with
+  its own boss picture, which has no cover here (the pack list leaves the BokGak copies out) and is read as Miracle in District 20;
+  its title names it Timekilling Time. The keyword alone agrees on 526 and is silent on 5. Every card is confirmed by one
   of the two (0 of 531 by neither). The keyword reads the same OCR text as the title match, the cover reads the pixels. No card was
   checked by eye one by one: a pack both of them misread the same way would pass (unverified).
 - The captures show **74 of the 94 packs** of the season; the 20 never dealt in them (The B.E., The Evil Defining, The
@@ -29,7 +32,8 @@ readings are unchanged; the cover verdicts and the gate table below are the new 
   name, its own cover pasted on a page and single words of its name, not a capture. "Every pack recognised" on a live page is not
   shown for them.
 - The cover's threshold (`pack_cover.MIN_SCORE`, `MIN_LEAD`) was picked on these captures, not on held-out pages: the gate table
-  below is the sweep (at 0.5 / 0.1, 490 cards read and 0 wrong; at a lead of 0.05, 5 wrong).
+  below is the sweep (at 0.5 / 0.1, 510 cards read and 1 wrong, the BokGak card above; at a lead of 0.05, 3 wrong). The picture
+  alone gave 490 read and 0 wrong at 0.5 / 0.1, 5 wrong at 0.05.
 - A card that has no OCR box at all is lost: none of the 112 pages shows one.
 - `S.E.A.` has no keyword of its own (`sea` is inside `Mountain of Corpses, Sea of Blood`); the keyword of its art title (`Hello Bus`, keyword `hello`) names its cards (10 keyword verdicts agree), and so does its cover.
 
@@ -190,10 +194,10 @@ the cover's gate (MIN_SCORE, MIN_LEAD), on every card against its truth:
 
 | best correlation at least | lead over the next at least | cards read | read wrong |
 |---|---|---|---|
-| 0.5 | 0.05 | 513 | 5 |
-| 0.5 | 0.1 | 490 | 0 |
-| 0.5 | 0.15 | 464 | 0 |
-| 0.6 | 0.1 | 490 | 0 |
-| 0.7 | 0.1 | 490 | 0 |
+| 0.5 | 0.05 | 516 | 3 |
+| 0.5 | 0.1 | 510 | 1 |
+| 0.5 | 0.15 | 480 | 0 |
+| 0.6 | 0.1 | 510 | 1 |
+| 0.7 | 0.1 | 507 | 1 |
 
-cover art alone against the truth: {'agree': 490, 'silent': 41}; keyword alone: {'agree': 526, 'silent': 5}; confirmed by neither: 0 of 531 (0 packs)
+cover art alone against the truth: {'agree': 509, 'silent': 21, 'DISAGREE': 1}; keyword alone: {'agree': 526, 'silent': 5}; confirmed by neither: 0 of 531 (0 packs)
