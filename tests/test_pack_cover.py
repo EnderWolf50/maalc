@@ -42,11 +42,19 @@ PAGES = {
                                ("Blade and Artwork", "name"), ("Thunder and Lightning", "name")],
     # HARD floor 5: the last card reads "Line" under noise and "ROLIND" (Merry-Go-Round, Line 5): Line 1 to 3 and 5 are alike
     # titles, the cover tells them apart (#274)
-    "ThemePackHardLine5": [("Nocturnal Sweeping", "name"), ("Miracle in District 20", "name"), ("The Dream Ending", "name"),
+    # the second card is the BokGak re-run of Miracle in District 20 (its title has the "BokGak" line; read as the original
+    # before the re-runs were packs)
+    "ThemePackHardLine5": [("Nocturnal Sweeping", "name"), ("Miracle in District 20 BokGak", "name"), ("The Dream Ending", "name"),
                            ("Mountain of Corpses, Sea of Blood", "name"), ("Line 5", "cover")],
     # NORMAL floor 3: Miracle in District 20's art title reads "InDistrict" and "miiracle" over noise (#274: its keyword)
     "ThemePackMiracle": [("Miracle in District 20", "keyword"), ("Addicting Lust", "name"), ("Vain Pride", "name"),
                          ("Yield My Flesh to Claim Their Bones", "name"), ("Tearful Things", "name")],
+    # HARD floor 5 with a BokGak re-run rightmost: its title and the "BokGak" line under it name the re-run, not the event
+    # pack it copies; LCB Regular Check-up without the line is the original
+    "ThemePackRefresh0": [("Line 3", "name"), ("The Surrendered Witnessing", "name"), ("Sunk Gloom", "name"),
+                          ("Spring Cultivation", "name"), ("Murder on the WARP Express BokGak", "name")],
+    "ThemePackRefresh1": [("The Infinite Procession", "name"), ("Unrelenting Might", "name"), ("Blade and Artwork", "name"),
+                          ("LCB Regular Check-up", "name"), ("Nocturnal Sweeping BokGak", "name")],
     # cards swinging in: tilted and overlapping, no cover stands clear (the agent waits for them to stop, #246)
     "ThemePack": [("To be Crushed", "name"), ("Nagel und Hammer", "name"), ("To be Cleaved", "name")],
 }
@@ -57,6 +65,12 @@ BLANKED = {
     # The Outcast's picture is The Dream Ending's: the title band tells them apart (with the picture alone it stayed unread)
     "ThemePackNormal/1": ("ThemePackNormal", 1, [("Automated Factory", "name"), ("The Outcast", "cover"), ("The Unloving", "name"),
                                                  ("Nagel und Hammer", "name"), ("The Forgotten", "name")]),
+    # a re-run whose title and BokGak line are lost: its own cover (another boss picture) names it
+    "ThemePackRefresh0/4": ("ThemePackRefresh0", 4, [("Line 3", "name"), ("The Surrendered Witnessing", "name"), ("Sunk Gloom", "name"),
+                                                     ("Spring Cultivation", "name"), ("Murder on the WARP Express BokGak", "cover")]),
+    "ThemePackRefresh1/4": ("ThemePackRefresh1", 4, [("The Infinite Procession", "name"), ("Unrelenting Might", "name"),
+                                                     ("Blade and Artwork", "name"), ("LCB Regular Check-up", "name"),
+                                                     ("Nocturnal Sweeping BokGak", "cover")]),
 }
 
 
@@ -154,9 +168,10 @@ def test_the_cover_alone_names_most_cards_of_a_real_page_and_never_a_wrong_one()
             found = pc.read_cover(image, x)
             spoke += found is not None
             right += found is not None and found[0] == name
-    # of 24 cards; silent: the boss silhouette of Sinking Deluge, Miracle in District 20 and The Dream Ending on the HARD page.
-    # The picture alone left 5 silent: Tangling Lust's silhouette and The Outcast and The Dream Ending (the same picture) too
-    assert (spoke, right) == (21, 21)
+    # of 24 cards; silent: the boss silhouette of Sinking Deluge and The Dream Ending on the HARD page. Without its own cover
+    # the Miracle in District 20 BokGak card was silent too; the picture alone left Tangling Lust's silhouette and The Outcast
+    # silent as well
+    assert (spoke, right) == (22, 22)
 
 
 

@@ -15,24 +15,29 @@ the path that read it and two independent verdicts. The OCR runs in a MaaFramewo
 Rerun on 2026-10-25 on the same 112 pages after the covers' boss layer was fixed (the boss picture sat 5 to 14 px low): the OCR
 readings are unchanged; the cover verdicts and the gate table below are the new covers'. Rerun again the same day after the
 signature took the title band beside the picture (`pack_cover.BANDS`): cover verdicts and the gate table changed, nothing else.
+Rerun again after the six BokGak re-runs became packs of their own (with covers): the 8 BokGak cards of the captures are now
+those packs (their truth was the original before), the per-pack table has six more rows, and the cover verdicts and gate table
+changed; the OCR readings are unchanged.
 
 ## Truth, and what it does not show
 
 - A card's truth is the pack the full reading (`+cover`) names. That is the reading under test, so each card also gets two verdicts
-  that do not rest on the whole-title match: the cover art alone agrees on 509 of the 531 cards, is silent on 21 (boss silhouettes, look-alike
-  covers and others; not classified card by card) and disagrees on 1: a HARD card of Timekilling Time BokGak, the re-run copy with
-  its own boss picture, which has no cover here (the pack list leaves the BokGak copies out) and is read as Miracle in District 20;
-  its title names it Timekilling Time. The keyword alone agrees on 526 and is silent on 5. Every card is confirmed by one
+  that do not rest on the whole-title match: the cover art alone agrees on 516 of the 531 cards and is silent on 15 (boss silhouettes,
+  look-alike covers and others; not classified card by card), the 8 BokGak cards included (3 Miracle in District 20, 2 Nocturnal
+  Sweeping, 2 Timekilling Time, 1 Yield My Flesh to Claim Their Bones). The keyword alone agrees on 526 and is silent on 5; a BokGak
+  card's keyword is its original's, and the "BokGak" line makes it the re-run (`run_start.rerun_copy`). None disagrees. Every card is confirmed by one
   of the two (0 of 531 by neither). The keyword reads the same OCR text as the title match, the cover reads the pixels. No card was
   checked by eye one by one: a pack both of them misread the same way would pass (unverified).
-- The captures show **74 of the 94 packs** of the season; the 20 never dealt in them (The B.E., The Evil Defining, The
+- The captures show **78 of the 100 packs** of the season; the 22 never dealt in them (The B.E., The Evil Defining, The
   Heartbreaking, La Manchaland Re-opening, Textbook, Storefront Campout, An Anarchy of Colors, Creed of Preservation, Readvent of
   Gluttony, Line 4 - Section #4, Crushers & Breakers, Unbound Wrath, Inert Sloth, Excessive Gluttony, Sunk Gloom, Pitiful Envy,
-  Burning Haze, Dizzying Waves, Spring Cultivation, Mnestic Experience) are only covered by the per-pack table below: a pack's own
+  Burning Haze, Dizzying Waves, Spring Cultivation, Mnestic Experience, Murder on the WARP Express BokGak, LCB Regular Check-up
+  BokGak) are only covered by the per-pack table below: a pack's own
   name, its own cover pasted on a page and single words of its name, not a capture. "Every pack recognised" on a live page is not
   shown for them.
 - The cover's threshold (`pack_cover.MIN_SCORE`, `MIN_LEAD`) was picked on these captures, not on held-out pages: the gate table
-  below is the sweep (at 0.5 / 0.1, 510 cards read and 1 wrong, the BokGak card above; at a lead of 0.05, 3 wrong). The picture
+  below is the sweep (at 0.5 / 0.1, 516 cards read and 0 wrong; at a lead of 0.05, 1 wrong). Before the BokGak covers: 510 read and
+  1 wrong (a Timekilling Time BokGak card read as Miracle in District 20), with the BokGak cards' truth their original. The picture
   alone gave 490 read and 0 wrong at 0.5 / 0.1, 5 wrong at 0.05.
 - A card that has no OCR box at all is lost: none of the 112 pages shows one.
 - `S.E.A.` has no keyword of its own (`sea` is inside `Mountain of Corpses, Sea of Blood`); the keyword of its art title (`Hello Bus`, keyword `hello`) names its cards (10 keyword verdicts agree), and so does its cover.
@@ -69,7 +74,7 @@ against 526); without it, it loses one (525).
 
 ## Results
 
-112 pages, 531 cards, 74 of 94 packs seen
+112 pages, 531 cards, 78 of 100 packs seen
 
 | reading | right | wrong | listed, no pack | not listed | extra cards | right of all |
 |---|---|---|---|---|---|---|
@@ -176,28 +181,34 @@ per pack (the keyword; cards among the captures; its own cover pasted on a page;
 | Thunder and Lightning | thunder | 4 | read | 0/3 | 1/3 |
 | Hell's Chicken | chicken | 11 | read | 0/2 | 1/2 |
 | S.E.A. | - | 11 | read | 0/0 | 0/0 |
-| Miracle in District 20 | miracle | 7 | read | 0/2 | 1/2 |
-| Yield My Flesh to Claim Their Bones | yield | 10 | read | 0/5 | 1/5 |
-| Timekilling Time | time | 8 | read | 1/2 | 2/2 |
+| Miracle in District 20 | miracle | 4 | read | 0/2 | 1/2 |
+| Yield My Flesh to Claim Their Bones | yield | 9 | read | 0/5 | 1/5 |
+| Timekilling Time | time | 6 | read | 1/2 | 2/2 |
 | Murder on the WARP Express | warp | 7 | read | 0/4 | 1/4 |
 | The Noon of Violet | violet | 3 | read | 0/3 | 1/3 |
 | Full-Stopped by a Bullet | full | 2 | read | 0/3 | 1/3 |
 | LCB Regular Check-up | check | 6 | read | 0/3 | 1/3 |
-| Nocturnal Sweeping | sweeping | 6 | read | 0/2 | 1/2 |
+| Nocturnal Sweeping | sweeping | 4 | read | 0/2 | 1/2 |
 | Walpurgis Night: Hatred and Despair | hatred | 9 | read | 0/5 | 1/5 |
 | Spring Cultivation | spring | 0 | read | 0/2 | 1/2 |
 | The Dusk of Amber | dusk | 9 | read | 0/3 | 1/3 |
 | Twining Threads | twining | 5 | read | 0/2 | 1/2 |
 | Mnestic Experience | mnestic | 0 | read | 0/2 | 1/2 |
+| Miracle in District 20 BokGak | - | 3 | read | 0/3 | 0/3 |
+| Yield My Flesh to Claim Their Bones BokGak | - | 1 | read | 0/6 | 0/6 |
+| Timekilling Time BokGak | - | 2 | read | 0/3 | 0/3 |
+| Murder on the WARP Express BokGak | - | 0 | read | 0/5 | 0/5 |
+| LCB Regular Check-up BokGak | - | 0 | read | 0/4 | 0/4 |
+| Nocturnal Sweeping BokGak | - | 2 | read | 0/3 | 0/3 |
 
 the cover's gate (MIN_SCORE, MIN_LEAD), on every card against its truth:
 
 | best correlation at least | lead over the next at least | cards read | read wrong |
 |---|---|---|---|
-| 0.5 | 0.05 | 516 | 3 |
-| 0.5 | 0.1 | 510 | 1 |
-| 0.5 | 0.15 | 480 | 0 |
-| 0.6 | 0.1 | 510 | 1 |
-| 0.7 | 0.1 | 507 | 1 |
+| 0.5 | 0.05 | 521 | 1 |
+| 0.5 | 0.1 | 516 | 0 |
+| 0.5 | 0.15 | 488 | 0 |
+| 0.6 | 0.1 | 516 | 0 |
+| 0.7 | 0.1 | 514 | 0 |
 
-cover art alone against the truth: {'agree': 509, 'silent': 21, 'DISAGREE': 1}; keyword alone: {'agree': 526, 'silent': 5}; confirmed by neither: 0 of 531 (0 packs)
+cover art alone against the truth: {'agree': 516, 'silent': 15}; keyword alone: {'agree': 526, 'silent': 5}; confirmed by neither: 0 of 531 (0 packs)

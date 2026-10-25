@@ -144,10 +144,10 @@ def test_every_pack_of_the_season_matches_itself_and_with_a_letter_lost():
     # The data file's own names: each one read back, and read with one letter dropped, finds itself.
     packs = yaml.safe_load(DATA.read_text(encoding="utf-8"))["packs"]
     for name in packs:
-        assert rs.match_title(name, packs) == name
+        assert rs.match_card([name], packs)[0] == name
         i = len(name) // 2
         if len(compact(name)) >= 6:
-            assert rs.match_title(name[:i] + name[i + 1:], packs) == name, name
+            assert rs.match_card([name[:i] + name[i + 1:]], packs)[0] == name, name
 
 
 def test_a_title_alike_to_several_packs_takes_their_weight_when_they_share_it():
@@ -386,10 +386,11 @@ def test_a_keyword_is_the_shortest_word_no_other_name_contains():
 
 def test_every_keyword_of_the_season_is_in_one_name_only_and_every_pack_but_one_has_one():
     keywords = rs.pack_keywords(ALL_NAMES)
+    originals = [n for n in ALL_NAMES if not n.endswith(rs.RERUN)]  # a re-run copy holds its original's keyword
     for name, keyword in keywords.items():
         assert len(keyword) >= rs.KEYWORD_MIN
-        assert [n for n in ALL_NAMES if keyword in compact(n)] == [name]
-    assert [n for n in DATA_NAMES if n not in keywords] == ["S.E.A."]  # "sea" is in Mountain of Corpses, Sea of Blood
+        assert [n for n in originals if keyword in compact(n)] == [name]
+    assert [n for n in originals if n in DATA_NAMES and n not in keywords] == ["S.E.A."]  # "sea" is in Mountain of Corpses, Sea of Blood
 
 
 def test_every_keyword_finds_its_pack_and_no_other():
@@ -434,3 +435,55 @@ def test_without_a_cover_a_card_no_title_path_reads_is_unlisted_as_before():
     ranked = rs.rank_packs([["WOPIS", "Line"]], DATA_NAMES, {"weights": {"Line 1": -5, "Line 2": -9}, "unlisted": 3})
     assert ranked == [("WOPIS Line", 3, "unread")]  # alike titles with two weights: unlisted
 
+
+
+RERUN_COPIES = {"Miracle in District 20": 1113, "Yield My Flesh to Claim Their Bones": 1116, "Timekilling Time": 1120,
+          "Murder on the WARP Express": 1123, "LCB Regular Check-up": 1125, "Nocturnal Sweeping": 1127}
+
+
+def test_the_bokgak_rerun_copies_are_packs_of_their_own_weighed_as_their_originals_and_not_event_packs():
+    # the client's re-run copies (1.117.0): the same title with a "BokGak" line, their own boss picture, HARD floors 4-5
+    text = DATA.read_text(encoding="utf-8")
+    weights = DATA_YAML["default_plan"]["weights"]
+    for original, pid in RERUN_COPIES.items():
+        copy = f"{original}{rs.RERUN}"
+        assert DATA_YAML["packs"][copy] == "H45" and f"# {pid}" in text.split(f"{copy}", 1)[1].splitlines()[0]
+        assert weights[copy] == weights[original] and copy not in DATA_YAML["event_packs"]
+
+
+@pytest.mark.parametrize(("lines", "expected"), [
+    (["Miracle in District 20 BokGak"], "Miracle in District 20 BokGak"),
+    (["Miracle in District 20", "BokGak"], "Miracle in District 20 BokGak"),
+    (["Miracle in District 20"], "Miracle in District 20"),
+    # live reads of BokGak cards (2026-10-22 captures, the #274 card list)
+    (["Miracle", "InDistrict", "免电免电免电免电免电", "Miracle in District 20", "BokGak"], "Miracle in District 20 BokGak"),
+    (["TIMKILLING", "TIΣE", "Timekilling Time", "BokGak"], "Timekilling Time BokGak"),
+    (["Yield My Flesh to Claim", "Their Bones BokGak", "A."], "Yield My Flesh to Claim Their Bones BokGak"),
+    (["MURDER", "ON THE", "WARPEXPRESS", "Murder on the WARP", "Express BokGak"], "Murder on the WARP Express BokGak"),
+    (["深夜清扫", "Nocturnal Sweeping", "BokGak"], "Nocturnal Sweeping BokGak"),
+    (["LCB Regular Check-up", "BokGak"], "LCB Regular Check-up BokGak"),
+    (["Timekilling Time"], "Timekilling Time"), (["Nocturnal Sweeping"], "Nocturnal Sweeping"),
+])
+def test_a_card_with_the_bokgak_line_is_the_rerun_copy_and_one_without_it_the_original(lines, expected):
+    assert rs.match_card(lines, DATA_NAMES)[0] == expected
+    assert rs.rank_packs([lines], DATA_NAMES, DATA_YAML["default_plan"], DATA_TITLE_ART)[0][0] == expected
+
+
+def test_a_rerun_copy_read_by_its_keyword_or_cover_is_the_copy():
+    def cover(i, allowed):
+        return ("Timekilling Time", 0.8)  # the original's cover (a boss silhouette, say): the BokGak line still says re-run
+
+    ranked = rs.rank_packs([["miracle", "BokGak"], ["WOPIS", "BokGak"]], DATA_NAMES, DATA_YAML["default_plan"], DATA_TITLE_ART, cover)
+    assert [(t, how) for t, _, how in ranked] == [("Miracle in District 20 BokGak", "keyword"), ("Timekilling Time BokGak", "cover 0.80")]
+
+
+def test_every_keyword_of_the_season_skips_the_rerun_copies():
+    # a re-run's name holds its original's: the original keeps its keyword, the copy is told by its BokGak line
+    keywords = rs.pack_keywords(DATA_NAMES)
+    assert all(keywords[o] for o in RERUN_COPIES) and not any(f"{o}{rs.RERUN}" in keywords for o in RERUN_COPIES)
+
+
+def test_floor_5s_leftmost_rerun_copy_is_not_an_event_pack():
+    # before the copies were packs, a BokGak card read as its original: an event story pack on floor 5's leftmost
+    ranked = rs.rank_packs([["Miracle in District 20", "BokGak"], ["Vain Pride"]], DATA_NAMES, DATA_YAML["default_plan"])
+    assert rs.event_slots(5, [t for t, _, _ in ranked], set(DATA_YAML["event_packs"]), DATA_NAMES) == [False, False]

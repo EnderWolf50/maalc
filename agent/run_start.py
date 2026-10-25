@@ -115,13 +115,26 @@ def match_title(text, names, min_ratio=0.8):
     return best[0] if len(best) == 1 else None
 
 
+RERUN = " BokGak"  # a re-run copy's name: its original's and this, the small line its card shows under the title
+
+
+def rerun_copy(name, text, names):
+    """name's re-run copy when text holds the BokGak line and names has the copy, else name."""
+    copy = f"{name}{RERUN}"
+    return copy if copy in names and compact(RERUN) in compact(text) else name
+
+
 def title_candidates(text, names, min_ratio=0.8):
-    """The names tied for the best match of text (match_title), best first; [] when none passes."""
+    """The names tied for the best match of text (match_title), best first; [] when none passes.
+
+    A re-run copy's name is left out: it holds its original's, which a plain title would match as well as the copy's
+    (rerun_copy tells them apart by the BokGak line).
+    """
     key = compact(text)
     found = []
     for name in set(names):
         n = compact(name)
-        if not key or not n:
+        if not key or not n or name.endswith(RERUN):
             continue
         r = max(SequenceMatcher(None, key[i:i + len(n)], n).ratio() for i in range(max(1, len(key) - len(n) + 1)))
         if r >= min_ratio:
@@ -136,9 +149,9 @@ KEYWORD_RATIO = 0.85  # a keyword of 4 to 6 letters must read exactly; from 7 le
 
 @lru_cache(maxsize=8)
 def _keywords(names):
-    compacts = {n: compact(n) for n in names}
+    compacts = {n: compact(n) for n in names if not n.endswith(RERUN)}  # a copy holds its original's every stretch
     out = {}
-    for name in names:
+    for name in compacts:
         c = compacts[name]
         words = sorted((compact(w) for w in re.split(r"[\W_]+", name)), key=len)
         stretches = [c[i:i + n] for n in range(KEYWORD_MIN, len(c) + 1) for i in range(len(c) - n + 1)]
@@ -153,7 +166,8 @@ def _keywords(names):
 
 def pack_keywords(names):
     """{pack name: its keyword} (#274): the shortest word of the name, or else the shortest stretch of it, of at least
-    KEYWORD_MIN letters and digits that no other name contains. A name whose every stretch another contains has none."""
+    KEYWORD_MIN letters and digits that no other name contains. A name whose every stretch another contains has none,
+    nor has a re-run copy (RERUN)."""
     return _keywords(tuple(sorted(set(names))))
 
 
@@ -214,7 +228,8 @@ def match_card(lines, names):
 
     Logo fragments read above the title are dropped by trying the lines from each start. The lines are also tried
     bottom up: live, a tilted card's two title boxes sorted "World", "Lake" (#240). Of the two reads the longer name
-    wins, as it covers more of the card: "Sea of Blood" over "Mountain of Corpses," finds S.E.A. top-down.
+    wins, as it covers more of the card: "Sea of Blood" over "Mountain of Corpses," finds S.E.A. top-down. A card
+    showing the BokGak line is its pack's re-run copy (rerun_copy).
     """
     found = []
     for order in (lines, lines[::-1]):
@@ -226,7 +241,8 @@ def match_card(lines, names):
                 break
     if not found:
         return None, " ".join(lines)
-    return max(found, key=lambda f: len(compact(f[0])))  # max keeps the top-down read on a tie
+    name, title = max(found, key=lambda f: len(compact(f[0])))  # max keeps the top-down read on a tie
+    return rerun_copy(name, " ".join(lines), names), title
 
 
 def rank_packs(cards, names, plan, title_art=None, cover=None):
@@ -237,7 +253,8 @@ def rank_packs(cards, names, plan, title_art=None, cover=None):
     "keyword" (the word that sets its pack apart, pack_keywords #274), "cover N" (cover(i, allowed) is the pack its
     art looks like and the correlation, or None; allowed: the packs the title is alike to, None when to none, #274).
     A title alike to several packs that share one weight takes it ("shared"): live, "Line 1" read as "Line", and every
-    Line pack is avoided (#89); else "unread". A matched card's title is the pack's name.
+    Line pack is avoided (#89); else "unread". A matched card's title is the pack's name; a card showing the BokGak
+    line is the re-run copy of the pack a path names (rerun_copy).
     """
     title_art = title_art or {}
     weights, unlisted = plan["weights"], plan["unlisted"]
@@ -253,7 +270,7 @@ def rank_packs(cards, names, plan, title_art=None, cover=None):
             found = cover(i, {title_art.get(n, n) for n in candidates} or None)
             name, how = found and found[0], found and f"cover {found[1]:.2f}"
         if name:
-            name = title_art.get(name, name)
+            name = rerun_copy(title_art.get(name, name), " ".join(lines), names)
             out.append((name, weights.get(name, unlisted), how))
             continue
         shared = {weights.get(title_art.get(n, n), unlisted) for n in candidates}

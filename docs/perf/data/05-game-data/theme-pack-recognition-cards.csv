@@ -161,10 +161,10 @@ capture-3331f578,850,Season of the Flame,Season of the Flame,name,Season of the 
 capture-3331f578,1059,CIMPIS / Crawling / Abyss,Crawling Abyss,name,Crawling Abyss,agree,Crawling Abyss,agree
 capture-ebdeeed7,217,WMPAUS / Repressed Wrath,Repressed Wrath,name,,silent,Repressed Wrath,agree
 capture-ebdeeed7,428,EP / Abnormal Seismic / Zone,Abnormal Seismic Zone,name,Abnormal Seismic Zone,agree,Abnormal Seismic Zone,agree
-capture-ebdeeed7,637,深夜清扫 / Nocturnal Sweeping / BokGak,Nocturnal Sweeping,name,,silent,Nocturnal Sweeping,agree
+capture-ebdeeed7,637,深夜清扫 / Nocturnal Sweeping / BokGak,Nocturnal Sweeping BokGak,name,Nocturnal Sweeping BokGak,agree,Nocturnal Sweeping BokGak,agree
 capture-ebdeeed7,848,LCB Regular Check-up,LCB Regular Check-up,name,LCB Regular Check-up,agree,LCB Regular Check-up,agree
-capture-ebdeeed7,1059,TIMKILLING / TIΣE / Timekilling Time / BokGak,Timekilling Time,name,,silent,Timekilling Time,agree
-capture-e19ea8b1,217,福断 / Yield My Flesh to Claim / Their Bones BokGak / A.,Yield My Flesh to Claim Their Bones,name,Yield My Flesh to Claim Their Bones,agree,Yield My Flesh to Claim Their Bones,agree
+capture-ebdeeed7,1059,TIMKILLING / TIΣE / Timekilling Time / BokGak,Timekilling Time BokGak,name,Timekilling Time BokGak,agree,Timekilling Time BokGak,agree
+capture-e19ea8b1,217,福断 / Yield My Flesh to Claim / Their Bones BokGak / A.,Yield My Flesh to Claim Their Bones BokGak,name,Yield My Flesh to Claim Their Bones BokGak,agree,Yield My Flesh to Claim Their Bones BokGak,agree
 capture-e19ea8b1,428,WOPNS / A Certain World,A Certain World,name,A Certain World,agree,A Certain World,agree
 capture-e19ea8b1,619,HP / MIKION / Thunder and / Lightning,Thunder and Lightning,name,Thunder and Lightning,agree,Thunder and Lightning,agree
 capture-e19ea8b1,848,Sinking Deluge,Sinking Deluge,name,,silent,Sinking Deluge,agree
@@ -172,7 +172,7 @@ capture-e19ea8b1,1059,WPIS / Devoured Gluttony,Devoured Gluttony,name,Devoured G
 capture-73d6471e,218,Season of the Flame,Season of the Flame,name,Season of the Flame,agree,Season of the Flame,agree
 capture-73d6471e,427,HP / Unrelenting Might,Unrelenting Might,name,Unrelenting Might,agree,Unrelenting Might,agree
 capture-73d6471e,638,Thunder and / Lightning,Thunder and Lightning,name,Thunder and Lightning,agree,Thunder and Lightning,agree
-capture-73d6471e,845,Miracle / InDistrict / 免电免电免电免电免电 / Miracle in District 20 / BokGak,Miracle in District 20,name,,silent,Miracle in District 20,agree
+capture-73d6471e,845,Miracle / InDistrict / 免电免电免电免电免电 / Miracle in District 20 / BokGak,Miracle in District 20 BokGak,name,Miracle in District 20 BokGak,agree,Miracle in District 20 BokGak,agree
 capture-73d6471e,1060,The Unchanging,The Unchanging,name,The Unchanging,agree,The Unchanging,agree
 capture-755f5b4c,217,MRUA / Sinking Deluge,Sinking Deluge,name,,silent,Sinking Deluge,agree
 capture-755f5b4c,428,Abnormal Seismic / Zone,Abnormal Seismic Zone,name,Abnormal Seismic Zone,agree,Abnormal Seismic Zone,agree
@@ -180,7 +180,7 @@ capture-755f5b4c,642,MADNESS / Line,Line 1,title_art,Line 1,agree,Line 1,agree
 capture-755f5b4c,848,WOPIS / Blade and Artwork,Blade and Artwork,name,Blade and Artwork,agree,Blade and Artwork,agree
 capture-755f5b4c,1038,Thunder and / L / Lightning,Thunder and Lightning,name,Thunder and Lightning,agree,Thunder and Lightning,agree
 capture-a955cc7d,216,Nocturnal Sweeping,Nocturnal Sweeping,name,Nocturnal Sweeping,agree,Nocturnal Sweeping,agree
-capture-a955cc7d,427,Miracle / InDistrict / 中自免电免电电免电米 / Miracle in District 20 / BokGak / V,Miracle in District 20,name,,silent,Miracle in District 20,agree
+capture-a955cc7d,427,Miracle / InDistrict / 中自免电免电电免电米 / Miracle in District 20 / BokGak / V,Miracle in District 20 BokGak,name,Miracle in District 20 BokGak,agree,Miracle in District 20 BokGak,agree
 capture-a955cc7d,639,LOPIS / The Dream Ending,The Dream Ending,name,,silent,The Dream Ending,agree
 capture-a955cc7d,852,"WOPIS /  9 / Mountain of Corpses, / Sea of Blood","Mountain of Corpses, Sea of Blood",name,"Mountain of Corpses, Sea of Blood",agree,"Mountain of Corpses, Sea of Blood",agree
 capture-a955cc7d,1059,+G①+ / ROLIND / Line,Line 5,cover,Line 5,agree,,silent
@@ -335,16 +335,16 @@ capture-859c9eec,954,Yield My Flesh to / Claim Their Bones,Yield My Flesh to Cla
 capture-16158d56,321,COPS / Poised Breathing,Poised Breathing,name,,silent,Poised Breathing,agree
 capture-16158d56,533,WOMPIS / Treadwheel Sloth,Treadwheel Sloth,name,Treadwheel Sloth,agree,Treadwheel Sloth,agree
 capture-16158d56,745,EOmPIS / Vain Pride,Vain Pride,name,Vain Pride,agree,Vain Pride,agree
-capture-16158d56,955,深夜清扫 / Nocturnal Sweeping / BokGak,Nocturnal Sweeping,name,,silent,Nocturnal Sweeping,agree
+capture-16158d56,955,深夜清扫 / Nocturnal Sweeping / BokGak,Nocturnal Sweeping BokGak,name,Nocturnal Sweeping BokGak,agree,Nocturnal Sweeping BokGak,agree
 capture-41d24d8f,323,Piercers & / Penetrators,Piercers & Penetrators,name,Piercers & Penetrators,agree,Piercers & Penetrators,agree
 capture-41d24d8f,533,TIMKILLING / TIME / Timekilling / Time,Timekilling Time,name,Timekilling Time,agree,Timekilling Time,agree
 capture-41d24d8f,745,Season of the Flame,Season of the Flame,name,Season of the Flame,agree,Season of the Flame,agree
 capture-41d24d8f,955,inDistrict / OROAOZO / 中R电 / 0 / miracle,Miracle in District 20,keyword,Miracle in District 20,agree,Miracle in District 20,agree
 capture-403286c9,325,WmPIS / Mountain of Corpses. / Sea of Blood,"Mountain of Corpses, Sea of Blood",name,"Mountain of Corpses, Sea of Blood",agree,"Mountain of Corpses, Sea of Blood",agree
 capture-403286c9,534,1 / winiag / #儿来 / 合世 / Twining Threads,Twining Threads,name,Twining Threads,agree,Twining Threads,agree
-capture-403286c9,743,TIMKILLING / TIΣE / Timekilling Time / BokGak,Timekilling Time,name,Miracle in District 20,DISAGREE,Timekilling Time,agree
+capture-403286c9,743,TIMKILLING / TIΣE / Timekilling Time / BokGak,Timekilling Time BokGak,name,Timekilling Time BokGak,agree,Timekilling Time BokGak,agree
 capture-403286c9,956,菜夜清扫 / Nocturnal Sweeping,Nocturnal Sweeping,name,Nocturnal Sweeping,agree,Nocturnal Sweeping,agree
-capture-b5dfe108,317,Miracle / InDistrict / @eee的e的e* / Miracle in District 20 / BokGak,Miracle in District 20,name,,silent,Miracle in District 20,agree
+capture-b5dfe108,317,Miracle / InDistrict / @eee的e的e* / Miracle in District 20 / BokGak,Miracle in District 20 BokGak,name,Miracle in District 20 BokGak,agree,Miracle in District 20 BokGak,agree
 capture-b5dfe108,533,HOPIS / The Unsevering,The Unsevering,name,The Unsevering,agree,The Unsevering,agree
 capture-b5dfe108,743,Limnus / The Infinite / Procession,The Infinite Procession,name,The Infinite Procession,agree,The Infinite Procession,agree
 capture-b5dfe108,955,Tyrannical Pride,Tyrannical Pride,name,Tyrannical Pride,agree,Tyrannical Pride,agree

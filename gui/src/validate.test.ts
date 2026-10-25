@@ -159,6 +159,9 @@ test("version 8 theme pack marks become weights that pick as before", () => {
 test("parseThemePacks reads the season's data file", () => {
   const data = parseThemePacks(themePacksYaml);
   expect(data.packs["Walpurgis Night: Hatred and Despair"]).toBe("N34 H34");
+  // the BokGak re-runs are packs of their own, on HARD floors 4-5, weighed as their originals
+  expect(data.packs["Miracle in District 20 BokGak"]).toBe("H45");
+  expect(data.default_plan.weights["Timekilling Time BokGak"]).toBe(data.default_plan.weights["Timekilling Time"]);
   // #240: AALC's weights, threshold 0, unlisted 0.
   expect(data.default_plan).toMatchObject({ threshold: 0, unlisted: 0, event_packs: "weight" });
   expect(data.default_plan.weights["The B.E."]).toBe(10);
