@@ -518,7 +518,8 @@ class DismissShot(CustomAction):
             stamp = f"{settlement.now().replace(':', '-')}-{argv.node_name}"
             try:
                 recovery.keep_capture(ROOT, "dismissed", screen(context), stamp, recovery.DISMISSED_KEEP)
-                DISMISSED_AT[argv.node_name] = now
+                if gap:
+                    DISMISSED_AT[argv.node_name] = now
                 log(f"{argv.node_name}: screen kept in logs/dismissed/{stamp}.png")
             except OSError as e:
                 log(f"{argv.node_name}: screen not saved: {e}")
