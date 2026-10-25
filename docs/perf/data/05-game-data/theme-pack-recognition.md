@@ -25,7 +25,7 @@ changed; the OCR readings are unchanged.
   that do not rest on the whole-title match: the cover art alone agrees on 516 of the 531 cards and is silent on 15 (boss silhouettes,
   look-alike covers and others; not classified card by card), the 8 BokGak cards included (3 Miracle in District 20, 2 Nocturnal
   Sweeping, 2 Timekilling Time, 1 Yield My Flesh to Claim Their Bones). The keyword alone agrees on 526 and is silent on 5; a BokGak
-  card's keyword is its original's, and the "BokGak" line makes it the re-run (`run_start.rerun`). None disagrees. Every card is confirmed by one
+  card's keyword is its original's, and the "BokGak" line makes it the re-run (`run_start.rerun_copy`). None disagrees. Every card is confirmed by one
   of the two (0 of 531 by neither). The keyword reads the same OCR text as the title match, the cover reads the pixels. No card was
   checked by eye one by one: a pack both of them misread the same way would pass (unverified).
 - The captures show **78 of the 100 packs** of the season; the 22 never dealt in them (The B.E., The Evil Defining, The

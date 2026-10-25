@@ -103,8 +103,9 @@ packs:
   The Dusk of Amber: N45 H45  # 1124
   Twining Threads: N5 H5  # 1126
   Mnestic Experience: N5 H5  # 1128
-  # Re-run copies of event packs (bokgak in the data): the original's title with a small "BokGak" line under it, their
-  # own boss picture and a Long Battle badge. Not event packs. A card reads as one only with that line (run_start.RERUN).
+  # Re-run copies of event packs (bokgak in the data): the original's title with a small "BokGak" line under it and
+  # their own boss picture (1113 also the Long Battle overlay). Not event packs. A card reads as one by that line
+  # (run_start.rerun_copy) or by its own cover.
   Miracle in District 20 BokGak: H45  # 1113 DIFFICULT
   Yield My Flesh to Claim Their Bones BokGak: H45  # 1116 DIFFICULT
   Timekilling Time BokGak: H45  # 1120

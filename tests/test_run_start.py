@@ -446,7 +446,7 @@ def test_the_bokgak_reruns_are_packs_of_their_own_weighed_as_their_originals_and
     text = DATA.read_text(encoding="utf-8")
     weights = DATA_YAML["default_plan"]["weights"]
     for original, pid in RERUNS.items():
-        copy = f"{original} BokGak"
+        copy = f"{original}{rs.RERUN}"
         assert DATA_YAML["packs"][copy] == "H45" and f"# {pid}" in text.split(f"{copy}", 1)[1].splitlines()[0]
         assert weights[copy] == weights[original] and copy not in DATA_YAML["event_packs"]
 
@@ -469,7 +469,7 @@ def test_a_card_with_the_bokgak_line_is_the_rerun_and_one_without_it_the_origina
     assert rs.rank_packs([lines], DATA_NAMES, DATA_YAML["default_plan"], DATA_TITLE_ART)[0][0] == expected
 
 
-def test_a_rerun_read_by_its_keyword_or_cover_is_the_rerun():
+def test_a_rerun_read_by_its_keyword_or_cover_is_the_rerun_copy():
     def cover(i, allowed):
         return ("Timekilling Time", 0.8)  # the original's cover (a boss silhouette, say): the BokGak line still says re-run
 
@@ -480,7 +480,7 @@ def test_a_rerun_read_by_its_keyword_or_cover_is_the_rerun():
 def test_every_keyword_of_the_season_skips_the_reruns():
     # a re-run's name holds its original's: the original keeps its keyword, the copy is told by its BokGak line
     keywords = rs.pack_keywords(DATA_NAMES)
-    assert all(keywords[o] for o in RERUNS) and not any(f"{o} BokGak" in keywords for o in RERUNS)
+    assert all(keywords[o] for o in RERUNS) and not any(f"{o}{rs.RERUN}" in keywords for o in RERUNS)
 
 
 def test_floor_5s_leftmost_rerun_is_not_an_event_pack():

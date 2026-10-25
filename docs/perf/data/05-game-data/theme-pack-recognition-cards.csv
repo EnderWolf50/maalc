@@ -522,11 +522,11 @@ capture-fa7334b0,428,Vain Pride,Vain Pride,name,Vain Pride,agree,Vain Pride,agre
 capture-fa7334b0,636,"HOPS / Charm, Wander / Doubt","Charm, Wander, Doubt",name,"Charm, Wander, Doubt",agree,"Charm, Wander, Doubt",agree
 capture-fa7334b0,848,LIUBUS / Piercers & / Penetrators,Piercers & Penetrators,name,Piercers & Penetrators,agree,Piercers & Penetrators,agree
 capture-fa7334b0,1059,LEUP / LCB Regular Check-Up,LCB Regular Check-up,name,LCB Regular Check-up,agree,LCB Regular Check-up,agree
-capture-fc5d5733,310,To be Crushed,To be Crushed,name,To be Crushed,agree,To be Crushed,agree
-capture-fc5d5733,485,LIOPUS / Nagel und Hammer,Nagel und Hammer,name,,silent,Nagel und Hammer,agree
-capture-fc5d5733,684,To be Cleaved,To be Cleaved,name,,silent,To be Cleaved,agree
-capture-2ae5ffb2,217,HOPIS / Automated Factory,Automated Factory,name,Automated Factory,agree,Automated Factory,agree
-capture-2ae5ffb2,426,enUPAm / The Outcast,The Outcast,name,The Outcast,agree,The Outcast,agree
-capture-2ae5ffb2,639,H / The Unloving,The Unloving,name,The Unloving,agree,The Unloving,agree
-capture-2ae5ffb2,849,MIMPIS / Nagel und Hammer,Nagel und Hammer,name,Nagel und Hammer,agree,Nagel und Hammer,agree
-capture-2ae5ffb2,1061,The Forgotten,The Forgotten,name,The Forgotten,agree,The Forgotten,agree
+tests/screens/ThemePack.png,310,To be Crushed,To be Crushed,name,To be Crushed,agree,To be Crushed,agree
+tests/screens/ThemePack.png,485,LIOPUS / Nagel und Hammer,Nagel und Hammer,name,,silent,Nagel und Hammer,agree
+tests/screens/ThemePack.png,684,To be Cleaved,To be Cleaved,name,,silent,To be Cleaved,agree
+tests/screens/ThemePackNormal.png,217,HOPIS / Automated Factory,Automated Factory,name,Automated Factory,agree,Automated Factory,agree
+tests/screens/ThemePackNormal.png,426,enUPAm / The Outcast,The Outcast,name,The Outcast,agree,The Outcast,agree
+tests/screens/ThemePackNormal.png,639,H / The Unloving,The Unloving,name,The Unloving,agree,The Unloving,agree
+tests/screens/ThemePackNormal.png,849,MIMPIS / Nagel und Hammer,Nagel und Hammer,name,Nagel und Hammer,agree,Nagel und Hammer,agree
+tests/screens/ThemePackNormal.png,1061,The Forgotten,The Forgotten,name,The Forgotten,agree,The Forgotten,agree
