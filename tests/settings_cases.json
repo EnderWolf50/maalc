@@ -47,7 +47,7 @@
       "difficulty": "auto", "runs": null, "weekly_bonus_use": "hard", "weekly_bonus_amount": "all",
       "stop_when_weekly_bonus_out": false, "starlight_unaffordable": "skip", "wipe_retries": 2,
       "after_retries": "stop", "webhook_url": "", "theme_pack_refresh": "all",
-      "auto_accept_terms": true, "auto_download": true
+      "auto_accept_terms": true, "auto_download": true, "keep_dismissed_screens": true
     },
     "deployment_order_plans": [
       {"id": "d1", "name": "Bleed order", "order": ["Yi Sang", "Faust", "Don Quixote", "Ryōshū", "Meursault", "Hong Lu", "Heathcliff", "Ishmael", "Rodion", "Sinclair", "Outis", "Gregor"]}

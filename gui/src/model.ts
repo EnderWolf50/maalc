@@ -292,7 +292,7 @@ export interface Settings {
     difficulty: string; runs: number | null; weekly_bonus_use: string; weekly_bonus_amount: string;
     stop_when_weekly_bonus_out: boolean; starlight_unaffordable: string; wipe_retries: number;
     after_retries: string; webhook_url: string; theme_pack_refresh: string;
-    auto_accept_terms: boolean; auto_download: boolean;
+    auto_accept_terms: boolean; auto_download: boolean; keep_dismissed_screens: boolean;
   };
   deployment_order_plans: DeploymentPlan[];
   starlight_plans: StarlightPlan[];
@@ -379,13 +379,13 @@ const MIGRATIONS: Record<number, (d: Record<string, unknown>) => Record<string, 
   }),
   // Version 10 adds teams[].fusion_condition (#263), "any": the shop fuses as before.
   9: (d) => withTeamDefault(d, { fusion_condition: "any" }),
-  // Version 11 (#291) moves the shop's keep settings from the teams to gift lists: a list per team, teams that kept the same
-  // share one; keyword (the list's order starts with it), keep_keywords, keywordless, keep_gifts and fusion_condition go. A keywordless
-  // gift is always kept now.
+  // Version 11 adds run.keep_dismissed_screens (#244), on, and (#291) moves the shop's keep settings from the teams to gift lists: a
+  // list per team, teams that kept the same share one; keyword (the list's order starts with it), keep_keywords, keywordless,
+  // keep_gifts and fusion_condition go. A keywordless gift is always kept now.
   10: (d) => {
     const { data, dropped } = migrateV10(d);
     v10Dropped = dropped;
-    return data;
+    return data.run && typeof data.run === "object" ? { ...data, run: { keep_dismissed_screens: true, ...data.run } } : data;
   },
 };
 /** The version 10 keep_gifts the last migration found no gift for (parseSettings returns it). */

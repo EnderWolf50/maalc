@@ -117,6 +117,15 @@ test("version 6 keeps what the shop kept before", () => {
   expect(validate(data)).toEqual([]);
 });
 
+test("version 10 keeps the dismissed screens", () => {
+  const old = structuredClone(cases.valid) as Record<string, unknown> & { run: Record<string, unknown> };
+  delete old.run.keep_dismissed_screens;
+  const { data, migrated } = parseSettings(JSON.stringify({ ...old, version: 10 }));
+  expect(migrated).toBe(true);
+  expect(data.run.keep_dismissed_screens).toBe(true);
+  expect(validate(data)).toEqual([]);
+});
+
 test("version 9 fuses as before", () => {
   const old = structuredClone(cases.valid10) as Record<string, unknown> & { teams: Record<string, unknown>[] };
   for (const t of old.teams) delete t.fusion_condition;
@@ -201,6 +210,9 @@ describe("cleanGiftList (tests/settings_cases.json clean_gift_list)", () => {
 test("parseThemePacks reads the season's data file", () => {
   const data = parseThemePacks(themePacksYaml);
   expect(data.packs["Walpurgis Night: Hatred and Despair"]).toBe("N34 H34");
+  // the BokGak re-runs are packs of their own, on HARD floors 4-5, weighed as their originals
+  expect(data.packs["Miracle in District 20 BokGak"]).toBe("H45");
+  expect(data.default_plan.weights["Timekilling Time BokGak"]).toBe(data.default_plan.weights["Timekilling Time"]);
   // #240: AALC's weights, threshold 0, unlisted 0.
   expect(data.default_plan).toMatchObject({ threshold: 0, unlisted: 0, event_packs: "weight" });
   expect(data.default_plan.weights["The B.E."]).toBe(10);

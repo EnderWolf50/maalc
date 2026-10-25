@@ -39,7 +39,8 @@
             }
         ],
         "box_index": 1,
-        "action": "Click",
+        "action": "Custom",
+        "custom_action": "DismissShot",
         "post_delay": 2000
     },
     // Every inline OCR has its own sub_name: MaaFramework OCRs a next list's OCR in one pass and files the boxes by
@@ -176,7 +177,8 @@
                 "expected": "(?i)You can enter the .*Mode"
             }
         ],
-        "action": "Click",
+        "action": "Custom",
+        "custom_action": "DismissShot",
         "post_delay": 1500
     },
     // A popup with one button in the middle (a server or network error on the title, an acknowledgement over a
@@ -214,7 +216,8 @@
             }
         ],
         "box_index": 1,
-        "action": "Click",
+        "action": "Custom",
+        "custom_action": "DismissShot",
         "post_delay": 1500
     },
     // The main window's own popups (#85, live 2026-10-21 on 1.117.x, tests/screens/EventNotices.png, SystemNotices.png,
@@ -225,8 +228,9 @@
         "recognition": "OCR",
         "roi": [480, 95, 330, 50],
         "expected": "Notifs$",
-        "action": "ClickKey",
-        "key": 4,
+        "action": "Custom",
+        "custom_action": "DismissShot",
+        "custom_action_param": "back",
         "post_delay": 1500
     },
     "Mailbox": {
@@ -246,7 +250,8 @@
             }
         ],
         "box_index": 1,
-        "action": "Click",
+        "action": "Custom",
+        "custom_action": "DismissShot",
         "post_delay": 1500
     },
     "SettingsMenu": {
@@ -266,7 +271,8 @@
             }
         ],
         "box_index": 1,
-        "action": "Click",
+        "action": "Custom",
+        "custom_action": "DismissShot",
         "post_delay": 1500
     },
     // The help pager behind every "i" button (#85, live 2026-10-21: Mirror Dungeon 34 pages, Refraction Railway 18,
@@ -293,8 +299,9 @@
                 "threshold": 0.8
             }
         ],
-        "action": "ClickKey",
-        "key": 4,
+        "action": "Custom",
+        "custom_action": "DismissShot",
+        "custom_action_param": "back",
         "post_delay": 1500
     },
     // The download after the title's dialog (live 2026-10-21, 17.77 GB): DOWNLOADING UPDATE n% 0/1, then DOWNLOADING

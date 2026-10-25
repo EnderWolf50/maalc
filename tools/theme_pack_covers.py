@@ -108,15 +108,29 @@ def font_files(data: Path, dest: Path) -> dict[str, Path]:
     return {key: need[name] for key, name in FONTS.items()}
 
 
+def sprite_image(sprite) -> Image.Image:
+    """The sprite over its whole rect. A tight-packed sprite (the boss pictures) keeps only its opaque part in the texture
+    and UnityPy's `image` is that part; the UI lays out the whole rect, so the part goes back where `textureRectOffset`
+    (from the rect's bottom left) puts it."""
+    im = sprite.image
+    w, h = round(sprite.m_Rect.width), round(sprite.m_Rect.height)
+    if im.size == (w, h):
+        return im
+    off = sprite.m_RD.textureRectOffset
+    full = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    full.paste(im.convert("RGBA"), (round(off.x), h - round(off.y) - im.height))
+    return full
+
+
 def bundle_sprites(cache: Path, wanted: set[str]) -> dict[str, Image.Image]:
-    """Sprite name -> image (a Sprite wins over its Texture2D)."""
+    """Sprite name -> image over its whole rect (a Sprite wins over its Texture2D)."""
     out = {}
     for p in sorted(cache.glob("*/*/__data")):  # UnityCache/<hash of the bundle name>/<content hash>/__data; 1556 bundles, ~2 minutes
         for o in unity(p).objects:
             if o.type.name in ("Sprite", "Texture2D"):
                 r = o.read()
                 if r.m_Name in wanted and (o.type.name == "Sprite" or r.m_Name not in out):
-                    out[r.m_Name] = r.image
+                    out[r.m_Name] = sprite_image(r) if o.type.name == "Sprite" else r.image
     return out
 
 

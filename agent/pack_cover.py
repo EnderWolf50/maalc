@@ -1,7 +1,8 @@
 """A theme pack card told by its cover art, for the cards whose title OCR cannot name (#274).
 
 Plain data in, plain data out: numpy only. data/theme_pack_signatures.json holds one small colour thumbnail per pack, made
-from the cover images of #242 by tools/theme_pack_signatures.py with the same signature() the page's cards go through.
+from the cover images of #242 by tools/theme_pack_signatures.py with the same signature() the page's cards go through:
+the picture and the title, so covers with the same picture (The Outcast and The Dream Ending) still differ.
 """
 
 import base64
@@ -13,9 +14,11 @@ import numpy as np
 from settings import data_dir
 
 SIGNATURES = data_dir() / "theme_pack_signatures.json"  # (#323)
-GRID = (16, 12)  # rows, columns of a signature
 ART = (0.05, 0.18, 0.95, 0.62)  # the part of a card that is its picture (left, top, right, bottom as shares): below the
 # search button and warning mark, above the logo and the title
+BANDS = ((ART[1], ART[3], 16), (0.74, 0.90, 6))  # top, bottom (shares, ART's left and right) and rows of each part of a
+# signature: the picture, then the title; cells about 9 px tall in both
+COLUMNS = 12
 CARD = (182, 335)  # a card on the 720p page: width, height; its top edge is at y = CARD_TOP
 CARD_TOP = 185
 PITCH = 210.5  # card centre to card centre; a page of n cards is centred on x = 640
@@ -24,14 +27,16 @@ MIN_LEAD = 0.1
 
 
 def signature(image):
-    """The ART part of a card (BGR, any size) as a GRID thumbnail of area averages, uint8."""
+    """The BANDS of a card (BGR, any size) as thumbnails of area averages stacked in one, COLUMNS wide, uint8."""
     h, w = image.shape[:2]
-    left, top, right, bottom = ART
-    part = image[int(top * h):int(bottom * h), int(left * w):int(right * w)].astype(np.float32)
-    for axis, n in ((0, GRID[0]), (1, GRID[1])):
-        edges = np.linspace(0, part.shape[axis], n + 1).astype(int)
-        part = np.add.reduceat(part, edges[:-1], axis=axis) / np.diff(edges).reshape((-1, 1, 1) if axis == 0 else (1, -1, 1))
-    return np.rint(part).astype(np.uint8)
+    out = []
+    for top, bottom, rows in BANDS:
+        part = image[int(top * h):int(bottom * h), int(ART[0] * w):int(ART[2] * w)].astype(np.float32)
+        for axis, n in ((0, rows), (1, COLUMNS)):
+            edges = np.linspace(0, part.shape[axis], n + 1).astype(int)
+            part = np.add.reduceat(part, edges[:-1], axis=axis) / np.diff(edges).reshape((-1, 1, 1) if axis == 0 else (1, -1, 1))
+        out.append(part)
+    return np.rint(np.concatenate(out)).astype(np.uint8)
 
 
 def encode(sig):
@@ -42,7 +47,7 @@ def encode(sig):
 def covers():
     """{pack name: signature}"""
     data = json.loads(SIGNATURES.read_text(encoding="utf-8"))
-    return {name: np.frombuffer(base64.b64decode(b), np.uint8).reshape(*GRID, 3) for name, b in data.items()}
+    return {name: np.frombuffer(base64.b64decode(b), np.uint8).reshape(-1, COLUMNS, 3) for name, b in data.items()}
 
 
 def correlation(a, b):

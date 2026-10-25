@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+from types import SimpleNamespace as NS
 
 from PIL import Image
 
@@ -65,3 +66,15 @@ def test_every_pack_of_the_yaml_has_a_card():
 
 def test_the_thumbnails_stay_small():
     assert sum(f.stat().st_size for f in COVERS.glob("*.webp")) < MAX_BYTES
+
+
+def test_a_tight_packed_sprite_gets_its_transparent_margin_back():
+    # the boss sprites are 391 x 432 rects whose textureRect drops the empty margin: UnityPy's image is the opaque part only.
+    # The card lays out the whole rect, so the art goes back to where textureRectOffset (from the bottom left) puts it
+    opaque = Image.new("RGBA", (4, 3), (255, 0, 0, 255))
+    sprite = NS(image=opaque, m_Rect=NS(width=10.0, height=8.0), m_RD=NS(textureRectOffset=NS(x=2.0, y=1.0)))
+    full = tpc.sprite_image(sprite)
+    assert full.size == (10, 8)
+    assert full.getchannel("A").getbbox() == (2, 4, 6, 7)  # 1 px above the bottom edge, 2 px from the left
+    whole = NS(image=opaque, m_Rect=NS(width=4.0, height=3.0), m_RD=NS(textureRectOffset=NS(x=0.0, y=0.0)))
+    assert tpc.sprite_image(whole) is opaque

@@ -48,7 +48,7 @@ VALID = {
         "difficulty": "auto", "runs": 1, "weekly_bonus_use": "hard", "weekly_bonus_amount": "all",
         "stop_when_weekly_bonus_out": False, "starlight_unaffordable": "skip", "wipe_retries": 2,
         "after_retries": "stop", "webhook_url": "", "theme_pack_refresh": "all",
-        "auto_accept_terms": True, "auto_download": True,
+        "auto_accept_terms": True, "auto_download": True, "keep_dismissed_screens": True,
     },
     "deployment_order_plans": [{"id": "d1", "name": "Bleed order", "order": ORDER}],
     "starlight_plans": [{"id": "s1", "name": "Cheap", **STARLIGHT}],
@@ -229,6 +229,12 @@ def test_version_7_accepts_terms_and_downloads(tmp_path):
     # The user's decision (2026-10-21): the bot may tick the User Agreement and accept downloads.
     old = edited10(lambda d: [d["run"].pop("auto_accept_terms"), d["run"].pop("auto_download")])
     assert load(tmp_path, {**old, "version": 7}) == MIGRATED
+
+
+def test_version_10_keeps_the_dismissed_screens(tmp_path):
+    # #244: on, so the first run after the update already keeps them.
+    old = edited(lambda d: d["run"].pop("keep_dismissed_screens"))
+    assert load(tmp_path, {**old, "version": 10}) == VALID
 
 
 def test_version_9_fuses_as_before(tmp_path):

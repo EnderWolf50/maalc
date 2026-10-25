@@ -25,7 +25,7 @@
   - 版本 8（#85、#86）：執行選項新增 `auto_accept_terms`、`auto_download`，從版本 7 遷移時都填開（使用者 2026-10-21 定案：bot 可以替帳號同意使用者條款、接受下載與更新）。
   - 版本 9（#240）：主題包方案的 `marks`（偏好／中立／避開）改成 `weights`（數字分數），並新增 `threshold`、`unlisted`、`event_packs`。從版本 8 遷移時偏好、中立、避開分別轉成 5、0、−5，門檻 0、沒列出的包 0、活動包照分數；選擇和刷新的結果和以前完全一樣（以前「全部是避開才刷新」就是「最好的包低於 0」）。
   - 版本 10（#263）：隊伍新增 `fusion_condition`，從版本 9 遷移時填 `any`（照舊材料夠就合）。
-  - 版本 11（#291、#292）：商店的保留設定從隊伍搬到飾品清單（第 13 節）。頂層新增 `gift_lists`；隊伍新增 `gift_list`，移除 `keyword`、`keep_keywords`、`keywordless`、`keep_gifts`、`fusion_condition`（主要體系改由清單決定，見第 13 節；版本 11 還沒發版，所以併在版本 11，不另升版本）。從版本 10 遷移時每支隊伍產生一份清單，保留的東西完全相同的隊伍共用同一份（名稱用第一支隊伍的名稱，撞名加 ` 2`；id 是 `gift-list-1`、`gift-list-2`、…），隊伍的 `gift_list` 指向它。清單內容：
+  - 版本 11（#244、#291、#292）：執行選項新增 `keep_dismissed_screens`，從版本 10 遷移時填開（#244）。商店的保留設定從隊伍搬到飾品清單（第 13 節，#291、#292）。頂層新增 `gift_lists`；隊伍新增 `gift_list`，移除 `keyword`、`keep_keywords`、`keywordless`、`keep_gifts`、`fusion_condition`（主要體系改由清單決定，見第 13 節；版本 11 還沒發版，所以併在版本 11，不另升版本；#244 的 `keep_dismissed_screens` 也在版本 11，兩項在同一個遷移裡一起做）。從版本 10 遷移時每支隊伍產生一份清單，保留的東西完全相同的隊伍共用同一份（名稱用第一支隊伍的名稱，撞名加 ` 2`；id 是 `gift-list-1`、`gift-list-2`、…），隊伍的 `gift_list` 指向它。清單內容：
     - `order`：隊伍原本的主要體系第一，其餘照預設順序，`Keywordless` 最後，所以遷移後的主要體系和遷移前相同；
     - `want`：主要體系的所有可購買飾品（`gift_search.json` 裡該體系的 I–III 階）；
     - `keep`：主要體系與 `keep_keywords` 的其餘飾品（`gift_recipes.json` 裡該體系的合成品與配方材料；`keep_keywords` 體系的可購買飾品也是）、所有無體系飾品（`gift_search.json` 的 `Keywordless` 分頁與 `gift_recipes.json` 裡無體系的）、`keep_gifts` 對得到 id 的飾品（用 `keyword`、`tier`、英文名對照 `gift_search.json`；殘影用名字對到 9991–9995）。已在 `want` 的不重複放進 `keep`。`keep_gifts` 對不到的丟掉並計數，GUI 遷移後在標頭的狀態列顯示「有 N 個對不到，已丟掉」，直到使用者改動設定或儲存；
@@ -94,6 +94,7 @@
 | 失敗通知 webhook | `webhook_url` | 字串 | 停止時送出摘要的網址；空字串 = 不送 | 空字串 | #14 |
 | 每層最多刷新主題包 | `theme_pack_refresh` | 字串 | `none` 不用／`once` 用一次／`all` 全用：最好的包低於方案的刷新門檻時用的免費刷新次數（見 [03](03-decisions.md#6-主題包) 第 6 節） | `all` | #41、#240 |
 | 自動同意使用者條款 | `auto_accept_terms` | 布林 | 開：標題畫面的 User Agreement 勾兩個 I agree.、確認都勾上再按 Confirm；關：停下並通知（停止程序） | 開 | #85、2026-10-21 |
+| 關掉前先存截圖 | `keep_dismissed_screens` | 布林 | 開：bot 關掉公告、彈窗（Notices、Mailbox、設定選單、說明頁、單鈕彈窗、重試、平行模式提示）或 recovery 按返回之前，先把畫面存到 install 的 `logs/dismissed/<時間>-<節點>.png`，最多留 100 張，只有重試（`RetryPopup`）同一種 60 秒內只存一張，其他節點每次都存；`logs/unknown/` 的圖不受這個選項控制；截圖含帳號畫面（UID 等），只存本機；關：不存 | 開 | #244 |
 | 自動下載與更新 | `auto_download` | 布林 | 開：標題的資料下載對話框按 Confirm，遊戲內的更新對話框按下後重啟遊戲；關：停下並通知 | 開 | #86、2026-10-21 |
 
 規則：
