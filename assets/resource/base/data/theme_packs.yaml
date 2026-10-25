@@ -2,8 +2,8 @@
 # Developer-maintained, replaced every season; users build their own plans in the settings GUI.
 #
 # Source: the Limbus Company client 1.117.0's static data (mirrordungeon-theme-floor, 121 packs; © Project Moon,
-# see NOTICE.md), unpacked 2026-10-18. Listed: every pack with a NORMAL or HARD floor; the Extreme-only packs and
-# the re-run copies (BokGak, same title) are left out. Names as the data gives them, except one read live:
+# see NOTICE.md), unpacked 2026-10-18. Listed: every pack with a NORMAL or HARD floor; the Extreme-only packs are
+# left out. Names as the data gives them, except one read live:
 # 1119 shows "Walpurgis Night: Hatred and Despair". Each pack maps to its floors (N: NORMAL, H: HARD; N12 H1 is
 # NORMAL floors 1-2 and HARD floor 1), which the settings GUI filters by. The comment after a pack: its id, and
 # DIFFICULT when the data marks it so (difficulty: DIFFICULT).
@@ -103,6 +103,14 @@ packs:
   The Dusk of Amber: N45 H45  # 1124
   Twining Threads: N5 H5  # 1126
   Mnestic Experience: N5 H5  # 1128
+  # Re-run copies of event packs (bokgak in the data): the original's title with a small "BokGak" line under it, their
+  # own boss picture and a Long Battle badge. Not event packs. A card reads as one only with that line (run_start.RERUN).
+  Miracle in District 20 BokGak: H45  # 1113 DIFFICULT
+  Yield My Flesh to Claim Their Bones BokGak: H45  # 1116 DIFFICULT
+  Timekilling Time BokGak: H45  # 1120
+  Murder on the WARP Express BokGak: H45  # 1123
+  LCB Regular Check-up BokGak: H45  # 1125
+  Nocturnal Sweeping BokGak: H45  # 1127 DIFFICULT
 
 # The packs above that are event packs, told by their English name (#89).
 event_packs:
@@ -239,3 +247,9 @@ default_plan:
     The Dusk of Amber: -5  # dusk
     Twining Threads: -5  # thread
     Mnestic Experience: -5  # mnestic
+    Miracle in District 20 BokGak: 0  # the re-runs: their original's weight (AALC's fragment finds the original in their title)
+    Yield My Flesh to Claim Their Bones BokGak: -5
+    Timekilling Time BokGak: -5
+    Murder on the WARP Express BokGak: -5
+    LCB Regular Check-up BokGak: -5
+    Nocturnal Sweeping BokGak: -5

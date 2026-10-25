@@ -228,7 +228,7 @@ def main():
             seen_by[name] += 1
             verdict = pack_cover.read_cover(page, x)
             word = run_start.match_keyword(" ".join(lines), NAMES + list(ART))
-            word = ART.get(word, word)
+            word = word and run_start.rerun(ART.get(word, word), " ".join(lines), NAMES)  # as rank_packs: the BokGak line
             covered.append((page, x, name))
             rows.append([image_id(path), x, " / ".join(lines), name, how.split()[0], verdict[0] if verdict else "",
                          "agree" if verdict and verdict[0] == name else ("silent" if not verdict else "DISAGREE"),
