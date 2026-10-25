@@ -47,7 +47,7 @@ BATON = "Baton"  # the "Long Battle" overlay, a bundle sprite (Sprite/UI/ThemePa
 
 
 def pack_ids(yaml_text: str) -> dict[str, int]:
-    """Pack name -> id of the `packs:` list of theme_packs.yaml (its `pack_ids` also names packs the list leaves out)."""
+    """Pack name -> id of the `packs:` list of theme_packs.yaml (its `pack_ids` also names the Extreme-only packs the list leaves out)."""
     data = yaml.safe_load(yaml_text)
     return {name: data["pack_ids"][name] for name in data["packs"]}
 

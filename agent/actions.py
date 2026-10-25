@@ -1198,7 +1198,8 @@ def note_pack(name):
         log(f"pack {name!r} has no id: the run's packs are unknown")
         del RUN["packs"]
         return
-    # A re-run (BokGak) shows the original's title, so the pull may be either: note both (some recipes name only the re-run).
+    # A re-run (BokGak) shows the original's title: a card whose BokGak line was read is already the copy's name (one id), else the
+    # pull may be either: note both (some recipes name only the re-run).
     RUN["packs"] += [i for i in (ids[name], ids.get(f"{name} BokGak")) if i is not None and i not in RUN["packs"]]
 
 

@@ -1843,6 +1843,14 @@ def test_a_pack_with_a_bokgak_re_run_notes_both_ids(context, monkeypatch):
     assert actions.RUN["packs"] == [1103, 1113]
 
 
+def test_a_card_read_as_the_bokgak_re_run_notes_only_the_re_run(monkeypatch):
+    # #361: with the BokGak line read, the pulled name is the copy's own: its id alone, not the original's.
+    monkeypatch.setattr(actions, "pack_ids", lambda: {"Pack 0a": 1103, "Pack 0a BokGak": 1113})
+    actions.RUN["packs"] = []
+    actions.note_pack("Pack 0a BokGak")
+    assert actions.RUN["packs"] == [1113]
+
+
 def test_a_pulled_pack_without_an_id_makes_the_run_packs_unknown(context, monkeypatch):
     # #306: a name the data file lacks (an event's, a plan's own) has no id: the exclusive recipes lock as after a restart.
     monkeypatch.setattr(actions, "pack_ids", lambda: {})

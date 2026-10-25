@@ -23,10 +23,10 @@ class Glyphs:
 
 def test_pack_ids_reads_the_id_of_each_listed_pack():
     text = (
-        "packs:\n  The B.E.: H345\n  S.E.A.: N2 H23  # DIFFICULT\n  \"Line 4 - Section #3\": N4\n\n"
-        'pack_ids:\n  The B.E.: 3001\n  S.E.A.: 1102\n  "Line 4 - Section #3": 1208\n  S.E.A. BokGak: 1113\n'
+        "packs:\n  The B.E.: H345\n  S.E.A.: N2 H23  # DIFFICULT\n  \"Line 4 - Section #3\": N4\n  S.E.A. BokGak: H45\n\n"
+        'pack_ids:\n  The B.E.: 3001\n  S.E.A.: 1102\n  "Line 4 - Section #3": 1208\n  S.E.A. BokGak: 1113\n  Extreme Only: 1507\n'
     )
-    assert tpc.pack_ids(text) == {"The B.E.": 3001, "S.E.A.": 1102, "Line 4 - Section #3": 1208}  # BokGak is not listed
+    assert tpc.pack_ids(text) == {"The B.E.": 3001, "S.E.A.": 1102, "Line 4 - Section #3": 1208, "S.E.A. BokGak": 1113}  # not the Extreme-only pack
 
 
 def test_rich_text_title_splits_into_coloured_runs():
