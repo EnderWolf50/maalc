@@ -94,3 +94,46 @@ def test_a_recipe_that_needs_a_gift_the_list_wants_is_skipped_and_the_log_says_w
     fused, taps, ok = fusion_taps(context, monkeypatch, team(SOOTHE, 9003), *readings)
     assert not fused and not ok and taps == [0, 0, 0]
     assert any(f"recipe {SOOTHE} " in line and "skip, missing 9003 " in line and line.endswith("(on the list as want/keep)") for line in logs)
+
+
+# The Forecasts row (#300): a recipe fusion whose page tier is not the recipe's own is left unpressed.
+SOOTHE_MATERIALS = [("Burn", 3, 9003), ("Burn", 3, 9053), ("Burn", 3, 9157)]
+
+
+def forecasting(monkeypatch, tier):
+    monkeypatch.setattr(actions.shop, "forecast_tier", lambda image: tier)
+
+
+def test_a_recipe_whose_forecast_is_not_its_tier_is_not_fused_and_the_materials_come_out(context, monkeypatch):
+    logs = []
+    monkeypatch.setattr(actions, "log", logs.append)
+    forecasting(monkeypatch, 3)  # Soothe the Dead is a IV
+    fused, taps, ok = fusion_taps(context, monkeypatch, team(SOOTHE), *SOOTHE_MATERIALS)
+    assert not fused and not ok and taps == [2, 2, 2]
+    assert any(f"recipe fusion {SOOTHE} " in line and "page tier 3" in line and "cancelled" in line for line in logs)
+
+
+def test_a_cancelled_recipe_leaves_the_ordinary_fusion_to_be_made_the_same_call(context, monkeypatch):
+    forecasting(monkeypatch, 3)
+    fused, taps, ok = fusion_taps(context, monkeypatch, team(SOOTHE), *SOOTHE_MATERIALS, *junk(3))
+    assert fused and ok and taps == [2, 2, 2, 1, 1, 1]
+
+
+def test_a_recipe_whose_forecast_is_its_tier_is_fused(context, monkeypatch):
+    forecasting(monkeypatch, 4)
+    fused, taps, ok = fusion_taps(context, monkeypatch, team(SOOTHE), *SOOTHE_MATERIALS)
+    assert fused and ok and taps == [1, 1, 1]
+
+
+def test_a_recipe_whose_forecast_is_unread_is_fused_all_the_same(context, monkeypatch):
+    # A recipe's tier is no points tier, so there is nothing to fall back on but the recipe itself.
+    forecasting(monkeypatch, None)
+    fused, taps, ok = fusion_taps(context, monkeypatch, team(SOOTHE), *SOOTHE_MATERIALS)
+    assert fused and ok and taps == [1, 1, 1]
+
+
+def test_a_tier_v_recipe_is_not_checked_as_the_row_never_reads_a_v(context, monkeypatch):
+    forecasting(monkeypatch, 4)  # a misread: shop.forecast_tier gives a V never
+    readings = [("Burn", 4, i) for i in (9105, 9110, 9142, 9147, 9152)]
+    fused, taps, ok = fusion_taps(context, monkeypatch, team(LUNAR), *readings, slots=5, confirm=5)
+    assert fused and ok and taps == [1] * 5
