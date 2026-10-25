@@ -21,8 +21,9 @@
     },
     // L1: the back key; the global popups come first in MirrorHub anyway.
     "RecoverL1": {
-        "action": "ClickKey",
-        "key": 4,
+        "action": "Custom",
+        "custom_action": "DismissShot",
+        "custom_action_param": "back",
         "post_delay": 2000
     },
     // L2: Dungeon Progress (already open, e.g. by L1's back key on the map, or by the map's gear),

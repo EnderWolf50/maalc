@@ -499,6 +499,38 @@ def allowed(key):
     return True if settings is None else settings["run"][key]
 
 
+DISMISSED_AT = {}  # node name -> time.monotonic() of its last kept screen (GAPPED nodes only)
+DISMISSED_GAP = 60  # seconds: RetryPopup keeps coming back on a dropped link, so it is kept once per gap
+GAPPED = {"RetryPopup"}  # the only node kept at most once per gap; every other node is kept each time
+
+
+@AgentServer.custom_action("DismissShot")
+class DismissShot(CustomAction):
+    """Keep the screen in logs/dismissed/ (run.keep_dismissed_screens), then close it (#244): the back key when the
+    param is "back", else a tap on the recognised box. File name: time and node, so what the bot closed can be told later.
+    RetryPopup: one screen per DISMISSED_GAP, or a dropped link fills the folder with one popup.
+    """
+
+    def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
+        now = time.monotonic()
+        gap = DISMISSED_GAP if argv.node_name in GAPPED else 0
+        if allowed("keep_dismissed_screens") and now - DISMISSED_AT.get(argv.node_name, -gap) >= gap:
+            stamp = f"{settlement.now().replace(':', '-')}-{argv.node_name}"
+            try:
+                recovery.keep_capture(ROOT, "dismissed", screen(context), stamp, recovery.DISMISSED_KEEP)
+                if gap:
+                    DISMISSED_AT[argv.node_name] = now
+                log(f"{argv.node_name}: screen kept in logs/dismissed/{stamp}.png")
+            except OSError as e:
+                log(f"{argv.node_name}: screen not saved: {e}")
+        if json.loads(argv.custom_action_param or "null") == "back":
+            context.tasker.controller.post_click_key(BACK_KEY).wait()
+        else:
+            x, y, w, h = argv.box
+            context.tasker.controller.post_click(x + w // 2, y + h // 2).wait()
+        return True
+
+
 @AgentServer.custom_action("ConfirmDownload")
 class ConfirmDownload(CustomAction):
     """Confirm the title's download dialog (the matched button), then hold the stuck detection until its progress

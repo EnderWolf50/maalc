@@ -17,7 +17,7 @@
     "trial_risk_overrides"
   ],
   "properties": {
-    "version": { "const": 10 },
+    "version": { "const": 11 },
     "language": { "enum": ["zh_tw", "en_us"], "default": "zh_tw" },
     "run": {
       "type": "object",
@@ -52,7 +52,8 @@
           "description": "free theme pack refreshes a floor may use while the best pack is below the plan's threshold: none, the first one, or all"
         },
         "auto_accept_terms": { "type": "boolean", "default": true, "description": "tick both boxes of the title's User Agreement and Confirm; off: stop" },
-        "auto_download": { "type": "boolean", "default": true, "description": "accept game data downloads and updates; off: stop" }
+        "auto_download": { "type": "boolean", "default": true, "description": "accept game data downloads and updates; off: stop" },
+        "keep_dismissed_screens": { "type": "boolean", "default": true, "description": "save the screen to logs/dismissed/ before the bot closes a notice, popup, mailbox, settings menu, help page or parallel-mode prompt, or before recovery presses back" }
       }
     },
     "deployment_order_plans": {
