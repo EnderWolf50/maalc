@@ -3733,8 +3733,9 @@ class Shop(CustomAction):
 
         The page needs a keyword picked before it unlocks, but a recipe's result does not depend on it (#304): the page's
         keyword stays, and the materials go in as for an ordinary fusion, each read back (place). The page recognises the
-        recipe by itself once they are in (its Forecasts row reads III Guaranteed 100%, logged; a tier other than the recipe's
-        cancels the fusion unpressed, the materials come back out and the ordinary fusion goes on, #300), and the dialog's count must be theirs. A recipe the page cannot hold (a Lunar Memory's 5 materials on 3 slots) is passed over for the next wanted one.
+        recipe by itself once they are in (its Forecasts row reads III Guaranteed 100%, logged). A tier other than the recipe's
+        cancels the fusion unpressed: the materials come back out and the ordinary fusion goes on (#300). The dialog's count must
+        be theirs. A recipe the page cannot hold (a Lunar Memory's 5 materials on 3 slots) is passed over for the next wanted one.
         """
         failed, blocked = visit.setdefault("recipes_failed", []), []
         recipe = recipe_fusion(team["list"], [c["id"] for c in cells if c["id"] is not None], slots=slots, skip=failed, blocked=blocked)
@@ -3750,19 +3751,19 @@ class Shop(CustomAction):
             failed.append(recipe["gift"])
             return False
         tier, chance = read_forecast(context)
-        want = GIFT_TIERS.get(recipe["gift"])
+        recipe_tier = GIFT_TIERS.get(recipe["gift"])
         # The row's tier must be the recipe's own (a recipe's result is fixed, #304): else the page did not take these materials
         # as the recipe, and Fuse is not pressed. Only the tier is compared: the row shows no product name to read. Unread, or
         # a recipe of tier V (shop.forecast_tier never reads one), it goes on: a recipe has no points tier to fall back on.
-        wrong = tier is not None and want is not None and want <= shop.FUSION_TOP_TIER and tier != want
-        made = False if wrong else Shop.press_fuse(context, len(group))
+        cancel = tier is not None and recipe_tier is not None and recipe_tier <= shop.FUSION_TOP_TIER and tier != recipe_tier
+        made = False if cancel else Shop.press_fuse(context, len(group))
         if not made:
             failed.append(recipe["gift"])
-        if wrong:
+        if cancel:
             Shop.place(context, group, slots, grid, out=True)  # the materials back out; if one stays, the caller closes the page
         log(f"shop: recipe fusion {recipe['gift']} {GIFT_NAMES.get(recipe['gift'])} from {names}: page tier {tier or 'unread'}, chance "
             f"{f'{chance}%' if chance else 'unread'}: "
-            + (f"cancelled, the recipe is tier {want}" if wrong else "done" if made else "not confirmed"))
+            + (f"cancelled, the recipe is tier {recipe_tier}" if cancel else "done" if made else "not confirmed"))
         return made
 
     @staticmethod
