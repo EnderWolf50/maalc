@@ -37,7 +37,10 @@ UNREAD = {("GiftGetOverMap.png", 1221, 438), ("PauseExploration.png", 1221, 438)
 CROPS = sorted((ROOT / "tests" / "data" / "cost_crops").glob("*.png"))
 CROP_COIN = (8, 8, *COIN)
 # node_at end to end on a floor of the given difficulty: (image, node centre, hard) -> type
-NODES = {("MapBossCost500.png", 583, 357, True): "boss"}
+# #268, live 2026-10-23 HARD floor 5 (MapHardF5Warn): the WARNING rings read from the Cost, not the ring that is often missed (the
+# first HARD round read a Risky and an Abnormality as Focused): column 1 down Focused 120, column 2 mid Risky 150, down Abnormality 180.
+NODES = {("MapBossCost500.png", 583, 357, True): "boss", ("MapHardF5Warn.png", 328, 570, True): "focused",
+         ("MapHardF5Warn.png", 583, 357, True): "risky", ("MapHardF5Warn.png", 583, 570, True): "abno"}
 
 
 def child():
