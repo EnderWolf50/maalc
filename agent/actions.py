@@ -499,7 +499,7 @@ def allowed(key):
     return True if settings is None else settings["run"][key]
 
 
-DISMISSED_AT = {}  # node name -> time.monotonic() of its last kept screen
+DISMISSED_AT = {}  # node name -> time.monotonic() of its last kept screen (GAPPED nodes only)
 DISMISSED_GAP = 60  # seconds: RetryPopup keeps coming back on a dropped link, so it is kept once per gap
 GAPPED = {"RetryPopup"}  # the only node kept at most once per gap; every other node is kept each time
 
