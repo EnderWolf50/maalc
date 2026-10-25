@@ -137,7 +137,7 @@ def test_a_card_whose_title_is_lost_is_read_by_its_cover_or_left_unread(read, ke
     assert read[key] == [list(p) for p in BLANKED[key][2]]
 
 
-def test_the_page_swinging_in_is_not_guessed_by_its_covers():
+def test_the_overlapped_cards_of_the_page_swinging_in_are_not_guessed_by_their_covers():
     # cards tilted and overlapping: the overlapped ones stand clear of no cover; the first, tilted but whole, reads right
     page = np.asarray(Image.open(SCREENS / "ThemePack.png").convert("RGB"))[:, :, ::-1]
     assert [(pc.read_cover(page, x) or [None])[0] for x in (310, 485, 684)] == ["To be Crushed", None, None]
@@ -241,13 +241,12 @@ def test_look_alike_covers_are_not_told_apart(three_covers):
 
 
 def test_covers_with_the_same_picture_are_told_apart_by_the_title_band(monkeypatch):
-    # The Outcast and The Dream Ending, or a re-run and its original: the picture alike, the title not
+    # The Outcast and The Dream Ending: the picture alike, the title not
     page, other = tiny_page(1), tiny_page(2)
     top = pc.CARD_TOP + int(0.70 * pc.CARD[1])
     twin = page.copy()
     twin[top:pc.CARD_TOP + pc.CARD[1]] = other[top:pc.CARD_TOP + pc.CARD[1]]  # the same picture, another title
-    cut = lambda im: pc.signature(im[pc.CARD_TOP:pc.CARD_TOP + pc.CARD[1], 549:731])
-    monkeypatch.setattr(pc, "covers", lambda: {"A": cut(page), "A twin": cut(twin)})
+    monkeypatch.setattr(pc, "covers", lambda: {"A": pc.signature(pc.card_image(page, 640)), "A twin": pc.signature(pc.card_image(twin, 640))})
     assert pc.read_cover(page, 640)[0] == "A"
     assert pc.read_cover(twin, 640)[0] == "A twin"
 
