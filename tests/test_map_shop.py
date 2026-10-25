@@ -39,6 +39,10 @@ FRAMES = {"MapFloor4 327 144": "event", "MapFloor4 327 357": "focused", "MapFloo
           "MapFloor4 582 144": "event", "MapFloor4 582 357": "battle", "MapFloor4 582 570": "event",
           "MapFloor4Panned 328 144": "battle", "MapFloor4Panned 328 357": "risky", "MapFloor4Panned 328 570": "abno",
           "MapFloor4Panned 583 144": "battle", "MapFloor4Panned 583 357": "event", "MapFloor4Panned 583 570": "event"}
+# #268, live 2026-10-23 floor 4 (NORMAL): the boss' glow is a thin ring, mostly outside MapNodeBoss's 80 px box: 502 red pixels in it
+# against its 1000 (741 in 92 px, 1448 in 120 px), so the dark boss is typed by its marks, as a fight. It is the boss all the same: the shop
+# 255 px before it says so (map_route.boss_after_shop, #279). The shop at x 837 and the boss at x 1092, both middle row.
+BOSS_SHOP, BOSS = (837, 357), (1092, 357)
 
 
 def child():
@@ -82,6 +86,12 @@ def child():
                     cx, cy = int(cx), int(cy)
                     image = np.asarray(Image.open(ROOT / "tests" / "screens" / f"{name}.png").convert("RGB"))[:, :, ::-1].copy()
                     out[case] = actions.node_at(context, image, cx, cy, costs=cx <= actions.MAP_NEAR)
+                image = np.asarray(Image.open(ROOT / "tests" / "screens" / "MapBossDarkAfterShop.png").convert("RGB"))[:, :, ::-1].copy()
+                x, y = BOSS
+                out["boss glow"] = bool(actions.seen(context, image, "MapNodeBoss", (x - 40, y - 40, 80, 80)))
+                out["boss shop"] = actions.node_at(context, image, *BOSS_SHOP, costs=False)
+                ahead = actions.RouteMap.read_ahead(context, image, *BOSS_SHOP, {"mid": ("shop", {"mid"})}, first=5)
+                out["boss ahead"] = [{row: [kind, sorted(src)] for row, (kind, src) in column.items()} for column in ahead]
             except Exception:  # MaaFramework swallows it: hand it to the test
                 out["error"] = traceback.format_exc()
             return True
@@ -127,6 +137,16 @@ def test_the_slots_most_like_the_plus_variant_are_not_shops(read, case):
 @pytest.mark.parametrize(("case", "kind"), FRAMES.items())
 def test_every_slot_up_to_map_near_is_typed_by_its_cost_on_the_far_left_frames(read, case, kind):
     assert read[case] == kind
+
+
+def test_the_dark_boss_of_floor_4_is_missed_by_its_glow(read):
+    # The premise of the next test, not a wish: the glow of this boss stays under MapNodeBoss's count.
+    assert read["boss shop"] == "shop"
+    assert read["boss glow"] is False
+
+
+def test_a_dark_boss_whose_glow_misses_is_the_boss_because_the_shop_comes_before_it(read):
+    assert read["boss ahead"] == [{"mid": ["boss", ["mid"]]}]
 
 
 if __name__ == "__main__":
