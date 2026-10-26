@@ -10,7 +10,7 @@
     },
     "ExpHome": {
         "action": "Custom",
-        "custom_action": "GoHomeRun",
+        "custom_action": "ExpHome",
         "next": [
             "ExpHub"
         ]
@@ -83,6 +83,15 @@
     "ExpTextLost": {
         "pre_delay": 0,
         "post_delay": 0
+    },
+    // The Enkephalin Module icon in the bottom-left panel (the round one; the card icon left of it is the Boxes). The panel
+    // sits at x 393 on the main window and Drive, at x 242 on the Luxcavation pages (0.95 there, 1.0 on the main window),
+    // so the icon is found and the number read to its right (actions.module_count).
+    "ModuleIcon": {
+        "recognition": "TemplateMatch",
+        "roi": [150, 615, 330, 55],
+        "template": "Luxcavation/ModuleIcon.png",
+        "threshold": 0.8
     },
     // Drive's Luxcavation button (tests/screens/Drive.png).
     "NavLuxcavation": {
