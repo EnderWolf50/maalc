@@ -59,16 +59,16 @@
 - 彈窗排在 `HomeReached` 前面：設定選單蓋著主畫面時 Window 分頁仍是亮的。其他分頁亮起、彈窗壓暗分頁列時，Window 模板的分數最多 0.80，門檻 0.9。
 - 前景不是遊戲時直接啟動遊戲，不等 hub 逾時走 L3（`GameAway` 讀 `dumpsys window`，讀不到時不算）。
 - 60 秒認不出畫面、或返回鍵用完仍沒到主畫面：走停止程序（存證據、webhook），任務失敗，client 的清單繼續；這個任務不結束整串清單。
+- 日常任務的入口：入口節點（`TaskStart`）接 `GoHomeRun` 節點，它在 agent 裡用 `context.run_task("GoHome")` 跑完整個 `GoHome` 再接 hub（`[JumpBack]` 接 `GoHome` 做不到：`GoHome` 的結尾 `HomeReached` 沒有下一步，任務會在那裡結束）。結尾：動作做 `go_home()` 再 `done()`，hub 的 `TaskDone` 讓任務成功結束。`GoHome` 失敗時已自己走過停止程序，`GoHomeRun` 直接讓任務失敗。（#371）
+- `ClaimPassMissions`（`pass_missions.json`）：主畫面的 Limbus Pass 橫幅（OCR 標題 `SEASON`）→ `Pass Missions` 分頁（模板，亮著時分數 0.92，門檻 0.97）→ Daily 分頁逐列點可領的列（`PassClaimable`，`agent/pass_missions.py`：金幣亮、沒有 CLEAR 章、進度條滿）→ Weekly 分頁同樣 → `PassFinish`（回主畫面、`done`）。沒有可領的就直接成功結束。可領那一列的畫面還沒截到，判斷是從已領、進行中兩種畫面推的（unverified）。
 - 沒有鏡牢的卡住恢復階梯：日常頁只有返回鍵（L1）和重啟遊戲（L3）；L3 之後的接手還沒做（待實機看過再定）。
 
 ### 日常任務的骨架
 
-每個日常任務照這個樣子接（#366 定案，經驗本 `luxcavation.json` 是第一個）；其他日常照用：
+開頭與結尾照上面「日常任務的入口」（`GoHomeRun`、`go_home()`、`TaskDone`，#371）。另外：（#366）
 
-- **入口節點**：PI 任務的 `entry`。動作是 `TaskStart`，或它的子類別（例如 `ExpStart`：先 `TaskStart`，再讀這個任務的設定；設定不能用就走停止程序，不點任何東西）。
-- **開頭回主畫面**：入口節點的 `next` 是 `["[JumpBack]TaskHome", "<任務>Hub"]`。`TaskHome`（`navigation.json`）`max_hit` 為 1，`next` 是 `GoHome`；`GoHome` 停在 `HomeReached`（空 `next`），跳回入口節點重新判斷，`TaskHome` 已用完，就進 hub。用 pipeline 的 `[JumpBack]`，不用 custom action 呼叫 `run_task`。（MaaFramework 5.14.3 的行為由 `tests/test_exp_luxcavation.py` 在真的任務上驗證）
-- **hub**：`next` 第一項是 `<任務>Stuck`（`StuckFlag` 加 `StopTask`：看門狗認定卡住就停止，日常頁還沒有恢復階梯），第二項是 `TaskDoneHome`，其餘都標 `[JumpBack]`：伺服器彈窗與說明頁、OCR 畫面集中在自己的 `HubText` 子類別（不進批次 OCR，#157）、任務自己的畫面、最後是導航（`NavTitle`、`NavMainTabs` 這類）。`on_error` 接 `StopTask`：60 秒認不出畫面就停止，任務失敗，清單繼續。
-- **結尾**：做完時動作呼叫 `done()`；hub 下一輪的 `TaskDoneHome`（`DoneFlag` 辨識）接 `GoHome`，回到主畫面後沒有可以跳回的節點，任務以成功結束。鏡牢的 `TaskDone` 不回主畫面，下一個任務的 `GoHome` 會處理。
+- **入口節點**的動作可以是 `TaskStart` 的子類別（例如 `ExpStart`：先 `TaskStart`，再讀這個任務的設定；設定不能用就走停止程序，不點任何東西），之後才接 `GoHomeRun`。
+- **hub**：`next` 第一項是 `<任務>Stuck`（`StuckFlag` 加 `StopTask`：看門狗認定卡住就停止，日常頁還沒有恢復階梯），第二項是 `TaskDone`，其餘都標 `[JumpBack]`：伺服器彈窗與說明頁、OCR 畫面集中在自己的 `HubText` 子類別（不進批次 OCR，#157）、任務自己的畫面、最後是導航（`NavTitle`、`NavMainTabs` 這類）。`on_error` 接 `StopTask`：60 秒認不出畫面就停止，任務失敗，清單繼續。
 - **記憶體**：任務自己的計數放 `RUN`（`TaskStart` 清空）；不放 `RUN["settings"]`，那是鏡牢一局的計畫，停止程序會依它寫 `runs.jsonl`。
 
 ### 經驗本（`ExpLuxcavation`）
@@ -76,7 +76,7 @@
 - 從主畫面點 Drive（`NavMainTabs`）→ Luxcavation（`NavLuxcavation`）→ EXP 分頁（停在 Thread 分頁時點 EXP，`LuxExpTab`）→ EXP 分頁預設畫面最右邊的 Enter（`LuxExpEnter`，`ExpEnter`）。上鎖的卡顯示 KEEP OUT、沒有 Enter，所以最右邊的 Enter 就是最難的開放關卡。不改 Consecutive Battle、不按 Skip Battle。（#366）
 - 分頁亮起看橘色邊框（ColorMatch）：亮和不亮的分頁對模板的分數差不多（0.93），分不開。
 - 隊伍是 `luxcavation.exp.team` 指的 maalc 隊伍，戰鬥用它的 `guard_turns`（全員防禦 N 回合後按勝率，同鏡牢）。
-- 按 Enter 之後回到 EXP 分頁，就算打完一場，`done()`，回主畫面，任務成功。
+- 按 Enter 之後回到 EXP 分頁，就算打完一場：`go_home()` 再 `done()`，任務成功。
 - 現狀（#366）：按 Enter 之後的選隊、編隊、結算畫面沒有截圖，hub 不認得，60 秒後走停止程序（存證據）。這些畫面截到後再補選隊、編隊與勝敗判斷；模組檢查、計次與戰敗重打在 #367。
 
 ### 入口頁的分流

@@ -36,25 +36,6 @@
             "[JumpBack]HomeBack"
         ]
     },
-    // A daily task's first step (#366): its entry node lists it [JumpBack] before its hub, so GoHome runs once, ends on
-    // HomeReached (its empty next goes back to the entry), and max_hit leaves the entry's next to the hub.
-    "TaskHome": {
-        "max_hit": 1,
-        "next": [
-            "GoHome"
-        ]
-    },
-    // A daily task's done exit (#366): on its hub where MirrorHub has TaskDone. An action found nothing left to do
-    // (actions.done); GoHome then ends on HomeReached with nothing to go back to, the task a success.
-    "TaskDoneHome": {
-        "recognition": "Custom",
-        "custom_recognition": "DoneFlag",
-        "pre_delay": 0,
-        "post_delay": 0,
-        "next": [
-            "GoHome"
-        ]
-    },
     "GoHomeLost": {
         "action": "Custom",
         "custom_action": "StopTask",

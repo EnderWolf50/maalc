@@ -121,7 +121,7 @@ def child():
     game.set("main")
     game.post_connection().wait()
     resource.post_bundle(ROOT / "assets" / "resource" / "base").wait()
-    for name in ("ExpStart", "ExpEnter", "StopTask", "DismissShot", "AcceptUpdate", "AcceptTerms", "ConfirmDownload",
+    for name in ("ExpStart", "ExpEnter", "GoHomeRun", "StopTask", "DismissShot", "AcceptUpdate", "AcceptTerms", "ConfirmDownload",
                  "Halt", "TapUntil", "PlayTurn", "HoldTurn", "Victory"):
         resource.register_custom_action(name, getattr(actions, name)())
     for name in ("GameAway", "HomeText", "ExpText", "StuckFlag", "DoneFlag"):
@@ -162,7 +162,7 @@ def test_exp_luxcavation_goes_home_first_enters_the_rightmost_open_stage_and_end
     assert taps.count(taps[4]) == 1  # one battle
     # Back on the EXP tab after it: done, and GoHome again (the back key, then the Window tab)
     assert o["keys"] == [4] and inside(WINDOW_TAB, *taps[-1]) and len(taps) == 6
-    assert o["nodes"][0] == "ExpLuxcavation" and o["nodes"][-1] == "HomeReached"
+    assert o["nodes"][:3] == ["ExpLuxcavation", "ExpHome", "ExpHub"] and o["nodes"][-1] == "TaskDone"
 
 
 def test_exp_luxcavation_skips_a_locked_stage_on_the_right():

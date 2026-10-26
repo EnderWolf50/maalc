@@ -25,6 +25,7 @@ import gift_search
 import hub_text
 import map_route
 import pack_cover
+import pass_missions
 import recovery
 import rewards
 import run_start
@@ -496,11 +497,11 @@ class ExpStart(TaskStart):
 @AgentServer.custom_action("ExpEnter")
 class ExpEnter(CustomAction):
     """LuxExpEnter: tap the rightmost open stage's Enter (the node's box) until the tab goes. Back on the tab after
-    that: the one battle is over (#366), done; the result has no capture yet."""
+    that: the one battle is over (#366), the main window, done; the result has no capture yet."""
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         if RUN.get("entered"):
-            return done("EXP Luxcavation: one battle fought")
+            return go_home(context) and done("EXP Luxcavation: one battle fought")
         x, y, w, h = argv.box
         if tap_then(context, x + w // 2, y + h // 2, lambda im: seen(context, im, argv.node_name) is None, timeout=3) is not None:
             RUN["entered"] = True
@@ -515,6 +516,32 @@ class StopTask(CustomAction):
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         return stop(context, f"{argv.node_name}: {json.loads(argv.custom_action_param or '""')}")
+
+
+def go_home(context):
+    """Run the GoHome task here, the first and the last step of a daily task (spec 01): False when it did not reach the
+    main window (GoHome has run the stop procedure itself)."""
+    detail = context.run_task("GoHome")
+    return bool(detail and detail.status.succeeded)
+
+
+@AgentServer.custom_action("GoHomeRun")
+class GoHomeRun(CustomAction):
+    """A daily task's first step, after its TaskStart: the main window, wherever the last task left the game."""
+
+    def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
+        return go_home(context)
+
+
+@AgentServer.custom_action("PassFinish")
+class PassFinish(CustomAction):
+    """Both Pass Missions tabs are claimed: back to the main window, then the done exit."""
+
+    def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
+        return go_home(context) and done("pass missions claimed")
+
+
+AgentServer.custom_recognition("PassClaimable")(pass_missions.PassClaimable)
 
 
 @AgentServer.custom_recognition("DoneFlag")

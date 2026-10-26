@@ -1,11 +1,17 @@
 {
-    // EXP Luxcavation (#366, spec 01 日常任務的骨架): ExpStart picks the team (luxcavation.exp), TaskHome goes to the main
-    // window, ExpHub plays the rightmost open stage of the EXP tab once and ends back on the main window (TaskDoneHome).
+    // EXP Luxcavation (#366): ExpStart picks the team (luxcavation.exp), then the daily task entry of spec 01: GoHome run
+    // by GoHomeRun, and ExpHub, which plays the rightmost open stage of the EXP tab once; its last step runs GoHome again.
     "ExpLuxcavation": {
         "action": "Custom",
         "custom_action": "ExpStart",
         "next": [
-            "[JumpBack]TaskHome",
+            "ExpHome"
+        ]
+    },
+    "ExpHome": {
+        "action": "Custom",
+        "custom_action": "GoHomeRun",
+        "next": [
             "ExpHub"
         ]
     },
@@ -20,7 +26,7 @@
         ],
         "next": [
             "ExpStuck",
-            "TaskDoneHome",
+            "TaskDone",
             "[JumpBack]BattleHUD",
             "[JumpBack]Connecting",
             "[JumpBack]HelpPager",
