@@ -572,8 +572,9 @@ def battle_over(context):
         return stop(context, f"{lux['name']}: back on the page with no victory or defeat seen")
     step = luxcavation.decide(lux["modules"], lux["cost"], lux["count"], lux["won"], lux["retried"], lux["retries"], result)
     lux["won"] += result == "win"
-    lux["retried"] += step == luxcavation.RETRY
-    log(f"{lux['name']}: {result}, {lux['won']} of {lux['count']} won, {lux['retried']} of {lux['retries']} retries used: {step}")
+    # Each battle has its own retries, as the mirror's wipe retries: a win starts the next battle at 0 (review S6).
+    lux["retried"] = 0 if result == "win" else lux["retried"] + (step == luxcavation.RETRY)
+    log(f"{lux['name']}: {result}, {lux['won']} of {lux['count']} won, {lux['retried']} of {lux['retries']} retries of this battle used: {step}")
     if step == luxcavation.FINISH:
         return go_home(context) and done(f"{lux['name']}: {lux['won']} won")
     if step == luxcavation.STOP:

@@ -271,5 +271,29 @@ def test_the_watchdog_counts_screens_not_the_luxcavation_hubs():
         actions.StuckFlag.see = see
     assert seen == ["LuxExpEnter"] * 3
 
+
+def test_each_battle_has_its_own_retries_a_win_resets_them():
+    # Review S6, as the mirror's wipe retries: retries 1 lets every battle lose once; the task fails only when one battle
+    # loses twice.
+    from unittest.mock import MagicMock
+
+    import actions
+
+    stops = []
+    actions.RUN.clear()
+    actions.RUN["lux"] = {"name": "EXP", "cost": 3, "count": 3, "retries": 1, "modules": 99, "won": 0, "retried": 0, "result": None}
+    saved = actions.stop
+    actions.stop = lambda context, reason, **kw: stops.append(reason) or False
+    try:
+        steps = []
+        for result in ("lose", "win", "lose", "win", "lose", "lose"):
+            actions.RUN.update(entered=True)
+            actions.RUN["lux"]["result"] = result
+            steps.append(actions.battle_over(MagicMock()))
+    finally:
+        actions.stop = saved
+        actions.RUN.clear()
+    assert steps == [None] * 5 + [False] and len(stops) == 1
+
 if __name__ == "__main__":
     child()

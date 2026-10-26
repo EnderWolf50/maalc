@@ -20,8 +20,9 @@ def decide(modules, cost, count, won, retried, retries, result=None):
 
     result None: no battle just ended, the task is starting; the Modules `modules` must cover all `count` battles
     (SKIP when they do not) before the first FIGHT. Later a result is "win" or "lose", `won` the battles won before it
-    and `retried` the retries used before it: a win counts and goes on (FIGHT) until `count` are won (FINISH); a defeat
-    counts for nothing and takes no Module, and plays the same stage again (RETRY) while `retries` lasts, else STOP.
+    and `retried` the retries this battle used before it (a win resets it, as the mirror's wipe retries): a win counts and
+    goes on (FIGHT) until `count` are won (FINISH); a defeat counts for nothing and takes no Module, and plays the same
+    stage again (RETRY) while this battle's `retries` last, else STOP.
     """
     if result is None:
         return SKIP if modules < needed(cost, count) else FIGHT
