@@ -145,10 +145,10 @@ def test_claim_mail_presses_claim_all_once_and_ends_at_the_main_window():
         assert o["succeeded"] and o["screen"] == "main" and o["done"] == "no mail to claim", name
         claims = [c for c in o["clicks"] if inside(CLAIM_ALL, *c)]
         assert len(claims) == 1, name  # the one claim; the empty box after it is not pressed again
-        assert o["nodes"][-1] == "HomeReached" and "MailClaimAll" in o["nodes"], name
-    # From Drive the first step is GoHome's Window tab; from the open box the stray Mailbox is claimed, not closed.
+        assert o["nodes"][-1] == "TaskDone" and "MailClaimAll" in o["nodes"] and "MailFinish" in o["nodes"], name
+    # The first step is GoHome (spec 01): from Drive its Window tab, from a stray open box that box's Close.
     assert inside(WINDOW_TAB, *out["drive"]["clicks"][0])
-    assert not any(inside(MAIL_ICON, *c) for c in out["box_open"]["clicks"])
+    assert inside(MAILBOX_CLOSE, *out["box_open"]["clicks"][0])
 
 
 def test_claim_mail_with_no_mail_ends_a_success_without_pressing_claim_all():
