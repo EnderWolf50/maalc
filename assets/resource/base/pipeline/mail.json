@@ -1,16 +1,17 @@
 {
     // ClaimMail (#372): open the Mailbox, press Claim All, end done. The global Mailbox (popups.json) stays as it was:
     // it only presses Close; here the task presses Claim All because the player ticked it.
-    // Spec 01 (daily tasks): TaskStart, GoHome run by GoHomeRun, the hub; the last step runs GoHome again (MailFinish),
+    // Spec 01 (daily tasks): TaskStart, GoHome run by GoHomeRun (MailHome), the hub; the last step runs GoHome again
+    // (GoHomeDone),
     // and the global Mailbox (GoHome's HomeText) closes the box with its own Close.
     "ClaimMail": {
         "action": "Custom",
         "custom_action": "TaskStart",
         "next": [
-            "MailStart"
+            "MailHome"
         ]
     },
-    "MailStart": {
+    "MailHome": {
         "action": "Custom",
         "custom_action": "GoHomeRun",
         "next": [
@@ -25,7 +26,6 @@
         ],
         "next": [
             "TaskDone",
-            "[JumpBack]MailPopups",
             "[JumpBack]MailText",
             "[JumpBack]HomeText",
             "[JumpBack]MailOpen"
@@ -36,40 +36,18 @@
         "custom_action": "StopTask",
         "custom_action_param": "the mail was not claimed"
     },
-    // HomeText's popups but the Mailbox (and the notices and the menu): a popup over the open box comes first, the box
-    // still reads under it (ServerErrorRetry.png), and the box's own Close is not what ClaimMail wants.
-    "MailPopups": {
-        "recognition": "Custom",
-        "custom_recognition": "MailPopups",
-        "custom_recognition_param": {
-            "entries": [
-                "RetryPopup",
-                "MaintenanceNotice",
-                "ClientOutdated",
-                "UpdateDialog",
-                "UserAgreement",
-                "DownloadDialog",
-                "Downloading",
-                "Loading",
-                "PopupButton"
-            ],
-            "tail": []
-        },
-        "pre_delay": 0,
-        "post_delay": 0,
-        "rate_limit": 300,
-        "timeout": 0,
-        "on_error": [
-            "MailTextLost"
-        ]
-    },
-    // The Mailbox's own two screens, read in one OCR pass (hub_text.py, #157): empty first, then Claim All.
+    // The open Mailbox and what can be over it, read in one OCR pass (hub_text.py, #157). The server's popups first: the
+    // box still reads under them (ServerErrorRetry.png). Then the empty box, ahead of the one-button popup: the game's
+    // "No mail available to claim" may be such a popup over the box, and it says the task is done. Then a one-button
+    // popup, then Claim All. Not HomeText's Mailbox: the box's own Close is not what ClaimMail wants.
     "MailText": {
         "recognition": "Custom",
-        "custom_recognition": "MailText",
+        "custom_recognition": "HubText",
         "custom_recognition_param": {
+            "base": "ServerPopups",
             "entries": [
                 "MailEmpty",
+                "PopupButton",
                 "MailClaimAll"
             ],
             "tail": []
@@ -88,6 +66,7 @@
     },
     // Nothing to claim: "No mail in storage." on the open box (tests/screens/MailboxEmpty.png), or the game's
     // "No mail available to claim with 'Claim All'" (not captured). Done, a success; GoHome closes the box.
+    // MailEmptyText's roi is wide to take both: TODO narrow it once the second message is captured (review T5).
     "MailEmpty": {
         "recognition": "And",
         "all_of": [
@@ -105,7 +84,8 @@
             }
         ],
         "action": "Custom",
-        "custom_action": "MailFinish",
+        "custom_action": "GoHomeDone",
+        "custom_action_param": "no mail to claim",
         "post_delay": 500
     },
     // Claim All beside the box's Close (Mailbox.png). max_hit: a confirm or result window over the box can leave the
@@ -131,12 +111,12 @@
         "post_delay": 2500,
         "max_hit": 3
     },
-    // The envelope at the top right of the main window (Window tab lit, as HomeReached).
+    // The envelope at the top right of the main window (HomeReached).
     "MailOpen": {
-        "recognition": "TemplateMatch",
-        "roi": [770, 598, 110, 84],
-        "template": "Navigation/NavWindowLit.png",
-        "threshold": 0.9,
+        "recognition": "And",
+        "all_of": [
+            "HomeReached"
+        ],
         "action": "Click",
         "target": [1085, 95, 70, 60],
         "post_delay": 2000,

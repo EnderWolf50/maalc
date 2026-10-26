@@ -424,20 +424,21 @@ class TaskStart(CustomAction):
         RUN.clear()
         TASK.clear()
         TASK.update(runs=0, done=None)
-        TASK.pop("assemble", None)
         STUCK.update(node=None, kind=None, flag=None, watch=recovery.Watchdog(), ladder=recovery.Ladder())
         SCREENS.clear()
         log(f"task {argv.node_name} started")
         return True
 
 
-# MirrorHub's own steps, no screen: the watchdog keeps the screen handled before them.
+# A hub's own steps, no screen: the watchdog keeps the screen handled before them. The hubs themselves are found by
+# their next list, which names the Stuck node (StuckFlag).
 PASS_NODES = ("BattleHUD", "BattleHUDLost", "HubText", "HubTextLost", "ExpText", "ExpTextLost")
 
 
 @AgentServer.custom_recognition("StuckFlag")
 class StuckFlag(CustomRecognition):
-    """MirrorHub's Stuck node: watches every screen it hands out, hits while a stuck waits for recovery.
+    """A hub's Stuck node (MirrorHub's Stuck, ExpStuck, ThreadStuck): watches every screen the hub hands out, hits while
+    a stuck waits for recovery.
 
     It runs first on each MirrorHub pass, so the task's last node is the screen just
     handled and argv.image what it left: the watchdog, the evidence and the run time limit work from them.
@@ -448,11 +449,16 @@ class StuckFlag(CustomRecognition):
         if ids and ids[-1] != STUCK["node"]:
             STUCK["node"] = ids[-1]
             node = context.tasker.get_node_detail(ids[-1])
-            if node and node.name not in ("MirrorDungeon", "MirrorHub", "Stuck", "GlobalStuck", *PASS_NODES):
+            if node and node.name not in ("MirrorDungeon", "GlobalStuck", argv.node_name, *PASS_NODES) and not self.hub(context, node.name, argv.node_name):
                 self.see(node.name, argv.image)
         if STUCK["flag"] and STUCK["flag"][0] is None:
             STUCK["flag"] = (STUCK["kind"], *STUCK["flag"][1:])  # reported by the action of the node just handled
         return CustomRecognition.AnalyzeResult(box=(0, 0, 1, 1), detail={}) if STUCK["flag"] else None
+
+    @staticmethod
+    def hub(context, name, stuck_node):
+        """Whether the node is a hub, not a screen: its next list holds this Stuck node."""
+        return stuck_node in (n["name"] for n in context.get_node_data(name)["next"])
 
     @staticmethod
     def see(kind, image):
@@ -473,11 +479,6 @@ class StuckFlag(CustomRecognition):
 AgentServer.custom_recognition("HubText")(hub_text.HubText)
 
 
-@AgentServer.custom_recognition("HomeText")
-class HomeText(hub_text.HubText):
-    """GoHome's popups (navigation.json): HubText with its own entries, which it reads once and keeps per instance."""
-
-
 @AgentServer.custom_recognition("GameAway")
 class GameAway(CustomRecognition):
     """GoHome's HomeGameAway: hits when another app (the launcher, the Play Store) or no window has the focus, so the
@@ -488,60 +489,36 @@ class GameAway(CustomRecognition):
         return CustomRecognition.AnalyzeResult(box=(0, 0, 1, 1), detail={"app": app}) if app not in (None, recovery.GAME) else None
 
 
-@AgentServer.custom_recognition("MailText")
-class MailText(hub_text.HubText):
-    """ClaimMail's Mailbox screens (mail.json): HubText with its own entries, which it reads once and keeps per instance."""
+# The Luxcavation tasks (#366, #368): their settings key (custom_action_param of LuxStart) -> name, Modules a battle.
+LUX = {"exp": ("EXP Luxcavation", luxcavation.EXP_COST), "thread": ("Thread Luxcavation", luxcavation.THREAD_COST)}
 
 
-@AgentServer.custom_recognition("MailPopups")
-class MailPopups(hub_text.HubText):
-    """ClaimMail's popups over the Mailbox (mail.json), apart from the Mailbox itself."""
-
-
-@AgentServer.custom_action("MailFinish")
-class MailFinish(CustomAction):
-    """The Mailbox has nothing left to claim: back to the main window (GoHome closes the box), then the done exit."""
-
-    def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
-        return go_home(context) and done("no mail to claim")
-
-
-@AgentServer.custom_recognition("ExpText")
-class ExpText(hub_text.HubText):
-    """ExpHub's OCR screens (luxcavation.json): HubText with its own entries."""
-
-
-@AgentServer.custom_action("ExpStart")
-class ExpStart(TaskStart):
-    """ExpLuxcavation's entry (#366): TaskStart, then the team luxcavation.exp names, whose guard turns the battle plays
-    (spec 03 section 8), and its count and retries (#367). No team picked, or settings that do not load: the stop
-    procedure, before any tap. ThreadStart is the same for luxcavation.thread (#368)."""
-
-    TASK, NAME, COST = "exp", "EXP Luxcavation", luxcavation.EXP_COST
+@AgentServer.custom_action("LuxStart")
+class LuxStart(TaskStart):
+    """A Luxcavation task's entry (#366, #368), its param the settings key ("exp", "thread"): TaskStart, then the team
+    luxcavation.<key> names, whose guard turns the battle plays (spec 03 section 8), and its count and retries (#367).
+    No team picked, or settings that do not load: the stop procedure, before any tap."""
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         super().run(context, argv)
+        key = json.loads(argv.custom_action_param)
+        name, cost = LUX[key]
         try:
             settings = load_settings(ROOT)
         except SettingsError as e:
             return stop(context, str(e))
-        opts = settings["luxcavation"][self.TASK]
+        opts = settings["luxcavation"][key]
         team = next((t for t in settings["teams"] if t["id"] == opts["team"]), None)
         if team is None:
-            return stop(context, f"{self.NAME} has no team: pick one in the settings GUI's Daily tab")
+            return stop(context, f"{name} has no team: pick one in the settings GUI's Daily tab")
         # Not RUN["settings"]: that is a Mirror Dungeon run, which the stop procedure writes to runs.jsonl.
         # lux: this task's count (spec 03 section 15): the battles won and the retries used, the last battle's result.
         RUN.update(team=team, guard=team["guard_turns"],
-                   lux={"name": self.NAME, "cost": self.COST, "count": opts["count"], "retries": opts["retries"], "modules": None,
+                   lux={"name": name, "cost": cost, "count": opts["count"], "retries": opts["retries"], "modules": None,
                         "won": 0, "retried": 0, "result": None})
-        log(f"{self.NAME}: team {team['name']!r} (TEAMS #{team['game_team']}), {team['guard_turns']} guard turns, "
+        log(f"{name}: team {team['name']!r} (TEAMS #{team['game_team']}), {team['guard_turns']} guard turns, "
             f"{opts['count']} wins, {opts['retries']} retries")
         return True
-
-
-@AgentServer.custom_action("ThreadStart")
-class ThreadStart(ExpStart):
-    TASK, NAME, COST = "thread", "Thread Luxcavation", luxcavation.THREAD_COST
 
 
 def modules_now(context, timeout=3):
@@ -563,9 +540,9 @@ class OpenDrive(CustomAction):
         return True
 
 
-@AgentServer.custom_action("ExpHome")
-class ExpHome(CustomAction):
-    """ExpHub's first step: the main window, then the one check of the task (#367): the Modules must cover `count`
+@AgentServer.custom_action("LuxHome")
+class LuxHome(CustomAction):
+    """A Luxcavation task's first step after LuxStart: the main window, then the one check of the task (#367): the Modules must cover `count`
     battles at the hardest stage's cost, else the task is done at once, a success the client's list goes on from
     (spec 03 section 15). A panel that does not read stops the task: nothing is known to be safe to spend."""
 
@@ -583,11 +560,6 @@ class ExpHome(CustomAction):
         return True
 
 
-@AgentServer.custom_action("ThreadHome")
-class ThreadHome(ExpHome):
-    pass
-
-
 def battle_over(context):
     """A Luxcavation battle was entered (RUN["entered"]) and the page it started from shows again: count its result
     (Victory sets it) and say what next (luxcavation.decide, #367). None: the next battle, or the same one again after a
@@ -600,8 +572,9 @@ def battle_over(context):
         return stop(context, f"{lux['name']}: back on the page with no victory or defeat seen")
     step = luxcavation.decide(lux["modules"], lux["cost"], lux["count"], lux["won"], lux["retried"], lux["retries"], result)
     lux["won"] += result == "win"
-    lux["retried"] += step == luxcavation.RETRY
-    log(f"{lux['name']}: {result}, {lux['won']} of {lux['count']} won, {lux['retried']} of {lux['retries']} retries used: {step}")
+    # Each battle has its own retries, as the mirror's wipe retries: a win starts the next battle at 0 (review S6).
+    lux["retried"] = 0 if result == "win" else lux["retried"] + (step == luxcavation.RETRY)
+    log(f"{lux['name']}: {result}, {lux['won']} of {lux['count']} won, {lux['retried']} of {lux['retries']} retries of this battle used: {step}")
     if step == luxcavation.FINISH:
         return go_home(context) and done(f"{lux['name']}: {lux['won']} won")
     if step == luxcavation.STOP:
@@ -609,36 +582,12 @@ def battle_over(context):
     return None
 
 
-@AgentServer.custom_action("ExpEnter")
-class ExpEnter(CustomAction):
-    """LuxExpEnter: tap the rightmost open stage's Enter (the node's box) until the tab goes. Back on the tab after
-    that: the battle is over (battle_over). ThreadEnter is the same for the Thread tab's open card, whose Enter opens
-    the Level Select (ThreadLevel) instead of the battle (#368)."""
-
-    OPENS_BATTLE = True
-
-    def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
-        if RUN.get("entered"):
-            over = battle_over(context)
-            if over is not None:
-                return over
-        x, y, w, h = argv.box
-        if tap_then(context, x + w // 2, y + h // 2, lambda im: seen(context, im, argv.node_name) is None, timeout=3) is not None:
-            RUN["entered"], RUN["team_picked"] = self.OPENS_BATTLE, False
-            log(f"{RUN['lux']['name']}: entered the stage at x {x + w // 2}")
-        return True
-
-
-@AgentServer.custom_action("ThreadEnter")
-class ThreadEnter(ExpEnter):
-    OPENS_BATTLE = False
-
-
-@AgentServer.custom_action("ThreadLevel")
-class ThreadLevel(CustomAction):
-    """LuxThreadLevel: the card's Level Select, which opens at its bottom row, the hardest level (#368): tap that row's
-    Enter (the node's box) until the list goes. A battle over that returns here, not to the Thread tab, is counted
-    first (battle_over)."""
+@AgentServer.custom_action("LuxEnter")
+class LuxEnter(CustomAction):
+    """An Enter of a Luxcavation page (the node's box): the EXP tab's rightmost open stage (LuxExpEnter), the Thread
+    tab's open card (LuxThreadEnter), the bottom row of the card's Level Select, its hardest level (LuxThreadLevel). Tap
+    it until the page goes. The param {"opens_battle": false} marks the card's Enter, which opens the Level Select, not
+    the battle (#368). Back on the page a battle started from: the battle is over (battle_over)."""
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         if RUN.get("entered"):
@@ -647,8 +596,9 @@ class ThreadLevel(CustomAction):
                 return over
         x, y, w, h = argv.box
         if tap_then(context, x + w // 2, y + h // 2, lambda im: seen(context, im, argv.node_name) is None, timeout=3) is not None:
-            RUN["entered"], RUN["team_picked"] = True, False
-            log(f"{RUN['lux']['name']}: entered the level at y {y + h // 2}")
+            RUN["entered"] = (json.loads(argv.custom_action_param or "null") or {}).get("opens_battle", True)
+            RUN["team_picked"] = False
+            log(f"{RUN['lux']['name']}: {argv.node_name} at ({x + w // 2}, {y + h // 2})")
         return True
 
 
@@ -676,12 +626,13 @@ class GoHomeRun(CustomAction):
         return go_home(context)
 
 
-@AgentServer.custom_action("PassFinish")
-class PassFinish(CustomAction):
-    """Both Pass Missions tabs are claimed: back to the main window, then the done exit."""
+@AgentServer.custom_action("GoHomeDone")
+class GoHomeDone(CustomAction):
+    """A daily task found nothing left to do (the Mailbox empty, both Pass Missions tabs claimed): back to the main window
+    (GoHome closes what is open), then the done exit; the param says why."""
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
-        return go_home(context) and done("pass missions claimed")
+        return go_home(context) and done(json.loads(argv.custom_action_param))
 
 
 AgentServer.custom_recognition("PassClaimable")(pass_missions.PassClaimable)
@@ -699,7 +650,8 @@ class DoneFlag(CustomRecognition):
 # Assemble Enkephalin Modules (#370, pipeline/assemble_modules.json).
 MODULE_COST = 20  # Enkephalin per module
 ENK_BAR = (440, 640)  # the resource panel's Enkephalin bar: opens the Charge Enkephalin window
-ASSEMBLE_MAX, ASSEMBLE_CONFIRM, ASSEMBLE_CANCEL = (805, 328), (760, 534), (520, 534)  # >> (the most), Confirm, Cancel
+ASSEMBLE_MAX = (805, 328)  # the Modules tab's >> (the most)
+PANEL_CONFIRM, PANEL_CANCEL = (760, 534), (520, 534)  # the Charge Enkephalin window's Confirm and Cancel, on every tab
 ASSEMBLE_TRIES = 3  # reads, taps of >> and Confirms the task spends before it gives up
 
 
@@ -711,6 +663,14 @@ def fractions(results):
 def read_fractions(context, image, node):
     detail = context.run_recognition(node, image)
     return fractions([(r.text, tuple(r.box)) for r in (detail.all_results if detail else [])])
+
+
+def on_modules_tab(context, image):
+    """The Modules tab's own prompt ("Would you like to assemble Enkephalin Modules?") is up. The Use Lunacy tab shows the
+    Enkephalin before and after as well, so the two "n / cap" alone do not tell the tabs apart: a Confirm there spends
+    Lunacy."""
+    detail = context.run_recognition("AssemblePrompt", image)
+    return bool(detail and detail.hit)
 
 
 def too_many(context, image):
@@ -748,9 +708,10 @@ class AssembleMain(CustomAction):
 
 @AgentServer.custom_action("AssemblePanel")
 class AssemblePanel(CustomAction):
-    """The Charge Enkephalin window: on its Modules tab (before and after Enkephalin are both read there), >> for the most
-    modules, Confirm. Only >>, Confirm and Cancel are tapped, never the Use Lunacy tab. The game's refusal ends the task;
-    a window over a task already decided is cancelled."""
+    """The Charge Enkephalin window: on its Modules tab (its prompt and the Enkephalin before and after read), >> for the
+    most modules, Confirm. Only >>, Confirm and Cancel are tapped, no tab. Not on the Modules tab, or a number that stops
+    reading after >>: Cancel and the stop procedure, never Confirm (Use Lunacy's Confirm spends Lunacy). The game's
+    refusal ends the task; a window over a task already decided is cancelled."""
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         a = TASK.setdefault("assemble", {"reads": 0, "confirms": 0})
@@ -759,14 +720,20 @@ class AssemblePanel(CustomAction):
             a["end"] = "too many Enkephalin Modules in storage"
             context.tasker.controller.post_click_key(BACK_KEY).wait()
             return True
-        read = read_fractions(context, image, "AssembleAfter")
-        if len(read) < 2:  # not the Modules tab, or the numbers not up yet
+        if a.get("end"):
+            tap(context, *PANEL_CANCEL, wait=0.5)
+            return True
+        read = read_fractions(context, image, "AssembleAfter") if on_modules_tab(context, image) else []
+        if len(read) < 2:  # not the Modules tab, or not up yet
             a["reads"] += 1
-            return True if a["reads"] < ASSEMBLE_TRIES else stop(context, "the Charge Enkephalin window shows no Modules tab")
+            if a["reads"] < ASSEMBLE_TRIES:
+                return True
+            tap(context, *PANEL_CANCEL, wait=0.5)
+            return stop(context, "the Charge Enkephalin window shows no Modules tab")
         a["reads"] = 0
         before, after = read[0][0], read[-1][0]
-        if a.get("end") or before < MODULE_COST:
-            tap(context, *ASSEMBLE_CANCEL, wait=0.5)
+        if before < MODULE_COST:
+            tap(context, *PANEL_CANCEL, wait=0.5)
             return True
         for _ in range(ASSEMBLE_TRIES):  # >> goes to the most the Enkephalin allows; ask again until nothing changes
             if after < MODULE_COST:
@@ -777,8 +744,11 @@ class AssemblePanel(CustomAction):
                 a["end"] = "too many Enkephalin Modules in storage"
                 context.tasker.controller.post_click_key(BACK_KEY).wait()
                 return True
-            again = read_fractions(context, image, "AssembleAfter")
-            if len(again) < 2 or again[-1][0] == after:
+            again = read_fractions(context, image, "AssembleAfter") if on_modules_tab(context, image) else []
+            if len(again) < 2:
+                tap(context, *PANEL_CANCEL, wait=0.5)
+                return stop(context, "the Modules tab did not read after >>: Confirm not pressed")
+            if again[-1][0] == after:
                 break
             after = again[-1][0]
         a["confirms"] += 1
@@ -786,7 +756,7 @@ class AssemblePanel(CustomAction):
             return stop(context, "Confirm did not close the Charge Enkephalin window")
         log(f"assemble: Enkephalin {before} -> {after}, Confirm")
         a["before"] = before
-        tap(context, *ASSEMBLE_CONFIRM, wait=0.5)
+        tap(context, *PANEL_CONFIRM, wait=0.5)
         return True
 
 
@@ -835,7 +805,7 @@ class ChargePanel(CustomAction):
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         c = TASK["charge"]
         if c.get("end"):  # a window over a task already decided
-            tap(context, *ASSEMBLE_CANCEL, wait=0.5)
+            tap(context, *PANEL_CANCEL, wait=0.5)
             return True
         tap(context, *LUNACY_TAB, wait=0.7)
         image = screen(context)
@@ -846,7 +816,7 @@ class ChargePanel(CustomAction):
             c["reads"] += 1
             if c["reads"] < CHARGE_TRIES:
                 return True
-            tap(context, *ASSEMBLE_CANCEL, wait=0.5)
+            tap(context, *PANEL_CANCEL, wait=0.5)
             return stop(context, "the Use Lunacy tab's Recharge prompt and price could not be read")
         c["reads"] = 0
         verdict, bought, why = lunacy.check(price, c["count"], c.get("bought"))
@@ -854,9 +824,9 @@ class ChargePanel(CustomAction):
         if verdict == lunacy.CHARGE:
             c["charged"] += 1
             c["bought"] = bought + 1  # the price after this Confirm; a price that stays is a Confirm that did nothing
-            tap(context, *ASSEMBLE_CONFIRM, wait=1.0)
+            tap(context, *PANEL_CONFIRM, wait=1.0)
             return True
-        tap(context, *ASSEMBLE_CANCEL, wait=0.5)
+        tap(context, *PANEL_CANCEL, wait=0.5)
         if verdict == lunacy.DONE:
             c["end"] = f"{c['charged']} charged now, {why}"
             return True
@@ -1086,16 +1056,18 @@ class TapUntil(CustomAction):
 class PlanRun(CustomAction):
     """Entry page, no run under way: check settings, pick difficulty and team, press Enter (spec 03 sections 1, 2).
 
-    Nothing left to do (the run count reached, the weekly bonuses out, no team for the difficulty) ends the task a
-    success (done); bad settings fail it (returning False).
+    Nothing left to do (the run count reached, the weekly bonuses out, no enabled team, none for the difficulty) ends
+    the task a success (done); bad settings fail it (returning False).
     """
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         try:
-            settings = load_settings(ROOT, need_team=True)
+            settings = load_settings(ROOT)
         except SettingsError as e:
             log(f"stop: {e}")
             return False
+        if not any(t["enabled"] for t in settings["teams"]):
+            return done("no enabled team")
         hsv_v = screen(context)[285:297].max(axis=2)  # V of HSV
         # Live: a filled slot reads V ~240, an empty one ~5 (2026-10-15).
         weekly = sum(hsv_v[:, x:x + 30].mean() > 40 for x in WEEKLY_SLOTS)

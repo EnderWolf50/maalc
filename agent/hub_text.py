@@ -64,6 +64,13 @@ def pick(nodes, results):
             if specs is None or (any if kind == "Or" else all)(reads(s, results) for s in specs)]
 
 
+def entries(name, params):
+    """A HubText node's entries: those of its base first (custom_recognition_param "base", another HubText node, so the
+    popups every hub reads are listed once), then its own. params(name) is that node's custom_recognition_param."""
+    param = params(name)
+    return (entries(param["base"], params) if "base" in param else []) + param["entries"]
+
+
 def mask(image, rois):
     """The image black outside rois, as MaaFramework's batch reads it."""
     out = image * 0
@@ -78,27 +85,31 @@ def union(rois):
 
 
 class HubText(CustomRecognition):
-    """MirrorHub's OCR screens (custom_recognition_param: entries in hub order, then tail) in one unbatched OCR.
+    """A hub's OCR screens (custom_recognition_param: entries in hub order, after its base's, then tail) in one unbatched
+    OCR; every hub's text node (MirrorHub's HubText, GoHome's HomeText, ...) uses it.
 
     The entries that may be up become this node's next list behind NoBatchOCR, then the tail: each checks with its
-    own OCR, unbatched. None may be up: no hit, and MirrorHub goes on to the tail itself.
+    own OCR, unbatched. None may be up: no hit, and the hub goes on to the tail itself.
     """
 
-    nodes = None
+    def __init__(self):
+        super().__init__()
+        self.lists = {}  # node name -> (its entries as (name, kind, specs), their rois): read once
 
     def analyze(self, context: Context, argv: CustomRecognition.AnalyzeArg):
         param = argv.custom_recognition_param
         param = json.loads(param) if isinstance(param, str) else param
-        if self.nodes is None:
-            self.nodes = []
-            for name in param["entries"]:
+        if argv.node_name not in self.lists:
+            names = entries(argv.node_name, lambda name: context.get_node_data(name)["recognition"]["param"]["custom_recognition_param"])
+            nodes = []
+            for name in names:
                 reco = context.get_node_data(name)["recognition"]
-                self.nodes.append((name, reco["type"], ocr_specs(reco)))
-            self.rois = [s[0] for *_, specs in self.nodes for s in specs or []]
-        detail = context.run_recognition_direct(JRecognitionType.OCR, JOCR(roi=tuple(union(self.rois)), threshold=0),
-                                                mask(argv.image, self.rois))
+                nodes.append((name, reco["type"], ocr_specs(reco)))
+            self.lists[argv.node_name] = nodes, [s[0] for *_, specs in nodes for s in specs or []]
+        nodes, rois = self.lists[argv.node_name]
+        detail = context.run_recognition_direct(JRecognitionType.OCR, JOCR(roi=tuple(union(rois)), threshold=0), mask(argv.image, rois))
         results = [(tuple(r.box), r.text, r.score) for r in (detail.all_results if detail else [])]
-        if not (picked := pick(self.nodes, results)):
+        if not (picked := pick(nodes, results)):
             return None
         context.override_next(argv.node_name, ["NoBatchOCR", *picked, *param["tail"]])
         return CustomRecognition.AnalyzeResult(box=(0, 0, 1, 1), detail={"picked": picked})

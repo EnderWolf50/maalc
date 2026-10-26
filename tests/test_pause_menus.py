@@ -10,7 +10,7 @@ import numpy as np
 import pytest
 from numpy.lib.stride_tricks import sliding_window_view
 from PIL import Image
-from test_pipeline import load_nodes, strip, template_first
+from test_pipeline import hub_entries, load_nodes, strip, template_first
 
 REPO = Path(__file__).resolve().parent.parent
 SCREENS = REPO / "tests/screens"
@@ -125,7 +125,7 @@ def test_the_progress_panel_taps_continue_only():
 def test_the_progress_panel_is_answered_before_the_pages_it_opens_over():
     # #215: the back key on an event opens the panel over it; the event's own button (Continue, bottom right) still
     # reads, so its node acted first, and the panel closed by chance. A dialog is answered before the page under it.
-    entries = load_nodes()["HubText"]["custom_recognition_param"]["entries"]
+    entries = hub_entries(load_nodes(), "HubText")
     pages = ["Event", "Shop", "GiftGet", "GiftChoice", "RewardCard", "RewardCardForgo", "GiftRefuseDialog", "Victory",
              "WipeDialog", "Formation", "ThemePack"]
     assert all(entries.index("ProgressPanel") < entries.index(p) for p in pages)

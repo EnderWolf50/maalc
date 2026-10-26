@@ -1,15 +1,16 @@
 {
     // ClaimPassMissions (#371): the main window, the Limbus Pass banner, its Pass Missions tab, then the Daily and the
     // Weekly tab, one tap per row with a reward to claim (agent/pass_missions.py), and the main window again.
-    // The entry follows spec 01 (daily tasks): TaskStart, then GoHome run by GoHomeRun; the last step runs it again.
+    // The entry follows spec 01 (daily tasks): TaskStart, then GoHome run by GoHomeRun (PassHome); the last step
+    // (PassFinish, GoHomeDone) runs it again.
     "ClaimPassMissions": {
         "action": "Custom",
         "custom_action": "TaskStart",
         "next": [
-            "PassStart"
+            "PassHome"
         ]
     },
-    "PassStart": {
+    "PassHome": {
         "action": "Custom",
         "custom_action": "GoHomeRun",
         "next": [
@@ -63,7 +64,7 @@
     "PassMissionsTab": {
         "recognition": "TemplateMatch",
         "roi": [300, 36, 150, 44],
-        "template": "Pass/MissionsTab.png",
+        "template": "Pass/PassMissionsTab.png",
         "threshold": 0.97,
         "action": "Click",
         "post_delay": 2000,
@@ -87,7 +88,7 @@
     "PassDailyLit": {
         "recognition": "TemplateMatch",
         "roi": [246, 194, 54, 130],
-        "template": "Pass/DailyLit.png",
+        "template": "Pass/PassDailyLit.png",
         "threshold": 0.9
     },
     // Nothing left to claim on the Daily tab: the Weekly tab.
@@ -119,7 +120,7 @@
     "PassWeeklyLit": {
         "recognition": "TemplateMatch",
         "roi": [246, 336, 54, 130],
-        "template": "Pass/WeeklyLit.png",
+        "template": "Pass/PassWeeklyLit.png",
         "threshold": 0.9
     },
     // Nothing left to claim on the Weekly tab: main window, done.
@@ -129,6 +130,7 @@
             "PassWeeklyLit"
         ],
         "action": "Custom",
-        "custom_action": "PassFinish"
+        "custom_action": "GoHomeDone",
+        "custom_action_param": "pass missions claimed"
     }
 }

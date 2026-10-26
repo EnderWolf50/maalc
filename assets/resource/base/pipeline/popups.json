@@ -181,6 +181,29 @@
         "custom_action": "DismissShot",
         "post_delay": 1500
     },
+    // The server's and the client's own popups, which any page can show: the first entries of every hub's HubText node
+    // (MirrorHub's HubText, GoHome's HomeText, ClaimMail's MailText), which name it as their base. Read in one pass
+    // (hub_text.py, #157) like them.
+    "ServerPopups": {
+        "recognition": "Custom",
+        "custom_recognition": "HubText",
+        "custom_recognition_param": {
+            "entries": [
+                "RetryPopup",
+                "MaintenanceNotice",
+                "ClientOutdated",
+                "UpdateDialog",
+                "UserAgreement",
+                "DownloadDialog",
+                "Downloading",
+                "Loading"
+            ],
+            "tail": []
+        },
+        "pre_delay": 0,
+        "post_delay": 0,
+        "timeout": 0
+    },
     // A popup with one button in the middle (a server or network error on the title, an acknowledgement over a
     // page): nothing to decide, press it (#86, #85). Two-button dialogs keep their buttons apart, so a Cancel /
     // Confirm question is never answered here. The maintenance notice, also a lone Close, halts first.

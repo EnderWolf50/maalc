@@ -10,7 +10,7 @@ import pytest
 from PIL import Image
 
 import actions
-from test_pipeline import load_nodes
+from test_pipeline import hub_entries, load_nodes
 
 SCREENS = Path(__file__).parent / "screens"
 UNTICKED, TICKED = (np.asarray(Image.open(SCREENS / f"{n}.png").convert("RGB"))[:, :, ::-1].copy()
@@ -146,7 +146,7 @@ def test_a_client_too_old_for_the_server_stops_the_bot_without_a_tap(game):
     nodes = load_nodes()
     node = nodes["ClientOutdated"]
     assert node["action"] == "Custom" and node["custom_action"] == "Halt"
-    entries = nodes["HubText"]["custom_recognition_param"]["entries"]
+    entries = hub_entries(nodes, "HubText")
     assert entries.index("ClientOutdated") < min(entries.index("DownloadDialog"), entries.index("PopupButton"))
     argv = SimpleNamespace(node_name="ClientOutdated", custom_action_param=json.dumps(node["custom_action_param"]))
     assert not actions.Halt().run(game.ctx, argv)

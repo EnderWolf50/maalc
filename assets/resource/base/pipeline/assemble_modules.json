@@ -2,16 +2,16 @@
     // Assemble Enkephalin Modules (#370, spec 00 daily tasks): the main window's Enkephalin bar, then the Charge
     // Enkephalin window's Modules tab. 20 Enkephalin make a module; the bot taps nothing else of that window (never its
     // Use Lunacy tab). The screen is truth: every pass of the hub looks at what is up, GoHome (navigation.json) takes
-    // it to the main window first (AssembleStart); the task is done only from there (AssembleMain), its last step.
+    // it to the main window first (AssembleHome); the task is done only from there (AssembleMain), its last step.
     "AssembleModules": {
         "action": "Custom",
         "custom_action": "TaskStart",
         "next": [
-            "AssembleStart"
+            "AssembleHome"
         ]
     },
     // GoHome, the first step (spec 01, daily tasks): the main window, wherever the last task left the game.
-    "AssembleStart": {
+    "AssembleHome": {
         "action": "Custom",
         "custom_action": "GoHomeRun",
         "next": [
@@ -46,12 +46,19 @@
         "custom_action": "AssembleMain",
         "post_delay": 1500
     },
-    // The "Charge Enkephalin" title plate (tests/screens/EnkephalinPanel.png), on all three of its tabs.
-    "AssemblePanel": {
+    // The "Charge Enkephalin" title plate (tests/screens/EnkephalinPanel.png), on all three of its tabs: the window
+    // AssemblePanel and ChargePanel act on.
+    "EnkephalinWindow": {
         "recognition": "TemplateMatch",
         "roi": [500, 90, 280, 60],
-        "template": "Assemble/PanelTitle.png",
-        "threshold": 0.9,
+        "template": "Assemble/EnkephalinWindow.png",
+        "threshold": 0.9
+    },
+    "AssemblePanel": {
+        "recognition": "And",
+        "all_of": [
+            "EnkephalinWindow"
+        ],
         "action": "Custom",
         "custom_action": "AssemblePanel",
         "post_delay": 1000
@@ -62,6 +69,13 @@
         "roi": [305, 655, 180, 35],
         "expected": "\\d+\\s*/\\s*\\d+"
     },
+    // The Modules tab's own prompt (EnkephalinPanel.png): the Use Lunacy tab shows "n / cap" twice as well, so AssemblePanel
+    // reads this before it trusts the numbers, and never presses Confirm without it.
+    "AssemblePrompt": {
+        "recognition": "OCR",
+        "roi": [380, 470, 520, 40],
+        "expected": "(?i)assemble enkephalin modules"
+    },
     // The Modules tab's Enkephalin before and after: "22 / 136 > 2 / 136".
     "AssembleAfter": {
         "recognition": "OCR",
@@ -69,7 +83,8 @@
         "expected": "\\d+\\s*/\\s*\\d+"
     },
     // The game's refusal when the modules are at their limit (EN_ShopUI: "Cannot assemble Modules; you have too many in
-    // storage."). No capture yet, so the roi is wide; read by AssemblePanel after each tap.
+    // storage."). No capture yet, so the roi is wide; read by AssemblePanel after each tap. TODO: narrow it to the
+    // message's box once a live capture of it exists (review T5).
     "AssembleTooMany": {
         "recognition": "OCR",
         "roi": [300, 150, 680, 420],

@@ -23,3 +23,12 @@ def rows(png):
 ])
 def test_claimable_rows(png, expected):
     assert rows(png) == expected
+
+
+def test_no_other_screen_has_a_row_to_claim():
+    # Review T2, the thresholds' sweep over every 720p image of tests/screens (151 on 2026-10-26): only the synthetic
+    # claimable row hits. The margins are in pass_missions.py.
+    hits = {png.name: found for png in sorted(SCREENS.glob("*.png"))
+            if (image := np.asarray(Image.open(png).convert("RGB"))[:, :, ::-1]).shape[:2] == (720, 1280)
+            and (found := pass_missions.claimable(image))}
+    assert hits == {"PassMissionsWeeklyClaimable.synthetic.png": [(370, 225)]}
