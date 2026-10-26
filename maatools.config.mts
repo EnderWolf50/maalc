@@ -101,8 +101,12 @@ const screens: [image: string, hits: string[]][] = [
   // The rows to claim are read by the agent (PassClaimable, tests/test_pass_missions.py), which this test cannot run.
   ['PassBattlePass.png', ['PassMissionsTab']],
   ['PassMissionsDaily.png', ['PassDailyLit', 'PassDailyDone']],
-  ['PassMissionsWeekly.png', ['PassWeeklyLit', 'PassFinish']],
-  ['PassMissionsWeeklyClaimable.synthetic.png', ['PassWeeklyLit', 'PassFinish']],
+  ['PassMissionsDailyUnderway.png', ['PassDailyLit', 'PassDailyDone']],  // live 2026-10-27: one claimed, four under way
+  ['PassMissionsWeekly.png', ['PassWeeklyLit', 'PassWeeklyDone']],
+  ['PassMissionsWeeklyClaimable.synthetic.png', ['PassWeeklyLit', 'PassWeeklyDone']],
+  // Live 2026-10-27 (#362 D9): the Seasonal tab at its top and at its end after one swipe, every row claimed.
+  ['PassMissionsSeasonal.png', ['PassSeasonalLit', 'PassSeasonalSwipe', 'PassFinish']],
+  ['PassMissionsSeasonalEnd.png', ['PassSeasonalLit', 'PassSeasonalSwipe', 'PassFinish']],
   ['EntryNewRun.png', ['MirrorEntryNewRun']],
   ['EntryPaused.png', ['MirrorEntryPaused']],
   // Synthetic (#94), no live capture yet: EntryNewRun.png with the Parallel Superposition label's OFF redrawn as ON.

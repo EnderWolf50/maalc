@@ -19,7 +19,7 @@ zip 不是安裝程式，也不會自動更新；換版時下載新 zip，把舊
 | 換腦啡肽模組（`AssembleModules`） | 把腦啡肽換成模組，沒有參數 |
 | 經驗本（`ExpLuxcavation`） | 打 EXP 分頁最右邊已開放的最難關 |
 | 紐本（`ThreadLuxcavation`） | 打 Thread 分頁今天開放的異想體，選最難的一級 |
-| 領通行證任務（`ClaimPassMissions`） | 領 Limbus Pass 的 Daily、Weekly 任務，沒有參數 |
+| 領通行證任務（`ClaimPassMissions`） | 領 Limbus Pass 的 Daily、Weekly、Seasonal 任務，沒有參數 |
 | 領信（`ClaimMail`） | 信箱 Claim All，沒有參數 |
 | 狂氣換腦啡肽（`ChargeEnkephalin`） | 用 Lunacy 換腦啡肽 |
 | 鏡牢（`MirrorDungeon`） | 見 `maalc-gui.exe` 的其他分頁 |

@@ -1,6 +1,7 @@
 {
-    // ClaimPassMissions (#371): the main window, the Limbus Pass banner, its Pass Missions tab, then the Daily and the
-    // Weekly tab, one tap per row with a reward to claim (agent/pass_missions.py), and the main window again.
+    // ClaimPassMissions (#371): the main window, the Limbus Pass banner, its Pass Missions tab, then the Daily, the Weekly
+    // and the Seasonal tab (#362 D9), one tap per row with a reward to claim (agent/pass_missions.py), and the main window
+    // again. A tab's taps have a limit (max_hit); once it is used up the next tab follows, not a failure.
     // The entry follows spec 01 (daily tasks): TaskStart, then GoHome run by GoHomeRun (PassHome); the last step
     // (PassFinish, GoHomeDone) runs it again.
     "ClaimPassMissions": {
@@ -33,6 +34,10 @@
             "[JumpBack]PassDailyClaim",
             "[JumpBack]PassDailyDone",
             "[JumpBack]PassWeeklyClaim",
+            "[JumpBack]PassWeeklyDone",
+            "[JumpBack]PassSeasonalClaim",
+            "[JumpBack]PassSeasonalSwipe",
+            "[JumpBack]PassSeasonalEndClaim",
             "[JumpBack]PassFinish",
             "[JumpBack]PassMissionsTab",
             "[JumpBack]PassBanner"
@@ -123,11 +128,77 @@
         "template": "Pass/PassWeeklyLit.png",
         "threshold": 0.9
     },
-    // Nothing left to claim on the Weekly tab: main window, done.
-    "PassFinish": {
+    // Nothing left to claim on the Weekly tab: the Seasonal tab (#362 D9).
+    "PassWeeklyDone": {
         "recognition": "And",
         "all_of": [
             "PassWeeklyLit"
+        ],
+        "action": "Click",
+        "target": [256, 490, 30, 100],
+        "post_delay": 2000,
+        "max_hit": 2
+    },
+    // The Seasonal tab's ten rows (live 2026-10-27): the five on show at its top first.
+    "PassSeasonalClaim": {
+        "recognition": "And",
+        "all_of": [
+            {
+                "recognition": "Custom",
+                "sub_name": "PassSeasonalRows",
+                "custom_recognition": "PassClaimable"
+            },
+            "PassSeasonalLit"
+        ],
+        "box_index": 0,
+        "action": "Click",
+        "post_delay": 1500,
+        "max_hit": 8
+    },
+    "PassSeasonalLit": {
+        "recognition": "TemplateMatch",
+        "roi": [246, 478, 54, 130],
+        "template": "Pass/PassSeasonalLit.png",
+        "threshold": 0.9
+    },
+    // Then one swipe up, which takes the list to its end (live 2026-10-27: a second one moved nothing). Once only: quick
+    // swipes in a row once left the game not responding.
+    "PassSeasonalSwipe": {
+        "recognition": "And",
+        "all_of": [
+            "PassSeasonalLit"
+        ],
+        "action": "Swipe",
+        "begin": [520, 560, 1, 1],
+        "end": [520, 200, 1, 1],
+        "duration": 600,
+        "post_delay": 2000,
+        "max_hit": 1
+    },
+    // The rows at the list's end sit 10 px lower than at its top (tests/screens/PassMissionsSeasonalEnd.png).
+    "PassSeasonalEndClaim": {
+        "recognition": "And",
+        "all_of": [
+            {
+                "recognition": "Custom",
+                "sub_name": "PassSeasonalEndRows",
+                "custom_recognition": "PassClaimable",
+                "custom_recognition_param": {
+                    "dy": 10
+                }
+            },
+            "PassSeasonalLit"
+        ],
+        "box_index": 0,
+        "action": "Click",
+        "post_delay": 1500,
+        "max_hit": 8
+    },
+    // Nothing left to claim on the Seasonal tab: main window, done.
+    "PassFinish": {
+        "recognition": "And",
+        "all_of": [
+            "PassSeasonalLit"
         ],
         "action": "Custom",
         "custom_action": "GoHomeDone",
