@@ -88,6 +88,8 @@ const screens: [image: string, hits: string[]][] = [
   ['ResumeDialog.png', ['ResumeDialog', 'MirrorEntryPaused', 'RecoverToWindow']],  // the entry page reads through it
   ['EnterDialog.png', ['MirrorEnterDialog', 'MirrorEntryNewRun']],
   ['TeamSelect.png', ['TeamSelect']],
+  // Live 2026-10-26 (#366): Enter on the EXP tab opens the same page, To Battle! for Confirm (ExpTeamSelect needs both).
+  ['ExpTeamSelect.png', ['TeamSelect', 'ExpTeamSelect']],
   ['LevelWarning.png', ['LevelWarning', 'TeamSelect']],
   ['StarlightPage.png', ['StarlightPage']],
   ['StarlightConfirm.png', ['StarlightConfirm', 'StarlightPage']],

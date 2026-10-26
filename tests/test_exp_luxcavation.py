@@ -2,7 +2,8 @@
 and the rightmost open stage's Enter; one battle later, back to the main window, a success.
 
 The real task on the repo's resource bundle in MaaFramework 5.14.3, as test_go_home.py: a screenshot per screen, taps
-and the back key that move between them. The pages after Enter (team, formation, battle, results) have no capture
+and the back key that move between them. Enter opens the team page (ExpTeamSelect.png): the model picks the
+TEAMS row and To Battle! there. The pages after To Battle! (level warning, start confirm, battle, results) have no capture
 yet: the model plays them as one unknown screen that gives way to the EXP tab again. The task runs in a child process
 (this file run as a script): the pytest process holds MaaFramework in AgentServer mode.
 """
@@ -27,10 +28,12 @@ DRIVE_TAB = (930, 600, 110, 80)
 LUXCAVATION = (355, 97, 190, 125)  # Drive's Luxcavation button
 EXP_TAB = (68, 234, 154, 60)
 ENTERS = {"exp": (1000, 455, 240, 50), "locked": (660, 455, 240, 50)}  # stage 9's Enter: the rightmost, the middle card
+TEAM_ROW = (75, 365, 110, 36)  # the TEAMS #3 row of the team page's list (ExpTeamSelect.png)
+TO_BATTLE = (1070, 560, 150, 55)
 FIGHT_SHOTS = 3  # screenshots the pages after Enter take before the EXP tab shows again
 
 SCREENS = {"main": "MainWindow.png", "drive": "Drive.png", "exp": "LuxExp.png", "locked": "LuxExpLocked.png",
-           "thread": "LuxThread.png", "fight": None}
+           "thread": "LuxThread.png", "team": "ExpTeamSelect.png", "fight": None}
 
 
 def inside(box, x, y):
@@ -55,6 +58,7 @@ def child():
     actions.ROOT = Path(tempfile.mkdtemp())
     (actions.ROOT / "config").mkdir()
     settings = json.loads((ROOT / "tests" / "settings_cases.json").read_text(encoding="utf-8"))["valid"]
+    settings["teams"][1]["game_team"] = 3  # the row ExpTeamSelect.png has lit
     images = {name: np.ascontiguousarray(np.array(Image.open(ROOT / "tests" / "screens" / png).convert("RGB"))[:, :, ::-1])
               if png else np.full((720, 1280, 3), 40, np.uint8) for name, png in SCREENS.items()}
 
@@ -62,7 +66,8 @@ def child():
         """The screen the game shows and what a tap or the back key does there."""
 
         def set(self, screen):
-            self.screen, self.clicks, self.keys, self.shots, self.stage = screen, [], [], 0, "exp" if screen != "locked" else "locked"
+            self.screen, self.clicks, self.keys, self.shots, self.picked = screen, [], [], 0, False
+            self.stage = "exp" if screen != "locked" else "locked"
 
         def connect(self):
             return True
@@ -89,18 +94,23 @@ def child():
             elif s == "thread" and inside(EXP_TAB, x, y):
                 self.screen = self.stage
             elif s in ENTERS and inside(ENTERS[s], x, y):
+                self.screen = "team"
+            elif s == "team" and inside(TEAM_ROW, x, y):
+                self.picked = True
+            elif s == "team" and self.picked and inside(TO_BATTLE, x, y):
                 self.screen, self.shots = "fight", 0
             return True
 
         def touch_down(self, contact, x, y, pressure):
-            self.down = (x, y)
+            self.down, self.dragged = (x, y), False
             return True
 
         def touch_move(self, contact, x, y, pressure):
+            self.dragged = True  # the team list's scroll: a drag, not a tap
             return True
 
         def touch_up(self, contact):
-            return self.click(*self.down)
+            return True if self.dragged else self.click(*self.down)
 
         def key_down(self, keycode):
             return True
@@ -121,7 +131,7 @@ def child():
     game.set("main")
     game.post_connection().wait()
     resource.post_bundle(ROOT / "assets" / "resource" / "base").wait()
-    for name in ("ExpStart", "ExpEnter", "GoHomeRun", "StopTask", "DismissShot", "AcceptUpdate", "AcceptTerms", "ConfirmDownload",
+    for name in ("ExpStart", "ExpEnter", "ExpSelectTeam", "GoHomeRun", "StopTask", "DismissShot", "AcceptUpdate", "AcceptTerms", "ConfirmDownload",
                  "Halt", "TapUntil", "PlayTurn", "HoldTurn", "Victory"):
         resource.register_custom_action(name, getattr(actions, name)())
     for name in ("GameAway", "HomeText", "ExpText", "StuckFlag", "DoneFlag"):
@@ -157,11 +167,14 @@ def test_exp_luxcavation_goes_home_first_enters_the_rightmost_open_stage_and_end
     o = out["drive"]
     assert o["succeeded"], o["nodes"]
     taps = o["clicks"]
-    # GoHome first (the Window tab), then Drive, Luxcavation, the EXP tab (Thread was open), stage 9's Enter
-    assert [inside(box, *xy) for box, xy in zip((WINDOW_TAB, DRIVE_TAB, LUXCAVATION, EXP_TAB, ENTERS["exp"]), taps)] == [True] * 5
-    assert taps.count(taps[4]) == 1  # one battle
+    # GoHome first (the Window tab), then Drive, Luxcavation, the EXP tab (Thread was open), stage 9's Enter, the team's
+    # row (TEAMS #3) and To Battle!
+    steps = (WINDOW_TAB, DRIVE_TAB, LUXCAVATION, EXP_TAB, ENTERS["exp"], TEAM_ROW, TO_BATTLE)
+    assert [inside(box, *xy) for box, xy in zip(steps, taps)] == [True] * 7
+    assert taps.count(taps[4]) == 1 and taps.count(taps[6]) == 1  # one battle
     # Back on the EXP tab after it: done, and GoHome again (the back key, then the Window tab)
-    assert o["keys"] == [4] and inside(WINDOW_TAB, *taps[-1]) and len(taps) == 6
+    assert o["keys"] == [4] and inside(WINDOW_TAB, *taps[-1]) and len(taps) == 8
+    assert o["nodes"].count("ExpTeamSelect") == 1
     assert o["nodes"][:3] == ["ExpLuxcavation", "ExpHome", "ExpHub"] and o["nodes"][-1] == "TaskDone"
 
 

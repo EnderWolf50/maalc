@@ -15,9 +15,9 @@
             "ExpHub"
         ]
     },
-    // The pages after Enter (team, formation, results) have no capture yet (#366): their screens time out here and
-    // the task stops with evidence, a failure the client's list goes past. Stuck (the watchdog: the same screen over
-    // and over) stops it too: no recovery ladder on the daily pages yet.
+    // The pages after To Battle! (level warning, start confirm, results) have no capture yet (#366): their screens time
+    // out here and the task stops with evidence, a failure the client's list goes past. Stuck (the watchdog: the same
+    // screen over and over) stops it too: no recovery ladder on the daily pages yet.
     "ExpHub": {
         "timeout": 60000,
         "rate_limit": 300,
@@ -31,6 +31,7 @@
             "[JumpBack]Connecting",
             "[JumpBack]HelpPager",
             "[JumpBack]ExpText",
+            "[JumpBack]ExpTeamSelect",
             "[JumpBack]LuxExpEnter",
             "[JumpBack]LuxExpTab",
             "[JumpBack]NavLuxcavation",
@@ -82,6 +83,28 @@
     },
     "ExpTextLost": {
         "pre_delay": 0,
+        "post_delay": 0
+    },
+    // Enter opens the mirror's team page (tests/screens/ExpTeamSelect.png, TeamSelect.png): the TEAMS list at the left,
+    // the same rows and taps (pick_team_slot), but To Battle! at the bottom right where the mirror's has Confirm.
+    "ExpTeamSelect": {
+        "recognition": "And",
+        "all_of": [
+            {
+                "recognition": "OCR",
+                "sub_name": "ExpTeamsHeader",
+                "roi": [80, 272, 100, 28],
+                "expected": "^TEAMS$"
+            },
+            {
+                "recognition": "OCR",
+                "sub_name": "ExpToBattle",
+                "roi": [1075, 570, 140, 38],
+                "expected": "To Battle"
+            }
+        ],
+        "action": "Custom",
+        "custom_action": "ExpSelectTeam",
         "post_delay": 0
     },
     // Drive's Luxcavation button (tests/screens/Drive.png).

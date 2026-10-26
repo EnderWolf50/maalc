@@ -57,6 +57,7 @@ WEEKLY_SLOTS = (922, 960, 998)  # x of the 3 Weekly Bonuses slots on the entry p
 TEAM_LIST = [75, 292, 115, 245]
 ENTER_DIALOG = [400, 325, 480, 45]  # "Will you enter ...?"
 TEAM_TITLE = [220, 112, 210, 26]  # "TEAMS #n" over the card list
+TO_BATTLE = (1145, 588)  # the team page's button before a Luxcavation battle
 LEVEL_WARNING = [400, 230, 480, 90]  # "... lower than the recommended level ..."
 STARLIGHT_HEADER = [890, 30, 115, 28]  # "Available"
 STARLIGHT_DIALOG = [480, 210, 320, 35]  # "Continue with selected effects?"
@@ -844,11 +845,11 @@ def team_rows(context, image):
     return visible
 
 
-def team_list_top(context):
+def team_list_top(context, home="TeamSelect"):
     """Drag the picker list to its top, a stroke at a time until the rows on show stay (#226): it opens where it was left."""
     seen = None
     for k in range(15):
-        rows = team_rows(context, page_guard(context, "TeamSelect"))
+        rows = team_rows(context, page_guard(context, home))
         if rows and rows == seen:  # no rows read is not a list at rest
             log(f"team list at its top after {k - 1} drags that moved it")
             return
@@ -857,34 +858,62 @@ def team_list_top(context):
     log("team list still moving after 15 drags: looking for the team from here")
 
 
+def pick_team_slot(context, n, home="TeamSelect"):
+    """Drag the picker list to its top, tap the in-game TEAMS #N row and check the title: that screenshot, or None when
+    15 strokes found no such row. home: the node of the page (the mirror's TeamSelect, ExpTeamSelect) for page_guard."""
+    team_list_top(context, home)
+    for _ in range(15):
+        visible = team_rows(context, page_guard(context, home))
+        move = run_start.team_list_move(visible, n)
+        if move == "down":
+            scroll(context, 130, 480, 0, -140)
+        elif move == "up":
+            scroll(context, 130, 340, 0, 140)
+        else:
+            image = tap_then(context, 130, move[1], shows(context, TEAM_TITLE, rf"#\s*{n}\b"))
+            if image is not None:
+                return image
+    return None
+
+
 @AgentServer.custom_action("SelectTeam")
 class SelectTeam(CustomAction):
-    """Drag the team list to its top, pick the team's in-game TEAMS #N slot, check the title, press Confirm."""
+    """Pick the team's in-game TEAMS #N slot (pick_team_slot), press Confirm."""
 
     @hands_back
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         # No plan here means a run resumed on the entry page, paused before team selection: the entry page only
         # offers Resume again, so backing out looped (#128). Make one up from settings, as after a restart.
         n = current_run(context)["team"]["game_team"]
-        team_list_top(context)
-        for _ in range(15):
-            visible = team_rows(context, page_guard(context, "TeamSelect"))
-            move = run_start.team_list_move(visible, n)
-            if move == "down":
-                scroll(context, 130, 480, 0, -140)
-            elif move == "up":
-                scroll(context, 130, 340, 0, 140)
-            else:
-                image = tap_then(context, 130, move[1], shows(context, TEAM_TITLE, rf"#\s*{n}\b"))
-                if image is not None:
-                    bonus = number(text(context, image, [1160, 522, 60, 34]))
-                    log(f"team TEAMS #{n}, Starlight Bonus {bonus}")
-                    # LevelWarning when the team is under the recommended level, else the starlight page; the team page
-                    # reads through the warning, so leaving it early would have MirrorHub pick the team twice.
-                    warning, starlight = shows(context, LEVEL_WARNING, "recommended level"), shows(context, STARLIGHT_HEADER, "Available")
-                    tap_then(context, 1145, 587, lambda im: warning(im) or starlight(im), timeout=4)
-                    return True
-        return stop(context, f"could not select TEAMS #{n}")
+        image = pick_team_slot(context, n)
+        if image is None:
+            return stop(context, f"could not select TEAMS #{n}")
+        bonus = number(text(context, image, [1160, 522, 60, 34]))
+        log(f"team TEAMS #{n}, Starlight Bonus {bonus}")
+        # LevelWarning when the team is under the recommended level, else the starlight page; the team page
+        # reads through the warning, so leaving it early would have MirrorHub pick the team twice.
+        warning, starlight = shows(context, LEVEL_WARNING, "recommended level"), shows(context, STARLIGHT_HEADER, "Available")
+        tap_then(context, 1145, 587, lambda im: warning(im) or starlight(im), timeout=4)
+        return True
+
+
+@AgentServer.custom_action("ExpSelectTeam")
+class ExpSelectTeam(CustomAction):
+    """ExpHub's team page (#366): the mirror's page, with To Battle! where it has Confirm. Pick the team
+    luxcavation.exp names once, then press To Battle! until the page goes. What follows it has no capture yet."""
+
+    @hands_back
+    def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
+        n = RUN["team"]["game_team"]
+        if not RUN.get("team_picked"):
+            if pick_team_slot(context, n, "ExpTeamSelect") is None:
+                return stop(context, f"EXP Luxcavation: could not select TEAMS #{n}")
+            RUN["team_picked"] = True
+            log(f"EXP Luxcavation: TEAMS #{n}")
+        # A dialog over the page reads through it: the page staying is for the watchdog (ExpStuck) to judge.
+        if tap_then(context, *TO_BATTLE, lambda im: not seen(context, im, "ExpTeamSelect"), timeout=4) is None:
+            log("EXP Luxcavation: To Battle! pressed, the team page stays")
+        return True
 
 
 def grace_box(n):
