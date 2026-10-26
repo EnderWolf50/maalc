@@ -854,6 +854,9 @@ class PlanRun(CustomAction):
             return done(f"{TASK['runs']} of {run['runs']} runs done")
         if run["stop_when_weekly_bonus_out"] and weekly == 0:
             return done("weekly bonuses used up")
+        modules = modules_now(context, timeout=1)  # the entry page has no panel as of the captures: None, the run goes on
+        if not settlement.can_claim(modules):
+            return done(f"Modules {modules} < {settlement.CLAIM_COST}, one Claim could not be paid: no new run")
         difficulty = run_start.run_difficulty(run["difficulty"], weekly)
         team = pick_team(settings["teams"], read_cursor(ROOT, address(context)), difficulty)
         if team is None:

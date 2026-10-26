@@ -66,6 +66,14 @@ def counts_as_run(result):
     return result == "clear"
 
 
+CLAIM_COST = 5  # the Enkephalin Modules one Claim takes (Claim, spec 03 section 14)
+
+
+def can_claim(modules):
+    """A new run may start: the Modules cover one Claim. An unread panel (None) does not block it (#369)."""
+    return modules is None or modules >= CLAIM_COST
+
+
 def runs_done(done, limit):
     """Whether the run count is reached: limit None (the switch off) means no limit (spec 04 section 5)."""
     return limit is not None and done >= limit
