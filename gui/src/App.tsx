@@ -8,7 +8,7 @@ import { TeamsTab } from "./Teams";
 import { EditorContext, Field, Num, Select, ToggleNum, useEditor, type Ctx } from "./ui";
 import { validate, type Problem } from "./validate";
 
-const TABS = [
+export const TABS = [
   ["run", "tab.run", RunTab, ["run"]],
   ["teams", "tab.teams", TeamsTab, ["teams"]],
   ["deployment", "tab.deployment", DeploymentTab, ["deployment_order_plans"]],
@@ -16,7 +16,7 @@ const TABS = [
   ["themepacks", "tab.themepacks", ThemePackTab, ["theme_pack_plans"]],
   ["events", "tab.events", EventsTab, ["event_overrides"]],
   ["trials", "tab.trials", TrialsTab, ["trial_risk_overrides"]],
-  ["daily", "tab.daily", DailyTab, ["luxcavation"]],
+  ["daily", "tab.daily", DailyTab, ["luxcavation", "charge_enkephalin"]],
 ] as const;
 
 const toText = (s: Settings) => JSON.stringify(s, null, 2) + "\n";

@@ -18,7 +18,8 @@
     // from the main window; the PI task GoHome runs it alone. Done once the Window tab is lit, not before the popups
     // are dealt with (the settings menu leaves it lit). The Window tab is tapped while the bar shows with another tab
     // open; a page with no bar gets the back key, at most 5 times (HomeBack's max_hit). The popups are HubText's
-    // (no OCR batching, #157), the game away from the front starts it, and 60 s of nothing known ends the task.
+    // (no OCR batching, #157), the game away from the front starts it, and 60 s of nothing known (the back keys used up
+    // too) restarts the game and goes again (HomeLost, #362), the stop procedure once the restarts are used up.
     "GoHome": {
         "timeout": 60000,
         "rate_limit": 300,
@@ -38,8 +39,10 @@
     },
     "GoHomeLost": {
         "action": "Custom",
-        "custom_action": "StopTask",
-        "custom_action_param": "the main window was not reached"
+        "custom_action": "HomeLost",
+        "next": [
+            "GoHome"
+        ]
     },
     // The global popups the main window or the title can show (popups.json), read in one pass (hub_text.py): the
     // server's (ServerPopups), then the main window's own.

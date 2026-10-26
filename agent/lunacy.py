@@ -15,22 +15,22 @@ PRICES = (26, 52, 78, 104, 130, 156, 182, 208, 234, 260)
 DAILY_MAX = len(PRICES)
 
 
-def check(price, count, expected):
-    """What to do with the price the Recharge prompt shows: (verdict, charges bought today, why).
+def check(price, charged, count, expected):
+    """What to do with the price the Recharge prompt shows: (verdict, its step in the table, why).
 
-    count: the day's charges the settings ask for, today's included. expected: the charges bought today when this task
-    knows (its own Confirms after its first price), else None: the first price says how many were bought before it,
-    by hand or by an earlier run. Any price the table lacks, or that is not the one after the last Confirm, is a STOP:
-    the screen is not what the task thinks, and nothing is charged.
+    charged: this run's Confirms so far; count: the charges this run asks for (charge_enkephalin.count), whatever was
+    charged earlier today. expected: the step the price must be at after this run's last Confirm, None before the first.
+    Any price the table lacks, or that is not the step after the last Confirm, is a STOP: the screen is not what the
+    task thinks, and nothing is charged. The table's last step is the day's last charge: the caller ends after it.
     """
     if price not in PRICES:
-        return STOP, 0, f"the price {price} is not in the game's table {PRICES}"
-    bought = PRICES.index(price)
-    if expected is not None and bought != expected:
-        return STOP, bought, f"the price {price} is charge {bought + 1} of the day, expected charge {expected + 1}"
-    if bought >= count:
-        return DONE, bought, f"{bought} of the day's {count} charges are done"
-    return CHARGE, bought, f"price {price}, charge {bought + 1} of {count}"
+        return STOP, None, f"the price {price} is not in the game's table {PRICES}"
+    step = PRICES.index(price)
+    if expected is not None and step != expected:
+        return STOP, step, f"the price {price} is charge {step + 1} of the day, expected charge {expected + 1}"
+    if charged >= count:
+        return DONE, step, f"{charged} of {count} charges done"
+    return CHARGE, step, f"price {price}, charge {charged + 1} of {count} (the day's {step + 1})"
 
 
 def read_price(texts):

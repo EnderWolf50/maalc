@@ -85,7 +85,10 @@ def child():
     tasker.bind(resource, controller)
     actions.TASK["done"] = "left by the last task"
     detail = tasker.post_task("MirrorDungeon").wait().get()
-    out.update(succeeded=detail.status.succeeded, nodes=[n.name for n in detail.nodes])
+    out.update(succeeded=detail.status.succeeded, nodes=[n.name for n in detail.nodes], first_starts=out["starts"])
+    actions.STUCK["halted"] = "maintenance"  # D8: an account-level stop earlier this launch
+    detail = tasker.post_task("MirrorDungeon").wait().get()
+    out["after_halt"] = {"succeeded": detail.status.succeeded, "nodes": [n.name for n in detail.nodes]}
     print(json.dumps(out))
 
 
@@ -94,9 +97,15 @@ def test_a_task_with_nothing_left_to_do_ends_a_success_on_task_done():
     assert run.returncode == 0, run.stderr[-2000:]
     out = json.loads(run.stdout.strip().splitlines()[-1])
     assert out["error"] is None, out["error"]
-    assert out["starts"] == 1 and out["done_was"] is None
+    assert out["first_starts"] == 1 and out["done_was"] is None
     assert out["succeeded"] is True
     assert out["nodes"][0] == "MirrorDungeon" and out["nodes"][-1] == "TaskDone"
+
+
+def test_a_task_after_an_account_level_stop_fails_at_its_entry_node():
+    run = subprocess.run([sys.executable, __file__], capture_output=True, text=True, timeout=300, cwd=ROOT)
+    out = json.loads(run.stdout.strip().splitlines()[-1])
+    assert out["after_halt"] == {"succeeded": False, "nodes": ["MirrorDungeon"]}
 
 
 def test_each_task_starts_with_a_clean_slate_but_the_game_restarts_count_per_launch(context, monkeypatch):
@@ -110,11 +119,46 @@ def test_each_task_starts_with_a_clean_slate_but_the_game_restarts_count_per_lau
     actions.STUCK["ladder"].stuck("MirrorMap", 1, 0)
     actions.SCREENS.append(np.zeros((720, 1280, 3), np.uint8))
     assert actions.TaskStart().run(context, SimpleNamespace(node_name="MirrorDungeon")) is True
-    assert actions.RUN == {} and actions.TASK == {"runs": 0, "done": None} and not actions.SCREENS
+    assert actions.RUN == {} and actions.TASK == {"runs": 0, "done": None, "entry": "MirrorDungeon", "ended": False} and not actions.SCREENS
     assert (actions.STUCK["flag"], actions.STUCK["kind"]) == (None, None)
     assert actions.STUCK["ladder"].counts == recovery.Ladder().counts
     assert not actions.STUCK["watch"].held(1.0)
     assert (actions.STUCK["l3"], actions.STUCK["updates"]) == (2, 1)
+
+
+def interrupted_run(context, how):
+    """MirrorDungeon starts a run, then ends as how says; the next task's TaskStart runs. RUN afterwards."""
+    actions.TaskStart().run(context, SimpleNamespace(node_name="MirrorDungeon"))
+    actions.RUN.update(settings={"run": {"webhook_url": ""}}, team={"id": "t1", "name": "A"}, planned=True, floor=3)
+    actions.TASK["runs"] = 1
+    how()
+    return actions.TaskStart().run(context, SimpleNamespace(node_name=next_task)) and dict(actions.RUN)
+
+
+next_task = "MirrorDungeon"
+
+
+def test_a_task_the_client_interrupted_leaves_its_run_to_the_same_task(context):
+    # D3 (#362): no done(), no stop(): the client stopped the task mid-run, so MirrorDungeon picks the same run up, as
+    # before the task chain. Its own state still starts over: the task's runs, the ladder, the screens.
+    run = interrupted_run(context, lambda: None)
+    assert run["floor"] == 3 and run["team"]["id"] == "t1" and run["planned"]
+    assert actions.TASK["runs"] == 0 and actions.STUCK["ladder"].counts == recovery.Ladder().counts
+
+
+@pytest.mark.parametrize("how", [
+    lambda: actions.done("1 of 1 runs done"),
+    lambda: actions.stop(MagicMock(), "recovery used up"),
+])
+def test_a_task_that_ended_by_done_or_the_stop_procedure_leaves_no_run(context, monkeypatch, how):
+    monkeypatch.setattr(actions, "screen", lambda context: np.zeros((720, 1280, 3), np.uint8))
+    assert interrupted_run(context, how) == {}
+
+
+def test_an_interrupted_run_does_not_reach_another_task(context, monkeypatch):
+    # Not the same task: a daily task's stop would write the Mirror Dungeon run's runs.jsonl line.
+    monkeypatch.setattr(sys.modules[__name__], "next_task", "ExpLuxcavation")
+    assert interrupted_run(context, lambda: None) == {}
 
 
 def entry_page(context, edit=lambda run, teams: None):
@@ -191,6 +235,42 @@ def test_an_account_level_stop_ends_the_whole_task_list(context, action, run):
     assert getattr(actions, action)().run(context, argv) is False
     context.tasker.post_stop.assert_called_once()
     assert list((actions.ROOT / "logs" / "evidence").iterdir())  # the stop procedure ran first
+
+
+def test_an_update_that_keeps_coming_back_ends_the_whole_task_list(context, monkeypatch):
+    # D1 (#362): the game asks for an update past its restarts with auto_download on: every later task would meet it.
+    monkeypatch.setitem(actions.STUCK, "updates", actions.UPDATE_RESTARTS)
+    actions.RUN["settings"] = {"run": {"webhook_url": "", "auto_download": True}}
+    argv = SimpleNamespace(node_name="UpdateDialog", custom_action_param=None, box=[0, 0, 10, 10])
+    assert actions.AcceptUpdate().run(context, argv) is False
+    context.tasker.post_stop.assert_called_once()
+    context.tasker.controller.post_click.assert_not_called()
+
+
+def test_every_task_after_an_account_level_stop_fails_at_its_entry_without_a_tap_or_a_webhook(context, monkeypatch):
+    # D8 (#362): MFAAvalonia hands the tasker one task at a time, so post_stop does not reach the next: the agent
+    # remembers the stop for this launch, and each later entry fails before anything (no evidence, no webhook).
+    urlopen = MagicMock()
+    monkeypatch.setattr(actions.urllib.request, "urlopen", urlopen)
+    actions.RUN["settings"] = {"run": {"webhook_url": "http://hook.invalid/"}}
+    argv = SimpleNamespace(node_name="MaintenanceNotice", custom_action_param='"maintenance"', box=[0, 0, 10, 10])
+    assert actions.Halt().run(context, argv) is False and urlopen.call_count == 1
+    evidence = list((actions.ROOT / "logs" / "evidence").iterdir())
+    context.reset_mock()
+    for start, node, param in [(actions.TaskStart, "ClaimMail", None), (actions.LuxStart, "ExpLuxcavation", '"exp"'),
+                               (actions.ChargeStart, "ChargeEnkephalin", None)]:
+        assert start().run(context, SimpleNamespace(node_name=node, custom_action_param=param)) is False, node
+    assert urlopen.call_count == 1 and list((actions.ROOT / "logs" / "evidence").iterdir()) == evidence
+    assert not context.method_calls and not context.tasker.controller.method_calls  # no tap, no key, no screenshot
+    assert any("skip: account-level stop earlier this launch" in line for line in actions.LOG)
+
+
+def test_the_account_level_stop_is_remembered_for_the_whole_launch(context):
+    actions.RUN["settings"] = {"run": {"webhook_url": ""}}
+    actions.stop(context, "recovery used up")
+    assert actions.STUCK["halted"] is None  # one task's stop: the next task runs
+    actions.stop(context, "maintenance", whole_list=True)
+    assert actions.STUCK["halted"] == "maintenance"
 
 
 def test_a_stop_of_one_task_leaves_the_list_running(context):

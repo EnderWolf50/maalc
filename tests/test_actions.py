@@ -50,6 +50,7 @@ def context(clock, monkeypatch, tmp_path):
     actions.RUN.clear()
     actions.RUN.update(settings={}, team={})  # a run plan in memory
     actions.STUCK["flag"] = None
+    monkeypatch.setitem(actions.STUCK, "halted", None)  # no account-level stop this launch; a test's own is undone after
     yield ctx
     actions.RUN.clear()
     actions.STUCK["flag"] = None

@@ -13,7 +13,7 @@ from pathlib import Path
 import numpy as np
 from daily_child import ROOT, bind, game_class, load, result, run_child, screen
 
-ENK_BAR, TAB, CONFIRM, CANCEL = (440, 640), (640, 225), (760, 534), (520, 534)
+ENK_BAR, TAB, CONFIRM, CANCEL = (440, 640), (639, 226), (760, 534), (520, 534)  # TAB: Use Lunacy (D7, live 720p)
 PRICES = (26, 52, 78, 104, 130, 156, 182, 208, 234, 260)
 
 
@@ -78,7 +78,7 @@ def child():
         "zero": (0, {}),
         "two_from_none": (2, {}),
         "two_one_by_hand": (2, {"bought": 1}),
-        "two_already": (2, {"bought": 2}),
+        "two_after_nine": (2, {"bought": 9}),
         "off_table": (2, {"price": 27}),
         "skips_a_price": (3, {"step": 2}),
         "confirm_does_nothing": (2, {"confirm_works": False}),
@@ -112,15 +112,17 @@ def test_two_charges_from_a_fresh_day_confirm_26_and_52_and_cancel_at_the_third_
     assert "2 charged now" in o["done"]
 
 
-def test_a_charge_made_by_hand_counts_toward_the_days_total():
+def test_the_count_is_this_runs_whatever_was_charged_earlier_today():
+    # D5 (#362): one charged by hand at 26; this run charges two more, 52 and 78, and checks 104 follows.
     o = run_child(__file__)["two_one_by_hand"]
-    assert o["succeeded"] and o["clicks"] == taps(ENK_BAR, TAB, CONFIRM, ENK_BAR, TAB, CANCEL)
-    assert "1 charged now" in o["done"]
+    assert o["succeeded"] and o["clicks"] == taps(ENK_BAR, TAB, CONFIRM, ENK_BAR, TAB, CONFIRM, ENK_BAR, TAB, CANCEL)
+    assert "2 charged now" in o["done"]
 
 
-def test_a_day_already_charged_confirms_nothing():
-    o = run_child(__file__)["two_already"]
-    assert o["succeeded"] and o["clicks"] == taps(ENK_BAR, TAB, CANCEL) and "0 charged now" in o["done"]
+def test_the_tenth_charge_of_the_day_ends_the_task_without_opening_the_window_again():
+    o = run_child(__file__)["two_after_nine"]
+    assert o["succeeded"] and o["clicks"] == taps(ENK_BAR, TAB, CONFIRM)
+    assert "1 charged now" in o["done"] and "10 charges are done" in o["done"]
 
 
 def test_a_price_off_the_table_is_cancelled_and_fails_the_task():

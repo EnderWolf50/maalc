@@ -99,7 +99,7 @@ def test_go_home_reads_its_popups_through_home_text_and_no_next_list_batches_ocr
     for name in hub_entries(nodes, "HomeText"):
         assert recognition(nodes[name])[0] in ("OCR", "And", "Or"), name
     assert len(batch_plan(nodes, ["NoBatchOCR", *hub_entries(nodes, "HomeText"), *param["tail"]])) == 1
-    assert nodes["GoHome"]["on_error"] == ["GoHomeLost"] and nodes["GoHomeLost"]["custom_action"] == "StopTask"
+    assert nodes["GoHome"]["on_error"] == ["GoHomeLost"] and nodes["GoHomeLost"]["custom_action"] == "HomeLost"
 
 
 def template_first(nodes, spec):
