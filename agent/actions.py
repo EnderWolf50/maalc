@@ -422,6 +422,7 @@ class TaskStart(CustomAction):
         RUN.clear()
         TASK.clear()
         TASK.update(runs=0, done=None)
+        TASK.pop("assemble", None)
         STUCK.update(node=None, kind=None, flag=None, watch=recovery.Watchdog(), ladder=recovery.Ladder())
         SCREENS.clear()
         log(f"task {argv.node_name} started")
@@ -691,6 +692,100 @@ class DoneFlag(CustomRecognition):
 
     def analyze(self, context: Context, argv: CustomRecognition.AnalyzeArg):
         return CustomRecognition.AnalyzeResult(box=(0, 0, 1, 1), detail={"done": TASK["done"]}) if TASK["done"] else None
+
+
+# Assemble Enkephalin Modules (#370, pipeline/assemble_modules.json).
+MODULE_COST = 20  # Enkephalin per module
+ENK_BAR = (440, 640)  # the resource panel's Enkephalin bar: opens the Charge Enkephalin window
+ASSEMBLE_MAX, ASSEMBLE_CONFIRM, ASSEMBLE_CANCEL = (805, 328), (760, 534), (520, 534)  # >> (the most), Confirm, Cancel
+ASSEMBLE_TRIES = 3  # reads, taps of >> and Confirms the task spends before it gives up
+
+
+def fractions(results):
+    """Every "n / cap" of OCR results [(text, box)], left to right, as (n, cap)."""
+    return [(int(n), int(cap)) for t, _ in sorted(results, key=lambda r: r[1][0]) for n, cap in re.findall(r"(\d+)\s*/\s*(\d+)", t)]
+
+
+def read_fractions(context, image, node):
+    detail = context.run_recognition(node, image)
+    return fractions([(r.text, tuple(r.box)) for r in (detail.all_results if detail else [])])
+
+
+def too_many(context, image):
+    detail = context.run_recognition("AssembleTooMany", image)
+    return bool(detail and detail.hit)
+
+
+@AgentServer.custom_action("AssembleMain")
+class AssembleMain(CustomAction):
+    """The main window, reached by GoHome or already there: the task's one way out and its way in. With the Enkephalin
+    under a module's cost, or the game's refusal seen, it is done; after a Confirm the bar must read lower than before
+    it; else the bar opens the window."""
+
+    def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
+        a = TASK.setdefault("assemble", {"reads": 0, "confirms": 0})
+        read = read_fractions(context, screen(context), "EnkephalinBar")
+        if not read:
+            a["reads"] += 1
+            return True if a["reads"] < ASSEMBLE_TRIES else stop(context, "the Enkephalin bar could not be read")
+        a["reads"], n = 0, read[0][0]
+        if a.get("end"):
+            return done(a["end"])
+        if "before" in a:
+            if n < a["before"]:
+                return done(f"Enkephalin {a['before']} -> {n}, assembled")
+            time.sleep(1)  # the bar counts down; read it again before judging
+            a["checks"] = a.get("checks", 0) + 1
+            return True if a["checks"] < ASSEMBLE_TRIES else stop(context, f"Enkephalin still {n} after Confirm")
+        if n < MODULE_COST:
+            return done(f"Enkephalin {n} < {MODULE_COST}, nothing to assemble")
+        log(f"assemble: Enkephalin {n}, opening the window")
+        tap(context, *ENK_BAR, wait=0.5)
+        return True
+
+
+@AgentServer.custom_action("AssemblePanel")
+class AssemblePanel(CustomAction):
+    """The Charge Enkephalin window: on its Modules tab (before and after Enkephalin are both read there), >> for the most
+    modules, Confirm. Only >>, Confirm and Cancel are tapped, never the Use Lunacy tab. The game's refusal ends the task;
+    a window over a task already decided is cancelled."""
+
+    def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
+        a = TASK.setdefault("assemble", {"reads": 0, "confirms": 0})
+        image = screen(context)
+        if too_many(context, image):
+            a["end"] = "too many Enkephalin Modules in storage"
+            context.tasker.controller.post_click_key(BACK_KEY).wait()
+            return True
+        read = read_fractions(context, image, "AssembleAfter")
+        if len(read) < 2:  # not the Modules tab, or the numbers not up yet
+            a["reads"] += 1
+            return True if a["reads"] < ASSEMBLE_TRIES else stop(context, "the Charge Enkephalin window shows no Modules tab")
+        a["reads"] = 0
+        before, after = read[0][0], read[-1][0]
+        if a.get("end") or before < MODULE_COST:
+            tap(context, *ASSEMBLE_CANCEL, wait=0.5)
+            return True
+        for _ in range(ASSEMBLE_TRIES):  # >> goes to the most the Enkephalin allows; ask again until nothing changes
+            if after < MODULE_COST:
+                break
+            tap(context, *ASSEMBLE_MAX, wait=0.5)
+            image = screen(context)
+            if too_many(context, image):
+                a["end"] = "too many Enkephalin Modules in storage"
+                context.tasker.controller.post_click_key(BACK_KEY).wait()
+                return True
+            again = read_fractions(context, image, "AssembleAfter")
+            if len(again) < 2 or again[-1][0] == after:
+                break
+            after = again[-1][0]
+        a["confirms"] += 1
+        if a["confirms"] > ASSEMBLE_TRIES:
+            return stop(context, "Confirm did not close the Charge Enkephalin window")
+        log(f"assemble: Enkephalin {before} -> {after}, Confirm")
+        a["before"] = before
+        tap(context, *ASSEMBLE_CONFIRM, wait=0.5)
+        return True
 
 
 @AgentServer.custom_action("Recover")

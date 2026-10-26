@@ -1,0 +1,78 @@
+{
+    // Assemble Enkephalin Modules (#370, spec 00 daily tasks): the main window's Enkephalin bar, then the Charge
+    // Enkephalin window's Modules tab. 20 Enkephalin make a module; the bot taps nothing else of that window (never its
+    // Use Lunacy tab). The screen is truth: every pass of the hub looks at what is up, GoHome (navigation.json) takes
+    // it to the main window first (AssembleStart); the task is done only from there (AssembleMain), its last step.
+    "AssembleModules": {
+        "action": "Custom",
+        "custom_action": "TaskStart",
+        "next": [
+            "AssembleStart"
+        ]
+    },
+    // GoHome, the first step (spec 01, daily tasks): the main window, wherever the last task left the game.
+    "AssembleStart": {
+        "action": "Custom",
+        "custom_action": "GoHomeRun",
+        "next": [
+            "AssembleHub"
+        ]
+    },
+    "AssembleHub": {
+        "timeout": 60000,
+        "rate_limit": 300,
+        "on_error": [
+            "AssembleLost"
+        ],
+        "next": [
+            "TaskDone",
+            "[JumpBack]AssemblePanel",
+            "[JumpBack]HomeText",
+            "[JumpBack]AssembleMain"
+        ]
+    },
+    "AssembleLost": {
+        "action": "Custom",
+        "custom_action": "StopTask",
+        "custom_action_param": "the Charge Enkephalin window or the main window was not reached"
+    },
+    // The main window, the Window tab lit (HomeReached): reads the bar, opens the window, or ends the task.
+    "AssembleMain": {
+        "recognition": "And",
+        "all_of": [
+            "HomeReached"
+        ],
+        "action": "Custom",
+        "custom_action": "AssembleMain",
+        "post_delay": 1500
+    },
+    // The "Charge Enkephalin" title plate (tests/screens/EnkephalinPanel.png), on all three of its tabs.
+    "AssemblePanel": {
+        "recognition": "TemplateMatch",
+        "roi": [500, 90, 280, 60],
+        "template": "Assemble/PanelTitle.png",
+        "threshold": 0.9,
+        "action": "Custom",
+        "custom_action": "AssemblePanel",
+        "post_delay": 1000
+    },
+    // The Enkephalin bar of the resource panel, bottom left: "23 / 134" (MainWindow.png; the window dims it).
+    "EnkephalinBar": {
+        "recognition": "OCR",
+        "roi": [305, 655, 180, 35],
+        "expected": "\\d+\\s*/\\s*\\d+"
+    },
+    // The Modules tab's Enkephalin before and after: "22 / 136 > 2 / 136".
+    "AssembleAfter": {
+        "recognition": "OCR",
+        "roi": [440, 405, 400, 60],
+        "expected": "\\d+\\s*/\\s*\\d+"
+    },
+    // The game's refusal when the modules are at their limit (EN_ShopUI: "Cannot assemble Modules; you have too many in
+    // storage."). No capture yet, so the roi is wide; read by AssemblePanel after each tap.
+    "AssembleTooMany": {
+        "recognition": "OCR",
+        "roi": [300, 150, 680, 420],
+        "expected": "(?i)too many in storage"
+    }
+}
