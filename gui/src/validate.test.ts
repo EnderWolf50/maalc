@@ -45,9 +45,9 @@ test("pyRepr matches Python repr", () => {
   expect(pyRepr("a\\b")).toBe("'a\\\\b'");
 });
 
-test("a new file asks for a team, and new teams make it valid", () => {
+test("a new file is valid without a team (#364: only MirrorDungeon asks for one), and with new teams", () => {
   const s = newSettings();
-  expect(validate(s).map((p) => p.text)).toEqual(["No enabled team: set up a team in the settings GUI first."]);
+  expect(validate(s)).toEqual([]);
   s.teams.push(newTeam(1, "隊伍 1"), newTeam(2, "隊伍 2"));
   expect(validate(s)).toEqual([]);
   expect(s.teams.map((x) => x.game_team)).toEqual([1, 2]);

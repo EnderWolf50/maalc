@@ -1,5 +1,6 @@
 import json
 import sys
+from types import SimpleNamespace
 
 from live import bot
 
@@ -33,3 +34,30 @@ def test_awake_holds_the_display_for_the_minutes():
     calls = []
     bot.awake(2, set_state=calls.append, sleep=calls.append)
     assert calls == [bot.ES_CONTINUOUS | bot.ES_SYSTEM_REQUIRED | bot.ES_DISPLAY_REQUIRED, 120, bot.ES_CONTINUOUS]
+
+
+def test_run_tasks_posts_the_list_up_front_and_reports_each_task():
+    # #364: a client queues its whole task list; an account-level stop (post_stop) leaves the rest pending, unrun.
+    status = dict(succeeded=False, failed=False, running=False)
+    states = iter([SimpleNamespace(**{**status, "succeeded": True}), SimpleNamespace(**status), None])
+    posted = []
+
+    class Job:
+        def __init__(self, name):
+            posted.append(name)
+            self.name = name
+
+        def wait(self):
+            return self
+
+        def get(self):
+            s = next(states)
+            return s and type("Detail", (), {"status": s, "nodes": []})()
+
+    tasker = type("Tasker", (), {"post_task": lambda self, name: Job(name)})()
+    lines = []
+    assert bot.run_tasks(tasker, ["MirrorDungeon", "MirrorDungeon", "ExpLuxcavation"], lines.append) == [
+        "succeeded", "pending", "none"]
+    assert posted == ["MirrorDungeon", "MirrorDungeon", "ExpLuxcavation"]
+    assert [ln.split(" t=")[0] for ln in lines if "status=" in ln] == [
+        "[run] MirrorDungeon status=succeeded", "[run] MirrorDungeon status=pending", "[run] ExpLuxcavation status=none"]

@@ -28,8 +28,6 @@ export function pyRepr(s: string) {
   return q + (q === "'" ? body.replace(/'/g, "\\'") : body) + q;
 }
 
-const NO_TEAM = "No enabled team: set up a team in the settings GUI first.";
-
 export function crossCheck(data: Settings): Problem[] {
   const errors: Problem[] = [];
 
@@ -54,7 +52,6 @@ export function crossCheck(data: Settings): Problem[] {
   dupes("teams", teams.map((t) => t.id), "id", "id");
 
   const enabled = teams.filter((t) => t.enabled);
-  if (!enabled.length) errors.push({ paths: ["teams"], text: NO_TEAM });
   const slots = [...new Set(enabled.map((t) => t.game_team))];
   for (const slot of slots) {
     const using = teams.flatMap((t, i) => (t.enabled && t.game_team === slot ? [i] : []));

@@ -77,10 +77,9 @@
     {"name": "missing team field", "edits": [{"delete": "teams/0/heal"}], "schema": ["teams/0"]},
     {"name": "unknown top-level key", "edits": [{"set": "extra", "value": 1}], "schema": ["(root)"]},
     {"name": "empty override question", "edits": [{"set": "event_overrides/0/question", "value": ""}], "schema": ["event_overrides/0/question"]},
-    {"name": "no enabled team", "edits": [{"set": "teams/0/enabled", "value": false}, {"set": "teams/1/enabled", "value": false}],
-     "cross": ["No enabled team: set up a team in the settings GUI first."]},
-    {"name": "no team at all", "edits": [{"set": "teams", "value": []}],
-     "cross": ["No enabled team: set up a team in the settings GUI first."]},
+    {"name": "no enabled team: only MirrorDungeon asks for one (#364)", "edits": [{"set": "teams/0/enabled", "value": false}, {"set": "teams/1/enabled", "value": false}],
+     "cross": []},
+    {"name": "no team at all", "edits": [{"set": "teams", "value": []}], "cross": []},
     {"name": "two enabled teams on one slot", "edits": [{"set": "teams/1/game_team", "value": 1}],
      "cross": ["teams: enabled teams 'Team a', 'Team b' all use TEAMS #1"]},
     {"name": "missing plans", "edits": [

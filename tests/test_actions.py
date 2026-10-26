@@ -1423,7 +1423,7 @@ def test_tap_until_logs_how_long_the_screen_took(context, clock):
 def test_plan_run_waits_for_the_enter_dialog_after_pressing_enter(context, clock, monkeypatch):
     team = {"id": 1, "name": "t", "game_team": 1, "guard_turns": 3, "hard_from_floor": 1}
     run = {"runs": 0, "stop_when_weekly_bonus_out": False, "difficulty": "normal"}
-    monkeypatch.setattr(actions, "load_settings", lambda root: {"run": run, "teams": [team]})
+    monkeypatch.setattr(actions, "load_settings", lambda root, need_team=False: {"run": run, "teams": [team]})
     monkeypatch.setattr(actions, "pick_team", lambda teams, cursor, difficulty: team)
     monkeypatch.setattr(actions, "read_cursor", lambda root, address: None)
     monkeypatch.setattr(actions.settlement, "runs_done", lambda done, limit: False)
@@ -1441,7 +1441,7 @@ def test_a_planned_run_of_a_team_that_never_switches_to_hard(context, clock, mon
     # Only the global "hard" makes it HARD (every floor, hard_wanted).
     team = {"id": 1, "name": "t", "game_team": 1, "guard_turns": 0, "hard_from_floor": None}
     run = {"runs": None, "stop_when_weekly_bonus_out": False, "difficulty": setting}
-    monkeypatch.setattr(actions, "load_settings", lambda root: {"run": run, "teams": [team]})
+    monkeypatch.setattr(actions, "load_settings", lambda root, need_team=False: {"run": run, "teams": [team]})
     monkeypatch.setattr(actions, "pick_team", lambda teams, cursor, difficulty: team)
     monkeypatch.setattr(actions, "read_cursor", lambda root, address: None)
     monkeypatch.setattr(actions.run_start, "run_difficulty", lambda setting, weekly: "hard")
@@ -1539,7 +1539,7 @@ def test_select_team_makes_a_plan_for_an_abandoned_empty_run_instead_of_backing_
     # #128 (live 2026-10-18): Resume on a run paused before team selection reaches the picker with no plan in memory;
     # backing out to the entry page, which only offers Resume, looped every 8 s.
     team = {"id": 1, "name": "t", "game_team": 3, "guard_turns": 0}
-    monkeypatch.setattr(actions, "load_settings", lambda root: {"run": {"difficulty": "normal"}, "teams": [team]})
+    monkeypatch.setattr(actions, "load_settings", lambda root, need_team=False: {"run": {"difficulty": "normal"}, "teams": [team]})
     monkeypatch.setattr(actions, "pick_team", lambda teams, cursor, difficulty: team)
     monkeypatch.setattr(actions, "read_cursor", lambda root, address: None)
     actions.RUN.clear()
@@ -2881,3 +2881,80 @@ def test_hands_back_clears_the_runtime_cache_of_a_long_task():
     context.tasker.clear_cache.reset_mock()
     assert Act().run(context, nodes(actions.CLEAR_CACHE_AFTER_NODES, gone=True))  # PageGone hands back too
     context.tasker.clear_cache.assert_called_once()
+
+
+def test_each_task_starts_with_a_clean_slate_but_the_game_restarts_count_per_launch(context, monkeypatch):
+    # #364, ADR 0010: a task list runs tasks on one agent; what one task left must not reach the next.
+    actions.RUN.update(floor=3, guard=2)
+    actions.TASK.update(runs=1, done="1 of 1 runs done")
+    for key, value in dict(l3=2, updates=1, watch=recovery.Watchdog(), ladder=recovery.Ladder()).items():
+        monkeypatch.setitem(actions.STUCK, key, value)  # restored afterwards: the later tests count from 0
+    actions.STUCK.update(flag=(None, 1, "x"), kind="MirrorMap")
+    actions.STUCK["watch"].hold(0.0, 600)
+    actions.STUCK["ladder"].stuck("MirrorMap", 1, 0)
+    actions.SCREENS.append(np.zeros((720, 1280, 3), np.uint8))
+    assert actions.TaskStart().run(context, SimpleNamespace(node_name="MirrorDungeon")) is True
+    assert actions.RUN == {} and actions.TASK == {"runs": 0, "done": None} and not actions.SCREENS
+    assert (actions.STUCK["flag"], actions.STUCK["kind"]) == (None, None)
+    assert actions.STUCK["ladder"].counts == recovery.Ladder().counts
+    assert not actions.STUCK["watch"].held(1.0)
+    assert (actions.STUCK["l3"], actions.STUCK["updates"]) == (2, 1)
+
+
+def entry_page(context, edit=lambda run, teams: None):
+    """settings.json under the agent's ROOT (settings_cases' valid file, edited); the entry page reads no weekly bonus."""
+    data = json.loads((Path(__file__).parent / "settings_cases.json").read_text(encoding="utf-8"))["valid"]
+    edit(data["run"], data["teams"])
+    data["run"]["webhook_url"] = "http://hook.invalid/"
+    (actions.ROOT / "config").mkdir()
+    (actions.ROOT / "config" / "settings.json").write_text(json.dumps(data), encoding="utf-8")
+    actions.RUN.clear()
+    context.tasker.controller.info = {}  # the default rotation cursor
+
+
+@pytest.mark.parametrize("edit, done", [
+    (lambda run, teams: run.update(runs=1), "1 of 1 runs done"),
+    (lambda run, teams: run.update(stop_when_weekly_bonus_out=True), "weekly bonuses used up"),
+    (lambda run, teams: teams[0].update(usage="hard_only"), "no enabled team may run normal"),
+])
+def test_a_mirror_dungeon_that_has_nothing_left_to_do_ends_a_success(context, monkeypatch, edit, done):
+    # #364: the run count reached, the weekly bonuses out, no team for the difficulty: the task is done, not failed, so
+    # the client's list goes on. No stop procedure: no runs.jsonl line, no webhook, no evidence; Enter is not pressed.
+    entry_page(context, edit)
+    actions.TASK.update(runs=1, done=None)
+    urlopen = MagicMock()
+    monkeypatch.setattr(actions.urllib.request, "urlopen", urlopen)
+    assert actions.PlanRun().run(context, None) is True
+    assert done in actions.TASK["done"]
+    assert not (actions.ROOT / "logs").exists() and not urlopen.called
+    context.tasker.controller.post_click.assert_not_called()
+
+
+def test_a_mirror_dungeon_with_no_enabled_team_fails(context):
+    # #364: the dailies run without a team, MirrorDungeon does not: a settings error, the task fails.
+    entry_page(context, lambda run, teams: [t.update(enabled=False) for t in teams])
+    actions.TASK.update(runs=0, done=None)
+    assert actions.PlanRun().run(context, None) is False
+    assert actions.TASK["done"] is None
+
+
+@pytest.mark.parametrize("action, run", [
+    (actions.Halt, {}),  # MaintenanceNotice, ClientOutdated
+    (actions.ConfirmDownload, {"auto_download": False}),
+    (actions.AcceptUpdate, {"auto_download": False}),
+    (actions.AcceptTerms, {"auto_accept_terms": False}),
+])
+def test_an_account_level_stop_ends_the_whole_task_list(context, action, run):
+    # #364: every task after this one would meet the same screen: after the stop procedure, post_stop empties the
+    # client's queue.
+    actions.RUN["settings"] = {"run": {"webhook_url": "", **run}}
+    argv = SimpleNamespace(node_name="MaintenanceNotice", custom_action_param='"maintenance"', box=[0, 0, 10, 10])
+    assert action().run(context, argv) is False
+    context.tasker.post_stop.assert_called_once()
+    assert list((actions.ROOT / "logs" / "evidence").iterdir())  # the stop procedure ran first
+
+
+def test_a_stop_of_one_task_leaves_the_list_running(context):
+    actions.RUN["settings"] = {"run": {"webhook_url": ""}}
+    assert actions.stop(context, "recovery used up") is False
+    context.tasker.post_stop.assert_not_called()
