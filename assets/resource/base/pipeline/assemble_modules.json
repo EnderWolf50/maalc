@@ -62,6 +62,13 @@
         "roi": [305, 655, 180, 35],
         "expected": "\\d+\\s*/\\s*\\d+"
     },
+    // The Modules tab's own prompt (EnkephalinPanel.png): the Use Lunacy tab shows "n / cap" twice as well, so AssemblePanel
+    // reads this before it trusts the numbers, and never presses Confirm without it.
+    "AssemblePrompt": {
+        "recognition": "OCR",
+        "roi": [380, 470, 520, 40],
+        "expected": "(?i)assemble enkephalin modules"
+    },
     // The Modules tab's Enkephalin before and after: "22 / 136 > 2 / 136".
     "AssembleAfter": {
         "recognition": "OCR",

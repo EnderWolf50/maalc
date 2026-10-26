@@ -72,7 +72,7 @@ const screens: [image: string, hits: string[]][] = [
   ['MainWindowLowEnkephalin.synthetic.png', ['GoToMirrorEntry', 'NavMainTabs', 'HomeReached', 'PassBanner', 'MailOpen', 'AssembleMain', 'ChargeMain', 'EnkephalinBar']],
   // Live 2026-10-26: the Charge Enkephalin window over Drive, the tab bar dimmed under it: neither tab here. The
   // Enkephalin bar still reads under the dimming (#370), as on every screen that shows the resource panel.
-  ['EnkephalinPanel.png', ['AssemblePanel', 'ChargePanel', 'EnkephalinBar', 'AssembleAfter']],
+  ['EnkephalinPanel.png', ['AssemblePanel', 'ChargePanel', 'EnkephalinBar', 'AssembleAfter', 'AssemblePrompt']],
   ['SinnersTab.png', ['GoToMirrorEntry', 'NavMainTabs', 'HomeWindowTab', 'EnkephalinBar']],
   ['Drive.png', ['GoToMirrorEntry', 'NavDrive', 'HomeWindowTab', 'NavLuxcavation', 'EnkephalinBar']],
   // Live 2026-10-26 (#366): Luxcavation as it opens on the EXP tab (stages 7-9), swiped right to the locked 10th (KEEP

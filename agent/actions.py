@@ -699,7 +699,8 @@ class DoneFlag(CustomRecognition):
 # Assemble Enkephalin Modules (#370, pipeline/assemble_modules.json).
 MODULE_COST = 20  # Enkephalin per module
 ENK_BAR = (440, 640)  # the resource panel's Enkephalin bar: opens the Charge Enkephalin window
-ASSEMBLE_MAX, ASSEMBLE_CONFIRM, ASSEMBLE_CANCEL = (805, 328), (760, 534), (520, 534)  # >> (the most), Confirm, Cancel
+ASSEMBLE_MAX = (805, 328)  # the Modules tab's >> (the most)
+PANEL_CONFIRM, PANEL_CANCEL = (760, 534), (520, 534)  # the Charge Enkephalin window's Confirm and Cancel, on every tab
 ASSEMBLE_TRIES = 3  # reads, taps of >> and Confirms the task spends before it gives up
 
 
@@ -711,6 +712,14 @@ def fractions(results):
 def read_fractions(context, image, node):
     detail = context.run_recognition(node, image)
     return fractions([(r.text, tuple(r.box)) for r in (detail.all_results if detail else [])])
+
+
+def on_modules_tab(context, image):
+    """The Modules tab's own prompt ("Would you like to assemble Enkephalin Modules?") is up. The Use Lunacy tab shows the
+    Enkephalin before and after as well, so the two "n / cap" alone do not tell the tabs apart: a Confirm there spends
+    Lunacy."""
+    detail = context.run_recognition("AssemblePrompt", image)
+    return bool(detail and detail.hit)
 
 
 def too_many(context, image):
@@ -748,9 +757,10 @@ class AssembleMain(CustomAction):
 
 @AgentServer.custom_action("AssemblePanel")
 class AssemblePanel(CustomAction):
-    """The Charge Enkephalin window: on its Modules tab (before and after Enkephalin are both read there), >> for the most
-    modules, Confirm. Only >>, Confirm and Cancel are tapped, never the Use Lunacy tab. The game's refusal ends the task;
-    a window over a task already decided is cancelled."""
+    """The Charge Enkephalin window: on its Modules tab (its prompt and the Enkephalin before and after read), >> for the
+    most modules, Confirm. Only >>, Confirm and Cancel are tapped, no tab. Not on the Modules tab, or a number that stops
+    reading after >>: Cancel and the stop procedure, never Confirm (Use Lunacy's Confirm spends Lunacy). The game's
+    refusal ends the task; a window over a task already decided is cancelled."""
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         a = TASK.setdefault("assemble", {"reads": 0, "confirms": 0})
@@ -759,14 +769,20 @@ class AssemblePanel(CustomAction):
             a["end"] = "too many Enkephalin Modules in storage"
             context.tasker.controller.post_click_key(BACK_KEY).wait()
             return True
-        read = read_fractions(context, image, "AssembleAfter")
-        if len(read) < 2:  # not the Modules tab, or the numbers not up yet
+        if a.get("end"):
+            tap(context, *PANEL_CANCEL, wait=0.5)
+            return True
+        read = read_fractions(context, image, "AssembleAfter") if on_modules_tab(context, image) else []
+        if len(read) < 2:  # not the Modules tab, or not up yet
             a["reads"] += 1
-            return True if a["reads"] < ASSEMBLE_TRIES else stop(context, "the Charge Enkephalin window shows no Modules tab")
+            if a["reads"] < ASSEMBLE_TRIES:
+                return True
+            tap(context, *PANEL_CANCEL, wait=0.5)
+            return stop(context, "the Charge Enkephalin window shows no Modules tab")
         a["reads"] = 0
         before, after = read[0][0], read[-1][0]
-        if a.get("end") or before < MODULE_COST:
-            tap(context, *ASSEMBLE_CANCEL, wait=0.5)
+        if before < MODULE_COST:
+            tap(context, *PANEL_CANCEL, wait=0.5)
             return True
         for _ in range(ASSEMBLE_TRIES):  # >> goes to the most the Enkephalin allows; ask again until nothing changes
             if after < MODULE_COST:
@@ -777,8 +793,11 @@ class AssemblePanel(CustomAction):
                 a["end"] = "too many Enkephalin Modules in storage"
                 context.tasker.controller.post_click_key(BACK_KEY).wait()
                 return True
-            again = read_fractions(context, image, "AssembleAfter")
-            if len(again) < 2 or again[-1][0] == after:
+            again = read_fractions(context, image, "AssembleAfter") if on_modules_tab(context, image) else []
+            if len(again) < 2:
+                tap(context, *PANEL_CANCEL, wait=0.5)
+                return stop(context, "the Modules tab did not read after >>: Confirm not pressed")
+            if again[-1][0] == after:
                 break
             after = again[-1][0]
         a["confirms"] += 1
@@ -786,7 +805,7 @@ class AssemblePanel(CustomAction):
             return stop(context, "Confirm did not close the Charge Enkephalin window")
         log(f"assemble: Enkephalin {before} -> {after}, Confirm")
         a["before"] = before
-        tap(context, *ASSEMBLE_CONFIRM, wait=0.5)
+        tap(context, *PANEL_CONFIRM, wait=0.5)
         return True
 
 
@@ -835,7 +854,7 @@ class ChargePanel(CustomAction):
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         c = TASK["charge"]
         if c.get("end"):  # a window over a task already decided
-            tap(context, *ASSEMBLE_CANCEL, wait=0.5)
+            tap(context, *PANEL_CANCEL, wait=0.5)
             return True
         tap(context, *LUNACY_TAB, wait=0.7)
         image = screen(context)
@@ -846,7 +865,7 @@ class ChargePanel(CustomAction):
             c["reads"] += 1
             if c["reads"] < CHARGE_TRIES:
                 return True
-            tap(context, *ASSEMBLE_CANCEL, wait=0.5)
+            tap(context, *PANEL_CANCEL, wait=0.5)
             return stop(context, "the Use Lunacy tab's Recharge prompt and price could not be read")
         c["reads"] = 0
         verdict, bought, why = lunacy.check(price, c["count"], c.get("bought"))
@@ -854,9 +873,9 @@ class ChargePanel(CustomAction):
         if verdict == lunacy.CHARGE:
             c["charged"] += 1
             c["bought"] = bought + 1  # the price after this Confirm; a price that stays is a Confirm that did nothing
-            tap(context, *ASSEMBLE_CONFIRM, wait=1.0)
+            tap(context, *PANEL_CONFIRM, wait=1.0)
             return True
-        tap(context, *ASSEMBLE_CANCEL, wait=0.5)
+        tap(context, *PANEL_CANCEL, wait=0.5)
         if verdict == lunacy.DONE:
             c["end"] = f"{c['charged']} charged now, {why}"
             return True

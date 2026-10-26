@@ -6,6 +6,7 @@ A start away from the main window goes through GoHomeRun (spec 01); the task end
 """
 
 import functools
+import itertools
 import json
 import subprocess
 import sys
@@ -181,6 +182,49 @@ def test_fractions_reads_n_over_cap_left_to_right():
     assert actions.fractions([("2 / 136", (200, 0, 1, 1)), ("22 / 136", (0, 0, 1, 1))]) == [(22, 136), (2, 136)]
     assert actions.fractions([("22/136 > 2/136", (0, 0, 1, 1))]) == [(22, 136), (2, 136)]
     assert actions.fractions([("Owned 104", (0, 0, 1, 1))]) == []
+
+
+def panel(monkeypatch, tmp_path, frames):
+    """AssemblePanel on a fake context: frames is what each screenshot shows, (Modules tab prompt read, fractions)."""
+    from unittest.mock import MagicMock
+
+    import actions
+
+    shots = iter(frames)
+    taps = []
+    monkeypatch.setattr(actions, "ROOT", tmp_path)
+    monkeypatch.setattr(actions, "screen", lambda context: next(shots))
+    monkeypatch.setattr(actions, "too_many", lambda context, image: False)
+    monkeypatch.setattr(actions, "on_modules_tab", lambda context, image: image[0])
+    monkeypatch.setattr(actions, "read_fractions", lambda context, image, node: image[1])
+    monkeypatch.setattr(actions, "tap", lambda context, x, y, wait=1.0: taps.append((x, y)))
+    monkeypatch.setattr(actions, "stop", lambda context, reason, **kw: taps.append("stop") or False)
+    actions.TASK.clear()
+    actions.TASK.update(runs=0, done=None)
+    return actions, MagicMock(), taps
+
+
+def test_a_window_not_on_its_modules_tab_is_cancelled_and_never_confirmed(monkeypatch, tmp_path):
+    # S1: the Use Lunacy tab shows the Enkephalin before and after too ("n / cap" twice); Confirm there spends Lunacy.
+    actions, context, taps = panel(monkeypatch, tmp_path, itertools.repeat((False, [(22, 136), (48, 136)])))
+    results = [actions.AssemblePanel().run(context, None) for _ in range(actions.ASSEMBLE_TRIES)]
+    assert results == [True] * (actions.ASSEMBLE_TRIES - 1) + [False]  # the window may still be opening: looked at again
+    assert taps == [actions.PANEL_CANCEL, "stop"]
+
+
+def test_a_number_that_stops_reading_after_the_most_button_is_cancelled_not_confirmed(monkeypatch, tmp_path):
+    # S1: >> tapped, then the tab or its numbers do not read: what Confirm would buy is not known.
+    for after in [(True, []), (False, [(42, 136), (2, 136)])]:
+        actions, context, taps = panel(monkeypatch, tmp_path, [(True, [(42, 136), (42, 136)]), after])
+        assert actions.AssemblePanel().run(context, None) is False
+        assert taps == [actions.ASSEMBLE_MAX, actions.PANEL_CANCEL, "stop"]
+
+
+def test_the_modules_tab_is_confirmed_once_the_most_button_stops_changing(monkeypatch, tmp_path):
+    frames = [(True, [(42, 136), (42, 136)]), (True, [(42, 136), (2, 136)])]
+    actions, context, taps = panel(monkeypatch, tmp_path, frames)
+    assert actions.AssemblePanel().run(context, None) is True
+    assert taps == [actions.ASSEMBLE_MAX, actions.PANEL_CONFIRM] and actions.TASK["assemble"]["before"] == 42
 
 
 def test_assemble_modules_is_a_task_of_the_interface():
