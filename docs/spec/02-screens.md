@@ -42,10 +42,12 @@
 |---|---|---|---|---|---|
 | Drive | 模板：`Luxcavation` 按鈕（`NavLuxcavation`） | 點它 | Luxcavation（上次停的分頁） | #366 | `tests/screens/Drive.png` |
 | Luxcavation：Thread 分頁 | 模板：左上 `Luxcavation` 面板；ColorMatch：Thread 分頁的橘色邊框（`LuxExpTab`） | 點 EXP 分頁 | EXP 分頁 | #366 | `tests/screens/LuxThread.png` |
-| Luxcavation：EXP 分頁 | ColorMatch：EXP 分頁的橘色邊框；模板：卡片上的 Enter，取最右邊的一個（`LuxExpEnter`） | 點最右邊的 Enter；打完一場回到這頁就結束 | 選隊／編隊頁（未截圖） | #366 | `tests/screens/LuxExp.png`、`LuxExpLocked.png`（最右邊是上鎖的第 10 關） |
+| Luxcavation：EXP 分頁 | ColorMatch：EXP 分頁的橘色邊框；模板：卡片上的 Enter，取最右邊的一個（`LuxExpEnter`） | 點最右邊的 Enter；打完一場回到這頁就結束 | 選隊頁（`LuxTeamSelect`） | #366 | `tests/screens/LuxExp.png`、`LuxExpLocked.png`（最右邊是上鎖的第 10 關） |
+| 選隊頁 | OCR：`TEAMS` 標題（80,272）和 `To Battle!` 按鈕（`LuxTeamSelect`）；和鏡牢 `TeamSelect` 同一頁，按鈕是 To Battle! 不是 Confirm | 選 `luxcavation.exp.team` 的遊戲隊伍編號（`TEAMS #N`，必要時捲動清單），按 To Battle!（1145,588） | 隊伍等級警告或開戰確認（未截圖）、戰鬥 | #366 | `tests/screens/LuxTeamSelect.png`（選了 TEAMS #3） |
 
 - EXP 分頁一進去就停在最難的三關（2026-10-26：第 7–9 關，共 10 關，第 10 關上鎖顯示 `Clear 10-4`）。左右箭頭點了不會翻頁，要滑動。
-- 按 Enter 之後的選隊、編隊、戰鬥結算頁還沒有截圖（#366）。
+- 選隊頁的清單捲動到 `#40` 為止。選隊頁沒有 Daily Bonuses 值，也沒有模組消耗顯示；按 Enter 不扣模組（104 → 104）。
+- 隊伍等級警告、開戰確認只會在按 To Battle! 之後出現，**還沒有截圖**；戰鬥、勝敗、結算畫面也沒有。（#366）
 
 ### Luxcavation（紐本，#368）
 

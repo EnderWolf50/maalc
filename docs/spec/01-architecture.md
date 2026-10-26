@@ -59,7 +59,7 @@
 - 彈窗排在 `HomeReached` 前面：設定選單蓋著主畫面時 Window 分頁仍是亮的。其他分頁亮起、彈窗壓暗分頁列時，Window 模板的分數最多 0.80，門檻 0.9。
 - 前景不是遊戲時直接啟動遊戲，不等 hub 逾時走 L3（`GameAway` 讀 `dumpsys window`，讀不到時不算）。
 - 60 秒認不出畫面、或返回鍵用完仍沒到主畫面：走停止程序（存證據、webhook），任務失敗，client 的清單繼續；這個任務不結束整串清單。
-- 日常任務的入口：入口節點（`TaskStart`）接 `GoHomeRun` 節點，它在 agent 裡用 `context.run_task("GoHome")` 跑完整個 `GoHome` 再接 hub（`[JumpBack]` 接 `GoHome` 做不到：`GoHome` 的結尾 `HomeReached` 沒有下一步，任務會在那裡結束）。結尾：動作做 `go_home()` 再 `done()`，hub 的 `TaskDone` 讓任務成功結束。`GoHome` 失敗時已自己走過停止程序，`GoHomeRun` 直接讓任務失敗。（#371）
+- 日常任務的入口：入口節點（`TaskStart`）接 `GoHomeRun` 節點，它在 agent 裡用 `context.run_task("GoHome")` 跑完整個 `GoHome` 再接 hub（#366 驗證過另一條路也行：入口列 `[JumpBack]TaskHome`，`TaskHome` 的 `max_hit` 為 1、`next` 是 `GoHome`，跑完 `GoHome` 跳回入口再進 hub；專案統一採用 `GoHomeRun`／`go_home()`，不混用）。結尾：動作做 `go_home()` 再 `done()`，hub 的 `TaskDone` 讓任務成功結束。`GoHome` 失敗時已自己走過停止程序，`GoHomeRun` 直接讓任務失敗。（#371）
 - `ClaimMail`（`mail.json`）：`TaskStart` → `GoHomeRun` → hub：主畫面點右上信封（`MailOpen`）→ 信箱按 Claim All（`MailClaimAll`，最多 3 次）→ 再看到空信箱（`No mail in storage`，`MailEmpty`）就 `MailFinish`（`go_home()`，GoHome 的全域 `Mailbox` 按 Close 關信箱，再 `done`）。蓋在信箱上的彈窗先處理（`MailPopups`）。沒信時不按 Claim All，直接成功結束。Claim All 之後的確認／結果畫面還沒截到（unverified）。（#372）
 - `ClaimPassMissions`（`pass_missions.json`）：主畫面的 Limbus Pass 橫幅（OCR 標題 `SEASON`）→ `Pass Missions` 分頁（模板，亮著時分數 0.92，門檻 0.97）→ Daily 分頁逐列點可領的列（`PassClaimable`，`agent/pass_missions.py`：金幣亮、沒有 CLEAR 章、進度條滿）→ Weekly 分頁同樣 → `PassFinish`（回主畫面、`done`）。沒有可領的就直接成功結束。可領那一列的畫面還沒截到，判斷是從已領、進行中兩種畫面推的（unverified）。
 - 沒有鏡牢的卡住恢復階梯：日常頁只有返回鍵（L1）和重啟遊戲（L3）；L3 之後的接手還沒做（待實機看過再定）。
@@ -77,8 +77,9 @@
 - 從主畫面點 Drive（`NavMainTabs`）→ Luxcavation（`NavLuxcavation`）→ EXP 分頁（停在 Thread 分頁時點 EXP，`LuxExpTab`）→ EXP 分頁預設畫面最右邊的 Enter（`LuxExpEnter`，`ExpEnter`）。上鎖的卡顯示 KEEP OUT、沒有 Enter，所以最右邊的 Enter 就是最難的開放關卡。不改 Consecutive Battle、不按 Skip Battle。（#366）
 - 分頁亮起看橘色邊框（ColorMatch）：亮和不亮的分頁對模板的分數差不多（0.93），分不開。
 - 隊伍是 `luxcavation.exp.team` 指的 maalc 隊伍，戰鬥用它的 `guard_turns`（全員防禦 N 回合後按勝率，同鏡牢）。
+- 按 Enter 直接進選隊頁（`LuxTeamSelect`）：和鏡牢的選隊頁（`TeamSelect`）同一頁，左側 `TEAMS` 清單、位置和點法都一樣（`pick_team_slot`，鏡牢的 `SelectTeam` 也用它：清單拖到頂、依畫面上的 `TEAMS #N` 列找，必要時捲動，點了之後讀標題確認），只有右下角的按鈕不同：鏡牢是 `Confirm`，這裡是 `To Battle!`（1145,588）。`LuxSelectTeam`：選 `RUN["team"]`（經驗本是 `luxcavation.exp.team`）的遊戲隊伍編號（`game_team`，每場一次），再按 To Battle! 直到這頁消失。節點與動作由 Luxcavation 的各個 hub（經驗本、紐本）共用：hub 列出 `[JumpBack]LuxTeamSelect`，Enter 的動作設 `RUN["team"]` 並在進關時清掉 `RUN["team_picked"]`。（#366）
 - 開頭回主畫面後讀模組數，不夠 `count` 場就跳過（`ExpHome`）；按 Enter 之後回到 EXP 分頁，依這場的勝敗計次、再打或結束（`ExpEnter`，[spec 03 第 15 節](03-decisions.md)）。
-- 現狀（#366）：按 Enter 之後的選隊、編隊、結算畫面沒有截圖，hub 不認得，60 秒後走停止程序（存證據）。這些畫面截到後再補選隊、編隊與勝敗判斷；模組檢查與計次（#367）已接上，戰敗訊號與戰敗重打待戰敗畫面的截圖。
+- 現狀（#366）：選隊頁已接（`LuxTeamSelect`）；To Battle! 之後的畫面（隊伍等級警告、開戰確認、戰鬥結算）沒有截圖，hub 不認得，60 秒後走停止程序（存證據）。戰鬥畫面（`BattleHUD`、`Victory`）沿用鏡牢的節點。缺的畫面截到後再補；模組檢查與計次（#367）已接上，戰敗訊號與戰敗重打待戰敗畫面的截圖。
 
 ### 紐本（`ThreadLuxcavation`）
 

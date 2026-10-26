@@ -15,9 +15,9 @@
             "ExpHub"
         ]
     },
-    // The pages after Enter (team, formation, results) have no capture yet (#366): their screens time out here and
-    // the task stops with evidence, a failure the client's list goes past. Stuck (the watchdog: the same screen over
-    // and over) stops it too: no recovery ladder on the daily pages yet.
+    // The pages after To Battle! (level warning, start confirm, results) have no capture yet (#366): their screens time
+    // out here and the task stops with evidence, a failure the client's list goes past. Stuck (the watchdog: the same
+    // screen over and over) stops it too: no recovery ladder on the daily pages yet.
     "ExpHub": {
         "timeout": 60000,
         "rate_limit": 300,
@@ -31,6 +31,7 @@
             "[JumpBack]Connecting",
             "[JumpBack]HelpPager",
             "[JumpBack]ExpText",
+            "[JumpBack]LuxTeamSelect",
             "[JumpBack]LuxExpEnter",
             "[JumpBack]LuxExpTab",
             "[JumpBack]NavLuxcavation",
@@ -82,6 +83,29 @@
     },
     "ExpTextLost": {
         "pre_delay": 0,
+        "post_delay": 0
+    },
+    // Enter opens the mirror's team page (tests/screens/LuxTeamSelect.png, TeamSelect.png): the TEAMS list at the left,
+    // the same rows and taps (pick_team_slot), but To Battle! at the bottom right where the mirror's has Confirm.
+    // Shared by the Luxcavation hubs (EXP, Thread): each lists it and sets RUN["team"] first.
+    "LuxTeamSelect": {
+        "recognition": "And",
+        "all_of": [
+            {
+                "recognition": "OCR",
+                "sub_name": "LuxTeamsHeader",
+                "roi": [80, 272, 100, 28],
+                "expected": "^TEAMS$"
+            },
+            {
+                "recognition": "OCR",
+                "sub_name": "LuxToBattle",
+                "roi": [1075, 570, 140, 38],
+                "expected": "To Battle"
+            }
+        ],
+        "action": "Custom",
+        "custom_action": "LuxSelectTeam",
         "post_delay": 0
     },
     // The Enkephalin Module icon in the bottom-left panel (the round one; the card icon left of it is the Boxes). The panel
@@ -190,6 +214,7 @@
             "[JumpBack]Connecting",
             "[JumpBack]HelpPager",
             "[JumpBack]ExpText",
+            "[JumpBack]LuxTeamSelect",
             "[JumpBack]LuxThreadLevel",
             "[JumpBack]LuxThreadEnter",
             "[JumpBack]LuxThreadSwipe",
