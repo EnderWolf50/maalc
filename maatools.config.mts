@@ -36,10 +36,11 @@ const screens: [image: string, hits: string[]][] = [
   // Live 2026-10-20 (#84): the server error over the Mailbox after a request timed out, Close / Retry. Retry
   // counts down "Retry 5" to "Retry 1" with a dark frame first, then reads "Retry". The Mailbox under these
   // popups still reads: they come before it in the hub.
-  ['ServerErrorRetryCountdown.png', ['RetryPopup', 'Mailbox']],
-  ['ServerErrorRetry.png', ['RetryPopup', 'Mailbox']],
+  // The box still reads under them, Claim All too: ClaimMail's hub reads MailPopups before MailText.
+  ['ServerErrorRetryCountdown.png', ['RetryPopup', 'Mailbox', 'MailClaimAll']],
+  ['ServerErrorRetry.png', ['RetryPopup', 'Mailbox', 'MailClaimAll']],
   // Live 2026-10-20 (#84): the network-unstable popup over the Mailbox with Wi-Fi off, Close only.
-  ['NetworkUnstable.png', ['PopupButton', 'Mailbox']],
+  ['NetworkUnstable.png', ['PopupButton', 'Mailbox', 'MailClaimAll']],
   // The Parallel Superposition prompt after clearing floor 5 / 10 with the mode engaged (#85). Captured from the
   // game's own help sheet (the page behind it is the help text, not a map): the dialog is its live look, but where
   // it sits on screen is not confirmed. A Cancel / Confirm question, so PopupButton (one centred button) stays out.
@@ -55,15 +56,18 @@ const screens: [image: string, hits: string[]][] = [
   // GoHome reads its popups before HomeReached.
   ['EventNotices.png', ['Notices']],
   ['SystemNotices.png', ['Notices']],
-  ['Mailbox.png', ['Mailbox']],
-  ['SettingsMenu.png', ['SettingsMenu', 'GoToMirrorEntry', 'NavMainTabs', 'HomeReached']],
+  // ClaimMail (#372): the box with mail reads Claim All; the empty one (live 2026-10-26) reads "No mail in storage." and
+  // has the button dimmed. MailOpen is the envelope tap on the main window, the Window tab lit as HomeReached.
+  ['Mailbox.png', ['Mailbox', 'MailClaimAll']],
+  ['MailboxEmpty.png', ['Mailbox', 'MailEmpty']],
+  ['SettingsMenu.png', ['SettingsMenu', 'GoToMirrorEntry', 'NavMainTabs', 'HomeReached', 'MailOpen']],
   ['HelpPager.png', ['HelpPager']],
   ['HelpPagerLast.png', ['HelpPager']],
   ['HelpPagerExtract.png', ['HelpPager']],
   ['HelpPagerSinners.png', ['HelpPager']],
-  ['MainWindow.png', ['GoToMirrorEntry', 'NavMainTabs', 'HomeReached', 'PassBanner']],
-  ['MainWindowFadeIn.png', ['GoToMirrorEntry', 'NavMainTabs', 'HomeReached', 'PassBanner']],
-  ['MainWindowLater.png', ['GoToMirrorEntry', 'NavMainTabs', 'HomeReached', 'PassBanner']],  // live 2026-10-26: other numbers on the resource panel
+  ['MainWindow.png', ['GoToMirrorEntry', 'NavMainTabs', 'HomeReached', 'PassBanner', 'MailOpen']],
+  ['MainWindowFadeIn.png', ['GoToMirrorEntry', 'NavMainTabs', 'HomeReached', 'PassBanner', 'MailOpen']],
+  ['MainWindowLater.png', ['GoToMirrorEntry', 'NavMainTabs', 'HomeReached', 'PassBanner', 'MailOpen']],  // live 2026-10-26: other numbers on the resource panel
   // Live 2026-10-26: the Charge Enkephalin window over Drive, the tab bar dimmed under it: nothing here, neither tab.
   ['EnkephalinPanel.png', []],
   ['SinnersTab.png', ['GoToMirrorEntry', 'NavMainTabs', 'HomeWindowTab']],
