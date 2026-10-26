@@ -76,6 +76,15 @@ def test_claim_mail_with_no_mail_ends_a_success_without_pressing_claim_all():
     assert "MailEmpty" in o["nodes"] and "MailClaimAll" not in o["nodes"]
 
 
+def test_the_empty_box_is_read_before_a_one_button_popup_over_it():
+    # Review S4: "No mail available to claim" may come as a one-button popup over the box; closing it first would hide
+    # that the task is done. The server's popups still come first (the box reads under them).
+    from test_pipeline import hub_entries, load_nodes
+
+    names = hub_entries(load_nodes(), "MailText")
+    assert names.index("RetryPopup") < names.index("MailEmpty") < names.index("PopupButton") < names.index("MailClaimAll")
+
+
 def test_claim_mail_is_a_task_of_the_interface_and_the_global_mailbox_still_only_closes():
     interface = json.loads(strip(ROOT / "assets/interface.json"))
     assert {"name": "ClaimMail", "label": "$ClaimMail", "entry": "ClaimMail"} in interface["task"]

@@ -47,15 +47,8 @@
         "recognition": "Custom",
         "custom_recognition": "HubText",
         "custom_recognition_param": {
+            "base": "ServerPopups",
             "entries": [
-                "RetryPopup",
-                "MaintenanceNotice",
-                "ClientOutdated",
-                "UpdateDialog",
-                "UserAgreement",
-                "DownloadDialog",
-                "Downloading",
-                "Loading",
                 "ClaimPopup",
                 "ParallelModePrompt",
                 "PopupButton",

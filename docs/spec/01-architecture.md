@@ -55,12 +55,12 @@
 ### 回主畫面（`GoHome`）
 
 - 日常任務的第一步和最後一步都走 `GoHome`（`navigation.json`），下一個任務因此一定從主畫面開始；PI 任務 `GoHome` 暫時用來單獨驗證。（#365）
-- 一個 hub，依序處理：連線中、說明頁、全域彈窗（`HomeText`，讀法同 `HubText`，不進批次 OCR）、**到了主畫面**（Window 分頁亮起，`HomeReached`，任務成功結束）、標題畫面（`NavTitle`）、底部分頁列在但 Window 沒亮（點 Window 分頁，`HomeWindowTab`）、遊戲不在前景（`HomeGameAway`，`StartApp`，最多 3 次）、都不是就按返回鍵（`HomeBack`，最多 5 次）。
+- 一個 hub，依序處理：連線中、說明頁、全域彈窗（`HomeText`，讀法同 `HubText`，不進批次 OCR；伺服器與用戶端的彈窗列在 `ServerPopups` 一份，`MirrorHub` 的 `HubText`、`HomeText`、`MailText` 用 `base` 引用它）、**到了主畫面**（Window 分頁亮起，`HomeReached`，任務成功結束）、標題畫面（`NavTitle`）、底部分頁列在但 Window 沒亮（點 Window 分頁，`HomeWindowTab`）、遊戲不在前景（`HomeGameAway`，`StartApp`，最多 3 次）、都不是就按返回鍵（`HomeBack`，最多 5 次）。
 - 彈窗排在 `HomeReached` 前面：設定選單蓋著主畫面時 Window 分頁仍是亮的。其他分頁亮起、彈窗壓暗分頁列時，Window 模板的分數最多 0.80，門檻 0.9。
 - 前景不是遊戲時直接啟動遊戲，不等 hub 逾時走 L3（`GameAway` 讀 `dumpsys window`，讀不到時不算）。
 - 60 秒認不出畫面、或返回鍵用完仍沒到主畫面：走停止程序（存證據、webhook），任務失敗，client 的清單繼續；這個任務不結束整串清單。
 - 日常任務的入口：入口節點（`TaskStart`）接 `GoHomeRun` 節點，它在 agent 裡用 `context.run_task("GoHome")` 跑完整個 `GoHome` 再接 hub（#366 驗證過另一條路也行：入口列 `[JumpBack]TaskHome`，`TaskHome` 的 `max_hit` 為 1、`next` 是 `GoHome`，跑完 `GoHome` 跳回入口再進 hub；專案統一採用 `GoHomeRun`／`go_home()`，不混用）。結尾：動作做 `go_home()` 再 `done()`，hub 的 `TaskDone` 讓任務成功結束。`GoHome` 失敗時已自己走過停止程序，`GoHomeRun` 直接讓任務失敗。（#371）
-- `ClaimMail`（`mail.json`）：`TaskStart` → `GoHomeRun` → hub：主畫面點右上信封（`MailOpen`）→ 信箱按 Claim All（`MailClaimAll`，最多 3 次）→ 再看到空信箱（`No mail in storage`，`MailEmpty`）就 `MailFinish`（`go_home()`，GoHome 的全域 `Mailbox` 按 Close 關信箱，再 `done`）。蓋在信箱上的彈窗先處理（`MailPopups`）。沒信時不按 Claim All，直接成功結束。Claim All 之後的確認／結果畫面還沒截到（unverified）。（#372）
+- `ClaimMail`（`mail.json`）：`TaskStart` → `GoHomeRun` → hub：主畫面點右上信封（`MailOpen`）→ 信箱按 Claim All（`MailClaimAll`，最多 3 次）→ 再看到空信箱（`No mail in storage`，`MailEmpty`）就 `MailFinish`（`go_home()`，GoHome 的全域 `Mailbox` 按 Close 關信箱，再 `done`）。信箱的畫面與蓋在上面的彈窗一次讀（`MailText`）：伺服器彈窗先，再來空信箱（遊戲的「No mail available to claim」可能是蓋在信箱上的單鈕彈窗，它代表做完了，所以排在單鈕彈窗前），再來單鈕彈窗，最後 Claim All。沒信時不按 Claim All，直接成功結束。Claim All 之後的確認／結果畫面還沒截到（unverified）。（#372）
 - `ClaimPassMissions`（`pass_missions.json`）：主畫面的 Limbus Pass 橫幅（OCR 標題 `SEASON`）→ `Pass Missions` 分頁（模板，亮著時分數 0.92，門檻 0.97）→ Daily 分頁逐列點可領的列（`PassClaimable`，`agent/pass_missions.py`：金幣亮、沒有 CLEAR 章、進度條滿）→ Weekly 分頁同樣 → `PassFinish`（回主畫面、`done`）。沒有可領的就直接成功結束。可領那一列的畫面還沒截到，判斷是從已領、進行中兩種畫面推的（unverified）。
 - 沒有鏡牢的卡住恢復階梯：日常頁只有返回鍵（L1）和重啟遊戲（L3）；L3 之後的接手還沒做（待實機看過再定）。
 

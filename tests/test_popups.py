@@ -1,6 +1,6 @@
 import re
 
-from test_pipeline import load_nodes
+from test_pipeline import hub_entries, load_nodes
 
 
 def test_the_main_window_popups_click_their_close_button_only():
@@ -19,5 +19,5 @@ def test_the_help_pager_is_looked_at_before_the_entry_page_under_it():
 
 def test_a_popup_over_the_mailbox_is_answered_before_the_mailbox():
     # live #84: the server error and the network popup came up over the Mailbox, which still reads under them.
-    entries = load_nodes()["HubText"]["custom_recognition_param"]["entries"]
+    entries = hub_entries(load_nodes(), "HubText")
     assert entries.index("RetryPopup") < entries.index("PopupButton") < entries.index("Mailbox")

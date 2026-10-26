@@ -51,24 +51,13 @@
         "custom_action": "StopTask",
         "custom_action_param": "EXP Luxcavation is stuck"
     },
-    // ExpHub's OCR screens, read in one pass as HubText (#157).
+    // ExpHub's OCR screens, read in one pass as HubText (#157): GoHome's popups (HomeText), then the battle's end.
     "ExpText": {
         "recognition": "Custom",
-        "custom_recognition": "ExpText",
+        "custom_recognition": "HubText",
         "custom_recognition_param": {
+            "base": "HomeText",
             "entries": [
-                "RetryPopup",
-                "MaintenanceNotice",
-                "ClientOutdated",
-                "UpdateDialog",
-                "UserAgreement",
-                "DownloadDialog",
-                "Downloading",
-                "Loading",
-                "PopupButton",
-                "Notices",
-                "Mailbox",
-                "SettingsMenu",
                 "Victory"
             ],
             "tail": []

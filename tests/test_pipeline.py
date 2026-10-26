@@ -3,6 +3,8 @@ import re
 from collections import Counter
 from pathlib import Path
 
+import hub_text
+
 PIPELINE = Path(__file__).resolve().parent.parent / "assets/resource/base/pipeline"
 
 
@@ -12,6 +14,11 @@ def load_nodes(pattern="*.json"):
         lines = path.read_text(encoding="utf-8").splitlines()
         nodes |= json.loads("\n".join(ln for ln in lines if not ln.strip().startswith("//")))
     return nodes
+
+
+def hub_entries(nodes, name):
+    """A HubText node's entries, its base's first (hub_text.entries)."""
+    return hub_text.entries(name, lambda n: nodes[n]["custom_recognition_param"])
 
 
 def recognition(spec):
@@ -72,12 +79,12 @@ def test_mirror_hub_reads_its_ocr_screens_through_hub_text():
     assert hub.index("BattleHUD") < hub.index("Connecting") < hub.index("HubText")
     param = nodes["HubText"]["custom_recognition_param"]
     assert param["tail"] == hub[hub.index("HubText") + 1:]
-    for name in param["entries"]:  # OCR HubText judges (hub_text.ocr_specs): OCR, And / Or of OCR, gates in an And
+    for name in hub_entries(nodes, "HubText"):  # OCR HubText judges (hub_text.ocr_specs): OCR, And / Or of OCR, gates in an And
         kind, params = recognition(nodes[name])
         subs = [recognition(s)[0] for s in parts(nodes, params)]
         assert (kind == "OCR" or kind == "Or" and subs and all(s == "OCR" for s in subs)
                 or kind == "And" and "OCR" in subs and all(s in ("OCR", "TemplateMatch", "Or") for s in subs)), name
-    assert len(batch_plan(nodes, ["NoBatchOCR", *param["entries"], *param["tail"]])) == 1
+    assert len(batch_plan(nodes, ["NoBatchOCR", *hub_entries(nodes, "HubText"), *param["tail"]])) == 1
 
 
 def test_go_home_reads_its_popups_through_home_text_and_no_next_list_batches_ocr():
@@ -89,9 +96,9 @@ def test_go_home_reads_its_popups_through_home_text_and_no_next_list_batches_ocr
     assert hub[-1] == "HomeBack" and nodes["HomeBack"]["max_hit"] == 5  # the back key has a limit
     param = nodes["HomeText"]["custom_recognition_param"]
     assert param["tail"] == [] and nodes["HomeText"]["timeout"] == 0
-    for name in param["entries"]:
+    for name in hub_entries(nodes, "HomeText"):
         assert recognition(nodes[name])[0] in ("OCR", "And", "Or"), name
-    assert len(batch_plan(nodes, ["NoBatchOCR", *param["entries"], *param["tail"]])) == 1
+    assert len(batch_plan(nodes, ["NoBatchOCR", *hub_entries(nodes, "HomeText"), *param["tail"]])) == 1
     assert nodes["GoHome"]["on_error"] == ["GoHomeLost"] and nodes["GoHomeLost"]["custom_action"] == "StopTask"
 
 
@@ -126,7 +133,7 @@ def test_the_screens_that_lift_a_held_finger_are_hub_nodes():
     import actions
     nodes = load_nodes()
     hub = [re.sub(r"^(\[\w+\])+", "", n) for n in nodes["MirrorHub"]["next"]]
-    hub += nodes["HubText"]["custom_recognition_param"]["entries"]
+    hub += hub_entries(nodes, "HubText")
     assert set(actions.BATTLE_LEFT) <= set(hub)
     assert nodes["BattlePause"]["custom_action"] == "HoldTurn" and "BattlePause" in nodes["BattleHUD"]["next"]
     # A popup over a playing turn lifts the finger; BattleHUD acts on it before BattlePause holds again.
@@ -222,3 +229,11 @@ def test_mirror_entry_paused_outwaits_the_chains():
     param = load_nodes("mirror_dungeon.json")["MirrorEntryPaused"]["custom_action_param"]
     assert param["timeout"] >= 2 * 3.9
 
+
+
+def test_every_hub_reads_the_server_popups_first_from_one_list():
+    # Review M4: the popups any page can show are listed once (ServerPopups); every hub's HubText node names it as its base.
+    nodes = load_nodes()
+    server = nodes["ServerPopups"]["custom_recognition_param"]["entries"]
+    for name in ("HubText", "HomeText", "ExpText", "MailText"):
+        assert nodes[name]["custom_recognition"] == "HubText" and hub_entries(nodes, name)[:len(server)] == server, name

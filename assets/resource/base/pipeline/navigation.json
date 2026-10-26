@@ -41,20 +41,14 @@
         "custom_action": "StopTask",
         "custom_action_param": "the main window was not reached"
     },
-    // The global popups the main window or the title can show (popups.json), read in one pass (hub_text.py).
+    // The global popups the main window or the title can show (popups.json), read in one pass (hub_text.py): the
+    // server's (ServerPopups), then the main window's own.
     "HomeText": {
         "recognition": "Custom",
-        "custom_recognition": "HomeText",
+        "custom_recognition": "HubText",
         "custom_recognition_param": {
+            "base": "ServerPopups",
             "entries": [
-                "RetryPopup",
-                "MaintenanceNotice",
-                "ClientOutdated",
-                "UpdateDialog",
-                "UserAgreement",
-                "DownloadDialog",
-                "Downloading",
-                "Loading",
                 "PopupButton",
                 "Notices",
                 "Mailbox",

@@ -25,7 +25,6 @@
         ],
         "next": [
             "TaskDone",
-            "[JumpBack]MailPopups",
             "[JumpBack]MailText",
             "[JumpBack]HomeText",
             "[JumpBack]MailOpen"
@@ -36,40 +35,18 @@
         "custom_action": "StopTask",
         "custom_action_param": "the mail was not claimed"
     },
-    // HomeText's popups but the Mailbox (and the notices and the menu): a popup over the open box comes first, the box
-    // still reads under it (ServerErrorRetry.png), and the box's own Close is not what ClaimMail wants.
-    "MailPopups": {
-        "recognition": "Custom",
-        "custom_recognition": "MailPopups",
-        "custom_recognition_param": {
-            "entries": [
-                "RetryPopup",
-                "MaintenanceNotice",
-                "ClientOutdated",
-                "UpdateDialog",
-                "UserAgreement",
-                "DownloadDialog",
-                "Downloading",
-                "Loading",
-                "PopupButton"
-            ],
-            "tail": []
-        },
-        "pre_delay": 0,
-        "post_delay": 0,
-        "rate_limit": 300,
-        "timeout": 0,
-        "on_error": [
-            "MailTextLost"
-        ]
-    },
-    // The Mailbox's own two screens, read in one OCR pass (hub_text.py, #157): empty first, then Claim All.
+    // The open Mailbox and what can be over it, read in one OCR pass (hub_text.py, #157). The server's popups first: the
+    // box still reads under them (ServerErrorRetry.png). Then the empty box, ahead of the one-button popup: the game's
+    // "No mail available to claim" may be such a popup over the box, and it says the task is done. Then a one-button
+    // popup, then Claim All. Not HomeText's Mailbox: the box's own Close is not what ClaimMail wants.
     "MailText": {
         "recognition": "Custom",
-        "custom_recognition": "MailText",
+        "custom_recognition": "HubText",
         "custom_recognition_param": {
+            "base": "ServerPopups",
             "entries": [
                 "MailEmpty",
+                "PopupButton",
                 "MailClaimAll"
             ],
             "tail": []
