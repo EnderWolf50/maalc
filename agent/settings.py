@@ -116,8 +116,16 @@ def _v10_to_v11(data):
     return data
 
 
+def _v11_to_v12(data):
+    """Version 12 adds luxcavation.exp (#366): one win, no team picked yet, no retries."""
+    lux = data.setdefault("luxcavation", {})
+    if isinstance(lux, dict):  # a broken file is left to the checks
+        lux.setdefault("exp", {"count": 1, "team": None, "retries": 0})
+    return data
+
+
 # MIGRATIONS[n] turns a version-n dict into a version-(n + 1) dict; keep in step with gui/src/model.ts.
-MIGRATIONS = {1: _v1_to_v2, 2: _v2_to_v3, 3: _v3_to_v4, 4: _v4_to_v5, 5: _v5_to_v6, 6: _v6_to_v7, 7: _v7_to_v8, 8: _v8_to_v9, 9: _v9_to_v10, 10: _v10_to_v11}
+MIGRATIONS = {1: _v1_to_v2, 2: _v2_to_v3, 3: _v3_to_v4, 4: _v4_to_v5, 5: _v5_to_v6, 6: _v6_to_v7, 7: _v7_to_v8, 8: _v8_to_v9, 9: _v9_to_v10, 10: _v10_to_v11, 11: _v11_to_v12}
 
 NO_TEAM = "No enabled team: set up a team in the settings GUI first."
 
@@ -200,6 +208,11 @@ def cross_check(data):
         for field, ref, key in refs:
             if ref is not None and ref not in plan_ids[key]:
                 errors.append(f"teams/{i}/{field}: team {t['name']!r} uses missing plan {ref!r} (not in {key})")
+
+    team_ids = {t["id"] for t in teams}
+    for task, opts in data["luxcavation"].items():
+        if opts["team"] is not None and opts["team"] not in team_ids:
+            errors.append(f"luxcavation/{task}/team: team {opts['team']!r} is not in teams")
 
     dupes("event_overrides", [o["question"] for o in data["event_overrides"]], "question")
     dupes("trial_risk_overrides", [o["trial"] for o in data["trial_risk_overrides"]], "trial")

@@ -54,7 +54,7 @@ test("a new file is valid without a team (#364: only MirrorDungeon asks for one)
 });
 
 test("parseSettings refuses newer and unmigratable versions", () => {
-  expect(() => parseSettings('{"version": 12}')).toThrow("newer");
+  expect(() => parseSettings('{"version": 13}')).toThrow("newer");
   expect(() => parseSettings('{"version": 0}')).toThrow("cannot be migrated");
 });
 
@@ -112,6 +112,15 @@ test("version 6 keeps what the shop kept before", () => {
   expect(migrated).toBe(true);
   const kept = [[], "keep", [], 4, false];
   expect(data.teams.map((t) => [t.keep_keywords, t.keywordless, t.keep_gifts, t.sell_max_tier, t.sell_vestiges])).toEqual([kept, kept]);
+  expect(validate(data)).toEqual([]);
+});
+
+test("version 11 gets EXP Luxcavation with no team picked", () => {
+  const old = structuredClone(cases.valid) as Record<string, unknown>;
+  delete old.luxcavation;
+  const { data, migrated } = parseSettings(JSON.stringify({ ...old, version: 11 }));
+  expect(migrated).toBe(true);
+  expect(data.luxcavation).toEqual({ exp: { count: 1, team: null, retries: 0 } });
   expect(validate(data)).toEqual([]);
 });
 

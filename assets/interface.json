@@ -43,6 +43,11 @@
             "entry": "MirrorDungeon"
         },
         {
+            "name": "ExpLuxcavation",
+            "label": "$ExpLuxcavation",
+            "entry": "ExpLuxcavation"
+        },
+        {
             "name": "ClaimPassMissions",
             "label": "$ClaimPassMissions",
             "entry": "ClaimPassMissions"
