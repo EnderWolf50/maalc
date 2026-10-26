@@ -1,0 +1,145 @@
+{
+    // EXP Luxcavation (#366, spec 01 日常任務的骨架): ExpStart picks the team (luxcavation.exp), TaskHome goes to the main
+    // window, ExpHub plays the rightmost open stage of the EXP tab once and ends back on the main window (TaskDoneHome).
+    "ExpLuxcavation": {
+        "action": "Custom",
+        "custom_action": "ExpStart",
+        "next": [
+            "[JumpBack]TaskHome",
+            "ExpHub"
+        ]
+    },
+    // The pages after Enter (team, formation, results) have no capture yet (#366): their screens time out here and
+    // the task stops with evidence, a failure the client's list goes past. Stuck (the watchdog: the same screen over
+    // and over) stops it too: no recovery ladder on the daily pages yet.
+    "ExpHub": {
+        "timeout": 60000,
+        "rate_limit": 300,
+        "on_error": [
+            "ExpLost"
+        ],
+        "next": [
+            "ExpStuck",
+            "TaskDoneHome",
+            "[JumpBack]BattleHUD",
+            "[JumpBack]Connecting",
+            "[JumpBack]HelpPager",
+            "[JumpBack]ExpText",
+            "[JumpBack]LuxExpEnter",
+            "[JumpBack]LuxExpTab",
+            "[JumpBack]NavLuxcavation",
+            "[JumpBack]NavTitle",
+            "[JumpBack]NavMainTabs"
+        ]
+    },
+    "ExpLost": {
+        "action": "Custom",
+        "custom_action": "StopTask",
+        "custom_action_param": "EXP Luxcavation: no screen known for 60 s"
+    },
+    "ExpStuck": {
+        "recognition": "Custom",
+        "custom_recognition": "StuckFlag",
+        "action": "Custom",
+        "custom_action": "StopTask",
+        "custom_action_param": "EXP Luxcavation is stuck"
+    },
+    // ExpHub's OCR screens, read in one pass as HubText (#157).
+    "ExpText": {
+        "recognition": "Custom",
+        "custom_recognition": "ExpText",
+        "custom_recognition_param": {
+            "entries": [
+                "RetryPopup",
+                "MaintenanceNotice",
+                "ClientOutdated",
+                "UpdateDialog",
+                "UserAgreement",
+                "DownloadDialog",
+                "Downloading",
+                "Loading",
+                "PopupButton",
+                "Notices",
+                "Mailbox",
+                "SettingsMenu",
+                "Victory"
+            ],
+            "tail": []
+        },
+        "pre_delay": 0,
+        "post_delay": 0,
+        "rate_limit": 300,
+        "timeout": 0,
+        "on_error": [
+            "ExpTextLost"
+        ]
+    },
+    "ExpTextLost": {
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    // Drive's Luxcavation button (tests/screens/Drive.png).
+    "NavLuxcavation": {
+        "recognition": "TemplateMatch",
+        "roi": [340, 80, 240, 160],
+        "template": "Navigation/NavLuxcavation.png",
+        "threshold": 0.8,
+        "action": "Click",
+        "post_delay": 2000
+    },
+    // A Luxcavation tab is lit by an orange frame: ~1060 orange px in its roi, no other screen over 710
+    // (tests/screens/LuxExp.png, LuxThread.png). The unlit and lit tabs read the same to a template (0.93).
+    "LuxExpLit": {
+        "recognition": "ColorMatch",
+        "roi": [62, 228, 166, 72],
+        "lower": [200, 120, 0],
+        "upper": [255, 200, 80],
+        "count": 900
+    },
+    // The Thread tab lit (LuxThread.png) under the Luxcavation panel: tap EXP.
+    "LuxExpTab": {
+        "recognition": "And",
+        "all_of": [
+            {
+                "recognition": "TemplateMatch",
+                "sub_name": "LuxPanel",
+                "roi": [55, 170, 180, 60],
+                "template": "Luxcavation/LuxPanel.png",
+                "threshold": 0.8
+            },
+            {
+                "recognition": "ColorMatch",
+                "sub_name": "LuxThreadLit",
+                "roi": [62, 297, 166, 72],
+                "lower": [200, 120, 0],
+                "upper": [255, 200, 80],
+                "count": 900
+            }
+        ],
+        "action": "Click",
+        "target": [70, 236, 150, 56],
+        "post_delay": 1500
+    },
+    // The EXP tab as it opens shows its three hardest stages (2026-10-26: 7-9 of 10, the 10th locked, KEEP OUT, with no
+    // Enter): the rightmost Enter is the hardest open stage. The box is that Enter's (index -1: the last, left to right).
+    "LuxExpEnter": {
+        "recognition": "And",
+        "all_of": [
+            "LuxExpLit",
+            {
+                "recognition": "TemplateMatch",
+                "sub_name": "LuxExpEnterButton",
+                "roi": [290, 450, 960, 60],
+                "template": "Luxcavation/LuxExpEnter.png",
+                "threshold": 0.8,
+                "order_by": "Horizontal",
+                "index": -1
+            }
+        ],
+        "box_index": 1,
+        "action": "Custom",
+        "custom_action": "ExpEnter",
+        "pre_delay": 500,
+        "post_delay": 0
+    }
+}

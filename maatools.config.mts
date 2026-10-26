@@ -67,7 +67,13 @@ const screens: [image: string, hits: string[]][] = [
   // Live 2026-10-26: the Charge Enkephalin window over Drive, the tab bar dimmed under it: nothing here, neither tab.
   ['EnkephalinPanel.png', []],
   ['SinnersTab.png', ['GoToMirrorEntry', 'NavMainTabs', 'HomeWindowTab']],
-  ['Drive.png', ['GoToMirrorEntry', 'NavDrive', 'HomeWindowTab']],
+  ['Drive.png', ['GoToMirrorEntry', 'NavDrive', 'HomeWindowTab', 'NavLuxcavation']],
+  // Live 2026-10-26 (#366): Luxcavation as it opens on the EXP tab (stages 7-9), swiped right to the locked 10th (KEEP
+  // OUT, no Enter: the rightmost Enter is stage 9 in the middle), and the Thread tab, which the EXP tab is tapped from.
+  // The lit tab is its orange frame (LuxExpLit); LuxExpEnter's box is the rightmost Enter (test_exp_luxcavation.py).
+  ['LuxExp.png', ['LuxExpLit', 'LuxExpEnter']],
+  ['LuxExpLocked.png', ['LuxExpLit', 'LuxExpEnter']],
+  ['LuxThread.png', ['LuxExpTab']],
   ['EntryNewRun.png', ['MirrorEntryNewRun']],
   ['EntryPaused.png', ['MirrorEntryPaused']],
   // Synthetic (#94), no live capture yet: EntryNewRun.png with the Parallel Superposition label's OFF redrawn as ON.

@@ -412,7 +412,7 @@ class TaskStart(CustomAction):
 
 
 # MirrorHub's own steps, no screen: the watchdog keeps the screen handled before them.
-PASS_NODES = ("BattleHUD", "BattleHUDLost", "HubText", "HubTextLost")
+PASS_NODES = ("BattleHUD", "BattleHUDLost", "HubText", "HubTextLost", "ExpText", "ExpTextLost")
 
 
 @AgentServer.custom_recognition("StuckFlag")
@@ -466,6 +466,46 @@ class GameAway(CustomRecognition):
     def analyze(self, context: Context, argv: CustomRecognition.AnalyzeArg):
         app = foreground(context)
         return CustomRecognition.AnalyzeResult(box=(0, 0, 1, 1), detail={"app": app}) if app not in (None, recovery.GAME) else None
+
+
+@AgentServer.custom_recognition("ExpText")
+class ExpText(hub_text.HubText):
+    """ExpHub's OCR screens (luxcavation.json): HubText with its own entries."""
+
+
+@AgentServer.custom_action("ExpStart")
+class ExpStart(TaskStart):
+    """ExpLuxcavation's entry (#366): TaskStart, then the team luxcavation.exp names, whose guard turns the battle plays
+    (spec 03 section 8). No team picked, or settings that do not load: the stop procedure, before any tap."""
+
+    def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
+        super().run(context, argv)
+        try:
+            settings = load_settings(ROOT)
+        except SettingsError as e:
+            return stop(context, str(e))
+        team = next((t for t in settings["teams"] if t["id"] == settings["luxcavation"]["exp"]["team"]), None)
+        if team is None:
+            return stop(context, "EXP Luxcavation has no team: pick one in the settings GUI's Daily tab")
+        # Not RUN["settings"]: that is a Mirror Dungeon run, which the stop procedure writes to runs.jsonl.
+        RUN.update(team=team, guard=team["guard_turns"])
+        log(f"EXP Luxcavation: team {team['name']!r} (TEAMS #{team['game_team']}), {team['guard_turns']} guard turns")
+        return True
+
+
+@AgentServer.custom_action("ExpEnter")
+class ExpEnter(CustomAction):
+    """LuxExpEnter: tap the rightmost open stage's Enter (the node's box) until the tab goes. Back on the tab after
+    that: the one battle is over (#366), done; the result has no capture yet."""
+
+    def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
+        if RUN.get("entered"):
+            return done("EXP Luxcavation: one battle fought")
+        x, y, w, h = argv.box
+        if tap_then(context, x + w // 2, y + h // 2, lambda im: seen(context, im, argv.node_name) is None, timeout=3) is not None:
+            RUN["entered"] = True
+            log(f"EXP Luxcavation: entered the stage at x {x + w // 2}")
+        return True
 
 
 @AgentServer.custom_action("StopTask")
