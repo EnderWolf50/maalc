@@ -51,6 +51,9 @@ def child():
 
     game = Game()
     game.set("main")
+    # MaaFramework's Linux build (CI) does not pass post_shell to a custom controller ("Shell is not supported for this
+    # controller type"), so foreground() reads None there and GameAway never hits: read the model's dumpsys directly.
+    actions.foreground = lambda context: actions.recovery.focused_package(game.shell("dumpsys window", 0))
     tasker = bind(resource, game)
     out = {"error": None}
     for scenario, (start, focus) in {
