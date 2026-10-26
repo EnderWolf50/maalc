@@ -12,6 +12,10 @@ from maa.custom_recognition import CustomRecognition
 
 ROWS_Y = (225, 312, 400, 487, 575)  # the rows' centres
 ICON_X = 370  # the coin at the row's left, which a tap claims
+# The three thresholds, swept over every 720p image of tests/screens (151, 2026-10-26; test_pass_missions.py): only the
+# synthetic claimable row passes all three. On the pass pages a lit coin reads 405 and a grey one 0; the stamp 175-224
+# and 0 without it; a full bar 175 and the 3/5 one 105. Other screens light up to 662 coin pixels in a row's square, but
+# none of them has a bar over 144 there.
 LIT = 100  # orange pixels of the coin's 40 x 40 square: lit; a claimed row's grey coin has none
 STAMP = 50  # red pixels of the CLEAR stamp (x 600-700): ~180 where it is, 0 where it is not
 BAR = 170  # of the bar's 175 columns bright: full
