@@ -484,6 +484,24 @@ class GameAway(CustomRecognition):
         return CustomRecognition.AnalyzeResult(box=(0, 0, 1, 1), detail={"app": app}) if app not in (None, recovery.GAME) else None
 
 
+@AgentServer.custom_recognition("MailText")
+class MailText(hub_text.HubText):
+    """ClaimMail's Mailbox screens (mail.json): HubText with its own entries, which it reads once and keeps per instance."""
+
+
+@AgentServer.custom_recognition("MailPopups")
+class MailPopups(hub_text.HubText):
+    """ClaimMail's popups over the Mailbox (mail.json), apart from the Mailbox itself."""
+
+
+@AgentServer.custom_action("MailFinish")
+class MailFinish(CustomAction):
+    """The Mailbox has nothing left to claim: back to the main window (GoHome closes the box), then the done exit."""
+
+    def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
+        return go_home(context) and done("no mail to claim")
+
+
 @AgentServer.custom_recognition("ExpText")
 class ExpText(hub_text.HubText):
     """ExpHub's OCR screens (luxcavation.json): HubText with its own entries."""
