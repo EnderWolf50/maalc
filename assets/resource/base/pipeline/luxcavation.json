@@ -17,9 +17,10 @@
             "ExpHub"
         ]
     },
-    // The pages after To Battle! (level warning, start confirm, results) have no capture yet (#366): their screens time
-    // out here and the task stops with evidence, a failure the client's list goes past. Stuck (the watchdog: the same
-    // screen over and over) stops it too: no recovery ladder on the daily pages yet.
+    // To Battle! goes straight to the battle (live 2026-10-27: no level warning, no start confirm); after it the results
+    // page (LuxResult) leads back to the EXP tab. A screen with no node times out here and the task stops with evidence,
+    // a failure the client's list goes past. Stuck (the watchdog: the same screen over and over) stops it too: no
+    // recovery ladder on the daily pages yet.
     "ExpHub": {
         "timeout": 60000,
         "rate_limit": 300,
@@ -53,14 +54,16 @@
         "custom_action": "StopTask",
         "custom_action_param": "EXP Luxcavation is stuck"
     },
-    // ExpHub's OCR screens, read in one pass as HubText (#157): GoHome's popups (HomeText), then the battle's end.
+    // ExpHub's OCR screens, read in one pass as HubText (#157): GoHome's popups (HomeText), then the battle's end: the
+    // battlefield's VICTORY and the results page.
     "ExpText": {
         "recognition": "Custom",
         "custom_recognition": "HubText",
         "custom_recognition_param": {
             "base": "HomeText",
             "entries": [
-                "Victory"
+                "Victory",
+                "LuxResult"
             ],
             "tail": []
         },
@@ -75,6 +78,42 @@
     "ExpTextLost": {
         "pre_delay": 0,
         "post_delay": 0
+    },
+    // The results page after a Luxcavation battle, won or lost (live 2026-10-27, tests/screens/LuxResultVictory.png,
+    // LuxResultThread.png, LuxResultDefeat.png): the Most Valued Employee at the left, Victory in yellow or Defeat in red at
+    // the top right, Clear Rewards and Module Cost under the team, Confirm at the bottom right. LuxResult reads the battle's
+    // result from it (LuxWon, LuxLost) and taps Confirm, which leads back to the EXP or the Thread tab (not the Level
+    // Select); the next Enter there counts it (battle_over).
+    "LuxResult": {
+        "recognition": "And",
+        "all_of": [
+            {
+                "recognition": "OCR",
+                "sub_name": "LuxClearRewards",
+                "roi": [680, 510, 155, 34],
+                "expected": "Clear Rewards"
+            },
+            {
+                "recognition": "OCR",
+                "sub_name": "LuxModuleCost",
+                "roi": [905, 510, 138, 34],
+                "expected": "Module Cost"
+            }
+        ],
+        "action": "Custom",
+        "custom_action": "LuxResult",
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "LuxWon": {
+        "recognition": "OCR",
+        "roi": [980, 95, 220, 75],
+        "expected": "^Victory$"
+    },
+    "LuxLost": {
+        "recognition": "OCR",
+        "roi": [995, 135, 200, 70],
+        "expected": "^Defeat$"
     },
     // Enter opens the mirror's team page (tests/screens/LuxTeamSelect.png, TeamSelect.png): the TEAMS list at the left,
     // the same rows and taps (pick_team_slot), but To Battle! at the bottom right where the mirror's has Confirm.
@@ -169,7 +208,7 @@
     // Thread Luxcavation (#368): LuxStart picks the team (luxcavation.thread), then the same entry as EXP (ThreadHome,
     // LuxHome) and ThreadHub, which plays the hardest level of today's one open card of the Thread tab, over
     // and over until `count` are won. Its screens: the Thread tab's open card (Enter), its Level Select (the bottom row's
-    // Enter), then the pages EXP's Enter leads to as well (ExpHub's list: the team page, the battle, the results).
+    // Enter), then the pages EXP's Enter leads to as well (ExpHub's list: the team page, the battle, the results page).
     "ThreadLuxcavation": {
         "action": "Custom",
         "custom_action": "LuxStart",

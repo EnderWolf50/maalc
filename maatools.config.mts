@@ -59,6 +59,8 @@ const screens: [image: string, hits: string[]][] = [
   // ClaimMail (#372): the box with mail reads Claim All; the empty one (live 2026-10-26) reads "No mail in storage." and
   // has the button dimmed. MailOpen is the envelope tap on the main window, the Window tab lit as HomeReached.
   ['Mailbox.png', ['Mailbox', 'MailClaimAll', 'EnkephalinBar', 'ModuleIcon']],
+  // Live 2026-10-27: Claim All's Parcel Received (Lunacy 104) over the box; its one Confirm is PopupButton's.
+  ['MailParcelReceived.png', ['PopupButton', 'Mailbox', 'MailClaimAll', 'EnkephalinBar', 'ModuleIcon']],
   ['MailboxEmpty.png', ['Mailbox', 'MailEmpty', 'EnkephalinBar', 'ModuleIcon']],
   ['SettingsMenu.png', ['SettingsMenu', 'GoToMirrorEntry', 'NavMainTabs', 'HomeReached', 'MailOpen', 'AssembleMain', 'ChargeMain', 'EnkephalinBar', 'ModuleIcon']],
   ['HelpPager.png', ['HelpPager']],
@@ -79,6 +81,9 @@ const screens: [image: string, hits: string[]][] = [
   // the Daily Count; Use Boxes shares the "Recharge N Enkephalin?" prompt, so ChargeCount is what tells Use Lunacy apart.
   ['EnkephalinModules.png', ['EnkephalinWindow', 'AssemblePanel', 'ChargePanel', 'EnkephalinBar', 'AssembleAfter', 'AssemblePrompt', 'ModuleIcon']],
   ['EnkephalinLunacy.png', ['EnkephalinWindow', 'AssemblePanel', 'ChargePanel', 'EnkephalinBar', 'AssembleAfter', 'ChargePrompt', 'ChargePrice', 'ChargeCount', 'ModuleIcon']],
+  // Live 2026-10-27 (live-1 F1): the window after Confirm stays open, the Enkephalin down, "Insufficient Enkephalin."
+  // where the prompt was (no AssemblePrompt), a "Module Assembled" toast; the main window still reads through.
+  ['EnkephalinAssembled.png', ['EnkephalinWindow', 'AssemblePanel', 'ChargePanel', 'EnkephalinBar', 'AssembleAfter', 'GoToMirrorEntry', 'NavMainTabs', 'ModuleIcon']],
   ['EnkephalinBoxes.png', ['EnkephalinWindow', 'AssemblePanel', 'ChargePanel', 'EnkephalinBar', 'AssembleAfter', 'ChargePrompt', 'ModuleIcon']],
   ['SinnersTab.png', ['GoToMirrorEntry', 'NavMainTabs', 'HomeWindowTab', 'EnkephalinBar', 'ModuleIcon']],
   ['Drive.png', ['GoToMirrorEntry', 'NavDrive', 'HomeWindowTab', 'NavLuxcavation', 'EnkephalinBar', 'ModuleIcon']],
@@ -105,7 +110,8 @@ const screens: [image: string, hits: string[]][] = [
   // Enkephalin window (AssemblePanel), as on WipeDialog.png.
   ['PassMissionsDailyUnderway.png', ['PassDailyLit', 'PassDailyDone', 'AssembleAfter']],
   ['PassMissionsWeekly.png', ['PassWeeklyLit', 'PassWeeklyDone']],
-  ['PassMissionsWeeklyClaimable.synthetic.png', ['PassWeeklyLit', 'PassWeeklyDone']],
+  // Live 2026-10-27 (live-1 F7): rows 2-5 to claim, each framed orange with a red ! and a full bar.
+  ['PassMissionsDailyClaimable.png', ['PassDailyLit', 'PassDailyDone']],
   // Live 2026-10-27 (#362 D9): the Seasonal tab at its top and at its end after one swipe, every row claimed.
   ['PassMissionsSeasonal.png', ['PassSeasonalLit', 'PassSeasonalSwipe', 'PassFinish']],
   ['PassMissionsSeasonalEnd.png', ['PassSeasonalLit', 'PassSeasonalSwipe', 'PassFinish']],
@@ -118,6 +124,12 @@ const screens: [image: string, hits: string[]][] = [
   ['TeamSelect.png', ['TeamSelect']],
   // Live 2026-10-26 (#366): Enter on the EXP tab opens the same page, To Battle! for Confirm (LuxTeamSelect needs both).
   ['LuxTeamSelect.png', ['TeamSelect', 'LuxTeamSelect', 'Formation']],  // its Clear Selection button is the formation page's (ExpText has no Formation)
+  // Live 2026-10-27 (live-1 F2): a Luxcavation battle's results page, won (EXP stage 9; Thread's Faelantern with its
+  // rewards) and lost (Give Up). LuxResult reads Clear Rewards and Module Cost; LuxWon / LuxLost the result. The mirror's
+  // RunVictory and DefeatScreen read them too; the Luxcavation hubs do not list those.
+  ['LuxResultVictory.png', ['LuxResult', 'LuxWon', 'RunVictory']],
+  ['LuxResultThread.png', ['LuxResult', 'LuxWon', 'RunVictory']],
+  ['LuxResultDefeat.png', ['LuxResult', 'LuxLost', 'DefeatScreen']],
   ['LevelWarning.png', ['LevelWarning', 'TeamSelect']],
   ['StarlightPage.png', ['StarlightPage']],
   ['StarlightConfirm.png', ['StarlightConfirm', 'StarlightPage']],
@@ -171,6 +183,13 @@ const screens: [image: string, hits: string[]][] = [
   ['BattleTurnSwarm.png', ['BattleTurn']], // a swarm of enemies over the battlefield, one sinner in 6 slots (live 2026-10-21)
   ['BattleTurnSwarmNext.png', ['BattleTurn']], // the same turn 3 s later: the swarm moved, the HUD did not
   ['BattlePause.png', ['BattlePause']],
+  // Live 2026-10-27, Luxcavation battles: EXP's turn 1 (the chain's gear), Thread's Faelantern (a focused encounter, the
+  // speed badge in ChargePrice's roi as on BattleTurnFocused.png), the battlefield's DEFEAT after Give Up over the turn
+  // (the Win Rate label still reads), and the pause menu: Settings / Resume / Give Up, Resume one bar lower (LuxBattleMenu).
+  ['LuxBattleTurn.png', ['BattleTurn']],
+  ['LuxBattleTurnFocused.png', ['BattleTurn', 'ChargePrice']],
+  ['LuxDefeatField.png', ['BattleTurn']],
+  ['LuxBattleMenu.png', ['LuxBattleMenu', 'BattleTurn']],
   // Live 2026-10-22 (#215): the pause menu behind the gear, over the planning screen (Settings / Resume / Retry Stage /
   // Give Up). BattleMenu clicks Resume; the second frame is the menu fading out after that click. The Win Rate label
   // reads through the menu, so BattleTurn hits too: BattleHUD tries BattleMenu first.
@@ -187,10 +206,12 @@ const screens: [image: string, hits: string[]][] = [
   // Recovery L2 (run by Recover, not the hub): Dungeon Progress -> To Window -> Pause Exploration.
   ['ProgressPanel.png', ['MirrorMap', 'ProgressPanel', 'RecoverToWindow']],
   ['PauseExploration.png', ['MirrorMap', 'RecoverPauseConfirm']],
-  ['DefeatScreen.png', ['DefeatScreen']],
+  // The mirror's run end reads Victory / Defeat where the Luxcavation results page does: LuxWon and LuxLost are read
+  // only on a page LuxResult already matched (Clear Rewards, Module Cost), which these are not.
+  ['DefeatScreen.png', ['DefeatScreen', 'LuxLost']],
   ['ExplorationComplete.png', ['ExplorationComplete']],
   // Settlement: the summary behind the window still reads; Settle handles the window's own dialogs.
-  ['RunVictory.png', ['RunVictory']],
+  ['RunVictory.png', ['RunVictory', 'LuxWon']],
   ['ExplorationReward.png', ['ExplorationReward', 'ExplorationComplete']],
   ['ExplorationRewardOff.png', ['ExplorationReward', 'ExplorationComplete']],
   ['GiveUpDialog.png', ['ExplorationReward', 'ExplorationComplete']],

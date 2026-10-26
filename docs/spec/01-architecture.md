@@ -61,7 +61,7 @@
 - 60 秒認不出畫面、或返回鍵用完仍沒到主畫面（`GoHomeLost`，動作 `HomeLost`）：先走 L3 重啟遊戲（`RecoverL3`，和鏡牢共用每次啟動最多 3 次的上限 `STUCK["l3"]`，每次嘗試都算），再從標題重跑 `GoHome`，返回鍵與啟動遊戲的次數重新算（`clear_hit_count`）。L3 用完才走停止程序（存證據、webhook），任務失敗，client 的清單繼續；這個任務不結束整串清單。（#362 D4）
 - 日常任務的入口：入口節點（`TaskStart`）接 `<任務>Home` 節點（`GoHomeRun`），它在 agent 裡用 `context.run_task("GoHome")` 跑完整個 `GoHome` 再接 hub（#366 驗證過另一條路也行：入口列 `[JumpBack]TaskHome`，`TaskHome` 的 `max_hit` 為 1、`next` 是 `GoHome`，跑完 `GoHome` 跳回入口再進 hub；專案統一採用 `GoHomeRun`／`go_home()`，不混用）。結尾：動作做 `go_home()` 再 `done()`（沒有其他事要做的結尾用共用的 `GoHomeDone`，`custom_action_param` 是 `done` 的理由），hub 的 `TaskDone` 讓任務成功結束。`GoHome` 失敗時已自己走過停止程序，`GoHomeRun` 直接讓任務失敗。（#371）
 - `ClaimMail`（`mail.json`）：`TaskStart` → `MailHome`（`GoHomeRun`）→ hub：主畫面點右上信封（`MailOpen`，主畫面認法引用 `HomeReached`）→ 信箱按 Claim All（`MailClaimAll`，最多 3 次）→ 再看到空信箱（`No mail in storage`，`MailEmpty`）就 `GoHomeDone`（`go_home()`，GoHome 的全域 `Mailbox` 按 Close 關信箱，再 `done`）。信箱的畫面與蓋在上面的彈窗一次讀（`MailText`）：伺服器彈窗先，再來空信箱（遊戲的「No mail available to claim」可能是蓋在信箱上的單鈕彈窗，它代表做完了，所以排在單鈕彈窗前），再來單鈕彈窗，最後 Claim All。沒信時不按 Claim All，直接成功結束。Claim All 之後的確認／結果畫面還沒截到（unverified）。（#372）
-- `ClaimPassMissions`（`pass_missions.json`）：主畫面的 Limbus Pass 橫幅（OCR 標題 `SEASON`）→ `Pass Missions` 分頁（模板，亮著時分數 0.92，門檻 0.97）→ Daily 分頁逐列點可領的列（`PassClaimable`，`agent/pass_missions.py`：金幣亮、沒有 CLEAR 章、進度條滿）→ Weekly 分頁同樣 → Seasonal 分頁（(270,540)，#362 D9）：先領看得到的五列，再往上滑一次（`PassSeasonalSwipe`：遊戲座標 520,560 → 520,200、600 ms，`max_hit` 1），一次就到底、各列比頂端低 10 px（`PassClaimable` 的參數 `dy` 10），領剩下的 → `PassFinish`（`GoHomeDone`：回主畫面、`done`）。Daily、Weekly 各 5 列、不能捲動，Seasonal 10 列（實機 2026-10-27，verified）。每個分頁的點擊有上限（`max_hit` 8），點滿就換下一個分頁，不算失敗。只滑一次：實機連續快速小幅滑動時遊戲曾出現「沒有回應」（不特別處理）。沒有可領的就直接成功結束。可領那一列的畫面還沒截到，判斷是從已領、進行中兩種畫面推的（unverified）。
+- `ClaimPassMissions`（`pass_missions.json`）：主畫面的 Limbus Pass 橫幅（OCR 標題 `SEASON`）→ `Pass Missions` 分頁（模板，亮著時分數 0.92，門檻 0.97）→ Daily 分頁逐列點可領的列（`PassClaimable`，`agent/pass_missions.py`：金幣亮、沒有 CLEAR 章、進度條滿）→ Weekly 分頁同樣 → Seasonal 分頁（(270,540)，#362 D9）：先領看得到的五列，再往上滑一次（`PassSeasonalSwipe`：遊戲座標 520,560 → 520,200、600 ms，`max_hit` 1），一次就到底、各列比頂端低 10 px（`PassClaimable` 的參數 `dy` 10），領剩下的 → `PassFinish`（動作 `PassFinish`：回主畫面、`done`，理由寫這次點了幾列：`pass missions: 4 row(s) claimed`，一列都沒點是 `pass missions: nothing to claim`，live-1 F6）。Daily、Weekly 各 5 列、不能捲動，Seasonal 10 列（實機 2026-10-27，verified）。每個分頁的點擊有上限（`max_hit` 8），點滿就換下一個分頁，不算失敗。只滑一次：實機連續快速小幅滑動時遊戲曾出現「沒有回應」（不特別處理）。沒有可領的就直接成功結束。可領的列（實機 2026-10-27，`tests/screens/PassMissionsDailyClaimable.png`）：整列橘框、右上紅色 !、進度條滿（1/1、2/2、10/10），四列都讀對（live-1 F7）。
 - 沒有鏡牢的卡住恢復階梯：日常頁只有返回鍵（L1）和重啟遊戲（L3）；L3 之後的接手還沒做（待實機看過再定）。
 
 ### 帳號層級的停止與 client 的任務佇列
@@ -85,10 +85,11 @@
 
 - 從主畫面點 Drive（`NavMainTabs`）→ Luxcavation（`NavLuxcavation`）→ EXP 分頁（停在 Thread 分頁時點 EXP，`LuxExpTab`）→ EXP 分頁預設畫面最右邊的 Enter（`LuxExpEnter`，`ExpEnter`）。上鎖的卡顯示 KEEP OUT、沒有 Enter，所以最右邊的 Enter 就是最難的開放關卡。不改 Consecutive Battle、不按 Skip Battle。（#366）
 - 分頁亮起看橘色邊框（ColorMatch）：亮和不亮的分頁對模板的分數差不多（0.93），分不開。
-- 隊伍是 `luxcavation.exp.team` 指的 maalc 隊伍，戰鬥用它的 `guard_turns`（全員防禦 N 回合後按勝率，同鏡牢）。
+- 隊伍是 `luxcavation.exp.team` 指的 maalc 隊伍，戰鬥用它的 `guard_turns`（全員防禦 N 回合後按勝率，同鏡牢）。實機 2026-10-27：經驗本第 9 關照 `guard_turns` 5 防禦了 5 回合（verified）。異想體戰（紐本的 Faelantern 等）是 focused encounter：左齒輪是空心圓環，技能要拖到敵方的技能格上，連線拉不起來，所以照 #127 按勝率、防禦回合留著（`tests/test_battle.py` 用 `LuxBattleTurn.png`、`LuxBattleTurnFocused.png` 驗證這個判斷）。（live-1 F5）
 - 按 Enter 直接進選隊頁（`LuxTeamSelect`）：和鏡牢的選隊頁（`TeamSelect`）同一頁，左側 `TEAMS` 清單、位置和點法都一樣（`pick_team_slot`，鏡牢的 `SelectTeam` 也用它：清單拖到頂、依畫面上的 `TEAMS #N` 列找，必要時捲動，點了之後讀標題確認），只有右下角的按鈕不同：鏡牢是 `Confirm`，這裡是 `To Battle!`（1145,588）。`LuxSelectTeam`：選 `RUN["team"]`（經驗本是 `luxcavation.exp.team`）的遊戲隊伍編號（`game_team`，每場一次），再按 To Battle! 直到這頁消失。節點與動作由 Luxcavation 的各個 hub（經驗本、紐本）共用：hub 列出 `[JumpBack]LuxTeamSelect`，Enter 的動作設 `RUN["team"]` 並在進關時清掉 `RUN["team_picked"]`。（#366）
 - 開頭回主畫面後讀模組數，不夠 `count` 場就跳過（`ExpHome` 節點，動作 `LuxHome`）；按 Enter 之後回到 EXP 分頁，依這場的勝敗計次、再打或結束（`LuxExpEnter` 節點，動作 `LuxEnter`，[spec 03 第 15 節](03-decisions.md)）。
-- 現狀（#366）：選隊頁已接（`LuxTeamSelect`）；To Battle! 之後的畫面（隊伍等級警告、開戰確認、戰鬥結算）沒有截圖，hub 不認得，60 秒後走停止程序（存證據）。戰鬥畫面（`BattleHUD`、`Victory`）沿用鏡牢的節點。缺的畫面截到後再補；模組檢查與計次（#367）已接上，戰敗訊號與戰敗重打待戰敗畫面的截圖。
+- To Battle! 之後直接 Now Loading 進戰鬥，沒有等級警告、沒有開戰確認（實機 2026-10-27）。戰鬥畫面（`BattleHUD`、`Victory`）沿用鏡牢的節點；暫停選單只有 Settings／Resume／Give Up，Resume 比鏡牢低一格（`LuxBattleMenu`，`tests/screens/LuxBattleMenu.png`）；Give Up 沒有確認框，按了就是戰敗。
+- 戰後：戰場上的 VICTORY／DEFEAT → Now Loading → **結算頁**（`LuxResult`，`tests/screens/LuxResultVictory.png`、`LuxResultThread.png`、`LuxResultDefeat.png`）：左邊 Most Valued Employee，右上黃字 `Victory` 或紅字 `Defeat`（`LuxWon`、`LuxLost`），中間 `Clear Rewards`、`Module Cost`，右下 `Confirm`（1125,570）。動作 `LuxResult` 讀 Victory／Defeat 當這場的勝敗（只記進了關的那一場一次），按 Confirm 直到這頁消失；之後落在 EXP 分頁（紐本是 Thread 分頁，不是 Level Select），下一個 Enter 的 `battle_over` 依勝敗計次、重打或結束。按返回鍵離開結算頁也落在同一頁。（live-1 F2）
 
 ### 紐本（`ThreadLuxcavation`）
 
@@ -98,7 +99,7 @@
 - 開放的卡才有亮的 Enter 按鈕（對模板 1.0，其他天才開的卡最多 0.6）。清單從今天的卡開始排，所以進頁就看得到；但清單記得上次捲到哪裡，捲走後看不到亮的 Enter，這時往右滑（`LuxThreadSwipe`，`max_hit` 4）把左邊的卡帶進來。滑的方向沒實機驗證（unverified）。
 - Level Select 一開啟清單就停在最底，最難的等級（Lust 是 Lv60）是最下面那一列；每級消耗 2 個模組（`luxcavation.THREAD_COST`），所以模組檢查是 2 × `count`。`ThreadLevel` 點畫面上最低的那個 Enter；按 Enter 本身不扣模組、不開戰。不改 Consecutive Battle、不按 Skip Battle。
 - Level Select 之後接選隊頁：和經驗本同一個節點，`ThreadHub` 與 `ExpHub` 都列 `[JumpBack]LuxTeamSelect`。（#366、#368）
-- 打完一場回到 Thread 分頁（或停在 Level Select）就算一場：`battle_over` 依勝敗計次、再打或回主畫面結束。回到哪一頁沒實機驗證（unverified）。
+- 打完一場經結算頁（`LuxResult`）回到 Thread 分頁就算一場（實機 2026-10-27：Confirm 後落在 Thread 分頁，不是 Level Select）：`battle_over` 依勝敗計次、再打或回主畫面結束；停在 Level Select 也照算。
 - 隊伍是 `luxcavation.thread.team`。
 
 ### 換腦啡肽模組（`AssembleModules`，#370）
@@ -106,7 +107,7 @@
 - 入口 `AssembleModules`（`TaskStart`）→ `AssembleHome`（`GoHomeRun`）→ `AssembleHub`；hub 認得腦啡肽視窗（`AssemblePanel`，視窗本身的認法是 `EnkephalinWindow`，`ChargePanel` 共用）、全域彈窗（`HomeText`）、主畫面（`AssembleMain`，任務只在這裡 `done()`，所以最後一步在主畫面）。60 秒都不認得就走停止程序（任務失敗）。（#370）
 - 主畫面左下腦啡肽條（`EnkephalinBar`）讀 `n/cap`：少於 20（一個模組的腦啡肽）就以成功結束，不開面板；否則點腦啡肽條開 Charge Enkephalin 視窗。
 - 視窗會停在上次開的分頁，所以每次先點 Modules 分頁（720p (505,226)，實機量的；點分頁不花資源，#362 D7；2026-10-27 的截圖顯示視窗重開一律在 Modules，點了也無害），再讀提示（`AssemblePrompt`：讀到 Modules 頁自己的提示才按 Confirm，這道保護保留）與換前、換後的腦啡肽（`AssembleAfter`），點 `»`（最大量），換後仍 ≥ 20 就再點，最多 3 次；再點 Confirm。只點 Modules 分頁、`»`、Confirm、Cancel，絕不點 Use Lunacy 頁。
-- 回到主畫面後讀回腦啡肽，低於換前才算完成（成功結束）；3 次讀回都沒降就走停止程序（任務失敗）。
+- 按 Confirm 後視窗**不關**（實機 2026-10-27，`tests/screens/EnkephalinAssembled.png`）：右上 toast `Module Assembled 134 ▶ 135`，換前的腦啡肽降下來，提示變成紅字 `Insufficient Enkephalin.`，Confirm 變灰。`AssemblePanel` 在視窗裡讀 `AssembleAfter` 的換前腦啡肽，低於按 Confirm 前就算完成：按 Cancel 關視窗，回主畫面 `done()`。提示又出現、數字沒變是 Confirm 沒按到，再按（最多 3 次）；提示和下降都還沒看到就再看，3 次都沒有就按 Cancel、走停止程序（任務失敗）。視窗若自己關了，主畫面讀回腦啡肽低於換前也算完成。（live-1 F1）
 - 出現「模組太多」（`Cannot assemble Modules; you have too many in storage.`）就以成功結束：按返回鍵、Cancel 關掉視窗、回主畫面。這一頁尚無截圖，辨識的 roi 是寬的（unverified）。
 
 ### 狂氣換腦啡肽（`ChargeEnkephalin`，#373）

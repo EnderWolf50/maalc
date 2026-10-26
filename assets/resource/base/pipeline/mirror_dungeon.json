@@ -114,6 +114,7 @@
         "recognition": "Or",
         "any_of": [
             "BattleMenu",
+            "LuxBattleMenu",
             "BattleTurn",
             "BattlePause"
         ],
@@ -131,6 +132,7 @@
             "UpdateDialog",
             "PopupButton",
             "BattleMenu",
+            "LuxBattleMenu",
             "BattleTurn",
             "BattlePause"
         ]
@@ -510,6 +512,22 @@
         "custom_action_param": {
             "target": [505, 296, 270, 41],
             "gone": {"roi": [505, 296, 270, 41], "expected": "Resume"}
+        }
+    },
+    // The same menu in a Luxcavation battle (live 2026-10-27, tests/screens/LuxBattleMenu.png): Settings / Resume / Give Up,
+    // no Retry Stage, so Resume sits one bar lower. Give Up has no confirm dialog: one tap ends the battle a defeat.
+    "LuxBattleMenu": {
+        "recognition": "TemplateMatch",
+        "roi": [505, 323, 270, 42],
+        "template": "Battle/BattleMenuResume.png",
+        "threshold": 0.8,
+        "action": "Custom",
+        "custom_action": "TapUntil",
+        "pre_delay": 0,
+        "post_delay": 0,
+        "custom_action_param": {
+            "target": [505, 323, 270, 42],
+            "gone": {"roi": [505, 323, 270, 42], "expected": "Resume"}
         }
     },
     // Waiting for input: the Win Rate label, off or on. It moves half a slot (~40 px) right with every

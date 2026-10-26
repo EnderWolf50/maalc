@@ -229,8 +229,24 @@ def clear_long_task_cache(context, argv):
         context.tasker.clear_cache()
 
 
+def hub_name(context):
+    """The hub of the task under way, for the log: the first node down its entry's next chain that lists TaskDone, as
+    every hub does (#364). MirrorDungeon's is MirrorHub, ExpLuxcavation's ExpHub (live-1 F4)."""
+    name = TASK.get("entry") or "MirrorDungeon"
+    for _ in range(5):
+        data = context.get_node_data(name) or {}
+        nexts = [n["name"] for n in data.get("next", [])]
+        if "TaskDone" in nexts:
+            return name
+        if not nexts:
+            break
+        name = nexts[0]
+    return "the hub"
+
+
 def hands_back(run):
-    """An action's run(): PageGone ends it with True, for MirrorHub to look at the screen now up (#118).
+    """An action's run(): PageGone ends it with True, for the task's hub (MirrorHub, ExpHub, ...) to look at the screen
+    now up (#118).
 
     It then clears the runtime cache of a long task (clear_long_task_cache).
     """
@@ -239,7 +255,7 @@ def hands_back(run):
         try:
             return run(self, context, argv)
         except PageGone as e:
-            log(f"{type(self).__name__}: {e} is gone: back to MirrorHub")
+            log(f"{type(self).__name__}: {e} is gone: back to {hub_name(context)}")
             return True
         finally:
             clear_long_task_cache(context, argv)
@@ -577,14 +593,14 @@ class LuxHome(CustomAction):
 
 def battle_over(context):
     """A Luxcavation battle was entered (RUN["entered"]) and the page it started from shows again: count its result
-    (Victory sets it) and say what next (luxcavation.decide, #367). None: the next battle, or the same one again after a
+    (LuxResult sets it) and say what next (luxcavation.decide, #367). None: the next battle, or the same one again after a
     defeat; else what the action returns: True once the main window is reached and the task done, False from the stop
     procedure."""
     lux = RUN["lux"]
     RUN.pop("entered")
     result, lux["result"] = lux["result"], None
-    if result is None:  # TODO(#367): a defeat sets no result yet, its screen has no capture (#366)
-        return stop(context, f"{lux['name']}: back on the page with no victory or defeat seen")
+    if result is None:
+        return stop(context, f"{lux['name']}: back on the page with no results page seen")
     step = luxcavation.decide(lux["modules"], lux["cost"], lux["count"], lux["won"], lux["retried"], lux["retries"], result)
     lux["won"] += result == "win"
     # Each battle has its own retries, as the mirror's wipe retries: a win starts the next battle at 0 (review S6).
@@ -614,6 +630,30 @@ class LuxEnter(CustomAction):
             RUN["entered"] = (json.loads(argv.custom_action_param or "null") or {}).get("opens_battle", True)
             RUN["team_picked"] = False
             log(f"{RUN['lux']['name']}: {argv.node_name} at ({x + w // 2}, {y + h // 2})")
+        return True
+
+
+LUX_CONFIRM = (1125, 570)  # the results page's Confirm (live 2026-10-27)
+
+
+@AgentServer.custom_action("LuxResult")
+class LuxResult(CustomAction):
+    """The results page after a Luxcavation battle (live-1 F2, pipeline LuxResult): its Victory or Defeat is the result of
+    the battle entered (RUN["entered"]), kept for battle_over; then Confirm until the page goes. Neither word read yet:
+    the page is still fading in, and the hub looks again. A defeat (by hand, Give Up: no confirm dialog) takes no
+    Module and no Daily Bonus (live 2026-10-27)."""
+
+    def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
+        image = screen(context)
+        result = "win" if seen(context, image, "LuxWon") else "lose" if seen(context, image, "LuxLost") else None
+        if result is None:
+            return True
+        RUN.pop("turn", None)  # the battle is over: the next one starts its turns and its clock afresh
+        RUN.pop("battle_start", None)
+        if RUN.get("entered") and RUN["lux"]["result"] is None:
+            RUN["lux"]["result"] = result
+            log(f"{RUN['lux']['name']}: results page, {'Victory' if result == 'win' else 'Defeat'}")
+        tap_then(context, *LUX_CONFIRM, lambda im: seen(context, im, "LuxResult") is None, timeout=4)
         return True
 
 
@@ -671,6 +711,18 @@ class GoHomeDone(CustomAction):
 
 
 AgentServer.custom_recognition("PassClaimable")(pass_missions.PassClaimable)
+PASS_CLAIMS = ("PassDailyClaim", "PassWeeklyClaim", "PassSeasonalClaim", "PassSeasonalEndClaim")  # a hit taps one row
+
+
+@AgentServer.custom_action("PassFinish")
+class PassFinish(CustomAction):
+    """ClaimPassMissions' last step: the main window (GoHome), then done with the rows tapped this run (live-1 F6: a run
+    with nothing to claim said "pass missions claimed")."""
+
+    def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
+        n = sum(context.get_hit_count(node) for node in PASS_CLAIMS)
+        return go_home(context) and done(f"pass missions: {n} row(s) claimed" if n else "pass missions: nothing to claim")
+
 
 
 @AgentServer.custom_recognition("DoneFlag")
@@ -748,7 +800,11 @@ class AssemblePanel(CustomAction):
     it (its prompt and the Enkephalin before and after read), >> for the most modules, Confirm. Only the tab, >>, Confirm
     and Cancel are tapped. Not on the Modules tab, or a number that stops reading after >>: Cancel and the stop
     procedure, never Confirm (Use Lunacy's Confirm spends Lunacy). The game's refusal ends the task; a window over a
-    task already decided is cancelled."""
+    task already decided is cancelled.
+
+    Confirm leaves the window open (live-1 F1, tests/screens/EnkephalinAssembled.png): a "Module Assembled 134 > 135"
+    toast, the Enkephalin down, "Insufficient Enkephalin." where the prompt was and Confirm greyed. The drop read there
+    decides the task and Cancel closes the window; the prompt back with nothing changed is a Confirm that did not take."""
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         a = TASK.setdefault("assemble", {"reads": 0, "confirms": 0})
@@ -760,6 +816,8 @@ class AssemblePanel(CustomAction):
         if a.get("end"):
             tap(context, *PANEL_CANCEL, wait=0.5)
             return True
+        if "before" in a and (step := self.after_confirm(context, a, image)) is not None:
+            return step
         tap(context, *MODULES_TAB, wait=0.7)
         image = screen(context)
         read = read_fractions(context, image, "AssembleAfter") if on_modules_tab(context, image) else []
@@ -792,11 +850,32 @@ class AssemblePanel(CustomAction):
             after = again[-1][0]
         a["confirms"] += 1
         if a["confirms"] > ASSEMBLE_TRIES:
-            return stop(context, "Confirm did not close the Charge Enkephalin window")
+            tap(context, *PANEL_CANCEL, wait=0.5)
+            return stop(context, f"Confirm did not take: Enkephalin still {before}")
         log(f"assemble: Enkephalin {before} -> {after}, Confirm")
         a["before"] = before
         tap(context, *PANEL_CONFIRM, wait=0.5)
         return True
+
+    @staticmethod
+    def after_confirm(context, a, image):
+        """The window after a Confirm (a["before"] set), what run() returns: the drop read sets a["end"] and Cancel closes
+        the window (True); nothing read yet is looked at again (True) up to ASSEMBLE_TRIES times, then the stop procedure
+        (False). None: the prompt shows again with the Enkephalin unchanged, a Confirm that did not take, for run() to
+        press again."""
+        read = read_fractions(context, image, "AssembleAfter")
+        if read and read[0][0] < a["before"]:
+            a["end"] = f"Enkephalin {a['before']} -> {read[0][0]}, assembled"
+            log(f"assemble: {a['end']}")
+            tap(context, *PANEL_CANCEL, wait=0.5)
+            return True
+        if on_modules_tab(context, image):
+            return None
+        a["checks"] = a.get("checks", 0) + 1
+        if a["checks"] < ASSEMBLE_TRIES:
+            return True
+        tap(context, *PANEL_CANCEL, wait=0.5)
+        return stop(context, f"Enkephalin still {a['before']} after Confirm")
 
 
 # Lunacy for Enkephalin (#373, pipeline/charge_enkephalin.json): the Charge Enkephalin window's Use Lunacy tab.
@@ -2838,8 +2917,6 @@ class Victory(CustomAction):
         RUN.pop("turn", None)
         RUN.pop("battle_start", None)
         RUN["wipes"] = 0
-        if RUN.get("entered") and RUN["lux"]["result"] is None:  # a Luxcavation battle's win, once: VICTORY stays up for a while
-            RUN["lux"]["result"] = "win"
         return True
 
 

@@ -1,7 +1,9 @@
 """AssembleModules (#370): the real task in a child process (daily_child.py), on a model of the game: a screenshot per
 screen and the taps that move between them.
 
-A start away from the main window goes through GoHomeRun (spec 01); the task ends from the main window.
+A start away from the main window goes through GoHomeRun (spec 01); the task ends from the main window. Confirm leaves
+the window open (live 2026-10-27, EnkephalinAssembled.png: the Enkephalin down, "Insufficient Enkephalin." where the prompt
+was, Confirm greyed): the bot reads the drop there and closes the window with Cancel.
 """
 
 import itertools
@@ -12,9 +14,10 @@ from daily_child import ROOT, bind, game_class, inside, load, result, run_child,
 WINDOW_TAB = (790, 608, 70, 64)
 ENK_BAR = (440, 640)
 CONFIRM = (760, 534)
+CANCEL = (520, 534)
 MODULES_TAB = (505, 226)  # D7 (#362), live 720p
 SCREENS = {"main": "MainWindowLater.png", "low": "MainWindowLowEnkephalin.synthetic.png", "panel": "EnkephalinPanel.png",
-           "drive": "Drive.png", "entry": "EntryNewRun.png"}
+           "drive": "Drive.png", "entry": "EntryNewRun.png", "assembled": "EnkephalinAssembled.png"}
 
 
 def child():
@@ -25,7 +28,7 @@ def child():
     class Game(game_class()):
         images = {**{name: screen(png) for name, png in SCREENS.items()}, "lunacy": lunacy_tab(26)}
 
-        def set(self, start, confirm_to="low", opens="panel"):
+        def set(self, start, confirm_to="assembled", opens="panel"):
             self.screen, self.confirm_to, self.opens, self.clicks, self.keys = start, confirm_to, opens, [], []
 
         def on_tap(self, x, y):
@@ -35,6 +38,10 @@ def child():
                 self.screen = "panel"
             elif self.screen in ("panel", "lunacy") and inside((650, 500, 220, 60), x, y):  # Confirm
                 self.screen = self.confirm_to
+            elif self.screen == "assembled" and inside((410, 500, 220, 60), x, y):  # Cancel closes the window
+                self.screen = "low"
+            elif self.screen in ("panel", "lunacy") and inside((410, 500, 220, 60), x, y):
+                self.screen = "main"
             elif self.screen == "drive" and inside(WINDOW_TAB, x, y):
                 self.screen = "main"
             return True
@@ -44,6 +51,8 @@ def child():
                 self.screen = "drive"
             elif keycode == 4 and self.screen == "panel":  # closes the window (live: unverified)
                 self.screen = "main"
+            elif keycode == 4 and self.screen == "assembled":
+                self.screen = "low"
             return True
 
     game = Game()
@@ -51,19 +60,29 @@ def child():
     tasker = bind(resource, game)
     out = {"error": None}
     for scenario, (start, confirm_to, *opens) in {
-        "main": ("main", "low"), "low": ("low", "low"), "drive": ("drive", "low"), "entry": ("entry", "low"),
-        "panel": ("panel", "low"), "no_drop": ("main", "main"), "on_lunacy": ("main", "low", "lunacy"),
+        "main": ("main", "assembled"), "low": ("low", "assembled"), "drive": ("drive", "assembled"),
+        "entry": ("entry", "assembled"), "panel": ("panel", "assembled"), "no_drop": ("main", "panel"),
+        "on_lunacy": ("main", "assembled", "lunacy"), "closes": ("main", "low"),
     }.items():
         game.set(start, confirm_to, *opens)
         out[scenario] = result(tasker.post_task("AssembleModules", {"AssembleHub": {"timeout": 15000}}).wait().get(), game, actions)
     print(json.dumps(out))
 
 
-def test_assembles_once_from_the_main_window_and_ends_there():
+ASSEMBLE = [list(ENK_BAR), list(MODULES_TAB), list(CONFIRM), list(CANCEL)]  # >> not tapped: the window's own number is under 20
+
+
+def test_assembles_once_from_the_main_window_closes_the_window_and_ends_there():
+    # live-1 F1: the window stays after Confirm; the Enkephalin it shows went down (25 -> 5 live, 22 -> 5 here): Cancel
     o = run_child(__file__)["main"]
     assert o["succeeded"] and o["nodes"][-1] == "TaskDone" and "AssembleMain" in o["nodes"] and "AssemblePanel" in o["nodes"]
-    assert o["clicks"] == [list(ENK_BAR), list(MODULES_TAB), list(CONFIRM)] and o["keys"] == []  # >> not tapped: the window's own number is under 20
-    assert "assembled" in o["done"]
+    assert o["clicks"] == ASSEMBLE and o["keys"] == [] and o["screen"] == "low"
+    assert "assembled" in o["done"] and "-> 5" in o["done"]
+
+
+def test_a_window_that_closes_on_confirm_is_judged_from_the_bar():
+    o = run_child(__file__)["closes"]  # not seen live: the bar on the main window shows the drop
+    assert o["succeeded"] and o["clicks"] == [list(ENK_BAR), list(MODULES_TAB), list(CONFIRM)] and "assembled" in o["done"]
 
 
 def test_starts_on_gohome_from_another_page():
@@ -83,19 +102,20 @@ def test_under_a_module_of_enkephalin_nothing_is_opened_and_the_task_succeeds():
 
 def test_a_window_already_open_is_closed_by_gohome_first():
     o = run_child(__file__)["panel"]
-    assert o["succeeded"] and o["keys"] == [4] and o["clicks"] == [list(ENK_BAR), list(MODULES_TAB), list(CONFIRM)]
+    assert o["succeeded"] and o["keys"] == [4] and o["clicks"] == ASSEMBLE
     assert "assembled" in o["done"]
 
 
 def test_a_window_that_opens_on_the_use_lunacy_tab_is_switched_to_modules_before_confirm():
     # D7 (#362): the window remembers its tab; the Modules tab is tapped first, so Confirm never lands on Use Lunacy.
     o = run_child(__file__)["on_lunacy"]
-    assert o["succeeded"] and o["clicks"] == [list(ENK_BAR), list(MODULES_TAB), list(CONFIRM)] and "assembled" in o["done"]
+    assert o["succeeded"] and o["clicks"] == ASSEMBLE and "assembled" in o["done"]
 
 
-def test_a_bar_that_does_not_drop_after_confirm_fails_the_task():
-    o = run_child(__file__)["no_drop"]
+def test_a_confirm_that_never_takes_fails_the_task():
+    o = run_child(__file__)["no_drop"]  # the prompt stays, the Enkephalin with it: Confirm again, ASSEMBLE_TRIES times
     assert o["succeeded"] is False and o["nodes"][-1] != "TaskDone"
+    assert o["clicks"].count(list(CONFIRM)) == 3
 
 
 def test_fractions_reads_n_over_cap_left_to_right():
@@ -154,6 +174,25 @@ def test_assemble_modules_is_a_task_of_the_interface():
     interface = json.loads("\n".join(ln for ln in (ROOT / "assets/interface.json").read_text(encoding="utf-8").splitlines()
                                      if not ln.strip().startswith("//")))
     assert {"name": "AssembleModules", "label": "$AssembleModules", "entry": "AssembleModules"} in interface["task"]
+
+
+
+def test_after_confirm_the_drop_in_the_open_window_ends_it_with_cancel(monkeypatch, tmp_path):
+    # live-1 F1 (EnkephalinAssembled.png): no prompt ("Insufficient Enkephalin." in its place), 5 / 136 where 25 was
+    actions, context, taps = panel(monkeypatch, tmp_path, [(False, [(5, 136), (5, 136)])])
+    actions.TASK["assemble"] = {"reads": 0, "confirms": 1, "before": 25}
+    assert actions.AssemblePanel().run(context, None) is True
+    assert taps == [actions.PANEL_CANCEL] and actions.TASK["assemble"]["end"] == "Enkephalin 25 -> 5, assembled"
+
+
+def test_after_confirm_a_window_with_nothing_changed_yet_is_looked_at_again(monkeypatch, tmp_path):
+    # Neither the prompt nor a drop: the window is still answering the tap; looked at again, then the stop procedure
+    frames = itertools.repeat((False, [(25, 136), (5, 136)]))
+    actions, context, taps = panel(monkeypatch, tmp_path, frames)
+    actions.TASK["assemble"] = {"reads": 0, "confirms": 1, "before": 25}
+    results = [actions.AssemblePanel().run(context, None) for _ in range(actions.ASSEMBLE_TRIES)]
+    assert results == [True] * (actions.ASSEMBLE_TRIES - 1) + [False]
+    assert taps == [actions.PANEL_CANCEL, "stop"]
 
 
 if __name__ == "__main__":

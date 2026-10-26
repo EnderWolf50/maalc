@@ -18,6 +18,7 @@ says whether it still runs (exit 0) or ended (exit 1, with the last line of its 
 """
 import argparse
 import ctypes
+import glob
 import json
 import os
 import re
@@ -127,6 +128,13 @@ def run(qdir: Path, name: str, cmd: list[str], is_alive=alive, poll: float = 5.0
 STRANDED = 600  # seconds a holder may sit after its bot ended before `status` calls it stranded
 
 
+def guard_logs(guard: Path) -> list[Path]:
+    """The logs a `hold --guard` names: one path, or a glob of them (`bot*.log`: every bot run started during one hold,
+    a second one under its own log included, live-1 T-live)."""
+    s = str(guard)
+    return [Path(p) for p in sorted(glob.glob(s))] if any(c in s for c in "*?[") else [guard]
+
+
 def hold_path(cmd: str, flag: str) -> Path | None:
     """The `--guard`/`--done` path of a `backup.py hold` command line (relative: to the main checkout)."""
     m = re.search(rf"--{flag}\s+(\S+)", cmd)  # ponytail: a path with spaces is cut at the space
@@ -136,9 +144,10 @@ def hold_path(cmd: str, flag: str) -> Path | None:
 def stranded(cmd: str, is_alive=alive, now: float | None = None) -> str:
     """Why a holder waits for an agent that is not there: its guard bot ended long ago and no `done` file exists."""
     guard, done = hold_path(cmd, "guard"), hold_path(cmd, "done")
-    if not guard or not done or done.exists() or not guard.exists() or not detached_doc(guard) or detached_running(guard, is_alive):
+    logs = [p for p in guard_logs(guard) if p.exists() and detached_doc(p)] if guard else []
+    if not logs or not done or done.exists() or any(detached_running(p, is_alive) for p in logs):
         return ""
-    secs = (now or time.time()) - guard.stat().st_mtime  # the bot's last write is when it ended
+    secs = (now or time.time()) - max(p.stat().st_mtime for p in logs)  # the last bot's last write is when it ended
     return f" — bot ended {secs / 60:.0f} min ago, waiting for the agent" if secs > STRANDED else ""
 
 
