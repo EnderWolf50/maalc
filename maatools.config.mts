@@ -103,6 +103,8 @@ const screens: [image: string, hits: string[]][] = [
   ['ResumeDialog.png', ['ResumeDialog', 'MirrorEntryPaused', 'RecoverToWindow']],  // the entry page reads through it
   ['EnterDialog.png', ['MirrorEnterDialog', 'MirrorEntryNewRun']],
   ['TeamSelect.png', ['TeamSelect']],
+  // Live 2026-10-26 (#366): Enter on the EXP tab opens the same page, To Battle! for Confirm (LuxTeamSelect needs both).
+  ['LuxTeamSelect.png', ['TeamSelect', 'LuxTeamSelect', 'Formation']],  // its Clear Selection button is the formation page's (ExpText has no Formation)
   ['LevelWarning.png', ['LevelWarning', 'TeamSelect']],
   ['StarlightPage.png', ['StarlightPage']],
   ['StarlightConfirm.png', ['StarlightConfirm', 'StarlightPage']],
