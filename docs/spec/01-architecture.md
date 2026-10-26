@@ -36,7 +36,7 @@
 | `i` 的說明頁（`HelpPager`） | 返回鍵關閉 | #8、#85 |
 | 自己跳出的教學提示 | 待截圖確認（是不是同一種說明頁） | #8、#85 |
 | 公告（`Notices`） | 返回鍵關閉 | #85 |
-| 信箱（`Mailbox`） | 按 Close，不按 Claim All | #85 |
+| 信箱（`Mailbox`） | 按 Close，不按 Claim All。例外：任務 `ClaimMail` 自己開信箱、按 Claim All，用的是它自己的節點（`mail.json`），全域的這一列不變 | #85、#372 |
 | 設定選單（`SettingsMenu`） | 按 Return，不按 Quit Game | #85 |
 | 每週重置通知 | 關閉 | #8、#14 |
 | 無限鏡牢彈窗 | 不開啟無限鏡牢 | #8、#17 |
@@ -59,6 +59,7 @@
 - 彈窗排在 `HomeReached` 前面：設定選單蓋著主畫面時 Window 分頁仍是亮的。其他分頁亮起、彈窗壓暗分頁列時，Window 模板的分數最多 0.80，門檻 0.9。
 - 前景不是遊戲時直接啟動遊戲，不等 hub 逾時走 L3（`GameAway` 讀 `dumpsys window`，讀不到時不算）。
 - 60 秒認不出畫面、或返回鍵用完仍沒到主畫面：走停止程序（存證據、webhook），任務失敗，client 的清單繼續；這個任務不結束整串清單。
+- 日常任務用 GoHome 的做法（#372 定案）：入口節點先 `TaskStart`，再進自己的 hub；hub 的 `next` 最後一項是 `[JumpBack]GoHome`（GoHome 不在主畫面才會落到它，跑完回 hub 再看一次）；hub 認得主畫面（Window 分頁亮）就直接做事。做完時 `done()`（`DoneTask` 動作）讓 hub 的完成節點命中，完成節點的 `next` 是 `GoHome`（全域彈窗照 GoHome 的 `HomeText` 關掉），GoHome 以 HomeReached 結束任務。`[JumpBack]` 接 GoHome 已用 MaaFramework 測過（`tests/test_claim_mail.py`）。
 - 沒有鏡牢的卡住恢復階梯：日常頁只有返回鍵（L1）和重啟遊戲（L3）；L3 之後的接手還沒做（待實機看過再定）。
 
 ### 入口頁的分流

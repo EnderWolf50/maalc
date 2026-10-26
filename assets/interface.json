@@ -42,6 +42,11 @@
             "label": "$MirrorDungeon",
             "entry": "MirrorDungeon"
         },
+        {
+            "name": "ClaimMail",
+            "label": "$ClaimMail",
+            "entry": "ClaimMail"
+        },
         // Temporary, for verifying GoHome (#365); the daily tasks run it themselves.
         {
             "name": "GoHome",

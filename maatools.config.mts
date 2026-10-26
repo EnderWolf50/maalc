@@ -55,15 +55,18 @@ const screens: [image: string, hits: string[]][] = [
   // GoHome reads its popups before HomeReached.
   ['EventNotices.png', ['Notices']],
   ['SystemNotices.png', ['Notices']],
-  ['Mailbox.png', ['Mailbox']],
-  ['SettingsMenu.png', ['SettingsMenu', 'GoToMirrorEntry', 'NavMainTabs', 'HomeReached']],
+  // ClaimMail (#372): the box with mail reads Claim All; the empty one (live 2026-10-26) reads "No mail in storage." and
+  // has the button dimmed. MailOpen is the envelope tap on the main window, the Window tab lit as HomeReached.
+  ['Mailbox.png', ['Mailbox', 'MailClaimAll']],
+  ['MailboxEmpty.png', ['Mailbox', 'MailEmpty']],
+  ['SettingsMenu.png', ['SettingsMenu', 'GoToMirrorEntry', 'NavMainTabs', 'HomeReached', 'MailOpen']],
   ['HelpPager.png', ['HelpPager']],
   ['HelpPagerLast.png', ['HelpPager']],
   ['HelpPagerExtract.png', ['HelpPager']],
   ['HelpPagerSinners.png', ['HelpPager']],
-  ['MainWindow.png', ['GoToMirrorEntry', 'NavMainTabs', 'HomeReached']],
-  ['MainWindowFadeIn.png', ['GoToMirrorEntry', 'NavMainTabs', 'HomeReached']],
-  ['MainWindowLater.png', ['GoToMirrorEntry', 'NavMainTabs', 'HomeReached']],  // live 2026-10-26: other numbers on the resource panel
+  ['MainWindow.png', ['GoToMirrorEntry', 'NavMainTabs', 'HomeReached', 'MailOpen']],
+  ['MainWindowFadeIn.png', ['GoToMirrorEntry', 'NavMainTabs', 'HomeReached', 'MailOpen']],
+  ['MainWindowLater.png', ['GoToMirrorEntry', 'NavMainTabs', 'HomeReached', 'MailOpen']],  // live 2026-10-26: other numbers on the resource panel
   // Live 2026-10-26: the Charge Enkephalin window over Drive, the tab bar dimmed under it: nothing here, neither tab.
   ['EnkephalinPanel.png', []],
   ['SinnersTab.png', ['GoToMirrorEntry', 'NavMainTabs', 'HomeWindowTab']],

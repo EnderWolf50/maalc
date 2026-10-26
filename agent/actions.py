@@ -468,6 +468,24 @@ class GameAway(CustomRecognition):
         return CustomRecognition.AnalyzeResult(box=(0, 0, 1, 1), detail={"app": app}) if app not in (None, recovery.GAME) else None
 
 
+@AgentServer.custom_recognition("MailText")
+class MailText(hub_text.HubText):
+    """ClaimMail's Mailbox screens (mail.json): HubText with its own entries, which it reads once and keeps per instance."""
+
+
+@AgentServer.custom_recognition("MailPopups")
+class MailPopups(hub_text.HubText):
+    """ClaimMail's popups over the Mailbox (mail.json), apart from the Mailbox itself."""
+
+
+@AgentServer.custom_action("DoneTask")
+class DoneTask(CustomAction):
+    """The task has nothing left to do (#372): the param says why; its hub's done exit (DoneFlag) ends it a success."""
+
+    def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
+        return done(json.loads(argv.custom_action_param or '""'))
+
+
 @AgentServer.custom_action("StopTask")
 class StopTask(CustomAction):
     """End the task a failure through the stop procedure (evidence, log, webhook); the param says why. Not the whole list:
