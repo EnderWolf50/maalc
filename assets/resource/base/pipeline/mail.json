@@ -66,6 +66,7 @@
     },
     // Nothing to claim: "No mail in storage." on the open box (tests/screens/MailboxEmpty.png), or the game's
     // "No mail available to claim with 'Claim All'" (not captured). Done, a success; GoHome closes the box.
+    // MailEmptyText's roi is wide to take both: TODO narrow it once the second message is captured (review T5).
     "MailEmpty": {
         "recognition": "And",
         "all_of": [

@@ -83,7 +83,8 @@
         "expected": "\\d+\\s*/\\s*\\d+"
     },
     // The game's refusal when the modules are at their limit (EN_ShopUI: "Cannot assemble Modules; you have too many in
-    // storage."). No capture yet, so the roi is wide; read by AssemblePanel after each tap.
+    // storage."). No capture yet, so the roi is wide; read by AssemblePanel after each tap. TODO: narrow it to the
+    // message's box once a live capture of it exists (review T5).
     "AssembleTooMany": {
         "recognition": "OCR",
         "roi": [300, 150, 680, 420],

@@ -63,7 +63,8 @@
         "expected": "(?i)recharge\\s*\\d+\\s*enkephalin"
     },
     // Where the price is, also unverified: a wide area of the window's body, read by lunacy.read_price, which wants exactly
-    // one number once the "n / cap" Enkephalin readings are dropped.
+    // one number once the "n / cap" Enkephalin readings are dropped. TODO: narrow it to the price's box once the Use
+    // Lunacy tab is captured (review T5).
     "ChargePrice": {
         "recognition": "OCR",
         "roi": [380, 300, 520, 170],
