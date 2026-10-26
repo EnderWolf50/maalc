@@ -4,8 +4,9 @@ the same to the Thread tab's open card, its Level Select and that list's bottom 
 
 The real task in a child process (daily_child.py), on a model of the game: a screenshot per screen, taps and the back
 key that move between them. Enter opens the team page (LuxTeamSelect.png): the model picks the TEAMS row and To
-Battle! there. The pages after To Battle! (level warning, start confirm, battle, results) have no capture yet: the model
-plays them as one unknown screen that gives way to the EXP tab again.
+Battle! there. To Battle! goes straight to the battle (live 2026-10-27: no level warning, no start confirm); the model
+plays it as an unknown screen, then the battlefield's VICTORY, then the results page (LuxResultVictory.png, LuxResultThread.png
+or LuxResultDefeat.png), which stays until Confirm or the back key and leads back to the EXP or Thread tab.
 """
 
 import json
@@ -23,11 +24,15 @@ LEVEL_ENTERS = [(780, 243 + 101 * i, 100, 40) for i in range(3)]  # Lv40, Lv50, 
 ENTERS = {"exp": (1000, 455, 240, 50), "locked": (660, 455, 240, 50)}  # stage 9's Enter: the rightmost, the middle card
 TEAM_ROW = (75, 365, 110, 36)  # the TEAMS #3 row of the team page's list (LuxTeamSelect.png)
 TO_BATTLE = (1070, 560, 150, 55)
-FIGHT_SHOTS = 4  # screenshots the pages after Enter take before the EXP tab shows again: the first of them gray, the rest VICTORY
+RESULT_CONFIRM = (1045, 540, 165, 60)  # the results page's Confirm (live 2026-10-27: (1125, 570))
+# The bot's taps on To Battle! and on the results page's Confirm: each lies inside the other's box, so they are counted
+# by the point.
+TO_BATTLE_TAP, CONFIRM_TAP = [1145, 588], [1125, 570]
+FIGHT_SHOTS = 4  # screenshots the battle takes before its results page: the first of them gray, the rest VICTORY on a win
 
 SCREENS = {"main": "MainWindow.png", "drive": "Drive.png", "exp": "LuxExp.png", "locked": "LuxExpLocked.png",
            "thread": "LuxThread.png", "team": "LuxTeamSelect.png", "scrolled": "LuxThreadScrolled.png", "levels": "LuxThreadLevels.png", "fight": None,
-           "victory": "Victory.png"}
+           "victory": "Victory.png", "win": "LuxResultVictory.png", "thread_win": "LuxResultThread.png", "lose": "LuxResultDefeat.png"}
 
 
 def child():
@@ -45,7 +50,8 @@ def child():
         def set(self, start, lux_tab="thread", after="thread"):
             self.screen, self.clicks, self.keys, self.shots, self.picked = start, [], [], 0, False
             self.stage = "exp" if start != "locked" else "locked"
-            self.wins = True  # the battles end in VICTORY; False: they end with no victory screen
+            self.outcomes = []  # each battle's end, in order: "win", "lose", or None (no results page: straight back to the tab)
+            self.outcome = None
             self.lux_tab = lux_tab  # the tab Luxcavation opens on
             self.after = after  # the page a Thread battle ends on: "thread" or "levels"
             self.swipes = []
@@ -54,9 +60,11 @@ def child():
             if self.screen == "fight":
                 self.shots += 1
                 if self.shots > FIGHT_SHOTS:
-                    self.screen = self.stage
-                elif self.shots > 1 and self.wins:
+                    self.screen = self.stage if self.outcome is None else "result"
+                elif self.shots > 1 and self.outcome == "win":
                     return self.images["victory"]
+            if self.screen == "result":
+                return self.images["thread_win" if self.outcome == "win" and self.after == "levels" else self.outcome]
             return self.images[self.screen]
 
         def on_tap(self, x, y):
@@ -82,6 +90,9 @@ def child():
                 self.picked = True
             elif s == "team" and self.picked and inside(TO_BATTLE, x, y):
                 self.screen, self.shots = "fight", 0
+                self.outcome = self.outcomes.pop(0) if self.outcomes else "win"
+            elif s == "result" and inside(RESULT_CONFIRM, x, y):
+                self.screen = self.stage  # live: the EXP or the Thread tab, not the Level Select
             return True
 
         def on_swipe(self, down, last):
@@ -97,31 +108,40 @@ def child():
                 self.screen = "drive"
             elif keycode == 4 and self.screen == "levels":  # live 2026-10-26: back closes the Level Select
                 self.screen = "thread"
+            elif keycode == 4 and self.screen == "result":  # live 2026-10-27: back leaves the results page as Confirm does
+                self.screen = self.stage
             return True
 
     game = Game()
     game.set("main")
     tasker = bind(resource, game)
     out = {"error": None}
-    # scenario: (task, start screen, team, count, battles that end in VICTORY, then for the Thread task the tab Luxcavation
-    # opens on and the page a battle ends on); the main window shows 182 Modules, an EXP stage takes 3, a Thread level 2
-    scenarios = {"drive": ("ExpLuxcavation", "drive", "b", 1, True), "locked": ("ExpLuxcavation", "locked", "b", 1, True),
-                 "no_team": ("ExpLuxcavation", "drive", None, 1, True), "two": ("ExpLuxcavation", "drive", "b", 2, True),
-                 "poor": ("ExpLuxcavation", "drive", "b", 61, True), "no_victory": ("ExpLuxcavation", "drive", "b", 1, False),
-                 "thread": ("ThreadLuxcavation", "drive", "b", 1, True, "exp"),
-                 "thread_on_thread": ("ThreadLuxcavation", "drive", "b", 1, True, "thread"),
-                 "thread_scrolled": ("ThreadLuxcavation", "drive", "b", 1, True, "scrolled"),
-                 "thread_two": ("ThreadLuxcavation", "drive", "b", 2, True, "exp"),
-                 "thread_two_levels": ("ThreadLuxcavation", "drive", "b", 2, True, "exp", "levels"),
-                 "thread_poor": ("ThreadLuxcavation", "drive", "b", 92, True, "exp"),
-                 "thread_no_team": ("ThreadLuxcavation", "drive", None, 1, True, "exp"),
-                 "thread_no_victory": ("ThreadLuxcavation", "drive", "b", 1, False, "exp")}
-    for scenario, (task, start, team, count, wins, *rest) in scenarios.items():
-        opts = {"count": count, "team": team, "retries": 0}
+    # scenario: (task, start screen, team, count, retries, how the battles end, then for the Thread task the tab
+    # Luxcavation opens on and the page a battle ends on); the main window shows 182 Modules, an EXP stage takes 3, a
+    # Thread level 2. A battle the list does not reach ends in a win.
+    win, lose = ["win"], ["lose"]
+    scenarios = {"drive": ("ExpLuxcavation", "drive", "b", 1, 0, win), "locked": ("ExpLuxcavation", "locked", "b", 1, 0, win),
+                 "no_team": ("ExpLuxcavation", "drive", None, 1, 0, win), "two": ("ExpLuxcavation", "drive", "b", 2, 0, win),
+                 "poor": ("ExpLuxcavation", "drive", "b", 61, 0, win), "no_result": ("ExpLuxcavation", "drive", "b", 1, 0, [None]),
+                 "lose_retry": ("ExpLuxcavation", "drive", "b", 1, 1, lose + win),
+                 "lose_out": ("ExpLuxcavation", "drive", "b", 1, 1, lose + lose),
+                 "lose_no_retries": ("ExpLuxcavation", "drive", "b", 1, 0, lose),
+                 "thread": ("ThreadLuxcavation", "drive", "b", 1, 0, win, "exp"),
+                 "thread_on_thread": ("ThreadLuxcavation", "drive", "b", 1, 0, win, "thread"),
+                 "thread_scrolled": ("ThreadLuxcavation", "drive", "b", 1, 0, win, "scrolled"),
+                 "thread_two": ("ThreadLuxcavation", "drive", "b", 2, 0, win, "exp"),
+                 "thread_two_levels": ("ThreadLuxcavation", "drive", "b", 2, 0, win, "exp", "levels"),
+                 "thread_poor": ("ThreadLuxcavation", "drive", "b", 92, 0, win, "exp"),
+                 "thread_no_team": ("ThreadLuxcavation", "drive", None, 1, 0, win, "exp"),
+                 "thread_no_result": ("ThreadLuxcavation", "drive", "b", 1, 0, [None], "exp"),
+                 "thread_lose_retry": ("ThreadLuxcavation", "drive", "b", 1, 1, lose + win, "exp"),
+                 "thread_lose_out": ("ThreadLuxcavation", "drive", "b", 1, 0, lose, "exp")}
+    for scenario, (task, start, team, count, retries, outcomes, *rest) in scenarios.items():
+        opts = {"count": count, "team": team, "retries": retries}
         (actions.ROOT / "config" / "settings.json").write_text(
             json.dumps({**settings, "luxcavation": {"exp": opts, "thread": opts}}), encoding="utf-8")
         game.set(start, *rest)
-        game.wins = wins
+        game.outcomes = list(outcomes)
         out[scenario] = {**result(tasker.post_task(task).wait().get(), game, actions), "swipes": game.swipes}
     print(json.dumps(out))
 
@@ -136,8 +156,10 @@ def test_exp_luxcavation_goes_home_first_enters_the_rightmost_open_stage_and_end
     steps = (WINDOW_TAB, DRIVE_TAB, LUXCAVATION, EXP_TAB, ENTERS["exp"], TEAM_ROW, TO_BATTLE)
     assert [inside(box, *xy) for box, xy in zip(steps, taps)] == [True] * 7
     assert taps.count(taps[4]) == 1 and taps.count(taps[6]) == 1  # one battle
-    # Back on the EXP tab after it: done, and GoHome again (the back key, then the Window tab)
-    assert o["keys"] == [4] and inside(WINDOW_TAB, *taps[-1]) and len(taps) == 8
+    # Its results page (live-1 F2): Victory read, Confirm, back on the EXP tab: done, and GoHome again (the back key,
+    # then the Window tab)
+    assert taps[7] == CONFIRM_TAP and o["nodes"].count("LuxResult") == 1
+    assert o["keys"] == [4] and inside(WINDOW_TAB, *taps[-1]) and len(taps) == 9
     assert o["nodes"].count("LuxTeamSelect") == 1
     assert o["nodes"][:3] == ["ExpLuxcavation", "ExpHome", "ExpHub"] and o["nodes"][-1] == "TaskDone"
 
@@ -152,7 +174,7 @@ def test_count_wins_are_fought_before_it_is_done():
     assert len(enters(o)) == 2 and o["keys"] == [4]  # two Enters, one trip home at the end
     # each battle picks its team again: the row and To Battle! after each Enter
     assert len([xy for xy in o["clicks"] if inside(TEAM_ROW, *xy)]) == 2
-    assert len([xy for xy in o["clicks"] if inside(TO_BATTLE, *xy)]) == 2
+    assert o["clicks"].count(TO_BATTLE_TAP) == 2
 
 
 def test_modules_short_of_count_times_the_cost_skip_the_task_a_success_before_any_battle():
@@ -161,10 +183,29 @@ def test_modules_short_of_count_times_the_cost_skip_the_task_a_success_before_an
     assert o["succeeded"] and enters(o) == [] and o["nodes"][-1] == "TaskDone"
 
 
-def test_a_battle_with_no_victory_stops_the_task_instead_of_counting():
-    # TODO(#367): a defeat sets no result yet (no capture of its screen)
-    o = run_child(__file__)["no_victory"]
+def test_a_battle_with_no_results_page_stops_the_task_instead_of_counting():
+    o = run_child(__file__)["no_result"]
     assert o["succeeded"] is False and len(enters(o)) == 1
+
+
+def confirms(o):
+    return [xy for xy in o["clicks"] if xy == CONFIRM_TAP]
+
+
+def test_a_defeat_counts_nothing_and_the_same_stage_is_played_again_within_the_retries():
+    # live-1 F2, F3: the results page's red Defeat is the battle's result; Confirm, then the EXP tab's Enter again
+    o = run_child(__file__)["lose_retry"]
+    assert o["succeeded"], o["nodes"]
+    assert len(enters(o)) == 2 and len(confirms(o)) == 2 and o["nodes"].count("LuxResult") == 2
+    assert o["nodes"][-1] == "TaskDone" and "1 won" in o["done"]
+
+
+def test_a_defeat_past_the_retries_ends_the_task_failed():
+    out = run_child(__file__)
+    for name, battles in (("lose_out", 2), ("lose_no_retries", 1)):
+        o = out[name]
+        assert o["succeeded"] is False and len(enters(o)) == battles and len(confirms(o)) == battles, name
+        assert o["done"] is None, name
 
 
 def test_exp_luxcavation_skips_a_locked_stage_on_the_right():
@@ -198,7 +239,8 @@ def test_thread_luxcavation_goes_home_first_taps_thread_the_open_card_and_the_bo
     boxes = (WINDOW_TAB, DRIVE_TAB, LUXCAVATION, THREAD_TAB, CARD_ENTER, LEVEL_ENTERS[-1], TEAM_ROW, TO_BATTLE)
     assert [inside(box, *xy) for box, xy in zip(boxes, taps)] == [True] * 8
     assert len(level_enters(o)) == 1  # the hardest level only, one battle: not Lv40 or Lv50
-    assert o["keys"] == [4] and inside(WINDOW_TAB, *taps[-1]) and len(taps) == 9  # GoHome again: the back key, the Window tab
+    assert taps[8] == CONFIRM_TAP and o["nodes"].count("LuxResult") == 1  # the results page's Confirm
+    assert o["keys"] == [4] and inside(WINDOW_TAB, *taps[-1]) and len(taps) == 10  # GoHome again: the back key, the Window tab
     assert o["nodes"].count("LuxTeamSelect") == 1
     assert o["nodes"][:3] == ["ThreadLuxcavation", "ThreadHome", "ThreadHub"] and o["nodes"][-1] == "TaskDone"
 
@@ -239,9 +281,18 @@ def test_thread_luxcavation_with_no_team_picked_fails_before_it_taps():
     assert o["succeeded"] is False and o["clicks"] == [] and o["nodes"] == ["ThreadLuxcavation"]
 
 
-def test_a_thread_battle_with_no_victory_stops_the_task_instead_of_counting():
-    o = run_child(__file__)["thread_no_victory"]
+def test_a_thread_battle_with_no_results_page_stops_the_task_instead_of_counting():
+    o = run_child(__file__)["thread_no_result"]
     assert o["succeeded"] is False and len(level_enters(o)) == 1
+
+
+def test_a_thread_defeat_is_played_again_from_the_card_within_the_retries():
+    out = run_child(__file__)
+    o = out["thread_lose_retry"]
+    assert o["succeeded"], o["nodes"]
+    assert len(level_enters(o)) == 2 and len(confirms(o)) == 2 and len([xy for xy in o["clicks"] if inside(CARD_ENTER, *xy)]) == 2
+    o = out["thread_lose_out"]
+    assert o["succeeded"] is False and len(level_enters(o)) == 1 and len(confirms(o)) == 1
 
 
 
@@ -270,6 +321,35 @@ def test_the_watchdog_counts_screens_not_the_luxcavation_hubs():
     finally:
         actions.StuckFlag.see = see
     assert seen == ["LuxExpEnter"] * 3
+
+
+def test_a_page_gone_mid_action_names_the_hub_of_the_task_under_way():
+    # live-1 F4: a daily task's battle logged "back to MirrorHub"; the hub is the first node down the entry's next chain
+    # that lists TaskDone.
+    from unittest.mock import MagicMock
+
+    import actions
+    from test_pipeline import load_nodes
+
+    nodes = load_nodes()
+    context = MagicMock()
+    context.get_node_data = lambda name: {"next": [{"name": n.split("]")[-1]} for n in nodes[name].get("next", [])]}
+    hubs = {}
+    for entry in ("MirrorDungeon", "ExpLuxcavation", "ThreadLuxcavation", "AssembleModules", "ClaimPassMissions", "ClaimMail"):
+        actions.TASK["entry"] = entry
+        hubs[entry] = actions.hub_name(context)
+    assert hubs == {"MirrorDungeon": "MirrorHub", "ExpLuxcavation": "ExpHub", "ThreadLuxcavation": "ThreadHub",
+                    "AssembleModules": "AssembleHub", "ClaimPassMissions": "PassHub", "ClaimMail": "ClaimMailHub"}
+
+    actions.TASK["entry"] = "ExpLuxcavation"
+
+    class Gone:
+        @actions.hands_back
+        def run(self, context, argv):
+            raise actions.PageGone("BattleTurn")
+
+    assert Gone().run(context, None) is True and actions.LOG[-1].endswith("Gone: BattleTurn is gone: back to ExpHub")
+    actions.TASK.pop("entry")
 
 
 def test_each_battle_has_its_own_retries_a_win_resets_them():

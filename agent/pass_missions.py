@@ -3,8 +3,8 @@
 Five rows sit at fixed places (720p); the Seasonal tab's ten scroll, and one swipe takes them to their end, 10 px lower
 (live 2026-10-27, #362 D9). A row is read from its look, not from OCR: a claimed row wears the red CLEAR
 stamp, a row under way (3/5) has a short bar, and a row whose icon is lit with a full bar and no stamp waits for a
-tap. Live 2026-10-26 only the claimed look (both tabs) and the under-way look (a weekly row) were captured: a row that
-waits for a tap is read from them, unverified until one is seen.
+tap (live 2026-10-27, tests/screens/PassMissionsDailyClaimable.png: the whole row framed orange, a red ! at its top
+right).
 """
 
 import json
@@ -15,10 +15,10 @@ from maa.custom_recognition import CustomRecognition
 
 ROWS_Y = (225, 312, 400, 487, 575)  # the rows' centres
 ICON_X = 370  # the coin at the row's left, which a tap claims
-# The three thresholds, swept over every 720p image of tests/screens (151, 2026-10-26; test_pass_missions.py): only the
-# synthetic claimable row passes all three. On the pass pages a lit coin reads 405 and a grey one 0; the stamp 175-224
-# and 0 without it; a full bar 175 and the 3/5 one 105. Other screens light up to 662 coin pixels in a row's square, but
-# none of them has a bar over 144 there.
+# The three thresholds, swept over every 720p image of tests/screens (test_pass_missions.py): only the live rows to claim
+# pass all three. On the pass pages a lit coin reads 386-405 and a grey one 0; the stamp 145-224 and 0 without it (a row
+# to claim: 5-16, its red !); a full bar 175 and the 3/5 one 105. Other screens light up to 662 coin pixels in a row's
+# square, but none of them has a bar over 144 there.
 LIT = 100  # orange pixels of the coin's 40 x 40 square: lit; a claimed row's grey coin has none
 STAMP = 50  # red pixels of the CLEAR stamp (x 600-700): ~180 where it is, 0 where it is not
 BAR = 170  # of the bar's 175 columns bright: full

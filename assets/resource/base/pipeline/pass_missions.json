@@ -3,7 +3,7 @@
     // and the Seasonal tab (#362 D9), one tap per row with a reward to claim (agent/pass_missions.py), and the main window
     // again. A tab's taps have a limit (max_hit); once it is used up the next tab follows, not a failure.
     // The entry follows spec 01 (daily tasks): TaskStart, then GoHome run by GoHomeRun (PassHome); the last step
-    // (PassFinish, GoHomeDone) runs it again.
+    // (PassFinish) runs it again.
     "ClaimPassMissions": {
         "action": "Custom",
         "custom_action": "TaskStart",
@@ -194,14 +194,14 @@
         "post_delay": 1500,
         "max_hit": 8
     },
-    // Nothing left to claim on the Seasonal tab: main window, done.
+    // Nothing left to claim on the Seasonal tab: main window, done, with the rows this run tapped (PassFinish counts the
+    // claim nodes' hits).
     "PassFinish": {
         "recognition": "And",
         "all_of": [
             "PassSeasonalLit"
         ],
         "action": "Custom",
-        "custom_action": "GoHomeDone",
-        "custom_action_param": "pass missions claimed"
+        "custom_action": "PassFinish"
     }
 }
