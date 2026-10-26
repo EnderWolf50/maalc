@@ -49,18 +49,25 @@ const screens: [image: string, hits: string[]][] = [
   // Live 2026-10-21 (#85, 1080p captures scaled to 720p): the main window's own popups and the help pager behind
   // every "i" button (Mirror Dungeon page 1 and its last page, Extract, Sinners). The tab bar dimmed under the
   // notices and the Mailbox misses NavMainTabs' 0.9; under the menu it still reads. The popups come first in the hub.
+  // GoHome (#365): HomeReached is the Window tab lit, HomeWindowTab the same tab unlit (the bar shows with another tab
+  // open, Drive and Sinners). The other tabs' lit look and a popup dimming the bar score at most 0.80 on them, so those
+  // images (the notices, the Mailbox, the popups over them) must miss. The settings menu leaves the Window tab lit:
+  // GoHome reads its popups before HomeReached.
   ['EventNotices.png', ['Notices']],
   ['SystemNotices.png', ['Notices']],
   ['Mailbox.png', ['Mailbox']],
-  ['SettingsMenu.png', ['SettingsMenu', 'GoToMirrorEntry', 'NavMainTabs']],
+  ['SettingsMenu.png', ['SettingsMenu', 'GoToMirrorEntry', 'NavMainTabs', 'HomeReached']],
   ['HelpPager.png', ['HelpPager']],
   ['HelpPagerLast.png', ['HelpPager']],
   ['HelpPagerExtract.png', ['HelpPager']],
   ['HelpPagerSinners.png', ['HelpPager']],
-  ['MainWindow.png', ['GoToMirrorEntry', 'NavMainTabs']],
-  ['MainWindowFadeIn.png', ['GoToMirrorEntry', 'NavMainTabs']],
-  ['SinnersTab.png', ['GoToMirrorEntry', 'NavMainTabs']],
-  ['Drive.png', ['GoToMirrorEntry', 'NavDrive']],
+  ['MainWindow.png', ['GoToMirrorEntry', 'NavMainTabs', 'HomeReached']],
+  ['MainWindowFadeIn.png', ['GoToMirrorEntry', 'NavMainTabs', 'HomeReached']],
+  ['MainWindowLater.png', ['GoToMirrorEntry', 'NavMainTabs', 'HomeReached']],  // live 2026-10-26: other numbers on the resource panel
+  // Live 2026-10-26: the Charge Enkephalin window over Drive, the tab bar dimmed under it: nothing here, neither tab.
+  ['EnkephalinPanel.png', []],
+  ['SinnersTab.png', ['GoToMirrorEntry', 'NavMainTabs', 'HomeWindowTab']],
+  ['Drive.png', ['GoToMirrorEntry', 'NavDrive', 'HomeWindowTab']],
   ['EntryNewRun.png', ['MirrorEntryNewRun']],
   ['EntryPaused.png', ['MirrorEntryPaused']],
   // Synthetic (#94), no live capture yet: EntryNewRun.png with the Parallel Superposition label's OFF redrawn as ON.

@@ -52,6 +52,15 @@
 - 從主畫面或其他畫面進入鏡牢入口頁的導航，必須另外做成一串節點，不放進 `MirrorHub`；做法仿照 MaaEnd 的 SceneManager。（#8）
 - L2、L3 恢復之後也走這串導航回到入口頁。（#14）
 
+### 回主畫面（`GoHome`）
+
+- 日常任務的第一步和最後一步都走 `GoHome`（`navigation.json`），下一個任務因此一定從主畫面開始；PI 任務 `GoHome` 暫時用來單獨驗證。（#365）
+- 一個 hub，依序處理：連線中、說明頁、全域彈窗（`HomeText`，讀法同 `HubText`，不進批次 OCR）、**到了主畫面**（Window 分頁亮起，`HomeReached`，任務成功結束）、標題畫面（`NavTitle`）、底部分頁列在但 Window 沒亮（點 Window 分頁，`HomeWindowTab`）、遊戲不在前景（`HomeGameAway`，`StartApp`，最多 3 次）、都不是就按返回鍵（`HomeBack`，最多 5 次）。
+- 彈窗排在 `HomeReached` 前面：設定選單蓋著主畫面時 Window 分頁仍是亮的。其他分頁亮起、彈窗壓暗分頁列時，Window 模板的分數最多 0.80，門檻 0.9。
+- 前景不是遊戲時直接啟動遊戲，不等 hub 逾時走 L3（`GameAway` 讀 `dumpsys window`，讀不到時不算）。
+- 60 秒認不出畫面、或返回鍵用完仍沒到主畫面：走停止程序（存證據、webhook），任務失敗，client 的清單繼續；這個任務不結束整串清單。
+- 沒有鏡牢的卡住恢復階梯：日常頁只有返回鍵（L1）和重啟遊戲（L3）；L3 之後的接手還沒做（待實機看過再定）。
+
 ### 入口頁的分流
 
 入口頁讀取 `Exploring:` 欄位、Weekly Bonuses 與 `Unclaimed Rewards`，依畫面分流：（#8）

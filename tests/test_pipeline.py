@@ -80,6 +80,21 @@ def test_mirror_hub_reads_its_ocr_screens_through_hub_text():
     assert len(batch_plan(nodes, ["NoBatchOCR", *param["entries"], *param["tail"]])) == 1
 
 
+def test_go_home_reads_its_popups_through_home_text_and_no_next_list_batches_ocr():
+    # #365: the same rule as MirrorHub (#157): GoHome lists no OCR of its own; HomeText reads the popups in one pass.
+    nodes = load_nodes()
+    hub = strip(nodes["GoHome"]["next"])
+    assert [o for n in hub for o in batchable_ocr(nodes, n)] == []
+    assert hub.index("HomeText") < hub.index("HomeReached")  # the settings menu leaves the Window tab lit
+    assert hub[-1] == "HomeBack" and nodes["HomeBack"]["max_hit"] == 5  # the back key has a limit
+    param = nodes["HomeText"]["custom_recognition_param"]
+    assert param["tail"] == [] and nodes["HomeText"]["timeout"] == 0
+    for name in param["entries"]:
+        assert recognition(nodes[name])[0] in ("OCR", "And", "Or"), name
+    assert len(batch_plan(nodes, ["NoBatchOCR", *param["entries"], *param["tail"]])) == 1
+    assert nodes["GoHome"]["on_error"] == ["GoHomeLost"] and nodes["GoHomeLost"]["custom_action"] == "StopTask"
+
+
 def template_first(nodes, spec):
     """Whether a recognition matches a template before any OCR runs: a template, an Or of them, an And led by one."""
     kind, params = recognition(spec)

@@ -14,6 +14,100 @@
             "NavTitle"
         ]
     },
+    // From anywhere to the main window (#365): the first and the last step of every daily task, so the next task starts
+    // from the main window; the PI task GoHome runs it alone. Done once the Window tab is lit, not before the popups
+    // are dealt with (the settings menu leaves it lit). The Window tab is tapped while the bar shows with another tab
+    // open; a page with no bar gets the back key, at most 5 times (HomeBack's max_hit). The popups are HubText's
+    // (no OCR batching, #157), the game away from the front starts it, and 60 s of nothing known ends the task.
+    "GoHome": {
+        "timeout": 60000,
+        "rate_limit": 300,
+        "on_error": [
+            "GoHomeLost"
+        ],
+        "next": [
+            "[JumpBack]Connecting",
+            "[JumpBack]HelpPager",
+            "[JumpBack]HomeText",
+            "HomeReached",
+            "[JumpBack]NavTitle",
+            "[JumpBack]HomeWindowTab",
+            "[JumpBack]HomeGameAway",
+            "[JumpBack]HomeBack"
+        ]
+    },
+    "GoHomeLost": {
+        "action": "Custom",
+        "custom_action": "StopTask",
+        "custom_action_param": "the main window was not reached"
+    },
+    // The global popups the main window or the title can show (popups.json), read in one pass (hub_text.py).
+    "HomeText": {
+        "recognition": "Custom",
+        "custom_recognition": "HomeText",
+        "custom_recognition_param": {
+            "entries": [
+                "RetryPopup",
+                "MaintenanceNotice",
+                "ClientOutdated",
+                "UpdateDialog",
+                "UserAgreement",
+                "DownloadDialog",
+                "Downloading",
+                "Loading",
+                "PopupButton",
+                "Notices",
+                "Mailbox",
+                "SettingsMenu"
+            ],
+            "tail": []
+        },
+        "pre_delay": 0,
+        "post_delay": 0,
+        "rate_limit": 300,
+        "timeout": 0,
+        "on_error": [
+            "HomeTextLost"
+        ]
+    },
+    "HomeTextLost": {
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    // The Window tab lit (tests/screens/MainWindow.png); the other tabs lit, and a popup dimming the bar, score at most
+    // 0.80 on it.
+    "HomeReached": {
+        "recognition": "TemplateMatch",
+        "roi": [770, 598, 110, 84],
+        "template": "Navigation/NavWindowLit.png",
+        "threshold": 0.9
+    },
+    // The Window tab unlit (Drive.png, SinnersTab.png).
+    "HomeWindowTab": {
+        "recognition": "TemplateMatch",
+        "roi": [770, 598, 110, 84],
+        "template": "Navigation/NavWindowTab.png",
+        "threshold": 0.9,
+        "action": "Click",
+        "post_delay": 2000
+    },
+    // Not the game in front (the launcher, the Play Store, no focus): start it; the title and its dialogs follow.
+    "HomeGameAway": {
+        "recognition": "Custom",
+        "custom_recognition": "GameAway",
+        "action": "StartApp",
+        "package": "com.ProjectMoon.LimbusCompany",
+        "post_delay": 10000,
+        "max_hit": 3
+    },
+    // A page with no tab bar (the entry page, Luxcavation): the back key goes up one page.
+    "HomeBack": {
+        "action": "Custom",
+        "custom_action": "DismissShot",
+        "custom_action_param": "back",
+        "post_delay": 2000,
+        "max_hit": 5
+    },
     "NavTitle": {
         "recognition": "TemplateMatch",
         "roi": [20, 620, 200, 70],
