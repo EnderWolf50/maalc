@@ -253,7 +253,7 @@ GUI 用表格編輯，存在設定檔，疊加在資料檔的試煉風險表上�
 
 GUI 的「日常」分頁編輯。要跑哪些日常、依什麼順序，由 MXU／MFAAvalonia 的任務清單決定（[ADR 0010](../adr/0010-one-pi-task-per-daily.md)），分頁上方寫明這點和建議順序。（#362、#366）
 
-`exp` 是經驗本（PI 任務 `ExpLuxcavation`）：
+`exp` 是經驗本（PI 任務 `ExpLuxcavation`），`thread` 是紐本（`ThreadLuxcavation`，#368），兩個的欄位一樣：
 
 | 欄位 | 鍵 | 類型 | 值 | 來源 |
 |---|---|---|---|---|
@@ -262,7 +262,7 @@ GUI 的「日常」分頁編輯。要跑哪些日常、依什麼順序，由 MXU
 | 戰敗重打 | `retries` | 整數 ≥ 0 | 輸掉後重打的次數，預設 0 | #366 |
 
 - `team` 指向不存在的隊伍是交叉檢查錯誤。（#366）
-- 版本 11 遷移到 12 時加上 `{"count": 1, "team": null, "retries": 0}`。（#366）
+- 版本 11 遷移到 12 時加上 `exp`、12 遷移到 13 時加上 `thread`，都是 `{"count": 1, "team": null, "retries": 0}`。（#366、#368）
 - `count` 與 `retries` 由 #367 接上：打贏 `count` 場結束，戰敗在 `retries` 內重打（[spec 03 第 15 節](03-decisions.md)）；戰敗訊號待截圖。
 
 ## 13. 其他檔案

@@ -158,6 +158,7 @@ function DailyTab() {
     <>
       <p className="muted">{t("daily.note")}</p>
       <LuxFields task="exp" />
+      <LuxFields task="thread" />
     </>
   );
 }

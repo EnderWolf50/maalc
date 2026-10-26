@@ -27,6 +27,7 @@ IDENTITY = {
     "Drive": [NAME_PLATE], "SinnersTab": [NAME_PLATE],
     # Luxcavation's narrower LV panel: the LV label sits elsewhere (#366)
     "LuxExp": [NAME_PLATE], "LuxExpLocked": [NAME_PLATE], "LuxThread": [NAME_PLATE],
+    "LuxThreadScrolled": [NAME_PLATE], "LuxThreadLust": [NAME_PLATE], "LuxThreadLevels": [NAME_PLATE],  # #368
     # the main window dimmed under the Mailbox and the popup: the Copy button and LV label do not match
     "ServerErrorRetry": [UID_PLATE, NAME_PLATE], "ServerErrorRetryCountdown": [UID_PLATE, NAME_PLATE],
     "NetworkUnstable": [UID_PLATE, NAME_PLATE],
@@ -76,7 +77,7 @@ def test_the_name_plate_detector_finds_every_screen_that_shows_the_lv_panel():
     shown = {p.stem for p in SCREENS.glob("*.png") if NAME_PLATE in required_boxes(p)}
     assert shown == {"MainWindow", "MainWindowFadeIn", "Drive", "SinnersTab", "ServerErrorRetry", "ServerErrorRetryCountdown",
                      "NetworkUnstable", "EventNotices", "SystemNotices", "Mailbox", "SettingsMenu",
-                     "LuxExp", "LuxExpLocked", "LuxThread"}
+                     "LuxExp", "LuxExpLocked", "LuxThread", "LuxThreadScrolled", "LuxThreadLust", "LuxThreadLevels"}
 
 
 def test_an_unmasked_copy_of_a_fixture_fails(tmp_path):
