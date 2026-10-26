@@ -54,7 +54,7 @@ test("a new file is valid without a team (#364: only MirrorDungeon asks for one)
 });
 
 test("parseSettings refuses newer and unmigratable versions", () => {
-  expect(() => parseSettings('{"version": 14}')).toThrow("newer");
+  expect(() => parseSettings('{"version": 15}')).toThrow("newer");
   expect(() => parseSettings('{"version": 0}')).toThrow("cannot be migrated");
 });
 
