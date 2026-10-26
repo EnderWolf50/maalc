@@ -173,7 +173,11 @@ export interface Settings {
   teams: Team[];
   event_overrides: { question: string; option: string }[];
   trial_risk_overrides: { trial: string; risk: number }[];
+  luxcavation: { exp: Luxcavation };
 }
+/** One Luxcavation daily task's options (#366): the wins to get, a teams[] id (null: none picked), the defeats fought again. */
+export interface Luxcavation { count: number; team: string | null; retries: number }
+const newLuxcavation = (): Luxcavation => defaultsOf(schema.$defs.luxcavation.properties) as unknown as Luxcavation;
 
 const clone = <T,>(v: T): T => structuredClone(v);
 const defaultsOf = (props: Record<string, object>) =>
@@ -186,7 +190,7 @@ export function newSettings(): Settings {
   return {
     version: VERSION, language: "zh_tw", run: defaultsOf(P.run.properties) as Settings["run"],
     deployment_order_plans: [], starlight_plans: [], theme_pack_plans: [], teams: [],
-    event_overrides: [], trial_risk_overrides: [],
+    event_overrides: [], trial_risk_overrides: [], luxcavation: { exp: newLuxcavation() },
   };
 }
 
@@ -253,6 +257,11 @@ const MIGRATIONS: Record<number, (d: Record<string, unknown>) => Record<string, 
   9: (d) => withTeamDefault(d, { fusion_condition: "any" }),
   // Version 11 adds run.keep_dismissed_screens (#244), on.
   10: (d) => (d.run && typeof d.run === "object" ? { ...d, run: { keep_dismissed_screens: true, ...d.run } } : d),
+  // Version 12 adds luxcavation.exp (#366): one win, no team picked yet, no retries.
+  11: (d) => {
+    const lux = d.luxcavation ?? {};
+    return lux && typeof lux === "object" ? { ...d, luxcavation: { exp: newLuxcavation(), ...lux } } : d;
+  },
 };
 
 const MARK_WEIGHTS: Record<string, number> = { prefer: 5, neutral: 0, avoid: -5 };

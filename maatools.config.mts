@@ -70,7 +70,13 @@ const screens: [image: string, hits: string[]][] = [
   // Enkephalin bar still reads under the dimming (#370), as on every screen that shows the resource panel.
   ['EnkephalinPanel.png', ['AssemblePanel', 'EnkephalinBar', 'AssembleAfter']],
   ['SinnersTab.png', ['GoToMirrorEntry', 'NavMainTabs', 'HomeWindowTab', 'EnkephalinBar']],
-  ['Drive.png', ['GoToMirrorEntry', 'NavDrive', 'HomeWindowTab', 'EnkephalinBar']],
+  ['Drive.png', ['GoToMirrorEntry', 'NavDrive', 'HomeWindowTab', 'EnkephalinBar', 'NavLuxcavation']],
+  // Live 2026-10-26 (#366): Luxcavation as it opens on the EXP tab (stages 7-9), swiped right to the locked 10th (KEEP
+  // OUT, no Enter: the rightmost Enter is stage 9 in the middle), and the Thread tab, which the EXP tab is tapped from.
+  // The lit tab is its orange frame (LuxExpLit); LuxExpEnter's box is the rightmost Enter (test_exp_luxcavation.py).
+  ['LuxExp.png', ['LuxExpLit', 'LuxExpEnter']],
+  ['LuxExpLocked.png', ['LuxExpLit', 'LuxExpEnter']],
+  ['LuxThread.png', ['LuxExpTab']],
   // Live 2026-10-26 (#371): the Limbus Pass page on its Battle Pass tab (the Pass Missions tab unlit), then Pass Missions
   // on the Daily tab (every row claimed) and the Weekly tab (one row under way, 3/5). The tab lit is the one on.
   // The rows to claim are read by the agent (PassClaimable, tests/test_pass_missions.py), which this test cannot run.

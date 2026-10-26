@@ -36,6 +36,17 @@
 
 實作（#94）：ON 的畫面還沒有實機截圖，`tests/screens/EntryParallelOn.png` 是把 `EntryNewRun.png` 的 OFF 改畫成 ON 的合成圖；點 `INFINITY MIRROR` 會直接切換還是先跳確認，也還沒實機看過（跳出別的畫面時讀不回 OFF，會停止，不會亂點）。
 
+### Luxcavation（經驗本，#366）
+
+| 畫面 | 辨識方式 | 處理 | 可能的下一個畫面 | 來源 | 實機截圖 |
+|---|---|---|---|---|---|
+| Drive | 模板：`Luxcavation` 按鈕（`NavLuxcavation`） | 點它 | Luxcavation（上次停的分頁） | #366 | `tests/screens/Drive.png` |
+| Luxcavation：Thread 分頁 | 模板：左上 `Luxcavation` 面板；ColorMatch：Thread 分頁的橘色邊框（`LuxExpTab`） | 點 EXP 分頁 | EXP 分頁 | #366 | `tests/screens/LuxThread.png` |
+| Luxcavation：EXP 分頁 | ColorMatch：EXP 分頁的橘色邊框；模板：卡片上的 Enter，取最右邊的一個（`LuxExpEnter`） | 點最右邊的 Enter；打完一場回到這頁就結束 | 選隊／編隊頁（未截圖） | #366 | `tests/screens/LuxExp.png`、`LuxExpLocked.png`（最右邊是上鎖的第 10 關） |
+
+- EXP 分頁一進去就停在最難的三關（2026-10-26：第 7–9 關，共 10 關，第 10 關上鎖顯示 `Clear 10-4`）。左右箭頭點了不會翻頁，要滑動。
+- 按 Enter 之後的選隊、編隊、戰鬥結算頁還沒有截圖（#366）。
+
 ## 開局
 
 | 畫面 | 辨識方式 | 處理 | 可能的下一個畫面 | 來源 | 實機截圖 |

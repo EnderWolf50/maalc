@@ -26,7 +26,7 @@ def team(id, game_team, **kw):
 
 
 VALID = {
-    "version": 11,
+    "version": 12,
     "language": "zh_tw",
     "run": {
         "difficulty": "auto", "runs": 1, "weekly_bonus_use": "hard", "weekly_bonus_amount": "all",
@@ -43,6 +43,7 @@ VALID = {
     ],
     "event_overrides": [{"question": "Q?", "option": "Yes"}],
     "trial_risk_overrides": [{"trial": "Growth I", "risk": 3}],
+    "luxcavation": {"exp": {"count": 1, "team": None, "retries": 0}},
 }
 
 
@@ -116,7 +117,7 @@ def test_schema_errors_name_the_field(tmp_path, fn, where):
 
 
 def test_newer_version_is_refused(tmp_path):
-    assert "newer" in errors(tmp_path, {**VALID, "version": 12})[0]
+    assert "newer" in errors(tmp_path, {**VALID, "version": 13})[0]
 
 
 def test_version_1_gets_guard_turns_off(tmp_path):
@@ -172,6 +173,12 @@ def test_version_7_accepts_terms_and_downloads(tmp_path):
     # The user's decision (2026-10-21): the bot may tick the User Agreement and accept downloads.
     old = edited(lambda d: [d["run"].pop("auto_accept_terms"), d["run"].pop("auto_download")])
     assert load(tmp_path, {**old, "version": 7}) == VALID
+
+
+def test_version_11_gets_exp_luxcavation_with_no_team(tmp_path):
+    # #366: one win a day, no team picked yet (the Daily tab), no retries.
+    old = edited(lambda d: d.pop("luxcavation"))
+    assert load(tmp_path, {**old, "version": 11})["luxcavation"] == {"exp": {"count": 1, "team": None, "retries": 0}}
 
 
 def test_version_10_keeps_the_dismissed_screens(tmp_path):
