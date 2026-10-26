@@ -1,0 +1,72 @@
+{
+    // Lunacy for Enkephalin (#373, spec 00 daily tasks): the main window's Enkephalin bar, then the Charge Enkephalin
+    // window's Use Lunacy tab, Confirm once per charge. It spends Lunacy: charge_enkephalin.count (0 by default) decides, 0
+    // never opens the window, and every Confirm waits for lunacy.check, the game's price table, on the price the prompt
+    // shows (ChargePanel). Same shape as AssembleModules: GoHome first, done only from the main window, the last step.
+    "ChargeEnkephalin": {
+        "action": "Custom",
+        "custom_action": "ChargeStart",
+        "next": [
+            "TaskDone",
+            "ChargeHome"
+        ]
+    },
+    "ChargeHome": {
+        "action": "Custom",
+        "custom_action": "GoHomeRun",
+        "next": [
+            "ChargeHub"
+        ]
+    },
+    "ChargeHub": {
+        "timeout": 60000,
+        "rate_limit": 300,
+        "on_error": [
+            "ChargeLost"
+        ],
+        "next": [
+            "TaskDone",
+            "[JumpBack]ChargePanel",
+            "[JumpBack]HomeText",
+            "[JumpBack]ChargeMain"
+        ]
+    },
+    "ChargeLost": {
+        "action": "Custom",
+        "custom_action": "StopTask",
+        "custom_action_param": "the Charge Enkephalin window or the main window was not reached"
+    },
+    "ChargeMain": {
+        "recognition": "And",
+        "all_of": [
+            "HomeReached"
+        ],
+        "action": "Custom",
+        "custom_action": "ChargeMain",
+        "post_delay": 1500
+    },
+    // The "Charge Enkephalin" title plate, as AssemblePanel's (tests/screens/EnkephalinPanel.png).
+    "ChargePanel": {
+        "recognition": "TemplateMatch",
+        "roi": [500, 90, 280, 60],
+        "template": "Assemble/PanelTitle.png",
+        "threshold": 0.9,
+        "action": "Custom",
+        "custom_action": "ChargePanel",
+        "post_delay": 1000
+    },
+    // The Use Lunacy tab's prompt ("Recharge {0} Enkephalin?", EN_ShopUI), taken to sit where the Modules tab's own prompt
+    // does. No capture of that tab yet: unverified, and a read that misses stops the task, never charges.
+    "ChargePrompt": {
+        "recognition": "OCR",
+        "roi": [380, 465, 520, 50],
+        "expected": "(?i)recharge\\s*\\d+\\s*enkephalin"
+    },
+    // Where the price is, also unverified: a wide area of the window's body, read by lunacy.read_price, which wants exactly
+    // one number once the "n / cap" Enkephalin readings are dropped.
+    "ChargePrice": {
+        "recognition": "OCR",
+        "roi": [380, 300, 520, 170],
+        "expected": "\\d+"
+    }
+}

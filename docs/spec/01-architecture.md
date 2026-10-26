@@ -99,6 +99,13 @@
 - 回到主畫面後讀回腦啡肽，低於換前才算完成（成功結束）；3 次讀回都沒降就走停止程序（任務失敗）。
 - 出現「模組太多」（`Cannot assemble Modules; you have too many in storage.`）就以成功結束：按返回鍵、Cancel 關掉視窗、回主畫面。這一頁尚無截圖，辨識的 roi 是寬的（unverified）。
 
+### 狂氣換腦啡肽（`ChargeEnkephalin`，#373）
+
+- 入口 `ChargeEnkephalin`（`ChargeStart`：`TaskStart` 加讀 `charge_enkephalin.count`）。`count` 是 0（預設）就 `done()`，`TaskDone` 接著結束，沒有 GoHome、沒有任何點擊。否則 `ChargeHome`（`GoHomeRun`）→ `ChargeHub`，形狀同 `AssembleHub`：認得視窗（`ChargePanel`，標題牌同 `AssemblePanel`）、全域彈窗（`HomeText`）、主畫面（`ChargeMain`，只在這裡 `done()`）。60 秒都不認得就走停止程序。
+- `ChargeMain` 點腦啡肽條開視窗；`ChargePanel` 點 Use Lunacy 頁、讀 Recharge 提示與價格（`ChargePrompt`、`ChargePrice`），交給 `lunacy.check`（[spec 03 第 16 節](03-decisions.md)）：CHARGE 才點 Confirm，DONE 與 STOP 點 Cancel。只點頁籤、Confirm、Cancel。
+- 開視窗次數有上限（價格表長度加一），避免價格一直讀對卻沒換成的迴圈。
+- 這一頁沒有截圖（unverified）：見 spec 03 第 16 節。
+
 ### 入口頁的分流
 
 入口頁讀取 `Exploring:` 欄位、Weekly Bonuses 與 `Unclaimed Rewards`，依畫面分流：（#8）

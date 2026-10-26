@@ -15,10 +15,11 @@
     "teams",
     "event_overrides",
     "trial_risk_overrides",
-    "luxcavation"
+    "luxcavation",
+    "charge_enkephalin"
   ],
   "properties": {
-    "version": { "const": 13 },
+    "version": { "const": 14 },
     "language": { "enum": ["zh_tw", "en_us"], "default": "zh_tw" },
     "run": {
       "type": "object",
@@ -320,6 +321,15 @@
       "properties": {
         "exp": { "$ref": "#/$defs/luxcavation" },
         "thread": { "$ref": "#/$defs/luxcavation" }
+      }
+    },
+    "charge_enkephalin": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["count"],
+      "description": "Lunacy for Enkephalin (#373, PI task ChargeEnkephalin): spends Lunacy, so it is off until set",
+      "properties": {
+        "count": { "type": "integer", "minimum": 0, "maximum": 10, "default": 0, "description": "charges per day in all, today's already counted; 0: the Use Lunacy tab is never touched; the game allows 10 a day" }
       }
     }
   },

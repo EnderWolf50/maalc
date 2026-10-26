@@ -159,7 +159,23 @@ function DailyTab() {
       <p className="muted">{t("daily.note")}</p>
       <LuxFields task="exp" />
       <LuxFields task="thread" />
+      <ChargeFields />
     </>
+  );
+}
+
+function ChargeFields() {
+  const { s, update, t } = useEditor();
+  return (
+    <fieldset>
+      <legend>{t("charge.title")}</legend>
+      <p className="muted">{t("charge.note")}</p>
+      <div className="grid">
+        <Field label={t("charge.count")} path="charge_enkephalin/count">
+          <Num value={s.charge_enkephalin.count} min={0} onChange={(v) => update((d) => { d.charge_enkephalin.count = v; })} />
+        </Field>
+      </div>
+    </fieldset>
   );
 }
 

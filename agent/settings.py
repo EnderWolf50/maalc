@@ -132,8 +132,14 @@ def _v12_to_v13(data):
     return data
 
 
+def _v13_to_v14(data):
+    """Version 14 adds charge_enkephalin (#373): no Lunacy charges."""
+    data.setdefault("charge_enkephalin", {"count": 0})
+    return data
+
+
 # MIGRATIONS[n] turns a version-n dict into a version-(n + 1) dict; keep in step with gui/src/model.ts.
-MIGRATIONS = {1: _v1_to_v2, 2: _v2_to_v3, 3: _v3_to_v4, 4: _v4_to_v5, 5: _v5_to_v6, 6: _v6_to_v7, 7: _v7_to_v8, 8: _v8_to_v9, 9: _v9_to_v10, 10: _v10_to_v11, 11: _v11_to_v12, 12: _v12_to_v13}
+MIGRATIONS = {1: _v1_to_v2, 2: _v2_to_v3, 3: _v3_to_v4, 4: _v4_to_v5, 5: _v5_to_v6, 6: _v6_to_v7, 7: _v7_to_v8, 8: _v8_to_v9, 9: _v9_to_v10, 10: _v10_to_v11, 11: _v11_to_v12, 12: _v12_to_v13, 13: _v13_to_v14}
 
 NO_TEAM = "No enabled team: set up a team in the settings GUI first."
 

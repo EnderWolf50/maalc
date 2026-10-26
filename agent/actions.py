@@ -24,6 +24,7 @@ import battle
 import gift_search
 import hub_text
 import luxcavation
+import lunacy
 import map_route
 import pack_cover
 import pass_missions
@@ -786,6 +787,79 @@ class AssemblePanel(CustomAction):
         a["before"] = before
         tap(context, *ASSEMBLE_CONFIRM, wait=0.5)
         return True
+
+
+# Lunacy for Enkephalin (#373, pipeline/charge_enkephalin.json): the Charge Enkephalin window's Use Lunacy tab.
+LUNACY_TAB = (640, 225)  # the Use Lunacy tab (EnkephalinPanel.png); Confirm and Cancel are taken to sit where the Modules tab's do
+CHARGE_TRIES = 3  # reads of the prompt and price the task spends before it gives up
+
+
+@AgentServer.custom_action("ChargeStart")
+class ChargeStart(TaskStart):
+    """ChargeEnkephalin's entry: TaskStart, then charge_enkephalin.count. 0, the default, ends the task at once, a success,
+    before GoHome or any tap: the window is never opened, so the Use Lunacy tab is never touched."""
+
+    def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
+        super().run(context, argv)
+        try:
+            count = load_settings(ROOT)["charge_enkephalin"]["count"]
+        except SettingsError as e:
+            return stop(context, str(e))
+        TASK["charge"] = {"count": count, "reads": 0, "opened": 0, "charged": 0}
+        return done("charge_enkephalin.count is 0: Lunacy left alone") if count == 0 else True
+
+
+@AgentServer.custom_action("ChargeMain")
+class ChargeMain(CustomAction):
+    """The main window: the task's one way out and its way in. Done once the panel decided so; else the Enkephalin bar
+    opens the window (once per charge and one more for the price that ends it, never more than the table has)."""
+
+    def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
+        c = TASK["charge"]
+        if c.get("end"):
+            return done(c["end"])
+        c["opened"] += 1
+        if c["opened"] > lunacy.DAILY_MAX + 1:
+            return stop(context, f"the Charge Enkephalin window opened {c['opened'] - 1} times, more than a day has charges")
+        tap(context, *ENK_BAR, wait=0.5)
+        return True
+
+
+@AgentServer.custom_action("ChargePanel")
+class ChargePanel(CustomAction):
+    """The Charge Enkephalin window: its Use Lunacy tab, the Recharge prompt and its price. The price must be the next of
+    the game's table (lunacy.check) before Confirm; else Cancel, and the task ends (a success when the day's count is
+    met, a failure when the screen is not what it should be). Only the tab, Confirm and Cancel are tapped."""
+
+    def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
+        c = TASK["charge"]
+        if c.get("end"):  # a window over a task already decided
+            tap(context, *ASSEMBLE_CANCEL, wait=0.5)
+            return True
+        tap(context, *LUNACY_TAB, wait=0.7)
+        image = screen(context)
+        prompt = context.run_recognition("ChargePrompt", image)
+        price_read = context.run_recognition("ChargePrice", image)
+        price = lunacy.read_price([r.text for r in (price_read.all_results if price_read else [])]) if prompt and prompt.hit else None
+        if price is None:
+            c["reads"] += 1
+            if c["reads"] < CHARGE_TRIES:
+                return True
+            tap(context, *ASSEMBLE_CANCEL, wait=0.5)
+            return stop(context, "the Use Lunacy tab's Recharge prompt and price could not be read")
+        c["reads"] = 0
+        verdict, bought, why = lunacy.check(price, c["count"], c.get("bought"))
+        log(f"charge: {why}")
+        if verdict == lunacy.CHARGE:
+            c["charged"] += 1
+            c["bought"] = bought + 1  # the price after this Confirm; a price that stays is a Confirm that did nothing
+            tap(context, *ASSEMBLE_CONFIRM, wait=1.0)
+            return True
+        tap(context, *ASSEMBLE_CANCEL, wait=0.5)
+        if verdict == lunacy.DONE:
+            c["end"] = f"{c['charged']} charged now, {why}"
+            return True
+        return stop(context, why)
 
 
 @AgentServer.custom_action("Recover")

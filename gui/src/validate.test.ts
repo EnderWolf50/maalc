@@ -132,6 +132,16 @@ test("version 12 gets Thread Luxcavation and keeps EXP", () => {
   expect(validate(data)).toEqual([]);
 });
 
+test("version 13 gets no Lunacy charges and keeps the rest", () => {
+  const old = structuredClone(cases.valid) as Record<string, unknown>;
+  delete old.charge_enkephalin;
+  const { data, migrated } = parseSettings(JSON.stringify({ ...old, version: 13 }));
+  expect(migrated).toBe(true);
+  expect(data.charge_enkephalin).toEqual({ count: 0 });
+  expect(data.luxcavation).toEqual(cases.valid.luxcavation);
+  expect(validate(data)).toEqual([]);
+});
+
 test("version 10 keeps the dismissed screens", () => {
   const old = structuredClone(cases.valid) as Record<string, unknown> & { run: Record<string, unknown> };
   delete old.run.keep_dismissed_screens;
