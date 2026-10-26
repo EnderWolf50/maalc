@@ -1,0 +1,134 @@
+{
+    // ClaimPassMissions (#371): the main window, the Limbus Pass banner, its Pass Missions tab, then the Daily and the
+    // Weekly tab, one tap per row with a reward to claim (agent/pass_missions.py), and the main window again.
+    // The entry follows spec 01 (daily tasks): TaskStart, then GoHome run by GoHomeRun; the last step runs it again.
+    "ClaimPassMissions": {
+        "action": "Custom",
+        "custom_action": "TaskStart",
+        "next": [
+            "PassStart"
+        ]
+    },
+    "PassStart": {
+        "action": "Custom",
+        "custom_action": "GoHomeRun",
+        "next": [
+            "PassHub"
+        ]
+    },
+    // Dispatch as the other hubs: [JumpBack] nodes return here to look again, 60 s of nothing known ends the task
+    // failed. The tab nodes come in order: a tab with rows to claim first, then the move to the next tab.
+    "PassHub": {
+        "timeout": 60000,
+        "rate_limit": 300,
+        "on_error": [
+            "PassLost"
+        ],
+        "next": [
+            "TaskDone",
+            "[JumpBack]Connecting",
+            "[JumpBack]HelpPager",
+            "[JumpBack]HomeText",
+            "[JumpBack]PassDailyClaim",
+            "[JumpBack]PassDailyDone",
+            "[JumpBack]PassWeeklyClaim",
+            "[JumpBack]PassFinish",
+            "[JumpBack]PassMissionsTab",
+            "[JumpBack]PassBanner"
+        ]
+    },
+    "PassLost": {
+        "action": "Custom",
+        "custom_action": "StopTask",
+        "custom_action_param": "the pass missions page was not reached"
+    },
+    // The Limbus Pass banner on the main window (its season art changes, its caption "SEASON n LIMBUS PASS" does not).
+    "PassBanner": {
+        "recognition": "And",
+        "all_of": [
+            "HomeReached",
+            {
+                "recognition": "OCR",
+                "sub_name": "PassBannerCaption",
+                "roi": [935, 180, 285, 25],
+                "expected": "(?i)season"
+            }
+        ],
+        "action": "Click",
+        "target": [940, 190, 270, 90],
+        "post_delay": 2500,
+        "max_hit": 3
+    },
+    // The pass page opens on its Battle Pass tab: the Pass Missions tab unlit (lit it scores 0.92, the 0.97 threshold keeps it out).
+    "PassMissionsTab": {
+        "recognition": "TemplateMatch",
+        "roi": [300, 36, 150, 44],
+        "template": "Pass/MissionsTab.png",
+        "threshold": 0.97,
+        "action": "Click",
+        "post_delay": 2000,
+        "max_hit": 3
+    },
+    "PassDailyClaim": {
+        "recognition": "And",
+        "all_of": [
+            {
+                "recognition": "Custom",
+                "sub_name": "PassDailyRows",
+                "custom_recognition": "PassClaimable"
+            },
+            "PassDailyLit"
+        ],
+        "box_index": 0,
+        "action": "Click",
+        "post_delay": 1500,
+        "max_hit": 8
+    },
+    "PassDailyLit": {
+        "recognition": "TemplateMatch",
+        "roi": [246, 194, 54, 130],
+        "template": "Pass/DailyLit.png",
+        "threshold": 0.9
+    },
+    // Nothing left to claim on the Daily tab: the Weekly tab.
+    "PassDailyDone": {
+        "recognition": "And",
+        "all_of": [
+            "PassDailyLit"
+        ],
+        "action": "Click",
+        "target": [256, 350, 30, 100],
+        "post_delay": 2000,
+        "max_hit": 2
+    },
+    "PassWeeklyClaim": {
+        "recognition": "And",
+        "all_of": [
+            {
+                "recognition": "Custom",
+                "sub_name": "PassWeeklyRows",
+                "custom_recognition": "PassClaimable"
+            },
+            "PassWeeklyLit"
+        ],
+        "box_index": 0,
+        "action": "Click",
+        "post_delay": 1500,
+        "max_hit": 8
+    },
+    "PassWeeklyLit": {
+        "recognition": "TemplateMatch",
+        "roi": [246, 336, 54, 130],
+        "template": "Pass/WeeklyLit.png",
+        "threshold": 0.9
+    },
+    // Nothing left to claim on the Weekly tab: main window, done.
+    "PassFinish": {
+        "recognition": "And",
+        "all_of": [
+            "PassWeeklyLit"
+        ],
+        "action": "Custom",
+        "custom_action": "PassFinish"
+    }
+}
