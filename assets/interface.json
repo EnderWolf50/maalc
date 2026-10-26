@@ -47,6 +47,11 @@
             "label": "$ClaimMail",
             "entry": "ClaimMail"
         },
+        {
+            "name": "ClaimPassMissions",
+            "label": "$ClaimPassMissions",
+            "entry": "ClaimPassMissions"
+        },
         // Temporary, for verifying GoHome (#365); the daily tasks run it themselves.
         {
             "name": "GoHome",

@@ -25,6 +25,7 @@ import gift_search
 import hub_text
 import map_route
 import pack_cover
+import pass_missions
 import recovery
 import rewards
 import run_start
@@ -478,12 +479,12 @@ class MailPopups(hub_text.HubText):
     """ClaimMail's popups over the Mailbox (mail.json), apart from the Mailbox itself."""
 
 
-@AgentServer.custom_action("DoneTask")
-class DoneTask(CustomAction):
-    """The task has nothing left to do (#372): the param says why; its hub's done exit (DoneFlag) ends it a success."""
+@AgentServer.custom_action("MailFinish")
+class MailFinish(CustomAction):
+    """The Mailbox has nothing left to claim: back to the main window (GoHome closes the box), then the done exit."""
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
-        return done(json.loads(argv.custom_action_param or '""'))
+        return go_home(context) and done("no mail to claim")
 
 
 @AgentServer.custom_action("StopTask")
@@ -493,6 +494,32 @@ class StopTask(CustomAction):
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         return stop(context, f"{argv.node_name}: {json.loads(argv.custom_action_param or '""')}")
+
+
+def go_home(context):
+    """Run the GoHome task here, the first and the last step of a daily task (spec 01): False when it did not reach the
+    main window (GoHome has run the stop procedure itself)."""
+    detail = context.run_task("GoHome")
+    return bool(detail and detail.status.succeeded)
+
+
+@AgentServer.custom_action("GoHomeRun")
+class GoHomeRun(CustomAction):
+    """A daily task's first step, after its TaskStart: the main window, wherever the last task left the game."""
+
+    def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
+        return go_home(context)
+
+
+@AgentServer.custom_action("PassFinish")
+class PassFinish(CustomAction):
+    """Both Pass Missions tabs are claimed: back to the main window, then the done exit."""
+
+    def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
+        return go_home(context) and done("pass missions claimed")
+
+
+AgentServer.custom_recognition("PassClaimable")(pass_missions.PassClaimable)
 
 
 @AgentServer.custom_recognition("DoneFlag")

@@ -101,7 +101,7 @@ def child():
     game = Game()
     game.post_connection().wait()
     resource.post_bundle(ROOT / "assets" / "resource" / "base").wait()
-    for name, cls in (("TaskStart", actions.TaskStart), ("StopTask", actions.StopTask), ("DoneTask", actions.DoneTask),
+    for name, cls in (("TaskStart", actions.TaskStart), ("StopTask", actions.StopTask), ("GoHomeRun", actions.GoHomeRun), ("MailFinish", actions.MailFinish),
                       ("DismissShot", actions.DismissShot), ("AcceptUpdate", actions.AcceptUpdate),
                       ("AcceptTerms", actions.AcceptTerms), ("ConfirmDownload", actions.ConfirmDownload),
                       ("Halt", actions.Halt)):
