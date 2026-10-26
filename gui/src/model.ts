@@ -259,18 +259,13 @@ const MIGRATIONS: Record<number, (d: Record<string, unknown>) => Record<string, 
   9: (d) => withTeamDefault(d, { fusion_condition: "any" }),
   // Version 11 adds run.keep_dismissed_screens (#244), on.
   10: (d) => (d.run && typeof d.run === "object" ? { ...d, run: { keep_dismissed_screens: true, ...d.run } } : d),
-  // Version 12 adds luxcavation.exp (#366): one win, no team picked yet, no retries.
+  // Version 12 adds the daily tasks (#362): luxcavation.exp and .thread (#366, #368: one win, no team picked yet, no
+  // retries) and charge_enkephalin (#373: no Lunacy charges).
   11: (d) => {
     const lux = d.luxcavation ?? {};
-    return lux && typeof lux === "object" ? { ...d, luxcavation: { exp: newLuxcavation(), ...lux } } : d;
+    const out = { charge_enkephalin: { count: 0 }, ...d };
+    return lux && typeof lux === "object" ? { ...out, luxcavation: { exp: newLuxcavation(), thread: newLuxcavation(), ...lux } } : out;
   },
-  // Version 13 adds luxcavation.thread (#368): the same defaults as exp.
-  12: (d) => {
-    const lux = d.luxcavation ?? {};
-    return lux && typeof lux === "object" ? { ...d, luxcavation: { thread: newLuxcavation(), ...lux } } : d;
-  },
-  // Version 14 adds charge_enkephalin (#373): no Lunacy charges.
-  13: (d) => ({ charge_enkephalin: { count: 0 }, ...d }),
 };
 
 const MARK_WEIGHTS: Record<string, number> = { prefer: 5, neutral: 0, avoid: -5 };

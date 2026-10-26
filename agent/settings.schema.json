@@ -19,7 +19,7 @@
     "charge_enkephalin"
   ],
   "properties": {
-    "version": { "const": 14 },
+    "version": { "const": 12 },
     "language": { "enum": ["zh_tw", "en_us"], "default": "zh_tw" },
     "run": {
       "type": "object",

@@ -54,7 +54,7 @@ test("a new file is valid without a team (#364: only MirrorDungeon asks for one)
 });
 
 test("parseSettings refuses newer and unmigratable versions", () => {
-  expect(() => parseSettings('{"version": 15}')).toThrow("newer");
+  expect(() => parseSettings('{"version": 13}')).toThrow("newer");
   expect(() => parseSettings('{"version": 0}')).toThrow("cannot be migrated");
 });
 
@@ -115,30 +115,14 @@ test("version 6 keeps what the shop kept before", () => {
   expect(validate(data)).toEqual([]);
 });
 
-test("version 11 gets both Luxcavations with no team picked", () => {
+test("version 11 gets the daily tasks: both Luxcavations with no team picked, no Lunacy charges", () => {
   const old = structuredClone(cases.valid) as Record<string, unknown>;
   delete old.luxcavation;
+  delete old.charge_enkephalin;
   const { data, migrated } = parseSettings(JSON.stringify({ ...old, version: 11 }));
   expect(migrated).toBe(true);
   expect(data.luxcavation).toEqual({ exp: { count: 1, team: null, retries: 0 }, thread: { count: 1, team: null, retries: 0 } });
-  expect(validate(data)).toEqual([]);
-});
-
-test("version 12 gets Thread Luxcavation and keeps EXP", () => {
-  const old = structuredClone(cases.valid) as Record<string, unknown> & { luxcavation: Record<string, unknown> };
-  old.luxcavation = { exp: { count: 3, team: "a", retries: 1 } };
-  const { data } = parseSettings(JSON.stringify({ ...old, version: 12 }));
-  expect(data.luxcavation).toEqual({ exp: { count: 3, team: "a", retries: 1 }, thread: { count: 1, team: null, retries: 0 } });
-  expect(validate(data)).toEqual([]);
-});
-
-test("version 13 gets no Lunacy charges and keeps the rest", () => {
-  const old = structuredClone(cases.valid) as Record<string, unknown>;
-  delete old.charge_enkephalin;
-  const { data, migrated } = parseSettings(JSON.stringify({ ...old, version: 13 }));
-  expect(migrated).toBe(true);
   expect(data.charge_enkephalin).toEqual({ count: 0 });
-  expect(data.luxcavation).toEqual(cases.valid.luxcavation);
   expect(validate(data)).toEqual([]);
 });
 
