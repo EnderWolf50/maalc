@@ -18,7 +18,7 @@
     "luxcavation"
   ],
   "properties": {
-    "version": { "const": 12 },
+    "version": { "const": 13 },
     "language": { "enum": ["zh_tw", "en_us"], "default": "zh_tw" },
     "run": {
       "type": "object",
@@ -315,10 +315,11 @@
     "luxcavation": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["exp"],
+      "required": ["exp", "thread"],
       "description": "the Luxcavation daily tasks (#362); the client's task list says which run and in what order",
       "properties": {
-        "exp": { "$ref": "#/$defs/luxcavation" }
+        "exp": { "$ref": "#/$defs/luxcavation" },
+        "thread": { "$ref": "#/$defs/luxcavation" }
       }
     }
   },
@@ -328,7 +329,7 @@
       "additionalProperties": false,
       "required": ["count", "team", "retries"],
       "properties": {
-        "count": { "type": "integer", "minimum": 1, "default": 1, "description": "battles to win, the hardest stage open" },
+        "count": { "type": "integer", "minimum": 1, "default": 1, "description": "battles to win, at the hardest level open" },
         "team": { "type": ["string", "null"], "minLength": 1, "default": null, "description": "a teams[] id: its TEAMS #N and guard_turns; null: none picked yet" },
         "retries": { "type": "integer", "minimum": 0, "default": 0, "description": "defeats fought again before the task fails" }
       }

@@ -26,7 +26,7 @@ def team(id, game_team, **kw):
 
 
 VALID = {
-    "version": 12,
+    "version": 13,
     "language": "zh_tw",
     "run": {
         "difficulty": "auto", "runs": 1, "weekly_bonus_use": "hard", "weekly_bonus_amount": "all",
@@ -43,7 +43,7 @@ VALID = {
     ],
     "event_overrides": [{"question": "Q?", "option": "Yes"}],
     "trial_risk_overrides": [{"trial": "Growth I", "risk": 3}],
-    "luxcavation": {"exp": {"count": 1, "team": None, "retries": 0}},
+    "luxcavation": {"exp": {"count": 1, "team": None, "retries": 0}, "thread": {"count": 1, "team": None, "retries": 0}},
 }
 
 
@@ -117,7 +117,7 @@ def test_schema_errors_name_the_field(tmp_path, fn, where):
 
 
 def test_newer_version_is_refused(tmp_path):
-    assert "newer" in errors(tmp_path, {**VALID, "version": 13})[0]
+    assert "newer" in errors(tmp_path, {**VALID, "version": 14})[0]
 
 
 def test_version_1_gets_guard_turns_off(tmp_path):
@@ -175,10 +175,16 @@ def test_version_7_accepts_terms_and_downloads(tmp_path):
     assert load(tmp_path, {**old, "version": 7}) == VALID
 
 
-def test_version_11_gets_exp_luxcavation_with_no_team(tmp_path):
-    # #366: one win a day, no team picked yet (the Daily tab), no retries.
+def test_version_11_gets_both_luxcavations_with_no_team(tmp_path):
+    # #366, #368: one win a day, no team picked yet (the Daily tab), no retries; exp and thread the same.
     old = edited(lambda d: d.pop("luxcavation"))
-    assert load(tmp_path, {**old, "version": 11})["luxcavation"] == {"exp": {"count": 1, "team": None, "retries": 0}}
+    assert load(tmp_path, {**old, "version": 11})["luxcavation"] == VALID["luxcavation"]
+
+
+def test_version_12_gets_thread_luxcavation_and_keeps_exp(tmp_path):
+    old = edited(lambda d: d["luxcavation"].update(exp={"count": 3, "team": "a", "retries": 1}) or d["luxcavation"].pop("thread"))
+    assert load(tmp_path, {**old, "version": 12})["luxcavation"] == {
+        "exp": {"count": 3, "team": "a", "retries": 1}, "thread": {"count": 1, "team": None, "retries": 0}}
 
 
 def test_version_10_keeps_the_dismissed_screens(tmp_path):

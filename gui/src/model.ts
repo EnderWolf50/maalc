@@ -173,7 +173,7 @@ export interface Settings {
   teams: Team[];
   event_overrides: { question: string; option: string }[];
   trial_risk_overrides: { trial: string; risk: number }[];
-  luxcavation: { exp: Luxcavation };
+  luxcavation: { exp: Luxcavation; thread: Luxcavation };
 }
 /** One Luxcavation daily task's options (#366): the wins to get, a teams[] id (null: none picked), the defeats fought again. */
 export interface Luxcavation { count: number; team: string | null; retries: number }
@@ -190,7 +190,7 @@ export function newSettings(): Settings {
   return {
     version: VERSION, language: "zh_tw", run: defaultsOf(P.run.properties) as Settings["run"],
     deployment_order_plans: [], starlight_plans: [], theme_pack_plans: [], teams: [],
-    event_overrides: [], trial_risk_overrides: [], luxcavation: { exp: newLuxcavation() },
+    event_overrides: [], trial_risk_overrides: [], luxcavation: { exp: newLuxcavation(), thread: newLuxcavation() },
   };
 }
 
@@ -261,6 +261,11 @@ const MIGRATIONS: Record<number, (d: Record<string, unknown>) => Record<string, 
   11: (d) => {
     const lux = d.luxcavation ?? {};
     return lux && typeof lux === "object" ? { ...d, luxcavation: { exp: newLuxcavation(), ...lux } } : d;
+  },
+  // Version 13 adds luxcavation.thread (#368): the same defaults as exp.
+  12: (d) => {
+    const lux = d.luxcavation ?? {};
+    return lux && typeof lux === "object" ? { ...d, luxcavation: { thread: newLuxcavation(), ...lux } } : d;
   },
 };
 

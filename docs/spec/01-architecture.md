@@ -79,6 +79,17 @@
 - 開頭回主畫面後讀模組數，不夠 `count` 場就跳過（`ExpHome`）；按 Enter 之後回到 EXP 分頁，依這場的勝敗計次、再打或結束（`ExpEnter`，[spec 03 第 15 節](03-decisions.md)）。
 - 現狀（#366）：按 Enter 之後的選隊、編隊、結算畫面沒有截圖，hub 不認得，60 秒後走停止程序（存證據）。這些畫面截到後再補選隊、編隊與勝敗判斷；模組檢查與計次（#367）已接上，戰敗訊號與戰敗重打待戰敗畫面的截圖。
 
+### 紐本（`ThreadLuxcavation`）
+
+照經驗本的做法：`ThreadStart`（`ExpStart` 的子類別，讀 `luxcavation.thread`）→ `GoHomeRun` → `ThreadHub`。`ExpStart`、`ExpHome`、`ExpEnter` 的計次、模組檢查與勝敗判斷共用（`battle_over`），只換任務名稱和每場的模組消耗；OCR 畫面共用 `ExpText`。（#368）
+
+- 從主畫面點 Drive → Luxcavation（`NavLuxcavation`）→ Thread 分頁（停在 EXP 分頁時點 Thread，`LuxThreadTab`：Luxcavation 面板加上 EXP 分頁亮著）→ 今天唯一開放的異想體卡的 Enter（`LuxThreadEnter`，`ThreadEnter`）→ Level Select（`LuxThreadLevel`，`ThreadLevel`）→ 最下面那一列的 Enter。
+- 開放的卡才有亮的 Enter 按鈕（對模板 1.0，其他天才開的卡最多 0.6）。清單從今天的卡開始排，所以進頁就看得到；但清單記得上次捲到哪裡，捲走後看不到亮的 Enter，這時往右滑（`LuxThreadSwipe`，`max_hit` 4）把左邊的卡帶進來。滑的方向沒實機驗證（unverified）。
+- Level Select 一開啟清單就停在最底，最難的等級（Lust 是 Lv60）是最下面那一列；每級消耗 2 個模組（`luxcavation.THREAD_COST`），所以模組檢查是 2 × `count`。`ThreadLevel` 點畫面上最低的那個 Enter；按 Enter 本身不扣模組、不開戰。不改 Consecutive Battle、不按 Skip Battle。
+- Level Select 之後接選隊頁：和經驗本同一個節點。目前這個節點（#366 的選隊頁）還沒合進整合分支，`ThreadHub` 先不列它；合併後它和 `ExpHub` 各加一行 `[JumpBack]ExpTeamSelect`。（#368）
+- 打完一場回到 Thread 分頁（或停在 Level Select）就算一場：`battle_over` 依勝敗計次、再打或回主畫面結束。回到哪一頁沒實機驗證（unverified）。
+- 隊伍是 `luxcavation.thread.team`。
+
 ### 入口頁的分流
 
 入口頁讀取 `Exploring:` 欄位、Weekly Bonuses 與 `Unclaimed Rewards`，依畫面分流：（#8）
