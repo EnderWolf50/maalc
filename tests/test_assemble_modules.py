@@ -2,8 +2,7 @@
 of the game: a screenshot per screen and the taps that move between them. As test_go_home.py, the task runs in a child
 process (this file run as a script): the pytest process holds MaaFramework in AgentServer mode.
 
-It also settles how a daily task starts and ends on GoHome: the hub's last next entry is [JumpBack]GoHome, so it runs
-only when no screen the task knows is up, and the task ends from the main window.
+A start away from the main window goes through GoHomeRun (spec 01); the task ends from the main window.
 """
 
 import functools
@@ -95,6 +94,8 @@ def child():
             self.keys.append(keycode)
             if keycode == 4 and self.screen == "entry":
                 self.screen = "drive"
+            elif keycode == 4 and self.screen == "panel":  # closes the window (live: unverified)
+                self.screen = "main"
             return True
 
         def shell(self, cmd, timeout):
@@ -107,7 +108,7 @@ def child():
     game.post_connection().wait()
     resource.post_bundle(ROOT / "assets" / "resource" / "base").wait()
     for name, cls in (("StopTask", actions.StopTask), ("DismissShot", actions.DismissShot), ("TaskStart", actions.TaskStart),
-                      ("AssembleMain", actions.AssembleMain), ("AssemblePanel", actions.AssemblePanel),
+                      ("AssembleMain", actions.AssembleMain), ("GoHomeRun", actions.GoHomeRun), ("AssemblePanel", actions.AssemblePanel),
                       ("AcceptUpdate", actions.AcceptUpdate), ("AcceptTerms", actions.AcceptTerms),
                       ("ConfirmDownload", actions.ConfirmDownload), ("Halt", actions.Halt)):
         resource.register_custom_action(name, cls())
@@ -152,7 +153,7 @@ def test_starts_on_gohome_from_another_page():
     out = run_child()
     for name in ("drive", "entry"):
         o = out[name]
-        assert o["succeeded"] and o["nodes"][-1] == "TaskDone" and "HomeWindowTab" in o["nodes"], name
+        assert o["succeeded"] and o["nodes"][-1] == "TaskDone" and "AssembleStart" in o["nodes"], name
         assert "assembled" in o["done"], name
     assert out["entry"]["keys"] == [4]  # the back key leaves the entry page, as GoHome alone
 
@@ -163,9 +164,10 @@ def test_under_a_module_of_enkephalin_nothing_is_opened_and_the_task_succeeds():
     assert "AssemblePanel" not in o["nodes"]
 
 
-def test_a_window_already_open_is_confirmed():
+def test_a_window_already_open_is_closed_by_gohome_first():
     o = run_child()["panel"]
-    assert o["succeeded"] and o["clicks"] == [list(CONFIRM)] and "assembled" in o["done"]
+    assert o["succeeded"] and o["keys"] == [4] and o["clicks"] == [list(ENK_BAR), list(CONFIRM)]
+    assert "assembled" in o["done"]
 
 
 def test_a_bar_that_does_not_drop_after_confirm_fails_the_task():

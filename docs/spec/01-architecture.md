@@ -59,16 +59,13 @@
 - 彈窗排在 `HomeReached` 前面：設定選單蓋著主畫面時 Window 分頁仍是亮的。其他分頁亮起、彈窗壓暗分頁列時，Window 模板的分數最多 0.80，門檻 0.9。
 - 前景不是遊戲時直接啟動遊戲，不等 hub 逾時走 L3（`GameAway` 讀 `dumpsys window`，讀不到時不算）。
 - 60 秒認不出畫面、或返回鍵用完仍沒到主畫面：走停止程序（存證據、webhook），任務失敗，client 的清單繼續；這個任務不結束整串清單。
+- 日常任務的入口：入口節點（`TaskStart`）接 `GoHomeRun` 節點，它在 agent 裡用 `context.run_task("GoHome")` 跑完整個 `GoHome` 再接 hub（`[JumpBack]` 接 `GoHome` 做不到：`GoHome` 的結尾 `HomeReached` 沒有下一步，任務會在那裡結束）。結尾：動作做 `go_home()` 再 `done()`，hub 的 `TaskDone` 讓任務成功結束。`GoHome` 失敗時已自己走過停止程序，`GoHomeRun` 直接讓任務失敗。（#371）
+- `ClaimPassMissions`（`pass_missions.json`）：主畫面的 Limbus Pass 橫幅（OCR 標題 `SEASON`）→ `Pass Missions` 分頁（模板，亮著時分數 0.92，門檻 0.97）→ Daily 分頁逐列點可領的列（`PassClaimable`，`agent/pass_missions.py`：金幣亮、沒有 CLEAR 章、進度條滿）→ Weekly 分頁同樣 → `PassFinish`（回主畫面、`done`）。沒有可領的就直接成功結束。可領那一列的畫面還沒截到，判斷是從已領、進行中兩種畫面推的（unverified）。
 - 沒有鏡牢的卡住恢復階梯：日常頁只有返回鍵（L1）和重啟遊戲（L3）；L3 之後的接手還沒做（待實機看過再定）。
-
-### 日常任務怎麼接 `GoHome`（#370，其他日常照用）
-
-- 入口節點先跑 `TaskStart`，再進自己的 hub。hub 的 `next` 順序：`TaskDone`、這個任務認得的畫面（各自 `[JumpBack]`）、**最後一項 `[JumpBack]GoHome`**。`GoHome` 是無辨識的節點，所以只在沒有任何已知畫面時才跑：開頭從別的頁面進來先回主畫面，任務中途被彈窗或別頁打斷也回主畫面。MaaFramework 驗證過：`GoHome` 到 `HomeReached` 結束後回到 hub 再看一次（`tests/test_assemble_modules.py`），不需要 custom action 呼叫 `run_task`。
-- 結尾：任務只在主畫面的節點（`And` 引用 `HomeReached`）裡呼叫 `done()`，下一輪 `TaskDone` 以成功結束。所以最後一步一定在主畫面。
-- `GoHome` 超時走 `GoHomeLost`，所以 hub 的 `on_error` 接 `GoHomeLost`。
 
 ### 換腦啡肽模組（`AssembleModules`，#370）
 
+- 入口 `AssembleModules`（`TaskStart`）→ `AssembleStart`（`GoHomeRun`）→ `AssembleHub`；hub 認得腦啡肽視窗（`AssemblePanel`）、全域彈窗（`HomeText`）、主畫面（`AssembleMain`，任務只在這裡 `done()`，所以最後一步在主畫面）。60 秒都不認得就走停止程序（任務失敗）。（#370）
 - 主畫面左下腦啡肽條（`EnkephalinBar`）讀 `n/cap`：少於 20（一個模組的腦啡肽）就以成功結束，不開面板；否則點腦啡肽條開 Charge Enkephalin 視窗。
 - 視窗的 Modules 頁讀換前與換後的腦啡肽（`AssembleAfter`），點 `»`（最大量），換後仍 ≥ 20 就再點，最多 3 次；再點 Confirm。只點 `»`、Confirm、Cancel，絕不點 Use Lunacy 頁。
 - 回到主畫面後讀回腦啡肽，低於換前才算完成（成功結束）；3 次讀回都沒降就走停止程序（任務失敗）。

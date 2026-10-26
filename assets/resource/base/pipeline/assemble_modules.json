@@ -2,10 +2,18 @@
     // Assemble Enkephalin Modules (#370, spec 00 daily tasks): the main window's Enkephalin bar, then the Charge
     // Enkephalin window's Modules tab. 20 Enkephalin make a module; the bot taps nothing else of that window (never its
     // Use Lunacy tab). The screen is truth: every pass of the hub looks at what is up, GoHome (navigation.json) takes
-    // it back to the main window first and last (the task is done only from there, AssembleMain).
+    // it to the main window first (AssembleStart); the task is done only from there (AssembleMain), its last step.
     "AssembleModules": {
         "action": "Custom",
         "custom_action": "TaskStart",
+        "next": [
+            "AssembleStart"
+        ]
+    },
+    // GoHome, the first step (spec 01, daily tasks): the main window, wherever the last task left the game.
+    "AssembleStart": {
+        "action": "Custom",
+        "custom_action": "GoHomeRun",
         "next": [
             "AssembleHub"
         ]
@@ -14,15 +22,19 @@
         "timeout": 60000,
         "rate_limit": 300,
         "on_error": [
-            "GoHomeLost"
+            "AssembleLost"
         ],
         "next": [
             "TaskDone",
             "[JumpBack]AssemblePanel",
             "[JumpBack]HomeText",
-            "[JumpBack]AssembleMain",
-            "[JumpBack]GoHome"
+            "[JumpBack]AssembleMain"
         ]
+    },
+    "AssembleLost": {
+        "action": "Custom",
+        "custom_action": "StopTask",
+        "custom_action_param": "the Charge Enkephalin window or the main window was not reached"
     },
     // The main window, the Window tab lit (HomeReached): reads the bar, opens the window, or ends the task.
     "AssembleMain": {

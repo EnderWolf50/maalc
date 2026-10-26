@@ -61,9 +61,9 @@ const screens: [image: string, hits: string[]][] = [
   ['HelpPagerLast.png', ['HelpPager']],
   ['HelpPagerExtract.png', ['HelpPager']],
   ['HelpPagerSinners.png', ['HelpPager']],
-  ['MainWindow.png', ['GoToMirrorEntry', 'NavMainTabs', 'HomeReached', 'AssembleMain', 'EnkephalinBar']],
-  ['MainWindowFadeIn.png', ['GoToMirrorEntry', 'NavMainTabs', 'HomeReached', 'AssembleMain', 'EnkephalinBar']],
-  ['MainWindowLater.png', ['GoToMirrorEntry', 'NavMainTabs', 'HomeReached', 'AssembleMain', 'EnkephalinBar']],  // live 2026-10-26: other numbers on the resource panel
+  ['MainWindow.png', ['GoToMirrorEntry', 'NavMainTabs', 'HomeReached', 'PassBanner', 'AssembleMain', 'EnkephalinBar']],
+  ['MainWindowFadeIn.png', ['GoToMirrorEntry', 'NavMainTabs', 'HomeReached', 'PassBanner', 'AssembleMain', 'EnkephalinBar']],
+  ['MainWindowLater.png', ['GoToMirrorEntry', 'NavMainTabs', 'HomeReached', 'PassBanner', 'AssembleMain', 'EnkephalinBar']],  // live 2026-10-26: other numbers on the resource panel
   // Synthetic (#370): MainWindowLater.png with the bar's "22" painted down to "2": under a module's 20 Enkephalin.
   ['MainWindowLowEnkephalin.synthetic.png', ['GoToMirrorEntry', 'NavMainTabs', 'HomeReached', 'AssembleMain', 'EnkephalinBar']],
   // Live 2026-10-26: the Charge Enkephalin window over Drive, the tab bar dimmed under it: neither tab here. The
@@ -71,6 +71,13 @@ const screens: [image: string, hits: string[]][] = [
   ['EnkephalinPanel.png', ['AssemblePanel', 'EnkephalinBar', 'AssembleAfter']],
   ['SinnersTab.png', ['GoToMirrorEntry', 'NavMainTabs', 'HomeWindowTab', 'EnkephalinBar']],
   ['Drive.png', ['GoToMirrorEntry', 'NavDrive', 'HomeWindowTab', 'EnkephalinBar']],
+  // Live 2026-10-26 (#371): the Limbus Pass page on its Battle Pass tab (the Pass Missions tab unlit), then Pass Missions
+  // on the Daily tab (every row claimed) and the Weekly tab (one row under way, 3/5). The tab lit is the one on.
+  // The rows to claim are read by the agent (PassClaimable, tests/test_pass_missions.py), which this test cannot run.
+  ['PassBattlePass.png', ['PassMissionsTab']],
+  ['PassMissionsDaily.png', ['PassDailyLit', 'PassDailyDone']],
+  ['PassMissionsWeekly.png', ['PassWeeklyLit', 'PassFinish']],
+  ['PassMissionsWeeklyClaimable.synthetic.png', ['PassWeeklyLit', 'PassFinish']],
   ['EntryNewRun.png', ['MirrorEntryNewRun']],
   ['EntryPaused.png', ['MirrorEntryPaused']],
   // Synthetic (#94), no live capture yet: EntryNewRun.png with the Parallel Superposition label's OFF redrawn as ON.
