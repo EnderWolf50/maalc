@@ -60,19 +60,19 @@ const screens: [image: string, hits: string[]][] = [
   // has the button dimmed. MailOpen is the envelope tap on the main window, the Window tab lit as HomeReached.
   ['Mailbox.png', ['Mailbox', 'MailClaimAll', 'EnkephalinBar']],
   ['MailboxEmpty.png', ['Mailbox', 'MailEmpty', 'EnkephalinBar']],
-  ['SettingsMenu.png', ['SettingsMenu', 'GoToMirrorEntry', 'NavMainTabs', 'HomeReached', 'MailOpen', 'AssembleMain', 'EnkephalinBar']],
+  ['SettingsMenu.png', ['SettingsMenu', 'GoToMirrorEntry', 'NavMainTabs', 'HomeReached', 'MailOpen', 'AssembleMain', 'ChargeMain', 'EnkephalinBar']],
   ['HelpPager.png', ['HelpPager']],
   ['HelpPagerLast.png', ['HelpPager']],
   ['HelpPagerExtract.png', ['HelpPager']],
   ['HelpPagerSinners.png', ['HelpPager']],
-  ['MainWindow.png', ['GoToMirrorEntry', 'NavMainTabs', 'HomeReached', 'PassBanner', 'MailOpen', 'AssembleMain', 'EnkephalinBar']],
-  ['MainWindowFadeIn.png', ['GoToMirrorEntry', 'NavMainTabs', 'HomeReached', 'PassBanner', 'MailOpen', 'AssembleMain', 'EnkephalinBar']],
-  ['MainWindowLater.png', ['GoToMirrorEntry', 'NavMainTabs', 'HomeReached', 'PassBanner', 'MailOpen', 'AssembleMain', 'EnkephalinBar']],  // live 2026-10-26: other numbers on the resource panel
+  ['MainWindow.png', ['GoToMirrorEntry', 'NavMainTabs', 'HomeReached', 'PassBanner', 'MailOpen', 'AssembleMain', 'ChargeMain', 'EnkephalinBar']],
+  ['MainWindowFadeIn.png', ['GoToMirrorEntry', 'NavMainTabs', 'HomeReached', 'PassBanner', 'MailOpen', 'AssembleMain', 'ChargeMain', 'EnkephalinBar']],
+  ['MainWindowLater.png', ['GoToMirrorEntry', 'NavMainTabs', 'HomeReached', 'PassBanner', 'MailOpen', 'AssembleMain', 'ChargeMain', 'EnkephalinBar']],  // live 2026-10-26: other numbers on the resource panel
   // Synthetic (#370): MainWindowLater.png with the bar's "22" painted down to "2": under a module's 20 Enkephalin.
-  ['MainWindowLowEnkephalin.synthetic.png', ['GoToMirrorEntry', 'NavMainTabs', 'HomeReached', 'PassBanner', 'MailOpen', 'AssembleMain', 'EnkephalinBar']],
+  ['MainWindowLowEnkephalin.synthetic.png', ['GoToMirrorEntry', 'NavMainTabs', 'HomeReached', 'PassBanner', 'MailOpen', 'AssembleMain', 'ChargeMain', 'EnkephalinBar']],
   // Live 2026-10-26: the Charge Enkephalin window over Drive, the tab bar dimmed under it: neither tab here. The
   // Enkephalin bar still reads under the dimming (#370), as on every screen that shows the resource panel.
-  ['EnkephalinPanel.png', ['AssemblePanel', 'EnkephalinBar', 'AssembleAfter']],
+  ['EnkephalinPanel.png', ['AssemblePanel', 'ChargePanel', 'EnkephalinBar', 'AssembleAfter']],
   ['SinnersTab.png', ['GoToMirrorEntry', 'NavMainTabs', 'HomeWindowTab', 'EnkephalinBar']],
   ['Drive.png', ['GoToMirrorEntry', 'NavDrive', 'HomeWindowTab', 'NavLuxcavation', 'EnkephalinBar']],
   // Live 2026-10-26 (#366): Luxcavation as it opens on the EXP tab (stages 7-9), swiped right to the locked 10th (KEEP

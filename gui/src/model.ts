@@ -174,6 +174,7 @@ export interface Settings {
   event_overrides: { question: string; option: string }[];
   trial_risk_overrides: { trial: string; risk: number }[];
   luxcavation: { exp: Luxcavation; thread: Luxcavation };
+  charge_enkephalin: { count: number };
 }
 /** One Luxcavation daily task's options (#366): the wins to get, a teams[] id (null: none picked), the defeats fought again. */
 export interface Luxcavation { count: number; team: string | null; retries: number }
@@ -191,6 +192,7 @@ export function newSettings(): Settings {
     version: VERSION, language: "zh_tw", run: defaultsOf(P.run.properties) as Settings["run"],
     deployment_order_plans: [], starlight_plans: [], theme_pack_plans: [], teams: [],
     event_overrides: [], trial_risk_overrides: [], luxcavation: { exp: newLuxcavation(), thread: newLuxcavation() },
+    charge_enkephalin: { count: 0 },
   };
 }
 
@@ -267,6 +269,8 @@ const MIGRATIONS: Record<number, (d: Record<string, unknown>) => Record<string, 
     const lux = d.luxcavation ?? {};
     return lux && typeof lux === "object" ? { ...d, luxcavation: { thread: newLuxcavation(), ...lux } } : d;
   },
+  // Version 14 adds charge_enkephalin (#373): no Lunacy charges.
+  13: (d) => ({ charge_enkephalin: { count: 0 }, ...d }),
 };
 
 const MARK_WEIGHTS: Record<string, number> = { prefer: 5, neutral: 0, avoid: -5 };
