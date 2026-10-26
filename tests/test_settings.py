@@ -229,8 +229,6 @@ def test_unmigratable_version(tmp_path):
 
 
 @pytest.mark.parametrize("fn, expected", [
-    (lambda d: [t.update(enabled=False) for t in d["teams"]], "set up a team"),
-    (lambda d: d.update(teams=[]), "set up a team"),
     (lambda d: d["teams"][1].update(game_team=1), "TEAMS #1"),
     (lambda d: d["teams"][0].update(deployment_order={"plan": "gone"}), "teams/0/deployment_order"),
     (lambda d: d["teams"][0].update(starlight={"plan": "gone"}), "teams/0/starlight"),
@@ -244,6 +242,16 @@ def test_unmigratable_version(tmp_path):
 ])
 def test_cross_checks(tmp_path, fn, expected):
     assert any(expected in e for e in errors(tmp_path, edited(fn)))
+
+
+@pytest.mark.parametrize("fn", [lambda d: [t.update(enabled=False) for t in d["teams"]], lambda d: d.update(teams=[])])
+def test_only_the_mirror_dungeon_wants_an_enabled_team(tmp_path, fn):
+    # #364: a file with no enabled team loads (the dailies need none); MirrorDungeon asks with need_team.
+    data = edited(fn)
+    assert load(tmp_path, data)["teams"] == data["teams"]
+    with pytest.raises(SettingsError) as e:
+        load_settings(tmp_path, need_team=True)
+    assert e.value.errors == [settings.NO_TEAM]
 
 
 def test_cross_check_allows_what_the_spec_allows(tmp_path):

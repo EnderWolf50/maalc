@@ -41,7 +41,7 @@ def game(monkeypatch):
         return MagicMock()
     ctx.tasker.controller.post_click.side_effect = click
     monkeypatch.setattr(actions.time, "sleep", lambda s: None)
-    monkeypatch.setattr(actions, "stop", lambda context, reason, line=None: state.stops.append(reason) or False)
+    monkeypatch.setattr(actions, "stop", lambda context, reason, line=None, whole_list=False: state.stops.append(reason) or False)
     actions.RUN.clear()
     actions.RUN["settings"] = {"run": {"auto_accept_terms": True, "auto_download": True}}
     actions.STUCK["updates"] = 0

@@ -41,7 +41,9 @@ RESOURCE = next(p for p in (ROOT / "resource", ROOT / "assets" / "resource") if 
 # This run's plan, made on the entry page: {"settings", "team", "difficulty"}.
 # Memory only (ADR 0003); an agent restarted mid-run falls back to current_run's guess.
 RUN = {}
-SETTLED = {"runs": 0}  # runs claimed since this agent started: the run count stop (spec 01); never saved
+# This task's own state (#364, ADR 0010), reset by TaskStart: the runs claimed since it started (the run count stop,
+# spec 01; never saved), and why it is done ("done", None while it runs), which ends it a success (TaskDone).
+TASK = {"runs": 0, "done": None}
 # Stuck detection and recovery (spec 06), memory only: the last node seen ("node", its id) and the
 # screen type it handled ("kind"), a pending stuck for MirrorHub's Stuck node ("flag": (kind, start
 # level, reason)), this run's Ladder, and the game restarts since this agent started ("l3").
@@ -311,7 +313,7 @@ def address(context):
 def current_run(context):
     """The run plan; made up from settings and the rotation cursor when the agent restarted mid-run."""
     if "settings" not in RUN:  # a run plan, not just counters left by an action
-        settings = load_settings(ROOT)
+        settings = load_settings(ROOT, need_team=True)
         difficulty = settings["run"]["difficulty"]
         difficulty = None if difficulty == "auto" else difficulty
         cursor = read_cursor(ROOT, address(context))
@@ -333,6 +335,17 @@ def stuck(reason, level=1):
     return True
 
 
+def done(reason):
+    """This task has nothing left to do (#364): TaskDone, next on the hub, ends it a success and the client's list goes
+    on. Not the stop procedure: no evidence, no runs.jsonl line, no webhook.
+
+    Returns True, for the action to return: its [JumpBack] leads to the hub.
+    """
+    log(f"done: {reason}")
+    TASK["done"] = reason
+    return True
+
+
 def run_line(run, outcome, hard, floors, bonuses=0):
     """This run's runs.jsonl line (spec 06 執行記錄)."""
     team = run["team"] if run.get("planned") else None
@@ -346,11 +359,13 @@ def run_line(run, outcome, hard, floors, bonuses=0):
     }
 
 
-def stop(context, reason, line=None):
+def stop(context, reason, line=None, whole_list=False):
     """The stop procedure (spec 06 停止程序): evidence, a `stop` line in runs.jsonl, the webhook.
 
     line is this run's line when the caller knows it better (Settle); otherwise one is made up while a
-    run is under way. Returns False, for the action to return: that ends the task.
+    run is under way. whole_list: an account-level stop (maintenance, an outdated client, a download or the terms
+    with their auto setting off), which every later task would meet too: post_stop then empties the client's
+    queue (#364). Returns False, for the action to return: that ends the task.
     """
     log(f"stop: {reason}")
     if line is None and "settings" in RUN:
@@ -375,7 +390,25 @@ def stop(context, reason, line=None):
             log("webhook sent")
         except (OSError, ValueError) as e:
             log(f"webhook failed: {e}")
+    if whole_list:
+        log("account-level stop: the rest of the task list is cancelled")
+        context.tasker.post_stop()
     return False
+
+
+@AgentServer.custom_action("TaskStart")
+class TaskStart(CustomAction):
+    """A task's entry node (#364, ADR 0010): a task list runs its tasks on one agent, so what the last task left in
+    memory goes: the run, its Ladder, the watchdog, the screens kept for evidence, this task's runs. The game restarts
+    (STUCK l3, updates) still count per bot launch."""
+
+    def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
+        RUN.clear()
+        TASK.update(runs=0, done=None)
+        STUCK.update(node=None, kind=None, flag=None, watch=recovery.Watchdog(), ladder=recovery.Ladder())
+        SCREENS.clear()
+        log(f"task {argv.node_name} started")
+        return True
 
 
 # MirrorHub's own steps, no screen: the watchdog keeps the screen handled before them.
@@ -418,6 +451,15 @@ class StuckFlag(CustomRecognition):
 
 
 AgentServer.custom_recognition("HubText")(hub_text.HubText)
+
+
+@AgentServer.custom_recognition("DoneFlag")
+class DoneFlag(CustomRecognition):
+    """TaskDone, on every task's hub: hits once an action found nothing left to do (done); its empty next ends the task
+    a success (#364)."""
+
+    def analyze(self, context: Context, argv: CustomRecognition.AnalyzeArg):
+        return CustomRecognition.AnalyzeResult(box=(0, 0, 1, 1), detail={"done": TASK["done"]}) if TASK["done"] else None
 
 
 @AgentServer.custom_action("Recover")
@@ -539,7 +581,7 @@ class ConfirmDownload(CustomAction):
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         if not allowed("auto_download"):
-            return stop(context, "the game asks to download data: run.auto_download is off")
+            return stop(context, "the game asks to download data: run.auto_download is off", whole_list=True)
         x, y, w, h = argv.box
         context.tasker.controller.post_click(x + w // 2, y + h // 2).wait()
         STUCK["watch"].hold(time.monotonic(), recovery.DOWNLOAD_HOLD)
@@ -558,7 +600,7 @@ class AcceptUpdate(CustomAction):
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         if not allowed("auto_download"):
-            return stop(context, "the game has an update: run.auto_download is off")
+            return stop(context, "the game has an update: run.auto_download is off", whole_list=True)
         if STUCK["updates"] >= UPDATE_RESTARTS:
             return stop(context, f"the game asked for an update {UPDATE_RESTARTS + 1} times since the bot started")
         STUCK["updates"] += 1
@@ -592,7 +634,7 @@ class AcceptTerms(CustomAction):
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         if not allowed("auto_accept_terms"):
-            return stop(context, "User Agreement: run.auto_accept_terms is off")
+            return stop(context, "User Agreement: run.auto_accept_terms is off", whole_list=True)
         image = screen(context)
         for x, y in AGREE_BOXES:
             if not agree_ticked(image, x, y):
@@ -610,10 +652,10 @@ class AcceptTerms(CustomAction):
 @AgentServer.custom_action("Halt")
 class Halt(CustomAction):
     """Stop on a screen the bot must not act on (the maintenance notice, a client too old for the server); the reason
-    goes to the log and the webhook."""
+    goes to the log and the webhook. An account-level stop: the whole task list ends."""
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
-        return stop(context, f"{argv.node_name}: {json.loads(argv.custom_action_param or '""')}")
+        return stop(context, f"{argv.node_name}: {json.loads(argv.custom_action_param or '""')}", whole_list=True)
 
 
 @AgentServer.custom_action("TapUntil")
@@ -643,12 +685,13 @@ class TapUntil(CustomAction):
 class PlanRun(CustomAction):
     """Entry page, no run under way: check settings, pick difficulty and team, press Enter (spec 03 sections 1, 2).
 
-    Returning False fails the task: that is the stop.
+    Nothing left to do (the run count reached, the weekly bonuses out, no team for the difficulty) ends the task a
+    success (done); bad settings fail it (returning False).
     """
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         try:
-            settings = load_settings(ROOT)
+            settings = load_settings(ROOT, need_team=True)
         except SettingsError as e:
             log(f"stop: {e}")
             return False
@@ -656,17 +699,14 @@ class PlanRun(CustomAction):
         # Live: a filled slot reads V ~240, an empty one ~5 (2026-10-15).
         weekly = sum(hsv_v[:, x:x + 30].mean() > 40 for x in WEEKLY_SLOTS)
         run = settings["run"]
-        if settlement.runs_done(SETTLED["runs"], run["runs"]):
-            log(f"stop: {SETTLED['runs']} of {run['runs']} runs done")
-            return False
+        if settlement.runs_done(TASK["runs"], run["runs"]):
+            return done(f"{TASK['runs']} of {run['runs']} runs done")
         if run["stop_when_weekly_bonus_out"] and weekly == 0:
-            log("stop: weekly bonuses used up")
-            return False
+            return done("weekly bonuses used up")
         difficulty = run_start.run_difficulty(run["difficulty"], weekly)
         team = pick_team(settings["teams"], read_cursor(ROOT, address(context)), difficulty)
         if team is None:
-            log(f"stop: no enabled team may run {difficulty}")
-            return False
+            return done(f"no enabled team may run {difficulty}")
         if run_start.team_difficulty(run["difficulty"], difficulty, team["hard_from_floor"]) != difficulty:
             log(f"team {team['name']!r} never switches to hard and the difficulty is {run['difficulty']}: a normal run")
             difficulty = "normal"
@@ -3703,5 +3743,5 @@ class Settle(CustomAction):
     @staticmethod
     def record(run, result, bonuses, outcome):
         settlement.append_run(ROOT, run_line(run, outcome, result[1], settlement.floors_passed(result), bonuses))
-        SETTLED["runs"] += settlement.counts_as_run(outcome)
+        TASK["runs"] += settlement.counts_as_run(outcome)
         STUCK["ladder"] = recovery.Ladder()

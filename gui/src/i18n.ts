@@ -20,7 +20,7 @@ const zh_tw = {
   // run
   "run.difficulty": "難度",
   "run.runs": "限制局數",
-  "run.runs_note": "這次啟動要領到獎勵的局數；關閉時不限局數，跑到其他停止條件成立。",
+  "run.runs_note": "這個鏡牢任務要領到獎勵的局數；關閉時不限局數，跑到其他停止條件成立。",
   "run.weekly_bonus_use": "每週獎勵用法",
   "run.weekly_bonus_normal_note": "普通局的每週獎勵報酬很少，建議只用在困難",
   "run.weekly_bonus_amount": "每週獎勵用量",
@@ -164,7 +164,7 @@ const en_us: typeof zh_tw = {
   newFile: "Start a new settings file",
   "run.difficulty": "Difficulty",
   "run.runs": "Limit runs",
-  "run.runs_note": "Runs to claim this start; off runs until another stop condition holds.",
+  "run.runs_note": "Runs to claim in this Mirror Dungeon task; off runs until another stop condition holds.",
   "run.weekly_bonus_use": "Use weekly bonuses on",
   "run.weekly_bonus_normal_note": "Weekly bonus rewards on Normal runs are tiny; use them on Hard instead",
   "run.weekly_bonus_amount": "Weekly bonuses per run",

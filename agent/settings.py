@@ -128,8 +128,11 @@ class SettingsError(Exception):
         super().__init__("Invalid settings:\n" + "\n".join(f"- {e}" for e in errors))
 
 
-def load_settings(root):
-    """Return the checked settings dict, or raise SettingsError listing every problem."""
+def load_settings(root, need_team=False):
+    """Return the checked settings dict, or raise SettingsError listing every problem.
+
+    need_team: MirrorDungeon's own check, an enabled team (#364); the dailies run without one.
+    """
     path = Path(root) / "config" / "settings.json"
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
@@ -145,6 +148,8 @@ def load_settings(root):
     ]
     # Cross-checks assume the structure is valid.
     errors = errors or cross_check(data)
+    if need_team and not errors and not any(t["enabled"] for t in data["teams"]):
+        errors.append(NO_TEAM)
     if errors:
         raise SettingsError(errors)
     return data
@@ -181,8 +186,6 @@ def cross_check(data):
     dupes("teams", [t["id"] for t in teams], "id")
 
     enabled = [t for t in teams if t["enabled"]]
-    if not enabled:
-        errors.append(NO_TEAM)
     for slot, n in Counter(t["game_team"] for t in enabled).items():
         if n > 1:
             names = ", ".join(repr(t["name"]) for t in enabled if t["game_team"] == slot)
