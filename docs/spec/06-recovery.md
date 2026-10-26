@@ -97,7 +97,7 @@
 2. 執行期間必須開著 `SaveOnError`（`Toolkit.init_option` 的 `save_on_error`），讓辨識失敗的繪圖一併留下。（#13、#14）這是用戶端的選項（MXU 寫在 `config/maa_option.json`），Agent 設不到。（#31）
 3. 在 `<root>/logs/runs.jsonl` 寫入這局，結果為「停止」。（#14、#19）只在有進行中的局時寫；Agent 這次啟動後還沒碰過這局（例如一啟動就卡住）時沒有這一行。（#31）
 4. 若使用者設定了 webhook，送出失敗通知（見下節）。（#14）
-5. 結束任務。帳號層級的停止（維護公告、用戶端過舊、`auto_download` 關閉時遇到下載或更新、`auto_accept_terms` 關閉時遇到使用者協議）之後的任務都會撞上同一個畫面，所以再呼叫 `post_stop` 清空 client 的任務佇列，整串清單結束；其他停止只結束這個任務，清單繼續。（#364）
+5. 結束任務。帳號層級的停止（維護公告、用戶端過舊、`auto_download` 關閉時遇到下載或更新、`auto_accept_terms` 關閉時遇到使用者協議）之後的任務都會撞上同一個畫面，所以再呼叫 `post_stop` 清空 tasker 的任務佇列；一次送整串的 client（MXU）因此整串結束，一次送一個的（MFAAvalonia）只結束這個任務，見 [spec 01「帳號層級的停止與 client 的任務佇列」](01-architecture.md)。其他停止只結束這個任務，清單繼續。（#364）
 
 ## 失敗通知
 

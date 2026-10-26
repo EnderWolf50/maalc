@@ -64,6 +64,14 @@
 - `ClaimPassMissions`（`pass_missions.json`）：主畫面的 Limbus Pass 橫幅（OCR 標題 `SEASON`）→ `Pass Missions` 分頁（模板，亮著時分數 0.92，門檻 0.97）→ Daily 分頁逐列點可領的列（`PassClaimable`，`agent/pass_missions.py`：金幣亮、沒有 CLEAR 章、進度條滿）→ Weekly 分頁同樣 → `PassFinish`（回主畫面、`done`）。沒有可領的就直接成功結束。可領那一列的畫面還沒截到，判斷是從已領、進行中兩種畫面推的（unverified）。
 - 沒有鏡牢的卡住恢復階梯：日常頁只有返回鍵（L1）和重啟遊戲（L3）；L3 之後的接手還沒做（待實機看過再定）。
 
+### 帳號層級的停止與 client 的任務佇列
+
+帳號層級的停止（[spec 06](06-recovery.md) 停止程序第 5 步）呼叫 `post_stop`。MaaFramework 5.14.3 的 `Tasker::post_stop`（`source/MaaFramework/Tasker/Tasker.cpp:161-183`）清掉 tasker 裡還沒跑的任務（`task_runner_->clear()`），再停下正在跑的那個。所以它能不能結束整串清單，要看 client 是一次把整串送進 tasker，還是一次送一個（依原始碼，沒有實機驗證）：
+
+- MXU（`5e923e8`）：一次送整串。`start_tasks_impl`（`src-tauri/src/commands/maa_agent.rs:554`）在 `maa_agent.rs:776-784` 的迴圈裡對每個勾選的任務呼叫 `tasker.post_task`，全部進了 tasker 才開始跑。`post_stop` 清掉的就是清單剩下的任務，整串結束。
+- MFAAvalonia（`098fe84`）：一次送一個。`ExecuteTasks`（`MFAAvalonia/Extensions/MaaFW/MaaProcessor.cs:3704-3728`）從自己的 `TaskQueue` 取一個任務，`TryRunTasksAsync`（`MaaProcessor.cs:4424-4431`）`AppendTask` 後等它結束才取下一個。`post_stop` 只結束目前這個任務（狀態不是 Succeeded，`MFAAvalonia/Helper/ValueType/MFATask.cs:92-113` 記為失敗）；「任務失敗後是否繼續」開著（預設，`MaaProcessor.cs:4469`）時清單照樣跑下一個，後面每個任務各自撞上同一個畫面、各自走停止程序。關掉這個選項時，第一個失敗就結束整串。
+- 替代做法（還沒做，待使用者決定）：agent 記住「這次啟動遇過帳號層級的停止」（像遊戲重啟次數一樣不隨 `TaskStart` 清掉），之後的任務在 `TaskStart` 就直接失敗，不點任何東西、不再送 webhook。兩個 client 都適用，也不靠 `post_stop`。
+
 ### 日常任務的骨架
 
 開頭與結尾照上面「日常任務的入口」（`GoHomeRun`、`go_home()`、`TaskDone`，#371）。另外：（#366）
