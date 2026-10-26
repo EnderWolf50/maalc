@@ -206,10 +206,12 @@ const screens: [image: string, hits: string[]][] = [
   // Recovery L2 (run by Recover, not the hub): Dungeon Progress -> To Window -> Pause Exploration.
   ['ProgressPanel.png', ['MirrorMap', 'ProgressPanel', 'RecoverToWindow']],
   ['PauseExploration.png', ['MirrorMap', 'RecoverPauseConfirm']],
-  ['DefeatScreen.png', ['DefeatScreen']],
+  // The mirror's run end reads Victory / Defeat where the Luxcavation results page does: LuxWon and LuxLost are read
+  // only on a page LuxResult already matched (Clear Rewards, Module Cost), which these are not.
+  ['DefeatScreen.png', ['DefeatScreen', 'LuxLost']],
   ['ExplorationComplete.png', ['ExplorationComplete']],
   // Settlement: the summary behind the window still reads; Settle handles the window's own dialogs.
-  ['RunVictory.png', ['RunVictory']],
+  ['RunVictory.png', ['RunVictory', 'LuxWon']],
   ['ExplorationReward.png', ['ExplorationReward', 'ExplorationComplete']],
   ['ExplorationRewardOff.png', ['ExplorationReward', 'ExplorationComplete']],
   ['GiveUpDialog.png', ['ExplorationReward', 'ExplorationComplete']],
