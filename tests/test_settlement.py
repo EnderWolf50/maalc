@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from settlement import append_run, bonus_toggles, can_claim, claim_dialog, counts_as_run, floors_passed, goal_met, now, read_result, runs_done
+from settlement import NOT_SEEN, append_run, bonus_toggles, claim_dialog, counts_as_run, floors_passed, goal_met, new_run_gate, now, read_result, runs_done
 
 
 @pytest.mark.parametrize("text, expected", [
@@ -84,6 +84,9 @@ def test_now_matches_the_gui_marker_format():
     assert len(now()) == len("2026-10-15T00:00:00.000Z") and now().endswith("Z")
 
 
-@pytest.mark.parametrize(("modules", "expected"), [(4, False), (0, False), (5, True), (182, True), (None, True)])
-def test_can_claim(modules, expected):
-    assert can_claim(modules) is expected
+@pytest.mark.parametrize(("seen", "backs", "expected"), [
+    (4, 0, "done"), (0, 0, "done"), (5, 0, "go"), (182, 0, "go"), (None, 0, "go"),  # read on the Drive page
+    (NOT_SEEN, 0, "back"), (NOT_SEEN, 1, "back"), (NOT_SEEN, 2, "go"),  # no Drive pass: back out twice, then unchecked
+])
+def test_new_run_gate(seen, backs, expected):
+    assert new_run_gate(seen, backs) == expected

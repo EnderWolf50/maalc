@@ -131,7 +131,8 @@
         "roi": [340, 240, 240, 140],
         "template": "Navigation/NavDrive.png",
         "threshold": 0.8,
-        "action": "Click",
+        "action": "Custom",
+        "custom_action": "OpenDrive",
         "post_delay": 3000
     }
 }
