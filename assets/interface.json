@@ -43,6 +43,11 @@
             "entry": "MirrorDungeon"
         },
         {
+            "name": "ClaimMail",
+            "label": "$ClaimMail",
+            "entry": "ClaimMail"
+        },
+        {
             "name": "ExpLuxcavation",
             "label": "$ExpLuxcavation",
             "entry": "ExpLuxcavation"
