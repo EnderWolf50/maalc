@@ -23,6 +23,7 @@ from maa.define import Rect
 import battle
 import gift_search
 import hub_text
+import luxcavation
 import map_route
 import pack_cover
 import pass_missions
@@ -308,6 +309,20 @@ def number(s):
     return int(found) if found else None
 
 
+def module_count(context, image):
+    """The Enkephalin Modules the bottom-left panel shows (main window, Drive, Luxcavation, any page with the panel); None
+    when the panel is not on the screen or its number does not read (#367).
+
+    The panel's x moves between pages, so the round Module icon is found first (ModuleIcon) and the digits read as one
+    line to its right: the dark field ends 78 px after the icon's left edge, its digits right-aligned.
+    """
+    detail = context.run_recognition("ModuleIcon", image)
+    if not detail or not detail.hit:
+        return None
+    x, y, w, h = detail.best_result.box
+    return digits(text(context, image, [x + w + 2, y + 2, 50, h - 4], only_rec=True))
+
+
 def address(context):
     return context.tasker.controller.info.get("adb_serial", "default")
 
@@ -478,7 +493,8 @@ class ExpText(hub_text.HubText):
 @AgentServer.custom_action("ExpStart")
 class ExpStart(TaskStart):
     """ExpLuxcavation's entry (#366): TaskStart, then the team luxcavation.exp names, whose guard turns the battle plays
-    (spec 03 section 8). No team picked, or settings that do not load: the stop procedure, before any tap."""
+    (spec 03 section 8), and its count and retries (#367). No team picked, or settings that do not load: the stop
+    procedure, before any tap."""
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         super().run(context, argv)
@@ -486,26 +502,70 @@ class ExpStart(TaskStart):
             settings = load_settings(ROOT)
         except SettingsError as e:
             return stop(context, str(e))
-        team = next((t for t in settings["teams"] if t["id"] == settings["luxcavation"]["exp"]["team"]), None)
+        exp = settings["luxcavation"]["exp"]
+        team = next((t for t in settings["teams"] if t["id"] == exp["team"]), None)
         if team is None:
             return stop(context, "EXP Luxcavation has no team: pick one in the settings GUI's Daily tab")
         # Not RUN["settings"]: that is a Mirror Dungeon run, which the stop procedure writes to runs.jsonl.
-        RUN.update(team=team, guard=team["guard_turns"])
-        log(f"EXP Luxcavation: team {team['name']!r} (TEAMS #{team['game_team']}), {team['guard_turns']} guard turns")
+        # lux: this task's count (spec 03 section 15): the battles won and the retries used, the last battle's result.
+        RUN.update(team=team, guard=team["guard_turns"],
+                   lux={"cost": luxcavation.EXP_COST, "count": exp["count"], "retries": exp["retries"], "modules": None,
+                        "won": 0, "retried": 0, "result": None})
+        log(f"EXP Luxcavation: team {team['name']!r} (TEAMS #{team['game_team']}), {team['guard_turns']} guard turns, "
+            f"{exp['count']} wins, {exp['retries']} retries")
+        return True
+
+
+def modules_now(context, timeout=3):
+    """The Modules the panel shows now (module_count), looked for up to timeout s: None when it never reads."""
+    found = []
+    until(context, lambda image: found.append(module_count(context, image)) or found[-1] is not None, timeout)
+    return found[-1]
+
+
+@AgentServer.custom_action("ExpHome")
+class ExpHome(CustomAction):
+    """ExpHub's first step: the main window, then the one check of the task (#367): the Modules must cover `count`
+    battles at the hardest stage's cost, else the task is done at once, a success the client's list goes on from
+    (spec 03 section 15). A panel that does not read stops the task: nothing is known to be safe to spend."""
+
+    def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
+        if not go_home(context):
+            return False
+        lux = RUN["lux"]
+        lux["modules"] = modules_now(context)
+        if lux["modules"] is None:
+            return stop(context, "EXP Luxcavation: the Modules number did not read on the main window")
+        need = luxcavation.needed(lux["cost"], lux["count"])
+        if luxcavation.decide(lux["modules"], lux["cost"], lux["count"], 0, 0, lux["retries"]) == luxcavation.SKIP:
+            return done(f"EXP Luxcavation: Modules {lux['modules']} < {need} needed, skipped")
+        log(f"EXP Luxcavation: Modules {lux['modules']} >= {need} needed")
         return True
 
 
 @AgentServer.custom_action("ExpEnter")
 class ExpEnter(CustomAction):
     """LuxExpEnter: tap the rightmost open stage's Enter (the node's box) until the tab goes. Back on the tab after
-    that: the one battle is over (#366), the main window, done; the result has no capture yet."""
+    that: the battle is over, and its result (Victory sets it) says what next (luxcavation.decide, #367): the next
+    battle, the same one again after a defeat, the main window and done, or the stop procedure."""
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
-        if RUN.get("entered"):
-            return go_home(context) and done("EXP Luxcavation: one battle fought")
+        lux = RUN["lux"]
+        if RUN.pop("entered", False):
+            result, lux["result"] = lux["result"], None
+            if result is None:  # TODO(#367): a defeat sets no result yet, its screen has no capture (#366)
+                return stop(context, "EXP Luxcavation: back on the EXP tab with no victory or defeat seen")
+            step = luxcavation.decide(lux["modules"], lux["cost"], lux["count"], lux["won"], lux["retried"], lux["retries"], result)
+            lux["won"] += result == "win"
+            lux["retried"] += step == luxcavation.RETRY
+            log(f"EXP Luxcavation: {result}, {lux['won']} of {lux['count']} won, {lux['retried']} of {lux['retries']} retries used: {step}")
+            if step == luxcavation.FINISH:
+                return go_home(context) and done(f"EXP Luxcavation: {lux['won']} won")
+            if step == luxcavation.STOP:
+                return stop(context, f"EXP Luxcavation: defeated with the {lux['retries']} retries used up")
         x, y, w, h = argv.box
         if tap_then(context, x + w // 2, y + h // 2, lambda im: seen(context, im, argv.node_name) is None, timeout=3) is not None:
-            RUN["entered"] = True
+            RUN["entered"], RUN["team_picked"] = True, False
             log(f"EXP Luxcavation: entered the stage at x {x + w // 2}")
         return True
 
@@ -860,7 +920,7 @@ def team_list_top(context, home="TeamSelect"):
 
 def pick_team_slot(context, n, home="TeamSelect"):
     """Drag the picker list to its top, tap the in-game TEAMS #N row and check the title: that screenshot, or None when
-    15 strokes found no such row. home: the node of the page (the mirror's TeamSelect, ExpTeamSelect) for page_guard."""
+    15 strokes found no such row. home: the node of the page (the mirror's TeamSelect, LuxTeamSelect) for page_guard."""
     team_list_top(context, home)
     for _ in range(15):
         visible = team_rows(context, page_guard(context, home))
@@ -897,22 +957,23 @@ class SelectTeam(CustomAction):
         return True
 
 
-@AgentServer.custom_action("ExpSelectTeam")
-class ExpSelectTeam(CustomAction):
-    """ExpHub's team page (#366): the mirror's page, with To Battle! where it has Confirm. Pick the team
-    luxcavation.exp names once, then press To Battle! until the page goes. What follows it has no capture yet."""
+@AgentServer.custom_action("LuxSelectTeam")
+class LuxSelectTeam(CustomAction):
+    """A Luxcavation hub's team page (#366, shared by the EXP and Thread hubs): the mirror's page, with To Battle! where
+    it has Confirm. Pick RUN["team"]'s in-game slot once, then press To Battle! until the page goes. The task's Enter
+    action drops RUN["team_picked"] when it enters a stage: each battle picks again. What follows has no capture yet."""
 
     @hands_back
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         n = RUN["team"]["game_team"]
         if not RUN.get("team_picked"):
-            if pick_team_slot(context, n, "ExpTeamSelect") is None:
-                return stop(context, f"EXP Luxcavation: could not select TEAMS #{n}")
+            if pick_team_slot(context, n, "LuxTeamSelect") is None:
+                return stop(context, f"Luxcavation: could not select TEAMS #{n}")
             RUN["team_picked"] = True
-            log(f"EXP Luxcavation: TEAMS #{n}")
-        # A dialog over the page reads through it: the page staying is for the watchdog (ExpStuck) to judge.
-        if tap_then(context, *TO_BATTLE, lambda im: not seen(context, im, "ExpTeamSelect"), timeout=4) is None:
-            log("EXP Luxcavation: To Battle! pressed, the team page stays")
+            log(f"Luxcavation: TEAMS #{n}")
+        # A dialog over the page reads through it: the page staying is for the hub's watchdog to judge.
+        if tap_then(context, *TO_BATTLE, lambda im: not seen(context, im, "LuxTeamSelect"), timeout=4) is None:
+            log("Luxcavation: To Battle! pressed, the team page stays")
         return True
 
 
@@ -2491,6 +2552,8 @@ class Victory(CustomAction):
         RUN.pop("turn", None)
         RUN.pop("battle_start", None)
         RUN["wipes"] = 0
+        if RUN.get("entered") and RUN["lux"]["result"] is None:  # a Luxcavation battle's win, once: VICTORY stays up for a while
+            RUN["lux"]["result"] = "win"
         return True
 
 

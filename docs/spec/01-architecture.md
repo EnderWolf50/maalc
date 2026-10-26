@@ -76,9 +76,9 @@
 - 從主畫面點 Drive（`NavMainTabs`）→ Luxcavation（`NavLuxcavation`）→ EXP 分頁（停在 Thread 分頁時點 EXP，`LuxExpTab`）→ EXP 分頁預設畫面最右邊的 Enter（`LuxExpEnter`，`ExpEnter`）。上鎖的卡顯示 KEEP OUT、沒有 Enter，所以最右邊的 Enter 就是最難的開放關卡。不改 Consecutive Battle、不按 Skip Battle。（#366）
 - 分頁亮起看橘色邊框（ColorMatch）：亮和不亮的分頁對模板的分數差不多（0.93），分不開。
 - 隊伍是 `luxcavation.exp.team` 指的 maalc 隊伍，戰鬥用它的 `guard_turns`（全員防禦 N 回合後按勝率，同鏡牢）。
-- 按 Enter 直接進選隊頁（`ExpTeamSelect`）：和鏡牢的選隊頁（`TeamSelect`）同一頁，左側 `TEAMS` 清單、位置和點法都一樣（`pick_team_slot`，鏡牢的 `SelectTeam` 也用它：清單拖到頂、依畫面上的 `TEAMS #N` 列找，必要時捲動，點了之後讀標題確認），只有右下角的按鈕不同：鏡牢是 `Confirm`，這裡是 `To Battle!`（1145,588）。`ExpSelectTeam`：選 `luxcavation.exp.team` 的遊戲隊伍編號（`game_team`，一次），再按 To Battle! 直到這頁消失。（#366）
-- 按 Enter 之後回到 EXP 分頁，就算打完一場：`go_home()` 再 `done()`，任務成功。
-- 現狀（#366）：To Battle! 之後的畫面（隊伍等級警告、開戰確認、戰鬥結算）沒有截圖，hub 不認得，60 秒後走停止程序（存證據）。戰鬥畫面（`BattleHUD`、`Victory`）沿用鏡牢的節點。缺的畫面截到後再補；模組檢查、計次與戰敗重打在 #367。
+- 按 Enter 直接進選隊頁（`LuxTeamSelect`）：和鏡牢的選隊頁（`TeamSelect`）同一頁，左側 `TEAMS` 清單、位置和點法都一樣（`pick_team_slot`，鏡牢的 `SelectTeam` 也用它：清單拖到頂、依畫面上的 `TEAMS #N` 列找，必要時捲動，點了之後讀標題確認），只有右下角的按鈕不同：鏡牢是 `Confirm`，這裡是 `To Battle!`（1145,588）。`LuxSelectTeam`：選 `RUN["team"]`（經驗本是 `luxcavation.exp.team`）的遊戲隊伍編號（`game_team`，每場一次），再按 To Battle! 直到這頁消失。節點與動作由 Luxcavation 的各個 hub（經驗本、紐本）共用：hub 列出 `[JumpBack]LuxTeamSelect`，Enter 的動作設 `RUN["team"]` 並在進關時清掉 `RUN["team_picked"]`。（#366）
+- 開頭回主畫面後讀模組數，不夠 `count` 場就跳過（`ExpHome`）；按 Enter 之後回到 EXP 分頁，依這場的勝敗計次、再打或結束（`ExpEnter`，[spec 03 第 15 節](03-decisions.md)）。
+- 現狀（#366）：選隊頁已接（`LuxTeamSelect`）；To Battle! 之後的畫面（隊伍等級警告、開戰確認、戰鬥結算）沒有截圖，hub 不認得，60 秒後走停止程序（存證據）。戰鬥畫面（`BattleHUD`、`Victory`）沿用鏡牢的節點。缺的畫面截到後再補；模組檢查與計次（#367）已接上，戰敗訊號與戰敗重打待戰敗畫面的截圖。
 
 ### 入口頁的分流
 
