@@ -41,6 +41,12 @@
             "name": "MirrorDungeon",
             "label": "$MirrorDungeon",
             "entry": "MirrorDungeon"
+        },
+        // Temporary, for verifying GoHome (#365); the daily tasks run it themselves.
+        {
+            "name": "GoHome",
+            "label": "$GoHome",
+            "entry": "GoHome"
         }
     ]
 }

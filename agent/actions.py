@@ -453,6 +453,30 @@ class StuckFlag(CustomRecognition):
 AgentServer.custom_recognition("HubText")(hub_text.HubText)
 
 
+@AgentServer.custom_recognition("HomeText")
+class HomeText(hub_text.HubText):
+    """GoHome's popups (navigation.json): HubText with its own entries, which it reads once and keeps per instance."""
+
+
+@AgentServer.custom_recognition("GameAway")
+class GameAway(CustomRecognition):
+    """GoHome's HomeGameAway: hits when another app (the launcher, the Play Store) or no window has the focus, so the
+    game is started without waiting for a hub timeout (#365). Not when the front package cannot be read."""
+
+    def analyze(self, context: Context, argv: CustomRecognition.AnalyzeArg):
+        app = foreground(context)
+        return CustomRecognition.AnalyzeResult(box=(0, 0, 1, 1), detail={"app": app}) if app not in (None, recovery.GAME) else None
+
+
+@AgentServer.custom_action("StopTask")
+class StopTask(CustomAction):
+    """End the task a failure through the stop procedure (evidence, log, webhook); the param says why. Not the whole list:
+    the next task of the client's list starts from its own GoHome."""
+
+    def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
+        return stop(context, f"{argv.node_name}: {json.loads(argv.custom_action_param or '""')}")
+
+
 @AgentServer.custom_recognition("DoneFlag")
 class DoneFlag(CustomRecognition):
     """TaskDone, on every task's hub: hits once an action found nothing left to do (done); its empty next ends the task
