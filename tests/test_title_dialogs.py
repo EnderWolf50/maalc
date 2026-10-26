@@ -65,8 +65,9 @@ def test_sweep_where_both_boxes_read_ticked():
         if image.shape[:2] == (720, 1280) and all(actions.agree_ticked(image, *b) for b in actions.AGREE_BOXES):
             hits.append(png.name)
     assert hits == ["BattleTurnLit.png", "BossGiftTrialsHard.png", "EventNotices.png", "LuxExp.png", "LuxExpLocked.png",
-                    "LuxThread.png", "LuxThreadLust.png", "LuxThreadScrolled.png", "Mailbox.png", "RunVictory.png",
-                    "SinnersTab.png", "SystemNotices.png", "TeamSelect.png", "Title.png", "UserAgreementTicked.png"]
+                    "LuxThread.png", "LuxThreadLust.png", "LuxThreadScrolled.png", "Mailbox.png", "MailboxEmpty.png",
+                    "RunVictory.png", "SinnersTab.png", "SystemNotices.png", "TeamSelect.png", "Title.png",
+                    "UserAgreementTicked.png"]
 
 
 def test_both_boxes_are_ticked_then_confirm(game):
