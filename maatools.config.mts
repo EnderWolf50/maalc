@@ -65,7 +65,7 @@ const screens: [image: string, hits: string[]][] = [
   ['MainWindowFadeIn.png', ['GoToMirrorEntry', 'NavMainTabs', 'HomeReached', 'PassBanner', 'AssembleMain', 'EnkephalinBar']],
   ['MainWindowLater.png', ['GoToMirrorEntry', 'NavMainTabs', 'HomeReached', 'PassBanner', 'AssembleMain', 'EnkephalinBar']],  // live 2026-10-26: other numbers on the resource panel
   // Synthetic (#370): MainWindowLater.png with the bar's "22" painted down to "2": under a module's 20 Enkephalin.
-  ['MainWindowLowEnkephalin.synthetic.png', ['GoToMirrorEntry', 'NavMainTabs', 'HomeReached', 'AssembleMain', 'EnkephalinBar']],
+  ['MainWindowLowEnkephalin.synthetic.png', ['GoToMirrorEntry', 'NavMainTabs', 'HomeReached', 'PassBanner', 'AssembleMain', 'EnkephalinBar']],
   // Live 2026-10-26: the Charge Enkephalin window over Drive, the tab bar dimmed under it: neither tab here. The
   // Enkephalin bar still reads under the dimming (#370), as on every screen that shows the resource panel.
   ['EnkephalinPanel.png', ['AssemblePanel', 'EnkephalinBar', 'AssembleAfter']],
