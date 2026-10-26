@@ -27,10 +27,10 @@ DRIVE_TAB = (930, 600, 110, 80)
 LUXCAVATION = (355, 97, 190, 125)  # Drive's Luxcavation button
 EXP_TAB = (68, 234, 154, 60)
 ENTERS = {"exp": (1000, 455, 240, 50), "locked": (660, 455, 240, 50)}  # stage 9's Enter: the rightmost, the middle card
-FIGHT_SHOTS = 3  # screenshots the pages after Enter take before the EXP tab shows again
+FIGHT_SHOTS = 4  # screenshots the pages after Enter take before the EXP tab shows again: the first of them gray, the rest VICTORY
 
 SCREENS = {"main": "MainWindow.png", "drive": "Drive.png", "exp": "LuxExp.png", "locked": "LuxExpLocked.png",
-           "thread": "LuxThread.png", "fight": None}
+           "thread": "LuxThread.png", "fight": None, "victory": "Victory.png"}
 
 
 def inside(box, x, y):
@@ -63,6 +63,7 @@ def child():
 
         def set(self, screen):
             self.screen, self.clicks, self.keys, self.shots, self.stage = screen, [], [], 0, "exp" if screen != "locked" else "locked"
+            self.wins = True  # the battles end in VICTORY; False: they end with no victory screen
 
         def connect(self):
             return True
@@ -75,6 +76,8 @@ def child():
                 self.shots += 1
                 if self.shots > FIGHT_SHOTS:
                     self.screen = self.stage
+                elif self.shots > 1 and self.wins:
+                    return images["victory"]
             return images[self.screen]
 
         def click(self, x, y):
@@ -121,7 +124,7 @@ def child():
     game.set("main")
     game.post_connection().wait()
     resource.post_bundle(ROOT / "assets" / "resource" / "base").wait()
-    for name in ("ExpStart", "ExpEnter", "GoHomeRun", "StopTask", "DismissShot", "AcceptUpdate", "AcceptTerms", "ConfirmDownload",
+    for name in ("ExpStart", "ExpHome", "ExpEnter", "GoHomeRun", "StopTask", "DismissShot", "AcceptUpdate", "AcceptTerms", "ConfirmDownload",
                  "Halt", "TapUntil", "PlayTurn", "HoldTurn", "Victory"):
         resource.register_custom_action(name, getattr(actions, name)())
     for name in ("GameAway", "HomeText", "ExpText", "StuckFlag", "DoneFlag"):
@@ -130,10 +133,15 @@ def child():
     tasker.bind(resource, game)
 
     out = {"error": None}
-    for scenario, (screen, team) in {"drive": ("drive", "b"), "locked": ("locked", "b"), "no_team": ("drive", None)}.items():
+    # scenario: (start screen, team, count, battles that end in VICTORY); the main window shows 182 Modules, a stage takes 3
+    scenarios = {"drive": ("drive", "b", 1, True), "locked": ("locked", "b", 1, True), "no_team": ("drive", None, 1, True),
+                 "two": ("drive", "b", 2, True), "poor": ("drive", "b", 61, True),
+                 "no_victory": ("drive", "b", 1, False)}
+    for scenario, (screen, team, count, wins) in scenarios.items():
         (actions.ROOT / "config" / "settings.json").write_text(
-            json.dumps({**settings, "luxcavation": {"exp": {"count": 1, "team": team, "retries": 0}}}), encoding="utf-8")
+            json.dumps({**settings, "luxcavation": {"exp": {"count": count, "team": team, "retries": 0}}}), encoding="utf-8")
         game.set(screen)
+        game.wins = wins
         try:
             detail = tasker.post_task("ExpLuxcavation").wait().get()
             out[scenario] = {"succeeded": detail.status.succeeded, "nodes": [n.name for n in detail.nodes],
@@ -163,6 +171,28 @@ def test_exp_luxcavation_goes_home_first_enters_the_rightmost_open_stage_and_end
     # Back on the EXP tab after it: done, and GoHome again (the back key, then the Window tab)
     assert o["keys"] == [4] and inside(WINDOW_TAB, *taps[-1]) and len(taps) == 6
     assert o["nodes"][:3] == ["ExpLuxcavation", "ExpHome", "ExpHub"] and o["nodes"][-1] == "TaskDone"
+
+
+def enters(o):
+    return [xy for xy in o["clicks"] if inside(ENTERS["exp"], *xy)]
+
+
+def test_count_wins_are_fought_before_it_is_done():
+    o = run_child()["two"]  # #367: a win counts, and the next battle starts from the same tab
+    assert o["succeeded"], o["nodes"]
+    assert len(enters(o)) == 2 and o["keys"] == [4]  # two Enters, one trip home at the end
+
+
+def test_modules_short_of_count_times_the_cost_skip_the_task_a_success_before_any_battle():
+    # 61 x 3 = 183 > the 182 the main window shows: no Enter, only the way home
+    o = run_child()["poor"]
+    assert o["succeeded"] and enters(o) == [] and o["nodes"][-1] == "TaskDone"
+
+
+def test_a_battle_with_no_victory_stops_the_task_instead_of_counting():
+    # TODO(#367): a defeat sets no result yet (no capture of its screen)
+    o = run_child()["no_victory"]
+    assert o["succeeded"] is False and len(enters(o)) == 1
 
 
 def test_exp_luxcavation_skips_a_locked_stage_on_the_right():
