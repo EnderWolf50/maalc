@@ -26,8 +26,8 @@ MODULES = {
     "MainWindow.png": 182, "MainWindowFadeIn.png": 182, "MainWindowLater.png": 104, "Drive.png": 182,
     "LuxExp.png": 104, "LuxExpLocked.png": 104, "LuxThread.png": 104,
 }
-# No panel, or none this function can read: the title screen, the Mirror Dungeon map, a shop.
-NONE = ["Title.png", "MirrorMap.png", "Shop.png", "Loading.png"]
+# No panel, or none this function can read: the title screen, the Mirror Dungeon map, a shop, the Mirror Dungeon entry page (#369: PlanRun's read gives None there).
+NONE = ["Title.png", "MirrorMap.png", "Shop.png", "Loading.png", "EntryNewRun.png", "EntryPaused.png", "EntryParallelOn.png"]
 
 
 def child():

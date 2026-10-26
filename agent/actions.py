@@ -420,6 +420,7 @@ class TaskStart(CustomAction):
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         RUN.clear()
+        TASK.clear()
         TASK.update(runs=0, done=None)
         STUCK.update(node=None, kind=None, flag=None, watch=recovery.Watchdog(), ladder=recovery.Ladder())
         SCREENS.clear()
@@ -538,6 +539,18 @@ def modules_now(context, timeout=3):
     found = []
     until(context, lambda image: found.append(module_count(context, image)) or found[-1] is not None, timeout)
     return found[-1]
+
+
+@AgentServer.custom_action("OpenDrive")
+class OpenDrive(CustomAction):
+    """NavDrive: the Drive page has the Modules panel (tests/screens/Drive.png), the entry page the next tap opens has
+    none. Read the number for PlanRun's gate (#369) before tapping Mirror Dungeons; None when it does not read."""
+
+    def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
+        TASK["modules"] = module_count(context, screen(context))
+        x, y, w, h = argv.box
+        context.tasker.controller.post_click(x + w // 2, y + h // 2).wait()
+        return True
 
 
 @AgentServer.custom_action("ExpHome")
@@ -879,6 +892,19 @@ class PlanRun(CustomAction):
         if run_start.team_difficulty(run["difficulty"], difficulty, team["hard_from_floor"]) != difficulty:
             log(f"team {team['name']!r} never switches to hard and the difficulty is {run['difficulty']}: a normal run")
             difficulty = "normal"
+        # The entry page has no Modules panel (tests/screens/EntryNewRun.png): the Drive page's read (OpenDrive) is this trip's.
+        step = settlement.new_run_gate(TASK.get("modules", settlement.NOT_SEEN), TASK.get("gate_backs", 0))
+        if step == "back":  # not through Drive since the last run: back out, the hub's navigation reads it on the way in
+            TASK["gate_backs"] = TASK.get("gate_backs", 0) + 1
+            log("new run: the Modules were not read on the way here, back to the Drive page to read them")
+            context.tasker.controller.post_click_key(BACK_KEY).wait()
+            return True
+        modules = TASK.pop("modules", None)
+        TASK.pop("gate_backs", None)
+        if step == "done":
+            return done(f"Modules {modules} < {settlement.CLAIM_COST}, one Claim could not be paid: no new run")
+        if modules is None:
+            log("new run: the Modules number did not read, starting anyway")
         RUN.clear()
         # planned: the bot picked the team itself, so the rotation cursor may move after the claim.
         limit = recovery.floor_limit(recovery.read_runs(ROOT), team["id"])
@@ -1414,6 +1440,7 @@ class PickThemePack(CustomAction):
         floor = int(m[1])
         if floor != RUN.get("floor"):
             RUN.pop("after_shop", None)
+            TASK.pop("modules", None)  # a run is under way: Claim will take 5, the next one reads the Modules again (#369)
             RUN.update(floor=floor, map_misses=0)  # a new floor's map gets a fresh retry quota (spec 06)
             restart_floor_clock()
         want = None if run["difficulty"] is None else run_start.hard_wanted(floor, run["difficulty"] == "hard", run["team"]["hard_from_floor"])

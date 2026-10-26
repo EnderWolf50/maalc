@@ -473,6 +473,7 @@ Cost 表是 wiki 與簡中客戶端的表，實機 log 的節點面板 Cost 沒�
   - 按 Claim 後視窗沒有關掉，而且不是上面相符的確認對話框，就停止、不再點任何東西（模組不夠時的畫面還沒見過，這樣不會誤點購買）。這局在 `runs.jsonl` 記為「停止」。
   - 輪替游標只在這局是 bot 自己在入口頁選的隊伍時才前進；接續或補領的局不前進（第 1 節）。
   - 「限制局數」只算這個任務開始後達到目標並領到獎勵的局；放棄獎勵（沒達到目標、放棄這局）與停止的局不算。達到時在入口頁停止，不開新局。（2026-10-16 定案）
+- **開新局前的模組門檻**（#369）：入口頁左下沒有模組面板（`EntryNewRun.png` 等），所以導航經過 Drive 頁時讀：`NavDrive` 是自訂動作 `OpenDrive`，點 Mirror Dungeons 之前用 `actions.module_count` 讀一次，存在任務狀態 `TASK["modules"]`（讀不到存 None）。`PlanRun` 開新局前用 `settlement.new_run_gate` 判斷：這趟讀到 m < 5（Claim 的費用，`settlement.CLAIM_COST`）→ log 模組數、`done()` 成功結束；m ≥ 5 或 None → 開局，讀不到不擋。這趟沒經過 Drive（例如上一局 Claim 後直接停在入口頁）→ 按返回鍵（最多 `BACKS` 次），由 hub 的導航重新走過 Drive 讀；返回鍵沒有把人帶到有面板的頁就不查、照常開局。值只用一次：`PlanRun` 取走，每層 `PickThemePack` 也清掉（Claim 會扣 5，舊值不能沿用）。接手暫停中的局不走這裡。返回鍵從入口頁會到哪一頁還沒有截圖，待實機。
 
 ## 15. 日常 Luxcavation 的模組與計次
 
