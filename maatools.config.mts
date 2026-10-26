@@ -61,11 +61,14 @@ const screens: [image: string, hits: string[]][] = [
   ['HelpPagerLast.png', ['HelpPager']],
   ['HelpPagerExtract.png', ['HelpPager']],
   ['HelpPagerSinners.png', ['HelpPager']],
-  ['MainWindow.png', ['GoToMirrorEntry', 'NavMainTabs', 'HomeReached']],
-  ['MainWindowFadeIn.png', ['GoToMirrorEntry', 'NavMainTabs', 'HomeReached']],
-  ['MainWindowLater.png', ['GoToMirrorEntry', 'NavMainTabs', 'HomeReached']],  // live 2026-10-26: other numbers on the resource panel
-  // Live 2026-10-26: the Charge Enkephalin window over Drive, the tab bar dimmed under it: nothing here, neither tab.
-  ['EnkephalinPanel.png', []],
+  ['MainWindow.png', ['GoToMirrorEntry', 'NavMainTabs', 'HomeReached', 'AssembleMain', 'EnkephalinBar']],
+  ['MainWindowFadeIn.png', ['GoToMirrorEntry', 'NavMainTabs', 'HomeReached', 'AssembleMain', 'EnkephalinBar']],
+  ['MainWindowLater.png', ['GoToMirrorEntry', 'NavMainTabs', 'HomeReached', 'AssembleMain', 'EnkephalinBar']],  // live 2026-10-26: other numbers on the resource panel
+  // Synthetic (#370): MainWindowLater.png with the bar's "22" painted down to "2": under a module's 20 Enkephalin.
+  ['MainWindowLowEnkephalin.synthetic.png', ['GoToMirrorEntry', 'NavMainTabs', 'HomeReached', 'AssembleMain', 'EnkephalinBar']],
+  // Live 2026-10-26: the Charge Enkephalin window over Drive, the tab bar dimmed under it: neither tab here. The
+  // Enkephalin bar still reads under the dimming (#370).
+  ['EnkephalinPanel.png', ['AssemblePanel', 'EnkephalinBar', 'AssembleAfter']],
   ['SinnersTab.png', ['GoToMirrorEntry', 'NavMainTabs', 'HomeWindowTab']],
   ['Drive.png', ['GoToMirrorEntry', 'NavDrive', 'HomeWindowTab']],
   ['EntryNewRun.png', ['MirrorEntryNewRun']],

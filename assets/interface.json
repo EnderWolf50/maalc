@@ -42,6 +42,11 @@
             "label": "$MirrorDungeon",
             "entry": "MirrorDungeon"
         },
+        {
+            "name": "AssembleModules",
+            "label": "$AssembleModules",
+            "entry": "AssembleModules"
+        },
         // Temporary, for verifying GoHome (#365); the daily tasks run it themselves.
         {
             "name": "GoHome",

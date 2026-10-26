@@ -61,6 +61,19 @@
 - 60 秒認不出畫面、或返回鍵用完仍沒到主畫面：走停止程序（存證據、webhook），任務失敗，client 的清單繼續；這個任務不結束整串清單。
 - 沒有鏡牢的卡住恢復階梯：日常頁只有返回鍵（L1）和重啟遊戲（L3）；L3 之後的接手還沒做（待實機看過再定）。
 
+### 日常任務怎麼接 `GoHome`（#370，其他日常照用）
+
+- 入口節點先跑 `TaskStart`，再進自己的 hub。hub 的 `next` 順序：`TaskDone`、這個任務認得的畫面（各自 `[JumpBack]`）、**最後一項 `[JumpBack]GoHome`**。`GoHome` 是無辨識的節點，所以只在沒有任何已知畫面時才跑：開頭從別的頁面進來先回主畫面，任務中途被彈窗或別頁打斷也回主畫面。MaaFramework 驗證過：`GoHome` 到 `HomeReached` 結束後回到 hub 再看一次（`tests/test_assemble_modules.py`），不需要 custom action 呼叫 `run_task`。
+- 結尾：任務只在主畫面的節點（`And` 引用 `HomeReached`）裡呼叫 `done()`，下一輪 `TaskDone` 以成功結束。所以最後一步一定在主畫面。
+- `GoHome` 超時走 `GoHomeLost`，所以 hub 的 `on_error` 接 `GoHomeLost`。
+
+### 換腦啡肽模組（`AssembleModules`，#370）
+
+- 主畫面左下腦啡肽條（`EnkephalinBar`）讀 `n/cap`：少於 20（一個模組的腦啡肽）就以成功結束，不開面板；否則點腦啡肽條開 Charge Enkephalin 視窗。
+- 視窗的 Modules 頁讀換前與換後的腦啡肽（`AssembleAfter`），點 `»`（最大量），換後仍 ≥ 20 就再點，最多 3 次；再點 Confirm。只點 `»`、Confirm、Cancel，絕不點 Use Lunacy 頁。
+- 回到主畫面後讀回腦啡肽，低於換前才算完成（成功結束）；3 次讀回都沒降就走停止程序（任務失敗）。
+- 出現「模組太多」（`Cannot assemble Modules; you have too many in storage.`）就以成功結束：按返回鍵、Cancel 關掉視窗、回主畫面。這一頁尚無截圖，辨識的 roi 是寬的（unverified）。
+
 ### 入口頁的分流
 
 入口頁讀取 `Exploring:` 欄位、Weekly Bonuses 與 `Unclaimed Rewards`，依畫面分流：（#8）
