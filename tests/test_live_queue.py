@@ -193,6 +193,21 @@ def test_status_marks_a_holder_whose_bot_ended_long_ago_without_a_done_file(tmp_
     assert "bot ended" not in lq.status(tmp_path, now=later + 1500)[0]
 
 
+def test_status_with_a_glob_guard_counts_from_the_last_bot_and_not_while_one_runs(tmp_path):
+    # live-1 T-live: `--guard bot*.log` follows every bot run of one hold.
+    done, first, second = tmp_path / "done", tmp_path / "bot.log", tmp_path / "bot-b.log"
+    for log in (first, second):
+        log.write_text("x")
+        lq.pid_file(log).write_text(json.dumps({"pid": dead_pid(), "start": None, "cmd": "bot"}))
+    os.utime(first, (0, second.stat().st_mtime - 1200))  # the first run ended 20 min before the second
+    (tmp_path / f"1-{os.getpid()}-t.ticket").write_text(f"hold --done {done} --guard {tmp_path / 'bot*.log'}")
+    later = second.stat().st_mtime
+    assert "bot ended" not in lq.status(tmp_path, now=later + 60)[0]
+    assert "bot ended 25 min ago" in lq.status(tmp_path, now=later + 1500)[0]
+    lq.pid_file(second).write_text(json.dumps({"pid": os.getpid(), "start": None, "cmd": "bot"}))  # runs again
+    assert "bot ended" not in lq.status(tmp_path, now=later + 1500, is_alive=lambda pid, start: pid == os.getpid())[0]
+
+
 def test_resume_next_step_while_queued_or_when_nothing_started(tmp_path):
     task = tmp_path / "t"
     task.mkdir()
