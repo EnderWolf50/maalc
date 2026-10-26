@@ -75,6 +75,11 @@ const screens: [image: string, hits: string[]][] = [
   // Live 2026-10-26: the Charge Enkephalin window over Drive, the tab bar dimmed under it: neither tab here. The
   // Enkephalin bar still reads under the dimming (#370), as on every screen that shows the resource panel.
   ['EnkephalinPanel.png', ['EnkephalinWindow', 'AssemblePanel', 'ChargePanel', 'EnkephalinBar', 'AssembleAfter', 'AssemblePrompt', 'ModuleIcon']],
+  // Live 2026-10-27 (#362): the window's three tabs. Only Modules has AssemblePrompt; only Use Lunacy has the price and
+  // the Daily Count; Use Boxes shares the "Recharge N Enkephalin?" prompt, so ChargeCount is what tells Use Lunacy apart.
+  ['EnkephalinModules.png', ['EnkephalinWindow', 'AssemblePanel', 'ChargePanel', 'EnkephalinBar', 'AssembleAfter', 'AssemblePrompt', 'ModuleIcon']],
+  ['EnkephalinLunacy.png', ['EnkephalinWindow', 'AssemblePanel', 'ChargePanel', 'EnkephalinBar', 'AssembleAfter', 'ChargePrompt', 'ChargePrice', 'ChargeCount', 'ModuleIcon']],
+  ['EnkephalinBoxes.png', ['EnkephalinWindow', 'AssemblePanel', 'ChargePanel', 'EnkephalinBar', 'AssembleAfter', 'ChargePrompt', 'ModuleIcon']],
   ['SinnersTab.png', ['GoToMirrorEntry', 'NavMainTabs', 'HomeWindowTab', 'EnkephalinBar', 'ModuleIcon']],
   ['Drive.png', ['GoToMirrorEntry', 'NavDrive', 'HomeWindowTab', 'NavLuxcavation', 'EnkephalinBar', 'ModuleIcon']],
   // Live 2026-10-26 (#366): Luxcavation as it opens on the EXP tab (stages 7-9), swiped right to the locked 10th (KEEP
@@ -155,7 +160,8 @@ const screens: [image: string, hits: string[]][] = [
   ['BattleTurnSolo.png', ['BattleTurn']], // 1-sinner formation: one slot, Win Rate at x ~740
   ['BattleTurnEven.png', ['BattleTurn']], // 8 slots (slot 4 a unit's second slot), Win Rate at x 1022
   ['BattleTurnStagger.png', ['BattleTurn']], // 6 of 7 slots staggered, Win Rate on, the START disc dim (#69)
-  ['BattleTurnFocused.png', ['BattleTurn']], // focused encounter (#127): hollow left gear, one sinner in 7 slots, nothing picked
+  // ChargePrice: the battle speed badge's "45" sits in its roi; the price is read only on the Use Lunacy tab (ChargeCount).
+  ['BattleTurnFocused.png', ['BattleTurn', 'ChargePrice']], // focused encounter (#127): hollow left gear, one sinner in 7 slots, nothing picked
   ['BattleTurnSwarm.png', ['BattleTurn']], // a swarm of enemies over the battlefield, one sinner in 6 slots (live 2026-10-21)
   ['BattleTurnSwarmNext.png', ['BattleTurn']], // the same turn 3 s later: the swarm moved, the HUD did not
   ['BattlePause.png', ['BattlePause']],

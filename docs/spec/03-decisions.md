@@ -487,14 +487,15 @@ Cost 表是 wiki 與簡中客戶端的表，實機 log 的節點面板 Cost 沒�
 
 ## 16. 狂氣換腦啡肽的價格核對
 
-`ChargeEnkephalin` 花 Lunacy，所以只有一條規則：價格要是遊戲價格表上的一格，確認後要是「下一格」，才按確認。判斷是純函式 `lunacy.check`（`tests/test_lunacy.py` 列舉情況）。（#373、#362）
+`ChargeEnkephalin` 花 Lunacy，所以只有一條規則：價格要是遊戲價格表上、當天已換次數（Daily Count）那一格，每次確認後次數要剛好加一，才按確認。判斷是純函式 `lunacy.check`（`tests/test_lunacy.py` 列舉情況）。（#373、#362）
 
 - **價格表**：第 n 次（從 1 算）換 `PRICES[n-1]` = 26、52、78、104、130、156、182、208、234、260（遊戲資料 `common-data` 的 `enkephalinPriceTable`；`chance` 9999 限一天 10 次、每日重置；已對照解包的遊戲資料，2026-10-26）。先扣免費 Lunacy，所以顯示的價格不變。
-- **次數是這次執行的**：`charge_enkephalin.count` 是這次執行換幾次，不推算今天已換幾次、也不另外記憶（#362 D5）。第一個價格只要在表上就行（手動或上一次執行換過的，價格自然比較高）；之後每次確認後，下一個價格必須剛好是下一格。這次換滿 `count` 次（且最後一次確認後的價格是下一格）就取消、成功結束。
-- **每日上限**：表上最後一格（260，當天第 10 次）確認之後就結束，不再開視窗：表上沒有下一格可核對。
-- **不符就不按確認**：價格不在表上、讀不出來（`lunacy.read_price` 要求去掉「n / cap」腦啡肽讀數後恰好剩一個數字）、或不是確認後該有的下一格（確認沒生效、價格跳格），一律按 Cancel、走停止程序（任務失敗，清單繼續）。同一個價格不會確認兩次。
+- **畫面**（實機 2026-10-27，`tests/screens/EnkephalinLunacy.png`）：Use Lunacy 分頁沒有另外的確認框，分頁本身顯示價格（`Consumable 104`，`ChargePrice`）、當天已換次數（`Daily Count 3/10`，`ChargeCount`，`lunacy.read_count`）與提示（`Recharge 136 Enkephalin?`，`ChargePrompt`），下面是 Cancel (520,534)、Confirm (765,534)。104 = 表[3]，和 3/10 對得上。Use Boxes 分頁（`EnkephalinBoxes.png`）有同樣的提示、沒有 Daily Count，所以讀不到 Daily Count 就不是 Use Lunacy 頁。視窗不記憶分頁，重開一律是 Modules（同一天的截圖）。
+- **次數是這次執行的**：`charge_enkephalin.count` 是這次執行換幾次，不推算、也不另外記憶今天已換幾次（#362 D5）。每次確認前：價格必須 == 表[Daily Count]；確認後再開視窗，Daily Count 必須剛好加一。這次換滿 `count` 次（且最後一次確認已加一）就取消、成功結束。
+- **每日上限**：Daily Count 讀到 10/10 就取消、成功結束（不看價格）。10/10 的畫面沒有截圖（unverified）。
+- **不符就不按確認**：價格或 Daily Count 讀不出來（`lunacy.read_price` 要求恰好一個數字，`read_count` 要求恰好一個「n/10」）、價格不是表上那一格、或確認後次數沒有剛好加一（確認沒生效、跳格），一律按 Cancel、走停止程序（任務失敗，清單繼續）。同一格不會確認兩次。
 - **0 次完全不碰**：`ChargeStart` 在入口讀設定，`count` 為 0 就 `done()`，不 GoHome、不開視窗。
-- **畫面（unverified）**：Use Lunacy 頁沒有截圖，確認框的提示（`ChargePrompt`，「Recharge {0} Enkephalin?」）、價格位置（`ChargePrice`）、Cancel／Confirm 位置都是照 Modules 頁推的，roi 很寬；讀不到就停，不會花。分頁本身的位置是實機量的（720p：Modules (505,226)、Use Lunacy (639,226)、Use Boxes (775,226)，verified 2026-10-26）。當天 10 次換完之後 Use Lunacy 頁長什麼樣也沒有截圖。實機驗收前先補截圖（要使用者同意花 Lunacy）。
+- **還沒看過的**：按下 Confirm 之後畫面怎麼變（會不會再跳彈窗、視窗是否關上）沒有實機看過（沒有花 Lunacy）；任務在 hub 照畫面處理，讀不到就停，不會多花。
 
 ## 未決
 

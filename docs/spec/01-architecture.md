@@ -105,16 +105,16 @@
 
 - 入口 `AssembleModules`（`TaskStart`）→ `AssembleHome`（`GoHomeRun`）→ `AssembleHub`；hub 認得腦啡肽視窗（`AssemblePanel`，視窗本身的認法是 `EnkephalinWindow`，`ChargePanel` 共用）、全域彈窗（`HomeText`）、主畫面（`AssembleMain`，任務只在這裡 `done()`，所以最後一步在主畫面）。60 秒都不認得就走停止程序（任務失敗）。（#370）
 - 主畫面左下腦啡肽條（`EnkephalinBar`）讀 `n/cap`：少於 20（一個模組的腦啡肽）就以成功結束，不開面板；否則點腦啡肽條開 Charge Enkephalin 視窗。
-- 視窗會停在上次開的分頁，所以每次先點 Modules 分頁（720p (505,226)，實機量的；點分頁不花資源，#362 D7），再讀提示（`AssemblePrompt`：讀到 Modules 頁自己的提示才按 Confirm，這道保護保留）與換前、換後的腦啡肽（`AssembleAfter`），點 `»`（最大量），換後仍 ≥ 20 就再點，最多 3 次；再點 Confirm。只點 Modules 分頁、`»`、Confirm、Cancel，絕不點 Use Lunacy 頁。
+- 視窗會停在上次開的分頁，所以每次先點 Modules 分頁（720p (505,226)，實機量的；點分頁不花資源，#362 D7；2026-10-27 的截圖顯示視窗重開一律在 Modules，點了也無害），再讀提示（`AssemblePrompt`：讀到 Modules 頁自己的提示才按 Confirm，這道保護保留）與換前、換後的腦啡肽（`AssembleAfter`），點 `»`（最大量），換後仍 ≥ 20 就再點，最多 3 次；再點 Confirm。只點 Modules 分頁、`»`、Confirm、Cancel，絕不點 Use Lunacy 頁。
 - 回到主畫面後讀回腦啡肽，低於換前才算完成（成功結束）；3 次讀回都沒降就走停止程序（任務失敗）。
 - 出現「模組太多」（`Cannot assemble Modules; you have too many in storage.`）就以成功結束：按返回鍵、Cancel 關掉視窗、回主畫面。這一頁尚無截圖，辨識的 roi 是寬的（unverified）。
 
 ### 狂氣換腦啡肽（`ChargeEnkephalin`，#373）
 
 - 入口 `ChargeEnkephalin`（`ChargeStart`：`TaskStart` 加讀 `charge_enkephalin.count`）。`count` 是 0（預設）就 `done()`，`TaskDone` 接著結束，沒有 GoHome、沒有任何點擊。**這是「每個日常任務頭尾都走 `GoHome`」的唯一例外**：0 次的任務什麼都不做，也就不必從主畫面開始；它不動畫面，所以下一個任務仍然從上一個任務留下的主畫面開始。否則 `ChargeHome`（`GoHomeRun`）→ `ChargeHub`，形狀同 `AssembleHub`：認得視窗（`ChargePanel`，視窗認法同 `AssemblePanel`：`EnkephalinWindow`）、全域彈窗（`HomeText`）、主畫面（`ChargeMain`，只在這裡 `done()`）。60 秒都不認得就走停止程序。
-- `ChargeMain` 點腦啡肽條開視窗；`ChargePanel` 先點 Use Lunacy 分頁（720p (639,226)，實機量的，#362 D7）、讀 Recharge 提示與價格（`ChargePrompt`、`ChargePrice`），交給 `lunacy.check`（[spec 03 第 16 節](03-decisions.md)）：CHARGE 才點 Confirm，DONE 與 STOP 點 Cancel。`count` 是這次執行換幾次（#362 D5）；價格表最後一格確認後就結束，不再開視窗。只點頁籤、Confirm、Cancel。
+- `ChargeMain` 點腦啡肽條開視窗；`ChargePanel` 先點 Use Lunacy 分頁（720p (639,226)，實機量的；視窗重開一律在 Modules，#362 D7）、讀提示、價格與 Daily Count（`ChargePrompt`、`ChargePrice`、`ChargeCount`），交給 `lunacy.check`（[spec 03 第 16 節](03-decisions.md)）：CHARGE 才點 Confirm，DONE 與 STOP 點 Cancel。`count` 是這次執行換幾次（#362 D5）；Daily Count 10/10 就結束。只點頁籤、Confirm、Cancel。
 - 開視窗次數有上限（價格表長度加一），避免價格一直讀對卻沒換成的迴圈。
-- 這一頁沒有截圖（unverified）：見 spec 03 第 16 節。
+- 畫面見 spec 03 第 16 節（Use Lunacy 頁有截圖，2026-10-27；Confirm 之後的畫面沒有）。
 
 ### 入口頁的分流
 

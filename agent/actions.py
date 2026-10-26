@@ -839,9 +839,11 @@ class ChargeMain(CustomAction):
 
 @AgentServer.custom_action("ChargePanel")
 class ChargePanel(CustomAction):
-    """The Charge Enkephalin window: its Use Lunacy tab, the Recharge prompt and its price. The price must be the next of
-    the game's table (lunacy.check) before Confirm; else Cancel, and the task ends (a success when the day's count is
-    met, a failure when the screen is not what it should be). Only the tab, Confirm and Cancel are tapped."""
+    """The Charge Enkephalin window: its Use Lunacy tab (it opens on Modules), which shows the price, the Daily Count and
+    the Recharge prompt (live 2026-10-27). The price must be the table's at the Daily Count, and the count one up after
+    each Confirm (lunacy.check); else Cancel, and the task ends (a success at this run's count or 10/10, a failure when
+    the screen is not what it should be). Use Boxes has the same prompt and no Daily Count: never confirmed. Only the
+    tab, Confirm and Cancel are tapped."""
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         c = TASK["charge"]
@@ -851,22 +853,22 @@ class ChargePanel(CustomAction):
         tap(context, *LUNACY_TAB, wait=0.7)
         image = screen(context)
         prompt = context.run_recognition("ChargePrompt", image)
-        price_read = context.run_recognition("ChargePrice", image)
-        price = lunacy.read_price([r.text for r in (price_read.all_results if price_read else [])]) if prompt and prompt.hit else None
-        if price is None:
+        price, used = None, None
+        if prompt and prompt.hit:
+            price = lunacy.read_price(ocr_texts(context, image, "ChargePrice"))
+            used = lunacy.read_count(ocr_texts(context, image, "ChargeCount"))
+        if used is None or (price is None and used < lunacy.DAILY_MAX):  # 10/10 needs no price
             c["reads"] += 1
             if c["reads"] < CHARGE_TRIES:
                 return True
             tap(context, *PANEL_CANCEL, wait=0.5)
-            return stop(context, "the Use Lunacy tab's Recharge prompt and price could not be read")
+            return stop(context, "the Use Lunacy tab's prompt, price and Daily Count could not be read")
         c["reads"] = 0
-        verdict, step, why = lunacy.check(price, c["charged"], c["count"], c.get("expected"))
+        verdict, why = lunacy.check(price, used, c["charged"], c["count"], c.get("expected"))
         log(f"charge: {why}")
         if verdict == lunacy.CHARGE:
             c["charged"] += 1
-            c["expected"] = step + 1  # the price after this Confirm; a price that stays is a Confirm that did nothing
-            if c["expected"] == lunacy.DAILY_MAX:  # the table has no step after it: the window is not opened again
-                c["end"] = f"{c['charged']} charged now, the day's {lunacy.DAILY_MAX} charges are done"
+            c["expected"] = used + 1  # a Daily Count that stays is a Confirm that did nothing
             tap(context, *PANEL_CONFIRM, wait=1.0)
             return True
         tap(context, *PANEL_CANCEL, wait=0.5)
@@ -874,6 +876,12 @@ class ChargePanel(CustomAction):
             c["end"] = f"{c['charged']} charged now, {why}"
             return True
         return stop(context, why)
+
+
+def ocr_texts(context, image, node):
+    """Every text the OCR node read on image, hit or not."""
+    detail = context.run_recognition(node, image)
+    return [r.text for r in (detail.all_results if detail else [])]
 
 
 @AgentServer.custom_action("Recover")
