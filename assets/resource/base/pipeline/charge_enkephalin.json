@@ -45,12 +45,12 @@
         "custom_action": "ChargeMain",
         "post_delay": 1500
     },
-    // The "Charge Enkephalin" title plate, as AssemblePanel's (tests/screens/EnkephalinPanel.png).
+    // The Charge Enkephalin window (EnkephalinWindow, assemble_modules.json).
     "ChargePanel": {
-        "recognition": "TemplateMatch",
-        "roi": [500, 90, 280, 60],
-        "template": "Assemble/PanelTitle.png",
-        "threshold": 0.9,
+        "recognition": "And",
+        "all_of": [
+            "EnkephalinWindow"
+        ],
         "action": "Custom",
         "custom_action": "ChargePanel",
         "post_delay": 1000

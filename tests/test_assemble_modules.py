@@ -66,7 +66,7 @@ def test_starts_on_gohome_from_another_page():
     out = run_child(__file__)
     for name in ("drive", "entry"):
         o = out[name]
-        assert o["succeeded"] and o["nodes"][-1] == "TaskDone" and "AssembleStart" in o["nodes"], name
+        assert o["succeeded"] and o["nodes"][-1] == "TaskDone" and "AssembleHome" in o["nodes"], name
         assert "assembled" in o["done"], name
     assert out["entry"]["keys"] == [4]  # the back key leaves the entry page, as GoHome alone
 

@@ -424,20 +424,21 @@ class TaskStart(CustomAction):
         RUN.clear()
         TASK.clear()
         TASK.update(runs=0, done=None)
-        TASK.pop("assemble", None)
         STUCK.update(node=None, kind=None, flag=None, watch=recovery.Watchdog(), ladder=recovery.Ladder())
         SCREENS.clear()
         log(f"task {argv.node_name} started")
         return True
 
 
-# MirrorHub's own steps, no screen: the watchdog keeps the screen handled before them.
+# A hub's own steps, no screen: the watchdog keeps the screen handled before them. The hubs themselves are found by
+# their next list, which names the Stuck node (StuckFlag).
 PASS_NODES = ("BattleHUD", "BattleHUDLost", "HubText", "HubTextLost", "ExpText", "ExpTextLost")
 
 
 @AgentServer.custom_recognition("StuckFlag")
 class StuckFlag(CustomRecognition):
-    """MirrorHub's Stuck node: watches every screen it hands out, hits while a stuck waits for recovery.
+    """A hub's Stuck node (MirrorHub's Stuck, ExpStuck, ThreadStuck): watches every screen the hub hands out, hits while
+    a stuck waits for recovery.
 
     It runs first on each MirrorHub pass, so the task's last node is the screen just
     handled and argv.image what it left: the watchdog, the evidence and the run time limit work from them.
@@ -448,11 +449,16 @@ class StuckFlag(CustomRecognition):
         if ids and ids[-1] != STUCK["node"]:
             STUCK["node"] = ids[-1]
             node = context.tasker.get_node_detail(ids[-1])
-            if node and node.name not in ("MirrorDungeon", "MirrorHub", "Stuck", "GlobalStuck", *PASS_NODES):
+            if node and node.name not in ("MirrorDungeon", "GlobalStuck", argv.node_name, *PASS_NODES) and not self.hub(context, node.name, argv.node_name):
                 self.see(node.name, argv.image)
         if STUCK["flag"] and STUCK["flag"][0] is None:
             STUCK["flag"] = (STUCK["kind"], *STUCK["flag"][1:])  # reported by the action of the node just handled
         return CustomRecognition.AnalyzeResult(box=(0, 0, 1, 1), detail={}) if STUCK["flag"] else None
+
+    @staticmethod
+    def hub(context, name, stuck_node):
+        """Whether the node is a hub, not a screen: its next list holds this Stuck node."""
+        return stuck_node in (n["name"] for n in context.get_node_data(name)["next"])
 
     @staticmethod
     def see(kind, image):
@@ -483,45 +489,36 @@ class GameAway(CustomRecognition):
         return CustomRecognition.AnalyzeResult(box=(0, 0, 1, 1), detail={"app": app}) if app not in (None, recovery.GAME) else None
 
 
-@AgentServer.custom_action("MailFinish")
-class MailFinish(CustomAction):
-    """The Mailbox has nothing left to claim: back to the main window (GoHome closes the box), then the done exit."""
-
-    def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
-        return go_home(context) and done("no mail to claim")
+# The Luxcavation tasks (#366, #368): their settings key (custom_action_param of LuxStart) -> name, Modules a battle.
+LUX = {"exp": ("EXP Luxcavation", luxcavation.EXP_COST), "thread": ("Thread Luxcavation", luxcavation.THREAD_COST)}
 
 
-@AgentServer.custom_action("ExpStart")
-class ExpStart(TaskStart):
-    """ExpLuxcavation's entry (#366): TaskStart, then the team luxcavation.exp names, whose guard turns the battle plays
-    (spec 03 section 8), and its count and retries (#367). No team picked, or settings that do not load: the stop
-    procedure, before any tap. ThreadStart is the same for luxcavation.thread (#368)."""
-
-    TASK, NAME, COST = "exp", "EXP Luxcavation", luxcavation.EXP_COST
+@AgentServer.custom_action("LuxStart")
+class LuxStart(TaskStart):
+    """A Luxcavation task's entry (#366, #368), its param the settings key ("exp", "thread"): TaskStart, then the team
+    luxcavation.<key> names, whose guard turns the battle plays (spec 03 section 8), and its count and retries (#367).
+    No team picked, or settings that do not load: the stop procedure, before any tap."""
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         super().run(context, argv)
+        key = json.loads(argv.custom_action_param)
+        name, cost = LUX[key]
         try:
             settings = load_settings(ROOT)
         except SettingsError as e:
             return stop(context, str(e))
-        opts = settings["luxcavation"][self.TASK]
+        opts = settings["luxcavation"][key]
         team = next((t for t in settings["teams"] if t["id"] == opts["team"]), None)
         if team is None:
-            return stop(context, f"{self.NAME} has no team: pick one in the settings GUI's Daily tab")
+            return stop(context, f"{name} has no team: pick one in the settings GUI's Daily tab")
         # Not RUN["settings"]: that is a Mirror Dungeon run, which the stop procedure writes to runs.jsonl.
         # lux: this task's count (spec 03 section 15): the battles won and the retries used, the last battle's result.
         RUN.update(team=team, guard=team["guard_turns"],
-                   lux={"name": self.NAME, "cost": self.COST, "count": opts["count"], "retries": opts["retries"], "modules": None,
+                   lux={"name": name, "cost": cost, "count": opts["count"], "retries": opts["retries"], "modules": None,
                         "won": 0, "retried": 0, "result": None})
-        log(f"{self.NAME}: team {team['name']!r} (TEAMS #{team['game_team']}), {team['guard_turns']} guard turns, "
+        log(f"{name}: team {team['name']!r} (TEAMS #{team['game_team']}), {team['guard_turns']} guard turns, "
             f"{opts['count']} wins, {opts['retries']} retries")
         return True
-
-
-@AgentServer.custom_action("ThreadStart")
-class ThreadStart(ExpStart):
-    TASK, NAME, COST = "thread", "Thread Luxcavation", luxcavation.THREAD_COST
 
 
 def modules_now(context, timeout=3):
@@ -543,9 +540,9 @@ class OpenDrive(CustomAction):
         return True
 
 
-@AgentServer.custom_action("ExpHome")
-class ExpHome(CustomAction):
-    """ExpHub's first step: the main window, then the one check of the task (#367): the Modules must cover `count`
+@AgentServer.custom_action("LuxHome")
+class LuxHome(CustomAction):
+    """A Luxcavation task's first step after LuxStart: the main window, then the one check of the task (#367): the Modules must cover `count`
     battles at the hardest stage's cost, else the task is done at once, a success the client's list goes on from
     (spec 03 section 15). A panel that does not read stops the task: nothing is known to be safe to spend."""
 
@@ -561,11 +558,6 @@ class ExpHome(CustomAction):
             return done(f"{lux['name']}: Modules {lux['modules']} < {need} needed, skipped")
         log(f"{lux['name']}: Modules {lux['modules']} >= {need} needed")
         return True
-
-
-@AgentServer.custom_action("ThreadHome")
-class ThreadHome(ExpHome):
-    pass
 
 
 def battle_over(context):
@@ -589,36 +581,12 @@ def battle_over(context):
     return None
 
 
-@AgentServer.custom_action("ExpEnter")
-class ExpEnter(CustomAction):
-    """LuxExpEnter: tap the rightmost open stage's Enter (the node's box) until the tab goes. Back on the tab after
-    that: the battle is over (battle_over). ThreadEnter is the same for the Thread tab's open card, whose Enter opens
-    the Level Select (ThreadLevel) instead of the battle (#368)."""
-
-    OPENS_BATTLE = True
-
-    def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
-        if RUN.get("entered"):
-            over = battle_over(context)
-            if over is not None:
-                return over
-        x, y, w, h = argv.box
-        if tap_then(context, x + w // 2, y + h // 2, lambda im: seen(context, im, argv.node_name) is None, timeout=3) is not None:
-            RUN["entered"], RUN["team_picked"] = self.OPENS_BATTLE, False
-            log(f"{RUN['lux']['name']}: entered the stage at x {x + w // 2}")
-        return True
-
-
-@AgentServer.custom_action("ThreadEnter")
-class ThreadEnter(ExpEnter):
-    OPENS_BATTLE = False
-
-
-@AgentServer.custom_action("ThreadLevel")
-class ThreadLevel(CustomAction):
-    """LuxThreadLevel: the card's Level Select, which opens at its bottom row, the hardest level (#368): tap that row's
-    Enter (the node's box) until the list goes. A battle over that returns here, not to the Thread tab, is counted
-    first (battle_over)."""
+@AgentServer.custom_action("LuxEnter")
+class LuxEnter(CustomAction):
+    """An Enter of a Luxcavation page (the node's box): the EXP tab's rightmost open stage (LuxExpEnter), the Thread
+    tab's open card (LuxThreadEnter), the bottom row of the card's Level Select, its hardest level (LuxThreadLevel). Tap
+    it until the page goes. The param {"opens_battle": false} marks the card's Enter, which opens the Level Select, not
+    the battle (#368). Back on the page a battle started from: the battle is over (battle_over)."""
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         if RUN.get("entered"):
@@ -627,8 +595,9 @@ class ThreadLevel(CustomAction):
                 return over
         x, y, w, h = argv.box
         if tap_then(context, x + w // 2, y + h // 2, lambda im: seen(context, im, argv.node_name) is None, timeout=3) is not None:
-            RUN["entered"], RUN["team_picked"] = True, False
-            log(f"{RUN['lux']['name']}: entered the level at y {y + h // 2}")
+            RUN["entered"] = (json.loads(argv.custom_action_param or "null") or {}).get("opens_battle", True)
+            RUN["team_picked"] = False
+            log(f"{RUN['lux']['name']}: {argv.node_name} at ({x + w // 2}, {y + h // 2})")
         return True
 
 
@@ -656,12 +625,13 @@ class GoHomeRun(CustomAction):
         return go_home(context)
 
 
-@AgentServer.custom_action("PassFinish")
-class PassFinish(CustomAction):
-    """Both Pass Missions tabs are claimed: back to the main window, then the done exit."""
+@AgentServer.custom_action("GoHomeDone")
+class GoHomeDone(CustomAction):
+    """A daily task found nothing left to do (the Mailbox empty, both Pass Missions tabs claimed): back to the main window
+    (GoHome closes what is open), then the done exit; the param says why."""
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
-        return go_home(context) and done("pass missions claimed")
+        return go_home(context) and done(json.loads(argv.custom_action_param))
 
 
 AgentServer.custom_recognition("PassClaimable")(pass_missions.PassClaimable)

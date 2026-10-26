@@ -73,14 +73,14 @@
     "HomeReached": {
         "recognition": "TemplateMatch",
         "roi": [770, 598, 110, 84],
-        "template": "Navigation/NavWindowLit.png",
+        "template": "Navigation/HomeReached.png",
         "threshold": 0.9
     },
     // The Window tab unlit (Drive.png, SinnersTab.png).
     "HomeWindowTab": {
         "recognition": "TemplateMatch",
         "roi": [770, 598, 110, 84],
-        "template": "Navigation/NavWindowTab.png",
+        "template": "Navigation/HomeWindowTab.png",
         "threshold": 0.9,
         "action": "Click",
         "post_delay": 2000

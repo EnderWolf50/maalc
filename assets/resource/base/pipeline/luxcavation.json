@@ -1,16 +1,18 @@
 {
-    // EXP Luxcavation (#366): ExpStart picks the team (luxcavation.exp), then the daily task entry of spec 01: GoHome run
-    // by GoHomeRun, and ExpHub, which plays the rightmost open stage of the EXP tab once; its last step runs GoHome again.
+    // EXP Luxcavation (#366): LuxStart picks the team (luxcavation.exp), then the daily task entry of spec 01: ExpHome
+    // (LuxHome: GoHome and the Modules check), and ExpHub, which plays the rightmost open stage of the EXP tab; its last
+    // step runs GoHome again.
     "ExpLuxcavation": {
         "action": "Custom",
-        "custom_action": "ExpStart",
+        "custom_action": "LuxStart",
+        "custom_action_param": "exp",
         "next": [
             "ExpHome"
         ]
     },
     "ExpHome": {
         "action": "Custom",
-        "custom_action": "ExpHome",
+        "custom_action": "LuxHome",
         "next": [
             "ExpHub"
         ]
@@ -124,25 +126,19 @@
         "upper": [255, 200, 80],
         "count": 900
     },
+    // The Luxcavation panel title at the left, over its EXP and Thread tabs (LuxExp.png, LuxThread.png).
+    "LuxPanel": {
+        "recognition": "TemplateMatch",
+        "roi": [55, 170, 180, 60],
+        "template": "Luxcavation/LuxPanel.png",
+        "threshold": 0.8
+    },
     // The Thread tab lit (LuxThread.png) under the Luxcavation panel: tap EXP.
     "LuxExpTab": {
         "recognition": "And",
         "all_of": [
-            {
-                "recognition": "TemplateMatch",
-                "sub_name": "LuxPanel",
-                "roi": [55, 170, 180, 60],
-                "template": "Luxcavation/LuxPanel.png",
-                "threshold": 0.8
-            },
-            {
-                "recognition": "ColorMatch",
-                "sub_name": "LuxThreadLit",
-                "roi": [62, 297, 166, 72],
-                "lower": [200, 120, 0],
-                "upper": [255, 200, 80],
-                "count": 900
-            }
+            "LuxPanel",
+            "LuxThreadLit"
         ],
         "action": "Click",
         "target": [70, 236, 150, 56],
@@ -166,24 +162,25 @@
         ],
         "box_index": 1,
         "action": "Custom",
-        "custom_action": "ExpEnter",
+        "custom_action": "LuxEnter",
         "pre_delay": 500,
         "post_delay": 0
     },
-    // Thread Luxcavation (#368): ThreadStart picks the team (luxcavation.thread), then the same entry as EXP (GoHomeRun
-    // through ThreadHome) and ThreadHub, which plays the hardest level of today's one open card of the Thread tab, over
+    // Thread Luxcavation (#368): LuxStart picks the team (luxcavation.thread), then the same entry as EXP (ThreadHome,
+    // LuxHome) and ThreadHub, which plays the hardest level of today's one open card of the Thread tab, over
     // and over until `count` are won. Its screens: the Thread tab's open card (Enter), its Level Select (the bottom row's
     // Enter), then the pages EXP's Enter leads to as well (ExpHub's list: the team page, the battle, the results).
     "ThreadLuxcavation": {
         "action": "Custom",
-        "custom_action": "ThreadStart",
+        "custom_action": "LuxStart",
+        "custom_action_param": "thread",
         "next": [
             "ThreadHome"
         ]
     },
     "ThreadHome": {
         "action": "Custom",
-        "custom_action": "ThreadHome",
+        "custom_action": "LuxHome",
         "next": [
             "ThreadHub"
         ]
@@ -237,13 +234,7 @@
     "LuxThreadTab": {
         "recognition": "And",
         "all_of": [
-            {
-                "recognition": "TemplateMatch",
-                "sub_name": "LuxPanel",
-                "roi": [55, 170, 180, 60],
-                "template": "Luxcavation/LuxPanel.png",
-                "threshold": 0.8
-            },
+            "LuxPanel",
             "LuxExpLit"
         ],
         "action": "Click",
@@ -268,7 +259,10 @@
         ],
         "box_index": 1,
         "action": "Custom",
-        "custom_action": "ThreadEnter",
+        "custom_action": "LuxEnter",
+        "custom_action_param": {
+            "opens_battle": false
+        },
         "pre_delay": 500,
         "post_delay": 0
     },
@@ -277,13 +271,7 @@
     "LuxThreadSwipe": {
         "recognition": "And",
         "all_of": [
-            {
-                "recognition": "TemplateMatch",
-                "sub_name": "LuxPanel",
-                "roi": [55, 170, 180, 60],
-                "template": "Luxcavation/LuxPanel.png",
-                "threshold": 0.8
-            },
+            "LuxPanel",
             "LuxThreadLit"
         ],
         "action": "Swipe",
@@ -309,7 +297,7 @@
                 "recognition": "TemplateMatch",
                 "sub_name": "LuxLevelEnterButton",
                 "roi": [700, 225, 260, 330],
-                "template": "Luxcavation/LuxLevelEnter.png",
+                "template": "Luxcavation/LuxThreadLevel.png",
                 "threshold": 0.9,
                 "order_by": "Vertical",
                 "index": -1
@@ -317,7 +305,7 @@
         ],
         "box_index": 1,
         "action": "Custom",
-        "custom_action": "ThreadLevel",
+        "custom_action": "LuxEnter",
         "pre_delay": 500,
         "post_delay": 0
     }

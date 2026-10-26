@@ -1,16 +1,17 @@
 {
     // ClaimMail (#372): open the Mailbox, press Claim All, end done. The global Mailbox (popups.json) stays as it was:
     // it only presses Close; here the task presses Claim All because the player ticked it.
-    // Spec 01 (daily tasks): TaskStart, GoHome run by GoHomeRun, the hub; the last step runs GoHome again (MailFinish),
+    // Spec 01 (daily tasks): TaskStart, GoHome run by GoHomeRun (MailHome), the hub; the last step runs GoHome again
+    // (GoHomeDone),
     // and the global Mailbox (GoHome's HomeText) closes the box with its own Close.
     "ClaimMail": {
         "action": "Custom",
         "custom_action": "TaskStart",
         "next": [
-            "MailStart"
+            "MailHome"
         ]
     },
-    "MailStart": {
+    "MailHome": {
         "action": "Custom",
         "custom_action": "GoHomeRun",
         "next": [
@@ -82,7 +83,8 @@
             }
         ],
         "action": "Custom",
-        "custom_action": "MailFinish",
+        "custom_action": "GoHomeDone",
+        "custom_action_param": "no mail to claim",
         "post_delay": 500
     },
     // Claim All beside the box's Close (Mailbox.png). max_hit: a confirm or result window over the box can leave the
@@ -108,12 +110,12 @@
         "post_delay": 2500,
         "max_hit": 3
     },
-    // The envelope at the top right of the main window (Window tab lit, as HomeReached).
+    // The envelope at the top right of the main window (HomeReached).
     "MailOpen": {
-        "recognition": "TemplateMatch",
-        "roi": [770, 598, 110, 84],
-        "template": "Navigation/NavWindowLit.png",
-        "threshold": 0.9,
+        "recognition": "And",
+        "all_of": [
+            "HomeReached"
+        ],
         "action": "Click",
         "target": [1085, 95, 70, 60],
         "post_delay": 2000,

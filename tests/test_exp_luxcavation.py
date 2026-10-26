@@ -244,5 +244,32 @@ def test_a_thread_battle_with_no_victory_stops_the_task_instead_of_counting():
     assert o["succeeded"] is False and len(level_enters(o)) == 1
 
 
+
+def test_the_watchdog_counts_screens_not_the_luxcavation_hubs():
+    # Review M5: StuckFlag skipped MirrorHub by name; ExpHub and ThreadHub reached the watchdog as if they were screens.
+    # A hub is now the node whose next list names the Stuck node.
+    from types import SimpleNamespace
+    from unittest.mock import MagicMock
+
+    import actions
+    from test_pipeline import load_nodes
+
+    nodes = load_nodes()
+    context = MagicMock()
+    context.get_node_data = lambda name: {"next": [{"name": n.split("]")[-1]} for n in nodes[name].get("next", [])]}
+    seen = []
+    see = actions.StuckFlag.see
+    actions.StuckFlag.see = staticmethod(lambda kind, image: seen.append(kind))
+    try:
+        for stuck, hub in (("ExpStuck", "ExpHub"), ("ThreadStuck", "ThreadHub"), ("Stuck", "MirrorHub")):
+            for k, name in enumerate((hub, "LuxExpEnter", "ExpText", stuck)):
+                actions.STUCK.update(node=None, flag=None)
+                context.tasker.get_node_detail.return_value = SimpleNamespace(name=name)
+                argv = SimpleNamespace(node_name=stuck, image=None, task_detail=SimpleNamespace(node_id_list=[k + 1]))
+                actions.StuckFlag().analyze(context, argv)
+    finally:
+        actions.StuckFlag.see = see
+    assert seen == ["LuxExpEnter"] * 3
+
 if __name__ == "__main__":
     child()

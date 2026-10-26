@@ -37,10 +37,10 @@ const screens: [image: string, hits: string[]][] = [
   // counts down "Retry 5" to "Retry 1" with a dark frame first, then reads "Retry". The Mailbox under these
   // popups still reads: they come before it in the hub.
   // The box still reads under them, Claim All too: ClaimMail's hub reads MailPopups before MailText.
-  ['ServerErrorRetryCountdown.png', ['RetryPopup', 'Mailbox', 'MailClaimAll', 'EnkephalinBar']],
-  ['ServerErrorRetry.png', ['RetryPopup', 'Mailbox', 'MailClaimAll', 'EnkephalinBar']],
+  ['ServerErrorRetryCountdown.png', ['RetryPopup', 'Mailbox', 'MailClaimAll', 'EnkephalinBar', 'ModuleIcon']],
+  ['ServerErrorRetry.png', ['RetryPopup', 'Mailbox', 'MailClaimAll', 'EnkephalinBar', 'ModuleIcon']],
   // Live 2026-10-20 (#84): the network-unstable popup over the Mailbox with Wi-Fi off, Close only.
-  ['NetworkUnstable.png', ['PopupButton', 'Mailbox', 'MailClaimAll', 'EnkephalinBar']],
+  ['NetworkUnstable.png', ['PopupButton', 'Mailbox', 'MailClaimAll', 'EnkephalinBar', 'ModuleIcon']],
   // The Parallel Superposition prompt after clearing floor 5 / 10 with the mode engaged (#85). Captured from the
   // game's own help sheet (the page behind it is the help text, not a map): the dialog is its live look, but where
   // it sits on screen is not confirmed. A Cancel / Confirm question, so PopupButton (one centred button) stays out.
@@ -58,37 +58,39 @@ const screens: [image: string, hits: string[]][] = [
   ['SystemNotices.png', ['Notices', 'EnkephalinBar']],
   // ClaimMail (#372): the box with mail reads Claim All; the empty one (live 2026-10-26) reads "No mail in storage." and
   // has the button dimmed. MailOpen is the envelope tap on the main window, the Window tab lit as HomeReached.
-  ['Mailbox.png', ['Mailbox', 'MailClaimAll', 'EnkephalinBar']],
-  ['MailboxEmpty.png', ['Mailbox', 'MailEmpty', 'EnkephalinBar']],
-  ['SettingsMenu.png', ['SettingsMenu', 'GoToMirrorEntry', 'NavMainTabs', 'HomeReached', 'MailOpen', 'AssembleMain', 'ChargeMain', 'EnkephalinBar']],
+  ['Mailbox.png', ['Mailbox', 'MailClaimAll', 'EnkephalinBar', 'ModuleIcon']],
+  ['MailboxEmpty.png', ['Mailbox', 'MailEmpty', 'EnkephalinBar', 'ModuleIcon']],
+  ['SettingsMenu.png', ['SettingsMenu', 'GoToMirrorEntry', 'NavMainTabs', 'HomeReached', 'MailOpen', 'AssembleMain', 'ChargeMain', 'EnkephalinBar', 'ModuleIcon']],
   ['HelpPager.png', ['HelpPager']],
   ['HelpPagerLast.png', ['HelpPager']],
   ['HelpPagerExtract.png', ['HelpPager']],
   ['HelpPagerSinners.png', ['HelpPager']],
-  ['MainWindow.png', ['GoToMirrorEntry', 'NavMainTabs', 'HomeReached', 'PassBanner', 'MailOpen', 'AssembleMain', 'ChargeMain', 'EnkephalinBar']],
-  ['MainWindowFadeIn.png', ['GoToMirrorEntry', 'NavMainTabs', 'HomeReached', 'PassBanner', 'MailOpen', 'AssembleMain', 'ChargeMain', 'EnkephalinBar']],
-  ['MainWindowLater.png', ['GoToMirrorEntry', 'NavMainTabs', 'HomeReached', 'PassBanner', 'MailOpen', 'AssembleMain', 'ChargeMain', 'EnkephalinBar']],  // live 2026-10-26: other numbers on the resource panel
+  ['MainWindow.png', ['GoToMirrorEntry', 'NavMainTabs', 'HomeReached', 'PassBanner', 'MailOpen', 'AssembleMain', 'ChargeMain', 'EnkephalinBar', 'ModuleIcon']],
+  ['MainWindowFadeIn.png', ['GoToMirrorEntry', 'NavMainTabs', 'HomeReached', 'PassBanner', 'MailOpen', 'AssembleMain', 'ChargeMain', 'EnkephalinBar', 'ModuleIcon']],
+  ['MainWindowLater.png', ['GoToMirrorEntry', 'NavMainTabs', 'HomeReached', 'PassBanner', 'MailOpen', 'AssembleMain', 'ChargeMain', 'EnkephalinBar', 'ModuleIcon']],  // live 2026-10-26: other numbers on the resource panel
   // Synthetic (#370): MainWindowLater.png with the bar's "22" painted down to "2": under a module's 20 Enkephalin.
-  ['MainWindowLowEnkephalin.synthetic.png', ['GoToMirrorEntry', 'NavMainTabs', 'HomeReached', 'PassBanner', 'MailOpen', 'AssembleMain', 'ChargeMain', 'EnkephalinBar']],
+  ['MainWindowLowEnkephalin.synthetic.png', ['GoToMirrorEntry', 'NavMainTabs', 'HomeReached', 'PassBanner', 'MailOpen', 'AssembleMain', 'ChargeMain', 'EnkephalinBar', 'ModuleIcon']],
+  // ModuleIcon (the Modules panel's round icon, actions.module_count) hits wherever the resource panel shows: the
+  // main window, Drive, Luxcavation, the Mailbox (0.93-1.0); 0.51 at most elsewhere.
   // Live 2026-10-26: the Charge Enkephalin window over Drive, the tab bar dimmed under it: neither tab here. The
   // Enkephalin bar still reads under the dimming (#370), as on every screen that shows the resource panel.
-  ['EnkephalinPanel.png', ['AssemblePanel', 'ChargePanel', 'EnkephalinBar', 'AssembleAfter', 'AssemblePrompt']],
-  ['SinnersTab.png', ['GoToMirrorEntry', 'NavMainTabs', 'HomeWindowTab', 'EnkephalinBar']],
-  ['Drive.png', ['GoToMirrorEntry', 'NavDrive', 'HomeWindowTab', 'NavLuxcavation', 'EnkephalinBar']],
+  ['EnkephalinPanel.png', ['EnkephalinWindow', 'AssemblePanel', 'ChargePanel', 'EnkephalinBar', 'AssembleAfter', 'AssemblePrompt', 'ModuleIcon']],
+  ['SinnersTab.png', ['GoToMirrorEntry', 'NavMainTabs', 'HomeWindowTab', 'EnkephalinBar', 'ModuleIcon']],
+  ['Drive.png', ['GoToMirrorEntry', 'NavDrive', 'HomeWindowTab', 'NavLuxcavation', 'EnkephalinBar', 'ModuleIcon']],
   // Live 2026-10-26 (#366): Luxcavation as it opens on the EXP tab (stages 7-9), swiped right to the locked 10th (KEEP
   // OUT, no Enter: the rightmost Enter is stage 9 in the middle), and the Thread tab, which the EXP tab is tapped from.
   // The lit tab is its orange frame (LuxExpLit); LuxExpEnter's box is the rightmost Enter (test_exp_luxcavation.py).
-  ['LuxExp.png', ['LuxExpLit', 'LuxExpEnter', 'LuxThreadTab']],
-  ['LuxExpLocked.png', ['LuxExpLit', 'LuxExpEnter', 'LuxThreadTab']],
-  ['LuxThread.png', ['LuxExpTab', 'LuxThreadLit', 'LuxThreadEnter', 'LuxThreadSwipe']],
+  ['LuxExp.png', ['LuxPanel', 'LuxExpLit', 'LuxExpEnter', 'LuxThreadTab', 'ModuleIcon']],
+  ['LuxExpLocked.png', ['LuxPanel', 'LuxExpLit', 'LuxExpEnter', 'LuxThreadTab', 'ModuleIcon']],
+  ['LuxThread.png', ['LuxPanel', 'LuxExpTab', 'LuxThreadLit', 'LuxThreadEnter', 'LuxThreadSwipe', 'ModuleIcon']],
   // Live 2026-10-26 (#368, Monday): the Thread tab as Thread Luxcavation finds it. LuxThreadLust.png: Lust's card open at
   // the left, LuxThread.png's way on another day (the lit Enter is the open card's, the others' read 0.6 at most).
   // LuxThreadScrolled.png: scrolled right, no card open on show. LuxThreadSwipe reads any Thread tab: the hub lists
   // LuxThreadEnter ahead of it, so it acts on the tab with no open card only. LuxThreadLevels.png: Lust's Level Select
   // (Lv40/50/60, -2 Modules each, the list at its bottom), the page dimmed behind it.
-  ['LuxThreadLust.png', ['LuxExpTab', 'LuxThreadLit', 'LuxThreadEnter', 'LuxThreadSwipe']],
-  ['LuxThreadScrolled.png', ['LuxExpTab', 'LuxThreadLit', 'LuxThreadSwipe']],
-  ['LuxThreadLevels.png', ['LuxThreadLevel']],
+  ['LuxThreadLust.png', ['LuxPanel', 'LuxExpTab', 'LuxThreadLit', 'LuxThreadEnter', 'LuxThreadSwipe', 'ModuleIcon']],
+  ['LuxThreadScrolled.png', ['LuxPanel', 'LuxExpTab', 'LuxThreadLit', 'LuxThreadSwipe', 'ModuleIcon']],
+  ['LuxThreadLevels.png', ['LuxPanel', 'LuxThreadLevel', 'ModuleIcon']],
   // Live 2026-10-26 (#371): the Limbus Pass page on its Battle Pass tab (the Pass Missions tab unlit), then Pass Missions
   // on the Daily tab (every row claimed) and the Weekly tab (one row under way, 3/5). The tab lit is the one on.
   // The rows to claim are read by the agent (PassClaimable, tests/test_pass_missions.py), which this test cannot run.
