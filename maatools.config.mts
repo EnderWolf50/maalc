@@ -101,7 +101,9 @@ const screens: [image: string, hits: string[]][] = [
   // The rows to claim are read by the agent (PassClaimable, tests/test_pass_missions.py), which this test cannot run.
   ['PassBattlePass.png', ['PassMissionsTab']],
   ['PassMissionsDaily.png', ['PassDailyLit', 'PassDailyDone']],
-  ['PassMissionsDailyUnderway.png', ['PassDailyLit', 'PassDailyDone']],  // live 2026-10-27: one claimed, four under way
+  // Live 2026-10-27: one claimed, four under way. AssembleAfter reads a row's "0/2" there; it is read only in the
+  // Enkephalin window (AssemblePanel), as on WipeDialog.png.
+  ['PassMissionsDailyUnderway.png', ['PassDailyLit', 'PassDailyDone', 'AssembleAfter']],
   ['PassMissionsWeekly.png', ['PassWeeklyLit', 'PassWeeklyDone']],
   ['PassMissionsWeeklyClaimable.synthetic.png', ['PassWeeklyLit', 'PassWeeklyDone']],
   // Live 2026-10-27 (#362 D9): the Seasonal tab at its top and at its end after one swipe, every row claimed.
