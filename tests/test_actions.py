@@ -1421,7 +1421,7 @@ def test_tap_until_logs_how_long_the_screen_took(context, clock):
 
 
 def test_plan_run_waits_for_the_enter_dialog_after_pressing_enter(context, clock, monkeypatch):
-    team = {"id": 1, "name": "t", "game_team": 1, "guard_turns": 3, "hard_from_floor": 1}
+    team = {"id": 1, "name": "t", "game_team": 1, "guard_turns": 3, "hard_from_floor": 1, "enabled": True}
     run = {"runs": 0, "stop_when_weekly_bonus_out": False, "difficulty": "normal"}
     monkeypatch.setattr(actions, "load_settings", lambda root, need_team=False: {"run": run, "teams": [team]})
     monkeypatch.setattr(actions, "pick_team", lambda teams, cursor, difficulty: team)
@@ -1440,7 +1440,7 @@ def test_plan_run_waits_for_the_enter_dialog_after_pressing_enter(context, clock
 def test_a_planned_run_of_a_team_that_never_switches_to_hard(context, clock, monkeypatch, setting, expected):
     # #137: auto with weekly bonuses left decides hard, but this team's switch to hard is off: the run is NORMAL.
     # Only the global "hard" makes it HARD (every floor, hard_wanted).
-    team = {"id": 1, "name": "t", "game_team": 1, "guard_turns": 0, "hard_from_floor": None}
+    team = {"id": 1, "name": "t", "game_team": 1, "guard_turns": 0, "hard_from_floor": None, "enabled": True}
     run = {"runs": None, "stop_when_weekly_bonus_out": False, "difficulty": setting}
     monkeypatch.setattr(actions, "load_settings", lambda root, need_team=False: {"run": run, "teams": [team]})
     monkeypatch.setattr(actions, "pick_team", lambda teams, cursor, difficulty: team)
@@ -2919,6 +2919,7 @@ def entry_page(context, edit=lambda run, teams: None):
     (lambda run, teams: run.update(runs=1), "1 of 1 runs done"),
     (lambda run, teams: run.update(stop_when_weekly_bonus_out=True), "weekly bonuses used up"),
     (lambda run, teams: teams[0].update(usage="hard_only"), "no enabled team may run normal"),
+    (lambda run, teams: [t.update(enabled=False) for t in teams], "no enabled team"),  # review S3: no team at all
 ])
 def test_a_mirror_dungeon_that_has_nothing_left_to_do_ends_a_success(context, monkeypatch, edit, done):
     # #364: the run count reached, the weekly bonuses out, no team for the difficulty: the task is done, not failed, so
@@ -2960,14 +2961,6 @@ def test_plan_run_backs_out_to_read_the_modules_when_the_trip_skipped_drive(cont
         assert context.tasker.controller.post_click_key.call_count == n and not actions.RUN
     assert actions.PlanRun().run(context, None) is True and actions.RUN["planned"]
     assert context.tasker.controller.post_click_key.call_count == 2
-
-
-def test_a_mirror_dungeon_with_no_enabled_team_fails(context):
-    # #364: the dailies run without a team, MirrorDungeon does not: a settings error, the task fails.
-    entry_page(context, lambda run, teams: [t.update(enabled=False) for t in teams])
-    actions.TASK.update(runs=0, done=None)
-    assert actions.PlanRun().run(context, None) is False
-    assert actions.TASK["done"] is None
 
 
 @pytest.mark.parametrize("action, run", [

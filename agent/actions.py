@@ -1105,16 +1105,18 @@ class TapUntil(CustomAction):
 class PlanRun(CustomAction):
     """Entry page, no run under way: check settings, pick difficulty and team, press Enter (spec 03 sections 1, 2).
 
-    Nothing left to do (the run count reached, the weekly bonuses out, no team for the difficulty) ends the task a
-    success (done); bad settings fail it (returning False).
+    Nothing left to do (the run count reached, the weekly bonuses out, no enabled team, none for the difficulty) ends
+    the task a success (done); bad settings fail it (returning False).
     """
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         try:
-            settings = load_settings(ROOT, need_team=True)
+            settings = load_settings(ROOT)
         except SettingsError as e:
             log(f"stop: {e}")
             return False
+        if not any(t["enabled"] for t in settings["teams"]):
+            return done("no enabled team")
         hsv_v = screen(context)[285:297].max(axis=2)  # V of HSV
         # Live: a filled slot reads V ~240, an empty one ~5 (2026-10-15).
         weekly = sum(hsv_v[:, x:x + 30].mean() > 40 for x in WEEKLY_SLOTS)
