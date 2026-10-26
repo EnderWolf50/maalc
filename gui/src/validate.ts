@@ -75,6 +75,14 @@ export function crossCheck(data: Settings): Problem[] {
     }
   });
 
+  const teamIds = new Set(teams.map((t) => t.id));
+  for (const [task, opts] of Object.entries(data.luxcavation)) {
+    if (opts.team !== null && !teamIds.has(opts.team)) {
+      const path = `luxcavation/${task}/team`;
+      errors.push({ paths: [path], text: `${path}: team ${pyRepr(opts.team)} is not in teams` });
+    }
+  }
+
   dupes("event_overrides", data.event_overrides.map((o) => o.question), "question", "question");
   dupes("trial_risk_overrides", data.trial_risk_overrides.map((o) => o.trial), "trial", "trial");
   return errors;
