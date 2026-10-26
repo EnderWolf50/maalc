@@ -55,19 +55,26 @@
         "custom_action": "ChargePanel",
         "post_delay": 1000
     },
-    // The Use Lunacy tab's prompt ("Recharge {0} Enkephalin?", EN_ShopUI), taken to sit where the Modules tab's own prompt
-    // does. No capture of that tab yet: unverified, and a read that misses stops the task, never charges.
+    // The Use Lunacy tab (tests/screens/EnkephalinLunacy.png, live 2026-10-27) has no dialog of its own: the tab shows the
+    // price ("Consumable 104"), the day's charges ("Daily Count 3/10") and the prompt ("Recharge 136 Enkephalin?",
+    // EN_ShopUI) over Cancel and Confirm. Use Boxes shows the same prompt ("Recharge 60 Enkephalin?",
+    // EnkephalinBoxes.png) but no Daily Count: ChargeCount tells the two apart.
     "ChargePrompt": {
         "recognition": "OCR",
-        "roi": [380, 465, 520, 50],
+        "roi": [400, 474, 480, 32],
         "expected": "(?i)recharge\\s*\\d+\\s*enkephalin"
     },
-    // Where the price is, also unverified: a wide area of the window's body, read by lunacy.read_price, which wants exactly
-    // one number once the "n / cap" Enkephalin readings are dropped. TODO: narrow it to the price's box once the Use
-    // Lunacy tab is captured (review T5).
+    // The price next to "Consumable", read by lunacy.read_price: the table's 26-260, a whole text of 2-3 digits (any
+    // digit matched other screens' text in this roi).
     "ChargePrice": {
         "recognition": "OCR",
-        "roi": [380, 300, 520, 170],
-        "expected": "\\d+"
+        "roi": [575, 270, 90, 50],
+        "expected": "^\\d{2,3}$"
+    },
+    // The day's charges under "Daily Count", read by lunacy.read_count.
+    "ChargeCount": {
+        "recognition": "OCR",
+        "roi": [690, 300, 110, 45],
+        "expected": "\\d+\\s*/\\s*10"
     }
 }

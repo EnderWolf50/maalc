@@ -42,16 +42,20 @@ ROOT = Path(__file__).resolve().parent.parent
 RESOURCE = next(p for p in (ROOT / "resource", ROOT / "assets" / "resource") if p.is_dir())
 
 # This run's plan, made on the entry page: {"settings", "team", "difficulty"}.
-# Memory only (ADR 0003); an agent restarted mid-run falls back to current_run's guess.
+# Memory only (ADR 0003); an agent restarted mid-run falls back to current_run's guess. TaskStart keeps it for the same
+# task when the client interrupted the last one (no done, no stop): the run is picked up as before the task chain.
 RUN = {}
 # This task's own state (#364, ADR 0010), reset by TaskStart: the runs claimed since it started (the run count stop,
-# spec 01; never saved), and why it is done ("done", None while it runs), which ends it a success (TaskDone).
+# spec 01; never saved), why it is done ("done", None while it runs), which ends it a success (TaskDone), its entry
+# node, and "ended" once done() or stop() ended it.
 TASK = {"runs": 0, "done": None}
 # Stuck detection and recovery (spec 06), memory only: the last node seen ("node", its id) and the
 # screen type it handled ("kind"), a pending stuck for MirrorHub's Stuck node ("flag": (kind, start
-# level, reason)), this run's Ladder, and the game restarts since this agent started ("l3").
+# level, reason)), this run's Ladder, the game restarts since this agent started ("l3"), and the reason of an
+# account-level stop this launch ("halted", #362 D8): every later task then fails at its entry.
 STUCK = {"node": None, "kind": None, "flag": None, "watch": recovery.Watchdog(), "ladder": recovery.Ladder(), "l3": 0,
-         "updates": 0}  # game restarts for update notices since this agent started (AcceptUpdate)
+         "updates": 0,  # game restarts for update notices since this agent started (AcceptUpdate)
+         "halted": None}
 SCREENS = deque(maxlen=20)  # the last screens MirrorHub handed out: the evidence on a stop
 LOG = deque(maxlen=500)
 
@@ -360,7 +364,7 @@ def done(reason):
     Returns True, for the action to return: its [JumpBack] leads to the hub.
     """
     log(f"done: {reason}")
-    TASK["done"] = reason
+    TASK.update(done=reason, ended=True)
     return True
 
 
@@ -382,10 +386,11 @@ def stop(context, reason, line=None, whole_list=False):
 
     line is this run's line when the caller knows it better (Settle); otherwise one is made up while a
     run is under way. whole_list: an account-level stop (maintenance, an outdated client, a download or the terms
-    with their auto setting off), which every later task would meet too: post_stop then empties the client's
+    with their auto setting off, an update that keeps coming back), which every later task would meet too: post_stop then empties the client's
     queue (#364). Returns False, for the action to return: that ends the task.
     """
     log(f"stop: {reason}")
+    TASK["ended"] = True
     if line is None and "settings" in RUN:
         line = run_line(RUN, "stop", RUN.get("floor_hard", RUN.get("difficulty") == "hard"), max(RUN.get("floor", 1) - 1, 0))
     if line:
@@ -410,6 +415,7 @@ def stop(context, reason, line=None, whole_list=False):
             log(f"webhook failed: {e}")
     if whole_list:
         log("account-level stop: the rest of the task list is cancelled")
+        STUCK["halted"] = reason  # a client that hands over one task at a time (MFAAvalonia) is not reached by post_stop
         context.tasker.post_stop()
     return False
 
@@ -417,13 +423,21 @@ def stop(context, reason, line=None, whole_list=False):
 @AgentServer.custom_action("TaskStart")
 class TaskStart(CustomAction):
     """A task's entry node (#364, ADR 0010): a task list runs its tasks on one agent, so what the last task left in
-    memory goes: the run, its Ladder, the watchdog, the screens kept for evidence, this task's runs. The game restarts
-    (STUCK l3, updates) still count per bot launch."""
+    memory goes: its Ladder, the watchdog, the screens kept for evidence, this task's runs. The run goes too once the
+    last task ended (done, stop); one the client interrupted stays for the same task, which picks it up (#362 D3). The
+    game restarts (STUCK l3, updates) still count per bot launch. After an account-level stop this launch the task fails
+    here, before any tap, evidence or webhook (#362 D8): it would meet the same screen."""
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
-        RUN.clear()
+        if STUCK["halted"]:
+            log(f"skip: account-level stop earlier this launch ({STUCK['halted']}): {argv.node_name} not run")
+            return False
+        if TASK.get("ended", True) or TASK.get("entry") != argv.node_name or "settings" not in RUN:
+            RUN.clear()
+        else:
+            log(f"the last {argv.node_name} was interrupted: its run is picked up")
         TASK.clear()
-        TASK.update(runs=0, done=None)
+        TASK.update(runs=0, done=None, entry=argv.node_name, ended=False)
         STUCK.update(node=None, kind=None, flag=None, watch=recovery.Watchdog(), ladder=recovery.Ladder())
         SCREENS.clear()
         log(f"task {argv.node_name} started")
@@ -500,7 +514,8 @@ class LuxStart(TaskStart):
     No team picked, or settings that do not load: the stop procedure, before any tap."""
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
-        super().run(context, argv)
+        if not super().run(context, argv):
+            return False
         key = json.loads(argv.custom_action_param)
         name, cost = LUX[key]
         try:
@@ -618,6 +633,26 @@ def go_home(context):
     return bool(detail and detail.status.succeeded)
 
 
+@AgentServer.custom_action("HomeLost")
+class HomeLost(CustomAction):
+    """GoHome's on_error (#362 D4): 60 s of nothing known, or the back key used up. The game is restarted (RecoverL3,
+    within L3_PER_EXECUTION a bot launch) and GoHome goes again from the title, with its back keys and game starts counted
+    afresh; once the restarts are used up, the stop procedure ends the task."""
+
+    def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
+        if STUCK["l3"] >= recovery.L3_PER_EXECUTION:
+            return stop(context, f"the main window was not reached; the game restarted {recovery.L3_PER_EXECUTION} times since the bot started")
+        STUCK["l3"] += 1  # every attempt counts, as Recover's: a restart that always fails still ends
+        log(f"recovery L3: the main window was not reached ({STUCK['l3']} of {recovery.L3_PER_EXECUTION} restarts)")
+        detail = context.run_task("RecoverL3")
+        if not (detail and detail.status.succeeded):
+            log("L3 did not go through")
+        for node in ("HomeBack", "HomeGameAway"):
+            context.clear_hit_count(node)
+        forget_game_state()
+        return True
+
+
 @AgentServer.custom_action("GoHomeRun")
 class GoHomeRun(CustomAction):
     """A daily task's first step, after its TaskStart: the main window, wherever the last task left the game."""
@@ -651,6 +686,7 @@ class DoneFlag(CustomRecognition):
 MODULE_COST = 20  # Enkephalin per module
 ENK_BAR = (440, 640)  # the resource panel's Enkephalin bar: opens the Charge Enkephalin window
 ASSEMBLE_MAX = (805, 328)  # the Modules tab's >> (the most)
+MODULES_TAB = (505, 226)  # the Charge Enkephalin window's Modules tab (live 720p, 2026-10-26)
 PANEL_CONFIRM, PANEL_CANCEL = (760, 534), (520, 534)  # the Charge Enkephalin window's Confirm and Cancel, on every tab
 ASSEMBLE_TRIES = 3  # reads, taps of >> and Confirms the task spends before it gives up
 
@@ -708,10 +744,11 @@ class AssembleMain(CustomAction):
 
 @AgentServer.custom_action("AssemblePanel")
 class AssemblePanel(CustomAction):
-    """The Charge Enkephalin window: on its Modules tab (its prompt and the Enkephalin before and after read), >> for the
-    most modules, Confirm. Only >>, Confirm and Cancel are tapped, no tab. Not on the Modules tab, or a number that stops
-    reading after >>: Cancel and the stop procedure, never Confirm (Use Lunacy's Confirm spends Lunacy). The game's
-    refusal ends the task; a window over a task already decided is cancelled."""
+    """The Charge Enkephalin window: its Modules tab first (the window opens on the tab it was left on, #362 D7), then on
+    it (its prompt and the Enkephalin before and after read), >> for the most modules, Confirm. Only the tab, >>, Confirm
+    and Cancel are tapped. Not on the Modules tab, or a number that stops reading after >>: Cancel and the stop
+    procedure, never Confirm (Use Lunacy's Confirm spends Lunacy). The game's refusal ends the task; a window over a
+    task already decided is cancelled."""
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         a = TASK.setdefault("assemble", {"reads": 0, "confirms": 0})
@@ -723,6 +760,8 @@ class AssemblePanel(CustomAction):
         if a.get("end"):
             tap(context, *PANEL_CANCEL, wait=0.5)
             return True
+        tap(context, *MODULES_TAB, wait=0.7)
+        image = screen(context)
         read = read_fractions(context, image, "AssembleAfter") if on_modules_tab(context, image) else []
         if len(read) < 2:  # not the Modules tab, or not up yet
             a["reads"] += 1
@@ -761,17 +800,19 @@ class AssemblePanel(CustomAction):
 
 
 # Lunacy for Enkephalin (#373, pipeline/charge_enkephalin.json): the Charge Enkephalin window's Use Lunacy tab.
-LUNACY_TAB = (640, 225)  # the Use Lunacy tab (EnkephalinPanel.png); Confirm and Cancel are taken to sit where the Modules tab's do
+LUNACY_TAB = (639, 226)  # the Use Lunacy tab (live 720p, 2026-10-26); Confirm and Cancel are taken to sit where the Modules tab's do
 CHARGE_TRIES = 3  # reads of the prompt and price the task spends before it gives up
 
 
 @AgentServer.custom_action("ChargeStart")
 class ChargeStart(TaskStart):
-    """ChargeEnkephalin's entry: TaskStart, then charge_enkephalin.count. 0, the default, ends the task at once, a success,
+    """ChargeEnkephalin's entry: TaskStart, then charge_enkephalin.count, the charges this run makes (#362 D5). 0, the
+    default, ends the task at once, a success,
     before GoHome or any tap: the window is never opened, so the Use Lunacy tab is never touched."""
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
-        super().run(context, argv)
+        if not super().run(context, argv):
+            return False
         try:
             count = load_settings(ROOT)["charge_enkephalin"]["count"]
         except SettingsError as e:
@@ -798,9 +839,11 @@ class ChargeMain(CustomAction):
 
 @AgentServer.custom_action("ChargePanel")
 class ChargePanel(CustomAction):
-    """The Charge Enkephalin window: its Use Lunacy tab, the Recharge prompt and its price. The price must be the next of
-    the game's table (lunacy.check) before Confirm; else Cancel, and the task ends (a success when the day's count is
-    met, a failure when the screen is not what it should be). Only the tab, Confirm and Cancel are tapped."""
+    """The Charge Enkephalin window: its Use Lunacy tab (it opens on Modules), which shows the price, the Daily Count and
+    the Recharge prompt (live 2026-10-27). The price must be the table's at the Daily Count, and the count one up after
+    each Confirm (lunacy.check); else Cancel, and the task ends (a success at this run's count or 10/10, a failure when
+    the screen is not what it should be). Use Boxes has the same prompt and no Daily Count: never confirmed. Only the
+    tab, Confirm and Cancel are tapped."""
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         c = TASK["charge"]
@@ -810,20 +853,22 @@ class ChargePanel(CustomAction):
         tap(context, *LUNACY_TAB, wait=0.7)
         image = screen(context)
         prompt = context.run_recognition("ChargePrompt", image)
-        price_read = context.run_recognition("ChargePrice", image)
-        price = lunacy.read_price([r.text for r in (price_read.all_results if price_read else [])]) if prompt and prompt.hit else None
-        if price is None:
+        price, used = None, None
+        if prompt and prompt.hit:
+            price = lunacy.read_price(ocr_texts(context, image, "ChargePrice"))
+            used = lunacy.read_count(ocr_texts(context, image, "ChargeCount"))
+        if used is None or (price is None and used < lunacy.DAILY_MAX):  # 10/10 needs no price
             c["reads"] += 1
             if c["reads"] < CHARGE_TRIES:
                 return True
             tap(context, *PANEL_CANCEL, wait=0.5)
-            return stop(context, "the Use Lunacy tab's Recharge prompt and price could not be read")
+            return stop(context, "the Use Lunacy tab's prompt, price and Daily Count could not be read")
         c["reads"] = 0
-        verdict, bought, why = lunacy.check(price, c["count"], c.get("bought"))
+        verdict, why = lunacy.check(price, used, c["charged"], c["count"], c.get("expected"))
         log(f"charge: {why}")
         if verdict == lunacy.CHARGE:
             c["charged"] += 1
-            c["bought"] = bought + 1  # the price after this Confirm; a price that stays is a Confirm that did nothing
+            c["expected"] = used + 1  # a Daily Count that stays is a Confirm that did nothing
             tap(context, *PANEL_CONFIRM, wait=1.0)
             return True
         tap(context, *PANEL_CANCEL, wait=0.5)
@@ -831,6 +876,12 @@ class ChargePanel(CustomAction):
             c["end"] = f"{c['charged']} charged now, {why}"
             return True
         return stop(context, why)
+
+
+def ocr_texts(context, image, node):
+    """Every text the OCR node read on image, hit or not."""
+    detail = context.run_recognition(node, image)
+    return [r.text for r in (detail.all_results if detail else [])]
 
 
 @AgentServer.custom_action("Recover")
@@ -973,7 +1024,7 @@ class AcceptUpdate(CustomAction):
         if not allowed("auto_download"):
             return stop(context, "the game has an update: run.auto_download is off", whole_list=True)
         if STUCK["updates"] >= UPDATE_RESTARTS:
-            return stop(context, f"the game asked for an update {UPDATE_RESTARTS + 1} times since the bot started")
+            return stop(context, f"the game asked for an update {UPDATE_RESTARTS + 1} times since the bot started", whole_list=True)
         STUCK["updates"] += 1
         x, y, w, h = argv.box
         context.tasker.controller.post_click(x + w // 2, y + h // 2).wait()

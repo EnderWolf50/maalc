@@ -12,6 +12,7 @@ from daily_child import ROOT, bind, game_class, inside, load, result, run_child,
 WINDOW_TAB = (790, 608, 70, 64)
 ENK_BAR = (440, 640)
 CONFIRM = (760, 534)
+MODULES_TAB = (505, 226)  # D7 (#362), live 720p
 SCREENS = {"main": "MainWindowLater.png", "low": "MainWindowLowEnkephalin.synthetic.png", "panel": "EnkephalinPanel.png",
            "drive": "Drive.png", "entry": "EntryNewRun.png"}
 
@@ -19,17 +20,20 @@ SCREENS = {"main": "MainWindowLater.png", "low": "MainWindowLowEnkephalin.synthe
 def child():
     """Run AssembleModules from each start; print one JSON line {scenario: {succeeded, nodes, clicks, keys}}."""
     actions, resource = load()
+    from test_charge_enkephalin import lunacy_tab
 
     class Game(game_class()):
-        images = {name: screen(png) for name, png in SCREENS.items()}
+        images = {**{name: screen(png) for name, png in SCREENS.items()}, "lunacy": lunacy_tab(26)}
 
-        def set(self, start, confirm_to="low"):
-            self.screen, self.confirm_to, self.clicks, self.keys = start, confirm_to, [], []
+        def set(self, start, confirm_to="low", opens="panel"):
+            self.screen, self.confirm_to, self.opens, self.clicks, self.keys = start, confirm_to, opens, [], []
 
         def on_tap(self, x, y):
             if self.screen in ("main", "low") and (x, y) == ENK_BAR:
+                self.screen = self.opens  # the window opens on the tab it was left on
+            elif self.screen in ("panel", "lunacy") and (x, y) == MODULES_TAB:
                 self.screen = "panel"
-            elif self.screen == "panel" and inside((650, 500, 220, 60), x, y):  # Confirm
+            elif self.screen in ("panel", "lunacy") and inside((650, 500, 220, 60), x, y):  # Confirm
                 self.screen = self.confirm_to
             elif self.screen == "drive" and inside(WINDOW_TAB, x, y):
                 self.screen = "main"
@@ -46,11 +50,11 @@ def child():
     game.set("main")
     tasker = bind(resource, game)
     out = {"error": None}
-    for scenario, (start, confirm_to) in {
+    for scenario, (start, confirm_to, *opens) in {
         "main": ("main", "low"), "low": ("low", "low"), "drive": ("drive", "low"), "entry": ("entry", "low"),
-        "panel": ("panel", "low"), "no_drop": ("main", "main"),
+        "panel": ("panel", "low"), "no_drop": ("main", "main"), "on_lunacy": ("main", "low", "lunacy"),
     }.items():
-        game.set(start, confirm_to)
+        game.set(start, confirm_to, *opens)
         out[scenario] = result(tasker.post_task("AssembleModules", {"AssembleHub": {"timeout": 15000}}).wait().get(), game, actions)
     print(json.dumps(out))
 
@@ -58,7 +62,7 @@ def child():
 def test_assembles_once_from_the_main_window_and_ends_there():
     o = run_child(__file__)["main"]
     assert o["succeeded"] and o["nodes"][-1] == "TaskDone" and "AssembleMain" in o["nodes"] and "AssemblePanel" in o["nodes"]
-    assert o["clicks"] == [list(ENK_BAR), list(CONFIRM)] and o["keys"] == []  # >> not tapped: the window's own number is under 20
+    assert o["clicks"] == [list(ENK_BAR), list(MODULES_TAB), list(CONFIRM)] and o["keys"] == []  # >> not tapped: the window's own number is under 20
     assert "assembled" in o["done"]
 
 
@@ -79,8 +83,14 @@ def test_under_a_module_of_enkephalin_nothing_is_opened_and_the_task_succeeds():
 
 def test_a_window_already_open_is_closed_by_gohome_first():
     o = run_child(__file__)["panel"]
-    assert o["succeeded"] and o["keys"] == [4] and o["clicks"] == [list(ENK_BAR), list(CONFIRM)]
+    assert o["succeeded"] and o["keys"] == [4] and o["clicks"] == [list(ENK_BAR), list(MODULES_TAB), list(CONFIRM)]
     assert "assembled" in o["done"]
+
+
+def test_a_window_that_opens_on_the_use_lunacy_tab_is_switched_to_modules_before_confirm():
+    # D7 (#362): the window remembers its tab; the Modules tab is tapped first, so Confirm never lands on Use Lunacy.
+    o = run_child(__file__)["on_lunacy"]
+    assert o["succeeded"] and o["clicks"] == [list(ENK_BAR), list(MODULES_TAB), list(CONFIRM)] and "assembled" in o["done"]
 
 
 def test_a_bar_that_does_not_drop_after_confirm_fails_the_task():
@@ -97,7 +107,8 @@ def test_fractions_reads_n_over_cap_left_to_right():
 
 
 def panel(monkeypatch, tmp_path, frames):
-    """AssemblePanel on a fake context: frames is what each screenshot shows, (Modules tab prompt read, fractions)."""
+    """AssemblePanel on a fake context: frames is what each screenshot shows, (Modules tab prompt read, fractions); a
+    run takes one before it taps the Modules tab, the next after."""
     from unittest.mock import MagicMock
 
     import actions
@@ -121,22 +132,22 @@ def test_a_window_not_on_its_modules_tab_is_cancelled_and_never_confirmed(monkey
     actions, context, taps = panel(monkeypatch, tmp_path, itertools.repeat((False, [(22, 136), (48, 136)])))
     results = [actions.AssemblePanel().run(context, None) for _ in range(actions.ASSEMBLE_TRIES)]
     assert results == [True] * (actions.ASSEMBLE_TRIES - 1) + [False]  # the window may still be opening: looked at again
-    assert taps == [actions.PANEL_CANCEL, "stop"]
+    assert taps == [actions.MODULES_TAB] * actions.ASSEMBLE_TRIES + [actions.PANEL_CANCEL, "stop"]
 
 
 def test_a_number_that_stops_reading_after_the_most_button_is_cancelled_not_confirmed(monkeypatch, tmp_path):
     # S1: >> tapped, then the tab or its numbers do not read: what Confirm would buy is not known.
     for after in [(True, []), (False, [(42, 136), (2, 136)])]:
-        actions, context, taps = panel(monkeypatch, tmp_path, [(True, [(42, 136), (42, 136)]), after])
+        actions, context, taps = panel(monkeypatch, tmp_path, [(False, []), (True, [(42, 136), (42, 136)]), after])
         assert actions.AssemblePanel().run(context, None) is False
-        assert taps == [actions.ASSEMBLE_MAX, actions.PANEL_CANCEL, "stop"]
+        assert taps == [actions.MODULES_TAB, actions.ASSEMBLE_MAX, actions.PANEL_CANCEL, "stop"]
 
 
 def test_the_modules_tab_is_confirmed_once_the_most_button_stops_changing(monkeypatch, tmp_path):
-    frames = [(True, [(42, 136), (42, 136)]), (True, [(42, 136), (2, 136)])]
+    frames = [(False, []), (True, [(42, 136), (42, 136)]), (True, [(42, 136), (2, 136)])]
     actions, context, taps = panel(monkeypatch, tmp_path, frames)
     assert actions.AssemblePanel().run(context, None) is True
-    assert taps == [actions.ASSEMBLE_MAX, actions.PANEL_CONFIRM] and actions.TASK["assemble"]["before"] == 42
+    assert taps == [actions.MODULES_TAB, actions.ASSEMBLE_MAX, actions.PANEL_CONFIRM] and actions.TASK["assemble"]["before"] == 42
 
 
 def test_assemble_modules_is_a_task_of_the_interface():

@@ -329,7 +329,7 @@
       "required": ["count"],
       "description": "Lunacy for Enkephalin (#373, PI task ChargeEnkephalin): spends Lunacy, so it is off until set",
       "properties": {
-        "count": { "type": "integer", "minimum": 0, "maximum": 10, "default": 0, "description": "charges per day in all, today's already counted; 0: the Use Lunacy tab is never touched; the game allows 10 a day" }
+        "count": { "type": "integer", "minimum": 0, "maximum": 10, "default": 0, "description": "charges this run makes, whatever was charged earlier today (#362); 0: the Use Lunacy tab is never touched; the game allows 10 a day, and the task ends at the tenth" }
       }
     }
   },

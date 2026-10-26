@@ -30,7 +30,7 @@ def child():
         images = {name: screen(png) if png else np.zeros((720, 1280, 3), np.uint8) for name, png in SCREENS.items()}
 
         def set(self, start, focus=GAME):
-            self.screen, self.focus, self.clicks, self.keys, self.starts = start, focus, [], [], 0
+            self.screen, self.focus, self.clicks, self.keys, self.starts, self.stops = start, focus, [], [], 0, 0
 
         def screencap(self):
             return self.images["black" if self.focus != GAME else self.screen]
@@ -49,6 +49,11 @@ def child():
             self.focus, self.screen = GAME, "title"
             return True
 
+        def stop_app(self, intent):
+            self.stops += 1
+            self.focus = "com.android.launcher"
+            return True
+
     game = Game()
     game.set("main")
     # MaaFramework's Linux build (CI) does not pass post_shell to a custom controller ("Shell is not supported for this
@@ -59,13 +64,26 @@ def child():
     for scenario, (start, focus) in {
         "drive": ("drive", GAME), "sinners": ("sinners", GAME), "main": ("main", GAME), "mailbox": ("mailbox", GAME),
         "settings": ("settings", GAME), "entry": ("entry", GAME), "closed": ("black", "com.android.launcher"),
-        "stuck": ("entry", GAME),
+        "stuck": ("entry", GAME), "restart": ("entry", GAME), "restarts_used": ("entry", GAME),
     }.items():
         game.set(start, focus)
-        if scenario == "stuck":  # the back key does nothing: it is pressed up to its limit, then the task fails
+        if scenario in ("stuck", "restart", "restarts_used"):  # the back key does nothing: pressed up to its limit
             game.on_key = lambda keycode: True
-        override = {"GoHome": {"timeout": 4000}} if scenario == "stuck" else {}
-        out[scenario] = {**result(tasker.post_task("GoHome", override).wait().get(), game, actions), "starts": game.starts}
+        if scenario == "restart":  # the restarted game works again, and its title opens on a page with no tab bar
+            game.start_app = lambda intent, game=game: (Game.start_app(game, intent), setattr(game, "on_key", Game.on_key.__get__(game)))[0]
+            game.on_tap = lambda x, y, game=game: (setattr(game, "screen", "entry") if game.screen == "title" else Game.on_tap(game, x, y)) or True
+        # stuck: the game restarts that L3 allows were used up before; restart: none were.
+        actions.STUCK["l3"] = 0 if scenario == "restart" else actions.recovery.L3_PER_EXECUTION
+        actions.ROOT.joinpath("logs").mkdir(exist_ok=True)
+        stops = len(list(actions.ROOT.joinpath("logs").rglob("agent.log")))
+        override = {"GoHome": {"timeout": 4000}, "RecoverL3": {"post_delay": 0}, "RecoverStartApp": {"post_delay": 0}}
+        if scenario == "restarts_used":  # one restart left, and the restarted game is as stuck as before
+            actions.STUCK["l3"] = actions.recovery.L3_PER_EXECUTION - 1
+            game.start_app = lambda intent, game=game: (setattr(game, "focus", GAME), setattr(game, "screen", "entry"), True)[-1]
+            override["RecoverStartApp"]["timeout"] = 3000
+        out[scenario] = {**result(tasker.post_task("GoHome", override).wait().get(), game, actions), "starts": game.starts,
+                         "stops": game.stops, "l3": actions.STUCK["l3"],
+                         "stopped": len(list(actions.ROOT.joinpath("logs").rglob("agent.log"))) - stops}
     print(json.dumps(out))
 
 
@@ -91,10 +109,25 @@ def test_go_home_starts_the_game_when_it_is_not_in_front_and_taps_through_the_ti
     assert "HomeGameAway" in o["nodes"] and "NavTitle" in o["nodes"] and o["nodes"][-1] == "HomeReached"
 
 
-def test_go_home_fails_after_a_limited_number_of_back_keys_when_the_screen_never_changes():
+def test_go_home_fails_after_a_limited_number_of_back_keys_when_the_game_restarts_are_used_up():
     o = run_child(__file__)["stuck"]
-    assert o["succeeded"] is False and o["keys"] == [4] * 5
-    assert o["nodes"][-1] == "GoHomeLost"
+    assert o["succeeded"] is False and o["keys"] == [4] * 5 and o["stops"] == 0
+    assert o["nodes"][-1] == "GoHomeLost" and o["stopped"] == 1  # the stop procedure ran: evidence and its log
+
+
+def test_go_home_that_cannot_reach_the_main_window_restarts_the_game_and_goes_again():
+    # D4 (#362): L3 within its limit per bot launch, then GoHome from the title. The back key's limit starts over:
+    # the restarted game's page with no tab bar takes one more.
+    o = run_child(__file__)["restart"]
+    assert o["succeeded"] and o["nodes"][-1] == "HomeReached" and o["stopped"] == 0
+    assert (o["stops"], o["starts"], o["l3"]) == (1, 1, 1)
+    assert o["keys"] == [4] * 6 and "GoHomeLost" in o["nodes"] and "NavTitle" in o["nodes"]
+
+
+def test_go_home_stops_once_the_last_restart_did_not_help():
+    o = run_child(__file__)["restarts_used"]
+    assert o["succeeded"] is False and o["stops"] == 1 and o["l3"] == 3 and o["stopped"] == 1
+    assert o["nodes"].count("GoHomeLost") == 2
 
 
 def test_go_home_is_a_task_of_the_interface():

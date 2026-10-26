@@ -1,10 +1,13 @@
-"""Pass Missions page (#371): which rows of the Daily or Weekly tab have a reward to claim.
+"""Pass Missions page (#371): which rows of the Daily, Weekly or Seasonal tab have a reward to claim.
 
-Five rows sit at fixed places (720p). A row is read from its look, not from OCR: a claimed row wears the red CLEAR
+Five rows sit at fixed places (720p); the Seasonal tab's ten scroll, and one swipe takes them to their end, 10 px lower
+(live 2026-10-27, #362 D9). A row is read from its look, not from OCR: a claimed row wears the red CLEAR
 stamp, a row under way (3/5) has a short bar, and a row whose icon is lit with a full bar and no stamp waits for a
 tap. Live 2026-10-26 only the claimed look (both tabs) and the under-way look (a weekly row) were captured: a row that
 waits for a tap is read from them, unverified until one is seen.
 """
+
+import json
 
 import numpy as np
 from maa.context import Context
@@ -21,10 +24,10 @@ STAMP = 50  # red pixels of the CLEAR stamp (x 600-700): ~180 where it is, 0 whe
 BAR = 170  # of the bar's 175 columns bright: full
 
 
-def claimable(image):
-    """Centres (x, y) of the rows to tap, top to bottom; image is a 720p BGR frame."""
+def claimable(image, dy=0):
+    """Centres (x, y) of the rows to tap, top to bottom; image is a 720p BGR frame, its rows dy px below ROWS_Y."""
     found = []
-    for y in ROWS_Y:
+    for y in (y + dy for y in ROWS_Y):
         b, g, r = (image[y - 20:y + 20, 350:390, i].astype(int) for i in range(3))
         stamp = image[y - 25:y + 25, 600:700].astype(int)
         red = ((stamp[..., 2] > 150) & (stamp[..., 1] < 60) & (stamp[..., 0] < 60)).sum()
@@ -35,8 +38,9 @@ def claimable(image):
 
 
 class PassClaimable(CustomRecognition):
-    """The first row to tap, as a 40 x 40 box on its coin; no hit when every row is claimed or under way."""
+    """The first row to tap, as a 40 x 40 box on its coin; no hit when every row is claimed or under way. The param's dy
+    moves the rows down (the swiped Seasonal tab's 10)."""
 
     def analyze(self, context: Context, argv: CustomRecognition.AnalyzeArg):
-        rows = claimable(np.asarray(argv.image))
+        rows = claimable(np.asarray(argv.image), (json.loads(argv.custom_recognition_param or "null") or {}).get("dy", 0))
         return CustomRecognition.AnalyzeResult(box=(rows[0][0] - 20, rows[0][1] - 20, 40, 40), detail={"rows": rows}) if rows else None

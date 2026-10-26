@@ -58,10 +58,10 @@
 - 一個 hub，依序處理：連線中、說明頁、全域彈窗（`HomeText`，讀法同 `HubText`，不進批次 OCR；伺服器與用戶端的彈窗列在 `ServerPopups` 一份，`MirrorHub` 的 `HubText`、`HomeText`、`MailText` 用 `base` 引用它）、**到了主畫面**（Window 分頁亮起，`HomeReached`，任務成功結束）、標題畫面（`NavTitle`）、底部分頁列在但 Window 沒亮（點 Window 分頁，`HomeWindowTab`）、遊戲不在前景（`HomeGameAway`，`StartApp`，最多 3 次）、都不是就按返回鍵（`HomeBack`，最多 5 次）。
 - 彈窗排在 `HomeReached` 前面：設定選單蓋著主畫面時 Window 分頁仍是亮的。其他分頁亮起、彈窗壓暗分頁列時，Window 模板的分數最多 0.80，門檻 0.9。
 - 前景不是遊戲時直接啟動遊戲，不等 hub 逾時走 L3（`GameAway` 讀 `dumpsys window`，讀不到時不算）。
-- 60 秒認不出畫面、或返回鍵用完仍沒到主畫面：走停止程序（存證據、webhook），任務失敗，client 的清單繼續；這個任務不結束整串清單。
+- 60 秒認不出畫面、或返回鍵用完仍沒到主畫面（`GoHomeLost`，動作 `HomeLost`）：先走 L3 重啟遊戲（`RecoverL3`，和鏡牢共用每次啟動最多 3 次的上限 `STUCK["l3"]`，每次嘗試都算），再從標題重跑 `GoHome`，返回鍵與啟動遊戲的次數重新算（`clear_hit_count`）。L3 用完才走停止程序（存證據、webhook），任務失敗，client 的清單繼續；這個任務不結束整串清單。（#362 D4）
 - 日常任務的入口：入口節點（`TaskStart`）接 `<任務>Home` 節點（`GoHomeRun`），它在 agent 裡用 `context.run_task("GoHome")` 跑完整個 `GoHome` 再接 hub（#366 驗證過另一條路也行：入口列 `[JumpBack]TaskHome`，`TaskHome` 的 `max_hit` 為 1、`next` 是 `GoHome`，跑完 `GoHome` 跳回入口再進 hub；專案統一採用 `GoHomeRun`／`go_home()`，不混用）。結尾：動作做 `go_home()` 再 `done()`（沒有其他事要做的結尾用共用的 `GoHomeDone`，`custom_action_param` 是 `done` 的理由），hub 的 `TaskDone` 讓任務成功結束。`GoHome` 失敗時已自己走過停止程序，`GoHomeRun` 直接讓任務失敗。（#371）
 - `ClaimMail`（`mail.json`）：`TaskStart` → `MailHome`（`GoHomeRun`）→ hub：主畫面點右上信封（`MailOpen`，主畫面認法引用 `HomeReached`）→ 信箱按 Claim All（`MailClaimAll`，最多 3 次）→ 再看到空信箱（`No mail in storage`，`MailEmpty`）就 `GoHomeDone`（`go_home()`，GoHome 的全域 `Mailbox` 按 Close 關信箱，再 `done`）。信箱的畫面與蓋在上面的彈窗一次讀（`MailText`）：伺服器彈窗先，再來空信箱（遊戲的「No mail available to claim」可能是蓋在信箱上的單鈕彈窗，它代表做完了，所以排在單鈕彈窗前），再來單鈕彈窗，最後 Claim All。沒信時不按 Claim All，直接成功結束。Claim All 之後的確認／結果畫面還沒截到（unverified）。（#372）
-- `ClaimPassMissions`（`pass_missions.json`）：主畫面的 Limbus Pass 橫幅（OCR 標題 `SEASON`）→ `Pass Missions` 分頁（模板，亮著時分數 0.92，門檻 0.97）→ Daily 分頁逐列點可領的列（`PassClaimable`，`agent/pass_missions.py`：金幣亮、沒有 CLEAR 章、進度條滿）→ Weekly 分頁同樣 → `PassFinish`（`GoHomeDone`：回主畫面、`done`）。沒有可領的就直接成功結束。可領那一列的畫面還沒截到，判斷是從已領、進行中兩種畫面推的（unverified）。
+- `ClaimPassMissions`（`pass_missions.json`）：主畫面的 Limbus Pass 橫幅（OCR 標題 `SEASON`）→ `Pass Missions` 分頁（模板，亮著時分數 0.92，門檻 0.97）→ Daily 分頁逐列點可領的列（`PassClaimable`，`agent/pass_missions.py`：金幣亮、沒有 CLEAR 章、進度條滿）→ Weekly 分頁同樣 → Seasonal 分頁（(270,540)，#362 D9）：先領看得到的五列，再往上滑一次（`PassSeasonalSwipe`：遊戲座標 520,560 → 520,200、600 ms，`max_hit` 1），一次就到底、各列比頂端低 10 px（`PassClaimable` 的參數 `dy` 10），領剩下的 → `PassFinish`（`GoHomeDone`：回主畫面、`done`）。Daily、Weekly 各 5 列、不能捲動，Seasonal 10 列（實機 2026-10-27，verified）。每個分頁的點擊有上限（`max_hit` 8），點滿就換下一個分頁，不算失敗。只滑一次：實機連續快速小幅滑動時遊戲曾出現「沒有回應」（不特別處理）。沒有可領的就直接成功結束。可領那一列的畫面還沒截到，判斷是從已領、進行中兩種畫面推的（unverified）。
 - 沒有鏡牢的卡住恢復階梯：日常頁只有返回鍵（L1）和重啟遊戲（L3）；L3 之後的接手還沒做（待實機看過再定）。
 
 ### 帳號層級的停止與 client 的任務佇列
@@ -70,7 +70,8 @@
 
 - MXU（`5e923e8`）：一次送整串。`start_tasks_impl`（`src-tauri/src/commands/maa_agent.rs:554`）在 `maa_agent.rs:776-784` 的迴圈裡對每個勾選的任務呼叫 `tasker.post_task`，全部進了 tasker 才開始跑。`post_stop` 清掉的就是清單剩下的任務，整串結束。
 - MFAAvalonia（`098fe84`）：一次送一個。`ExecuteTasks`（`MFAAvalonia/Extensions/MaaFW/MaaProcessor.cs:3704-3728`）從自己的 `TaskQueue` 取一個任務，`TryRunTasksAsync`（`MaaProcessor.cs:4424-4431`）`AppendTask` 後等它結束才取下一個。`post_stop` 只結束目前這個任務（狀態不是 Succeeded，`MFAAvalonia/Helper/ValueType/MFATask.cs:92-113` 記為失敗）；「任務失敗後是否繼續」開著（預設，`MaaProcessor.cs:4469`）時清單照樣跑下一個，後面每個任務各自撞上同一個畫面、各自走停止程序。關掉這個選項時，第一個失敗就結束整串。
-- 替代做法（還沒做，待使用者決定）：agent 記住「這次啟動遇過帳號層級的停止」（像遊戲重啟次數一樣不隨 `TaskStart` 清掉），之後的任務在 `TaskStart` 就直接失敗，不點任何東西、不再送 webhook。兩個 client 都適用，也不靠 `post_stop`。
+- 所以 agent 也記住「這次啟動遇過帳號層級的停止」（`STUCK["halted"]`，停止的理由；像遊戲重啟次數一樣只在記憶體、不隨 `TaskStart` 清掉）：之後每個任務的入口（`TaskStart` 與它的子類別 `LuxStart`、`ChargeStart`）一看到就以失敗結束，不點任何東西、不存證據、不寫 `runs.jsonl`、不送 webhook，只 log 一行 `skip: account-level stop earlier this launch`。兩個 client 都適用，不靠 `post_stop`。（#362 D8）
+- 帳號層級的停止：維護公告、用戶端過舊、`auto_download` 關閉時遇到下載或更新、遊戲一直要求更新（每次啟動重啟 2 次之後又出現，#362 D1）、`auto_accept_terms` 關閉時遇到使用者協議（#362 D2，維持原樣）。
 
 ### 日常任務的骨架
 
@@ -78,7 +79,7 @@
 
 - **入口節點**的動作可以是 `TaskStart` 的子類別，名稱是 `<任務>Start`（例如 `LuxStart`：先 `TaskStart`，再讀這個任務的設定；設定不能用就走停止程序，不點任何東西）。之後接 `<任務>Home` 節點：回主畫面（`GoHomeRun`，或它加上開頭檢查的動作，例如 `LuxHome`），再進 `<任務>Hub`。各任務的節點名稱都照這個：`MailHome`、`PassHome`、`AssembleHome`、`ChargeHome`、`ExpHome`、`ThreadHome`。
 - **hub**：`next` 第一項是 `<任務>Stuck`（`StuckFlag` 加 `StopTask`：看門狗認定卡住就停止，日常頁還沒有恢復階梯），第二項是 `TaskDone`，其餘都標 `[JumpBack]`：伺服器彈窗與說明頁、OCR 畫面集中在自己的 `HubText` 節點（`custom_recognition` 都是 `HubText`，清單用 `base` 引用共用的彈窗；不進批次 OCR，#157）、任務自己的畫面、最後是導航（`NavTitle`、`NavMainTabs` 這類）。`on_error` 接 `StopTask`：60 秒認不出畫面就停止，任務失敗，清單繼續。
-- **記憶體**：任務自己的計數放 `RUN`（`TaskStart` 清空）；不放 `RUN["settings"]`，那是鏡牢一局的計畫，停止程序會依它寫 `runs.jsonl`。
+- **記憶體**：任務自己的計數放 `RUN`（`TaskStart` 清空）；不放 `RUN["settings"]`，那是鏡牢一局的計畫，停止程序會依它寫 `runs.jsonl`。`TaskStart` 只在上一個任務以 `done()` 或停止程序結束時清 `RUN`；上一個任務被 client 中途打斷（兩者都沒走）、而且這次是同一個任務、`RUN` 裡有一局的計畫（`settings`）時保留它，鏡牢接手同一局，和任務鏈之前一樣。換成別的任務一律清掉：日常任務的停止程序不能寫出鏡牢那一局的 `runs.jsonl` 行。卡住階梯、看門狗、證據畫面、任務局數照舊每個任務重設。（#362 D3）
 
 ### 經驗本（`ExpLuxcavation`）
 
@@ -96,7 +97,7 @@
 - 從主畫面點 Drive → Luxcavation（`NavLuxcavation`）→ Thread 分頁（停在 EXP 分頁時點 Thread，`LuxThreadTab`：Luxcavation 面板加上 EXP 分頁亮著）→ 今天唯一開放的異想體卡的 Enter（`LuxThreadEnter`，`ThreadEnter`）→ Level Select（`LuxThreadLevel`，`ThreadLevel`）→ 最下面那一列的 Enter。
 - 開放的卡才有亮的 Enter 按鈕（對模板 1.0，其他天才開的卡最多 0.6）。清單從今天的卡開始排，所以進頁就看得到；但清單記得上次捲到哪裡，捲走後看不到亮的 Enter，這時往右滑（`LuxThreadSwipe`，`max_hit` 4）把左邊的卡帶進來。滑的方向沒實機驗證（unverified）。
 - Level Select 一開啟清單就停在最底，最難的等級（Lust 是 Lv60）是最下面那一列；每級消耗 2 個模組（`luxcavation.THREAD_COST`），所以模組檢查是 2 × `count`。`ThreadLevel` 點畫面上最低的那個 Enter；按 Enter 本身不扣模組、不開戰。不改 Consecutive Battle、不按 Skip Battle。
-- Level Select 之後接選隊頁：和經驗本同一個節點。目前這個節點（#366 的選隊頁）還沒合進整合分支，`ThreadHub` 先不列它；合併後它和 `ExpHub` 各加一行 `[JumpBack]ExpTeamSelect`。（#368）
+- Level Select 之後接選隊頁：和經驗本同一個節點，`ThreadHub` 與 `ExpHub` 都列 `[JumpBack]LuxTeamSelect`。（#366、#368）
 - 打完一場回到 Thread 分頁（或停在 Level Select）就算一場：`battle_over` 依勝敗計次、再打或回主畫面結束。回到哪一頁沒實機驗證（unverified）。
 - 隊伍是 `luxcavation.thread.team`。
 
@@ -104,16 +105,16 @@
 
 - 入口 `AssembleModules`（`TaskStart`）→ `AssembleHome`（`GoHomeRun`）→ `AssembleHub`；hub 認得腦啡肽視窗（`AssemblePanel`，視窗本身的認法是 `EnkephalinWindow`，`ChargePanel` 共用）、全域彈窗（`HomeText`）、主畫面（`AssembleMain`，任務只在這裡 `done()`，所以最後一步在主畫面）。60 秒都不認得就走停止程序（任務失敗）。（#370）
 - 主畫面左下腦啡肽條（`EnkephalinBar`）讀 `n/cap`：少於 20（一個模組的腦啡肽）就以成功結束，不開面板；否則點腦啡肽條開 Charge Enkephalin 視窗。
-- 視窗的 Modules 頁讀換前與換後的腦啡肽（`AssembleAfter`），點 `»`（最大量），換後仍 ≥ 20 就再點，最多 3 次；再點 Confirm。只點 `»`、Confirm、Cancel，絕不點 Use Lunacy 頁。
+- 視窗會停在上次開的分頁，所以每次先點 Modules 分頁（720p (505,226)，實機量的；點分頁不花資源，#362 D7；2026-10-27 的截圖顯示視窗重開一律在 Modules，點了也無害），再讀提示（`AssemblePrompt`：讀到 Modules 頁自己的提示才按 Confirm，這道保護保留）與換前、換後的腦啡肽（`AssembleAfter`），點 `»`（最大量），換後仍 ≥ 20 就再點，最多 3 次；再點 Confirm。只點 Modules 分頁、`»`、Confirm、Cancel，絕不點 Use Lunacy 頁。
 - 回到主畫面後讀回腦啡肽，低於換前才算完成（成功結束）；3 次讀回都沒降就走停止程序（任務失敗）。
 - 出現「模組太多」（`Cannot assemble Modules; you have too many in storage.`）就以成功結束：按返回鍵、Cancel 關掉視窗、回主畫面。這一頁尚無截圖，辨識的 roi 是寬的（unverified）。
 
 ### 狂氣換腦啡肽（`ChargeEnkephalin`，#373）
 
 - 入口 `ChargeEnkephalin`（`ChargeStart`：`TaskStart` 加讀 `charge_enkephalin.count`）。`count` 是 0（預設）就 `done()`，`TaskDone` 接著結束，沒有 GoHome、沒有任何點擊。**這是「每個日常任務頭尾都走 `GoHome`」的唯一例外**：0 次的任務什麼都不做，也就不必從主畫面開始；它不動畫面，所以下一個任務仍然從上一個任務留下的主畫面開始。否則 `ChargeHome`（`GoHomeRun`）→ `ChargeHub`，形狀同 `AssembleHub`：認得視窗（`ChargePanel`，視窗認法同 `AssemblePanel`：`EnkephalinWindow`）、全域彈窗（`HomeText`）、主畫面（`ChargeMain`，只在這裡 `done()`）。60 秒都不認得就走停止程序。
-- `ChargeMain` 點腦啡肽條開視窗；`ChargePanel` 點 Use Lunacy 頁、讀 Recharge 提示與價格（`ChargePrompt`、`ChargePrice`），交給 `lunacy.check`（[spec 03 第 16 節](03-decisions.md)）：CHARGE 才點 Confirm，DONE 與 STOP 點 Cancel。只點頁籤、Confirm、Cancel。
+- `ChargeMain` 點腦啡肽條開視窗；`ChargePanel` 先點 Use Lunacy 分頁（720p (639,226)，實機量的；視窗重開一律在 Modules，#362 D7）、讀提示、價格與 Daily Count（`ChargePrompt`、`ChargePrice`、`ChargeCount`），交給 `lunacy.check`（[spec 03 第 16 節](03-decisions.md)）：CHARGE 才點 Confirm，DONE 與 STOP 點 Cancel。`count` 是這次執行換幾次（#362 D5）；Daily Count 10/10 就結束。只點頁籤、Confirm、Cancel。
 - 開視窗次數有上限（價格表長度加一），避免價格一直讀對卻沒換成的迴圈。
-- 這一頁沒有截圖（unverified）：見 spec 03 第 16 節。
+- 畫面見 spec 03 第 16 節（Use Lunacy 頁有截圖，2026-10-27；Confirm 之後的畫面沒有）。
 
 ### 入口頁的分流
 
