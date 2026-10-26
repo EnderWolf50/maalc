@@ -64,6 +64,22 @@
 - `ClaimPassMissions`（`pass_missions.json`）：主畫面的 Limbus Pass 橫幅（OCR 標題 `SEASON`）→ `Pass Missions` 分頁（模板，亮著時分數 0.92，門檻 0.97）→ Daily 分頁逐列點可領的列（`PassClaimable`，`agent/pass_missions.py`：金幣亮、沒有 CLEAR 章、進度條滿）→ Weekly 分頁同樣 → `PassFinish`（回主畫面、`done`）。沒有可領的就直接成功結束。可領那一列的畫面還沒截到，判斷是從已領、進行中兩種畫面推的（unverified）。
 - 沒有鏡牢的卡住恢復階梯：日常頁只有返回鍵（L1）和重啟遊戲（L3）；L3 之後的接手還沒做（待實機看過再定）。
 
+### 日常任務的骨架
+
+開頭與結尾照上面「日常任務的入口」（`GoHomeRun`、`go_home()`、`TaskDone`，#371）。另外：（#366）
+
+- **入口節點**的動作可以是 `TaskStart` 的子類別（例如 `ExpStart`：先 `TaskStart`，再讀這個任務的設定；設定不能用就走停止程序，不點任何東西），之後才接 `GoHomeRun`。
+- **hub**：`next` 第一項是 `<任務>Stuck`（`StuckFlag` 加 `StopTask`：看門狗認定卡住就停止，日常頁還沒有恢復階梯），第二項是 `TaskDone`，其餘都標 `[JumpBack]`：伺服器彈窗與說明頁、OCR 畫面集中在自己的 `HubText` 子類別（不進批次 OCR，#157）、任務自己的畫面、最後是導航（`NavTitle`、`NavMainTabs` 這類）。`on_error` 接 `StopTask`：60 秒認不出畫面就停止，任務失敗，清單繼續。
+- **記憶體**：任務自己的計數放 `RUN`（`TaskStart` 清空）；不放 `RUN["settings"]`，那是鏡牢一局的計畫，停止程序會依它寫 `runs.jsonl`。
+
+### 經驗本（`ExpLuxcavation`）
+
+- 從主畫面點 Drive（`NavMainTabs`）→ Luxcavation（`NavLuxcavation`）→ EXP 分頁（停在 Thread 分頁時點 EXP，`LuxExpTab`）→ EXP 分頁預設畫面最右邊的 Enter（`LuxExpEnter`，`ExpEnter`）。上鎖的卡顯示 KEEP OUT、沒有 Enter，所以最右邊的 Enter 就是最難的開放關卡。不改 Consecutive Battle、不按 Skip Battle。（#366）
+- 分頁亮起看橘色邊框（ColorMatch）：亮和不亮的分頁對模板的分數差不多（0.93），分不開。
+- 隊伍是 `luxcavation.exp.team` 指的 maalc 隊伍，戰鬥用它的 `guard_turns`（全員防禦 N 回合後按勝率，同鏡牢）。
+- 按 Enter 之後回到 EXP 分頁，就算打完一場：`go_home()` 再 `done()`，任務成功。
+- 現狀（#366）：按 Enter 之後的選隊、編隊、結算畫面沒有截圖，hub 不認得，60 秒後走停止程序（存證據）。這些畫面截到後再補選隊、編隊與勝敗判斷；模組檢查、計次與戰敗重打在 #367。
+
 ### 入口頁的分流
 
 入口頁讀取 `Exploring:` 欄位、Weekly Bonuses 與 `Unclaimed Rewards`，依畫面分流：（#8）
@@ -90,7 +106,7 @@
 ## 執行記錄 runs.jsonl
 
 - Agent 必須為每局寫一行到 `<root>/logs/runs.jsonl`（`<root>` 是 Agent 的根目錄），欄位包括：起訖時間、隊伍 id、難度、有沒有用每週獎勵、通過幾層、結果（通關／停止／放棄）、L1／L2／L3 各觸發幾次。（#14）
-- `runs.jsonl` 是唯讀的記錄，只用於驗收和計算每層時間上限，不得用於中途接續的判斷。時間上限每隊各自計算；設定 GUI 的「重置時間記錄」只附加一行該隊的重置標記，不刪舊記錄（[04-settings.md](04-settings.md#12-其他檔案)）。（#14、#19）
+- `runs.jsonl` 是唯讀的記錄，只用於驗收和計算每層時間上限，不得用於中途接續的判斷。時間上限每隊各自計算；設定 GUI 的「重置時間記錄」只附加一行該隊的重置標記，不刪舊記錄（[04-settings.md](04-settings.md#13-其他檔案)）。（#14、#19）
 
 ## 各畫面讀取的資訊
 

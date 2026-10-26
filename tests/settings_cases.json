@@ -1,7 +1,7 @@
 {
   "description": "Shared by tests/test_settings.py and gui/src/validate.test.ts so the agent and the GUI reject the same files. Each case applies edits to valid: set (a last path segment of - appends) or delete. schema lists the error paths; every error must sit at or under one of them. cross lists the exact cross-check messages, in order.",
   "valid": {
-    "version": 11,
+    "version": 12,
     "language": "zh_tw",
     "run": {
       "difficulty": "auto", "runs": null, "weekly_bonus_use": "hard", "weekly_bonus_amount": "all",
@@ -38,7 +38,8 @@
       }
     ],
     "event_overrides": [{"question": "Q?", "option": "Yes"}],
-    "trial_risk_overrides": [{"trial": "Growth I", "risk": 3}]
+    "trial_risk_overrides": [{"trial": "Growth I", "risk": 3}],
+    "luxcavation": {"exp": {"count": 1, "team": null, "retries": 0}}
   },
   "cases": [
     {"name": "disabled teams may share a slot, plan names are per kind, empty weights",
@@ -80,6 +81,13 @@
     {"name": "no enabled team: only MirrorDungeon asks for one (#364)", "edits": [{"set": "teams/0/enabled", "value": false}, {"set": "teams/1/enabled", "value": false}],
      "cross": []},
     {"name": "no team at all", "edits": [{"set": "teams", "value": []}], "cross": []},
+    {"name": "EXP Luxcavation may use any team, enabled or not (#366)",
+     "edits": [{"set": "teams/1/enabled", "value": false}, {"set": "luxcavation/exp/team", "value": "b"}], "cross": []},
+    {"name": "EXP Luxcavation's team is gone", "edits": [{"set": "luxcavation/exp/team", "value": "gone"}],
+     "cross": ["luxcavation/exp/team: team 'gone' is not in teams"]},
+    {"name": "EXP Luxcavation count and retries out of range",
+     "edits": [{"set": "luxcavation/exp/count", "value": 0}, {"set": "luxcavation/exp/retries", "value": -1}],
+     "schema": ["luxcavation/exp/count", "luxcavation/exp/retries"]},
     {"name": "two enabled teams on one slot", "edits": [{"set": "teams/1/game_team", "value": 1}],
      "cross": ["teams: enabled teams 'Team a', 'Team b' all use TEAMS #1"]},
     {"name": "missing plans", "edits": [

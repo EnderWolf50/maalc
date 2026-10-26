@@ -14,10 +14,11 @@
     "theme_pack_plans",
     "teams",
     "event_overrides",
-    "trial_risk_overrides"
+    "trial_risk_overrides",
+    "luxcavation"
   ],
   "properties": {
-    "version": { "const": 11 },
+    "version": { "const": 12 },
     "language": { "enum": ["zh_tw", "en_us"], "default": "zh_tw" },
     "run": {
       "type": "object",
@@ -310,9 +311,28 @@
           "risk": { "type": "integer", "minimum": 0, "maximum": 5 }
         }
       }
+    },
+    "luxcavation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["exp"],
+      "description": "the Luxcavation daily tasks (#362); the client's task list says which run and in what order",
+      "properties": {
+        "exp": { "$ref": "#/$defs/luxcavation" }
+      }
     }
   },
   "$defs": {
+    "luxcavation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["count", "team", "retries"],
+      "properties": {
+        "count": { "type": "integer", "minimum": 1, "default": 1, "description": "battles to win, the hardest stage open" },
+        "team": { "type": ["string", "null"], "minLength": 1, "default": null, "description": "a teams[] id: its TEAMS #N and guard_turns; null: none picked yet" },
+        "retries": { "type": "integer", "minimum": 0, "default": 0, "description": "defeats fought again before the task fails" }
+      }
+    },
     "id": { "type": "string", "minLength": 1 },
     "pack_weight": { "type": "integer", "minimum": -10, "maximum": 10 },
     "vestige": {
