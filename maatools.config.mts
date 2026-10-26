@@ -36,10 +36,10 @@ const screens: [image: string, hits: string[]][] = [
   // Live 2026-10-20 (#84): the server error over the Mailbox after a request timed out, Close / Retry. Retry
   // counts down "Retry 5" to "Retry 1" with a dark frame first, then reads "Retry". The Mailbox under these
   // popups still reads: they come before it in the hub.
-  ['ServerErrorRetryCountdown.png', ['RetryPopup', 'Mailbox']],
-  ['ServerErrorRetry.png', ['RetryPopup', 'Mailbox']],
+  ['ServerErrorRetryCountdown.png', ['RetryPopup', 'Mailbox', 'EnkephalinBar']],
+  ['ServerErrorRetry.png', ['RetryPopup', 'Mailbox', 'EnkephalinBar']],
   // Live 2026-10-20 (#84): the network-unstable popup over the Mailbox with Wi-Fi off, Close only.
-  ['NetworkUnstable.png', ['PopupButton', 'Mailbox']],
+  ['NetworkUnstable.png', ['PopupButton', 'Mailbox', 'EnkephalinBar']],
   // The Parallel Superposition prompt after clearing floor 5 / 10 with the mode engaged (#85). Captured from the
   // game's own help sheet (the page behind it is the help text, not a map): the dialog is its live look, but where
   // it sits on screen is not confirmed. A Cancel / Confirm question, so PopupButton (one centred button) stays out.
@@ -53,10 +53,10 @@ const screens: [image: string, hits: string[]][] = [
   // open, Drive and Sinners). The other tabs' lit look and a popup dimming the bar score at most 0.80 on them, so those
   // images (the notices, the Mailbox, the popups over them) must miss. The settings menu leaves the Window tab lit:
   // GoHome reads its popups before HomeReached.
-  ['EventNotices.png', ['Notices']],
-  ['SystemNotices.png', ['Notices']],
-  ['Mailbox.png', ['Mailbox']],
-  ['SettingsMenu.png', ['SettingsMenu', 'GoToMirrorEntry', 'NavMainTabs', 'HomeReached']],
+  ['EventNotices.png', ['Notices', 'EnkephalinBar']],
+  ['SystemNotices.png', ['Notices', 'EnkephalinBar']],
+  ['Mailbox.png', ['Mailbox', 'EnkephalinBar']],
+  ['SettingsMenu.png', ['SettingsMenu', 'GoToMirrorEntry', 'NavMainTabs', 'HomeReached', 'AssembleMain', 'EnkephalinBar']],
   ['HelpPager.png', ['HelpPager']],
   ['HelpPagerLast.png', ['HelpPager']],
   ['HelpPagerExtract.png', ['HelpPager']],
@@ -67,10 +67,10 @@ const screens: [image: string, hits: string[]][] = [
   // Synthetic (#370): MainWindowLater.png with the bar's "22" painted down to "2": under a module's 20 Enkephalin.
   ['MainWindowLowEnkephalin.synthetic.png', ['GoToMirrorEntry', 'NavMainTabs', 'HomeReached', 'AssembleMain', 'EnkephalinBar']],
   // Live 2026-10-26: the Charge Enkephalin window over Drive, the tab bar dimmed under it: neither tab here. The
-  // Enkephalin bar still reads under the dimming (#370).
+  // Enkephalin bar still reads under the dimming (#370), as on every screen that shows the resource panel.
   ['EnkephalinPanel.png', ['AssemblePanel', 'EnkephalinBar', 'AssembleAfter']],
-  ['SinnersTab.png', ['GoToMirrorEntry', 'NavMainTabs', 'HomeWindowTab']],
-  ['Drive.png', ['GoToMirrorEntry', 'NavDrive', 'HomeWindowTab']],
+  ['SinnersTab.png', ['GoToMirrorEntry', 'NavMainTabs', 'HomeWindowTab', 'EnkephalinBar']],
+  ['Drive.png', ['GoToMirrorEntry', 'NavDrive', 'HomeWindowTab', 'EnkephalinBar']],
   ['EntryNewRun.png', ['MirrorEntryNewRun']],
   ['EntryPaused.png', ['MirrorEntryPaused']],
   // Synthetic (#94), no live capture yet: EntryNewRun.png with the Parallel Superposition label's OFF redrawn as ON.
@@ -136,7 +136,7 @@ const screens: [image: string, hits: string[]][] = [
   ['BattleMenu.png', ['BattleMenu', 'BattleTurn']],
   ['BattleMenuClosing.png', ['BattleMenu', 'BattleTurn']],
   ['Victory.png', ['Victory']],
-  ['WipeDialog.png', ['WipeDialog']],
+  ['WipeDialog.png', ['WipeDialog', 'AssembleAfter']],
   ['DungeonProgress.png', ['MirrorMap', 'ProgressPanel', 'RecoverToWindow']],
   // Live 2026-10-22 (#215): the back key on the map, NORMAL floor 2. Synthetic: the same panel over a dimmed event
   // result page (live the back key opens it there too, #118); the page's own Continue button still reads.

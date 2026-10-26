@@ -19,6 +19,7 @@
         "next": [
             "TaskDone",
             "[JumpBack]AssemblePanel",
+            "[JumpBack]HomeText",
             "[JumpBack]AssembleMain",
             "[JumpBack]GoHome"
         ]
