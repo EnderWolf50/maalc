@@ -7,6 +7,7 @@ actions.py reads the Enkephalin Modules and the battle's result and taps; everyt
 SKIP, FIGHT, RETRY, FINISH, STOP = "skip", "fight", "retry", "finish", "stop"
 
 EXP_COST = 3  # the Modules one EXP Luxcavation battle takes, the hardest stage's (live 2026-10-26: stages 4-9 take 3)
+THREAD_COST = 2  # a Thread Luxcavation battle's, every level of Lust's Level Select (live 2026-10-26: Lv20-60 all take 2)
 
 
 def needed(cost, count):

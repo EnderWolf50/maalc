@@ -421,6 +421,7 @@ class TaskStart(CustomAction):
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         RUN.clear()
+        TASK.clear()
         TASK.update(runs=0, done=None)
         STUCK.update(node=None, kind=None, flag=None, watch=recovery.Watchdog(), ladder=recovery.Ladder())
         SCREENS.clear()
@@ -512,7 +513,9 @@ class ExpText(hub_text.HubText):
 class ExpStart(TaskStart):
     """ExpLuxcavation's entry (#366): TaskStart, then the team luxcavation.exp names, whose guard turns the battle plays
     (spec 03 section 8), and its count and retries (#367). No team picked, or settings that do not load: the stop
-    procedure, before any tap."""
+    procedure, before any tap. ThreadStart is the same for luxcavation.thread (#368)."""
+
+    TASK, NAME, COST = "exp", "EXP Luxcavation", luxcavation.EXP_COST
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         super().run(context, argv)
@@ -520,18 +523,23 @@ class ExpStart(TaskStart):
             settings = load_settings(ROOT)
         except SettingsError as e:
             return stop(context, str(e))
-        exp = settings["luxcavation"]["exp"]
-        team = next((t for t in settings["teams"] if t["id"] == exp["team"]), None)
+        opts = settings["luxcavation"][self.TASK]
+        team = next((t for t in settings["teams"] if t["id"] == opts["team"]), None)
         if team is None:
-            return stop(context, "EXP Luxcavation has no team: pick one in the settings GUI's Daily tab")
+            return stop(context, f"{self.NAME} has no team: pick one in the settings GUI's Daily tab")
         # Not RUN["settings"]: that is a Mirror Dungeon run, which the stop procedure writes to runs.jsonl.
         # lux: this task's count (spec 03 section 15): the battles won and the retries used, the last battle's result.
         RUN.update(team=team, guard=team["guard_turns"],
-                   lux={"cost": luxcavation.EXP_COST, "count": exp["count"], "retries": exp["retries"], "modules": None,
+                   lux={"name": self.NAME, "cost": self.COST, "count": opts["count"], "retries": opts["retries"], "modules": None,
                         "won": 0, "retried": 0, "result": None})
-        log(f"EXP Luxcavation: team {team['name']!r} (TEAMS #{team['game_team']}), {team['guard_turns']} guard turns, "
-            f"{exp['count']} wins, {exp['retries']} retries")
+        log(f"{self.NAME}: team {team['name']!r} (TEAMS #{team['game_team']}), {team['guard_turns']} guard turns, "
+            f"{opts['count']} wins, {opts['retries']} retries")
         return True
+
+
+@AgentServer.custom_action("ThreadStart")
+class ThreadStart(ExpStart):
+    TASK, NAME, COST = "thread", "Thread Luxcavation", luxcavation.THREAD_COST
 
 
 def modules_now(context, timeout=3):
@@ -539,6 +547,18 @@ def modules_now(context, timeout=3):
     found = []
     until(context, lambda image: found.append(module_count(context, image)) or found[-1] is not None, timeout)
     return found[-1]
+
+
+@AgentServer.custom_action("OpenDrive")
+class OpenDrive(CustomAction):
+    """NavDrive: the Drive page has the Modules panel (tests/screens/Drive.png), the entry page the next tap opens has
+    none. Read the number for PlanRun's gate (#369) before tapping Mirror Dungeons; None when it does not read."""
+
+    def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
+        TASK["modules"] = module_count(context, screen(context))
+        x, y, w, h = argv.box
+        context.tasker.controller.post_click(x + w // 2, y + h // 2).wait()
+        return True
 
 
 @AgentServer.custom_action("ExpHome")
@@ -553,38 +573,80 @@ class ExpHome(CustomAction):
         lux = RUN["lux"]
         lux["modules"] = modules_now(context)
         if lux["modules"] is None:
-            return stop(context, "EXP Luxcavation: the Modules number did not read on the main window")
+            return stop(context, f"{lux['name']}: the Modules number did not read on the main window")
         need = luxcavation.needed(lux["cost"], lux["count"])
         if luxcavation.decide(lux["modules"], lux["cost"], lux["count"], 0, 0, lux["retries"]) == luxcavation.SKIP:
-            return done(f"EXP Luxcavation: Modules {lux['modules']} < {need} needed, skipped")
-        log(f"EXP Luxcavation: Modules {lux['modules']} >= {need} needed")
+            return done(f"{lux['name']}: Modules {lux['modules']} < {need} needed, skipped")
+        log(f"{lux['name']}: Modules {lux['modules']} >= {need} needed")
         return True
+
+
+@AgentServer.custom_action("ThreadHome")
+class ThreadHome(ExpHome):
+    pass
+
+
+def battle_over(context):
+    """A Luxcavation battle was entered (RUN["entered"]) and the page it started from shows again: count its result
+    (Victory sets it) and say what next (luxcavation.decide, #367). None: the next battle, or the same one again after a
+    defeat; else what the action returns: True once the main window is reached and the task done, False from the stop
+    procedure."""
+    lux = RUN["lux"]
+    RUN.pop("entered")
+    result, lux["result"] = lux["result"], None
+    if result is None:  # TODO(#367): a defeat sets no result yet, its screen has no capture (#366)
+        return stop(context, f"{lux['name']}: back on the page with no victory or defeat seen")
+    step = luxcavation.decide(lux["modules"], lux["cost"], lux["count"], lux["won"], lux["retried"], lux["retries"], result)
+    lux["won"] += result == "win"
+    lux["retried"] += step == luxcavation.RETRY
+    log(f"{lux['name']}: {result}, {lux['won']} of {lux['count']} won, {lux['retried']} of {lux['retries']} retries used: {step}")
+    if step == luxcavation.FINISH:
+        return go_home(context) and done(f"{lux['name']}: {lux['won']} won")
+    if step == luxcavation.STOP:
+        return stop(context, f"{lux['name']}: defeated with the {lux['retries']} retries used up")
+    return None
 
 
 @AgentServer.custom_action("ExpEnter")
 class ExpEnter(CustomAction):
     """LuxExpEnter: tap the rightmost open stage's Enter (the node's box) until the tab goes. Back on the tab after
-    that: the battle is over, and its result (Victory sets it) says what next (luxcavation.decide, #367): the next
-    battle, the same one again after a defeat, the main window and done, or the stop procedure."""
+    that: the battle is over (battle_over). ThreadEnter is the same for the Thread tab's open card, whose Enter opens
+    the Level Select (ThreadLevel) instead of the battle (#368)."""
+
+    OPENS_BATTLE = True
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
-        lux = RUN["lux"]
-        if RUN.pop("entered", False):
-            result, lux["result"] = lux["result"], None
-            if result is None:  # TODO(#367): a defeat sets no result yet, its screen has no capture (#366)
-                return stop(context, "EXP Luxcavation: back on the EXP tab with no victory or defeat seen")
-            step = luxcavation.decide(lux["modules"], lux["cost"], lux["count"], lux["won"], lux["retried"], lux["retries"], result)
-            lux["won"] += result == "win"
-            lux["retried"] += step == luxcavation.RETRY
-            log(f"EXP Luxcavation: {result}, {lux['won']} of {lux['count']} won, {lux['retried']} of {lux['retries']} retries used: {step}")
-            if step == luxcavation.FINISH:
-                return go_home(context) and done(f"EXP Luxcavation: {lux['won']} won")
-            if step == luxcavation.STOP:
-                return stop(context, f"EXP Luxcavation: defeated with the {lux['retries']} retries used up")
+        if RUN.get("entered"):
+            over = battle_over(context)
+            if over is not None:
+                return over
+        x, y, w, h = argv.box
+        if tap_then(context, x + w // 2, y + h // 2, lambda im: seen(context, im, argv.node_name) is None, timeout=3) is not None:
+            RUN["entered"], RUN["team_picked"] = self.OPENS_BATTLE, False
+            log(f"{RUN['lux']['name']}: entered the stage at x {x + w // 2}")
+        return True
+
+
+@AgentServer.custom_action("ThreadEnter")
+class ThreadEnter(ExpEnter):
+    OPENS_BATTLE = False
+
+
+@AgentServer.custom_action("ThreadLevel")
+class ThreadLevel(CustomAction):
+    """LuxThreadLevel: the card's Level Select, which opens at its bottom row, the hardest level (#368): tap that row's
+    Enter (the node's box) until the list goes. A battle over that returns here, not to the Thread tab, is counted
+    first (battle_over)."""
+
+    def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
+        if RUN.get("entered"):
+            over = battle_over(context)
+            if over is not None:
+                return over
         x, y, w, h = argv.box
         if tap_then(context, x + w // 2, y + h // 2, lambda im: seen(context, im, argv.node_name) is None, timeout=3) is not None:
             RUN["entered"], RUN["team_picked"] = True, False
-            log(f"EXP Luxcavation: entered the stage at x {x + w // 2}")
+            log(f"{RUN['lux']['name']}: entered the level at y {y + h // 2}")
         return True
 
 
@@ -880,6 +942,19 @@ class PlanRun(CustomAction):
         if run_start.team_difficulty(run["difficulty"], difficulty, team["hard_from_floor"]) != difficulty:
             log(f"team {team['name']!r} never switches to hard and the difficulty is {run['difficulty']}: a normal run")
             difficulty = "normal"
+        # The entry page has no Modules panel (tests/screens/EntryNewRun.png): the Drive page's read (OpenDrive) is this trip's.
+        step = settlement.new_run_gate(TASK.get("modules", settlement.NOT_SEEN), TASK.get("gate_backs", 0))
+        if step == "back":  # not through Drive since the last run: back out, the hub's navigation reads it on the way in
+            TASK["gate_backs"] = TASK.get("gate_backs", 0) + 1
+            log("new run: the Modules were not read on the way here, back to the Drive page to read them")
+            context.tasker.controller.post_click_key(BACK_KEY).wait()
+            return True
+        modules = TASK.pop("modules", None)
+        TASK.pop("gate_backs", None)
+        if step == "done":
+            return done(f"Modules {modules} < {settlement.CLAIM_COST}, one Claim could not be paid: no new run")
+        if modules is None:
+            log("new run: the Modules number did not read, starting anyway")
         RUN.clear()
         # planned: the bot picked the team itself, so the rotation cursor may move after the claim.
         limit = recovery.floor_limit(recovery.read_runs(ROOT), team["id"])
@@ -1444,6 +1519,7 @@ class PickThemePack(CustomAction):
         floor = int(m[1])
         if floor != RUN.get("floor"):
             RUN.pop("after_shop", None)
+            TASK.pop("modules", None)  # a run is under way: Claim will take 5, the next one reads the Modules again (#369)
             RUN.update(floor=floor, map_misses=0)  # a new floor's map gets a fresh retry quota (spec 06)
             restart_floor_clock()
         want = None if run["difficulty"] is None else run_start.hard_wanted(floor, run["difficulty"] == "hard", run["team"]["hard_from_floor"])

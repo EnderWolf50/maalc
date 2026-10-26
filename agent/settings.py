@@ -124,8 +124,16 @@ def _v11_to_v12(data):
     return data
 
 
+def _v12_to_v13(data):
+    """Version 13 adds luxcavation.thread (#368): one win, no team picked yet, no retries, as exp."""
+    lux = data.setdefault("luxcavation", {})
+    if isinstance(lux, dict):
+        lux.setdefault("thread", {"count": 1, "team": None, "retries": 0})
+    return data
+
+
 # MIGRATIONS[n] turns a version-n dict into a version-(n + 1) dict; keep in step with gui/src/model.ts.
-MIGRATIONS = {1: _v1_to_v2, 2: _v2_to_v3, 3: _v3_to_v4, 4: _v4_to_v5, 5: _v5_to_v6, 6: _v6_to_v7, 7: _v7_to_v8, 8: _v8_to_v9, 9: _v9_to_v10, 10: _v10_to_v11, 11: _v11_to_v12}
+MIGRATIONS = {1: _v1_to_v2, 2: _v2_to_v3, 3: _v3_to_v4, 4: _v4_to_v5, 5: _v5_to_v6, 6: _v6_to_v7, 7: _v7_to_v8, 8: _v8_to_v9, 9: _v9_to_v10, 10: _v10_to_v11, 11: _v11_to_v12, 12: _v12_to_v13}
 
 NO_TEAM = "No enabled team: set up a team in the settings GUI first."
 

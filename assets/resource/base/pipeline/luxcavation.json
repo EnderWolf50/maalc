@@ -180,5 +180,156 @@
         "custom_action": "ExpEnter",
         "pre_delay": 500,
         "post_delay": 0
+    },
+    // Thread Luxcavation (#368): ThreadStart picks the team (luxcavation.thread), then the same entry as EXP (GoHomeRun
+    // through ThreadHome) and ThreadHub, which plays the hardest level of today's one open card of the Thread tab, over
+    // and over until `count` are won. Its screens: the Thread tab's open card (Enter), its Level Select (the bottom row's
+    // Enter), then the pages EXP's Enter leads to as well (ExpHub's list: the team page, the battle, the results).
+    "ThreadLuxcavation": {
+        "action": "Custom",
+        "custom_action": "ThreadStart",
+        "next": [
+            "ThreadHome"
+        ]
+    },
+    "ThreadHome": {
+        "action": "Custom",
+        "custom_action": "ThreadHome",
+        "next": [
+            "ThreadHub"
+        ]
+    },
+    // ExpText is the one pass over the OCR screens of both hubs. The team page after Level Select has no node here yet:
+    // it waits for #366's, which both hubs list (#366b).
+    "ThreadHub": {
+        "timeout": 60000,
+        "rate_limit": 300,
+        "on_error": [
+            "ThreadLost"
+        ],
+        "next": [
+            "ThreadStuck",
+            "TaskDone",
+            "[JumpBack]BattleHUD",
+            "[JumpBack]Connecting",
+            "[JumpBack]HelpPager",
+            "[JumpBack]ExpText",
+            "[JumpBack]LuxTeamSelect",
+            "[JumpBack]LuxThreadLevel",
+            "[JumpBack]LuxThreadEnter",
+            "[JumpBack]LuxThreadSwipe",
+            "[JumpBack]LuxThreadTab",
+            "[JumpBack]NavLuxcavation",
+            "[JumpBack]NavTitle",
+            "[JumpBack]NavMainTabs"
+        ]
+    },
+    "ThreadLost": {
+        "action": "Custom",
+        "custom_action": "StopTask",
+        "custom_action_param": "Thread Luxcavation: no screen known for 60 s"
+    },
+    "ThreadStuck": {
+        "recognition": "Custom",
+        "custom_recognition": "StuckFlag",
+        "action": "Custom",
+        "custom_action": "StopTask",
+        "custom_action_param": "Thread Luxcavation is stuck"
+    },
+    // The Thread tab lit: its orange frame, as the EXP tab's (LuxExpLit).
+    "LuxThreadLit": {
+        "recognition": "ColorMatch",
+        "roi": [62, 297, 166, 72],
+        "lower": [200, 120, 0],
+        "upper": [255, 200, 80],
+        "count": 900
+    },
+    // Luxcavation on its EXP tab (the tab it opens on): tap Thread.
+    "LuxThreadTab": {
+        "recognition": "And",
+        "all_of": [
+            {
+                "recognition": "TemplateMatch",
+                "sub_name": "LuxPanel",
+                "roi": [55, 170, 180, 60],
+                "template": "Luxcavation/LuxPanel.png",
+                "threshold": 0.8
+            },
+            "LuxExpLit"
+        ],
+        "action": "Click",
+        "target": [70, 306, 150, 56],
+        "post_delay": 1500
+    },
+    // The Thread tab shows four of the seven cards; the open one has a lit Enter (tests/screens/LuxThread.png, LuxThreadLust.png:
+    // the cards that open on other days read 0.6 at most). The list starts at today's card, but it keeps where it was
+    // scrolled, so a tab that shows none was left scrolled away (LuxThreadScrolled.png): swipe to the right, which brings
+    // the left cards in (unverified, the direction of the game's drag).
+    "LuxThreadEnter": {
+        "recognition": "And",
+        "all_of": [
+            "LuxThreadLit",
+            {
+                "recognition": "TemplateMatch",
+                "sub_name": "LuxThreadEnterButton",
+                "roi": [255, 455, 1000, 50],
+                "template": "Luxcavation/LuxThreadEnter.png",
+                "threshold": 0.9
+            }
+        ],
+        "box_index": 1,
+        "action": "Custom",
+        "custom_action": "ThreadEnter",
+        "pre_delay": 500,
+        "post_delay": 0
+    },
+    // The Thread tab with nothing else known: it comes after LuxThreadEnter in the hub, so it is the tab with no open card on
+    // show. (An inverted match of the Enter in this And never hit.)
+    "LuxThreadSwipe": {
+        "recognition": "And",
+        "all_of": [
+            {
+                "recognition": "TemplateMatch",
+                "sub_name": "LuxPanel",
+                "roi": [55, 170, 180, 60],
+                "template": "Luxcavation/LuxPanel.png",
+                "threshold": 0.8
+            },
+            "LuxThreadLit"
+        ],
+        "action": "Swipe",
+        "begin": [330, 330, 40, 20],
+        "end": [1100, 330, 40, 20],
+        "duration": 600,
+        "post_delay": 1000,
+        "max_hit": 4
+    },
+    // The card's Level Select: a list of levels, each with its own Enter and -2 Modules, that opens at its bottom row, the
+    // hardest (Lv60 of Lust; tests/screens/LuxThreadLevels.png). The box is the lowest Enter on show.
+    "LuxThreadLevel": {
+        "recognition": "And",
+        "all_of": [
+            {
+                "recognition": "TemplateMatch",
+                "sub_name": "LuxLevelSelect",
+                "roi": [480, 90, 320, 65],
+                "template": "Luxcavation/LuxLevelSelect.png",
+                "threshold": 0.9
+            },
+            {
+                "recognition": "TemplateMatch",
+                "sub_name": "LuxLevelEnterButton",
+                "roi": [700, 225, 260, 330],
+                "template": "Luxcavation/LuxLevelEnter.png",
+                "threshold": 0.9,
+                "order_by": "Vertical",
+                "index": -1
+            }
+        ],
+        "box_index": 1,
+        "action": "Custom",
+        "custom_action": "ThreadLevel",
+        "pre_delay": 500,
+        "post_delay": 0
     }
 }

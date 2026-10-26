@@ -53,6 +53,11 @@
             "entry": "ExpLuxcavation"
         },
         {
+            "name": "ThreadLuxcavation",
+            "label": "$ThreadLuxcavation",
+            "entry": "ThreadLuxcavation"
+        },
+        {
             "name": "ClaimPassMissions",
             "label": "$ClaimPassMissions",
             "entry": "ClaimPassMissions"

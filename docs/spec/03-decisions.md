@@ -473,13 +473,14 @@ Cost 表是 wiki 與簡中客戶端的表，實機 log 的節點面板 Cost 沒�
   - 按 Claim 後視窗沒有關掉，而且不是上面相符的確認對話框，就停止、不再點任何東西（模組不夠時的畫面還沒見過，這樣不會誤點購買）。這局在 `runs.jsonl` 記為「停止」。
   - 輪替游標只在這局是 bot 自己在入口頁選的隊伍時才前進；接續或補領的局不前進（第 1 節）。
   - 「限制局數」只算這個任務開始後達到目標並領到獎勵的局；放棄獎勵（沒達到目標、放棄這局）與停止的局不算。達到時在入口頁停止，不開新局。（2026-10-16 定案）
+- **開新局前的模組門檻**（#369）：入口頁左下沒有模組面板（`EntryNewRun.png` 等），所以導航經過 Drive 頁時讀：`NavDrive` 是自訂動作 `OpenDrive`，點 Mirror Dungeons 之前用 `actions.module_count` 讀一次，存在任務狀態 `TASK["modules"]`（讀不到存 None）。`PlanRun` 開新局前用 `settlement.new_run_gate` 判斷：這趟讀到 m < 5（Claim 的費用，`settlement.CLAIM_COST`）→ log 模組數、`done()` 成功結束；m ≥ 5 或 None → 開局，讀不到不擋。這趟沒經過 Drive（例如上一局 Claim 後直接停在入口頁）→ 按返回鍵（最多 `BACKS` 次），由 hub 的導航重新走過 Drive 讀；返回鍵沒有把人帶到有面板的頁就不查、照常開局。值只用一次：`PlanRun` 取走，每層 `PickThemePack` 也清掉（Claim 會扣 5，舊值不能沿用）。接手暫停中的局不走這裡。返回鍵從入口頁會到哪一頁還沒有截圖，待實機。
 
 ## 15. 日常 Luxcavation 的模組與計次
 
-經驗本（`ExpLuxcavation`）的模組檢查、打贏才算一次、戰敗重打。判斷是純函式 `luxcavation.decide`（`tests/test_luxcavation.py` 列舉情況）。（#367、#362）
+經驗本（`ExpLuxcavation`）與紐本（`ThreadLuxcavation`）的模組檢查、打贏才算一次、戰敗重打。判斷是純函式 `luxcavation.decide`（`tests/test_luxcavation.py` 列舉情況），兩個任務共用，只有每場的消耗不同：經驗本 3、紐本 2（Level Select 每級都是 2）。（#367、#368、#362）
 
 - **讀模組數**（`actions.module_count`）：左下面板有兩個數字：黃色卡片圖示旁的是 Enkephalin Box，**圓形圖示旁的是 Enkephalin Module**（實機 2026-10-26）。面板的 x 隨頁面移動（主畫面、Drive 在 393，Luxcavation 頁在 242），所以先用模板 `ModuleIcon` 找圓形圖示，再把圖示右邊那一行當一個數字 OCR。圖示不在畫面上或數字讀不出來回 None。鏡牢開局前的門檻（#369）重用這個函式。截圖：`tests/screens/MainWindow.png`、`Drive.png`、`LuxExp.png` 等，`tests/test_module_count.py`。
-- **開始時檢查一次**：回到主畫面之後（`ExpHome`）讀模組數 m；m < 最難關每場消耗 × `count`（經驗本每場 3 個）就在 log 記 `Modules m < n needed, skipped`，以成功結束（`done()`），清單繼續。面板讀不出來：停止程序，不花任何模組。之後不再檢查。
+- **開始時檢查一次**：回到主畫面之後（`ExpHome`）讀模組數 m；m < 最難關每場消耗 × `count`（經驗本每場 3 個，紐本每場 2 個）就在 log 記 `Modules m < n needed, skipped`，以成功結束（`done()`），清單繼續。面板讀不出來：停止程序，不花任何模組。之後不再檢查。
 - **打贏才算一次**：戰鬥結束時 `Victory` 節點記下這場的結果；回到 EXP 分頁時 `ExpEnter` 照 `decide` 走：贏了而未滿 `count` 就再點 Enter，滿了就 `go_home()` 後 `done()`。每場的 VICTORY 只算一次（畫面會停留好幾次 hub）。
 - **戰敗**：不算次數，不扣模組；`retries` 內重打同一關（再點 Enter），用完就停止程序（任務失敗，清單繼續）。**現狀：戰敗畫面沒有截圖，`lose` 還沒有訊號來源**（#366 補截圖後接上）；回到 EXP 分頁卻沒看到勝敗，也走停止程序，不算一次。
 - 計數存在記憶體（`RUN["lux"]`），每個任務開始時由 `TaskStart` 清掉（ADR 0003：狀態檔不存這個）。

@@ -49,6 +49,18 @@
 - 選隊頁的清單捲動到 `#40` 為止。選隊頁沒有 Daily Bonuses 值，也沒有模組消耗顯示；按 Enter 不扣模組（104 → 104）。
 - 隊伍等級警告、開戰確認只會在按 To Battle! 之後出現，**還沒有截圖**；戰鬥、勝敗、結算畫面也沒有。（#366）
 
+### Luxcavation（紐本，#368）
+
+| 畫面 | 辨識方式 | 處理 | 可能的下一個畫面 | 來源 | 實機截圖 |
+|---|---|---|---|---|---|
+| Luxcavation：EXP 分頁 | 模板：左上 `Luxcavation` 面板；ColorMatch：EXP 分頁的橘色邊框（`LuxThreadTab`） | 點 Thread 分頁 | Thread 分頁 | #368 | `tests/screens/LuxExp.png` |
+| Thread 分頁：今天的卡開著 | ColorMatch：Thread 分頁的橘色邊框（`LuxThreadLit`）；模板：亮著的 Enter 按鈕，只有開放的那張卡有（`LuxThreadEnter`） | 點亮著的 Enter | Level Select | #368 | `tests/screens/LuxThread.png`、`LuxThreadLust.png` |
+| Thread 分頁：捲走了 | 同上的 Thread 分頁，但看不到亮著的 Enter（`LuxThreadSwipe`） | 往右滑，把左邊的卡帶進來（方向 unverified） | Thread 分頁，開放的卡在畫面裡 | #368 | `tests/screens/LuxThreadScrolled.png` |
+| Level Select | 模板：標題 `Level Select`；模板：每列的 `Enter`，取最下面一個（`LuxThreadLevel`） | 點最下面那列的 Enter（開啟時清單停在最底，最難的等級） | 選隊頁（和經驗本同一頁） | #368 | `tests/screens/LuxThreadLevels.png` |
+
+- Thread 分頁一次顯示四張卡，共七隻異想體，依星期開放，其餘卡顯示 `Opens <星期>`；Daily Bonuses 的剩餘次數在頂部（只有這一頁），今天的卡有 `Consecutive Battle ×1` 的選擇器，不動它。清單從今天的卡開始排（週日 Wrath 在最左，週一 Lust 在最左），但記得上次捲到哪裡。
+- Level Select：Lust 有 Lv20/30/40/50/60 五級，每級 Enter 消耗 2 個模組，都沒上鎖，沒有 Skip；一開啟清單就停在最底（Lv40/50/60）。其他異想體的清單沒看過（unverified）。（2026-10-26 實機，週一）
+
 ## 開局
 
 | 畫面 | 辨識方式 | 處理 | 可能的下一個畫面 | 來源 | 實機截圖 |

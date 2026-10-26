@@ -1429,6 +1429,7 @@ def test_plan_run_waits_for_the_enter_dialog_after_pressing_enter(context, clock
     monkeypatch.setattr(actions.settlement, "runs_done", lambda done, limit: False)
     monkeypatch.setattr(actions.recovery, "read_runs", lambda root: [])
     monkeypatch.setattr(actions.recovery, "floor_limit", lambda runs, team: 1800)
+    actions.TASK["modules"] = 20  # read on the Drive page (#369)
     page(context, {(400, 325, 480, 45): lambda clicks, looks: "Will you enter X?" if clicks and looks >= 3 else None})
     assert actions.PlanRun().run(context, argv())
     assert taps(context) == [(1108, 494)]
@@ -1447,6 +1448,7 @@ def test_a_planned_run_of_a_team_that_never_switches_to_hard(context, clock, mon
     monkeypatch.setattr(actions.run_start, "run_difficulty", lambda setting, weekly: "hard")
     monkeypatch.setattr(actions.recovery, "read_runs", lambda root: [])
     monkeypatch.setattr(actions.recovery, "floor_limit", lambda runs, team: 1800)
+    actions.TASK["modules"] = 20  # read on the Drive page (#369)
     page(context, {})
     actions.PlanRun().run(context, argv())
     assert actions.RUN["difficulty"] == expected
@@ -2910,6 +2912,7 @@ def entry_page(context, edit=lambda run, teams: None):
     (actions.ROOT / "config" / "settings.json").write_text(json.dumps(data), encoding="utf-8")
     actions.RUN.clear()
     context.tasker.controller.info = {}  # the default rotation cursor
+    actions.TASK["modules"] = 20  # what OpenDrive read on this trip (#369)
 
 
 @pytest.mark.parametrize("edit, done", [
@@ -2928,6 +2931,35 @@ def test_a_mirror_dungeon_that_has_nothing_left_to_do_ends_a_success(context, mo
     assert done in actions.TASK["done"]
     assert not (actions.ROOT / "logs").exists() and not urlopen.called
     context.tasker.controller.post_click.assert_not_called()
+
+
+def test_plan_run_does_not_open_a_run_the_modules_cannot_claim(context):
+    # #369: read 4 on the Drive page (< 5, one Claim): the task is done, Enter is not pressed.
+    entry_page(context)
+    actions.TASK.update(runs=0, done=None, modules=4)
+    assert actions.PlanRun().run(context, None) is True
+    assert "Modules 4 < 5" in actions.TASK["done"]
+    context.tasker.controller.post_click.assert_not_called()
+
+
+def test_plan_run_starts_when_the_modules_did_not_read(context):
+    entry_page(context)
+    actions.TASK.update(runs=0, done=None, modules=None)
+    assert actions.PlanRun().run(context, None) is True
+    assert actions.TASK["done"] is None and "modules" not in actions.TASK and actions.RUN["planned"]
+
+
+def test_plan_run_backs_out_to_read_the_modules_when_the_trip_skipped_drive(context):
+    # #369: the last run's Claim took 5, so an old value is none: the back key, twice at most, then the run starts.
+    entry_page(context)
+    actions.TASK.clear()
+    actions.TASK.update(runs=0, done=None)
+    for n in (1, 2):
+        assert actions.PlanRun().run(context, None) is True
+        context.tasker.controller.post_click_key.assert_called_with(actions.BACK_KEY)
+        assert context.tasker.controller.post_click_key.call_count == n and not actions.RUN
+    assert actions.PlanRun().run(context, None) is True and actions.RUN["planned"]
+    assert context.tasker.controller.post_click_key.call_count == 2
 
 
 def test_a_mirror_dungeon_with_no_enabled_team_fails(context):
