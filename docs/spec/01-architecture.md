@@ -76,8 +76,8 @@
 - 從主畫面點 Drive（`NavMainTabs`）→ Luxcavation（`NavLuxcavation`）→ EXP 分頁（停在 Thread 分頁時點 EXP，`LuxExpTab`）→ EXP 分頁預設畫面最右邊的 Enter（`LuxExpEnter`，`ExpEnter`）。上鎖的卡顯示 KEEP OUT、沒有 Enter，所以最右邊的 Enter 就是最難的開放關卡。不改 Consecutive Battle、不按 Skip Battle。（#366）
 - 分頁亮起看橘色邊框（ColorMatch）：亮和不亮的分頁對模板的分數差不多（0.93），分不開。
 - 隊伍是 `luxcavation.exp.team` 指的 maalc 隊伍，戰鬥用它的 `guard_turns`（全員防禦 N 回合後按勝率，同鏡牢）。
-- 按 Enter 之後回到 EXP 分頁，就算打完一場：`go_home()` 再 `done()`，任務成功。
-- 現狀（#366）：按 Enter 之後的選隊、編隊、結算畫面沒有截圖，hub 不認得，60 秒後走停止程序（存證據）。這些畫面截到後再補選隊、編隊與勝敗判斷；模組檢查、計次與戰敗重打在 #367。
+- 開頭回主畫面後讀模組數，不夠 `count` 場就跳過（`ExpHome`）；按 Enter 之後回到 EXP 分頁，依這場的勝敗計次、再打或結束（`ExpEnter`，[spec 03 第 15 節](03-decisions.md)）。
+- 現狀（#366）：按 Enter 之後的選隊、編隊、結算畫面沒有截圖，hub 不認得，60 秒後走停止程序（存證據）。這些畫面截到後再補選隊、編隊與勝敗判斷；模組檢查與計次（#367）已接上，戰敗訊號與戰敗重打待戰敗畫面的截圖。
 
 ### 換腦啡肽模組（`AssembleModules`，#370）
 
