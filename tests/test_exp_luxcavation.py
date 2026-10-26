@@ -2,28 +2,17 @@
 and the rightmost open stage's Enter; one battle later, back to the main window, a success. ThreadLuxcavation (#368):
 the same to the Thread tab's open card, its Level Select and that list's bottom row.
 
-The real task on the repo's resource bundle in MaaFramework 5.14.3, as test_go_home.py: a screenshot per screen, taps
-and the back key that move between them. Enter opens the team page (LuxTeamSelect.png): the model picks the
-TEAMS row and To Battle! there. The pages after To Battle! (level warning, start confirm, battle, results) have no capture
-yet: the model plays them as one unknown screen that gives way to the EXP tab again. The task runs in a child process
-(this file run as a script): the pytest process holds MaaFramework in AgentServer mode.
+The real task in a child process (daily_child.py), on a model of the game: a screenshot per screen, taps and the back
+key that move between them. Enter opens the team page (LuxTeamSelect.png): the model picks the TEAMS row and To
+Battle! there. The pages after To Battle! (level warning, start confirm, battle, results) have no capture yet: the model
+plays them as one unknown screen that gives way to the EXP tab again.
 """
 
-import functools
 import json
-import subprocess
-import sys
-import tempfile
-import traceback
-import types
-from pathlib import Path
 
 import numpy as np
+from daily_child import ROOT, bind, game_class, inside, load, result, run_child, screen
 
-ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT / "agent"))  # run as a script: as pytest's pythonpath has it
-
-GAME = "com.ProjectMoon.LimbusCompany"
 WINDOW_TAB = (790, 608, 70, 64)
 DRIVE_TAB = (930, 600, 110, 80)
 LUXCAVATION = (355, 97, 190, 125)  # Drive's Luxcavation button
@@ -41,48 +30,25 @@ SCREENS = {"main": "MainWindow.png", "drive": "Drive.png", "exp": "LuxExp.png", 
            "victory": "Victory.png"}
 
 
-def inside(box, x, y):
-    return box[0] <= x < box[0] + box[2] and box[1] <= y < box[1] + box[3]
-
-
 def child():
     """Run ExpLuxcavation from each start; print one JSON line {scenario: {succeeded, nodes, clicks, keys}}."""
-    from maa.controller import CustomController
-    from maa.resource import Resource
-    from maa.tasker import Tasker
-    from PIL import Image
-
-    resource = Resource()  # MaaFramework itself, before anything loads the AgentServer library
-    stub = types.ModuleType("maa.agent.agent_server")
-    stub.AgentServer = type("AgentServer", (), {"custom_action": staticmethod(lambda name: lambda c: c),
-                                                "custom_recognition": staticmethod(lambda name: lambda c: c)})
-    sys.modules["maa.agent"] = types.ModuleType("maa.agent")
-    sys.modules["maa.agent.agent_server"] = stub
-    import actions
-
-    actions.ROOT = Path(tempfile.mkdtemp())
+    actions, resource = load()
     (actions.ROOT / "config").mkdir()
     settings = json.loads((ROOT / "tests" / "settings_cases.json").read_text(encoding="utf-8"))["valid"]
     settings["teams"][1]["game_team"] = 3  # the row LuxTeamSelect.png has lit
-    images = {name: np.ascontiguousarray(np.array(Image.open(ROOT / "tests" / "screens" / png).convert("RGB"))[:, :, ::-1])
-              if png else np.full((720, 1280, 3), 40, np.uint8) for name, png in SCREENS.items()}
 
-    class Game(CustomController):
+    class Game(game_class()):
         """The screen the game shows and what a tap or the back key does there."""
 
-        def set(self, screen, lux_tab="thread", after="thread"):
-            self.screen, self.clicks, self.keys, self.shots, self.picked = screen, [], [], 0, False
-            self.stage = "exp" if screen != "locked" else "locked"
+        images = {name: screen(png) if png else np.full((720, 1280, 3), 40, np.uint8) for name, png in SCREENS.items()}
+
+        def set(self, start, lux_tab="thread", after="thread"):
+            self.screen, self.clicks, self.keys, self.shots, self.picked = start, [], [], 0, False
+            self.stage = "exp" if start != "locked" else "locked"
             self.wins = True  # the battles end in VICTORY; False: they end with no victory screen
             self.lux_tab = lux_tab  # the tab Luxcavation opens on
             self.after = after  # the page a Thread battle ends on: "thread" or "levels"
             self.swipes = []
-
-        def connect(self):
-            return True
-
-        def request_uuid(self):
-            return "test"
 
         def screencap(self):
             if self.screen == "fight":
@@ -90,11 +56,10 @@ def child():
                 if self.shots > FIGHT_SHOTS:
                     self.screen = self.stage
                 elif self.shots > 1 and self.wins:
-                    return images["victory"]
-            return images[self.screen]
+                    return self.images["victory"]
+            return self.images[self.screen]
 
-        def click(self, x, y):
-            self.clicks.append((x, y))
+        def on_tap(self, x, y):
             s = self.screen
             if s == "drive" and inside(WINDOW_TAB, x, y):
                 self.screen = "main"
@@ -119,53 +84,24 @@ def child():
                 self.screen, self.shots = "fight", 0
             return True
 
-        def touch_down(self, contact, x, y, pressure):
-            self.down = self.last = (x, y)
-            return True
-
-        def touch_move(self, contact, x, y, pressure):
-            self.last = (x, y)
-            return True
-
-        def touch_up(self, contact):
-            if max(abs(self.last[0] - self.down[0]), abs(self.last[1] - self.down[1])) < 30:
-                return self.click(*self.down)
-            if abs(self.last[1] - self.down[1]) > abs(self.last[0] - self.down[0]):
-                return True  # the team list's scroll: a drag up or down, not a tap, not the Thread tab's swipe
-            self.swipes.append((self.down, self.last))
-            if self.screen == "scrolled" and self.last[0] - self.down[0] > 300:  # the finger to the right: the left cards show
+        def on_swipe(self, down, last):
+            if abs(last[1] - down[1]) > abs(last[0] - down[0]):
+                return True  # the team list's scroll: a drag up or down, not the Thread tab's swipe
+            self.swipes.append((down, last))
+            if self.screen == "scrolled" and last[0] - down[0] > 300:  # the finger to the right: the left cards show
                 self.screen = "thread"
             return True
 
-        def key_down(self, keycode):
-            return True
-
-        def key_up(self, keycode):
-            self.keys.append(keycode)
+        def on_key(self, keycode):
             if keycode == 4 and self.screen in ("exp", "locked", "thread"):
                 self.screen = "drive"
             elif keycode == 4 and self.screen == "levels":  # live 2026-10-26: back closes the Level Select
                 self.screen = "thread"
             return True
 
-        def shell(self, cmd, timeout):
-            return f"  mCurrentFocus=Window{{1a2b u0 {GAME}/com.unity3d.player.UnityPlayerActivity}}"
-
-        def __getattr__(self, name):
-            return lambda *args: True
-
     game = Game()
     game.set("main")
-    game.post_connection().wait()
-    resource.post_bundle(ROOT / "assets" / "resource" / "base").wait()
-    for name in ("ExpStart", "ExpHome", "ExpEnter", "LuxSelectTeam", "ThreadStart", "ThreadHome", "ThreadEnter", "ThreadLevel", "GoHomeRun", "StopTask", "DismissShot", "AcceptUpdate", "AcceptTerms", "ConfirmDownload",
-                 "Halt", "TapUntil", "PlayTurn", "HoldTurn", "Victory"):
-        resource.register_custom_action(name, getattr(actions, name)())
-    for name in ("GameAway", "HomeText", "ExpText", "StuckFlag", "DoneFlag"):
-        resource.register_custom_recognition(name, getattr(actions, name)())
-    tasker = Tasker()
-    tasker.bind(resource, game)
-
+    tasker = bind(resource, game)
     out = {"error": None}
     # scenario: (task, start screen, team, count, battles that end in VICTORY, then for the Thread task the tab Luxcavation
     # opens on and the page a battle ends on); the main window shows 182 Modules, an EXP stage takes 3, a Thread level 2
@@ -180,32 +116,18 @@ def child():
                  "thread_poor": ("ThreadLuxcavation", "drive", "b", 92, True, "exp"),
                  "thread_no_team": ("ThreadLuxcavation", "drive", None, 1, True, "exp"),
                  "thread_no_victory": ("ThreadLuxcavation", "drive", "b", 1, False, "exp")}
-    for scenario, (task, screen, team, count, wins, *rest) in scenarios.items():
+    for scenario, (task, start, team, count, wins, *rest) in scenarios.items():
         opts = {"count": count, "team": team, "retries": 0}
         (actions.ROOT / "config" / "settings.json").write_text(
             json.dumps({**settings, "luxcavation": {"exp": opts, "thread": opts}}), encoding="utf-8")
-        game.set(screen, *rest)
+        game.set(start, *rest)
         game.wins = wins
-        try:
-            detail = tasker.post_task(task).wait().get()
-            out[scenario] = {"succeeded": detail.status.succeeded, "nodes": [n.name for n in detail.nodes],
-                             "clicks": game.clicks, "keys": game.keys, "swipes": game.swipes}
-        except Exception:
-            out["error"] = traceback.format_exc()
+        out[scenario] = {**result(tasker.post_task(task).wait().get(), game, actions), "swipes": game.swipes}
     print(json.dumps(out))
 
 
-@functools.cache  # one child run (~40 s) for every test
-def run_child():
-    run = subprocess.run([sys.executable, __file__], capture_output=True, text=True, timeout=600, cwd=ROOT)
-    assert run.returncode == 0, run.stderr[-2000:]
-    out = json.loads(run.stdout.strip().splitlines()[-1])
-    assert out["error"] is None, out["error"]
-    return out
-
-
 def test_exp_luxcavation_goes_home_first_enters_the_rightmost_open_stage_and_ends_home():
-    out = run_child()
+    out = run_child(__file__)
     o = out["drive"]
     assert o["succeeded"], o["nodes"]
     taps = o["clicks"]
@@ -225,7 +147,7 @@ def enters(o):
 
 
 def test_count_wins_are_fought_before_it_is_done():
-    o = run_child()["two"]  # #367: a win counts, and the next battle starts from the same tab
+    o = run_child(__file__)["two"]  # #367: a win counts, and the next battle starts from the same tab
     assert o["succeeded"], o["nodes"]
     assert len(enters(o)) == 2 and o["keys"] == [4]  # two Enters, one trip home at the end
     # each battle picks its team again: the row and To Battle! after each Enter
@@ -235,25 +157,25 @@ def test_count_wins_are_fought_before_it_is_done():
 
 def test_modules_short_of_count_times_the_cost_skip_the_task_a_success_before_any_battle():
     # 61 x 3 = 183 > the 182 the main window shows: no Enter, only the way home
-    o = run_child()["poor"]
+    o = run_child(__file__)["poor"]
     assert o["succeeded"] and enters(o) == [] and o["nodes"][-1] == "TaskDone"
 
 
 def test_a_battle_with_no_victory_stops_the_task_instead_of_counting():
     # TODO(#367): a defeat sets no result yet (no capture of its screen)
-    o = run_child()["no_victory"]
+    o = run_child(__file__)["no_victory"]
     assert o["succeeded"] is False and len(enters(o)) == 1
 
 
 def test_exp_luxcavation_skips_a_locked_stage_on_the_right():
-    o = run_child()["locked"]
+    o = run_child(__file__)["locked"]
     assert o["succeeded"]
     enters = [xy for xy in o["clicks"] if 440 <= xy[1] < 510]
     assert len(enters) == 1 and inside(ENTERS["locked"], *enters[0])
 
 
 def test_exp_luxcavation_with_no_team_picked_fails_before_it_taps():
-    o = run_child()["no_team"]
+    o = run_child(__file__)["no_team"]
     assert o["succeeded"] is False and o["clicks"] == [] and o["nodes"] == ["ExpLuxcavation"]
 
 
@@ -269,7 +191,7 @@ def level_enters(o):
 
 
 def test_thread_luxcavation_goes_home_first_taps_thread_the_open_card_and_the_bottom_level_then_ends_home():
-    o = run_child()["thread"]  # #368: Luxcavation opened on the EXP tab
+    o = run_child(__file__)["thread"]  # #368: Luxcavation opened on the EXP tab
     assert o["succeeded"], o["nodes"]
     taps = o["clicks"]
     # the team page after the Level Select's Enter (#366): the team's row, To Battle!
@@ -282,43 +204,43 @@ def test_thread_luxcavation_goes_home_first_taps_thread_the_open_card_and_the_bo
 
 
 def test_thread_luxcavation_on_the_thread_tab_does_not_tap_it():
-    o = run_child()["thread_on_thread"]
+    o = run_child(__file__)["thread_on_thread"]
     assert o["succeeded"], o["nodes"]
     assert not any(inside(THREAD_TAB, *xy) for xy in o["clicks"]) and len(level_enters(o)) == 1
 
 
 def test_thread_luxcavation_swipes_a_tab_scrolled_away_from_its_open_card():
-    o = run_child()["thread_scrolled"]  # LuxThreadScrolled.png: no Enter lit on show
+    o = run_child(__file__)["thread_scrolled"]  # LuxThreadScrolled.png: no Enter lit on show
     assert o["succeeded"], o["nodes"]
     assert len(o["swipes"]) == 1 and o["swipes"][0][1][0] - o["swipes"][0][0][0] > 300 and len(level_enters(o)) == 1
 
 
 def test_thread_luxcavation_fights_count_wins_from_the_card_each_time():
-    o = run_child()["thread_two"]
+    o = run_child(__file__)["thread_two"]
     assert o["succeeded"], o["nodes"]
     assert len(level_enters(o)) == 2 and len([xy for xy in o["clicks"] if inside(CARD_ENTER, *xy)]) == 2 and o["keys"] == [4]
     assert len([xy for xy in o["clicks"] if inside(TEAM_ROW, *xy)]) == 2  # the team is picked again for each battle
 
 
 def test_thread_luxcavation_counts_a_battle_that_ends_on_the_level_select():
-    o = run_child()["thread_two_levels"]  # the Level Select shows after the battle: counted once, the next battle from it
+    o = run_child(__file__)["thread_two_levels"]  # the Level Select shows after the battle: counted once, the next battle from it
     assert o["succeeded"], o["nodes"]
     assert len(level_enters(o)) == 2 and len([xy for xy in o["clicks"] if inside(CARD_ENTER, *xy)]) == 1
 
 
 def test_thread_luxcavation_skips_when_the_modules_do_not_cover_count_levels_at_2_each():
-    o = run_child()["thread_poor"]  # 92 x 2 = 184 > the 182 the main window shows
+    o = run_child(__file__)["thread_poor"]  # 92 x 2 = 184 > the 182 the main window shows
     assert o["succeeded"] and level_enters(o) == [] and not any(inside(CARD_ENTER, *xy) for xy in o["clicks"])
     assert o["nodes"][-1] == "TaskDone"
 
 
 def test_thread_luxcavation_with_no_team_picked_fails_before_it_taps():
-    o = run_child()["thread_no_team"]
+    o = run_child(__file__)["thread_no_team"]
     assert o["succeeded"] is False and o["clicks"] == [] and o["nodes"] == ["ThreadLuxcavation"]
 
 
 def test_a_thread_battle_with_no_victory_stops_the_task_instead_of_counting():
-    o = run_child()["thread_no_victory"]
+    o = run_child(__file__)["thread_no_victory"]
     assert o["succeeded"] is False and len(level_enters(o)) == 1
 
 
