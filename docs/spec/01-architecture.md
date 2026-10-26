@@ -92,6 +92,14 @@
 - 打完一場回到 Thread 分頁（或停在 Level Select）就算一場：`battle_over` 依勝敗計次、再打或回主畫面結束。回到哪一頁沒實機驗證（unverified）。
 - 隊伍是 `luxcavation.thread.team`。
 
+### 換腦啡肽模組（`AssembleModules`，#370）
+
+- 入口 `AssembleModules`（`TaskStart`）→ `AssembleStart`（`GoHomeRun`）→ `AssembleHub`；hub 認得腦啡肽視窗（`AssemblePanel`）、全域彈窗（`HomeText`）、主畫面（`AssembleMain`，任務只在這裡 `done()`，所以最後一步在主畫面）。60 秒都不認得就走停止程序（任務失敗）。（#370）
+- 主畫面左下腦啡肽條（`EnkephalinBar`）讀 `n/cap`：少於 20（一個模組的腦啡肽）就以成功結束，不開面板；否則點腦啡肽條開 Charge Enkephalin 視窗。
+- 視窗的 Modules 頁讀換前與換後的腦啡肽（`AssembleAfter`），點 `»`（最大量），換後仍 ≥ 20 就再點，最多 3 次；再點 Confirm。只點 `»`、Confirm、Cancel，絕不點 Use Lunacy 頁。
+- 回到主畫面後讀回腦啡肽，低於換前才算完成（成功結束）；3 次讀回都沒降就走停止程序（任務失敗）。
+- 出現「模組太多」（`Cannot assemble Modules; you have too many in storage.`）就以成功結束：按返回鍵、Cancel 關掉視窗、回主畫面。這一頁尚無截圖，辨識的 roi 是寬的（unverified）。
+
 ### 入口頁的分流
 
 入口頁讀取 `Exploring:` 欄位、Weekly Bonuses 與 `Unclaimed Rewards`，依畫面分流：（#8）
