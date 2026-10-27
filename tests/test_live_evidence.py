@@ -268,7 +268,7 @@ def test_map_draw_boxes_every_read_node_and_marks_a_fix():
              (2, "down"): {"type": "risky", "first": "event", "cost": "20", "stage": 1, "notes": []}}
     fix = {"c2/down": ["cost", "讀成 20（畫面是 120）"], "c3/up": ["missed", "沒讀到的 event"]}
     im = ev.draw_map(shots, [0, 510], [(0, 510, 3)], nodes, ([("mid", "battle"), ("down", "risky")], 7), fix, 1)
-    assert im.size == (1790, ev.TOP + 720 + ev.BOTTOM)  # a header line above the map, a legend line below it
+    assert im.size == (1790, ev.TOP + 720 + ev.LINE)  # a header line above the map, a legend line below it
     px = np.asarray(im)
     assert ring(px, 357, 328) == ev.GREEN  # read right
     assert ring(px, 570, 583) == ev.ORANGE  # Cost read wrong
@@ -314,6 +314,19 @@ def test_map_draw_labels_each_node_with_its_route_weight_by_difficulty():
     normal = {(1, "mid"): {"type": "battle", "first": "battle", "cost": "75", "stage": 0, "notes": []}}
     hard = {(1, "mid"): {"type": "battle", "first": "battle", "cost": "85", "stage": 0, "notes": []}}
     assert ev.map_weights(normal)["risky"] == 6 and ev.map_weights(hard)["risky"] == 8
+    shared = {(1, "mid"): {"type": "risky", "first": "risky", "cost": "120", "stage": 0, "notes": []}}  # 120: both difficulties
+    assert ev.map_weights(shared, hard=True)["risky"] == 8  # what the log said wins over the Costs
+
+
+def test_map_draw_puts_the_legend_note_on_its_own_line_when_the_legend_fills_the_width():
+    shots = [Image.new("RGB", (1280, 720))]
+    kinds = ["retyped", "cost_none", "boss_by_cost", "boss_glow"]
+    nodes = {(k, "mid"): {"type": "battle", "first": "event", "cost": None, "stage": 0, "notes": [(tag, None)]}
+             for k, tag in enumerate(kinds, 1)}
+    fix = {"c5/mid": ["missed", "x"], "c5/up": ["missed", "y"]}
+    wide = ev.draw_map(shots, [0], [], nodes, ([("mid", "battle")], 2), {**fix, "c1/mid": ["risky"]}, 1)
+    narrow = ev.draw_map(shots, [0], [], {}, None, {}, 1)
+    assert wide.size == (1280, ev.TOP + 720 + 2 * ev.LINE) and narrow.size == (1280, ev.TOP + 720 + ev.LINE)
 
 
 def test_packs_reading_names_weights_event_and_pull(log):
