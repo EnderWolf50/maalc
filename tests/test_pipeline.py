@@ -231,6 +231,42 @@ def test_mirror_entry_paused_outwaits_the_chains():
     assert param["timeout"] >= 2 * 3.9
 
 
+DAILY = ["navigation.json", "luxcavation.json", "assemble_modules.json", "pass_missions.json", "mail.json",
+         "charge_enkephalin.json"]
+# A tap on a template's tab or button, then the node's own recognition missing: the page it was on is left.
+DAILY_LEFT = ["HomeWindowTab", "NavTitle", "NavMainTabs", "NavLuxcavation", "LuxExpTab", "LuxThreadTab", "PassBanner",
+              "PassMissionsTab", "PassDailyDone", "PassWeeklyDone"]
+# Kept, each with its reason in the pipeline: nothing to wait on is known (a back key, a swipe, a claim's window).
+DAILY_KEPT = ["HomeBack", "NavDrive", "LuxThreadSwipe", "PassDailyClaim", "PassWeeklyClaim", "PassSeasonalClaim",
+              "PassSeasonalEndClaim", "PassSeasonalSwipe", "MailClaimAll", "AssemblePanel", "ChargePanel"]
+
+
+def test_the_daily_pages_wait_for_screens_not_for_delays():
+    # #362: GoHome and the daily tasks slept 1.5-10 s after a tap whatever the game did; they wait for the page now.
+    nodes = {}
+    for f in DAILY:
+        nodes |= load_nodes(f)
+    for name in DAILY_LEFT:
+        node = nodes[name]
+        assert node["custom_action"] == "TapUntil" and node["custom_action_param"]["left"] is True, name
+        assert node.get("post_delay") == 0, name
+    for name in ("NavTitle", "LuxExpTab", "LuxThreadTab", "PassBanner", "PassDailyDone", "PassWeeklyDone"):
+        assert "target" in nodes[name]["custom_action_param"], name  # the old Click's target; the others tap the box found
+    # The envelope opens the box: its title, as MailEmpty and MailClaimAll read it.
+    title = nodes["MailEmpty"]["all_of"][0]
+    assert nodes["MailOpen"]["custom_action_param"]["next"] == {"roi": title["roi"], "expected": title["expected"]}
+    # The game started: up to the old 10 s and GoHome's 60 s for a screen GoHome knows, then GoHomeLost as GoHome's own
+    # timeout has it.
+    away = nodes["HomeGameAway"]
+    assert away.get("post_delay") == 0 and away["next"] == ["HomeGameUp"] and away["timeout"] >= 70000
+    assert away["on_error"] == ["GoHomeLost"]
+    assert set(nodes["HomeGameUp"]["any_of"]) >= {"RecoverTitle", "HomeReached", "HomeWindowTab", "Connecting"}
+    # An action that ends the task (MailEmpty) or waits in itself (AssembleMain, ChargeMain: the window) sleeps nothing.
+    for name in ("MailEmpty", "AssembleMain", "ChargeMain"):
+        assert nodes[name].get("post_delay") == 0, name
+    assert [n for n, spec in nodes.items() if spec.get("post_delay", 0) > 0 and n not in DAILY_KEPT] == []
+
+
 
 def test_every_hub_reads_the_server_popups_first_from_one_list():
     # Review M4: the popups any page can show are listed once (ServerPopups); every hub's HubText node names it as its base.

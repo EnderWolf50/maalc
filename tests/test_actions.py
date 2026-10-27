@@ -1414,6 +1414,18 @@ def test_tap_until_gone_gives_up_after_its_timeout(context, clock):
     assert 2 <= sum(clock) < 2.5
 
 
+def test_tap_until_left_taps_the_nodes_box_and_waits_until_the_node_misses(context, clock):
+    # A template node's page (the unlit Window tab, a Luxcavation tab): the node's own recognition missing is the page
+    # left; the hub would tap it again before that.
+    page(context, {(): lambda clicks, looks: "hit" if not clicks or looks < 4 else None})  # the node, no roi override
+    run = SimpleNamespace(custom_action_param=json.dumps({"left": True}), node_name="HomeWindowTab", box=[800, 620, 50, 40])
+    assert actions.TapUntil().run(context, run)
+    assert taps(context) == [(825, 640)]
+    assert context.run_recognition.call_args.args[0] == "HomeWindowTab"
+    assert "HomeWindowTab: screen changed after" in actions.LOG[-1]
+    no_fixed_wait(clock)
+
+
 def test_tap_until_logs_how_long_the_screen_took(context, clock):
     # #254: the live run reads the wait from the log; the fixed delay it replaces was never measured.
     page(context, {(600, 440, 80, 35): lambda clicks, looks: "Continue" if looks < 4 else None})
@@ -1506,36 +1518,81 @@ def test_select_team_taps_the_card_again_when_the_title_never_changed(context, c
     assert taps(context) == [(130, 390), (130, 390), (1145, 587)]
 
 
-@pytest.mark.parametrize("left_at", [0, 4, 10])
-def test_select_team_drags_the_list_to_its_top_before_it_looks_for_the_team(context, clock, monkeypatch, left_at):
-    # #226: the list opens wherever it was left; it goes to the top first, then down to the slot.
-    actions.RUN["team"] = {"game_team": 8}
-    state = {"first": left_at, "tapped": None, "drags": []}  # first: the number of the first row on show
+def team_list(context, monkeypatch, first, title, blank=0):
+    """A picker list of TEAMS #1-#20 showing 7 rows from #first (the 7th cut off at the edge), its title TEAMS #title
+    until a row is tapped; the OCR boxes move by a pixel from one look to the next, as live (2026-10-27). blank: looks
+    that read no row. Returns the state: the row numbers tapped and the drags (dy > 0: the content down, to the top)."""
+    state = {"first": first, "title": title, "tapped": [], "drags": [], "looks": 0}
     rows = lambda: {n: 309 + 36 * (n - state["first"]) for n in range(state["first"], state["first"] + 7)}
 
     def ocr(context, image, roi, only_rec=False):
         if roi == actions.TEAM_LIST:
-            return [(f"TEAMS #{n}", (100, y - 10, 80, 20)) for n, y in rows().items()]
-        return [(f"TEAMS #{state['tapped']}", tuple(roi))] if roi == actions.TEAM_TITLE and state["tapped"] else []
+            state["looks"] += 1
+            if state["looks"] <= blank:
+                return []
+            return [(f"TEAMS #{n}", (100, y - 10 + state["looks"] % 2, 80, 20)) for n, y in rows().items()]
+        return [(f"TEAMS #{state['title']}", tuple(roi))] if roi == actions.TEAM_TITLE else []
 
     def scroll(context, x, y, dx, dy):
         state["drags"].append(dy)
-        state["first"] = min(max(state["first"] - 4 * (1 if dy > 0 else -1), 0), 20)  # 140 px = 4 rows
+        state["first"] = min(max(state["first"] - 4 * (1 if dy > 0 else -1), 1), 14)  # 140 px = 4 rows
 
     def click(x, y):
         if x == 130:
-            state["tapped"] = next((n for n, ry in rows().items() if abs(ry - y) < 18), None)
+            n = next((n for n, ry in rows().items() if abs(ry - y) < 18), None)
+            state["tapped"].append(n)
+            state["title"] = n or state["title"]
         return MagicMock()
     monkeypatch.setattr(actions, "ocr", ocr)
     monkeypatch.setattr(actions, "scroll", scroll)
     context.tasker.controller.post_click.side_effect = click
-    assert actions.SelectTeam().run(context, argv())
-    assert state["tapped"] == 8
+    return state
+
+
+TEAM_PAGES = {"mirror": actions.SelectTeam, "luxcavation": actions.LuxSelectTeam}
+
+
+@pytest.mark.parametrize("caller", TEAM_PAGES)
+def test_a_team_already_on_the_title_is_neither_dragged_to_nor_tapped(context, clock, monkeypatch, caller):
+    actions.RUN["team"] = {"game_team": 3}
+    state = team_list(context, monkeypatch, first=1, title=3)
+    assert TEAM_PAGES[caller]().run(context, argv())
+    assert state["tapped"] == [] and state["drags"] == []
+
+
+@pytest.mark.parametrize("caller", TEAM_PAGES)
+def test_a_team_row_on_show_is_tapped_without_a_drag(context, clock, monkeypatch, caller):
+    # Live 2026-10-27: TEAMS #3 on show from the start, yet the list was dragged 10 times first (to the top it was at).
+    actions.RUN["team"] = {"game_team": 3}
+    state = team_list(context, monkeypatch, first=1, title=1)
+    assert TEAM_PAGES[caller]().run(context, argv())
+    assert state["tapped"] == [3] and state["drags"] == []
+
+
+@pytest.mark.parametrize("caller", TEAM_PAGES)
+@pytest.mark.parametrize(("first", "target", "towards"), [(1, 12, "down"), (11, 2, "up")])
+def test_a_team_row_off_show_is_scrolled_to_from_where_the_list_is(context, clock, monkeypatch, caller, first, target, towards):
+    # #226: the list opens wherever it was left; it moves from there towards the row, never to the top first.
+    actions.RUN["team"] = {"game_team": target}
+    state = team_list(context, monkeypatch, first=first, title=first)
+    assert TEAM_PAGES[caller]().run(context, argv())
+    assert state["tapped"] == [target]
+    assert state["drags"] and all((d < 0) == (towards == "down") for d in state["drags"])
+    assert len(state["drags"]) <= 3  # 4 rows a drag
+
+
+@pytest.mark.parametrize("caller", TEAM_PAGES)
+def test_a_team_list_that_reads_no_row_is_dragged_to_its_top_first(context, clock, monkeypatch, caller):
+    # No row read: where the list is is unknown, so it goes to the top, as before #226's fix; the boxes moving by a
+    # pixel at rest do not keep it dragging.
+    actions.RUN["team"] = {"game_team": 8}
+    state = team_list(context, monkeypatch, first=11, title=11, blank=1)
+    assert TEAM_PAGES[caller]().run(context, argv())
+    assert state["tapped"] == [8]
     drags = state["drags"]
-    assert drags[0] > 0  # the first drag moves the content down, towards the top, even from the top itself
     top = max(i for i, d in enumerate(drags) if d > 0)
     assert all(d > 0 for d in drags[:top + 1]) and all(d < 0 for d in drags[top + 1:])  # all the way up, then down
-    assert (top == 0) == (left_at == 0)  # already at the top: one drag that moves nothing
+    assert len(drags) <= 6
 
 
 def test_select_team_makes_a_plan_for_an_abandoned_empty_run_instead_of_backing_out(context, clock, monkeypatch):
@@ -1548,7 +1605,7 @@ def test_select_team_makes_a_plan_for_an_abandoned_empty_run_instead_of_backing_
     actions.RUN.clear()
     team_picker(context, "TEAMS #3", lambda clicks, looks: "recommended level" if clicks else None)
     assert actions.SelectTeam().run(context, argv())
-    assert taps(context) == [(130, 390), (1145, 587)]  # no back arrow (97, 42)
+    assert taps(context) == [(1145, 587)]  # TEAMS #3 already on the title: Confirm, no back arrow (97, 42)
     assert actions.RUN["team"] is team
 
 

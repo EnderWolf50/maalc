@@ -147,14 +147,18 @@
         "template": "Luxcavation/ModuleIcon.png",
         "threshold": 0.8
     },
-    // Drive's Luxcavation button (tests/screens/Drive.png).
+    // Drive's Luxcavation button (tests/screens/Drive.png): tapped until Drive goes (TapUntil, #362).
     "NavLuxcavation": {
         "recognition": "TemplateMatch",
         "roi": [340, 80, 240, 160],
         "template": "Navigation/NavLuxcavation.png",
         "threshold": 0.8,
-        "action": "Click",
-        "post_delay": 2000
+        "action": "Custom",
+        "custom_action": "TapUntil",
+        "custom_action_param": {
+            "left": true
+        },
+        "post_delay": 0
     },
     // A Luxcavation tab is lit by an orange frame: ~1060 orange px in its roi, no other screen over 710
     // (tests/screens/LuxExp.png, LuxThread.png). The unlit and lit tabs read the same to a template (0.93).
@@ -172,16 +176,21 @@
         "template": "Luxcavation/LuxPanel.png",
         "threshold": 0.8
     },
-    // The Thread tab lit (LuxThread.png) under the Luxcavation panel: tap EXP.
+    // The Thread tab lit (LuxThread.png) under the Luxcavation panel: tap EXP until Thread is lit no more. The Enter
+    // nodes' pre_delay lets the tab's cards come in.
     "LuxExpTab": {
         "recognition": "And",
         "all_of": [
             "LuxPanel",
             "LuxThreadLit"
         ],
-        "action": "Click",
-        "target": [70, 236, 150, 56],
-        "post_delay": 1500
+        "action": "Custom",
+        "custom_action": "TapUntil",
+        "custom_action_param": {
+            "target": [70, 236, 150, 56],
+            "left": true
+        },
+        "post_delay": 0
     },
     // The EXP tab as it opens shows its three hardest stages (2026-10-26: 7-9 of 10, the 10th locked, KEEP OUT, with no
     // Enter): the rightmost Enter is the hardest open stage. The box is that Enter's (index -1: the last, left to right).
@@ -269,16 +278,20 @@
         "upper": [255, 200, 80],
         "count": 900
     },
-    // Luxcavation on its EXP tab (the tab it opens on): tap Thread.
+    // Luxcavation on its EXP tab (the tab it opens on): tap Thread until EXP is lit no more.
     "LuxThreadTab": {
         "recognition": "And",
         "all_of": [
             "LuxPanel",
             "LuxExpLit"
         ],
-        "action": "Click",
-        "target": [70, 306, 150, 56],
-        "post_delay": 1500
+        "action": "Custom",
+        "custom_action": "TapUntil",
+        "custom_action_param": {
+            "target": [70, 306, 150, 56],
+            "left": true
+        },
+        "post_delay": 0
     },
     // The Thread tab shows four of the seven cards; the open one has a lit Enter (tests/screens/LuxThread.png, LuxThreadLust.png:
     // the cards that open on other days read 0.6 at most). The list starts at today's card, but it keeps where it was
@@ -306,7 +319,8 @@
         "post_delay": 0
     },
     // The Thread tab with nothing else known: it comes after LuxThreadEnter in the hub, so it is the tab with no open card on
-    // show. (An inverted match of the Enter in this And never hit.)
+    // show. (An inverted match of the Enter in this And never hit.) Its 1 s stays: the cards still slide after the finger
+    // lifts, and LuxThreadEnter would tap a moving Enter; how long they slide has no capture.
     "LuxThreadSwipe": {
         "recognition": "And",
         "all_of": [

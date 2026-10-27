@@ -5,6 +5,7 @@ that move between them, and `dumpsys window` for the front package.
 """
 
 import json
+import time
 
 import numpy as np
 from daily_child import GAME, ROOT, bind, game_class, inside, load, result, run_child, screen
@@ -29,14 +30,26 @@ def child():
     class Game(game_class()):
         images = {name: screen(png) if png else np.zeros((720, 1280, 3), np.uint8) for name, png in SCREENS.items()}
 
-        def set(self, start, focus=GAME):
+        def set(self, start, focus=GAME, lag=0, splash=0):
             self.screen, self.focus, self.clicks, self.keys, self.starts, self.stops = start, focus, [], [], 0, 0
+            self.lag, self.splash, self.pending = lag, splash, None  # lag: screenshots a tap's screen takes to show
 
         def screencap(self):
+            if self.pending:
+                self.pending[1] -= 1
+                if self.pending[1] < 0:
+                    self.screen, self.pending = self.pending[0], None
+            if self.focus == GAME and self.screen == "title" and self.splash > 0:  # the game's start, before its title
+                self.splash -= 1
+                return self.images["black"]
             return self.images["black" if self.focus != GAME else self.screen]
 
         def on_tap(self, x, y):
-            self.screen = next((to for on, box, to in TAPS if self.screen in on and inside(box, x, y)), self.screen)
+            to = next((to for on, box, to in TAPS if self.screen in on and inside(box, x, y)), self.screen)
+            if self.lag and to != self.screen:
+                self.pending = [to, self.lag]
+            else:
+                self.screen = to
             return True
 
         def on_key(self, keycode):
@@ -61,12 +74,15 @@ def child():
     actions.foreground = lambda context: actions.recovery.focused_package(game.shell("dumpsys window", 0))
     tasker = bind(resource, game)
     out = {"error": None}
-    for scenario, (start, focus) in {
+    for scenario, (start, focus, *model) in {
         "drive": ("drive", GAME), "sinners": ("sinners", GAME), "main": ("main", GAME), "mailbox": ("mailbox", GAME),
         "settings": ("settings", GAME), "entry": ("entry", GAME), "closed": ("black", "com.android.launcher"),
+        # the Window tab's page shows 4 screenshots after the tap; the game shows black for 15 before its title
+        "drive_late": ("drive", GAME, 4), "closed_slow": ("black", "com.android.launcher", 0, 15),
+        # these last: they change the model's methods
         "stuck": ("entry", GAME), "restart": ("entry", GAME), "restarts_used": ("entry", GAME),
     }.items():
-        game.set(start, focus)
+        game.set(start, focus, *model)
         if scenario in ("stuck", "restart", "restarts_used"):  # the back key does nothing: pressed up to its limit
             game.on_key = lambda keycode: True
         if scenario == "restart":  # the restarted game works again, and its title opens on a page with no tab bar
@@ -81,7 +97,9 @@ def child():
             actions.STUCK["l3"] = actions.recovery.L3_PER_EXECUTION - 1
             game.start_app = lambda intent, game=game: (setattr(game, "focus", GAME), setattr(game, "screen", "entry"), True)[-1]
             override["RecoverStartApp"]["timeout"] = 3000
+        began = time.monotonic()
         out[scenario] = {**result(tasker.post_task("GoHome", override).wait().get(), game, actions), "starts": game.starts,
+                         "seconds": time.monotonic() - began,
                          "stops": game.stops, "l3": actions.STUCK["l3"],
                          "stopped": len(list(actions.ROOT.joinpath("logs").rglob("agent.log"))) - stops}
     print(json.dumps(out))
@@ -107,6 +125,17 @@ def test_go_home_starts_the_game_when_it_is_not_in_front_and_taps_through_the_ti
     o = run_child(__file__)["closed"]
     assert o["succeeded"] and o["starts"] == 1 and o["keys"] == []
     assert "HomeGameAway" in o["nodes"] and "NavTitle" in o["nodes"] and o["nodes"][-1] == "HomeReached"
+
+
+def test_go_home_waits_for_the_screens_not_for_fixed_delays():
+    # #362: the Window tab's tap waits until the tab reads unlit no more, so a page that comes late is not tapped twice;
+    # the game's start waits for its title, not 10 s.
+    o = run_child(__file__)["drive_late"]
+    assert o["succeeded"] and len(o["clicks"]) == 1 and inside(WINDOW_TAB, *o["clicks"][0]) and o["keys"] == []
+    o = run_child(__file__)["closed_slow"]
+    assert o["succeeded"] and o["starts"] == 1 and "GoHomeLost" not in o["nodes"] and "HomeGameUp" in o["nodes"]
+    assert "NavTitle" in o["nodes"] and o["nodes"][-1] == "HomeReached"
+    assert run_child(__file__)["closed"]["seconds"] < 10  # HomeGameAway's post_delay was 10 s
 
 
 def test_go_home_fails_after_a_limited_number_of_back_keys_when_the_game_restarts_are_used_up():
