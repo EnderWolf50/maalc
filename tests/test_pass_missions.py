@@ -50,6 +50,9 @@ def daily_claimed(k):
     ("PassMissionsWeekly.png", 0, []),  # one row under way, 3/5: a short bar, nothing to tap
     # live 2026-10-27 (live-1 F7): rows 2-5 wait for a tap (the whole row framed orange, a red ! at its top right, the bar full)
     ("PassMissionsDailyClaimable.png", 0, CLAIMABLE),
+    # live 2026-10-27 (live-2 G2), 0.3 s after the tap on row 1: its coin grey, its stamp not in yet; it is not tapped
+    # again, so PassFinish's count of taps is the rows claimed (6 that run: Battle Pass XP 4 -> 18, 5 x 2 daily + 4 weekly)
+    ("PassMissionsDailyClaiming.png", 0, CLAIMABLE),
     ("PassMissionsSeasonal.png", 0, []),  # live 2026-10-27, D9: the Seasonal tab's top, all claimed
     ("PassMissionsSeasonalEnd.png", 10, []),  # its end after one swipe, all claimed
 ])
@@ -71,7 +74,7 @@ def test_no_other_screen_has_a_row_to_claim():
     hits = {png.name: found for png in sorted(SCREENS.glob("*.png"))
             if (image := np.asarray(Image.open(png).convert("RGB"))[:, :, ::-1]).shape[:2] == (720, 1280)
             and (found := pass_missions.claimable(image))}
-    assert hits == {"PassMissionsDailyClaimable.png": CLAIMABLE}
+    assert hits == {"PassMissionsDailyClaimable.png": CLAIMABLE, "PassMissionsDailyClaiming.png": CLAIMABLE}
 
 
 def test_no_screen_has_a_row_to_claim_10_px_lower():

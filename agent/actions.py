@@ -680,13 +680,13 @@ class GoHomeRun(CustomAction):
         return go_home(context)
 
 
-@AgentServer.custom_action("GoHomeDone")
-class GoHomeDone(CustomAction):
-    """A daily task found nothing left to do (the Mailbox empty, both Pass Missions tabs claimed): back to the main window
-    (GoHome closes what is open), then the done exit; the param says why."""
+@AgentServer.custom_action("MailDone")
+class MailDone(CustomAction):
+    """ClaimMail's end, on the empty Mailbox: the main window, then done with what this run did (live-2 G3: a box emptied
+    by Claim All said "no mail to claim")."""
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
-        return go_home(context) and done(json.loads(argv.custom_action_param))
+        return go_home(context) and done("mail claimed" if context.get_hit_count("MailClaimAll") else "no mail to claim")
 
 
 AgentServer.custom_recognition("PassClaimable")(pass_missions.PassClaimable)
@@ -1161,12 +1161,18 @@ class TapUntil(CustomAction):
         return True
 
 
+def finish(context, reason):
+    """A Mirror Dungeons task with nothing left to do: the main window (GoHome) first, as a daily task's end (live-2 G4),
+    then done."""
+    return go_home(context) and done(reason)
+
+
 @AgentServer.custom_action("PlanRun")
 class PlanRun(CustomAction):
     """Entry page, no run under way: check settings, pick difficulty and team, press Enter (spec 03 sections 1, 2).
 
     Nothing left to do (the run count reached, the weekly bonuses out, no enabled team, none for the difficulty) ends
-    the task a success (done); bad settings fail it (returning False).
+    the task a success at the main window (GoHome, then done; live-2 G4); bad settings fail it (returning False).
     """
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
@@ -1176,19 +1182,19 @@ class PlanRun(CustomAction):
             log(f"stop: {e}")
             return False
         if not any(t["enabled"] for t in settings["teams"]):
-            return done("no enabled team")
+            return finish(context, "no enabled team")
         hsv_v = screen(context)[285:297].max(axis=2)  # V of HSV
         # Live: a filled slot reads V ~240, an empty one ~5 (2026-10-15).
         weekly = sum(hsv_v[:, x:x + 30].mean() > 40 for x in WEEKLY_SLOTS)
         run = settings["run"]
         if settlement.runs_done(TASK["runs"], run["runs"]):
-            return done(f"{TASK['runs']} of {run['runs']} runs done")
+            return finish(context, f"{TASK['runs']} of {run['runs']} runs done")
         if run["stop_when_weekly_bonus_out"] and weekly == 0:
-            return done("weekly bonuses used up")
+            return finish(context, "weekly bonuses used up")
         difficulty = run_start.run_difficulty(run["difficulty"], weekly)
         team = pick_team(settings["teams"], read_cursor(ROOT, address(context)), difficulty)
         if team is None:
-            return done(f"no enabled team may run {difficulty}")
+            return finish(context, f"no enabled team may run {difficulty}")
         if run_start.team_difficulty(run["difficulty"], difficulty, team["hard_from_floor"]) != difficulty:
             log(f"team {team['name']!r} never switches to hard and the difficulty is {run['difficulty']}: a normal run")
             difficulty = "normal"
@@ -1202,9 +1208,11 @@ class PlanRun(CustomAction):
         modules = TASK.pop("modules", None)
         TASK.pop("gate_backs", None)
         if step == "done":
-            return done(f"Modules {modules} < {settlement.CLAIM_COST}, one Claim could not be paid: no new run")
+            return finish(context, f"Modules {modules} < {settlement.CLAIM_COST}, one Claim could not be paid: no new run")
         if modules is None:
             log("new run: the Modules number did not read, starting anyway")
+        else:
+            log(f"new run: Modules {modules} >= {settlement.CLAIM_COST}")
         RUN.clear()
         # planned: the bot picked the team itself, so the rotation cursor may move after the claim.
         limit = recovery.floor_limit(recovery.read_runs(ROOT), team["id"])
