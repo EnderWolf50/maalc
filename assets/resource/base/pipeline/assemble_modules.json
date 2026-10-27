@@ -78,10 +78,16 @@
         "roi": [380, 470, 520, 40],
         "expected": "(?i)assemble enkephalin modules"
     },
-    // The Modules tab's Enkephalin before and after: "22 / 136 > 2 / 136".
+    // The Modules tab's Enkephalin before and after, "22 / 136 > 2 / 136", one box each side of the arrow (x 672-684 on
+    // every tab): one OCR over both read the arrow as "4" or nothing ("67/136447/136", live-3 H1), a single fraction.
+    "AssembleBefore": {
+        "recognition": "OCR",
+        "roi": [440, 405, 228, 60],
+        "expected": "\\d+\\s*/\\s*\\d+"
+    },
     "AssembleAfter": {
         "recognition": "OCR",
-        "roi": [440, 405, 400, 60],
+        "roi": [688, 405, 152, 60],
         "expected": "\\d+\\s*/\\s*\\d+"
     },
     // The game's refusal when the modules are at their limit (EN_ShopUI: "Cannot assemble Modules; you have too many in
