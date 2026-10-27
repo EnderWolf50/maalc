@@ -420,8 +420,9 @@ def draw_map(shots, offsets, drags, nodes, path, fix, floor: int, hard: bool | N
     floor's difficulty as the log said, None to tell it by the Costs.
 
     One header line (the floor, the route's steps with their weights and its score, the drags and nodes read), the
-    map, one legend line. Each node: a box in its colour (one ring per colour), its label hanging from the box's bottom
-    edge as wide as the box (the type and its route weight), a line per note under it; boxes and labels half see-through."""
+    map, the legend flowing over as many lines as it needs. Each node: a box in its colour (one ring per colour), its
+    label hanging from the box's bottom edge as wide as the box (the type and its route weight), a line per note under
+    it, widened to a note longer than the box; boxes and labels half see-through."""
     logged = list(accumulate((px for _, px, _ in drags), initial=0))
     f, fs, fx, ft = font(18), font(16), font(14), font(24)
     weights = map_weights(nodes, hard)

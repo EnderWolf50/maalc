@@ -331,8 +331,20 @@ def test_map_draw_puts_the_legend_note_on_its_own_line_when_the_legend_fills_the
     wide = ev.draw_map(shots, [0], [], nodes, ([("mid", "battle")], 2), {**fix, "c1/mid": ["risky"]}, 1)
     narrow = ev.draw_map(shots, [0], [], {}, None, {}, 1)
     assert wide.size[1] > ev.TOP + 720 + ev.LINE and narrow.size == (1280, ev.TOP + 720 + ev.LINE)
-    every = ev.draw_map(shots, [0], [], nodes, ([("mid", "battle")], 2), {**fix, "c1/mid": ["risky"], "c2/mid": ["cost", "z"]}, 1)
-    assert every.size[1] >= wide.size[1]  # all eight colours: the legend flows over lines instead of running off the edge
+    plain = {(4, "up"): {"type": "battle", "first": "battle", "cost": None, "stage": 0, "notes": []}}  # green
+    every = np.asarray(ev.draw_map(shots, [0], [], {**nodes, **plain}, ([("mid", "battle")], 2),
+                                   {**fix, "c1/mid": ["risky"], "c2/mid": ["cost", "z"]}, 1))
+    legend = every[ev.TOP + 720:]
+    assert legend.shape[0] >= 2 * ev.LINE  # all eight colours: the legend flows over lines
+    assert (legend[:, -12:] == ev.BG).all()  # instead of running off the edge
+
+
+def test_map_draw_widens_a_missed_nodes_plate_to_its_label():
+    shots = [Image.new("RGB", (1280, 720))]
+    right = ev.COLX(3) + ev.EDGE + 30, ev.TOP + ev.ROWY["mid"] + ev.EDGE + 12  # right of the box, on the label's row
+    short, long = (np.asarray(ev.draw_map(shots, [0], [], {}, None, {"c3/mid": ["missed", text]}, 1))[right[1], right[0]]
+                   for text in ("x", "沒讀到的 event，畫面上有"))
+    assert tuple(short) == (0, 0, 0) and tuple(long) != (0, 0, 0)
 
 
 def test_packs_reading_names_weights_event_and_pull(log):
