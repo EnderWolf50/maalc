@@ -43,7 +43,7 @@ VALID = {
     ],
     "event_overrides": [{"question": "Q?", "option": "Yes"}],
     "trial_risk_overrides": [{"trial": "Growth I", "risk": 3}],
-    "luxcavation": {"exp": {"count": 1, "team": None, "retries": 0}, "thread": {"count": 1, "team": None, "retries": 0}},
+    "luxcavation": {"exp": {"count": 1, "team": None, "retries": 0}, "thread": {"count": 3, "team": None, "retries": 0}},
     "charge_enkephalin": {"count": 0},
 }
 
@@ -177,7 +177,8 @@ def test_version_7_accepts_terms_and_downloads(tmp_path):
 
 
 def test_version_11_gets_the_daily_tasks_with_no_team_and_no_lunacy_charges(tmp_path):
-    # #366, #368: one win a day, no team picked yet (the Daily tab), no retries; exp and thread the same. #373: Lunacy is
+    # #366, #368: one EXP win and three Thread wins a day (its 3 Daily Bonuses), no team picked yet (the Daily tab), no
+    # retries. #373: Lunacy is
     # spent only when the user sets a count.
     old = edited(lambda d: d.pop("luxcavation") and d.pop("charge_enkephalin"))
     assert load(tmp_path, {**old, "version": 11}) == VALID

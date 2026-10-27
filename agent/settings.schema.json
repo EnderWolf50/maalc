@@ -339,7 +339,7 @@
       "additionalProperties": false,
       "required": ["count", "team", "retries"],
       "properties": {
-        "count": { "type": "integer", "minimum": 1, "default": 1, "description": "battles to win, at the hardest level open" },
+        "count": { "type": "integer", "minimum": 1, "default": 1, "description": "battles to win, at the hardest level open; a new or migrated file: EXP 1, Thread 3 (its 3 Daily Bonuses)" },
         "team": { "type": ["string", "null"], "minLength": 1, "default": null, "description": "a teams[] id: its TEAMS #N and guard_turns; null: none picked yet" },
         "retries": { "type": "integer", "minimum": 0, "default": 0, "description": "defeats of one battle fought again before the task fails; a win starts the next battle with them all" }
       }

@@ -121,7 +121,7 @@ test("version 11 gets the daily tasks: both Luxcavations with no team picked, no
   delete old.charge_enkephalin;
   const { data, migrated } = parseSettings(JSON.stringify({ ...old, version: 11 }));
   expect(migrated).toBe(true);
-  expect(data.luxcavation).toEqual({ exp: { count: 1, team: null, retries: 0 }, thread: { count: 1, team: null, retries: 0 } });
+  expect(data.luxcavation).toEqual({ exp: { count: 1, team: null, retries: 0 }, thread: { count: 3, team: null, retries: 0 } });
   expect(data.charge_enkephalin).toEqual({ count: 0 });
   expect(validate(data)).toEqual([]);
 });

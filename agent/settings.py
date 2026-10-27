@@ -117,12 +117,13 @@ def _v10_to_v11(data):
 
 
 def _v11_to_v12(data):
-    """Version 12 adds the daily tasks (#362): luxcavation.exp and .thread (#366, #368: one win, no team picked yet, no
+    """Version 12 adds the daily tasks (#362): luxcavation.exp and .thread (#366, #368: one win for EXP, three for Thread
+    (its 3 Daily Bonuses), no team picked yet, no
     retries) and charge_enkephalin (#373: no Lunacy charges)."""
     lux = data.setdefault("luxcavation", {})
     if isinstance(lux, dict):  # a broken file is left to the checks
-        for task in ("exp", "thread"):
-            lux.setdefault(task, {"count": 1, "team": None, "retries": 0})
+        for task, count in (("exp", 1), ("thread", 3)):
+            lux.setdefault(task, {"count": count, "team": None, "retries": 0})
     data.setdefault("charge_enkephalin", {"count": 0})
     return data
 
