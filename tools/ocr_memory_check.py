@@ -8,8 +8,8 @@ recognitions just miss). The Tasker runs in this process, so this process's memo
     uv run --with opencv-python-headless python tools/ocr_memory_check.py --minutes 3 --csv mem.csv
 
 `--clear-nodes N` calls `tasker.clear_cache()` from the action of the node that hit once the task has N nodes, as
-the Agent's hands_back does (#176): a clear between nodes leaves the task without a detail, and custom recognitions
-miss until a node ends.
+the Agent's hands_back did before the MaaFramework fork capped the details itself (#176, G1): a clear between nodes
+leaves the task without a detail, and custom recognitions miss until a node ends.
 The summary adds the slope after minute 5 (least squares, MB/h) and the round time (one screencap to the next).
 
 Prints a line every 10 s and a summary. Exits 1 when the memory passes --cap-mb (it stops there), or when the median

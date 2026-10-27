@@ -28,12 +28,14 @@ import maa
 
 PYTHON = ("https://www.python.org/ftp/python/3.12.10/python-3.12.10-embed-amd64.zip",
           "4acbed6dd1c744b0376e3b1cf57ce906f9dc9e95e68824584c8099a63025a3c3")
-# MaaFramework.dll from the EnderWolf50/MaaFramework fork: v5.14.3 plus a fix for batch OCR re-recognizing
-# 1 px slivers at roi edges (GBs of memory, MaaXYZ/MaaFramework#1568, #157). Windows only; the rest of maafw/
-# stays the wheel's. Drop both once a maafw release has the fix (MaaXYZ/MaaFramework#1573).
+# MaaFramework.dll from the EnderWolf50/MaaFramework fork: v5.14.3 plus two fixes. Batch OCR no longer
+# re-recognizes 1 px slivers at roi edges (GBs of memory, MaaXYZ/MaaFramework#1568, #157). A task keeps only the
+# details of its last 200 nodes, so a whole dungeon run as one task stays flat without clear_cache, which also
+# dropped the runner ids of the queued tasks (MaaXYZ/MaaFramework#1578, #176, G1). Windows only; the rest of
+# maafw/ stays the wheel's. Drop both once a maafw release has both fixes (MaaXYZ/MaaFramework#1573, #1578).
 MAAFW_FIX_VERSION = "5.14.3"
-MAAFW_FIX = ("https://github.com/EnderWolf50/MaaFramework/releases/download/v5.14.3-maalc.2/MaaFramework-v5.14.3-maalc.2-win-x64.zip",
-             "84f8d9451ce9dbf36af2cd9732a912a12ac3cefc111af519bfac02c4be2de1ab")
+MAAFW_FIX = ("https://github.com/EnderWolf50/MaaFramework/releases/download/v5.14.3-maalc.3/MaaFramework-v5.14.3-maalc.3-win-x64.zip",
+             "9968f461419582e5cbd7d6d91f14aad6c27617fc34c5d0a9a906976368d893c8")
 MXU = ("https://github.com/MistEO/MXU/releases/download/v2.7.1/MXU-win-x86_64-v2.7.1.zip",
        "825a62af7a344a7a47adca09d1414128e6f53a222a11cdf456f08d2e83d31724")
 

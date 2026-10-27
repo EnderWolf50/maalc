@@ -36,28 +36,53 @@ def test_awake_holds_the_display_for_the_minutes():
     assert calls == [bot.ES_CONTINUOUS | bot.ES_SYSTEM_REQUIRED | bot.ES_DISPLAY_REQUIRED, 120, bot.ES_CONTINUOUS]
 
 
-def test_run_tasks_posts_the_list_up_front_and_reports_each_task():
+def test_run_tasks_posts_the_list_up_front_and_follows_each_task_by_its_detail():
     # #364: a client queues its whole task list; an account-level stop (post_stop) leaves the rest pending, unrun.
-    status = dict(succeeded=False, failed=False, running=False)
-    states = iter([SimpleNamespace(**{**status, "succeeded": True}), SimpleNamespace(**status), None])
-    posted = []
+    # G1: as MXU, a task is done when its detail says so, not when wait() returns, and the agent stays up until the
+    # tasker has stopped.
+    status = dict(done=False, succeeded=False, failed=False, running=False, pending=False)
+    running = SimpleNamespace(**{**status, "running": True})
+    details = {
+        "MirrorDungeon": [running, running, SimpleNamespace(**{**status, "done": True, "succeeded": True})],
+        "MirrorDungeon2": [SimpleNamespace(**{**status, "pending": True})],
+        "ExpLuxcavation": [None],
+    }
+    posted, polls = [], []
+
+    class Tasker:
+        ticks = 0
+
+        @property
+        def running(self):  # the account-level stop: the first task ends it, the rest stay pending
+            return self.ticks < 4
+
+        def post_task(self, name):
+            posted.append(name)
+            return Job(name if name not in posted[:-1] else name + "2")
 
     class Job:
         def __init__(self, name):
-            posted.append(name)
             self.name = name
 
         def wait(self):
-            return self
+            raise AssertionError("wait() returns early once a task's runner id is gone")
 
         def get(self):
-            s = next(states)
+            polls.append(self.name)
+            reads = details[self.name]
+            s = reads.pop(0) if len(reads) > 1 else reads[0]
             return s and type("Detail", (), {"status": s, "nodes": []})()
 
-    tasker = type("Tasker", (), {"post_task": lambda self, name: Job(name)})()
+    tasker = Tasker()
+
+    def sleep(seconds):
+        tasker.ticks += 1
+
     lines = []
-    assert bot.run_tasks(tasker, ["MirrorDungeon", "MirrorDungeon", "ExpLuxcavation"], lines.append) == [
+    assert bot.run_tasks(tasker, ["MirrorDungeon", "MirrorDungeon", "ExpLuxcavation"], lines.append, sleep) == [
         "succeeded", "pending", "none"]
     assert posted == ["MirrorDungeon", "MirrorDungeon", "ExpLuxcavation"]
+    assert polls[:3] == ["MirrorDungeon"] * 3  # polled until its detail said done
+    assert not tasker.running  # returned (the agent closes) only once the tasker had stopped
     assert [ln.split(" t=")[0] for ln in lines if "status=" in ln] == [
         "[run] MirrorDungeon status=succeeded", "[run] MirrorDungeon status=pending", "[run] ExpLuxcavation status=none"]

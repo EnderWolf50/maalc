@@ -57,19 +57,25 @@ def stamped(cmd, log: Path, clock=clock) -> int:
     return code
 
 
-def run_tasks(t, tasks: list[str], say=print) -> list[str]:
+def run_tasks(t, tasks: list[str], say=print, sleep=time.sleep) -> list[str]:
     """Post the whole list up front, as a client queues its task list (an account-level stop's post_stop leaves the
-    rest pending, unrun), then wait for each in turn: their states."""
+    rest pending, unrun), then follow each in turn by its detail until it is done or the tasker has stopped, as MXU
+    does (G1: wait() and status go through a runner id a clear_cache drops), and return only once the tasker has
+    stopped, so the agent is not closed under a task still running: their states."""
     states = []
     for name, job in [(name, t.post_task(name)) for name in tasks]:
         t0 = time.time()
-        detail = job.wait().get()
+        while (detail := job.get()) and not detail.status.done and t.running:
+            sleep(1)
+        detail = job.get()  # read again: the tasker may have stopped after the read above
         s = detail and detail.status
         state = "none" if not s else "succeeded" if s.succeeded else "failed" if s.failed else "running" if s.running else "pending"
         say(f"[run] {name} status={state} t={time.time() - t0:.0f}s")
         for n in (detail.nodes[-10:] if detail else []):
             say(f"[run] node {n.name} {n.completed}")
         states.append(state)
+    while t.running:
+        sleep(1)
     return states
 
 
