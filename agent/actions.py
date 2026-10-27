@@ -610,6 +610,7 @@ def battle_over(context):
         return go_home(context) and done(f"{lux['name']}: {lux['won']} won")
     if step == luxcavation.STOP:
         return stop(context, f"{lux['name']}: defeated with the {lux['retries']} retries used up")
+    RUN["guard"] = RUN["team"]["guard_turns"]  # each battle guards its first turns (2026-10-27)
     return None
 
 
