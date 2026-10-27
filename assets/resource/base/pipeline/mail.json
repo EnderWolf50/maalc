@@ -2,7 +2,7 @@
     // ClaimMail (#372): open the Mailbox, press Claim All, end done. The global Mailbox (popups.json) stays as it was:
     // it only presses Close; here the task presses Claim All because the player ticked it.
     // Spec 01 (daily tasks): TaskStart, GoHome run by GoHomeRun (MailHome), the hub; the last step runs GoHome again
-    // (GoHomeDone),
+    // (MailDone),
     // and the global Mailbox (GoHome's HomeText) closes the box with its own Close.
     "ClaimMail": {
         "action": "Custom",
@@ -65,7 +65,8 @@
         "post_delay": 0
     },
     // Nothing to claim: "No mail in storage." on the open box (tests/screens/MailboxEmpty.png), or the game's
-    // "No mail available to claim with 'Claim All'" (not captured). Done, a success; GoHome closes the box.
+    // "No mail available to claim with 'Claim All'" (not captured). Done, a success, saying whether Claim All was pressed
+    // (MailDone); GoHome closes the box.
     // MailEmptyText's roi is wide to take both: TODO narrow it once the second message is captured (review T5).
     "MailEmpty": {
         "recognition": "And",
@@ -84,8 +85,7 @@
             }
         ],
         "action": "Custom",
-        "custom_action": "GoHomeDone",
-        "custom_action_param": "no mail to claim",
+        "custom_action": "MailDone",
         "post_delay": 500
     },
     // Claim All beside the box's Close (Mailbox.png). max_hit: a confirm or result window over the box can leave the
