@@ -1233,6 +1233,8 @@ class PlanRun(CustomAction):
             return finish(context, f"Modules {modules} < {settlement.CLAIM_COST}, one Claim could not be paid: no new run")
         if modules is None:
             log("new run: the Modules number did not read, starting anyway")
+        else:
+            log(f"new run: Modules {modules} >= {settlement.CLAIM_COST}")
         RUN.clear()
         # planned: the bot picked the team itself, so the rotation cursor may move after the claim.
         limit = recovery.floor_limit(recovery.read_runs(ROOT), team["id"])

@@ -203,6 +203,16 @@ def test_plan_run_does_not_open_a_run_the_modules_cannot_claim(context):
     context.run_task.assert_called_once_with("GoHome")
 
 
+def test_plan_run_logs_modules_that_cover_a_claim(context, monkeypatch):
+    # #369: a run the Modules cover says so too, not only one they do not.
+    entry_page(context)
+    actions.TASK.update(runs=0, done=None, modules=118)
+    logged = []
+    monkeypatch.setattr(actions, "log", logged.append)
+    assert actions.PlanRun().run(context, None) is True and actions.RUN["planned"]
+    assert "new run: Modules 118 >= 5" in logged
+
+
 def test_plan_run_starts_when_the_modules_did_not_read(context):
     entry_page(context)
     actions.TASK.update(runs=0, done=None, modules=None)
