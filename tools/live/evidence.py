@@ -20,7 +20,7 @@ wall time of its first frame (screen-record's `started`); give one per piece of 
 **map** stitches the floor from the frames before and after each `map: dragged the map N px` and boxes every
 node the bot read, at its column and row: green read right, red a wrong type, orange a wrong Cost or a node
 the bot did not list (from FIX). Under each box hangs its label, the type and its route weight (map_weights.yaml,
-the difficulty told by the Costs read), and a line per note. Reads that took more than the marks have their own
+for the difficulty the bot logged for the floor, else told by the Costs read), and a line per note. Reads that took more than the marks have their own
 colour and line: violet a type corrected once the map was dragged near (with the first read), magenta a Cost that
 read no number or missed, white a boss told by its Cost, cyan a boss told by its red glow or by the shop before it;
 a legend under the picture lists the colours it uses. The route is numbered, and the header line has its steps,
@@ -429,7 +429,7 @@ def draw_map(shots, offsets, drags, nodes, path, fix, floor: int, hard: bool | N
     width = W + int(offsets[-1])
     probe = ImageDraw.Draw(Image.new("RGB", (1, 1)))
     explain = "數字＝路線分數，越低越優先"
-    canvas = Image.new("RGBA", (width, TOP + H + 2 * LINE), BG + (255,))  # cropped to one legend line when it fits
+    canvas = Image.new("RGBA", (width, TOP + H + 3 * LINE), BG + (255,))  # cropped to the legend's lines
     for im, off in zip(shots, offsets):
         canvas.paste(im.convert("RGB"), (int(off), TOP))
 
@@ -454,8 +454,9 @@ def draw_map(shots, offsets, drags, nodes, path, fix, floor: int, hard: bool | N
         top = y + EDGE
         for j, (left, right, col) in enumerate(rows):
             (h, alpha), last = (24, 110) if j == 0 else (22, 60), j == len(rows) - 1
-            # a note longer than the box widens its plate to the right: the label is the box's width, a note its own
-            right_x = x + EDGE if j == 0 else max(x + EDGE, x - EDGE + 14 + probe.textlength(left, font=fx))
+            # a row with no weight (a note, a FIX line, a missed node's label) longer than the box widens its plate to
+            # the right; a node's label is the box's width
+            right_x = x + EDGE if right else max(x + EDGE, x - EDGE + 14 + probe.textlength(left, font=fs if j == 0 else fx))
             shapes.append(([x - EDGE, top, right_x, top + h], col + (alpha,), None, (False, False, last, last)))
             lit = (255, 255, 255) if j == 0 else tuple(min(255, v + 60) for v in col)
             texts.append(((x - EDGE + 7, top + h / 2), left, "lm", lit, fs if j == 0 else fx))
@@ -502,22 +503,24 @@ def draw_map(shots, offsets, drags, nodes, path, fix, floor: int, hard: bool | N
     d.text((width - 16, y), f"拖曳 {len(drags)} 次　讀到 {len(nodes)} 個節點", font=fs, fill=(175, 175, 175), anchor="rm")
     smooth(canvas, lambda dd, k: [badge(dd, *b, k) for b in badges])
 
-    # legend: the colours this picture uses, the route last; what the numbers are at the right, or on a line of its own
-    # when the legend leaves no room for it
+    # legend: the colours this picture uses, the route last, flowing over lines; what the numbers are at the right of
+    # the last line, or below it when there is no room
     d = ImageDraw.Draw(canvas, "RGBA")
-    cols = [c for c in LEGEND_TEXT if c in used]
-    two = 16 + sum(60 + probe.textlength(LEGEND_TEXT[c], font=fs) for c in cols) + probe.textlength(explain, font=fs) + 16 > width
     x, y = 16, TOP + H + LINE // 2
-    for col in cols:
+    for col in [c for c in LEGEND_TEXT if c in used]:
         text = LEGEND_TEXT[col]
+        if x > 16 and x + 32 + d.textlength(text, font=fs) > width - 16:
+            x, y = 16, y + LINE
         if col == BLUE:
             d.line([x, y, x + 24, y], fill=col, width=6)
         else:
             d.rectangle([x + 2, y - 10, x + 22, y + 10], outline=col, width=4)
         d.text((x + 32, y), text, font=fs, fill=(175, 175, 175), anchor="lm")
         x += 32 + d.textlength(text, font=fs) + 28
-    d.text((width - 16, y + LINE * two), explain, font=fs, fill=(130, 130, 130), anchor="rm")
-    return canvas.crop((0, 0, width, TOP + H + LINE * (1 + two))).convert("RGB")
+    if x + d.textlength(explain, font=fs) > width - 16:
+        y += LINE
+    d.text((width - 16, y), explain, font=fs, fill=(130, 130, 130), anchor="rm")
+    return canvas.crop((0, 0, width, y + LINE // 2)).convert("RGB")
 
 
 def drag_steps(block, stages, drags, path, floor: int, t0: float, t1: float) -> list[dict]:
@@ -531,6 +534,13 @@ def drag_steps(block, stages, drags, path, floor: int, t0: float, t1: float) -> 
     if path:
         steps.append({"from": t_plan, "to": t1, "title": f"規劃路線，分數 {path[1]}：" + " > ".join(f"{r} {t}" for r, t in path[0])})
     return [{**s, "from": hms(s["from"]), "to": hms(s["to"])} for s in steps if s["from"] < s["to"]]
+
+
+def logged_hard(msgs, floor: int, until: float) -> bool | None:
+    """The difficulty the bot logged for the floor (`floor N: HARD|NORMAL`), the last time before until (the map's
+    reading: a log of several runs has the floor once per run); None when it never did."""
+    said = [x for t, x in msgs if t <= until and re.fullmatch(rf"floor {floor}: (HARD|NORMAL)", x)]
+    return said[-1].endswith("HARD") if said else None
 
 
 def map_cmd(a) -> None:
@@ -553,8 +563,7 @@ def map_cmd(a) -> None:
     slides = [measure_shift(gray[n], gray[n + 1], px) for n, (_, px, _) in enumerate(drags)]
     offsets = list(accumulate((s[0] if s else px for s, (_, px, _) in zip(slides, drags)), initial=0))
     measured = [s and s[0] for s in slides]
-    said = [x for _, x in maalc(log) if re.fullmatch(rf"floor {a.floor}: (HARD|NORMAL)", x)]
-    draw_map(shots, offsets, drags, nodes, path, fix, a.floor, said[-1].endswith("HARD") if said else None).save(out / "stitched.png")
+    draw_map(shots, offsets, drags, nodes, path, fix, a.floor, logged_hard(maalc(log), a.floor, block[-1][0])).save(out / "stitched.png")
     (out / "route.json").write_text(json.dumps({
         "floor": a.floor, "drags": [{"t": hms(t), "px": px, "from_column": c, "measured": m, "score": s and round(s[1], 3)}
                                     for (t, px, c), m, s in zip(drags, measured, slides)],

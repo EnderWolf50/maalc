@@ -317,6 +317,10 @@ def test_map_draw_labels_each_node_with_its_route_weight_by_difficulty():
     shared = {(1, "mid"): {"type": "risky", "first": "risky", "cost": "120", "stage": 0, "notes": []}}  # 120: both difficulties
     assert ev.map_weights(shared, hard=True)["risky"] == 8  # what the log said wins over the Costs
 
+    msgs = [(10.0, "floor 2: NORMAL"), (20.0, "map: path mid battle, score 2"), (30.0, "floor 2: HARD")]
+    assert ev.logged_hard(msgs, 2, 25.0) is False and ev.logged_hard(msgs, 2, 35.0) is True  # the run the map is in
+    assert ev.logged_hard(msgs, 3, 35.0) is None
+
 
 def test_map_draw_puts_the_legend_note_on_its_own_line_when_the_legend_fills_the_width():
     shots = [Image.new("RGB", (1280, 720))]
@@ -326,7 +330,9 @@ def test_map_draw_puts_the_legend_note_on_its_own_line_when_the_legend_fills_the
     fix = {"c5/mid": ["missed", "x"], "c5/up": ["missed", "y"]}
     wide = ev.draw_map(shots, [0], [], nodes, ([("mid", "battle")], 2), {**fix, "c1/mid": ["risky"]}, 1)
     narrow = ev.draw_map(shots, [0], [], {}, None, {}, 1)
-    assert wide.size == (1280, ev.TOP + 720 + 2 * ev.LINE) and narrow.size == (1280, ev.TOP + 720 + ev.LINE)
+    assert wide.size[1] > ev.TOP + 720 + ev.LINE and narrow.size == (1280, ev.TOP + 720 + ev.LINE)
+    every = ev.draw_map(shots, [0], [], nodes, ([("mid", "battle")], 2), {**fix, "c1/mid": ["risky"], "c2/mid": ["cost", "z"]}, 1)
+    assert every.size[1] >= wide.size[1]  # all eight colours: the legend flows over lines instead of running off the edge
 
 
 def test_packs_reading_names_weights_event_and_pull(log):
