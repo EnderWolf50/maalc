@@ -81,9 +81,10 @@ const screens: [image: string, hits: string[]][] = [
   // the Daily Count; Use Boxes shares the "Recharge N Enkephalin?" prompt, so ChargeCount is what tells Use Lunacy apart.
   ['EnkephalinModules.png', ['EnkephalinWindow', 'AssemblePanel', 'ChargePanel', 'EnkephalinBar', 'AssembleBefore', 'AssembleAfter', 'AssemblePrompt', 'ModuleIcon']],
   // Live 2026-10-27 (live-3 H1): one OCR over both numbers read the arrow as "4" (85/136465/136) or not at all
-  // (86/13666/136); AssembleBefore and AssembleAfter read each side of it.
-  ['EnkephalinModulesArrowAsFour.png', ['EnkephalinWindow', 'AssemblePanel', 'ChargePanel', 'EnkephalinBar', 'AssembleBefore', 'AssembleAfter', 'AssemblePrompt', 'ModuleIcon']],
-  ['EnkephalinModulesNoArrow.png', ['EnkephalinWindow', 'AssemblePanel', 'ChargePanel', 'EnkephalinBar', 'AssembleBefore', 'AssembleAfter', 'AssemblePrompt', 'ModuleIcon']],
+  // (86/13666/136); AssembleBefore and AssembleAfter read each side of it. Over the main window, which reads through
+  // (as on EnkephalinAssembled.png).
+  ['EnkephalinModulesArrowAsFour.png', ['EnkephalinWindow', 'AssemblePanel', 'ChargePanel', 'EnkephalinBar', 'AssembleBefore', 'AssembleAfter', 'AssemblePrompt', 'GoToMirrorEntry', 'NavMainTabs', 'ModuleIcon']],
+  ['EnkephalinModulesNoArrow.png', ['EnkephalinWindow', 'AssemblePanel', 'ChargePanel', 'EnkephalinBar', 'AssembleBefore', 'AssembleAfter', 'AssemblePrompt', 'GoToMirrorEntry', 'NavMainTabs', 'ModuleIcon']],
   ['EnkephalinLunacy.png', ['EnkephalinWindow', 'AssemblePanel', 'ChargePanel', 'EnkephalinBar', 'AssembleBefore', 'AssembleAfter', 'ChargePrompt', 'ChargePrice', 'ChargeCount', 'ModuleIcon']],
   // Live 2026-10-27 (live-1 F1): the window after Confirm stays open, the Enkephalin down, "Insufficient Enkephalin."
   // where the prompt was (no AssemblePrompt), a "Module Assembled" toast; the main window still reads through.
