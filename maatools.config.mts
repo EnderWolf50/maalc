@@ -76,15 +76,19 @@ const screens: [image: string, hits: string[]][] = [
   // main window, Drive, Luxcavation, the Mailbox (0.93-1.0); 0.51 at most elsewhere.
   // Live 2026-10-26: the Charge Enkephalin window over Drive, the tab bar dimmed under it: neither tab here. The
   // Enkephalin bar still reads under the dimming (#370), as on every screen that shows the resource panel.
-  ['EnkephalinPanel.png', ['EnkephalinWindow', 'AssemblePanel', 'ChargePanel', 'EnkephalinBar', 'AssembleAfter', 'AssemblePrompt', 'ModuleIcon']],
+  ['EnkephalinPanel.png', ['EnkephalinWindow', 'AssemblePanel', 'ChargePanel', 'EnkephalinBar', 'AssembleBefore', 'AssembleAfter', 'AssemblePrompt', 'ModuleIcon']],
   // Live 2026-10-27 (#362): the window's three tabs. Only Modules has AssemblePrompt; only Use Lunacy has the price and
   // the Daily Count; Use Boxes shares the "Recharge N Enkephalin?" prompt, so ChargeCount is what tells Use Lunacy apart.
-  ['EnkephalinModules.png', ['EnkephalinWindow', 'AssemblePanel', 'ChargePanel', 'EnkephalinBar', 'AssembleAfter', 'AssemblePrompt', 'ModuleIcon']],
-  ['EnkephalinLunacy.png', ['EnkephalinWindow', 'AssemblePanel', 'ChargePanel', 'EnkephalinBar', 'AssembleAfter', 'ChargePrompt', 'ChargePrice', 'ChargeCount', 'ModuleIcon']],
+  ['EnkephalinModules.png', ['EnkephalinWindow', 'AssemblePanel', 'ChargePanel', 'EnkephalinBar', 'AssembleBefore', 'AssembleAfter', 'AssemblePrompt', 'ModuleIcon']],
+  // Live 2026-10-27 (live-3 H1): one OCR over both numbers read the arrow as "4" (85/136465/136) or not at all
+  // (86/13666/136); AssembleBefore and AssembleAfter read each side of it.
+  ['EnkephalinModulesArrowAsFour.png', ['EnkephalinWindow', 'AssemblePanel', 'ChargePanel', 'EnkephalinBar', 'AssembleBefore', 'AssembleAfter', 'AssemblePrompt', 'ModuleIcon']],
+  ['EnkephalinModulesNoArrow.png', ['EnkephalinWindow', 'AssemblePanel', 'ChargePanel', 'EnkephalinBar', 'AssembleBefore', 'AssembleAfter', 'AssemblePrompt', 'ModuleIcon']],
+  ['EnkephalinLunacy.png', ['EnkephalinWindow', 'AssemblePanel', 'ChargePanel', 'EnkephalinBar', 'AssembleBefore', 'AssembleAfter', 'ChargePrompt', 'ChargePrice', 'ChargeCount', 'ModuleIcon']],
   // Live 2026-10-27 (live-1 F1): the window after Confirm stays open, the Enkephalin down, "Insufficient Enkephalin."
   // where the prompt was (no AssemblePrompt), a "Module Assembled" toast; the main window still reads through.
-  ['EnkephalinAssembled.png', ['EnkephalinWindow', 'AssemblePanel', 'ChargePanel', 'EnkephalinBar', 'AssembleAfter', 'GoToMirrorEntry', 'NavMainTabs', 'ModuleIcon']],
-  ['EnkephalinBoxes.png', ['EnkephalinWindow', 'AssemblePanel', 'ChargePanel', 'EnkephalinBar', 'AssembleAfter', 'ChargePrompt', 'ModuleIcon']],
+  ['EnkephalinAssembled.png', ['EnkephalinWindow', 'AssemblePanel', 'ChargePanel', 'EnkephalinBar', 'AssembleBefore', 'AssembleAfter', 'GoToMirrorEntry', 'NavMainTabs', 'ModuleIcon']],
+  ['EnkephalinBoxes.png', ['EnkephalinWindow', 'AssemblePanel', 'ChargePanel', 'EnkephalinBar', 'AssembleBefore', 'AssembleAfter', 'ChargePrompt', 'ModuleIcon']],
   ['SinnersTab.png', ['GoToMirrorEntry', 'NavMainTabs', 'HomeWindowTab', 'EnkephalinBar', 'ModuleIcon']],
   ['Drive.png', ['GoToMirrorEntry', 'NavDrive', 'HomeWindowTab', 'NavLuxcavation', 'EnkephalinBar', 'ModuleIcon']],
   // Live 2026-10-26 (#366): Luxcavation as it opens on the EXP tab (stages 7-9), swiped right to the locked 10th (KEEP
@@ -106,9 +110,8 @@ const screens: [image: string, hits: string[]][] = [
   // The rows to claim are read by the agent (PassClaimable, tests/test_pass_missions.py), which this test cannot run.
   ['PassBattlePass.png', ['PassMissionsTab']],
   ['PassMissionsDaily.png', ['PassDailyLit', 'PassDailyDone']],
-  // Live 2026-10-27: one claimed, four under way. AssembleAfter reads a row's "0/2" there; it is read only in the
-  // Enkephalin window (AssemblePanel), as on WipeDialog.png.
-  ['PassMissionsDailyUnderway.png', ['PassDailyLit', 'PassDailyDone', 'AssembleAfter']],
+  // Live 2026-10-27: one claimed, four under way.
+  ['PassMissionsDailyUnderway.png', ['PassDailyLit', 'PassDailyDone']],
   ['PassMissionsWeekly.png', ['PassWeeklyLit', 'PassWeeklyDone']],
   // Live 2026-10-27 (live-1 F7): rows 2-5 to claim, each framed orange with a red ! and a full bar.
   ['PassMissionsDailyClaimable.png', ['PassDailyLit', 'PassDailyDone']],
@@ -196,7 +199,8 @@ const screens: [image: string, hits: string[]][] = [
   ['BattleMenu.png', ['BattleMenu', 'BattleTurn']],
   ['BattleMenuClosing.png', ['BattleMenu', 'BattleTurn']],
   ['Victory.png', ['Victory']],
-  ['WipeDialog.png', ['WipeDialog', 'AssembleAfter']],
+  // AssembleBefore reads its "1/12": it is read only in the Enkephalin window (AssemblePanel).
+  ['WipeDialog.png', ['WipeDialog', 'AssembleBefore']],
   ['DungeonProgress.png', ['MirrorMap', 'ProgressPanel', 'RecoverToWindow']],
   // Live 2026-10-22 (#215): the back key on the map, NORMAL floor 2. Synthetic: the same panel over a dimmed event
   // result page (live the back key opens it there too, #118); the page's own Continue button still reads.

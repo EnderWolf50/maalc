@@ -34,6 +34,7 @@ IDENTITY = {
     "EventNotices": [UID_PLATE, NAME_PLATE], "SystemNotices": [UID_PLATE, NAME_PLATE],
     "Mailbox": [UID_PLATE, NAME_PLATE], "SettingsMenu": [UID_PLATE, NAME_PLATE],
     "EnkephalinAssembled": [UID_PLATE, NAME_PLATE], "MailParcelReceived": [UID_PLATE, NAME_PLATE],  # live-1 F8
+    "EnkephalinModulesArrowAsFour": [UID_PLATE, NAME_PLATE], "EnkephalinModulesNoArrow": [UID_PLATE, NAME_PLATE],  # live-3 H1
 }
 
 # A new fixture is found by a part of the screen that stays put: it must match Title.png's "Change Account"
@@ -79,7 +80,7 @@ def test_the_name_plate_detector_finds_every_screen_that_shows_the_lv_panel():
     assert shown == {"MainWindow", "MainWindowFadeIn", "Drive", "SinnersTab", "ServerErrorRetry", "ServerErrorRetryCountdown",
                      "NetworkUnstable", "EventNotices", "SystemNotices", "Mailbox", "SettingsMenu",
                      "LuxExp", "LuxExpLocked", "LuxThread", "LuxThreadScrolled", "LuxThreadLust", "LuxThreadLevels",
-                     "EnkephalinAssembled", "MailParcelReceived"}
+                     "EnkephalinAssembled", "MailParcelReceived", "EnkephalinModulesArrowAsFour", "EnkephalinModulesNoArrow"}
 
 
 def test_an_unmasked_copy_of_a_fixture_fails(tmp_path):

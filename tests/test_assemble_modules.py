@@ -17,7 +17,9 @@ CONFIRM = (760, 534)
 CANCEL = (520, 534)
 MODULES_TAB = (505, 226)  # D7 (#362), live 720p
 SCREENS = {"main": "MainWindowLater.png", "low": "MainWindowLowEnkephalin.synthetic.png", "panel": "EnkephalinPanel.png",
-           "drive": "Drive.png", "entry": "EntryNewRun.png", "assembled": "EnkephalinAssembled.png"}
+           "drive": "Drive.png", "entry": "EntryNewRun.png", "assembled": "EnkephalinAssembled.png",
+           # live 2026-10-27: OCR reads the arrow between the two numbers as "4" (85/136465/136), or not at all (86/13666/136)
+           "panel_four": "EnkephalinModulesArrowAsFour.png", "panel_none": "EnkephalinModulesNoArrow.png"}
 
 
 def child():
@@ -30,21 +32,25 @@ def child():
 
         def set(self, start, confirm_to="assembled", opens="panel"):
             self.screen, self.confirm_to, self.opens, self.clicks, self.keys = start, confirm_to, opens, [], []
+            self.modules = opens if opens.startswith("panel") else "panel"  # the Modules tab this window shows
 
         def on_tap(self, x, y):
             if self.screen in ("main", "low") and (x, y) == ENK_BAR:
                 self.screen = self.opens  # the window opens on the tab it was left on
-            elif self.screen in ("panel", "lunacy") and (x, y) == MODULES_TAB:
-                self.screen = "panel"
-            elif self.screen in ("panel", "lunacy") and inside((650, 500, 220, 60), x, y):  # Confirm
+            elif self.window() and (x, y) == MODULES_TAB:
+                self.screen = self.modules
+            elif self.window() and inside((650, 500, 220, 60), x, y):  # Confirm
                 self.screen = self.confirm_to
             elif self.screen == "assembled" and inside((410, 500, 220, 60), x, y):  # Cancel closes the window
                 self.screen = "low"
-            elif self.screen in ("panel", "lunacy") and inside((410, 500, 220, 60), x, y):
+            elif self.window() and inside((410, 500, 220, 60), x, y):
                 self.screen = "main"
             elif self.screen == "drive" and inside(WINDOW_TAB, x, y):
                 self.screen = "main"
             return True
+
+        def window(self):  # the Charge Enkephalin window before Confirm, on any tab
+            return self.screen.startswith("panel") or self.screen == "lunacy"
 
         def on_key(self, keycode):
             if keycode == 4 and self.screen == "entry":
@@ -63,6 +69,7 @@ def child():
         "main": ("main", "assembled"), "low": ("low", "assembled"), "drive": ("drive", "assembled"),
         "entry": ("entry", "assembled"), "panel": ("panel", "assembled"), "no_drop": ("main", "panel"),
         "on_lunacy": ("main", "assembled", "lunacy"), "closes": ("main", "low"),
+        "arrow_as_four": ("main", "assembled", "panel_four"), "no_arrow": ("main", "assembled", "panel_none"),
     }.items():
         game.set(start, confirm_to, *opens)
         out[scenario] = result(tasker.post_task("AssembleModules", {"AssembleHub": {"timeout": 15000}}).wait().get(), game, actions)
@@ -112,6 +119,16 @@ def test_a_window_that_opens_on_the_use_lunacy_tab_is_switched_to_modules_before
     assert o["succeeded"] and o["clicks"] == ASSEMBLE and "assembled" in o["done"]
 
 
+def test_the_window_reads_however_ocr_takes_the_arrow_between_its_numbers():
+    # live 2026-10-27 (H1): one OCR over "67/136 > 47/136" read "67/136447/136", a single fraction: no Modules tab, stop
+    out = run_child(__file__)
+    for name, before in (("arrow_as_four", 85), ("no_arrow", 86)):
+        o = out[name]
+        assert o["succeeded"] and o["nodes"][-1] == "TaskDone", name
+        assert o["clicks"] == [list(ENK_BAR), list(MODULES_TAB), [805, 328], list(CONFIRM), list(CANCEL)], name
+        assert f"Enkephalin {before} -> 5" in o["done"], name
+
+
 def test_a_confirm_that_never_takes_fails_the_task():
     o = run_child(__file__)["no_drop"]  # the prompt stays, the Enkephalin with it: Confirm again, ASSEMBLE_TRIES times
     assert o["succeeded"] is False and o["nodes"][-1] != "TaskDone"
@@ -152,7 +169,8 @@ def test_a_window_not_on_its_modules_tab_is_cancelled_and_never_confirmed(monkey
     actions, context, taps = panel(monkeypatch, tmp_path, itertools.repeat((False, [(22, 136), (48, 136)])))
     results = [actions.AssemblePanel().run(context, None) for _ in range(actions.ASSEMBLE_TRIES)]
     assert results == [True] * (actions.ASSEMBLE_TRIES - 1) + [False]  # the window may still be opening: looked at again
-    assert taps == [actions.MODULES_TAB] * actions.ASSEMBLE_TRIES + [actions.PANEL_CANCEL, "stop"]
+    # the stop procedure's evidence shows the window itself, so it comes before Cancel (live-3 H1)
+    assert taps == [actions.MODULES_TAB] * actions.ASSEMBLE_TRIES + ["stop", actions.PANEL_CANCEL]
 
 
 def test_a_number_that_stops_reading_after_the_most_button_is_cancelled_not_confirmed(monkeypatch, tmp_path):
@@ -160,7 +178,7 @@ def test_a_number_that_stops_reading_after_the_most_button_is_cancelled_not_conf
     for after in [(True, []), (False, [(42, 136), (2, 136)])]:
         actions, context, taps = panel(monkeypatch, tmp_path, [(False, []), (True, [(42, 136), (42, 136)]), after])
         assert actions.AssemblePanel().run(context, None) is False
-        assert taps == [actions.MODULES_TAB, actions.ASSEMBLE_MAX, actions.PANEL_CANCEL, "stop"]
+        assert taps == [actions.MODULES_TAB, actions.ASSEMBLE_MAX, "stop", actions.PANEL_CANCEL]
 
 
 def test_the_modules_tab_is_confirmed_once_the_most_button_stops_changing(monkeypatch, tmp_path):
@@ -192,7 +210,7 @@ def test_after_confirm_a_window_with_nothing_changed_yet_is_looked_at_again(monk
     actions.TASK["assemble"] = {"reads": 0, "confirms": 1, "before": 25}
     results = [actions.AssemblePanel().run(context, None) for _ in range(actions.ASSEMBLE_TRIES)]
     assert results == [True] * (actions.ASSEMBLE_TRIES - 1) + [False]
-    assert taps == [actions.PANEL_CANCEL, "stop"]
+    assert taps == ["stop", actions.PANEL_CANCEL]
 
 
 if __name__ == "__main__":

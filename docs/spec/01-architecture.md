@@ -106,8 +106,8 @@
 
 - 入口 `AssembleModules`（`TaskStart`）→ `AssembleHome`（`GoHomeRun`）→ `AssembleHub`；hub 認得腦啡肽視窗（`AssemblePanel`，視窗本身的認法是 `EnkephalinWindow`，`ChargePanel` 共用）、全域彈窗（`HomeText`）、主畫面（`AssembleMain`，任務只在這裡 `done()`，所以最後一步在主畫面）。60 秒都不認得就走停止程序（任務失敗）。（#370）
 - 主畫面左下腦啡肽條（`EnkephalinBar`）讀 `n/cap`：少於 20（一個模組的腦啡肽）就以成功結束，不開面板；否則點腦啡肽條開 Charge Enkephalin 視窗。
-- 視窗會停在上次開的分頁，所以每次先點 Modules 分頁（720p (505,226)，實機量的；點分頁不花資源，#362 D7；2026-10-27 的截圖顯示視窗重開一律在 Modules，點了也無害），再讀提示（`AssemblePrompt`：讀到 Modules 頁自己的提示才按 Confirm，這道保護保留）與換前、換後的腦啡肽（`AssembleAfter`），點 `»`（最大量），換後仍 ≥ 20 就再點，最多 3 次；再點 Confirm。只點 Modules 分頁、`»`、Confirm、Cancel，絕不點 Use Lunacy 頁。
-- 按 Confirm 後視窗**不關**（實機 2026-10-27，`tests/screens/EnkephalinAssembled.png`）：右上 toast `Module Assembled 134 ▶ 135`，換前的腦啡肽降下來，提示變成紅字 `Insufficient Enkephalin.`，Confirm 變灰。`AssemblePanel` 在視窗裡讀 `AssembleAfter` 的換前腦啡肽，低於按 Confirm 前就算完成：按 Cancel 關視窗，回主畫面 `done()`。提示又出現、數字沒變是 Confirm 沒按到，再按（最多 3 次）；提示和下降都還沒看到就再看，3 次都沒有就按 Cancel、走停止程序（任務失敗）。視窗若自己關了，主畫面讀回腦啡肽低於換前也算完成。（live-1 F1）
+- 視窗會停在上次開的分頁，所以每次先點 Modules 分頁（720p (505,226)，實機量的；點分頁不花資源，#362 D7；2026-10-27 的截圖顯示視窗重開一律在 Modules，點了也無害），再讀提示（`AssemblePrompt`：讀到 Modules 頁自己的提示才按 Confirm，這道保護保留）與換前、換後的腦啡肽（`AssembleBefore`、`AssembleAfter`，箭頭兩側各讀一格：整段一起 OCR 會把箭頭讀成「4」或吃掉，`67/136447/136` 只剩一個分數，live-3 H1），點 `»`（最大量），換後仍 ≥ 20 就再點，最多 3 次；再點 Confirm。只點 Modules 分頁、`»`、Confirm、Cancel，絕不點 Use Lunacy 頁。
+- 按 Confirm 後視窗**不關**（實機 2026-10-27，`tests/screens/EnkephalinAssembled.png`）：右上 toast `Module Assembled 134 ▶ 135`，換前的腦啡肽降下來，提示變成紅字 `Insufficient Enkephalin.`，Confirm 變灰。`AssemblePanel` 在視窗裡讀 `AssembleBefore` 的換前腦啡肽，低於按 Confirm 前就算完成：按 Cancel 關視窗，回主畫面 `done()`。提示又出現、數字沒變是 Confirm 沒按到，再按（最多 3 次）；提示和下降都還沒看到就再看，3 次都沒有就走停止程序（任務失敗）再按 Cancel：停止程序的證據截圖拍到視窗本身（live-3 H1）。視窗若自己關了，主畫面讀回腦啡肽低於換前也算完成。（live-1 F1）
 - 出現「模組太多」（`Cannot assemble Modules; you have too many in storage.`）就以成功結束：按返回鍵、Cancel 關掉視窗、回主畫面。這一頁尚無截圖，辨識的 roi 是寬的（unverified）。
 
 ### 狂氣換腦啡肽（`ChargeEnkephalin`，#373）

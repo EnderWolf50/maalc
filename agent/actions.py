@@ -732,6 +732,20 @@ def read_fractions(context, image, node):
     return fractions([(r.text, tuple(r.box)) for r in (detail.all_results if detail else [])])
 
 
+def panel_read(context, image):
+    """The window's Enkephalin before and after, [(n, cap), (n, cap)], each read on its own side of the arrow; [] unless
+    both read."""
+    before, after = read_fractions(context, image, "AssembleBefore"), read_fractions(context, image, "AssembleAfter")
+    return before[:1] + after[-1:] if before and after else []
+
+
+def cancel_stop(context, reason):
+    """The stop procedure, its evidence the window itself (live-3 H1), then Cancel closes the window; False."""
+    stop(context, reason)
+    tap(context, *PANEL_CANCEL, wait=0.5)
+    return False
+
+
 def on_modules_tab(context, image):
     """The Modules tab's own prompt ("Would you like to assemble Enkephalin Modules?") is up. The Use Lunacy tab shows the
     Enkephalin before and after as well, so the two "n / cap" alone do not tell the tabs apart: a Confirm there spends
@@ -783,9 +797,9 @@ class AssembleMain(CustomAction):
 class AssemblePanel(CustomAction):
     """The Charge Enkephalin window: its Modules tab first (the window opens on the tab it was left on, #362 D7), then on
     it (its prompt and the Enkephalin before and after read), >> for the most modules, Confirm. Only the tab, >>, Confirm
-    and Cancel are tapped. Not on the Modules tab, or a number that stops reading after >>: Cancel and the stop
-    procedure, never Confirm (Use Lunacy's Confirm spends Lunacy). The game's refusal ends the task; a window over a
-    task already decided is cancelled.
+    and Cancel are tapped. Not on the Modules tab, or a number that stops reading after >>: the stop procedure, then
+    Cancel, never Confirm (Use Lunacy's Confirm spends Lunacy). The game's refusal ends the task; a window over a task
+    already decided is cancelled.
 
     Confirm leaves the window open (live-1 F1, tests/screens/EnkephalinAssembled.png): a "Module Assembled 134 > 135"
     toast, the Enkephalin down, "Insufficient Enkephalin." where the prompt was and Confirm greyed. The drop read there
@@ -805,13 +819,12 @@ class AssemblePanel(CustomAction):
             return step
         tap(context, *MODULES_TAB, wait=0.7)
         image = screen(context)
-        read = read_fractions(context, image, "AssembleAfter") if on_modules_tab(context, image) else []
-        if len(read) < 2:  # not the Modules tab, or not up yet
+        read = panel_read(context, image) if on_modules_tab(context, image) else []
+        if not read:  # not the Modules tab, or not up yet
             a["reads"] += 1
             if a["reads"] < ASSEMBLE_TRIES:
                 return True
-            tap(context, *PANEL_CANCEL, wait=0.5)
-            return stop(context, "the Charge Enkephalin window shows no Modules tab")
+            return cancel_stop(context, "the Charge Enkephalin window shows no Modules tab")
         a["reads"] = 0
         before, after = read[0][0], read[-1][0]
         if before < MODULE_COST:
@@ -826,17 +839,15 @@ class AssemblePanel(CustomAction):
                 a["end"] = "too many Enkephalin Modules in storage"
                 context.tasker.controller.post_click_key(BACK_KEY).wait()
                 return True
-            again = read_fractions(context, image, "AssembleAfter") if on_modules_tab(context, image) else []
-            if len(again) < 2:
-                tap(context, *PANEL_CANCEL, wait=0.5)
-                return stop(context, "the Modules tab did not read after >>: Confirm not pressed")
+            again = panel_read(context, image) if on_modules_tab(context, image) else []
+            if not again:
+                return cancel_stop(context, "the Modules tab did not read after >>: Confirm not pressed")
             if again[-1][0] == after:
                 break
             after = again[-1][0]
         a["confirms"] += 1
         if a["confirms"] > ASSEMBLE_TRIES:
-            tap(context, *PANEL_CANCEL, wait=0.5)
-            return stop(context, f"Confirm did not take: Enkephalin still {before}")
+            return cancel_stop(context, f"Confirm did not take: Enkephalin still {before}")
         log(f"assemble: Enkephalin {before} -> {after}, Confirm")
         a["before"] = before
         tap(context, *PANEL_CONFIRM, wait=0.5)
@@ -848,7 +859,7 @@ class AssemblePanel(CustomAction):
         the window (True); nothing read yet is looked at again (True) up to ASSEMBLE_TRIES times, then the stop procedure
         (False). None: the prompt shows again with the Enkephalin unchanged, a Confirm that did not take, for run() to
         press again."""
-        read = read_fractions(context, image, "AssembleAfter")
+        read = panel_read(context, image)
         if read and read[0][0] < a["before"]:
             a["end"] = f"Enkephalin {a['before']} -> {read[0][0]}, assembled"
             log(f"assemble: {a['end']}")
@@ -859,8 +870,7 @@ class AssemblePanel(CustomAction):
         a["checks"] = a.get("checks", 0) + 1
         if a["checks"] < ASSEMBLE_TRIES:
             return True
-        tap(context, *PANEL_CANCEL, wait=0.5)
-        return stop(context, f"Enkephalin still {a['before']} after Confirm")
+        return cancel_stop(context, f"Enkephalin still {a['before']} after Confirm")
 
 
 # Lunacy for Enkephalin (#373, pipeline/charge_enkephalin.json): the Charge Enkephalin window's Use Lunacy tab.
