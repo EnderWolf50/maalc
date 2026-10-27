@@ -3,8 +3,8 @@ and the rightmost open stage's Enter; one battle later, back to the main window,
 the same to the Thread tab's open card, its Level Select and that list's bottom row.
 
 The real task in a child process (daily_child.py), on a model of the game: a screenshot per screen, taps and the back
-key that move between them. Enter opens the team page (LuxTeamSelect.png): the model picks the TEAMS row and To
-Battle! there. To Battle! goes straight to the battle (live 2026-10-27: no level warning, no start confirm); the model
+key that move between them. Enter opens the team page (LuxTeamSelect.png), its title already TEAMS #3: the team's row is neither tapped
+nor dragged to, and the model takes To Battle! there. To Battle! goes straight to the battle (live 2026-10-27: no level warning, no start confirm); the model
 plays it as an unknown screen, then the battlefield's VICTORY, then the results page (LuxResultVictory.png, LuxResultThread.png
 or LuxResultDefeat.png), which stays until Confirm or the back key and leads back to the EXP or Thread tab.
 """
@@ -22,7 +22,7 @@ THREAD_TAB = (68, 304, 154, 60)
 CARD_ENTER = (293, 462, 157, 36)  # the open card's Enter (LuxThread.png: Wrath's, at the left)
 LEVEL_ENTERS = [(780, 243 + 101 * i, 100, 40) for i in range(3)]  # Lv40, Lv50, Lv60 of the Level Select; the last is the hardest
 ENTERS = {"exp": (1000, 455, 240, 50), "locked": (660, 455, 240, 50)}  # stage 9's Enter: the rightmost, the middle card
-TEAM_ROW = (75, 365, 110, 36)  # the TEAMS #3 row of the team page's list (LuxTeamSelect.png)
+TEAM_ROW = (75, 365, 110, 36)  # the TEAMS #3 row of the team page's list (LuxTeamSelect.png), lit and on the title
 TO_BATTLE = (1070, 560, 150, 55)
 RESULT_CONFIRM = (1045, 540, 165, 60)  # the results page's Confirm (live 2026-10-27: (1125, 570))
 # The bot's taps on To Battle! and on the results page's Confirm: each lies inside the other's box, so they are counted
@@ -48,13 +48,14 @@ def child():
         images = {name: screen(png) if png else np.full((720, 1280, 3), 40, np.uint8) for name, png in SCREENS.items()}
 
         def set(self, start, lux_tab="thread", after="thread"):
-            self.screen, self.clicks, self.keys, self.shots, self.picked = start, [], [], 0, False
+            self.screen, self.clicks, self.keys, self.shots = start, [], [], 0
             self.stage = "exp" if start != "locked" else "locked"
             self.outcomes = []  # each battle's end, in order: "win", "lose", or None (no results page: straight back to the tab)
             self.outcome = None
             self.lux_tab = lux_tab  # the tab Luxcavation opens on
             self.after = after  # the page a Thread battle ends on: "thread" or "levels"
             self.swipes = []
+            self.drags = []  # the team list's
 
         def screencap(self):
             if self.screen == "fight":
@@ -82,13 +83,11 @@ def child():
             elif s == "thread" and inside(CARD_ENTER, x, y):
                 self.screen = "levels"
             elif s == "levels" and inside(LEVEL_ENTERS[-1], x, y):
-                self.screen, self.picked = "team", False
+                self.screen = "team"
                 self.stage = self.after
             elif s in ENTERS and inside(ENTERS[s], x, y):
-                self.screen, self.picked = "team", False
-            elif s == "team" and inside(TEAM_ROW, x, y):
-                self.picked = True
-            elif s == "team" and self.picked and inside(TO_BATTLE, x, y):
+                self.screen = "team"
+            elif s == "team" and inside(TO_BATTLE, x, y):
                 self.screen, self.shots = "fight", 0
                 self.outcome = self.outcomes.pop(0) if self.outcomes else "win"
             elif s == "result" and inside(RESULT_CONFIRM, x, y):
@@ -97,7 +96,8 @@ def child():
 
         def on_swipe(self, down, last):
             if abs(last[1] - down[1]) > abs(last[0] - down[0]):
-                return True  # the team list's scroll: a drag up or down, not the Thread tab's swipe
+                self.drags.append((down, last))  # the team list's scroll: a drag up or down, not the Thread tab's swipe
+                return True
             self.swipes.append((down, last))
             if self.screen == "scrolled" and last[0] - down[0] > 300:  # the finger to the right: the left cards show
                 self.screen = "thread"
@@ -142,7 +142,7 @@ def child():
             json.dumps({**settings, "luxcavation": {"exp": opts, "thread": opts}}), encoding="utf-8")
         game.set(start, *rest)
         game.outcomes = list(outcomes)
-        out[scenario] = {**result(tasker.post_task(task).wait().get(), game, actions), "swipes": game.swipes}
+        out[scenario] = {**result(tasker.post_task(task).wait().get(), game, actions), "swipes": game.swipes, "drags": game.drags}
     print(json.dumps(out))
 
 
@@ -151,15 +151,16 @@ def test_exp_luxcavation_goes_home_first_enters_the_rightmost_open_stage_and_end
     o = out["drive"]
     assert o["succeeded"], o["nodes"]
     taps = o["clicks"]
-    # GoHome first (the Window tab), then Drive, Luxcavation, the EXP tab (Thread was open), stage 9's Enter, the team's
-    # row (TEAMS #3) and To Battle!
-    steps = (WINDOW_TAB, DRIVE_TAB, LUXCAVATION, EXP_TAB, ENTERS["exp"], TEAM_ROW, TO_BATTLE)
-    assert [inside(box, *xy) for box, xy in zip(steps, taps)] == [True] * 7
-    assert taps.count(taps[4]) == 1 and taps.count(taps[6]) == 1  # one battle
+    # GoHome first (the Window tab), then Drive, Luxcavation, the EXP tab (Thread was open), stage 9's Enter and To
+    # Battle!: the team (TEAMS #3) is on the title already, its row neither tapped nor dragged to
+    steps = (WINDOW_TAB, DRIVE_TAB, LUXCAVATION, EXP_TAB, ENTERS["exp"], TO_BATTLE)
+    assert [inside(box, *xy) for box, xy in zip(steps, taps)] == [True] * 6
+    assert taps.count(taps[4]) == 1 and taps.count(taps[5]) == 1  # one battle
+    assert not [xy for xy in taps if inside(TEAM_ROW, *xy)] and o["drags"] == []
     # Its results page (live-1 F2): Victory read, Confirm, back on the EXP tab: done, and GoHome again (the back key,
     # then the Window tab)
-    assert taps[7] == CONFIRM_TAP and o["nodes"].count("LuxResult") == 1
-    assert o["keys"] == [4] and inside(WINDOW_TAB, *taps[-1]) and len(taps) == 9
+    assert taps[6] == CONFIRM_TAP and o["nodes"].count("LuxResult") == 1
+    assert o["keys"] == [4] and inside(WINDOW_TAB, *taps[-1]) and len(taps) == 8
     assert o["nodes"].count("LuxTeamSelect") == 1
     assert o["nodes"][:3] == ["ExpLuxcavation", "ExpHome", "ExpHub"] and o["nodes"][-1] == "TaskDone"
 
@@ -172,8 +173,8 @@ def test_count_wins_are_fought_before_it_is_done():
     o = run_child(__file__)["two"]  # #367: a win counts, and the next battle starts from the same tab
     assert o["succeeded"], o["nodes"]
     assert len(enters(o)) == 2 and o["keys"] == [4]  # two Enters, one trip home at the end
-    # each battle picks its team again: the row and To Battle! after each Enter
-    assert len([xy for xy in o["clicks"] if inside(TEAM_ROW, *xy)]) == 2
+    # each battle looks for its team again: on the title already, To Battle! after each Enter
+    assert not [xy for xy in o["clicks"] if inside(TEAM_ROW, *xy)] and o["drags"] == []
     assert o["clicks"].count(TO_BATTLE_TAP) == 2
 
 
@@ -235,12 +236,13 @@ def test_thread_luxcavation_goes_home_first_taps_thread_the_open_card_and_the_bo
     o = run_child(__file__)["thread"]  # #368: Luxcavation opened on the EXP tab
     assert o["succeeded"], o["nodes"]
     taps = o["clicks"]
-    # the team page after the Level Select's Enter (#366): the team's row, To Battle!
-    boxes = (WINDOW_TAB, DRIVE_TAB, LUXCAVATION, THREAD_TAB, CARD_ENTER, LEVEL_ENTERS[-1], TEAM_ROW, TO_BATTLE)
-    assert [inside(box, *xy) for box, xy in zip(boxes, taps)] == [True] * 8
+    # the team page after the Level Select's Enter (#366): the team on the title already, To Battle!
+    boxes = (WINDOW_TAB, DRIVE_TAB, LUXCAVATION, THREAD_TAB, CARD_ENTER, LEVEL_ENTERS[-1], TO_BATTLE)
+    assert [inside(box, *xy) for box, xy in zip(boxes, taps)] == [True] * 7
+    assert not [xy for xy in taps if inside(TEAM_ROW, *xy)] and o["drags"] == []
     assert len(level_enters(o)) == 1  # the hardest level only, one battle: not Lv40 or Lv50
-    assert taps[8] == CONFIRM_TAP and o["nodes"].count("LuxResult") == 1  # the results page's Confirm
-    assert o["keys"] == [4] and inside(WINDOW_TAB, *taps[-1]) and len(taps) == 10  # GoHome again: the back key, the Window tab
+    assert taps[7] == CONFIRM_TAP and o["nodes"].count("LuxResult") == 1  # the results page's Confirm
+    assert o["keys"] == [4] and inside(WINDOW_TAB, *taps[-1]) and len(taps) == 9  # GoHome again: the back key, the Window tab
     assert o["nodes"].count("LuxTeamSelect") == 1
     assert o["nodes"][:3] == ["ThreadLuxcavation", "ThreadHome", "ThreadHub"] and o["nodes"][-1] == "TaskDone"
 
@@ -261,7 +263,7 @@ def test_thread_luxcavation_fights_count_wins_from_the_card_each_time():
     o = run_child(__file__)["thread_two"]
     assert o["succeeded"], o["nodes"]
     assert len(level_enters(o)) == 2 and len([xy for xy in o["clicks"] if inside(CARD_ENTER, *xy)]) == 2 and o["keys"] == [4]
-    assert len([xy for xy in o["clicks"] if inside(TEAM_ROW, *xy)]) == 2  # the team is picked again for each battle
+    assert not [xy for xy in o["clicks"] if inside(TEAM_ROW, *xy)] and o["drags"] == []  # on the title each battle
 
 
 def test_thread_luxcavation_counts_a_battle_that_ends_on_the_level_select():

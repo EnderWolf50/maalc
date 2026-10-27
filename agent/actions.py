@@ -1257,10 +1257,12 @@ def team_rows(context, image):
 
 
 def team_list_top(context, home="TeamSelect"):
-    """Drag the picker list to its top, a stroke at a time until the rows on show stay (#226): it opens where it was left."""
+    """Drag the picker list to its top, a stroke at a time until the rows on show stay (#226): it opens where it was left.
+
+    The rows' numbers, not their y: OCR boxes move by a pixel or two at rest (live 2026-10-27: 10 drags at the top)."""
     seen = None
     for k in range(15):
-        rows = team_rows(context, page_guard(context, home))
+        rows = set(team_rows(context, page_guard(context, home)))
         if rows and rows == seen:  # no rows read is not a list at rest
             log(f"team list at its top after {k - 1} drags that moved it")
             return
@@ -1270,20 +1272,30 @@ def team_list_top(context, home="TeamSelect"):
 
 
 def pick_team_slot(context, n, home="TeamSelect"):
-    """Drag the picker list to its top, tap the in-game TEAMS #N row and check the title: that screenshot, or None when
-    15 strokes found no such row. home: the node of the page (the mirror's TeamSelect, LuxTeamSelect) for page_guard."""
-    team_list_top(context, home)
+    """Have the title read the in-game TEAMS #N: that screenshot, or None when 15 strokes found no such row.
+
+    Already on the title: nothing to do. Else tap its row, scrolling from where the list is towards it (team_list_move);
+    the list goes to its top first only when no row reads (#226). Only the number counts: a team's name is the user's.
+    home: the node of the page (the mirror's TeamSelect, LuxTeamSelect) for page_guard."""
+    titled = shows(context, TEAM_TITLE, rf"#\s*{n}\b")
+    image = page_guard(context, home)
+    if titled(image):
+        return image
+    if not team_rows(context, image):
+        team_list_top(context, home)
+        image = None
     for _ in range(15):
-        visible = team_rows(context, page_guard(context, home))
+        visible = team_rows(context, page_guard(context, home) if image is None else image)
+        image = None
         move = run_start.team_list_move(visible, n)
         if move == "down":
             scroll(context, 130, 480, 0, -140)
         elif move == "up":
             scroll(context, 130, 340, 0, 140)
         else:
-            image = tap_then(context, 130, move[1], shows(context, TEAM_TITLE, rf"#\s*{n}\b"))
-            if image is not None:
-                return image
+            shot = tap_then(context, 130, move[1], titled)
+            if shot is not None:
+                return shot
     return None
 
 
