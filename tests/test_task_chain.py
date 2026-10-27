@@ -190,6 +190,7 @@ def test_a_mirror_dungeon_that_has_nothing_left_to_do_ends_a_success(context, mo
     assert done in actions.TASK["done"]
     assert not (actions.ROOT / "logs").exists() and not urlopen.called
     context.tasker.controller.post_click.assert_not_called()
+    context.run_task.assert_called_once_with("GoHome")  # live-2 G4: the main window, not the entry page, for the next task
 
 
 def test_plan_run_does_not_open_a_run_the_modules_cannot_claim(context):
@@ -199,6 +200,7 @@ def test_plan_run_does_not_open_a_run_the_modules_cannot_claim(context):
     assert actions.PlanRun().run(context, None) is True
     assert "Modules 4 < 5" in actions.TASK["done"]
     context.tasker.controller.post_click.assert_not_called()
+    context.run_task.assert_called_once_with("GoHome")
 
 
 def test_plan_run_starts_when_the_modules_did_not_read(context):
