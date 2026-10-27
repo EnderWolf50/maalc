@@ -19,11 +19,12 @@ wall time of its first frame (screen-record's `started`); give one per piece of 
 
 **map** stitches the floor from the frames before and after each `map: dragged the map N px` and boxes every
 node the bot read, at its column and row: green read right, red a wrong type, orange a wrong Cost or a node
-the bot did not list (from FIX), with the Cost it read and the first read when a later one replaced it. Reads
-that took more than the marks have their own colour and line: violet a type corrected once the map was dragged
-near, magenta a Cost that read no number or missed, white a boss told by its Cost, cyan a boss told by its red
-glow or by the shop before it; a legend under the picture says so. The route is numbered and the banner has the
-drags, the path and its score. Each shot is the still map the bot read (the still stretch of the footage around
+the bot did not list (from FIX). Under each box hangs its label, the type and its route weight (map_weights.yaml,
+for the difficulty the bot logged for the floor, else told by the Costs read), and a line per note. Reads that took more than the marks have their own
+colour and line: violet a type corrected once the map was dragged near (with the first read), magenta a Cost that
+read no number or missed, white a boss told by its Cost, cyan a boss told by its red glow or by the shop before it;
+a legend under the picture lists the colours it uses. The route is numbered, and the header line has its steps,
+their weights summed to its score, and the drags and nodes read. Each shot is the still map the bot read (the still stretch of the footage around
 the read, never a motion run: a drag back is not a drag), and the shots are laid side by side by the slide
 measured between them on the frames (template match), the log's px where none matches. FIX is what you judged on the frames:
 `{"c4/down": ["risky"], "c2/mid": ["cost", "<what it read and what the screen shows>"], "c3/up": ["missed", "<label>"]}`.
@@ -51,6 +52,7 @@ from itertools import accumulate
 from pathlib import Path
 
 import numpy as np
+import yaml
 from PIL import Image, ImageDraw, ImageFont
 
 TOOLS = Path(__file__).resolve().parents[1]
@@ -69,8 +71,6 @@ GREEN, RED, ORANGE, YELLOW, GREY, BLUE = (60, 220, 60), (255, 60, 60), (255, 160
 VIOLET, MAGENTA, WHITE, CYAN = (170, 110, 255), (255, 70, 200), (245, 245, 245), (0, 225, 225)
 # a node's notes, in the order they ring its box: tag -> colour
 NOTE_COLOUR = {"boss_shop": CYAN, "boss_glow": CYAN, "boss_by_cost": WHITE, "cost_miss": MAGENTA, "cost_none": MAGENTA, "retyped": VIOLET}
-LEGEND = [(GREEN, "綠＝讀對"), (RED, "紅＝類型錯"), (ORANGE, "橘＝Cost 錯或漏列"), (VIOLET, "紫＝先讀錯，拖近後改正"),
-          (MAGENTA, "洋紅＝Cost 沒讀到或 miss"), (WHITE, "白＝靠 Cost 判成 Boss"), (CYAN, "青＝Boss 紅光或商店判定"), (BLUE, "藍線＝路線")]
 SHIFT_MIN = 0.6  # TM_CCOEFF_NORMED of a slide to trust: the real one scored 0.91-0.94 (run 11, floor 1), another place 0.5 at most
 COLX = lambda k: 328 + 255 * (k - 1)  # noqa: E731  x of map column k (1-based) before any drag
 ROWY = {"up": 144, "mid": 357, "down": 570}
@@ -377,97 +377,151 @@ def measure_shift(prev, cur, expect: int, reach: int = 100, rows=(150, 560), col
     return (lo + best - x0, float(score[best])) if score[best] >= SHIFT_MIN else None
 
 
-def label(d, x, y, lines, colours, f):
-    for j, (line, col) in enumerate(zip(lines, colours)):
-        w = d.textlength(line, font=f)
-        d.rectangle([x, y + j * 26, x + w + 8, y + 26 + j * 26], fill=(0, 0, 0, 215))
-        d.text((x + 4, y + j * 26), line, font=f, fill=col)
+LEGEND_TEXT = {GREEN: "讀對", RED: "類型錯", ORANGE: "Cost 錯或漏列", VIOLET: "先讀錯，拖近後改正", MAGENTA: "Cost 沒讀到或 miss",
+               WHITE: "靠 Cost 判成 Boss", CYAN: "Boss 紅光或商店判定", BLUE: "路線"}
+TOP, LINE = 44, 40  # the header line above the map; a legend line below it
+SMOOTH = 4  # shapes are drawn this many times larger and scaled down: PIL draws them without antialiasing
+BG = (22, 22, 22)
+EDGE = 52  # half a node box: PIL draws an outline inside its rectangle, so this is its outer edge
 
 
-def note_text(tag: str, detail, n) -> str:
-    return {"retyped": f"先讀成 {n['first']}，拖近後改正", "cost_none": "Cost 沒讀到", "cost_miss": f"Cost miss：{detail}",
-            "boss_by_cost": f"靠 Cost {n['cost']} 判成 boss", "boss_glow": "Boss 紅光判斷，前面沒有商店",
-            "boss_shop": "商店後面，判成 boss"}[tag]
+def note_text(tag: str, n) -> str:
+    """A note's line under the node's label: short, the label is a box wide."""
+    return {"retyped": f"初讀 {n['first']}", "cost_none": "Cost 沒讀到", "cost_miss": "Cost miss",
+            "boss_by_cost": "靠 Cost 判 boss", "boss_glow": "Boss 紅光", "boss_shop": "商店後，判 boss"}[tag]
 
 
-def legend_layout(d, f, width: int):
-    """([(x, y, colour, text)], height): the legend's entries, flowing over rows of the picture's width."""
-    x, y, items = 8, 6, []
-    for col, text in LEGEND:
-        w = 34 + d.textlength(text, font=f) + 24
-        if x + w > width and x > 8:
-            x, y = 8, y + 32
-        items.append((x, y, col, text))
-        x += w
-    return items, y + 38
+def map_weights(nodes, hard: bool | None = None) -> dict:
+    """The route weights of the floor's difficulty (map_weights.yaml): hard as the log said (`floor N: HARD`), else told by
+    the Costs read (a hard battle costs 85, a normal one 75). The boss is not weighted: it scores as unknown, as the
+    bot's route does."""
+    data = yaml.safe_load((TOOLS.parent / "assets/resource/base/data/map_weights.yaml").read_text(encoding="utf-8"))
+    if hard is None:
+        costs = {str(c) for c in data["node_costs"]["hard"]} - {str(c) for c in data["node_costs"]["normal"]}
+        hard = any(str(n.get("cost")) in costs for n in nodes.values())
+    return data["hard" if hard else "normal"]
 
 
-def drag_banner(drags, offsets, measured) -> str:
-    """`512px(從第 3 欄接)` per drag, with the slide the frames show where it differs from the log's or was not measured."""
-    parts = []
-    for n, (_, px, col) in enumerate(drags):
-        step = offsets[n + 1] - offsets[n]
-        extra = f"，畫面量得 {step}px" if abs(step - px) > 2 else "，位移沒量到" if measured and measured[n] is None else ""
-        parts.append(f"{px}px(從第 {col} 欄接{extra})")
-    return " + ".join(parts) or "無"
+def smooth(canvas: Image.Image, paint) -> None:
+    """paint(draw, k) on a layer SMOOTH times larger, scaled down onto canvas (RGBA)."""
+    layer = Image.new("RGBA", (canvas.width * SMOOTH, canvas.height * SMOOTH), (0, 0, 0, 0))
+    paint(ImageDraw.Draw(layer), SMOOTH)
+    canvas.alpha_composite(layer.resize(canvas.size, Image.LANCZOS))
 
 
-def draw_map(shots, offsets, drags, nodes, path, fix, floor: int, measured=()) -> Image.Image:
-    """offsets: the x of each shot on the picture (the slides measured, or the log's px); drags: the log's."""
+def badge(d, x, y, n, r, k):
+    x, y, r = x * k, y * k, r * k
+    d.ellipse([x - r, y - r, x + r, y + r], fill=BLUE + (255,), outline=(0, 0, 0, 255), width=2 * k)
+    d.text((x, y), str(n), font=font(16 * k), fill=(0, 0, 0), anchor="mm")
+
+
+def draw_map(shots, offsets, drags, nodes, path, fix, floor: int, hard: bool | None = None) -> Image.Image:
+    """offsets: the x of each shot on the picture (the slides measured, or the log's px); drags: the log's; hard: the
+    floor's difficulty as the log said, None to tell it by the Costs.
+
+    One header line (the floor, the route's steps with their weights and its score, the drags and nodes read), the
+    map, the legend flowing over as many lines as it needs. Each node: a box in its colour (one ring per colour), its
+    label hanging from the box's bottom edge as wide as the box (the type and its route weight), a line per note under
+    it, widened to a note longer than the box; boxes and labels half see-through."""
     logged = list(accumulate((px for _, px, _ in drags), initial=0))
-    f, fb = font(22), font(26)
-    items, legend_h = legend_layout(ImageDraw.Draw(Image.new("RGB", (1, 1))), f, W + int(offsets[-1]))
-    canvas = Image.new("RGB", (W + int(offsets[-1]), H + legend_h))
+    f, fs, fx, ft = font(18), font(16), font(14), font(24)
+    weights = map_weights(nodes, hard)
+    weight = lambda t: weights.get(t, weights["unknown"])  # noqa: E731
+    width = W + int(offsets[-1])
+    probe = ImageDraw.Draw(Image.new("RGB", (1, 1)))
+    explain = "數字＝路線分數，越低越優先"
+    canvas = Image.new("RGBA", (width, TOP + H + 3 * LINE), BG + (255,))  # cropped to the legend's lines
     for im, off in zip(shots, offsets):
-        canvas.paste(im.convert("RGB"), (int(off), 0))
-    d = ImageDraw.Draw(canvas, "RGBA")
+        canvas.paste(im.convert("RGB"), (int(off), TOP))
 
     def where(k, row):
         """A node sits where the shot it was last read in shows it: the log's column grid, moved by what that shot's
         offset differs from the log's px."""
         # a node the bot did not list: the last shot that shows its column
         s = nodes[k, row]["stage"] if (k, row) in nodes else max((i for i in range(len(offsets)) if 60 <= COLX(k) - logged[i] <= 1200), default=0)
-        return COLX(k) + offsets[s] - logged[s], ROWY[row]
+        return COLX(k) + offsets[s] - logged[s], ROWY[row] + TOP
+
+    pts = [(BUS[0], BUS[1] + TOP)] + [where(k, row) for k, (row, _) in enumerate(path[0], 1)] if path else []
+    smooth(canvas, lambda d, k: [d.line([(x * k, y * k) for x, y in pts], fill=c, width=w * k, joint="curve")
+                                 for c, w in (((0, 0, 0, 170), 11), (BLUE + (235,), 6))] if pts else None)
+    shapes, texts, used = [], [], {BLUE} if pts else set()
+
+    def node(x, y, rings, rows):
+        """rings: the box's colours, outermost first; rows: (left, right, colour) of the label, then the notes."""
+        used.update(rings)
+        for i, col in enumerate(rings):
+            e = EDGE - 5 * i
+            shapes.append(([x - e, y - e, x + e, y + e], None, col + (210,), (True, True, False, False)))
+        top = y + EDGE
+        for j, (left, right, col) in enumerate(rows):
+            (h, alpha), last = (24, 110) if j == 0 else (22, 60), j == len(rows) - 1
+            # a row with no weight (a note, a FIX line, a missed node's label) longer than the box widens its plate to
+            # the right; a node's label is the box's width
+            right_x = x + EDGE if right else max(x + EDGE, x - EDGE + 14 + probe.textlength(left, font=fs if j == 0 else fx))
+            shapes.append(([x - EDGE, top, right_x, top + h], col + (alpha,), None, (False, False, last, last)))
+            lit = (255, 255, 255) if j == 0 else tuple(min(255, v + 60) for v in col)
+            texts.append(((x - EDGE + 7, top + h / 2), left, "lm", lit, fs if j == 0 else fx))
+            if right:
+                texts.append(((x + EDGE - 7, top + h / 2), right, "rm", lit, fs))
+            top += h
 
     for (k, row), n in sorted(nodes.items()):
-        (x, y), real = where(k, row), fix.get(f"c{k}/{row}")
+        real = fix.get(f"c{k}/{row}")
         notes = [(t, det) for t, det in n["notes"] if not (t == "cost_none" and any(u == "cost_miss" for u, _ in n["notes"]))]
         rings = ([ORANGE if real[0] == "cost" else RED] if real else []) + list(dict.fromkeys(NOTE_COLOUR[t] for t, _ in notes)) or [GREEN]
-        for i, col in enumerate(rings):
-            e = 52 - 5 * i
-            d.rectangle([x - e, y - e, x + e, y + e], outline=col + (255,), width=4)
-        cost = n["cost"] if n["cost"] not in (None, "None") else ""
-        lines, colours = [n["type"] + (f" {cost}" if cost else "")], [rings[0]]
-        for tag, detail in notes:
-            lines.append(note_text(tag, detail, n))
-            colours.append(NOTE_COLOUR[tag])
-        if real and real[0] == "cost":
-            lines.append(f"Cost 讀錯：{real[1]}，類型讀對")
-            colours.append(ORANGE)
-        elif real:
-            lines.append(f"讀錯：實為 {real[0]}")
-            colours.append(RED)
-        label(d, x - 52, y + 54, lines, colours, f)
+        rows = [(n["type"], str(weight(n["type"])), rings[0])] + [(note_text(t, n), "", NOTE_COLOUR[t]) for t, _ in notes]
+        if real:
+            rows.append((f"Cost 讀錯：{real[1]}" if real[0] == "cost" else f"實為 {real[0]}", "", rings[0]))
+        node(*where(k, row), rings, rows)
     for key, real in fix.items():
         if real[0] == "missed":
             k, row = int(key[1:].split("/")[0]), key.split("/")[1]
-            x, y = where(k, row)
-            d.rectangle([x - 52, y - 52, x + 52, y + 52], outline=ORANGE + (255,), width=4)
-            label(d, x - 52, y + 54, [real[1]], [ORANGE], f)
-    for x, y, col, text in items:
-        d.rectangle([x, H + y + 3, x + 24, H + y + 27], fill=col)
-        d.text((x + 32, H + y), text, font=f, fill=(255, 255, 255))
-    banner = f"第 {floor} 層  拖曳 " + drag_banner(drags, offsets, measured)
+            node(*where(k, row), [ORANGE], [(real[1], "", ORANGE)])
+
+    def plates(d, k):
+        for box, fill, outline, corners in shapes:
+            d.rounded_rectangle([v * k for v in box], 6 * k, fill=fill, outline=outline, width=4 * k if outline else 0, corners=corners)
+    smooth(canvas, plates)
+    d = ImageDraw.Draw(canvas, "RGBA")
+    for xy, text, anchor, col, fnt in texts:
+        d.text(xy, text, font=fnt, fill=col, anchor=anchor)
+
+    # header: the floor, the steps (number, type, weight) summed to the route's score; the drags and nodes at the right
+    y, badges = TOP // 2, [(x - EDGE, y - EDGE, i, 12) for i, (x, y) in enumerate(pts[1:], 1)]
+    d.text((16, y), f"第 {floor} 層", font=ft, fill=(255, 255, 255), anchor="lm")
+    x = 104
+    for i, (_, t) in enumerate(path[0] if path else [], 1):
+        badges.append((x + 11, y, i, 11))
+        d.text((x + 28, y), t, font=f, fill=(240, 240, 240), anchor="lm")
+        x += 28 + d.textlength(t, font=f) + 5
+        d.text((x, y + 1), str(weight(t)), font=fs, fill=(175, 175, 175), anchor="lm")
+        x += d.textlength(str(weight(t)), font=fs) + 10
+        if i < len(path[0]):
+            d.text((x, y), "+", font=f, fill=(110, 110, 110), anchor="lm")
+            x += 22
     if path:
-        pts = [BUS] + [where(k, row) for k, (row, _) in enumerate(path[0], 1)]
-        d.line(pts, fill=BLUE + (255,), width=8)
-        for n, (x, y) in enumerate(pts[1:], 1):
-            d.ellipse([x - 66, y - 66, x - 38, y - 38], fill=BLUE + (255,))
-            d.text((x - 59, y - 67), str(n), font=fb, fill=(0, 0, 0))
-        banner += "  路線：" + " > ".join(f"{r} {t}" for r, t in path[0]) + f"  分數 {path[1]}"
-    d.rectangle([0, 0, canvas.width, 34], fill=(0, 0, 0, 200))
-    d.text((8, 3), banner, font=f, fill=(255, 255, 255))
-    return canvas
+        d.text((x + 4, y), f"＝ {path[1]}", font=f, fill=(255, 255, 255), anchor="lm")
+    d.text((width - 16, y), f"拖曳 {len(drags)} 次　讀到 {len(nodes)} 個節點", font=fs, fill=(175, 175, 175), anchor="rm")
+    smooth(canvas, lambda dd, k: [badge(dd, *b, k) for b in badges])
+
+    # legend: the colours this picture uses, the route last, flowing over lines; what the numbers are at the right of
+    # the last line, or below it when there is no room
+    d = ImageDraw.Draw(canvas, "RGBA")
+    x, y = 16, TOP + H + LINE // 2
+    for col in [c for c in LEGEND_TEXT if c in used]:
+        text = LEGEND_TEXT[col]
+        if x > 16 and x + 32 + d.textlength(text, font=fs) > width - 16:
+            x, y = 16, y + LINE
+        if col == BLUE:
+            d.line([x, y, x + 24, y], fill=col, width=6)
+        else:
+            d.rectangle([x + 2, y - 10, x + 22, y + 10], outline=col, width=4)
+        d.text((x + 32, y), text, font=fs, fill=(175, 175, 175), anchor="lm")
+        x += 32 + d.textlength(text, font=fs) + 28
+    if x + d.textlength(explain, font=fs) > width - 16:
+        y += LINE
+    d.text((width - 16, y), explain, font=fs, fill=(130, 130, 130), anchor="rm")
+    return canvas.crop((0, 0, width, y + LINE // 2)).convert("RGB")
 
 
 def drag_steps(block, stages, drags, path, floor: int, t0: float, t1: float) -> list[dict]:
@@ -481,6 +535,13 @@ def drag_steps(block, stages, drags, path, floor: int, t0: float, t1: float) -> 
     if path:
         steps.append({"from": t_plan, "to": t1, "title": f"規劃路線，分數 {path[1]}：" + " > ".join(f"{r} {t}" for r, t in path[0])})
     return [{**s, "from": hms(s["from"]), "to": hms(s["to"])} for s in steps if s["from"] < s["to"]]
+
+
+def logged_hard(msgs, floor: int, until: float) -> bool | None:
+    """The difficulty the bot logged for the floor (`floor N: HARD|NORMAL`), the last time before until (the map's
+    reading: a log of several runs has the floor once per run); None when it never did."""
+    said = [x for t, x in msgs if t <= until and re.fullmatch(rf"floor {floor}: (HARD|NORMAL)", x)]
+    return said[-1].endswith("HARD") if said else None
 
 
 def map_cmd(a) -> None:
@@ -503,7 +564,7 @@ def map_cmd(a) -> None:
     slides = [measure_shift(gray[n], gray[n + 1], px) for n, (_, px, _) in enumerate(drags)]
     offsets = list(accumulate((s[0] if s else px for s, (_, px, _) in zip(slides, drags)), initial=0))
     measured = [s and s[0] for s in slides]
-    draw_map(shots, offsets, drags, nodes, path, fix, a.floor, measured).save(out / "stitched.png")
+    draw_map(shots, offsets, drags, nodes, path, fix, a.floor, logged_hard(maalc(log), a.floor, block[-1][0])).save(out / "stitched.png")
     (out / "route.json").write_text(json.dumps({
         "floor": a.floor, "drags": [{"t": hms(t), "px": px, "from_column": c, "measured": m, "score": s and round(s[1], 3)}
                                     for (t, px, c), m, s in zip(drags, measured, slides)],
