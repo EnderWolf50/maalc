@@ -86,10 +86,10 @@
         ],
         "action": "Custom",
         "custom_action": "MailDone",
-        "post_delay": 500
+        "post_delay": 0
     },
     // Claim All beside the box's Close (Mailbox.png). max_hit: a confirm or result window over the box can leave the
-    // button reading; three presses is far more than one claim needs.
+    // button reading; three presses is far more than one claim needs. Its 2.5 s stay: that window has no capture to wait for.
     "MailClaimAll": {
         "recognition": "And",
         "all_of": [
@@ -111,15 +111,22 @@
         "post_delay": 2500,
         "max_hit": 3
     },
-    // The envelope at the top right of the main window (HomeReached).
+    // The envelope at the top right of the main window (HomeReached): tapped until the box's title reads (MailEmptyTitle).
     "MailOpen": {
         "recognition": "And",
         "all_of": [
             "HomeReached"
         ],
-        "action": "Click",
-        "target": [1085, 95, 70, 60],
-        "post_delay": 2000,
+        "action": "Custom",
+        "custom_action": "TapUntil",
+        "custom_action_param": {
+            "target": [1085, 95, 70, 60],
+            "next": {
+                "roi": [500, 100, 280, 45],
+                "expected": "^Mailbox$"
+            }
+        },
+        "post_delay": 0,
         "max_hit": 2
     }
 }

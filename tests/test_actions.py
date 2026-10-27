@@ -1414,6 +1414,18 @@ def test_tap_until_gone_gives_up_after_its_timeout(context, clock):
     assert 2 <= sum(clock) < 2.5
 
 
+def test_tap_until_left_taps_the_nodes_box_and_waits_until_the_node_misses(context, clock):
+    # A template node's page (the unlit Window tab, a Luxcavation tab): the node's own recognition missing is the page
+    # left; the hub would tap it again before that.
+    page(context, {(): lambda clicks, looks: "hit" if not clicks or looks < 4 else None})  # the node, no roi override
+    run = SimpleNamespace(custom_action_param=json.dumps({"left": True}), node_name="HomeWindowTab", box=[800, 620, 50, 40])
+    assert actions.TapUntil().run(context, run)
+    assert taps(context) == [(825, 640)]
+    assert context.run_recognition.call_args.args[0] == "HomeWindowTab"
+    assert "HomeWindowTab: screen changed after" in actions.LOG[-1]
+    no_fixed_wait(clock)
+
+
 def test_tap_until_logs_how_long_the_screen_took(context, clock):
     # #254: the live run reads the wait from the log; the fixed delay it replaces was never measured.
     page(context, {(600, 440, 80, 35): lambda clicks, looks: "Continue" if looks < 4 else None})

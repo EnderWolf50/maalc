@@ -60,21 +60,32 @@
                 "expected": "(?i)season"
             }
         ],
-        "action": "Click",
-        "target": [940, 190, 270, 90],
-        "post_delay": 2500,
+        "action": "Custom",
+        "custom_action": "TapUntil",
+        "custom_action_param": {
+            "target": [940, 190, 270, 90],
+            "left": true
+        },
+        "post_delay": 0,
         "max_hit": 3
     },
-    // The pass page opens on its Battle Pass tab: the Pass Missions tab unlit (lit it scores 0.92, the 0.97 threshold keeps it out).
+    // The pass page opens on its Battle Pass tab: the Pass Missions tab unlit (lit it scores 0.92, the 0.97 threshold keeps
+    // it out), tapped until it is lit.
     "PassMissionsTab": {
         "recognition": "TemplateMatch",
         "roi": [300, 36, 150, 44],
         "template": "Pass/PassMissionsTab.png",
         "threshold": 0.97,
-        "action": "Click",
-        "post_delay": 2000,
+        "action": "Custom",
+        "custom_action": "TapUntil",
+        "custom_action_param": {
+            "left": true
+        },
+        "post_delay": 0,
         "max_hit": 3
     },
+    // A row's tap keeps its 1.5 s, on each tab: what shows after it (a reward window, the row's own change) has no
+    // capture to wait for.
     "PassDailyClaim": {
         "recognition": "And",
         "all_of": [
@@ -102,9 +113,13 @@
         "all_of": [
             "PassDailyLit"
         ],
-        "action": "Click",
-        "target": [256, 350, 30, 100],
-        "post_delay": 2000,
+        "action": "Custom",
+        "custom_action": "TapUntil",
+        "custom_action_param": {
+            "target": [256, 350, 30, 100],
+            "left": true
+        },
+        "post_delay": 0,
         "max_hit": 2
     },
     "PassWeeklyClaim": {
@@ -134,9 +149,13 @@
         "all_of": [
             "PassWeeklyLit"
         ],
-        "action": "Click",
-        "target": [256, 490, 30, 100],
-        "post_delay": 2000,
+        "action": "Custom",
+        "custom_action": "TapUntil",
+        "custom_action_param": {
+            "target": [256, 490, 30, 100],
+            "left": true
+        },
+        "post_delay": 0,
         "max_hit": 2
     },
     // The Seasonal tab's ten rows (live 2026-10-27): the five on show at its top first.
@@ -162,7 +181,7 @@
         "threshold": 0.9
     },
     // Then one swipe up, which takes the list to its end (live 2026-10-27: a second one moved nothing). Once only: quick
-    // swipes in a row once left the game not responding.
+    // swipes in a row once left the game not responding. Its 2 s stay: the list still slides after the finger lifts.
     "PassSeasonalSwipe": {
         "recognition": "And",
         "all_of": [

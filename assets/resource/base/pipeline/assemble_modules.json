@@ -44,7 +44,7 @@
         ],
         "action": "Custom",
         "custom_action": "AssembleMain",
-        "post_delay": 1500
+        "post_delay": 0
     },
     // The "Charge Enkephalin" title plate (tests/screens/EnkephalinPanel.png), on all three of its tabs: the window
     // AssemblePanel and ChargePanel act on.
@@ -54,6 +54,8 @@
         "template": "Assemble/EnkephalinWindow.png",
         "threshold": 0.9
     },
+    // Its 1 s stays: after Confirm the window's numbers change in their own time, and AssemblePanel's next look reads them
+    // (three looks, then the stop procedure); how long they take has no capture.
     "AssemblePanel": {
         "recognition": "And",
         "all_of": [

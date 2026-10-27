@@ -745,6 +745,12 @@ def too_many(context, image):
     return bool(detail and detail.hit)
 
 
+def open_enkephalin(context):
+    """The Enkephalin bar, then until the Charge Enkephalin window shows (3 s at most): the hub's next look at the main
+    window would tap the bar again (#362, instead of a fixed 1.5 s)."""
+    tap_then(context, *ENK_BAR, lambda im: seen(context, im, "EnkephalinWindow") is not None, timeout=3)
+
+
 @AgentServer.custom_action("AssembleMain")
 class AssembleMain(CustomAction):
     """The main window, reached by GoHome or already there: the task's one way out and its way in. With the Enkephalin
@@ -769,7 +775,7 @@ class AssembleMain(CustomAction):
         if n < MODULE_COST:
             return done(f"Enkephalin {n} < {MODULE_COST}, nothing to assemble")
         log(f"assemble: Enkephalin {n}, opening the window")
-        tap(context, *ENK_BAR, wait=0.5)
+        open_enkephalin(context)
         return True
 
 
@@ -891,7 +897,7 @@ class ChargeMain(CustomAction):
         c["opened"] += 1
         if c["opened"] > lunacy.DAILY_MAX + 1:
             return stop(context, f"the Charge Enkephalin window opened {c['opened'] - 1} times, more than a day has charges")
-        tap(context, *ENK_BAR, wait=0.5)
+        open_enkephalin(context)
         return True
 
 
@@ -1143,18 +1149,22 @@ class TapUntil(CustomAction):
     """A Click node that waits for the page that follows instead of a post_delay (#115).
 
     Param: {"target": [x, y, w, h], "next": {"roi": [...], "expected": regex} or a list of them (any),
-    "gone": {"roi": [...], "expected": regex}, "timeout": s (default 3)}; "next" or "gone" or both, the first to hold ends it.
-    The page it leaves may still read like itself for a moment; MirrorHub would act on it twice.
+    "gone": {"roi": [...], "expected": regex}, "left": true, "timeout": s (default 3)}; any of "next", "gone" and "left",
+    the first to hold ends it. The page it leaves may still read like itself for a moment; MirrorHub would act on it twice.
     gone: the node's own roi and expected (#254), for a page whose next one is not known or reads the same (ClaimPopup).
+    left: the node's own recognition misses, for a node that is no OCR (a template: the daily pages' tabs and buttons).
+    No target: the node's box.
     """
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         p = json.loads(argv.custom_action_param)
-        x, y, w, h = p["target"]
+        x, y, w, h = p.get("target", argv.box)
         nxt = p.get("next", [])
         pages = [shows(context, n["roi"], n["expected"]) for n in (nxt if isinstance(nxt, list) else [nxt])]
         if "gone" in p:
             pages.append(gone(context, p["gone"], screen(context)))
+        if p.get("left"):
+            pages.append(lambda im: seen(context, im, argv.node_name) is None)
         began = time.monotonic()
         changed = tap_then(context, x + w // 2, y + h // 2, lambda im: any(page(im) for page in pages), timeout=p.get("timeout", 3))
         log(f"{argv.node_name}: {'screen changed' if changed is not None else 'no change'} after {time.monotonic() - began:.1f} s")

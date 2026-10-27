@@ -43,9 +43,10 @@
         ],
         "action": "Custom",
         "custom_action": "ChargeMain",
-        "post_delay": 1500
+        "post_delay": 0
     },
-    // The Charge Enkephalin window (EnkephalinWindow, assemble_modules.json).
+    // The Charge Enkephalin window (EnkephalinWindow, assemble_modules.json). Its 1 s stays, as AssemblePanel's: the
+    // Daily Count after a Confirm is read on the next look.
     "ChargePanel": {
         "recognition": "And",
         "all_of": [

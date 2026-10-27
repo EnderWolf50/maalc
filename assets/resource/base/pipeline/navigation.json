@@ -79,25 +79,53 @@
         "template": "Navigation/HomeReached.png",
         "threshold": 0.9
     },
-    // The Window tab unlit (Drive.png, SinnersTab.png).
+    // The Window tab unlit (Drive.png, SinnersTab.png): tapped until it reads unlit no more (TapUntil, the page left),
+    // not a fixed 2 s (#362).
     "HomeWindowTab": {
         "recognition": "TemplateMatch",
         "roi": [770, 598, 110, 84],
         "template": "Navigation/HomeWindowTab.png",
         "threshold": 0.9,
-        "action": "Click",
-        "post_delay": 2000
+        "action": "Custom",
+        "custom_action": "TapUntil",
+        "custom_action_param": {
+            "left": true
+        },
+        "post_delay": 0
     },
-    // Not the game in front (the launcher, the Play Store, no focus): start it; the title and its dialogs follow.
+    // Not the game in front (the launcher, the Play Store, no focus): start it; the title and its dialogs follow. Its
+    // next waits for the first screen GoHome knows (HomeGameUp), up to the 10 s post_delay and GoHome's 60 s it had
+    // before (#362); none by then: GoHomeLost, as GoHome's own timeout.
     "HomeGameAway": {
         "recognition": "Custom",
         "custom_recognition": "GameAway",
         "action": "StartApp",
         "package": "com.ProjectMoon.LimbusCompany",
-        "post_delay": 10000,
-        "max_hit": 3
+        "post_delay": 0,
+        "max_hit": 3,
+        "timeout": 70000,
+        "rate_limit": 500,
+        "next": [
+            "HomeGameUp"
+        ],
+        "on_error": [
+            "GoHomeLost"
+        ]
     },
-    // A page with no tab bar (the entry page, Luxcavation): the back key goes up one page.
+    // The game up: the title or what can hide it (RecoverTitle), the main window, the tab bar, a loading screen.
+    "HomeGameUp": {
+        "recognition": "Or",
+        "any_of": [
+            "RecoverTitle",
+            "HomeReached",
+            "HomeWindowTab",
+            "Connecting"
+        ],
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    // A page with no tab bar (the entry page, Luxcavation): the back key goes up one page. The 2 s stay: nothing is known
+    // to wait for, and a second back key while the page is still going can go past the main window (max_hit counts it).
     "HomeBack": {
         "action": "Custom",
         "custom_action": "DismissShot",
@@ -105,24 +133,34 @@
         "post_delay": 2000,
         "max_hit": 5
     },
+    // The title: a tap, then until it goes (TapUntil; after 3 s the hub taps again, as after the old 3 s post_delay).
     "NavTitle": {
         "recognition": "TemplateMatch",
         "roi": [20, 620, 200, 70],
         "template": "Navigation/NavTitle.png",
         "threshold": 0.8,
-        "action": "Click",
-        "target": [540, 300, 200, 120],
-        "post_delay": 3000
+        "action": "Custom",
+        "custom_action": "TapUntil",
+        "custom_action_param": {
+            "target": [540, 300, 200, 120],
+            "left": true
+        },
+        "post_delay": 0
     },
-    // Bottom tab bar; Drive looks different once it is the open tab.
+    // Bottom tab bar; Drive looks different once it is the open tab: tapped until the unlit Drive tab goes.
     "NavMainTabs": {
         "recognition": "TemplateMatch",
         "roi": [930, 600, 110, 80],
         "template": "Navigation/NavMainTabs.png",
         "threshold": 0.9,
-        "action": "Click",
-        "post_delay": 2000
+        "action": "Custom",
+        "custom_action": "TapUntil",
+        "custom_action_param": {
+            "left": true
+        },
+        "post_delay": 0
     },
+    // Mirror Dungeons' way in only (GoToMirrorEntry): its 3 s stay with the mirror's navigation.
     "NavDrive": {
         "recognition": "TemplateMatch",
         "roi": [340, 240, 240, 140],
