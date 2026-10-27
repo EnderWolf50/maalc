@@ -60,7 +60,7 @@ def test_claim_mail_presses_claim_all_once_and_ends_at_the_main_window():
     out = run_child(__file__)
     for name in ("main", "drive", "box_open"):
         o = out[name]
-        assert o["succeeded"] and o["screen"] == "main" and o["done"] == "no mail to claim", name
+        assert o["succeeded"] and o["screen"] == "main" and o["done"] == "mail claimed", name  # live-2 G3
         claims = [c for c in o["clicks"] if inside(CLAIM_ALL, *c)]
         assert len(claims) == 1, name  # the one claim; the empty box after it is not pressed again
         assert o["nodes"][-1] == "TaskDone" and "MailClaimAll" in o["nodes"] and "MailEmpty" in o["nodes"], name

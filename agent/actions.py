@@ -702,13 +702,13 @@ class GoHomeRun(CustomAction):
         return go_home(context)
 
 
-@AgentServer.custom_action("GoHomeDone")
-class GoHomeDone(CustomAction):
-    """A daily task found nothing left to do (the Mailbox empty, both Pass Missions tabs claimed): back to the main window
-    (GoHome closes what is open), then the done exit; the param says why."""
+@AgentServer.custom_action("MailDone")
+class MailDone(CustomAction):
+    """ClaimMail's end, on the empty Mailbox: the main window, then done with what this run did (live-2 G3: a box emptied
+    by Claim All said "no mail to claim")."""
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
-        return go_home(context) and done(json.loads(argv.custom_action_param))
+        return go_home(context) and done("mail claimed" if context.get_hit_count("MailClaimAll") else "no mail to claim")
 
 
 AgentServer.custom_recognition("PassClaimable")(pass_missions.PassClaimable)
