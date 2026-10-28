@@ -41,6 +41,31 @@ def test_watchdog_a_change_starts_over():
     assert [bool(w.see("Event", B, t)) for t in range(6, 10)] == [False, False, False, True]
 
 
+def test_watchdog_a_tab_tapped_over_and_over_is_stuck_however_the_screen_moves():
+    # Acceptance 5 (live 2026-10-28): after an L3 the Drive tab was tapped 2188 times in 45 min, the game showing its tap
+    # but never the Drive page; the main window's banners moved all along, so the same-screen count never got to 5.
+    w = Watchdog()
+    moving = [A, B] * 10
+    assert not any(w.see("NavMainTabs", moving[t], t) for t in range(9))
+    assert w.see("NavMainTabs", moving[9], 9)
+    w = Watchdog()  # a tab that opens its page: another screen comes between two taps
+    assert not any(w.see(kind, moving[t % 20], t) for t in range(40) for kind in ("NavMainTabs", "NavDrive"))
+    w = Watchdog()  # screens that repeat while the game moves on are not taps
+    assert not any(w.see("BattleTurn", moving[t % 20], t) for t in range(40))
+
+
+def test_a_tab_that_never_opens_after_a_restart_restarts_again_then_stops():
+    # Acceptance 5: the battle froze (L1, then L3), and the restarted game would not open Drive. The tab's stuck is the
+    # same episode (NavMainTabs is on the way back): L3 again, and once this run's restarts are used up, the stop.
+    ladder = Ladder()
+    assert ladder.stuck("BattlePause", 1, 0) == (1, None)
+    assert ladder.stuck("BattlePause", 1, 0) == (3, None)
+    ladder.progress("NavMainTabs")
+    assert ladder.stuck("NavMainTabs", 1, 1) == (3, None)
+    ladder.progress("NavMainTabs")
+    assert ladder.stuck("NavMainTabs", 1, 2) == (None, "game restarted 2 times this run")
+
+
 def dots(n):
     """Loading.png's NOW LOADING... as it animates: n of its 3 dots, a few pixels of one block."""
     image = screen(100)
