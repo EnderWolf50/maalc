@@ -81,9 +81,9 @@ def child():
         # the Window tab's page shows 4 screenshots after the tap; the game shows black for 15 before its title
         "drive_late": ("drive", GAME, 4), "closed_slow": ("black", "com.android.launcher", 0, 15),
         # these last: they change the model's methods
-        "stuck": ("entry", GAME), "restart": ("entry", GAME), "restarts_used": ("entry", GAME),
-        # J2 (live 2026-10-28): the last task stopped mid-battle; these end the task list (post_stop): last
-        "battle": ("battle", GAME), "event": ("event", GAME),
+        "stuck": ("entry", GAME), "restart": ("entry", GAME), "restarts_used": ("entry", GAME), "event": ("event", GAME),
+        # J2 (live 2026-10-28): the last task stopped mid-battle; it ends the task list (post_stop): last
+        "battle": ("battle", GAME),
     }.items():
         game.set(start, focus, *model)
         if scenario in ("stuck", "restart", "restarts_used"):  # the back key does nothing: pressed up to its limit
@@ -164,15 +164,21 @@ def test_go_home_stops_once_the_last_restart_did_not_help():
     assert o["nodes"].count("GoHomeLost") == 2
 
 
-def test_go_home_in_a_battle_or_its_story_ends_the_task_list_without_a_back_key():
-    # J2 (live 2026-10-28): Thread Luxcavation stopped on a battle's story; the next task's GoHome pressed back 5 times
-    # there (in a battle it opens the pause menu, Give Up one tap away). Nothing is pressed: the stop procedure, and the
-    # rest of the list goes, as after an account-level stop, for the user to end the battle by hand.
-    out = run_child(__file__)
-    for name in ("battle", "event"):
-        o = out[name]
-        assert o["succeeded"] is False and o["keys"] == [] and o["clicks"] == [], name
-        assert o["stopped"] == 1 and o["halted"].startswith(("HomeInBattle: ", "HomeInEvent: ")), (name, o["halted"])
+def test_go_home_in_a_battle_ends_the_task_list_without_a_back_key():
+    # J2 (live 2026-10-28): in a battle the back key opens the pause menu, Give Up one tap away. Nothing is pressed: the
+    # stop procedure, and the rest of the list goes, as after an account-level stop, for the user to end it by hand.
+    o = run_child(__file__)["battle"]
+    assert o["succeeded"] is False and o["keys"] == [] and o["clicks"] == []
+    assert o["stopped"] == 1 and o["halted"].startswith("HomeInBattle: "), o["halted"]
+
+
+def test_go_home_on_an_event_page_presses_back_then_restarts_the_game():
+    # The user (2026-10-28): the event screens of Luxcavation and the mirror look the same, so no screen reading tells
+    # them apart; an event page gets the old way, the back key (5 times, live: the story page did not change), then L3.
+    # The restarts are used up here: L3 runs the stop procedure, and the list is not ended.
+    o = run_child(__file__)["event"]
+    assert o["succeeded"] is False and o["keys"] == [4] * 5 and o["clicks"] == []
+    assert o["nodes"][-1] == "GoHomeLost" and o["stopped"] == 1 and o["halted"] is None, o
 
 
 def test_go_home_is_a_task_of_the_interface():
