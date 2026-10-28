@@ -172,7 +172,7 @@ def test_go_home_in_a_battle_or_its_story_ends_the_task_list_without_a_back_key(
     for name in ("battle", "event"):
         o = out[name]
         assert o["succeeded"] is False and o["keys"] == [] and o["clicks"] == [], name
-        assert o["stopped"] == 1 and o["halted"].startswith("HomeInBattle: "), (name, o["halted"])
+        assert o["stopped"] == 1 and o["halted"].startswith(("HomeInBattle: ", "HomeInEvent: ")), (name, o["halted"])
 
 
 def test_go_home_is_a_task_of_the_interface():

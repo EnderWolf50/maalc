@@ -35,10 +35,11 @@
             "[JumpBack]HomeWindowTab",
             "[JumpBack]HomeGameAway",
             "HomeInBattle",
+            "[JumpBack]HomeEventText",
             "[JumpBack]HomeBack"
         ]
     },
-    // A battle or its story (the battle screens BattleHUD knows, the event's button Event reads): the last task stopped
+    // A battle (the screens BattleHUD knows) or its story (HomeInEvent, the event's button): the last task stopped
     // mid-battle (J2, live 2026-10-28). The back key opens a battle's pause menu, Give Up one tap away, and giving a
     // battle up is not the bot's to do: Halt, which ends the rest of the list too (each task would meet the same battle),
     // for the user to end it by hand.
@@ -48,12 +49,38 @@
             "BattleMenu",
             "LuxBattleMenu",
             "BattleTurn",
-            "BattlePause",
-            "Event"
+            "BattlePause"
         ],
         "action": "Custom",
         "custom_action": "Halt",
         "custom_action_param": "a battle is on: end it by hand, then start the list again"
+    },
+    // HomeInEvent's OCR in one HubText pass, as HomeText's (#157: GoHome lists no OCR of its own).
+    "HomeEventText": {
+        "recognition": "Custom",
+        "custom_recognition": "HubText",
+        "custom_recognition_param": {
+            "entries": [
+                "HomeInEvent"
+            ],
+            "tail": []
+        },
+        "pre_delay": 0,
+        "post_delay": 0,
+        "rate_limit": 300,
+        "timeout": 0,
+        "on_error": [
+            "HomeTextLost"
+        ]
+    },
+    // The event's button (Event's roi and text: SKIP, Proceed, Continue, Commence), a battle's story: as HomeInBattle.
+    "HomeInEvent": {
+        "recognition": "OCR",
+        "roi": [1040, 612, 190, 66],
+        "expected": "SKIP|Proceed|Continue|Commence",
+        "action": "Custom",
+        "custom_action": "Halt",
+        "custom_action_param": "a battle's story is on: end the battle by hand, then start the list again"
     },
     "GoHomeLost": {
         "action": "Custom",
