@@ -64,7 +64,10 @@ def test_sweep_where_both_boxes_read_ticked():
         image = np.asarray(Image.open(png).convert("RGB"))[:, :, ::-1]
         if image.shape[:2] == (720, 1280) and all(actions.agree_ticked(image, *b) for b in actions.AGREE_BOXES):
             hits.append(png.name)
-    assert hits == ["BattleTurnLit.png", "BossGiftTrialsHard.png", "EventNotices.png", "LuxExp.png", "LuxExpLocked.png",
+    assert hits == ["BattleTurnLit.png", "BossGiftTrialsHard.png", "EventNotices.png",
+                    "LuxConsecExp1.png", "LuxConsecExp10Open.png", "LuxConsecExp1Open.png", "LuxConsecExp2Open.png",
+                    "LuxConsecExp9Open.png", "LuxConsecThread1.png", "LuxConsecThread10Open.png", "LuxConsecThread2Open.png",
+                    "LuxConsecThread3Open.png", "LuxExp.png", "LuxExpLocked.png",
                     "LuxThread.png", "LuxThreadLust.png", "LuxThreadScrolled.png", "Mailbox.png", "MailboxEmpty.png",
                     "RunVictory.png", "SinnersTab.png", "SystemNotices.png", "TeamSelect.png", "Title.png",
                     "UserAgreementTicked.png"]
