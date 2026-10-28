@@ -36,7 +36,7 @@
 以下功能不在 `maalc` 的規劃內：（#1）
 
 - 無限鏡牢（Parallel Superposition，第 6–10 層），一律不開啟。（#17）
-- Refraction Railway、免費抽卡（Extraction）、自動換模組的常駐工具。排程與結束後動作由 MXU／MFAAvalonia 提供，maalc 只在 README 說明。（#362）
+- Refraction Railway、免費抽卡（Extraction）、自動換腦啡肽模組的常駐工具。排程與結束後動作由 MXU／MFAAvalonia 提供，maalc 只在 README 說明。（#362）
 - 安裝程式與自動更新。v1 只用 GitHub Actions 產出一個 zip：bot、resource、MXU、內嵌 Python、設定 GUI 的執行檔放在同一個發佈目錄（做法參考 MaaPracticeBoilerplate 的 workflow）。（#1、#4、#19，2026-10-14 定案；MXU 與內嵌 Python 見 #33）
 - Windows 原生客戶端（Win32 控制器）。
 - 中文或其他語言的遊戲畫面辨識。
@@ -58,7 +58,6 @@
 | Dark UI 外觀 | 只支援 Default，使用者維持 Default | #48 |
 | 不指定次數、自動判斷模式 | 經驗本、紐本照 `settings.json` 填的次數打；之後可讀通行證每日任務有沒有完成、紐本 Daily Bonuses 的剩餘次數 `n` 自動決定 | #362 |
 | Skip（掃蕩） | 實際打戰鬥，不按 Skip | #362 |
-| 遊戲內 Consecutive Battle | 不改遊戲設定，一次打一場 | #362 |
 | 依星期換隊伍 | 每個日常用一支固定隊伍 | #362 |
 | 選關功能 | 一律打最難的關 | #362 |
 | 通行證等級獎勵 | 只領每日、每週、季度（Seasonal）任務獎勵 | #362 |

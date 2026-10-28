@@ -58,7 +58,7 @@
 | Thread 分頁：捲走了 | 同上的 Thread 分頁，但看不到亮著的 Enter（`LuxThreadSwipe`） | 往右滑，把左邊的卡帶進來（方向 unverified） | Thread 分頁，開放的卡在畫面裡 | #368 | `tests/screens/LuxThreadScrolled.png` |
 | Level Select | 模板：標題 `Level Select`；模板：每列的 `Enter`，取最下面一個（`LuxThreadLevel`） | 點最下面那列的 Enter（開啟時清單停在最底，最難的等級） | 選隊頁（和經驗本同一頁） | #368 | `tests/screens/LuxThreadLevels.png` |
 
-- Thread 分頁一次顯示四張卡，共七隻異想體，依星期開放，其餘卡顯示 `Opens <星期>`；Daily Bonuses 的剩餘次數在頂部（只有這一頁），今天的卡有 `Consecutive Battle ×1` 的選擇器，不動它。清單從今天的卡開始排（週日 Wrath 在最左，週一 Lust 在最左），但記得上次捲到哪裡。
+- Thread 分頁一次顯示四張卡，共七隻異想體，依星期開放，其餘卡顯示 `Opens <星期>`；Daily Bonuses 的剩餘次數在頂部（只有這一頁），今天的卡有 `Consecutive Battle ×1` 的選擇器；連戰開時 bot 進場前會把它設成 ×N（見 [01](01-architecture.md)）。清單從今天的卡開始排（週日 Wrath 在最左，週一 Lust 在最左），但記得上次捲到哪裡。
 - Level Select：Lust 有 Lv20/30/40/50/60 五級，每級 Enter 消耗 2 個模組，都沒上鎖，沒有 Skip；一開啟清單就停在最底（Lv40/50/60）。其他異想體的清單沒看過（unverified）。（2026-10-26 實機，週一）
 
 ## 開局

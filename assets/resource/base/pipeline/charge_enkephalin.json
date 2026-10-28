@@ -34,7 +34,7 @@
     "ChargeLost": {
         "action": "Custom",
         "custom_action": "StopTask",
-        "custom_action_param": "the Charge Enkephalin window or the main window was not reached"
+        "custom_action_param": "Charge Enkephalin: the Charge Enkephalin window or the main window was not reached"
     },
     "ChargeMain": {
         "recognition": "And",

@@ -617,14 +617,22 @@ def set_consecutive(context, box, target):
     _, _, (title_x, title_y), row_y, buttons = CONSECUTIVE[box]
     shown = []
     until(context, lambda im: shown.append(consecutive_now(context, im, box)) or shown[-1] is not None, timeout=3)
-    if shown[-1] is None or shown[-1] == target:
-        return shown[-1]
+    if shown[-1] is None:
+        log(f"Consecutive Battle ({box}): does not read, wants x{target}")
+        return None
+    log(f"Consecutive Battle ({box}): shows x{shown[-1]}, wants x{target}")
+    if shown[-1] == target:
+        return target
     tap(context, title_x, title_y, wait=0.5)  # open the row
-    for name in luxcavation.presses(shown[-1], target):
+    keys = luxcavation.presses(shown[-1], target)
+    log(f"Consecutive Battle ({box}): pressed {', '.join(keys)}")
+    for name in keys:
         tap(context, buttons[name], row_y, wait=0.3)
     tap(context, title_x, title_y, wait=0.5)  # close it again
     shown.clear()
     until(context, lambda im: shown.append(consecutive_now(context, im, box)) or shown[-1] == target, timeout=3)
+    log(f"Consecutive Battle ({box}): {'does not read' if shown[-1] is None else f'shows x{shown[-1]}'} after closing the row"
+        + ("" if shown[-1] == target else f", wanted x{target}"))
     return shown[-1]
 
 

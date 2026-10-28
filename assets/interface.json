@@ -71,12 +71,6 @@
             "name": "ChargeEnkephalin",
             "label": "$ChargeEnkephalin",
             "entry": "ChargeEnkephalin"
-        },
-        // Temporary, for verifying GoHome (#365); the daily tasks run it themselves.
-        {
-            "name": "GoHome",
-            "label": "$GoHome",
-            "entry": "GoHome"
         }
     ]
 }

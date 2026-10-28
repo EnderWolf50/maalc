@@ -82,6 +82,8 @@ def child():
         "drive_late": ("drive", GAME, 4), "closed_slow": ("black", "com.android.launcher", 0, 15),
         # these last: they change the model's methods
         "stuck": ("entry", GAME), "restart": ("entry", GAME), "restarts_used": ("entry", GAME), "event": ("event", GAME),
+        # the Window tab shows its tap but the page never changes: tapped up to its limit (the taps stay ignored after it)
+        "tab_stuck": ("drive", GAME),
         # J2 (live 2026-10-28): the last task stopped mid-battle; it ends the task list (post_stop): last
         "battle": ("battle", GAME),
     }.items():
@@ -96,6 +98,10 @@ def child():
         actions.ROOT.joinpath("logs").mkdir(exist_ok=True)
         stops = len(list(actions.ROOT.joinpath("logs").rglob("agent.log")))
         override = {"GoHome": {"timeout": 4000}, "RecoverL3": {"post_delay": 0}, "RecoverStartApp": {"post_delay": 0}}
+        if scenario == "tab_stuck":
+            game.on_tap = lambda x, y: True
+            override["GoHome"]["timeout"] = 8000
+            override["HomeWindowTab"] = {"custom_action_param": {"left": True, "timeout": 0.1}}
         if scenario == "restarts_used":  # one restart left, and the restarted game is as stuck as before
             actions.STUCK["l3"] = actions.recovery.L3_PER_EXECUTION - 1
             game.start_app = lambda intent, game=game: (setattr(game, "focus", GAME), setattr(game, "screen", "entry"), True)[-1]
@@ -181,10 +187,18 @@ def test_go_home_on_an_event_page_presses_back_then_restarts_the_game():
     assert o["nodes"][-1] == "GoHomeLost" and o["stopped"] == 1 and o["halted"] is None, o
 
 
-def test_go_home_is_a_task_of_the_interface():
+def test_go_home_taps_a_window_tab_that_does_not_open_its_page_only_a_limited_number_of_times():
+    # Review of #375: HomeWindowTab had no limit, so a tab that showed its tap but never changed the page was tapped
+    # until the end of time (a JumpBack gives GoHome a fresh timeout each time). 10 taps, then GoHomeLost's L3.
+    o = run_child(__file__)["tab_stuck"]
+    assert o["succeeded"] is False and len(o["clicks"]) == 10 and all(inside(WINDOW_TAB, *c) for c in o["clicks"]), o
+    assert o["nodes"][-1] == "GoHomeLost" and o["stopped"] == 1, o
+
+
+def test_go_home_is_not_a_task_of_the_interface():  # the daily tasks run it themselves (#365); no PI entry of its own
     interface = json.loads("\n".join(ln for ln in (ROOT / "assets/interface.json").read_text(encoding="utf-8").splitlines()
                                      if not ln.strip().startswith("//")))
-    assert {"name": "GoHome", "label": "$GoHome", "entry": "GoHome"} in interface["task"]
+    assert "GoHome" not in [t["name"] for t in interface["task"]]
 
 
 if __name__ == "__main__":

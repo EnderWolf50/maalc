@@ -1,6 +1,16 @@
-import pytest
+from pathlib import Path
 
+import numpy as np
+import pytest
+from PIL import Image
+
+import actions
 from luxcavation import EXP_COST, FIGHT, FINISH, RETRY, SKIP, STOP, batch, decide, needed, parse_consecutive, presses
+
+if __name__ != "__main__":  # as test_task_chain.py: the fixtures are test_actions's
+    from test_actions import Choices, clock, context  # noqa: F401 (the fake Maa context the in-process tests use)
+
+SCREENS = Path(__file__).resolve().parent / "screens"
 
 
 @pytest.mark.parametrize("count, cost, need", [(1, 3, 3), (2, 3, 6), (5, 3, 15), (3, 2, 6)])
@@ -77,3 +87,69 @@ def test_the_title_reads_as_its_count(read, n):
 ])
 def test_the_buttons_to_press_are_the_fewest(now, target, taps):
     assert presses(now, target) == taps
+
+
+def test_a_luxcavation_event_reads_its_choices_without_a_mirror_run_plan(context, monkeypatch):
+    # J1: a Luxcavation battle's event has its task's team, no Mirror run plan; one made up from the settings would
+    # go to runs.jsonl at the next stop.
+    actions.RUN.clear()
+    actions.RUN.update(lux={"name": "Thread Luxcavation"}, team={"keyword": "Burn"})
+    page = Choices(context, monkeypatch, [("Option 0.", ""), ("Option 1.", "Select to gain a Burn E.G.O Gift")], ["Unknown story."])
+    actions.Event().run(context, None)
+    assert page.tapped == ["Option 1."] and "settings" not in actions.RUN
+
+
+LUX_EVENT = {name: np.array(Image.open(SCREENS / f"{name}.png").convert("RGB"))[:, :, ::-1]
+             for name in ("LuxEventStory", "LuxEventCard", "LuxEventCheck", "LuxEventText", "EventStory", "EventCheck",
+                          "EventChoices", "EventResult", "EventNotices")}
+
+
+@pytest.mark.parametrize("name", LUX_EVENT)
+def test_a_check_card_alone_is_told_from_every_other_event_page(name):
+    # Live 2026-10-28 (J1): after SKIP, a Luxcavation event's check card shows alone at the right, SKIP grey; nothing
+    # goes on until the card is tapped. Its prompt below, a result, a Choices list or no card: another page.
+    assert actions.card_alone(LUX_EVENT[name]) == (name == "LuxEventCard")
+
+
+def test_a_check_card_alone_is_tapped_to_open_its_prompt(context, monkeypatch):
+    taps = []
+    monkeypatch.setattr(actions, "tap", lambda context, x, y, wait=1.0: taps.append((x, y)))
+    shots = [LUX_EVENT["LuxEventCard"], LUX_EVENT["LuxEventCheck"]]
+    context.tasker.controller.post_screencap.return_value.wait.return_value.get.side_effect = (
+        lambda: shots.pop(0) if len(shots) > 1 else shots[0])
+    actions.RUN.clear()
+    actions.RUN.update(lux={"name": "Thread Luxcavation"}, team={"keyword": "Burn"})
+    assert actions.Event().run(context, None) is True
+    assert taps == [actions.EVENT_CARD] and "settings" not in actions.RUN
+
+
+def run_set_consecutive(context, monkeypatch, reads, target):
+    """actions.set_consecutive on the exp page with the title reading `reads` in turn (the last repeats); the taps made."""
+    taps, reads = [], list(reads)
+    monkeypatch.setattr(actions, "consecutive_now", lambda context, image, box: reads.pop(0) if len(reads) > 1 else reads[0])
+    monkeypatch.setattr(actions, "tap", lambda context, x, y, wait=1.0: taps.append((x, y)))
+    actions.LOG.clear()
+    return actions.set_consecutive(context, "exp", target), taps
+
+
+def test_the_consecutive_battle_logs_what_it_read_pressed_and_read_back(context, monkeypatch):
+    # Acceptance 7 (M1): a run's log did not say what x N the bot found, which keys it pressed, or what it read after.
+    got, taps = run_set_consecutive(context, monkeypatch, [1, 4], 4)
+    assert got == 4 and len(taps) == 5  # open, + + +, close
+    lines = [ln.split(" ", 1)[1] for ln in actions.LOG]
+    assert lines == ["Consecutive Battle (exp): shows x1, wants x4",
+                     "Consecutive Battle (exp): pressed plus, plus, plus",
+                     "Consecutive Battle (exp): shows x4 after closing the row"]
+
+
+def test_the_consecutive_battle_already_at_its_count_logs_the_read_only(context, monkeypatch):
+    got, taps = run_set_consecutive(context, monkeypatch, [3], 3)
+    assert got == 3 and taps == []
+    assert [ln.split(" ", 1)[1] for ln in actions.LOG] == ["Consecutive Battle (exp): shows x3, wants x3"]
+
+
+def test_the_consecutive_battle_that_does_not_read_or_set_logs_it(context, monkeypatch):
+    got, _ = run_set_consecutive(context, monkeypatch, [None], 4)
+    assert got is None and [ln.split(" ", 1)[1] for ln in actions.LOG] == ["Consecutive Battle (exp): does not read, wants x4"]
+    got, _ = run_set_consecutive(context, monkeypatch, [1, 2], 4)
+    assert got == 2 and actions.LOG[-1].endswith("Consecutive Battle (exp): shows x2 after closing the row, wanted x4")

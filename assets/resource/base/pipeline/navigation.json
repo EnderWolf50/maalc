@@ -97,7 +97,9 @@
         "threshold": 0.9
     },
     // The Window tab unlit (Drive.png, SinnersTab.png): tapped until it reads unlit no more (TapUntil, the page left),
-    // not a fixed 2 s (#362).
+    // not a fixed 2 s (#362). At most 10 taps (max_hit, as the watchdog's NAV_TAP_LIMIT): a tab that shows its tap but
+    // never opens its page would be tapped for ever, each JumpBack giving GoHome a new timeout; GoHome then times out
+    // into GoHomeLost's L3.
     "HomeWindowTab": {
         "recognition": "TemplateMatch",
         "roi": [770, 598, 110, 84],
@@ -108,7 +110,8 @@
         "custom_action_param": {
             "left": true
         },
-        "post_delay": 0
+        "post_delay": 0,
+        "max_hit": 10
     },
     // Not the game in front (the launcher, the Play Store, no focus): start it; the title and its dialogs follow. Its
     // next waits for the first screen GoHome knows (HomeGameUp), up to the 10 s post_delay and GoHome's 60 s it had

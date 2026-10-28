@@ -82,7 +82,7 @@ const zh_tw = {
   teamName: "隊伍",
   noTeams: "還沒有隊伍。新增一支隊伍，bot 才能開始跑。",
   // daily tasks (#362)
-  "daily.note": "這裡只設定每個日常任務怎麼跑。要跑哪些、依什麼順序，在 MXU 或 MFAAvalonia 的任務清單勾選並拖曳排序。建議順序：換模組 → 經驗本 → 紐本 → 換模組 → 通行證任務 → 信箱 → 鏡牢。",
+  "daily.note": "這裡只設定每個日常任務怎麼跑。要跑哪些、依什麼順序，在 MXU 或 MFAAvalonia 的任務清單勾選並拖曳排序。建議順序：換腦啡肽模組 → 經驗本 → 紐本 → 換腦啡肽模組 → 通行證任務 → 信箱 → 鏡牢。",
   "lux.exp": "經驗本（EXP Luxcavation）",
   "lux.exp_note": "在任務清單勾選「經驗本」。打 EXP 分頁預設畫面最右邊、已開放的關卡（最難的一關）。",
   "lux.thread": "紐本（Thread Luxcavation）",

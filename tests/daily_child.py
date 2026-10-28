@@ -9,6 +9,7 @@ import json
 import subprocess
 import sys
 import tempfile
+import traceback
 import types
 from pathlib import Path
 
@@ -131,6 +132,33 @@ def result(detail, game, actions):
     """A task's outcome for the test: its status, the nodes it went through, what the model was pressed, the done reason."""
     return {"succeeded": detail.status.succeeded, "nodes": [n.name for n in detail.nodes], "clicks": game.clicks,
             "keys": game.keys, "screen": game.screen, "done": actions.TASK["done"]}
+
+
+def probe_child(body):
+    """The child of a test that calls an agent function on the real OCR: body(context, actions, out) runs inside a custom
+    action of a MaaFramework task on a still, black game; whatever it puts in the dict out is printed as the one JSON
+    line, and an exception in it as out["error"] (MaaFramework swallows it)."""
+    from maa.custom_action import CustomAction
+
+    actions, resource = load()
+    out = {"error": None}
+
+    class Still(game_class()):
+        images = {"black": np.zeros((720, 1280, 3), np.uint8)}
+
+    class Probe(CustomAction):
+        def run(self, context, argv):
+            try:
+                body(context, actions, out)
+            except Exception:
+                out["error"] = traceback.format_exc()
+            return True
+
+    game = Still()
+    game.screen, game.clicks, game.keys = "black", [], []
+    resource.register_custom_action("Probe", Probe())
+    bind(resource, game).post_task("Probe", {"Probe": {"action": "Custom", "custom_action": "Probe"}}).wait()
+    print(json.dumps(out))
 
 
 @functools.cache  # one child run for all the tests of a file

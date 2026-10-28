@@ -274,3 +274,11 @@ def test_every_hub_reads_the_server_popups_first_from_one_list():
     server = nodes["ServerPopups"]["custom_recognition_param"]["entries"]
     for name in ("HubText", "HomeText", "ExpText", "MailText"):
         assert nodes[name]["custom_recognition"] == "HubText" and hub_entries(nodes, name)[:len(server)] == server, name
+
+
+def test_each_lost_node_stops_with_a_message_of_its_own():
+    # Review of #375: AssembleLost and ChargeLost said the same words, so a log could not tell which task was lost.
+    lost = {name: spec["custom_action_param"] for name, spec in load_nodes().items()
+            if name.endswith("Lost") and spec.get("custom_action") == "StopTask" and isinstance(spec.get("custom_action_param"), str)}
+    assert {"AssembleLost", "ChargeLost"} <= lost.keys()
+    assert len(set(lost.values())) == len(lost), Counter(lost.values())

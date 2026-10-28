@@ -238,8 +238,8 @@
             "ThreadHub"
         ]
     },
-    // ExpText is the one pass over the OCR screens of both hubs. The team page after Level Select has no node here yet:
-    // it waits for #366's, which both hubs list (#366b).
+    // ExpText is the one pass over the OCR screens of both hubs; the team page after Level Select is LuxTeamSelect,
+    // which both hubs list.
     "ThreadHub": {
         "timeout": 60000,
         "rate_limit": 300,
