@@ -51,6 +51,7 @@
 
 - 從主畫面或其他畫面進入鏡牢入口頁的導航，必須另外做成一串節點，不放進 `MirrorHub`；做法仿照 MaaEnd 的 SceneManager。（#8）
 - L2、L3 恢復之後也走這串導航回到入口頁。（#14）
+- 鏡牢從紐本頁起跑（`LuxPanel`：EXP／Thread 分頁、Thread 的 Level Select）：`MirrorHub` 先跑 `GoHome` 回主畫面（`MirrorFromLux`，`GoHomeRun`），再走這串導航，不等 60 秒認不出畫面再 L1。其他認不得的頁面仍走 60 秒逾時。（驗收 #5 K3）
 
 ### 回主畫面（`GoHome`）
 
