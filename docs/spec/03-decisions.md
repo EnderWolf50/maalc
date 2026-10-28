@@ -483,6 +483,7 @@ Cost 表是 wiki 與簡中客戶端的表，實機 log 的節點面板 Cost 沒�
 - **開始時檢查一次**：回到主畫面之後（`LuxHome`）讀模組數 m；m < 最難關每場消耗 × `count`（經驗本每場 3 個，紐本每場 2 個）就在 log 記 `Modules m < n needed, skipped`，以成功結束（`done()`），清單繼續。面板讀不出來：停止程序，不花任何模組。之後不再檢查。
 - **打贏才算一次**：戰後的結算頁（`LuxResult`，[01](01-architecture.md) 經驗本）右上的 `Victory`／`Defeat` 記下這場的結果，按 Confirm 回到 EXP（或 Thread）分頁；`LuxEnter` 照 `decide` 走：贏了而未滿 `count` 就再點 Enter，滿了就 `go_home()` 後 `done()`。每場只記一次（結算頁會停留好幾次 hub）。戰場上的 VICTORY 字樣不再當訊號（live-1 F2）。
 - **戰敗**：不算次數，不扣模組；`retries` 內重打同一關（再點 Enter），用完就停止程序（任務失敗，清單繼續）。`retries` 是每一場各自的次數，打贏就重算（同鏡牢的全滅重打）：`retries` 1、`count` 3 時，每一場都可以輸一次再打。`lose` 的訊號是結算頁的紅字 `Defeat`（實機 2026-10-27：手動 Give Up，沒有確認框；戰敗不扣模組、不吃紐本的 Daily Bonuses，verified）。回到分頁卻沒看到結算頁，也走停止程序，不算一次。（live-1 F2、F3）
+- **連戰**（`luxcavation.<任務>.consecutive`，預設開，#375）：`luxcavation.batch` 給下一場的 N = min(10, `count` − 已贏)（關：1）；`decide` 的 `size` 是這場的 N：贏了 `won` 加 N，`won` + N ≥ `count` 結束。戰敗不算，重打用同一個 N。`LuxEnter` 的設定與讀回見 [01](01-architecture.md) 經驗本，N 讀不到或調不到就停止程序，不照錯的次數開戰。
 - 計數存在記憶體（`RUN["lux"]`），每個任務開始時由 `TaskStart` 清掉（ADR 0003：狀態檔不存這個）。
 
 ## 16. 狂氣換腦啡肽的價格核對

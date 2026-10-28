@@ -147,4 +147,5 @@ test("a new settings file forfeits a run whose wipe retries ran out instead of s
 test("a new settings file wins one EXP Luxcavation and three Thread Luxcavations, the dailies a day needs (#362)", () => {
   const { exp, thread } = newSettings().luxcavation;
   expect([exp.count, thread.count]).toEqual([1, 3]);
+  expect([exp.consecutive, thread.consecutive]).toEqual([true, true]); // #375: on by default
 });

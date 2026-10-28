@@ -3,6 +3,8 @@
 actions.py reads the Enkephalin Modules and the battle's result and taps; everything here is plain data in, a step out.
 """
 
+import re
+
 # What the next step is (decide): SKIP and FINISH end the task a success, STOP a failure.
 SKIP, FIGHT, RETRY, FINISH, STOP = "skip", "fight", "retry", "finish", "stop"
 
@@ -15,17 +17,39 @@ def needed(cost, count):
     return cost * count
 
 
-def decide(modules, cost, count, won, retried, retries, result=None):
+MAX_BATCH = 10  # the game's Consecutive Battle goes from 1 to 10
+
+
+def batch(count, won, consecutive):
+    """The wins the next battle takes: the wins left up to the game's 10 as one Consecutive Battle, else one."""
+    return min(MAX_BATCH, count - won) if consecutive else 1
+
+
+def parse_consecutive(read):
+    """The N of a read "Consecutive Battle x N" (the sign misreads as x or X), None when no N of 1-10 reads."""
+    found = re.search(r"[×xX]\s*(\d+)", read)
+    return int(found[1]) if found and 1 <= int(found[1]) <= MAX_BATCH else None
+
+
+def presses(now, target):
+    """The fewest buttons ("one" 1<<, "minus", "plus", "ten" >>10) that take the box from `now` to `target`."""
+    if target == now:
+        return []
+    step = "plus" if target > now else "minus"
+    return min([[step] * abs(target - now), ["one"] + ["plus"] * (target - 1), ["ten"] + ["minus"] * (MAX_BATCH - target)], key=len)
+
+
+def decide(modules, cost, count, won, retried, retries, result=None, size=1):
     """The next step of a Luxcavation task.
 
     result None: no battle just ended, the task is starting; the Modules `modules` must cover all `count` battles
     (SKIP when they do not) before the first FIGHT. Later a result is "win" or "lose", `won` the battles won before it
-    and `retried` the retries this battle used before it (a win resets it, as the mirror's wipe retries): a win counts and
-    goes on (FIGHT) until `count` are won (FINISH); a defeat counts for nothing and takes no Module, and plays the same
+    and `retried` the retries this battle used before it (a win resets it, as the mirror's wipe retries): a win counts
+    `size` (a Consecutive Battle x N wins N) and goes on (FIGHT) until `count` are won (FINISH); a defeat counts for nothing and takes no Module, and plays the same
     stage again (RETRY) while this battle's `retries` last, else STOP.
     """
     if result is None:
         return SKIP if modules < needed(cost, count) else FIGHT
     if result == "win":
-        return FINISH if won + 1 >= count else FIGHT
+        return FINISH if won + size >= count else FIGHT
     return RETRY if retried < retries else STOP

@@ -195,6 +195,9 @@ function LuxFields({ task }: { task: keyof Settings["luxcavation"] }) {
             label={(id) => { const x = s.teams.find((x) => x.id === id); return x ? `${x.name || "—"} (#${x.game_team})` : t("lux.team_none"); }}
             onChange={(v) => set({ team: v || null })} />
         </Field>
+        <Field label={t("lux.consecutive")} path={`${path}/consecutive`} note={t("lux.consecutive_note")}>
+          <input type="checkbox" checked={opts.consecutive} onChange={(e) => set({ consecutive: e.target.checked })} />
+        </Field>
         <Field label={t("lux.retries")} path={`${path}/retries`} note={t("lux.retries_note")}>
           <Num value={opts.retries} min={0} onChange={(v) => set({ retries: v })} />
         </Field>

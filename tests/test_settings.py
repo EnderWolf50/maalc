@@ -26,7 +26,7 @@ def team(id, game_team, **kw):
 
 
 VALID = {
-    "version": 12,
+    "version": 13,
     "language": "zh_tw",
     "run": {
         "difficulty": "auto", "runs": 1, "weekly_bonus_use": "hard", "weekly_bonus_amount": "all",
@@ -43,7 +43,8 @@ VALID = {
     ],
     "event_overrides": [{"question": "Q?", "option": "Yes"}],
     "trial_risk_overrides": [{"trial": "Growth I", "risk": 3}],
-    "luxcavation": {"exp": {"count": 1, "team": None, "retries": 0}, "thread": {"count": 3, "team": None, "retries": 0}},
+    "luxcavation": {"exp": {"count": 1, "team": None, "retries": 0, "consecutive": True},
+                    "thread": {"count": 3, "team": None, "retries": 0, "consecutive": True}},
     "charge_enkephalin": {"count": 0},
 }
 
@@ -118,7 +119,7 @@ def test_schema_errors_name_the_field(tmp_path, fn, where):
 
 
 def test_newer_version_is_refused(tmp_path):
-    assert "newer" in errors(tmp_path, {**VALID, "version": 13})[0]
+    assert "newer" in errors(tmp_path, {**VALID, "version": 14})[0]
 
 
 def test_version_1_gets_guard_turns_off(tmp_path):
@@ -232,6 +233,13 @@ def test_old_version_is_migrated_in_memory(tmp_path, monkeypatch):
     old = {**edited(lambda d: d.pop("language")), "version": 0, "lang": "en_us"}
     assert load(tmp_path, old)["language"] == "en_us"
     assert json.loads((tmp_path / "config" / "settings.json").read_text(encoding="utf-8"))["version"] == 0
+
+
+def test_version_12_fights_luxcavation_as_consecutive_battles_and_keeps_a_switch_set(tmp_path):
+    old = edited(lambda d: [d["luxcavation"]["exp"].pop("consecutive"), d["luxcavation"]["thread"].update(consecutive=False)])
+    old = {**old, "version": 12}
+    got = load(tmp_path, old)["luxcavation"]
+    assert (got["exp"]["consecutive"], got["thread"]["consecutive"]) == (True, False)
 
 
 def test_unmigratable_version(tmp_path):

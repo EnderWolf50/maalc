@@ -27,6 +27,7 @@
   - 版本 10（#263）：隊伍新增 `fusion_condition`，從版本 9 遷移時填 `any`（照舊材料夠就合）。
   - 版本 11（#244）：執行選項新增 `keep_dismissed_screens`，從版本 10 遷移時填開。
   - 版本 12（#362）：新增日常任務的 `luxcavation`（`exp`、`thread`）與 `charge_enkephalin`，從版本 11 遷移時填預設值（見第 12 節）。
+  - 版本 13（#375）：`luxcavation.exp`、`luxcavation.thread` 新增 `consecutive`，從版本 12 遷移時填 `true`（已有的值不動）。
 - 只有 GUI 寫設定檔，Agent 不回寫。寫入必須先寫暫存檔再改名，避免寫到一半損毀。（#6、#19，2026-10-14 定案）
 - 檢查分兩層。schema 負責結構檢查：（#19，2026-10-14 定案）
   - 型別、列舉值、數字範圍；
@@ -261,9 +262,10 @@ GUI 的「日常」分頁編輯。要跑哪些日常、依什麼順序，由 MXU
 | 次數 | `count` | 整數 ≥ 1 | 要打贏的場數；新檔與遷移的預設：經驗本 1、紐本 3（每天 3 次 Daily Bonuses，2026-10-27 使用者決定） | #366 |
 | 隊伍 | `team` | 字串或 `null` | `teams[]` 的 id：用它的遊戲隊伍編號、出戰順序和 `guard_turns`，不必啟用；`null` 是還沒選，任務開始時停止 | #366 |
 | 戰敗重打 | `retries` | 整數 ≥ 0 | 每一場輸掉後重打的次數（打贏就重算，同鏡牢的全滅重打），預設 0 | #366 |
+| 連戰 | `consecutive` | 布林 | 開（預設）：進場時把 Consecutive Battle 設成「剩下的場數，最多 10」，一場打完，一場 ×N 算 N 場；`count` 超過 10 就先 ×10 再開下一場打剩下的。關：一場一場打。不依 Daily Bonuses 剩餘次數調整 | #375 |
 
 - `team` 指向不存在的隊伍是交叉檢查錯誤。（#366）
-- 版本 11 遷移到 12 時加上 `exp` 和 `thread`，經驗本 `{"count": 1, "team": null, "retries": 0}`，紐本 `count` 是 3。（#366、#368）
+- 版本 11 遷移到 12 時加上 `exp` 和 `thread`，經驗本 `{"count": 1, "team": null, "retries": 0}`，紐本 `count` 是 3。（#366、#368）版本 12 遷移到 13 時各加 `consecutive: true`。（#375）
 - `count` 與 `retries` 由 #367 接上：打贏 `count` 場結束，戰敗在 `retries` 內重打（[spec 03 第 15 節](03-decisions.md)）；戰敗訊號待截圖。
 
 ### 狂氣換腦啡肽（`charge_enkephalin`）

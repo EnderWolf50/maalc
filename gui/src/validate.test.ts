@@ -54,7 +54,7 @@ test("a new file is valid without a team (#364: only MirrorDungeon asks for one)
 });
 
 test("parseSettings refuses newer and unmigratable versions", () => {
-  expect(() => parseSettings('{"version": 13}')).toThrow("newer");
+  expect(() => parseSettings('{"version": 14}')).toThrow("newer");
   expect(() => parseSettings('{"version": 0}')).toThrow("cannot be migrated");
 });
 
@@ -121,8 +121,20 @@ test("version 11 gets the daily tasks: both Luxcavations with no team picked, no
   delete old.charge_enkephalin;
   const { data, migrated } = parseSettings(JSON.stringify({ ...old, version: 11 }));
   expect(migrated).toBe(true);
-  expect(data.luxcavation).toEqual({ exp: { count: 1, team: null, retries: 0 }, thread: { count: 3, team: null, retries: 0 } });
+  expect(data.luxcavation).toEqual({
+    exp: { count: 1, team: null, retries: 0, consecutive: true }, thread: { count: 3, team: null, retries: 0, consecutive: true },
+  });
   expect(data.charge_enkephalin).toEqual({ count: 0 });
+  expect(validate(data)).toEqual([]);
+});
+
+test("version 12 fights the Luxcavation wins as Consecutive Battles, a switch each task keeps as it was set (#375)", () => {
+  const old = structuredClone(cases.valid) as { luxcavation: Record<string, Record<string, unknown>> };
+  delete old.luxcavation.exp.consecutive;
+  old.luxcavation.thread.consecutive = false;
+  const { data, migrated } = parseSettings(JSON.stringify({ ...old, version: 12 }));
+  expect(migrated).toBe(true);
+  expect([data.luxcavation.exp.consecutive, data.luxcavation.thread.consecutive]).toEqual([true, false]);
   expect(validate(data)).toEqual([]);
 });
 

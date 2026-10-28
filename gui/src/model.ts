@@ -177,7 +177,7 @@ export interface Settings {
   charge_enkephalin: { count: number };
 }
 /** One Luxcavation daily task's options (#366): the wins to get, a teams[] id (null: none picked), the defeats fought again. */
-export interface Luxcavation { count: number; team: string | null; retries: number }
+export interface Luxcavation { count: number; team: string | null; retries: number; consecutive: boolean }
 // count: EXP 1, Thread 3 (its 3 Daily Bonuses a day; the schema's default is EXP's)
 const newLuxcavation = (count = 1): Luxcavation =>
   ({ ...defaultsOf(schema.$defs.luxcavation.properties), count }) as unknown as Luxcavation;
@@ -267,6 +267,13 @@ const MIGRATIONS: Record<number, (d: Record<string, unknown>) => Record<string, 
     const lux = d.luxcavation ?? {};
     const out = { charge_enkephalin: { count: 0 }, ...d };
     return lux && typeof lux === "object" ? { ...out, luxcavation: { exp: newLuxcavation(), thread: newLuxcavation(3), ...lux } } : out;
+  },
+  // Version 13 adds luxcavation.<task>.consecutive (#375), on.
+  12: (d) => {
+    const lux = d.luxcavation as Record<string, unknown> | undefined;
+    if (!lux || typeof lux !== "object") return d;
+    const fixed = Object.fromEntries(Object.entries(lux).map(([k, o]) => [k, o && typeof o === "object" ? { consecutive: true, ...o } : o]));
+    return { ...d, luxcavation: fixed };
   },
 };
 

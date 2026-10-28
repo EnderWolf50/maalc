@@ -213,6 +213,9 @@
         "box_index": 1,
         "action": "Custom",
         "custom_action": "LuxEnter",
+        "custom_action_param": {
+            "box": "exp"
+        },
         "pre_delay": 500,
         "post_delay": 0
     },
@@ -315,7 +318,8 @@
         "action": "Custom",
         "custom_action": "LuxEnter",
         "custom_action_param": {
-            "opens_battle": false
+            "opens_battle": false,
+            "box": "thread"
         },
         "pre_delay": 500,
         "post_delay": 0
@@ -361,6 +365,9 @@
         "box_index": 1,
         "action": "Custom",
         "custom_action": "LuxEnter",
+        "custom_action_param": {
+            "box": "level"
+        },
         "pre_delay": 500,
         "post_delay": 0
     }

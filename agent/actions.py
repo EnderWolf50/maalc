@@ -524,9 +524,9 @@ class LuxStart(TaskStart):
         # lux: this task's count (spec 03 section 15): the battles won and the retries used, the last battle's result.
         RUN.update(team=team, guard=team["guard_turns"],
                    lux={"name": name, "cost": cost, "count": opts["count"], "retries": opts["retries"], "modules": None,
-                        "won": 0, "retried": 0, "result": None})
+                        "won": 0, "retried": 0, "result": None, "consecutive": opts["consecutive"], "size": 1})
         log(f"{name}: team {team['name']!r} (TEAMS #{team['game_team']}), {team['guard_turns']} guard turns, "
-            f"{opts['count']} wins, {opts['retries']} retries")
+            f"{opts['count']} wins, {opts['retries']} retries, consecutive {'on' if opts['consecutive'] else 'off'}")
         return True
 
 
@@ -579,8 +579,9 @@ def battle_over(context):
     result, lux["result"] = lux["result"], None
     if result is None:
         return stop(context, f"{lux['name']}: back on the page with no results page seen")
-    step = luxcavation.decide(lux["modules"], lux["cost"], lux["count"], lux["won"], lux["retried"], lux["retries"], result)
-    lux["won"] += result == "win"
+    step = luxcavation.decide(lux["modules"], lux["cost"], lux["count"], lux["won"], lux["retried"], lux["retries"], result,
+                              lux["size"])
+    lux["won"] += lux["size"] * (result == "win")
     # Each battle has its own retries, as the mirror's wipe retries: a win starts the next battle at 0 (review S6).
     lux["retried"] = 0 if result == "win" else lux["retried"] + (step == luxcavation.RETRY)
     log(f"{lux['name']}: {result}, {lux['won']} of {lux['count']} won, {lux['retried']} of {lux['retries']} retries of this battle used: {step}")
@@ -592,21 +593,65 @@ def battle_over(context):
     return None
 
 
+# The Consecutive Battle box of each page that has one (live 2026-10-27, 1280x720): the title's OCR roi (short of its arrow,
+# which the OCR reads as a 7), a narrower roi on its "x N", the title to tap (opens and closes the row), and the row's y with
+# the x of 1<<, -, +, >>10.
+CONSECUTIVE = {
+    "exp": ([990, 240, 205, 30], [1135, 240, 50, 28], (1110, 254), 286, {"one": 1008, "minus": 1038, "plus": 1179, "ten": 1209}),
+    "thread": ([250, 212, 230, 28], [400, 212, 50, 28], (370, 226), 259, {"one": 272, "minus": 305, "plus": 436, "ten": 469}),
+    "level": ([510, 170, 225, 26], [680, 170, 45, 26], (640, 183), 217, {"one": 530, "minus": 563, "plus": 716, "ten": 749}),
+}
+
+
+def consecutive_now(context, image, box):
+    """The N of the Consecutive Battle title on `box`'s page (1-10), None when it does not read: the narrow roi on its "x N"
+    first, which reads the yellow 4 the whole title's detection misses (Level Select, live 2026-10-27), then the title."""
+    title, digit = CONSECUTIVE[box][:2]
+    return (luxcavation.parse_consecutive(text(context, image, digit, only_rec=True))
+            or luxcavation.parse_consecutive(text(context, image, title)))
+
+
+def set_consecutive(context, box, target):
+    """Set the Consecutive Battle of `box`'s page to `target` and read it back: the N it shows at the end, None when it never
+    read. The game resets it to 1 on leaving Luxcavation and after a result, so each entry sets it (live 2026-10-28)."""
+    _, _, (title_x, title_y), row_y, buttons = CONSECUTIVE[box]
+    shown = []
+    until(context, lambda im: shown.append(consecutive_now(context, im, box)) or shown[-1] is not None, timeout=3)
+    if shown[-1] is None or shown[-1] == target:
+        return shown[-1]
+    tap(context, title_x, title_y, wait=0.5)  # open the row
+    for name in luxcavation.presses(shown[-1], target):
+        tap(context, buttons[name], row_y, wait=0.3)
+    tap(context, title_x, title_y, wait=0.5)  # close it again
+    shown.clear()
+    until(context, lambda im: shown.append(consecutive_now(context, im, box)) or shown[-1] == target, timeout=3)
+    return shown[-1]
+
+
 @AgentServer.custom_action("LuxEnter")
 class LuxEnter(CustomAction):
     """An Enter of a Luxcavation page (the node's box): the EXP tab's rightmost open stage (LuxExpEnter), the Thread
     tab's open card (LuxThreadEnter), the bottom row of the card's Level Select, its hardest level (LuxThreadLevel). Tap
     it until the page goes. The param {"opens_battle": false} marks the card's Enter, which opens the Level Select, not
-    the battle (#368). Back on the page a battle started from: the battle is over (battle_over)."""
+    the battle (#368). Back on the page a battle started from: the battle is over (battle_over). Where the task fights
+    consecutively, the param's "box" names the page's Consecutive Battle (CONSECUTIVE): it is set to the wins left, up
+    to 10, before the tap (#375); one that will not read or set stops the task, so no battle starts at the wrong count."""
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         if RUN.get("entered"):
             over = battle_over(context)
             if over is not None:
                 return over
+        opts = json.loads(argv.custom_action_param or "null") or {}
+        lux = RUN["lux"]
+        if lux["consecutive"]:
+            want = lux["size"] = luxcavation.batch(lux["count"], lux["won"], True)
+            got = set_consecutive(context, opts["box"], want)
+            if got != want:
+                return stop(context, f"{lux['name']}: Consecutive Battle {'did not read' if got is None else f'shows x{got}'}, wanted x{want}")
         x, y, w, h = argv.box
         if tap_then(context, x + w // 2, y + h // 2, lambda im: seen(context, im, argv.node_name) is None, timeout=3) is not None:
-            RUN["entered"] = (json.loads(argv.custom_action_param or "null") or {}).get("opens_battle", True)
+            RUN["entered"] = opts.get("opens_battle", True)
             RUN["team_picked"] = False
             log(f"{RUN['lux']['name']}: {argv.node_name} at ({x + w // 2}, {y + h // 2})")
         return True

@@ -34,6 +34,11 @@ EVENT_BUTTON = (1040, 612, 190, 66)
 EVENT_CARD = (740, 110, 405, 140)
 VERY_HIGH = (530, 620, 70, 70)
 EVENT_PORTRAITS = (40, 620, 560, 70)
+# The Consecutive Battle box (live 2026-10-27, tests/screens/LuxConsec*.png): a tap on the title opens its row, the row's
+# buttons 1<<, -, +, >>10 change N from 1 to 10. Per page: title, row y, button xs.
+BOX = {"exp": ((1110, 254), 286, {"one": 1008, "minus": 1038, "plus": 1179, "ten": 1209}),
+       "thread": ((370, 226), 259, {"one": 272, "minus": 305, "plus": 436, "ten": 469}),
+       "level": ((640, 183), 217, {"one": 530, "minus": 563, "plus": 716, "ten": 749})}
 FIGHT_SHOTS = 4  # screenshots the battle takes before its results page: the first of them gray, the rest VICTORY on a win
 
 SCREENS = {"main": "MainWindow.png", "drive": "Drive.png", "exp": "LuxExp.png", "locked": "LuxExpLocked.png",
@@ -41,7 +46,7 @@ SCREENS = {"main": "MainWindow.png", "drive": "Drive.png", "exp": "LuxExp.png", 
            "victory": "Victory.png", "win": "LuxResultVictory.png", "thread_win": "LuxResultThread.png", "lose": "LuxResultDefeat.png",
            "ev_story": "LuxEventStory.png", "ev_card": "LuxEventCard.png", "ev_check": "LuxEventCheck.png",
            "ev_commence": "LuxEventCommence.png", "ev_passed": "LuxEventPassed.png", "ev_text": "LuxEventText.png",
-           "ev_continue": "LuxEventContinue.png"}
+           "ev_continue": "LuxEventContinue.png", "chain_team": "LuxTeamSelectChain.png"}
 # Each event screen and the tap that leads on from it, live 2026-10-28: SKIP, the card, the Very High sinner, Commence,
 # SKIP, a tap on the text once SKIP is grey (live: on the dialog; anywhere off the button here), Continue back to the battle.
 EVENT_STEPS = {"ev_story": (EVENT_BUTTON, "ev_card"), "ev_card": (EVENT_CARD, "ev_check"), "ev_check": (VERY_HIGH, "ev_commence"),
@@ -71,6 +76,21 @@ def child():
             self.swipes = []
             self.drags = []  # the team list's
             self.event = False  # an event comes up on the battle's second screenshot
+            self.reset_boxes()
+            self.unread = False  # the Consecutive Battle title does not read
+            self.fights = []  # the N each battle started with
+            self.presses = []  # the box's buttons pressed, by name
+
+        def reset_boxes(self):
+            """The game's Consecutive Battle goes back to x1 on leaving Luxcavation and after a result (live 2026-10-28)."""
+            self.n, self.open, self.fight_box = {"exp": 1, "thread": 1, "level": 1}, False, "exp"
+
+        def box(self):
+            """The Consecutive Battle box the page on show has: its key in BOX, None where there is none."""
+            return {"exp": "exp", "locked": "exp", "thread": "thread", "levels": "level"}.get(self.screen)
+
+        def read(self, box):
+            return None if self.unread or self.box() != box else self.n[box]
 
         def screencap(self):
             if self.screen == "fight":
@@ -82,11 +102,37 @@ def child():
                     self.screen = self.stage if self.outcome is None else "result"
                 elif self.shots > 1 and self.outcome == "win":
                     return self.images["victory"]
+            if self.screen == "team" and self.n[self.fight_box] > 1:
+                return self.images["chain_team"]  # live 2026-10-28: Chain To Battle! after a Consecutive Battle x N
             if self.screen == "result":
                 return self.images["thread_win" if self.outcome == "win" and self.after == "levels" else self.outcome]
             return self.images[self.screen]
 
         def on_tap(self, x, y):
+            before = self.screen
+            box = self.box()
+            if box and self.tap_box(box, x, y):
+                return True
+            self.tap(x, y)
+            if self.screen in ("drive", "main") or before == "result":
+                self.reset_boxes()
+            return True
+
+        def tap_box(self, box, x, y):
+            (title_x, title_y), row_y, buttons = BOX[box]
+            if abs(x - title_x) <= 40 and abs(y - title_y) <= 12:
+                self.open = not self.open
+                return True
+            if not (self.open and abs(y - row_y) <= 12):
+                return False
+            for name, button_x in buttons.items():
+                if abs(x - button_x) <= 14:
+                    self.presses.append(name)
+                    self.n[box] = {"one": 1, "minus": max(1, self.n[box] - 1), "plus": min(10, self.n[box] + 1), "ten": 10}[name]
+                    return True
+            return False
+
+        def tap(self, x, y):
             s = self.screen
             if s in EVENT_STEPS and inside(EVENT_STEPS[s][0], x, y):
                 self.screen = EVENT_STEPS[s][1]
@@ -104,13 +150,15 @@ def child():
                 self.screen = "thread"
             elif s == "thread" and inside(CARD_ENTER, x, y):
                 self.screen = "levels"
+                self.n["level"] = self.n["thread"]  # the Level Select starts from the card's N (live 2026-10-27)
             elif s == "levels" and inside(LEVEL_ENTERS[-1], x, y):
-                self.screen = "team"
+                self.screen, self.fight_box = "team", "level"
                 self.stage = self.after
             elif s in ENTERS and inside(ENTERS[s], x, y):
-                self.screen = "team"
+                self.screen, self.fight_box = "team", "exp"
             elif s == "team" and inside(TO_BATTLE, x, y):
                 self.screen, self.shots = "fight", 0
+                self.fights.append(self.n[self.fight_box])
                 self.outcome = self.outcomes.pop(0) if self.outcomes else "win"
             elif s == "result" and inside(RESULT_CONFIRM, x, y):
                 self.screen = self.stage  # live: the EXP or the Thread tab, not the Level Select
@@ -126,6 +174,13 @@ def child():
             return True
 
         def on_key(self, keycode):
+            before = self.screen
+            self.key(keycode)
+            if self.screen in ("drive", "main") or before == "result":
+                self.reset_boxes()
+            return True
+
+        def key(self, keycode):
             if keycode == 4 and self.screen in ("exp", "locked", "thread"):
                 self.screen = "drive"
             elif keycode == 4 and self.screen == "levels":  # live 2026-10-26: back closes the Level Select
@@ -136,6 +191,7 @@ def child():
 
     game = Game()
     game.set("main")
+    actions.consecutive_now = lambda context, image, box: game.read(box)
     tasker = bind(resource, game)
     out = {"error": None}
     # scenario: (task, start screen, team, count, retries, how the battles end, then for the Thread task the tab
@@ -158,15 +214,26 @@ def child():
                  "thread_no_result": ("ThreadLuxcavation", "drive", "b", 1, 0, [None], "exp"),
                  "thread_lose_retry": ("ThreadLuxcavation", "drive", "b", 1, 1, lose + win, "exp"),
                  "thread_lose_out": ("ThreadLuxcavation", "drive", "b", 1, 0, lose, "exp"),
-                 "thread_event": ("ThreadLuxcavation", "drive", "b", 1, 0, win, "exp")}
+                 "thread_event": ("ThreadLuxcavation", "drive", "b", 1, 0, win, "exp"),
+                 # #375: the wins as Consecutive Battles (the names in `consecutive`), off for the rest
+                 "x1": ("ExpLuxcavation", "drive", "b", 1, 0, win), "x3": ("ExpLuxcavation", "drive", "b", 3, 0, win),
+                 "x3_off": ("ExpLuxcavation", "drive", "b", 3, 0, win), "x12": ("ExpLuxcavation", "drive", "b", 12, 0, win),
+                 "x3_unread": ("ExpLuxcavation", "drive", "b", 3, 0, win),
+                 "x3_lose_retry": ("ExpLuxcavation", "drive", "b", 3, 1, lose + win),
+                 "thread_x3": ("ThreadLuxcavation", "drive", "b", 3, 0, win, "exp"),
+                 "thread_x3_off": ("ThreadLuxcavation", "drive", "b", 3, 0, win, "exp"),
+                 "thread_x12": ("ThreadLuxcavation", "drive", "b", 12, 0, win, "exp")}
+    consecutive = {"x1", "x3", "x12", "x3_unread", "x3_lose_retry", "thread_x3", "thread_x12"}
     for scenario, (task, start, team, count, retries, outcomes, *rest) in scenarios.items():
-        opts = {"count": count, "team": team, "retries": retries}
+        opts = {"count": count, "team": team, "retries": retries, "consecutive": scenario in consecutive}
         (actions.ROOT / "config" / "settings.json").write_text(
             json.dumps({**settings, "luxcavation": {"exp": opts, "thread": opts}}), encoding="utf-8")
         game.set(start, *rest)
         game.outcomes = list(outcomes)
         game.event = scenario == "thread_event"
-        out[scenario] = {**result(tasker.post_task(task).wait().get(), game, actions), "swipes": game.swipes, "drags": game.drags}
+        game.unread = scenario.endswith("_unread")
+        out[scenario] = {**result(tasker.post_task(task).wait().get(), game, actions), "swipes": game.swipes, "drags": game.drags,
+                         "fights": game.fights, "presses": game.presses}
     print(json.dumps(out))
 
 
@@ -335,6 +402,61 @@ def test_a_thread_battles_event_is_played_through_and_the_battle_goes_on():
     assert len(level_enters(o)) == 1 and len(confirms(o)) == 1 and o["keys"] == out["thread"]["keys"]
 
 
+def title_taps(o, box):
+    (x, y), _, _ = BOX[box]
+    return [xy for xy in o["clicks"] if abs(xy[0] - x) <= 40 and abs(xy[1] - y) <= 12]
+
+
+def test_consecutive_sets_the_stage_to_the_wins_left_and_fights_them_as_one_battle():
+    o = run_child(__file__)["x3"]  # #375: count 3 -> x3: the title opened, + twice, closed; one Enter, one battle, 3 won
+    assert o["succeeded"], o["nodes"]
+    assert o["presses"] == ["plus", "plus"] and len(title_taps(o, "exp")) == 2
+    assert o["fights"] == [3] and len(enters(o)) == 1 and "3 won" in o["done"]
+    assert o["nodes"].count("LuxTeamSelect") == 1  # the team page of a chain says Chain To Battle! and is known all the same
+
+
+def test_consecutive_leaves_a_box_that_already_reads_the_wanted_count_alone():
+    o = run_child(__file__)["x1"]
+    assert o["succeeded"] and o["presses"] == [] and title_taps(o, "exp") == [] and o["fights"] == [1]
+
+
+def test_consecutive_off_fights_one_battle_at_a_time_and_never_touches_the_box():
+    for name, box in (("x3_off", "exp"), ("thread_x3_off", "thread")):
+        o = run_child(__file__)[name]
+        assert o["succeeded"], o["nodes"]
+        assert o["fights"] == [1, 1, 1] and o["presses"] == [] and title_taps(o, box) == [], name
+
+
+def test_consecutive_splits_more_than_ten_wins_into_ten_and_the_rest():
+    o = run_child(__file__)["x12"]  # the game resets to x1 after a result: the second battle sets x2
+    assert o["succeeded"], o["nodes"]
+    assert o["fights"] == [10, 2] and o["presses"] == ["ten", "plus"] and len(enters(o)) == 2 and "12 won" in o["done"]
+
+
+def test_consecutive_that_does_not_read_stops_the_task_before_any_battle():
+    o = run_child(__file__)["x3_unread"]
+    assert o["succeeded"] is False and o["fights"] == [] and enters(o) == [] and o["presses"] == []
+
+
+def test_a_defeated_consecutive_battle_counts_nothing_and_is_set_and_fought_again():
+    o = run_child(__file__)["x3_lose_retry"]
+    assert o["succeeded"], o["nodes"]
+    assert o["fights"] == [3, 3] and o["presses"] == ["plus", "plus"] * 2 and "3 won" in o["done"]
+
+
+def test_thread_consecutive_is_set_on_the_card_and_carries_into_the_level_select():
+    o = run_child(__file__)["thread_x3"]
+    assert o["succeeded"], o["nodes"]
+    assert o["presses"] == ["plus", "plus"] and title_taps(o, "level") == []  # the Level Select already shows x3
+    assert o["fights"] == [3] and len(level_enters(o)) == 1 and "3 won" in o["done"]
+
+
+def test_thread_consecutive_splits_more_than_ten_wins_too():
+    o = run_child(__file__)["thread_x12"]
+    assert o["succeeded"], o["nodes"]
+    assert o["fights"] == [10, 2] and o["presses"] == ["ten", "plus"] and len(level_enters(o)) == 2
+
+
 def test_the_watchdog_counts_screens_not_the_luxcavation_hubs():
     # Review M5: StuckFlag skipped MirrorHub by name; ExpHub and ThreadHub reached the watchdog as if they were screens.
     # A hub is now the node whose next list names the Stuck node.
@@ -401,7 +523,7 @@ def test_each_battle_has_its_own_retries_a_win_resets_them():
     stops = []
     actions.RUN.clear()
     actions.RUN["team"] = {"guard_turns": 0}
-    actions.RUN["lux"] = {"name": "EXP", "cost": 3, "count": 3, "retries": 1, "modules": 99, "won": 0, "retried": 0, "result": None}
+    actions.RUN["lux"] = {"name": "EXP", "cost": 3, "count": 3, "retries": 1, "modules": 99, "won": 0, "retried": 0, "result": None, "size": 1}
     saved = actions.stop
     actions.stop = lambda context, reason, **kw: stops.append(reason) or False
     try:
@@ -424,7 +546,7 @@ def test_each_battle_starts_its_guard_turns_afresh():
 
     actions.RUN.clear()
     actions.RUN.update(team={"guard_turns": 2}, guard=0, entered=True)
-    actions.RUN["lux"] = {"name": "EXP", "cost": 3, "count": 2, "retries": 0, "modules": 99, "won": 0, "retried": 0, "result": "win"}
+    actions.RUN["lux"] = {"name": "EXP", "cost": 3, "count": 2, "retries": 0, "modules": 99, "won": 0, "retried": 0, "result": "win", "size": 1}
     try:
         assert actions.battle_over(MagicMock()) is None and actions.RUN["guard"] == 2
     finally:

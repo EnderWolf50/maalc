@@ -1,6 +1,6 @@
 import pytest
 
-from luxcavation import EXP_COST, FIGHT, FINISH, RETRY, SKIP, STOP, decide, needed
+from luxcavation import EXP_COST, FIGHT, FINISH, RETRY, SKIP, STOP, batch, decide, needed, parse_consecutive, presses
 
 
 @pytest.mark.parametrize("count, cost, need", [(1, 3, 3), (2, 3, 6), (5, 3, 15), (3, 2, 6)])
@@ -43,3 +43,37 @@ def test_a_defeat_counts_for_nothing_and_plays_again_within_retries(retries, ret
 
 def test_a_win_after_retries_still_counts_once():
     assert decide(0, EXP_COST, 1, 0, 1, 1, "win") == FINISH
+
+
+@pytest.mark.parametrize("count, won, consecutive, size", [
+    (1, 0, True, 1), (3, 0, True, 3), (12, 0, True, 10), (12, 10, True, 2), (10, 0, True, 10),  # the rest, up to the game's 10
+    (3, 0, False, 1), (12, 10, False, 1),  # off: one battle at a time
+])
+def test_a_consecutive_battle_takes_the_wins_left_up_to_ten(count, won, consecutive, size):
+    assert batch(count, won, consecutive) == size
+
+
+@pytest.mark.parametrize("count, won, size, step", [
+    (3, 0, 3, FINISH),  # one x3 battle wins all three
+    (12, 0, 10, FIGHT),  # x10 first, then the 2 left
+    (12, 10, 2, FINISH),
+])
+def test_a_consecutive_win_counts_its_size(count, won, size, step):
+    assert decide(0, EXP_COST, count, won, 0, 0, "win", size) == step
+
+
+@pytest.mark.parametrize("read, n", [
+    ("Consecutive Battle ×1", 1), ("Consecutive Battle × 10", 10), ("Consecutive Battle×9▼", 9), ("le×3", 3),
+    ("Consecutive Battle X 4", 4), ("Consecutive Battle ×", None), ("Consecutive Battle ", None), ("", None),
+    ("×0", None), ("×11", None),  # the game takes 1-10
+])
+def test_the_title_reads_as_its_count(read, n):
+    assert parse_consecutive(read) == n
+
+
+@pytest.mark.parametrize("now, target, taps", [
+    (1, 1, []), (1, 2, ["plus"]), (1, 3, ["plus", "plus"]), (1, 10, ["ten"]), (10, 3, ["one", "plus", "plus"]),
+    (9, 10, ["plus"]), (10, 9, ["minus"]), (5, 1, ["one"]), (7, 2, ["one", "plus"]), (4, 10, ["ten"]),
+])
+def test_the_buttons_to_press_are_the_fewest(now, target, taps):
+    assert presses(now, target) == taps

@@ -19,7 +19,7 @@
     "charge_enkephalin"
   ],
   "properties": {
-    "version": { "const": 12 },
+    "version": { "const": 13 },
     "language": { "enum": ["zh_tw", "en_us"], "default": "zh_tw" },
     "run": {
       "type": "object",
@@ -337,11 +337,12 @@
     "luxcavation": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["count", "team", "retries"],
+      "required": ["count", "team", "retries", "consecutive"],
       "properties": {
         "count": { "type": "integer", "minimum": 1, "default": 1, "description": "battles to win, at the hardest level open; a new or migrated file: EXP 1, Thread 3 (its 3 Daily Bonuses)" },
         "team": { "type": ["string", "null"], "minLength": 1, "default": null, "description": "a teams[] id: its TEAMS #N and guard_turns; null: none picked yet" },
-        "retries": { "type": "integer", "minimum": 0, "default": 0, "description": "defeats of one battle fought again before the task fails; a win starts the next battle with them all" }
+        "retries": { "type": "integer", "minimum": 0, "default": 0, "description": "defeats of one battle fought again before the task fails; a win starts the next battle with them all" },
+        "consecutive": { "type": "boolean", "default": true, "description": "set the stage's Consecutive Battle to min(10, battles left) and fight them as one battle (a x N win counts N); off: one battle at a time" }
       }
     },
     "id": { "type": "string", "minLength": 1 },
