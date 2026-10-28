@@ -25,6 +25,7 @@
             "ChargeLost"
         ],
         "next": [
+            "ChargeStuck",
             "TaskDone",
             "[JumpBack]ChargePanel",
             "[JumpBack]HomeText",
@@ -35,6 +36,13 @@
         "action": "Custom",
         "custom_action": "StopTask",
         "custom_action_param": "Charge Enkephalin: the Charge Enkephalin window or the main window was not reached"
+    },
+    "ChargeStuck": {
+        "recognition": "Custom",
+        "custom_recognition": "StuckFlag",
+        "action": "Custom",
+        "custom_action": "StopTask",
+        "custom_action_param": "Charge Enkephalin is stuck"
     },
     "ChargeMain": {
         "recognition": "And",

@@ -27,6 +27,7 @@
             "PassLost"
         ],
         "next": [
+            "PassStuck",
             "TaskDone",
             "[JumpBack]Connecting",
             "[JumpBack]HelpPager",
@@ -47,6 +48,13 @@
         "action": "Custom",
         "custom_action": "StopTask",
         "custom_action_param": "the pass missions page was not reached"
+    },
+    "PassStuck": {
+        "recognition": "Custom",
+        "custom_recognition": "StuckFlag",
+        "action": "Custom",
+        "custom_action": "StopTask",
+        "custom_action_param": "Claim Pass Missions is stuck"
     },
     // The Limbus Pass banner on the main window (its season art changes, its caption "SEASON n LIMBUS PASS" does not).
     "PassBanner": {

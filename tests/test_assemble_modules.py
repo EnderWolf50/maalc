@@ -9,7 +9,7 @@ was, Confirm greyed): the bot reads the drop there and closes the window with Ca
 import itertools
 import json
 
-from daily_child import ROOT, bind, game_class, inside, load, result, run_child, screen
+from daily_child import bind, game_class, inside, interface as interface_json, load, result, run_child, screen
 
 WINDOW_TAB = (790, 608, 70, 64)
 ENK_BAR = (440, 640)
@@ -189,8 +189,7 @@ def test_the_modules_tab_is_confirmed_once_the_most_button_stops_changing(monkey
 
 
 def test_assemble_modules_is_a_task_of_the_interface():
-    interface = json.loads("\n".join(ln for ln in (ROOT / "assets/interface.json").read_text(encoding="utf-8").splitlines()
-                                     if not ln.strip().startswith("//")))
+    interface = interface_json()
     assert {"name": "AssembleModules", "label": "$AssembleModules", "entry": "AssembleModules"} in interface["task"]
 
 

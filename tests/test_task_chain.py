@@ -291,5 +291,61 @@ def test_a_stop_of_one_task_leaves_the_list_running(context):
     context.tasker.post_stop.assert_not_called()
 
 
+
+HUB_STUCK = {"Stuck": "MirrorHub", "ExpStuck": "ExpHub", "ThreadStuck": "ThreadHub", "AssembleStuck": "AssembleHub",
+             "ChargeStuck": "ChargeHub", "ClaimMailStuck": "ClaimMailHub", "PassStuck": "PassHub"}
+
+
+def test_the_watchdog_counts_screens_not_the_hubs():
+    # Review M5: StuckFlag skipped MirrorHub by name; the hubs reached the watchdog as if they were screens. A hub is the
+    # node whose next list names its Stuck node (spec 01), so each of the seven tasks needs one.
+    from test_pipeline import load_nodes
+
+    nodes = load_nodes()
+    for stuck, hub in HUB_STUCK.items():
+        assert stuck in [n.split("]")[-1] for n in nodes[hub]["next"]][:1], hub  # first, as spec 01 says
+    context = MagicMock()
+    context.get_node_data = lambda name: {"next": [{"name": n.split("]")[-1]} for n in nodes[name].get("next", [])]}
+    seen = []
+    see = actions.StuckFlag.see
+    actions.StuckFlag.see = staticmethod(lambda kind, image: seen.append(kind))
+    try:
+        for stuck, hub in HUB_STUCK.items():
+            for k, name in enumerate((hub, "LuxExpEnter", "ExpText", stuck)):
+                actions.STUCK.update(node=None, flag=None)
+                context.tasker.get_node_detail.return_value = SimpleNamespace(name=name)
+                argv = SimpleNamespace(node_name=stuck, image=None, task_detail=SimpleNamespace(node_id_list=[k + 1]))
+                actions.StuckFlag().analyze(context, argv)
+    finally:
+        actions.StuckFlag.see = see
+    assert seen == ["LuxExpEnter"] * len(HUB_STUCK)
+
+
+def test_a_page_gone_mid_action_names_the_hub_of_the_task_under_way():
+    # live-1 F4: a daily task's battle logged "back to MirrorHub"; the hub is the first node down the entry's next chain
+    # that lists TaskDone.
+    from test_pipeline import load_nodes
+
+    nodes = load_nodes()
+    context = MagicMock()
+    context.get_node_data = lambda name: {"next": [{"name": n.split("]")[-1]} for n in nodes[name].get("next", [])]}
+    hubs = {}
+    for entry in ("MirrorDungeon", "ExpLuxcavation", "ThreadLuxcavation", "AssembleModules", "ClaimPassMissions", "ClaimMail"):
+        actions.TASK["entry"] = entry
+        hubs[entry] = actions.hub_name(context)
+    assert hubs == {"MirrorDungeon": "MirrorHub", "ExpLuxcavation": "ExpHub", "ThreadLuxcavation": "ThreadHub",
+                    "AssembleModules": "AssembleHub", "ClaimPassMissions": "PassHub", "ClaimMail": "ClaimMailHub"}
+
+    actions.TASK["entry"] = "ExpLuxcavation"
+
+    class Gone:
+        @actions.hands_back
+        def run(self, context, argv):
+            raise actions.PageGone("BattleTurn")
+
+    assert Gone().run(context, None) is True and actions.LOG[-1].endswith("Gone: BattleTurn is gone: back to ExpHub")
+    actions.TASK.pop("entry")
+
+
 if __name__ == "__main__":
     child()

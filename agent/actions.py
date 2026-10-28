@@ -47,7 +47,8 @@ RESOURCE = next(p for p in (ROOT / "resource", ROOT / "assets" / "resource") if 
 RUN = {}
 # This task's own state (#364, ADR 0010), reset by TaskStart: the runs claimed since it started (the run count stop,
 # spec 01; never saved), why it is done ("done", None while it runs), which ends it a success (TaskDone), its entry
-# node, and "ended" once done() or stop() ended it.
+# node, and "ended" once done() or stop() ended it. Set as a task needs them: "modules" and "gate_backs" (the mirror's new
+# run gate), "assemble" (Assemble Modules' reads and confirms), "charge" (Charge Enkephalin's count and its steps).
 TASK = {"runs": 0, "done": None}
 # Stuck detection and recovery (spec 06), memory only: the last node seen ("node", its id) and the
 # screen type it handled ("kind"), a pending stuck for MirrorHub's Stuck node ("flag": (kind, start
@@ -445,7 +446,7 @@ PASS_NODES = ("BattleHUD", "BattleHUDLost", "HubText", "HubTextLost", "ExpText",
 
 @AgentServer.custom_recognition("StuckFlag")
 class StuckFlag(CustomRecognition):
-    """A hub's Stuck node (MirrorHub's Stuck, ExpStuck, ThreadStuck): watches every screen the hub hands out, hits while
+    """A hub's Stuck node (MirrorHub's Stuck, ExpStuck, AssembleStuck ...): watches every screen the hub hands out, hits while
     a stuck waits for recovery.
 
     It runs first on each MirrorHub pass, so the task's last node is the screen just
@@ -586,7 +587,7 @@ def battle_over(context):
     lux["retried"] = 0 if result == "win" else lux["retried"] + (step == luxcavation.RETRY)
     log(f"{lux['name']}: {result}, {lux['won']} of {lux['count']} won, {lux['retried']} of {lux['retries']} retries of this battle used: {step}")
     if step == luxcavation.FINISH:
-        return go_home(context) and done(f"{lux['name']}: {lux['won']} won")
+        return finish(context, f"{lux['name']}: {lux['won']} won")
     if step == luxcavation.STOP:
         return stop(context, f"{lux['name']}: defeated with the {lux['retries']} retries used up")
     RUN["guard"] = RUN["team"]["guard_turns"]  # each battle guards its first turns (2026-10-27)
@@ -595,28 +596,44 @@ def battle_over(context):
 
 # The Consecutive Battle box of each page that has one (live 2026-10-27, 1280x720): the title's OCR roi (short of its arrow,
 # which the OCR reads as a 7), a narrower roi on its "x N", the title to tap (opens and closes the row), and the row's y with
-# the x of 1<<, -, +, >>10.
+# the x of 1<<, -, +, >>10. The EXP and Thread boxes sit on their card, whose place changes (the EXP tab's rightmost open stage
+# is the middle card where the 10th is locked): theirs are given for the card whose Enter has the centre in ENTER_AT, and
+# move by how far the Enter in use is from it. Level Select's box does not move.
 CONSECUTIVE = {
     "exp": ([990, 240, 205, 30], [1135, 240, 50, 28], (1110, 254), 286, {"one": 1008, "minus": 1038, "plus": 1179, "ten": 1209}),
     "thread": ([250, 212, 230, 28], [400, 212, 50, 28], (370, 226), 259, {"one": 272, "minus": 305, "plus": 436, "ten": 469}),
     "level": ([510, 170, 225, 26], [680, 170, 45, 26], (640, 183), 217, {"one": 530, "minus": 563, "plus": 716, "ten": 749}),
 }
+ENTER_AT = {"exp": (1079, 479), "thread": (372, 481)}  # the centre of LuxExpEnter on stage 9 at the right, of LuxThreadEnter
 
 
-def consecutive_now(context, image, box):
+def consecutive_box(box, enter=None):
+    """CONSECUTIVE[box] for the card whose Enter has its centre at `enter` (x, y): the rois, the title tap, the row's y and
+    the buttons' xs moved by its distance from ENTER_AT. `enter` None (Level Select), or a page of no card: as given."""
+    title, digit, (title_x, title_y), row_y, buttons = CONSECUTIVE[box]
+    if box not in ENTER_AT or enter is None:
+        return title, digit, (title_x, title_y), row_y, buttons
+    dx, dy = enter[0] - ENTER_AT[box][0], enter[1] - ENTER_AT[box][1]
+    return ([title[0] + dx, title[1] + dy, *title[2:]], [digit[0] + dx, digit[1] + dy, *digit[2:]], (title_x + dx, title_y + dy),
+            row_y + dy, {name: x + dx for name, x in buttons.items()})
+
+
+def consecutive_now(context, image, box, enter=None):
     """The N of the Consecutive Battle title on `box`'s page (1-10), None when it does not read: the narrow roi on its "x N"
-    first, which reads the yellow 4 the whole title's detection misses (Level Select, live 2026-10-27), then the title."""
-    title, digit = CONSECUTIVE[box][:2]
+    first, which reads the yellow 4 the whole title's detection misses (Level Select, live 2026-10-27), then the title.
+    `enter`: the centre of the Enter the card's box is above (consecutive_box)."""
+    title, digit = consecutive_box(box, enter)[:2]
     return (luxcavation.parse_consecutive(text(context, image, digit, only_rec=True))
             or luxcavation.parse_consecutive(text(context, image, title)))
 
 
-def set_consecutive(context, box, target):
-    """Set the Consecutive Battle of `box`'s page to `target` and read it back: the N it shows at the end, None when it never
-    read. The game resets it to 1 on leaving Luxcavation and after a result, so each entry sets it (live 2026-10-28)."""
-    _, _, (title_x, title_y), row_y, buttons = CONSECUTIVE[box]
+def set_consecutive(context, box, target, enter=None):
+    """Set the Consecutive Battle of `box`'s page (the card of the Enter at `enter`) to `target` and read it back: the N it
+    shows at the end, None when it never read. The game resets it to 1 on leaving Luxcavation and after a result, so each
+    entry sets it (live 2026-10-28)."""
+    _, _, (title_x, title_y), row_y, buttons = consecutive_box(box, enter)
     shown = []
-    until(context, lambda im: shown.append(consecutive_now(context, im, box)) or shown[-1] is not None, timeout=3)
+    until(context, lambda im: shown.append(consecutive_now(context, im, box, enter)) or shown[-1] is not None, timeout=3)
     if shown[-1] is None:
         log(f"Consecutive Battle ({box}): does not read, wants x{target}")
         return None
@@ -630,7 +647,7 @@ def set_consecutive(context, box, target):
         tap(context, buttons[name], row_y, wait=0.3)
     tap(context, title_x, title_y, wait=0.5)  # close it again
     shown.clear()
-    until(context, lambda im: shown.append(consecutive_now(context, im, box)) or shown[-1] == target, timeout=3)
+    until(context, lambda im: shown.append(consecutive_now(context, im, box, enter)) or shown[-1] == target, timeout=3)
     log(f"Consecutive Battle ({box}): {'does not read' if shown[-1] is None else f'shows x{shown[-1]}'} after closing the row"
         + ("" if shown[-1] == target else f", wanted x{target}"))
     return shown[-1]
@@ -652,12 +669,12 @@ class LuxEnter(CustomAction):
                 return over
         opts = json.loads(argv.custom_action_param or "null") or {}
         lux = RUN["lux"]
+        x, y, w, h = argv.box
         if lux["consecutive"]:
             want = lux["size"] = luxcavation.batch(lux["count"], lux["won"], True)
-            got = set_consecutive(context, opts["box"], want)
+            got = set_consecutive(context, opts["box"], want, (x + w // 2, y + h // 2))
             if got != want:
                 return stop(context, f"{lux['name']}: Consecutive Battle {'did not read' if got is None else f'shows x{got}'}, wanted x{want}")
-        x, y, w, h = argv.box
         if tap_then(context, x + w // 2, y + h // 2, lambda im: seen(context, im, argv.node_name) is None, timeout=3) is not None:
             RUN["entered"] = opts.get("opens_battle", True)
             RUN["team_picked"] = False
@@ -719,7 +736,7 @@ class HomeLost(CustomAction):
         detail = context.run_task("RecoverL3")
         if not (detail and detail.status.succeeded):
             log("L3 did not go through")
-        for node in ("HomeBack", "HomeGameAway"):
+        for node in ("HomeBack", "HomeGameAway", "HomeWindowTab"):
             context.clear_hit_count(node)
         forget_game_state()
         return True
@@ -739,7 +756,7 @@ class MailDone(CustomAction):
     by Claim All said "no mail to claim")."""
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
-        return go_home(context) and done("mail claimed" if context.get_hit_count("MailClaimAll") else "no mail to claim")
+        return finish(context, "mail claimed" if context.get_hit_count("MailClaimAll") else "no mail to claim")
 
 
 AgentServer.custom_recognition("PassClaimable")(pass_missions.PassClaimable)
@@ -753,7 +770,7 @@ class PassFinish(CustomAction):
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         n = sum(context.get_hit_count(node) for node in PASS_CLAIMS)
-        return go_home(context) and done(f"pass missions: {n} row(s) claimed" if n else "pass missions: nothing to claim")
+        return finish(context, f"pass missions: {n} row(s) claimed" if n else "pass missions: nothing to claim")
 
 
 
@@ -1235,8 +1252,7 @@ class TapUntil(CustomAction):
 
 
 def finish(context, reason):
-    """A Mirror Dungeons task with nothing left to do: the main window (GoHome) first, as a daily task's end (live-2 G4),
-    then done."""
+    """A task with nothing left to do: the main window (GoHome) first, as a daily task's end (live-2 G4), then done."""
     return go_home(context) and done(reason)
 
 
@@ -1397,7 +1413,7 @@ class SelectTeam(CustomAction):
 class LuxSelectTeam(CustomAction):
     """A Luxcavation hub's team page (#366, shared by the EXP and Thread hubs): the mirror's page, with To Battle! where
     it has Confirm. Pick RUN["team"]'s in-game slot once, then press To Battle! until the page goes. The task's Enter
-    action drops RUN["team_picked"] when it enters a stage: each battle picks again. What follows has no capture yet."""
+    action drops RUN["team_picked"] when it enters a stage: each battle picks again."""
 
     @hands_back
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:

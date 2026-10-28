@@ -111,6 +111,14 @@ def test_a_check_card_alone_is_told_from_every_other_event_page(name):
     assert actions.card_alone(LUX_EVENT[name]) == (name == "LuxEventCard")
 
 
+def test_no_other_screen_is_a_check_card_alone():
+    # CODING_STANDARDS, Recognition: the colour thresholds swept over every 720p capture of tests/screens; only the card
+    # alone (live 2026-10-28, J1) hits.
+    hits = [png.name for png in sorted(SCREENS.glob("*.png"))
+            if (image := np.asarray(Image.open(png).convert("RGB"))[:, :, ::-1]).shape[:2] == (720, 1280) and actions.card_alone(image)]
+    assert hits == ["LuxEventCard.png"]
+
+
 def test_a_check_card_alone_is_tapped_to_open_its_prompt(context, monkeypatch):
     taps = []
     monkeypatch.setattr(actions, "tap", lambda context, x, y, wait=1.0: taps.append((x, y)))
@@ -123,13 +131,13 @@ def test_a_check_card_alone_is_tapped_to_open_its_prompt(context, monkeypatch):
     assert taps == [actions.EVENT_CARD] and "settings" not in actions.RUN
 
 
-def run_set_consecutive(context, monkeypatch, reads, target):
+def run_set_consecutive(context, monkeypatch, reads, target, enter=None):
     """actions.set_consecutive on the exp page with the title reading `reads` in turn (the last repeats); the taps made."""
     taps, reads = [], list(reads)
-    monkeypatch.setattr(actions, "consecutive_now", lambda context, image, box: reads.pop(0) if len(reads) > 1 else reads[0])
+    monkeypatch.setattr(actions, "consecutive_now", lambda context, image, box, enter=None: reads.pop(0) if len(reads) > 1 else reads[0])
     monkeypatch.setattr(actions, "tap", lambda context, x, y, wait=1.0: taps.append((x, y)))
     actions.LOG.clear()
-    return actions.set_consecutive(context, "exp", target), taps
+    return actions.set_consecutive(context, "exp", target, enter), taps
 
 
 def test_the_consecutive_battle_logs_what_it_read_pressed_and_read_back(context, monkeypatch):
@@ -140,6 +148,15 @@ def test_the_consecutive_battle_logs_what_it_read_pressed_and_read_back(context,
     assert lines == ["Consecutive Battle (exp): shows x1, wants x4",
                      "Consecutive Battle (exp): pressed plus, plus, plus",
                      "Consecutive Battle (exp): shows x4 after closing the row"]
+
+
+def test_the_consecutive_battle_is_tapped_on_the_card_of_the_enter_in_use(context, monkeypatch):
+    # Stage 9 in the middle (the 10th locked, LuxExpLocked.png): its Enter is 341 px left of the rightmost card's, and so is
+    # the title to tap, the row and its buttons.
+    _, right = run_set_consecutive(context, monkeypatch, [1, 2], 2, actions.ENTER_AT["exp"])
+    _, middle = run_set_consecutive(context, monkeypatch, [1, 2], 2, (actions.ENTER_AT["exp"][0] - 341, actions.ENTER_AT["exp"][1]))
+    assert right == [(1110, 254), (1179, 286), (1110, 254)]
+    assert middle == [(1110 - 341, 254), (1179 - 341, 286), (1110 - 341, 254)]
 
 
 def test_the_consecutive_battle_already_at_its_count_logs_the_read_only(context, monkeypatch):

@@ -11,7 +11,7 @@ import tempfile
 from pathlib import Path
 
 import numpy as np
-from daily_child import ROOT, bind, game_class, load, result, run_child, screen
+from daily_child import ROOT, bind, game_class, interface as interface_json, load, result, run_child, screen
 
 ENK_BAR, TAB, CONFIRM, CANCEL = (440, 640), (639, 226), (760, 534), (520, 534)  # TAB: Use Lunacy (D7, live 720p)
 PRICES = (26, 52, 78, 104, 130, 156, 182, 208, 234, 260)
@@ -161,8 +161,7 @@ def test_the_recharge_prompt_is_read_on_the_lunacy_tab_and_not_on_the_modules_ta
 
 
 def test_charge_enkephalin_is_a_task_of_the_interface():
-    interface = json.loads("\n".join(ln for ln in (ROOT / "assets/interface.json").read_text(encoding="utf-8").splitlines()
-                                     if not ln.strip().startswith("//")))
+    interface = interface_json()
     assert {"name": "ChargeEnkephalin", "label": "$ChargeEnkephalin", "entry": "ChargeEnkephalin"} in interface["task"]
 
 

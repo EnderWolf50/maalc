@@ -7,7 +7,7 @@
             "MirrorHub"
         ]
     },
-    // The done exit, on every task's hub right after Stuck and without [JumpBack]: an action found nothing left to do
+    // The done exit, on every task's hub right after its own Stuck node (MirrorHub's Stuck, ExpStuck, ...) and without [JumpBack]: an action found nothing left to do
     // (actions.done), and the empty next ends the task a success, so the client's list goes on (#364).
     "TaskDone": {
         "recognition": "Custom",

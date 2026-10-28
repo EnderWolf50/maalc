@@ -25,6 +25,7 @@
             "AssembleLost"
         ],
         "next": [
+            "AssembleStuck",
             "TaskDone",
             "[JumpBack]AssemblePanel",
             "[JumpBack]HomeText",
@@ -35,6 +36,13 @@
         "action": "Custom",
         "custom_action": "StopTask",
         "custom_action_param": "Assemble Modules: the Charge Enkephalin window or the main window was not reached"
+    },
+    "AssembleStuck": {
+        "recognition": "Custom",
+        "custom_recognition": "StuckFlag",
+        "action": "Custom",
+        "custom_action": "StopTask",
+        "custom_action_param": "Assemble Modules is stuck"
     },
     // The main window, the Window tab lit (HomeReached): reads the bar, opens the window, or ends the task.
     "AssembleMain": {

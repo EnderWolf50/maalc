@@ -4,7 +4,7 @@ game: a screenshot per screen, and the taps and the back key that move between t
 
 import json
 
-from daily_child import ROOT, bind, game_class, inside, load, result, run_child, screen
+from daily_child import bind, game_class, inside, interface as interface_json, load, result, run_child, screen
 
 BANNER = (940, 190, 270, 90)  # the Limbus Pass banner on the main window
 MISSIONS_TAB = (305, 38, 140, 38)
@@ -91,8 +91,7 @@ def test_a_seasonal_row_below_the_first_five_is_tapped_after_the_swipe():
 
 
 def test_claim_pass_missions_is_a_task_of_the_interface():
-    interface = json.loads("\n".join(ln for ln in (ROOT / "assets/interface.json").read_text(encoding="utf-8").splitlines()
-                                     if not ln.strip().startswith("//")))
+    interface = interface_json()
     assert {"name": "ClaimPassMissions", "label": "$ClaimPassMissions", "entry": "ClaimPassMissions"} in interface["task"]
 
 

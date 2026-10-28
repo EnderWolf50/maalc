@@ -12,7 +12,7 @@ or LuxResultDefeat.png), which stays until Confirm or the back key and leads bac
 import json
 
 import numpy as np
-from daily_child import ROOT, bind, game_class, inside, load, result, run_child, screen
+from daily_child import ROOT, bind, game_class, inside, interface as interface_json, load, result, run_child, screen
 
 WINDOW_TAB = (790, 608, 70, 64)
 DRIVE_TAB = (930, 600, 110, 80)
@@ -39,6 +39,9 @@ EVENT_PORTRAITS = (40, 620, 560, 70)
 BOX = {"exp": ((1110, 254), 286, {"one": 1008, "minus": 1038, "plus": 1179, "ten": 1209}),
        "thread": ((370, 226), 259, {"one": 272, "minus": 305, "plus": 436, "ten": 469}),
        "level": ((640, 183), 217, {"one": 530, "minus": 563, "plus": 716, "ten": 749})}
+# The box moves with its card: the centre of the Enter under it on each page (LuxExp.png, LuxExpLocked.png, LuxThread.png), where
+# BOX's numbers hold for stage 9 at the right and the Thread tab's card.
+CARD = {"exp": (1079, 479), "locked": (738, 479), "thread": (372, 481)}
 FIGHT_SHOTS = 4  # screenshots the battle takes before its results page: the first of them gray, the rest VICTORY on a win
 
 SCREENS = {"main": "MainWindow.png", "drive": "Drive.png", "exp": "LuxExp.png", "locked": "LuxExpLocked.png",
@@ -89,8 +92,19 @@ def child():
             """The Consecutive Battle box the page on show has: its key in BOX, None where there is none."""
             return {"exp": "exp", "locked": "exp", "thread": "thread", "levels": "level"}.get(self.screen)
 
-        def read(self, box):
-            return None if self.unread or self.box() != box else self.n[box]
+        def shift(self):
+            """How far the box on show lies from BOX's numbers: the card it is on is in the middle where stage 10 is locked."""
+            card, home = CARD.get(self.screen), CARD.get(self.box())
+            return (0, 0) if card is None else (card[0] - home[0], card[1] - home[1])
+
+        def read(self, box, enter=None):
+            """What the title reads at the roi LuxEnter hands over: nothing where the box is not, as on the real captures."""
+            if self.unread or self.box() != box:
+                return None
+            card = CARD.get(self.screen)
+            if card and (enter is None or abs(enter[0] - card[0]) > 20 or abs(enter[1] - card[1]) > 20):
+                return None
+            return self.n[box]
 
         def screencap(self):
             if self.screen == "fight":
@@ -120,6 +134,8 @@ def child():
 
         def tap_box(self, box, x, y):
             (title_x, title_y), row_y, buttons = BOX[box]
+            dx, dy = self.shift()
+            title_x, title_y, row_y, buttons = title_x + dx, title_y + dy, row_y + dy, {k: v + dx for k, v in buttons.items()}
             if abs(x - title_x) <= 40 and abs(y - title_y) <= 12:
                 self.open = not self.open
                 return True
@@ -191,7 +207,7 @@ def child():
 
     game = Game()
     game.set("main")
-    actions.consecutive_now = lambda context, image, box: game.read(box)
+    actions.consecutive_now = lambda context, image, box, enter=None: game.read(box, enter)
     tasker = bind(resource, game)
     out = {"error": None}
     # scenario: (task, start screen, team, count, retries, how the battles end, then for the Thread task the tab
@@ -313,8 +329,7 @@ def test_exp_luxcavation_with_no_team_picked_fails_before_it_taps():
 
 
 def test_exp_luxcavation_is_a_task_of_the_interface():
-    interface = json.loads("\n".join(ln for ln in (ROOT / "assets/interface.json").read_text(encoding="utf-8").splitlines()
-                                     if not ln.strip().startswith("//")))
+    interface = interface_json()
     assert {"name": "ExpLuxcavation", "label": "$ExpLuxcavation", "entry": "ExpLuxcavation"} in interface["task"]
     assert {"name": "ThreadLuxcavation", "label": "$ThreadLuxcavation", "entry": "ThreadLuxcavation"} in interface["task"]
 
@@ -455,62 +470,6 @@ def test_thread_consecutive_splits_more_than_ten_wins_too():
     o = run_child(__file__)["thread_x12"]
     assert o["succeeded"], o["nodes"]
     assert o["fights"] == [10, 2] and o["presses"] == ["ten", "plus"] and len(level_enters(o)) == 2
-
-
-def test_the_watchdog_counts_screens_not_the_luxcavation_hubs():
-    # Review M5: StuckFlag skipped MirrorHub by name; ExpHub and ThreadHub reached the watchdog as if they were screens.
-    # A hub is now the node whose next list names the Stuck node.
-    from types import SimpleNamespace
-    from unittest.mock import MagicMock
-
-    import actions
-    from test_pipeline import load_nodes
-
-    nodes = load_nodes()
-    context = MagicMock()
-    context.get_node_data = lambda name: {"next": [{"name": n.split("]")[-1]} for n in nodes[name].get("next", [])]}
-    seen = []
-    see = actions.StuckFlag.see
-    actions.StuckFlag.see = staticmethod(lambda kind, image: seen.append(kind))
-    try:
-        for stuck, hub in (("ExpStuck", "ExpHub"), ("ThreadStuck", "ThreadHub"), ("Stuck", "MirrorHub")):
-            for k, name in enumerate((hub, "LuxExpEnter", "ExpText", stuck)):
-                actions.STUCK.update(node=None, flag=None)
-                context.tasker.get_node_detail.return_value = SimpleNamespace(name=name)
-                argv = SimpleNamespace(node_name=stuck, image=None, task_detail=SimpleNamespace(node_id_list=[k + 1]))
-                actions.StuckFlag().analyze(context, argv)
-    finally:
-        actions.StuckFlag.see = see
-    assert seen == ["LuxExpEnter"] * 3
-
-
-def test_a_page_gone_mid_action_names_the_hub_of_the_task_under_way():
-    # live-1 F4: a daily task's battle logged "back to MirrorHub"; the hub is the first node down the entry's next chain
-    # that lists TaskDone.
-    from unittest.mock import MagicMock
-
-    import actions
-    from test_pipeline import load_nodes
-
-    nodes = load_nodes()
-    context = MagicMock()
-    context.get_node_data = lambda name: {"next": [{"name": n.split("]")[-1]} for n in nodes[name].get("next", [])]}
-    hubs = {}
-    for entry in ("MirrorDungeon", "ExpLuxcavation", "ThreadLuxcavation", "AssembleModules", "ClaimPassMissions", "ClaimMail"):
-        actions.TASK["entry"] = entry
-        hubs[entry] = actions.hub_name(context)
-    assert hubs == {"MirrorDungeon": "MirrorHub", "ExpLuxcavation": "ExpHub", "ThreadLuxcavation": "ThreadHub",
-                    "AssembleModules": "AssembleHub", "ClaimPassMissions": "PassHub", "ClaimMail": "ClaimMailHub"}
-
-    actions.TASK["entry"] = "ExpLuxcavation"
-
-    class Gone:
-        @actions.hands_back
-        def run(self, context, argv):
-            raise actions.PageGone("BattleTurn")
-
-    assert Gone().run(context, None) is True and actions.LOG[-1].endswith("Gone: BattleTurn is gone: back to ExpHub")
-    actions.TASK.pop("entry")
 
 
 def test_each_battle_has_its_own_retries_a_win_resets_them():

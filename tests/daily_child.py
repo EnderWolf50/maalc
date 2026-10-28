@@ -21,6 +21,12 @@ sys.path.insert(0, str(ROOT / "agent"))  # run as a script: as pytest's pythonpa
 GAME = "com.ProjectMoon.LimbusCompany"
 
 
+def interface():
+    """assets/interface.json, read without its whole-line // comments (json.load fails on them)."""
+    lines = (ROOT / "assets" / "interface.json").read_text(encoding="utf-8").splitlines()
+    return json.loads("\n".join(ln for ln in lines if not ln.strip().startswith("//")))
+
+
 def inside(box, x, y):
     return box[0] <= x < box[0] + box[2] and box[1] <= y < box[1] + box[3]
 

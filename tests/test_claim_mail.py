@@ -6,7 +6,7 @@ move between them.
 
 import json
 
-from daily_child import ROOT, bind, game_class, inside, load, result, run_child, screen
+from daily_child import ROOT, bind, game_class, inside, interface as interface_json, load, result, run_child, screen
 
 WINDOW_TAB = (790, 608, 70, 64)  # the bottom tab bar's Window tab
 MAIL_ICON = (1085, 95, 70, 60)
@@ -86,7 +86,7 @@ def test_the_empty_box_is_read_before_a_one_button_popup_over_it():
 
 
 def test_claim_mail_is_a_task_of_the_interface_and_the_global_mailbox_still_only_closes():
-    interface = json.loads(strip(ROOT / "assets/interface.json"))
+    interface = interface_json()
     assert {"name": "ClaimMail", "label": "$ClaimMail", "entry": "ClaimMail"} in interface["task"]
     mailbox = json.loads(strip(ROOT / "assets/resource/base/pipeline/popups.json"))["Mailbox"]
     assert mailbox["custom_action"] == "DismissShot" and "Claim" not in json.dumps(mailbox)

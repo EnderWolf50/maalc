@@ -8,7 +8,7 @@ import json
 import time
 
 import numpy as np
-from daily_child import GAME, ROOT, bind, game_class, inside, load, result, run_child, screen
+from daily_child import GAME, bind, game_class, inside, interface as interface_json, load, result, run_child, screen
 
 WINDOW_TAB = (790, 608, 70, 64)  # the bottom tab bar's Window tab
 MAILBOX_CLOSE = (690, 530, 175, 45)
@@ -84,6 +84,8 @@ def child():
         "stuck": ("entry", GAME), "restart": ("entry", GAME), "restarts_used": ("entry", GAME), "event": ("event", GAME),
         # the Window tab shows its tap but the page never changes: tapped up to its limit (the taps stay ignored after it)
         "tab_stuck": ("drive", GAME),
+        # the same, with a game restart left: the restarted game opens on the Drive page and takes the Window tab's tap again
+        "tab_restart": ("drive", GAME),
         # J2 (live 2026-10-28): the last task stopped mid-battle; it ends the task list (post_stop): last
         "battle": ("battle", GAME),
     }.items():
@@ -94,7 +96,7 @@ def child():
             game.start_app = lambda intent, game=game: (Game.start_app(game, intent), setattr(game, "on_key", Game.on_key.__get__(game)))[0]
             game.on_tap = lambda x, y, game=game: (setattr(game, "screen", "entry") if game.screen == "title" else Game.on_tap(game, x, y)) or True
         # stuck: the game restarts that L3 allows were used up before; restart: none were.
-        actions.STUCK["l3"] = 0 if scenario == "restart" else actions.recovery.L3_PER_EXECUTION
+        actions.STUCK["l3"] = 0 if scenario in ("restart", "tab_restart") else actions.recovery.L3_PER_EXECUTION
         actions.ROOT.joinpath("logs").mkdir(exist_ok=True)
         stops = len(list(actions.ROOT.joinpath("logs").rglob("agent.log")))
         override = {"GoHome": {"timeout": 4000}, "RecoverL3": {"post_delay": 0}, "RecoverStartApp": {"post_delay": 0}}
@@ -102,6 +104,12 @@ def child():
             game.on_tap = lambda x, y: True
             override["GoHome"]["timeout"] = 8000
             override["HomeWindowTab"] = {"custom_action_param": {"left": True, "timeout": 0.1}}
+        if scenario == "tab_restart":
+            game.on_tap = lambda x, y: True
+            override["GoHome"]["timeout"] = 8000
+            override["HomeWindowTab"] = {"custom_action_param": {"left": True, "timeout": 0.1}}
+            game.start_app = lambda intent, game=game: (Game.start_app(game, intent), setattr(game, "screen", "drive"),
+                                                        setattr(game, "on_tap", Game.on_tap.__get__(game)))[0]
         if scenario == "restarts_used":  # one restart left, and the restarted game is as stuck as before
             actions.STUCK["l3"] = actions.recovery.L3_PER_EXECUTION - 1
             game.start_app = lambda intent, game=game: (setattr(game, "focus", GAME), setattr(game, "screen", "entry"), True)[-1]
@@ -195,9 +203,16 @@ def test_go_home_taps_a_window_tab_that_does_not_open_its_page_only_a_limited_nu
     assert o["nodes"][-1] == "GoHomeLost" and o["stopped"] == 1, o
 
 
+def test_go_home_taps_the_window_tab_again_after_the_game_restarted():
+    # Review of #375: L3 cleared HomeBack's and HomeGameAway's hit counts but not HomeWindowTab's, so a task that used its
+    # 10 taps could not tap the restarted game's Window tab at all.
+    o = run_child(__file__)["tab_restart"]
+    assert o["succeeded"] and o["l3"] == 1 and "GoHomeLost" in o["nodes"], o
+    assert len(o["clicks"]) == 11 and all(inside(WINDOW_TAB, *c) for c in o["clicks"]), o
+
+
 def test_go_home_is_not_a_task_of_the_interface():  # the daily tasks run it themselves (#365); no PI entry of its own
-    interface = json.loads("\n".join(ln for ln in (ROOT / "assets/interface.json").read_text(encoding="utf-8").splitlines()
-                                     if not ln.strip().startswith("//")))
+    interface = interface_json()
     assert "GoHome" not in [t["name"] for t in interface["task"]]
 
 

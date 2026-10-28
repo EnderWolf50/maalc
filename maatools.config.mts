@@ -36,7 +36,7 @@ const screens: [image: string, hits: string[]][] = [
   // Live 2026-10-20 (#84): the server error over the Mailbox after a request timed out, Close / Retry. Retry
   // counts down "Retry 5" to "Retry 1" with a dark frame first, then reads "Retry". The Mailbox under these
   // popups still reads: they come before it in the hub.
-  // The box still reads under them, Claim All too: ClaimMail's hub reads MailPopups before MailText.
+  // The box still reads under them, Claim All too: ClaimMail's hub reads MailText, whose server popups come ahead of the box's own entries.
   ['ServerErrorRetryCountdown.png', ['RetryPopup', 'Mailbox', 'MailClaimAll', 'EnkephalinBar', 'ModuleIcon']],
   ['ServerErrorRetry.png', ['RetryPopup', 'Mailbox', 'MailClaimAll', 'EnkephalinBar', 'ModuleIcon']],
   // Live 2026-10-20 (#84): the network-unstable popup over the Mailbox with Wi-Fi off, Close only.
