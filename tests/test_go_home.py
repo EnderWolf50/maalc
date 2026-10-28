@@ -17,7 +17,8 @@ TITLE_TAP = (540, 300, 200, 120)
 
 # screen name -> tests/screens image (None: black, the game is not up)
 SCREENS = {"main": "MainWindow.png", "drive": "Drive.png", "sinners": "SinnersTab.png", "mailbox": "Mailbox.png",
-           "settings": "SettingsMenu.png", "entry": "EntryNewRun.png", "title": "Title.png", "black": None}
+           "settings": "SettingsMenu.png", "entry": "EntryNewRun.png", "title": "Title.png", "black": None,
+           "battle": "LuxBattleTurn.png", "event": "LuxEventStory.png"}
 # where a tap moves: (screens it works on, its box, the screen it shows)
 TAPS = [(("drive", "sinners"), WINDOW_TAB, "main"), (("mailbox",), MAILBOX_CLOSE, "main"),
         (("settings",), SETTINGS_RETURN, "main"), (("title",), TITLE_TAP, "main")]
@@ -81,6 +82,8 @@ def child():
         "drive_late": ("drive", GAME, 4), "closed_slow": ("black", "com.android.launcher", 0, 15),
         # these last: they change the model's methods
         "stuck": ("entry", GAME), "restart": ("entry", GAME), "restarts_used": ("entry", GAME),
+        # J2 (live 2026-10-28): the last task stopped mid-battle; these end the task list (post_stop): last
+        "battle": ("battle", GAME), "event": ("event", GAME),
     }.items():
         game.set(start, focus, *model)
         if scenario in ("stuck", "restart", "restarts_used"):  # the back key does nothing: pressed up to its limit
@@ -101,7 +104,9 @@ def child():
         out[scenario] = {**result(tasker.post_task("GoHome", override).wait().get(), game, actions), "starts": game.starts,
                          "seconds": time.monotonic() - began,
                          "stops": game.stops, "l3": actions.STUCK["l3"],
-                         "stopped": len(list(actions.ROOT.joinpath("logs").rglob("agent.log"))) - stops}
+                         "stopped": len(list(actions.ROOT.joinpath("logs").rglob("agent.log"))) - stops,
+                         "halted": actions.STUCK["halted"]}
+        actions.STUCK["halted"] = None
     print(json.dumps(out))
 
 
@@ -157,6 +162,17 @@ def test_go_home_stops_once_the_last_restart_did_not_help():
     o = run_child(__file__)["restarts_used"]
     assert o["succeeded"] is False and o["stops"] == 1 and o["l3"] == 3 and o["stopped"] == 1
     assert o["nodes"].count("GoHomeLost") == 2
+
+
+def test_go_home_in_a_battle_or_its_story_ends_the_task_list_without_a_back_key():
+    # J2 (live 2026-10-28): Thread Luxcavation stopped on a battle's story; the next task's GoHome pressed back 5 times
+    # there (in a battle it opens the pause menu, Give Up one tap away). Nothing is pressed: the stop procedure, and the
+    # rest of the list goes, as after an account-level stop, for the user to end the battle by hand.
+    out = run_child(__file__)
+    for name in ("battle", "event"):
+        o = out[name]
+        assert o["succeeded"] is False and o["keys"] == [] and o["clicks"] == [], name
+        assert o["stopped"] == 1 and o["halted"].startswith("HomeInBattle: "), (name, o["halted"])
 
 
 def test_go_home_is_a_task_of_the_interface():

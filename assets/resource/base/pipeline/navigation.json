@@ -34,8 +34,26 @@
             "[JumpBack]NavTitle",
             "[JumpBack]HomeWindowTab",
             "[JumpBack]HomeGameAway",
+            "HomeInBattle",
             "[JumpBack]HomeBack"
         ]
+    },
+    // A battle or its story (the battle screens BattleHUD knows, the event's button Event reads): the last task stopped
+    // mid-battle (J2, live 2026-10-28). The back key opens a battle's pause menu, Give Up one tap away, and giving a
+    // battle up is not the bot's to do: Halt, which ends the rest of the list too (each task would meet the same battle),
+    // for the user to end it by hand.
+    "HomeInBattle": {
+        "recognition": "Or",
+        "any_of": [
+            "BattleMenu",
+            "LuxBattleMenu",
+            "BattleTurn",
+            "BattlePause",
+            "Event"
+        ],
+        "action": "Custom",
+        "custom_action": "Halt",
+        "custom_action_param": "a battle is on: end it by hand, then start the list again"
     },
     "GoHomeLost": {
         "action": "Custom",
