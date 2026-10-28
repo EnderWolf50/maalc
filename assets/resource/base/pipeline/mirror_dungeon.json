@@ -36,8 +36,20 @@
             "[JumpBack]HubText",
             "[JumpBack]MapNodePanel",
             "[JumpBack]MirrorMap",
+            "[JumpBack]MirrorFromLux",
             "[JumpBack]GoToMirrorEntry"
         ]
+    },
+    // A Luxcavation page (its panel: the EXP and Thread tabs, a Thread card's Level Select), where the last task or the
+    // user left the game: the main window first (GoHome), the way to the entry page from there. Acceptance 5 (K3): a
+    // start on the Thread page knew nothing for 60 s, until the recovery's back key.
+    "MirrorFromLux": {
+        "recognition": "Or",
+        "any_of": [
+            "LuxPanel"
+        ],
+        "action": "Custom",
+        "custom_action": "GoHomeRun"
     },
     // MirrorHub's OCR screens, in priority order (#157): one OCR pass the Agent judges (agent/hub_text.py), then the
     // screens that may be up, each with its own OCR. In MirrorHub's next list MaaFramework would batch them, and the
@@ -88,6 +100,7 @@
             "tail": [
                 "MapNodePanel",
                 "MirrorMap",
+                "MirrorFromLux",
                 "GoToMirrorEntry"
             ]
         },
