@@ -3008,6 +3008,7 @@ CHECK_PROMPT = [850, 295, 300, 50]
 EVENT_PORTRAIT_X = [77 + round(69.3 * i) for i in range(12)]  # 7 in a boss's mid-battle event, from the left
 EVENT_PORTRAIT_Y = 655
 EVENT_NEUTRAL = (5, 5)  # top-left corner: nothing there on any event page
+EVENT_CARD = (940, 195)  # a check's card at the right: alone, it waits for this tap to open its prompt (card_alone)
 EVENT_TEXT_TAPS = 30
 # A text tap every EVENT_TAP_EVERY s, the lit button's pixels looked at after each, the page's text only every
 # EVENT_READ_EVERY taps: live 2026-10-20, a screenshot and 3 OCRs after each tap made it one every 0.3-1.1 s whatever
@@ -3039,13 +3040,21 @@ def red_button(image):
     return r > 150 and r - b > 70
 
 
+def card_alone(image):
+    """A check's card at the right with nothing under it (live 2026-10-28, J1, tests/screens/LuxEventCard.png): a
+    Luxcavation battle's event shows it after SKIP, SKIP grey, and goes on only once the card is tapped. Its lit frame's
+    bottom strip over a black panel; under the prompt or a check's result the panel is lit."""
+    b, g, r = image[230:240, 760:1120].reshape(-1, 3).mean(0)
+    return r > 90 and g > 75 and image[290:300, 700:1180].mean() < 10
+
+
 @AgentServer.custom_action("Event")
 class Event(CustomAction):
-    """One step on an event page: press the lit button, pick a checker or an option, else advance the text (spec 03 section 10)."""
+    """One step on an event page: press the lit button, open a check's card, pick a checker or an option, else advance
+    the text (spec 03 section 10). The mirror's, and a Luxcavation battle's (ExpText, J1)."""
 
     @hands_back
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
-        run = current_run(context)
         image = screen(context)
         # One event's clock: a call more than EVENT_GAP s after the last starts the next event's (#92).
         now = time.monotonic()
@@ -3063,6 +3072,9 @@ class Event(CustomAction):
             checked.clear()
             tap(context, *EVENT_BUTTON, wait=0)
             Event.advance(context, image, pressed_at=time.monotonic())
+        elif card_alone(image):
+            tap(context, *EVENT_CARD, wait=0)
+            Event.settle(context, image)
         elif has(text(context, image, CHECK_PROMPT), "Choose a character"):
             # One read per portrait: read as a row, neighbouring captions run together ("HighVery Low").
             captions = [(text(context, image, [x - 38, 605, 76, 24], only_rec=True), x) for x in EVENT_PORTRAIT_X]
@@ -3078,12 +3090,13 @@ class Event(CustomAction):
                 checked.add(i)
         elif has(text(context, image, CHOICES_HEADER), "Choices"):
             checked.clear()
+            run = RUN if "lux" in RUN else current_run(context)  # a Luxcavation battle's (J1): its team, no Mirror run plan
             story = [t for t, _ in sorted(ocr(context, image, EVENT_STORY), key=lambda r: (r[1][1], r[1][0]))]
             scrolls = rewards.choice_scrollbar(image) or any(None in c for c in rewards.choice_cards(image))
             options, image = self.read_choices(context, image, scrolls)
             if not options:
                 return True
-            overrides = data("events.yaml") | {o["question"]: o["option"] for o in run["settings"]["event_overrides"]}
+            overrides = data("events.yaml") | {o["question"]: o["option"] for o in run.get("settings", {}).get("event_overrides", [])}
             question = next(filter(None, (run_start.match_pack(t, list(overrides)) for t in story + [" ".join(story)])), None) if overrides else None
             known = rewards.match_event(" ".join(story), event_table())
             # Grey options (taken in an earlier round of the same questions) and ones a tap did nothing on are closed.
@@ -3142,6 +3155,8 @@ class Event(CustomAction):
                 continue
             read = n % EVENT_READ_EVERY == 0 or pressed_label is not None
             pressed_label = None
+            if card_alone(image):
+                break
             if read and (not text(context, image, EVENT_BUTTON_LABEL) or any(
                     has(text(context, image, roi), k) for k, roi in (("Choices", CHOICES_HEADER), ("Choose a character", CHECK_PROMPT)))):
                 break

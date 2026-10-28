@@ -55,7 +55,8 @@
         "custom_action_param": "EXP Luxcavation is stuck"
     },
     // ExpHub's OCR screens, read in one pass as HubText (#157): GoHome's popups (HomeText), then the battle's end: the
-    // battlefield's VICTORY and the results page.
+    // battlefield's VICTORY and the results page, and an event mid-battle (the mirror's Event: live 2026-10-28, J1,
+    // Glut's second wave, tests/screens/LuxEvent*.png), which ends back in the battle.
     "ExpText": {
         "recognition": "Custom",
         "custom_recognition": "HubText",
@@ -63,7 +64,8 @@
             "base": "HomeText",
             "entries": [
                 "Victory",
-                "LuxResult"
+                "LuxResult",
+                "Event"
             ],
             "tail": []
         },

@@ -28,11 +28,25 @@ RESULT_CONFIRM = (1045, 540, 165, 60)  # the results page's Confirm (live 2026-1
 # The bot's taps on To Battle! and on the results page's Confirm: each lies inside the other's box, so they are counted
 # by the point.
 TO_BATTLE_TAP, CONFIRM_TAP = [1145, 588], [1125, 570]
+# A battle's event (live 2026-10-28, J1, LuxEvent*.png): the lit button bottom right (SKIP, Commence, Continue), the
+# check's card alone at the right, the rightmost sinner of the check prompt (Very High).
+EVENT_BUTTON = (1040, 612, 190, 66)
+EVENT_CARD = (740, 110, 405, 140)
+VERY_HIGH = (530, 620, 70, 70)
+EVENT_PORTRAITS = (40, 620, 560, 70)
 FIGHT_SHOTS = 4  # screenshots the battle takes before its results page: the first of them gray, the rest VICTORY on a win
 
 SCREENS = {"main": "MainWindow.png", "drive": "Drive.png", "exp": "LuxExp.png", "locked": "LuxExpLocked.png",
            "thread": "LuxThread.png", "team": "LuxTeamSelect.png", "scrolled": "LuxThreadScrolled.png", "levels": "LuxThreadLevels.png", "fight": None,
-           "victory": "Victory.png", "win": "LuxResultVictory.png", "thread_win": "LuxResultThread.png", "lose": "LuxResultDefeat.png"}
+           "victory": "Victory.png", "win": "LuxResultVictory.png", "thread_win": "LuxResultThread.png", "lose": "LuxResultDefeat.png",
+           "ev_story": "LuxEventStory.png", "ev_card": "LuxEventCard.png", "ev_check": "LuxEventCheck.png",
+           "ev_commence": "LuxEventCommence.png", "ev_passed": "LuxEventPassed.png", "ev_text": "LuxEventText.png",
+           "ev_continue": "LuxEventContinue.png"}
+# Each event screen and the tap that leads on from it, live 2026-10-28: SKIP, the card, the Very High sinner, Commence,
+# SKIP, a tap on the text once SKIP is grey (live: on the dialog; anywhere off the button here), Continue back to the battle.
+EVENT_STEPS = {"ev_story": (EVENT_BUTTON, "ev_card"), "ev_card": (EVENT_CARD, "ev_check"), "ev_check": (VERY_HIGH, "ev_commence"),
+               "ev_commence": (EVENT_BUTTON, "ev_passed"), "ev_passed": (EVENT_BUTTON, "ev_text"),
+               "ev_continue": (EVENT_BUTTON, "fight")}
 
 
 def child():
@@ -56,10 +70,14 @@ def child():
             self.after = after  # the page a Thread battle ends on: "thread" or "levels"
             self.swipes = []
             self.drags = []  # the team list's
+            self.event = False  # an event comes up on the battle's second screenshot
 
         def screencap(self):
             if self.screen == "fight":
                 self.shots += 1
+                if self.event and self.shots == 2:
+                    self.event, self.screen = False, "ev_story"
+                    return self.images["ev_story"]
                 if self.shots > FIGHT_SHOTS:
                     self.screen = self.stage if self.outcome is None else "result"
                 elif self.shots > 1 and self.outcome == "win":
@@ -70,7 +88,11 @@ def child():
 
         def on_tap(self, x, y):
             s = self.screen
-            if s == "drive" and inside(WINDOW_TAB, x, y):
+            if s in EVENT_STEPS and inside(EVENT_STEPS[s][0], x, y):
+                self.screen = EVENT_STEPS[s][1]
+            elif s == "ev_text" and not inside(EVENT_BUTTON, x, y):
+                self.screen = "ev_continue"
+            elif s == "drive" and inside(WINDOW_TAB, x, y):
                 self.screen = "main"
             elif s == "main" and inside(DRIVE_TAB, x, y):
                 self.screen = "drive"
@@ -135,13 +157,15 @@ def child():
                  "thread_no_team": ("ThreadLuxcavation", "drive", None, 1, 0, win, "exp"),
                  "thread_no_result": ("ThreadLuxcavation", "drive", "b", 1, 0, [None], "exp"),
                  "thread_lose_retry": ("ThreadLuxcavation", "drive", "b", 1, 1, lose + win, "exp"),
-                 "thread_lose_out": ("ThreadLuxcavation", "drive", "b", 1, 0, lose, "exp")}
+                 "thread_lose_out": ("ThreadLuxcavation", "drive", "b", 1, 0, lose, "exp"),
+                 "thread_event": ("ThreadLuxcavation", "drive", "b", 1, 0, win, "exp")}
     for scenario, (task, start, team, count, retries, outcomes, *rest) in scenarios.items():
         opts = {"count": count, "team": team, "retries": retries}
         (actions.ROOT / "config" / "settings.json").write_text(
             json.dumps({**settings, "luxcavation": {"exp": opts, "thread": opts}}), encoding="utf-8")
         game.set(start, *rest)
         game.outcomes = list(outcomes)
+        game.event = scenario == "thread_event"
         out[scenario] = {**result(tasker.post_task(task).wait().get(), game, actions), "swipes": game.swipes, "drags": game.drags}
     print(json.dumps(out))
 
@@ -296,6 +320,19 @@ def test_a_thread_defeat_is_played_again_from_the_card_within_the_retries():
     o = out["thread_lose_out"]
     assert o["succeeded"] is False and len(level_enters(o)) == 1 and len(confirms(o)) == 1
 
+
+
+def test_a_thread_battles_event_is_played_through_and_the_battle_goes_on():
+    # J1 (live 2026-10-28): Glut's second wave showed an event; ThreadHub knew none of its screens and stopped after 60 s.
+    out = run_child(__file__)
+    o = out["thread_event"]
+    assert o["succeeded"], o["nodes"]
+    assert "Event" in o["nodes"] and o["screen"] != "ev_text"
+    taps = o["clicks"]
+    assert len([xy for xy in taps if inside(EVENT_CARD, *xy)]) == 1  # the card alone, tapped once
+    picks = [xy for xy in taps if inside(EVENT_PORTRAITS, *xy)]
+    assert len(picks) == 1 and inside(VERY_HIGH, *picks[0])  # the best odds, not the Unselectable or a High
+    assert len(level_enters(o)) == 1 and len(confirms(o)) == 1 and o["keys"] == out["thread"]["keys"]
 
 
 def test_the_watchdog_counts_screens_not_the_luxcavation_hubs():

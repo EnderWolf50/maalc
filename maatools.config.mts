@@ -241,6 +241,16 @@ const screens: [image: string, hits: string[]][] = [
   ['EventChoicesScrolledBack.png', ['Event']],
   ['EventCheck.png', ['Event']],
   ['EventResult.png', ['Event']],
+  // Live 2026-10-28 (J1): an event in a Thread Luxcavation battle (Glut's second wave), the mirror's event pages without
+  // the gear or the gift box: the story (SKIP), its check card alone (SKIP grey), the prompt, Commence, the check
+  // passed (SKIP), the text with SKIP grey, Continue back to the battle.
+  ['LuxEventStory.png', ['Event']],
+  ['LuxEventCard.png', ['Event']],
+  ['LuxEventCheck.png', ['Event']],
+  ['LuxEventCommence.png', ['Event']],
+  ['LuxEventPassed.png', ['Event']],
+  ['LuxEventText.png', ['Event']],
+  ['LuxEventContinue.png', ['Event']],
   // Shop: Leave stays readable under the shop's own dialogs and pages; the heal page has Return instead.
   ['Shop.png', ['Shop']],
   ['SuperShop.png', ['Shop']],

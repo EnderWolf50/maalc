@@ -2285,6 +2285,40 @@ def test_an_option_cut_off_with_no_scrollbar_still_scrolls(context, monkeypatch)
     assert page.tapped == ["Option 2."]  # the hint rules, on the option read once scrolled
 
 
+def test_a_luxcavation_event_reads_its_choices_without_a_mirror_run_plan(context, monkeypatch):
+    # J1: a Luxcavation battle's event has its task's team, no Mirror run plan; one made up from the settings would
+    # go to runs.jsonl at the next stop.
+    actions.RUN.clear()
+    actions.RUN.update(lux={"name": "Thread Luxcavation"}, team={"keyword": "Burn"})
+    page = Choices(context, monkeypatch, [("Option 0.", ""), ("Option 1.", "Select to gain a Burn E.G.O Gift")], ["Unknown story."])
+    actions.Event().run(context, None)
+    assert page.tapped == ["Option 1."] and "settings" not in actions.RUN
+
+
+LUX_EVENT = {name: np.array(Image.open(SCREENS / f"{name}.png").convert("RGB"))[:, :, ::-1]
+             for name in ("LuxEventStory", "LuxEventCard", "LuxEventCheck", "LuxEventText", "EventStory", "EventCheck",
+                          "EventChoices", "EventResult", "EventNotices")}
+
+
+@pytest.mark.parametrize("name", LUX_EVENT)
+def test_a_check_card_alone_is_told_from_every_other_event_page(name):
+    # Live 2026-10-28 (J1): after SKIP, a Luxcavation event's check card shows alone at the right, SKIP grey; nothing
+    # goes on until the card is tapped. Its prompt below, a result, a Choices list or no card: another page.
+    assert actions.card_alone(LUX_EVENT[name]) == (name == "LuxEventCard")
+
+
+def test_a_check_card_alone_is_tapped_to_open_its_prompt(context, monkeypatch):
+    taps = []
+    monkeypatch.setattr(actions, "tap", lambda context, x, y, wait=1.0: taps.append((x, y)))
+    shots = [LUX_EVENT["LuxEventCard"], LUX_EVENT["LuxEventCheck"]]
+    context.tasker.controller.post_screencap.return_value.wait.return_value.get.side_effect = (
+        lambda: shots.pop(0) if len(shots) > 1 else shots[0])
+    actions.RUN.clear()
+    actions.RUN.update(lux={"name": "Thread Luxcavation"}, team={"keyword": "Burn"})
+    assert actions.Event().run(context, None) is True
+    assert taps == [actions.EVENT_CARD] and "settings" not in actions.RUN
+
+
 class Panel:
     """A battle's skill panel (7 slots, Win Rate label at x 984): a portrait tap swaps the slot's lower skill
     and its guard skill. A drag from the left gear links the chain, all but drops[k] slots on the k-th drag
