@@ -55,8 +55,9 @@
 ### 回主畫面（`GoHome`）
 
 - 日常任務的第一步和最後一步都走 `GoHome`（`navigation.json`），下一個任務因此一定從主畫面開始；PI 任務 `GoHome` 暫時用來單獨驗證。（#365）
-- 一個 hub，依序處理：連線中、說明頁、全域彈窗（`HomeText`，讀法同 `HubText`，不進批次 OCR；伺服器與用戶端的彈窗列在 `ServerPopups` 一份，`MirrorHub` 的 `HubText`、`HomeText`、`MailText` 用 `base` 引用它）、**到了主畫面**（Window 分頁亮起，`HomeReached`，任務成功結束）、標題畫面（`NavTitle`）、底部分頁列在但 Window 沒亮（點 Window 分頁，`HomeWindowTab`）、遊戲不在前景（`HomeGameAway`，`StartApp`，最多 3 次）、都不是就按返回鍵（`HomeBack`，最多 5 次）。
+- 一個 hub，依序處理：連線中、說明頁、全域彈窗（`HomeText`，讀法同 `HubText`，不進批次 OCR；伺服器與用戶端的彈窗列在 `ServerPopups` 一份，`MirrorHub` 的 `HubText`、`HomeText`、`MailText` 用 `base` 引用它）、**到了主畫面**（Window 分頁亮起，`HomeReached`，任務成功結束）、標題畫面（`NavTitle`）、底部分頁列在但 Window 沒亮（點 Window 分頁，`HomeWindowTab`）、遊戲不在前景（`HomeGameAway`，`StartApp`，最多 3 次）、戰鬥或戰鬥中的劇情（`HomeInBattle`，見下）、都不是就按返回鍵（`HomeBack`，最多 5 次）。
 - 彈窗排在 `HomeReached` 前面：設定選單蓋著主畫面時 Window 分頁仍是亮的。其他分頁亮起、彈窗壓暗分頁列時，Window 模板的分數最多 0.80，門檻 0.9。
+- 畫面是戰鬥（`BattleHUD` 認的戰鬥畫面、暫停選單）或戰鬥中的劇情事件（`Event` 讀到右下 SKIP／Commence／Continue）：不按返回鍵，走 `Halt`，停止程序後整串清單結束（`whole_list`，同帳號層級的停止，這次啟動之後的任務也在入口失敗）。上一個任務停在戰鬥裡時（例如紐本 60 秒認不出畫面），下一個任務的 `HomeBack` 會在戰鬥裡按返回：戰鬥中的返回鍵開暫停選單，Give Up 一點就是戰敗，而放棄戰鬥不是 bot 該做的；後面每個任務都會遇到同一場戰鬥，所以停整串，讓使用者手動結束戰鬥再重開清單。選在 `GoHome` 而不是讓失敗的任務自己停整串：每個任務的開頭都經過它，使用者手動開清單時遊戲正在戰鬥也一樣擋下。絕不自動 Give Up。（live-4 J2）
 - 前景不是遊戲時直接啟動遊戲，不等 hub 逾時走 L3（`GameAway` 讀 `dumpsys window`，讀不到時不算）。
 - 60 秒認不出畫面、或返回鍵用完仍沒到主畫面（`GoHomeLost`，動作 `HomeLost`）：先走 L3 重啟遊戲（`RecoverL3`，和鏡牢共用每次啟動最多 3 次的上限 `STUCK["l3"]`，每次嘗試都算），再從標題重跑 `GoHome`，返回鍵與啟動遊戲的次數重新算（`clear_hit_count`）。L3 用完才走停止程序（存證據、webhook），任務失敗，client 的清單繼續；這個任務不結束整串清單。（#362 D4）
 - 日常任務的入口：入口節點（`TaskStart`）接 `<任務>Home` 節點（`GoHomeRun`），它在 agent 裡用 `context.run_task("GoHome")` 跑完整個 `GoHome` 再接 hub（#366 驗證過另一條路也行：入口列 `[JumpBack]TaskHome`，`TaskHome` 的 `max_hit` 為 1、`next` 是 `GoHome`，跑完 `GoHome` 跳回入口再進 hub；專案統一採用 `GoHomeRun`／`go_home()`，不混用）。結尾：動作做 `go_home()` 再 `done()`，`done` 的理由寫這次實際做了什麼（`PassFinish`、`MailDone`），hub 的 `TaskDone` 讓任務成功結束。鏡牢沒事可做的結尾（`PlanRun`：場數到了、每週加成用完、沒有隊伍、Module 不夠）同樣先 `go_home()` 再 `done()`（`finish`，live-2 G4）；停止程序的路徑不變。`GoHome` 失敗時已自己走過停止程序，`GoHomeRun` 直接讓任務失敗。（#371）
@@ -71,7 +72,7 @@
 - MXU（`5e923e8`）：一次送整串。`start_tasks_impl`（`src-tauri/src/commands/maa_agent.rs:554`）在 `maa_agent.rs:776-784` 的迴圈裡對每個勾選的任務呼叫 `tasker.post_task`，全部進了 tasker 才開始跑。`post_stop` 清掉的就是清單剩下的任務，整串結束。
 - MFAAvalonia（`098fe84`）：一次送一個。`ExecuteTasks`（`MFAAvalonia/Extensions/MaaFW/MaaProcessor.cs:3704-3728`）從自己的 `TaskQueue` 取一個任務，`TryRunTasksAsync`（`MaaProcessor.cs:4424-4431`）`AppendTask` 後等它結束才取下一個。`post_stop` 只結束目前這個任務（狀態不是 Succeeded，`MFAAvalonia/Helper/ValueType/MFATask.cs:92-113` 記為失敗）；「任務失敗後是否繼續」開著（預設，`MaaProcessor.cs:4469`）時清單照樣跑下一個，後面每個任務各自撞上同一個畫面、各自走停止程序。關掉這個選項時，第一個失敗就結束整串。
 - 所以 agent 也記住「這次啟動遇過帳號層級的停止」（`STUCK["halted"]`，停止的理由；像遊戲重啟次數一樣只在記憶體、不隨 `TaskStart` 清掉）：之後每個任務的入口（`TaskStart` 與它的子類別 `LuxStart`、`ChargeStart`）一看到就以失敗結束，不點任何東西、不存證據、不寫 `runs.jsonl`、不送 webhook，只 log 一行 `skip: account-level stop earlier this launch`。兩個 client 都適用，不靠 `post_stop`。（#362 D8）
-- 帳號層級的停止：維護公告、用戶端過舊、`auto_download` 關閉時遇到下載或更新、遊戲一直要求更新（每次啟動重啟 2 次之後又出現，#362 D1）、`auto_accept_terms` 關閉時遇到使用者協議（#362 D2，維持原樣）。
+- 帳號層級的停止：`GoHome` 遇到戰鬥（`HomeInBattle`，live-4 J2）、維護公告、用戶端過舊、`auto_download` 關閉時遇到下載或更新、遊戲一直要求更新（每次啟動重啟 2 次之後又出現，#362 D1）、`auto_accept_terms` 關閉時遇到使用者協議（#362 D2，維持原樣）。
 
 ### 日常任務的骨架
 
@@ -88,7 +89,7 @@
 - 隊伍是 `luxcavation.exp.team` 指的 maalc 隊伍，戰鬥用它的 `guard_turns`（全員防禦 N 回合後按勝率，同鏡牢；每場戰鬥重新算，2026-10-27）。實機 2026-10-27：經驗本第 9 關照 `guard_turns` 5 防禦了 5 回合（verified）。異想體戰（紐本的 Faelantern 等）是 focused encounter：左齒輪是空心圓環，技能要拖到敵方的技能格上，連線拉不起來，所以照 #127 按勝率、防禦回合留著（`tests/test_battle.py` 用 `LuxBattleTurn.png`、`LuxBattleTurnFocused.png` 驗證這個判斷）。（live-1 F5）
 - 按 Enter 直接進選隊頁（`LuxTeamSelect`）：和鏡牢的選隊頁（`TeamSelect`）同一頁，左側 `TEAMS` 清單、位置和點法都一樣（`pick_team_slot`，鏡牢的 `SelectTeam` 也用它：標題已是 `TEAMS #N` 就不動，否則點畫面上的 `TEAMS #N` 列，不在畫面上才從目前位置捲過去，點了之後讀標題確認；見 [03](03-decisions.md) 選隊），只有右下角的按鈕不同：鏡牢是 `Confirm`，這裡是 `To Battle!`（1145,588）。`LuxSelectTeam`：選 `RUN["team"]`（經驗本是 `luxcavation.exp.team`）的遊戲隊伍編號（`game_team`，每場一次），再按 To Battle! 直到這頁消失。節點與動作由 Luxcavation 的各個 hub（經驗本、紐本）共用：hub 列出 `[JumpBack]LuxTeamSelect`，Enter 的動作設 `RUN["team"]` 並在進關時清掉 `RUN["team_picked"]`。（#366）
 - 開頭回主畫面後讀模組數，不夠 `count` 場就跳過（`ExpHome` 節點，動作 `LuxHome`）；按 Enter 之後回到 EXP 分頁，依這場的勝敗計次、再打或結束（`LuxExpEnter` 節點，動作 `LuxEnter`，[spec 03 第 15 節](03-decisions.md)）。
-- To Battle! 之後直接 Now Loading 進戰鬥，沒有等級警告、沒有開戰確認（實機 2026-10-27）。戰鬥畫面（`BattleHUD`、`Victory`）沿用鏡牢的節點；暫停選單只有 Settings／Resume／Give Up，Resume 比鏡牢低一格（`LuxBattleMenu`，`tests/screens/LuxBattleMenu.png`）；Give Up 沒有確認框，按了就是戰敗。
+- To Battle! 之後直接 Now Loading 進戰鬥，沒有等級警告、沒有開戰確認（實機 2026-10-27）。戰鬥畫面（`BattleHUD`、`Victory`）沿用鏡牢的節點；戰鬥中的劇情事件也沿用鏡牢的 `Event`（`ExpText` 的 entries，處理完回 hub、戰鬥照打）：SKIP → 右側只有事件卡、SKIP 變灰時點事件卡（`card_alone`，(940,195)；不點不會前進）→ 選角色（`pick_checker`：預測最高的，Very High > High > … ，Unselectable 不選；不花資源）→ Commence → SKIP → SKIP 灰時點畫面推進文字 → Continue 回戰鬥。實機 2026-10-28 紐本 Glut 第 2 波（`tests/screens/LuxEvent*.png`，live-4 J1）；推進文字實機是點對話框，bot 點左上角落（鏡牢的做法），在紐本上 unverified。經驗本會不會遇到 unverified。暫停選單只有 Settings／Resume／Give Up，Resume 比鏡牢低一格（`LuxBattleMenu`，`tests/screens/LuxBattleMenu.png`）；Give Up 沒有確認框，按了就是戰敗。
 - 戰後：戰場上的 VICTORY／DEFEAT → Now Loading → **結算頁**（`LuxResult`，`tests/screens/LuxResultVictory.png`、`LuxResultThread.png`、`LuxResultDefeat.png`）：左邊 Most Valued Employee，右上黃字 `Victory` 或紅字 `Defeat`（`LuxWon`、`LuxLost`），中間 `Clear Rewards`、`Module Cost`，右下 `Confirm`（1125,570）。動作 `LuxResult` 讀 Victory／Defeat 當這場的勝敗（只記進了關的那一場一次），按 Confirm 直到這頁消失；之後落在 EXP 分頁（紐本是 Thread 分頁，不是 Level Select），下一個 Enter 的 `battle_over` 依勝敗計次、重打或結束。按返回鍵離開結算頁也落在同一頁。（live-1 F2）
 
 ### 紐本（`ThreadLuxcavation`）
