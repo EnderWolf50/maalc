@@ -1138,6 +1138,9 @@ class DismissShot(CustomAction):
                 log(f"{argv.node_name}: screen kept in logs/dismissed/{stamp}.png")
             except OSError as e:
                 log(f"{argv.node_name}: screen not saved: {e}")
+        if argv.node_name == "PopupButton":  # what was closed, e.g. the previous session's "Please claim your rewards" (#382)
+            image = screen(context)
+            log(f"popup: {text(context, image, DIALOG_TEXT)!r}: pressed {text(context, image, POPUP_BUTTON).strip()!r}")
         if json.loads(argv.custom_action_param or "null") == "back":
             context.tasker.controller.post_click_key(BACK_KEY).wait()
         else:
@@ -1944,6 +1947,7 @@ class PickThemePack(CustomAction):
                     log(f"floor {floor} stays HARD: a run never goes back to NORMAL")
                 log(f"floor {floor}: {'HARD' if hard else 'NORMAL'}")
                 RUN["floor_hard"] = hard  # the map does not show it; RouteMap's weights need it
+                RUN.setdefault("floors_hard", {})[floor] = hard  # what Settle's weekly bonuses count on (#382)
                 return True
             # The arrows sit left of HARD, right of NORMAL; switching re-rolls the packs.
             log(f"floor {floor}: switch to {move.upper()}")
@@ -4298,6 +4302,7 @@ TOGGLE_X, TOGGLE_ROI = (558, 660, 763), (-45, 237, 90, 30)  # the 3 weekly-bonus
 GIVE_UP, CLAIM = (393, 544), (887, 544)
 REWARD_TITLE_ROI = [500, 100, 280, 45]
 DIALOG_TEXT = [360, 280, 560, 140]
+POPUP_BUTTON = [540, 430, 200, 90]  # the pipeline's PopupButtonText roi
 DIALOG_CANCEL, DIALOG_CONFIRM = (515, 493), (763, 493)
 
 
@@ -4336,7 +4341,9 @@ class Settle(CustomAction):
 
         s, team = run["settings"]["run"], run["team"]
         left = number(text(context, image, WEEKLY_LEFT).split("/")[0])
-        all_hard = run.get("planned", False) and run["difficulty"] == "hard" and team["hard_from_floor"] in (1, None)
+        # The difficulty each floor was played on, as the theme pack page showed it: a run with no plan in memory (an
+        # expired session's dialog came first, #382) counts the same. A floor not seen (a resumed run) is not HARD.
+        all_hard = floor >= 1 and all(RUN.get("floors_hard", {}).get(f) for f in range(1, floor + 1))
         want = settlement.bonus_toggles(s["weekly_bonus_use"], s["weekly_bonus_amount"], hard, left or 0, all_hard)
         for _ in range(6):
             states = toggles(context, page_guard(context, "ExplorationReward"))

@@ -2549,6 +2549,44 @@ def test_a_forfeited_run_gives_up_its_rewards_and_the_same_team_runs_next(contex
     assert line["result"] == "giveup" and line["team"] == "a"
 
 
+def settle_all_floors(context, monkeypatch, tmp_path, floors_hard, **run):
+    """Settle on `Floor 5 [HARD] 7/7` with 3 weekly bonuses left and use=hard, amount=all; the bonuses the run asked for."""
+    monkeypatch.setattr(actions, "ROOT", tmp_path)
+    team = {"id": "a", "name": "A", "enabled": True, "hard_from_floor": None}
+    actions.RUN.update(settings={"run": {"weekly_bonus_use": "hard", "weekly_bonus_amount": "all"}, "teams": [team]}, team=team, floors_hard=floors_hard, **run)
+    asked = []
+    real = actions.settlement.bonus_toggles
+    monkeypatch.setattr(actions.settlement, "bonus_toggles", lambda *a: asked.append(real(*a)) or asked[-1])
+    monkeypatch.setattr(actions, "ocr", lambda context, image, roi, only_rec=False: [("Floor 5 [HARD] 7/7", (300, 420, 90, 20))] if roi == actions.RESULT else [])
+    monkeypatch.setattr(actions, "text", lambda context, image, roi, only_rec=False: "3/3" if roi == actions.WEEKLY_LEFT else "")
+    monkeypatch.setattr(actions, "toggles", lambda context, image: [i < (asked[0] if asked else 0) for i in range(3)])
+    monkeypatch.setattr(actions, "tap", lambda *a, **k: None)
+    assert actions.Settle().run(context, None)
+    return asked
+
+
+def test_five_hard_floors_with_no_run_plan_open_every_weekly_bonus(context, monkeypatch, tmp_path):
+    # #382: the run began on an expired session's dialog, so no plan was made (planned unset); the floors played say HARD.
+    assert settle_all_floors(context, monkeypatch, tmp_path, {f: True for f in range(1, 6)}) == [3]
+
+
+def test_a_normal_floor_among_five_keeps_it_to_one_weekly_bonus(context, monkeypatch, tmp_path):
+    assert settle_all_floors(context, monkeypatch, tmp_path, {1: False, 2: True, 3: True, 4: True, 5: True}) == [1]
+
+
+def test_floors_not_all_seen_keep_it_to_one_weekly_bonus(context, monkeypatch, tmp_path):
+    assert settle_all_floors(context, monkeypatch, tmp_path, {4: True, 5: True}) == [1]  # a resumed run: floors 1-3 unknown
+
+
+def test_the_difficulty_each_floor_is_played_on_is_remembered(context, monkeypatch):
+    # #382: all_hard comes from what the theme pack page showed per floor, not from the run's plan.
+    monkeypatch.setattr(actions, "text", lambda *a, **k: "HARD")
+    monkeypatch.setattr(actions, "page_guard", lambda context, node, image=None: np.zeros((720, 1280, 3), np.uint8))
+    actions.RUN["floor_hard"] = None
+    actions.PickThemePack.set_difficulty(context, 4, True)
+    assert actions.RUN["floors_hard"] == {4: True}
+
+
 # #118: an action checks its page before each tap and hands a changed screen back to MirrorHub.
 @pytest.fixture
 def guarded(monkeypatch):

@@ -46,6 +46,14 @@ def test_a_box_is_tapped_at_its_centre(game):
     assert len(list(game.folder.iterdir())) == 1
 
 
+def test_a_popup_pressed_is_logged_with_its_text_and_button(game, monkeypatch, capsys):
+    # #382: the previous session's "Please claim your rewards" was closed with no line saying what it was.
+    monkeypatch.setattr(actions, "text", lambda context, image, roi, only_rec=False:
+                        "The previous session has expired. Please claim your rewards." if roi == actions.DIALOG_TEXT else "Confirm")
+    actions.DismissShot().run(game.ctx, arg("PopupButton"))
+    assert "popup: 'The previous session has expired. Please claim your rewards.': pressed 'Confirm'" in capsys.readouterr().out
+
+
 def test_off_dismisses_without_a_shot(game):
     actions.RUN["settings"]["run"]["keep_dismissed_screens"] = False
     actions.DismissShot().run(game.ctx, arg("PopupButton"))
