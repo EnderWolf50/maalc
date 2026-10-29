@@ -8,7 +8,7 @@ import re
 from datetime import datetime, timezone
 from pathlib import Path
 
-from ocrtext import has
+from ocrtext import compact, has
 
 
 def read_result(text):
@@ -31,6 +31,24 @@ def goal_met(result):
 def floors_passed(result):
     floor, _, cleared, total = result
     return floor if cleared == total else floor - 1
+
+
+def first_floor_hard(text):
+    """Whether the Exploration Reward window's floor 1 tile reads `[HARD] Floor1` (Dungeon Progress, left of the dialog)."""
+    return re.search(r"floor1(?!\d)", compact(text)) is not None and has(text, "HARD")
+
+
+def all_hard(floors_hard, floor, hard, read_first):
+    """Whether every floor 1..floor was HARD, for a run that gets more than one weekly bonus (#382).
+
+    floors_hard: the difficulty the theme pack page showed for each floor this agent saw. With floor 1 among them they
+    say it all. A run picked up after a restart lacks the first floors; a run never goes back to NORMAL, so the window's
+    last floor HARD (hard) and its floor 1 tile marked [HARD] (read_first(): the tile's text) make them all HARD. An
+    unreadable tile is not HARD.
+    """
+    if 1 in floors_hard:
+        return floor >= 1 and all(floors_hard.get(f) for f in range(1, floor + 1))
+    return bool(hard) and first_floor_hard(read_first())
 
 
 def bonus_toggles(use, amount, hard, left, all_hard):
