@@ -330,11 +330,11 @@ def test_a_page_gone_mid_action_names_the_hub_of_the_task_under_way():
     context = MagicMock()
     context.get_node_data = lambda name: {"next": [{"name": n.split("]")[-1]} for n in nodes[name].get("next", [])]}
     hubs = {}
-    for entry in ("MirrorDungeon", "ExpLuxcavation", "ThreadLuxcavation", "AssembleModules", "ClaimPassMissions", "ClaimMail"):
+    for entry in ("MirrorDungeon", "ExpLuxcavation", "ThreadLuxcavation", "AssembleModules", "ChargeEnkephalin", "ClaimPassMissions", "ClaimMail"):
         actions.TASK["entry"] = entry
         hubs[entry] = actions.hub_name(context)
     assert hubs == {"MirrorDungeon": "MirrorHub", "ExpLuxcavation": "ExpHub", "ThreadLuxcavation": "ThreadHub",
-                    "AssembleModules": "AssembleHub", "ClaimPassMissions": "PassHub", "ClaimMail": "ClaimMailHub"}
+                    "AssembleModules": "AssembleHub", "ChargeEnkephalin": "ChargeHub", "ClaimPassMissions": "PassHub", "ClaimMail": "ClaimMailHub"}
 
     actions.TASK["entry"] = "ExpLuxcavation"
 

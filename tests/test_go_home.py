@@ -100,14 +100,11 @@ def child():
         actions.ROOT.joinpath("logs").mkdir(exist_ok=True)
         stops = len(list(actions.ROOT.joinpath("logs").rglob("agent.log")))
         override = {"GoHome": {"timeout": 4000}, "RecoverL3": {"post_delay": 0}, "RecoverStartApp": {"post_delay": 0}}
-        if scenario == "tab_stuck":
+        if scenario in ("tab_stuck", "tab_restart"):  # the tab's tap is ignored; its wait cut short
             game.on_tap = lambda x, y: True
             override["GoHome"]["timeout"] = 8000
             override["HomeWindowTab"] = {"custom_action_param": {"left": True, "timeout": 0.1}}
         if scenario == "tab_restart":
-            game.on_tap = lambda x, y: True
-            override["GoHome"]["timeout"] = 8000
-            override["HomeWindowTab"] = {"custom_action_param": {"left": True, "timeout": 0.1}}
             game.start_app = lambda intent, game=game: (Game.start_app(game, intent), setattr(game, "screen", "drive"),
                                                         setattr(game, "on_tap", Game.on_tap.__get__(game)))[0]
         if scenario == "restarts_used":  # one restart left, and the restarted game is as stuck as before

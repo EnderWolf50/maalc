@@ -440,8 +440,10 @@ class TaskStart(CustomAction):
 
 
 # A hub's own steps, no screen: the watchdog keeps the screen handled before them. The hubs themselves are found by
-# their next list, which names the Stuck node (StuckFlag).
-PASS_NODES = ("BattleHUD", "BattleHUDLost", "HubText", "HubTextLost", "ExpText", "ExpTextLost")
+# their next list, which names the Stuck node (StuckFlag). ChargePanel and the pass missions' claims repeat on the same
+# picture on purpose (a window that stays open after Confirm, a row to claim after a row): a count of them is not a stuck.
+PASS_NODES = ("BattleHUD", "BattleHUDLost", "HubText", "HubTextLost", "ExpText", "ExpTextLost", "ChargePanel",
+              "PassDailyClaim", "PassWeeklyClaim", "PassSeasonalClaim", "PassSeasonalEndClaim")
 
 
 @AgentServer.custom_recognition("StuckFlag")
@@ -449,7 +451,7 @@ class StuckFlag(CustomRecognition):
     """A hub's Stuck node (MirrorHub's Stuck, ExpStuck, AssembleStuck ...): watches every screen the hub hands out, hits while
     a stuck waits for recovery.
 
-    It runs first on each MirrorHub pass, so the task's last node is the screen just
+    It runs first on each pass of a hub, so the task's last node is the screen just
     handled and argv.image what it left: the watchdog, the evidence and the run time limit work from them.
     """
 

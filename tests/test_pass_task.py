@@ -12,9 +12,23 @@ WEEKLY_TAB = (256, 350, 30, 100)
 SEASONAL_TAB = (256, 490, 30, 100)  # live 2026-10-27, (270, 540)
 COINS = [(350, y - 20, 40, 40) for y in (312, 400, 487, 575)]  # PassMissionsDailyClaimable.png's rows to claim, top to bottom
 END_COIN = (350, 215, 40, 40)  # the swiped Seasonal tab's first row, 10 px lower
+ROWS_Y = (225, 312, 400, 487, 575)
+ROWS = [(350, y - 20, 40, 40) for y in ROWS_Y]  # all five rows of a tab
+END_ROWS = [(350, y - 10, 40, 40) for y in ROWS_Y]  # the swiped Seasonal tab's, 10 px lower
 SCREENS = {"main": "MainWindow.png", "pass": "PassBattlePass.png", "daily": "PassMissionsDaily.png",
            "weekly": "PassMissionsWeekly.png",
            "seasonal": "PassMissionsSeasonal.png", "seasonal_end": "PassMissionsSeasonalEnd.png"}
+
+
+def rows_to_claim(base, left, dy=0):
+    """base (a tab with every row claimed) with its rows from index left down wearing the look of a row to claim
+    (PassMissionsDailyClaimable.png's second row)."""
+    from test_pass_missions import band, frame
+
+    image, look = frame(base).copy(), frame("PassMissionsDailyClaimable.png")
+    for y in ROWS_Y[left:]:
+        image[band(y + dy), 330:705] = look[band(312), 330:705]
+    return image
 
 
 def child():
@@ -25,7 +39,11 @@ def child():
 
     class Game(game_class()):
         images = {**{name: screen(png) for name, png in SCREENS.items()}, "seasonal_end_claimable": seasonal_end_claimable(),
-                  **{f"daily_{k}": daily_claimed(k) for k in range(4)}}
+                  **{f"daily_{k}": daily_claimed(k) for k in range(4)},
+                  # the day's every row to claim, no reward window between them (live 2026-10-27 showed none)
+                  **{f"d5_{k}": rows_to_claim("PassMissionsDaily.png", k) for k in range(5)},
+                  **{f"s5_{k}": rows_to_claim("PassMissionsSeasonal.png", k) for k in range(5)},
+                  **{f"e5_{k}": rows_to_claim("PassMissionsSeasonalEnd.png", k, 10) for k in range(5)}}
 
         def set(self, claimable):
             self.screen, self.claimable, self.clicks, self.keys, self.swipes = "main", claimable, [], [], []
@@ -34,13 +52,19 @@ def child():
             if self.screen == "main" and inside(BANNER, x, y):
                 self.screen = "pass"
             elif self.screen == "pass" and inside(MISSIONS_TAB, x, y):
-                self.screen = "daily_0" if self.claimable == "daily" else "daily"
+                self.screen = {"daily": "daily_0", "daily5": "d5_0"}.get(self.claimable, "daily")
+            elif self.screen.startswith("d5_") and inside(ROWS[k := int(self.screen[-1])], x, y):
+                self.screen = f"d5_{k + 1}" if k < 4 else "daily"
+            elif self.screen.startswith("s5_") and inside(ROWS[k := int(self.screen[-1])], x, y):
+                self.screen = f"s5_{k + 1}" if k < 4 else "seasonal"
+            elif self.screen.startswith("e5_") and inside(END_ROWS[k := int(self.screen[-1])], x, y):
+                self.screen = f"e5_{k + 1}" if k < 4 else "seasonal_end"
             elif self.screen.startswith("daily_") and inside(COINS[k := int(self.screen[-1])], x, y):
                 self.screen = f"daily_{k + 1}" if k < 3 else "daily"  # each tap claims its row
             elif self.screen == "daily" and inside(WEEKLY_TAB, x, y):
                 self.screen = "weekly"
             elif self.screen == "weekly" and inside(SEASONAL_TAB, x, y):
-                self.screen = "seasonal"
+                self.screen = "s5_0" if self.claimable == "seasonal10" else "seasonal"
             elif self.screen == "seasonal_end_claimable" and inside(END_COIN, x, y):
                 self.screen = "seasonal_end"
             return True
@@ -48,7 +72,7 @@ def child():
         def on_swipe(self, down, last):
             self.swipes.append([*down, *last])
             if self.screen == "seasonal" and last[1] < down[1]:  # up: the list's end
-                self.screen = "seasonal_end_claimable" if self.claimable == "seasonal" else "seasonal_end"
+                self.screen = {"seasonal": "seasonal_end_claimable", "seasonal10": "e5_0"}.get(self.claimable, "seasonal_end")
             return True
 
         def on_key(self, keycode):
@@ -60,7 +84,7 @@ def child():
     game.set(False)
     tasker = bind(resource, game)
     out = {"error": None}
-    for scenario, claimable in {"nothing": None, "claim": "daily", "seasonal": "seasonal"}.items():
+    for scenario, claimable in {"nothing": None, "claim": "daily", "seasonal": "seasonal", "daily5": "daily5", "seasonal10": "seasonal10"}.items():
         game.set(claimable)
         out[scenario] = {**result(tasker.post_task("ClaimPassMissions").wait().get(), game, actions), "swipes": game.swipes}
     print(json.dumps(out))
@@ -88,6 +112,19 @@ def test_a_seasonal_row_below_the_first_five_is_tapped_after_the_swipe():
     assert o["succeeded"] and o["screen"] == "main" and o["nodes"][-1] == "TaskDone"
     assert inside(END_COIN, *o["clicks"][-1]) and len(o["clicks"]) == 5 and len(o["swipes"]) == 1
     assert "PassSeasonalEndClaim" in o["nodes"] and o["done"] == "pass missions: 1 row(s) claimed"
+
+
+def test_five_daily_rows_to_claim_with_no_reward_window_between_are_not_a_stuck_screen():
+    o = run_child(__file__)["daily5"]
+    assert o["succeeded"] and o["nodes"][-1] == "TaskDone" and o["nodes"].count("PassDailyClaim") == 5
+    assert o["done"] == "pass missions: 5 row(s) claimed"
+
+
+def test_ten_seasonal_rows_to_claim_are_not_a_stuck_screen():
+    o = run_child(__file__)["seasonal10"]
+    assert o["succeeded"] and o["nodes"][-1] == "TaskDone" and len(o["swipes"]) == 1
+    assert o["nodes"].count("PassSeasonalClaim") == 5 and o["nodes"].count("PassSeasonalEndClaim") == 5
+    assert o["done"] == "pass missions: 10 row(s) claimed"
 
 
 def test_claim_pass_missions_is_a_task_of_the_interface():

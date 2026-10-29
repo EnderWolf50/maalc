@@ -46,7 +46,7 @@
 | 選隊頁 | OCR：`TEAMS` 標題（80,272）和 `To Battle!` 按鈕（`LuxTeamSelect`）；和鏡牢 `TeamSelect` 同一頁，按鈕是 To Battle!（連戰 ×2 以上是 Chain To Battle!）不是 Confirm | 選 `luxcavation.exp.team` 的遊戲隊伍編號（`TEAMS #N`，必要時捲動清單），按 To Battle!（1145,588） | 隊伍等級警告或開戰確認（未截圖）、戰鬥 | #366 | `tests/screens/LuxTeamSelect.png`（選了 TEAMS #3） |
 
 - EXP 分頁一進去就停在最難的三關（2026-10-26：第 7–9 關，共 10 關，第 10 關上鎖顯示 `Clear 10-4`）。左右箭頭點了不會翻頁，要滑動。
-- 選隊頁的清單捲動到 `#40` 為止。選隊頁沒有 Daily Bonuses 值，也沒有模組消耗顯示；按 Enter 不扣模組（104 → 104）。
+- 選隊頁的清單捲動到 `#40` 為止。選隊頁沒有 Daily Bonuses 值，也沒有腦啡肽模組消耗顯示；按 Enter 不扣腦啡肽模組（104 → 104）。
 - 隊伍等級警告、開戰確認只會在按 To Battle! 之後出現，**還沒有截圖**；戰鬥、勝敗、結算畫面也沒有。（#366）
 
 ### Luxcavation（紐本，#368）
@@ -59,7 +59,7 @@
 | Level Select | 模板：標題 `Level Select`；模板：每列的 `Enter`，取最下面一個（`LuxThreadLevel`） | 點最下面那列的 Enter（開啟時清單停在最底，最難的等級） | 選隊頁（和經驗本同一頁） | #368 | `tests/screens/LuxThreadLevels.png` |
 
 - Thread 分頁一次顯示四張卡，共七隻異想體，依星期開放，其餘卡顯示 `Opens <星期>`；Daily Bonuses 的剩餘次數在頂部（只有這一頁），今天的卡有 `Consecutive Battle ×1` 的選擇器；連戰開時 bot 進場前會把它設成 ×N（見 [01](01-architecture.md)）。清單從今天的卡開始排（週日 Wrath 在最左，週一 Lust 在最左），但記得上次捲到哪裡。
-- Level Select：Lust 有 Lv20/30/40/50/60 五級，每級 Enter 消耗 2 個模組，都沒上鎖，沒有 Skip；一開啟清單就停在最底（Lv40/50/60）。其他異想體的清單沒看過（unverified）。（2026-10-26 實機，週一）
+- Level Select：Lust 有 Lv20/30/40/50/60 五級，每級 Enter 消耗 2 個腦啡肽模組，都沒上鎖，沒有 Skip；一開啟清單就停在最底（Lv40/50/60）。其他異想體的清單沒看過（unverified）。（2026-10-26 實機，週一）
 
 ## 開局
 

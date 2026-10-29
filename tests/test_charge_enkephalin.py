@@ -47,11 +47,13 @@ def child():
                   "boxes": screen("EnkephalinBoxes.png"), **{f"lunacy{n}": lunacy_tab(n) for n in range(11)},
                   "lunacy0_27": lunacy_tab(0, 27)}
 
-        def set(self, bought=0, price=None, confirm_works=True, tab="lunacy", step=1):
+        def set(self, bought=0, price=None, confirm_works=True, tab="lunacy", step=1, stays=False):
             """bought: the day's charges made so far (Daily Count); price: the price shown whatever bought says (a wrong
-            one); tab: what the Use Lunacy tab's tap shows ("modules": the tap did nothing)."""
+            one); tab: what the Use Lunacy tab's tap shows ("modules": the tap did nothing); stays: the window
+            stays open after Confirm (spec 01: live for Modules; unverified for Lunacy)."""
             self.screen, self.clicks, self.keys = "main", [], []
             self.bought, self.price, self.confirm_works, self.tab, self.step = bought, price, confirm_works, tab, step
+            self.stays = stays
 
         def lunacy(self):
             return f"lunacy{self.bought}" + (f"_{self.price}" if self.price else "")
@@ -63,7 +65,7 @@ def child():
                 self.screen = self.lunacy() if self.tab == "lunacy" else self.tab
             elif self.screen.startswith("lunacy") and (x, y) == CONFIRM and self.confirm_works:
                 self.bought = min(self.bought + self.step, 10)  # step 1; 2 is a count that jumped
-                self.screen = "main"
+                self.screen = self.lunacy() if self.stays else "main"
             elif self.screen != "main" and (x, y) == CANCEL:
                 self.screen = "main"
             return True
@@ -86,6 +88,7 @@ def child():
         "skips_a_price": (3, {"step": 2}),
         "confirm_does_nothing": (2, {"confirm_works": False}),
         "tab_never_opens": (2, {"tab": "modules"}),
+        "window_stays_ten": (10, {"stays": True}),  # Confirm leaves the window open: ChargePanel looks at near the same screen 10 times
         "boxes_tab": (2, {"tab": "boxes"}),  # the same Recharge prompt, no Daily Count
     }.items():
         actions.ROOT = settings(count)  # the settings, and the stop procedure's evidence and log
@@ -148,6 +151,12 @@ def test_a_confirm_that_did_nothing_never_confirms_the_same_price_twice():
 def test_a_tab_that_never_shows_its_price_is_never_confirmed():
     o = run_child(__file__)["tab_never_opens"]
     assert o["succeeded"] is False and list(CONFIRM) not in o["clicks"] and o["clicks"][-1] == list(CANCEL)
+
+
+def test_ten_charges_in_a_window_that_stays_open_are_not_a_stuck_screen():
+    # The same picture ten times, only its price and Daily Count moving: the watchdog's same-screen count must not take it.
+    o = run_child(__file__)["window_stays_ten"]
+    assert o["succeeded"] and o["clicks"].count(list(CONFIRM)) == 10 and "10 charged now" in o["done"]
 
 
 def test_the_use_boxes_tab_has_the_same_prompt_but_no_daily_count_and_is_never_confirmed():
