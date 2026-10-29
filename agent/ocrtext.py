@@ -3,6 +3,7 @@
 OCR reads full-width forms, odd case, accents and stray or missing spaces; compare normalised text on both sides.
 """
 
+import re
 import unicodedata
 
 LOOKALIKE = str.maketrans("OoDQIl|SsBZz", "000011155822")
@@ -23,6 +24,15 @@ def has(text, *phrases):
     """Whether any of phrases shows in text, both compacted ("Leave the shop" in "LEAVE THESHOP?")."""
     t = compact(text)
     return any(compact(p) in t for p in phrases)
+
+
+def floor_number(text, label=r"floor"):
+    """The floor a title or result line names ("SELECT FLOOR 12 THEME PACK" -> 12); None when it shows no number.
+
+    Two digits: the mirror runs to 15 floors (#383). `label` is the regex before the number, case folded.
+    """
+    m = re.search(label + r"\s*(\d{1,2})(?!\d)", normalize(text))
+    return int(m[1]) if m else None
 
 
 def digits(text):
