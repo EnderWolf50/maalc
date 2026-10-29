@@ -2689,6 +2689,27 @@ def test_a_new_floor_forgets_the_shop_left_before_the_boss(context, monkeypatch)
     assert actions.RUN["floor"] == 3 and "after_shop" not in actions.RUN
 
 
+@pytest.mark.parametrize("shown, floor", [("SELECT FLOOR 10 THEME PACK", 10), ("Select Floor 12 Theme Pack", 12), ("SELECT FLOOR 15 THEME PACK", 15)])
+def test_the_theme_pack_page_reads_a_two_digit_floor(context, monkeypatch, shown, floor):
+    # #383: floors run to 15; "Floor 12" is not floor 1.
+    monkeypatch.setattr(actions, "text", lambda *a, **k: shown)
+    monkeypatch.setattr(actions.PickThemePack, "set_difficulty", lambda *a: False)
+    actions.RUN["difficulty"] = None
+    actions.PickThemePack().run(context, None)
+    assert actions.RUN["floor"] == floor
+
+
+def test_floor_10_to_11_restarts_the_clock_and_the_map_quota(context, monkeypatch):
+    # #383: 10 -> 11 is a new floor: the clock restarts and map_misses is back to 0.
+    monkeypatch.setattr(actions, "text", lambda *a, **k: "SELECT FLOOR 11 THEME PACK")
+    monkeypatch.setattr(actions.PickThemePack, "set_difficulty", lambda *a: False)
+    restarted = []
+    monkeypatch.setattr(actions, "restart_floor_clock", lambda: restarted.append(1))
+    actions.RUN.update(difficulty=None, floor=10, map_misses=3)
+    actions.PickThemePack().run(context, None)
+    assert actions.RUN["floor"] == 11 and actions.RUN["map_misses"] == 0 and restarted == [1]
+
+
 def moved(context):
     """Taps, drags and swipes sent to the device."""
     ctl = context.tasker.controller

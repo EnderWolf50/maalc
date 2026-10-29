@@ -33,7 +33,7 @@ import rewards
 import run_start
 import settlement
 import shop
-from ocrtext import compact, digits, has, normalize
+from ocrtext import compact, digits, floor_number, has, normalize
 from settings import SCHEMA, SettingsError, load_settings
 from state import next_cursor, pick_team, read_cursor, write_cursor
 
@@ -1879,10 +1879,9 @@ class PickThemePack(CustomAction):
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         run = current_run(context)
         image = screen(context)
-        m = re.search(r"floor\s*(\d)", normalize(text(context, image, [480, 100, 320, 40])))
-        if not m:
+        floor = floor_number(text(context, image, [480, 100, 320, 40]))
+        if floor is None:
             return True  # page fading in or out: let MirrorHub look again
-        floor = int(m[1])
         if floor != RUN.get("floor"):
             RUN.pop("after_shop", None)
             TASK.pop("modules", None)  # a run is under way: Claim will take 5, the next one reads the Modules again (#369)
@@ -2143,8 +2142,7 @@ def map_floor(context, image):
     Swept 2026-10-19 over every 0.25 s from the 10 theme pack pulls of two runs: the last floor's number, a gap,
     the new one; never a third number. tests/screens/MapBoss.png reads "Floar 3".
     """
-    m = re.search(r"Fl\w+\s*(\d)", text(context, image, MAP_TITLE))
-    return int(m[1]) if m else None
+    return floor_number(text(context, image, MAP_TITLE), r"fl[a-z]*")
 
 
 def enter_node(context):
