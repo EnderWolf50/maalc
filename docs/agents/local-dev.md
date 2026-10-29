@@ -60,6 +60,11 @@ Three links tie the evidence folders together; they are junctions, so a size lis
 
 Retention: an archive folder older than 7 days whose `INDEX.md` rows name only closed issues and PRs can be deleted with `prune`; a folder with no `INDEX.md` row, or with a number gh does not return, stays. A recording above 720p can be re-encoded with `shrink`. `recordings/` is never pruned. Before deleting or re-encoding, ask the chat that runs the live tests and owns the open issues which folders keep their original files (`shrink --keep <folder>`), and read the dry run first. `recordings/` holds hard links, not copies, so one file counts once.
 
+## Orchestration tools
+
+- `tools/live/watchdog.py add|done|list|tick` owns `agents.tsv` (and `agents.state.json`, what `tick` already reported) in `.local/scratch/`: nobody edits the file by hand. `tick` prints only news or `NOTHING NEW`; the scheduled prompt is `docs/agents/watchdog-prompt.md`.
+- `tools/live/brief.py live|code --task <name> ...` writes the standard header of `.local/scratch/<name>/brief.md`; every run setting is a required argument. Rules the public repo must not state go in `.local/brief-rules.md` (gitignored), which the script appends to the brief as "Machine-local rules".
+
 ## Game data
 
 `tools/live/dialogs.py` lists the confirm-style dialog strings of `.local/unpack/`, to diff against the pipeline's known dialogs; run it before an unattended run.
