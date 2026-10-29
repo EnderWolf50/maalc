@@ -14,8 +14,9 @@ ICONS = DATA / "gift_icons"
 KEYWORDS = ["Burn", "Bleed", "Tremor", "Rupture", "Sinking", "Poise", "Charge", "Slash", "Pierce", "Blunt", "Keywordless"]
 VESTIGES = {g["id"] for g in RECIPES["vestiges"]}
 BUYABLE = {g["id"] for g in SEARCH}
-KNOWN = BUYABLE | {g["id"] for g in RECIPES["gifts"] + RECIPES["materials"]} | VESTIGES  # what a list may name
-ICON_IDS = KNOWN | {g["id"] for g in RECIPES["extra_gifts"]}
+KEYWORD_GIFTS = SEARCH + RECIPES["gifts"] + RECIPES["materials"] + RECIPES["extra_gifts"]
+KNOWN = {g["id"] for g in KEYWORD_GIFTS} | VESTIGES  # what a list may name
+ICON_IDS = KNOWN
 MAX_BYTES = 900_000  # 464 icons weigh 675 KB (1.4 KB each)
 
 
@@ -29,7 +30,7 @@ def test_default_list_ids_all_exist():
 def test_default_list_is_the_former_default_team():
     burn = {g["id"] for g in SEARCH if g["keyword"] == "Burn"}
     assert set(LIST["want"]) == burn | {9083}
-    keywordless = {g["id"] for g in SEARCH + RECIPES["gifts"] + RECIPES["materials"] if g["keyword"] == "Keywordless"}
+    keywordless = {g["id"] for g in KEYWORD_GIFTS if g["keyword"] == "Keywordless"}  # extra_gifts' too (#310's live run)
     # vestiges I-IV (9991-9994) are fusion materials, so `drop`; Lunar Vestige (V, 9995) is never a material, so `keep`
     assert set(LIST["keep"]) == (keywordless | {max(VESTIGES)}) - {9083}
     assert LIST["order"] == KEYWORDS and LIST["fusion_condition"] == "any"

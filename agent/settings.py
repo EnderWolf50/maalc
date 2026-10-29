@@ -151,9 +151,15 @@ def default_gorder():
     return {k: [g["id"] for tier in (3, 2, 1) for g in search if g["keyword"] == k and g["tier"] == tier] for k in GIFT_KEYWORDS}
 
 
-def known_gift_ids():
+def keyword_gifts():
+    """Every gift a list names by its keyword (spec 04 section 13): the buyable ones, the fusion gifts, the recipe materials and
+    the other gifts (extra_gifts: a keyword fusion or an event gives one, and the shop tells it apart, #332); not the vestiges."""
     search, fusions, materials = gift_tables()
-    return {g["id"] for g in search + fusions + materials} | vestige_ids()
+    return search + fusions + materials + extra_gifts()
+
+
+def known_gift_ids():
+    return {g["id"] for g in keyword_gifts()} | vestige_ids()
 
 
 def clean_gift_list(gift_list):
@@ -178,12 +184,12 @@ def clean_gift_list(gift_list):
 def _team_gift_list(team):
     """The version 14 gift list the shop's keep settings of a version 10 team come to (spec 04 section 2, version 14):
     (list without id and name, number of keep_gifts that match no gift)."""
-    search, fusions, materials = gift_tables()
+    search = gift_tables()[0]
     listed = lambda key: team[key] if isinstance(team.get(key), list) else []  # a broken file is left to the checks
     main = team.get("keyword") if isinstance(team.get("keyword"), str) else None
     kept_kw = {main, *(k for k in listed("keep_keywords") if isinstance(k, str))}
     want = {g["id"] for g in search if g["keyword"] == main}
-    keep = {g["id"] for g in search + fusions + materials if g["keyword"] in kept_kw or g["keyword"] == "Keywordless"}
+    keep = {g["id"] for g in keyword_gifts() if g["keyword"] in kept_kw or g["keyword"] == "Keywordless"}
     dropped = 0
     for kept in listed("keep_gifts"):
         kept = kept if isinstance(kept, dict) else {}

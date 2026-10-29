@@ -2,6 +2,7 @@
 import pytest
 
 import actions
+import settings
 import test_actions
 from test_actions import fusion_taps, sale_taps, wants
 
@@ -18,6 +19,16 @@ def test_a_fusion_taps_only_the_drop_gifts_it_knows(context, monkeypatch):
     fused, taps, ok = fusion_taps(context, monkeypatch, {"list": wants(9009, keep=[9053])}, ("Burn", 2, 9009),
                                   ("Burn", 3, 9053), ("Bleed", 2, None), ("Keywordless", 3), ("Tremor", 2), ("Pierce", 2))
     assert fused and ok and taps == [0, 0, 0, 1, 1, 1]
+
+
+def test_a_migrated_list_keeps_its_main_keywords_fusion_only_tier_iv(context, monkeypatch):
+    # The live run of #310 (accept-301b): a version 10 Poise team's list fused its Clear Mirror, Calm Water (9070, a tier IV no
+    # shop sells and no recipe makes, #332) into a tier III. The old team kept every Poise gift; so does its list, and every
+    # keywordless gift (One with the Blade 9228 is the same kind). Tremor III + Pierce III + Sinking II still make a IV.
+    lists, _, _ = settings.gift_lists_from_v10([{"keyword": "Poise", "keep_keywords": [], "keywordless": "keep", "keep_gifts": []}])
+    fused, taps, ok = fusion_taps(context, monkeypatch, {"list": lists[0]}, ("Poise", 4, 9070), ("Keywordless", 3, 9228),
+                                  ("Tremor", 3), ("Pierce", 3), ("Sinking", 2))
+    assert fused and ok and taps == [0, 0, 1, 1, 1]
 
 
 @pytest.mark.parametrize("tier, vestige_id", [(1, 9991), (2, 9992), (3, 9993), (4, 9994)])

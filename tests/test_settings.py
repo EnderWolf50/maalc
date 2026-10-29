@@ -32,7 +32,7 @@ def gift_list(keyword="Burn", **kw):
     """What the version 14 migration makes of a team of this main keyword that keeps nothing else, worked out from the data
     files on their own: the keyword's buyable gifts wanted, the rest of its gifts and every keywordless gift kept (a vestige only when keep_gifts names it)."""
     want = sorted(g["id"] for g in SEARCH if g["keyword"] == keyword)
-    every = SEARCH + RECIPES["gifts"] + RECIPES["materials"]
+    every = SEARCH + RECIPES["gifts"] + RECIPES["materials"] + RECIPES["extra_gifts"]
     keep = {g["id"] for g in every if g["keyword"] in (keyword, "Keywordless")}
     gorder = {k: [g["id"] for tier in (3, 2, 1) for g in SEARCH if g["keyword"] == k and g["tier"] == tier] for k in KEYWORDS}
     return {
@@ -464,7 +464,7 @@ def test_version_10_keeps_what_the_team_kept(tmp_path):
     first, second = data["gift_lists"]
     assert first == {"id": "gift-list-1", "name": "Team a", **gift_list("Tremor", fusion_condition="upgrade")}
     expected = gift_list("Pierce")
-    blunt = {g["id"] for g in SEARCH + RECIPES["gifts"] + RECIPES["materials"] if g["keyword"] == "Blunt"}
+    blunt = {g["id"] for g in SEARCH + RECIPES["gifts"] + RECIPES["materials"] + RECIPES["extra_gifts"] if g["keyword"] == "Blunt"}
     poise = {g["id"] for g in SEARCH if g["keyword"] == "Poise" and g["en"] == "Cigarette Holder"}
     assert poise  # the test names a real gift
     expected["keep"] = sorted(set(expected["keep"]) | blunt | poise | {9991})  # 9991: Dark Vestige, named in keep_gifts

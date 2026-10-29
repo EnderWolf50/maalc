@@ -45,9 +45,9 @@ const material = fixed.recipes![0][0];
 const vestige = 9991;
 
 describe("the catalog", () => {
-  test("every gift has an icon, and the data's gifts, fusions, materials and vestiges are each listed once", () => {
+  test("every gift has an icon, and the data's gifts, fusions, materials, other gifts and vestiges are each listed once", () => {
     expect(new Set(CATALOG.map((g) => g.id)).size).toBe(CATALOG.length);
-    expect(CATALOG.length).toBe(SEARCH_GIFTS.length + recipes.gifts.length + recipes.materials.length + 5);
+    expect(CATALOG.length).toBe(SEARCH_GIFTS.length + recipes.gifts.length + recipes.materials.length + recipes.extra_gifts.length + 5);
     for (const g of CATALOG) expect(iconUrl(g.id), String(g.id)).toBeTruthy();
   });
 });
@@ -260,6 +260,15 @@ describe("read-only default", () => {
 });
 
 describe("gifts that cannot be wanted", () => {
+  test("a gift no shop sells and no recipe makes shows in its keyword's tier and becomes keep when wanted", async () => {
+    // #310's live run: Clear Mirror, Calm Water (9070, Poise IV) comes from a keyword fusion; the list must be able to keep it.
+    const r = await open([mine()]);
+    expect(GIFT_BY_ID.get(9070)).toMatchObject({ keyword: "Poise", tier: 4, kind: "other" });
+    await r.user.click(await tile(r, 9070));
+    expect(list(r)).toMatchObject({ want: [], keep: [9070] });
+    expect(flash()).toBe(say(zh["gl.unbuyable_keep"], { name: nameOf(9070) }));
+  });
+
   test("a vestige set to want becomes keep, with a notice", async () => {
     const r = await open([mine()]);
     await r.user.click(await tile(r, vestige));

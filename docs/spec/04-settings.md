@@ -31,7 +31,7 @@
   - 版本 14（#291、#292）：商店的保留設定從隊伍搬到飾品清單（第 13 節，#291、#292）。頂層新增 `gift_lists`；隊伍新增 `gift_list`，移除 `keyword`、`keep_keywords`、`keywordless`、`keep_gifts`、`fusion_condition`（主要體系改由清單決定，見第 13 節）。從版本 13 以前的檔案遷移時（版本 10 以前先照上面的步驟升到 13），每支隊伍產生一份清單，保留的東西完全相同的隊伍共用同一份（名稱用第一支隊伍的名稱，撞名加 ` 2`；id 是 `gift-list-1`、`gift-list-2`、…），隊伍的 `gift_list` 指向它。清單內容：
     - `order`：隊伍原本的主要體系第一，其餘照預設順序，`Keywordless` 最後，所以遷移後的主要體系和遷移前相同；
     - `want`：主要體系的所有可購買飾品（`gift_search.json` 裡該體系的 I–III 階）；
-    - `keep`：主要體系與 `keep_keywords` 的其餘飾品（`gift_recipes.json` 裡該體系的合成品與配方材料；`keep_keywords` 體系的可購買飾品也是）、所有無體系飾品（`gift_search.json` 的 `Keywordless` 分頁與 `gift_recipes.json` 裡無體系的）、`keep_gifts` 對得到 id 的飾品（用 `keyword`、`tier`、英文名對照 `gift_search.json`；殘影用名字對到 9991–9995）。已在 `want` 的不重複放進 `keep`。`keep_gifts` 對不到的丟掉並計數，GUI 遷移後在標頭的狀態列顯示「有 N 個對不到，已丟掉」，直到使用者改動設定或儲存；
+    - `keep`：主要體系與 `keep_keywords` 的其餘飾品（`gift_recipes.json` 裡該體系的合成品、配方材料與 `extra_gifts`；`keep_keywords` 體系的可購買飾品也是）、所有無體系飾品（`gift_search.json` 的 `Keywordless` 分頁與 `gift_recipes.json` 裡無體系的，含 `extra_gifts`）、`keep_gifts` 對得到 id 的飾品（用 `keyword`、`tier`、英文名對照 `gift_search.json`；殘影用名字對到 9991–9995）。已在 `want` 的不重複放進 `keep`。`keep_gifts` 對不到的丟掉並計數，GUI 遷移後在標頭的狀態列顯示「有 N 個對不到，已丟掉」，直到使用者改動設定或儲存；
     - `gorder` 用預設（每體系 III、II、I 階），`fusion_condition` 沿用該隊的值。
 
     遷移後的行為差異（Agent 已依清單買、賣、合成，這幾點是使用者會看到的）：
@@ -329,7 +329,7 @@ PI 任務 `ChargeEnkephalin`，GUI 的「日常」分頁編輯。它花 Lunacy�
 | 飾品順序 | `gorder` | 物件：體系 → id 陣列 | 該體系內的購買先後，可跨階級；只影響「想要」的可購買飾品 | 每體系：III、II、I 階，階內照資料檔順序 |
 | 合成條件 | `fusion_condition` | 字串 | `any` 材料夠就合（能升階的組合先合，再合出材料能做到的最高階）／`upgrade` 合出的階級比這組材料的最高階還高才合／`tier4` 只在能合出 IV 級時才合。階級由材料點數算出（[03](03-decisions.md) 第 13 節），不花星光；不合成的材料照一般規則仍可能被出售。GUI 的名稱（使用者 2026-10-22 定案）：任意合成／升階才合／只合 IV，英文 Any／Upgrades only／Tier IV only | `any` |
 
-- 飾品 id 存**數字 id**，不存名字：`gift_search.json`（可購買的 320 個，I–III 階）、`gift_recipes.json`（60 個合成品與 12 個 `gift_search.json` 沒有的配方材料）和殘影 9991–9995（黯淡、微茫、閃耀、輝煌的殘影、月之殘影，階級 I–V）。名字會因中文化改變；id 換季時是否穩定、舊 id 會不會消失還沒驗證（同一季內 `gift_search.json` 的 320 個 id、體系、階級、英文名在 2026-10-16 與 2026-10-23 的版本完全相同；跨季沒有資料），所以載入時不認得的 id 不報錯：GUI 顯示警告並丟掉，Agent 靜默略過。（#291、#292）
+- 飾品 id 存**數字 id**，不存名字：`gift_search.json`（可購買的 320 個，I–III 階）、`gift_recipes.json`（60 個合成品、12 個 `gift_search.json` 沒有的配方材料，與 67 個 `extra_gifts`：商店不賣、配方也不做，只會從體系合成或事件拿到，例如呼吸 IV 階的 Clear Mirror, Calm Water 9070，只能保留或不要）和殘影 9991–9995（黯淡、微茫、閃耀、輝煌的殘影、月之殘影，階級 I–V）。`extra_gifts` 以前不在清單裡，遷移與 GUI 都設不到，商店認出後一律當 `drop`：#310 的實機驗收裡，遷移後的呼吸清單把第 4 層合成出的 9070 在第 5 層當材料合掉；舊設定保留整個主要體系，所以現在照樣保留。名字會因中文化改變；id 換季時是否穩定、舊 id 會不會消失還沒驗證（同一季內 `gift_search.json` 的 320 個 id、體系、階級、英文名在 2026-10-16 與 2026-10-23 的版本完全相同；跨季沒有資料），所以載入時不認得的 id 不報錯：GUI 顯示警告並丟掉，Agent 靜默略過。（#291、#292）
 - `gorder` 缺的飾品補在該體系最後（資料檔順序），多的 id（不是該體系可購買的飾品）丟掉，缺的體系用預設順序；所以 `gorder` 不檢查是不是排列，換季後的舊設定仍可載入。（#292）
 - `want` 裡出現殘影或不能購買的非合成品不報錯：GUI 不讓選，Agent 的購買清單略過它們，因為資料檔換季後可能變動。（#292，未驗證換季時的實際情形）
 - schema 檢查型別、`order` 的列舉與不重複（11 項）、`want`／`keep` 的不重複、`gorder` 的鍵是 11 個體系之一。跨物件檢查（GUI 與 Agent 各做一份，訊息一致）：清單的 id 或名稱重複（`gift_lists: id 'x' appears 2 times`）；隊伍引用不存在的清單（`teams/0/gift_list: team 'T' uses missing plan 'x' (not in gift_lists)`）；同一個 id 同時在 `want` 與 `keep`（`gift_lists/0: list 'L' has gift 9053 in both want and keep`）。（#292）

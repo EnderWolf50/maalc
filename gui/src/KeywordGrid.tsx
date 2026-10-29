@@ -117,7 +117,7 @@ export function KeywordPanel({ keyword }: { keyword: string }) {
       {blocks.map(({ tier, ids }) => {
         const kinds = ids.map((id) => GIFT_BY_ID.get(id)!.kind);
         const set = ids.filter((id) => state(list, id) !== "drop").length;
-        const note = kinds.includes("fusion") ? t("gl.tier_fusion") : kinds.some((k) => k === "material" || k === "vestige") ? t("gl.tier_unbuyable") : "";
+        const note = kinds.includes("fusion") ? t("gl.tier_fusion") : kinds.some((k) => k !== "buyable") ? t("gl.tier_unbuyable") : "";
         return (
           <section key={tier} className="gl-tier" aria-label={TIERS[tier]}>
             <h4><span className={"gl-tierno" + (tier >= 4 ? " fusion" : "")}>{TIERS[tier]}</span>

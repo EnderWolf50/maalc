@@ -43,7 +43,8 @@ NOTE = ("Fusion gifts and their recipes. Recipes: combineFixed (any one of a gif
         "filled green. `extra_gifts` (#332) are the rest of the client's gift ids 9000-9999 (static data ego-gift*, "
         "465 in 1.117.0, 464 with a name: 9247 has neither a name nor an icon sprite, so it is left out): no shop sells "
         "them and no recipe uses them, so a shop cell may still show one (some are the theme packs' specificEgoGiftPool gifts); "
-        "the Gift Search icons and the GUI ignore them, the shop cell match (agent/gift_cells.py) takes them as candidates. "+NOTE_ZH+" "
+        "the Gift Search icons ignore them, the shop cell match (agent/gift_cells.py) takes them as candidates, and a gift list "
+        "names them as any gift of their keyword (keep or drop: they cannot be wanted). "+NOTE_ZH+" "
         "Written by tools/gift_recipes.py.")
 
 

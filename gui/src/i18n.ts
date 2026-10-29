@@ -185,7 +185,7 @@ const zh_tw = {
   "gl.empty_note": "先選上面的狀態，再點飾品；或直接從「預設」的內容開始。",
   "gl.from_default": "用「預設」的內容開始",
   "gl.tier_fusion": "含合成品：不能購買，想要的話材料自動保留，湊齊就自動合成",
-  "gl.tier_unbuyable": "含不能購買的材料與殘影：只能保留或不要",
+  "gl.tier_unbuyable": "含不能購買的飾品：只能保留或不要",
   "gl.tier_n": "{n} 個", "gl.tier_set": "已設 {n}",
   // hover popover, search and help (#307)
   "gl.tip_set": "設為", "gl.tip_set_group": "設定狀態",
@@ -423,7 +423,7 @@ const en_us: typeof zh_tw = {
   "gl.empty_note": "Pick a state above, then click gifts; or start from the content of Default.",
   "gl.from_default": "Start from Default's content",
   "gl.tier_fusion": "Has fusion gifts: not sold; if wanted, their materials are kept and the fusion is made once they are all owned",
-  "gl.tier_unbuyable": "Has materials and vestiges the shop does not sell: keep or drop only",
+  "gl.tier_unbuyable": "Has gifts the shop does not sell: keep or drop only",
   "gl.tier_n": "{n} gifts", "gl.tier_set": "{n} set",
   "gl.tip_set": "Set to", "gl.tip_set_group": "Set the state",
   "gl.tip_ro": "\"Default\" is read-only; copy it to change it",

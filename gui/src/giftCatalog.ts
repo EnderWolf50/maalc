@@ -5,15 +5,17 @@ import { FUSIONS, materialsOf, type Fusion } from "./gifts";
 import { SEARCH_GIFTS, VESTIGES, parseThemePacks } from "./model";
 
 /** buyable: on the Gift Search page (tier I-III); fusion: made by fusing, so wantable but never bought; material: a recipe's
- * material the shop does not sell; vestige: sold or fused only. Only a buyable or fusion gift can be "want". */
-export type Kind = "buyable" | "fusion" | "material" | "vestige";
+ * material the shop does not sell; other: no shop sells it and no recipe makes it (extra_gifts, #332), a keyword fusion or an
+ * event gives one; vestige: sold or fused only. Only a buyable or fusion gift can be "want". */
+export type Kind = "buyable" | "fusion" | "material" | "other" | "vestige";
 export interface CatalogGift { id: number; keyword: string; tier: number; en: string; zh: string; kind: Kind }
 
-/** The data files' order: the shop's gifts in page order, then fusion gifts, materials and vestiges. */
+/** The data files' order: the shop's gifts in page order, then fusion gifts, materials, other gifts and vestiges. */
 export const CATALOG: CatalogGift[] = [
   ...SEARCH_GIFTS.map((g): CatalogGift => ({ ...g, kind: "buyable" })),
   ...recipes.gifts.map((g): CatalogGift => ({ id: g.id, keyword: g.keyword, tier: g.tier, en: g.en, zh: g.zh, kind: "fusion" })),
   ...recipes.materials.map((g): CatalogGift => ({ id: g.id, keyword: g.keyword, tier: g.tier, en: g.en, zh: g.zh, kind: "material" })),
+  ...recipes.extra_gifts.map((g): CatalogGift => ({ id: g.id, keyword: g.keyword, tier: g.tier, en: g.en, zh: g.zh, kind: "other" })),
   ...VESTIGES.map((g): CatalogGift => ({ ...g, kind: "vestige" })),
 ];
 export const GIFT_BY_ID = new Map(CATALOG.map((g) => [g.id, g]));

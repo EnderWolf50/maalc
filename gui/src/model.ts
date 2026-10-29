@@ -77,8 +77,9 @@ export const VESTIGES = recipes.vestiges;
  * static data, Chinese names from LLC (data/gift_search.json carries its sources and license). */
 export const SEARCH_GIFTS: SearchGift[] = gifts.gifts;
 export interface SearchGift { id: number; keyword: string; tier: number; en: string; zh: string }
-/** The fusion gifts and the recipe materials the search page lacks (data/gift_recipes.json, spec 05). */
-const RECIPE_GIFTS: { id: number; keyword: string }[] = [...recipes.gifts, ...recipes.materials];
+/** The fusion gifts, the recipe materials the search page lacks and the game's other gifts (extra_gifts: a keyword fusion or
+ * an event gives one, #332), data/gift_recipes.json, spec 05: with the search page's, every gift a list names by its keyword. */
+const RECIPE_GIFTS: { id: number; keyword: string }[] = [...recipes.gifts, ...recipes.materials, ...recipes.extra_gifts];
 
 /** The game searches 3 gifts at most; agent/settings.schema.json caps gift_search.gifts the same. */
 export const MAX_GIFTS: number = TEAM.gift_search.properties.gifts.maxItems;
@@ -181,7 +182,7 @@ export function cleanGiftList(list: GiftList): { list: GiftList; dropped: number
 const giftListCheck = new Ajv2020({ strict: false }).compile({ $ref: "#/$defs/gift_list", $defs: schema.$defs });
 const wellFormed = (l: unknown): l is GiftList => giftListCheck(l);
 
-/** Every Keywordless gift the shop sells or fuses, by id, and Lunar Vestige: what a new list keeps, as the default list does.
+/** Every Keywordless gift a list names by its keyword (the shop's, the fusions', the other gifts'), by id, and Lunar Vestige: what a new list keeps, as the default list does.
  * Vestiges I-IV are no such gift: they stay fusion material; Lunar Vestige, tier V, never is one. */
 export const keywordlessIds = (): number[] =>
   [...SEARCH_GIFTS, ...RECIPE_GIFTS].filter((g) => g.keyword === "Keywordless").map((g) => g.id).concat(VESTIGES[4].id)
