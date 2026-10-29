@@ -442,7 +442,8 @@ class TaskStart(CustomAction):
 
 # A hub's own steps, no screen: the watchdog keeps the screen handled before them. The hubs themselves are found by
 # their next list, which names the Stuck node (StuckFlag). ChargePanel and the pass missions' claims repeat on the same
-# picture on purpose (a window that stays open after Confirm, a row to claim after a row): a count of them is not a stuck.
+# picture on purpose (a window that stays open after Confirm, a row to claim after a row): a count of them is not a stuck,
+# so each bounds itself (ChargePanel's reads and Cancels, the claims' max_hit).
 PASS_NODES = ("BattleHUD", "BattleHUDLost", "HubText", "HubTextLost", "ExpText", "ExpTextLost", "ChargePanel",
               "PassDailyClaim", "PassWeeklyClaim", "PassSeasonalClaim", "PassSeasonalEndClaim")
 
@@ -994,7 +995,10 @@ class ChargePanel(CustomAction):
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         c = TASK["charge"]
-        if c.get("end"):  # a window over a task already decided
+        if c.get("end"):  # a window over a task already decided; exempt from the same-screen watchdog, so bounded here
+            c["cancels"] = c.get("cancels", 0) + 1
+            if c["cancels"] > CHARGE_TRIES:
+                return stop(context, f"the Charge Enkephalin window stayed open after {CHARGE_TRIES} more Cancels")
             tap(context, *PANEL_CANCEL, wait=0.5)
             return True
         tap(context, *LUNACY_TAB, wait=0.7)
