@@ -2142,7 +2142,7 @@ def map_floor(context, image):
     Swept 2026-10-19 over every 0.25 s from the 10 theme pack pulls of two runs: the last floor's number, a gap,
     the new one; never a third number. tests/screens/MapBoss.png reads "Floar 3".
     """
-    return floor_number(text(context, image, MAP_TITLE), r"fl\w+")
+    return floor_number(text(context, image, MAP_TITLE), r"fl[a-z]*")
 
 
 def enter_node(context):

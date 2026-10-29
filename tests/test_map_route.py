@@ -415,7 +415,7 @@ def test_a_fresh_map_dragged_to_its_edge_costs_no_extra_drags(context):
     assert ctl.post_touch_down.call_count == 2  # one drag to the edge, one that shows it
 
 
-@pytest.mark.parametrize(("shown", "floor"), [("Exploring Floor 3", 3), ("Exploring Floar 3", 3), ("Exploring Floor 10", 10), ("Exploring Floor 15", 15), ("Exploring", None), ("", None)])
+@pytest.mark.parametrize(("shown", "floor"), [("Exploring Floor 3", 3), ("Exploring Floar 3", 3), ("Exploring Floor 10", 10), ("Exploring Floor 15", 15), ("Exploring Floor12", 12), ("Exploring Floar12", 12), ("Exploring Floor3", 3), ("Exploring", None), ("", None)])
 def test_the_map_title_gives_the_floor(context, shown, floor):
     context.run_recognition.side_effect = lambda name, image, override=None: SimpleNamespace(
         all_results=[SimpleNamespace(text=shown, box=(40, 90, 220, 25))] if shown else [])
