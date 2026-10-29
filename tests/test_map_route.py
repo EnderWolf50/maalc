@@ -781,3 +781,49 @@ def test_a_dark_column_after_a_shop_is_still_the_boss(context, before, expected)
     image = np.zeros((720, 1280, 3), np.uint8)
     image[y - 2:y + 3, x:x + mr.COLUMN_DX] = 200  # the link, 5 px wide
     assert actions.RouteMap.read_ahead(context, image, x, y, before) == expected
+
+
+def bus_on_a_node_world(context, monkeypatch, floor, **run):
+    """The bus stands off BUS_HOME with no slot to its right; the panel shows after any tap."""
+    monkeypatch.setattr(actions, "map_weights", lambda context: AB_WEIGHTS)
+    monkeypatch.setattr(actions, "enter_node", lambda context: True)
+    actions.RUN.update(floor=floor, **run)
+    ctl = context.tasker.controller
+
+    def run_recognition(name, image, override=None):
+        if name == "MapBus":
+            return SimpleNamespace(hit=True, box=[300, 250, 45, 75])  # off BUS_HOME: find_bus would pan it
+        if name == "MapNodePanel":
+            return SimpleNamespace(hit=True, box=[0, 0, 1, 1]) if ctl.post_click.call_count else None
+        return None
+    context.run_recognition.side_effect = run_recognition
+    title_reads(context, f"Exploring Floor {floor}")
+    return ctl
+
+
+def test_a_resumed_run_with_the_bus_on_a_node_taps_the_bus_before_any_pan(context, monkeypatch):
+    # #379, live: the bus stood on the Boss after a restart, with no slot to its right; four looks cost 11 drags
+    # (~21 s) before the bus was tapped. In a continued run, a bus with no linked slot is tapped first.
+    ctl = bus_on_a_node_world(context, monkeypatch, 3)
+    actions.forget_game_state()  # the recovery that brought the game back
+    assert actions.RouteMap().run(context, None)
+    ctl.post_touch_down.assert_not_called()  # no drag
+    assert ctl.post_click.call_args_list[0].args == (300 + 22, 250 + 37)
+    assert actions.RUN["map_entered"] is True
+
+
+def test_a_restarted_agent_that_has_seen_no_floor_taps_the_bus_first(context, monkeypatch):
+    ctl = bus_on_a_node_world(context, monkeypatch, 3)
+    del actions.RUN["floor"]  # a fresh process: no theme pack seen
+    assert actions.RouteMap().run(context, None)
+    ctl.post_touch_down.assert_not_called()
+    assert ctl.post_click.call_args_list[0].args == (300 + 22, 250 + 37)
+
+
+def test_a_new_runs_first_floor_does_not_tap_the_bus_first(context, monkeypatch):
+    # The map of a floor just pulled has no node entered: the first tap would only wait BUS_PROBE s for a panel.
+    ctl = bus_on_a_node_world(context, monkeypatch, 1)
+    sleeps = []
+    monkeypatch.setattr(actions.time, "sleep", sleeps.append)
+    assert not actions.RouteMap.tap_bus_first(context)
+    ctl.post_click.assert_not_called()

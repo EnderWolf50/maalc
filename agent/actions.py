@@ -1090,6 +1090,12 @@ def forget_game_state():
     STUCK["watch"].reset()
     for key in ("turn", "battle_start", "map_misses", "event_tried", "map_plan", "map_entered"):
         RUN.pop(key, None)
+    RUN["resumed"] = True
+
+
+def run_continued():
+    """Whether this agent process did not see the run's floor from its theme pack on: a restart or a recovery since (#379)."""
+    return bool(RUN.get("resumed")) or "floor" not in RUN
 
 
 def restart_floor_clock():
@@ -1899,6 +1905,7 @@ class PickThemePack(CustomAction):
             RUN.pop("after_shop", None)
             if floor == 1:
                 RUN.pop("floors_hard", None)  # a floor 1 after a later floor is a new run's: no difficulty of the last one stays (#382)
+            RUN.pop("resumed", None)  # this floor's map comes up from its theme pack
             TASK.pop("modules", None)  # a run is under way: Claim will take 5, the next one reads the Modules again (#369)
             RUN.update(floor=floor, map_misses=0)  # a new floor's map gets a fresh retry quota (spec 06)
             restart_floor_clock()
@@ -2199,7 +2206,7 @@ class RouteMap(CustomAction):
     map_route.rank over the columns read (on screen, then on a NORMAL floor the rest, two columns a drag: read_on)
     and, the map dragged back to the bus, tapped in that order until the node panel (MapNodePanel)
     shows. After them come the fallbacks: the bus (a node reached but not entered; first after a restart or a
-    recovery, #88), then the slots not tried yet. No bus on screen: the map is dragged about for it (#61).
+    recovery, #88; in such a continued run the bus is tapped before any read when no slot is linked to it, #379), then the slots not tried yet. No bus on screen: the map is dragged about for it (#61).
     Nothing taking a tap spends one of the floor's map retries; when they run out, the map is stuck (spec 06);
     with no bus found at all, at once at L2. A map zoomed in on the bus is reset first (unzoom); one that stays so goes
     to L2 at once too, or into the node when its panel stays up (L2 starts from the map's gear).
@@ -2226,6 +2233,8 @@ class RouteMap(CustomAction):
         if self.follow(context):
             return enter_node(context)
         RUN.pop("map_plan", None)
+        if not RUN.get("map_entered") and self.tap_bus_first(context):
+            return enter_node(context)
         for _ in range(MAP_LOOKS):  # live: right after a floor's theme pack, the map shows before its bus and links
             if (image := still(context)) is None:
                 return True  # still fading in or out: let MirrorHub look again
@@ -2274,9 +2283,7 @@ class RouteMap(CustomAction):
         # #130: a bus tap on a node already entered shows nothing; a panel shows within ~0.5 s, so that probe is short.
         probe = not RUN.get("map_entered")
         for name, (x, y) in tries:
-            page_guard(context, "MirrorMap")
-            tap(context, x, y, wait=0)
-            if until(context, lambda im: seen(context, im, "MapNodePanel"), timeout=BUS_PROBE if probe and name == "the bus" else 2.0) is not None:
+            if RouteMap.tap_for_panel(context, x, y, BUS_PROBE if probe and name == "the bus" else 2.0):
                 log(f"map: take {name}")
                 if steps is not None and (x, y) == ranked[0][1]:  # the path's first node: follow the rest
                     RUN["map_plan"] = {"floor": RUN.get("floor"), "steps": steps}
@@ -2307,6 +2314,37 @@ class RouteMap(CustomAction):
             return False  # MirrorHub looks again: the new map may still be fading in
         log(f"map: the title stays floor {shown}; reading the map as it is")
         RUN["title_off"] = floor
+        return True
+
+    @staticmethod
+    def tap_for_panel(context, x, y, timeout, image=None):
+        """Whether a tap at (x, y) opened the node panel (MapNodePanel) within timeout s; the page is checked first."""
+        page_guard(context, "MirrorMap", image=image)
+        tap(context, x, y, wait=0)
+        return until(context, lambda im: seen(context, im, "MapNodePanel"), timeout=timeout) is not None
+
+    @staticmethod
+    def tap_bus_first(context):
+        """Whether the bus, tapped where it stands, opened its node panel; only in a continued run (#379).
+
+        A continued run is one this agent process did not see the earlier floors of (a restart: no floor in memory)
+        or that came back from a recovery (forget_game_state); a run's first floor taps no bus first, it has no node
+        entered yet and the tap would only wait BUS_PROBE s.
+        Live: the bus stood on the Boss with no slot to its right; the looks and pans for a linked slot cost ~21 s
+        (11 drags at the map's edge) before the bus was tapped (#88). A bus with no linked slot is tapped at once,
+        without panning; with a slot linked, or the panel not showing within BUS_PROBE s, the full read follows.
+        """
+        if not run_continued():
+            return False
+        image = still(context)
+        bus = seen(context, image, "MapBus") if image is not None else None
+        if not bus or RouteMap.read_slots(context, image, bus.box[0], bus.box[1]):
+            return False
+        if not RouteMap.tap_for_panel(context, bus.box[0] + 22, bus.box[1] + 37, BUS_PROBE, image=image):
+            return False
+        log("map: column 1: no linked slot read")
+        log("map: take the bus")
+        RUN["map_entered"] = True
         return True
 
     @staticmethod
@@ -3108,6 +3146,7 @@ EVENT_TAKE = 1.5  # s a tap on an event page has to show
 EVENT_LABELS = {"skip", "proceed", "continue", "commence"}  # the Event node's expected, compact()ed
 EVENT_BUTTON_LABEL = [1040, 612, 190, 66]  # the Event node's roi: empty once the event page is gone
 EVENT_LIMIT = 180  # s one event may take before recovery L1 (AALC allows 300); a boss quiz of several rounds stays well under
+EVENT_ODDS_WAIT = 2.0  # s after a check's prompt first shows that no odds read hands back to MirrorHub, not a sinner (#380); live: the odds came 1.8 s after
 EVENT_GAP = 30  # s between two Event calls after which the next call is another event
 EVENT_LEAST = 0.5 # s after a tap before the screen counts as moved: a fade's first frames are the same page
 CHOICE_X = 925  # the option list's middle
@@ -3160,6 +3199,7 @@ class Event(CustomAction):
         if red_button(image):
             tried.clear()
             checked.clear()
+            event.pop("prompt_at", None)
             tap(context, *EVENT_BUTTON, wait=0)
             Event.advance(context, image, pressed_at=time.monotonic())
         elif card_alone(image):
@@ -3168,8 +3208,13 @@ class Event(CustomAction):
         elif has(text(context, image, CHECK_PROMPT), "Choose a character"):
             # One read per portrait: read as a row, neighbouring captions run together ("HighVery Low").
             captions = [(text(context, image, [x - 38, 605, 76, 24], only_rec=True), x) for x in EVENT_PORTRAIT_X]
+            # The odds are drawn after the prompt (#380): in the first EVENT_ODDS_WAIT s with none read, no blind first
+            # sinner; past it a check that never draws them goes on sinner by sinner (#92).
+            if all(rewards.odds_rank(t) is None for t, _ in captions) and now - event.setdefault("prompt_at", now) < EVENT_ODDS_WAIT:
+                log("event check: no odds read yet; MirrorHub looks again")
+                return True
             i = rewards.pick_checker(captions, checked)
-            if i is None:  # no odds read (or all tried): the next sinner not tried yet, round again when all are
+            if i is None:  # all the odds read were tried: the next sinner not tried yet, round again when all are
                 i = next((k for k in range(len(captions)) if k not in checked), None)
                 if i is None:
                     checked.clear()
@@ -3180,6 +3225,7 @@ class Event(CustomAction):
                 checked.add(i)
         elif has(text(context, image, CHOICES_HEADER), "Choices"):
             checked.clear()
+            event.pop("prompt_at", None)
             run = RUN if "lux" in RUN else current_run(context)  # a Luxcavation battle's (J1): its team, no Mirror run plan
             story = [t for t, _ in sorted(ocr(context, image, EVENT_STORY), key=lambda r: (r[1][1], r[1][0]))]
             scrolls = rewards.choice_scrollbar(image) or any(None in c for c in rewards.choice_cards(image))
@@ -3378,7 +3424,8 @@ class RewardCard(CustomAction):
             m = re.search(r"(\d)\s*/\s*(\d)", text(context, image, SELECTABLE))
             if m and m[1] == m[2]:
                 tap(context, *CARD_CONFIRM, wait=0)
-                until(context, lambda im: not has(text(context, im, REWARD_TITLE), "Encounter Reward"))
+                get = shows(context, GET_TITLE, "GET")  # a gift's popup leaves the title up: MirrorHub hands it to GiftGet (#377)
+                until(context, lambda im: not has(text(context, im, REWARD_TITLE), "Encounter Reward") or get(im))
                 return True
             if not m:  # no count to tell a tap by: the page is not up
                 continue
