@@ -1090,6 +1090,12 @@ def forget_game_state():
     STUCK["watch"].reset()
     for key in ("turn", "battle_start", "map_misses", "event_tried", "map_plan", "map_entered"):
         RUN.pop(key, None)
+    RUN["resumed"] = True
+
+
+def run_continued():
+    """Whether this agent process did not see the run's floor from its theme pack on: a restart or a recovery since (#379)."""
+    return bool(RUN.get("resumed")) or "floor" not in RUN
 
 
 def restart_floor_clock():
@@ -1885,6 +1891,7 @@ class PickThemePack(CustomAction):
         floor = int(m[1])
         if floor != RUN.get("floor"):
             RUN.pop("after_shop", None)
+            RUN.pop("resumed", None)  # this floor's map comes up from its theme pack
             TASK.pop("modules", None)  # a run is under way: Claim will take 5, the next one reads the Modules again (#369)
             RUN.update(floor=floor, map_misses=0)  # a new floor's map gets a fresh retry quota (spec 06)
             restart_floor_clock()
@@ -2185,7 +2192,7 @@ class RouteMap(CustomAction):
     map_route.rank over the columns read (on screen, then on a NORMAL floor the rest, two columns a drag: read_on)
     and, the map dragged back to the bus, tapped in that order until the node panel (MapNodePanel)
     shows. After them come the fallbacks: the bus (a node reached but not entered; first after a restart or a
-    recovery, #88), then the slots not tried yet. No bus on screen: the map is dragged about for it (#61).
+    recovery, #88; in such a continued run the bus is tapped before any read when no slot is linked to it, #379), then the slots not tried yet. No bus on screen: the map is dragged about for it (#61).
     Nothing taking a tap spends one of the floor's map retries; when they run out, the map is stuck (spec 06);
     with no bus found at all, at once at L2. A map zoomed in on the bus is reset first (unzoom); one that stays so goes
     to L2 at once too, or into the node when its panel stays up (L2 starts from the map's gear).
@@ -2262,9 +2269,7 @@ class RouteMap(CustomAction):
         # #130: a bus tap on a node already entered shows nothing; a panel shows within ~0.5 s, so that probe is short.
         probe = not RUN.get("map_entered")
         for name, (x, y) in tries:
-            page_guard(context, "MirrorMap")
-            tap(context, x, y, wait=0)
-            if until(context, lambda im: seen(context, im, "MapNodePanel"), timeout=BUS_PROBE if probe and name == "the bus" else 2.0) is not None:
+            if RouteMap.tap_for_panel(context, x, y, BUS_PROBE if probe and name == "the bus" else 2.0):
                 log(f"map: take {name}")
                 if steps is not None and (x, y) == ranked[0][1]:  # the path's first node: follow the rest
                     RUN["map_plan"] = {"floor": RUN.get("floor"), "steps": steps}
@@ -2298,20 +2303,30 @@ class RouteMap(CustomAction):
         return True
 
     @staticmethod
-    def tap_bus_first(context):
-        """Whether the bus, tapped where it stands, opened its node panel; only after a restart or recovery (#379).
+    def tap_for_panel(context, x, y, timeout, image=None):
+        """Whether a tap at (x, y) opened the node panel (MapNodePanel) within timeout s; the page is checked first."""
+        page_guard(context, "MirrorMap", image=image)
+        tap(context, x, y, wait=0)
+        return until(context, lambda im: seen(context, im, "MapNodePanel"), timeout=timeout) is not None
 
+    @staticmethod
+    def tap_bus_first(context):
+        """Whether the bus, tapped where it stands, opened its node panel; only in a continued run (#379).
+
+        A continued run is one this agent process did not see the earlier floors of (a restart: no floor in memory)
+        or that came back from a recovery (forget_game_state); a run's first floor taps no bus first, it has no node
+        entered yet and the tap would only wait BUS_PROBE s.
         Live: the bus stood on the Boss with no slot to its right; the looks and pans for a linked slot cost ~21 s
         (11 drags at the map's edge) before the bus was tapped (#88). A bus with no linked slot is tapped at once,
         without panning; with a slot linked, or the panel not showing within BUS_PROBE s, the full read follows.
         """
+        if not run_continued():
+            return False
         image = still(context)
         bus = seen(context, image, "MapBus") if image is not None else None
         if not bus or RouteMap.read_slots(context, image, bus.box[0], bus.box[1]):
             return False
-        page_guard(context, "MirrorMap", image=image)
-        tap(context, bus.box[0] + 22, bus.box[1] + 37, wait=0)
-        if until(context, lambda im: seen(context, im, "MapNodePanel"), timeout=BUS_PROBE) is None:
+        if not RouteMap.tap_for_panel(context, bus.box[0] + 22, bus.box[1] + 37, BUS_PROBE, image=image):
             return False
         log("map: column 1: no linked slot read")
         log("map: take the bus")
