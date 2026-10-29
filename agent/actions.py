@@ -215,14 +215,15 @@ def page_guard(context, home, image=None):
 
 def hub_name(context):
     """The hub of the task under way, for the log: the first node down its entry's next chain that lists TaskDone, as
-    every hub does (#364). MirrorDungeon's is MirrorHub, ExpLuxcavation's ExpHub (live-1 F4)."""
-    name = TASK.get("entry") or "MirrorDungeon"
+    every hub does (#364). MirrorDungeon's is MirrorHub, ExpLuxcavation's ExpHub (live-1 F4). The entry itself is not one,
+    though ChargeEnkephalin's next list also names TaskDone (a count of 0 ends there)."""
+    entry = name = TASK.get("entry") or "MirrorDungeon"
     for _ in range(5):
         data = context.get_node_data(name) or {}
         nexts = [n["name"] for n in data.get("next", [])]
-        if "TaskDone" in nexts:
+        if "TaskDone" in nexts and name != entry:
             return name
-        if not nexts:
+        if not (nexts := [n for n in nexts if n != "TaskDone"]):
             break
         name = nexts[0]
     return "the hub"
