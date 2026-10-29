@@ -16,6 +16,7 @@ import sys
 import time
 from collections import defaultdict
 from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 
@@ -74,8 +75,19 @@ def relink(keep: Path, dup: Path) -> None:
     os.replace(tmp, dup)
 
 
-def dedupe(root: Path, min_bytes: float = 1e6, apply: bool = False) -> list[tuple[int, Path, Path]]:
-    """(size, duplicate, kept) for each byte-identical file that is not yet the same inode as the kept one."""
+def by_inode(paths) -> dict[tuple[int, int], list[Path]]:
+    """Paths grouped by the file data they share."""
+    groups: dict[tuple[int, int], list[Path]] = defaultdict(list)
+    for p in paths:
+        st = p.stat()
+        groups[(st.st_dev, st.st_ino)].append(p)
+    return groups
+
+
+def dedupe(root: Path, min_bytes: float = 1e6, apply: bool = False) -> list[tuple[int, list[Path], Path]]:
+    """(size, paths relinked, kept) for each inode whose bytes equal another inode's.
+
+    Every path of a duplicate inode is relinked, so its data is freed once no path outside `root` holds it."""
     by_size: dict[int, list[Path]] = defaultdict(list)
     for p in root.rglob("*"):
         if p.is_file() and not p.is_symlink():
@@ -84,28 +96,27 @@ def dedupe(root: Path, min_bytes: float = 1e6, apply: bool = False) -> list[tupl
                 by_size[size].append(p)
     found = []
     for size, paths in by_size.items():
-        inodes: dict[tuple[int, int], Path] = {}
-        for p in paths:
-            st = p.stat()
-            inodes.setdefault((st.st_dev, st.st_ino), p)
+        inodes = by_inode(paths)
         if len(inodes) < 2:
             continue
-        by_hash: dict[str, list[Path]] = defaultdict(list)
-        for p in inodes.values():
-            by_hash[sha256(p)].append(p)
-        for group in by_hash.values():
-            keep, *dups = sorted(group, key=lambda q: (len(str(q)), str(q)))
-            for d in dups:
-                found.append((size, d, keep))
+        by_hash: dict[str, list[list[Path]]] = defaultdict(list)
+        for group in inodes.values():
+            by_hash[sha256(group[0])].append(group)
+        for same in by_hash.values():
+            keep_group, *dup_groups = sorted(same, key=lambda g: min((len(str(q)), str(q)) for q in g))
+            keep = keep_group[0]
+            for group in dup_groups:
+                found.append((size, group, keep))
                 if apply:
-                    relink(keep, d)
+                    for d in group:
+                        relink(keep, d)
     return found
 
 
 def cmd_dedupe(a: argparse.Namespace) -> None:
     found = dedupe(a.root, a.min_mb * 1e6, a.apply)
-    for size, dup, keep in found:
-        print(f"{size / 1e9:7.2f} GB  {dup}  ->  {keep}")
+    for size, dups, keep in found:
+        print(f"{size / 1e9:7.2f} GB  {' , '.join(map(str, dups))}  ->  {keep}")
     print(f"{'saved' if a.apply else 'would save'} {sum(s for s, _, _ in found) / 1e9:.1f} GB")
 
 
@@ -121,7 +132,8 @@ def should_replace(src_duration: float, src_size: int, out_duration: float, out_
 
 
 def is_kept(paths: list[Path], keep: list[str]) -> bool:
-    return any(k in part for p in paths for part in p.parts for k in keep)
+    """True when any path runs through a folder named in `keep`."""
+    return any(part in keep for p in paths for part in p.parts)
 
 
 def probe(path: Path) -> dict | None:
@@ -147,17 +159,16 @@ def encode(src: Path, tmp: Path) -> int:
 
 def cmd_shrink(a: argparse.Namespace) -> None:
     cut = time.time() - a.recent_hours * 3600
-    by_inode: dict[tuple[int, int], list[Path]] = defaultdict(list)
-    for p in a.root.rglob("*.mp4"):
-        st = p.stat()
-        by_inode[(st.st_dev, st.st_ino)].append(p)
-
     jobs = []
-    for paths in by_inode.values():
+    for paths in by_inode(a.root.rglob("*.mp4")).values():
         if is_kept(paths, a.keep):
             continue
         src = paths[0]
-        if src.stat().st_mtime > cut:
+        st = src.stat()
+        if st.st_mtime > cut:
+            continue
+        if st.st_nlink > len(paths):
+            print(f"   SKIP (a hard link outside {a.root} would keep the original): {src}", flush=True)
             continue
         info = probe(src)
         if not info or not qualifies(info["h"], info["dur"], info["size"]):
@@ -216,51 +227,75 @@ def issue_refs(name: str, index_lines: list[str]) -> list[int]:
     return sorted(nums)
 
 
+CLOSED_STATES = {"closed", "merged"}
+
+
+@dataclass
 class Folder:
-    def __init__(self, name: str, age_days: float, size: int, refs: list[int], open_refs: list[int]):
-        self.name, self.age_days, self.size, self.refs, self.open_refs = name, age_days, size, refs, open_refs
+    name: str
+    age_days: float
+    size: int
+    refs: dict[int, str]  # issue/PR number -> state; `unknown` when gh did not return it
+
+    def blocker(self, days: float) -> str | None:
+        """Why the folder stays, or None when prune may delete it."""
+        if self.name == "recordings":
+            return "recordings"
+        if self.age_days <= days:
+            return "recent"
+        if not self.refs:
+            return "no INDEX row"
+        live = [f"#{n} {s}" for n, s in self.refs.items() if s not in CLOSED_STATES]
+        return ", ".join(live) or None
 
 
-def archive_folders(archive: Path, states: dict[int, str], now: float | None = None) -> list[Folder]:
-    now = now or time.time()
+def archive_folders(archive: Path, states: dict[int, str]) -> list[Folder]:
+    now = time.time()
     index = archive / "INDEX.md"
     lines = index.read_text(encoding="utf-8").splitlines() if index.exists() else []
     folders = []
     for d in sorted(p for p in archive.iterdir() if p.is_dir() and not is_link(p)):
         files = [f for f in d.rglob("*") if f.is_file()]
         newest = max((f.stat().st_mtime for f in files), default=d.stat().st_mtime)
-        refs = issue_refs(d.name, lines)
-        folders.append(Folder(d.name, (now - newest) / 86400, sum(f.stat().st_size for f in files), refs,
-                              [n for n in refs if states.get(n) == "open"]))
+        refs = {n: states.get(n, "unknown") for n in issue_refs(d.name, lines)}
+        folders.append(Folder(d.name, (now - newest) / 86400, sum(f.stat().st_size for f in files), refs))
     return sorted(folders, key=lambda f: -f.size)
 
 
-def deletable(f: Folder, days: float) -> bool:
-    return f.name != "recordings" and f.age_days > days and not f.open_refs
+def mark_deleted(row: str, names: list[str], tag: str) -> str:
+    """Append the deletion note inside the row's last cell, so the table still renders it."""
+    note = f"（{tag} 已刪除 {'、'.join(names)}）"
+    body = row.rstrip()
+    return body[:-1].rstrip() + f" {note} |" if body.endswith("|") else body + note
 
 
 def prune(archive: Path, days: float = 7, apply: bool = False,
           states: Callable[[], dict[int, str]] = gh_states) -> list[Folder]:
     folders = archive_folders(archive, states())
     for f in folders:
-        why = "kept" if not deletable(f, days) else "delete"
-        open_note = " open:" + ",".join(f"#{n}" for n in f.open_refs) if f.open_refs else ""
-        refs = " ".join(f"#{n}" for n in f.refs)
-        print(f"{why:6}  {f.size / 1e9:6.2f} GB  {f.age_days:6.1f} d  {f.name}  [{refs}]{open_note}")
-    doomed = [f for f in folders if deletable(f, days)]
+        why = f.blocker(days)
+        refs = " ".join(f"#{n}:{s}" for n, s in f.refs.items())
+        print(f"{'kept' if why else 'delete':6}  {f.size / 1e9:6.2f} GB  {f.age_days:6.1f} d  {f.name}  [{refs}]"
+              + (f"  ({why})" if why else ""))
+    doomed = [f for f in folders if f.blocker(days) is None]
     print(f"{len(doomed)} folders, {sum(f.size for f in doomed) / 1e9:.1f} GB (hard links counted per path)")
-    if apply and doomed:
-        index = archive / "INDEX.md"
-        tag = f"（{date.today().isoformat()} 已刪除：超過 {days:g} 天且無開啟中的 issue）"
-        if index.exists():
-            lines = index.read_text(encoding="utf-8").splitlines()
-            lines = [ln + tag if ln.startswith("|") and tag not in ln and any(mentions(f.name, ln) for f in doomed)
-                     else ln for ln in lines]
-            index.write_text("\n".join(lines) + "\n", encoding="utf-8")
-        for f in doomed:
+    if not (apply and doomed):
+        return doomed
+    deleted = []
+    for f in doomed:
+        try:
             shutil.rmtree(archive / f.name)
-        print("deleted")
-    return doomed
+            deleted.append(f.name)
+        except OSError as e:
+            print(f"   could not delete {f.name}: {e}")
+    index = archive / "INDEX.md"
+    if index.exists() and deleted:
+        tag = date.today().isoformat()
+        lines = [mark_deleted(ln, hit, tag) if ln.startswith("|") and (hit := [n for n in deleted if mentions(n, ln)])
+                 else ln for ln in index.read_text(encoding="utf-8").splitlines()]
+        index.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    print(f"deleted {len(deleted)}")
+    return [f for f in doomed if f.name in deleted]
 
 
 def cmd_prune(a: argparse.Namespace) -> None:

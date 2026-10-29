@@ -38,7 +38,7 @@ Everything that belongs to one machine lives in `.local/` of the **main checkout
 | `.local/llc/` | the Localize Limbus Company release zips `tools/llc_text.py` downloads |
 | `.local/evidence/` | privacy-mask templates and `masks.json`; they can show the account, so they stay out of git |
 | `.local/probe/` | the complete migrated probe: loose files, scripts, environments, caches, captures and experiments, preserving their relative paths |
-| (disk space) | `uv run python tools/local_clean.py <command>` frees it; each command is a dry run until `--apply`. `usage <dir>` lists the sizes of a folder's items; `dedupe <root>` turns byte-identical files into hard links; `shrink <root>` re-encodes mp4 above 720p and 2 Mbps to 720p HEVC (NVENC); `prune <archive>` deletes archive folders past `--days` with no open issue or PR. See "Keeping disk space" below |
+| (disk space) | `uv run python tools/local_clean.py <command>` frees it; each command is a dry run until `--apply`. `usage <dir>` lists the sizes of a folder's items; `dedupe <root>` turns byte-identical files into hard links; `shrink <root>` re-encodes mp4 above 720p and 2 Mbps to 720p HEVC (NVENC); `prune <archive>` deletes archive folders past `--days` whose `INDEX.md` rows name only closed issues and PRs. See "Keeping disk space" below |
 
 Strings that must not reach public text (the game account's e-mail, local folder names) go in the repo-local git config, once per clone: `git config --local --add maalc.privateTerm <term>`. `.claude/hooks/public-text-guard.py` reads them with `git config --get-all maalc.privateTerm`.
 
@@ -53,10 +53,12 @@ Before applying, `uv run python tools/live/queue.py status` must show no holder 
 Three links tie the evidence folders together; they are junctions, so a size listing that follows links counts the data twice (`local_clean.py usage` skips them):
 
 - `.local/archive` points to `.local/probe/archive`.
-- `.cache/maalc-probe` in the home folder points to `.local/probe`.
-- `limbus-unpack`, next to the repo, points to `.local/unpack`.
+- The old probe root that `local_migrate.py --apply` left behind points to `.local/probe`.
+- The old unpacked-data folder it left behind points to `.local/unpack`.
 
-Retention: an archive folder older than 7 days whose `INDEX.md` issues and PRs are all closed can be deleted with `prune`; a recording above 720p can be re-encoded with `shrink`. `recordings/` is never pruned. Before deleting or re-encoding, ask the coordinator thread which folders keep their original files (`shrink --keep <folder>`), and read the dry run first. Recordings are taken at 720p (`screenrec.py start --height 720`), and `recordings/` holds hard links, not copies, so one file counts once.
+`local_migrate.py` records where those two old roots are.
+
+Retention: an archive folder older than 7 days whose `INDEX.md` rows name only closed issues and PRs can be deleted with `prune`; a folder with no `INDEX.md` row, or with a number gh does not return, stays. A recording above 720p can be re-encoded with `shrink`. `recordings/` is never pruned. Before deleting or re-encoding, ask the chat that runs the live tests and owns the open issues which folders keep their original files (`shrink --keep <folder>`), and read the dry run first. `recordings/` holds hard links, not copies, so one file counts once.
 
 ## Game data
 
