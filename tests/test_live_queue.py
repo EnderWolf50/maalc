@@ -217,3 +217,90 @@ def test_resume_next_step_while_queued_or_when_nothing_started(tmp_path):
     assert "still queued" in lq.resume(task)[-1]
     (task / "hold.log").write_text("[queue] start t\n")
     assert "no bot started" in lq.resume(task)[-1]
+
+
+class Clock:
+    """A fake monotonic clock: sleep moves it, nothing waits."""
+
+    def __init__(self):
+        self.t = 0.0
+
+    def now(self):
+        return self.t
+
+    def sleep(self, s):
+        self.t += s
+
+
+def waiting(tmp_path, name, timeout_s, ticket=True):
+    clock, said = Clock(), []
+    if ticket:
+        (tmp_path / f"1-{os.getpid()}-{lq.ticket_name(name)}.ticket").write_text("cmd")  # as run() names it
+    code = lq.wait(tmp_path, name, timeout_s, poll=5, say=said.append, clock=clock.now, sleep=clock.sleep)
+    return code, said, clock
+
+
+def test_run_leaves_a_result_with_the_exit_code_and_log(tmp_path):
+    assert lq.run(tmp_path, "chk", [sys.executable, "-c", "raise SystemExit(7)"], log="out.log") == 7
+    assert json.loads(lq.result_path(tmp_path, "chk").read_text())["exit"] == 7
+    assert lq.run(tmp_path, "chk", [sys.executable, "-c", "pass"]) == 0  # the earlier result is replaced
+    assert json.loads(lq.result_path(tmp_path, "chk").read_text())["exit"] == 0
+
+
+def test_wait_times_out_with_a_distinct_code_while_the_ticket_runs(tmp_path):
+    code, said, clock = waiting(tmp_path, "bench-check", 60)
+    assert code == lq.WAIT_TIMEOUT == 75 and clock.t >= 60
+    assert "still running, run wait again" in said[-1]
+
+
+def test_wait_returns_the_exit_code_and_log_once_the_ticket_ended(tmp_path):
+    lq.result_path(tmp_path, "chk").write_text(json.dumps({"exit": 3, "log": "x.log", "ended": "2026-10-30T10:00:00"}))
+    code, said, _ = waiting(tmp_path, "chk", 60, ticket=False)
+    assert code == 3 and "exit code 3" in said[-1] and "x.log" in said[-1]
+
+
+def test_wait_follows_a_ticket_that_ends_while_it_waits(tmp_path):
+    ticket = tmp_path / f"1-{os.getpid()}-chk.ticket"
+    ticket.write_text("cmd")
+    clock, said = Clock(), []
+
+    def sleep(s):
+        clock.sleep(s)
+        if clock.t >= 10:  # the command ends: result first, then the ticket goes
+            lq.result_path(tmp_path, "chk").write_text(json.dumps({"exit": 0, "log": None, "ended": "t"}))
+            ticket.unlink(missing_ok=True)
+
+    assert lq.wait(tmp_path, "chk", 60, poll=5, say=said.append, clock=clock.now, sleep=sleep) == 0
+    assert clock.t == 10
+
+
+def test_wait_names_an_unknown_ticket_and_a_run_that_died(tmp_path):
+    code, said, _ = waiting(tmp_path, "nobody", 60, ticket=False)
+    assert code == lq.WAIT_UNKNOWN and "no such ticket" in said[-1]
+    ticket = tmp_path / f"1-{os.getpid()}-dead.ticket"
+    ticket.write_text("cmd")
+    said = []
+    assert lq.wait(tmp_path, "dead", 60, poll=5, say=said.append, clock=Clock().now, sleep=lambda s: ticket.unlink()) == lq.WAIT_DIED
+    assert "died" in said[-1]  # the ticket went with no result
+
+
+def test_pause_keeps_the_hold_and_status_says_who_owns_the_emulator(tmp_path):
+    task = tmp_path / "t"
+    done = task / "done"
+    (tmp_path / f"1-{os.getpid()}-t.ticket").write_text(f"hold --done {done} --timeout 7200")
+    assert "PAUSED" not in lq.status(tmp_path, now=1000)[0]
+    lq.pause(task, 30, now=1000)
+    assert lq.pause_until(task) == 1000 + 1800
+    assert "PAUSED until" in lq.status(tmp_path, now=1500)[0]
+    assert "PAUSED" not in lq.status(tmp_path, now=1000 + 1801)[0]  # lapsed
+    lq.pause(task, None)
+    assert lq.pause_until(task) is None
+
+
+def test_status_warns_before_a_hold_expires(tmp_path):
+    task = tmp_path / "t"
+    task.mkdir()
+    (tmp_path / f"1-{os.getpid()}-t.ticket").write_text(f"hold --done {task / 'done'} --timeout 7200")
+    (task / "hold.deadline").write_text("10000")
+    assert "expires" not in lq.status(tmp_path, now=10000 - 3600)[0]
+    assert "hold expires in 10 min" in lq.status(tmp_path, now=10000 - 600)[0]
