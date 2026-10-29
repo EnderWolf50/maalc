@@ -18,6 +18,8 @@ TITLE_EMAIL_SMALL = (1060, 662, 120, 22)  # the plain title screens
 UID_PLATE = (110, 130, 135, 28)  # main window, next to its Copy button
 NAME_PLATE = (36, 626, 98, 20)  # the player name above "LV", on every screen that shows the LV panel
 
+LUX_CONSEC = ['LuxConsecExp1', 'LuxConsecExp1Open', 'LuxConsecExp2Open', 'LuxConsecExp10Open', 'LuxConsecExp9Open', 'LuxConsecThread1', 'LuxConsecThread2Open', 'LuxConsecThread10Open', 'LuxConsecThread3Open', 'LuxConsecLevel3', 'LuxConsecLevel4Open', 'LuxConsecLevel4']
+
 IDENTITY = {
     "TryAgain": [TITLE_EMAIL], "RetryCountdown": [TITLE_EMAIL], "MaintenanceNotice": [TITLE_EMAIL],
     "TitleDownload": [TITLE_EMAIL], "TitleClientOutdated": [TITLE_EMAIL], "TitleErrorConfirm": [TITLE_EMAIL],
@@ -25,11 +27,17 @@ IDENTITY = {
     "Title": [TITLE_EMAIL_SMALL], "TitleConnecting": [TITLE_EMAIL_SMALL], "TitleFading": [TITLE_EMAIL_SMALL],
     "MainWindow": [UID_PLATE, NAME_PLATE], "MainWindowFadeIn": [UID_PLATE, NAME_PLATE],
     "Drive": [NAME_PLATE], "SinnersTab": [NAME_PLATE],
+    # Luxcavation's narrower LV panel: the LV label sits elsewhere (#366)
+    "LuxExp": [NAME_PLATE], "LuxExpLocked": [NAME_PLATE], "LuxThread": [NAME_PLATE],
+    "LuxThreadScrolled": [NAME_PLATE], "LuxThreadLust": [NAME_PLATE], "LuxThreadLevels": [NAME_PLATE],  # #368
+    **{n: [NAME_PLATE] for n in LUX_CONSEC},  # #375: the Consecutive Battle box on the EXP, Thread and Level Select pages
     # the main window dimmed under the Mailbox and the popup: the Copy button and LV label do not match
     "ServerErrorRetry": [UID_PLATE, NAME_PLATE], "ServerErrorRetryCountdown": [UID_PLATE, NAME_PLATE],
     "NetworkUnstable": [UID_PLATE, NAME_PLATE],
     "EventNotices": [UID_PLATE, NAME_PLATE], "SystemNotices": [UID_PLATE, NAME_PLATE],
     "Mailbox": [UID_PLATE, NAME_PLATE], "SettingsMenu": [UID_PLATE, NAME_PLATE],
+    "EnkephalinAssembled": [UID_PLATE, NAME_PLATE], "MailParcelReceived": [UID_PLATE, NAME_PLATE],  # live-1 F8
+    "EnkephalinModulesArrowAsFour": [UID_PLATE, NAME_PLATE], "EnkephalinModulesNoArrow": [UID_PLATE, NAME_PLATE],  # live-3 H1
 }
 
 # A new fixture is found by a part of the screen that stays put: it must match Title.png's "Change Account"
@@ -73,7 +81,9 @@ def test_every_listed_fixture_exists():
 def test_the_name_plate_detector_finds_every_screen_that_shows_the_lv_panel():
     shown = {p.stem for p in SCREENS.glob("*.png") if NAME_PLATE in required_boxes(p)}
     assert shown == {"MainWindow", "MainWindowFadeIn", "Drive", "SinnersTab", "ServerErrorRetry", "ServerErrorRetryCountdown",
-                     "NetworkUnstable", "EventNotices", "SystemNotices", "Mailbox", "SettingsMenu"}
+                     "NetworkUnstable", "EventNotices", "SystemNotices", "Mailbox", "SettingsMenu",
+                     "LuxExp", "LuxExpLocked", "LuxThread", "LuxThreadScrolled", "LuxThreadLust", "LuxThreadLevels",
+                     *LUX_CONSEC, "EnkephalinAssembled", "MailParcelReceived", "EnkephalinModulesArrowAsFour", "EnkephalinModulesNoArrow"}
 
 
 def test_an_unmasked_copy_of_a_fixture_fails(tmp_path):

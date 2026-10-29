@@ -10,7 +10,7 @@ import pytest
 from PIL import Image
 
 import actions
-from test_pipeline import load_nodes
+from test_pipeline import hub_entries, load_nodes
 
 SCREENS = Path(__file__).parent / "screens"
 UNTICKED, TICKED = (np.asarray(Image.open(SCREENS / f"{n}.png").convert("RGB"))[:, :, ::-1].copy()
@@ -41,7 +41,7 @@ def game(monkeypatch):
         return MagicMock()
     ctx.tasker.controller.post_click.side_effect = click
     monkeypatch.setattr(actions.time, "sleep", lambda s: None)
-    monkeypatch.setattr(actions, "stop", lambda context, reason, line=None: state.stops.append(reason) or False)
+    monkeypatch.setattr(actions, "stop", lambda context, reason, line=None, whole_list=False: state.stops.append(reason) or False)
     actions.RUN.clear()
     actions.RUN["settings"] = {"run": {"auto_accept_terms": True, "auto_download": True}}
     actions.STUCK["updates"] = 0
@@ -64,8 +64,13 @@ def test_sweep_where_both_boxes_read_ticked():
         image = np.asarray(Image.open(png).convert("RGB"))[:, :, ::-1]
         if image.shape[:2] == (720, 1280) and all(actions.agree_ticked(image, *b) for b in actions.AGREE_BOXES):
             hits.append(png.name)
-    assert hits == ["BattleTurnLit.png", "BossGiftTrialsHard.png", "EventNotices.png", "Mailbox.png", "RunVictory.png",
-                    "SinnersTab.png", "SystemNotices.png", "TeamSelect.png", "Title.png", "UserAgreementTicked.png"]
+    assert hits == ["BattleTurnLit.png", "BossGiftTrialsHard.png", "EventNotices.png",
+                    "LuxConsecExp1.png", "LuxConsecExp10Open.png", "LuxConsecExp1Open.png", "LuxConsecExp2Open.png",
+                    "LuxConsecExp9Open.png", "LuxConsecThread1.png", "LuxConsecThread10Open.png", "LuxConsecThread2Open.png",
+                    "LuxConsecThread3Open.png", "LuxExp.png", "LuxExpLocked.png",
+                    "LuxThread.png", "LuxThreadLust.png", "LuxThreadScrolled.png", "Mailbox.png", "MailboxEmpty.png",
+                    "RunVictory.png", "SinnersTab.png", "SystemNotices.png", "TeamSelect.png", "Title.png",
+                    "UserAgreementTicked.png"]
 
 
 def test_both_boxes_are_ticked_then_confirm(game):
@@ -144,7 +149,7 @@ def test_a_client_too_old_for_the_server_stops_the_bot_without_a_tap(game):
     nodes = load_nodes()
     node = nodes["ClientOutdated"]
     assert node["action"] == "Custom" and node["custom_action"] == "Halt"
-    entries = nodes["HubText"]["custom_recognition_param"]["entries"]
+    entries = hub_entries(nodes, "HubText")
     assert entries.index("ClientOutdated") < min(entries.index("DownloadDialog"), entries.index("PopupButton"))
     argv = SimpleNamespace(node_name="ClientOutdated", custom_action_param=json.dumps(node["custom_action_param"]))
     assert not actions.Halt().run(game.ctx, argv)

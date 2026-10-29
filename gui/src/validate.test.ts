@@ -45,16 +45,16 @@ test("pyRepr matches Python repr", () => {
   expect(pyRepr("a\\b")).toBe("'a\\\\b'");
 });
 
-test("a new file asks for a team, and new teams make it valid", () => {
+test("a new file is valid without a team (#364: only MirrorDungeon asks for one), and with new teams", () => {
   const s = newSettings();
-  expect(validate(s).map((p) => p.text)).toEqual(["No enabled team: set up a team in the settings GUI first."]);
+  expect(validate(s)).toEqual([]);
   s.teams.push(newTeam(1, "隊伍 1"), newTeam(2, "隊伍 2"));
   expect(validate(s)).toEqual([]);
   expect(s.teams.map((x) => x.game_team)).toEqual([1, 2]);
 });
 
 test("parseSettings refuses newer and unmigratable versions", () => {
-  expect(() => parseSettings('{"version": 12}')).toThrow("newer");
+  expect(() => parseSettings('{"version": 14}')).toThrow("newer");
   expect(() => parseSettings('{"version": 0}')).toThrow("cannot be migrated");
 });
 
@@ -112,6 +112,29 @@ test("version 6 keeps what the shop kept before", () => {
   expect(migrated).toBe(true);
   const kept = [[], "keep", [], 4, false];
   expect(data.teams.map((t) => [t.keep_keywords, t.keywordless, t.keep_gifts, t.sell_max_tier, t.sell_vestiges])).toEqual([kept, kept]);
+  expect(validate(data)).toEqual([]);
+});
+
+test("version 11 gets the daily tasks: both Luxcavations with no team picked, no Lunacy charges", () => {
+  const old = structuredClone(cases.valid) as Record<string, unknown>;
+  delete old.luxcavation;
+  delete old.charge_enkephalin;
+  const { data, migrated } = parseSettings(JSON.stringify({ ...old, version: 11 }));
+  expect(migrated).toBe(true);
+  expect(data.luxcavation).toEqual({
+    exp: { count: 1, team: null, retries: 0, consecutive: true }, thread: { count: 3, team: null, retries: 0, consecutive: true },
+  });
+  expect(data.charge_enkephalin).toEqual({ count: 0 });
+  expect(validate(data)).toEqual([]);
+});
+
+test("version 12 fights the Luxcavation wins as Consecutive Battles, a switch each task keeps as it was set (#375)", () => {
+  const old = structuredClone(cases.valid) as { luxcavation: Record<string, Record<string, unknown>> };
+  delete old.luxcavation.exp.consecutive;
+  old.luxcavation.thread.consecutive = false;
+  const { data, migrated } = parseSettings(JSON.stringify({ ...old, version: 12 }));
+  expect(migrated).toBe(true);
+  expect([data.luxcavation.exp.consecutive, data.luxcavation.thread.consecutive]).toEqual([true, false]);
   expect(validate(data)).toEqual([]);
 });
 

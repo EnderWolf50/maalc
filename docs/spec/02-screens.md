@@ -36,6 +36,31 @@
 
 實作（#94）：ON 的畫面還沒有實機截圖，`tests/screens/EntryParallelOn.png` 是把 `EntryNewRun.png` 的 OFF 改畫成 ON 的合成圖；點 `INFINITY MIRROR` 會直接切換還是先跳確認，也還沒實機看過（跳出別的畫面時讀不回 OFF，會停止，不會亂點）。
 
+### Luxcavation（經驗本，#366）
+
+| 畫面 | 辨識方式 | 處理 | 可能的下一個畫面 | 來源 | 實機截圖 |
+|---|---|---|---|---|---|
+| Drive | 模板：`Luxcavation` 按鈕（`NavLuxcavation`） | 點它 | Luxcavation（上次停的分頁） | #366 | `tests/screens/Drive.png` |
+| Luxcavation：Thread 分頁 | 模板：左上 `Luxcavation` 面板；ColorMatch：Thread 分頁的橘色邊框（`LuxExpTab`） | 點 EXP 分頁 | EXP 分頁 | #366 | `tests/screens/LuxThread.png` |
+| Luxcavation：EXP 分頁 | ColorMatch：EXP 分頁的橘色邊框；模板：卡片上的 Enter，取最右邊的一個（`LuxExpEnter`） | 點最右邊的 Enter；打完一場回到這頁就結束 | 選隊頁（`LuxTeamSelect`） | #366 | `tests/screens/LuxExp.png`、`LuxExpLocked.png`（最右邊是上鎖的第 10 關） |
+| 選隊頁 | OCR：`TEAMS` 標題（80,272）和 `To Battle!` 按鈕（`LuxTeamSelect`）；和鏡牢 `TeamSelect` 同一頁，按鈕是 To Battle!（連戰 ×2 以上是 Chain To Battle!）不是 Confirm | 選 `luxcavation.exp.team` 的遊戲隊伍編號（`TEAMS #N`，必要時捲動清單），按 To Battle!（1145,588） | 隊伍等級警告或開戰確認（未截圖）、戰鬥 | #366 | `tests/screens/LuxTeamSelect.png`（選了 TEAMS #3） |
+
+- EXP 分頁一進去就停在最難的三關（2026-10-26：第 7–9 關，共 10 關，第 10 關上鎖顯示 `Clear 10-4`）。左右箭頭點了不會翻頁，要滑動。
+- 選隊頁的清單捲動到 `#40` 為止。選隊頁沒有 Daily Bonuses 值，也沒有腦啡肽模組消耗顯示；按 Enter 不扣腦啡肽模組（104 → 104）。
+- 隊伍等級警告、開戰確認只會在按 To Battle! 之後出現，**還沒有截圖**；戰鬥、勝敗、結算畫面也沒有。（#366）
+
+### Luxcavation（紐本，#368）
+
+| 畫面 | 辨識方式 | 處理 | 可能的下一個畫面 | 來源 | 實機截圖 |
+|---|---|---|---|---|---|
+| Luxcavation：EXP 分頁 | 模板：左上 `Luxcavation` 面板；ColorMatch：EXP 分頁的橘色邊框（`LuxThreadTab`） | 點 Thread 分頁 | Thread 分頁 | #368 | `tests/screens/LuxExp.png` |
+| Thread 分頁：今天的卡開著 | ColorMatch：Thread 分頁的橘色邊框（`LuxThreadLit`）；模板：亮著的 Enter 按鈕，只有開放的那張卡有（`LuxThreadEnter`） | 點亮著的 Enter | Level Select | #368 | `tests/screens/LuxThread.png`、`LuxThreadLust.png` |
+| Thread 分頁：捲走了 | 同上的 Thread 分頁，但看不到亮著的 Enter（`LuxThreadSwipe`） | 往右滑，把左邊的卡帶進來（方向 unverified） | Thread 分頁，開放的卡在畫面裡 | #368 | `tests/screens/LuxThreadScrolled.png` |
+| Level Select | 模板：標題 `Level Select`；模板：每列的 `Enter`，取最下面一個（`LuxThreadLevel`） | 點最下面那列的 Enter（開啟時清單停在最底，最難的等級） | 選隊頁（和經驗本同一頁） | #368 | `tests/screens/LuxThreadLevels.png` |
+
+- Thread 分頁一次顯示四張卡，共七隻異想體，依星期開放，其餘卡顯示 `Opens <星期>`；Daily Bonuses 的剩餘次數在頂部（只有這一頁），今天的卡有 `Consecutive Battle ×1` 的選擇器；連戰開時 bot 進場前會把它設成 ×N（見 [01](01-architecture.md)）。清單從今天的卡開始排（週日 Wrath 在最左，週一 Lust 在最左），但記得上次捲到哪裡。
+- Level Select：Lust 有 Lv20/30/40/50/60 五級，每級 Enter 消耗 2 個腦啡肽模組，都沒上鎖，沒有 Skip；一開啟清單就停在最底（Lv40/50/60）。其他異想體的清單沒看過（unverified）。（2026-10-26 實機，週一）
+
 ## 開局
 
 | 畫面 | 辨識方式 | 處理 | 可能的下一個畫面 | 來源 | 實機截圖 |
@@ -150,7 +175,9 @@
 | Retry 彈窗（待截圖確認） | OCR：按鈕文字以 `Retry`（可接倒數，例如 `Retry (5)`；不含 DEFEAT 的 `Retry Stage`）或 `Try Again` 開頭 | 點那個按鈕 | 連線中、前一個畫面 | #8、#84 | —（`tests/screens/RetryCountdown.png`、`TryAgain.png` 是合成圖） |
 | 說明頁（`HelpPager`） | 每個 `i` 按鈕後面的同一種說明頁（鏡牢 34 頁、Refraction Railway 18、Sinners 17、Extract 4、Dispense 5；第一次進某畫面時自己跳出的教學是不是同一種畫面還沒截到）。標題隨頁改變，所以認外框：左上的返回按鈕（`Screen/HelpPagerBack.png`）與下方一排頁碼點（`Screen/HelpPagerDot.png`），兩個模板都中（返回按鈕單獨在入口頁的返回鍵上也有 0.98，靠頁碼點區分）。鏡牢的第 1 頁是入口頁的圖，所以它排在 `MirrorHub` 的 `HubText` 之前 | Android 返回鍵關閉（左上 ← 也可以；右側 ▶ 只翻頁） | 前一個畫面 | #8、#85 | `tests/screens/HelpPager.png`、`HelpPagerLast.png`、`HelpPagerExtract.png`、`HelpPagerSinners.png`（實機 2026-10-21） |
 | 公告（`Notices`） | OCR：上方分頁 `Event Notifs`／`System Notifs` | Android 返回鍵關閉 | 主畫面 | #85 | `tests/screens/EventNotices.png`、`SystemNotices.png`（實機 2026-10-21） |
-| 信箱（`Mailbox`） | OCR：標題 `Mailbox`，且按鈕 `Close` | 點 Close；旁邊的 Claim All 不按，不領信 | 主畫面 | #85 | `tests/screens/Mailbox.png`（實機 2026-10-21） |
+| 信箱（`Mailbox`） | OCR：標題 `Mailbox`，且按鈕 `Close` | 點 Close；旁邊的 Claim All 不按，不領信（只有任務 `ClaimMail` 按，見下） | 主畫面 | #85 | `tests/screens/Mailbox.png`（實機 2026-10-21） |
+| `ClaimMail` 的信箱畫面（`MailEmpty`、`MailClaimAll`，`mail.json`） | `MailEmpty`：標題 `Mailbox`，且內文 `No mail in storage` 或 `No mail available`（按 Claim All 後的提示，還沒截到）；`MailClaimAll`：標題 `Mailbox`，且按鈕 `Claim All`（右下，Close 旁） | `MailEmpty`：以成功結束任務（`done`），GoHome 用全域 `Mailbox` 的 Close 關信箱；`MailClaimAll`：點 Claim All，最多 3 次 | 主畫面 | #372 | `tests/screens/Mailbox.png`（有信）、`MailboxEmpty.png`（空，實機 2026-10-26）；Claim All 後的確認／結果畫面未截 |
+| 信箱圖示（`MailOpen`） | 主畫面（Window 分頁亮，同 `HomeReached`） | 點右上信封，最多 2 次 | 信箱 | #372 | `tests/screens/MainWindow.png` |
 | 設定選單（`SettingsMenu`，主畫面右上齒輪） | OCR：標題 `Settings`，且按鈕 `Return` | 點 Return；下方的 Quit Game 不按（沒有確認對話框，直接結束遊戲），也不進 Settings 改設定 | 主畫面 | #85 | `tests/screens/SettingsMenu.png`（實機 2026-10-21） |
 | 每週重置通知／舊局過期（待截圖確認，沒有專用節點） | AALC：主畫面上只有一個打勾按鈕的 renew 對話框，確認後回主畫面（`renew_confirm`，AALC `mirror.py`） | 還沒做：沒有截圖，按鈕是圖示不是文字，`PopupButton` 讀不到。下次重置時看 `logs/unknown/` | 前一個畫面、主畫面 | #8、#14、#85 | — |
 | 無限鏡牢（Parallel Superposition）彈窗 | OCR：`You can enter the … Mode`，按鈕 `Cancel`（兩個按鈕：Cancel／Confirm）。只有「Parallel Superposition Mode」開著、通過第 5 層（EXTREME 是第 10 層）才會出現 | 點 Cancel，不開啟（`ParallelModePrompt`，排在各頁之前，它蓋在頁面上） | 前一個畫面 | #8、#17、#85 | `tests/screens/ParallelModePrompt.png`、`ParallelModeExtreme.png`（遊戲說明頁裡的彈窗圖，位置待實機確認） |

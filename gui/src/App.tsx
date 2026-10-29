@@ -2,13 +2,13 @@
 import { useEffect, useMemo, useState } from "react";
 import * as api from "./api";
 import { TEXT, type Key } from "./i18n";
-import { newSettings, parseSettings, runEnum, type Settings } from "./model";
+import { newSettings, parseSettings, runEnum, type Luxcavation, type Settings } from "./model";
 import { DeploymentTab, StarlightTab, ThemePackTab } from "./Plans";
 import { TeamsTab } from "./Teams";
 import { EditorContext, Field, Num, Select, ToggleNum, useEditor, type Ctx } from "./ui";
 import { validate, type Problem } from "./validate";
 
-const TABS = [
+export const TABS = [
   ["run", "tab.run", RunTab, ["run"]],
   ["teams", "tab.teams", TeamsTab, ["teams"]],
   ["deployment", "tab.deployment", DeploymentTab, ["deployment_order_plans"]],
@@ -16,6 +16,7 @@ const TABS = [
   ["themepacks", "tab.themepacks", ThemePackTab, ["theme_pack_plans"]],
   ["events", "tab.events", EventsTab, ["event_overrides"]],
   ["trials", "tab.trials", TrialsTab, ["trial_risk_overrides"]],
+  ["daily", "tab.daily", DailyTab, ["luxcavation", "charge_enkephalin"]],
 ] as const;
 
 const toText = (s: Settings) => JSON.stringify(s, null, 2) + "\n";
@@ -147,6 +148,61 @@ function RunTab() {
         <input type="url" value={run.webhook_url} onChange={(e) => set({ webhook_url: e.target.value })} />
       </Field>
     </div>
+  );
+}
+
+/** The daily tasks' options (#362); the client's task list picks and orders the tasks. */
+function DailyTab() {
+  const { t } = useEditor();
+  return (
+    <>
+      <p className="muted">{t("daily.note")}</p>
+      <LuxFields task="exp" />
+      <LuxFields task="thread" />
+      <ChargeFields />
+    </>
+  );
+}
+
+function ChargeFields() {
+  const { s, update, t } = useEditor();
+  return (
+    <fieldset>
+      <legend>{t("charge.title")}</legend>
+      <p className="muted">{t("charge.note")}</p>
+      <div className="grid">
+        <Field label={t("charge.count")} path="charge_enkephalin/count">
+          <Num value={s.charge_enkephalin.count} min={0} onChange={(v) => update((d) => { d.charge_enkephalin.count = v; })} />
+        </Field>
+      </div>
+    </fieldset>
+  );
+}
+
+function LuxFields({ task }: { task: keyof Settings["luxcavation"] }) {
+  const { s, update, t } = useEditor();
+  const opts = s.luxcavation[task];
+  const set = (patch: Partial<Luxcavation>) => update((d) => { Object.assign(d.luxcavation[task], patch); });
+  const path = `luxcavation/${task}`;
+  return (
+    <fieldset>
+      <legend>{t(`lux.${task}`)}</legend>
+      <p className="muted">{t(`lux.${task}_note`)}</p>
+      <div className="grid">
+        <Field label={t("lux.count")} path={`${path}/count`}><Num value={opts.count} min={1} onChange={(v) => set({ count: v })} /></Field>
+        <Field label={t("lux.team")} path={`${path}/team`} note={t("lux.team_note")}>
+          <Select value={opts.team ?? ""} options={["", ...s.teams.map((x) => x.id)]}
+            label={(id) => { const x = s.teams.find((x) => x.id === id); return x ? `${x.name || "—"} (#${x.game_team})` : t("lux.team_none"); }}
+            onChange={(v) => set({ team: v || null })} />
+        </Field>
+        <Field label={t("lux.consecutive")} path={`${path}/consecutive`} note={t("lux.consecutive_note")}>
+          <input type="checkbox" checked={opts.consecutive} onChange={(e) => set({ consecutive: e.target.checked })} />
+        </Field>
+        <Field label={t("lux.retries")} path={`${path}/retries`} note={t("lux.retries_note")}>
+          <Num value={opts.retries} min={0} onChange={(v) => set({ retries: v })} />
+        </Field>
+      </div>
+    </fieldset>
   );
 }
 

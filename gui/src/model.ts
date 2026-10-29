@@ -173,7 +173,14 @@ export interface Settings {
   teams: Team[];
   event_overrides: { question: string; option: string }[];
   trial_risk_overrides: { trial: string; risk: number }[];
+  luxcavation: { exp: Luxcavation; thread: Luxcavation };
+  charge_enkephalin: { count: number };
 }
+/** One Luxcavation daily task's options (#366): the wins to get, a teams[] id (null: none picked), the defeats fought again. */
+export interface Luxcavation { count: number; team: string | null; retries: number; consecutive: boolean }
+// count: EXP 1, Thread 3 (its 3 Daily Bonuses a day; the schema's default is EXP's)
+const newLuxcavation = (count = 1): Luxcavation =>
+  ({ ...defaultsOf(schema.$defs.luxcavation.properties), count }) as unknown as Luxcavation;
 
 const clone = <T,>(v: T): T => structuredClone(v);
 const defaultsOf = (props: Record<string, object>) =>
@@ -186,7 +193,8 @@ export function newSettings(): Settings {
   return {
     version: VERSION, language: "zh_tw", run: defaultsOf(P.run.properties) as Settings["run"],
     deployment_order_plans: [], starlight_plans: [], theme_pack_plans: [], teams: [],
-    event_overrides: [], trial_risk_overrides: [],
+    event_overrides: [], trial_risk_overrides: [], luxcavation: { exp: newLuxcavation(), thread: newLuxcavation(3) },
+    charge_enkephalin: { count: 0 },
   };
 }
 
@@ -253,6 +261,20 @@ const MIGRATIONS: Record<number, (d: Record<string, unknown>) => Record<string, 
   9: (d) => withTeamDefault(d, { fusion_condition: "any" }),
   // Version 11 adds run.keep_dismissed_screens (#244), on.
   10: (d) => (d.run && typeof d.run === "object" ? { ...d, run: { keep_dismissed_screens: true, ...d.run } } : d),
+  // Version 12 adds the daily tasks (#362): luxcavation.exp and .thread (#366, #368: one win for EXP, three for Thread,
+  // no team picked yet, no retries) and charge_enkephalin (#373: no Lunacy charges).
+  11: (d) => {
+    const lux = d.luxcavation ?? {};
+    const out = { charge_enkephalin: { count: 0 }, ...d };
+    return lux && typeof lux === "object" ? { ...out, luxcavation: { exp: newLuxcavation(), thread: newLuxcavation(3), ...lux } } : out;
+  },
+  // Version 13 adds luxcavation.<task>.consecutive (#375), on.
+  12: (d) => {
+    const lux = d.luxcavation as Record<string, unknown> | undefined;
+    if (!lux || typeof lux !== "object") return d;
+    const fixed = Object.fromEntries(Object.entries(lux).map(([k, o]) => [k, o && typeof o === "object" ? { consecutive: true, ...o } : o]));
+    return { ...d, luxcavation: fixed };
+  },
 };
 
 const MARK_WEIGHTS: Record<string, number> = { prefer: 5, neutral: 0, avoid: -5 };

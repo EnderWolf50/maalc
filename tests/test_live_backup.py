@@ -90,3 +90,25 @@ def test_hold_ignores_a_pid_file_left_by_an_earlier_run(tmp_path, capsys):
     bk.hold(tmp_path / "install", tmp_path / "bak", tmp_path / "never", timeout=0.2, poll=0.02, guard=bot,
             running=lambda _log: False, stop_profile="p", grace=0.05, stop=stopped.append)
     assert "bot ended" not in capsys.readouterr().out and stopped == []
+
+
+def test_hold_follows_a_second_bot_run_under_its_own_log(tmp_path, capsys):
+    # live-1 T-live: the second bot of one hold ran under bot-b.log; a guard on bot.log alone stopped its recording 60 s
+    # after the first ended. A glob guard follows every bot log of the hold.
+    (tmp_path / "install").mkdir()
+    up, stopped = {"bot.log": False, "bot-b.log": False}, []
+
+    def start(name):
+        (tmp_path / name).write_text("")
+        (tmp_path / f"{name}.pid").write_text('{"pid": 1, "start": null, "cmd": "bot"}')
+        up[name] = True
+
+    start("bot.log")
+    threading.Timer(0.1, lambda: up.update({"bot.log": False})).start()  # the first run ends
+    threading.Timer(0.15, lambda: start("bot-b.log")).start()  # the second starts within the grace
+    threading.Timer(0.5, lambda: up.update({"bot-b.log": False})).start()
+    began = time.monotonic()
+    bk.hold(tmp_path / "install", tmp_path / "bak", tmp_path / "never", timeout=0.3, poll=0.01, guard=tmp_path / "bot*.log",
+            running=lambda log: up[log.name], stop_profile="p", grace=0.2, stop=lambda p: stopped.append(time.monotonic() - began))
+    assert len(stopped) == 1 and stopped[0] >= 0.7  # 0.2 s after the second run's end, not the first's
+    assert capsys.readouterr().out.count("[hold] bot ended 20") == 2

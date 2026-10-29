@@ -3,6 +3,8 @@ import re
 from collections import Counter
 from pathlib import Path
 
+import hub_text
+
 PIPELINE = Path(__file__).resolve().parent.parent / "assets/resource/base/pipeline"
 
 
@@ -12,6 +14,11 @@ def load_nodes(pattern="*.json"):
         lines = path.read_text(encoding="utf-8").splitlines()
         nodes |= json.loads("\n".join(ln for ln in lines if not ln.strip().startswith("//")))
     return nodes
+
+
+def hub_entries(nodes, name):
+    """A HubText node's entries, its base's first (hub_text.entries)."""
+    return hub_text.entries(name, lambda n: nodes[n]["custom_recognition_param"])
 
 
 def recognition(spec):
@@ -61,23 +68,39 @@ def test_mirror_hub_reads_its_ocr_screens_through_hub_text():
     assert [o for n in hub for o in batchable_ocr(nodes, n)] == []
     assert hub.index("BattleHUD") < hub.index("HubText")
     assert batchable_ocr(nodes, "BattleHUD") == []
-    assert nodes["BattleHUD"]["any_of"] == ["BattleMenu", "BattleTurn", "BattlePause"]  # the pause menu (#215)
+    menus = ["BattleMenu", "LuxBattleMenu"]  # the pause menu (#215), the mirror's and Luxcavation's (live-1)
+    assert nodes["BattleHUD"]["any_of"] == [*menus, "BattleTurn", "BattlePause"]
     hud = strip(nodes["BattleHUD"]["next"])
-    assert hud[-3:] == ["BattleMenu", "BattleTurn", "BattlePause"] and len(batch_plan(nodes, hud)) < 2
+    assert hud[-4:] == [*menus, "BattleTurn", "BattlePause"] and len(batch_plan(nodes, hud)) < 2
     # The server's popups before the turn run no OCR on a battle round (live A/B: 3 OCR a round, ~130 ms): a
     # template comes first, and MaaFramework's And stops at the first part that misses.
-    assert hud[0] == "NoBatchOCR" and hud[1:-3] == ["Connecting", "RetryPopup", "UpdateDialog", "PopupButton"]
+    assert hud[0] == "NoBatchOCR" and hud[1:-4] == ["Connecting", "RetryPopup", "UpdateDialog", "PopupButton"]
     assert all(template_first(nodes, nodes[n]) for n in hud[1:-2])
     # Connecting is a template: it waits in MirrorHub's list, ahead of HubText, as it does in BattleHUD's.
     assert hub.index("BattleHUD") < hub.index("Connecting") < hub.index("HubText")
     param = nodes["HubText"]["custom_recognition_param"]
     assert param["tail"] == hub[hub.index("HubText") + 1:]
-    for name in param["entries"]:  # OCR HubText judges (hub_text.ocr_specs): OCR, And / Or of OCR, gates in an And
+    for name in hub_entries(nodes, "HubText"):  # OCR HubText judges (hub_text.ocr_specs): OCR, And / Or of OCR, gates in an And
         kind, params = recognition(nodes[name])
         subs = [recognition(s)[0] for s in parts(nodes, params)]
         assert (kind == "OCR" or kind == "Or" and subs and all(s == "OCR" for s in subs)
                 or kind == "And" and "OCR" in subs and all(s in ("OCR", "TemplateMatch", "Or") for s in subs)), name
-    assert len(batch_plan(nodes, ["NoBatchOCR", *param["entries"], *param["tail"]])) == 1
+    assert len(batch_plan(nodes, ["NoBatchOCR", *hub_entries(nodes, "HubText"), *param["tail"]])) == 1
+
+
+def test_go_home_reads_its_popups_through_home_text_and_no_next_list_batches_ocr():
+    # #365: the same rule as MirrorHub (#157): GoHome lists no OCR of its own; HomeText reads the popups in one pass.
+    nodes = load_nodes()
+    hub = strip(nodes["GoHome"]["next"])
+    assert [o for n in hub for o in batchable_ocr(nodes, n)] == []
+    assert hub.index("HomeText") < hub.index("HomeReached")  # the settings menu leaves the Window tab lit
+    assert hub[-1] == "HomeBack" and nodes["HomeBack"]["max_hit"] == 5  # the back key has a limit
+    param = nodes["HomeText"]["custom_recognition_param"]
+    assert param["tail"] == [] and nodes["HomeText"]["timeout"] == 0
+    for name in hub_entries(nodes, "HomeText"):
+        assert recognition(nodes[name])[0] in ("OCR", "And", "Or"), name
+    assert len(batch_plan(nodes, ["NoBatchOCR", *hub_entries(nodes, "HomeText"), *param["tail"]])) == 1
+    assert nodes["GoHome"]["on_error"] == ["GoHomeLost"] and nodes["GoHomeLost"]["custom_action"] == "HomeLost"
 
 
 def template_first(nodes, spec):
@@ -111,7 +134,7 @@ def test_the_screens_that_lift_a_held_finger_are_hub_nodes():
     import actions
     nodes = load_nodes()
     hub = [re.sub(r"^(\[\w+\])+", "", n) for n in nodes["MirrorHub"]["next"]]
-    hub += nodes["HubText"]["custom_recognition_param"]["entries"]
+    hub += hub_entries(nodes, "HubText")
     assert set(actions.BATTLE_LEFT) <= set(hub)
     assert nodes["BattlePause"]["custom_action"] == "HoldTurn" and "BattlePause" in nodes["BattleHUD"]["next"]
     # A popup over a playing turn lifts the finger; BattleHUD acts on it before BattlePause holds again.
@@ -207,3 +230,55 @@ def test_mirror_entry_paused_outwaits_the_chains():
     param = load_nodes("mirror_dungeon.json")["MirrorEntryPaused"]["custom_action_param"]
     assert param["timeout"] >= 2 * 3.9
 
+
+DAILY = ["navigation.json", "luxcavation.json", "assemble_modules.json", "pass_missions.json", "mail.json",
+         "charge_enkephalin.json"]
+# A tap on a template's tab or button, then the node's own recognition missing: the page it was on is left.
+DAILY_LEFT = ["HomeWindowTab", "NavTitle", "NavMainTabs", "NavLuxcavation", "LuxExpTab", "LuxThreadTab", "PassBanner",
+              "PassMissionsTab", "PassDailyDone", "PassWeeklyDone"]
+# Kept, each with its reason in the pipeline: nothing to wait on is known (a back key, a swipe, a claim's window).
+DAILY_KEPT = ["HomeBack", "NavDrive", "LuxThreadSwipe", "PassDailyClaim", "PassWeeklyClaim", "PassSeasonalClaim",
+              "PassSeasonalEndClaim", "PassSeasonalSwipe", "MailClaimAll", "AssemblePanel", "ChargePanel"]
+
+
+def test_the_daily_pages_wait_for_screens_not_for_delays():
+    # #362: GoHome and the daily tasks slept 1.5-10 s after a tap whatever the game did; they wait for the page now.
+    nodes = {}
+    for f in DAILY:
+        nodes |= load_nodes(f)
+    for name in DAILY_LEFT:
+        node = nodes[name]
+        assert node["custom_action"] == "TapUntil" and node["custom_action_param"]["left"] is True, name
+        assert node.get("post_delay") == 0, name
+    for name in ("NavTitle", "LuxExpTab", "LuxThreadTab", "PassBanner", "PassDailyDone", "PassWeeklyDone"):
+        assert "target" in nodes[name]["custom_action_param"], name  # the old Click's target; the others tap the box found
+    # The envelope opens the box: its title, as MailEmpty and MailClaimAll read it.
+    title = nodes["MailEmpty"]["all_of"][0]
+    assert nodes["MailOpen"]["custom_action_param"]["next"] == {"roi": title["roi"], "expected": title["expected"]}
+    # The game started: up to the old 10 s and GoHome's 60 s for a screen GoHome knows, then GoHomeLost as GoHome's own
+    # timeout has it.
+    away = nodes["HomeGameAway"]
+    assert away.get("post_delay") == 0 and away["next"] == ["HomeGameUp"] and away["timeout"] >= 70000
+    assert away["on_error"] == ["GoHomeLost"]
+    assert set(nodes["HomeGameUp"]["any_of"]) >= {"RecoverTitle", "HomeReached", "HomeWindowTab", "Connecting"}
+    # An action that ends the task (MailEmpty) or waits in itself (AssembleMain, ChargeMain: the window) sleeps nothing.
+    for name in ("MailEmpty", "AssembleMain", "ChargeMain"):
+        assert nodes[name].get("post_delay") == 0, name
+    assert [n for n, spec in nodes.items() if spec.get("post_delay", 0) > 0 and n not in DAILY_KEPT] == []
+
+
+
+def test_every_hub_reads_the_server_popups_first_from_one_list():
+    # Review M4: the popups any page can show are listed once (ServerPopups); every hub's HubText node names it as its base.
+    nodes = load_nodes()
+    server = nodes["ServerPopups"]["custom_recognition_param"]["entries"]
+    for name in ("HubText", "HomeText", "ExpText", "MailText"):
+        assert nodes[name]["custom_recognition"] == "HubText" and hub_entries(nodes, name)[:len(server)] == server, name
+
+
+def test_each_lost_node_stops_with_a_message_of_its_own():
+    # Review of #375: AssembleLost and ChargeLost said the same words, so a log could not tell which task was lost.
+    lost = {name: spec["custom_action_param"] for name, spec in load_nodes().items()
+            if name.endswith("Lost") and spec.get("custom_action") == "StopTask" and isinstance(spec.get("custom_action_param"), str)}
+    assert {"AssembleLost", "ChargeLost"} <= lost.keys()
+    assert len(set(lost.values())) == len(lost), Counter(lost.values())

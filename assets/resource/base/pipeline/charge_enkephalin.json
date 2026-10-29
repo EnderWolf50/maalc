@@ -1,0 +1,89 @@
+{
+    // Lunacy for Enkephalin (#373, spec 00 daily tasks): the main window's Enkephalin bar, then the Charge Enkephalin
+    // window's Use Lunacy tab, Confirm once per charge. It spends Lunacy: charge_enkephalin.count (0 by default) decides, 0
+    // never opens the window, and every Confirm waits for lunacy.check, the game's price table, on the price the prompt
+    // shows (ChargePanel). Same shape as AssembleModules: GoHome first, done only from the main window, the last step.
+    "ChargeEnkephalin": {
+        "action": "Custom",
+        "custom_action": "ChargeStart",
+        "next": [
+            "TaskDone",
+            "ChargeHome"
+        ]
+    },
+    "ChargeHome": {
+        "action": "Custom",
+        "custom_action": "GoHomeRun",
+        "next": [
+            "ChargeHub"
+        ]
+    },
+    "ChargeHub": {
+        "timeout": 60000,
+        "rate_limit": 300,
+        "on_error": [
+            "ChargeLost"
+        ],
+        "next": [
+            "ChargeStuck",
+            "TaskDone",
+            "[JumpBack]ChargePanel",
+            "[JumpBack]HomeText",
+            "[JumpBack]ChargeMain"
+        ]
+    },
+    "ChargeLost": {
+        "action": "Custom",
+        "custom_action": "StopTask",
+        "custom_action_param": "Charge Enkephalin: the Charge Enkephalin window or the main window was not reached"
+    },
+    "ChargeStuck": {
+        "recognition": "Custom",
+        "custom_recognition": "StuckFlag",
+        "action": "Custom",
+        "custom_action": "StopTask",
+        "custom_action_param": "Charge Enkephalin is stuck"
+    },
+    "ChargeMain": {
+        "recognition": "And",
+        "all_of": [
+            "HomeReached"
+        ],
+        "action": "Custom",
+        "custom_action": "ChargeMain",
+        "post_delay": 0
+    },
+    // The Charge Enkephalin window (EnkephalinWindow, assemble_modules.json). Its 1 s stays, as AssemblePanel's: the
+    // Daily Count after a Confirm is read on the next look.
+    "ChargePanel": {
+        "recognition": "And",
+        "all_of": [
+            "EnkephalinWindow"
+        ],
+        "action": "Custom",
+        "custom_action": "ChargePanel",
+        "post_delay": 1000
+    },
+    // The Use Lunacy tab (tests/screens/EnkephalinLunacy.png, live 2026-10-27) has no dialog of its own: the tab shows the
+    // price ("Consumable 104"), the day's charges ("Daily Count 3/10") and the prompt ("Recharge 136 Enkephalin?",
+    // EN_ShopUI) over Cancel and Confirm. Use Boxes shows the same prompt ("Recharge 60 Enkephalin?",
+    // EnkephalinBoxes.png) but no Daily Count: ChargeCount tells the two apart.
+    "ChargePrompt": {
+        "recognition": "OCR",
+        "roi": [400, 474, 480, 32],
+        "expected": "(?i)recharge\\s*\\d+\\s*enkephalin"
+    },
+    // The price next to "Consumable", read by lunacy.read_price: the table's 26-260, a whole text of 2-3 digits (any
+    // digit matched other screens' text in this roi).
+    "ChargePrice": {
+        "recognition": "OCR",
+        "roi": [575, 270, 90, 50],
+        "expected": "^\\d{2,3}$"
+    },
+    // The day's charges under "Daily Count", read by lunacy.read_count.
+    "ChargeCount": {
+        "recognition": "OCR",
+        "roi": [690, 300, 110, 45],
+        "expected": "\\d+\\s*/\\s*10"
+    }
+}

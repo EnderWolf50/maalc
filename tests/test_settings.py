@@ -26,7 +26,7 @@ def team(id, game_team, **kw):
 
 
 VALID = {
-    "version": 11,
+    "version": 13,
     "language": "zh_tw",
     "run": {
         "difficulty": "auto", "runs": 1, "weekly_bonus_use": "hard", "weekly_bonus_amount": "all",
@@ -43,6 +43,9 @@ VALID = {
     ],
     "event_overrides": [{"question": "Q?", "option": "Yes"}],
     "trial_risk_overrides": [{"trial": "Growth I", "risk": 3}],
+    "luxcavation": {"exp": {"count": 1, "team": None, "retries": 0, "consecutive": True},
+                    "thread": {"count": 3, "team": None, "retries": 0, "consecutive": True}},
+    "charge_enkephalin": {"count": 0},
 }
 
 
@@ -116,7 +119,7 @@ def test_schema_errors_name_the_field(tmp_path, fn, where):
 
 
 def test_newer_version_is_refused(tmp_path):
-    assert "newer" in errors(tmp_path, {**VALID, "version": 12})[0]
+    assert "newer" in errors(tmp_path, {**VALID, "version": 14})[0]
 
 
 def test_version_1_gets_guard_turns_off(tmp_path):
@@ -174,6 +177,14 @@ def test_version_7_accepts_terms_and_downloads(tmp_path):
     assert load(tmp_path, {**old, "version": 7}) == VALID
 
 
+def test_version_11_gets_the_daily_tasks_with_no_team_and_no_lunacy_charges(tmp_path):
+    # #366, #368: one EXP win and three Thread wins a day (its 3 Daily Bonuses), no team picked yet (the Daily tab), no
+    # retries. #373: Lunacy is
+    # spent only when the user sets a count.
+    old = edited(lambda d: d.pop("luxcavation") and d.pop("charge_enkephalin"))
+    assert load(tmp_path, {**old, "version": 11}) == VALID
+
+
 def test_version_10_keeps_the_dismissed_screens(tmp_path):
     # #244: on, so the first run after the update already keeps them.
     old = edited(lambda d: d["run"].pop("keep_dismissed_screens"))
@@ -224,13 +235,18 @@ def test_old_version_is_migrated_in_memory(tmp_path, monkeypatch):
     assert json.loads((tmp_path / "config" / "settings.json").read_text(encoding="utf-8"))["version"] == 0
 
 
+def test_version_12_fights_luxcavation_as_consecutive_battles_and_keeps_a_switch_set(tmp_path):
+    old = edited(lambda d: [d["luxcavation"]["exp"].pop("consecutive"), d["luxcavation"]["thread"].update(consecutive=False)])
+    old = {**old, "version": 12}
+    got = load(tmp_path, old)["luxcavation"]
+    assert (got["exp"]["consecutive"], got["thread"]["consecutive"]) == (True, False)
+
+
 def test_unmigratable_version(tmp_path):
     assert "cannot be migrated" in errors(tmp_path, {**VALID, "version": 0})[0]
 
 
 @pytest.mark.parametrize("fn, expected", [
-    (lambda d: [t.update(enabled=False) for t in d["teams"]], "set up a team"),
-    (lambda d: d.update(teams=[]), "set up a team"),
     (lambda d: d["teams"][1].update(game_team=1), "TEAMS #1"),
     (lambda d: d["teams"][0].update(deployment_order={"plan": "gone"}), "teams/0/deployment_order"),
     (lambda d: d["teams"][0].update(starlight={"plan": "gone"}), "teams/0/starlight"),
@@ -244,6 +260,16 @@ def test_unmigratable_version(tmp_path):
 ])
 def test_cross_checks(tmp_path, fn, expected):
     assert any(expected in e for e in errors(tmp_path, edited(fn)))
+
+
+@pytest.mark.parametrize("fn", [lambda d: [t.update(enabled=False) for t in d["teams"]], lambda d: d.update(teams=[])])
+def test_only_the_mirror_dungeon_wants_an_enabled_team(tmp_path, fn):
+    # #364: a file with no enabled team loads (the dailies need none); MirrorDungeon asks with need_team.
+    data = edited(fn)
+    assert load(tmp_path, data)["teams"] == data["teams"]
+    with pytest.raises(SettingsError) as e:
+        load_settings(tmp_path, need_team=True)
+    assert e.value.errors == [settings.NO_TEAM]
 
 
 def test_cross_check_allows_what_the_spec_allows(tmp_path):

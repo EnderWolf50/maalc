@@ -1,7 +1,7 @@
 """#215: the battle pause menu and the Dungeon Progress panel are closed by Resume / Continue, never Give Up / Forfeit.
 
-Button rectangles (x, y, w, h in game pixels) are measured on the live captures tests/screens/BattleMenu.png and
-DungeonProgress*.png.
+Button rectangles (x, y, w, h in game pixels) are measured on the live captures tests/screens/BattleMenu.png,
+LuxBattleMenu.png (a Luxcavation battle's menu, live 2026-10-27: no Retry Stage) and DungeonProgress*.png.
 """
 import re
 from pathlib import Path
@@ -10,7 +10,7 @@ import numpy as np
 import pytest
 from numpy.lib.stride_tricks import sliding_window_view
 from PIL import Image
-from test_pipeline import load_nodes, strip, template_first
+from test_pipeline import hub_entries, load_nodes, strip, template_first
 
 REPO = Path(__file__).resolve().parent.parent
 SCREENS = REPO / "tests/screens"
@@ -23,6 +23,10 @@ BATTLE_BARS = {"Settings": (505, 241, 270, 41), "Resume": (505, 296, 270, 41),
 PANEL_BUTTONS = {name: (x, 373, 83, 125) for name, x in
                  [("Progress", 402), ("Forfeit", 500), ("Continue", 598), ("To Window", 696), ("Config", 794)]}
 BATTLE_MENU_SHOTS = ["BattleMenu.png", "BattleMenuClosing.png"]
+# Luxcavation's menu: three bars, Resume one bar lower than the mirror's, Give Up with no confirm dialog.
+LUX_BARS = {"Settings": (505, 268, 270, 41), "Resume": (505, 323, 270, 42), "Give Up": (505, 378, 270, 41)}
+# (node, its captures, the bars of its menu)
+MENUS = [("BattleMenu", BATTLE_MENU_SHOTS, BATTLE_BARS), ("LuxBattleMenu", ["LuxBattleMenu.png"], LUX_BARS)]
 
 
 def inside(box, rect):
@@ -55,24 +59,25 @@ def best_match(image, template, roi):
     return float(scores[i]), (x + i % cols, y + i // cols, tw, th)
 
 
-def battle_menu_match(image):
-    node = load_nodes()["BattleMenu"]
+def battle_menu_match(image, name="BattleMenu"):
+    node = load_nodes()[name]
     return best_match(image, gray(IMAGES / node["template"]), node["roi"]), node
 
 
-@pytest.mark.parametrize("shot", BATTLE_MENU_SHOTS)
-def test_the_battle_menu_is_found_on_resume_only(shot):
-    (score, box), node = battle_menu_match(gray(SCREENS / shot))
+@pytest.mark.parametrize("name, shot, bars", [(n, shot, bars) for n, shots, bars in MENUS for shot in shots])
+def test_the_battle_menu_is_found_on_resume_only(name, shot, bars):
+    (score, box), node = battle_menu_match(gray(SCREENS / shot), name)
     assert score >= node["threshold"]
     center = (box[0] + box[2] // 2, box[1] + box[3] // 2, 1, 1)
-    assert inside(center, BATTLE_BARS["Resume"])
-    assert not any(touches(center, rect) for name, rect in BATTLE_BARS.items() if name != "Resume")
+    assert inside(center, bars["Resume"])
+    assert not any(touches(center, rect) for n, rect in bars.items() if n != "Resume")
 
 
-def test_the_battle_menu_taps_resume_and_waits_for_the_screen():
+@pytest.mark.parametrize("name", [n for n, _, _ in MENUS])
+def test_the_battle_menu_taps_resume_and_waits_for_the_screen(name):
     # #254 turned Click + post_delay into TapUntil (the delay was a guess at the fade); #261's Click had a 1000 ms one.
     # The tap lands on the roi's centre, as the Click did on the matched box's, and the wait reads the Resume bar.
-    node = load_nodes()["BattleMenu"]
+    node = load_nodes()[name]
     param = node["custom_action_param"]
     assert node["action"] == "Custom" and node["custom_action"] == "TapUntil" and node.get("post_delay") == 0
     assert param["target"] == node["roi"] and param["gone"]["roi"] == node["roi"]
@@ -80,19 +85,23 @@ def test_the_battle_menu_taps_resume_and_waits_for_the_screen():
     assert not any(re.search(param["gone"]["expected"], other) for other in ["Settings", "Retry Stage", "Give Up"])
 
 
-def test_the_battle_menu_roi_holds_the_resume_bar_and_no_other():
-    # Whatever the template matches inside the roi, the tap (the roi's centre) cannot reach Give Up or Retry Stage.
-    node = load_nodes()["BattleMenu"]
-    assert inside(node["roi"], BATTLE_BARS["Resume"])
-    assert not any(touches(node["roi"], rect) for name, rect in BATTLE_BARS.items() if name != "Resume")
+@pytest.mark.parametrize("name, bars", [(n, bars) for n, _, bars in MENUS])
+def test_the_battle_menu_roi_holds_the_resume_bar_and_no_other(name, bars):
+    # Whatever the template matches inside the roi, the tap (the roi's centre) cannot reach Give Up or Retry Stage. On the
+    # other menu the roi holds no Resume (the sweep below): there the node does not hit.
+    node = load_nodes()[name]
+    assert inside(node["roi"], bars["Resume"])
+    assert not any(touches(node["roi"], rect) for n, rect in bars.items() if n != "Resume")
 
 
-def test_no_other_screen_reads_as_the_battle_menu():
+@pytest.mark.parametrize("name, shots", [(n, shots) for n, shots, _ in MENUS])
+def test_no_other_screen_reads_as_the_battle_menu(name, shots):
     # CODING_STANDARDS: a template heuristic ships with a sweep over tests/screens. Sweep (OpenCV, colour, 2026-10-22):
-    # 1.000 and 0.986 on the two captures of the menu, 0.50 at most on every other 1280 x 720 screen.
-    node = load_nodes()["BattleMenu"]
+    # 1.000 and 0.986 on the two captures of the menu, 0.50 at most on every other 1280 x 720 screen, the other
+    # menu included (each node's roi holds only its own menu's Resume).
+    node = load_nodes()[name]
     template = gray(IMAGES / node["template"])
-    others = [p for p in sorted(SCREENS.glob("*.png")) if p.name not in BATTLE_MENU_SHOTS]
+    others = [p for p in sorted(SCREENS.glob("*.png")) if p.name not in shots]
     scores = {p.name: best_match(gray(p), template, node["roi"])[0] for p in others
               if Image.open(p).size == (1280, 720)}
     assert len(scores) > 100
@@ -105,9 +114,10 @@ def test_the_battle_menu_is_answered_before_the_turn_under_it():
     # reads no text (#157).
     nodes = load_nodes()
     hud = strip(nodes["BattleHUD"]["next"])
-    assert hud.index("BattleMenu") < hud.index("BattleTurn") < hud.index("BattlePause")
-    assert nodes["BattleHUD"]["any_of"].index("BattleMenu") < nodes["BattleHUD"]["any_of"].index("BattleTurn")
-    assert template_first(nodes, nodes["BattleMenu"])
+    for menu in ("BattleMenu", "LuxBattleMenu"):
+        assert hud.index(menu) < hud.index("BattleTurn") < hud.index("BattlePause")
+        assert nodes["BattleHUD"]["any_of"].index(menu) < nodes["BattleHUD"]["any_of"].index("BattleTurn")
+        assert template_first(nodes, nodes[menu])
 
 
 def test_the_progress_panel_taps_continue_only():
@@ -125,7 +135,7 @@ def test_the_progress_panel_taps_continue_only():
 def test_the_progress_panel_is_answered_before_the_pages_it_opens_over():
     # #215: the back key on an event opens the panel over it; the event's own button (Continue, bottom right) still
     # reads, so its node acted first, and the panel closed by chance. A dialog is answered before the page under it.
-    entries = load_nodes()["HubText"]["custom_recognition_param"]["entries"]
+    entries = hub_entries(load_nodes(), "HubText")
     pages = ["Event", "Shop", "GiftGet", "GiftChoice", "RewardCard", "RewardCardForgo", "GiftRefuseDialog", "Victory",
              "WipeDialog", "Formation", "ThemePack"]
     assert all(entries.index("ProgressPanel") < entries.index(p) for p in pages)

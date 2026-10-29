@@ -10,8 +10,9 @@ main checkout) except the runtime output folders (debug, logs, state, cache), an
 `verify` lists every file that changed, vanished or appeared since and exits 1 when there is any.
 `hold` is backup, then a wait until `<file>` exists (or the timeout, default 2 h), then verify: the one command a
 live test queues, so the emulator stays taken while the agent does the interactive steps and then creates `<file>`.
-`--guard` names the `--log` of a `queue.py detach` (the bot): while that process runs the timeout does not run, and
-it starts again when the bot ends, so the emulator is never handed on under a running bot or right after it. When the bot ends, `hold` prints
+`--guard` names the `--log` of a `queue.py detach` (the bot), or a glob of them (`bot*.log`) when one hold runs the bot
+more than once, each run under its own log: while any of those processes runs the timeout does not run, and it starts
+again when the last one ends, so the emulator is never handed on under a running bot or right after it. When the bot ends, `hold` prints
 `[hold] bot ended <iso time>` (read by `queue.py resume`); with `--stop-recording <profile>` it stops that screen-record
 profile 60 s later, so a recording nobody stopped does not grow for hours.
 """
@@ -27,7 +28,7 @@ from pathlib import Path
 
 sys.path[0] = str(Path(__file__).resolve().parents[1])
 
-from live.queue import detached_doc, detached_running
+from live.queue import detached_doc, detached_running, guard_logs
 from local_dir import local_dir, main_checkout
 
 RUNTIME = {"debug", "logs", "state", "cache"}
@@ -69,13 +70,14 @@ def hold(root: Path, dest: Path, done: Path, timeout: float, poll: float = 2.0, 
     print(f"backed up {backup(root, dest)} files of {root}; waiting for {done}", flush=True)
     deadline = time.monotonic() + timeout
     seen, ended = False, None  # the bot was seen running; when it ended (monotonic)
-    before = guard and detached_doc(guard)  # a pid file of an earlier run under this log is not this run's bot
+    logs = (lambda: guard_logs(guard)) if guard else list  # a glob takes in the logs of later runs as they start
+    before = {p: detached_doc(p) for p in logs()}  # a pid file of an earlier run under a log is not this run's bot
     while not done.exists():
-        if guard and running(guard):
+        if any(running(p) for p in logs()):
             seen, ended, deadline = True, None, time.monotonic() + timeout  # the agent's own steps after the bot get the whole timeout; a restarted bot re-arms the end note
         elif time.monotonic() >= deadline:
             break
-        elif (seen or guard and detached_doc(guard) not in (None, before)) and ended is None:  # durable for `queue.py resume` (nobody may have been watching); a bot gone within one poll still counts
+        elif (seen or any(detached_doc(p) not in (None, before.get(p)) for p in logs())) and ended is None:  # durable for `queue.py resume` (nobody may have been watching); a bot gone within one poll still counts
             ended = time.monotonic()
             print(f"[hold] bot ended {datetime.now().isoformat(timespec='seconds')}", flush=True)
         if ended is not None and stop_profile and time.monotonic() >= ended + grace:
@@ -94,7 +96,7 @@ def main(argv=None) -> int:
     ap.add_argument("--label", default="latest")
     ap.add_argument("--done", type=Path, help="hold: the file that ends the wait")
     ap.add_argument("--timeout", type=float, default=7200)
-    ap.add_argument("--guard", type=Path, help="hold: the --log of the detached bot; the timeout counts from its end")
+    ap.add_argument("--guard", type=Path, help="hold: the --log of the detached bot, or a glob of them (bot*.log); the timeout counts from the last one's end")
     ap.add_argument("--stop-recording", metavar="PROFILE", help="hold: stop this screenrec profile 60 s after the bot ended")
     ap.add_argument("--root", type=Path, default=main_checkout() / "install")
     a = ap.parse_args(argv)

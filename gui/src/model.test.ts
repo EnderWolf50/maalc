@@ -143,3 +143,9 @@ test("a card's price is its base price times 1, 2 or 3", () => {
 test("a new settings file forfeits a run whose wipe retries ran out instead of stopping the batch (#95)", () => {
   expect(newSettings().run.after_retries).toBe("forfeit");
 });
+
+test("a new settings file wins one EXP Luxcavation and three Thread Luxcavations, the dailies a day needs (#362)", () => {
+  const { exp, thread } = newSettings().luxcavation;
+  expect([exp.count, thread.count]).toEqual([1, 3]);
+  expect([exp.consecutive, thread.consecutive]).toEqual([true, true]); // #375: on by default
+});
