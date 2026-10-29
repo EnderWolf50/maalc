@@ -188,3 +188,38 @@ def test_subagent_preamble_hook_injects_the_preamble_doc():
     out = json.loads(subprocess.run([sys.executable, str(hook)], capture_output=True, text=True, check=True).stdout)
     assert out["hookSpecificOutput"]["hookEventName"] == "SubagentStart"
     assert "maalc-live-test" in out["hookSpecificOutput"]["additionalContext"]
+
+def test_an_absolute_path_to_a_body_file_is_read_not_judged(repo):
+    # The path names the file; only its content is public. Any --<word>-file flag counts as a file flag.
+    for flag in ("--body-file", "--comment-file", "-F"):
+        assert not denied(f"gh issue comment 1 {flag} '{repo / 'clean.md'}'", repo, USERNAME="")
+        assert denied(f"gh issue comment 1 {flag} '{repo / 'dirty.md'}'", repo)
+    assert denied(f"gh issue comment 1 --body-file '{repo / 'clean.md'}' --body 'see {WIN}'", repo)
+
+
+def test_a_local_note_label_is_denied(repo):
+    assert denied('gh pr create --title t --body "see questions-1 no. 8"', repo)
+    assert denied('git commit -m "answer Questions-12"', repo)
+    assert not denied('gh pr create --title t --body "open questions: 1"', repo)
+
+
+GOOD_BODY = "## Verification\n\n- Tests: `uv run pytest` -> 12 passed, 0 failed\n- Live: not run: the shop path, tracked in #77\n"
+
+
+def pr_body(repo, text, call="gh pr create --title t --body-file body.md"):
+    (repo / "body.md").write_text(text)
+    return reason(call, repo)
+
+
+def test_a_pr_body_needs_the_test_line_and_an_issue_for_each_not_run(repo):
+    assert pr_body(repo, GOOD_BODY) is None
+    assert pr_body(repo, GOOD_BODY, "gh pr edit 3 --body-file body.md") is None
+    assert "N passed, M failed" in pr_body(repo, "- Tests: 1393 collected, 0 failed\n")
+    assert "`not run` without the issue" in pr_body(repo, GOOD_BODY + "- Live: not run on the emulator\n")
+    assert pr_body(repo, GOOD_BODY + "- Live: not run: none\n") is None
+
+
+def test_only_pr_create_and_edit_bodies_are_linted(repo):
+    assert pr_body(repo, "short note", "gh pr comment 3 --body-file body.md") is None
+    assert pr_body(repo, "short note", "gh issue create --title t --body-file body.md") is None
+    assert pr_body(repo, "short note", "gh pr edit 3 --title t") is None
