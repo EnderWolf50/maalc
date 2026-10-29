@@ -17,11 +17,20 @@ Once per clone, `lefthook install` turns on the pre-commit hook (`lefthook.yml`)
 
 ## After landing a PR
 
-Land with the `ship` skill's land task. Then, in the main checkout and unless `uv run python tools/live/queue.py status` shows a holder for `emulator` (a live run is using `install/`): `uv run python tools/after_land.py`. It first fetches and fast-forwards the checkout's `main` (refusing off main, with local changes, or when it cannot fast-forward), then builds the settings GUI, assembles `install/` and checks that `install/config/settings.json` still loads.
+Land one PR at a time with `tools/ship.py`:
+
+- `uv run python tools/ship.py ready <pr>...` prints head SHA, `ci-ok` state, mergeable, draft, base and the PRs stacked on each.
+- `uv run python tools/ship.py land <pr> --go` merges (merge commit) only when `ci-ok` passed on the current head and the PR is mergeable, retargets the PRs stacked on its branch to the base before the branch is deleted, waits for the CI run of the merge commit on `main` and exits non-zero when it is red. A second `land` waits until the first returned green. Run the `code-review` skill before `--go`.
+- `uv run python tools/ship.py into <integration-branch> <branch>` merges `<branch>` into the integration branch (`--no-ff`, in a worktree of it), runs `tools/check.py` through the bench queue and pushes only on green; a conflict or a red check pushes nothing. The first merge into an integration branch with no open PR opens a draft PR, so Linux CI runs from the first merge.
+- `uv run python tools/review_pack.py <pr>` writes the diff, body, CI state and the issues the PR closes or names to `.local/scratch/review-<pr>/`, for a reviewer whose Bash tool does not run.
+
+After a green `land`, `ship.py` runs `tools/after_land.py` in the main checkout unless `uv run python tools/live/queue.py status` shows a holder for `emulator` (a live run is using `install/`); then it prints the command to run later: `uv run python tools/after_land.py`. It first fetches and fast-forwards the checkout's `main` (refusing off main, with local changes, or when it cannot fast-forward), then builds the settings GUI, assembles `install/` and checks that `install/config/settings.json` still loads.
 
 Done: `after_land.py` ends without a "failed" line.
 
 ## Claude Code hooks
+
+`.claude/hooks/main-checkout-guard.py` (Bash and PowerShell) denies `git switch`, `git checkout -b` and `git checkout <branch>` in the main checkout, also through `git -C`; a linked worktree may switch.
 
 `.claude/settings.json` starts both hooks in exec form (`"command": "uv"` plus an `args` list), which needs a Claude Code version that knows `args` (2.1.302 does; `claude --version`). An older version drops `args` and runs a bare `uv`, which exits 2, the code that blocks a tool call: every Bash call then fails with a hook error that shows `uv`'s usage text. Update Claude Code when you see it.
 
