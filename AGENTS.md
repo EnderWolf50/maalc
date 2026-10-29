@@ -27,6 +27,7 @@ This repo is public. Issue, PR and commit text describes evidence by its content
 - Worktree setup, checks, post-land steps, `.local/` and the game data: `docs/agents/local-dev.md`.
 - Anything on the emulator: the `maalc-live-test` skill. The emulator's resolution and window stay as the user set them; MaaFramework scales screenshots to 720p by itself.
 - Subagents: `docs/agents/subagent-preamble.md` reaches each one through a SubagentStart hook.
+- A change to `gui/` or what the settings window shows: the `maalc-gui-check` skill builds and drives the real app (`docs/agents/gui-driving.md`); how evidence stills and clips look: `docs/agents/evidence-style.md`.
 - Writing a PR body, or a PR or issue comment: `docs/agents/pr.md`.
 - Review standards: `CODING_STANDARDS.md`.
 - Pipeline JSON under `assets/resource/base/pipeline/` allows whole-line `//` comments, so `json.load` fails on it; drop those lines first, as `tests/test_pipeline.py` does.
