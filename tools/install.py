@@ -29,8 +29,8 @@ import maa
 PYTHON = ("https://www.python.org/ftp/python/3.12.10/python-3.12.10-embed-amd64.zip",
           "4acbed6dd1c744b0376e3b1cf57ce906f9dc9e95e68824584c8099a63025a3c3")
 # MaaFramework.dll from the EnderWolf50/MaaFramework fork: v5.14.3 plus two fixes. Batch OCR no longer
-# re-recognizes 1 px slivers at roi edges (GBs of memory, MaaXYZ/MaaFramework#1568, #157): a roi with such a box
-# runs its own det+rec instead, so it reads as it does unbatched (maalc.4; maalc.3 dropped the box). A task keeps
+# re-recognizes a cached box cut to less than half its height at a roi edge, a sliver down to 1 px (GBs of memory,
+# MaaXYZ/MaaFramework#1568, #157): that roi runs its own det+rec, as it does unbatched. A task keeps
 # only the details of its last 200 nodes, so a whole dungeon run as one task stays flat without clear_cache, which also
 # dropped the runner ids of the queued tasks (MaaXYZ/MaaFramework#1578, #176, G1). Windows only; the rest of
 # maafw/ stays the wheel's. Drop both once a maafw release has both fixes (MaaXYZ/MaaFramework#1573, #1578).

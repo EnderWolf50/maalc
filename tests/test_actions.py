@@ -2961,7 +2961,7 @@ def test_a_fusion_gone_after_a_cell_tap_taps_nothing_more(context, guarded, monk
 
 def test_hands_back_leaves_the_runtime_cache_of_a_long_task_alone():
     """G1: a clear_cache drops the runner ids of the tasks queued after this one, so their wait() returns at once. The
-    MaaFramework fork (v5.14.3-maalc.4) keeps only a task's last 200 node details itself (MaaXYZ/MaaFramework#1578)."""
+    MaaFramework fork (MAAFW_FIX in tools/install.py) keeps only a task's last 200 node details itself (MaaXYZ/MaaFramework#1578)."""
     class Act:
         @actions.hands_back
         def run(self, context, argv):
