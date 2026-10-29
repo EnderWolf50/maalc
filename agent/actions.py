@@ -3364,7 +3364,8 @@ class RewardCard(CustomAction):
             m = re.search(r"(\d)\s*/\s*(\d)", text(context, image, SELECTABLE))
             if m and m[1] == m[2]:
                 tap(context, *CARD_CONFIRM, wait=0)
-                until(context, lambda im: not has(text(context, im, REWARD_TITLE), "Encounter Reward"))
+                get = shows(context, GET_TITLE, "GET")  # a gift's popup leaves the title up: MirrorHub hands it to GiftGet (#377)
+                until(context, lambda im: not has(text(context, im, REWARD_TITLE), "Encounter Reward") or get(im))
                 return True
             if not m:  # no count to tell a tap by: the page is not up
                 continue
