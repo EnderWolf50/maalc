@@ -22,7 +22,7 @@ def test_a_fusion_taps_only_the_drop_gifts_it_knows(context, monkeypatch):
 
 
 def test_a_migrated_list_keeps_its_main_keywords_fusion_only_tier_iv(context, monkeypatch):
-    # The live run of #310 (accept-301b): a version 10 Poise team's list fused its Clear Mirror, Calm Water (9070, a tier IV no
+    # The HARD live acceptance of #310: a version 10 Poise team's list fused its Clear Mirror, Calm Water (9070, a tier IV no
     # shop sells and no recipe makes, #332) into a tier III. The old team kept every Poise gift; so does its list, and every
     # keywordless gift (One with the Blade 9228 is the same kind). Tremor III + Pierce III + Sinking II still make a IV.
     lists, _, _ = settings.gift_lists_from_v10([{"keyword": "Poise", "keep_keywords": [], "keywordless": "keep", "keep_gifts": []}])

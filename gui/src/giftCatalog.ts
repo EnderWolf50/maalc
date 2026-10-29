@@ -5,8 +5,8 @@ import { FUSIONS, materialsOf, type Fusion } from "./gifts";
 import { SEARCH_GIFTS, VESTIGES, parseThemePacks } from "./model";
 
 /** buyable: on the Gift Search page (tier I-III); fusion: made by fusing, so wantable but never bought; material: a recipe's
- * material the shop does not sell; other: no shop sells it and no recipe makes it (extra_gifts, #332), a keyword fusion or an
- * event gives one; vestige: sold or fused only. Only a buyable or fusion gift can be "want". */
+ * material the shop does not sell; other: no shop sells it and no recipe makes it (extra_gifts, #332), a keyword fusion, an
+ * event or a theme pack's own pool gives one; vestige: sold or fused only. Only a buyable or fusion gift can be "want". */
 export type Kind = "buyable" | "fusion" | "material" | "other" | "vestige";
 export interface CatalogGift { id: number; keyword: string; tier: number; en: string; zh: string; kind: Kind }
 
