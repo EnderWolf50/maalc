@@ -1137,8 +1137,10 @@ class DismissShot(CustomAction):
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         now = time.monotonic()
         gap = DISMISSED_GAP if argv.node_name in GAPPED else 0
-        image = screen(context)  # one capture for the kept screen and the popup's text
-        if allowed("keep_dismissed_screens") and now - DISMISSED_AT.get(argv.node_name, -gap) >= gap:
+        keep = allowed("keep_dismissed_screens") and now - DISMISSED_AT.get(argv.node_name, -gap) >= gap
+        popup = argv.node_name == "PopupButton"
+        image = screen(context) if keep or popup else None  # one capture for the kept screen and the popup's text
+        if keep:
             stamp = f"{settlement.now().replace(':', '-')}-{argv.node_name}"
             try:
                 recovery.keep_capture(ROOT, "dismissed", image, stamp, recovery.DISMISSED_KEEP)
@@ -1147,7 +1149,7 @@ class DismissShot(CustomAction):
                 log(f"{argv.node_name}: screen kept in logs/dismissed/{stamp}.png")
             except OSError as e:
                 log(f"{argv.node_name}: screen not saved: {e}")
-        if argv.node_name == "PopupButton":  # what was closed, e.g. the previous session's "Please claim your rewards" (#382)
+        if popup:  # what was closed, e.g. the previous session's "Please claim your rewards" (#382)
             log(f"popup: {text(context, image, DIALOG_TEXT)!r}: pressed {popup_button(argv.reco_detail)!r}")
         if json.loads(argv.custom_action_param or "null") == "back":
             context.tasker.controller.post_click_key(BACK_KEY).wait()
@@ -4357,7 +4359,7 @@ class Settle(CustomAction):
 
         def first_tile():
             tile = text(context, image, FIRST_FLOOR)
-            log(f"floors before {min(floors_hard, default=floor)} were not seen: the window's floor 1 tile reads {tile!r}")
+            log(f"floors before {min(floors_hard, default=floor + 1)} were not seen: the window's floor 1 tile reads {tile!r}")
             return tile
         all_hard = settlement.all_hard(floors_hard, floor, hard, first_tile)
         want = settlement.bonus_toggles(s["weekly_bonus_use"], s["weekly_bonus_amount"], hard, left or 0, all_hard)
