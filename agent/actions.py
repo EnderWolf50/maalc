@@ -2212,6 +2212,8 @@ class RouteMap(CustomAction):
         if self.follow(context):
             return enter_node(context)
         RUN.pop("map_plan", None)
+        if not RUN.get("map_entered") and self.tap_bus_first(context):
+            return enter_node(context)
         for _ in range(MAP_LOOKS):  # live: right after a floor's theme pack, the map shows before its bus and links
             if (image := still(context)) is None:
                 return True  # still fading in or out: let MirrorHub look again
@@ -2293,6 +2295,27 @@ class RouteMap(CustomAction):
             return False  # MirrorHub looks again: the new map may still be fading in
         log(f"map: the title stays floor {shown}; reading the map as it is")
         RUN["title_off"] = floor
+        return True
+
+    @staticmethod
+    def tap_bus_first(context):
+        """Whether the bus, tapped where it stands, opened its node panel; only after a restart or recovery (#379).
+
+        Live: the bus stood on the Boss with no slot to its right; the looks and pans for a linked slot cost ~21 s
+        (11 drags at the map's edge) before the bus was tapped (#88). A bus with no linked slot is tapped at once,
+        without panning; with a slot linked, or the panel not showing within BUS_PROBE s, the full read follows.
+        """
+        image = still(context)
+        bus = seen(context, image, "MapBus") if image is not None else None
+        if not bus or RouteMap.read_slots(context, image, bus.box[0], bus.box[1]):
+            return False
+        page_guard(context, "MirrorMap", image=image)
+        tap(context, bus.box[0] + 22, bus.box[1] + 37, wait=0)
+        if until(context, lambda im: seen(context, im, "MapNodePanel"), timeout=BUS_PROBE) is None:
+            return False
+        log("map: column 1: no linked slot read")
+        log("map: take the bus")
+        RUN["map_entered"] = True
         return True
 
     @staticmethod
