@@ -41,6 +41,36 @@
             "name": "MirrorDungeon",
             "label": "$MirrorDungeon",
             "entry": "MirrorDungeon"
+        },
+        {
+            "name": "AssembleModules",
+            "label": "$AssembleModules",
+            "entry": "AssembleModules"
+        },
+        {
+            "name": "ClaimMail",
+            "label": "$ClaimMail",
+            "entry": "ClaimMail"
+        },
+        {
+            "name": "ExpLuxcavation",
+            "label": "$ExpLuxcavation",
+            "entry": "ExpLuxcavation"
+        },
+        {
+            "name": "ThreadLuxcavation",
+            "label": "$ThreadLuxcavation",
+            "entry": "ThreadLuxcavation"
+        },
+        {
+            "name": "ClaimPassMissions",
+            "label": "$ClaimPassMissions",
+            "entry": "ClaimPassMissions"
+        },
+        {
+            "name": "ChargeEnkephalin",
+            "label": "$ChargeEnkephalin",
+            "entry": "ChargeEnkephalin"
         }
     ]
 }

@@ -24,6 +24,7 @@
 | 結算 | 五層全部通過才依每週獎勵設定切開關並 Claim；否則放棄獎勵 | #8、#17、#19 |
 | 中途接續 | 從任何畫面啟動都能接手，以畫面為準 | #8 |
 | 卡住處理 | 偵測卡住，分三級恢復，必要時重啟遊戲；停止時保存證據並發 webhook | #14 |
+| 日常任務 | 每個日常一個 PI 任務，順序、啟用、排程由 client 管，參數放 `settings.json`（[ADR 0010](../adr/0010-one-pi-task-per-daily.md)）：經驗本、紐本（一律打最難的關，腦啡肽模組不夠就跳過）、換腦啡肽模組、通行證任務領取、信箱 Claim All、狂氣換腦啡肽（預設 0 次）。鏡牢開局前也檢查腦啡肽模組 | #362 |
 | 設定 GUI | 自製設定 GUI（`gui/`）編輯所有使用者設定：執行選項、具名方案、隊伍、事件與試煉風險覆寫；介面提供繁中與英文，預設繁中。執行仍在 MXU／MFAAvalonia | #1、#18、#19 |
 
 驗收標準是無人看管、連續 10 局困難鏡牢、0 次停止；累計 30 局標記為穩定。詳見 [07-assets-and-testing.md](07-assets-and-testing.md)。（#14）
@@ -35,7 +36,7 @@
 以下功能不在 `maalc` 的規劃內：（#1）
 
 - 無限鏡牢（Parallel Superposition，第 6–10 層），一律不開啟。（#17）
-- 日常任務：經驗本、紐本、領獎、狂氣換體、腦啡肽模組。v1 只做鏡牢。
+- Refraction Railway、免費抽卡（Extraction）、自動換腦啡肽模組的常駐工具。排程與結束後動作由 MXU／MFAAvalonia 提供，maalc 只在 README 說明。（#362）
 - 安裝程式與自動更新。v1 只用 GitHub Actions 產出一個 zip：bot、resource、MXU、內嵌 Python、設定 GUI 的執行檔放在同一個發佈目錄（做法參考 MaaPracticeBoilerplate 的 workflow）。（#1、#4、#19，2026-10-14 定案；MXU 與內嵌 Python 見 #33）
 - Windows 原生客戶端（Win32 控制器）。
 - 中文或其他語言的遊戲畫面辨識。
@@ -54,6 +55,12 @@
 | 依體系挑飾品卡（需 OCR 卡片文字） | 依每隊的獎勵卡順序挑選 | #11 |
 | 尋路往前看兩欄並加總權重 | 只看相鄰一欄 | #12 |
 | Dark UI 外觀 | 只支援 Default，使用者維持 Default | #48 |
+| 不指定次數、自動判斷模式 | 經驗本、紐本照 `settings.json` 填的次數打；之後可讀通行證每日任務有沒有完成、紐本 Daily Bonuses 的剩餘次數 `n` 自動決定 | #362 |
+| Skip（掃蕩） | 實際打戰鬥，不按 Skip | #362 |
+| 依星期換隊伍 | 每個日常用一支固定隊伍 | #362 |
+| 選關功能 | 一律打最難的關 | #362 |
+| 通行證等級獎勵 | 只領每日、每週、季度（Seasonal）任務獎勵 | #362 |
+| GUI 裡的任務清單（A2） | 任務清單由 client 管 | #362 |
 
 ## 目標環境
 
@@ -78,7 +85,7 @@
 | 架構 | 流程寫在 Pipeline 的 `MirrorHub`，決策寫在 Python Agent（[ADR 0002](../adr/0002-pipeline-hub-and-agent-decisions.md)） | #8 |
 | Agent | Python，由 `interface.json` 的 `agent.child_exec`／`child_args` 啟動 | #1、#4 |
 | 專案骨架 | 以 MaaPracticeBoilerplate（MIT）為起點，手動搬入所需檔案，保留其版權聲明 | #4 |
-| 執行介面 | ProjectInterface V2，只放控制器、資源與鏡牢任務，沒有使用者選項；MXU 與 MFAAvalonia 都必須能跑，開發時用 MXU。不依賴只有其中一邊支援的功能 | #1、#6、#19 |
+| 執行介面 | ProjectInterface V2，只放控制器、資源與各任務（鏡牢、日常），沒有使用者選項；MXU 與 MFAAvalonia 都必須能跑，開發時用 MXU。不依賴只有其中一邊支援的功能 | #1、#6、#19 |
 | 設定 GUI | Tauri 2 + React/TypeScript，放在 `gui/`，是 v1 新增的交付物。第一階段只編輯設定，不執行 bot（[ADR 0006](../adr/0006-settings-gui-writes-one-settings-file.md)） | #19 |
 | 設定 | 使用者設定全部放在 `<root>/config/settings.json`，由設定 GUI 寫入、Agent 讀取，格式由 `settings.schema.json` 描述（[ADR 0006](../adr/0006-settings-gui-writes-one-settings-file.md)）；遊戲資料放資料檔（[ADR 0005](../adr/0005-game-data-files-separate-from-user-settings.md)） | #9、#11、#19 |
 | 辨識 | 文字與數字用 OCR（`ppocr_v6/small`），圖示與按鈕用自製模板；地圖節點先找 Bus 再比對相鄰格位，不用整張地圖的偵測模型 | #3、#13 |

@@ -14,30 +14,180 @@
             "NavTitle"
         ]
     },
+    // From anywhere to the main window (#365): the first and the last step of every daily task, so the next task starts
+    // from the main window. Done once the Window tab is lit, not before the popups
+    // are dealt with (the settings menu leaves it lit). The Window tab is tapped while the bar shows with another tab
+    // open; a page with no bar gets the back key, at most 5 times (HomeBack's max_hit). The popups are HubText's
+    // (no OCR batching, #157), the game away from the front starts it, and 60 s of nothing known (the back keys used up
+    // too) restarts the game and goes again (HomeLost, #362), the stop procedure once the restarts are used up.
+    "GoHome": {
+        "timeout": 60000,
+        "rate_limit": 300,
+        "on_error": [
+            "GoHomeLost"
+        ],
+        "next": [
+            "[JumpBack]Connecting",
+            "[JumpBack]HelpPager",
+            "[JumpBack]HomeText",
+            "HomeReached",
+            "[JumpBack]NavTitle",
+            "[JumpBack]HomeWindowTab",
+            "[JumpBack]HomeGameAway",
+            "HomeInBattle",
+            "[JumpBack]HomeBack"
+        ]
+    },
+    // A battle (the screens BattleHUD knows): the last task stopped mid-battle (J2, live 2026-10-28). The back key opens a
+    // battle's pause menu, Give Up one tap away, and giving a battle up is not the bot's to do: Halt, which ends the rest
+    // of the list too (each task would meet the same battle), for the user to end it by hand. An event page is not read:
+    // Luxcavation's and the mirror's look the same (the user, 2026-10-28), so it gets HomeBack, then GoHomeLost's L3.
+    "HomeInBattle": {
+        "recognition": "Or",
+        "any_of": [
+            "BattleMenu",
+            "LuxBattleMenu",
+            "BattleTurn",
+            "BattlePause"
+        ],
+        "action": "Custom",
+        "custom_action": "Halt",
+        "custom_action_param": "a battle is on: end it by hand, then start the list again"
+    },
+    "GoHomeLost": {
+        "action": "Custom",
+        "custom_action": "HomeLost",
+        "next": [
+            "GoHome"
+        ]
+    },
+    // The global popups the main window or the title can show (popups.json), read in one pass (hub_text.py): the
+    // server's (ServerPopups), then the main window's own.
+    "HomeText": {
+        "recognition": "Custom",
+        "custom_recognition": "HubText",
+        "custom_recognition_param": {
+            "base": "ServerPopups",
+            "entries": [
+                "PopupButton",
+                "Notices",
+                "Mailbox",
+                "SettingsMenu"
+            ],
+            "tail": []
+        },
+        "pre_delay": 0,
+        "post_delay": 0,
+        "rate_limit": 300,
+        "timeout": 0,
+        "on_error": [
+            "HomeTextLost"
+        ]
+    },
+    "HomeTextLost": {
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    // The Window tab lit (tests/screens/MainWindow.png); the other tabs lit, and a popup dimming the bar, score at most
+    // 0.80 on it.
+    "HomeReached": {
+        "recognition": "TemplateMatch",
+        "roi": [770, 598, 110, 84],
+        "template": "Navigation/HomeReached.png",
+        "threshold": 0.9
+    },
+    // The Window tab unlit (Drive.png, SinnersTab.png): tapped until it reads unlit no more (TapUntil, the page left),
+    // not a fixed 2 s (#362). At most 10 taps (max_hit, as the watchdog's NAV_TAP_LIMIT): a tab that shows its tap but
+    // never opens its page would be tapped for ever, each JumpBack giving GoHome a new timeout; GoHome then times out
+    // into GoHomeLost's L3.
+    "HomeWindowTab": {
+        "recognition": "TemplateMatch",
+        "roi": [770, 598, 110, 84],
+        "template": "Navigation/HomeWindowTab.png",
+        "threshold": 0.9,
+        "action": "Custom",
+        "custom_action": "TapUntil",
+        "custom_action_param": {
+            "left": true
+        },
+        "post_delay": 0,
+        "max_hit": 10
+    },
+    // Not the game in front (the launcher, the Play Store, no focus): start it; the title and its dialogs follow. Its
+    // next waits for the first screen GoHome knows (HomeGameUp), up to the 10 s post_delay and GoHome's 60 s it had
+    // before (#362); none by then: GoHomeLost, as GoHome's own timeout.
+    "HomeGameAway": {
+        "recognition": "Custom",
+        "custom_recognition": "GameAway",
+        "action": "StartApp",
+        "package": "com.ProjectMoon.LimbusCompany",
+        "post_delay": 0,
+        "max_hit": 3,
+        "timeout": 70000,
+        "rate_limit": 500,
+        "next": [
+            "HomeGameUp"
+        ],
+        "on_error": [
+            "GoHomeLost"
+        ]
+    },
+    // The game up: the title or what can hide it (RecoverTitle), the main window, the tab bar, a loading screen.
+    "HomeGameUp": {
+        "recognition": "Or",
+        "any_of": [
+            "RecoverTitle",
+            "HomeReached",
+            "HomeWindowTab",
+            "Connecting"
+        ],
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    // A page with no tab bar (the entry page, Luxcavation): the back key goes up one page. The 2 s stay: nothing is known
+    // to wait for, and a second back key while the page is still going can go past the main window (max_hit counts it).
+    "HomeBack": {
+        "action": "Custom",
+        "custom_action": "DismissShot",
+        "custom_action_param": "back",
+        "post_delay": 2000,
+        "max_hit": 5
+    },
+    // The title: a tap, then until it goes (TapUntil; after 3 s the hub taps again, as after the old 3 s post_delay).
     "NavTitle": {
         "recognition": "TemplateMatch",
         "roi": [20, 620, 200, 70],
         "template": "Navigation/NavTitle.png",
         "threshold": 0.8,
-        "action": "Click",
-        "target": [540, 300, 200, 120],
-        "post_delay": 3000
+        "action": "Custom",
+        "custom_action": "TapUntil",
+        "custom_action_param": {
+            "target": [540, 300, 200, 120],
+            "left": true
+        },
+        "post_delay": 0
     },
-    // Bottom tab bar; Drive looks different once it is the open tab.
+    // Bottom tab bar; Drive looks different once it is the open tab: tapped until the unlit Drive tab goes.
     "NavMainTabs": {
         "recognition": "TemplateMatch",
         "roi": [930, 600, 110, 80],
         "template": "Navigation/NavMainTabs.png",
         "threshold": 0.9,
-        "action": "Click",
-        "post_delay": 2000
+        "action": "Custom",
+        "custom_action": "TapUntil",
+        "custom_action_param": {
+            "left": true
+        },
+        "post_delay": 0
     },
+    // Mirror Dungeons' way in only (GoToMirrorEntry): its 3 s stay with the mirror's navigation.
     "NavDrive": {
         "recognition": "TemplateMatch",
         "roi": [340, 240, 240, 140],
         "template": "Navigation/NavDrive.png",
         "threshold": 0.8,
-        "action": "Click",
+        "action": "Custom",
+        "custom_action": "OpenDrive",
         "post_delay": 3000
     }
 }

@@ -15,10 +15,12 @@
     "gift_lists",
     "teams",
     "event_overrides",
-    "trial_risk_overrides"
+    "trial_risk_overrides",
+    "luxcavation",
+    "charge_enkephalin"
   ],
   "properties": {
-    "version": { "const": 11 },
+    "version": { "const": 14 },
     "language": { "enum": ["zh_tw", "en_us"], "default": "zh_tw" },
     "run": {
       "type": "object",
@@ -290,9 +292,39 @@
           "risk": { "type": "integer", "minimum": 0, "maximum": 5 }
         }
       }
+    },
+    "luxcavation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["exp", "thread"],
+      "description": "the Luxcavation daily tasks (#362); the client's task list says which run and in what order",
+      "properties": {
+        "exp": { "$ref": "#/$defs/luxcavation" },
+        "thread": { "$ref": "#/$defs/luxcavation" }
+      }
+    },
+    "charge_enkephalin": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["count"],
+      "description": "Lunacy for Enkephalin (#373, PI task ChargeEnkephalin): spends Lunacy, so it is off until set",
+      "properties": {
+        "count": { "type": "integer", "minimum": 0, "maximum": 10, "default": 0, "description": "charges this run makes, whatever was charged earlier today (#362); 0: the Use Lunacy tab is never touched; the game allows 10 a day, and the task ends at the tenth" }
+      }
     }
   },
   "$defs": {
+    "luxcavation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["count", "team", "retries", "consecutive"],
+      "properties": {
+        "count": { "type": "integer", "minimum": 1, "default": 1, "description": "battles to win, at the hardest level open; a new or migrated file: EXP 1, Thread 3 (its 3 Daily Bonuses)" },
+        "team": { "type": ["string", "null"], "minLength": 1, "default": null, "description": "a teams[] id: its TEAMS #N and guard_turns; null: none picked yet" },
+        "retries": { "type": "integer", "minimum": 0, "default": 0, "description": "defeats of one battle fought again before the task fails; a win starts the next battle with them all" },
+        "consecutive": { "type": "boolean", "default": true, "description": "set the stage's Consecutive Battle to min(10, battles left) and fight them as one battle (a x N win counts N); off: one battle at a time" }
+      }
+    },
     "id": { "type": "string", "minLength": 1 },
     "pack_weight": { "type": "integer", "minimum": -10, "maximum": 10 },
     "gift": {

@@ -201,3 +201,9 @@ test("an import of something that is not a gift list throws", () => {
   expect(() => importGiftList("[1]", [], "")).toThrow("not a gift list");
   expect(() => importGiftList("null", [], "")).toThrow("not a gift list");
 });
+
+test("a new settings file wins one EXP Luxcavation and three Thread Luxcavations, the dailies a day needs (#362)", () => {
+  const { exp, thread } = newSettings().luxcavation;
+  expect([exp.count, thread.count]).toEqual([1, 3]);
+  expect([exp.consecutive, thread.consecutive]).toEqual([true, true]); // #375: on by default
+});

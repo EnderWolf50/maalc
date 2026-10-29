@@ -105,3 +105,21 @@ _Avoid_: 事件資料庫、事件腳本
 **獎勵卡**：
 遭遇戰勝利後從 2 到 3 張中選一張的獎勵，共五種：Cost、Cost & Keyword Gift Chance、E.G.O Resource、Random E.G.O Gift、Starlight。
 _Avoid_: 獎勵、reward（單指這頁時）
+
+## 日常
+
+**經驗本**：
+Luxcavation 的 EXP 分頁，打了拿 EXP 的副本。maalc 打預設畫面最右邊、已開放的那張卡，也就是最難的關。
+_Avoid_: 經驗副本、EXP dungeon；程式裡寫 EXP Luxcavation
+
+**紐本**：
+Luxcavation 的 Thread 分頁，今天唯一開放的異想體副本；在 Level Select 清單選最下面（最難）的等級。
+_Avoid_: 線本、Thread dungeon；程式裡寫 Thread Luxcavation
+
+**腦啡肽模組**：
+打經驗本、紐本、領鏡牢結算獎勵要花的資源，數量顯示在主畫面與 Drive 左下面板的綠色模組圖示旁，由腦啡肽換得。
+_Avoid_: 模組（單說容易和其他模組混淆）
+
+**Daily Bonuses**：
+紐本頁的每日加成次數，顯示 `n/N`，n 是剩餘的加成次數。
+_Avoid_: 每日次數、daily count

@@ -176,7 +176,7 @@ def clean_gift_list(gift_list):
 
 
 def _team_gift_list(team):
-    """The version 11 gift list the shop's keep settings of a version 10 team come to (spec 04 section 2, version 11):
+    """The version 14 gift list the shop's keep settings of a version 10 team come to (spec 04 section 2, version 14):
     (list without id and name, number of keep_gifts that match no gift)."""
     search, fusions, materials = gift_tables()
     listed = lambda key: team[key] if isinstance(team.get(key), list) else []  # a broken file is left to the checks
@@ -219,7 +219,35 @@ def gift_lists_from_v10(teams):
 
 
 def _v10_to_v11(data):
-    """Version 11 adds run.keep_dismissed_screens (#244), on. It also (#291) moves the shop's keep settings from the teams to gift lists: a list per team (teams that kept the same
+    """Version 11 adds run.keep_dismissed_screens (#244), on."""
+    if isinstance(data.get("run"), dict):
+        data["run"].setdefault("keep_dismissed_screens", True)
+    return data
+
+
+def _v11_to_v12(data):
+    """Version 12 adds the daily tasks (#362): luxcavation.exp and .thread (#366, #368: one win for EXP, three for Thread
+    (its 3 Daily Bonuses), no team picked yet, no
+    retries) and charge_enkephalin (#373: no Lunacy charges)."""
+    lux = data.setdefault("luxcavation", {})
+    if isinstance(lux, dict):  # a broken file is left to the checks
+        for task, count in (("exp", 1), ("thread", 3)):
+            lux.setdefault(task, {"count": count, "team": None, "retries": 0})
+    data.setdefault("charge_enkephalin", {"count": 0})
+    return data
+
+
+def _v12_to_v13(data):
+    """Version 13 adds luxcavation.<task>.consecutive (#375), on: the Luxcavation tasks fight their wins as Consecutive Battles."""
+    lux = data.get("luxcavation")
+    for opts in lux.values() if isinstance(lux, dict) else []:
+        if isinstance(opts, dict):
+            opts.setdefault("consecutive", True)
+    return data
+
+
+def _v13_to_v14(data):
+    """Version 14 (#291) moves the shop's keep settings from the teams to gift lists: a list per team (teams that kept the same
     share one), teams[].gift_list names it; keyword (the list's order starts with it), keep_keywords, keywordless, keep_gifts and
     fusion_condition go. A keywordless gift is always kept now, whatever keywordless said: "fuse" and "fuse_or_sell" no longer make it material."""
     teams = [t for t in data.get("teams") if isinstance(t, dict)] if isinstance(data.get("teams"), list) else []
@@ -228,13 +256,11 @@ def _v10_to_v11(data):
         for old in ("keyword", "keep_keywords", "keywordless", "keep_gifts", "fusion_condition"):
             team.pop(old, None)
         team["gift_list"] = gift_list
-    if isinstance(data.get("run"), dict):
-        data["run"].setdefault("keep_dismissed_screens", True)
     return data
 
 
 # MIGRATIONS[n] turns a version-n dict into a version-(n + 1) dict; keep in step with gui/src/model.ts.
-MIGRATIONS = {1: _v1_to_v2, 2: _v2_to_v3, 3: _v3_to_v4, 4: _v4_to_v5, 5: _v5_to_v6, 6: _v6_to_v7, 7: _v7_to_v8, 8: _v8_to_v9, 9: _v9_to_v10, 10: _v10_to_v11}
+MIGRATIONS = {1: _v1_to_v2, 2: _v2_to_v3, 3: _v3_to_v4, 4: _v4_to_v5, 5: _v5_to_v6, 6: _v6_to_v7, 7: _v7_to_v8, 8: _v8_to_v9, 9: _v9_to_v10, 10: _v10_to_v11, 11: _v11_to_v12, 12: _v12_to_v13, 13: _v13_to_v14}
 
 NO_TEAM = "No enabled team: set up a team in the settings GUI first."
 
@@ -245,8 +271,11 @@ class SettingsError(Exception):
         super().__init__("Invalid settings:\n" + "\n".join(f"- {e}" for e in errors))
 
 
-def load_settings(root):
-    """Return the checked settings dict, or raise SettingsError listing every problem."""
+def load_settings(root, need_team=False):
+    """Return the checked settings dict, or raise SettingsError listing every problem.
+
+    need_team: MirrorDungeon's own check, an enabled team (#364); the dailies run without one.
+    """
     path = Path(root) / "config" / "settings.json"
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
@@ -264,6 +293,8 @@ def load_settings(root):
         data["gift_lists"] = [clean_gift_list(gift_list)[0] for gift_list in data["gift_lists"]]
     # Cross-checks assume the structure is valid.
     errors = errors or cross_check(data)
+    if need_team and not errors and not any(t["enabled"] for t in data["teams"]):
+        errors.append(NO_TEAM)
     if errors:
         raise SettingsError(errors)
     return data
@@ -300,8 +331,6 @@ def cross_check(data):
     dupes("teams", [t["id"] for t in teams], "id")
 
     enabled = [t for t in teams if t["enabled"]]
-    if not enabled:
-        errors.append(NO_TEAM)
     for slot, n in Counter(t["game_team"] for t in enabled).items():
         if n > 1:
             names = ", ".join(repr(t["name"]) for t in enabled if t["game_team"] == slot)
@@ -323,6 +352,11 @@ def cross_check(data):
             f"gift_lists/{i}: list {gift_list['name']!r} has gift {gid} in both want and keep"
             for gid in gift_list["want"] if gid in gift_list["keep"]
         )
+
+    team_ids = {t["id"] for t in teams}
+    for task, opts in data["luxcavation"].items():
+        if opts["team"] is not None and opts["team"] not in team_ids:
+            errors.append(f"luxcavation/{task}/team: team {opts['team']!r} is not in teams")
 
     dupes("event_overrides", [o["question"] for o in data["event_overrides"]], "question")
     dupes("trial_risk_overrides", [o["trial"] for o in data["trial_risk_overrides"]], "trial")

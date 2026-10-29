@@ -28,8 +28,6 @@ export function pyRepr(s: string) {
   return q + (q === "'" ? body.replace(/'/g, "\\'") : body) + q;
 }
 
-const NO_TEAM = "No enabled team: set up a team in the settings GUI first.";
-
 export function crossCheck(data: Settings): Problem[] {
   const errors: Problem[] = [];
 
@@ -54,7 +52,6 @@ export function crossCheck(data: Settings): Problem[] {
   dupes("teams", teams.map((t) => t.id), "id", "id");
 
   const enabled = teams.filter((t) => t.enabled);
-  if (!enabled.length) errors.push({ paths: ["teams"], text: NO_TEAM });
   const slots = [...new Set(enabled.map((t) => t.game_team))];
   for (const slot of slots) {
     const using = teams.flatMap((t, i) => (t.enabled && t.game_team === slot ? [i] : []));
@@ -85,6 +82,14 @@ export function crossCheck(data: Settings): Problem[] {
       errors.push({ paths: [path], text: `${path}: list ${pyRepr(list.name)} has gift ${id} in both want and keep` });
     }
   });
+
+  const teamIds = new Set(teams.map((t) => t.id));
+  for (const [task, opts] of Object.entries(data.luxcavation)) {
+    if (opts.team !== null && !teamIds.has(opts.team)) {
+      const path = `luxcavation/${task}/team`;
+      errors.push({ paths: [path], text: `${path}: team ${pyRepr(opts.team)} is not in teams` });
+    }
+  }
 
   dupes("event_overrides", data.event_overrides.map((o) => o.question), "question", "question");
   dupes("trial_risk_overrides", data.trial_risk_overrides.map((o) => o.trial), "trial", "trial");

@@ -1,8 +1,19 @@
 {
+    // A task's entry: TaskStart drops what the last task of the client's list left in the agent (#364, ADR 0010).
     "MirrorDungeon": {
+        "action": "Custom",
+        "custom_action": "TaskStart",
         "next": [
             "MirrorHub"
         ]
+    },
+    // The done exit, on every task's hub right after its own Stuck node (MirrorHub's Stuck, ExpStuck, ...) and without [JumpBack]: an action found nothing left to do
+    // (actions.done), and the empty next ends the task a success, so the client's list goes on (#364).
+    "TaskDone": {
+        "recognition": "Custom",
+        "custom_recognition": "DoneFlag",
+        "pre_delay": 0,
+        "post_delay": 0
     },
     // Dispatch: every screen is one node; [JumpBack] nodes return here to look again.
     // next order is priority: Stuck (the watchdog, which must see every pass), global popups,
@@ -18,14 +29,27 @@
         ],
         "next": [
             "Stuck",
+            "TaskDone",
             "[JumpBack]BattleHUD",
             "[JumpBack]Connecting",
             "[JumpBack]HelpPager",
             "[JumpBack]HubText",
             "[JumpBack]MapNodePanel",
             "[JumpBack]MirrorMap",
+            "[JumpBack]MirrorFromLux",
             "[JumpBack]GoToMirrorEntry"
         ]
+    },
+    // A Luxcavation page (its panel: the EXP and Thread tabs, a Thread card's Level Select), where the last task or the
+    // user left the game: the main window first (GoHome), the way to the entry page from there. Acceptance 5 (K3): a
+    // start on the Thread page knew nothing for 60 s, until the recovery's back key.
+    "MirrorFromLux": {
+        "recognition": "Or",
+        "any_of": [
+            "LuxPanel"
+        ],
+        "action": "Custom",
+        "custom_action": "GoHomeRun"
     },
     // MirrorHub's OCR screens, in priority order (#157): one OCR pass the Agent judges (agent/hub_text.py), then the
     // screens that may be up, each with its own OCR. In MirrorHub's next list MaaFramework would batch them, and the
@@ -35,15 +59,8 @@
         "recognition": "Custom",
         "custom_recognition": "HubText",
         "custom_recognition_param": {
+            "base": "ServerPopups",
             "entries": [
-                "RetryPopup",
-                "MaintenanceNotice",
-                "ClientOutdated",
-                "UpdateDialog",
-                "UserAgreement",
-                "DownloadDialog",
-                "Downloading",
-                "Loading",
                 "ClaimPopup",
                 "ParallelModePrompt",
                 "PopupButton",
@@ -83,6 +100,7 @@
             "tail": [
                 "MapNodePanel",
                 "MirrorMap",
+                "MirrorFromLux",
                 "GoToMirrorEntry"
             ]
         },
@@ -109,6 +127,7 @@
         "recognition": "Or",
         "any_of": [
             "BattleMenu",
+            "LuxBattleMenu",
             "BattleTurn",
             "BattlePause"
         ],
@@ -126,6 +145,7 @@
             "UpdateDialog",
             "PopupButton",
             "BattleMenu",
+            "LuxBattleMenu",
             "BattleTurn",
             "BattlePause"
         ]
@@ -505,6 +525,22 @@
         "custom_action_param": {
             "target": [505, 296, 270, 41],
             "gone": {"roi": [505, 296, 270, 41], "expected": "Resume"}
+        }
+    },
+    // The same menu in a Luxcavation battle (live 2026-10-27, tests/screens/LuxBattleMenu.png): Settings / Resume / Give Up,
+    // no Retry Stage, so Resume sits one bar lower. Give Up has no confirm dialog: one tap ends the battle a defeat.
+    "LuxBattleMenu": {
+        "recognition": "TemplateMatch",
+        "roi": [505, 323, 270, 42],
+        "template": "Battle/BattleMenuResume.png",
+        "threshold": 0.8,
+        "action": "Custom",
+        "custom_action": "TapUntil",
+        "pre_delay": 0,
+        "post_delay": 0,
+        "custom_action_param": {
+            "target": [505, 323, 270, 42],
+            "gone": {"roi": [505, 323, 270, 42], "expected": "Resume"}
         }
     },
     // Waiting for input: the Win Rate label, off or on. It moves half a slot (~40 px) right with every

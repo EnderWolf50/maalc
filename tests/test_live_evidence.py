@@ -219,7 +219,7 @@ def test_map_stitches_by_the_measured_slide_and_the_still_frames(tmp_path, monke
     assert [d["px"] for d in route["drags"]] == [512, 512] and [d["measured"] for d in route["drags"]] == [512, 480]
     stitched = np.asarray(Image.open(tmp_path / "r/stitched.png").convert("RGB"))
     assert stitched.shape[1] == world.shape[1]  # 1280 + 512 + 480
-    assert (stitched[40:80, :, 0] == world[40:80]).all()  # the world seamless, rows between the banner and the boxes
+    assert (stitched[ev.TOP:ev.TOP + 80, :, 0] == world[:80]).all()  # the world seamless, rows above the boxes
     assert len(set(route["shots"])) == 3
 
 
@@ -268,17 +268,24 @@ def test_map_draw_boxes_every_read_node_and_marks_a_fix():
              (2, "down"): {"type": "risky", "first": "event", "cost": "20", "stage": 1, "notes": []}}
     fix = {"c2/down": ["cost", "讀成 20（畫面是 120）"], "c3/up": ["missed", "沒讀到的 event"]}
     im = ev.draw_map(shots, [0, 510], [(0, 510, 3)], nodes, ([("mid", "battle"), ("down", "risky")], 7), fix, 1)
-    assert im.size[0] == 1790 and im.size[1] > 720  # the legend strip is below the map
+    assert im.size == (1790, ev.TOP + 720 + ev.LINE)  # a header line above the map, a legend line below it
     px = np.asarray(im)
-    assert tuple(px[357 - 52, 328]) == ev.GREEN  # read right
-    assert tuple(px[570 - 52, 583]) == ev.ORANGE  # Cost read wrong
-    assert tuple(px[144 - 52, 838]) == ev.ORANGE  # a node the bot did not list
+    assert ring(px, 357, 328) == ev.GREEN  # read right
+    assert ring(px, 570, 583) == ev.ORANGE  # Cost read wrong
+    assert ring(px, 144, 838) == ev.ORANGE  # a node the bot did not list
+
+
+def ring(px, y, x):
+    """The colour of the box edge above map point (x, y): boxes are see-through, so the palette colour nearest."""
+    edge = px[ev.TOP + y - ev.EDGE + 1, x].astype(int)
+    palette = [ev.GREEN, ev.RED, ev.ORANGE, ev.VIOLET, ev.MAGENTA, ev.WHITE, ev.CYAN]
+    return min(palette, key=lambda c: int(np.abs(edge - np.array(c) * 210 / 255).sum()))
 
 
 def test_map_draw_puts_a_missed_node_where_the_shot_that_shows_its_column_has_it():
     shots = [Image.new("RGB", (1280, 720)), Image.new("RGB", (1280, 720))]
     im = ev.draw_map(shots, [0, 480], [(0, 512, 3)], {}, None, {"c5/mid": ["missed", "x"]}, 1)  # the drag moved 480, not 512
-    assert tuple(np.asarray(im)[357 - 52, ev.COLX(5) - 512 + 480]) == ev.ORANGE
+    assert ring(np.asarray(im), 357, ev.COLX(5) - 512 + 480) == ev.ORANGE
 
 
 def test_map_command_survives_a_floor_block_with_no_reading(tmp_path, footage):
@@ -296,10 +303,48 @@ def test_map_draw_gives_each_special_read_its_own_colour_and_a_legend():
              for k, (tag, row) in enumerate(zip(kinds, ["up", "mid", "down", "up", "mid", "down"]), 1)}
     im = np.asarray(ev.draw_map(shots, [0, 512], [(0, 512, 3)], nodes, None, {}, 1))
     for (k, row), n in nodes.items():
-        assert tuple(im[ev.ROWY[row] - 52, ev.COLX(k)]) == kinds[n["notes"][0][0]]
-    legend = im[720:]
+        assert ring(im, ev.ROWY[row], ev.COLX(k)) == kinds[n["notes"][0][0]]
+    legend = im[ev.TOP + 720:]
     colours = {tuple(c) for c in legend.reshape(-1, 3)}
-    assert {ev.GREEN, ev.RED, ev.ORANGE, ev.VIOLET, ev.MAGENTA, ev.WHITE, ev.CYAN} <= colours
+    assert {ev.VIOLET, ev.MAGENTA, ev.WHITE, ev.CYAN} <= colours  # the colours this picture uses
+    assert not {ev.GREEN, ev.RED, ev.ORANGE} & colours  # and no other
+
+
+def test_map_draw_labels_each_node_with_its_route_weight_by_difficulty():
+    normal = {(1, "mid"): {"type": "battle", "first": "battle", "cost": "75", "stage": 0, "notes": []}}
+    hard = {(1, "mid"): {"type": "battle", "first": "battle", "cost": "85", "stage": 0, "notes": []}}
+    assert ev.map_weights(normal)["risky"] == 6 and ev.map_weights(hard)["risky"] == 8
+    shared = {(1, "mid"): {"type": "risky", "first": "risky", "cost": "120", "stage": 0, "notes": []}}  # 120: both difficulties
+    assert ev.map_weights(shared, hard=True)["risky"] == 8  # what the log said wins over the Costs
+
+    msgs = [(10.0, "floor 2: NORMAL"), (20.0, "map: path mid battle, score 2"), (30.0, "floor 2: HARD")]
+    assert ev.logged_hard(msgs, 2, 25.0) is False and ev.logged_hard(msgs, 2, 35.0) is True  # the run the map is in
+    assert ev.logged_hard(msgs, 3, 35.0) is None
+
+
+def test_map_draw_puts_the_legend_note_on_its_own_line_when_the_legend_fills_the_width():
+    shots = [Image.new("RGB", (1280, 720))]
+    kinds = ["retyped", "cost_none", "boss_by_cost", "boss_glow"]
+    nodes = {(k, "mid"): {"type": "battle", "first": "event", "cost": None, "stage": 0, "notes": [(tag, None)]}
+             for k, tag in enumerate(kinds, 1)}
+    fix = {"c5/mid": ["missed", "x"], "c5/up": ["missed", "y"]}
+    wide = ev.draw_map(shots, [0], [], nodes, ([("mid", "battle")], 2), {**fix, "c1/mid": ["risky"]}, 1)
+    narrow = ev.draw_map(shots, [0], [], {}, None, {}, 1)
+    # (how many lines the legend takes depends on the font: CI has no CJK font; the right edge below does not)
+    assert wide.size[1] >= ev.TOP + 720 + ev.LINE and narrow.size == (1280, ev.TOP + 720 + ev.LINE)
+    plain = {(4, "up"): {"type": "battle", "first": "battle", "cost": None, "stage": 0, "notes": []}}  # green
+    every = np.asarray(ev.draw_map(shots, [0], [], {**nodes, **plain}, ([("mid", "battle")], 2),
+                                   {**fix, "c1/mid": ["risky"], "c2/mid": ["cost", "z"]}, 1))
+    legend = every[ev.TOP + 720:]
+    assert (legend[:, -12:] == ev.BG).all()  # all eight colours: the legend flows over lines instead of running off the edge
+
+
+def test_map_draw_widens_a_missed_nodes_plate_to_its_label():
+    shots = [Image.new("RGB", (1280, 720))]
+    right = ev.COLX(3) + ev.EDGE + 30, ev.TOP + ev.ROWY["mid"] + ev.EDGE + 12  # right of the box, on the label's row
+    short, long = (np.asarray(ev.draw_map(shots, [0], [], {}, None, {"c3/mid": ["missed", text]}, 1))[right[1], right[0]]
+                   for text in ("x", "x" * 60))  # ASCII: wide in any font, CI's included
+    assert tuple(short) == (0, 0, 0) and tuple(long) != (0, 0, 0)
 
 
 def test_packs_reading_names_weights_event_and_pull(log):

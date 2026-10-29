@@ -10,7 +10,8 @@
 |---|---|---|---|
 | hub 認不出畫面 | `MirrorHub` 的 `timeout` 為 60 秒，逾時經 `on_error` 進入 `GlobalStuck` | Pipeline | #14 |
 | 載入畫面過久 | 載入畫面（`Loading`）、連線中（`Connecting`）與下載進度（`Downloading`）的畫面完全不動（縮圖每一格都相同）80 秒，或載入與連線中不論動不動連續出現超過 150 秒（兩者交替出現算同一段等待；下載不設上限） | Agent | #14、#31、#86、#179 |
-| 畫面沒變 | 每處理完一個畫面，記下「畫面類型 + 縮圖」；同一組連續出現 5 次（縮圖的比對見下方實作）。戰鬥演出中（`BattlePause`）另須持續 30 秒以上 | Agent | #14、#31 |
+| 畫面沒變 | 每處理完一個畫面，記下「畫面類型 + 縮圖」；同一組連續出現 5 次（縮圖的比對見下方實作）。戰鬥演出中（`BattlePause`）另須持續 30 秒以上。狂氣換腦啡肽的視窗（`ChargePanel`）與通行證的領取（`PassDailyClaim` 等四個）照設計會在幾乎同一畫面重複，不算進來，各自設上限：`ChargePanel` 讀取 3 次、任務已決定後再按 Cancel 3 次，用完走停止程序；領取節點 `max_hit` 8 | Agent | #14、#31、#375 |
+| 導航點擊不換頁 | 換頁用的點擊（主畫面的分頁 `NavMainTabs`、`NavDrive`、紐本的 `NavLuxcavation`、`LuxExpTab`、`LuxThreadTab`）連續 10 次是同一個節點，不管畫面動不動（主畫面的橫幅一直在動，「畫面沒變」數不到 5 次）。鏡牢走恢復階梯（L3 之後的同一段仍是 L3，用完就停止），日常頁停止任務 | Agent | 驗收 #5（live 2026-10-28：L3 後點 Drive 分頁 45 分鐘、2188 次，遊戲有點擊波紋但不換頁，原因 unverified） |
 | 後備點擊用完 | 點空白、按返回這類後備節點必須設 `max_hit`，每個任務約 3 次 | Pipeline | #14 |
 | 地圖重試額度用完 | 見下方「地圖的重試額度」 | Agent | #12、#14、#31 |
 | 每層超時 | 每進入新的一層（主題包頁讀到新的層數）重新計時，第 1 層從入口頁開局算起。上限為 45 分鐘；該隊最新重置標記之後有 10 局以上記錄、且其整局第 95 百分位耗時的 2 倍平分到五層比 45 分鐘長時，用後者。超過時在地圖頁從 L2 開始處理；不在地圖頁就等回到地圖，再過一場戰鬥的上限（20 分鐘）還沒回到地圖才直接處理 | Agent | #14、#19、#66 |
@@ -27,7 +28,8 @@
 - 「畫面沒變」的比對：把 1280×720 的截圖切成 40×40 的格子取平均亮度（32×18 的縮圖），和這一串的第一張比，變動超過 8 階的格子少於 3% 就算同一個畫面。不用精確的雜湊：實機（2026-10-16）地圖頁的 Bus 火焰與光暈每一幀都在動，雜湊永遠不會連續相同。
 - 卡住有兩個來源：Agent 的動作發現點了沒反應（例如節點面板按 Enter 沒反應、Chain To Battle! 沒反應），回報卡住後回到 hub，由 `Stuck` 節點接手；或 `MirrorHub` 逾時進入 `GlobalStuck`，算作卡在最後處理的那個畫面。兩者都交給 Agent 的 `Recover` 動作決定恢復等級，再用 `context.run_task` 執行 Pipeline 的 `RecoverL1`–`RecoverL3`，最後明確跳回 `MirrorHub`。
 - `MirrorHub` 逾時（什麼都認不出來）進 `Recover` 時，Agent 把當下的畫面存到 `<root>/logs/unknown/<時間>.png`（只留最新 30 張）。還沒有節點的彈窗與頁面（每週重置、自己跳出的新手提示、「?」選效果頁，見 [02-screens.md](02-screens.md)）出現一次就留下一張截圖，不必等到停止才有證據。（#85、#87）
-- 停止條件（設定的停止、存活不足、重打用完、不能確定開關時不 Claim、會花持有星光）不經恢復，直接走停止程序。開局前的結束條件（設定錯誤、局數已滿、每週獎勵用完、沒有可用隊伍）沒有進行中的局，只寫記錄後結束任務，不存證據也不送 webhook。
+- 停止條件（設定的停止、存活不足、重打用完、不能確定開關時不 Claim、會花持有星光）不經恢復，直接走停止程序。開局前的結束條件沒有進行中的局，只寫 log 後結束任務，不存證據、不寫 `runs.jsonl`、也不送 webhook：設定錯誤以失敗結束；局數已滿、每週獎勵用完、沒有可用隊伍（完全沒有啟用的隊伍，或沒有隊伍能打這個難度）是正常做完，log 記 `done:`，任務以成功結束（hub 的 `TaskDone` 節點讀 Agent 的完成旗標，`next` 為空），client 的清單繼續。停止程序的 log 記 `stop:`，只有它寫 `stop` 的 `runs.jsonl` 行和送 webhook。（#364）
+- 每個任務的入口節點先執行 `TaskStart`，重設卡住階梯、看門狗、證據用的畫面與這個任務的局數；這一局（`RUN`）只在上一個任務以 `done()` 或停止程序結束時重設，被 client 中途打斷的局留給同一個任務接手（#362 D3，見 [spec 01「日常任務的骨架」](01-architecture.md)）。遊戲重啟（L3）與更新重啟的次數、這次啟動有沒有過帳號層級的停止，仍以整次 bot 啟動累計；有過的話，之後的任務在入口就以失敗結束，不點、不存證據、不送 webhook（#362 D8）。（#364，[ADR 0010](../adr/0010-one-pi-task-per-daily.md)）
 
 ### 地圖的重試額度
 
@@ -59,7 +61,7 @@
 - bot 關掉公告、彈窗（`Notices`、`Mailbox`、`SettingsMenu`、`HelpPager`、`RetryPopup`、`PopupButton`、`ParallelModePrompt`）或按 L1 的返回鍵之前，`DismissShot` 先把畫面存到 `logs/dismissed/<時間>-<節點>.png`（最多 100 張，`run.keep_dismissed_screens` 可關；只有 `RetryPopup` 同一種 60 秒內只存一張（斷線時它反覆跳出，不會把額度用完），其他節點每次都存；`logs/unknown/` 的圖不受這個選項控制）並在 log 記一行；截圖含帳號畫面，只存本機。L2 的點擊（`RecoverGear`、`RecoverToWindow`）不存圖（#244 Deferred）。（#244）
 - hub 認不出畫面而逾時時，`Recover` 先讀前景（`dumpsys window` 的 `mCurrentFocus`）。前景不是遊戲（Play 商店、桌面），或沒有視窗取得焦點，這段卡住就直接用 L3：返回鍵與 To Window 在那裡沒用。讀不到前景（不是 adb 控制器）照原本的升級。實機 2026-10-22：Play 商店更新後按「開始玩」，遊戲程序在、畫面全黑約 5 分鐘、`mCurrentFocus=null`；強制關閉再啟動，20 秒內到標題畫面。不依賴 Play 商店的「開始玩」。（#86）
 - L2 只在地圖頁做得到：Dungeon Progress 面板（L1 的返回鍵已經打開，或點右上齒輪）→ `To Window` → `Pause Exploration` 對話框（`Save your progress and return to the Main Menu?`）按 Confirm → 主畫面，之後由 hub 的導航回到入口頁，入口頁的暫停中的局按 Enter → Resume 對話框按 Resume。（#31）
-- L3 重啟遊戲後最多等 180 秒標題畫面出現（`timeout` 要放在等 `next` 的 `RecoverStartApp` 上；原本放在 `RecoverTitle` 上沒被讀，離線實測重啟後 33.5 秒沒出現標題就算 L3 失敗，#86），之後同樣由 hub 導航回入口頁並 Resume。標題畫面也可能蓋著對話框，hub 的 `DownloadDialog` 與 `PopupButton` 處理它們：資料下載對話框（`Downloading N MB of data`，Close/Confirm）按 Confirm（`auto_download` 關時停止），並讓卡住偵測暫停 3 分鐘，期間逾時的 `Recover` 只等不升級；之後的下載進度畫面（`Downloading`）是等待畫面，在動就一直等、完全不動 80 秒才算卡住。原本暫停 30 分鐘、進度畫面認不得：實機 2026-10-21 下載 17.77 GB 約 32 分鐘，暫停在下載完之前就到期。確認下載與下載進度畫面都讓這一層的時間上限重新起算：下載期間遊戲不在 bot 手上，32 分鐘會讓它在下載中途觸發 L3。使用者條款（`UserAgreement`）勾兩格再 Confirm；只有一個按鈕的錯誤框按那個按鈕。遊戲內的更新通知（`UpdateDialog`）按下後由 `AcceptUpdate` 直接執行 `RecoverL3` 重啟遊戲，不經 `Ladder`、不算進恢復次數（每次啟動 bot 最多 2 次，再來就停止），之後同樣由 hub 確認下載、導航回入口頁並 Resume。（#31、#85、#86）
+- L3 重啟遊戲後最多等 180 秒標題畫面出現（`timeout` 要放在等 `next` 的 `RecoverStartApp` 上；原本放在 `RecoverTitle` 上沒被讀，離線實測重啟後 33.5 秒沒出現標題就算 L3 失敗，#86），之後同樣由 hub 導航回入口頁並 Resume。標題畫面也可能蓋著對話框，hub 的 `DownloadDialog` 與 `PopupButton` 處理它們：資料下載對話框（`Downloading N MB of data`，Close/Confirm）按 Confirm（`auto_download` 關時停止），並讓卡住偵測暫停 3 分鐘，期間逾時的 `Recover` 只等不升級；之後的下載進度畫面（`Downloading`）是等待畫面，在動就一直等、完全不動 80 秒才算卡住。原本暫停 30 分鐘、進度畫面認不得：實機 2026-10-21 下載 17.77 GB 約 32 分鐘，暫停在下載完之前就到期。確認下載與下載進度畫面都讓這一層的時間上限重新起算：下載期間遊戲不在 bot 手上，32 分鐘會讓它在下載中途觸發 L3。使用者條款（`UserAgreement`）勾兩格再 Confirm；只有一個按鈕的錯誤框按那個按鈕。遊戲內的更新通知（`UpdateDialog`）按下後由 `AcceptUpdate` 直接執行 `RecoverL3` 重啟遊戲，不經 `Ladder`、不算進恢復次數（每次啟動 bot 最多 2 次，再來就是帳號層級的停止，#362 D1），之後同樣由 hub 確認下載、導航回入口頁並 Resume。（#31、#85、#86）
 - 單場戰鬥的計時從該場第一個回合開始，打贏、全滅或恢復之後重新計算。每層超時每層最多觸發一次（下載讓時間重新起算之後，可以再觸發一次）；Resume 接手、不是 bot 自己開的局不計時。（#31、#66）
 - 每層而不是整局計時（#66）：#34 驗收的兩局困難局花了約 80 與 107 分鐘，全程有進展（每場戰鬥 3–7 分鐘、每層約 10–25 分鐘），舊的整局 60 分鐘把它們打斷。每層重新計時，持續進到下一層的局就不會被打斷；45 分鐘約是實機最慢一層的 2 倍。等回到地圖再處理，是因為 L2 只在地圖頁做得到：戰鬥中觸發時 L2 失敗、升到 L3 重啟遊戲，那場戰鬥要從編隊重來。
 - 實機（2026-10-16，1.117.0）：地圖頁按返回鍵會打開 Dungeon Progress 面板，hub 的 `ProgressPanel` 按 Continue 關閉它。戰鬥中強制關閉遊戲，L3 重啟、Resume 後回到地圖頁，Bus 停在那一場戰鬥的節點上，再進去時戰鬥從頭開始（編隊頁重來）。重啟到標題畫面約 20 秒，不需要下載資料。（實機：tests/screens/ProgressPanel.png、PauseExploration.png、ResumeDialog.png）
@@ -96,7 +98,7 @@
 2. 執行期間必須開著 `SaveOnError`（`Toolkit.init_option` 的 `save_on_error`），讓辨識失敗的繪圖一併留下。（#13、#14）這是用戶端的選項（MXU 寫在 `config/maa_option.json`），Agent 設不到。（#31）
 3. 在 `<root>/logs/runs.jsonl` 寫入這局，結果為「停止」。（#14、#19）只在有進行中的局時寫；Agent 這次啟動後還沒碰過這局（例如一啟動就卡住）時沒有這一行。（#31）
 4. 若使用者設定了 webhook，送出失敗通知（見下節）。（#14）
-5. 結束任務。
+5. 結束任務。帳號層級的停止（維護公告、用戶端過舊、`auto_download` 關閉時遇到下載或更新、遊戲一直要求更新、`auto_accept_terms` 關閉時遇到使用者協議）之後的任務都會撞上同一個畫面，所以再呼叫 `post_stop` 清空 tasker 的任務佇列，並記住這次啟動有過它（之後的任務在入口就失敗）；一次送整串的 client（MXU）因此整串結束，一次送一個的（MFAAvalonia）只結束這個任務，見 [spec 01「帳號層級的停止與 client 的任務佇列」](01-architecture.md)。其他停止只結束這個任務，清單繼續。（#364）
 
 ## 失敗通知
 

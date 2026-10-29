@@ -45,16 +45,28 @@ test("pyRepr matches Python repr", () => {
   expect(pyRepr("a\\b")).toBe("'a\\\\b'");
 });
 
-test("a new file asks for a team, and new teams make it valid", () => {
+test("a new file is valid without a team (#364: only MirrorDungeon asks for one), and with new teams", () => {
   const s = newSettings();
-  expect(validate(s).map((p) => p.text)).toEqual(["No enabled team: set up a team in the settings GUI first."]);
+  expect(validate(s)).toEqual([]);
   s.teams.push(newTeam(1, "隊伍 1"), newTeam(2, "隊伍 2"));
   expect(validate(s)).toEqual([]);
   expect(s.teams.map((x) => x.game_team)).toEqual([1, 2]);
 });
 
+/** valid10 as version 13 wrote it: the daily tasks and keep_dismissed_screens are in, the teams still keep the shop's settings. */
+function asV13() {
+  const old = structuredClone(cases.valid10) as Record<string, unknown> & { run: Record<string, unknown> };
+  old.version = 13;
+  old.run.keep_dismissed_screens = true;
+  old.luxcavation = {
+    exp: { count: 1, team: null, retries: 0, consecutive: true }, thread: { count: 3, team: null, retries: 0, consecutive: true },
+  };
+  old.charge_enkephalin = { count: 0 };
+  return old;
+}
+
 test("parseSettings refuses newer and unmigratable versions", () => {
-  expect(() => parseSettings('{"version": 12}')).toThrow("newer");
+  expect(() => parseSettings('{"version": 15}')).toThrow("newer");
   expect(() => parseSettings('{"version": 0}')).toThrow("cannot be migrated");
 });
 
@@ -114,6 +126,42 @@ test("version 6 keeps what the shop kept before", () => {
   expect(data.teams.map((t) => [t.sell_max_tier, t.sell_vestiges])).toEqual([[4, false], [4, false]]);
   expect(data.gift_lists.map((l) => l.order[0])).toEqual(["Burn", "Bleed"]);
   expect(data.gift_lists.map((l) => l.keep.includes(9273))).toEqual([true, true]); // a keywordless gift
+  expect(validate(data)).toEqual([]);
+});
+
+test("version 11 gets the daily tasks: both Luxcavations with no team picked, no Lunacy charges", () => {
+  const old = asV13();
+  delete old.luxcavation;
+  delete old.charge_enkephalin;
+  const { data, migrated } = parseSettings(JSON.stringify({ ...old, version: 11 }));
+  expect(migrated).toBe(true);
+  expect(data.luxcavation).toEqual({
+    exp: { count: 1, team: null, retries: 0, consecutive: true }, thread: { count: 3, team: null, retries: 0, consecutive: true },
+  });
+  expect(data.charge_enkephalin).toEqual({ count: 0 });
+  expect(validate(data)).toEqual([]);
+});
+
+test("version 13 turns the teams' keep settings into gift lists, the daily tasks left as they were (#291)", () => {
+  const old = asV13() as Record<string, unknown> & { luxcavation: { thread: { count: number } } };
+  old.luxcavation.thread.count = 2;
+  const { data, migrated, dropped } = parseSettings(JSON.stringify(old));
+  expect(migrated).toBe(true);
+  expect(dropped).toBe(0);
+  expect(data.luxcavation.thread.count).toBe(2);
+  expect(data.teams.map((t) => t.gift_list)).toEqual(["gift-list-1", "gift-list-2"]);
+  expect(data.gift_lists.map((l) => l.order[0])).toEqual(["Burn", "Bleed"]);
+  for (const t of data.teams) for (const k of ["keyword", "keep_keywords", "keywordless", "keep_gifts", "fusion_condition"]) expect(t).not.toHaveProperty(k);
+  expect(validate(data)).toEqual([]);
+});
+
+test("version 12 fights the Luxcavation wins as Consecutive Battles, a switch each task keeps as it was set (#375)", () => {
+  const old = asV13() as unknown as { luxcavation: Record<string, Record<string, unknown>> };
+  delete old.luxcavation.exp.consecutive;
+  old.luxcavation.thread.consecutive = false;
+  const { data, migrated } = parseSettings(JSON.stringify({ ...old, version: 12 }));
+  expect(migrated).toBe(true);
+  expect([data.luxcavation.exp.consecutive, data.luxcavation.thread.consecutive]).toEqual([true, false]);
   expect(validate(data)).toEqual([]);
 });
 

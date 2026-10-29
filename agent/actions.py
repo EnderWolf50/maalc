@@ -24,8 +24,11 @@ import battle
 import gift_cells
 import gift_search
 import hub_text
+import luxcavation
+import lunacy
 import map_route
 import pack_cover
+import pass_missions
 import recovery
 import rewards
 import run_start
@@ -40,14 +43,21 @@ from state import next_cursor, pick_team, read_cursor, write_cursor
 ROOT = Path(__file__).resolve().parent.parent
 
 # This run's plan, made on the entry page: {"settings", "team", "difficulty"}.
-# Memory only (ADR 0003); an agent restarted mid-run falls back to current_run's guess.
+# Memory only (ADR 0003); an agent restarted mid-run falls back to current_run's guess. TaskStart keeps it for the same
+# task when the client interrupted the last one (no done, no stop): the run is picked up as before the task chain.
 RUN = {}
-SETTLED = {"runs": 0}  # runs claimed since this agent started: the run count stop (spec 01); never saved
+# This task's own state (#364, ADR 0010), reset by TaskStart: the runs claimed since it started (the run count stop,
+# spec 01; never saved), why it is done ("done", None while it runs), which ends it a success (TaskDone), its entry
+# node, and "ended" once done() or stop() ended it. Set as a task needs them: "modules" and "gate_backs" (the mirror's new
+# run gate), "assemble" (Assemble Modules' reads and confirms), "charge" (Charge Enkephalin's count and its steps).
+TASK = {"runs": 0, "done": None}
 # Stuck detection and recovery (spec 06), memory only: the last node seen ("node", its id) and the
 # screen type it handled ("kind"), a pending stuck for MirrorHub's Stuck node ("flag": (kind, start
-# level, reason)), this run's Ladder, and the game restarts since this agent started ("l3").
+# level, reason)), this run's Ladder, the game restarts since this agent started ("l3"), and the reason of an
+# account-level stop this launch ("halted", #362 D8): every later task then fails at its entry.
 STUCK = {"node": None, "kind": None, "flag": None, "watch": recovery.Watchdog(), "ladder": recovery.Ladder(), "l3": 0,
-         "updates": 0}  # game restarts for update notices since this agent started (AcceptUpdate)
+         "updates": 0,  # game restarts for update notices since this agent started (AcceptUpdate)
+         "halted": None}
 SCREENS = deque(maxlen=20)  # the last screens MirrorHub handed out: the evidence on a stop
 LOG = deque(maxlen=500)
 
@@ -55,6 +65,7 @@ WEEKLY_SLOTS = (922, 960, 998)  # x of the 3 Weekly Bonuses slots on the entry p
 TEAM_LIST = [75, 292, 115, 245]
 ENTER_DIALOG = [400, 325, 480, 45]  # "Will you enter ...?"
 TEAM_TITLE = [220, 112, 210, 26]  # "TEAMS #n" over the card list
+TO_BATTLE = (1145, 588)  # the team page's button before a Luxcavation battle
 LEVEL_WARNING = [400, 230, 480, 90]  # "... lower than the recommended level ..."
 STARLIGHT_HEADER = [890, 30, 115, 28]  # "Available"
 STARLIGHT_DIALOG = [480, 210, 320, 35]  # "Continue with selected effects?"
@@ -203,37 +214,32 @@ def page_guard(context, home, image=None):
     return image
 
 
-CLEAR_CACHE_AFTER_NODES = 200  # ~6 min: a 24-min stretch of a live run's log had 784 nodes
-
-
-def clear_long_task_cache(context, argv):
-    """Clear MaaFramework's runtime cache once the task has CLEAR_CACHE_AFTER_NODES nodes (#176).
-
-    The cache keeps every node's and recognition's detail until clear_cache, and a whole dungeon run is one task.
-    Only the end of an action may clear it: the clear drops the task's own detail too, and without it every custom
-    recognition and action of the task misses, including those the action's own run_recognition and run_task reach
-    (they share the task's id); the end of the action's node writes it back right after. A hands_back action run
-    inside a run_task would leave the rest of that subtask without it; none is (RecoverL1-3 have no custom node).
-    """
-    detail = getattr(argv, "task_detail", None)  # (the tests' argv has none)
-    if detail and len(detail.node_id_list) >= CLEAR_CACHE_AFTER_NODES:
-        context.tasker.clear_cache()
+def hub_name(context):
+    """The hub of the task under way, for the log: the first node down its entry's next chain that lists TaskDone, as
+    every hub does (#364). MirrorDungeon's is MirrorHub, ExpLuxcavation's ExpHub (live-1 F4). The entry itself is not one,
+    though ChargeEnkephalin's next list also names TaskDone (a count of 0 ends there)."""
+    entry = name = TASK.get("entry") or "MirrorDungeon"
+    for _ in range(5):
+        data = context.get_node_data(name) or {}
+        nexts = [n["name"] for n in data.get("next", [])]
+        if "TaskDone" in nexts and name != entry:
+            return name
+        if not (nexts := [n for n in nexts if n != "TaskDone"]):
+            break
+        name = nexts[0]
+    return "the hub"
 
 
 def hands_back(run):
-    """An action's run(): PageGone ends it with True, for MirrorHub to look at the screen now up (#118).
-
-    It then clears the runtime cache of a long task (clear_long_task_cache).
-    """
+    """An action's run(): PageGone ends it with True, for the task's hub (MirrorHub, ExpHub, ...) to look at the screen
+    now up (#118)."""
     @functools.wraps(run)
     def wrapped(self, context, argv):
         try:
             return run(self, context, argv)
         except PageGone as e:
-            log(f"{type(self).__name__}: {e} is gone: back to MirrorHub")
+            log(f"{type(self).__name__}: {e} is gone: back to {hub_name(context)}")
             return True
-        finally:
-            clear_long_task_cache(context, argv)
     return wrapped
 
 
@@ -305,6 +311,20 @@ def number(s):
     return int(found) if found else None
 
 
+def module_count(context, image):
+    """The Enkephalin Modules the bottom-left panel shows (main window, Drive, Luxcavation, any page with the panel); None
+    when the panel is not on the screen or its number does not read (#367).
+
+    The panel's x moves between pages, so the round Module icon is found first (ModuleIcon) and the digits read as one
+    line to its right: the dark field ends 78 px after the icon's left edge, its digits right-aligned.
+    """
+    detail = context.run_recognition("ModuleIcon", image)
+    if not detail or not detail.hit:
+        return None
+    x, y, w, h = detail.best_result.box
+    return digits(text(context, image, [x + w + 2, y + 2, 50, h - 4], only_rec=True))
+
+
 def address(context):
     return context.tasker.controller.info.get("adb_serial", "default")
 
@@ -319,7 +339,7 @@ def run_team(settings, team):
 def current_run(context):
     """The run plan; made up from settings and the rotation cursor when the agent restarted mid-run."""
     if "settings" not in RUN:  # a run plan, not just counters left by an action
-        settings = load_settings(ROOT)
+        settings = load_settings(ROOT, need_team=True)
         difficulty = settings["run"]["difficulty"]
         difficulty = None if difficulty == "auto" else difficulty
         cursor = read_cursor(ROOT, address(context))
@@ -341,6 +361,17 @@ def stuck(reason, level=1):
     return True
 
 
+def done(reason):
+    """This task has nothing left to do (#364): TaskDone, next on the hub, ends it a success and the client's list goes
+    on. Not the stop procedure: no evidence, no runs.jsonl line, no webhook.
+
+    Returns True, for the action to return: its [JumpBack] leads to the hub.
+    """
+    log(f"done: {reason}")
+    TASK.update(done=reason, ended=True)
+    return True
+
+
 def run_line(run, outcome, hard, floors, bonuses=0):
     """This run's runs.jsonl line (spec 06 執行記錄)."""
     team = run["team"] if run.get("planned") else None
@@ -354,13 +385,16 @@ def run_line(run, outcome, hard, floors, bonuses=0):
     }
 
 
-def stop(context, reason, line=None):
+def stop(context, reason, line=None, whole_list=False):
     """The stop procedure (spec 06 停止程序): evidence, a `stop` line in runs.jsonl, the webhook.
 
     line is this run's line when the caller knows it better (Settle); otherwise one is made up while a
-    run is under way. Returns False, for the action to return: that ends the task.
+    run is under way. whole_list: an account-level stop (maintenance, an outdated client, a download or the terms
+    with their auto setting off, an update that keeps coming back), which every later task would meet too: post_stop then empties the client's
+    queue (#364). Returns False, for the action to return: that ends the task.
     """
     log(f"stop: {reason}")
+    TASK["ended"] = True
     if line is None and "settings" in RUN:
         line = run_line(RUN, "stop", RUN.get("floor_hard", RUN.get("difficulty") == "hard"), max(RUN.get("floor", 1) - 1, 0))
     if line:
@@ -383,18 +417,51 @@ def stop(context, reason, line=None):
             log("webhook sent")
         except (OSError, ValueError) as e:
             log(f"webhook failed: {e}")
+    if whole_list:
+        log("account-level stop: the rest of the task list is cancelled")
+        STUCK["halted"] = reason  # a client that hands over one task at a time (MFAAvalonia) is not reached by post_stop
+        context.tasker.post_stop()
     return False
 
 
-# MirrorHub's own steps, no screen: the watchdog keeps the screen handled before them.
-PASS_NODES = ("BattleHUD", "BattleHUDLost", "HubText", "HubTextLost")
+@AgentServer.custom_action("TaskStart")
+class TaskStart(CustomAction):
+    """A task's entry node (#364, ADR 0010): a task list runs its tasks on one agent, so what the last task left in
+    memory goes: its Ladder, the watchdog, the screens kept for evidence, this task's runs. The run goes too once the
+    last task ended (done, stop); one the client interrupted stays for the same task, which picks it up (#362 D3). The
+    game restarts (STUCK l3, updates) still count per bot launch. After an account-level stop this launch the task fails
+    here, before any tap, evidence or webhook (#362 D8): it would meet the same screen."""
+
+    def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
+        if STUCK["halted"]:
+            log(f"skip: account-level stop earlier this launch ({STUCK['halted']}): {argv.node_name} not run")
+            return False
+        if TASK.get("ended", True) or TASK.get("entry") != argv.node_name or "settings" not in RUN:
+            RUN.clear()
+        else:
+            log(f"the last {argv.node_name} was interrupted: its run is picked up")
+        TASK.clear()
+        TASK.update(runs=0, done=None, entry=argv.node_name, ended=False)
+        STUCK.update(node=None, kind=None, flag=None, watch=recovery.Watchdog(), ladder=recovery.Ladder())
+        SCREENS.clear()
+        log(f"task {argv.node_name} started")
+        return True
+
+
+# A hub's own steps, no screen: the watchdog keeps the screen handled before them. The hubs themselves are found by
+# their next list, which names the Stuck node (StuckFlag). ChargePanel and the pass missions' claims repeat on the same
+# picture on purpose (a window that stays open after Confirm, a row to claim after a row): a count of them is not a stuck,
+# so each bounds itself (ChargePanel's reads and Cancels, the claims' max_hit).
+PASS_NODES = ("BattleHUD", "BattleHUDLost", "HubText", "HubTextLost", "ExpText", "ExpTextLost", "ChargePanel",
+              "PassDailyClaim", "PassWeeklyClaim", "PassSeasonalClaim", "PassSeasonalEndClaim")
 
 
 @AgentServer.custom_recognition("StuckFlag")
 class StuckFlag(CustomRecognition):
-    """MirrorHub's Stuck node: watches every screen it hands out, hits while a stuck waits for recovery.
+    """A hub's Stuck node (MirrorHub's Stuck, ExpStuck, AssembleStuck ...): watches every screen the hub hands out, hits while
+    a stuck waits for recovery.
 
-    It runs first on each MirrorHub pass, so the task's last node is the screen just
+    It runs first on each pass of a hub, so the task's last node is the screen just
     handled and argv.image what it left: the watchdog, the evidence and the run time limit work from them.
     """
 
@@ -403,11 +470,16 @@ class StuckFlag(CustomRecognition):
         if ids and ids[-1] != STUCK["node"]:
             STUCK["node"] = ids[-1]
             node = context.tasker.get_node_detail(ids[-1])
-            if node and node.name not in ("MirrorDungeon", "MirrorHub", "Stuck", "GlobalStuck", *PASS_NODES):
+            if node and node.name not in ("MirrorDungeon", "GlobalStuck", argv.node_name, *PASS_NODES) and not self.hub(context, node.name, argv.node_name):
                 self.see(node.name, argv.image)
         if STUCK["flag"] and STUCK["flag"][0] is None:
             STUCK["flag"] = (STUCK["kind"], *STUCK["flag"][1:])  # reported by the action of the node just handled
         return CustomRecognition.AnalyzeResult(box=(0, 0, 1, 1), detail={}) if STUCK["flag"] else None
+
+    @staticmethod
+    def hub(context, name, stuck_node):
+        """Whether the node is a hub, not a screen: its next list holds this Stuck node."""
+        return stuck_node in (n["name"] for n in context.get_node_data(name)["next"])
 
     @staticmethod
     def see(kind, image):
@@ -426,6 +498,549 @@ class StuckFlag(CustomRecognition):
 
 
 AgentServer.custom_recognition("HubText")(hub_text.HubText)
+
+
+@AgentServer.custom_recognition("GameAway")
+class GameAway(CustomRecognition):
+    """GoHome's HomeGameAway: hits when another app (the launcher, the Play Store) or no window has the focus, so the
+    game is started without waiting for a hub timeout (#365). Not when the front package cannot be read."""
+
+    def analyze(self, context: Context, argv: CustomRecognition.AnalyzeArg):
+        app = foreground(context)
+        return CustomRecognition.AnalyzeResult(box=(0, 0, 1, 1), detail={"app": app}) if app not in (None, recovery.GAME) else None
+
+
+# The Luxcavation tasks (#366, #368): their settings key (custom_action_param of LuxStart) -> name, Modules a battle.
+LUX = {"exp": ("EXP Luxcavation", luxcavation.EXP_COST), "thread": ("Thread Luxcavation", luxcavation.THREAD_COST)}
+
+
+@AgentServer.custom_action("LuxStart")
+class LuxStart(TaskStart):
+    """A Luxcavation task's entry (#366, #368), its param the settings key ("exp", "thread"): TaskStart, then the team
+    luxcavation.<key> names, whose guard turns the battle plays (spec 03 section 8), and its count and retries (#367).
+    No team picked, or settings that do not load: the stop procedure, before any tap."""
+
+    def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
+        if not super().run(context, argv):
+            return False
+        key = json.loads(argv.custom_action_param)
+        name, cost = LUX[key]
+        try:
+            settings = load_settings(ROOT)
+        except SettingsError as e:
+            return stop(context, str(e))
+        opts = settings["luxcavation"][key]
+        team = next((t for t in settings["teams"] if t["id"] == opts["team"]), None)
+        if team is None:
+            return stop(context, f"{name} has no team: pick one in the settings GUI's Daily tab")
+        # Not RUN["settings"]: that is a Mirror Dungeon run, which the stop procedure writes to runs.jsonl.
+        # lux: this task's count (spec 03 section 15): the battles won and the retries used, the last battle's result.
+        RUN.update(team=team, guard=team["guard_turns"],
+                   lux={"name": name, "cost": cost, "count": opts["count"], "retries": opts["retries"], "modules": None,
+                        "won": 0, "retried": 0, "result": None, "consecutive": opts["consecutive"], "size": 1})
+        log(f"{name}: team {team['name']!r} (TEAMS #{team['game_team']}), {team['guard_turns']} guard turns, "
+            f"{opts['count']} wins, {opts['retries']} retries, consecutive {'on' if opts['consecutive'] else 'off'}")
+        return True
+
+
+def modules_now(context, timeout=3):
+    """The Modules the panel shows now (module_count), looked for up to timeout s: None when it never reads."""
+    found = []
+    until(context, lambda image: found.append(module_count(context, image)) or found[-1] is not None, timeout)
+    return found[-1]
+
+
+@AgentServer.custom_action("OpenDrive")
+class OpenDrive(CustomAction):
+    """NavDrive: the Drive page has the Modules panel (tests/screens/Drive.png), the entry page the next tap opens has
+    none. Read the number for PlanRun's gate (#369) before tapping Mirror Dungeons; None when it does not read."""
+
+    def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
+        TASK["modules"] = module_count(context, screen(context))
+        x, y, w, h = argv.box
+        context.tasker.controller.post_click(x + w // 2, y + h // 2).wait()
+        return True
+
+
+@AgentServer.custom_action("LuxHome")
+class LuxHome(CustomAction):
+    """A Luxcavation task's first step after LuxStart: the main window, then the one check of the task (#367): the Modules must cover `count`
+    battles at the hardest stage's cost, else the task is done at once, a success the client's list goes on from
+    (spec 03 section 15). A panel that does not read stops the task: nothing is known to be safe to spend."""
+
+    def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
+        if not go_home(context):
+            return False
+        lux = RUN["lux"]
+        lux["modules"] = modules_now(context)
+        if lux["modules"] is None:
+            return stop(context, f"{lux['name']}: the Modules number did not read on the main window")
+        need = luxcavation.needed(lux["cost"], lux["count"])
+        if luxcavation.decide(lux["modules"], lux["cost"], lux["count"], 0, 0, lux["retries"]) == luxcavation.SKIP:
+            return done(f"{lux['name']}: Modules {lux['modules']} < {need} needed, skipped")
+        log(f"{lux['name']}: Modules {lux['modules']} >= {need} needed")
+        return True
+
+
+def battle_over(context):
+    """A Luxcavation battle was entered (RUN["entered"]) and the page it started from shows again: count its result
+    (LuxResult sets it) and say what next (luxcavation.decide, #367). None: the next battle, or the same one again after a
+    defeat; else what the action returns: True once the main window is reached and the task done, False from the stop
+    procedure."""
+    lux = RUN["lux"]
+    RUN.pop("entered")
+    result, lux["result"] = lux["result"], None
+    if result is None:
+        return stop(context, f"{lux['name']}: back on the page with no results page seen")
+    step = luxcavation.decide(lux["modules"], lux["cost"], lux["count"], lux["won"], lux["retried"], lux["retries"], result,
+                              lux["size"])
+    lux["won"] += lux["size"] * (result == "win")
+    # Each battle has its own retries, as the mirror's wipe retries: a win starts the next battle at 0 (review S6).
+    lux["retried"] = 0 if result == "win" else lux["retried"] + (step == luxcavation.RETRY)
+    log(f"{lux['name']}: {result}, {lux['won']} of {lux['count']} won, {lux['retried']} of {lux['retries']} retries of this battle used: {step}")
+    if step == luxcavation.FINISH:
+        return finish(context, f"{lux['name']}: {lux['won']} won")
+    if step == luxcavation.STOP:
+        return stop(context, f"{lux['name']}: defeated with the {lux['retries']} retries used up")
+    RUN["guard"] = RUN["team"]["guard_turns"]  # each battle guards its first turns (2026-10-27)
+    return None
+
+
+# The Consecutive Battle box of each page that has one (live 2026-10-27, 1280x720): the title's OCR roi (short of its arrow,
+# which the OCR reads as a 7), a narrower roi on its "x N", the title to tap (opens and closes the row), and the row's y with
+# the x of 1<<, -, +, >>10. The EXP and Thread boxes sit on their card, whose place changes (the EXP tab's rightmost open stage
+# is the middle card where the 10th is locked): theirs are given for the card whose Enter has the centre in ENTER_AT, and
+# move by how far the Enter in use is from it. Level Select's box does not move.
+CONSECUTIVE = {
+    "exp": ([990, 240, 205, 30], [1135, 240, 50, 28], (1110, 254), 286, {"one": 1008, "minus": 1038, "plus": 1179, "ten": 1209}),
+    "thread": ([250, 212, 230, 28], [400, 212, 50, 28], (370, 226), 259, {"one": 272, "minus": 305, "plus": 436, "ten": 469}),
+    "level": ([510, 170, 225, 26], [680, 170, 45, 26], (640, 183), 217, {"one": 530, "minus": 563, "plus": 716, "ten": 749}),
+}
+ENTER_AT = {"exp": (1079, 479), "thread": (372, 481)}  # the centre of LuxExpEnter on stage 9 at the right, of LuxThreadEnter
+
+
+def consecutive_box(box, enter=None):
+    """CONSECUTIVE[box] for the card whose Enter has its centre at `enter` (x, y): the rois, the title tap, the row's y and
+    the buttons' xs moved by its distance from ENTER_AT. `enter` None (Level Select), or a page of no card: as given."""
+    title, digit, (title_x, title_y), row_y, buttons = CONSECUTIVE[box]
+    if box not in ENTER_AT or enter is None:
+        return title, digit, (title_x, title_y), row_y, buttons
+    dx, dy = enter[0] - ENTER_AT[box][0], enter[1] - ENTER_AT[box][1]
+    return ([title[0] + dx, title[1] + dy, *title[2:]], [digit[0] + dx, digit[1] + dy, *digit[2:]], (title_x + dx, title_y + dy),
+            row_y + dy, {name: x + dx for name, x in buttons.items()})
+
+
+def consecutive_now(context, image, box, enter=None):
+    """The N of the Consecutive Battle title on `box`'s page (1-10), None when it does not read: the narrow roi on its "x N"
+    first, which reads the yellow 4 the whole title's detection misses (Level Select, live 2026-10-27), then the title.
+    `enter`: the centre of the Enter the card's box is above (consecutive_box)."""
+    title, digit = consecutive_box(box, enter)[:2]
+    return (luxcavation.parse_consecutive(text(context, image, digit, only_rec=True))
+            or luxcavation.parse_consecutive(text(context, image, title)))
+
+
+def set_consecutive(context, box, target, enter=None):
+    """Set the Consecutive Battle of `box`'s page (the card of the Enter at `enter`) to `target` and read it back: the N it
+    shows at the end, None when it never read. The game resets it to 1 on leaving Luxcavation and after a result, so each
+    entry sets it (live 2026-10-28)."""
+    _, _, (title_x, title_y), row_y, buttons = consecutive_box(box, enter)
+    shown = []
+    until(context, lambda im: shown.append(consecutive_now(context, im, box, enter)) or shown[-1] is not None, timeout=3)
+    if shown[-1] is None:
+        log(f"Consecutive Battle ({box}): does not read, wants x{target}")
+        return None
+    log(f"Consecutive Battle ({box}): shows x{shown[-1]}, wants x{target}")
+    if shown[-1] == target:
+        return target
+    tap(context, title_x, title_y, wait=0.5)  # open the row
+    keys = luxcavation.presses(shown[-1], target)
+    log(f"Consecutive Battle ({box}): pressed {', '.join(keys)}")
+    for name in keys:
+        tap(context, buttons[name], row_y, wait=0.3)
+    tap(context, title_x, title_y, wait=0.5)  # close it again
+    shown.clear()
+    until(context, lambda im: shown.append(consecutive_now(context, im, box, enter)) or shown[-1] == target, timeout=3)
+    log(f"Consecutive Battle ({box}): {'does not read' if shown[-1] is None else f'shows x{shown[-1]}'} after closing the row"
+        + ("" if shown[-1] == target else f", wanted x{target}"))
+    return shown[-1]
+
+
+@AgentServer.custom_action("LuxEnter")
+class LuxEnter(CustomAction):
+    """An Enter of a Luxcavation page (the node's box): the EXP tab's rightmost open stage (LuxExpEnter), the Thread
+    tab's open card (LuxThreadEnter), the bottom row of the card's Level Select, its hardest level (LuxThreadLevel). Tap
+    it until the page goes. The param {"opens_battle": false} marks the card's Enter, which opens the Level Select, not
+    the battle (#368). Back on the page a battle started from: the battle is over (battle_over). Where the task fights
+    consecutively, the param's "box" names the page's Consecutive Battle (CONSECUTIVE): it is set to the wins left, up
+    to 10, before the tap (#375); one that will not read or set stops the task, so no battle starts at the wrong count."""
+
+    def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
+        if RUN.get("entered"):
+            over = battle_over(context)
+            if over is not None:
+                return over
+        opts = json.loads(argv.custom_action_param or "null") or {}
+        lux = RUN["lux"]
+        x, y, w, h = argv.box
+        if lux["consecutive"]:
+            want = lux["size"] = luxcavation.batch(lux["count"], lux["won"], True)
+            got = set_consecutive(context, opts["box"], want, (x + w // 2, y + h // 2))
+            if got != want:
+                return stop(context, f"{lux['name']}: Consecutive Battle {'did not read' if got is None else f'shows x{got}'}, wanted x{want}")
+        if tap_then(context, x + w // 2, y + h // 2, lambda im: seen(context, im, argv.node_name) is None, timeout=3) is not None:
+            RUN["entered"] = opts.get("opens_battle", True)
+            RUN["team_picked"] = False
+            log(f"{RUN['lux']['name']}: {argv.node_name} at ({x + w // 2}, {y + h // 2})")
+        return True
+
+
+LUX_CONFIRM = (1125, 570)  # the results page's Confirm (live 2026-10-27)
+
+
+@AgentServer.custom_action("LuxResult")
+class LuxResult(CustomAction):
+    """The results page after a Luxcavation battle (live-1 F2, pipeline LuxResult): its Victory or Defeat is the result of
+    the battle entered (RUN["entered"]), kept for battle_over; then Confirm until the page goes. Neither word read yet:
+    the page is still fading in, and the hub looks again. A defeat (by hand, Give Up: no confirm dialog) takes no
+    Module and no Daily Bonus (live 2026-10-27)."""
+
+    def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
+        image = screen(context)
+        result = "win" if seen(context, image, "LuxWon") else "lose" if seen(context, image, "LuxLost") else None
+        if result is None:
+            return True
+        RUN.pop("turn", None)  # the battle is over: the next one starts its turns and its clock afresh
+        RUN.pop("battle_start", None)
+        if RUN.get("entered") and RUN["lux"]["result"] is None:
+            RUN["lux"]["result"] = result
+            log(f"{RUN['lux']['name']}: results page, {'Victory' if result == 'win' else 'Defeat'}")
+        tap_then(context, *LUX_CONFIRM, lambda im: seen(context, im, "LuxResult") is None, timeout=4)
+        return True
+
+
+@AgentServer.custom_action("StopTask")
+class StopTask(CustomAction):
+    """End the task a failure through the stop procedure (evidence, log, webhook); the param says why. Not the whole list:
+    the next task of the client's list starts from its own GoHome."""
+
+    def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
+        return stop(context, f"{argv.node_name}: {json.loads(argv.custom_action_param or '""')}")
+
+
+def go_home(context):
+    """Run the GoHome task here, the first and the last step of a daily task (spec 01): False when it did not reach the
+    main window (GoHome has run the stop procedure itself)."""
+    detail = context.run_task("GoHome")
+    return bool(detail and detail.status.succeeded)
+
+
+@AgentServer.custom_action("HomeLost")
+class HomeLost(CustomAction):
+    """GoHome's on_error (#362 D4): 60 s of nothing known, or the back key used up. The game is restarted (RecoverL3,
+    within L3_PER_EXECUTION a bot launch) and GoHome goes again from the title, with its back keys and game starts counted
+    afresh; once the restarts are used up, the stop procedure ends the task."""
+
+    def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
+        if STUCK["l3"] >= recovery.L3_PER_EXECUTION:
+            return stop(context, f"the main window was not reached; the game restarted {recovery.L3_PER_EXECUTION} times since the bot started")
+        STUCK["l3"] += 1  # every attempt counts, as Recover's: a restart that always fails still ends
+        log(f"recovery L3: the main window was not reached ({STUCK['l3']} of {recovery.L3_PER_EXECUTION} restarts)")
+        detail = context.run_task("RecoverL3")
+        if not (detail and detail.status.succeeded):
+            log("L3 did not go through")
+        for node in ("HomeBack", "HomeGameAway", "HomeWindowTab"):
+            context.clear_hit_count(node)
+        forget_game_state()
+        return True
+
+
+@AgentServer.custom_action("GoHomeRun")
+class GoHomeRun(CustomAction):
+    """A daily task's first step, after its TaskStart: the main window, wherever the last task left the game."""
+
+    def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
+        return go_home(context)
+
+
+@AgentServer.custom_action("MailDone")
+class MailDone(CustomAction):
+    """ClaimMail's end, on the empty Mailbox: the main window, then done with what this run did (live-2 G3: a box emptied
+    by Claim All said "no mail to claim")."""
+
+    def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
+        return finish(context, "mail claimed" if context.get_hit_count("MailClaimAll") else "no mail to claim")
+
+
+AgentServer.custom_recognition("PassClaimable")(pass_missions.PassClaimable)
+PASS_CLAIMS = ("PassDailyClaim", "PassWeeklyClaim", "PassSeasonalClaim", "PassSeasonalEndClaim")  # a hit taps one row
+
+
+@AgentServer.custom_action("PassFinish")
+class PassFinish(CustomAction):
+    """ClaimPassMissions' last step: the main window (GoHome), then done with the rows tapped this run (live-1 F6: a run
+    with nothing to claim said "pass missions claimed")."""
+
+    def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
+        n = sum(context.get_hit_count(node) for node in PASS_CLAIMS)
+        return finish(context, f"pass missions: {n} row(s) claimed" if n else "pass missions: nothing to claim")
+
+
+
+@AgentServer.custom_recognition("DoneFlag")
+class DoneFlag(CustomRecognition):
+    """TaskDone, on every task's hub: hits once an action found nothing left to do (done); its empty next ends the task
+    a success (#364)."""
+
+    def analyze(self, context: Context, argv: CustomRecognition.AnalyzeArg):
+        return CustomRecognition.AnalyzeResult(box=(0, 0, 1, 1), detail={"done": TASK["done"]}) if TASK["done"] else None
+
+
+# Assemble Enkephalin Modules (#370, pipeline/assemble_modules.json).
+MODULE_COST = 20  # Enkephalin per module
+ENK_BAR = (440, 640)  # the resource panel's Enkephalin bar: opens the Charge Enkephalin window
+ASSEMBLE_MAX = (805, 328)  # the Modules tab's >> (the most)
+MODULES_TAB = (505, 226)  # the Charge Enkephalin window's Modules tab (live 720p, 2026-10-26)
+PANEL_CONFIRM, PANEL_CANCEL = (760, 534), (520, 534)  # the Charge Enkephalin window's Confirm and Cancel, on every tab
+ASSEMBLE_TRIES = 3  # reads, taps of >> and Confirms the task spends before it gives up
+
+
+def fractions(results):
+    """Every "n / cap" of OCR results [(text, box)], left to right, as (n, cap)."""
+    return [(int(n), int(cap)) for t, _ in sorted(results, key=lambda r: r[1][0]) for n, cap in re.findall(r"(\d+)\s*/\s*(\d+)", t)]
+
+
+def read_fractions(context, image, node):
+    detail = context.run_recognition(node, image)
+    return fractions([(r.text, tuple(r.box)) for r in (detail.all_results if detail else [])])
+
+
+def panel_read(context, image):
+    """The window's Enkephalin before and after, [(n, cap), (n, cap)], each read on its own side of the arrow; [] unless
+    both read."""
+    before, after = read_fractions(context, image, "AssembleBefore"), read_fractions(context, image, "AssembleAfter")
+    return before[:1] + after[-1:] if before and after else []
+
+
+def cancel_stop(context, reason):
+    """The stop procedure, its evidence the window itself (live-3 H1), then Cancel closes the window; False."""
+    stop(context, reason)
+    tap(context, *PANEL_CANCEL, wait=0.5)
+    return False
+
+
+def on_modules_tab(context, image):
+    """The Modules tab's own prompt ("Would you like to assemble Enkephalin Modules?") is up. The Use Lunacy tab shows the
+    Enkephalin before and after as well, so the two "n / cap" alone do not tell the tabs apart: a Confirm there spends
+    Lunacy."""
+    detail = context.run_recognition("AssemblePrompt", image)
+    return bool(detail and detail.hit)
+
+
+def too_many(context, image):
+    detail = context.run_recognition("AssembleTooMany", image)
+    return bool(detail and detail.hit)
+
+
+def open_enkephalin(context):
+    """The Enkephalin bar, then until the Charge Enkephalin window shows (3 s at most): the hub's next look at the main
+    window would tap the bar again (#362, instead of a fixed 1.5 s)."""
+    tap_then(context, *ENK_BAR, lambda im: seen(context, im, "EnkephalinWindow") is not None, timeout=3)
+
+
+@AgentServer.custom_action("AssembleMain")
+class AssembleMain(CustomAction):
+    """The main window, reached by GoHome or already there: the task's one way out and its way in. With the Enkephalin
+    under a module's cost, or the game's refusal seen, it is done; after a Confirm the bar must read lower than before
+    it; else the bar opens the window."""
+
+    def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
+        a = TASK.setdefault("assemble", {"reads": 0, "confirms": 0})
+        read = read_fractions(context, screen(context), "EnkephalinBar")
+        if not read:
+            a["reads"] += 1
+            return True if a["reads"] < ASSEMBLE_TRIES else stop(context, "the Enkephalin bar could not be read")
+        a["reads"], n = 0, read[0][0]
+        if a.get("end"):
+            return done(a["end"])
+        if "before" in a:
+            if n < a["before"]:
+                return done(f"Enkephalin {a['before']} -> {n}, assembled")
+            time.sleep(1)  # the bar counts down; read it again before judging
+            a["checks"] = a.get("checks", 0) + 1
+            return True if a["checks"] < ASSEMBLE_TRIES else stop(context, f"Enkephalin still {n} after Confirm")
+        if n < MODULE_COST:
+            return done(f"Enkephalin {n} < {MODULE_COST}, nothing to assemble")
+        log(f"assemble: Enkephalin {n}, opening the window")
+        open_enkephalin(context)
+        return True
+
+
+@AgentServer.custom_action("AssemblePanel")
+class AssemblePanel(CustomAction):
+    """The Charge Enkephalin window: its Modules tab first (the window opens on the tab it was left on, #362 D7), then on
+    it (its prompt and the Enkephalin before and after read), >> for the most modules, Confirm. Only the tab, >>, Confirm
+    and Cancel are tapped. Not on the Modules tab, or a number that stops reading after >>: the stop procedure, then
+    Cancel, never Confirm (Use Lunacy's Confirm spends Lunacy). The game's refusal ends the task; a window over a task
+    already decided is cancelled.
+
+    Confirm leaves the window open (live-1 F1, tests/screens/EnkephalinAssembled.png): a "Module Assembled 134 > 135"
+    toast, the Enkephalin down, "Insufficient Enkephalin." where the prompt was and Confirm greyed. The drop read there
+    decides the task and Cancel closes the window; the prompt back with nothing changed is a Confirm that did not take."""
+
+    def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
+        a = TASK.setdefault("assemble", {"reads": 0, "confirms": 0})
+        image = screen(context)
+        if too_many(context, image):
+            a["end"] = "too many Enkephalin Modules in storage"
+            context.tasker.controller.post_click_key(BACK_KEY).wait()
+            return True
+        if a.get("end"):
+            tap(context, *PANEL_CANCEL, wait=0.5)
+            return True
+        if "before" in a and (step := self.after_confirm(context, a, image)) is not None:
+            return step
+        tap(context, *MODULES_TAB, wait=0.7)
+        image = screen(context)
+        read = panel_read(context, image) if on_modules_tab(context, image) else []
+        if not read:  # not the Modules tab, or not up yet
+            a["reads"] += 1
+            if a["reads"] < ASSEMBLE_TRIES:
+                return True
+            return cancel_stop(context, "the Charge Enkephalin window shows no Modules tab")
+        a["reads"] = 0
+        before, after = read[0][0], read[-1][0]
+        if before < MODULE_COST:
+            tap(context, *PANEL_CANCEL, wait=0.5)
+            return True
+        for _ in range(ASSEMBLE_TRIES):  # >> goes to the most the Enkephalin allows; ask again until nothing changes
+            if after < MODULE_COST:
+                break
+            tap(context, *ASSEMBLE_MAX, wait=0.5)
+            image = screen(context)
+            if too_many(context, image):
+                a["end"] = "too many Enkephalin Modules in storage"
+                context.tasker.controller.post_click_key(BACK_KEY).wait()
+                return True
+            again = panel_read(context, image) if on_modules_tab(context, image) else []
+            if not again:
+                return cancel_stop(context, "the Modules tab did not read after >>: Confirm not pressed")
+            if again[-1][0] == after:
+                break
+            after = again[-1][0]
+        a["confirms"] += 1
+        if a["confirms"] > ASSEMBLE_TRIES:
+            return cancel_stop(context, f"Confirm did not take: Enkephalin still {before}")
+        log(f"assemble: Enkephalin {before} -> {after}, Confirm")
+        a["before"] = before
+        tap(context, *PANEL_CONFIRM, wait=0.5)
+        return True
+
+    @staticmethod
+    def after_confirm(context, a, image):
+        """The window after a Confirm (a["before"] set), what run() returns: the drop read sets a["end"] and Cancel closes
+        the window (True); nothing read yet is looked at again (True) up to ASSEMBLE_TRIES times, then the stop procedure
+        (False). None: the prompt shows again with the Enkephalin unchanged, a Confirm that did not take, for run() to
+        press again."""
+        read = panel_read(context, image)
+        if read and read[0][0] < a["before"]:
+            a["end"] = f"Enkephalin {a['before']} -> {read[0][0]}, assembled"
+            log(f"assemble: {a['end']}")
+            tap(context, *PANEL_CANCEL, wait=0.5)
+            return True
+        if on_modules_tab(context, image):
+            return None
+        a["checks"] = a.get("checks", 0) + 1
+        if a["checks"] < ASSEMBLE_TRIES:
+            return True
+        return cancel_stop(context, f"Enkephalin still {a['before']} after Confirm")
+
+
+# Lunacy for Enkephalin (#373, pipeline/charge_enkephalin.json): the Charge Enkephalin window's Use Lunacy tab.
+LUNACY_TAB = (639, 226)  # the Use Lunacy tab (live 720p, 2026-10-26); Confirm and Cancel are taken to sit where the Modules tab's do
+CHARGE_TRIES = 3  # reads of the prompt and price, and Cancels over a decided task, the task spends before it gives up
+
+
+@AgentServer.custom_action("ChargeStart")
+class ChargeStart(TaskStart):
+    """ChargeEnkephalin's entry: TaskStart, then charge_enkephalin.count, the charges this run makes (#362 D5). 0, the
+    default, ends the task at once, a success,
+    before GoHome or any tap: the window is never opened, so the Use Lunacy tab is never touched."""
+
+    def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
+        if not super().run(context, argv):
+            return False
+        try:
+            count = load_settings(ROOT)["charge_enkephalin"]["count"]
+        except SettingsError as e:
+            return stop(context, str(e))
+        TASK["charge"] = {"count": count, "reads": 0, "opened": 0, "charged": 0}
+        return done("charge_enkephalin.count is 0: Lunacy left alone") if count == 0 else True
+
+
+@AgentServer.custom_action("ChargeMain")
+class ChargeMain(CustomAction):
+    """The main window: the task's one way out and its way in. Done once the panel decided so; else the Enkephalin bar
+    opens the window (once per charge and one more for the price that ends it, never more than the table has)."""
+
+    def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
+        c = TASK["charge"]
+        if c.get("end"):
+            return done(c["end"])
+        c["opened"] += 1
+        if c["opened"] > lunacy.DAILY_MAX + 1:
+            return stop(context, f"the Charge Enkephalin window opened {c['opened'] - 1} times, more than a day has charges")
+        open_enkephalin(context)
+        return True
+
+
+@AgentServer.custom_action("ChargePanel")
+class ChargePanel(CustomAction):
+    """The Charge Enkephalin window: its Use Lunacy tab (it opens on Modules), which shows the price, the Daily Count and
+    the Recharge prompt (live 2026-10-27). The price must be the table's at the Daily Count, and the count one up after
+    each Confirm (lunacy.check); else Cancel, and the task ends (a success at this run's count or 10/10, a failure when
+    the screen is not what it should be). Use Boxes has the same prompt and no Daily Count: never confirmed. Only the
+    tab, Confirm and Cancel are tapped."""
+
+    def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
+        c = TASK["charge"]
+        if c.get("end"):  # a window over a task already decided; exempt from the same-screen watchdog, so bounded here
+            c["cancels"] = c.get("cancels", 0) + 1
+            if c["cancels"] > CHARGE_TRIES:
+                return stop(context, f"the Charge Enkephalin window stayed open after {CHARGE_TRIES} more Cancels")
+            tap(context, *PANEL_CANCEL, wait=0.5)
+            return True
+        tap(context, *LUNACY_TAB, wait=0.7)
+        image = screen(context)
+        prompt = context.run_recognition("ChargePrompt", image)
+        price, used = None, None
+        if prompt and prompt.hit:
+            price = lunacy.read_price(ocr_texts(context, image, "ChargePrice"))
+            used = lunacy.read_count(ocr_texts(context, image, "ChargeCount"))
+        if used is None or (price is None and used < lunacy.DAILY_MAX):  # 10/10 needs no price
+            c["reads"] += 1
+            if c["reads"] < CHARGE_TRIES:
+                return True
+            tap(context, *PANEL_CANCEL, wait=0.5)
+            return stop(context, "the Use Lunacy tab's prompt, price and Daily Count could not be read")
+        c["reads"] = 0
+        verdict, why = lunacy.check(price, used, c["charged"], c["count"], c.get("expected"))
+        log(f"charge: {why}")
+        if verdict == lunacy.CHARGE:
+            c["charged"] += 1
+            c["expected"] = used + 1  # a Daily Count that stays is a Confirm that did nothing
+            tap(context, *PANEL_CONFIRM, wait=1.0)
+            return True
+        tap(context, *PANEL_CANCEL, wait=0.5)
+        if verdict == lunacy.DONE:
+            c["end"] = f"{c['charged']} charged now, {why}"
+            return True
+        return stop(context, why)
+
+
+def ocr_texts(context, image, node):
+    """Every text the OCR node read on image, hit or not."""
+    detail = context.run_recognition(node, image)
+    return [r.text for r in (detail.all_results if detail else [])]
 
 
 @AgentServer.custom_action("Recover")
@@ -547,7 +1162,7 @@ class ConfirmDownload(CustomAction):
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         if not allowed("auto_download"):
-            return stop(context, "the game asks to download data: run.auto_download is off")
+            return stop(context, "the game asks to download data: run.auto_download is off", whole_list=True)
         x, y, w, h = argv.box
         context.tasker.controller.post_click(x + w // 2, y + h // 2).wait()
         STUCK["watch"].hold(time.monotonic(), recovery.DOWNLOAD_HOLD)
@@ -566,9 +1181,9 @@ class AcceptUpdate(CustomAction):
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         if not allowed("auto_download"):
-            return stop(context, "the game has an update: run.auto_download is off")
+            return stop(context, "the game has an update: run.auto_download is off", whole_list=True)
         if STUCK["updates"] >= UPDATE_RESTARTS:
-            return stop(context, f"the game asked for an update {UPDATE_RESTARTS + 1} times since the bot started")
+            return stop(context, f"the game asked for an update {UPDATE_RESTARTS + 1} times since the bot started", whole_list=True)
         STUCK["updates"] += 1
         x, y, w, h = argv.box
         context.tasker.controller.post_click(x + w // 2, y + h // 2).wait()
@@ -600,7 +1215,7 @@ class AcceptTerms(CustomAction):
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         if not allowed("auto_accept_terms"):
-            return stop(context, "User Agreement: run.auto_accept_terms is off")
+            return stop(context, "User Agreement: run.auto_accept_terms is off", whole_list=True)
         image = screen(context)
         for x, y in AGREE_BOXES:
             if not agree_ticked(image, x, y):
@@ -618,10 +1233,10 @@ class AcceptTerms(CustomAction):
 @AgentServer.custom_action("Halt")
 class Halt(CustomAction):
     """Stop on a screen the bot must not act on (the maintenance notice, a client too old for the server); the reason
-    goes to the log and the webhook."""
+    goes to the log and the webhook. An account-level stop: the whole task list ends."""
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
-        return stop(context, f"{argv.node_name}: {json.loads(argv.custom_action_param or '""')}")
+        return stop(context, f"{argv.node_name}: {json.loads(argv.custom_action_param or '""')}", whole_list=True)
 
 
 @AgentServer.custom_action("TapUntil")
@@ -629,29 +1244,39 @@ class TapUntil(CustomAction):
     """A Click node that waits for the page that follows instead of a post_delay (#115).
 
     Param: {"target": [x, y, w, h], "next": {"roi": [...], "expected": regex} or a list of them (any),
-    "gone": {"roi": [...], "expected": regex}, "timeout": s (default 3)}; "next" or "gone" or both, the first to hold ends it.
-    The page it leaves may still read like itself for a moment; MirrorHub would act on it twice.
+    "gone": {"roi": [...], "expected": regex}, "left": true, "timeout": s (default 3)}; any of "next", "gone" and "left",
+    the first to hold ends it. The page it leaves may still read like itself for a moment; MirrorHub would act on it twice.
     gone: the node's own roi and expected (#254), for a page whose next one is not known or reads the same (ClaimPopup).
+    left: the node's own recognition misses, for a node that is no OCR (a template: the daily pages' tabs and buttons).
+    No target: the node's box.
     """
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         p = json.loads(argv.custom_action_param)
-        x, y, w, h = p["target"]
+        x, y, w, h = p.get("target", argv.box)
         nxt = p.get("next", [])
         pages = [shows(context, n["roi"], n["expected"]) for n in (nxt if isinstance(nxt, list) else [nxt])]
         if "gone" in p:
             pages.append(gone(context, p["gone"], screen(context)))
+        if p.get("left"):
+            pages.append(lambda im: seen(context, im, argv.node_name) is None)
         began = time.monotonic()
         changed = tap_then(context, x + w // 2, y + h // 2, lambda im: any(page(im) for page in pages), timeout=p.get("timeout", 3))
         log(f"{argv.node_name}: {'screen changed' if changed is not None else 'no change'} after {time.monotonic() - began:.1f} s")
         return True
 
 
+def finish(context, reason):
+    """A task with nothing left to do: the main window (GoHome) first, as a daily task's end (live-2 G4), then done."""
+    return go_home(context) and done(reason)
+
+
 @AgentServer.custom_action("PlanRun")
 class PlanRun(CustomAction):
     """Entry page, no run under way: check settings, pick difficulty and team, press Enter (spec 03 sections 1, 2).
 
-    Returning False fails the task: that is the stop.
+    Nothing left to do (the run count reached, the weekly bonuses out, no enabled team, none for the difficulty) ends
+    the task a success at the main window (GoHome, then done; live-2 G4); bad settings fail it (returning False).
     """
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
@@ -660,24 +1285,38 @@ class PlanRun(CustomAction):
         except SettingsError as e:
             log(f"stop: {e}")
             return False
+        if not any(t["enabled"] for t in settings["teams"]):
+            return finish(context, "no enabled team")
         hsv_v = screen(context)[285:297].max(axis=2)  # V of HSV
         # Live: a filled slot reads V ~240, an empty one ~5 (2026-10-15).
         weekly = sum(hsv_v[:, x:x + 30].mean() > 40 for x in WEEKLY_SLOTS)
         run = settings["run"]
-        if settlement.runs_done(SETTLED["runs"], run["runs"]):
-            log(f"stop: {SETTLED['runs']} of {run['runs']} runs done")
-            return False
+        if settlement.runs_done(TASK["runs"], run["runs"]):
+            return finish(context, f"{TASK['runs']} of {run['runs']} runs done")
         if run["stop_when_weekly_bonus_out"] and weekly == 0:
-            log("stop: weekly bonuses used up")
-            return False
+            return finish(context, "weekly bonuses used up")
         difficulty = run_start.run_difficulty(run["difficulty"], weekly)
         team = pick_team(settings["teams"], read_cursor(ROOT, address(context)), difficulty)
         if team is None:
-            log(f"stop: no enabled team may run {difficulty}")
-            return False
+            return finish(context, f"no enabled team may run {difficulty}")
         if run_start.team_difficulty(run["difficulty"], difficulty, team["hard_from_floor"]) != difficulty:
             log(f"team {team['name']!r} never switches to hard and the difficulty is {run['difficulty']}: a normal run")
             difficulty = "normal"
+        # The entry page has no Modules panel (tests/screens/EntryNewRun.png): the Drive page's read (OpenDrive) is this trip's.
+        step = settlement.new_run_gate(TASK.get("modules", settlement.NOT_SEEN), TASK.get("gate_backs", 0))
+        if step == "back":  # not through Drive since the last run: back out, the hub's navigation reads it on the way in
+            TASK["gate_backs"] = TASK.get("gate_backs", 0) + 1
+            log("new run: the Modules were not read on the way here, back to the Drive page to read them")
+            context.tasker.controller.post_click_key(BACK_KEY).wait()
+            return True
+        modules = TASK.pop("modules", None)
+        TASK.pop("gate_backs", None)
+        if step == "done":
+            return finish(context, f"Modules {modules} < {settlement.CLAIM_COST}, one Claim could not be paid: no new run")
+        if modules is None:
+            log("new run: the Modules number did not read, starting anyway")
+        else:
+            log(f"new run: Modules {modules} >= {settlement.CLAIM_COST}")
         RUN.clear()
         # planned: the bot picked the team itself, so the rotation cursor may move after the claim.
         limit = recovery.floor_limit(recovery.read_runs(ROOT), team["id"])
@@ -721,11 +1360,13 @@ def team_rows(context, image):
     return visible
 
 
-def team_list_top(context):
-    """Drag the picker list to its top, a stroke at a time until the rows on show stay (#226): it opens where it was left."""
+def team_list_top(context, home="TeamSelect"):
+    """Drag the picker list to its top, a stroke at a time until the rows on show stay (#226): it opens where it was left.
+
+    The rows' numbers, not their y: OCR boxes move by a pixel or two at rest (live 2026-10-27: 10 drags at the top)."""
     seen = None
     for k in range(15):
-        rows = team_rows(context, page_guard(context, "TeamSelect"))
+        rows = set(team_rows(context, page_guard(context, home)))
         if rows and rows == seen:  # no rows read is not a list at rest
             log(f"team list at its top after {k - 1} drags that moved it")
             return
@@ -734,34 +1375,73 @@ def team_list_top(context):
     log("team list still moving after 15 drags: looking for the team from here")
 
 
+def pick_team_slot(context, n, home="TeamSelect"):
+    """Have the title read the in-game TEAMS #N: that screenshot, or None when 15 strokes found no such row.
+
+    Already on the title: nothing to do. Else tap its row, scrolling from where the list is towards it (team_list_move);
+    the list goes to its top first only when no row reads (#226). Only the number counts: a team's name is the user's.
+    home: the node of the page (the mirror's TeamSelect, LuxTeamSelect) for page_guard."""
+    titled = shows(context, TEAM_TITLE, rf"#\s*{n}\b")
+    image = page_guard(context, home)
+    if titled(image):
+        return image
+    if not team_rows(context, image):
+        team_list_top(context, home)
+        image = None
+    for _ in range(15):
+        visible = team_rows(context, page_guard(context, home) if image is None else image)
+        image = None
+        move = run_start.team_list_move(visible, n)
+        if move == "down":
+            scroll(context, 130, 480, 0, -140)
+        elif move == "up":
+            scroll(context, 130, 340, 0, 140)
+        else:
+            shot = tap_then(context, 130, move[1], titled)
+            if shot is not None:
+                return shot
+    return None
+
+
 @AgentServer.custom_action("SelectTeam")
 class SelectTeam(CustomAction):
-    """Drag the team list to its top, pick the team's in-game TEAMS #N slot, check the title, press Confirm."""
+    """Pick the team's in-game TEAMS #N slot (pick_team_slot), press Confirm."""
 
     @hands_back
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         # No plan here means a run resumed on the entry page, paused before team selection: the entry page only
         # offers Resume again, so backing out looped (#128). Make one up from settings, as after a restart.
         n = current_run(context)["team"]["game_team"]
-        team_list_top(context)
-        for _ in range(15):
-            visible = team_rows(context, page_guard(context, "TeamSelect"))
-            move = run_start.team_list_move(visible, n)
-            if move == "down":
-                scroll(context, 130, 480, 0, -140)
-            elif move == "up":
-                scroll(context, 130, 340, 0, 140)
-            else:
-                image = tap_then(context, 130, move[1], shows(context, TEAM_TITLE, rf"#\s*{n}\b"))
-                if image is not None:
-                    bonus = number(text(context, image, [1160, 522, 60, 34]))
-                    log(f"team TEAMS #{n}, Starlight Bonus {bonus}")
-                    # LevelWarning when the team is under the recommended level, else the starlight page; the team page
-                    # reads through the warning, so leaving it early would have MirrorHub pick the team twice.
-                    warning, starlight = shows(context, LEVEL_WARNING, "recommended level"), shows(context, STARLIGHT_HEADER, "Available")
-                    tap_then(context, 1145, 587, lambda im: warning(im) or starlight(im), timeout=4)
-                    return True
-        return stop(context, f"could not select TEAMS #{n}")
+        image = pick_team_slot(context, n)
+        if image is None:
+            return stop(context, f"could not select TEAMS #{n}")
+        bonus = number(text(context, image, [1160, 522, 60, 34]))
+        log(f"team TEAMS #{n}, Starlight Bonus {bonus}")
+        # LevelWarning when the team is under the recommended level, else the starlight page; the team page
+        # reads through the warning, so leaving it early would have MirrorHub pick the team twice.
+        warning, starlight = shows(context, LEVEL_WARNING, "recommended level"), shows(context, STARLIGHT_HEADER, "Available")
+        tap_then(context, 1145, 587, lambda im: warning(im) or starlight(im), timeout=4)
+        return True
+
+
+@AgentServer.custom_action("LuxSelectTeam")
+class LuxSelectTeam(CustomAction):
+    """A Luxcavation hub's team page (#366, shared by the EXP and Thread hubs): the mirror's page, with To Battle! where
+    it has Confirm. Pick RUN["team"]'s in-game slot once, then press To Battle! until the page goes. The task's Enter
+    action drops RUN["team_picked"] when it enters a stage: each battle picks again."""
+
+    @hands_back
+    def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
+        n = RUN["team"]["game_team"]
+        if not RUN.get("team_picked"):
+            if pick_team_slot(context, n, "LuxTeamSelect") is None:
+                return stop(context, f"Luxcavation: could not select TEAMS #{n}")
+            RUN["team_picked"] = True
+            log(f"Luxcavation: TEAMS #{n}")
+        # A dialog over the page reads through it: the page staying is for the hub's watchdog to judge.
+        if tap_then(context, *TO_BATTLE, lambda im: not seen(context, im, "LuxTeamSelect"), timeout=4) is None:
+            log("Luxcavation: To Battle! pressed, the team page stays")
+        return True
 
 
 def grace_box(n):
@@ -1234,6 +1914,7 @@ class PickThemePack(CustomAction):
         floor = int(m[1])
         if floor != RUN.get("floor"):
             RUN.pop("after_shop", None)
+            TASK.pop("modules", None)  # a run is under way: Claim will take 5, the next one reads the Modules again (#369)
             RUN.update(floor=floor, map_misses=0)  # a new floor's map gets a fresh retry quota (spec 06)
             restart_floor_clock()
         want = None if run["difficulty"] is None else run_start.hard_wanted(floor, run["difficulty"] == "hard", run["team"]["hard_from_floor"])
@@ -2433,6 +3114,7 @@ CHECK_PROMPT = [850, 295, 300, 50]
 EVENT_PORTRAIT_X = [77 + round(69.3 * i) for i in range(12)]  # 7 in a boss's mid-battle event, from the left
 EVENT_PORTRAIT_Y = 655
 EVENT_NEUTRAL = (5, 5)  # top-left corner: nothing there on any event page
+EVENT_CARD = (940, 195)  # a check's card at the right: alone, it waits for this tap to open its prompt (card_alone)
 EVENT_TEXT_TAPS = 30
 # A text tap every EVENT_TAP_EVERY s, the lit button's pixels looked at after each, the page's text only every
 # EVENT_READ_EVERY taps: live 2026-10-20, a screenshot and 3 OCRs after each tap made it one every 0.3-1.1 s whatever
@@ -2464,13 +3146,21 @@ def red_button(image):
     return r > 150 and r - b > 70
 
 
+def card_alone(image):
+    """A check's card at the right with nothing under it (live 2026-10-28, J1, tests/screens/LuxEventCard.png): a
+    Luxcavation battle's event shows it after SKIP, SKIP grey, and goes on only once the card is tapped. Its lit frame's
+    bottom strip over a black panel; under the prompt or a check's result the panel is lit."""
+    b, g, r = image[230:240, 760:1120].reshape(-1, 3).mean(0)
+    return r > 90 and g > 75 and image[290:300, 700:1180].mean() < 10
+
+
 @AgentServer.custom_action("Event")
 class Event(CustomAction):
-    """One step on an event page: press the lit button, pick a checker or an option, else advance the text (spec 03 section 10)."""
+    """One step on an event page: press the lit button, open a check's card, pick a checker or an option, else advance
+    the text (spec 03 section 10). The mirror's, and a Luxcavation battle's (ExpText, J1)."""
 
     @hands_back
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
-        run = current_run(context)
         image = screen(context)
         # One event's clock: a call more than EVENT_GAP s after the last starts the next event's (#92).
         now = time.monotonic()
@@ -2488,6 +3178,9 @@ class Event(CustomAction):
             checked.clear()
             tap(context, *EVENT_BUTTON, wait=0)
             Event.advance(context, image, pressed_at=time.monotonic())
+        elif card_alone(image):
+            tap(context, *EVENT_CARD, wait=0)
+            Event.settle(context, image)
         elif has(text(context, image, CHECK_PROMPT), "Choose a character"):
             # One read per portrait: read as a row, neighbouring captions run together ("HighVery Low").
             captions = [(text(context, image, [x - 38, 605, 76, 24], only_rec=True), x) for x in EVENT_PORTRAIT_X]
@@ -2503,12 +3196,13 @@ class Event(CustomAction):
                 checked.add(i)
         elif has(text(context, image, CHOICES_HEADER), "Choices"):
             checked.clear()
+            run = RUN if "lux" in RUN else current_run(context)  # a Luxcavation battle's (J1): its team, no Mirror run plan
             story = [t for t, _ in sorted(ocr(context, image, EVENT_STORY), key=lambda r: (r[1][1], r[1][0]))]
             scrolls = rewards.choice_scrollbar(image) or any(None in c for c in rewards.choice_cards(image))
             options, image = self.read_choices(context, image, scrolls)
             if not options:
                 return True
-            overrides = data("events.yaml") | {o["question"]: o["option"] for o in run["settings"]["event_overrides"]}
+            overrides = data("events.yaml") | {o["question"]: o["option"] for o in run.get("settings", {}).get("event_overrides", [])}
             question = next(filter(None, (run_start.match_pack(t, list(overrides)) for t in story + [" ".join(story)])), None) if overrides else None
             known = rewards.match_event(" ".join(story), event_table())
             # Grey options (taken in an earlier round of the same questions) and ones a tap did nothing on are closed.
@@ -2567,6 +3261,8 @@ class Event(CustomAction):
                 continue
             read = n % EVENT_READ_EVERY == 0 or pressed_label is not None
             pressed_label = None
+            if card_alone(image):
+                break
             if read and (not text(context, image, EVENT_BUTTON_LABEL) or any(
                     has(text(context, image, roi), k) for k, roi in (("Choices", CHOICES_HEADER), ("Choose a character", CHECK_PROMPT)))):
                 break
@@ -3937,5 +4633,5 @@ class Settle(CustomAction):
     @staticmethod
     def record(run, result, bonuses, outcome):
         settlement.append_run(ROOT, run_line(run, outcome, result[1], settlement.floors_passed(result), bonuses))
-        SETTLED["runs"] += settlement.counts_as_run(outcome)
+        TASK["runs"] += settlement.counts_as_run(outcome)
         STUCK["ladder"] = recovery.Ladder()

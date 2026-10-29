@@ -66,6 +66,25 @@ def counts_as_run(result):
     return result == "clear"
 
 
+CLAIM_COST = 5  # the Enkephalin Modules one Claim takes (Claim, spec 03 section 14)
+
+
+BACKS = 2  # back presses at the entry page to reach a page with the Modules panel, before the run starts unchecked
+NOT_SEEN = object()
+
+
+def new_run_gate(seen, backs):
+    """What PlanRun does before it opens a new run (#369): "go", "done" or "back".
+
+    seen: the Modules the panel showed on this trip's Drive page (OpenDrive), None when it did not read, NOT_SEEN when
+    the trip did not pass a page with the panel (the last run's Claim took 5, so an old value is no use). Not seen: "back"
+    to the Drive page, up to BACKS times, then "go" unchecked; an unread panel never blocks the run.
+    """
+    if seen is NOT_SEEN:
+        return "back" if backs < BACKS else "go"
+    return "go" if seen is None or seen >= CLAIM_COST else "done"
+
+
 def runs_done(done, limit):
     """Whether the run count is reached: limit None (the switch off) means no limit (spec 04 section 5)."""
     return limit is not None and done >= limit

@@ -24,6 +24,10 @@ SAME_SCREEN = 5  # the same screen type and thumbnail this many times in a row i
 WAIT_STILL, WAIT_CAP = 80, {"Loading": 150, "Connecting": 150}
 WAIT_SCREENS = WAIT_CAP.keys() | {"Downloading"}
 HASH_FLOOR = {"BattlePause": 30}  # a turn playing out may sit still a while: also this many seconds
+# Taps that leave their page (a tab, a page's button): one of them this many times in a row is stuck, however the
+# screen moves. Acceptance 5 (live 2026-10-28): after an L3 the Drive tab was tapped 2188 times in 45 min, the game
+# showing the tap but never the Drive page, and the main window's banners kept the same-screen count from 5.
+NAV_TAPS, NAV_TAP_LIMIT = {"NavMainTabs", "NavDrive", "NavLuxcavation", "LuxExpTab", "LuxThreadTab"}, 10
 # Screens on the way back to a run after L2/L3: seeing them does not mean the stuck screen was got past.
 TRANSIT = {"Loading", "Connecting", "RetryPopup", "GoToMirrorEntry", "NavTitle", "NavMainTabs", "NavDrive",
            "MirrorEntryPaused", "ResumeDialog", "ProgressPanel", "DownloadDialog", "PopupButton",
@@ -86,7 +90,7 @@ class Watchdog:
     """Spots a screen that does not change (spec 06 卡住的定義: 畫面沒變, 載入畫面過久)."""
 
     def __init__(self):
-        self.kind, self.kind_since = None, 0.0
+        self.kind, self.kind_since, self.hits = None, 0.0, 0  # hits: this kind in a row
         self.first, self.count, self.since = None, 0, 0.0  # the streak's first thumbnail
         self.last, self.moved = None, 0.0  # the last thumbnail, and when the screen last changed at all
         self.hold_until = 0.0  # a download is under way until then: no screen counts as stuck
@@ -100,15 +104,18 @@ class Watchdog:
         if kind != self.kind:
             if not {kind, self.kind} <= WAIT_CAP.keys():  # Loading after Connecting is one wait: WAIT_CAP runs on
                 self.kind_since = now
-            self.kind, self.first, self.moved = kind, None, now
+            self.kind, self.first, self.moved, self.hits = kind, None, now, 0
         elif self.last is None or small is None or not np.array_equal(small, self.last):
             self.moved = now
         self.last = small
         if not same_screen(small, self.first):
             self.first, self.count, self.since = small, 0, now
         self.count += 1
+        self.hits += 1
         if self.held(now):
             return None
+        if kind in NAV_TAPS and self.hits >= NAV_TAP_LIMIT:
+            return f"tapped {self.hits} times, its page did not open"
         if kind in WAIT_SCREENS:
             if now - self.moved >= WAIT_STILL:
                 return f"the screen did not change for {WAIT_STILL} s"

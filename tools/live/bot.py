@@ -1,13 +1,14 @@
 """Run maalc headless from an install, and the chores around a live run.
 
-    uv run python tools/live/bot.py run --install DIR --log run.log [--task MirrorDungeon] [--port 16384]
+    uv run python tools/live/bot.py run --install DIR --log run.log [--task MirrorDungeon[,ExpLuxcavation...]] [--port 16384]
     uv run python tools/live/bot.py prep --install DIR [--source INSTALL] [--set KEY=VALUE ...]
     uv run python tools/live/bot.py awake [--minutes 240]
 
 **run** starts the task the way MXU does (the install's resource/base, agent/main.py and maafw/, so its
 patched MaaFramework.dll) on the MuMu instance at `--port`, and writes every line the tasker and the agent
 print to `--log`, each with its wall time (`HH:MM:SS.fff <line>`): the `[maalc]` lines and the controller's
-touch lines that `tools/live/evidence.py` reads. It exits with the tasker's code. Start it detached
+touch lines that `tools/live/evidence.py` reads. `--task A,B` posts several tasks up front, as a client queues its
+task list, and runs them in turn (#364). It exits 0 when every task succeeded. Start it detached
 (`tools/live/queue.py detach`), as the maalc-live-test skill says.
 
 **prep** copies `config/settings.json`, `config/maa_option.json` and `state/` from `--source` (default the
@@ -56,8 +57,30 @@ def stamped(cmd, log: Path, clock=clock) -> int:
     return code
 
 
-def tasker(root: Path, task: str, port: int) -> int:
-    """The task, run in this process: MaaFramework from root/maafw, the agent as a child."""
+def run_tasks(t, tasks: list[str], say=print, sleep=time.sleep) -> list[str]:
+    """Post the whole list up front, as a client queues its task list (an account-level stop's post_stop leaves the
+    rest pending, unrun), then follow each in turn by its detail until it is done or the tasker has stopped, as MXU
+    does (G1: wait() and status go through a runner id a clear_cache drops), and return only once the tasker has
+    stopped, so the agent is not closed under a task still running: their states."""
+    states = []
+    for name, job in [(name, t.post_task(name)) for name in tasks]:
+        t0 = time.time()
+        while (detail := job.get()) and not detail.status.done and t.running:
+            sleep(1)
+        detail = job.get()  # read again: the tasker may have stopped after the read above
+        s = detail and detail.status
+        state = "none" if not s else "succeeded" if s.succeeded else "failed" if s.failed else "running" if s.running else "pending"
+        say(f"[run] {name} status={state} t={time.time() - t0:.0f}s")
+        for n in (detail.nodes[-10:] if detail else []):
+            say(f"[run] node {n.name} {n.completed}")
+        states.append(state)
+    while t.running:
+        sleep(1)
+    return states
+
+
+def tasker(root: Path, tasks: list[str], port: int) -> int:
+    """The tasks, run in this process in turn: MaaFramework from root/maafw, the agent as a child."""
     os.environ["MAAFW_BINARY_PATH"] = str(root / "maafw")
     from maa.agent_client import AgentClient
     from maa.resource import Resource
@@ -77,17 +100,11 @@ def tasker(root: Path, task: str, port: int) -> int:
     client.connect()
     t = Tasker()
     t.bind(res, ctl)
-    t0 = time.time()
-    print(f"[run] start {task} pid {os.getpid()} agent {agent.pid} install {root}", flush=True)
-    detail = t.post_task(task).wait().get()
-    s = detail and detail.status
-    state = "none" if not s else "succeeded" if s.succeeded else "failed" if s.failed else "running" if s.running else "pending"
-    print(f"[run] status={state} t={time.time() - t0:.0f}s", flush=True)
-    for n in (detail.nodes[-10:] if detail else []):
-        print("[run] node", n.name, n.completed, flush=True)
+    print(f"[run] start {','.join(tasks)} pid {os.getpid()} agent {agent.pid} install {root}", flush=True)
+    states = run_tasks(t, tasks, lambda line: print(line, flush=True))
     client.disconnect()
     agent.terminate()
-    return 0 if state == "succeeded" else 1
+    return 0 if set(states) == {"succeeded"} else 1
 
 
 def prep(install: Path, source: Path, sets: list[str]) -> dict:
@@ -129,7 +146,7 @@ def main(argv=None) -> int:
     for name in ("run", "tasker"):
         p = sub.add_parser(name)
         p.add_argument("--install", type=Path, required=True)
-        p.add_argument("--task", default="MirrorDungeon")
+        p.add_argument("--task", default="MirrorDungeon", help="a PI task, or several, comma-separated, run in turn")
         p.add_argument("--port", type=int, default=16384)
         if name == "run":
             p.add_argument("--log", type=Path, required=True)
@@ -144,7 +161,7 @@ def main(argv=None) -> int:
         root = a.install.resolve()
         return stamped([sys.executable, "-u", __file__, "tasker", "--install", str(root), "--task", a.task, "--port", str(a.port)], a.log)
     if a.command == "tasker":
-        return tasker(a.install, a.task, a.port)
+        return tasker(a.install, a.task.split(","), a.port)
     if a.command == "prep":
         print(prep(a.install, a.source or main_checkout() / "install", a.set).get("run"))
     elif a.command == "awake":

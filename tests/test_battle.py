@@ -151,3 +151,15 @@ def gear(name):
 ])
 def test_gear_hollow(name, hollow):
     assert b.gear_hollow(gear(name), 40, 40) is hollow
+
+
+@pytest.mark.parametrize(("png", "hollow"), [
+    # live-1 F5 (2026-10-27): EXP Luxcavation's stage 9, a battle with the chain's gear: its 5 guard turns were played.
+    ("LuxBattleTurn.png", False),
+    # Thread Luxcavation's Faelantern (TETH), an Abnormality: a focused encounter, its skill slots over the enemy. The
+    # guard chain cannot start there, so its turns are Win Rate and the guard turns wait (#127).
+    ("LuxBattleTurnFocused.png", True),
+])
+def test_gear_hollow_on_the_luxcavation_battles(png, hollow):
+    image = np.asarray(Image.open(SCREENS / png).convert("RGB"))[:, :, ::-1]
+    assert b.gear_hollow(image, b.slot_xs(984)[0] - 86, 576) is hollow  # 7 slots: Win Rate at x 984
