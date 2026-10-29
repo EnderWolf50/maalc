@@ -34,6 +34,7 @@
             "[JumpBack]Connecting",
             "[JumpBack]HelpPager",
             "[JumpBack]HubText",
+            "NoBatchOCR",
             "[JumpBack]Victory",
             "[JumpBack]MapNodePanel",
             "[JumpBack]MirrorMap",

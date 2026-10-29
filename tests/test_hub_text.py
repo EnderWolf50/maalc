@@ -60,10 +60,11 @@ def test_windows_stay_within_the_det_side_and_hold_any_box_whole():
     # The det model shrinks an image wider than 960 px; HubText's rois span 1210 px (40..1250), where the shrunk pass
     # read "✓Confirm" and no SKIP (tests/screens/FormationNoSinners.png, EventChoicesLitTop.png).
     rois = [[40, 30, 100, 50], [1150, 600, 100, 80]]
-    assert ht.windows(rois) == [[40, 30, 960, 650], [290, 30, 960, 650]]  # 710 px overlap
-    assert ht.windows([[0, 0, 960, 20]]) == [[0, 0, 960, 20]]
+    side = ht.DET_SIDE
+    assert ht.windows(rois) == [[40, 30, side, 650], [1250 - side, 30, side, 650]]  # 710 px overlap
+    assert ht.windows([[0, 0, side, 20]]) == [[0, 0, side, 20]]
     wide = ht.windows([[0, 0, 2000, 20]])
-    assert len(wide) == 3 and wide[0][0] == 0 and wide[-1][0] + 960 == 2000 and all(w[2] == 960 for w in wide)
+    assert len(wide) == 3 and wide[0][0] == 0 and wide[-1][0] + side == 2000 and all(w[2] == side for w in wide)
 
 
 def test_mask_keeps_only_the_rois():
