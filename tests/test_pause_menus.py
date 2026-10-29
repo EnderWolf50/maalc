@@ -135,8 +135,10 @@ def test_the_progress_panel_taps_continue_only():
 def test_the_progress_panel_is_answered_before_the_pages_it_opens_over():
     # #215: the back key on an event opens the panel over it; the event's own button (Continue, bottom right) still
     # reads, so its node acted first, and the panel closed by chance. A dialog is answered before the page under it.
-    entries = hub_entries(load_nodes(), "HubText")
-    pages = ["Event", "Shop", "GiftGet", "GiftChoice", "RewardCard", "RewardCardForgo", "GiftRefuseDialog", "Victory",
+    nodes = load_nodes()
+    entries = hub_entries(nodes, "HubText")
+    pages = ["Event", "Shop", "GiftGet", "GiftChoice", "RewardCard", "RewardCardForgo", "GiftRefuseDialog",
              "WipeDialog", "Formation", "ThemePack"]
     assert all(entries.index("ProgressPanel") < entries.index(p) for p in pages)
+    assert "Victory" in nodes["HubText"]["custom_recognition_param"]["tail"]  # the tail checks after every entry
     assert entries.index("PopupButton") < entries.index("ProgressPanel")  # the server's popups still come first

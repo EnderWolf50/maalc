@@ -6,6 +6,12 @@ that pass crossing its roi edge (OCRer::handle_cached). A box 1 px into a roi is
 HubText runs that one pass itself (run_recognition_direct has no batch cache) and judges each screen from its boxes:
 a box counts for a roi when at least half of it lies inside, so no sliver is ever read. The screens that pass then
 check with their own OCR, unbatched, so a hit is what MaaFramework reads.
+
+The det model shrinks an image wider than DET_SIDE to that width (MaaXYZ/MaaFramework#1531), and the rois of a hub
+span 1210 px: shrunk, a button read "✓Confirm" and an event's SKIP read nothing, both screens left out though their
+own OCR reads them. So the pass runs in windows of at most DET_SIDE px that overlap enough to hold any box whole.
+A screen whose text only reads when det finds no box and the whole roi goes to rec (the battlefield's VICTORY) sits
+in the tail, where it always checks.
 """
 
 import json
@@ -16,6 +22,7 @@ from maa.custom_recognition import CustomRecognition
 from maa.pipeline import JOCR, JRecognitionType
 
 INSIDE = 0.5  # share of a box's area inside a roi for the box to count there
+DET_SIDE = 960  # the det model's max side (fastdeploy DBDetector's max_side_len)
 
 
 def ocr_specs(reco):
@@ -84,6 +91,26 @@ def union(rois):
     return [x0, y0, max(r[0] + r[2] for r in rois) - x0, max(r[1] + r[3] for r in rois) - y0]
 
 
+def windows(rois):
+    """The union of rois cut into as few windows of at most DET_SIDE px wide as cover it, spread evenly, so they
+    overlap as much as they can (a 720 px screen is never taller than DET_SIDE)."""
+    x, y, w, h = union(rois)
+    n = -(-w // DET_SIDE)
+    if n == 1:
+        return [[x, y, w, h]]
+    return [[x + round(i * (w - DET_SIDE) / (n - 1)), y, DET_SIDE, h] for i in range(n)]
+
+
+def read(context, image, rois):
+    """[(box, text, score)] of the text in rois, read with the rest of the image black, window by window."""
+    masked = mask(image, rois)
+    out = []
+    for win in windows(rois):
+        detail = context.run_recognition_direct(JRecognitionType.OCR, JOCR(roi=tuple(win), threshold=0), masked)
+        out += [(tuple(r.box), r.text, r.score) for r in (detail.all_results if detail else [])]
+    return out
+
+
 class HubText(CustomRecognition):
     """A hub's OCR screens (custom_recognition_param: entries in hub order, after its base's, then tail) in one unbatched
     OCR; every hub's text node (MirrorHub's HubText, GoHome's HomeText, ...) uses it.
@@ -107,9 +134,7 @@ class HubText(CustomRecognition):
                 nodes.append((name, reco["type"], ocr_specs(reco)))
             self.lists[argv.node_name] = nodes, [s[0] for *_, specs in nodes for s in specs or []]
         nodes, rois = self.lists[argv.node_name]
-        detail = context.run_recognition_direct(JRecognitionType.OCR, JOCR(roi=tuple(union(rois)), threshold=0), mask(argv.image, rois))
-        results = [(tuple(r.box), r.text, r.score) for r in (detail.all_results if detail else [])]
-        if not (picked := pick(nodes, results)):
+        if not (picked := pick(nodes, read(context, argv.image, rois))):
             return None
         context.override_next(argv.node_name, ["NoBatchOCR", *picked, *param["tail"]])
         return CustomRecognition.AnalyzeResult(box=(0, 0, 1, 1), detail={"picked": picked})

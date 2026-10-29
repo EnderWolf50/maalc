@@ -62,10 +62,11 @@ def test_mirror_hub_reads_its_ocr_screens_through_hub_text():
     # pass crossing its roi edge (OCRer::handle_cached), slivers 1 px high padded to 48 px x (width / height): a
     # battle skill text 1 px into MirrorEnterDialog's roi, 443 x 1, took 7.6 s and the Tasker from 4 to 12 GB.
     # MirrorHub lists no OCR; HubText (agent/hub_text.py) reads its screens and lists the ones that may be up behind
-    # NoBatchOCR. BattleHUD, two templates, comes before HubText, and its own list does not batch.
+    # NoBatchOCR. BattleHUD, two templates, comes before HubText, and its own list does not batch. Victory is the one
+    # OCR the hub lists: HubText's pass cannot read it (agent/hub_text.py), and one OCR alone is no batch.
     nodes = load_nodes()
     hub = strip(nodes["MirrorHub"]["next"])
-    assert [o for n in hub for o in batchable_ocr(nodes, n)] == []
+    assert [n for n in hub if batchable_ocr(nodes, n)] == ["Victory"] and len(batch_plan(nodes, hub)) < 2
     assert hub.index("BattleHUD") < hub.index("HubText")
     assert batchable_ocr(nodes, "BattleHUD") == []
     menus = ["BattleMenu", "LuxBattleMenu"]  # the pause menu (#215), the mirror's and Luxcavation's (live-1)
@@ -101,6 +102,18 @@ def test_go_home_reads_its_popups_through_home_text_and_no_next_list_batches_ocr
         assert recognition(nodes[name])[0] in ("OCR", "And", "Or"), name
     assert len(batch_plan(nodes, ["NoBatchOCR", *hub_entries(nodes, "HomeText"), *param["tail"]])) == 1
     assert nodes["GoHome"]["on_error"] == ["GoHomeLost"] and nodes["GoHomeLost"]["custom_action"] == "HomeLost"
+
+
+def test_victory_checks_in_every_hub_tail_unbatched():
+    # The battlefield's VICTORY reads only when det finds no box and the whole roi goes to rec; HubText's one pass and
+    # MaaFramework's batch both miss it (tests/screens/Victory.png), so it is in the tails, where it always checks.
+    nodes = load_nodes()
+    for hub, text in (("MirrorHub", "HubText"), ("ExpHub", "ExpText"), ("ThreadHub", "ExpText")):
+        listed = strip(nodes[hub]["next"])
+        param = nodes[text]["custom_recognition_param"]
+        assert "Victory" not in param["entries"] and param["tail"][0] == "Victory", text
+        assert listed.index(text) < listed.index("Victory"), hub
+        assert len(batch_plan(nodes, listed)) < 2, hub
 
 
 def template_first(nodes, spec):

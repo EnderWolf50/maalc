@@ -34,6 +34,8 @@
             "[JumpBack]Connecting",
             "[JumpBack]HelpPager",
             "[JumpBack]ExpText",
+            "NoBatchOCR",
+            "[JumpBack]Victory",
             "[JumpBack]LuxTeamSelect",
             "[JumpBack]LuxExpEnter",
             "[JumpBack]LuxExpTab",
@@ -57,17 +59,20 @@
     // ExpHub's OCR screens, read in one pass as HubText (#157): GoHome's popups (HomeText), then the battle's end: the
     // battlefield's VICTORY and the results page, and an event mid-battle (the mirror's Event: live 2026-10-28, J1,
     // Glut's second wave, tests/screens/LuxEvent*.png), which ends back in the battle.
+    // VICTORY is in the tail and both hubs list it, behind NoBatchOCR: neither ExpText's pass nor a batch reads it
+    // (mirror_dungeon.json, HubText).
     "ExpText": {
         "recognition": "Custom",
         "custom_recognition": "HubText",
         "custom_recognition_param": {
             "base": "HomeText",
             "entries": [
-                "Victory",
                 "LuxResult",
                 "Event"
             ],
-            "tail": []
+            "tail": [
+                "Victory"
+            ]
         },
         "pre_delay": 0,
         "post_delay": 0,
@@ -253,6 +258,8 @@
             "[JumpBack]Connecting",
             "[JumpBack]HelpPager",
             "[JumpBack]ExpText",
+            "NoBatchOCR",
+            "[JumpBack]Victory",
             "[JumpBack]LuxTeamSelect",
             "[JumpBack]LuxThreadLevel",
             "[JumpBack]LuxThreadEnter",
