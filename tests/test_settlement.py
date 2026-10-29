@@ -1,8 +1,17 @@
+"""Settlement decisions, and Settle on the acceptance's Exploration Reward capture (#382).
+
+The Settle cases run the real MaaFramework and its OCR in a child process (this file run as a script), as
+test_consecutive_ocr.py does.
+"""
+
 import json
+from types import SimpleNamespace
+from unittest.mock import MagicMock
 
 import pytest
+from daily_child import probe_child, run_child, screen
 
-from settlement import NOT_SEEN, append_run, bonus_toggles, claim_dialog, counts_as_run, floors_passed, goal_met, new_run_gate, now, read_result, runs_done
+from settlement import NOT_SEEN, all_hard, append_run, bonus_toggles, claim_dialog, counts_as_run, first_floor_hard, floors_passed, goal_met, new_run_gate, now, read_result, runs_done
 
 
 @pytest.mark.parametrize("text, expected", [
@@ -92,3 +101,110 @@ def test_now_matches_the_gui_marker_format():
 ])
 def test_new_run_gate(seen, backs, expected):
     assert new_run_gate(seen, backs) == expected
+
+
+@pytest.mark.parametrize(("tile", "expected"), [
+    ("[HARD] Floor1", True),  # what the OCR read on tests/screens/ExplorationRewardHard5.png
+    ("[HARD] Floor 1", True),
+    ("[NORMAL] Floor1", False),
+    ("[HARD] Floor2", False),  # not the first tile
+    ("[HARD]", False),
+    ("", False),
+])
+def test_first_floor_hard(tile, expected):
+    assert first_floor_hard(tile) is expected
+
+
+@pytest.mark.parametrize(("floors_hard", "floor", "hard", "tile", "expected"), [
+    ({f: True for f in range(1, 6)}, 5, True, "", True),  # every floor seen HARD: the tile is not read
+    ({1: False, 2: True, 3: True, 4: True, 5: True}, 5, True, "[HARD] Floor1", False),  # seen NORMAL beats the tile
+    ({4: True, 5: True}, 5, True, "[HARD] Floor1", True),  # a resumed run: floors 1-3 not seen, the tile says HARD
+    ({}, 5, True, "[HARD] Floor1", True),  # no floor seen (the agent restarted)
+    ({4: True, 5: True}, 5, True, "[NORMAL] Floor1", False),
+    ({4: True, 5: True}, 5, True, "", False),  # unreadable: not all HARD
+    ({}, 5, False, "[HARD] Floor1", False),  # the last floor NORMAL: the run is not HARD
+    ({1: True, 2: True}, 3, True, "[HARD] Floor1", False),  # floor 3 not seen though floor 1 was
+])
+def test_all_hard(floors_hard, floor, hard, tile, expected):
+    assert all_hard(floors_hard, floor, hard, lambda: tile) is expected
+
+
+def test_the_floors_not_read_are_not_asked_for_when_all_were_seen():
+    assert all_hard({1: True, 2: True}, 2, True, lambda: pytest.fail("the tile was read")) is True
+
+
+def test_the_difficulty_each_floor_is_played_on_is_remembered(monkeypatch):
+    # #382: all_hard comes from what the theme pack page showed per floor, not from the run's plan.
+    import actions  # not at the top: the child (this file as a script) loads it under its AgentServer stand-in
+    monkeypatch.setattr(actions, "text", lambda *a, **k: "HARD")
+    monkeypatch.setattr(actions, "page_guard", lambda context, node, image=None: screen("MainWindow.png"))
+    actions.RUN.clear()
+    actions.RUN["floor_hard"] = None
+    actions.PickThemePack.set_difficulty(MagicMock(), 4, True)
+    assert actions.RUN["floors_hard"] == {4: True}
+    actions.RUN.clear()
+
+
+def test_a_new_runs_first_floor_forgets_the_floors_of_the_last_run(monkeypatch):
+    # #382: a run that began on an expired session's dialog has no PlanRun to clear RUN; floor 1 does it.
+    import actions
+    monkeypatch.setattr(actions, "current_run", lambda context: {"difficulty": None, "team": {"hard_from_floor": None}, "settings": {"run": {}}})
+    monkeypatch.setattr(actions, "screen", lambda context: None)
+    monkeypatch.setattr(actions, "text", lambda *a, **k: "SELECT FLOOR 1 THEME PACK")
+    monkeypatch.setattr(actions, "restart_floor_clock", lambda: None)
+    monkeypatch.setattr(actions.PickThemePack, "set_difficulty", staticmethod(lambda context, floor, want: False))
+    monkeypatch.setattr(actions, "stuck", lambda reason, level=1: True)
+    actions.RUN.clear()
+    actions.TASK.clear()
+    actions.RUN.update(floor=5, floors_hard={f: True for f in range(1, 6)})
+    actions.PickThemePack().run(MagicMock(), SimpleNamespace(node_name="PickThemePack"))
+    assert "floors_hard" not in actions.RUN and actions.RUN["floor"] == 1
+    actions.RUN.clear()
+
+
+# The acceptance's claim page (2026-10-29): Floor 5 [HARD] 7/7, five HARD floors, 3 weekly bonuses left, no run plan.
+CLAIM = "ExplorationRewardHard5.png"
+SEEN = {"all five": {f: True for f in range(1, 6)}, "none": {}, "last two": {4: True, 5: True},
+        "floor 1 NORMAL": {1: False, 2: True, 3: True, 4: True, 5: True}}
+ASKED = {"all five": 3, "none": 3, "last two": 3, "floor 1 NORMAL": 1}
+
+
+def child():
+    class Asked(Exception):
+        pass
+
+    def body(context, actions, out):
+        team = {"id": "a", "name": "A", "enabled": True, "hard_from_floor": None}
+        asked, real = [], actions.settlement.bonus_toggles
+
+        def bonus(use, amount, hard, left, all_hard):
+            asked.append(real(use, amount, hard, left, all_hard))
+            raise Asked
+
+        actions.settlement.bonus_toggles = bonus
+        out["asked"] = {}
+        for name, floors in SEEN.items():
+            actions.RUN.clear()
+            actions.RUN.update(settings={"run": {"weekly_bonus_use": "hard", "weekly_bonus_amount": "all"}, "teams": [team]},
+                               team=team, floors_hard=floors)  # no "planned": the run began on the expired session's dialog
+            asked.clear()
+            try:
+                actions.Settle().run(context, SimpleNamespace(node_name="Settle"))
+            except Asked:
+                pass
+            out["asked"][name] = list(asked)
+
+    probe_child(body, image=CLAIM)
+
+
+def read():
+    return run_child(__file__)
+
+
+@pytest.mark.parametrize("name", list(SEEN))
+def test_settle_on_the_acceptance_capture_asks_for_the_bonuses_the_floors_allow(name):
+    assert read()["asked"][name] == [ASKED[name]]
+
+
+if __name__ == "__main__":
+    child()

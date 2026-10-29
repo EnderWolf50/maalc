@@ -475,7 +475,7 @@ Cost 表是 wiki 與簡中客戶端的表，實機 log 的節點面板 Cost 沒�
 - 看到 Claim 完成後，輪替游標才前進（第 1 節）。（#8）
 - 實作（#30）：
   - 一局算不算困難局，看視窗上最後一層的 `[HARD]`／`[NORMAL]`：任何一層選了 HARD 就不能切回普通，所以最後一層就代表整局（第 2 節）。
-  - 一次用 2 次以上的每週獎勵，要每一層都是 HARD（遊戲內說明頁，`captures/29_help_page_02.png`）。所以「一次全用」只在 bot 自己開的困難局、且「困難局從第 N 層起轉困難」開著、N = 1 時才切多個開關，其他情況最多切 1 個。
+  - 一次用 2 次以上的每週獎勵，要每一層都是 HARD（遊戲內說明頁，`captures/29_help_page_02.png`）。所以「一次全用」只在打到的每一層都是 HARD 時才切多個開關，其他情況最多切 1 個。每層的難度取自主題包頁在該層顯示的難度（`RUN["floors_hard"]`，`set_difficulty` 記下），不看開局規劃：開局先跳出過期上一局的對話框而沒有規劃時，五層都 HARD 一樣算（#382）；沒看到前幾層的局（接續的局，沒看到第 1 層）：最後一層是 HARD，而且領獎視窗左邊 Dungeon Progress 的第 1 層標記讀到 `[HARD]`（`FIRST_FLOOR`，實機讀到 `[HARD] Floor1`）就算全 HARD（HARD 不會切回普通），log 寫 `floors before N were not seen: the window's floor 1 tile reads …`；讀不到才算不是全 HARD。過期上一局的對話框（`The previous session has expired. Please claim your rewards.`）實際怎麼結算沒有實機證據（unverified）：只知道 2026-10-29 驗收時按下後就進了新局，log 沒有領取或放棄的行。按下時 log 記一行 `popup: '<對話框文字>': pressed '<按鈕文字>'`（按鈕文字取自 `PopupButton` 辨識已讀到的結果），之後若出現 `exploration reward: Floor …` 與 `claimed with N weekly bonus(es)` 或 `goal not met: gave up the rewards`，就是這局怎麼結算的；沒有這幾行就是沒有結算。
   - 遊戲會預設切好開關（實機：普通局也預設第 1 個 ON），所以每個開關都要從畫面讀成 ON 或 OFF，把 ON 的數量調到剛好等於要用的數量，再讀一次確認；讀不出來或調不到就停止，不按 Claim。
   - 按 Claim 後會跳確認對話框：開關全 OFF、還有剩餘次數時是「不使用每週獎勵確認」，有開關 ON 時是「使用每週獎勵確認」（`Spend your 「Weekly Bonuses」 to claim the bonus rewards?`）。只按和切好、讀回的開關相符的那一個的 Confirm，所以只有 bot 自己決定用每週獎勵時才會花掉它。用了每週獎勵時，之後依序跳 `Rewards Acquired` 與 `Pass Level Up` 彈窗，各按 Confirm 關掉（hub 的 `ClaimPopup`）。（#65，2026-10-16 實機）
   - 按 Claim 後視窗沒有關掉，而且不是上面相符的確認對話框，就停止、不再點任何東西（模組不夠時的畫面還沒見過，這樣不會誤點購買）。這局在 `runs.jsonl` 記為「停止」。

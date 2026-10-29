@@ -34,6 +34,8 @@
             "[JumpBack]Connecting",
             "[JumpBack]HelpPager",
             "[JumpBack]HubText",
+            "NoBatchOCR",
+            "[JumpBack]Victory",
             "[JumpBack]MapNodePanel",
             "[JumpBack]MirrorMap",
             "[JumpBack]MirrorFromLux",
@@ -55,6 +57,8 @@
     // screens that may be up, each with its own OCR. In MirrorHub's next list MaaFramework would batch them, and the
     // batch re-reads every text box crossing a roi edge: a battle skill text 1 px into a dialog roi became a 443 x 1
     // read padded to 21264 px wide, 7.6 s and the Tasker from 4 to 12 GB for good. Each entry ends back in MirrorHub.
+    // Victory heads the tail: it reads only when det finds no box and its whole roi goes to rec, which HubText's pass
+    // never does (tests/screens/Victory.png read 'JICTORY' there).
     "HubText": {
         "recognition": "Custom",
         "custom_recognition": "HubText",
@@ -94,10 +98,10 @@
                 "Shop",
                 "Event",
                 "WipeDialog",
-                "Victory",
                 "Formation"
             ],
             "tail": [
+                "Victory",
                 "MapNodePanel",
                 "MirrorMap",
                 "MirrorFromLux",

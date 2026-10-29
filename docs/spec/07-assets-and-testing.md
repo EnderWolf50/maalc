@@ -88,7 +88,7 @@
 | 設定檢查 | GUI 與 Agent 各自的單元測試，共用同一批範例設定檔 | `settings.schema.json` 的結構檢查與跨物件檢查；兩邊對同一份檔案必須給出相同的錯誤 | #19 |
 | Agent 邏輯 | pytest，用 Python `CustomController` 餵截圖 | 輪替游標、地圖重試額度、選路、卡住偵測、恢復升級上限 | #4、#14 |
 | 回歸 | `RecordController` 錄下驗收局，`ReplayController` 重播 | 整條流程；行為不符就失敗 | #4、#14 |
-| 批次 OCR | pytest（`tests/test_pipeline.py`） | 同一個 next 清單裡沒有兩個 OCR 用同一個名字（內嵌 OCR 都要有自己的 `sub_name`）；`MirrorHub` 的清單沒有 OCR：OCR 畫面放在 `HubText`，由 Agent 讀一次、只把可能的畫面排進它的清單（`NoBatchOCR` 在前，不批次）；`BattleHUD`（戰鬥畫面的模板）排在 `HubText` 前面，它自己的清單也不批次（照 `prepare_batch_ocr` 的規則算），清單裡回合前的伺服器彈窗都先比模板。`tests/test_hub_text.py` 測 Agent 的判讀規則 | #149、#157 |
+| 批次 OCR | pytest（`tests/test_pipeline.py`） | 同一個 next 清單裡沒有兩個 OCR 用同一個名字（內嵌 OCR 都要有自己的 `sub_name`）；`MirrorHub` 的清單只有 `Victory` 一個 OCR，排在 `NoBatchOCR` 後面（`HubText` 與 `ExpText` 的 tail 都有它）：OCR 畫面放在 `HubText`，由 Agent 讀一次、只把可能的畫面排進它的清單（`NoBatchOCR` 在前，不批次）；`BattleHUD`（戰鬥畫面的模板）排在 `HubText` 前面，它自己的清單也不批次（照 `prepare_batch_ocr` 的規則算），清單裡回合前的伺服器彈窗都先比模板。`tests/test_hub_text.py` 測 Agent 的判讀規則 | #149、#157 |
 
 - `maa-tools test` 不跑 Agent；Agent 的部分由 pytest 涵蓋。（#4）
 - 不使用官方 `DbgController`：pip wheel 沒附它的動態庫。（#4）
