@@ -13,7 +13,7 @@ from ocrtext import has
 
 def read_result(text):
     """(floor, hard, cleared, total) from the window's result, e.g. "Floor 5 [NORMAL] 6/6"; None when unreadable."""
-    m = re.search(r"Floor\s*(\d).*?\[?\s*(HARD|NORMAL)\s*\]?.*?(\d)\s*/\s*(\d)", text, re.I | re.S)
+    m = re.search(r"Floor\s*(\d{1,2}).*?\[?\s*(HARD|NORMAL)\s*\]?.*?(\d)\s*/\s*(\d)", text, re.I | re.S)
     if not m:
         return None
     return int(m[1]), m[2].upper() == "HARD", int(m[3]), int(m[4])

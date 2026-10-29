@@ -9,6 +9,8 @@ from settlement import NOT_SEEN, append_run, bonus_toggles, claim_dialog, counts
     ("Floor 5 [NORMAL] 6/6", (5, False, 6, 6)),
     ("Floor 5 [HARD] 5/6", (5, True, 5, 6)),
     ("Floor 3 HARD 2 / 6", (3, True, 2, 6)),  # OCR may drop the brackets
+    ("Floor 12 [HARD] 5/7", (12, True, 5, 7)),  # #383: floors run to 15
+    ("Floor 15 [NORMAL] 6/6", (15, False, 6, 6)),
     ("Floor 5", None),
     ("", None),
 ])
