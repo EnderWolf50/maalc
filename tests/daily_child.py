@@ -140,17 +140,18 @@ def result(detail, game, actions):
             "keys": game.keys, "screen": game.screen, "done": actions.TASK["done"]}
 
 
-def probe_child(body):
+def probe_child(body, image=None):
     """The child of a test that calls an agent function on the real OCR: body(context, actions, out) runs inside a custom
     action of a MaaFramework task on a still, black game; whatever it puts in the dict out is printed as the one JSON
-    line, and an exception in it as out["error"] (MaaFramework swallows it)."""
+    line, and an exception in it as out["error"] (MaaFramework swallows it). image: the tests/screens png the game shows
+    instead of black."""
     from maa.custom_action import CustomAction
 
     actions, resource = load()
     out = {"error": None}
 
     class Still(game_class()):
-        images = {"black": np.zeros((720, 1280, 3), np.uint8)}
+        images = {"black": screen(image) if image else np.zeros((720, 1280, 3), np.uint8)}
 
     class Probe(CustomAction):
         def run(self, context, argv):
