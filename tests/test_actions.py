@@ -2106,7 +2106,20 @@ def test_a_check_with_no_odds_read_taps_no_sinner_and_hands_back(context):
     # #380: the prompt shows before the odds are drawn; the first sinner was taken blind, the right one read 1.8 s later.
     check_page(context, [(x, "") for x in actions.EVENT_PORTRAIT_X])
     assert actions.Event().run(context, None) is True
+    actions.time.sleep(actions.EVENT_ODDS_WAIT - 0.5)
+    assert actions.Event().run(context, None) is True  # still inside the wait
     assert event_portrait_taps(context) == []
+
+
+def test_a_check_with_no_odds_read_tries_the_next_sinner_when_a_tap_did_nothing(context):
+    # #92: with no odds read it was always the first sinner; when she cannot be picked it never ended.
+    # #380: only once the odds are 2 s late; the prompt's first look just hands back.
+    check_page(context)
+    actions.Event().run(context, None)
+    actions.time.sleep(actions.EVENT_ODDS_WAIT)
+    for _ in range(3):
+        actions.Event().run(context, None)  # the screen never changes: each tap did nothing
+    assert event_portrait_taps(context) == actions.EVENT_PORTRAIT_X[:3]
 
 
 def test_a_check_with_some_odds_read_still_takes_the_best_of_them(context):
