@@ -4,7 +4,7 @@ import { describe, expect, test } from "vitest";
 import { GiftListsTab } from "./GiftLists";
 import { DEFAULT_LIST } from "./gifts";
 import { TEXT } from "./i18n";
-import { GIFT_KEYWORDS, SEARCH_GIFTS, defaultGorder, exportGiftList, newSettings, newTeam, type GiftList } from "./model";
+import { GIFT_KEYWORDS, SEARCH_GIFTS, defaultGorder, exportGiftList, keywordlessIds, newSettings, newTeam, type GiftList } from "./model";
 import { renderEditor } from "./testing";
 import { validate } from "./validate";
 
@@ -70,8 +70,18 @@ describe("copy and new", () => {
     const r = await open([mine({ want: [1] })]);
     await r.item("blank");
     const lists = r.settings().gift_lists;
-    expect(lists[1]).toMatchObject({ name: zh["gl.blank_name"], want: [], keep: [], fusion_condition: "any" });
+    expect(lists[1]).toMatchObject({ name: zh["gl.blank_name"], want: [], fusion_condition: "any" });
     expect(chosenName()).toBe(zh["gl.blank_name"]);
+  });
+
+  test("new keeps every Keywordless gift, so a blank list does not fuse or sell them (questions-1 no. 8)", async () => {
+    const r = await open([mine({ want: [1] })]);
+    await r.item("blank");
+    const kept = r.settings().gift_lists[1].keep;
+    expect(kept).toEqual(keywordlessIds());
+    expect(kept.length).toBeGreaterThan(80);
+    expect(kept).not.toContain(9991); // the vestiges stay fusion material
+    expect(validate(r.settings())).toEqual([]);
   });
 });
 

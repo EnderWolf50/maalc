@@ -143,7 +143,7 @@ test("version 11 gets the daily tasks: both Luxcavations with no team picked, no
 });
 
 test("version 13 turns the teams' keep settings into gift lists, the daily tasks left as they were (#291)", () => {
-  const old = asV13() as Record<string, unknown> & { luxcavation: { thread: { count: number } } };
+  const old = asV13() as unknown as { luxcavation: { thread: { count: number } } };
   old.luxcavation.thread.count = 2;
   const { data, migrated, dropped } = parseSettings(JSON.stringify(old));
   expect(migrated).toBe(true);
@@ -257,9 +257,9 @@ describe("cleanGiftList (tests/settings_cases.json clean_gift_list)", () => {
 
 test("parseThemePacks reads the season's data file", () => {
   const data = parseThemePacks(themePacksYaml);
-  expect(data.packs["Walpurgis Night: Hatred and Despair"]).toBe("N34 H34");
+  expect(data.packs["Walpurgis Night: Hatred and Despair"]).toEqual({ N: [3, 4], H: [3, 4] });
   // the BokGak re-runs are packs of their own, on HARD floors 4-5, weighed as their originals
-  expect(data.packs["Miracle in District 20 BokGak"]).toBe("H45");
+  expect(data.packs["Miracle in District 20 BokGak"]).toEqual({ H: [4, 5] });
   expect(data.default_plan.weights["Timekilling Time BokGak"]).toBe(data.default_plan.weights["Timekilling Time"]);
   // #240: AALC's weights, threshold 0, unlisted 0.
   expect(data.default_plan).toMatchObject({ threshold: 0, unlisted: 0, event_packs: "weight" });

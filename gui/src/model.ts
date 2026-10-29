@@ -100,9 +100,12 @@ export interface StarlightPlan extends StarlightValues { id: string; name: strin
  * read, and the event packs' mode. */
 export interface PackPlanValues { weights: Record<string, number>; threshold: number; unlisted: number; event_packs: string }
 export interface ThemePackPlan extends PackPlanValues { id: string; name: string }
-/** assets/resource/base/data/theme_packs.yaml (spec 05 section 2): the season's packs with their floors ("N12 H1")
- * every pack's id by name (also packs the list leaves out, #306) and the locked default plan. */
-export interface ThemePacks { packs: Record<string, string>; pack_ids: Record<string, number>; default_plan: PackPlanValues }
+/** A theme pack's floors (spec 05 section 2, #387): N (NORMAL) and H (HARD) list the floors 1-15, I (INFINITY) and X (EXTREME)
+ * are true where it shows on every floor of that mode. */
+export interface PackFloors { N?: number[]; H?: number[]; I?: true; X?: true }
+/** assets/resource/base/data/theme_packs.yaml (spec 05 section 2): the season's packs with their floors, every pack's id by
+ * name (also packs the list leaves out, #306) and the locked default plan. */
+export interface ThemePacks { packs: Record<string, PackFloors>; pack_ids: Record<string, number>; default_plan: PackPlanValues }
 
 export const EVENT_MODES: string[] = P.theme_pack_plans.items.properties.event_packs.enum;
 export const newPackPlan = (): PackPlanValues => ({ weights: {}, threshold: 0, unlisted: 0, event_packs: "weight" });
@@ -112,22 +115,19 @@ export function parseThemePacks(text: string): ThemePacks {
   return { packs: data.packs ?? {}, pack_ids: data.pack_ids ?? {}, default_plan: { ...newPackPlan(), ...data.default_plan } };
 }
 
-/** The floor digits of one difficulty in a pack's floors: "N12 H1", "N" -> "12"; undefined when it has none. */
-const floorDigits = (floors: string, letter: "N" | "H") => floors.match(new RegExp(letter + "(\\d+)"))?.[1];
-
-/** Whether a pack with these floors ("N12 H1": NORMAL 1-2, HARD 1) shows on difficulty ("" any) and floor (0 any). */
-export function onFloor(floors: string, difficulty: "" | "normal" | "hard", floor: number) {
-  const on = (letter: "N" | "H") => floorDigits(floors, letter);
-  const sets = (difficulty ? [on(difficulty === "hard" ? "H" : "N")] : [on("N"), on("H")]).filter((x) => x !== undefined);
-  return sets.some((f) => floor === 0 || f!.includes(String(floor)));
+/** Whether a pack with these floors ({N: [1, 2], H: [1]}: NORMAL 1-2, HARD 1) shows on difficulty ("" any) and floor (0 any).
+ * INFINITY and EXTREME are no difficulty of the filter. */
+export function onFloor(floors: PackFloors, difficulty: "" | "normal" | "hard", floor: number) {
+  const sets = difficulty ? [floors[difficulty === "hard" ? "H" : "N"]] : [floors.N, floors.H];
+  return sets.some((f) => f !== undefined && (floor === 0 || f.includes(floor)));
 }
 
-/** A pack's floors ("N12 H1") as badges, NORMAL first: each difficulty it has with its runs of floors as ranges ("1–2"),
+/** A pack's floors as badges, NORMAL first: each difficulty it has with its runs of floors as ranges ("1–2"),
  * the rest joined by sep ("1–2、4"). A difficulty it lacks has no badge. */
-export function floorBadges(floors: string, sep: string) {
-  const runs = (digits: string) => {
+export function floorBadges(floors: PackFloors, sep: string) {
+  const runs = (list: number[]) => {
     const groups: number[][] = [];
-    for (const n of [...digits].map(Number).sort((a, b) => a - b)) {
+    for (const n of [...list].sort((a, b) => a - b)) {
       const last = groups[groups.length - 1];
       if (last && n === last[last.length - 1] + 1) last.push(n);
       else groups.push([n]);
@@ -135,8 +135,8 @@ export function floorBadges(floors: string, sep: string) {
     return groups.map((g) => (g.length > 1 ? `${g[0]}–${g[g.length - 1]}` : `${g[0]}`)).join(sep);
   };
   return (["N", "H"] as const).flatMap((d) => {
-    const digits = floorDigits(floors, d);
-    return digits ? [{ hard: d === "H", text: runs(digits) }] : [];
+    const list = floors[d];
+    return list?.length ? [{ hard: d === "H", text: runs(list) }] : [];
   });
 }
 
@@ -180,6 +180,10 @@ export function cleanGiftList(list: GiftList): { list: GiftList; dropped: number
 /** Whether a loaded gift list passes the schema, so cleaning it hides no schema error (the agent cleans after the schema check too). */
 const giftListCheck = new Ajv2020({ strict: false }).compile({ $ref: "#/$defs/gift_list", $defs: schema.$defs });
 const wellFormed = (l: unknown): l is GiftList => giftListCheck(l);
+
+/** Every Keywordless gift the shop sells or fuses, by id: what a new list keeps (a vestige is no such gift: it stays fusion material). */
+export const keywordlessIds = (): number[] =>
+  [...SEARCH_GIFTS, ...RECIPE_GIFTS].filter((g) => g.keyword === "Keywordless").map((g) => g.id).sort((a, b) => a - b);
 
 /** The gift list a version 10 team's keep settings come to, without id and name; lost: its keep_gifts that match no gift
  * (agent/settings.py _team_gift_list). */

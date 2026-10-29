@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { resetToDefault } from "./giftEdit";
 import { DEFAULT_LIST } from "./gifts";
 import { fill } from "./i18n";
-import { GIFT_KEYWORDS, defaultGorder, exportGiftList, freeName, importGiftList, newId, type GiftList } from "./model";
+import { GIFT_KEYWORDS, defaultGorder, exportGiftList, freeName, importGiftList, keywordlessIds, newId, type GiftList } from "./model";
 import { useEditor } from "./ui";
 
 type View = "menu" | "rename" | "reset" | "export" | "import" | "delete";
@@ -46,7 +46,7 @@ export function GiftListOptions({ at, readOnly, choose, flash }: {
     add({ ...base, id: newId(), name: freeName(fill(t("gl.copy_name"), { name }), names) }, "gl.copied_list");
   };
   const blank = () => add({
-    id: newId(), name: freeName(t("gl.blank_name"), names), order: [...GIFT_KEYWORDS], want: [], keep: [], gorder: defaultGorder(), fusion_condition: "any",
+    id: newId(), name: freeName(t("gl.blank_name"), names), order: [...GIFT_KEYWORDS], want: [], keep: keywordlessIds(), gorder: defaultGorder(), fusion_condition: "any",
   }, "gl.blank_made");
   const rename = () => {
     const v = text.trim();

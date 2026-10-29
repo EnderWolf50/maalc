@@ -8,21 +8,28 @@ import {
 import { validate } from "./validate";
 
 test("a pack shows on the floors the data file gives it", () => {
-  expect(onFloor("N12 H1", "", 0)).toBe(true);
-  expect(onFloor("N12 H1", "normal", 2)).toBe(true);
-  expect(onFloor("N12 H1", "hard", 2)).toBe(false);
-  expect(onFloor("H345", "normal", 0)).toBe(false); // HARD only
-  expect(onFloor("H345", "", 4)).toBe(true);
+  expect(onFloor({ N: [1, 2], H: [1] }, "", 0)).toBe(true);
+  expect(onFloor({ N: [1, 2], H: [1] }, "normal", 2)).toBe(true);
+  expect(onFloor({ N: [1, 2], H: [1] }, "hard", 2)).toBe(false);
+  expect(onFloor({ H: [3, 4, 5] }, "normal", 0)).toBe(false); // HARD only
+  expect(onFloor({ H: [3, 4, 5] }, "", 4)).toBe(true);
+  // #387: two-digit floors are their own floor, not the digits of one
+  expect(onFloor({ H: [10, 11] }, "hard", 1)).toBe(false);
+  expect(onFloor({ H: [10, 11] }, "hard", 11)).toBe(true);
+  expect(onFloor({ H: [10, 11] }, "", 15)).toBe(false);
+  expect(onFloor({ I: true, X: true }, "", 0)).toBe(false); // INFINITY and EXTREME are no difficulty of the filter
 });
 
 test("a pack's floors become badges: ranges for runs, the rest listed, only the difficulties it has", () => {
-  expect(floorBadges("N12 H1", "、")).toEqual([{ hard: false, text: "1–2" }, { hard: true, text: "1" }]);
-  expect(floorBadges("H13", "、")).toEqual([{ hard: true, text: "1、3" }]); // one difficulty, a gap
-  expect(floorBadges("H345", "、")).toEqual([{ hard: true, text: "3–5" }]);
-  expect(floorBadges("N124 H5", "、")).toEqual([{ hard: false, text: "1–2、4" }, { hard: true, text: "5" }]);
-  expect(floorBadges("N5", "、")).toEqual([{ hard: false, text: "5" }]);
-  expect(floorBadges("N45 H34", ", ")).toEqual([{ hard: false, text: "4–5" }, { hard: true, text: "3–4" }]);
-  expect(floorBadges("", "、")).toEqual([]);
+  expect(floorBadges({ N: [1, 2], H: [1] }, "、")).toEqual([{ hard: false, text: "1–2" }, { hard: true, text: "1" }]);
+  expect(floorBadges({ H: [1, 3] }, "、")).toEqual([{ hard: true, text: "1、3" }]); // one difficulty, a gap
+  expect(floorBadges({ H: [3, 4, 5] }, "、")).toEqual([{ hard: true, text: "3–5" }]);
+  expect(floorBadges({ N: [1, 2, 4], H: [5] }, "、")).toEqual([{ hard: false, text: "1–2、4" }, { hard: true, text: "5" }]);
+  expect(floorBadges({ N: [5] }, "、")).toEqual([{ hard: false, text: "5" }]);
+  expect(floorBadges({ N: [4, 5], H: [3, 4] }, ", ")).toEqual([{ hard: false, text: "4–5" }, { hard: true, text: "3–4" }]);
+  expect(floorBadges({ H: [9, 10, 11, 13] }, "、")).toEqual([{ hard: true, text: "9–11、13" }]); // #387: floors 6-15
+  expect(floorBadges({ I: true, X: true }, "、")).toEqual([]); // not a difficulty of the filter either
+  expect(floorBadges({}, "、")).toEqual([]);
 });
 
 test("lanes are the weights in use and 0, highest first; the line sits under the lanes at or over the threshold", () => {

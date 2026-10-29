@@ -1678,7 +1678,7 @@ def test_the_default_list_makes_burn_the_main_keyword():
 
 def test_a_planned_run_plays_the_main_keyword_of_the_teams_list(context, clock, monkeypatch):
     settings = {**listed("Bleed"), "run": {"runs": None, "stop_when_weekly_bonus_out": False, "difficulty": "normal"}}
-    monkeypatch.setattr(actions, "load_settings", lambda root: settings)
+    monkeypatch.setattr(actions, "load_settings", lambda root, need_team=False: settings)
     monkeypatch.setattr(actions, "read_cursor", lambda root, address: None)
     monkeypatch.setattr(actions.recovery, "read_runs", lambda root: [])
     monkeypatch.setattr(actions.recovery, "floor_limit", lambda runs, team: 1800)
@@ -1686,6 +1686,7 @@ def test_a_planned_run_plays_the_main_keyword_of_the_teams_list(context, clock, 
     actions.RUN.clear()
     assert actions.current_run(context)["team"]["keyword"] == "Bleed"  # the agent restarted mid-run
     actions.RUN.clear()
+    actions.TASK["modules"] = 20  # read on the Drive page (#369)
     page(context, {})
     actions.PlanRun().run(context, argv())
     assert actions.RUN["team"]["keyword"] == "Bleed"
@@ -1911,12 +1912,16 @@ def test_a_card_read_as_the_bokgak_re_run_notes_only_the_re_run(monkeypatch):
     assert actions.RUN["packs"] == [1113]
 
 
-def test_a_pulled_pack_without_an_id_makes_the_run_packs_unknown(context, monkeypatch):
-    # #306: a name the data file lacks (an event's, a plan's own) has no id: the exclusive recipes lock as after a restart.
+def test_a_pulled_pack_without_an_id_is_skipped_and_the_packs_noted_so_far_stay(context, monkeypatch):
+    # #310 review: a pack the data file lacks (an EXTREME-only pack, an event's, a plan's own) is not noted; the packs noted
+    # before it, and the ones after it, still are, so the exclusive recipes of the known packs stay open.
     monkeypatch.setattr(actions, "pack_ids", lambda: {})
     actions.RUN["packs"] = [1011]
     pack_page(context, monkeypatch, 2, "none", "weight")
-    assert actions.run_packs() is None
+    assert actions.run_packs() == [1011]
+    monkeypatch.setattr(actions, "pack_ids", lambda: {"Pack 0a": 1004})
+    actions.note_pack("Pack 0a")
+    assert actions.run_packs() == [1011, 1004]
 
 
 def test_a_run_without_a_packs_note_stays_unknown_after_a_pull(context, monkeypatch):
@@ -1927,15 +1932,16 @@ def test_a_run_without_a_packs_note_stays_unknown_after_a_pull(context, monkeypa
 
 
 def test_a_new_run_starts_with_no_packs_taken(context, clock, monkeypatch):
-    team = {"id": 1, "name": "t", "game_team": 1, "guard_turns": 3, "hard_from_floor": 1, "gift_list": "default"}
+    team = {"id": 1, "name": "t", "game_team": 1, "guard_turns": 3, "hard_from_floor": 1, "gift_list": "default", "enabled": True}
     run = {"runs": 0, "stop_when_weekly_bonus_out": False, "difficulty": "normal"}
-    monkeypatch.setattr(actions, "load_settings", lambda root: {"run": run, "teams": [team], "gift_lists": []})
+    monkeypatch.setattr(actions, "load_settings", lambda root, need_team=False: {"run": run, "teams": [team], "gift_lists": []})
     monkeypatch.setattr(actions, "pick_team", lambda teams, cursor, difficulty: team)
     monkeypatch.setattr(actions, "read_cursor", lambda root, address: None)
     monkeypatch.setattr(actions.settlement, "runs_done", lambda done, limit: False)
     monkeypatch.setattr(actions.recovery, "read_runs", lambda root: [])
     monkeypatch.setattr(actions.recovery, "floor_limit", lambda runs, team: 1800)
     actions.RUN["packs"] = [1004, 1005]  # the last run's
+    actions.TASK["modules"] = 20  # read on the Drive page (#369)
     page(context, {})
     actions.PlanRun().run(context, argv())
     assert actions.run_packs() == []

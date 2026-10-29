@@ -1864,19 +1864,18 @@ def pack_ids():
 
 
 def run_packs():
-    """The ids of the theme packs the run pulled so far, or None when unknown: the agent restarted mid-run (ADR 0003) or a pulled
-    pack has no id. The gift list's exclusive recipes lock their materials all the same when it is None (gifts.lockers, #306)."""
+    """The ids of the theme packs the run pulled so far, or None when unknown: the agent restarted mid-run (ADR 0003). The gift list's exclusive recipes lock their materials all the same when it is None (gifts.lockers, #306)."""
     return RUN.get("packs")
 
 
 def note_pack(name):
-    """Note the pack PickThemePack pulled in the run; a run that lost its earlier floors, or a pack without an id, leaves it unknown."""
+    """Note the pack PickThemePack pulled in the run; a run that lost its earlier floors leaves it unknown, a pack without an id (an
+    EXTREME-only pack, an event's) is skipped and the rest stay noted."""
     if "packs" not in RUN:
         return
     ids = pack_ids()
     if name not in ids:
-        log(f"pack {name!r} has no id: the run's packs are unknown")
-        del RUN["packs"]
+        log(f"pack {name!r} has no id: left out of the run's packs")
         return
     # A re-run (BokGak) shows the original's title: a card whose BokGak line was read is already the copy's name (one id), else the
     # pull may be either: note both (some recipes name only the re-run).
