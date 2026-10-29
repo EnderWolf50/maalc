@@ -68,6 +68,15 @@ def test_a_recording_that_stops_growing_is_reported(tmp_path):
     assert pf.recording_grows(tmp_path, 1, say=said.append, sleep=lambda s: None) == 1 and "asleep" in said[-1]
 
 
+def test_a_recording_in_progress_is_an_mkv(tmp_path):
+    # screenrec writes rec_<profile>_<date>_<time>.mkv while it records and remuxes it to .mp4 only at stop
+    said = []
+    (tmp_path / "rec_old_20261029_100000.mp4").write_bytes(b"x" * 500)
+    rec = tmp_path / "rec_preflight_20261030_043630.mkv"
+    rec.write_bytes(b"x" * 10)
+    assert pf.recording_grows(tmp_path, 1, say=said.append, sleep=lambda s: rec.write_bytes(b"x" * 99)) == 0, said
+
+
 class Clock:
     def __init__(self):
         self.t = 0.0

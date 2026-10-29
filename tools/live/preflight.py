@@ -10,7 +10,7 @@ to accept on 2026-10-21 (exit 0, the line says which; the bot's nodes do it when
 `run.auto_accept_terms` are on); `stop` a resumable Mirror Dungeon run, an outdated client or any other screen (exit 1
 with the reason). Run it before any pytest or install rebuild: a game update found after 21 minutes of prep cost a run.
 
-**recording** exits 1 when the newest `rec_*.mp4` in `--out` did not grow over `--seconds`: a display that went to sleep
+**recording** exits 1 when the newest `rec_*.mkv` (a recording in progress) or `rec_*.mp4` in `--out` did not grow over `--seconds`: a display that went to sleep
 after `screenrec.py start` leaves a clip with no frames.
 
 **plan** waits up to `--within` seconds for the bot's `new run:` line (a run it planned itself) in `--log`. A
@@ -96,12 +96,13 @@ def screen(root: Path, port: int, shot: Path | None, say=print, see=look) -> int
 
 def recording_grows(out: Path, seconds: float, say=print, sleep=time.sleep) -> int:
     def newest():
-        files = sorted(out.glob("rec_*.mp4"), key=lambda p: p.stat().st_mtime)
+        # screenrec writes .mkv while recording and remuxes it to .mp4 at stop; a tie goes to the .mkv
+        files = sorted([*out.glob("rec_*.mkv"), *out.glob("rec_*.mp4")], key=lambda p: (p.stat().st_mtime, p.suffix == ".mkv"))
         return (files[-1], files[-1].stat().st_size) if files else (None, 0)
 
     first, size = newest()
     if first is None:
-        say(f"no rec_*.mp4 in {out}: the recording did not start")
+        say(f"no rec_*.mkv or rec_*.mp4 in {out}: the recording did not start")
         return 1
     sleep(seconds)
     last, now = newest()
