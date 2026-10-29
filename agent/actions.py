@@ -949,7 +949,7 @@ class AssemblePanel(CustomAction):
 
 # Lunacy for Enkephalin (#373, pipeline/charge_enkephalin.json): the Charge Enkephalin window's Use Lunacy tab.
 LUNACY_TAB = (639, 226)  # the Use Lunacy tab (live 720p, 2026-10-26); Confirm and Cancel are taken to sit where the Modules tab's do
-CHARGE_TRIES = 3  # reads of the prompt and price the task spends before it gives up
+CHARGE_TRIES = 3  # reads of the prompt and price, and Cancels over a decided task, the task spends before it gives up
 
 
 @AgentServer.custom_action("ChargeStart")

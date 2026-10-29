@@ -164,7 +164,7 @@ def test_ten_charges_in_a_window_that_stays_open_are_not_a_stuck_screen():
 def test_a_cancel_that_never_closes_the_window_stops_the_task_after_a_few_taps():
     # Done at the third price, the window stays: ChargePanel is exempt from the same-screen watchdog, so it bounds itself.
     o = run_child(__file__)["cancel_does_nothing"]
-    assert o["succeeded"] is False and o["clicks"].count(list(CANCEL)) <= 4
+    assert o["succeeded"] is False and o["clicks"].count(list(CANCEL)) == 4  # the deciding one, then CHARGE_TRIES more
 
 
 def test_the_use_boxes_tab_has_the_same_prompt_but_no_daily_count_and_is_never_confirmed():
