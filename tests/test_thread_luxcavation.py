@@ -3,10 +3,27 @@ Thread tab, its open card, the Level Select and that list's bottom row; one batt
 success. The game model and the child are test_exp_luxcavation.py's, run here for this task alone.
 """
 
-from daily_child import inside, run_child
-from test_exp_luxcavation import (CARD_ENTER, CONFIRM_TAP, DRIVE_TAB, EVENT_CARD, EVENT_PORTRAITS, LEVEL_ENTERS,
-                                  LUXCAVATION, TEAM_ROW, THREAD_TAB, TO_BATTLE, VERY_HIGH, WINDOW_TAB, child, confirms,
-                                  title_taps)
+from daily_child import inside, interface as interface_json, run_child
+from test_exp_luxcavation import (CARD_ENTER, CONFIRM_TAP, DRIVE_TAB, EVENT_CARD, EVENT_PORTRAITS, LEVEL_ENTERS, LOSE,
+                                  LUXCAVATION, TEAM_ROW, THREAD_TAB, TO_BATTLE, VERY_HIGH, WIN, WINDOW_TAB, child,
+                                  confirms, title_taps)
+
+# test_exp_luxcavation.py's SCENARIOS shape; a Thread level takes 2 Modules.
+SCENARIOS = {"thread": ("drive", "b", 1, 0, WIN, "exp"), "thread_on_thread": ("drive", "b", 1, 0, WIN, "thread"),
+             "thread_scrolled": ("drive", "b", 1, 0, WIN, "scrolled"), "thread_two": ("drive", "b", 2, 0, WIN, "exp"),
+             "thread_two_levels": ("drive", "b", 2, 0, WIN, "exp", "levels"),
+             "thread_poor": ("drive", "b", 92, 0, WIN, "exp"), "thread_no_team": ("drive", None, 1, 0, WIN, "exp"),
+             "thread_no_result": ("drive", "b", 1, 0, [None], "exp"),
+             "thread_lose_retry": ("drive", "b", 1, 1, LOSE + WIN, "exp"), "thread_lose_out": ("drive", "b", 1, 0, LOSE, "exp"),
+             "thread_event": ("drive", "b", 1, 0, WIN, "exp"),
+             "thread_x3": ("drive", "b", 3, 0, WIN, "exp"), "thread_x3_off": ("drive", "b", 3, 0, WIN, "exp"),
+             "thread_x12": ("drive", "b", 12, 0, WIN, "exp")}
+CONSECUTIVE = {"thread_x3", "thread_x12"}
+
+
+def test_thread_luxcavation_is_a_task_of_the_interface():
+    interface = interface_json()
+    assert {"name": "ThreadLuxcavation", "label": "$ThreadLuxcavation", "entry": "ThreadLuxcavation"} in interface["task"]
 
 
 def level_enters(o):
@@ -111,4 +128,4 @@ def test_thread_consecutive_splits_more_than_ten_wins_too():
 
 
 if __name__ == "__main__":
-    child("ThreadLuxcavation")
+    child("ThreadLuxcavation", SCENARIOS, CONSECUTIVE)

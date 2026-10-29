@@ -57,9 +57,25 @@ EVENT_STEPS = {"ev_story": (EVENT_BUTTON, "ev_card"), "ev_card": (EVENT_CARD, "e
                "ev_continue": (EVENT_BUTTON, "fight")}
 
 
-def child(task="ExpLuxcavation"):
-    """Run task (ExpLuxcavation or ThreadLuxcavation) from each of its starts; print one JSON line {scenario:
-    {succeeded, nodes, clicks, keys}}. A task a child of its own: CI's shards split the tests by file (conftest.py)."""
+# scenario: (start screen, team, count, retries, how the battles end, then for the Thread task the tab Luxcavation
+# opens on and the page a battle ends on); the main window shows 182 Modules, an EXP stage takes 3, a Thread level 2. A
+# battle the list does not reach ends in a win. CONSECUTIVE: the scenarios that fight their wins as Consecutive Battles
+# (#375), off for the rest.
+WIN, LOSE = ["win"], ["lose"]
+SCENARIOS = {"drive": ("drive", "b", 1, 0, WIN), "locked": ("locked", "b", 1, 0, WIN), "no_team": ("drive", None, 1, 0, WIN),
+             "two": ("drive", "b", 2, 0, WIN), "poor": ("drive", "b", 61, 0, WIN), "no_result": ("drive", "b", 1, 0, [None]),
+             "lose_retry": ("drive", "b", 1, 1, LOSE + WIN), "lose_out": ("drive", "b", 1, 1, LOSE + LOSE),
+             "lose_no_retries": ("drive", "b", 1, 0, LOSE),
+             "x1": ("drive", "b", 1, 0, WIN), "x3": ("drive", "b", 3, 0, WIN), "x3_off": ("drive", "b", 3, 0, WIN),
+             "x12": ("drive", "b", 12, 0, WIN), "x3_unread": ("drive", "b", 3, 0, WIN),
+             "x3_lose_retry": ("drive", "b", 3, 1, LOSE + WIN)}
+CONSECUTIVE = {"x1", "x3", "x12", "x3_unread", "x3_lose_retry"}
+
+
+def child(task="ExpLuxcavation", scenarios=SCENARIOS, consecutive=CONSECUTIVE):
+    """Run task from each of its scenarios (SCENARIOS' shape); print one JSON line {scenario: {succeeded, nodes, clicks,
+    keys}}. test_thread_luxcavation.py runs ThreadLuxcavation's on this model: one child run per file, as CI's shards
+    split the tests by file (conftest.py)."""
     actions, resource = load()
     (actions.ROOT / "config").mkdir()
     settings = json.loads((ROOT / "tests" / "settings_cases.json").read_text(encoding="utf-8"))["valid"]
@@ -211,39 +227,7 @@ def child(task="ExpLuxcavation"):
     actions.consecutive_now = lambda context, image, box, enter=None: game.read(box, enter)
     tasker = bind(resource, game)
     out = {"error": None}
-    # scenario: (task, start screen, team, count, retries, how the battles end, then for the Thread task the tab
-    # Luxcavation opens on and the page a battle ends on); the main window shows 182 Modules, an EXP stage takes 3, a
-    # Thread level 2. A battle the list does not reach ends in a win.
-    win, lose = ["win"], ["lose"]
-    scenarios = {"drive": ("ExpLuxcavation", "drive", "b", 1, 0, win), "locked": ("ExpLuxcavation", "locked", "b", 1, 0, win),
-                 "no_team": ("ExpLuxcavation", "drive", None, 1, 0, win), "two": ("ExpLuxcavation", "drive", "b", 2, 0, win),
-                 "poor": ("ExpLuxcavation", "drive", "b", 61, 0, win), "no_result": ("ExpLuxcavation", "drive", "b", 1, 0, [None]),
-                 "lose_retry": ("ExpLuxcavation", "drive", "b", 1, 1, lose + win),
-                 "lose_out": ("ExpLuxcavation", "drive", "b", 1, 1, lose + lose),
-                 "lose_no_retries": ("ExpLuxcavation", "drive", "b", 1, 0, lose),
-                 "thread": ("ThreadLuxcavation", "drive", "b", 1, 0, win, "exp"),
-                 "thread_on_thread": ("ThreadLuxcavation", "drive", "b", 1, 0, win, "thread"),
-                 "thread_scrolled": ("ThreadLuxcavation", "drive", "b", 1, 0, win, "scrolled"),
-                 "thread_two": ("ThreadLuxcavation", "drive", "b", 2, 0, win, "exp"),
-                 "thread_two_levels": ("ThreadLuxcavation", "drive", "b", 2, 0, win, "exp", "levels"),
-                 "thread_poor": ("ThreadLuxcavation", "drive", "b", 92, 0, win, "exp"),
-                 "thread_no_team": ("ThreadLuxcavation", "drive", None, 1, 0, win, "exp"),
-                 "thread_no_result": ("ThreadLuxcavation", "drive", "b", 1, 0, [None], "exp"),
-                 "thread_lose_retry": ("ThreadLuxcavation", "drive", "b", 1, 1, lose + win, "exp"),
-                 "thread_lose_out": ("ThreadLuxcavation", "drive", "b", 1, 0, lose, "exp"),
-                 "thread_event": ("ThreadLuxcavation", "drive", "b", 1, 0, win, "exp"),
-                 # #375: the wins as Consecutive Battles (the names in `consecutive`), off for the rest
-                 "x1": ("ExpLuxcavation", "drive", "b", 1, 0, win), "x3": ("ExpLuxcavation", "drive", "b", 3, 0, win),
-                 "x3_off": ("ExpLuxcavation", "drive", "b", 3, 0, win), "x12": ("ExpLuxcavation", "drive", "b", 12, 0, win),
-                 "x3_unread": ("ExpLuxcavation", "drive", "b", 3, 0, win),
-                 "x3_lose_retry": ("ExpLuxcavation", "drive", "b", 3, 1, lose + win),
-                 "thread_x3": ("ThreadLuxcavation", "drive", "b", 3, 0, win, "exp"),
-                 "thread_x3_off": ("ThreadLuxcavation", "drive", "b", 3, 0, win, "exp"),
-                 "thread_x12": ("ThreadLuxcavation", "drive", "b", 12, 0, win, "exp")}
-    consecutive = {"x1", "x3", "x12", "x3_unread", "x3_lose_retry", "thread_x3", "thread_x12"}
-    for scenario, (name, start, team, count, retries, outcomes, *rest) in scenarios.items():
-        if name != task:
-            continue
+    for scenario, (start, team, count, retries, outcomes, *rest) in scenarios.items():
         opts = {"count": count, "team": team, "retries": retries, "consecutive": scenario in consecutive}
         (actions.ROOT / "config" / "settings.json").write_text(
             json.dumps({**settings, "luxcavation": {"exp": opts, "thread": opts}}), encoding="utf-8")
@@ -334,7 +318,6 @@ def test_exp_luxcavation_with_no_team_picked_fails_before_it_taps():
 def test_exp_luxcavation_is_a_task_of_the_interface():
     interface = interface_json()
     assert {"name": "ExpLuxcavation", "label": "$ExpLuxcavation", "entry": "ExpLuxcavation"} in interface["task"]
-    assert {"name": "ThreadLuxcavation", "label": "$ThreadLuxcavation", "entry": "ThreadLuxcavation"} in interface["task"]
 
 
 def title_taps(o, box):
