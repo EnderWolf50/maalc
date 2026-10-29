@@ -181,9 +181,11 @@ export function cleanGiftList(list: GiftList): { list: GiftList; dropped: number
 const giftListCheck = new Ajv2020({ strict: false }).compile({ $ref: "#/$defs/gift_list", $defs: schema.$defs });
 const wellFormed = (l: unknown): l is GiftList => giftListCheck(l);
 
-/** Every Keywordless gift the shop sells or fuses, by id: what a new list keeps (a vestige is no such gift: it stays fusion material). */
+/** Every Keywordless gift the shop sells or fuses, by id, and Lunar Vestige: what a new list keeps, as the default list does.
+ * Vestiges I-IV are no such gift: they stay fusion material; Lunar Vestige, tier V, never is one. */
 export const keywordlessIds = (): number[] =>
-  [...SEARCH_GIFTS, ...RECIPE_GIFTS].filter((g) => g.keyword === "Keywordless").map((g) => g.id).sort((a, b) => a - b);
+  [...SEARCH_GIFTS, ...RECIPE_GIFTS].filter((g) => g.keyword === "Keywordless").map((g) => g.id).concat(VESTIGES[4].id)
+    .sort((a, b) => a - b);
 
 /** The gift list a version 10 team's keep settings come to, without id and name; lost: its keep_gifts that match no gift
  * (agent/settings.py _team_gift_list). */

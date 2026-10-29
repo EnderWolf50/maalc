@@ -74,13 +74,14 @@ describe("copy and new", () => {
     expect(chosenName()).toBe(zh["gl.blank_name"]);
   });
 
-  test("new keeps every Keywordless gift, so a blank list does not fuse or sell them (questions-1 no. 8)", async () => {
+  test("new keeps every Keywordless gift, so a blank list does not fuse or sell them (user decision 2026-10-29)", async () => {
     const r = await open([mine({ want: [1] })]);
     await r.item("blank");
     const kept = r.settings().gift_lists[1].keep;
     expect(kept).toEqual(keywordlessIds());
     expect(kept.length).toBeGreaterThan(80);
     expect(kept).not.toContain(9991); // the vestiges stay fusion material
+    expect(kept).toContain(9995); // Lunar Vestige, tier V, is none: kept as the default list does
     expect(validate(r.settings())).toEqual([]);
   });
 });

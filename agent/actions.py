@@ -1869,8 +1869,8 @@ def run_packs():
 
 
 def note_pack(name):
-    """Note the pack PickThemePack pulled in the run; a run that lost its earlier floors leaves it unknown, a pack without an id (an
-    EXTREME-only pack, an event's) is skipped and the rest stay noted."""
+    """Note the pack PickThemePack pulled in the run; a run that lost its earlier floors leaves it unknown, a pack the data file
+    has no id for (most EXTREME-only packs, an event pack newer than the file) is skipped and the rest stay noted."""
     if "packs" not in RUN:
         return
     ids = pack_ids()
