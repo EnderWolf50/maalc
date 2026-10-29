@@ -38,6 +38,7 @@ pythonpath = ["agent", "tools"]
 testpaths = ["tests"]
 # pytest-timeout: a test that hangs fails after this many seconds instead of holding the job (main.23: 50 minutes).
 timeout = 300
+timeout_method = "thread"  # SIGALRM never reached a hang inside MaaFramework; the thread method dumps every stack and exits
 
 [tool.ruff.lint]
 # Syntax errors and pyflakes: undefined names, unused imports, F811 redefinition.
