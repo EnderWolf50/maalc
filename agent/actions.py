@@ -1125,6 +1125,14 @@ DISMISSED_GAP = 60  # seconds: RetryPopup keeps coming back on a dropped link, s
 GAPPED = {"RetryPopup"}  # the only node kept at most once per gap; every other node is kept each time
 
 
+def popup_button(detail):
+    """The text of the button PopupButton recognised: its PopupButtonText sub-result, which the And already read."""
+    for sub in getattr(detail.best_result, "sub_results", []):
+        if sub.name == "PopupButtonText" and sub.best_result:
+            return sub.best_result.text
+    return ""
+
+
 @AgentServer.custom_action("DismissShot")
 class DismissShot(CustomAction):
     """Keep the screen in logs/dismissed/ (run.keep_dismissed_screens), then close it (#244): the back key when the
@@ -1135,15 +1143,20 @@ class DismissShot(CustomAction):
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         now = time.monotonic()
         gap = DISMISSED_GAP if argv.node_name in GAPPED else 0
-        if allowed("keep_dismissed_screens") and now - DISMISSED_AT.get(argv.node_name, -gap) >= gap:
+        keep = allowed("keep_dismissed_screens") and now - DISMISSED_AT.get(argv.node_name, -gap) >= gap
+        popup = argv.node_name == "PopupButton"
+        image = screen(context) if keep or popup else None  # one capture for the kept screen and the popup's text
+        if keep:
             stamp = f"{settlement.now().replace(':', '-')}-{argv.node_name}"
             try:
-                recovery.keep_capture(ROOT, "dismissed", screen(context), stamp, recovery.DISMISSED_KEEP)
+                recovery.keep_capture(ROOT, "dismissed", image, stamp, recovery.DISMISSED_KEEP)
                 if gap:
                     DISMISSED_AT[argv.node_name] = now
                 log(f"{argv.node_name}: screen kept in logs/dismissed/{stamp}.png")
             except OSError as e:
                 log(f"{argv.node_name}: screen not saved: {e}")
+        if popup:  # what was closed, e.g. the previous session's "Please claim your rewards" (#382)
+            log(f"popup: {text(context, image, DIALOG_TEXT)!r}: pressed {popup_button(argv.reco_detail)!r}")
         if json.loads(argv.custom_action_param or "null") == "back":
             context.tasker.controller.post_click_key(BACK_KEY).wait()
         else:
@@ -1890,6 +1903,8 @@ class PickThemePack(CustomAction):
             return True  # page fading in or out: let MirrorHub look again
         if floor != RUN.get("floor"):
             RUN.pop("after_shop", None)
+            if floor == 1:
+                RUN.pop("floors_hard", None)  # a floor 1 after a later floor is a new run's: no difficulty of the last one stays (#382)
             RUN.pop("resumed", None)  # this floor's map comes up from its theme pack
             TASK.pop("modules", None)  # a run is under way: Claim will take 5, the next one reads the Modules again (#369)
             RUN.update(floor=floor, map_misses=0)  # a new floor's map gets a fresh retry quota (spec 06)
@@ -1950,6 +1965,7 @@ class PickThemePack(CustomAction):
                     log(f"floor {floor} stays HARD: a run never goes back to NORMAL")
                 log(f"floor {floor}: {'HARD' if hard else 'NORMAL'}")
                 RUN["floor_hard"] = hard  # the map does not show it; RouteMap's weights need it
+                RUN.setdefault("floors_hard", {})[floor] = hard  # what Settle's weekly bonuses count on (#382)
                 return True
             # The arrows sit left of HARD, right of NORMAL; switching re-rolls the packs.
             log(f"floor {floor}: switch to {move.upper()}")
@@ -4343,6 +4359,7 @@ TOGGLE_X, TOGGLE_ROI = (558, 660, 763), (-45, 237, 90, 30)  # the 3 weekly-bonus
 GIVE_UP, CLAIM = (393, 544), (887, 544)
 REWARD_TITLE_ROI = [500, 100, 280, 45]
 DIALOG_TEXT = [360, 280, 560, 140]
+FIRST_FLOOR = [96, 238, 64, 36]  # Dungeon Progress's floor 1 tile, left of the dialog: "[HARD] Floor1" (2026-10-29)
 DIALOG_CANCEL, DIALOG_CONFIRM = (515, 493), (763, 493)
 
 
@@ -4381,7 +4398,15 @@ class Settle(CustomAction):
 
         s, team = run["settings"]["run"], run["team"]
         left = number(text(context, image, WEEKLY_LEFT).split("/")[0])
-        all_hard = run.get("planned", False) and run["difficulty"] == "hard" and team["hard_from_floor"] in (1, None)
+        # The difficulty each floor was played on, as the theme pack page showed it: a run with no plan in memory (an
+        # expired session's dialog came first, #382) counts the same. Floors not seen (a resumed run): the window's floor 1 tile.
+        floors_hard = RUN.get("floors_hard", {})
+
+        def first_tile():
+            tile = text(context, image, FIRST_FLOOR)
+            log(f"floors before {min(floors_hard, default=floor + 1)} were not seen: the window's floor 1 tile reads {tile!r}")
+            return tile
+        all_hard = settlement.all_hard(floors_hard, floor, hard, first_tile)
         want = settlement.bonus_toggles(s["weekly_bonus_use"], s["weekly_bonus_amount"], hard, left or 0, all_hard)
         for _ in range(6):
             states = toggles(context, page_guard(context, "ExplorationReward"))
