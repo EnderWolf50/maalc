@@ -53,13 +53,14 @@ def changed_tests(source: str, lines: set[int], path: str) -> list[str]:
 
 
 def passed_keys(junit: Path) -> set[tuple[str, str]]:
-    """(test module, function) of every case a junit file shows as passed; a parametrized test counts by its function."""
-    out = set()
+    """(test module, function) of every test whose cases all passed in a junit file; one failed case of a parametrized test fails it."""
+    results: dict[tuple[str, str], bool] = {}
     for case in ET.parse(junit).getroot().iter("testcase"):
-        if not any(child.tag in ("failure", "error", "skipped") for child in case):
-            module = next((part for part in case.get("classname", "").split(".") if part.startswith("test_")), "")
-            out.add((module, case.get("name", "").split("[")[0]))
-    return out
+        module = next((part for part in case.get("classname", "").split(".") if part.startswith("test_")), "")
+        key = (module, case.get("name", "").split("[")[0])
+        ok = not any(child.tag in ("failure", "error", "skipped") for child in case)
+        results[key] = results.get(key, True) and ok
+    return {key for key, ok in results.items() if ok}
 
 
 def link(source: Path, target: Path) -> None:
@@ -94,10 +95,12 @@ def main(base: str) -> int:
                 (work / path).write_bytes(subprocess.run(["git", "show", f"HEAD:{path}"], cwd=ROOT, capture_output=True, check=True).stdout)
             if (ROOT / OCR).exists() and not (work / OCR).exists():
                 link(ROOT / OCR, work / OCR)
-            junit = Path(tmp) / "result.xml"
-            subprocess.run([sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider", f"--junitxml={junit}", *wanted],
-                           cwd=work, capture_output=True, text=True, encoding="utf-8")
-            passing = passed_keys(junit) if junit.exists() else set()
+            passing = set()
+            for n, path in enumerate(sorted({w.split("::")[0] for w in wanted})):  # one run per file: a module that does not import
+                junit = Path(tmp) / f"result{n}.xml"                                # on the base must not stop the others
+                subprocess.run([sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider", f"--junitxml={junit}",
+                                *(w for w in wanted if w.split("::")[0] == path)], cwd=work, capture_output=True, text=True, encoding="utf-8")
+                passing |= passed_keys(junit) if junit.exists() else set()
         finally:
             unlink(work / OCR)
             git("worktree", "remove", "--force", str(work), check=False)
