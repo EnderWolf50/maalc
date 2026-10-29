@@ -3130,6 +3130,7 @@ EVENT_TAKE = 1.5  # s a tap on an event page has to show
 EVENT_LABELS = {"skip", "proceed", "continue", "commence"}  # the Event node's expected, compact()ed
 EVENT_BUTTON_LABEL = [1040, 612, 190, 66]  # the Event node's roi: empty once the event page is gone
 EVENT_LIMIT = 180  # s one event may take before recovery L1 (AALC allows 300); a boss quiz of several rounds stays well under
+EVENT_ODDS_WAIT = 2.0  # s after a check's prompt first shows that no odds read hands back to MirrorHub, not a sinner (#380); live: the odds came 1.8 s after
 EVENT_GAP = 30  # s between two Event calls after which the next call is another event
 EVENT_LEAST = 0.5 # s after a tap before the screen counts as moved: a fade's first frames are the same page
 CHOICE_X = 925  # the option list's middle
@@ -3182,6 +3183,7 @@ class Event(CustomAction):
         if red_button(image):
             tried.clear()
             checked.clear()
+            event.pop("prompt_at", None)
             tap(context, *EVENT_BUTTON, wait=0)
             Event.advance(context, image, pressed_at=time.monotonic())
         elif card_alone(image):
@@ -3190,8 +3192,13 @@ class Event(CustomAction):
         elif has(text(context, image, CHECK_PROMPT), "Choose a character"):
             # One read per portrait: read as a row, neighbouring captions run together ("HighVery Low").
             captions = [(text(context, image, [x - 38, 605, 76, 24], only_rec=True), x) for x in EVENT_PORTRAIT_X]
+            # The odds are drawn after the prompt (#380): in the first EVENT_ODDS_WAIT s with none read, no blind first
+            # sinner; past it a check that never draws them goes on sinner by sinner (#92).
+            if all(rewards.odds_rank(t) is None for t, _ in captions) and now - event.setdefault("prompt_at", now) < EVENT_ODDS_WAIT:
+                log("event check: no odds read yet; MirrorHub looks again")
+                return True
             i = rewards.pick_checker(captions, checked)
-            if i is None:  # no odds read (or all tried): the next sinner not tried yet, round again when all are
+            if i is None:  # all the odds read were tried: the next sinner not tried yet, round again when all are
                 i = next((k for k in range(len(captions)) if k not in checked), None)
                 if i is None:
                     checked.clear()
@@ -3202,6 +3209,7 @@ class Event(CustomAction):
                 checked.add(i)
         elif has(text(context, image, CHOICES_HEADER), "Choices"):
             checked.clear()
+            event.pop("prompt_at", None)
             run = RUN if "lux" in RUN else current_run(context)  # a Luxcavation battle's (J1): its team, no Mirror run plan
             story = [t for t, _ in sorted(ocr(context, image, EVENT_STORY), key=lambda r: (r[1][1], r[1][0]))]
             scrolls = rewards.choice_scrollbar(image) or any(None in c for c in rewards.choice_cards(image))

@@ -128,7 +128,7 @@
 | 飾品選擇頁（戰後、事件） | OCR：飾品名稱、`Select <n>/<m>`；模板：卡片上的 `Acquire E.G.O Gift` 標籤、`Refuse Gift`、體系圖示、`Owned` 標籤 | 依「主要體系 > 其他 > 已擁有」選，計數允許多選時依同一順序繼續選；沒有任何候選時選第一個（[03](03-decisions.md) 飾品）。實機：只有一張卡時置中顯示，Select 上沒有計數，點卡片前 Select 是灰的 | 飾品獲得視窗 | #10 | `captures/154_focused_unknown.png`、`155_gift_acquire_selected.png` |
 | 事件頁：敘事 | 模板：左側敘事面板、右下紅色按鈕；OCR：按鈕文字（`SKIP`、`Proceed`、`Continue`、`Commence`） | 點該文字。這幾個按鈕都在右下同一個位置，沒有作用時變灰；敘事中途要點敘事框推進文字 | 事件頁：選項、事件頁：技能判定、地圖頁、飾品獲得視窗 | #11、#16 | `captures/132_event_entered.png`、`142_event_after_skip.png`、`146_event_continue.png` |
 | 事件頁：選項 | OCR：右側 `Choices` 面板的問題文字與選項文字 | 先查事件覆寫表（問題文字用模糊比對，依選項文字選）；沒有就用通用規則：「獲得主要體系 E.G.O」> 其他獲得 E.G.O 的選項 > 第一個選項（[03](03-decisions.md) 事件）。實機：選項下方的提示寫出判定與獎勵，例如 `Lust & Pride Advantage check. Pass to gain a Keywordless E.G.O Gift.`；選項多時面板會出現捲軸 | 事件頁：結果、事件頁：技能判定 | #11 | `captures/133_event_skip1.png`、`149_ev2_choices.png` |
-| 事件頁：技能判定 | OCR：`Choose a character to perform the check with:`、`Threshold`；每位罪人頭像上方的成功率等級（Very High … Very Low） | 選等級最高的罪人，同等級選最左邊；讀不到就選第 1 位，不盲點。選好後點 `Commence` | 事件頁：結果 | #11 | `captures/137_event_check_after_tap.png`、`139_event_check_sinner_selected.png`、`141_event_check_result.png` |
+| 事件頁：技能判定 | OCR：`Choose a character to perform the check with:`、`Threshold`；每位罪人頭像上方的成功率等級（Very High … Very Low） | 選等級最高的罪人，同等級選最左邊；提示出現後 2 秒內成功率全讀不到就不點（等它畫出來，#380），超過 2 秒仍讀不到才由左往右逐位試。選好後點 `Commence` | 事件頁：結果 | #11 | `captures/137_event_check_after_tap.png`、`139_event_check_sinner_selected.png`、`141_event_check_result.png` |
 | 事件頁：結果 | OCR：`Result` 標題、`Check Passed` 這類文字、`Continue`／`Proceed`／`SKIP` | 點該文字。獲得的飾品會先在結果面板顯示，回地圖後再彈飾品獲得視窗 | 事件頁、飾品獲得視窗、地圖頁、戰前編隊頁 | #11、#16 | `captures/134_event_choice1.png`、`143_event_next.png` |
 
 ## 商店
