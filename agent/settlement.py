@@ -8,15 +8,16 @@ import re
 from datetime import datetime, timezone
 from pathlib import Path
 
-from ocrtext import has
+from ocrtext import floor_number, has
 
 
 def read_result(text):
     """(floor, hard, cleared, total) from the window's result, e.g. "Floor 5 [NORMAL] 6/6"; None when unreadable."""
-    m = re.search(r"Floor\s*(\d).*?\[?\s*(HARD|NORMAL)\s*\]?.*?(\d)\s*/\s*(\d)", text, re.I | re.S)
-    if not m:
+    floor = floor_number(text)
+    m = re.search(r"floor.*?\[?\s*(HARD|NORMAL)\s*\]?.*?(\d)\s*/\s*(\d)", text, re.I | re.S)
+    if floor is None or not m:
         return None
-    return int(m[1]), m[2].upper() == "HARD", int(m[3]), int(m[4])
+    return floor, m[1].upper() == "HARD", int(m[2]), int(m[3])
 
 
 def goal_met(result):

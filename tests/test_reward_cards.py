@@ -115,3 +115,21 @@ def test_a_look_that_cannot_read_selectable_taps_nothing(context, monkeypatch):
     monkeypatch.setattr(actions, "ocr", read)
     assert actions.RewardCard().run(context, None)
     assert page.taps == [(660, 300), (660, 300), actions.CARD_CONFIRM]
+
+
+def test_a_gift_get_popup_over_the_title_ends_the_wait_at_once(context, monkeypatch):
+    # #377: the E.G.O Gift GET! popup covers the middle only, so the page's title stays; the wait for the title to go
+    # used to run its whole 2 s before MirrorHub could hand the popup to GiftGet.
+    page = RewardPage(context, monkeypatch, deal=0)
+    ocr = page.ocr
+    page.picked = [660]  # Selectable 1/1: straight to Confirm
+
+    def read(context, image, roi, only_rec=False):
+        if roi == actions.GET_TITLE:
+            return [("E.G.O Gift GET!", (560, 165, 160, 30))]
+        return ocr(context, image, roi, only_rec)
+    monkeypatch.setattr(actions, "ocr", read)
+    start = actions.time.monotonic()
+    assert actions.RewardCard().run(context, None)
+    assert actions.time.monotonic() - start < 1.0
+    assert page.taps == [actions.CARD_CONFIRM]
