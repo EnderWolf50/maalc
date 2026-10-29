@@ -4530,9 +4530,9 @@ class Shop(CustomAction):
         """
         failed, blocked = visit.setdefault("recipes_failed", []), []
         recipe = recipe_fusion(team["list"], [c["id"] for c in cells if c["id"] is not None], slots=slots, skip=failed, blocked=blocked)
-        for gift, lacks in blocked:
-            log(f"shop: recipe {gift} {GIFT_NAMES.get(gift)}: skip, missing " + ", ".join(f"{i} {GIFT_NAMES.get(i)}" for i in lacks)
-                + " (on the list as want/keep)")
+        for gift, kept in blocked:
+            log(f"shop: recipe {gift} {GIFT_NAMES.get(gift)}: skip, the list keeps " + ", ".join(f"{i} {GIFT_NAMES.get(i)}" for i in kept)
+                + " (owned, but a kept gift is no material)")
         if recipe is None:
             return None
         group = pick_cells(cells, recipe["materials"])

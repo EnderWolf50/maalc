@@ -86,14 +86,30 @@ def test_a_recipe_that_does_not_go_in_leaves_the_ordinary_fusion_to_be_made_the_
     assert fused and ok and taps[3:] == [1, 1, 1]
 
 
-def test_a_recipe_that_needs_a_gift_the_list_wants_is_skipped_and_the_log_says_why(context, monkeypatch):
-    # The list wants Soothe the Dead and also 9003, one of its materials: 9003 is no material (state table: want/keep are not).
+REMINISCENCE = 9179  # Poise III: [9063, 9177]
+REMINISCENCE_MATERIALS = [("Poise", 1, 9063), ("Poise", 2, 9177)]
+
+
+def test_a_wanted_fusion_is_made_from_materials_the_list_wants_too(context, monkeypatch):
+    # accept-301c's list wanted Reminiscence and both its materials; the user (2026-10-30): the fusion takes them.
+    fused, taps, ok = fusion_taps(context, monkeypatch, team(REMINISCENCE, 9063, 9177), *REMINISCENCE_MATERIALS, confirm=2)
+    assert fused and ok and taps == [1, 1]
+
+
+def test_a_wanted_material_short_of_its_partner_is_no_ordinary_fusion_material(context, monkeypatch):
+    # 9177 not owned yet: 9063 waits for it (a wanted gift is never an ordinary fusion's material), three junk gifts fuse.
+    fused, taps, ok = fusion_taps(context, monkeypatch, team(REMINISCENCE, 9063, 9177), ("Poise", 1, 9063), *junk(3))
+    assert fused and ok and taps == [0, 1, 1, 1]
+
+
+def test_a_recipe_that_needs_a_kept_gift_is_skipped_and_the_log_says_the_list_keeps_it(context, monkeypatch):
     logs = []
     monkeypatch.setattr(actions, "log", logs.append)
-    readings = [("Burn", 3, 9003), ("Burn", 3, 9053), ("Burn", 3, 9157)]
-    fused, taps, ok = fusion_taps(context, monkeypatch, team(SOOTHE, 9003), *readings)
-    assert not fused and not ok and taps == [0, 0, 0]
-    assert any(f"recipe {SOOTHE} " in line and "skip, missing 9003 " in line and line.endswith("(on the list as want/keep)") for line in logs)
+    wanted = {"list": wants(REMINISCENCE, 9063, keep=(9177,))}
+    fused, taps, ok = fusion_taps(context, monkeypatch, wanted, *REMINISCENCE_MATERIALS, confirm=2)
+    assert not fused and not ok and taps == [0, 0]
+    line = next(line for line in logs if f"recipe {REMINISCENCE} " in line)
+    assert "missing" not in line and "9063" not in line and "the list keeps 9177 " in line
 
 
 # The Forecasts row (#300): a recipe fusion whose page tier is not the recipe's own is left unpressed.

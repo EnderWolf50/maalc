@@ -307,18 +307,18 @@ describe("dragging on the main screen", () => {
 });
 
 describe("the default list in the dialog", () => {
-  test("it can be looked at; every move only shows the notice", async () => {
+  test("it can be looked at; it buys nothing, and every move only shows the notice", async () => {
+    // The default list wants nothing (the user, 2026-10-30): no gift rows, only the keyword order.
     const r = await open(null);
     const before = JSON.stringify(r.settings());
-    expect(buyButton()).toHaveTextContent(`（${queue(DEFAULT_LIST).length}）`);
+    expect(queue(DEFAULT_LIST)).toEqual([]);
+    expect(buyButton()).toHaveTextContent("（0）");
     const d = await openDialog(r);
-    const first = rowIds()[0];
-    await r.user.click(d.getByRole("button", { name: say(zh["gl.down_gift"], { name: nameOf(first) }) }));
-    expect(within(dialog()).getByRole("status")).toHaveTextContent(zh["gl.ro"]);
-    expect(rowIds()[0]).toBe(first);
+    expect(rowIds()).toEqual([]);
     const main = DEFAULT_LIST.order.find((k) => k !== "Keywordless")!;
     const second = DEFAULT_LIST.order[DEFAULT_LIST.order.indexOf(main) + 1];
     await r.user.click(d.getByRole("button", { name: say(zh["gl.kw_up"], { name: zh[`kw.${second}` as keyof typeof zh] }) }));
+    expect(within(dialog()).getByRole("status")).toHaveTextContent(zh["gl.ro"]);
     drag(section(main), section(second));
     expect(JSON.stringify(r.settings())).toBe(before);
   });

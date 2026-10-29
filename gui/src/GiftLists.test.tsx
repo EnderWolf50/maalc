@@ -240,11 +240,15 @@ describe("read-only default", () => {
     const r = await open([mine()], "zh_tw", "default");
     expect(screen.getByRole("combobox", { name: zh["gl.list"] })).toHaveValue("default");
     expect(screen.getByText(zh["gl.readonly"])).toBeInTheDocument();
-    const wanted = DEFAULT_LIST.want.find((id) => GIFT_BY_ID.get(id)!.kind === "buyable")!;
-    expect(await tile(r, wanted)).toHaveAccessibleName(new RegExp(zh["state.want"]));
+    // The user, 2026-10-30: it keeps the Keywordless gifts and wants nothing; a Burn gift is drop.
+    expect(DEFAULT_LIST.want).toEqual([]);
+    const kept = DEFAULT_LIST.keep.find((id) => GIFT_BY_ID.get(id)!.kind === "buyable")!;
+    expect(await tile(r, kept)).toHaveAccessibleName(new RegExp(zh["state.keep"]));
+    const burn = DEFAULT_LIST.gorder.Burn[0];
+    expect(await tile(r, burn)).toHaveAccessibleName(new RegExp(zh["state.drop"]));
     const before = JSON.stringify(r.settings());
-    await r.user.keyboard("3");
-    await r.user.click(getTile(wanted));
+    await r.user.keyboard("1");
+    await r.user.click(getTile(burn));
     expect(flash()).toBe(zh["gl.ro"]);
     await r.user.selectOptions(screen.getByRole("combobox", { name: zh["gl.fusion_condition"] }), "tier4");
     expect(flash()).toBe(zh["gl.ro"]);

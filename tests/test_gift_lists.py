@@ -27,12 +27,12 @@ def test_default_list_ids_all_exist():
     assert not set(LIST["want"]) & set(LIST["keep"])
 
 
-def test_default_list_is_the_former_default_team():
-    burn = {g["id"] for g in SEARCH if g["keyword"] == "Burn"}
-    assert set(LIST["want"]) == burn | {9083}
+def test_default_list_keeps_the_keywordless_gifts_and_wants_nothing():
+    # The user, 2026-10-30: the default list only keeps the Keywordless gifts; what to want is the user's to set.
+    assert LIST["want"] == []
     keywordless = {g["id"] for g in KEYWORD_GIFTS if g["keyword"] == "Keywordless"}  # extra_gifts' too (#310's live run)
     # vestiges I-IV (9991-9994) are fusion materials, so `drop`; Lunar Vestige (V, 9995) is never a material, so `keep`
-    assert set(LIST["keep"]) == (keywordless | {max(VESTIGES)}) - {9083}
+    assert set(LIST["keep"]) == keywordless | {max(VESTIGES)} and 9083 in LIST["keep"] and len(LIST["keep"]) == 116
     assert LIST["order"] == KEYWORDS and LIST["fusion_condition"] == "any"
 
 
