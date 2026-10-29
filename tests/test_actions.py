@@ -2102,12 +2102,17 @@ def event_portrait_taps(context):
     return [c.args[0] for c in context.tasker.controller.post_click.call_args_list if c.args[1] == actions.EVENT_PORTRAIT_Y]
 
 
-def test_a_check_with_no_odds_read_tries_the_next_sinner_when_a_tap_did_nothing(context):
-    # #92: with no odds read it was always the first sinner; when she cannot be picked it never ended.
-    check_page(context)
-    for _ in range(3):
-        actions.Event().run(context, None)  # the screen never changes: each tap did nothing
-    assert event_portrait_taps(context) == actions.EVENT_PORTRAIT_X[:3]
+def test_a_check_with_no_odds_read_taps_no_sinner_and_hands_back(context):
+    # #380: the prompt shows before the odds are drawn; the first sinner was taken blind, the right one read 1.8 s later.
+    check_page(context, [(x, "") for x in actions.EVENT_PORTRAIT_X])
+    assert actions.Event().run(context, None) is True
+    assert event_portrait_taps(context) == []
+
+
+def test_a_check_with_some_odds_read_still_takes_the_best_of_them(context):
+    check_page(context, [(actions.EVENT_PORTRAIT_X[3], "Very High")])
+    actions.Event().run(context, None)
+    assert event_portrait_taps(context) == [actions.EVENT_PORTRAIT_X[3]]
 
 
 def test_a_check_with_odds_read_takes_the_next_best_when_a_tap_did_nothing(context):
@@ -2118,7 +2123,7 @@ def test_a_check_with_odds_read_takes_the_next_best_when_a_tap_did_nothing(conte
 
 
 def test_a_check_tap_that_took_is_not_held_against_the_sinner(context):
-    check_page(context)
+    check_page(context, [(actions.EVENT_PORTRAIT_X[0], "High")])
     screens(context, [0, 9])  # the first tap changes the screen
     actions.Event().run(context, None)
     actions.Event().run(context, None)

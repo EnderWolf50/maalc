@@ -3154,8 +3154,11 @@ class Event(CustomAction):
         elif has(text(context, image, CHECK_PROMPT), "Choose a character"):
             # One read per portrait: read as a row, neighbouring captions run together ("HighVery Low").
             captions = [(text(context, image, [x - 38, 605, 76, 24], only_rec=True), x) for x in EVENT_PORTRAIT_X]
+            if all(rewards.odds_rank(t) is None for t, _ in captions):
+                log("event check: no odds read yet; MirrorHub looks again")  # drawn after the prompt: no blind first sinner (#380)
+                return True
             i = rewards.pick_checker(captions, checked)
-            if i is None:  # no odds read (or all tried): the next sinner not tried yet, round again when all are
+            if i is None:  # all the odds read were tried: the next sinner not tried yet, round again when all are
                 i = next((k for k in range(len(captions)) if k not in checked), None)
                 if i is None:
                     checked.clear()
