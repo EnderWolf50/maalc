@@ -21,6 +21,12 @@ Land with the `ship` skill's land task. Then, in the main checkout and unless `u
 
 Done: `after_land.py` ends without a "failed" line.
 
+When to run it, and when not:
+
+- Run it after the PR has landed on `origin/main`: it fetches and fast-forwards by itself, and it refuses an off-main or dirty checkout.
+- Run it as `uv run python tools/after_land.py`. A bare `python` lacks the `maa` package (2026-10-21).
+- Not inside a `queue.py run` ticket: the script then reads its own ticket as a held `emulator` lane (2026-10-21).
+
 ## Claude Code hooks
 
 `.claude/settings.json` starts both hooks in exec form (`"command": "uv"` plus an `args` list), which needs a Claude Code version that knows `args` (2.1.302 does; `claude --version`). An older version drops `args` and runs a bare `uv`, which exits 2, the code that blocks a tool call: every Bash call then fails with a hook error that shows `uv`'s usage text. Update Claude Code when you see it.
@@ -60,8 +66,18 @@ Three links tie the evidence folders together; they are junctions, so a size lis
 
 Retention: an archive folder older than 7 days whose `INDEX.md` rows name only closed issues and PRs can be deleted with `prune`; a folder with no `INDEX.md` row, or with a number gh does not return, stays. A recording above 720p can be re-encoded with `shrink`. `recordings/` is never pruned. Before deleting or re-encoding, ask the chat that runs the live tests and owns the open issues which folders keep their original files (`shrink --keep <folder>`), and read the dry run first. `recordings/` holds hard links, not copies, so one file counts once.
 
+## The emulator lane
+
+Every MuMu instance on this PC logs in to the same game account, and starting the game on one instance kicks the other out (the user, 2026-10-20). So the `emulator` resource covers all instances: `tools/live/queue.py` describes it as the user's game account on the emulator. Take an `emulator` ticket before you drive any instance.
+
 ## Game data
 
 `tools/live/dialogs.py` lists the confirm-style dialog strings of `.local/unpack/`, to diff against the pipeline's known dialogs; run it before an unattended run.
 
 Look in `.local/unpack/` first (gift tables, prices, theme packs, every dialog string, under `raw/` and `static/`; its `NOTES.md` says what is where). The Simplified Chinese strings come from the Localize project, https://github.com/LocalizeLimbusCompany: clone it next to the other data to read them. The Chinese names the data files ship come from its release zip through `tools/llc_text.py`, which converts them to Traditional (OpenCC `s2twp` plus a few fixes). Reach for a wiki only when neither has it.
+
+To query it, search the unpacked tree with `rg`: `rg -l "<text>" .local/unpack/raw/Localize/en` finds a dialog or a name, and `rg -l "<key>" .local/unpack/static` finds a table (`static/` holds about 2200 JSON files). Mounting Trial names are in `raw/Localize/en/EN_Bufs_Mirror5.json`, and the mirror node data for the `-hard`, `-extreme` and `-infinite` variants is `static/Assets/Resources_moved/StaticData/static-data/mirrordungeon/mirrordungeon-08-*.json`.
+
+The Huiji wiki (`limbuscompany.huijiwiki.com`) is behind Cloudflare: `curl` got 403 from this PC on 2026-10-30, and WebFetch got 403 on 2026-10-16. Use the unpacked data first; a wiki answer means a browser session.
+
+The AALC source, the bot that AGENTS.md "Goal" sets feature parity with, is upstream `KIYI671/AhabAssistantLimbusCompany`. Read one file with `gh api repos/KIYI671/AhabAssistantLimbusCompany/contents/<path>`, or clone it once into `.local/aalc/` of the main checkout (resolve it with `tools/local_dir.py`) and search it with `rg`. A fork on your machine can be stale, so compare a file with upstream before you rely on it.
