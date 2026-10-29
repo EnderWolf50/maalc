@@ -104,7 +104,8 @@ def child():
             game.on_tap = lambda x, y: True
             override["GoHome"]["timeout"] = 8000
             override["HomeWindowTab"] = {"custom_action_param": {"left": True, "timeout": 0.1}}
-        if scenario == "tab_restart":
+        if scenario == "tab_restart":  # no title after the restart: RecoverStartApp's wait for it cut short (180 s)
+            override["RecoverStartApp"]["timeout"] = 3000
             game.start_app = lambda intent, game=game: (Game.start_app(game, intent), setattr(game, "screen", "drive"),
                                                         setattr(game, "on_tap", Game.on_tap.__get__(game)))[0]
         if scenario == "restarts_used":  # one restart left, and the restarted game is as stuck as before
