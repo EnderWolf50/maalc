@@ -9,7 +9,7 @@
 - 不採用把整局寫在程式碼迴圈裡的做法（MaaLimbus、AALC）。理由見 [ADR 0002](../adr/0002-pipeline-hub-and-agent-decisions.md)。（#8）
 - 使用者設定由設定 GUI 寫進 `<root>/config/settings.json`，Agent 在任務開始時讀取並檢查；PI 不帶使用者選項（[ADR 0006](../adr/0006-settings-gui-writes-one-settings-file.md)）。格式見 [04-settings.md](04-settings.md)。（#6、#19，2026-10-14 定案）
 - 遊戲資料（主題包清單與預設主題包方案、事件覆寫表、尋路權重、Cost 對照表與商店數字、試煉風險表）放在 `resource/base/data/` 的 YAML 資料檔，由 Agent 讀取（[ADR 0005](../adr/0005-game-data-files-separate-from-user-settings.md)）。格式見 [05-game-data.md](05-game-data.md)。（#11、#12、#17、#19）
-- MaaFramework 用 `maafw` wheel，但 `MaaFramework.dll` 換成 fork（EnderWolf50/MaaFramework）的修改版：v5.14.3 加上兩個修正。一是批次 OCR 裡被 roi 切掉一半以上高度的字框，改由那個 roi 自己跑一次 det+rec，不再切成細條重讀（MaaXYZ/MaaFramework#1573，#157）；二是每個任務只保留最後 200 個節點的詳情（MaaXYZ/MaaFramework#1578，#176）。版本與 SHA-256 釘在 `tools/install.py` 的 `MAAFW_FIX`，wheel 版本不符時安裝中止；對應原始碼見 [NOTICE.md](../../NOTICE.md)。等 maafw 正式版同時包含這兩個修正，就拿掉 fork、改回 wheel 的 DLL。只有 Windows 換 DLL。
+- Windows 上，`tools/install.py` 組出的 `install/maafw/` 用 `maafw` wheel 的檔案，只把 `MaaFramework.dll` 換成 fork（EnderWolf50/MaaFramework）的修改版；MXU 與 `tools/live/bot.py`（設 `MAAFW_BINARY_PATH`）載入這份，其他直接 `import maa` 的程式（測試、離線工具）載入的仍是 wheel 原版。fork 是 wheel 那一版加上兩個修正：批次 OCR 裡被 roi 切掉一半以上高度的字框，改由那個 roi 自己跑一次 det+rec，不再切成細條重讀（上游 MaaXYZ/MaaFramework#1568，修正 PR 為 MaaXYZ/MaaFramework#1573）；每個任務只保留最後 200 個節點的詳情（上游 MaaXYZ/MaaFramework#1578）。`MAAFW_FIX` 釘下載網址與 SHA-256，`MAAFW_FIX_VERSION` 是它對應的 wheel 版本，wheel 版本不符時安裝中止；對應原始碼見 [NOTICE.md](../../NOTICE.md)。等 maafw 正式版同時包含這兩個修正，就拿掉 fork、改回 wheel 的 DLL。（#157、#176）
 
 | 層 | 負責 | 不負責 |
 |---|---|---|
@@ -21,7 +21,7 @@
 
 - `MirrorHub` 是鏡牢流程的分派節點。每種鏡牢畫面都必須列在它的 `next` 裡，並標上 `[JumpBack]`；每個畫面處理完就回到 hub，重新判斷畫面。（#8）
 - `next` 的順序就是優先權。全域彈窗必須排在最前面（只有卡住偵測的 `Stuck` 節點排在它們之前，見 [06-recovery.md](06-recovery.md#實作31)），各子流程也引用同一組全域彈窗節點。（#8）
-- 用 OCR 認的畫面不直接列在 `next`，而是依同樣的順序列在 `HubText` 裡：MaaFramework 會把同一個 `next` 清單裡的 OCR 合併成一次辨識，再把跨過 roi 邊緣的字框切成 1 px 細條重讀，戰鬥中一次就吃掉好幾 GB 記憶體。`HubText` 由 Agent 自己讀一次，只把可能的畫面排進它的清單，每個畫面再用自己的 OCR 確認。它分成每段最寬 960 px 的視窗讀（det 會把更寬的圖縮小，小字因此讀錯）；勝利畫面的 VICTORY 只有 det 找不到框、整個 roi 交給 rec 時才讀得出來，它的那一次讀不到，所以 `Victory` 放在 tail，每輪都自己檢查；`next` 只剩 `Stuck`、`BattleHUD`（戰鬥畫面：回合或暫停鍵，伺服器彈窗仍先看）、`Connecting`、`HubText`、`NoBatchOCR` 後的 `Victory`（唯一直接列在 `next` 的 OCR，理由見下）和幾個模板畫面。戰鬥中每輪都會先看的三個伺服器彈窗（`Connecting`、`RetryPopup`、`PopupButton`）都先比模板，模板沒中就不跑 OCR；`HubText` 只用 `And` 裡的 OCR 判讀，模板留給節點自己確認。（#157）
+- 用 OCR 認的畫面不直接列在 `next`，而是依同樣的順序列在 `HubText` 裡：MaaFramework 會把同一個 `next` 清單裡的 OCR 合併成一次辨識，再把跨過 roi 邊緣的字框切成 1 px 細條重讀，戰鬥中一次就吃掉好幾 GB 記憶體（wheel 原版的行為；`install/` 的 fork DLL 已修，見〈分工〉，但 `HubText` 只讀一次、只排可能的畫面，所以照留）。`HubText` 由 Agent 自己讀一次，只把可能的畫面排進它的清單，每個畫面再用自己的 OCR 確認。它分成每段最寬 960 px 的視窗讀（det 會把更寬的圖縮小，小字因此讀錯）；勝利畫面的 VICTORY 只有 det 找不到框、整個 roi 交給 rec 時才讀得出來，它的那一次讀不到，所以 `Victory` 放在 tail，每輪都自己檢查；`next` 只剩 `Stuck`、`BattleHUD`（戰鬥畫面：回合或暫停鍵，伺服器彈窗仍先看）、`Connecting`、`HubText`、`NoBatchOCR` 後的 `Victory`（唯一直接列在 `next` 的 OCR，理由見下）和幾個模板畫面。戰鬥中每輪都會先看的三個伺服器彈窗（`Connecting`、`RetryPopup`、`PopupButton`）都先比模板，模板沒中就不跑 OCR；`HubText` 只用 `And` 裡的 OCR 判讀，模板留給節點自己確認。（#157）
 - 點下地圖節點之後出現什麼畫面，由 `MirrorHub` 依畫面判斷，不依預期的節點類型走分支；兩者不符時只記錄。（#12）
 - 看到 `VICTORY` 就算戰鬥結束；Confirm 有出現才按，之後的畫面交給 `MirrorHub`。實機：`VICTORY` → 載入畫面（`Combat Tips`）→ 地圖頁；Focused、異想體戰與 Boss 之後先出現飾品選擇頁或獎勵卡頁。（#16、#19；實機：captures/63_battle_victory.png、captures/64_loading_combat_tips.png）
 - `MirrorHub` 的 `timeout` 為 60 秒，逾時經 `on_error` 交給卡住處理；載入畫面另看畫面有沒有在動（不動 80 秒、最長 150 秒）。`on_error` 路徑裡 `[JumpBack]` 不生效，恢復後必須明確回到 `MirrorHub`。細節見 [06-recovery.md](06-recovery.md)。（#14）
