@@ -29,8 +29,14 @@ def game(monkeypatch, tmp_path):
     actions.RUN.clear()
 
 
-def arg(node, param=None, box=(100, 200, 40, 20)):
-    return SimpleNamespace(node_name=node, custom_action_param=param, box=box)
+def button(text):
+    """What the And of PopupButton hands the action: its PopupButtonText sub-result read `text`."""
+    sub = SimpleNamespace(name="PopupButtonText", best_result=SimpleNamespace(text=text))
+    return SimpleNamespace(best_result=SimpleNamespace(sub_results=[SimpleNamespace(name="Or", best_result=None), sub]))
+
+
+def arg(node, param=None, box=(100, 200, 40, 20), reco_detail=None):
+    return SimpleNamespace(node_name=node, custom_action_param=param, box=box, reco_detail=reco_detail or button("Confirm"))
 
 
 def test_the_screen_is_kept_under_its_time_and_node_before_the_key(game):
@@ -44,6 +50,15 @@ def test_a_box_is_tapped_at_its_centre(game):
     actions.DismissShot().run(game.ctx, arg("PopupButton"))
     assert game.taps == [(120, 210)] and game.keys == []
     assert len(list(game.folder.iterdir())) == 1
+
+
+def test_a_popup_pressed_is_logged_with_its_text_and_button(game, monkeypatch, capsys):
+    # #382: the previous session's "Please claim your rewards" was closed with no line saying what it was.
+    texts = []
+    monkeypatch.setattr(actions, "text", lambda context, image, roi, only_rec=False: texts.append(roi) or "The previous session has expired. Please claim your rewards.")
+    actions.DismissShot().run(game.ctx, arg("PopupButton", reco_detail=button("Confirm")))
+    assert texts == [actions.DIALOG_TEXT]  # the dialog is the only OCR it adds: the button's text is the recognition's
+    assert "popup: 'The previous session has expired. Please claim your rewards.': pressed 'Confirm'" in capsys.readouterr().out
 
 
 def test_off_dismisses_without_a_shot(game):
