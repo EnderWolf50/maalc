@@ -9,8 +9,11 @@ check with their own OCR, unbatched, so a hit is what MaaFramework reads.
 
 The det model shrinks an image wider than DET_SIDE to that width (MaaXYZ/MaaFramework#1531), and the rois of a hub
 span 1210 px: shrunk, a button read "✓Confirm" and an event's SKIP read nothing, both screens left out though their
-own OCR reads them. So the pass runs in windows of at most DET_SIDE px; for a 1210 px union two of them overlap by
-710 px, and a box wider than the overlap may be cut.
+own OCR reads them. So the pass groups the rois left to right, each group at most DET_SIDE px wide, and stacks the
+groups on one canvas for one det call: each window is a det call of its own. Where the stack is taller than
+DET_SIDE (MirrorHub's HubText) it runs in windows of at most DET_SIDE px instead; for a 1210 px union two of them
+overlap by 710 px, and a box wider than the overlap may be cut. A larger max side in the fork DLL would rescale the
+det of every OCR node, not this pass alone, and the tests run PyPI's wheel; so the pass keeps to DET_SIDE.
 A screen whose text only reads when det finds no box and the whole roi goes to rec (the battlefield's VICTORY) sits
 in the tail, where it always checks.
 """
@@ -18,12 +21,14 @@ in the tail, where it always checks.
 import json
 import re
 
+import numpy as np
 from maa.context import Context
 from maa.custom_recognition import CustomRecognition
 from maa.pipeline import JOCR, JRecognitionType
 
 INSIDE = 0.5  # share of a box's area inside a roi for the box to count there
 DET_SIDE = 960  # the det model's max side (fastdeploy DBDetector's max_side_len)
+GAP = 16  # black rows between two groups of rois on the det canvas, so det joins no text across them
 
 
 def ocr_specs(reco):
@@ -102,14 +107,54 @@ def windows(rois):
     return [[x + round(i * (w - DET_SIDE) / (n - 1)), y, DET_SIDE, h] for i in range(n)]
 
 
-def ocr_pass(context, image, rois):
-    """[(box, text, score)] of the text in rois, read with the rest of the image black, window by window."""
-    masked = mask(image, rois)
+def stack(rois):
+    """The rois left to right in groups whose union is at most DET_SIDE px wide, each group's union stacked under the
+    last on a canvas, GAP px apart: [(the union on the screen, its top on the canvas)] and the canvas (w, h). None
+    when one group holds them all or the canvas is wider or taller than DET_SIDE."""
+    groups = []
+    for roi in sorted(rois):
+        if groups and union(groups[-1] + [roi])[2] <= DET_SIDE:
+            groups[-1].append(roi)
+        else:
+            groups.append([roi])
+    placed, top = [], 0
+    for group in groups:
+        placed.append((union(group), top))
+        top += placed[-1][0][3] + GAP
+    size = max(u[2] for u, _ in placed), top - GAP
+    return None if len(placed) == 1 or max(size) > DET_SIDE else (placed, size)
+
+
+def read(context, image, roi):
+    """[(box, text, score)] of one OCR call over roi of image."""
+    detail = context.run_recognition_direct(JRecognitionType.OCR, JOCR(roi=tuple(roi), threshold=0), image)
+    return [(tuple(r.box), r.text, r.score) for r in (detail.all_results if detail else [])]
+
+
+def read_stacked(context, masked, placed, size):
+    """read() over the canvas stack() laid out, its boxes back where they are on the screen: by the group whose band
+    holds the box's middle (one in GAP has none and is left out)."""
+    w, h = size
+    # Never smaller than the screen: every image MaaFramework reads elsewhere is a full capture.
+    canvas = np.zeros((max(h, masked.shape[0]), max(w, masked.shape[1]), 3), masked.dtype)
+    for (x, y, gw, gh), top in placed:
+        canvas[top:top + gh, :gw] = masked[y:y + gh, x:x + gw]
     out = []
-    for win in windows(rois):
-        detail = context.run_recognition_direct(JRecognitionType.OCR, JOCR(roi=tuple(win), threshold=0), masked)
-        out += [(tuple(r.box), r.text, r.score) for r in (detail.all_results if detail else [])]
+    for (bx, by, bw, bh), text, score in read(context, canvas, (0, 0, w, h)):
+        for (x, y, _, gh), top in placed:
+            if top <= by + bh / 2 < top + gh:
+                out.append(((bx + x, by - top + y, bw, bh), text, score))
+                break
     return out
+
+
+def ocr_pass(context, image, rois):
+    """[(box, text, score)] of the text in rois, read with the rest of the image black: one det call on the stack of
+    their groups when it holds them, else window by window."""
+    masked = mask(image, rois)
+    if stacked := stack(rois):
+        return read_stacked(context, masked, *stacked)
+    return [found for win in windows(rois) for found in read(context, masked, win)]
 
 
 def screens(context, name):
