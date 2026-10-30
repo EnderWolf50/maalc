@@ -29,7 +29,7 @@
   - 版本 12（#362）：新增日常任務的 `luxcavation`（`exp`、`thread`）與 `charge_enkephalin`，從版本 11 遷移時填預設值（見第 12 節）。
   - 版本 13（#375）：`luxcavation.exp`、`luxcavation.thread` 新增 `consecutive`，從版本 12 遷移時填 `true`（已有的值不動）。
   - 版本 15（#310）：隊伍的 `shop_refresh_limit` 拆成 `shop_refresh_keyword`（體系刷新次數）與 `shop_refresh_normal`（一般刷新次數）（使用者 2026-10-30 決定：「刷新上限分開」）。從版本 14 遷移時舊值 N 變成體系 N、一般 0：以前就是先用體系刷新，所以花費不會比以前多。新隊伍兩個都是 0（不刷新）。Agent 在記憶體裡遷移，GUI 遷移後寫回；舊版 Agent 讀到版本 15 會報「比自己新」。
-  - 版本 14（#291、#292）：商店的保留設定從隊伍搬到飾品清單（第 13 節，#291、#292）。頂層新增 `gift_lists`；隊伍新增 `gift_list`，移除 `keyword`、`keep_keywords`、`keywordless`、`keep_gifts`、`fusion_condition`（主要體系改由清單決定，見第 13 節）。從版本 13 以前的檔案遷移時（版本 10 以前先照上面的步驟升到 13），每支隊伍產生一份清單，保留的東西完全相同的隊伍共用同一份（名稱用第一支隊伍的名稱，撞名加 ` 2`；id 是 `gift-list-1`、`gift-list-2`、…），隊伍的 `gift_list` 指向它。清單內容：
+  - 版本 14（#291、#292）：商店留哪些飾品的設定從隊伍搬到飾品清單（第 13 節，#291、#292）。頂層新增 `gift_lists`；隊伍新增 `gift_list`，移除 `keyword`、`keep_keywords`、`keywordless`、`keep_gifts`、`fusion_condition`（主要體系改由清單決定，見第 13 節）。從版本 13 以前的檔案遷移時（版本 10 以前先照上面的步驟升到 13），每支隊伍產生一份清單，保留的東西完全相同的隊伍共用同一份（名稱用第一支隊伍的名稱，撞名加 ` 2`；id 是 `gift-list-1`、`gift-list-2`、…），隊伍的 `gift_list` 指向它。清單內容：
     - `order`：隊伍原本的主要體系第一，其餘照預設順序，`Keywordless` 最後，所以遷移後的主要體系和遷移前相同；
     - `want`：主要體系的所有可購買飾品（`gift_search.json` 裡該體系的 I–III 階）；
     - `keep`：主要體系與 `keep_keywords` 的其餘飾品（`gift_recipes.json` 裡該體系的合成品、配方材料與 `extra_gifts`；`keep_keywords` 體系的可購買飾品也是）、所有無體系飾品（`gift_search.json` 的 `Keywordless` 分頁與 `gift_recipes.json` 裡無體系的，含 `extra_gifts`）、`keep_gifts` 對得到 id 的飾品（用 `keyword`、`tier`、英文名對照 `gift_search.json`；殘影用名字對到 9991–9995）。已在 `want` 的不重複放進 `keep`。`keep_gifts` 對不到的丟掉並計數，GUI 遷移後在標頭的狀態列顯示「有 N 個對不到，已丟掉」，直到使用者改動設定或儲存；
