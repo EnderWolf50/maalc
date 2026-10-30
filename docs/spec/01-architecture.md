@@ -86,6 +86,7 @@
 ### 經驗本（`ExpLuxcavation`）
 
 - 從主畫面點 Drive（`NavMainTabs`）→ Luxcavation（`NavLuxcavation`）→ EXP 分頁（停在 Thread 分頁時點 EXP，`LuxExpTab`）→ EXP 分頁預設畫面最右邊的 Enter（`LuxExpEnter`，`ExpEnter`）。上鎖的卡顯示 KEEP OUT、沒有 Enter，所以最右邊的 Enter 就是最難的開放關卡。不按 Skip Battle；Consecutive Battle 見下一條。（#366）
+- **每場花費**：3 個腦啡肽模組（`luxcavation.EXP_COST`；實機 2026-10-26 第 4–9 關都是 3），紐本每場 2 個（`luxcavation.THREAD_COST`，見下方紐本）。
 - **連戰**（`luxcavation.exp.consecutive`，預設開，#375）：卡片上方一條 `Consecutive Battle ×N ▲`，點它展開一列 `1« − N + »10`，範圍 1–10。框長在卡片上，卡片的位置會變（EXP 分頁最右邊已開放的關是中間那張卡時），所以標題、數字、列與按鍵的座標依實際按的 Enter 平移（基準 `ENTER_AT`，`actions.consecutive_box`），不寫死座標（`tests/screens/LuxConsecExp*.png`）。開時 `LuxEnter` 在按 Enter 之前把 N 設成 `luxcavation.batch(count, 已贏, 開)` = min(10, 剩下的場數)，一場打完，一場 ×N 算 N 場（獎勵與腦啡肽模組消耗都是 ×N，一張結算頁）；`count` 超過 10 就先 ×10，打完再開下一場打剩下的。遊戲離開 Luxcavation 或結算後會把 N 歸零成 ×1，所以每次進場都要設，不信畫面上的預設。設法（`actions.set_consecutive`）：OCR 讀標題的 N（`consecutive_now`：先讀 ×N 旁的窄 roi，再讀整個標題），不等於目標就點標題展開、照 `luxcavation.presses` 按最少的鍵（1«、−、+、»10）、再點標題收合，再讀一次必須等於目標；讀不到或調不到就停止程序（帶證據），不照錯的次數開戰。關：不碰這個框，一場一場打（`count` 場）。不依 Daily Bonuses 剩餘次數調整。戰敗：不算次數，重打時重設同樣的 N。
 - 分頁亮起看橘色邊框（ColorMatch）：亮和不亮的分頁對模板的分數差不多（0.93），分不開。
 - 隊伍是 `luxcavation.exp.team` 指的 maalc 隊伍，戰鬥用它的 `guard_turns`（全員防禦 N 回合後按勝率，同鏡牢；每場戰鬥重新算，2026-10-27）。實機 2026-10-27：經驗本第 9 關照 `guard_turns` 5 防禦了 5 回合（verified）。異想體戰（紐本的 Faelantern 等）是 focused encounter：左齒輪是空心圓環，技能要拖到敵方的技能格上，連線拉不起來，所以照 #127 按勝率、防禦回合留著（`tests/test_battle.py` 用 `LuxBattleTurn.png`、`LuxBattleTurnFocused.png` 驗證這個判斷）。（live-1 F5）
