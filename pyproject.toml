@@ -38,7 +38,8 @@ pythonpath = ["agent", "tools"]
 testpaths = ["tests"]
 # pytest-timeout: a test that hangs fails after this many seconds instead of holding the job for 50 minutes.
 timeout = 300
-timeout_method = "thread"  # two CI shards hung 25 minutes under the signal method; the cause is not known, and the thread method has not yet fired on a hang
+timeout_method = "thread"  # two CI shards hung 25 minutes under the signal method, which never fired
+# A file that runs a MaaFramework child gets run_child's own timeout and a minute instead (tests/conftest.py).
 
 [tool.ruff.lint]
 # Syntax errors and pyflakes: undefined names, unused imports, F811 redefinition.

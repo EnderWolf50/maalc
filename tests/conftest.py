@@ -1,7 +1,10 @@
 """CI shards the tests by file: SHARD=i of SHARDS=n keeps the files the greedy split below gives shard i. Unset, every
 test runs."""
 
+import inspect
 import os
+
+import pytest
 
 # Seconds of the seven slowest files, each one MaaFramework child run (pytest --durations, 2026-10-29); any other file
 # counts 0.15 s a test. A stale number only unbalances the shards.
@@ -10,7 +13,18 @@ FILE_SECONDS = {"test_go_home.py": 181, "test_thread_luxcavation.py": 163, "test
                 "test_claim_mail.py": 40}
 
 
+def child_timeout(item):
+    """Seconds a test of a file that runs a MaaFramework child may take: `run_child`'s own timeout and a minute. The
+    file's first test pays for the whole child run (about 380 s on CI on 2026-10-30), over the 300 s default, and the
+    child's TimeoutExpired names the file where pytest-timeout would end the whole shard."""
+    run_child = getattr(getattr(item, "module", None), "run_child", None)
+    return inspect.signature(run_child).parameters["timeout"].default + 60 if run_child else None
+
+
 def pytest_collection_modifyitems(config, items):
+    for item in items:
+        if seconds := child_timeout(item):
+            item.add_marker(pytest.mark.timeout(seconds))
     shards = int(os.environ.get("SHARDS", 1))
     if shards < 2:
         return
