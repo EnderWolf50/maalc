@@ -20,7 +20,7 @@ Once per clone, `lefthook install` turns on the pre-commit hook (`lefthook.yml`)
 Land one PR at a time with `tools/ship.py`:
 
 - `uv run python tools/ship.py ready <pr>...` prints head SHA, `ci-ok` state, mergeable, draft, base and the PRs stacked on each.
-- `uv run python tools/ship.py land <pr> --go` merges (merge commit) only when `ci-ok` passed on the current head and the PR is mergeable, retargets the PRs stacked on its branch to the base before the branch is deleted, waits for the CI run of the merge commit on `main` and exits non-zero when it is red. A second `land` waits until the first returned green. Run the `code-review` skill before `--go`.
+- `uv run python tools/ship.py land <pr> --go` merges (merge commit) only when `ci-ok` passed on the current head and the PR is mergeable, retargets the PRs stacked on its branch to the base before the branch is deleted, waits for the CI run of the merge commit on `main` and exits non-zero when it is red. Start the next `land` after this one returned green. A PR whose base is not `main` merges without that wait (`ci.yml` runs on pushes to `main` only). Run the `code-review` skill before `--go`.
 - `uv run python tools/ship.py into <integration-branch> <branch>` merges `<branch>` into the integration branch (`--no-ff`, in a worktree of it), runs `tools/check.py` through the bench queue and pushes only on green; a conflict or a red check pushes nothing. The first merge into an integration branch with no open PR opens a draft PR, so Linux CI runs from the first merge.
 - `uv run python tools/review_pack.py <pr>` writes the diff, body, CI state and the issues the PR closes or names to `.local/scratch/review-<pr>/`, for a reviewer whose Bash tool does not run.
 
@@ -32,7 +32,7 @@ Done: `after_land.py` ends without a "failed" line.
 
 `.claude/hooks/main-checkout-guard.py` (Bash and PowerShell) denies `git switch`, `git checkout -b` and `git checkout <branch>` in the main checkout, also through `git -C`; a linked worktree may switch.
 
-`.claude/settings.json` starts both hooks in exec form (`"command": "uv"` plus an `args` list), which needs a Claude Code version that knows `args` (2.1.302 does; `claude --version`). An older version drops `args` and runs a bare `uv`, which exits 2, the code that blocks a tool call: every Bash call then fails with a hook error that shows `uv`'s usage text. Update Claude Code when you see it.
+`.claude/settings.json` starts its hooks in exec form (`"command": "uv"` plus an `args` list), which needs a Claude Code version that knows `args` (2.1.302 does; `claude --version`). An older version drops `args` and runs a bare `uv`, which exits 2, the code that blocks a tool call: every Bash call then fails with a hook error that shows `uv`'s usage text. Update Claude Code when you see it.
 
 ## `.local/`: machine-local state
 

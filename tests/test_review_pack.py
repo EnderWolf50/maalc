@@ -38,6 +38,12 @@ def test_pack_writes_diff_body_ci_and_each_issue(tmp_path):
     assert "a comment" in (tmp_path / "r/issue-12.md").read_text()
 
 
+def test_pack_drops_the_issue_files_of_an_earlier_run(tmp_path):
+    review_pack.pack(5, tmp_path / "r", fake_gh("see #9"))
+    review_pack.pack(5, tmp_path / "r", fake_gh("see #4"))
+    assert sorted(p.name for p in (tmp_path / "r").iterdir()) == ["body.md", "ci.txt", "diff.patch", "issue-4.md"]
+
+
 def test_pack_notes_a_number_that_is_not_an_issue(tmp_path):
     notes = review_pack.pack(5, tmp_path / "r", fake_gh("see #9", unreadable=[9]))
     assert notes == ["#9 could not be read as an issue"]

@@ -57,6 +57,8 @@ def pack(pr: int, out: Path, runner=run) -> list[str]:
     info = json.loads(gh("pr", "view", str(pr), "--json",
                          "number,title,body,headRefOid,baseRefName,closingIssuesReferences,statusCheckRollup"))
     out.mkdir(parents=True, exist_ok=True)
+    for old in out.glob("issue-*.md"):  # an earlier run's issues are not this PR's
+        old.unlink()
     (out / "diff.patch").write_text(gh("pr", "diff", str(pr)), encoding="utf-8")
     (out / "body.md").write_text(f"# {info['title']} (base {info['baseRefName']})\n\n{info['body'] or ''}\n", encoding="utf-8")
     (out / "ci.txt").write_text(ci_text(info), encoding="utf-8")
