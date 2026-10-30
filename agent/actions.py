@@ -3489,8 +3489,9 @@ REFUSE_GIFT = [870, 560, 160, 40]
 # A boss card's trial half, around the card's centre x: the Enemy Level Up badge's "+N" at its left (from x - 103), the
 # trial's icon, its name, then its effect line, wrapped to two or three lines (tests/screens/BossGiftTrials*.png, #381).
 TRIAL_HALF = (-125, 438, 250, 105)  # x from the centre, y, w, h
-TRIAL_NAME_FOOT = 470  # a name's box starts above it, an effect line's below (444-451 and 475+ on 16 cards)
-TRIAL_BADGE_X = -60  # a "+N" box starts left of the centre by more (-103 on 16 cards); the name's by at most 24
+# Measured on the 10 boss cards of tests/screens (16 with two more 2026-10-28 frames, not committed):
+TRIAL_NAME_FOOT = 470  # a name's box starts above it (y 444-451), an effect line's below (475+)
+TRIAL_BADGE_X = -60  # a "+N" box starts left of the centre by more (-103), the name's by at most 24
 ROMAN = ("I", "II", "III", "IV", "V")
 
 
@@ -3502,9 +3503,11 @@ def gift_count(context, image=None):
 def gift_tier(image, x):
     """The tier (1-5) of the gift card centred at x, from the yellow numeral over its icon (shop.numeral), or None (#381).
 
-    The numeral is 17 px tall, its top at y 212 on a boss page and 220 on a fight's, 26 px wide at most left of the
-    centre (I-III at x - 13 to x - 9 on 17 captures); the icon's own yellow sits right of it. Its strokes are counted as
-    shop.tier counts a cell's: 2 px under the top and 3 over the foot.
+    The numeral is 17 px tall, its top at y 212 on a boss page (220 on a fight's), left of the centre, I-III centred
+    at x - 13 to x - 9; the icon's own yellow sits right of the window. Its strokes are counted as shop.tier counts a
+    cell's: 2 px under the top and 3 over the foot. Every gift card of tests/screens (11 on 4 captures, tiers I-II)
+    reads its gift data's tier (test_trial_screens.py), as do 6 more on two 2026-10-28 frames (a III among them); a IV or
+    V is on no capture yet.
     """
     mask = shop.yellow(image[203:250, x - 26:x + 2])
     rows = np.flatnonzero(mask.any(axis=1))
@@ -3515,7 +3518,8 @@ def trial_card(context, image, x):
     """(Enemy Level Up N or None, the trial name's OCR, its effect line's OCR) of the boss gift card centred at x (#381).
 
     One OCR over the card's trial half (TRIAL_HALF): the whole page's misses badges (none of BossGiftTrials.png's 3);
-    the half's read all 16 badges, names and effect lines of the boss captures. A wrapped effect line joins top to bottom.
+    the half's read every badge, name and effect line of the 10 boss cards in tests/screens (test_trial_screens.py) and
+    of 6 more on two 2026-10-28 frames. A wrapped effect line joins top to bottom.
     The icon reads as one or two stray letters ("X", "0x"): no name is that short.
     """
     dx, y, w, h = TRIAL_HALF
@@ -3535,9 +3539,9 @@ def trial_card(context, image, x):
 class PickGift(CustomAction):
     """Gift choice after a fight, an event or a boss: best cards until Select n/m is full, then Select (spec 03 section 12).
 
-    Cards are main keyword > other > owned, a higher tier first; when Mounting Trials hang under them (after a boss),
-    each scores gift - weight x (trial + level x Enemy Level Up N), the trial told from the pool of the floor just
-    cleared (data/trials.yaml, #381). Refuse Gift is never pressed: it hands out random trials.
+    Cards are main keyword > other > owned; when Mounting Trials hang under them (after a boss), each scores gift (with
+    its tier) - weight x (trial + level x Enemy Level Up N), the trial told from the pool of the floor just cleared
+    (data/trials.yaml, #381). Refuse Gift is never pressed: it hands out random trials.
     A gift the team avoids (#90) comes last: taken only when nothing else fills the count.
     """
 
@@ -3566,20 +3570,21 @@ class PickGift(CustomAction):
         for x, card in zip(centres, lines):
             gift = " ".join(t for y, t in card if y < 410)
             owned = any(compact(t) == "owned" for _, t in card)
-            kind, tier = rewards.gift_kind(gift, run["team"]["keyword"], owned, avoid), gift_tier(image, x)
-            name, trial, note = None, "", ""
-            if trials:
+            kind = rewards.gift_kind(gift, run["team"]["keyword"], owned, avoid)
+            name, tier, part, note = None, None, "", ""
+            if trials:  # the tier counts on the boss page only (#381); a fight's page stays main > other > owned
+                tier = gift_tier(image, x)
                 level, read, line = trial_card(context, image, x)
                 name, how = rewards.read_trial(read, line, pool)
                 score = scores[name] if name else max(scores.values())  # unread: the pool's worst
                 cards.append((kind, tier, rewards.burden(score, level, table["model"])))
-                trial = f"/{name or '?'} +{'?' if level is None else level} score {score:g}"
+                part = f"/{name or '?'} +{'?' if level is None else level} score {score:g}" + (f" tier {ROMAN[tier - 1]}" if tier else "")
                 if not name or compact(read) != compact(name):  # the name read is not the trial's: what was, for the log
                     note = f" ({f'by its {how}' if how else 'unread: the pool worst'}, read {read!r} / {line!r})"
             else:
-                cards.append((kind, tier, None))
+                cards.append((kind, None, None))
             names.append(name)
-            shown.append(kind + trial + (f" tier {ROMAN[tier - 1]}" if tier else "") + note)
+            shown.append(kind + part + note)
         ranked = rewards.rank_gifts(cards, run["team"]["trial_risk_weight"])
         log("gifts: " + ", ".join(shown) + f": order {ranked}")
 

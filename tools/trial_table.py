@@ -5,14 +5,15 @@ Defaults: the main checkout's .local/unpack (tools/local_dir.py), client 1.117.0
 localization. --check writes nothing and exits 1 when the committed file differs from what the data gives.
 
 Pool n is the pick after the floor-n boss: floors[n-1].enemyBuffPool of mirrordungeon-08*.json, the same in every mode.
-Its hidden gifts carry no link to a trial; the k-th of pool n is the k-th trial of tier n (MD5n1..., MD610x for pools
-10-14): each pool holds as many as its tier, and 28 cards seen live in pools 1-4 all agree (#381). The trials' values
-come from the static buff files, read against their English descriptions.
+Its hidden gifts carry no link to a trial; the k-th of pool n is the k-th trial of id group n (MD5n1..., MD610x for
+pools 10-14): each pool holds as many as its group, and 28 cards seen live in pools 1-4 all agree (#381). The trials'
+values come from the static buff files, read against their English descriptions.
 
 Score: enemy Clash Power points (pt), 1 pt = the enemy's Clash Power +1, the sum of each effect's weight x its value
 (docs/spec/03-decisions.md section 12). Pools 1-4 and pools 5+ weigh differently: a guide's "never take" effects
 (Damage Taken -x%, Damage Dealt +x%, Coin Power) cost 4 pt and more there. A Coin unit of pools 5+ is scored at the
-in-budget weight; the agent adds coin_over - coin_in for each unit past the run's budget.
+in-budget weight; the agent adds coin_over - coin_in for each unit past the run's budget. MODEL's coin_budget is the
+one place to raise that budget (a guide: "take some, not too many"); no setting holds it yet.
 """
 
 import json
@@ -67,17 +68,17 @@ def table(static, en):
     buffs = {b["id"]: b.get("list", []) for f in ("mirror-dungeon-5-floor-buff.json", "mirror-dungeon-5-infinite-floor-buff.json",
                                                   "mirror-dungeon-6-infinite-floor-buff.json")
              for b in load(static / "buff" / f)["list"]}  # with EXTREME's Mounting Adversities (MD6Limit*), not trials
-    tiers = [sorted((i for i in names if re.fullmatch(rf"MD5{t}\d", i)), key=lambda i: int(i[2:])) for t in range(1, 10)]
-    tiers += [sorted((i for i in names if re.fullmatch(rf"MD61{t}\d", i)), key=lambda i: int(i[2:])) for t in range(5)]
+    groups = [sorted((i for i in names if re.fullmatch(rf"MD5{g}\d", i)), key=lambda i: int(i[2:])) for g in range(1, 10)]
+    groups += [sorted((i for i in names if re.fullmatch(rf"MD61{g}\d", i)), key=lambda i: int(i[2:])) for g in range(5)]  # pools 10-14
     modes = [[f["enemyBuffPool"] for f in load(static / f"mirrordungeon/mirrordungeon-{m}.json")["list"][0]["floors"]]
              for m in MODES]
     longest = max(modes, key=len)
     for pools in modes:  # every mode draws floor n's pick from the same pool
         assert all(p in ([], longest[n]) for n, p in enumerate(pools)), "a mode has a pool of its own"
     sizes = [len(p) for p in longest if p]
-    assert sizes == [len(t) for t in tiers], (sizes, [len(t) for t in tiers])
+    assert sizes == [len(g) for g in groups], (sizes, [len(g) for g in groups])
     trials = {}
-    for pool, ids in enumerate(tiers, 1):
+    for pool, ids in enumerate(groups, 1):
         for i in ids:
             name, desc = names[i]
             effects = {}

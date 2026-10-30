@@ -5,8 +5,10 @@ import json
 import sys
 from pathlib import Path
 
+import numpy as np
 import pytest
 import yaml
+from PIL import Image
 
 import actions
 import rewards as r
@@ -43,6 +45,13 @@ def test_the_table_holds_every_pool_of_a_15_floor_run():
 def test_scores_follow_the_model(name, effects, score):
     assert TABLE["trials"][name]["effects"] == effects
     assert TABLE["trials"][name]["score"] == pytest.approx(score)
+
+
+def test_every_score_is_its_effects_weighed_by_the_file_s_own_weights():
+    # Without the game data (CI): the scores and the weights in the file agree, whatever the tool's run
+    for name, t in TABLE["trials"].items():
+        weights = TABLE["weights"]["early" if t["pool"] <= MODEL["early_pools"] else "late"]
+        assert t["score"] == pytest.approx(sum(weights[k] * v for k, v in t["effects"].items()), abs=1e-4), name
 
 
 @pytest.mark.parametrize("text, effects", [
@@ -193,6 +202,31 @@ def test_a_boss_page_takes_the_card_whose_trial_and_level_ups_weigh_least(contex
     assert logs[0] == ("gifts: other/Resilient V +2 score 0.105, other/Final Power Boost +1 score 1.075, "
                        "owned/Keen III +1 score 1.045: order [0, 1, 2]")
     assert "trial_coins" not in actions.RUN
+
+
+def test_a_boss_page_adds_the_tier_the_numeral_over_each_icon_shows(context, monkeypatch):
+    # The same page on its capture (BossGiftTrialsFloor3.png): Barbed Lasso is tier II, 2.5 - (1.075 + 0.5) = 0.925 over
+    # Ashes to Ashes' 2 - (0.105 + 1) = 0.895; the owned Nebulizer's II adds nothing.
+    image = np.asarray(Image.open(ROOT / "tests/screens/BossGiftTrialsFloor3.png").convert("RGB"))[:, :, ::-1].copy()
+    context.tasker.controller.post_screencap.return_value.wait.return_value.get.return_value = image
+    taps, logs = boss_page(context, monkeypatch, FLOOR_3, 3)
+    assert actions.PickGift().run(context, None)
+    assert [t for t in taps if t[1] == 300] == [(639, 300)]
+    assert logs[0] == ("gifts: other/Resilient V +2 score 0.105 tier I, other/Final Power Boost +1 score 1.075 tier II, "
+                       "owned/Keen III +1 score 1.045 tier II: order [1, 0, 2]")
+
+
+def test_a_fight_s_gift_page_does_not_weigh_tiers(context, monkeypatch):
+    # #381 adds the tier on the boss page only: a fight's page stays main > other > owned. A main tier I card on the left,
+    # an other tier IV on the right (3.5 over 3, were tiers counted).
+    taps = test_actions.gift_page(context, monkeypatch, ["Ashes to Ashes", "Barbed Lasso"])  # "Inflict Bleed" on both
+    actions.RUN["team"]["keyword"] = "Bleed"
+    inner = actions.ocr
+    monkeypatch.setattr(actions, "ocr", lambda context, image, roi, only_rec=False: [
+        (t.replace("Bleed", "Burn") if b[0] > 400 else t, b) for t, b in inner(context, image, roi, only_rec)])
+    monkeypatch.setattr(actions, "gift_tier", lambda image, x: 1 if x < 400 else 4)
+    actions.PickGift().run(context, None)
+    assert [t for t in taps if t[1] == 300] == [(236, 300)]
 
 
 def test_a_card_read_by_its_effects_or_not_at_all_says_what_was_read(context, monkeypatch):

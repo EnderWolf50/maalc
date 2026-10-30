@@ -266,13 +266,12 @@ def test_a_gift_like_the_avoided_one_is_not_avoided():
 
 
 def test_rank_gifts_without_trials():
-    assert r.rank_gifts([("other", 1, None), ("main", 1, None), ("owned", 1, None), ("main", 1, None)], "high") == [1, 3, 0, 2]
-    assert r.rank_gifts([("other", 1, None), ("other", 2, None)], "high") == [1, 0]  # the higher tier (#381)
+    assert r.rank_gifts([("other", None, None), ("main", None, None), ("owned", None, None), ("main", None, None)], "high") == [1, 3, 0, 2]
 
 
 def test_rank_gifts_with_trials():
     # score = gift - weight x burden; high weight 2: main/1 -> 1, other/0 -> 2, main/3 -> -3, other/5 -> -8
-    cards = [("main", 1, 1), ("other", 1, 0), ("main", 1, 3), ("other", 1, 5)]
+    cards = [("main", None, 1), ("other", None, 0), ("main", None, 3), ("other", None, 5)]
     assert r.rank_gifts(cards, "high") == [1, 0, 2, 3]
     # low weight 0.5: main/1 -> 2.5, other/0 -> 2, main/3 -> 1.5
     assert r.rank_gifts(cards, "low")[:3] == [0, 1, 2]

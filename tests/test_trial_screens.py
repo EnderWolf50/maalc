@@ -31,7 +31,9 @@ CARDS = {
     # live 2026-10-28: Resilient V's and its neighbours' effect lines wrap to a second line
     "BossGiftTrialsFloor3.png": (3, [(375, 2, "Resilient V", 1), (638, 1, "Final Power Boost", 2), (904, 1, "Keen III", 2)]),
 }
-TIERS = {"GiftChoice.png": [(639, 2)]}  # a fight's gift page: its numeral 8 px lower than a boss page's
+# A fight's gift page, whose tier PickGift does not score (main > other > owned there), but the last gift card of
+# tests/screens: its numeral 8 px lower than a boss page's.
+TIERS = {"GiftChoice.png": [(639, 2)]}
 
 
 def load(name):
@@ -114,8 +116,8 @@ def test_a_boss_card_reads_its_badge_and_its_trial_by_the_effect_line(read, name
 @pytest.mark.parametrize(("name", "x", "tier"), [(n, x, t) for n, (_, cards) in CARDS.items() for x, _, _, t in cards]
                          + [(n, x, t) for n, cards in TIERS.items() for x, t in cards])
 def test_the_tier_numeral_over_a_gift_card_reads_as_the_gift_data_s_tier(name, x, tier):
-    # Every gift card of the gift pages in tests/screens: tiers I and II; a III read right on a 2026-10-28 frame that is
-    # not committed (Disk Fragment, floor 2). IV and V are not on any capture yet.
+    # The sweep: every gift card of tests/screens, 11 on 4 captures, tiers I and II, none misread. A III read right on a
+    # 2026-10-28 frame that is not committed (Disk Fragment, floor 2); IV and V are on no capture yet.
     import actions
     assert actions.gift_tier(load(name), x) == tier
 
