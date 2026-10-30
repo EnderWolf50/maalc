@@ -3655,19 +3655,27 @@ def note_owned(team, visit, cells):
     return owned
 
 
-def held_gifts(visit):
+def owned_now(visit):
     """A copy of the gifts the visit counts as owned (gifts.purchases): visit["owned"] once a page was read (note_owned), else
     only what this visit bought (visit["bought"]): an owned gift not read counts as none (spec 03), a gift bought counts."""
     return list(visit["owned"] if visit.get("owned") is not None else visit.get("bought", ()))
 
 
 def owned_change(visit, gone=(), got=()):
-    """Take `gone` out of the gifts the visit counts as owned (held_gifts) and add `got`, in place: a sale, a fusion, a
-    purchase. While visit["owned"] is unread only a purchase adds to them (visit["bought"])."""
-    owned = visit["owned"] if visit.get("owned") is not None else visit.setdefault("bought", [])
+    """Take `gone` out of the gifts the visit counts as owned (owned_now) and add `got`, in place: a sale, a fusion, a
+    purchase. Unread, `got` goes to visit["bought"] and `gone` is not looked for: the sale and the fusions read the owned
+    gifts first, so only a purchase comes here then."""
+    if visit.get("owned") is None:
+        visit.setdefault("bought", []).extend(got)
+        return
     for i in gone:
-        owned.remove(i)
-    owned.extend(got)
+        visit["owned"].remove(i)
+    visit["owned"].extend(got)
+
+
+def buy_list(team, visit):
+    """gifts.purchases for the team's list, the run's packs and the gifts the visit counts as owned (owned_now)."""
+    return purchases(team["list"], run_packs(), owned_now(visit))
 
 
 def cell_role(cell, team, page, avoid, owned=()):
@@ -4194,10 +4202,10 @@ class Shop(CustomAction):
         Each refresh asks again with what was bought since: none once the list buys nothing more.
         """
         keyword, reserve, acted = team["keyword"], team["reserve_cost"], False
-        to_buy = purchases(team["list"], run_packs(), held_gifts(visit))
+        to_buy = buy_list(team, visit)
         if visit.get("owned") is None and any(f for _, f in to_buy):
             Shop.read_owned(context, team, visit)
-            to_buy = purchases(team["list"], run_packs(), held_gifts(visit))
+            to_buy = buy_list(team, visit)
         if not to_buy:
             log("shop: the gift list buys nothing the shop sells (no wanted gift, no wanted fusion's material): nothing bought, no refresh")
             return False
@@ -4207,7 +4215,7 @@ class Shop(CustomAction):
                 visit["fuse_scanned"] = False  # a new gift: the fusion grid has changed
             if visit["wanted"] and not visit["sold"]:
                 return True  # sell first, next round
-            if not purchases(team["list"], run_packs(), held_gifts(visit)):
+            if not buy_list(team, visit):
                 log("shop: what was bought meets the gift list (no wanted gift, no wanted fusion's material left): no refresh")
                 return acted
             cost = read_cost(context)
@@ -4259,7 +4267,7 @@ class Shop(CustomAction):
 
         A gift is told by its icon (read_cells, #297) and by its name plate (read_plates, #329): one vote is enough, two that
         differ leave the cell unknown. Only an offer whose id is known and that gifts.purchases names (the list wants it, or a
-        wanted fusion lacks it: by held_gifts) is bought, in that order (#298); one bought for a fusion is logged with it. Each
+        wanted fusion lacks it: buy_list) is bought, in that order (#298); one bought for a fusion is logged with it. Each
         gift bought counts as owned (owned_change) for the next and after a refresh, unread owned gifts or not, so a fusion is
         bought no more than it lacks. A Not
         Enough Cost offer is dimmed (no icon read) but its plate reads: with its id it may be the first choice, so the shop
@@ -4267,7 +4275,7 @@ class Shop(CustomAction):
         the Cost.
         """
         gift_list, reserve = team["list"], team["reserve_cost"]
-        to_buy = purchases(gift_list, run_packs(), held_gifts(visit))
+        to_buy = buy_list(team, visit)
         place, reason = {i: n for n, (i, _) in enumerate(to_buy)}, dict(to_buy)
 
         def why(i):
@@ -4309,7 +4317,7 @@ class Shop(CustomAction):
                 log(f"shop: {slot['name']!r} {gift_shown(cell)} is tagged Not Enough Cost: its price {slot['price']} is a misread")
                 continue
             rank = place.get(cell["id"])
-            listed = cell_state(cell, gift_list, held_gifts(visit))
+            listed = cell_state(cell, gift_list, owned_now(visit))
             log(f"shop: {slot['name']!r} {slot['price']}: tier {cell['tier']} {cell['keyword']} {gift_shown(cell)}, plate {plate['text']!r}, {listed}"
                 f"{'' if rank is None else f', place {rank}{why(cell['id'])}'}")
             if rank is not None:
@@ -4321,7 +4329,7 @@ class Shop(CustomAction):
         bought = 0
         for i in plan:
             slot = slots[i]
-            if ids[i] not in dict(purchases(gift_list, run_packs(), held_gifts(visit))):
+            if ids[i] not in dict(buy_list(team, visit)):
                 log(f"shop: {slot['name']!r} {ids[i]}: no longer needed, what was bought meets its fusion")
                 continue
             image = Shop.open_offer(context, slot)

@@ -6,7 +6,8 @@ import type { GiftList } from "./model";
 
 /** What a click with this state does to a gift: refused because wanted fusions lock it, set to `to`, or set to keep because
  * it cannot be wanted. A locked gift may still be wanted for itself (the user, 2026-10-30: bought again once its fusion ate
- * it); keep and drop are refused, as both keep it already. The GUI does not know the run's theme packs, so a pack-specific
+ * it); keep and drop are refused, as both keep it already. A locked gift that cannot be wanted (no shop sells it, no recipe makes
+ * it) is refused all three. The GUI does not know the run's theme packs, so a pack-specific
  * fusion always locks (lockers' null). */
 export type Applied = { locked: number[] } | { to: GiftState; downgraded?: true };
 export function plan(list: ListRules, id: number, to: GiftState): Applied {
