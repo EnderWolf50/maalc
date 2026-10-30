@@ -9,6 +9,7 @@
 - 不採用把整局寫在程式碼迴圈裡的做法（MaaLimbus、AALC）。理由見 [ADR 0002](../adr/0002-pipeline-hub-and-agent-decisions.md)。（#8）
 - 使用者設定由設定 GUI 寫進 `<root>/config/settings.json`，Agent 在任務開始時讀取並檢查；PI 不帶使用者選項（[ADR 0006](../adr/0006-settings-gui-writes-one-settings-file.md)）。格式見 [04-settings.md](04-settings.md)。（#6、#19，2026-10-14 定案）
 - 遊戲資料（主題包清單與預設主題包方案、事件覆寫表、尋路權重、Cost 對照表與商店數字、試煉風險表）放在 `resource/base/data/` 的 YAML 資料檔，由 Agent 讀取（[ADR 0005](../adr/0005-game-data-files-separate-from-user-settings.md)）。格式見 [05-game-data.md](05-game-data.md)。（#11、#12、#17、#19）
+- MaaFramework 用 `maafw` wheel，但 `MaaFramework.dll` 換成 fork（EnderWolf50/MaaFramework）的修改版：v5.14.3 加上兩個修正。一是批次 OCR 裡被 roi 切掉一半以上高度的字框，改由那個 roi 自己跑一次 det+rec，不再切成細條重讀（MaaXYZ/MaaFramework#1573，#157）；二是每個任務只保留最後 200 個節點的詳情（MaaXYZ/MaaFramework#1578，#176）。版本與 SHA-256 釘在 `tools/install.py` 的 `MAAFW_FIX`，wheel 版本不符時安裝中止；對應原始碼見 [NOTICE.md](../../NOTICE.md)。等 maafw 正式版同時包含這兩個修正，就拿掉 fork、改回 wheel 的 DLL。只有 Windows 換 DLL。
 
 | 層 | 負責 | 不負責 |
 |---|---|---|
