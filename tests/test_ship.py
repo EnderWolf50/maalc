@@ -47,7 +47,7 @@ def land_fake(pr=None, stacked=(), main_ci=(("completed", "success"),), queue="e
                    "gh pr list": (0, json.dumps(list(stacked))), "gh run list": runs,
                    "gh pr merge": (0, ""), "gh pr edit": (0, ""), "gh api": (0, ""),
                    f"{ship.sys.executable} tools/live/queue.py status": (0, queue),
-                   f"{ship.sys.executable} tools/after_land.py": (0, "after_land done"), **extra})
+                   "uv run python tools/after_land.py": (0, "after_land done"), **extra})
 
 
 def land(fake, go=True):
@@ -123,21 +123,28 @@ def test_land_waits_until_the_main_run_finishes():
     fake = land_fake(main_ci=[("queued", None), ("in_progress", None), ("completed", "success")])
     assert land(fake) == 0
     assert len(fake.ran("gh", "run", "list")) == 3
-    assert fake.ran(ship.sys.executable, "tools/after_land.py")
+    assert fake.ran("uv", "run", "python", "tools/after_land.py")
 
 
 def test_land_exits_non_zero_on_a_red_main_and_skips_after_land(capsys):
     fake = land_fake(main_ci=[("completed", "failure")])
     assert land(fake) == 1
     assert "failure" in capsys.readouterr().err
-    assert not fake.ran(ship.sys.executable, "tools/after_land.py")
+    assert not fake.ran("uv", "run", "python", "tools/after_land.py")
 
 
 def test_land_prints_the_command_when_the_emulator_has_a_holder(capsys):
     fake = land_fake(queue="emulator:\n  1234-bot (pid 5)\n")
     assert land(fake) == 0
     assert "tools/after_land.py" in capsys.readouterr().out
-    assert not fake.ran(ship.sys.executable, "tools/after_land.py")
+    assert not fake.ran("uv", "run", "python", "tools/after_land.py")
+
+
+def test_land_into_a_stacked_base_does_not_wait_for_a_main_run(capsys):
+    fake = land_fake(pr=info(baseRefName="feat/base"))
+    assert land(fake) == 0
+    assert not fake.ran("gh", "run", "list") and not fake.ran("uv", "run", "python", "tools/after_land.py")
+    assert "feat/base" in capsys.readouterr().out
 
 
 def test_wait_for_main_ci_times_out():
@@ -184,6 +191,31 @@ def test_into_resets_and_does_not_push_on_red_checks(capsys):
     assert ship.cmd_into(fake, "integration", "feat/x", repo=Path("main-checkout")) == 1
     assert fake.ran("git", "reset", "--hard", HEAD) and not fake.ran("git", "push")
     assert not fake.ran("gh", "pr", "create")
+
+
+def test_into_installs_the_packages_of_a_new_worktree():
+    fake = into_fake()
+    fake.routes["git worktree list"] = (0, "worktree main-checkout\nbranch refs/heads/main\n\n")
+    assert ship.cmd_into(fake, "integration", "feat/x", repo=Path("main-checkout")) == 0
+    add = next(i for i, c in enumerate(fake.calls) if c[:3] == ["git", "worktree", "add"])
+    pnpm = next(i for i, c in enumerate(fake.calls) if c[:2] == ["pnpm", "install"])
+    check = next(i for i, c in enumerate(fake.calls) if "queue.py" in " ".join(c))
+    assert add < pnpm < check
+
+
+def test_into_resets_a_merge_it_did_not_push_when_a_step_exits():
+    fake = into_fake()
+    fake.routes["uv run python tools/fetch_ocr.py"] = (1, "no network")
+    with pytest.raises(SystemExit):
+        ship.cmd_into(fake, "integration", "feat/x", repo=Path("main-checkout"))
+    assert fake.ran("git", "reset", "--hard", HEAD) and not fake.ran("git", "push")
+
+
+def test_into_reports_a_failed_merge_that_is_not_a_conflict(capsys):
+    fake = into_fake(merge=(1, "fatal: not something we can merge"), conflicts="")
+    fake.routes["git merge --abort"] = (128, "There is no merge to abort")
+    assert ship.cmd_into(fake, "integration", "feat/x", repo=Path("main-checkout")) == 1
+    assert "not something we can merge" in capsys.readouterr().err
 
 
 def test_into_refuses_a_dirty_integration_worktree():

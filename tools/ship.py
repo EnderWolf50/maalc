@@ -130,6 +130,9 @@ def cmd_land(runner, pr: int, go: bool, sleep=time.sleep, repo: Path | None = No
     if not info["isCrossRepository"]:
         need(runner, ["gh", "api", "-X", "DELETE", f"repos/{{owner}}/{{repo}}/git/refs/heads/{branch}"])
     sha = gh_json(runner, "pr", "view", str(pr), "--json", "mergeCommit")["mergeCommit"]["oid"]
+    if base != "main":  # ci.yml runs on pushes to main only: a stacked base gets no run to wait for
+        print(f"ship: #{pr} merged as {sha[:10]} into {base}, which has no push CI; the stack's last PR lands on main")
+        return 0
     print(f"ship: #{pr} merged as {sha[:10]}; waiting for CI on {base}", flush=True)
     if (result := wait_for_main_ci(runner, base, sha, sleep)) != "success":
         print(f"ship: CI of {sha[:10]} on {base} is {result}. Do not land another PR.", file=sys.stderr)
@@ -138,7 +141,7 @@ def cmd_land(runner, pr: int, go: bool, sleep=time.sleep, repo: Path | None = No
     if emulator_busy(runner, repo):
         print(f"ship: green. The emulator queue has a holder (install/ is in use); run later in the main checkout: {later}")
         return 0
-    rc, out = runner([sys.executable, "tools/after_land.py"], repo)
+    rc, out = runner(["uv", "run", "python", "tools/after_land.py"], repo)  # the main checkout's venv, not the caller's
     print(out.strip())
     if rc:
         print("ship: green, but after_land failed", file=sys.stderr)
@@ -180,25 +183,32 @@ def cmd_into(runner, integration: str, branch: str, repo: Path | None = None) ->
     if tree is None:
         tree = local_dir("scratch", f"into-{re.sub(r'[^\w.-]', '_', integration)}") / "wt"
         need(runner, ["git", "worktree", "add", str(tree), integration], repo)
+        need(runner, ["pnpm", "install", "--frozen-lockfile"], tree)
     if need(runner, ["git", "status", "--porcelain", "--untracked-files=no"], tree).strip():
         sys.exit(f"ship: the worktree of {integration} has local changes ({tree})")
     need(runner, ["git", "merge", "--ff-only", f"origin/{integration}"], tree)
     before = need(runner, ["git", "rev-parse", "HEAD"], tree).strip()
     rc, out = runner(["git", "merge", "--no-ff", "-m", f"Merge {branch} into {integration}", f"origin/{branch}"], tree)
     if rc:
-        conflicts = need(runner, ["git", "diff", "--name-only", "--diff-filter=U"], tree).split()
-        need(runner, ["git", "merge", "--abort"], tree)
-        print(f"ship: merging {branch} into {integration} conflicts in: {', '.join(conflicts) or out.strip()}", file=sys.stderr)
+        conflicts = runner(["git", "diff", "--name-only", "--diff-filter=U"], tree)[1].split()
+        runner(["git", "merge", "--abort"], tree)  # none to abort when the merge failed before it started
+        print(f"ship: merging {branch} into {integration} failed: "
+              f"{'conflicts in ' + ', '.join(conflicts) if conflicts else out.strip()}", file=sys.stderr)
         return 1
-    need(runner, ["uv", "run", "python", "tools/fetch_ocr.py"], tree)
-    rc, out = runner(["uv", "run", "python", "tools/live/queue.py", "run", "--resource", "bench", "--name",
-                      f"into-{branch}", "--", "uv", "run", "python", "tools/check.py"], tree)
-    print(out.strip()[-3000:])
-    if rc:
-        need(runner, ["git", "reset", "--hard", before], tree)
-        print(f"ship: the checks failed with {branch} merged; {integration} is as it was, nothing pushed", file=sys.stderr)
-        return 1
-    need(runner, ["git", "push", "origin", integration], tree)
+    pushed = False
+    try:
+        need(runner, ["uv", "run", "python", "tools/fetch_ocr.py"], tree)
+        rc, out = runner(["uv", "run", "python", "tools/live/queue.py", "run", "--resource", "bench", "--name",
+                          f"into-{branch}", "--", "uv", "run", "python", "tools/check.py"], tree)
+        print(out.strip()[-3000:])
+        if rc:
+            print(f"ship: the checks failed with {branch} merged; {integration} is as it was, nothing pushed", file=sys.stderr)
+            return 1
+        need(runner, ["git", "push", "origin", integration], tree)
+        pushed = True
+    finally:
+        if not pushed:  # a merge that was not checked and pushed must not ride along with the next `into`
+            runner(["git", "reset", "--hard", before], tree)
     if not open_pr_of(runner, integration):
         print(f"ship: opened {draft_pr(runner, integration)}")
     print(f"ship: {branch} merged into {integration} and pushed")
