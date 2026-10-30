@@ -9,8 +9,10 @@ check with their own OCR, unbatched, so a hit is what MaaFramework reads.
 
 The det model shrinks an image wider than DET_SIDE to that width (MaaXYZ/MaaFramework#1531), and the rois of a hub
 span 1210 px: shrunk, a button read "✓Confirm" and an event's SKIP read nothing, both screens left out though their
-own OCR reads them. So the pass runs in windows of at most DET_SIDE px; for a 1210 px union two of them overlap by
-710 px, and a box wider than the overlap may be cut.
+own OCR reads them. So the pass groups the rois left to right, each group at most DET_SIDE px wide, and stacks the
+groups on one canvas for one det call; two windows took twice the det (the Luxcavation children's CI runs 247 ->
+382 s). Where the stack is taller than DET_SIDE (MirrorHub's HubText) it runs in windows of at most DET_SIDE px
+instead; for a 1210 px union two of them overlap by 710 px, and a box wider than the overlap may be cut.
 A screen whose text only reads when det finds no box and the whole roi goes to rec (the battlefield's VICTORY) sits
 in the tail, where it always checks.
 """
@@ -18,12 +20,14 @@ in the tail, where it always checks.
 import json
 import re
 
+import numpy as np
 from maa.context import Context
 from maa.custom_recognition import CustomRecognition
 from maa.pipeline import JOCR, JRecognitionType
 
 INSIDE = 0.5  # share of a box's area inside a roi for the box to count there
 DET_SIDE = 960  # the det model's max side (fastdeploy DBDetector's max_side_len)
+GAP = 16  # black rows between two groups of rois on the det canvas, so det joins no text across them
 
 
 def ocr_specs(reco):
@@ -102,13 +106,46 @@ def windows(rois):
     return [[x + round(i * (w - DET_SIDE) / (n - 1)), y, DET_SIDE, h] for i in range(n)]
 
 
+def stack(rois):
+    """The rois left to right in groups whose union is at most DET_SIDE px wide, each group's union stacked under the
+    last on a canvas, GAP px apart: [(the union on the screen, its top on the canvas)] and the canvas (w, h). None
+    when one group holds them all or the canvas is wider or taller than DET_SIDE."""
+    groups = []
+    for roi in sorted(rois):
+        if groups and union(groups[-1] + [roi])[2] <= DET_SIDE:
+            groups[-1].append(roi)
+        else:
+            groups.append([roi])
+    placed, top = [], 0
+    for group in groups:
+        placed.append((union(group), top))
+        top += placed[-1][0][3] + GAP
+    size = max(u[2] for u, _ in placed), top - GAP
+    return None if len(placed) == 1 or max(size) > DET_SIDE else (placed, size)
+
+
 def ocr_pass(context, image, rois):
-    """[(box, text, score)] of the text in rois, read with the rest of the image black, window by window."""
+    """[(box, text, score)] of the text in rois, read with the rest of the image black: one det call on the stack of
+    their groups when it holds them, else window by window."""
     masked = mask(image, rois)
+    if not (stacked := stack(rois)):
+        out = []
+        for win in windows(rois):
+            detail = context.run_recognition_direct(JRecognitionType.OCR, JOCR(roi=tuple(win), threshold=0), masked)
+            out += [(tuple(r.box), r.text, r.score) for r in (detail.all_results if detail else [])]
+        return out
+    placed, (w, h) = stacked
+    canvas = np.zeros((max(h, image.shape[0]), max(w, image.shape[1]), 3), image.dtype)
+    for (x, y, gw, gh), top in placed:
+        canvas[top:top + gh, :gw] = masked[y:y + gh, x:x + gw]
+    detail = context.run_recognition_direct(JRecognitionType.OCR, JOCR(roi=(0, 0, w, h), threshold=0), canvas)
     out = []
-    for win in windows(rois):
-        detail = context.run_recognition_direct(JRecognitionType.OCR, JOCR(roi=tuple(win), threshold=0), masked)
-        out += [(tuple(r.box), r.text, r.score) for r in (detail.all_results if detail else [])]
+    for r in detail.all_results if detail else []:
+        bx, by, bw, bh = r.box
+        for (x, y, _, gh), top in placed:  # the group whose band holds the box's middle
+            if top <= by + bh / 2 < top + gh:
+                out.append(((bx + x, by - top + y, bw, bh), r.text, r.score))
+                break
     return out
 
 
