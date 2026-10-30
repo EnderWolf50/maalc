@@ -125,7 +125,7 @@ def public_text(cmd: str, base: Path) -> tuple[str, bool]:
 
 
 def pr_body_problem(call: str, base: Path) -> str | None:
-    """docs/agents/pr.md for a `gh pr create|edit --body-file`: a test line `N passed, M failed`, and an issue
+    """docs/agents/pr.md for a `gh pr create|edit --body-file`: a test line `N passed, M failed[, K skipped]` (or `Tests: none (docs only)`), and an issue
     (`#n`) on every line that says something was not run."""
     if not PR_CALL.search(call):
         return None

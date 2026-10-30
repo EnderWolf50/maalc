@@ -87,6 +87,13 @@ def test_a_cancelled_task_is_reported_once_as_cancelled_and_never_told_to_resume
         assert wd.tick(rows(), {DECODED: spelling}, "", "", state, "2026103013")[0] == []
 
 
+def test_a_stranded_holder_of_a_cancelled_task_is_not_told_to_resume():
+    queue = "RUNNING live1 (pid 5) — bot ended 90 min ago, waiting for the agent\n"
+    events, _ = wd.tick(rows(), {DECODED: "cancelled"}, queue, "", {}, "h")
+    stranded = [e for e in events if e.startswith("STRANDED")]
+    assert len(stranded) == 1 and "resume" not in stranded[0].replace("not resume", "")
+
+
 def test_a_running_task_and_a_missing_state_are_silent():
     assert wd.tick(rows(), {DECODED: "running"}, "", "", {}, "h")[0] == []
     assert wd.tick(rows(), {}, "", "", {}, "h")[0] == []

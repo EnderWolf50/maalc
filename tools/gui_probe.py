@@ -8,7 +8,8 @@ unless `--settings` names a file) and links `assets/` beside it, which `load_the
 `install/` is never touched. The app stays running: stop it by the pid printed.
 
 Prints one JSON line `{"pid", "hwnd", "title", "rect": [left, top, right, bottom], "width", "height", "root"}` when the
-window shows. Exits 1 and kills the process when no window of the exe with that title shows within `--timeout`.
+window shows. Exits 1 and kills the process when no window of the exe with that title shows within `--timeout`, and exits 1 before
+starting anything when `--root` exists without the marker file the probe writes (the folder is not deleted).
 """
 import argparse
 import json
