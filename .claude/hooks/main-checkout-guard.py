@@ -1,6 +1,6 @@
 """PreToolUse(Bash, PowerShell): deny a git command that switches the main checkout to another branch.
 
-The main checkout stays on `main` (AGENTS.md): `tools/after_land.py` refuses off main and a live run reads
+The main checkout stays on `main`: `tools/after_land.py` refuses off main and a live run reads
 `install/` from it. Denied there: `git switch ...`, `git checkout -b|-B|--orphan|--detach ...`, and
 `git checkout <ref>` when `<ref>` names a branch, tag or commit. `git checkout -- <path>`, `git checkout <ref> -- <path>`
 and `git checkout <path>` restore files and stay allowed. A linked worktree is free to switch.
@@ -82,10 +82,13 @@ def switches(where: Path, args: list[str], ref=is_ref) -> bool:
     rest = args[1:]
     if SWITCHING_FLAGS & set(rest) or any(a.startswith(("-b", "-B")) for a in rest):
         return True
+    before, after = rest, []
     if "--" in rest:
+        before, after = rest[:rest.index("--")], rest[rest.index("--") + 1:]
+    if after:
         return False  # `git checkout -- path`, `git checkout <ref> -- path`: files only
-    positional = [a for a in rest if not a.startswith("-")]
-    return len(positional) == 1 and ref(where, positional[0])  # `git checkout <ref> <path>` restores files
+    positional = [a for a in before if a == "-" or not a.startswith("-")]
+    return len(positional) == 1 and (positional[0] == "-" or ref(where, positional[0]))  # `git checkout <ref> <path>` restores files
 
 
 def check(cmd: str, cwd: str, main=is_main_checkout, ref=is_ref) -> str | None:

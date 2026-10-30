@@ -30,6 +30,8 @@ def denied(cmd, cwd="repo", main=lambda w: True):
     "git switch feat/x",
     "git switch -c new",
     "git switch -",
+    "git checkout -",
+    "git checkout main --",
     "git -C repo switch main",
     "git -c core.x=1 checkout main",
     "git.exe checkout main",
