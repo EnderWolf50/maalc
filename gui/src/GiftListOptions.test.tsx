@@ -4,7 +4,7 @@ import { describe, expect, test } from "vitest";
 import { GiftListsTab } from "./GiftLists";
 import { DEFAULT_LIST } from "./gifts";
 import { TEXT } from "./i18n";
-import { GIFT_KEYWORDS, SEARCH_GIFTS, defaultGorder, exportGiftList, keywordlessIds, newSettings, newTeam, type GiftList } from "./model";
+import { GIFT_KEYWORDS, SEARCH_GIFTS, defaultGorder, exportGiftList, newSettings, newTeam, type GiftList } from "./model";
 import { renderEditor } from "./testing";
 import { validate } from "./validate";
 
@@ -74,15 +74,12 @@ describe("copy and new", () => {
     expect(chosenName()).toBe(zh["gl.blank_name"]);
   });
 
-  test("new keeps every Keywordless gift, so a blank list does not fuse or sell them (user decision 2026-10-29)", async () => {
+  test("new wants and keeps nothing, so every gift is Drop; copy the default to start from it (user decision 2026-10-30)", async () => {
     const r = await open([mine({ want: [1] })]);
     await r.item("blank");
-    const kept = r.settings().gift_lists[1].keep;
-    expect(kept).toEqual(keywordlessIds());
-    expect(kept.length).toBeGreaterThan(80);
-    expect(kept).not.toContain(9991); // the vestiges stay fusion material
-    expect(kept).toContain(9995); // Lunar Vestige, tier V, is none: kept as the default list does
+    expect(r.settings().gift_lists[1]).toMatchObject({ want: [], keep: [] });
     expect(validate(r.settings())).toEqual([]);
+    expect(screen.getByText(zh["gl.blank_made"].replace("{name}", zh["gl.blank_name"]))).toBeTruthy();
   });
 });
 
