@@ -148,11 +148,13 @@ describe("hover popover: setting the state", () => {
     expect(list(r)).toMatchObject({ want: [], keep: [] });
   });
 
-  test("a locked gift's buttons are disabled and say what to cancel", async () => {
+  test("a locked gift's keep and drop are disabled and say what to cancel; want sets it (the user, 2026-10-30)", async () => {
     const r = await open([mine({ want: [fixed.id] })]);
     const p = await hover(r, material);
-    for (const s of ["want", "keep", "drop"]) expect(p.getByRole("button", { name: zh[`state.${s}` as Text] })).toBeDisabled();
+    for (const s of ["keep", "drop"]) expect(p.getByRole("button", { name: zh[`state.${s}` as Text] })).toBeDisabled();
     expect(p.getByText(say(zh["gl.tip_locked"], { by: nameOf(fixed.id) }))).toBeInTheDocument();
+    await r.user.click(p.getByRole("button", { name: zh["state.want"] }));
+    expect(list(r).want).toEqual([fixed.id, material]);
   });
 
   test("on the read-only default they are disabled with the reason", async () => {

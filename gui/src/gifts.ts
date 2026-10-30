@@ -83,13 +83,13 @@ const counts = (ids: number[]) => {
  * gift the shop sells that a fusion the list still makes (toMake; in recipeFusion's order) lacks: none once `owned` completes
  * one of its recipes or its groups; else each id a recipe needs more of than owned, and the ids not owned of a group short
  * of its `need`. Each id once, for its first reason. A material keeps its own state, and is bought no more once its fusion
- * is owned (the user, 2026-10-30). A pack-specific fusion buys nothing while runPacks is null (the agent restarted mid-run):
- * the run may never have pulled its pack; its materials stay locked all the same (lockers). */
+ * is owned (the user, 2026-10-30). While runPacks is null (the agent restarted mid-run), a pack-specific fusion buys as it
+ * locks, though the run may never have pulled its pack (the user, 2026-10-30: rather spend more Cost than miss a wanted fusion). */
 export function purchases(list: ListRules, runPacks: number[] | null = null, owned: number[] = [], tables: GiftTables = GAME_TABLES): [number, number | null][] {
   const buyable = new Set(tables.buyable.map((g) => g.id)), held = counts(owned), have = (id: number) => held.get(id) ?? 0;
   const out = new Map<number, number | null>(queue(list, tables).map((id) => [id, null]));
   for (const f of inListOrder(list, tables.fusions)) {
-    if ((f.specific && runPacks === null) || !toMake(list, f, runPacks, owned) || pick(f, held)) continue;
+    if (!toMake(list, f, runPacks, owned) || pick(f, held)) continue;
     const short = [
       ...(f.recipes ?? []).flatMap((r) => [...counts(r)].filter(([id, n]) => have(id) < n).map(([id]) => id)),
       ...(f.groups ?? []).filter((g) => g.ids.filter(have).length < g.need).flatMap((g) => g.ids.filter((id) => !have(id))),

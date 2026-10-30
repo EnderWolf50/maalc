@@ -114,7 +114,8 @@ export function GiftPopover({ id, anchor }: { id: number; anchor: HTMLElement })
         <span className="k">{t("gl.tip_set")}</span>
         <div className="gl-tip-seg" role="group" aria-label={t("gl.tip_set_group")}>
           {STATES.map((v) => (
-            <button type="button" key={v} className={`gl-state ${v}${shown === v ? " on" : ""}`} aria-pressed={shown === v} disabled={!!why}
+            <button type="button" key={v} className={`gl-state ${v}${shown === v ? " on" : ""}`} aria-pressed={shown === v}
+              disabled={readOnly || (locked && v !== "want")}
               onClick={() => apply(id, v)}><i aria-hidden />{t(`state.${v}`)}</button>
           ))}
         </div>

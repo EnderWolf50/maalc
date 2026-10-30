@@ -265,15 +265,14 @@ def test_the_owned_gifts_are_not_read_for_a_list_whose_fusions_lack_nothing_the_
 VIOLIN = 9249  # A Small, Lovely Violin: [9706, 9707, 9431], specific to Dregs of the Manor (1016) and S.E.A. (1102)
 
 
-def test_a_restarted_agent_buys_nothing_for_a_pack_fusion_and_the_log_says_why(context, monkeypatch):
-    # The run's packs are unknown (RUN has none): the run may never have pulled the Violin's pack, so its Cost is kept.
+def test_a_restarted_agent_still_buys_for_a_pack_fusion(context, monkeypatch):
+    # The run's packs are unknown (RUN has none): the Violin's materials are bought all the same, though the run may never
+    # have pulled its pack (the user, 2026-10-30: rather spend more than miss a wanted fusion).
     monkeypatch.setattr(actions.Shop, "buy_offers", staticmethod(lambda *a: 0))
-    lines = []
-    monkeypatch.setattr(actions, "log", lines.append)
-    taps = refresh_shop(context)
-    visit = {"wanted": None, "sold": False, "refreshes": {"keyword": 0, "normal": 0}}
-    assert not actions.Shop.buy(context, buying(wants(VIOLIN), shop_refresh_keyword=3), visit) and taps == []
-    assert sum(f"{VIOLIN} A Small, Lovely Violin" in line and "packs are unknown" in line for line in lines) == 1
+    refresh_shop(context)
+    visit = {"wanted": None, "sold": False, "refreshes": {"keyword": 0, "normal": 0}, "owned": []}
+    actions.Shop.buy(context, buying(wants(VIOLIN), shop_refresh_keyword=1), visit)
+    assert visit["refreshes"]["keyword"] == 1
 
 
 def test_a_pack_fusion_buys_in_a_run_of_its_pack(context, monkeypatch):

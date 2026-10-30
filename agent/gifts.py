@@ -80,13 +80,12 @@ def purchases(gift_list, run_packs=None, owned=(), tables=None):
     gift the shop sells that a fusion the list still makes (_to_make; in recipe_fusion's order) lacks: none once `owned`
     completes one of its recipes or its groups; else each id a recipe needs more of than owned, and the ids not owned of
     a group short of its `need`. Each id once, for its first reason. Nothing marks a material: it keeps its own state, and is
-    bought no more once its fusion is owned (the user, 2026-10-30). A pack-specific fusion buys nothing while run_packs is
-    None (the agent restarted mid-run): the run may never have pulled its pack, so its Cost would be lost; its materials
-    stay locked all the same (lockers)."""
+    bought no more once its fusion is owned (the user, 2026-10-30). While run_packs is None (the agent restarted mid-run),
+    a pack-specific fusion buys as it locks, though the run may never have pulled its pack (the user, 2026-10-30: rather spend more Cost than miss a wanted fusion)."""
     tables = tables or _game_tables()
     buyable, held, out = {g["id"] for g in tables["buyable"]}, Counter(owned), {i: None for i in queue(gift_list, tables)}
     for fusion in _in_list_order(gift_list, tables["fusions"]):
-        if (fusion.get("specific") and run_packs is None) or not _to_make(gift_list, fusion, run_packs, held) or _pick(fusion, held, None):
+        if not _to_make(gift_list, fusion, run_packs, held) or _pick(fusion, held, None):
             continue
         short = [i for recipe in fusion.get("recipes", []) for i, n in Counter(recipe).items() if held[i] < n]
         short += [i for group in fusion.get("groups", []) if sum(held[i] > 0 for i in group["ids"]) < group["need"]

@@ -3655,19 +3655,6 @@ def note_owned(team, visit, cells):
     return owned
 
 
-def tell_unknown_packs(team, visit):
-    """Log once a visit the wanted pack-specific fusions nothing is bought for while the run's packs are unknown (the agent
-    restarted mid-run, gifts.purchases): the run may never have pulled their packs. Their materials stay locked."""
-    if run_packs() is not None or visit.get("packs_told"):
-        return
-    owned = visit.get("owned") or ()
-    ids = [f["id"] for f in gift_tables()[1] if f.get("specific") and f["id"] not in owned and state(team["list"], f["id"]) == "want"]
-    if ids:
-        visit["packs_told"] = True
-        log("shop: the run's theme packs are unknown (the agent restarted mid-run): nothing bought for the pack fusions "
-            + ", ".join(f"{i} {GIFT_NAMES.get(i)}" for i in ids) + "; their materials stay locked")
-
-
 def cell_role(cell, team, page, avoid, owned=()):
     """"material" or "keep": what the shop may do with the owned gift a cell of page ("fuse" or "sell") shows (#299).
 
@@ -4193,7 +4180,6 @@ class Shop(CustomAction):
         keyword, reserve, acted = team["keyword"], team["reserve_cost"], False
         if visit.get("owned") is None and any(f for _, f in purchases(team["list"], run_packs())):
             Shop.read_owned(context, team, visit)
-        tell_unknown_packs(team, visit)
         if not purchases(team["list"], run_packs(), visit.get("owned") or ()):
             log("shop: the gift list buys nothing the shop sells (no wanted gift, no wanted fusion's material): nothing bought, no refresh")
             return False
