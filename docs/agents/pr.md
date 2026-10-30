@@ -9,13 +9,13 @@ The `pr` skill's sections, then:
 ```markdown
 ## Verification
 
-- Tests: `<command>` → `<passed> passed, <failed> failed`
+- Tests: `<command>` → `<passed> passed, <failed> failed`, plus `, <skipped> skipped` when some skipped (a PR that changes only docs says `Tests: none (docs only)` instead)
 - Live: <paths run on the emulator>; not run: <paths>, each with its follow-up issue
 - Acceptance: `<criterion from the issue>` → met / not met, with the count
 - Fixtures: real captures, or synthetic (file name ends `.synthetic.png`)
 ```
 
-`public-text-guard.py` denies `gh pr create|edit --body-file` when the body has no `N passed, M failed` or a line saying `not run` names no issue (`#<n>`; `not run: none` passes).
+`public-text-guard.py` denies `gh pr create|edit --body-file` when the body has neither `N passed, M failed[, K skipped]` nor `Tests: none (docs only)`, or a line saying `not run` names no issue (`#<n>`; `not run: none` passes).
 
 ## Comments
 

@@ -79,6 +79,14 @@ def test_a_failed_task_is_resumed_once_per_hour():
     assert len(wd.tick(rows(), {DECODED: "failed"}, "", "", state, "2026103013")[0]) == 1
 
 
+def test_a_cancelled_task_is_reported_once_as_cancelled_and_never_told_to_resume():
+    for spelling in ("cancelled", "canceled"):
+        events, state = wd.tick(rows(), {DECODED: spelling}, "", "", {}, "2026103012")
+        assert len(events) == 1 and events[0].startswith("CANCELLED a")
+        assert "resume-a" not in events[0] and "t3_thread_send" not in events[0]
+        assert wd.tick(rows(), {DECODED: spelling}, "", "", state, "2026103013")[0] == []
+
+
 def test_a_running_task_and_a_missing_state_are_silent():
     assert wd.tick(rows(), {DECODED: "running"}, "", "", {}, "h")[0] == []
     assert wd.tick(rows(), {}, "", "", {}, "h")[0] == []
