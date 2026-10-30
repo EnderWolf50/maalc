@@ -274,6 +274,23 @@ def test_wait_follows_a_ticket_that_ends_while_it_waits(tmp_path):
     assert clock.t == 10
 
 
+def test_wait_gives_a_starting_run_time_to_queue_before_it_trusts_an_old_result(tmp_path):
+    lq.result_path(tmp_path, "chk").write_text(json.dumps({"exit": 0, "log": None, "ended": "earlier"}))  # the previous run under this name
+    ticket = tmp_path / f"1-{os.getpid()}-chk.ticket"
+    clock, said = Clock(), []
+
+    def sleep(s):
+        clock.sleep(s)
+        if clock.t == 5:  # uv has started: the new run drops the old result and queues
+            lq.result_path(tmp_path, "chk").unlink()
+            ticket.write_text("cmd")
+        if clock.t == 15:
+            lq.result_path(tmp_path, "chk").write_text(json.dumps({"exit": 4, "log": None, "ended": "later"}))
+            ticket.unlink()
+
+    assert lq.wait(tmp_path, "chk", 60, poll=5, say=said.append, clock=clock.now, sleep=sleep) == 4
+
+
 def test_wait_names_an_unknown_ticket_and_a_run_that_died(tmp_path):
     code, said, _ = waiting(tmp_path, "nobody", 60, ticket=False)
     assert code == lq.WAIT_UNKNOWN and "no such ticket" in said[-1]

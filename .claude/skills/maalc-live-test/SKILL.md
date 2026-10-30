@@ -9,7 +9,7 @@ The tools are in `tools/live/`, each with its options in `--help`. Reach for the
 
 | Tool | Does |
 | --- | --- |
-| `queue.py` | the emulator and bench tickets, `wait` for one to end, `pause` a hold, `detach`, `status`, `resume` |
+| `queue.py` | the emulator and bench tickets, `wait --resource <bench|emulator> --name <ticket>` blocks until one ends and exits with its code (75: still running, run it again; give the ticket's `run` a `--log` so `wait` prints it), `pause` a hold, `detach`, `status`, `resume` |
 | `preflight.py` | `screen` names the emulator's screen before costly prep; `recording` and `plan` check a run in progress |
 | `backup.py hold` | backs up `install/` and verifies it after the run |
 | `bot.py` | `run` the bot headless into a stamped `run.log`; `prep` a test install's settings; `awake` keeps the screen on |

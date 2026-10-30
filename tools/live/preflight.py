@@ -89,6 +89,8 @@ def look(root: Path, port: int, shot: Path | None) -> str | None:
 
 
 def screen(root: Path, port: int, shot: Path | None, say=print, see=look) -> int:
+    if shot:
+        shot.parent.mkdir(parents=True, exist_ok=True)  # the archive folder of a new topic is made at step 5, after this
     verdict, reason = classify(see(root, port, shot))
     say(f"{verdict}: {reason}")
     return 1 if verdict == "stop" else 0
@@ -113,14 +115,17 @@ def recording_grows(out: Path, seconds: float, say=print, sleep=time.sleep) -> i
     return 1
 
 
-NEW_RUN = r"\[maalc\] new run: "
+NEW_RUN = r"\[maalc\] new run: \S+, team "  # the plan line (agent/actions.py); the other `new run:` lines are Module reads
 NO_PLAN = re.compile(r"no run plan in memory")
+BOT_START = "[run] child pid"  # tools/live/bot.py writes it when it starts the agent; the log is appended to across runs
 
 
 def plan_line(log: Path, within: float, pattern: str = NEW_RUN, say=print, clock=time.monotonic, sleep=time.sleep) -> int:
     want, deadline = re.compile(pattern), clock() + within
     while True:
         lines = log.read_text(encoding="utf-8", errors="replace").splitlines() if log.exists() else []
+        starts = [i for i, l in enumerate(lines) if BOT_START in l]
+        lines = lines[starts[-1]:] if starts else lines  # only the bot run that just started
         if bad := next((l for l in lines if NO_PLAN.search(l)), None):
             say(f"stop: the bot has no run plan ({bad.strip()[:140]}); it continues a leftover run. Stop the run tree and look at the screen")
             return 1

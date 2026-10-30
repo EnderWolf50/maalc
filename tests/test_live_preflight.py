@@ -104,6 +104,35 @@ def test_a_leftover_run_without_a_plan_stops_at_once(tmp_path):
     assert code == 1 and clock.t == 0 and "leftover run" in said[-1]
 
 
+OLD_RUN = ("10:00:00.000 [run] child pid 1\n"
+           "10:00:02.000 [maalc] new run: normal, team 'A' (TEAMS #1), weekly bonuses left 3, time limit 20 min a floor\n")
+PLAN = "[maalc] new run: hard, team 'A' (TEAMS #1), weekly bonuses left 3, time limit 20 min a floor\n"
+
+
+def test_a_plan_line_of_an_earlier_bot_run_in_the_same_log_is_not_this_runs(tmp_path):
+    code, said, clock = plan(tmp_path, OLD_RUN + "11:00:00.000 [run] child pid 2\n11:00:01.000 [maalc] stuck: something\n")
+    assert code == 1 and clock.t >= 60 and "no line matching" in said[-1]
+    code, said, _ = plan(tmp_path, OLD_RUN + "11:00:00.000 [run] child pid 2\n11:00:01.000 [maalc] no run plan in memory: x\n")
+    assert code == 1 and "no run plan" in said[-1]
+
+
+def test_an_earlier_runs_no_plan_line_does_not_stop_a_planned_run(tmp_path):
+    old = "10:00:00.000 [run] child pid 1\n10:00:02.000 [maalc] no run plan in memory: x\n"
+    assert plan(tmp_path, old + "11:00:00.000 [run] child pid 2\n11:00:01.000 " + PLAN)[0] == 0
+
+
+def test_only_the_plan_line_counts_not_the_other_new_run_lines(tmp_path):
+    code, _, clock = plan(tmp_path, "10:00:01.000 [maalc] new run: the Modules were not read on the way here\n10:00:02.000 [maalc] new run: Modules 12 >= 5\n")
+    assert code == 1 and clock.t >= 60
+
+
+def test_screen_makes_the_folder_of_its_shot(tmp_path):
+    shot = tmp_path / "new-topic" / "00-start.png"
+    seen = []
+    pf.screen(tmp_path, 1, shot, say=lambda *_: None, see=lambda root, port, s: seen.append(s.parent.is_dir()) or "HomeReached")
+    assert seen == [True]
+
+
 def test_no_plan_line_in_time_stops_after_the_wait(tmp_path):
     code, said, clock = plan(tmp_path, "10:00:01.000 [maalc] stuck: something\n", within=60)
     assert code == 1 and clock.t >= 60 and "no line matching" in said[-1]

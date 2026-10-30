@@ -147,11 +147,19 @@ def run(qdir: Path, name: str, cmd: list[str], is_alive=alive, poll: float = 5.0
 WAIT_TIMEOUT, WAIT_UNKNOWN, WAIT_DIED = 75, 2, 3
 
 
+WAIT_GRACE = 10  # seconds a `run` started just before `wait` has to queue (uv starts first); until then the result is the last run's
+
+
 def wait(qdir: Path, name: str, timeout_s: float, is_alive=alive, poll: float = 5.0, say=print,
-         clock=time.monotonic, sleep=time.sleep) -> int:
+         clock=time.monotonic, sleep=time.sleep, grace: float = WAIT_GRACE) -> int:
     """Block until the ticket `name` (queued or running) has ended; its exit code, or WAIT_TIMEOUT after timeout_s."""
     name, deadline, seen = ticket_name(name), clock() + timeout_s, False
-    while [p for p in tickets(qdir, is_alive) if p.stem.split("-", 2)[2] == name] if qdir.exists() else []:
+    queued = lambda: [p for p in tickets(qdir, is_alive) if p.stem.split("-", 2)[2] == name] if qdir.exists() else []
+    for _ in range(int(grace // poll) if poll else 0):
+        if queued():
+            break
+        sleep(poll)
+    while queued():
         if not seen:
             seen = True
             say(f"[queue] waiting for {name} (up to {timeout_s:.0f} s)")
