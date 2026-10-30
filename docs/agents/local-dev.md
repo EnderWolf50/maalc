@@ -17,13 +17,27 @@ Once per clone, `lefthook install` turns on the pre-commit hook (`lefthook.yml`)
 
 ## After landing a PR
 
-Land with the `ship` skill's land task. Then, in the main checkout and unless `uv run python tools/live/queue.py status` shows a holder for `emulator` (a live run is using `install/`): `uv run python tools/after_land.py`. It first fetches and fast-forwards the checkout's `main` (refusing off main, with local changes, or when it cannot fast-forward), then builds the settings GUI, assembles `install/` and checks that `install/config/settings.json` still loads.
+Land one PR at a time with `tools/ship.py`:
+
+- `uv run python tools/ship.py ready <pr>...` prints head SHA, `ci-ok` state, mergeable, draft, base and the PRs stacked on each.
+- `uv run python tools/ship.py land <pr> --go` merges (merge commit) only when `ci-ok` passed on the current head and the PR is mergeable, retargets the PRs stacked on its branch to the base before the branch is deleted, waits for the CI run of the merge commit on `main` and exits non-zero when it is red. Start the next `land` after this one returned green. A PR whose base is not `main` merges without that wait (`ci.yml` runs on pushes to `main` only). Run the `code-review` skill before `--go`.
+- `uv run python tools/ship.py into <integration-branch> <branch>` merges `<branch>` into the integration branch (`--no-ff`, in a worktree of it), runs `tools/check.py` through the bench queue and pushes only on green; a conflict or a red check pushes nothing. The first merge into an integration branch with no open PR opens a draft PR, so Linux CI runs from the first merge.
+- `uv run python tools/review_pack.py <pr>` writes the diff, body, CI state and the issues the PR closes or names to `.local/scratch/review-<pr>/`, for a reviewer whose Bash tool does not run.
+
+After a green `land`, `ship.py` runs `tools/after_land.py` in the main checkout unless `uv run python tools/live/queue.py status` shows a holder for `emulator` (a live run is using `install/`); then it prints the command to run later: `uv run python tools/after_land.py`. It first fetches and fast-forwards the checkout's `main` (refusing off main, with local changes, or when it cannot fast-forward), then builds the settings GUI, assembles `install/` and checks that `install/config/settings.json` still loads.
 
 Done: `after_land.py` ends without a "failed" line.
 
+When to run it, and when not:
+
+- Run it as `uv run python tools/after_land.py`, after the PR has landed on `origin/main`. A bare `python` lacks the `maa` package (2026-10-21).
+- Not inside a `queue.py run --resource emulator` ticket: the script then reads its own ticket as a held `emulator` lane, and a `bench` ticket does not trip it (2026-10-21).
+
 ## Claude Code hooks
 
-`.claude/settings.json` starts both hooks in exec form (`"command": "uv"` plus an `args` list), which needs a Claude Code version that knows `args` (2.1.302 does; `claude --version`). An older version drops `args` and runs a bare `uv`, which exits 2, the code that blocks a tool call: every Bash call then fails with a hook error that shows `uv`'s usage text. Update Claude Code when you see it.
+`.claude/hooks/main-checkout-guard.py` (Bash and PowerShell) denies `git switch`, `git checkout -b` and `git checkout <branch>` in the main checkout, also through `git -C`; a linked worktree may switch.
+
+`.claude/settings.json` starts its hooks in exec form (`"command": "uv"` plus an `args` list), which needs a Claude Code version that knows `args` (2.1.302 does; `claude --version`). An older version drops `args` and runs a bare `uv`, which exits 2, the code that blocks a tool call: every Bash call then fails with a hook error that shows `uv`'s usage text. Update Claude Code when you see it.
 
 ## `.local/`: machine-local state
 
@@ -65,8 +79,20 @@ Retention: an archive folder older than 7 days whose `INDEX.md` rows name only c
 - `tools/live/watchdog.py add|done|list|tick` owns `agents.tsv` (and `agents.state.json`, what `tick` already reported) in `.local/scratch/`: nobody edits the file by hand. `tick` prints only news or `NOTHING NEW`; the scheduled prompt is `docs/agents/watchdog-prompt.md`.
 - `tools/live/brief.py live|code --task <name> ...` writes the standard header of `.local/scratch/<name>/brief.md`; every run setting is a required argument. Rules the public repo must not state go in `.local/brief-rules.md` (gitignored), which the script appends to the brief as "Machine-local rules".
 
+## The emulator lane
+
+Every MuMu instance on this PC logs in to the same game account, and starting the game on one instance kicks the other out (the user, 2026-10-20). So the `emulator` resource covers all instances: `tools/live/queue.py` describes it as the user's game account on the emulator. Take an `emulator` ticket before you drive any instance.
+
 ## Game data
 
 `tools/live/dialogs.py` lists the confirm-style dialog strings of `.local/unpack/`, to diff against the pipeline's known dialogs; run it before an unattended run.
 
 Look in `.local/unpack/` first (gift tables, prices, theme packs, every dialog string, under `raw/` and `static/`; its `NOTES.md` says what is where). The Simplified Chinese strings come from the Localize project, https://github.com/LocalizeLimbusCompany: clone it next to the other data to read them. The Chinese names the data files ship come from its release zip through `tools/llc_text.py`, which converts them to Traditional (OpenCC `s2twp` plus a few fixes). Reach for a wiki only when neither has it.
+
+To query it, search the unpacked tree with `rg`: `rg -l "<text>" .local/unpack/raw/Localize/en` finds a dialog or a name, and `rg -l "<key>" .local/unpack/static` finds a table (`static/` holds about 2200 JSON files, counted 2026-10-30). Mounting Trial names are in `raw/Localize/en/EN_Bufs_Mirror5.json`, and the mirror node data for the `-hard`, `-extreme` and `-infinite` variants is `static/Assets/Resources_moved/StaticData/static-data/mirrordungeon/mirrordungeon-08-*.json`.
+
+The Huiji wiki (`limbuscompany.huijiwiki.com`) is behind Cloudflare: `curl` got 403 from this PC on 2026-10-30, and WebFetch got 403 on 2026-10-16. Use the unpacked data first; a wiki answer means a browser session.
+
+A personality's skill deck is always S1 ×3, S2 ×2, S3 ×1: `attributeList[].number` of every `personality-*.json` under `static/.../StaticData/static-data/personality/` is 3, 2, 1 (202 personalities, counted 2026-10-30).
+
+The AALC source, the bot that AGENTS.md "Goal" sets feature parity with, is upstream `KIYI671/AhabAssistantLimbusCompany`. `docs/research/aalc/` is the written reading of it, pinned to commit `b0f4393` (its README): start there, and open the source only for what it lacks. Read one file with `gh api repos/KIYI671/AhabAssistantLimbusCompany/contents/<path>`, or clone it once into `.local/aalc/` of the main checkout (resolve it with `tools/local_dir.py`) and search it with `rg`. A fork on your machine can be stale, so compare a file with upstream before you rely on it.
