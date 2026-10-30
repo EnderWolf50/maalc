@@ -3,7 +3,7 @@ name: maalc-gui-check
 description: Build and launch the real maalc settings app (Tauri, gui/) and drive the changed controls with cua-driver, including drag-and-drop. Use when a change touches gui/, tauri.conf.json, the settings schema or anything the settings window shows, before calling it verified.
 ---
 
-`pnpm test`, `tsc` and `tauri build` never open the app. A Tauri window setting (`dragDropEnabled`) once broke every drag-and-drop list while each earlier GUI PR passed those three (#63, #64). A GUI change is verified when the real app was driven and looked at.
+`pnpm test`, `tsc` and `tauri build` never open the app. A Tauri window setting (`dragDropEnabled`) once broke every drag-and-drop list while each earlier GUI PR passed those three (issue #64, fixed in 380aad8). A GUI change is verified when the real app was driven and looked at.
 
 What driving it takes on this machine (session, delivery mode, window sizes, UIPI) is in `docs/agents/gui-driving.md`; how the screenshots look is in `docs/agents/evidence-style.md`. Read `cua-driver`'s skill before step 4. The app runs from a throwaway folder: the emulator, the game account and `install/` are not involved, and no live-test queue ticket is needed.
 
