@@ -40,7 +40,9 @@ HEADER = [
 ]
 NOTHING = "NOTHING NEW"
 STRANDED_MIN = 60  # minutes a holder may sit after its bot ended before the tick calls it stranded
-FINISHED = {"completed", "complete", "succeeded", "success", "done"}
+# `result_available` is task_status's workState for a task with a result and no live child work; `working` and
+# `waiting_for_children` are not listed on purpose: a finished turn with live child work is not done.
+FINISHED = {"result_available", "completed", "complete", "succeeded", "success", "done"}
 FAILED = {"failed", "error", "errored", "interrupted", "cancelled", "canceled", "rate_limited", "overloaded"}
 RESUME_MSG = ("You were interrupted. Run `uv run python tools/live/queue.py resume --task {task}` and "
               "`queue.py status`, read .local/scratch/{task}/next.md, and continue from there; never start a second hold or bot.")

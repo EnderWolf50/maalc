@@ -64,6 +64,14 @@ def test_a_finished_task_is_reported_once_with_the_done_command():
     assert events == []
 
 
+def test_a_task_whose_work_state_is_result_available_is_finished_and_a_working_one_is_not():
+    for waiting in ("working", "waiting_for_children"):
+        events, _ = wd.tick(rows(), {DECODED: waiting}, "", "", {}, "h")
+        assert events == []
+    events, _ = wd.tick(rows(), {DECODED: "result_available"}, "", "", {}, "h")
+    assert events and events[0].startswith("FINISHED a")
+
+
 def test_a_failed_task_is_resumed_once_per_hour():
     events, state = wd.tick(rows(), {DECODED: "failed"}, "", "", {}, "2026103012")
     assert "resume-a-2026103012" in events[0] and "queue.py resume --task live1" in events[0]
