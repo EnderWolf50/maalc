@@ -22,7 +22,7 @@
 | 事件表 `event_table.json` | 事件頁依選項的實際效果排序 | 開發者每季從拆包的客戶端資料重新產生（第 7 節） | 1.117.0 的 195 個事件 | #93 |
 | 觀測飾品表 `gift_search.json` 與圖示 `image/GiftSearch/<id>.png` | E.G.O Gift Search 頁找飾品（位置預測、圖示比對）；GUI 的飾品清單 | 開發者每季依遊戲客戶端的觀測表重新產生（產生方式寫在檔頭 `note` 與 [04-settings.md](04-settings.md) 第 9 節） | 這一季的 320 個，另有 5 個殘影圖示（9991–9995，#161） | #54 |
 | 合成飾品表 `gift_recipes.json` 與圖示 `image/GiftRecipe/<id>.png` | 飾品清單把合成品標成想要時，查它的配方與材料（固定配方、月之記憶的 N 選 K） | 開發者每季跑 `tools/gift_recipes.py`（中文名取自 LLC release）（用法寫在工具檔頭與 `note`，要 `bench` 號碼牌） | 這一季 60 個合成品（59 個固定配方共 67 條，月之記憶 1 條 N 選 K），其中 39 條固定配方（`isSpecific`）用到主題包專屬飾品，該合成品帶 `specific: true` 與 `packs`（那些主題包的 id，取自各包 `specificEgoGiftPool`）；另有 12 個 `gift_search.json` 沒有的材料，與 `extra_gifts`（遊戲資料 9000–9999 其餘有名字的 id，464 個減去商店、合成、殘影已列的，共 67 個：不賣、不當配方材料，逐格辨識當候選，飾品清單只能保留或不要；9247 不收：遊戲資料裡它是 LCB Regular Check-up 復刻組的一筆（暴怒、燒傷、III 階、售價 255），但英、日、韓、簡中語言檔與灰機 wiki 都沒有它的名字與圖示，候選表認不出它，#332），139 個圖示 | #277、#286、#332 |
-| 預設飾品清單 `gift_lists.yaml` 與 GUI 圖示 `gift_icons/<id>.webp` | 飾品清單的「預設」；GUI 顯示 464 個飾品的圖示（第 9 節） | 開發者每季確認 id 還在、重跑 `tools/gift_icons.py` | 預設清單 0 個想要、116 個保留；464 個圖示（含 67 個 `extra_gifts`） | #291、#293 |
+| 預設飾品清單 `gift_lists.yaml` 與 GUI 圖示 `gift_icons/<id>.webp` | 飾品清單的「預設」；GUI 顯示 464 個飾品的圖示（第 9 節） | 開發者每季確認 id 還在、重跑 `tools/gift_icons.py` | 預設清單 50 個想要、66 個保留；464 個圖示（含 67 個 `extra_gifts`） | #291、#293 |
 
 ## 2. 主題包方案
 
@@ -227,11 +227,11 @@ Boss 的 Cost 是遊戲資料 `mirror-dungeon-common-data-md8.json` 的 BOSS cos
 
 **用途**：設定的飾品清單（[04-settings.md](04-settings.md)，#291）有一份唯讀的「預設」，使用者只能複製；設定 GUI 的飾品格要顯示每個飾品的圖示。（#291、#293）
 
-**預設清單**：`resource/base/data/gift_lists.yaml` 的 `default_list`，欄位同設定檔 v14 `gift_lists[]` 的一項去掉 `id`、`name`（格式由 #292 寫進 04-settings.md）（`order`、`want`、`keep`、`gorder`、`fusion_condition`）。預設清單只保留無體系飾品，其他由使用者自己設定（使用者 2026-10-30 決定：「預設清單應該只放 keywordless，其他由 user 設定」；無體系「先做成保留就好」）。2026-10-23 到 10-30 它是原本的預設隊伍轉成的清單：想要 Burn 在商店買得到的 22 個與月之記憶。
+**預設清單**：`resource/base/data/gift_lists.yaml` 的 `default_list`，欄位同設定檔 v14 `gift_lists[]` 的一項去掉 `id`、`name`（格式由 #292 寫進 04-settings.md）（`order`、`want`、`keep`、`gorder`、`fusion_condition`）。預設清單只保留無體系飾品，其他由使用者自己設定（使用者 2026-10-30 決定：「預設清單應該只放 keywordless，其他由 user 設定」；無體系「先做成保留就好」；同一天又決定「把需合成的無體系改回想要」，再決定「照你的建議，預設的想要只加無體系」：加上主題包專屬飾品池裡、商店有賣的無體系飾品）。2026-10-23 到 10-30 它是原本的預設隊伍轉成的清單：想要 Burn 在商店買得到的 22 個與月之記憶。
 
 - `order`：Gift Search 頁的分頁順序，Burn 第一、`Keywordless` 最後。
-- `want`：空的。所以預設清單什麼都不買，也不做配方合成；Burn 和其他體系一樣是 `drop`。
-- `keep`：所有無體系飾品，共 116 個：`gift_search.json` 的 82 個、`gift_recipes.json` 的 4 個無體系合成品（含 V 階的月之記憶 9083）與 29 個無體系 `extra_gifts`、月之殘影（9995）。無體系飾品一律 `keep`：不賣，也不當合成材料。月之殘影是 V 階，本來就永遠不當合成材料，所以保留；殘影 I–IV（9991–9994）是 `drop`，讓用預設清單的隊伍照舊把它們當合成材料（出售仍看隊伍的「可以出售殘影」）。（#292，使用者 2026-10-23 決定；2026-10-30 接受 115 → 116）
-- 其餘是 `drop`。月之記憶不再是想要，它的 10 個材料（殘片、記憶）也不再被鎖住，照一般規則當材料或出售。`gorder`：每個體系 III、II、I 階，階內照 `gift_search.json` 的順序。`fusion_condition`：`any`。
+- `want`，50 個：先是 `gift_recipes.json` 裡無體系的 4 個合成品，再是主題包專屬飾品池裡商店有賣的 46 個無體系飾品。飾品池來自解包的 `mirrordungeon-theme-floor-*.json` 各主題包的 `specificEgoGiftPool`（1.117.0，所有包合起來 180 個，無體系 53 個；另外 7 個 9208、9209、9246、9752、9754、9758、9797 是 `extra_gifts`，不能標想要，留在 `keep`）。解包資料不在 repo 也不在 CI 上，所以 `tests/test_gift_lists.py` 直接列出這 46 個 id 核對。4 個合成品：V 階的月之記憶 9083、9249 A Small, Lovely Violin、9764 Gift、9780 High-risk Operational Gear。商店會買它們缺、商店有賣的材料（9249：9706、9707、9431；9764：9762、9763；9780：9778、9779；三個都是主題包專屬，只在本局拉到它們的主題包時才買；Agent 中途重啟、主題包不知道時不買。這些材料除了 9706（Tremor）都在 46 個想要裡，所以本來就照想要買；只有 9706 是為了合成品買的），材料湊齊就合成，標「保留」的材料也會用掉；月之記憶的 10 個材料商店不賣，不買。Burn 和其他體系一樣是 `drop`。
+- `keep`：其餘的無體系飾品，共 66 個：`gift_search.json` 的另外 36 個、29 個無體系 `extra_gifts`、月之殘影（9995）。不賣，一般合成也不用（想要的合成品可以用）。月之殘影是 V 階，本來就永遠不當合成材料，所以保留；殘影 I–IV（9991–9994）是 `drop`，讓用預設清單的隊伍照舊把它們當合成材料（出售仍看隊伍的「可以出售殘影」）。（#292，使用者 2026-10-23 決定；2026-10-30 接受 115 → 116）
+- 其餘是 `drop`。月之記憶的 10 個材料（殘片、記憶）與 9706（Tremor）被想要的合成品鎖住，合成品到手後解鎖。`gorder`：每個體系 III、II、I 階，階內照 `gift_search.json` 的順序。`fusion_condition`：`any`。
 
 **圖示**：`resource/base/data/gift_icons/<id>.webp` 與 `index.json`（`{id: 檔名}`），由 `tools/gift_icons.py` 產生。涵蓋 `gift_search.json` 的 320 個、`gift_recipes.json` 的 60 個合成品、12 個材料與 67 個 `extra_gifts`、5 個殘影，共 464 個，GUI 清單全部列出（`extra_gifts` 只能保留或不要）。圖示取自遊戲的 EgoGiftIcon 精靈圖，保留透明，縮成 56 px（最長邊）、WebP quality 72；整批 674,532 位元組，平均約 1.45 KB。`image/GiftSearch/`、`image/GiftRecipe/` 的綠底模板是 Agent 比對用，不動。`tests/test_gift_lists.py` 檢查預設清單的 id 與內容、圖示齊全與總量。（#293）

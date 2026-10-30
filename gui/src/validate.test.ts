@@ -66,7 +66,7 @@ function asV13() {
 }
 
 test("parseSettings refuses newer and unmigratable versions", () => {
-  expect(() => parseSettings('{"version": 15}')).toThrow("newer");
+  expect(() => parseSettings('{"version": 16}')).toThrow("newer");
   expect(() => parseSettings('{"version": 0}')).toThrow("cannot be migrated");
 });
 
@@ -152,6 +152,21 @@ test("version 13 turns the teams' keep settings into gift lists, the daily tasks
   expect(data.teams.map((t) => t.gift_list)).toEqual(["gift-list-1", "gift-list-2"]);
   expect(data.gift_lists.map((l) => l.order[0])).toEqual(["Burn", "Bleed"]);
   for (const t of data.teams) for (const k of ["keyword", "keep_keywords", "keywordless", "keep_gifts", "fusion_condition"]) expect(t).not.toHaveProperty(k);
+  expect(validate(data)).toEqual([]);
+});
+
+test("version 14's shop refresh limit becomes as many keyword refreshes and no normal one (the user, 2026-10-30)", () => {
+  const old = structuredClone(cases.valid) as unknown as { version: number; teams: Record<string, unknown>[] };
+  old.version = 14;
+  old.teams.forEach((t, i) => {
+    delete t.shop_refresh_keyword;
+    delete t.shop_refresh_normal;
+    t.shop_refresh_limit = [3, 0][i];
+  });
+  const { data, migrated } = parseSettings(JSON.stringify(old));
+  expect(migrated).toBe(true);
+  expect(data.teams.map((t) => [t.shop_refresh_keyword, t.shop_refresh_normal])).toEqual([[3, 0], [0, 0]]);
+  for (const t of data.teams) expect(t).not.toHaveProperty("shop_refresh_limit");
   expect(validate(data)).toEqual([]);
 });
 

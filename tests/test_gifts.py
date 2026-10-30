@@ -20,23 +20,31 @@ def run(case):
         return None
     args = case["args"]
     tables = None if args.get("data") == "real" else CASES["data"]
-    packs = args.get("run_packs")
+    packs, owned = args.get("run_packs"), args.get("owned", [])
     match case["fn"]:
         case "main_keyword":
             return gifts.main_keyword(gift_list)
         case "state":
             return {str(i): gifts.state(gift_list, i) for i in args["ids"]}
         case "effective":
-            return {str(i): gifts.effective(gift_list, i, packs, tables) for i in args["ids"]}
+            return {str(i): gifts.effective(gift_list, i, packs, tables, owned) for i in args["ids"]}
         case "lockers":
-            return {str(i): gifts.lockers(gift_list, i, packs, tables) for i in args["ids"]}
+            return {str(i): gifts.lockers(gift_list, i, packs, tables, owned) for i in args["ids"]}
         case "queue":
             return gifts.queue(gift_list, tables)
         case "queue_summary":
             queue = gifts.queue(gift_list, tables)
             return {"first": queue[:3], "has_9083": 9083 in queue}
+        case "purchases":
+            return [list(p) for p in gifts.purchases(gift_list, packs, owned, tables)]
+        case "fusion_purchases":
+            return [list(p) for p in gifts.purchases(gift_list, packs, owned, tables) if p[1] is not None]
+        case "purchases_summary":
+            bought = gifts.purchases(gift_list, packs, owned, tables)
+            ids = [i for i, _ in bought]
+            return {"count": len(bought), "for_fusion": sum(f is not None for _, f in bought), "has": [i for i in args["ids"] if i in ids]}
         case "recipe_fusion":
-            return gifts.recipe_fusion(gift_list, args["owned"], tables, args.get("slots"))
+            return gifts.recipe_fusion(gift_list, owned, tables, args.get("slots"))
     raise AssertionError(case["fn"])
 
 

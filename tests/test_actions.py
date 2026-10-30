@@ -801,8 +801,8 @@ def with_ids(readings):
 
 
 def buying(list_, **team):
-    """A team that plays gift list `list_` (run_team puts it in the team), reserve 0."""
-    return {"keyword": "Burn", "reserve_cost": 0, "list": list_, **team}
+    """A team that plays gift list `list_` (run_team puts it in the team), reserve 0, no shop refresh."""
+    return {"keyword": "Burn", "reserve_cost": 0, "list": list_, "shop_refresh_keyword": 0, "shop_refresh_normal": 0, **team}
 
 
 def test_offers_are_read_once_and_bought_in_the_lists_order_from_the_back(context, monkeypatch):
@@ -1041,9 +1041,9 @@ def test_a_keyword_refresh_waits_for_the_new_cost_not_a_fixed_time(context, cloc
                 tuple(actions.REFRESH["keyword"][1]): [("90", (1110, 145, 40, 20))],
                 tuple(actions.KEYWORD_LABELS): [("Burn", (300, 400, 60, 20))]}
     taps = live_shop(context, reads_now)
-    visit = {"wanted": None, "sold": False, "refreshes": 0}
-    assert actions.Shop.buy(context, buying(wants(9053), shop_refresh_limit=1), visit)
-    assert visit["refreshes"] == 1 and taps == [actions.REFRESH["keyword"][0], (330, 360), actions.KEYWORD_REFRESH]
+    visit = {"wanted": None, "sold": False, "refreshes": {"keyword": 0, "normal": 0}}
+    assert actions.Shop.buy(context, buying(wants(9053), shop_refresh_keyword=1), visit)
+    assert visit["refreshes"] == {"keyword": 1, "normal": 0} and taps == [actions.REFRESH["keyword"][0], (330, 360), actions.KEYWORD_REFRESH]
     assert sum(clock) < 1.5
 
 
@@ -1055,9 +1055,9 @@ def test_a_keyword_refresh_checks_the_page_before_its_first_tap(context, clock, 
     taps = live_shop(context, lambda taps: {tuple(actions.SHOP_COST): [("500", (560, 120, 60, 30))],
                                             tuple(actions.REFRESH["normal"][1]): [("100", (970, 145, 40, 20))],
                                             tuple(actions.REFRESH["keyword"][1]): [("90", (1110, 145, 40, 20))]})
-    visit = {"wanted": None, "sold": False, "refreshes": 0}
+    visit = {"wanted": None, "sold": False, "refreshes": {"keyword": 0, "normal": 0}}
     with pytest.raises(actions.PageGone):
-        actions.Shop.buy(context, buying(wants(9053), shop_refresh_limit=1), visit)
+        actions.Shop.buy(context, buying(wants(9053), shop_refresh_keyword=1), visit)
     assert taps == []
 
 

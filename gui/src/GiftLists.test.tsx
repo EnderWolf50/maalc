@@ -229,6 +229,40 @@ describe("locked gifts", () => {
     expect((await tile(r, m)).getAttribute("aria-label")).toContain(zh["gl.locked"]);
   });
 
+  test("a locked material may be wanted for itself, and is no longer locked; keep is still refused", async () => {
+    // The user, 2026-10-30: want means the gift itself (bought again once a fusion ate it); keep and drop both keep it already.
+    const r = await open([mine({ want: [fixed.id] })]);
+    const t = await tile(r, material);
+    await r.user.keyboard("2");
+    await r.user.click(t);
+    expect(flash()).toBe(say(zh["gl.lock_why"], { name: nameOf(material), by: nameOf(fixed.id) }));
+    expect(list(r)).toMatchObject({ want: [fixed.id], keep: [] });
+    await r.user.keyboard("1");
+    await r.user.click(t);
+    expect(list(r).want).toEqual([fixed.id, material]);
+    expect((await tile(r, material)).getAttribute("aria-label")).not.toContain(zh["gl.locked"]);
+  });
+
+  test("a locked material wears its fusion's icon in a corner, and the badge says what it means", async () => {
+    const r = await open([mine({ want: [fixed.id] })]);
+    const badge = (await tile(r, material)).querySelector(".gl-fbadge")!;
+    expect(badge.querySelector("img")!.getAttribute("src")).toBe(iconUrl(fixed.id));
+    expect(badge.textContent).toBe("");
+    expect(badge.getAttribute("title")).toBe(say(zh["gl.fusion_badge"], { names: nameOf(fixed.id) }));
+    expect((await tile(r, burnIII[2])).querySelector(".gl-fbadge")).toBeNull();
+  });
+
+  test("a material two wanted fusions lock shows the first one's icon and +1", async () => {
+    const fusions = recipes.gifts.filter((g) => g.recipes && !g.specific);
+    const [m, a, b] = fusions.flatMap((f) => fusions.filter((h) => h.id !== f.id && h.recipes!.flat().some((i) => f.recipes!.flat().includes(i)))
+      .map((h) => [f.recipes!.flat().find((i) => h.recipes!.flat().includes(i))!, f, h] as const))[0];
+    const r = await open([mine({ want: [a.id, b.id] })]);
+    const badge = (await tile(r, m)).querySelector(".gl-fbadge")!;
+    const first = recipes.gifts.find((g) => g.id === a.id || g.id === b.id)!; // lockers: data-file order
+    expect(badge.querySelector("img")!.getAttribute("src")).toBe(iconUrl(first.id));
+    expect(badge.textContent).toBe("+1");
+  });
+
   test("a material the list keeps itself is not locked", async () => {
     const r = await open([mine({ want: [fixed.id], keep: [material] })]);
     expect((await tile(r, material)).getAttribute("aria-label")).not.toContain(zh["gl.locked"]);
@@ -240,8 +274,9 @@ describe("read-only default", () => {
     const r = await open([mine()], "zh_tw", "default");
     expect(screen.getByRole("combobox", { name: zh["gl.list"] })).toHaveValue("default");
     expect(screen.getByText(zh["gl.readonly"])).toBeInTheDocument();
-    // The user, 2026-10-30: it keeps the Keywordless gifts and wants nothing; a Burn gift is drop.
-    expect(DEFAULT_LIST.want).toEqual([]);
+    // The user, 2026-10-30: it holds the Keywordless gifts only, wanting the 4 fusion gifts and the 46 of the packs' own pools.
+    expect(DEFAULT_LIST.want.slice(0, 4)).toEqual([9083, 9249, 9764, 9780]);
+    expect(DEFAULT_LIST.want).toHaveLength(50);
     const kept = DEFAULT_LIST.keep.find((id) => GIFT_BY_ID.get(id)!.kind === "buyable")!;
     expect(await tile(r, kept)).toHaveAccessibleName(new RegExp(zh["state.keep"]));
     const burn = DEFAULT_LIST.gorder.Burn[0];

@@ -12,7 +12,7 @@ def bleed_team(**extra):
     """The team a run plays: a list with Bleed first that wants Wound Clerid (9005, buyable) and keeps nothing else."""
     settings = listed("Bleed")
     settings["gift_lists"] = [{"id": "g", "name": "G", **wants(9005, order=("Bleed",))}]
-    return {"reserve_cost": 0, "trial_risk_weight": "high", **extra, **actions.run_team(settings, settings["teams"][0])}
+    return {"reserve_cost": 0, "trial_risk_weight": "high", "shop_refresh_keyword": 0, "shop_refresh_normal": 0, **extra, **actions.run_team(settings, settings["teams"][0])}
 
 
 def test_the_keyword_refresh_picks_the_lists_first_keyword(context, clock):
@@ -23,8 +23,8 @@ def test_the_keyword_refresh_picks_the_lists_first_keyword(context, clock):
                 tuple(actions.REFRESH["keyword"][1]): [("90", (1110, 145, 40, 20))],
                 tuple(actions.KEYWORD_LABELS): [("Bleed", (300, 400, 60, 20))]}  # the dialog lists no Burn here
     taps = live_shop(context, reads_now)
-    visit = {"wanted": None, "sold": False, "refreshes": 0}
-    assert actions.Shop.buy(context, bleed_team(shop_refresh_limit=1), visit)
+    visit = {"wanted": None, "sold": False, "refreshes": {"keyword": 0, "normal": 0}}
+    assert actions.Shop.buy(context, bleed_team(shop_refresh_keyword=1), visit)
     assert taps == [actions.REFRESH["keyword"][0], (330, 360), actions.KEYWORD_REFRESH]
 
 

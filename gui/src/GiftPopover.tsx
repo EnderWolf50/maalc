@@ -3,7 +3,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { FUSION_BY_ID, GIFT_BY_ID, giftName, iconUrl, packName, usedIn } from "./giftCatalog";
 import { STATES, useGiftEdit, type GiftTip } from "./giftEdit";
-import { lockers, materialsOf, queue } from "./gifts";
+import { lockers, materialsOf, purchases, queue } from "./gifts";
 import { fill, TEXT, type Key } from "./i18n";
 import { LockIcon, look, TIERS } from "./KeywordGrid";
 import { useEditor } from "./ui";
@@ -81,6 +81,7 @@ export function GiftPopover({ id, anchor }: { id: number; anchor: HTMLElement })
   const why = locked ? fill(t("gl.tip_locked"), { by: byNames }) : readOnly ? t("gl.tip_ro") : "";
   const users = usedIn(id);
   const buy = queue(list), at = buy.indexOf(id) + 1;
+  const forFusion = at ? null : purchases(list).find(([i]) => i === id)?.[1]; // a wanted fusion's material, bought after the wants
 
   // After every render (its height changes with the content): place it against the tile.
   useLayoutEffect(() => {
@@ -98,7 +99,8 @@ export function GiftPopover({ id, anchor }: { id: number; anchor: HTMLElement })
     </span>
   );
   const rank = g.kind === "fusion" ? t(shown === "want" ? "gl.tip_fusion_want" : "gl.tip_fusion_no")
-    : at ? fill(t("gl.tip_buy_rank"), { n: at, total: buy.length }) : t("gl.tip_buy_none");
+    : at ? fill(t("gl.tip_buy_rank"), { n: at, total: buy.length })
+    : forFusion ? fill(t("gl.tip_buy_fusion"), { name: name(forFusion) }) : t("gl.tip_buy_none");
 
   return (
     // tabIndex -1: a click on the popover's own text keeps the focus inside it. Focus going anywhere but its tile or itself closes it.

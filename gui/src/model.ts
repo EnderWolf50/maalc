@@ -285,7 +285,7 @@ export type Ref<T> = { plan: string } | { custom: T };
 export interface Team {
   id: string; name: string; enabled: boolean; game_team: number; usage: string;
   hard_from_floor: number | null; deployment_order: Ref<Order>; starlight: Ref<StarlightValues>;
-  theme_pack_plan: string; reward_cards: string[]; shop_refresh_limit: number; heal: string;
+  theme_pack_plan: string; reward_cards: string[]; shop_refresh_keyword: number; shop_refresh_normal: number; heal: string;
   reserve_cost: number; min_alive: number; guard_turns: number; trial_risk_weight: string;
   gift_search: { enabled: boolean; gifts: GiftRef[] }; allow_white_gossypium: boolean;
   gift_list: string; sell_max_tier: number; sell_vestiges: boolean;
@@ -418,6 +418,16 @@ const MIGRATIONS: Record<number, (d: Record<string, unknown>) => Record<string, 
     v10Dropped = dropped;
     return data;
   },
+  // Version 15 splits a team's shop_refresh_limit N into N keyword refreshes and no normal one (the user, 2026-10-30): the
+  // shop used the keyword refresh first, so it spends no more than before.
+  14: (d) => ({
+    ...d,
+    teams: Array.isArray(d.teams) ? d.teams.map((t) => {
+      if (!t || typeof t !== "object" || Array.isArray(t)) return t; // left to the schema check, as the agent does
+      const { shop_refresh_limit: limit = 0, ...rest } = t as Record<string, unknown>;
+      return { shop_refresh_keyword: limit, shop_refresh_normal: 0, ...rest };
+    }) : d.teams,
+  }),
 };
 /** The version 10 keep_gifts the last migration found no gift for (parseSettings returns it). */
 let v10Dropped = 0;

@@ -34,7 +34,7 @@ import rewards
 import run_start
 import settlement
 import shop
-from gifts import effective, main_keyword, queue, recipe_fusion, resolve_list, state
+from gifts import effective, main_keyword, purchases, recipe_fusion, resolve_list, state
 from ocrtext import compact, digits, floor_number, has, normalize
 from settings import SettingsError, data_dir, gift_tables, load_settings, vestige_ids
 from state import next_cursor, pick_team, read_cursor, write_cursor
@@ -3595,6 +3595,7 @@ BADGES = ["Burn", "Bleed", "Tremor", "Rupture", "Sinking", "Poise", "Charge", "S
 BADGE_MIN = 0.5
 GIFTS = gift_cells.load()  # every gift a cell may show (#297)
 GIFT_NAMES = {e["id"]: e["en"] for e in GIFTS}
+FUSION_IDS = {g["id"] for g in gift_tables()[1]}
 GIFT_TIERS = {e["id"]: e["tier"] for e in GIFTS}
 GIFT_IDS = {e["en"]: e["id"] for e in GIFTS}  # an English name plate's gift (#329)
 CELL_ICON_ROI = 70  # px square around a cell's centre on the scaled grid where its icon is looked for: the biggest icon (54 px) +-8
@@ -3632,27 +3633,53 @@ def read_cost(context, roi=SHOP_COST):
     return None
 
 
-def cell_state(cell, gift_list):
+def cell_state(cell, gift_list, owned=()):
     """What the list makes of the gift a cell shows, for the log (#299): "want", "keep", "locked" (a drop gift a wanted
-    fusion needs), "drop", or "unknown" (the icon was not told)."""
+    fusion not in `owned` needs), "drop", or "unknown" (the icon was not told)."""
     if cell["id"] is None:
         return "unknown"
     own = state(gift_list, cell["id"])
-    return "locked" if own == "drop" and effective(gift_list, cell["id"], run_packs()) != "drop" else own
+    return "locked" if own == "drop" and effective(gift_list, cell["id"], run_packs(), owned=owned) != "drop" else own
 
 
-def cell_role(cell, team, page, avoid):
+def note_owned(team, visit, cells):
+    """The ids of the owned gifts `cells` show (an unknown one left out), kept as visit["owned"] for the visit's purchases
+    (gifts.purchases). Each wanted fusion among them is logged once a visit: it locks and buys nothing more (the user,
+    2026-10-30)."""
+    visit["owned"] = owned = [c["id"] for c in cells if c["id"] is not None]
+    told = visit.setdefault("owned_fusions", [])
+    for i in owned:
+        if i in FUSION_IDS and i not in told and state(team["list"], i) == "want":
+            told.append(i)
+            log(f"shop: wanted fusion {i} {GIFT_NAMES.get(i)} is owned: its materials are no longer bought or kept")
+    return owned
+
+
+def tell_unknown_packs(team, visit):
+    """Log once a visit the wanted pack-specific fusions nothing is bought for while the run's packs are unknown (the agent
+    restarted mid-run, gifts.purchases): the run may never have pulled their packs. Their materials stay locked."""
+    if run_packs() is not None or visit.get("packs_told"):
+        return
+    owned = visit.get("owned") or ()
+    ids = [f["id"] for f in gift_tables()[1] if f.get("specific") and f["id"] not in owned and state(team["list"], f["id"]) == "want"]
+    if ids:
+        visit["packs_told"] = True
+        log("shop: the run's theme packs are unknown (the agent restarted mid-run): nothing bought for the pack fusions "
+            + ", ".join(f"{i} {GIFT_NAMES.get(i)}" for i in ids) + "; their materials stay locked")
+
+
+def cell_role(cell, team, page, avoid, owned=()):
     """"material" or "keep": what the shop may do with the owned gift a cell of page ("fuse" or "sell") shows (#299).
 
     Material only when the gift is known (its id was read, #297) and its effective state in the team's gift list is "drop"
-    (not wanted, not kept, and no wanted fusion's material: gifts.effective; a pack's exclusive fusion locks its materials only
-    when the run pulled one of its packs, or run_packs is unknown, #306). A gift whose id is in `avoid` (White Gossypium for a team that does
+    (not wanted, not kept, and no material of a wanted fusion not in `owned`: gifts.effective; a pack's exclusive fusion locks
+    its materials only when the run pulled one of its packs, or run_packs is unknown, #306). A gift whose id is in `avoid` (White Gossypium for a team that does
     not hold it, #90) is material whatever the list says: the team's setting comes before the list's, as on the shelf. A
     vestige is never sold unless the team sells vestiges (sell_vestiges, #161), but still fuses.
     """
     if cell["id"] in avoid:
         return "material"
-    if cell["id"] is None or effective(team["list"], cell["id"], run_packs()) != "drop":
+    if cell["id"] is None or effective(team["list"], cell["id"], run_packs(), owned=owned) != "drop":
         return "keep"
     if page == "sell" and cell["id"] in vestige_ids() and not team.get("sell_vestiges", False):
         return "keep"
@@ -4032,7 +4059,7 @@ class Shop(CustomAction):
         if not self.to_main(context):
             return True  # a page fading in or out: let MirrorHub look again
         RUN["after_shop"] = True  # #279: the next map's only node is the boss; cleared by the next node entered
-        visit = RUN.setdefault("shop", {"healed": False, "refreshes": 0, "wanted": None, "sold": False})
+        visit = RUN.setdefault("shop", {"healed": False, "refreshes": {"keyword": 0, "normal": 0}, "wanted": None, "sold": False})
         # The sale groups by the fuse page's slots and thresholds before that page was read: a Super Shop's red title tells (#263).
         if "slots" not in visit:
             visit["slots"] = 5 if shop.is_super(screen(context)) else 3
@@ -4159,12 +4186,16 @@ class Shop(CustomAction):
         """Buy the gifts of the team's list on show (buy_offers), then refresh while the rules allow; True on any spend.
 
         A first choice too dear for the reserve becomes visit["wanted"] for the next round's sell, and
-        holds the purchases and the refresh back until that sell has been tried. A list that wants nothing the
-        shop sells buys nothing and never refreshes (#298).
+        holds the purchases and the refresh back until that sell has been tried. A list with nothing to buy (gifts.purchases:
+        it wants nothing the shop sells, and no wanted fusion lacks a gift the shop sells) buys nothing and never refreshes
+        (#298). What a wanted fusion lacks depends on the owned gifts: a visit that has not read them reads the sell page first.
         """
         keyword, reserve, acted = team["keyword"], team["reserve_cost"], False
-        if not queue(team["list"]):
-            log("shop: the gift list wants nothing the shop sells: nothing bought, no refresh")
+        if visit.get("owned") is None and any(f for _, f in purchases(team["list"], run_packs())):
+            Shop.read_owned(context, team, visit)
+        tell_unknown_packs(team, visit)
+        if not purchases(team["list"], run_packs(), visit.get("owned") or ()):
+            log("shop: the gift list buys nothing the shop sells (no wanted gift, no wanted fusion's material): nothing bought, no refresh")
             return False
         while True:
             if Shop.buy_offers(context, team, visit):
@@ -4178,7 +4209,8 @@ class Shop(CustomAction):
                 return acted
             image = screen(context)
             fees = {k: number(text(context, image, roi)) for k, (_, roi) in REFRESH.items()}
-            choice = shop.refresh_choice(cost, reserve, visit["refreshes"], team["shop_refresh_limit"],
+            limits = {"keyword": team["shop_refresh_keyword"], "normal": team["shop_refresh_normal"]}
+            choice = shop.refresh_choice(cost, reserve, visit["refreshes"], limits,
                                          fees["normal"], fees["keyword"], data("shop.yaml")["refresh_margin"])
             if not choice:
                 return acted
@@ -4201,22 +4233,37 @@ class Shop(CustomAction):
             if after == cost:
                 Shop.to_main(context)
                 return acted
-            visit["refreshes"] += 1
+            visit["refreshes"][choice] += 1
             visit["sold"] = False
             acted = True
+
+    @staticmethod
+    def read_owned(context, team, visit):
+        """Read the owned gifts off the sell page into visit["owned"] (note_owned); nothing is tapped but the page's button.
+        It stays unknown when the page does not open."""
+        page_guard(context, "Shop")
+        if tap_shown(context, *SHOP_BUTTONS["sell"], shows(context, DIALOG_TITLE, "Sell"), timeout=2) is not None:
+            note_owned(team, visit, owned_cells(context, "sell")[0])
+        Shop.to_main(context)
 
     @staticmethod
     def buy_offers(context, team, visit):
         """Read the offers once, then buy the ones of the team's list shop.buy_plan picks, last cell first; how many bought.
 
         A gift is told by its icon (read_cells, #297) and by its name plate (read_plates, #329): one vote is enough, two that
-        differ leave the cell unknown. Only an offer whose id is known, that the list wants and the shop sells (gifts.queue)
-        is bought, in the queue's order (#298). A Not Enough Cost offer is dimmed (no icon read) but its plate reads: with its
-        id it may be the first choice, so the shop sells for it; it is never bought. Every cell, Purchased ones too, is
-        logged with its id. Each purchase is checked on the Cost.
+        differ leave the cell unknown. Only an offer whose id is known and that gifts.purchases names (the list wants it, or a
+        wanted fusion lacks it: by visit["owned"], none when unknown) is bought, in that order (#298); one bought for a fusion is
+        logged with it. Each gift bought counts as owned for the next, so a fusion is bought no more than it lacks. A Not
+        Enough Cost offer is dimmed (no icon read) but its plate reads: with its id it may be the first choice, so the shop
+        sells for it; it is never bought. Every cell, Purchased ones too, is logged with its id. Each purchase is checked on
+        the Cost.
         """
-        gift_list, reserve = team["list"], team["reserve_cost"]
-        place = {i: n for n, i in enumerate(queue(gift_list))}
+        gift_list, reserve, held = team["list"], team["reserve_cost"], list(visit.get("owned") or ())
+        wanted = purchases(gift_list, run_packs(), held)
+        place, reason = {i: n for n, (i, _) in enumerate(wanted)}, dict(wanted)
+
+        def why(i):
+            return f" for fusion {reason[i]} {GIFT_NAMES.get(reason[i])}" if reason.get(i) else ""
         visit["wanted"] = None
         cost = read_cost(context)
         if cost is None:
@@ -4239,7 +4286,7 @@ class Shop(CustomAction):
         slots = [s for s in shown if shop.on_sale(s)]
         avoid = [g["name"] for g in avoided]
         avoid_ids = [g["id"] for g in avoided]
-        offers = []
+        offers, ids = [], {}
         for i, slot in enumerate(slots):
             cell, plate = slot["cell"], slot["plate"]
             icon, (named, split) = cell["id"], gift_cells.vote(cell["id"], plate["id"])
@@ -4254,17 +4301,21 @@ class Shop(CustomAction):
                 log(f"shop: {slot['name']!r} {gift_shown(cell)} is tagged Not Enough Cost: its price {slot['price']} is a misread")
                 continue
             rank = place.get(cell["id"])
-            listed = cell_state(cell, gift_list)
+            listed = cell_state(cell, gift_list, held)
             log(f"shop: {slot['name']!r} {slot['price']}: tier {cell['tier']} {cell['keyword']} {gift_shown(cell)}, plate {plate['text']!r}, {listed}"
-                f"{'' if rank is None else f', place {rank}'}")
+                f"{'' if rank is None else f', place {rank}{why(cell['id'])}'}")
             if rank is not None:
                 offers.append((i, rank, slot["price"]))
+                ids[i] = cell["id"]
         plan, visit["wanted"] = shop.buy_plan(offers, cost, reserve, visit["sold"])
         if visit["wanted"]:
             log(f"shop: the first choice costs {visit['wanted']}, {cost} Cost is short: sell first")
         bought = 0
         for i in plan:
             slot = slots[i]
+            if ids[i] not in dict(purchases(gift_list, run_packs(), held)):
+                log(f"shop: {slot['name']!r} {ids[i]}: no longer needed, what was bought meets its fusion")
+                continue
             image = Shop.open_offer(context, slot)
             if image is None:
                 if not Shop.to_main(context):
@@ -4279,12 +4330,15 @@ class Shop(CustomAction):
             tap(context, *PURCHASE, wait=0)
             gift_get(context)
             after = read_cost(context)
-            log(f"shop: bought {slot['name']!r} for {price}: {cost} -> {after} Cost")
+            log(f"shop: bought {slot['name']!r} for {price}{why(ids[i])}: {cost} -> {after} Cost")
             if after is None or after == cost:
                 log("shop: the Cost did not change; taking it as not bought")
                 Shop.to_main(context)
                 continue
             cost, bought = after, bought + 1
+            held.append(ids[i])
+            if visit.get("owned") is not None:
+                visit["owned"] = list(held)
         return bought
 
     @staticmethod
@@ -4371,18 +4425,19 @@ class Shop(CustomAction):
         # The grid decides (#112, #205): each cell's tier, badge and icon (its id), its price under it.
         avoid = [g["id"] for g in avoided_gifts(team)]
         cells, grid = owned_cells(context, "sell")
-        roles = [cell_role(c, team, "sell", avoid) for c in cells]
+        owned = note_owned(team, visit, cells)
+        roles = [cell_role(c, team, "sell", avoid, owned) for c in cells]
         # A pack-exclusive fusion the run did not pull does not lock its materials (#306), but the fuse page still makes it
         # (#300): what a held recipe takes is not sold, which runs before the fusion.
         held = recipe_places(team, cells, visit.get("slots", 3))
         roles = ["keep" if c["i"] in held else r for c, r in zip(cells, roles)]
-        log("shop: sell cells " + "; ".join(f"{cell_line(c, f'{r}, {cell_state(c, team['list'])}')} {c['price']}" for c, r in zip(cells, roles)))
+        log("shop: sell cells " + "; ".join(f"{cell_line(c, f'{r}, {cell_state(c, team['list'], owned)}')} {c['price']}" for c, r in zip(cells, roles)))
         gifts = [(c["i"], c["price"]) for c, r in zip(cells, roles) if r == "material" and c["price"]]
         avoided = {c["i"] for c in cells if c["id"] in avoid}  # sold first (#90)
         # The fusion still uses what may not be sold (#79): a vestige the team does not sell (kept on the sell page, material
         # on the fuse page, #161), and a material whose price is unread.
         fuse_only = [c["i"] for c, r in zip(cells, roles) if c["i"] not in held
-                     and ((r == "keep" and cell_role(c, team, "fuse", avoid) == "material") or (r == "material" and not c["price"]))]
+                     and ((r == "keep" and cell_role(c, team, "fuse", avoid, owned) == "material") or (r == "material" and not c["price"]))]
         # The fusion is grouped without the avoided gifts, which are sold first (#90): a sale then breaks no group.
         materials = [c for c in cells if (c["i"] in dict(gifts) or c["i"] in fuse_only) and c["i"] not in avoided]
         condition = team["list"]["fusion_condition"]  # a group the condition refuses makes no fusion: its gifts are spare
@@ -4417,6 +4472,7 @@ class Shop(CustomAction):
                 log(f"shop: sell cell {i} for {price}: not sold, {before} -> {read_cost(context, SELL_COST)} Cost")
                 break
             log(f"shop: sold cell {i} for {price}: {before} -> {before + price} Cost")
+            owned.remove(by_i[i]["id"])
             before += price
             still(context, timeout=1.5)  # the dialog goes as the Cost turns: the next cell's tap waits for it
             if grid["at"]:  # the grid lost a cell, and may have moved up from its end: from its top again
@@ -4459,8 +4515,9 @@ class Shop(CustomAction):
             log("shop: the fuse page shows Fusion Available: the owned gifts are read under it")
         avoid = [g["id"] for g in avoided_gifts(team)]
         cells, grid = owned_cells(context, "fuse")
-        roles = [cell_role(c, team, "fuse", avoid) for c in cells]
-        log(f"shop: fuse cells ({slots} slots) " + "; ".join(cell_line(c, f"{r}, {cell_state(c, team['list'])}") for c, r in zip(cells, roles)))
+        owned = note_owned(team, visit, cells)
+        roles = [cell_role(c, team, "fuse", avoid, owned) for c in cells]
+        log(f"shop: fuse cells ({slots} slots) " + "; ".join(cell_line(c, f"{r}, {cell_state(c, team['list'], owned)}") for c, r in zip(cells, roles)))
         made = Shop.fuse_recipe(context, team, cells, grid, slots, visit)  # a wanted fusion comes before the ordinary one (#300)
         if made is False:  # the page did not take the recipe, and may hold some of its materials: close it, then the ordinary fusion
             Shop.to_main(context)
@@ -4495,6 +4552,9 @@ class Shop(CustomAction):
             if wanted:
                 fused = Shop.press_fuse(context, len(group))
                 log(f"shop: fuse {materials} into a tier {page_tier or tier} {keyword} gift (condition {condition}): {'done' if fused else 'not confirmed'}")
+                if fused:
+                    for c in group:
+                        owned.remove(c["id"])
                 break
             refused.append(tuple(sorted(c["tier"] for c in group)))
             if len(refused) >= FUSE_TRIES or not Shop.place(context, group, slots, grid, out=True):
@@ -4528,11 +4588,8 @@ class Shop(CustomAction):
         cancels the fusion unpressed: the materials come back out and the ordinary fusion goes on (#300). The dialog's count must
         be theirs. A recipe the page cannot hold (a Lunar Memory's 5 materials on 3 slots) is passed over for the next wanted one.
         """
-        failed, blocked = visit.setdefault("recipes_failed", []), []
-        recipe = recipe_fusion(team["list"], [c["id"] for c in cells if c["id"] is not None], slots=slots, skip=failed, blocked=blocked)
-        for gift, kept in blocked:
-            log(f"shop: recipe {gift} {GIFT_NAMES.get(gift)}: skip, the list keeps " + ", ".join(f"{i} {GIFT_NAMES.get(i)}" for i in kept)
-                + " (owned, but a kept gift is no material)")
+        failed = visit.setdefault("recipes_failed", [])
+        recipe = recipe_fusion(team["list"], [c["id"] for c in cells if c["id"] is not None], slots=slots, skip=failed)
         if recipe is None:
             return None
         group = pick_cells(cells, recipe["materials"])
@@ -4548,6 +4605,10 @@ class Shop(CustomAction):
         # a recipe of tier V (shop.forecast_tier never reads one), it goes on: a recipe has no points tier to fall back on.
         cancel = tier is not None and recipe_tier is not None and recipe_tier <= shop.FUSION_TOP_TIER and tier != recipe_tier
         made = False if cancel else Shop.press_fuse(context, len(group))
+        if made and visit.get("owned") is not None:
+            for i in recipe["materials"]:
+                visit["owned"].remove(i)
+            visit["owned"].append(recipe["gift"])
         if not made:
             failed.append(recipe["gift"])
         if cancel:

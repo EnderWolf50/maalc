@@ -214,3 +214,8 @@ test("a new settings file wins one EXP Luxcavation and three Thread Luxcavations
   expect([exp.count, thread.count]).toEqual([1, 3]);
   expect([exp.consecutive, thread.consecutive]).toEqual([true, true]); // #375: on by default
 });
+
+test("a new team does not refresh the shop until the user sets a limit (the user, 2026-10-30)", () => {
+  const team = newTeam(1, "T");
+  expect([team.shop_refresh_keyword, team.shop_refresh_normal]).toEqual([0, 0]);
+});

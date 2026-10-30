@@ -88,22 +88,30 @@ def test_heal_plan(mode, cost, reserve, dead, plan):
     assert s.heal_plan(mode, cost, reserve, dead, 100) == plan
 
 
-@pytest.mark.parametrize("cost, reserve, used, limit, choice", [
-    (210, 0, 0, 2, "keyword"),  # 90 + 120
-    (209, 0, 0, 2, "normal"),  # short of a keyword refresh: 15 + 120 still fits
-    (134, 0, 0, 2, None),
-    (310, 100, 0, 2, "keyword"),  # the reserve counts on top
-    (309, 100, 0, 2, "normal"),
-    (3000, 0, 2, 2, None),  # limit reached; both kinds count
-    (3000, 0, 0, 0, None),
+def counts(keyword, normal):
+    return {"keyword": keyword, "normal": normal}
+
+
+@pytest.mark.parametrize("cost, reserve, used, limits, choice", [
+    (210, 0, counts(0, 0), counts(2, 2), "keyword"),  # 90 + 120
+    (209, 0, counts(0, 0), counts(2, 2), "normal"),  # short of a keyword refresh: 15 + 120 still fits
+    (134, 0, counts(0, 0), counts(2, 2), None),
+    (310, 100, counts(0, 0), counts(2, 2), "keyword"),  # the reserve counts on top
+    (309, 100, counts(0, 0), counts(2, 2), "normal"),
+    (3000, 0, counts(2, 0), counts(2, 1), "normal"),  # the keyword refreshes used up: the normal ones are next
+    (3000, 0, counts(0, 0), counts(0, 1), "normal"),
+    (3000, 0, counts(2, 1), counts(2, 1), None),  # each kind counts its own
+    (3000, 0, counts(1, 0), counts(1, 0), None),
+    (209, 0, counts(0, 0), counts(2, 0), None),  # short of a keyword refresh, and no normal one allowed
+    (3000, 0, counts(0, 0), counts(0, 0), None),  # the default: no refresh (the user, 2026-10-30)
 ])
-def test_refresh_choice(cost, reserve, used, limit, choice):
-    assert s.refresh_choice(cost, reserve, used, limit, 15, 90, 120) == choice
+def test_refresh_choice(cost, reserve, used, limits, choice):
+    assert s.refresh_choice(cost, reserve, used, limits, 15, 90, 120) == choice
 
 
 def test_refresh_choice_unread_fee_is_skipped():
-    assert s.refresh_choice(3000, 0, 0, 2, 15, None, 120) == "normal"
-    assert s.refresh_choice(3000, 0, 0, 2, None, None, 120) is None
+    assert s.refresh_choice(3000, 0, counts(0, 0), counts(2, 2), 15, None, 120) == "normal"
+    assert s.refresh_choice(3000, 0, counts(0, 0), counts(2, 2), None, None, 120) is None
 
 
 def test_to_sell_the_dearest_spare_first():

@@ -3,7 +3,7 @@ import { useRef, useState, type KeyboardEvent } from "react";
 import { CATALOG, GIFT_BY_ID, giftName, iconUrl, keywordIconUrl, tiersOf } from "./giftCatalog";
 import { useDragSort, type DragProps } from "./dragSort";
 import { moveGift, useGiftEdit } from "./giftEdit";
-import { effective, mainKeyword, state, type GiftState, type ListRules } from "./gifts";
+import { effective, lockers, mainKeyword, state, type GiftState, type ListRules } from "./gifts";
 import { fill, type Key } from "./i18n";
 import { GIFT_KEYWORDS } from "./model";
 import { useEditor } from "./ui";
@@ -174,7 +174,19 @@ export const LockIcon = ({ className }: { className: string }) => (
   <svg className={className} viewBox="0 0 16 16" aria-hidden><path d="M5 7V5a3 3 0 016 0v2h1v7H4V7zm1.5 0h3V5a1.5 1.5 0 00-3 0z" fill="currentColor" /></svg>
 );
 
-/** One gift: its icon in a frame that shows its state (want thick and striped, keep solid, drop faded, locked dashed with a padlock). */
+/** The corner badge of a locked gift: what locks it, for a glance (the user, 2026-10-30: the dashed frame alone did not tell). */
+function FusionBadge({ by, zh }: { by: number[]; zh: boolean }) {
+  const { t } = useEditor();
+  const names = by.map((f) => giftName(GIFT_BY_ID.get(f)!, zh)).join(t("gl.sep"));
+  return (
+    <span className="gl-fbadge" title={fill(t("gl.fusion_badge"), { names })}>
+      <img src={iconUrl(by[0])} alt="" />{by.length > 1 && <b>+{by.length - 1}</b>}
+    </span>
+  );
+}
+
+/** One gift: its icon in a frame that shows its state (want thick and striped, keep solid, drop faded, locked dashed with a
+ * padlock and, in its top corner, the icon of the first wanted fusion that locks it, "+N" for the others). */
 function GiftTile({ id, zh, tabStop, onFocus, drag }: {
   id: number; zh: boolean; tabStop: boolean; onFocus: () => void; drag?: DragProps;
 }) {
@@ -192,6 +204,7 @@ function GiftTile({ id, zh, tabStop, onFocus, drag }: {
       onMouseEnter={(e) => tip.show(id, e.currentTarget)} onMouseLeave={tip.leave} onClick={() => apply(id)}>
       <img src={iconUrl(id)} alt="" loading="lazy" />
       {locked && <LockIcon className="gl-lock" />}
+      {locked && <FusionBadge by={lockers(list, id)} zh={zh} />}
     </button>
   );
 }

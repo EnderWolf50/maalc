@@ -87,7 +87,14 @@
   box-shadow: 0 0 0 2px var(--gl-panel), 0 0 0 4px var(--gl-want);
 }
 .gl .gl-tile.keep { border-color: var(--gl-keep); background: var(--gl-keepbg); }
-.gl .gl-tile.locked { border-style: dashed; cursor: not-allowed; }
+.gl .gl-tile.locked { border-style: dashed; }
+/* A locked gift's badge: the icon of the fusion that locks it, top right, "+N" when more do. */
+.gl-fbadge {
+  position: absolute; right: -6px; top: -6px; display: flex; align-items: center; gap: 1px; height: 24px; min-width: 24px; padding: 0 2px;
+  box-sizing: border-box; border: 2px solid var(--gl-keep); border-radius: 12px; background: var(--gl-panel);
+}
+.gl-tile .gl-fbadge img { width: 18px; height: 18px; }
+.gl-fbadge b { font-size: 10px; line-height: 1; color: var(--gl-fg); padding-right: 1px; }
 /* Search box, search results header, the help popover (#307). */
 .gl .gl-search { border: 1px solid var(--gl-line); border-radius: 6px; padding: 4px 8px; background: var(--gl-panel); color: var(--gl-fg); width: 260px; max-width: 100%; }
 .gl-sh { display: flex; align-items: center; gap: 10px; padding: 2px 0 6px; }

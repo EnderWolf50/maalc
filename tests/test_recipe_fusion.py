@@ -49,8 +49,8 @@ def test_materials_that_fall_short_make_no_recipe_and_the_ordinary_fusion_goes_o
 def test_a_recipe_the_page_cannot_hold_does_not_block_the_next_wanted_one(context, monkeypatch):
     # Lunar Memory (first in the list's order) takes 5 materials, a 3-slot fuse page holds three: Soothe the Dead goes in.
     readings = [("Burn", 4, i) for i in (9105, 9110, 9142, 9147, 9152)] + [("Burn", 3, 9003), ("Burn", 3, 9053), ("Burn", 3, 9157)]
-    wanted = {"list": wants(LUNAR, SOOTHE, order=("Keywordless", "Burn"))}
-    fused, taps, ok = fusion_taps(context, monkeypatch, wanted, *readings)
+    lunar_first = {"list": wants(LUNAR, SOOTHE, order=("Keywordless", "Burn"))}
+    fused, taps, ok = fusion_taps(context, monkeypatch, lunar_first, *readings)
     assert fused and ok and taps == [0] * 5 + [1, 1, 1]
 
 
@@ -102,14 +102,20 @@ def test_a_wanted_material_short_of_its_partner_is_no_ordinary_fusion_material(c
     assert fused and ok and taps == [0, 1, 1, 1]
 
 
-def test_a_recipe_that_needs_a_kept_gift_is_skipped_and_the_log_says_the_list_keeps_it(context, monkeypatch):
+def test_a_wanted_fusion_takes_a_material_the_list_keeps(context, monkeypatch):
+    # The user, 2026-10-30: "want is the highest priority, it may eat a keep".
+    keeps_one = {"list": wants(REMINISCENCE, 9063, keep=(9177,))}
+    fused, taps, ok = fusion_taps(context, monkeypatch, keeps_one, *REMINISCENCE_MATERIALS, confirm=2)
+    assert fused and ok and taps == [1, 1]
+
+
+def test_the_materials_of_a_wanted_fusion_owned_are_ordinary_materials_again_and_the_log_says_so(context, monkeypatch):
+    # Soothe the Dead owned: 9003 and 9053 are no longer locked, so they fuse with the Bleed II; Soothe itself is wanted, kept.
     logs = []
     monkeypatch.setattr(actions, "log", logs.append)
-    wanted = {"list": wants(REMINISCENCE, 9063, keep=(9177,))}
-    fused, taps, ok = fusion_taps(context, monkeypatch, wanted, *REMINISCENCE_MATERIALS, confirm=2)
-    assert not fused and not ok and taps == [0, 0]
-    line = next(line for line in logs if f"recipe {REMINISCENCE} " in line)
-    assert "missing" not in line and "9063" not in line and "the list keeps 9177 " in line
+    fused, taps, ok = fusion_taps(context, monkeypatch, team(SOOTHE), ("Burn", 4, SOOTHE), ("Burn", 3, 9003), ("Burn", 3, 9053), *junk(1))
+    assert fused and ok and taps == [0, 1, 1, 1]
+    assert any(f"wanted fusion {SOOTHE} " in line and "no longer bought or kept" in line for line in logs)
 
 
 # The Forecasts row (#300): a recipe fusion whose page tier is not the recipe's own is left unpressed.

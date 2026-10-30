@@ -4,7 +4,8 @@ Pure data in, data out, no MaaFramework (the shop, the other actions and the GUI
 sides run tests/gift_list_cases.json). A gift list here is a cleaned one (settings.clean_gift_list): `order`, `want`, `keep`,
 `gorder`. `tables` is {"buyable": gift_search.json's gifts, "fusions": gift_recipes.json's gifts}, the game files' when None.
 `run_packs` are the ids of the theme packs the run took, None when unknown (the agent restarted mid-run): then a pack-specific
-fusion locks its materials all the same.
+fusion locks its materials all the same. `owned` are the ids of the gifts held (repeats count), none when unknown: a wanted
+fusion held is made no more, so it locks and buys nothing (the user, 2026-10-30).
 """
 from collections import Counter
 from functools import cache
@@ -47,26 +48,60 @@ def _materials(fusion):
     return [i for recipe in fusion.get("recipes", []) for i in recipe] + [i for group in fusion.get("groups", []) for i in group["ids"]]
 
 
-def lockers(gift_list, gift_id, run_packs=None, tables=None):
-    """The wanted fusions that lock a drop gift, in data-file order: it is a material of any of their recipes, or of
-    any group. A pack-specific fusion (data `specific`) only when run_packs and its `packs` share one, or run_packs is None."""
+def _to_make(gift_list, fusion, run_packs, owned):
+    """Whether the list still makes `fusion`: wanted, not owned, and not pack-specific (data `specific`) unless run_packs and
+    its `packs` share one, or run_packs is None."""
+    return (state(gift_list, fusion["id"]) == "want" and fusion["id"] not in owned
+            and (not fusion.get("specific") or run_packs is None or bool(set(fusion.get("packs", [])) & set(run_packs))))
+
+
+def lockers(gift_list, gift_id, run_packs=None, tables=None, owned=()):
+    """The fusions the list still makes (_to_make) that lock a drop gift, in data-file order: it is a material of any of
+    their recipes, or of any group."""
     if state(gift_list, gift_id) != "drop":
         return []
-    return [f["id"] for f in (tables or _game_tables())["fusions"]
-            if state(gift_list, f["id"]) == "want" and gift_id in _materials(f)
-            and (not f.get("specific") or run_packs is None or set(f.get("packs", [])) & set(run_packs))]
+    return [f["id"] for f in (tables or _game_tables())["fusions"] if gift_id in _materials(f) and _to_make(gift_list, f, run_packs, owned)]
 
 
-def effective(gift_list, gift_id, run_packs=None, tables=None):
+def effective(gift_list, gift_id, run_packs=None, tables=None, owned=()):
     """"want", "keep" (kept, or a drop gift something locks) or "drop"."""
     own = state(gift_list, gift_id)
-    return "keep" if own == "drop" and lockers(gift_list, gift_id, run_packs, tables) else own
+    return "keep" if own == "drop" and lockers(gift_list, gift_id, run_packs, tables, owned) else own
 
 
 def queue(gift_list, tables=None):
     """The ids to buy, first first: per keyword in `order`, its `gorder` gifts the list wants and the shop sells."""
     buyable = {g["id"] for g in (tables or _game_tables())["buyable"]}
     return [i for k in gift_list["order"] for i in gift_list["gorder"][k] if i in buyable and state(gift_list, i) == "want"]
+
+
+def purchases(gift_list, run_packs=None, owned=(), tables=None):
+    """What the shop buys, first first: (id, None) for each gift of `queue` (the list wants it), then (id, fusion id) for each
+    gift the shop sells that a fusion the list still makes (_to_make; in recipe_fusion's order) lacks: none once `owned`
+    completes one of its recipes or its groups; else each id a recipe needs more of than owned, and the ids not owned of
+    a group short of its `need`. Each id once, for its first reason. Nothing marks a material: it keeps its own state, and is
+    bought no more once its fusion is owned (the user, 2026-10-30). A pack-specific fusion buys nothing while run_packs is
+    None (the agent restarted mid-run): the run may never have pulled its pack, so its Cost would be lost; its materials
+    stay locked all the same (lockers)."""
+    tables = tables or _game_tables()
+    buyable, held, out = {g["id"] for g in tables["buyable"]}, Counter(owned), {i: None for i in queue(gift_list, tables)}
+    for fusion in _in_list_order(gift_list, tables["fusions"]):
+        if (fusion.get("specific") and run_packs is None) or not _to_make(gift_list, fusion, run_packs, held) or _pick(fusion, held, None):
+            continue
+        short = [i for recipe in fusion.get("recipes", []) for i, n in Counter(recipe).items() if held[i] < n]
+        short += [i for group in fusion.get("groups", []) if sum(held[i] > 0 for i in group["ids"]) < group["need"]
+                  for i in group["ids"] if not held[i]]
+        for i in short:
+            if i in buyable:
+                out.setdefault(i, fusion["id"])
+    return list(out.items())
+
+
+def _in_list_order(gift_list, fusions):
+    """The fusions in list order: the keyword's place in `order` (`queue`'s), then data-file order (a fusion is in no
+    `gorder`, which holds the shop's gifts)."""
+    place = {k: n for n, k in enumerate(gift_list["order"])}
+    return sorted(fusions, key=lambda f: place.get(f["keyword"], len(place)))
 
 
 def _pick(fusion, owned, slots):
@@ -83,21 +118,16 @@ def _pick(fusion, owned, slots):
     return None
 
 
-def recipe_fusion(gift_list, owned_ids, tables=None, slots=None, skip=(), blocked=None):
-    """{"gift": id, "materials": [ids]} for the first wanted fusion in list order whose materials `owned_ids` (a list,
-    repeats count) hold, else None. List order = the keyword's place in `order` (`queue`'s), then data-file order: a fusion
-    is in no `gorder` (that holds the shop's gifts). A pack-specific fusion is made whatever the run packs. `slots`: the fuse page's material slots; a recipe needing more is passed over (the next
-    wanted one is tried). `skip`: fusion ids not to make (the page refused them this visit). A fusion already owned is not
-    made again. Every owned gift the list does not keep is a material: a drop gift (locked by a wanted fusion or not) and a
-    wanted one (the user, 2026-10-30); a recipe that needs a kept gift is passed over for the next. `blocked`: a list that
-    gets (fusion id, the kept gifts it would take) for each fusion that only those gifts keep from being made."""
-    owned = Counter(i for i in owned_ids if state(gift_list, i) != "keep")
-    place = {k: n for n, k in enumerate(gift_list["order"])}
-    for fusion in sorted((tables or _game_tables())["fusions"], key=lambda f: place.get(f["keyword"], len(place))):
-        if fusion["id"] in skip or fusion["id"] in owned_ids or state(gift_list, fusion["id"]) != "want":
+def recipe_fusion(gift_list, owned_ids, tables=None, slots=None, skip=()):
+    """{"gift": id, "materials": [ids]} for the first wanted fusion in list order (_in_list_order) whose materials `owned_ids`
+    (a list, repeats count) hold, else None. A pack-specific fusion is made whatever the run packs. `slots`: the fuse page's
+    material slots; a recipe needing more is passed over (the next wanted one is tried). `skip`: fusion ids not to make (the
+    page refused them this visit). A fusion already owned is not made again. Every owned gift is a material, whatever its
+    state: a wanted fusion comes before any keep (the user, 2026-10-30: "want is the highest priority, it may eat a keep")."""
+    held = Counter(owned_ids)
+    for fusion in _in_list_order(gift_list, (tables or _game_tables())["fusions"]):
+        if fusion["id"] in skip or fusion["id"] in held or state(gift_list, fusion["id"]) != "want":
             continue
-        if materials := _pick(fusion, owned, slots):
+        if materials := _pick(fusion, held, slots):
             return {"gift": fusion["id"], "materials": materials}
-        if blocked is not None and (held := _pick(fusion, Counter(owned_ids), slots)):
-            blocked.append((fusion["id"], [i for i in held if state(gift_list, i) == "keep"]))
     return None

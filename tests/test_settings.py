@@ -22,7 +22,7 @@ def team(id, game_team, **kw):
         "usage": "any", "hard_from_floor": 1, "deployment_order": {"custom": ORDER},
         "starlight": {"custom": STARLIGHT}, "theme_pack_plan": "default",
         "reward_cards": ["Starlight", "Random E.G.O Gift", "Cost & Keyword Gift Chance", "Cost", "E.G.O Resource"],
-        "shop_refresh_limit": 2, "heal": "revive", "reserve_cost": 0, "min_alive": 0, "guard_turns": 0,
+        "shop_refresh_keyword": 2, "shop_refresh_normal": 0, "heal": "revive", "reserve_cost": 0, "min_alive": 0, "guard_turns": 0,
         "trial_risk_weight": "high", "gift_search": {"enabled": False, "gifts": []}, "allow_white_gossypium": True,
         "gift_list": "default", "sell_max_tier": 4, "sell_vestiges": False, **kw,
     }
@@ -42,7 +42,7 @@ def gift_list(keyword="Burn", **kw):
 
 
 VALID = {
-    "version": 14,
+    "version": 15,
     "language": "zh_tw",
     "run": {
         "difficulty": "auto", "runs": 1, "weekly_bonus_use": "hard", "weekly_bonus_amount": "all",
@@ -67,9 +67,18 @@ VALID = {
 }
 
 
+def as_v14(valid):
+    """The same settings as version 14 wrote them: one shop refresh limit, which the keyword refresh used first."""
+    old = copy.deepcopy(valid)
+    old["version"] = 14
+    for t in old["teams"]:
+        t["shop_refresh_limit"] = t.pop("shop_refresh_keyword") + t.pop("shop_refresh_normal")
+    return old
+
+
 def as_v13(valid):
     """The same settings as version 13 wrote them: the teams keep the shop's keep settings themselves, there are no lists."""
-    old = copy.deepcopy(valid)
+    old = as_v14(valid)
     old["version"] = 13
     del old["gift_lists"]
     for t in old["teams"]:
@@ -86,6 +95,7 @@ def as_v10(valid):
     return old
 
 
+V14 = as_v14(VALID)
 V13 = as_v13(VALID)
 V10 = as_v10(VALID)
 # What migrating V10 gives: both teams keep nothing but Burn, so they share one list, named after the first team.
@@ -190,7 +200,7 @@ def test_schema_errors_name_the_field(tmp_path, fn, where):
 
 
 def test_newer_version_is_refused(tmp_path):
-    assert "newer" in errors(tmp_path, {**VALID, "version": 15})[0]
+    assert "newer" in errors(tmp_path, {**VALID, "version": 16})[0]
 
 
 def test_version_1_gets_guard_turns_off(tmp_path):
@@ -272,6 +282,18 @@ def test_version_13_teams_with_other_keep_settings_get_their_own_lists(tmp_path)
     assert [t["gift_list"] for t in got["teams"]] == ["gift-list-1", "gift-list-2"]
     assert [g["order"][0] for g in got["gift_lists"]] == ["Burn", "Bleed"]
     assert all(not {"keyword", "keep_keywords", "keywordless", "keep_gifts", "fusion_condition"} & t.keys() for t in got["teams"])
+
+
+def test_version_14_refresh_limit_becomes_as_many_keyword_refreshes_and_no_normal_one(tmp_path):
+    # The user, 2026-10-30: two counts; N keyword refreshes first was what N allowed, so the shop spends no more than before.
+    old = edited(lambda d: [d["teams"][0].update(shop_refresh_limit=3), d["teams"][1].update(shop_refresh_limit=0)], V14)
+    got = load(tmp_path, old)
+    assert [(t["shop_refresh_keyword"], t["shop_refresh_normal"]) for t in got["teams"]] == [(3, 0), (0, 0)]
+    assert all("shop_refresh_limit" not in t for t in got["teams"])
+
+
+def test_version_14_loads_as_the_current_settings(tmp_path):
+    assert load(tmp_path, V14) == load(tmp_path, VALID)
 
 
 def test_version_9_fuses_as_before(tmp_path):
@@ -419,7 +441,7 @@ def test_shared_valid_loads(tmp_path):
 
 def test_shared_valid10_migrates_and_loads(tmp_path):
     loaded = load(tmp_path, CASES["valid10"])
-    assert loaded["version"] == 14 and [t["gift_list"] for t in loaded["teams"]] == ["gift-list-1", "gift-list-2"]
+    assert loaded["version"] == 15 and [t["gift_list"] for t in loaded["teams"]] == ["gift-list-1", "gift-list-2"]
 
 
 @pytest.mark.parametrize("case", CASES["migrations"], ids=lambda c: c["name"])

@@ -244,6 +244,12 @@ describe("hover popover: what it says", () => {
     expect(within(popover()!).getByText(zh["gl.tip_fusion_no"])).toBeInTheDocument();
   });
 
+  test("a material of a wanted fusion the shop sells is bought for it", async () => {
+    const material = fixed.recipes![0][0]; // Soothe the Dead's Ashes to Ashes: the list drops it, the fusion locks it
+    const r = await open([mine({ want: [fixed.id] })]);
+    expect((await hover(r, material)).getByText(say(zh["gl.tip_buy_fusion"], { name: nameOf(fixed.id) }))).toBeInTheDocument();
+  });
+
   test("in English", async () => {
     const en = TEXT.en_us, [a] = burnIII;
     const r = await open([mine({ want: [a] })], "en_us");

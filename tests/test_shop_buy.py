@@ -1,10 +1,14 @@
 """Shop.buy and Shop.buy_offers: what the shop buys off the team's gift list (#298); the reading of cells is test_shop_cells."""
+import json
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import numpy as np
+import pytest
 
 import actions
+import gifts
 import test_actions
 from settings import gift_tables
 from test_actions import NO_GOSSYPIUM, OLD_DOLL_SHOP, buying, cells_read, live_shop, reads, wants
@@ -145,15 +149,51 @@ def test_every_cell_of_the_shop_is_logged_with_its_id_purchased_ones_too(context
     assert [x for x, _ in taps] == [725 + 50]
 
 
-def test_an_offer_a_wanted_fusion_locks_is_logged_as_locked_and_not_bought(context, monkeypatch):
-    # #299: 9031 is a material of the wanted 9092; the shop does not sell 9092, so the queue is empty. The log names why.
+COUPLED = 9092  # Coupled Oscillation, Tremor IV: [9031, 9091, 9165], all three sold by the shop
+
+
+def test_a_material_a_wanted_fusion_lacks_is_bought_for_it_and_the_log_says_which(context, monkeypatch):
+    # The user, 2026-10-30: the list wants 9092 only; its material 9031 keeps its drop state (locked) and is bought for it.
     shelf(context, [100], 500)
     cells_read(monkeypatch, ("Tremor", 1, 9031))
     plates_read(monkeypatch, 9031)
     lines = []
     monkeypatch.setattr(actions, "log", lines.append)
-    assert actions.Shop.buy_offers(context, buying(wants(9092)), {"wanted": None, "sold": False}) == 0
-    assert any("9031" in line and line.endswith("locked") for line in lines)
+    assert actions.Shop.buy_offers(context, buying(wants(COUPLED)), {"wanted": None, "sold": False, "owned": [9091]}) == 1
+    assert any("9031" in line and line.endswith(f"locked, place 0 for fusion {COUPLED} Coupled Oscillation") for line in lines)
+    assert any(line.startswith("shop: bought") and f"for fusion {COUPLED} " in line for line in lines)
+
+
+def test_no_material_is_bought_for_a_wanted_fusion_owned(context, monkeypatch):
+    shelf(context, [100], 500)
+    cells_read(monkeypatch, ("Tremor", 1, 9031))
+    plates_read(monkeypatch, 9031)
+    lines = []
+    monkeypatch.setattr(actions, "log", lines.append)
+    assert actions.Shop.buy_offers(context, buying(wants(COUPLED)), {"wanted": None, "sold": False, "owned": [COUPLED]}) == 0
+    assert any("9031" in line and line.endswith("drop") for line in lines)
+
+
+def test_a_material_owned_is_not_bought_again(context, monkeypatch):
+    shelf(context, [100, 100], 500)
+    cells_read(monkeypatch, ("Tremor", 1, 9031), ("Tremor", 2, 9165))
+    plates_read(monkeypatch, 9031, 9165)
+    assert actions.Shop.buy_offers(context, buying(wants(COUPLED)), {"wanted": None, "sold": False, "owned": [9031]}) == 1
+    taps = [c.args for c in context.tasker.controller.post_click.call_args_list if c.args[1] == 268]
+    assert [x for x, _ in taps] == [725 + 50]
+
+
+def test_a_group_short_of_one_buys_one_though_two_of_its_gifts_are_on_sale(context, monkeypatch):
+    # The shared cases' fusion 507 takes 2 of 201, 202, 302; 202 is owned and 201, 302 are on sale: the first bought (the
+    # last cell, 302) meets the need, so 201 is not bought.
+    tables = json.loads((Path(__file__).parent / "gift_list_cases.json").read_text(encoding="utf-8"))["data"]
+    monkeypatch.setattr(gifts, "_game_tables", lambda: tables)
+    shelf(context, [100, 100], 500)
+    cells_read(monkeypatch, ("Bleed", 3, 201), ("Keywordless", 3, 302))
+    plates_read(monkeypatch, 201, 302)
+    assert actions.Shop.buy_offers(context, buying(wants(507)), {"wanted": None, "sold": False, "owned": [202]}) == 1
+    taps = [c.args for c in context.tasker.controller.post_click.call_args_list if c.args[1] == 268]
+    assert [x for x, _ in taps] == [725 + 50]
 
 
 def test_white_gossypium_known_only_by_its_plate_is_not_bought(context, monkeypatch):
@@ -166,13 +206,92 @@ def test_white_gossypium_known_only_by_its_plate_is_not_bought(context, monkeypa
     assert [x for x, _ in taps] == [725 + 50]
 
 
+def refresh_shop(context):
+    """A shop of 500 Cost whose refresh fees read 100 and 90, 410 Cost after a refresh: the taps."""
+    refreshed = (actions.KEYWORD_REFRESH, actions.REFRESH["normal"][0])
+    return live_shop(context, lambda taps: {tuple(actions.SHOP_COST): [("410" if any(t in taps for t in refreshed) else "500", (560, 120, 60, 30))],
+                                            tuple(actions.REFRESH["normal"][1]): [("100", (970, 145, 40, 20))],
+                                            tuple(actions.REFRESH["keyword"][1]): [("90", (1110, 145, 40, 20))],
+                                            tuple(actions.KEYWORD_LABELS): [("Burn", (300, 400, 60, 20))]})
+
+
+def test_the_shop_does_not_refresh_for_a_wanted_fusion_owned(context, monkeypatch):
+    monkeypatch.setattr(actions.Shop, "buy_offers", staticmethod(lambda *a: 0))
+    taps = refresh_shop(context)
+    team = buying(wants(COUPLED), shop_refresh_keyword=3)
+    assert not actions.Shop.buy(context, team, {"wanted": None, "sold": False, "refreshes": {"keyword": 0, "normal": 0}, "owned": [COUPLED]}) and taps == []
+
+
+def test_the_shop_refreshes_for_a_material_a_wanted_fusion_lacks(context, monkeypatch):
+    monkeypatch.setattr(actions.Shop, "buy_offers", staticmethod(lambda *a: 0))
+    taps = refresh_shop(context)
+    visit = {"wanted": None, "sold": False, "refreshes": {"keyword": 0, "normal": 0}, "owned": []}
+    actions.Shop.buy(context, buying(wants(COUPLED), shop_refresh_keyword=1), visit)
+    assert visit["refreshes"] == {"keyword": 1, "normal": 0} and taps
+
+
+@pytest.mark.parametrize("keyword, normal, used", [
+    (1, 0, {"keyword": 1, "normal": 0}),
+    (0, 1, {"keyword": 0, "normal": 1}),  # the keyword refresh has no count left: the normal one goes on
+    (0, 0, {"keyword": 0, "normal": 0}),  # a new team's default: no refresh (the user, 2026-10-30)
+])
+def test_each_refresh_kind_has_its_own_count(context, monkeypatch, keyword, normal, used):
+    monkeypatch.setattr(actions.Shop, "buy_offers", staticmethod(lambda *a: 0))
+    refresh_shop(context)
+    visit = {"wanted": None, "sold": False, "refreshes": {"keyword": 0, "normal": 0}, "owned": []}
+    actions.Shop.buy(context, buying(wants(COUPLED), shop_refresh_keyword=keyword, shop_refresh_normal=normal), visit)
+    assert visit["refreshes"] == used
+
+
+def test_the_owned_gifts_are_read_off_the_sell_page_before_a_wanted_fusions_material_is_bought(context, monkeypatch):
+    # The visit has not read them yet: the sell page shows Coupled Oscillation owned, so nothing is bought for it.
+    monkeypatch.setattr(actions.Shop, "buy_offers", staticmethod(lambda *a: 0))
+    monkeypatch.setattr(actions, "owned_cells", lambda context, page: ([{"i": 0, "id": COUPLED}, {"i": 1, "id": None}], {}))
+    taps = live_shop(context, lambda taps: {tuple(actions.DIALOG_TITLE): [("Sell E.G.O Gift", (500, 90, 200, 40))]}
+                     if taps[-1:] == [actions.SHOP_BUTTONS["sell"]] else {})
+    visit = {"wanted": None, "sold": False, "refreshes": {"keyword": 0, "normal": 0}}
+    assert not actions.Shop.buy(context, buying(wants(COUPLED), shop_refresh_keyword=3), visit)
+    assert visit["owned"] == [COUPLED] and taps[0] == actions.SHOP_BUTTONS["sell"]
+
+
+def test_the_owned_gifts_are_not_read_for_a_list_whose_fusions_lack_nothing_the_shop_sells(context, monkeypatch):
+    monkeypatch.setattr(actions.Shop, "buy_offers", staticmethod(lambda *a: 0))
+    taps = refresh_shop(context)
+    visit = {"wanted": None, "sold": False, "refreshes": {"keyword": 0, "normal": 0}}
+    actions.Shop.buy(context, buying(wants(9053, 9083), shop_refresh_keyword=0), visit)  # Lunar Memory: no shop material
+    assert "owned" not in visit and actions.SHOP_BUTTONS["sell"] not in taps
+
+
+VIOLIN = 9249  # A Small, Lovely Violin: [9706, 9707, 9431], specific to Dregs of the Manor (1016) and S.E.A. (1102)
+
+
+def test_a_restarted_agent_buys_nothing_for_a_pack_fusion_and_the_log_says_why(context, monkeypatch):
+    # The run's packs are unknown (RUN has none): the run may never have pulled the Violin's pack, so its Cost is kept.
+    monkeypatch.setattr(actions.Shop, "buy_offers", staticmethod(lambda *a: 0))
+    lines = []
+    monkeypatch.setattr(actions, "log", lines.append)
+    taps = refresh_shop(context)
+    visit = {"wanted": None, "sold": False, "refreshes": {"keyword": 0, "normal": 0}}
+    assert not actions.Shop.buy(context, buying(wants(VIOLIN), shop_refresh_keyword=3), visit) and taps == []
+    assert sum(f"{VIOLIN} A Small, Lovely Violin" in line and "packs are unknown" in line for line in lines) == 1
+
+
+def test_a_pack_fusion_buys_in_a_run_of_its_pack(context, monkeypatch):
+    actions.RUN["packs"] = [1016]
+    monkeypatch.setattr(actions.Shop, "buy_offers", staticmethod(lambda *a: 0))
+    refresh_shop(context)
+    visit = {"wanted": None, "sold": False, "refreshes": {"keyword": 0, "normal": 0}, "owned": []}
+    actions.Shop.buy(context, buying(wants(VIOLIN), shop_refresh_keyword=1), visit)
+    assert visit["refreshes"]["keyword"] == 1
+
+
 def test_the_shop_does_not_refresh_when_the_list_buys_nothing(context):
     # #298: the buy queue is empty (nothing wanted): no offer read, no refresh, whatever the Cost.
     taps = live_shop(context, lambda taps: {tuple(actions.SHOP_COST): [("500", (560, 120, 60, 30))],
                                             tuple(actions.REFRESH["normal"][1]): [("100", (970, 145, 40, 20))],
                                             tuple(actions.REFRESH["keyword"][1]): [("90", (1110, 145, 40, 20))]})
-    team = buying(wants(), shop_refresh_limit=3)
-    assert not actions.Shop.buy(context, team, {"wanted": None, "sold": False, "refreshes": 0}) and taps == []
+    team = buying(wants(), shop_refresh_keyword=3)
+    assert not actions.Shop.buy(context, team, {"wanted": None, "sold": False, "refreshes": {"keyword": 0, "normal": 0}}) and taps == []
 
 
 ROW = 153  # px between the offer rows; a Super Shop's grid scrolls 150 px at most (live 2026-10-15: SuperShop.png and its scrolled capture)

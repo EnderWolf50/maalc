@@ -207,16 +207,14 @@ def buy_plan(offers, cost, reserve, sold):
     return sorted(picked, reverse=True), None
 
 
-def refresh_choice(cost, reserve, used, limit, normal_fee, keyword_fee, margin):
+def refresh_choice(cost, reserve, used, limits, normal_fee, keyword_fee, margin):
     """"keyword", "normal" or None: the refresh to use now (spec 03 section 13).
 
-    Keyword refresh first, then normal; either one only while it leaves margin plus the reserve
-    to buy with, and only limit times per shop (both kinds count).
+    Keyword refresh first, then normal; either one only while it leaves margin plus the reserve to buy with, and only as
+    many times per shop as its own count in `limits` allows ({"keyword": n, "normal": n}, the team's; `used` counts alike).
     """
-    if used >= limit:
-        return None
     for kind, fee in (("keyword", keyword_fee), ("normal", normal_fee)):
-        if fee is not None and can_spend(cost, fee + margin, reserve):
+        if used[kind] < limits[kind] and fee is not None and can_spend(cost, fee + margin, reserve):
             return kind
     return None
 

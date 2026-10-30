@@ -167,8 +167,11 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
           <Field label={t("team.reserve_cost")} path={`${path}/reserve_cost`}>
             <Num value={team.reserve_cost} min={0} onChange={(v) => set({ reserve_cost: v })} />
           </Field>
-          <Field label={t("team.shop_refresh_limit")} path={`${path}/shop_refresh_limit`}>
-            <Num value={team.shop_refresh_limit} min={0} onChange={(v) => set({ shop_refresh_limit: v })} />
+          <Field label={t("team.shop_refresh_keyword")} path={`${path}/shop_refresh_keyword`}>
+            <Num value={team.shop_refresh_keyword} min={0} onChange={(v) => set({ shop_refresh_keyword: v })} />
+          </Field>
+          <Field label={t("team.shop_refresh_normal")} path={`${path}/shop_refresh_normal`} note={t("team.shop_refresh_note")}>
+            <Num value={team.shop_refresh_normal} min={0} onChange={(v) => set({ shop_refresh_normal: v })} />
           </Field>
           <Field label={t("team.gift_list")} path={`${path}/gift_list`} note={t("team.gift_list_note")}>
             <select value={team.gift_list} onChange={(e) => set({ gift_list: e.target.value })}>

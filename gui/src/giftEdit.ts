@@ -5,12 +5,15 @@ import { DEFAULT_LIST, lockers, queue, type GiftState, type ListRules } from "./
 import type { GiftList } from "./model";
 
 /** What a click with this state does to a gift: refused because wanted fusions lock it, set to `to`, or set to keep because
- * it cannot be wanted. The GUI does not know the run's theme packs, so a pack-specific fusion always locks (lockers' null). */
+ * it cannot be wanted. A locked gift may still be wanted for itself (the user, 2026-10-30: bought again once its fusion ate
+ * it); keep and drop are refused, as both keep it already. The GUI does not know the run's theme packs, so a pack-specific
+ * fusion always locks (lockers' null). */
 export type Applied = { locked: number[] } | { to: GiftState; downgraded?: true };
 export function plan(list: ListRules, id: number, to: GiftState): Applied {
+  const wanted = to === "want" && wantable(GIFT_BY_ID.get(id)!);
   const locked = lockers(list, id);
-  if (locked.length) return { locked };
-  return to === "want" && !wantable(GIFT_BY_ID.get(id)!) ? { to: "keep", downgraded: true } : { to };
+  if (locked.length && !wanted) return { locked };
+  return to === "want" && !wanted ? { to: "keep", downgraded: true } : { to };
 }
 
 /** Write the state into a list (a draft in the settings): the gift leaves want and keep, then joins the one it is set to. */

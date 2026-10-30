@@ -27,13 +27,30 @@ def test_default_list_ids_all_exist():
     assert not set(LIST["want"]) & set(LIST["keep"])
 
 
-def test_default_list_keeps_the_keywordless_gifts_and_wants_nothing():
-    # The user, 2026-10-30: the default list only keeps the Keywordless gifts; what to want is the user's to set.
-    assert LIST["want"] == []
+# The Keywordless gifts the shop sells that a theme pack's own pool holds (specificEgoGiftPool of the game's
+# mirrordungeon-theme-floor-* data, 1.117.0; the unpacked game data is in neither the repo nor CI, so the ids are listed here).
+PACK_POOL = [9219, 9225, 9266, 9273, 9276, 9284, 9285, 9414, 9419, 9420, 9423, 9427, 9431, 9433, 9435, 9439, 9703, 9705, 9707,
+             9711, 9712, 9723, 9727, 9732, 9733, 9748, 9749, 9751, 9753, 9755, 9757, 9760, 9762, 9763, 9766, 9769, 9778, 9779,
+             9781, 9794, 9801, 9805, 9810, 9811, 9813, 9826]
+PACK_POOL_EXTRA = [9208, 9209, 9246, 9752, 9754, 9758, 9797]  # the pools' other Keywordless gifts: extra_gifts, never wanted
+
+
+def test_default_list_wants_the_keywordless_fusions_and_the_pack_pools_keywordless_gifts():
+    # The user, 2026-10-30: the default list only holds the Keywordless gifts; it wants the ones a fusion makes, then the
+    # ones only a theme pack's pool gives that the shop sells.
+    fusions = [g["id"] for g in RECIPES["gifts"] if g["keyword"] == "Keywordless"]
+    assert fusions == [9083, 9249, 9764, 9780]
+    assert LIST["want"] == fusions + PACK_POOL
+    assert len(LIST["want"]) == 50
+    assert all(i in BUYABLE for i in PACK_POOL)
+    assert set(PACK_POOL_EXTRA) <= {g["id"] for g in RECIPES["extra_gifts"]}
+    assert set(PACK_POOL_EXTRA) <= set(LIST["keep"])
     keywordless = {g["id"] for g in KEYWORD_GIFTS if g["keyword"] == "Keywordless"}  # extra_gifts' too (#310's live run)
     # vestiges I-IV (9991-9994) are fusion materials, so `drop`; Lunar Vestige (V, 9995) is never a material, so `keep`
-    assert set(LIST["keep"]) == keywordless | {max(VESTIGES)} and 9083 in LIST["keep"] and len(LIST["keep"]) == 116
-    assert LIST["order"] == KEYWORDS and LIST["fusion_condition"] == "any"
+    assert set(LIST["keep"]) == keywordless - set(LIST["want"]) | {max(VESTIGES)}
+    assert len(LIST["keep"]) == 66
+    assert LIST["order"] == KEYWORDS
+    assert LIST["fusion_condition"] == "any"
 
 
 def test_default_gorder_is_tier_iii_to_i_in_data_order():

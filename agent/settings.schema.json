@@ -20,7 +20,7 @@
     "charge_enkephalin"
   ],
   "properties": {
-    "version": { "const": 14 },
+    "version": { "const": 15 },
     "language": { "enum": ["zh_tw", "en_us"], "default": "zh_tw" },
     "run": {
       "type": "object",
@@ -142,7 +142,8 @@
           "starlight",
           "theme_pack_plan",
           "reward_cards",
-          "shop_refresh_limit",
+          "shop_refresh_keyword",
+          "shop_refresh_normal",
           "heal",
           "reserve_cost",
           "min_alive",
@@ -214,7 +215,8 @@
             "items": { "enum": ["Starlight", "Random E.G.O Gift", "Cost & Keyword Gift Chance", "Cost", "E.G.O Resource"] },
             "default": ["Starlight", "Random E.G.O Gift", "Cost & Keyword Gift Chance", "Cost", "E.G.O Resource"]
           },
-          "shop_refresh_limit": { "type": "integer", "minimum": 0, "default": 2 },
+          "shop_refresh_keyword": { "type": "integer", "minimum": 0, "default": 0, "description": "keyword refreshes per shop, used first" },
+          "shop_refresh_normal": { "type": "integer", "minimum": 0, "default": 0, "description": "normal refreshes per shop, once the keyword ones are used up or too dear" },
           "heal": { "enum": ["none", "full", "revive"], "default": "revive" },
           "reserve_cost": { "type": "integer", "minimum": 0, "default": 0 },
           "min_alive": {
