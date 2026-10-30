@@ -14,6 +14,7 @@ child_exec onto the interface.json folder), and MXU's mxu.exe and LICENSE,
 shipped unmodified from its release (MXU is AGPL-3.0, see NOTICE.md).
 """
 
+import argparse
 import hashlib
 import io
 import shutil
@@ -74,8 +75,14 @@ def bundle_mxu() -> None:
         (install / "LICENSE-MXU").write_bytes(mxu.read("LICENSE"))
 
 
+def parse_args(argv=None) -> argparse.Namespace:
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--release", action="store_true", help="self-contained install/ (Windows x64 only)")
+    return ap.parse_args(argv)
+
+
 if __name__ == "__main__":
-    release = "--release" in sys.argv[1:]
+    release = parse_args().release  # before anything changes: --help and a typo leave install/ alone
     if sys.platform == "win32":
         if version("maafw").lstrip("v") != MAAFW_FIX_VERSION:  # the wheel's metadata says "v5.14.3"
             sys.exit(f"maafw {version('maafw')} installed, MAAFW_FIX is built for {MAAFW_FIX_VERSION}: update or drop it")

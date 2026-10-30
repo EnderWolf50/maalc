@@ -9,6 +9,7 @@
 - 不採用把整局寫在程式碼迴圈裡的做法（MaaLimbus、AALC）。理由見 [ADR 0002](../adr/0002-pipeline-hub-and-agent-decisions.md)。（#8）
 - 使用者設定由設定 GUI 寫進 `<root>/config/settings.json`，Agent 在任務開始時讀取並檢查；PI 不帶使用者選項（[ADR 0006](../adr/0006-settings-gui-writes-one-settings-file.md)）。格式見 [04-settings.md](04-settings.md)。（#6、#19，2026-10-14 定案）
 - 遊戲資料（主題包清單與預設主題包方案、事件覆寫表、尋路權重、Cost 對照表與商店數字、試煉風險表）放在 `resource/base/data/` 的 YAML 資料檔，由 Agent 讀取（[ADR 0005](../adr/0005-game-data-files-separate-from-user-settings.md)）。格式見 [05-game-data.md](05-game-data.md)。（#11、#12、#17、#19）
+- Windows 上，`tools/install.py` 組出的 `install/maafw/` 用 `maafw` wheel 的檔案，只把 `MaaFramework.dll` 換成 fork（EnderWolf50/MaaFramework）的修改版；MXU 與 `tools/live/bot.py`（設 `MAAFW_BINARY_PATH`）載入這份，其他直接 `import maa` 的程式（測試、離線工具）載入的仍是 wheel 原版。fork 是 wheel 那一版加上兩個修正：批次 OCR 裡被 roi 切掉一半以上高度的字框，改由那個 roi 自己跑一次 det+rec，不再切成細條重讀（上游 MaaXYZ/MaaFramework#1568，修正 PR 為 MaaXYZ/MaaFramework#1573）；每個任務只保留最後 200 個節點的詳情（上游 MaaXYZ/MaaFramework#1578）。`MAAFW_FIX` 釘下載網址與 SHA-256，`MAAFW_FIX_VERSION` 是它對應的 wheel 版本，wheel 版本不符時安裝中止；對應原始碼見 [NOTICE.md](../../NOTICE.md)。等 maafw 正式版同時包含這兩個修正，就拿掉 fork、改回 wheel 的 DLL。（#157、#176）
 
 | 層 | 負責 | 不負責 |
 |---|---|---|
@@ -20,7 +21,7 @@
 
 - `MirrorHub` 是鏡牢流程的分派節點。每種鏡牢畫面都必須列在它的 `next` 裡，並標上 `[JumpBack]`；每個畫面處理完就回到 hub，重新判斷畫面。（#8）
 - `next` 的順序就是優先權。全域彈窗必須排在最前面（只有卡住偵測的 `Stuck` 節點排在它們之前，見 [06-recovery.md](06-recovery.md#實作31)），各子流程也引用同一組全域彈窗節點。（#8）
-- 用 OCR 認的畫面不直接列在 `next`，而是依同樣的順序列在 `HubText` 裡：MaaFramework 會把同一個 `next` 清單裡的 OCR 合併成一次辨識，再把跨過 roi 邊緣的字框切成 1 px 細條重讀，戰鬥中一次就吃掉好幾 GB 記憶體。`HubText` 由 Agent 自己讀一次，只把可能的畫面排進它的清單，每個畫面再用自己的 OCR 確認。它分成每段最寬 960 px 的視窗讀（det 會把更寬的圖縮小，小字因此讀錯）；勝利畫面的 VICTORY 只有 det 找不到框、整個 roi 交給 rec 時才讀得出來，它的那一次讀不到，所以 `Victory` 放在 tail，每輪都自己檢查；`next` 只剩 `Stuck`、`BattleHUD`（戰鬥畫面：回合或暫停鍵，伺服器彈窗仍先看）、`Connecting`、`HubText`、`NoBatchOCR` 後的 `Victory`（唯一直接列在 `next` 的 OCR，理由見下）和幾個模板畫面。戰鬥中每輪都會先看的三個伺服器彈窗（`Connecting`、`RetryPopup`、`PopupButton`）都先比模板，模板沒中就不跑 OCR；`HubText` 只用 `And` 裡的 OCR 判讀，模板留給節點自己確認。（#157）
+- 用 OCR 認的畫面不直接列在 `next`，而是依同樣的順序列在 `HubText` 裡：MaaFramework 會把同一個 `next` 清單裡的 OCR 合併成一次辨識，再把跨過 roi 邊緣的字框切成 1 px 細條重讀，戰鬥中一次就吃掉好幾 GB 記憶體（wheel 原版的行為；`install/` 的 fork DLL 已修，見〈分工〉，但 `HubText` 只讀一次、只排可能的畫面，所以照留）。`HubText` 由 Agent 自己讀一次，只把可能的畫面排進它的清單，每個畫面再用自己的 OCR 確認。它分成每段最寬 960 px 的視窗讀（det 會把更寬的圖縮小，小字因此讀錯）；勝利畫面的 VICTORY 只有 det 找不到框、整個 roi 交給 rec 時才讀得出來，它的那一次讀不到，所以 `Victory` 放在 tail，每輪都自己檢查；`next` 只剩 `Stuck`、`BattleHUD`（戰鬥畫面：回合或暫停鍵，伺服器彈窗仍先看）、`Connecting`、`HubText`、`NoBatchOCR` 後的 `Victory`（唯一直接列在 `next` 的 OCR，理由見下）和幾個模板畫面。戰鬥中每輪都會先看的三個伺服器彈窗（`Connecting`、`RetryPopup`、`PopupButton`）都先比模板，模板沒中就不跑 OCR；`HubText` 只用 `And` 裡的 OCR 判讀，模板留給節點自己確認。（#157）
 - 點下地圖節點之後出現什麼畫面，由 `MirrorHub` 依畫面判斷，不依預期的節點類型走分支；兩者不符時只記錄。（#12）
 - 看到 `VICTORY` 就算戰鬥結束；Confirm 有出現才按，之後的畫面交給 `MirrorHub`。實機：`VICTORY` → 載入畫面（`Combat Tips`）→ 地圖頁；Focused、異想體戰與 Boss 之後先出現飾品選擇頁或獎勵卡頁。（#16、#19；實機：captures/63_battle_victory.png、captures/64_loading_combat_tips.png）
 - `MirrorHub` 的 `timeout` 為 60 秒，逾時經 `on_error` 交給卡住處理；載入畫面另看畫面有沒有在動（不動 80 秒、最長 150 秒）。`on_error` 路徑裡 `[JumpBack]` 不生效，恢復後必須明確回到 `MirrorHub`。細節見 [06-recovery.md](06-recovery.md)。（#14）
@@ -86,6 +87,7 @@
 ### 經驗本（`ExpLuxcavation`）
 
 - 從主畫面點 Drive（`NavMainTabs`）→ Luxcavation（`NavLuxcavation`）→ EXP 分頁（停在 Thread 分頁時點 EXP，`LuxExpTab`）→ EXP 分頁預設畫面最右邊的 Enter（`LuxExpEnter`，`ExpEnter`）。上鎖的卡顯示 KEEP OUT、沒有 Enter，所以最右邊的 Enter 就是最難的開放關卡。不按 Skip Battle；Consecutive Battle 見下一條。（#366）
+- **每場花費**：3 個腦啡肽模組（`luxcavation.EXP_COST`；實機 2026-10-26 第 4–9 關都是 3），紐本每場 2 個（`luxcavation.THREAD_COST`，見下方紐本）。
 - **連戰**（`luxcavation.exp.consecutive`，預設開，#375）：卡片上方一條 `Consecutive Battle ×N ▲`，點它展開一列 `1« − N + »10`，範圍 1–10。框長在卡片上，卡片的位置會變（EXP 分頁最右邊已開放的關是中間那張卡時），所以標題、數字、列與按鍵的座標依實際按的 Enter 平移（基準 `ENTER_AT`，`actions.consecutive_box`），不寫死座標（`tests/screens/LuxConsecExp*.png`）。開時 `LuxEnter` 在按 Enter 之前把 N 設成 `luxcavation.batch(count, 已贏, 開)` = min(10, 剩下的場數)，一場打完，一場 ×N 算 N 場（獎勵與腦啡肽模組消耗都是 ×N，一張結算頁）；`count` 超過 10 就先 ×10，打完再開下一場打剩下的。遊戲離開 Luxcavation 或結算後會把 N 歸零成 ×1，所以每次進場都要設，不信畫面上的預設。設法（`actions.set_consecutive`）：OCR 讀標題的 N（`consecutive_now`：先讀 ×N 旁的窄 roi，再讀整個標題），不等於目標就點標題展開、照 `luxcavation.presses` 按最少的鍵（1«、−、+、»10）、再點標題收合，再讀一次必須等於目標；讀不到或調不到就停止程序（帶證據），不照錯的次數開戰。關：不碰這個框，一場一場打（`count` 場）。不依 Daily Bonuses 剩餘次數調整。戰敗：不算次數，重打時重設同樣的 N。
 - 分頁亮起看橘色邊框（ColorMatch）：亮和不亮的分頁對模板的分數差不多（0.93），分不開。
 - 隊伍是 `luxcavation.exp.team` 指的 maalc 隊伍，戰鬥用它的 `guard_turns`（全員防禦 N 回合後按勝率，同鏡牢；每場戰鬥重新算，2026-10-27）。實機 2026-10-27：經驗本第 9 關照 `guard_turns` 5 防禦了 5 回合（verified）。異想體戰（紐本的 Faelantern 等）是 focused encounter：左齒輪是空心圓環，技能要拖到敵方的技能格上，連線拉不起來，所以照 #127 按勝率、防禦回合留著（`tests/test_battle.py` 用 `LuxBattleTurn.png`、`LuxBattleTurnFocused.png` 驗證這個判斷）。（live-1 F5）

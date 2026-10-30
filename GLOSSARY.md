@@ -123,3 +123,11 @@ _Avoid_: 模組（單說容易和其他模組混淆）
 **Daily Bonuses**：
 紐本頁的每日加成次數，顯示 `n/N`，n 是剩餘的加成次數。
 _Avoid_: 每日次數、daily count
+
+**連戰**：
+經驗本與紐本卡片上的 `Consecutive Battle ×N`，N 是 1–10。一場打完算 N 場，獎勵與腦啡肽模組消耗都是 ×N；離開 Luxcavation 或結算後會回到 ×1（[spec 01](docs/spec/01-architecture.md)）。
+_Avoid_: 連打、連續戰鬥（程式裡寫 `consecutive`）
+
+**每日重置**：
+遊戲的日常次數在每天 05:00（UTC+8）重置：使用者 2026-10-27 告知 05:00，`.local/unpack/raw/Localize/en/EN_DailyLoginEvent.json` 寫每日重置是 06:00 KST（= UTC+8 的 05:00），兩者相符；AALC 也以 Asia/Seoul 6 點分日（`docs/research/aalc/03-daily-tasks.md`）。每個次數各自何時恢復未逐項查證。
+_Avoid_: 刷新時間、日界
