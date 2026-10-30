@@ -1,4 +1,4 @@
-"""Mechanical checks for findings reviewers caught by hand (retro 2026-10-30): the tree as it stands."""
+"""Mechanical checks for findings reviewers caught by hand : the tree as it stands."""
 import ast
 import re
 from pathlib import Path

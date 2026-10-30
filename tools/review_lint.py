@@ -19,18 +19,22 @@ PROSE = re.compile(r"(?:.*\.md|assets/locales/.*\.json|gui/src/i18n\.ts)$")
 DEF_TEST = re.compile(r"^\s*(?:async\s+)?def (test_\w+)")
 
 
-def git(*args: str) -> str:
-    return subprocess.run(["git", *args], cwd=ROOT, capture_output=True, text=True, encoding="utf-8", check=True).stdout
+def git(*args: str, check: bool = True) -> str:
+    return subprocess.run(["git", *args], cwd=ROOT, capture_output=True, text=True, encoding="utf-8", check=check).stdout
 
 
 def diff_lines(base: str) -> tuple[dict[str, list[tuple[int, str]]], dict[str, list[str]]]:
     """(added, removed) lines per file of `git diff -U0 <merge base of base and HEAD>`; added ones carry their line number."""
     added: dict[str, list[tuple[int, str]]] = {}
     removed: dict[str, list[str]] = {}
-    path, at = "", 0
+    path, old, at = "", "", 0
     for line in git("diff", "-U0", "--no-color", git("merge-base", base, "HEAD").strip()).splitlines():
-        if line.startswith("+++ "):
-            path = line[6:] if line.startswith("+++ b/") else ""
+        if line.startswith("diff --git "):
+            path, old = "", ""
+        elif not path and line.startswith("--- a/"):
+            old = line[6:]
+        elif not path and line.startswith("+++ "):
+            path = line[6:] if line.startswith("+++ b/") else old  # a deleted file: `+++ /dev/null`
         elif m := re.match(r"@@ -\S+ \+(\d+)", line):
             at = int(m[1])
         elif path and line.startswith("+") and not line.startswith("+++"):
@@ -121,7 +125,7 @@ def removed_names(removed: dict[str, list[str]], added: dict[str, list[tuple[int
 def stale_references(removed: dict[str, list[str]], added: dict[str, list[tuple[int, str]]]) -> list[str]:
     problems = []
     for name, path in sorted(set(removed_names(removed, added))):
-        hits = git("grep", "-n", "-w", "-e", name, "--", ".", ":(exclude)tests/screens").splitlines()
+        hits = git("grep", "-n", "-w", "-e", name, "--", ".", ":(exclude)tests/screens", check=False).splitlines()  # exit 1: no match
         hits = [h for h in hits if not h.startswith((".local/", "docs/adr/"))]  # an ADR records history
         defined = [h for h in hits if any((m := p.match(h.split(":", 2)[2])) and name in m.groups() for p in (NODE_KEY, TASK_NAME, PY_DEF))]
         if hits and not defined:  # a definition elsewhere in the tree: the name was moved or defined twice, not removed
@@ -137,7 +141,7 @@ def main(base: str) -> int:
     for p in problems:
         print(p)
     print(f"review_lint: {len(problems)} problem(s)")
-    return len(problems)
+    return 1 if problems else 0
 
 
 if __name__ == "__main__":

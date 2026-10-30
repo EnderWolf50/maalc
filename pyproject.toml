@@ -36,9 +36,9 @@ package = false
 [tool.pytest.ini_options]
 pythonpath = ["agent", "tools"]
 testpaths = ["tests"]
-# pytest-timeout: a test that hangs fails after this many seconds instead of holding the job (main.23: 50 minutes).
+# pytest-timeout: a test that hangs fails after this many seconds instead of holding the job for 50 minutes.
 timeout = 300
-timeout_method = "thread"  # the default signal method did not end a CI hang; the thread method dumps every stack and exits
+timeout_method = "thread"  # two CI shards hung 25 minutes under the signal method; the cause is not known, and the thread method has not yet fired on a hang
 
 [tool.ruff.lint]
 # Syntax errors and pyflakes: undefined names, unused imports, F811 redefinition.

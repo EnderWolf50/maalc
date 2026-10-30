@@ -45,7 +45,7 @@ LOCAL_NOTE = re.compile(r"\bquestions-\d+\b", re.I)  # the label of a note that 
 PR_CALL = re.compile(r"\bgh\s+pr\s+(?:create|edit)\b")
 BODY_FILE = re.compile(rf"(?<![\w-])(?:--body-file|-F)(?:\s+|=|(?=\S))({ARG})")
 TEST_LINE = re.compile(r"\b\d+ passed, \d+ failed\b", re.I)
-NOT_RUN = re.compile(r"not run", re.I)
+NOT_RUN = re.compile(r"\bnot run\b", re.I)
 NOT_RUN_OK = re.compile(r"#\d+|not run:?\s*(?:none|n/a)\b", re.I)
 HEREDOC = re.compile(r"<<-?\s*[\"']?\w")
 EMPTY_FLAG = re.compile(r"(?<![\w-])(?:--[a-z]+-file|--file|-F)\s*$")  # xargs supplies the file

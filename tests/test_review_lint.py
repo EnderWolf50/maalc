@@ -93,3 +93,31 @@ def test_a_removed_name_still_used_is_stale_but_one_defined_elsewhere_is_not(tmp
     monkeypatch.setattr(review_lint, "ROOT", Path(tmp_path))
     removed = {"a.py": ["OLD_LIMIT = 3", "SHARED_LIMIT = 4"]}
     assert review_lint.stale_references(removed, {}) == ["a.py: `OLD_LIMIT` was removed but is still named at README.md:1"]
+
+
+def test_a_removed_name_nobody_names_any_more_is_not_a_crash(tmp_path, monkeypatch):
+    def run(*args):
+        subprocess.run(["git", "-C", str(tmp_path), "-c", "user.name=t", "-c", "user.email=t@example.test", *args], check=True,
+                       capture_output=True)
+    (tmp_path / "a.py").write_text("DEAD_LIMIT = 3\n")
+    run("init", "-q", "-b", "main")
+    run("add", ".")
+    run("commit", "-qm", "base")
+    (tmp_path / "a.py").write_text("")
+    monkeypatch.setattr(review_lint, "ROOT", Path(tmp_path))
+    assert review_lint.stale_references({"a.py": ["DEAD_LIMIT = 3"]}, {}) == []
+
+
+def test_diff_lines_reads_the_lines_of_a_deleted_file(tmp_path, monkeypatch):
+    def run(*args):
+        subprocess.run(["git", "-C", str(tmp_path), "-c", "user.name=t", "-c", "user.email=t@example.test", *args], check=True,
+                       capture_output=True)
+    (tmp_path / "gone.py").write_text("GONE_LIMIT = 3\n")
+    run("init", "-q", "-b", "main")
+    run("add", ".")
+    run("commit", "-qm", "base")
+    run("checkout", "-qb", "feat")
+    run("rm", "-q", "gone.py")
+    run("commit", "-qm", "delete")
+    monkeypatch.setattr(review_lint, "ROOT", Path(tmp_path))
+    assert review_lint.diff_lines("main")[1] == {"gone.py": ["GONE_LIMIT = 3"]}

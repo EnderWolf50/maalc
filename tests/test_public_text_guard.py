@@ -223,3 +223,7 @@ def test_only_pr_create_and_edit_bodies_are_linted(repo):
     assert pr_body(repo, "short note", "gh pr comment 3 --body-file body.md") is None
     assert pr_body(repo, "short note", "gh issue create --title t --body-file body.md") is None
     assert pr_body(repo, "short note", "gh pr edit 3 --title t") is None
+
+
+def test_cannot_run_is_not_a_not_run_item(repo):
+    assert pr_body(repo, GOOD_BODY + "- Live: cannot run on Linux\n") is None

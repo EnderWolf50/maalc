@@ -12,7 +12,7 @@ Judgement rules for review; the machine-checkable ones live in ruff (`E9`, `F`),
 ## Fixes
 
 - A reference implementation (AALC, MaaLimbus) that fails here is diffed against ours to the first difference before it is replaced.
-- A performance or memory fix states before/after for both speed and memory, each measured live (the same run, before and after the change); a regression on either is named in the PR.
+- A performance or memory fix states before/after for both speed and memory, each measured live (the same scenario, before and after the change); a regression on either is named in the PR.
 - A workaround names the root-cause fix tried first, or why that fix could not be made.
 - A node exempted from the watchdog carries its own bound (a timeout or a count) and a test of that bound.
 
