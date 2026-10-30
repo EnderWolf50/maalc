@@ -15,6 +15,8 @@ The `pr` skill's sections, then:
 - Fixtures: real captures, or synthetic (file name ends `.synthetic.png`)
 ```
 
+`public-text-guard.py` denies `gh pr create|edit --body-file` when the body has no `N passed, M failed` or a line saying `not run` names no issue (`#<n>`; `not run: none` passes).
+
 ## Comments
 
 Post with `gh pr comment <n>` or `gh issue comment <n>`; a multi-line body follows `docs/agents/issue-tracker.md` (Create an issue). An issue is referenced as `#<n>` or `Refs #<n>`.

@@ -4,7 +4,6 @@ between them). The pytest process holds MaaFramework in AgentServer mode, so the
 test file run as a script (run_child), whose child() uses load, game_class and bind.
 """
 
-import functools
 import json
 import subprocess
 import sys
@@ -168,11 +167,22 @@ def probe_child(body, image=None):
     print(json.dumps(out))
 
 
-@functools.cache  # one child run for all the tests of a file
+CHILD_RUNS = {}  # path -> the child's JSON line, or the exception its run raised
+
+
 def run_child(path, timeout=600):
-    """Run the test file at path as a script; its one JSON line, which has no error."""
-    run = subprocess.run([sys.executable, str(path)], capture_output=True, text=True, timeout=timeout, cwd=ROOT)
-    assert run.returncode == 0, run.stderr[-2000:]
-    out = json.loads(run.stdout.strip().splitlines()[-1])
-    assert out["error"] is None, out["error"]
-    return out
+    """Run the test file at path as a script; its one JSON line, which has no error. One child run serves all the tests
+    of a file, a failed one too: after a child that timed out, the file's other tests fail at once instead of each
+    starting it again for another `timeout`."""
+    if path not in CHILD_RUNS:
+        try:
+            run = subprocess.run([sys.executable, str(path)], capture_output=True, text=True, timeout=timeout, cwd=ROOT)
+            assert run.returncode == 0, run.stderr[-2000:]
+            out = json.loads(run.stdout.strip().splitlines()[-1])
+            assert out["error"] is None, out["error"]
+            CHILD_RUNS[path] = out
+        except Exception as e:
+            CHILD_RUNS[path] = e
+    if isinstance(CHILD_RUNS[path], Exception):
+        raise CHILD_RUNS[path]
+    return CHILD_RUNS[path]

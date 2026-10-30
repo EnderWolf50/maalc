@@ -17,6 +17,7 @@ jobs:
   # gui: any changed file outside docs; gui/ imports agent/, assets/ and tests/ files.
   changes:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     permissions:
       pull-requests: read
     outputs:
@@ -36,6 +37,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     strategy:
       fail-fast: false
       matrix:
@@ -59,6 +61,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
@@ -85,6 +88,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.gui == 'true'
     runs-on: windows-latest
+    timeout-minutes: 25
     defaults:
       run:
         working-directory: gui
@@ -108,11 +112,23 @@ jobs:
           workspaces: gui/src-tauri
       - run: cargo check --locked --manifest-path src-tauri/Cargo.toml
 
+  # What the branch adds, against its base (tools/review_lint.py). Docs-only pull requests run it too.
+  review-lint:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - run: python3 tools/review_lint.py origin/${{ github.base_ref }}
+
   # The one check to require: fails if the filter or any job it asked for failed or was cancelled.
   ci-ok:
     if: always()
-    needs: [changes, agent, pipeline, gui]
+    needs: [changes, agent, pipeline, gui, review-lint]
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - if: needs.changes.result != 'success' || contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
         run: exit 1
