@@ -41,7 +41,7 @@ def same_turn(last, turn):
 
 
 def guard_left(left, guarded):
-    """Guard turns left in the run after a turn started (spec 03 section 8).
+    """Guard turns left in the Mirror Dungeon run, or the Luxcavation battle, after a turn started (spec 03 section 8).
 
     Only a turn that started with every unit on guard counts; a fallback to Win Rate keeps the count.
     """
