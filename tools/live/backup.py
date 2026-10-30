@@ -2,13 +2,13 @@
 
   python tools/live/backup.py backup [--label <name>] [--root <install>]
   python tools/live/backup.py verify [--label <name>] [--root <install>]
-  python tools/live/backup.py hold --done <file> [--timeout <seconds>] [--guard <log>] [--stop-recording <profile>] [--label <name>] [--root <install>]
+  python tools/live/backup.py hold --done <file> --timeout <seconds> [--guard <log>] [--stop-recording <profile>] [--label <name>] [--root <install>]
 
 `backup` writes an md5 manifest of every file under the install folder (default: `install/` of the
 main checkout) except the runtime output folders (debug, logs, state, cache), and copies
 `config/settings.json`, to `<main checkout>/.local/scratch/install-backup/<label>/`.
 `verify` lists every file that changed, vanished or appeared since and exits 1 when there is any.
-`hold` is backup, then a wait until `<file>` exists (or the timeout, default 2 h), then verify: the one command a
+`hold` is backup, then a wait until `<file>` exists (or the timeout, required), then verify: the one command a
 live test queues, so the emulator stays taken while the agent does the interactive steps and then creates `<file>`.
 `--guard` names the `--log` of a `queue.py detach` (the bot), or a glob of them (`bot*.log`) when one hold runs the bot
 more than once, each run under its own log: while any of those processes runs the timeout does not run, and it starts
@@ -28,7 +28,7 @@ from pathlib import Path
 
 sys.path[0] = str(Path(__file__).resolve().parents[1])
 
-from live.queue import detached_doc, detached_running, guard_logs
+from live.queue import detached_doc, detached_running, guard_logs, pause_until
 from local_dir import local_dir, main_checkout
 
 RUNTIME = {"debug", "logs", "state", "cache"}
@@ -66,13 +66,17 @@ def stop_recording(profile: str) -> None:
 
 
 def hold(root: Path, dest: Path, done: Path, timeout: float, poll: float = 2.0, guard: Path | None = None,
-         running=detached_running, stop_profile: str | None = None, grace: float = 60.0, stop=stop_recording) -> int:
+         running=detached_running, stop_profile: str | None = None, grace: float = 60.0, stop=stop_recording,
+         wall=time.time) -> int:
     print(f"backed up {backup(root, dest)} files of {root}; waiting for {done}", flush=True)
     deadline = time.monotonic() + timeout
+    shown = float("-inf")  # `queue.py status` reads the deadline from this file; written at most every 30 s
     seen, ended = False, None  # the bot was seen running; when it ended (monotonic)
     logs = (lambda: guard_logs(guard)) if guard else list  # a glob takes in the logs of later runs as they start
     before = {p: detached_doc(p) for p in logs()}  # a pid file of an earlier run under a log is not this run's bot
     while not done.exists():
+        if (until := pause_until(done.parent)) and until > wall():
+            deadline = time.monotonic() + timeout  # paused by its agent (queue.py pause): the emulator stays taken
         if any(running(p) for p in logs()):
             seen, ended, deadline = True, None, time.monotonic() + timeout  # the agent's own steps after the bot get the whole timeout; a restarted bot re-arms the end note
         elif time.monotonic() >= deadline:
@@ -83,7 +87,11 @@ def hold(root: Path, dest: Path, done: Path, timeout: float, poll: float = 2.0, 
         if ended is not None and stop_profile and time.monotonic() >= ended + grace:
             stop(stop_profile)  # a stranded recording must not grow for hours
             stop_profile = None
+        if time.monotonic() - shown >= 30:
+            shown = time.monotonic()
+            (done.parent / "hold.deadline").write_text(str(wall() + deadline - time.monotonic()), encoding="utf-8")
         time.sleep(poll)
+    (done.parent / "hold.deadline").unlink(missing_ok=True)
     print("done file found" if done.exists() else f"timed out after {timeout:.0f} s", flush=True)
     diff = verify(root, dest)
     print("\n".join(diff) if diff else "install matches the backup (md5)")
@@ -95,7 +103,7 @@ def main(argv=None) -> int:
     ap.add_argument("cmd", choices=["backup", "verify", "hold"])
     ap.add_argument("--label", default="latest")
     ap.add_argument("--done", type=Path, help="hold: the file that ends the wait")
-    ap.add_argument("--timeout", type=float, default=7200)
+    ap.add_argument("--timeout", type=float, help="hold: seconds the emulator stays taken without a running bot or a pause; required, no default (a hold that lapsed unnoticed handed the emulator to a second agent)")
     ap.add_argument("--guard", type=Path, help="hold: the --log of the detached bot, or a glob of them (bot*.log); the timeout counts from the last one's end")
     ap.add_argument("--stop-recording", metavar="PROFILE", help="hold: stop this screenrec profile 60 s after the bot ended")
     ap.add_argument("--root", type=Path, default=main_checkout() / "install")
@@ -104,6 +112,8 @@ def main(argv=None) -> int:
     if a.cmd == "hold":
         if not a.done:
             ap.error("hold needs --done")
+        if a.timeout is None:
+            ap.error("hold needs --timeout (seconds; 7200 is the old default)")
         return hold(a.root, dest, a.done, a.timeout, guard=a.guard, stop_profile=a.stop_recording)
     if a.cmd == "backup":
         print(f"backed up {backup(a.root, dest)} files of {a.root} -> {dest}")
