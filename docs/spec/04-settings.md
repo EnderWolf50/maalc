@@ -327,7 +327,7 @@ PI 任務 `ChargeEnkephalin`，GUI 的「日常」分頁編輯。它花 Lunacy�
 | 名稱 | `name` | 字串 | 使用者自取，不重複 | 必填 |
 | 體系順序 | `order` | 陣列，11 項，不重複 | `Burn`、`Bleed`、`Tremor`、`Rupture`、`Sinking`、`Poise`、`Charge`、`Slash`、`Pierce`、`Blunt`、`Keywordless`；排前面的先買 | 如左（遊戲觀測頁的順序，`Keywordless` 最後） |
 | 想要 | `want` | 陣列，不重複 | 飾品 id | `[]` |
-| 保留 | `keep` | 陣列，不重複 | 飾品 id | `[]`；GUI 新增空白清單時填入所有無體系飾品（`gift_search.json`、`gift_recipes.json` 裡 `Keywordless` 的）與 Lunar Vestige，和預設清單一致；殘影 I–IV 不算，仍當合成材料。使用者 2026-10-29 定案：新清單的無體系飾品不會被合成或賣掉 |
+| 保留 | `keep` | 陣列，不重複 | 飾品 id | `[]`；GUI 新增空白清單時填入所有無體系飾品（`gift_search.json`、`gift_recipes.json` 裡 `Keywordless` 的）與 Lunar Vestige，共 116 個，和預設清單列出的是同一批飾品；預設清單把其中 50 個標成想要、66 個保留，新清單全部放在保留；殘影 I–IV 不算，仍當合成材料。使用者 2026-10-29 定案：新清單的無體系飾品不會被合成或賣掉 |
 | 飾品順序 | `gorder` | 物件：體系 → id 陣列 | 該體系內的購買先後，可跨階級；只影響「想要」的可購買飾品 | 每體系：III、II、I 階，階內照資料檔順序 |
 | 合成條件 | `fusion_condition` | 字串 | `any` 材料夠就合（能升階的組合先合，再合出材料能做到的最高階）／`upgrade` 合出的階級比這組材料的最高階還高才合／`tier4` 只在能合出 IV 級時才合。階級由材料點數算出（[03](03-decisions.md) 第 13 節），不花星光；不合成的材料照一般規則仍可能被出售。GUI 的名稱（使用者 2026-10-22 定案）：任意合成／升階才合／只合 IV，英文 Any／Upgrades only／Tier IV only | `any` |
 

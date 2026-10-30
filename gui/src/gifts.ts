@@ -46,15 +46,15 @@ const toMake = (list: ListRules, f: Fusion, runPacks: number[] | null, owned: nu
 
 /** The fusions the list still makes (toMake) that lock a drop gift, in data-file order: it is a material of any of their
  * recipes, or of any group. A wanted fusion owned locks nothing: it is made no more (the user, 2026-10-30). */
-export function lockers(list: ListRules, id: number, runPacks: number[] | null = null, tables: GiftTables = GAME_TABLES, owned: number[] = []): number[] {
+export function lockers(list: ListRules, id: number, runPacks: number[] | null = null, owned: number[] = [], tables: GiftTables = GAME_TABLES): number[] {
   if (state(list, id) !== "drop") return [];
   return tables.fusions.filter((f) => materialsOf(f).includes(id) && toMake(list, f, runPacks, owned)).map((f) => f.id);
 }
 
 /** "want", "keep" (kept, or a drop gift something locks) or "drop". */
-export function effective(list: ListRules, id: number, runPacks: number[] | null = null, tables: GiftTables = GAME_TABLES, owned: number[] = []): GiftState {
+export function effective(list: ListRules, id: number, runPacks: number[] | null = null, owned: number[] = [], tables: GiftTables = GAME_TABLES): GiftState {
   const own = state(list, id);
-  return own === "drop" && lockers(list, id, runPacks, tables, owned).length ? "keep" : own;
+  return own === "drop" && lockers(list, id, runPacks, owned, tables).length ? "keep" : own;
 }
 
 /** The ids to buy, first first: per keyword in `order`, its `gorder` gifts the list wants and the shop sells. */

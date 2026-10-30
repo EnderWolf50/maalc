@@ -2,8 +2,8 @@
 // One popover for the whole tab: a tile shows it for itself (GiftEdit.tip), the tab renders it.
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { FUSION_BY_ID, GIFT_BY_ID, giftName, iconUrl, packName, usedIn } from "./giftCatalog";
-import { STATES, useGiftEdit, type GiftTip } from "./giftEdit";
-import { lockers, materialsOf, purchases, queue } from "./gifts";
+import { plan, STATES, useGiftEdit, type GiftTip } from "./giftEdit";
+import { lockers, materialsOf, purchases, queue, type GiftState } from "./gifts";
 import { fill, TEXT, type Key } from "./i18n";
 import { LockIcon, look, TIERS } from "./KeywordGrid";
 import { useEditor } from "./ui";
@@ -78,7 +78,8 @@ export function GiftPopover({ id, anchor }: { id: number; anchor: HTMLElement })
   const name = (x: number) => giftName(GIFT_BY_ID.get(x)!, zh);
   const { shown, locked } = look(list, id);
   const by = lockers(list, id), byNames = by.map(name).join(t("gl.sep"));
-  const why = locked ? fill(t("gl.tip_locked"), { by: byNames }) : readOnly ? t("gl.tip_ro") : "";
+  const refused = (v: GiftState) => "locked" in plan(list, id, v); // as the tab's apply refuses it
+  const why = locked ? fill(t(refused("want") ? "gl.tip_locked_nowant" : "gl.tip_locked"), { by: byNames }) : readOnly ? t("gl.tip_ro") : "";
   const users = usedIn(id);
   const buy = queue(list), at = buy.indexOf(id) + 1;
   const forFusion = at ? null : purchases(list).find(([i]) => i === id)?.[1]; // a wanted fusion's material, bought after the wants
@@ -115,7 +116,7 @@ export function GiftPopover({ id, anchor }: { id: number; anchor: HTMLElement })
         <div className="gl-tip-seg" role="group" aria-label={t("gl.tip_set_group")}>
           {STATES.map((v) => (
             <button type="button" key={v} className={`gl-state ${v}${shown === v ? " on" : ""}`} aria-pressed={shown === v}
-              disabled={readOnly || (locked && v !== "want")}
+              disabled={readOnly || refused(v)}
               onClick={() => apply(id, v)}><i aria-hidden />{t(`state.${v}`)}</button>
           ))}
         </div>

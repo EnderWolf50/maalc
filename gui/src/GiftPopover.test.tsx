@@ -157,6 +157,15 @@ describe("hover popover: setting the state", () => {
     expect(list(r).want).toEqual([fixed.id, material]);
   });
 
+  test("a locked gift that cannot be wanted has all three disabled, and says only the fusion's want frees it", async () => {
+    // Lunar Memory's fragment: no shop sells it, so plan refuses want as well as keep and drop.
+    const fragment = lunar.groups![0].ids[0];
+    const r = await open([mine({ want: [lunar.id] })]);
+    const p = await hover(r, fragment);
+    for (const s of ["want", "keep", "drop"]) expect(p.getByRole("button", { name: zh[`state.${s}` as Text] })).toBeDisabled();
+    expect(p.getByText(say(zh["gl.tip_locked_nowant"], { by: nameOf(lunar.id) }))).toBeInTheDocument();
+  });
+
   test("on the read-only default they are disabled with the reason", async () => {
     const r = await open([mine()], "zh_tw", "default");
     const p = await hover(r, burnIII[0]);

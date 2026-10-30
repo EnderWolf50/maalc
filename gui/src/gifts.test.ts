@@ -16,8 +16,8 @@ function run(c: Case) {
   switch (c.fn) {
     case "main_keyword": return mainKeyword(list);
     case "state": return each((id) => state(list, id));
-    case "effective": return each((id) => effective(list, id, packs, tables, owned));
-    case "lockers": return each((id) => lockers(list, id, packs, tables, owned));
+    case "effective": return each((id) => effective(list, id, packs, owned, tables));
+    case "lockers": return each((id) => lockers(list, id, packs, owned, tables));
     case "queue": return queue(list, tables);
     case "queue_summary": {
       const q = queue(list, tables);

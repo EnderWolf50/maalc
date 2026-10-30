@@ -48,7 +48,7 @@ export function GiftListsTab() {
     const name = giftName(GIFT_BY_ID.get(id)!, zh), result = plan(list, id, to);
     if ("locked" in result) {
       const by = result.locked.map((b) => giftName(GIFT_BY_ID.get(b)!, zh)).join(t("gl.sep"));
-      return flash(fill(t("gl.lock_why"), { name, by }), true);
+      return flash(fill(t("locked" in plan(list, id, "want") ? "gl.lock_why_nowant" : "gl.lock_why"), { name, by }), true);
     }
     update((d) => setState(d.gift_lists[at], id, result.to));
     if (result.downgraded) flash(fill(t("gl.unbuyable_keep"), { name }), true);

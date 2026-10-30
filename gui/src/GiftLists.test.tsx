@@ -229,6 +229,16 @@ describe("locked gifts", () => {
     expect((await tile(r, m)).getAttribute("aria-label")).toContain(zh["gl.locked"]);
   });
 
+  test("a locked material no shop sells cannot be wanted either: the click says only the fusion's want frees it", async () => {
+    const lunar = recipes.gifts.find((g) => g.groups)!, fragment = lunar.groups![0].ids[0];
+    const r = await open([mine({ want: [lunar.id] })]);
+    const t = await tile(r, fragment);
+    await r.user.keyboard("1");
+    await r.user.click(t);
+    expect(flash()).toBe(say(zh["gl.lock_why_nowant"], { name: nameOf(fragment), by: nameOf(lunar.id) }));
+    expect(list(r)).toMatchObject({ want: [lunar.id], keep: [] });
+  });
+
   test("a locked material may be wanted for itself, and is no longer locked; keep is still refused", async () => {
     // The user, 2026-10-30: want means the gift itself (bought again once a fusion ate it); keep and drop both keep it already.
     const r = await open([mine({ want: [fixed.id] })]);

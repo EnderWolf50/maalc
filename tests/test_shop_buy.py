@@ -284,6 +284,38 @@ def test_a_pack_fusion_buys_in_a_run_of_its_pack(context, monkeypatch):
     assert visit["refreshes"]["keyword"] == 1
 
 
+def test_the_shop_stops_refreshing_once_what_it_bought_meets_the_list(context, monkeypatch):
+    # The list wants the Violin alone; the run pulled Dregs of the Manor (1016) and holds 9707 and 9431; the shop shows 9706.
+    # Once 9706 is bought the list buys nothing more: the two keyword refreshes left are not spent.
+    actions.RUN["packs"] = [1016]
+
+    def buy_offers(context, team, visit):
+        if 9706 in visit["owned"]:
+            return 0
+        visit["owned"].append(9706)
+        return 1
+    monkeypatch.setattr(actions.Shop, "buy_offers", staticmethod(buy_offers))
+    taps = refresh_shop(context)
+    lines = []
+    monkeypatch.setattr(actions, "log", lines.append)
+    visit = {"wanted": None, "sold": False, "refreshes": {"keyword": 0, "normal": 0}, "owned": [9707, 9431]}
+    assert actions.Shop.buy(context, buying(wants(VIOLIN), shop_refresh_keyword=2), visit)
+    assert visit["refreshes"] == {"keyword": 0, "normal": 0} and actions.KEYWORD_REFRESH not in taps
+    assert any("no refresh" in line and "bought" in line for line in lines)
+
+
+def test_a_visit_that_could_not_read_the_owned_gifts_does_not_buy_a_fusions_material_twice(context, monkeypatch):
+    # The sell page did not open (visit["owned"] stays None): an owned gift counts as none (spec 03), but what this visit
+    # bought counts: after a refresh the shop shows 9031 again, and Coupled Oscillation lacks it no more.
+    visit = {"wanted": None, "sold": False}
+    for bought in (1, 0):
+        shelf(context, [100], 500)
+        cells_read(monkeypatch, ("Tremor", 1, 9031))
+        plates_read(monkeypatch, 9031)
+        assert actions.Shop.buy_offers(context, buying(wants(COUPLED)), visit) == bought
+    assert visit.get("owned") is None and visit["bought"] == [9031]
+
+
 def test_the_shop_does_not_refresh_when_the_list_buys_nothing(context):
     # #298: the buy queue is empty (nothing wanted): no offer read, no refresh, whatever the Cost.
     taps = live_shop(context, lambda taps: {tuple(actions.SHOP_COST): [("500", (560, 120, 60, 30))],

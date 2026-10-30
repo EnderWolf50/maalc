@@ -55,7 +55,7 @@ def _to_make(gift_list, fusion, run_packs, owned):
             and (not fusion.get("specific") or run_packs is None or bool(set(fusion.get("packs", [])) & set(run_packs))))
 
 
-def lockers(gift_list, gift_id, run_packs=None, tables=None, owned=()):
+def lockers(gift_list, gift_id, run_packs=None, owned=(), tables=None):
     """The fusions the list still makes (_to_make) that lock a drop gift, in data-file order: it is a material of any of
     their recipes, or of any group."""
     if state(gift_list, gift_id) != "drop":
@@ -63,10 +63,10 @@ def lockers(gift_list, gift_id, run_packs=None, tables=None, owned=()):
     return [f["id"] for f in (tables or _game_tables())["fusions"] if gift_id in _materials(f) and _to_make(gift_list, f, run_packs, owned)]
 
 
-def effective(gift_list, gift_id, run_packs=None, tables=None, owned=()):
+def effective(gift_list, gift_id, run_packs=None, owned=(), tables=None):
     """"want", "keep" (kept, or a drop gift something locks) or "drop"."""
     own = state(gift_list, gift_id)
-    return "keep" if own == "drop" and lockers(gift_list, gift_id, run_packs, tables, owned) else own
+    return "keep" if own == "drop" and lockers(gift_list, gift_id, run_packs, owned, tables) else own
 
 
 def queue(gift_list, tables=None):

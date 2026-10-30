@@ -3646,12 +3646,28 @@ def note_owned(team, visit, cells):
     (gifts.purchases). Each wanted fusion among them is logged once a visit: it locks and buys nothing more (the user,
     2026-10-30)."""
     visit["owned"] = owned = [c["id"] for c in cells if c["id"] is not None]
+    visit.pop("bought", None)  # the page shows them
     told = visit.setdefault("owned_fusions", [])
     for i in owned:
         if i in FUSION_IDS and i not in told and state(team["list"], i) == "want":
             told.append(i)
             log(f"shop: wanted fusion {i} {GIFT_NAMES.get(i)} is owned: its materials are no longer bought or kept")
     return owned
+
+
+def held_gifts(visit):
+    """A copy of the gifts the visit counts as owned (gifts.purchases): visit["owned"] once a page was read (note_owned), else
+    only what this visit bought (visit["bought"]): an owned gift not read counts as none (spec 03), a gift bought counts."""
+    return list(visit["owned"] if visit.get("owned") is not None else visit.get("bought", ()))
+
+
+def owned_change(visit, gone=(), got=()):
+    """Take `gone` out of the gifts the visit counts as owned (held_gifts) and add `got`, in place: a sale, a fusion, a
+    purchase. While visit["owned"] is unread only a purchase adds to them (visit["bought"])."""
+    owned = visit["owned"] if visit.get("owned") is not None else visit.setdefault("bought", [])
+    for i in gone:
+        owned.remove(i)
+    owned.extend(got)
 
 
 def cell_role(cell, team, page, avoid, owned=()):
@@ -4175,11 +4191,14 @@ class Shop(CustomAction):
         holds the purchases and the refresh back until that sell has been tried. A list with nothing to buy (gifts.purchases:
         it wants nothing the shop sells, and no wanted fusion lacks a gift the shop sells) buys nothing and never refreshes
         (#298). What a wanted fusion lacks depends on the owned gifts: a visit that has not read them reads the sell page first.
+        Each refresh asks again with what was bought since: none once the list buys nothing more.
         """
         keyword, reserve, acted = team["keyword"], team["reserve_cost"], False
-        if visit.get("owned") is None and any(f for _, f in purchases(team["list"], run_packs())):
+        to_buy = purchases(team["list"], run_packs(), held_gifts(visit))
+        if visit.get("owned") is None and any(f for _, f in to_buy):
             Shop.read_owned(context, team, visit)
-        if not purchases(team["list"], run_packs(), visit.get("owned") or ()):
+            to_buy = purchases(team["list"], run_packs(), held_gifts(visit))
+        if not to_buy:
             log("shop: the gift list buys nothing the shop sells (no wanted gift, no wanted fusion's material): nothing bought, no refresh")
             return False
         while True:
@@ -4188,6 +4207,9 @@ class Shop(CustomAction):
                 visit["fuse_scanned"] = False  # a new gift: the fusion grid has changed
             if visit["wanted"] and not visit["sold"]:
                 return True  # sell first, next round
+            if not purchases(team["list"], run_packs(), held_gifts(visit)):
+                log("shop: what was bought meets the gift list (no wanted gift, no wanted fusion's material left): no refresh")
+                return acted
             cost = read_cost(context)
             if cost is None:
                 log("shop: the Cost reads nothing: no refresh")
@@ -4237,15 +4259,16 @@ class Shop(CustomAction):
 
         A gift is told by its icon (read_cells, #297) and by its name plate (read_plates, #329): one vote is enough, two that
         differ leave the cell unknown. Only an offer whose id is known and that gifts.purchases names (the list wants it, or a
-        wanted fusion lacks it: by visit["owned"], none when unknown) is bought, in that order (#298); one bought for a fusion is
-        logged with it. Each gift bought counts as owned for the next, so a fusion is bought no more than it lacks. A Not
+        wanted fusion lacks it: by held_gifts) is bought, in that order (#298); one bought for a fusion is logged with it. Each
+        gift bought counts as owned (owned_change) for the next and after a refresh, unread owned gifts or not, so a fusion is
+        bought no more than it lacks. A Not
         Enough Cost offer is dimmed (no icon read) but its plate reads: with its id it may be the first choice, so the shop
         sells for it; it is never bought. Every cell, Purchased ones too, is logged with its id. Each purchase is checked on
         the Cost.
         """
-        gift_list, reserve, held = team["list"], team["reserve_cost"], list(visit.get("owned") or ())
-        wanted = purchases(gift_list, run_packs(), held)
-        place, reason = {i: n for n, (i, _) in enumerate(wanted)}, dict(wanted)
+        gift_list, reserve = team["list"], team["reserve_cost"]
+        to_buy = purchases(gift_list, run_packs(), held_gifts(visit))
+        place, reason = {i: n for n, (i, _) in enumerate(to_buy)}, dict(to_buy)
 
         def why(i):
             return f" for fusion {reason[i]} {GIFT_NAMES.get(reason[i])}" if reason.get(i) else ""
@@ -4286,7 +4309,7 @@ class Shop(CustomAction):
                 log(f"shop: {slot['name']!r} {gift_shown(cell)} is tagged Not Enough Cost: its price {slot['price']} is a misread")
                 continue
             rank = place.get(cell["id"])
-            listed = cell_state(cell, gift_list, held)
+            listed = cell_state(cell, gift_list, held_gifts(visit))
             log(f"shop: {slot['name']!r} {slot['price']}: tier {cell['tier']} {cell['keyword']} {gift_shown(cell)}, plate {plate['text']!r}, {listed}"
                 f"{'' if rank is None else f', place {rank}{why(cell['id'])}'}")
             if rank is not None:
@@ -4298,7 +4321,7 @@ class Shop(CustomAction):
         bought = 0
         for i in plan:
             slot = slots[i]
-            if ids[i] not in dict(purchases(gift_list, run_packs(), held)):
+            if ids[i] not in dict(purchases(gift_list, run_packs(), held_gifts(visit))):
                 log(f"shop: {slot['name']!r} {ids[i]}: no longer needed, what was bought meets its fusion")
                 continue
             image = Shop.open_offer(context, slot)
@@ -4321,9 +4344,7 @@ class Shop(CustomAction):
                 Shop.to_main(context)
                 continue
             cost, bought = after, bought + 1
-            held.append(ids[i])
-            if visit.get("owned") is not None:
-                visit["owned"] = list(held)
+            owned_change(visit, got=[ids[i]])
         return bought
 
     @staticmethod
@@ -4457,7 +4478,7 @@ class Shop(CustomAction):
                 log(f"shop: sell cell {i} for {price}: not sold, {before} -> {read_cost(context, SELL_COST)} Cost")
                 break
             log(f"shop: sold cell {i} for {price}: {before} -> {before + price} Cost")
-            owned.remove(by_i[i]["id"])
+            owned_change(visit, gone=[by_i[i]["id"]])
             before += price
             still(context, timeout=1.5)  # the dialog goes as the Cost turns: the next cell's tap waits for it
             if grid["at"]:  # the grid lost a cell, and may have moved up from its end: from its top again
@@ -4538,8 +4559,7 @@ class Shop(CustomAction):
                 fused = Shop.press_fuse(context, len(group))
                 log(f"shop: fuse {materials} into a tier {page_tier or tier} {keyword} gift (condition {condition}): {'done' if fused else 'not confirmed'}")
                 if fused:
-                    for c in group:
-                        owned.remove(c["id"])
+                    owned_change(visit, gone=[c["id"] for c in group])
                 break
             refused.append(tuple(sorted(c["tier"] for c in group)))
             if len(refused) >= FUSE_TRIES or not Shop.place(context, group, slots, grid, out=True):
@@ -4590,10 +4610,8 @@ class Shop(CustomAction):
         # a recipe of tier V (shop.forecast_tier never reads one), it goes on: a recipe has no points tier to fall back on.
         cancel = tier is not None and recipe_tier is not None and recipe_tier <= shop.FUSION_TOP_TIER and tier != recipe_tier
         made = False if cancel else Shop.press_fuse(context, len(group))
-        if made and visit.get("owned") is not None:
-            for i in recipe["materials"]:
-                visit["owned"].remove(i)
-            visit["owned"].append(recipe["gift"])
+        if made:
+            owned_change(visit, gone=recipe["materials"], got=[recipe["gift"]])
         if not made:
             failed.append(recipe["gift"])
         if cancel:

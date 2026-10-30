@@ -27,9 +27,9 @@ def run(case):
         case "state":
             return {str(i): gifts.state(gift_list, i) for i in args["ids"]}
         case "effective":
-            return {str(i): gifts.effective(gift_list, i, packs, tables, owned) for i in args["ids"]}
+            return {str(i): gifts.effective(gift_list, i, packs, owned, tables) for i in args["ids"]}
         case "lockers":
-            return {str(i): gifts.lockers(gift_list, i, packs, tables, owned) for i in args["ids"]}
+            return {str(i): gifts.lockers(gift_list, i, packs, owned, tables) for i in args["ids"]}
         case "queue":
             return gifts.queue(gift_list, tables)
         case "queue_summary":
