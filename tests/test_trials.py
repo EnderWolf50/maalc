@@ -251,6 +251,7 @@ def test_a_run_logs_the_trial_overrides_the_settings_migration_emptied(context, 
     (tmp_path / "config" / "settings.json").write_text(json.dumps(test_settings.V15), encoding="utf-8")  # ROOT: context's
     logs = []
     monkeypatch.setattr(actions, "log", logs.append)
+    monkeypatch.setitem(actions.TASK, "runs", 0)  # what TaskStart leaves; another file's test may have cleared it
     monkeypatch.setattr(actions.settlement, "runs_done", lambda done, limit: True)
     monkeypatch.setattr(actions, "finish", lambda context, reason: True)
     assert actions.PlanRun().run(context, None)
