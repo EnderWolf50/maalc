@@ -16,7 +16,9 @@ FILE_SECONDS = {"test_go_home.py": 181, "test_thread_luxcavation.py": 163, "test
 def child_timeout(item):
     """Seconds a test of a file that runs a MaaFramework child may take: `run_child`'s own timeout and a minute. The
     file's first test pays for the whole child run (about 380 s on CI on 2026-10-30), over the 300 s default, and the
-    child's TimeoutExpired names the file where pytest-timeout would end the whole shard."""
+    child's TimeoutExpired names the file where pytest-timeout would end the whole shard. A file is one when its module
+    holds the name `run_child` (`from daily_child import run_child`); the marker also outranks `--timeout` given on the
+    command line."""
     run_child = getattr(getattr(item, "module", None), "run_child", None)
     return inspect.signature(run_child).parameters["timeout"].default + 60 if run_child else None
 

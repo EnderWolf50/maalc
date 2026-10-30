@@ -38,7 +38,7 @@ pythonpath = ["agent", "tools"]
 testpaths = ["tests"]
 # pytest-timeout: a test that hangs fails after this many seconds instead of holding the job for 50 minutes.
 timeout = 300
-timeout_method = "thread"  # two CI shards hung 25 minutes under the signal method, which never fired
+timeout_method = "thread"  # two CI shards hung 25 minutes under the signal method, which never fired; the cause is not known
 # A file that runs a MaaFramework child gets run_child's own timeout and a minute instead (tests/conftest.py).
 
 [tool.ruff.lint]
