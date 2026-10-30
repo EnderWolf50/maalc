@@ -79,7 +79,7 @@ describe("copy and new", () => {
     await r.item("blank");
     expect(r.settings().gift_lists[1]).toMatchObject({ want: [], keep: [] });
     expect(validate(r.settings())).toEqual([]);
-    expect(screen.getByText(zh["gl.blank_made"].replace("{name}", zh["gl.blank_name"]))).toBeTruthy();
+    expect(status()).toBe(say(zh["gl.blank_made"], { name: zh["gl.blank_name"] }));
   });
 });
 
