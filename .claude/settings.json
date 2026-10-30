@@ -11,6 +11,17 @@
             "timeout": 10
           }
         ]
+      },
+      {
+        "matcher": "Bash|PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "uv",
+            "args": ["run", "--no-project", "--quiet", "python", "${CLAUDE_PROJECT_DIR}/.claude/hooks/main-checkout-guard.py"],
+            "timeout": 10
+          }
+        ]
       }
     ],
     "SubagentStart": [

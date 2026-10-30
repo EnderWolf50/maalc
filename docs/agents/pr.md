@@ -1,6 +1,6 @@
 # PR bodies and comments
 
-Every number is copied from command output in this session, and every "verified" points at the command or clip that shows it. Evidence follows AGENTS.md "Public repo": attach files with `--attach '<file>#<alt>'` (`gh pr create`, `gh pr comment`, `gh issue comment`).
+Every number is copied from command output in this session, and every "verified" points at the command or clip that shows it. Evidence follows AGENTS.md "Public repo": attach files with `--attach '<file>#<alt>'` (`gh pr create`, `gh pr comment`, `gh issue comment`). Alt text is for images only: a video attached with `#<alt>` fails with `cannot set alt text on video` (seen 2026-10-27), so attach a video without `#<alt>`.
 
 ## PR body
 
