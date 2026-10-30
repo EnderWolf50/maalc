@@ -1,0 +1,20 @@
+---
+name: maalc-gui-check
+description: Build and launch the real maalc settings app (Tauri, gui/) and drive the changed controls with cua-driver, including drag-and-drop. Use when a change touches gui/, tauri.conf.json, the settings schema or anything the settings window shows, before calling it verified.
+---
+
+`pnpm test`, `tsc` and `tauri build` never open the app. A Tauri window setting (`dragDropEnabled`) once broke every drag-and-drop list while each earlier GUI PR passed those three (issue #64, fixed in 380aad8). A GUI change is verified when the real app was driven and looked at.
+
+What driving it takes on this machine (session, delivery mode, window sizes, UIPI) is in `docs/agents/gui-driving.md`; how the screenshots look is in `docs/agents/evidence-style.md`. Read `cua-driver`'s skill before step 4. The app runs from a throwaway folder: the emulator, the game account and `install/` are not involved, and no live-test queue ticket is needed.
+
+## Steps
+
+1. **Scope.** List the controls the change can reach and the input each needs: a click, typing, a select, a drag. A change to `tauri.conf.json`, `lib.rs`, `ui.tsx`, `Plans.tsx` or CSS that can move a hit target counts as reaching every drag-and-drop list (the team list, the plan lists). Done: the list exists, each control with its input.
+2. **Build.** In your worktree: `pnpm --dir gui install --frozen-lockfile`, then `pnpm --dir gui tauri build --no-bundle` (about 3 minutes cold), as a background command waited on. Done: `gui/src-tauri/target/release/maalc-gui.exe` is newer than your last edit of `gui/`.
+3. **Launch.** `uv run python tools/gui_probe.py --exe gui/src-tauri/target/release/maalc-gui.exe --root <main checkout>/.local/scratch/<task>/gui-root` (find the main checkout's `.local/` with `tools/local_dir.py`; a different `--settings FILE` starts the app on a file the change needs). It copies the exe beside demo settings, starts it and prints `{"pid", "hwnd", "rect", ...}`. Keep the pid. Done: the probe exited 0 and printed a pid; a blank window or exit 1 means the build or the settings are wrong, so read why before going on.
+4. **Observe.** With one `"session":"<task>"` on every cua call: `get_window_state` with `include_accessibility_tree:false` and `--screenshot-out-file` gives the window's screenshot, the only image you may take (never `get_desktop_state`, never a screen capture). Its pixels are the coordinates of every action. Done: `before-*.png` of each screen the change touches.
+5. **Drive.** For each control of step 1: act, then take a new screenshot; the driver's own `effect` is `unverifiable` for drags and says nothing. Clicks and typing in the default background delivery; a drag with `delivery_mode:"foreground"`, `duration_ms:4000`, `steps:120` once background fails or does nothing (the user's go-ahead for visible control is part of this skill's brief; ask first if a user is working on the machine). Include every drag-and-drop list when step 1 said so, and check the order really changed and "有未儲存的變更" shows. Done: each control has an after screenshot and a verdict (works / does not / not reached), and a drag that moved nothing is reported, not retried until it does.
+6. **Mask and stop.** The app's header shows the full path of `settings.json`: black it out, and anything else identifying, in every screenshot (`docs/agents/evidence-style.md` "Privacy"). Stop the app with `taskkill /T /F /PID <pid>` in PowerShell, the pid of step 3 only. Done: `Get-Process -Id <pid>` finds nothing, and the screenshots hold no path, e-mail or account name.
+7. **Report.** Per control: verdict, with its before and after stills, attached to the PR (`gh pr create/comment --attach '<file>#<alt>'`, AGENTS.md "Public repo"). A control not driven says so and why. Done: the PR body's Verification section lists "GUI: driven <controls>; not driven: <controls>" with the stills.
+
+Not run (say so, do not claim it verified): a PR that could not build the app, found no window, or ran with the driver and the app at different integrity levels.
