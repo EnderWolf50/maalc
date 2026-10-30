@@ -117,5 +117,5 @@ _Avoid_: 每日次數、daily count
 _Avoid_: 連打、連續戰鬥（程式裡寫 `consecutive`）
 
 **每日重置**：
-遊戲的日常次數在每天 05:00 重置（使用者 2026-10-27 告知；時區與各次數何時恢復未查證）。
+遊戲的日常次數在每天 05:00（UTC+8）重置：使用者 2026-10-27 告知 05:00，`.local/unpack/raw/Localize/en/EN_DailyLoginEvent.json` 寫每日重置是 06:00 KST（= UTC+8 的 05:00），兩者相符；AALC 也以 Asia/Seoul 6 點分日（`docs/research/aalc/03-daily-tasks.md`）。每個次數各自何時恢復未逐項查證。
 _Avoid_: 刷新時間、日界

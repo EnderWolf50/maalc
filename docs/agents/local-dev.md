@@ -23,9 +23,8 @@ Done: `after_land.py` ends without a "failed" line.
 
 When to run it, and when not:
 
-- Run it after the PR has landed on `origin/main`: it fetches and fast-forwards by itself, and it refuses an off-main or dirty checkout.
-- Run it as `uv run python tools/after_land.py`. A bare `python` lacks the `maa` package (2026-10-21).
-- Not inside a `queue.py run` ticket: the script then reads its own ticket as a held `emulator` lane (2026-10-21).
+- Run it as `uv run python tools/after_land.py`, after the PR has landed on `origin/main`. A bare `python` lacks the `maa` package (2026-10-21).
+- Not inside a `queue.py run --resource emulator` ticket: the script then reads its own ticket as a held `emulator` lane, and a `bench` ticket does not trip it (2026-10-21).
 
 ## Claude Code hooks
 
@@ -76,8 +75,10 @@ Every MuMu instance on this PC logs in to the same game account, and starting th
 
 Look in `.local/unpack/` first (gift tables, prices, theme packs, every dialog string, under `raw/` and `static/`; its `NOTES.md` says what is where). The Simplified Chinese strings come from the Localize project, https://github.com/LocalizeLimbusCompany: clone it next to the other data to read them. The Chinese names the data files ship come from its release zip through `tools/llc_text.py`, which converts them to Traditional (OpenCC `s2twp` plus a few fixes). Reach for a wiki only when neither has it.
 
-To query it, search the unpacked tree with `rg`: `rg -l "<text>" .local/unpack/raw/Localize/en` finds a dialog or a name, and `rg -l "<key>" .local/unpack/static` finds a table (`static/` holds about 2200 JSON files). Mounting Trial names are in `raw/Localize/en/EN_Bufs_Mirror5.json`, and the mirror node data for the `-hard`, `-extreme` and `-infinite` variants is `static/Assets/Resources_moved/StaticData/static-data/mirrordungeon/mirrordungeon-08-*.json`.
+To query it, search the unpacked tree with `rg`: `rg -l "<text>" .local/unpack/raw/Localize/en` finds a dialog or a name, and `rg -l "<key>" .local/unpack/static` finds a table (`static/` holds about 2200 JSON files, counted 2026-10-30). Mounting Trial names are in `raw/Localize/en/EN_Bufs_Mirror5.json`, and the mirror node data for the `-hard`, `-extreme` and `-infinite` variants is `static/Assets/Resources_moved/StaticData/static-data/mirrordungeon/mirrordungeon-08-*.json`.
 
 The Huiji wiki (`limbuscompany.huijiwiki.com`) is behind Cloudflare: `curl` got 403 from this PC on 2026-10-30, and WebFetch got 403 on 2026-10-16. Use the unpacked data first; a wiki answer means a browser session.
 
-The AALC source, the bot that AGENTS.md "Goal" sets feature parity with, is upstream `KIYI671/AhabAssistantLimbusCompany`. Read one file with `gh api repos/KIYI671/AhabAssistantLimbusCompany/contents/<path>`, or clone it once into `.local/aalc/` of the main checkout (resolve it with `tools/local_dir.py`) and search it with `rg`. A fork on your machine can be stale, so compare a file with upstream before you rely on it.
+A personality's skill deck is always S1 ×3, S2 ×2, S3 ×1: `attributeList[].number` of every `personality-*.json` under `static/.../StaticData/static-data/personality/` is 3, 2, 1 (202 personalities, counted 2026-10-30).
+
+The AALC source, the bot that AGENTS.md "Goal" sets feature parity with, is upstream `KIYI671/AhabAssistantLimbusCompany`. `docs/research/aalc/` is the written reading of it, pinned to commit `b0f4393` (its README): start there, and open the source only for what it lacks. Read one file with `gh api repos/KIYI671/AhabAssistantLimbusCompany/contents/<path>`, or clone it once into `.local/aalc/` of the main checkout (resolve it with `tools/local_dir.py`) and search it with `rg`. A fork on your machine can be stale, so compare a file with upstream before you rely on it.
