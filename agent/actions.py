@@ -2646,7 +2646,6 @@ DETAILS_BUTTON = [860, 110, 125, 30]  # reads "Details" in the card view
 CLEAR_SELECTION = (1145, 479)
 RESET_DIALOG = [450, 330, 380, 35]  # Clear Selection asks "Reset Deployment Order?"
 RESET_CONFIRM = (767, 497)
-TO_BATTLE = (1145, 588)
 PICK_RETAP = 1.0  # s; a card tap that has not raised the count by then is tapped again (the old fixed wait guessed a tap within ~1 s of the last is lost, #253)
 PICK_SETTLE = 1.5  # s; after a repeated tap the count is watched this long for a fall back: the first tap may have taken late (#253: the count showed 0.3-1.2 s after a tap, recordings, unverified)
 

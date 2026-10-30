@@ -6,6 +6,10 @@ personal term (game-account e-mail, local folder names) comes from the repo-loca
 worktree and is never committed. `git config user.email` counts as a term too, and the Windows login
 name counts when it appears as a path segment.
 
+A body file is named by any `--<word>-file` flag, and the guard reads the file, never the path that names it: an
+absolute path is fine, a local path inside the text is not. A `questions-<n>` label (a note kept in .local) is denied too.
+A `gh pr create|edit --body-file` body must also carry `N passed, M failed` and an issue on each "not run" line.
+
 Checked: `gh issue|pr create|comment|edit|review|close|merge|reopen`, `gh release create|edit`, `gh api`,
 `git commit|merge|tag`, including the contents of a `--body-file`/`-F` file. Paths that only name a file
 to upload (`--attach`, `-R`, `git -C`) are fine.
@@ -31,14 +35,20 @@ GIT_OPT = rf"""(?:-[Cc]\s+{ARG}|--(?:git-dir|work-tree|namespace)\s+{ARG}|--[\w-
 START = re.compile(r"\bgh\s+(?:issue|pr)\s+(?:create|comment|edit|review|close|merge|reopen)\b"
                    r"|\bgh\s+release\s+(?:create|edit)\b|\bgh\s+api\b"
                    rf"|\bgit\b(?:\s+{GIT_OPT})*\s+(?:commit|merge|tag)\b")
-FILE_FLAG = re.compile(rf"(?<![\w-])(?:--body-file|--notes-file|--file|-F)(?:\s+|=|(?=\S))({ARG})")  # gh: -F is --body-file; git: -F is --file
+FILE_FLAG = re.compile(rf"(?<![\w-])(?:--[a-z]+-file|--file|-F)(?:\s+|=|(?=\S))({ARG})")  # --body-file, --notes-file, --comment-file...; gh: -F is --body-file; git: -F is --file
 FIELD_FILE = re.compile(rf"(?:--field|-F)\s*[\w.\[\]]+=@({ARG})")  # gh api -F key=@file
 FIELD = re.compile(r"^[\w.\[\]]+=")  # `-F key=value` is an api field, not a file
 INPUT = re.compile(r"--input(?:\s|=)")
 UNREADABLE = re.compile(r"\$\(|`|<<-?\s*[\"']?\w")  # command substitution or heredoc
 LOCAL = re.compile(r"\b[A-Za-z]:[\\/]+\w|(?<![\w.])/(?:home|Users|mnt/[a-z])/\w+|~[\\/]\.?\w|file://", re.I)
+LOCAL_NOTE = re.compile(r"\bquestions-\d+\b", re.I)  # the label of a note that lives only in .local/scratch
+PR_CALL = re.compile(r"\bgh\s+pr\s+(?:create|edit)\b")
+BODY_FILE = re.compile(rf"(?<![\w-])(?:--body-file|-F)(?:\s+|=|(?=\S))({ARG})")
+TEST_LINE = re.compile(r"\b\d+ passed, \d+ failed\b", re.I)
+NOT_RUN = re.compile(r"\bnot run\b", re.I)
+NOT_RUN_OK = re.compile(r"#\d+|not run:?\s*(?:none|n/a)\b", re.I)
 HEREDOC = re.compile(r"<<-?\s*[\"']?\w")
-EMPTY_FLAG = re.compile(r"(?<![\w-])(?:--body-file|--notes-file|--file|-F)\s*$")  # xargs supplies the file
+EMPTY_FLAG = re.compile(r"(?<![\w-])(?:--[a-z]+-file|--file|-F)\s*$")  # xargs supplies the file
 UNREADABLE_REASON = "write the body to a file with the Write tool and pass its absolute Windows path to --body-file"
 
 
@@ -113,6 +123,25 @@ def public_text(cmd: str, base: Path) -> tuple[str, bool]:
     return re.sub(r"https?://\S+", " ", "\n".join([cmd, *files])), unreadable  # a link names a page, never a place here
 
 
+def pr_body_problem(call: str, base: Path) -> str | None:
+    """docs/agents/pr.md for a `gh pr create|edit --body-file`: a test line `N passed, M failed`, and an issue
+    (`#n`) on every line that says something was not run."""
+    if not PR_CALL.search(call):
+        return None
+    inside = quoted(call)
+    for m in BODY_FILE.finditer(call):
+        path = base / native(unquote(m[1]))
+        if not bare(m, inside) or not path.is_file():
+            continue
+        body = path.read_text(encoding="utf-8", errors="replace")
+        if not TEST_LINE.search(body):
+            return "The PR body needs the test result as `<command> -> N passed, M failed` (docs/agents/pr.md)."
+        for line in body.splitlines():
+            if NOT_RUN.search(line) and not NOT_RUN_OK.search(line):
+                return "A PR body line says `not run` without the issue that tracks it (`#<n>`): " + line.strip()[:80]
+    return None
+
+
 def terms(cwd: str) -> list[str]:
     def git(*args):
         return subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True, encoding="utf-8").stdout.split("\n")
@@ -174,7 +203,7 @@ def check_call(call: str, prefix: str, start_text: str, cwd: str) -> str | None:
     text, unreadable = public_text(call, base_dir(prefix, start_text, cwd))
     if unreadable:
         return "The guard cannot read this text: " + UNREADABLE_REASON + "."
-    found = {m.group(0) for m in LOCAL.finditer(text)}
+    found = {m.group(0) for m in LOCAL.finditer(text)} | {m.group(0) for m in LOCAL_NOTE.finditer(text)}
     found |= {t for t in terms(cwd) if re.search(rf"(?<!\w){re.escape(t)}(?!\w)", text, re.I)}
     login = os.environ.get("USERNAME") or os.environ.get("USER") or ""
     if len(login) >= 4 and re.search(rf"[\\/]{re.escape(login)}(?=[\\/\s\"'`]|$)", text, re.I):
@@ -182,7 +211,7 @@ def check_call(call: str, prefix: str, start_text: str, cwd: str) -> str | None:
     if found:
         return ("Public text names this machine or its owner: " + ", ".join(sorted(found)[:3])
                 + ". Describe the evidence by its content and upload the file with --attach.")
-    return None
+    return pr_body_problem(call, base_dir(prefix, start_text, cwd))
 
 
 if __name__ == "__main__":

@@ -3,6 +3,8 @@ import threading
 import time
 from pathlib import Path
 
+import pytest
+
 spec = importlib.util.spec_from_file_location("backup", Path(__file__).resolve().parent.parent / "tools/live/backup.py")
 bk = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(bk)
@@ -90,6 +92,32 @@ def test_hold_ignores_a_pid_file_left_by_an_earlier_run(tmp_path, capsys):
     bk.hold(tmp_path / "install", tmp_path / "bak", tmp_path / "never", timeout=0.2, poll=0.02, guard=bot,
             running=lambda _log: False, stop_profile="p", grace=0.05, stop=stopped.append)
     assert "bot ended" not in capsys.readouterr().out and stopped == []
+
+
+def test_hold_does_not_time_out_while_paused_and_shows_its_deadline(tmp_path, capsys):
+    (tmp_path / "install").mkdir()
+    done = tmp_path / "t" / "done"
+    done.parent.mkdir()
+    (done.parent / "pause").write_text(str(time.time() + 0.3))  # paused for 0.3 s
+    began = time.monotonic()
+    assert bk.hold(tmp_path / "install", tmp_path / "bak", done, timeout=0.2, poll=0.01) == 0
+    assert time.monotonic() - began >= 0.45  # the 0.2 s timeout ran only after the pause lapsed
+    assert "timed out" in capsys.readouterr().out
+    assert not (done.parent / "hold.deadline").exists()  # removed when the hold ends
+
+
+def test_hold_writes_the_deadline_a_second_agent_reads_in_status(tmp_path):
+    (tmp_path / "install").mkdir()
+    done = tmp_path / "done"
+    seen = []
+    threading.Timer(0.1, lambda: (seen.append((tmp_path / "hold.deadline").read_text()), done.write_text(""))).start()
+    bk.hold(tmp_path / "install", tmp_path / "bak", done, timeout=500, poll=0.02, wall=lambda: 1000.0)
+    assert 1000 + 400 < float(seen[0]) <= 1500
+
+
+def test_hold_requires_an_explicit_timeout(tmp_path):
+    with pytest.raises(SystemExit):
+        bk.main(["hold", "--done", str(tmp_path / "d"), "--root", str(tmp_path)])
 
 
 def test_hold_follows_a_second_bot_run_under_its_own_log(tmp_path, capsys):
