@@ -219,6 +219,15 @@ def test_a_pr_body_needs_the_test_line_and_an_issue_for_each_not_run(repo):
     assert pr_body(repo, GOOD_BODY + "- Live: not run: none\n") is None
 
 
+def test_the_test_line_takes_an_optional_skipped_count_and_docs_only_has_its_own_form(repo):
+    assert pr_body(repo, "- Tests: `uv run pytest` -> 12 passed, 0 failed, 3 skipped\n") is None
+    assert "N passed, M failed" in pr_body(repo, "- Tests: `uv run pytest` -> 12 passed, 3 skipped\n")
+    assert pr_body(repo, "## Verification\n\n- Tests: none (docs only)\n") is None
+    assert pr_body(repo, "## Verification\n\n- Tests: none (docs only)\n- Live: not run: none\n") is None
+    assert "docs only" in pr_body(repo, "## Verification\n\n- Live: not run: none\n")
+    assert "docs only" in pr_body(repo, "## Verification\n\n- Tests: none\n")
+
+
 def test_only_pr_create_and_edit_bodies_are_linted(repo):
     assert pr_body(repo, "short note", "gh pr comment 3 --body-file body.md") is None
     assert pr_body(repo, "short note", "gh issue create --title t --body-file body.md") is None

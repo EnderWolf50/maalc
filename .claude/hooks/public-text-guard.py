@@ -8,7 +8,7 @@ name counts when it appears as a path segment.
 
 A body file is named by any `--<word>-file` flag, and the guard reads the file, never the path that names it: an
 absolute path is fine, a local path inside the text is not. A `questions-<n>` label (a note kept in .local) is denied too.
-A `gh pr create|edit --body-file` body must also carry `N passed, M failed` and an issue on each "not run" line.
+A `gh pr create|edit --body-file` body must also carry `N passed, M failed[, K skipped]` (or `Tests: none (docs only)`) and an issue on each "not run" line.
 
 Checked: `gh issue|pr create|comment|edit|review|close|merge|reopen`, `gh release create|edit`, `gh api`,
 `git commit|merge|tag`, including the contents of a `--body-file`/`-F` file. Paths that only name a file
@@ -44,7 +44,8 @@ LOCAL = re.compile(r"\b[A-Za-z]:[\\/]+\w|(?<![\w.])/(?:home|Users|mnt/[a-z])/\w+
 LOCAL_NOTE = re.compile(r"\bquestions-\d+\b", re.I)  # the label of a note that lives only in .local/scratch
 PR_CALL = re.compile(r"\bgh\s+pr\s+(?:create|edit)\b")
 BODY_FILE = re.compile(rf"(?<![\w-])(?:--body-file|-F)(?:\s+|=|(?=\S))({ARG})")
-TEST_LINE = re.compile(r"\b\d+ passed, \d+ failed\b", re.I)
+TEST_LINE = re.compile(r"\b\d+ passed, \d+ failed(?:, \d+ skipped)?\b", re.I)
+DOCS_ONLY = re.compile(r"^\W*Tests:\s*none \(docs only\)", re.I | re.M)
 NOT_RUN = re.compile(r"\bnot run\b", re.I)
 NOT_RUN_OK = re.compile(r"#\d+|not run:?\s*(?:none|n/a)\b", re.I)
 HEREDOC = re.compile(r"<<-?\s*[\"']?\w")
@@ -124,7 +125,7 @@ def public_text(cmd: str, base: Path) -> tuple[str, bool]:
 
 
 def pr_body_problem(call: str, base: Path) -> str | None:
-    """docs/agents/pr.md for a `gh pr create|edit --body-file`: a test line `N passed, M failed`, and an issue
+    """docs/agents/pr.md for a `gh pr create|edit --body-file`: a test line `N passed, M failed[, K skipped]` (or `Tests: none (docs only)`), and an issue
     (`#n`) on every line that says something was not run."""
     if not PR_CALL.search(call):
         return None
@@ -134,8 +135,9 @@ def pr_body_problem(call: str, base: Path) -> str | None:
         if not bare(m, inside) or not path.is_file():
             continue
         body = path.read_text(encoding="utf-8", errors="replace")
-        if not TEST_LINE.search(body):
-            return "The PR body needs the test result as `<command> -> N passed, M failed` (docs/agents/pr.md)."
+        if not (TEST_LINE.search(body) or DOCS_ONLY.search(body)):
+            return ("The PR body needs the test result as `<command> -> N passed, M failed[, K skipped]`, "
+                    "or `Tests: none (docs only)` for a docs-only PR (docs/agents/pr.md).")
         for line in body.splitlines():
             if NOT_RUN.search(line) and not NOT_RUN_OK.search(line):
                 return "A PR body line says `not run` without the issue that tracks it (`#<n>`): " + line.strip()[:80]
