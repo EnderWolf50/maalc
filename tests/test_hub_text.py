@@ -98,8 +98,7 @@ def lit(*boxes):
 
 def test_rois_wider_than_the_det_side_read_in_one_det_call_at_full_size():
     # ExpText's rois (2026-10-30): Downloading at the left edge, Loading and Event at the right, 1210 px in all. Two
-    # 960 px windows took twice the det of one pass (Luxcavation's child runs 247 -> 382 s on CI); stacked as groups of
-    # at most 960 px, one canvas holds them, none shrunk.
+    # 960 px windows took two det calls a pass; stacked as groups of at most 960 px, one canvas holds them, none shrunk.
     rois = [[40, 600, 440, 36], [340, 380, 600, 180], [905, 510, 138, 34], [1060, 625, 190, 40]]
     left, right = (60, 605, 50, 20), (1100, 630, 50, 20)
     det = Det()
@@ -109,7 +108,7 @@ def test_rois_wider_than_the_det_side_read_in_one_det_call_at_full_size():
 
 
 def test_rois_no_canvas_holds_read_in_windows():
-    # MirrorHub's rois (HubText) stack taller than the det side: they read in the overlapping windows.
+    # Rois that stack taller than the det side, as MirrorHub's (HubText) do, read in the overlapping windows.
     rois = [[40, 30, 100, 650], [1150, 30, 100, 650]]
     box = (1160, 600, 50, 20)
     det = Det()

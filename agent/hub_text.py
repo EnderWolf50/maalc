@@ -10,9 +10,10 @@ check with their own OCR, unbatched, so a hit is what MaaFramework reads.
 The det model shrinks an image wider than DET_SIDE to that width (MaaXYZ/MaaFramework#1531), and the rois of a hub
 span 1210 px: shrunk, a button read "✓Confirm" and an event's SKIP read nothing, both screens left out though their
 own OCR reads them. So the pass groups the rois left to right, each group at most DET_SIDE px wide, and stacks the
-groups on one canvas for one det call; two windows took twice the det (the Luxcavation children's CI runs 247 ->
-382 s). Where the stack is taller than DET_SIDE (MirrorHub's HubText) it runs in windows of at most DET_SIDE px
-instead; for a 1210 px union two of them overlap by 710 px, and a box wider than the overlap may be cut.
+groups on one canvas for one det call: each window is a det call of its own. Where the stack is taller than
+DET_SIDE (MirrorHub's HubText) it runs in windows of at most DET_SIDE px instead; for a 1210 px union two of them
+overlap by 710 px, and a box wider than the overlap may be cut. A larger max side in the fork DLL would rescale the
+det of every OCR node, not this pass alone, and the tests run PyPI's wheel; so the pass keeps to DET_SIDE.
 A screen whose text only reads when det finds no box and the whole roi goes to rec (the battlefield's VICTORY) sits
 in the tail, where it always checks.
 """
@@ -124,29 +125,36 @@ def stack(rois):
     return None if len(placed) == 1 or max(size) > DET_SIDE else (placed, size)
 
 
+def read(context, image, roi):
+    """[(box, text, score)] of one OCR call over roi of image."""
+    detail = context.run_recognition_direct(JRecognitionType.OCR, JOCR(roi=tuple(roi), threshold=0), image)
+    return [(tuple(r.box), r.text, r.score) for r in (detail.all_results if detail else [])]
+
+
+def read_stacked(context, masked, placed, size):
+    """read() over the canvas stack() laid out, its boxes back where they are on the screen: by the group whose band
+    holds the box's middle (one in GAP has none and is left out)."""
+    w, h = size
+    # Never smaller than the screen: every image MaaFramework reads elsewhere is a full capture.
+    canvas = np.zeros((max(h, masked.shape[0]), max(w, masked.shape[1]), 3), masked.dtype)
+    for (x, y, gw, gh), top in placed:
+        canvas[top:top + gh, :gw] = masked[y:y + gh, x:x + gw]
+    out = []
+    for (bx, by, bw, bh), text, score in read(context, canvas, (0, 0, w, h)):
+        for (x, y, _, gh), top in placed:
+            if top <= by + bh / 2 < top + gh:
+                out.append(((bx + x, by - top + y, bw, bh), text, score))
+                break
+    return out
+
+
 def ocr_pass(context, image, rois):
     """[(box, text, score)] of the text in rois, read with the rest of the image black: one det call on the stack of
     their groups when it holds them, else window by window."""
     masked = mask(image, rois)
-    if not (stacked := stack(rois)):
-        out = []
-        for win in windows(rois):
-            detail = context.run_recognition_direct(JRecognitionType.OCR, JOCR(roi=tuple(win), threshold=0), masked)
-            out += [(tuple(r.box), r.text, r.score) for r in (detail.all_results if detail else [])]
-        return out
-    placed, (w, h) = stacked
-    canvas = np.zeros((max(h, image.shape[0]), max(w, image.shape[1]), 3), image.dtype)
-    for (x, y, gw, gh), top in placed:
-        canvas[top:top + gh, :gw] = masked[y:y + gh, x:x + gw]
-    detail = context.run_recognition_direct(JRecognitionType.OCR, JOCR(roi=(0, 0, w, h), threshold=0), canvas)
-    out = []
-    for r in detail.all_results if detail else []:
-        bx, by, bw, bh = r.box
-        for (x, y, _, gh), top in placed:  # the group whose band holds the box's middle
-            if top <= by + bh / 2 < top + gh:
-                out.append(((bx + x, by - top + y, bw, bh), r.text, r.score))
-                break
-    return out
+    if stacked := stack(rois):
+        return read_stacked(context, masked, *stacked)
+    return [found for win in windows(rois) for found in read(context, masked, win)]
 
 
 def screens(context, name):
