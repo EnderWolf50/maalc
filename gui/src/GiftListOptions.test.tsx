@@ -74,7 +74,7 @@ describe("copy and new", () => {
     expect(chosenName()).toBe(zh["gl.blank_name"]);
   });
 
-  test("new wants and keeps nothing, so every gift is Drop; copy the default to start from it (user decision 2026-10-30)", async () => {
+  test("new wants and keeps nothing, so every gift is Drop (user decision 2026-10-30)", async () => {
     const r = await open([mine({ want: [1] })]);
     await r.item("blank");
     expect(r.settings().gift_lists[1]).toMatchObject({ want: [], keep: [] });
