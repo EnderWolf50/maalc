@@ -27,7 +27,6 @@ from theme_pack_card import card  # noqa: E402
 REPO = Path(__file__).resolve().parent.parent
 DATA = REPO / "assets/resource/base/data"
 OUT = DATA / "theme_pack_covers"
-THEME_PACK_LINE = re.compile(r'^\s+("[^"]*"|[^"#:]+?):\s+(?:[NH]\d+\s*)+#\s*(\d+)\b')  # `  Name: N1 H1  # 1001`: name -> floors, the comment carries the pack id
 PLAYER_DATA = "apk-data/assets/bin/Data"
 THEME_FLOOR_DIR = "static/Assets/Resources_moved/StaticData/static-data/mirrordungeon-theme-floor"
 ATLAS_PARTS = {  # key -> (sprite name, size): MirrorDungeonThemeCardUI's layers, in sharedassets2
@@ -48,16 +47,9 @@ BATON = "Baton"  # the "Long Battle" overlay, a bundle sprite (Sprite/UI/ThemePa
 
 
 def pack_ids(yaml_text: str) -> dict[str, int]:
-    """Pack name -> id of the `packs:` list of theme_packs.yaml."""
-    packs, inside = {}, False
-    for line in yaml_text.splitlines():
-        if line.startswith("packs:"):
-            inside = True
-        elif inside and line and not line.startswith((" ", "#")):
-            break
-        elif inside and (m := THEME_PACK_LINE.match(line)):
-            packs[yaml.safe_load(m[1])] = int(m[2])
-    return packs
+    """Pack name -> id of the `packs:` list of theme_packs.yaml (its `pack_ids` also names the Extreme-only packs the list leaves out)."""
+    data = yaml.safe_load(yaml_text)
+    return {name: data["pack_ids"][name] for name in data["packs"]}
 
 
 def ui_configs(floor_dir: Path) -> dict[int, dict]:

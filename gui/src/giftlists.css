@@ -1,0 +1,212 @@
+/* The gift list tab (GiftLists.tsx, KeywordGrid.tsx), after the mockup of #291. It carries its own light and dark colours, chosen by
+ * the system setting: the rest of the editor has no dark theme, so the tab is a self-contained surface. */
+.gl {
+  --gl-sel: #dfe6fa; --gl-hov: #eef2fd; --gl-drop: #6b7385;
+  --gl-want: #b87400; --gl-wantbg: #fff3d1; --gl-stripe: #ffe29a; --gl-keep: #0f8a80; --gl-keepbg: #dff5f2;
+  --gl-panel2: #f5f6fa; --gl-tile: #eef0f5; --gl-on-accent: #fff;
+  --gl-fg: var(--fg); --gl-muted: #5d6577; --gl-line: #cdd3de; --gl-bg: var(--bg); --gl-panel: var(--panel); --gl-accent: var(--accent); --gl-bad: var(--bad);
+  color-scheme: light;
+  color: var(--gl-fg); background: var(--gl-bg); border-radius: 10px; padding: 12px;
+}
+@media (prefers-color-scheme: dark) {
+  .gl {
+    --gl-sel: #35405e; --gl-hov: #2a3144; --gl-drop: #c3cad8;
+    --gl-want: #f0b43c; --gl-wantbg: #3b3014; --gl-stripe: #4f3e14; --gl-keep: #3fc1b4; --gl-keepbg: #12332f;
+    --gl-panel2: #252a34; --gl-tile: #272c37; --gl-on-accent: #111;
+    --gl-fg: #e6e9f0; --gl-muted: #a1a9ba; --gl-line: #3a4152; --gl-bg: #14171d; --gl-panel: #1d2129; --gl-accent: #7a9dff; --gl-bad: #ff7b72;
+    color-scheme: dark;
+  }
+}
+.gl button, .gl select { background: var(--gl-panel); border-color: var(--gl-line); color: var(--gl-fg); }
+.gl button:hover:not(:disabled) { background: var(--gl-hov); border-color: var(--gl-line); }
+.gl select { border: 1px solid var(--gl-line); }
+.gl :focus-visible { outline-color: var(--gl-accent); }
+.gl .spacer { flex: 1; }
+
+/* Top: list choice and fusion condition, then the apply bar and its status line; they stay in view while the grid scrolls. */
+.gl-top { position: sticky; top: 0; z-index: 10; background: var(--gl-bg); padding: 4px 0 6px; }
+.gl-bar, .gl-apply {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 7px 12px;
+  background: var(--gl-panel); border: 1px solid var(--gl-line); border-radius: 8px; margin-bottom: 6px;
+}
+.gl-readonly { color: var(--gl-want); font-weight: 600; font-size: 12px; }
+.gl-label { font-weight: 600; color: var(--gl-muted); }
+.gl-pick { display: flex; align-items: center; gap: 6px; }
+.gl-hint { flex: 1 1 240px; font-size: 12px; color: var(--gl-muted); }
+/* The three apply buttons: a short bar in the state's colour before the label; the chosen one gets the flat selection fill. */
+.gl-state { display: inline-flex; align-items: center; gap: 6px; padding: 3px 12px; }
+.gl-state i { width: 12px; height: 4px; border-radius: 2px; background: var(--gl-drop); }
+.gl-state.want i { background: var(--gl-want); }
+.gl-state.keep i { background: var(--gl-keep); }
+.gl .gl-state.on { background: var(--gl-sel); font-weight: 700; }
+.gl kbd { font: 11px monospace; border: 1px solid var(--gl-line); border-bottom-width: 2px; border-radius: 4px; padding: 0 5px; background: var(--gl-panel2); }
+.gl-flash { font-size: 13px; color: var(--gl-accent); min-height: 1.45em; }
+.gl-flash.warn { color: var(--gl-bad); font-weight: 600; }
+
+/* Keyword tabs: separate rounded buttons, the chosen one in the selection fill and bold, no border change. */
+.gl-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 8px; }
+.gl-tab { display: inline-flex; align-items: center; gap: 6px; padding: 5px 9px; border-radius: 8px; color: var(--gl-muted); }
+.gl-tab:hover { color: var(--gl-fg); }
+.gl .gl-tab.on { color: var(--gl-fg); font-weight: 700; background: var(--gl-sel); }
+.gl-dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; flex: none; background: #7a8194; }
+.gl-dot.big { width: 22px; height: 22px; }
+.gl-kwi { width: 16px; height: 16px; object-fit: contain; flex: none; }
+.gl-kwi.big { width: 26px; height: 26px; }
+.gl-n { background: var(--gl-want); color: var(--gl-on-accent); border-radius: 999px; font-size: 10px; font-weight: 600; padding: 0 5px; line-height: 15px; }
+
+.gl-panel { background: var(--gl-panel); border: 1px solid var(--gl-line); border-radius: 8px; padding: 8px 12px 12px; min-height: 200px; }
+.gl-empty { border: 1px dashed var(--gl-line); border-radius: 8px; padding: 14px; text-align: center; margin: 6px 0 10px; background: var(--gl-panel2); }
+.gl-empty p { margin: 4px 0 10px; color: var(--gl-muted); }
+.gl-kwh { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 0; padding: 2px 0 6px; font-size: 14px; font-weight: 400; }
+.gl-kwh b { font-size: 16px; }
+.gl-kwh small { color: var(--gl-muted); }
+.gl-tag { background: var(--gl-panel2); border: 1px solid var(--gl-line); border-radius: 999px; font-size: 12px; padding: 0 9px; color: var(--gl-muted); }
+.gl-tag.main { background: var(--gl-sel); color: var(--gl-fg); font-weight: 700; }
+.gl-tag.want { background: var(--gl-wantbg); color: var(--gl-want); border-color: transparent; }
+.gl-tag.keep { background: var(--gl-keepbg); color: var(--gl-keep); border-color: transparent; }
+.gl-tag.fusion { background: #e8e2f6; color: #5b3fa6; border-color: transparent; }
+@media (prefers-color-scheme: dark) { .gl-tag.fusion { background: #2e2748; color: #b9a4f5; } }
+
+.gl-tier h4 { display: flex; align-items: center; gap: 8px; margin: 8px 0 6px; padding: 3px 8px; background: var(--gl-panel2); border-radius: 4px; }
+.gl-tierno { background: #4a5163; color: #fff; font-size: 12px; padding: 0 8px; border-radius: 4px; }
+.gl-tierno.fusion { background: #6b4f0b; }
+.gl-tier h4 small { color: var(--gl-muted); font-size: 11.5px; font-weight: 400; }
+.gl-wall { display: flex; flex-wrap: wrap; gap: 9px; }
+
+/* A tile shows the state in its frame: want thick, double ring and stripes; keep solid with a tint; drop thin and faded; a gift
+ * locked by a wanted fusion is kept, dashed, with a padlock. */
+.gl .gl-tile {
+  position: relative; width: 64px; height: 64px; padding: 0; border: 2px solid var(--gl-line); border-radius: 8px; background: var(--gl-tile);
+  display: flex; align-items: center; justify-content: center; cursor: pointer;
+}
+.gl-tile img { width: 52px; height: 52px; object-fit: contain; pointer-events: none; }
+.gl .gl-tile.drop { opacity: 0.5; filter: grayscale(0.55); border-width: 1px; }
+.gl .gl-tile.drop:hover, .gl .gl-tile.drop:focus-visible { opacity: 0.9; }
+.gl .gl-tile.want {
+  border: 3px solid var(--gl-want); background: repeating-linear-gradient(45deg, var(--gl-wantbg) 0 6px, var(--gl-stripe) 6px 9px);
+  box-shadow: 0 0 0 2px var(--gl-panel), 0 0 0 4px var(--gl-want);
+}
+.gl .gl-tile.keep { border-color: var(--gl-keep); background: var(--gl-keepbg); }
+.gl .gl-tile.locked { border-style: dashed; }
+/* A locked gift's badge: the icon of the fusion that locks it, top right, "+N" when more do. */
+.gl-fbadge {
+  position: absolute; right: -6px; top: -6px; display: flex; align-items: center; gap: 1px; height: 24px; min-width: 24px; padding: 0 2px;
+  box-sizing: border-box; border: 2px solid var(--gl-keep); border-radius: 12px; background: var(--gl-panel);
+}
+.gl-tile .gl-fbadge img { width: 18px; height: 18px; }
+.gl-fbadge b { font-size: 10px; line-height: 1; color: var(--gl-fg); padding-right: 1px; }
+/* Search box, search results header, the help popover (#307). */
+.gl .gl-search { border: 1px solid var(--gl-line); border-radius: 6px; padding: 4px 8px; background: var(--gl-panel); color: var(--gl-fg); width: 260px; max-width: 100%; }
+.gl-sh { display: flex; align-items: center; gap: 10px; padding: 2px 0 6px; }
+.gl-helpwrap { position: relative; display: inline-block; }
+.gl .gl-helpwrap > button.on { background: var(--gl-sel); }
+.gl-pop {
+  position: absolute; right: 0; top: calc(100% + 6px); z-index: 40; width: 380px; max-width: calc(100vw - 24px); max-height: 70vh; overflow: auto;
+  background: var(--gl-panel); border: 1px solid var(--gl-line); border-radius: 10px; box-shadow: 0 8px 24px #0004; padding: 10px 12px; text-align: left; font-size: 12.5px;
+}
+.gl-lg { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.gl-lg b { flex: none; }
+.gl-sw { box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; flex: none; width: 22px; height: 22px; border-radius: 5px; border: 2px solid var(--gl-line); background: var(--gl-tile); font-style: normal; font-size: 11px; font-weight: 700; }
+.gl-sw.want { border: 3px solid var(--gl-want); background: repeating-linear-gradient(45deg, var(--gl-wantbg) 0 3px, var(--gl-stripe) 3px 5px); box-shadow: 0 0 0 1px var(--gl-panel), 0 0 0 2px var(--gl-want); }
+.gl-sw.keep { border-color: var(--gl-keep); background: var(--gl-keepbg); }
+.gl-sw.drop { border-width: 1px; opacity: 0.7; }
+.gl-sw.locked { border: 2px dashed var(--gl-keep); background: var(--gl-keepbg); }
+.gl-sw.fusion { border-radius: 50%; background: #4a5163; border-color: var(--gl-line); color: #fff; }
+.gl-sech { margin: 10px 0 4px; font-weight: 700; color: var(--gl-muted); }
+.gl-pop p { margin: 4px 0; }
+.gl-pop .gl-note { color: var(--gl-muted); }
+.gl-keys { list-style: none; margin: 4px 0; padding: 0; display: grid; gap: 3px; }
+.gl-keys kbd { margin-right: 3px; }
+
+/* The hover popover of a tile: fixed against the window, placed by GiftPopover's `place`. */
+.gl-tip {
+  position: fixed; z-index: 60; width: 340px; max-height: calc(100vh - 12px); overflow: auto; padding: 10px 12px; font-size: 12.5px;
+  background: var(--gl-panel); color: var(--gl-fg); border: 1px solid var(--gl-line); border-radius: 10px; box-shadow: 0 8px 24px #0004;
+}
+.gl-tip:focus { outline: none; }
+.gl-tip-head { display: flex; align-items: center; gap: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--gl-line); }
+.gl-tip-head img { width: 44px; height: 44px; object-fit: contain; }
+.gl-tip-head > div { display: flex; flex-direction: column; justify-content: center; flex: 1; line-height: 1.35; }
+.gl-tip-head b { font-size: 14.5px; }
+.gl-tip-head small, .gl-tip-why { color: var(--gl-muted); }
+.gl-tip-set { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 0 2px; }
+.gl-tip .k { color: var(--gl-muted); font-weight: 600; width: 36px; flex: none; }
+.gl-tip-seg { display: inline-flex; gap: 5px; }
+.gl-tip .gl-state { padding: 2px 10px; }
+.gl-tip button:disabled { opacity: 0.45; }
+.gl-tip-why { flex-basis: 100%; }
+.gl-tip-rows { display: flex; flex-direction: column; gap: 7px; padding-top: 8px; }
+.gl-tip-row { display: grid; grid-template-columns: 36px 1fr; column-gap: 8px; align-items: center; }
+.gl-tip-row > .v { min-width: 0; display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+.gl-tip-lockwhy { display: inline-flex; align-items: center; gap: 5px; color: var(--gl-keep); font-weight: 600; }
+.gl-tip-acts { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 5px; }
+.gl-tip-acts button { padding: 1px 8px; font-size: 12px; }
+.gl .gl-tip-acts button.warn { color: var(--gl-bad); border-color: var(--gl-bad); }
+.gl-lk { width: 11px; height: 11px; color: var(--gl-keep); flex: none; }
+.gl-tip-recipes { display: flex; flex-direction: column; gap: 6px; width: 100%; }
+.gl-tip-recipe, .gl-tip-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.gl-tip-recipe i { font-style: normal; color: var(--gl-muted); }
+.gl-tip-no { width: 16px; height: 16px; border-radius: 50%; background: var(--gl-accent); color: var(--gl-on-accent); font-size: 10px; text-align: center; line-height: 16px; font-weight: 700; }
+.gl-tip-group { display: flex; flex-direction: column; gap: 3px; }
+.gl-tip-need { align-self: flex-start; background: var(--gl-accent); color: var(--gl-on-accent); border-radius: 4px; padding: 0 6px; font-size: 11.5px; font-weight: 700; }
+.gl-tip-need.all { background: var(--gl-keep); }
+.gl-mat { display: inline-flex; align-items: center; gap: 3px; background: var(--gl-panel2); border: 1px solid var(--gl-line); border-radius: 5px; padding: 1px 5px 1px 2px; font-size: 11.5px; line-height: 1.2; }
+.gl-mat.locked { background: var(--gl-keepbg); }
+.gl-mat img { width: 18px; height: 18px; object-fit: contain; }
+.gl-lock { position: absolute; left: 2px; bottom: 2px; width: 16px; height: 16px; padding: 2px; border-radius: 50%; color: var(--gl-keep); background: var(--gl-panel); }
+
+/* Drag and drop: the tile or row being dragged fades, the one it would land on takes the selection fill. */
+.gl [data-dragging] { opacity: 0.3; }
+.gl .gl-tile[data-over], .gl .gl-sortrow[data-over] { background: var(--gl-sel); }
+
+/* Purchase order dialog (BuyOrder.tsx): one column, collapsible keyword sections. */
+.gl .gl-buy { margin-left: auto; }
+.gl-dlgback { position: fixed; inset: 0; z-index: 80; background: #0008; display: flex; align-items: center; justify-content: center; padding: 20px; }
+.gl-dlg {
+  background: var(--gl-panel); border: 1px solid var(--gl-line); border-radius: 12px; width: min(640px, 100%); max-height: 88vh;
+  display: flex; flex-direction: column; box-shadow: 0 12px 40px #000a;
+}
+.gl-dlgtop { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--gl-line); background: var(--gl-panel2); border-radius: 12px 12px 0 0; }
+.gl-dlgtop small { color: var(--gl-muted); flex: 1; }
+.gl .gl-x { border: 0; background: none; font-size: 16px; padding: 0 6px; }
+.gl-dlgbody { overflow: auto; padding: 8px 10px; flex: 1; }
+.gl-accbar { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.gl-accbar small { color: var(--gl-muted); }
+.gl-dlgnote { color: var(--gl-muted); font-size: 12.5px; margin: 4px 0 4px 26px; }
+.gl-dlgnote.warn { color: var(--gl-bad); font-weight: 600; margin: 0 0 0 auto; }
+.gl-dlgfoot { margin: 0; padding: 8px 14px; border-top: 1px solid var(--gl-line); color: var(--gl-muted); font-size: 12.5px; }
+.gl-agrp { margin-bottom: 6px; }
+.gl-sortrow { display: flex; align-items: center; gap: 8px; padding: 3px 4px; border-radius: 5px; }
+.gl-sortrow:hover { background: var(--gl-hov); }
+.gl-ahead { background: var(--gl-panel2); padding: 3px 6px; }
+.gl-rows { list-style: none; margin: 0 0 0 26px; padding: 0; }
+.gl-grip { cursor: grab; color: var(--gl-muted); }
+.gl .gl-dnb { display: flex; flex: 1; min-width: 0; align-items: center; gap: 8px; text-align: left; border: 0; background: none; padding: 3px 0; border-radius: 6px; }
+.gl .gl-dnb:hover:not(:disabled) { background: none; }
+.gl-dnb b { font-size: 14px; }
+.gl-dnb small { color: var(--gl-muted); }
+.gl-chev { width: 12px; color: var(--gl-muted); text-align: center; }
+.gl-ord { min-width: 24px; text-align: center; background: var(--gl-accent); color: var(--gl-on-accent); border-radius: 999px; font-size: 11px; font-weight: 700; flex: none; }
+.gl-qn { flex: 0 1 auto; }
+.gl-ico { width: 24px; height: 24px; object-fit: contain; flex: none; pointer-events: none; }
+.gl-gr small { color: var(--gl-muted); }
+/* The arrow buttons are small, as in the mockup. */
+.gl .gl-mini { padding: 0 4px; min-width: 20px; font-size: 9px; line-height: 15px; border-radius: 5px; }
+.gl .gl-accbar .gl-mini { font-size: 12px; padding: 0 8px; }
+/* List options menu (GiftListOptions.tsx): a popover under its button. */
+.gl-opts { position: relative; }
+.gl-opt-pop {
+  position: absolute; z-index: 20; top: calc(100% + 4px); left: 0; width: 320px; padding: 8px; background: var(--gl-panel);
+  border: 1px solid var(--gl-line); border-radius: 8px; box-shadow: 0 6px 20px rgba(0, 0, 0, .25);
+}
+.gl-opt-head { padding: 2px 4px 6px; }
+.gl-opt-menu { display: flex; flex-direction: column; gap: 2px; }
+.gl-opt-menu button { text-align: left; border-color: transparent; }
+.gl-opt-menu button:disabled { opacity: .45; }
+.gl-opt-note { margin: 4px; font-size: 12px; color: var(--gl-muted); }
+.gl-opt-body { display: flex; flex-direction: column; gap: 6px; }
+.gl-opt-body p { margin: 0; font-size: 12px; color: var(--gl-muted); }
+.gl-opt-body input, .gl-opt-body textarea { width: 100%; box-sizing: border-box; font: inherit; background: var(--gl-bg); color: var(--gl-fg); border: 1px solid var(--gl-line); border-radius: 4px; padding: 4px 6px; }
+.gl-opt-row { display: flex; gap: 6px; }
+.gl-opt-row .gl-opt-pri { background: var(--gl-sel); font-weight: 600; }
+.gl-opt-err { color: var(--gl-bad); font-size: 12px; font-weight: 600; }

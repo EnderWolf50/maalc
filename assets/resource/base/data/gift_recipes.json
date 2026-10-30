@@ -1,5 +1,5 @@
 {
- "note": "Fusion gifts and their recipes. Recipes: combineFixed (any one of a gift's `recipes` fuses it; each is a list of the required gift ids; `specific` marks a gift whose recipe uses a theme pack's exclusive gift, `packs` is the union of the theme pack ids of those gifts (one recipe can need several packs), from isSpecific and the packs' specificEgoGiftPool) and combineMixed (`groups`: take `need` of each group's `ids`) of the game client 1.117.0's mirror-dungeon-common-data-md8. Ids, tiers, keywords and English names: the same client's ego-gift static data and EN_EGOgift localization. `materials` are the recipe ingredients gift_search.json does not list. Icons: image/GiftRecipe/<id>.png, the game's EgoGiftIcon sprites (by the ego-gift iconId) scaled by 0.21 with transparency filled green. Chinese names: the Localize Limbus Company release's LLC_zh-CN/EGOgift_*.json by gift id (Simplified Chinese), converted with OpenCC s2twp, then 指標->指針, 重新整理->刷新, 映象->鏡像, 透過階層->通過階層, 松肉->鬆肉. Chinese names licensed CC BY-NC-SA 4.0 (see NOTICE.md). Written by tools/gift_recipes.py.",
+ "note": "Fusion gifts and their recipes. Recipes: combineFixed (any one of a gift's `recipes` fuses it; each is a list of the required gift ids; `specific` marks a gift whose recipe uses a theme pack's exclusive gift, `packs` is the union of the theme pack ids of those gifts (one recipe can need several packs), from isSpecific and the packs' specificEgoGiftPool) and combineMixed (`groups`: take `need` of each group's `ids`) of the game client 1.117.0's mirror-dungeon-common-data-md8. Ids, tiers, keywords and English names: the same client's ego-gift static data and EN_EGOgift localization. `materials` are the recipe ingredients gift_search.json does not list. `vestiges` (#161) are the five gifts 9991-9995 (tier I-V, keywordless) that are only fusion or sale material. Icons: image/GiftRecipe/<id>.png, the game's EgoGiftIcon sprites (by the ego-gift iconId) scaled by 0.21 with transparency filled green. `extra_gifts` (#332) are the rest of the client's gift ids 9000-9999 (static data ego-gift*, 465 in 1.117.0, 464 with a name: 9247 has neither a name nor an icon sprite, so it is left out): no shop sells them and no recipe uses them, so a shop cell may still show one (some are the theme packs' specificEgoGiftPool gifts); the Gift Search icons ignore them, the shop cell match (agent/gift_cells.py) takes them as candidates, and a gift list names them as any gift of their keyword (keep or drop: they cannot be wanted). Chinese names: the Localize Limbus Company release's LLC_zh-CN/EGOgift_*.json by gift id (Simplified Chinese), converted with OpenCC s2twp, then 指標->指針, 重新整理->刷新, 映象->鏡像, 透過階層->通過階層, 松肉->鬆肉. Chinese names licensed CC BY-NC-SA 4.0 (see NOTICE.md). Written by tools/gift_recipes.py.",
  "zh_source": "https://github.com/LocalizeLimbusCompany/LocalizeLimbusCompany",
  "zh_release": "2026101602",
  "license": "CC BY-NC-SA 4.0",
@@ -1140,6 +1140,514 @@
    "tier": 4,
    "en": "Mask of the Parade",
    "zh": "遊行的面具"
+  }
+ ],
+ "extra_gifts": [
+  {
+   "id": 9045,
+   "keyword": "Burn",
+   "tier": 4,
+   "en": "Glimpse of Flames",
+   "zh": "炎鱗"
+  },
+  {
+   "id": 9050,
+   "keyword": "Bleed",
+   "tier": 4,
+   "en": "Red-stained Gossypium",
+   "zh": "紅染棉花"
+  },
+  {
+   "id": 9055,
+   "keyword": "Tremor",
+   "tier": 4,
+   "en": "Downpour",
+   "zh": "暴雨"
+  },
+  {
+   "id": 9060,
+   "keyword": "Rupture",
+   "tier": 4,
+   "en": "Thrill",
+   "zh": "快感"
+  },
+  {
+   "id": 9065,
+   "keyword": "Sinking",
+   "tier": 4,
+   "en": "Artistic Sense",
+   "zh": "美感"
+  },
+  {
+   "id": 9070,
+   "keyword": "Poise",
+   "tier": 4,
+   "en": "Clear Mirror, Calm Water",
+   "zh": "明鏡止水"
+  },
+  {
+   "id": 9075,
+   "keyword": "Charge",
+   "tier": 4,
+   "en": "Charge-type Gloves",
+   "zh": "充能式手套"
+  },
+  {
+   "id": 9081,
+   "keyword": "Keywordless",
+   "tier": 4,
+   "en": "Faith",
+   "zh": "信念"
+  },
+  {
+   "id": 9082,
+   "keyword": "Keywordless",
+   "tier": 4,
+   "en": "Piece of Relationship",
+   "zh": "緣分殘片"
+  },
+  {
+   "id": 9084,
+   "keyword": "Keywordless",
+   "tier": 4,
+   "en": "Ancient Effigy",
+   "zh": "古代雕像"
+  },
+  {
+   "id": 9085,
+   "keyword": "Keywordless",
+   "tier": 4,
+   "en": "Non-disclosure Agreement",
+   "zh": "保密協議"
+  },
+  {
+   "id": 9196,
+   "keyword": "Slash",
+   "tier": 4,
+   "en": "Broken Greatsword",
+   "zh": "破碎的巨劍"
+  },
+  {
+   "id": 9200,
+   "keyword": "Pierce",
+   "tier": 4,
+   "en": "Dueling Manual Book 3",
+   "zh": "決鬥教材第三卷"
+  },
+  {
+   "id": 9204,
+   "keyword": "Blunt",
+   "tier": 4,
+   "en": "The Book of Vengeance",
+   "zh": "復仇賬簿"
+  },
+  {
+   "id": 9207,
+   "keyword": "Keywordless",
+   "tier": 4,
+   "en": "Chance & Choice",
+   "zh": "機率與選擇"
+  },
+  {
+   "id": 9208,
+   "keyword": "Keywordless",
+   "tier": 4,
+   "en": "Entangled Fate",
+   "zh": "糾纏的緣分"
+  },
+  {
+   "id": 9209,
+   "keyword": "Keywordless",
+   "tier": 4,
+   "en": "For You Who Love the City",
+   "zh": "獻給熱愛都市的你"
+  },
+  {
+   "id": 9211,
+   "keyword": "Sinking",
+   "tier": 4,
+   "en": "Raincloud",
+   "zh": "烏雲"
+  },
+  {
+   "id": 9227,
+   "keyword": "Keywordless",
+   "tier": 1,
+   "en": "Baleful Hwando",
+   "zh": "寄宿鬼氣的環刀"
+  },
+  {
+   "id": 9228,
+   "keyword": "Keywordless",
+   "tier": 3,
+   "en": "One with the Blade",
+   "zh": "人劍合一"
+  },
+  {
+   "id": 9229,
+   "keyword": "Keywordless",
+   "tier": 1,
+   "en": "Tarnished Gauntlet",
+   "zh": "褪色的護手"
+  },
+  {
+   "id": 9230,
+   "keyword": "Keywordless",
+   "tier": 3,
+   "en": "Golden Hour",
+   "zh": "黃金時間"
+  },
+  {
+   "id": 9231,
+   "keyword": "Keywordless",
+   "tier": 1,
+   "en": "Record Logs of That Day",
+   "zh": "那一日的記錄"
+  },
+  {
+   "id": 9232,
+   "keyword": "Keywordless",
+   "tier": 3,
+   "en": "Potentialities",
+   "zh": "可能性"
+  },
+  {
+   "id": 9241,
+   "keyword": "Keywordless",
+   "tier": 3,
+   "en": "Still-warm Coffee",
+   "zh": "尚且溫熱的咖啡"
+  },
+  {
+   "id": 9242,
+   "keyword": "Keywordless",
+   "tier": 4,
+   "en": "Bongy Plush",
+   "zh": "小鳳玩偶"
+  },
+  {
+   "id": 9246,
+   "keyword": "Keywordless",
+   "tier": 4,
+   "en": "Someone's Dropped Employee Card",
+   "zh": "某人遺落的員工證"
+  },
+  {
+   "id": 9250,
+   "keyword": "Keywordless",
+   "tier": 4,
+   "en": "Mid-range K Corp. Ampule",
+   "zh": "量產型K公司安瓿"
+  },
+  {
+   "id": 9251,
+   "keyword": "Burn",
+   "tier": 4,
+   "en": "Burning Fate",
+   "zh": "燃燒的命運"
+  },
+  {
+   "id": 9252,
+   "keyword": "Bleed",
+   "tier": 4,
+   "en": "Nail and Hammer",
+   "zh": "釘與錘"
+  },
+  {
+   "id": 9253,
+   "keyword": "Bleed",
+   "tier": 4,
+   "en": "Carousel Figurine",
+   "zh": "旋轉木馬模型"
+  },
+  {
+   "id": 9254,
+   "keyword": "Tremor",
+   "tier": 4,
+   "en": "Another Round!",
+   "zh": "再來一杯！"
+  },
+  {
+   "id": 9255,
+   "keyword": "Tremor",
+   "tier": 4,
+   "en": "Clappity Clap!",
+   "zh": "拍手啪啪！"
+  },
+  {
+   "id": 9256,
+   "keyword": "Tremor",
+   "tier": 4,
+   "en": "Imperfect Eye of Precognition",
+   "zh": "不完善的預知眼"
+  },
+  {
+   "id": 9257,
+   "keyword": "Sinking",
+   "tier": 4,
+   "en": "The Abandoned Oracle",
+   "zh": "遺落的神諭"
+  },
+  {
+   "id": 9258,
+   "keyword": "Blunt",
+   "tier": 4,
+   "en": "The Book of Vengeance: Annex",
+   "zh": "復仇賬簿：附錄"
+  },
+  {
+   "id": 9259,
+   "keyword": "Bleed",
+   "tier": 4,
+   "en": "A Maestro's Ring-Turned-Artwork",
+   "zh": "化為作品的大師指環"
+  },
+  {
+   "id": 9267,
+   "keyword": "Burn",
+   "tier": 4,
+   "en": "Searing Brass",
+   "zh": "灼熱的銅管"
+  },
+  {
+   "id": 9283,
+   "keyword": "Tremor",
+   "tier": 4,
+   "en": "Tributary Cigar",
+   "zh": "奉納的雪茄"
+  },
+  {
+   "id": 9436,
+   "keyword": "Sinking",
+   "tier": 4,
+   "en": "Refraction Glass Pod",
+   "zh": "折射玻璃管"
+  },
+  {
+   "id": 9719,
+   "keyword": "Poise",
+   "tier": 4,
+   "en": "Ragged Bamboo Hat",
+   "zh": "破損的斗笠"
+  },
+  {
+   "id": 9720,
+   "keyword": "Slash",
+   "tier": 4,
+   "en": "Old Dopo Robe",
+   "zh": "陳舊的長袍"
+  },
+  {
+   "id": 9752,
+   "keyword": "Keywordless",
+   "tier": 4,
+   "en": "False Halo",
+   "zh": "虛假的光相"
+  },
+  {
+   "id": 9754,
+   "keyword": "Keywordless",
+   "tier": 4,
+   "en": "Bridle",
+   "zh": "枷鎖"
+  },
+  {
+   "id": 9756,
+   "keyword": "Burn",
+   "tier": 4,
+   "en": "Unhatched Embers",
+   "zh": "未孵化的火種"
+  },
+  {
+   "id": 9758,
+   "keyword": "Keywordless",
+   "tier": 4,
+   "en": "Vestiges of the King",
+   "zh": "王的殘渣"
+  },
+  {
+   "id": 9785,
+   "keyword": "Slash",
+   "tier": 4,
+   "en": "Swarmcloud",
+   "zh": "叢雲"
+  },
+  {
+   "id": 9795,
+   "keyword": "Bleed",
+   "tier": 4,
+   "en": "A Drop",
+   "zh": "落墜的一滴"
+  },
+  {
+   "id": 9796,
+   "keyword": "Poise",
+   "tier": 4,
+   "en": "Sorrowful Exhale",
+   "zh": "悲悶的吐息"
+  },
+  {
+   "id": 9797,
+   "keyword": "Keywordless",
+   "tier": 4,
+   "en": "Shatterbound Cannon",
+   "zh": "註定破碎的火炮"
+  },
+  {
+   "id": 9798,
+   "keyword": "Bleed",
+   "tier": 4,
+   "en": "Coveting Thorn",
+   "zh": "貪慾之棘"
+  },
+  {
+   "id": 9799,
+   "keyword": "Keywordless",
+   "tier": 5,
+   "en": "A Certain Philosophy",
+   "zh": "某種哲學"
+  },
+  {
+   "id": 9800,
+   "keyword": "Keywordless",
+   "tier": 5,
+   "en": "Wealth",
+   "zh": "富"
+  },
+  {
+   "id": 9816,
+   "keyword": "Tremor",
+   "tier": 4,
+   "en": "Microprecision Time Accelerator",
+   "zh": "超精密時間加速裝置"
+  },
+  {
+   "id": 9827,
+   "keyword": "Bleed",
+   "tier": 4,
+   "en": "The Family's Resentment",
+   "zh": "家人的怨恨"
+  },
+  {
+   "id": 9828,
+   "keyword": "Tremor",
+   "tier": 4,
+   "en": "For the Capo",
+   "zh": "為了指揮官"
+  },
+  {
+   "id": 9829,
+   "keyword": "Blunt",
+   "tier": 4,
+   "en": "Rules of the Middle",
+   "zh": "中指規矩"
+  },
+  {
+   "id": 9830,
+   "keyword": "Keywordless",
+   "tier": 4,
+   "en": "Kkomi's Mini-Gift",
+   "zh": "可米的小小禮物"
+  },
+  {
+   "id": 9831,
+   "keyword": "Keywordless",
+   "tier": 3,
+   "en": "Sea Terror Notes",
+   "zh": "恐魚研究記錄"
+  },
+  {
+   "id": 9832,
+   "keyword": "Keywordless",
+   "tier": 3,
+   "en": "Goldforged Compass",
+   "zh": "黃金羅盤"
+  },
+  {
+   "id": 9833,
+   "keyword": "Keywordless",
+   "tier": 4,
+   "en": "Silver Key Bundle",
+   "zh": "銀色的鑰匙串"
+  },
+  {
+   "id": 9834,
+   "keyword": "Keywordless",
+   "tier": 4,
+   "en": "Sea Terror Jerky",
+   "zh": "恐魚乾"
+  },
+  {
+   "id": 9835,
+   "keyword": "Keywordless",
+   "tier": 4,
+   "en": "Brilliant Lamplight",
+   "zh": "閃耀的提燈"
+  },
+  {
+   "id": 9836,
+   "keyword": "Sinking",
+   "tier": 4,
+   "en": "Aged Sheet Music",
+   "zh": "古舊樂譜殘章"
+  },
+  {
+   "id": 9837,
+   "keyword": "Rupture",
+   "tier": 4,
+   "en": "Metal Construct",
+   "zh": "金屬構造體"
+  },
+  {
+   "id": 9838,
+   "keyword": "Poise",
+   "tier": 4,
+   "en": "Moonmirror Wine Cup",
+   "zh": "宿月酒盞"
+  },
+  {
+   "id": 9839,
+   "keyword": "Tremor",
+   "tier": 4,
+   "en": "Classical-design Letter Opener",
+   "zh": "造型古典的拆信刀"
+  }
+ ],
+ "vestiges": [
+  {
+   "id": 9991,
+   "keyword": "Keywordless",
+   "tier": 1,
+   "en": "Dark Vestige",
+   "zh": "黯淡的殘影"
+  },
+  {
+   "id": 9992,
+   "keyword": "Keywordless",
+   "tier": 2,
+   "en": "Faint Vestige",
+   "zh": "微茫的殘影"
+  },
+  {
+   "id": 9993,
+   "keyword": "Keywordless",
+   "tier": 3,
+   "en": "Twinkling Vestige",
+   "zh": "閃耀的殘影"
+  },
+  {
+   "id": 9994,
+   "keyword": "Keywordless",
+   "tier": 4,
+   "en": "Brilliant Vestige",
+   "zh": "輝煌的殘影"
+  },
+  {
+   "id": 9995,
+   "keyword": "Keywordless",
+   "tier": 5,
+   "en": "Lunar Vestige",
+   "zh": "月之殘影"
   }
  ]
 }

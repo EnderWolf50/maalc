@@ -16,6 +16,7 @@ CROP_AT = {
     "fuse_spiderweb": (620, 236),  # live 2026-10-18 (probe capture rec/m3/fuse-140): Spiderweb Entangled in Red first
     "fuse": (620, 236),  # tests/screens/ShopFuse.png
     "fuse_recipe": (620, 236),  # tests/screens/ShopFuseRecipe.png (#103): the owned row sits at y 427
+    "fuse_tooltip": (620, 236),  # a tooltip (Hellterfly's Dream's) over the first row's right half and the row under it (#297)
     # The fuse page's slots and first two columns (#77): live 2026-10-18 (probe capture rec/m3/fuse-152), Spiderweb tapped
     # in; captures/97 (2 in, a tooltip over the grid), Super Shop captures/172 (cells 5 and 6 in) and 169 (empty).
     "fuse_one_in": (180, 165),
@@ -29,6 +30,7 @@ CROP_AT = {
     "sell": (620, 200),  # live 2026-10-16 (probe capture s29/025_sell): the sell page of ShopFuse.png's gifts
     "offers": (560, 210),  # tests/screens/Shop.png
     "offers_super": (560, 210),  # tests/screens/SuperShop.png
+    "offers_super_scrolled": (560, 210),  # the same shop scrolled 150 px (live 2026-10-15, probe capture 163): its last two offers show
     "offers_red": (560, 210),  # live (probe capture s28/013): Fragment of Hellfire, a red gem, 400 orange
     "offers_short": (560, 210),  # live 2026-10-18 (probe capture live-all/f/shopd_2590.6): 106 Cost, 3 offers tagged Not Enough Cost
     # Map nodes (test_map_shop.py): 200 px around the node, live 2026-10-18 probe capture live2/f (map_f2_c, map_f1_c, map_f1_a)
@@ -86,22 +88,30 @@ def test_heal_plan(mode, cost, reserve, dead, plan):
     assert s.heal_plan(mode, cost, reserve, dead, 100) == plan
 
 
-@pytest.mark.parametrize("cost, reserve, used, limit, choice", [
-    (210, 0, 0, 2, "keyword"),  # 90 + 120
-    (209, 0, 0, 2, "normal"),  # short of a keyword refresh: 15 + 120 still fits
-    (134, 0, 0, 2, None),
-    (310, 100, 0, 2, "keyword"),  # the reserve counts on top
-    (309, 100, 0, 2, "normal"),
-    (3000, 0, 2, 2, None),  # limit reached; both kinds count
-    (3000, 0, 0, 0, None),
+def counts(keyword, normal):
+    return {"keyword": keyword, "normal": normal}
+
+
+@pytest.mark.parametrize("cost, reserve, used, limits, choice", [
+    (210, 0, counts(0, 0), counts(2, 2), "keyword"),  # 90 + 120
+    (209, 0, counts(0, 0), counts(2, 2), "normal"),  # short of a keyword refresh: 15 + 120 still fits
+    (134, 0, counts(0, 0), counts(2, 2), None),
+    (310, 100, counts(0, 0), counts(2, 2), "keyword"),  # the reserve counts on top
+    (309, 100, counts(0, 0), counts(2, 2), "normal"),
+    (3000, 0, counts(2, 0), counts(2, 1), "normal"),  # the keyword refreshes used up: the normal ones are next
+    (3000, 0, counts(0, 0), counts(0, 1), "normal"),
+    (3000, 0, counts(2, 1), counts(2, 1), None),  # each kind counts its own
+    (3000, 0, counts(1, 0), counts(1, 0), None),
+    (209, 0, counts(0, 0), counts(2, 0), None),  # short of a keyword refresh, and no normal one allowed
+    (3000, 0, counts(0, 0), counts(0, 0), None),  # the default: no refresh (the user, 2026-10-30)
 ])
-def test_refresh_choice(cost, reserve, used, limit, choice):
-    assert s.refresh_choice(cost, reserve, used, limit, 15, 90, 120) == choice
+def test_refresh_choice(cost, reserve, used, limits, choice):
+    assert s.refresh_choice(cost, reserve, used, limits, 15, 90, 120) == choice
 
 
 def test_refresh_choice_unread_fee_is_skipped():
-    assert s.refresh_choice(3000, 0, 0, 2, 15, None, 120) == "normal"
-    assert s.refresh_choice(3000, 0, 0, 2, None, None, 120) is None
+    assert s.refresh_choice(3000, 0, counts(0, 0), counts(2, 2), 15, None, 120) == "normal"
+    assert s.refresh_choice(3000, 0, counts(0, 0), counts(2, 2), None, None, 120) is None
 
 
 def test_to_sell_the_dearest_spare_first():
@@ -226,39 +236,6 @@ def test_dialog_price_from_the_cost_preview():
     assert s.dialog_price(2618, "2218") is None  # not the Cost we read
     assert s.dialog_price(2618, "2618") is None
     assert s.dialog_price(None, "28642612") is None
-
-
-@pytest.mark.parametrize("keyword, gift, role", [
-    ("Bleed", None, "material"),  # another keyword: fuse or sell it
-    ("Burn", None, "keep"),  # the main keyword
-    ("Keywordless", None, "keep"),  # no badge: every keywordless gift is kept (#103)
-    ("Bleed", "Hellterfly's Dream", "keep"),  # its icon is one of the team's observed gifts
-    (None, None, "unknown"),  # badge unread: neither fused nor sold
-    (None, "Spiderweb Entangled in Red", "keep"),
-])
-def test_gift_role_from_the_cells_badge_and_icon(keyword, gift, role):
-    assert s.gift_role(keyword, gift, {"Burn", "Keywordless"}) == role
-
-
-def test_the_kept_keywords_decide_the_role():
-    # #77: another keyword the team names is kept. The user on #161: a cell with no badge and no matched icon is a
-    # keywordless gift, material once the team lets keywordless gifts go.
-    assert s.gift_role("Bleed", None, {"Burn", "Bleed"}) == "keep"
-    assert s.gift_role("Keywordless", None, {"Burn"}) == "material"
-    assert s.gift_role("Keywordless", "Spiderweb Entangled in Red", {"Burn"}) == "keep"  # a kept gift's icon still keeps it
-
-
-def test_a_vestige_told_by_its_icon_is_material_whatever_the_keywordless_setting():
-    # #161: a vestige is its own kind; material names the ones the team neither keeps nor (on the sell page) keeps
-    # from the sale. One left out of it is kept like any gift whose icon matched.
-    assert s.gift_role("Keywordless", "Dark Vestige", {"Burn", "Keywordless"}, material=["Dark Vestige"]) == "material"
-    assert s.gift_role("Keywordless", "Dark Vestige", {"Burn"}) == "keep"
-
-
-def test_an_avoided_gift_is_material_though_it_is_the_main_keyword():
-    # #90: a Bleed team that does not hold White Gossypium fuses or sells it.
-    assert s.gift_role("Bleed", "White Gossypium", {"Bleed"}, avoid=["White Gossypium"]) == "material"
-    assert s.gift_role("Bleed", None, {"Bleed"}, avoid=["White Gossypium"]) == "keep"
 
 
 POINTS = {1: 3, 2: 6, 3: 10, 4: 15, 5: 30}  # data/shop.yaml
@@ -429,7 +406,12 @@ def test_pick_fusion_puts_an_avoided_gift_in_first():
     assert s.pick_fusion(materials, 3, SHOP, POINTS, first={"w"}) == [(["a", "b", "w"], 3)]
 
 
-@pytest.mark.parametrize("name, placed, picked", [("ShopFuse", 0, []), ("ShopFuseRecipe", 3, [0])])
+@pytest.mark.parametrize("name, placed, picked", [
+    ("ShopFuse", 0, []), ("ShopFuseRecipe", 3, [0]),
+    ("ShopFuseLocked", 0, []),  # #304: "Select a Keyword." dims the list; nothing is placed or framed
+    ("ShopFuseAvailable", 0, []),  # #304: keyword picked, the Fusion Available cell is not framed until its materials go in
+    ("ShopFuseRecipeTwo", 2, [0]),  # #304: tapping the Fusion Available cell put its 2 materials in the slots and framed it
+])
 def test_the_fuse_read_back_on_the_whole_fuse_pages_of_tests_screens(name, placed, picked):
     # CODING_STANDARDS' sweep of fuse_slots, placed and picked: no false hit. ShopFuseRecipe really holds 3 materials
     # in its slots, and its Fusion Available cell (where FUSE_CELLS' cell 0 sits) is framed orange.
@@ -488,7 +470,8 @@ def test_the_forecasts_row_sweep_over_tests_screens_finds_no_unlisted_hit():
         img = Image.open(png)
         if img.size == (1280, 720):
             hits[png.stem] = s.forecast_tier(np.asarray(img.convert("RGB"))[:, :, ::-1])
-    assert {k: v for k, v in hits.items() if v} == {"GiftGetOverMap": 1, "ShopFuseRecipe": 4}
+    # ShopFuseRecipeTwo (#304) is a fuse page with a recipe placed: its row reads III Guaranteed.
+    assert {k: v for k, v in hits.items() if v} == {"GiftGetOverMap": 1, "ShopFuseRecipe": 4, "ShopFuseRecipeTwo": 3}
 
 
 def test_pick_fusion_leaves_out_a_refused_group():
@@ -519,18 +502,19 @@ def test_sell_prices_are_the_numbers_under_each_cell():
     assert s.cell_prices(SELL_OCR, cells) == {0: 100, 1: 50, 2: 131, 3: 99, 4: 93, 5: 100, 6: 97, 7: 91, 8: 101, 9: 96}
 
 
-def test_buy_plan_takes_high_tier_first_and_buys_from_the_back():
-    # #76: (grid index, tier, price) of the main-keyword offers on show.
-    offers = [(0, 1, 140), (1, 2, 200), (3, 2, 180), (4, 3, 250)]
-    # Tier 3, then the cheaper tier 2, then the dearer one; tier 1 no longer fits. Bought last cell first,
+def test_buy_plan_takes_the_queue_order_not_the_tier_or_the_price_and_buys_from_the_back():
+    # #298: (grid index, place in the buy queue, price) of the offers on show the list wants.
+    offers = [(0, 3, 140), (1, 1, 200), (3, 0, 250), (4, 2, 180)]
+    # Queue order 3, 1, 4, 0 though 0 is the cheapest; 140 no longer fits after them. Bought last cell first,
     # so the offers before it keep their places (a bought one moves to the end of the grid).
     assert s.buy_plan(offers, 700, 0, sold=False) == ([4, 3, 1], None)
-    assert s.buy_plan(offers, 700, 100, sold=False) == ([4, 3, 0], None)  # the reserve: 200 no longer fits, 140 does
-    assert s.buy_plan([(2, None, 150), (5, 1, 160)], 200, 0, sold=False) == ([5], None)  # an unread tier comes last
+    assert s.buy_plan(offers, 700, 100, sold=False) == ([3, 1, 0], None)  # the reserve: 180 no longer fits, the cheaper 140 does
+    assert s.buy_plan(offers, 600, 100, sold=False) == ([3, 1], None)
+    assert s.buy_plan([(2, 1, 150), (5, 1, 140)], 200, 0, sold=False) == ([5], None)  # one gift twice on show: the cheaper
 
 
-def test_buy_plan_sells_first_when_the_top_tier_is_too_dear():
-    offers = [(0, 1, 140), (2, 3, 250)]
+def test_buy_plan_sells_first_when_the_first_in_the_queue_is_too_dear():
+    offers = [(0, 4, 140), (2, 0, 250)]
     assert s.buy_plan(offers, 200, 0, sold=False) == ([], 250)  # nothing bought: the next round sells for it
     assert s.buy_plan(offers, 200, 0, sold=True) == ([0], None)  # sold already (or nothing to sell): what fits
     assert s.buy_plan([], 200, 0, sold=False) == ([], None)

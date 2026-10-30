@@ -4,6 +4,7 @@ import * as api from "./api";
 import { TEXT, type Key } from "./i18n";
 import { newSettings, parseSettings, runEnum, type Luxcavation, type Settings } from "./model";
 import { DeploymentTab, StarlightTab, ThemePackTab } from "./Plans";
+import { GiftListsTab } from "./GiftLists";
 import { TeamsTab } from "./Teams";
 import { EditorContext, Field, Num, Select, ToggleNum, useEditor, type Ctx } from "./ui";
 import { validate, type Problem } from "./validate";
@@ -11,6 +12,7 @@ import { validate, type Problem } from "./validate";
 export const TABS = [
   ["run", "tab.run", RunTab, ["run"]],
   ["teams", "tab.teams", TeamsTab, ["teams"]],
+  ["gifts", "tab.gifts", GiftListsTab, ["gift_lists"]],
   ["deployment", "tab.deployment", DeploymentTab, ["deployment_order_plans"]],
   ["starlight", "tab.starlight", StarlightTab, ["starlight_plans"]],
   ["themepacks", "tab.themepacks", ThemePackTab, ["theme_pack_plans"]],
@@ -27,6 +29,7 @@ export default function App() {
   const [loadError, setLoadError] = useState("");
   const [root, setRoot] = useState("");
   const [tab, setTab] = useState<(typeof TABS)[number][0]>("teams");
+  const [giftList, setGiftList] = useState("default"); // what the gift list tab shows; the teams tab can point it at a list
   const [checked, setChecked] = useState(false); // marks show after the first save attempt
   const [status, setStatus] = useState("");
 
@@ -35,10 +38,12 @@ export default function App() {
     api.loadSettings().then(async (text) => {
       if (text === null) return setS(newSettings());
       try {
-        const { data, migrated } = parseSettings(text);
+        const { data, migrated, dropped, unknown } = parseSettings(text);
         setS(data);
         if (migrated && !validate(data).length) await api.saveSettings(toText(data));
         setSavedText(toText(data)); // dirty = content changed, not formatting
+        const warn = (key: Key, n: number) => (n ? [TEXT[data.language][key].replace("{n}", String(n))] : []);
+        setStatus([...warn("migrate.dropped", dropped), ...warn("migrate.unknown", unknown)].join(" "));
       } catch (e) {
         setLoadError(String(e));
       }
@@ -63,7 +68,8 @@ export default function App() {
   const marked = new Set(checked ? problems.flatMap((p) => p.paths) : []);
   const bad = (path: string) => [...marked].some((m) => m === path || m.startsWith(path + "/"));
   const ctx: Ctx = {
-    s, t, bad,
+    s, t, bad, giftList,
+    chooseList: (id, open) => { setGiftList(id); if (open) setTab("gifts"); },
     update: (fn) => setS((prev) => { const next = structuredClone(prev!); fn(next); return next; }),
     tv: (field, v) => TEXT[lang][`${field}.${v}` as Key] ?? v,
   };

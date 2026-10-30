@@ -59,6 +59,29 @@ def test_39_recipes_use_a_theme_pack_exclusive_gift():
     assert by_id[9410]["packs"] == [1004, 1005] and by_id[9717]["packs"] == [1104, 1116] and by_id[9248]["packs"] == [1010, 1012]
 
 
+def test_every_pack_a_recipe_names_has_an_id_in_the_theme_pack_file():
+    # #306: recipes speak pack ids, the agent notes the run's packs by id; theme_packs.yaml's pack_ids is where they meet.
+    import yaml
+    packs = yaml.safe_load((BASE / "data" / "theme_packs.yaml").read_text(encoding="utf-8"))
+    ids = packs["pack_ids"]
+    assert len(set(ids.values())) == len(ids)  # one name per id
+    assert set(packs["packs"]) <= set(ids)  # every listed pack has an id
+    named = {p for g in DATA["gifts"] for p in g.get("packs", [])}
+    assert sorted(named - set(ids.values())) == []  # a season's new pack id shows up here
+
+
+def test_the_theme_pack_ids_match_the_game_data_when_it_is_unpacked():
+    import pytest
+    import yaml
+    path = local_dir("unpack") / "raw/Localize/en/EN_MirrorDungeonTheme-1.json"
+    if not path.is_file():
+        pytest.skip("no unpacked game data")
+    names = {r["id"]: r["name"] for r in json.loads(path.read_text(encoding="utf-8-sig"))["dataList"]}
+    ids = yaml.safe_load((BASE / "data" / "theme_packs.yaml").read_text(encoding="utf-8"))["pack_ids"]
+    wrong = {n: i for n, i in ids.items() if names.get(i) != n and i != 1119}  # 1119's name was read live (theme_packs.yaml)
+    assert wrong == {}
+
+
 def test_specific_and_packs_match_the_game_data_when_it_is_unpacked():
     import pytest
     static = local_dir("unpack") / "static/Assets/Resources_moved/StaticData/static-data"
@@ -75,3 +98,11 @@ def test_specific_and_packs_match_the_game_data_when_it_is_unpacked():
             used = {i for c in mine for i in c["requiredEgoGiftIds"]}
             assert g["packs"] == sorted(p for p, pool in pools.items() if pool & used), g["id"]
     assert sum(1 for c in fixed if c.get("isSpecific")) == 39
+
+
+def test_the_five_vestiges_are_data_ids_9991_to_9995_keywordless_tier_i_to_v():
+    # #161: agent/settings.py and the GUI take the vestiges (ids, names, tiers) from here, not from the schema.
+    assert [(v["id"], v["tier"], v["keyword"], v["en"]) for v in DATA["vestiges"]] == [
+        (9991, 1, "Keywordless", "Dark Vestige"), (9992, 2, "Keywordless", "Faint Vestige"), (9993, 3, "Keywordless", "Twinkling Vestige"),
+        (9994, 4, "Keywordless", "Brilliant Vestige"), (9995, 5, "Keywordless", "Lunar Vestige")]
+    assert all(v["zh"] for v in DATA["vestiges"])

@@ -1,9 +1,10 @@
-import re
+from difflib import SequenceMatcher
 from pathlib import Path
 
 import pytest
 import yaml
 
+import gift_cells
 import run_start as rs
 from ocrtext import compact
 
@@ -277,8 +278,18 @@ DATA_NAMES, DATA_TITLE_ART = list(DATA_YAML["packs"]), DATA_YAML["title_art"]
 def test_theme_pack_data_file():
     data = yaml.safe_load(DATA.read_text(encoding="utf-8"))
     packs, plan = data["packs"], data["default_plan"]
-    # Each pack maps to its floors; an unquoted "a: b" name would parse as a nested dict.
-    assert packs and all(isinstance(p, str) and re.fullmatch(r"(N[1-5]+)?( ?H[1-5]+)?", f) for p, f in packs.items())
+    # Each pack maps to its floors (#387): N and H are sorted lists of floors 1-15, I and X (INFINITY, EXTREME: every floor) are true.
+    # An unquoted "a: b" name would parse as a nested dict, so a value that is not a mapping of these keys fails here too.
+    def floors_ok(f):
+        if not isinstance(f, dict) or not f or not set(f) <= {"N", "H", "I", "X"}:
+            return False
+        lists = all(isinstance(v, list) and v and v == sorted(set(v)) and all(type(n) is int and 1 <= n <= 15 for n in v)
+                    for k, v in f.items() if k in "NH")
+        return lists and all(v is True for k, v in f.items() if k in "IX")
+
+    assert packs and all(isinstance(p, str) and floors_ok(f) for p, f in packs.items())
+    assert packs["The Forgotten"] == {"N": [1], "H": [1]} and packs["The B.E."] == {"H": [3, 4, 5]}
+    assert floors_ok({"N": [1, 12], "H": [10, 11], "I": True, "X": True}) and not floors_ok({"N": [12, 1]}) and not floors_ok("N12 H1")
     # #240: the default plan is AALC's weights, threshold 0, unlisted 0, event packs by weight.
     assert (plan["threshold"], plan["unlisted"], plan["event_packs"]) == (0, 0, "weight")
     assert all(p in packs and isinstance(w, int) and -10 <= w <= 10 for p, w in plan["weights"].items())
@@ -437,17 +448,31 @@ def test_without_a_cover_a_card_no_title_path_reads_is_unlisted_as_before():
 
 
 
+def test_match_pack_skips_only_names_that_cannot_be_the_answer():
+    # #329: names whose quick_ratio is under min_ratio - margin are not scored; the answer is the plain definition's.
+    names = [e["en"] for e in gift_cells.load()]
+
+    def plain(text, min_ratio=0.9, margin=0.04):
+        scores = sorted(((SequenceMatcher(None, compact(text), compact(n)).ratio(), n) for n in set(names)), reverse=True)
+        if scores[0][0] < min_ratio or scores[0][0] - scores[1][0] < margin:
+            return None
+        return scores[0][1]
+
+    for n in names[::7]:
+        for text in (n, n[:-1], n[1:], n.replace("e", "c", 1), n[: len(n) * 2 // 3], n.upper() + "x"):
+            assert rs.match_pack(text, names) == plain(text), text
+
+
 RERUN_COPIES = {"Miracle in District 20": 1113, "Yield My Flesh to Claim Their Bones": 1116, "Timekilling Time": 1120,
           "Murder on the WARP Express": 1123, "LCB Regular Check-up": 1125, "Nocturnal Sweeping": 1127}
 
 
 def test_the_bokgak_rerun_copies_are_packs_of_their_own_weighed_as_their_originals_and_not_event_packs():
     # the client's re-run copies (1.117.0): the same title with a "BokGak" line, their own boss picture, HARD floors 4-5
-    text = DATA.read_text(encoding="utf-8")
     weights = DATA_YAML["default_plan"]["weights"]
     for original, pid in RERUN_COPIES.items():
         copy = f"{original}{rs.RERUN}"
-        assert DATA_YAML["packs"][copy] == "H45" and f"# {pid}" in text.split(f"{copy}", 1)[1].splitlines()[0]
+        assert DATA_YAML["packs"][copy] == {"H": [4, 5]} and DATA_YAML["pack_ids"][copy] == pid
         assert weights[copy] == weights[original] and copy not in DATA_YAML["event_packs"]
 
 

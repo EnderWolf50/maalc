@@ -4,116 +4,225 @@
 # Source: the Limbus Company client 1.117.0's static data (mirrordungeon-theme-floor, 121 packs; © Project Moon,
 # see NOTICE.md), unpacked 2026-10-18. Listed: every pack with a NORMAL or HARD floor; the Extreme-only packs are
 # left out. Names as the data gives them, except one read live:
-# 1119 shows "Walpurgis Night: Hatred and Despair". Each pack maps to its floors (N: NORMAL, H: HARD; N12 H1 is
-# NORMAL floors 1-2 and HARD floor 1), which the settings GUI filters by. The comment after a pack: its id, and
-# DIFFICULT when the data marks it so (difficulty: DIFFICULT).
+# 1119 shows "Walpurgis Night: Hatred and Despair". Each pack maps to its floors: N (NORMAL) and H (HARD) are lists of
+# floor numbers 1-15, I (INFINITY) and X (EXTREME) are true where the pack shows on every floor of that mode ({N: [1, 2],
+# H: [1]} is NORMAL floors 1-2 and HARD floor 1); the settings GUI filters by them. The comment after a pack: DIFFICULT
+# when the data marks it so (difficulty: DIFFICULT). `pack_ids` below gives each pack's id.
 packs:
-  The B.E.: H345  # 3001
-  The Forgotten: N1 H1  # 1001
-  The Outcast: N1 H1  # 1002 DIFFICULT
-  Flat-broke Gamblers: N12 H1  # 1003
-  Automated Factory: N12 H12  # 1004
-  The Unloving: N12 H12  # 1005 DIFFICULT
-  Nagel und Hammer: N1 H1  # 1006
-  "Faith & Erosion": N12 H1  # 1007
-  The Unconfronting: N3 H23  # 1008 DIFFICULT
-  "Nest, Workshop, and Technology": N12 H1  # 1009
-  Falling Flowers: N3 H23  # 1010
-  Tearful Things: N45 H34  # 1011
-  The Unchanging: H45  # 1012 DIFFICULT
-  Lake World: N2 H1  # 1013
-  Crawling Abyss: N45 H34  # 1014
-  The Evil Defining: H45  # 1015 DIFFICULT
-  Dregs of the Manor: N3 H1  # 1016
-  A Certain World: N45 H34  # 1017
-  The Heartbreaking: H5  # 1018 DIFFICULT
-  La Manchaland Re-opening: H5  # 1019 DIFFICULT
-  The Infinite Procession: H5  # 1020 DIFFICULT
-  The Dream Ending: H5  # 1021 DIFFICULT
-  Four Houses and Greed: H5  # 1022
-  The Surrendered Witnessing: H5  # 1023
-  "Charm, Wander, Doubt": N45 H34  # 1024
-  Textbook: H5  # 1025
-  Blade and Artwork: H5  # 1026
-  The Unsevering: H5  # 1027
-  Storefront Campout: N34 H34  # 1028
-  An Anarchy of Colors: H45  # 1029
-  Creed of Preservation: H45  # 1030
-  Readvent of Gluttony: H45  # 1031
-  Line 1: H5  # 1108 DIFFICULT
-  Line 2: H45  # 1109 DIFFICULT
-  Line 3: H5  # 1110 DIFFICULT
-  "Line 4 - Section #3": H5  # 1111 DIFFICULT
-  "Line 4 - Section #4": H5  # 1112 DIFFICULT
-  Line 5: H5  # 1118 DIFFICULT
-  "Slicers & Dicers": N5 H4  # 1201
-  To be Cleaved: N23 H12  # 1202
-  "Piercers & Penetrators": N5 H4  # 1203
-  To be Pierced: N23 H12  # 1204
-  "Crushers & Breakers": N5 H4  # 1205
-  To be Crushed: N23 H12  # 1206
-  Repressed Wrath: N45 H34  # 1301
-  Unbound Wrath: H5  # 1302 DIFFICULT
-  Emotional Repression: N3 H2  # 1303
-  Addicting Lust: N45 H34  # 1304
-  Tangling Lust: H5  # 1305 DIFFICULT
-  Emotional Seduction: N3 H2  # 1306
-  Treadwheel Sloth: N45 H34  # 1307
-  Inert Sloth: H5  # 1308 DIFFICULT
-  Emotional Indolence: N3 H2  # 1309
-  Devoured Gluttony: N45 H34  # 1310
-  Excessive Gluttony: H5  # 1311 DIFFICULT
-  Emotional Craving: N3 H2  # 1312
-  Degraded Gloom: N45 H34  # 1313
-  Sunk Gloom: H5  # 1314 DIFFICULT
-  Emotional Flood: N3 H2  # 1315
-  Vain Pride: N45 H34  # 1316
-  Tyrannical Pride: H5  # 1317 DIFFICULT
-  Emotional Subservience: N3 H2  # 1318
-  Insignificant Envy: N45 H34  # 1319
-  Pitiful Envy: H5  # 1320 DIFFICULT
-  Emotional Judgment: N3 H2  # 1321
-  Burning Haze: H3  # 1401
-  Season of the Flame: H45  # 1402 DIFFICULT
-  Trickled Sanguine Blood: H3  # 1403
-  "Mountain of Corpses, Sea of Blood": H45  # 1404 DIFFICULT
-  Dizzying Waves: H3  # 1405
-  Abnormal Seismic Zone: H45  # 1406 DIFFICULT
-  Crushing External Force: H3  # 1407
-  Unrelenting Might: H45  # 1408 DIFFICULT
-  Sinking Pang: H3  # 1409
-  Sinking Deluge: H45  # 1410 DIFFICULT
-  Deep Sigh: H3  # 1411
-  Poised Breathing: H45  # 1412 DIFFICULT
-  Rising Power Supply: H3  # 1413
-  Thunder and Lightning: H45  # 1414 DIFFICULT
+  The B.E.: {H: [3, 4, 5]}
+  The Forgotten: {N: [1], H: [1]}
+  The Outcast: {N: [1], H: [1]}  # DIFFICULT
+  Flat-broke Gamblers: {N: [1, 2], H: [1]}
+  Automated Factory: {N: [1, 2], H: [1, 2]}
+  The Unloving: {N: [1, 2], H: [1, 2]}  # DIFFICULT
+  Nagel und Hammer: {N: [1], H: [1]}
+  "Faith & Erosion": {N: [1, 2], H: [1]}
+  The Unconfronting: {N: [3], H: [2, 3]}  # DIFFICULT
+  "Nest, Workshop, and Technology": {N: [1, 2], H: [1]}
+  Falling Flowers: {N: [3], H: [2, 3]}
+  Tearful Things: {N: [4, 5], H: [3, 4]}
+  The Unchanging: {H: [4, 5]}  # DIFFICULT
+  Lake World: {N: [2], H: [1]}
+  Crawling Abyss: {N: [4, 5], H: [3, 4]}
+  The Evil Defining: {H: [4, 5]}  # DIFFICULT
+  Dregs of the Manor: {N: [3], H: [1]}
+  A Certain World: {N: [4, 5], H: [3, 4]}
+  The Heartbreaking: {H: [5]}  # DIFFICULT
+  La Manchaland Re-opening: {H: [5]}  # DIFFICULT
+  The Infinite Procession: {H: [5]}  # DIFFICULT
+  The Dream Ending: {H: [5]}  # DIFFICULT
+  Four Houses and Greed: {H: [5]}
+  The Surrendered Witnessing: {H: [5]}
+  "Charm, Wander, Doubt": {N: [4, 5], H: [3, 4]}
+  Textbook: {H: [5]}
+  Blade and Artwork: {H: [5]}
+  The Unsevering: {H: [5]}
+  Storefront Campout: {N: [3, 4], H: [3, 4]}
+  An Anarchy of Colors: {H: [4, 5]}
+  Creed of Preservation: {H: [4, 5]}
+  Readvent of Gluttony: {H: [4, 5]}
+  Line 1: {H: [5]}  # DIFFICULT
+  Line 2: {H: [4, 5]}  # DIFFICULT
+  Line 3: {H: [5]}  # DIFFICULT
+  "Line 4 - Section #3": {H: [5]}  # DIFFICULT
+  "Line 4 - Section #4": {H: [5]}  # DIFFICULT
+  Line 5: {H: [5]}  # DIFFICULT
+  "Slicers & Dicers": {N: [5], H: [4]}
+  To be Cleaved: {N: [2, 3], H: [1, 2]}
+  "Piercers & Penetrators": {N: [5], H: [4]}
+  To be Pierced: {N: [2, 3], H: [1, 2]}
+  "Crushers & Breakers": {N: [5], H: [4]}
+  To be Crushed: {N: [2, 3], H: [1, 2]}
+  Repressed Wrath: {N: [4, 5], H: [3, 4]}
+  Unbound Wrath: {H: [5]}  # DIFFICULT
+  Emotional Repression: {N: [3], H: [2]}
+  Addicting Lust: {N: [4, 5], H: [3, 4]}
+  Tangling Lust: {H: [5]}  # DIFFICULT
+  Emotional Seduction: {N: [3], H: [2]}
+  Treadwheel Sloth: {N: [4, 5], H: [3, 4]}
+  Inert Sloth: {H: [5]}  # DIFFICULT
+  Emotional Indolence: {N: [3], H: [2]}
+  Devoured Gluttony: {N: [4, 5], H: [3, 4]}
+  Excessive Gluttony: {H: [5]}  # DIFFICULT
+  Emotional Craving: {N: [3], H: [2]}
+  Degraded Gloom: {N: [4, 5], H: [3, 4]}
+  Sunk Gloom: {H: [5]}  # DIFFICULT
+  Emotional Flood: {N: [3], H: [2]}
+  Vain Pride: {N: [4, 5], H: [3, 4]}
+  Tyrannical Pride: {H: [5]}  # DIFFICULT
+  Emotional Subservience: {N: [3], H: [2]}
+  Insignificant Envy: {N: [4, 5], H: [3, 4]}
+  Pitiful Envy: {H: [5]}  # DIFFICULT
+  Emotional Judgment: {N: [3], H: [2]}
+  Burning Haze: {H: [3]}
+  Season of the Flame: {H: [4, 5]}  # DIFFICULT
+  Trickled Sanguine Blood: {H: [3]}
+  "Mountain of Corpses, Sea of Blood": {H: [4, 5]}  # DIFFICULT
+  Dizzying Waves: {H: [3]}
+  Abnormal Seismic Zone: {H: [4, 5]}  # DIFFICULT
+  Crushing External Force: {H: [3]}
+  Unrelenting Might: {H: [4, 5]}  # DIFFICULT
+  Sinking Pang: {H: [3]}
+  Sinking Deluge: {H: [4, 5]}  # DIFFICULT
+  Deep Sigh: {H: [3]}
+  Poised Breathing: {H: [4, 5]}  # DIFFICULT
+  Rising Power Supply: {H: [3]}
+  Thunder and Lightning: {H: [4, 5]}  # DIFFICULT
   # Event packs: added for good once their event story is cleared (unlockCode 9xxx, #89).
-  "Hell's Chicken": N2 H2  # 1101
-  S.E.A.: N2 H23  # 1102
-  Miracle in District 20: N4 H34  # 1103
-  Yield My Flesh to Claim Their Bones: N45 H34  # 1104
-  Timekilling Time: N45 H45  # 1105
-  Murder on the WARP Express: N45 H45  # 1106
-  The Noon of Violet: N4 H34  # 1107
-  Full-Stopped by a Bullet: N4 H34  # 1114
-  LCB Regular Check-up: N5 H45  # 1115
-  Nocturnal Sweeping: N5 H45  # 1117 DIFFICULT
-  "Walpurgis Night: Hatred and Despair": N34 H34  # 1119
-  Spring Cultivation: N5 H5  # 1121 DIFFICULT
-  The Dusk of Amber: N45 H45  # 1124
-  Twining Threads: N5 H5  # 1126
-  Mnestic Experience: N5 H5  # 1128
+  "Hell's Chicken": {N: [2], H: [2]}
+  S.E.A.: {N: [2], H: [2, 3]}
+  Miracle in District 20: {N: [4], H: [3, 4]}
+  Yield My Flesh to Claim Their Bones: {N: [4, 5], H: [3, 4]}
+  Timekilling Time: {N: [4, 5], H: [4, 5]}
+  Murder on the WARP Express: {N: [4, 5], H: [4, 5]}
+  The Noon of Violet: {N: [4], H: [3, 4]}
+  Full-Stopped by a Bullet: {N: [4], H: [3, 4]}
+  LCB Regular Check-up: {N: [5], H: [4, 5]}
+  Nocturnal Sweeping: {N: [5], H: [4, 5]}  # DIFFICULT
+  "Walpurgis Night: Hatred and Despair": {N: [3, 4], H: [3, 4]}
+  Spring Cultivation: {N: [5], H: [5]}  # DIFFICULT
+  The Dusk of Amber: {N: [4, 5], H: [4, 5]}
+  Twining Threads: {N: [5], H: [5]}
+  Mnestic Experience: {N: [5], H: [5]}
   # Re-run copies of event packs (bokgak in the data): the original's title with a small "BokGak" line under it and
   # their own boss picture (1113 also the Long Battle overlay). Not event packs. A card reads as one by that line
   # (run_start.rerun_copy) or by its own cover.
-  Miracle in District 20 BokGak: H45  # 1113 DIFFICULT
-  Yield My Flesh to Claim Their Bones BokGak: H45  # 1116 DIFFICULT
-  Timekilling Time BokGak: H45  # 1120
-  Murder on the WARP Express BokGak: H45  # 1123
-  LCB Regular Check-up BokGak: H45  # 1125
-  Nocturnal Sweeping BokGak: H45  # 1127 DIFFICULT
+  Miracle in District 20 BokGak: {H: [4, 5]}  # DIFFICULT
+  Yield My Flesh to Claim Their Bones BokGak: {H: [4, 5]}  # DIFFICULT
+  Timekilling Time BokGak: {H: [4, 5]}
+  Murder on the WARP Express BokGak: {H: [4, 5]}
+  LCB Regular Check-up BokGak: {H: [4, 5]}
+  Nocturnal Sweeping BokGak: {H: [4, 5]}  # DIFFICULT
 
 # The packs above that are event packs, told by their English name (#89).
+# Every pack's id by name: `packs` above plus, last, the Extreme-only packs left out of it (no plan weighs them) that recipes
+# still name, named as the data gives them (EN_MirrorDungeonTheme).
+# gift_recipes.json speaks ids; the agent notes the run's packs by id and the GUI shows them by name (#306).
+pack_ids:
+  The B.E.: 3001
+  The Forgotten: 1001
+  The Outcast: 1002
+  Flat-broke Gamblers: 1003
+  Automated Factory: 1004
+  The Unloving: 1005
+  Nagel und Hammer: 1006
+  "Faith & Erosion": 1007
+  The Unconfronting: 1008
+  "Nest, Workshop, and Technology": 1009
+  Falling Flowers: 1010
+  Tearful Things: 1011
+  The Unchanging: 1012
+  Lake World: 1013
+  Crawling Abyss: 1014
+  The Evil Defining: 1015
+  Dregs of the Manor: 1016
+  A Certain World: 1017
+  The Heartbreaking: 1018
+  La Manchaland Re-opening: 1019
+  The Infinite Procession: 1020
+  The Dream Ending: 1021
+  Four Houses and Greed: 1022
+  The Surrendered Witnessing: 1023
+  "Charm, Wander, Doubt": 1024
+  Textbook: 1025
+  Blade and Artwork: 1026
+  The Unsevering: 1027
+  Storefront Campout: 1028
+  An Anarchy of Colors: 1029
+  Creed of Preservation: 1030
+  Readvent of Gluttony: 1031
+  Line 1: 1108
+  Line 2: 1109
+  Line 3: 1110
+  "Line 4 - Section #3": 1111
+  "Line 4 - Section #4": 1112
+  Line 5: 1118
+  "Slicers & Dicers": 1201
+  To be Cleaved: 1202
+  "Piercers & Penetrators": 1203
+  To be Pierced: 1204
+  "Crushers & Breakers": 1205
+  To be Crushed: 1206
+  Repressed Wrath: 1301
+  Unbound Wrath: 1302
+  Emotional Repression: 1303
+  Addicting Lust: 1304
+  Tangling Lust: 1305
+  Emotional Seduction: 1306
+  Treadwheel Sloth: 1307
+  Inert Sloth: 1308
+  Emotional Indolence: 1309
+  Devoured Gluttony: 1310
+  Excessive Gluttony: 1311
+  Emotional Craving: 1312
+  Degraded Gloom: 1313
+  Sunk Gloom: 1314
+  Emotional Flood: 1315
+  Vain Pride: 1316
+  Tyrannical Pride: 1317
+  Emotional Subservience: 1318
+  Insignificant Envy: 1319
+  Pitiful Envy: 1320
+  Emotional Judgment: 1321
+  Burning Haze: 1401
+  Season of the Flame: 1402
+  Trickled Sanguine Blood: 1403
+  "Mountain of Corpses, Sea of Blood": 1404
+  Dizzying Waves: 1405
+  Abnormal Seismic Zone: 1406
+  Crushing External Force: 1407
+  Unrelenting Might: 1408
+  Sinking Pang: 1409
+  Sinking Deluge: 1410
+  Deep Sigh: 1411
+  Poised Breathing: 1412
+  Rising Power Supply: 1413
+  Thunder and Lightning: 1414
+  "Hell's Chicken": 1101
+  S.E.A.: 1102
+  Miracle in District 20: 1103
+  Yield My Flesh to Claim Their Bones: 1104
+  Timekilling Time: 1105
+  Murder on the WARP Express: 1106
+  The Noon of Violet: 1107
+  Full-Stopped by a Bullet: 1114
+  LCB Regular Check-up: 1115
+  Nocturnal Sweeping: 1117
+  "Walpurgis Night: Hatred and Despair": 1119
+  Spring Cultivation: 1121
+  The Dusk of Amber: 1124
+  Twining Threads: 1126
+  Mnestic Experience: 1128
+  Miracle in District 20 BokGak: 1113
+  Yield My Flesh to Claim Their Bones BokGak: 1116
+  Timekilling Time BokGak: 1120
+  Murder on the WARP Express BokGak: 1123
+  LCB Regular Check-up BokGak: 1125
+  Nocturnal Sweeping BokGak: 1127
+  "Who Couldn't be Bloodfiends": 1507
+  Blessed Carnival: 1514
+  The Master of La Manchaland: 1518
+
 event_packs:
   - "Hell's Chicken"
   - S.E.A.

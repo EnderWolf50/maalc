@@ -21,19 +21,20 @@
 | Cost 對照表與商店數字 | 節點 Cost 參考值（不用於辨識）、商店的刷新與治療判斷 | 開發者 | 有預設值 | #10、#12、#19 |
 | 事件表 `event_table.json` | 事件頁依選項的實際效果排序 | 開發者每季從拆包的客戶端資料重新產生（第 7 節） | 1.117.0 的 195 個事件 | #93 |
 | 觀測飾品表 `gift_search.json` 與圖示 `image/GiftSearch/<id>.png` | E.G.O Gift Search 頁找飾品（位置預測、圖示比對）；GUI 的飾品清單 | 開發者每季依遊戲客戶端的觀測表重新產生（產生方式寫在檔頭 `note` 與 [04-settings.md](04-settings.md) 第 9 節） | 這一季的 320 個，另有 5 個殘影圖示（9991–9995，#161） | #54 |
-| 合成飾品表 `gift_recipes.json` 與圖示 `image/GiftRecipe/<id>.png` | 飾品清單把合成品標成想要時，查它的配方與材料（固定配方、月之記憶的 N 選 K） | 開發者每季跑 `tools/gift_recipes.py`（中文名取自 LLC release）（用法寫在工具檔頭與 `note`，要 `bench` 號碼牌） | 這一季 60 個合成品（59 個固定配方共 67 條，月之記憶 1 條 N 選 K），其中 39 條固定配方（`isSpecific`）用到主題包專屬飾品，該合成品帶 `specific: true` 與 `packs`（那些主題包的 id，取自各包 `specificEgoGiftPool`）；另有 12 個 `gift_search.json` 沒有的材料，72 個圖示，中文名全齊 | #277、#286 |
-| 預設飾品清單 `gift_lists.yaml` 與 GUI 圖示 `gift_icons/<id>.webp` | 飾品清單的「預設」；GUI 顯示 397 個飾品的圖示（第 9 節） | 開發者每季確認 id 還在、重跑 `tools/gift_icons.py` | 預設清單 23 個想要、90 個保留；397 個圖示 | #291、#293 |
+| 合成飾品表 `gift_recipes.json` 與圖示 `image/GiftRecipe/<id>.png` | 飾品清單把合成品標成想要時，查它的配方與材料（固定配方、月之記憶的 N 選 K） | 開發者每季跑 `tools/gift_recipes.py`（中文名取自 LLC release）（用法寫在工具檔頭與 `note`，要 `bench` 號碼牌） | 這一季 60 個合成品（59 個固定配方共 67 條，月之記憶 1 條 N 選 K），其中 39 條固定配方（`isSpecific`）用到主題包專屬飾品，該合成品帶 `specific: true` 與 `packs`（那些主題包的 id，取自各包 `specificEgoGiftPool`）；另有 12 個 `gift_search.json` 沒有的材料，與 `extra_gifts`（遊戲資料 9000–9999 其餘有名字的 id，464 個減去商店、合成、殘影已列的，共 67 個：不賣、不當配方材料，逐格辨識當候選，飾品清單只能保留或不要；9247 不收：遊戲資料裡它是 LCB Regular Check-up 復刻組的一筆（暴怒、燒傷、III 階、售價 255），但英、日、韓、簡中語言檔與灰機 wiki 都沒有它的名字與圖示，候選表認不出它，#332），139 個圖示 | #277、#286、#332 |
+| 預設飾品清單 `gift_lists.yaml` 與 GUI 圖示 `gift_icons/<id>.webp` | 飾品清單的「預設」；GUI 顯示 464 個飾品的圖示（第 9 節） | 開發者每季確認 id 還在、重跑 `tools/gift_icons.py` | 預設清單 50 個想要、66 個保留；464 個圖示（含 67 個 `extra_gifts`） | #291、#293 |
 
 ## 2. 主題包方案
 
 **用途**：在主題包頁依每個主題包的分數（權重）挑選主題包。每隊選「預設」方案或使用者自己的方案。（#11、#19，2026-10-14 定案；#240 改成分數）
 
-**檔案**：`resource/base/data/theme_packs.yaml`，`packs` 是主題包清單（名稱 → 樓層），`event_packs` 是活動包，`default_plan` 是預設方案。（#25、#240）
+**檔案**：`resource/base/data/theme_packs.yaml`，`packs` 是主題包清單（名稱 → 樓層），`pack_ids` 是每個主題包的 id（名稱 → id），`event_packs` 是活動包，`default_plan` 是預設方案。（#25、#240、#306）
 
 **內容**：
 
-- 主題包清單：這一季所有主題包的英文名稱，用來和 OCR 讀到的卡片標題列比對；GUI 也用它列出可以標記的主題包。困難限定的主題包列在同一份清單裡（#11、#19）。每個名稱對到資料標的樓層，例如 `N12 H1` 是普通第 1–2 層、困難第 1 層；設定 GUI 用它篩選要顯示的主題包，分數本身不分難度與樓層。（#240）
-- 清單從遊戲客戶端的靜態資料產生（`mirrordungeon-theme-floor`，1.117.0 有 121 個）：收錄有普通或困難樓層的主題包；只出現在 Extreme 的、沒有樓層的不收。名稱照資料，實機看到的標題不同時以實機為準（目前只有 `Walpurgis Night: Hatred and Despair`，資料寫 `Hatred and Despair`）。檔頭寫來源與版本，每個名稱後的註解是 id 與樓層（N 普通、H 困難）。（#89，2026-10-18）
+- 主題包清單：這一季所有主題包的英文名稱，用來和 OCR 讀到的卡片標題列比對；GUI 也用它列出可以標記的主題包。困難限定的主題包列在同一份清單裡（#11、#19）。每個名稱對到資料標的樓層，是一個結構化的值（#387，使用者 2026-10-29 定案：最終目標是 15 層，所以格式先支援 6–15 層與 INFINITY／EXTREME）：`N`（普通）、`H`（困難）是樓層數字的清單（1–15 的整數、由小到大不重複），`I`（INFINITY）、`X`（EXTREME）是 `true`，表示該模式的每一層都會出現（遊戲資料的 INFINITY／EXTREME 條目沒有 `selectableFloors`），例如 `{N: [1, 2], H: [1]}` 是普通第 1–2 層、困難第 1 層。樓層是整數清單，不再拼成字串，所以 10 以上的層數不會黏在一起。設定 GUI 用 `N`、`H` 篩選要顯示的主題包（`I`、`X` 目前不進篩選與標籤），分數本身不分難度與樓層。（#240）
+- 清單從遊戲客戶端的靜態資料產生（`mirrordungeon-theme-floor`，1.117.0 有 121 個）：收錄有普通或困難樓層的主題包；只出現在 Extreme 的、沒有樓層的不收。名稱照資料，實機看到的標題不同時以實機為準（目前只有 `Walpurgis Night: Hatred and Despair`，資料寫 `Hatred and Despair`）。檔頭寫來源與版本，每個名稱的值是樓層（上一條的格式），名稱後的註解只寫 `DIFFICULT`（資料標為困難的包）。目前只填 `N`、`H`；INFINITY／EXTREME 的標記與 EXTREME 專用的 20 個包（id 1501–1520）留給 #387 的資料部分，在那之前它們仍不收。（#89，2026-10-18）
+- 主題包 id（#306）：`pack_ids` 是名稱 → id，收錄 `packs` 的每個名稱，另外在最後列出清單不收、但配方資料（`gift_recipes.json` 的 `packs`，用 id）還會提到的 3 個只在 Extreme 的包（1507、1514、1518）；6 個 BokGak 復刻版（1113、1116、1120、1123、1125、1127）是 `packs` 的獨立項目，id 在 `pack_ids` 同一處。名稱照資料（`EN_MirrorDungeonTheme-1`）。Agent 用它把選走的主題包名稱換成 id，GUI 用它把配方的 `packs` 顯示成名稱（找不到才顯示 `#id`）。換季檢查：`tests/test_gift_recipes.py` 檢查 `packs` 的每個名稱都有 id、id 不重複、配方 `packs` 的每個 id 都在 `pack_ids` 裡（換季新增的包 id 沒補會在這裡失敗），有解包的遊戲資料時再核對每個 id 的名稱（`1119` 的名稱是實機讀到的，資料不同，例外）。
 - 復刻版（資料的 `bokgak`，1.117.0 有 6 個：`Miracle in District 20`、`Yield My Flesh to Claim Their Bones`、`Timekilling Time`、`Murder on the WARP Express`、`LCB Regular Check-up`、`Nocturnal Sweeping` 各一個，id 1113、1116、1120、1123、1125、1127，都在困難第 4–5 層）：卡面是原包的標題，下面多一行小字 `BokGak`，boss 圖不同（1113 另有 Long Battle 疊圖，`isShowBaton`）。清單收成獨立的包，名稱是原包名加 ` BokGak`（資料的名稱），不是活動包；預設方案的分數和原包相同（AALC 的片段在復刻版的標題裡一樣找得到原包）。比對時復刻版的名稱不參加標題比對和關鍵字（它包含原包的整個名稱），任何一條路認出原包、而卡片文字裡有 `BokGak` 時，就換成那個包的復刻版（`run_start.rerun_copy`）；沒有 `BokGak` 的卡是原包；標題都讀不到時，復刻版的封面（boss 圖不同）也認得出它。2026-10-22 的 112 頁裡 8 張復刻版卡加上 `tests/screens/ThemePackRefresh0`、`1` 的 2 張，`BokGak` 每次都讀得完整（有時接在標題行尾，例如 `Express BokGak`）。使用者自己的方案沒有列復刻版時，復刻版用方案的「沒列出的包」分數（設定 GUI 顯示的也是這個），不沿用原包的分數。（2026-10-25）
 - 活動包：資料裡 `unlockCode` 為 9xxx 的 22 個主題包是活動劇情通關後永久加入的，其中 15 個出現在一般鏡牢，另列在 `event_packs`，用英文名稱辨認。只在第 5 層出現的是 `Spring Cultivation`、`Twining Threads`、`Mnestic Experience`。（#89，2026-10-18 定案）
   - 怎麼認出活動包（#240 調查，2026-10-22）：9xxx 是 `unlockcode-subchapter` 裡的 `SUBCHAPTER_CLEAR`，也就是某段活動劇情（間章、Walpurgis Night 各期）通關後解鎖。Walpurgis Night 的每一期各有自己的解鎖碼（`walpu2`…`walpu8`）和自己的主題包名稱，所以清單逐包列名稱，不靠 `Walpurgis Night` 這個字。靜態資料（`mirrordungeon-theme-floor`、`mirror-dungeon-common-data`、`main-event`、`event`）沒有限時或「目前活動」欄位，資料只分得出「活動劇情包」，分不出「這一期正在開的活動包」。實機卡片也沒有專屬外框或標記（`captures/177_f3_theme_pack.png`，登錄在 [captures-2026-10-13.md](captures-2026-10-13.md)，截圖留在本機：`Walpurgis Night: Hatred and Despair` 的卡和一般主題包同一種卡框）。使用者說明（2026-10-22）：活動進行期間，活動包固定出現在第 5 層最左邊（AALC 也看這個位置）；已結束的活動包和一般主題包一樣，這張截圖的第 3 層就是這種情形。所以活動卡包設定只看第 5 層最左邊那張，並且只在它是活動劇情包或資料檔沒收錄的包時才套用（[03](03-decisions.md#6-主題包) 第 6 節）。
@@ -208,13 +209,13 @@ Boss 的 Cost 是遊戲資料 `mirror-dungeon-common-data-md8.json` 的 BOSS cos
 新一季鏡牢開始時，開發者依序：
 
 1. 更新主題包清單（含樓層），並提供這一季的預設主題包方案。使用者方案裡沒有的新主題包自動用方案的「沒列出的包」分數，不必改設定檔。（#11、#19、#240）
-   - 重產卡片縮圖：先把新版客戶端的 `UnityCache`、APK 玩家資料（`apk-data/assets/bin/Data`）、靜態資料與英文在地化拆到 `.local/unpack/`（見 `docs/agents/local-dev.md`），再 `uv run python tools/live/queue.py run --resource bench --name theme_covers -- uv run --group unpack python tools/theme_pack_covers.py --contact-sheet <檔名>.png`（要 `bench` 號碼牌，讀 12 GB bundle 與玩家資料）。工具依 `theme_packs.yaml` 每行註解的 id 找資料，印出 `no cover:` 的包（新包沒有封面時 GUI 顯示名稱）；卡片零件的精靈圖名稱或尺寸對不上時直接報錯，表示客戶端改了圖集編號，要重讀卡片 prefab（`MirrorDungeonThemeCardUI`，在 `sharedassets7`）。`tests/test_theme_pack_covers.py` 檢查每個包都有檔、寬度和總量。（#241）
+   - 重產卡片縮圖：先把新版客戶端的 `UnityCache`、APK 玩家資料（`apk-data/assets/bin/Data`）、靜態資料與英文在地化拆到 `.local/unpack/`（見 `docs/agents/local-dev.md`），再 `uv run python tools/live/queue.py run --resource bench --name theme_covers -- uv run --group unpack python tools/theme_pack_covers.py --contact-sheet <檔名>.png`（要 `bench` 號碼牌，讀 12 GB bundle 與玩家資料）。工具依 `theme_packs.yaml` 的 `pack_ids` 找資料，印出 `no cover:` 的包（新包沒有封面時 GUI 顯示名稱）；卡片零件的精靈圖名稱或尺寸對不上時直接報錯，表示客戶端改了圖集編號，要重讀卡片 prefab（`MirrorDungeonThemeCardUI`，在 `sharedassets7`）。`tests/test_theme_pack_covers.py` 檢查每個包都有檔、寬度和總量。（#241）
    - 重產卡片縮圖之後，再跑 `uv run python tools/theme_pack_signatures.py` 更新 `theme_pack_signatures.json`（只讀縮圖，不需要遊戲檔）；`tests/test_pack_cover.py` 檢查檔案和縮圖一致。新一季的 `NOT_TITLE`、關鍵字和 cover 效果用 `uv run python tools/pack_stats.py <截圖資料夾> --glob "*raw*.png"` 重跑（離線 OCR）。（#274）
 2. 更新試煉風險表。（#17）
 3. 檢查選路權重、Cost 對照表與商店數字是否仍符合遊戲。（#10、#12）
 4. 依上一季的記錄補充事件覆寫表。（#11）
 5. 拆包新版客戶端，重跑 `events_md8.py`（換成這一季的鏡牢編號）與 `tools/event_table.py` 更新事件表，NOTICE.md 的版本一併更新。（#93）
-   - 重產合成飾品表：`uv run python tools/live/queue.py run --resource bench --name gift_recipes -- uv run --group unpack python tools/gift_recipes.py`（用法見工具檔頭）。（#277）
+   - 重產合成飾品表（連 `extra_gifts`；換季先看遊戲資料 9000–9999 的飾品 id 有沒有新增，重產後 `tests/test_gift_cells.py` 會對照）：`uv run python tools/live/queue.py run --resource bench --name gift_recipes -- uv run --group unpack python tools/gift_recipes.py`（用法見工具檔頭）。（#277）
    - 更新中文名：`uv run --group unpack python tools/llc_text.py --release <LLC 最新 release>`，改寫 `gift_search.json`、`gift_recipes.json`、`gui/src/graces.json` 的中文名與星之恩惠效果文字，並記下所用 release；NOTICE.md 的 release 一併更新。（#280）
    - 預設飾品清單：確認 `gift_lists.yaml` 的 id 都還在 `gift_search.json`、`gift_recipes.json`、殘影裡（`tests/test_gift_lists.py` 會檢查，也檢查內容符合第 9 節）；重產 GUI 圖示：`uv run python tools/live/queue.py run --resource bench --name gift_icons -- uv run --group unpack python tools/gift_icons.py`。（#293）
 6. 重截約 20 個關鍵畫面加進測試，跑 `maa-tools test`；分數餘裕小於 0.05 的節點標出來檢查。（#13）
@@ -226,11 +227,11 @@ Boss 的 Cost 是遊戲資料 `mirror-dungeon-common-data-md8.json` 的 BOSS cos
 
 **用途**：設定的飾品清單（[04-settings.md](04-settings.md)，#291）有一份唯讀的「預設」，使用者只能複製；設定 GUI 的飾品格要顯示每個飾品的圖示。（#291、#293）
 
-**預設清單**：`resource/base/data/gift_lists.yaml` 的 `default_list`，欄位同設定檔 v11 `gift_lists[]` 的一項去掉 `id`、`name`（格式由 #292 寫進 04-settings.md）（`order`、`want`、`keep`、`gorder`、`fusion_condition`）。內容照原本的預設隊伍轉過來（使用者 2026-10-23 決定）：
+**預設清單**：`resource/base/data/gift_lists.yaml` 的 `default_list`，欄位同設定檔 v14 `gift_lists[]` 的一項去掉 `id`、`name`（格式由 #292 寫進 04-settings.md）（`order`、`want`、`keep`、`gorder`、`fusion_condition`）。預設清單只保留無體系飾品，其他由使用者自己設定（使用者 2026-10-30 決定：「預設清單應該只放 keywordless，其他由 user 設定」；無體系「先做成保留就好」；同一天又決定「把需合成的無體系改回想要」，再決定「照你的建議，預設的想要只加無體系」：加上主題包專屬飾品池裡、商店有賣的無體系飾品）。2026-10-23 到 10-30 它是原本的預設隊伍轉成的清單：想要 Burn 在商店買得到的 22 個與月之記憶。
 
 - `order`：Gift Search 頁的分頁順序，Burn 第一、`Keywordless` 最後。
-- `want`：Burn 在商店買得到的 22 個（I–III 階）與月之記憶（9083），共 23 個。
-- `keep`：所有無體系飾品，共 90 個：`gift_search.json` 的 82 個、`gift_recipes.json` 其餘 3 個無體系合成品、5 個殘影（9991–9995）。無體系飾品一律 `keep`：不賣，也不當合成材料。
-- 其餘是 `drop`。`gorder`：每個體系 III、II、I 階，階內照 `gift_search.json` 的順序。`fusion_condition`：`any`。
+- `want`，50 個：先是 `gift_recipes.json` 裡無體系的 4 個合成品，再是主題包專屬飾品池裡商店有賣的 46 個無體系飾品。飾品池來自解包的 `mirrordungeon-theme-floor-*.json` 各主題包的 `specificEgoGiftPool`（1.117.0，所有包合起來 180 個，無體系 53 個；另外 7 個 9208、9209、9246、9752、9754、9758、9797 是 `extra_gifts`，不能標想要，留在 `keep`）。解包資料不在 repo 也不在 CI 上，所以 `tests/test_gift_lists.py` 直接列出這 46 個 id 核對。4 個合成品：V 階的月之記憶 9083、9249 A Small, Lovely Violin、9764 Gift、9780 High-risk Operational Gear。商店會買它們缺、商店有賣的材料（9249：9706、9707、9431；9764：9762、9763；9780：9778、9779；三個都是主題包專屬，只在本局拉到它們的主題包時才買；Agent 中途重啟、主題包不知道時照樣買，使用者 2026-10-30 決定：寧願多花錢，也不要錯過。這些材料除了 9706（Tremor）都在 46 個想要裡，所以本來就照想要買；只有 9706 是為了合成品買的），材料湊齊就合成，標「保留」的材料也會用掉；月之記憶的 10 個材料商店不賣，不買。Burn 和其他體系一樣是 `drop`。
+- `keep`：其餘的無體系飾品，共 66 個：`gift_search.json` 的另外 36 個、29 個無體系 `extra_gifts`、月之殘影（9995）。不賣，一般合成也不用（想要的合成品可以用）。月之殘影是 V 階，本來就永遠不當合成材料，所以保留；殘影 I–IV（9991–9994）是 `drop`，讓用預設清單的隊伍照舊把它們當合成材料（出售仍看隊伍的「可以出售殘影」）。（#292，使用者 2026-10-23 決定；2026-10-30 接受 115 → 116）
+- 其餘是 `drop`。月之記憶的 10 個材料（殘片、記憶）與 9706（Tremor）被想要的合成品鎖住，合成品到手後解鎖。`gorder`：每個體系 III、II、I 階，階內照 `gift_search.json` 的順序。`fusion_condition`：`any`。
 
-**圖示**：`resource/base/data/gift_icons/<id>.webp` 與 `index.json`（`{id: 檔名}`），由 `tools/gift_icons.py` 產生。涵蓋 `gift_search.json` 的 320 個、`gift_recipes.json` 的 60 個合成品與 12 個材料、5 個殘影，共 397 個。圖示取自遊戲的 EgoGiftIcon 精靈圖，保留透明，縮成 56 px（最長邊）、WebP quality 72；整批 574,696 位元組，平均約 1.4 KB。`image/GiftSearch/`、`image/GiftRecipe/` 的綠底模板是 Agent 比對用，不動。`tests/test_gift_lists.py` 檢查預設清單的 id 與內容、圖示齊全與總量。（#293）
+**圖示**：`resource/base/data/gift_icons/<id>.webp` 與 `index.json`（`{id: 檔名}`），由 `tools/gift_icons.py` 產生。涵蓋 `gift_search.json` 的 320 個、`gift_recipes.json` 的 60 個合成品、12 個材料與 67 個 `extra_gifts`、5 個殘影，共 464 個，GUI 清單全部列出（`extra_gifts` 只能保留或不要）。圖示取自遊戲的 EgoGiftIcon 精靈圖，保留透明，縮成 56 px（最長邊）、WebP quality 72；整批 674,532 位元組，平均約 1.45 KB。`image/GiftSearch/`、`image/GiftRecipe/` 的綠底模板是 Agent 比對用，不動。`tests/test_gift_lists.py` 檢查預設清單的 id 與內容、圖示齊全與總量。（#293）

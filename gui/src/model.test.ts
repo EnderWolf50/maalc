@@ -1,26 +1,35 @@
 // The click rules of the team page's sinner grid and starlight cards.
 import { expect, test } from "vitest";
 import {
-  SEARCH_GIFTS, SEARCH_TABS, buyOrder, clickCard, clickEnhance, enhanceAll, gracePrice, lanesOf, lineAt, newPackPlan, newSettings,
-  floorBadges, onFloor, selectAll, starlightCost, toggleGift, toggleSinner, weightOf, type StarlightValues,
+  FUSION_CONDITIONS, GIFT_KEYWORDS, SEARCH_GIFTS, SEARCH_TABS, buyOrder, clickCard, clickEnhance, defaultGorder, enhanceAll, exportGiftList, gracePrice,
+  importGiftList, lanesOf, lineAt, newPackPlan, newSettings, newTeam, floorBadges, onFloor, selectAll, starlightCost, toggleGift, toggleSinner,
+  weightOf, type GiftList, type StarlightValues,
 } from "./model";
+import { validate } from "./validate";
 
 test("a pack shows on the floors the data file gives it", () => {
-  expect(onFloor("N12 H1", "", 0)).toBe(true);
-  expect(onFloor("N12 H1", "normal", 2)).toBe(true);
-  expect(onFloor("N12 H1", "hard", 2)).toBe(false);
-  expect(onFloor("H345", "normal", 0)).toBe(false); // HARD only
-  expect(onFloor("H345", "", 4)).toBe(true);
+  expect(onFloor({ N: [1, 2], H: [1] }, "", 0)).toBe(true);
+  expect(onFloor({ N: [1, 2], H: [1] }, "normal", 2)).toBe(true);
+  expect(onFloor({ N: [1, 2], H: [1] }, "hard", 2)).toBe(false);
+  expect(onFloor({ H: [3, 4, 5] }, "normal", 0)).toBe(false); // HARD only
+  expect(onFloor({ H: [3, 4, 5] }, "", 4)).toBe(true);
+  // #387: two-digit floors are their own floor, not the digits of one
+  expect(onFloor({ H: [10, 11] }, "hard", 1)).toBe(false);
+  expect(onFloor({ H: [10, 11] }, "hard", 11)).toBe(true);
+  expect(onFloor({ H: [10, 11] }, "", 15)).toBe(false);
+  expect(onFloor({ I: true, X: true }, "", 0)).toBe(false); // INFINITY and EXTREME are no difficulty of the filter
 });
 
 test("a pack's floors become badges: ranges for runs, the rest listed, only the difficulties it has", () => {
-  expect(floorBadges("N12 H1", "、")).toEqual([{ hard: false, text: "1–2" }, { hard: true, text: "1" }]);
-  expect(floorBadges("H13", "、")).toEqual([{ hard: true, text: "1、3" }]); // one difficulty, a gap
-  expect(floorBadges("H345", "、")).toEqual([{ hard: true, text: "3–5" }]);
-  expect(floorBadges("N124 H5", "、")).toEqual([{ hard: false, text: "1–2、4" }, { hard: true, text: "5" }]);
-  expect(floorBadges("N5", "、")).toEqual([{ hard: false, text: "5" }]);
-  expect(floorBadges("N45 H34", ", ")).toEqual([{ hard: false, text: "4–5" }, { hard: true, text: "3–4" }]);
-  expect(floorBadges("", "、")).toEqual([]);
+  expect(floorBadges({ N: [1, 2], H: [1] }, "、")).toEqual([{ hard: false, text: "1–2" }, { hard: true, text: "1" }]);
+  expect(floorBadges({ H: [1, 3] }, "、")).toEqual([{ hard: true, text: "1、3" }]); // one difficulty, a gap
+  expect(floorBadges({ H: [3, 4, 5] }, "、")).toEqual([{ hard: true, text: "3–5" }]);
+  expect(floorBadges({ N: [1, 2, 4], H: [5] }, "、")).toEqual([{ hard: false, text: "1–2、4" }, { hard: true, text: "5" }]);
+  expect(floorBadges({ N: [5] }, "、")).toEqual([{ hard: false, text: "5" }]);
+  expect(floorBadges({ N: [4, 5], H: [3, 4] }, ", ")).toEqual([{ hard: false, text: "4–5" }, { hard: true, text: "3–4" }]);
+  expect(floorBadges({ H: [9, 10, 11, 13] }, "、")).toEqual([{ hard: true, text: "9–11、13" }]); // #387: floors 6-15
+  expect(floorBadges({ I: true, X: true }, "、")).toEqual([]); // not a difficulty of the filter either
+  expect(floorBadges({}, "、")).toEqual([]);
 });
 
 test("lanes are the weights in use and 0, highest first; the line sits under the lanes at or over the threshold", () => {
@@ -144,8 +153,69 @@ test("a new settings file forfeits a run whose wipe retries ran out instead of s
   expect(newSettings().run.after_retries).toBe("forfeit");
 });
 
+const SHARED: GiftList = {
+  id: "g1", name: "Fire", order: GIFT_KEYWORDS, want: [9053], keep: [9071], gorder: { Burn: [9071, 9053] }, fusion_condition: "tier4",
+};
+
+test("the default gorder lists a keyword's buyable gifts tier III first, in data-file order", () => {
+  const burn = defaultGorder().Burn;
+  expect(burn).toHaveLength(22);
+  expect(burn.slice(0, 2)).toEqual([9053, 9071]);
+  expect(Object.keys(defaultGorder())).toEqual(GIFT_KEYWORDS);
+});
+
+test("a gift list exports without its id and imports as a new list that passes the checks", () => {
+  const text = exportGiftList(SHARED);
+  expect(JSON.parse(text)).toEqual({ name: "Fire", order: GIFT_KEYWORDS, want: [9053], keep: [9071], gorder: { Burn: [9071, 9053] }, fusion_condition: "tier4" });
+  const { list, skipped } = importGiftList(text, ["Fire（匯入）"], "（匯入）");
+  expect(skipped).toBe(0);
+  expect(list.name).toBe("Fire（匯入） 2");
+  expect(list.id).not.toBe("g1");
+  expect(list.fusion_condition).toBe("tier4");
+  expect(list.gorder.Burn.slice(0, 2)).toEqual([9071, 9053]);
+  expect(list.gorder.Bleed).toEqual(defaultGorder().Bleed);
+  const s = newSettings();
+  s.gift_lists.push(list);
+  s.teams.push({ ...newTeam(1, "T"), gift_list: list.id });
+  expect(validate(s)).toEqual([]);
+});
+
+test("every fusion condition survives an export and an import", () => {
+  for (const fusion_condition of FUSION_CONDITIONS) {
+    expect(importGiftList(exportGiftList({ ...SHARED, fusion_condition }), [], "").list.fusion_condition).toBe(fusion_condition);
+  }
+  expect(FUSION_CONDITIONS).toEqual(["any", "upgrade", "tier4"]);
+});
+
+test("an import skips bad ids and falls back to the defaults", () => {
+  const messy = JSON.stringify({
+    name: "X", order: ["Burn"], want: [9053, 9053, 12345, "9071", 1.5], keep: [9053, 9071, 9991, 77], gorder: { Burn: "no", Fire: [1] },
+    fusion_condition: "aggressive",
+  });
+  const { list, skipped } = importGiftList(messy, [], "（匯入）");
+  expect(list.name).toBe("X（匯入）");
+  expect(list.order).toEqual(GIFT_KEYWORDS); // not all 11 keywords once
+  expect(list.want).toEqual([9053]); // the repeat, an unknown id and the ones that are not ids go
+  expect(list.keep).toEqual([9071, 9991]); // a wanted gift is not kept too
+  expect(skipped).toBe(4); // "9071" and 1.5 are not ids, 12345 and 77 are no gift
+  expect(list.fusion_condition).toBe("any");
+  expect(list.gorder.Burn).toEqual(defaultGorder().Burn);
+  expect(Object.keys(list.gorder)).toEqual(GIFT_KEYWORDS);
+});
+
+test("an import of something that is not a gift list throws", () => {
+  expect(() => importGiftList("{", [], "")).toThrow();
+  expect(() => importGiftList("[1]", [], "")).toThrow("not a gift list");
+  expect(() => importGiftList("null", [], "")).toThrow("not a gift list");
+});
+
 test("a new settings file wins one EXP Luxcavation and three Thread Luxcavations, the dailies a day needs (#362)", () => {
   const { exp, thread } = newSettings().luxcavation;
   expect([exp.count, thread.count]).toEqual([1, 3]);
   expect([exp.consecutive, thread.consecutive]).toEqual([true, true]); // #375: on by default
+});
+
+test("a new team does not refresh the shop until the user sets a limit (the user, 2026-10-30)", () => {
+  const team = newTeam(1, "T");
+  expect([team.shop_refresh_keyword, team.shop_refresh_normal]).toEqual([0, 0]);
 });

@@ -3,6 +3,7 @@
 actions.py reads the shop pages and taps; everything here is plain data in, plain data out.
 """
 
+from difflib import SequenceMatcher
 from itertools import combinations
 
 import numpy as np
@@ -69,7 +70,7 @@ def forecast_tier(image):
     """The tier (1-4) the fuse page's Forecasts row predicts, or None (no numeral: no material in, or the row is covered).
 
     The row's numeral is the cells' (numeral), 19 px tall, its top and bottom rows found from its own yellow. Live
-    2026-10-23: I, II and IV on a shop's and a Super Shop's page, IV on a fixed recipe's (tests/shop, ShopFuseRecipe).
+    2026-10-23: I, II and IV on a shop's and a Super Shop's page, IV and III on a fixed recipe's (tests/shop, tests/screens ShopFuseRecipe, ShopFuseRecipeTwo).
     """
     x, y, w, h = FORECAST_NUMERAL
     mask = yellow(image[y:y + h, x:x + w])
@@ -116,8 +117,8 @@ def read_slots(results):
     lines = [(t, x + w // 2, y + h // 2, h) for t, (x, y, w, h) in results]
     slots = []
     for t, x, y, h in sorted(lines, key=lambda line: (line[2] // 40, line[1])):
-        if h < 18 or has_letters(t):
-            continue  # tier numerals on the icons read as short lines
+        if (h < 18 and sum(c.isdigit() for c in t) < 3) or has_letters(t):
+            continue  # tier numerals on the icons read as short lines; a price read 17 px tall (Burning Intellect's 141, #341) has 3 digits
         near = [(u, uy) for u, ux, uy, _ in lines if abs(ux - x) < 75 and u != t]
         name = next((u for u, uy in near if 10 < uy - y < 40), "")
         if name and not has_letters(name):
@@ -175,6 +176,12 @@ def buyable(slot, cost=None):
     return cost is None or slot["price"] <= cost
 
 
+def same_offer(a, b):
+    """Whether two reads of the offer grid are one offer: the same column and price, and a name that differs by a misread letter at most."""
+    return (abs(a["x"] - b["x"]) < 30 and a["price"] == b["price"]
+            and SequenceMatcher(None, a["name"].lower(), b["name"].lower()).ratio() >= 0.8)
+
+
 def on_sale(slot):
     """Whether a shop slot is a gift on sale for Cost, affordable or not: not bought, not a skill, not "??"."""
     name = slot["name"]
@@ -182,14 +189,14 @@ def on_sale(slot):
 
 
 def buy_plan(offers, cost, reserve, sold):
-    """(grid indexes to buy, last first; the wanted price or None) for the main-keyword offers on show (#76).
+    """(grid indexes to buy, last first; the wanted price or None) for the offers on show the gift list wants (#298).
 
-    offers: [(grid index, tier or None, price)]. Highest tier first, cheapest first within a tier, each only
-    while the reserve stays. When the first choice is too dear and no sale has been tried for it, nothing is
+    offers: [(grid index, place in the buy queue, price)]. The queue's order, cheapest first for one gift on show twice,
+    each only while the reserve stays. When the first choice is too dear and no sale has been tried for it, nothing is
     bought: wanted asks the next round to sell first. Bought from the back, a purchase (moved to the grid's
     end) leaves the offers before it in place, so the grid is read once.
     """
-    order = sorted(offers, key=lambda o: (-(o[1] or 0), o[2]))
+    order = sorted(offers, key=lambda o: o[1:])
     if order and not sold and not can_spend(cost, order[0][2], reserve):
         return [], order[0][2]
     picked = []
@@ -200,16 +207,14 @@ def buy_plan(offers, cost, reserve, sold):
     return sorted(picked, reverse=True), None
 
 
-def refresh_choice(cost, reserve, used, limit, normal_fee, keyword_fee, margin):
+def refresh_choice(cost, reserve, used, limits, normal_fee, keyword_fee, margin):
     """"keyword", "normal" or None: the refresh to use now (spec 03 section 13).
 
-    Keyword refresh first, then normal; either one only while it leaves margin plus the reserve
-    to buy with, and only limit times per shop (both kinds count).
+    Keyword refresh first, then normal; either one only while it leaves margin plus the reserve to buy with, and only as
+    many times per shop as its own count in `limits` allows ({"keyword": n, "normal": n}, the team's; `used` counts alike).
     """
-    if used >= limit:
-        return None
     for kind, fee in (("keyword", keyword_fee), ("normal", normal_fee)):
-        if fee is not None and can_spend(cost, fee + margin, reserve):
+        if used[kind] < limits[kind] and fee is not None and can_spend(cost, fee + margin, reserve):
             return kind
     return None
 
@@ -247,23 +252,6 @@ def to_sell(spare, wanted, cost, reserve, first=()):
     if not can_spend(cost, wanted, reserve):
         return None
     return sorted(picked, reverse=True)  # selling from the back keeps the earlier cells in place
-
-
-def gift_role(keyword, gift, kept, avoid=(), material=()):
-    """"keep", "material" or "unknown" for an owned gift read off its grid cell, on the fuse and the sell page.
-
-    keyword: its badge's keyword, "Keywordless" with no badge, None when the badge is cut off or unread;
-    gift: the gift its icon matched (an observed, a kept, an avoided one or a vestige), or None; kept: the keywords
-    the team keeps (kept_keywords: the main one, the ones it names and "Keywordless" unless it lets them go, #77).
-    Kept too: the gifts whose icon matched (observed #103, #112, or named in keep_gifts #77); a gift in avoid (#90) or
-    material (the vestiges the team lets go, #161) is material whatever its keyword. No badge and no icon matched is a
-    keywordless gift (the user, #161). Unknown, a cut-off or unread badge, is neither fused nor sold.
-    """
-    if gift in avoid or gift in material:
-        return "material"
-    if gift or keyword in kept:
-        return "keep"
-    return "unknown" if keyword is None else "material"
 
 
 SHOP_TITLE = (190, 108, 130, 30)  # x, y, w, h: the title on the main page's plate, top left
@@ -305,7 +293,7 @@ def pick_fusion(materials, slots, thresholds, points, first=(), condition="any",
     this shop; points: {tier: a material's points}. Each fusion takes 3 to slots materials: the group giving the
     highest tier, then holding the most of first (gifts the team avoids, #90), then worth the fewest points; then
     again from what is left, until fewer than 3 are. A tier V gift is never a material (MAX_MATERIAL_TIER).
-    condition (the team's fusion_condition, #263) keeps out the groups fusion_wanted refuses: the best of the rest is
+    condition (the gift list's fusion_condition, #263) keeps out the groups fusion_wanted refuses: the best of the rest is
     made, and none when no group is left. "any" puts the groups that upgrade (user, 2026-10-23) ahead of that order.
     refused: [tuple of sorted tiers] the groups the page's own forecast turned down (#285): the result depends on the
     materials' tiers only, so no group of those tiers is picked again.

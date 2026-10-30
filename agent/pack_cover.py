@@ -8,13 +8,12 @@ the picture and the title, so covers with the same picture (The Outcast and The 
 import base64
 import json
 from functools import lru_cache
-from pathlib import Path
 
 import numpy as np
 
-ROOT = Path(__file__).resolve().parent.parent
-# as actions.RESOURCE: resource/ sits under <root> in a release, under assets/ in the repo (#323)
-SIGNATURES = next(p for p in (ROOT / "resource", ROOT / "assets" / "resource") if p.is_dir()) / "base" / "data" / "theme_pack_signatures.json"
+from settings import data_dir
+
+SIGNATURES = data_dir() / "theme_pack_signatures.json"  # (#323)
 ART = (0.05, 0.18, 0.95, 0.62)  # the part of a card that is its picture (left, top, right, bottom as shares): below the
 # search button and warning mark, above the logo and the title
 BANDS = ((ART[1], ART[3], 16), (0.74, 0.90, 6))  # top, bottom (shares, ART's left and right) and rows of each part of a

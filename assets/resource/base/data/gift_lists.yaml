@@ -1,14 +1,21 @@
 # The default gift list (docs/spec/05-game-data.md section 9; #291, #293): the fields of a settings `gift_lists[]` entry without
 # `id` and `name`. Read-only for users, who copy it to make their own. Developer-maintained, checked every season.
 #
-# Content (the user, 2026-10-23): the former default team turned into a list. `want`: every Burn gift the shop sells (tiers I-III)
-# and Lunar Memory (9083); `keep`: every Keywordless gift (the 82 of gift_search.json, the other Keywordless fusion gifts, the 5
-# vestiges 9991-9995); all others are `drop`. `order`: the Gift Search page's tab order. `gorder`: per keyword tier III, II, I,
-# inside a tier in the order of gift_search.json. tests/test_gift_lists.py derives all of it from the data files.
+# Content (the user, 2026-10-30: "the default list only holds the Keywordless gifts; the user sets the rest"; then "want the
+# Keywordless gifts that need a fusion again"; then "as you suggest, the default wants add Keywordless gifts only"): `want`, 50:
+# gift_recipes.json's 4 Keywordless fusion gifts (Lunar Memory 9083, 9249, 9764, 9780), so the shop buys the materials it sells
+# for them and fuses them, kept materials too; then the 46 Keywordless gifts the shop sells that a theme pack's own pool holds
+# (specificEgoGiftPool of the game's mirrordungeon-theme-floor-* data, 1.117.0: 180 gifts in all, 53 Keywordless; the other 7
+# are extra_gifts, which cannot be wanted, so they stay kept). `keep`: every other Keywordless gift (of gift_search.json, then
+# gift_recipes.json's Keywordless extra_gifts, #332; Lunar Vestige 9995), 66; all others are `drop`, Burn too, and vestiges
+# I-IV (9991-9994), so they stay fusion materials (Lunar Vestige, tier V, never is one).
+# Until 2026-10-30 the list was the former default team (the user, 2026-10-23). `order`: the Gift Search page's tab order
+# (Burn first, so the main keyword stays Burn). `gorder`: per keyword tier III, II, I, inside a tier in the order of
+# gift_search.json. tests/test_gift_lists.py derives all of it from the data files.
 default_list:
   order: [Burn, Bleed, Tremor, Rupture, Sinking, Poise, Charge, Slash, Pierce, Blunt, Keywordless]
-  want: [9053, 9071, 9104, 9701, 9772, 9774, 9776, 9215, 9240, 9243, 9282, 9001, 9009, 9034, 9103, 9155, 9156, 9819, 9003, 9087, 9101, 9102, 9083]
-  keep: [9011, 9014, 9022, 9038, 9058, 9067, 9068, 9076, 9154, 9188, 9189, 9190, 9191, 9419, 9420, 9431, 9433, 9703, 9705, 9711, 9727, 9748, 9749, 9763, 9766, 9778, 9779, 9781, 9794, 9805, 9219, 9273, 9276, 9284, 9006, 9007, 9025, 9026, 9036, 9037, 9039, 9077, 9078, 9079, 9080, 9153, 9185, 9186, 9187, 9414, 9423, 9427, 9435, 9439, 9707, 9712, 9723, 9733, 9751, 9753, 9755, 9757, 9801, 9810, 9811, 9769, 9760, 9813, 9826, 9266, 9285, 9002, 9004, 9010, 9017, 9021, 9028, 9035, 9040, 9732, 9762, 9225, 9249, 9764, 9780, 9991, 9992, 9993, 9994, 9995]
+  want: [9083, 9249, 9764, 9780, 9219, 9225, 9266, 9273, 9276, 9284, 9285, 9414, 9419, 9420, 9423, 9427, 9431, 9433, 9435, 9439, 9703, 9705, 9707, 9711, 9712, 9723, 9727, 9732, 9733, 9748, 9749, 9751, 9753, 9755, 9757, 9760, 9762, 9763, 9766, 9769, 9778, 9779, 9781, 9794, 9801, 9805, 9810, 9811, 9813, 9826]
+  keep: [9011, 9014, 9022, 9038, 9058, 9067, 9068, 9076, 9154, 9188, 9189, 9190, 9191, 9006, 9007, 9025, 9026, 9036, 9037, 9039, 9077, 9078, 9079, 9080, 9153, 9185, 9186, 9187, 9002, 9004, 9010, 9017, 9021, 9028, 9035, 9040, 9995, 9081, 9082, 9084, 9085, 9207, 9208, 9209, 9227, 9228, 9229, 9230, 9231, 9232, 9241, 9242, 9246, 9250, 9752, 9754, 9758, 9797, 9799, 9800, 9830, 9831, 9832, 9833, 9834, 9835]
   gorder:
     Burn: [9053, 9071, 9104, 9701, 9772, 9774, 9776, 9215, 9240, 9243, 9282, 9001, 9009, 9034, 9103, 9155, 9156, 9819, 9003, 9087, 9101, 9102]
     Bleed: [9042, 9048, 9109, 9160, 9404, 9437, 9438, 9714, 9842, 9843, 9206, 9221, 9234, 9236, 9005, 9020, 9029, 9108, 9159, 9413, 9415, 9704, 9739, 9744, 9205, 9222, 9223, 9237, 9262, 9268, 9275, 9008, 9089, 9106, 9107, 9192]
