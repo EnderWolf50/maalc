@@ -35,7 +35,9 @@ This repo is public. Issue, PR and commit text describes evidence by its content
 - Review standards: `CODING_STANDARDS.md`.
 - Pipeline JSON under `assets/resource/base/pipeline/` allows whole-line `//` comments, so `json.load` fails on it; drop those lines first, as `tests/test_pipeline.py` does.
 
-### CI
+### Review and CI
+
+Whoever writes a change runs the `code-review` skill (Standards + Spec) on it after committing and before the push, with fixed point `origin/<base>` and the issue or brief as the spec, and fixes its findings before pushing; a later push that adds commits reviews them first, with fixed point `origin/<branch>`. CI then runs on reviewed code, and a merge starts no review round.
 
 A PR merges on a green `ci-ok`. When CI does not start, say so and wait; a local check does not replace it.
 
