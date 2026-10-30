@@ -63,4 +63,4 @@ SOFTWARE.
 
 - [MXU](https://github.com/MistEO/MXU) v2.7.1 的 `mxu.exe`，採 [AGPL-3.0](https://www.gnu.org/licenses/agpl-3.0.html) 授權，授權全文在 zip 內的 `LICENSE-MXU`。對應原始碼：<https://github.com/MistEO/MXU/tree/v2.7.1>。
 - [Python](https://www.python.org/) 3.12.10 embeddable package（`python/`），採 PSF License，授權全文在 `python/LICENSE.txt`；`python/Lib/site-packages/` 內的套件各依其授權。
-- [MaaFramework](https://github.com/MaaXYZ/MaaFramework)（`maafw/` 與 `maafw` 套件），採 LGPL-3.0 授權。例外：`maafw/MaaFramework.dll` 是修改過的版本（v5.14.3 加上批次 OCR 細條修正與每個任務的節點詳情上限），對應原始碼：<https://github.com/EnderWolf50/MaaFramework/tree/v5.14.3-maalc.3>。
+- [MaaFramework](https://github.com/MaaXYZ/MaaFramework)（`maafw/` 與 `maafw` 套件），採 LGPL-3.0 授權。例外：`maafw/MaaFramework.dll` 是修改過的版本（v5.14.3 加上批次 OCR 細條修正與每個任務的節點詳情上限），對應原始碼：<https://github.com/EnderWolf50/MaaFramework/tree/v5.14.3-maalc.4>。
