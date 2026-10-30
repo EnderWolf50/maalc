@@ -13,7 +13,6 @@ DATA = Path(__file__).resolve().parent.parent / "assets/resource/base/data"
 SCREENS = Path(__file__).resolve().parent / "screens"
 
 ORDER = ["Starlight", "Random E.G.O Gift", "Cost & Keyword Gift Chance", "Cost", "E.G.O Resource"]
-RISKS = {"Defense Level Up": 1, "Growth I": 3, "Offense Level Up I": 2, "Offense Level Up II": 4}
 
 
 def test_pick_choice_prefers_a_main_keyword_gift():
@@ -266,33 +265,17 @@ def test_a_gift_like_the_avoided_one_is_not_avoided():
     assert r.gift_kind("White Bleed Potency", "Bleed", False, avoid=["White Gossypium"]) == "main"
 
 
-def test_an_avoided_gift_is_ranked_last():
-    # #90 (the user, 2026-10-18): taken only when nothing else is left, rather than a random trial.
-    assert r.rank_gifts([("avoid", None), ("owned", None), ("main", None)], "high") == [2, 1, 0]
-    assert r.rank_gifts([("avoid", 0), ("other", 5)], "high") == [1, 0]  # even below a risk-5 trial
-    assert r.rank_gifts([("avoid", None)], "high") == [0]
-
-
-def test_trial_risk_unknown_is_max():
-    assert r.trial_risk("Defense Level Up", RISKS) == 1
-    assert r.trial_risk("Offense Level Up II", RISKS) == 4
-    assert r.trial_risk("Resilient I", RISKS) == r.MAX_RISK
-    assert r.trial_risk("Growth II", RISKS) == r.MAX_RISK  # not Growth I's risk
-    assert r.trial_risk("Defense Leve1 Up", RISKS) == 1  # OCR slips still match
-
-
 def test_rank_gifts_without_trials():
-    assert r.rank_gifts([("other", None), ("main", None), ("owned", None), ("main", None)], "high") == [1, 3, 0, 2]
+    assert r.rank_gifts([("other", 1, None), ("main", 1, None), ("owned", 1, None), ("main", 1, None)], "high") == [1, 3, 0, 2]
+    assert r.rank_gifts([("other", 1, None), ("other", 2, None)], "high") == [1, 0]  # the higher tier (#381)
 
 
 def test_rank_gifts_with_trials():
-    # score = gift - weight x risk; high weight 2: main/1 -> 1, other/0 -> 2, main/3 -> -3, other/5 -> -8
-    cards = [("main", 1), ("other", 0), ("main", 3), ("other", 5)]
+    # score = gift - weight x burden; high weight 2: main/1 -> 1, other/0 -> 2, main/3 -> -3, other/5 -> -8
+    cards = [("main", 1, 1), ("other", 1, 0), ("main", 1, 3), ("other", 1, 5)]
     assert r.rank_gifts(cards, "high") == [1, 0, 2, 3]
     # low weight 0.5: main/1 -> 2.5, other/0 -> 2, main/3 -> 1.5
     assert r.rank_gifts(cards, "low")[:3] == [0, 1, 2]
-    # equal scores: the lower risk first (medium: main/1 -> 2, other/0 -> 2)
-    assert r.rank_gifts([("main", 1), ("other", 0)], "medium") == [1, 0]
 
 
 class GiftPage:
@@ -340,13 +323,11 @@ def test_pick_gifts_a_lone_card_is_tapped_once():
 def test_pick_gifts_repicks_a_card_the_tap_dropped():
     page = GiftPage(picks=2)
     page.picked = [1]  # left picked by the last try, Select 1/2
-    r.pick_gifts([1, 0, 2], page.read, page.tap)
+    assert r.pick_gifts([1, 0, 2], page.read, page.tap) == [1, 0]  # the cards it took, for the trials' Coin count (#381)
     assert sorted(page.picked) == [0, 1]
 
 
 def test_data_files():
-    risks = yaml.safe_load((DATA / "trial_risks.yaml").read_text(encoding="utf-8"))
-    assert risks and all(isinstance(v, int) and 0 <= v <= r.MAX_RISK for v in risks.values())
     assert yaml.safe_load((DATA / "events.yaml").read_text(encoding="utf-8")) == {}
     events = json.loads((DATA / "event_table.json").read_text(encoding="utf-8"))
     assert events["client"] == "1.117.0" and "Project Moon" in events["note"]

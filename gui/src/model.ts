@@ -422,9 +422,18 @@ const MIGRATIONS: Record<number, (d: Record<string, unknown>) => Record<string, 
       return { shop_refresh_keyword: limit, shop_refresh_normal: 0, ...rest };
     }) : d.teams,
   }),
+  // Version 16 scores trials in pt, 1 pt = the enemy's Clash Power +1 (#381): a 0-5 risk of trial_risk_overrides means
+  // nothing on that scale, so the list is emptied and counted. A team's own trial_risk_weight stays.
+  15: (d) => {
+    if (!Array.isArray(d.trial_risk_overrides) || !d.trial_risk_overrides.length) return d;
+    v15Trials = d.trial_risk_overrides.length;
+    return { ...d, trial_risk_overrides: [] };
+  },
 };
 /** The version 10 keep_gifts the last migration found no gift for (parseSettings returns it). */
 let v10Dropped = 0;
+/** The version 15 trial risk overrides the last migration emptied (parseSettings returns it). */
+let v15Trials = 0;
 
 const MARK_WEIGHTS: Record<string, number> = { prefer: 5, neutral: 0, avoid: -5 };
 
@@ -437,18 +446,20 @@ function withTeamDefault(d: Record<string, unknown>, field: Record<string, unkno
 }
 
 /** Parse a settings file; an older version is migrated and the caller writes it back (spec 04 section 2). */
-export function parseSettings(text: string): { data: Settings; migrated: boolean; dropped: number; unknown: number } {
+export function parseSettings(text: string): { data: Settings; migrated: boolean; dropped: number; unknown: number; trials: number } {
   let data = JSON.parse(text);
   let version = data?.version;
   if (!Number.isInteger(version)) throw new Error(`version must be an integer, got ${JSON.stringify(version)}`);
   if (version > VERSION) throw new Error(`settings version ${version} is newer than this GUI supports (${VERSION}); update maalc`);
   const migrated = version < VERSION;
   v10Dropped = 0;
+  v15Trials = 0;
   for (; version < VERSION; version++) {
     if (!MIGRATIONS[version]) throw new Error(`settings version ${version} cannot be migrated`);
     data = { ...MIGRATIONS[version](data), version: version + 1 };
   }
   const dropped = v10Dropped;
+  const trials = v15Trials;
   const lists = Array.isArray(data.gift_lists) ? data.gift_lists : [];
   let unknown = 0; // ids in a list that no data file has (a new season): dropped, the caller warns
   data = {
@@ -460,5 +471,5 @@ export function parseSettings(text: string): { data: Settings; migrated: boolean
       return cleaned.list;
     }),
   };
-  return { data, migrated, dropped, unknown };
+  return { data, migrated, dropped, unknown, trials };
 }

@@ -66,7 +66,7 @@ function asV13() {
 }
 
 test("parseSettings refuses newer and unmigratable versions", () => {
-  expect(() => parseSettings('{"version": 16}')).toThrow("newer");
+  expect(() => parseSettings('{"version": 17}')).toThrow("newer");
   expect(() => parseSettings('{"version": 0}')).toThrow("cannot be migrated");
 });
 
@@ -168,6 +168,25 @@ test("version 14's shop refresh limit becomes as many keyword refreshes and no n
   expect(data.teams.map((t) => [t.shop_refresh_keyword, t.shop_refresh_normal])).toEqual([[3, 0], [0, 0]]);
   for (const t of data.teams) expect(t).not.toHaveProperty("shop_refresh_limit");
   expect(validate(data)).toEqual([]);
+});
+
+test("version 15's 0-5 trial risks are emptied and counted, the team's own weight kept (#381)", () => {
+  const old = structuredClone(cases.valid) as unknown as { version: number; teams: Record<string, unknown>[]; trial_risk_overrides: unknown[] };
+  old.version = 15;
+  old.teams[0].trial_risk_weight = "high";
+  old.trial_risk_overrides = [{ trial: "Growth I", risk: 3 }, { trial: "Growth II", risk: 0 }];
+  const { data, migrated, trials } = parseSettings(JSON.stringify(old));
+  expect(migrated).toBe(true);
+  expect(trials).toBe(2);
+  expect(data.trial_risk_overrides).toEqual([]);
+  expect(data.teams[0].trial_risk_weight).toBe("high");
+  expect(validate(data)).toEqual([]);
+  expect(parseSettings(JSON.stringify({ ...old, trial_risk_overrides: [] })).trials).toBe(0);
+  expect(parseSettings(JSON.stringify(cases.valid)).trials).toBe(0);
+});
+
+test("a new team weighs trials medium (#381)", () => {
+  expect(newTeam(1, "隊伍 1").trial_risk_weight).toBe("medium");
 });
 
 test("version 12 fights the Luxcavation wins as Consecutive Battles, a switch each task keeps as it was set (#375)", () => {

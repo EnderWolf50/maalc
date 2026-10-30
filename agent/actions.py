@@ -36,6 +36,7 @@ import settlement
 import shop
 from gifts import effective, main_keyword, purchases, recipe_fusion, resolve_list, state
 from ocrtext import compact, digits, floor_number, has, normalize
+from settings import NOTES as settings_notes
 from settings import SettingsError, data_dir, gift_tables, load_settings, vestige_ids
 from state import next_cursor, pick_team, read_cursor, write_cursor
 
@@ -1304,6 +1305,8 @@ class PlanRun(CustomAction):
         except SettingsError as e:
             log(f"stop: {e}")
             return False
+        for note in settings_notes:  # what migrating an older file dropped (it stays on disk until the GUI saves it)
+            log(note)
         if not any(t["enabled"] for t in settings["teams"]):
             return finish(context, "no enabled team")
         hsv_v = screen(context)[285:297].max(axis=2)  # V of HSV
@@ -3483,7 +3486,12 @@ GIFT_CARDS = [100, 150, 1080, 410]  # 1-4 cards; on the boss page the Mounting T
 GIFT_COUNT = [1060, 555, 160, 50]  # "Select 0/2"; no count with one card
 GIFT_SELECT = (1138, 579)
 REFUSE_GIFT = [870, 560, 160, 40]
-TRIAL_NAME_Y = (440, 475)  # top of the trial name line; the effect line under it starts ~485
+# A boss card's trial half, around the card's centre x: the Enemy Level Up badge's "+N" at its left (from x - 103), the
+# trial's icon, its name, then its effect line, wrapped to two or three lines (tests/screens/BossGiftTrials*.png, #381).
+TRIAL_HALF = (-125, 438, 250, 105)  # x from the centre, y, w, h
+TRIAL_NAME_FOOT = 470  # a name's box starts above it, an effect line's below (444-451 and 475+ on 16 cards)
+TRIAL_BADGE_X = -60  # a "+N" box starts left of the centre by more (-103 on 16 cards); the name's by at most 24
+ROMAN = ("I", "II", "III", "IV", "V")
 
 
 def gift_count(context, image=None):
@@ -3491,12 +3499,45 @@ def gift_count(context, image=None):
     return (int(m[1]), int(m[2])) if m else None
 
 
+def gift_tier(image, x):
+    """The tier (1-5) of the gift card centred at x, from the yellow numeral over its icon (shop.numeral), or None (#381).
+
+    The numeral is 17 px tall, its top at y 212 on a boss page and 220 on a fight's, 26 px wide at most left of the
+    centre (I-III at x - 13 to x - 9 on 17 captures); the icon's own yellow sits right of it. Its strokes are counted as
+    shop.tier counts a cell's: 2 px under the top and 3 over the foot.
+    """
+    mask = shop.yellow(image[203:250, x - 26:x + 2])
+    rows = np.flatnonzero(mask.any(axis=1))
+    return shop.numeral(mask, rows[0] + 2, rows[0] + 14) if len(rows) >= 8 else None
+
+
+def trial_card(context, image, x):
+    """(Enemy Level Up N or None, the trial name's OCR, its effect line's OCR) of the boss gift card centred at x (#381).
+
+    One OCR over the card's trial half (TRIAL_HALF): the whole page's misses badges (none of BossGiftTrials.png's 3);
+    the half's read all 16 badges, names and effect lines of the boss captures. A wrapped effect line joins top to bottom.
+    The icon reads as one or two stray letters ("X", "0x"): no name is that short.
+    """
+    dx, y, w, h = TRIAL_HALF
+    level, name, line = None, [], []
+    for t, (bx, by, _, _) in sorted(ocr(context, image, [x + dx, y, w, h]), key=lambda r: (r[1][1], r[1][0])):
+        badge = re.fullmatch(r"\+\s*(\d)", t.strip())
+        if badge and bx < x + TRIAL_BADGE_X:
+            level = int(badge[1])
+        elif by >= TRIAL_NAME_FOOT:
+            line.append(t)
+        elif len(compact(t)) >= 3 and not has(t, "Mounting"):
+            name.append(t)
+    return level, " ".join(name), " ".join(line)
+
+
 @AgentServer.custom_action("PickGift")
 class PickGift(CustomAction):
     """Gift choice after a fight, an event or a boss: best cards until Select n/m is full, then Select (spec 03 section 12).
 
-    Cards are main keyword > other > owned; when Mounting Trials hang under them (after a boss),
-    each scores gift - weight x trial risk. Refuse Gift is never pressed: it hands out random trials.
+    Cards are main keyword > other > owned, a higher tier first; when Mounting Trials hang under them (after a boss),
+    each scores gift - weight x (trial + level x Enemy Level Up N), the trial told from the pool of the floor just
+    cleared (data/trials.yaml, #381). Refuse Gift is never pressed: it hands out random trials.
     A gift the team avoids (#90) comes last: taken only when nothing else fills the count.
     """
 
@@ -3515,28 +3556,48 @@ class PickGift(CustomAction):
             if abs(centres[i] - x - w // 2) < 130 and not has(t, "Acquire"):
                 lines[i].append((y, t))
         trials = any(has(t, "Mounting") for t, _ in results)
-        risks = data("trial_risks.yaml") | {o["trial"]: o["risk"] for o in run["settings"]["trial_risk_overrides"]}
+        table = data("trials.yaml")
+        # The pool of the floor just cleared; every trial when the floor is unknown (the agent restarted mid-run).
+        pool = rewards.trials_of(table, run.get("floor")) or rewards.trials_of(table, None)
+        overrides = {o["trial"]: o["risk"] for o in run["settings"]["trial_risk_overrides"]}
+        scores = rewards.scores(pool, table["model"], run.get("trial_coins", 0), overrides)
         avoid = [g["name"] for g in avoided_gifts(run["team"])]
-        cards = []
-        for card in lines:
+        cards, shown, names = [], [], []
+        for x, card in zip(centres, lines):
             gift = " ".join(t for y, t in card if y < 410)
             owned = any(compact(t) == "owned" for _, t in card)
-            names = [t for y, t in card if TRIAL_NAME_Y[0] <= y < TRIAL_NAME_Y[1]]
-            risk = min((rewards.trial_risk(t, risks) for t in names), default=rewards.MAX_RISK) if trials else None
-            cards.append((rewards.gift_kind(gift, run["team"]["keyword"], owned, avoid), risk))
+            kind, tier = rewards.gift_kind(gift, run["team"]["keyword"], owned, avoid), gift_tier(image, x)
+            name, trial, note = None, "", ""
+            if trials:
+                level, read, line = trial_card(context, image, x)
+                name, how = rewards.read_trial(read, line, pool)
+                score = scores[name] if name else max(scores.values())  # unread: the pool's worst
+                cards.append((kind, tier, rewards.burden(score, level, table["model"])))
+                trial = f"/{name or '?'} +{'?' if level is None else level} score {score:g}"
+                if not name or compact(read) != compact(name):  # the name read is not the trial's: what was, for the log
+                    note = f" ({f'by its {how}' if how else 'unread: the pool worst'}, read {read!r} / {line!r})"
+            else:
+                cards.append((kind, tier, None))
+            names.append(name)
+            shown.append(kind + trial + (f" tier {ROMAN[tier - 1]}" if tier else "") + note)
         ranked = rewards.rank_gifts(cards, run["team"]["trial_risk_weight"])
-        log("gifts: " + ", ".join(k + ("" if r is None else f"/risk {r}") for k, r in cards) + f": order {ranked}")
+        log("gifts: " + ", ".join(shown) + f": order {ranked}")
 
         def pick(i):
             before = gift_count(context, page_guard(context, "GiftChoice"))
             tap(context, centres[i], 300, wait=0)
             until(context, lambda im: gift_count(context, im) != before, timeout=1.5)
 
-        rewards.pick_gifts(ranked, lambda: gift_count(context), pick)
+        taken = rewards.pick_gifts(ranked, lambda: gift_count(context), pick)
         for _ in range(3):
             page_guard(context, "GiftChoice")
             tap(context, *GIFT_SELECT, wait=0)
             if until(context, lambda im: not has(text(context, im, REFUSE_GIFT), "Refuse")) is not None:
+                # The run's Coin Power units so far, for the budget of pools past early_pools (spec 03 section 12)
+                coins = sum(table["trials"][names[i]]["effects"].get("coin", 0) for i in taken if names[i])
+                if coins:
+                    RUN["trial_coins"] = run.get("trial_coins", 0) + coins
+                    log(f"trials: {RUN['trial_coins']} Coin Power units this run")
                 return True
         return stuck("Select did not take the gifts")
 

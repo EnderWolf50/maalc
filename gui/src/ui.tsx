@@ -50,6 +50,20 @@ export function Num({ value, min, max, disabled, onChange }: {
   );
 }
 
+/** A number with decimals (#381). A text field: a number field's value reads "" on the way from "0" to "0.5", which React
+ * would write back. Each text that reads as a number of at least `min` is the value; leaving the field shows the value again. */
+export function Decimal({ value, min, onChange }: { value: number; min: number; onChange: (v: number) => void }) {
+  const [text, setText] = useState<string | null>(null); // null: not being typed in, the value shows
+  return (
+    <input type="text" inputMode="decimal" className="decimal" value={text ?? String(value)} onBlur={() => setText(null)}
+      onChange={(e) => {
+        setText(e.target.value);
+        const v = Number(e.target.value);
+        if (e.target.value.trim() !== "" && Number.isFinite(v) && v >= min) onChange(v);
+      }} />
+  );
+}
+
 /** A switch with its number (#137): off is null and greys the number out; switched on, it starts at `on`. */
 export function ToggleNum({ label, path, value, on, min, max, note, onChange }: {
   label: string; path: string; value: number | null; on: number; min: number; max?: number; note?: string;

@@ -28,7 +28,7 @@ button.icon { padding: 0 6px; border-color: transparent; background: none; }
 select, input:not([type="checkbox"]) {
   border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; background: var(--panel); min-width: 0;
 }
-input[type="number"] { width: 7em; }
+input[type="number"], input.decimal { width: 7em; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
 header {
@@ -89,7 +89,7 @@ table { border-collapse: collapse; background: var(--panel); }
 th, td { text-align: left; padding: 3px 8px; border-bottom: 1px solid var(--line); }
 th { font-size: 12px; color: var(--muted); font-weight: 500; }
 table.overrides { width: 100%; margin-bottom: 8px; }
-table.overrides input:not([type="number"]) { width: 100%; }
+table.overrides input:not([type="number"]):not(.decimal) { width: 100%; }
 
 .load-error { padding: 24px; }
 .team { display: flex; flex-direction: column; gap: 14px; }

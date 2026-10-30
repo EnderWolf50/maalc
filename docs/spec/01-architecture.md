@@ -8,7 +8,7 @@
 - 需要判斷的選擇必須寫成 Agent 的 custom action 或 custom recognition，包括地圖節點、飾品、主題包、商店、星光、獎勵卡、事件選項、Boss 後的選擇、戰前的出戰順序。（#8、#9、#11、#17）
 - 不採用把整局寫在程式碼迴圈裡的做法（MaaLimbus、AALC）。理由見 [ADR 0002](../adr/0002-pipeline-hub-and-agent-decisions.md)。（#8）
 - 使用者設定由設定 GUI 寫進 `<root>/config/settings.json`，Agent 在任務開始時讀取並檢查；PI 不帶使用者選項（[ADR 0006](../adr/0006-settings-gui-writes-one-settings-file.md)）。格式見 [04-settings.md](04-settings.md)。（#6、#19，2026-10-14 定案）
-- 遊戲資料（主題包清單與預設主題包方案、事件覆寫表、尋路權重、Cost 對照表與商店數字、試煉風險表）放在 `resource/base/data/` 的 YAML 資料檔，由 Agent 讀取（[ADR 0005](../adr/0005-game-data-files-separate-from-user-settings.md)）。格式見 [05-game-data.md](05-game-data.md)。（#11、#12、#17、#19）
+- 遊戲資料（主題包清單與預設主題包方案、事件覆寫表、尋路權重、Cost 對照表與商店數字、試煉表）放在 `resource/base/data/` 的 YAML 資料檔，由 Agent 讀取（[ADR 0005](../adr/0005-game-data-files-separate-from-user-settings.md)）。格式見 [05-game-data.md](05-game-data.md)。（#11、#12、#17、#19）
 - Windows 上，`tools/install.py` 組出的 `install/maafw/` 用 `maafw` wheel 的檔案，只把 `MaaFramework.dll` 換成 fork（EnderWolf50/MaaFramework）的修改版；MXU 與 `tools/live/bot.py`（設 `MAAFW_BINARY_PATH`）載入這份，其他直接 `import maa` 的程式（測試、離線工具）載入的仍是 wheel 原版。fork 是 wheel 那一版加上兩個修正：批次 OCR 裡被 roi 切掉一半以上高度的字框，改由那個 roi 自己跑一次 det+rec，不再切成細條重讀（上游 MaaXYZ/MaaFramework#1568，修正 PR 為 MaaXYZ/MaaFramework#1573）；每個任務只保留最後 200 個節點的詳情（上游 MaaXYZ/MaaFramework#1578）。`MAAFW_FIX` 釘下載網址與 SHA-256，`MAAFW_FIX_VERSION` 是它對應的 wheel 版本，wheel 版本不符時安裝中止；對應原始碼見 [NOTICE.md](../../NOTICE.md)。等 maafw 正式版同時包含這兩個修正，就拿掉 fork、改回 wheel 的 DLL。（#157、#176）
 
 | 層 | 負責 | 不負責 |
@@ -183,7 +183,7 @@
       - **事件**：事件覆寫表有列出就照表，否則用通用規則。（#11）
       - **商店**：先治療，再循環「出售 → 購買與刷新 → 合成」，直到一整圈沒有動作或跑滿 10 圈。（#10、#19）
    4. **Boss**：Boss 只在它是唯一可走的節點時才走；每層 Boss 前一定有一家商店。（#12）
-   5. **Boss 後選擇**：依「飾品分數 − 權重 × 試煉風險」評分，困難取前兩名（`Select 0/2`）；1.117.0 實機在普通局也看到這一頁（未見官方公告，待確認）（`Select 0/1`），規則相同（#28）。Super Shop 和一般商店同一套流程。（#17）實機：Boss 打完先出獎勵卡頁，再出 4 欄「飾品＋試煉」的選擇頁（`Select 0/2`），選完直接進入下一層的主題包頁，所有罪人 HP 回滿。（實機：captures/115_boss_unknown.png、captures/122_boss_gift_trials_page.png、captures/127_after_boss_gifts.png）
+   5. **Boss 後選擇**：依「飾品分數 − 權重 ×（試煉分 + 0.5 × Enemy Level Up）」評分（#381），困難取前兩名（`Select 0/2`）；1.117.0 實機在普通局也看到這一頁（未見官方公告，待確認）（`Select 0/1`），規則相同（#28）。Super Shop 和一般商店同一套流程。（#17）實機：Boss 打完先出獎勵卡頁，再出 4 欄「飾品＋試煉」的選擇頁（`Select 0/2`），選完直接進入下一層的主題包頁，所有罪人 HP 回滿。（實機：captures/115_boss_unknown.png、captures/122_boss_gift_trials_page.png、captures/127_after_boss_gifts.png）
    6. 進入下一層，回到第 6.1 步。
 7. **結算（Exploration Reward）**：依下面的[結算規則](#結算規則)處理。（#9、#17、#19）
 8. **領到獎勵**：Claim 完成後，輪替游標前進到下一支隊伍，寫一行 `runs.jsonl`，回到入口頁開下一局。2026-10-15 實機：第 5 層 Boss 後依序是通關畫面（`Victory`）→ Exploration Complete 摘要 → Exploration Reward 視窗；Claim 後經載入畫面回到主畫面，再由導航回到入口頁。（#8、#14、#30）
