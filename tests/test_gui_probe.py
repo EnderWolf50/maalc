@@ -52,6 +52,28 @@ def test_prepare_root_twice_replaces_the_root_and_leaves_the_assets_alone(tmp_pa
     assert (assets / "resource" / "keep.txt").read_text() == "x"
 
 
+def test_prepare_root_refuses_an_existing_folder_it_did_not_make(tmp_path):
+    exe = tmp_path / "built.exe"
+    exe.write_bytes(b"MZ")
+    foreign = tmp_path / "home"
+    foreign.mkdir()
+    (foreign / "precious.txt").write_text("keep")
+    with pytest.raises(gp.ForeignRoot):
+        gp.prepare_root(exe, foreign, "x", fake_assets(tmp_path))
+    assert (foreign / "precious.txt").read_text() == "keep"
+
+
+def test_main_exits_1_and_deletes_nothing_for_a_root_without_the_marker(tmp_path, capsys):
+    exe = tmp_path / "built.exe"
+    exe.write_bytes(b"MZ")
+    foreign = tmp_path / "home"
+    foreign.mkdir()
+    (foreign / "precious.txt").write_text("keep")
+    assert gp.main(["--exe", str(exe), "--root", str(foreign)]) == 1
+    assert (foreign / "precious.txt").exists()
+    assert gp.MARKER in capsys.readouterr().err
+
+
 @windows_only
 def test_wait_for_window_returns_the_window_of_the_process_with_the_title():
     proc = subprocess.Popen([sys._base_executable, "-c", WINDOW, "gui-probe-test"])

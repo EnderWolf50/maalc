@@ -43,7 +43,9 @@ STRANDED_MIN = 60  # minutes a holder may sit after its bot ended before the tic
 # `result_available` is task_status's workState for a task with a result and no live child work; `working` and
 # `waiting_for_children` are not listed on purpose: a finished turn with live child work is not done.
 FINISHED = {"result_available", "completed", "complete", "succeeded", "success", "done"}
-FAILED = {"failed", "error", "errored", "interrupted", "cancelled", "canceled", "rate_limited", "overloaded"}
+FAILED = {"failed", "error", "errored", "interrupted", "rate_limited", "overloaded"}
+TASK_KEYS = ("done|", "failed|", "cancelled|")  # the `reported` keys that belong to a listed task
+CANCELLED = {"cancelled", "canceled"}  # stopped on purpose by the coordinator: reported once, never resumed
 RESUME_MSG = ("You were interrupted. Run `uv run python tools/live/queue.py resume --task {task}` and "
               "`queue.py status`, read .local/scratch/{task}/next.md, and continue from there; never start a second hold or bot.")
 
@@ -146,6 +148,9 @@ def tick(rows: list[Row], statuses: dict[str, str], queue_text: str, ci_json: st
         if s in FINISHED:
             fire(f"done|{r.key()}", f"FINISHED {r.label}: relay its result to the user, decisions first, then "
                                     f"`uv run python tools/live/watchdog.py done {r.label}`")
+        elif s in CANCELLED:
+            fire(f"cancelled|{r.key()}", f"CANCELLED {r.label}: stopped on purpose, not resumed; the coordinator decides, "
+                                         f"and `uv run python tools/live/watchdog.py done {r.label}` drops the line")
         elif s in FAILED:
             fire(f"failed|{r.key()}|{hour}", f"FAILED {r.label} ({s}) with no result: resume it once with t3_thread_send "
                  f"(mode auto, clientRequestId resume-{r.label}-{hour}), message: "
@@ -153,7 +158,12 @@ def tick(rows: list[Row], statuses: dict[str, str], queue_text: str, ci_json: st
     for name, mins in stranded_holders(queue_text):
         if mins > STRANDED_MIN:
             owner = next((r for r in rows if r.task == name or r.label == name), None)
-            who = f"tell {owner.label} to resume (as for FAILED)" if owner else "its owner is not in the list: report it to the user"
+            if owner is None:
+                who = "its owner is not in the list: report it to the user"
+            elif statuses.get(owner.key(), "").lower() in CANCELLED:
+                who = f"{owner.label} was cancelled on purpose, do not resume it: the coordinator releases the hold"
+            else:
+                who = f"tell {owner.label} to resume (as for FAILED)"
             fire(f"stranded:{name}", f"STRANDED holder {name}: bot ended {mins} min ago, no done file; {who}")
     try:
         runs = json.loads(ci_json) if ci_json.strip() else []
@@ -170,7 +180,7 @@ def tick(rows: list[Row], statuses: dict[str, str], queue_text: str, ci_json: st
             events.append(f"MAIN GREEN again at {sha}")
             state["main_red"] = False
     # forget what belongs to tasks that left the list (an id can come back), keep holder and CI keys
-    reported = {k for k in reported if not k.startswith(("done|", "failed|")) or k.split("|")[1] in live}
+    reported = {k for k in reported if not k.startswith(TASK_KEYS) or k.split("|")[1] in live}
     state["reported"] = sorted(reported)
     return events, state
 

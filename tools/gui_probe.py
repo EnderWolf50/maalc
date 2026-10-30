@@ -8,7 +8,8 @@ unless `--settings` names a file) and links `assets/` beside it, which `load_the
 `install/` is never touched. The app stays running: stop it by the pid printed.
 
 Prints one JSON line `{"pid", "hwnd", "title", "rect": [left, top, right, bottom], "width", "height", "root"}` when the
-window shows. Exits 1 and kills the process when no window of the exe with that title shows within `--timeout`.
+window shows. Exits 1 and kills the process when no window of the exe with that title shows within `--timeout`, and exits 1 before
+starting anything when `--root` exists without the marker file the probe writes (the folder is not deleted).
 """
 import argparse
 import json
@@ -21,6 +22,11 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
 EXE_NAME = "maalc-gui.exe"
+MARKER = ".gui-probe-root"  # written when the probe makes a root: only a folder that has it is replaced
+
+
+class ForeignRoot(Exception):
+    """`--root` exists and the probe did not make it."""
 
 
 def link_dir(link: Path, target: Path):
@@ -49,11 +55,15 @@ def demo_settings() -> str:
 
 
 def prepare_root(exe: Path, root: Path, settings_text: str, assets: Path = REPO / "assets") -> Path:
-    """`root` holding a copy of `exe`, config/settings.json and a link to `assets`; an existing root is replaced. Returns the copied exe."""
-    unlink_dir(root / "assets")  # the link goes first: rmtree must never follow it into the repo
+    """`root` holding a copy of `exe`, config/settings.json and a link to `assets`; a root the probe made earlier is replaced. Returns the copied exe.
+    Raises `ForeignRoot`, deleting nothing, when `root` exists without the marker file."""
     if root.exists():
+        if not (root / MARKER).is_file():
+            raise ForeignRoot(f"{root} exists and has no {MARKER} marker: not made by this probe, so not deleted")
+        unlink_dir(root / "assets")  # the link goes first: rmtree must never follow it into the repo
         shutil.rmtree(root)
     (root / "config").mkdir(parents=True)
+    (root / MARKER).write_text("made by tools/gui_probe.py\n", encoding="utf-8")
     copied = root / EXE_NAME
     shutil.copy2(exe, copied)
     (root / "config" / "settings.json").write_text(settings_text, encoding="utf-8")
@@ -105,14 +115,18 @@ def stop(proc: subprocess.Popen):
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--exe", type=Path, required=True)
-    ap.add_argument("--root", type=Path, required=True, help="throwaway folder the exe is copied into (replaced if it exists)")
+    ap.add_argument("--root", type=Path, required=True, help="throwaway folder the exe is copied into (replaced only if the probe made it: it holds a marker file)")
     ap.add_argument("--settings", type=Path, help="settings.json to start with (default: the `valid` case of tests/settings_cases.json)")
     ap.add_argument("--title", default="maalc")
     ap.add_argument("--timeout", type=float, default=30)
     args = ap.parse_args(argv)
 
     text = args.settings.read_text(encoding="utf-8") if args.settings else demo_settings()
-    exe = prepare_root(args.exe, args.root, text)
+    try:
+        exe = prepare_root(args.exe, args.root, text)
+    except ForeignRoot as e:
+        print(e, file=sys.stderr)
+        return 1
     proc = subprocess.Popen([str(exe)], cwd=args.root)
     hit = wait_for_window(proc, args.title, args.timeout)
     if not hit:
