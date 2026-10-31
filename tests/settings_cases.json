@@ -41,7 +41,7 @@
     "trial_risk_overrides": [{"trial": "Growth I", "risk": 3}]
   },
   "valid": {
-    "version": 16,
+    "version": 17,
     "language": "zh_tw",
     "run": {
       "difficulty": "auto", "runs": null, "weekly_bonus_use": "hard", "weekly_bonus_amount": "all",
@@ -65,7 +65,7 @@
         "id": "a", "name": "Team a", "enabled": true, "game_team": 1, "usage": "any", "hard_from_floor": 1,
         "deployment_order": {"plan": "d1"}, "starlight": {"plan": "s1"}, "theme_pack_plan": "p1",
         "reward_cards": ["Starlight", "Random E.G.O Gift", "Cost & Keyword Gift Chance", "Cost", "E.G.O Resource"],
-        "shop_refresh_keyword": 2, "shop_refresh_normal": 1, "heal": "revive", "reserve_cost": 0, "min_alive": 0, "guard_turns": 0, "trial_risk_weight": "high",
+        "shop_refresh_keyword": 2, "shop_refresh_normal": 1, "heal": "revive", "reserve_cost": 0, "min_alive": 0, "guard_turns": 0,
         "gift_search": {"enabled": false, "gifts": []}, "allow_white_gossypium": true,
         "gift_list": "g1", "sell_max_tier": 4, "sell_vestiges": false
       },
@@ -75,7 +75,7 @@
         "starlight": {"custom": {"levels": ["base", "plus", "plus2", "none", "none", "none", "none", "none", "none", "none"], "priority": [10, 9, 8, 7, 6, 5, 4, 3, 2, 1], "convert_leftover": true}},
         "theme_pack_plan": "default",
         "reward_cards": ["Cost", "Starlight", "Random E.G.O Gift", "Cost & Keyword Gift Chance", "E.G.O Resource"],
-        "shop_refresh_keyword": 0, "shop_refresh_normal": 0, "heal": "none", "reserve_cost": 50, "min_alive": 3, "guard_turns": 3, "trial_risk_weight": "low",
+        "shop_refresh_keyword": 0, "shop_refresh_normal": 0, "heal": "none", "reserve_cost": 50, "min_alive": 3, "guard_turns": 3,
         "gift_search": {"enabled": true, "gifts": [{"keyword": "Bleed", "tier": 3, "name": "Smokes and Wires"}, {"keyword": "Bleed", "tier": 1, "name": "Layered Bandages"}]},
         "allow_white_gossypium": false, "gift_list": "default", "sell_max_tier": 5, "sell_vestiges": true
       }

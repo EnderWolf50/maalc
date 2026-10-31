@@ -20,7 +20,7 @@
     "charge_enkephalin"
   ],
   "properties": {
-    "version": { "const": 16 },
+    "version": { "const": 17 },
     "language": { "enum": ["zh_tw", "en_us"], "default": "zh_tw" },
     "run": {
       "type": "object",
@@ -148,7 +148,6 @@
           "reserve_cost",
           "min_alive",
           "guard_turns",
-          "trial_risk_weight",
           "gift_search",
           "allow_white_gossypium",
           "gift_list",
@@ -227,11 +226,6 @@
             "description": "fewer alive is handled like used-up wipe retries (run.after_retries); 0: no check"
           },
           "guard_turns": { "type": "integer", "minimum": 0, "maximum": 5, "default": 0 },
-          "trial_risk_weight": {
-            "enum": ["low", "medium", "high"],
-            "default": "medium",
-            "description": "how much a boss card's trial counts against its gift: 0.5, 1 or 2 gift points a trial pt (#381)"
-          },
           "gift_search": {
             "type": "object",
             "additionalProperties": false,
