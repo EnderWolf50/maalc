@@ -6,7 +6,7 @@
 # dealt: Damage Dealt +%, defskill: Defense Skill Final Power). score: pt, 1 pt = the enemy's Clash Power +1; a Coin
 # unit of a pool past early_pools at coin_in, coin_over past the run's coin_budget. level: pt per Enemy Level Up +1.
 client: 1.117.0
-model: {early_pools: 4, level: 0.5, coin_budget: 0, coin_in: 1.5, coin_over: 3}
+model: {early_pools: 4, level: 0.36, coin_budget: 0, coin_in: 1.5, coin_over: 3}
 weights: {early: {clash: 1, offense: 0.34, base: 1.05, final: 1.05, coin: 4, dealt: 0.8, taken: 0.8, defense: 0.02, hp: 0.005, boss_hp: 0.005, defskill: 0.1}, late: {clash: 1, offense: 0.34, base: 1.05, final: 1.05, coin: 1.5, dealt: 0.1, taken: 0.1, defense: 0.02, hp: 0.005, boss_hp: 0.005, defskill: 0.1}}
 pools: {1: 6, 2: 7, 3: 8, 4: 9, 5: 8, 6: 8, 7: 8, 8: 8, 9: 8, 10: 7, 11: 7, 12: 7, 13: 7, 14: 7}
 trials:

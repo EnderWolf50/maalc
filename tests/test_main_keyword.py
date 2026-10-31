@@ -12,7 +12,7 @@ def bleed_team(**extra):
     """The team a run plays: a list with Bleed first that wants Wound Clerid (9005, buyable) and keeps nothing else."""
     settings = listed("Bleed")
     settings["gift_lists"] = [{"id": "g", "name": "G", **wants(9005, order=("Bleed",))}]
-    return {"reserve_cost": 0, "trial_risk_weight": "high", "shop_refresh_keyword": 0, "shop_refresh_normal": 0, **extra, **actions.run_team(settings, settings["teams"][0])}
+    return {"reserve_cost": 0, "shop_refresh_keyword": 0, "shop_refresh_normal": 0, **extra, **actions.run_team(settings, settings["teams"][0])}
 
 
 def test_the_keyword_refresh_picks_the_lists_first_keyword(context, clock):

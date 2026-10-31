@@ -23,7 +23,7 @@ def team(id, game_team, **kw):
         "starlight": {"custom": STARLIGHT}, "theme_pack_plan": "default",
         "reward_cards": ["Starlight", "Random E.G.O Gift", "Cost & Keyword Gift Chance", "Cost", "E.G.O Resource"],
         "shop_refresh_keyword": 2, "shop_refresh_normal": 0, "heal": "revive", "reserve_cost": 0, "min_alive": 0, "guard_turns": 0,
-        "trial_risk_weight": "high", "gift_search": {"enabled": False, "gifts": []}, "allow_white_gossypium": True,
+        "gift_search": {"enabled": False, "gifts": []}, "allow_white_gossypium": True,
         "gift_list": "default", "sell_max_tier": 4, "sell_vestiges": False, **kw,
     }
 
@@ -42,7 +42,7 @@ def gift_list(keyword="Burn", **kw):
 
 
 VALID = {
-    "version": 16,
+    "version": 17,
     "language": "zh_tw",
     "run": {
         "difficulty": "auto", "runs": 1, "weekly_bonus_use": "hard", "weekly_bonus_amount": "all",
@@ -67,9 +67,18 @@ VALID = {
 }
 
 
+def as_v16(valid):
+    """The same settings as version 16 wrote them: each team's trial risk weight."""
+    old = copy.deepcopy(valid)
+    old["version"] = 16
+    for t, weight in zip(old["teams"], ("high", "low")):
+        t["trial_risk_weight"] = weight
+    return old
+
+
 def as_v15(valid):
     """The same settings as version 15 wrote them: trial risks 0-5."""
-    old = copy.deepcopy(valid)
+    old = as_v16(valid)
     old["version"] = 15
     old["trial_risk_overrides"] = [{"trial": "Growth I", "risk": 3}]
     return old
@@ -103,6 +112,7 @@ def as_v10(valid):
     return old
 
 
+V16 = as_v16(VALID)
 V15 = as_v15(VALID)
 V14 = as_v14(VALID)
 CLEARED = {**VALID, "trial_risk_overrides": []}  # what an older file comes to: its 0-5 trial risks do not carry over (#381)
@@ -210,7 +220,7 @@ def test_schema_errors_name_the_field(tmp_path, fn, where):
 
 
 def test_newer_version_is_refused(tmp_path):
-    assert "newer" in errors(tmp_path, {**VALID, "version": 17})[0]
+    assert "newer" in errors(tmp_path, {**VALID, "version": 18})[0]
 
 
 def test_version_1_gets_guard_turns_off(tmp_path):
@@ -314,7 +324,13 @@ def test_version_15_trial_risks_are_emptied_with_a_note(tmp_path):
     load(tmp_path, V15)
     assert settings.NOTES == ["settings version 16: 1 trial risk override (0-5) emptied, trials score in pt now (#381)"]
     assert load(tmp_path, edited(lambda d: d.update(trial_risk_overrides=[]), V15)) and settings.NOTES == []
-    assert [t["trial_risk_weight"] for t in got["teams"]] == ["high", "high"]  # the user's own weight stays
+
+
+def test_version_16_drops_the_teams_trial_risk_weight(tmp_path):
+    # The user, 2026-10-31: a trial counts at weight 1 for every team, so the setting goes, whatever it was
+    got = load(tmp_path, V16)
+    assert settings.NOTES == []  # nothing to log: every team now picks as weight medium did
+    assert got == load(tmp_path, VALID)
 
 
 @pytest.mark.parametrize("risk, ok", [(0, True), (0.25, True), (12, True), (-0.5, False), ("1", False)])
@@ -471,7 +487,7 @@ def test_shared_valid_loads(tmp_path):
 
 def test_shared_valid10_migrates_and_loads(tmp_path):
     loaded = load(tmp_path, CASES["valid10"])
-    assert loaded["version"] == 16 and [t["gift_list"] for t in loaded["teams"]] == ["gift-list-1", "gift-list-2"]
+    assert loaded["version"] == 17 and [t["gift_list"] for t in loaded["teams"]] == ["gift-list-1", "gift-list-2"]
 
 
 @pytest.mark.parametrize("case", CASES["migrations"], ids=lambda c: c["name"])
