@@ -354,7 +354,7 @@ Cost 表是 wiki 與簡中客戶端的表，實機 log 的節點面板 Cost 沒�
 - 依分數取 `Select n/m` 的可選數量（困難 `Select 0/2`、普通 `Select 0/1`）；同分時選試煉負擔（試煉分 + 0.36 × N）較輕的，再同就選左邊的。（#17、#19，2026-10-14 定案；#28；#381）
 - 讀不到 `Select n/m`：只有一張卡時點那一張（單卡頁沒有張數）；兩張以上時再讀一次，仍讀不到就依排序一張一張點，每點一張重讀，讀到張數後照張數停，一直讀不到就全部點完。（#81）
 - 實機：困難頁面有 4 欄，每欄上半是飾品、下半是 `Mounting Trials`；計數是 `Select 0/2`，選一欄就同時拿到飾品和試煉。選完後每個飾品各彈一次飾品獲得視窗，然後直接進入下一層的主題包頁。普通頁面是 3 欄、`Select 0/1`。每張卡剛好一個試煉，不用捲動（8 頁 28 張卡）。（實機：captures/122_boss_gift_trials_page.png、captures/124_boss_gift_pick2.png、captures/127_after_boss_gifts.png；1.117.0 普通局 2026-10-15；#381）
-- 例（2026-10-28 普通局）：第 3 層 Boss 後 Ashes to Ashes（其他、I 階）／Resilient V +2 是 2 −（0.105 + 0.72）= 1.175，Barbed Lasso（其他、II 階）／Final Power Boost +1 是 2.5 −（1.075 + 0.36）= 1.065，Nebulizer（已擁有）／Keen III +1 是 0 −（1.045 + 0.36）= −1.405，選 Ashes to Ashes，不算階級時也是（#381 留言寫的選擇；每級 0.5 時選 Barbed Lasso）。第 4 層 Burning Intellect（其他、I 階）／Body Up III +1 是 0.53，Huge Gift Sack（主要、II 階）／Brutality +2 是 3.5 −（4 + 0.72）= −1.22，選 Burning Intellect。2026-10-30 困難局四頁（#381 的實機驗收，當時權重高、每級 0.5）照現在的算法拿的兩張卡都不變。（#381）
+- 例（2026-10-28 普通局）：第 3 層 Boss 後 Ashes to Ashes（其他、I 階）／Resilient V +2 是 2 −（0.105 + 0.72）= 1.175，Barbed Lasso（其他、II 階）／Final Power Boost +1 是 2.5 −（1.075 + 0.36）= 1.065，Nebulizer（已擁有）／Keen III +1 是 0 −（1.045 + 0.36）= −1.405，選 Ashes to Ashes，不算階級時也是（#381 留言寫的選擇）；原本權重中、每級 0.5、算階級時選 Barbed Lasso（2.5 −（1.075 + 0.5）= 0.925 對 0.895）。第 4 層 Burning Intellect（其他、I 階）／Body Up III +1 是 0.53，Huge Gift Sack（主要、II 階）／Brutality +2 是 3.5 −（4 + 0.72）= −1.22，選 Burning Intellect。2026-10-30 困難局四頁（#381 的實機驗收，當時權重高、每級 0.5）照現在的算法拿的兩張卡都不變。（#381）
 - 未驗證：第 5 池以後的池與試煉的對應、每頁幾張卡、`Enemy Level Up` 是否還在，都是由資料推論（v1 只打到第 5 層）；選飾品頁上 IV、V 階的數字還沒有截圖驗證。（#381）
 
 ## 13. 商店

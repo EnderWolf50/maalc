@@ -30,7 +30,7 @@
   - 版本 13（#375）：`luxcavation.exp`、`luxcavation.thread` 新增 `consecutive`，從版本 12 遷移時填 `true`（已有的值不動）。
   - 版本 15（#310）：隊伍的 `shop_refresh_limit` 拆成 `shop_refresh_keyword`（體系刷新次數）與 `shop_refresh_normal`（一般刷新次數）（使用者 2026-10-30 決定：「刷新上限分開」）。從版本 14 遷移時舊值 N 變成體系 N、一般 0：以前就是先用體系刷新，所以花費不會比以前多。新隊伍兩個都是 0（不刷新）。Agent 在記憶體裡遷移，GUI 遷移後寫回；舊版 Agent 讀到版本 15 會報「比自己新」。
   - 版本 16（#381）：試煉改用 pt 計分（1 pt = 敵方 Clash Power +1），`trial_risk_overrides` 的 `risk` 由整數 0–5 改成 ≥ 0 的數字（可有小數）。舊的 0–5 風險值換算不過來，從版本 15 遷移時清空整張表：Agent 在記憶體裡遷移，開局時在記錄裡寫一行 `settings version 16: <n> trial risk override(s) (0-5) emptied, trials score in pt now (#381)`（檔案沒被 GUI 寫回前每局都會寫）；GUI 遷移後寫回，狀態列說清掉了幾筆。`trial_risk_weight` 的預設改成 `medium`，舊檔裡隊伍自己的值不改。舊版 Agent 讀到版本 16 會報「比自己新」。
-  - 版本 17：移除隊伍的 `trial_risk_weight`（使用者 2026-10-31 決定：試煉固定 1 pt 抵 1 分，設定裡不放看不懂的選項）。從版本 16 遷移時刪掉每隊的這個欄位，不記記錄、狀態列也不提：選「中」的隊伍選法不變，選「低」「高」的改成和「中」相同，沒有資料遺失要說（版本 15 刪掉 `shop_refresh_limit` 也沒記）。Agent 在記憶體裡遷移，GUI 遷移後寫回；舊版 Agent 讀到版本 17 會報「比自己新」。
+  - 版本 17（#381）：移除隊伍的 `trial_risk_weight`（使用者 2026-10-31 決定：試煉固定 1 pt 抵 1 分，設定裡不放看不懂的選項）。從版本 16 遷移時刪掉每隊的這個欄位，不記記錄、狀態列也不提：選「中」的隊伍選法不變，選「低」「高」的改成和「中」相同，沒有資料遺失要說（版本 15 刪掉 `shop_refresh_limit` 也沒記）。Agent 在記憶體裡遷移，GUI 遷移後寫回；舊版 Agent 讀到版本 17 會報「比自己新」。
   - 版本 14（#291、#292）：商店留哪些飾品的設定從隊伍搬到飾品清單（第 13 節，#291、#292）。頂層新增 `gift_lists`；隊伍新增 `gift_list`，移除 `keyword`、`keep_keywords`、`keywordless`、`keep_gifts`、`fusion_condition`（主要體系改由清單決定，見第 13 節）。從版本 13 以前的檔案遷移時（版本 10 以前先照上面的步驟升到 13），每支隊伍產生一份清單，保留的東西完全相同的隊伍共用同一份（名稱用第一支隊伍的名稱，撞名加 ` 2`；id 是 `gift-list-1`、`gift-list-2`、…），隊伍的 `gift_list` 指向它。清單內容：
     - `order`：隊伍原本的主要體系第一，其餘照預設順序，`Keywordless` 最後，所以遷移後的主要體系和遷移前相同；
     - `want`：主要體系的所有可購買飾品（`gift_search.json` 裡該體系的 I–III 階）；

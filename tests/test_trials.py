@@ -292,6 +292,7 @@ def test_the_overrides_tab_s_note_gives_the_table_s_numbers():
     assert len(notes) == 2
     for note in notes:
         assert f"{MODEL['level']:g}" in note
+        assert "權重" not in note and "weight" not in note  # no trial risk weight any more
         for name in ("Growth II", "Final Power Boost", "Headstrong II"):
             score = re.escape(f"{TABLE['trials'][name]['score']:g}")
             assert re.search(rf"{name}\D{{0,20}}{score}\b", note), (name, note)

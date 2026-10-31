@@ -138,6 +138,7 @@
     {"name": "fusion_condition moved to the gift list", "edits": [{"set": "teams/0/fusion_condition", "value": "any"}], "schema": ["teams/0"]},
     {"name": "a negative refresh count", "edits": [{"set": "teams/0/shop_refresh_normal", "value": -1}], "schema": ["teams/0/shop_refresh_normal"]},
     {"name": "the old refresh limit is no setting any more", "edits": [{"set": "teams/0/shop_refresh_limit", "value": 2}], "schema": ["teams/0"]},
+    {"name": "the trial risk weight is no setting any more", "edits": [{"set": "teams/0/trial_risk_weight", "value": "medium"}], "schema": ["teams/0"]},
     {"name": "guard turns out of range", "edits": [{"set": "teams/0/guard_turns", "value": 6}], "schema": ["teams/0/guard_turns"]},
     {"name": "repeated starlight priority", "edits": [{"set": "starlight_plans/0/priority/0", "value": 2}], "schema": ["starlight_plans/0/priority"]},
     {"name": "bad custom starlight level", "edits": [{"set": "teams/1/starlight/custom/levels/0", "value": "max"}], "schema": ["teams/1/starlight"]},
