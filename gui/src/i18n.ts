@@ -19,7 +19,7 @@ const zh_tw = {
   "tab.starlight": "星光方案",
   "tab.themepacks": "主題包方案",
   "tab.events": "事件覆寫",
-  "tab.trials": "試煉風險覆寫",
+  "tab.trials": "試煉分數覆寫",
   "tab.daily": "日常",
   loadError: "設定檔無法讀取，請修正或建立新的設定檔（會覆蓋原檔）：",
   newFile: "建立新的設定檔",
@@ -145,6 +145,7 @@ const zh_tw = {
   "team.gift_list_note": "商店買什麼、留什麼、賣什麼、拿什麼合成。「預設」是唯讀的清單：只放無體系飾品，想要 4 個無體系合成品（商店會買它們缺的材料）與主題包專屬飾品池裡商店有賣的 46 個，其餘保留；要買什麼、合成什麼，複製一份再設定。",
   "migrate.dropped": "從舊設定轉成飾品清單時，有 {n} 個「保留指定飾品」對不到任何飾品，已丟掉。",
   "migrate.unknown": "飾品清單裡有 {n} 個飾品 id 在資料檔找不到（換季了？），已從清單丟掉。",
+  "migrate.trials": "試煉改用新的計分（pt），舊設定的 {n} 筆試煉風險覆寫（0–5）換算不過來，已清空。",
   "gl.fusion_condition": "合成條件",
   "gl.fusion_condition_note": "任意合成：材料夠 3 個就合，能升階的組合先合。升階才合：結果階級要比材料的最高階高。只合 IV：只在能合出 IV 級時才合。階級由材料點數算出，不花星光（Wishmaking 不勾）。",
   // gift list tab
@@ -248,7 +249,8 @@ const zh_tw = {
   "event.question": "問題文字",
   "event.option": "要選的選項文字",
   "trial.trial": "試煉（例如 Growth I）",
-  "trial.risk": "風險（0–5）",
+  "trial.risk": "分數（pt，0 以上，可有小數）",
+  "trial.note": "Boss 後選飾品時，每張卡的分數是：飾品分 − 試煉風險權重 ×（試煉分 + 0.5 × 卡上的 Enemy Level Up 等級數）。試煉分的單位是 pt，1 pt = 敵方 Clash Power +1；每個試煉的預設分數由遊戲資料算出，例如 Growth II 0.05、Final Power Boost 1.075、Brutality 4、Headstrong II 40。這裡填的分數取代預設，以試煉的英文名稱比對。",
   noRows: "沒有覆寫。",
 };
 
@@ -267,7 +269,7 @@ const en_us: typeof zh_tw = {
   "tab.starlight": "Starlight plans",
   "tab.themepacks": "Theme pack plans",
   "tab.events": "Event overrides",
-  "tab.trials": "Trial risk overrides",
+  "tab.trials": "Trial score overrides",
   "tab.daily": "Daily",
   loadError: "The settings file cannot be read. Fix it, or start a new one (overwrites it):",
   newFile: "Start a new settings file",
@@ -389,6 +391,7 @@ const en_us: typeof zh_tw = {
   "team.gift_list_note": "What the shop buys, keeps, sells and fuses. \"Default\" is a read-only list: it holds only the keywordless gifts: it wants the 4 keywordless fusion gifts (the shop buys what they lack) and the 46 the shop sells from the theme packs' own pools, and keeps the rest; copy it to choose what to buy and fuse.",
   "migrate.dropped": "While turning the old settings into gift lists, {n} kept gifts matched no gift and were dropped.",
   "migrate.unknown": "{n} gift ids in the gift lists are in no data file (a new season?) and were dropped from the lists.",
+  "migrate.trials": "Trials score on a new scale (pt) now: the {n} old trial risk overrides (0–5) do not carry over and were emptied.",
   "gl.fusion_condition": "Fusion condition",
   "gl.fusion_condition_note": "Any: fuse whenever there are 3 materials, groups that upgrade first. Upgrades only: the result must be a higher tier than the highest material. Tier IV only: fuse only when the result is tier IV. The tier is worked out from the materials' points; no Starlight is spent (Wishmaking stays unticked).",
   "gl.opts": "List options ▾",
@@ -489,7 +492,8 @@ const en_us: typeof zh_tw = {
   "event.question": "Question text",
   "event.option": "Option text to pick",
   "trial.trial": "Trial (e.g. Growth I)",
-  "trial.risk": "Risk (0–5)",
+  "trial.risk": "Score (pt, 0 or more, decimals allowed)",
+  "trial.note": "On a gift page after a boss each card scores: gift score − trial risk weight × (trial score + 0.5 × the card's Enemy Level Up). A trial score is in pt, 1 pt = the enemy's Clash Power +1; each trial's default comes from the game data, e.g. Growth II 0.05, Final Power Boost 1.075, Brutality 4, Headstrong II 40. A score here replaces the default, matched by the trial's English name.",
   noRows: "No overrides.",
 };
 

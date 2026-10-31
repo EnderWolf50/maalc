@@ -20,7 +20,7 @@
     "charge_enkephalin"
   ],
   "properties": {
-    "version": { "const": 15 },
+    "version": { "const": 16 },
     "language": { "enum": ["zh_tw", "en_us"], "default": "zh_tw" },
     "run": {
       "type": "object",
@@ -227,7 +227,11 @@
             "description": "fewer alive is handled like used-up wipe retries (run.after_retries); 0: no check"
           },
           "guard_turns": { "type": "integer", "minimum": 0, "maximum": 5, "default": 0 },
-          "trial_risk_weight": { "enum": ["low", "medium", "high"], "default": "high" },
+          "trial_risk_weight": {
+            "enum": ["low", "medium", "high"],
+            "default": "medium",
+            "description": "how much a boss card's trial counts against its gift: 0.5, 1 or 2 gift points a trial pt (#381)"
+          },
           "gift_search": {
             "type": "object",
             "additionalProperties": false,
@@ -285,13 +289,14 @@
     },
     "trial_risk_overrides": {
       "type": "array",
+      "description": "a trial's score in place of data/trials.yaml's, by its English name (#381)",
       "items": {
         "type": "object",
         "additionalProperties": false,
         "required": ["trial", "risk"],
         "properties": {
           "trial": { "type": "string", "minLength": 1 },
-          "risk": { "type": "integer", "minimum": 0, "maximum": 5 }
+          "risk": { "type": "number", "minimum": 0, "description": "the score in pt, 1 pt = the enemy's Clash Power +1" }
         }
       }
     },

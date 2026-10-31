@@ -6,7 +6,7 @@ import { newSettings, parseSettings, runEnum, type Luxcavation, type Settings } 
 import { DeploymentTab, StarlightTab, ThemePackTab } from "./Plans";
 import { GiftListsTab } from "./GiftLists";
 import { TeamsTab } from "./Teams";
-import { EditorContext, Field, Num, Select, ToggleNum, useEditor, type Ctx } from "./ui";
+import { Decimal, EditorContext, Field, Num, Select, ToggleNum, useEditor, type Ctx } from "./ui";
 import { validate, type Problem } from "./validate";
 
 export const TABS = [
@@ -38,12 +38,12 @@ export default function App() {
     api.loadSettings().then(async (text) => {
       if (text === null) return setS(newSettings());
       try {
-        const { data, migrated, dropped, unknown } = parseSettings(text);
+        const { data, migrated, dropped, unknown, trials } = parseSettings(text);
         setS(data);
         if (migrated && !validate(data).length) await api.saveSettings(toText(data));
         setSavedText(toText(data)); // dirty = content changed, not formatting
         const warn = (key: Key, n: number) => (n ? [TEXT[data.language][key].replace("{n}", String(n))] : []);
-        setStatus([...warn("migrate.dropped", dropped), ...warn("migrate.unknown", unknown)].join(" "));
+        setStatus([...warn("migrate.dropped", dropped), ...warn("migrate.unknown", unknown), ...warn("migrate.trials", trials)].join(" "));
       } catch (e) {
         setLoadError(String(e));
       }
@@ -232,7 +232,7 @@ function OverrideTable<R extends Record<string, string | number>>({ listKey, col
                 {cols.map((c) => (
                   <td key={c.key} className={bad(`${listKey}/${i}/${c.key}`) ? "bad" : ""}>
                     {c.number
-                      ? <Num value={r[c.key] as number} min={0} max={5} onChange={(v) => set((l) => { (l[i] as Record<string, unknown>)[c.key] = v; })} />
+                      ? <Decimal value={r[c.key] as number} min={0} onChange={(v) => set((l) => { (l[i] as Record<string, unknown>)[c.key] = v; })} />
                       : <input value={r[c.key] as string} onChange={(e) => set((l) => { (l[i] as Record<string, unknown>)[c.key] = e.target.value; })} />}
                   </td>
                 ))}
@@ -253,6 +253,12 @@ function EventsTab() {
 }
 
 function TrialsTab() {
-  return <OverrideTable listKey="trial_risk_overrides" blank={{ trial: "", risk: 5 }}
-    cols={[{ key: "trial", label: "trial.trial" }, { key: "risk", label: "trial.risk", number: true }]} />;
+  const { t } = useEditor();
+  return (
+    <>
+      <p className="muted">{t("trial.note")}</p>
+      <OverrideTable listKey="trial_risk_overrides" blank={{ trial: "", risk: 1 }}
+        cols={[{ key: "trial", label: "trial.trial" }, { key: "risk", label: "trial.risk", number: true }]} />
+    </>
+  );
 }

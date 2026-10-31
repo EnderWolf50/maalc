@@ -41,7 +41,7 @@
     "trial_risk_overrides": [{"trial": "Growth I", "risk": 3}]
   },
   "valid": {
-    "version": 15,
+    "version": 16,
     "language": "zh_tw",
     "run": {
       "difficulty": "auto", "runs": null, "weekly_bonus_use": "hard", "weekly_bonus_amount": "all",
@@ -81,7 +81,7 @@
       }
     ],
     "event_overrides": [{"question": "Q?", "option": "Yes"}],
-    "trial_risk_overrides": [{"trial": "Growth I", "risk": 3}],
+    "trial_risk_overrides": [{"trial": "Growth I", "risk": 1.5}],
     "luxcavation": {"exp": {"count": 1, "team": null, "retries": 0, "consecutive": true}, "thread": {"count": 1, "team": null, "retries": 0, "consecutive": true}},
     "charge_enkephalin": {"count": 0}
   },
@@ -189,9 +189,12 @@
          {"keyword": "Bleed", "tier": 3, "name": "A"}, {"keyword": "Bleed", "tier": 3, "name": "B"},
          {"keyword": "Bleed", "tier": 2, "name": "C"}, {"keyword": "Bleed", "tier": 1, "name": "D"}]}],
      "schema": ["teams/0/gift_search/gifts"]},
+    {"name": "a trial score is 0 or more, decimals too", "edits": [{"set": "trial_risk_overrides/0/risk", "value": -0.5}],
+     "schema": ["trial_risk_overrides/0/risk"]},
+    {"name": "a trial score may pass the old 0-5 scale", "edits": [{"set": "trial_risk_overrides/0/risk", "value": 40}], "cross": []},
     {"name": "duplicate overrides", "edits": [
        {"set": "event_overrides/-", "value": {"question": "Q?", "option": "No"}},
-       {"set": "trial_risk_overrides/-", "value": {"trial": "Growth I", "risk": 1}},
+       {"set": "trial_risk_overrides/-", "value": {"trial": "Growth I", "risk": 0.25}},
        {"set": "trial_risk_overrides/-", "value": {"trial": "Growth I", "risk": 2}}],
      "cross": ["event_overrides: question 'Q?' appears 2 times", "trial_risk_overrides: trial 'Growth I' appears 3 times"]}
   ],

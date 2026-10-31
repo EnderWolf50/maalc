@@ -155,7 +155,7 @@ def test_a_new_runs_first_floor_forgets_the_floors_of_the_last_run(monkeypatch):
     monkeypatch.setattr(actions.PickThemePack, "set_difficulty", staticmethod(lambda context, floor, want: False))
     monkeypatch.setattr(actions, "stuck", lambda reason, level=1: True)
     actions.RUN.clear()
-    actions.TASK.clear()
+    monkeypatch.setattr(actions, "TASK", {"runs": 0, "done": None})  # a fresh task's, the module's own back after the test
     actions.RUN.update(floor=5, floors_hard={f: True for f in range(1, 6)})
     actions.PickThemePack().run(MagicMock(), SimpleNamespace(node_name="PickThemePack"))
     assert "floors_hard" not in actions.RUN and actions.RUN["floor"] == 1

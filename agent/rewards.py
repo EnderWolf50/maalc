@@ -6,13 +6,14 @@ actions.py reads the pages and taps; everything here is plain data in, plain dat
 import re
 from difflib import SequenceMatcher
 
-from ocrtext import compact, has
+from ocrtext import compact, has, normalize
 from run_start import match_pack
 
 ODDS = ("very low", "low", "normal", "high", "very high")
 GIFT_SCORE = {"main": 3, "other": 2, "owned": 0}
+TIER_STEP = 0.5  # a main or other gift's score per tier above I (#381)
 RISK_WEIGHT = {"low": 0.5, "medium": 1, "high": 2}
-MAX_RISK = 5
+UNREAD_LEVELS = 2  # an Enemy Level Up badge that does not read counts as +2, the most seen live (#381)
 KEYWORDS = ("Burn", "Bleed", "Tremor", "Rupture", "Sinking", "Poise", "Charge", "Slash", "Pierce", "Blunt", "Keywordless")
 
 
@@ -222,13 +223,48 @@ def names_gift(text, name, min_ratio=0.8):
                for i in range(max(1, len(key) - len(word) + 1)))
 
 
-def trial_risk(text, risks):
-    """Risk of the trial named in text (one OCR line); MAX_RISK when it is not in the table."""
-    exact = {compact(n): n for n in risks}  # "Growth I" and "Growth II" are too alike for the fuzzy margin
-    name = exact.get(compact(text)) or match_pack(text, list(risks))
-    if name and _numeral(name) != _numeral(text):
-        name = None  # fuzzy "Growth II" -> "Growth I" would understate the risk
-    return risks[name] if name else MAX_RISK
+# Effects on the enemy as a trial's line shows them (data/trials.yaml's keys), case folded: "Offense Level+3", "Max HP
+# +7.5%", "Damage Taken -5%". Minus Coin Power comes with Plus Coin Power, the same number: coin is one of them.
+NUMBER = r"\s*(\d+(?:\.\d+)?)"
+EFFECTS = {"offense": r"offense level\s*\+" + NUMBER, "defense": r"defense level\s*\+" + NUMBER,
+           "hp": r"(?<!boss )max hp\s*\+" + NUMBER + "%", "boss_hp": r"boss max hp\s*\+" + NUMBER + "%",
+           "clash": r"clash power\s*\+" + NUMBER, "final": r"(?<!skill )final power\s*\+" + NUMBER,
+           "base": r"base power\s*\+" + NUMBER, "coin": r"plus coin power\s*\+" + NUMBER,
+           "taken": r"damage taken\s*[-−–]" + NUMBER + "%", "dealt": r"damage dealt\s*\+" + NUMBER + "%",
+           "defskill": r"defense skill final power\s*\+" + NUMBER}
+
+
+def parse_effects(text):
+    """{effect: number} an effect line reads as (data/trials.yaml's keys); an effect without its number is left out."""
+    t = normalize(text)
+    return {k: float(m[1]) for k, p in EFFECTS.items() if (m := re.search(p, t))}
+
+
+def trials_of(table, pool):
+    """{name: entry} of data/trials.yaml's trials the pick after the floor-`pool` boss draws from; every trial when the
+    floor is unknown (None)."""
+    return {n: t for n, t in table["trials"].items() if pool is None or t["pool"] == pool}
+
+
+def read_trial(name, line, trials):
+    """(trial, how) a card shows: its name's and its effect line's OCR held against trials, the pool's (spec 03 section 12).
+
+    The effect line goes first ("effects"): a pool's trials differ in what they do, and a numeral slip in the name
+    ("Growth I" for Growth II, #381) does not touch it. It names the trial with the same effects whose values agree most
+    (Body Up II shows Max HP +10%, its static data 12.5%); none when a value is cut off or two agree as much. Then the
+    name ("name"): found exactly, else by match_pack, and dropped when its numeral is not the one read (Keen I is
+    neither Keen II nor III). Neither: (None, None).
+    """
+    read = parse_effects(line)
+    alike = sorted(((sum(abs(t["effects"][k] - v) < 1e-6 for k, v in read.items()), n)
+                    for n, t in trials.items() if read and set(t["effects"]) == set(read)), reverse=True)
+    if alike and alike[0][0] and (len(alike) == 1 or alike[1][0] < alike[0][0]):
+        return alike[0][1], "effects"
+    exact = {compact(n): n for n in trials}
+    found = exact.get(compact(name)) or match_pack(name, list(trials))
+    if found and _numeral(found) == _numeral(name):
+        return found, "name"
+    return None, None
 
 
 def _numeral(s):
@@ -236,24 +272,47 @@ def _numeral(s):
     return m[1] if m else ""
 
 
+def scores(trials, model, coins=0, overrides=None):
+    """{name: score in pt} of trials (spec 03 section 12): the table's, and past early_pools each Coin unit beyond the
+    run's coin_budget at coin_over instead of coin_in; coins: the units the run's trials took so far. An override
+    (settings trial_risk_overrides) replaces the score."""
+    left = max(0, model["coin_budget"] - coins)
+    out = {}
+    for n, t in trials.items():
+        coin = t["effects"].get("coin", 0) if t["pool"] > model["early_pools"] else 0
+        out[n] = t["score"] + (model["coin_over"] - model["coin_in"]) * max(0, coin - left)
+    return out | {n: v for n, v in (overrides or {}).items() if n in out}
+
+
+def burden(score, levels, model):
+    """What a card's trial costs in pt: its score and model["level"] per Enemy Level Up; levels None (unread) counts
+    UNREAD_LEVELS."""
+    return score + model["level"] * (UNREAD_LEVELS if levels is None else levels)
+
+
+def gift_score(kind, tier):
+    """A gift card's worth: main 3, other 2, owned 0; main and other TIER_STEP more per tier above I (unread: I)."""
+    return GIFT_SCORE.get(kind, 0) + (TIER_STEP * (tier - 1) if tier and kind in ("main", "other") else 0)
+
+
 def rank_gifts(cards, weight):
     """Card indexes best first (spec 03 section 12).
 
-    cards are (kind, trial risk or None); score = gift score - weight x risk, ties to the lower
-    risk, then the leftmost. Without trials (risk None) it is main > other > owned. An avoided gift
-    comes after every other card: taken only to fill the count, rather than a random trial (#90).
+    cards are (kind, tier, burden or None); score = gift_score - weight x burden, ties to the lighter burden, then the
+    leftmost. Without trials (burden None) the gift score alone. An avoided gift comes after every other card: taken
+    only to fill the count, rather than a random trial (#90).
     """
     w = RISK_WEIGHT[weight]
 
     def key(i):
-        kind, risk = cards[i]
-        return (kind == "avoid", -(GIFT_SCORE.get(kind, 0) - w * (risk or 0)), risk or 0, i)
+        kind, tier, cost = cards[i]
+        return (kind == "avoid", -(gift_score(kind, tier) - w * (cost or 0)), cost or 0, i)
 
     return sorted(range(len(cards)), key=key)
 
 
 def pick_gifts(ranked, read, tap):
-    """Tap gift cards best first until Select n/m is full (spec 03 section 12).
+    """Tap gift cards best first until Select n/m is full (spec 03 section 12); the cards tapped, in order.
 
     read() gives (n, m) off the screen or None; tap(i) taps card i. A lone card shows no count.
     With several cards and no count read, it is read again, then cards are tapped in order until
@@ -262,15 +321,18 @@ def pick_gifts(ranked, read, tap):
     count = read()
     if count is None and len(ranked) > 1:
         count = read()
+    taken = []
     for i in ranked:
         if count and count[0] >= count[1]:
             break
         tap(i)
+        taken.append(i)
         now = read()
         if count and now and now[0] < count[0]:  # it was picked already: pick it again, go on to the next
             tap(i)
             now = read()
         count = now or count
+    return taken
 
 
 def _key(s):

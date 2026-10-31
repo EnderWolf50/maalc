@@ -1,13 +1,13 @@
 # 05 遊戲資料檔
 
-本章定義放在 resource 裡、隨季節更新的遊戲資料檔：主題包清單與預設主題包方案、事件覆寫表、試煉風險表、選路權重，以及 Cost 對照表與商店數字。每份資料檔說明用途、欄位、範例、誰維護、使用者怎麼覆寫，最後是每季更新的檢查清單。使用者自己的設定（隊伍、方案、執行選項、覆寫）不在這裡，見 [04-settings.md](04-settings.md)。
+本章定義放在 resource 裡、隨季節更新的遊戲資料檔：主題包清單與預設主題包方案、事件覆寫表、試煉表、選路權重，以及 Cost 對照表與商店數字。每份資料檔說明用途、欄位、範例、誰維護、使用者怎麼覆寫，最後是每季更新的檢查清單。使用者自己的設定（隊伍、方案、執行選項、覆寫）不在這裡，見 [04-settings.md](04-settings.md)。
 
 ## 1. 總則
 
 - 遊戲資料放在 resource 裡的資料檔，和使用者的設定檔分開。換季時只更新資料檔，GUI 與設定檔都不用改。理由見 [ADR 0005](../adr/0005-game-data-files-separate-from-user-settings.md)。（#11）
 - 資料檔由開發者每季更新，使用者不直接修改。（#11、#19，2026-10-14 定案，[ADR 0006](../adr/0006-settings-gui-writes-one-settings-file.md)）
 - 資料檔用 YAML，放在 `resource/base/data/`。檔名在實作時決定。本章的範例用表格表示欄位與內容。（#19）
-- 使用者要調整的部分在設定 GUI 裡編輯，存在設定檔 `<root>/config/settings.json`，由 Agent 讀取時疊加在資料檔上：自己的主題包方案、事件覆寫、試煉風險覆寫。開發者更新資料檔時不動設定檔。不另設覆寫檔。（#11、#19，2026-10-14 定案，[ADR 0006](../adr/0006-settings-gui-writes-one-settings-file.md)）
+- 使用者要調整的部分在設定 GUI 裡編輯，存在設定檔 `<root>/config/settings.json`，由 Agent 讀取時疊加在資料檔上：自己的主題包方案、事件覆寫、試煉分數覆寫。開發者更新資料檔時不動設定檔。不另設覆寫檔。（#11、#19，2026-10-14 定案，[ADR 0006](../adr/0006-settings-gui-writes-one-settings-file.md)）
 - OCR 讀到的文字（主題包標題、事件問題、試煉名稱）用 `expected` 或模糊比對對照資料檔。（#13）
 - 模糊比對：相似度 ≥ 0.9，而且必須比第二名高 0.04 以上才算比對到。數值在實作時再調整。（#19）主題包標題改用第 2 節的子字串比對（#89）。
 - v1 不需要飾品清單資料檔：飾品挑選只依體系，Sale & Fusion-only 從畫面讀。（#10、#19）
@@ -16,7 +16,7 @@
 |---|---|---|---|---|
 | 主題包清單與預設主題包方案 | 主題包頁挑選；GUI 列出這一季的主題包 | 開發者每季提供；使用者不能改，可以在設定檔另建方案 | 預設方案有內容 | #11、#19 |
 | 事件覆寫表 | 事件頁的例外選項 | 開發者依記錄補充；使用者在設定檔另加覆寫 | 空 | #11、#19 |
-| 試煉風險表 | Boss 後的選擇評分 | 開發者每季更新；使用者在設定檔另加覆寫 | 有預設值 | #17、#19 |
+| 試煉表 `trials.yaml` | Boss 後的選擇評分 | 開發者每季從拆包的客戶端資料重新產生（第 4 節）；使用者在設定檔另加覆寫 | 1.117.0 的 14 池 105 個試煉 | #17、#19、#381 |
 | 選路權重 | 地圖頁選下一個節點 | 開發者 | 有預設值 | #12 |
 | Cost 對照表與商店數字 | 節點 Cost 參考值（不用於辨識）、商店的刷新與治療判斷 | 開發者 | 有預設值 | #10、#12、#19 |
 | 事件表 `event_table.json` | 事件頁依選項的實際效果排序 | 開發者每季從拆包的客戶端資料重新產生（第 7 節） | 1.117.0 的 195 個事件 | #93 |
@@ -96,34 +96,31 @@
 |---|---|
 | `What will you do with the box?` | `Leave it` |
 
-## 4. 試煉風險表
+## 4. 試煉表
 
-**用途**：Boss 後的選擇評分（困難；1.117.0 實機在普通局也看到，未見官方公告，待確認）。選項評分 = 飾品分數 − 權重 × 試煉風險；分數最高的勝出，同分時選試煉風險較低的。權重是每隊的「試煉風險權重」（低／中／高），見 [04-settings.md](04-settings.md)。（#17）
+**用途**：Boss 後的選擇評分：選項分數 = 飾品分數 − 權重 ×（試煉分 + 0.5 × `Enemy Level Up` 的 N），規則見 [03](03-decisions.md#12-選飾品boss-後的選擇與試煉)。權重是每隊的「試煉風險權重」（低／中／高），見 [04-settings.md](04-settings.md)。（#17、#381）
 
-**內容**：試煉（Mounting Trial）的名稱 → 風險值（0–5）。從選項上 OCR 讀出試煉名稱再查表；查不到就當作最高風險 5。（#17、#19）
+**檔案**：`resource/base/data/trials.yaml`，由 `tools/trial_table.py` 從拆包的客戶端資料產生，不手改。檔頭寫客戶端版本、產生方式與 © Project Moon（NOTICE.md 同）。（#381）
 
-**檔案**：`resource/base/data/trial_risks.yaml`，試煉名稱 → 風險值。名稱先找完全相同的（`Growth I` 和 `Growth II` 太像，模糊比對分不開），再用模糊比對。（#28）
+- `model`：`early_pools`（第 1–4 池用另一組權重）、`level`（`Enemy Level Up` 每級的 pt）、`coin_budget`、`coin_in`、`coin_over`（第 5 池起硬幣威力在本局預算內與超出時每單位的 pt）。`weights`：兩組詞條權重，`early`（第 1–4 池）與 `late`。權重只寫在 `tools/trial_table.py` 一處，產生時寫進檔案。
+- `pools`：第 n 池的試煉數。第 n 池是打完第 n 層 Boss 後的選擇，四個模式（NORMAL、HARD、INFINITY、EXTREME）第 n 層用同一個池，共 14 池（第 15 層沒有），池大小 6,7,8,9,8,8,8,8,8,7,7,7,7,7。
+- `trials`：試煉名稱 → `{id, pool, effects, score}`，105 個，名稱不重複。`effects` 是加在敵方的詞條（`offense`／`defense` 攻擊／防禦等級、`hp`／`boss_hp` 血量／Boss 血量 %、`clash`／`final`／`base` 拼點／最終／基礎威力、`coin` 正負硬幣威力、`taken` 受到傷害 −%、`dealt` 造成傷害 +%、`defskill` 防禦技最終威力）；`score` 是 pt，第 5 池起的硬幣按預算內算，執行時超出 `coin_budget` 的單位再加 `coin_over − coin_in`。
 
-識別字用試煉名稱，含羅馬數字，例如 `Defense Level Up`、`Defense Skill Up`、`Take Less Damage`、`Growth I`、`Keen I`、`Offense Level Up II`。每個試煉旁另有紅色 `Enemy Level Up +1`／`+2` 標記，只有兩種值，不能當識別字。（實機：captures/122_boss_gift_trials_page.png、captures/176_f2boss_rewards_gift.png）
+例：
 
-評分的初始數值如下，等截圖確認後再調整：（#19）
+```yaml
+model: {early_pools: 4, level: 0.5, coin_budget: 0, coin_in: 1.5, coin_over: 3}
+trials:
+  Growth II: {id: MD526, pool: 2, effects: {hp: 10}, score: 0.05}
+  Brutality: {id: MD548, pool: 4, effects: {coin: 1}, score: 4}
+  Brutality II: {id: MD558, pool: 5, effects: {coin: 1, dealt: 5}, score: 2}
+```
 
-| 項目 | 初始值 |
-|---|---|
-| 飾品分數 | 主要體系 3、其他 2、已擁有 0 |
-| 試煉風險 | 0–5 |
-| 權重 | 低 0.5、中 1、高 2 |
+**來源**：名稱與說明取自 `EN_Bufs_Mirror5.json`（MD511–MD598）與 `EN_Bufs_Mirror6.json`（MD6101–MD6147）；數值取自靜態資料 `buff/mirror-dungeon-5-floor-buff.json`、`mirror-dungeon-5-infinite-floor-buff.json`、`mirror-dungeon-6-infinite-floor-buff.json`；池取自 `mirrordungeon/mirrordungeon-08*.json` 的 `floors[i].enemyBuffPool`。池裡是隱藏飾品，沒有連到試煉的欄位：第 n 池的第 k 個對應第 n 階的第 k 個試煉，依據是每池數量與每階試煉數相同，實機 28 張卡（第 1–4 池）也全部符合；第 5 池以後沒有實機對照。（#381）
 
-**範例**（試煉名稱取自實機，風險值僅示意）：
+**產生時的檢查**（資料改版時失敗，要人工看）：四個模式同層同池；第 n 池大小等於第 n 階的試煉數；靜態數值與英文說明一致（說明用 Agent 讀效果行的同一個解析器讀，所以也檢查了它；唯一例外 Body Up II 的 Max HP 靜態 12.5%、說明與畫面 10%，以靜態為準）；正負硬幣威力成對；沒有不認得的能力名；名稱不重複。`tests/test_trials.py` 在本機有拆包資料時跑 `tools/trial_table.py --check`，確認提交的檔案就是資料算出的結果。（#381）
 
-| 試煉 | 風險 |
-|---|---|
-| `Defense Level Up` | 1 |
-| `Growth I` | 3 |
-
-**維護**：開發者每季更新。（#17）
-
-**使用者覆寫**：在 GUI 的表格編輯，存在設定檔的 `trial_risk_overrides`；同一個試煉兩邊都有時以設定檔為準（[04-settings.md](04-settings.md#11-試煉風險覆寫trial_risk_overrides)）。（#17、#19，2026-10-14 定案）
+**使用者覆寫**：在 GUI 的「試煉分數覆寫」表格編輯，存在設定檔的 `trial_risk_overrides`，以英文名稱取代 `score`；名稱不在試煉表裡的覆寫不起作用（[04-settings.md](04-settings.md#11-試煉分數覆寫trial_risk_overrides)）。（#17、#19，2026-10-14 定案；#381）
 
 ## 5. 選路權重
 
@@ -211,7 +208,7 @@ Boss 的 Cost 是遊戲資料 `mirror-dungeon-common-data-md8.json` 的 BOSS cos
 1. 更新主題包清單（含樓層），並提供這一季的預設主題包方案。使用者方案裡沒有的新主題包自動用方案的「沒列出的包」分數，不必改設定檔。（#11、#19、#240）
    - 重產卡片縮圖：先把新版客戶端的 `UnityCache`、APK 玩家資料（`apk-data/assets/bin/Data`）、靜態資料與英文在地化拆到 `.local/unpack/`（見 `docs/agents/local-dev.md`），再 `uv run python tools/live/queue.py run --resource bench --name theme_covers -- uv run --group unpack python tools/theme_pack_covers.py --contact-sheet <檔名>.png`（要 `bench` 號碼牌，讀 12 GB bundle 與玩家資料）。工具依 `theme_packs.yaml` 的 `pack_ids` 找資料，印出 `no cover:` 的包（新包沒有封面時 GUI 顯示名稱）；卡片零件的精靈圖名稱或尺寸對不上時直接報錯，表示客戶端改了圖集編號，要重讀卡片 prefab（`MirrorDungeonThemeCardUI`，在 `sharedassets7`）。`tests/test_theme_pack_covers.py` 檢查每個包都有檔、寬度和總量。（#241）
    - 重產卡片縮圖之後，再跑 `uv run python tools/theme_pack_signatures.py` 更新 `theme_pack_signatures.json`（只讀縮圖，不需要遊戲檔）；`tests/test_pack_cover.py` 檢查檔案和縮圖一致。新一季的 `NOT_TITLE`、關鍵字和 cover 效果用 `uv run python tools/pack_stats.py <截圖資料夾> --glob "*raw*.png"` 重跑（離線 OCR）。（#274）
-2. 更新試煉風險表。（#17）
+2. 重產試煉表：`uv run python tools/trial_table.py`（讀 `.local/unpack/`），檢查失敗時先看資料改了什麼；NOTICE.md 的版本一併更新。（#17、#381）
 3. 檢查選路權重、Cost 對照表與商店數字是否仍符合遊戲。（#10、#12）
 4. 依上一季的記錄補充事件覆寫表。（#11）
 5. 拆包新版客戶端，重跑 `events_md8.py`（換成這一季的鏡牢編號）與 `tools/event_table.py` 更新事件表，NOTICE.md 的版本一併更新。（#93）

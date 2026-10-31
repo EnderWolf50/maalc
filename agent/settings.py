@@ -275,8 +275,20 @@ def _v14_to_v15(data):
     return data
 
 
+def _v15_to_v16(data):
+    """Version 16 scores trials in pt, 1 pt = the enemy's Clash Power +1 (#381): a 0-5 risk of trial_risk_overrides means
+    nothing on that scale, so the list is emptied and NOTES says how many went. A team's own trial_risk_weight stays."""
+    old = data.get("trial_risk_overrides")
+    if isinstance(old, list) and old:
+        data["trial_risk_overrides"] = []
+        NOTES.append(f"settings version 16: {len(old)} trial risk override{'s' if len(old) > 1 else ''} (0-5) emptied, "
+                     "trials score in pt now (#381)")
+    return data
+
+
 # MIGRATIONS[n] turns a version-n dict into a version-(n + 1) dict; keep in step with gui/src/model.ts.
-MIGRATIONS = {1: _v1_to_v2, 2: _v2_to_v3, 3: _v3_to_v4, 4: _v4_to_v5, 5: _v5_to_v6, 6: _v6_to_v7, 7: _v7_to_v8, 8: _v8_to_v9, 9: _v9_to_v10, 10: _v10_to_v11, 11: _v11_to_v12, 12: _v12_to_v13, 13: _v13_to_v14, 14: _v14_to_v15}
+MIGRATIONS = {1: _v1_to_v2, 2: _v2_to_v3, 3: _v3_to_v4, 4: _v4_to_v5, 5: _v5_to_v6, 6: _v6_to_v7, 7: _v7_to_v8, 8: _v8_to_v9, 9: _v9_to_v10, 10: _v10_to_v11, 11: _v11_to_v12, 12: _v12_to_v13, 13: _v13_to_v14, 14: _v14_to_v15, 15: _v15_to_v16}
+NOTES = []  # what the last migrate() dropped, for the agent's log: the file on disk keeps it until the GUI saves
 
 NO_TEAM = "No enabled team: set up a team in the settings GUI first."
 
@@ -317,6 +329,7 @@ def load_settings(root, need_team=False):
 
 
 def migrate(data):
+    NOTES.clear()
     version = data.get("version") if isinstance(data, dict) else None
     if not isinstance(version, int) or isinstance(version, bool):
         raise SettingsError([f"version must be an integer, got {version!r}"])
