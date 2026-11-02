@@ -1132,7 +1132,7 @@ def gift_page(context, monkeypatch, names):
             return [("Refuse Gift", (900, 570, 100, 25))]
         return []
     monkeypatch.setattr(actions, "ocr", ocr)
-    actions.RUN.update(settings={"trial_risk_overrides": []}, team={**NO_GOSSYPIUM, "trial_risk_weight": "high"})
+    actions.RUN.update(settings={"trial_risk_overrides": []}, team={**NO_GOSSYPIUM})
     return taps
 
 
@@ -2835,7 +2835,7 @@ def test_a_starlight_page_handed_back_after_one_grace_still_buys_the_next(contex
 
 
 def test_a_gift_choice_gone_is_handed_back_untouched(context, guarded):
-    actions.RUN["team"] = {"keyword": "Burn", "trial_risk_weight": "medium"}
+    actions.RUN["team"] = {"keyword": "Burn"}
     actions.RUN["settings"] = {"trial_risk_overrides": []}
     reads(context, {tuple(actions.GIFT_CARDS): [("Acquire E.G.O Gift", (300, 160, 150, 30)), ("Hellterfly's Dream", (200, 250, 150, 30))]})
     assert actions.PickGift().run(context, argv())
@@ -2916,7 +2916,7 @@ def test_a_starlight_page_gone_after_a_grace_tap_is_handed_back_not_stopped(cont
 
 
 def test_a_gift_choice_gone_after_one_card_does_not_press_select(context, guarded):
-    actions.RUN["team"] = {"keyword": "Burn", "trial_risk_weight": "medium"}
+    actions.RUN["team"] = {"keyword": "Burn"}
     actions.RUN["settings"] = {"trial_risk_overrides": []}
     reads(context, {tuple(actions.GIFT_CARDS): [("Acquire E.G.O Gift", (300, 160, 150, 30)), ("Hellterfly's Dream", (200, 250, 150, 30)),
                                                 ("Acquire E.G.O Gift", (700, 160, 150, 30)), ("Ashes to Ashes", (600, 250, 150, 30))]})

@@ -74,6 +74,11 @@ describe("the gift list choice", () => {
   });
 });
 
+test("a team has no trial risk weight dropdown any more: every trial counts the same (the user, 2026-10-31)", () => {
+  renderEditor(<TeamsTab />, settings());
+  expect(screen.queryByText("試煉風險權重", { exact: false })).not.toBeInTheDocument();
+});
+
 describe("edit this list", () => {
   test("the button asks to show the team's list, which the default is too", async () => {
     const r = renderEditor(<TeamsTab />, settings());

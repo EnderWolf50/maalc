@@ -124,7 +124,6 @@ const zh_tw = {
   "team.turns": "回合",
   "team.more": "其他設定",
   "team.guard_turns_note": "鏡牢每局最前面的 N 個戰鬥回合（跨場累計）全員防禦，經驗本和紐本則是每場戰鬥的前 N 回合；焦點戰不防禦、不扣回合數。用完照常按勝率。",
-  "team.trial_risk_weight": "試煉風險權重",
   "team.allow_white_gossypium": "可以持有 White Gossypium（白棉花）",
   "team.allow_white_gossypium_note": "關閉時：選飾品時有別的卡就不選它（只剩它時照選，不拿隨機試煉）、商店不買它，已持有的優先拿去合成或出售。",
   "gift.title": "觀測飾品（E.G.O Gift Search）",
@@ -237,7 +236,6 @@ const zh_tw = {
   "fusion_condition.upgrade": "升階才合",
   "fusion_condition.tier4": "只合 IV",
   "heal.none": "不治療", "heal.full": "錢 ≥ 100 + 預留時全體治療", "heal.revive": "有罪人陣亡時才治療",
-  "trial_risk_weight.low": "低", "trial_risk_weight.medium": "中", "trial_risk_weight.high": "高",
   custom: "自訂",
   saveAsPlan: "存成方案",
   planSuffixDeploy: "出戰順序",
@@ -250,7 +248,7 @@ const zh_tw = {
   "event.option": "要選的選項文字",
   "trial.trial": "試煉（例如 Growth I）",
   "trial.risk": "分數（pt，0 以上，可有小數）",
-  "trial.note": "Boss 後選飾品時，每張卡的分數是：飾品分 − 試煉風險權重 ×（試煉分 + 0.5 × 卡上的 Enemy Level Up 等級數）。試煉分的單位是 pt，1 pt = 敵方 Clash Power +1；每個試煉的預設分數由遊戲資料算出，例如 Growth II 0.05、Final Power Boost 1.075、Brutality 4、Headstrong II 40。這裡填的分數取代預設，以試煉的英文名稱比對。",
+  "trial.note": "Boss 打完選飾品時，每張卡下面都掛著一個試煉：選了那張卡，之後的敵人就會變強。每個試煉有一個分數，分數越高，bot 越不想選那張卡。1 分大約等於敵人的拼點威力 +1；卡上的 Enemy Level Up 每 +1（敵人升 1 級）約再加 0.36 分。飾品這邊，主體系的飾品比其他體系的多 1 分。例如：Growth II 只有 0.05 分（敵人最大體力 +10%，幾乎沒差）；Final Power Boost 1.075 分（敵人最終威力 +1、最大體力 +5%）；Headstrong II 40 分（敵人受到的傷害 −25%、造成的傷害 +25%，bot 幾乎不會選）。預設分數由遊戲資料算出；這裡填的分數會取代預設，以試煉的英文名稱比對。",
   noRows: "沒有覆寫。",
 };
 
@@ -370,7 +368,6 @@ const en_us: typeof zh_tw = {
   "team.turns": "turns",
   "team.more": "More settings",
   "team.guard_turns_note": "Every unit guards in a Mirror Dungeon run's first N battle turns, counted across battles, and in the first N turns of each Luxcavation battle; a Focused Encounter does not guard and keeps the count. Then Win Rate as usual.",
-  "team.trial_risk_weight": "Trial risk weight",
   "team.allow_white_gossypium": "May hold White Gossypium",
   "team.allow_white_gossypium_note": "Off: a gift choice takes it only when no other card is left (rather than a random trial), the shop never buys it, and one already owned is fused or sold first.",
   "gift.title": "E.G.O Gift Search",
@@ -481,7 +478,6 @@ const en_us: typeof zh_tw = {
   "fusion_condition.upgrade": "Upgrades only",
   "fusion_condition.tier4": "Tier IV only",
   "heal.none": "None", "heal.full": "Heal all at cost ≥ 100 + reserve", "heal.revive": "Only when a sinner is down",
-  "trial_risk_weight.low": "Low", "trial_risk_weight.medium": "Medium", "trial_risk_weight.high": "High",
   custom: "Custom",
   saveAsPlan: "Save as plan",
   planSuffixDeploy: "order",
@@ -493,7 +489,7 @@ const en_us: typeof zh_tw = {
   "event.option": "Option text to pick",
   "trial.trial": "Trial (e.g. Growth I)",
   "trial.risk": "Score (pt, 0 or more, decimals allowed)",
-  "trial.note": "On a gift page after a boss each card scores: gift score − trial risk weight × (trial score + 0.5 × the card's Enemy Level Up). A trial score is in pt, 1 pt = the enemy's Clash Power +1; each trial's default comes from the game data, e.g. Growth II 0.05, Final Power Boost 1.075, Brutality 4, Headstrong II 40. A score here replaces the default, matched by the trial's English name.",
+  "trial.note": "After a boss, each gift card carries a trial: take the card and the enemies get stronger from then on. Every trial has a score, and the higher it is, the less the bot wants that card. 1 point is about the enemy's Clash Power +1; each Enemy Level Up +1 on the card (the enemy one level higher) adds about 0.36. On the gift side, a gift of the main keyword counts 1 point more than one of another keyword. For example: Growth II scores only 0.05 (enemy Max HP +10%, next to nothing); Final Power Boost 1.075 (enemy Final Power +1, Max HP +5%); Headstrong II 40 (enemy Damage Taken −25%, Damage Dealt +25%: the bot all but never takes it). The defaults come from the game data; a score here replaces the default, matched by the trial's English name.",
   noRows: "No overrides.",
 };
 

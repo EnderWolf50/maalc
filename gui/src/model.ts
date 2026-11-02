@@ -280,7 +280,7 @@ export interface Team {
   id: string; name: string; enabled: boolean; game_team: number; usage: string;
   hard_from_floor: number | null; deployment_order: Ref<Order>; starlight: Ref<StarlightValues>;
   theme_pack_plan: string; reward_cards: string[]; shop_refresh_keyword: number; shop_refresh_normal: number; heal: string;
-  reserve_cost: number; min_alive: number; guard_turns: number; trial_risk_weight: string;
+  reserve_cost: number; min_alive: number; guard_turns: number;
   gift_search: { enabled: boolean; gifts: GiftRef[] }; allow_white_gossypium: boolean;
   gift_list: string; sell_max_tier: number; sell_vestiges: boolean;
 }
@@ -423,12 +423,21 @@ const MIGRATIONS: Record<number, (d: Record<string, unknown>) => Record<string, 
     }) : d.teams,
   }),
   // Version 16 scores trials in pt, 1 pt = the enemy's Clash Power +1 (#381): a 0-5 risk of trial_risk_overrides means
-  // nothing on that scale, so the list is emptied and counted. A team's own trial_risk_weight stays.
+  // nothing on that scale, so the list is emptied and counted.
   15: (d) => {
     if (!Array.isArray(d.trial_risk_overrides) || !d.trial_risk_overrides.length) return d;
     v15Trials = d.trial_risk_overrides.length;
     return { ...d, trial_risk_overrides: [] };
   },
+  // Version 17 drops teams[].trial_risk_weight (the user, 2026-10-31): a trial's pt counts one gift point for every team.
+  16: (d) => ({
+    ...d,
+    teams: Array.isArray(d.teams) ? d.teams.map((t) => {
+      if (!t || typeof t !== "object" || Array.isArray(t)) return t; // left to the schema check, as the agent does
+      const { trial_risk_weight: _, ...rest } = t as Record<string, unknown>;
+      return rest;
+    }) : d.teams,
+  }),
 };
 /** The version 10 keep_gifts the last migration found no gift for (parseSettings returns it). */
 let v10Dropped = 0;

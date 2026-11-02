@@ -98,18 +98,18 @@
 
 ## 4. 試煉表
 
-**用途**：Boss 後的選擇評分：選項分數 = 飾品分數 − 權重 ×（試煉分 + 0.5 × `Enemy Level Up` 的 N），規則見 [03](03-decisions.md#12-選飾品boss-後的選擇與試煉)。權重是每隊的「試煉風險權重」（低／中／高），見 [04-settings.md](04-settings.md)。（#17、#381）
+**用途**：Boss 後的選擇評分：選項分數 = 飾品分數 −（試煉分 + `level` × `Enemy Level Up` 的 N），`level` 是 0.36，規則見 [03](03-decisions.md#12-選飾品boss-後的選擇與試煉)。（#17、#381）
 
 **檔案**：`resource/base/data/trials.yaml`，由 `tools/trial_table.py` 從拆包的客戶端資料產生，不手改。檔頭寫客戶端版本、產生方式與 © Project Moon（NOTICE.md 同）。（#381）
 
-- `model`：`early_pools`（第 1–4 池用另一組權重）、`level`（`Enemy Level Up` 每級的 pt）、`coin_budget`、`coin_in`、`coin_over`（第 5 池起硬幣威力在本局預算內與超出時每單位的 pt）。`weights`：兩組詞條權重，`early`（第 1–4 池）與 `late`。權重只寫在 `tools/trial_table.py` 一處，產生時寫進檔案。
+- `model`：`early_pools`（第 1–4 池用另一組權重）、`level`（`Enemy Level Up` 每級的 pt：`late` 的攻擊等級加防禦等級，0.34 + 0.02）、`coin_budget`、`coin_in`、`coin_over`（第 5 池起硬幣威力在本局預算內與超出時每單位的 pt）。`weights`：兩組詞條權重，`early`（第 1–4 池）與 `late`。權重只寫在 `tools/trial_table.py` 一處，產生時寫進檔案。
 - `pools`：第 n 池的試煉數。第 n 池是打完第 n 層 Boss 後的選擇，四個模式（NORMAL、HARD、INFINITY、EXTREME）第 n 層用同一個池，共 14 池（第 15 層沒有），池大小 6,7,8,9,8,8,8,8,8,7,7,7,7,7。
 - `trials`：試煉名稱 → `{id, pool, effects, score}`，105 個，名稱不重複。`effects` 是加在敵方的詞條（`offense`／`defense` 攻擊／防禦等級、`hp`／`boss_hp` 血量／Boss 血量 %、`clash`／`final`／`base` 拼點／最終／基礎威力、`coin` 正負硬幣威力、`taken` 受到傷害 −%、`dealt` 造成傷害 +%、`defskill` 防禦技最終威力）；`score` 是 pt，第 5 池起的硬幣按預算內算，執行時超出 `coin_budget` 的單位再加 `coin_over − coin_in`。
 
 例：
 
 ```yaml
-model: {early_pools: 4, level: 0.5, coin_budget: 0, coin_in: 1.5, coin_over: 3}
+model: {early_pools: 4, level: 0.36, coin_budget: 0, coin_in: 1.5, coin_over: 3}
 trials:
   Growth II: {id: MD526, pool: 2, effects: {hp: 10}, score: 0.05}
   Brutality: {id: MD548, pool: 4, effects: {coin: 1}, score: 4}

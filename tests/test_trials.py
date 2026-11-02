@@ -2,6 +2,7 @@
 and PickGift on a boss page."""
 
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -29,7 +30,7 @@ def test_the_table_holds_every_pool_of_a_15_floor_run():
     assert TABLE["pools"] == {1: 6, 2: 7, 3: 8, 4: 9, 5: 8, 6: 8, 7: 8, 8: 8, 9: 8, 10: 7, 11: 7, 12: 7, 13: 7, 14: 7}
     assert len(TABLE["trials"]) == 105
     assert [sum(t["pool"] == n for t in TABLE["trials"].values()) for n in TABLE["pools"]] == list(TABLE["pools"].values())
-    assert MODEL == {"early_pools": 4, "level": 0.5, "coin_budget": 0, "coin_in": 1.5, "coin_over": 3.0}
+    assert MODEL == {"early_pools": 4, "level": 0.36, "coin_budget": 0, "coin_in": 1.5, "coin_over": 3.0}
     assert "Project Moon" in (ROOT / "assets/resource/base/data/trials.yaml").read_text(encoding="utf-8")
 
 
@@ -45,6 +46,12 @@ def test_the_table_holds_every_pool_of_a_15_floor_run():
 def test_scores_follow_the_model(name, effects, score):
     assert TABLE["trials"][name]["effects"] == effects
     assert TABLE["trials"][name]["score"] == pytest.approx(score)
+
+
+def test_an_enemy_level_up_weighs_an_offense_and_a_defense_level():
+    # The user, 2026-10-31: a level up is Offense Level +1 and Defense Level +1, 0.34 + 0.02 pt
+    late = TABLE["weights"]["late"]
+    assert MODEL["level"] == pytest.approx(late["offense"] + late["defense"])
 
 
 def test_every_score_is_its_effects_weighed_by_the_file_s_own_weights():
@@ -115,19 +122,19 @@ def test_the_gift_score_rises_half_a_point_a_tier_for_main_and_other():
     assert r.gift_score("owned", 4) == r.gift_score("avoid", 2) == 0
 
 
-def test_rank_gifts_takes_level_ups_at_half_a_point():
-    # card = gift - weight x (trial + 0.5 x N), ties to the lighter trial, then the leftmost
+def test_rank_gifts_takes_level_ups_at_0_36_a_level():
+    # card = gift - (trial + 0.36 x N), ties to the lighter trial, then the leftmost
     cards = [("main", 1, r.burden(4.0, 2, MODEL)), ("other", 1, r.burden(0.1, 1, MODEL)), ("owned", 1, r.burden(0.8, 1, MODEL))]
-    assert r.rank_gifts(cards, "medium") == [1, 2, 0]
-    assert r.burden(0.1, None, MODEL) == pytest.approx(1.1)  # N unread counts as 2
-    assert r.rank_gifts([("main", 1, 1.0), ("other", 1, 0.0)], "medium") == [1, 0]  # 2 = 2: the lighter first
-    assert r.rank_gifts([("other", None, None), ("main", None, None), ("owned", None, None)], "high") == [1, 0, 2]
+    assert r.rank_gifts(cards) == [1, 2, 0]
+    assert r.burden(0.1, None, MODEL) == pytest.approx(0.82)  # N unread counts as 2
+    assert r.rank_gifts([("main", 1, 1.0), ("other", 1, 0.0)]) == [1, 0]  # 2 = 2: the lighter first
+    assert r.rank_gifts([("other", None, None), ("main", None, None), ("owned", None, None)]) == [1, 0, 2]
 
 
 def test_an_avoided_gift_is_ranked_last():
     # #90 (the user, 2026-10-18): taken only when nothing else is left, rather than a random trial.
-    assert r.rank_gifts([("avoid", 1, None), ("owned", 1, None), ("main", 1, None)], "high") == [2, 1, 0]
-    assert r.rank_gifts([("avoid", 1, 0.0), ("other", 1, 40.0)], "high") == [1, 0]
+    assert r.rank_gifts([("avoid", 1, None), ("owned", 1, None), ("main", 1, None)]) == [2, 1, 0]
+    assert r.rank_gifts([("avoid", 1, 0.0), ("other", 1, 40.0)]) == [1, 0]
 
 
 # The three boss pages of the 2026-10-28 NORMAL run (#381): (kind, the tier the gift data gives, trial, Enemy Level Up N)
@@ -138,10 +145,13 @@ PAGES = {
 }
 
 
-def pick(floor, tiers=True, weight="medium"):
+def ranked(page, floor, tiers=True):
     scores = r.scores(pool(floor), MODEL)
-    cards = [(kind, tier if tiers else None, r.burden(scores[name], n, MODEL)) for kind, tier, name, n in PAGES[floor]]
-    return PAGES[floor][r.rank_gifts(cards, weight)[0]][2:]
+    return r.rank_gifts([(kind, tier if tiers else None, r.burden(scores[name], n, MODEL)) for kind, tier, name, n in page])
+
+
+def pick(floor, tiers=True):
+    return PAGES[floor][ranked(PAGES[floor], floor, tiers)[0]][2:]
 
 
 def test_the_2026_10_28_pages_without_the_tier_bonus_pick_as_the_issue_says():
@@ -151,14 +161,34 @@ def test_the_2026_10_28_pages_without_the_tier_bonus_pick_as_the_issue_says():
 
 
 def test_the_2026_10_28_pages_with_their_gifts_tiers():
-    # The same pages with each gift's tier: Disk Fragment is tier III (2 + 1 = 3 - (0.06 + 1) = 1.94 over Phlebotomy Pack's
-    # 1.43) and Barbed Lasso tier II (2.5 - (1.075 + 0.5) = 0.93 over Ashes to Ashes' 0.90).
-    assert [pick(f) for f in PAGES] == [("Resilient II", 2), ("Final Power Boost", 1), ("Body Up III", 1)]
+    # The same pages with each gift's tier: Disk Fragment is tier III (2 + 1 = 3 - (0.0575 + 0.72) = 2.22 over Phlebotomy
+    # Pack's 1.58); Barbed Lasso's tier II (2.5 - (1.075 + 0.36) = 1.065) stays under Ashes to Ashes' 2 - (0.105 + 0.72) = 1.175.
+    assert [pick(f) for f in PAGES] == [("Resilient II", 2), ("Resilient V", 2), ("Body Up III", 1)]
+
+
+# The four boss pages of the 2026-10-30 HARD run (#381's live test, Select 0/2): (kind, tier, trial, N), screen order
+HARD_PAGES = {
+    1: [("other", 2, "Take Less Damage", 1), ("other", 1, "Defense Skill Up", 2),  # Melted Spring, Lithograph
+        ("owned", 1, "Growth I", 2), ("other", 2, "Offense Level Up I", 2)],  # Ornamental Horseshoe, Barbed Lasso
+    2: [("other", 1, "Body Up I", 1), ("other", 1, "Resilient II", 1),  # Burial Curse, Layered Bandages
+        ("main", 1, "Offense Level Up II", 1), ("owned", 2, "Growth II", 1)],  # Devil's Share, Cigarette Holder
+    3: [("other", 2, "Base Power Boost", 1), ("other", 1, "Keen II", 2),  # Milepost of Survival, Blue Zippo Lighter
+        ("main", 3, "Keen III", 1), ("other", 3, "Resilient IV", 2)],  # Four-leaf Clover, Disk Fragment
+    4: [("other", 1, "Growth IV", 1), ("other", 2, "Keen IV", 2),  # Headless Portrait, Town-protecting Harpoon
+        ("main", 3, "Headstrong II", 2), ("avoid", 2, "Final Power Spurt", 1)],  # Endorphin Kit, White Gossypium
+}
+
+
+@pytest.mark.parametrize("floor, taken", [(1, {3, 1}), (2, {1, 2}), (3, {2, 3}), (4, {0, 1})])
+def test_the_2026_10_30_hard_pages_take_the_cards_they_took_live(floor, taken):
+    # Live at weight 2 and 0.5 a level; the weight gone and 0.36 a level, floor 2 takes Devil's Share (3 - (0.68 + 0.36)
+    # = 1.96) before Layered Bandages (1.58), the same two cards.
+    assert set(ranked(HARD_PAGES[floor], floor)[:2]) == taken
 
 
 def boss_page(context, monkeypatch, cards, floor=None):
     """A boss gift page whose OCR reads cards [(gift text, owned, N, trial name, effect lines)] (the trial half's read,
-    TRIAL_HALF), card i centred at 375 + 264 i, Select 0/1; a Sinking team, weight medium. Its taps and log lines."""
+    TRIAL_HALF), card i centred at 375 + 264 i, Select 0/1; a Sinking team. Its taps and log lines."""
     taps, logs = [], []
     monkeypatch.setattr(actions, "tap", lambda context, x, y, wait=1.0: taps.append((x, y)))
     monkeypatch.setattr(actions, "log", logs.append)
@@ -181,8 +211,7 @@ def boss_page(context, monkeypatch, cards, floor=None):
             return [("Refuse Gift", (900, 570, 100, 25))]
         return []
     monkeypatch.setattr(actions, "ocr", ocr)
-    actions.RUN.update(settings={"trial_risk_overrides": []}, team={**test_actions.NO_GOSSYPIUM, "keyword": "Sinking",
-                                                                    "trial_risk_weight": "medium"})
+    actions.RUN.update(settings={"trial_risk_overrides": []}, team={**test_actions.NO_GOSSYPIUM, "keyword": "Sinking"})
     if floor:
         actions.RUN["floor"] = floor
     return taps, logs
@@ -205,15 +234,15 @@ def test_a_boss_page_takes_the_card_whose_trial_and_level_ups_weigh_least(contex
 
 
 def test_a_boss_page_adds_the_tier_the_numeral_over_each_icon_shows(context, monkeypatch):
-    # The same page on its capture (BossGiftTrialsFloor3.png): Barbed Lasso is tier II, 2.5 - (1.075 + 0.5) = 0.925 over
-    # Ashes to Ashes' 2 - (0.105 + 1) = 0.895; the owned Nebulizer's II adds nothing.
+    # The same page on its capture (BossGiftTrialsFloor3.png): Barbed Lasso is tier II, 2.5 - (1.075 + 0.36) = 1.065, still
+    # under Ashes to Ashes' 2 - (0.105 + 0.72) = 1.175; the owned Nebulizer's II adds nothing.
     image = np.asarray(Image.open(ROOT / "tests/screens/BossGiftTrialsFloor3.png").convert("RGB"))[:, :, ::-1].copy()
     context.tasker.controller.post_screencap.return_value.wait.return_value.get.return_value = image
     taps, logs = boss_page(context, monkeypatch, FLOOR_3, 3)
     assert actions.PickGift().run(context, None)
-    assert [t for t in taps if t[1] == 300] == [(639, 300)]
+    assert [t for t in taps if t[1] == 300] == [(375, 300)]
     assert logs[0] == ("gifts: other/Resilient V +2 score 0.105 tier I, other/Final Power Boost +1 score 1.075 tier II, "
-                       "owned/Keen III +1 score 1.045 tier II: order [1, 0, 2]")
+                       "owned/Keen III +1 score 1.045 tier II: order [0, 1, 2]")
 
 
 def test_a_fight_s_gift_page_does_not_weigh_tiers(context, monkeypatch):
@@ -255,6 +284,18 @@ def test_a_run_logs_the_trial_overrides_the_settings_migration_emptied(context, 
     monkeypatch.setattr(actions, "finish", lambda context, reason: True)
     assert actions.PlanRun().run(context, None)
     assert logs == ["settings version 16: 1 trial risk override (0-5) emptied, trials score in pt now (#381)"]
+
+
+def test_the_overrides_tab_s_note_gives_the_table_s_numbers():
+    # The settings GUI explains a score with the level's pt and a few trials' scores (the user, 2026-10-31): both languages
+    notes = re.findall(r'"trial\.note": "([^"]*)"', (ROOT / "gui/src/i18n.ts").read_text(encoding="utf-8"))
+    assert len(notes) == 2
+    for note in notes:
+        assert f"{MODEL['level']:g}" in note
+        assert "權重" not in note and "weight" not in note  # no trial risk weight any more
+        for name in ("Growth II", "Final Power Boost", "Headstrong II"):
+            score = re.escape(f"{TABLE['trials'][name]['score']:g}")
+            assert re.search(rf"{name}\D{{0,20}}{score}\b", note), (name, note)
 
 
 def test_the_table_is_what_the_game_data_gives_when_it_is_unpacked():

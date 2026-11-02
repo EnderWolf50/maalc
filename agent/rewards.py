@@ -12,7 +12,6 @@ from run_start import match_pack
 ODDS = ("very low", "low", "normal", "high", "very high")
 GIFT_SCORE = {"main": 3, "other": 2, "owned": 0}
 TIER_STEP = 0.5  # a main or other gift's score per tier above I (#381)
-RISK_WEIGHT = {"low": 0.5, "medium": 1, "high": 2}
 UNREAD_LEVELS = 2  # an Enemy Level Up badge that does not read counts as +2, the most seen live (#381)
 KEYWORDS = ("Burn", "Bleed", "Tremor", "Rupture", "Sinking", "Poise", "Charge", "Slash", "Pierce", "Blunt", "Keywordless")
 
@@ -295,18 +294,17 @@ def gift_score(kind, tier):
     return GIFT_SCORE.get(kind, 0) + (TIER_STEP * (tier - 1) if tier and kind in ("main", "other") else 0)
 
 
-def rank_gifts(cards, weight):
+def rank_gifts(cards):
     """Card indexes best first (spec 03 section 12).
 
-    cards are (kind, tier, burden or None); score = gift_score - weight x burden, ties to the lighter burden, then the
-    leftmost. Without trials (burden None) the gift score alone. An avoided gift comes after every other card: taken
-    only to fill the count, rather than a random trial (#90).
+    cards are (kind, tier, burden or None); score = gift_score - burden, ties to the lighter burden, then the leftmost.
+    Without trials (burden None) the gift score alone. An avoided gift comes after every other card: taken only to fill
+    the count, rather than a random trial (#90).
     """
-    w = RISK_WEIGHT[weight]
 
     def key(i):
         kind, tier, cost = cards[i]
-        return (kind == "avoid", -(gift_score(kind, tier) - w * (cost or 0)), cost or 0, i)
+        return (kind == "avoid", -(gift_score(kind, tier) - (cost or 0)), cost or 0, i)
 
     return sorted(range(len(cards)), key=key)
 

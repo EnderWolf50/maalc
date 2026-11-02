@@ -47,7 +47,9 @@ EARLY_POOLS = 4
 WEIGHTS = {"clash": 1.0, "offense": 0.34, "base": 1.05, "final": 1.05, "coin": 1.5, "dealt": 0.1, "taken": 0.1,
            "defense": 0.02, "hp": 0.005, "boss_hp": 0.005, "defskill": 0.1}
 EARLY_WEIGHTS = WEIGHTS | {"coin": 4.0, "dealt": 0.8, "taken": 0.8}  # pools 1-4: never take them (4 pt > a main gift's 3)
-MODEL = {"early_pools": EARLY_POOLS, "level": 0.5, "coin_budget": 0, "coin_in": WEIGHTS["coin"], "coin_over": 3.0}
+# An Enemy Level Up +1 is Offense Level +1 and Defense Level +1 (the user, 2026-10-31): 0.36 pt
+LEVEL = round(WEIGHTS["offense"] + WEIGHTS["defense"], 4)
+MODEL = {"early_pools": EARLY_POOLS, "level": LEVEL, "coin_budget": 0, "coin_in": WEIGHTS["coin"], "coin_over": 3.0}
 
 
 def load(path):

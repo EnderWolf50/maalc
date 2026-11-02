@@ -3540,7 +3540,7 @@ class PickGift(CustomAction):
     """Gift choice after a fight, an event or a boss: best cards until Select n/m is full, then Select (spec 03 section 12).
 
     Cards are main keyword > other > owned; when Mounting Trials hang under them (after a boss), each scores gift (with
-    its tier) - weight x (trial + level x Enemy Level Up N), the trial told from the pool of the floor just cleared
+    its tier) - (trial + level x Enemy Level Up N), the trial told from the pool of the floor just cleared
     (data/trials.yaml, #381). Refuse Gift is never pressed: it hands out random trials.
     A gift the team avoids (#90) comes last: taken only when nothing else fills the count.
     """
@@ -3585,7 +3585,7 @@ class PickGift(CustomAction):
                 cards.append((kind, None, None))
             names.append(name)
             shown.append(kind + part + note)
-        ranked = rewards.rank_gifts(cards, run["team"]["trial_risk_weight"])
+        ranked = rewards.rank_gifts(cards)
         log("gifts: " + ", ".join(shown) + f": order {ranked}")
 
         def pick(i):

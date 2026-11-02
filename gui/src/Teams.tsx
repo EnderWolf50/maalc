@@ -40,11 +40,6 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
   const team = s.teams[i];
   const path = `teams/${i}`;
   const set = (patch: Partial<Team>) => update((d) => { Object.assign(d.teams[i], patch); });
-  const pick = (field: "heal" | "trial_risk_weight") => (
-    <Field label={t(`team.${field}`)} path={`${path}/${field}`}>
-      <Select value={team[field]} options={teamEnum(field)} label={(v) => tv(field, v)} onChange={(v) => set({ [field]: v })} />
-    </Field>
-  );
   const main = teamKeyword(team.gift_list, s.gift_lists);
   const [notice, setNotice] = useState("");
 
@@ -163,7 +158,9 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
           </div>
         </div>
         <div className="grid">
-          {pick("heal")}
+          <Field label={t("team.heal")} path={`${path}/heal`}>
+            <Select value={team.heal} options={teamEnum("heal")} label={(v) => tv("heal", v)} onChange={(v) => set({ heal: v })} />
+          </Field>
           <Field label={t("team.reserve_cost")} path={`${path}/reserve_cost`}>
             <Num value={team.reserve_cost} min={0} onChange={(v) => set({ reserve_cost: v })} />
           </Field>
@@ -189,7 +186,6 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
               {missing(team.theme_pack_plan !== "default" && team.theme_pack_plan, s.theme_pack_plans)}
             </select>
           </Field>
-          {pick("trial_risk_weight")}
           <Field label={t("team.min_alive")} path={`${path}/min_alive`} note={t("team.min_alive_note")}>
             <Num value={team.min_alive} min={0} max={12} onChange={(v) => set({ min_alive: v })} />
           </Field>
