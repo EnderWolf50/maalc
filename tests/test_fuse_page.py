@@ -10,7 +10,7 @@ from test_shop_scroll import KEYWORDS, UNLISTED, by_points, fusion, kept_but
 
 clock, context, grid = test_actions.clock, test_actions.context, test_shop_scroll.grid  # their fixtures
 KEPT = "shop: fuse page kept: "
-READ_AGAIN = ": owned gifts read again"
+READ_AGAIN = ", owned gifts read again"
 PLACED = "shop: fuse page kept: owned gifts placed by the fusion (new gift read at cell "
 SOOTHE = 9088  # Burn IV: [9003, 9053, 9157]
 
@@ -218,7 +218,7 @@ def test_a_gift_made_not_where_the_fusion_puts_it_has_the_owned_gifts_read_again
     monkeypatch.setattr(actions, "log", lines.append)
     g = grid("fuse", 8)  # the gift made left out
     assert fusion(context, monkeypatch, g, kept_but(8, 0, 1, 2))
-    assert KEPT + "the gift made reads no gift at cell 5: the owned gifts are placed by their label" in lines
+    assert KEPT + "the gift made reads no gift at cell 5, the owned gifts are placed by their label" in lines
     assert KEPT + "the gift made reads no gift at cell 5" + READ_AGAIN in lines
     assert g.reads == list(range(8)) + list(range(3, 8)) and not placed_lines(lines)
 
@@ -262,3 +262,33 @@ def test_a_recipe_gift_is_placed_after_its_section_goes(context, grid, monkeypat
     assert g.reads == list(range(10)) + [1001] and sorted(g.tapped) == [1, 2, 7]
     second = [m for m in lines if m.startswith("shop: fuse cells")][1]
     assert f") 0 IV {KEYWORDS[1001 % len(KEYWORDS)]} {SOOTHE} Soothe the Dead (0.90): keep, want; " in second
+
+
+def test_a_section_that_comes_with_the_fusion_has_the_owned_gifts_placed_by_their_label(context, grid, monkeypatch):
+    # The III made completes a fixed recipe's materials: a Fusion Available section of 2 cells comes over the owned gifts,
+    # which move down a row and the label (#304). The cells on show are not where the fusion put them; placed by their
+    # label, they are, and only the gift made is read.
+    lines = []
+    monkeypatch.setattr(actions, "log", lines.append)
+    g = grid("fuse", 16, tiers=[3] * 5 + [2] * 6 + [1] * 5, makes=by_points())
+    made = g.fused
+    monkeypatch.setattr(g, "fused", lambda gifts: made(gifts) or g.add_section(2))
+    assert fusion(context, monkeypatch, g, kept_but(16, 4, 10, 15))
+    assert [m for m in lines if m.startswith(KEPT + "cell ") and m.endswith(", the owned gifts are placed by their label")]
+    assert placed_lines(lines) == [PLACED + "4)"] and g.reads == list(range(16)) + [1001]
+
+
+def test_a_recipe_whose_cell_is_not_where_the_fusion_put_it_is_not_counted_failed(context, monkeypatch):
+    # A cell placed by the last fusion that did not show where it was put (cell_at) is no fault of the recipe: the page is
+    # opened again and the recipe tried there. A cell read and not there still counts it failed for the visit (#300).
+    def place(context, cells, slots, grid, out=False):
+        grid["missed"] = True
+        return False
+    monkeypatch.setattr(actions.Shop, "place", staticmethod(place))
+    cells = [{"i": k, "x": 678 + 96 * k, "y": 294, "tier": t, "keyword": "Burn", "id": g, "score": 0.9}
+             for k, (t, g) in enumerate([(1, 9003), (3, 9053), (3, 9157)])]
+    for placed, failed in ((True, []), (False, [SOOTHE])):
+        visit = {}
+        grid = {"page": "fuse", "at": 0, "placed": placed, "missed": False}
+        assert actions.Shop.fuse_recipe(context, shop_team({"list": wants(SOOTHE)}), cells, grid, 3, visit) is False
+        assert visit["recipes_failed"] == failed

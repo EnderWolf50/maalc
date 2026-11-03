@@ -3929,7 +3929,8 @@ def owned_cells(context, page, grid=None):
     drag moves it no more. A cell is {"i", "x", "y", "tier", "keyword", "id", "score", "price", "look"}: i its place in the
     grid's order, y with the grid at its top, look its centre as read (cell_at finds it again by both); grid is
     {"page", "at": px scrolled, "top": at with the list at its top, "whole": the read went to the grid's end, "placed":
-    False, the cells read (fused_cells places them)}. The list goes to its top first (owned_top).
+    False, the cells read (fused_cells places them), "missed": a cell not where the grid put it (cell_at)}. The list goes
+    to its top first (owned_top).
     """
     (x0, y0), (dx, dy), under = OWNED_GRID[page]
     bottom = CELL_PAGES[page][1]
@@ -4126,7 +4127,7 @@ def fused_cells(context, cells, grid, fusion):
     placed = grid.get("whole") and shop.fusion_places(cells, [c["i"] for c in fusion["gone"]], fusion["tier"], ((x0, y0), (dx, dy)))
     if not placed:
         log("shop: fuse page kept: " + ("the last read stopped short of the grid's end" if not grid.get("whole") else
-                                        "the cells read give no order by tier") + ": owned gifts read again")
+                                        "the cells read give no order by tier") + ", owned gifts read again")
         return None
     new, k = placed
     recipe = fusion["gift"] is not None
@@ -4135,18 +4136,23 @@ def fused_cells(context, cells, grid, fusion):
     else:
         problem, cell = fused_check(context, new, k, grid, fusion)
     if problem is not None and not recipe:
-        log(f"shop: fuse page kept: {problem}: the owned gifts are placed by their label")
+        log(f"shop: fuse page kept: {problem}, the owned gifts are placed by their label")
         if owned_top(context, "fuse", grid)[1] is None:
             problem = "no E.G.O Gifts Owned label"
         else:
             problem, cell = fused_check(context, new, k, grid, fusion)
     if problem is not None:
-        log(f"shop: fuse page kept: {problem}: owned gifts read again")
+        log(f"shop: fuse page kept: {problem}, owned gifts read again")
         return None
     new[k] = cell
     grid.update(placed=True, missed=False)
     log(f"shop: fuse page kept: owned gifts placed by the fusion (new gift read at cell {k})")
     return new
+
+
+def misplaced(grid):
+    """Whether a cell of the grid placed by a fusion (fused_cells) did not show where it was put (cell_at)."""
+    return bool(grid.get("placed") and grid.get("missed"))
 
 
 def fused_check(context, new, k, grid, fusion):
@@ -4731,7 +4737,7 @@ class Shop(CustomAction):
             log(f"shop: fuse cells ({slots} slots) " + "; ".join(cell_line(c, f"{r}, {cell_state(c, team['list'], owned)}") for c, r in zip(cells, roles)))
             made = Shop.fuse_recipe(context, team, cells, grid, slots, visit)  # a wanted fusion comes before the ordinary one (#300)
             fusion = made if made is False else made or Shop.fuse_ordinary(context, team, visit, cells, roles, slots, grid, avoid)
-            if not fusion and grid.get("placed") and grid.get("missed"):
+            if not fusion and misplaced(grid):
                 log("shop: a cell placed by the fusion is not where it was put: the fuse page is opened again")
                 Shop.to_main(context)
                 return Shop.fuse(context, team, visit) or fused_any
@@ -4818,7 +4824,7 @@ class Shop(CustomAction):
         group.sort(key=lambda c: -c["y"])  # the grid's end first, as an ordinary fusion's
         names = ", ".join(cell_line(c, "material").rsplit(":", 1)[0] for c in group)
         if not Shop.place(context, group, slots, grid):
-            if not (grid.get("placed") and grid.get("missed")):
+            if not misplaced(grid):
                 failed.append(recipe["gift"])
             return False
         tier, chance = read_forecast(context)

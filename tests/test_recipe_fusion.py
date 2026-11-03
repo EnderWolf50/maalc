@@ -1,6 +1,7 @@
 """#300: a wanted fusion whose recipe the owned gifts hold is made by recipe before any ordinary fusion."""
 import actions
 import test_actions
+import test_fuse_page
 from test_actions import fusion_taps, wants
 
 clock, context = test_actions.clock, test_actions.context  # its fixtures
@@ -70,7 +71,7 @@ def test_a_made_recipe_leaves_the_owned_gifts_to_be_read_again(context, monkeypa
     test_actions.reads(context, test_actions.FUSING)
     test_actions.fuse_page(context, monkeypatch, ("Burn", 3, 9003), ("Burn", 3, 9053), ("Burn", 3, 9157))
     assert actions.Shop.fuse(context, test_actions.shop_team(team(SOOTHE)), visit)
-    assert [m for m in logs if m.startswith("shop: fuse page kept: ") and m.endswith(": owned gifts read again")]
+    assert test_fuse_page.read_again(logs)
     assert visit["fuse_scanned"]
 
 

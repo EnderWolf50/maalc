@@ -17,10 +17,11 @@ UNLISTED = test_actions.UNLISTED  # gift i of a grid reads as id UNLISTED + i, w
 KEYWORDS = ["Bleed", "Tremor", "Pierce", "Sinking", "Slash", "Blunt", "Poise", "Rupture", "Charge"]
 
 
-def frame(icon):
-    """icon (a cell's 76 px square) in its frame, the same for every gift."""
-    icon[:5], icon[-5:], icon[:, :5], icon[:, -5:] = (0, 200, 230), (0, 200, 230), (0, 200, 230), (0, 200, 230)
-    return icon
+def icon(rng):
+    """A gift's cell, 76 px square: an icon of rng's, in the frame every gift has."""
+    out = np.kron(rng.integers(40, 255, (19, 19, 3), np.uint8), np.ones((4, 4, 1), np.uint8))
+    out[:5], out[-5:], out[:, :5], out[:, -5:] = (0, 200, 230), (0, 200, 230), (0, 200, 230), (0, 200, 230)
+    return out
 
 
 class Grid:
@@ -43,13 +44,10 @@ class Grid:
         # a gift's tooltip over the cells, its red head drawn (head: shop.tooltip sees it); taps on the neutral spot that do not close it
         self.tooltip, self.head, self.stuck = False, True, 0
         rng = np.random.default_rng(1)
-        self.icons = [np.kron(rng.integers(40, 255, (19, 19, 3), np.uint8), np.ones((4, 4, 1), np.uint8))
-                      for _ in range(n + recipes)]
+        self.icons = [icon(rng) for _ in range(n + recipes)]
         self.ids = list(range(n + recipes))  # each icon's gift: its place when the grid was made
         self.tiers = list(tiers or [1] * n) + [1] * recipes
         self.names, self.makes, self.made, self.tapped = dict(names or {}), makes, 0, []  # tapped: the gifts tapped, in turn
-        for icon in self.icons:
-            frame(icon)
         ctl = context.tasker.controller
         ctl.post_screencap.return_value.wait.return_value.get.side_effect = self.screen
         ctl.post_touch_down.side_effect = self.down
@@ -80,8 +78,7 @@ class Grid:
             self.made += 1
             gift = 1000 + self.made  # a number no gift of the grid has
             k = sum(t >= tier for t in self.tiers[:len(self.icons) - len(self.recipes)])
-            icon = np.kron(np.random.default_rng(gift).integers(40, 255, (19, 19, 3), np.uint8), np.ones((4, 4, 1), np.uint8))
-            self.icons.insert(k, frame(icon))
+            self.icons.insert(k, icon(np.random.default_rng(gift)))
             self.ids.insert(k, gift)
             self.tiers.insert(k, tier)
             if gift_id is not None:
@@ -91,6 +88,15 @@ class Grid:
     def gift_id(self, gift):
         """The data's id gift reads as."""
         return self.names.get(gift, UNLISTED + gift)
+
+    def add_section(self, recipes):
+        """A Fusion Available section of `recipes` cells comes over the owned gifts (a gift made completes a fixed recipe's
+        materials): the owned gifts move down under it."""
+        self.above = (1 + (recipes - 1) // 5) * self.dy + actions.OWNED_LABEL
+        self.recipes = [(self.x0 + self.dx * (k % 5), self.y0 + self.dy * (k // 5)) for k in range(recipes)]
+        self.icons += [icon(np.random.default_rng(2000 + k)) for k in range(recipes)]
+        self.ids += [2000 + k for k in range(recipes)]
+        self.tiers += [1] * recipes
 
     def drop_section(self):
         """The recipe section over the owned gifts goes (live, #304: its recipe fused, the list moves up at once)."""

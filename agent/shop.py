@@ -338,19 +338,19 @@ def placed(image, slots):
     return sum(int(image[y - 25:y + 25, x - 25:x + 25].max(axis=2).std() > 15) for x, y in FUSE_SLOTS[slots])
 
 
-def fusion_places(cells, gone, tier, grid):
+def fusion_places(cells, gone, tier, geometry):
     """The fuse page's owned grid after a fusion, in the order the page keeps (#378): (the cells left and the gift made,
     each a copy with its new place "i" and centre "x", "y" with the grid at its top, the gift made's place), or None when
     the cells do not tell it.
 
     cells: the grid as read (each {"i", "tier", ...}, i its place); gone: the places of the materials; tier: the gift
-    made's; grid: ((x0, y0), (dx, dy)), the first cell's centre and the step to the next column and row, 5 a row.
+    made's; geometry: ((x0, y0), (dx, dy)), the first cell's centre and the step to the next column and row, 5 a row.
     The list goes by tier, highest first: the materials go out, the rest keep their order, and the gift made goes last
     of its tier's run, between the higher and the lower tiers when none of its tier is left (live: 33 of 33 fusions in six
     logs of 2026-11-02 to 04). It is {"i", "x", "y", "tier", "keyword": None, "id": None}: what it is shows only on screen.
     None: a place not read (the places are not 0 to n-1), a tier unread or out of order, or a material not among them.
     """
-    (x0, y0), (dx, dy) = grid
+    (x0, y0), (dx, dy) = geometry
     cells = sorted(cells, key=lambda c: c["i"])
     if [c["i"] for c in cells] != list(range(len(cells))) or not set(gone) <= {c["i"] for c in cells}:
         return None
@@ -363,16 +363,17 @@ def fusion_places(cells, gone, tier, grid):
 
 
 TOOLTIP_AREA = (600, 200, 680, 330)  # x, y, w, h: where a fuse page tooltip's head shows, under its tapped cell's centre
-TOOLTIP_HEAD = 120  # px of unbroken red on one row: a tooltip's head 189-290, the fuse page without one 45 at most
+TOOLTIP_HEAD = 120  # px of unbroken red on one row: a tooltip's head 288-290 (189 cut), the fuse page without one 45 at most
 
 
 def tooltip(image):
     """Whether a gift's tooltip shows over the fuse page (#331, #378): its "E.G.O GIFT" head, a dark red bar.
 
     One row of TOOLTIP_AREA holds TOOLTIP_HEAD red px in a row (red: R over 120 and over twice G and B, plus 40). The head
-    starts by its tapped cell's centre and is 330 px wide, shifted left at the screen's edge. Live (the 2026-11-04
-    recording's tooltips; tests/shop/fuse_tooltip's head is cut at 1120): 189-290 px; the fuse pages of tests/screens and
-    tests/shop 45 at most, a gift's red art ending at its cell's frame. test_shop sweeps tests/screens.
+    starts by its tapped cell's centre and is 330 px wide, shifted left at the screen's edge. Live: the 15 tooltips of the
+    2026-11-04 recording's four fuse-page visits (4654 frames, 113 with a tooltip) 288-290 px, no other frame 120;
+    tests/shop/fuse_tooltip's head, cut at the crop's edge, 189. Without one: 45 at most on the 6 fuse pages of tests/screens
+    and the 10 fuse and sell crops of tests/shop, a gift's red art ending at its cell's frame. test_shop sweeps tests/screens.
     """
     x, y, w, h = TOOLTIP_AREA
     b, g, r = (image[y:y + h, x:x + w, i].astype(int) for i in range(3))
