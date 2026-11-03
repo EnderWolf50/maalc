@@ -273,7 +273,7 @@ def fusion(context, monkeypatch, g, team):
     """Shop.fuse on g with the fuse page's read-back as the game would show it: a tap puts a gift in or takes it out, and
     the dialog's Confirm takes the gifts in out of the grid (g.fused) and empties the slots."""
     def inside():
-        since = g.taps[max((k + 1 for k, t in enumerate(g.taps) if t == actions.FUSE_DIALOG_CONFIRM), default=0):]
+        since = test_actions.after_last(g.taps, actions.FUSE_DIALOG_CONFIRM)
         return {i for i in since if isinstance(i, int) and since.count(i) % 2}
     click = g.click
 

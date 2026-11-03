@@ -24,12 +24,8 @@ def fuse(context, monkeypatch, team, readings, page, chance=True, slots=3, stuck
     test_actions.reads(context, reads_)
     test_actions.fuse_page(context, monkeypatch, *test_actions.with_ids(readings), slots=slots)
 
-    def taps():
-        return test_actions.taps(context)
-
     def since():  # the taps since a fusion last emptied the slots
-        t = taps()
-        return t[max((k + 1 for k, c in enumerate(t) if c == actions.FUSE_DIALOG_CONFIRM), default=0):]
+        return test_actions.after_last(test_actions.taps(context), actions.FUSE_DIALOG_CONFIRM)
 
     def inside():
         n = [since().count(c) for c in actions.FUSE_CELLS]
@@ -39,7 +35,8 @@ def fuse(context, monkeypatch, team, readings, page, chance=True, slots=3, stuck
         {i for i, c in enumerate(actions.FUSE_CELLS) if since().count(c)} if framed else inside()))
     monkeypatch.setattr(actions.shop, "forecast_tier", lambda image: page.get(tuple(sorted(inside()))))
     fused = actions.Shop.fuse(context, test_actions.shop_team(team), {} if visit is None else visit)
-    return fused, [taps().count(c) for c in actions.FUSE_CELLS[:len(readings)]], actions.PAGE_OK in taps(), lines
+    tapped = test_actions.taps(context)
+    return fused, [tapped.count(c) for c in actions.FUSE_CELLS[:len(readings)]], actions.PAGE_OK in tapped, lines
 
 
 

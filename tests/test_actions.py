@@ -763,10 +763,15 @@ FUSING = FUSE_PAGE | {tuple(actions.FUSE_CONFIRM): [("Selected E.G.O Gifts 3/3",
                       tuple(actions.GET_TITLE): [("E.G.O Gift GET!", (560, 165, 160, 30))]}
 
 
+def after_last(tapped, at):
+    """The taps of `tapped` after the last one at `at`; all of them when none was."""
+    return tapped[max((k + 1 for k, t in enumerate(tapped) if t == at), default=0):]
+
+
 def in_slots(tapped, ignored=()):
     """The cells (FUSE_CELLS) whose gift is in the fuse page's slots after the taps `tapped`: each tapped an odd number of
     times since the last fusion confirmed (the dialog's Confirm empties the slots), a cell in ignored never."""
-    since = tapped[max((k + 1 for k, t in enumerate(tapped) if t == actions.FUSE_DIALOG_CONFIRM), default=0):]
+    since = after_last(tapped, actions.FUSE_DIALOG_CONFIRM)
     return {c for c in actions.FUSE_CELLS if c not in ignored and since.count(c) % 2}
 
 
@@ -798,8 +803,8 @@ def fuse_page(context, monkeypatch, *readings, slots=3, ignored=()):
     def run_recognition(name, image, override=None):
         roi = tuple((override or {}).get(name, {}).get("roi", ()))
         tapped = taps(context)
-        confirmed = max((k for k, t in enumerate(tapped) if t == actions.FUSE_DIALOG_CONFIRM), default=None)
-        if roi == tuple(actions.GET_TITLE) and (confirmed is None or actions.GET_CONFIRM in tapped[confirmed:]):
+        if roi == tuple(actions.GET_TITLE) and (actions.FUSE_DIALOG_CONFIRM not in tapped
+                                                 or actions.GET_CONFIRM in after_last(tapped, actions.FUSE_DIALOG_CONFIRM)):
             return None
         return shown(name, image, override)
     context.run_recognition.side_effect = run_recognition
