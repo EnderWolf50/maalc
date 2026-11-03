@@ -17,6 +17,10 @@ CROP_AT = {
     "fuse": (620, 236),  # tests/screens/ShopFuse.png
     "fuse_recipe": (620, 236),  # tests/screens/ShopFuseRecipe.png (#103): the owned row sits at y 427
     "fuse_tooltip": (620, 236),  # a tooltip (Hellterfly's Dream's) over the first row's right half and the row under it (#297)
+    # #378: frames of the 2026-11-04 recording (F5), the list scrolled to its end: a third-row cell's tooltip down over Fuse,
+    # and a last-column cell's, shifted left at the screen's edge
+    "fuse_tooltip_low": (620, 200),
+    "fuse_tooltip_edge": (620, 200),
     # The fuse page's slots and first two columns (#77): live 2026-10-18 (probe capture rec/m3/fuse-152), Spiderweb tapped
     # in; captures/97 (2 in, a tooltip over the grid), Super Shop captures/172 (cells 5 and 6 in) and 169 (empty).
     "fuse_one_in": (180, 165),
@@ -460,6 +464,28 @@ def test_the_forecasts_row_tier_reads_a_tier_iii_and_never_a_tier_v():
     v = screen_with("forecast_super_iv")
     v[459:477, 308:311] = 0  # the IV's I bar (x 308-310 at this size)
     assert s.forecast_tier(v) is None  # a V is no tier a fusion gives
+
+
+@pytest.mark.parametrize("name, shown", [
+    ("fuse_tooltip", True), ("fuse_tooltip_low", True), ("fuse_tooltip_edge", True),
+    ("fuse", False), ("fuse_spiderweb", False), ("fuse_recipe", False), ("fuse_one_in", False), ("fuse_super_open", False),
+    ("forecast_shop_ii", False), ("forecast_super_iv", False), ("sell", False),
+])
+def test_a_tooltip_over_the_fuse_page_is_told_by_its_red_head(name, shown):
+    # #378: close_tooltip taps only when one shows. fuse_two_in and fuse_super_two_in hold a tooltip too, but their crops
+    # end 43 px into it.
+    assert s.tooltip(screen_with(name)) == shown
+
+
+def test_the_tooltip_sweep_over_tests_screens_hits_no_fuse_page():
+    # CODING_STANDARDS' sweep: close_tooltip looks at the fuse page only. No fuse page of tests/screens reads a tooltip;
+    # 18 other screens do (red banners and buttons over the area): there a hit would only tap as every read did before #378.
+    hits = [p.stem for p in sorted(SCREENS.glob("*.png")) if s.tooltip(np.asarray(Image.open(p).convert("RGB"))[:, :, ::-1])]
+    assert not [h for h in hits if h.startswith("ShopFus")]
+    assert hits == ["BattleTurnFocused", "EntryNewRun", "EntryParallelOn", "EntryPaused", "Formation", "LuxConsecExp10Open",
+                    "LuxConsecExp2Open", "LuxConsecExp9Open", "LuxEventCommence", "LuxEventContinue", "LuxEventPassed",
+                    "LuxEventText", "LuxTeamSelect", "LuxTeamSelectChain", "StarlightConfirm", "StarlightConfirmConnecting",
+                    "StarlightPage", "WipeDialog"]
 
 
 def test_the_forecasts_row_sweep_over_tests_screens_finds_no_unlisted_hit():

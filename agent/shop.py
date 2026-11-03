@@ -338,6 +338,25 @@ def placed(image, slots):
     return sum(int(image[y - 25:y + 25, x - 25:x + 25].max(axis=2).std() > 15) for x, y in FUSE_SLOTS[slots])
 
 
+TOOLTIP_AREA = (600, 200, 680, 330)  # x, y, w, h: where a fuse page tooltip's head shows, under its tapped cell's centre
+TOOLTIP_HEAD = 120  # px of unbroken red on one row: a tooltip's head 189-290, the fuse page without one 45 at most
+
+
+def tooltip(image):
+    """Whether a gift's tooltip shows over the fuse page (#331, #378): its "E.G.O GIFT" head, a dark red bar.
+
+    One row of TOOLTIP_AREA holds TOOLTIP_HEAD red px in a row (red: R over 120 and over twice G and B, plus 40). The head
+    starts by its tapped cell's centre and is 330 px wide, shifted left at the screen's edge. Live (the 2026-11-04
+    recording's tooltips; tests/shop/fuse_tooltip's head is cut at 1120): 189-290 px; the fuse pages of tests/screens and
+    tests/shop 45 at most, a gift's red art ending at its cell's frame. test_shop sweeps tests/screens.
+    """
+    x, y, w, h = TOOLTIP_AREA
+    b, g, r = (image[y:y + h, x:x + w, i].astype(int) for i in range(3))
+    red = (r > 120) & (r > 2 * g + 40) & (r > 2 * b + 40)
+    runs = np.cumsum(np.pad(red, ((0, 0), (1, 0))), axis=1)  # a row's red px up to each column
+    return bool((runs[:, TOOLTIP_HEAD:] - runs[:, :-TOOLTIP_HEAD] == TOOLTIP_HEAD).any())
+
+
 def picked(image, x, y, bottom=720):
     """Whether the owned gift whose cell is centred at (x, y) is in the fusion: its frame turns orange (#77).
 

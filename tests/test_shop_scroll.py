@@ -32,7 +32,8 @@ class Grid:
         self.top, self.bottom = TOP[page], actions.CELL_PAGES[page][1]
         self.end = END[page]
         self.at, self.drags, self.taps, self.reads, self.fling, self.share = 0, 0, [], [], fling, share
-        self.tooltip, self.stuck = False, 0  # a gift's tooltip over the cells; taps on the neutral spot that do not close it
+        # a gift's tooltip over the cells, its red head drawn (head: shop.tooltip sees it); taps on the neutral spot that do not close it
+        self.tooltip, self.head, self.stuck = False, True, 0
         rng = np.random.default_rng(1)
         self.icons = [np.kron(rng.integers(40, 255, (19, 19, 3), np.uint8), np.ones((4, 4, 1), np.uint8))
                       for _ in range(n + recipes)]
@@ -95,6 +96,8 @@ class Grid:
             lo, hi = max(y - 38, self.top), min(y + 38, self.bottom)
             if lo < hi:
                 image[lo:hi, x - 38:x + 38] = icon[lo - y + 38:hi - y + 38]
+        if self.tooltip and self.head:  # its head under the grid's edge, where no drag measures it
+            image[500:526, 700:990] = (0, 0, 155)
         return image
 
     def down(self, x, y):
@@ -172,6 +175,36 @@ def test_a_fuse_pages_tooltip_is_closed_before_its_cells_are_read(context, grid,
     cells, _ = actions.owned_cells(context, "fuse")
     assert [c["id"] for c in cells] == [UNLISTED + i for i in range(13)]
     assert g.taps and set(g.taps) == {actions.FUSE_NEUTRAL}
+
+
+def test_a_fuse_page_with_no_tooltip_is_read_without_a_tap(context, grid):
+    # #378: the neutral spot was tapped before every read and the screen waited on to move, 1.5 s a read with nothing
+    # to close (live 2026-11-04: 4 of them in one read of 16 gifts). No tooltip on show: no tap, no wait for one.
+    g = grid("fuse", 23)
+    cells, _ = actions.owned_cells(context, "fuse")
+    assert [c["id"] for c in cells] == [UNLISTED + i for i in range(23)]
+    assert actions.FUSE_NEUTRAL not in g.taps
+
+
+def test_a_tooltip_the_check_misses_is_closed_for_the_cells_it_hid(context, grid):
+    # A tooltip whose head shop.tooltip does not see: the cells under it read unknown, so the neutral spot is tapped once
+    # and they are read again (#331's second read), every gift known.
+    g = grid("fuse", 13)
+    g.tooltip, g.head = True, False
+    cells, _ = actions.owned_cells(context, "fuse")
+    assert [c["id"] for c in cells] == [UNLISTED + i for i in range(13)]
+    assert g.taps == [actions.FUSE_NEUTRAL]
+
+
+def test_a_page_the_guard_does_not_find_untapped_is_tapped_as_before(context, clock, monkeypatch):
+    # A tooltip that hides Leave (the Shop node's anchor) and that shop.tooltip misses: the guard on the untapped screenshot
+    # fails, so the neutral spot is tapped and the page checked again, as close_tooltip always did (ADR 0007).
+    monkeypatch.setattr(actions, "page_guard", test_actions.REAL_GUARD)
+    ctl = context.tasker.controller
+    context.run_recognition.side_effect = lambda name, image, override=None: \
+        SimpleNamespace(hit=True, box=[0, 0, 1, 1]) if name == "Shop" and ctl.post_click.called else None
+    assert actions.close_tooltip(context, "fuse") is not None
+    assert [c.args for c in ctl.post_click.call_args_list] == [actions.FUSE_NEUTRAL]
 
 
 def test_the_tap_that_closes_a_materials_tooltip_is_followed_by_the_page_guard(context, monkeypatch):

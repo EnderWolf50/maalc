@@ -3884,25 +3884,37 @@ def gift_shown(cell):
     return f"{cell['id']} {named} ({cell['score']:.2f})" if named else f"unknown (best {cell['score']:.2f})"
 
 
-def close_tooltip(context, page):
-    """A screenshot of page after a tap on its TOOLTIP_CLOSE spot (a page without one: as it is), #331.
+def close_tooltip(context, page, force=False):
+    """A screenshot of page with no gift tooltip over its grid, the page checked (page_guard), #331.
 
-    The tap comes first and the guard after it (ADR 0007): a tooltip over the fuse page hides Leave, so the page node
-    reads nothing until it is closed.
+    A tooltip comes up over a cell tapped and hides the cells under it. With one on show (shop.tooltip), or force (a cell
+    was just tapped), the page's TOOLTIP_CLOSE spot is tapped and the screen waited on to move and stop. The tap comes
+    first and the guard after it (ADR 0007): a tooltip over the fuse page hides Leave, so the page node reads nothing until
+    it is closed. With none on show nothing is tapped or waited for (#378: 1.5 s a read, live), unless the guard does not
+    find the page on that screenshot: a tooltip shop.tooltip missed may hide Leave, so it is tapped as with one.
+    A page without a TOOLTIP_CLOSE spot: as it is.
     """
-    if page in TOOLTIP_CLOSE:
-        tap_settled(context, *TOOLTIP_CLOSE[page], timeout=1.0)
+    image = screen(context)
+    if page not in TOOLTIP_CLOSE:
+        return page_guard(context, "Shop", image=image)
+    if not force and not shop.tooltip(image):
+        try:
+            return page_guard(context, "Shop", image=image)
+        except PageGone:
+            pass
+    tap_settled(context, *TOOLTIP_CLOSE[page], timeout=1.0)
     return page_guard(context, "Shop")
 
 
 def read_clear(context, image, spots, page):
     """read_cells of spots on image, the cells that read unknown read again on a screenshot taken after one more tap
-    on the page's TOOLTIP_CLOSE spot (#331): ([cell], [the screenshot each was read from])."""
+    on the page's TOOLTIP_CLOSE spot (#331): ([cell], [the screenshot each was read from]). The tap is made whether a
+    tooltip shows or not: one shop.tooltip missed may be what hid them."""
     cells = read_cells(context, image, spots, page)
     shots = [image] * len(cells)
     unknown = [k for k, c in enumerate(cells) if c["id"] is None]
     if unknown and page in TOOLTIP_CLOSE:
-        again = close_tooltip(context, page)
+        again = close_tooltip(context, page, force=True)
         for c in read_cells(context, again, [(cells[k]["x"], cells[k]["y"]) for k in unknown], page):
             k = unknown[c["i"]]
             cells[k], shots[k] = {**c, "i": cells[k]["i"]}, again
@@ -4738,7 +4750,7 @@ class Shop(CustomAction):
             x, y = at
             page_guard(context, "Shop")
             tap_moved(context, x, y, timeout=0.5)
-            image = close_tooltip(context, "fuse")  # its tooltip shades the grid
+            image = close_tooltip(context, "fuse", force=True)  # its tooltip shades the grid, still fading in maybe
             filled, framed = shop.placed(image, slots), shop.picked(image, x, y, CELL_PAGES["fuse"][1])
             if filled != (len(cells) - n if out else n) or framed == out:
                 log(f"shop: cell {c['i']} tapped: {filled} materials in, {'framed' if framed else 'not framed'}: "
