@@ -36,6 +36,7 @@ class Grid:
         rng = np.random.default_rng(1)
         self.icons = [np.kron(rng.integers(40, 255, (19, 19, 3), np.uint8), np.ones((4, 4, 1), np.uint8))
                       for _ in range(n + recipes)]
+        self.ids = list(range(n + recipes))  # each icon's gift: its place when the grid was made
         for icon in self.icons:
             icon[:5], icon[-5:], icon[:, :5], icon[:, -5:] = (0, 200, 230), (0, 200, 230), (0, 200, 230), (0, 200, 230)
         ctl = context.tasker.controller
@@ -53,7 +54,19 @@ class Grid:
 
     def sold(self, i):
         """Gift i sold: the gifts after it move up a cell, and a grid scrolled past its new end springs back."""
-        del self.icons[i]
+        del self.icons[i], self.ids[i]
+        self.at = min(self.at, self.max_at)
+
+    def fused(self, gifts):
+        """The gifts in `gifts` (places) fused: they leave the grid as a sale does (the fused gift is left out, #378)."""
+        for i in sorted(gifts, reverse=True):
+            self.sold(i)
+
+    def drop_section(self):
+        """The recipe section over the owned gifts goes (live, #304: its recipe fused, the list moves up at once)."""
+        n = len(self.icons) - len(self.recipes)
+        del self.icons[n:], self.ids[n:]
+        self.recipes, self.above = [], 0
         self.at = min(self.at, self.max_at)
 
     def place(self, i):
@@ -115,9 +128,10 @@ class Grid:
             i = self.at_screen(x, y)
             assert i is None or i < len(self.icons) - len(self.recipes), f"a recipe cell read as an owned gift at {x, y}"
             if i is not None:
-                self.reads.append(i)
-                out.append({"i": k, "x": x, "y": y, "tier": 1, "keyword": KEYWORDS[i % len(KEYWORDS)],
-                            "id": None if self.tooltip and i % 2 else UNLISTED + i, "score": 0.9})
+                gift = self.ids[i]
+                self.reads.append(gift)
+                out.append({"i": k, "x": x, "y": y, "tier": 1, "keyword": KEYWORDS[gift % len(KEYWORDS)],
+                            "id": None if self.tooltip and gift % 2 else UNLISTED + gift, "score": 0.9})
         return out
 
 
@@ -256,11 +270,19 @@ def kept_but(n, *free):
 
 
 def fusion(context, monkeypatch, g, team):
-    """Shop.fuse on g with the fuse page's read-back as the game would show it (a tap puts a gift in or takes it out)."""
+    """Shop.fuse on g with the fuse page's read-back as the game would show it: a tap puts a gift in or takes it out, and
+    the dialog's Confirm takes the gifts in out of the grid (g.fused) and empties the slots."""
     def inside():
-        return {i for i in g.taps if isinstance(i, int) and g.taps.count(i) % 2}
-    page = {**test_actions.FUSE_PAGE, tuple(actions.FUSE_CONFIRM): [("Selected E.G.O Gifts 3/3", (330, 175, 320, 30))],
-            tuple(actions.GET_TITLE): [("E.G.O Gift GET!", (560, 165, 160, 30))]}
+        since = g.taps[max((k + 1 for k, t in enumerate(g.taps) if t == actions.FUSE_DIALOG_CONFIRM), default=0):]
+        return {i for i in since if isinstance(i, int) and since.count(i) % 2}
+    click = g.click
+
+    def tap(x, y):
+        if (x, y) == actions.FUSE_DIALOG_CONFIRM:
+            g.fused(inside())
+        return click(x, y)
+    context.tasker.controller.post_click.side_effect = tap
+    page = dict(test_actions.FUSING)
     del page[tuple(actions.FUSE_LIST)]  # the grid's own label
     test_actions.reads(context, page)
     inner = context.run_recognition.side_effect
@@ -283,10 +305,11 @@ def test_a_fusion_puts_in_gifts_from_both_ends_of_the_grid(context, grid, monkey
 def test_a_fusion_reads_the_owned_gifts_under_a_fixed_recipes_section(context, grid, monkeypatch, recipes):
     # Live 2026-10-21 (F4, F5): a fixed recipe's Fusion Available section over the owned gifts closed the fuse page
     # unread (#103). The owned gifts are found by their label under 1, 2 or 3 rows of recipe cells (3: the label is
-    # under the list's edge when it opens); no recipe cell is read or tapped (#78 is the recipes' own issue).
+    # under the list's edge when it opens); no recipe cell is read or tapped (#78 is the recipes' own issue). After the
+    # fusion the 20 gifts left are read again under the section on the page still open (#378).
     g = grid("fuse", 23, recipes=recipes)
     assert fusion(context, monkeypatch, g, kept_but(23, 1, 12, 22))
-    assert g.reads == list(range(23))
+    assert g.reads == list(range(23)) + [i for i in range(23) if i not in (1, 12, 22)]
     assert sorted(i for i in g.taps if isinstance(i, int)) == [1, 12, 22]
 
 

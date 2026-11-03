@@ -14,7 +14,7 @@ THREE_THREE_TWO = [("Bleed", 3), ("Tremor", 3), ("Pierce", 2)]  # 26 points: a I
 
 
 def fuse(context, monkeypatch, team, readings, page, chance=True, slots=3, stuck=False, framed=False, visit=None, get=True):
-    """Shop.fuse on readings (test_actions.cells_read), the page forecasting page.get(the cells in, as a sorted tuple) (a tier, or
+    """Shop.fuse on readings (test_actions.fuse_page), the page forecasting page.get(the cells in, as a sorted tuple) (a tier, or
     nothing: the row does not read; page: a dict, or anything with .get). get: the page reads "GET!" after a fusion; stuck: a material tapped in cannot be taken out again, framed: it goes out but its frame stays lit; visit: the shop visit's dict.
     Returns (fused, how often each cell was tapped, whether Fuse was pressed, the log lines)."""
     lines = []
@@ -22,19 +22,22 @@ def fuse(context, monkeypatch, team, readings, page, chance=True, slots=3, stuck
     reads_ = {**test_actions.FUSE_PAGE, tuple(actions.FUSE_CONFIRM): [(f"Selected E.G.O Gifts 3/{slots}", (330, 175, 320, 30))],
               **({tuple(actions.GET_TITLE): [("E.G.O Gift GET!", (560, 165, 160, 30))]} if get else {}), **(CHANCE if chance else {})}
     test_actions.reads(context, reads_)
+    test_actions.fuse_page(context, monkeypatch, *test_actions.with_ids(readings), slots=slots)
 
     def taps():
-        return [c.args for c in context.tasker.controller.post_click.call_args_list]
+        return test_actions.taps(context)
+
+    def since():  # the taps since a fusion last emptied the slots
+        t = taps()
+        return t[max((k + 1 for k, c in enumerate(t) if c == actions.FUSE_DIALOG_CONFIRM), default=0):]
 
     def inside():
-        n = [taps().count(c) for c in actions.FUSE_CELLS]
+        n = [since().count(c) for c in actions.FUSE_CELLS]
         return {i for i, k in enumerate(n) if (k and stuck) or k % 2}
-    monkeypatch.setattr(actions.shop, "fuse_slots", lambda image: slots)
     monkeypatch.setattr(actions.shop, "placed", lambda image, n: len(inside()))
     monkeypatch.setattr(actions.shop, "picked", lambda image, x, y, bottom=720: actions.FUSE_CELLS.index((x, y)) in (
-        {i for i, c in enumerate(actions.FUSE_CELLS) if taps().count(c)} if framed else inside()))
+        {i for i, c in enumerate(actions.FUSE_CELLS) if since().count(c)} if framed else inside()))
     monkeypatch.setattr(actions.shop, "forecast_tier", lambda image: page.get(tuple(sorted(inside()))))
-    test_actions.cells_read(monkeypatch, *test_actions.with_ids(readings))
     fused = actions.Shop.fuse(context, test_actions.shop_team(team), {} if visit is None else visit)
     return fused, [taps().count(c) for c in actions.FUSE_CELLS[:len(readings)]], actions.PAGE_OK in taps(), lines
 

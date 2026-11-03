@@ -736,6 +736,11 @@ def owned_gifts(context, cells=actions.FUSE_CELLS):
 def cells_read(monkeypatch, *readings):
     """read_cells reads the first cells of any grid as readings [(keyword[, tier[, gift id]])], tier 2 and no id
     by default (test_shop_cells checks the reading itself on live captures)."""
+    grid_read(monkeypatch, list(readings))
+
+
+def grid_read(monkeypatch, readings):
+    """cells_read over the list readings as it is at each read: fuse_page's, which a fusion changes."""
     places = {}
 
     def read_cells(context, image, cells, page):
@@ -753,17 +758,51 @@ def cells_read(monkeypatch, *readings):
 FUSE_PAGE = {tuple(actions.DIALOG_TITLE): [("Fuse E.G.O Gift", (500, 100, 200, 40))],
              tuple(actions.KEYWORD_LABELS): [("Burn", (300, 400, 60, 20))],
              tuple(actions.FUSE_LIST): [("E.G.O Gifts Owned", (635, 216, 161, 24))]}  # at its place: nothing over it
+# The fuse page whose fusions go through: its dialog counts 3/3, its GET! shows (fuse_page: once a fusion is confirmed).
+FUSING = FUSE_PAGE | {tuple(actions.FUSE_CONFIRM): [("Selected E.G.O Gifts 3/3", (330, 175, 320, 30))],
+                      tuple(actions.GET_TITLE): [("E.G.O Gift GET!", (560, 165, 160, 30))]}
+
+
+def in_slots(tapped, ignored=()):
+    """The cells (FUSE_CELLS) whose gift is in the fuse page's slots after the taps `tapped`: each tapped an odd number of
+    times since the last fusion confirmed (the dialog's Confirm empties the slots), a cell in ignored never."""
+    since = tapped[max((k + 1 for k, t in enumerate(tapped) if t == actions.FUSE_DIALOG_CONFIRM), default=0):]
+    return {c for c in actions.FUSE_CELLS if c not in ignored and since.count(c) % 2}
 
 
 def fuse_slots(context, monkeypatch, slots=3, ignored=()):
     """The fuse page's read-back (shop.fuse_slots, placed, picked; test_shop checks them on live captures) as the
-    game would show it: a tap on a cell puts its gift in or takes it out, but not on a cell in ignored."""
-    def inside():
-        taps = [c.args for c in context.tasker.controller.post_click.call_args_list]
-        return {c for c in actions.FUSE_CELLS if c not in ignored and taps.count(c) % 2}
+    game would show it: a tap on a cell puts its gift in or takes it out, but not on a cell in ignored (in_slots)."""
     monkeypatch.setattr(actions.shop, "fuse_slots", lambda image: slots)
-    monkeypatch.setattr(actions.shop, "placed", lambda image, n: len(inside()))
-    monkeypatch.setattr(actions.shop, "picked", lambda image, x, y, bottom=720: (x, y) in inside())
+    monkeypatch.setattr(actions.shop, "placed", lambda image, n: len(in_slots(taps(context), ignored)))
+    monkeypatch.setattr(actions.shop, "picked", lambda image, x, y, bottom=720: (x, y) in in_slots(taps(context), ignored))
+
+
+def fuse_page(context, monkeypatch, *readings, slots=3, ignored=()):
+    """fuse_slots over a grid whose first cells hold readings (cells_read), changed by a fusion as the game does (#378):
+    the dialog's Confirm takes the gifts in out of the grid, the rest moving up a cell each (the fused gift is left out:
+    an unknown gift stays out of every fusion), and the GET! popup OCR reads shows from that Confirm until its own is
+    tapped. Call it after reads()."""
+    fuse_slots(context, monkeypatch, slots, ignored)
+    grid = list(readings)
+    grid_read(monkeypatch, grid)
+
+    def click(x, y):
+        if (x, y) == actions.FUSE_DIALOG_CONFIRM:  # recorded already: the slots as they were before it
+            gone = {actions.FUSE_CELLS.index(c) for c in in_slots(taps(context)[:-1], ignored)}
+            grid[:] = [r for k, r in enumerate(grid) if k not in gone]
+        return MagicMock()
+    context.tasker.controller.post_click.side_effect = click
+    shown = context.run_recognition.side_effect
+
+    def run_recognition(name, image, override=None):
+        roi = tuple((override or {}).get(name, {}).get("roi", ()))
+        tapped = taps(context)
+        confirmed = max((k for k, t in enumerate(tapped) if t == actions.FUSE_DIALOG_CONFIRM), default=None)
+        if roi == tuple(actions.GET_TITLE) and (confirmed is None or actions.GET_CONFIRM in tapped[confirmed:]):
+            return None
+        return shown(name, image, override)
+    context.run_recognition.side_effect = run_recognition
 
 
 ORDER = ["Burn", "Bleed", "Tremor", "Rupture", "Sinking", "Poise", "Charge", "Slash", "Pierce", "Blunt", "Keywordless"]
@@ -1152,22 +1191,23 @@ def test_a_team_without_white_gossypium_takes_it_when_it_is_the_only_card(contex
 
 
 def fusion_taps(context, monkeypatch, team, *readings, slots=3, ignored=(), confirm=3):
-    """Shop.fuse on readings (cells_read) with the read-back of fuse_slots; (its result, how often each cell was tapped,
-    whether Fuse was pressed). The confirm dialog reads "confirm/slots"."""
-    reads(context, {**FUSE_PAGE, tuple(actions.FUSE_CONFIRM): [(f"Selected E.G.O Gifts {confirm}/{slots}", (330, 175, 320, 30))],
-                    tuple(actions.GET_TITLE): [("E.G.O Gift GET!", (560, 165, 160, 30))]})
-    fuse_slots(context, monkeypatch, slots, ignored)
-    cells_read(monkeypatch, *with_ids(readings))
+    """Shop.fuse on readings (with_ids) of fuse_page; (its result, how often each cell was tapped, whether Fuse was
+    pressed). The confirm dialog reads "confirm/slots"."""
+    reads(context, FUSING | {tuple(actions.FUSE_CONFIRM): [(f"Selected E.G.O Gifts {confirm}/{slots}", (330, 175, 320, 30))]})
+    fuse_page(context, monkeypatch, *with_ids(readings), slots=slots, ignored=ignored)
     fused = actions.Shop.fuse(context, shop_team(team), {})
     taps = [c.args for c in context.tasker.controller.post_click.call_args_list]
     return fused, [taps.count(c) for c in actions.FUSE_CELLS[:len(readings)]], actions.PAGE_OK in taps
 
 
 def test_a_fusion_puts_in_the_materials_that_make_the_highest_tier(context, monkeypatch):
-    # #77: III + III + II make a tier IV; the three I would make only a tier I.
-    fused, taps, ok = fusion_taps(context, monkeypatch, {}, ("Bleed", 1), ("Bleed", 3), ("Pierce", 1),
-                                  ("Tremor", 2), ("Slash", 3), ("Sinking", 1))
-    assert fused and ok and taps == [0, 1, 0, 1, 1, 0]
+    # #77: III + III + II make a tier IV; the three I would make only a tier I, made after it on the same page (#378): with
+    # cells 1, 3 and 4 gone they are cells 0-2.
+    fused, _, ok = fusion_taps(context, monkeypatch, {}, ("Bleed", 1), ("Bleed", 3), ("Pierce", 1),
+                               ("Tremor", 2), ("Slash", 3), ("Sinking", 1))
+    cells = [t for t in taps(context) if t in actions.FUSE_CELLS]
+    assert fused and ok and sorted(cells[:3]) == sorted(actions.FUSE_CELLS[i] for i in (1, 3, 4))
+    assert sorted(cells[3:]) == sorted(actions.FUSE_CELLS[:3])
 
 
 @pytest.mark.parametrize("condition, made", [(None, True), ("any", True), ("upgrade", False), ("tier4", False)])
