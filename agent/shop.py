@@ -338,6 +338,30 @@ def placed(image, slots):
     return sum(int(image[y - 25:y + 25, x - 25:x + 25].max(axis=2).std() > 15) for x, y in FUSE_SLOTS[slots])
 
 
+def fusion_places(cells, gone, tier, grid):
+    """The fuse page's owned grid after a fusion, in the order the page keeps (#378): (the cells left and the gift made,
+    each a copy with its new place "i" and centre "x", "y" with the grid at its top, the gift made's place), or None when
+    the cells do not tell it.
+
+    cells: the grid as read (each {"i", "tier", ...}, i its place); gone: the places of the materials; tier: the gift
+    made's; grid: ((x0, y0), (dx, dy)), the first cell's centre and the step to the next column and row, 5 a row.
+    The list goes by tier, highest first: the materials go out, the rest keep their order, and the gift made goes last
+    of its tier's run, between the higher and the lower tiers when none of its tier is left (live: 33 of 33 fusions in six
+    logs of 2026-11-02 to 04). It is {"i", "x", "y", "tier", "keyword": None, "id": None}: what it is shows only on screen.
+    None: a place not read (the places are not 0 to n-1), a tier unread or out of order, or a material not among them.
+    """
+    (x0, y0), (dx, dy) = grid
+    cells = sorted(cells, key=lambda c: c["i"])
+    if [c["i"] for c in cells] != list(range(len(cells))) or not set(gone) <= {c["i"] for c in cells}:
+        return None
+    if tier is None or any(c["tier"] is None for c in cells) or any(a["tier"] < b["tier"] for a, b in zip(cells, cells[1:])):
+        return None
+    left = [c for c in cells if c["i"] not in set(gone)]
+    k = sum(c["tier"] >= tier for c in left)
+    order = left[:k] + [{"tier": tier, "keyword": None, "id": None}] + left[k:]
+    return [{**c, "i": n, "x": x0 + dx * (n % 5), "y": y0 + dy * (n // 5)} for n, c in enumerate(order)], k
+
+
 TOOLTIP_AREA = (600, 200, 680, 330)  # x, y, w, h: where a fuse page tooltip's head shows, under its tapped cell's centre
 TOOLTIP_HEAD = 120  # px of unbroken red on one row: a tooltip's head 189-290, the fuse page without one 45 at most
 

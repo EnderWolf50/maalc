@@ -63,14 +63,14 @@ def test_a_recipe_the_dialog_counts_wrong_is_not_confirmed(context, monkeypatch)
 
 
 def test_a_made_recipe_leaves_the_owned_gifts_to_be_read_again(context, monkeypatch):
-    # The grid changed: it is read again on the page still open (#378), and with nothing left to make the page is closed
-    # and not read again until the owned gifts change.
+    # The grid changed: on the page still open (#378) the fake shows no gift made where the fusion puts it, so the owned
+    # gifts are read again; with nothing left to make the page is closed and not read again until the owned gifts change.
     visit, logs = {}, []
     monkeypatch.setattr(actions, "log", logs.append)
     test_actions.reads(context, test_actions.FUSING)
     test_actions.fuse_page(context, monkeypatch, ("Burn", 3, 9003), ("Burn", 3, 9053), ("Burn", 3, 9157))
     assert actions.Shop.fuse(context, test_actions.shop_team(team(SOOTHE)), visit)
-    assert "shop: fuse page kept: owned gifts read again" in logs
+    assert [m for m in logs if m.startswith("shop: fuse page kept: ") and m.endswith(": owned gifts read again")]
     assert visit["fuse_scanned"]
 
 

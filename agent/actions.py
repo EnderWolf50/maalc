@@ -3928,35 +3928,17 @@ def owned_cells(context, page, grid=None):
     row up to the first row's place (with none, the row under a full last row), until no cut-off cell holds a gift or a
     drag moves it no more. A cell is {"i", "x", "y", "tier", "keyword", "id", "score", "price", "look"}: i its place in the
     grid's order, y with the grid at its top, look its centre as read (cell_at finds it again by both); grid is
-    {"page", "at": px scrolled, "top": at with the list at its top}. A page opens where its list was left (live
-    2026-10-21: the fuse page after a fusion), so every list is dragged to its top first (grid_top); a grid an earlier
-    read of the page still open left (the fuse page after a fusion, #378) goes back by its top in one drag, and to its top
-    stroke by stroke only when their label does not show then. The fuse page's owned gifts are then placed by their label
-    (owned_label), whatever that drag measured: sections over them come and go with a fusion (#304).
+    {"page", "at": px scrolled, "top": at with the list at its top, "whole": the read went to the grid's end, "placed":
+    False, the cells read (fused_cells places them)}. The list goes to its top first (owned_top).
     """
     (x0, y0), (dx, dy), under = OWNED_GRID[page]
     bottom = CELL_PAGES[page][1]
-    out, done, kept = [], set(), grid is not None
-    close_tooltip(context, page)
-    if kept:
-        moved, image = drag_grid(context, page, grid["top"] - grid["at"])
-        grid["at"] += moved
-    else:
-        grid, image = {"page": page, "at": 0, "top": 0}, grid_top(context, page)
-    if page == "fuse":
-        label, image, up = owned_label(context, image)
-        if label is None and kept:  # the drag back stopped short (a stroke the game took less of): owned_label looks only up
-            log("shop: the owned gifts' label is not on show after the drag back: the fuse list goes to its top")
-            label, image, up = owned_label(context, grid_top(context, page))
-        if label is None:
-            log("shop: no E.G.O Gifts Owned on the fuse page: nothing read")
-            return [], grid
-        grid["at"] = y0 - label - OWNED_LABEL  # negative: sections over the owned gifts push them down
-        grid["top"] = grid["at"] - up
-        if not whole(page, y0 - grid["at"]):
-            log(f"shop: the owned gifts start at y {y0 - grid['at']}, under the sections over them")
-            moved, image = drag_grid(context, page, -grid["at"] - GRID_MARGIN)
-            grid["at"] += moved
+    out, done = [], set()
+    grid, image = owned_top(context, page, grid)
+    grid.update(whole=False, placed=False, missed=False)
+    if image is None:
+        log("shop: no E.G.O Gifts Owned on the fuse page: nothing read")
+        return [], grid
     for _ in range(GRID_SCROLLS):
         image = close_tooltip(context, page)
         rows = range(max(0, grid["at"] // dy), grid["at"] // dy + 5)  # the last one all under the edge
@@ -3975,16 +3957,52 @@ def owned_cells(context, page, grid=None):
         # drag more tells them apart.
         full = not cut and all(shop.filled(image[:bottom], x0 + dx * c, hidden - dy) for c in range(5))
         if not cut and not full:
+            grid["whole"] = True
             break
         moved, image = drag_grid(context, page, (min(cut) if cut else hidden) - y0 - GRID_MARGIN)
         grid["at"] += moved
         if abs(moved) <= 3:
+            grid["whole"] = full
             log(f"shop: the {page} grid does not move: " + ("at its end" if full else "its cut-off cells stay unread"))
             break
     else:
         log(f"shop: the {page} grid still has cut-off cells after {GRID_SCROLLS} drags: they stay unread")
     log(f"shop: {page} grid read down {grid['at']} px")
     return out, grid
+
+
+def owned_top(context, page, grid=None):
+    """(grid, the screenshot) with page's list dragged to its top; on the fuse page the owned gifts placed by their label
+    (owned_label), the screenshot None when it does not show.
+
+    A page opens where its list was left (live 2026-10-21: the fuse page after a fusion), so a new grid's list goes to its
+    top stroke by stroke (grid_top). A grid an earlier read of the page still open left (the fuse page after a fusion,
+    #378) goes back by its top in one drag, and to its top stroke by stroke only when the label does not show then. The
+    owned gifts are placed by their label whatever that drag measured: sections over them come and go with a fusion (#304).
+    """
+    (_, y0), _, _ = OWNED_GRID[page]
+    kept = grid is not None
+    close_tooltip(context, page)
+    if kept:
+        moved, image = drag_grid(context, page, grid["top"] - grid["at"])
+        grid["at"] += moved
+    else:
+        grid, image = {"page": page, "at": 0, "top": 0}, grid_top(context, page)
+    if page != "fuse":
+        return grid, image
+    label, image, up = owned_label(context, image)
+    if label is None and kept:  # the drag back stopped short (a stroke the game took less of): owned_label looks only up
+        log("shop: the owned gifts' label is not on show after the drag back: the fuse list goes to its top")
+        label, image, up = owned_label(context, grid_top(context, page))
+    if label is None:
+        return grid, None
+    grid["at"] = y0 - label - OWNED_LABEL  # negative: sections over the owned gifts push them down
+    grid["top"] = grid["at"] - up
+    if not whole(page, y0 - grid["at"]):
+        log(f"shop: the owned gifts start at y {y0 - grid['at']}, under the sections over them")
+        moved, image = drag_grid(context, page, -grid["at"] - GRID_MARGIN)
+        grid["at"] += moved
+    return grid, image
 
 
 def owned_label(context, image):
@@ -4064,21 +4082,101 @@ def matched(image, x, y, look):
     return min(((np.abs(centre(image, x, y + k) - look).mean(), k) for k in range(-3, 4)), key=lambda m: (m[0], abs(m[1])))
 
 
-def cell_at(context, grid, cell):
-    """Where cell (owned_cells) shows now: (x, y) on screen, the grid dragged first to bring it whole into view; None
-    when its centre there is not the one read (the grid is not where it was measured to be): nothing is tapped."""
-    (_, y0), _, _ = OWNED_GRID[grid["page"]]
+def into_view(context, grid, cell, rows_over=0):
+    """Drag the grid to bring cell (owned_cells) whole into view, its row to the first row's place, or rows_over rows
+    under it (the rows over it on show too) when it has as many over it: its y on screen."""
+    (_, y0), (_, dy), _ = OWNED_GRID[grid["page"]]
+    over = min(rows_over, (cell["y"] - y0) // dy) * dy
     for _ in range(3):  # a drag stopped short (an end, a stroke the game took less of) is followed by another
         y = cell["y"] - grid["at"]
         if whole(grid["page"], y):
             break
-        grid["at"] += drag_grid(context, grid["page"], y - y0 - GRID_MARGIN)[0]
-    x, y = cell["x"], cell["y"] - grid["at"]
+        grid["at"] += drag_grid(context, grid["page"], y - over - y0 - GRID_MARGIN)[0]
+    return cell["y"] - grid["at"]
+
+
+def cell_at(context, grid, cell):
+    """Where cell (owned_cells) shows now: (x, y) on screen, the grid dragged first to bring it whole into view; None
+    when its centre there is not the one read (the grid is not where it was measured to be): nothing is tapped, and
+    grid["missed"] says so."""
+    x, y = cell["x"], into_view(context, grid, cell)
     diff, k = matched(screen(context), x, y, cell["look"])
     if diff > GRID_SAME:
         log(f"shop: cell {cell['i']} is not where the grid puts it ({grid['page']} grid at {grid['at']} px, {diff:.1f})")
+        grid["missed"] = True
         return None
     return x, y + k
+
+
+def fused_cells(context, cells, grid, fusion):
+    """The fuse page's owned gifts after `fusion` (Shop.fuse_ordinary's or fuse_recipe's), on the page kept open (#378):
+    placed by it instead of read again ([cell], as owned_cells gives them), or None when they are to be read again (the
+    reason logged).
+
+    shop.fusion_places puts the gifts left and the gift made in the grid's new order: only when the last read went to the
+    grid's end and gave every place a tier, highest first. After a recipe the owned gifts are placed by their label first
+    (owned_top): its Fusion Available section may have gone, the list moved up (#304). The gift made's cell is dragged into
+    view, a row over it on show too, and read: it is placed (fused_check) when its tier is the fusion's (a recipe's: its
+    id), its id is read and it looks like no gift listed, every other cell on show looks as it was read (matched within
+    GRID_SAME) and the places after the last are empty. A check that fails places the owned gifts by their label once (the
+    list may have sprung back from its end, a section come or gone) and checks again. Each tap after it still checks its
+    cell (cell_at).
+    """
+    (x0, y0), (dx, dy), _ = OWNED_GRID["fuse"]
+    placed = grid.get("whole") and shop.fusion_places(cells, [c["i"] for c in fusion["gone"]], fusion["tier"], ((x0, y0), (dx, dy)))
+    if not placed:
+        log("shop: fuse page kept: " + ("the last read stopped short of the grid's end" if not grid.get("whole") else
+                                        "the cells read give no order by tier") + ": owned gifts read again")
+        return None
+    new, k = placed
+    recipe = fusion["gift"] is not None
+    if recipe and owned_top(context, "fuse", grid)[1] is None:
+        problem, cell = "no E.G.O Gifts Owned label after the recipe", None
+    else:
+        problem, cell = fused_check(context, new, k, grid, fusion)
+    if problem is not None and not recipe:
+        log(f"shop: fuse page kept: {problem}: the owned gifts are placed by their label")
+        if owned_top(context, "fuse", grid)[1] is None:
+            problem = "no E.G.O Gifts Owned label"
+        else:
+            problem, cell = fused_check(context, new, k, grid, fusion)
+    if problem is not None:
+        log(f"shop: fuse page kept: {problem}: owned gifts read again")
+        return None
+    new[k] = cell
+    grid.update(placed=True, missed=False)
+    log(f"shop: fuse page kept: owned gifts placed by the fusion (new gift read at cell {k})")
+    return new
+
+
+def fused_check(context, new, k, grid, fusion):
+    """(None, the gift made's cell as read) when the screen shows the owned gifts as fused_cells placed them, else (what
+    does not hold, None): the gift made's cell `new[k]` dragged into view and read, the other cells on show compared."""
+    (x0, y0), (dx, dy), _ = OWNED_GRID["fuse"]
+    y = into_view(context, grid, new[k], rows_over=1)
+    image = close_tooltip(context, "fuse")
+    for c in new:
+        at = c["y"] - grid["at"]
+        diff = matched(image, c["x"], at, c["look"])[0] if c["i"] != k and whole("fuse", at) else 0
+        if diff > GRID_SAME:
+            return f"cell {c['i']} is not where the fusion puts it ({diff:.1f})", None
+    for j in range(len(new), len(new) + 10):
+        at = y0 + dy * (j // 5) - grid["at"]
+        if whole("fuse", at) and shop.filled(image, x0 + dx * (j % 5), at):
+            return f"cell {j} holds a gift, after the last", None
+    if not whole("fuse", y):
+        return f"cell {k}, the gift made, is not on show", None
+    read, shots = read_clear(context, image, [(new[k]["x"], y)], "fuse")
+    if not read or read[0]["id"] is None:
+        return f"the gift made reads {'unknown' if read else 'no gift'} at cell {k}", None
+    cell = {**read[0], "i": k, "x": new[k]["x"], "y": new[k]["y"], "price": None, "look": centre(shots[0], new[k]["x"], y)}
+    if cell["tier"] != fusion["tier"] or fusion["gift"] not in (None, cell["id"]):
+        made = f"tier {fusion['tier']}" + (f" {fusion['gift']}" if fusion["gift"] else "")
+        return f"cell {k} reads tier {cell['tier']} {gift_shown(cell)}, not the {made} made", None
+    twin = next((c["i"] for c in new if c["i"] != k and matched(shots[0], cell["x"], y, c["look"])[0] <= GRID_SAME), None)
+    if twin is not None:
+        return f"cell {k}, the gift made, looks like cell {twin}", None
+    return None, cell
 
 
 def fusions(cells, roles, slots, avoid, condition="any", refused=()):
@@ -4594,8 +4692,10 @@ class Shop(CustomAction):
         The cells are read off the grid, scrolled for the cut-off rows (owned_cells, #112, #205): the gifts the team's list
         lets go and whose icon is known are the materials, the rest stay (cell_role, #299). No cell is tapped but to put it in. Each material
         tapped in is read back (place); one that does not show closes the page unfused. The page stays open after a fusion
-        (#378, as AALC's fuse_useless_gifts): the grid changed, so it is read again there and the next fusion made, a wanted
-        one first, until none is left or FUSIONS_PER_PAGE were made; then the page is closed.
+        (#378, as AALC's fuse_useless_gifts): the owned gifts are placed by the fusion (fused_cells: only the gift made is
+        read), else read again there, and the next fusion made, a wanted one first, until none is left or FUSIONS_PER_PAGE
+        were made; then the page is closed. A cell placed by the fusion that does not show where it was put (cell_at) closes
+        the page and opens it again, its owned gifts read from the top: materials may be in.
         A grid that made none is not read again until a purchase or a sale changes the owned gifts (#62).
         """
         if visit.get("fuse_scanned"):
@@ -4621,22 +4721,26 @@ class Shop(CustomAction):
         if seen(context, image, "ShopFusionAvailable"):
             log("shop: the fuse page shows Fusion Available: the owned gifts are read under it")
         avoid = [g["id"] for g in avoided_gifts(team)]
-        grid, fused_any = None, False
+        grid, cells, fusion, fused_any = None, None, None, False
         for _ in range(FUSIONS_PER_PAGE):
-            if grid is not None:
-                log("shop: fuse page kept: owned gifts read again")
-            cells, grid = owned_cells(context, "fuse", grid)
+            cells = fused_cells(context, cells, grid, fusion) if fusion else None
+            if cells is None:
+                cells, grid = owned_cells(context, "fuse", grid)
             owned = note_owned(team, visit, cells)
             roles = [cell_role(c, team, "fuse", avoid, owned) for c in cells]
             log(f"shop: fuse cells ({slots} slots) " + "; ".join(cell_line(c, f"{r}, {cell_state(c, team['list'], owned)}") for c, r in zip(cells, roles)))
             made = Shop.fuse_recipe(context, team, cells, grid, slots, visit)  # a wanted fusion comes before the ordinary one (#300)
+            fusion = made if made is False else made or Shop.fuse_ordinary(context, team, visit, cells, roles, slots, grid, avoid)
+            if not fusion and grid.get("placed") and grid.get("missed"):
+                log("shop: a cell placed by the fusion is not where it was put: the fuse page is opened again")
+                Shop.to_main(context)
+                return Shop.fuse(context, team, visit) or fused_any
             if made is False:  # the page did not take the recipe, and may hold some of its materials: close it, then the ordinary fusion
                 Shop.to_main(context)
                 return Shop.fuse(context, team, visit) or fused_any  # fuse_recipe put the recipe in visit["recipes_failed"]: it is not tried again
-            fused = made or Shop.fuse_ordinary(context, team, visit, cells, roles, slots, grid, avoid)
             # Nothing to fuse, unconfirmed, refused or not read back: not the same scan again until the owned gifts change (#103).
-            visit["fuse_scanned"] = not fused
-            if not fused:
+            visit["fuse_scanned"] = not fusion
+            if not fusion:
                 break
             fused_any = True
         else:
@@ -4646,8 +4750,9 @@ class Shop(CustomAction):
 
     @staticmethod
     def fuse_ordinary(context, team, visit, cells, roles, slots, grid, avoid):
-        """The ordinary fusion of the cells read, fusions' first group put in (place): True when it fused. A group the page's
-        forecast turns down comes out again and the next is tried, FUSE_TRIES at most (#285); False on none left."""
+        """The ordinary fusion of the cells read, fusions' first group put in (place): the fusion made, {"gone": its cells,
+        "tier": the page's forecast's (the points' when unread), "gift": None}, for fused_cells. A group the page's forecast
+        turns down comes out again and the next is tried, FUSE_TRIES at most (#285); False on none left."""
         condition = team["list"]["fusion_condition"]
         refused = []
         while True:
@@ -4672,9 +4777,10 @@ class Shop(CustomAction):
             if wanted:
                 fused = Shop.press_fuse(context, len(group))
                 log(f"shop: fuse {materials} into a tier {page_tier or tier} {team['keyword']} gift (condition {condition}): {'done' if fused else 'not confirmed'}")
-                if fused:
-                    owned_change(visit, gone=[c["id"] for c in group])
-                return fused
+                if not fused:
+                    return False
+                owned_change(visit, gone=[c["id"] for c in group])
+                return {"gone": group, "tier": page_tier or tier, "gift": None}
             refused.append(tuple(sorted(c["tier"] for c in group)))
             if len(refused) >= FUSE_TRIES or not Shop.place(context, group, slots, grid, out=True):
                 return False  # the page is closed, which empties it too
@@ -4693,9 +4799,10 @@ class Shop(CustomAction):
 
     @staticmethod
     def fuse_recipe(context, team, cells, grid, slots, visit):
-        """Fuse the wanted fusion the owned cells hold the materials of (gifts.recipe_fusion, #300): True when made, False when
-        tried and not (the recipe is added to visit["recipes_failed"], so this visit does not try it again), None when the list
-        has none to make (or the page cannot hold it).
+        """Fuse the wanted fusion the owned cells hold the materials of (gifts.recipe_fusion, #300): the fusion made when made
+        ({"gone": its cells, "tier": the recipe's, "gift": its id}, for fused_cells), False when tried and not (the recipe is
+        added to visit["recipes_failed"], so this visit does not try it again; not when a cell placed by the last fusion was
+        not where it was put, cell_at: the page is opened again), None when the list has none to make (or the page cannot hold it).
 
         The page needs a keyword picked before it unlocks, but a recipe's result does not depend on it (#304): the page's
         keyword stays, and the materials go in as for an ordinary fusion, each read back (place). The page recognises the
@@ -4711,7 +4818,8 @@ class Shop(CustomAction):
         group.sort(key=lambda c: -c["y"])  # the grid's end first, as an ordinary fusion's
         names = ", ".join(cell_line(c, "material").rsplit(":", 1)[0] for c in group)
         if not Shop.place(context, group, slots, grid):
-            failed.append(recipe["gift"])
+            if not (grid.get("placed") and grid.get("missed")):
+                failed.append(recipe["gift"])
             return False
         tier, chance = read_forecast(context)
         recipe_tier = GIFT_TIERS.get(recipe["gift"])
@@ -4729,7 +4837,7 @@ class Shop(CustomAction):
         log(f"shop: recipe fusion {recipe['gift']} {GIFT_NAMES.get(recipe['gift'])} from {names}: page tier {tier or 'unread'}, chance "
             f"{f'{chance}%' if chance else 'unread'}: "
             + (f"cancelled, the recipe is tier {recipe_tier}" if cancel else "done" if made else "not confirmed"))
-        return made
+        return made and {"gone": group, "tier": recipe_tier, "gift": recipe["gift"]}
 
     @staticmethod
     def place(context, cells, slots, grid, out=False):
