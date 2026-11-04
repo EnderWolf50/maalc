@@ -74,7 +74,9 @@ def png(image):
 
 def unpng(data):
     """png()'s bytes back to the BGR image. Only that layout: one IDAT, no filter on any row."""
-    w, h = struct.unpack(">II", data[16:24])
+    w, h = struct.unpack(">II", data[16:24])  # IHDR's first fields, after the signature and the chunk's length and type
+    # The IDAT data: after the 8-byte signature, the 25-byte IHDR chunk and IDAT's length and type; before its CRC and
+    # the 12-byte IEND chunk.
     rows = np.frombuffer(zlib.decompress(data[8 + 25 + 8:-12 - 4]), np.uint8).reshape(h, 1 + w * 3)
     return rows[:, 1:].reshape(h, w, 3)[:, :, ::-1]
 

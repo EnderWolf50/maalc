@@ -119,16 +119,16 @@ def guard_shown(before, after):
 
 # data/stagger_word.png: the word STAGGER, 2 px round it, cut from slot 4 of tests/screens/BattleTurnStagger.png (#69)
 # at (582, 649), its slot at x 605. STAGGER_SLIDE: how far it is looked for either side of there (x, y).
-STAGGER_WORD = data_dir() / "stagger_word.png"
+STAGGER_WORD_PNG = data_dir() / "stagger_word.png"
 STAGGER_AT, STAGGER_SLIDE = (-23, 649), (12, 4)
 STAGGER_MATCH = 0.6
-GREY = np.array([0.114, 0.587, 0.299])  # BGR to luma, as OpenCV weighs it
+BGR_LUMA = np.array([0.114, 0.587, 0.299])  # a BGR pixel's weights in its greyscale value, as OpenCV weighs them
 
 
 @cache
 def stagger_word():
     """The greyscale word, less its mean."""
-    word = unpng(STAGGER_WORD.read_bytes()) @ GREY
+    word = unpng(STAGGER_WORD_PNG.read_bytes()) @ BGR_LUMA
     return word - word.mean()
 
 
@@ -138,7 +138,7 @@ def stagger_score(image, x):
     word = stagger_word()
     (dx, top), (sx, sy) = STAGGER_AT, STAGGER_SLIDE
     left = x + dx
-    roi = image[top - sy:top + word.shape[0] + sy, left - sx:left + word.shape[1] + sx] @ GREY
+    roi = image[top - sy:top + word.shape[0] + sy, left - sx:left + word.shape[1] + sx] @ BGR_LUMA
     windows = np.lib.stride_tricks.sliding_window_view(roi, word.shape)
     dot = np.einsum("ijkl,kl->ij", windows, word)  # the word's mean is 0: no window mean to take off
     spread = (windows ** 2).sum(axis=(2, 3)) - windows.sum(axis=(2, 3)) ** 2 / word.size
@@ -151,9 +151,9 @@ def staggered(image, xs):
 
     A plate takes the portrait's place: STAGGER in yellow on yellow cracks (or on the dimmed portrait, #69), STAGGER+ in
     white on red cracks; STAGGER++ has no capture. The plates differ in colour, so the word's greyscale shape tells: a
-    match anywhere within STAGGER_SLIDE takes in the shift of a longer, centred word. Live: 0.86-1.00 on the 9 plates
-    of tests/screens (3 battles, both kinds), 0.42 at most on the other 4522 slot positions of its 197 1280x720 screens
-    (every position of 1 to 12 slots).
+    match anywhere within STAGGER_SLIDE takes in the shift of a longer, centred word. Over tests/screens: 0.86-1.00 on
+    its 9 plates (live captures of 3 battles, both kinds), 0.42 at most on the other 4522 slot positions of its 197
+    1280x720 screens (every position of 1 to 12 slots).
     """
     return [stagger_score(image, x) > STAGGER_MATCH for x in xs]
 

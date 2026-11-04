@@ -2581,15 +2581,15 @@ def test_a_staggered_slot_between_two_others_is_left_out_of_the_chain(context, c
     assert len(portrait_taps(context)) == 6 and actions.RUN["guard"] == 2
 
 
-def test_a_turn_with_every_slot_staggered_presses_start_and_keeps_the_guard_turn(context, chains):
-    # #427, #69: nothing can be picked; START works as soon as the plaque shows, through Win Rate's own check. No unit
-    # guarded, so the guard turn is kept for a turn that has one.
+def test_a_turn_with_every_slot_staggered_presses_start_and_counts(context, chains):
+    # #427, #69: nothing can be picked and the plaque shows from the turn's start: START at once, no Win Rate. The
+    # turn counts as a guard turn, as one with some slots staggered does.
     panel = Panel(context, guard=[False] * 7, staggered=set(range(7)))
-    panel.complete_at = actions.time.monotonic() - 1  # the plaque up from the turn's start
+    panel.complete_at = actions.time.monotonic() - 1
     guard_turn(context)
-    assert panel.started
+    assert panel.started and not win_rate_taps(context)
     assert not portrait_taps(context) and chains == []
-    assert actions.RUN["guard"] == 3
+    assert actions.RUN["guard"] == 2
 
 
 def test_a_win_rate_turn_presses_start_at_once_and_counts_no_guard_turn(context):

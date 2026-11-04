@@ -136,7 +136,7 @@ def test_staggered_holds_for_a_plate_of_another_colour_and_a_longer_word():
 
 
 def test_the_stagger_word_is_cut_from_the_69_screen():
-    word = recovery.unpng(b.STAGGER_WORD.read_bytes())
+    word = recovery.unpng(b.STAGGER_WORD_PNG.read_bytes())
     assert np.array_equal(word, screen("BattleTurnStagger.png")[649:663, 582:630])  # slot 4's word, 2 px round it
 
 

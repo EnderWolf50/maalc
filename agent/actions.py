@@ -3041,42 +3041,44 @@ class PlayTurn(CustomAction):
 
         A staggered slot (battle.staggered, #427) acts no skill this turn and a tap on its portrait swaps nothing: it is
         neither tapped nor compared, and the chain makes no stop on it. The other slots guard, and the turn counts as a
-        guard turn. With every slot staggered there is nothing to pick: Win Rate's turn presses START (#69).
+        guard turn. With every slot staggered there is nothing to pick: START is pressed as it is (#69), and the turn
+        counts too.
         """
         xs = battle.slot_xs(x)
         image = lower_skills(context, [lower_x(sx) for sx in xs])  # live: a first turn slides the portraits in late
         staggered = battle.staggered(image, xs)
-        if all(staggered):
-            log("guard: every slot staggered")
-            return False
+        if all(staggered):  # #69: the plaque shows with no skill picked
+            log("guard: every slot staggered, nothing to pick")
+            page_guard(context, "BattleTurn", image=image)
+            return press_start(context, disc)
         if any(staggered):
-            log(f"guard: slots {[i + 1 for i, s in enumerate(staggered) if s]} staggered, the rest on guard")
-        slots = [i for i, s in enumerate(staggered) if not s]  # the slots that act, by their index in xs
-        lows = [lower_x(xs[i]) for i in slots]
+            log(f"guard: slots {[n for n, s in enumerate(staggered, 1) if s]} staggered, the rest on guard")
+        numbers = [n for n, s in enumerate(staggered, 1) if not s]  # the slots that act: their numbers and x
+        acting = [sx for sx, s in zip(xs, staggered) if not s]
+        lows = [lower_x(sx) for sx in acting]
         before = [guard_score(image, lx) for lx in lows]
         page_guard(context, "BattleTurn", image=image)
-        for i in slots:  # ponytail: one check per batch of portrait taps (0.1 s apart), not a screenshot per tap
-            tap(context, xs[i], SLOT_PORTRAIT_Y, wait=GUARD_TAP_WAIT)
+        for sx in acting:  # ponytail: one check per batch of portrait taps (0.1 s apart), not a screenshot per tap
+            tap(context, sx, SLOT_PORTRAIT_Y, wait=GUARD_TAP_WAIT)
         image = lower_skills(context, lows, before)
         after = [guard_score(image, lx) for lx in lows]
         shown = battle.guard_shown(before, after)
-        unsure = [k for k, s in enumerate(shown) if s is None]
+        unsure = [i for i, s in enumerate(shown) if s is None]
         if unsure:  # live: the glow on a unit's slot flickers; swap those back and compare once more
             page_guard(context, "BattleTurn", image=image)
-            for k in unsure:
-                tap(context, xs[slots[k]], SLOT_PORTRAIT_Y, wait=GUARD_TAP_WAIT)
-            image = lower_skills(context, [lows[k] for k in unsure], [after[k] for k in unsure])
-            again = battle.guard_shown([after[k] for k in unsure], [guard_score(image, lows[k]) for k in unsure])
-            for k, s in zip(unsure, again):
-                shown[k] = s
+            for i in unsure:
+                tap(context, acting[i], SLOT_PORTRAIT_Y, wait=GUARD_TAP_WAIT)
+            image = lower_skills(context, [lows[i] for i in unsure], [after[i] for i in unsure])
+            again = battle.guard_shown([after[i] for i in unsure], [guard_score(image, lows[i]) for i in unsure])
+            for i, s in zip(unsure, again):
+                shown[i] = s
         if None in shown:
-            unread = [slots[k] + 1 for k, s in enumerate(shown) if s is None]
-            log(f"guard: cannot tell the guard skill of slots {unread}")
+            log(f"guard: cannot tell the guard skill of slots {[n for n, s in zip(numbers, shown) if s is None]}")
             return False
         page_guard(context, "BattleTurn", image=image)
-        for i, on in zip(slots, shown):
+        for sx, on in zip(acting, shown):
             if not on:
-                tap(context, xs[i], SLOT_PORTRAIT_Y, wait=GUARD_TAP_WAIT)
+                tap(context, sx, SLOT_PORTRAIT_Y, wait=GUARD_TAP_WAIT)
         chain = battle.guard_chain(xs, staggered)
         for n, params in enumerate(GUARD_DRAGS, 1):
             page_guard(context, "BattleTurn")
