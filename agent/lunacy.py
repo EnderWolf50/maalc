@@ -19,22 +19,22 @@ def check(price, used, charged, count, expected):
     """What to do with the Use Lunacy tab as read: (verdict, why).
 
     price: the tab's price; used: its Daily Count, the day's charges so far (n of "n/10"). charged: this run's Confirms;
-    count: the charges this run asks for (charge_enkephalin.count), whatever was charged earlier today (#362 D5).
-    expected: the Daily Count after this run's last Confirm, None before the first. The price must be the table's at the
-    Daily Count, and each Confirm must move the count up by one: anything else is a STOP, the screen is not what the
-    task thinks, and nothing is charged. At 10/10 the day is done.
+    count: the day's target Daily Count (charge_enkephalin.count, 0-10, #429), so the charges made earlier today, by
+    hand too, count toward it. expected: the Daily Count after this run's last Confirm, None before the first. A Daily
+    Count at the target (10/10 is the most a target can be) is DONE, whatever the price shows. Short of it, the price
+    must be the table's at the Daily Count, and each Confirm must move the count up by one: anything else is a STOP, the
+    screen is not what the task thinks, and nothing is charged.
     """
     if used is None or not 0 <= used <= DAILY_MAX:
         return STOP, f"the Daily Count {used} did not read as n/{DAILY_MAX}"
     if expected is not None and used != expected:
         return STOP, f"the Daily Count is {used}/{DAILY_MAX} after the last Confirm, expected {expected}/{DAILY_MAX}"
-    if used == DAILY_MAX:
-        return DONE, f"{charged} of {count} charged, the day's {DAILY_MAX} charges are done"
+    head = f"Daily Count {used}/{DAILY_MAX}, target {count}"
+    if used >= count:
+        return DONE, f"{head}: {f'{charged} charged' if charged else 'nothing to charge'}"
     if price != PRICES[used]:
         return STOP, f"the price {price} is not the table's {PRICES[used]} at Daily Count {used}/{DAILY_MAX}"
-    if charged >= count:
-        return DONE, f"{charged} of {count} charges done"
-    return CHARGE, f"price {price}, charge {charged + 1} of {count} (the day's {used + 1})"
+    return CHARGE, f"{head}: price {price}, charge the day's {used + 1}"
 
 
 def read_price(texts):

@@ -963,9 +963,9 @@ CHARGE_TRIES = 3  # reads of the prompt and price, and Cancels over a decided ta
 
 @AgentServer.custom_action("ChargeStart")
 class ChargeStart(TaskStart):
-    """ChargeEnkephalin's entry: TaskStart, then charge_enkephalin.count, the charges this run makes (#362 D5). 0, the
-    default, ends the task at once, a success,
-    before GoHome or any tap: the window is never opened, so the Use Lunacy tab is never touched."""
+    """ChargeEnkephalin's entry: TaskStart, then charge_enkephalin.count, the day's target Daily Count (#429). 0, the
+    default, ends the task at once, a success, before GoHome or any tap: the window is never opened, so the Use Lunacy
+    tab is never touched."""
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         if not super().run(context, argv):
@@ -998,9 +998,10 @@ class ChargeMain(CustomAction):
 class ChargePanel(CustomAction):
     """The Charge Enkephalin window: its Use Lunacy tab (it opens on Modules), which shows the price, the Daily Count and
     the Recharge prompt (live 2026-10-27). The price must be the table's at the Daily Count, and the count one up after
-    each Confirm (lunacy.check); else Cancel, and the task ends (a success at this run's count or 10/10, a failure when
-    the screen is not what it should be). Use Boxes has the same prompt and no Daily Count: never confirmed. Only the
-    tab, Confirm and Cancel are tapped."""
+    each Confirm (lunacy.check); else Cancel, and the task ends (a success at the day's target, a failure when the
+    screen is not what it should be). Use Boxes has the same prompt and no Daily Count: never confirmed. A tab that
+    does not read before this run's first Confirm is not known to be short of the target: Cancel, a success with
+    nothing charged (#429); after a Confirm it is the stop procedure. Only the tab, Confirm and Cancel are tapped."""
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         c = TASK["charge"]
@@ -1017,12 +1018,17 @@ class ChargePanel(CustomAction):
         if prompt and prompt.hit:
             price = lunacy.read_price(ocr_texts(context, image, "ChargePrice"))
             used = lunacy.read_count(ocr_texts(context, image, "ChargeCount"))
-        if used is None or (price is None and used < lunacy.DAILY_MAX):  # 10/10 needs no price
+        if used is None or (price is None and used < c["count"]):  # at the target the price is not needed
             c["reads"] += 1
             if c["reads"] < CHARGE_TRIES:
                 return True
             tap(context, *PANEL_CANCEL, wait=0.5)
-            return stop(context, "the Use Lunacy tab's prompt, price and Daily Count could not be read")
+            unread = "the Use Lunacy tab's " + ("prompt and Daily Count" if used is None else f"price (Daily Count {used}/{lunacy.DAILY_MAX})")
+            if c["charged"] == 0:
+                c["end"] = f"{unread} did not read, target {c['count']}: nothing charged"
+                log(f"charge: {c['end']}")
+                return True
+            return stop(context, f"{unread} could not be read after a Confirm")
         c["reads"] = 0
         verdict, why = lunacy.check(price, used, c["charged"], c["count"], c.get("expected"))
         log(f"charge: {why}")
@@ -1033,7 +1039,7 @@ class ChargePanel(CustomAction):
             return True
         tap(context, *PANEL_CANCEL, wait=0.5)
         if verdict == lunacy.DONE:
-            c["end"] = f"{c['charged']} charged now, {why}"
+            c["end"] = why
             return True
         return stop(context, why)
 
