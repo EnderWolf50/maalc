@@ -1,6 +1,7 @@
 """#300: a wanted fusion whose recipe the owned gifts hold is made by recipe before any ordinary fusion."""
 import actions
 import test_actions
+import test_fuse_page
 from test_actions import fusion_taps, wants
 
 clock, context = test_actions.clock, test_actions.context  # its fixtures
@@ -19,10 +20,12 @@ def junk(n):
 
 
 def test_a_wanted_fixed_recipe_with_its_materials_owned_is_fused_by_putting_exactly_them_in(context, monkeypatch):
-    # junk(3) would make an ordinary fusion too; the recipe goes first and is the only one this call makes.
+    # junk(3) would make an ordinary fusion too; the recipe goes first, exactly its three cells (3-5). The junk is fused
+    # after it on the same page (test_fuse_page), so only the first three cells tapped are looked at here.
     readings = [*junk(3), ("Burn", 3, 9003), ("Burn", 3, 9053), ("Burn", 3, 9157)]
-    fused, taps, ok = fusion_taps(context, monkeypatch, team(SOOTHE), *readings)
-    assert fused and ok and taps == [0, 0, 0, 1, 1, 1]
+    fused, _, ok = fusion_taps(context, monkeypatch, team(SOOTHE), *readings)
+    cells = [t for t in test_actions.taps(context) if t in actions.FUSE_CELLS]
+    assert fused and ok and sorted(cells[:3]) == sorted(actions.FUSE_CELLS[3:6])
 
 
 def test_the_recipe_that_is_complete_is_the_one_put_in(context, monkeypatch):
@@ -61,14 +64,15 @@ def test_a_recipe_the_dialog_counts_wrong_is_not_confirmed(context, monkeypatch)
 
 
 def test_a_made_recipe_leaves_the_owned_gifts_to_be_read_again(context, monkeypatch):
-    # The grid changed: the next call reads it again (visit["fuse_scanned"] stays False) and may make the next recipe.
-    visit = {}
-    test_actions.reads(context, {**test_actions.FUSE_PAGE, tuple(actions.FUSE_CONFIRM): [("Selected E.G.O Gifts 3/3", (330, 175, 320, 30))],
-                                 tuple(actions.GET_TITLE): [("E.G.O Gift GET!", (560, 165, 160, 30))]})
-    test_actions.fuse_slots(context, monkeypatch)
-    test_actions.cells_read(monkeypatch, ("Burn", 3, 9003), ("Burn", 3, 9053), ("Burn", 3, 9157))
+    # The grid changed: on the page still open (#378) the fake shows no gift made where the fusion puts it, so the owned
+    # gifts are read again; with nothing left to make the page is closed and not read again until the owned gifts change.
+    visit, logs = {}, []
+    monkeypatch.setattr(actions, "log", logs.append)
+    test_actions.reads(context, test_actions.FUSING)
+    test_actions.fuse_page(context, monkeypatch, ("Burn", 3, 9003), ("Burn", 3, 9053), ("Burn", 3, 9157))
     assert actions.Shop.fuse(context, test_actions.shop_team(team(SOOTHE)), visit)
-    assert not visit["fuse_scanned"]
+    assert test_fuse_page.read_again(logs)
+    assert visit["fuse_scanned"]
 
 
 def test_an_exclusive_recipe_is_made_though_the_run_took_none_of_its_packs(context, monkeypatch):

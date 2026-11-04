@@ -17,6 +17,13 @@ CROP_AT = {
     "fuse": (620, 236),  # tests/screens/ShopFuse.png
     "fuse_recipe": (620, 236),  # tests/screens/ShopFuseRecipe.png (#103): the owned row sits at y 427
     "fuse_tooltip": (620, 236),  # a tooltip (Hellterfly's Dream's) over the first row's right half and the row under it (#297)
+    # #378: frames of the 2026-11-04 recording (F5), the list scrolled to its end: a third-row cell's tooltip down over Fuse,
+    # and a last-column cell's, shifted left at the screen's edge
+    "fuse_tooltip_low": (620, 200),
+    "fuse_tooltip_edge": (620, 200),
+    # #378: a frame of the 2026-11-04 recording (F3, 07:03:31), the list at its top: Twinkling Vestige (III) first, then A
+    # Certain Philosophy (EX, 9799) dimmed under its red "Unselectable" tag, then the III run
+    "fuse_ex": (620, 200),
     # The fuse page's slots and first two columns (#77): live 2026-10-18 (probe capture rec/m3/fuse-152), Spiderweb tapped
     # in; captures/97 (2 in, a tooltip over the grid), Super Shop captures/172 (cells 5 and 6 in) and 169 (empty).
     "fuse_one_in": (180, 165),
@@ -460,6 +467,53 @@ def test_the_forecasts_row_tier_reads_a_tier_iii_and_never_a_tier_v():
     v = screen_with("forecast_super_iv")
     v[459:477, 308:311] = 0  # the IV's I bar (x 308-310 at this size)
     assert s.forecast_tier(v) is None  # a V is no tier a fusion gives
+
+
+@pytest.mark.parametrize("name, shown", [
+    ("fuse_tooltip", True), ("fuse_tooltip_low", True), ("fuse_tooltip_edge", True),
+    ("fuse", False), ("fuse_spiderweb", False), ("fuse_recipe", False), ("fuse_one_in", False), ("fuse_super_open", False),
+    ("forecast_shop_ii", False), ("forecast_super_iv", False), ("sell", False),
+])
+def test_a_tooltip_over_the_fuse_page_is_told_by_its_red_head(name, shown):
+    # #378: close_tooltip taps only when one shows. fuse_two_in and fuse_super_two_in hold a tooltip too, but their crops
+    # end 43 px into it.
+    assert s.tooltip(screen_with(name)) == shown
+
+
+def test_the_tooltip_sweep_over_tests_screens_hits_no_fuse_page():
+    # CODING_STANDARDS' sweep: close_tooltip looks at the fuse page only. No fuse page of tests/screens reads a tooltip;
+    # 18 other screens do (red banners and buttons over the area): there a hit would only tap as every read did before #378.
+    hits = [p.stem for p in sorted(SCREENS.glob("*.png")) if s.tooltip(np.asarray(Image.open(p).convert("RGB"))[:, :, ::-1])]
+    assert not [h for h in hits if h.startswith("ShopFus")]
+    assert hits == ["BattleTurnFocused", "EntryNewRun", "EntryParallelOn", "EntryPaused", "Formation", "LuxConsecExp10Open",
+                    "LuxConsecExp2Open", "LuxConsecExp9Open", "LuxEventCommence", "LuxEventContinue", "LuxEventPassed",
+                    "LuxEventText", "LuxTeamSelect", "LuxTeamSelectChain", "StarlightConfirm", "StarlightConfirmConnecting",
+                    "StarlightPage", "WipeDialog"]
+
+
+def test_an_unselectable_cell_is_told_by_its_tag_though_it_is_flat():
+    # #378: the EX gift a failed fusion gives shows dim, as flat as an empty cell (live: read as no gift, the list's places
+    # broken), its red "Unselectable" tag over its top edge. Of tests/shop's fuse page crops only that cell has it.
+    import actions  # noqa: PLC0415  (test_gift_cells' MaaFramework child imports this file before its Resource)
+    ex = screen_with("fuse_ex")
+    assert [c for c, (x, y) in enumerate(actions.FUSE_CELLS) if s.filled(ex, x, y)] == [0, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
+    assert [c for c, (x, y) in enumerate(actions.FUSE_CELLS) if s.unselectable(ex, x, y)] == [1]
+    for name in [n for n in CROP_AT if n.startswith("fuse") and n != "fuse_ex"]:
+        image = screen_with(name)
+        assert not [c for c, (x, y) in enumerate(actions.FUSE_CELLS) if s.unselectable(image, x, y)], name
+
+
+def test_the_unselectable_sweep_over_tests_screens_hits_no_fuse_page():
+    # CODING_STANDARDS' sweep: the tag is looked for on the fuse page only (actions.held). No fuse page of tests/screens has
+    # one at a cell of its grid; two map screens read one at cell 9's place.
+    import actions  # noqa: PLC0415  (as above)
+    hits = []
+    for png in sorted(SCREENS.glob("*.png")):
+        img = Image.open(png)
+        if img.size == (1280, 720):
+            image = np.asarray(img.convert("RGB"))[:, :, ::-1]
+            hits += [f"{png.stem} {c}" for c, (x, y) in enumerate(actions.FUSE_CELLS) if s.unselectable(image, x, y)]
+    assert hits == ["MapBossDarkAfterShop 9", "MapFloor4Panned 9"]
 
 
 def test_the_forecasts_row_sweep_over_tests_screens_finds_no_unlisted_hit():

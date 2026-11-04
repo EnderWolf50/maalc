@@ -3,7 +3,7 @@
 Each test plays a team whose list order starts with Bleed (run_team makes its team) and fails when the path reads Burn."""
 import actions
 import test_actions
-from test_actions import Choices, FUSE_PAGE, cells_read, fuse_slots, gift_page, listed, live_shop, reads, shop_team, with_ids, wants
+from test_actions import Choices, FUSING, fuse_page, gift_page, listed, live_shop, reads, shop_team, with_ids, wants
 
 clock, context = test_actions.clock, test_actions.context  # its fixtures
 
@@ -29,11 +29,8 @@ def test_the_keyword_refresh_picks_the_lists_first_keyword(context, clock):
 
 
 def test_the_fusion_page_picks_the_lists_first_keyword(context, monkeypatch):
-    reads(context, {**FUSE_PAGE, tuple(actions.KEYWORD_LABELS): [("Bleed", (300, 400, 60, 20))],
-                    tuple(actions.FUSE_CONFIRM): [("Selected E.G.O Gifts 3/3", (330, 175, 320, 30))],
-                    tuple(actions.GET_TITLE): [("E.G.O Gift GET!", (560, 165, 160, 30))]})
-    fuse_slots(context, monkeypatch)
-    cells_read(monkeypatch, *with_ids([("Pierce",), ("Slash",), ("Blunt",)]))
+    reads(context, FUSING | {tuple(actions.KEYWORD_LABELS): [("Bleed", (300, 400, 60, 20))]})
+    fuse_page(context, monkeypatch, *with_ids([("Pierce",), ("Slash",), ("Blunt",)]))
     assert actions.Shop.fuse(context, shop_team(bleed_team()), {})  # no Burn label: a Burn team finds no keyword dialog
 
 
