@@ -76,7 +76,7 @@
         "max_hit": 3
     },
     // The Daily tab's Clear EXP Luxcavation row, by its text in the rows' column (PassMissionsDailyUnderway.png: row 2).
-    // The Weekly tab's Clear EXP Luxcavation 5 time(s) reads too: ExpPassRead reads it on the Daily tab only.
+    // The Weekly and the Seasonal tab's rows of it (5, 30 time(s)) read too: ExpPassRead reads it on the Daily tab only.
     "PassExpRow": {
         "recognition": "OCR",
         "roi": [400, 180, 300, 440],

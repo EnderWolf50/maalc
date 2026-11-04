@@ -117,7 +117,7 @@ const screens: [image: string, hits: string[]][] = [
   // Live 2026-10-27 (live-1 F7): rows 2-5 to claim, each framed orange with a red ! and a full bar.
   ['PassMissionsDailyClaimable.png', ['PassDailyLit', 'PassDailyDone', 'ExpPassRead', 'PassExpRow']],
   // Live 2026-10-27 (#362 D9): the Seasonal tab at its top and at its end after one swipe, every row claimed.
-  ['PassMissionsSeasonal.png', ['PassSeasonalLit', 'PassSeasonalSwipe', 'PassFinish', 'ExpPassDaily']],
+  ['PassMissionsSeasonal.png', ['PassSeasonalLit', 'PassSeasonalSwipe', 'PassFinish', 'ExpPassDaily', 'PassExpRow']],  // its Clear EXP Luxcavation 30 time(s)
   ['PassMissionsSeasonalEnd.png', ['PassSeasonalLit', 'PassSeasonalSwipe', 'PassFinish', 'ExpPassDaily']],
   ['EntryNewRun.png', ['MirrorEntryNewRun']],
   ['EntryPaused.png', ['MirrorEntryPaused']],
