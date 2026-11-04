@@ -119,6 +119,8 @@ def screen(png):
     # #427 (live 2026-11-04, EXP Luxcavation turn 5): slots 7 and 8 STAGGER+ (one unit and its second slot), a white word
     # on red cracks. Slots 2-4 and 6 are the dark guard icons of the other units' second slots.
     ("BattleTurnStaggerPlus.png", 1022, [False] * 6 + [True] * 2),
+    # #427 (live 2026-11-05, turn 2, 3 slots): slot 3 STAGGER++, a white word on green cracks (scores 0.04, 0.12, 0.92).
+    ("BattleTurnStaggerPlusPlus.png", 984 + 40.5 * (3 - 7), [False, False, True]),
     # Live 2026-10-28, EXP Luxcavation turn 4: slot 9 STAGGER on yellow cracks; slot 7 a dark shield icon.
     ("BattleTurnStaggerLast.png", 1061, [False] * 8 + [True]),
 ])
@@ -127,7 +129,8 @@ def test_staggered_reads_the_stagger_plates(png, win_rate_x, expected):
 
 
 def test_staggered_holds_for_a_plate_of_another_colour_and_a_longer_word():
-    # #427: STAGGER++ has no capture. Slot 8's STAGGER+ plate with its colour channels swapped (the red cracks blue) and
+    # #427: the plates come in yellow, red and green (STAGGER++ is real, BattleTurnStaggerPlusPlus.png). A plate of a
+    # colour no capture has: slot 8's STAGGER+ plate with its colour channels swapped (the red cracks blue) and
     # moved 6 px left, as a centred STAGGER++ moves its first seven letters, still reads staggered.
     image = screen("BattleTurnStaggerPlus.png").copy()
     x = b.slot_xs(1022)[7]
@@ -150,6 +153,7 @@ def test_no_other_slot_of_tests_screens_reads_staggered():
         if image.shape[:2] == (720, 1280) and (found := [x for x, s in zip(xs, b.staggered(image, xs)) if s]):
             hits[png.name] = found
     assert hits == {"BattleTurnStagger.png": b.slot_xs(984)[1:], "BattleTurnStaggerPlus.png": b.slot_xs(1022)[6:],
+                    "BattleTurnStaggerPlusPlus.png": b.slot_xs(984 - 162)[2:],
                     "BattleTurnStaggerLast.png": b.slot_xs(1061)[8:]}
 
 

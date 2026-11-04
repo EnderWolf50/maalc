@@ -150,10 +150,10 @@ def staggered(image, xs):
     """Per slot, whether its unit is staggered: it acts no skill this turn, and a portrait tap swaps nothing (#427).
 
     A plate takes the portrait's place: STAGGER in yellow on yellow cracks (or on the dimmed portrait, #69), STAGGER+ in
-    white on red cracks; STAGGER++ has no capture. The plates differ in colour, so the word's greyscale shape tells: a
-    match anywhere within STAGGER_SLIDE takes in the shift of a longer, centred word. Over tests/screens: 0.86-1.00 on
-    its 9 plates (live captures of 3 battles, both kinds), 0.42 at most on the other 4522 slot positions of its 197
-    1280x720 screens (every position of 1 to 12 slots).
+    white on red cracks, STAGGER++ in white on green cracks (0.92 on its capture). The plates differ in colour, so the
+    word's greyscale shape tells: a match anywhere within STAGGER_SLIDE takes in the shift of a longer, centred word.
+    Over tests/screens: 0.86-1.00 on its 10 plates (live captures of 4 battles, all three kinds), 0.42 at most on the
+    other slot positions of its 1280x720 screens (every position of 1 to 12 slots).
     """
     return [stagger_score(image, x) > STAGGER_MATCH for x in xs]
 
