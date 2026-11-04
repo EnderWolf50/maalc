@@ -139,6 +139,22 @@ LIVE = {
         [(3, "Poise", 9056), (3, "Keywordless", 9076), (2, "Slash", 9032), (2, "Rupture", 9047), (2, "Keywordless", 9037),
          (2, "Sinking", 9054), (1, "Keywordless", 9004), (1, "Poise", 9063)],
         [0, 1, 2], 4, 9131, [9131, 9047, 9037, 9054, 9004, 9063]),
+    # The vestiges go first whatever their tier (the client's SortByTierPieceFirst), the gift made after them: the IV made
+    # lands third, after the Dark Vestige (I) and the IV left (2026-11-04 F5, read again as "no order by tier", 6.83 s).
+    "a Dark Vestige ahead of a tier IV": (
+        [(1, "Keywordless", 9991), (4, "Poise", 9131), (3, "Keywordless", 9273), (3, "Poise", 9073), (3, "Poise", 9130),
+         (3, "Poise", 9056), (3, "Keywordless", 9067), (3, "Keywordless", 9038), (3, "Keywordless", 9190), (3, "Slash", 9821),
+         (2, "Poise", 9046), (2, "Poise", 9177), (2, "Poise", 9178), (2, "Poise", 9066), (2, "Poise", 9129), (2, "Poise", 9051),
+         (2, "Tremor", 9820), (1, "Poise", 9063), (1, "Poise", 9128), (1, "Poise", 9127), (1, "Poise", 9097)],
+        [16, 6, 7], 4, 9070, [9991, 9131, 9070, 9273, 9073, 9130, 9056, 9190, 9821, 9046, 9177, 9178, 9066, 9129, 9051, 9063,
+                              9128, 9127, 9097]),
+    # A Twinkling Vestige (III) first, then A Certain Philosophy (EX, tier V in the data: the 2026-11-04 recording shows it at
+    # place 1, the log's read skipped it as no gift), then the III run; the vestige fused, the III made goes last of the IIIs.
+    "a vestige and an EX gift ahead of a tier III": (
+        [(3, "Keywordless", 9993), (5, "Keywordless", 9799), (3, "Keywordless", 9273), (3, "Poise", 9130), (3, "Poise", 9073),
+         (2, "Poise", 9046), (2, "Poise", 9066), (2, "Poise", 9129), (2, "Poise", 9178), (2, "Sinking", 9061),
+         (2, "Poise", 9051), (1, "Poise", 9063), (1, "Rupture", 9013), (1, "Poise", 9128)],
+        [12, 9, 0], 3, 9056, [9799, 9273, 9130, 9073, 9056, 9046, 9066, 9129, 9178, 9051, 9063, 9128]),
 }
 
 
@@ -149,8 +165,9 @@ def listed(gifts):
 
 @pytest.mark.parametrize("before, gone, tier, made, after", LIVE.values(), ids=list(LIVE))
 def test_the_gift_made_goes_last_of_its_tier_as_on_the_live_fuse_pages(before, gone, tier, made, after):
-    # The list goes by tier, highest first; the materials go out, the rest keep their order, and the gift made goes
-    # last of its tier's run (33 of 33 fusions of the live logs). Its id is unknown until read; the places run on.
+    # The list goes by tier, highest first, the vestiges ahead; the materials go out, the rest keep their order, and the
+    # gift made goes after the vestiges, last of its tier's run (29 of the 30 fusions read again in the live logs; the 30th
+    # failed and gave an EX gift). Its id is unknown until read; the places run on.
     new, k = actions.shop.fusion_places(listed(before), gone, tier, GRID)
     assert [c["id"] for c in new] == [None if g == made else g for g in after]
     assert k == after.index(made) and new[k]["tier"] == tier and new[k]["keyword"] is None
@@ -170,6 +187,8 @@ def test_a_super_shops_five_materials_go_out_at_once():
     ([(2, "Burn", 1), (None, "Burn", 2), (1, "Burn", 3)], [0], 2),  # a tier unread
     ([(1, "Burn", 1), (2, "Burn", 2), (1, "Burn", 3)], [0], 2),  # not by tier
     ([(2, "Burn", 1), (2, "Burn", 2), (1, "Burn", 3)], [5], 2),  # a material not among the places read
+    ([(2, "Burn", 1), (1, "Keywordless", 9991), (1, "Burn", 3)], [0], 2),  # a vestige after another gift
+    ([(1, "Keywordless", 9991), (3, "Keywordless", 9993), (2, "Burn", 3)], [2], 2),  # the vestiges not by tier
 ])
 def test_no_order_is_made_up_from_a_read_that_does_not_give_it(gifts, gone, tier):
     assert actions.shop.fusion_places(listed(gifts), gone, tier, GRID) is None
@@ -221,6 +240,43 @@ def test_a_gift_made_not_where_the_fusion_puts_it_has_the_owned_gifts_read_again
     assert KEPT + "the gift made reads no gift at cell 5, the owned gifts are placed by their label" in lines
     assert KEPT + "the gift made reads no gift at cell 5" + READ_AGAIN in lines
     assert g.reads == list(range(8)) + list(range(3, 8)) and not placed_lines(lines)
+
+
+@pytest.mark.parametrize("same_id", [False, True])
+def test_a_gift_made_that_looks_like_a_gift_listed_is_its_twin_only_by_the_same_id(context, grid, monkeypatch, same_id):
+    # Live 2026-11-04 (F3): Old Wooden Doll (II), the gift made, showed at its place, but its centre was within GRID_SAME of
+    # Finifugality's (III, cell 2): "cell 9, the gift made, looks like cell 2", twice, then read again (6.76 s). Its id read
+    # is another gift's: it is placed. A look-alike that reads the same id may be that gift still: read again.
+    lines = []
+    monkeypatch.setattr(actions, "log", lines.append)
+    g, team = three_tiers(grid)
+    made = g.fused
+
+    def fused(gifts):
+        made(gifts)
+        if g.made == 1:  # the III made (cell 4) shows cell 2's icon
+            g.icons[g.ids.index(1001)] = g.icons[g.ids.index(2)].copy()
+            if same_id:
+                g.names[1001] = UNLISTED + 2
+    monkeypatch.setattr(g, "fused", fused)
+    assert fusion(context, monkeypatch, g, team)
+    twin = KEPT + "cell 4, the gift made, looks like cell 2"
+    if same_id:
+        assert twin + ", the owned gifts are placed by their label" in lines and twin + READ_AGAIN in lines
+    else:
+        assert placed_lines(lines) == [PLACED + "4)", PLACED + "9)"] and not read_again(lines)
+        assert g.reads == list(range(16)) + [1001, 1002]
+
+
+def test_an_unselectable_cell_is_kept_whatever_the_list_says():
+    # #378: the fuse page tags A Certain Philosophy (EX, the gift a 99% fusion gives when it fails) Unselectable: the page
+    # takes it in no fusion, so it is no material even when the list drops it, nor sold.
+    team = shop_team({"list": wants()})
+    cell = {"i": 0, "tier": 5, "keyword": "Keywordless", "id": 9799, "unselectable": True}
+    assert actions.cell_state(cell, team["list"]) == "drop"
+    assert [actions.cell_role(cell, team, page, ()) for page in ("fuse", "sell")] == ["keep", "keep"]
+    assert actions.cell_role(cell, team, "fuse", (9799,)) == "keep"  # nor as a gift the team avoids
+    assert actions.cell_line({**cell, "score": 0.78}, "keep") == "0 V Keywordless 9799 A Certain Philosophy (0.78) unselectable: keep"
 
 
 def test_a_cell_placed_by_the_fusion_that_is_not_there_has_the_page_opened_again(context, grid, monkeypatch):

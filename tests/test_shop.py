@@ -21,6 +21,9 @@ CROP_AT = {
     # and a last-column cell's, shifted left at the screen's edge
     "fuse_tooltip_low": (620, 200),
     "fuse_tooltip_edge": (620, 200),
+    # #378: a frame of the 2026-11-04 recording (F3, 07:03:31), the list at its top: Twinkling Vestige (III) first, then A
+    # Certain Philosophy (EX, 9799) dimmed under its red "Unselectable" tag, then the III run
+    "fuse_ex": (620, 200),
     # The fuse page's slots and first two columns (#77): live 2026-10-18 (probe capture rec/m3/fuse-152), Spiderweb tapped
     # in; captures/97 (2 in, a tooltip over the grid), Super Shop captures/172 (cells 5 and 6 in) and 169 (empty).
     "fuse_one_in": (180, 165),
@@ -486,6 +489,32 @@ def test_the_tooltip_sweep_over_tests_screens_hits_no_fuse_page():
                     "LuxConsecExp2Open", "LuxConsecExp9Open", "LuxEventCommence", "LuxEventContinue", "LuxEventPassed",
                     "LuxEventText", "LuxTeamSelect", "LuxTeamSelectChain", "StarlightConfirm", "StarlightConfirmConnecting",
                     "StarlightPage", "WipeDialog"]
+
+
+FUSE_GRID = [(678 + 96 * c, 294 + 92 * r) for r in range(3) for c in range(5)]  # actions.FUSE_CELLS
+
+
+def test_an_unselectable_cell_is_told_by_its_tag_though_it_is_flat():
+    # #378: the EX gift a failed fusion gives shows dim, as flat as an empty cell (live: read as no gift, the list's places
+    # broken), its red "Unselectable" tag over its top edge. Of tests/shop's fuse page crops only that cell has it.
+    ex = screen_with("fuse_ex")
+    assert [c for c, (x, y) in enumerate(FUSE_GRID) if s.filled(ex, x, y)] == [0, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
+    assert [c for c, (x, y) in enumerate(FUSE_GRID) if s.unselectable(ex, x, y)] == [1]
+    for name in [n for n in CROP_AT if n.startswith("fuse") and n != "fuse_ex"]:
+        image = screen_with(name)
+        assert not [c for c, (x, y) in enumerate(FUSE_GRID) if s.unselectable(image, x, y)], name
+
+
+def test_the_unselectable_sweep_over_tests_screens_hits_no_fuse_page():
+    # CODING_STANDARDS' sweep: the tag is looked for on the fuse page only (actions.held). No fuse page of tests/screens has
+    # one at a cell of its grid; two map screens read one at cell 9's place.
+    hits = []
+    for png in sorted(SCREENS.glob("*.png")):
+        img = Image.open(png)
+        if img.size == (1280, 720):
+            image = np.asarray(img.convert("RGB"))[:, :, ::-1]
+            hits += [f"{png.stem} {c}" for c, (x, y) in enumerate(FUSE_GRID) if s.unselectable(image, x, y)]
+    assert hits == ["MapBossDarkAfterShop 9", "MapFloor4Panned 9"]
 
 
 def test_the_forecasts_row_sweep_over_tests_screens_finds_no_unlisted_hit():

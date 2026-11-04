@@ -10,6 +10,7 @@ import numpy as np
 
 from gift_search import _runs
 from ocrtext import has
+from settings import vestige_ids
 
 ROUNDS = 10
 CELL_HALF = 48  # screen px kept around a cell's centre: its icon, tier numerals and keyword badge
@@ -36,6 +37,29 @@ def cell_crop(image, x, y, scale):
 def filled(image, x, y):
     """Whether the grid cell centred at (x, y) holds a gift: textured (live: spread 41-84), an empty one flat (1-2)."""
     return bool(image[y - 25:y + 25, x - 25:x + 25].max(axis=2).std() > 15)
+
+
+UNSELECTABLE_BAND = (44, 29, 44)  # px over a cell's centre the fuse page's "Unselectable" tag spans (from, to), px either side
+UNSELECTABLE_MIN, UNSELECTABLE_SPAN, UNSELECTABLE_RUN = 300, 70, 20  # its letters' px, the columns they span, their longest run
+
+
+def unselectable(image, x, y):
+    """Whether the fuse page's cell centred at (x, y) carries the "Unselectable" tag over its top edge (#378).
+
+    The game's combine_egogift_not_allow: a gift no fusion takes, drawn dim, its centre as flat as an empty cell's (spread
+    9.6-9.9, under filled's 15). Live 2026-11-04: A Certain Philosophy (9799, EX), the gift a 99% fusion gives when it fails.
+    The tag's dark red letters (live R 101-160, G and B 23 at most) are 439-502 px of the band and span 84 px in runs of a
+    few px; a tooltip's red head runs 288 px (tooltip). The fuse page's other cells: 220 px at most (1325 cells of 89 fuse
+    pages: the 2026-11-04 recordings' frames and tests/shop's crops); test_shop sweeps tests/screens.
+    """
+    over, under, side = UNSELECTABLE_BAND
+    band = image[y - over:y - under, x - side:x + side].astype(int)
+    b, g, r = band[:, :, 0], band[:, :, 1], band[:, :, 2]
+    letters = (r > 90) & (r < 180) & (g < 40) & (b < 40)
+    cols = np.flatnonzero(letters.any(axis=0))
+    if letters.sum() < UNSELECTABLE_MIN or cols[-1] - cols[0] + 1 < UNSELECTABLE_SPAN:
+        return False
+    return max(n for row in letters for _, n in _runs(np.flatnonzero(row))) <= UNSELECTABLE_RUN
 
 
 def yellow(box):
@@ -343,23 +367,43 @@ def fusion_places(cells, gone, tier, geometry):
     each a copy with its new place "i" and centre "x", "y" with the grid at its top, the gift made's place), or None when
     the cells do not tell it.
 
-    cells: the grid as read (each {"i", "tier", ...}, i its place); gone: the places of the materials; tier: the gift
+    cells: the grid as read (each {"i", "tier", "id", ...}, i its place); gone: the places of the materials; tier: the gift
     made's; geometry: ((x0, y0), (dx, dy)), the first cell's centre and the step to the next column and row, 5 a row.
-    The list goes by tier, highest first: the materials go out, the rest keep their order, and the gift made goes last
-    of its tier's run, between the higher and the lower tiers when none of its tier is left (live: 33 of 33 fusions in six
-    logs of 2026-11-02 to 04). It is {"i", "x", "y", "tier", "keyword": None, "id": None}: what it is shows only on screen.
-    None: a place not read (the places are not 0 to n-1), a tier unread or out of order, or a material not among them.
+    The list goes by tier, highest first, with the vestiges ahead of the rest whatever their tier (in_tier_order); the
+    materials go out, the rest keep their order, and the gift made goes after the vestiges and last of its tier's run,
+    between the higher and the lower tiers when none of its tier is left (live: 29 of the 30 fusions read again in 57 logs of
+    2026-10-20 to 11-04, 5 of them with a vestige on the page; the 30th failed and gave an EX gift, tier V where the page
+    forecast IV, which fused_check refuses). It is {"i", "x", "y", "tier", "keyword": None, "id": None}:
+    what it is shows only on screen. None: a place not read (the places are not 0 to n-1), a tier unread or out of that
+    order, or a material not among them.
     """
     (x0, y0), (dx, dy) = geometry
     cells = sorted(cells, key=lambda c: c["i"])
     if [c["i"] for c in cells] != list(range(len(cells))) or not set(gone) <= {c["i"] for c in cells}:
         return None
-    if tier is None or any(c["tier"] is None for c in cells) or any(a["tier"] < b["tier"] for a, b in zip(cells, cells[1:])):
+    if tier is None or any(c["tier"] is None for c in cells) or not in_tier_order(cells):
         return None
     left = [c for c in cells if c["i"] not in set(gone)]
-    k = sum(c["tier"] >= tier for c in left)
+    k = sum(c["id"] in vestige_ids() or c["tier"] >= tier for c in left)
     order = left[:k] + [{"tier": tier, "keyword": None, "id": None}] + left[k:]
     return [{**c, "i": n, "x": x0 + dx * (n % 5), "y": y0 + dy * (n // 5)} for n, c in enumerate(order)], k
+
+
+def in_tier_order(cells):
+    """Whether cells (in their places' order, every tier read) keep the fuse page's By Tier order (#378): the vestiges first,
+    highest tier first among them, then the rest highest tier first.
+
+    The client's sort is SortByTierPieceFirst (a method name in its IL2CPP metadata); its "piece" gifts are the vestiges
+    (pieceEgoGiftIds 9991-9995 of the md8 common data). Live: 86 of 86 reads of whole lists in 57 logs of 2026-10-20 to
+    11-04 keep it (an EX gift counted where the recordings show it), 13 of them with a vestige (12 of those out of order by
+    tier alone: a Dark Vestige ahead of tier IV and III gifts), two with vestiges of two tiers (III ahead of I, II ahead of
+    I). A Certain Philosophy (EX, tier V in the data) showed after a Twinkling Vestige (III) and ahead of the IIIs, with no
+    IV owned: ahead of a IV is the data's tier, unseen. A gift whose id is unread counts as no vestige.
+    """
+    n = sum(c["id"] in vestige_ids() for c in cells)
+    head, rest = cells[:n], cells[n:]
+    return all(c["id"] in vestige_ids() for c in head) and all(a["tier"] >= b["tier"] for run in (head, rest)
+                                                               for a, b in zip(run, run[1:]))
 
 
 TOOLTIP_AREA = (600, 200, 680, 330)  # x, y, w, h: where a fuse page tooltip's head shows, under its tapped cell's centre

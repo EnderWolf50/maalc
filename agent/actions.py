@@ -3665,6 +3665,9 @@ FUSION_IDS = {g["id"] for g in gift_tables()[1]}
 GIFT_TIERS = {e["id"]: e["tier"] for e in GIFTS}
 GIFT_IDS = {e["en"]: e["id"] for e in GIFTS}  # an English name plate's gift (#329)
 CELL_ICON_ROI = 70  # px square around a cell's centre on the scaled grid where its icon is looked for: the biggest icon (54 px) +-8
+# An EX gift's tier in the game data (TIER_5 beside TIER_EX: 9799 A Certain Philosophy, 9800 Wealth); its cell shows "EX"
+# where the numerals go, so an Unselectable cell with no numeral read is matched against that tier's gifts (#378)
+EX_TIER = 5
 FUSE_CONFIRM = [300, 150, 680, 380]  # "Selected E.G.O Gifts 3/5" over "Fuse the selected E.G.O Gifts?"
 FUSE_COUNT = r"(\d)\s*/\s*\d"  # its "3/5": the materials in
 FUSE_NEUTRAL = (815, 160)  # above the owned grid, between Recipes and Fusion Guide: closes a tooltip, selects nothing
@@ -3753,8 +3756,11 @@ def cell_role(cell, team, page, avoid, owned=()):
     (not wanted, not kept, and no material of a wanted fusion not in `owned`: gifts.effective; a pack's exclusive fusion locks
     its materials only when the run pulled one of its packs, or run_packs is unknown, #306). A gift whose id is in `avoid` (White Gossypium for a team that does
     not hold it, #90) is material whatever the list says: the team's setting comes before the list's, as on the shelf. A
-    vestige is never sold unless the team sells vestiges (sell_vestiges, #161), but still fuses.
+    vestige is never sold unless the team sells vestiges (sell_vestiges, #161), but still fuses. A cell the fuse page tags
+    Unselectable (an EX gift, #378) is kept whatever the list says: the page does not take it in, and it is not sold.
     """
+    if cell.get("unselectable"):
+        return "keep"
     if cell["id"] in avoid:
         return "material"
     if cell["id"] is None or effective(team["list"], cell["id"], run_packs(), owned=owned) != "drop":
@@ -3817,24 +3823,33 @@ def cell_id(context, grid, at, keyword, tier):
     return found, max((s for _, s in scores), default=0.0)
 
 
+def held(image, x, y, page):
+    """Whether the cell of page centred at (x, y) holds a gift: textured (shop.filled), or on the fuse page tagged
+    Unselectable (shop.unselectable: a gift drawn dim, flat as an empty cell, #378)."""
+    return shop.filled(image, x, y) or (page == "fuse" and shop.unselectable(image, x, y))
+
+
 def read_cells(context, image, cells, page):
-    """The filled cells of a shop grid read off one screenshot (#76, #112): [{"i", "x", "y", "tier", "keyword", "id", "score"}].
+    """The cells holding a gift of a shop grid read off one screenshot (#76, #112): [{"i", "x", "y", "tier", "keyword",
+    "id", "score", "unselectable"}].
 
     The grid is scaled so gift icons are at their GiftSearch template's size, then each keyword's badge is matched once
     over it. keyword: the cell's best badge, "Keywordless" with none, None when the badge is below the grid's edge. An
-    empty cell is flat (live: spread 1-2, a gift 41-84).
+    empty cell is flat (live: spread 1-2, a gift 41-84), unless the fuse page tags it Unselectable (held).
     id: the data's id of the gift the cell shows (cell_id), None when unknown, score the best icon's; tier is then that gift's.
+    unselectable: the fuse page's tag (#378); with no numeral read the cell's candidates are EX_TIER's (an EX gift shows
+    "EX" there).
     """
     scale, bottom = CELL_PAGES[page]
     half = shop.CELL_HALF
-    filled = [(i, x, y) for i, (x, y) in enumerate(cells) if shop.filled(image, x, y)]
+    filled = [(i, x, y) for i, (x, y) in enumerate(cells) if held(image, x, y, page)]
     if not filled:
         return []
     x0, y0 = min(x for _, x, _ in filled) - half, min(y for _, _, y in filled) - half
     x1, y1 = max(x for _, x, _ in filled) + half, min(bottom, max(y for _, _, y in filled) + half)
     grid = shop.rescale(image[y0:y1, x0:x1], 1 / scale)
     out = [{"i": i, "x": x, "y": y, "tier": shop.tier(shop.cell_crop(image, x, y, scale)),
-            "keyword": "Keywordless" if y + 40 <= bottom else None,
+            "keyword": "Keywordless" if y + 40 <= bottom else None, "unselectable": page == "fuse" and shop.unselectable(image, x, y),
             "at": ((x - x0) / scale, (y - y0) / scale)} for i, x, y in filled]
     best = {}
     for keyword in BADGES:
@@ -3844,7 +3859,8 @@ def read_cells(context, image, cells, page):
                 if c["keyword"] and 12 <= bx - cx <= 40 and 12 <= by - cy <= 40 and score > best.get(c["i"], 0):
                     best[c["i"]], c["keyword"] = score, keyword
     for c in out:
-        c["id"], c["score"] = cell_id(context, grid, c.pop("at"), c["keyword"], c["tier"])
+        tier = EX_TIER if c["tier"] is None and c["unselectable"] else c["tier"]
+        c["id"], c["score"] = cell_id(context, grid, c.pop("at"), c["keyword"], tier)
         if c["id"] is not None:
             c["tier"] = GIFT_TIERS[c["id"]]  # the numeral may be misread (#330): the gift's own tier decides
     return out
@@ -3871,9 +3887,11 @@ def offer_cell(slot):
 
 
 def cell_line(cell, role):
-    """One cell read for the log: "2 III Bleed 9042 Smokes and Wires (0.77): keep", an unknown gift "unknown (best 0.38)" (#297)."""
+    """One cell read for the log: "2 III Bleed 9042 Smokes and Wires (0.77): keep", an unknown gift "unknown (best 0.38)" (#297),
+    a cell the fuse page tags Unselectable "... (0.78) unselectable: keep" (#378)."""
     tier = "I II III IV V".split()[cell["tier"] - 1] if cell["tier"] else "?"
-    return f"{cell['i']} {tier} {cell['keyword'] or 'badge unread'} {gift_shown(cell)}: {role}"
+    tag = " unselectable" if cell.get("unselectable") else ""
+    return f"{cell['i']} {tier} {cell['keyword'] or 'badge unread'} {gift_shown(cell)}{tag}: {role}"
 
 
 def gift_shown(cell):
@@ -3952,11 +3970,11 @@ def owned_cells(context, page, grid=None):
         for c, shot in zip(cells, shots):
             i, _, y = fresh[c["i"]]
             out.append({**c, "i": i, "y": y + grid["at"], "price": prices.get(c["i"]), "look": centre(shot, c["x"], y)})
-        cut = [y for _, x, y in shown if y + under > bottom and y - 25 < bottom and shop.filled(image[:bottom], x, y)]
+        cut = [y for _, x, y in shown if y + under > bottom and y - 25 < bottom and held(image[:bottom], x, y, page)]
         hidden = min(y for _, _, y in shown if y - 25 >= bottom)
         # A full row over the edge and the next one all under it (a drag the game took less of, or the grid's end): one
         # drag more tells them apart.
-        full = not cut and all(shop.filled(image[:bottom], x0 + dx * c, hidden - dy) for c in range(5))
+        full = not cut and all(held(image[:bottom], x0 + dx * c, hidden - dy, page) for c in range(5))
         if not cut and not full:
             grid["whole"] = True
             break
@@ -4115,13 +4133,14 @@ def fused_cells(context, cells, grid, fusion):
     reason logged).
 
     shop.fusion_places puts the gifts left and the gift made in the grid's new order: only when the last read went to the
-    grid's end and gave every place a tier, highest first. After a recipe the owned gifts are placed by their label first
-    (owned_top): its Fusion Available section may have gone, the list moved up (#304). The gift made's cell is dragged into
-    view, a row over it on show too, and read: it is placed (fused_check) when its tier is the fusion's (a recipe's: its
-    id), its id is read and it looks like no gift listed, every other cell on show looks as it was read (matched within
-    GRID_SAME) and the places after the last are empty. A check that fails places the owned gifts by their label once (the
-    list may have sprung back from its end, a section come or gone) and checks again. Each tap after it still checks its
-    cell (cell_at).
+    grid's end and gave every place a tier, in the page's order (the vestiges first, then highest tier first). After a
+    recipe the owned gifts are placed by their label first (owned_top): its Fusion Available section may have gone, the
+    list moved up (#304). The gift made's cell is dragged into view, a row over it on show too, and read: it is placed
+    (fused_check) when its tier is the fusion's (a recipe's: its id; an EX gift a failed fusion gives is tier V, so never),
+    its id is read and no gift listed with that id or an unread one looks like it, every other cell on show looks as it was
+    read (matched within GRID_SAME) and the places after the last hold no gift. A check that fails places the owned gifts
+    by their label once (the list may have sprung back from its end, a section come or gone) and checks again. Each tap
+    after it still checks its cell (cell_at).
     """
     (x0, y0), (dx, dy), _ = OWNED_GRID["fuse"]
     placed = grid.get("whole") and shop.fusion_places(cells, [c["i"] for c in fusion["gone"]], fusion["tier"], ((x0, y0), (dx, dy)))
@@ -4168,7 +4187,7 @@ def fused_check(context, new, k, grid, fusion):
             return f"cell {c['i']} is not where the fusion puts it ({diff:.1f})", None
     for j in range(len(new), len(new) + 10):
         at = y0 + dy * (j // 5) - grid["at"]
-        if whole("fuse", at) and shop.filled(image, x0 + dx * (j % 5), at):
+        if whole("fuse", at) and held(image, x0 + dx * (j % 5), at, "fuse"):
             return f"cell {j} holds a gift, after the last", None
     if not whole("fuse", y):
         return f"cell {k}, the gift made, is not on show", None
@@ -4179,7 +4198,10 @@ def fused_check(context, new, k, grid, fusion):
     if cell["tier"] != fusion["tier"] or fusion["gift"] not in (None, cell["id"]):
         made = f"tier {fusion['tier']}" + (f" {fusion['gift']}" if fusion["gift"] else "")
         return f"cell {k} reads tier {cell['tier']} {gift_shown(cell)}, not the {made} made", None
-    twin = next((c["i"] for c in new if c["i"] != k and matched(shots[0], cell["x"], y, c["look"])[0] <= GRID_SAME), None)
+    # A cell listed that looks like it and is not told apart by its id (the same id, or one unread): the gift made may be
+    # that one still. Another id read is another gift: live, Old Wooden Doll (II) looked like Finifugality (III), #378.
+    twin = next((c["i"] for c in new if c["i"] != k and c["id"] in (None, cell["id"])
+                 and matched(shots[0], cell["x"], y, c["look"])[0] <= GRID_SAME), None)
     if twin is not None:
         return f"cell {k}, the gift made, looks like cell {twin}", None
     return None, cell
@@ -4817,6 +4839,7 @@ class Shop(CustomAction):
         be theirs. A recipe the page cannot hold (a Lunar Memory's 5 materials on 3 slots) is passed over for the next wanted one.
         """
         failed = visit.setdefault("recipes_failed", [])
+        cells = [c for c in cells if not c.get("unselectable")]  # the page takes none of them in (#378)
         recipe = recipe_fusion(team["list"], [c["id"] for c in cells if c["id"] is not None], slots=slots, skip=failed)
         if recipe is None:
             return None

@@ -173,7 +173,7 @@ FUSE, SELL, OFFER = "FUSE_CELLS", "SELL_CELLS", "OFFER_CELLS"
 RECIPE_CELLS = [(678 + 96 * c, 427) for c in range(5)] + [(678, 293)]  # a fuse page with a recipe on offer: owned gifts at y 427
 CASES = {  # name: (crop under tests/shop, the page's cells, the page)
     "fuse": ("fuse", FUSE, "fuse"), "fuse_spiderweb": ("fuse_spiderweb", FUSE, "fuse"), "fuse_recipe": ("fuse_recipe", RECIPE_CELLS, "fuse"),
-    "fuse_tooltip": ("fuse_tooltip", FUSE, "fuse"),
+    "fuse_tooltip": ("fuse_tooltip", FUSE, "fuse"), "fuse_ex": ("fuse_ex", FUSE, "fuse"),
     "sell": ("sell", SELL, "sell"), "offers": ("offers", OFFER, "offer"), "offers_super": ("offers_super", OFFER, "offer"),
     "offers_red": ("offers_red", OFFER, "offer"), "offers_short": ("offers_short", OFFER, "offer"),
 }
@@ -294,6 +294,14 @@ NO_BADGE = [None] * 5
 ])
 def test_a_cell_is_named_by_its_icon_on_each_page(read, case, ids):
     assert read["cases"][case] == ids
+
+
+def test_an_unselectable_ex_gift_is_read_at_its_place(read):
+    # #378, live 2026-11-04 (F3): A Certain Philosophy (EX, 9799), dim under the fuse page's "Unselectable" tag, was read as
+    # no gift, so the places after the Twinkling Vestige (9993) ran 0, 2, 3 and no order was made of them. Its cell holds a
+    # gift, and an EX cell's icon is matched against the tier V gifts. The others as the log read them 34 px further down;
+    # the third row's badges are cut off.
+    assert read["cases"]["fuse_ex"] == [9993, 9799, 9273, 9130, 9073, 9046, 9066, 9129, 9178, 9061] + [None] * 4
 
 
 @pytest.mark.parametrize("case", ["offers", "offers_super", "offers_red"])
