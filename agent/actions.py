@@ -3757,7 +3757,8 @@ def cell_role(cell, team, page, avoid, owned=()):
     its materials only when the run pulled one of its packs, or run_packs is unknown, #306). A gift whose id is in `avoid` (White Gossypium for a team that does
     not hold it, #90) is material whatever the list says: the team's setting comes before the list's, as on the shelf. A
     vestige is never sold unless the team sells vestiges (sell_vestiges, #161), but still fuses. A cell the fuse page tags
-    Unselectable (an EX gift, #378) is kept whatever the list says: the page does not take it in, and it is not sold.
+    Unselectable (an EX gift, #378) is kept whatever the list says: the page does not take it in. The sell page has no such
+    tag (read_cells): an EX gift there shows no numeral, so its id is unknown and it is kept as any unknown cell (unseen live).
     """
     if cell.get("unselectable"):
         return "keep"
@@ -3842,14 +3843,15 @@ def read_cells(context, image, cells, page):
     """
     scale, bottom = CELL_PAGES[page]
     half = shop.CELL_HALF
-    filled = [(i, x, y) for i, (x, y) in enumerate(cells) if held(image, x, y, page)]
+    tagged = {i for i, (x, y) in enumerate(cells) if page == "fuse" and shop.unselectable(image, x, y)}
+    filled = [(i, x, y) for i, (x, y) in enumerate(cells) if i in tagged or shop.filled(image, x, y)]  # held
     if not filled:
         return []
     x0, y0 = min(x for _, x, _ in filled) - half, min(y for _, _, y in filled) - half
     x1, y1 = max(x for _, x, _ in filled) + half, min(bottom, max(y for _, _, y in filled) + half)
     grid = shop.rescale(image[y0:y1, x0:x1], 1 / scale)
     out = [{"i": i, "x": x, "y": y, "tier": shop.tier(shop.cell_crop(image, x, y, scale)),
-            "keyword": "Keywordless" if y + 40 <= bottom else None, "unselectable": page == "fuse" and shop.unselectable(image, x, y),
+            "keyword": "Keywordless" if y + 40 <= bottom else None, "unselectable": i in tagged,
             "at": ((x - x0) / scale, (y - y0) / scale)} for i, x, y in filled]
     best = {}
     for keyword in BADGES:

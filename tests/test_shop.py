@@ -491,29 +491,28 @@ def test_the_tooltip_sweep_over_tests_screens_hits_no_fuse_page():
                     "StarlightPage", "WipeDialog"]
 
 
-FUSE_GRID = [(678 + 96 * c, 294 + 92 * r) for r in range(3) for c in range(5)]  # actions.FUSE_CELLS
-
-
 def test_an_unselectable_cell_is_told_by_its_tag_though_it_is_flat():
     # #378: the EX gift a failed fusion gives shows dim, as flat as an empty cell (live: read as no gift, the list's places
     # broken), its red "Unselectable" tag over its top edge. Of tests/shop's fuse page crops only that cell has it.
+    import actions  # noqa: PLC0415  (test_gift_cells' MaaFramework child imports this file before its Resource)
     ex = screen_with("fuse_ex")
-    assert [c for c, (x, y) in enumerate(FUSE_GRID) if s.filled(ex, x, y)] == [0, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
-    assert [c for c, (x, y) in enumerate(FUSE_GRID) if s.unselectable(ex, x, y)] == [1]
+    assert [c for c, (x, y) in enumerate(actions.FUSE_CELLS) if s.filled(ex, x, y)] == [0, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
+    assert [c for c, (x, y) in enumerate(actions.FUSE_CELLS) if s.unselectable(ex, x, y)] == [1]
     for name in [n for n in CROP_AT if n.startswith("fuse") and n != "fuse_ex"]:
         image = screen_with(name)
-        assert not [c for c, (x, y) in enumerate(FUSE_GRID) if s.unselectable(image, x, y)], name
+        assert not [c for c, (x, y) in enumerate(actions.FUSE_CELLS) if s.unselectable(image, x, y)], name
 
 
 def test_the_unselectable_sweep_over_tests_screens_hits_no_fuse_page():
     # CODING_STANDARDS' sweep: the tag is looked for on the fuse page only (actions.held). No fuse page of tests/screens has
     # one at a cell of its grid; two map screens read one at cell 9's place.
+    import actions  # noqa: PLC0415  (as above)
     hits = []
     for png in sorted(SCREENS.glob("*.png")):
         img = Image.open(png)
         if img.size == (1280, 720):
             image = np.asarray(img.convert("RGB"))[:, :, ::-1]
-            hits += [f"{png.stem} {c}" for c, (x, y) in enumerate(FUSE_GRID) if s.unselectable(image, x, y)]
+            hits += [f"{png.stem} {c}" for c, (x, y) in enumerate(actions.FUSE_CELLS) if s.unselectable(image, x, y)]
     assert hits == ["MapBossDarkAfterShop 9", "MapFloor4Panned 9"]
 
 

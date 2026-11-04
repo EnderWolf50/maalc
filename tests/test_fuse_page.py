@@ -270,11 +270,11 @@ def test_a_gift_made_that_looks_like_a_gift_listed_is_its_twin_only_by_the_same_
 
 def test_an_unselectable_cell_is_kept_whatever_the_list_says():
     # #378: the fuse page tags A Certain Philosophy (EX, the gift a 99% fusion gives when it fails) Unselectable: the page
-    # takes it in no fusion, so it is no material even when the list drops it, nor sold.
+    # takes it in no fusion, so it is no material even when the list drops it.
     team = shop_team({"list": wants()})
     cell = {"i": 0, "tier": 5, "keyword": "Keywordless", "id": 9799, "unselectable": True}
     assert actions.cell_state(cell, team["list"]) == "drop"
-    assert [actions.cell_role(cell, team, page, ()) for page in ("fuse", "sell")] == ["keep", "keep"]
+    assert actions.cell_role(cell, team, "fuse", ()) == "keep"
     assert actions.cell_role(cell, team, "fuse", (9799,)) == "keep"  # nor as a gift the team avoids
     assert actions.cell_line({**cell, "score": 0.78}, "keep") == "0 V Keywordless 9799 A Certain Philosophy (0.78) unselectable: keep"
 

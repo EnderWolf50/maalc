@@ -48,9 +48,10 @@ def unselectable(image, x, y):
 
     The game's combine_egogift_not_allow: a gift no fusion takes, drawn dim, its centre as flat as an empty cell's (spread
     9.6-9.9, under filled's 15). Live 2026-11-04: A Certain Philosophy (9799, EX), the gift a 99% fusion gives when it fails.
-    The tag's dark red letters (live R 101-160, G and B 23 at most) are 439-502 px of the band and span 84 px in runs of a
-    few px; a tooltip's red head runs 288 px (tooltip). The fuse page's other cells: 220 px at most (1325 cells of 89 fuse
-    pages: the 2026-11-04 recordings' frames and tests/shop's crops); test_shop sweeps tests/screens.
+    The tag's dark red letters (live R 101-160, G and B 23 at most) are 439-502 px of the band, span 84 px, and run 7-11 px
+    on a row (11 tagged cells, 7 distinct, of 90 fuse pages: the 2026-11-04 recordings' frames and tests/shop's crops); a
+    tooltip's red head runs 288 px (tooltip). The other 1339 cells of those pages: 220 px at most. test_shop sweeps
+    tests/screens.
     """
     over, under, side = UNSELECTABLE_BAND
     band = image[y - over:y - under, x - side:x + side].astype(int)
