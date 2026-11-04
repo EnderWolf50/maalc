@@ -133,7 +133,7 @@ _Avoid_: 模組（單說容易和其他模組混淆）
 _Avoid_: 每日次數、daily count
 
 **Daily Count**：
-Charge Enkephalin 視窗 Use Lunacy 分頁的 `n/10`，n 是當天已用 Lunacy 換腦啡肽的次數（每日重置，一天最多 10 次）。狂氣換腦啡肽的 `count` 是它當天的目標（#429）。不是紐本的 Daily Bonuses。
+Charge Enkephalin 視窗 Use Lunacy 分頁的 `n/10`，n 是當天已用 Lunacy 換腦啡肽的次數，一天最多 10 次（[spec 03 第 16 節](docs/spec/03-decisions.md)）。不是紐本的 Daily Bonuses。
 
 **連戰**：
 經驗本與紐本卡片上的 `Consecutive Battle ×N`，N 是 1–10。一場打完算 N 場，獎勵與腦啡肽模組消耗都是 ×N；離開 Luxcavation 或結算後會回到 ×1（[spec 01](docs/spec/01-architecture.md)）。
