@@ -153,7 +153,7 @@ def staggered(image, xs):
     white on red cracks, STAGGER++ in white on green cracks (0.92 on its capture). The plates differ in colour, so the
     word's greyscale shape tells: a match anywhere within STAGGER_SLIDE takes in the shift of a longer, centred word.
     Over tests/screens: 0.86-1.00 on its 10 plates (live captures of 4 battles, all three kinds), 0.42 at most on the
-    other slot positions of its 1280x720 screens (every position of 1 to 12 slots).
+    other 4544 slot positions of its 198 1280x720 screens (every position of 1 to 12 slots).
     """
     return [stagger_score(image, x) > STAGGER_MATCH for x in xs]
 

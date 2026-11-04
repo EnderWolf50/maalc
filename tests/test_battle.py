@@ -120,7 +120,7 @@ def screen(png):
     # on red cracks. Slots 2-4 and 6 are the dark guard icons of the other units' second slots.
     ("BattleTurnStaggerPlus.png", 1022, [False] * 6 + [True] * 2),
     # #427 (live 2026-11-05, turn 2, 3 slots): slot 3 STAGGER++, a white word on green cracks (scores 0.04, 0.12, 0.92).
-    ("BattleTurnStaggerPlusPlus.png", 984 + 40.5 * (3 - 7), [False, False, True]),
+    ("BattleTurnStaggerPlusPlus.png", 822, [False, False, True]),
     # Live 2026-10-28, EXP Luxcavation turn 4: slot 9 STAGGER on yellow cracks; slot 7 a dark shield icon.
     ("BattleTurnStaggerLast.png", 1061, [False] * 8 + [True]),
 ])
@@ -153,7 +153,7 @@ def test_no_other_slot_of_tests_screens_reads_staggered():
         if image.shape[:2] == (720, 1280) and (found := [x for x, s in zip(xs, b.staggered(image, xs)) if s]):
             hits[png.name] = found
     assert hits == {"BattleTurnStagger.png": b.slot_xs(984)[1:], "BattleTurnStaggerPlus.png": b.slot_xs(1022)[6:],
-                    "BattleTurnStaggerPlusPlus.png": b.slot_xs(984 - 162)[2:],
+                    "BattleTurnStaggerPlusPlus.png": b.slot_xs(822)[2:],
                     "BattleTurnStaggerLast.png": b.slot_xs(1061)[8:]}
 
 
