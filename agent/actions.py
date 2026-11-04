@@ -538,10 +538,10 @@ class LuxStart(TaskStart):
             return stop(context, f"{name} has no team: pick one in the settings GUI's Daily tab")
         # Not RUN["settings"]: that is a Mirror Dungeon run, which the stop procedure writes to runs.jsonl.
         # lux: this task's count (spec 03 section 15): target, the day's wins the settings ask for; today, those won
-        # today as read (plan); count, the battles this run fights, None until planned; the battles won and the retries
+        # today as read (plan) and seen, what was read, for the log; fights, the battles this run fights, None until planned; the battles won and the retries
         # used, the last battle's result.
         RUN.update(team=team, guard=team["guard_turns"],
-                   lux={"name": name, "cost": cost, "target": opts["count"], "today": None, "count": None,
+                   lux={"name": name, "cost": cost, "target": opts["count"], "today": None, "seen": None, "fights": None,
                         "retries": opts["retries"], "modules": None, "won": 0, "retried": 0, "result": None,
                         "consecutive": opts["consecutive"], "size": 1})
         log(f"{name}: team {team['name']!r} (TEAMS #{team['game_team']}), {team['guard_turns']} guard turns, "
@@ -584,7 +584,7 @@ class LuxHome(CustomAction):
             return stop(context, f"{lux['name']}: the Modules number did not read on the main window")
         log(f"{lux['name']}: Modules {lux['modules']} on the main window")
         if (json.loads(argv.custom_action_param or "null") or {}).get("plan"):
-            over = plan(context, lux["today"], lux.pop("seen"))
+            over = plan(context, lux["today"], lux["seen"])
             return True if over is None else over
         return True
 
@@ -593,7 +593,7 @@ def plan(context, today, seen):
     """The battles this run fights (#429): the day's target less `today`, the battles won today as read (None: it did
     not read), `seen` what was read, for the log. Nothing read or nothing left: the main window and done, nothing
     fought; else the Modules must cover the battles left at the hardest stage's cost (spec 03 section 15), or the task
-    is skipped the same way. None: RUN["lux"]["count"] is set and the battles go on; else what the action returns."""
+    is skipped the same way. None: RUN["lux"]["fights"] is set and the battles go on; else what the action returns."""
     lux = RUN["lux"]
     if today is None:
         return finish(context, f"{lux['name']}: {seen}: nothing fought")
@@ -605,7 +605,7 @@ def plan(context, today, seen):
     need = luxcavation.needed(lux["cost"], fights)
     if luxcavation.decide(lux["modules"], lux["cost"], fights, 0, 0, lux["retries"]) == luxcavation.SKIP:
         return finish(context, f"{head}: Modules {lux['modules']} < {need} needed for {fights}, skipped")
-    lux["count"] = fights
+    lux["fights"] = fights
     log(f"{head}: Modules {lux['modules']} >= {need} needed, fight {fights}")
     return None
 
@@ -650,12 +650,12 @@ def battle_over(context):
     result, lux["result"] = lux["result"], None
     if result is None:
         return stop(context, f"{lux['name']}: back on the page with no results page seen")
-    step = luxcavation.decide(lux["modules"], lux["cost"], lux["count"], lux["won"], lux["retried"], lux["retries"], result,
+    step = luxcavation.decide(lux["modules"], lux["cost"], lux["fights"], lux["won"], lux["retried"], lux["retries"], result,
                               lux["size"])
     lux["won"] += lux["size"] * (result == "win")
     # Each battle has its own retries, as the mirror's wipe retries: a win starts the next battle at 0 (review S6).
     lux["retried"] = 0 if result == "win" else lux["retried"] + (step == luxcavation.RETRY)
-    log(f"{lux['name']}: {result}, {lux['won']} of {lux['count']} won, {lux['retried']} of {lux['retries']} retries of this battle used: {step}")
+    log(f"{lux['name']}: {result}, {lux['won']} of {lux['fights']} won, {lux['retried']} of {lux['retries']} retries of this battle used: {step}")
     if step == luxcavation.FINISH:
         return finish(context, f"{lux['name']}: {lux['won']} won")
     if step == luxcavation.STOP:
@@ -740,15 +740,15 @@ class LuxEnter(CustomAction):
                 return over
         opts = json.loads(argv.custom_action_param or "null") or {}
         lux = RUN["lux"]
-        if lux["count"] is None:  # Thread's first look at its open card: the Daily Bonuses above it plan the task (#429)
+        if lux["fights"] is None:  # Thread's first look at its open card: the Daily Bonuses above it plan the task (#429)
             n = luxcavation.read_bonuses(ocr_texts(context, screen(context), "ThreadBonuses"))
             shown = "Daily Bonuses did not read" if n is None else f"Daily Bonuses {n}/{luxcavation.DAILY_BONUSES}"
-            over = plan(context, None if n is None else luxcavation.thread_today(n), shown)
+            over = plan(context, None if n is None else luxcavation.thread_today(n, lux["target"]), shown)
             if over is not None:
                 return over
         x, y, w, h = argv.box
         if lux["consecutive"]:
-            want = lux["size"] = luxcavation.batch(lux["count"], lux["won"], True)
+            want = lux["size"] = luxcavation.batch(lux["fights"], lux["won"], True)
             got = set_consecutive(context, opts["box"], want, (x + w // 2, y + h // 2))
             if got != want:
                 return stop(context, f"{lux['name']}: Consecutive Battle {'did not read' if got is None else f'shows x{got}'}, wanted x{want}")

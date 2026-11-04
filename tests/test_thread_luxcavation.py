@@ -157,11 +157,11 @@ def test_the_modules_are_checked_against_the_battles_left_not_the_target():
     saved = actions.finish
     actions.finish = lambda context, reason: ends.append(reason) or True
     actions.RUN.clear()
-    actions.RUN["lux"] = {"name": "Thread Luxcavation", "cost": 2, "target": 92, "today": None, "count": None, "retries": 0,
+    actions.RUN["lux"] = {"name": "Thread Luxcavation", "cost": 2, "target": 92, "today": None, "seen": None, "fights": None, "retries": 0,
                           "modules": 182}
     try:
-        assert actions.plan(MagicMock(), 1, "Daily Bonuses 2/3") is None and actions.RUN["lux"]["count"] == 91 and ends == []
-        actions.RUN["lux"].update(modules=181, count=None)
+        assert actions.plan(MagicMock(), 1, "Daily Bonuses 2/3") is None and actions.RUN["lux"]["fights"] == 91 and ends == []
+        actions.RUN["lux"].update(modules=181, fights=None)
         assert actions.plan(MagicMock(), 1, "Daily Bonuses 2/3") is True
         assert ends == ["Thread Luxcavation: Daily Bonuses 2/3 (1 won today), target 92: Modules 181 < 182 needed for 91, skipped"]
     finally:

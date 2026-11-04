@@ -36,10 +36,12 @@ def test_daily_bonuses_read_as_the_one_n_over_3(texts, n):
     assert luxcavation.read_bonuses(texts) == n
 
 
-@pytest.mark.parametrize("n, today", [(3, 0), (2, 1), (1, 2), (0, 3)])
-def test_the_daily_bonuses_n_is_the_bonuses_left(n, today):
-    # the user, 2026-11-05: 3/3 on a fresh day, 0/3 once three Thread battles are won
-    assert luxcavation.thread_today(n) == today
+@pytest.mark.parametrize("n, target, today", [(3, 3, 0), (2, 3, 1), (1, 3, 2), (0, 3, 3), (0, 1, 3), (2, 5, 1),
+                                              (0, 5, None)])
+def test_the_daily_bonuses_n_is_the_bonuses_left(n, target, today):
+    # the user, 2026-11-05: 3/3 on a fresh day, 0/3 once three Thread battles are won; at 0/3 a target above 3 cannot
+    # tell how many more were won, so nothing is fought
+    assert luxcavation.thread_today(n, target) == today
 
 
 @pytest.mark.parametrize("count, cost, need", [(1, 3, 3), (2, 3, 6), (5, 3, 15), (3, 2, 6)])

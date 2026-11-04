@@ -455,7 +455,7 @@ def test_each_battle_has_its_own_retries_a_win_resets_them():
     stops = []
     actions.RUN.clear()
     actions.RUN["team"] = {"guard_turns": 0}
-    actions.RUN["lux"] = {"name": "EXP", "cost": 3, "count": 3, "retries": 1, "modules": 99, "won": 0, "retried": 0, "result": None, "size": 1}
+    actions.RUN["lux"] = {"name": "EXP", "cost": 3, "fights": 3, "retries": 1, "modules": 99, "won": 0, "retried": 0, "result": None, "size": 1}
     saved = actions.stop
     actions.stop = lambda context, reason, **kw: stops.append(reason) or False
     try:
@@ -478,7 +478,7 @@ def test_each_battle_starts_its_guard_turns_afresh():
 
     actions.RUN.clear()
     actions.RUN.update(team={"guard_turns": 2}, guard=0, entered=True)
-    actions.RUN["lux"] = {"name": "EXP", "cost": 3, "count": 2, "retries": 0, "modules": 99, "won": 0, "retried": 0, "result": "win", "size": 1}
+    actions.RUN["lux"] = {"name": "EXP", "cost": 3, "fights": 2, "retries": 0, "modules": 99, "won": 0, "retried": 0, "result": "win", "size": 1}
     try:
         assert actions.battle_over(MagicMock()) is None and actions.RUN["guard"] == 2
     finally:

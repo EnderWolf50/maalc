@@ -26,9 +26,12 @@ def read_bonuses(texts):
     return int(found[0][0]) if len(found) == 1 and int(found[0][1]) == DAILY_BONUSES and int(found[0][0]) <= DAILY_BONUSES else None
 
 
-def thread_today(n):
-    """The Thread battles won today from the Daily Bonuses n: n is the bonuses left (the user, 2026-11-05), so a day
-    past its 3 bonuses reads as 3 won, however many more were fought."""
+def thread_today(n, target):
+    """The Thread battles won today from the Daily Bonuses n: n is the bonuses left (the user, 2026-11-05; live: 3/3,
+    then 2/3 after a win). At 0/3 the day may hold 3 wins or more, which only matters to a target above 3: None, no
+    read, so a rerun does not fight past it again and again."""
+    if n == 0 and target > DAILY_BONUSES:
+        return None
     return DAILY_BONUSES - n
 
 
