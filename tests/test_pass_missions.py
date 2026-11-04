@@ -60,6 +60,25 @@ def test_claimable_rows(png, dy, expected):
     assert rows(png, dy) == expected
 
 
+@pytest.mark.parametrize("png, dy, done", [
+    ("PassMissionsDaily.png", 0, [True] * 5),  # every row claimed (CLEAR)
+    ("PassMissionsDailyUnderway.png", 0, [True, False, False, False, False]),  # Clear EXP Luxcavation 0/1 is row 2
+    ("PassMissionsDailyClaimable.png", 0, [True] * 5),  # row 1 claimed, rows 2-5 full bars to claim
+    ("PassMissionsDailyClaiming.png", 0, [True] * 5),
+    ("PassMissionsWeekly.png", 0, [False, True, True, True, True]),  # Clear EXP Luxcavation 5 time(s) 3/5 under way
+    ("PassMissionsSeasonal.png", 0, [True] * 5),
+    ("PassMissionsSeasonalEnd.png", 10, [True] * 5),
+])
+def test_a_row_is_done_with_its_bar_full_or_its_stamp_on_and_not_while_under_way(png, dy, done):
+    # #429: ExpLuxcavation reads its Clear EXP Luxcavation row as "won today" when it is done, claimed or not
+    image = frame(png)
+    assert [pass_missions.row_done(image, y + dy) for y in pass_missions.ROWS_Y] == done
+
+
+def test_the_nearest_row_of_a_rows_text():
+    assert [pass_missions.nearest_row(y) for y in (200, 299, 387, 560, 700)] == [225, 312, 400, 575, 575]
+
+
 def test_the_swiped_seasonal_tab_reads_its_rows_10_px_lower():
     assert pass_missions.claimable(seasonal_end_claimable(), 10) == [(370, 235)]
 

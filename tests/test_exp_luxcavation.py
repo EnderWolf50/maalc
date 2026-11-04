@@ -43,6 +43,11 @@ BOX = {"exp": ((1110, 254), 286, {"one": 1008, "minus": 1038, "plus": 1179, "ten
 # BOX's numbers hold for stage 9 at the right and the Thread tab's card.
 CARD = {"exp": (1079, 479), "locked": (738, 479), "thread": (372, 481)}
 FIGHT_SHOTS = 4  # screenshots the battle takes before its results page: the first of them gray, the rest VICTORY on a win
+# The pass page (#429, test_pass_task.py's): the main window's banner, the Pass Missions tab, the Daily tab.
+BANNER = (940, 190, 270, 90)
+MISSIONS_TAB = (305, 38, 140, 38)
+DAILY_TAB = (256, 210, 30, 100)
+PASS = {"underway": "PassMissionsDailyUnderway.png", "done": "PassMissionsDaily.png", "weekly": "PassMissionsWeekly.png"}
 
 SCREENS = {"main": "MainWindow.png", "drive": "Drive.png", "exp": "LuxExp.png", "locked": "LuxExpLocked.png",
            "thread": "LuxThread.png", "team": "LuxTeamSelect.png", "scrolled": "LuxThreadScrolled.png", "levels": "LuxThreadLevels.png", "fight": None,
@@ -68,14 +73,41 @@ SCENARIOS = {"drive": ("drive", "b", 1, 0, WIN), "locked": ("locked", "b", 1, 0,
              "lose_no_retries": ("drive", "b", 1, 0, LOSE),
              "x1": ("drive", "b", 1, 0, WIN), "x3": ("drive", "b", 3, 0, WIN), "x3_off": ("drive", "b", 3, 0, WIN),
              "x12": ("drive", "b", 12, 0, WIN), "x3_unread": ("drive", "b", 3, 0, WIN),
-             "x3_lose_retry": ("drive", "b", 3, 1, LOSE + WIN)}
+             "x3_lose_retry": ("drive", "b", 3, 1, LOSE + WIN),
+             "done_today": ("drive", "b", 1, 0, WIN), "done_today_two": ("drive", "b", 2, 0, WIN),
+             "weekly_tab": ("drive", "b", 1, 0, WIN), "no_pass": ("drive", "b", 1, 0, WIN),
+             "row_unread": ("drive", "b", 1, 0, WIN)}
 CONSECUTIVE = {"x1", "x3", "x12", "x3_unread", "x3_lose_retry"}
+# #429: the pass's Clear EXP Luxcavation row done (one won today), the pass page opening on its Weekly tab, no pass page
+# (its hub's 60 s cut to 5), the row not found on the Daily tab.
+STATES = {"done_today": {"pass_row": "done"}, "done_today_two": {"pass_row": "done"}, "weekly_tab": {"pass_tab": "weekly"},
+          "no_pass": {"pass_row": None, "override": {"ExpPassHub": {"timeout": 5000}}}, "row_unread": {"pass_row": "unread"}}
 
 
-def child(task="ExpLuxcavation", scenarios=SCENARIOS, consecutive=CONSECUTIVE):
+def bonuses(png, n):
+    """png (a Thread tab, Daily Bonuses 0/3) with its "0/3" painted over as n/3, or blank when n is None."""
+    from PIL import Image, ImageDraw, ImageFont
+
+    im = Image.open(ROOT / "tests" / "screens" / png).convert("RGB")
+    draw = ImageDraw.Draw(im)
+    draw.rectangle((630, 24, 680, 53), fill=im.getpixel((620, 30)))
+    if n is not None:
+        draw.text((636, 25), f"{n}/3", fill=(40, 30, 20), font=ImageFont.load_default(size=26))
+    return np.ascontiguousarray(np.array(im)[:, :, ::-1])
+
+
+def unread_row():
+    """PassMissionsDailyUnderway.png with the Clear EXP Luxcavation row's text painted out: the row is not found."""
+    image = screen(PASS["underway"]).copy()
+    image[285:312, 405:690] = image[280, 700]
+    return image
+
+
+def child(task="ExpLuxcavation", scenarios=SCENARIOS, consecutive=CONSECUTIVE, states=None):
     """Run task from each of its scenarios (SCENARIOS' shape); print one JSON line {scenario: {succeeded, nodes, clicks,
     keys}}. test_thread_luxcavation.py runs ThreadLuxcavation's on this model: one child run per file, as CI's shards
-    split the tests by file (conftest.py)."""
+    split the tests by file (conftest.py). states: a scenario's model attributes other than the defaults (Game.set),
+    and "override", the pipeline override it runs with."""
     actions, resource = load()
     (actions.ROOT / "config").mkdir()
     settings = json.loads((ROOT / "tests" / "settings_cases.json").read_text(encoding="utf-8"))["valid"]
@@ -84,10 +116,16 @@ def child(task="ExpLuxcavation", scenarios=SCENARIOS, consecutive=CONSECUTIVE):
     class Game(game_class()):
         """The screen the game shows and what a tap or the back key does there."""
 
-        images = {name: screen(png) if png else np.full((720, 1280, 3), 40, np.uint8) for name, png in SCREENS.items()}
+        images = {**{name: screen(png) if png else np.full((720, 1280, 3), 40, np.uint8) for name, png in SCREENS.items()},
+                  **{f"pass_{name}": screen(png) for name, png in PASS.items()}, "pass": screen("PassBattlePass.png"),
+                  "pass_unread": unread_row(),
+                  **{f"{name}{n}": bonuses(SCREENS[name], n) for name in ("thread", "scrolled") for n in (None, 0, 1, 2, 3)}}
 
         def set(self, start, lux_tab="thread", after="thread"):
             self.screen, self.clicks, self.keys, self.shots = start, [], [], 0
+            self.pass_row = "underway"  # the pass's Daily tab: "underway" (0 won today), "done", "unread"; None: no pass page
+            self.pass_tab = "daily"  # the tab the pass page's Pass Missions opens on: "daily", "weekly"
+            self.bonuses = 3  # the Thread tab's Daily Bonuses n/3 (n left), None: it does not read
             self.stage = "exp" if start != "locked" else "locked"
             self.outcomes = []  # each battle's end, in order: "win", "lose", or None (no results page: straight back to the tab)
             self.outcome = None
@@ -137,6 +175,8 @@ def child(task="ExpLuxcavation", scenarios=SCENARIOS, consecutive=CONSECUTIVE):
                 return self.images["chain_team"]  # live 2026-10-28: Chain To Battle! after a Consecutive Battle x N
             if self.screen == "result":
                 return self.images["thread_win" if self.outcome == "win" and self.after == "levels" else self.outcome]
+            if self.screen in ("thread", "scrolled"):
+                return self.images[f"{self.screen}{self.bonuses}"]
             return self.images[self.screen]
 
         def on_tap(self, x, y):
@@ -173,6 +213,12 @@ def child(task="ExpLuxcavation", scenarios=SCENARIOS, consecutive=CONSECUTIVE):
                 self.screen = "ev_continue"
             elif s == "drive" and inside(WINDOW_TAB, x, y):
                 self.screen = "main"
+            elif s == "main" and inside(BANNER, x, y) and self.pass_row:
+                self.screen = "pass"
+            elif s == "pass" and inside(MISSIONS_TAB, x, y):
+                self.screen = "pass_weekly" if self.pass_tab == "weekly" else f"pass_{self.pass_row}"
+            elif s == "pass_weekly" and inside(DAILY_TAB, x, y):
+                self.screen = f"pass_{self.pass_row}"
             elif s == "main" and inside(DRIVE_TAB, x, y):
                 self.screen = "drive"
             elif s == "drive" and inside(LUXCAVATION, x, y):
@@ -220,6 +266,8 @@ def child(task="ExpLuxcavation", scenarios=SCENARIOS, consecutive=CONSECUTIVE):
                 self.screen = "thread"
             elif keycode == 4 and self.screen == "result":  # live 2026-10-27: back leaves the results page as Confirm does
                 self.screen = self.stage
+            elif keycode == 4 and self.screen.startswith("pass"):  # the pass pages have no tab bar (test_pass_task.py)
+                self.screen = "main"
             return True
 
     game = Game()
@@ -235,8 +283,12 @@ def child(task="ExpLuxcavation", scenarios=SCENARIOS, consecutive=CONSECUTIVE):
         game.outcomes = list(outcomes)
         game.event = scenario == "thread_event"
         game.unread = scenario.endswith("_unread")
-        out[scenario] = {**result(tasker.post_task(task).wait().get(), game, actions), "swipes": game.swipes, "drags": game.drags,
-                         "fights": game.fights, "presses": game.presses}
+        state = dict((states or {}).get(scenario, {}))
+        override = state.pop("override", {})
+        for name, value in state.items():
+            setattr(game, name, value)
+        out[scenario] = {**result(tasker.post_task(task, override).wait().get(), game, actions), "swipes": game.swipes,
+                         "drags": game.drags, "fights": game.fights, "presses": game.presses}
     print(json.dumps(out))
 
 
@@ -245,18 +297,50 @@ def test_exp_luxcavation_goes_home_first_enters_the_rightmost_open_stage_and_end
     o = out["drive"]
     assert o["succeeded"], o["nodes"]
     taps = o["clicks"]
-    # GoHome first (the Window tab), then Drive, Luxcavation, the EXP tab (Thread was open), stage 9's Enter and To
-    # Battle!: the team (TEAMS #3) is on the title already, its row neither tapped nor dragged to
-    steps = (WINDOW_TAB, DRIVE_TAB, LUXCAVATION, EXP_TAB, ENTERS["exp"], TO_BATTLE)
-    assert [inside(box, *xy) for box, xy in zip(steps, taps)] == [True] * 6
-    assert taps.count(taps[4]) == 1 and taps.count(taps[5]) == 1  # one battle
+    # GoHome first (the Window tab); the pass page's banner and Pass Missions tab (#429: the Daily tab's Clear EXP
+    # Luxcavation row under way, nothing won today); the back key home; then Drive, Luxcavation, the EXP tab (Thread was
+    # open), stage 9's Enter and To Battle!: the team (TEAMS #3) is on the title already, its row neither tapped nor
+    # dragged to
+    steps = (WINDOW_TAB, BANNER, MISSIONS_TAB, DRIVE_TAB, LUXCAVATION, EXP_TAB, ENTERS["exp"], TO_BATTLE)
+    assert [inside(box, *xy) for box, xy in zip(steps, taps)] == [True] * 8
+    assert taps.count(taps[6]) == 1 and taps.count(taps[7]) == 1  # one battle
     assert not [xy for xy in taps if inside(TEAM_ROW, *xy)] and o["drags"] == []
     # Its results page (live-1 F2): Victory read, Confirm, back on the EXP tab: done, and GoHome again (the back key,
     # then the Window tab)
-    assert taps[6] == CONFIRM_TAP and o["nodes"].count("LuxResult") == 1
-    assert o["keys"] == [4] and inside(WINDOW_TAB, *taps[-1]) and len(taps) == 8
+    assert taps[8] == CONFIRM_TAP and o["nodes"].count("LuxResult") == 1
+    assert o["keys"] == [4, 4] and inside(WINDOW_TAB, *taps[-1]) and len(taps) == 10
     assert o["nodes"].count("LuxTeamSelect") == 1
-    assert o["nodes"][:3] == ["ExpLuxcavation", "ExpHome", "ExpHub"] and o["nodes"][-1] == "TaskDone"
+    assert o["nodes"][:5] == ["ExpLuxcavation", "ExpPassHome", "ExpPassHub", "ExpPassRead", "ExpHome"]
+    assert o["nodes"][5] == "ExpHub" and o["nodes"][-1] == "TaskDone"
+
+
+def test_an_exp_battle_won_today_by_hand_counts_toward_the_target():
+    out = run_child(__file__)
+    o = out["done_today"]  # #429: the row done, a target of 1: nothing fought, a success on the main window
+    assert o["succeeded"] and enters(o) == [] and o["nodes"][-1] == "TaskDone" and o["screen"] == "main"
+    assert o["done"] == "EXP Luxcavation: the pass's Clear EXP Luxcavation row done (1 won today), target 1: nothing to fight"
+    assert not any(inside(DRIVE_TAB, *xy) for xy in o["clicks"])
+    o = out["done_today_two"]  # a target of 2: the one left
+    assert o["succeeded"] and len(enters(o)) == 1 and o["done"] == "EXP Luxcavation: 1 won"
+
+
+def test_the_pass_page_on_its_weekly_tab_is_moved_to_the_daily_tab_and_no_row_is_tapped():
+    o = run_child(__file__)["weekly_tab"]
+    assert o["succeeded"] and len(enters(o)) == 1
+    assert [inside(box, *xy) for box, xy in zip((WINDOW_TAB, BANNER, MISSIONS_TAB, DAILY_TAB, DRIVE_TAB), o["clicks"])] == [True] * 5
+    assert o["done"] == "EXP Luxcavation: 1 won"
+
+
+def test_an_unread_pass_fights_nothing_and_ends_a_success():
+    # #429 item 4: a battle more than the day's target costs Modules, so a day not read is a day not fought.
+    out = run_child(__file__)
+    o = out["no_pass"]
+    assert o["succeeded"], o["nodes"]
+    assert enters(o) == [] and "ExpPassLost" in o["nodes"] and o["nodes"][-1] == "TaskDone"
+    assert o["done"] == "EXP Luxcavation: the pass page was not reached in 60 s: nothing fought"
+    o = out["row_unread"]
+    assert o["succeeded"] and enters(o) == []
+    assert o["done"] == "EXP Luxcavation: the pass's Clear EXP Luxcavation row did not read: nothing fought"
 
 
 def enters(o):
@@ -402,4 +486,4 @@ def test_each_battle_starts_its_guard_turns_afresh():
 
 
 if __name__ == "__main__":
-    child()
+    child(states=STATES)

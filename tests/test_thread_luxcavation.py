@@ -17,8 +17,12 @@ SCENARIOS = {"thread": ("drive", "b", 1, 0, WIN, "exp"), "thread_on_thread": ("d
              "thread_lose_retry": ("drive", "b", 1, 1, LOSE + WIN, "exp"), "thread_lose_out": ("drive", "b", 1, 0, LOSE, "exp"),
              "thread_event": ("drive", "b", 1, 0, WIN, "exp"),
              "thread_x3": ("drive", "b", 3, 0, WIN, "exp"), "thread_x3_off": ("drive", "b", 3, 0, WIN, "exp"),
-             "thread_x12": ("drive", "b", 12, 0, WIN, "exp")}
+             "thread_x12": ("drive", "b", 12, 0, WIN, "exp"),
+             "thread_done_today": ("drive", "b", 3, 0, WIN, "exp"), "thread_one_today": ("drive", "b", 3, 0, WIN, "exp"),
+             "thread_bonuses_unread": ("drive", "b", 3, 0, WIN, "exp")}
 CONSECUTIVE = {"thread_x3", "thread_x12"}
+# #429: the Daily Bonuses n/3 (n left; the model's default 3/3, a fresh day): 0/3 three won today, 2/3 one, blank.
+STATES = {"thread_done_today": {"bonuses": 0}, "thread_one_today": {"bonuses": 2}, "thread_bonuses_unread": {"bonuses": None}}
 
 
 def test_thread_luxcavation_is_a_task_of_the_interface():
@@ -127,5 +131,43 @@ def test_thread_consecutive_splits_more_than_ten_wins_too():
     assert o["fights"] == [10, 2] and o["presses"] == ["ten", "plus"] and len(level_enters(o)) == 2
 
 
+def test_thread_battles_won_today_count_toward_the_target():
+    out = run_child(__file__)
+    o = out["thread_done_today"]  # #429: Daily Bonuses 0/3, three won today, a target of 3: nothing fought
+    assert o["succeeded"] and level_enters(o) == [] and not any(inside(CARD_ENTER, *xy) for xy in o["clicks"])
+    assert o["done"] == "Thread Luxcavation: Daily Bonuses 0/3 (3 won today), target 3: nothing to fight"
+    assert o["screen"] == "main" and o["nodes"][-1] == "TaskDone"
+    o = out["thread_one_today"]  # 2/3: one won today, two left
+    assert o["succeeded"] and len(level_enters(o)) == 2 and o["done"] == "Thread Luxcavation: 2 won"
+
+
+def test_thread_daily_bonuses_that_do_not_read_fight_nothing_and_end_a_success():
+    o = run_child(__file__)["thread_bonuses_unread"]
+    assert o["succeeded"] and level_enters(o) == [] and not any(inside(CARD_ENTER, *xy) for xy in o["clicks"])
+    assert o["done"] == "Thread Luxcavation: Daily Bonuses did not read: nothing fought" and o["screen"] == "main"
+
+
+def test_the_modules_are_checked_against_the_battles_left_not_the_target():
+    # #429: a target of 92 with one won today leaves 91, 182 Modules at 2 each: fought, where 92 x 2 = 184 would skip.
+    from unittest.mock import MagicMock
+
+    import actions
+
+    ends = []
+    saved = actions.finish
+    actions.finish = lambda context, reason: ends.append(reason) or True
+    actions.RUN.clear()
+    actions.RUN["lux"] = {"name": "Thread Luxcavation", "cost": 2, "target": 92, "today": None, "count": None, "retries": 0,
+                          "modules": 182}
+    try:
+        assert actions.plan(MagicMock(), 1, "Daily Bonuses 2/3") is None and actions.RUN["lux"]["count"] == 91 and ends == []
+        actions.RUN["lux"].update(modules=181, count=None)
+        assert actions.plan(MagicMock(), 1, "Daily Bonuses 2/3") is True
+        assert ends == ["Thread Luxcavation: Daily Bonuses 2/3 (1 won today), target 92: Modules 181 < 182 needed for 91, skipped"]
+    finally:
+        actions.finish = saved
+        actions.RUN.clear()
+
+
 if __name__ == "__main__":
-    child("ThreadLuxcavation", SCENARIOS, CONSECUTIVE)
+    child("ThreadLuxcavation", SCENARIOS, CONSECUTIVE, STATES)
