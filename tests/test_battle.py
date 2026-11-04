@@ -79,6 +79,16 @@ def test_guard_chain_starts_on_the_left_gear_and_runs_along_the_lower_row():
     assert b.guard_chain(xs) == [(232, 557)] + [(x, 665) for x in xs]
 
 
+def test_guard_chain_stops_on_no_staggered_slot():
+    # #427, BattleTurnStaggerPlus.png: slots 7 and 8 staggered. The chain starts on the same gear and links slots 1-6.
+    xs = b.slot_xs(1022)
+    assert b.guard_chain(xs, [False] * 6 + [True] * 2) == [(232, 557)] + [(x, 665) for x in xs[:6]]
+    # A staggered slot in the middle is no point of the drag; one in front leaves the gear where slot 1 puts it.
+    middle = b.guard_chain(xs, [False, False, True] + [False] * 5)
+    assert middle == [(232, 557)] + [(x, 665) for x in xs[:2] + xs[3:]]
+    assert b.guard_chain(xs, [True] + [False] * 7) == [(232, 557)] + [(x, 665) for x in xs[1:]]
+
+
 def test_the_hud_band_rests_while_a_swarm_moves_the_battlefield():
     # #229: two turn screens 3 s apart; the swarm moved 6.9% of the band's blocks, the most over 319 such pairs.
     frames = [np.asarray(Image.open(SCREENS / f"BattleTurnSwarm{s}.png"))[:, :, ::-1] for s in ("", "Next")]
@@ -97,6 +107,54 @@ def test_guard_shown_compares_each_slot_before_and_after_the_tap():
     # Snow map: an orange skill frame reads browner than the guard icon; the texture still tells.
     assert b.guard_shown([(0.15, 122), (0.01, 131)], [(0.06, 104), (0.03, 113)]) == [True, True]
     assert b.guard_shown([(0.1, 100), (0.2, 100)], [(0.12, 104), (0.05, 100)]) == [None, False]
+
+
+def screen(png):
+    return np.asarray(Image.open(SCREENS / png).convert("RGB"))[:, :, ::-1]
+
+
+@pytest.mark.parametrize(("png", "win_rate_x", "expected"), [
+    # #69 (live 2026-10-17, floor 5 boss turn 6): slots 2-7 STAGGER, a yellow word on each dimmed portrait.
+    ("BattleTurnStagger.png", 984, [False] + [True] * 6),
+    # #427 (live 2026-11-04, EXP Luxcavation turn 5): slots 7 and 8 STAGGER+ (one unit and its second slot), a white word
+    # on red cracks. Slots 2-4 and 6 are the dark guard icons of the other units' second slots.
+    ("BattleTurnStaggerPlus.png", 1022, [False] * 6 + [True] * 2),
+    # #427 (live 2026-11-05, turn 2, 3 slots): slot 3 STAGGER++, a white word on green cracks (scores 0.04, 0.12, 0.92).
+    ("BattleTurnStaggerPlusPlus.png", 822, [False, False, True]),
+    # Live 2026-10-28, EXP Luxcavation turn 4: slot 9 STAGGER on yellow cracks; slot 7 a dark shield icon.
+    ("BattleTurnStaggerLast.png", 1061, [False] * 8 + [True]),
+])
+def test_staggered_reads_the_stagger_plates(png, win_rate_x, expected):
+    assert b.staggered(screen(png), b.slot_xs(win_rate_x)) == expected
+
+
+def test_staggered_holds_for_a_plate_of_another_colour_and_a_longer_word():
+    # #427: the plates come in yellow, red and green (STAGGER++ is real, BattleTurnStaggerPlusPlus.png). A plate of a
+    # colour no capture has: slot 8's STAGGER+ plate with its colour channels swapped (the red cracks blue) and
+    # moved 6 px left, as a centred STAGGER++ moves its first seven letters, still reads staggered.
+    image = screen("BattleTurnStaggerPlus.png").copy()
+    x = b.slot_xs(1022)[7]
+    image[630:680, x - 40:x + 40] = np.roll(image[630:680, x - 40:x + 40, ::-1], -6, axis=1)
+    assert b.staggered(image, b.slot_xs(1022)) == [False] * 6 + [True] * 2
+
+
+def test_the_stagger_word_is_cut_from_the_69_screen():
+    word = recovery.unpng(b.STAGGER_WORD_PNG.read_bytes())
+    assert np.array_equal(word, screen("BattleTurnStagger.png")[649:663, 582:630])  # slot 4's word, 2 px round it
+
+
+def test_no_other_slot_of_tests_screens_reads_staggered():
+    # CODING_STANDARDS' sweep: every slot position of 1 to 12 slots on every 1280x720 screen of tests/screens. Only the
+    # plates above read staggered: 0.86-1.00 on them, 0.42 at most anywhere else (STAGGER_MATCH 0.6).
+    xs = sorted({x for n in range(1, 13) for x in b.slot_xs(984 + 40.5 * (n - 7))})
+    hits = {}
+    for png in sorted(SCREENS.glob("*.png")):
+        image = screen(png.name)
+        if image.shape[:2] == (720, 1280) and (found := [x for x, s in zip(xs, b.staggered(image, xs)) if s]):
+            hits[png.name] = found
+    assert hits == {"BattleTurnStagger.png": b.slot_xs(984)[1:], "BattleTurnStaggerPlus.png": b.slot_xs(1022)[6:],
+                    "BattleTurnStaggerPlusPlus.png": b.slot_xs(822)[2:],
+                    "BattleTurnStaggerLast.png": b.slot_xs(1061)[8:]}
 
 
 def test_same_turn_counts_tries_at_one_turn():
