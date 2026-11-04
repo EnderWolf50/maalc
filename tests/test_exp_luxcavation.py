@@ -310,8 +310,8 @@ def test_exp_luxcavation_goes_home_first_enters_the_rightmost_open_stage_and_end
     assert taps[8] == CONFIRM_TAP and o["nodes"].count("LuxResult") == 1
     assert o["keys"] == [4, 4] and inside(WINDOW_TAB, *taps[-1]) and len(taps) == 10
     assert o["nodes"].count("LuxTeamSelect") == 1
-    assert o["nodes"][:5] == ["ExpLuxcavation", "ExpPassHome", "ExpPassHub", "ExpPassRead", "ExpHome"]
-    assert o["nodes"][5] == "ExpHub" and o["nodes"][-1] == "TaskDone"
+    assert o["nodes"][:5] == ["ExpLuxcavation", "ExpPassHome", "ExpPassHub", "PassBanner", "PassMissionsTab"]
+    assert o["nodes"][5:8] == ["ExpPassRead", "ExpHome", "ExpHub"] and o["nodes"][-1] == "TaskDone"
 
 
 def test_an_exp_battle_won_today_by_hand_counts_toward_the_target():
@@ -350,7 +350,7 @@ def enters(o):
 def test_count_wins_are_fought_before_it_is_done():
     o = run_child(__file__)["two"]  # #367: a win counts, and the next battle starts from the same tab
     assert o["succeeded"], o["nodes"]
-    assert len(enters(o)) == 2 and o["keys"] == [4]  # two Enters, one trip home at the end
+    assert len(enters(o)) == 2 and o["keys"] == [4, 4]  # two Enters; home from the pass page, one trip home at the end
     # each battle looks for its team again: on the title already, To Battle! after each Enter
     assert not [xy for xy in o["clicks"] if inside(TEAM_ROW, *xy)] and o["drags"] == []
     assert o["clicks"].count(TO_BATTLE_TAP) == 2
