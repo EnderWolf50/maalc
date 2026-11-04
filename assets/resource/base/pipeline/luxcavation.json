@@ -28,7 +28,7 @@
             "ExpPassLost"
         ],
         "next": [
-            "ExpStuck",
+            "ExpPassStuck",
             "[JumpBack]Connecting",
             "[JumpBack]HelpPager",
             "[JumpBack]HomeText",
@@ -37,6 +37,13 @@
             "[JumpBack]PassMissionsTab",
             "[JumpBack]PassBanner"
         ]
+    },
+    "ExpPassStuck": {
+        "recognition": "Custom",
+        "custom_recognition": "StuckFlag",
+        "action": "Custom",
+        "custom_action": "StopTask",
+        "custom_action_param": "EXP Luxcavation is stuck on the way to the pass page"
     },
     "ExpPassLost": {
         "action": "Custom",
