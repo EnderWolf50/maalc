@@ -509,24 +509,30 @@ Cost 表是 wiki 與簡中客戶端的表，實機 log 的節點面板 Cost 沒�
 
 ## 15. 日常 Luxcavation 的腦啡肽模組與計次
 
-經驗本（`ExpLuxcavation`）與紐本（`ThreadLuxcavation`）的腦啡肽模組檢查、打贏才算一次、戰敗重打。判斷是純函式 `luxcavation.decide`（`tests/test_luxcavation.py` 列舉情況），兩個任務共用，只有每場的消耗不同：經驗本 3、紐本 2（Level Select 每級都是 2）。（#367、#368、#362）
+經驗本（`ExpLuxcavation`）與紐本（`ThreadLuxcavation`）的腦啡肽模組檢查、打贏才算一次、戰敗重打。判斷是純函式 `luxcavation.decide`、`left`（`tests/test_luxcavation.py` 列舉情況），兩個任務共用，只有每場的消耗與今天已打的讀法不同：經驗本 3、紐本 2（Level Select 每級都是 2）。（#367、#368、#362、#429）
 
 - **讀腦啡肽模組數**（`actions.module_count`）：左下面板有兩個數字：黃色卡片圖示旁的是 Enkephalin Box，**圓形圖示旁的是 Enkephalin Module**（實機 2026-10-26）。面板的 x 隨頁面移動（主畫面、Drive 在 393，Luxcavation 頁在 242），所以先用模板 `ModuleIcon` 找圓形圖示，再把圖示右邊那一行當一個數字 OCR。圖示不在畫面上或數字讀不出來回 None。鏡牢開局前的門檻（#369）重用這個函式。截圖：`tests/screens/MainWindow.png`、`Drive.png`、`LuxExp.png` 等，`tests/test_module_count.py`。
-- **開始時檢查一次**：回到主畫面之後（`LuxHome`）讀腦啡肽模組數 m；m < 最難關每場消耗 × `count`（經驗本每場 3 個，紐本每場 2 個）就在 log 記 `Modules m < n needed, skipped`，以成功結束（`done()`），清單繼續。面板讀不出來：停止程序，不花任何腦啡肽模組。之後不再檢查。
-- **打贏才算一次**：戰後的結算頁（`LuxResult`，[01](01-architecture.md) 經驗本）右上的 `Victory`／`Defeat` 記下這場的結果，按 Confirm 回到 EXP（或 Thread）分頁；`LuxEnter` 照 `decide` 走：贏了而未滿 `count` 就再點 Enter，滿了就 `go_home()` 後 `done()`。每場只記一次（結算頁會停留好幾次 hub）。戰場上的 VICTORY 字樣不再當訊號（live-1 F2）。
+- **`count` 是當天的目標場數**（#429，使用者 2026-11-05；取代 #362 D5「這次打幾場」）：當天已經打贏的場數（手動打的也算）先扣掉，這次只打剩下的 `luxcavation.left(count, 今天已贏)` = max(0, `count` − 今天已贏) 場。判斷在 `actions.plan`，兩個任務共用：
+  - **經驗本**：開頭先 `GoHome`，走通行證頁（`ExpPassHub`，同 `ClaimPassMissions` 的 `PassBanner` → `PassMissionsTab`，停在 Weekly／Seasonal 分頁就點 Daily，`ExpPassDaily`），在 Daily 分頁用 OCR 找 `Clear EXP Luxcavation 1 time(s)` 那一列（`PassExpRow`，最近的 `pass_missions.ROWS_Y`），看它的樣子（`pass_missions.row_done`：進度條滿或蓋了 CLEAR 章，可領或已領）：完成算今天已贏 1 場，進行中算 0 場（`ExpPassRead`）。這一列只分得出 0 和「至少 1」。不點任何一列。60 秒都沒到通行證頁（`ExpPassLost`）或 3 秒內找不到這一列：算讀不到。然後 `ExpHome`（`LuxHome`）回主畫面讀腦啡肽模組、`plan`。
+  - **紐本**：`ThreadHome`（`LuxHome`）只讀腦啡肽模組；第一次看到開放卡片的 Enter（`LuxThreadEnter`，按之前）讀 Thread 分頁頂部的 `Daily Bonuses n/3`（`ThreadBonuses`，`luxcavation.read_bonuses`）。n 是**剩下的**加成次數（使用者 2026-11-05），今天已贏 3 − n 場（`luxcavation.thread_today`）；加成用完之後再打的場數讀不到，所以目標超過 3 時，0/3 一律算 3 場。
+  - 讀不到：不打，log 記 `… did not read: nothing fought`，回主畫面、以成功結束。多打一場會白花腦啡肽模組。
+  - 剩 0 場：log 記讀到的值和決定，例如 `Thread Luxcavation: Daily Bonuses 0/3 (3 won today), target 3: nothing to fight`，回主畫面、以成功結束。
+- **開始時檢查一次**：主畫面讀到的腦啡肽模組數 m（`LuxHome`）；m < 最難關每場消耗 × 剩下的場數（經驗本每場 3 個，紐本每場 2 個）就在 log 記 `Modules m < n needed for k, skipped`，回主畫面、以成功結束（`finish()`），清單繼續。面板讀不出來：停止程序，不花任何腦啡肽模組。之後不再檢查。
+- **打贏才算一次**：戰後的結算頁（`LuxResult`，[01](01-architecture.md) 經驗本）右上的 `Victory`／`Defeat` 記下這場的結果，按 Confirm 回到 EXP（或 Thread）分頁；`LuxEnter` 照 `decide` 走：贏了而未滿剩下的場數（`RUN["lux"]["count"]`）就再點 Enter，滿了就 `go_home()` 後 `done()`。每場只記一次（結算頁會停留好幾次 hub）。戰場上的 VICTORY 字樣不再當訊號（live-1 F2）。
 - **戰敗**：不算次數，不扣腦啡肽模組；`retries` 內重打同一關（再點 Enter），用完就停止程序（任務失敗，清單繼續）。`retries` 是每一場各自的次數，打贏就重算（同鏡牢的全滅重打）：`retries` 1、`count` 3 時，每一場都可以輸一次再打。`lose` 的訊號是結算頁的紅字 `Defeat`（實機 2026-10-27：手動 Give Up，沒有確認框；戰敗不扣腦啡肽模組、不吃紐本的 Daily Bonuses，verified）。回到分頁卻沒看到結算頁，也走停止程序，不算一次。（live-1 F2、F3）
-- **連戰**（`luxcavation.<任務>.consecutive`，預設開，#375）：`luxcavation.batch` 給下一場的 N = min(10, `count` − 已贏)（關：1）；`decide` 的 `size` 是這場的 N：贏了 `won` 加 N，`won` + N ≥ `count` 結束。戰敗不算，重打用同一個 N。`LuxEnter` 的設定與讀回見 [01](01-architecture.md) 經驗本，N 讀不到或調不到就停止程序，不照錯的次數開戰。
-- 計數存在記憶體（`RUN["lux"]`），每個任務開始時由 `TaskStart` 清掉（ADR 0003：狀態檔不存這個）。
+- **連戰**（`luxcavation.<任務>.consecutive`，預設開，#375）：`luxcavation.batch` 給下一場的 N = min(10, 剩下的場數 − 這次已贏)（關：1）；`decide` 的 `size` 是這場的 N：贏了 `won` 加 N，`won` + N ≥ 剩下的場數結束。戰敗不算，重打用同一個 N。`LuxEnter` 的設定與讀回見 [01](01-architecture.md) 經驗本，N 讀不到或調不到就停止程序，不照錯的次數開戰。
+- 計數存在記憶體（`RUN["lux"]`：`target` 設定的目標、`today` 讀到的今天已贏、`count` 這次要打的場數，`plan` 之前是 None），每個任務開始時由 `TaskStart` 清掉（ADR 0003：狀態檔不存這個；今天已做的次數每次從畫面讀，不記憶）。
 
 ## 16. 狂氣換腦啡肽的價格核對
 
-`ChargeEnkephalin` 花 Lunacy，所以只有一條規則：價格要是遊戲價格表上、當天已換次數（Daily Count）那一格，每次確認後次數要剛好加一，才按確認。判斷是純函式 `lunacy.check`（`tests/test_lunacy.py` 列舉情況）。（#373、#362）
+`ChargeEnkephalin` 花 Lunacy，所以只有一條規則：價格要是遊戲價格表上、當天已換次數（Daily Count）那一格，每次確認後次數要剛好加一，才按確認。判斷是純函式 `lunacy.check`（`tests/test_lunacy.py` 列舉情況）。（#373、#362、#429）
 
 - **價格表**：第 n 次（從 1 算）換 `PRICES[n-1]` = 26、52、78、104、130、156、182、208、234、260（遊戲資料 `common-data` 的 `enkephalinPriceTable`；`chance` 9999 限一天 10 次、每日重置；已對照解包的遊戲資料，2026-10-26）。先扣免費 Lunacy，所以顯示的價格不變。
 - **畫面**（實機 2026-10-27，`tests/screens/EnkephalinLunacy.png`）：Use Lunacy 分頁沒有另外的確認框，分頁本身顯示價格（`Consumable 104`，`ChargePrice`）、當天已換次數（`Daily Count 3/10`，`ChargeCount`，`lunacy.read_count`）與提示（`Recharge 136 Enkephalin?`，`ChargePrompt`），下面是 Cancel (520,534)、Confirm (765,534)。104 = 表[3]，和 3/10 對得上。Use Boxes 分頁（`EnkephalinBoxes.png`）有同樣的提示、沒有 Daily Count，所以讀不到 Daily Count 就不是 Use Lunacy 頁。視窗不記憶分頁，重開一律是 Modules（同一天的截圖）。
-- **次數是這次執行的**：`charge_enkephalin.count` 是這次執行換幾次，不推算、也不另外記憶今天已換幾次（#362 D5）。每次確認前：價格必須 == 表[Daily Count]；確認後再開視窗，Daily Count 必須剛好加一。這次換滿 `count` 次（且最後一次確認已加一）就取消、成功結束。
-- **每日上限**：Daily Count 讀到 10/10 就取消、成功結束（不看價格）。10/10 的畫面沒有截圖（unverified）。
-- **不符就不按確認**：價格或 Daily Count 讀不出來（`lunacy.read_price` 要求恰好一個數字，`read_count` 要求恰好一個「n/10」）、價格不是表上那一格、或確認後次數沒有剛好加一（確認沒生效、跳格），一律按 Cancel、走停止程序（任務失敗，清單繼續）。同一格不會確認兩次。
+- **`count` 是當天的目標 Daily Count**（#429，使用者 2026-11-05；取代 #362 D5「這次換幾次」）：當天已換的次數（手動換的也算）就是畫面上的 Daily Count，換到 Daily Count = `count` 為止。Daily Count ≥ `count` 就取消、成功結束（不看價格），log 記讀到的值和決定：`charge: Daily Count 3/10, target 3: nothing to charge`，這次換過就是 `… target 3: 2 charged`。每次確認前：價格必須 == 表[Daily Count]；確認後再開視窗，Daily Count 必須剛好加一。
+- **每日上限**：`count` 最多 10，所以 Daily Count 10/10 一定已到目標，取消、成功結束。10/10 的畫面沒有截圖（unverified）。
+- **第一次開就讀不到**：這次還沒按過確認，提示、Daily Count（或還沒到目標時的價格）重讀 3 次都讀不出來：按 Cancel，以成功結束，什麼都不買，log 記 `the Use Lunacy tab's … did not read, target n: nothing charged`（#429：不知道今天換了幾次就不換，多換一次會多花 Lunacy）。Use Boxes 分頁也是這樣。
+- **不符就不按確認**：確認之後讀不出來（`lunacy.read_price` 要求恰好一個數字，`read_count` 要求恰好一個「n/10」）、價格不是表上那一格、或確認後次數沒有剛好加一（確認沒生效、跳格），一律按 Cancel、走停止程序（任務失敗，清單繼續）。同一格不會確認兩次。
 - **0 次完全不碰**：`ChargeStart` 在入口讀設定，`count` 為 0 就 `done()`，不 GoHome、不開視窗。
 - **還沒看過的**：按下 Confirm 之後畫面怎麼變（會不會再跳彈窗、視窗是否關上）沒有實機看過（沒有花 Lunacy）；任務在 hub 照畫面處理，讀不到就停，不會多花。
 

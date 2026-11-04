@@ -310,7 +310,7 @@
       "required": ["count"],
       "description": "Lunacy for Enkephalin (#373, PI task ChargeEnkephalin): spends Lunacy, so it is off until set",
       "properties": {
-        "count": { "type": "integer", "minimum": 0, "maximum": 10, "default": 0, "description": "charges this run makes, whatever was charged earlier today (#362); 0: the Use Lunacy tab is never touched; the game allows 10 a day, and the task ends at the tenth" }
+        "count": { "type": "integer", "minimum": 0, "maximum": 10, "default": 0, "description": "the day's target Daily Count: charges made earlier today, by hand too, count toward it, and none is made once it is reached or when the Daily Count does not read (#429); 0: the Use Lunacy tab is never touched; the game allows 10 a day" }
       }
     }
   },
@@ -320,7 +320,7 @@
       "additionalProperties": false,
       "required": ["count", "team", "retries", "consecutive"],
       "properties": {
-        "count": { "type": "integer", "minimum": 1, "default": 1, "description": "battles to win, at the hardest level open; a new or migrated file: EXP 1, Thread 3 (its 3 Daily Bonuses)" },
+        "count": { "type": "integer", "minimum": 1, "default": 1, "description": "battles to win today, at the hardest level open: those won today (EXP: the pass's Daily row; Thread: its Daily Bonuses left) count toward it, and none is fought when they do not read (#429); a new or migrated file: EXP 1, Thread 3 (its 3 Daily Bonuses)" },
         "team": { "type": ["string", "null"], "minLength": 1, "default": null, "description": "a teams[] id: its TEAMS #N and guard_turns; null: none picked yet" },
         "retries": { "type": "integer", "minimum": 0, "default": 0, "description": "defeats of one battle fought again before the task fails; a win starts the next battle with them all" },
         "consecutive": { "type": "boolean", "default": true, "description": "set the stage's Consecutive Battle to min(10, battles left) and fight them as one battle (a x N win counts N); off: one battle at a time" }
