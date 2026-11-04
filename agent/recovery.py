@@ -72,6 +72,13 @@ def png(image):
             + chunk(b"IDAT", zlib.compress(rows.tobytes(), 6)) + chunk(b"IEND", b""))
 
 
+def unpng(data):
+    """png()'s bytes back to the BGR image. Only that layout: one IDAT, no filter on any row."""
+    w, h = struct.unpack(">II", data[16:24])
+    rows = np.frombuffer(zlib.decompress(data[8 + 25 + 8:-12 - 4]), np.uint8).reshape(h, 1 + w * 3)
+    return rows[:, 1:].reshape(h, w, 3)[:, :, ::-1]
+
+
 def keep_capture(root, name, image, stamp, keep):
     """Save image to <root>/logs/<name>/<stamp>.png, keeping the newest keep there.
 

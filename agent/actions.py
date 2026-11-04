@@ -3038,34 +3038,46 @@ class PlayTurn(CustomAction):
         that does not start means the chain ended short (#145): a tap on the left gear clears it (a chain
         cannot be continued from its last slot) and a slower drag links it again (GUARD_DRAGS). A drag that
         links nothing (a hollow gear, #127) is not tried again.
+
+        A staggered slot (battle.staggered, #427) acts no skill this turn and a tap on its portrait swaps nothing: it is
+        neither tapped nor compared, and the chain makes no stop on it. The other slots guard, and the turn counts as a
+        guard turn. With every slot staggered there is nothing to pick: Win Rate's turn presses START (#69).
         """
         xs = battle.slot_xs(x)
-        lows = [lower_x(sx) for sx in xs]
-        image = lower_skills(context, lows)  # live: a battle's first turn slides the portraits in late
+        image = lower_skills(context, [lower_x(sx) for sx in xs])  # live: a first turn slides the portraits in late
+        staggered = battle.staggered(image, xs)
+        if all(staggered):
+            log("guard: every slot staggered")
+            return False
+        if any(staggered):
+            log(f"guard: slots {[i + 1 for i, s in enumerate(staggered) if s]} staggered, the rest on guard")
+        slots = [i for i, s in enumerate(staggered) if not s]  # the slots that act, by their index in xs
+        lows = [lower_x(xs[i]) for i in slots]
         before = [guard_score(image, lx) for lx in lows]
         page_guard(context, "BattleTurn", image=image)
-        for sx in xs:  # ponytail: one check per batch of portrait taps (0.1 s apart), not a screenshot per tap
-            tap(context, sx, SLOT_PORTRAIT_Y, wait=GUARD_TAP_WAIT)
+        for i in slots:  # ponytail: one check per batch of portrait taps (0.1 s apart), not a screenshot per tap
+            tap(context, xs[i], SLOT_PORTRAIT_Y, wait=GUARD_TAP_WAIT)
         image = lower_skills(context, lows, before)
         after = [guard_score(image, lx) for lx in lows]
         shown = battle.guard_shown(before, after)
-        unsure = [i for i, s in enumerate(shown) if s is None]
+        unsure = [k for k, s in enumerate(shown) if s is None]
         if unsure:  # live: the glow on a unit's slot flickers; swap those back and compare once more
             page_guard(context, "BattleTurn", image=image)
-            for i in unsure:
-                tap(context, xs[i], SLOT_PORTRAIT_Y, wait=GUARD_TAP_WAIT)
-            image = lower_skills(context, [lows[i] for i in unsure], [after[i] for i in unsure])
-            again = battle.guard_shown([after[i] for i in unsure], [guard_score(image, lows[i]) for i in unsure])
-            for i, s in zip(unsure, again):
-                shown[i] = s
+            for k in unsure:
+                tap(context, xs[slots[k]], SLOT_PORTRAIT_Y, wait=GUARD_TAP_WAIT)
+            image = lower_skills(context, [lows[k] for k in unsure], [after[k] for k in unsure])
+            again = battle.guard_shown([after[k] for k in unsure], [guard_score(image, lows[k]) for k in unsure])
+            for k, s in zip(unsure, again):
+                shown[k] = s
         if None in shown:
-            log(f"guard: cannot tell the guard skill of slots {[i + 1 for i, s in enumerate(shown) if s is None]}")
+            unread = [slots[k] + 1 for k, s in enumerate(shown) if s is None]
+            log(f"guard: cannot tell the guard skill of slots {unread}")
             return False
         page_guard(context, "BattleTurn", image=image)
-        for sx, on in zip(xs, shown):
+        for i, on in zip(slots, shown):
             if not on:
-                tap(context, sx, SLOT_PORTRAIT_Y, wait=GUARD_TAP_WAIT)
-        chain = battle.guard_chain(xs)
+                tap(context, xs[i], SLOT_PORTRAIT_Y, wait=GUARD_TAP_WAIT)
+        chain = battle.guard_chain(xs, staggered)
         for n, params in enumerate(GUARD_DRAGS, 1):
             page_guard(context, "BattleTurn")
             drag(context, chain, **params)

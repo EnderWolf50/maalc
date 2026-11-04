@@ -2264,6 +2264,8 @@ def test_an_event_after_a_pause_starts_its_own_clock(context):
 GEAR = (272, 557)  # the left gear of a 7-slot panel (battle.guard_chain)
 DISC = (918, 557)  # its START disc
 WIN_RATE_XY = (1004, 545)
+# Slot 2's STAGGER plate of tests/screens/BattleTurnStagger.png (#69), 80 px round its portrait.
+STAGGER_PLATE = np.asarray(Image.open(SCREENS / "BattleTurnStagger.png").convert("RGB"))[620:700, 403:483, ::-1]
 
 
 class Choices:
@@ -2404,11 +2406,14 @@ class Panel:
     the START plaque shows (and START starts the turn) only once every slot is. units[i] is the unit in
     slot i (slots reorder by speed every turn); guard[u] whether unit u shows its guard skill. The plaque swings
     in plaque_after s after the chain is complete (live 2026-10-18, 30 fps recording: upright 0.33-0.47 s after
-    the panel levels, ~0.5-0.65 s after the lift; a minimised emulator held it mid-swing for over 2 s)."""
+    the panel levels, ~0.5-0.65 s after the lift; a minimised emulator held it mid-swing for over 2 s).
+    A staggered unit (#427) shows a STAGGER plate for its portrait, which a tap does not swap, and needs no skill: the
+    plaque shows once every other slot is linked (#69)."""
 
-    def __init__(self, context, guard, drops=(), lost_start=0, plaque_after=0.6):
+    def __init__(self, context, guard, drops=(), lost_start=0, plaque_after=0.6, staggered=()):
         self.xs = actions.battle.slot_xs(984)
         self.units, self.guard, self.dealt = list(range(7)), list(guard), 0
+        self.staggered, self.acting = set(staggered), 7 - len(staggered)
         self.linked, self.win_rate, self.started, self.at, self.lifted = 0, False, False, None, -1.0
         self.drops, self.lost_start, self.plaque_after, self.complete_at = list(drops), lost_start, plaque_after, None
         self.drags = []  # how long each chain drag took, s
@@ -2429,23 +2434,24 @@ class Panel:
             if self.linked:
                 self.linked = 0
             else:
-                self.linked = 7 - (self.drops.pop(0) if self.drops else 0)
-                self.complete_at = self.lifted if self.linked == 7 else None
+                self.linked = self.acting - (self.drops.pop(0) if self.drops else 0)
+                self.complete_at = self.lifted if self.linked == self.acting else None
                 self.drags.append(actions.time.monotonic() - self.t0)
         return DEFAULT
 
     def click(self, x, y):
         if y == actions.SLOT_PORTRAIT_Y:
             u = self.units[min(range(7), key=lambda i: abs(self.xs[i] - x))]
-            self.guard[u] = not self.guard[u]
+            if u not in self.staggered:
+                self.guard[u] = not self.guard[u]
         elif (x, y) == GEAR:
             self.linked = 0
             self.win_rate = False
         elif (x, y) == WIN_RATE_XY:
             self.win_rate = not self.win_rate
-            self.linked = 7 if self.win_rate else 0
+            self.linked = self.acting if self.win_rate else 0
             self.complete_at = actions.time.monotonic() if self.win_rate else None
-        elif (x, y) == DISC and self.linked == 7 and actions.time.monotonic() - self.lifted >= 0.15:
+        elif (x, y) == DISC and self.linked == self.acting and actions.time.monotonic() - self.lifted >= 0.15:
             # live #145: a press while the panel still tilts back from a drag misses the disc
             if self.lost_start:
                 self.lost_start -= 1
@@ -2455,7 +2461,7 @@ class Panel:
 
     def recognise(self, name, image, override=None):
         node = (override or {}).get(name, {})
-        plaque = self.linked == 7 and actions.time.monotonic() - self.complete_at >= self.plaque_after
+        plaque = self.linked == self.acting and actions.time.monotonic() - self.complete_at >= self.plaque_after
         hit = {"BattlePause": self.started, "BattleStart": plaque,
                "BattleTurn": not self.started and actions.time.monotonic() - self.lifted >= 0.15  # live: the panel
                and (self.win_rate or "Pressed" not in node.get("template", ""))}  # tilts back 0.15 s, the label gone
@@ -2475,6 +2481,8 @@ class Panel:
             else:  # line art: a new skill is dealt each turn
                 rng = np.random.default_rng(100 * u + self.dealt)
                 image[y - 20:y + 20, x - 20:x + 20] = rng.integers(0, 255, (40, 40, 3))
+            if u in self.staggered:
+                image[620:700, self.xs[i] - 40:self.xs[i] + 40] = STAGGER_PLATE
         if self.linked:
             image[547:567, 908:928] = 255  # the START disc at (918, 557)
         return image
@@ -2540,6 +2548,48 @@ def test_a_plaque_still_swinging_in_is_waited_for_before_the_chain_is_dragged_ag
     guard_turn(context)
     assert panel.started and len(panel.drags) == 1
     assert actions.RUN["guard"] == 2
+
+
+@pytest.fixture
+def chains(monkeypatch):
+    """The points of every drag the action makes, in order; the drags still reach the fake controller."""
+    seen, real = [], actions.drag
+    monkeypatch.setattr(actions, "drag", lambda context, points, **kw: seen.append(points) or real(context, points, **kw))
+    return seen
+
+
+def test_a_guard_turn_with_staggered_slots_guards_the_rest_and_counts(context, chains):
+    # #427 (live 2026-11-04, EXP Luxcavation turn 5): slots 6 and 7 STAGGER+. A tap on their portraits swaps nothing,
+    # so their guard skills could not be told and the whole team played Win Rate. Now they are left out: the other
+    # portraits are tapped (slot 2's twice, it was on guard), the chain links slots 1-5, and the turn counts.
+    panel = Panel(context, guard=[False, True, False, False, False, False, False], staggered={5, 6})
+    guard_turn(context)
+    assert panel.started and not panel.win_rate
+    assert all(panel.guard[:5])
+    assert sorted({c.args[0] for c in portrait_taps(context)}) == panel.xs[:5] and len(portrait_taps(context)) == 6
+    assert chains == [[GEAR] + [(x, 665) for x in panel.xs[:5]]]
+    assert actions.RUN["guard"] == 2
+    assert any(line.endswith("guard: slots [6, 7] staggered, the rest on guard") for line in actions.LOG)
+
+
+def test_a_staggered_slot_between_two_others_is_left_out_of_the_chain(context, chains):
+    # #427: the finger crosses a staggered slot in the middle without a stop there; the slots after it are linked.
+    panel = Panel(context, guard=[False] * 7, staggered={2})
+    guard_turn(context)
+    assert panel.started and not panel.win_rate
+    assert chains == [[GEAR] + [(x, 665) for i, x in enumerate(panel.xs) if i != 2]]
+    assert len(portrait_taps(context)) == 6 and actions.RUN["guard"] == 2
+
+
+def test_a_turn_with_every_slot_staggered_presses_start_and_keeps_the_guard_turn(context, chains):
+    # #427, #69: nothing can be picked; START works as soon as the plaque shows, through Win Rate's own check. No unit
+    # guarded, so the guard turn is kept for a turn that has one.
+    panel = Panel(context, guard=[False] * 7, staggered=set(range(7)))
+    panel.complete_at = actions.time.monotonic() - 1  # the plaque up from the turn's start
+    guard_turn(context)
+    assert panel.started
+    assert not portrait_taps(context) and chains == []
+    assert actions.RUN["guard"] == 3
 
 
 def test_a_win_rate_turn_presses_start_at_once_and_counts_no_guard_turn(context):

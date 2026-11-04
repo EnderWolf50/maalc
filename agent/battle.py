@@ -3,7 +3,12 @@
 actions.py reads the formation page and the DEFEAT dialog and taps; everything here is plain data.
 """
 
+from functools import cache
+
 import numpy as np
+
+from recovery import unpng
+from settings import data_dir
 
 # The 12 cards on the formation page, left to right, top row first.
 SINNERS = ("Yi Sang", "Faust", "Don Quixote", "Ryōshū", "Meursault", "Hong Lu",
@@ -78,15 +83,17 @@ def hud_band(box):
     return left, 560, -(-(x + w - left) // 40) * 40, 160
 
 
-def guard_chain(xs):
+def guard_chain(xs, staggered=None):
     """The points of the drag that picks every slot's lower skill, left to right (spec 03 section 8).
 
     Live (2026-10-16): the chain starts only on the left gear, 90 px left of the first slot at y 557.
     Once the finger is down the panel tilts: the upper skills move to y ~600 and the lower skills to
     y ~665, under the slots' x, so the drag runs along y 665 (along the resting lower row, y 577,
-    it picks the upper skills).
+    it picks the upper skills). A staggered slot (#427) has no skill to pick: it is no point of the
+    drag, which still starts by the first slot.
     """
-    return [(xs[0] - 90, 557)] + [(x, 665) for x in xs]
+    staggered = staggered or [False] * len(xs)
+    return [(xs[0] - 90, 557)] + [(x, 665) for x, s in zip(xs, staggered) if not s]
 
 
 def guard_shown(before, after):
@@ -108,6 +115,47 @@ def guard_shown(before, after):
         else:
             shown.append(None)
     return shown
+
+
+# data/stagger_word.png: the word STAGGER, 2 px round it, cut from slot 4 of tests/screens/BattleTurnStagger.png (#69)
+# at (582, 649), its slot at x 605. STAGGER_SLIDE: how far it is looked for either side of there (x, y).
+STAGGER_WORD = data_dir() / "stagger_word.png"
+STAGGER_AT, STAGGER_SLIDE = (-23, 649), (12, 4)
+STAGGER_MATCH = 0.6
+GREY = np.array([0.114, 0.587, 0.299])  # BGR to luma, as OpenCV weighs it
+
+
+@cache
+def stagger_word():
+    """The greyscale word, less its mean."""
+    word = unpng(STAGGER_WORD.read_bytes()) @ GREY
+    return word - word.mean()
+
+
+def stagger_score(image, x):
+    """How well the portrait of the slot at x shows the word STAGGER: the best normalised cross-correlation of greyscale
+    stagger_word round where it sits on a plate, 1 a perfect match. A window flatter than one grey level reads 0."""
+    word = stagger_word()
+    (dx, top), (sx, sy) = STAGGER_AT, STAGGER_SLIDE
+    left = x + dx
+    roi = image[top - sy:top + word.shape[0] + sy, left - sx:left + word.shape[1] + sx] @ GREY
+    windows = np.lib.stride_tricks.sliding_window_view(roi, word.shape)
+    dot = np.einsum("ijkl,kl->ij", windows, word)  # the word's mean is 0: no window mean to take off
+    spread = (windows ** 2).sum(axis=(2, 3)) - windows.sum(axis=(2, 3)) ** 2 / word.size
+    flat = spread < word.size
+    return float(np.where(flat, 0, dot / np.sqrt(np.where(flat, 1, spread) * (word ** 2).sum())).max())
+
+
+def staggered(image, xs):
+    """Per slot, whether its unit is staggered: it acts no skill this turn, and a portrait tap swaps nothing (#427).
+
+    A plate takes the portrait's place: STAGGER in yellow on yellow cracks (or on the dimmed portrait, #69), STAGGER+ in
+    white on red cracks; STAGGER++ has no capture. The plates differ in colour, so the word's greyscale shape tells: a
+    match anywhere within STAGGER_SLIDE takes in the shift of a longer, centred word. Live: 0.86-1.00 on the 9 plates
+    of tests/screens (3 battles, both kinds), 0.42 at most on the other 4522 slot positions of its 197 1280x720 screens
+    (every position of 1 to 12 slots).
+    """
+    return [stagger_score(image, x) > STAGGER_MATCH for x in xs]
 
 
 def disc_lit(image, x, y):

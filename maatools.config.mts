@@ -182,6 +182,9 @@ const screens: [image: string, hits: string[]][] = [
   ['BattleTurnSolo.png', ['BattleTurn']], // 1-sinner formation: one slot, Win Rate at x ~740
   ['BattleTurnEven.png', ['BattleTurn']], // 8 slots (slot 4 a unit's second slot), Win Rate at x 1022
   ['BattleTurnStagger.png', ['BattleTurn']], // 6 of 7 slots staggered, Win Rate on, the START disc dim (#69)
+  // Live, EXP Luxcavation (#427): slots 7-8 of 8 STAGGER+ (2026-11-04), slot 9 of 9 STAGGER on yellow cracks (2026-10-28).
+  ['BattleTurnStaggerPlus.png', ['BattleTurn']],
+  ['BattleTurnStaggerLast.png', ['BattleTurn']],
   // ChargePrice: the battle speed badge's "45" sits in its roi; the price is read only on the Use Lunacy tab (ChargeCount).
   ['BattleTurnFocused.png', ['BattleTurn', 'ChargePrice']], // focused encounter (#127): hollow left gear, one sinner in 7 slots, nothing picked
   ['BattleTurnSwarm.png', ['BattleTurn']], // a swarm of enemies over the battlefield, one sinner in 6 slots (live 2026-10-21)
