@@ -16,7 +16,7 @@ jobs:
   # code: a changed file outside docs and gui/ (agent, assets, tests, tools, configs, lock files, workflows).
   # gui: any changed file outside docs; gui/ imports agent/, assets/ and tests/ files.
   changes:
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     timeout-minutes: 5
     permissions:
       pull-requests: read
@@ -36,7 +36,7 @@ jobs:
   agent:
     needs: changes
     if: needs.changes.outputs.code == 'true'
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     timeout-minutes: 25
     strategy:
       fail-fast: false
@@ -48,7 +48,7 @@ jobs:
       SHARD: ${{ strategy.job-index }}
       SHARDS: ${{ strategy.job-total }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: useblacksmith/checkout@v1
       - uses: astral-sh/setup-uv@v6
       - run: uv sync --locked
       # Lints every file regardless of SHARD: once is enough.
@@ -68,10 +68,10 @@ jobs:
   shard-balance:
     needs: agent
     if: needs.agent.result == 'success'
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
+      - uses: useblacksmith/checkout@v1
       - uses: actions/download-artifact@v4
         with:
           pattern: junit-*
@@ -81,7 +81,7 @@ jobs:
   pipeline:
     needs: changes
     if: needs.changes.outputs.code == 'true'
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     timeout-minutes: 20
     strategy:
       fail-fast: false
@@ -92,7 +92,7 @@ jobs:
       SHARD: ${{ strategy.job-index }}
       SHARDS: ${{ strategy.job-total }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: useblacksmith/checkout@v1
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
@@ -108,7 +108,7 @@ jobs:
   gui:
     needs: changes
     if: needs.changes.outputs.gui == 'true'
-    runs-on: windows-latest
+    runs-on: blacksmith-4vcpu-windows-2025
     timeout-minutes: 25
     defaults:
       run:
@@ -136,10 +136,10 @@ jobs:
   # What the branch adds, against its base (tools/review_lint.py). Docs-only pull requests run it too.
   review-lint:
     if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: useblacksmith/checkout@v1
         with:
           fetch-depth: 0
       - run: python3 tools/review_lint.py origin/${{ github.base_ref }}
@@ -148,7 +148,7 @@ jobs:
   ci-ok:
     if: always()
     needs: [changes, agent, shard-balance, pipeline, gui, review-lint]
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     timeout-minutes: 5
     steps:
       - if: needs.changes.result != 'success' || contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
