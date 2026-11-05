@@ -1,7 +1,7 @@
 """Write the standard header of a delegated task's brief, so no brief is copied from the last one.
 
   python tools/live/brief.py live --task <name> --difficulty normal|hard --exp-mode daily|count --exp-count N \\
-      --thread-mode daily|count --thread-count N --weekly-bonus none|hard --recording yes|no [--runs N] [--force]
+      --thread-mode daily|count --thread-count N --runs N --weekly-bonus none|hard --recording yes|no [--force]
   python tools/live/brief.py code --task <name> [--force]
 
 Writes `.local/scratch/<name>/brief.md` of the main checkout: the preamble pointer, the skills to load, the queue
@@ -133,7 +133,7 @@ def main(argv=None) -> int:
     live.add_argument("--thread-count", type=int, required=True)
     live.add_argument("--weekly-bonus", choices=("none", "hard"), required=True)
     live.add_argument("--recording", choices=("yes", "no"), required=True)
-    live.add_argument("--runs", type=int, default=1)
+    live.add_argument("--runs", type=int, required=True)
     code = sub.add_parser("code")
     for p in (live, code):
         p.add_argument("--task", required=True)
