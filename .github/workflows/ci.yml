@@ -12,18 +12,39 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Which jobs a PR needs. Push and workflow_dispatch run everything.
+  # Which jobs a PR needs.
   # code: a changed file outside docs and gui/ (agent, assets, tests, tools, configs, lock files, workflows).
   # gui: any changed file outside docs; gui/ imports agent/, assets/ and tests/ files.
   changes:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
+      actions: read
+      contents: read
       pull-requests: read
     outputs:
-      code: ${{ github.event_name != 'pull_request' || steps.filter.outputs.code == 'true' }}
-      gui: ${{ github.event_name != 'pull_request' || steps.filter.outputs.gui == 'true' }}
+      code: ${{ steps.tested.outputs.tested != 'true' && (github.event_name != 'pull_request' || steps.filter.outputs.code == 'true') }}
+      gui: ${{ steps.tested.outputs.tested != 'true' && (github.event_name != 'pull_request' || steps.filter.outputs.gui == 'true') }}
+      tree: ${{ steps.tree.outputs.tree }}
     steps:
+      - id: tree
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tree=$(gh api "repos/$GITHUB_REPOSITORY/git/commits/$GITHUB_SHA" --jq .tree.sha)
+          echo "tree=$tree" | tee -a "$GITHUB_OUTPUT"
+      # A PR run tests refs/pull/N/merge, whose tree is the merge commit's tree when main has not moved since.
+      # A fork's PR run can upload any marker, so only a run from this repository counts.
+      - if: github.event_name == 'push' && steps.tree.outputs.tree != ''
+        id: tested
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TREE: ${{ steps.tree.outputs.tree }}
+        run: |
+          tested=$(gh api "repos/$GITHUB_REPOSITORY/actions/artifacts?name=ci-ok-tree-$TREE" --jq 'any(.artifacts[]; (.expired | not) and .workflow_run.head_repository_id == .workflow_run.repository_id)')
+          echo "tested=$tested" | tee -a "$GITHUB_OUTPUT"
       - if: github.event_name == 'pull_request'
         id: filter
         uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
@@ -153,3 +174,16 @@ jobs:
     steps:
       - if: needs.changes.result != 'success' || contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
         run: exit 1
+      - if: github.event_name == 'pull_request' && needs.changes.outputs.code == 'true' && needs.changes.outputs.gui == 'true' && needs.changes.outputs.tree != ''
+        id: marker
+        env:
+          TREE: ${{ needs.changes.outputs.tree }}
+        run: echo "$TREE" > tree
+      - if: steps.marker.outcome == 'success'
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-ok-tree-${{ needs.changes.outputs.tree }}
+          path: tree
+          retention-days: 14
+          overwrite: true
