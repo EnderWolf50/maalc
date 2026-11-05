@@ -8,11 +8,18 @@ brief = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(brief)
 
 LIVE = ["live", "--task", "t1", "--difficulty", "normal", "--exp-mode", "daily", "--exp-count", "1",
-        "--thread-mode", "daily", "--thread-count", "3", "--weekly-bonus", "none", "--recording", "yes"]
+        "--thread-mode", "daily", "--thread-count", "3", "--runs", "1", "--weekly-bonus", "none", "--recording", "yes"]
 
 
 def run(tmp_path, args):
     return brief.main(["--scratch", str(tmp_path), *args])
+
+
+def with_values(args, **values):
+    out = list(args)
+    for name, value in values.items():
+        out[out.index("--" + name.replace("_", "-")) + 1] = value
+    return out
 
 
 def test_live_brief_states_every_setting_from_the_arguments(tmp_path):
@@ -30,11 +37,12 @@ def test_live_brief_states_every_setting_from_the_arguments(tmp_path):
 
 def test_a_different_count_is_never_inherited_from_an_earlier_brief(tmp_path):
     run(tmp_path, LIVE)
-    run(tmp_path, ["live", "--task", "t2", "--difficulty", "hard", "--exp-mode", "daily", "--exp-count", "2",
-                   "--thread-mode", "count", "--thread-count", "5", "--weekly-bonus", "hard", "--recording", "no", "--force"])
+    run(tmp_path, [*with_values(LIVE, task="t2", difficulty="hard", exp_count="2", thread_mode="count", thread_count="5",
+                                runs="2", weekly_bonus="hard", recording="no"), "--force"])
     text = (tmp_path / "t2" / "brief.md").read_text(encoding="utf-8")
     assert "luxcavation.exp.count=2" in text and "| EXP Luxcavation count | 2, not used:" in text
     assert "| Thread Luxcavation count | 5 |" in text and "--set luxcavation.thread.mode=count --set luxcavation.thread.count=5" in text
+    assert "| runs | 2 |" in text and "--set run.runs=2" in text
     assert "| weekly bonus use | hard |" in text
     assert "| recording | no |" in text and "screenrec.py start" not in text and "Do not record" in text
 
@@ -60,8 +68,8 @@ def test_daily_mode_marks_its_count_unused_and_says_what_it_fights(tmp_path):
     assert "--set luxcavation.thread.mode=daily --set luxcavation.thread.count=3" in text
 
 
-@pytest.mark.parametrize("flag", ["--exp-mode", "--thread-mode"])
-def test_a_brief_without_a_mode_is_not_written(tmp_path, flag):
+@pytest.mark.parametrize("flag", ["--exp-mode", "--thread-mode", "--runs"])
+def test_a_brief_without_a_mode_or_runs_is_not_written(tmp_path, flag):
     i = LIVE.index(flag)
     assert run(tmp_path / "full", LIVE) == 0
     with pytest.raises(SystemExit) as exit_:
