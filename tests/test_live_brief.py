@@ -7,8 +7,8 @@ spec = importlib.util.spec_from_file_location("live_brief", Path(__file__).resol
 brief = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(brief)
 
-LIVE = ["live", "--task", "t1", "--difficulty", "normal", "--exp-count", "1", "--thread-count", "3",
-        "--weekly-bonus", "none", "--recording", "yes"]
+LIVE = ["live", "--task", "t1", "--difficulty", "normal", "--exp-mode", "daily", "--exp-count", "1",
+        "--thread-mode", "daily", "--thread-count", "3", "--weekly-bonus", "none", "--recording", "yes"]
 
 
 def run(tmp_path, args):
@@ -21,7 +21,6 @@ def test_live_brief_states_every_setting_from_the_arguments(tmp_path):
     assert "docs/agents/subagent-preamble.md" in text
     assert "maalc-live-test" in text and "screen-record" in text
     assert "| difficulty | normal |" in text
-    assert "| EXP Luxcavation count | 1 |" in text and "| Thread Luxcavation count | 3 |" in text
     assert "| weekly bonus use | none |" in text
     assert "| recording | yes |" in text and "--height 720" in text
     assert "kept on from the start of the run to its end" in text and "recording.md" in text  # no stall rule (2026-11-05)
@@ -31,11 +30,50 @@ def test_live_brief_states_every_setting_from_the_arguments(tmp_path):
 
 def test_a_different_count_is_never_inherited_from_an_earlier_brief(tmp_path):
     run(tmp_path, LIVE)
-    run(tmp_path, ["live", "--task", "t2", "--difficulty", "hard", "--exp-count", "2", "--thread-count", "3",
-                   "--weekly-bonus", "hard", "--recording", "no", "--force"])
+    run(tmp_path, ["live", "--task", "t2", "--difficulty", "hard", "--exp-mode", "daily", "--exp-count", "2",
+                   "--thread-mode", "count", "--thread-count", "5", "--weekly-bonus", "hard", "--recording", "no", "--force"])
     text = (tmp_path / "t2" / "brief.md").read_text(encoding="utf-8")
-    assert "| EXP Luxcavation count | 2 |" in text and "| weekly bonus use | hard |" in text
+    assert "luxcavation.exp.count=2" in text and "| EXP Luxcavation count | 2, not used:" in text
+    assert "| Thread Luxcavation count | 5 |" in text and "--set luxcavation.thread.mode=count --set luxcavation.thread.count=5" in text
+    assert "| weekly bonus use | hard |" in text
     assert "| recording | no |" in text and "screenrec.py start" not in text and "Do not record" in text
+
+
+def settings_of(tmp_path, *extra):
+    run(tmp_path, [*LIVE, *extra])
+    return (tmp_path / "t1" / "brief.md").read_text(encoding="utf-8")
+
+
+def test_count_mode_states_its_count_and_sets_mode_and_count(tmp_path):
+    text = settings_of(tmp_path, "--exp-mode", "count", "--exp-count", "2")
+    assert "| EXP Luxcavation mode | count |" in text and "| EXP Luxcavation count | 2 |" in text
+    assert "--set luxcavation.exp.mode=count --set luxcavation.exp.count=2" in text
+
+
+def test_daily_mode_marks_its_count_unused_and_says_what_it_fights(tmp_path):
+    text = settings_of(tmp_path)
+    assert "| Thread Luxcavation mode | daily |" in text and "| EXP Luxcavation mode | daily |" in text
+    thread = next(line for line in text.splitlines() if line.startswith("| Thread Luxcavation count |"))
+    exp = next(line for line in text.splitlines() if line.startswith("| EXP Luxcavation count |"))
+    assert thread.startswith("| Thread Luxcavation count | 3, not used: daily mode") and "Daily Bonuses" in thread
+    assert exp.startswith("| EXP Luxcavation count | 1, not used: daily mode") and "Clear EXP Luxcavation" in exp
+    assert "--set luxcavation.thread.mode=daily --set luxcavation.thread.count=3" in text
+
+
+@pytest.mark.parametrize("flag", ["--exp-mode", "--thread-mode"])
+def test_a_brief_without_a_mode_is_not_written(tmp_path, flag):
+    i = LIVE.index(flag)
+    assert run(tmp_path / "full", LIVE) == 0
+    with pytest.raises(SystemExit) as exit_:
+        run(tmp_path, [*LIVE[:i], *LIVE[i + 2:]])
+    assert exit_.value.code == 2
+    assert not (tmp_path / "t1" / "brief.md").exists()
+
+
+def test_a_mode_outside_the_schema_is_not_an_option(tmp_path):
+    assert run(tmp_path, [*LIVE, "--exp-mode", "count"]) == 0
+    with pytest.raises(SystemExit):
+        run(tmp_path, [*LIVE, "--exp-mode", "today"])
 
 
 def test_the_run_settings_are_required(tmp_path):

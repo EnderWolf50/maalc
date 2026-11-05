@@ -1,7 +1,7 @@
 """Write the standard header of a delegated task's brief, so no brief is copied from the last one.
 
-  python tools/live/brief.py live --task <name> --difficulty normal|hard --exp-count N --thread-count N \\
-      --weekly-bonus none|hard --recording yes|no [--runs N] [--force]
+  python tools/live/brief.py live --task <name> --difficulty normal|hard --exp-mode daily|count --exp-count N \\
+      --thread-mode daily|count --thread-count N --weekly-bonus none|hard --recording yes|no [--runs N] [--force]
   python tools/live/brief.py code --task <name> [--force]
 
 Writes `.local/scratch/<name>/brief.md` of the main checkout: the preamble pointer, the skills to load, the queue
@@ -9,6 +9,7 @@ and waiting rules, the report format, and (for `live`) a table of every run sett
 Each setting is a required argument and nothing is read from an earlier brief: a count or a bonus carried over
 from a copy is what cost Enkephalin Modules. The agent that creates the task writes only the `## Goal` section.
 The weekly bonus has no `normal` choice; a brief that needs it for a NORMAL run says so, with the user's answer, in its goal.
+A Luxcavation mode is required too (the user, 2026-11-05): daily mode ignores the count, so a brief must say which one runs (#442).
 
 `.local/brief-rules.md` (gitignored; override with `--rules`) holds the rules this public repo must not state,
 such as account specifics. When it exists, its text is appended as "Machine-local rules".
@@ -69,19 +70,38 @@ These are the settings of this run. Set each with `bot.py prep --set`; nothing i
 | --- | --- |
 | difficulty | {difficulty} |
 | runs | {runs} |
-| EXP Luxcavation count | {exp} |
-| Thread Luxcavation count | {thread} |
+{lux_rows}
 | weekly bonus use | {bonus} |
 | recording | {recording} |
 
 {recording_text}
-`bot.py prep --set run.difficulty={difficulty} --set run.runs={runs} --set run.weekly_bonus_use={bonus} --set luxcavation.exp.count={exp} --set luxcavation.thread.count={thread}`; check the keys against `agent/settings.schema.json` and confirm the effective values in `run.log` before the bot starts the run.
+`bot.py prep --set run.difficulty={difficulty} --set run.runs={runs} --set run.weekly_bonus_use={bonus} {lux_sets}`; check the keys against `agent/settings.schema.json` and confirm the effective values in `run.log` before the bot starts the run.
 """
 
 RECORD_YES = ("Record the run: `screen-record` with `--height 720` (skill step 5), one recording kept on from the start of "
               "the run to its end, and annotate it (step 8). A stretch with no new frames goes into `recording.md` and the "
               "report, as step 5 says.")
 RECORD_NO = "Do not record this run; step 8's route and pack stills come from device screenshots."
+
+LUX = {"exp": ("EXP", "fights 1 while the pass's Daily row Clear EXP Luxcavation is under way"),
+       "thread": ("Thread", "fights n when Daily Bonuses reads n/3 left")}
+
+
+def lux(a: argparse.Namespace) -> list[tuple[str, str, str, str, int]]:
+    return [(key, name, daily, getattr(a, f"{key}_mode"), getattr(a, f"{key}_count")) for key, (name, daily) in LUX.items()]
+
+
+def lux_rows(a: argparse.Namespace) -> str:
+    rows = []
+    for _, name, daily, mode, count in lux(a):
+        cell = count if mode == "count" else f"{count}, not used: daily mode {daily}"
+        rows += [f"| {name} Luxcavation mode | {mode} |", f"| {name} Luxcavation count | {cell} |"]
+    return "\n".join(rows)
+
+
+def lux_sets(a: argparse.Namespace) -> str:
+    return " ".join(f"--set luxcavation.{key}.mode={mode} --set luxcavation.{key}.count={count}" for key, _, _, mode, count in lux(a))
+
 
 GOAL = "\n## Goal\n\n(The agent that creates this task writes the goal here: what to prove, the segment each check needs, the acceptance numbers.)\n"
 
@@ -91,7 +111,7 @@ def build(kind: str, a: argparse.Namespace, rules: str | None) -> str:
     text = COMMON.format(task=a.task, skills=LIVE_SKILLS if live else CODE_SKILLS,
                          live_queue=LIVE_QUEUE.format(task=a.task) if live else "")
     if live:
-        text += "\n" + SETTINGS.format(difficulty=a.difficulty, runs=a.runs, exp=a.exp_count, thread=a.thread_count,
+        text += "\n" + SETTINGS.format(difficulty=a.difficulty, runs=a.runs, lux_rows=lux_rows(a), lux_sets=lux_sets(a),
                                        bonus=a.weekly_bonus, recording=a.recording,
                                        recording_text=RECORD_YES if a.recording == "yes" else RECORD_NO)
     text += GOAL
@@ -107,7 +127,9 @@ def main(argv=None) -> int:
     sub = ap.add_subparsers(dest="kind", required=True)
     live = sub.add_parser("live")
     live.add_argument("--difficulty", choices=("normal", "hard"), required=True)
+    live.add_argument("--exp-mode", choices=("daily", "count"), required=True)
     live.add_argument("--exp-count", type=int, required=True)
+    live.add_argument("--thread-mode", choices=("daily", "count"), required=True)
     live.add_argument("--thread-count", type=int, required=True)
     live.add_argument("--weekly-bonus", choices=("none", "hard"), required=True)
     live.add_argument("--recording", choices=("yes", "no"), required=True)
