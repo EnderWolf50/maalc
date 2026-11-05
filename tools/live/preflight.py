@@ -10,10 +10,10 @@ to accept on 2026-10-21 (exit 0, the line says which; the bot's nodes do it when
 `run.auto_accept_terms` are on); `stop` a resumable Mirror Dungeon run, an outdated client or any other screen (exit 1
 with the reason). Run it before any pytest or install rebuild: a game update found after 21 minutes of prep cost a run.
 
-**recording** says whether the newest `rec_*.mkv` (a recording in progress) or `rec_*.mp4` in `--out` grew over
-`--seconds`. A file that did not grow is a `note:` for the report, exit 0: the window drew nothing (a game frozen on one
-screen draws nothing either, so a still file does not mean a broken recording), and the recording stays on. Exit 1 only
-when `--out` holds no recording at all.
+**recording** says whether the recording in progress in `--out` (the `.mkv` its live `rec_<profile>.state.json` names)
+grew over `--seconds`. A file that did not grow, or that ffmpeg has not written yet because no frame came, is a `note:`
+for the report, exit 0: a game frozen on one screen draws nothing, like a sleeping display, so a still file does not mean
+a broken recording, and the recording stays on. Exit 1 only when `--out` has no recording in progress.
 
 **plan** waits up to `--within` seconds for the bot's `new run:` line (a run it planned itself) in `--log`. A
 `no run plan in memory` line, or none in time, means the bot continues a leftover run with no plan (weekly bonuses,
@@ -23,6 +23,7 @@ Modules and the team are then not its own choice): exit 1, stop it. For a task t
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import sys
 import time
@@ -98,22 +99,33 @@ def screen(root: Path, port: int, shot: Path | None, say=print, see=look) -> int
     return 1 if verdict == "stop" else 0
 
 
-def recording_note(out: Path, seconds: float, say=print, sleep=time.sleep, clock=time.strftime) -> int:
-    def newest():
-        # screenrec writes .mkv while recording and remuxes it to .mp4 at stop; a tie goes to the .mkv
-        files = sorted([*out.glob("rec_*.mkv"), *out.glob("rec_*.mp4")], key=lambda p: (p.stat().st_mtime, p.suffix == ".mkv"))
-        return (files[-1], files[-1].stat().st_size) if files else (None, 0)
+def live_recording(out: Path) -> Path | None:
+    """The .mkv of the newest recording screenrec still runs in `out`: its rec_<profile>.state.json names it and has no
+    `ended`. screenrec writes the .mkv once the first frame is encoded and remuxes it to .mp4 at stop."""
+    live = []
+    for sp in out.glob("rec_*.state.json"):
+        try:
+            st = json.loads(sp.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue  # screenrec rewrites it in place; a half-written one is skipped
+        if st.get("mkv") and not st.get("ended"):
+            live.append((sp.stat().st_mtime, Path(st["mkv"])))
+    return max(live)[1] if live else None
 
-    first, size = newest()
-    if first is None:
-        say(f"no rec_*.mkv or rec_*.mp4 in {out}: the recording did not start")
+
+def recording_check(out: Path, seconds: float, say=print, sleep=time.sleep, clock=time.strftime) -> int:
+    rec = live_recording(out)
+    if rec is None:
+        say(f"no recording in progress in {out} (no live rec_*.state.json): start it with screenrec.py start")
         return 1
+    size = rec.stat().st_size if rec.exists() else 0
     sleep(seconds)
-    last, now = newest()
-    if last == first and now > size:
-        say(f"{first.name} grew {size} -> {now} bytes in {seconds:.0f} s")
+    now = rec.stat().st_size if rec.exists() else 0
+    if now > size:
+        say(f"{rec.name} grew {size} -> {now} bytes in {seconds:.0f} s")
         return 0
-    say(f"note: {first.name} did not grow in the {seconds:.0f} s before {clock('%H:%M:%S')} ({size} bytes): no new frames "
+    what = "did not grow" if rec.exists() else "has no frame yet"
+    say(f"note: {rec.name} {what} in the {seconds:.0f} s before {clock('%H:%M:%S')}: no new frames "
         "(a frozen game or a sleeping display). Keep recording; put this line in the report")
     return 0
 
@@ -159,7 +171,7 @@ def main(argv=None) -> int:
     if a.command == "screen":
         return screen(a.install.resolve(), a.port, a.shot)
     if a.command == "recording":
-        return recording_note(a.out, a.seconds)
+        return recording_check(a.out, a.seconds)
     return plan_line(a.log, a.within, a.pattern)
 
 

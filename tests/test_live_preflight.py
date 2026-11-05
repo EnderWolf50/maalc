@@ -1,5 +1,6 @@
 """tools/live/preflight.py: the screen verdicts on the pipeline's own fixtures, the recording and run-plan checks on fake files."""
 import importlib.util
+import json
 import re
 from pathlib import Path
 
@@ -59,24 +60,34 @@ def test_screen_exits_nonzero_only_on_stop(tmp_path):
     assert pf.screen(tmp_path, 1, None, say=said.append, see=lambda *a: "ResumeDialog") == 1 and said[-1].startswith("stop")
 
 
+def screenrec_state(out, mkv, **kv):
+    # screenrec's rec_<profile>.state.json names the .mkv it records into; `ended` once ffmpeg exits
+    (out / "rec_p.state.json").write_text(json.dumps({"mkv": str(mkv), **kv}), encoding="utf-8")
+
+
 def test_a_recording_with_no_new_frames_is_a_note_not_a_failure(tmp_path):
     # a game frozen on one screen draws nothing, like a sleeping display: the recording stays on (2026-11-05)
     said = []
-    assert pf.recording_note(tmp_path, 1, say=said.append, sleep=lambda s: None) == 1 and "did not start" in said[-1]
-    rec = tmp_path / "rec_1.mp4"
+    assert pf.recording_check(tmp_path, 1, say=said.append, sleep=lambda s: None) == 1 and "no recording in progress" in said[-1]
+    rec = tmp_path / "rec_p_20261105_153350.mkv"
+    screenrec_state(tmp_path, rec)
+    # no frame yet: ffmpeg has not written the .mkv
+    assert pf.recording_check(tmp_path, 1, say=said.append, sleep=lambda s: None, clock=lambda f: "15:34:10") == 0
+    assert said[-1].startswith("note:") and "has no frame yet" in said[-1] and "15:34:10" in said[-1]
     rec.write_bytes(b"x" * 10)
-    assert pf.recording_note(tmp_path, 1, say=said.append, sleep=lambda s: rec.write_bytes(b"x" * 99)) == 0
-    assert pf.recording_note(tmp_path, 1, say=said.append, sleep=lambda s: None, clock=lambda f: "15:33:53") == 0
-    assert said[-1].startswith("note:") and "15:33:53" in said[-1] and "Keep recording" in said[-1]
+    assert pf.recording_check(tmp_path, 1, say=said.append, sleep=lambda s: rec.write_bytes(b"x" * 99)) == 0 and "grew" in said[-1]
+    assert pf.recording_check(tmp_path, 1, say=said.append, sleep=lambda s: None) == 0
+    assert said[-1].startswith("note:") and "did not grow" in said[-1] and "Keep recording" in said[-1]
+    screenrec_state(tmp_path, rec, ended=True)
+    assert pf.recording_check(tmp_path, 1, say=said.append, sleep=lambda s: None) == 1
 
 
-def test_a_recording_in_progress_is_an_mkv(tmp_path):
-    # screenrec writes rec_<profile>_<date>_<time>.mkv while it records and remuxes it to .mp4 only at stop
+def test_an_older_recording_in_the_folder_is_not_the_one_checked(tmp_path):
     said = []
-    (tmp_path / "rec_old_20261029_100000.mp4").write_bytes(b"x" * 500)
-    rec = tmp_path / "rec_preflight_20261030_043630.mkv"
-    rec.write_bytes(b"x" * 10)
-    assert pf.recording_note(tmp_path, 1, say=said.append, sleep=lambda s: rec.write_bytes(b"x" * 99)) == 0, said
+    (tmp_path / "rec_p_20261029_100000.mp4").write_bytes(b"x" * 500)
+    screenrec_state(tmp_path, tmp_path / "rec_p_20261105_153350.mkv")
+    assert pf.recording_check(tmp_path, 1, say=said.append, sleep=lambda s: None) == 0
+    assert "rec_p_20261105_153350.mkv has no frame yet" in said[-1], said
 
 
 class Clock:
