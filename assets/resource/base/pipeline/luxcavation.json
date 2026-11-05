@@ -1,15 +1,23 @@
 {
-    // EXP Luxcavation (#366): LuxStart picks the team (luxcavation.exp), then the daily task entry of spec 01. First the
-    // pass page (#429): ExpPassHome (GoHome), then ExpPassHub to the Pass Missions' Daily tab, whose Clear EXP
-    // Luxcavation row says whether a battle was won today (ExpPassRead). Then ExpHome (LuxHome: GoHome, the Modules and
-    // the battles left to the day's target), and ExpHub, which plays the rightmost open stage of the EXP tab; its last
-    // step runs GoHome again.
+    // EXP Luxcavation (#366): LuxStart picks the team (luxcavation.exp), then the daily task entry of spec 01. In daily
+    // mode first the pass page (#429): ExpPassHome (GoHome), then ExpPassHub to the Pass Missions' Daily tab, whose Clear
+    // EXP Luxcavation row says whether a battle was won today (ExpPassRead). Count mode reads nothing about today
+    // (ExpCountMode, #431). Then ExpHome (LuxHome: GoHome, the Modules and the battles this run fights), and ExpHub,
+    // which plays the rightmost open stage of the EXP tab; its last step runs GoHome again.
     "ExpLuxcavation": {
         "action": "Custom",
         "custom_action": "LuxStart",
         "custom_action_param": "exp",
         "next": [
+            "ExpCountMode",
             "ExpPassHome"
+        ]
+    },
+    "ExpCountMode": {
+        "recognition": "Custom",
+        "custom_recognition": "LuxCountMode",
+        "next": [
+            "ExpHome"
         ]
     },
     "ExpPassHome": {
@@ -308,7 +316,7 @@
     },
     // Thread Luxcavation (#368): LuxStart picks the team (luxcavation.thread), then the same entry as EXP (ThreadHome,
     // LuxHome) and ThreadHub, which plays the hardest level of today's one open card of the Thread tab, over
-    // and over until `count` are won. Its screens: the Thread tab's open card (Enter), its Level Select (the bottom row's
+    // and over until this run's battles are won (count mode: count; daily mode: the Daily Bonuses left, #431). Its screens: the Thread tab's open card (Enter), its Level Select (the bottom row's
     // Enter), then the pages EXP's Enter leads to as well (ExpHub's list: the team page, the battle, the results page).
     "ThreadLuxcavation": {
         "action": "Custom",

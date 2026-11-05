@@ -14,12 +14,19 @@ if __name__ != "__main__":  # as test_task_chain.py: the fixtures are test_actio
 SCREENS = Path(__file__).resolve().parent / "screens"
 
 
-@pytest.mark.parametrize("target, today, fights", [
-    (3, 0, 3), (3, 1, 2), (3, 3, 0), (1, 1, 0), (1, 0, 1), (2, 1, 1),
-    (3, 5, 0),  # more won than the target: nothing, not a negative count
+@pytest.mark.parametrize("task, today, fights", [
+    ("exp", 0, 1), ("exp", 1, 0),  # the pass's Clear EXP Luxcavation row under way, done
+    ("thread", 0, 3), ("thread", 1, 2), ("thread", 3, 0),  # Daily Bonuses 3/3, 2/3, 0/3
+    ("exp", 2, 0),  # more won than the day's: nothing, not a negative count
+    ("exp", None, None), ("thread", None, None),  # not read: nothing fought (#429)
 ])
-def test_left_is_the_target_less_the_battles_won_today(target, today, fights):
-    assert luxcavation.left(target, today) == fights
+def test_daily_mode_fights_what_the_day_still_needs(task, today, fights):
+    assert luxcavation.fights("daily", luxcavation.DAILY[task], today) == fights
+
+
+@pytest.mark.parametrize("count, today", [(1, None), (3, None), (2, 1), (12, 0)])
+def test_count_mode_fights_count_whatever_today_holds(count, today):
+    assert luxcavation.fights("count", count, today) == count
 
 
 @pytest.mark.parametrize("texts, n", [
@@ -34,14 +41,6 @@ def test_left_is_the_target_less_the_battles_won_today(target, today, fights):
 ])
 def test_daily_bonuses_read_as_the_one_n_over_3(texts, n):
     assert luxcavation.read_bonuses(texts) == n
-
-
-@pytest.mark.parametrize("n, target, today", [(3, 3, 0), (2, 3, 1), (1, 3, 2), (0, 3, 3), (0, 1, 3), (2, 5, 1),
-                                              (0, 5, None)])
-def test_the_daily_bonuses_n_is_the_bonuses_left(n, target, today):
-    # the user, 2026-11-05: 3/3 on a fresh day, 0/3 once three Thread battles are won; at 0/3 a target above 3 cannot
-    # tell how many more were won, so nothing is fought
-    assert luxcavation.thread_today(n, target) == today
 
 
 @pytest.mark.parametrize("count, cost, need", [(1, 3, 3), (2, 3, 6), (5, 3, 15), (3, 2, 6)])

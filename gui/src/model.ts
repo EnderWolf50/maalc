@@ -305,8 +305,11 @@ export interface Settings {
   luxcavation: { exp: Luxcavation; thread: Luxcavation };
   charge_enkephalin: { count: number };
 }
-/** One Luxcavation daily task's options (#366): the wins to get, a teams[] id (null: none picked), the defeats fought again. */
-export interface Luxcavation { count: number; team: string | null; retries: number; consecutive: boolean }
+/** One Luxcavation daily task's options (#366, #431): daily (the battles the day still needs, read in the game) or count
+ * (count wins this run), a teams[] id (null: none picked), the defeats fought again. */
+export interface Luxcavation { mode: LuxMode; count: number; team: string | null; retries: number; consecutive: boolean }
+export type LuxMode = "daily" | "count";
+export const LUX_MODES = schema.$defs.luxcavation.properties.mode.enum as LuxMode[];
 // count: EXP 1, Thread 3 (its 3 Daily Bonuses a day; the schema's default is EXP's)
 const newLuxcavation = (count = 1): Luxcavation =>
   ({ ...defaultsOf(schema.$defs.luxcavation.properties), count }) as unknown as Luxcavation;
@@ -438,6 +441,13 @@ const MIGRATIONS: Record<number, (d: Record<string, unknown>) => Record<string, 
       return rest;
     }) : d.teams,
   }),
+  // Version 18 adds luxcavation.<task>.mode (#431), daily (the user, 2026-11-05); count stays for count mode.
+  17: (d) => {
+    const lux = d.luxcavation as Record<string, unknown> | undefined;
+    if (!lux || typeof lux !== "object") return d;
+    const fixed = Object.fromEntries(Object.entries(lux).map(([k, o]) => [k, o && typeof o === "object" ? { mode: "daily", ...o } : o]));
+    return { ...d, luxcavation: fixed };
+  },
 };
 /** The version 10 keep_gifts the last migration found no gift for (parseSettings returns it). */
 let v10Dropped = 0;

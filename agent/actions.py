@@ -513,6 +513,14 @@ class GameAway(CustomRecognition):
         return CustomRecognition.AnalyzeResult(box=(0, 0, 1, 1), detail={"app": app}) if app not in (None, recovery.GAME) else None
 
 
+@AgentServer.custom_recognition("LuxCountMode")
+class LuxCountMode(CustomRecognition):
+    """Hits when the Luxcavation task LuxStart began runs in count mode (#431): ExpCountMode, which skips the pass page."""
+
+    def analyze(self, context: Context, argv: CustomRecognition.AnalyzeArg):
+        return CustomRecognition.AnalyzeResult(box=(0, 0, 1, 1), detail={}) if RUN["lux"]["mode"] == "count" else None
+
+
 # The Luxcavation tasks (#366, #368): their settings key (custom_action_param of LuxStart) -> name, Modules a battle.
 LUX = {"exp": ("EXP Luxcavation", luxcavation.EXP_COST), "thread": ("Thread Luxcavation", luxcavation.THREAD_COST)}
 
@@ -520,7 +528,7 @@ LUX = {"exp": ("EXP Luxcavation", luxcavation.EXP_COST), "thread": ("Thread Luxc
 @AgentServer.custom_action("LuxStart")
 class LuxStart(TaskStart):
     """A Luxcavation task's entry (#366, #368), its param the settings key ("exp", "thread"): TaskStart, then the team
-    luxcavation.<key> names, whose guard turns the battle plays (spec 03 section 8), and its count and retries (#367).
+    luxcavation.<key> names, whose guard turns the battle plays (spec 03 section 8), its mode (#431), count and retries (#367).
     No team picked, or settings that do not load: the stop procedure, before any tap."""
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
@@ -537,15 +545,19 @@ class LuxStart(TaskStart):
         if team is None:
             return stop(context, f"{name} has no team: pick one in the settings GUI's Daily tab")
         # Not RUN["settings"]: that is a Mirror Dungeon run, which the stop procedure writes to runs.jsonl.
-        # lux: this task's count (spec 03 section 15): target, the day's wins the settings ask for; today, those won
-        # today as read (plan) and seen, what was read, for the log; fights, the battles this run fights, None until planned; the battles won and the retries
-        # used, the last battle's result.
+        # lux: this task's battles (spec 03 section 15): mode, daily or count (#431); target, count's wins this run or the
+        # day's in daily mode (luxcavation.DAILY); today, those won today as read (plan) and seen, what was read, for the
+        # log; fights, the battles this run fights, None until planned; the battles won and the retries used, the last
+        # battle's result.
+        mode = opts["mode"]
+        target = opts["count"] if mode == "count" else luxcavation.DAILY[key]
         RUN.update(team=team, guard=team["guard_turns"],
-                   lux={"name": name, "cost": cost, "target": opts["count"], "today": None, "seen": None, "fights": None,
+                   lux={"name": name, "cost": cost, "mode": mode, "target": target, "today": None, "seen": None, "fights": None,
                         "retries": opts["retries"], "modules": None, "won": 0, "retried": 0, "result": None,
                         "consecutive": opts["consecutive"], "size": 1})
         log(f"{name}: team {team['name']!r} (TEAMS #{team['game_team']}), {team['guard_turns']} guard turns, "
-            f"target {opts['count']} wins today, {opts['retries']} retries, consecutive {'on' if opts['consecutive'] else 'off'}")
+            + (f"mode count, {target} wins this run" if mode == "count" else "mode daily")
+            + f", {opts['retries']} retries, consecutive {'on' if opts['consecutive'] else 'off'}")
         return True
 
 
@@ -570,10 +582,10 @@ class OpenDrive(CustomAction):
 
 @AgentServer.custom_action("LuxHome")
 class LuxHome(CustomAction):
-    """A Luxcavation task's step after LuxStart (EXP: after the pass page): the main window, then the Modules the panel
-    shows (#367). A panel that does not read stops the task: nothing is known to be safe to spend. The param
-    {"plan": true} (EXP, whose battles won today were read on the pass page) plans the task here; Thread plans on the
-    Thread tab, where its Daily Bonuses show (LuxEnter)."""
+    """A Luxcavation task's step after LuxStart (EXP in daily mode: after the pass page): the main window, then the Modules
+    the panel shows (#367). A panel that does not read stops the task: nothing is known to be safe to spend. Count mode
+    plans the task here, as does the param {"plan": true} (EXP, whose battles won today were read on the pass page);
+    Thread in daily mode plans on the Thread tab, where its Daily Bonuses show (LuxEnter)."""
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         if not go_home(context):
@@ -583,23 +595,25 @@ class LuxHome(CustomAction):
         if lux["modules"] is None:
             return stop(context, f"{lux['name']}: the Modules number did not read on the main window")
         log(f"{lux['name']}: Modules {lux['modules']} on the main window")
-        if (json.loads(argv.custom_action_param or "null") or {}).get("plan"):
+        if lux["mode"] == "count" or (json.loads(argv.custom_action_param or "null") or {}).get("plan"):
             over = plan(context, lux["today"], lux["seen"])
             return True if over is None else over
         return True
 
 
 def plan(context, today, seen):
-    """The battles this run fights (#429): the day's target less `today`, the battles won today as read (None: it did
-    not read), `seen` what was read, for the log. Nothing read or nothing left: the main window and done, nothing
-    fought; else the Modules must cover the battles left at the hardest stage's cost (spec 03 section 15), or the task
-    is skipped the same way. None: RUN["lux"]["fights"] is set and the battles go on; else what the action returns."""
+    """The battles this run fights (luxcavation.fights): count mode, the target; daily mode (#429), the day's target less
+    `today`, the battles won today as read (None: it did not read), `seen` what was read, for the log. Nothing read or
+    nothing left: the main window and done, nothing fought; else the Modules must cover the battles at the hardest
+    stage's cost (spec 03 section 15), or the task is skipped the same way. None: RUN["lux"]["fights"] is set and the
+    battles go on; else what the action returns."""
     lux = RUN["lux"]
-    if today is None:
+    fights = luxcavation.fights(lux["mode"], lux["target"], today)
+    if fights is None:
         return finish(context, f"{lux['name']}: {seen}: nothing fought")
     lux["today"] = today
-    fights = luxcavation.left(lux["target"], today)
-    head = f"{lux['name']}: {seen} ({today} won today), target {lux['target']}"
+    head = (f"{lux['name']}: count mode, {fights} this run" if lux["mode"] == "count"
+            else f"{lux['name']}: {seen} ({today} won today), {lux['target']} a day")
     if fights == 0:
         return finish(context, f"{head}: nothing to fight")
     need = luxcavation.needed(lux["cost"], fights)
@@ -731,7 +745,8 @@ class LuxEnter(CustomAction):
     the battle (#368). Back on the page a battle started from: the battle is over (battle_over). Where the task fights
     consecutively, the param's "box" names the page's Consecutive Battle (CONSECUTIVE): it is set to the wins left, up
     to 10, before the tap (#375); one that will not read or set stops the task, so no battle starts at the wrong count.
-    A task not planned yet (Thread's first look at its card) reads the tab's Daily Bonuses and plans first (#429)."""
+    A task not planned yet (Thread's first look at its card, in daily mode) reads the tab's Daily Bonuses and plans first
+    (#429): n left of 3 is 3 - n won today."""
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         if RUN.get("entered"):
@@ -740,10 +755,10 @@ class LuxEnter(CustomAction):
                 return over
         opts = json.loads(argv.custom_action_param or "null") or {}
         lux = RUN["lux"]
-        if lux["fights"] is None:  # Thread's first look at its open card: the Daily Bonuses above it plan the task (#429)
+        if lux["fights"] is None:  # Thread in daily mode only: count mode was planned in LuxHome
             n = luxcavation.read_bonuses(ocr_texts(context, screen(context), "ThreadBonuses"))
             shown = "Daily Bonuses did not read" if n is None else f"Daily Bonuses {n}/{luxcavation.DAILY_BONUSES}"
-            over = plan(context, None if n is None else luxcavation.thread_today(n, lux["target"]), shown)
+            over = plan(context, None if n is None else luxcavation.DAILY_BONUSES - n, shown)
             if over is not None:
                 return over
         x, y, w, h = argv.box

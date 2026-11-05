@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState } from "react";
 import * as api from "./api";
 import { TEXT, type Key } from "./i18n";
-import { newSettings, parseSettings, runEnum, type Luxcavation, type Settings } from "./model";
+import { LUX_MODES, newSettings, parseSettings, runEnum, type Luxcavation, type LuxMode, type Settings } from "./model";
 import { DeploymentTab, StarlightTab, ThemePackTab } from "./Plans";
 import { GiftListsTab } from "./GiftLists";
 import { TeamsTab } from "./Teams";
@@ -186,7 +186,7 @@ function ChargeFields() {
 }
 
 function LuxFields({ task }: { task: keyof Settings["luxcavation"] }) {
-  const { s, update, t } = useEditor();
+  const { s, update, t, tv } = useEditor();
   const opts = s.luxcavation[task];
   const set = (patch: Partial<Luxcavation>) => update((d) => { Object.assign(d.luxcavation[task], patch); });
   const path = `luxcavation/${task}`;
@@ -195,7 +195,12 @@ function LuxFields({ task }: { task: keyof Settings["luxcavation"] }) {
       <legend>{t(`lux.${task}`)}</legend>
       <p className="muted">{t(`lux.${task}_note`)}</p>
       <div className="grid">
-        <Field label={t("lux.count")} path={`${path}/count`}><Num value={opts.count} min={1} onChange={(v) => set({ count: v })} /></Field>
+        <Field label={t("lux.mode")} path={`${path}/mode`}>
+          <Select value={opts.mode} options={LUX_MODES} label={(v) => tv("lux_mode", v)} onChange={(v) => set({ mode: v as LuxMode })} />
+        </Field>
+        <Field label={t("lux.count")} path={`${path}/count`} note={opts.mode === "daily" ? t("lux.count_unused") : undefined}>
+          <Num value={opts.count} min={1} disabled={opts.mode === "daily"} onChange={(v) => set({ count: v })} />
+        </Field>
         <Field label={t("lux.team")} path={`${path}/team`} note={t("lux.team_note")}>
           <Select value={opts.team ?? ""} options={["", ...s.teams.map((x) => x.id)]}
             label={(id) => { const x = s.teams.find((x) => x.id === id); return x ? `${x.name || "—"} (#${x.game_team})` : t("lux.team_none"); }}

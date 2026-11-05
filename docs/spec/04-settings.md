@@ -31,6 +31,7 @@
   - 版本 15（#310）：隊伍的 `shop_refresh_limit` 拆成 `shop_refresh_keyword`（體系刷新次數）與 `shop_refresh_normal`（一般刷新次數）（使用者 2026-10-30 決定：「刷新上限分開」）。從版本 14 遷移時舊值 N 變成體系 N、一般 0：以前就是先用體系刷新，所以花費不會比以前多。新隊伍兩個都是 0（不刷新）。Agent 在記憶體裡遷移，GUI 遷移後寫回；舊版 Agent 讀到版本 15 會報「比自己新」。
   - 版本 16（#381）：試煉改用 pt 計分（1 pt = 敵方 Clash Power +1），`trial_risk_overrides` 的 `risk` 由整數 0–5 改成 ≥ 0 的數字（可有小數）。舊的 0–5 風險值換算不過來，從版本 15 遷移時清空整張表：Agent 在記憶體裡遷移，開局時在記錄裡寫一行 `settings version 16: <n> trial risk override(s) (0-5) emptied, trials score in pt now (#381)`（檔案沒被 GUI 寫回前每局都會寫）；GUI 遷移後寫回，狀態列說清掉了幾筆。`trial_risk_weight` 的預設改成 `medium`，舊檔裡隊伍自己的值不改。舊版 Agent 讀到版本 16 會報「比自己新」。
   - 版本 17（#381）：移除隊伍的 `trial_risk_weight`（使用者 2026-10-31 決定：試煉固定 1 pt 抵 1 分，設定裡不放看不懂的選項）。從版本 16 遷移時刪掉每隊的這個欄位，不記記錄、狀態列也不提：選「中」的隊伍選法不變，選「低」「高」的改成和「中」相同，沒有資料遺失要說（版本 15 刪掉 `shop_refresh_limit` 也沒記）。Agent 在記憶體裡遷移，GUI 遷移後寫回；舊版 Agent 讀到版本 17 會報「比自己新」。
+  - 版本 18（#431）：`luxcavation.exp`、`luxcavation.thread` 新增 `mode`（`daily` 每日模式／`count` 自訂次數），從版本 17 遷移時兩個都填 `daily`（使用者 2026-11-05 決定：預設每日模式，遷移的檔也是），`count` 保留給自訂次數用。舊版 Agent 讀到版本 18 會報「比自己新」。
   - 版本 14（#291、#292）：商店留哪些飾品的設定從隊伍搬到飾品清單（第 13 節，#291、#292）。頂層新增 `gift_lists`；隊伍新增 `gift_list`，移除 `keyword`、`keep_keywords`、`keywordless`、`keep_gifts`、`fusion_condition`（主要體系改由清單決定，見第 13 節）。從版本 13 以前的檔案遷移時（版本 10 以前先照上面的步驟升到 13），每支隊伍產生一份清單，保留的東西完全相同的隊伍共用同一份（名稱用第一支隊伍的名稱，撞名加 ` 2`；id 是 `gift-list-1`、`gift-list-2`、…），隊伍的 `gift_list` 指向它。清單內容：
     - `order`：隊伍原本的主要體系第一，其餘照預設順序，`Keywordless` 最後，所以遷移後的主要體系和遷移前相同；
     - `want`：主要體系的所有可購買飾品（`gift_search.json` 裡該體系的 I–III 階）；
@@ -274,14 +275,15 @@ GUI 的「日常」分頁編輯。要跑哪些日常、依什麼順序，由 MXU
 
 | 欄位 | 鍵 | 類型 | 值 | 來源 |
 |---|---|---|---|---|
-| 次數 | `count` | 整數 ≥ 1 | 當天要打贏的目標場數：當天已贏的（手動打的也算）先扣掉，只打剩下的；經驗本從通行證 Daily 的 `Clear EXP Luxcavation` 那一列讀（只分得出 0 與至少 1），紐本從 Daily Bonuses 讀（剩 n 次就是已贏 3 − n）；讀不到就不打（[spec 03 第 15 節](03-decisions.md)）。新檔與遷移的預設：經驗本 1、紐本 3（每天 3 次 Daily Bonuses，2026-10-27 使用者決定） | #366、#429 |
+| 模式 | `mode` | `daily`／`count` | `daily`（每日模式，預設）：打今天還沒打的，當天已贏的（手動打的也算）不再打；經驗本看通行證 Daily 的 `Clear EXP Luxcavation` 那一列，進行中打 1 場、完成不打；紐本看 Daily Bonuses，剩 n 次打 n 場；讀不到就不打；不用 `count`。`count`（自訂次數）：這次打贏 `count` 場，不讀今天打過幾場（經驗本不走通行證頁）（[spec 03 第 15 節](03-decisions.md)） | #429、#431 |
+| 次數 | `count` | 整數 ≥ 1 | 只有自訂次數模式用：這次要打贏的場數。新檔與遷移的預設：經驗本 1、紐本 3（每天 3 次 Daily Bonuses，2026-10-27 使用者決定）。GUI 在每日模式把這格停用 | #366、#431 |
 | 隊伍 | `team` | 字串或 `null` | `teams[]` 的 id：用它的遊戲隊伍編號、出戰順序和 `guard_turns`，不必啟用；`null` 是還沒選，任務開始時停止 | #366 |
 | 戰敗重打 | `retries` | 整數 ≥ 0 | 每一場輸掉後重打的次數（打贏就重算，同鏡牢的全滅重打），預設 0 | #366 |
-| 連戰 | `consecutive` | 布林 | 開（預設）：進場時把 Consecutive Battle 設成「剩下的場數，最多 10」，一場打完，一場 ×N 算 N 場；超過 10 就先 ×10 再開下一場打剩下的。關：一場一場打。剩下的場數是到 `count` 還差的（#429） | #375、#429 |
+| 連戰 | `consecutive` | 布林 | 開（預設）：進場時把 Consecutive Battle 設成「剩下的場數，最多 10」，一場打完，一場 ×N 算 N 場；超過 10 就先 ×10 再開下一場打剩下的。關：一場一場打。剩下的場數是這個模式算出的場數還差的（#429、#431） | #375、#429 |
 
 - `team` 指向不存在的隊伍是交叉檢查錯誤。（#366）
-- 版本 11 遷移到 12 時加上 `exp` 和 `thread`，經驗本 `{"count": 1, "team": null, "retries": 0}`，紐本 `count` 是 3。（#366、#368）版本 12 遷移到 13 時各加 `consecutive: true`。（#375）
-- `count` 與 `retries` 由 #367 接上：打贏 `count` 場結束，戰敗在 `retries` 內重打（[spec 03 第 15 節](03-decisions.md)）；戰敗訊號待截圖。
+- 版本 11 遷移到 12 時加上 `exp` 和 `thread`，經驗本 `{"count": 1, "team": null, "retries": 0}`，紐本 `count` 是 3。（#366、#368）版本 12 遷移到 13 時各加 `consecutive: true`。（#375）版本 17 遷移到 18 時各加 `mode: "daily"`。（#431）
+- 場數與 `retries` 由 #367 接上：打贏這個模式算出的場數結束，戰敗在 `retries` 內重打（[spec 03 第 15 節](03-decisions.md)）；戰敗訊號待截圖。
 
 ### 狂氣換腦啡肽（`charge_enkephalin`）
 
