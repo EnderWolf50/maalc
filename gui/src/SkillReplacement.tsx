@@ -2,7 +2,7 @@
 // priority order, the skills 1/2/3 to aim for (a deck of 6) and the swaps it may use, the first tried first.
 import { useDragSort } from "./dragSort";
 import { fill } from "./i18n";
-import { SKILL_PAYMENTS, SKILL_SWAPS, skillCounts, type SkillReplacement } from "./model";
+import { SKILL_PAYMENTS, SKILL_SWAPS, skillCounts, type SkillPay, type SkillReplacement } from "./model";
 import { useEditor } from "./ui";
 
 const move = <T,>(list: T[], from: number, to: number) => {
@@ -26,7 +26,8 @@ export function SkillPanel({ i }: { i: number }) {
     if (group === "sinners") d.sinners = move(d.sinners, Number(from), Number(to));
     else {
       const x = d.sinners[Number(group.slice("swaps:".length))];
-      x.options = move(x.options, x.options.indexOf(from), x.options.indexOf(to));
+      const swap = (key: string) => key.slice(key.indexOf(":") + 1); // the key is "<sinner index>:<swap>": unique on the whole page
+      x.options = move(x.options, x.options.indexOf(swap(from)), x.options.indexOf(swap(to)));
     }
   }), () => true);
 
@@ -70,7 +71,7 @@ export function SkillPanel({ i }: { i: number }) {
               </div>
               <ol className={"skill-swaps" + (bad(`${rowPath}/options`) ? " bad" : "")} aria-label={t("skill.swaps")}>
                 {x.options.map((k, o) => (
-                  <li key={k} data-swap={k} {...dragItem(k, `swaps:${j}`)}>
+                  <li key={k} data-swap={k} {...dragItem(`${j}:${k}`, `swaps:${j}`)}>
                     <span className="grip" aria-hidden>⋮⋮</span>
                     <span>{o + 1}. {swapName(k)}</span>
                     <small className="muted">{fill(t("skill.shop_price"), { price: SKILL_SWAPS[k].shop })}</small>
@@ -99,13 +100,13 @@ export function SkillPanel({ i }: { i: number }) {
           {t("skill.id_search")}
         </label>
         <select aria-label={t("skill.pay")} value={search.pay} disabled={!search.enabled}
-          onChange={(e) => edit((d) => { d.id_skill_search.pay = e.target.value; })}>
+          onChange={(e) => edit((d) => { d.id_skill_search.pay = e.target.value as SkillPay; })}>
           {SKILL_PAYMENTS.map((v) => <option key={v} value={v}>{tv("skill_pay", v)}</option>)}
         </select>
         <small>{t("skill.id_search_note")}</small>
         <small>{search.pay === "starlight" ? t("skill.pay_starlight_note") : t("skill.pay_cost_note")}</small>
         <small data-testid="id-search-prices">
-          {t("skill.id_prices")} {Object.entries(SKILL_SWAPS).map(([k, v]) => `${swapName(k)} ${v.id_search[search.pay as "cost" | "starlight"]}`).join("、")}{" "}
+          {t("skill.id_prices")} {Object.entries(SKILL_SWAPS).map(([k, v]) => `${swapName(k)} ${v.id_search[search.pay]}`).join("、")}{" "}
           {t(search.pay === "starlight" ? "skill.starlight" : "skill.cost")}
         </small>
       </div>

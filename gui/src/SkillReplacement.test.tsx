@@ -153,6 +153,15 @@ describe("swaps", () => {
     expect(sinnerOrder()).toEqual(SINNERS); // the swap's drag did not move a sinner
   });
 
+  test("a swap being dragged is marked in its own sinner's row alone, though every row has the same swaps", async () => {
+    const r = renderEditor(<TeamsTab />, settings());
+    await expand(r);
+    const swap = row("Yi Sang").querySelector<HTMLElement>('li[data-swap="s1_s3"]')!;
+    fireEvent.dragStart(swap, { dataTransfer: dt() });
+    expect([...panel().querySelectorAll("[data-dragging]")]).toEqual([swap]);
+    fireEvent.dragEnd(swap, { dataTransfer: dt() });
+  });
+
   test("a swap can be taken out and put back at the end; the last one cannot be taken out", async () => {
     const r = renderEditor(<TeamsTab />, settings());
     await expand(r);

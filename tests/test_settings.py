@@ -15,10 +15,9 @@ KEYWORDS = ["Burn", "Bleed", "Tremor", "Rupture", "Sinking", "Poise", "Charge", 
 ORDER = ["Yi Sang", "Faust", "Don Quixote", "Ryōshū", "Meursault", "Hong Lu",
          "Heathcliff", "Ishmael", "Rodion", "Sinclair", "Outis", "Gregor"]
 SWAPS = ["s1_s3", "s2_s3", "s1_s2"]  # data/shop.yaml skill_replacement, in the default order
-DEFAULT_SKILLS = {  # a new team: every sinner at the 3/2/1 deck, all three swaps, ID Skill Search off, paid in Cost (#454)
-    "sinners": [{"sinner": s, "target": {"s1": 3, "s2": 2, "s3": 1}, "options": list(SWAPS)} for s in ORDER],
-    "id_skill_search": {"enabled": False, "pay": "cost"},
-}
+# a new team and a migrated one: every sinner at the 3/2/1 deck, all three swaps, ID Skill Search off, paid in Cost (#454); the
+# GUI's tests read the same literal
+DEFAULT_SKILLS = json.loads((Path(__file__).parent / "settings_cases.json").read_text(encoding="utf-8"))["skill_replacement_default"]
 STARLIGHT = {"levels": ["none"] * 10, "priority": list(range(1, 11)), "convert_leftover": False}
 
 

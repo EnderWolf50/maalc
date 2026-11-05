@@ -200,10 +200,7 @@ test("version 16 drops each team's trial risk weight, with nothing to count (the
 });
 
 /** A team's skill replacement as a new team has it: every sinner at 3/2/1 with all three swaps, ID Skill Search off, paid in Cost. */
-const DEFAULT_SKILLS = {
-  sinners: SINNERS.map((sinner) => ({ sinner, target: { s1: 3, s2: 2, s3: 1 }, options: ["s1_s3", "s2_s3", "s1_s2"] })),
-  id_skill_search: { enabled: false, pay: "cost" },
-};
+const DEFAULT_SKILLS = cases.skill_replacement_default;
 
 test("version 18 teams replace no skill: every sinner aims for the 3/2/1 deck, each team with a copy of its own (#454)", () => {
   const old = structuredClone(cases.valid) as unknown as { version: number; teams: Record<string, unknown>[] };
@@ -228,6 +225,7 @@ test("version 18 keeps a skill replacement the file already has, and older files
 
 test("a new team replaces no skill (#454), and the setting is data/shop.yaml's three swaps in the schema's order", () => {
   expect(newTeam(1, "隊伍 1").skill_replacement).toEqual(DEFAULT_SKILLS);
+  expect(DEFAULT_SKILLS.sinners.map((x) => x.sinner)).toEqual(SINNERS);
   expect(newTeam(1, "a").skill_replacement.sinners).not.toBe(newTeam(2, "b").skill_replacement.sinners);
   expect(Object.keys(SKILL_SWAPS)).toEqual(schema.$defs.skill_sinner.properties.options.items.enum);
   expect(SKILL_SWAPS).toEqual({

@@ -43,9 +43,10 @@ export const skillCounts = (t: SkillTarget) => ({
   total: t.s1 + t.s2 + t.s3, untouched: t.s1 === GAME_DECK.s1 && t.s2 === GAME_DECK.s2 && t.s3 === GAME_DECK.s3,
 });
 /** Spec 04 section 9 skill_replacement: sinners in priority order, each with its target and the swaps to try in order. */
+export type SkillPay = "cost" | "starlight";
 export interface SkillSinner { sinner: string; target: SkillTarget; options: string[] }
-export interface SkillReplacement { sinners: SkillSinner[]; id_skill_search: { enabled: boolean; pay: string } }
-export const SKILL_PAYMENTS: string[] = TEAM.skill_replacement.properties.id_skill_search.properties.pay.enum;
+export interface SkillReplacement { sinners: SkillSinner[]; id_skill_search: { enabled: boolean; pay: SkillPay } }
+export const SKILL_PAYMENTS: SkillPay[] = TEAM.skill_replacement.properties.id_skill_search.properties.pay.enum as SkillPay[];
 
 /** Spec 04 section 7: base prices; + and ++ cost 2x and 3x (agent/run_start.py GRACE_BASE). */
 export const BOOST_COST = [10, 10, 20, 20, 30, 30, 40, 40, 50, 60];
