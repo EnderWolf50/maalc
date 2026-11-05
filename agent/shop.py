@@ -82,10 +82,48 @@ def numeral(mask, top, bottom):
     return TIERS.get((len(bars), len(ends)))
 
 
-def tier(cell):
-    """A cell's tier (1-5) from its yellow numerals top left (cell_crop), or None (no numerals: a skill, a dim page)."""
+def numeral_place(cell):
+    """The box of a cell (cell_crop) its tier numerals sit in, top left: rows inside every numeral on both scales."""
     mid = cell.shape[0] // 2
-    return numeral(yellow(cell[mid - 36:mid - 8, mid - 36:mid - 16]), 9, 19)  # rows inside every numeral on both scales
+    return cell[mid - 36:mid - 8, mid - 36:mid - 16]
+
+
+def tier(cell):
+    """A cell's tier (1-5) from its yellow numerals top left (cell_crop), or None (no numerals: a skill, a dim page, EX)."""
+    return numeral(yellow(numeral_place(cell)), 9, 19)
+
+
+def green(box):
+    """The green pixels of box (BGR) an EX gift's "EX" mark is drawn in, where other gifts show yellow numerals (#449).
+
+    G over R by a fifth and over twice B. Live 2026-11-04, A Certain Philosophy (9799): on the GET! popup G up to 255, R up
+    to 211, B up to 75 (its top edge turns yellow and fails); dimmed on the fuse page's Unselectable cell G 41-56, R 24-42,
+    B 15 at most. A yellow numeral has more R than G.
+    """
+    b, g, r = (box[:, :, i].astype(int) for i in range(3))
+    return (g > 40) & (5 * g > 6 * r) & (g > 2 * b + 10)
+
+
+# Green px in a cell's numeral place (numeral_place) that make its "EX". Live 2026-11-04: the dimmed EX 39-52 (14 frames);
+# the 15 other cells with no numeral read on the 50 archived 1280x720 frames with 5 numerals read on a grid, 1 at most.
+EX_CELL_PX = 30
+
+
+def ex_mark(cell):
+    """Whether a cell (cell_crop) shows the green "EX" an EX gift has where the numerals go (#449)."""
+    return int(green(numeral_place(cell)).sum()) >= EX_CELL_PX
+
+
+GET_MARK = (338, 228, 50, 50)  # x, y, w, h: the GET! popup's icon corner, its gift's tier numeral or "EX" (#449)
+# Green px there that make the "EX". Live: the EX's popup 966-974 (its 9 frames at 30 fps, 2026-11-04); the 1006 other
+# popups of 34 archived 1280x720 recordings (2026-10-18 to 11-05, 10 fps) 39 at most (a green icon's art at the corner).
+EX_GET_PX = 500
+
+
+def ex_got(image):
+    """Whether the E.G.O Gift GET! popup shows an EX gift: the green "EX" at its icon's top left, not a yellow numeral (#449)."""
+    x, y, w, h = GET_MARK
+    return int(green(image[y:y + h, x:x + w]).sum()) >= EX_GET_PX
 
 
 FORECAST_NUMERAL = (298, 452, 34, 34)  # x, y, w, h: the Forecasts row's numeral on the fuse page, centred at x 315
@@ -374,7 +412,8 @@ def fusion_places(cells, gone, tier, geometry):
     materials go out, the rest keep their order, and the gift made goes after the vestiges and last of its tier's run,
     between the higher and the lower tiers when none of its tier is left (live: 29 of the 30 fusions read again in 57 logs of
     2026-10-20 to 11-04, 5 of them with a vestige on the page; the 30th failed and gave an EX gift, tier V where the page
-    forecast IV, which fused_check refuses). It is {"i", "x", "y", "tier", "keyword": None, "id": None}:
+    forecast IV: its GET! popup's "EX" makes tier V, #449, placed ahead of the IVs by the data's tier, unseen). It is
+    {"i", "x", "y", "tier", "keyword": None, "id": None}:
     what it is shows only on screen. None: a place not read (the places are not 0 to n-1), a tier unread or out of that
     order, or a material not among them.
     """

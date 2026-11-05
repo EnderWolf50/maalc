@@ -2,6 +2,7 @@
 
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -165,6 +166,9 @@ def test_a_cell_log_line_names_the_gift_or_says_unknown():
     cell = {"i": 2, "tier": 3, "keyword": "Bleed", "id": 9042, "score": 0.77}
     assert actions.cell_line(cell, "keep") == "2 III Bleed 9042 Smokes and Wires (0.77): keep"
     assert actions.cell_line({**cell, "id": None, "score": 0.38}, "keep") == "2 III Bleed unknown (best 0.38): keep"
+    # #449: a sell page's EX gift (the green "EX" where the numerals go, no Unselectable tag there): its tier reads EX
+    ex = {"i": 4, "tier": 5, "keyword": "Keywordless", "id": 9799, "score": 0.81, "ex": True}
+    assert actions.cell_line(ex, "keep, drop") == "4 EX Keywordless 9799 A Certain Philosophy (0.81): keep, drop"
 
 
 # --- The ids on live captures, read by MaaFramework itself (the setup of test_shop_cells.py) -------------------------
@@ -213,7 +217,7 @@ def child():
         def __getattr__(self, name):  # start_app, click, swipe, touch_*, keys, text, scroll: nothing moves
             return lambda *args: True
 
-    out = {"cases": {}, "sweep": {}, "plates": {}, "plate_sweep": {}, "plate_ms": [], "page_ms": [], "short_prices": {}}
+    out = {"cases": {}, "ex": {}, "sweep": {}, "plates": {}, "plate_sweep": {}, "plate_ms": [], "page_ms": [], "short_prices": {}}
 
     class Probe(CustomAction):
         def run(self, context, argv):
@@ -221,6 +225,7 @@ def child():
                 for case, (crop, cells, page) in CASES.items():
                     found = actions.read_cells(context, screen_with(crop), cells if isinstance(cells, list) else getattr(actions, cells), page)
                     out["cases"][case] = [c["id"] for c in found]
+                    out["ex"][case] = [actions.cell_line(c, "keep") for c in found if c["ex"]]
                 actions.ocr(context, screen_with("offers"), actions.OFFER_GRID)  # the agent's order: a det+rec pass reads before any plate
                 first = actions.Shop.read_offers(context, screen_with("offers_super"))  # a Super Shop at rest, then scrolled (#341)
                 more = actions.Shop.read_offers(context, screen_with("offers_super_scrolled"), first)
@@ -302,6 +307,12 @@ def test_an_unselectable_ex_gift_is_read_at_its_place(read):
     # gift, and an EX cell's icon is matched against the tier V gifts. The others as the log read them 34 px further down;
     # the third row's badges are cut off.
     assert read["cases"]["fuse_ex"] == [9993, 9799, 9273, 9130, 9073, 9046, 9066, 9129, 9178, 9061] + [None] * 4
+
+
+def test_an_ex_gifts_cell_is_logged_ex(read):
+    # #449: the green "EX" where a cell's numerals go (shop.ex_mark), the only one of every crop's cells: its log line says EX.
+    unscored = {case: [re.sub(r"\(\d\.\d\d\)", "(score)", m) for m in lines] for case, lines in read["ex"].items() if lines}
+    assert unscored == {"fuse_ex": ["1 EX Keywordless 9799 A Certain Philosophy (score) unselectable: keep"]}
 
 
 @pytest.mark.parametrize("case", ["offers", "offers_super", "offers_red"])
