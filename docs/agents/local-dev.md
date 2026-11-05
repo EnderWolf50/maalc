@@ -15,6 +15,8 @@ Once per clone, `lefthook install` turns on the pre-commit hook (`lefthook.yml`)
 
 `uv run python tools/check.py` runs ruff, pytest, `maa-tools check` and `maa-tools test` and prints one summary line each; a failing step adds the tail of its output. CI runs the same checks, and a PR merges on a green `ci-ok`.
 
+CI splits pytest over the `agent` shards by each file's seconds on a CI runner, from `tests/shard_seconds.json`. A PR that adds a slow test file, or makes one much slower or faster, turns the `shard-balance` job red; its error names the command that rewrites the table from that run (`uv run python tools/shard_seconds.py update --run <run id>`). Commit the new table in the same PR.
+
 ## After landing a PR
 
 Land one PR at a time with `tools/ship.py`:
