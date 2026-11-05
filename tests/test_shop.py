@@ -27,9 +27,9 @@ CROP_AT = {
     # #449: the GET! popup after F2's second fusion of the same recording (06:55:57): A Certain Philosophy, the green "EX" at
     # its icon's top left where a gift's yellow numeral goes, its name plate yellow
     "get_ex": (300, 160),
-    # #451: GET! popups of the 2026-11-06 recording (#449's acceptance), each its first frame, still sliding in from the right
-    # (9, 1, 2 and 2 px short of its place): Talisman Bundle (I, the icon's yellow art inside the numeral's corner), and the
-    # gifts three fusions made, Old Wooden Doll (II), Finifugality (III) and Thrill (IV)
+    # #451: GET! popups of the 2026-11-06 recording (#449's acceptance), each its first frame, still sliding in from the lower
+    # right: Talisman Bundle (I, 9 px right, 5 px low and 2 rows short of its place), and the gifts three fusions made, Old
+    # Wooden Doll (II), Finifugality (III) and Thrill (IV), 1 to 2 px right
     **{name: (300, 160) for name in ("get_i", "get_ii", "get_iii", "get_iv")},
     # The fuse page's slots and first two columns (#77): live 2026-10-18 (probe capture rec/m3/fuse-152), Spiderweb tapped
     # in; captures/97 (2 in, a tooltip over the grid), Super Shop captures/172 (cells 5 and 6 in) and 169 (empty).
