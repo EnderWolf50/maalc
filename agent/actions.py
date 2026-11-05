@@ -3932,14 +3932,14 @@ def held(image, x, y, page):
 
 def read_cells(context, image, cells, page):
     """The cells holding a gift of a shop grid read off one screenshot (#76, #112): [{"i", "x", "y", "tier", "keyword",
-    "id", "score", "unselectable"}].
+    "id", "score", "unselectable", "ex"}].
 
     The grid is scaled so gift icons are at their GiftSearch template's size, then each keyword's badge is matched once
     over it. keyword: the cell's best badge, "Keywordless" with none, None when the badge is below the grid's edge. An
     empty cell is flat (live: spread 1-2, a gift 41-84), unless the fuse page tags it Unselectable (held).
     id: the data's id of the gift the cell shows (cell_id), None when unknown, score the best icon's; tier is then that gift's.
-    unselectable: the fuse page's tag (#378); ex: no numeral read, the green "EX" there instead (shop.ex_mark, #449). With
-    either and no numeral, the cell's candidates are EX_TIER's.
+    unselectable: the fuse page's tag (#378); ex: on the owned gifts' pages (fuse, sell) no numeral read, the green "EX" there
+    instead (shop.ex_mark, #449). With either and no numeral, the cell's candidates are EX_TIER's.
     """
     scale, bottom = CELL_PAGES[page]
     half = shop.CELL_HALF
@@ -3955,7 +3955,7 @@ def read_cells(context, image, cells, page):
             "keyword": "Keywordless" if y + 40 <= bottom else None, "unselectable": i in tagged,
             "at": ((x - x0) / scale, (y - y0) / scale)} for i, x, y in filled]
     for c in out:
-        c["ex"] = c["tier"] is None and shop.ex_mark(crops[c["i"]])
+        c["ex"] = c["tier"] is None and page in OWNED_GRID and shop.ex_mark(crops[c["i"]])
     best = {}
     for keyword in BADGES:
         for score, (bx, by) in template_hits(context, grid, f"Shop/Badge{keyword}.png", BADGE_MIN):
@@ -4914,12 +4914,12 @@ class Shop(CustomAction):
             log(f"shop: fuse forecast {materials}: points tier {tier}, page tier {page_tier or 'unread'}, chance "
                 f"{f'{chance}%' if chance else 'unread'}, condition {condition}: {act}")
             if wanted:
-                got = Shop.press_fuse(context, len(group))
-                log(f"shop: fuse {materials} into a tier {page_tier or tier} {team['keyword']} gift (condition {condition}): {'not confirmed' if got is None else 'done'}")
-                if got is None:
+                popup = Shop.press_fuse(context, len(group))
+                log(f"shop: fuse {materials} into a tier {page_tier or tier} {team['keyword']} gift (condition {condition}): {'not confirmed' if popup is None else 'done'}")
+                if popup is None:
                     return False
                 owned_change(visit, gone=[c["id"] for c in group])
-                if shop.ex_got(got):  # #449: a fusion short of its 99% gives an EX gift
+                if shop.ex_got(popup):  # #449: a fusion short of its 99% gives an EX gift
                     log("shop: the GET! popup shows an EX gift (green EX): the gift made is placed as tier V")
                     return {"gone": group, "tier": EX_TIER, "gift": None}
                 return {"gone": group, "tier": page_tier or tier, "gift": None}

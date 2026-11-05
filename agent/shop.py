@@ -104,7 +104,9 @@ def green(box):
     return (g > 40) & (5 * g > 6 * r) & (g > 2 * b + 10)
 
 
-EX_CELL_PX = 30  # green px in a cell's numeral place (numeral_place) that make its "EX" (live: dimmed 39-52)
+# Green px in a cell's numeral place (numeral_place) that make its "EX". Live 2026-11-04: the dimmed EX 39-52 (14 frames);
+# the 15 other cells with no numeral read on the 50 archived 1280x720 frames with 5 numerals read on a grid, 1 at most.
+EX_CELL_PX = 30
 
 
 def ex_mark(cell):
@@ -113,7 +115,9 @@ def ex_mark(cell):
 
 
 GET_MARK = (338, 228, 50, 50)  # x, y, w, h: the GET! popup's icon corner, its gift's tier numeral or "EX" (#449)
-EX_GET_PX = 500  # green px there that make the "EX" (live: 966-974)
+# Green px there that make the "EX". Live: the EX's popup 966-974 (its 9 frames at 30 fps, 2026-11-04); the 1006 other
+# popups of 34 archived 1280x720 recordings (2026-10-18 to 11-05, 10 fps) 39 at most (a green icon's art at the corner).
+EX_GET_PX = 500
 
 
 def ex_got(image):

@@ -523,10 +523,10 @@ def test_an_ex_gift_shows_its_green_ex_where_the_numerals_go():
     # #449: an EX gift's cell has a green "EX" for its tier numerals: dimmed on the fuse page (fuse_ex, cell 1, A Certain
     # Philosophy), bright on a sell page (unseen live). Of tests/shop's fuse and sell crops only that cell shows it.
     import actions  # noqa: PLC0415  (as above)
-    for name, cells in [(n, actions.FUSE_CELLS) for n in CROP_AT if n.startswith("fuse")] + [("sell", actions.SELL_CELLS)]:
+    for name, page in [(n, "fuse") for n in CROP_AT if n.startswith("fuse")] + [("sell", "sell")]:
         image = screen_with(name)
-        shown = [c for c, (x, y) in enumerate(cells) if (s.filled(image, x, y) or s.unselectable(image, x, y))
-                 and s.ex_mark(s.cell_crop(image, x, y, OWNED))]
+        cells = actions.FUSE_CELLS if page == "fuse" else actions.SELL_CELLS
+        shown = [c for c, (x, y) in enumerate(cells) if actions.held(image, x, y, page) and s.ex_mark(s.cell_crop(image, x, y, OWNED))]
         assert shown == ([1] if name == "fuse_ex" else []), name
 
 
@@ -562,8 +562,11 @@ def test_the_get_popup_tells_an_ex_gift_by_its_green_mark():
 def test_the_get_popup_sweep_over_tests_screens_hits_nothing():
     # CODING_STANDARDS' sweep: gift_get's screenshot is looked at only after a fusion, but no 1280x720 screen of tests/screens
     # reads an "EX" at the popup's icon corner.
-    hits = [p.stem for p in sorted(SCREENS.glob("*.png")) if Image.open(p).size == (1280, 720)
-            and s.ex_got(np.asarray(Image.open(p).convert("RGB"))[:, :, ::-1])]
+    hits = []
+    for png in sorted(SCREENS.glob("*.png")):
+        img = Image.open(png)
+        if img.size == (1280, 720) and s.ex_got(np.asarray(img.convert("RGB"))[:, :, ::-1]):
+            hits.append(png.stem)
     assert hits == []
 
 

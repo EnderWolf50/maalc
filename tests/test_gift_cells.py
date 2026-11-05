@@ -166,6 +166,9 @@ def test_a_cell_log_line_names_the_gift_or_says_unknown():
     cell = {"i": 2, "tier": 3, "keyword": "Bleed", "id": 9042, "score": 0.77}
     assert actions.cell_line(cell, "keep") == "2 III Bleed 9042 Smokes and Wires (0.77): keep"
     assert actions.cell_line({**cell, "id": None, "score": 0.38}, "keep") == "2 III Bleed unknown (best 0.38): keep"
+    # #449: a sell page's EX gift (the green "EX" where the numerals go, no Unselectable tag there): its tier reads EX
+    ex = {"i": 4, "tier": 5, "keyword": "Keywordless", "id": 9799, "score": 0.81, "ex": True}
+    assert actions.cell_line(ex, "keep, drop") == "4 EX Keywordless 9799 A Certain Philosophy (0.81): keep, drop"
 
 
 # --- The ids on live captures, read by MaaFramework itself (the setup of test_shop_cells.py) -------------------------
