@@ -20,7 +20,7 @@
     "charge_enkephalin"
   ],
   "properties": {
-    "version": { "const": 17 },
+    "version": { "const": 18 },
     "language": { "enum": ["zh_tw", "en_us"], "default": "zh_tw" },
     "run": {
       "type": "object",
@@ -318,9 +318,10 @@
     "luxcavation": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["count", "team", "retries", "consecutive"],
+      "required": ["mode", "count", "team", "retries", "consecutive"],
       "properties": {
-        "count": { "type": "integer", "minimum": 1, "default": 1, "description": "battles to win today, at the hardest level open: those won today (EXP: the pass's Daily row; Thread: its Daily Bonuses left) count toward it, and none is fought when they do not read (#429); a new or migrated file: EXP 1, Thread 3 (its 3 Daily Bonuses)" },
+        "mode": { "enum": ["daily", "count"], "default": "daily", "description": "daily: the battles the day still needs, read in the game (EXP: the pass's Daily row Clear EXP Luxcavation, 1 while under way; Thread: its Daily Bonuses n/3 left, n), none when it does not read (#429); count: count battles this run, nothing read (#431)" },
+        "count": { "type": "integer", "minimum": 1, "default": 1, "description": "count mode only: battles to win this run, at the hardest level open (#431); a new or migrated file: EXP 1, Thread 3" },
         "team": { "type": ["string", "null"], "minLength": 1, "default": null, "description": "a teams[] id: its TEAMS #N and guard_turns; null: none picked yet" },
         "retries": { "type": "integer", "minimum": 0, "default": 0, "description": "defeats of one battle fought again before the task fails; a win starts the next battle with them all" },
         "consecutive": { "type": "boolean", "default": true, "description": "set the stage's Consecutive Battle to min(10, battles left) and fight them as one battle (a x N win counts N); off: one battle at a time" }

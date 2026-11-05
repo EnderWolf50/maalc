@@ -41,7 +41,7 @@
     "trial_risk_overrides": [{"trial": "Growth I", "risk": 3}]
   },
   "valid": {
-    "version": 17,
+    "version": 18,
     "language": "zh_tw",
     "run": {
       "difficulty": "auto", "runs": null, "weekly_bonus_use": "hard", "weekly_bonus_amount": "all",
@@ -82,7 +82,7 @@
     ],
     "event_overrides": [{"question": "Q?", "option": "Yes"}],
     "trial_risk_overrides": [{"trial": "Growth I", "risk": 1.5}],
-    "luxcavation": {"exp": {"count": 1, "team": null, "retries": 0, "consecutive": true}, "thread": {"count": 1, "team": null, "retries": 0, "consecutive": true}},
+    "luxcavation": {"exp": {"mode": "daily", "count": 1, "team": null, "retries": 0, "consecutive": true}, "thread": {"mode": "count", "count": 1, "team": null, "retries": 0, "consecutive": true}},
     "charge_enkephalin": {"count": 0}
   },
   "cases": [
@@ -162,6 +162,8 @@
      "cross": ["luxcavation/thread/team: team 'gone' is not in teams"]},
     {"name": "Thread Luxcavation count out of range", "edits": [{"set": "luxcavation/thread/count", "value": 0}],
      "schema": ["luxcavation/thread/count"]},
+    {"name": "Luxcavation mode is neither daily nor count", "edits": [{"set": "luxcavation/thread/mode", "value": "target"}],
+     "schema": ["luxcavation/thread/mode"]},
     {"name": "Consecutive Battle switch is not a boolean", "edits": [{"set": "luxcavation/exp/consecutive", "value": "yes"}],
      "schema": ["luxcavation/exp/consecutive"]},
     {"name": "Lunacy charges out of range", "edits": [{"set": "charge_enkephalin/count", "value": 11}],

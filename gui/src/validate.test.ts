@@ -66,7 +66,7 @@ function asV13() {
 }
 
 test("parseSettings refuses newer and unmigratable versions", () => {
-  expect(() => parseSettings('{"version": 18}')).toThrow("newer");
+  expect(() => parseSettings('{"version": 19}')).toThrow("newer");
   expect(() => parseSettings('{"version": 0}')).toThrow("cannot be migrated");
 });
 
@@ -136,7 +136,8 @@ test("version 11 gets the daily tasks: both Luxcavations with no team picked, no
   const { data, migrated } = parseSettings(JSON.stringify({ ...old, version: 11 }));
   expect(migrated).toBe(true);
   expect(data.luxcavation).toEqual({
-    exp: { count: 1, team: null, retries: 0, consecutive: true }, thread: { count: 3, team: null, retries: 0, consecutive: true },
+    exp: { mode: "daily", count: 1, team: null, retries: 0, consecutive: true },
+    thread: { mode: "daily", count: 3, team: null, retries: 0, consecutive: true },
   });
   expect(data.charge_enkephalin).toEqual({ count: 0 });
   expect(validate(data)).toEqual([]);
@@ -194,6 +195,17 @@ test("version 16 drops each team's trial risk weight, with nothing to count (the
   for (const t of data.teams) expect(t).not.toHaveProperty("trial_risk_weight");
   expect(validate(data)).toEqual([]);
   expect(newTeam(1, "隊伍 1")).not.toHaveProperty("trial_risk_weight");
+});
+
+test("version 17 runs both Luxcavations in daily mode and keeps their counts (#431, the user, 2026-11-05)", () => {
+  const old = structuredClone(cases.valid) as unknown as { version: number; luxcavation: Record<string, Record<string, unknown>> };
+  old.version = 17;
+  for (const o of Object.values(old.luxcavation)) delete o.mode;
+  old.luxcavation.thread.count = 5;
+  const { data, migrated } = parseSettings(JSON.stringify(old));
+  expect(migrated).toBe(true);
+  expect([data.luxcavation.exp, data.luxcavation.thread].map((o) => [o.mode, o.count])).toEqual([["daily", 1], ["daily", 5]]);
+  expect(validate(data)).toEqual([]);
 });
 
 test("version 12 fights the Luxcavation wins as Consecutive Battles, a switch each task keeps as it was set (#375)", () => {

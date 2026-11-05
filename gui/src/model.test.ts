@@ -211,7 +211,8 @@ test("an import of something that is not a gift list throws", () => {
 
 test("a new settings file wins one EXP Luxcavation and three Thread Luxcavations, the dailies a day needs (#362)", () => {
   const { exp, thread } = newSettings().luxcavation;
-  expect([exp.count, thread.count]).toEqual([1, 3]);
+  expect([exp.mode, thread.mode]).toEqual(["daily", "daily"]); // #431: the day's battles, read in the game
+  expect([exp.count, thread.count]).toEqual([1, 3]); // for count mode
   expect([exp.consecutive, thread.consecutive]).toEqual([true, true]); // #375: on by default
 });
 

@@ -42,7 +42,7 @@ def gift_list(keyword="Burn", **kw):
 
 
 VALID = {
-    "version": 17,
+    "version": 18,
     "language": "zh_tw",
     "run": {
         "difficulty": "auto", "runs": 1, "weekly_bonus_use": "hard", "weekly_bonus_amount": "all",
@@ -61,15 +61,24 @@ VALID = {
     ],
     "event_overrides": [{"question": "Q?", "option": "Yes"}],
     "trial_risk_overrides": [{"trial": "Growth I", "risk": 1.5}],
-    "luxcavation": {"exp": {"count": 1, "team": None, "retries": 0, "consecutive": True},
-                    "thread": {"count": 3, "team": None, "retries": 0, "consecutive": True}},
+    "luxcavation": {"exp": {"mode": "daily", "count": 1, "team": None, "retries": 0, "consecutive": True},
+                    "thread": {"mode": "daily", "count": 3, "team": None, "retries": 0, "consecutive": True}},
     "charge_enkephalin": {"count": 0},
 }
 
 
+def as_v17(valid):
+    """The same settings as version 17 wrote them: no Luxcavation mode, count the day's target."""
+    old = copy.deepcopy(valid)
+    old["version"] = 17
+    for opts in old["luxcavation"].values():
+        del opts["mode"]
+    return old
+
+
 def as_v16(valid):
     """The same settings as version 16 wrote them: each team's trial risk weight."""
-    old = copy.deepcopy(valid)
+    old = as_v17(valid)
     old["version"] = 16
     for t, weight in zip(old["teams"], ("high", "low")):
         t["trial_risk_weight"] = weight
@@ -112,6 +121,7 @@ def as_v10(valid):
     return old
 
 
+V17 = as_v17(VALID)
 V16 = as_v16(VALID)
 V15 = as_v15(VALID)
 V14 = as_v14(VALID)
@@ -220,7 +230,7 @@ def test_schema_errors_name_the_field(tmp_path, fn, where):
 
 
 def test_newer_version_is_refused(tmp_path):
-    assert "newer" in errors(tmp_path, {**VALID, "version": 18})[0]
+    assert "newer" in errors(tmp_path, {**VALID, "version": 19})[0]
 
 
 def test_version_1_gets_guard_turns_off(tmp_path):
@@ -331,6 +341,14 @@ def test_version_16_drops_the_teams_trial_risk_weight(tmp_path):
     got = load(tmp_path, V16)
     assert settings.NOTES == []  # nothing to log: every team now picks as weight medium did
     assert got == load(tmp_path, VALID)
+
+
+def test_version_17_runs_both_luxcavations_in_daily_mode_and_keeps_their_counts(tmp_path):
+    # #431, the user (2026-11-05): daily mode is the default, also for a migrated file; count is kept for count mode
+    old = edited(lambda d: d["luxcavation"]["thread"].update(count=5), V17)
+    got = load(tmp_path, old)["luxcavation"]
+    assert [(o["mode"], o["count"]) for o in (got["exp"], got["thread"])] == [("daily", 1), ("daily", 5)]
+    assert settings.NOTES == []
 
 
 @pytest.mark.parametrize("risk, ok", [(0, True), (0.25, True), (12, True), (-0.5, False), ("1", False)])
@@ -487,7 +505,7 @@ def test_shared_valid_loads(tmp_path):
 
 def test_shared_valid10_migrates_and_loads(tmp_path):
     loaded = load(tmp_path, CASES["valid10"])
-    assert loaded["version"] == 17 and [t["gift_list"] for t in loaded["teams"]] == ["gift-list-1", "gift-list-2"]
+    assert loaded["version"] == 18 and [t["gift_list"] for t in loaded["teams"]] == ["gift-list-1", "gift-list-2"]
 
 
 @pytest.mark.parametrize("case", CASES["migrations"], ids=lambda c: c["name"])
