@@ -29,6 +29,7 @@ select, input:not([type="checkbox"]) {
   border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; background: var(--panel); min-width: 0;
 }
 input[type="number"], input.decimal { width: 7em; }
+input:disabled { opacity: 0.45; cursor: default; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
 header {
