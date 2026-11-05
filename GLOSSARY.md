@@ -139,6 +139,14 @@ Charge Enkephalin 視窗 Use Lunacy 分頁的 `n/10`，n 是當天已用 Lunacy 
 經驗本與紐本卡片上的 `Consecutive Battle ×N`，N 是 1–10。一場打完算 N 場，獎勵與腦啡肽模組消耗都是 ×N；離開 Luxcavation 或結算後會回到 ×1（[spec 01](docs/spec/01-architecture.md)）。
 _Avoid_: 連打、連續戰鬥（程式裡寫 `consecutive`）
 
+**每日模式**：
+經驗本與紐本的預設模式（`mode: "daily"`，#431）：打今天還沒打的。經驗本看通行證 Daily 的 `Clear EXP Luxcavation`，進行中打 1 場；紐本看 Daily Bonuses，剩 n 次打 n 場；讀不到就不打（[spec 03 第 15 節](docs/spec/03-decisions.md)）。不用 `count`。
+_Avoid_: 目標模式、當天目標（狂氣換腦啡肽的 `count` 才是當天的目標 Daily Count）
+
+**自訂次數**：
+經驗本與紐本的另一個模式（`mode: "count"`，#431）：這次打贏 `count` 場，不讀今天打過幾場。
+_Avoid_: 次數模式、固定場數
+
 **每日重置**：
 遊戲的日常次數在每天 05:00（UTC+8）重置：使用者 2026-10-27 告知 05:00，`.local/unpack/raw/Localize/en/EN_DailyLoginEvent.json` 寫每日重置是 06:00 KST（= UTC+8 的 05:00），兩者相符；AALC 也以 Asia/Seoul 6 點分日（`docs/research/aalc/03-daily-tasks.md`）。每個次數各自何時恢復未逐項查證。
 _Avoid_: 刷新時間、日界
