@@ -1,15 +1,23 @@
 {
-    // EXP Luxcavation (#366): LuxStart picks the team (luxcavation.exp), then the daily task entry of spec 01. First the
-    // pass page (#429): ExpPassHome (GoHome), then ExpPassHub to the Pass Missions' Daily tab, whose Clear EXP
-    // Luxcavation row says whether a battle was won today (ExpPassRead). Then ExpHome (LuxHome: GoHome, the Modules and
-    // the battles left to the day's target), and ExpHub, which plays the rightmost open stage of the EXP tab; its last
-    // step runs GoHome again.
+    // EXP Luxcavation (#366): LuxStart picks the team (luxcavation.exp), then the daily task entry of spec 01. In daily
+    // mode first the pass page (#429): ExpPassHome (GoHome), then ExpPassHub to the Pass Missions' Daily tab, whose Clear
+    // EXP Luxcavation row says whether a battle was won today (ExpPassRead). Count mode reads nothing about today
+    // (ExpCountMode, #431). Then ExpHome (LuxHome: GoHome, the Modules and the battles this run fights), and ExpHub,
+    // which plays the rightmost open stage of the EXP tab; its last step runs GoHome again.
     "ExpLuxcavation": {
         "action": "Custom",
         "custom_action": "LuxStart",
         "custom_action_param": "exp",
         "next": [
+            "ExpCountMode",
             "ExpPassHome"
+        ]
+    },
+    "ExpCountMode": {
+        "recognition": "Custom",
+        "custom_recognition": "LuxCountMode",
+        "next": [
+            "ExpHome"
         ]
     },
     "ExpPassHome": {

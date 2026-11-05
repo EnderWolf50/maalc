@@ -65,7 +65,7 @@ EVENT_STEPS = {"ev_story": (EVENT_BUTTON, "ev_card"), "ev_card": (EVENT_CARD, "e
 # scenario: (start screen, team, count, retries, how the battles end, then for the Thread task the tab Luxcavation
 # opens on and the page a battle ends on); the main window shows 182 Modules, an EXP stage takes 3, a Thread level 2. A
 # battle the list does not reach ends in a win. CONSECUTIVE: the scenarios that fight their wins as Consecutive Battles
-# (#375), off for the rest.
+# (#375), off for the rest. DAILY: the scenarios in daily mode (#431), the rest fight count in count mode.
 WIN, LOSE = ["win"], ["lose"]
 SCENARIOS = {"drive": ("drive", "b", 1, 0, WIN), "locked": ("locked", "b", 1, 0, WIN), "no_team": ("drive", None, 1, 0, WIN),
              "two": ("drive", "b", 2, 0, WIN), "poor": ("drive", "b", 61, 0, WIN), "no_result": ("drive", "b", 1, 0, [None]),
@@ -74,14 +74,16 @@ SCENARIOS = {"drive": ("drive", "b", 1, 0, WIN), "locked": ("locked", "b", 1, 0,
              "x1": ("drive", "b", 1, 0, WIN), "x3": ("drive", "b", 3, 0, WIN), "x3_off": ("drive", "b", 3, 0, WIN),
              "x12": ("drive", "b", 12, 0, WIN), "x3_unread": ("drive", "b", 3, 0, WIN),
              "x3_lose_retry": ("drive", "b", 3, 1, LOSE + WIN),
-             "done_today": ("drive", "b", 1, 0, WIN), "done_today_two": ("drive", "b", 2, 0, WIN),
+             "done_today": ("drive", "b", 1, 0, WIN), "done_today_count_2": ("drive", "b", 2, 0, WIN),
              "weekly_tab": ("drive", "b", 1, 0, WIN), "no_pass": ("drive", "b", 1, 0, WIN),
-             "row_unread": ("drive", "b", 1, 0, WIN)}
+             "row_unread": ("drive", "b", 1, 0, WIN), "count_done_today": ("drive", "b", 2, 0, WIN)}
 CONSECUTIVE = {"x1", "x3", "x12", "x3_unread", "x3_lose_retry"}
+DAILY = {"drive", "done_today", "done_today_count_2", "weekly_tab", "no_pass", "row_unread"}
 # #429: the pass's Clear EXP Luxcavation row done (one won today), the pass page opening on its Weekly tab, no pass page
 # (its hub's 60 s cut to 5), the row not found on the Daily tab.
-STATES = {"done_today": {"pass_row": "done"}, "done_today_two": {"pass_row": "done"}, "weekly_tab": {"pass_tab": "weekly"},
-          "no_pass": {"pass_row": None, "override": {"ExpPassHub": {"timeout": 5000}}}, "row_unread": {"pass_row": "unread"}}
+STATES = {"done_today": {"pass_row": "done"}, "done_today_count_2": {"pass_row": "done"}, "weekly_tab": {"pass_tab": "weekly"},
+          "no_pass": {"pass_row": None, "override": {"ExpPassHub": {"timeout": 5000}}}, "row_unread": {"pass_row": "unread"},
+          "count_done_today": {"pass_row": "done"}}
 
 
 def bonuses(png, n):
@@ -103,9 +105,9 @@ def unread_row():
     return image
 
 
-def child(task="ExpLuxcavation", scenarios=SCENARIOS, consecutive=CONSECUTIVE, states=None):
-    """Run task from each of its scenarios (SCENARIOS' shape); print one JSON line {scenario: {succeeded, nodes, clicks,
-    keys}}. test_thread_luxcavation.py runs ThreadLuxcavation's on this model: one child run per file, as CI's shards
+def child(task="ExpLuxcavation", scenarios=SCENARIOS, consecutive=CONSECUTIVE, states=None, daily=DAILY):
+    """Run task from each of its scenarios (SCENARIOS' shape), those in `daily` in daily mode, the rest in count mode;
+    print one JSON line {scenario: {succeeded, nodes, clicks, keys}}. test_thread_luxcavation.py runs ThreadLuxcavation's on this model: one child run per file, as CI's shards
     split the tests by file (conftest.py). states: a scenario's model attributes other than the defaults (Game.set),
     and "override", the pipeline override it runs with."""
     actions, resource = load()
@@ -276,7 +278,8 @@ def child(task="ExpLuxcavation", scenarios=SCENARIOS, consecutive=CONSECUTIVE, s
     tasker = bind(resource, game)
     out = {"error": None}
     for scenario, (start, team, count, retries, outcomes, *rest) in scenarios.items():
-        opts = {"count": count, "team": team, "retries": retries, "consecutive": scenario in consecutive}
+        opts = {"mode": "daily" if scenario in daily else "count", "count": count, "team": team, "retries": retries,
+                "consecutive": scenario in consecutive}
         (actions.ROOT / "config" / "settings.json").write_text(
             json.dumps({**settings, "luxcavation": {"exp": opts, "thread": opts}}), encoding="utf-8")
         game.set(start, *rest)
@@ -314,14 +317,21 @@ def test_exp_luxcavation_goes_home_first_enters_the_rightmost_open_stage_and_end
     assert o["nodes"][5:8] == ["ExpPassRead", "ExpHome", "ExpHub"] and o["nodes"][-1] == "TaskDone"
 
 
-def test_an_exp_battle_won_today_by_hand_counts_toward_the_target():
+def test_daily_mode_fights_no_exp_battle_once_the_pass_row_is_done_whatever_count_says():
     out = run_child(__file__)
-    o = out["done_today"]  # #429: the row done, a target of 1: nothing fought, a success on the main window
-    assert o["succeeded"] and enters(o) == [] and o["nodes"][-1] == "TaskDone" and o["screen"] == "main"
-    assert o["done"] == "EXP Luxcavation: the pass's Clear EXP Luxcavation row done (1 won today), target 1: nothing to fight"
-    assert not any(inside(DRIVE_TAB, *xy) for xy in o["clicks"])
-    o = out["done_today_two"]  # a target of 2: the one left
-    assert o["succeeded"] and len(enters(o)) == 1 and o["done"] == "EXP Luxcavation: 1 won"
+    for name in ("done_today", "done_today_count_2"):  # #429: the row done, the day's 1 won: nothing fought; #431: count unused
+        o = out[name]
+        assert o["succeeded"] and enters(o) == [] and o["nodes"][-1] == "TaskDone" and o["screen"] == "main", name
+        assert o["done"] == "EXP Luxcavation: the pass's Clear EXP Luxcavation row done (1 won today), target 1: nothing to fight"
+        assert not any(inside(DRIVE_TAB, *xy) for xy in o["clicks"]), name
+
+
+def test_count_mode_fights_count_and_never_opens_the_pass_page():
+    o = run_child(__file__)["count_done_today"]  # #431: the pass row done today, count 2: two battles all the same
+    assert o["succeeded"], o["nodes"]
+    assert len(enters(o)) == 2 and o["done"] == "EXP Luxcavation: 2 won"
+    assert not any(inside(BANNER, *xy) for xy in o["clicks"]) and "PassBanner" not in o["nodes"]
+    assert o["nodes"][:4] == ["ExpLuxcavation", "ExpCountMode", "ExpHome", "ExpHub"]
 
 
 def test_the_pass_page_on_its_weekly_tab_is_moved_to_the_daily_tab_and_no_row_is_tapped():
@@ -350,7 +360,7 @@ def enters(o):
 def test_count_wins_are_fought_before_it_is_done():
     o = run_child(__file__)["two"]  # #367: a win counts, and the next battle starts from the same tab
     assert o["succeeded"], o["nodes"]
-    assert len(enters(o)) == 2 and o["keys"] == [4, 4]  # two Enters; home from the pass page, one trip home at the end
+    assert len(enters(o)) == 2 and o["keys"] == [4]  # two Enters; count mode: no pass page, one trip home at the end
     # each battle looks for its team again: on the title already, To Battle! after each Enter
     assert not [xy for xy in o["clicks"] if inside(TEAM_ROW, *xy)] and o["drags"] == []
     assert o["clicks"].count(TO_BATTLE_TAP) == 2

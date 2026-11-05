@@ -18,11 +18,14 @@ SCENARIOS = {"thread": ("drive", "b", 1, 0, WIN, "exp"), "thread_on_thread": ("d
              "thread_event": ("drive", "b", 1, 0, WIN, "exp"),
              "thread_x3": ("drive", "b", 3, 0, WIN, "exp"), "thread_x3_off": ("drive", "b", 3, 0, WIN, "exp"),
              "thread_x12": ("drive", "b", 12, 0, WIN, "exp"),
-             "thread_done_today": ("drive", "b", 3, 0, WIN, "exp"), "thread_one_today": ("drive", "b", 3, 0, WIN, "exp"),
-             "thread_bonuses_unread": ("drive", "b", 3, 0, WIN, "exp")}
+             "thread_done_today": ("drive", "b", 3, 0, WIN, "exp"), "thread_one_today": ("drive", "b", 1, 0, WIN, "exp"),
+             "thread_bonuses_unread": ("drive", "b", 3, 0, WIN, "exp"), "thread_daily": ("drive", "b", 1, 0, WIN, "exp"),
+             "thread_count_spent": ("drive", "b", 2, 0, WIN, "exp")}
 CONSECUTIVE = {"thread_x3", "thread_x12"}
+DAILY = {"thread_done_today", "thread_one_today", "thread_bonuses_unread", "thread_daily"}
 # #429: the Daily Bonuses n/3 (n left; the model's default 3/3, a fresh day): 0/3 three won today, 2/3 one, blank.
-STATES = {"thread_done_today": {"bonuses": 0}, "thread_one_today": {"bonuses": 2}, "thread_bonuses_unread": {"bonuses": None}}
+STATES = {"thread_done_today": {"bonuses": 0}, "thread_one_today": {"bonuses": 2}, "thread_bonuses_unread": {"bonuses": None},
+          "thread_count_spent": {"bonuses": 0}}
 
 
 def test_thread_luxcavation_is_a_task_of_the_interface():
@@ -131,14 +134,22 @@ def test_thread_consecutive_splits_more_than_ten_wins_too():
     assert o["fights"] == [10, 2] and o["presses"] == ["ten", "plus"] and len(level_enters(o)) == 2
 
 
-def test_thread_battles_won_today_count_toward_the_target():
+def test_daily_mode_fights_the_daily_bonuses_left_whatever_count_says():
     out = run_child(__file__)
-    o = out["thread_done_today"]  # #429: Daily Bonuses 0/3, three won today, a target of 3: nothing fought
+    o = out["thread_done_today"]  # #429: Daily Bonuses 0/3, three won today: nothing fought
     assert o["succeeded"] and level_enters(o) == [] and not any(inside(CARD_ENTER, *xy) for xy in o["clicks"])
     assert o["done"] == "Thread Luxcavation: Daily Bonuses 0/3 (3 won today), target 3: nothing to fight"
     assert o["screen"] == "main" and o["nodes"][-1] == "TaskDone"
-    o = out["thread_one_today"]  # 2/3: one won today, two left
+    o = out["thread_one_today"]  # 2/3: two left, count 1 unused (#431)
     assert o["succeeded"] and len(level_enters(o)) == 2 and o["done"] == "Thread Luxcavation: 2 won"
+    o = out["thread_daily"]  # 3/3, a fresh day: three
+    assert o["succeeded"] and len(level_enters(o)) == 3 and o["done"] == "Thread Luxcavation: 3 won"
+
+
+def test_count_mode_fights_count_with_the_daily_bonuses_spent():
+    o = run_child(__file__)["thread_count_spent"]  # #431: 0/3, count 2: two battles, the bonuses not read
+    assert o["succeeded"], o["nodes"]
+    assert len(level_enters(o)) == 2 and o["done"] == "Thread Luxcavation: 2 won"
 
 
 def test_thread_daily_bonuses_that_do_not_read_fight_nothing_and_end_a_success():
@@ -147,8 +158,9 @@ def test_thread_daily_bonuses_that_do_not_read_fight_nothing_and_end_a_success()
     assert o["done"] == "Thread Luxcavation: Daily Bonuses did not read: nothing fought" and o["screen"] == "main"
 
 
-def test_the_modules_are_checked_against_the_battles_left_not_the_target():
-    # #429: a target of 92 with one won today leaves 91, 182 Modules at 2 each: fought, where 92 x 2 = 184 would skip.
+def test_the_modules_are_checked_against_this_runs_battles():
+    # #429: one won today leaves 2 of the day's 3, 4 Modules at 2 each: fought, where 3 x 2 = 6 would skip. #431: count
+    # mode checks count's battles.
     from unittest.mock import MagicMock
 
     import actions
@@ -157,17 +169,22 @@ def test_the_modules_are_checked_against_the_battles_left_not_the_target():
     saved = actions.finish
     actions.finish = lambda context, reason: ends.append(reason) or True
     actions.RUN.clear()
-    actions.RUN["lux"] = {"name": "Thread Luxcavation", "cost": 2, "target": 92, "today": None, "seen": None, "fights": None, "retries": 0,
-                          "modules": 182}
+    actions.RUN["lux"] = {"name": "Thread Luxcavation", "cost": 2, "mode": "daily", "target": 3, "today": None, "seen": None,
+                          "fights": None, "retries": 0, "modules": 4}
     try:
-        assert actions.plan(MagicMock(), 1, "Daily Bonuses 2/3") is None and actions.RUN["lux"]["fights"] == 91 and ends == []
-        actions.RUN["lux"].update(modules=181, fights=None)
+        assert actions.plan(MagicMock(), 1, "Daily Bonuses 2/3") is None and actions.RUN["lux"]["fights"] == 2 and ends == []
+        actions.RUN["lux"].update(modules=3, fights=None)
         assert actions.plan(MagicMock(), 1, "Daily Bonuses 2/3") is True
-        assert ends == ["Thread Luxcavation: Daily Bonuses 2/3 (1 won today), target 92: Modules 181 < 182 needed for 91, skipped"]
+        assert ends == ["Thread Luxcavation: Daily Bonuses 2/3 (1 won today), target 3: Modules 3 < 4 needed for 2, skipped"]
+        actions.RUN["lux"].update(mode="count", target=91, modules=182, fights=None)
+        assert actions.plan(MagicMock()) is None and actions.RUN["lux"]["fights"] == 91
+        actions.RUN["lux"].update(modules=181, fights=None)
+        assert actions.plan(MagicMock()) is True
+        assert ends[-1] == "Thread Luxcavation: count mode, 91 this run: Modules 181 < 182 needed for 91, skipped"
     finally:
         actions.finish = saved
         actions.RUN.clear()
 
 
 if __name__ == "__main__":
-    child("ThreadLuxcavation", SCENARIOS, CONSECUTIVE, STATES)
+    child("ThreadLuxcavation", SCENARIOS, CONSECUTIVE, STATES, DAILY)
