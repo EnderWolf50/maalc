@@ -97,28 +97,28 @@ const screens: [image: string, hits: string[]][] = [
   // The lit tab is its orange frame (LuxExpLit); LuxExpEnter's box is the rightmost Enter (test_exp_luxcavation.py).
   ['LuxExp.png', ['LuxPanel', 'MirrorFromLux', 'LuxExpLit', 'LuxExpEnter', 'LuxThreadTab', 'ModuleIcon']],
   ['LuxExpLocked.png', ['LuxPanel', 'MirrorFromLux', 'LuxExpLit', 'LuxExpEnter', 'LuxThreadTab', 'ModuleIcon']],
-  ['LuxThread.png', ['LuxPanel', 'MirrorFromLux', 'LuxExpTab', 'LuxThreadLit', 'LuxThreadEnter', 'LuxThreadSwipe', 'ModuleIcon']],
+  ['LuxThread.png', ['LuxPanel', 'MirrorFromLux', 'LuxExpTab', 'LuxThreadLit', 'LuxThreadEnter', 'LuxThreadSwipe', 'ModuleIcon', 'ThreadBonuses']],
   // Live 2026-10-26 (#368, Monday): the Thread tab as Thread Luxcavation finds it. LuxThreadLust.png: Lust's card open at
   // the left, LuxThread.png's way on another day (the lit Enter is the open card's, the others' read 0.6 at most).
   // LuxThreadScrolled.png: scrolled right, no card open on show. LuxThreadSwipe reads any Thread tab: the hub lists
   // LuxThreadEnter ahead of it, so it acts on the tab with no open card only. LuxThreadLevels.png: Lust's Level Select
   // (Lv40/50/60, -2 Modules each, the list at its bottom), the page dimmed behind it.
-  ['LuxThreadLust.png', ['LuxPanel', 'MirrorFromLux', 'LuxExpTab', 'LuxThreadLit', 'LuxThreadEnter', 'LuxThreadSwipe', 'ModuleIcon']],
-  ['LuxThreadScrolled.png', ['LuxPanel', 'MirrorFromLux', 'LuxExpTab', 'LuxThreadLit', 'LuxThreadSwipe', 'ModuleIcon']],
-  ['LuxThreadLevels.png', ['LuxPanel', 'MirrorFromLux', 'LuxThreadLevel', 'ModuleIcon']],
+  ['LuxThreadLust.png', ['LuxPanel', 'MirrorFromLux', 'LuxExpTab', 'LuxThreadLit', 'LuxThreadEnter', 'LuxThreadSwipe', 'ModuleIcon', 'ThreadBonuses']],
+  ['LuxThreadScrolled.png', ['LuxPanel', 'MirrorFromLux', 'LuxExpTab', 'LuxThreadLit', 'LuxThreadSwipe', 'ModuleIcon', 'ThreadBonuses']],
+  ['LuxThreadLevels.png', ['LuxPanel', 'MirrorFromLux', 'LuxThreadLevel', 'ModuleIcon', 'ThreadBonuses']],  // the Daily Bonuses read through the dimming
   // Live 2026-10-26 (#371): the Limbus Pass page on its Battle Pass tab (the Pass Missions tab unlit), then Pass Missions
   // on the Daily tab (every row claimed) and the Weekly tab (one row under way, 3/5). The tab lit is the one on.
   // The rows to claim are read by the agent (PassClaimable, tests/test_pass_missions.py), which this test cannot run.
   ['PassBattlePass.png', ['PassMissionsTab']],
-  ['PassMissionsDaily.png', ['PassDailyLit', 'PassDailyDone']],
+  ['PassMissionsDaily.png', ['PassDailyLit', 'PassDailyDone', 'ExpPassRead', 'PassExpRow']],
   // Live 2026-10-27: one claimed, four under way.
-  ['PassMissionsDailyUnderway.png', ['PassDailyLit', 'PassDailyDone']],
-  ['PassMissionsWeekly.png', ['PassWeeklyLit', 'PassWeeklyDone']],
+  ['PassMissionsDailyUnderway.png', ['PassDailyLit', 'PassDailyDone', 'ExpPassRead', 'PassExpRow']],
+  ['PassMissionsWeekly.png', ['PassWeeklyLit', 'PassWeeklyDone', 'ExpPassDaily', 'PassExpRow']],  // #429: its Clear EXP Luxcavation 5 time(s) reads; ExpPassRead needs the Daily tab
   // Live 2026-10-27 (live-1 F7): rows 2-5 to claim, each framed orange with a red ! and a full bar.
-  ['PassMissionsDailyClaimable.png', ['PassDailyLit', 'PassDailyDone']],
+  ['PassMissionsDailyClaimable.png', ['PassDailyLit', 'PassDailyDone', 'ExpPassRead', 'PassExpRow']],
   // Live 2026-10-27 (#362 D9): the Seasonal tab at its top and at its end after one swipe, every row claimed.
-  ['PassMissionsSeasonal.png', ['PassSeasonalLit', 'PassSeasonalSwipe', 'PassFinish']],
-  ['PassMissionsSeasonalEnd.png', ['PassSeasonalLit', 'PassSeasonalSwipe', 'PassFinish']],
+  ['PassMissionsSeasonal.png', ['PassSeasonalLit', 'PassSeasonalSwipe', 'PassFinish', 'ExpPassDaily', 'PassExpRow']],  // its Clear EXP Luxcavation 30 time(s)
+  ['PassMissionsSeasonalEnd.png', ['PassSeasonalLit', 'PassSeasonalSwipe', 'PassFinish', 'ExpPassDaily']],
   ['EntryNewRun.png', ['MirrorEntryNewRun']],
   ['EntryPaused.png', ['MirrorEntryPaused']],
   // Synthetic (#94), no live capture yet: EntryNewRun.png with the Parallel Superposition label's OFF redrawn as ON.

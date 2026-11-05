@@ -1,18 +1,100 @@
 {
-    // EXP Luxcavation (#366): LuxStart picks the team (luxcavation.exp), then the daily task entry of spec 01: ExpHome
-    // (LuxHome: GoHome and the Modules check), and ExpHub, which plays the rightmost open stage of the EXP tab; its last
+    // EXP Luxcavation (#366): LuxStart picks the team (luxcavation.exp), then the daily task entry of spec 01. First the
+    // pass page (#429): ExpPassHome (GoHome), then ExpPassHub to the Pass Missions' Daily tab, whose Clear EXP
+    // Luxcavation row says whether a battle was won today (ExpPassRead). Then ExpHome (LuxHome: GoHome, the Modules and
+    // the battles left to the day's target), and ExpHub, which plays the rightmost open stage of the EXP tab; its last
     // step runs GoHome again.
     "ExpLuxcavation": {
         "action": "Custom",
         "custom_action": "LuxStart",
         "custom_action_param": "exp",
         "next": [
+            "ExpPassHome"
+        ]
+    },
+    "ExpPassHome": {
+        "action": "Custom",
+        "custom_action": "GoHomeRun",
+        "next": [
+            "ExpPassHub"
+        ]
+    },
+    // ClaimPassMissions' way to the Daily tab (pass_missions.json), no row tapped. ExpPassRead is not [JumpBack]: once it
+    // read, the task goes on to ExpHome. 60 s with no pass page: ExpPassLost, nothing read, so nothing fought.
+    "ExpPassHub": {
+        "timeout": 60000,
+        "rate_limit": 300,
+        "on_error": [
+            "ExpPassLost"
+        ],
+        "next": [
+            "ExpPassStuck",
+            "[JumpBack]Connecting",
+            "[JumpBack]HelpPager",
+            "[JumpBack]HomeText",
+            "ExpPassRead",
+            "[JumpBack]ExpPassDaily",
+            "[JumpBack]PassMissionsTab",
+            "[JumpBack]PassBanner"
+        ]
+    },
+    "ExpPassStuck": {
+        "recognition": "Custom",
+        "custom_recognition": "StuckFlag",
+        "action": "Custom",
+        "custom_action": "StopTask",
+        "custom_action_param": "EXP Luxcavation is stuck on the way to the pass page"
+    },
+    "ExpPassLost": {
+        "action": "Custom",
+        "custom_action": "ExpPassRead",
+        "custom_action_param": {
+            "lost": true
+        },
+        "next": [
             "ExpHome"
         ]
+    },
+    "ExpPassRead": {
+        "recognition": "And",
+        "all_of": [
+            "PassDailyLit"
+        ],
+        "action": "Custom",
+        "custom_action": "ExpPassRead",
+        "next": [
+            "ExpHome"
+        ]
+    },
+    // The Weekly or the Seasonal tab lit (the pass page opens on the tab it was left on): the Daily tab.
+    "ExpPassDaily": {
+        "recognition": "Or",
+        "any_of": [
+            "PassWeeklyLit",
+            "PassSeasonalLit"
+        ],
+        "action": "Custom",
+        "custom_action": "TapUntil",
+        "custom_action_param": {
+            "target": [256, 210, 30, 100],
+            "left": true
+        },
+        "post_delay": 0,
+        "max_hit": 3
+    },
+    // The Daily tab's Clear EXP Luxcavation row, by its text in the rows' column (PassMissionsDailyUnderway.png: row 2).
+    // The Weekly and the Seasonal tab's rows of it (5, 30 time(s)) read too: ExpPassRead reads it on the Daily tab only.
+    "PassExpRow": {
+        "recognition": "OCR",
+        "roi": [400, 180, 300, 440],
+        "expected": "EXP Luxcavation"
     },
     "ExpHome": {
         "action": "Custom",
         "custom_action": "LuxHome",
+        "custom_action_param": {
+            "plan": true
+        },
         "next": [
             "ExpHub"
         ]
@@ -289,6 +371,13 @@
         "lower": [200, 120, 0],
         "upper": [255, 200, 80],
         "count": 900
+    },
+    // The Thread tab's top (LuxThread.png): "Daily Bonuses" and its "n/3", n the bonuses left (the user, 2026-11-05);
+    // LuxEnter reads it (luxcavation.read_bonuses) on the first look at the open card.
+    "ThreadBonuses": {
+        "recognition": "OCR",
+        "roi": [478, 24, 210, 30],
+        "expected": "^\\d\\s*/\\s*3$"
     },
     // Luxcavation on its EXP tab (the tab it opens on): tap Thread until EXP is lit no more.
     "LuxThreadTab": {

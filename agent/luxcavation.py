@@ -12,6 +12,29 @@ EXP_COST = 3  # the Modules one EXP Luxcavation battle takes, the hardest stage'
 THREAD_COST = 2  # a Thread Luxcavation battle's, every level of Lust's Level Select (live 2026-10-26: Lv20-60 all take 2)
 
 
+DAILY_BONUSES = 3  # the Thread tab's "Daily Bonuses n/3" (tests/screens/LuxThread.png)
+
+
+def left(target, today):
+    """The battles this run fights: the day's target (luxcavation.<task>.count) less those won today (#429)."""
+    return max(0, target - today)
+
+
+def read_bonuses(texts):
+    """The n of the one "n/3" in the OCR strings of the Daily Bonuses box; None when there is none or more."""
+    found = re.findall(r"(\d+)\s*/\s*(\d+)", " ".join(texts))
+    return int(found[0][0]) if len(found) == 1 and int(found[0][1]) == DAILY_BONUSES and int(found[0][0]) <= DAILY_BONUSES else None
+
+
+def thread_today(n, target):
+    """The Thread battles won today from the Daily Bonuses n: n is the bonuses left (the user, 2026-11-05; live: 3/3,
+    then 2/3 after a win). At 0/3 the day may hold 3 wins or more, which only matters to a target above 3: None, no
+    read, so a rerun does not fight past it again and again."""
+    if n == 0 and target > DAILY_BONUSES:
+        return None
+    return DAILY_BONUSES - n
+
+
 def needed(cost, count):
     """The Modules `count` battles take: the task's one check at its start."""
     return cost * count

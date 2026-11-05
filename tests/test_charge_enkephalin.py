@@ -1,5 +1,5 @@
-"""ChargeEnkephalin (#373): the real task in a child process (daily_child.py), on a model of the game: a screenshot per
-screen and the taps that move between them.
+"""ChargeEnkephalin (#373; its count the day's target Daily Count, #429): the real task in a child process
+(daily_child.py), on a model of the game: a screenshot per screen and the taps that move between them.
 
 The Use Lunacy tab is EnkephalinLunacy.png (live 2026-10-27: price 104 at Daily Count 3/10) with its price and Daily
 Count painted over and the model's drawn in. No Confirm was pressed for it (no Lunacy spent), so what the tab shows
@@ -47,14 +47,16 @@ def child():
                   "boxes": screen("EnkephalinBoxes.png"), **{f"lunacy{n}": lunacy_tab(n) for n in range(11)},
                   "lunacy0_27": lunacy_tab(0, 27)}
 
-        def set(self, bought=0, price=None, confirm_works=True, tab="lunacy", step=1, stays=False, cancel_works=True):
+        def set(self, bought=0, price=None, confirm_works=True, tab="lunacy", step=1, stays=False, cancel_works=True,
+                tab_after=None):
             """bought: the day's charges made so far (Daily Count); price: the price shown whatever bought says (a wrong
             one); tab: what the Use Lunacy tab's tap shows ("modules": the tap did nothing); stays: the window
             stays open after Confirm (spec 01: live for Modules; unverified for Lunacy); cancel_works: False, the Cancel
-            tap misses (its spot on the Lunacy tab is taken from the Modules tab's, not measured)."""
+            tap misses (its spot on the Lunacy tab is taken from the Modules tab's, not measured); tab_after: what the
+            window shows after a Confirm, in place of tab."""
             self.screen, self.clicks, self.keys = "main", [], []
             self.bought, self.price, self.confirm_works, self.tab, self.step = bought, price, confirm_works, tab, step
-            self.stays, self.cancel_works = stays, cancel_works
+            self.stays, self.cancel_works, self.tab_after = stays, cancel_works, tab_after
 
         def lunacy(self):
             return f"lunacy{self.bought}" + (f"_{self.price}" if self.price else "")
@@ -66,7 +68,8 @@ def child():
                 self.screen = self.lunacy() if self.tab == "lunacy" else self.tab
             elif self.screen.startswith("lunacy") and (x, y) == CONFIRM and self.confirm_works:
                 self.bought = min(self.bought + self.step, 10)  # step 1; 2 is a count that jumped
-                self.screen = self.lunacy() if self.stays else "main"
+                self.tab = self.tab_after or self.tab
+                self.screen = (self.lunacy() if self.tab == "lunacy" else self.tab) if self.stays else "main"
             elif self.screen != "main" and (x, y) == CANCEL and self.cancel_works:
                 self.screen = "main"
             return True
@@ -83,14 +86,17 @@ def child():
     for scenario, (count, state) in {
         "zero": (0, {}),
         "two_from_none": (2, {}),
-        "two_one_by_hand": (2, {"bought": 1}),
-        "two_after_nine": (2, {"bought": 9}),
+        "three_one_by_hand": (3, {"bought": 1}),
+        "three_three_by_hand": (3, {"bought": 3}),
+        "two_after_five": (2, {"bought": 5}),
+        "ten_after_nine": (10, {"bought": 9}),
         "off_table": (2, {"price": 27}),
         "skips_a_price": (3, {"step": 2}),
         "confirm_does_nothing": (2, {"confirm_works": False}),
         "tab_never_opens": (2, {"tab": "modules"}),
         "window_stays_ten": (10, {"stays": True}),  # Confirm leaves the window open: ChargePanel looks at near the same screen 10 times
         "boxes_tab": (2, {"tab": "boxes"}),  # the same Recharge prompt, no Daily Count
+        "unread_after_confirm": (2, {"stays": True, "tab_after": "boxes"}),
         "cancel_does_nothing": (2, {"cancel_works": False}),
     }.items():
         actions.ROOT = settings(count)  # the settings, and the stop procedure's evidence and log
@@ -114,25 +120,33 @@ def test_zero_charges_touch_nothing_not_even_the_window():
     assert "ChargeHome" not in o["nodes"] and "ChargePanel" not in o["nodes"]
 
 
-def test_two_charges_from_a_fresh_day_confirm_26_and_52_and_cancel_at_the_third_price():
+def test_a_target_of_two_on_a_fresh_day_confirms_26_and_52_and_cancels_at_2_of_10():
     o = run_child(__file__)["two_from_none"]
     assert o["succeeded"] and o["nodes"][-1] == "TaskDone"
     assert o["clicks"] == taps(ENK_BAR, TAB, CONFIRM, ENK_BAR, TAB, CONFIRM, ENK_BAR, TAB, CANCEL)
-    assert "2 charged now" in o["done"]
+    assert o["done"] == "Daily Count 2/10, target 2: 2 charged"
 
 
-def test_the_count_is_this_runs_whatever_was_charged_earlier_today():
-    # D5 (#362): one charged by hand at 26; this run charges two more, 52 and 78, and checks 104 follows.
-    o = run_child(__file__)["two_one_by_hand"]
+def test_charges_made_by_hand_today_count_toward_the_target():
+    # #429: one charged by hand at 26; a target of three charges two more, 52 and 78, not 52, 78 and 104.
+    o = run_child(__file__)["three_one_by_hand"]
     assert o["succeeded"] and o["clicks"] == taps(ENK_BAR, TAB, CONFIRM, ENK_BAR, TAB, CONFIRM, ENK_BAR, TAB, CANCEL)
-    assert "2 charged now" in o["done"]
+    assert o["done"] == "Daily Count 3/10, target 3: 2 charged"
+
+
+def test_a_target_already_met_by_hand_charges_nothing_and_is_a_success():
+    out = run_child(__file__)
+    for name, used, target in (("three_three_by_hand", 3, 3), ("two_after_five", 5, 2)):
+        o = out[name]
+        assert o["succeeded"] and o["clicks"] == taps(ENK_BAR, TAB, CANCEL), name
+        assert o["done"] == f"Daily Count {used}/10, target {target}: nothing to charge", name
 
 
 def test_the_tenth_charge_of_the_day_ends_the_task_at_10_of_10():
-    # D5 (#362): 9/10 is charged, then 10/10 shows: the day is done, a success.
-    o = run_child(__file__)["two_after_nine"]
+    # 9/10 is charged, then 10/10 shows: the day is done, a success.
+    o = run_child(__file__)["ten_after_nine"]
     assert o["succeeded"] and o["clicks"] == taps(ENK_BAR, TAB, CONFIRM, ENK_BAR, TAB, CANCEL)
-    assert "1 charged now" in o["done"] and "10 charges are done" in o["done"]
+    assert o["done"] == "Daily Count 10/10, target 10: 1 charged"
 
 
 def test_a_price_off_the_table_is_cancelled_and_fails_the_task():
@@ -150,15 +164,22 @@ def test_a_confirm_that_did_nothing_never_confirms_the_same_price_twice():
     assert o["succeeded"] is False and o["clicks"].count(list(CONFIRM)) == 1
 
 
-def test_a_tab_that_never_shows_its_price_is_never_confirmed():
+def test_a_tab_that_never_shows_its_daily_count_is_never_confirmed_and_ends_a_success_with_nothing_bought():
+    # #429 item 4: the day's charges are not known, so none is made; a success, the reason in the log.
     o = run_child(__file__)["tab_never_opens"]
-    assert o["succeeded"] is False and list(CONFIRM) not in o["clicks"] and o["clicks"][-1] == list(CANCEL)
+    assert o["succeeded"] and list(CONFIRM) not in o["clicks"] and o["clicks"][-1] == list(CANCEL)
+    assert o["done"] == "the Use Lunacy tab's prompt and Daily Count did not read, target 2: nothing charged"
+
+
+def test_a_tab_that_stops_reading_after_a_confirm_fails_the_task():
+    o = run_child(__file__)["unread_after_confirm"]
+    assert o["succeeded"] is False and o["clicks"].count(list(CONFIRM)) == 1 and o["clicks"][-1] == list(CANCEL)
 
 
 def test_ten_charges_in_a_window_that_stays_open_are_not_a_stuck_screen():
     # The same picture ten times, only its price and Daily Count moving: the watchdog's same-screen count must not take it.
     o = run_child(__file__)["window_stays_ten"]
-    assert o["succeeded"] and o["clicks"].count(list(CONFIRM)) == 10 and "10 charged now" in o["done"]
+    assert o["succeeded"] and o["clicks"].count(list(CONFIRM)) == 10 and o["done"] == "Daily Count 10/10, target 10: 10 charged"
 
 
 def test_a_cancel_that_never_closes_the_window_stops_the_task_after_a_few_taps():
@@ -169,7 +190,8 @@ def test_a_cancel_that_never_closes_the_window_stops_the_task_after_a_few_taps()
 
 def test_the_use_boxes_tab_has_the_same_prompt_but_no_daily_count_and_is_never_confirmed():
     o = run_child(__file__)["boxes_tab"]
-    assert o["succeeded"] is False and list(CONFIRM) not in o["clicks"] and o["clicks"][-1] == list(CANCEL)
+    assert o["succeeded"] and list(CONFIRM) not in o["clicks"] and o["clicks"][-1] == list(CANCEL)
+    assert "nothing charged" in o["done"]
 
 
 def test_the_recharge_prompt_is_read_on_the_lunacy_tab_and_not_on_the_modules_tab():

@@ -5,12 +5,43 @@ import pytest
 from PIL import Image
 
 import actions
+import luxcavation
 from luxcavation import EXP_COST, FIGHT, FINISH, RETRY, SKIP, STOP, batch, decide, needed, parse_consecutive, presses
 
 if __name__ != "__main__":  # as test_task_chain.py: the fixtures are test_actions's
     from test_actions import Choices, clock, context  # noqa: F401 (the fake Maa context the in-process tests use)
 
 SCREENS = Path(__file__).resolve().parent / "screens"
+
+
+@pytest.mark.parametrize("target, today, fights", [
+    (3, 0, 3), (3, 1, 2), (3, 3, 0), (1, 1, 0), (1, 0, 1), (2, 1, 1),
+    (3, 5, 0),  # more won than the target: nothing, not a negative count
+])
+def test_left_is_the_target_less_the_battles_won_today(target, today, fights):
+    assert luxcavation.left(target, today) == fights
+
+
+@pytest.mark.parametrize("texts, n", [
+    (["Daily Bonuses", "0/3"], 0),  # tests/screens/LuxThread.png
+    (["Daily Bonuses 2/3"], 2),
+    (["3 / 3"], 3),
+    (["0/4"], None),  # a cap that is not 3
+    (["4/3"], None),  # more than the day has
+    (["1/3", "2/3"], None),  # two: refuse
+    (["Daily Bonuses"], None),
+    ([], None),
+])
+def test_daily_bonuses_read_as_the_one_n_over_3(texts, n):
+    assert luxcavation.read_bonuses(texts) == n
+
+
+@pytest.mark.parametrize("n, target, today", [(3, 3, 0), (2, 3, 1), (1, 3, 2), (0, 3, 3), (0, 1, 3), (2, 5, 1),
+                                              (0, 5, None)])
+def test_the_daily_bonuses_n_is_the_bonuses_left(n, target, today):
+    # the user, 2026-11-05: 3/3 on a fresh day, 0/3 once three Thread battles are won; at 0/3 a target above 3 cannot
+    # tell how many more were won, so nothing is fought
+    assert luxcavation.thread_today(n, target) == today
 
 
 @pytest.mark.parametrize("count, cost, need", [(1, 3, 3), (2, 3, 6), (5, 3, 15), (3, 2, 6)])
