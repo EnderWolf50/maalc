@@ -44,3 +44,21 @@ Used by `/wayfinder`. The **map** is a single issue with **child** issues as tic
 - **Frontier query**: list the map's open children (`gh issue list --state open`, scoped to the map's sub-issues / task list), drop any with an open blocker (`issue_dependencies_summary.blocked_by > 0`, or an open issue in the `Blocked by` line) or an assignee; first in map order wins.
 - **Claim**: `gh issue edit <n> --add-assignee @me`, the session's first write.
 - **Resolve**: `gh issue comment <n> --body "<answer>"`, then `gh issue close <n>`, then append a context pointer (gist + link) to the map's Decisions-so-far.
+
+## Keeping issues current
+
+From 2026-10-23 to 2026-11-05 no new issue got a milestone, and work already done stayed listed as open in older issues. These rules and `tools/issue_audit.py` keep that from coming back.
+
+Every open issue carries:
+
+- **A milestone.** `v1` when #34's acceptance or AALC parity (#21) needs it; `v2` for #1's Deferred items and work beyond AALC parity. A sub-issue takes its parent's milestone; an issue split off another takes the milestone of the part it carries.
+- **Exactly one triage label** from `triage-labels.md`. A new issue starts at `needs-triage` unless its body is already fully specified.
+
+A map (`wayfinder:map`) or a long-running tracker (`tracking`, such as #203, #251, #252) carries neither.
+
+When to act:
+
+- **Creating an issue:** pass `--milestone` and `--label` in the same `gh issue create`.
+- **A PR finishes part of an issue it does not close:** in the same session, rewrite the issue body. Done items move to a `已完成` list with the PR or commit, and the `file:line` references the body cites are refreshed. A map or tracker that lists an issue the PR closes gets its box ticked.
+- **A comment widens an issue's scope** (as #94 gained the 15-floor switch): split the new scope into its own issue with its own milestone instead.
+- **Session start for issue or PR work, and after creating issues:** run `uv run python tools/issue_audit.py`. Exit 1 lists issues without a milestone or a single triage label; fix them. Each issue on its stale list (untouched for 14 days) gets checked against `main`: close it, rewrite its body, or comment why it is still current.
