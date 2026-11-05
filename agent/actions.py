@@ -613,7 +613,7 @@ def plan(context, today, seen):
         return finish(context, f"{lux['name']}: {seen}: nothing fought")
     lux["today"] = today
     head = (f"{lux['name']}: count mode, {fights} this run" if lux["mode"] == "count"
-            else f"{lux['name']}: {seen} ({today} won today), target {lux['target']}")
+            else f"{lux['name']}: {seen} ({today} won today), {lux['target']} a day")
     if fights == 0:
         return finish(context, f"{head}: nothing to fight")
     need = luxcavation.needed(lux["cost"], fights)
@@ -755,7 +755,7 @@ class LuxEnter(CustomAction):
                 return over
         opts = json.loads(argv.custom_action_param or "null") or {}
         lux = RUN["lux"]
-        if lux["fights"] is None:
+        if lux["fights"] is None:  # Thread in daily mode only: count mode was planned in LuxHome
             n = luxcavation.read_bonuses(ocr_texts(context, screen(context), "ThreadBonuses"))
             shown = "Daily Bonuses did not read" if n is None else f"Daily Bonuses {n}/{luxcavation.DAILY_BONUSES}"
             over = plan(context, None if n is None else luxcavation.DAILY_BONUSES - n, shown)

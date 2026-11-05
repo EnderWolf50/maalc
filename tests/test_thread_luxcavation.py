@@ -138,7 +138,7 @@ def test_daily_mode_fights_the_daily_bonuses_left_whatever_count_says():
     out = run_child(__file__)
     o = out["thread_done_today"]  # #429: Daily Bonuses 0/3, three won today: nothing fought
     assert o["succeeded"] and level_enters(o) == [] and not any(inside(CARD_ENTER, *xy) for xy in o["clicks"])
-    assert o["done"] == "Thread Luxcavation: Daily Bonuses 0/3 (3 won today), target 3: nothing to fight"
+    assert o["done"] == "Thread Luxcavation: Daily Bonuses 0/3 (3 won today), 3 a day: nothing to fight"
     assert o["screen"] == "main" and o["nodes"][-1] == "TaskDone"
     o = out["thread_one_today"]  # 2/3: two left, count 1 unused (#431)
     assert o["succeeded"] and len(level_enters(o)) == 2 and o["done"] == "Thread Luxcavation: 2 won"
@@ -175,7 +175,7 @@ def test_the_modules_are_checked_against_this_runs_battles():
         assert actions.plan(MagicMock(), 1, "Daily Bonuses 2/3") is None and actions.RUN["lux"]["fights"] == 2 and ends == []
         actions.RUN["lux"].update(modules=3, fights=None)
         assert actions.plan(MagicMock(), 1, "Daily Bonuses 2/3") is True
-        assert ends == ["Thread Luxcavation: Daily Bonuses 2/3 (1 won today), target 3: Modules 3 < 4 needed for 2, skipped"]
+        assert ends == ["Thread Luxcavation: Daily Bonuses 2/3 (1 won today), 3 a day: Modules 3 < 4 needed for 2, skipped"]
         actions.RUN["lux"].update(mode="count", target=91, modules=182, fights=None)
         assert actions.plan(MagicMock(), None, None) is None and actions.RUN["lux"]["fights"] == 91
         actions.RUN["lux"].update(modules=181, fights=None)

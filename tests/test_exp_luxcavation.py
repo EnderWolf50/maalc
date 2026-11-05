@@ -322,7 +322,7 @@ def test_daily_mode_fights_no_exp_battle_once_the_pass_row_is_done_whatever_coun
     for name in ("done_today", "done_today_count_2"):  # #429: the row done, the day's 1 won: nothing fought; #431: count unused
         o = out[name]
         assert o["succeeded"] and enters(o) == [] and o["nodes"][-1] == "TaskDone" and o["screen"] == "main", name
-        assert o["done"] == "EXP Luxcavation: the pass's Clear EXP Luxcavation row done (1 won today), target 1: nothing to fight"
+        assert o["done"] == "EXP Luxcavation: the pass's Clear EXP Luxcavation row done (1 won today), 1 a day: nothing to fight"
         assert not any(inside(DRIVE_TAB, *xy) for xy in o["clicks"]), name
 
 
