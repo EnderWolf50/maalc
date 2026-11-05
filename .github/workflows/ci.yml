@@ -56,7 +56,6 @@ jobs:
         run: uv run ruff check
       - run: python3 tools/fetch_ocr.py  # test_shop_cells reads the fuse page's labels by OCR (#205)
       - run: uv run pytest --junitxml=junit.xml
-      # shard-balance compares each file's time with tests/shard_seconds.json.
       - if: always()
         uses: actions/upload-artifact@v4
         with:

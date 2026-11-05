@@ -31,8 +31,9 @@ def test_seconds_add_up_per_file_across_shards_and_classes(tmp_path):
     assert shard_seconds.measured([a, b]) == {"test_go_home.py": 120.5, "test_map_cost.py": 0.25}
 
 
-def test_a_matching_table_passes(tmp_path, table, capsys):
+def test_a_matching_table_passes(tmp_path, table, monkeypatch):
     table({"test_go_home.py": 200})
+    monkeypatch.setattr(shard_seconds, "unmeasured", lambda seconds: [])
     assert shard_seconds.check([report(tmp_path, "a.xml", [("tests.test_go_home", "380")])]) == 0
 
 
@@ -54,28 +55,35 @@ def test_a_number_off_by_more_than_double_fails_either_way(tmp_path, table, caps
     assert "test_pass_task.py took 100 s, the table says 300" in out
 
 
-def test_fast_files_never_fail_the_check(tmp_path, table):
+def test_a_shard_with_no_report_fails_the_check(tmp_path, table, capsys):
+    table({})
+    assert shard_seconds.check([report(tmp_path, "a.xml", [("tests.test_map_cost", "1")])]) == 1
+    assert "test_go_home.py has no time in this run's reports" in capsys.readouterr().out
+
+
+def test_fast_files_never_fail_the_check(tmp_path, table, monkeypatch):
+    monkeypatch.setattr(shard_seconds, "unmeasured", lambda seconds: [])
     table({"test_map_cost.py": 2})
     assert shard_seconds.check([report(tmp_path, "a.xml", [("tests.test_map_cost", "20"), ("tests.test_x", "29")])]) == 0
 
 
-def test_update_refuses_a_run_that_lacks_a_test_file(tmp_path, table, monkeypatch, capsys):
+def test_update_refuses_a_run_that_lacks_a_test_file(table, monkeypatch, capsys):
     table({"test_go_home.py": 1})
 
-    def download(args, check):
-        report(args[args.index("--dir") + 1], "junit.xml", [("tests.test_go_home", "380")])
-    monkeypatch.setattr(shard_seconds.subprocess, "run", download)
+    def download(run, folder):
+        report(folder, "junit.xml", [("tests.test_go_home", "380")])
+    monkeypatch.setattr(shard_seconds, "download", download)
     assert shard_seconds.update(9) == 1
-    assert "use a green run" in capsys.readouterr().out
+    assert "use a run whose shards all passed" in capsys.readouterr().out
     assert json.loads(shard_seconds.TABLE.read_text(encoding="utf-8")) == {"test_go_home.py": 1}
 
 
-def test_update_writes_every_file_rounded(tmp_path, table, monkeypatch):
+def test_update_writes_every_file_rounded(table, monkeypatch):
     table({})
     names = [p.stem for p in (shard_seconds.ROOT / "tests").glob("test_*.py")]
 
-    def download(args, check):
-        report(args[args.index("--dir") + 1], "junit.xml", [(f"tests.{n}", "1.6") for n in names])
-    monkeypatch.setattr(shard_seconds.subprocess, "run", download)
+    def download(run, folder):
+        report(folder, "junit.xml", [(f"tests.{n}", "1.6") for n in names])
+    monkeypatch.setattr(shard_seconds, "download", download)
     assert shard_seconds.update(9) == 0
     assert json.loads(shard_seconds.TABLE.read_text(encoding="utf-8")) == {f"{n}.py": 2 for n in names}

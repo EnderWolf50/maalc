@@ -18,6 +18,7 @@ ROOT = Path(__file__).resolve().parent.parent
 TABLE = ROOT / "tests" / "shard_seconds.json"
 # A file faster than this cannot unbalance a shard on its own; conftest counts an unlisted one 0.15 s a test.
 SLOW = 30
+# Runner speed varies from run to run; a file off by more than this factor changed, not the runner.
 RATIO = 2
 
 
@@ -47,9 +48,14 @@ def unmeasured(seconds):
     return sorted(p.name for p in (ROOT / "tests").glob("test_*.py") if p.name not in seconds)
 
 
+def download(run, folder):
+    subprocess.run(["gh", "run", "download", str(run), "--pattern", "junit-*", "--dir", folder], check=True)
+
+
 def check(reports):
     table = json.loads(TABLE.read_text(encoding="utf-8"))
-    problems = stale(table, measured(reports))
+    seconds = measured(reports)
+    problems = stale(table, seconds) + [f"{name} has no time in this run's reports" for name in unmeasured(seconds)]
     if not problems:
         print(f"tests/shard_seconds.json matches this run ({len(reports)} reports)")
         return 0
@@ -62,10 +68,10 @@ def check(reports):
 
 def update(run):
     with tempfile.TemporaryDirectory() as folder:
-        subprocess.run(["gh", "run", "download", str(run), "--pattern", "junit-*", "--dir", folder], check=True)
+        download(run, folder)
         seconds = measured(sorted(Path(folder).rglob("*.xml")))
     if missing := unmeasured(seconds):
-        print(f"run {run} has no time for {', '.join(missing)}: a shard failed or was cut short; use a green run")
+        print(f"run {run} has no time for {', '.join(missing)}: a shard was cut short; use a run whose shards all passed")
         return 1
     TABLE.write_text(json.dumps({n: round(s) for n, s in sorted(seconds.items())}, indent=0) + "\n", encoding="utf-8")
     print(f"wrote {len(seconds)} files to tests/shard_seconds.json, {sum(seconds.values()):.0f} s in all")

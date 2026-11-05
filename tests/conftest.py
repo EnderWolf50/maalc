@@ -4,13 +4,14 @@ test runs."""
 import inspect
 import json
 import os
-from pathlib import Path
 
 import pytest
 
+from shard_seconds import TABLE
+
 # Seconds each file took on a CI runner, written by tools/shard_seconds.py; an unlisted file counts 0.15 s a test.
 # CI's shard-balance job fails when a number no longer matches the run.
-FILE_SECONDS = json.loads(Path(__file__).with_name("shard_seconds.json").read_text(encoding="utf-8"))
+FILE_SECONDS = json.loads(TABLE.read_text(encoding="utf-8"))
 
 
 def child_timeout(item):
