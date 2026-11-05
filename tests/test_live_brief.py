@@ -63,6 +63,7 @@ def test_daily_mode_marks_its_count_unused_and_says_what_it_fights(tmp_path):
 @pytest.mark.parametrize("flag", ["--exp-mode", "--thread-mode"])
 def test_a_brief_without_a_mode_is_not_written(tmp_path, flag):
     i = LIVE.index(flag)
+    assert run(tmp_path / "full", LIVE) == 0
     with pytest.raises(SystemExit) as exit_:
         run(tmp_path, [*LIVE[:i], *LIVE[i + 2:]])
     assert exit_.value.code == 2
