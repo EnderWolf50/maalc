@@ -15,6 +15,8 @@ The `pr` skill's sections, then:
 - Fixtures: real captures, or synthetic (file name ends `.synthetic.png`)
 ```
 
+An issue the PR finishes only in part gets its body rewritten in the same session (`docs/agents/issue-tracker.md` "Keeping issues current").
+
 `public-text-guard.py` denies `gh pr create|edit --body-file` when the body has neither `N passed, M failed[, K skipped]` nor `Tests: none (docs only)`, or a line saying `not run` names no issue (`#<n>`; `not run: none` passes).
 
 ## Comments
