@@ -145,6 +145,8 @@
 | 合成畫面 | OCR：標題 `Fuse E.G.O Gift`、預測列；模板：中央的體系選擇格、周圍的材料格、Close／Fuse | 先做清單想要的配方合成，再依點數挑 3 個到材料槽數、清單放手的飾品合成，指定主要體系；每放一個就回讀材料槽與格子外框（[03](03-decisions.md) 第 13 節，#77）；材料放好後讀左下 `Forecasts` 欄的結果階級（黃色羅馬數字）與機率，階級不符合成條件就不按 Fuse，把材料點回來、排除這一組再挑（#285）。實機：點中央格開 `Fusion - Keyword Selection` 選體系；材料最多 5 格；`Wishmaking` 勾選框要花持有的星光，必須保持不勾；按 Fuse 後還有確認頁 `Fuse the selected E.G.O Gifts?`。合成本身不花 Cost。點飾品出現的說明框會蓋住 Fuse，Close 在容易誤觸的位置。固定配方（`Fusion Available`、`Recipes`、點產物一鍵放入材料）見下方「合成頁的配方合成」 | 飾品獲得視窗、商店主畫面 | #10 | `captures/94_shop_fuse_try2.png`、`95_fuse_center_tap.png`、`173_fuse_confirm.png`、`174_fuse_result.png`；`tests/shop/forecast_shop_ii.png`、`forecast_super_iv.png`（`Forecasts` 欄，2026-10-23） |
 | 定向刷新對話框 | OCR：標題 `Shop - Keyword Refresh`、`Spend <n> Cost to Keyword Refresh?`；模板：10 個體系選項、Cancel／Refresh | 指定主要體系；條件是錢 ≥ 定向刷新費用 + 120 | 商店主畫面 | #10 | `captures/79_shop_keyword_refresh_dialog.png`、`80_shop_keyword_bleed_selected.png` |
 | 離開確認 | OCR：`Leave the shop?` | 點 Confirm | 地圖頁 | #10 | `captures/111_shop_leave.png` |
+| 技能替換對話框（`Replace <罪人>'s Skill`） | OCR：左上標題 `Replace <罪人>'s Skill`、頂端 `Skills Owned` 的三個張數、右上目前的 Cost、三個選項的價格；像素：選項的橘框、Confirm 的金色或灰色 | 點商店的替換格才出現。bot 現在不點替換格，回商店主畫面的步驟（`Shop.to_main`）也還不認得這個對話框；換技能的流程與在這裡按 Cancel 見 #264。版面、選取與 Confirm 之後的畫面見下方「技能替換對話框」 | 第二層確認、商店主畫面（Cancel） | #264、#453 | `tests/screens/ShopReplaceSkill.png`、`ShopReplaceSkillAll.png`、`ShopReplaceSkillPicked.png` |
+| 技能替換的第二層確認 | OCR：`Spend <n> Cost to replace this Skill?`、右上 `<Cost> ▸ <換後 Cost>` | Confirm 才付款；Cancel 回到對話框 | 商店主畫面（Confirm）、技能替換對話框（Cancel） | #453 | `tests/screens/ShopReplaceSkillConfirm.png`、`ShopReplaceSkillConnecting.png` |
 | Super Shop（困難） | 同商店主畫面，標題改為紅色 `Super Shop` | 和一般商店同一套流程；規則不依賴格數，每格都從畫面讀價格和體系。實機：10 格分兩列，要捲動；有一格 `ID Skill Search` 用星光計價；`Special Catalogue` 會讓獎勵卡多一張 | 同商店主畫面 | #17 | `captures/162_f2shop_entered.png`、`163_supershop_scrolled.png`、`190_f3shop_entered.png` |
 
 ### 合成頁的配方合成（#304 實機）
@@ -159,6 +161,20 @@
 - **按 Fuse 與確認框**：`Fuse`（約 (790, 585)）跳出 `Fuse the selected E.G.O Gifts?`，左邊 `Selected E.G.O Gifts n/3`（兩件材料時是 `2/3`，分母是槽數），右邊 `Prediction` 框列出產物；Cancel 約 (490, 583)、Confirm 約 (790, 583)。Confirm 後跳 `E.G.O Gift GET!`（產物名、說明，說明長時有往下箭頭），再按它的 Confirm（這次說明框的 Confirm 在約 (640, 532)，位置看說明長短）。回到合成頁：頁面還開著、材料槽清空、`Fusion Available` 消失、持有飾品列表多了產物、少了兩件材料。（合成不花 Cost。）
 - **`Recipes` 按鈕（約 (668, 160)）**：開 `Fusion Recipes` 彈窗，**只是唯讀的配方表**：右上有篩選鈕（約 (955, 165)，展開後是 Keywords 的 Burn、Bleed、Tremor、Rupture、Sinking、Poise、Charge，Attack Type 的 Slash、Pierce、Blunt，Other 的 Keywordless 開關；開關的效果沒試），底部 `Confirm`（約 (640, 570)）關閉。列表可上下拖動；最上面可能有 `Theme Pack Exclusive Fusion Gift` 區（同一天另一局的截圖看到，沒有附檔：一個專屬配方，產物還是黑色剪影；本節附的 `ShopFusionRecipes.png` 沒有這一區），之後每個體系一區（體系圖示加名稱），每條配方一列「材料 + 材料（+ 材料）= 產物」，材料與產物的左上是階級；部分飾品上方有紅色 `HARD` 小標（應是困難模式限定，未驗證）；部分飾品是黑色剪影（另一局的截圖，沒有附檔；應是還沒取得過，未驗證）。點材料或產物沒有任何反應（點了兩次，沒有說明框）。體系區的順序不跟著目前選的體系（選 Burn 時 Poise 區在最前；更早一次實機是 Bleed 在最前，截圖沒有附檔），什麼決定順序**沒看出來**。Confirm 關閉。（`ShopFusionRecipes.png`）
 - **月之記憶（混合配方，`Lunar Memory`）沒有驗證**：需要 IV 階殘片與記憶，這個帳號的一般商店流程湊不到；怎麼放、`Fusion Available` 是否列出它、`Forecasts` 顯示什麼都沒看到。Agent（#300）把它和固定配方一樣一件一件點進槽；需要 5 個材料，一般商店 3 槽放不下就不合。第一次湊到殘片時要實機核對放法與 `Forecasts`。
+
+### 技能替換對話框（#453 實機）
+
+實機觀察 (2026-11-06)，1280×720、NORMAL 鏡牢。第 1 層的商店是 Gregor（`SKILL 1x3 SKILL 2x2 SKILL 3x0`，人格的 Uptie 未滿 3），第 2 層的商店是 Don Quixote（`SKILL 1x3 SKILL 2x2 SKILL 3x1`）。Gregor 換了一次 `SKILL 1 → 2`，付 45 Cost；Don Quixote 三個選項都點過，最後按 Cancel。座標是遊戲像素 (x, y, w, h)，在 `tests/screens/` 的截圖上量的。錄影在這一段沒有新影格（視窗停止重繪），所以 Confirm 前後的畫面來自裝置截圖，間隔約 0.06–0.1 秒。
+
+- **替換格**：商店第一格，名稱 `Replace <罪人>'s Skill`，價格 `??`。名稱很長時字會縮小（`Replace Don Quixote's Skill`）。點它開對話框，不經過購買確認。（`ShopReplaceSkillCancelled.png`）
+- **版面**：左上標題 `Replace <罪人>'s Skill`（字約在 213–568、124–152，名稱越長越寬）；標題右邊 `Skills Owned` 小字（約 612, 110），下面一排 `SKILL 1x<n> SKILL 2x<n> SKILL 3x<n>`（約 618, 134, 216, 16）；右上是目前的 Cost（數字約 1021, 127, 41, 25，三位數）。三個選項由左到右是 `Pay a moderate price.` 45（技能 1 → 2）、`Pay a large sum.` 75（技能 2 → 3）、`Pay a tremendous price.` 120（技能 1 → 3），每個選項的框約 (156, 196, 311, 310)、(482, 196, 311, 310)、(808, 196, 311, 310)，價格在框的右上角（金幣加數字約 (408, 206, 51, 20)、(734, 206, 52, 20)、(1059, 206, 52, 20)），點選項的中心 (312, 340)、(638, 340)、(963, 340)。框裡是換前、換後的技能圖示、技能名與 `×1`。底部 Cancel（507, 542）、Confirm（790, 542）。（`ShopReplaceSkillAll.png`）
+- **暗掉的選項**：Gregor 沒有技能 3，換到技能 3 的 75、120 兩個選項整格變暗，價格是紅字（120 的數字中位色約 RGB 158, 32, 2）；選得到的價格是橘字（約 233, 124, 10）。點暗掉的選項沒有反應，已選的不變。這次 Cost 夠（350、534），**Cost 不夠時的樣子沒看到**。（`ShopReplaceSkill.png`）
+- **選取**：剛開的對話框一個都沒選，Confirm 是灰色；這時按 Confirm 沒有反應。點一個選得到的選項，那一格外面多一圈橘色發光的框（中位色約 178, 78, 6），Confirm 變成金色。單選：點另一個選項，框移過去；再點同一個不會取消。框在點下後 0.1 秒內還沒畫出來。（`ShopReplaceSkillPicked.png`、`ShopReplaceSkillPickedMiddle.png`、`ShopReplaceSkillPickedRight.png`）
+- **Cancel**：回到商店主畫面，Cost 不變（350）。再開對話框時選取已清空。（`ShopReplaceSkillCancelled.png`）
+- **Confirm 之後**：先出第二層確認：左邊換前、右邊換後的技能卡（技能名、張數、`Atk Weight`、效果），中間 `Spend 45 Cost to replace this Skill?`，右上 `350 ▸ 305` 的預覽，Cancel／Confirm 位置不變。這時還沒扣錢。第二層按 Cancel 回到第一層，選取清空、Cost 不變。第二層按 Confirm：約 0.3 秒內右上出現 `CONNECTING`，約 0.6 秒後直接回到商店主畫面，**沒有結果彈窗**。Cost 在回到主畫面時才變成 305，數字先是紅色，約 0.5 秒後變回白色。（`ShopReplaceSkillConfirm.png`、`ShopReplaceSkillConnecting.png`）
+- **換完的替換格**：圖示上方標 `Purchased`，價格仍是 `??`，位置不變（仍在第一格，其他格也沒動）；和買過的飾品會移到最後一格不同。點它沒有反應（不開對話框，也不開 `E.G.O Gift Info`）。（`ShopReplaceSkillDone.png`）
+- **換完再刷新**：同一次進商店，bot 接著做一次定向刷新（305 → 215）。飾品格全部換新，替換格仍是 `Replace Gregor's Skill`、仍標 `Purchased`。#264 附圖 106 → 107 是沒換過的替換格在刷新後換了罪人；換過的替換格看起來不會被刷新換掉（只有這一組樣本）。（`ShopReplaceSkillRefreshed.png`）
+- **下一場戰鬥的編隊頁**：編隊頁不顯示技能張數。`Details` 的 SKILL 檢視每張卡只列技能 I／II／III 與防禦的圖示，Gregor 的 III 上鎖（Uptie 未滿 3），看不出換過的張數。換完的替換格點不開（見上），所以這次造訪裡讀不到換後的 `Skills Owned`；同一位罪人下次出現替換格時對話框顯示什麼，**沒看到**。（`FormationSkills.png`）
 
 ## 困難模式與結算
 
@@ -219,7 +235,7 @@
 | Progress（`Exploring` 進度頁） | Dungeon Progress 面板的 Progress | Close（直接回到地圖） | `captures/32_gear_progress_view.png` |
 | Encounter Reward Cards Guide | 獎勵卡頁右上 | Confirm | `captures/116_reward_card_guide.png` |
 | 人格詳情（戰鬥中） | 戰鬥中點到單位 | 點面板外 | `captures/219_battle_sinner_detail_panel.png`、`220_after_close_detail.png` |
-| 商店子頁：`Enhance E.G.O Gift`、`Team`、`Replace <罪人>'s Skill`、`ID Skill Search` 的選人模式、`Fusion Recipes`、`Fusion Guide` | 商店主畫面或合成畫面的對應按鈕 | Close、返回、Cancel、Return 或 Confirm（依頁面） | `captures/101_shop_enhance_page.png`、`104_shop_team_page.png`、`106_shop_replace_skill.png`、`165_supershop_id_skill_search.png`、`98_fuse_recipes.png`、`99_fusion_guide.png` |
+| 商店子頁：`Enhance E.G.O Gift`、`Team`、`Replace <罪人>'s Skill`（細節見「商店」的技能替換對話框）、`ID Skill Search` 的選人模式、`Fusion Recipes`、`Fusion Guide` | 商店主畫面或合成畫面的對應按鈕 | Close、返回、Cancel、Return 或 Confirm（依頁面） | `captures/101_shop_enhance_page.png`、`104_shop_team_page.png`、`106_shop_replace_skill.png`、`165_supershop_id_skill_search.png`、`98_fuse_recipes.png`、`99_fusion_guide.png` |
 
 ## 未決
 
