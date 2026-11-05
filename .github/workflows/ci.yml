@@ -12,7 +12,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Which jobs a PR needs.
+  # Which jobs a run needs. A PR picks them by its changed files. A push to main skips them all when a PR run already
+  # passed every job on the same tree, and otherwise runs them all, as workflow_dispatch does.
   # code: a changed file outside docs and gui/ (agent, assets, tests, tools, configs, lock files, workflows).
   # gui: any changed file outside docs; gui/ imports agent/, assets/ and tests/ files.
   changes:
@@ -174,6 +175,7 @@ jobs:
     steps:
       - if: needs.changes.result != 'success' || contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
         run: exit 1
+      # Only a run that ran every job proves the whole tree, so a docs-only or gui-only PR leaves no marker.
       - if: github.event_name == 'pull_request' && needs.changes.outputs.code == 'true' && needs.changes.outputs.gui == 'true' && needs.changes.outputs.tree != ''
         id: marker
         env:
