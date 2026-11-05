@@ -145,7 +145,7 @@
 | 合成畫面 | OCR：標題 `Fuse E.G.O Gift`、預測列；模板：中央的體系選擇格、周圍的材料格、Close／Fuse | 先做清單想要的配方合成，再依點數挑 3 個到材料槽數、清單放手的飾品合成，指定主要體系；每放一個就回讀材料槽與格子外框（[03](03-decisions.md) 第 13 節，#77）；材料放好後讀左下 `Forecasts` 欄的結果階級（黃色羅馬數字）與機率，階級不符合成條件就不按 Fuse，把材料點回來、排除這一組再挑（#285）。實機：點中央格開 `Fusion - Keyword Selection` 選體系；材料最多 5 格；`Wishmaking` 勾選框要花持有的星光，必須保持不勾；按 Fuse 後還有確認頁 `Fuse the selected E.G.O Gifts?`。合成本身不花 Cost。點飾品出現的說明框會蓋住 Fuse，Close 在容易誤觸的位置。固定配方（`Fusion Available`、`Recipes`、點產物一鍵放入材料）見下方「合成頁的配方合成」 | 飾品獲得視窗、商店主畫面 | #10 | `captures/94_shop_fuse_try2.png`、`95_fuse_center_tap.png`、`173_fuse_confirm.png`、`174_fuse_result.png`；`tests/shop/forecast_shop_ii.png`、`forecast_super_iv.png`（`Forecasts` 欄，2026-10-23） |
 | 定向刷新對話框 | OCR：標題 `Shop - Keyword Refresh`、`Spend <n> Cost to Keyword Refresh?`；模板：10 個體系選項、Cancel／Refresh | 指定主要體系；條件是錢 ≥ 定向刷新費用 + 120 | 商店主畫面 | #10 | `captures/79_shop_keyword_refresh_dialog.png`、`80_shop_keyword_bleed_selected.png` |
 | 離開確認 | OCR：`Leave the shop?` | 點 Confirm | 地圖頁 | #10 | `captures/111_shop_leave.png` |
-| 技能替換對話框（`Replace <罪人>'s Skill`） | OCR：左上標題 `Replace <罪人>'s Skill`、頂端 `Skills Owned` 的三個張數、右上目前的 Cost、三個選項的價格；像素：選項的橘框、Confirm 的金色或灰色 | 點商店的替換格才出現。bot 現在不點替換格，回商店主畫面的步驟（`Shop.to_main`）也還不認得這個對話框；換技能的流程與在這裡按 Cancel 見 #264。版面、選取與 Confirm 之後的畫面見下方「技能替換對話框」 | 第二層確認、商店主畫面（Cancel） | #264、#453 | `tests/screens/ShopReplaceSkill.png`、`ShopReplaceSkillAll.png`、`ShopReplaceSkillPicked.png` |
+| 技能替換對話框（`Replace <罪人>'s Skill`） | OCR：左上標題 `Replace <罪人>'s Skill`、頂端 `Skills Owned` 的三個張數、右上目前的 Cost、三個選項的價格；像素：選項的橘框、Confirm 的字是灰色或和 Cancel 同色 | 點商店的替換格才出現。bot 現在不點替換格，回商店主畫面的步驟（`Shop.to_main`）也還不認得這個對話框；換技能的流程與在這裡按 Cancel 見 #264。版面、選取與 Confirm 之後的畫面見下方「技能替換對話框」 | 第二層確認、商店主畫面（Cancel） | #264、#453 | `tests/screens/ShopReplaceSkillDimmed.png`、`ShopReplaceSkillAll.png`、`ShopReplaceSkillPickedLeft.png` |
 | 技能替換的第二層確認 | OCR：`Spend <n> Cost to replace this Skill?`、右上 `<Cost> ▸ <換後 Cost>` | Confirm 才付款；Cancel 回到對話框 | 商店主畫面（Confirm）、技能替換對話框（Cancel） | #453 | `tests/screens/ShopReplaceSkillConfirm.png`、`ShopReplaceSkillConnecting.png` |
 | Super Shop（困難） | 同商店主畫面，標題改為紅色 `Super Shop` | 和一般商店同一套流程；規則不依賴格數，每格都從畫面讀價格和體系。實機：10 格分兩列，要捲動；有一格 `ID Skill Search` 用星光計價；`Special Catalogue` 會讓獎勵卡多一張 | 同商店主畫面 | #17 | `captures/162_f2shop_entered.png`、`163_supershop_scrolled.png`、`190_f3shop_entered.png` |
 
@@ -164,17 +164,17 @@
 
 ### 技能替換對話框（#453 實機）
 
-實機觀察 (2026-11-06)，1280×720、NORMAL 鏡牢。第 1 層的商店是 Gregor（`SKILL 1x3 SKILL 2x2 SKILL 3x0`，人格的 Uptie 未滿 3），第 2 層的商店是 Don Quixote（`SKILL 1x3 SKILL 2x2 SKILL 3x1`）。Gregor 換了一次 `SKILL 1 → 2`，付 45 Cost；Don Quixote 三個選項都點過，最後按 Cancel。座標是遊戲像素 (x, y, w, h)，在 `tests/screens/` 的截圖上量的。錄影在這一段沒有新影格（視窗停止重繪），所以 Confirm 前後的畫面來自裝置截圖，間隔約 0.06–0.1 秒。
+實機觀察 (2026-11-06)，1280×720、NORMAL 鏡牢。第 1 層的商店是 Gregor（`SKILL 1x3 SKILL 2x2 SKILL 3x0`：編隊頁上他的技能 III 上鎖；技能 3 要 Uptie 3 才有，見 #264），第 2 層的商店是 Don Quixote（`SKILL 1x3 SKILL 2x2 SKILL 3x1`）。Gregor 先按過一次 Cancel，再換了一次 `SKILL 1 → 2`，付 45 Cost；Don Quixote 三個選項都點過，最後按 Cancel。座標是遊戲像素 (x, y, w, h)，在 `tests/screens/` 的截圖上量的。錄影在這一段沒有新影格（視窗停止重繪），所以 Confirm 前後的畫面來自裝置截圖，間隔約 0.06–0.1 秒。
 
-- **替換格**：商店第一格，名稱 `Replace <罪人>'s Skill`，價格 `??`。名稱很長時字會縮小（`Replace Don Quixote's Skill`）。點它開對話框，不經過購買確認。（`ShopReplaceSkillCancelled.png`）
+- **替換格**：商店第一格，名稱 `Replace <罪人>'s Skill`，價格 `??`。點它開對話框，不經過購買確認。（`ShopReplaceSkillCancelled.png`）名稱很長時字會縮小：第 2 層商店的 `Replace Don Quixote's Skill`，這張主畫面沒有收進測試截圖。
 - **版面**：左上標題 `Replace <罪人>'s Skill`（字約在 213–568、124–152，名稱越長越寬）；標題右邊 `Skills Owned` 小字（約 612, 110），下面一排 `SKILL 1x<n> SKILL 2x<n> SKILL 3x<n>`（約 618, 134, 216, 16）；右上是目前的 Cost（數字約 1021, 127, 41, 25，三位數）。三個選項由左到右是 `Pay a moderate price.` 45（技能 1 → 2）、`Pay a large sum.` 75（技能 2 → 3）、`Pay a tremendous price.` 120（技能 1 → 3），每個選項的框約 (156, 196, 311, 310)、(482, 196, 311, 310)、(808, 196, 311, 310)，價格在框的右上角（金幣加數字約 (408, 206, 51, 20)、(734, 206, 52, 20)、(1059, 206, 52, 20)），點選項的中心 (312, 340)、(638, 340)、(963, 340)。框裡是換前、換後的技能圖示、技能名與 `×1`。底部 Cancel（507, 542）、Confirm（790, 542）。（`ShopReplaceSkillAll.png`）
-- **暗掉的選項**：Gregor 沒有技能 3，換到技能 3 的 75、120 兩個選項整格變暗，價格是紅字（120 的數字中位色約 RGB 158, 32, 2）；選得到的價格是橘字（約 233, 124, 10）。點暗掉的選項沒有反應，已選的不變。這次 Cost 夠（350、534），**Cost 不夠時的樣子沒看到**。（`ShopReplaceSkill.png`）
-- **選取**：剛開的對話框一個都沒選，Confirm 是灰色；這時按 Confirm 沒有反應。點一個選得到的選項，那一格外面多一圈橘色發光的框（中位色約 178, 78, 6），Confirm 變成金色。單選：點另一個選項，框移過去；再點同一個不會取消。框在點下後 0.1 秒內還沒畫出來。（`ShopReplaceSkillPicked.png`、`ShopReplaceSkillPickedMiddle.png`、`ShopReplaceSkillPickedRight.png`）
-- **Cancel**：回到商店主畫面，Cost 不變（350）。再開對話框時選取已清空。（`ShopReplaceSkillCancelled.png`）
-- **Confirm 之後**：先出第二層確認：左邊換前、右邊換後的技能卡（技能名、張數、`Atk Weight`、效果），中間 `Spend 45 Cost to replace this Skill?`，右上 `350 ▸ 305` 的預覽，Cancel／Confirm 位置不變。這時還沒扣錢。第二層按 Cancel 回到第一層，選取清空、Cost 不變。第二層按 Confirm：約 0.3 秒內右上出現 `CONNECTING`，約 0.6 秒後直接回到商店主畫面，**沒有結果彈窗**。Cost 在回到主畫面時才變成 305，數字先是紅色，約 0.5 秒後變回白色。（`ShopReplaceSkillConfirm.png`、`ShopReplaceSkillConnecting.png`）
+- **暗掉的選項**：Gregor 沒有技能 3，換到技能 3 的 75、120 兩個選項整格變暗，價格是紅字（120 的數字中位色約 RGB 158, 32, 2）；選得到的價格是橘字（約 233, 124, 10）。點暗掉的選項沒有反應，已選的不變。這次 Cost 夠（350、534），**Cost 不夠時的樣子沒看到**。（`ShopReplaceSkillDimmed.png`）
+- **選取**：剛開的對話框一個都沒選，Confirm 是灰色；這時按 Confirm 沒有反應。點一個選得到的選項，那一格外面多一圈橘色發光的框（中位色約 178, 78, 6），Confirm 的字從灰色（中位色約 137, 137, 135）變成和 Cancel 同色（約 230, 198, 156）。單選：點另一個選項，框移過去；再點同一個不會取消。框在點下後 0.1 秒內還沒畫出來。（`ShopReplaceSkillPickedLeft.png`、`ShopReplaceSkillPickedMiddle.png`、`ShopReplaceSkillPickedRight.png`）
+- **Cancel**：回到商店主畫面，Cost 不變（Gregor 那次 350，Don Quixote 那次 534）。再開對話框時選取已清空。（`ShopReplaceSkillCancelled.png`）
+- **Confirm 之後**：先出第二層確認：左邊換前、右邊換後的技能卡（技能名、張數、`Atk Weight`、效果），中間 `Spend 45 Cost to replace this Skill?`，右上 `350 ▸ 305` 的預覽，Cancel／Confirm 位置不變。這時還沒扣錢。第二層按 Cancel 回到第一層，選取清空、Cost 不變。第二層按 Confirm：約 0.3 秒內右上出現 `CONNECTING`，約 0.6 秒後直接回到商店主畫面，**沒有結果彈窗**。Cost 在回到主畫面時才變成 305，數字先是紅色，約 0.5 秒後變回白色。（`ShopReplaceSkillConfirm.png`、`ShopReplaceSkillConnecting.png`；第二層的 Cancel、回主畫面的時間與紅字來自沒有提交的裝置截圖，附在 #264 的留言）
 - **換完的替換格**：圖示上方標 `Purchased`，價格仍是 `??`，位置不變（仍在第一格，其他格也沒動）；和買過的飾品會移到最後一格不同。點它沒有反應（不開對話框，也不開 `E.G.O Gift Info`）。（`ShopReplaceSkillDone.png`）
 - **換完再刷新**：同一次進商店，bot 接著做一次定向刷新（305 → 215）。飾品格全部換新，替換格仍是 `Replace Gregor's Skill`、仍標 `Purchased`。#264 附圖 106 → 107 是沒換過的替換格在刷新後換了罪人；換過的替換格看起來不會被刷新換掉（只有這一組樣本）。（`ShopReplaceSkillRefreshed.png`）
-- **下一場戰鬥的編隊頁**：編隊頁不顯示技能張數。`Details` 的 SKILL 檢視每張卡只列技能 I／II／III 與防禦的圖示，Gregor 的 III 上鎖（Uptie 未滿 3），看不出換過的張數。換完的替換格點不開（見上），所以這次造訪裡讀不到換後的 `Skills Owned`；同一位罪人下次出現替換格時對話框顯示什麼，**沒看到**。（`FormationSkills.png`）
+- **下一場戰鬥的戰前編隊頁**：編隊頁不顯示技能張數。`Details` 的 SKILL 檢視每張卡只列技能 I／II／III 與防禦的圖示，Gregor 的 III 上鎖（Uptie 未滿 3），看不出換過的張數。換完的替換格點不開（見上），所以這次造訪裡讀不到換後的 `Skills Owned`；同一位罪人下次出現替換格時對話框顯示什麼，**沒看到**。（`FormationSkills.png`）
 
 ## 困難模式與結算
 
