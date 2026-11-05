@@ -114,7 +114,7 @@ def ex_mark(cell):
     return int(green(numeral_place(cell)).sum()) >= EX_CELL_PX
 
 
-GET_MARK = (338, 228, 50, 50)  # x, y, w, h: the GET! popup's icon corner, its gift's tier numeral or "EX" (#449)
+GET_MARK = (338, 228, 50, 50)  # x, y, w, h: the GET! popup's icon corner, its gift's tier numeral (#451) or "EX" (#449)
 # Green px there that make the "EX". Live: the EX's popup 966-974 (its 9 frames at 30 fps, 2026-11-04); the 1006 other
 # popups of 34 archived 1280x720 recordings (2026-10-18 to 11-05, 10 fps) 39 at most (a green icon's art at the corner).
 EX_GET_PX = 500
@@ -124,6 +124,24 @@ def ex_got(image):
     """Whether the E.G.O Gift GET! popup shows an EX gift: the green "EX" at its icon's top left, not a yellow numeral (#449)."""
     x, y, w, h = GET_MARK
     return int(green(image[y:y + h, x:x + w]).sum()) >= EX_GET_PX
+
+
+def got_tier(image):
+    """The tier (1-5) of the E.G.O Gift GET! popup's gift from the yellow numeral at its icon's top left, or None (#451).
+
+    The numeral is a cell's (numeral) about twice as big, 38 px tall: read 4 and 34 rows under its top yellow row. The
+    popup slides in from the right over its first two frames, 9 px short of its place at most, so the rows are found, not
+    fixed. Live: the first frame (10 fps) of 1007 GET! popups of 34 recordings, 2026-10-18 to 11-04: 1006 read their tier
+    (I 342, II 408, III 216, IV 40, checked by eye), the EX gift's none; the 42 popups of the 2026-11-06 recording, 30 fps,
+    their tier on every frame or none while they slide out. A V is unseen. An icon's yellow art in the box sits right of
+    the numeral and under its top, out of the rows numeral reads.
+    """
+    x, y, w, h = GET_MARK
+    mask = yellow(image[y:y + h, x:x + w])
+    rows = np.flatnonzero(mask.any(axis=1))
+    if not len(rows) or rows[0] + 34 >= h:
+        return None
+    return numeral(mask, rows[0] + 4, rows[0] + 34)
 
 
 FORECAST_NUMERAL = (298, 452, 34, 34)  # x, y, w, h: the Forecasts row's numeral on the fuse page, centred at x 315
