@@ -20,7 +20,7 @@
     "charge_enkephalin"
   ],
   "properties": {
-    "version": { "const": 18 },
+    "version": { "const": 19 },
     "language": { "enum": ["zh_tw", "en_us"], "default": "zh_tw" },
     "run": {
       "type": "object",
@@ -152,7 +152,8 @@
           "allow_white_gossypium",
           "gift_list",
           "sell_max_tier",
-          "sell_vestiges"
+          "sell_vestiges",
+          "skill_replacement"
         ],
         "properties": {
           "id": { "$ref": "#/$defs/id" },
@@ -265,6 +266,47 @@
             "type": "boolean",
             "default": false,
             "description": "the shop may sell vestiges (pure fusion-material gifts, data/shop.yaml); off: never sold"
+          },
+          "skill_replacement": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["sinners", "id_skill_search"],
+            "description": "the shop's Replace <sinner>'s Skill and ID Skill Search (#264, docs/spec/04-settings.md section 9): per sinner, the skill counts to aim for; the list order is the sinners' priority",
+            "properties": {
+              "sinners": {
+                "type": "array",
+                "minItems": 12,
+                "maxItems": 12,
+                "items": { "$ref": "#/$defs/skill_sinner" },
+                "description": "all 12 sinners once each (the cross-check names a repeat), in priority order"
+              },
+              "id_skill_search": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["enabled", "pay"],
+                "properties": {
+                  "enabled": { "type": "boolean", "default": false },
+                  "pay": { "enum": ["cost", "starlight"], "default": "cost", "description": "starlight is the owned starlight; choosing it in the GUI is consent to spend it" }
+                }
+              }
+            },
+            "default": {
+              "sinners": [
+              { "sinner": "Yi Sang", "target": { "s1": 3, "s2": 2, "s3": 1 }, "options": ["s1_s3", "s2_s3", "s1_s2"] },
+              { "sinner": "Faust", "target": { "s1": 3, "s2": 2, "s3": 1 }, "options": ["s1_s3", "s2_s3", "s1_s2"] },
+              { "sinner": "Don Quixote", "target": { "s1": 3, "s2": 2, "s3": 1 }, "options": ["s1_s3", "s2_s3", "s1_s2"] },
+              { "sinner": "Ryōshū", "target": { "s1": 3, "s2": 2, "s3": 1 }, "options": ["s1_s3", "s2_s3", "s1_s2"] },
+              { "sinner": "Meursault", "target": { "s1": 3, "s2": 2, "s3": 1 }, "options": ["s1_s3", "s2_s3", "s1_s2"] },
+              { "sinner": "Hong Lu", "target": { "s1": 3, "s2": 2, "s3": 1 }, "options": ["s1_s3", "s2_s3", "s1_s2"] },
+              { "sinner": "Heathcliff", "target": { "s1": 3, "s2": 2, "s3": 1 }, "options": ["s1_s3", "s2_s3", "s1_s2"] },
+              { "sinner": "Ishmael", "target": { "s1": 3, "s2": 2, "s3": 1 }, "options": ["s1_s3", "s2_s3", "s1_s2"] },
+              { "sinner": "Rodion", "target": { "s1": 3, "s2": 2, "s3": 1 }, "options": ["s1_s3", "s2_s3", "s1_s2"] },
+              { "sinner": "Sinclair", "target": { "s1": 3, "s2": 2, "s3": 1 }, "options": ["s1_s3", "s2_s3", "s1_s2"] },
+              { "sinner": "Outis", "target": { "s1": 3, "s2": 2, "s3": 1 }, "options": ["s1_s3", "s2_s3", "s1_s2"] },
+              { "sinner": "Gregor", "target": { "s1": 3, "s2": 2, "s3": 1 }, "options": ["s1_s3", "s2_s3", "s1_s2"] }
+              ],
+              "id_skill_search": { "enabled": false, "pay": "cost" }
+            }
           }
         }
       }
@@ -325,6 +367,34 @@
         "team": { "type": ["string", "null"], "minLength": 1, "default": null, "description": "a teams[] id: its TEAMS #N and guard_turns; null: none picked yet" },
         "retries": { "type": "integer", "minimum": 0, "default": 0, "description": "defeats of one battle fought again before the task fails; a win starts the next battle with them all" },
         "consecutive": { "type": "boolean", "default": true, "description": "set the stage's Consecutive Battle to min(10, battles left) and fight them as one battle (a x N win counts N); off: one battle at a time" }
+      }
+    },
+    "skill_sinner": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sinner", "target", "options"],
+      "properties": {
+        "sinner": { "$ref": "#/$defs/order/items" },
+        "target": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["s1", "s2", "s3"],
+          "description": "how many of skill 1, 2 and 3 the sinner's deck of 6 should hold; the total must be 6 (cross-check); 3/2/1 is the game's deck, so the shop leaves it alone",
+          "properties": {
+            "s1": { "type": "integer", "minimum": 0, "maximum": 6 },
+            "s2": { "type": "integer", "minimum": 0, "maximum": 6 },
+            "s3": { "type": "integer", "minimum": 0, "maximum": 6 }
+          }
+        },
+        "options": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 3,
+          "uniqueItems": true,
+          "items": { "enum": ["s1_s3", "s2_s3", "s1_s2"] },
+          "default": ["s1_s3", "s2_s3", "s1_s2"],
+          "description": "the swaps this sinner may use, the first to try first (data/shop.yaml skill_replacement prices them)"
+        }
       }
     },
     "id": { "type": "string", "minLength": 1 },
