@@ -528,7 +528,7 @@ LUX = {"exp": ("EXP Luxcavation", luxcavation.EXP_COST), "thread": ("Thread Luxc
 @AgentServer.custom_action("LuxStart")
 class LuxStart(TaskStart):
     """A Luxcavation task's entry (#366, #368), its param the settings key ("exp", "thread"): TaskStart, then the team
-    luxcavation.<key> names, whose guard turns the battle plays (spec 03 section 8), and its count and retries (#367).
+    luxcavation.<key> names, whose guard turns the battle plays (spec 03 section 8), its mode (#431), count and retries (#367).
     No team picked, or settings that do not load: the stop procedure, before any tap."""
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
@@ -601,7 +601,7 @@ class LuxHome(CustomAction):
         return True
 
 
-def plan(context, today=None, seen=None):
+def plan(context, today, seen):
     """The battles this run fights (luxcavation.fights): count mode, the target; daily mode (#429), the day's target less
     `today`, the battles won today as read (None: it did not read), `seen` what was read, for the log. Nothing read or
     nothing left: the main window and done, nothing fought; else the Modules must cover the battles at the hardest

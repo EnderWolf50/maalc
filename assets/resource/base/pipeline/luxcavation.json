@@ -316,7 +316,7 @@
     },
     // Thread Luxcavation (#368): LuxStart picks the team (luxcavation.thread), then the same entry as EXP (ThreadHome,
     // LuxHome) and ThreadHub, which plays the hardest level of today's one open card of the Thread tab, over
-    // and over until `count` are won. Its screens: the Thread tab's open card (Enter), its Level Select (the bottom row's
+    // and over until this run's battles are won (count mode: count; daily mode: the Daily Bonuses left, #431). Its screens: the Thread tab's open card (Enter), its Level Select (the bottom row's
     // Enter), then the pages EXP's Enter leads to as well (ExpHub's list: the team page, the battle, the results page).
     "ThreadLuxcavation": {
         "action": "Custom",

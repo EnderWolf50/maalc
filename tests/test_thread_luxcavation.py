@@ -177,9 +177,9 @@ def test_the_modules_are_checked_against_this_runs_battles():
         assert actions.plan(MagicMock(), 1, "Daily Bonuses 2/3") is True
         assert ends == ["Thread Luxcavation: Daily Bonuses 2/3 (1 won today), target 3: Modules 3 < 4 needed for 2, skipped"]
         actions.RUN["lux"].update(mode="count", target=91, modules=182, fights=None)
-        assert actions.plan(MagicMock()) is None and actions.RUN["lux"]["fights"] == 91
+        assert actions.plan(MagicMock(), None, None) is None and actions.RUN["lux"]["fights"] == 91
         actions.RUN["lux"].update(modules=181, fights=None)
-        assert actions.plan(MagicMock()) is True
+        assert actions.plan(MagicMock(), None, None) is True
         assert ends[-1] == "Thread Luxcavation: count mode, 91 this run: Modules 181 < 182 needed for 91, skipped"
     finally:
         actions.finish = saved
