@@ -10,8 +10,11 @@ to accept on 2026-10-21 (exit 0, the line says which; the bot's nodes do it when
 `run.auto_accept_terms` are on); `stop` a resumable Mirror Dungeon run, an outdated client or any other screen (exit 1
 with the reason). Run it before any pytest or install rebuild: a game update found after 21 minutes of prep cost a run.
 
-**recording** exits 1 when the newest `rec_*.mkv` (a recording in progress) or `rec_*.mp4` in `--out` did not grow over `--seconds`: a display that went to sleep
-after `screenrec.py start` leaves a clip with no frames.
+**recording** says whether the recording in progress in `--out` (the `.mkv` its live `rec_<profile>.state.json` names)
+grew over `--seconds`. A file that did not grow, or that ffmpeg has not written yet because no frame came, is a `note:`
+for the report, exit 0: a game frozen on one screen draws nothing, like a sleeping display, so a still file does not mean
+a broken recording, and the recording stays on. Exit 1 only when `--out` has no recording in progress: no state file
+without `ended` whose `ffmpeg_pid` still runs (the state format is `save()` of the screen-record skill's `screenrec.py`).
 
 **plan** waits up to `--within` seconds for the bot's `new run:` line (a run it planned itself) in `--log`. A
 `no run plan in memory` line, or none in time, means the bot continues a leftover run with no plan (weekly bonuses,
@@ -21,7 +24,9 @@ Modules and the team are then not its own choice): exit 1, stop it. For a task t
 from __future__ import annotations
 
 import argparse
+import json
 import re
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -96,23 +101,56 @@ def screen(root: Path, port: int, shot: Path | None, say=print, see=look) -> int
     return 1 if verdict == "stop" else 0
 
 
-def recording_grows(out: Path, seconds: float, say=print, sleep=time.sleep) -> int:
-    def newest():
-        # screenrec writes .mkv while recording and remuxes it to .mp4 at stop; a tie goes to the .mkv
-        files = sorted([*out.glob("rec_*.mkv"), *out.glob("rec_*.mp4")], key=lambda p: (p.stat().st_mtime, p.suffix == ".mkv"))
-        return (files[-1], files[-1].stat().st_size) if files else (None, 0)
+def ffmpeg_running(pid) -> bool:
+    if not isinstance(pid, int) or pid <= 0:
+        return False
+    r = subprocess.run(["tasklist", "/FI", f"PID eq {pid}", "/FI", "IMAGENAME eq ffmpeg.exe", "/FO", "CSV", "/NH"],
+                       capture_output=True, text=True)
+    return f'"{pid}"' in r.stdout
 
-    first, size = newest()
-    if first is None:
-        say(f"no rec_*.mkv or rec_*.mp4 in {out}: the recording did not start")
+
+def read_state(sp: Path) -> dict:
+    for _ in range(5):  # screenrec swaps the file in with os.replace; Windows can refuse a read during the swap
+        try:
+            return json.loads(sp.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            time.sleep(0.2)
+    return {}
+
+
+def live_recording(out: Path, running=None) -> Path | None:
+    """The .mkv of the newest recording still running in `out`: its rec_<profile>.state.json names it, has no `ended`,
+    and its ffmpeg runs. screenrec writes the .mkv once the first frame is encoded and remuxes it to .mp4 at stop."""
+    running, live = running or ffmpeg_running, []
+    for sp in out.glob("rec_*.state.json"):
+        st = read_state(sp)
+        if st.get("mkv") and not st.get("ended") and running(st.get("ffmpeg_pid")):
+            live.append((sp.stat().st_mtime, Path(st["mkv"])))
+    return max(live)[1] if live else None
+
+
+def size_of(f: Path) -> int | None:
+    try:
+        return f.stat().st_size
+    except FileNotFoundError:
+        return None  # no frame encoded yet, or `stop` already removed it
+
+
+def recording_check(out: Path, seconds: float, say=print, sleep=time.sleep, clock=time.strftime, running=None) -> int:
+    rec = live_recording(out, running)
+    if rec is None:
+        say(f"no recording in progress in {out} (no rec_*.state.json with a running ffmpeg): start one with screenrec.py start")
         return 1
+    size = size_of(rec) or 0
     sleep(seconds)
-    last, now = newest()
-    if last == first and now > size:
-        say(f"{first.name} grew {size} -> {now} bytes in {seconds:.0f} s")
+    now = size_of(rec)
+    if now and now > size:
+        say(f"{rec.name} grew {size} -> {now} bytes in {seconds:.0f} s")
         return 0
-    say(f"{first.name} did not grow in {seconds:.0f} s ({size} bytes): the display may be asleep (bot.py awake); stop the recording and start it again")
-    return 1
+    what = "did not grow" if now is not None else "has no frame yet"
+    say(f"note: {rec.name} {what} in the {seconds:.0f} s before {clock('%H:%M:%S')}: no new frames "
+        "(a frozen game or a sleeping display). Keep recording; put this line in the report")
+    return 0
 
 
 NEW_RUN = r"\[maalc\] new run: \S+, team "  # the plan line (agent/actions.py); the other `new run:` lines are Module reads
@@ -156,7 +194,7 @@ def main(argv=None) -> int:
     if a.command == "screen":
         return screen(a.install.resolve(), a.port, a.shot)
     if a.command == "recording":
-        return recording_grows(a.out, a.seconds)
+        return recording_check(a.out, a.seconds)
     return plan_line(a.log, a.within, a.pattern)
 
 

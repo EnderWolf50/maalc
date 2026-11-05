@@ -78,7 +78,9 @@ These are the settings of this run. Set each with `bot.py prep --set`; nothing i
 `bot.py prep --set run.difficulty={difficulty} --set run.runs={runs} --set run.weekly_bonus_use={bonus} --set luxcavation.exp.count={exp} --set luxcavation.thread.count={thread}`; check the keys against `agent/settings.schema.json` and confirm the effective values in `run.log` before the bot starts the run.
 """
 
-RECORD_YES = "Record the run: `screen-record` with `--height 720` (skill step 5), and annotate it (step 8)."
+RECORD_YES = ("Record the run: `screen-record` with `--height 720` (skill step 5), one recording kept on from the start of "
+              "the run to its end, and annotate it (step 8). A stretch with no new frames goes into `recording.md` and the "
+              "report, as step 5 says.")
 RECORD_NO = "Do not record this run; step 8's route and pack stills come from device screenshots."
 
 GOAL = "\n## Goal\n\n(The agent that creates this task writes the goal here: what to prove, the segment each check needs, the acceptance numbers.)\n"

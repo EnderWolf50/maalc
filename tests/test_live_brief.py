@@ -24,6 +24,7 @@ def test_live_brief_states_every_setting_from_the_arguments(tmp_path):
     assert "| EXP Luxcavation count | 1 |" in text and "| Thread Luxcavation count | 3 |" in text
     assert "| weekly bonus use | none |" in text
     assert "| recording | yes |" in text and "--height 720" in text
+    assert "kept on from the start of the run to its end" in text and "recording.md" in text  # no stall rule (2026-11-05)
     assert "queue.py detach" in text and "Report" in text
     assert "## Goal" in text
 
