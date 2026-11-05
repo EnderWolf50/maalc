@@ -13,7 +13,7 @@ Once per clone, `lefthook install` turns on the pre-commit hook (`lefthook.yml`)
 
 ## Checks
 
-`uv run python tools/check.py` runs ruff, pytest, `maa-tools check` and `maa-tools test` and prints one summary line each; a failing step adds the tail of its output. CI runs the same checks, and a PR merges on a green `ci-ok`.
+`uv run python tools/check.py` runs ruff, pytest, `maa-tools check` and `maa-tools test` and prints one summary line each; a failing step adds the tail of its output. CI runs the same checks, and a PR merges on a green `ci-ok`. A push to `main` skips them when a PR run already passed every job on the same file tree. The trees match when `main` did not move between that PR run and the merge.
 
 CI splits pytest over the `agent` shards by each file's seconds on a CI runner, from `tests/shard_seconds.json`. A PR that adds a slow test file, or makes one much slower or faster, turns the `shard-balance` job red; its error names the command that rewrites the table from that run (`uv run python tools/shard_seconds.py update --run <run id>`). Commit the new table in the same PR.
 
@@ -22,7 +22,7 @@ CI splits pytest over the `agent` shards by each file's seconds on a CI runner, 
 Land one PR at a time with `tools/ship.py`:
 
 - `uv run python tools/ship.py ready <pr>...` prints head SHA, `ci-ok` state, mergeable, draft, base and the PRs stacked on each.
-- `uv run python tools/ship.py land <pr> --go` merges (merge commit) only when `ci-ok` passed on the current head and the PR is mergeable, retargets the PRs stacked on its branch to the base before the branch is deleted, waits for the CI run of the merge commit on `main` and exits non-zero when it is red. Start the next `land` after this one returned green. A PR whose base is not `main` merges without that wait (`ci.yml` runs on pushes to `main` only). `land` runs no review (AGENTS.md "Review and CI").
+- `uv run python tools/ship.py land <pr> --go` merges (merge commit) only when `ci-ok` passed on the current head and the PR is mergeable, retargets the PRs stacked on its branch to the base before the branch is deleted, waits for the CI run of the merge commit on `main` and exits non-zero when it is red. The wait is short when that run skips its jobs (see "Checks"). Start the next `land` after this one returned green. A PR whose base is not `main` merges without that wait (`ci.yml` runs on pushes to `main` only). `land` runs no review (AGENTS.md "Review and CI").
 - `uv run python tools/ship.py into <integration-branch> <branch>` merges `<branch>` into the integration branch (`--no-ff`, in a worktree of it), runs `tools/check.py` through the bench queue and pushes only on green; a conflict or a red check pushes nothing. The first merge into an integration branch with no open PR opens a draft PR, so Linux CI runs from the first merge.
 - `uv run python tools/review_pack.py <pr>` writes the diff, body, CI state and the issues the PR closes or names to `.local/scratch/review-<pr>/`, for a reviewer whose Bash tool does not run. Before the push there is no PR yet: save `git diff origin/<base>...HEAD` to a file under `.local/scratch/` instead.
 
