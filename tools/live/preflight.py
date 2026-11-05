@@ -13,7 +13,8 @@ with the reason). Run it before any pytest or install rebuild: a game update fou
 **recording** says whether the recording in progress in `--out` (the `.mkv` its live `rec_<profile>.state.json` names)
 grew over `--seconds`. A file that did not grow, or that ffmpeg has not written yet because no frame came, is a `note:`
 for the report, exit 0: a game frozen on one screen draws nothing, like a sleeping display, so a still file does not mean
-a broken recording, and the recording stays on. Exit 1 only when `--out` has no recording in progress.
+a broken recording, and the recording stays on. Exit 1 only when `--out` has no recording in progress: no state file
+without `ended` whose `ffmpeg_pid` still runs (the state format is `save()` of the screen-record skill's `screenrec.py`).
 
 **plan** waits up to `--within` seconds for the bot's `new run:` line (a run it planned itself) in `--log`. A
 `no run plan in memory` line, or none in time, means the bot continues a leftover run with no plan (weekly bonuses,
@@ -25,6 +26,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -99,32 +101,53 @@ def screen(root: Path, port: int, shot: Path | None, say=print, see=look) -> int
     return 1 if verdict == "stop" else 0
 
 
-def live_recording(out: Path) -> Path | None:
-    """The .mkv of the newest recording screenrec still runs in `out`: its rec_<profile>.state.json names it and has no
-    `ended`. screenrec writes the .mkv once the first frame is encoded and remuxes it to .mp4 at stop."""
-    live = []
-    for sp in out.glob("rec_*.state.json"):
+def ffmpeg_running(pid) -> bool:
+    if not isinstance(pid, int) or pid <= 0:
+        return False
+    r = subprocess.run(["tasklist", "/FI", f"PID eq {pid}", "/FI", "IMAGENAME eq ffmpeg.exe", "/FO", "CSV", "/NH"],
+                       capture_output=True, text=True)
+    return f'"{pid}"' in r.stdout
+
+
+def read_state(sp: Path) -> dict:
+    for _ in range(5):  # screenrec swaps the file in with os.replace; Windows can refuse a read during the swap
         try:
-            st = json.loads(sp.read_text(encoding="utf-8"))
+            return json.loads(sp.read_text(encoding="utf-8"))
         except (OSError, ValueError):
-            continue  # screenrec rewrites it in place; a half-written one is skipped
-        if st.get("mkv") and not st.get("ended"):
+            time.sleep(0.2)
+    return {}
+
+
+def live_recording(out: Path, running=None) -> Path | None:
+    """The .mkv of the newest recording still running in `out`: its rec_<profile>.state.json names it, has no `ended`,
+    and its ffmpeg runs. screenrec writes the .mkv once the first frame is encoded and remuxes it to .mp4 at stop."""
+    running, live = running or ffmpeg_running, []
+    for sp in out.glob("rec_*.state.json"):
+        st = read_state(sp)
+        if st.get("mkv") and not st.get("ended") and running(st.get("ffmpeg_pid")):
             live.append((sp.stat().st_mtime, Path(st["mkv"])))
     return max(live)[1] if live else None
 
 
-def recording_check(out: Path, seconds: float, say=print, sleep=time.sleep, clock=time.strftime) -> int:
-    rec = live_recording(out)
+def size_of(f: Path) -> int | None:
+    try:
+        return f.stat().st_size
+    except FileNotFoundError:
+        return None  # no frame encoded yet, or `stop` already removed it
+
+
+def recording_check(out: Path, seconds: float, say=print, sleep=time.sleep, clock=time.strftime, running=None) -> int:
+    rec = live_recording(out, running)
     if rec is None:
-        say(f"no recording in progress in {out} (no live rec_*.state.json): start it with screenrec.py start")
+        say(f"no recording in progress in {out} (no rec_*.state.json with a running ffmpeg): start one with screenrec.py start")
         return 1
-    size = rec.stat().st_size if rec.exists() else 0
+    size = size_of(rec) or 0
     sleep(seconds)
-    now = rec.stat().st_size if rec.exists() else 0
-    if now > size:
+    now = size_of(rec)
+    if now and now > size:
         say(f"{rec.name} grew {size} -> {now} bytes in {seconds:.0f} s")
         return 0
-    what = "did not grow" if rec.exists() else "has no frame yet"
+    what = "did not grow" if now is not None else "has no frame yet"
     say(f"note: {rec.name} {what} in the {seconds:.0f} s before {clock('%H:%M:%S')}: no new frames "
         "(a frozen game or a sleeping display). Keep recording; put this line in the report")
     return 0

@@ -61,8 +61,13 @@ def test_screen_exits_nonzero_only_on_stop(tmp_path):
 
 
 def screenrec_state(out, mkv, **kv):
-    # screenrec's rec_<profile>.state.json names the .mkv it records into; `ended` once ffmpeg exits
-    (out / "rec_p.state.json").write_text(json.dumps({"mkv": str(mkv), **kv}), encoding="utf-8")
+    # screenrec's rec_<profile>.state.json names the .mkv it records into and its ffmpeg; `ended` once ffmpeg exits
+    (out / "rec_p.state.json").write_text(json.dumps({"mkv": str(mkv), "ffmpeg_pid": 901, **kv}), encoding="utf-8")
+
+
+@pytest.fixture(autouse=True)
+def ffmpeg_901_runs(monkeypatch):
+    monkeypatch.setattr(pf, "ffmpeg_running", lambda pid: pid == 901)
 
 
 def test_a_recording_with_no_new_frames_is_a_note_not_a_failure(tmp_path):
@@ -80,6 +85,16 @@ def test_a_recording_with_no_new_frames_is_a_note_not_a_failure(tmp_path):
     assert said[-1].startswith("note:") and "did not grow" in said[-1] and "Keep recording" in said[-1]
     screenrec_state(tmp_path, rec, ended=True)
     assert pf.recording_check(tmp_path, 1, say=said.append, sleep=lambda s: None) == 1
+
+
+def test_a_dead_recorder_is_no_recording_in_progress(tmp_path):
+    # a killed runner leaves its state without `ended`; a dead ffmpeg is a broken recording, not a frozen game
+    said = []
+    rec = tmp_path / "rec_p_20261105_153350.mkv"
+    rec.write_bytes(b"x" * 10)
+    screenrec_state(tmp_path, rec, ffmpeg_pid=902)
+    assert pf.recording_check(tmp_path, 1, say=said.append, sleep=lambda s: None, running=lambda pid: False) == 1
+    assert "no recording in progress" in said[-1]
 
 
 def test_an_older_recording_in_the_folder_is_not_the_one_checked(tmp_path):
