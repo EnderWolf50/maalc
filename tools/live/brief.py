@@ -131,9 +131,9 @@ def main(argv=None) -> int:
     live.add_argument("--exp-count", type=int, required=True)
     live.add_argument("--thread-mode", choices=("daily", "count"), required=True)
     live.add_argument("--thread-count", type=int, required=True)
+    live.add_argument("--runs", type=int, required=True)
     live.add_argument("--weekly-bonus", choices=("none", "hard"), required=True)
     live.add_argument("--recording", choices=("yes", "no"), required=True)
-    live.add_argument("--runs", type=int, required=True)
     code = sub.add_parser("code")
     for p in (live, code):
         p.add_argument("--task", required=True)
