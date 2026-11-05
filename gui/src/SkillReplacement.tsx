@@ -33,8 +33,8 @@ export function SkillPanel({ i }: { i: number }) {
 
   const seen = new Map<string, number>();
   return (
-    <details className={"panel" + (bad(path) ? " bad" : "")}>
-      <summary>{t("skill.title")}{changed ? ` (${changed})` : ""}</summary>
+    <details className="panel skill-panel">
+      <summary className={bad(path) ? "bad" : ""}>{t("skill.title")}{changed ? ` (${changed})` : ""}</summary>
       <p className="muted">{t("skill.note")}</p>
       <ol className="skill-sinners">
         {sr.sinners.map((x, j) => {

@@ -182,6 +182,8 @@ details.panel > * + * { margin-top: 12px; }
 .rewards { max-width: 360px; }
 
 /* Skill replacement (#454): the 12 sinners in priority order, each with its S1/S2/S3 targets and its swaps. */
+/* not details.bad: `.bad input` would outline every field of the panel, not just the wrong row's */
+details.skill-panel > summary.bad { color: var(--bad); }
 ol.skill-sinners, ol.skill-swaps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 ol.skill-sinners > li { padding: 6px 8px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; cursor: grab; user-select: none; }
 ol.skill-sinners > li.bad { border-color: var(--bad); outline: 1px solid var(--bad); }
