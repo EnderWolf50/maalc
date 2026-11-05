@@ -87,18 +87,20 @@ LUX = {"exp": ("EXP", "fights 1 while the pass's Daily row Clear EXP Luxcavation
        "thread": ("Thread", "fights n when Daily Bonuses reads n/3 left")}
 
 
+def lux(a: argparse.Namespace) -> list[tuple[str, str, str, str, int]]:
+    return [(key, name, daily, getattr(a, f"{key}_mode"), getattr(a, f"{key}_count")) for key, (name, daily) in LUX.items()]
+
+
 def lux_rows(a: argparse.Namespace) -> str:
     rows = []
-    for key, (name, daily) in LUX.items():
-        mode, count = getattr(a, f"{key}_mode"), getattr(a, f"{key}_count")
+    for _, name, daily, mode, count in lux(a):
         cell = count if mode == "count" else f"{count}, not used: daily mode {daily}"
         rows += [f"| {name} Luxcavation mode | {mode} |", f"| {name} Luxcavation count | {cell} |"]
     return "\n".join(rows)
 
 
 def lux_sets(a: argparse.Namespace) -> str:
-    return " ".join(f"--set luxcavation.{key}.mode={getattr(a, f'{key}_mode')} --set luxcavation.{key}.count={getattr(a, f'{key}_count')}"
-                    for key in LUX)
+    return " ".join(f"--set luxcavation.{key}.mode={mode} --set luxcavation.{key}.count={count}" for key, _, _, mode, count in lux(a))
 
 
 GOAL = "\n## Goal\n\n(The agent that creates this task writes the goal here: what to prove, the segment each check needs, the acceptance numbers.)\n"

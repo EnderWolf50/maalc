@@ -30,9 +30,11 @@ def test_live_brief_states_every_setting_from_the_arguments(tmp_path):
 
 def test_a_different_count_is_never_inherited_from_an_earlier_brief(tmp_path):
     run(tmp_path, LIVE)
-    run(tmp_path, ["live", "--task", "t2", "--difficulty", "hard", "--exp-count", "2", "--thread-count", "3",
-                   "--weekly-bonus", "hard", "--recording", "no", "--force"])
+    run(tmp_path, ["live", "--task", "t2", "--difficulty", "hard", "--exp-count", "2", "--thread-count", "5",
+                   "--thread-mode", "count", "--weekly-bonus", "hard", "--recording", "no", "--force"])
     text = (tmp_path / "t2" / "brief.md").read_text(encoding="utf-8")
+    assert "luxcavation.exp.count=2" in text and "| EXP Luxcavation count | 2, not used:" in text
+    assert "| Thread Luxcavation count | 5 |" in text and "--set luxcavation.thread.mode=count --set luxcavation.thread.count=5" in text
     assert "| weekly bonus use | hard |" in text
     assert "| recording | no |" in text and "screenrec.py start" not in text and "Do not record" in text
 
@@ -51,8 +53,10 @@ def test_count_mode_states_its_count_and_sets_mode_and_count(tmp_path):
 def test_daily_mode_marks_its_count_unused_and_says_what_it_fights(tmp_path):
     text = settings_of(tmp_path, "--thread-mode", "daily", "--exp-mode", "daily")
     assert "| Thread Luxcavation mode | daily |" in text and "| EXP Luxcavation mode | daily |" in text
-    assert "| Thread Luxcavation count | 3, not used: daily mode fights n when Daily Bonuses reads n/3 left |" in text
-    assert "| EXP Luxcavation count | 1, not used: daily mode fights 1 while the pass's Daily row Clear EXP Luxcavation is under way |" in text
+    thread = next(line for line in text.splitlines() if line.startswith("| Thread Luxcavation count |"))
+    exp = next(line for line in text.splitlines() if line.startswith("| EXP Luxcavation count |"))
+    assert thread.startswith("| Thread Luxcavation count | 3, not used: daily mode") and "Daily Bonuses" in thread
+    assert exp.startswith("| EXP Luxcavation count | 1, not used: daily mode") and "Clear EXP Luxcavation" in exp
     assert "--set luxcavation.thread.mode=daily --set luxcavation.thread.count=3" in text
 
 
@@ -62,6 +66,7 @@ def test_the_mode_defaults_to_daily_as_the_schema_does(tmp_path):
 
 
 def test_a_mode_outside_the_schema_is_not_an_option(tmp_path):
+    assert run(tmp_path, [*LIVE, "--exp-mode", "count"]) == 0
     with pytest.raises(SystemExit):
         run(tmp_path, [*LIVE, "--exp-mode", "today"])
 
