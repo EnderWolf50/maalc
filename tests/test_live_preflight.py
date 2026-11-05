@@ -59,13 +59,15 @@ def test_screen_exits_nonzero_only_on_stop(tmp_path):
     assert pf.screen(tmp_path, 1, None, say=said.append, see=lambda *a: "ResumeDialog") == 1 and said[-1].startswith("stop")
 
 
-def test_a_recording_that_stops_growing_is_reported(tmp_path):
+def test_a_recording_with_no_new_frames_is_a_note_not_a_failure(tmp_path):
+    # a game frozen on one screen draws nothing, like a sleeping display: the recording stays on (2026-11-05)
     said = []
-    assert pf.recording_grows(tmp_path, 1, say=said.append, sleep=lambda s: None) == 1 and "did not start" in said[-1]
+    assert pf.recording_note(tmp_path, 1, say=said.append, sleep=lambda s: None) == 1 and "did not start" in said[-1]
     rec = tmp_path / "rec_1.mp4"
     rec.write_bytes(b"x" * 10)
-    assert pf.recording_grows(tmp_path, 1, say=said.append, sleep=lambda s: rec.write_bytes(b"x" * 99)) == 0
-    assert pf.recording_grows(tmp_path, 1, say=said.append, sleep=lambda s: None) == 1 and "asleep" in said[-1]
+    assert pf.recording_note(tmp_path, 1, say=said.append, sleep=lambda s: rec.write_bytes(b"x" * 99)) == 0
+    assert pf.recording_note(tmp_path, 1, say=said.append, sleep=lambda s: None, clock=lambda f: "15:33:53") == 0
+    assert said[-1].startswith("note:") and "15:33:53" in said[-1] and "Keep recording" in said[-1]
 
 
 def test_a_recording_in_progress_is_an_mkv(tmp_path):
@@ -74,7 +76,7 @@ def test_a_recording_in_progress_is_an_mkv(tmp_path):
     (tmp_path / "rec_old_20261029_100000.mp4").write_bytes(b"x" * 500)
     rec = tmp_path / "rec_preflight_20261030_043630.mkv"
     rec.write_bytes(b"x" * 10)
-    assert pf.recording_grows(tmp_path, 1, say=said.append, sleep=lambda s: rec.write_bytes(b"x" * 99)) == 0, said
+    assert pf.recording_note(tmp_path, 1, say=said.append, sleep=lambda s: rec.write_bytes(b"x" * 99)) == 0, said
 
 
 class Clock:
