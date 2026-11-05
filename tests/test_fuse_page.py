@@ -4,6 +4,7 @@ import pytest
 
 import actions
 import test_actions
+import test_shop
 import test_shop_scroll
 from test_actions import FUSING, after_last, fuse_page, reads, shop_team, taps, wants, with_ids
 from test_shop_scroll import KEYWORDS, UNLISTED, by_points, fusion, kept_but
@@ -13,6 +14,7 @@ KEPT = "shop: fuse page kept: "
 READ_AGAIN = ", owned gifts read again"
 PLACED = "shop: fuse page kept: owned gifts placed by the fusion (new gift read at cell "
 SOOTHE = 9088  # Burn IV: [9003, 9053, 9157]
+EX = 9799  # A Certain Philosophy: the EX gift a 99% fusion gives when it fails (#378, #449)
 
 
 def read_again(lines):
@@ -266,6 +268,28 @@ def test_a_gift_made_that_looks_like_a_gift_listed_is_its_twin_only_by_the_same_
     else:
         assert placed_lines(lines) == [PLACED + "4)", PLACED + "9)"] and not read_again(lines)
         assert g.reads == list(range(16)) + [1001, 1002]
+
+
+def test_a_fusion_whose_get_popup_shows_ex_places_the_ex_gift_as_tier_v(context, grid, monkeypatch):
+    # #449, live 2026-11-04 (F2's second fusion): forecast IV at 99%, the fusion gave A Certain Philosophy (EX, tier V in the
+    # data); read as tier V where the forecast's tier was made, the owned gifts were read again. Its GET! popup (the
+    # recording's frame, over the page left of the grid from the fusion's Confirm until its own) shows the green "EX": the
+    # gift made is tier V, placed ahead of the IIIs and read there alone. The fusion: III 4, II 10 and I 15 (a III by points).
+    lines = []
+    monkeypatch.setattr(actions, "log", lines.append)
+    g = grid("fuse", 16, tiers=[3] * 5 + [2] * 6 + [1] * 5, makes=lambda tiers, ids: (5, EX))
+    popup = test_shop.screen_with("get_ex")
+
+    def screen():
+        image = g.screen()
+        if actions.FUSE_DIALOG_CONFIRM in g.taps and actions.GET_CONFIRM not in after_last(g.taps, actions.FUSE_DIALOG_CONFIRM):
+            image[160:500, 300:640] = popup[160:500, 300:640]
+        return image
+    context.tasker.controller.post_screencap.return_value.wait.return_value.get.side_effect = screen
+    assert fusion(context, monkeypatch, g, kept_but(16, 4, 10, 13, 14, 15))
+    assert "shop: the GET! popup shows an EX gift (green EX): the gift made is placed as tier V" in lines
+    assert placed_lines(lines) == [PLACED + "0)"] and not read_again(lines)
+    assert g.reads == list(range(16)) + [1001]
 
 
 def test_an_unselectable_cell_is_kept_whatever_the_list_says():

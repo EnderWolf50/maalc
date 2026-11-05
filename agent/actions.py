@@ -3765,7 +3765,8 @@ GIFT_TIERS = {e["id"]: e["tier"] for e in GIFTS}
 GIFT_IDS = {e["en"]: e["id"] for e in GIFTS}  # an English name plate's gift (#329)
 CELL_ICON_ROI = 70  # px square around a cell's centre on the scaled grid where its icon is looked for: the biggest icon (54 px) +-8
 # An EX gift's tier in the game data (TIER_5 beside TIER_EX: 9799 A Certain Philosophy, 9800 Wealth); its cell shows "EX"
-# where the numerals go, so an Unselectable cell with no numeral read is matched against that tier's gifts (#378)
+# where the numerals go, so a cell with no numeral read and that "EX" (#449) or the Unselectable tag (#378) is matched
+# against that tier's gifts, and a fusion whose GET! popup shows it made that tier
 EX_TIER = 5
 FUSE_CONFIRM = [300, 150, 680, 380]  # "Selected E.G.O Gifts 3/5" over "Fuse the selected E.G.O Gifts?"
 FUSE_COUNT = r"(\d)\s*/\s*\d"  # its "3/5": the materials in
@@ -3937,8 +3938,8 @@ def read_cells(context, image, cells, page):
     over it. keyword: the cell's best badge, "Keywordless" with none, None when the badge is below the grid's edge. An
     empty cell is flat (live: spread 1-2, a gift 41-84), unless the fuse page tags it Unselectable (held).
     id: the data's id of the gift the cell shows (cell_id), None when unknown, score the best icon's; tier is then that gift's.
-    unselectable: the fuse page's tag (#378); with no numeral read the cell's candidates are EX_TIER's (an EX gift shows
-    "EX" there).
+    unselectable: the fuse page's tag (#378); ex: no numeral read, the green "EX" there instead (shop.ex_mark, #449). With
+    either and no numeral, the cell's candidates are EX_TIER's.
     """
     scale, bottom = CELL_PAGES[page]
     half = shop.CELL_HALF
@@ -3949,9 +3950,12 @@ def read_cells(context, image, cells, page):
     x0, y0 = min(x for _, x, _ in filled) - half, min(y for _, _, y in filled) - half
     x1, y1 = max(x for _, x, _ in filled) + half, min(bottom, max(y for _, _, y in filled) + half)
     grid = shop.rescale(image[y0:y1, x0:x1], 1 / scale)
-    out = [{"i": i, "x": x, "y": y, "tier": shop.tier(shop.cell_crop(image, x, y, scale)),
+    crops = {i: shop.cell_crop(image, x, y, scale) for i, x, y in filled}
+    out = [{"i": i, "x": x, "y": y, "tier": shop.tier(crops[i]),
             "keyword": "Keywordless" if y + 40 <= bottom else None, "unselectable": i in tagged,
             "at": ((x - x0) / scale, (y - y0) / scale)} for i, x, y in filled]
+    for c in out:
+        c["ex"] = c["tier"] is None and shop.ex_mark(crops[c["i"]])
     best = {}
     for keyword in BADGES:
         for score, (bx, by) in template_hits(context, grid, f"Shop/Badge{keyword}.png", BADGE_MIN):
@@ -3960,7 +3964,7 @@ def read_cells(context, image, cells, page):
                 if c["keyword"] and 12 <= bx - cx <= 40 and 12 <= by - cy <= 40 and score > best.get(c["i"], 0):
                     best[c["i"]], c["keyword"] = score, keyword
     for c in out:
-        tier = EX_TIER if c["tier"] is None and c["unselectable"] else c["tier"]
+        tier = EX_TIER if c["tier"] is None and (c["unselectable"] or c["ex"]) else c["tier"]
         c["id"], c["score"] = cell_id(context, grid, c.pop("at"), c["keyword"], tier)
         if c["id"] is not None:
             c["tier"] = GIFT_TIERS[c["id"]]  # the numeral may be misread (#330): the gift's own tier decides
@@ -3989,8 +3993,9 @@ def offer_cell(slot):
 
 def cell_line(cell, role):
     """One cell read for the log: "2 III Bleed 9042 Smokes and Wires (0.77): keep", an unknown gift "unknown (best 0.38)" (#297),
-    a cell the fuse page tags Unselectable "... (0.78) unselectable: keep" (#378)."""
-    tier = "I II III IV V".split()[cell["tier"] - 1] if cell["tier"] else "?"
+    a cell the fuse page tags Unselectable "... (0.78) unselectable: keep" (#378), a cell showing the green "EX" for its
+    numerals "1 EX Keywordless 9799 A Certain Philosophy (0.78): keep" (#449)."""
+    tier = "EX" if cell.get("ex") else "I II III IV V".split()[cell["tier"] - 1] if cell["tier"] else "?"
     tag = " unselectable" if cell.get("unselectable") else ""
     return f"{cell['i']} {tier} {cell['keyword'] or 'badge unread'} {gift_shown(cell)}{tag}: {role}"
 
@@ -4237,7 +4242,8 @@ def fused_cells(context, cells, grid, fusion):
     grid's end and gave every place a tier, in the page's order (the vestiges first, then highest tier first). After a
     recipe the owned gifts are placed by their label first (owned_top): its Fusion Available section may have gone, the
     list moved up (#304). The gift made's cell is dragged into view, a row over it on show too, and read: it is placed
-    (fused_check) when its tier is the fusion's (a recipe's: its id; an EX gift a failed fusion gives is tier V, so never),
+    (fused_check) when its tier is the fusion's (a recipe's: its id; an EX gift a failed fusion gives, tier V, when the GET!
+    popup showed its "EX", #449),
     its id is read and no gift listed with that id or an unread one looks like it, every other cell on show looks as it was
     read (matched within GRID_SAME) and the places after the last hold no gift. A check that fails places the owned gifts
     by their label once (the list may have sprung back from its end, a section come or gone) and checks again. Each tap
@@ -4343,16 +4349,19 @@ def tap_keyword(context, keyword):
 
 
 def gift_get(context):
-    """Confirm the E.G.O Gift GET! popup after a purchase or a fusion; False when none comes up in 4.5 s."""
+    """Confirm the E.G.O Gift GET! popup after a purchase or a fusion: the screenshot its title was read on, None when none
+    comes up in 4.5 s. Its gift's mark is on that screenshot already (#449: the 2026-11-04 recording at 30 fps shows the
+    title and the "EX" from the popup's first frame, 0.3 s before the tap took it away)."""
     def title(image):
         return has(text(context, image, GET_TITLE), "GET")
-    if until(context, title, timeout=4.5) is None:
-        return False
+    image = until(context, title, timeout=4.5)
+    if image is None:
+        return None
     for _ in range(3):  # a tap while the popup zooms in is lost
         if tap_then(context, *GET_CONFIRM, lambda im: not title(im), timeout=1.5) is not None:
             still(context, timeout=1.0)  # the popup fades out over the Cost
             break
-    return True
+    return image
 
 
 def pick_cells(cells, materials):
@@ -4880,7 +4889,8 @@ class Shop(CustomAction):
     @staticmethod
     def fuse_ordinary(context, team, visit, cells, roles, slots, grid, avoid):
         """The ordinary fusion of the cells read, fusions' first group put in (place): the fusion made, {"gone": its cells,
-        "tier": the page's forecast's (the points' when unread), "gift": None}, for fused_cells. A group the page's forecast
+        "tier": the page's forecast's (the points' when unread; EX_TIER when the GET! popup shows an EX gift, shop.ex_got,
+        #449), "gift": None}, for fused_cells. A group the page's forecast
         turns down comes out again and the next is tried, FUSE_TRIES at most (#285); False on none left."""
         condition = team["list"]["fusion_condition"]
         refused = []
@@ -4904,11 +4914,14 @@ class Shop(CustomAction):
             log(f"shop: fuse forecast {materials}: points tier {tier}, page tier {page_tier or 'unread'}, chance "
                 f"{f'{chance}%' if chance else 'unread'}, condition {condition}: {act}")
             if wanted:
-                fused = Shop.press_fuse(context, len(group))
-                log(f"shop: fuse {materials} into a tier {page_tier or tier} {team['keyword']} gift (condition {condition}): {'done' if fused else 'not confirmed'}")
-                if not fused:
+                got = Shop.press_fuse(context, len(group))
+                log(f"shop: fuse {materials} into a tier {page_tier or tier} {team['keyword']} gift (condition {condition}): {'not confirmed' if got is None else 'done'}")
+                if got is None:
                     return False
                 owned_change(visit, gone=[c["id"] for c in group])
+                if shop.ex_got(got):  # #449: a fusion short of its 99% gives an EX gift
+                    log("shop: the GET! popup shows an EX gift (green EX): the gift made is placed as tier V")
+                    return {"gone": group, "tier": EX_TIER, "gift": None}
                 return {"gone": group, "tier": page_tier or tier, "gift": None}
             refused.append(tuple(sorted(c["tier"] for c in group)))
             if len(refused) >= FUSE_TRIES or not Shop.place(context, group, slots, grid, out=True):
@@ -4916,13 +4929,14 @@ class Shop(CustomAction):
 
     @staticmethod
     def press_fuse(context, count):
-        """Press Fuse with `count` materials in and confirm it when the dialog counts as many; True when the GET! popup came."""
+        """Press Fuse with `count` materials in and confirm it when the dialog counts as many: the GET! popup's screenshot
+        (gift_get), None when it did not come."""
         # Read again on the still screenshot: the one that matched was taken while the dialog zoomed in.
         page_guard(context, "Shop")
         image = tap_shown(context, *PAGE_OK, shows(context, FUSE_CONFIRM, FUSE_COUNT), timeout=2)
         m = image is not None and re.search(FUSE_COUNT, text(context, image, FUSE_CONFIRM))
         if not (m and int(m[1]) == count):
-            return False
+            return None
         tap(context, *FUSE_DIALOG_CONFIRM, wait=0)  # gift_get waits for its GET!
         return gift_get(context)
 
@@ -4957,7 +4971,7 @@ class Shop(CustomAction):
         # as the recipe, and Fuse is not pressed. Only the tier is compared: the row shows no product name to read. Unread, or
         # a recipe of tier V (shop.forecast_tier never reads one), it goes on: a recipe has no points tier to fall back on.
         cancel = tier is not None and recipe_tier is not None and recipe_tier <= shop.FUSION_TOP_TIER and tier != recipe_tier
-        made = False if cancel else Shop.press_fuse(context, len(group))
+        made = not cancel and Shop.press_fuse(context, len(group)) is not None
         if made:
             owned_change(visit, gone=recipe["materials"], got=[recipe["gift"]])
         if not made:

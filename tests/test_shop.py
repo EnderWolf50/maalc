@@ -24,6 +24,9 @@ CROP_AT = {
     # #378: a frame of the 2026-11-04 recording (F3, 07:03:31), the list at its top: Twinkling Vestige (III) first, then A
     # Certain Philosophy (EX, 9799) dimmed under its red "Unselectable" tag, then the III run
     "fuse_ex": (620, 200),
+    # #449: the GET! popup after F2's second fusion of the same recording (06:55:57): A Certain Philosophy, the green "EX" at
+    # its icon's top left where a gift's yellow numeral goes, its name plate yellow
+    "get_ex": (300, 160),
     # The fuse page's slots and first two columns (#77): live 2026-10-18 (probe capture rec/m3/fuse-152), Spiderweb tapped
     # in; captures/97 (2 in, a tooltip over the grid), Super Shop captures/172 (cells 5 and 6 in) and 169 (empty).
     "fuse_one_in": (180, 165),
@@ -514,6 +517,54 @@ def test_the_unselectable_sweep_over_tests_screens_hits_no_fuse_page():
             image = np.asarray(img.convert("RGB"))[:, :, ::-1]
             hits += [f"{png.stem} {c}" for c, (x, y) in enumerate(actions.FUSE_CELLS) if s.unselectable(image, x, y)]
     assert hits == ["MapBossDarkAfterShop 9", "MapFloor4Panned 9"]
+
+
+def test_an_ex_gift_shows_its_green_ex_where_the_numerals_go():
+    # #449: an EX gift's cell has a green "EX" for its tier numerals: dimmed on the fuse page (fuse_ex, cell 1, A Certain
+    # Philosophy), bright on a sell page (unseen live). Of tests/shop's fuse and sell crops only that cell shows it.
+    import actions  # noqa: PLC0415  (as above)
+    for name, cells in [(n, actions.FUSE_CELLS) for n in CROP_AT if n.startswith("fuse")] + [("sell", actions.SELL_CELLS)]:
+        image = screen_with(name)
+        shown = [c for c, (x, y) in enumerate(cells) if (s.filled(image, x, y) or s.unselectable(image, x, y))
+                 and s.ex_mark(s.cell_crop(image, x, y, OWNED))]
+        assert shown == ([1] if name == "fuse_ex" else []), name
+
+
+def test_the_ex_mark_sweep_over_tests_screens_hits_no_shop_page():
+    # CODING_STANDARDS' sweep: read_cells looks for the "EX" only on a shop page's cell holding a gift whose numeral it did
+    # not read. No shop page of tests/screens has one; 12 other screens do (green art, map nodes, banners at a cell's place).
+    import actions  # noqa: PLC0415  (as above)
+    hits = set()
+    for png in sorted(SCREENS.glob("*.png")):
+        img = Image.open(png)
+        if img.size != (1280, 720):
+            continue
+        image = np.asarray(img.convert("RGB"))[:, :, ::-1]
+        for page, cells in (("fuse", actions.FUSE_CELLS), ("sell", actions.SELL_CELLS)):
+            for x, y in cells:
+                cell = s.cell_crop(image, x, y, OWNED)
+                if actions.held(image, x, y, page) and s.tier(cell) is None and s.ex_mark(cell):
+                    hits.add(png.stem)
+    assert not [h for h in hits if "Shop" in h]
+    assert sorted(hits) == ["BattlePause", "BattleTurnEven", "EnkephalinAssembled", "GiftSearchSelected", "HelpPagerSinners",
+                            "Mailbox", "MainWindow", "MainWindowFadeIn", "MainWindowLater", "MainWindowLowEnkephalin.synthetic",
+                            "MapHardRest.synthetic", "Victory"]
+
+
+def test_the_get_popup_tells_an_ex_gift_by_its_green_mark():
+    # #449: after a fusion short of its 99%, the GET! popup shows the EX gift it gave with a green "EX" at its icon's top
+    # left; any other gift shows its yellow tier numeral there (GiftGet: II, after a Gift Search; GiftGetOverMap: I).
+    assert s.ex_got(screen_with("get_ex"))
+    for name in ("GiftGet", "GiftGetOverMap", "GiftSearchGet"):
+        assert not s.ex_got(np.asarray(Image.open(SCREENS / f"{name}.png").convert("RGB"))[:, :, ::-1]), name
+
+
+def test_the_get_popup_sweep_over_tests_screens_hits_nothing():
+    # CODING_STANDARDS' sweep: gift_get's screenshot is looked at only after a fusion, but no 1280x720 screen of tests/screens
+    # reads an "EX" at the popup's icon corner.
+    hits = [p.stem for p in sorted(SCREENS.glob("*.png")) if Image.open(p).size == (1280, 720)
+            and s.ex_got(np.asarray(Image.open(p).convert("RGB"))[:, :, ::-1])]
+    assert hits == []
 
 
 def test_the_forecasts_row_sweep_over_tests_screens_finds_no_unlisted_hit():
