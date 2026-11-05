@@ -51,7 +51,7 @@ def test_count_mode_states_its_count_and_sets_mode_and_count(tmp_path):
 
 
 def test_daily_mode_marks_its_count_unused_and_says_what_it_fights(tmp_path):
-    text = settings_of(tmp_path, "--thread-mode", "daily", "--exp-mode", "daily")
+    text = settings_of(tmp_path)
     assert "| Thread Luxcavation mode | daily |" in text and "| EXP Luxcavation mode | daily |" in text
     thread = next(line for line in text.splitlines() if line.startswith("| Thread Luxcavation count |"))
     exp = next(line for line in text.splitlines() if line.startswith("| EXP Luxcavation count |"))
@@ -63,8 +63,9 @@ def test_daily_mode_marks_its_count_unused_and_says_what_it_fights(tmp_path):
 @pytest.mark.parametrize("flag", ["--exp-mode", "--thread-mode"])
 def test_a_brief_without_a_mode_is_not_written(tmp_path, flag):
     i = LIVE.index(flag)
-    with pytest.raises(SystemExit):
+    with pytest.raises(SystemExit) as exit_:
         run(tmp_path, [*LIVE[:i], *LIVE[i + 2:]])
+    assert exit_.value.code == 2
     assert not (tmp_path / "t1" / "brief.md").exists()
 
 
