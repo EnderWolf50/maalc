@@ -2,7 +2,7 @@
 // crossCheck mirrors cross_check in agent/settings.py message for message;
 // tests/settings_cases.json holds the cases both test suites run.
 import Ajv2020 from "ajv/dist/2020";
-import { schema, type Settings } from "./model";
+import { schema, skillCounts, type Settings } from "./model";
 
 /** paths mark the fields in the editor; text is what agent/settings.py would say. */
 export interface Problem { paths: string[]; text: string }
@@ -74,6 +74,17 @@ export function crossCheck(data: Settings): Problem[] {
         errors.push({ paths: [path], text: `${path}: team ${pyRepr(t.name)} uses missing plan ${pyRepr(ref)} (not in ${key})` });
       }
     }
+  });
+
+  teams.forEach((t, i) => {
+    const sinners = t.skill_replacement.sinners;
+    dupes(`teams/${i}/skill_replacement/sinners`, sinners.map((x) => x.sinner), "sinner", "sinner");
+    sinners.forEach((x, j) => {
+      const { total } = skillCounts(x.target);
+      if (total === 6) return;
+      const path = `teams/${i}/skill_replacement/sinners/${j}/target`;
+      errors.push({ paths: [path], text: `${path}: team ${pyRepr(t.name)} sinner ${pyRepr(x.sinner)} targets ${total} skills, not 6` });
+    });
   });
 
   data.gift_lists.forEach((list, i) => {

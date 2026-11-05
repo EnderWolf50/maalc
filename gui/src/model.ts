@@ -4,6 +4,7 @@ import { parse as parseYaml } from "yaml";
 import schema from "../../agent/settings.schema.json";
 import gifts from "../../assets/resource/base/data/gift_search.json";
 import recipes from "../../assets/resource/base/data/gift_recipes.json";
+import shopYaml from "../../assets/resource/base/data/shop.yaml?raw";
 import graces from "./graces.json";
 
 export { schema };
@@ -26,6 +27,25 @@ export const runEnum = (k: keyof typeof P.run.properties) => (P.run.properties[k
 export const teamEnum = (k: keyof typeof TEAM) => (TEAM[k] as { enum: string[] }).enum;
 
 export type Order = string[];
+
+/** A skill swap a team's skill replacement may use (#264, #454): one skill `from` becomes one skill `to`; `shop` is the Replace
+ * <sinner>'s Skill cell's price in Cost, `id_search` the ID Skill Search's price in Cost or starlight. */
+export interface SkillSwap { from: number; to: number; shop: number; id_search: { cost: number; starlight: number } }
+/** data/shop.yaml's skill_replacement, keyed by swap in the default order (the schema's options enum lists the same keys);
+ * the agent reads the same entry, the screen's own price wins when the bot taps. */
+export const SKILL_SWAPS: Record<string, SkillSwap> = parseYaml(shopYaml).skill_replacement;
+/** A sinner's target counts: skill 1, 2 and 3 in a deck of 6. */
+export interface SkillTarget { s1: number; s2: number; s3: number }
+/** The game's deck: 3 of skill 1, 2 of skill 2, 1 of skill 3; a sinner at it is left alone. */
+export const GAME_DECK: SkillTarget = { s1: 3, s2: 2, s3: 1 };
+/** The deck of 6 a target makes: its total (must be 6) and whether it is the game's own deck. */
+export const skillCounts = (t: SkillTarget) => ({
+  total: t.s1 + t.s2 + t.s3, untouched: t.s1 === GAME_DECK.s1 && t.s2 === GAME_DECK.s2 && t.s3 === GAME_DECK.s3,
+});
+/** Spec 04 section 9 skill_replacement: sinners in priority order, each with its target and the swaps to try in order. */
+export interface SkillSinner { sinner: string; target: SkillTarget; options: string[] }
+export interface SkillReplacement { sinners: SkillSinner[]; id_skill_search: { enabled: boolean; pay: string } }
+export const SKILL_PAYMENTS: string[] = TEAM.skill_replacement.properties.id_skill_search.properties.pay.enum;
 
 /** Spec 04 section 7: base prices; + and ++ cost 2x and 3x (agent/run_start.py GRACE_BASE). */
 export const BOOST_COST = [10, 10, 20, 20, 30, 30, 40, 40, 50, 60];
@@ -282,7 +302,7 @@ export interface Team {
   theme_pack_plan: string; reward_cards: string[]; shop_refresh_keyword: number; shop_refresh_normal: number; heal: string;
   reserve_cost: number; min_alive: number; guard_turns: number;
   gift_search: { enabled: boolean; gifts: GiftRef[] }; allow_white_gossypium: boolean;
-  gift_list: string; sell_max_tier: number; sell_vestiges: boolean;
+  gift_list: string; sell_max_tier: number; sell_vestiges: boolean; skill_replacement: SkillReplacement;
 }
 /** A gift on the E.G.O Gift Search page: its keyword tab, tier and English name (spec 04 section 9). */
 export interface GiftRef { keyword: string; tier: number; name: string }
@@ -315,6 +335,7 @@ const newLuxcavation = (count = 1): Luxcavation =>
   ({ ...defaultsOf(schema.$defs.luxcavation.properties), count }) as unknown as Luxcavation;
 
 const clone = <T,>(v: T): T => structuredClone(v);
+const defaultSkillReplacement = (): SkillReplacement => clone(TEAM.skill_replacement.default) as SkillReplacement;
 const defaultsOf = (props: Record<string, object>) =>
   Object.fromEntries(Object.entries(props).map(([k, v]) => [k, clone((v as { default?: unknown }).default)]));
 
@@ -448,6 +469,9 @@ const MIGRATIONS: Record<number, (d: Record<string, unknown>) => Record<string, 
     const fixed = Object.fromEntries(Object.entries(lux).map(([k, o]) => [k, o && typeof o === "object" ? { mode: "daily", ...o } : o]));
     return { ...d, luxcavation: fixed };
   },
+  // Version 19 adds teams[].skill_replacement (#454): every sinner at the game's 3/2/1 deck with all three swaps, ID Skill
+  // Search off and paid in Cost; a deck at its target is left alone, so the shop plays as before.
+  18: (d) => withTeamDefault(d, { skill_replacement: defaultSkillReplacement() }),
 };
 /** The version 10 keep_gifts the last migration found no gift for (parseSettings returns it). */
 let v10Dropped = 0;
@@ -460,7 +484,7 @@ function withTeamDefault(d: Record<string, unknown>, field: Record<string, unkno
   return {
     ...d,
     teams: Array.isArray(d.teams)
-      ? d.teams.map((t) => (t && typeof t === "object" ? { ...clone(field), ...t } : t)) : d.teams,
+      ? d.teams.map((t) => (t && typeof t === "object" && !Array.isArray(t) ? { ...clone(field), ...t } : t)) : d.teams,
   };
 }
 
