@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 
 import pytest
+import yaml
 
 import settings
 from settings import SettingsError, load_settings
@@ -13,6 +14,10 @@ RECIPES = json.loads((DATA / "gift_recipes.json").read_text(encoding="utf-8"))
 KEYWORDS = ["Burn", "Bleed", "Tremor", "Rupture", "Sinking", "Poise", "Charge", "Slash", "Pierce", "Blunt", "Keywordless"]
 ORDER = ["Yi Sang", "Faust", "Don Quixote", "Ryōshū", "Meursault", "Hong Lu",
          "Heathcliff", "Ishmael", "Rodion", "Sinclair", "Outis", "Gregor"]
+SWAPS = ["s1_s3", "s2_s3", "s1_s2"]  # data/shop.yaml skill_replacement, in the default order
+# a new team and a migrated one: every sinner at the 3/2/1 deck, all three swaps, ID Skill Search off, paid in Cost (#454); the
+# GUI's tests read the same literal
+DEFAULT_SKILLS = json.loads((Path(__file__).parent / "settings_cases.json").read_text(encoding="utf-8"))["skill_replacement_default"]
 STARLIGHT = {"levels": ["none"] * 10, "priority": list(range(1, 11)), "convert_leftover": False}
 
 
@@ -24,7 +29,8 @@ def team(id, game_team, **kw):
         "reward_cards": ["Starlight", "Random E.G.O Gift", "Cost & Keyword Gift Chance", "Cost", "E.G.O Resource"],
         "shop_refresh_keyword": 2, "shop_refresh_normal": 0, "heal": "revive", "reserve_cost": 0, "min_alive": 0, "guard_turns": 0,
         "gift_search": {"enabled": False, "gifts": []}, "allow_white_gossypium": True,
-        "gift_list": "default", "sell_max_tier": 4, "sell_vestiges": False, **kw,
+        "gift_list": "default", "sell_max_tier": 4, "sell_vestiges": False,
+        "skill_replacement": copy.deepcopy(DEFAULT_SKILLS), **kw,
     }
 
 
@@ -41,8 +47,19 @@ def gift_list(keyword="Burn", **kw):
     }
 
 
+def custom_skills():
+    """Team b's setting: Gregor first and aiming for four skill 3s, Yi Sang at 2/2/2 by one swap; ID Skill Search on, paid in starlight."""
+    sr = copy.deepcopy(DEFAULT_SKILLS)
+    gregor = sr["sinners"].pop(11)
+    gregor.update(target={"s1": 1, "s2": 1, "s3": 4}, options=["s1_s3"])
+    sr["sinners"].insert(0, gregor)
+    sr["sinners"][1].update(target={"s1": 2, "s2": 2, "s3": 2}, options=["s2_s3", "s1_s2"])
+    sr["id_skill_search"] = {"enabled": True, "pay": "starlight"}
+    return sr
+
+
 VALID = {
-    "version": 18,
+    "version": 19,
     "language": "zh_tw",
     "run": {
         "difficulty": "auto", "runs": 1, "weekly_bonus_use": "hard", "weekly_bonus_amount": "all",
@@ -57,7 +74,7 @@ VALID = {
                     "fusion_condition": "upgrade"}],
     "teams": [
         team("a", 1, deployment_order={"plan": "d1"}, starlight={"plan": "s1"}, theme_pack_plan="p1", gift_list="g1"),
-        team("b", 2),
+        team("b", 2, skill_replacement=custom_skills()),
     ],
     "event_overrides": [{"question": "Q?", "option": "Yes"}],
     "trial_risk_overrides": [{"trial": "Growth I", "risk": 1.5}],
@@ -67,9 +84,18 @@ VALID = {
 }
 
 
+def as_v18(valid):
+    """The same settings as version 18 wrote them: no skill replacement."""
+    old = copy.deepcopy(valid)
+    old["version"] = 18
+    for t in old["teams"]:
+        del t["skill_replacement"]
+    return old
+
+
 def as_v17(valid):
     """The same settings as version 17 wrote them: no Luxcavation mode, count the day's target."""
-    old = copy.deepcopy(valid)
+    old = as_v18(valid)
     old["version"] = 17
     for opts in old["luxcavation"].values():
         del opts["mode"]
@@ -121,6 +147,12 @@ def as_v10(valid):
     return old
 
 
+def defaulted(data):
+    """What a file from before version 19 comes to: every team on the default skill replacement."""
+    return {**data, "teams": [{**t, "skill_replacement": DEFAULT_SKILLS} for t in data["teams"]]}
+
+
+V18 = as_v18(VALID)
 V17 = as_v17(VALID)
 V16 = as_v16(VALID)
 V15 = as_v15(VALID)
@@ -130,7 +162,7 @@ V13 = as_v13(VALID)
 V10 = as_v10(VALID)
 # What migrating V10 gives: both teams keep nothing but Burn, so they share one list, named after the first team.
 MIGRATED = {**CLEARED, "gift_lists": [{"id": "gift-list-1", "name": "Team a", **gift_list()}],
-            "teams": [{**t, "gift_list": "gift-list-1"} for t in VALID["teams"]]}
+            "teams": [{**t, "gift_list": "gift-list-1", "skill_replacement": DEFAULT_SKILLS} for t in VALID["teams"]]}
 VALID_FROM_ZEROS = {**MIGRATED, "run": {**VALID["run"], "runs": None}}  # version 5's 0 run limit migrated
 
 
@@ -224,13 +256,25 @@ def test_broken_json(tmp_path):
     (lambda d: d["gift_lists"][0]["gorder"].update(Burn="9053"), "gift_lists/0/gorder/Burn"),
     (lambda d: d["gift_lists"][0].pop("keep"), "gift_lists/0"),
     (lambda d: d["teams"][0].update(sell_max_tier=0), "teams/0/sell_max_tier"),
+    (lambda d: d["teams"][0].pop("skill_replacement"), "teams/0"),
+    (lambda d: d["teams"][0]["skill_replacement"]["sinners"][0]["target"].update(s3=7), "teams/0/skill_replacement/sinners/0/target/s3"),
+    (lambda d: d["teams"][0]["skill_replacement"]["sinners"][0]["target"].update(s3=-1), "teams/0/skill_replacement/sinners/0/target/s3"),
+    (lambda d: d["teams"][0]["skill_replacement"]["sinners"][0]["target"].update(s3=1.5), "teams/0/skill_replacement/sinners/0/target/s3"),
+    (lambda d: d["teams"][0]["skill_replacement"]["sinners"][0]["target"].pop("s2"), "teams/0/skill_replacement/sinners/0/target"),
+    (lambda d: d["teams"][0]["skill_replacement"]["sinners"][0].update(options=[]), "teams/0/skill_replacement/sinners/0/options"),
+    (lambda d: d["teams"][0]["skill_replacement"]["sinners"][0].update(options=["s1_s3", "s1_s3"]), "teams/0/skill_replacement/sinners/0/options"),
+    (lambda d: d["teams"][0]["skill_replacement"]["sinners"][0].update(options=["s3_s1"]), "teams/0/skill_replacement/sinners/0/options/0"),
+    (lambda d: d["teams"][0]["skill_replacement"]["sinners"][0].update(sinner="Dante"), "teams/0/skill_replacement/sinners/0/sinner"),
+    (lambda d: d["teams"][0]["skill_replacement"]["sinners"].pop(), "teams/0/skill_replacement/sinners"),
+    (lambda d: d["teams"][0]["skill_replacement"]["id_skill_search"].update(pay="lunacy"), "teams/0/skill_replacement/id_skill_search/pay"),
+    (lambda d: d["teams"][0]["skill_replacement"]["id_skill_search"].update(enabled="yes"), "teams/0/skill_replacement/id_skill_search/enabled"),
 ])
 def test_schema_errors_name_the_field(tmp_path, fn, where):
     assert any(e.startswith(where + ":") for e in errors(tmp_path, edited(fn)))
 
 
 def test_newer_version_is_refused(tmp_path):
-    assert "newer" in errors(tmp_path, {**VALID, "version": 19})[0]
+    assert "newer" in errors(tmp_path, {**VALID, "version": 20})[0]
 
 
 def test_version_1_gets_guard_turns_off(tmp_path):
@@ -323,13 +367,13 @@ def test_version_14_refresh_limit_becomes_as_many_keyword_refreshes_and_no_norma
 
 
 def test_version_14_loads_as_the_current_settings(tmp_path):
-    assert load(tmp_path, V14) == load(tmp_path, CLEARED)
+    assert load(tmp_path, V14) == load(tmp_path, defaulted(CLEARED))
 
 
 def test_version_15_trial_risks_are_emptied_with_a_note(tmp_path):
     # #381: trials score in pt now (1 pt = the enemy's Clash Power +1); a 0-5 risk means nothing on that scale.
     got = load(tmp_path, edited(lambda d: d["trial_risk_overrides"].append({"trial": "Growth II", "risk": 0}), V15))
-    assert got == load(tmp_path, CLEARED)
+    assert got == load(tmp_path, defaulted(CLEARED))
     assert settings.NOTES == []  # loading the current file leaves none
     load(tmp_path, V15)
     assert settings.NOTES == ["settings version 16: 1 trial risk override (0-5) emptied, trials score in pt now (#381)"]
@@ -340,7 +384,7 @@ def test_version_16_drops_the_teams_trial_risk_weight(tmp_path):
     # The user, 2026-10-31: a trial counts at weight 1 for every team, so the setting goes, whatever it was
     got = load(tmp_path, V16)
     assert settings.NOTES == []  # nothing to log: every team now picks as weight medium did
-    assert got == load(tmp_path, VALID)
+    assert got == load(tmp_path, defaulted(VALID))
 
 
 def test_version_17_runs_both_luxcavations_in_daily_mode_and_keeps_their_counts(tmp_path):
@@ -349,6 +393,40 @@ def test_version_17_runs_both_luxcavations_in_daily_mode_and_keeps_their_counts(
     got = load(tmp_path, old)["luxcavation"]
     assert [(o["mode"], o["count"]) for o in (got["exp"], got["thread"])] == [("daily", 1), ("daily", 5)]
     assert settings.NOTES == []
+
+
+def test_version_18_teams_replace_no_skill_and_aim_for_the_3_2_1_deck(tmp_path):
+    # #454: every sinner at 3/2/1 is left alone, so the migrated file plays as before; each team gets its own copy
+    got = load(tmp_path, V18)
+    assert [t["skill_replacement"] for t in got["teams"]] == [DEFAULT_SKILLS, DEFAULT_SKILLS]
+    got["teams"][0]["skill_replacement"]["sinners"][0]["target"]["s1"] = 0
+    assert load(tmp_path, V18)["teams"][1]["skill_replacement"] == DEFAULT_SKILLS
+    assert settings.NOTES == []
+
+
+def test_version_18_keeps_a_setting_the_file_already_has(tmp_path):
+    data = copy.deepcopy(V18)
+    data["teams"][0]["skill_replacement"] = custom_skills()
+    assert load(tmp_path, data)["teams"][0]["skill_replacement"] == custom_skills()
+
+
+def test_skill_swaps_are_game_data_the_schema_and_the_gui_share():
+    # data/shop.yaml holds the three swaps and their prices (ADR 0005, #264: read off the game's upgradePersonality);
+    # the schema's options enum names the same swaps, in the default order, so a setting can only ask for a swap the data prices.
+    swaps = yaml.safe_load((DATA / "shop.yaml").read_text(encoding="utf-8"))["skill_replacement"]
+    assert list(swaps) == SWAPS
+    assert {k: (v["from"], v["to"]) for k, v in swaps.items()} == {"s1_s3": (1, 3), "s2_s3": (2, 3), "s1_s2": (1, 2)}
+    assert {k: v["shop"] for k, v in swaps.items()} == {"s1_s3": 120, "s2_s3": 75, "s1_s2": 45}
+    assert {k: v["id_search"] for k, v in swaps.items()} == {
+        "s1_s3": {"cost": 240, "starlight": 75}, "s2_s3": {"cost": 150, "starlight": 50}, "s1_s2": {"cost": 90, "starlight": 25}}
+    team = settings.SCHEMA["properties"]["teams"]["items"]["properties"]["skill_replacement"]
+    assert settings.SCHEMA["$defs"]["skill_sinner"]["properties"]["options"]["items"]["enum"] == SWAPS
+    assert team["default"] == DEFAULT_SKILLS
+    assert [s["sinner"] for s in team["default"]["sinners"]] == settings.SCHEMA["$defs"]["order"]["default"] == ORDER
+
+
+def test_older_versions_come_to_the_same_skill_replacement(tmp_path):
+    assert [t["skill_replacement"] for t in load(tmp_path, V10)["teams"]] == [DEFAULT_SKILLS, DEFAULT_SKILLS]
 
 
 @pytest.mark.parametrize("risk, ok", [(0, True), (0.25, True), (12, True), (-0.5, False), ("1", False)])
@@ -427,6 +505,12 @@ def test_unmigratable_version(tmp_path):
     (lambda d: d["gift_lists"][0].update(keep=[9071, 9053]),
      "gift_lists/0: list 'Mine' has gift 9053 in both want and keep"),
     (lambda d: d["teams"][1].update(id="a"), "teams: id 'a'"),
+    (lambda d: d["teams"][0]["skill_replacement"]["sinners"][0]["target"].update(s3=2),
+     "teams/0/skill_replacement/sinners/0/target: team 'Team a' sinner 'Yi Sang' targets 7 skills, not 6"),
+    (lambda d: d["teams"][1]["skill_replacement"]["sinners"][3]["target"].update(s1=0),
+     "teams/1/skill_replacement/sinners/3/target: team 'Team b' sinner 'Don Quixote' targets 3 skills, not 6"),
+    (lambda d: d["teams"][0]["skill_replacement"]["sinners"][1].update(sinner="Yi Sang"),
+     "teams/0/skill_replacement/sinners: sinner 'Yi Sang' appears 2 times"),
     (lambda d: d["starlight_plans"].append({**d["starlight_plans"][0], "name": "Other"}), "starlight_plans: id 's1'"),
     (lambda d: d["deployment_order_plans"].append({"id": "d2", "name": "Bleed order", "order": ORDER}),
      "deployment_order_plans: name 'Bleed order'"),
@@ -505,7 +589,7 @@ def test_shared_valid_loads(tmp_path):
 
 def test_shared_valid10_migrates_and_loads(tmp_path):
     loaded = load(tmp_path, CASES["valid10"])
-    assert loaded["version"] == 18 and [t["gift_list"] for t in loaded["teams"]] == ["gift-list-1", "gift-list-2"]
+    assert loaded["version"] == 19 and [t["gift_list"] for t in loaded["teams"]] == ["gift-list-1", "gift-list-2"]
 
 
 @pytest.mark.parametrize("case", CASES["migrations"], ids=lambda c: c["name"])

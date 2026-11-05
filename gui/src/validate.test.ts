@@ -2,7 +2,9 @@
 import { describe, expect, test } from "vitest";
 import cases from "../../tests/settings_cases.json";
 import themePacksYaml from "../../assets/resource/base/data/theme_packs.yaml?raw";
-import { cleanGiftList, defaultGorder, newSettings, newTeam, parseSettings, parseThemePacks, type GiftList } from "./model";
+import {
+  SINNERS, SKILL_SWAPS, cleanGiftList, defaultGorder, newSettings, newTeam, parseSettings, parseThemePacks, schema, skillCounts, type GiftList,
+} from "./model";
 import { pyRepr, validate } from "./validate";
 
 type Edit = { set: string; value: unknown } | { delete: string };
@@ -66,7 +68,7 @@ function asV13() {
 }
 
 test("parseSettings refuses newer and unmigratable versions", () => {
-  expect(() => parseSettings('{"version": 19}')).toThrow("newer");
+  expect(() => parseSettings('{"version": 20}')).toThrow("newer");
   expect(() => parseSettings('{"version": 0}')).toThrow("cannot be migrated");
 });
 
@@ -195,6 +197,45 @@ test("version 16 drops each team's trial risk weight, with nothing to count (the
   for (const t of data.teams) expect(t).not.toHaveProperty("trial_risk_weight");
   expect(validate(data)).toEqual([]);
   expect(newTeam(1, "隊伍 1")).not.toHaveProperty("trial_risk_weight");
+});
+
+/** A team's skill replacement as a new team has it: every sinner at 3/2/1 with all three swaps, ID Skill Search off, paid in Cost. */
+const DEFAULT_SKILLS = cases.skill_replacement_default;
+
+test("version 18 teams replace no skill: every sinner aims for the 3/2/1 deck, each team with a copy of its own (#454)", () => {
+  const old = structuredClone(cases.valid) as unknown as { version: number; teams: Record<string, unknown>[] };
+  old.version = 18;
+  for (const t of old.teams) delete t.skill_replacement;
+  const { data, migrated } = parseSettings(JSON.stringify(old));
+  expect(migrated).toBe(true);
+  expect(data.teams.map((t) => t.skill_replacement)).toEqual([DEFAULT_SKILLS, DEFAULT_SKILLS]);
+  expect(validate(data)).toEqual([]);
+  data.teams[0].skill_replacement.sinners[0].target.s1 = 0;
+  expect(data.teams[1].skill_replacement.sinners[0].target.s1).toBe(3);
+});
+
+test("version 18 keeps a skill replacement the file already has, and older files come to the default", () => {
+  const old = structuredClone(cases.valid) as unknown as { version: number };
+  old.version = 18;
+  expect(parseSettings(JSON.stringify(old)).data.teams[1].skill_replacement).toEqual(cases.valid.teams[1].skill_replacement);
+  const v10 = parseSettings(JSON.stringify(cases.valid10)).data;
+  expect(v10.teams.map((t) => t.skill_replacement)).toEqual([DEFAULT_SKILLS, DEFAULT_SKILLS]);
+  expect(validate(v10)).toEqual([]);
+});
+
+test("a new team replaces no skill (#454), and the setting is data/shop.yaml's three swaps in the schema's order", () => {
+  expect(newTeam(1, "隊伍 1").skill_replacement).toEqual(DEFAULT_SKILLS);
+  expect(DEFAULT_SKILLS.sinners.map((x) => x.sinner)).toEqual(SINNERS);
+  expect(newTeam(1, "a").skill_replacement.sinners).not.toBe(newTeam(2, "b").skill_replacement.sinners);
+  expect(Object.keys(SKILL_SWAPS)).toEqual(schema.$defs.skill_sinner.properties.options.items.enum);
+  expect(SKILL_SWAPS).toEqual({
+    s1_s3: { from: 1, to: 3, shop: 120, id_search: { cost: 240, starlight: 75 } },
+    s2_s3: { from: 2, to: 3, shop: 75, id_search: { cost: 150, starlight: 50 } },
+    s1_s2: { from: 1, to: 2, shop: 45, id_search: { cost: 90, starlight: 25 } },
+  });
+  expect(skillCounts({ s1: 3, s2: 2, s3: 1 })).toEqual({ total: 6, untouched: true });
+  expect(skillCounts({ s1: 3, s2: 3, s3: 1 })).toEqual({ total: 7, untouched: false });
+  expect(skillCounts({ s1: 2, s2: 2, s3: 2 })).toEqual({ total: 6, untouched: false });
 });
 
 test("version 17 runs both Luxcavations in daily mode and keeps their counts (#431, the user, 2026-11-05)", () => {
