@@ -2,15 +2,15 @@
 test runs."""
 
 import inspect
+import json
 import os
+from pathlib import Path
 
 import pytest
 
-# Seconds of the seven slowest files, each one MaaFramework child run (pytest --durations, 2026-10-29); any other file
-# counts 0.15 s a test. A stale number only unbalances the shards.
-FILE_SECONDS = {"test_go_home.py": 181, "test_thread_luxcavation.py": 163, "test_exp_luxcavation.py": 156,
-                "test_charge_enkephalin.py": 143, "test_pass_task.py": 99, "test_assemble_modules.py": 92,
-                "test_claim_mail.py": 40}
+# Seconds each file took on a CI runner, written by tools/shard_seconds.py; an unlisted file counts 0.15 s a test.
+# CI's shard-balance job fails when a number no longer matches the run.
+FILE_SECONDS = json.loads(Path(__file__).with_name("shard_seconds.json").read_text(encoding="utf-8"))
 
 
 def child_timeout(item):

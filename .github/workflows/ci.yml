@@ -55,7 +55,29 @@ jobs:
       - if: strategy.job-index == 0
         run: uv run ruff check
       - run: python3 tools/fetch_ocr.py  # test_shop_cells reads the fuse page's labels by OCR (#205)
-      - run: uv run pytest
+      - run: uv run pytest --junitxml=junit.xml
+      # shard-balance compares each file's time with tests/shard_seconds.json.
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: junit-${{ strategy.job-index }}
+          path: junit.xml
+          if-no-files-found: ignore
+          retention-days: 14
+
+  # Fails when tests/shard_seconds.json no longer matches this run, and names the command that rewrites it.
+  shard-balance:
+    needs: agent
+    if: needs.agent.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: junit-*
+          path: junit
+      - run: python3 tools/shard_seconds.py check junit/*/junit.xml
 
   pipeline:
     needs: changes
@@ -126,7 +148,7 @@ jobs:
   # The one check to require: fails if the filter or any job it asked for failed or was cancelled.
   ci-ok:
     if: always()
-    needs: [changes, agent, pipeline, gui, review-lint]
+    needs: [changes, agent, shard-balance, pipeline, gui, review-lint]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
