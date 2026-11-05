@@ -77,7 +77,7 @@ Retention: an archive folder older than 7 days whose `INDEX.md` rows name only c
 ## Orchestration tools
 
 - `tools/live/watchdog.py add|done|list|tick` owns `agents.tsv` (and `agents.state.json`, what `tick` already reported) in `.local/scratch/`: nobody edits the file by hand. `tick` prints only news or `NOTHING NEW`; the scheduled prompt is `docs/agents/watchdog-prompt.md`.
-- `tools/live/brief.py live|code --task <name> ...` writes the standard header of `.local/scratch/<name>/brief.md`; every run setting is a required argument, except `--exp-mode` and `--thread-mode`, which default to `daily` as the settings schema does. Rules the public repo must not state go in `.local/brief-rules.md` (gitignored), which the script appends to the brief as "Machine-local rules".
+- `tools/live/brief.py live|code --task <name> ...` writes the standard header of `.local/scratch/<name>/brief.md`; every run setting is a required argument. Rules the public repo must not state go in `.local/brief-rules.md` (gitignored), which the script appends to the brief as "Machine-local rules".
 
 ## The emulator lane
 

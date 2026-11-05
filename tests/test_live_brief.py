@@ -7,8 +7,8 @@ spec = importlib.util.spec_from_file_location("live_brief", Path(__file__).resol
 brief = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(brief)
 
-LIVE = ["live", "--task", "t1", "--difficulty", "normal", "--exp-count", "1", "--thread-count", "3",
-        "--weekly-bonus", "none", "--recording", "yes"]
+LIVE = ["live", "--task", "t1", "--difficulty", "normal", "--exp-mode", "daily", "--exp-count", "1",
+        "--thread-mode", "daily", "--thread-count", "3", "--weekly-bonus", "none", "--recording", "yes"]
 
 
 def run(tmp_path, args):
@@ -30,8 +30,8 @@ def test_live_brief_states_every_setting_from_the_arguments(tmp_path):
 
 def test_a_different_count_is_never_inherited_from_an_earlier_brief(tmp_path):
     run(tmp_path, LIVE)
-    run(tmp_path, ["live", "--task", "t2", "--difficulty", "hard", "--exp-count", "2", "--thread-count", "5",
-                   "--thread-mode", "count", "--weekly-bonus", "hard", "--recording", "no", "--force"])
+    run(tmp_path, ["live", "--task", "t2", "--difficulty", "hard", "--exp-mode", "daily", "--exp-count", "2",
+                   "--thread-mode", "count", "--thread-count", "5", "--weekly-bonus", "hard", "--recording", "no", "--force"])
     text = (tmp_path / "t2" / "brief.md").read_text(encoding="utf-8")
     assert "luxcavation.exp.count=2" in text and "| EXP Luxcavation count | 2, not used:" in text
     assert "| Thread Luxcavation count | 5 |" in text and "--set luxcavation.thread.mode=count --set luxcavation.thread.count=5" in text
@@ -60,9 +60,12 @@ def test_daily_mode_marks_its_count_unused_and_says_what_it_fights(tmp_path):
     assert "--set luxcavation.thread.mode=daily --set luxcavation.thread.count=3" in text
 
 
-def test_the_mode_defaults_to_daily_as_the_schema_does(tmp_path):
-    text = settings_of(tmp_path)
-    assert "--set luxcavation.exp.mode=daily" in text and "--set luxcavation.thread.mode=daily" in text
+@pytest.mark.parametrize("flag", ["--exp-mode", "--thread-mode"])
+def test_a_brief_without_a_mode_is_not_written(tmp_path, flag):
+    i = LIVE.index(flag)
+    with pytest.raises(SystemExit):
+        run(tmp_path, [*LIVE[:i], *LIVE[i + 2:]])
+    assert not (tmp_path / "t1" / "brief.md").exists()
 
 
 def test_a_mode_outside_the_schema_is_not_an_option(tmp_path):

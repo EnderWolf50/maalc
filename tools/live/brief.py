@@ -1,15 +1,15 @@
 """Write the standard header of a delegated task's brief, so no brief is copied from the last one.
 
-  python tools/live/brief.py live --task <name> --difficulty normal|hard --exp-count N --thread-count N \\
-      --weekly-bonus none|hard --recording yes|no [--exp-mode daily|count] [--thread-mode daily|count] [--runs N] [--force]
+  python tools/live/brief.py live --task <name> --difficulty normal|hard --exp-mode daily|count --exp-count N \\
+      --thread-mode daily|count --thread-count N --weekly-bonus none|hard --recording yes|no [--runs N] [--force]
   python tools/live/brief.py code --task <name> [--force]
 
 Writes `.local/scratch/<name>/brief.md` of the main checkout: the preamble pointer, the skills to load, the queue
 and waiting rules, the report format, and (for `live`) a table of every run setting taken from the arguments.
-Each setting but the Luxcavation modes is a required argument and nothing is read from an earlier brief: a count or a bonus carried over
+Each setting is a required argument and nothing is read from an earlier brief: a count or a bonus carried over
 from a copy is what cost Enkephalin Modules. The agent that creates the task writes only the `## Goal` section.
 The weekly bonus has no `normal` choice; a brief that needs it for a NORMAL run says so, with the user's answer, in its goal.
-A Luxcavation mode defaults to `daily`, as `agent/settings.schema.json` does, and the prep line always sets it.
+A Luxcavation mode is required too (the user, 2026-11-05): daily mode ignores the count, so a brief must say which one runs (#442).
 
 `.local/brief-rules.md` (gitignored; override with `--rules`) holds the rules this public repo must not state,
 such as account specifics. When it exists, its text is appended as "Machine-local rules".
@@ -129,8 +129,8 @@ def main(argv=None) -> int:
     live.add_argument("--difficulty", choices=("normal", "hard"), required=True)
     live.add_argument("--exp-count", type=int, required=True)
     live.add_argument("--thread-count", type=int, required=True)
-    live.add_argument("--exp-mode", choices=("daily", "count"), default="daily")
-    live.add_argument("--thread-mode", choices=("daily", "count"), default="daily")
+    live.add_argument("--exp-mode", choices=("daily", "count"), required=True)
+    live.add_argument("--thread-mode", choices=("daily", "count"), required=True)
     live.add_argument("--weekly-bonus", choices=("none", "hard"), required=True)
     live.add_argument("--recording", choices=("yes", "no"), required=True)
     live.add_argument("--runs", type=int, default=1)
