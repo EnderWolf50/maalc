@@ -54,10 +54,11 @@ def test_the_ego_card_is_found_on_its_capture():
 
 def test_no_other_screen_reads_as_the_ego_card():
     # CODING_STANDARDS: a template ships with a sweep over tests/screens. Sweep (grey, 2026-11-07, 198 other 1280 x 720
-    # captures): 1.00 for both parts on both captures of the card; Details alone 0.70 at most (HelpPager.png),
-    # Resistances alone 0.74 (MapNodePanel.png), both together 0.63 at most (SuperShop.png: 0.62 and 0.63). Each part
-    # stays under its threshold on its own, and the And's lower part 0.2 under it. The production matcher's own sweep is
-    # maa-tools test (maatools.config.mts): EgoCard hits on the two captures of the card and misses every other screen.
+    # captures): 1.00 for both parts on all three captures of the card (one card, blue or green; three cards); Details
+    # alone 0.70 at most (HelpPager.png), Resistances alone 0.74 (MapNodePanel.png), both together 0.63 at most
+    # (SuperShop.png: 0.62 and 0.63). Each part stays under its threshold on its own, and the And's lower part 0.2 under
+    # it. The production matcher's own sweep is
+    # maa-tools test (maatools.config.mts): EgoCard hits on the three captures of the card and misses every other screen.
     nodes = load_nodes()
     found = templates(nodes, nodes["EgoCard"])
     others = [p for p in sorted(SCREENS.glob("*.png")) if p.name not in SHOTS and Image.open(p).size == (1280, 720)]
