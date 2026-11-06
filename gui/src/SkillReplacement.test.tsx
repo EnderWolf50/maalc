@@ -217,6 +217,14 @@ describe("a target a hand-edited file made unreachable", () => {
     expect(step("Faust", "S3", "inc")).toBeEnabled();
   });
 
+  test("a count outside 0 to 6 is a fault too, though it totals 6", async () => {
+    const r = renderEditor(<TeamsTab />, settings([entry("Yi Sang", 3, -1, 4)]));
+    await expand(r);
+    expect(within(row("Yi Sang")).getByRole("alert")).toHaveTextContent(zh["skill.fault_range"]);
+    expect(step("Yi Sang", "S3", "inc")).toBeDisabled();
+    expect(order("Yi Sang")).not.toHaveAttribute("title");
+  });
+
   test("names each fault, the total among them", async () => {
     const r = renderEditor(<TeamsTab />, settings([entry("Yi Sang", 5, 2, 0)]));
     await expand(r);

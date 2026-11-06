@@ -14,9 +14,9 @@ const move = <T,>(list: T[], from: number, to: number) => {
   return next;
 };
 const swapName = (k: SkillSwapKey) => `S${SKILL_SWAPS[k].from}→S${SKILL_SWAPS[k].to}`;
-type Up = "s2" | "s3";
+type Stepped = "s2" | "s3";
 /** Which way a stepper may move a card between S1 and `k` and keep the target reachable: S1 0..3, S2 0 and up, S3 1 and up. */
-const room = (t: SkillTarget, k: Up) => ({ dec: t[k] > (k === "s3" ? GAME_DECK.s3 : 0) && t.s1 < GAME_DECK.s1, inc: t.s1 > 0 });
+const stepRoom = (t: SkillTarget, k: Stepped) => ({ dec: t[k] > (k === "s3" ? GAME_DECK.s3 : 0) && t.s1 < GAME_DECK.s1, inc: t.s1 > 0 });
 
 export function SkillPanel({ i }: { i: number }) {
   const { s, update, t, tv, bad } = useEditor();
@@ -41,13 +41,14 @@ export function SkillPanel({ i }: { i: number }) {
       {!sr.sinners.length && <p className="muted">{t("skill.empty")}</p>}
       <ol className="skill-sinners">
         {sr.sinners.map((x, j) => {
-          const plan = skillPlan(x.target), g = x.target, faulty = plan.faults.length > 0;
-          const two = plan.need.length > 1;
-          const other = plan.need.find((n) => n.key !== "s1_s3")?.key;
+          const plan = skillPlan(x.target), target = x.target, faulty = plan.faults.length > 0;
+          const needsTwo = plan.need.length > 1;
+          const otherSwap = plan.need.find((v) => v.key !== "s1_s3")?.key;
           const n = seen.get(x.sinner) ?? 0;
           seen.set(x.sinner, n + 1);
           const rowPath = `${path}/sinners/${j}`;
-          const shift = (k: Up, d: 1 | -1) => edit((dr) => { const tg = dr.sinners[j].target; tg.s1 -= d; tg[k] += d; });
+          // a step moves one card between S1 and `k`, so the deck stays 6
+          const shift = (k: Stepped, d: 1 | -1) => edit((draft) => { const g = draft.sinners[j].target; g.s1 -= d; g[k] += d; });
           return (
             <li key={n ? `${x.sinner}#${n}` : x.sinner} data-sinner={x.sinner} className={bad(rowPath) || faulty ? "bad" : ""}
               {...dragItem(String(j), "sinners")}>
@@ -56,16 +57,16 @@ export function SkillPanel({ i }: { i: number }) {
               <span className="skill-name" title={x.sinner}>{x.sinner}</span>
               <span className="skill-count">
                 <span>S1</span>
-                <span className="skill-box ro" aria-label={`${x.sinner} S1`} title={t("skill.s1_auto")}>{g.s1}</span>
+                <span className="skill-box ro" aria-label={`${x.sinner} S1`} title={t("skill.s1_auto")}>{target.s1}</span>
               </span>
               {(["s2", "s3"] as const).map((k) => {
-                const name = `${x.sinner} ${k.toUpperCase()}`, ok = room(g, k);
+                const name = `${x.sinner} ${k.toUpperCase()}`, ok = stepRoom(target, k);
                 return (
                   <span key={k} className="skill-count">
                     <span>{k.toUpperCase()}</span>
                     <span className="skill-box skill-spin" role="group" aria-label={name}>
                       <button type="button" aria-label={`${name} ${t("skill.dec")}`} disabled={faulty || !ok.dec} onClick={() => shift(k, -1)}>−</button>
-                      <span className="n">{g[k]}</span>
+                      <span className="n">{target[k]}</span>
                       <button type="button" aria-label={`${name} ${t("skill.inc")}`} disabled={faulty || !ok.inc} onClick={() => shift(k, 1)}>+</button>
                     </span>
                   </span>
@@ -74,17 +75,17 @@ export function SkillPanel({ i }: { i: number }) {
               <span className="skill-pillcell">
                 {faulty
                   ? <span role="alert" className="skill-pill err">
-                    {plan.faults.map((f) => fill(t(`skill.fault_${f}`), { total: g.s1 + g.s2 + g.s3 })).join(t("skill.sep"))}
+                    {plan.faults.map((f) => fill(t(`skill.fault_${f}`), { total: target.s1 + target.s2 + target.s3 })).join(t("skill.sep"))}
                   </span>
                   : plan.untouched ? <span className="skill-pill off">{t("skill.unchanged")}</span>
                   : <span className="skill-pill on">{plan.need.map((v) => `${swapName(v.key)} ×${v.n}`).join(t("skill.sep"))}</span>}
               </span>
-              <select className="skill-first" aria-label={`${x.sinner} ${t("skill.order")}`} disabled={!two}
-                title={two ? t("skill.order_two") : t("skill.order_one")}
-                value={two ? (x.s1_s3_first ? "s1_s3" : other) : ""}
+              <select className="skill-first" aria-label={`${x.sinner} ${t("skill.order")}`} disabled={!needsTwo}
+                title={faulty ? undefined : needsTwo ? t("skill.order_two") : t("skill.order_one")}
+                value={needsTwo ? (x.s1_s3_first ? "s1_s3" : otherSwap) : ""}
                 onChange={(e) => edit((d) => { d.sinners[j].s1_s3_first = e.target.value === "s1_s3"; })}>
-                {two && other
-                  ? (["s1_s3", other] as const).map((k) => <option key={k} value={k}>{fill(t("skill.first"), { swap: swapName(k) })}</option>)
+                {needsTwo && otherSwap
+                  ? (["s1_s3", otherSwap] as const).map((k) => <option key={k} value={k}>{fill(t("skill.first"), { swap: swapName(k) })}</option>)
                   : <option value="">—</option>}
               </select>
               <span className="skill-arrows">

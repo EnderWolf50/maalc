@@ -28,8 +28,9 @@ export const teamEnum = (k: keyof typeof TEAM) => (TEAM[k] as { enum: string[] }
 
 export type Order = string[];
 
-/** A skill swap a team's skill replacement may use (#264, #454): one skill `from` becomes one skill `to`; `shop` is the Replace
- * <sinner>'s Skill cell's price in Cost, `id_search` the ID Skill Search's price in Cost or starlight. */
+/** A skill swap of the shop (#264, #454): one skill `from` becomes one skill `to`; `shop` is the Replace <sinner>'s Skill cell's
+ * price in Cost, `id_search` the ID Skill Search's price in Cost or starlight. The GUI names a swap by `from` and `to` and shows
+ * no price; the prices are for the agent (#455). */
 export interface SkillSwap { from: number; to: number; shop: number; id_search: { cost: number; starlight: number } }
 export type SkillSwapKey = "s1_s3" | "s2_s3" | "s1_s2";
 /** data/shop.yaml's skill_replacement, keyed by swap; the agent reads the same entry, the screen's own price wins when the bot taps. */
@@ -38,14 +39,16 @@ export const SKILL_SWAPS: Record<SkillSwapKey, SkillSwap> = parseYaml(shopYaml).
 export interface SkillTarget { s1: number; s2: number; s3: number }
 /** The game's deck: 3 of skill 1, 2 of skill 2, 1 of skill 3; a sinner at it is left alone. */
 export const GAME_DECK: SkillTarget = { s1: 3, s2: 2, s3: 1 };
-/** Why a target can never be reached: its total is not 6, or every swap moves a card up from 3/2/1, so S1 cannot pass 3 nor S3 fall below 1. */
-export type SkillFault = "total" | "s1" | "s3";
+/** Why a target can never be reached: a count that is not a whole number 0 to 6 (the schema's rule; a hand-edited file still
+ * opens with it), a total other than 6, or, since every swap moves a card up from 3/2/1, S1 above 3 or S3 below 1. */
+export type SkillFault = "range" | "total" | "s1" | "s3";
 /** What a target takes from the game's 3/2/1 (spec 04 section 9, #264): a swap a→b counts only while skill a is above its target
  * and skill b below it, so the swaps are fixed. With S2 above 2, S1→S2 × (S2 − 2) and S1→S3 × (S3 − 1); otherwise S2→S3 × (2 − S2)
  * and S1→S3 × (3 − S1). `need` lists them with S1→S3 last, and is empty for a target with faults (validate.ts reports those). */
 export function skillPlan(t: SkillTarget): { untouched: boolean; faults: SkillFault[]; need: { key: SkillSwapKey; n: number }[] } {
   const untouched = t.s1 === GAME_DECK.s1 && t.s2 === GAME_DECK.s2 && t.s3 === GAME_DECK.s3;
   const faults: SkillFault[] = [];
+  if (![t.s1, t.s2, t.s3].every((v) => Number.isInteger(v) && v >= 0 && v <= 6)) return { untouched, faults: ["range"], need: [] };
   if (t.s1 + t.s2 + t.s3 !== 6) faults.push("total");
   if (t.s1 > GAME_DECK.s1) faults.push("s1");
   if (t.s3 < GAME_DECK.s3) faults.push("s3");
@@ -55,9 +58,9 @@ export function skillPlan(t: SkillTarget): { untouched: boolean; faults: SkillFa
     : [["s2_s3", GAME_DECK.s2 - t.s2], ["s1_s3", GAME_DECK.s1 - t.s1]];
   return { untouched, faults, need: counts.filter(([, n]) => n > 0).map(([key, n]) => ({ key, n })) };
 }
+export type SkillPay = "cost" | "starlight";
 /** Spec 04 section 9 skill_replacement: only the sinners to change, in priority order, each with its target; s1_s3_first says
  * which kind of swap to try first when the target needs two. */
-export type SkillPay = "cost" | "starlight";
 export interface SkillSinner { sinner: string; target: SkillTarget; s1_s3_first: boolean }
 export interface SkillReplacement { sinners: SkillSinner[]; id_skill_search: { enabled: boolean; pay: SkillPay } }
 export const SKILL_PAYMENTS: SkillPay[] = TEAM.skill_replacement.properties.id_skill_search.properties.pay.enum as SkillPay[];

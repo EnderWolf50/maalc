@@ -257,6 +257,9 @@ describe("a skill target (#264's rule: a swap a→b counts only while skill a is
     [t(4, 1, 1), ["s1"]],
     [t(3, 3, 0), ["s3"]],
     [t(5, 2, 0), ["total", "s1", "s3"]],
+    // the schema rejects these; a hand-edited file still opens in the editor with them
+    [t(3, -1, 4), ["range"]],
+    [t(2.5, 2, 1.5), ["range"]],
   ])("%o cannot be reached: %o, and needs no swap", (target, faults) => {
     expect(skillPlan(target)).toEqual({ untouched: false, faults, need: [] });
   });

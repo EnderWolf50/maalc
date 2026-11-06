@@ -81,13 +81,17 @@ export function crossCheck(data: Settings): Problem[] {
     dupes(`teams/${i}/skill_replacement/sinners`, sinners.map((x) => x.sinner), "sinner", "sinner");
     sinners.forEach((x, j) => {
       // the deck starts at the game's 3/2/1 and every swap moves a card up, so S1 above 3 or S3 below 1 is never reached
-      const path = `teams/${i}/skill_replacement/sinners/${j}/target`, who = `team ${pyRepr(t.name)} sinner ${pyRepr(x.sinner)}`, g = x.target;
-      const text: Record<SkillFault, [string, string]> = {
-        total: [path, `targets ${g.s1 + g.s2 + g.s3} skills, not 6`],
-        s1: [`${path}/s1`, `targets ${g.s1} of skill 1, but swaps only lower it from the game's 3`],
-        s3: [`${path}/s3`, `targets ${g.s3} of skill 3, but swaps only raise it from the game's 1`],
+      const path = `teams/${i}/skill_replacement/sinners/${j}/target`, who = `team ${pyRepr(t.name)} sinner ${pyRepr(x.sinner)}`;
+      const target = x.target;
+      // "range" never gets here: the schema rejects it, and crossCheck runs only on a file the schema passed
+      const text: Record<Exclude<SkillFault, "range">, [string, string]> = {
+        total: [path, `targets ${target.s1 + target.s2 + target.s3} skills, not 6`],
+        s1: [`${path}/s1`, `targets ${target.s1} of skill 1, but swaps only lower it from the game's 3`],
+        s3: [`${path}/s3`, `targets ${target.s3} of skill 3, but swaps only raise it from the game's 1`],
       };
-      for (const f of skillPlan(g).faults) errors.push({ paths: [text[f][0]], text: `${text[f][0]}: ${who} ${text[f][1]}` });
+      for (const f of skillPlan(target).faults) {
+        if (f !== "range") errors.push({ paths: [text[f][0]], text: `${text[f][0]}: ${who} ${text[f][1]}` });
+      }
     });
   });
 

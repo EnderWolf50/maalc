@@ -415,7 +415,7 @@ def test_version_18_keeps_a_setting_the_file_already_has(tmp_path):
     assert load(tmp_path, data)["teams"][0]["skill_replacement"] == custom_skills()
 
 
-def test_skill_swaps_are_game_data_the_schema_and_the_gui_share():
+def test_skill_swaps_are_game_data_the_gui_shares():
     # data/shop.yaml holds the three swaps and their prices (ADR 0005, #264: read off the game's upgradePersonality); a target
     # names no swap, the swaps it needs follow from it (docs/spec/04-settings.md section 9).
     swaps = yaml.safe_load((DATA / "shop.yaml").read_text(encoding="utf-8"))["skill_replacement"]
