@@ -23,7 +23,10 @@ SCREENS = ROOT / "tests" / "screens"
 # (hub text node, capture) -> a screen its pass must pick
 PICKS = {("HubText", "FormationNoSinners.png"): "PopupButton", ("HomeText", "FormationNoSinners.png"): "PopupButton",
          ("ExpText", "FormationNoSinners.png"): "PopupButton", ("ExpText", "EventChoicesLitTop.png"): "Event",
-         ("ExpText", "EventChoicesLitBottom.png"): "Event", ("ExpText", "EventChoicesScrolledBack.png"): "Event"}
+         ("ExpText", "EventChoicesLitBottom.png"): "Event", ("ExpText", "EventChoicesScrolledBack.png"): "Event",
+         # #456: MirrorHub handed ID Skill Search's select mode (Leave reads Return there) comes to Shop by its title, whose
+         # to_main leaves by Return; the plain shop still by Leave.
+         ("HubText", "ShopIdSkillSearchSelect.png"): "Shop", ("HubText", "Shop.png"): "Shop"}
 
 
 def child():

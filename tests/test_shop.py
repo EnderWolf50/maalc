@@ -278,6 +278,70 @@ def test_skill_plan_opens_one_slot_a_sinner():
         ("Replace Gregor's Skill", None, "'Gregor' has another slot opened this visit: skip")]
 
 
+def id_lines(listed_, known=None, tried=(), dead=()):
+    return [(e and e["sinner"], why) for e, why in s.id_search_plan(listed_, known or {}, list(tried), list(dead), SWAPS)]
+
+
+def test_id_search_tries_the_listed_sinners_in_the_lists_order():
+    # #456: the first listed sinner with a feasible swap; the list order, not the bar's (Gregor is last on it).
+    team = [skill_entry("Gregor", 1, 3, 2), skill_entry("Faust", 3, 2, 1), skill_entry("Don Quixote", 2, 2, 2)]
+    assert id_lines(team) == [("Gregor", "'Gregor' counts not read this run, toward 1/3/2: try"),
+                              (None, "'Faust' targets the game's 3/2/1: skip"),
+                              ("Don Quixote", "'Don Quixote' counts not read this run, toward 2/2/2: try")]
+    assert id_lines(team, known={"Gregor": [2, 3, 1]})[0] == ("Gregor", "'Gregor' 2/3/1 read this run, toward 1/3/2: try")
+
+
+def test_id_search_skips_a_sinner_at_the_target_with_no_swap_left_dead_or_tried_this_visit():
+    team = [skill_entry("Gregor", 1, 3, 2), skill_entry("Ryōshū", 2, 2, 2), skill_entry("Meursault", 2, 3, 1),
+            skill_entry("Yi Sang", 2, 2, 2)]
+    assert id_lines(team, known={"Gregor": [1, 3, 2], "Ryōshū": [3, 2, 0]}, tried=["Meursault"], dead=["Yi Sang"]) == [
+        (None, "'Gregor' is at 1/3/2 (read this run): skip"),
+        (None, "'Ryōshū' at 3/2/0 can make no swap toward 2/2/2 (skill 3 locked): skip"),
+        (None, "'Meursault' tried this visit: skip"),
+        (None, "'Yi Sang' is dead (grey on the shop's bar): skip")]
+
+
+def test_id_search_has_nobody_to_try_with_no_sinner_listed():
+    assert id_lines([]) == []
+
+
+ID_COST = {"s1_s2": 90, "s2_s3": 150, "s1_s3": 240}
+ID_STARLIGHT = {"s1_s2": 25, "s2_s3": 50, "s1_s3": 75}
+
+
+@pytest.mark.parametrize("prices, mode", [
+    (ID_COST, "cost"), (ID_STARLIGHT, "starlight"),
+    ({**ID_STARLIGHT, "s1_s3": None}, "starlight"),  # a price unread: the others tell
+    (PRICES, None),  # a Replace slot's dialog: neither
+    ({"s1_s2": 25, "s2_s3": 150, "s1_s3": 75}, None),  # mixed: never a guess
+    ({"s1_s2": None, "s2_s3": None, "s1_s3": None}, None),
+])
+def test_the_pay_mode_is_told_by_the_three_prices(prices, mode):
+    # #456 capture: the switch turns 90/150/240 into 25/50/75; the Cost box then shows the owned starlight.
+    assert s.pay_mode(prices, SWAPS) == mode
+
+
+def test_id_search_pays_starlight_without_the_reserve_and_never_beyond_what_is_owned():
+    ryoshu = skill_entry("Ryōshū", 1, 3, 2)
+    # Starlight: the Cost reserve does not apply; 74 starlight pays no 75 but a 25.
+    assert s.id_search_choice(ryoshu, (3, 2, 1), LIT, ID_STARLIGHT, 75, "starlight", 500, SWAPS) == ("s1_s3", 75)
+    assert s.id_search_choice(ryoshu, (3, 2, 1), LIT, ID_STARLIGHT, 74, "starlight", 500, SWAPS) == ("s1_s2", 25)
+    assert s.id_search_choice(ryoshu, (3, 2, 1), LIT, ID_STARLIGHT, 24, "starlight", 0, SWAPS) is None
+
+
+def test_id_search_pays_cost_keeping_the_reserve():
+    ryoshu = skill_entry("Ryōshū", 1, 3, 2)
+    assert s.id_search_choice(ryoshu, (3, 2, 1), LIT, ID_COST, 340, "cost", 100, SWAPS) == ("s1_s3", 240)
+    assert s.id_search_choice(ryoshu, (3, 2, 1), LIT, ID_COST, 339, "cost", 100, SWAPS) == ("s1_s2", 90)
+    assert s.id_search_choice(ryoshu, (3, 2, 1), LIT, ID_COST, 189, "cost", 100, SWAPS) is None
+
+
+def test_the_id_skill_search_slot_is_found_whole_or_clipped_and_tells_whether_it_was_used():
+    grid = [slot("Replace Gregor's Skill", 778), slot("ID Skil Search", 624, purchased=True), GIFT]
+    assert s.id_search_slot(grid)["x"] == 624 and s.id_search_slot(grid)["purchased"]
+    assert s.id_search_slot([slot("Replace Gregor's Skill"), GIFT]) is None
+
+
 def test_any_change_is_false_for_the_default_and_for_entries_left_at_the_games_deck():
     assert not s.any_change([])
     assert not s.any_change([skill_entry("Faust", 3, 2, 1)])

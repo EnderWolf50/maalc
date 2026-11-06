@@ -1,4 +1,5 @@
-"""Skill replacement in the shop (#455): the flow on a fake shop, and the dialog's pixel readers on the real captures.
+"""Skill replacement in the shop (#455) and ID Skill Search (#456): the flow on a fake shop, and the dialog's and the sinner
+bar's pixel readers on the real captures.
 
 The OCR of the real captures (the slot's sinner, Skills Owned, the Cost, the prices, to_main's tell) is test_shop_skill_screens.
 """
@@ -365,6 +366,319 @@ def test_the_swap_table_matches_the_dialog_options():
     assert {k: v["shop"] for k, v in swaps.items()} == PRICES  # the prices #453 saw on the dialog, left to right 45, 75, 120
 
 
+ID_PRICES = {"cost": {"s1_s2": 90, "s2_s3": 150, "s1_s3": 240}, "starlight": {"s1_s2": 25, "s2_s3": 50, "s1_s3": 75}}
+ID_SLOT = slot_tap(0)
+
+
+def portrait(sinner):
+    return actions.SHOP_PORTRAIT_X[actions.battle.SINNERS.index(sinner)], 655
+
+
+class IdGame:
+    """A Super Shop whose first slot is ID Skill Search, as #456's captures saw it (spec 02 「ID Skill Search」).
+
+    decks: {sinner: counts} of the living sinners; dead: sinners grey on the bar (their portrait takes no tap); hidden: dead
+    ones the bar reads as alive (their portrait takes no tap either); cost, starlight: what is owned; mode: the payment the
+    dialog opens in; switches: whether the double arrow switches it; pays: whether the paying Confirm takes the price;
+    asks: the second layer's text (None: the price in the mode's unit). Its slot taps into select mode (the Refresh fee still
+    reads there); a portrait opens the Replace dialog at the ID prices, whose Cancel and paying Confirm land on the main page.
+    """
+
+    def __init__(self, context, monkeypatch, decks, cost=868, starlight=3433, dead=(), hidden=(), mode="cost",
+                 switches=True, pays=True, asks=None, purchased=False):
+        self.decks, self.cost, self.starlight, self.dead, self.hidden = dict(decks), cost, starlight, set(dead), set(hidden)
+        self.mode, self.opens_in, self.switches, self.pays, self.asks, self.purchased = mode, mode, switches, pays, asks, purchased
+        self.state, self.open, self.picked, self.taps = "main", None, None, []
+        context.tasker.controller.post_click.side_effect = self.click
+        context.tasker.controller.post_screencap.return_value.wait.return_value.get.side_effect = \
+            lambda: np.full((720, 1280, 3), len(self.taps) * 20 % 256, np.uint8)
+        context.run_recognition.side_effect = self.recognition
+        monkeypatch.setattr(actions.shop, "option_lit", lambda image, box: self.lit(box))
+        monkeypatch.setattr(actions.shop, "option_picked", lambda image, frame: self.picked is not None
+                            and frame == actions.REPLACE_FRAMES[self.picked])
+        monkeypatch.setattr(actions, "bar_dead", lambda image: set(self.dead))
+
+    def lit(self, box):
+        swap = next(k for k, b in actions.REPLACE_PRICES.items() if b == box)
+        return not (swap != "s1_s2" and self.decks[self.open][2] == 0)  # skill 3 locked: the two swaps into it dim
+
+    def price(self):
+        return ID_PRICES[self.mode][self.picked]
+
+    def click(self, x, y):
+        at = (x, y)
+        self.taps.append(at)
+        if self.state == "main":
+            if at == ID_SLOT and not self.purchased:
+                self.state = "select"
+            elif at == actions.BOTTOM_RIGHT:
+                self.state = "leave"
+        elif self.state == "leave":
+            self.state = "left" if at == actions.LEAVE_CONFIRM else "main"
+        elif self.state == "select":
+            sinner = next((s for s in self.decks if portrait(s) == at), None)
+            if sinner and sinner not in self.dead | self.hidden:
+                self.state, self.open, self.picked, self.mode = "dialog", sinner, None, self.opens_in
+            elif at == actions.BOTTOM_RIGHT:
+                self.state = "main"  # Return
+        elif self.state == "dialog":
+            swap = next((k for k, p in actions.REPLACE_OPTIONS.items() if p == at), None)
+            if swap and self.lit(actions.REPLACE_PRICES[swap]):
+                self.picked = swap
+            elif at == actions.PAY_SWITCH and self.switches:
+                self.mode = "starlight" if self.mode == "cost" else "cost"
+            elif at == actions.REPLACE_CONFIRM and self.picked:
+                self.state = "ask"
+            elif at == actions.REPLACE_CANCEL:
+                self.state = "main"  # not back to select mode (#456 capture)
+        elif self.state == "ask":
+            if at == actions.REPLACE_CONFIRM:
+                if self.pays:
+                    if self.mode == "cost":
+                        self.cost -= self.price()
+                    else:
+                        self.starlight -= self.price()
+                    self.decks[self.open] = shop.after_swap(self.decks[self.open], self.picked, actions.data("shop.yaml")["skill_replacement"])
+                    self.purchased = True
+                self.state = "main"
+            elif at == actions.REPLACE_CANCEL:
+                self.state, self.picked = "dialog", None
+        return MagicMock()
+
+    def shown(self):
+        if self.state == "left":
+            return {}
+        if self.state in ("main", "leave", "select"):
+            x = NAME_X[0]
+            lines = [("ID Skill Search", (x + 5, 333, 95, 17)), ("??", (x + 30, 306, 40, 24))]
+            lines += [("Purchased", (x + 10, 260, 80, 17))] if self.purchased else []
+            shown = {tuple(actions.OFFER_GRID): lines, tuple(actions.SHOP_COST): [(str(self.cost), (560, 120, 60, 30))],
+                     tuple(actions.REFRESH["normal"][1]): [("15", (980, 145, 30, 20))]}
+            if self.state == "select":  # the Refresh fee still reads: to_main must not take it for the main page
+                shown[tuple(actions.SELECT_TITLE)] = [("Select a Sinner for Skill Replacement.", (450, 20, 380, 24))]
+            if self.state == "leave":
+                shown[tuple(actions.LEAVE_DIALOG)] = [("Leave the shop?", (480, 325, 300, 35))]
+            return shown
+        sinner, counts = self.open, self.decks[self.open]
+        owned = "SKILL 1x{} SKILL 2x{} SKILL 3x{}".format(*counts)
+        shown = {tuple(actions.DIALOG_TITLE): [("Skills Owned", (610, 104, 90, 14)), (owned, (617, 134, 216, 16))],
+                 tuple(actions.REPLACE_TITLE): [(f"Replace {sinner}'s Skill", (213, 124, 355, 28))],
+                 tuple(actions.REPLACE_OWNED): [("Skills Owned", (610, 104, 90, 14)), (owned, (617, 134, 216, 16))],
+                 tuple(actions.REFRESH["normal"][1]): [("86", (1020, 140, 20, 20))],
+                 **{tuple(box): [(str(ID_PRICES[self.mode][k]), (box[0] + 20, 206, 30, 20))] for k, box in actions.REPLACE_PRICES.items()}}
+        funds = self.cost if self.mode == "cost" else self.starlight
+        if self.state == "dialog":
+            shown[tuple(actions.REPLACE_COST)] = [(str(funds), (1035, 127, 60, 25))]
+        else:
+            unit = "Cost" if self.mode == "cost" else "Starlight"
+            shown[tuple(actions.REPLACE_ASK)] = [(self.asks or f"Spend {self.price()} {unit} to replace this Skill?", (440, 493, 400, 16))]
+            shown[tuple(actions.REPLACE_PREVIEW)] = [(f"{funds} ▸ {funds - self.price()}", (985, 127, 113, 25))]
+        return shown
+
+    def recognition(self, name, image, override=None):
+        roi = tuple((override or {}).get(name, {}).get("roi", ()))
+        results = [SimpleNamespace(text=t, box=b) for t, b in self.shown().get(roi, [])]
+        return SimpleNamespace(all_results=results, hit=True, best_result=None) if results else None
+
+
+def searching(*entries, pay="cost", enabled=True, reserve=0):
+    return shop_team({"reserve_cost": reserve, "skill_replacement": {
+        **replacing(*entries), "id_skill_search": {"enabled": enabled, "pay": pay}}})
+
+
+RYOSHU = skill_entry("Ryōshū", 1, 3, 2)
+
+
+def test_id_skill_search_switched_off_taps_nothing_and_reads_nothing(context, monkeypatch):
+    game = IdGame(context, monkeypatch, {"Ryōshū": (2, 3, 1)})
+    for team in (searching(RYOSHU, enabled=False), searching(skill_entry("Ryōshū", 3, 2, 1))):
+        assert actions.Shop.id_skill_search(context, team, {}) == 0
+    assert game.taps == [] and not context.run_recognition.called
+
+
+def test_id_skill_search_picks_a_sinner_swaps_and_checks_the_cost(context, monkeypatch):
+    # The capture's swap: Ryōshū 2/3/1, s1_s3 for 240 Cost, 868 -> 628.
+    game, lines, visit = IdGame(context, monkeypatch, {"Ryōshū": (2, 3, 1)}), logged(monkeypatch), {}
+    assert actions.Shop.id_skill_search(context, searching(RYOSHU), visit) == 1
+    assert game.taps == [ID_SLOT, portrait("Ryōshū"), actions.REPLACE_OPTIONS["s1_s3"], actions.REPLACE_CONFIRM,
+                         actions.REPLACE_CONFIRM]
+    assert lines == ["shop: ID Skill Search: 'Ryōshū' counts not read this run, toward 1/3/2: try",
+                     "shop: ID Skill Search: 'Ryōshū': Skills Owned 2/3/1, s1_s2 90, s2_s3 150, s1_s3 240, 868 Cost, "
+                     "reserve 0: try s1_s3",
+                     "shop: ID Skill Search: replaced 'Ryōshū' s1_s3 (skill 1 -> 3) for 240: 868 -> 628 Cost"]
+    assert game.cost == 628 and actions.RUN["skills"] == {"Ryōshū": [1, 3, 2]} and visit["id_searched"]
+    assert actions.Shop.id_skill_search(context, searching(RYOSHU), visit) == 0 and len(game.taps) == 5  # once a visit
+
+
+def test_id_skill_search_switches_to_starlight_and_checks_the_slot_and_the_cost(context, monkeypatch):
+    # #456 decision 3: the dialog opens in Cost; the double arrow switches it, and the prices must read 25/50/75 before
+    # anything is judged. Starlight is out of reach after the swap (the slot no longer opens): the slot's Purchased and an
+    # unchanged Cost are the check.
+    game, lines = IdGame(context, monkeypatch, {"Ryōshū": (2, 3, 1)}), logged(monkeypatch)
+    assert actions.Shop.id_skill_search(context, searching(RYOSHU, pay="starlight", reserve=900), {}) == 1
+    assert game.taps == [ID_SLOT, portrait("Ryōshū"), actions.PAY_SWITCH, actions.REPLACE_OPTIONS["s1_s3"],
+                         actions.REPLACE_CONFIRM, actions.REPLACE_CONFIRM]
+    assert "shop: ID Skill Search: 'Ryōshū': Skills Owned 2/3/1, s1_s2 25, s2_s3 50, s1_s3 75, 3433 starlight "\
+           "(no reserve): try s1_s3" in lines
+    assert lines[-1] == ("shop: ID Skill Search: replaced 'Ryōshū' s1_s3 (skill 1 -> 3) for 75 starlight: the slot reads "
+                         "Purchased, the Cost stays 868")
+    assert (game.starlight, game.cost) == (3358, 868) and actions.RUN["skills"] == {"Ryōshū": [1, 3, 2]}
+
+
+def test_id_skill_search_goes_down_the_list_to_the_first_sinner_with_a_feasible_swap(context, monkeypatch):
+    # #456: Yi Sang dead (grey on the bar), Meursault read at his target, Gregor's dialog with no swap (2/3/0: skill 3
+    # locked, skill 2 at its target): Cancel lands on the main page, so the slot is tapped again for Ryōshū.
+    game = IdGame(context, monkeypatch, {"Yi Sang": (3, 2, 1), "Meursault": (2, 3, 1), "Gregor": (2, 3, 0), "Ryōshū": (2, 3, 1)},
+                  dead=["Yi Sang"])
+    actions.note_skills("Meursault", (1, 3, 2))
+    team = searching(skill_entry("Yi Sang", 2, 2, 2), skill_entry("Meursault", 1, 3, 2), skill_entry("Gregor", 1, 3, 2), RYOSHU)
+    visit, lines = {}, logged(monkeypatch)
+    assert actions.Shop.id_skill_search(context, team, visit) == 1
+    assert game.taps == [ID_SLOT, portrait("Gregor"), actions.REPLACE_CANCEL, ID_SLOT, portrait("Ryōshū"),
+                         actions.REPLACE_OPTIONS["s1_s3"], actions.REPLACE_CONFIRM, actions.REPLACE_CONFIRM]
+    assert lines[:4] == ["shop: ID Skill Search: 'Yi Sang' is dead (grey on the shop's bar): skip",
+                         "shop: ID Skill Search: 'Meursault' is at 1/3/2 (read this run): skip",
+                         "shop: ID Skill Search: 'Gregor' counts not read this run, toward 1/3/2: try",
+                         "shop: ID Skill Search: 'Ryōshū' counts not read this run, toward 1/3/2: try"]
+    assert "shop: ID Skill Search: 'Gregor': no swap toward 1/3/2 is lit, priced and affordable in Cost: cancel" in lines
+    assert visit["id_tried"] == ["Gregor", "Ryōshū"] and actions.RUN["skills"]["Gregor"] == [2, 3, 0]
+
+
+def test_id_skill_search_keeps_the_cost_reserve(context, monkeypatch):
+    # 300 Cost, reserve 100: 240 would break it; s1_s2 is not wanted from 2/3/1. Nothing paid, Cancel to the main page.
+    game, lines = IdGame(context, monkeypatch, {"Ryōshū": (2, 3, 1)}, cost=300), logged(monkeypatch)
+    assert actions.Shop.id_skill_search(context, searching(RYOSHU, reserve=100), {}) == 0
+    assert game.taps == [ID_SLOT, portrait("Ryōshū"), actions.REPLACE_CANCEL] and game.cost == 300
+    assert "shop: ID Skill Search: 'Ryōshū': Skills Owned 2/3/1, s1_s2 90, s2_s3 150, s1_s3 240, 300 Cost, reserve 100: try s1_s3" in lines
+
+
+def test_too_little_starlight_is_no_swap(context, monkeypatch):
+    game, lines = IdGame(context, monkeypatch, {"Ryōshū": (2, 3, 1)}, starlight=74), logged(monkeypatch)
+    assert actions.Shop.id_skill_search(context, searching(RYOSHU, pay="starlight"), {}) == 0
+    assert game.taps == [ID_SLOT, portrait("Ryōshū"), actions.PAY_SWITCH, actions.REPLACE_CANCEL]
+    assert "shop: ID Skill Search: 'Ryōshū': no swap toward 1/3/2 is lit, priced and affordable in starlight: cancel" in lines
+    assert (game.starlight, game.cost, game.state) == (74, 868, "main")
+
+
+def test_a_payment_that_does_not_switch_is_cancelled(context, monkeypatch):
+    game, lines = IdGame(context, monkeypatch, {"Ryōshū": (2, 3, 1)}, switches=False), logged(monkeypatch)
+    assert actions.Shop.id_skill_search(context, searching(RYOSHU, pay="starlight"), {}) == 0
+    assert game.taps == [ID_SLOT, portrait("Ryōshū"), actions.PAY_SWITCH, actions.REPLACE_CANCEL] and game.cost == 868
+    assert ("shop: ID Skill Search: 'Ryōshū': prices s1_s2 90, s2_s3 150, s1_s3 240: the payment does not show starlight: "
+            "cancel") in lines
+
+
+def test_a_dialog_already_in_starlight_is_switched_back_for_cost(context, monkeypatch):
+    # Whether the payment persists between openings is uncaptured: it is read every time, never assumed.
+    game = IdGame(context, monkeypatch, {"Ryōshū": (2, 3, 1)}, mode="starlight")
+    assert actions.Shop.id_skill_search(context, searching(RYOSHU), {}) == 1
+    assert actions.PAY_SWITCH in game.taps and (game.cost, game.starlight) == (628, 3433)
+
+
+def test_id_skill_search_with_nobody_to_swap_leaves_by_return(context, monkeypatch):
+    # The bar reads Gregor alive, but his portrait takes no tap: nobody else to try, the select mode is left by Return.
+    game, lines = IdGame(context, monkeypatch, {"Gregor": (3, 2, 0)}, hidden=["Gregor"]), logged(monkeypatch)
+    assert actions.Shop.id_skill_search(context, searching(skill_entry("Gregor", 1, 3, 2)), {}) == 0
+    assert game.taps == [ID_SLOT, portrait("Gregor"), actions.BOTTOM_RIGHT] and game.state == "main"
+    assert lines[-2:] == ["shop: ID Skill Search: 'Gregor''s portrait opened no dialog",
+                          "shop: ID Skill Search: no listed sinner has a feasible swap: Return"]
+
+
+def test_id_skill_search_with_nobody_to_try_is_not_opened(context, monkeypatch):
+    game, lines = IdGame(context, monkeypatch, {"Gregor": (3, 2, 0)}, dead=["Gregor"]), logged(monkeypatch)
+    assert actions.Shop.id_skill_search(context, searching(skill_entry("Gregor", 1, 3, 2)), {}) == 0
+    assert game.taps == [] and lines[-1] == "shop: ID Skill Search: nobody to try: not opened"
+
+
+def test_a_purchased_id_skill_search_is_never_opened(context, monkeypatch):
+    game, lines = IdGame(context, monkeypatch, {"Ryōshū": (2, 3, 1)}, purchased=True), logged(monkeypatch)
+    visit = {}
+    assert actions.Shop.id_skill_search(context, searching(RYOSHU), visit) == 0
+    assert game.taps == [] and visit["id_searched"] and lines == ["shop: ID Skill Search: used already (Purchased): skip"]
+
+
+def test_a_starlight_second_layer_that_does_not_ask_starlight_is_not_paid(context, monkeypatch):
+    # #456 decision 3: the starlight layer is uncaptured; only "Spend <price> Starlight" with a matching preview is paid.
+    game = IdGame(context, monkeypatch, {"Ryōshū": (2, 3, 1)}, asks="Spend 75 Cost to replace this Skill?")
+    lines = logged(monkeypatch)
+    assert actions.Shop.id_skill_search(context, searching(RYOSHU, pay="starlight"), {}) == 0
+    assert game.taps.count(actions.REPLACE_CONFIRM) == 1 and (game.starlight, game.cost, game.state) == (3433, 868, "main")
+    assert "shop: ID Skill Search: 'Ryōshū': no second confirm asking Starlight: back to the shop" in lines
+
+
+def test_a_starlight_swap_without_purchased_forgets_the_counts(context, monkeypatch):
+    game, lines = IdGame(context, monkeypatch, {"Ryōshū": (2, 3, 1)}, pays=False), logged(monkeypatch)
+    visit = {}
+    assert actions.Shop.id_skill_search(context, searching(RYOSHU, pay="starlight"), visit) == 0
+    assert lines[-1] == ("shop: ID Skill Search: 'Ryōshū' s1_s3 for 75 starlight: the slot reads no Purchased, the Cost "
+                         "868 -> 868: the counts are not known")
+    assert actions.RUN["skills"] == {} and visit["id_searched"]
+    actions.Shop.id_skill_search(context, searching(RYOSHU, pay="starlight"), visit)  # after a refresh: not again
+    assert game.taps.count(ID_SLOT) == 1
+
+
+def test_a_hand_back_at_the_paying_tap_does_not_pay_twice(context, monkeypatch):
+    # #456 decision 5: the visit is marked before the paying tap. Here the tap is lost to a popup (nothing paid, the slot
+    # not Purchased): the visit memory alone keeps the re-entered visit from paying.
+    actions.RUN["team"] = searching(RYOSHU) | {"heal": "none"}
+    game = IdGame(context, monkeypatch, {"Ryōshū": (2, 3, 1)})
+    for step in ("sell", "buy", "fuse"):
+        monkeypatch.setattr(actions.Shop, step, staticmethod(lambda *a: False))
+    click = game.click
+
+    def popup_at_the_paying_tap(x, y):
+        if (x, y) == actions.REPLACE_CONFIRM and game.state == "ask":
+            raise actions.PageGone("Shop")
+        return click(x, y)
+    context.tasker.controller.post_click.side_effect = popup_at_the_paying_tap
+    assert actions.Shop().run(context, argv())
+    assert actions.RUN["shop"]["id_searched"] and game.state == "ask"
+    context.tasker.controller.post_click.side_effect = click
+    lines = logged(monkeypatch)
+    assert actions.Shop().run(context, argv())  # MirrorHub enters the same visit again: to_main cancels both layers
+    assert game.taps.count(ID_SLOT) == 1 and game.cost == 868 and game.state == "left"
+    assert game.taps[-4:-2] == [actions.REPLACE_CANCEL, actions.REPLACE_CANCEL]
+    assert not [line for line in lines if "ID Skill Search" in line]
+
+
+def test_to_main_leaves_the_select_mode_by_return_though_the_refresh_fee_reads(context, monkeypatch):
+    # #456: in the select mode the Refresh fee still reads; MirrorHub's Shop node reads the title there (pipeline), and
+    # to_main taps Return.
+    game = IdGame(context, monkeypatch, {"Ryōshū": (2, 3, 1)})
+    game.state = "select"
+    assert actions.Shop.to_main(context)
+    assert game.taps == [actions.BOTTOM_RIGHT] and game.state == "main"
+
+
+def test_a_visit_replaces_slots_first_then_searches_and_again_after_a_refresh(context, monkeypatch):
+    # #456 decision 1: the Replace slots (half the price for one swap) before ID Skill Search, at both times of the step.
+    actions.RUN["team"] = shop_team({"heal": "full"})
+    real_buy = actions.Shop.buy
+    monkeypatch.setattr(actions.Shop, "to_main", staticmethod(lambda context: True))
+    steps = []
+    for step in ("heal", "replace_skills", "id_skill_search", "sell", "buy", "fuse"):
+        monkeypatch.setattr(actions.Shop, step, staticmethod(lambda *a, step=step: steps.append(step) and False))
+    actions.Shop().run(context, argv())
+    assert steps == ["heal", "replace_skills", "id_skill_search", "sell", "buy", "fuse"]
+    # A refresh that took (the real buy): both again, in that order.
+    Game(context, monkeypatch, [("Gregor", (3, 2, 0))], 350, refreshed=[("Rodion", (3, 2, 1))])
+    steps.clear()
+    monkeypatch.setattr(actions.Shop, "buy", staticmethod(real_buy))
+    monkeypatch.setattr(actions.Shop, "buy_offers", staticmethod(lambda *a: steps.append("buy_offers") and 0))
+    visit = {"wanted": None, "sold": False, "refreshes": {"keyword": 0, "normal": 0}}
+    assert actions.Shop.buy(context, buying(wants(9053), shop_refresh_normal=1), visit)
+    assert steps == ["buy_offers", "replace_skills", "id_skill_search", "buy_offers"]
+
+
+def test_the_search_judges_on_the_counts_the_replace_slots_left(context, monkeypatch):
+    # Ryōshū's Replace slot took him to 1/3/2 in the same pass: ID Skill Search has nobody left to try.
+    game, lines = IdGame(context, monkeypatch, {"Ryōshū": (2, 3, 1)}), logged(monkeypatch)
+    monkeypatch.setattr(actions.Shop, "replace_skills", staticmethod(lambda *a: actions.note_skills("Ryōshū", (1, 3, 2)) or 1))
+    actions.Shop.skill_step(context, searching(RYOSHU), {})
+    assert game.taps == [] and lines[-2:] == ["shop: ID Skill Search: 'Ryōshū' is at 1/3/2 (read this run): skip",
+                                              "shop: ID Skill Search: nobody to try: not opened"]
+
+
 def capture(name):
     return np.asarray(Image.open(SCREENS / f"{name}.png").convert("RGB"))[:, :, ::-1]
 
@@ -393,6 +707,22 @@ def test_a_dimmed_option_is_told_by_its_red_price(name, lit):
 def test_the_picked_option_is_told_by_its_orange_frame(name, picked):
     image = capture(name)
     assert [k for k, frame in actions.REPLACE_FRAMES.items() if shop.option_picked(image, frame)] == picked
+
+
+HARD_ALIVE = ["Ryōshū", "Meursault", "Gregor"]  # #453's and #456's runs: the other nine dead
+
+
+@pytest.mark.parametrize("name, alive", [
+    *[(n, list(actions.battle.SINNERS)) for n in ("Shop", "ShopHeal", "SuperShop")],
+    *[(n, HARD_ALIVE) for n in ("ShopReplaceSkillCancelled", "ShopReplaceSkillDone", "ShopReplaceSkillRefreshed",
+                                "ShopReplaceSkillClippedGregor", "ShopReplaceSkillClippedMeursault", "SuperShopIdSkillSearch",
+                                "SuperShopScrolled", "ShopIdSkillSearchDone", "ShopIdSkillSearchSelect")],
+])
+def test_the_dead_are_the_grey_portraits_of_the_shops_main_page(name, alive):
+    # Every capture of tests/screens that shows the shop's main page (or the select mode over it): the bar the heal and ID
+    # Skill Search read. A dead portrait reads up to 51, over the old 30.
+    image = capture(name)
+    assert [s for s in actions.battle.SINNERS if s not in actions.bar_dead(image)] == alive
 
 
 def screens_1280():
