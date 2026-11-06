@@ -27,6 +27,10 @@ CROP_AT = {
     # #449: the GET! popup after F2's second fusion of the same recording (06:55:57): A Certain Philosophy, the green "EX" at
     # its icon's top left where a gift's yellow numeral goes, its name plate yellow
     "get_ex": (300, 160),
+    # #451: GET! popups of the 2026-11-06 recording (#449's acceptance), each its first frame, still sliding in from the lower
+    # right: Talisman Bundle (I, 9 px right, 5 px low and 2 rows short of its place), and the gifts three fusions made, Old
+    # Wooden Doll (II), Finifugality (III) and Thrill (IV), 1 to 2 px right
+    **{name: (300, 160) for name in ("get_i", "get_ii", "get_iii", "get_iv")},
     # The fuse page's slots and first two columns (#77): live 2026-10-18 (probe capture rec/m3/fuse-152), Spiderweb tapped
     # in; captures/97 (2 in, a tooltip over the grid), Super Shop captures/172 (cells 5 and 6 in) and 169 (empty).
     "fuse_one_in": (180, 165),
@@ -553,10 +557,32 @@ def test_the_ex_mark_sweep_over_tests_screens_hits_no_shop_page():
 
 def test_the_get_popup_tells_an_ex_gift_by_its_green_mark():
     # #449: after a fusion short of its 99%, the GET! popup shows the EX gift it gave with a green "EX" at its icon's top
-    # left; any other gift shows its yellow tier numeral there (GiftGet: II, after a Gift Search; GiftGetOverMap: I).
+    # left; any other gift shows its yellow tier numeral there (GiftGet: II, after a Gift Search; GiftGetOverMap: III).
     assert s.ex_got(screen_with("get_ex"))
     for name in ("GiftGet", "GiftGetOverMap", "GiftSearchGet"):
         assert not s.ex_got(np.asarray(Image.open(SCREENS / f"{name}.png").convert("RGB"))[:, :, ::-1]), name
+
+
+@pytest.mark.parametrize("name, ex, tier", [("get_i", False, 1), ("get_ii", False, 2), ("get_iii", False, 3),
+                                            ("get_iv", False, 4), ("get_ex", True, None)])
+def test_the_get_popup_tells_its_gifts_tier_by_the_yellow_numeral(name, ex, tier):
+    # #451: a fusion's tier goes by the table and Forecasts' % is the keyword's, but when that tier's gifts are all taken the
+    # game may give another tier: the GET! popup shows the gift made's own, its yellow numeral where an EX gift's "EX" goes.
+    # Read on the popup's first frame, still sliding in; the EX shows no numeral and stays an EX.
+    image = screen_with(name)
+    assert (s.ex_got(image), s.got_tier(image)) == (ex, tier)
+
+
+def test_the_get_popup_tier_sweep_over_tests_screens_reads_the_get_popups_and_three_others():
+    # CODING_STANDARDS' sweep: got_tier reads gift_get's screenshot, its GET! title read, after a fusion only. Of the 1280x720
+    # screens of tests/screens the three GET! popups read their gift's tier; three other screens have a yellow bar in the box.
+    hits = {}
+    for png in sorted(SCREENS.glob("*.png")):
+        img = Image.open(png)
+        if img.size == (1280, 720) and (t := s.got_tier(np.asarray(img.convert("RGB"))[:, :, ::-1])):
+            hits[png.stem] = t
+    assert hits == {"GiftGet": 2, "GiftGetOverMap": 3, "GiftSearchGet": 3, "BattleTurnFocused": 1, "SinnersTab": 1,
+                    "TeamSelect": 1}
 
 
 def test_the_get_popup_sweep_over_tests_screens_hits_nothing():
