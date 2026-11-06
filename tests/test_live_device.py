@@ -33,6 +33,10 @@ class FakeCtl:
         self.calls.append(("click", x, y))
         return Job()
 
+    def post_swipe(self, x1, y1, x2, y2, duration):
+        self.calls.append(("swipe", x1, y1, x2, y2, duration))
+        return Job()
+
     def post_click_key(self, key):
         self.calls.append(("key", key))
         return Job()
@@ -68,6 +72,14 @@ def test_key_and_start(monkeypatch, tmp_path):
     assert ctl.calls == [("key", 4), ("start", dv.GAME)] and len(list(tmp_path.glob("boot-*.png"))) == 2
 
 
+def test_press_holds_the_finger_in_place(monkeypatch):
+    # #468: a long press, a swipe that does not move, held for --hold seconds.
+    ctl = FakeCtl()
+    monkeypatch.setattr(dv, "connect", lambda port: ctl)
+    dv.main(["press", "640", "360", "--hold", "1.5"])
+    assert ctl.calls == [("swipe", 640, 360, 640, 360, 1500)]
+
+
 def test_wait_fire_needs_the_arm_line_first():
     lines = iter(["map: path a", "floor 2: pull x", "map: path b", "later"])
     assert dv.wait_fire(lines, re.compile("map: path"), re.compile("floor 2")) == "map: path b"
@@ -75,9 +87,9 @@ def test_wait_fire_needs_the_arm_line_first():
 
 def test_commands_run_until_resume(tmp_path):
     ctl, cmd = FakeCtl(), tmp_path / "cmd.txt"
-    cmd.write_text("tap 10 20\nkey 4\nshot map\nstart com.android.vending\nresume\n")
+    cmd.write_text("tap 10 20\npress 30 40 0.8\nkey 4\nshot map\nstart com.android.vending\nresume\n")
     dv.run_commands(ctl, cmd, tmp_path, deadline=float("inf"), poll=0)
-    assert ctl.calls == [("click", 10, 20), ("key", 4), ("start", "com.android.vending")]
+    assert ctl.calls == [("click", 10, 20), ("swipe", 30, 40, 30, 40, 800), ("key", 4), ("start", "com.android.vending")]
     assert [p.name.endswith("-map.png") for p in tmp_path.glob("*.png")] == [True]
     assert cmd.read_text() == ""
 

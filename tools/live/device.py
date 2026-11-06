@@ -4,6 +4,7 @@
 
   shot OUT.png                          one screenshot, 1280x720
   tap X Y [--wait S] [--shot OUT.png]   a tap in game pixels (1280x720), then a screenshot after S seconds
+  press X Y [--hold S] [--wait S] [--shot OUT.png]   a long press: the finger held still for --hold s (1)
   key CODE [--wait S] [--shot OUT.png]  an Android key code: 4 back, 3 home
   start [PACKAGE] [--shots DIR --every S --count N]   start an app (default the game), screenshots while it boots
   freeze --log run.log --fire RE --pid PID [--arm RE] [--cmd FILE] [--out DIR] [--max S]
@@ -13,8 +14,8 @@ first (the maalc-live-test skill); these commands act on the user's game account
 
 **freeze** waits for a line of the bot's run.log matching `--fire` (after one matching `--arm`, when given),
 suspends every process under `--pid` (the `bot.py run` pid the detach printed), then runs the commands written
-to `--cmd` (default `cmd.txt` beside the log), one a line: `shot NAME`, `tap X Y`, `key CODE`, `start PACKAGE`,
-`resume`. The bot resumes on `resume` or after `--max` seconds (150): MaaFramework's waits run on, so a long
+to `--cmd` (default `cmd.txt` beside the log), one a line: `shot NAME`, `tap X Y`, `press X Y S`, `key CODE`,
+`start PACKAGE`, `resume`. The bot resumes on `resume` or after `--max` seconds (150): MaaFramework's waits run on, so a long
 freeze can time a node out. Screenshots go to `--out` (default the log's folder) as `HHMMSS.fff-NAME.png`.
 """
 from __future__ import annotations
@@ -51,6 +52,11 @@ def connect(port: int):
 def shot(ctl, out) -> None:
     Image.fromarray(ctl.post_screencap().wait().get()[..., ::-1]).save(out)  # BGR from MaaFramework
     print("saved", out, flush=True)
+
+
+def press(ctl, x: int, y: int, hold: float) -> None:
+    """A long press: a swipe that stays on (x, y) for hold seconds."""
+    ctl.post_swipe(x, y, x, y, round(hold * 1000)).wait()
 
 
 def stamp() -> str:
@@ -97,6 +103,8 @@ def run_commands(ctl, cmd: Path, out: Path, deadline: float, poll: float = 0.2) 
                 return
             if a[0] == "tap":
                 ctl.post_click(int(a[1]), int(a[2])).wait()
+            elif a[0] == "press":
+                press(ctl, int(a[1]), int(a[2]), float(a[3]))
             elif a[0] == "key":
                 ctl.post_click_key(int(a[1])).wait()
             elif a[0] == "start":
@@ -144,12 +152,14 @@ def main(argv=None) -> None:
     ap.add_argument("--port", type=int, default=16384)
     sub = ap.add_subparsers(dest="command", required=True)
     sub.add_parser("shot").add_argument("out")
-    for name, args in (("tap", ("x", "y")), ("key", ("code",))):
+    for name, args in (("tap", ("x", "y")), ("press", ("x", "y")), ("key", ("code",))):
         p = sub.add_parser(name)
         for arg in args:
             p.add_argument(arg, type=int)
         p.add_argument("--wait", type=float, default=1.0)
         p.add_argument("--shot")
+        if name == "press":
+            p.add_argument("--hold", type=float, default=1.0)
     p = sub.add_parser("start")
     p.add_argument("package", nargs="?", default=GAME)
     p.add_argument("--shots")
@@ -167,8 +177,13 @@ def main(argv=None) -> None:
     command, ctl = a.command, connect(a.port)
     if command == "shot":
         shot(ctl, a.out)
-    elif command in ("tap", "key"):
-        (ctl.post_click(a.x, a.y) if command == "tap" else ctl.post_click_key(a.code)).wait()
+    elif command in ("tap", "press", "key"):
+        if command == "tap":
+            ctl.post_click(a.x, a.y).wait()
+        elif command == "press":
+            press(ctl, a.x, a.y, a.hold)
+        else:
+            ctl.post_click_key(a.code).wait()
         if a.shot:
             time.sleep(a.wait)
             shot(ctl, a.shot)
