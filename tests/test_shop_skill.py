@@ -170,7 +170,8 @@ def test_an_unchanged_cost_is_not_retried(context, monkeypatch):
     visit = {}
     assert actions.Shop.replace_skills(context, GREGOR, visit) == 0
     assert game.taps.count(actions.REPLACE_CONFIRM) == 2
-    assert "shop: the Cost did not change; taking it as not replaced" in lines
+    assert "shop: 'Gregor' s1_s2 for 45: 350 -> 350 Cost: the Cost did not change; taking it as not replaced" in lines
+    assert not [line for line in lines if line.startswith("shop: replaced")]  # #264 log: "replaced" is a swap that went through
     assert actions.RUN["skills"] == {"Gregor": [3, 2, 0]} and visit["replaced"] == ["Gregor"]
     actions.Shop.replace_skills(context, GREGOR, visit)  # the pass after a refresh: handled this visit
     assert game.taps.count(slot_tap(0)) == 1 and "\"Replace Gregor's Skill\": 'Gregor' handled this visit: skip" in lines[-1]
@@ -181,8 +182,8 @@ def test_a_cost_that_drops_by_another_amount_forgets_the_counts(context, monkeyp
     gregor_shop(context, monkeypatch, drop=60)
     lines = logged(monkeypatch)
     assert actions.Shop.replace_skills(context, GREGOR, {}) == 0
-    assert "shop: 'Gregor': the Cost dropped by 60, not the price 45: the counts are not known" in lines
-    assert actions.RUN["skills"] == {}
+    assert "shop: 'Gregor' s1_s2 for 45: 350 -> 290 Cost: the Cost dropped by 60, not the price: the counts are not known" in lines
+    assert actions.RUN["skills"] == {} and not [line for line in lines if line.startswith("shop: replaced")]
 
 
 def test_a_dialog_of_another_sinner_is_cancelled(context, monkeypatch):
@@ -203,6 +204,7 @@ def test_a_dialog_that_does_not_read_or_react_is_cancelled_before_any_confirm(co
     assert actions.Shop.replace_skills(context, GREGOR, visit) == 0
     assert played.taps[0] == slot_tap(0) and played.taps[-1] == actions.REPLACE_CANCEL
     assert actions.REPLACE_CONFIRM not in played.taps and line in lines and visit["replaced"] == ["Gregor"]
+    assert any(line.startswith("shop: 'Gregor': Skills Owned ") and ", 350 Cost, reserve 0: try " in line for line in lines)  # #264 log
 
 
 def test_an_unread_cost_buys_nothing(context, monkeypatch):
@@ -211,6 +213,7 @@ def test_an_unread_cost_buys_nothing(context, monkeypatch):
     game.shown = lambda: {k: v for k, v in shown().items() if k != tuple(actions.REPLACE_COST)}
     actions.Shop.replace_skills(context, GREGOR, {})
     assert game.taps == [slot_tap(0), actions.REPLACE_CANCEL] and "shop: the Cost reads nothing: cancel" in lines
+    assert "shop: 'Gregor': Skills Owned 3/2/0, s1_s2 45, s2_s3 75 dim, s1_s3 120 dim, unread Cost, reserve 0: try s1_s2" in lines
     assert actions.RUN["skills"] == {"Gregor": [3, 2, 0]}  # the counts read are kept
 
 
@@ -255,11 +258,31 @@ def test_a_sinner_read_at_the_target_is_not_opened_at_the_next_shop(context, mon
     assert lines == ["shop: \"Replace Gregor's Skill\": 'Gregor' is at 1/3/2 (read this run): skip"]
 
 
-def test_the_counts_leave_with_the_run(context, monkeypatch):
-    # #455: cleared on leaving the Mirror Dungeon: RUN goes as a whole at the claim, the give-up, a new run and a task change.
+def test_the_counts_leave_with_the_run_when_its_rewards_are_given_up(context, monkeypatch):
+    # #455: cleared on leaving the Mirror Dungeon. RUN goes as a whole at the claim, the give-up (here), a new run and a
+    # task change; a new floor or a hand-back keeps it.
     actions.note_skills("Gregor", (2, 3, 0))
-    actions.RUN.clear()
+    monkeypatch.setattr(actions.Settle, "record", staticmethod(lambda *a: None))
+    test_actions.reads(context, {tuple(actions.DIALOG_TEXT): [("End expedition without claiming rewards?", (420, 300, 440, 30))]})
+    assert actions.Settle().give_up(context, actions.RUN, None)
     assert "skills" not in actions.RUN
+
+
+def test_a_slot_gone_from_the_grid_after_a_swap_is_not_tapped(context, monkeypatch):
+    # #264: the grid is read again after each slot; whether a swapped slot moves is unseen. Here Don Quixote's slot is gone.
+    game = Game(context, monkeypatch, [("Gregor", (3, 2, 1)), ("Don Quixote", (3, 2, 1))], 500)
+    team = shop_team({"skill_replacement": replacing(skill_entry("Gregor", 2, 3, 1), skill_entry("Don Quixote", 2, 3, 1))})
+    click = game.click
+
+    def swap_hides_the_second(x, y):
+        if (x, y) == actions.REPLACE_CONFIRM and game.state == "ask":
+            game.sinners = game.sinners[:1]
+        return click(x, y)
+    context.tasker.controller.post_click.side_effect = swap_hides_the_second
+    lines, visit = logged(monkeypatch), {}
+    assert actions.Shop.replace_skills(context, team, visit) == 1
+    assert slot_tap(1) not in game.taps and visit["replaced"] == ["Gregor"]
+    assert "shop: 'Don Quixote''s slot is no longer on the grid: skip" in lines
 
 
 def test_a_refresh_that_shows_another_sinner_is_judged_again(context, monkeypatch):

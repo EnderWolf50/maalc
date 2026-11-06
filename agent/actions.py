@@ -4571,16 +4571,24 @@ class Shop(CustomAction):
         (ADR 0007): a visit handed back mid-dialog and entered again does not pay twice. A sinner leaves it again only when
         the bot itself cancelled the dialog before any Confirm because no swap was lit, priced and affordable: the pass after
         the next refresh judges it again. With every target at 3/2/1, or no sinner listed, nothing is read and nothing tapped.
+        Before each slot after the first the grid is read again and the slot found by its sinner (#264: whether a swapped
+        slot moves is unseen); one gone is not tapped.
         """
         listed = team["skill_replacement"]["sinners"]
         if not shop.any_change(listed):
             return 0
         swaps, handled = data("shop.yaml")["skill_replacement"], visit.setdefault("replaced", [])
-        made = 0
-        for slot, entry, why in shop.skill_plan(listed, Shop.skill_offers(context), RUN.get("skills", {}), handled, swaps):
+        plan = shop.skill_plan(listed, Shop.skill_offers(context), RUN.get("skills", {}), handled, swaps)
+        for slot, _, why in plan:
             log(f"shop: {slot['name']!r}: {why}")
-            if entry is None:
-                continue
+        made = 0
+        for n, (slot, entry) in enumerate((slot, entry) for slot, entry, _ in plan if entry):
+            if n:
+                slot = next((s for s in shop.skill_slots(Shop.skill_offers(context))
+                             if s["sinner"] == slot["sinner"] and not s["purchased"]), None)
+                if slot is None:
+                    log(f"shop: {entry['sinner']!r}'s slot is no longer on the grid: skip")
+                    continue
             handled.append(slot["sinner"])  # first: a hand-back mid-dialog (#118) is not paid twice
             outcome = Shop.replace_skill(context, slot, entry, team["reserve_cost"], swaps)
             made += outcome == "replaced"
@@ -4636,6 +4644,10 @@ class Shop(CustomAction):
             Shop.cancel_replace(context)
             return "handled"
         owned, cost = read["owned"], read["cost"]
+        wanted = [] if owned is None else shop.swaps_wanted(entry["target"], owned, entry["s1_s3_first"], swaps)
+        prices = ", ".join(f"{k} {read['prices'][k]}{'' if read['lit'][k] else ' dim'}" for k in REPLACE_PRICES)
+        log(f"shop: {sinner!r}: Skills Owned {'unread' if owned is None else shop.counts_line(owned)}, {prices}, "
+            f"{'unread' if cost is None else cost} Cost, reserve {reserve}: try {', '.join(wanted) or 'nothing'}")
         if owned is None:
             log(f"shop: {sinner!r}: Skills Owned unread or not 5-6 cards: cancel")
             Shop.cancel_replace(context)
@@ -4645,10 +4657,6 @@ class Shop(CustomAction):
             log("shop: the Cost reads nothing: cancel")
             Shop.cancel_replace(context)
             return "handled"
-        wanted = shop.swaps_wanted(entry["target"], owned, entry["s1_s3_first"], swaps)
-        prices = ", ".join(f"{k} {read['prices'][k]}{'' if read['lit'][k] else ' dim'}" for k in REPLACE_PRICES)
-        log(f"shop: {sinner!r}: Skills Owned {shop.counts_line(owned)}, {prices}, {cost} Cost, reserve {reserve}: "
-            f"try {', '.join(wanted) or 'nothing'}")
         choice = shop.skill_choice(entry, owned, read["lit"], read["prices"], cost, reserve, swaps)
         if choice is None:
             log(f"shop: {sinner!r}: no swap toward {shop.counts_line(entry['target'])} is lit, priced and affordable: cancel")
@@ -4686,16 +4694,16 @@ class Shop(CustomAction):
             return "handled"
         still(context, timeout=1.5)
         after = read_cost(context)
-        sw = swaps[swap]
-        log(f"shop: replaced {sinner!r} {swap} (skill {sw['from']} -> {sw['to']}) for {price}: {cost} -> {after} Cost")
         if after == cost:
-            log("shop: the Cost did not change; taking it as not replaced")
+            log(f"shop: {sinner!r} {swap} for {price}: {cost} -> {after} Cost: the Cost did not change; taking it as not replaced")
             return "handled"
         if after is None or cost - after != price:
-            log(f"shop: {sinner!r}: the Cost {'reads nothing' if after is None else f'dropped by {cost - after}'}, not the price "
-                f"{price}: the counts are not known")
+            log(f"shop: {sinner!r} {swap} for {price}: {cost} -> {after} Cost: the Cost "
+                f"{'reads nothing' if after is None else f'dropped by {cost - after}'}, not the price: the counts are not known")
             note_skills(sinner, None)
             return "handled"
+        sw = swaps[swap]
+        log(f"shop: replaced {sinner!r} {swap} (skill {sw['from']} -> {sw['to']}) for {price}: {cost} -> {after} Cost")
         note_skills(sinner, shop.after_swap(owned, swap, swaps))
         return "replaced"
 
