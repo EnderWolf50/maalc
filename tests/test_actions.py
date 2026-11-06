@@ -825,12 +825,21 @@ def wants(*ids, order=("Burn", "Bleed"), keep=(), condition="any"):
             "fusion_condition": condition}
 
 
+DEFAULT_SKILLS = json.loads((Path(__file__).parent / "settings_cases.json").read_text(encoding="utf-8"))["skill_replacement_default"]
+
+
+def replacing(*entries):
+    """A team's skill_replacement listing entries (test_shop.skill_entry), else the settings' default: no sinner listed, so
+    the shop taps no replacement slot (#455)."""
+    return {**json.loads(json.dumps(DEFAULT_SKILLS)), "sinners": list(entries)}
+
+
 def shop_team(team):
     """The team Shop.sell and Shop.fuse get (run_team's): its list drops everything, fusing under `fusion_condition`, unless
-    `list` says (then its own condition counts)."""
+    `list` says (then its own condition counts); no skill replacement unless `skill_replacement` says."""
     team = dict(team)
     condition = team.pop("fusion_condition", None) or "any"
-    return {"keyword": "Burn", "reserve_cost": 0, "list": wants(condition=condition), **team}
+    return {"keyword": "Burn", "reserve_cost": 0, "list": wants(condition=condition), "skill_replacement": replacing(), **team}
 
 
 UNLISTED = 800000  # a cell given no id reads as UNLISTED + its place: an id no gift list mentions
@@ -845,8 +854,8 @@ def with_ids(readings):
 
 
 def buying(list_, **team):
-    """A team that plays gift list `list_` (run_team puts it in the team), reserve 0, no shop refresh."""
-    return {"keyword": "Burn", "reserve_cost": 0, "list": list_, "shop_refresh_keyword": 0, "shop_refresh_normal": 0, **team}
+    """A team that plays gift list `list_` (run_team puts it in the team), reserve 0, no shop refresh, no skill replacement."""
+    return shop_team({"list": list_, "shop_refresh_keyword": 0, "shop_refresh_normal": 0, **team})
 
 
 def test_offers_are_read_once_and_bought_in_the_lists_order_from_the_back(context, monkeypatch):
@@ -994,7 +1003,7 @@ def test_a_fusion_reads_the_tier_by_the_shop_it_is_in(context, monkeypatch, slot
 
 def test_a_shop_visit_counts_a_super_shops_five_slots_from_its_red_title(context, monkeypatch):
     # #263: before any fuse page was read, the sale already groups by the Super Shop's table.
-    actions.RUN["team"] = {"heal": "none", "keyword": "Burn", "reserve_cost": 0}
+    actions.RUN["team"] = shop_team({"heal": "none"})
     monkeypatch.setattr(actions.Shop, "to_main", staticmethod(lambda context: True))
     seen = []
 
@@ -1107,7 +1116,7 @@ def test_a_keyword_refresh_checks_the_page_before_its_first_tap(context, clock, 
 
 def test_the_leave_dialog_is_read_with_its_spaces_dropped(context, clock, monkeypatch):
     # #160: OCR drops spaces ("LEAVE THESHOP?"); has() compacts both sides, as main's Leave does.
-    actions.RUN["team"] = {"heal": "none", "keyword": "Burn", "reserve_cost": 0}
+    actions.RUN["team"] = shop_team({"heal": "none"})
     monkeypatch.setattr(actions.Shop, "to_main", staticmethod(lambda context: True))
     for step in ("sell", "buy", "fuse"):
         monkeypatch.setattr(actions.Shop, step, staticmethod(lambda *a: False))
@@ -1705,7 +1714,8 @@ def test_the_gift_search_switch_is_waited_for_not_slept_on(context, clock):
 def listed(*first):
     """Settings with a team on gift list "g" whose order starts with first, the other keywords after them."""
     order = [*first, *(k for k in ORDER if k not in first)]
-    team = {"id": "a", "name": "t", "enabled": True, "usage": "any", "game_team": 1, "guard_turns": 0, "hard_from_floor": 1, "gift_list": "g"}
+    team = {"id": "a", "name": "t", "enabled": True, "usage": "any", "game_team": 1, "guard_turns": 0, "hard_from_floor": 1, "gift_list": "g",
+            "skill_replacement": replacing()}
     return {"run": {}, "teams": [team], "gift_lists": [{"id": "g", "name": "G", "order": order}]}
 
 
@@ -2771,7 +2781,7 @@ def test_a_fusion_taps_no_cell_once_the_shop_is_gone(context, guarded):
 
 
 def test_a_shop_visit_left_by_hand_is_handed_back_and_forgotten_at_the_next_node(context, guarded, monkeypatch):
-    actions.RUN["team"] = {"heal": "none", "keyword": "Burn", "reserve_cost": 0}
+    actions.RUN["team"] = shop_team({"heal": "none"})
     monkeypatch.setattr(actions.Shop, "to_main", staticmethod(lambda context: True))
     monkeypatch.setattr(actions.Shop, "sell", staticmethod(lambda *a: False))
     monkeypatch.setattr(actions.Shop, "buy", staticmethod(lambda *a: actions.page_guard(context, "Shop")))
@@ -2957,7 +2967,7 @@ def test_an_event_gone_is_not_scrolled(context, guarded):
 
 
 def test_a_shop_gone_before_leave_is_handed_back_not_stuck(context, guarded, monkeypatch):
-    actions.RUN["team"] = {"heal": "none", "keyword": "Burn", "reserve_cost": 0}
+    actions.RUN["team"] = shop_team({"heal": "none"})
     monkeypatch.setattr(actions.Shop, "to_main", staticmethod(lambda context: True))
     for step in ("sell", "buy", "fuse"):
         monkeypatch.setattr(actions.Shop, step, staticmethod(lambda *a: False))
@@ -2992,7 +3002,7 @@ def test_a_shop_gone_before_the_sell_or_fuse_button_taps_nothing(context, guarde
 
 
 def test_a_heal_handed_back_mid_way_is_not_paid_again(context, monkeypatch):
-    actions.RUN["team"] = {"heal": "full", "keyword": "Burn", "reserve_cost": 0}
+    actions.RUN["team"] = shop_team({"heal": "full"})
     monkeypatch.setattr(actions.Shop, "to_main", staticmethod(lambda context: True))
 
     def heal(context, team):

@@ -3783,6 +3783,20 @@ SHOP_PORTRAIT_X = [98 + 77 * i for i in range(12)]  # the shop's sinner bar (ste
 BOTTOM_RIGHT = (1130, 647)  # Leave on the shop; Return, Select or Leave on the heal pages
 OUTSIDE = (40, 400)  # left of every shop dialog, on nothing
 LEAVE_DIALOG, LEAVE_CONFIRM, LEAVE_CANCEL = [440, 320, 400, 45], (765, 493), (515, 493)
+# The Replace <sinner>'s Skill dialog (#455; spec 02 「技能替換對話框」), measured on tests/screens/ShopReplaceSkill*.png. Both
+# layers (the three options, then "Spend N Cost to replace this Skill?") keep the counts, Cancel and Confirm in place.
+REPLACE_TITLE = [200, 118, 380, 40]  # "Replace Don Quixote's Skill" x 213-568, "Replace Gregor's Skill" 247-534, y 124-151
+REPLACE_OWNED = [600, 102, 250, 52]  # "Skills Owned" over "SKILL 1x3 SKILL 2x2 SKILL 3x1" (x 617-833, y 134-149)
+REPLACE_COST = [1012, 118, 100, 42]  # the Cost, digits from x 1020 (the coin ends at 1011, Keyword Refresh's dim label from 1129)
+REPLACE_PREVIEW = [980, 115, 130, 45]  # 2nd layer: "350 ▸ 305", the Cost before and after (x 985-1098)
+REPLACE_PRICES = {"s1_s2": [408, 206, 51, 20], "s2_s3": [734, 206, 52, 20], "s1_s3": [1059, 206, 52, 20]}  # 45, 75, 120
+REPLACE_FRAMES = {"s1_s2": (156, 196, 311, 310), "s2_s3": (482, 196, 311, 310), "s1_s3": (808, 196, 311, 310)}
+REPLACE_OPTIONS = {"s1_s2": (312, 340), "s2_s3": (638, 340), "s1_s3": (963, 340)}  # the frames' centres (tapped live, #453)
+REPLACE_CANCEL, REPLACE_CONFIRM = (507, 542), (790, 542)
+REPLACE_ASK = [420, 486, 440, 28]  # 2nd layer only: "Spend 45 Cost to replace this Skill?" (y 493-508)
+# What DIALOG_TITLE reads on both layers, the counts line lying inside it: to_main's tell, at no extra OCR.
+REPLACE_MARK = ("Skills Owned", "SKILL1x", "SKILL2x")
+REPLACE_SETTLE = 4  # s the final Confirm waits for the main page's new Cost: CONNECTING ~0.3 s, the page ~0.6 s later (#453)
 
 
 def cost_in(context, image, roi=SHOP_COST):
@@ -3801,6 +3815,21 @@ def read_cost(context, roi=SHOP_COST):
             return cost
         time.sleep(0.5)
     return None
+
+
+def note_skills(sinner, owned):
+    """RUN["skills"][sinner] = the counts (c1, c2, c3) read or made this run, or forgets them (owned None): the only writer
+    (#264: a sinner read at the target is not opened again this run).
+
+    It leaves with RUN (the claim, the give-up, a new run, a task change: the Mirror Dungeon left) and survives floors and
+    hand-backs. A cache of the screen: the next dialog reads the counts again and overwrites it. A remembered deck never
+    runs ahead of the game's (#455): an outcome not known is forgotten, which costs one more open at a later shop.
+    """
+    skills = RUN.setdefault("skills", {})
+    if owned is None:
+        skills.pop(sinner, None)
+    else:
+        skills[sinner] = list(owned)
 
 
 def cell_state(cell, gift_list, owned=()):
@@ -4385,10 +4414,11 @@ def recipe_places(team, cells, slots):
 
 @AgentServer.custom_action("Shop")
 class Shop(CustomAction):
-    """Heal, then sell -> buy and refresh -> fuse until a round does nothing, then leave (spec 03 section 13).
+    """Heal, replace skills, then sell -> buy and refresh -> fuse until a round does nothing, then leave (spec 03 section 13).
 
     The visit's state (healed, refreshes used, the gift wanted and whether a sale was tried for it, whether the
-    owned gifts were scanned for a fusion) lives in RUN["shop"], so a re-entry from MirrorHub carries on; leaving drops it. Every spend keeps the team's reserve_cost.
+    owned gifts were scanned for a fusion, the sinners whose replacement slot was tapped) lives in RUN["shop"], so a
+    re-entry from MirrorHub carries on; leaving drops it. Every spend keeps the team's reserve_cost.
     """
 
     @hands_back
@@ -4404,6 +4434,7 @@ class Shop(CustomAction):
         if not visit["healed"]:
             visit["healed"] = True  # first: a heal handed back mid-way (#118) is not paid twice
             self.heal(context, team)
+        self.replace_skills(context, team, visit)  # after the heal, before the rounds (#264 時機)
         for _ in range(shop.ROUNDS):
             if not self.to_main(context):
                 break  # left already: the leave below finds the map
@@ -4445,36 +4476,48 @@ class Shop(CustomAction):
         """
         for _ in range(5):
             image = screen(context)
-            if Shop.on_map(context, image):
-                return False
-            title = text(context, image, DIALOG_TITLE)
-            heal = has(text(context, image, HEAL_TITLE), "Heal")
-            if has(text(context, image, GET_TITLE), "GET"):
-                at = GET_CONFIRM
-            elif has(title, "Purchase"):
-                at = PURCHASE_CANCEL
-            elif has(title, "Keyword Refresh"):
-                at = KEYWORD_CANCEL
-            elif has(title, "Keyword Selection"):
-                at = (490, 566)  # its Cancel
-            elif has(title, "Gift Info"):  # a bought offer tapped: only a tap outside it closes it
-                at = OUTSIDE
-            elif has(title, "E.G.O Gift"):  # the fuse or sell page, a keyword picked or not (#214)
-                log(f"shop: {title!r} closed")
-                at = PAGE_CLOSE
-            elif has(text(context, image, LEAVE_DIALOG), "Leave the shop"):
-                at = LEAVE_CANCEL
-            elif heal:
+            at = Shop.way_out(context, image)
+            if at in ("map", "main"):
+                return at == "main"
+            if at == "heal":
                 tap(context, *BOTTOM_RIGHT, wait=1.5)  # the heal pages keep their fixed waits: not seen live
-                continue
-            elif number(text(context, image, REFRESH["normal"][1])) is not None:
-                return True
-            else:
+            elif at is None:
                 page_guard(context, "Shop", image=image)  # not a shop page MirrorHub knows: hand it back
                 still(context, timeout=1.5)  # a page fading in or out
-                continue
-            tap_settled(context, *at)
+            else:
+                tap_settled(context, *at)
         return False
+
+    @staticmethod
+    def way_out(context, image):
+        """What image asks of to_main: "map" (the shop was left), "main" (the main page: its Refresh fee shows), "heal" (a heal
+        page), the point to tap to close a page or dialog, or None (a page the shop does not know)."""
+        if Shop.on_map(context, image):
+            return "map"
+        title = text(context, image, DIALOG_TITLE)
+        if has(text(context, image, GET_TITLE), "GET"):
+            return GET_CONFIRM
+        if has(title, "Purchase"):
+            return PURCHASE_CANCEL
+        # Before the Refresh fee: the dialog's Cost digits (x 1020-1061) overlap REFRESH["normal"]'s box (#455).
+        if has(title, *REPLACE_MARK):
+            return REPLACE_CANCEL
+        if has(title, "Keyword Refresh"):
+            return KEYWORD_CANCEL
+        if has(title, "Keyword Selection"):
+            return (490, 566)  # its Cancel
+        if has(title, "Gift Info"):  # a bought offer tapped: only a tap outside it closes it
+            return OUTSIDE
+        if has(title, "E.G.O Gift"):  # the fuse or sell page, a keyword picked or not (#214)
+            log(f"shop: {title!r} closed")
+            return PAGE_CLOSE
+        if has(text(context, image, LEAVE_DIALOG), "Leave the shop"):
+            return LEAVE_CANCEL
+        if has(text(context, image, HEAL_TITLE), "Heal"):
+            return "heal"
+        if number(text(context, image, REFRESH["normal"][1])) is not None:
+            return "main"
+        return None
 
     @staticmethod
     def heal(context, team):
@@ -4518,6 +4561,151 @@ class Shop(CustomAction):
             tap(context, *BOTTOM_RIGHT, wait=2)  # the result's Leave: back to the shop
             Shop.to_main(context)
         Shop.to_main(context)
+
+    @staticmethod
+    def replace_skills(context, team, visit):
+        """Open each Replace <sinner>'s Skill slot the team's skill_replacement asks for and make one swap in it (#455); how
+        many swaps went through. Called after the heal and after each refresh that took (#264 時機); it never refreshes.
+
+        visit["replaced"] names the sinners whose slot was tapped this visit, added before the tap as the heal's flag is
+        (ADR 0007): a visit handed back mid-dialog and entered again does not pay twice. A sinner leaves it again only when
+        the bot itself cancelled the dialog before any Confirm because no swap was lit, priced and affordable: the pass after
+        the next refresh judges it again. With every target at 3/2/1, or no sinner listed, nothing is read and nothing tapped.
+        Before each slot after the first the grid is read again and the slot found by its sinner (#264: whether a swapped
+        slot moves is unseen); one gone is not tapped.
+        """
+        listed = team["skill_replacement"]["sinners"]
+        if not shop.any_change(listed):
+            return 0
+        swaps, handled = data("shop.yaml")["skill_replacement"], visit.setdefault("replaced", [])
+        plan = shop.skill_plan(listed, Shop.skill_offers(context), RUN.get("skills", {}), handled, swaps)
+        for slot, _, why in plan:
+            log(f"shop: {slot['name']!r}: {why}")
+        made = 0
+        for n, (slot, entry) in enumerate((slot, entry) for slot, entry, _ in plan if entry):
+            if n:
+                slot = next((s for s in shop.skill_slots(Shop.skill_offers(context))
+                             if s["sinner"] == slot["sinner"] and not s["purchased"]), None)
+                if slot is None:
+                    log(f"shop: {entry['sinner']!r}'s slot is no longer on the grid: skip")
+                    continue
+            handled.append(slot["sinner"])  # first: a hand-back mid-dialog (#118) is not paid twice
+            outcome = Shop.replace_skill(context, slot, entry, team["reserve_cost"], swaps)
+            made += outcome == "replaced"
+            if outcome == "unchosen":
+                handled.remove(slot["sinner"])
+            if not Shop.to_main(context):
+                break  # on the map: the shop was left
+        return made
+
+    @staticmethod
+    def skill_offers(context):
+        """The grid's slots as shop.read_slots gives them, one OCR pass (not read_offers' cells and plates). A Super Shop's
+        grid is read at its top and after a drag down, as buy_offers reads it (#341), each slot with its "page"."""
+        image = page_guard(context, "Shop")
+        if not shop.is_super(image):
+            return shop.read_slots(ocr(context, image, OFFER_GRID))
+        top = [{**s, "page": 0} for s in shop.read_slots(ocr(context, Shop.drag_offers(context, down=False), OFFER_GRID))]
+        lower = shop.read_slots(ocr(context, Shop.drag_offers(context, down=True), OFFER_GRID))
+        return top + [{**s, "page": 1} for s in lower if offer_whole(s["y"]) and not any(shop.same_offer(s, k) for k in top)]
+
+    @staticmethod
+    def read_replace_dialog(context, image):
+        """{"sinner", "owned", "cost", "prices", "lit"} off the dialog's screenshot: the title's sinner, the Skills Owned
+        counts (None unless 5 or 6 cards), the Cost (None when 3 reads give no digit), each option's price (None when
+        unread) and whether it is lit."""
+        cost = cost_in(context, image, REPLACE_COST)
+        return {"sinner": shop.sinner_named(text(context, image, REPLACE_TITLE)),
+                "owned": shop.skills_owned(text(context, image, REPLACE_OWNED)),
+                "cost": read_cost(context, REPLACE_COST) if cost is None else cost,
+                "prices": {k: digits(text(context, image, box)) for k, box in REPLACE_PRICES.items()},
+                "lit": {k: shop.option_lit(image, box) for k, box in REPLACE_PRICES.items()}}
+
+    @staticmethod
+    def cancel_replace(context):
+        """The dialog's Cancel, on either layer: the first goes back to the shop, the second to the first; the Cost stays (#453)."""
+        tap_settled(context, *REPLACE_CANCEL)
+
+    @staticmethod
+    def replace_skill(context, slot, entry, reserve, swaps):
+        """One dialog: open the slot, read it, pick the swap shop.skill_choice gives, Confirm twice, check the Cost.
+
+        "replaced" on a swap; "unchosen" when the bot cancelled before any Confirm because no swap was lit, priced and
+        affordable; "handled" otherwise. Each failure of #264's table writes one line; the caller's to_main closes whatever
+        is left open. The run's memory of the counts (note_skills) never runs ahead of the game's.
+        """
+        sinner = slot["sinner"]
+        image = Shop.open_offer(context, slot, "Replace", REPLACE_TITLE)
+        if image is None:
+            return "handled"
+        read = Shop.read_replace_dialog(context, image)
+        if read["sinner"] != sinner:
+            log(f"shop: the dialog is {read['sinner']!r}'s, not {sinner!r}'s: cancel")
+            Shop.cancel_replace(context)
+            return "handled"
+        owned, cost = read["owned"], read["cost"]
+        wanted = [] if owned is None else shop.swaps_wanted(entry["target"], owned, entry["s1_s3_first"], swaps)
+        prices = ", ".join(f"{k} {read['prices'][k]}{'' if read['lit'][k] else ' dim'}" for k in REPLACE_PRICES)
+        log(f"shop: {sinner!r}: Skills Owned {'unread' if owned is None else shop.counts_line(owned)}, {prices}, "
+            f"{'unread' if cost is None else cost} Cost, reserve {reserve}: try {', '.join(wanted) or 'nothing'}")
+        if owned is None:
+            log(f"shop: {sinner!r}: Skills Owned unread or not 5-6 cards: cancel")
+            Shop.cancel_replace(context)
+            return "handled"
+        note_skills(sinner, owned)  # the counts are real whatever follows
+        if cost is None:
+            log("shop: the Cost reads nothing: cancel")
+            Shop.cancel_replace(context)
+            return "handled"
+        choice = shop.skill_choice(entry, owned, read["lit"], read["prices"], cost, reserve, swaps)
+        if choice is None:
+            log(f"shop: {sinner!r}: no swap toward {shop.counts_line(entry['target'])} is lit, priced and affordable: cancel")
+            Shop.cancel_replace(context)
+            return "unchosen"
+        swap, price = choice
+        page_guard(context, "Shop")
+        tap(context, *REPLACE_OPTIONS[swap], wait=0)
+        if until(context, lambda im: shop.option_picked(im, REPLACE_FRAMES[swap]), timeout=1.0) is None:
+            log(f"shop: {sinner!r}: {swap} did not light up: cancel")
+            Shop.cancel_replace(context)
+            return "handled"
+        page_guard(context, "Shop")
+        ask = tap_shown(context, *REPLACE_CONFIRM, shows(context, REPLACE_ASK, r"spend\s*\d+\s*cost"), timeout=2, rest=1.0)
+        if ask is None:
+            log(f"shop: {sinner!r}: no second confirm: back to the shop")
+            return "handled"
+        # The second layer is checked twice before the paying tap: its "Spend N Cost" and its "350 ▸ 305" preview, which also
+        # catches a Cost misread too high (that would spend into the reserve).
+        asked, previewed = number(text(context, ask, REPLACE_ASK)), shop.dialog_price(cost, text(context, ask, REPLACE_PREVIEW))
+        if asked != price or previewed != price:
+            log(f"shop: {sinner!r}: the dialog asks {asked} and previews {previewed} off {cost}, not {price}: cancel")
+            Shop.cancel_replace(context)
+            return "handled"
+        page_guard(context, "Shop")
+        tap(context, *REPLACE_CONFIRM, wait=0)
+        # No page_guard from here until the dialog is gone: CONNECTING shows (#453) where the global Connecting popup is
+        # matched, and a guarded read would hand the shop back in the middle of the payment. Only the Cost is polled; under the
+        # dialog SHOP_COST reads no digit, so the wait ends on the main page's new number.
+        landed = until(context, lambda im: cost_in(context, im) not in (None, cost), timeout=REPLACE_SETTLE)
+        if landed is None and has(text(context, screen(context), DIALOG_TITLE), *REPLACE_MARK):
+            log(f"shop: {sinner!r}: the dialog is still up {REPLACE_SETTLE} s after Confirm: the swap is not known")
+            note_skills(sinner, None)
+            page_guard(context, "Shop")  # a real Connecting popup: MirrorHub waits it out
+            return "handled"
+        still(context, timeout=1.5)
+        after = read_cost(context)
+        if after == cost:
+            log(f"shop: {sinner!r} {swap} for {price}: {cost} -> {after} Cost: the Cost did not change; taking it as not replaced")
+            return "handled"
+        if after is None or cost - after != price:
+            log(f"shop: {sinner!r} {swap} for {price}: {cost} -> {after} Cost: the Cost "
+                f"{'reads nothing' if after is None else f'dropped by {cost - after}'}, not the price: the counts are not known")
+            note_skills(sinner, None)
+            return "handled"
+        sw = swaps[swap]
+        log(f"shop: replaced {sinner!r} {swap} (skill {sw['from']} -> {sw['to']}) for {price}: {cost} -> {after} Cost")
+        note_skills(sinner, shop.after_swap(owned, swap, swaps))
+        return "replaced"
 
     @staticmethod
     def buy(context, team, visit):
@@ -4579,6 +4767,7 @@ class Shop(CustomAction):
             visit["refreshes"][choice] += 1
             visit["sold"] = False
             acted = True
+            Shop.replace_skills(context, team, visit)  # a refresh can put another sinner's slot up (#264 時機)
 
     @staticmethod
     def read_owned(context, team, visit):
@@ -4730,18 +4919,19 @@ class Shop(CustomAction):
         return None
 
     @staticmethod
-    def open_offer(context, slot):
-        """Tap an offer; the screenshot of its purchase dialog, or None when none opened."""
+    def open_offer(context, slot, title="Purchase", roi=DIALOG_TITLE):
+        """Tap an offer; the screenshot of the dialog it opens (title read in roi: a purchase's, or a skill replacement's), or
+        None when none opened."""
         # Its text and Cost preview are read once it stops.
         page_guard(context, "Shop")
         if "page" in slot:  # a Super Shop's grid scrolls: the offer is brought into view and read back first (#341)
             slot = Shop.find_offer(context, slot)
             if slot is None:
                 return None
-        image = tap_shown(context, slot["x"], slot["y"] - 50, shows(context, DIALOG_TITLE, "Purchase"), timeout=1.5, rest=1.0)
+        image = tap_shown(context, slot["x"], slot["y"] - 50, shows(context, roi, title), timeout=1.5, rest=1.0)
         if image is not None:
             return image
-        log(f"shop: {slot['name']!r} opened no purchase dialog")
+        log(f"shop: {slot['name']!r} opened no {title.lower()} dialog")
         return None
 
     @staticmethod

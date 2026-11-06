@@ -365,9 +365,10 @@ Cost 表是 wiki 與簡中客戶端的表，實機 log 的節點面板 Cost 沒�
 **流程**（#10、#17）
 
 1. 先治療（依治療方式）。
-2. 進入循環：出售 → 購買與刷新 → 合成。跑完一整圈都沒有任何動作就離開商店。
-3. 循環最多跑 10 圈，避免卡住。（#10、#19）
-4. 飾品升級 v1 不做；之後接在循環最後。
+2. 換技能（隊伍有要換的罪人時，見下方「換技能」，#455）。
+3. 進入循環：出售 → 購買與刷新 → 合成。跑完一整圈都沒有任何動作就離開商店。每次刷新成功後先換技能，再回去買。
+4. 循環最多跑 10 圈，避免卡住。（#10、#19）
+5. 飾品升級 v1 不做；之後接在循環最後。
 
 **治療**（每隊三選一，#10、#16）
 
@@ -381,7 +382,41 @@ Cost 表是 wiki 與簡中客戶端的表，實機 log 的節點面板 Cost 沒�
 
 實機的治療頁有三個選項，各 100 Cost：單人大量治療（HP 50% + SP 45）、全體中量治療（HP 20% + SP 15）、復活一人。沒人陣亡時復活是灰的；復活要先點陣亡罪人的頭像才會出現 `Select`；復活後 HP 全滿、SP 為 0。商店的罪人列也直接顯示陣亡者（灰色、HP `0`）。（實機：captures/82_shop_heal_page.png、captures/191_heal_page_with_dead.png、captures/213_revive_selected.png、captures/194_revive_result.png）
 
-預留金額適用於所有花費：治療、購買、刷新。任何花費後剩下的 Cost 都不得低於預留金額。（#10、#19）
+預留金額適用於所有花費：治療、換技能、購買、刷新。任何花費後剩下的 Cost 都不得低於預留金額。（#10、#19、#455）
+
+**換技能**（`Replace <罪人>'s Skill` 替換格，#264、#455；ID Skill Search 是 #456）
+
+隊伍的 `skill_replacement.sinners`（[04](04-settings.md) 第 9 節）列出要換技能的罪人、每位的目標張數與 `s1_s3_first`；清單是空的，或每位的目標都還是遊戲的 3／2／1 時，這一步什麼都不讀、不點（`shop.any_change`），商店和以前完全一樣。
+
+- **時機**（#264 定案）：治療之後、出售 → 購買與刷新 → 合成的循環之前做一次（`Shop.replace_skills`）；每次刷新成功（Cost 有扣）後、回去讀商品之前再做一次，因為刷新會換掉替換格的罪人（#264 附圖 106 → 107）。不為了換技能而刷新：刷新照舊只由購買的規則決定。MirrorHub 交回後重新進同一次造訪時也會再跑這一步，已處理過的罪人跳過。
+- **讀商品格**：整塊 `OFFER_GRID` OCR 一次（`shop.read_slots`，不讀名牌與圖示）；名稱有 `Replace` 和 `Skill`、沒有 `ID Skill` 的是替換格（`shop.skill_slots`），罪人名用 `ocrtext.has` 比對 12 位罪人（大小寫、重音、空白都不計，`RYOSHU` 也算 Ryōshū），對不到或對到兩位就是讀不出來。同一格讀成兩行價格（`SuperShop.png` 的 `??` 讀成金幣字形和 `7?`）只算一格（`shop.same_offer`）。Super Shop 和購買頁一樣讀頂端與拖到底的兩屏，每格記下在哪一屏，點之前用 `Shop.find_offer` 重找。
+- **先開哪一格**（`shop.skill_plan`）：要開的格子照清單順序排（同一頁有兩格、錢只夠一格時先換清單前面的罪人），其餘照格子順序寫 log。不開的格子：標 `Purchased`（換過了）、罪人名讀不出來、罪人不在清單上、目標是 3／2／1、這次造訪已處理過、這一局讀到的張數已達標、或讀到的張數已經沒有換法能更接近目標（例如技能 3 上鎖）。張數還不知道的罪人要開：對話框是唯一讀得到張數的地方。同一位罪人一次造訪只開一格（兩格同一位罪人沒看過）。
+- **換法的決策**（#264 定案；`shop.swaps_wanted`、`shop.skill_choice`）：換法 `a_b` 只在技能 a 多於目標、技能 b 少於目標時算（每次只動一張，不會超過目標）。兩種都算時依 `s1_s3_first` 先試 `s1_s3` 或另一種。技能 3 上鎖（`Skills Owned` 總數 5 且技能 3 是 0，Uptie 未滿 3）時換到技能 3 的兩種都不算，只剩 `s1_s2`。照順序取第一個「價格讀得到、選項亮著（價格是橘字，暗掉的是紅字，`shop.option_lit`）、付完不低於預留金額」的換法；都不行就不換。價格看畫面（以畫面為準），資料檔的價格不拿來預測或決定。Cost 讀不到就什麼都不選。從 3／2／1 照這個規則一格換一張，18 種合法目標兩種先後都會走到目標，用到的換法正好是 #264 寫的固定數量（`tests/test_shop.py`）。
+- **一格的流程**（`Shop.replace_skill`）：點格子（`Shop.open_offer`，等左上標題 `Replace` 出現）→ 讀對話框（`Shop.read_replace_dialog`：標題的罪人、`Skills Owned` 的三個張數、右上的 Cost、三個價格與是否亮著）→ 點選換法，等那一格出現橘框（`shop.option_picked`）→ Confirm，等第二層 `Spend <n> Cost to replace this Skill?` → 核對 `<n>` 和右上 `<Cost> ▸ <換後>` 的預覽都等於要付的價格（預覽也擋下讀高的 Cost，否則會花進預留金額）→ 再按 Confirm 付款 → 等主畫面的 Cost 變成新的數字（最多 4 秒）→ 讀 Cost 核對。最後一次 Confirm 之後到對話框消失之前**不做畫面檢查**（`page_guard`）：付款時右上出現 `CONNECTING`，會被當成全域的 `Connecting` 彈窗而把商店交回 MirrorHub（`tests/test_shop_skill_screens.py`：`ShopReplaceSkillConnecting.png` 上 `Connecting` 節點會命中）。4 秒後對話框還在，才檢查畫面（真的 `Connecting` 由 MirrorHub 等），之後回商店主畫面，結果當作不知道。每一格處理完都回商店主畫面（`Shop.to_main`）；處理下一格之前重讀商品格，用罪人名找到那一格（換過的格會不會移位沒看過，#264），找不到就不點（`'<罪人>''s slot is no longer on the grid: skip`）。
+- **處理過**：點格子之前就把罪人記成這次造訪處理過（`RUN["shop"]["replaced"]`，和治療一樣，ADR 0007），所以中途被交回 MirrorHub、再進商店時不會重付。只有一種情況會拿掉這個記號：還沒按任何 Confirm、bot 自己按 Cancel，原因是沒有亮著、讀得到價格又付得起的換法；之後刷新再判斷時（可能賣過東西、Cost 變多了）會再開一次。
+- **這一局的張數**（`RUN["skills"]`，只由 `actions.note_skills` 寫）：對話框讀到的張數立刻記下；換成功就記成換後的張數。記住的張數絕不超前遊戲：Cost 扣的正好是價格才算換成；Cost 沒變就保留原來的張數；Cost 讀不到、扣的數字不是價格、或對話框 4 秒後還在，就忘掉這位罪人的張數，下次再開來讀（多開一次而已；超前的話可能跳過還需要換的格子）。張數跟著 `RUN` 走：結算的 Claim、Give up、新的一局與換任務時清掉（離開鏡牢就清掉），換層與 MirrorHub 交回都留著；Agent 重啟後不在，就再開一次讀。
+- **換不了的情況**（#264 定案）：一律不換、寫一行 log、繼續商店的其他步驟。
+
+  | 情況 | 處理 | log |
+  |---|---|---|
+  | 不在清單上、目標 3／2／1、已知已達標或沒有換法 | 不點 | 該格的 `skip` 行 |
+  | 罪人名讀不出來 | 不點 | `the sinner's name is unread: skip` |
+  | 點了沒出現對話框 | 回主畫面，算處理過 | `opened no replace dialog` |
+  | 對話框的罪人和格子不同 | Cancel，算處理過 | `the dialog is '<A>''s, not '<B>''s: cancel` |
+  | `Skills Owned` 讀不到或總數不是 5、6 | Cancel，算處理過 | `Skills Owned unread or not 5-6 cards: cancel` |
+  | Cost 讀不到 | Cancel，不花錢 | `the Cost reads nothing: cancel` |
+  | 沒有亮著、讀得到價格又付得起的換法 | Cancel；刷新後再判斷 | `no swap toward <目標> is lit, priced and affordable: cancel` |
+  | 點了選項沒出現橘框 | Cancel，算處理過 | `<換法> did not light up: cancel` |
+  | 第一次 Confirm 沒出現第二層 | 回主畫面，算處理過 | `no second confirm: back to the shop` |
+  | 第二層的價格或預覽不是要付的價格 | Cancel，算處理過 | `the dialog asks <n> and previews <m> off <Cost>, not <價格>: cancel` |
+  | 付款後 Cost 沒變 | 當作沒換，這次造訪不再點，不重試 | `the Cost did not change; taking it as not replaced` |
+  | 付款後 Cost 讀不到或扣的不是價格 | 忘掉張數 | `the Cost dropped by <d>, not the price: the counts are not known`（讀不到時是 `reads nothing`） |
+  | 付款 4 秒後對話框還在 | 檢查畫面、回主畫面，忘掉張數 | `the dialog is still up 4 s after Confirm: the swap is not known` |
+  | 出現不認得的畫面 | 交回 MirrorHub | `Shop: Shop is gone: back to MirrorHub` |
+
+- **log**（#264 定案，`shop:` 前綴）：每一個替換格一行，例如 `shop: "Replace Gregor's Skill": 'Gregor' counts not read this run, toward 1/3/2: open`、`... 'Faust' is not listed: skip`、`... 'Gregor' is at 1/3/2 (read this run): skip`；進對話框後（罪人對得上就寫，張數或 Cost 讀不到也寫，讀不到的寫 `unread`）一行寫讀到的張數、三個價格（暗掉的標 `dim`）、Cost、預留金額與照順序要試的換法：`shop: 'Gregor': Skills Owned 3/2/0, s1_s2 45, s2_s3 75 dim, s1_s3 120 dim, 350 Cost, reserve 0: try s1_s2`；只有 Cost 正好扣掉價格才寫換成功的那行（換法、價格與換前換後的 Cost）：`shop: replaced 'Gregor' s1_s2 (skill 1 -> 2) for 45: 350 -> 305 Cost`；沒換成的那行也寫換前換後的 Cost，但不寫 `replaced`；上表每種失敗各一行。
+- **回商店主畫面**（`Shop.to_main` 的 `Shop.way_out`）：`DIALOG_TITLE` 讀到 `Skills Owned` 或 `SKILL1x`／`SKILL2x`（兩層都有）就按 Cancel（第二層按一次回第一層，再按一次回主畫面）。這個判斷排在「讀得到刷新費用就是主畫面」之前：對話框右上的 Cost 數字和普通刷新費用的框重疊。
+- 實機畫面與座標見 [02](02-screens.md)「技能替換對話框」。
 
 **購買與刷新**（#10）
 
@@ -478,7 +513,7 @@ Cost 表是 wiki 與簡中客戶端的表，實機 log 的節點面板 Cost 沒�
 
 **Super Shop**（困難模式，#17）
 
-- 和一般商店用同一套流程：先治療，再循環「出售 → 購買與刷新 → 合成」。
+- 和一般商店用同一套流程：先治療、換技能，再循環「出售 → 購買與刷新 → 合成」。替換格可能有兩格（`SuperShop.png`：Gregor、Don Quixote），照清單順序開（見「換技能」）。
 - 規則不依賴格數，每格都從畫面讀出價格和體系。
 - 合成頁有 5 個材料槽，挑材料時可以放 3–5 個，門檻用 Super Shop 那一組（#77）。
 - 實機：商店顯示 `Super Shop On Next Floor? <n>%`，這個機率隨本層花掉的 Cost 上升（3% → 8% → 15% → 24%），進過 Super Shop 後回到 3%。Super Shop 標題是紅色 `Super Shop`，10 格分兩列要捲動；其中 `ID Skill Search` 用星光計價，`Special Catalogue` 讓獎勵卡多一張。合成畫面的 `Wishmaking` 也花星光。這些商品不在清單的購買清單裡，所以不會買。（實機：captures/77_after_enter_shop_node.png、captures/87_back_to_shop.png、captures/162_f2shop_entered.png、captures/163_supershop_scrolled.png、captures/94_shop_fuse_try2.png）

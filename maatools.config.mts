@@ -269,6 +269,15 @@ const screens: [image: string, hits: string[]][] = [
   ['ShopFuseAvailable.png', ['Shop', 'ShopFusionAvailable']],
   ['ShopFuseRecipeTwo.png', ['Shop', 'ShopFusionAvailable']],
   ['ShopFusionRecipes.png', ['Shop']],
+  // #453 (live 2026-11-06): the Replace <sinner>'s Skill dialog, both layers. Leave reads under it, so a hand-back mid-dialog
+  // finds the shop (#455); CONNECTING after the final Confirm hits the global popup, which is why that wait runs unguarded.
+  ['ShopReplaceSkillAll.png', ['Shop']],
+  ['ShopReplaceSkillDimmed.png', ['Shop']],
+  ['ShopReplaceSkillPickedLeft.png', ['Shop']],
+  ['ShopReplaceSkillPickedMiddle.png', ['Shop']],
+  ['ShopReplaceSkillPickedRight.png', ['Shop']],
+  ['ShopReplaceSkillConfirm.png', ['Shop']],
+  ['ShopReplaceSkillConnecting.png', ['Connecting', 'Shop']],
   ['ShopHeal.png', []],
 ]
 

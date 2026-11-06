@@ -412,8 +412,8 @@ def test_a_scrolled_super_shop_adds_its_last_two_offers_to_the_eight_at_rest(rea
 def test_no_shop_capture_has_a_short_line_of_digits_that_is_not_a_price(read):
     # #341: read_slots takes a digits-only line under 18 px tall for a price when it has 3 digits. Over every tests/screens capture
     # the OFFER_GRID box reads such lines only on battle, map and settings screens (a turn counter, a date), which no shop page is,
-    # and on the skill replacement dialog (#453): its own price 120, where it is not dimmed. read_slots is never asked there
-    # today: shop.on_sale skips the replacement cell, so the bot never opens the dialog (#455 changes that).
+    # and on the skill replacement dialog (#453): its own price 120, where it is not dimmed. read_slots is never asked there:
+    # Shop.replace_skills (#455) reads the grid before it opens the dialog, and the buy rounds start after the dialog is closed.
     shops = {k: v for k, v in read["short_prices"].items() if k.startswith(("Shop", "SuperShop"))}  # a map (MapBossDarkAfterShop) is not one
     assert shops == {k: ["120"] for k in ("ShopReplaceSkillAll", "ShopReplaceSkillPickedMiddle", "ShopReplaceSkillPickedRight")}
 
