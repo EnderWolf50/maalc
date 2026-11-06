@@ -4,7 +4,8 @@ The whole battle screen dimmed, one E.G.O card in the middle (Details, To Corrod
 bar below it (Resistances, the grade, the E.G.O's name). No battle node knew it, so EXP Luxcavation timed out after
 60 s; the back key leaves it up. LuxBattleEgoCard.png is the daily run's EXP battle (a blue card),
 BattleEgoCard.png a Mirror Dungeon battle's, opened by a long press on a portrait (a green card). The card's box,
-measured on both: x 535-747, y 132-502.
+measured on both: x 535-747, y 132-502. A sinner with three E.G.O shows three cards in a row, each with its Details, the
+Resistances bar the same (LuxBattleEgoCards.png, the Thread acceptance battle): x 255-1030, y 128-502.
 """
 from pathlib import Path
 
@@ -16,8 +17,9 @@ from test_pipeline import load_nodes, parts, strip, template_first
 REPO = Path(__file__).resolve().parent.parent
 SCREENS = REPO / "tests/screens"
 IMAGES = REPO / "assets/resource/base/image"
-SHOTS = ["LuxBattleEgoCard.png", "BattleEgoCard.png"]
+SHOTS = ["LuxBattleEgoCard.png", "BattleEgoCard.png", "LuxBattleEgoCards.png"]
 CARD_BOX = (535, 132, 212, 370)
+CARDS_ROW = (255, 128, 775, 374)  # three cards (LuxBattleEgoCards.png)
 # The turn's buttons near the top, measured on BattleTurn.png: WAVE / TURN at the left; the speed, MAX, auto and the
 # pause gear at the right, and the box and the red button under them.
 TOP_BUTTONS = [(5, 15, 105, 80), (1040, 15, 225, 50), (1080, 70, 185, 55)]
@@ -94,5 +96,5 @@ def test_the_tap_lands_off_the_card_and_off_the_turns_buttons():
     assert param["left"] is True  # waits for the card to go, no OCR
     x, y, w, h = param["target"]
     tap = (x + w // 2, y + h // 2, 1, 1)
-    assert inside(tap, (0, 0, 1280, CARD_BOX[1])) and not touches(tap, CARD_BOX)
+    assert all(inside(tap, (0, 0, 1280, box[1])) and not touches(tap, box) for box in (CARD_BOX, CARDS_ROW))
     assert not any(touches(tap, b) for b in TOP_BUTTONS)
