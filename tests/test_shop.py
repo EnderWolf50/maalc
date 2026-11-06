@@ -530,9 +530,10 @@ def test_an_ex_gift_shows_its_green_ex_where_the_numerals_go():
         assert shown == ([1] if name == "fuse_ex" else []), name
 
 
-def test_the_ex_mark_sweep_over_tests_screens_hits_no_shop_page():
+def test_the_ex_mark_sweep_over_tests_screens_hits_no_shop_page_but_gregors_replacement_dialog():
     # CODING_STANDARDS' sweep: read_cells looks for the "EX" only on a shop page's cell holding a gift whose numeral it did
-    # not read. No shop page of tests/screens has one; 12 other screens do (green art, map nodes, banners at a cell's place).
+    # not read. No fuse or sell page of tests/screens has one; 12 other screens do (green art, map nodes, banners at a cell's
+    # place), and so does Gregor's skill replacement dialog (#453), the one with two options dimmed.
     import actions  # noqa: PLC0415  (as above)
     hits = set()
     for png in sorted(SCREENS.glob("*.png")):
@@ -545,10 +546,12 @@ def test_the_ex_mark_sweep_over_tests_screens_hits_no_shop_page():
                 cell = s.cell_crop(image, x, y, OWNED)
                 if actions.held(image, x, y, page) and s.tier(cell) is None and s.ex_mark(cell):
                     hits.add(png.stem)
-    assert not [h for h in hits if "Shop" in h]
+    # #453: only Gregor's dialog (two options dimmed) has a green skill icon where a fuse or sell cell is; Don Quixote's
+    # (ShopReplaceSkillAll, PickedMiddle, PickedRight) has none there.
+    gregor_dialog = ["ShopReplaceSkillDimmed", "ShopReplaceSkillPickedLeft"]
     assert sorted(hits) == ["BattlePause", "BattleTurnEven", "EnkephalinAssembled", "GiftSearchSelected", "HelpPagerSinners",
                             "Mailbox", "MainWindow", "MainWindowFadeIn", "MainWindowLater", "MainWindowLowEnkephalin.synthetic",
-                            "MapHardRest.synthetic", "Victory"]
+                            "MapHardRest.synthetic", *gregor_dialog, "Victory"]
 
 
 def test_the_get_popup_tells_an_ex_gift_by_its_green_mark():
@@ -559,15 +562,15 @@ def test_the_get_popup_tells_an_ex_gift_by_its_green_mark():
         assert not s.ex_got(np.asarray(Image.open(SCREENS / f"{name}.png").convert("RGB"))[:, :, ::-1]), name
 
 
-def test_the_get_popup_sweep_over_tests_screens_hits_nothing():
-    # CODING_STANDARDS' sweep: gift_get's screenshot is looked at only after a fusion, but no 1280x720 screen of tests/screens
-    # reads an "EX" at the popup's icon corner.
+def test_the_get_popup_sweep_over_tests_screens_hits_only_the_skill_replacement_confirm():
+    # CODING_STANDARDS' sweep: gift_get's screenshot is looked at only after a fusion. Of the 1280x720 screens of tests/screens
+    # only the skill replacement's second layer (#453) reads an "EX" at the popup's icon corner: its green SKILL 1 icon sits there.
     hits = []
     for png in sorted(SCREENS.glob("*.png")):
         img = Image.open(png)
         if img.size == (1280, 720) and s.ex_got(np.asarray(img.convert("RGB"))[:, :, ::-1]):
             hits.append(png.stem)
-    assert hits == []
+    assert hits == ["ShopReplaceSkillConfirm", "ShopReplaceSkillConnecting"]
 
 
 def test_the_forecasts_row_sweep_over_tests_screens_finds_no_unlisted_hit():
