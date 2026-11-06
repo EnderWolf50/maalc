@@ -48,7 +48,7 @@ export function SkillPanel({ i }: { i: number }) {
           seen.set(x.sinner, n + 1);
           const rowPath = `${path}/sinners/${j}`;
           // a step moves one card between S1 and `k`, so the deck stays 6
-          const shift = (k: Stepped, d: 1 | -1) => edit((draft) => { const g = draft.sinners[j].target; g.s1 -= d; g[k] += d; });
+          const shift = (k: Stepped, d: 1 | -1) => edit((draft) => { const goal = draft.sinners[j].target; goal.s1 -= d; goal[k] += d; });
           return (
             <li key={n ? `${x.sinner}#${n}` : x.sinner} data-sinner={x.sinner} className={bad(rowPath) || faulty ? "faulty" : ""}
               {...dragItem(String(j), "sinners")}>
