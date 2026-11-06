@@ -6,7 +6,7 @@ import actions
 import test_actions
 import test_shop
 import test_shop_scroll
-from test_actions import FUSING, after_last, fuse_page, reads, shop_team, taps, wants, with_ids
+from test_actions import FUSING, after_last, fuse_page, lost_tap_fuse_page, reads, shop_team, taps, wants, with_ids
 from test_shop_scroll import KEYWORDS, UNLISTED, by_points, fusion, kept_but
 
 clock, context, grid = test_actions.clock, test_actions.context, test_shop_scroll.grid  # their fixtures
@@ -405,3 +405,17 @@ def test_a_recipe_whose_cell_is_not_where_the_fusion_put_it_is_not_counted_faile
         grid = {"page": "fuse", "at": 0, "placed": placed, "missed": False}
         assert actions.Shop.fuse_recipe(context, shop_team({"list": wants(SOOTHE)}), cells, grid, 3, visit) is False
         assert visit["recipes_failed"] == failed
+
+
+def test_a_recovery_reads_the_fuse_page_again_on_the_same_visit(context, monkeypatch):
+    # #459, live: the game froze on the fuse page, a material's tap was lost and the scan made none. The recovery restarted
+    # the game into the same shop, whose visit kept fuse_scanned: the page was not opened again that floor.
+    paid = {"healed": True, "refreshes": {"keyword": 1, "normal": 0}}
+    visit = actions.RUN.setdefault("shop", {**paid, "wanted": None, "sold": False})
+    lost_tap_fuse_page(context, monkeypatch)
+    actions.Shop.fuse(context, shop_team({}), visit)
+    assert visit["fuse_scanned"]
+    actions.forget_game_state()  # the recovery that brought the game back
+    actions.Shop.fuse(context, shop_team({}), visit)
+    assert taps(context).count(actions.SHOP_BUTTONS["fuse"]) == 2  # opened again
+    assert {k: visit[k] for k in paid} == paid  # what the visit paid for is not paid again

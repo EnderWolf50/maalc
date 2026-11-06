@@ -4839,7 +4839,8 @@ class Shop(CustomAction):
         read), else read again there, and the next fusion made, a wanted one first, until none is left or FUSIONS_PER_PAGE
         were made; then the page is closed. A cell placed by the fusion that does not show where it was put (cell_at) closes
         the page and opens it again, its owned gifts read from the top: materials may be in.
-        A grid that made none is not read again until a purchase or a sale changes the owned gifts (#62).
+        A grid that made none is not read again until a purchase or a sale changes the owned gifts (#62), or a recovery
+        (forget_game_state, #459).
         """
         if visit.get("fuse_scanned"):
             return False
