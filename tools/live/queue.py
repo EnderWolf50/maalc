@@ -1,6 +1,6 @@
 """First-come-first-served queue for a resource one task may use at a time.
 
-  python tools/live/queue.py run --resource <bench|emulator> --name <task> [--log <file>] -- <command...>
+  python tools/live/queue.py run --resource <bench|emulator> --name <task> [--log <file>] [--first] -- <command...>
   python tools/live/queue.py wait --resource <bench|emulator> --name <task> [--timeout-s N]
   python tools/live/queue.py pause --task <task> [--minutes N | --end]
   python tools/live/queue.py status [--resource <bench|emulator>]
@@ -12,6 +12,10 @@
 emulator (see the maalc-live-test skill). A run takes one ticket, waits until it is first,
 runs the command and leaves the queue, so a chain of runs interleaves with other tasks' runs.
 The tickets of dead processes are dropped. A `run` leaves `<name>.result` (exit code, `--log`) when its command ends.
+`run --first` is for the daily task, which a 05:00 game reset ends (#465): its ticket goes right behind the one that
+holds the resource, ahead of every waiting one, and `status` marks it FIRST. The holder's run is not cut short; a
+live-test hold that spans several bot runs ends before its next one (the maalc-live-test skill). With no holder it
+starts at once.
 `wait` blocks in the foreground until that ticket's command ends, prints its exit code and log path and exits with that
 code; at its own `--timeout-s` (default 540, inside a 10-minute tool limit) it prints "still running, run wait again" and
 exits 75 (so can a command that exits 75: read the line). Exit 2: no such ticket or result. Exit 3: the run died without
@@ -123,12 +127,21 @@ def result_path(qdir: Path, name: str) -> Path:
     return qdir / f"{ticket_name(name)}.result"
 
 
-def run(qdir: Path, name: str, cmd: list[str], is_alive=alive, poll: float = 5.0, log: str | None = None) -> int:
+def arrival(qdir: Path, first: bool, is_alive=alive) -> int:
+    """A new ticket's place in the queue: now, or with first just behind the ticket that holds the resource (#465)."""
+    now = time.time_ns()
+    if first and (q := tickets(qdir, is_alive)):
+        return min(now, int(q[0].name.split("-", 1)[0]) + 1)
+    return now
+
+
+def run(qdir: Path, name: str, cmd: list[str], is_alive=alive, poll: float = 5.0, log: str | None = None,
+        first: bool = False) -> int:
     qdir.mkdir(parents=True, exist_ok=True)
     name = ticket_name(name)
     result_path(qdir, name).unlink(missing_ok=True)  # a result of an earlier run under this name is not this one's
-    me = qdir / f"{time.time_ns()}-{os.getpid()}-{name}.ticket"
-    me.write_text(json.dumps({"cmd": " ".join(cmd), "start": started(os.getpid())}), encoding="utf-8")
+    me = qdir / f"{arrival(qdir, first, is_alive)}-{os.getpid()}-{name}.ticket"
+    me.write_text(json.dumps({"cmd": " ".join(cmd), "start": started(os.getpid()), "first": first}), encoding="utf-8")
     try:
         said = False
         while (q := tickets(qdir, is_alive))[:1] != [me]:
@@ -239,12 +252,24 @@ def hold_note(cmd: str, now: float | None = None) -> str:
     return f" — hold expires in {max(left, 0) / 60:.0f} min unless its bot runs or it is paused" if left < EXPIRY_WARN else ""
 
 
+def is_first(p: Path) -> bool:
+    """The ticket was queued with --first (the daily task)."""
+    try:
+        return json.loads(p.read_text(encoding="utf-8")).get("first") is True
+    except (OSError, ValueError, AttributeError):
+        return False
+
+
+FIRST_NOTE = " — FIRST: the daily task, due before the 05:00 reset; the holder ends its hold before its next bot run"
+
+
 def status(qdir: Path, is_alive=alive, now: float | None = None) -> list[str]:
     lines = []
     for i, p in enumerate(tickets(qdir, is_alive) if qdir.exists() else []):
         _, pid, name = p.stem.split("-", 2)
         cmd = read(p)[0]
-        lines.append(("RUNNING " if i == 0 else f"#{i:<6} ") + f"{name} (pid {pid}){stranded(cmd, is_alive, now)}{hold_note(cmd, now) if i == 0 else ''}: {cmd[:120]}")
+        note = hold_note(cmd, now) if i == 0 else FIRST_NOTE if is_first(p) else ""
+        lines.append(("RUNNING " if i == 0 else f"#{i:<6} ") + f"{name} (pid {pid}){stranded(cmd, is_alive, now)}{note}: {cmd[:120]}")
     return lines
 
 
@@ -336,6 +361,8 @@ def main(argv=None) -> int:
     r.add_argument("--name", required=True)
     r.add_argument("command", nargs=argparse.REMAINDER)
     r.add_argument("--log", help="the file the command's output goes to, for `wait` to print")
+    r.add_argument("--first", action="store_true",
+                   help="queue right behind the run that holds the resource, ahead of the waiting ones (the daily task)")
     w = sub.add_parser("wait", help="block until a ticket's command ends; exit with its exit code")
     w.add_argument("--resource", choices=RESOURCES, required=True)
     w.add_argument("--name", required=True)
@@ -377,7 +404,7 @@ def main(argv=None) -> int:
     if a.cmd == "detach":
         print(f"pid {detach(cmd, a.log)}, output in {a.log}", flush=True)
         return 0
-    return run(local_dir("queue", a.resource), a.name, cmd, log=a.log)
+    return run(local_dir("queue", a.resource), a.name, cmd, log=a.log, first=a.first)
 
 
 if __name__ == "__main__":
