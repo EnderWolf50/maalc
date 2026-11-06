@@ -372,6 +372,11 @@ AFTER_REFRESH = [[1, 9127], [2, 9041], [3, 9004], [4, 9016]]  # the same shop af
 # Millarca (grid slot 3 of the first, slot 1 of the second) reads 9159 on both.
 CLIPPED = {"ShopReplaceSkillClippedMeursault": [[1, 9003], [2, 9089], [3, 9159], [4, 9049]],
            "ShopReplaceSkillClippedGregor": [[1, 9159], [2, 9031], [3, 9153], [4, 9190]]}
+# #456 (live 2026-11-07), a Super Shop with ID Skill Search and two Replace slots before its gifts: Millarca, Milepost of
+# Survival, Red Order, Lithograph, Wound Clerid at rest (before and after the ID Skill Search swap), and scrolled down the
+# last four of those plus Burial Curse and Trial Plan Guide.
+ID_SEARCH = [[3, 9159], [4, 9080], [5, 9041], [6, 9017], [7, 9005]]
+ID_SEARCH_SCROLLED = [[0, 9080], [1, 9041], [2, 9017], [3, 9005], [4, 9148], [5, 9190]]
 
 
 def test_no_other_capture_names_a_gift(read):
@@ -391,6 +396,8 @@ def test_no_other_capture_names_a_gift(read):
         **{f"{name} offer": AFTER_REPLACE for name in ("ShopReplaceSkillCancelled", "ShopReplaceSkillDone")},
         "ShopReplaceSkillRefreshed offer": AFTER_REFRESH,
         **{f"{name} offer": ids for name, ids in CLIPPED.items()},
+        "SuperShopIdSkillSearch offer": ID_SEARCH, "ShopIdSkillSearchDone offer": ID_SEARCH,
+        "SuperShopScrolled offer": ID_SEARCH_SCROLLED,
     }
 
 
@@ -400,7 +407,11 @@ def test_no_capture_but_the_shops_has_a_name_plate_that_names_a_gift(read):
     assert read["plate_sweep"] == {"Shop": [[1, 9123], [2, 9198], [3, 9150], [4, 9086]], "ShopPurchase": [[3, 9027]],
                                    "SuperShop": [[3, 9187], [4, 9009], [5, 9102], [6, 9063], [7, 9163]],
                                    "ShopReplaceSkillCancelled": AFTER_REPLACE, "ShopReplaceSkillDone": AFTER_REPLACE,
-                                   "ShopReplaceSkillRefreshed": AFTER_REFRESH, **CLIPPED}
+                                   "ShopReplaceSkillRefreshed": AFTER_REFRESH, **CLIPPED,
+                                   # #456: the select mode dims the shop but its plates still read
+                                   **{name: ID_SEARCH for name in ("SuperShopIdSkillSearch", "ShopIdSkillSearchSelect",
+                                                                   "ShopIdSkillSearchDone")},
+                                   "SuperShopScrolled": ID_SEARCH_SCROLLED}
 
 
 def test_a_scrolled_super_shop_adds_its_last_two_offers_to_the_eight_at_rest(read):
@@ -419,8 +430,11 @@ def test_no_shop_capture_has_a_short_line_of_digits_that_is_not_a_price(read):
     # the OFFER_GRID box reads such lines only on battle, map and settings screens (a turn counter, a date), which no shop page is,
     # and on the skill replacement dialog (#453): its own price 120, where it is not dimmed. read_slots is never asked there:
     # Shop.replace_skills (#455) reads the grid before it opens the dialog, and the buy rounds start after the dialog is closed.
+    # #456's ID Skill Search dialog, the same dialog, reads its own price plates there, dimmed or not: Ryōshū's 150 and 240
+    # (ShopIdSkillSearchAll) as 130 and 290, Gregor's dimmed 150 as 130 and his dimmed 240 not at all.
     shops = {k: v for k, v in read["short_prices"].items() if k.startswith(("Shop", "SuperShop"))}  # a map (MapBossDarkAfterShop) is not one
-    assert shops == {k: ["120"] for k in ("ShopReplaceSkillAll", "ShopReplaceSkillPickedMiddle", "ShopReplaceSkillPickedRight")}
+    assert shops == {**{k: ["120"] for k in ("ShopReplaceSkillAll", "ShopReplaceSkillPickedMiddle", "ShopReplaceSkillPickedRight")},
+                     "ShopIdSkillSearchAll": ["130", "290"], "ShopIdSkillSearchDialog": ["130"], "ShopIdSkillSearchPicked": ["130"]}
 
 
 if __name__ == "__main__":

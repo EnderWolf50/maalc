@@ -151,8 +151,11 @@ def test_the_way_back_to_the_main_page_cancels_the_dialog_on_both_layers(read):
 
 def test_the_dialog_is_told_by_its_counts_line_inside_the_dialog_title_box(read):
     # REPLACE_MARK: DIALOG_TITLE reads "Gregor's Skill Skills Owned SKILL1x3  SKILL2x2 SKILL3x0" on both layers. The sweep over
-    # every 1280x720 capture of tests/screens (CODING_STANDARDS): only the 7 dialog captures read it.
-    assert read["mark_sweep"] == ["ShopReplaceSkillAll", "ShopReplaceSkillConfirm", "ShopReplaceSkillConnecting",
+    # every 1280x720 capture of tests/screens (CODING_STANDARDS): only the 7 dialog captures read it, and #456's 6 captures of
+    # the ID Skill Search dialog, the same dialog on both layers (its title also reads "Replace <sinner>'s Skill").
+    id_skill_search = ["ShopIdSkillSearchAll", "ShopIdSkillSearchConfirm", "ShopIdSkillSearchConnecting", "ShopIdSkillSearchDialog",
+                       "ShopIdSkillSearchPicked", "ShopIdSkillSearchStarlight"]
+    assert read["mark_sweep"] == [*id_skill_search, "ShopReplaceSkillAll", "ShopReplaceSkillConfirm", "ShopReplaceSkillConnecting",
                                   "ShopReplaceSkillDimmed", "ShopReplaceSkillPickedLeft", "ShopReplaceSkillPickedMiddle",
                                   "ShopReplaceSkillPickedRight"]
 
