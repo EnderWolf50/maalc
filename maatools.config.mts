@@ -202,6 +202,10 @@ const screens: [image: string, hits: string[]][] = [
   // reads through the menu, so BattleTurn hits too: BattleHUD tries BattleMenu first.
   ['BattleMenu.png', ['BattleMenu', 'BattleTurn']],
   ['BattleMenuClosing.png', ['BattleMenu', 'BattleTurn']],
+  // #468 (live 2026-11-07): a sinner's E.G.O card over the turn, the battle dimmed under it; the HUD's Win Rate does not
+  // read through, so EgoCard alone hits. The daily run's EXP battle (blue card) and a Mirror Dungeon battle (green).
+  ['LuxBattleEgoCard.png', ['EgoCard']],
+  ['BattleEgoCard.png', ['EgoCard']],
   ['Victory.png', ['Victory']],
   // AssembleBefore reads its "1/12": it is read only in the Enkephalin window (AssemblePanel).
   ['WipeDialog.png', ['WipeDialog', 'AssembleBefore']],
