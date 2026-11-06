@@ -85,13 +85,12 @@ function Switcher({ v }: { v: string }) {
   );
 }
 
-// ---------- today's ID Skill Search block, lifted unchanged ----------
+// ---------- today's ID Skill Search block, lifted; the price line is gone (user, 2026-11-06) ----------
 function IdSearch({ i }: { i: number }) {
   const { s, update, t, tv, bad } = useEditor();
   const path = `teams/${i}/skill_replacement`;
   const search = s.teams[i].skill_replacement.id_skill_search;
   const edit = (fn: (draft: SkillReplacement) => void) => update((d) => fn(d.teams[i].skill_replacement));
-  const swapName = (k: string) => `SKILL ${SKILL_SWAPS[k].from} → ${SKILL_SWAPS[k].to}`;
   return (
     <div className={"toggle" + (bad(`${path}/id_skill_search`) ? " bad" : "")}>
       <label className="check">
@@ -104,10 +103,6 @@ function IdSearch({ i }: { i: number }) {
       </select>
       <small>{t("skill.id_search_note")}</small>
       <small>{search.pay === "starlight" ? t("skill.pay_starlight_note") : t("skill.pay_cost_note")}</small>
-      <small data-testid="id-search-prices">
-        {t("skill.id_prices")} {Object.entries(SKILL_SWAPS).map(([k, v]) => `${swapName(k)} ${v.id_search[search.pay]}`).join("、")}{" "}
-        {t(search.pay === "starlight" ? "skill.starlight" : "skill.cost")}
-      </small>
     </div>
   );
 }

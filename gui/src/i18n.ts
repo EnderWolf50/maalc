@@ -144,7 +144,7 @@ const zh_tw = {
   "skill.add_swap": "加入換法",
   "skill.remove_swap": "移除換法",
   "skill.shop_price": "替換格 {price} Cost",
-  "skill.id_search": "ID Skill Search（Super Shop）",
+  "skill.id_search": "人格技能觀測（ID Skill Search，特殊商店）",
   "skill.id_search_note": "選人後換，依上面罪人的順序挑第一位有換法的罪人。",
   "skill.pay": "付款方式",
   "skill.pay_starlight_note": "花的是持有的星光，不受預留金額限制；選了星光就表示同意花費，星光不夠就不換。",
