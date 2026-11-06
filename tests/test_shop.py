@@ -536,7 +536,8 @@ def test_an_ex_gift_shows_its_green_ex_where_the_numerals_go():
 
 def test_the_ex_mark_sweep_over_tests_screens_hits_no_shop_page():
     # CODING_STANDARDS' sweep: read_cells looks for the "EX" only on a shop page's cell holding a gift whose numeral it did
-    # not read. No shop page of tests/screens has one; 12 other screens do (green art, map nodes, banners at a cell's place).
+    # not read. No shop page of tests/screens has one; 13 other screens do (green art, map nodes, banners at a cell's place;
+    # BattleEgoCard: the green E.G.O card's frame, #468).
     import actions  # noqa: PLC0415  (as above)
     hits = set()
     for png in sorted(SCREENS.glob("*.png")):
@@ -550,7 +551,7 @@ def test_the_ex_mark_sweep_over_tests_screens_hits_no_shop_page():
                 if actions.held(image, x, y, page) and s.tier(cell) is None and s.ex_mark(cell):
                     hits.add(png.stem)
     assert not [h for h in hits if "Shop" in h]
-    assert sorted(hits) == ["BattlePause", "BattleTurnEven", "EnkephalinAssembled", "GiftSearchSelected", "HelpPagerSinners",
+    assert sorted(hits) == ["BattleEgoCard", "BattlePause", "BattleTurnEven", "EnkephalinAssembled", "GiftSearchSelected", "HelpPagerSinners",
                             "Mailbox", "MainWindow", "MainWindowFadeIn", "MainWindowLater", "MainWindowLowEnkephalin.synthetic",
                             "MapHardRest.synthetic", "Victory"]
 

@@ -8,8 +8,9 @@ measured on both: x 535-747, y 132-502.
 """
 from pathlib import Path
 
+import cv2
 from PIL import Image
-from test_pause_menus import best_match, gray, inside, touches
+from test_pause_menus import gray, inside, touches
 from test_pipeline import load_nodes, parts, strip, template_first
 
 REPO = Path(__file__).resolve().parent.parent
@@ -33,7 +34,9 @@ def templates(nodes, spec):
 
 
 def score(image, template, roi):
-    return best_match(image, gray(IMAGES / template), roi)[0]
+    """test_pause_menus.best_match's score (grey TM_CCOEFF_NORMED), through OpenCV: the sweep is 200 screens."""
+    x, y, w, h = roi
+    return float(cv2.matchTemplate(image[y:y + h, x:x + w], gray(IMAGES / template), cv2.TM_CCOEFF_NORMED).max())
 
 
 def test_the_ego_card_is_found_on_its_capture():
