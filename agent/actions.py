@@ -1180,10 +1180,14 @@ def foreground(context):
 
 
 def forget_game_state():
-    """The game came back from a recovery or a restart: drop the streak, the battle clock and the map retries."""
+    """The game came back from a recovery or a restart: drop the streak, the battle clock and the map retries.
+
+    A shop visit keeps what it paid for (healed, refreshes) but not fuse_scanned: a fuse page that made none may have been
+    a game that took no tap (#459), so the next round reads it again."""
     STUCK["watch"].reset()
     for key in ("turn", "battle_start", "map_misses", "event_tried", "map_plan", "map_entered"):
         RUN.pop(key, None)
+    RUN.get("shop", {}).pop("fuse_scanned", None)
     RUN["resumed"] = True
 
 
@@ -4388,7 +4392,8 @@ class Shop(CustomAction):
     """Heal, then sell -> buy and refresh -> fuse until a round does nothing, then leave (spec 03 section 13).
 
     The visit's state (healed, refreshes used, the gift wanted and whether a sale was tried for it, whether the
-    owned gifts were scanned for a fusion) lives in RUN["shop"], so a re-entry from MirrorHub carries on; leaving drops it. Every spend keeps the team's reserve_cost.
+    owned gifts were scanned for a fusion) lives in RUN["shop"], so a re-entry from MirrorHub carries on; leaving drops it, and
+    a recovery drops the fusion scan (forget_game_state, #459). Every spend keeps the team's reserve_cost.
     """
 
     @hands_back
@@ -4834,7 +4839,8 @@ class Shop(CustomAction):
         read), else read again there, and the next fusion made, a wanted one first, until none is left or FUSIONS_PER_PAGE
         were made; then the page is closed. A cell placed by the fusion that does not show where it was put (cell_at) closes
         the page and opens it again, its owned gifts read from the top: materials may be in.
-        A grid that made none is not read again until a purchase or a sale changes the owned gifts (#62).
+        A grid that made none is not read again until a purchase or a sale changes the owned gifts (#62), or a recovery
+        (forget_game_state, #459).
         """
         if visit.get("fuse_scanned"):
             return False
