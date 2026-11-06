@@ -554,13 +554,14 @@ def test_a_super_shop_is_told_by_its_red_title(name, is_super):
 def test_the_super_shop_title_sweep_over_tests_screens():
     # CODING_STANDARDS "Recognition": is_super only runs on a shop's main page, but over every 1280x720 screen of tests/screens
     # its one false positive is not a shop page: the update download, a red screen (the resource download and a battle
-    # turn have a few red pixels, under the threshold).
+    # turn have a few red pixels, under the threshold). #456's Super Shop (live 2026-11-07) hits at rest, scrolled and after
+    # the ID Skill Search swap; its select mode (ShopIdSkillSearchSelect) dims the title and does not.
     hits = []
     for path in sorted(SCREENS.glob("*.png")):
         image = np.asarray(Image.open(path).convert("RGB"))[:, :, ::-1]
         if image.shape[:2] == (720, 1280) and s.is_super(image):
             hits.append(path.stem)
-    assert hits == ["DownloadingUpdate", "SuperShop"]
+    assert hits == ["DownloadingUpdate", "ShopIdSkillSearchDone", "SuperShop", "SuperShopIdSkillSearch", "SuperShopScrolled"]
 
 
 def test_pick_fusion_any_makes_every_group_it_can():
@@ -695,13 +696,14 @@ def test_a_tooltip_over_the_fuse_page_is_told_by_its_red_head(name, shown):
 
 def test_the_tooltip_sweep_over_tests_screens_hits_no_fuse_page():
     # CODING_STANDARDS' sweep: close_tooltip looks at the fuse page only. No fuse page of tests/screens reads a tooltip;
-    # 18 other screens do (red banners and buttons over the area): there a hit would only tap as every read did before #378.
+    # 21 other screens do (red banners and buttons over the area): there a hit would only tap as every read did before #378.
+    # #456's Ryōshū dialog and its second layer are three of them: Rend Space's red skill banner sits there.
     hits = [p.stem for p in sorted(SCREENS.glob("*.png")) if s.tooltip(np.asarray(Image.open(p).convert("RGB"))[:, :, ::-1])]
     assert not [h for h in hits if h.startswith("ShopFus")]
     assert hits == ["BattleTurnFocused", "EntryNewRun", "EntryParallelOn", "EntryPaused", "Formation", "LuxConsecExp10Open",
                     "LuxConsecExp2Open", "LuxConsecExp9Open", "LuxEventCommence", "LuxEventContinue", "LuxEventPassed",
-                    "LuxEventText", "LuxTeamSelect", "LuxTeamSelectChain", "StarlightConfirm", "StarlightConfirmConnecting",
-                    "StarlightPage", "WipeDialog"]
+                    "LuxEventText", "LuxTeamSelect", "LuxTeamSelectChain", "ShopIdSkillSearchAll", "ShopIdSkillSearchConfirm",
+                    "ShopIdSkillSearchConnecting", "StarlightConfirm", "StarlightConfirmConnecting", "StarlightPage", "WipeDialog"]
 
 
 def test_an_unselectable_cell_is_told_by_its_tag_though_it_is_flat():
@@ -757,8 +759,10 @@ def test_the_ex_mark_sweep_over_tests_screens_hits_no_shop_page_but_gregors_repl
                 if actions.held(image, x, y, page) and s.tier(cell) is None and s.ex_mark(cell):
                     hits.add(png.stem)
     # #453: only Gregor's dialog (two options dimmed) has a green skill icon where a fuse or sell cell is; Don Quixote's
-    # (ShopReplaceSkillAll, PickedMiddle, PickedRight) has none there.
-    gregor_dialog = ["ShopReplaceSkillDimmed", "ShopReplaceSkillPickedLeft"]
+    # (ShopReplaceSkillAll, PickedMiddle, PickedRight) has none there. #456's ID Skill Search dialog of Gregor is the same
+    # dialog (Cost or Starlight); Ryōshū's (ShopIdSkillSearchAll) has none there.
+    gregor_dialog = ["ShopIdSkillSearchDialog", "ShopIdSkillSearchPicked", "ShopIdSkillSearchStarlight",
+                     "ShopReplaceSkillDimmed", "ShopReplaceSkillPickedLeft"]
     assert sorted(hits) == ["BattlePause", "BattleTurnEven", "EnkephalinAssembled", "GiftSearchSelected", "HelpPagerSinners",
                             "Mailbox", "MainWindow", "MainWindowFadeIn", "MainWindowLater", "MainWindowLowEnkephalin.synthetic",
                             "MapHardRest.synthetic", *gregor_dialog, "Victory"]

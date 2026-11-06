@@ -404,20 +404,26 @@ def screens_1280():
 
 def test_the_lit_price_sweep_over_tests_screens():
     # CODING_STANDARDS' sweep: option_lit is asked only on the dialog's first layer, after its title named the slot's sinner.
-    # Over every 1280x720 screen of tests/screens (209 of them), a price box reads lit on the dialogs and on 9 other screens,
+    # Over every 1280x720 screen of tests/screens (221 of them), a price box reads lit on the dialogs and on 9 other screens,
     # none a shop page: orange art where a box sits (a battle's skill card, a map node, a gift). The second layer (Confirm,
-    # Connecting) reads none: its skill cards cover the prices.
+    # Connecting) reads none: its skill cards cover the prices. #456's ID Skill Search dialogs (live 2026-11-07, the same
+    # dialog with prices 90/150/240 in Cost or 25/50/75 in Starlight) read as the captures show: Gregor's skill 3 is locked,
+    # so only s1_s2 is lit; Ryōshū's three are.
     hits = {stem: [k for k, box in actions.REPLACE_PRICES.items() if shop.option_lit(image, box)] for stem, image in screens_1280()}
     assert {k: v for k, v in hits.items() if v and k not in DIALOGS} == {
         "BattleTurnFocused": ["s1_s2"], "BossGiftTrialsHard": ["s2_s3"], "FormationDetails": ["s2_s3"],
         "LuxConsecThread10Open": ["s1_s2"], "LuxConsecThread2Open": ["s1_s2"], "LuxTeamSelect": ["s1_s2"],
-        "LuxTeamSelectChain": ["s1_s2"], "MapZoomed": ["s2_s3"], "StartingGiftPicked": ["s1_s2", "s2_s3", "s1_s3"]}
+        "LuxTeamSelectChain": ["s1_s2"], "MapZoomed": ["s2_s3"], "StartingGiftPicked": ["s1_s2", "s2_s3", "s1_s3"],
+        "ShopIdSkillSearchAll": ["s1_s2", "s2_s3", "s1_s3"],
+        **{f"ShopIdSkillSearch{n}": ["s1_s2"] for n in ("Dialog", "Picked", "Starlight")}}
 
 
 def test_the_picked_frame_sweep_over_tests_screens():
     # CODING_STANDARDS' sweep: option_picked is asked only after an option's tap on the dialog. Over every 1280x720 screen
     # of tests/screens, a frame reads picked on the three Picked captures, the one tapped, and on one battle screen (an
-    # orange-lit skill where the right frame's edge runs); no shop page.
+    # orange-lit skill where the right frame's edge runs); no shop page. #456's ID Skill Search dialog with s1_s2 tapped
+    # (ShopIdSkillSearchPicked) reads its tapped frame.
     hits = {stem: [k for k, frame in actions.REPLACE_FRAMES.items() if shop.option_picked(image, frame)] for stem, image in screens_1280()}
-    assert {k: v for k, v in hits.items() if v} == {"BattleTurnFocused": ["s1_s3"], "ShopReplaceSkillPickedLeft": ["s1_s2"],
+    assert {k: v for k, v in hits.items() if v} == {"BattleTurnFocused": ["s1_s3"], "ShopIdSkillSearchPicked": ["s1_s2"],
+                                                     "ShopReplaceSkillPickedLeft": ["s1_s2"],
                                                      "ShopReplaceSkillPickedMiddle": ["s2_s3"], "ShopReplaceSkillPickedRight": ["s1_s3"]}
