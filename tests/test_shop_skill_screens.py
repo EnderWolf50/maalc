@@ -16,7 +16,8 @@ import numpy as np
 import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
-SLOTS = ["Shop", "SuperShop", "ShopReplaceSkillCancelled", "ShopReplaceSkillDone", "ShopReplaceSkillRefreshed"]
+SLOTS = ["Shop", "SuperShop", "ShopReplaceSkillCancelled", "ShopReplaceSkillDone", "ShopReplaceSkillRefreshed",
+         "ShopReplaceSkillClippedMeursault", "ShopReplaceSkillClippedGregor"]
 FIRST_LAYER = ["ShopReplaceSkillAll", "ShopReplaceSkillDimmed", "ShopReplaceSkillPickedLeft", "ShopReplaceSkillPickedMiddle",
                "ShopReplaceSkillPickedRight"]
 SECOND_LAYER = ["ShopReplaceSkillConfirm", "ShopReplaceSkillConnecting"]
@@ -116,7 +117,10 @@ def test_a_replacement_slot_names_its_sinner_and_whether_it_was_bought(read):
                              "SuperShop": [["Replace Gregor's Skill", "Gregor", False], ["Replace Don Quixote's Skill", "Don Quixote", False]],
                              "ShopReplaceSkillCancelled": [["Replace Gregor's Skill", "Gregor", False]],
                              "ShopReplaceSkillDone": [["Replace Gregor's Skill", "Gregor", True]],
-                             "ShopReplaceSkillRefreshed": [["Replace Gregor's Skill", "Gregor", True]]}
+                             "ShopReplaceSkillRefreshed": [["Replace Gregor's Skill", "Gregor", True]],
+                             # the OCR clips the tail of the name ("Skil"): the slot is still found (#455 live acceptance, floors 1 and 5)
+                             "ShopReplaceSkillClippedMeursault": [["Replace Meursault's Skil", "Meursault", False]],
+                             "ShopReplaceSkillClippedGregor": [["Replace Gregor's Skil", "Gregor", False]]}
 
 
 DON_QUIXOTE = {"sinner": "Don Quixote", "owned": [3, 2, 1], "cost": 534, "prices": {"s1_s2": 45, "s2_s3": 75, "s1_s3": 120},

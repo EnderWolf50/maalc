@@ -240,6 +240,36 @@ def test_a_replacement_slot_read_twice_is_one_slot():
     assert [(x["sinner"], x["x"]) for x in s.skill_slots(grid)] == [("Gregor", 763), ("Don Quixote", 926)]
 
 
+@pytest.mark.parametrize("name, sinner, is_replace", [
+    ("Replace Meursault's Skil", "Meursault", True),  # the OCR read that dropped the slot (clipped tail), floors 1 and 5
+    ("Replace Gregor's Skil", "Gregor", True),
+    ("Replace Grgor's Skil", None, True),  # a replace slot, sinner unread: kept so the plan logs it
+    ("Replace Ryōshū's Skill", "Ryōshū", True),
+    ("ID Skill Search", None, False),  # #456's slot, whole and clipped the same way
+    ("ID Skil Search", None, False),
+    ("ID Skill Searc", None, False),
+    ("ID Skil", None, False),
+    ("Rusted Muzzle", None, False),
+])
+def test_a_replace_slot_survives_a_clipped_skill(name, sinner, is_replace):
+    got = s.skill_slots([slot(name)])
+    assert [(x["sinner"]) for x in got] == ([sinner] if is_replace else [])
+    assert s.replace_slot(name) is is_replace
+
+
+def test_a_clipped_replace_slot_still_gets_its_plan_line():
+    team = [skill_entry("Gregor", 1, 3, 2)]
+    assert plan_lines(team, [slot("Replace Gregor's Skil")]) == [
+        ("Replace Gregor's Skil", "Gregor", "'Gregor' counts not read this run, toward 1/3/2: open")]
+    assert plan_lines(team, [slot("Replace Grgor's Skil")]) == [("Replace Grgor's Skil", None, "the sinner's name is unread: skip")]
+    assert plan_lines(team, [slot("ID Skil Search")]) == []
+
+
+def test_a_clipped_skill_slot_is_never_on_sale():
+    for name in ("Replace Gregor's Skil", "ID Skil Search", "ID Skill Search"):
+        assert not s.on_sale({"name": name, "price": 120, "purchased": False, "short": False})
+
+
 def test_skill_plan_opens_one_slot_a_sinner():
     # Two slots for one sinner (never seen): keyed by sinner, the second waits for the next visit.
     team = [skill_entry("Gregor", 1, 3, 2)]
