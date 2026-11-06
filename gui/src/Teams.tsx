@@ -8,7 +8,7 @@ import {
   type GiftRef, type SearchGift, type Team,
 } from "./model";
 import { SinnerGrid, StarlightEditor } from "./Plans";
-import { SkillPanel } from "./SkillReplacement";
+import { SkillPrototype } from "./SkillReplacement.prototype";
 import { Field, Num, ReorderList, Select, ToggleNum, useEditor } from "./ui";
 
 export function TeamsTab() {
@@ -124,7 +124,7 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
 
       <GiftSearchPanel i={i} />
       <KeepPanel i={i} />
-      <SkillPanel i={i} />
+      <SkillPrototype i={i} />
 
       <details className="panel" open>
         <summary>{t("team.more")}</summary>
