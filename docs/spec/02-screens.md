@@ -147,7 +147,7 @@
 | 離開確認 | OCR：`Leave the shop?` | 點 Confirm | 地圖頁 | #10 | `captures/111_shop_leave.png` |
 | 技能替換對話框（`Replace <罪人>'s Skill`） | OCR：左上標題 `Replace <罪人>'s Skill`、頂端 `Skills Owned` 的三個張數、右上目前的 Cost、三個選項的價格；像素：選項的橘框、Confirm 的字是灰色或和 Cancel 同色 | 點商店的替換格才出現。隊伍有要換的罪人時 bot 會點它換一張（[03](03-decisions.md) 第 13 節「換技能」，#455）；回商店主畫面的步驟（`Shop.to_main`）在這裡按 Cancel（`DIALOG_TITLE` 讀到 `Skills Owned`，兩層都是）。版面、選取與 Confirm 之後的畫面見下方「技能替換對話框」 | 第二層確認、商店主畫面（Cancel） | #264、#453 | `tests/screens/ShopReplaceSkillDimmed.png`、`ShopReplaceSkillAll.png`、`ShopReplaceSkillPickedLeft.png` |
 | 技能替換的第二層確認 | OCR：`Spend <n> Cost to replace this Skill?`、右上 `<Cost> ▸ <換後 Cost>` | Confirm 才付款；Cancel 回到對話框 | 商店主畫面（Confirm）、技能替換對話框（Cancel） | #453 | `tests/screens/ShopReplaceSkillConfirm.png`、`ShopReplaceSkillConnecting.png` |
-| Super Shop（困難） | 同商店主畫面，標題改為紅色 `Super Shop` | 和一般商店同一套流程；規則不依賴格數，每格都從畫面讀價格和體系。實機：10 格分兩列，要捲動；有一格 `ID Skill Search`，付 Cost 或星光（見下方「ID Skill Search」）；`Special Catalogue` 會讓獎勵卡多一張 | 同商店主畫面 | #17 | `captures/162_f2shop_entered.png`、`163_supershop_scrolled.png`、`190_f3shop_entered.png`、`tests/screens/SuperShopIdSkillSearch.png`、`SuperShopScrolled.png` |
+| Super Shop（困難） | 同商店主畫面，標題改為紅色 `Super Shop` | 和一般商店同一套流程；規則不依賴格數，每格都從畫面讀價格和體系。實機：10 格分兩列，要捲動；有一格 `ID Skill Search`，付 Cost 或星光（見下方「ID Skill Search」）；`Special Catalogue` 會讓獎勵卡多一張 | 同商店主畫面 | #17、#456 | `captures/162_f2shop_entered.png`、`163_supershop_scrolled.png`、`190_f3shop_entered.png`、`tests/screens/SuperShopIdSkillSearch.png`、`SuperShopScrolled.png` |
 
 ### 合成頁的配方合成（#304 實機）
 
@@ -181,17 +181,17 @@
 
 實機觀察 (2026-11-07)，1280×720、HARD 鏡牢第 4 層的 Super Shop，Cost 868，存活的只有 Ryōshū、Meursault、Gregor。bot 凍結在商店，畫面由手動點、裝置截圖記錄（間隔約 0.5–1 秒，時間從點下算）。座標是遊戲像素 (x, y, w, h)，在 `tests/screens/` 的截圖上量的；「OCR 讀得出」指用現有的 `actions.text`、`read_slots`、`Shop.read_replace_dialog` 讀這些截圖的結果。這次只換了一次（Ryōshū `s1_s3`，付 Cost），**星光沒有實際付過**。
 
-- **格子**：Super Shop 第一格（這次和 `SuperShop.png` 都是），名稱 `ID Skill Search`（`read_slots` 讀出整個名字，沒有被截掉）。圖示中心 (624, 265)，點這裡進選人模式。價格牌是 `??`，前面的小圖示自己在星光與 Cost 的金幣之間淡入淡出，大約每 2 秒換一次（8 張間隔約 1 秒的截圖交替出現），所以截圖拍到哪一個看時機，**和付款方式無關**。同一頁另有兩格 `Replace Meursault's Skill`、`Replace Ryōshū's Skill`。（`SuperShopIdSkillSearch.png`）往下拖 200 px 是第 2 頁：最後 6 格。（`SuperShopScrolled.png`）
+- **格子**：Super Shop 第一格（這次和 `SuperShop.png` 都是），名稱 `ID Skill Search`（`read_slots` 讀出整個名字，沒有被截掉）。圖示中心 (624, 265)，點這裡進選人模式。價格牌是 `??`，前面的小圖示自己在星光與 Cost 的金幣之間淡入淡出，大約每 2 秒換一次（8 張間隔約 1 秒的截圖交替出現），所以截圖拍到哪一個看時機，**和付款方式無關**。同一頁另有兩格 `Replace Meursault's Skill`、`Replace Ryōshū's Skill`。（`SuperShopIdSkillSearch.png`）往下拖 200 px 是第 2 頁：最後 6 格。（`SuperShopScrolled.png`，換完之後拍的：Cost 628）
 - **選人模式**：點格子後 0.4 秒內，頂端出現橘字 `Select a Sinner for Skill Replacement.`（OCR 框 (430, 15, 420, 35) 讀出整句），整個商店變暗（紅色的 `Super Shop` 標題也暗掉，`is_super` 讀 False），右下 `Leave` 換成 `Return`（OCR 框 (1050, 625, 160, 45) 讀出 `Return`，點 (1130, 647)）。底部的罪人頭像照舊顯示。現有的讀法在這裡會出錯：`Shop.way_out` 回傳 `"main"`（`Refresh` 的費用照樣讀得到），MirrorHub 的 `Shop` 節點（`Leave`）不命中。（`ShopIdSkillSearchSelect.png`）
 - **選罪人**：點底部頭像，中心 (98 + 77 × i, 655)，i 是罪人順序 0–11（同 `SHOP_PORTRAIT_X`）。陣亡的罪人（灰色頭像、HP 0）點了沒反應，停在選人模式（Yi Sang、Faust 各試一次）。存活的罪人點了之後 0.4 秒內出現對話框（Gregor、Meursault、Ryōshū）。存活、但三種換法都不行的罪人會怎樣，**沒看到**。
 - **對話框**：就是替換格的對話框（版面、選項框、Cancel／Confirm 的位置見上方「技能替換對話框」），標題同樣是 `Replace <罪人>'s Skill`，`Skills Owned` 也一樣；`Shop.read_replace_dialog` 讀得出罪人、三個張數、Cost、三個價格與哪幾項亮著。不同的只有兩點：
   - 價格是 90／150／240（Cost）或 25／50／75（星光），和遊戲資料 `upgradePersonality` 一致。
   - 右上的 Cost 左邊多了一個雙箭頭圖示，中心約 (957, 140)：**這就是付款方式的切換**。第一次打開時是 Cost（金幣、868）。點一下 0.4 秒內換成星光：右上改成星光圖示與**持有的星光**（3433），三個價格變 25／50／75，暗的選項還是暗的；再點一下換回 Cost。`read_replace_dialog` 的 `cost` 讀的是右上的數字（`REPLACE_COST`），所以星光模式下讀到的是 3433；要知道現在付哪一種，得另外看右上的圖示或價格。換回 Cost 後再打開的對話框都是 Cost；停在星光時關掉再打開會不會保留，**沒試**。（`ShopIdSkillSearchDialog.png`、`ShopIdSkillSearchStarlight.png`）
-  - 例子：Gregor `SKILL 1x2 SKILL 2x3 SKILL 3x0`（第 1 層換過一次，技能 3 上鎖），150、240 暗、紅字；Meursault 也是 2/3/0；Ryōshū `SKILL 1x2 SKILL 2x3 SKILL 3x1`，三項都亮。（`ShopIdSkillSearchAll.png`）
+  - 例子：Gregor `SKILL 1x2 SKILL 2x3 SKILL 3x0`（第 1 層換過一次，技能 3 上鎖），150、240 暗、紅字（`ShopIdSkillSearchDialog.png`）；Meursault 也是 2/3/0（裝置截圖沒有收進測試截圖）；Ryōshū `SKILL 1x2 SKILL 2x3 SKILL 3x1`，三項都亮（`ShopIdSkillSearchAll.png`）。
 - **選取**：同替換格：點亮著的選項多一圈橘框、Confirm 變亮；點暗的選項沒有反應。（`ShopIdSkillSearchPicked.png`）
 - **Cancel**：0.6 秒內直接回**商店主畫面**（不是回選人模式），Cost 不變（868）。
 - **Return**（選人模式）：回商店主畫面，Cost 不變（868）。
-- **Confirm 之後**：先出第二層，同替換格：`Spend 240 Cost to replace this Skill?`，右上 `868 ▸ 628`，這時還沒扣錢。（`ShopIdSkillSearchConfirm.png`）第二層按 Confirm：0.2 秒時右上出現 `CONNECTING`（全域的 `Connecting` 節點命中，`Shop` 節點也命中），0.7 秒時已經回到商店主畫面，Cost 628（紅字）；**沒有結果彈窗，也沒有第三層**。（`ShopIdSkillSearchConnecting.png`）
+- **Confirm 之後**：先出第二層，同替換格：`Spend 240 Cost to replace this Skill?`，右上 `868 ▸ 628`，這時還沒扣錢。（`ShopIdSkillSearchConfirm.png`）第二層按 Confirm：0.2 秒時右上出現 `CONNECTING`（全域的 `Connecting` 節點命中，`Shop` 節點也命中），0.7 秒時已經回到商店主畫面，Cost 628 是紅字（中位色約 RGB 151, 0, 0），1.2 秒時已變回平常的顏色（約 233, 201, 159）；**沒有結果彈窗，也沒有第三層**。（`ShopIdSkillSearchConnecting.png`；0.7 秒的紅字來自沒有收進測試截圖的裝置截圖，`ShopIdSkillSearchDone.png` 是 6 秒後拍的）
 - **換完的格子**：`ID Skill Search` 標 `Purchased`，位置不變（仍在第一格，其他格也沒動），價格牌仍是 `??`；再點它沒有反應，不會再進選人模式。`Super Shop On Next Floor?` 從 3% 變成 15%（只有這一次樣本，原因不明）。之後 bot 做了兩次定向刷新，`ID Skill Search` 兩次都還是 `Purchased`（bot 的 log）。（`ShopIdSkillSearchDone.png`）
 - **換的張數有沒有生效**：同一次造訪，bot 接著開 `Replace Ryōshū's Skill`，對話框讀到 `Skills Owned 1/3/2`（換前 2/3/1），所以 ID Skill Search 換的那張立刻算進去。
 

@@ -430,7 +430,8 @@ def test_no_shop_capture_has_a_short_line_of_digits_that_is_not_a_price(read):
     # the OFFER_GRID box reads such lines only on battle, map and settings screens (a turn counter, a date), which no shop page is,
     # and on the skill replacement dialog (#453): its own price 120, where it is not dimmed. read_slots is never asked there:
     # Shop.replace_skills (#455) reads the grid before it opens the dialog, and the buy rounds start after the dialog is closed.
-    # #456's ID Skill Search dialog, the same dialog, reads its own 150 and 240 price plates there, as 130 and 290.
+    # #456's ID Skill Search dialog, the same dialog, reads its own price plates there, dimmed or not: Ryōshū's 150 and 240
+    # (ShopIdSkillSearchAll) as 130 and 290, Gregor's dimmed 150 as 130 and his dimmed 240 not at all.
     shops = {k: v for k, v in read["short_prices"].items() if k.startswith(("Shop", "SuperShop"))}  # a map (MapBossDarkAfterShop) is not one
     assert shops == {**{k: ["120"] for k in ("ShopReplaceSkillAll", "ShopReplaceSkillPickedMiddle", "ShopReplaceSkillPickedRight")},
                      "ShopIdSkillSearchAll": ["130", "290"], "ShopIdSkillSearchDialog": ["130"], "ShopIdSkillSearchPicked": ["130"]}
