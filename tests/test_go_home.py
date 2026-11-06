@@ -180,8 +180,10 @@ def test_go_home_in_a_battle_ends_the_task_list_without_a_back_key():
     # J2 (live 2026-10-28): in a battle the back key opens the pause menu, Give Up one tap away. Nothing is pressed: the
     # stop procedure, and the rest of the list goes, as after an account-level stop, for the user to end it by hand.
     o = run_child(__file__)["battle"]
-    assert o["succeeded"] is False and o["keys"] == [] and o["clicks"] == []
-    assert o["stopped"] == 1 and o["halted"].startswith("HomeInBattle: "), o["halted"]
+    # #461: the task reads succeeded now and then on CI; its whole outcome shows in that red's log (a string message,
+    # which pytest prints in full: a dict is cut short).
+    assert o["succeeded"] is False and o["keys"] == [] and o["clicks"] == [], json.dumps(o)
+    assert o["stopped"] == 1 and o["halted"].startswith("HomeInBattle: "), json.dumps(o)
 
 
 def test_go_home_on_an_event_page_presses_back_then_restarts_the_game():
