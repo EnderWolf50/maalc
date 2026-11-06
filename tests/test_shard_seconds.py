@@ -74,7 +74,6 @@ def test_update_refuses_a_run_that_lacks_a_test_file(table, monkeypatch, capsys)
     def download(run, folder):
         report(folder, "junit.xml", [("tests.test_go_home", "380")])
     monkeypatch.setattr(shard_seconds, "download", download)
-    monkeypatch.setattr(shard_seconds, "earlier", lambda run: [])
     assert shard_seconds.update(9) == 1
     assert "use a run whose shards all passed" in capsys.readouterr().out
     assert json.loads(shard_seconds.TABLE.read_text(encoding="utf-8")) == {"test_go_home.py": 1}
@@ -92,9 +91,9 @@ def test_update_writes_every_file_rounded(table, monkeypatch):
     assert json.loads(shard_seconds.TABLE.read_text(encoding="utf-8")) == {f"{n}.py": 2 for n in names}
 
 
-def ci_runs(monkeypatch, runs, shards=None):
-    """CI runs for update(): runs {run id: {test file stem: seconds}} (every other file 1 s), newest first; shards
-    {run id: reports} splits a run's cases over that many junit files (default 1), and a run left out of runs has none.
+def ci_runs(monkeypatch, runs, failed=(), expired=()):
+    """CI runs for update(): runs {run id: {test file stem: seconds}} (every other file 1 s); failed: runs where an agent
+    shard did not pass; expired: runs whose agent shards passed but whose junit is gone. A larger id is a later run.
     Returns the list of runs downloaded, in order."""
     names = [p.stem for p in (shard_seconds.ROOT / "tests").glob("test_*.py")]
     downloaded = []
@@ -103,12 +102,11 @@ def ci_runs(monkeypatch, runs, shards=None):
         downloaded.append(run)
         if run not in runs:
             raise subprocess.CalledProcessError(1, ["gh", "run", "download"])
-        cases = [(f"tests.{n}", str(runs[run].get(n, 1))) for n in names]
-        count = (shards or {}).get(run, 1)
-        for i in range(count):
-            report(folder, f"junit-{i}.xml", cases[i::count])
+        report(folder, "junit.xml", [(f"tests.{n}", str(runs[run].get(n, 1))) for n in names])
     monkeypatch.setattr(shard_seconds, "download", download)
-    monkeypatch.setattr(shard_seconds, "earlier", lambda run: sorted({*runs, *(shards or {})} - {run}, reverse=True))
+    monkeypatch.setattr(shard_seconds, "earlier",
+                        lambda run: sorted({r for r in (*runs, *failed, *expired) if r < run}, reverse=True))
+    monkeypatch.setattr(shard_seconds, "agents_passed", lambda run: run not in failed)
     return downloaded
 
 
@@ -136,11 +134,34 @@ def test_a_file_off_by_more_than_double_from_the_median_takes_the_runs_own_time(
     assert written()["test_gift_cells.py"] == 380
 
 
-def test_an_earlier_run_without_a_report_from_every_shard_is_skipped(table, monkeypatch):
-    # Run 8's second shard was cut short (one report of the run's two), run 7 has no junit (docs only, or expired).
+def test_an_earlier_run_whose_agent_shards_did_not_all_pass_or_whose_junit_expired_is_skipped(table, monkeypatch, capsys):
+    # Run 8 had a shard fail or cut short (its times are not a runner's), run 7's junit is gone: neither counts, and run 8
+    # is not even downloaded. Only three runs are left: update says so.
     table({})
-    runs = {9: {"test_gift_cells": 126}, 8: {"test_gift_cells": 10}, **{run: {"test_gift_cells": 130} for run in (6, 5, 4, 3)}}
-    downloaded = ci_runs(monkeypatch, runs, shards={9: 2, 8: 1, 7: 2, 6: 2, 5: 2, 4: 2, 3: 2})
+    runs = {9: {"test_gift_cells": 126}, 8: {"test_gift_cells": 10}, **{run: {"test_gift_cells": 130} for run in (6, 5, 4)}}
+    downloaded = ci_runs(monkeypatch, runs, failed={8}, expired={7})
     assert shard_seconds.update(9) == 0
     assert written()["test_gift_cells.py"] == 130
-    assert downloaded == [9, 8, 7, 6, 5, 4, 3]
+    assert downloaded == [9, 7, 6, 5, 4]
+    assert "only 3 earlier CI runs" in capsys.readouterr().out
+
+
+def test_earlier_lists_the_completed_ci_runs_before_the_run_newest_first(monkeypatch):
+    calls = []
+
+    def gh_json(*args):
+        calls.append(args)
+        return [{"databaseId": 12}, {"databaseId": 10}, {"databaseId": 9}, {"databaseId": 7}]
+    monkeypatch.setattr(shard_seconds, "gh_json", gh_json)
+    assert shard_seconds.earlier("10") == [9, 7]  # argparse hands the run id over as text
+    assert {"ci.yml", "completed"} <= set(calls[0])
+
+
+def test_only_a_run_whose_agent_shards_all_passed_counts(monkeypatch):
+    jobs = {1: [("agent (0)", "success"), ("agent (1)", "success"), ("shard-balance", "failure")],  # a runner's times
+            2: [("agent (0)", "success"), ("agent (1)", "failure")],
+            3: [("agent (0)", "success"), ("agent (1)", "cancelled")],
+            4: [("changes", "success"), ("agent", "skipped")]}  # docs only: the matrix never ran
+    monkeypatch.setattr(shard_seconds, "gh_json",
+                        lambda *args: {"jobs": [{"name": n, "conclusion": c} for n, c in jobs[int(args[2])]]})
+    assert [run for run in jobs if shard_seconds.agents_passed(run)] == [1]
