@@ -2,7 +2,7 @@
 // crossCheck mirrors cross_check in agent/settings.py message for message;
 // tests/settings_cases.json holds the cases both test suites run.
 import Ajv2020 from "ajv/dist/2020";
-import { schema, skillCounts, type Settings } from "./model";
+import { schema, skillPlan, type Settings, type SkillFault } from "./model";
 
 /** paths mark the fields in the editor; text is what agent/settings.py would say. */
 export interface Problem { paths: string[]; text: string }
@@ -80,10 +80,14 @@ export function crossCheck(data: Settings): Problem[] {
     const sinners = t.skill_replacement.sinners;
     dupes(`teams/${i}/skill_replacement/sinners`, sinners.map((x) => x.sinner), "sinner", "sinner");
     sinners.forEach((x, j) => {
-      const { total } = skillCounts(x.target);
-      if (total === 6) return;
-      const path = `teams/${i}/skill_replacement/sinners/${j}/target`;
-      errors.push({ paths: [path], text: `${path}: team ${pyRepr(t.name)} sinner ${pyRepr(x.sinner)} targets ${total} skills, not 6` });
+      // the deck starts at the game's 3/2/1 and every swap moves a card up, so S1 above 3 or S3 below 1 is never reached
+      const path = `teams/${i}/skill_replacement/sinners/${j}/target`, who = `team ${pyRepr(t.name)} sinner ${pyRepr(x.sinner)}`, g = x.target;
+      const text: Record<SkillFault, [string, string]> = {
+        total: [path, `targets ${g.s1 + g.s2 + g.s3} skills, not 6`],
+        s1: [`${path}/s1`, `targets ${g.s1} of skill 1, but swaps only lower it from the game's 3`],
+        s3: [`${path}/s3`, `targets ${g.s3} of skill 3, but swaps only raise it from the game's 1`],
+      };
+      for (const f of skillPlan(g).faults) errors.push({ paths: [text[f][0]], text: `${text[f][0]}: ${who} ${text[f][1]}` });
     });
   });
 

@@ -14,11 +14,11 @@ fusion_points: {1: 3, 2: 6, 3: 10, 4: 15, 5: 30}
 fusion_tiers:
   shop: [10, 16, 24]
   super_shop: [9, 14, 21]
-# Skill replacement (#264, #454): the swaps a sinner's skill deck can make, in the default order of teams[].skill_replacement
-# (the settings schema's options enum names the same keys). A swap `a_b` turns one skill `from` into one skill `to`.
+# Skill replacement (#264, #454): the swaps a sinner's skill deck can make. A swap `a_b` turns one skill `from` into one skill
+# `to`; a teams[].skill_replacement target names no swap, the ones it needs follow from it (docs/spec/04-settings.md section 9).
 # shop = the Replace <sinner>'s Skill cell's price in Cost; id_search = the ID Skill Search's price, in Cost or in starlight.
 # Prices: the game's upgradePersonality table (verified by #264). The bot reads the price on screen before it taps, and the
-# screen wins; the settings GUI shows these next to each swap.
+# screen wins; the settings GUI names the swaps from here and shows no price.
 skill_replacement:
   s1_s3: {from: 1, to: 3, shop: 120, id_search: {cost: 240, starlight: 75}}
   s2_s3: {from: 2, to: 3, shop: 75, id_search: {cost: 150, starlight: 50}}

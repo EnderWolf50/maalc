@@ -271,14 +271,13 @@
             "type": "object",
             "additionalProperties": false,
             "required": ["sinners", "id_skill_search"],
-            "description": "the shop's Replace <sinner>'s Skill and ID Skill Search (#264, docs/spec/04-settings.md section 9): per sinner, the skill counts to aim for; the list order is the sinners' priority",
+            "description": "the shop's Replace <sinner>'s Skill and ID Skill Search (#264, docs/spec/04-settings.md section 9): per listed sinner, the skill counts to aim for; the list order is the sinners' priority",
             "properties": {
               "sinners": {
                 "type": "array",
-                "minItems": 12,
                 "maxItems": 12,
                 "items": { "$ref": "#/$defs/skill_sinner" },
-                "description": "all 12 sinners once each (the cross-check names a repeat), in priority order"
+                "description": "only the sinners to change, each at most once (the cross-check names a repeat), in priority order; an unlisted sinner keeps the game's deck"
               },
               "id_skill_search": {
                 "type": "object",
@@ -290,23 +289,7 @@
                 }
               }
             },
-            "default": {
-              "sinners": [
-              { "sinner": "Yi Sang", "target": { "s1": 3, "s2": 2, "s3": 1 }, "options": ["s1_s3", "s2_s3", "s1_s2"] },
-              { "sinner": "Faust", "target": { "s1": 3, "s2": 2, "s3": 1 }, "options": ["s1_s3", "s2_s3", "s1_s2"] },
-              { "sinner": "Don Quixote", "target": { "s1": 3, "s2": 2, "s3": 1 }, "options": ["s1_s3", "s2_s3", "s1_s2"] },
-              { "sinner": "Ryōshū", "target": { "s1": 3, "s2": 2, "s3": 1 }, "options": ["s1_s3", "s2_s3", "s1_s2"] },
-              { "sinner": "Meursault", "target": { "s1": 3, "s2": 2, "s3": 1 }, "options": ["s1_s3", "s2_s3", "s1_s2"] },
-              { "sinner": "Hong Lu", "target": { "s1": 3, "s2": 2, "s3": 1 }, "options": ["s1_s3", "s2_s3", "s1_s2"] },
-              { "sinner": "Heathcliff", "target": { "s1": 3, "s2": 2, "s3": 1 }, "options": ["s1_s3", "s2_s3", "s1_s2"] },
-              { "sinner": "Ishmael", "target": { "s1": 3, "s2": 2, "s3": 1 }, "options": ["s1_s3", "s2_s3", "s1_s2"] },
-              { "sinner": "Rodion", "target": { "s1": 3, "s2": 2, "s3": 1 }, "options": ["s1_s3", "s2_s3", "s1_s2"] },
-              { "sinner": "Sinclair", "target": { "s1": 3, "s2": 2, "s3": 1 }, "options": ["s1_s3", "s2_s3", "s1_s2"] },
-              { "sinner": "Outis", "target": { "s1": 3, "s2": 2, "s3": 1 }, "options": ["s1_s3", "s2_s3", "s1_s2"] },
-              { "sinner": "Gregor", "target": { "s1": 3, "s2": 2, "s3": 1 }, "options": ["s1_s3", "s2_s3", "s1_s2"] }
-              ],
-              "id_skill_search": { "enabled": false, "pay": "cost" }
-            }
+            "default": { "sinners": [], "id_skill_search": { "enabled": false, "pay": "cost" } }
           }
         }
       }
@@ -372,28 +355,24 @@
     "skill_sinner": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["sinner", "target", "options"],
+      "required": ["sinner", "target", "s1_s3_first"],
       "properties": {
         "sinner": { "$ref": "#/$defs/order/items" },
         "target": {
           "type": "object",
           "additionalProperties": false,
           "required": ["s1", "s2", "s3"],
-          "description": "how many of skill 1, 2 and 3 the sinner's deck of 6 should hold; the total must be 6 (cross-check); 3/2/1 is the game's deck, so the shop leaves it alone",
+          "description": "how many of skill 1, 2 and 3 the sinner's deck of 6 should hold; the total must be 6, s1 at most 3 and s3 at least 1, since every swap moves a card up from the game's 3/2/1 (cross-check); a target of 3/2/1 does nothing",
           "properties": {
             "s1": { "type": "integer", "minimum": 0, "maximum": 6 },
             "s2": { "type": "integer", "minimum": 0, "maximum": 6 },
             "s3": { "type": "integer", "minimum": 0, "maximum": 6 }
           }
         },
-        "options": {
-          "type": "array",
-          "minItems": 1,
-          "maxItems": 3,
-          "uniqueItems": true,
-          "items": { "enum": ["s1_s3", "s2_s3", "s1_s2"] },
-          "default": ["s1_s3", "s2_s3", "s1_s2"],
-          "description": "the swaps this sinner may use, the first to try first (data/shop.yaml skill_replacement prices them)"
+        "s1_s3_first": {
+          "type": "boolean",
+          "default": true,
+          "description": "only for a target that needs two kinds of swap (s1_s3 and s1_s2, or s1_s3 and s2_s3): true tries s1_s3 first, false the other kind; the swaps a target needs follow from it (docs/spec/04-settings.md section 9)"
         }
       }
     },
