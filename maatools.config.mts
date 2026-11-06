@@ -278,6 +278,19 @@ const screens: [image: string, hits: string[]][] = [
   ['ShopReplaceSkillPickedRight.png', ['Shop']],
   ['ShopReplaceSkillConfirm.png', ['Shop']],
   ['ShopReplaceSkillConnecting.png', ['Connecting', 'Shop']],
+  // #456 (live 2026-11-07, HARD): the Super Shop with ID Skill Search, before and after its swap, scrolled to its second page;
+  // the select mode, where Leave reads Return and Shop reads the title instead (a hand-back there comes to Shop, whose to_main
+  // leaves by Return); the Replace dialog it opens, in Cost and in starlight, both layers, CONNECTING as after a Replace slot.
+  ['SuperShopIdSkillSearch.png', ['Shop']],
+  ['SuperShopScrolled.png', ['Shop']],
+  ['ShopIdSkillSearchDone.png', ['Shop']],
+  ['ShopIdSkillSearchSelect.png', ['Shop']],
+  ['ShopIdSkillSearchDialog.png', ['Shop']],
+  ['ShopIdSkillSearchAll.png', ['Shop']],
+  ['ShopIdSkillSearchPicked.png', ['Shop']],
+  ['ShopIdSkillSearchStarlight.png', ['Shop']],
+  ['ShopIdSkillSearchConfirm.png', ['Shop']],
+  ['ShopIdSkillSearchConnecting.png', ['Connecting', 'Shop']],
   ['ShopHeal.png', []],
 ]
 

@@ -365,7 +365,7 @@ Cost 表是 wiki 與簡中客戶端的表，實機 log 的節點面板 Cost 沒�
 **流程**（#10、#17）
 
 1. 先治療（依治療方式）。
-2. 換技能（隊伍有要換的罪人時，見下方「換技能」，#455）。
+2. 換技能（隊伍有要換的罪人時，見下方「換技能」，#455）：先替換格，再 ID Skill Search（#456）。
 3. 進入循環：出售 → 購買與刷新 → 合成。跑完一整圈都沒有任何動作就離開商店。每次刷新成功後先換技能，再回去買。
 4. 循環最多跑 10 圈，避免卡住。（#10、#19）
 5. 飾品升級 v1 不做；之後接在循環最後。
@@ -384,7 +384,7 @@ Cost 表是 wiki 與簡中客戶端的表，實機 log 的節點面板 Cost 沒�
 
 預留金額適用於所有花費：治療、換技能、購買、刷新。任何花費後剩下的 Cost 都不得低於預留金額。（#10、#19、#455）
 
-**換技能**（`Replace <罪人>'s Skill` 替換格，#264、#455；ID Skill Search 是 #456）
+**換技能**（`Replace <罪人>'s Skill` 替換格，#264、#455；ID Skill Search 見下方，#456）
 
 隊伍的 `skill_replacement.sinners`（[04](04-settings.md) 第 9 節）列出要換技能的罪人、每位的目標張數與 `s1_s3_first`；清單是空的，或每位的目標都還是遊戲的 3／2／1 時，這一步什麼都不讀、不點（`shop.any_change`），商店和以前完全一樣。
 
@@ -407,7 +407,7 @@ Cost 表是 wiki 與簡中客戶端的表，實機 log 的節點面板 Cost 沒�
   | Cost 讀不到 | Cancel，不花錢 | `the Cost reads nothing: cancel` |
   | 沒有亮著、讀得到價格又付得起的換法 | Cancel；刷新後再判斷 | `no swap toward <目標> is lit, priced and affordable: cancel` |
   | 點了選項沒出現橘框 | Cancel，算處理過 | `<換法> did not light up: cancel` |
-  | 第一次 Confirm 沒出現第二層 | 回主畫面，算處理過 | `no second confirm: back to the shop` |
+  | 第一次 Confirm 沒出現第二層 | 回主畫面，算處理過 | `no second confirm asking Cost: back to the shop` |
   | 第二層的價格或預覽不是要付的價格 | Cancel，算處理過 | `the dialog asks <n> and previews <m> off <Cost>, not <價格>: cancel` |
   | 付款後 Cost 沒變 | 當作沒換，這次造訪不再點，不重試 | `the Cost did not change; taking it as not replaced` |
   | 付款後 Cost 讀不到或扣的不是價格 | 忘掉張數 | `the Cost dropped by <d>, not the price: the counts are not known`（讀不到時是 `reads nothing`） |
@@ -417,6 +417,36 @@ Cost 表是 wiki 與簡中客戶端的表，實機 log 的節點面板 Cost 沒�
 - **log**（#264 定案，`shop:` 前綴）：每一個替換格一行，例如 `shop: "Replace Gregor's Skill": 'Gregor' counts not read this run, toward 1/3/2: open`、`... 'Faust' is not listed: skip`、`... 'Gregor' is at 1/3/2 (read this run): skip`；進對話框後（罪人對得上就寫，張數或 Cost 讀不到也寫，讀不到的寫 `unread`）一行寫讀到的張數、三個價格（暗掉的標 `dim`）、Cost、預留金額與照順序要試的換法：`shop: 'Gregor': Skills Owned 3/2/0, s1_s2 45, s2_s3 75 dim, s1_s3 120 dim, 350 Cost, reserve 0: try s1_s2`；只有 Cost 正好扣掉價格才寫換成功的那行（換法、價格與換前換後的 Cost）：`shop: replaced 'Gregor' s1_s2 (skill 1 -> 2) for 45: 350 -> 305 Cost`；沒換成的那行也寫換前換後的 Cost，但不寫 `replaced`；上表每種失敗各一行。
 - **回商店主畫面**（`Shop.to_main` 的 `Shop.way_out`）：`DIALOG_TITLE` 讀到 `Skills Owned` 或 `SKILL1x`／`SKILL2x`（兩層都有）就按 Cancel（第二層按一次回第一層，再按一次回主畫面）。這個判斷排在「讀得到刷新費用就是主畫面」之前：對話框右上的 Cost 數字和普通刷新費用的框重疊。
 - 實機畫面與座標見 [02](02-screens.md)「技能替換對話框」。
+
+**ID Skill Search**（Super Shop 的人格技能觀測，#264、#456）
+
+隊伍的 `skill_replacement.id_skill_search`（[04](04-settings.md) 第 9 節）`enabled` 打開、而且 `sinners` 有目標不是 3／2／1 的罪人時才做；否則什麼都不讀、不點。它和替換格共用上面的換法決策、對話框讀法與付款流程，只差在怎麼選罪人、付哪一種。
+
+- **時機**（#456 決定 1）：和替換格是同一步（`Shop.skill_step`）：治療之後、每次刷新成功後，**先**處理替換格（`Shop.replace_skills`），**再**做 ID Skill Search（`Shop.id_skill_search`），用替換格換完之後的張數（`RUN["skills"]`）與 Cost 判斷。理由：同一種換法替換格只要一半的價格。
+- **找格子**：讀商品格（`Shop.skill_offers`，Super Shop 兩屏），名稱有 `ID Skil` 的那格（`shop.id_search_slot`，截掉字尾也認得）。沒有這格就什麼都不做；標 `Purchased` 就記成這次造訪處理過，不點（換過之後點它沒有反應，#456 實機）。
+- **挑罪人**（`shop.id_search_plan`，#264 定案）：照 `sinners` 的順序，每位寫一行 log。跳過：目標是 3／2／1、這次造訪試過（每位最多試一次，`RUN["shop"]["id_tried"]`）、陣亡（商店主畫面罪人列的灰色頭像，`actions.bar_dead`：選人模式點陣亡罪人的頭像沒有反應）、這一局讀到的張數已達標或已經沒有換法。其餘的照順序一位一位試，在對話框上判斷（以畫面為準）。一位都沒有就不點格子（`nobody to try: not opened`）。
+- **一位的流程**（`Shop.id_search_swap`）：點格子進選人模式（`Shop.open_offer`，等頂端 `Select a Sinner` 出現）→ 先把罪人記成試過 → 點他的頭像（`SHOP_PORTRAIT_X`，y 655），等對話框標題 `Replace` → 讀對話框（`Shop.read_replace_dialog`，罪人要對得上）→ 讀到的張數立刻記下 → 看付款方式 → 判斷換法（`shop.id_search_choice`）→ 和替換格同一段付款（`Shop.pay_swap`：選換法、等橘框、Confirm、核對第二層、付款 Confirm、等主畫面）→ 核對。對話框的 Cancel 直接回商店主畫面（不是選人模式），所以試下一位要再點一次格子；點了頭像沒出現對話框時還在選人模式，直接點下一位的頭像。試完都沒換成、而還停在選人模式時按 Return（`no listed sinner has a feasible swap: Return`）。一次造訪最多換一次（格子換過就標 `Purchased`）。
+- **付款方式**（#456 決定 3）：對話框的三個價格決定現在付哪一種（`shop.pay_mode`：讀得到的價格全部等於資料檔 `id_search.cost` 的 90／150／240 是 Cost，全部等於 `id_search.starlight` 的 25／50／75 是星光，混雜或都讀不到就不知道）。三個價格都讀不到時付款方式不知道，直接 Cancel（點雙箭頭可能把本來對的方式切走）。和 `pay` 不同就點右上 Cost 左邊的雙箭頭（`PAY_SWITCH` (957, 140)），等三個價格變成另一種才往下（不假設上次的方式會保留：停在星光時關掉再打開會怎樣沒拍到）；切不過去就 Cancel。星光模式下右上的數字是持有的星光，`read_replace_dialog` 的 `cost` 讀的就是它。
+- **付 Cost**：遵守預留金額，和替換格一樣；付完核對主畫面的 Cost 正好少了價格（`Shop.cost_paid`，三種結果和替換格相同）。
+- **付星光**：不受預留金額限制，星光不夠視為不可行。第二層只在 `Spend <價格> Starlight to replace this Skill?` 出現、而且 `<數字> ▸ <數字>` 的預覽正好少了價格時才付款；**星光的第二層沒有實機截圖**，這個字樣是照 Cost 那層（`Spend 240 Cost to replace this Skill?`、`868 ▸ 628`）把 `Cost` 換成 `Starlight` 推的；讀到別的字樣就不付（`no second confirm asking Starlight: back to the shop`），預覽對不上就 Cancel。預覽照 Cost 那層的框讀（`REPLACE_PREVIEW` [980, 115, 130, 45]，照三位數的 `350 ▸ 305` 量的）：四位數的星光（例如 `3433 ▸ 3358`）多兩位數字，可能超出框而讀錯，那就每次都 Cancel、付不出星光（往不付的方向錯）；實機驗收要先看這一層。付完之後主畫面讀不到星光、格子也點不開，所以用畫面上看得到的兩件事核對：格子標 `Purchased`，而且主畫面的 Cost 沒變；兩件都對才算換成，否則忘掉這位罪人的張數。
+- **處理過**（#456 決定 5）：付款的那一下 Confirm **之前**就記下 `RUN["shop"]["id_searched"]`（和治療一樣），之後這次造訪不再點這格；格子標 `Purchased` 時也記。所以付款途中被交回 MirrorHub 再進來不會重付。只是試過、沒按到付款的罪人不會讓整格算處理過，刷新後還能試沒試過的罪人。
+- **選人模式與畫面檢查**（#456 決定 4）：選人模式下 `Leave` 變成 `Return`，原本 MirrorHub 的 `Shop` 節點（`Leave`）不命中，`Shop.way_out` 也會因為讀得到刷新費用而誤判成主畫面。所以 `Shop` 節點改成「`Leave`，或頂端的 `Select a Sinner for Skill`」（`mirror_dungeon.json`），選人模式下 `page_guard` 照常成立，被交回 MirrorHub 時 HubText 也會選 `Shop`（`tests/test_hub_text_screens.py`）；`Shop.way_out` 在讀刷新費用之前先讀頂端（`SELECT_TITLE` [430, 15, 420, 35]；`Shop` 節點的 `ShopSelectSinner` 寫著同一個框，改一處要一起改），是選人模式就按 Return（`BOTTOM_RIGHT`），所以 `Shop.to_main` 一定回到商店主畫面。改之前，選人模式下 MirrorHub 沒有節點命中（`ShopIdSkillSearchSelect.png` 上 `Shop` 不命中，#456 的探測），只能等復原處理。付款 Confirm 之後到對話框消失之前一樣不做畫面檢查（`CONNECTING` 會命中全域的 `Connecting`，`ShopIdSkillSearchConnecting.png`）。
+- **換不了的情況**：和替換格同一張表（第一次 Confirm 沒出現第二層的那行寫 `no second confirm asking <Cost|Starlight>`），另外：
+
+  | 情況 | 處理 | log |
+  |---|---|---|
+  | 沒有這格、或沒有可試的罪人 | 不點 | `nobody to try: not opened`（沒有格子時不寫） |
+  | 格子標 `Purchased` | 不點，算處理過 | `used already (Purchased): skip` |
+  | 點了格子沒出現選人模式 | 算處理過，不再點 | `shop: 'ID Skill Search' opened no select a sinner dialog`（`Shop.open_offer` 寫的，不是下面的開頭） |
+  | 點了頭像沒出現對話框 | 還在選人模式，試下一位；都沒有就 Return | `'<罪人>''s portrait opened no dialog` |
+  | 三個價格都讀不到 | Cancel，試下一位 | `the payment is unknown: cancel` |
+  | 切不到要付的方式 | Cancel，試下一位 | `the payment does not show <pay>: cancel` |
+  | 沒有亮著、讀得到價格又付得起的換法（星光不夠也是） | Cancel，試下一位 | `no swap toward <目標> is lit, priced and affordable in <Cost|starlight>: cancel` |
+  | 試完都不行、還在選人模式 | Return | `no listed sinner has a feasible swap: Return` |
+  | 付星光後格子沒標 `Purchased` 或 Cost 變了 | 忘掉張數 | `the slot reads no Purchased, the Cost <a> -> <b>: the counts are not known` |
+
+- **log**：除了點格子沒反應那行（`Shop.open_offer` 寫的），每行以 `shop: ID Skill Search: ` 開頭。每位罪人一行（`'Gregor' counts not read this run, toward 1/3/2: try`、`'Yi Sang' is dead (grey on the shop's bar): skip`）；對話框一行寫張數、三個價格、付款的數字與單位：`'Ryōshū': Skills Owned 2/3/1, s1_s2 90, s2_s3 150, s1_s3 240, 868 Cost, reserve 0: try s1_s3`（星光：`... 3433 starlight (no reserve): try ...`）；換成功：`replaced 'Ryōshū' s1_s3 (skill 1 -> 3) for 240: 868 -> 628 Cost`，星光：`replaced 'Ryōshū' s1_s3 (skill 1 -> 3) for 75 starlight: 3433 -> 3358 starlight (unread after the dialog), the slot reads Purchased, the Cost stays 868`（換後的星光是算的：對話框關掉後讀不到）。
+- 實機畫面與座標見 [02](02-screens.md)「ID Skill Search」。
 
 **購買與刷新**（#10）
 
@@ -498,7 +528,7 @@ Cost 表是 wiki 與簡中客戶端的表，實機 log 的節點面板 Cost 沒�
 - 合成時讀合成頁的所有持有飾品（捲動讀完，見「讀格子」）與材料槽數（選好體系、還沒放材料時讀：Super Shop 左上的空槽是黑的，一般商店那裡是背景的齒輪），用 `shop.pick_fusion` 挑一組；不要的飾品（含無體系飾品）一起挑最高階級，不點開（#161、#299）。放材料從列表後面的格子放起（捲動停在後面）。合成後合成頁不關：按下 `GET!` 的 Confirm 後頁面還在、材料槽清空、選的體系保留（#378 附圖），格子會變。合成頁的列表依階級由高到低排（`By Tier`），但殘影（Vestige，9991–9995）不看階級排在最前面，殘影之間也由高到低（#378 第三輪：遊戲 IL2CPP metadata 的排序方法叫 `SortByTierPieceFirst`，md8 common data 的 `pieceEgoGiftIds` 就是這 5 個殘影；57 份本機 log 讀完整列表的 86 次都照這個順序（EX 飾品照錄影補在它的位置），其中 13 次有殘影，12 次只看階級會判成亂序（I 階 Dark Vestige 排在 IV、III 前面），兩次有兩種殘影（III 在 I 前、II 在 I 前）；EX 的 A Certain Philosophy 當 V 階，排在殘影後、III 階前，錄影看得到，那時沒有 IV 階飾品，所以它在 IV 前面是照資料的 `TIER_5` 推的，讀到的順序不符就照舊重讀）。合成拿掉材料、其餘照原來的順序，新飾品（不會是殘影）排在殘影之後、同階那一段的最後（57 份 log 合成後重讀的 30 組有 29 組一樣，5 組頁上有殘影，其中 2 組殘影留著、新飾品排在 I 階 Dark Vestige 之後（一組 IV、一組 III）；第 30 組是合成失敗、給了 EX 飾品（V 階，Forecasts 寫 IV），見下面的 GET! 視窗），所以持有飾品的新順序用算的（`shop.fusion_places`、`actions.fused_cells`，#378 第二輪）：只讀新飾品那一格（拖到它那一列，上一列也露出），它的階級要等於這次合成的階級（配方合成是那個合成品的 id）、id 要讀得出、清單裡 id 一樣或 id 沒讀到的飾品樣子不能和它一樣（樣子像、但 id 讀出來是別的，就是別的飾品：2026-11-04 F3 新的 II 階 Old Wooden Doll 和 III 階 Finifugality 的中心差在 12.5 以內，舊的規則因此重讀，6.76 s）；同一張截圖上其他露出的格子要和讀的時候一樣（同「讀格子」的中心比對），最後一格之後露出的位置要是空的。合成給出 EX 飾品時（#449）：按下 Fuse 後的 `GET!` 視窗，圖示左上角是綠色的 `EX`、名牌是黃色，一般飾品那裡是黃色的階級數字。`shop.ex_got` 看 `gift_get` 等到標題的那張截圖（不多截圖、不用 OCR；2026-11-04 錄影 30 fps，標題和 `EX` 在視窗出現的第一格就都在，約 0.3 s 後 bot 按掉），視窗圖示左上 50×50 px 裡的綠色至少 500 px 就是 EX（實機的 EX 966–974 px；封存的 34 支 1280×720 錄影（2026-10-18 到 11-05，每秒 10 格）裡另外 1006 次 GET! 視窗最多 39 px，是綠色圖示的飾品；`tests/screens` 沒有命中）。看到 EX 時這次一般合成的產物當 V 階：`fusion_places` 照 V 階排它的位置（殘影之後、IV 之前，照資料的 `TIER_5` 推的，實機還沒看過），讀那一格要讀到 V 階（是 9799 還是 9800 照舊由讀格子決定），log 多一行 `shop: the GET! popup shows an EX gift (green EX): the gift made is placed as tier V`；位置推錯就照下面的檢查重讀。配方合成固定給出合成品（100%），不看這個標記。配方合成後 `Fusion Available` 區塊可能消失、列表上移，所以先拖回頂端、靠 `E.G.O Gifts Owned` 標題重新定位再比；一般合成比對不符時也重新定位一次再比。算不出（上一次沒讀到列表底、有格子階級讀不到或不是上面的順序）或比對仍不符，就照舊在同一頁重讀全部持有飾品。log：用算的寫 `shop: fuse page kept: owned gifts placed by the fusion (new gift read at cell <n>)`；重讀寫 `shop: fuse page kept: <原因>, owned gifts read again`；重新定位寫 `shop: fuse page kept: <原因>, the owned gifts are placed by their label`。之後每點一格仍先比對（`cell_at`）；用算的格子點之前比對不符，就不點、關頁再開、從頂端重讀（log `shop: a cell placed by the fusion is not where it was put: the fuse page is opened again`），因為材料可能已經放進一部分；這種失敗不算配方合成失敗。再照先配方、後一般合成挑下一組，直到沒有可合的才關頁，和 AALC 的 `fuse_useless_gifts` 一樣（b0f4393，`tasks/mirror/in_shop.py` L665–L667：`GET!` Confirm 後 `continue`）。一頁最多合 10 組（`FUSIONS_PER_PAGE`），到了就寫 log 關頁，持有的飾品變了，所以下一圈再開。這次呼叫合成過至少一組就算有動作；最後一次讀到的格子沒有可合的，這次造訪就記成已掃描（#62）。以前每合一組就關頁，下一圈重開、選體系、拖回頂端重讀，一組約 10 秒（#378 的錄影）。`Wishmaking` 已勾選時不合成。飾品清單的 `fusion_condition` 不是 `any` 時，沒有符合條件的組合就不合（#263）。（#77）
 - **放入後回讀**（#77）：放材料前材料槽必須是空的；每點一格（再點列表上方 Recipes 與 Fusion Guide 之間的空白處關掉說明框；列表裡的標籤捲動後可能是別的格子）就截圖確認：有材料的槽多 1 個（空槽是純黑，亮度標準差 0–1，有材料 29–85），而且點的那格外框變橘（外框一圈橘色像素 17–23%，被說明框遮暗時 11%，沒選的 0–2%）。實機截圖顯示點了的格子留在原位、格子不重排，所以外框變橘就表示放進去的是預期的那格。任何一格不符就 Close 整頁、不按 Fuse，這次造訪在持有飾品改變前不再試。確認對話框的 `n/m` 的 n 要等於放入的個數才確認。log 記放入的材料（格子、階級、體系）與預期的結果階級。
 - 合成頁的列表上方可能多出其他區塊：持有的飾品湊得出固定配方時的 `Fusion Available`（配方產物列在上面，#103；實機：tests/screens/ShopFuseRecipe.png），也可能有主題包限定合成（`Theme Pack Exclusive Fusion Gift`：`Recipes` 彈窗最上面在另一局看過這一區（截圖沒有附檔），合成頁本身的區塊還沒看過）。持有飾品整區因此往下移，所以合成頁先拖回列表最上面，再用 OCR 找 `E.G.O Gifts Owned` 標題（找不到就往上拖一筆再找，拖不動就不讀、不合成），第一列持有飾品的中心在標題中心下方 66 px（實機：無區塊時 228 → 294，有固定配方時約 361 → 427）；#304 另量到標題 229／363、第一列 293／427，差 1–2 px，再照「讀格子」捲動讀完。標題上方的區塊不讀、不點（固定配方的實機流程見 [02-screens.md](02-screens.md) 合成頁的配方合成，#304；Agent 的做法見第 13 節配方合成，#300），限定合成另開 issue。（#205；以前讀到 `Fusion Available` 就直接 Close，2026-10-21 實機 F4、F5 兩次因此沒有合成。）這次造訪在持有飾品改變（買或賣）前不再試合成；確認對話框的 `n/m` 的 n 不等於放入的個數、沒合成成功時也一樣。
-- 治療的陣亡者以商店罪人列的灰色頭像為準；戰前編隊記下的存活人數只拿來核對，不一致時寫進記錄。
+- 治療的陣亡者以商店罪人列的灰色頭像為準（`actions.bar_dead`：頭像的平均飽和度低於 65；陣亡的 24–51，超過舊的 30（目測是 SP 徽章的藍色），存活的 83–158，`tests/screens` 12 張商店主畫面、144 個頭像，#456）；戰前編隊記下的存活人數只拿來核對，不一致時寫進記錄。
 - 進行中的商店狀態（是否已治療、兩種刷新各用了幾次、想買的價格與是否已為它出售、持有飾品是否已掃過、讀到的持有飾品）存在 Agent 記憶體，離開商店時清掉。Agent 重啟後會重新判斷治療。
 - 尚未處理：出售後若有確認對話框（還沒看過）。
 
@@ -516,7 +546,7 @@ Cost 表是 wiki 與簡中客戶端的表，實機 log 的節點面板 Cost 沒�
 - 和一般商店用同一套流程：先治療、換技能，再循環「出售 → 購買與刷新 → 合成」。替換格可能有兩格（`SuperShop.png`：Gregor、Don Quixote），照清單順序開（見「換技能」）。
 - 規則不依賴格數，每格都從畫面讀出價格和體系。
 - 合成頁有 5 個材料槽，挑材料時可以放 3–5 個，門檻用 Super Shop 那一組（#77）。
-- 實機：商店顯示 `Super Shop On Next Floor? <n>%`，這個機率隨本層花掉的 Cost 上升（3% → 8% → 15% → 24%），進過 Super Shop 後回到 3%。Super Shop 標題是紅色 `Super Shop`，10 格分兩列要捲動；其中 `ID Skill Search` 用星光計價，`Special Catalogue` 讓獎勵卡多一張。合成畫面的 `Wishmaking` 也花星光。這些商品不在清單的購買清單裡，所以不會買。（實機：captures/77_after_enter_shop_node.png、captures/87_back_to_shop.png、captures/162_f2shop_entered.png、captures/163_supershop_scrolled.png、captures/94_shop_fuse_try2.png）
+- 實機：商店顯示 `Super Shop On Next Floor? <n>%`，這個機率隨本層花掉的 Cost 上升（3% → 8% → 15% → 24%），進過 Super Shop 後回到 3%。Super Shop 標題是紅色 `Super Shop`，10 格分兩列要捲動；其中 `ID Skill Search` 付 Cost 或星光（隊伍打開時由換技能那一步處理，見「ID Skill Search」，#456），`Special Catalogue` 讓獎勵卡多一張。合成畫面的 `Wishmaking` 也花星光。這些商品不在清單的購買清單裡，所以購買不會買。（實機：captures/77_after_enter_shop_node.png、captures/87_back_to_shop.png、captures/162_f2shop_entered.png、captures/163_supershop_scrolled.png、captures/94_shop_fuse_try2.png）
 
 ## 14. 結算與每週獎勵
 

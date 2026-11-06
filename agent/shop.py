@@ -300,21 +300,68 @@ def skill_plan(listed, slots, known, handled, swaps):
             why = f"{sinner!r} handled this visit: skip"
         elif sinner in opened:
             why = f"{sinner!r} has another slot opened this visit: skip"
-        elif sinner in known:
-            owned, target = known[sinner], entry["target"]
-            if tuple(owned) == (target["s1"], target["s2"], target["s3"]):
-                why = f"{sinner!r} is at {counts_line(owned)} (read this run): skip"
-            elif not swaps_wanted(target, owned, entry["s1_s3_first"], swaps):
-                why = (f"{sinner!r} at {counts_line(owned)} can make no swap toward {counts_line(target)}"
-                       f"{' (skill 3 locked)' if locked(owned) else ''}: skip")
-            else:
-                why, opens = f"{sinner!r} {counts_line(owned)} read this run, toward {counts_line(target)}: open", True
         else:
-            why, opens = f"{sinner!r} counts not read this run, toward {counts_line(entry['target'])}: open", True
+            why, opens = by_counts(entry, known, swaps, "open")
         if opens:
             opened.add(sinner)
         out.append(((0, n) if opens else (1, at), slot, entry if opens else None, why))
     return [(slot, entry, why) for _, slot, entry, why in sorted(out, key=lambda o: o[0])]
+
+
+def by_counts(entry, known, swaps, verb):
+    """(why, whether to go on) for a listed sinner by the counts read this run (known): at the target or with no swap left
+    is a skip; unknown counts or a swap wanted go on (`verb` ends the line): the dialog is where the counts show."""
+    sinner, target = entry["sinner"], entry["target"]
+    if sinner not in known:
+        return f"{sinner!r} counts not read this run, toward {counts_line(target)}: {verb}", True
+    owned = known[sinner]
+    if tuple(owned) == (target["s1"], target["s2"], target["s3"]):
+        return f"{sinner!r} is at {counts_line(owned)} (read this run): skip", False
+    if not swaps_wanted(target, owned, entry["s1_s3_first"], swaps):
+        return (f"{sinner!r} at {counts_line(owned)} can make no swap toward {counts_line(target)}"
+                f"{' (skill 3 locked)' if locked(owned) else ''}: skip"), False
+    return f"{sinner!r} {counts_line(owned)} read this run, toward {counts_line(target)}: {verb}", True
+
+
+def id_search_slot(slots):
+    """The ID Skill Search slot of a grid read (read_slots), whole or clipped, or None (#456)."""
+    return next((slot for slot in slots if id_skill_slot(slot["name"])), None)
+
+
+def id_search_plan(listed, known, tried, dead, swaps):
+    """[(entry or None, why)] for every listed sinner, in the list's order: the sinners ID Skill Search tries (entry set),
+    each judged on its dialog, and the skipped (#456; #264: the first listed sinner with a feasible swap).
+
+    A sinner is skipped at the game's 3/2/1, when tried this visit (`tried`, each at most once), dead (`dead`: grey on the
+    shop's bar, a portrait that takes no tap), or when its counts read this run are at the target or allow no swap.
+    """
+    out = []
+    for entry in listed:
+        sinner = entry["sinner"]
+        if entry["target"] == DECK:
+            why, tries = f"{sinner!r} targets the game's 3/2/1: skip", False
+        elif sinner in tried:
+            why, tries = f"{sinner!r} tried this visit: skip", False
+        elif sinner in dead:
+            why, tries = f"{sinner!r} is dead (grey on the shop's bar): skip", False
+        else:
+            why, tries = by_counts(entry, known, swaps, "try")
+        out.append((entry if tries else None, why))
+    return out
+
+
+def pay_mode(prices, swaps):
+    """"cost" or "starlight": the ID Skill Search dialog's payment, told by its prices (#456: 90/150/240 for Cost, 25/50/75
+    for starlight), or None. Every price that read must be that mode's, and one at least: a mix or none is never a guess."""
+    read = {k: p for k, p in prices.items() if p is not None}
+    modes = [m for m in ("cost", "starlight") if read and all(swaps[k]["id_search"][m] == p for k, p in read.items())]
+    return modes[0] if len(modes) == 1 else None
+
+
+def id_search_choice(entry, owned, lit, prices, funds, pay, reserve, swaps):
+    """skill_choice for ID Skill Search (#456): funds is what the dialog's top right shows, the Cost or the owned starlight.
+    Cost keeps the team's reserve; starlight is not under it, and too little of it is no swap (#264 價格)."""
+    return skill_choice(entry, owned, lit, prices, funds, reserve if pay == "cost" else 0, swaps)
 
 
 # Pixel readers of the dialog (#453), image BGR. Measured on tests/screens/ShopReplaceSkill*.png; test_shop_skill sweeps
