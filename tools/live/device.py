@@ -4,7 +4,7 @@
 
   shot OUT.png                          one screenshot, 1280x720
   tap X Y [--wait S] [--shot OUT.png]   a tap in game pixels (1280x720), then a screenshot after S seconds
-  press X Y [--hold S] [--wait S] [--shot OUT.png]   a long press: the finger held still for --hold s (1)
+  press X Y [--hold S] [--wait S] [--shot OUT.png]   a long press: the finger held still for --hold s (default 1)
   key CODE [--wait S] [--shot OUT.png]  an Android key code: 4 back, 3 home
   start [PACKAGE] [--shots DIR --every S --count N]   start an app (default the game), screenshots while it boots
   freeze --log run.log --fire RE --pid PID [--arm RE] [--cmd FILE] [--out DIR] [--max S]
@@ -14,7 +14,7 @@ first (the maalc-live-test skill); these commands act on the user's game account
 
 **freeze** waits for a line of the bot's run.log matching `--fire` (after one matching `--arm`, when given),
 suspends every process under `--pid` (the `bot.py run` pid the detach printed), then runs the commands written
-to `--cmd` (default `cmd.txt` beside the log), one a line: `shot NAME`, `tap X Y`, `press X Y S`, `key CODE`,
+to `--cmd` (default `cmd.txt` beside the log), one a line: `shot NAME`, `tap X Y`, `press X Y [S]`, `key CODE`,
 `start PACKAGE`, `resume`. The bot resumes on `resume` or after `--max` seconds (150): MaaFramework's waits run on, so a long
 freeze can time a node out. Screenshots go to `--out` (default the log's folder) as `HHMMSS.fff-NAME.png`.
 """
@@ -52,6 +52,9 @@ def connect(port: int):
 def shot(ctl, out) -> None:
     Image.fromarray(ctl.post_screencap().wait().get()[..., ::-1]).save(out)  # BGR from MaaFramework
     print("saved", out, flush=True)
+
+
+PRESS_HOLD = 1.0  # s a press holds when no time is given
 
 
 def press(ctl, x: int, y: int, hold: float) -> None:
@@ -104,7 +107,7 @@ def run_commands(ctl, cmd: Path, out: Path, deadline: float, poll: float = 0.2) 
             if a[0] == "tap":
                 ctl.post_click(int(a[1]), int(a[2])).wait()
             elif a[0] == "press":
-                press(ctl, int(a[1]), int(a[2]), float(a[3]))
+                press(ctl, int(a[1]), int(a[2]), float(a[3]) if len(a) > 3 else PRESS_HOLD)
             elif a[0] == "key":
                 ctl.post_click_key(int(a[1])).wait()
             elif a[0] == "start":
@@ -159,7 +162,7 @@ def main(argv=None) -> None:
         p.add_argument("--wait", type=float, default=1.0)
         p.add_argument("--shot")
         if name == "press":
-            p.add_argument("--hold", type=float, default=1.0)
+            p.add_argument("--hold", type=float, default=PRESS_HOLD)
     p = sub.add_parser("start")
     p.add_argument("package", nargs="?", default=GAME)
     p.add_argument("--shots")

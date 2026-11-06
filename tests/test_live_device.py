@@ -87,9 +87,10 @@ def test_wait_fire_needs_the_arm_line_first():
 
 def test_commands_run_until_resume(tmp_path):
     ctl, cmd = FakeCtl(), tmp_path / "cmd.txt"
-    cmd.write_text("tap 10 20\npress 30 40 0.8\nkey 4\nshot map\nstart com.android.vending\nresume\n")
+    cmd.write_text("tap 10 20\npress 30 40 0.8\npress 50 60\nkey 4\nshot map\nstart com.android.vending\nresume\n")
     dv.run_commands(ctl, cmd, tmp_path, deadline=float("inf"), poll=0)
-    assert ctl.calls == [("click", 10, 20), ("swipe", 30, 40, 30, 40, 800), ("key", 4), ("start", "com.android.vending")]
+    assert ctl.calls == [("click", 10, 20), ("swipe", 30, 40, 30, 40, 800), ("swipe", 50, 60, 50, 60, 1000), ("key", 4),
+                         ("start", "com.android.vending")]
     assert [p.name.endswith("-map.png") for p in tmp_path.glob("*.png")] == [True]
     assert cmd.read_text() == ""
 

@@ -17,7 +17,7 @@ REPO = Path(__file__).resolve().parent.parent
 SCREENS = REPO / "tests/screens"
 IMAGES = REPO / "assets/resource/base/image"
 SHOTS = ["LuxBattleEgoCard.png", "BattleEgoCard.png"]
-CARD = (535, 132, 212, 370)
+CARD_BOX = (535, 132, 212, 370)
 # The turn's buttons near the top, measured on BattleTurn.png: WAVE / TURN at the left; the speed, MAX, auto and the
 # pause gear at the right, and the box and the red button under them.
 TOP_BUTTONS = [(5, 15, 105, 80), (1040, 15, 225, 50), (1080, 70, 185, 55)]
@@ -54,7 +54,8 @@ def test_no_other_screen_reads_as_the_ego_card():
     # CODING_STANDARDS: a template ships with a sweep over tests/screens. Sweep (grey, 2026-11-07, 198 other 1280 x 720
     # captures): 1.00 for both parts on both captures of the card; Details alone 0.70 at most (HelpPager.png),
     # Resistances alone 0.74 (MapNodePanel.png), both together 0.63 at most (SuperShop.png: 0.62 and 0.63). Each part
-    # stays under its threshold on its own, and the And's lower part 0.2 under it.
+    # stays under its threshold on its own, and the And's lower part 0.2 under it. The production matcher's own sweep is
+    # maa-tools test (maatools.config.mts): EgoCard hits on the two captures of the card and misses every other screen.
     nodes = load_nodes()
     found = templates(nodes, nodes["EgoCard"])
     others = [p for p in sorted(SCREENS.glob("*.png")) if p.name not in SHOTS and Image.open(p).size == (1280, 720)]
@@ -79,8 +80,8 @@ def test_every_battle_hub_closes_the_ego_card_before_the_turn():
 
 
 def test_a_held_finger_lifts_for_the_ego_card():
-    # The daily run's card came right after `turn 1: started`, while hold_turn held the finger for up to 6 s: it lifts
-    # as soon as the card shows, and BattleHUD closes it.
+    # The daily run's card was up after `turn 1: started` (what opened it is unverified), where hold_turn holds the
+    # finger for up to 6 s: it lifts as soon as the card shows, and BattleHUD closes it.
     import actions
     assert "EgoCard" in actions.BATTLE_LEFT
 
@@ -93,5 +94,5 @@ def test_the_tap_lands_off_the_card_and_off_the_turns_buttons():
     assert param["left"] is True  # waits for the card to go, no OCR
     x, y, w, h = param["target"]
     tap = (x + w // 2, y + h // 2, 1, 1)
-    assert inside(tap, (0, 0, 1280, CARD[1])) and not touches(tap, CARD)
+    assert inside(tap, (0, 0, 1280, CARD_BOX[1])) and not touches(tap, CARD_BOX)
     assert not any(touches(tap, b) for b in TOP_BUTTONS)
