@@ -1,5 +1,5 @@
 // PROTOTYPE for #264 UI feedback, throwaway branch proto/skill-replacement-ui, never merge
-// Three variants of the 技能替換 panel, flipped with ?variant=A|B|C (or the floating bar / ← →). State is in memory only.
+// Four variants of the 技能替換 panel, flipped with ?variant=A|B|C|D (or the floating bar / ← →). State is in memory only.
 import { useState, useSyncExternalStore, type Dispatch, type SetStateAction } from "react";
 import "./SkillReplacement.prototype.css";
 import { useDragSort } from "./dragSort";
@@ -54,11 +54,11 @@ type SetRows = Dispatch<SetStateAction<Row[]>>;
 const patch = (set: SetRows, j: number, f: (r: Row) => Row) => set((rs) => rs.map((r, k) => (k === j ? f(r) : r)));
 
 // ---------- the switcher ----------
-const NAMES: Record<string, string> = { A: "A 下拉選順序", B: "B 點牌換技能", C: "C 換技能清單" };
+const NAMES: Record<string, string> = { A: "A 下拉選順序", B: "B 點牌換技能", C: "C 換技能清單", D: "D A＋C" };
 const VARIANTS = Object.keys(NAMES);
 let current = (() => {
-  try { const v = new URLSearchParams(window.location.search).get("variant")?.toUpperCase() ?? "A"; return VARIANTS.includes(v) ? v : "A"; }
-  catch { return "A"; }
+  try { const v = new URLSearchParams(window.location.search).get("variant")?.toUpperCase() ?? "D"; return VARIANTS.includes(v) ? v : "D"; }
+  catch { return "D"; }
 })();
 const listeners = new Set<() => void>();
 function setVariant(v: string) {
@@ -125,6 +125,7 @@ export function SkillPrototype({ i }: { i: number }) {
       {v === "A" && <VariantA key="A" seed={seed} />}
       {v === "B" && <VariantB key="B" seed={seed} />}
       {v === "C" && <VariantC key="C" seed={seed} />}
+      {v === "D" && <VariantD key="D" seed={seed} />}
       <p className="muted sp-note">技能 3 需要 Uptie 3；沒有的身分只能用 1→2。（原型不模擬）</p>
       <IdSearch i={i} />
       <Switcher v={v} />
@@ -269,25 +270,38 @@ function Stepper({ label, value, dec, inc, decOff, incOff }: { label: string; va
   );
 }
 
-function VariantC({ seed }: { seed: Row[] }) {
-  const all = seed.map((r) => r.sinner);
+type Up = "s2" | "s3";
+/** Moves one card between S1 and `k`: +1 takes it from S1, −1 gives it back, so the deck stays 6. */
+const shift = (set: SetRows, j: number, k: Up, d: 1 | -1) =>
+  patch(set, j, (x) => ({ ...x, target: { ...x.target, s1: x.target.s1 - d, [k]: x.target[k] + d } }));
+/** Which way `k` may move and keep the target valid: S1 in 0..3, S2 ≥ 0, S3 ≥ 1. */
+const room = (t: SkillTarget, k: Up) => ({ dec: t[k] > (k === "s3" ? 1 : 0) && t.s1 < 3, inc: t.s1 > 0 });
+
+/** The listed sinners, seeded with the ones whose target is not 3/2/1; `rest` are the unlisted, 不換 ones. */
+function useListed(seed: Row[]) {
   const [rows, setRows] = useState(() => seed.filter((r) => !plan(r.target).untouched));
-  const rest = all.filter((n) => !rows.some((r) => r.sinner === n));
+  const rest = seed.map((r) => r.sinner).filter((n) => !rows.some((r) => r.sinner === n));
+  return { rows, setRows, rest };
+}
+
+function AddSinner({ seed, rest, set }: { seed: Row[]; rest: string[]; set: SetRows }) {
+  return (
+    <div className="sp-add">
+      <select aria-label="加入罪人" value="" disabled={!rest.length}
+        onChange={(e) => { const base = seed.find((r) => r.sinner === e.target.value); if (base) set((rs) => [...rs, { ...base, target: { ...GAME_DECK } }]); }}>
+        <option value="">＋ 加入罪人</option>
+        {rest.map((n) => <option key={n} value={n}>{n}</option>)}
+      </select>
+    </div>
+  );
+}
+
+function VariantC({ seed }: { seed: Row[] }) {
+  const { rows, setRows, rest } = useListed(seed);
   const total = rows.reduce((a, r) => a + plan(r.target).cost, 0);
-  const adjust = (j: number, k: "s2" | "s3", d: 1 | -1) => patch(setRows, j, (x) => {
-    const t = { ...x.target };
-    t[k] += d; t.s1 -= d;
-    return { ...x, target: t };
-  });
   return (
     <div className="sp-c">
-      <div className="sp-add">
-        <select aria-label="加入罪人" value="" disabled={!rest.length}
-          onChange={(e) => { const n = e.target.value; const base = seed.find((r) => r.sinner === n); if (base) setRows((rs) => [...rs, { ...base, target: { ...GAME_DECK } }]); }}>
-          <option value="">＋ 加入罪人</option>
-          {rest.map((n) => <option key={n} value={n}>{n}</option>)}
-        </select>
-      </div>
+      <AddSinner seed={seed} rest={rest} set={setRows} />
       {!rows.length && <p className="muted sp-empty">目前沒有罪人要換技能，全部維持 3／2／1。</p>}
       <ol className="sp-cards">
         {rows.map((r, j) => {
@@ -304,8 +318,10 @@ function VariantC({ seed }: { seed: Row[] }) {
               </div>
               <div className="steps">
                 <span className="sp-step"><span className="muted">S1</span><b className="ro">{t.s1}</b></span>
-                <Stepper label="S2" value={t.s2} decOff={t.s2 <= 0 || t.s1 >= 3} incOff={t.s1 <= 0} dec={() => adjust(j, "s2", -1)} inc={() => adjust(j, "s2", 1)} />
-                <Stepper label="S3" value={t.s3} decOff={t.s3 <= 1 || t.s1 >= 3} incOff={t.s1 <= 0} dec={() => adjust(j, "s3", -1)} inc={() => adjust(j, "s3", 1)} />
+                {(["s2", "s3"] as const).map((k) => (
+                  <Stepper key={k} label={k.toUpperCase()} value={t[k]} decOff={!room(t, k).dec} incOff={!room(t, k).inc}
+                    dec={() => shift(setRows, j, k, -1)} inc={() => shift(setRows, j, k, 1)} />
+                ))}
               </div>
               <div className="plan">
                 {p.untouched ? <span className="muted">還沒有變更（3／2／1）</span> : <span>{planText(p)}・共 <b>{p.cost}</b> Cost</span>}
@@ -323,6 +339,63 @@ function VariantC({ seed }: { seed: Row[] }) {
       </ol>
       <p className="muted sp-foot">不換：{rest.join("、") || "（無）"}</p>
       <p className="sp-foot"><b>全部換完共 {total} Cost</b></p>
+    </div>
+  );
+}
+
+// ---------- D: A's one-line rows, only for the sinners to change; S1 follows S2 and S3 ----------
+function VariantD({ seed }: { seed: Row[] }) {
+  const { rows, setRows, rest } = useListed(seed);
+  const dragItem = useDragSort((from, to) => setRows((rs) => move(rs, Number(from), Number(to))), () => true);
+  return (
+    <div>
+      <AddSinner seed={seed} rest={rest} set={setRows} />
+      {!rows.length && <p className="muted sp-empty">目前沒有罪人要換技能，全部維持 3／2／1。</p>}
+      <ol className="sp-a sp-d">
+        {rows.map((r, j) => {
+          const p = plan(r.target), t = r.target;
+          const two = p.need.length > 1;
+          return (
+            <li key={r.sinner} data-sinner={r.sinner} {...dragItem(String(j), "rows")}>
+              <span className="grip" aria-hidden>⋮⋮</span>
+              <b className="skill-rank">{j + 1}</b>
+              <span className="skill-name" title={r.sinner}>{r.sinner}</span>
+              <span className="skill-count">
+                <span>S1</span>
+                <span className="sp-box ro" aria-label={`${r.sinner} S1`} title="S1 = 6 − S2 − S3，自動算">{t.s1}</span>
+              </span>
+              {(["s2", "s3"] as const).map((k) => {
+                const name = `${r.sinner} ${k.toUpperCase()}`, ok = room(t, k);
+                return (
+                  <span key={k} className="skill-count">
+                    <span>{k.toUpperCase()}</span>
+                    <span className="sp-box sp-spin" role="group" aria-label={name}>
+                      <button type="button" aria-label={`${name} 減一`} disabled={!ok.dec} onClick={() => shift(setRows, j, k, -1)}>−</button>
+                      <span className="n">{t[k]}</span>
+                      <button type="button" aria-label={`${name} 加一`} disabled={!ok.inc} onClick={() => shift(setRows, j, k, 1)}>+</button>
+                    </span>
+                  </span>
+                );
+              })}
+              <span className="sp-pillcell">
+                {p.error ? <span className="sp-pill err" role="alert">{p.error}</span>
+                  : p.untouched ? <span className="sp-pill off">還沒變更</span>
+                  : <span className="sp-pill on">{planText(p)}</span>}
+              </span>
+              <select className="sp-first" aria-label={`${r.sinner} 先換`} disabled={!two}
+                title={two ? "兩種換法都要用時，先試哪一種" : "這個目標用不到兩種換法，順序不影響"}
+                value={two ? firstOf(r, p) : ""} onChange={(e) => patch(setRows, j, (x) => withFirst(x, e.target.value))}>
+                {two ? [...p.need].reverse().map((x) => <option key={x.key} value={x.key}>先換 {long(x.key)}</option>)
+                  : <option value="">—</option>}
+              </select>
+              <Arrows j={j} n={rows.length} set={setRows} name={r.sinner} />
+              <button type="button" className="icon" aria-label={`移除 ${r.sinner}，改回不換`} title="移除（改回 3/2/1，不換）"
+                onClick={() => setRows((rs) => rs.filter((_, k) => k !== j))}>✕</button>
+            </li>
+          );
+        })}
+      </ol>
+      <p className="muted sp-foot">不換：{rest.join("、") || "（無）"}</p>
     </div>
   );
 }

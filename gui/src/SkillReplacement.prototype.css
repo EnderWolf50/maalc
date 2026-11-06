@@ -56,6 +56,24 @@
 .sp-cards .first { display: flex; align-items: center; gap: 8px; font-size: 13px; }
 .sp-foot { margin: 8px 0 0; font-size: 13px; }
 
+/* D: A's rows (.sp-a), only the sinners to change */
+.sp-d > li { gap: 6px; }
+.sp-d .skill-name { flex: 0 1 6.5em; min-width: 3em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sp-d .skill-count { gap: 3px; }
+.sp-box { display: inline-flex; align-items: stretch; width: 64px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); font-size: 14px; color: var(--fg); }
+.sp-box.ro { justify-content: center; padding: 4px 0; background: var(--bg); color: var(--muted); cursor: default; }
+.sp-spin button { flex: 1; min-width: 0; padding: 4px 0; border: none; border-radius: 0; background: none; font-weight: 600; }
+.sp-spin button:first-child { border-radius: 5px 0 0 5px; }
+.sp-spin button:last-child { border-radius: 0 5px 5px 0; }
+.sp-spin button:hover:not(:disabled) { background: var(--sp-tint); color: var(--accent); }
+.sp-spin button:focus-visible { outline-offset: -2px; }
+.sp-spin .n { width: 22px; flex: none; padding: 4px 0; text-align: center; border-left: 1px solid var(--line); border-right: 1px solid var(--line); }
+.sp-d .sp-pillcell { width: 11em; }
+.sp-first { width: 8.5em; flex: none; }
+.sp-d .sp-arrows { flex-direction: column; margin-left: auto; }
+.sp-d .sp-arrows button { padding: 0 5px; border: none; font-size: 12px; line-height: 15px; }
+.sp-d .sp-arrows button:hover:not(:disabled) { color: var(--accent); }
+
 /* switcher */
 .sp-switcher { position: fixed; left: 50%; bottom: 14px; transform: translateX(-50%); z-index: 1000; display: flex; align-items: center; gap: 12px;
   padding: 6px 12px; background: #1d2330; color: #fff; border-radius: 999px; box-shadow: 0 4px 16px rgba(0,0,0,.35); }
