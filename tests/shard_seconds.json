@@ -82,6 +82,8 @@
 "test_shop_buy.py": 1,
 "test_shop_cells.py": 5,
 "test_shop_scroll.py": 10,
+"test_shop_skill.py": 8,
+"test_shop_skill_screens.py": 50,
 "test_slim_mcp.py": 0,
 "test_state.py": 0,
 "test_subagent_preamble.py": 0,
