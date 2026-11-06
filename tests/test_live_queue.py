@@ -65,6 +65,35 @@ def test_a_first_ticket_runs_right_after_the_holder_ahead_of_the_waiting_ones(tm
     assert done["rc"] == 0 and waiting.exists()  # it ran while the waiting ticket still waits
 
 
+def test_a_first_ticket_is_placed_again_when_the_holder_leaves_before_it_is_written(tmp_path, monkeypatch):
+    # Review of #465: between reading the queue and writing the ticket, the holder ended and the next run started; a
+    # ticket just behind the old holder would sort ahead of that run and start a second command.
+    holder = tmp_path / f"1000000000000000001-{os.getpid()}-holder.ticket"
+    taken = tmp_path / f"1000000000000000005-{os.getpid()}-taken.ticket"
+    holder.write_text("x")
+    taken.write_text("x")
+    real = lq.tickets
+
+    def holder_leaves_after_the_read(qdir, is_alive=lq.alive):
+        q = real(qdir, is_alive)
+        holder.unlink(missing_ok=True)  # it ends right after this read; `taken` is first now and starts
+        return q
+    monkeypatch.setattr(lq, "tickets", holder_leaves_after_the_read)
+    me = lq.place(tmp_path, "daily", ["hold"], first=True)
+    assert [p.name.split("-", 2)[2] for p in real(tmp_path)] == ["taken.ticket", "daily.ticket"]
+    assert me.exists()
+
+
+def test_a_second_first_ticket_goes_behind_the_first_one(tmp_path):
+    holder = tmp_path / f"1000000000000000001-{os.getpid()}-holder.ticket"
+    holder.write_text(json.dumps({"cmd": "hold", "start": None}))
+    (tmp_path / f"1000000000000000002-{os.getpid()}-daily1.ticket").write_text(json.dumps({"cmd": "hold", "start": None, "first": True}))
+    (tmp_path / f"1000000000000000009-{os.getpid()}-waiting.ticket").write_text(json.dumps({"cmd": "hold", "start": None}))
+    lq.place(tmp_path, "daily2", ["hold"], first=True)
+    assert [p.name.split("-", 2)[2] for p in lq.tickets(tmp_path)] == [
+        "holder.ticket", "daily1.ticket", "daily2.ticket", "waiting.ticket"]
+
+
 def test_status_marks_a_waiting_first_ticket_for_the_holder_to_let_in(tmp_path):
     # A live-test hold spans several bot runs: its agent reads status before the next one and ends the hold for it.
     (tmp_path / f"1-{os.getpid()}-holder.ticket").write_text(json.dumps({"cmd": "hold", "start": None}))
