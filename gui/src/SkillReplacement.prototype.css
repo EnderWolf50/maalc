@@ -70,8 +70,7 @@
 .sp-spin .n { width: 22px; flex: none; padding: 4px 0; text-align: center; border-left: 1px solid var(--line); border-right: 1px solid var(--line); }
 .sp-d .sp-pillcell { width: 11em; }
 .sp-first { width: 8.5em; flex: none; }
-.sp-d .sp-arrows { flex-direction: column; margin-left: auto; }
-.sp-d .sp-arrows button { padding: 0 5px; border: none; font-size: 12px; line-height: 15px; }
+.sp-d .sp-arrows { margin-left: auto; }
 .sp-d .sp-arrows button:hover:not(:disabled) { color: var(--accent); }
 
 /* switcher */
