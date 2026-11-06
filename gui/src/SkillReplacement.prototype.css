@@ -47,7 +47,7 @@
 /* C */
 .sp-add { margin-bottom: 8px; }
 .sp-empty { margin: 4px 0 8px; }
-.sp .sp-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 8px; }
+.sp .sp-cards { display: flex; flex-direction: column; gap: 8px; }
 .sp-cards > li { display: flex; flex-direction: column; gap: 6px; padding: 8px 10px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; }
 .sp-cards .head, .sp-cards .steps { display: flex; align-items: center; gap: 12px; }
 .sp-step { display: inline-flex; align-items: center; gap: 6px; }
