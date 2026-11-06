@@ -194,17 +194,32 @@ def sinner_named(text):
     return found[0] if len(found) == 1 else None
 
 
+# OCR clips the tail of a 130 px name: "Replace Meursault's Skil" and "Replace Gregor's Skil" (2026-11-06 run), so the stem
+# is "Skil", not "Skill". The same clip hits "ID Skil Search"; the buy side and the Replace check both go through these.
+SKILL_STEM = "Skil"
+
+
+def id_skill_slot(name):
+    """Whether a slot name is ID Skill Search (#456), clipped or whole."""
+    return has(name, "ID " + SKILL_STEM)
+
+
+def replace_slot(name):
+    """Whether a slot name is a Replace <sinner>'s Skill slot: Replace and the Skill stem, and not ID Skill Search."""
+    return has(name, "Replace") and has(name, SKILL_STEM) and not id_skill_slot(name)
+
+
 def skill_slots(slots):
     """The Replace <sinner>'s Skill slots of a grid read (read_slots), each a copy with its "sinner" (or None).
 
-    A name with Replace and Skill and not ID Skill (#264); bought ones stay, tagged purchased, so the plan logs them.
+    A name replace_slot() accepts (#264; the stem survives a clipped tail); bought ones stay, tagged purchased, so the plan logs them.
     ID Skill Search is #456's slot, not one of these. One slot read twice is one: SuperShop.png's "??" reads as a coin
     glyph and "7?", two price lines under one name (same_offer: the same column, price and name).
     """
     found = []
     for slot in slots:
         name = slot["name"]
-        if has(name, "Replace") and has(name, "Skill") and not has(name, "ID Skill") and not any(same_offer(slot, s) for s in found):
+        if replace_slot(name) and not any(same_offer(slot, s) for s in found):
             found.append({**slot, "sinner": sinner_named(name)})
     return found
 
@@ -419,7 +434,7 @@ def same_offer(a, b):
 def on_sale(slot):
     """Whether a shop slot is a gift on sale for Cost, affordable or not: not bought, not a skill, not "??"."""
     name = slot["name"]
-    return slot["price"] is not None and not slot["purchased"] and not has(name, "Replace", "ID Skill")
+    return slot["price"] is not None and not slot["purchased"] and not has(name, "Replace") and not id_skill_slot(name)  # wider than replace_slot on purpose: any Replace name is no gift
 
 
 def buy_plan(offers, cost, reserve, sold):
