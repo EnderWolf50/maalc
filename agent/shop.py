@@ -434,7 +434,7 @@ def same_offer(a, b):
 def on_sale(slot):
     """Whether a shop slot is a gift on sale for Cost, affordable or not: not bought, not a skill, not "??"."""
     name = slot["name"]
-    return slot["price"] is not None and not slot["purchased"] and not has(name, "Replace") and not id_skill_slot(name)
+    return slot["price"] is not None and not slot["purchased"] and not has(name, "Replace") and not id_skill_slot(name)  # wider than replace_slot on purpose: any Replace name is no gift
 
 
 def buy_plan(offers, cost, reserve, sold):

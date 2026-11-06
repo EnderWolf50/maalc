@@ -253,7 +253,7 @@ def test_a_replacement_slot_read_twice_is_one_slot():
 ])
 def test_a_replace_slot_survives_a_clipped_skill(name, sinner, is_replace):
     got = s.skill_slots([slot(name)])
-    assert [(x["sinner"]) for x in got] == ([sinner] if is_replace else [])
+    assert [x["sinner"] for x in got] == ([sinner] if is_replace else [])
     assert s.replace_slot(name) is is_replace
 
 
