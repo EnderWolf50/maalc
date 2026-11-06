@@ -1,8 +1,11 @@
-// A team's skill replacement (#264, #454, spec 04 section 9): the shop's Replace <sinner>'s Skill and ID Skill Search. Per sinner, in
-// priority order, the skills 1/2/3 to aim for (a deck of 6) and the swaps it may use, the first tried first.
+// A team's skill replacement (#264, #454, spec 04 section 9): the shop's Replace <sinner>'s Skill and ID Skill Search. Only the
+// sinners to change are listed, in priority order (the layout the user adopted on 2026-11-06): S1 follows the S2 and S3 steppers,
+// the row shows the swaps its target needs and, when it needs two kinds, which one to try first.
 import { useDragSort } from "./dragSort";
 import { fill } from "./i18n";
-import { SKILL_PAYMENTS, SKILL_SWAPS, skillCounts, type SkillPay, type SkillReplacement } from "./model";
+import {
+  GAME_DECK, SINNERS, SKILL_PAYMENTS, SKILL_SWAPS, skillPlan, type SkillPay, type SkillReplacement, type SkillSwapKey, type SkillTarget,
+} from "./model";
 import { useEditor } from "./ui";
 
 const move = <T,>(list: T[], from: number, to: number) => {
@@ -10,8 +13,10 @@ const move = <T,>(list: T[], from: number, to: number) => {
   next.splice(to, 0, ...next.splice(from, 1));
   return next;
 };
-/** A swap as the game words it: the skill it takes a card from and the one it gives. */
-const swapName = (k: string) => `SKILL ${SKILL_SWAPS[k].from} → ${SKILL_SWAPS[k].to}`;
+const swapName = (k: SkillSwapKey) => `S${SKILL_SWAPS[k].from}→S${SKILL_SWAPS[k].to}`;
+type Stepped = "s2" | "s3";
+/** Which way a stepper may move a card between S1 and `k` and keep the target reachable: S1 0..3, S2 0 and up, S3 1 and up. */
+const stepRoom = (t: SkillTarget, k: Stepped) => ({ dec: t[k] > (k === "s3" ? GAME_DECK.s3 : 0) && t.s1 < GAME_DECK.s1, inc: t.s1 > 0 });
 
 export function SkillPanel({ i }: { i: number }) {
   const { s, update, t, tv, bad } = useEditor();
@@ -19,81 +24,84 @@ export function SkillPanel({ i }: { i: number }) {
   const path = `teams/${i}/skill_replacement`;
   const edit = (fn: (draft: SkillReplacement) => void) => update((d) => fn(d.teams[i].skill_replacement));
   const search = sr.id_skill_search;
-  const changed = sr.sinners.filter((x) => !skillCounts(x.target).untouched).length;
+  const changed = sr.sinners.filter((x) => !skillPlan(x.target).untouched).length;
+  const rest = SINNERS.filter((n) => !sr.sinners.some((x) => x.sinner === n));
+  const dragItem = useDragSort((from, to) => edit((d) => { d.sinners = move(d.sinners, Number(from), Number(to)); }), () => true);
 
-  // Rows are dragged by their index, a swap by its key within its sinner's group: a swap cannot land on another sinner or a row.
-  const dragItem = useDragSort((from, to, group) => edit((d) => {
-    if (group === "sinners") d.sinners = move(d.sinners, Number(from), Number(to));
-    else {
-      const x = d.sinners[Number(group.slice("swaps:".length))];
-      const swap = (key: string) => key.slice(key.indexOf(":") + 1); // the key is "<sinner index>:<swap>": unique on the whole page
-      x.options = move(x.options, x.options.indexOf(swap(from)), x.options.indexOf(swap(to)));
-    }
-  }), () => true);
-
-  const seen = new Map<string, number>();
+  const seen = new Map<string, number>(); // a hand-edited file can list a sinner twice (validate names it): keys stay unique
   return (
     <details className="panel skill-panel">
       <summary className={bad(path) ? "bad" : ""}>{t("skill.title")}{changed ? ` (${changed})` : ""}</summary>
       <p className="muted">{t("skill.note")}</p>
+      <select className="skill-add" aria-label={t("skill.add")} value="" disabled={!rest.length}
+        onChange={(e) => { const sinner = e.target.value; edit((d) => { d.sinners.push({ sinner, target: { ...GAME_DECK }, s1_s3_first: true }); }); }}>
+        <option value="">{t("skill.add")}</option>
+        {rest.map((n) => <option key={n} value={n}>{n}</option>)}
+      </select>
+      {!sr.sinners.length && <p className="muted">{t("skill.empty")}</p>}
       <ol className="skill-sinners">
         {sr.sinners.map((x, j) => {
-          const { total, untouched } = skillCounts(x.target);
+          const plan = skillPlan(x.target), target = x.target, faulty = plan.faults.length > 0;
+          const needsTwo = plan.need.length > 1;
+          const otherSwap = plan.need.find((v) => v.key !== "s1_s3")?.key;
           const n = seen.get(x.sinner) ?? 0;
           seen.set(x.sinner, n + 1);
           const rowPath = `${path}/sinners/${j}`;
-          const missing = Object.keys(SKILL_SWAPS).filter((k) => !x.options.includes(k));
+          // a step moves one card between S1 and `k`, so the deck stays 6
+          const shift = (k: Stepped, d: 1 | -1) => edit((draft) => { const goal = draft.sinners[j].target; goal.s1 -= d; goal[k] += d; });
           return (
-            <li key={n ? `${x.sinner}#${n}` : x.sinner} data-sinner={x.sinner} className={bad(rowPath) || total !== 6 ? "bad" : ""}
+            <li key={n ? `${x.sinner}#${n}` : x.sinner} data-sinner={x.sinner} className={bad(rowPath) || faulty ? "faulty" : ""}
               {...dragItem(String(j), "sinners")}>
-              <div className="skill-head">
-                <span className="grip" aria-hidden>⋮⋮</span>
-                <b className="skill-rank">{j + 1}</b>
-                <span className="skill-name">{x.sinner}</span>
-                {(["s1", "s2", "s3"] as const).map((k) => (
-                  <label key={k} className={"skill-count" + (bad(`${rowPath}/target/${k}`) ? " bad" : "")}>
+              <span className="grip" aria-hidden>⋮⋮</span>
+              <b className="skill-rank">{j + 1}</b>
+              <span className="skill-name" title={x.sinner}>{x.sinner}</span>
+              <span className="skill-count">
+                <span>S1</span>
+                <span className="skill-box ro" aria-label={`${x.sinner} S1`} title={t("skill.s1_auto")}>{target.s1}</span>
+              </span>
+              {(["s2", "s3"] as const).map((k) => {
+                const name = `${x.sinner} ${k.toUpperCase()}`, ok = stepRoom(target, k);
+                return (
+                  <span key={k} className="skill-count">
                     <span>{k.toUpperCase()}</span>
-                    <input type="number" min={0} max={6} step={1} value={x.target[k]} aria-label={`${x.sinner} ${k.toUpperCase()}`}
-                      onChange={(e) => {
-                        const v = e.target.value === "" ? 0 : Math.trunc(Number(e.target.value));
-                        edit((d) => { d.sinners[j].target[k] = v; });
-                      }} />
-                  </label>
-                ))}
-                {total !== 6
-                  ? <span role="alert" className="skill-err">{fill(t("skill.total_bad"), { sinner: x.sinner, total })}</span>
-                  : untouched && <small className="muted">{t("skill.untouched")}</small>}
-                <span className="spacer" />
+                    <span className="skill-box skill-spin" role="group" aria-label={name}>
+                      <button type="button" aria-label={`${name} ${t("skill.dec")}`} disabled={faulty || !ok.dec} onClick={() => shift(k, -1)}>−</button>
+                      <span className="n">{target[k]}</span>
+                      <button type="button" aria-label={`${name} ${t("skill.inc")}`} disabled={faulty || !ok.inc} onClick={() => shift(k, 1)}>+</button>
+                    </span>
+                  </span>
+                );
+              })}
+              <span className="skill-pillcell">
+                {faulty
+                  ? <span role="alert" className="skill-pill err">
+                    {plan.faults.map((f) => fill(t(`skill.fault_${f}`), { total: target.s1 + target.s2 + target.s3 })).join(t("skill.sep"))}
+                  </span>
+                  : plan.untouched ? <span className="skill-pill off">{t("skill.unchanged")}</span>
+                  : <span className="skill-pill on">{plan.need.map((v) => `${swapName(v.key)} ×${v.n}`).join(t("skill.sep"))}</span>}
+              </span>
+              <select className="skill-first" aria-label={`${x.sinner} ${t("skill.order")}`} disabled={!needsTwo}
+                title={faulty ? undefined : needsTwo ? t("skill.order_two") : t("skill.order_one")}
+                value={needsTwo ? (x.s1_s3_first ? "s1_s3" : otherSwap) : ""}
+                onChange={(e) => edit((d) => { d.sinners[j].s1_s3_first = e.target.value === "s1_s3"; })}>
+                {needsTwo && otherSwap
+                  ? (["s1_s3", otherSwap] as const).map((k) => <option key={k} value={k}>{fill(t("skill.first"), { swap: swapName(k) })}</option>)
+                  : <option value="">—</option>}
+              </select>
+              <span className="skill-arrows">
                 <button type="button" className="icon" aria-label={`${t("up")} ${x.sinner}`} title={t("up")} disabled={j === 0}
                   onClick={() => edit((d) => { d.sinners = move(d.sinners, j, j - 1); })}>↑</button>
                 <button type="button" className="icon" aria-label={`${t("down")} ${x.sinner}`} title={t("down")} disabled={j === sr.sinners.length - 1}
                   onClick={() => edit((d) => { d.sinners = move(d.sinners, j, j + 1); })}>↓</button>
-              </div>
-              <ol className={"skill-swaps" + (bad(`${rowPath}/options`) ? " bad" : "")} aria-label={t("skill.swaps")}>
-                {x.options.map((k, o) => (
-                  <li key={k} data-swap={k} {...dragItem(`${j}:${k}`, `swaps:${j}`)}>
-                    <span className="grip" aria-hidden>⋮⋮</span>
-                    <span>{o + 1}. {swapName(k)}</span>
-                    <small className="muted">{fill(t("skill.shop_price"), { price: SKILL_SWAPS[k].shop })}</small>
-                    <button type="button" className="icon" aria-label={`${t("up")} ${swapName(k)}`} title={t("up")} disabled={o === 0}
-                      onClick={() => edit((d) => { d.sinners[j].options = move(d.sinners[j].options, o, o - 1); })}>↑</button>
-                    <button type="button" className="icon" aria-label={`${t("down")} ${swapName(k)}`} title={t("down")} disabled={o === x.options.length - 1}
-                      onClick={() => edit((d) => { d.sinners[j].options = move(d.sinners[j].options, o, o + 1); })}>↓</button>
-                    <button type="button" className="icon" aria-label={t("skill.remove_swap")} title={t("skill.remove_swap")} disabled={x.options.length === 1}
-                      onClick={() => edit((d) => { d.sinners[j].options.splice(o, 1); })}>×</button>
-                  </li>
-                ))}
-                {missing.map((k) => (
-                  <li key={k} className="skill-add">
-                    <button type="button" aria-label={`${t("skill.add_swap")} ${swapName(k)}`}
-                      onClick={() => edit((d) => { d.sinners[j].options.push(k); })}>+ {swapName(k)}</button>
-                  </li>
-                ))}
-              </ol>
+                <button type="button" className="icon" aria-label={`${t("skill.remove")} ${x.sinner}`} title={t("skill.remove")}
+                  onClick={() => edit((d) => { d.sinners.splice(j, 1); })}>✕</button>
+              </span>
             </li>
           );
         })}
       </ol>
+      <p className="muted skill-rest">{t("skill.rest")}{rest.join(t("skill.sep")) || t("skill.rest_none")}</p>
+      <p className="muted">{t("skill.uptie")}</p>
       <div className={"toggle" + (bad(`${path}/id_skill_search`) ? " bad" : "")}>
         <label className="check">
           <input type="checkbox" checked={search.enabled} onChange={(e) => edit((d) => { d.id_skill_search.enabled = e.target.checked; })} />
@@ -105,10 +113,6 @@ export function SkillPanel({ i }: { i: number }) {
         </select>
         <small>{t("skill.id_search_note")}</small>
         <small>{search.pay === "starlight" ? t("skill.pay_starlight_note") : t("skill.pay_cost_note")}</small>
-        <small data-testid="id-search-prices">
-          {t("skill.id_prices")} {Object.entries(SKILL_SWAPS).map(([k, v]) => `${swapName(k)} ${v.id_search[search.pay]}`).join("、")}{" "}
-          {t(search.pay === "starlight" ? "skill.starlight" : "skill.cost")}
-        </small>
       </div>
     </details>
   );

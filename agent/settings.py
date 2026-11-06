@@ -306,16 +306,12 @@ def _v17_to_v18(data):
 
 
 def _v18_to_v19(data):
-    """Version 19 adds teams[].skill_replacement (#454): every sinner at the game's 3/2/1 deck with all three swaps, ID Skill
-    Search off and paid in Cost; a deck at its target is left alone, so the shop plays as before."""
+    """Version 19 adds teams[].skill_replacement (#454): no sinner listed, so every deck stays the game's 3/2/1 and the shop
+    plays as before; ID Skill Search off and paid in Cost."""
     teams = data.get("teams")
     for team in teams if isinstance(teams, list) else []:
         if isinstance(team, dict):
-            team.setdefault("skill_replacement", {
-                "sinners": [{"sinner": s, "target": {"s1": 3, "s2": 2, "s3": 1}, "options": ["s1_s3", "s2_s3", "s1_s2"]}
-                            for s in SCHEMA["$defs"]["order"]["default"]],
-                "id_skill_search": {"enabled": False, "pay": "cost"},
-            })
+            team.setdefault("skill_replacement", {"sinners": [], "id_skill_search": {"enabled": False, "pay": "cost"}})
     return data
 
 
@@ -412,11 +408,15 @@ def cross_check(data):
     for i, t in enumerate(teams):
         sinners = t["skill_replacement"]["sinners"]
         dupes(f"teams/{i}/skill_replacement/sinners", [s["sinner"] for s in sinners], "sinner")
-        errors.extend(
-            f"teams/{i}/skill_replacement/sinners/{j}/target: team {t['name']!r} sinner {s['sinner']!r} "
-            f"targets {sum(s['target'].values())} skills, not 6"
-            for j, s in enumerate(sinners) if sum(s["target"].values()) != 6
-        )
+        for j, s in enumerate(sinners):
+            # the deck starts at the game's 3/2/1 and every swap moves a card up, so S1 above 3 or S3 below 1 is never reached
+            path, who, target = f"teams/{i}/skill_replacement/sinners/{j}/target", f"team {t['name']!r} sinner {s['sinner']!r}", s["target"]
+            if sum(target.values()) != 6:
+                errors.append(f"{path}: {who} targets {sum(target.values())} skills, not 6")
+            if target["s1"] > 3:
+                errors.append(f"{path}/s1: {who} targets {target['s1']} of skill 1, but swaps only lower it from the game's 3")
+            if target["s3"] < 1:
+                errors.append(f"{path}/s3: {who} targets {target['s3']} of skill 3, but swaps only raise it from the game's 1")
 
     for i, gift_list in enumerate(data["gift_lists"]):
         errors.extend(

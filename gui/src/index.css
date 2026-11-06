@@ -181,25 +181,42 @@ details.panel > * + * { margin-top: 12px; }
 .toggle small { color: var(--muted); font-size: 12px; }
 .rewards { max-width: 360px; }
 
-/* Skill replacement (#454): the 12 sinners in priority order, each with its S1/S2/S3 targets and its swaps. */
-/* not details.bad: `.bad input` would outline every field of the panel, not just the wrong row's */
+/* Skill replacement (#454), the layout the user adopted on 2026-11-06: one line per listed sinner, in priority order. */
+details.skill-panel > * + * { margin-top: 8px; }
+details.skill-panel > p { margin-bottom: 0; }
+/* not details.bad nor li.bad: `.bad input`, `.bad select` would outline every field of the panel or the row, not just the wrong row */
 details.skill-panel > summary.bad { color: var(--bad); }
-ol.skill-sinners, ol.skill-swaps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
-ol.skill-sinners > li { padding: 6px 8px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; cursor: grab; user-select: none; }
-ol.skill-sinners > li.bad { border-color: var(--bad); outline: 1px solid var(--bad); }
-ol.skill-sinners li[data-dragging] { opacity: 0.4; }
-ol.skill-sinners li[data-over] { background: var(--line); }
-.skill-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.skill-head .grip, ol.skill-swaps .grip { color: var(--muted); font-size: 11px; }
+.skill-add { align-self: flex-start; }
+ol.skill-sinners { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+ol.skill-sinners:empty { display: none; }
+ol.skill-sinners > li {
+  display: flex; align-items: center; gap: 6px; padding: 4px 8px; background: var(--panel); border: 1px solid var(--line);
+  border-radius: 6px; cursor: grab; user-select: none;
+}
+ol.skill-sinners > li.faulty { border-color: var(--bad); outline: 1px solid var(--bad); }
+ol.skill-sinners > li[data-dragging] { opacity: 0.4; }
+ol.skill-sinners > li[data-over] { background: var(--line); }
+ol.skill-sinners .grip { color: var(--muted); font-size: 11px; }
 .skill-rank { min-width: 1.5em; text-align: right; color: var(--muted); }
-.skill-name { min-width: 7em; font-weight: 600; }
-.skill-count { display: flex; align-items: center; gap: 4px; font-size: 12px; color: var(--muted); }
-.skill-count input { width: 3.5em; }
-.skill-err { color: var(--bad); font-size: 12px; }
-ol.skill-swaps { margin: 6px 0 0 34px; flex-direction: row; flex-wrap: wrap; gap: 4px 8px; align-items: center; }
-ol.skill-swaps > li { display: flex; align-items: center; gap: 6px; padding: 1px 4px 1px 8px; border: 1px solid var(--line); border-radius: 6px; cursor: grab; }
-ol.skill-swaps > li.skill-add { border: 0; padding: 0; cursor: default; }
-ol.skill-swaps.bad > li { border-color: var(--bad); }
+.skill-name { flex: 0 1 6.5em; min-width: 3em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.skill-count { display: flex; align-items: center; gap: 3px; font-size: 12px; color: var(--muted); }
+/* S1 is worked out, S2 and S3 are − n + in one box each: no free number field */
+.skill-box { display: inline-flex; align-items: stretch; width: 64px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); font-size: 14px; color: var(--fg); }
+.skill-box.ro { justify-content: center; padding: 4px 0; background: var(--bg); color: var(--muted); cursor: default; }
+.skill-spin button { flex: 1; min-width: 0; padding: 4px 0; border: none; border-radius: 0; background: none; font-weight: 600; }
+.skill-spin button:first-child { border-radius: 5px 0 0 5px; }
+.skill-spin button:last-child { border-radius: 0 5px 5px 0; }
+.skill-spin button:hover:not(:disabled) { background: color-mix(in srgb, var(--accent) 12%, var(--panel)); color: var(--accent); }
+.skill-spin button:focus-visible { outline-offset: -2px; }
+.skill-spin .n { width: 22px; flex: none; padding: 4px 0; text-align: center; border-left: 1px solid var(--line); border-right: 1px solid var(--line); }
+.skill-pillcell { width: 11em; flex: none; }
+.skill-pill { display: inline-block; padding: 1px 10px; border-radius: 999px; font-size: 12px; white-space: nowrap; border: 1px solid var(--line); }
+.skill-pill.off { color: var(--muted); border-color: var(--muted); background: transparent; }
+.skill-pill.on { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+.skill-pill.err { background: var(--bad); border-color: var(--bad); color: #fff; white-space: normal; }
+.skill-first { width: 8.5em; flex: none; }
+.skill-arrows { display: inline-flex; margin-left: auto; }
+.skill-arrows button:hover:not(:disabled) { color: var(--accent); }
 
 /* E.G.O Gift Search, drawn after the game's page: keyword tabs, a band per tier, text cards; a picked one glows gold. */
 .gift-search { display: flex; flex-direction: column; gap: 10px; padding: 12px; border-radius: 8px; background: #0d1424; color: #e6ebf5; }

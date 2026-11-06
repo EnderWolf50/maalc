@@ -3,7 +3,7 @@ import { describe, expect, test } from "vitest";
 import cases from "../../tests/settings_cases.json";
 import themePacksYaml from "../../assets/resource/base/data/theme_packs.yaml?raw";
 import {
-  SINNERS, SKILL_SWAPS, cleanGiftList, defaultGorder, newSettings, newTeam, parseSettings, parseThemePacks, schema, skillCounts, type GiftList,
+  SKILL_SWAPS, cleanGiftList, defaultGorder, newSettings, newTeam, parseSettings, parseThemePacks, schema, skillPlan, type GiftList,
 } from "./model";
 import { pyRepr, validate } from "./validate";
 
@@ -199,19 +199,19 @@ test("version 16 drops each team's trial risk weight, with nothing to count (the
   expect(newTeam(1, "隊伍 1")).not.toHaveProperty("trial_risk_weight");
 });
 
-/** A team's skill replacement as a new team has it: every sinner at 3/2/1 with all three swaps, ID Skill Search off, paid in Cost. */
+/** A team's skill replacement as a new team has it: no sinner listed, so every deck stays 3/2/1; ID Skill Search off, paid in Cost. */
 const DEFAULT_SKILLS = cases.skill_replacement_default;
 
-test("version 18 teams replace no skill: every sinner aims for the 3/2/1 deck, each team with a copy of its own (#454)", () => {
+test("version 18 teams list no sinner to replace, each team with a copy of its own (#454, the user, 2026-11-06)", () => {
   const old = structuredClone(cases.valid) as unknown as { version: number; teams: Record<string, unknown>[] };
   old.version = 18;
   for (const t of old.teams) delete t.skill_replacement;
   const { data, migrated } = parseSettings(JSON.stringify(old));
   expect(migrated).toBe(true);
+  expect(DEFAULT_SKILLS).toEqual({ sinners: [], id_skill_search: { enabled: false, pay: "cost" } });
   expect(data.teams.map((t) => t.skill_replacement)).toEqual([DEFAULT_SKILLS, DEFAULT_SKILLS]);
   expect(validate(data)).toEqual([]);
-  data.teams[0].skill_replacement.sinners[0].target.s1 = 0;
-  expect(data.teams[1].skill_replacement.sinners[0].target.s1).toBe(3);
+  expect(data.teams[0].skill_replacement.sinners).not.toBe(data.teams[1].skill_replacement.sinners);
 });
 
 test("version 18 keeps a skill replacement the file already has, and older files come to the default", () => {
@@ -223,19 +223,46 @@ test("version 18 keeps a skill replacement the file already has, and older files
   expect(validate(v10)).toEqual([]);
 });
 
-test("a new team replaces no skill (#454), and the setting is data/shop.yaml's three swaps in the schema's order", () => {
+test("a new team lists no sinner to replace (#454), and the swaps are data/shop.yaml's three", () => {
   expect(newTeam(1, "隊伍 1").skill_replacement).toEqual(DEFAULT_SKILLS);
-  expect(DEFAULT_SKILLS.sinners.map((x) => x.sinner)).toEqual(SINNERS);
   expect(newTeam(1, "a").skill_replacement.sinners).not.toBe(newTeam(2, "b").skill_replacement.sinners);
-  expect(Object.keys(SKILL_SWAPS)).toEqual(schema.$defs.skill_sinner.properties.options.items.enum);
+  expect(schema.$defs.skill_sinner.properties.s1_s3_first.default).toBe(true);
   expect(SKILL_SWAPS).toEqual({
     s1_s3: { from: 1, to: 3, shop: 120, id_search: { cost: 240, starlight: 75 } },
     s2_s3: { from: 2, to: 3, shop: 75, id_search: { cost: 150, starlight: 50 } },
     s1_s2: { from: 1, to: 2, shop: 45, id_search: { cost: 90, starlight: 25 } },
   });
-  expect(skillCounts({ s1: 3, s2: 2, s3: 1 })).toEqual({ total: 6, untouched: true });
-  expect(skillCounts({ s1: 3, s2: 3, s3: 1 })).toEqual({ total: 7, untouched: false });
-  expect(skillCounts({ s1: 2, s2: 2, s3: 2 })).toEqual({ total: 6, untouched: false });
+});
+
+describe("a skill target (#264's rule: a swap a→b counts only while skill a is above its target and skill b below it)", () => {
+  const t = (s1: number, s2: number, s3: number) => ({ s1, s2, s3 });
+  test("3/2/1 is the game's deck: nothing to do", () => {
+    expect(skillPlan(t(3, 2, 1))).toEqual({ untouched: true, faults: [], need: [] });
+  });
+  test.each([
+    [t(2, 2, 2), [{ key: "s1_s3", n: 1 }]],
+    [t(2, 3, 1), [{ key: "s1_s2", n: 1 }]],
+    [t(3, 0, 3), [{ key: "s2_s3", n: 2 }]],
+    // S2 above 2: S1→S2 for S2, S1→S3 for S3
+    [t(1, 3, 2), [{ key: "s1_s2", n: 1 }, { key: "s1_s3", n: 1 }]],
+    [t(0, 5, 1), [{ key: "s1_s2", n: 3 }]],
+    // S2 at 2 or below: S2→S3 for S2, S1→S3 for S1
+    [t(2, 1, 3), [{ key: "s2_s3", n: 1 }, { key: "s1_s3", n: 1 }]],
+    [t(0, 0, 6), [{ key: "s2_s3", n: 2 }, { key: "s1_s3", n: 3 }]],
+  ])("%o needs %o", (target, need) => {
+    expect(skillPlan(target)).toEqual({ untouched: false, faults: [], need });
+  });
+  test.each([
+    [t(3, 2, 2), ["total"]],
+    [t(4, 1, 1), ["s1"]],
+    [t(3, 3, 0), ["s3"]],
+    [t(5, 2, 0), ["total", "s1", "s3"]],
+    // the schema rejects these; a hand-edited file still opens in the editor with them
+    [t(3, -1, 4), ["range"]],
+    [t(2.5, 2, 1.5), ["range"]],
+  ])("%o cannot be reached: %o, and needs no swap", (target, faults) => {
+    expect(skillPlan(target)).toEqual({ untouched: false, faults, need: [] });
+  });
 });
 
 test("version 17 runs both Luxcavations in daily mode and keeps their counts (#431, the user, 2026-11-05)", () => {
