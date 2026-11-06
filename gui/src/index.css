@@ -182,10 +182,9 @@ details.panel > * + * { margin-top: 12px; }
 .rewards { max-width: 360px; }
 
 /* Skill replacement (#454), the layout the user adopted on 2026-11-06: one line per listed sinner, in priority order. */
-details.skill-panel { gap: 8px; }
-details.skill-panel > * + * { margin-top: 0; }
-details.skill-panel > p { margin: 0; }
-/* not details.bad: `.bad input` would outline every field of the panel, not just the wrong row's */
+details.skill-panel > * + * { margin-top: 8px; }
+details.skill-panel > p { margin-bottom: 0; }
+/* not details.bad nor li.bad: `.bad input`, `.bad select` would outline every field of the panel or the row, not just the wrong row */
 details.skill-panel > summary.bad { color: var(--bad); }
 .skill-add { align-self: flex-start; }
 ol.skill-sinners { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
@@ -194,7 +193,7 @@ ol.skill-sinners > li {
   display: flex; align-items: center; gap: 6px; padding: 4px 8px; background: var(--panel); border: 1px solid var(--line);
   border-radius: 6px; cursor: grab; user-select: none;
 }
-ol.skill-sinners > li.bad { border-color: var(--bad); outline: 1px solid var(--bad); }
+ol.skill-sinners > li.faulty { border-color: var(--bad); outline: 1px solid var(--bad); }
 ol.skill-sinners > li[data-dragging] { opacity: 0.4; }
 ol.skill-sinners > li[data-over] { background: var(--line); }
 ol.skill-sinners .grip { color: var(--muted); font-size: 11px; }

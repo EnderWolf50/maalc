@@ -207,8 +207,10 @@ describe("a target a hand-edited file made unreachable", () => {
   test("outlines its row with what is wrong, and leaves every stepper and the order select off", async () => {
     const r = renderEditor(<TeamsTab />, settings([entry("Yi Sang", 4, 1, 1), entry("Faust", 2, 2, 2)]));
     await expand(r);
-    expect(row("Yi Sang")).toHaveClass("bad");
-    expect(row("Faust")).not.toHaveClass("bad");
+    // not the editor's generic "bad", whose `.bad select` rule would outline the row's disabled order select too
+    expect(row("Yi Sang")).toHaveClass("faulty");
+    expect(row("Yi Sang")).not.toHaveClass("bad");
+    expect(row("Faust")).not.toHaveClass("faulty");
     expect(within(row("Yi Sang")).getByRole("alert")).toHaveTextContent(zh["skill.fault_s1"]);
     expect(within(panel()).getAllByRole("alert")).toHaveLength(1);
     expect(s1("Yi Sang")).toHaveTextContent("4");
