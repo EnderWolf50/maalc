@@ -1275,6 +1275,23 @@ def test_a_material_that_does_not_show_in_the_fusion_closes_the_page(context, mo
     assert visit["fuse_scanned"]
 
 
+def test_a_recovery_reads_the_fuse_page_again_on_the_same_visit(context, monkeypatch):
+    # #459, live: the game froze on the fuse page, a material's tap was lost and the scan made none. The recovery restarted
+    # the game into the same shop, whose visit kept fuse_scanned: the page was not opened again that floor.
+    paid = {"healed": True, "refreshes": {"keyword": 1, "normal": 0}}
+    visit = actions.RUN.setdefault("shop", {**paid, "wanted": None, "sold": False})
+    reads(context, FUSE_PAGE)
+    fuse_slots(context, monkeypatch, ignored=[actions.FUSE_CELLS[1]])
+    cells_read(monkeypatch, *with_ids([("Bleed",), ("Tremor",), ("Pierce",)]))
+    actions.Shop.fuse(context, shop_team({}), visit)
+    assert visit["fuse_scanned"]
+    actions.forget_game_state()  # the recovery that brought the game back
+    actions.Shop.fuse(context, shop_team({}), visit)
+    taps = [c.args for c in context.tasker.controller.post_click.call_args_list]
+    assert taps.count(actions.SHOP_BUTTONS["fuse"]) == 2  # opened again
+    assert {k: visit[k] for k in paid} == paid  # what the visit paid for is not paid again
+
+
 def test_a_fusion_is_not_confirmed_when_the_dialog_counts_other_materials(context, monkeypatch):
     fused, _, ok = fusion_taps(context, monkeypatch, {}, *[("Bleed",)] * 3, confirm=2)
     assert ok and not fused
