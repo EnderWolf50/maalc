@@ -520,8 +520,8 @@ def test_id_skill_search_switches_to_starlight_and_checks_the_slot_and_the_cost(
                          actions.REPLACE_CONFIRM, actions.REPLACE_CONFIRM]
     assert "shop: ID Skill Search: 'Ryōshū': Skills Owned 2/3/1, s1_s2 25, s2_s3 50, s1_s3 75, 3433 starlight "\
            "(no reserve): try s1_s3" in lines
-    assert lines[-1] == ("shop: ID Skill Search: replaced 'Ryōshū' s1_s3 (skill 1 -> 3) for 75 starlight: the slot reads "
-                         "Purchased, the Cost stays 868")
+    assert lines[-1] == ("shop: ID Skill Search: replaced 'Ryōshū' s1_s3 (skill 1 -> 3) for 75 starlight: 3433 -> 3358 starlight "
+                         "(unread after the dialog), the slot reads Purchased, the Cost stays 868")
     assert (game.starlight, game.cost) == (3358, 868) and actions.RUN["skills"] == {"Ryōshū": [1, 3, 2]}
 
 
@@ -566,6 +566,17 @@ def test_a_payment_that_does_not_switch_is_cancelled(context, monkeypatch):
     assert game.taps == [ID_SLOT, portrait("Ryōshū"), actions.PAY_SWITCH, actions.REPLACE_CANCEL] and game.cost == 868
     assert ("shop: ID Skill Search: 'Ryōshū': prices s1_s2 90, s2_s3 150, s1_s3 240: the payment does not show starlight: "
             "cancel") in lines
+
+
+def test_a_dialog_whose_prices_do_not_read_is_cancelled_without_a_switch(context, monkeypatch):
+    # #264: a swap is feasible only with its price read. With none read the payment is unknown: the double arrow would flip a
+    # dialog already on the wanted payment, so nothing is tapped but Cancel.
+    game, lines = IdGame(context, monkeypatch, {"Ryōshū": (2, 3, 1)}), logged(monkeypatch)
+    shown = game.shown
+    game.shown = lambda: {k: v for k, v in shown().items() if list(k) not in actions.REPLACE_PRICES.values()}
+    assert actions.Shop.id_skill_search(context, searching(RYOSHU), {}) == 0
+    assert game.taps == [ID_SLOT, portrait("Ryōshū"), actions.REPLACE_CANCEL] and game.mode == "cost"
+    assert "shop: ID Skill Search: 'Ryōshū': prices s1_s2 None, s2_s3 None, s1_s3 None: the payment is unknown: cancel" in lines
 
 
 def test_a_dialog_already_in_starlight_is_switched_back_for_cost(context, monkeypatch):
@@ -723,6 +734,24 @@ def test_the_dead_are_the_grey_portraits_of_the_shops_main_page(name, alive):
     # Skill Search read. A dead portrait reads up to 51, over the old 30.
     image = capture(name)
     assert [s for s in actions.battle.SINNERS if s not in actions.bar_dead(image)] == alive
+
+
+def test_the_grey_portrait_sweep_over_the_shop_captures():
+    # CODING_STANDARDS' sweep: bar_dead over all 32 shop captures of tests/screens. On the 12 main pages (the test above) it
+    # reads the dead right. Over a dialog the bar is shaded and it names Faust alone (62-64; on the HARD ones nine are dead):
+    # wrong both ways, and neither the heal nor ID Skill Search reads the bar there. The fuse and purchase pages name nobody.
+    # Off the shop (128 of the other 189 1280x720 screens name someone) there is no bar at that place, and it is never asked.
+    main = {"Shop", "ShopHeal", "SuperShop", "ShopReplaceSkillCancelled", "ShopReplaceSkillDone", "ShopReplaceSkillRefreshed",
+            "ShopReplaceSkillClippedGregor", "ShopReplaceSkillClippedMeursault", "SuperShopIdSkillSearch", "SuperShopScrolled",
+            "ShopIdSkillSearchDone", "ShopIdSkillSearchSelect"}
+    shop_screens = {stem: image for stem, image in screens_1280() if stem.startswith(("Shop", "SuperShop"))}
+    assert len(shop_screens) == 32 and main <= set(shop_screens)
+    off_main = {stem: sorted(actions.bar_dead(image)) for stem, image in shop_screens.items() if stem not in main}
+    assert {stem: dead for stem, dead in off_main.items() if dead} == {
+        stem: ["Faust"] for stem in ("ShopIdSkillSearchAll", "ShopIdSkillSearchConfirm", "ShopIdSkillSearchConnecting",
+                                     "ShopIdSkillSearchDialog", "ShopIdSkillSearchPicked", "ShopIdSkillSearchStarlight",
+                                     "ShopReplaceSkillConfirm", "ShopReplaceSkillConnecting", "ShopReplaceSkillDimmed",
+                                     "ShopReplaceSkillPickedLeft")}
 
 
 def screens_1280():

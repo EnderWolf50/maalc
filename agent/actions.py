@@ -3799,7 +3799,7 @@ REPLACE_MARK = ("Skills Owned", "SKILL1x", "SKILL2x")
 REPLACE_SETTLE = 4  # s the final Confirm waits for the main page's new Cost: CONNECTING ~0.3 s, the page ~0.6 s later (#453)
 # ID Skill Search (#456; spec 02 「ID Skill Search」), measured on tests/screens/ShopIdSkillSearch*.png. Its slot opens the
 # select mode; a portrait there opens the Replace dialog above, at its own prices; its Return is BOTTOM_RIGHT.
-SELECT_TITLE = [430, 15, 420, 35]  # select mode: "Select a Sinner for Skill Replacement." over the dimmed shop
+SELECT_TITLE = [430, 15, 420, 35]  # select mode: "Select a Sinner for Skill Replacement." (also the Shop node's ShopSelectSinner)
 PAY_SWITCH = (957, 140)  # the dialog's double arrow left of its Cost: Cost <-> the owned starlight (the Cost box shows it)
 
 
@@ -4695,7 +4695,13 @@ class Shop(CustomAction):
         if read["owned"] is not None:
             note_skills(sinner, read["owned"])  # the counts are real whatever follows
         # Never assumed to carry over (#456 decision 3): the prices tell the payment; a switch must show the other prices.
-        if shop.pay_mode(read["prices"], swaps) != pay:
+        # With no price read the payment is unknown, and a switch could flip the wanted one away: cancel.
+        mode = shop.pay_mode(read["prices"], swaps)
+        if mode is None:
+            log(f"{head}{sinner!r}: prices {Shop.price_line(read)}: the payment is unknown: cancel")
+            Shop.cancel_replace(context)
+            return "handled"
+        if mode != pay:
             page_guard(context, "Shop")
             switched = tap_shown(context, *PAY_SWITCH, lambda im: shop.pay_mode(Shop.dialog_prices(context, im), swaps) == pay,
                                  timeout=1.5, rest=1.0)
@@ -4705,7 +4711,7 @@ class Shop(CustomAction):
                 return "handled"
             read = Shop.read_replace_dialog(context, switched)
         owned, funds = read["owned"], read["cost"]
-        unit, cut, budget = ("Cost", reserve, f", reserve {reserve}") if pay == "cost" else ("starlight", 0, " (no reserve)")
+        unit, budget = ("Cost", f", reserve {reserve}") if pay == "cost" else ("starlight", " (no reserve)")
         wanted = [] if owned is None else shop.swaps_wanted(entry["target"], owned, entry["s1_s3_first"], swaps)
         log(f"{head}{sinner!r}: Skills Owned {'unread' if owned is None else shop.counts_line(owned)}, {Shop.price_line(read)}, "
             f"{'unread' if funds is None else funds} {unit}{budget}: try {', '.join(wanted) or 'nothing'}")
@@ -4717,7 +4723,7 @@ class Shop(CustomAction):
             log(f"{head}the {unit} reads nothing: cancel")
             Shop.cancel_replace(context)
             return "handled"
-        choice = shop.id_search_choice(entry, owned, read["lit"], read["prices"], funds, pay, cut, swaps)
+        choice = shop.id_search_choice(entry, owned, read["lit"], read["prices"], funds, pay, reserve, swaps)
         if choice is None:
             log(f"{head}{sinner!r}: no swap toward {shop.counts_line(entry['target'])} is lit, priced and affordable in {unit}: cancel")
             Shop.cancel_replace(context)
@@ -4738,8 +4744,8 @@ class Shop(CustomAction):
             note_skills(sinner, None)
             return "handled"
         sw = swaps[swap]
-        log(f"{head}replaced {sinner!r} {swap} (skill {sw['from']} -> {sw['to']}) for {price} starlight: the slot reads Purchased, "
-            f"the Cost stays {after}")
+        log(f"{head}replaced {sinner!r} {swap} (skill {sw['from']} -> {sw['to']}) for {price} starlight: {funds} -> {funds - price} "
+            f"starlight (unread after the dialog), the slot reads Purchased, the Cost stays {after}")
         note_skills(sinner, shop.after_swap(owned, swap, swaps))
         return "replaced"
 
