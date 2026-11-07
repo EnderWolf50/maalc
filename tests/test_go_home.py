@@ -145,7 +145,10 @@ def child():
             actions.STUCK["l3"] = actions.recovery.L3_PER_EXECUTION - 1
             game.start_app = lambda intent, game=game: (setattr(game, "focus", GAME), setattr(game, "screen", "entry"), True)[-1]
         began = time.monotonic()
-        out[scenario] = {**result(tasker.post_task("GoHome", override).wait().get(), game, actions), "starts": game.starts,
+        job = tasker.post_task("GoHome", override).wait()
+        while not (detail := job.get()).status.done:  # #461: post_stop's queue clear ends wait() before the task does
+            time.sleep(0.01)
+        out[scenario] = {**result(detail, game, actions), "starts": game.starts,
                          "seconds": time.monotonic() - began,
                          "stops": game.stops, "l3": actions.STUCK["l3"],
                          "stopped": len(list(actions.ROOT.joinpath("logs").rglob("agent.log"))) - stops,
