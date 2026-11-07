@@ -208,6 +208,7 @@ const screens: [image: string, hits: string[]][] = [
   ['LuxBattleEgoCard.png', ['EgoCard']],
   ['BattleEgoCard.png', ['EgoCard']],
   ['LuxBattleEgoCards.png', ['EgoCard']],
+  ['BattleEgoCardsTwo.png', ['EgoCard']],  // live 2026-11-07 (#469): a sinner with two E.G.O, two cards side by side
   ['Victory.png', ['Victory']],
   // AssembleBefore reads its "1/12": it is read only in the Enkephalin window (AssemblePanel).
   ['WipeDialog.png', ['WipeDialog', 'AssembleBefore']],
