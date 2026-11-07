@@ -4,6 +4,8 @@ files as CI's agent job does; the step fails when any shard fails, and its outpu
 import types
 from pathlib import Path
 
+import pytest
+
 # A check.py that runs at import (before #484) would start the whole check from inside pytest, which collects this file
 # again and recurses without end; fail at collection instead.
 assert 'if __name__ == "__main__":' in (Path(__file__).parents[1] / "tools" / "check.py").read_text(encoding="utf-8")
@@ -15,18 +17,24 @@ PYTEST = ["uv", "run", "pytest", "-q"]
 
 class Popen:
     """subprocess.Popen as check.run_step calls it: each process writes one line naming its shard to the stdout it is
-    given and ends with codes[shard]. events lists the starts and waits in order."""
+    given and ends with codes[shard]; the start of shard `fails` raises. events lists the starts and waits in order."""
 
-    def __init__(self, codes):
-        self.codes, self.envs, self.events = codes, [], []
+    def __init__(self, codes, fails=None):
+        self.codes, self.fails, self.envs, self.events, self.started = codes, fails, [], [], []
 
     def __call__(self, cmd, stdout, stderr, env=None):
         shard = int(env["SHARD"]) if env and "SHARD" in env else 0
+        if shard == self.fails:
+            raise FileNotFoundError(cmd[0])
         self.envs.append(env)
         self.events.append(("start", shard))
         stdout.write(f"output of shard {shard}\n")
         stdout.flush()
-        return types.SimpleNamespace(wait=lambda: self.events.append(("wait", shard)) or self.codes[shard])
+        process = types.SimpleNamespace(shard=shard, done=False)
+        process.wait = lambda: self.events.append(("wait", shard)) or setattr(process, "done", True) or self.codes[shard]
+        process.poll = lambda: self.codes[shard] if process.done else None
+        self.started.append(process)
+        return process
 
 
 def test_pytest_runs_as_four_shards_at_once():
@@ -51,5 +59,21 @@ def test_another_step_runs_once_without_a_shard():
     assert popen.envs == [None]
 
 
-def test_the_shards_are_cis_agent_shards():
-    assert check.SHARDS == 4 or check.SHARDS == check.os.cpu_count()
+def test_a_shard_that_cannot_start_ends_the_ones_already_running():
+    popen, stopped = Popen([0, 0, 0, 0], fails=2), []
+    with pytest.raises(FileNotFoundError):
+        check.run_step(PYTEST, 4, popen, stop=stopped.append)
+    assert [p.shard for p in stopped] == [0, 1]
+
+
+def test_only_pytest_runs_as_shards_and_every_line_has_its_seconds(capsys):
+    calls = []
+    assert check.main(run=lambda cmd, shards: calls.append((cmd[2], shards)) or (0, "")) == 0
+    assert calls == [("ruff", 1), ("pytest", check.SHARDS), ("maa-tools", 1), ("maa-tools", 1)]
+    lines = capsys.readouterr().out.splitlines()
+    assert len(lines) == 4 and all(line.startswith("== ") and line.endswith(" s") and ": exit 0, " in line for line in lines)
+
+
+@pytest.mark.parametrize(("cores", "shards"), [(32, 4), (16, 4), (8, 2), (4, 1), (2, 1), (1, 1)])
+def test_one_shard_per_four_cores_as_on_ci(cores, shards):
+    assert check.pytest_shards(cores) == shards
