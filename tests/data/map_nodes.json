@@ -1,0 +1,22 @@
+{
+  "MapBoss.png": {"difficulty": "hard", "nodes": [[215, 72, "battle"], [215, 498, 150], [725, 285, 375]]},
+  "MapBossCost500.png": {"difficulty": "hard", "nodes": [[328, 357, "shop"], [583, 357, 500]]},
+  "MapBossDarkAfterShop.png": {"difficulty": "normal", "nodes": [[73, 144, "event"], [73, 570, "event"], [328, 144, "event"], [328, 570, "event"], [583, 357, 120], [837, 357, "shop"], [1092, 357, 400]]},
+  "MapCards.png": {"difficulty": "hard", "nodes": [[725, 72, "event"], [725, 285, 85], [725, 498, 180], [980, 72, "risky"], [980, 285, 120]]},
+  "MapCostFloor3.png": {"difficulty": "normal", "nodes": [[329, 144, 75], [329, 357, "event"], [329, 570, "event"], [584, 144, 75], [584, 357, 100], [584, 570, "event"], [839, 357, 75], [839, 570, 120], [1094, 144, 75], [1094, 357, 75], [1094, 570, 100]]},
+  "MapCostFloor4.png": {"difficulty": "normal", "nodes": [[328, 144, 75], [328, 357, 75], [328, 570, 150], [583, 144, "event"], [583, 357, 120], [838, 144, 100], [838, 357, "event"], [1093, 357, 75], [1093, 570, 100]]},
+  "MapCostHard85.png": {"difficulty": "hard", "nodes": [[329, 144, "event"], [329, 357, "event"], [329, 570, 85], [584, 357, "event"], [584, 570, 85]]},
+  "MapEvent.png": {"difficulty": "normal", "nodes": [[725, 72, "battle"], [725, 285, "event"], [725, 498, 75], [980, 285, 75], [980, 498, 75], [1235, 498, "event"]]},
+  "MapFloor4.png": {"difficulty": "normal", "nodes": [[327, 144, "event"], [327, 357, 100], [327, 570, 100], [582, 357, 75], [582, 570, "event"], [837, 144, 75], [837, 357, 120], [837, 570, 150], [1092, 144, 75], [1092, 570, "event"]]},
+  "MapFloor4Panned.png": {"difficulty": "normal", "nodes": [[73, 570, "event"], [328, 144, 75], [328, 357, 120], [328, 570, 150], [583, 144, 75], [583, 570, "event"], [838, 357, "shop"], [1093, 357, 400]]},
+  "MapFocused.png": {"difficulty": null, "nodes": [[215, 72, "event"], [215, 285, "event"], [470, 72, "battle"], [725, 285, 150]]},
+  "MapHardF5Warn.png": {"difficulty": "hard", "nodes": [[328, 144, "event"], [328, 357, "event"], [328, 570, 120], [583, 357, 150], [583, 570, 180]]},
+  "MapHardRest.synthetic.png": {"difficulty": "hard", "nodes": [[723, 72, "battle"], [723, 285, 180], [723, 498, 120], [978, 72, "battle"], [978, 285, "event"]]},
+  "MapHardTwoColsMidDown.png": {"difficulty": "hard", "nodes": [[328, 144, "event"], [328, 357, 85], [328, 570, 180], [583, 357, "event"], [583, 570, "event"]]},
+  "MapHardTwoColsUp.png": {"difficulty": "hard", "nodes": [[327, 144, 85], [327, 357, 180], [327, 570, 120], [582, 144, 85], [582, 357, "event"]]},
+  "MapHardTwoColsUpOnly.png": {"difficulty": "hard", "nodes": [[73, 144, 120], [328, 144, 85], [328, 357, "event"], [583, 144, "event"]]},
+  "MapPanned.png": {"difficulty": "normal", "nodes": [[725, 106, 100], [725, 319, 120], [725, 532, "event"], [980, 106, "event"], [980, 532, 100], [1235, 106, 150], [1235, 532, 75]]},
+  "MapRock.png": {"difficulty": null, "nodes": [[725, 72, "battle"], [725, 285, 150], [725, 498, "event"], [980, 72, "battle"], [980, 498, "event"]]},
+  "MapShop.png": {"difficulty": "hard", "nodes": [[215, 285, "event"], [215, 498, 85], [470, 498, 85], [725, 498, "shop"], [980, 498, 250]]},
+  "MirrorMap.png": {"difficulty": "hard", "nodes": [[725, 72, "event"], [725, 285, "event"], [725, 498, 85], [980, 285, 85], [980, 498, 85]]}
+}
