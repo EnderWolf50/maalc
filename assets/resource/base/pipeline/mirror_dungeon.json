@@ -555,9 +555,11 @@
     // bar's Resistances stay put (two sinners, two colours, the same place). A sinner with more E.G.O shows a card each in
     // a row: three with the middle one where a single card sits (LuxBattleEgoCards.png), two side by side with none there
     // (BattleEgoCardsTwo.png, Details 0.96 at x 518): the Details roi spans the row. The back key leaves it up; a tap
-    // anywhere off the card closes it within 0.1 s (live: the dimmed field, the bar, the dim above the card), and (1, 1)
-    // closed it 9 times of 9, one card and two (#469). The tap goes there, hold_turn's HOLD_SPOT, which no battle screen
-    // has a button on. Before BattleTurn and BattlePause: it hides the HUD they look for.
+    // anywhere off the card closes it (#468: the dimmed field, the bar, the dim above the card, within 0.1 s). A tap at
+    // (1, 1) closed it within 0.35 s each of the 9 times a screenshot followed (one card 5, two cards 4; the bot frozen
+    // mid-hold, its own finger maybe down there), and with the bot running it closed one card and two, the screen
+    // changed 0.3 s after the tap (#469). The tap goes there, hold_turn's HOLD_SPOT, which no battle screen has a
+    // button on. Before BattleTurn and BattlePause: it hides the HUD they look for.
     "EgoCard": {
         "recognition": "And",
         "all_of": [

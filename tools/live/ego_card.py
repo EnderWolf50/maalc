@@ -6,10 +6,11 @@
 **open** waits for a planning phase (BattleTurn's templates), long-presses the portrait under skill slot N (0 the
 leftmost; the slots counted from the Win Rate label, as battle.slot_xs does) for --hold seconds, then logs when the
 card shows (with how many cards its row holds) and when it goes, each line with its wall time, and saves both frames to
---out. A press that brings no card
-in 3 s is tried again at the next planning phase. Exit 0 when a card opened and closed, 1 when one stayed up 30 s, 2
-when --attempts presses opened none or --timeout passed. A live test owns the emulator first (the maalc-live-test
-skill); the press races the bot, which acts on the planning phase too.
+--out. The press blocks until the finger lifts, so "shown" is the first look after the lift: a card that came up
+during the press stayed longer than the logged time. A press that brings no card in 3 s is tried again 3 s later, at
+the planning phase then up. Exit 0 when a card opened and closed, 1 when one stayed up 30 s, 2 when --attempts presses
+opened none or --timeout passed. A live test owns the emulator first (the maalc-live-test skill); the press races the
+bot, which acts on the planning phase too.
 
 **score** prints each EgoCard part's score (grey TM_CCOEFF_NORMED in its roi, as tests/test_ego_card.py scores them)
 and where it matched, on each image.
@@ -19,7 +20,6 @@ The card and the planning phase are read with the pipeline's own nodes, EgoCard 
 from __future__ import annotations
 
 import argparse
-import datetime
 import json
 import sys
 import time
@@ -85,7 +85,10 @@ def card_up(image) -> bool:
 
 
 CARD_BAND = (0, 100, 1280, 100)  # the row of cards' Details buttons, the whole width
-CARD_PEAK = 0.85  # a Details button in the row: the side cards of three score 0.87, the cards of two 0.96 and 0.93
+# A Details button in the row, on the four captures of the card (one each of one card blue and green, two, three): the
+# side cards of three score 0.87, the cards of two 0.96 and 0.93, a single card 1.00. cards() runs only on a frame
+# card_up() already took for the card, so another screen's score does not count.
+CARD_PEAK = 0.85
 CARD_GAP = 100  # px between two cards' Details at least (277 apart in a row of three, 317 in a row of two)
 
 
@@ -153,10 +156,6 @@ def open_card(grab, press, say, slot: int, hold: float, attempts: int, timeout: 
     return 2
 
 
-def stamp() -> str:
-    return f"{datetime.datetime.now():%H:%M:%S.%f}"[:-3]
-
-
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--port", type=int, default=16384)
@@ -177,13 +176,13 @@ def main(argv=None) -> int:
             hit = all(s >= threshold for (s, _, _), (_, _, threshold) in zip(scores, parts("EgoCard")))
             print(f"{Path(f).name}: " + ", ".join(f"{s:.3f} at ({x}, {y})" for s, x, y in scores) + (" hit" if hit else " miss"))
         return 0
-    from live.device import connect, press
+    from live.device import connect, press, stamp
 
     ctl = connect(a.port)
     a.out.mkdir(parents=True, exist_ok=True)
 
     def shot(name, image):
-        cv2.imwrite(str(a.out / f"{stamp().replace(':', '')}-{name}.png"), image)
+        cv2.imwrite(str(a.out / f"{stamp()}-{name}.png"), image)
 
     return open_card(lambda: ctl.post_screencap().wait().get(), lambda x, y, s: press(ctl, x, y, s),
                      lambda line: print(stamp(), line, flush=True), a.slot, a.hold, a.attempts, a.timeout, shot)

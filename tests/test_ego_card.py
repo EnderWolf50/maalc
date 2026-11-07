@@ -7,7 +7,8 @@ BattleEgoCard.png a Mirror Dungeon battle's, opened by a long press on a portrai
 measured on both: x 535-747, y 132-502. A sinner with three E.G.O shows three cards in a row, each with its Details, the
 Resistances bar the same (LuxBattleEgoCards.png, the Thread acceptance battle): x 255-1030, y 128-502. A sinner with two
 shows two side by side, no card in the middle (BattleEgoCardsTwo.png, Ryoshu in a Mirror Dungeon battle, live
-2026-11-07): x 370-910, y 128-504. Of the seven sinners deployed in that battle, six showed one card and Ryoshu two.
+2026-11-07): x 370-910, y 128-504. Of the seven sinners deployed in that battle, six showed one card and Ryoshu two;
+the team's five others were not deployed and not tried, so a row of four or five is not known.
 """
 from pathlib import Path
 
@@ -95,8 +96,9 @@ def test_a_held_finger_lifts_for_the_ego_card():
 
 def test_the_tap_lands_off_the_card_and_off_the_turns_buttons():
     # Live 2026-11-07: a tap on the dimmed field, on the bar and on the dim above the card each closed it; the back key
-    # did not. #469 follow-up (live 2026-11-07): a tap at (1, 1) closed it 9 times of 9, one card 5 times and two cards 4,
-    # within 0.4 s. The tap (the target's centre) is hold_turn's HOLD_SPOT, the corner kept free of buttons on every
+    # did not. #469 follow-up (live 2026-11-07): a tap at (1, 1) closed it each of the 9 times a screenshot followed (one
+    # card 5, two cards 4), within 0.35 s, the bot frozen mid-hold; with the bot running, its EgoCard tap there closed
+    # one card and two (`screen changed after 0.3 s`). The tap (the target's centre) is hold_turn's HOLD_SPOT, the corner kept free of buttons on every
     # battle screen (docs/spec/03-decisions.md): a tap that comes when the card has already gone presses nothing.
     import actions
     param = load_nodes()["EgoCard"]["custom_action_param"]

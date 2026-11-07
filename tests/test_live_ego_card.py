@@ -10,7 +10,7 @@ import cv2
 from live import ego_card as ec
 
 SCREENS = Path(__file__).resolve().parent / "screens"
-CARDS = ["LuxBattleEgoCard.png", "BattleEgoCard.png", "LuxBattleEgoCards.png"]
+CARDS = ["LuxBattleEgoCard.png", "BattleEgoCard.png", "LuxBattleEgoCards.png", "BattleEgoCardsTwo.png"]
 
 
 def read(name):
@@ -24,7 +24,7 @@ def test_the_card_is_read_with_the_ego_card_nodes_templates():
 
 def test_the_cards_in_a_row_are_counted_by_their_details_buttons():
     # One card, two side by side (Details 0.96 and 0.93), three in a row (the side ones 0.87): the run's widest row.
-    assert [ec.cards(read(f)) for f in ["BattleEgoCard.png", "BattleEgoCardsTwo.png", "LuxBattleEgoCards.png"]] == [1, 2, 3]
+    assert [ec.cards(read(f)) for f in CARDS] == [1, 1, 3, 2]
     assert ec.cards(read("BattleTurn.png")) == 0
 
 
@@ -60,7 +60,7 @@ def test_a_press_on_the_slots_portrait_opens_the_card_and_its_close_is_timed():
     assert bot.said[-1].startswith("card gone") and "s after it showed" in bot.said[-1]
 
 
-def test_a_press_that_opens_no_card_is_tried_again_at_the_next_planning_phase():
+def test_a_press_that_opens_no_card_is_tried_again_3_s_later():
     bot = Bot(["BattleTurn.png"])
     assert bot.run(attempts=2) == 2 and len(bot.presses) == 2
 
