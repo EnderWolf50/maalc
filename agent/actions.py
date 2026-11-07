@@ -84,7 +84,7 @@ CARDS_SETTLE = 4.0  # s; a page still swinging by then is read anyway
 # (max channel), on the pack pages of 46 live runs' recordings (2026-10-22 to 11-07, 288 frames): lit 765-2108 (253
 # frames), greyed 0 (35 frames, the brightest px 54-56). The ThemePack captures of tests/screens: lit 1176-1321, greyed 0.
 REFRESH_BUTTON = (1001, 25, 163, 45)
-REFRESH_BRIGHT, REFRESH_LIT = 120, 100
+REFRESH_BRIGHT, REFRESH_LIT_MIN = 120, 100
 
 
 def log(msg):
@@ -2017,9 +2017,9 @@ def columns(results):
 
 
 def refresh_lit(image):
-    """Whether the theme pack page's Refresh button is lit: REFRESH_LIT of its px over REFRESH_BRIGHT (#482)."""
+    """Whether the theme pack page's Refresh button is lit: REFRESH_LIT_MIN of its px over REFRESH_BRIGHT (#482)."""
     x, y, w, h = REFRESH_BUTTON
-    return bool((image[y:y + h, x:x + w].max(axis=2) > REFRESH_BRIGHT).sum() >= REFRESH_LIT)
+    return bool((image[y:y + h, x:x + w].max(axis=2) > REFRESH_BRIGHT).sum() >= REFRESH_LIT_MIN)
 
 
 @AgentServer.custom_action("PickThemePack")

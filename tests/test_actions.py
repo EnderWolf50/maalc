@@ -25,6 +25,11 @@ REAL_GUARD = actions.page_guard
 SCREENS = Path(__file__).resolve().parent / "screens"
 
 
+def bgr(path):
+    """A capture as MaaFramework hands it to the agent: BGR."""
+    return np.asarray(Image.open(path).convert("RGB"))[:, :, ::-1]
+
+
 @pytest.fixture
 def clock(monkeypatch):
     """A fake clock that time.sleep moves on; returns the list of sleeps."""
@@ -1835,8 +1840,7 @@ def test_a_difficulty_label_not_readable_yet_is_looked_at_again_not_slept_on(con
 
 REFRESH = (1083, 47)
 # A floor page's screenshots (#482): Refresh lit with no count (one free refresh), and greyed once it is used.
-PACK_LIT, PACK_GREY = (np.asarray(Image.open(SCREENS / f"{name}.png").convert("RGB"))[:, :, ::-1]
-                       for name in ("ThemePack", "ThemePackRefreshGrey"))
+PACK_LIT, PACK_GREY = (bgr(SCREENS / f"{name}.png") for name in ("ThemePack", "ThemePackRefreshGrey"))
 
 
 def pack_page(context, monkeypatch, floor, setting, mode, covers=None, spent_after=None, grey_after=None):
@@ -1929,27 +1933,15 @@ def test_a_greyed_refresh_button_with_no_count_is_not_pressed_again(context, mon
     assert lines[-1] == "floor 2: pull 'Pack 1a' (-5, below the threshold)"
 
 
-@pytest.mark.parametrize(("name", "lit"), [
-    ("ThemePack", True), ("ThemePackHardLine5", True), ("ThemePackHardLineCover", True), ("ThemePackMiracle", True),
-    ("ThemePackNormal", True), ("ThemePackRefresh1", True),
-    ("ThemePackHardLine1", False), ("ThemePackRefreshGrey", False), ("ThemePackRefresh0", False),
-])
-def test_the_refresh_button_reads_lit_until_its_free_refreshes_are_spent(name, lit):
-    # #482: lit as `Refresh` alone (ThemePack) or with 1/3, 2/3, 3/3, 4/4; greyed with no count, or greyed `0/3` (#319's
-    # capture, which PackRefreshSpent reads too).
-    assert actions.refresh_lit(np.asarray(Image.open(SCREENS / f"{name}.png").convert("RGB"))[:, :, ::-1]) is lit
-
-
-def test_the_refresh_button_sweep_over_tests_screens():
-    # CODING_STANDARDS' sweep: refresh_lit is asked only on a theme pack page (page_guard's ThemePack). There it reads
-    # unlit exactly the three greyed buttons. Off that page its box is dark on most screens (160 of the other 217 1280x720
-    # captures on 2026-11-08), but nothing asks it there.
-    unlit = []
-    for path in sorted(SCREENS.glob("ThemePack*.png")):
-        image = Image.open(path)
-        if image.size == (1280, 720) and not actions.refresh_lit(np.asarray(image.convert("RGB"))[:, :, ::-1]):
-            unlit.append(path.stem)
-    assert unlit == ["ThemePackHardLine1", "ThemePackRefresh0", "ThemePackRefreshGrey"]
+def test_the_refresh_button_sweep_over_the_theme_pack_captures():
+    # CODING_STANDARDS' sweep, #482: refresh_lit reads unlit the greyed buttons alone, with no count (HardLine1,
+    # RefreshGrey) or #319's `0/3` (Refresh0, which PackRefreshSpent reads too); `Refresh` alone (ThemePack) and 1/3, 2/3,
+    # 3/3, 4/4 read lit. Off the theme pack page its box is dark on most captures, but PickThemePack asks it only on a
+    # page page_guard took for ThemePack.
+    lit = {path.stem: actions.refresh_lit(bgr(path)) for path in sorted(SCREENS.glob("ThemePack*.png"))}
+    assert [stem for stem, on in lit.items() if not on] == ["ThemePackHardLine1", "ThemePackRefresh0", "ThemePackRefreshGrey"]
+    assert [stem for stem, on in lit.items() if on] == ["ThemePack", "ThemePackHardLine5", "ThemePackHardLineCover",
+                                                        "ThemePackMiracle", "ThemePackNormal", "ThemePackRefresh1"]
 
 
 def test_a_theme_pack_page_is_not_refreshed_by_a_spent_button_it_did_not_need(context, monkeypatch):
