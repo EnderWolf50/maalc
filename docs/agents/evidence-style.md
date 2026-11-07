@@ -33,8 +33,8 @@ Check by measurement, not by eye: the label's outer edge equals the box's outer 
 
 ## Clips and stills in general
 
-- `evidence-annotate` burns the touches, step captions, boxes and zoom into a clip; drawtext needs an explicit font file (`C:/Windows/Fonts/msjhbd.ttc`), without it ffmpeg crashes here.
-- The recording of a live test is the MuMu window only, 720p, with its 60 px title bar cropped: `screenrec.py start --window "Android Device" --crop-top 60`, the values every live test has used; the other options are in `maalc-live-test` step 5. A GUI clip or still is the GUI window only.
+- `evidence-annotate` burns the touches, step captions, boxes and zoom into a clip; on Windows drawtext needs an explicit font file (`C:/Windows/Fonts/msjhbd.ttc`); without one it crashed (2026-10-18).
+- The recording of a live test is the MuMu window only, 720p, with its title bar cropped: `screenrec.py start --window "Android Device" --crop-top 60`, the values every live test has used (the bar's height follows the display's scaling; check a first frame after a change); the other options are in `maalc-live-test` step 5. A GUI clip or still is the GUI window only.
 - A clip may speed up or skip the stretches outside the issue's focus (battles, map walks, loading when the issue is the shop); the part the issue is about stays at normal speed. [user, 2026-11-04: 「非當次 issue 重點的證據片段可以些微加速跳過」] Mark each such stretch on the clip ("×4", "略過 2:10") so a reviewer knows it was cut; the archive recording stays uncut.
 - `gh ... --attach '<file>#<alt>'`: the `#alt` works for images; a video takes no alt text, so attach it without. [2026-10-27, the `gh issue comment` error "cannot set alt text on video"]
 - An attached file is described by its content in the text, never by a local path (AGENTS.md "Public repo").

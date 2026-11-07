@@ -46,6 +46,8 @@ def test_a_different_count_is_never_inherited_from_an_earlier_brief(tmp_path):
     assert "| runs | 2 |" in text and "--set run.runs=2" in text
     assert "| weekly bonus use | hard |" in text
     assert "| recording | no |" in text and "screenrec.py start" not in text and "Do not record" in text
+    # `no` overrides the skill's always-on recording only because the user asked for it (the user, 2026-11-07)
+    assert "the user asked for a run without a recording" in text
 
 
 def settings_of(tmp_path, *extra):

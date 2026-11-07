@@ -81,7 +81,8 @@ These are the settings of this run. Set each with `bot.py prep --set`; nothing i
 RECORD_YES = ("Record the run: `screen-record` with `--height 720` (skill step 5), one recording kept on from the start of "
               "the run to its end, and annotate it (step 8). A stretch with no new frames goes into `recording.md` and the "
               "report, as step 5 says.")
-RECORD_NO = "Do not record this run; step 8's route and pack stills come from device screenshots."
+RECORD_NO = ("Do not record this run: the user asked for a run without a recording. Step 8's route and pack "
+             "stills come from device screenshots.")
 
 LUX = {"exp": ("EXP", "fights 1 while the pass's Daily row Clear EXP Luxcavation is under way"),
        "thread": ("Thread", "fights n when Daily Bonuses reads n/3 left")}
@@ -133,7 +134,8 @@ def main(argv=None) -> int:
     live.add_argument("--thread-count", type=int, required=True)
     live.add_argument("--runs", type=int, required=True)
     live.add_argument("--weekly-bonus", choices=("none", "hard"), required=True)
-    live.add_argument("--recording", choices=("yes", "no"), required=True)
+    live.add_argument("--recording", choices=("yes", "no"), required=True,
+                      help="no only when the user asked for a run without a recording (the skill records by default)")
     code = sub.add_parser("code")
     for p in (live, code):
         p.add_argument("--task", required=True)
