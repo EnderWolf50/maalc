@@ -13,7 +13,8 @@ The tools are in `tools/live/`, each with its options in `--help`. Reach for the
 | `preflight.py` | `screen` names the emulator's screen before costly prep; `plan` checks a run in progress; `recording` notes a stretch with no new frames |
 | `backup.py hold` | backs up `install/` and verifies it after the run |
 | `bot.py` | `run` the bot headless into a stamped `run.log`; `prep` a test install's settings; `awake` keeps the screen on |
-| `device.py` | `shot`, `tap`, `key`, `start` an app; `freeze` the bot on a log line to look or act, then resume |
+| `device.py` | `shot`, `tap`, `key`, `start` or `restart` an app; `freeze` the bot on a log line to look or act, then resume |
+| `giveup.py` | `run` ends a Mirror Dungeon run early from a battle: Give Up, Forfeit, GiveUpRewards, never Claim; `look` names a capture's screen |
 | `evidence.py` | `events`, `steps`, `frames`, `clip`, `mask`; `map` and `packs`, the route and pack evidence of step 8 |
 | `maafw_events.py` | maafw.log touches as events.json |
 | `dialogs.py` | the game's confirm dialogs, to diff against the pipeline before an unattended run |

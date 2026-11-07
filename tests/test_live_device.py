@@ -45,6 +45,10 @@ class FakeCtl:
         self.calls.append(("start", package))
         return Job()
 
+    def post_stop_app(self, package):
+        self.calls.append(("stop", package))
+        return Job()
+
 
 def test_pick_takes_the_device_on_the_port():
     devs = [SimpleNamespace(address="127.0.0.1:16416"), SimpleNamespace(address="127.0.0.1:16384")]
@@ -122,3 +126,24 @@ def test_freeze_resumes_the_rest_when_one_process_ended(tmp_path, monkeypatch):
     monkeypatch.setattr(dv, "tail", lambda path: iter(["packs"]))
     dv.main(["freeze", "--log", str(tmp_path / "run.log"), "--fire", "packs", "--pid", "9", "--max", "0.1"])
     assert log == ["suspend 1", "resume 1"]
+
+
+def test_restart_stops_the_game_and_starts_it_as_the_pipelines_l3_does(monkeypatch, tmp_path):
+    # The daily task restarts the game before the bot (2026-11-07). RecoverL3 stops the app, waits its post_delay, and
+    # RecoverStartApp starts it; the screenshot comes --wait seconds after the start.
+    from test_pipeline import load_nodes
+
+    ctl, slept = FakeCtl(), []
+    monkeypatch.setattr(dv, "connect", lambda port: ctl)
+    monkeypatch.setattr(dv.time, "sleep", slept.append)
+    dv.main(["restart", "--wait", "20", "--shot", str(tmp_path / "boot.png")])
+    assert ctl.calls == [("stop", dv.GAME), ("start", dv.GAME)]
+    assert slept == [load_nodes()["RecoverL3"]["post_delay"] / 1000, 20] and (tmp_path / "boot.png").exists()
+
+
+def test_restart_takes_another_package_and_no_shot_without_one(monkeypatch):
+    ctl, slept = FakeCtl(), []
+    monkeypatch.setattr(dv, "connect", lambda port: ctl)
+    monkeypatch.setattr(dv.time, "sleep", slept.append)
+    dv.main(["restart", "com.android.vending"])
+    assert ctl.calls == [("stop", "com.android.vending"), ("start", "com.android.vending")] and len(slept) == 1

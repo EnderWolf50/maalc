@@ -44,6 +44,7 @@ The old scripts stay in `.local/`, unchanged. These are replaced, every copy und
 - `prep.py`, `prep_config.py`, `prep_settings.py` → `bot.py prep`
 - `keepawake.ps1`, `awake.ps1`, `wake.ps1` → `bot.py awake`
 - `shot.py`, `tap.py`, `start_game.py`, `freezer.py` → `device.py`
+- the daily task's game restart → `device.py restart`; #468's give-up script → `giveup.py run` (2026-11-07)
 - `scratch/combined-verify/`: `common.py`, `route.py`, `packs.py`, `mkclip.py`, `packclip.py` → `evidence.py`
 - `scratch/top-live-video4/`: `mkevents.py`, `grabframes.py` → `evidence.py events`, `frames`; `loadspans.py` → `tools/wait_spans.py`; `mask85.py`, `mask197.py` → `evidence.py mask`
 - `scratch/*/maafw_timeline.py` → `tools/maafw_timeline.py`
@@ -52,10 +53,11 @@ Not replaced: `scratch/combined-verify/mkclip248.py` (a clip joined from two pie
 
 ## Design
 
-Three tools under `tools/live/`, one per thing they act on, each with subcommands; `--help` lists them, the `maalc-live-test` skill says when each runs.
+Four tools under `tools/live/`, one per thing they act on, each with subcommands; `--help` lists them, the `maalc-live-test` skill says when each runs.
 
 - `evidence.py`, the evidence files: `events`, `steps`, `frames`, `clip`, `mask`, `map`, `packs`. Input is the bot's stamped `run.log` and the recording as `--video PATH@START`, START the wall time of its first frame (screen-record's `started`), once per piece, so no clock offset is needed. `map` and `packs` port `route.py` and `packs.py`; their image analysis runs on frames ffmpeg decodes into numpy arrays, so the tests drive it with synthetic frames. Every still and every annotated clip is masked with `.local/evidence/masks.json`; only template matching needs OpenCV (the probe group), as evidence-annotate's `annotate.py` does it the same way.
-- `device.py`, the emulator through MaaFramework's adb controller: `shot`, `tap`, `key`, `start`, `freeze`. A single screenshot is its only capture; recording stays with screen-record.
+- `device.py`, the emulator through MaaFramework's adb controller: `shot`, `tap`, `key`, `start`, `restart`, `freeze`. A single screenshot is its only capture; recording stays with screen-record.
 - `bot.py`, the bot process: `run` (the old `tasker.py` and `tsrun.py` in one), `prep`, `awake`.
+- `giveup.py`, a Mirror Dungeon run ended early from a battle, with no Claim: `run` (Give Up, Forfeit, GiveUpRewards, each screen checked with the pipeline's own nodes before its tap, but the DEFEAT dialog's Confirm right after its card), `look` (a capture's screen, by the same probe; added 2026-11-07).
 
 Paths come in as arguments; `.local/` is found through `tools/local_dir.py`. What the repo already had is extended, not redone: `evidence.py events` hands a maafw.log to `maafw_events.py`, and the queue, `backup.py`, `dialogs.py`, `tools/video_align.py`, `tools/wait_spans.py` and `tools/maafw_timeline.py` keep their jobs.
