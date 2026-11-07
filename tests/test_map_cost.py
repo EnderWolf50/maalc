@@ -37,15 +37,18 @@ UNREAD = {("GiftGetOverMap.png", 1221, 438), ("PauseExploration.png", 1221, 438)
 CROPS = sorted((ROOT / "tests" / "data" / "cost_crops").glob("*.png"))
 CROP_COIN = (8, 8, *COIN)
 # node_at end to end on every node of the map captures (#228), labelled by eye: image -> the floor's difficulty (null: not
-# known, both are run) and [x, y, the Cost printed, or the kind on screen where no Cost shows] of each node centre. Left out:
-# the node under the bus, MapEvent's at 1235, 72 and MapFocused's at 980, 72 (under the HUD, their kind unseen), and the
-# captures with a popup over the map or zoomed in on the bus, which RouteMap does not read. MapHardRest.synthetic's top row,
-# under the HUD, has the kinds of MapHardTwoColsUp, the capture it was made from. Among them, #268's (live 2026-10-23, HARD):
+# known, both are run) and [x, y, the Cost printed, or the kind on screen where no Cost shows] of each node centre. A
+# battle with its Cost hidden is told by its coin, centred over the node: Focused and up carry theirs ~25 px right of
+# centre, beside a gift box. MapHardRest.synthetic's top row, under the HUD, has the kinds of MapHardTwoColsUp, the
+# capture it was made from. Left out: the node the bus stands on, which the bus hides; MapEvent's at 1235, 72 and
+# MapFocused's at 980, 72, their kind unseen under the HUD; the captures of a popup over the map (DungeonProgress*,
+# GiftGetOverMap, PauseExploration, ProgressPanel), each answered by MirrorHub before MirrorMap, and of the map zoomed in
+# on the bus (MapZoomed, MapNodePanel), which RouteMap.unzoom resets first. Among them, #268's (live 2026-10-23, HARD):
 # MapBossCost500's boss, its glow unmatched, by its Cost; MapHardF5Warn's Focused 120, Risky 150 and Abnormality 180 by
 # their Costs, not the ring that is often missed.
 MAP_NODES = json.loads((ROOT / "tests" / "data" / "map_nodes.json").read_text(encoding="utf-8"))
-SWEEP = [(name, x, y, difficulty) for name, shot in MAP_NODES.items() for x, y, _ in shot["nodes"]
-         for difficulty in ([shot["difficulty"]] if shot["difficulty"] else ["normal", "hard"])]
+NODE_CASES = [(name, x, y, difficulty) for name, shot in MAP_NODES.items() for x, y, _ in shot["nodes"]
+              for difficulty in ([shot["difficulty"]] if shot["difficulty"] else ["normal", "hard"])]
 TYPED_INSTEAD = {
     # Misread: HARD, the map at rest. A fight (crossed swords, the WARNING ring) with its Cost under the star panel: the
     # ring unmatched, only the gift box seen, so an event.
@@ -112,7 +115,7 @@ def child():
                 actions.log = lines.append
                 with tempfile.TemporaryDirectory() as logs:
                     actions.ROOT = Path(logs)  # a miss keeps its crop under logs/cost
-                    for name, cx, cy, difficulty in SWEEP:
+                    for name, cx, cy, difficulty in NODE_CASES:
                         actions.RUN.update(settings={}, difficulty=difficulty, floor_hard=difficulty == "hard")
                         lines.clear()
                         kind = actions.node_at(context, load(SCREENS / name), cx, cy)
@@ -175,14 +178,14 @@ def test_the_sweep_has_no_unlisted_miss(read):
 
 
 def label(name, x, y):
-    return next(label for nx, ny, label in MAP_NODES[name]["nodes"] if (nx, ny) == (x, y))
+    return next(shown for nx, ny, shown in MAP_NODES[name]["nodes"] if (nx, ny) == (x, y))
 
 
-def fight(name, x, y):
+def is_fight(name, x, y):
     return label(name, x, y) not in ("event", "shop")
 
 
-@pytest.mark.parametrize(("name", "x", "y", "difficulty"), [pytest.param(*c, id=f"{c[0]}-{c[1]}-{c[2]}-{c[3]}") for c in SWEEP])
+@pytest.mark.parametrize(("name", "x", "y", "difficulty"), [pytest.param(*c, id=f"{c[0]}-{c[1]}-{c[2]}-{c[3]}") for c in NODE_CASES])
 def test_every_map_node_is_typed_as_the_capture_shows_or_as_listed(read, name, x, y, difficulty):
     import actions
     shown = label(name, x, y)
@@ -192,9 +195,9 @@ def test_every_map_node_is_typed_as_the_capture_shows_or_as_listed(read, name, x
 
 
 def test_the_fights_typed_with_no_cost_read_are_the_listed_ones(read):
-    unread = {(name, x, y) for name, x, y, difficulty in SWEEP
-              if fight(name, x, y) and read[f"node {name} {x} {y} {difficulty}"][1] is None}
-    assert unread == UNCOSTED | {node for node in TYPED_INSTEAD if fight(*node)}
+    unread = {(name, x, y) for name, x, y, difficulty in NODE_CASES
+              if is_fight(name, x, y) and read[f"node {name} {x} {y} {difficulty}"][1] is None}
+    assert unread == UNCOSTED | {node for node in TYPED_INSTEAD if is_fight(*node)}
 
 
 @pytest.mark.parametrize(("found", "number"), [
