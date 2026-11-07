@@ -1,6 +1,6 @@
 """Assemble a runnable <root> in install/: interface.json, resource/, agent/,
-maafw/ (the MaaFramework DLLs MXU loads, taken from the installed maafw; on Windows
-MaaFramework.dll comes from MAAFW_FIX), and
+maafw/ (the MaaFramework DLLs MXU and the agent load, taken from the installed maafw;
+on Windows MaaFramework.dll comes from MAAFW_FIX), and
 the settings GUI maalc-gui.exe when it has been built.
 
 Drop MXU or MFAAvalonia into install/ and start it. child_exec is pinned to the
@@ -9,7 +9,8 @@ resolves a bare `python` to the Microsoft Store alias. Run tools/fetch_ocr.py fi
 
 `--release` (Windows x64 only, used by .github/workflows/release.yml) makes
 install/ self-contained instead: python.org's embeddable Python in python/ with
-the locked runtime deps, child_exec `./python/python.exe` (MXU joins a relative
+the locked runtime deps but without the maafw wheel's DLLs (agent/main.py points
+it at maafw/), child_exec `./python/python.exe` (MXU joins a relative
 child_exec onto the interface.json folder), and MXU's mxu.exe and LICENSE,
 shipped unmodified from its release (MXU is AGPL-3.0, see NOTICE.md).
 """
@@ -67,6 +68,9 @@ def bundle_python() -> None:
                     "--python-version", "3.12", "--python-platform", "x86_64-pc-windows-msvc",
                     "--requirements", str(requirements)], check=True)
     requirements.unlink()
+    wheel_dlls = python / "Lib" / "site-packages" / "maa" / "bin"
+    if wheel_dlls.exists():  # a rerun finds maafw installed already, its bin/ gone
+        shutil.rmtree(wheel_dlls)
 
 
 def bundle_mxu() -> None:
