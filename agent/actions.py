@@ -1180,10 +1180,15 @@ def foreground(context):
 
 
 def forget_game_state():
-    """The game came back from a recovery or a restart: drop the streak, the battle clock and the map retries."""
+    """The game came back from a recovery or a restart: drop the streak, the battle clock and the map retries.
+
+    A shop visit keeps what it paid for (healed, refreshes, the skill step's skill_tapped, id_tried and id_searched) but
+    not fuse_scanned: a fuse page that made none may have been a game that took no tap (#459), so the next round reads it
+    again."""
     STUCK["watch"].reset()
     for key in ("turn", "battle_start", "map_misses", "event_tried", "map_plan", "map_entered"):
         RUN.pop(key, None)
+    RUN.get("shop", {}).pop("fuse_scanned", None)
     RUN["resumed"] = True
 
 
@@ -2992,7 +2997,9 @@ HOLD_EVERY = 0.3  # s between looks, MirrorHub's rate_limit
 HOLD_LIMIT = 6  # s at most per hold (a turn without E.G.O plays ~6 s): then MirrorHub (its watchdog, recovery) looks; BattlePause holds a longer turn again
 # Screens that can follow a turn, besides the next turn: the finger lifts before their node acts.
 BATTLE_POPUPS = ("Connecting", "RetryPopup", "PopupButton")  # template-gated: looked for while a turn plays, no OCR (#157)
-BATTLE_LEFT = BATTLE_POPUPS + ("Victory", "WipeDialog", "Event", "ClaimPopup", "Loading")
+# EgoCard (#468): in the daily run of 2026-11-07 the card was up after `turn 1: started`, still on TURN 1; what opened it
+# there is unverified (a long press on a portrait opens it). A hold that meets it lifts at once, not after HOLD_LIMIT.
+BATTLE_LEFT = BATTLE_POPUPS + ("Victory", "WipeDialog", "Event", "ClaimPopup", "Loading", "EgoCard")
 
 
 def hold_turn(context):
@@ -4288,8 +4295,8 @@ def fused_cells(context, cells, grid, fusion):
     grid's end and gave every place a tier, in the page's order (the vestiges first, then highest tier first). After a
     recipe the owned gifts are placed by their label first (owned_top): its Fusion Available section may have gone, the
     list moved up (#304). The gift made's cell is dragged into view, a row over it on show too, and read: it is placed
-    (fused_check) when its tier is the fusion's (a recipe's: its id; an EX gift a failed fusion gives, tier V, when the GET!
-    popup showed its "EX", #449),
+    (fused_check) when its tier is the fusion's (a recipe's: its id; an ordinary one's, the tier its GET! popup showed,
+    #451, tier V for an EX gift, #449),
     its id is read and no gift listed with that id or an unread one looks like it, every other cell on show looks as it was
     read (matched within GRID_SAME) and the places after the last hold no gift. A check that fails places the owned gifts
     by their label once (the list may have sprung back from its end, a section come or gone) and checks again. Each tap
@@ -4436,7 +4443,8 @@ class Shop(CustomAction):
     The visit's state (healed, refreshes used, the gift wanted and whether a sale was tried for it, whether the
     owned gifts were scanned for a fusion, the sinners whose Replace slot was tapped (skill_tapped), the sinners ID Skill
     Search tried (id_tried) and whether it was used (id_searched)) lives in RUN["shop"], so a re-entry from MirrorHub
-    carries on; leaving drops it. Every spend keeps the team's reserve_cost.
+    carries on; leaving drops it, and a recovery drops the fusion scan (forget_game_state, #459). Every spend keeps the
+    team's reserve_cost.
     """
 
     @hands_back
@@ -5223,7 +5231,8 @@ class Shop(CustomAction):
         read), else read again there, and the next fusion made, a wanted one first, until none is left or FUSIONS_PER_PAGE
         were made; then the page is closed. A cell placed by the fusion that does not show where it was put (cell_at) closes
         the page and opens it again, its owned gifts read from the top: materials may be in.
-        A grid that made none is not read again until a purchase or a sale changes the owned gifts (#62).
+        A grid that made none is not read again until a purchase or a sale changes the owned gifts (#62), or a recovery
+        (forget_game_state, #459).
         """
         if visit.get("fuse_scanned"):
             return False
@@ -5278,9 +5287,9 @@ class Shop(CustomAction):
     @staticmethod
     def fuse_ordinary(context, team, visit, cells, roles, slots, grid, avoid):
         """The ordinary fusion of the cells read, fusions' first group put in (place): the fusion made, {"gone": its cells,
-        "tier": the page's forecast's (the points' when unread; EX_TIER when the GET! popup shows an EX gift, shop.ex_got,
-        #449), "gift": None}, for fused_cells. A group the page's forecast
-        turns down comes out again and the next is tried, FUSE_TRIES at most (#285); False on none left."""
+        "tier": the GET! popup's numeral (shop.got_tier, #451; EX_TIER when it shows an EX gift, shop.ex_got, #449; the
+        page's forecast's when unread, the points' when that is unread too), "gift": None}, for fused_cells. A group the
+        page's forecast turns down comes out again and the next is tried, FUSE_TRIES at most (#285); False on none left."""
         condition = team["list"]["fusion_condition"]
         refused = []
         while True:
@@ -5311,7 +5320,14 @@ class Shop(CustomAction):
                 if shop.ex_got(popup):  # #449: a fusion short of its 99% gives an EX gift
                     log("shop: the GET! popup shows an EX gift (green EX): the gift made is placed as tier V")
                     return {"gone": group, "tier": EX_TIER, "gift": None}
-                return {"gone": group, "tier": page_tier or tier, "gift": None}
+                # #451: the tier's gifts all taken, the game may give another tier than the table's
+                made, expected = shop.got_tier(popup), page_tier or tier
+                forecast = ("the forecast's" if page_tier else "the points'") + f" tier {expected}"
+                if made is None:
+                    log(f"shop: the GET! popup shows no tier numeral: the gift made is placed as {forecast}")
+                elif made != expected:
+                    log(f"shop: the GET! popup shows tier {made}, not {forecast}: the gift made is placed as tier {made}")
+                return {"gone": group, "tier": made or expected, "gift": None}
             refused.append(tuple(sorted(c["tier"] for c in group)))
             if len(refused) >= FUSE_TRIES or not Shop.place(context, group, slots, grid, out=True):
                 return False  # the page is closed, which empties it too

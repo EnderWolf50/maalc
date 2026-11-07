@@ -40,7 +40,10 @@ def screen(png):
 def load():
     """(actions, resource): MaaFramework's Resource first, then actions under a stand-in AgentServer that records what
     the agent registers; every custom action and recognition goes on the resource, as the agent serves them. ROOT is a
-    new temporary folder (the settings, the stop procedure's evidence and log)."""
+    new temporary folder (the settings, the stop procedure's evidence and log).
+
+    Every node's pre_delay and post_delay is 0 (#480): a game model shows the next screen at the tap, and those waits
+    were half of a child's time (test_exp_luxcavation 285 s, 136 s without them, its 21 scenarios ending the same)."""
     from maa.resource import Resource
 
     resource = Resource()  # MaaFramework itself, before anything loads the AgentServer library
@@ -58,6 +61,7 @@ def load():
     for kind, name, cls in found:
         (resource.register_custom_action if kind == "action" else resource.register_custom_recognition)(name, cls())
     resource.post_bundle(ROOT / "assets" / "resource" / "base").wait()
+    resource.override_pipeline({name: {"pre_delay": 0, "post_delay": 0} for name in resource.node_list})
     actions.ROOT = Path(tempfile.mkdtemp())
     return actions, resource
 

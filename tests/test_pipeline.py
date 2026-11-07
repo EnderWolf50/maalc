@@ -58,9 +58,7 @@ def strip(listed):
 
 
 def test_mirror_hub_reads_its_ocr_screens_through_hub_text():
-    # #149, #157: batched, MaaFramework OCRs a next list's rois in one pass, and each OCR re-reads every box of that
-    # pass crossing its roi edge (OCRer::handle_cached), slivers 1 px high padded to 48 px x (width / height): a
-    # battle skill text 1 px into MirrorEnterDialog's roi, 443 x 1, took 7.6 s and the Tasker from 4 to 12 GB.
+    # #149, #157: the reasons are accuracy and battle speed; the fork DLL fixed the memory (spec 01, MirrorHub).
     # MirrorHub lists no OCR; HubText (agent/hub_text.py) reads its screens and lists the ones that may be up behind
     # NoBatchOCR. BattleHUD, two templates, comes before HubText, and its own list does not batch. Victory is the one
     # OCR the hub lists: HubText's pass cannot read it (agent/hub_text.py); NoBatchOCR before it keeps it unbatched.
@@ -70,13 +68,14 @@ def test_mirror_hub_reads_its_ocr_screens_through_hub_text():
     assert hub[hub.index("Victory") - 1] == "NoBatchOCR"
     assert hub.index("BattleHUD") < hub.index("HubText")
     assert batchable_ocr(nodes, "BattleHUD") == []
-    menus = ["BattleMenu", "LuxBattleMenu"]  # the pause menu (#215), the mirror's and Luxcavation's (live-1)
-    assert nodes["BattleHUD"]["any_of"] == [*menus, "BattleTurn", "BattlePause"]
+    # the pause menu (#215), the mirror's and Luxcavation's (live-1); the E.G.O card over the turn (#468)
+    covers = ["BattleMenu", "LuxBattleMenu", "EgoCard"]
+    assert nodes["BattleHUD"]["any_of"] == [*covers, "BattleTurn", "BattlePause"]
     hud = strip(nodes["BattleHUD"]["next"])
-    assert hud[-4:] == [*menus, "BattleTurn", "BattlePause"] and len(batch_plan(nodes, hud)) < 2
-    # The server's popups before the turn run no OCR on a battle round (live A/B: 3 OCR a round, ~130 ms): a
+    assert hud[-5:] == [*covers, "BattleTurn", "BattlePause"] and len(batch_plan(nodes, hud)) < 2
+    # The server's popups before the turn run no OCR on a battle round (#166: 405 s a run, spec 01): a
     # template comes first, and MaaFramework's And stops at the first part that misses.
-    assert hud[0] == "NoBatchOCR" and hud[1:-4] == ["Connecting", "RetryPopup", "UpdateDialog", "PopupButton"]
+    assert hud[0] == "NoBatchOCR" and hud[1:-5] == ["Connecting", "RetryPopup", "UpdateDialog", "PopupButton"]
     assert all(template_first(nodes, nodes[n]) for n in hud[1:-2])
     # Connecting is a template: it waits in MirrorHub's list, ahead of HubText, as it does in BattleHUD's.
     assert hub.index("BattleHUD") < hub.index("Connecting") < hub.index("HubText")
@@ -143,12 +142,12 @@ def test_no_next_list_batches_two_ocr_recognitions_under_one_name():
 
 
 def test_the_screens_that_lift_a_held_finger_are_hub_nodes():
-    # #150: hold_turn lifts on these; each is a MirrorHub screen (its list or HubText's entries, #157), so the hub
-    # acts on it once the finger is up. BattlePause, which holds again, is reached from BattleHUD.
+    # #150: hold_turn lifts on these; each is a MirrorHub screen (its list, HubText's entries (#157) or BattleHUD's
+    # list), so the hub acts on it once the finger is up. BattlePause, which holds again, is reached from BattleHUD.
     import actions
     nodes = load_nodes()
     hub = [re.sub(r"^(\[\w+\])+", "", n) for n in nodes["MirrorHub"]["next"]]
-    hub += hub_entries(nodes, "HubText")
+    hub += hub_entries(nodes, "HubText") + strip(nodes["BattleHUD"]["next"])
     assert set(actions.BATTLE_LEFT) <= set(hub)
     assert nodes["BattlePause"]["custom_action"] == "HoldTurn" and "BattlePause" in nodes["BattleHUD"]["next"]
     # A popup over a playing turn lifts the finger; BattleHUD acts on it before BattlePause holds again.
