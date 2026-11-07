@@ -236,3 +236,14 @@ def test_only_pr_create_and_edit_bodies_are_linted(repo):
 
 def test_cannot_run_is_not_a_not_run_item(repo):
     assert pr_body(repo, GOOD_BODY + "- Live: cannot run on Linux\n") is None
+
+
+def test_the_guard_runs_on_powershell_too(repo):
+    # A subagent whose Bash tool is broken publishes through PowerShell (subagent-preamble.md, "Bash check").
+    settings = json.loads((GUARD.parents[1] / "settings.json").read_text(encoding="utf-8"))
+    wired = [h["matcher"] for h in settings["hooks"]["PreToolUse"]
+             if any("public-text-guard.py" in " ".join(c.get("args", [])) for c in h["hooks"])]
+    assert wired and all(set(m.split("|")) >= {"Bash", "PowerShell"} for m in wired)
+    assert denied(f"gh issue comment 1 --body @'\nsee {WIN}\n'@", repo)  # a here-string's text is read
+    assert denied("gh issue comment 1 `\n  --body-file clean.md", repo)  # a backtick line continuation: fail closed
+    assert not denied(f"gh issue comment 1 --body-file '{repo / 'clean.md'}'", repo)

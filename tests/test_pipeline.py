@@ -58,9 +58,7 @@ def strip(listed):
 
 
 def test_mirror_hub_reads_its_ocr_screens_through_hub_text():
-    # #149, #157: batched, MaaFramework OCRs a next list's rois in one pass, and each OCR re-reads every box of that
-    # pass crossing its roi edge (OCRer::handle_cached), slivers 1 px high padded to 48 px x (width / height): a
-    # battle skill text 1 px into MirrorEnterDialog's roi, 443 x 1, took 7.6 s and the Tasker from 4 to 12 GB.
+    # #149, #157: the reasons are accuracy and battle speed; the fork DLL fixed the memory (spec 01, MirrorHub).
     # MirrorHub lists no OCR; HubText (agent/hub_text.py) reads its screens and lists the ones that may be up behind
     # NoBatchOCR. BattleHUD, two templates, comes before HubText, and its own list does not batch. Victory is the one
     # OCR the hub lists: HubText's pass cannot read it (agent/hub_text.py); NoBatchOCR before it keeps it unbatched.
@@ -75,7 +73,7 @@ def test_mirror_hub_reads_its_ocr_screens_through_hub_text():
     assert nodes["BattleHUD"]["any_of"] == [*covers, "BattleTurn", "BattlePause"]
     hud = strip(nodes["BattleHUD"]["next"])
     assert hud[-5:] == [*covers, "BattleTurn", "BattlePause"] and len(batch_plan(nodes, hud)) < 2
-    # The server's popups before the turn run no OCR on a battle round (live A/B: 3 OCR a round, ~130 ms): a
+    # The server's popups before the turn run no OCR on a battle round (#166: 405 s a run, spec 01): a
     # template comes first, and MaaFramework's And stops at the first part that misses.
     assert hud[0] == "NoBatchOCR" and hud[1:-5] == ["Connecting", "RetryPopup", "UpdateDialog", "PopupButton"]
     assert all(template_first(nodes, nodes[n]) for n in hud[1:-2])

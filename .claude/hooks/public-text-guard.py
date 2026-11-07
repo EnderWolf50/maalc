@@ -1,4 +1,4 @@
-"""PreToolUse(Bash): deny GitHub text and commit messages that name this machine or its owner.
+"""PreToolUse(Bash, PowerShell): deny GitHub text and commit messages that name this machine or its owner.
 
 This repo is public. The generic shapes below catch any absolute path or file:// link, and every
 personal term (game-account e-mail, local folder names) comes from the repo-local git config:
@@ -14,7 +14,7 @@ Checked: `gh issue|pr create|comment|edit|review|close|merge|reopen`, `gh releas
 `git commit|merge|tag`, including the contents of a `--body-file`/`-F` file. Paths that only name a file
 to upload (`--attach`, `-R`, `git -C`) are fine.
 
-Fails closed: text the hook cannot read (stdin, `$(...)`, a backtick, a heredoc, `--input`, a body file that
+Fails closed: text the hook cannot read (stdin, `$(...)`, a backtick (also PowerShell's line continuation), a heredoc, `--input`, a body file that
 does not exist yet) is denied, because it could carry anything.
 
 Each publishing call is cut at its own boundary, read the way bash reads it (quotes, backslashes, `$(...)`,

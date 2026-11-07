@@ -12,7 +12,8 @@ LIVE = ["live", "--task", "t1", "--difficulty", "normal", "--exp-mode", "daily",
 
 
 def run(tmp_path, args):
-    return brief.main(["--scratch", str(tmp_path), *args])
+    # the machine's own .local/brief-rules.md stays out of the tests; a test that wants rules passes --rules (the last wins)
+    return brief.main(["--scratch", str(tmp_path), "--rules", str(tmp_path / "no-rules.md"), *args])
 
 
 def with_values(args, **values):
@@ -122,3 +123,10 @@ def test_code_brief_has_no_emulator_section(tmp_path):
     text = (tmp_path / "c1" / "brief.md").read_text(encoding="utf-8")
     assert "maalc-live-test" not in text and "tdd" in text and "bench" in text
     assert "not run live" in text
+
+
+def test_the_queue_and_stop_commands_match_the_preamble(tmp_path):
+    # docs/agents/subagent-preamble.md: the check ticket takes --log (queue.py wait prints it); a stop takes the tree by force.
+    text = settings_of(tmp_path)
+    assert "--name t1-check --log <log> -- uv run python tools/check.py" in text
+    assert "taskkill /T /F /PID <pid>" in text
