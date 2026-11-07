@@ -7,7 +7,8 @@ A live test that needs only the early floors forfeits the run and gives its rewa
 standing rule): no Enkephalin Module is spent. Run it with the bot stopped or frozen; a live test owns the emulator
 first (the maalc-live-test skill).
 
-**run** looks at the screen, taps what that screen asks, and looks again, until the give-up dialog is confirmed:
+**run** looks at the screen, taps what that screen asks, and looks again, until the main window shows after
+GiveUpRewards:
 
   BattleTurn (the planning phase)        the gear, top right; it takes a tap only in the planning phase
   BattlePause (a turn playing out)       no tap: wait for the planning phase
@@ -19,14 +20,15 @@ first (the maalc-live-test skill).
   ForfeitDialog (Quit exploring the dungeon?)   Confirm
   DefeatScreen                           Confirm
   ExplorationComplete                    Claim Rewards: it only opens the Exploration Reward window
-  ExplorationReward                      GiveUpRewards
-  GiveUpDialog (End expedition without claiming rewards?)   Confirm, the last tap; then the reward window fades out
+  ExplorationReward                      GiveUpRewards; live (2026-11-07) it brought no dialog: Connecting, Now Loading,
+                                         then the main window (HomeReached), the end
+  GiveUpDialog (End expedition without claiming rewards?)   Confirm, when it shows; the reward window then fades out
   ClaimDialog (a Claim's confirm dialog) Cancel; the window's Claim is never tapped
 
 It may start on any of these screens. Each screen is named with the pipeline's own node (`look`'s probe), and the three
 dialogs with the text the bot reads inside its actions; it is checked before every tap. A screenshot of each screen
-before its tap goes to --out, and one of the screen after the last tap. Exit 1, with a screenshot, when no known screen
-shows for --timeout seconds (60) or one screen stays after its taps.
+before its tap goes to --out, and one of the main window at the end. Exit 1, with a screenshot, when no known screen
+shows for --timeout seconds (60), one screen stays after its looks, or the main window shows before any give-up.
 
 **look** names the screen of each image with the same probe: the tests' seam, and a check on a capture.
 """
@@ -97,6 +99,9 @@ DIALOG_NODES = {
 # Behind the give-up dialog: after its Confirm they fade out, with no tap, for up to FADE_LOOKS looks a second apart.
 FADING = ("ExplorationReward", "ExplorationComplete")
 FADE_LOOKS = 10
+# The end: the main window, after GiveUpRewards (live 2026-11-07: with no dialog, then Connecting and Now Loading) or
+# after the dialog's Confirm. Tried after every step's screen.
+END = "HomeReached"
 PROBE = "GiveUpProbe"
 LOOK_MS = 1500  # how long one look tries before it names no screen
 
@@ -106,12 +111,13 @@ def probe_override() -> dict:
     nodes = {n: {"action": "DoNothing", "next": [], "pre_delay": 0, "post_delay": 0} for n in STEPS}
     for n, reco in DIALOG_NODES.items():
         nodes[n].update(reco)
-    nodes[PROBE] = {"recognition": "DirectHit", "action": "DoNothing", "next": list(STEPS), "timeout": LOOK_MS}
+    nodes[END] = {"action": "DoNothing", "next": [], "pre_delay": 0, "post_delay": 0}
+    nodes[PROBE] = {"recognition": "DirectHit", "action": "DoNothing", "next": [*STEPS, END], "timeout": LOOK_MS}
     return nodes
 
 
 def first_hit(node_names: list[str]) -> str | None:
-    return next((n for n in node_names if n in STEPS), None)
+    return next((n for n in node_names if n in STEPS or n == END), None)
 
 
 def tasker(controller, resource: Path):
@@ -134,17 +140,20 @@ def look(t) -> str | None:
 
 
 def give_up(look, tap, shot, timeout: float = 60, clock=time.monotonic, sleep=time.sleep, say=print) -> int:
-    """Look, tap what the screen asks, look again, until the give-up dialog's Confirm went through and the reward window
-    has gone (exit 0). Nothing is tapped after that Confirm. Exit 1 when no known screen shows for `timeout` seconds, or
-    one screen stays after its looks in a row.
+    """Look, tap what the screen asks, look again, until the main window shows after GiveUpRewards (exit 0). Nothing is
+    tapped after the give-up dialog's Confirm. Exit 1 when no known screen shows for `timeout` seconds, one screen stays
+    after its looks in a row, or the main window shows before any give-up (no run to end).
     """
-    known_at, last, in_row, confirmed = clock(), None, 0, False
+    known_at, last, in_row, gave_up, confirmed = clock(), None, 0, False, False
     while True:
         name = look()
-        if confirmed and name not in ("GiveUpDialog", *FADING):
+        if name == END:
             shot("end")
-            say("gave the rewards up: the run is over, nothing claimed")
-            return 0
+            if gave_up:
+                say("the main window: the run is over, its rewards given up, nothing claimed")
+                return 0
+            say("stop: the main window, and no run was given up here")
+            return 1
         if name is None:
             if clock() - known_at >= timeout:
                 shot("unknown")
@@ -171,6 +180,7 @@ def give_up(look, tap, shot, timeout: float = 60, clock=time.monotonic, sleep=ti
                     sleep(TAP_GAP)
                 tap(*xy)
             say(f"{name}: tap {' then '.join(map(str, step.taps))}")
+            gave_up = gave_up or name in ("ExplorationReward", "GiveUpDialog")
             confirmed = confirmed or name == "GiveUpDialog"
         sleep(step.wait)
 

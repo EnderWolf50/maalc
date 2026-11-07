@@ -38,7 +38,7 @@ NAMED = {
     "GiveUpDialog.png": "GiveUpDialog",
     "ClaimNoBonusDialog.png": "ClaimDialog",
     "ClaimBonusDialog.png": "ClaimDialog",
-    "MainWindow.png": None,
+    "MainWindow.png": "HomeReached",
     "Drive.png": None,
 }
 
@@ -121,7 +121,7 @@ class Game:
 def test_a_run_ends_from_a_turn_playing_out_to_the_give_up_dialogs_confirm():
     game = Game(["BattlePause", "BattleTurn", "BattleTurn", "BattleMenu", None, "MirrorMap", "ProgressPanel", "ForfeitDialog",
                  "DefeatScreen", "ExplorationComplete", "ExplorationReward", "GiveUpDialog", "ExplorationReward", "ExplorationComplete",
-                 None])
+                 None, "HomeReached"])
     assert game.run() == 0
     assert game.taps == [gu.BATTLE_GEAR, gu.BATTLE_GEAR, gu.GIVE_UP, gu.MAP_GEAR, gu.FORFEIT, gu.FORFEIT_CONFIRM, gu.DEFEAT_CONFIRM,
                          gu.CLAIM_REWARDS, gu.GIVE_UP_REWARDS, gu.DIALOG_CONFIRM]  # nothing after the confirm: the window fades out
@@ -138,14 +138,25 @@ def test_the_end_waits_for_the_reward_window_to_go():
 def test_a_wipe_accepts_the_results_and_a_formation_backs_out_to_the_map():
     # The bot stops at either when it ran out of retries or sinners (`after_retries: stop`): both lead to the map's Forfeit.
     game = Game(["WipeDialog", "Formation", "MapNodePanel", "ProgressPanel", "ForfeitDialog", "DefeatScreen", "ExplorationComplete",
-                 "ExplorationReward", "GiveUpDialog", None])
+                 "ExplorationReward", "GiveUpDialog", None, "HomeReached"])
     assert game.run() == 0
     assert game.taps[:4] == [gu.ACCEPT_RESULTS, gu.WIPE_CONFIRM, gu.FORMATION_BACK, gu.MAP_GEAR]
 
 
 def test_the_give_up_dialog_is_confirmed_again_while_it_stays():
-    game = Game(["GiveUpDialog", "GiveUpDialog", None])
+    game = Game(["GiveUpDialog", "GiveUpDialog", None, "HomeReached"])
     assert game.run() == 0 and game.taps == [gu.DIALOG_CONFIRM] * 2
+
+
+def test_giveuprewards_with_no_dialog_ends_on_the_main_window():
+    # Live 2026-11-07, a forfeited NORMAL floor 1: GiveUpRewards brought no dialog; Connecting, Now Loading, the main window.
+    game = Game(["ExplorationReward", None, None, "HomeReached"])
+    assert game.run() == 0 and game.taps == [gu.GIVE_UP_REWARDS] and game.shots[-1] == "end"
+
+
+def test_the_main_window_before_any_give_up_is_no_run_to_end():
+    game = Game(["HomeReached"])
+    assert game.run() == 1 and game.taps == []
 
 
 def test_no_known_screen_for_the_timeout_stops_with_a_screenshot():
