@@ -2452,10 +2452,10 @@ class RouteMap(CustomAction):
         return until(context, lambda im: seen(context, im, "MapNodePanel"), timeout=timeout) is not None
 
     @staticmethod
-    def tap_answered(context, x, y, image):
+    def tap_until_answered(context, x, y, image):
         """Tap (x, y), the page checked before each tap, until the map answers: its node panel (MapNodePanel) shows or
-        the screen leaves the one the first check passed (recovery.same_screen). Whether it did; the last tap goes out
-        within MAP_TAP_LIMIT s (#473)."""
+        the screen leaves the one the first check passed (recovery.same_screen). Whether it did; no tap is made again
+        once MAP_TAP_LIMIT s have passed since the first (#473)."""
         before, end = recovery.thumb(page_guard(context, "MirrorMap", image=image)), time.monotonic() + MAP_TAP_LIMIT
 
         def answered(im):
@@ -2604,8 +2604,7 @@ class RouteMap(CustomAction):
         Only that slot is read, and the map is dragged (bus to the far left) only when it sits under the
         resource bar or the buttons. False, for a full read, whenever in doubt: no plan or a used-up one,
         the slot not linked to the bus or not of the planned type (the bus not where the plan put it, or a
-        misread from afar), or no panel after its tap. A tap the map does not answer is made again for up to
-        MAP_TAP_LIMIT s (tap_answered, #473).
+        misread from afar), or no panel after its tap, made again while the map ignores it (#473).
         """
         plan = RUN.get("map_plan")
         if not plan or plan["floor"] != RUN.get("floor") or not plan["steps"]:
@@ -2628,7 +2627,7 @@ class RouteMap(CustomAction):
         if kind != node:
             log(f"map: planned {row} {node} reads {kind}; reading the map again")
             return False
-        if not RouteMap.tap_answered(context, cx, cy, image):
+        if not RouteMap.tap_until_answered(context, cx, cy, image):
             log(f"map: planned {row} {node} took no tap in {MAP_TAP_LIMIT} s; reading the map again")
             return False
         if until(context, lambda im: seen(context, im, "MapNodePanel")) is None:
