@@ -446,6 +446,50 @@ def test_a_fresh_hard_map_that_cannot_pan_costs_no_extra_drags(context, clock):
     assert ctl.post_touch_down.call_count == 3
 
 
+def touch_times(context):
+    """[(kind, t)] of each touch down, move and lift on the fake clock, map_world's fakes still doing the moving."""
+    ctl, events = context.tasker.controller, []
+    for kind, fake in (("down", ctl.post_touch_down), ("move", ctl.post_touch_move), ("up", ctl.post_touch_up)):
+        fake.side_effect = lambda *a, kind=kind, inner=fake.side_effect: events.append((kind, actions.time.monotonic())) or inner(*a)
+    return events
+
+
+# Lit links across the screen: map_world's noise alone averages out over recovery.thumb's blocks, so a drag of it reads as
+# no change; a live map's nodes and links moved 12.8% of the blocks or more by a drag's last move (#486).
+ROW_LINKS = [((1, r), (2, r)) for r in ("up", "mid", "down")]
+
+
+def test_a_first_drag_the_map_ignores_is_made_again_without_resting_or_waiting(context):
+    # #486: after the map faded in, the game ignored find_bus's first drag in 20 of 60 map visits (six runs); the drag
+    # still rested SCROLL_HOLD s before the lift and waited 0.5 s after it, 1.50-1.58 s from that drag to the next.
+    offsets = map_world(context, {(1, "mid"): {"cost"}}, ROW_LINKS, bus_x=446)
+    ctl = context.tasker.controller
+    move = ctl.post_touch_move.side_effect
+    ctl.post_touch_move.side_effect = lambda x, y: MagicMock() if ctl.post_touch_down.call_count == 1 else move(x, y)
+    events = touch_times(context)
+    _, bus = actions.RouteMap.find_bus(context)
+    assert abs(bus[0] - actions.BUS_HOME[0]) <= actions.BUS_SLACK[0] and len(offsets) == 2  # the second drag took the bus home
+    second = [k for k, _ in events].index("down", 1)
+    last_move = max(t for k, t in events[:second] if k == "move")
+    assert events[second][1] - last_move < actions.SCROLL_HOLD  # before the old rest alone would have ended
+
+
+def test_a_drag_the_map_follows_rests_and_waits_as_before(context):
+    # #486: the screenshot that tells an ignored drag is taken while the finger rests; a drag the map follows still rests
+    # SCROLL_HOLD s from its last move (no fling, #114), that screenshot's time inside the rest, and waits 0.5 s after it.
+    map_world(context, {(1, "mid"): {"cost"}}, ROW_LINKS, bus_x=446)
+    shot = context.tasker.controller.post_screencap.return_value.wait.return_value.get
+    grab, looks = shot.side_effect, []
+    shot.side_effect = lambda: actions.time.sleep(0.1) or looks.append(actions.time.monotonic()) or grab()
+    events = touch_times(context)
+    _, bus = actions.RouteMap.find_bus(context)
+    assert abs(bus[0] - actions.BUS_HOME[0]) <= actions.BUS_SLACK[0]
+    assert [k for k, _ in events].count("down") == 1
+    last_move, lift = max(t for k, t in events if k == "move"), next(t for k, t in events if k == "up")
+    assert actions.SCROLL_HOLD <= lift - last_move < actions.SCROLL_HOLD + 0.1  # the screenshot's 0.1 s is inside the rest
+    assert min(t for t in looks if t > lift) - lift >= 0.5
+
+
 def test_a_gift_window_over_the_map_after_a_battle_goes_back_to_mirror_hub(context, monkeypatch):
     # Live 2026-10-19 23:34: after an abnormality fight E.G.O Gift GET! slid in over the map (GiftGet 0.73, under its
     # threshold, MirrorMap 0.997); RouteMap read under it, found no bus, dragged the map about and went to L2, then L3.
@@ -694,9 +738,9 @@ def test_a_short_drag_still_brings_every_column_near_before_it_is_joined_on(cont
     offsets = map_world(context, WIDE, WIDE_LINKS, bus_x=446, width=3200)
     drags, scroll, reads = [], actions.scroll, cost_reads(monkeypatch, offsets)
 
-    def short_first(context, x, y, dx, dy):
+    def short_first(context, x, y, dx, dy, **kw):
         drags.append(dx)
-        scroll(context, x, y, dx + eaten[0] if len(drags) == 2 else dx + eaten[1] if len(drags) == 3 else dx, dy)
+        return scroll(context, x, y, dx + eaten[0] if len(drags) == 2 else dx + eaten[1] if len(drags) == 3 else dx, dy, **kw)
     monkeypatch.setattr(actions, "scroll", short_first)
     actions.RouteMap().run(context, None)
     assert {c for c, costs in reads if costs} >= set(range(1, 7))

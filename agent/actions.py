@@ -267,16 +267,26 @@ def swipe(context, x1, y1, x2, y2, ms=500, wait=1.0):
     time.sleep(wait)
 
 
-def scroll(context, x, y, dx, dy):
+def scroll(context, x, y, dx, dy, ignored=None):
     """Drag the content under (x, y) by (dx, dy) px and let go without a fling (spec 07).
 
     The game's drag threshold eats the first move, so the finger first moves 10 px and rests 0.1 s (a move
     right after it can be eaten too), then moves (dx, dy) in 20 px moves 10 ms apart. The game flings the content
     on with the speed the finger still has at the lift, decaying while it rests, so it rests SCROLL_HOLD s first.
+    ignored(image) judges a screenshot taken as the rest starts: when it says the content did not follow the finger,
+    nothing moves to fling, so the finger lifts at once and that screenshot is returned (#486). Else None, the
+    screenshot's time taken out of the rest.
     """
     d = max(abs(dx), abs(dy), 1)
     lx, ly = x + round(10 * dx / d), y + round(10 * dy / d)
-    drag(context, [(x, y), (lx, ly), (lx + dx, ly + dy)], settle=0, dwell=0.1, hold=SCROLL_HOLD, pause=0.01, step=20)
+    press(context, [(x, y), (lx, ly), (lx + dx, ly + dy)], settle=0, dwell=0.1, pause=0.01, step=20)
+    end = time.monotonic() + SCROLL_HOLD
+    image = screen(context) if ignored else None
+    stayed = image is not None and ignored(image)
+    if not stayed:
+        time.sleep(max(0.0, end - time.monotonic()))
+    context.tasker.controller.post_touch_up().wait()
+    return image if stayed else None
 
 
 # Live 2026-10-18 (#114): with these moves (~1000 px/s) a 0.55 s rest left at most 1 px of fling in 126 drags of
@@ -291,6 +301,13 @@ def drag(context, points, settle=0.3, dwell=0.1, hold=0.0, pause=0.02, step=10):
 
     Lifts on the last point after hold s; at once by default: a finger held on a battle skill opens its details.
     """
+    press(context, points, settle, dwell, pause, step)
+    time.sleep(hold)
+    context.tasker.controller.post_touch_up().wait()
+
+
+def press(context, points, settle, dwell, pause, step):
+    """drag's touch up to its lift: the finger is left down on the last point."""
     ctl = context.tasker.controller
     ctl.post_touch_down(*points[0]).wait()
     time.sleep(settle)
@@ -301,8 +318,6 @@ def drag(context, points, settle=0.3, dwell=0.1, hold=0.0, pause=0.02, step=10):
             time.sleep(pause)
         if (x1, y1) != points[-1]:
             time.sleep(dwell)
-    time.sleep(hold)
-    ctl.post_touch_up().wait()
 
 
 def ocr(context, image, roi, only_rec=False):
@@ -2542,10 +2557,14 @@ class RouteMap(CustomAction):
         Up to three pans. On a floor's fresh map (no node entered since the theme pack) a pan that leaves the
         bus where it was does not count and is made again, for up to MAP_PAN_LIMIT s: live 2026-10-19, a new
         map took no drag for its first seconds. Once a pan has moved the bus, one that does not is the map's edge.
+        #486: after a fade-in the game ignores the map's touches for a while. A pan's screenshot as the finger stops
+        that shows the screen it started on (recovery.same_screen) lifts the finger at once and is the next look: no
+        rest, no 0.5 s wait. On the six runs' recordings, at the last move 20 ignored drags had moved at most 1.9% of
+        the blocks, 108 taken ones 12.8% or more.
         """
         end, pans, last, moved = time.monotonic() + MAP_PAN_LIMIT, 0, None, False
+        image = screen(context)
         while True:
-            image = screen(context)
             bus = seen(context, image, "MapBus")
             if not bus:
                 return image, None
@@ -2568,9 +2587,12 @@ class RouteMap(CustomAction):
             # Look again after each pan. Start on map background: between the first and second columns,
             # between the middle and bottom rows. #213: a GET! window rising over the map ends the pans.
             page_guard(context, "MirrorMap", image=image)
-            scroll(context, min(bx + SLOT[0] + map_route.COLUMN_DX // 2, 1100), by + SLOT[1] + 106, dx, dy)
-            time.sleep(0.5)
-            last = (bx, by)
+            last, before = (bx, by), recovery.thumb(image)
+            image = scroll(context, min(bx + SLOT[0] + map_route.COLUMN_DX // 2, 1100), by + SLOT[1] + 106, dx, dy,
+                           ignored=lambda im: recovery.same_screen(before, recovery.thumb(im)))
+            if image is None:
+                time.sleep(0.5)
+                image = screen(context)
 
     @staticmethod
     def search_bus(context):
