@@ -189,6 +189,10 @@ class PageGone(Exception):
     """The page an action works on went away mid-action (#118): by hand, a popup, a disconnect."""
 
 
+class PageEnded(PageGone):
+    """The page gave way to the one it ends on (ENDS_ON)."""
+
+
 def on_page(context, image, *nodes):
     """The first of nodes (MirrorHub's screen nodes) that hits on image, or None."""
     return next((n for n in nodes if seen(context, image, n)), None)
@@ -201,11 +205,14 @@ COVERS = {"MirrorMap": ("GiftGet",)}
 # Windows that hide a page's anchor where the action's own taps close them anyway: they pass its guard as its page.
 # #309: an event's GET! windows, over its page or the map it ends on, close on any tap, the text taps on the dead corner too.
 TAPPED_THROUGH = {"Event": ("GiftGet",)}
+# The page an action's page gives way to, looked for after its own and its TAPPED_THROUGH windows: seen, the page is gone
+# without the 1 s look again (#511). MirrorMap hits under the GET! windows an event ends with too: GiftGet first.
+ENDS_ON = {"Event": ("MirrorMap",)}
 
 
 def page_guard(context, home, image=None):
     """Before a tap: a screenshot that still shows home (MirrorHub's node for the action's page) or one of its
-    TAPPED_THROUGH windows; else PageGone.
+    TAPPED_THROUGH windows; PageEnded at once on the page it ends on (ENDS_ON); else PageGone.
 
     ADR 0007, #118: an action that taps on for long checks its page first, so a screen changed under it is
     handed back to MirrorHub at once instead of tapped blind until the action gives up. A miss is looked at
@@ -214,10 +221,13 @@ def page_guard(context, home, image=None):
     one of POPUPS showing is the page gone too: MirrorHub answers it first. So is one of home's COVERS.
     image: a screenshot just taken, looked at first.
     """
-    pages = (home, *TAPPED_THROUGH.get(home, ()))
+    pages, ends = (home, *TAPPED_THROUGH.get(home, ())), ENDS_ON.get(home, ())
 
     def shown(im):
-        return on_page(context, im, *POPUPS, *COVERS.get(home, ()), *pages) in pages
+        page = on_page(context, im, *POPUPS, *COVERS.get(home, ()), *pages, *ends)
+        if page in ends:
+            raise PageEnded(home)
+        return page in pages
 
     if image is not None and shown(image):
         return image
@@ -3328,7 +3338,11 @@ EVENT_TEXT_TAPS = 30
 EVENT_TAP_EVERY, EVENT_READ_EVERY = 0.15, 3
 EVENT_TAKE = 1.5  # s a tap on an event page has to show
 EVENT_LABELS = {"skip", "proceed", "continue", "commence"}  # the Event node's expected, compact()ed
-EVENT_BUTTON_LABEL = [1040, 612, 190, 66]  # the Event node's roi: empty once the event page is gone
+EVENT_BUTTON_LABEL = [1040, 612, 190, 66]  # the Event node's roi; on the map the bottom bar's lever reads there (#511)
+# s the map an event ends on holds still before Event hands back: GET! windows come over it, and close on the corner taps
+# (#309). The 2026-10-23 window recording, 28 event ends (#511): the map held still at most 0.23 s before a window came,
+# and not at all between two windows; the last map held still 0-0.27 s after it showed.
+EVENT_MAP_REST = 0.4
 EVENT_LIMIT = 180  # s one event may take before recovery L1 (AALC allows 300); a boss quiz of several rounds stays well under
 EVENT_ODDS_WAIT = 2.0  # s after a check's prompt first shows that no odds read hands back to MirrorHub, not a sinner (#380); live: the odds came 1.8 s after
 EVENT_GAP = 30  # s between two Event calls after which the next call is another event
@@ -3461,17 +3475,29 @@ class Event(CustomAction):
         next button; lit EVENT_TAKE s on, the press was lost.
         Only two labels read whole tell another button: one read empty or in part while it fades ("Contnue") is not,
         as MirrorHub's Event node would still match the fading button and press it twice.
+        On the map the event ends on, the taps go on until the screen a look saw it on has not changed for
+        EVENT_MAP_REST s (#511).
         """
         last, pressed_label = 0.0, None  # None: not in a press's fade (any more)
         if pressed_at is not None:
             last, pressed_label = pressed_at, compact(text(context, image, EVENT_BUTTON_LABEL))
+        shot_at = still_since = time.monotonic()
+        small, ended = recovery.thumb(image), None  # ended: the time of the screenshot a look last saw the map on
         for n in range(1, EVENT_TEXT_TAPS + 1):
             time.sleep(max(0.0, last + EVENT_TAP_EVERY - time.monotonic()))
             last = time.monotonic()
             if (n - 1) % EVENT_READ_EVERY == 0:  # on the last read's screenshot (#118, ADR 0007): an OCR a tap would undo the 0.15 s
-                page_guard(context, "Event", image=image)
+                try:
+                    page_guard(context, "Event", image=image)
+                except PageEnded:
+                    ended = shot_at
+            if ended is not None and still_since <= ended and shot_at - still_since >= EVENT_MAP_REST:
+                raise PageEnded("Event")
             tap(context, *EVENT_NEUTRAL, wait=0)
-            image = screen(context)
+            image, shot_at = screen(context), time.monotonic()
+            before, small = small, recovery.thumb(image)
+            if not recovery.same_screen(before, small):
+                still_since = shot_at
             if red_button(image):
                 if pressed_label is None or time.monotonic() - pressed_at >= EVENT_TAKE:
                     break
