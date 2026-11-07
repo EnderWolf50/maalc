@@ -35,9 +35,10 @@ CARDS = {
 # A fight's gift page, whose tier PickGift does not score (main > other > owned there), but the last gift card of
 # tests/screens: its numeral 8 px lower than a boss page's.
 TIERS = {"GiftChoice.png": [(639, 2)]}
-# capture -> the Select n/m its button shows, None for "Select" alone
+# Every gift page capture PickGift runs on -> the Select n/m its button shows, None for "Select" alone (#494). Swept over
+# all 226 captures of tests/screens on 2026-11-08, only these two None pages read "Select" alone.
 COUNTS = {"BossGiftTrials.png": (0, 1), "BossGiftTrialsHard.png": (0, 2), "BossGiftTrialsFloor3.png": (0, 1),
-          "GiftChoiceNoCount.png": None}
+          "GiftRefuseDialog.png": (0, 1), "GiftChoice.png": None, "GiftChoiceNoCount.png": None}
 
 
 def load(name):

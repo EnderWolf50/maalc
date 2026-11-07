@@ -319,8 +319,9 @@ def test_pick_gifts_stops_at_the_count_once_it_reads():
     assert page.taps == [2]
 
 
-def test_pick_gifts_a_lone_card_is_tapped_once():
-    page = GiftPage(picks=1, counted=False)  # one card shows no count
+@pytest.mark.parametrize("unread", [0, 99])
+def test_pick_gifts_a_lone_card_is_tapped_once(unread):
+    page = GiftPage(picks=1, unread=unread, counted=False)  # one card shows no count
     r.pick_gifts([0], page.read, page.tap)
     assert page.taps == [0]
 
