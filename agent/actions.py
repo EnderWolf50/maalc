@@ -79,6 +79,12 @@ PACK_TITLES = [120, 400, 1040, 100]  # up to 5 cards (live: 5 with two Theme Pac
 # #246, recordings: dealt cards slide in and swing until ~2.8 s after the deal; their titles are read once they stop.
 PACK_CARDS = [120, 170, 1040, 360]
 CARDS_SETTLE = 4.0  # s; a page still swinging by then is read anyway
+# The theme pack page's Refresh button (frame, icon and word): lit while a free refresh is left, greyed once none is,
+# with or without its `n/m` (#482: one free refresh shows none). How many of its px are brighter than REFRESH_BRIGHT
+# (max channel), on the pack pages of 46 live runs' recordings (2026-10-22 to 11-07, 288 frames): lit 765-2108 (253
+# frames), greyed 0 (35 frames, the brightest px 54-56). The ThemePack captures of tests/screens: lit 1176-1321, greyed 0.
+REFRESH_BUTTON = (1001, 25, 163, 45)
+REFRESH_BRIGHT, REFRESH_LIT = 120, 100
 
 
 def log(msg):
@@ -2010,6 +2016,12 @@ def columns(results):
     return [(g[0][0], [t for _, _, t in sorted(g, key=lambda line: line[1])]) for g in groups]
 
 
+def refresh_lit(image):
+    """Whether the theme pack page's Refresh button is lit: REFRESH_LIT of its px over REFRESH_BRIGHT (#482)."""
+    x, y, w, h = REFRESH_BUTTON
+    return bool((image[y:y + h, x:x + w].max(axis=2) > REFRESH_BRIGHT).sum() >= REFRESH_LIT)
+
+
 @AgentServer.custom_action("PickThemePack")
 class PickThemePack(CustomAction):
     """Set this floor's difficulty, then pull the best pack: highest weight, leftmost first (spec 03 sections 2, 6)."""
@@ -2037,7 +2049,7 @@ class PickThemePack(CustomAction):
         names = packs + list(plan["weights"])  # a weighed pack the data file dropped still matches
         setting = run["settings"]["run"]["theme_pack_refresh"]
         prev = None
-        for used in range(10):  # the button's `Refresh 0/m` ends it; unread, a refresh that changes nothing does (#319)
+        for used in range(10):  # a greyed button or its `0/m` ends it (#319, #482); unread, a refresh that changes nothing does
             settled = still(context, timeout=CARDS_SETTLE, roi=PACK_CARDS, runs=2)
             if settled is None:
                 log(f"floor {floor}: the cards still moved after {CARDS_SETTLE:g} s")
@@ -2055,7 +2067,7 @@ class PickThemePack(CustomAction):
             i, meets = run_start.pick_pack([w for _, w, _ in ranked], slots, plan)
             if not run_start.refresh_wanted(meets, setting, used) or titles == prev:
                 break
-            if seen(context, page, "PackRefreshSpent"):
+            if not refresh_lit(page) or seen(context, page, "PackRefreshSpent"):
                 log(f"floor {floor}: no free refresh left")
                 break
             prev = titles
