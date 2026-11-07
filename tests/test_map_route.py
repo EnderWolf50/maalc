@@ -578,8 +578,8 @@ def test_a_floor_wider_than_the_screen_is_read_two_columns_a_drag_and_planned_wh
     offsets = map_world(context, WIDE, WIDE_LINKS, bus_x=446, width=2900)
     actions.RouteMap().run(context, None)
     # The bus to the far left, two drags of two columns on to the boss, then back to the bus. The fake map takes
-    # each drag's 10 px threshold move too (actions.scroll): 520 px a drag, and back a little past where it was.
-    assert [o - offsets[0] for o in offsets[:3]] == [0, 520, 1040] and abs(446 - offsets[-1] - actions.BUS_HOME[0]) <= 30
+    # each drag's 10 px threshold move too (actions.scroll): 520 px a drag, and as far back.
+    assert [o - offsets[0] for o in offsets[:3]] == [0, 520, 1040] and offsets[-1] == offsets[0]
     # up: 4 events, 2 focused (12); down: 4 battles, 2 events (10). The first screen alone took the top row.
     assert context.tasker.controller.post_click.call_args_list[0].args == (446 - offsets[-1] + actions.SLOT[0], actions.BUS_HOME[1] + actions.SLOT[1] + 213)
     assert actions.RUN["map_plan"]["steps"] == [("mid", "battle")] * 3 + [("mid", "event")] * 2 + [("up", "shop"), ("mid", "boss")]
