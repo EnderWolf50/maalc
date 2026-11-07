@@ -2099,8 +2099,9 @@ class PickThemePack(CustomAction):
 # The bus at the far left: the screen shows it and four columns (#111; the user's hard-mode capture, bus at 47, 311).
 # Panned ~70 px down from rest (bus at 446, 248): top-row badges clear the resource bar.
 BUS_HOME = (50, 320)
-# px off BUS_HOME, across and down, at which find_bus takes the bus as home. RouteMap.read_on leaves a drag back this
-# short undone (#490): live, the 1 px one left after each 510 px drag back did not move the map (2026-11-06, 5 of 5).
+# px off BUS_HOME, across and down, at which find_bus takes the bus as home (#26 picked them; nothing measured them).
+# RouteMap.read_on leaves a drag back this short undone (#490): live, the 1 px one left after each 510 px drag back did
+# not move the map (2026-11-06, 5 of 5).
 BUS_SLACK = (30, 25)
 BUS_REST = (446, 248)
 SLOT = (279, 37)  # middle-row slot centre; map_route.ROW_DY gives the other rows

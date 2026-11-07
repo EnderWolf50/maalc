@@ -620,7 +620,9 @@ SIX = ({**{k: v for k, v in WIDE.items() if k[0] <= 5}, (6, "mid"): {"boss"}},
     (SIX, 2900, [-510, 510]),
     ((WIDE, WIDE_LINKS), 2900, [-510, -510, 510, 510]),
     ((WIDE, WIDE_LINKS), 2676, [-510, -510, 510, 490]),
-], ids=["read on the first screen", "511 px", "511 then 511 px", "511 then 489 px to the edge"])
+    ((WIDE, WIDE_LINKS), 2227, [-510, -510, 510, 41]),
+], ids=["read on the first screen", "511 px", "511 then 511 px", "511 then 489 px to the edge",
+        "511 then 40 px to the edge: read_on drags the 41 px back, not find_bus"])
 def test_the_drag_back_leaves_undone_a_remainder_find_bus_takes_as_home(context, monkeypatch, floor, width, drags):
     # #490, live 2026-11-06 NORMAL: each drag of 510 px measured 511; the 1 px drag back after the 510 px one did not
     # move the map.
