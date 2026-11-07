@@ -831,11 +831,11 @@ def test_a_new_runs_first_floor_does_not_tap_the_bus_first(context, monkeypatch)
 
 # #473, live 2026-11-07 HARD: back on the map after a fight, the map still and the tap on the planned node, the game
 # took no touch for a while; each such miss cost a full read (~4 s), 12 times in the run.
-NODE = (446 + actions.SLOT[0], actions.BUS_HOME[1] + actions.SLOT[1])  # the middle slot by the bus at x 446: no drag first
+PLANNED = (446 + actions.SLOT[0], actions.BUS_HOME[1] + actions.SLOT[1])  # the middle slot by the bus at x 446: no drag first
 
 
-def deaf_map(context, monkeypatch, hears):
-    """Floor 1's plan goes on to the battle at NODE; its node panel shows only while hears(clicks, drags) holds.
+def deaf_world(context, monkeypatch, hears):
+    """Floor 1's plan goes on to the battle at PLANNED; its node panel shows only while hears(clicks, drags) holds.
 
     The log lines, the clicks as ((x, y), time) and the drags as (time, clicks before it) on the fake clock.
     """
@@ -856,31 +856,48 @@ def deaf_map(context, monkeypatch, hears):
 
 
 def test_a_planned_node_the_map_ignores_is_tapped_again_until_its_panel_shows(context, monkeypatch):
-    logs, clicks, drags = deaf_map(context, monkeypatch, lambda clicks, drags: len(clicks) >= 3)
+    logs, clicks, drags = deaf_world(context, monkeypatch, lambda clicks, drags: len(clicks) >= 3)
     assert actions.RouteMap().run(context, None)
     assert not drags  # followed: no drag for a full read
-    assert [xy for xy, _ in clicks if xy != actions.ENTER] == [NODE] * 3
-    assert logs.count(f"map: no answer to the tap at {NODE[0]}, {NODE[1]}; tapping again") == 2
+    taps = [(xy, at) for xy, at in clicks if xy != actions.ENTER]
+    assert [xy for xy, _ in taps] == [PLANNED] * 3
+    assert all(b - a >= actions.MAP_ANSWER for (_, a), (_, b) in zip(taps, taps[1:]))  # each waited for an answer first
+    assert logs.count(f"map: no answer to the tap at {PLANNED[0]}, {PLANNED[1]}; tapping again") == 2
     assert actions.RUN["map_plan"]["steps"] == []
     assert "entered the node" in logs
 
 
 def test_a_planned_node_that_takes_no_tap_for_long_is_left_for_a_full_read(context, monkeypatch):
-    logs, clicks, drags = deaf_map(context, monkeypatch, lambda clicks, drags: bool(drags))
+    logs, clicks, drags = deaf_world(context, monkeypatch, lambda clicks, drags: bool(drags))
     assert actions.RouteMap().run(context, None)
     at, before = drags[0]
     assert before > 1  # tapped again while the map gave no answer
-    assert {xy for xy, _ in clicks[:before]} == {NODE}
-    assert actions.MAP_DEAF <= at - clicks[0][1] < actions.MAP_DEAF + 2
-    assert f"map: planned mid battle took no tap in {actions.MAP_DEAF} s; reading the map again" in logs
+    assert {xy for xy, _ in clicks[:before]} == {PLANNED}
+    assert actions.MAP_TAP_LIMIT <= at - clicks[0][1] < actions.MAP_TAP_LIMIT + 2
+    assert f"map: planned mid battle took no tap in {actions.MAP_TAP_LIMIT} s; reading the map again" in logs
+
+
+def test_a_page_gone_between_taps_ends_the_taps_on_the_planned_node(context, monkeypatch):
+    # ADR 0007: each tap again is checked against the page first; a small popup may not move the screen enough to answer.
+    logs, clicks, drags = deaf_world(context, monkeypatch, lambda clicks, drags: False)
+    shown = actions.page_guard
+
+    def guard(context, home, image=None):
+        if len(clicks) >= 2:
+            raise actions.PageGone(home)
+        return shown(context, home, image)
+    monkeypatch.setattr(actions, "page_guard", guard)
+    with pytest.raises(actions.PageGone):
+        actions.RouteMap.follow(context)
+    assert [xy for xy, _ in clicks] == [PLANNED] * 2
 
 
 def test_a_tap_that_changes_the_map_but_opens_no_panel_is_not_made_again(context, monkeypatch):
     # The screen it answered with is another one now (a window over the map): a second tap there could hit something else.
-    logs, clicks, drags = deaf_map(context, monkeypatch, lambda clicks, drags: bool(drags))
+    logs, clicks, drags = deaf_world(context, monkeypatch, lambda clicks, drags: bool(drags))
     get = context.tasker.controller.post_screencap.return_value.wait.return_value.get
     shot = get.side_effect
     get.side_effect = lambda: 255 - shot() if clicks and not drags else shot()
     assert actions.RouteMap().run(context, None)
-    assert [xy for xy, _ in clicks[:drags[0][1]]] == [NODE]
+    assert [xy for xy, _ in clicks[:drags[0][1]]] == [PLANNED]
     assert "map: planned mid battle moved the map but showed no panel; reading the map again" in logs
