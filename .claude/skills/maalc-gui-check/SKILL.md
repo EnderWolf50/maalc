@@ -5,7 +5,7 @@ description: Build and launch the real maalc settings app (Tauri, gui/) and driv
 
 `pnpm test`, `tsc` and `tauri build` never open the app. A Tauri window setting (`dragDropEnabled`) once broke every drag-and-drop list while each earlier GUI PR passed those three (issue #64, fixed in 380aad8). A GUI change is verified when the real app was driven and looked at.
 
-What driving it takes (session, delivery mode, window sizes at the display's scaling, UIPI) is in `docs/agents/gui-driving.md`; how the screenshots look is in `docs/agents/evidence-style.md`. Read `cua-driver`'s skill before step 4. The app runs from a throwaway folder: the emulator, the game account and `install/` are not involved, and no live-test queue ticket is needed.
+What driving it takes (session, delivery mode, window sizes, UIPI) is in `docs/agents/gui-driving.md`; how the screenshots look is in `docs/agents/evidence-style.md`. Read `cua-driver`'s skill before step 4. The app runs from a throwaway folder: the emulator, the game account and `install/` are not involved, and no live-test queue ticket is needed.
 
 ## Steps
 
