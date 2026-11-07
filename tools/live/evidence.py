@@ -602,15 +602,20 @@ def card_rows(grays) -> list[tuple[float, float]]:
 
 
 EMPTY = 8  # mean brightness of an empty card area: black is 0, the starfield behind the cards 6.7 (floor 1, 2026-10-22)
+# Mean abs change of a full card area in one frame that only a new hand makes: the 3 Refreshes of 2026-10-29 and
+# 2026-11-07 changed it by 18.1-21.5 (the area dims to only 8.3-8.6, above EMPTY), while the dealt cards of those
+# runs' 16 reads swing by at most 13.0.
+SWAP = 15
 
 
 def settle(rows, k_log: int):
-    """(deal frame, settle frame or None, deal before the footage): the deal follows the last empty card area
-    before the log line; the cards stand still from the first of 8 frames each under 2 apart."""
-    empties = [i for i in range(min(k_log, len(rows) - 1) + 1) if rows[i][0] < EMPTY]
-    deal = empties[-1] + 1 if empties else 0
+    """(deal frame, settle frame or None, deal before the footage): the deal follows the last empty card area or
+    swapped hand (a Refresh) before the log line; the cards stand still from the first of 8 frames each under 2 apart."""
+    cuts = [i for i in range(min(k_log, len(rows) - 1) + 1)
+            if rows[i][0] < EMPTY or (i and rows[i - 1][0] >= EMPTY and rows[i][1] >= SWAP)]
+    deal = cuts[-1] + 1 if cuts else 0
     still = next((i for i in range(deal, len(rows) - 7) if rows[i][0] > 20 and all(rows[j][1] < 2 for j in range(i, i + 8))), None)
-    return deal, still, not empties
+    return deal, still, not cuts
 
 
 def centres(n: int) -> list[float]:

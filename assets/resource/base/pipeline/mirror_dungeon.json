@@ -132,6 +132,7 @@
         "any_of": [
             "BattleMenu",
             "LuxBattleMenu",
+            "EgoCard",
             "BattleTurn",
             "BattlePause"
         ],
@@ -150,6 +151,7 @@
             "PopupButton",
             "BattleMenu",
             "LuxBattleMenu",
+            "EgoCard",
             "BattleTurn",
             "BattlePause"
         ]
@@ -545,6 +547,44 @@
         "custom_action_param": {
             "target": [505, 323, 270, 42],
             "gone": {"roi": [505, 323, 270, 42], "expected": "Resume"}
+        }
+    },
+    // A sinner's E.G.O card over the turn (#468, live 2026-11-07, tests/screens/LuxBattleEgoCard.png, BattleEgoCard.png):
+    // a long press (2.5 s) on a portrait opens it, the whole battle dimmed, the card in the middle (Details, To Corrode,
+    // the 7 sin costs), the sinner's Resistances bar below. The card's frame takes the E.G.O's colour; its Details and the
+    // bar's Resistances stay put (two sinners, two colours, the same place). A sinner with more E.G.O shows a card each in
+    // a row: three with the middle one where a single card sits (LuxBattleEgoCards.png), two side by side with none there
+    // (BattleEgoCardsTwo.png, Details 0.96 at x 518): the Details roi spans the row. The back key leaves it up; a tap
+    // anywhere off the card closes it (#468: the dimmed field, the bar, the dim above the card, within 0.1 s). A tap at
+    // (1, 1) closed it within 0.35 s each of the 9 times a screenshot followed (one card 5, two cards 4; the bot frozen
+    // mid-hold, its own finger maybe down there), and with the bot running it closed one card and two, the screen
+    // changed 0.3 s after the tap (#469). The tap goes there, hold_turn's HOLD_SPOT, which no battle screen has a
+    // button on. Before BattleTurn and BattlePause: it hides the HUD they look for.
+    "EgoCard": {
+        "recognition": "And",
+        "all_of": [
+            {
+                "recognition": "TemplateMatch",
+                "sub_name": "EgoCardDetails",
+                "roi": [200, 115, 880, 70],
+                "template": "Battle/EgoCardDetails.png",
+                "threshold": 0.9
+            },
+            {
+                "recognition": "TemplateMatch",
+                "sub_name": "EgoCardResistances",
+                "roi": [250, 530, 170, 60],
+                "template": "Battle/EgoCardResistances.png",
+                "threshold": 0.9
+            }
+        ],
+        "action": "Custom",
+        "custom_action": "TapUntil",
+        "pre_delay": 0,
+        "post_delay": 0,
+        "custom_action_param": {
+            "target": [1, 1, 1, 1],
+            "left": true
         }
     },
     // Waiting for input: the Win Rate label, off or on. It moves half a slot (~40 px) right with every

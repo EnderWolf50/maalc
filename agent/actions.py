@@ -2996,7 +2996,9 @@ HOLD_EVERY = 0.3  # s between looks, MirrorHub's rate_limit
 HOLD_LIMIT = 6  # s at most per hold (a turn without E.G.O plays ~6 s): then MirrorHub (its watchdog, recovery) looks; BattlePause holds a longer turn again
 # Screens that can follow a turn, besides the next turn: the finger lifts before their node acts.
 BATTLE_POPUPS = ("Connecting", "RetryPopup", "PopupButton")  # template-gated: looked for while a turn plays, no OCR (#157)
-BATTLE_LEFT = BATTLE_POPUPS + ("Victory", "WipeDialog", "Event", "ClaimPopup", "Loading")
+# EgoCard (#468): in the daily run of 2026-11-07 the card was up after `turn 1: started`, still on TURN 1; what opened it
+# there is unverified (a long press on a portrait opens it). A hold that meets it lifts at once, not after HOLD_LIMIT.
+BATTLE_LEFT = BATTLE_POPUPS + ("Victory", "WipeDialog", "Event", "ClaimPopup", "Loading", "EgoCard")
 
 
 def hold_turn(context):
