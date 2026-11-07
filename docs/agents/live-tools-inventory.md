@@ -44,6 +44,7 @@ The old scripts stay in `.local/`, unchanged. These are replaced, every copy und
 - `prep.py`, `prep_config.py`, `prep_settings.py` → `bot.py prep`
 - `keepawake.ps1`, `awake.ps1`, `wake.ps1` → `bot.py awake`
 - `shot.py`, `tap.py`, `start_game.py`, `freezer.py` → `device.py`
+- `scratch/daily-auto/restart_game.py` → `device.py restart`; `scratch/ego-card-468/giveup_md.py` → `giveup.py run` (2026-11-07)
 - `scratch/combined-verify/`: `common.py`, `route.py`, `packs.py`, `mkclip.py`, `packclip.py` → `evidence.py`
 - `scratch/top-live-video4/`: `mkevents.py`, `grabframes.py` → `evidence.py events`, `frames`; `loadspans.py` → `tools/wait_spans.py`; `mask85.py`, `mask197.py` → `evidence.py mask`
 - `scratch/*/maafw_timeline.py` → `tools/maafw_timeline.py`
