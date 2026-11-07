@@ -132,8 +132,33 @@ def test_intervals_count_hub_passes_and_the_first_hit():
     lt = np.arange(0, 10, 0.1)
     scores = np.where((lt >= 2) & (lt <= 3.5), 0.9, 0.1)
     rows = va.intervals(lt, scores, 0.6, hub=[1.0, 2.2, 2.9, 3.3, 5.0], hits=[3.0])
+    # pass_after_gone_s: the hub's first look once the screen went (#258: a 1.2 s sleep after each Connecting hit
+    # put it up to 1.2 s late).
     assert rows == [{"up_at": 2.0, "up_s": 1.5, "hub_passes_while_up": 3, "passes_until_hit": 2,
-                     "recognized": True, "hit_after_s": 1.0}]
+                     "recognized": True, "hit_after_s": 1.0, "pass_after_gone_s": 1.5}]
+    assert va.intervals(lt, scores, 0.6, hub=[1.0], hits=[])[0]["pass_after_gone_s"] == ""  # the log ended first
+
+
+def test_a_green_masked_template_scores_its_word_over_any_page(tmp_path):
+    # Connecting.png is the word on pure green (0, 255, 0), which MaaFramework's green_mask leaves out of the match;
+    # the game shows the word over the page. Unmasked, a frame of the 2026-10-29 run scored 0.33 where the bot
+    # logged 0.99.
+    import cv2
+
+    tpl_path = va.RESOURCE / "image/Screen/Connecting.png"
+    tpl = cv2.imread(str(tpl_path))
+    x, y, w, h = 995, 45, 250, 60
+    page = np.random.default_rng(1).integers(0, 120, (720, 1280, 3), np.uint8)
+    shown = page.copy()
+    word = ~(tpl == (0, 255, 0)).all(axis=2)
+    shown[y + 6:y + 6 + tpl.shape[0], x + 20:x + 20 + tpl.shape[1]][word] = tpl[word]
+    path = tmp_path / "rec.avi"
+    out = cv2.VideoWriter(str(path), cv2.VideoWriter_fourcc(*"MJPG"), 10, (1280, 720))
+    for frame in [page] * 5 + [shown] * 5:
+        out.write(frame)
+    out.release()
+    _, vs, _ = va.video_scores(path, {"Connecting": (tpl_path, (x, y, w, h), 0.8)}, started=0.0)
+    assert (vs["Connecting"][:5] < 0.5).all() and (vs["Connecting"][5:] >= 0.9).all(), vs["Connecting"]
 
 
 def test_unaligned_frames_end_an_interval():

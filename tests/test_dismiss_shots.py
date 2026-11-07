@@ -1,5 +1,6 @@
 """A screen the bot dismisses is kept in logs/dismissed/ first (#244)."""
 
+import json
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
@@ -40,7 +41,7 @@ def arg(node, param=None, box=(100, 200, 40, 20), reco_detail=None):
 
 
 def test_the_screen_is_kept_under_its_time_and_node_before_the_key(game):
-    assert actions.DismissShot().run(game.ctx, arg("Notices", '"back"'))
+    assert actions.DismissShot().run(game.ctx, arg("Notices", '{"back": true}'))
     (shot,) = game.folder.iterdir()
     assert shot.name.endswith("-Notices.png") and shot.read_bytes().startswith(b"\x89PNG")
     assert game.keys == [actions.BACK_KEY] and game.taps == []
@@ -103,4 +104,47 @@ def test_the_folder_keeps_only_the_latest(game):
 def test_every_dismissing_node_goes_through_the_shot():
     nodes = load_nodes()
     assert [n for n in DISMISSERS if nodes[n].get("custom_action") != "DismissShot"] == []
-    assert [n for n in ("Notices", "HelpPager", "RecoverL1") if nodes[n].get("custom_action_param") != "back"] == []
+    assert [n for n in ("Notices", "HelpPager", "RecoverL1", "HomeBack") if nodes[n]["custom_action_param"].get("back") is not True] == []
+
+
+@pytest.fixture
+def clock(monkeypatch):
+    """A fake clock that time.sleep moves on; returns the list of sleeps."""
+    now, sleeps = [1000.0], []
+
+    def sleep(s):
+        sleeps.append(s)
+        now[0] += s
+    monkeypatch.setattr(actions.time, "sleep", sleep)
+    monkeypatch.setattr(actions.time, "monotonic", lambda: now[0])
+    return sleeps
+
+
+def shows(game, node, looks):
+    """node hits from the looks-th screenshot on (the kept screen is the first), every other node misses."""
+    shots = game.ctx.tasker.controller.post_screencap
+    game.ctx.run_recognition.side_effect = lambda name, image, override=None: (
+        SimpleNamespace(hit=True, box=(0, 0, 1, 1)) if name == node and shots.call_count >= looks else None)
+
+
+UNTIL_HOME = {"until": "HomeReached", "timeout": 1.5}
+
+
+def test_a_popup_with_until_hands_back_once_the_page_under_it_shows(game, clock):
+    # #258: the Mailbox slept 1.5 s after its Close; in all 5 live closes the main window was up at the first look after.
+    shows(game, "HomeReached", looks=3)
+    assert actions.DismissShot().run(game.ctx, arg("Mailbox", json.dumps(UNTIL_HOME)))
+    assert game.taps == [(120, 210)] and sum(clock) == pytest.approx(0.2)  # one 0.2 s look, no 1.5 s sleep
+    assert "Mailbox: screen changed after 0.2 s" in actions.LOG[-1]
+
+
+def test_a_popup_still_up_hands_back_after_its_timeout(game, clock):
+    shows(game, "HomeReached", looks=99)
+    actions.DismissShot().run(game.ctx, arg("Notices", json.dumps({"back": True, **UNTIL_HOME})))
+    assert game.keys == [actions.BACK_KEY] and 1.5 <= sum(clock) < 1.8
+    assert "Notices: no change after 1.6 s" in actions.LOG[-1]
+
+
+def test_a_popup_without_until_does_not_wait(game, clock):
+    actions.DismissShot().run(game.ctx, arg("PopupButton", "null"))  # MaaFramework's param when the node sets none
+    assert game.taps == [(120, 210)] and clock == []  # its post_delay waits instead

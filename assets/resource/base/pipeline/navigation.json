@@ -151,7 +151,9 @@
     "HomeBack": {
         "action": "Custom",
         "custom_action": "DismissShot",
-        "custom_action_param": "back",
+        "custom_action_param": {
+            "back": true
+        },
         "post_delay": 2000,
         "max_hit": 5
     },
