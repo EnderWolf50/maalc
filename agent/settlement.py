@@ -59,14 +59,14 @@ def claim_ok(result):
     return floors_passed(result) >= 5
 
 
-def target_reached(result, target):
-    """Whether the run passed the run's target_floor (5, 10 or 15); only such a run toggles weekly bonuses."""
-    return floors_passed(result) >= target
+def target_reached(floors, target):
+    """Whether a run that passed `floors` floors reached its target_floor (5, 10 or 15); only such a run toggles weekly bonuses."""
+    return floors >= target
 
 
 def claim_bonuses(result, target, use, amount, left, floors_hard, read_first):
     """How many weekly-bonus toggles go ON for a claimed run: none short of the target, none when the marker did not read."""
-    if not target_reached(result, target) or result.difficulty is None:
+    if not target_reached(floors_passed(result), target) or result.difficulty is None:
         return 0
     return bonus_toggles(use, amount, result.hard, left, all_hard(floors_hard, result.floor, result.hard, read_first))
 
@@ -90,7 +90,7 @@ def all_hard(floors_hard, floor, hard, read_first):
 
 
 def bonus_toggles(use, amount, hard, left, all_hard):
-    """How many weekly-bonus toggles go ON for a run that met the goal.
+    """How many weekly-bonus toggles go ON for a run that reached its target_floor.
 
     A run counts as hard when any floor was HARD; the window's last floor shows it, as a run never
     goes back to NORMAL. More than one bonus at once needs every floor HARD (in-game help page).

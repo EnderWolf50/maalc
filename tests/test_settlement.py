@@ -13,6 +13,10 @@ from daily_child import probe_child, run_child, screen
 
 from settlement import NOT_SEEN, Result, all_hard, append_run, bonus_toggles, claim_bonuses, claim_dialog, claim_ok, counts_as_run, first_floor_hard, floors_passed, new_run_gate, now, read_result, runs_done, target_reached
 
+if __name__ != "__main__":  # as test_luxcavation.py: the fixtures are test_actions's
+    import actions
+    from test_actions import clock, context  # noqa: F401 (the fake Maa context the in-process tests use)
+
 
 @pytest.mark.parametrize("text, expected", [
     ("Floor 5 [NORMAL] 6/6", (5, "normal", 6, 6)),
@@ -76,7 +80,7 @@ def test_floors_passed(result, passed):
 def test_claim_ok_and_target_reached(text, target, claim, reached):
     result = read_result(text)
     assert claim_ok(result) is claim
-    assert target_reached(result, target) is reached
+    assert target_reached(floors_passed(result), target) is reached
 
 
 @pytest.mark.parametrize("text, target, expected", [
@@ -221,6 +225,82 @@ def test_a_new_runs_first_floor_forgets_the_floors_of_the_last_run(monkeypatch):
     actions.PickThemePack().run(MagicMock(), SimpleNamespace(node_name="PickThemePack"))
     assert "floors_hard" not in actions.RUN and actions.RUN["floor"] == 1
     actions.RUN.clear()
+
+
+def settle(context, monkeypatch, tmp_path, window, target, floors_hard=None):
+    """Settle on a window reading `window` for a run with `target`, weekly bonuses "hard"/"all" with 3 left.
+
+    The toggles are three switches that a tap on one flips. Returns (taps, ON toggles when Claim was tapped, the runs.jsonl line).
+    """
+    monkeypatch.setattr(actions, "ROOT", tmp_path)
+    monkeypatch.setattr(actions, "address", lambda context: "emulator")
+    team = {"id": "a", "name": "A", "enabled": True}
+    actions.RUN.update(settings={"run": {"weekly_bonus_use": "hard", "weekly_bonus_amount": "all", "target_floor": target}, "teams": [team]},
+                       team=team, planned=True, floors_hard=floors_hard or {})
+    taps, switches, on_at_claim = [], [False] * 3, []
+
+    def tap(context, x, y, wait=1.0):
+        taps.append((x, y))
+        if (x, y) == actions.CLAIM:
+            on_at_claim.append(sum(switches))
+        elif y == 252:
+            i = actions.TOGGLE_X.index(x)
+            switches[i] = not switches[i]
+
+    def ocr(context, image, roi, only_rec=False):
+        if roi == actions.RESULT:
+            return [(window, (300, 420, 90, 20))]
+        if roi == actions.WEEKLY_LEFT:
+            return [("3/3", (440, 230, 40, 20))]
+        if roi == actions.DIALOG_TEXT and actions.GIVE_UP in taps:
+            return [("End expedition without claiming rewards?", (400, 300, 400, 30))]
+        return []
+    monkeypatch.setattr(actions, "ocr", ocr)
+    monkeypatch.setattr(actions, "tap", tap)
+    monkeypatch.setattr(actions, "toggles", lambda context, image: list(switches))
+    assert actions.Settle().run(context, None)
+    path = tmp_path / "logs" / "runs.jsonl"
+    lines = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()] if path.exists() else []
+    return taps, on_at_claim, lines
+
+
+@pytest.mark.parametrize("window, target, claimed_on, floors, reached", [
+    ("Floor 8 [INFINITY] 7/7", 15, 0, 8, False),  # past floor 5, short of the target: Claim, no toggle
+    ("Floor 15 [EXTREME] 9/9", 15, 3, 15, True),  # reached: the toggles follow the settings
+    ("Floor 5 [HARD] 6/6", 5, 3, 5, True),  # target 5 acts as it did
+    ("Floor 6 [HARD] 1/7", 10, 0, 5, False),  # died on floor 6: floor 5 passed, Claim
+    ("Floor 8 7/7", 8, 0, 8, True),  # marker unread: still Claim, never a bonus on a guess
+])
+def test_settle_claims_a_run_past_floor_5_and_toggles_bonuses_only_at_the_target(context, monkeypatch, tmp_path, window, target, claimed_on, floors, reached):
+    taps, on_at_claim, lines = settle(context, monkeypatch, tmp_path, window, target, {f: True for f in range(1, 16)})
+    assert actions.GIVE_UP not in taps and actions.CLAIM in taps
+    assert on_at_claim == [claimed_on]
+    assert [(line["result"], line["floors"], line["target_reached"]) for line in lines] == [("clear", floors, reached)]
+
+
+@pytest.mark.parametrize("window, difficulty", [("Floor 8 [INFINITY] 7/7", "hard"), ("Floor 5 [NORMAL] 6/6", "normal"), ("Floor 8 7/7", "hard"), ("Floor 5 6/6", None)])
+def test_the_runs_line_keeps_difficulty_hard_normal_or_null(context, monkeypatch, tmp_path, window, difficulty):
+    _, _, lines = settle(context, monkeypatch, tmp_path, window, 5)
+    assert lines[0]["difficulty"] == difficulty
+
+
+@pytest.mark.parametrize("window", ["Floor 3 [NORMAL] 2/6", "Floor 5 [HARD] 5/7", "Floor 4 4/4"])
+def test_settle_gives_up_a_run_short_of_floor_5_even_with_an_unread_marker(context, monkeypatch, tmp_path, window):
+    taps, _, lines = settle(context, monkeypatch, tmp_path, window, 15)
+    assert taps == [actions.GIVE_UP, actions.DIALOG_CONFIRM]
+    assert [(line["result"], line["target_reached"]) for line in lines] == [("giveup", False)]
+
+
+def test_a_window_with_floor_and_progress_but_no_marker_is_not_left_fading_in(context, monkeypatch, tmp_path):
+    taps, _, lines = settle(context, monkeypatch, tmp_path, "Floor 9 6/6", 15)
+    assert taps and lines
+
+
+def test_a_forfeited_run_past_floor_5_claims_its_floor_5_rewards(context, monkeypatch, tmp_path):
+    # forfeit() quits the dungeon and pops the flag; the Exploration Reward window that follows is Settle's, which decides on the result alone.
+    taps, on_at_claim, lines = settle(context, monkeypatch, tmp_path, "Floor 7 [HARD] 3/7", 15)
+    assert actions.CLAIM in taps and actions.GIVE_UP not in taps
+    assert [(line["result"], line["floors"]) for line in lines] == [("clear", 6)]
 
 
 # The acceptance's claim page (2026-10-29): Floor 5 [HARD] 7/7, five HARD floors, 3 weekly bonuses left, no run plan.

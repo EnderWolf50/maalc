@@ -102,7 +102,7 @@
 | 每週獎勵用完就停 | `stop_when_weekly_bonus_out` | 布林 | 開／關 | 關 | #8、#19 |
 | 星光買不起時 | `starlight_unaffordable` | 字串 | `stop` 停止任務／`skip` 跳過這個加成（見第 7 節） | `skip` | #9、#19 |
 | 全滅重打次數 N | `wipe_retries` | 整數 ≥ 0 | 同一場遭遇戰最多重打幾次 | 2 | #16 |
-| 重打用完後 | `after_retries` | 字串 | `stop` 停止／`forfeit` 放棄這局（不領獎勵，輪替游標不前進） | `forfeit` | #16、#95 |
+| 重打用完後 | `after_retries` | 字串 | `stop` 停止／`forfeit` 放棄這局（已通過第 5 層就在結算視窗 Claim、游標照常前進，沒過第 5 層則不領獎勵、游標不前進） | `forfeit` | #16、#95 |
 | 失敗通知 webhook | `webhook_url` | 字串 | 停止時送出摘要的網址；空字串 = 不送 | 空字串 | #14 |
 | 每層最多刷新主題包 | `theme_pack_refresh` | 字串 | `none` 不用／`once` 用一次／`all` 全用：最好的包低於方案的刷新門檻時用的免費刷新次數（見 [03](03-decisions.md#6-主題包) 第 6 節） | `all` | #41、#240 |
 | 自動同意使用者條款 | `auto_accept_terms` | 布林 | 開：標題畫面的 User Agreement 勾兩個 I agree.、確認都勾上再按 Confirm；關：停下並通知（停止程序） | 開 | #85、2026-10-21 |

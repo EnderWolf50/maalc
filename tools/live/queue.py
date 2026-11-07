@@ -321,7 +321,7 @@ def detached_status(log: Path, is_alive=alive) -> tuple[bool, str]:
     return False, f"ended pid {doc['pid']}, last line: {lines[-1] if lines else '(no output)'}"
 
 
-OUTCOME = re.compile(r"forfeit|victory|claimed|goal not met|gave up|stop: \d+ of|Traceback|Error|failed", re.I)
+OUTCOME = re.compile(r"forfeit|victory|claimed|not passed|gave up|stop: \d+ of|Traceback|Error|failed", re.I)
 BOT_ENDED = re.compile(r"\[hold\] bot ended (\S+)")
 
 
