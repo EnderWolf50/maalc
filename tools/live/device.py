@@ -1,11 +1,14 @@
-"""The emulator through MaaFramework's adb controller: screenshots, taps, keys, starting an app, freezing the bot.
+"""The emulator through MaaFramework's adb controller: screenshots, taps, keys, starting or restarting an app, freezing the bot.
 
     uv run --group probe python tools/live/device.py [--port 16384] <command> ...
 
   shot OUT.png                          one screenshot, 1280x720
   tap X Y [--wait S] [--shot OUT.png]   a tap in game pixels (1280x720), then a screenshot after S seconds
+  press X Y [--hold S] [--wait S] [--shot OUT.png]   a long press: the finger held still for --hold s (default 1)
   key CODE [--wait S] [--shot OUT.png]  an Android key code: 4 back, 3 home
   start [PACKAGE] [--shots DIR --every S --count N]   start an app (default the game), screenshots while it boots
+  restart [PACKAGE] [--wait S] [--shot OUT.png]   stop the app (default the game) and start it again, as the
+                                        pipeline's L3 does; with --shot, a screenshot S seconds (30) after the start
   freeze --log run.log --fire RE --pid PID [--arm RE] [--cmd FILE] [--out DIR] [--max S]
 
 `--port` picks the MuMu instance: 16384 is instance 0, 16416 instance 1. A live test owns the emulator
@@ -13,8 +16,8 @@ first (the maalc-live-test skill); these commands act on the user's game account
 
 **freeze** waits for a line of the bot's run.log matching `--fire` (after one matching `--arm`, when given),
 suspends every process under `--pid` (the `bot.py run` pid the detach printed), then runs the commands written
-to `--cmd` (default `cmd.txt` beside the log), one a line: `shot NAME`, `tap X Y`, `key CODE`, `start PACKAGE`,
-`resume`. The bot resumes on `resume` or after `--max` seconds (150): MaaFramework's waits run on, so a long
+to `--cmd` (default `cmd.txt` beside the log), one a line: `shot NAME`, `tap X Y`, `press X Y [S]`, `key CODE`,
+`start PACKAGE`, `resume`. The bot resumes on `resume` or after `--max` seconds (150): MaaFramework's waits run on, so a long
 freeze can time a node out. Screenshots go to `--out` (default the log's folder) as `HHMMSS.fff-NAME.png`.
 """
 from __future__ import annotations
@@ -51,6 +54,14 @@ def connect(port: int):
 def shot(ctl, out) -> None:
     Image.fromarray(ctl.post_screencap().wait().get()[..., ::-1]).save(out)  # BGR from MaaFramework
     print("saved", out, flush=True)
+
+
+PRESS_HOLD = 1.0  # s a press holds when no time is given
+
+
+def press(ctl, x: int, y: int, hold: float) -> None:
+    """A long press: a swipe that stays on (x, y) for hold seconds."""
+    ctl.post_swipe(x, y, x, y, round(hold * 1000)).wait()
 
 
 def stamp() -> str:
@@ -97,6 +108,8 @@ def run_commands(ctl, cmd: Path, out: Path, deadline: float, poll: float = 0.2) 
                 return
             if a[0] == "tap":
                 ctl.post_click(int(a[1]), int(a[2])).wait()
+            elif a[0] == "press":
+                press(ctl, int(a[1]), int(a[2]), float(a[3]) if len(a) > 3 else PRESS_HOLD)
             elif a[0] == "key":
                 ctl.post_click_key(int(a[1])).wait()
             elif a[0] == "start":
@@ -139,22 +152,40 @@ def each(call) -> bool:
         return False
 
 
+RESTART_PAUSE = 3.0  # s between the stop and the start: RecoverL3's post_delay (recovery.json)
+
+
+def restart(ctl, package: str) -> None:
+    """Stop the app, then start it: the pipeline's L3 (RecoverL3, RecoverStartApp)."""
+    ctl.post_stop_app(package).wait()
+    print(stamp(), "stopped", package, flush=True)
+    time.sleep(RESTART_PAUSE)
+    ctl.post_start_app(package).wait()
+    print(stamp(), "started", package, flush=True)
+
+
 def main(argv=None) -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--port", type=int, default=16384)
     sub = ap.add_subparsers(dest="command", required=True)
     sub.add_parser("shot").add_argument("out")
-    for name, args in (("tap", ("x", "y")), ("key", ("code",))):
+    for name, args in (("tap", ("x", "y")), ("press", ("x", "y")), ("key", ("code",))):
         p = sub.add_parser(name)
         for arg in args:
             p.add_argument(arg, type=int)
         p.add_argument("--wait", type=float, default=1.0)
         p.add_argument("--shot")
+        if name == "press":
+            p.add_argument("--hold", type=float, default=PRESS_HOLD)
     p = sub.add_parser("start")
     p.add_argument("package", nargs="?", default=GAME)
     p.add_argument("--shots")
     p.add_argument("--every", type=float, default=15)
     p.add_argument("--count", type=int, default=10)
+    p = sub.add_parser("restart")
+    p.add_argument("package", nargs="?", default=GAME)
+    p.add_argument("--wait", type=float, default=30)
+    p.add_argument("--shot")
     p = sub.add_parser("freeze")
     p.add_argument("--log", required=True)
     p.add_argument("--fire", required=True)
@@ -167,8 +198,13 @@ def main(argv=None) -> None:
     command, ctl = a.command, connect(a.port)
     if command == "shot":
         shot(ctl, a.out)
-    elif command in ("tap", "key"):
-        (ctl.post_click(a.x, a.y) if command == "tap" else ctl.post_click_key(a.code)).wait()
+    elif command in ("tap", "press", "key"):
+        if command == "tap":
+            ctl.post_click(a.x, a.y).wait()
+        elif command == "press":
+            press(ctl, a.x, a.y, a.hold)
+        else:
+            ctl.post_click_key(a.code).wait()
         if a.shot:
             time.sleep(a.wait)
             shot(ctl, a.shot)
@@ -177,6 +213,11 @@ def main(argv=None) -> None:
         for i in range(a.count if a.shots else 0):
             time.sleep(a.every)
             shot(ctl, Path(a.shots) / f"boot-{i:02}.png")
+    elif command == "restart":
+        restart(ctl, a.package)
+        if a.shot:
+            time.sleep(a.wait)
+            shot(ctl, a.shot)
     elif command == "freeze":
         freeze(a, ctl)
 

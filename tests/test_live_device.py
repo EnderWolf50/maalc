@@ -33,12 +33,20 @@ class FakeCtl:
         self.calls.append(("click", x, y))
         return Job()
 
+    def post_swipe(self, x1, y1, x2, y2, duration):
+        self.calls.append(("swipe", x1, y1, x2, y2, duration))
+        return Job()
+
     def post_click_key(self, key):
         self.calls.append(("key", key))
         return Job()
 
     def post_start_app(self, package):
         self.calls.append(("start", package))
+        return Job()
+
+    def post_stop_app(self, package):
+        self.calls.append(("stop", package))
         return Job()
 
 
@@ -68,6 +76,14 @@ def test_key_and_start(monkeypatch, tmp_path):
     assert ctl.calls == [("key", 4), ("start", dv.GAME)] and len(list(tmp_path.glob("boot-*.png"))) == 2
 
 
+def test_press_holds_the_finger_in_place(monkeypatch):
+    # #468: a long press, a swipe that does not move, held for --hold seconds.
+    ctl = FakeCtl()
+    monkeypatch.setattr(dv, "connect", lambda port: ctl)
+    dv.main(["press", "640", "360", "--hold", "1.5"])
+    assert ctl.calls == [("swipe", 640, 360, 640, 360, 1500)]
+
+
 def test_wait_fire_needs_the_arm_line_first():
     lines = iter(["map: path a", "floor 2: pull x", "map: path b", "later"])
     assert dv.wait_fire(lines, re.compile("map: path"), re.compile("floor 2")) == "map: path b"
@@ -75,9 +91,10 @@ def test_wait_fire_needs_the_arm_line_first():
 
 def test_commands_run_until_resume(tmp_path):
     ctl, cmd = FakeCtl(), tmp_path / "cmd.txt"
-    cmd.write_text("tap 10 20\nkey 4\nshot map\nstart com.android.vending\nresume\n")
+    cmd.write_text("tap 10 20\npress 30 40 0.8\npress 50 60\nkey 4\nshot map\nstart com.android.vending\nresume\n")
     dv.run_commands(ctl, cmd, tmp_path, deadline=float("inf"), poll=0)
-    assert ctl.calls == [("click", 10, 20), ("key", 4), ("start", "com.android.vending")]
+    assert ctl.calls == [("click", 10, 20), ("swipe", 30, 40, 30, 40, 800), ("swipe", 50, 60, 50, 60, 1000), ("key", 4),
+                         ("start", "com.android.vending")]
     assert [p.name.endswith("-map.png") for p in tmp_path.glob("*.png")] == [True]
     assert cmd.read_text() == ""
 
@@ -109,3 +126,24 @@ def test_freeze_resumes_the_rest_when_one_process_ended(tmp_path, monkeypatch):
     monkeypatch.setattr(dv, "tail", lambda path: iter(["packs"]))
     dv.main(["freeze", "--log", str(tmp_path / "run.log"), "--fire", "packs", "--pid", "9", "--max", "0.1"])
     assert log == ["suspend 1", "resume 1"]
+
+
+def test_restart_stops_the_game_and_starts_it_as_the_pipelines_l3_does(monkeypatch, tmp_path):
+    # The daily task restarts the game before the bot (2026-11-07). RecoverL3 stops the app, waits its post_delay, and
+    # RecoverStartApp starts it; the screenshot comes --wait seconds after the start.
+    from test_pipeline import load_nodes
+
+    ctl, slept = FakeCtl(), []
+    monkeypatch.setattr(dv, "connect", lambda port: ctl)
+    monkeypatch.setattr(dv.time, "sleep", slept.append)
+    dv.main(["restart", "--wait", "20", "--shot", str(tmp_path / "boot.png")])
+    assert ctl.calls == [("stop", dv.GAME), ("start", dv.GAME)]
+    assert slept == [load_nodes()["RecoverL3"]["post_delay"] / 1000, 20] and (tmp_path / "boot.png").exists()
+
+
+def test_restart_takes_another_package_and_no_shot_without_one(monkeypatch):
+    ctl, slept = FakeCtl(), []
+    monkeypatch.setattr(dv, "connect", lambda port: ctl)
+    monkeypatch.setattr(dv.time, "sleep", slept.append)
+    dv.main(["restart", "com.android.vending"])
+    assert ctl.calls == [("stop", "com.android.vending"), ("start", "com.android.vending")] and len(slept) == 1
