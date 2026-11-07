@@ -2275,7 +2275,7 @@ def test_a_check_tap_that_took_is_not_held_against_the_sinner(context):
     check_page(context, [(actions.EVENT_PORTRAIT_X[0], "High")])
     ctl = context.tasker.controller
     ctl.post_screencap.return_value.wait.return_value.get.side_effect = \
-        lambda: np.full((720, 1280, 3), 9 if ctl.post_click.called else 0, np.uint8)  # the first tap changes the screen
+        lambda: np.full((720, 1280, 3), 9 if ctl.post_click.called else 0, np.uint8)
     actions.Event().run(context, None)
     actions.Event().run(context, None)
     assert event_portrait_taps(context) == [actions.EVENT_PORTRAIT_X[0]] * 2

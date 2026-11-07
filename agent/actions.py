@@ -3371,7 +3371,7 @@ class Event(CustomAction):
         if now - event["since"] > EVENT_LIMIT:
             RUN.pop("event")
             return stuck(f"one event went on over {EVENT_LIMIT} s")
-        image = still(context)  # #273: MirrorHub hands the page over as soon as its button reads, maybe mid-fade
+        image = still(context)
         if image is None:
             log("event: the page did not hold still; MirrorHub looks again")
             return True
@@ -3434,7 +3434,7 @@ class Event(CustomAction):
             if until(context, lambda im: not Event.panel_same(image, im), timeout=EVENT_TAKE) is None:
                 log(f"event: {options[i][0]!r} did nothing: try another")
                 tried.add(options[i][0])
-            else:  # #273: the page fades out; MirrorHub reading it then would take an option again
+            else:  # a lit card changes the panel before the page goes: MirrorHub reading Choices would take one again
                 until(context, lambda im: not has(text(context, im, CHOICES_HEADER), "Choices"), timeout=EVENT_TAKE)
         else:
             tried.clear()

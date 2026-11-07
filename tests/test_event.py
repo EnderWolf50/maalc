@@ -49,27 +49,27 @@ class Picked(Choices):
 
     def __init__(self, context, monkeypatch, fade):
         super().__init__(context, monkeypatch, [("Take it.", ""), ("Leave it.", "")], ["Unknown story."])
-        self.fade, self.since = fade, None  # screenshots since the tap
+        self.fade, self.shots_since_tap = fade, None
 
     def click(self, x, y):
         result = super().click(x, y)
-        if self.tapped and self.since is None:
-            self.since = 0
+        if self.tapped and self.shots_since_tap is None:
+            self.shots_since_tap = 0
         return result
 
     def render(self):
-        if self.since is None:
+        if self.shots_since_tap is None:
             return super().render()
-        self.since += 1
+        self.shots_since_tap += 1
         return super().render() // 2
 
     def read(self, name, image, override=None):
-        return super().read(name, image, override) if self.since is None or self.since <= self.fade else None
+        return super().read(name, image, override) if self.shots_since_tap is None or self.shots_since_tap <= self.fade else None
 
 
 def test_a_taken_option_hands_back_once_the_choices_page_is_gone(context, clock, monkeypatch):
-    # #273: the tap returned once the panel changed, with the page still fading out; with MaaFramework's 200 ms
-    # post_delay gone, MirrorHub's next look reads the fading Choices and taps an option again.
+    # #273: the tap returned once the panel changed, which a lit card does before the page goes; with MaaFramework's
+    # 200 ms post_delay gone, MirrorHub's next look would read the Choices still up and take an option again.
     actions.RUN["team"] = {"keyword": "Burn"}
     actions.RUN["settings"] = {"event_overrides": []}
     page = Picked(context, monkeypatch, fade=3)
