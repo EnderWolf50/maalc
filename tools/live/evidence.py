@@ -232,7 +232,8 @@ def apply_masks(im: Image.Image, masks) -> Image.Image:
 # --- map -------------------------------------------------------------------------------------------------
 
 def floor_block(msgs, floor: int, after: float | None = None) -> list[tuple[float, str]]:
-    """The floor's `map:` lines, from its pull (or the first map line after `after`) to its `map: path`."""
+    """The floor's `map:` lines, from its pull (or the first map line after `after`) to its `map: path`. The lines
+    start at the last `follow plan` or `reading the map again` line when there is one."""
     if after is not None:
         start = next(i for i, (t, x) in enumerate(msgs) if t > after and x.startswith("map:"))
     else:
@@ -240,6 +241,8 @@ def floor_block(msgs, floor: int, after: float | None = None) -> list[tuple[floa
     out = []
     for t, x in msgs[start:]:
         if x.startswith("map:"):
+            if x.startswith("map: follow plan") or x.endswith("reading the map again"):
+                out = []
             out.append((t, x))
             if x.startswith("map: path"):
                 break

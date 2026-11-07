@@ -141,8 +141,42 @@ def test_map_command_writes_the_stitched_floor_and_its_nodes(tmp_path, footage):
     ev.main(["map", str(tmp_path / "run.log"), "--floor", "1", "-o", str(tmp_path / "route"), *footage])
     route = json.loads((tmp_path / "route/route.json").read_text(encoding="utf-8"))
     assert Image.open(tmp_path / "route/stitched.png").size[0] == 1790  # 1280 + the 510 px drag: no frame to measure, the log's px stand
-    assert route["path"]["score"] == 22 and len(route["nodes"]) == 5 and len(route["shots"]) == 2
+    assert route["path"]["score"] == 22 and len(route["nodes"]) == 5
+    reads = [ev.secs("15:52:55.967"), ev.secs("15:52:59.345")]  # the first reading, 0.1 s after the `dragged` line
+    assert [ev.secs(t) for t in route["shots"]] == pytest.approx(reads, abs=0.05)  # the nearest of frames 0.1 s apart
     assert (tmp_path / "route/before-1.png").exists() and (tmp_path / "route/after-1.png").exists()
+
+
+REREAD = """\
+15:52:56.500 [maalc] map: take mid battle
+15:52:57.000 [maalc] map: node at 583, 570 reads Cost 120: focused
+15:52:57.100 [maalc] map: planned down battle took no tap; reading the map again
+15:52:59.500 [maalc] map: node at 328, 357 reads Cost 85: battle
+15:52:59.600 [maalc] map: column 1: mid battle (1 onward)
+15:52:59.700 [maalc] map: column 2: down shop (from mid)
+15:52:59.800 [maalc] map: dragged the map 510 px; reading on from column 3
+15:52:59.900 [maalc] map: column 3: down boss (from down)
+15:53:00.000 [maalc] map: path mid battle > down shop > down boss, score 18
+"""
+
+FOLLOWED = """\
+15:52:56.500 [maalc] map: take down event
+15:52:57.000 [maalc] map: node at 583, 357 reads Cost 120: focused
+15:52:57.100 [maalc] map: follow plan mid battle
+15:52:59.600 [maalc] map: column 1: mid shop (1 onward)
+15:52:59.700 [maalc] map: column 2: mid boss (from mid)
+15:53:00.000 [maalc] map: path mid shop > mid boss, score 16
+"""
+
+
+@pytest.mark.parametrize("run, drags", [(REREAD, 1), (FOLLOWED, 0)], ids=["read-again", "followed"])
+def test_map_draws_the_reading_that_planned_the_path(tmp_path, footage, run, drags):
+    (tmp_path / "run.log").write_text(run, encoding="utf-8")
+    ev.main(["map", str(tmp_path / "run.log"), "--floor", "1", "--after", "15:52:56", "-o", str(tmp_path / "route"), *footage])
+    route = json.loads((tmp_path / "route/route.json").read_text(encoding="utf-8"))
+    assert len(route["drags"]) == drags and len(route["shots"]) == 1 + drags
+    assert all(ev.secs("15:52:59.0") <= ev.secs(t) <= ev.secs("15:53:00.0") for t in route["shots"])
+    assert "120" not in [n["cost"] for n in route["nodes"]]  # only the check read it
 
 
 def test_map_clip_cuts_into_local_not_beside_the_output(tmp_path, footage, monkeypatch):
