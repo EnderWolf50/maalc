@@ -14,12 +14,15 @@ Checked: `gh issue|pr create|comment|edit|review|close|merge|reopen`, `gh releas
 `git commit|merge|tag`, including the contents of a `--body-file`/`-F` file. Paths that only name a file
 to upload (`--attach`, `-R`, `git -C`) are fine.
 
-Fails closed: text the hook cannot read (stdin, `$(...)`, a backtick (also PowerShell's line continuation), a heredoc, `--input`, a body file that
+Fails closed: text the hook cannot read (stdin, `$(...)`, a backtick, a heredoc, `--input`, a body file that
 does not exist yet) is denied, because it could carry anything.
 
 Each publishing call is cut at its own boundary, read the way bash reads it (quotes, backslashes, `$(...)`,
 `${...}`, comments). A call inside quotes (`bash -c`, `eval`) or after a heredoc is checked to the end of the
-line. This is a seatbelt against an agent's accidental leak, not a sandbox: a `$var`, a body file rewritten
+line. A PowerShell call (the hook's `tool_name`) is read the same way with two differences: a backslash is a
+plain character, and an unquoted `(` (also `@(`) is unreadable, since it runs a command. A backtick (its line
+continuation) fails closed as above, and `Set-Location` is not a `cd`, so a relative body file after it is
+not found and fails closed too. This is a seatbelt against an agent's accidental leak, not a sandbox: a `$var`, a body file rewritten
 earlier in the same command, or text that `xargs` supplies to a text flag still pass.
 """
 import json
@@ -42,6 +45,7 @@ INPUT = re.compile(r"--input(?:\s|=)")
 UNREADABLE = re.compile(r"\$\(|`|<<-?\s*[\"']?\w")  # command substitution or heredoc
 LOCAL = re.compile(r"\b[A-Za-z]:[\\/]+\w|(?<![\w.])/(?:home|Users|mnt/[a-z])/\w+|~[\\/]\.?\w|file://", re.I)
 LOCAL_NOTE = re.compile(r"\bquestions-\d+\b", re.I)  # the label of a note that lives only in .local/scratch
+POWERSHELL = False  # the hook's tool_name: PowerShell has no backslash escape, and ( ... ) runs a command
 PR_CALL = re.compile(r"\bgh\s+pr\s+(?:create|edit)\b")
 BODY_FILE = re.compile(rf"(?<![\w-])(?:--body-file|-F)(?:\s+|=|(?=\S))({ARG})")
 TEST_LINE = re.compile(r"\b\d+ passed, \d+ failed(?:, \d+ skipped)?\b", re.I)
@@ -103,6 +107,9 @@ def bare(m, inside: set) -> bool:
 def public_text(cmd: str, base: Path) -> tuple[str, bool]:
     """(the part of the call that reaches GitHub or the commit log, whether some of it could not be read)."""
     unreadable = bool(UNREADABLE.search(cmd)) or any(bare(m, quoted(cmd)) for p in (INPUT, EMPTY_FLAG) for m in p.finditer(cmd))
+    if POWERSHELL:  # an unquoted ( or @( hands a command's output to the call, as $( ... ) does in bash
+        inside = quoted(cmd)
+        unreadable = unreadable or any(c == "(" and i not in inside for i, c in enumerate(cmd))
     files = []
     for pat in (FILE_FLAG, FIELD_FILE):
         inside = quoted(cmd)
@@ -158,7 +165,7 @@ def scan(cmd: str, at: int, stop: bool, inside: set | None = None) -> tuple[int,
     quote, closers, i = "", [], at
     while i < len(cmd):
         c = cmd[i]
-        if c == "\\" and quote != "\'":
+        if c == "\\" and quote != "\'" and not POWERSHELL:
             if quote and inside is not None:
                 inside.update((i, i + 1))
             i += 2
@@ -219,6 +226,7 @@ def check_call(call: str, prefix: str, start_text: str, cwd: str) -> str | None:
 
 if __name__ == "__main__":
     data = json.load(sys.stdin)
+    POWERSHELL = data.get("tool_name") == "PowerShell"
     reason = check(data.get("tool_input", {}).get("command", ""), data.get("cwd") or os.getcwd())
     if reason:
         print(json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny",

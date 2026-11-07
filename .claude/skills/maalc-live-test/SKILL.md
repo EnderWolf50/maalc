@@ -49,4 +49,4 @@ Done: every check has a verdict and a clip, every tap of your own falls inside a
 
 ## Asks the user first
 
-Give Up on a battle, Claim (a reward), the weekly bonus, starlight beyond the configured graces. The answer covers that one action. A rule in the brief's "Machine-local rules" (`tools/live/brief.py` appends them) is a standing answer for the case it names.
+Give Up on a battle, Claim (a reward) and the weekly bonus follow the brief's "Machine-local rules" (`tools/live/brief.py` appends them); without such a rule each asks the user first, as does starlight beyond the configured graces. The answer covers that one action.
