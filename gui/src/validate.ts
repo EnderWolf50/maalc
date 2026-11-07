@@ -95,10 +95,10 @@ export function crossCheck(data: Settings): Problem[] {
     });
   });
 
-  const target = data.run.target_floor;
-  if (target > 5) {
+  const targetFloor = data.run.target_floor;
+  if (targetFloor > 5) {
     // floors 6+ open only when every floor of the run was HARD, and the rotation picks from the enabled teams (#385)
-    const need = `but target_floor ${target} needs the whole run HARD`;
+    const need = `but target_floor ${targetFloor} needs the whole run HARD`;
     if (data.run.difficulty === "normal") {
       errors.push({ paths: ["run/difficulty"], text: `run/difficulty: difficulty is 'normal', ${need}` });
     }

@@ -16,7 +16,7 @@ PRIORITY = [3, 1, 10, 4, 2, 5, 6, 7, 8, 9]
     ("auto", 3, "hard"), ("auto", 0, "normal"), ("hard", 0, "hard"), ("normal", 3, "normal"),
 ])
 def test_run_difficulty(setting, weekly, expected):
-    assert rs.run_difficulty(setting, weekly) == expected
+    assert rs.run_difficulty(setting, weekly, 5) == expected
 
 
 @pytest.mark.parametrize(("setting", "weekly", "target", "expected"), [

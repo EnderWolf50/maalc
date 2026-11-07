@@ -14,7 +14,7 @@ test("the target floor offers 5, 10 and 15, opens on 5 and shows no note there",
   const select = screen.getByRole("combobox", { name: new RegExp(zh["run.target_floor"]) }) as HTMLSelectElement;
   expect(select.value).toBe("5");
   expect(screen.getAllByRole("option").filter((o) => (o as HTMLOptionElement).parentElement === select).map((o) => o.textContent))
-    .toEqual(["5", "10", "15"]);
+    .toEqual([zh["target_floor.5"], zh["target_floor.10"], zh["target_floor.15"]]);
   expect(screen.queryByText(zh["run.target_floor_note"])).toBeNull();
 });
 

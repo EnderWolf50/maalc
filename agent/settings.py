@@ -426,10 +426,10 @@ def cross_check(data):
             if target["s3"] < 1:
                 errors.append(f"{path}/s3: {who} targets {target['s3']} of skill 3, but swaps only raise it from the game's 1")
 
-    target = data["run"]["target_floor"]
-    if target > 5:
+    target_floor = data["run"]["target_floor"]
+    if target_floor > 5:
         # floors 6+ open only when every floor of the run was HARD, and the rotation picks from the enabled teams (#385)
-        need = f"but target_floor {target} needs the whole run HARD"
+        need = f"but target_floor {target_floor} needs the whole run HARD"
         if data["run"]["difficulty"] == "normal":
             errors.append(f"run/difficulty: difficulty is 'normal', {need}")
         for i, t in enumerate(teams):
