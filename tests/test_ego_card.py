@@ -95,7 +95,7 @@ def test_a_held_finger_lifts_for_the_ego_card():
 
 def test_the_tap_lands_off_the_card_and_off_the_turns_buttons():
     # Live 2026-11-07: a tap on the dimmed field, on the bar and on the dim above the card each closed it; the back key
-    # did not. #469 follow-up (live 2026-11-07): a tap at (1, 1) closed it 7 times of 7, one card 4 times and two cards 3,
+    # did not. #469 follow-up (live 2026-11-07): a tap at (1, 1) closed it 9 times of 9, one card 5 times and two cards 4,
     # within 0.4 s. The tap (the target's centre) is hold_turn's HOLD_SPOT, the corner kept free of buttons on every
     # battle screen (docs/spec/03-decisions.md): a tap that comes when the card has already gone presses nothing.
     import actions
