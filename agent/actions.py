@@ -2165,7 +2165,11 @@ PANEL_REWARDS = [700, 495, 110, 30]  # the "Clear Rewards" label
 PANEL_COST = [730, 545, 40, 35]  # the number by its Cost coin
 MAP_TITLE = [40, 85, 240, 35]  # "Exploring Floor 3", top left
 MAP_LEAVING = 6  # s RouteMap waits for the last floor's map to give way to this floor's
-MAP_PAN_LIMIT = 8  # s find_bus drags a fresh map again that took none of its drags
+MAP_PAN_LIMIT = 8  # s find_bus drags a fresh NORMAL map again that took none of its drags
+# px (a pan's larger axis) from which find_bus looks as the finger stops whether the map ignored the pan (#486). On the six
+# runs' recordings every find_bus pan was 396 px: at its last move the bus had moved 0 px on the 20 ignored ones and trailed
+# the finger by 126 px at most on the 108 taken ones. A shorter pan, taken, may not have moved yet: it rests as before.
+PAN_LOOK_MIN = 300
 BUS_JITTER = 3  # px the bus's match moves on a map that did not move
 # #473: back on the map from a fight's loading screen or its reward pages, the game ignores taps on the still map for a
 # time that differs by run, with no sign on screen (over 1.46 s after the fade-in on 2026-11-07, under 1.32 s on
@@ -2558,9 +2562,8 @@ class RouteMap(CustomAction):
         and is made again, for up to MAP_TAP_LIMIT s (#486: after a fade-in the game ignores the map's touches for a
         while); on a floor's fresh NORMAL map (no node entered since the theme pack) for up to MAP_PAN_LIMIT s: live
         2026-10-19, a new map took no drag for its first seconds. Once a pan has moved the bus, one that does not is
-        the map's edge. A pan's screenshot as the finger stops that shows the bus where it was lifts the finger at
-        once and is the next look: no rest, no 0.5 s wait (#486). On the six runs' recordings, at the last move the
-        bus had moved 0 px on 20 ignored drags and 270 px or more on 108 taken ones.
+        the map's edge. On a pan of PAN_LOOK_MIN px or more, a screenshot as the finger stops that shows the bus where
+        it was lifts the finger at once and is the next look: no rest, no 0.5 s wait (#486).
         """
         def stays(hit, at):  # a MapBus hit within BUS_JITTER of at: the map has not moved
             return hit is not None and at is not None and abs(hit.box[0] - at[0]) <= BUS_JITTER and abs(hit.box[1] - at[1]) <= BUS_JITTER
@@ -2592,8 +2595,9 @@ class RouteMap(CustomAction):
             # between the middle and bottom rows. #213: a GET! window rising over the map ends the pans.
             page_guard(context, "MirrorMap", image=image)
             last = (bx, by)
+            look = max(abs(dx), abs(dy)) >= PAN_LOOK_MIN
             image = scroll(context, min(bx + SLOT[0] + map_route.COLUMN_DX // 2, 1100), by + SLOT[1] + 106, dx, dy,
-                           ignored=lambda im: stays(seen(context, im, "MapBus"), last))
+                           ignored=(lambda im: stays(seen(context, im, "MapBus"), last)) if look else None)
             if image is None:
                 time.sleep(0.5)
                 image = screen(context)

@@ -445,8 +445,9 @@ def test_a_fresh_hard_map_that_cannot_pan_is_not_dragged_for_the_fresh_floors_li
     map_world(context, {(1, "mid"): {"cost"}}, [], bus_x=446)
     ctl = context.tasker.controller
     ctl.post_touch_move.side_effect = lambda x, y: MagicMock()
+    t0 = actions.time.monotonic()
     actions.RouteMap.find_bus(context)
-    assert actions.MAP_TAP_LIMIT < sum(clock) < actions.MAP_TAP_LIMIT + 1
+    assert actions.MAP_TAP_LIMIT < actions.time.monotonic() - t0 < actions.MAP_TAP_LIMIT + 1
 
 
 def touch_times(context):
@@ -486,6 +487,19 @@ def test_a_drag_the_map_follows_rests_and_waits_as_before(context):
     last_move, lift = max(t for k, t in events if k == "move"), next(t for k, t in events if k == "up")
     assert actions.SCROLL_HOLD <= lift - last_move < actions.SCROLL_HOLD + 0.1  # the screenshot's 0.1 s is inside the rest
     assert min(t for t in looks if t > lift) - lift >= 0.5
+
+
+def test_a_short_pan_rests_before_its_lift_even_when_the_map_ignored_it(context):
+    # #486: the map trailed the finger by up to 126 px at a 396 px pan's last move; a shorter pan the map takes may not have
+    # moved yet when the finger stops, so it is not judged then: lifted unrested, it would fling.
+    map_world(context, {(1, "mid"): {"cost"}}, [], bus_x=actions.BUS_HOME[0] + actions.PAN_LOOK_MIN - 20)
+    ctl = context.tasker.controller
+    move = ctl.post_touch_move.side_effect
+    ctl.post_touch_move.side_effect = lambda x, y: MagicMock() if ctl.post_touch_down.call_count == 1 else move(x, y)
+    events = touch_times(context)
+    actions.RouteMap.find_bus(context)
+    lift = [k for k, _ in events].index("up")
+    assert events[lift][1] - max(t for k, t in events[:lift] if k == "move") >= actions.SCROLL_HOLD
 
 
 def test_three_drags_the_map_ignores_after_a_fight_still_take_the_bus_home(context):
