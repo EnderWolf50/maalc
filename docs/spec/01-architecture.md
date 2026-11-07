@@ -44,7 +44,7 @@
 | 信箱（`Mailbox`） | 按 Close，不按 Claim All。例外：任務 `ClaimMail` 自己開信箱、按 Claim All，用的是它自己的節點（`mail.json`），全域的這一列不變 | #85、#372 |
 | 設定選單（`SettingsMenu`） | 按 Return，不按 Quit Game | #85 |
 | 每週重置通知 | 關閉 | #8、#14 |
-| 無限鏡牢彈窗 | 不開啟無限鏡牢 | #8、#17 |
+| 無限鏡牢彈窗 | 不開啟無限鏡牢（v1 目標 5 層；目標層數大於 5 時的入口與提示由 #434 接上） | #8、#17 |
 | 升級彈窗 | 關閉 | #16 |
 | 維護公告 | 直接停止 | #14 |
 | 標題畫面的資料下載對話框 | 按 Confirm，等下載完（卡住偵測暫停） | #86 |
@@ -167,7 +167,7 @@
 | 主題包頁 | `SELECT FLOOR N THEME PACK`、右上角的本層難度（遊戲會記住上次的選擇） | 讀取並設定本層難度、挑主題包 | #8 |
 | 地圖頁 | `Exploring Floor N`、主題包名稱、身上的飾品；不顯示難度 | 尋路、確認層數 | #8 |
 | 戰前編隊頁 | 出戰順序標記、存活人數（`Total Participants <n>/<m>` 的 `<m>`，例如 `10/11` 表示 11 人存活） | 重選出戰順序、治療判斷、存活下限 | #9、#10、#16 |
-| 結算視窗（Exploration Reward） | `Weekly Bonuses n/3` 與開關、最後到達的一層與進度（例如 `Floor 5 [HARD] 6/6`） | 判斷是否達到目標、依每週獎勵設定切開關 | #8、#9、#17 |
+| 結算視窗（Exploration Reward） | `Weekly Bonuses n/3` 與開關、最後到達的一層與進度（例如 `Floor 5 [HARD] 6/6`） | 判斷能不能 Claim（`claim_ok`）與有沒有到目標（`target_reached`）、依每週獎勵設定切開關 | #8、#9、#17 |
 
 地圖頁不顯示難度，所以本層難度只能在主題包頁或 `Dungeon Progress` 讀取。（#8）
 
@@ -180,7 +180,7 @@
 3. **星光頁**：依隊伍的星光方案購買加成；方案要求時把剩下的星光換成 Cost。什麼都不選直接進入時，會再問 `Continue with selected effects?`。買不起時依全域選項停止或跳過（預設跳過）。（#8、#9、#19）
 4. **初始飾品**：依隊伍有沒有要觀測的飾品切換 `Activate Gift Search`，再選隊伍主要體系（由飾品清單決定）那一欄，依序選滿可選數量。（#9、#19、#54、#305）
 5. **觀測飾品（E.G.O Gift Search）**：隊伍開啟觀測並選了飾品時，依清單順序選取、按 Select 並確認花費；否則 Refuse，在確認彈窗按 Confirm。（#8、#19、#54）
-6. **每一層**（第 1–5 層）：
+6. **每一層**（第 1–5 層；v1 目標 5 層，目標層數見 [04](04-settings.md) 第 5 節）：
    1. **主題包頁**：讀取本層難度，依設定切換；再依隊伍的主題包方案挑主題包，卡片要往下拉才能選。（#8、#9、#11）
    2. **地圖頁**：依尋路規則選相鄰一欄的節點 → 等 Enter → 點 Enter。每次進入地圖頁時給一份重試額度，只在進入新一層的地圖時清除。（#12、#14）
    3. **節點內容**，由 `MirrorHub` 依畫面判斷：
@@ -197,10 +197,10 @@
 
 ### 結算規則
 
-結算前必須先判斷這一局有沒有達到目標。目標是五層全部通過：Exploration Reward 視窗顯示 `Floor 5` 且進度是 `n/n`（已通過數等於總數）才算達到。困難層的節點數不一定是 6：2026-10-16 實機第 5 層是 `Floor 5 [HARD] 7/7`（#67）。不看 Exploration Complete 摘要的逐層 `n/6`。（#8、#19，2026-10-14 定案）實機：Exploration Reward 視窗只顯示最後到達的一層（例如 `Floor 5 [HARD] 5/6`）。（實機：captures/252_exploration_reward_window.png）
+結算前必須先從 Exploration Reward 視窗的最後一層（例如 `Floor 8 [INFINITY] 7/7`）判斷已通過幾層：已通過第 5 層就能 Claim（`claim_ok`），通過層數到達這局的 `target_floor` 才算 `target_reached`。困難層的節點數不一定是 6：2026-10-16 實機第 5 層是 `Floor 5 [HARD] 7/7`（#67）。不看 Exploration Complete 摘要的逐層 `n/6`。（#8、#19、#384；規則全文見 [03](03-decisions.md#14-結算與每週獎勵) 第 14 節）實機：Exploration Reward 視窗只顯示最後到達的一層（例如 `Floor 5 [HARD] 5/6`）。（實機：captures/252_exploration_reward_window.png）
 
-- 達到目標：依每週獎勵設定把對應數量的開關切到 ON，再按 Claim。開關數量與剩餘次數從畫面讀。Claim 要花的腦啡肽模組不夠時，必須停止並通知（[06-recovery.md](06-recovery.md)）。（#9、#17、#19）
-- 沒達到目標：按 GiveUpRewards 放棄獎勵，不花模組。（#19）
+- `claim_ok`：`target_reached` 時依每週獎勵設定把對應數量的開關切到 ON（沒到目標的局不切），再按 Claim。開關數量與剩餘次數從畫面讀。Claim 要花的腦啡肽模組不夠時，必須停止並通知（[06-recovery.md](06-recovery.md)）。（#9、#17、#19）
+- 沒過第 5 層：按 GiveUpRewards 放棄獎勵，不花腦啡肽模組。（#19）
 - 這條規則適用於一般結算、補領上局沒領的獎勵、每週重置後過期的局，以及全滅後重打次數用完、全域選項為「放棄這局」時，按 `Accept results` 回到地圖、再從設定面板 Forfeit 之後的結算（[03](03-decisions.md#9-全滅與陣亡)）。（#16、#19）
 
 ## 未決

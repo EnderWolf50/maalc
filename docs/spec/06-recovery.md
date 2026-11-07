@@ -14,7 +14,7 @@
 | 導航點擊不換頁 | 換頁用的點擊（主畫面的分頁 `NavMainTabs`、`NavDrive`、紐本的 `NavLuxcavation`、`LuxExpTab`、`LuxThreadTab`）連續 10 次是同一個節點，不管畫面動不動（主畫面的橫幅一直在動，「畫面沒變」數不到 5 次）。鏡牢走恢復階梯（L3 之後的同一段仍是 L3，用完就停止），日常頁停止任務 | Agent | 驗收 #5（live 2026-10-28：L3 後點 Drive 分頁 45 分鐘、2188 次，遊戲有點擊波紋但不換頁，原因 unverified） |
 | 後備點擊用完 | 點空白、按返回這類後備節點必須設 `max_hit`，每個任務約 3 次 | Pipeline | #14 |
 | 地圖重試額度用完 | 見下方「地圖的重試額度」 | Agent | #12、#14、#31 |
-| 每層超時 | 每進入新的一層（主題包頁讀到新的層數，1–15）重新計時，第 1 層從入口頁開局算起。上限為 45 分鐘；該隊最新重置標記之後有 10 局以上記錄、且其整局第 95 百分位耗時的 2 倍平分到五層比 45 分鐘長時，用後者。超過時在地圖頁從 L2 開始處理；不在地圖頁就等回到地圖，再過一場戰鬥的上限（20 分鐘）還沒回到地圖才直接處理 | Agent | #14、#19、#66 |
+| 每層超時 | 每進入新的一層（主題包頁讀到新的層數，1–15）重新計時，第 1 層從入口頁開局算起。上限為 45 分鐘；該隊最新重置標記之後有 10 局以上記錄、且其整局第 95 百分位耗時的 2 倍平分到這局的 `target_floor` 層比 45 分鐘長時，用後者。只算 `target` 和這局相同的 `clear` 局（舊行沒有 `target`，算 5），也不算 `target_reached` 為 `false` 的局（通過第 5 層就 Claim、但沒到目標，耗時比完整的局短；舊行沒有這欄，照算）。`target_floor` 是 5 時和過去一樣。超過時在地圖頁從 L2 開始處理；不在地圖頁就等回到地圖，再過一場戰鬥的上限（20 分鐘）還沒回到地圖才直接處理 | Agent | #14、#19、#66 |
 | 戰鬥回合數不變 | 送出 3 次後回合數都沒變 | Agent | #16 |
 | 戰鬥中認不出畫面 | 60 秒內什麼都認不出來 | Pipeline | #16、#19 |
 | 單場戰鬥超時 | 每場戰鬥約 20 分鐘，從戰前編隊重新計時（沒看到上一場的 VICTORY 也一樣）；超過直接處理，不經 L1（戰鬥中跳過 L2，直接 L3） | Agent | #16、#70、#80 |
@@ -120,7 +120,7 @@
 | 結果 | 通關／停止／放棄 |
 | L1、L2、L3 | 各級恢復各觸發幾次 |
 
-- 鍵名（#30）：`start`、`end`（UTC ISO 8601，和重置標記的 `time` 同格式；接續的局沒有 `start`，寫 `null`）、`team`、`team_name`（bot 沒有自己選隊時寫 `null`）、`difficulty`（`hard`／`normal`）、`weekly_bonus`（用了幾次）、`floors`、`result`（`clear` 通關／`stop` 停止／`giveup` 放棄）、`l1`、`l2`、`l3`。結算與停止程序都會寫入（#31）。結算以外的停止：`difficulty` 取目前這層的難度，`floors` 是主題包頁讀到的層數減 1；Resume 接手、Agent 沒看過主題包頁的局寫 0。`l1`–`l3` 是 Agent 這次啟動後這局的恢復次數。這局觀測了飾品時多一個 `gift_search`：`{"gifts": [英文名…], "starlight": 確認彈窗的價格, "owned_before": 觀測前的持有星光, "owned_after": 扣掉價格後}`，讀不到的值寫 `null`（#54）。
+- 鍵名（#30）：`start`、`end`（UTC ISO 8601，和重置標記的 `time` 同格式；接續的局沒有 `start`，寫 `null`）、`team`、`team_name`（bot 沒有自己選隊時寫 `null`）、`difficulty`（`hard`／`normal`；結算視窗的標記讀不到、層數在 1–5 層時 `null`；`INFINITY`／`EXTREME` 局寫 `hard`）、`weekly_bonus`（用了幾次）、`target`（這局的 `target_floor`：5／10／15；舊行沒有這欄，算 5；記憶體裡沒有設定時也寫 5，#390）、`floors`、`target_reached`（布林：通過層數到達該局的 `target_floor`；舊行沒有這欄，讀作 `null`，#384）、`result`（`clear` 領了獎勵，包括通過第 5 層後沒到 `target_floor` 就 Claim 的局，`target_reached` 說明有沒有到目標／`stop` 停止／`giveup` 放棄）、`l1`、`l2`、`l3`。結算與停止程序都會寫入（#31）。結算以外的停止：`difficulty` 取目前這層的難度，`floors` 是主題包頁讀到的層數減 1；Resume 接手、Agent 沒看過主題包頁的局寫 0。`l1`–`l3` 是 Agent 這次啟動後這局的恢復次數。這局觀測了飾品時多一個 `gift_search`：`{"gifts": [英文名…], "starlight": 確認彈窗的價格, "owned_before": 觀測前的持有星光, "owned_after": 扣掉價格後}`，讀不到的值寫 `null`（#54）。
 - 這份記錄是唯讀的：只用來驗收（見 [07-assets-and-testing.md](07-assets-and-testing.md)）和計算每層時間上限，必須不拿來做中途接續或輪替的判斷。（#14，[ADR 0003](../adr/0003-screen-is-truth-state-file-only-rotation-cursor.md)）
 - 輪替游標仍只存在 Agent 狀態檔，不從 `runs.jsonl` 推算。（[ADR 0003](../adr/0003-screen-is-truth-state-file-only-rotation-cursor.md)）
-- 設定 GUI 的「重置時間記錄」會附加一行重置標記，只含隊伍 id 與時間。計算該隊的時間上限時，只看最新一個標記之後的記錄；舊記錄保留。（#14、#19，2026-10-14 定案）重置標記的格式是 `{"reset": "<隊伍 id>", "time": "<ISO 時間>"}`。算耗時只用該隊結果為 `clear`、`start` 與 `end` 都有的行，第 95 百分位用線性內插（Python `statistics.quantiles(..., n=20, method="inclusive")`）。（#31）
+- 設定 GUI 的「重置時間記錄」會附加一行重置標記，只含隊伍 id 與時間。計算該隊的時間上限時，只看最新一個標記之後的記錄；舊記錄保留。（#14、#19，2026-10-14 定案）重置標記的格式是 `{"reset": "<隊伍 id>", "time": "<ISO 時間>"}`。算耗時只用該隊結果為 `clear`、`target` 和這局相同（舊行算 5）、`target_reached` 不是 `false`、`start` 與 `end` 都有的行（見上面的每層超時），第 95 百分位用線性內插（Python `statistics.quantiles(..., n=20, method="inclusive")`）。（#31）

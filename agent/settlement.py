@@ -7,31 +7,68 @@ import json
 import re
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import NamedTuple
 
 from ocrtext import compact, floor_number, has
 
 
+class Result(NamedTuple):
+    """The Exploration Reward window's result line. difficulty: normal, hard, infinity, extreme, or None when the marker did not read."""
+
+    floor: int
+    difficulty: str | None
+    cleared: int
+    total: int
+
+    @property
+    def hard(self):
+        """Whether the run was HARD: floors 6 and up need every floor HARD, so any of them is; None when a floor 1-5 marker did not read."""
+        if self.difficulty is not None:
+            return self.difficulty != "normal"
+        return True if self.floor > 5 else None
+
+
+MARKER = r"\[?\s*(HARD|NORMAL|INFINITY|EXTREME)\s*\]?"
+
+
 def read_result(text):
-    """(floor, hard, cleared, total) from the window's result, e.g. "Floor 5 [NORMAL] 6/6"; None when unreadable."""
-    floor = floor_number(text)
-    m = re.search(r"floor.*?\[?\s*(HARD|NORMAL)\s*\]?.*?(\d)\s*/\s*(\d)", text, re.I | re.S)
-    if floor is None or not m:
-        return None
-    return floor, m[1].upper() == "HARD", int(m[2]), int(m[3])
+    """The window's result as a Result, e.g. "Floor 5 [NORMAL] 6/6"; None when floor or progress is unreadable.
 
-
-def goal_met(result):
-    """The goal is all five floors: Floor 5 with every node cleared (spec 03 section 14).
-
-    Live 2026-10-16: a HARD floor may have 7 nodes (`Floor 5 [HARD] 7/7`), so the total is read, not assumed 6.
+    The INFINITY and EXTREME markers are a guess from the game data (no capture shows them). A marker that does not
+    read leaves difficulty None and the floors still decide the Claim (#384), instead of the window looking unread.
     """
-    floor, _, cleared, total = result
-    return floor == 5 and cleared == total
+    floor = floor_number(text)
+    if floor is None:
+        return None
+    m = re.search(r"floor.*?" + MARKER + r".*?(\d{1,2})\s*/\s*(\d{1,2})", text, re.I | re.S)
+    if m:
+        return Result(floor, m[1].lower(), int(m[2]), int(m[3]))
+    m = re.search(r"floor.*?(\d{1,2})\s*/\s*(\d{1,2})", text, re.I | re.S)
+    return Result(floor, None, int(m[1]), int(m[2])) if m else None
 
 
 def floors_passed(result):
-    floor, _, cleared, total = result
-    return floor if cleared == total else floor - 1
+    return result.floor if result.cleared == result.total else result.floor - 1
+
+
+def claim_ok(result):
+    """Floor 5 passed: the Claim is the game's to give, however far the run went after it (spec 03 section 14).
+
+    Live 2026-10-16: a HARD floor may have 7 nodes (`Floor 5 [HARD] 7/7`), so the total is read, not assumed 6.
+    """
+    return floors_passed(result) >= 5
+
+
+def target_reached(floors, target):
+    """Whether a run that passed `floors` floors reached its target_floor (5, 10 or 15); only such a run toggles weekly bonuses."""
+    return floors >= target
+
+
+def claim_bonuses(result, target, use, amount, left, floors_hard, read_first):
+    """How many weekly-bonus toggles go ON for a claimed run: none short of the target, none when the marker did not read."""
+    if not target_reached(floors_passed(result), target) or result.difficulty is None:
+        return 0
+    return bonus_toggles(use, amount, result.hard, left, all_hard(floors_hard, result.floor, result.hard, read_first))
 
 
 def first_floor_hard(text):
@@ -53,7 +90,7 @@ def all_hard(floors_hard, floor, hard, read_first):
 
 
 def bonus_toggles(use, amount, hard, left, all_hard):
-    """How many weekly-bonus toggles go ON for a run that met the goal.
+    """How many weekly-bonus toggles go ON for a run that reached its target_floor.
 
     A run counts as hard when any floor was HARD; the window's last floor shows it, as a run never
     goes back to NORMAL. More than one bonus at once needs every floor HARD (in-game help page).
