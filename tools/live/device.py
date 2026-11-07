@@ -10,6 +10,8 @@
   restart [PACKAGE] [--wait S] [--shot OUT.png]   stop the app (default the game) and start it again, as the
                                         pipeline's L3 does; with --shot, a screenshot S seconds (30) after the start
   freeze --log run.log --fire RE --pid PID [--arm RE] [--cmd FILE] [--out DIR] [--max S]
+                                        commands in the file: shot NAME, tap X Y, press X Y [S], key CODE, start PKG,
+                                        plan [S] (shots until a planning phase or an E.G.O card, at most S s), resume
 
 `--port` picks the MuMu instance: 16384 is instance 0, 16416 instance 1. A live test owns the emulator
 first (the maalc-live-test skill); these commands act on the user's game account.
@@ -17,8 +19,15 @@ first (the maalc-live-test skill); these commands act on the user's game account
 **freeze** waits for a line of the bot's run.log matching `--fire` (after one matching `--arm`, when given),
 suspends every process under `--pid` (the `bot.py run` pid the detach printed), then runs the commands written
 to `--cmd` (default `cmd.txt` beside the log), one a line: `shot NAME`, `tap X Y`, `press X Y [S]`, `key CODE`,
-`start PACKAGE`, `resume`. The bot resumes on `resume` or after `--max` seconds (150): MaaFramework's waits run on, so a long
-freeze can time a node out. Screenshots go to `--out` (default the log's folder) as `HHMMSS.fff-NAME.png`.
+`start PACKAGE`, `plan [S]`, `resume`. The bot resumes on `resume` or after `--max` seconds (150): MaaFramework's waits
+run on, so a long freeze can time a node out. Screenshots go to `--out` (default the log's folder) as `HHMMSS.fff-NAME.png`.
+
+`plan [S]` lets the game play on, a shot every 3 s (`HHMMSS.fff-plan-NN.png`), until one shows a planning phase (the Win
+Rate label up, BattleTurn) or an E.G.O card (EgoCard), read with tools/live/ego_card.py. It prints `PLANNING <file>` or
+`CARD <file>`, and the commands after it in the file run then. It ends at the first of: that screen, S seconds (default
+120, printed `PLAN timeout after S s`), or the freeze's own `--max` (printed `PLAN cut by the freeze's --max`, and the
+bot resumes at that moment). So S above what is left of `--max` is cut to it: raise `--max` for a longer wait. A
+`resume` written while `plan` runs waits until it ends.
 """
 from __future__ import annotations
 
@@ -30,6 +39,10 @@ import time
 from pathlib import Path
 
 from PIL import Image
+
+TOOLS = Path(__file__).resolve().parents[1]
+if str(TOOLS) not in sys.path:  # run as a script, `live` is not importable until tools/ is on the path
+    sys.path.insert(0, str(TOOLS))
 
 GAME = "com.ProjectMoon.LimbusCompany"
 
@@ -51,9 +64,41 @@ def connect(port: int):
     return ctl
 
 
-def shot(ctl, out) -> None:
-    Image.fromarray(ctl.post_screencap().wait().get()[..., ::-1]).save(out)  # BGR from MaaFramework
+def shot(ctl, out):
+    """Save a screenshot; returns it as MaaFramework hands it out (BGR)."""
+    img = ctl.post_screencap().wait().get()
+    Image.fromarray(img[..., ::-1]).save(out)
     print("saved", out, flush=True)
+    return img
+
+
+PLAN_LIMIT = 120.0  # s `plan` waits when no time is given
+PLAN_EVERY = 3.0  # s between two of its shots
+
+
+def plan(ctl, out: Path, limit: float, deadline: float) -> None:
+    """Shots every PLAN_EVERY s until a planning phase or an E.G.O card shows, `limit` s pass, or `deadline` (the
+    freeze's own end) comes: the first of the three ends it, and the line it prints says which."""
+    from live import ego_card
+
+    end = time.time() + limit
+    cut = deadline < end
+    end = min(end, deadline)
+    i = 0
+    while time.time() < end:
+        path = out / f"{stamp()}-plan-{i:02}.png"
+        img = shot(ctl, path)
+        i += 1
+        x, card = ego_card.win_rate_x(img), ego_card.card_up(img)
+        print(stamp(), "win rate x", x, "card", card, flush=True)
+        if x is not None or card:
+            print("PLANNING" if x is not None else "CARD", path, flush=True)
+            return
+        time.sleep(PLAN_EVERY)
+    if cut:
+        print(f"PLAN cut by the freeze's --max after {i} shots; the bot resumes now", flush=True)
+    else:
+        print(f"PLAN timeout after {limit:g} s ({i} shots)", flush=True)
 
 
 PRESS_HOLD = 1.0  # s a press holds when no time is given
@@ -116,6 +161,9 @@ def run_commands(ctl, cmd: Path, out: Path, deadline: float, poll: float = 0.2) 
                 ctl.post_start_app(a[1]).wait()
             elif a[0] == "shot":
                 shot(ctl, out / f"{stamp()}-{a[1]}.png")
+                continue
+            elif a[0] == "plan":
+                plan(ctl, out, float(a[1]) if len(a) > 1 else PLAN_LIMIT, deadline)
                 continue
             else:
                 print("unknown command", line, flush=True)
