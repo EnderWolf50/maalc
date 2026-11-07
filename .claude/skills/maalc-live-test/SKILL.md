@@ -17,6 +17,7 @@ The tools are in `tools/live/`, each with its options in `--help`. Reach for the
 | `giveup.py` | `run` ends a Mirror Dungeon run early from a battle: Give Up, Forfeit, GiveUpRewards, never Claim; `look` names a capture's screen |
 | `evidence.py` | `events`, `steps`, `frames`, `clip`, `mask`; `map` and `packs`, the route and pack evidence of step 8 |
 | `maafw_events.py` | maafw.log touches as events.json |
+| `maafw_loaded.py` | the Maa DLLs a client and its agent have loaded, and whether the MaaFramework.dll is the fixed one |
 | `map_taps.py` | every touch on the Mirror Dungeon map (follow, a full read's take, `find_bus` and the other drags) as a CSV row: taken or ignored by `recovery.same_screen`, seconds since the map faded in, the log line it led to; a summary per kind and verdict |
 | `dialogs.py` | the game's confirm dialogs, to diff against the pipeline before an unattended run |
 
