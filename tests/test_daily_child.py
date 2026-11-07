@@ -1,5 +1,6 @@
 """daily_child.load() (#480): the resource a child test runs on waits no pre_delay or post_delay. The game model moves to
-the next screen at the tap, so the pipeline's waits (200 ms a node by default, up to 5 s on some) were only idle time.
+the next screen at the tap, so the pipeline's waits (200 ms before and after a node by default, up to 10 s on some)
+were only idle time.
 load() needs MaaFramework outside AgentServer mode, so the check runs in a child process: this file run as a script.
 """
 
