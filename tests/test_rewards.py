@@ -276,17 +276,21 @@ def test_rank_gifts_with_trials():
 
 
 class GiftPage:
-    """Select n/m over the gift cards: a tap picks a card, or drops it when picked; full, a tap does nothing."""
+    """Select n/m over the gift cards: a tap picks a card, or drops it when picked; full, a tap does nothing.
 
-    def __init__(self, picks, unread=0):
-        self.picks, self.unread = picks, unread  # unread: count reads that come back empty first
+    A page that shows no count (counted=False, #494) reads "Select" alone and takes one card: a tap on another card
+    moves the pick to it.
+    """
+
+    def __init__(self, picks, unread=0, counted=True):
+        self.picks, self.unread, self.counted = picks, unread, counted  # unread: count reads that come back empty first
         self.picked, self.taps = [], []
 
     def read(self):
         if self.unread:
             self.unread -= 1
             return ""
-        return f"Select {len(self.picked)}/{self.picks}"
+        return f"Select {len(self.picked)}/{self.picks}" if self.counted else "Select"
 
     def tap(self, i):
         self.taps.append(i)
@@ -294,6 +298,8 @@ class GiftPage:
             self.picked.remove(i)
         elif len(self.picked) < self.picks:
             self.picked.append(i)
+        elif not self.counted:
+            self.picked = [i]
 
 
 def test_pick_gifts_taps_every_card_when_the_count_never_reads():
@@ -312,9 +318,16 @@ def test_pick_gifts_stops_at_the_count_once_it_reads():
 
 
 def test_pick_gifts_a_lone_card_is_tapped_once():
-    page = GiftPage(picks=1, unread=99)  # one card shows no count
+    page = GiftPage(picks=1, counted=False)  # one card shows no count
     r.pick_gifts([0], page.read, page.tap)
     assert page.taps == [0]
+
+
+def test_pick_gifts_a_page_with_no_count_takes_the_best_card():
+    # #494: three cards, Select with no n/m; 2026-11-07 HARD floor 4 ranked them [0, 2, 1] and ended on card 1, owned
+    page = GiftPage(picks=1, counted=False)
+    assert r.pick_gifts([0, 2, 1], page.read, page.tap) == [0]
+    assert page.picked == [0]
 
 
 def test_pick_gifts_repicks_a_card_the_tap_dropped():
