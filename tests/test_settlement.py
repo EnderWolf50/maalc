@@ -303,6 +303,12 @@ def test_a_forfeited_run_past_floor_5_claims_its_floor_5_rewards(context, monkey
     assert [(line["result"], line["floors"]) for line in lines] == [("clear", 6)]
 
 
+def test_a_stop_line_of_a_run_with_no_settings_in_memory_is_a_target_5_line(context):
+    actions.RUN.clear()
+    line = actions.run_line(actions.RUN, "stop", None, 0)
+    assert (line["target"], line["target_reached"]) == (5, False)
+
+
 # The acceptance's claim page (2026-10-29): Floor 5 [HARD] 7/7, five HARD floors, 3 weekly bonuses left, no run plan.
 CLAIM = "ExplorationRewardHard5.png"
 SEEN = {"all five": {f: True for f in range(1, 6)}, "none": {}, "last two": {4: True, 5: True},

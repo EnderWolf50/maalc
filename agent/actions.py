@@ -385,12 +385,12 @@ def run_line(run, outcome, hard, floors, bonuses=0):
     """This run's runs.jsonl line (spec 06 執行記錄)."""
     team = run["team"] if run.get("planned") else None
     counts = STUCK["ladder"].counts
-    target = run.get("settings", {}).get("run", {}).get("target_floor")
+    target = run.get("settings", {}).get("run", {}).get("target_floor", 5)
     return {
         "start": run.get("start"), "end": settlement.now(),
         "team": team and team["id"], "team_name": team and team["name"],
         "difficulty": None if hard is None else "hard" if hard else "normal", "weekly_bonus": bonuses,
-        "target": target, "floors": floors, "target_reached": None if target is None else settlement.target_reached(floors, target),
+        "target": target, "floors": floors, "target_reached": settlement.target_reached(floors, target),
         "result": outcome, "l1": counts[1], "l2": counts[2], "l3": counts[3],
         **({"gift_search": run["gift_search"]} if "gift_search" in run else {}),
     }
