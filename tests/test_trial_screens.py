@@ -1,5 +1,6 @@
 """A boss gift card read off the boss captures in tests/screens (#381): its Enemy Level Up badge, its trial's name and
-effect line through actions.trial_card, its gift's tier through actions.gift_tier.
+effect line through actions.trial_card, its gift's tier through actions.gift_tier. The Select button of a gift page
+read off its capture: its count, or none on a page that takes one card (#494).
 
 trial_card runs inside a real MaaFramework task (resource bundle loaded, a still controller), so the OCR is the agent's
 on the device. The pytest process holds MaaFramework in AgentServer mode, so the task runs in a child process: this file
@@ -34,6 +35,9 @@ CARDS = {
 # A fight's gift page, whose tier PickGift does not score (main > other > owned there), but the last gift card of
 # tests/screens: its numeral 8 px lower than a boss page's.
 TIERS = {"GiftChoice.png": [(639, 2)]}
+# capture -> the Select n/m its button shows, None for "Select" alone
+COUNTS = {"BossGiftTrials.png": (0, 1), "BossGiftTrialsHard.png": (0, 2), "BossGiftTrialsFloor3.png": (0, 1),
+          "GiftChoiceNoCount.png": None}
 
 
 def load(name):
@@ -77,6 +81,8 @@ def child():
                     image = load(name)
                     for x, *_ in cards:
                         out[f"{name} {x}"] = list(actions.trial_card(context, image, x))
+                for name in COUNTS:
+                    out[f"{name} count"] = actions.text(context, load(name), actions.GIFT_COUNT)
             except Exception:  # MaaFramework swallows it: hand it to the test
                 out["error"] = traceback.format_exc()
             return True
@@ -120,6 +126,20 @@ def test_the_tier_numeral_over_a_gift_card_reads_as_the_gift_data_s_tier(name, x
     # 2026-10-28 frame that is not committed (Disk Fragment, floor 2); IV and V are on no capture yet.
     import actions
     assert actions.gift_tier(load(name), x) == tier
+
+
+@pytest.mark.parametrize(("name", "count"), COUNTS.items())
+def test_the_select_button_reads_its_count_or_none(read, name, count):
+    from gift_search import select_count
+    assert select_count(read[f"{name} count"]) == count
+
+
+def test_a_page_whose_select_shows_no_count_has_its_best_card_tapped_alone(read):
+    # The 2026-11-07 floor-4 page ranked [0, 2, 1]: every card was tapped, the last one (owned) taken (#494)
+    import rewards
+    taps = []
+    rewards.pick_gifts([0, 2, 1], lambda: read["GiftChoiceNoCount.png count"], taps.append)
+    assert taps == [0]
 
 
 if __name__ == "__main__":
