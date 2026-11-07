@@ -321,14 +321,13 @@ def test_pick_gifts_stops_at_the_count_once_it_reads():
 
 @pytest.mark.parametrize("unread", [0, 99])
 def test_pick_gifts_a_lone_card_is_tapped_once(unread):
-    page = GiftPage(picks=1, unread=unread, counted=False)  # one card shows no count
+    page = GiftPage(picks=1, unread=unread, counted=False)
     r.pick_gifts([0], page.read, page.tap)
     assert page.taps == [0]
 
 
 def test_pick_gifts_a_page_with_no_count_takes_the_best_card():
-    # #494: three cards, Select with no n/m; 2026-11-07 HARD floor 4 ranked them [0, 2, 1] and ended on card 1, owned
-    page = GiftPage(picks=1, counted=False)
+    page = GiftPage(picks=1, counted=False)  # #494's floor-4 page, ranked [0, 2, 1]
     assert r.pick_gifts([0, 2, 1], page.read, page.tap) == [0]
     assert page.picked == [0]
 

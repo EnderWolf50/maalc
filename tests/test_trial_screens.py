@@ -35,8 +35,7 @@ CARDS = {
 # A fight's gift page, whose tier PickGift does not score (main > other > owned there), but the last gift card of
 # tests/screens: its numeral 8 px lower than a boss page's.
 TIERS = {"GiftChoice.png": [(639, 2)]}
-# Every gift page capture PickGift runs on -> the Select n/m its button shows, None for "Select" alone (#494). Swept over
-# all 226 captures of tests/screens on 2026-11-08, only these two None pages read "Select" alone.
+# every gift page capture PickGift runs on -> the Select n/m its button shows, None for "Select" alone
 COUNTS = {"BossGiftTrials.png": (0, 1), "BossGiftTrialsHard.png": (0, 2), "BossGiftTrialsFloor3.png": (0, 1),
           "GiftRefuseDialog.png": (0, 1), "GiftChoice.png": None, "GiftChoiceNoCount.png": None}
 
@@ -136,7 +135,6 @@ def test_the_select_button_reads_its_count_or_none(read, name, count):
 
 
 def test_a_page_whose_select_shows_no_count_has_its_best_card_tapped_alone(read):
-    # The 2026-11-07 floor-4 page ranked [0, 2, 1]: every card was tapped, the last one (owned) taken (#494)
     import rewards
     taps = []
     rewards.pick_gifts([0, 2, 1], lambda: read["GiftChoiceNoCount.png count"], taps.append)
