@@ -10,6 +10,13 @@
 
 zip 不是安裝程式，也不會自動更新；換版時下載新 zip，把舊資料夾的 `config/` 複製過去，就能沿用 maalc 的設定。
 
+### 辨識失敗時的截圖（`save_on_error`）
+
+辨識沒對上時，MaaFramework 會把當下的畫面存進 `debug/on_error/`，回報問題時請附上。這是 client 的選項，maalc 設不到。MXU 和 MFAAvalonia 預設都開著，值都存在 `config/maa_option.json` 的 `save_on_error`，所以兩個 client 放在同一個資料夾時共用它：
+
+- MXU：第一次啟動時寫入這個檔案，值是 `true`。
+- MFAAvalonia：「設定」→「執行設定」→「啟用錯誤時儲存截圖」。
+
 ## 日常任務
 
 鏡牢以外的日常各是一個獨立任務，在 MXU 或 MFAAvalonia 的任務清單裡勾選、排序：
