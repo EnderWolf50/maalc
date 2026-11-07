@@ -295,16 +295,26 @@ def swipe(context, x1, y1, x2, y2, ms=500, wait=1.0):
     time.sleep(wait)
 
 
-def scroll(context, x, y, dx, dy):
+def scroll(context, x, y, dx, dy, ignored=None):
     """Drag the content under (x, y) by (dx, dy) px and let go without a fling (spec 07).
 
     The game's drag threshold eats the first move, so the finger first moves 10 px and rests 0.1 s (a move
     right after it can be eaten too), then moves (dx, dy) in 20 px moves 10 ms apart. The game flings the content
     on with the speed the finger still has at the lift, decaying while it rests, so it rests SCROLL_HOLD s first.
+    ignored(image) judges a screenshot taken as the rest starts: when it says the content did not follow the finger,
+    nothing moves to fling, so the finger lifts at once and that screenshot is returned (#486). Else None, the
+    screenshot's time taken out of the rest.
     """
     d = max(abs(dx), abs(dy), 1)
     lx, ly = x + round(10 * dx / d), y + round(10 * dy / d)
-    drag(context, [(x, y), (lx, ly), (lx + dx, ly + dy)], settle=0, dwell=0.1, hold=SCROLL_HOLD, pause=0.01, step=20)
+    press(context, [(x, y), (lx, ly), (lx + dx, ly + dy)], settle=0, dwell=0.1, pause=0.01, step=20)
+    end = time.monotonic() + SCROLL_HOLD
+    image = screen(context) if ignored else None
+    stayed = image is not None and ignored(image)
+    if not stayed:
+        time.sleep(max(0.0, end - time.monotonic()))
+    context.tasker.controller.post_touch_up().wait()
+    return image if stayed else None
 
 
 # Live 2026-10-18 (#114): with these moves (~1000 px/s) a 0.55 s rest left at most 1 px of fling in 126 drags of
@@ -319,6 +329,13 @@ def drag(context, points, settle=0.3, dwell=0.1, hold=0.0, pause=0.02, step=10):
 
     Lifts on the last point after hold s; at once by default: a finger held on a battle skill opens its details.
     """
+    press(context, points, settle, dwell, pause, step)
+    time.sleep(hold)
+    context.tasker.controller.post_touch_up().wait()
+
+
+def press(context, points, settle, dwell, pause, step):
+    """drag without its rest and lift: the finger goes down and moves through points, and stays down on the last."""
     ctl = context.tasker.controller
     ctl.post_touch_down(*points[0]).wait()
     time.sleep(settle)
@@ -329,8 +346,6 @@ def drag(context, points, settle=0.3, dwell=0.1, hold=0.0, pause=0.02, step=10):
             time.sleep(pause)
         if (x1, y1) != points[-1]:
             time.sleep(dwell)
-    time.sleep(hold)
-    ctl.post_touch_up().wait()
 
 
 def ocr(context, image, roi, only_rec=False):
@@ -2218,7 +2233,11 @@ PANEL_REWARDS = [700, 495, 110, 30]  # the "Clear Rewards" label
 PANEL_COST = [730, 545, 40, 35]  # the number by its Cost coin
 MAP_TITLE = [40, 85, 240, 35]  # "Exploring Floor 3", top left
 MAP_LEAVING = 6  # s RouteMap waits for the last floor's map to give way to this floor's
-MAP_PAN_LIMIT = 8  # s find_bus drags a fresh map again that took none of its drags
+MAP_PAN_LIMIT = 8  # s find_bus drags a fresh NORMAL map again that took none of its drags
+# px (a pan's larger axis) from which find_bus looks as the finger stops whether the map ignored the pan (#486). On the six
+# runs' recordings every find_bus pan was 396 px: at its last move the bus had moved 0 px on the 20 ignored ones and trailed
+# the finger by 126 px at most on the 108 taken ones. A shorter pan, taken, may not have moved yet: it rests as before.
+PAN_LOOK_MIN = 300
 BUS_JITTER = 3  # px the bus's match moves on a map that did not move
 # #473: back on the map from a fight's loading screen or its reward pages, the game ignores taps on the still map for a
 # time that differs by run, with no sign on screen (over 1.46 s after the fade-in on 2026-11-07, under 1.32 s on
@@ -2226,7 +2245,7 @@ BUS_JITTER = 3  # px the bus's match moves on a map that did not move
 # from 0.13-0.23 s after it was sent (75 taps); one it ignored moved 1.0% at most over 2 s (26 taps, 3 runs), and the
 # next touch, at most 2.6 s later, was always taken.
 MAP_ANSWER = 0.7  # s a tap on the map has to answer (its node panel, or the screen moving) before follow taps again
-MAP_TAP_LIMIT = 4  # s follow taps its node again while the map ignores taps
+MAP_TAP_LIMIT = 4  # s follow taps its node again, and find_bus drags the map again (#486), while the map ignores touches
 
 
 def seen(context, image, node, roi=None):
@@ -2607,13 +2626,20 @@ class RouteMap(CustomAction):
     def find_bus(context):
         """A screenshot and the bus's top-left in it, after panning the bus to BUS_HOME.
 
-        Up to three pans. On a floor's fresh map (no node entered since the theme pack) a pan that leaves the
-        bus where it was does not count and is made again, for up to MAP_PAN_LIMIT s: live 2026-10-19, a new
-        map took no drag for its first seconds. Once a pan has moved the bus, one that does not is the map's edge.
+        Up to three pans that move the bus. A pan that leaves the bus where it was (the map ignored it) does not count
+        and is made again, for up to MAP_TAP_LIMIT s (#486: after a fade-in the game ignores the map's touches for a
+        while); on a floor's fresh NORMAL map (no node entered since the theme pack) for up to MAP_PAN_LIMIT s: live
+        2026-10-19, a new map took no drag for its first seconds. Once a pan has moved the bus, one that does not is
+        the map's edge. On a pan of PAN_LOOK_MIN px or more, a screenshot as the finger stops that shows the bus where
+        it was lifts the finger at once and is the next look: no rest, no 0.5 s wait (#486).
         """
-        end, pans, last, moved = time.monotonic() + MAP_PAN_LIMIT, 0, None, False
+        def stays(hit, at):  # a MapBus hit within BUS_JITTER of at: the map has not moved
+            return hit is not None and at is not None and abs(hit.box[0] - at[0]) <= BUS_JITTER and abs(hit.box[1] - at[1]) <= BUS_JITTER
+
+        limit = MAP_PAN_LIMIT if RUN.get("fresh_floor") and not RUN.get("floor_hard") else MAP_TAP_LIMIT  # a HARD map does not pan (#129)
+        end, pans, last, moved = time.monotonic() + limit, 0, None, False
+        image = screen(context)
         while True:
-            image = screen(context)
             bus = seen(context, image, "MapBus")
             if not bus:
                 return image, None
@@ -2621,13 +2647,13 @@ class RouteMap(CustomAction):
             dx, dy = BUS_HOME[0] - bx, BUS_HOME[1] - by
             if abs(dx) <= BUS_SLACK[0] and abs(dy) <= BUS_SLACK[1]:
                 return image, (bx, by)
-            held = last is not None and abs(bx - last[0]) <= BUS_JITTER and abs(by - last[1]) <= BUS_JITTER
+            held = stays(bus, last)
             if held and moved:
                 return image, (bx, by)  # live 2026-10-21 NORMAL: the map's left edge stopped the bus at 196
             moved = last is not None and not held
-            if held and RUN.get("fresh_floor") and not RUN.get("floor_hard"):  # a HARD map does not pan (#129)
+            if held:
                 if time.monotonic() > end:
-                    log(f"map: the bus stayed at {bx}, {by} through {MAP_PAN_LIMIT} s of drags")
+                    log(f"map: the bus stayed at {bx}, {by} through {limit} s of drags")
                     return image, (bx, by)
             else:
                 if pans == 3:
@@ -2636,9 +2662,13 @@ class RouteMap(CustomAction):
             # Look again after each pan. Start on map background: between the first and second columns,
             # between the middle and bottom rows. #213: a GET! window rising over the map ends the pans.
             page_guard(context, "MirrorMap", image=image)
-            scroll(context, min(bx + SLOT[0] + map_route.COLUMN_DX // 2, 1100), by + SLOT[1] + 106, dx, dy)
-            time.sleep(0.5)
             last = (bx, by)
+            look = max(abs(dx), abs(dy)) >= PAN_LOOK_MIN
+            image = scroll(context, min(bx + SLOT[0] + map_route.COLUMN_DX // 2, 1100), by + SLOT[1] + 106, dx, dy,
+                           ignored=(lambda im: stays(seen(context, im, "MapBus"), last)) if look else None)
+            if image is None:
+                time.sleep(0.5)
+                image = screen(context)
 
     @staticmethod
     def search_bus(context):
