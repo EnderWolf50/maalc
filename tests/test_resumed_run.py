@@ -93,3 +93,12 @@ def test_a_stop_line_is_written_when_no_team_fits_the_set_difficulty(resumed, mo
 def test_a_daily_task_stopped_with_no_run_plan_writes_no_mirror_line(resumed, monkeypatch):
     stopped_at_once(resumed, monkeypatch, "ExpLuxcavation")
     assert not (actions.ROOT / "logs" / "runs.jsonl").exists()
+
+
+def test_a_stop_after_the_tasks_claim_writes_no_line_for_a_run_not_begun(resumed, monkeypatch):
+    # The claim ended the run; the task stops on its way to the next one (Parallel Superposition stays ON, say).
+    monkeypatch.setattr(actions, "TASK", {"runs": 0, "done": None})
+    actions.TaskStart().run(resumed, SimpleNamespace(node_name="MirrorDungeon"))
+    claim(resumed, monkeypatch)
+    actions.stop(resumed, "Parallel Superposition Mode stays ON after tapping INFINITY MIRROR")
+    assert last_line()["result"] == "clear"

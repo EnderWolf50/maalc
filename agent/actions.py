@@ -51,7 +51,8 @@ RUN = {}
 # This task's own state (#364, ADR 0010), reset by TaskStart: the runs claimed since it started (the run count stop,
 # spec 01; never saved), why it is done ("done", None while it runs), which ends it a success (TaskDone), its entry
 # node, and "ended" once done() or stop() ended it. Set as a task needs them: "modules" and "gate_backs" (the mirror's new
-# run gate), "assemble" (Assemble Modules' reads and confirms), "charge" (Charge Enkephalin's count and its steps).
+# run gate), "settled" (a mirror run claimed or given up: none is under way until the next is planned, #436),
+# "assemble" (Assemble Modules' reads and confirms), "charge" (Charge Enkephalin's count and its steps).
 TASK = {"runs": 0, "done": None}
 # Stuck detection and recovery (spec 06), memory only: the last node seen ("node", its id) and the
 # screen type it handled ("kind"), a pending stuck for MirrorHub's Stuck node ("flag": (kind, start
@@ -349,7 +350,7 @@ def current_run(context):
         team, known = resumed_team(settings["teams"], read_cursor(ROOT, address(context)), difficulty)
         RUN.update(settings=settings, team=run_team(settings, team), difficulty=difficulty, planned=known)
         # The guard turns left are unknown after a restart: they count as used up (spec 03 section 8).
-        how = "from the rotation cursor" if known else "assumed, the rotation cursor picks another team on the other difficulty"
+        how = "from the rotation cursor" if known else "assumed: the rotation cursor does not tell the run's team"
         log(f"no run plan in memory: team {team['name']!r} {how}, difficulty {difficulty or 'unknown'}, no guard turns")
     return RUN
 
@@ -393,14 +394,14 @@ def stop(context, reason, line=None, whole_list=False):
     """The stop procedure (spec 06 停止程序): evidence, a `stop` line in runs.jsonl, the webhook.
 
     line is this run's line when the caller knows it better (Settle); otherwise one is made up from the run plan, in a
-    Mirror Dungeon task that stops before it touched the run too (#436). whole_list: an account-level stop (maintenance,
+    Mirror Dungeon task that stops before it touched the run too, unless it ended one already (#436). whole_list: an account-level stop (maintenance,
     an outdated client, a download or the terms with their auto setting off, an update that keeps coming back), which
     every later task would meet too: post_stop then empties the client's queue (#364). Returns False, for the action to
     return: that ends the task.
     """
     log(f"stop: {reason}")
     TASK["ended"] = True
-    if line is None and "settings" not in RUN and TASK.get("entry") == "MirrorDungeon":
+    if line is None and TASK.get("entry") == "MirrorDungeon" and not TASK.get("settled"):
         try:
             current_run(context)
         except SettingsError as e:
@@ -5572,4 +5573,5 @@ class Settle(CustomAction):
     def record(run, result, bonuses, outcome):
         settlement.append_run(ROOT, run_line(run, outcome, result[1], settlement.floors_passed(result), bonuses))
         TASK["runs"] += settlement.counts_as_run(outcome)
+        TASK["settled"] = True
         STUCK["ladder"] = recovery.Ladder()

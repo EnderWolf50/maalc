@@ -63,10 +63,11 @@ def resumed_team(teams, cursor, difficulty):
 
     No screen shows the team after the team page, so it comes from the cursor, which only a claim moves: a run the bot
     began plays pick_team for the difficulty it began on. difficulty None: that is not known (auto), and the team is
-    known only when every difficulty a run could begin on picks it. Not known: the hard pick to play the run by, or with
-    no team for the difficulty the cursor's own; never None while a team is enabled.
+    known only when every difficulty a run could begin on picks it. The run is played by the first pick (hard before
+    normal); when no team fits, by the cursor's own team, so a team comes back whenever one is enabled.
     """
-    fits = [t for t in (pick_team(teams, cursor, d) for d in ([difficulty] if difficulty else ["hard", "normal"])) if t]
+    difficulties = [difficulty] if difficulty else ["hard", "normal"]
+    fits = [t for t in (pick_team(teams, cursor, d) for d in difficulties) if t]
     team = fits[0] if fits else _from_cursor(teams, cursor)[0]
     return team, len({t["id"] for t in fits}) == 1
 
