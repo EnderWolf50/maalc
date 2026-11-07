@@ -1457,7 +1457,8 @@ INFINITY_BUTTON = (1053, 377)  # INFINITY MIRROR under it
 class ParallelModeOff(CustomAction):
     """Entry page with Parallel Superposition Mode ON: tap INFINITY MIRROR until it reads OFF (#94, spec 02).
 
-    The bot never plays past floor 5; the prompt after floor 5 (ParallelModePrompt) is cancelled as a second guard.
+    v1 never plays past floor 5 (#434 opens it for a target above 5); the prompt after floor 5 (ParallelModePrompt)
+    is cancelled as a second guard.
     Still ON after two taps: stop, nothing else is tried.
     """
 
