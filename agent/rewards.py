@@ -6,6 +6,7 @@ actions.py reads the pages and taps; everything here is plain data in, plain dat
 import re
 from difflib import SequenceMatcher
 
+from gift_search import select_count
 from ocrtext import compact, has, normalize
 from run_start import match_pack
 
@@ -312,23 +313,23 @@ def rank_gifts(cards):
 def pick_gifts(ranked, read, tap):
     """Tap gift cards best first until Select n/m is full (spec 03 section 12); the cards tapped, in order.
 
-    read() gives (n, m) off the screen or None; tap(i) taps card i. A lone card shows no count.
+    read() gives the Select button's OCR text off the screen; tap(i) taps card i. A lone card shows no count.
     With several cards and no count read, it is read again, then cards are tapped in order until
     it reads, every card when it never does (#81).
     """
-    count = read()
+    count = select_count(read())
     if count is None and len(ranked) > 1:
-        count = read()
+        count = select_count(read())
     taken = []
     for i in ranked:
         if count and count[0] >= count[1]:
             break
         tap(i)
         taken.append(i)
-        now = read()
+        now = select_count(read())
         if count and now and now[0] < count[0]:  # it was picked already: pick it again, go on to the next
             tap(i)
-            now = read()
+            now = select_count(read())
         count = now or count
     return taken
 

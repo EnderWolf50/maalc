@@ -3728,7 +3728,7 @@ class PickGift(CustomAction):
             tap(context, centres[i], 300, wait=0)
             until(context, lambda im: gift_count(context, im) != before, timeout=1.5)
 
-        taken = rewards.pick_gifts(ranked, lambda: gift_count(context), pick)
+        taken = rewards.pick_gifts(ranked, lambda: text(context, screen(context), GIFT_COUNT), pick)
         for _ in range(3):
             page_guard(context, "GiftChoice")
             tap(context, *GIFT_SELECT, wait=0)

@@ -285,8 +285,8 @@ class GiftPage:
     def read(self):
         if self.unread:
             self.unread -= 1
-            return None
-        return len(self.picked), self.picks
+            return ""
+        return f"Select {len(self.picked)}/{self.picks}"
 
     def tap(self, i):
         self.taps.append(i)
