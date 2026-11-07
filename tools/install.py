@@ -1,6 +1,6 @@
 """Assemble a runnable <root> in install/: interface.json, resource/, agent/,
-maafw/ (the MaaFramework DLLs MXU loads, taken from the installed maafw; on Windows
-MaaFramework.dll comes from MAAFW_FIX), and
+maafw/ (the MaaFramework DLLs MXU and the agent load, taken from the installed maafw;
+on Windows MaaFramework.dll comes from MAAFW_FIX), and
 the settings GUI maalc-gui.exe when it has been built.
 
 Drop MXU or MFAAvalonia into install/ and start it. child_exec is pinned to the
@@ -9,7 +9,8 @@ resolves a bare `python` to the Microsoft Store alias. Run tools/fetch_ocr.py fi
 
 `--release` (Windows x64 only, used by .github/workflows/release.yml) makes
 install/ self-contained instead: python.org's embeddable Python in python/ with
-the locked runtime deps, child_exec `./python/python.exe` (MXU joins a relative
+the locked runtime deps but without the maafw wheel's DLLs (agent/main.py points
+it at maafw/), child_exec `./python/python.exe` (MXU joins a relative
 child_exec onto the interface.json folder), and MXU's mxu.exe and LICENSE,
 shipped unmodified from its release (MXU is AGPL-3.0, see NOTICE.md).
 """
@@ -43,6 +44,7 @@ MXU = ("https://github.com/MistEO/MXU/releases/download/v2.7.1/MXU-win-x86_64-v2
 
 repo = Path(__file__).resolve().parent.parent
 install = repo / "install"
+wheel_bin = Path(maa.__file__).parent / "bin"
 
 
 def fetch_zip(url: str, sha256: str) -> zipfile.ZipFile:
@@ -51,6 +53,11 @@ def fetch_zip(url: str, sha256: str) -> zipfile.ZipFile:
     if hashlib.sha256(data).hexdigest() != sha256:
         sys.exit(f"SHA-256 mismatch: {url}")
     return zipfile.ZipFile(io.BytesIO(data))
+
+
+def fixed_framework_dll() -> bytes:
+    """MAAFW_FIX's MaaFramework.dll, the one maafw/ ships on Windows."""
+    return fetch_zip(*MAAFW_FIX).read("MaaFramework.dll")
 
 
 def bundle_python() -> None:
@@ -63,10 +70,14 @@ def bundle_python() -> None:
     requirements = install / "requirements.txt"
     subprocess.run(["uv", "export", "--frozen", "--no-dev", "--no-emit-project",
                     "--output-file", str(requirements)], cwd=repo, check=True)
-    subprocess.run(["uv", "pip", "install", "--target", str(python / "Lib" / "site-packages"),
+    site_packages = python / "Lib" / "site-packages"
+    subprocess.run(["uv", "pip", "install", "--target", str(site_packages),
                     "--python-version", "3.12", "--python-platform", "x86_64-pc-windows-msvc",
                     "--requirements", str(requirements)], check=True)
     requirements.unlink()
+    wheel_dlls = site_packages / "maa" / "bin"
+    if wheel_dlls.exists():  # a rerun finds maafw installed already, its bin/ gone
+        shutil.rmtree(wheel_dlls)
 
 
 def bundle_mxu() -> None:
@@ -88,7 +99,7 @@ if __name__ == "__main__":
             sys.exit(f"maafw {version('maafw')} installed, MAAFW_FIX is built for {MAAFW_FIX_VERSION}: update or drop it")
         # Fetched before anything is copied: a failed download or hash leaves install/ as it was,
         # never with the wheel's unpatched DLL.
-        maafw_fix = fetch_zip(*MAAFW_FIX)
+        fixed_dll = fixed_framework_dll()
     shutil.copytree(repo / "assets", install, dirs_exist_ok=True)
     shutil.copytree(repo / "agent", install / "agent", dirs_exist_ok=True,
                     ignore=shutil.ignore_patterns("__pycache__"))
@@ -97,9 +108,9 @@ if __name__ == "__main__":
     exe = "./python/python.exe" if release else Path(sys.executable).as_posix()
     interface.write_text(text.replace('"child_exec": "python"', f'"child_exec": "{exe}"'),
                          encoding="utf-8")
-    shutil.copytree(Path(maa.__file__).parent / "bin", install / "maafw", dirs_exist_ok=True)
+    shutil.copytree(wheel_bin, install / "maafw", dirs_exist_ok=True)
     if sys.platform == "win32":
-        maafw_fix.extract("MaaFramework.dll", install / "maafw")
+        (install / "maafw" / "MaaFramework.dll").write_bytes(fixed_dll)
     for name in ("LICENSE", "NOTICE.md"):
         shutil.copy2(repo / name, install)
     # The settings GUI finds <root> from its own folder, so it sits next to agent/.
