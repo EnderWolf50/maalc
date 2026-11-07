@@ -16,7 +16,7 @@ import shop
 import test_actions
 from test_actions import argv, buying, replacing, shop_team, wants
 from test_pipeline import load_nodes
-from test_shop import skill_entry
+from test_shop import MEURSAULT_ONCE, RYOSHU_TWICE, skill_entry
 
 clock, context = test_actions.clock, test_actions.context  # its fixtures
 SCREENS = Path(__file__).resolve().parent / "screens"
@@ -653,8 +653,8 @@ def test_a_starlight_swap_without_purchased_forgets_the_counts(context, monkeypa
 
 
 def test_a_hand_back_at_the_paying_tap_does_not_pay_twice(context, monkeypatch):
-    # #264 Implementation Decisions (the heal's rule, ADR 0007): the visit is marked before the paying tap. Here the tap is lost to a popup (nothing paid, the slot
-    # not Purchased): the visit memory alone keeps the re-entered visit from paying.
+    # #264 Implementation Decisions (the heal's rule, ADR 0007): the visit is marked before the paying tap. Here the tap is
+    # lost to a popup (nothing paid, the slot not Purchased): the visit memory alone keeps the re-entered visit from paying.
     actions.RUN["team"] = searching(RYOSHU) | {"heal": "none"}
     game = IdGame(context, monkeypatch, {"Ryōshū": (2, 3, 1)})
     for step in ("sell", "buy", "fuse"):
@@ -696,7 +696,6 @@ def test_the_step_runs_after_the_heal_and_again_after_a_refresh(context, monkeyp
     assert steps == ["buy_offers", "skill_step", "buy_offers"]
 
 
-RYOSHU_TWICE, MEURSAULT_ONCE = skill_entry("Ryōshū", 1, 4, 1), skill_entry("Meursault", 2, 3, 1)  # two s1_s2 from 3/2/1; one
 FRESH = {"Ryōshū": (3, 2, 1), "Meursault": (3, 2, 1)}
 
 
@@ -731,6 +730,18 @@ def test_a_search_with_no_swap_for_its_sinner_goes_down_the_list_past_a_replace_
     assert [(how, sinner) for how, sinner, _ in game.made] == [("search", "Yi Sang"), ("replace", "Meursault")]
     assert game.taps[:4] == [ID_SLOT, portrait("Ryōshū"), actions.REPLACE_CANCEL, ID_SLOT] and portrait("Meursault") not in game.taps
     assert "shop: ID Skill Search: 'Meursault' has a Replace slot on this page, used first: skip" in lines
+
+
+def test_a_search_never_goes_back_up_the_list(context, monkeypatch):
+    # #264 先後: on Meursault's turn ID Skill Search starts from him; Ryōshū, listed before him, was passed already.
+    IdGame(context, monkeypatch, FRESH, replace=["Ryōshū"])
+    calls = []
+    monkeypatch.setattr(actions.Shop, "replace_skill", staticmethod(lambda *a: "handled"))
+    monkeypatch.setattr(actions.Shop, "id_skill_search", staticmethod(
+        lambda context, team, visit, listed, waiting, offers: calls.append([e["sinner"] for e in listed]) or 0))
+    visit = {"id_tried": ["Ryōshū"]}  # his turn came after his slot; as if it opened nothing for him
+    actions.Shop.skill_step(context, searching(RYOSHU_TWICE, MEURSAULT_ONCE), visit)
+    assert calls == [["Meursault"]]
 
 
 def test_the_search_judges_on_the_counts_the_replace_slot_left(context, monkeypatch):

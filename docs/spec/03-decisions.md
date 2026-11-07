@@ -389,7 +389,7 @@ Cost 表是 wiki 與簡中客戶端的表，實機 log 的節點面板 Cost 沒�
 隊伍的 `skill_replacement.sinners`（[04](04-settings.md) 第 9 節）列出要換技能的罪人、每位的目標張數與 `s1_s3_first`；清單是空的，或每位的目標都還是遊戲的 3／2／1 時，這一步什麼都不讀、不點（`shop.any_change`），商店和以前完全一樣。
 
 - **時機**（#264 定案）：治療之後、出售 → 購買與刷新 → 合成的循環之前做一次（`Shop.skill_step`，替換格與 ID Skill Search 是同一步）；每次刷新成功（Cost 有扣）後、回去讀商品之前再做一次，因為刷新會換掉替換格的罪人（#264 附圖 106 → 107）。不為了換技能而刷新：刷新照舊只由購買的規則決定。MirrorHub 交回後重新進同一次造訪時也會再跑這一步，已處理過的罪人跳過。
-- **先後**（#264 定案，使用者 2026-11-07；`shop.skill_walk`）：依 `sinners` 的順序一位一位處理，處理完這位才輪到下一位。每位先用他自己在這一頁的替換格（同一種換法替換格只要 ID Skill Search 一半的價格）；這位照這一局的張數還要換（`shop.search_turn`：這一局沒讀過張數的算要換），而且 ID Skill Search 開著、這一頁有、這次造訪還沒用過，再用 ID Skill Search 換他。每一格每次造訪只用一次。付星光時順序不變：星光不花 Cost，換到的結果和付 Cost 夠多時一樣。#264 的例子（清單 1 良秀（Ryōshū）、2 莫爾索（Meursault），付 Cost；`tests/test_shop_skill.py` 照這張表測）：
+- **先後**（#264 定案，使用者 2026-11-07；`shop.skill_walk`）：依 `sinners` 的順序一位一位處理，處理完這位才輪到下一位。每位先用他自己在這一頁的替換格（同一種換法替換格只要 ID Skill Search 一半的價格）；這位照這一局的張數還要換（`shop.search_turn`：這一局沒讀過張數的算要換），而且 ID Skill Search 開著、這一頁有、這次造訪還沒用過，再用 ID Skill Search 換他。每一格每次造訪只用一次：替換格點過就不再點（bot 自己在 Confirm 之前因為付不起而 Cancel 的除外，見「處理過」），ID Skill Search 付過款就不再點；點開後 Cancel 不算用過，但每位罪人每次造訪只試一次（`id_tried`）。付星光時順序不變：星光不花 Cost，換到的結果和付 Cost 夠多時一樣。#264 的例子（清單 1 良秀（Ryōshū）、2 莫爾索（Meursault），付 Cost；`tests/test_shop_skill.py` 照這張表測）：
 
   | 這一頁 | Cost 夠換 | 順序 |
   |---|---|---|

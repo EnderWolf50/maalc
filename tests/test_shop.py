@@ -318,15 +318,15 @@ def test_id_search_passes_a_sinner_whose_own_replace_slot_is_still_to_come():
 RYOSHU_TWICE, MEURSAULT_ONCE = skill_entry("Ryōshū", 1, 4, 1), skill_entry("Meursault", 2, 3, 1)  # two s1_s2 from 3/2/1; one
 
 
-@pytest.mark.parametrize("slotted, walk", [
+@pytest.mark.parametrize("waiting, walk", [
     # #264 先後's examples, list 1 Ryōshū, 2 Meursault: each sinner's own Replace slot, then ID Skill Search on them.
     ({"Ryōshū", "Meursault"}, [("replace", "Ryōshū"), ("search", "Ryōshū"), ("replace", "Meursault"), ("search", "Meursault")]),
     ({"Meursault"}, [("search", "Ryōshū"), ("replace", "Meursault"), ("search", "Meursault")]),
     (set(), [("search", "Ryōshū"), ("search", "Meursault")]),
 ])
-def test_the_skill_walk_finishes_one_sinner_before_the_next(slotted, walk):
+def test_the_skill_walk_finishes_one_sinner_before_the_next(waiting, walk):
     team = [RYOSHU_TWICE, MEURSAULT_ONCE]
-    assert [(kind, team[n]["sinner"]) for kind, n in s.skill_walk(team, slotted)] == walk
+    assert [(kind, team[n]["sinner"]) for kind, n in s.skill_walk(team, waiting)] == walk
 
 
 @pytest.mark.parametrize("entry, known, tried, turn", [

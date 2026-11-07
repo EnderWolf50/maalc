@@ -4614,8 +4614,12 @@ class Shop(CustomAction):
             sinner = entry["sinner"]
             if kind == "replace":
                 waiting.discard(sinner)
-                if not fresh:
-                    offers, fresh = Shop.skill_offers(context), True
+            elif not (conf["enabled"] and not visit.get("id_searched")
+                      and shop.search_turn(entry, RUN.get("skills", {}), visit.get("id_tried", ()), swaps)):
+                continue
+            if not fresh:
+                offers, fresh = Shop.skill_offers(context), True
+            if kind == "replace":
                 slot = next((s for s in shop.skill_slots(offers) if s["sinner"] == sinner and not s["purchased"]), None)
                 if slot is None:
                     log(f"shop: {sinner!r}'s slot is no longer on the grid: skip")
@@ -4625,16 +4629,11 @@ class Shop(CustomAction):
                 made += outcome == "replaced"
                 if outcome == "unchosen":
                     tapped.remove(sinner)
-            elif conf["enabled"] and not visit.get("id_searched") and shop.search_turn(
-                    entry, RUN.get("skills", {}), visit.get("id_tried", ()), swaps):
-                if not fresh:
-                    offers, fresh = Shop.skill_offers(context), True
+            else:
                 outcome = Shop.id_skill_search(context, team, visit, listed[n:], waiting, offers)
                 if outcome is None:
                     continue  # nothing tapped: the grid read still stands
                 made += outcome
-            else:
-                continue
             fresh = False
             if not Shop.to_main(context):
                 break  # on the map: the shop was left

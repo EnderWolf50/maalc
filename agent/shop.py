@@ -328,13 +328,13 @@ def id_search_slot(slots):
     return next((slot for slot in slots if id_skill_slot(slot["name"])), None)
 
 
-def skill_walk(listed, slotted):
+def skill_walk(listed, waiting):
     """[(kind, n)]: the order of the shop's skill step (#264 先後), n an entry's place in listed. The listed sinners one by
     one in the list's order, each finished before the next: "replace", the sinner's own Replace slot on this page when
-    `slotted` (the sinners skill_plan opens) has one, half ID Skill Search's price for the same swap; then "search", ID
+    `waiting` (the sinners skill_plan opens a slot for) holds them, half ID Skill Search's price for the same swap; then "search", ID
     Skill Search on them, which search_turn judges when it comes, on the counts the slot left."""
     return [(kind, n) for n, entry in enumerate(listed)
-            for kind in (("replace", "search") if entry["sinner"] in slotted else ("search",))]
+            for kind in (("replace", "search") if entry["sinner"] in waiting else ("search",))]
 
 
 def search_turn(entry, known, tried, swaps):
