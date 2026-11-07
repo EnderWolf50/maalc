@@ -1,0 +1,138 @@
+"""tools/live/giveup.py: ends a Mirror Dungeon run early from a battle, with no Claim.
+
+Its probe names each screen of the way with the pipeline's own nodes (and three dialogs the bot reads inside its
+actions), on the live captures of tests/screens. The probe runs MaaFramework, which the pytest process holds in
+AgentServer mode: `giveup.py look` runs in a child process, once for every capture.
+"""
+import json
+import subprocess
+import sys
+from pathlib import Path
+
+import pytest
+from test_pause_menus import BATTLE_BARS, PANEL_BUTTONS, inside, touches
+from test_pipeline import load_nodes
+
+from live import giveup as gu
+
+REPO = Path(__file__).resolve().parent.parent
+SCREENS = REPO / "tests/screens"
+
+# capture -> the screen the probe must name (None: none of the way's)
+NAMED = {
+    "BattleTurn.png": "BattleTurn",
+    "BattleMenu.png": "BattleMenu",
+    "BattlePause.png": "BattlePause",
+    "MirrorMap.png": "MirrorMap",
+    "DungeonProgress.png": "ProgressPanel",
+    "ProgressPanel.png": "ProgressPanel",
+    "ForfeitDialog.png": "ForfeitDialog",
+    "DefeatScreen.png": "DefeatScreen",
+    "ExplorationComplete.png": "ExplorationComplete",
+    "ExplorationReward.png": "ExplorationReward",
+    "ExplorationRewardOff.png": "ExplorationReward",
+    "GiveUpDialog.png": "GiveUpDialog",
+    "ClaimNoBonusDialog.png": "ClaimDialog",
+    "ClaimBonusDialog.png": "ClaimDialog",
+    "MainWindow.png": None,
+    "Drive.png": None,
+}
+
+
+@pytest.fixture(scope="module")
+def named():
+    done = subprocess.run([sys.executable, str(REPO / "tools/live/giveup.py"), "look", "--json", *(str(SCREENS / f) for f in NAMED)],
+                          capture_output=True, text=True, timeout=240, cwd=REPO)
+    assert done.returncode == 0, done.stderr[-2000:]
+    return json.loads(done.stdout.strip().splitlines()[-1])
+
+
+@pytest.mark.parametrize("capture", list(NAMED))
+def test_the_probe_names_each_screen_of_the_way(named, capture):
+    assert named[capture] == NAMED[capture]
+
+
+GEAR_BOX = (1211, 17, 49, 46)  # the planning phase's gear, top right, measured on BattleTurn.png
+CLAIM_BOX = (774, 523, 226, 43)  # the Exploration Reward window's Claim, measured on ExplorationReward.png
+
+
+def point(xy):
+    return (*xy, 1, 1)
+
+
+def test_the_taps_are_the_bots_own():
+    import actions
+
+    def centre(target):
+        x, y, w, h = target
+        return (x + w // 2, y + h // 2)
+
+    nodes = load_nodes()
+    assert (gu.MAP_GEAR, gu.FORFEIT, gu.FORFEIT_CONFIRM) == (actions.GEAR, actions.FORFEIT, actions.FORFEIT_CONFIRM)
+    assert (gu.FORFEIT_DIALOG, gu.DIALOG_TEXT) == (actions.FORFEIT_DIALOG, actions.DIALOG_TEXT)
+    assert (gu.GIVE_UP_REWARDS, gu.DIALOG_CANCEL, gu.DIALOG_CONFIRM) == (actions.GIVE_UP, actions.DIALOG_CANCEL, actions.DIALOG_CONFIRM)
+    assert gu.DEFEAT_CONFIRM == centre(nodes["DefeatScreen"]["custom_action_param"]["target"])
+    assert gu.CLAIM_REWARDS == centre(nodes["ExplorationComplete"]["custom_action_param"]["target"])
+
+
+def test_the_battle_taps_land_on_the_gear_give_up_and_forfeit():
+    assert inside(point(gu.BATTLE_GEAR), GEAR_BOX)
+    assert inside(point(gu.GIVE_UP), BATTLE_BARS["Give Up"])
+    assert inside(point(gu.FORFEIT), PANEL_BUTTONS["Forfeit"])
+
+
+def test_claim_is_never_tapped():
+    taps = {name: xy for name, (xy, _, _) in gu.STEPS.items() if xy}
+    assert not any(touches(point(xy), CLAIM_BOX) for xy in taps.values())
+    # A dialog's Confirm sits where a Claim dialog's does: it is tapped on the give-up dialog only; a Claim dialog is cancelled.
+    assert [n for n, xy in taps.items() if xy == gu.DIALOG_CONFIRM] == ["GiveUpDialog"]
+    assert taps["ClaimDialog"] == gu.DIALOG_CANCEL
+
+
+def test_the_probe_names_only_screens_with_a_node():
+    nodes = load_nodes()
+    assert not set(gu.OWN) & set(nodes) and gu.PROBE not in nodes  # the probe's own nodes override no pipeline node
+    assert set(gu.STEPS) - set(gu.OWN) <= set(nodes)
+
+
+class Game:
+    """The screens a run's looks show in turn, a clock the sleeps move, and what was tapped and shot."""
+
+    def __init__(self, screens):
+        self.screens, self.now, self.taps, self.shots, self.said = list(screens), 0.0, [], [], []
+
+    def look(self):
+        return self.screens.pop(0) if len(self.screens) > 1 else self.screens[0]
+
+    def run(self, timeout=60):
+        return gu.give_up(self.look, lambda x, y: self.taps.append((x, y)), self.shots.append, timeout=timeout,
+                          clock=lambda: self.now, sleep=self.sleep, say=self.said.append)
+
+    def sleep(self, s):
+        self.now += s
+
+
+def test_a_run_ends_from_a_turn_playing_out_to_the_give_up_dialogs_confirm():
+    game = Game(["BattlePause", "BattleTurn", "BattleTurn", "BattleMenu", None, "MirrorMap", "ProgressPanel", "ForfeitDialog",
+                 "DefeatScreen", "ExplorationComplete", "ExplorationReward", "GiveUpDialog", "ExplorationReward"])
+    assert game.run() == 0
+    assert game.taps == [gu.BATTLE_GEAR, gu.BATTLE_GEAR, gu.GIVE_UP, gu.MAP_GEAR, gu.FORFEIT, gu.FORFEIT_CONFIRM, gu.DEFEAT_CONFIRM,
+                         gu.CLAIM_REWARDS, gu.GIVE_UP_REWARDS, gu.DIALOG_CONFIRM]  # nothing after the confirm: the window fades out
+    assert game.shots[-1] == "end" and game.shots[:3] == ["BattleTurn", "BattleTurn", "BattleMenu"]
+
+
+def test_the_give_up_dialog_is_confirmed_again_while_it_stays():
+    game = Game(["GiveUpDialog", "GiveUpDialog", None])
+    assert game.run() == 0 and game.taps == [gu.DIALOG_CONFIRM] * 2
+
+
+def test_no_known_screen_for_the_timeout_stops_with_a_screenshot():
+    game = Game(["BattleMenu", None])
+    assert game.run(timeout=30) == 1
+    assert game.taps == [gu.GIVE_UP] and game.shots[-1] == "unknown" and 30 <= game.now <= 40
+
+
+def test_a_screen_that_stays_after_its_taps_stops():
+    game = Game(["ProgressPanel"])
+    assert game.run() == 1
+    assert game.taps == [gu.FORFEIT] * gu.STEPS["ProgressPanel"][2] and game.shots[-1] == "stuck-ProgressPanel"
