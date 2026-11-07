@@ -829,10 +829,12 @@ class StopTask(CustomAction):
 
 
 def go_home(context):
-    """Run the GoHome task here, the first and the last step of a daily task (spec 01): False when it did not reach the
-    main window (GoHome has run the stop procedure itself)."""
+    """Run the GoHome task here, the first and the last step of a daily task (spec 01): True once it ended on the main
+    window (HomeReached), False when it did not (GoHome has run the stop procedure itself). Not the task's status: a
+    sub-task that stopped the tasker (Halt in a battle) ends succeeded too (#514)."""
     detail = context.run_task("GoHome")
-    return bool(detail and detail.status.succeeded)
+    last = detail and detail.node_id_list and context.tasker.get_node_detail(detail.node_id_list[-1])
+    return bool(last and last.name == "HomeReached")
 
 
 def restart_game(context, reason):
