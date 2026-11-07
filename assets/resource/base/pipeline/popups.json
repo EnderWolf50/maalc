@@ -139,7 +139,8 @@
     // The title's data download dialog (live 2026-10-16: `Downloading N MB of data`, Close / Confirm; seen after a
     // game restart, no capture, so both ROIs are wide). Confirm and let the download run: the Agent holds the stuck
     // detection until its progress screen (Downloading) is up (#86). Before GoToMirrorEntry in MirrorHub:
-    // the title reads through the dialog.
+    // the title reads through the dialog. Its 2 s stay (#258): in both live downloads it read again after its first
+    // Confirm and 2 s, so a shorter wait would only press it again sooner; it comes once a game update.
     "DownloadDialog": {
         "recognition": "And",
         "all_of": [
@@ -212,9 +213,9 @@
     // A popup with one button in the middle (a server or network error on the title, an acknowledgement over a
     // page): nothing to decide, press it (#86, #85). Two-button dialogs keep their buttons apart, so a Cancel /
     // Confirm question is never answered here. The maintenance notice, also a lone Close, halts first.
-    // Its 1.5 s stay (#258): over any page, nothing tells what comes next. Its live closes (the Mailbox's Parcel
-    // Received) went back to the box, where MailClaimAll reads the dimmed Claim All under the popup and MailEmpty does
-    // not (MailParcelReceived.png): a look while it fades could press Claim All again.
+    // Its 1.5 s stay (#258): its 4 live closes (the Mailbox's Parcel Received) went back to the box, where MailClaimAll
+    // reads the dimmed Claim All under the popup and MailEmpty does not (MailParcelReceived.png): a look while it fades
+    // could press Claim All again.
     "PopupButton": {
         "recognition": "And",
         "all_of": [
@@ -255,10 +256,12 @@
     // Mailbox.png, SettingsMenu.png). The bot never opens them; a stray tap or a login can. Each is closed the way that
     // leaves the account as it was: the notices by the back key, the Mailbox by its Close (never Claim All, next to
     // it), the menu behind the top-right gear by Return (Quit Game, under it, quits with no confirm dialog).
-    // The notices and the Mailbox dim the tab bar (HomeReached at most 0.67 under them, 1.0 on the main window): closed,
-    // they hand back once HomeReached hits, looked for every 0.2 s up to the 1.5 s they used to sleep (#258; live, the
-    // main window was up at the first look after each of 5 Mailbox closes). The menu leaves the Window tab lit, so its
-    // 1.5 s stay: only its own text tells it gone, and that may stop reading while it still fades.
+    // The notices and the Mailbox dim the tab bar: HomeReached scores at most 0.67 on the 5 captures of them
+    // (EventNotices, SystemNotices, Mailbox, MailboxEmpty, MailParcelReceived; maatools.config.mts holds it to a miss)
+    // and 1.0 on the main window's 3. Closed, they hand back once HomeReached hits and they no longer read, looked for
+    // every 0.2 s up to the 1.5 s they used to sleep (#258; live, the main window was up at the first look after each of
+    // 5 Mailbox closes; no live log has the notices). The menu leaves the Window tab lit, so its 1.5 s stay: only its
+    // own text tells it gone, and that may stop reading while it still fades.
     "Notices": {
         "recognition": "OCR",
         "roi": [480, 95, 330, 50],
@@ -323,8 +326,7 @@
     // by its frame: the back button at the top left and the page dots along the bottom. The back button alone also
     // scores 0.98 on the entry page's own back button (EntryPaused.png); the dots are what tell the pager apart. The back key closes it; the
     // arrow at the right only turns the page. Page 1 of the Mirror Dungeon one is a picture of the entry page, so it
-    // sits in MirrorHub before HubText. Its 1.5 s stay (#258): the page under it is any page with an "i", so nothing
-    // tells what comes next, and no live log has the pager to time a change against.
+    // sits in MirrorHub before HubText. Its 1.5 s stay (#258): no live log has the pager to time its close against.
     "HelpPager": {
         "recognition": "And",
         "all_of": [
@@ -352,6 +354,8 @@
     },
     // The download after the title's dialog (live 2026-10-21, 17.77 GB): DOWNLOADING UPDATE n% 0/1, then DOWNLOADING
     // RESOURCES n% k/1741, ~32 min in all, NOW LOADING... beside it. A waiting screen: stuck only once it stops moving.
+    // Its 1 s stays (#258): its end is seen at most 1.2 s late once a download, and at the hub's pace a 30 min wait
+    // would take four times the passes and the log.
     "Downloading": {
         "recognition": "OCR",
         "roi": [40, 600, 440, 36],
@@ -362,7 +366,8 @@
         "recognition": "OCR",
         "roi": [1060, 625, 190, 40],
         "expected": "NOW LOADING",
-        // MirrorHub's rate_limit paces the looks; a delay here only saw the next screen late (#115).
+        // HubText's OCR pass paces the looks: a hit skips the hub's rate_limit (hit again every 0.15-0.32 s on
+        // 2026-10-29). A delay here only saw the next screen late (#115).
         "pre_delay": 0,
         "post_delay": 0
     }

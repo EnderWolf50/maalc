@@ -139,8 +139,8 @@ def tap_then(context, x, y, done, timeout=2.0):
 
 
 def log_change(node, image, began):
-    """Log how long the screen after a node's tap took to come (image: until()'s, None when it never did); a live run
-    reads each wait from these lines (#254)."""
+    """Log how long the screen after a node's tap or key took to come, from before it (image: until()'s, None when it
+    never did); a live run reads each wait from these lines (#254)."""
     log(f"{node}: {'screen changed' if image is not None else 'no change'} after {time.monotonic() - began:.1f} s")
 
 
@@ -1248,8 +1248,8 @@ class DismissShot(CustomAction):
     """Keep the screen in logs/dismissed/ (run.keep_dismissed_screens), then close it (#244): the back key with
     {"back": true}, else a tap on the recognised box. File name: time and node, so what the bot closed can be told later.
     RetryPopup: one screen per DISMISSED_GAP, or a dropped link fills the folder with one popup.
-    "until": a node that hits once the popup is gone (the main window's lit tab under the Mailbox); looked for every
-    0.2 s, at most "timeout" s, instead of a post_delay (#258).
+    "until": a node that hits once the popup is gone (the main window's lit tab under the Mailbox); every 0.2 s, at
+    most "timeout" s, until it hits and the popup's own node misses, instead of a post_delay (#258).
     """
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
@@ -1270,14 +1270,16 @@ class DismissShot(CustomAction):
                 log(f"{argv.node_name}: screen not saved: {e}")
         if popup:  # what was closed, e.g. the previous session's "Please claim your rewards" (#382)
             log(f"popup: {text(context, image, DIALOG_TEXT)!r}: pressed {popup_button(argv.reco_detail)!r}")
+        began = time.monotonic() if "until" in p else None
         if p.get("back"):
             context.tasker.controller.post_click_key(BACK_KEY).wait()
         else:
             x, y, w, h = argv.box
             context.tasker.controller.post_click(x + w // 2, y + h // 2).wait()
         if "until" in p:
-            began = time.monotonic()
-            log_change(argv.node_name, until(context, lambda im: seen(context, im, p["until"]) is not None, timeout=p["timeout"]), began)
+            def closed(im):
+                return seen(context, im, p["until"]) is not None and seen(context, im, argv.node_name) is None
+            log_change(argv.node_name, until(context, closed, timeout=p["timeout"]), began)
         return True
 
 

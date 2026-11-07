@@ -308,11 +308,11 @@ def intervals(lt, scores, threshold, hub, hits, gap=GAP) -> list[dict]:
         passes = [h for h in hub if a <= h <= b]
         hit = [h for h in hits if a <= h <= b + 0.5]  # a hit is logged after its screenshot
         first = min(hit) if hit else None
-        after = [h for h in hub if h > b]
+        later = [h for h in hub if h > b]
         rows.append({"up_at": round(float(a), 3), "up_s": round(float(b - a), 3), "hub_passes_while_up": len(passes),
                      "passes_until_hit": len([h for h in passes if first is None or h <= first]),
                      "recognized": bool(hit), "hit_after_s": round(float(first - a), 3) if hit else "",
-                     "pass_after_gone_s": round(float(min(after) - b), 3) if after else ""})
+                     "pass_after_gone_s": round(float(min(later) - b), 3) if later else ""})
     return rows
 
 
@@ -368,11 +368,13 @@ def main(argv=None) -> None:
         r = [x for x in rows if x["screen"] == n]
         if r:
             up = sorted(x["up_s"] for x in r)
-            after = sorted(x["hit_after_s"] for x in r if x["hit_after_s"] != "")
-            gone = sorted(x["pass_after_gone_s"] for x in r if x["pass_after_gone_s"] != "")
+
+            def median(key):
+                xs = sorted(x[key] for x in r if x[key] != "")
+                return xs[len(xs) // 2] if xs else "-"
             print(f"{n}: {len(r)} intervals, {sum(x['recognized'] for x in r)} recognized, up {up[0]}-{up[-1]} s"
-                  f" (median {up[len(up) // 2]}), hit after median {after[len(after) // 2] if after else '-'} s,"
-                  f" next pass after gone median {gone[len(gone) // 2] if gone else '-'} s")
+                  f" (median {up[len(up) // 2]}), hit after median {median('hit_after_s')} s,"
+                  f" next pass after gone median {median('pass_after_gone_s')} s")
 
 
 if __name__ == "__main__":

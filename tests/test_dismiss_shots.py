@@ -120,11 +120,13 @@ def clock(monkeypatch):
     return sleeps
 
 
-def shows(game, node, looks):
-    """node hits from the looks-th screenshot on (the kept screen is the first), every other node misses."""
+def shows(game, node, looks, popup=None, gone=0):
+    """node hits from the looks-th screenshot on (the kept screen is the first), the popup until the gone-th; every
+    other node misses."""
     shots = game.ctx.tasker.controller.post_screencap
     game.ctx.run_recognition.side_effect = lambda name, image, override=None: (
-        SimpleNamespace(hit=True, box=(0, 0, 1, 1)) if name == node and shots.call_count >= looks else None)
+        SimpleNamespace(hit=True, box=(0, 0, 1, 1)) if (name == node and shots.call_count >= looks)
+        or (name == popup and shots.call_count < gone) else None)
 
 
 UNTIL_HOME = {"until": "HomeReached", "timeout": 1.5}
@@ -138,6 +140,14 @@ def test_a_popup_with_until_hands_back_once_the_page_under_it_shows(game, clock)
     assert "Mailbox: screen changed after 0.2 s" in actions.LOG[-1]
 
 
+def test_a_popup_that_still_reads_over_the_page_is_waited_for(game, clock):
+    # The tab bar may light up while the Mailbox's text still reads; handed back then, GoHome reads HomeText first and
+    # presses Close again on the main window.
+    shows(game, "HomeReached", looks=2, popup="Mailbox", gone=4)
+    actions.DismissShot().run(game.ctx, arg("Mailbox", json.dumps(UNTIL_HOME)))
+    assert sum(clock) == pytest.approx(0.4) and "Mailbox: screen changed after 0.4 s" in actions.LOG[-1]
+
+
 def test_a_popup_still_up_hands_back_after_its_timeout(game, clock):
     shows(game, "HomeReached", looks=99)
     actions.DismissShot().run(game.ctx, arg("Notices", json.dumps({"back": True, **UNTIL_HOME})))
@@ -146,5 +156,6 @@ def test_a_popup_still_up_hands_back_after_its_timeout(game, clock):
 
 
 def test_a_popup_without_until_does_not_wait(game, clock):
-    actions.DismissShot().run(game.ctx, arg("PopupButton", "null"))  # MaaFramework's param when the node sets none
+    # Guards what the base already did: MaaFramework hands "null" to a node that sets no param.
+    actions.DismissShot().run(game.ctx, arg("PopupButton", "null"))
     assert game.taps == [(120, 210)] and clock == []  # its post_delay waits instead
