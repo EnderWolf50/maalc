@@ -5,7 +5,8 @@
 
 **open** waits for a planning phase (BattleTurn's templates), long-presses the portrait under skill slot N (0 the
 leftmost; the slots counted from the Win Rate label, as battle.slot_xs does) for --hold seconds, then logs when the
-card shows and when it goes, each line with its wall time, and saves both frames to --out. A press that brings no card
+card shows (with how many cards its row holds) and when it goes, each line with its wall time, and saves both frames to
+--out. A press that brings no card
 in 3 s is tried again at the next planning phase. Exit 0 when a card opened and closed, 1 when one stayed up 30 s, 2
 when --attempts presses opened none or --timeout passed. A live test owns the emulator first (the maalc-live-test
 skill); the press races the bot, which acts on the planning phase too.
@@ -83,6 +84,25 @@ def card_up(image) -> bool:
     return all(best(g, t, roi)[0] >= threshold for t, roi, threshold in parts("EgoCard"))
 
 
+CARD_BAND = (0, 100, 1280, 100)  # the row of cards' Details buttons, the whole width
+CARD_PEAK = 0.85  # a Details button in the row: the side cards of three score 0.87, the cards of two 0.96 and 0.93
+CARD_GAP = 100  # px between two cards' Details at least (277 apart in a row of three, 317 in a row of two)
+
+
+def cards(image) -> int:
+    """How many cards the row shows: Details buttons across the band, each a peak at CARD_PEAK or more."""
+    (templates, _, _), _ = parts("EgoCard")
+    x, y, w, h = CARD_BAND
+    scores = cv2.matchTemplate(grey(image)[y:y + h, x:x + w], templates[0], cv2.TM_CCOEFF_NORMED).max(axis=0)
+    found = []
+    for i in scores.argsort()[::-1]:
+        if scores[i] < CARD_PEAK:
+            break
+        if all(abs(i - j) >= CARD_GAP for j in found):
+            found.append(i)
+    return len(found)
+
+
 def win_rate_x(image) -> int | None:
     """The Win Rate label's x when BattleTurn hits (a planning phase), else None."""
     (templates, roi, threshold), = parts("BattleTurn")
@@ -112,7 +132,8 @@ def open_card(grab, press, say, slot: int, hold: float, attempts: int, timeout: 
             up = card_up(image)
             if up and opened is None:
                 opened = clock()
-                say("card open")
+                n = cards(image)
+                say(f"card open: {n} card{'s' if n > 1 else ''}")
                 if shot:
                     shot("card-open", image)
             elif not up and opened is not None:

@@ -22,6 +22,12 @@ def test_the_card_is_read_with_the_ego_card_nodes_templates():
     assert not any(ec.card_up(read(f)) for f in ["BattleTurn.png", "BattlePause.png", "BattleMenu.png", "MainWindow.png"])
 
 
+def test_the_cards_in_a_row_are_counted_by_their_details_buttons():
+    # One card, two side by side (Details 0.96 and 0.93), three in a row (the side ones 0.87): the run's widest row.
+    assert [ec.cards(read(f)) for f in ["BattleEgoCard.png", "BattleEgoCardsTwo.png", "LuxBattleEgoCards.png"]] == [1, 2, 3]
+    assert ec.cards(read("BattleTurn.png")) == 0
+
+
 def test_the_planning_phase_gives_the_win_rate_labels_x():
     # The pipeline's comment on BattleTurn: x 984 with 7 slots (BattleTurn.png), 1022 with 8 (BattleTurnEven.png).
     assert abs(ec.win_rate_x(read("BattleTurn.png")) - 984) <= 2
@@ -50,7 +56,7 @@ def test_a_press_on_the_slots_portrait_opens_the_card_and_its_close_is_timed():
     bot = Bot(["BattlePause.png", "BattleTurn.png", "BattleEgoCard.png", "BattleEgoCard.png", "BattleTurn.png"])
     assert bot.run(slot=2) == 0
     assert bot.presses == [(524, 665, 2.5)]  # 7 slots 81 px apart, centred on x 605: the third at 524
-    assert any(line.startswith("card open") for line in bot.said)
+    assert "card open: 1 card" in bot.said
     assert bot.said[-1].startswith("card gone") and "s after it showed" in bot.said[-1]
 
 
