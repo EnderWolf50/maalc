@@ -198,10 +198,14 @@ POPUPS = ("Connecting", "RetryPopup", "PopupButton")  # MirrorHub's global popup
 # Windows that leave a page's anchor readable under them, answered by MirrorHub before that page. #213: a GET! window
 # over the map after a fight leaves its buttons (MirrorMap) lit. Not the shop's: Shop closes its own GET! windows.
 COVERS = {"MirrorMap": ("GiftGet",)}
+# Windows an action closes with its own taps: they pass its guard as its page. #309: an event's GET! windows, over its
+# page or the map it ends on, close on any tap, as the text taps on the dead corner do.
+TAPPED_THROUGH = {"Event": ("GiftGet",)}
 
 
 def page_guard(context, home, image=None):
-    """Before a tap: a screenshot that still shows home (MirrorHub's node for the action's page); else PageGone.
+    """Before a tap: a screenshot that still shows home (MirrorHub's node for the action's page) or one of its
+    TAPPED_THROUGH windows; else PageGone.
 
     ADR 0007, #118: an action that taps on for long checks its page first, so a screen changed under it is
     handed back to MirrorHub at once instead of tapped blind until the action gives up. A miss is looked at
@@ -210,8 +214,10 @@ def page_guard(context, home, image=None):
     one of POPUPS showing is the page gone too: MirrorHub answers it first. So is one of home's COVERS.
     image: a screenshot just taken, looked at first.
     """
+    pages = (home, *TAPPED_THROUGH.get(home, ()))
+
     def shown(im):
-        return on_page(context, im, *POPUPS, *COVERS.get(home, ()), home) == home
+        return on_page(context, im, *POPUPS, *COVERS.get(home, ()), *pages) in pages
 
     if image is not None and shown(image):
         return image
