@@ -1,6 +1,6 @@
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import MagicMock
+from unittest.mock import DEFAULT, MagicMock
 
 import numpy as np
 import pytest
@@ -827,3 +827,73 @@ def test_a_new_runs_first_floor_does_not_tap_the_bus_first(context, monkeypatch)
     monkeypatch.setattr(actions.time, "sleep", sleeps.append)
     assert not actions.RouteMap.tap_bus_first(context)
     ctl.post_click.assert_not_called()
+
+
+PLANNED = (446 + actions.SLOT[0], actions.BUS_HOME[1] + actions.SLOT[1])  # by the bus at x 446, clear of the edges: no drag first
+
+
+def deaf_world(context, monkeypatch, hears):
+    """Floor 1's plan goes on to the battle at PLANNED; its node panel shows only while hears(clicks, drags) holds.
+
+    The log lines, the clicks as ((x, y), time) and the drags as (time, clicks before it) on the fake clock.
+    """
+    monkeypatch.setattr(actions, "map_weights", lambda context: AB_WEIGHTS)
+    logs, clicks, drags = [], [], []
+    monkeypatch.setattr(actions, "log", logs.append)
+    actions.RUN.update(floor=1, map_plan={"floor": 1, "steps": [("mid", "battle")]})
+    map_world(context, {(1, "mid"): {"cost"}}, [], bus_x=446)
+    ctl, inner = context.tasker.controller, context.run_recognition.side_effect
+    ctl.post_click.side_effect = lambda x, y: clicks.append(((x, y), actions.time.monotonic())) or DEFAULT
+    down = ctl.post_touch_down.side_effect
+    ctl.post_touch_down.side_effect = lambda x, y: drags.append((actions.time.monotonic(), len(clicks))) or down(x, y)
+
+    def run_recognition(name, image, override=None):
+        return None if name == "MapNodePanel" and not hears(clicks, drags) else inner(name, image, override)
+    context.run_recognition.side_effect = run_recognition
+    return logs, clicks, drags
+
+
+def test_a_planned_node_the_map_ignores_is_tapped_again_until_its_panel_shows(context, monkeypatch):
+    logs, clicks, drags = deaf_world(context, monkeypatch, lambda clicks, drags: len(clicks) >= 3)
+    assert actions.RouteMap().run(context, None)
+    assert "map: follow plan mid battle" in logs and not drags
+    taps = [(xy, at) for xy, at in clicks if xy != actions.ENTER]
+    assert [xy for xy, _ in taps] == [PLANNED] * 3
+    assert all(b - a >= actions.MAP_ANSWER for (_, a), (_, b) in zip(taps, taps[1:]))
+    assert logs.count(f"map: no answer to the tap at {PLANNED[0]}, {PLANNED[1]}; tapping again") == 2
+    assert actions.RUN["map_plan"]["steps"] == []
+    assert "entered the node" in logs
+
+
+def test_a_planned_node_that_takes_no_tap_for_long_is_left_for_a_full_read(context, monkeypatch):
+    logs, clicks, drags = deaf_world(context, monkeypatch, lambda clicks, drags: bool(drags))
+    assert actions.RouteMap().run(context, None)
+    at, tapped = drags[0]
+    assert tapped > 1
+    assert {xy for xy, _ in clicks[:tapped]} == {PLANNED}
+    assert actions.MAP_TAP_LIMIT <= at - clicks[0][1] < actions.MAP_TAP_LIMIT + 2
+    assert f"map: planned mid battle took no tap in {actions.MAP_TAP_LIMIT} s; reading the map again" in logs
+
+
+def test_a_page_gone_between_taps_ends_the_taps_on_the_planned_node(context, monkeypatch):
+    logs, clicks, drags = deaf_world(context, monkeypatch, lambda clicks, drags: False)
+    shown = actions.page_guard
+
+    def guard(context, home, image=None):
+        if len(clicks) >= 2:
+            raise actions.PageGone(home)
+        return shown(context, home, image)
+    monkeypatch.setattr(actions, "page_guard", guard)
+    with pytest.raises(actions.PageGone):
+        actions.RouteMap.follow(context)
+    assert [xy for xy, _ in clicks] == [PLANNED] * 2
+
+
+def test_a_tap_that_changes_the_map_but_opens_no_panel_is_not_made_again(context, monkeypatch):
+    logs, clicks, drags = deaf_world(context, monkeypatch, lambda clicks, drags: bool(drags))
+    get = context.tasker.controller.post_screencap.return_value.wait.return_value.get
+    shot = get.side_effect
+    get.side_effect = lambda: 255 - shot() if clicks and not drags else shot()
+    assert actions.RouteMap().run(context, None)
+    assert [xy for xy, _ in clicks[:drags[0][1]]] == [PLANNED]
+    assert "map: planned mid battle moved the map but showed no panel; reading the map again" in logs

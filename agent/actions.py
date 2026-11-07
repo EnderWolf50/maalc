@@ -2136,6 +2136,13 @@ MAP_TITLE = [40, 85, 240, 35]  # "Exploring Floor 3", top left
 MAP_LEAVING = 6  # s RouteMap waits for the last floor's map to give way to this floor's
 MAP_PAN_LIMIT = 8  # s find_bus drags a fresh map again that took none of its drags
 BUS_JITTER = 3  # px the bus's match moves on a map that did not move
+# #473: back on the map from a fight's loading screen or its reward pages, the game ignores taps on the still map for a
+# time that differs by run, with no sign on screen (over 1.46 s after the fade-in on 2026-11-07, under 1.32 s on
+# 2026-11-06). Recordings of 5 runs, recovery.same_screen's blocks: a node tap the game took moved 52.4% of them or more,
+# from 0.13-0.23 s after it was sent (75 taps); one it ignored moved 1.0% at most over 2 s (26 taps, 3 runs), and the
+# next touch, at most 2.6 s later, was always taken.
+MAP_ANSWER = 0.7  # s a tap on the map has to answer (its node panel, or the screen moving) before follow taps again
+MAP_TAP_LIMIT = 4  # s follow taps its node again while the map ignores taps
 
 
 def seen(context, image, node, roi=None):
@@ -2445,6 +2452,24 @@ class RouteMap(CustomAction):
         return until(context, lambda im: seen(context, im, "MapNodePanel"), timeout=timeout) is not None
 
     @staticmethod
+    def tap_until_answered(context, x, y, image):
+        """Tap (x, y), the page checked before each tap, until the map answers: its node panel (MapNodePanel) shows or
+        the screen leaves the one the first check passed (recovery.same_screen). Whether it did; no tap is made again
+        once MAP_TAP_LIMIT s have passed since the first (#473)."""
+        before, end = recovery.thumb(page_guard(context, "MirrorMap", image=image)), time.monotonic() + MAP_TAP_LIMIT
+
+        def answered(im):
+            return seen(context, im, "MapNodePanel") or not recovery.same_screen(before, recovery.thumb(im))
+        while True:
+            tap(context, x, y, wait=0)
+            if until(context, answered, timeout=MAP_ANSWER) is not None:
+                return True
+            if time.monotonic() >= end:
+                return False
+            log(f"map: no answer to the tap at {x}, {y}; tapping again")
+            page_guard(context, "MirrorMap")
+
+    @staticmethod
     def tap_bus_first(context):
         """Whether the bus, tapped where it stands, opened its node panel; only in a continued run (#379).
 
@@ -2579,7 +2604,7 @@ class RouteMap(CustomAction):
         Only that slot is read, and the map is dragged (bus to the far left) only when it sits under the
         resource bar or the buttons. False, for a full read, whenever in doubt: no plan or a used-up one,
         the slot not linked to the bus or not of the planned type (the bus not where the plan put it, or a
-        misread from afar), or its tap showing no panel.
+        misread from afar), or no panel after its tap, made again while the map ignores it (#473).
         """
         plan = RUN.get("map_plan")
         if not plan or plan["floor"] != RUN.get("floor") or not plan["steps"]:
@@ -2602,10 +2627,11 @@ class RouteMap(CustomAction):
         if kind != node:
             log(f"map: planned {row} {node} reads {kind}; reading the map again")
             return False
-        page_guard(context, "MirrorMap", image=image)
-        tap(context, cx, cy, wait=0)
+        if not RouteMap.tap_until_answered(context, cx, cy, image):
+            log(f"map: planned {row} {node} took no tap in {MAP_TAP_LIMIT} s; reading the map again")
+            return False
         if until(context, lambda im: seen(context, im, "MapNodePanel")) is None:
-            log(f"map: planned {row} {node} took no tap; reading the map again")
+            log(f"map: planned {row} {node} moved the map but showed no panel; reading the map again")
             return False
         log(f"map: follow plan {row} {node}")
         plan["steps"] = plan["steps"][1:]
