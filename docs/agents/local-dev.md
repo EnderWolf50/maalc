@@ -9,7 +9,7 @@
 
 Done: `uv run python tools/check.py` passes in the worktree.
 
-Once per clone, `lefthook install` turns on the pre-commit hook (`lefthook.yml`): ruff on the staged Python files and the screenshot privacy test. `lefthook` is installed globally, not by `uv sync` or `pnpm install`.
+Once per clone, `lefthook install` turns on the pre-commit hook (`lefthook.yml`): ruff on the staged Python files and the screenshot privacy test. Install `lefthook` itself once per machine (`pnpm add -g lefthook`); the project's dependencies leave it out.
 
 ## Checks
 
@@ -83,7 +83,7 @@ Retention: an archive folder older than 7 days whose `INDEX.md` rows name only c
 
 ## The emulator lane
 
-Every MuMu instance logs in to the same game account, and starting the game on one instance kicks the other out (the user, 2026-10-20). So the `emulator` resource covers all instances: `tools/live/queue.py` describes it as the user's game account on the emulator. Take an `emulator` ticket before you drive any instance.
+The MuMu instances the live tests use all log in to one game account, and starting the game on one instance kicks the others out (the user, 2026-10-20). So the `emulator` resource covers all instances: `tools/live/queue.py` describes it as the user's game account on the emulator. Take an `emulator` ticket before you drive any instance.
 
 ## Game data
 
