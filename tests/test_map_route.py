@@ -1,3 +1,4 @@
+import itertools
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import DEFAULT, MagicMock
@@ -578,8 +579,8 @@ def test_a_floor_wider_than_the_screen_is_read_two_columns_a_drag_and_planned_wh
     offsets = map_world(context, WIDE, WIDE_LINKS, bus_x=446, width=2900)
     actions.RouteMap().run(context, None)
     # The bus to the far left, two drags of two columns on to the boss, then back to the bus. The fake map takes
-    # each drag's 10 px threshold move too (actions.scroll): 520 px a drag, and back a little past where it was.
-    assert [o - offsets[0] for o in offsets[:3]] == [0, 520, 1040] and abs(446 - offsets[-1] - actions.BUS_HOME[0]) <= 30
+    # each drag's 10 px threshold move too (actions.scroll): 520 px a drag.
+    assert [o - offsets[0] for o in offsets[:3]] == [0, 520, 1040] and offsets[-1] == offsets[0]
     # up: 4 events, 2 focused (12); down: 4 battles, 2 events (10). The first screen alone took the top row.
     assert context.tasker.controller.post_click.call_args_list[0].args == (446 - offsets[-1] + actions.SLOT[0], actions.BUS_HOME[1] + actions.SLOT[1] + 213)
     assert actions.RUN["map_plan"]["steps"] == [("mid", "battle")] * 3 + [("mid", "event")] * 2 + [("up", "shop"), ("mid", "boss")]
@@ -607,6 +608,37 @@ def test_a_drag_that_cannot_be_measured_leaves_the_first_screens_read(context, m
     actions.RouteMap().run(context, None)
     assert [o - offsets[0] for o in offsets] == [0, 520, 0]
     assert actions.RUN["map_plan"]["steps"] == [("mid", "event")] * 3
+
+
+FIRST_SCREEN = ({(1, "mid"): {"cost"}, (2, "mid"): {"boss"}}, [((1, "mid"), (2, "mid"))])
+SIX = ({**{k: v for k, v in WIDE.items() if k[0] <= 5}, (6, "mid"): {"boss"}},
+       [link for link in WIDE_LINKS if link[1][0] <= 5] + [((5, "up"), (6, "mid")), ((5, "down"), (6, "mid"))])
+
+
+@pytest.mark.parametrize(("floor", "width", "drags"), [
+    (FIRST_SCREEN, 1800, []),
+    (SIX, 2900, [-510, 510]),
+    ((WIDE, WIDE_LINKS), 2900, [-510, -510, 510, 510]),
+    ((WIDE, WIDE_LINKS), 2676, [-510, -510, 510, 490]),
+    ((WIDE, WIDE_LINKS), 2227, [-510, -510, 510, 41]),
+], ids=["read on the first screen", "511 px", "511 then 511 px", "511 then 489 px to the edge",
+        "511 then 40 px to the edge: read_on drags the 41 px back, not find_bus"])
+def test_the_drag_back_leaves_undone_a_remainder_find_bus_takes_as_home(context, monkeypatch, floor, width, drags):
+    # #490, live 2026-11-06 NORMAL: each drag of 510 px measured 511; the 1 px drag back after the 510 px one did not
+    # move the map.
+    monkeypatch.setattr(actions, "map_weights", lambda context: WIDE_WEIGHTS)
+    actions.RUN["floor"] = 1
+    offsets = map_world(context, *floor, bus_x=actions.BUS_HOME[0], width=width)
+    asked, scroll = [], actions.scroll
+
+    def live_scroll(context, x, y, dx, dy):  # map_world's map moves 10 px past dx; the live one 1 px, and none for 1 px
+        asked.append(dx)
+        scroll(context, x, y, dx - 9 if dx > 9 else dx + 9 if dx < -9 else 0, dy)
+    monkeypatch.setattr(actions, "scroll", live_scroll)
+    actions.RouteMap().run(context, None)
+    assert asked == drags
+    start = 446 - actions.BUS_HOME[0]
+    assert all(a != b for a, b in itertools.pairwise([start, *offsets])), "a drag did not move the map"
 
 
 def test_the_cost_is_read_on_the_two_columns_next_to_the_bus_and_only_marks_beyond(context):

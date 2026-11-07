@@ -2099,6 +2099,10 @@ class PickThemePack(CustomAction):
 # The bus at the far left: the screen shows it and four columns (#111; the user's hard-mode capture, bus at 47, 311).
 # Panned ~70 px down from rest (bus at 446, 248): top-row badges clear the resource bar.
 BUS_HOME = (50, 320)
+# px off BUS_HOME, across and down, at which find_bus takes the bus as home (#26 picked them; nothing measured them).
+# RouteMap.read_on leaves a drag back this short undone (#490): live, the 1 px one left after each 510 px drag back did
+# not move the map (2026-11-06, 5 of 5).
+BUS_SLACK = (30, 25)
 BUS_REST = (446, 248)
 SLOT = (279, 37)  # middle-row slot centre; map_route.ROW_DY gives the other rows
 LINKS = {
@@ -2535,7 +2539,7 @@ class RouteMap(CustomAction):
                 return image, None
             bx, by = bus.box[0], bus.box[1]
             dx, dy = BUS_HOME[0] - bx, BUS_HOME[1] - by
-            if abs(dx) <= 30 and abs(dy) <= 25:
+            if abs(dx) <= BUS_SLACK[0] and abs(dy) <= BUS_SLACK[1]:
                 return image, (bx, by)
             held = last is not None and abs(bx - last[0]) <= BUS_JITTER and abs(by - last[1]) <= BUS_JITTER
             if held and moved:
@@ -2706,7 +2710,7 @@ class RouteMap(CustomAction):
         with nothing read past it (hard mode's two columns), a drag that moves the map less than half a column or
         leaves no column to read on from (its edge), or one that cannot be measured (what was read stands), or after
         MAP_DRAGS drags.
-        The map is then dragged back as far and the bus found again (find_bus).
+        The map is then dragged back as far, less a remainder within BUS_SLACK, and the bus found again (find_bus).
         """
         dx, (bx, by) = map_route.COLUMN_DX, bus
         x0, y, moved, back = bx + SLOT[0], by + SLOT[1], 0, 0
@@ -2743,7 +2747,7 @@ class RouteMap(CustomAction):
             ahead = ahead[:k] + more
         if not back:
             return ahead, bus
-        while back > 0:
+        while back > BUS_SLACK[0]:
             page_guard(context, "MirrorMap")
             scroll(context, x0 + dx // 2, y + 106, min(back, 2 * dx), 0)
             time.sleep(0.5)
