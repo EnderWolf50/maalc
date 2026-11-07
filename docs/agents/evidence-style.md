@@ -6,7 +6,7 @@ How an evidence still or clip looks. A rule below is the user's own word, or the
 
 - A live test, experiment or acceptance run comes back with images, clips and annotations, not text alone: routing (the drag, the nodes recognised, the weight per path, the route chosen) drawn on the screenshots. Captions, boxes and labels are burned into the clips. [user, 2026-10-18]
 - Every run reports all the map routing and all the theme pack picks, per floor: the stitched floor with every node it read labelled, and the pack page with its cards, weights and the pick. Post them to the issue or PR when useful (#251 routes, #252 packs). [user, 2026-10-22]
-- A still that leaves a read node unlabelled cannot be checked. Label every node the bot read, not only the route. [user, 2026-10-22]
+- A still that leaves a read node unlabelled cannot be checked. Label every node the bot read, not only the route. [2026-10-22: the user could not check such a still]
 - A GUI check returns screenshots of the GUI window only, never the full screen. [user rule, brief of this work package]
 
 ## Privacy
@@ -34,7 +34,7 @@ Check by measurement, not by eye: the label's outer edge equals the box's outer 
 ## Clips and stills in general
 
 - `evidence-annotate` burns the touches, step captions, boxes and zoom into a clip; drawtext needs an explicit font file (`C:/Windows/Fonts/msjhbd.ttc`), without it ffmpeg crashes here.
-- The recording of a live test is the MuMu window only (`--window "Android Device"`), 720p, with its 60 px title bar cropped (`--crop-top 60`; `maalc-live-test` step 5). A GUI clip or still is the GUI window only.
-- A clip may speed up or skip the stretches outside the issue's focus (battles, map walks, loading when the issue is the shop), each marked on the clip ("×4", "略過 2:10"); the part the issue is about stays at normal speed, and the archive recording stays uncut. [user, 2026-11-04]
+- The recording of a live test is the MuMu window only, 720p, with its 60 px title bar cropped: `screenrec.py start --window "Android Device" --crop-top 60`, the values every live test has used; the other options are in `maalc-live-test` step 5. A GUI clip or still is the GUI window only.
+- A clip may speed up or skip the stretches outside the issue's focus (battles, map walks, loading when the issue is the shop); the part the issue is about stays at normal speed. [user, 2026-11-04: 「非當次 issue 重點的證據片段可以些微加速跳過」] Mark each such stretch on the clip ("×4", "略過 2:10") so a reviewer knows it was cut; the archive recording stays uncut.
 - `gh ... --attach '<file>#<alt>'`: the `#alt` works for images; a video takes no alt text, so attach it without. [main.20 10-27T06:09; the `gh issue comment` error "cannot set alt text on video"]
 - An attached file is described by its content in the text, never by a local path (AGENTS.md "Public repo").

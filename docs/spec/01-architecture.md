@@ -22,9 +22,9 @@
 - `MirrorHub` 是鏡牢流程的分派節點。每種鏡牢畫面都必須列在它的 `next` 裡，並標上 `[JumpBack]`；每個畫面處理完就回到 hub，重新判斷畫面。（#8）
 - `next` 的順序就是優先權。全域彈窗必須排在最前面（只有卡住偵測的 `Stuck` 節點排在它們之前，見 [06-recovery.md](06-recovery.md#實作31)），各子流程也引用同一組全域彈窗節點。（#8）
 - 用 OCR 認的畫面不直接列在 `next`，而是依同樣的順序列在 `HubText` 裡。`HubText` 由 Agent 自己讀一次，只把可能的畫面排進它的清單，每個畫面再用自己的 OCR 確認；它只用 `And` 裡的 OCR 判讀，模板留給節點自己確認。這是各 hub（`MirrorHub`、`GoHome`、經驗本與紐本、`ClaimMail`）的 OCR 畫面唯一的讀法，理由是準確與戰鬥中的速度，不是記憶體（#157）：
-  - **記憶體已修好**：MaaFramework 會把同一個 `next` 清單裡的 OCR 合成一批，再把跨過 roi 邊緣的字框切成 1 px 細條重讀，戰鬥中一次 7.6 s、Tasker 從 4 GB 漲到 12 GB 不回落。這是 wheel 原版的行為；`install/` 的 fork DLL 已修（見〈分工〉），只有直接 `import maa` 的測試與離線工具還會遇到。不在戰鬥中每輪跑、roi 外接矩形不超過 960 px 的清單可以批次 OCR，例如等遊戲開機的 `HomeGameAway` 與 `RecoverStartApp`（各 5 個 OCR，外接矩形 585 × 420 px）。
+  - **記憶體已修好**：MaaFramework 會把同一個 `next` 清單裡的 OCR 合成一批，再把跨過 roi 邊緣的字框切成 1 px 細條重讀，戰鬥中一次 7.6 s、Tasker 從 4 GB 漲到 12 GB 不回落。這是 wheel 原版的行為；`install/` 的 fork DLL 已修（見〈分工〉）。目前批次 OCR 的清單只有等遊戲開機的 `HomeGameAway` 與 `RecoverStartApp`（各 5 個 OCR，外接矩形 585 × 420 px，用 `tests/test_pipeline.py` 的 `batch_plan` 算，2026-11-07），不在戰鬥中、也在 960 px 內。
   - **準確**：det 會把寬或高超過 960 px 的圖縮小，小字因此讀錯。5.14.3 的批次 OCR 把整批 roi 的外接矩形交給一次 det，wheel 與 fork 都是（上游 MaaXYZ/MaaFramework#1531 改成依 960 px 分組，5.15.0 才有）；`MirrorHub` 的 roi 橫跨 1210 px。`HubText` 自己把 roi 由左到右分組（每組最寬 960 px），把各組疊在同一張畫布上只跑一次 det（每個視窗都是一次 det，分視窗讀的成本隨視窗數增加）；疊起來超過 960 px 高時（`MirrorHub` 的 `HubText`）改成每段最寬 960 px 的視窗分次讀。
-  - **戰鬥中的速度**：戰鬥中每輪都會先看的三個伺服器彈窗（`Connecting`、`RetryPopup`、`PopupButton`）都先比模板，模板沒中就不跑 OCR。實機 A/B（兩邊都載入 fork DLL，#166）裡這三個 OCR 每個戰鬥輪各跑一次，一趟 2141 輪共 405 s；改成先比模板後，戰鬥輪的中位數從 206 ms 降到 48 ms。新加進 `BattleHUD` 清單的畫面照這個做。
+  - **戰鬥中的速度**：戰鬥中每輪都會先看的三個伺服器彈窗（`Connecting`、`RetryPopup`、`PopupButton`）都先比模板，模板沒中就不跑 OCR。#166 的實機（三局都載入 fork DLL）：A/B 的 A 臂（HARD）裡這三個 OCR 每個戰鬥輪各跑一次，一局 2141 個戰鬥輪共 405 s，戰鬥輪中位數 206 ms；加上模板閘門後的 NORMAL 一局，戰鬥輪中位數 48 ms。新加進 `BattleHUD` 清單的畫面照這個做。
   - 勝利畫面的 VICTORY 只有 det 找不到框、整個 roi 交給 rec 時才讀得出來，`HubText` 的那一次讀不到，所以 `Victory` 放在 tail，每輪都自己檢查。`next` 只剩 `Stuck`、`BattleHUD`（戰鬥畫面：回合或暫停鍵，伺服器彈窗仍先看）、`Connecting`、`HubText`、`NoBatchOCR` 後的 `Victory`（唯一直接列在 `next` 的 OCR）和幾個模板畫面。
 - 點下地圖節點之後出現什麼畫面，由 `MirrorHub` 依畫面判斷，不依預期的節點類型走分支；兩者不符時只記錄。（#12）
 - 看到 `VICTORY` 就算戰鬥結束；Confirm 有出現才按，之後的畫面交給 `MirrorHub`。實機：`VICTORY` → 載入畫面（`Combat Tips`）→ 地圖頁；Focused、異想體戰與 Boss 之後先出現飾品選擇頁或獎勵卡頁。（#16、#19；實機：captures/63_battle_victory.png、captures/64_loading_combat_tips.png）

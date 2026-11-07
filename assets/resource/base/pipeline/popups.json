@@ -5,8 +5,7 @@
     // (ClaimPopup). PopupButton presses
     // any lone Close / Confirm / OK meanwhile; Recover saves a screen MirrorHub does not know to logs/unknown/.
     // Connecting, RetryPopup and PopupButton run before the turn on every battle round (BattleHUD), so each starts with a
-    // template and reads no text on a battle screen (#157; live A/B on the fork DLL: these three OCR cost ~130 ms a
-    // round). The reason is speed: the fork fixed #157's memory (spec 01, MirrorHub). RetryPopup
+    // template and reads no text on a battle screen, for speed (#157; spec 01, MirrorHub, has the live numbers). RetryPopup
     // and PopupButton read their button text only once the left end of a popup button is in their roi:
     // Screen/DialogButton.png, the dark gold-edged one of MaintenanceNotice.png and RewardsAcquired.png, also on
     // the live server error and network popups (ServerErrorRetry.png, NetworkUnstable.png); for PopupButton also
