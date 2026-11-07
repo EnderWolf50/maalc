@@ -3338,7 +3338,7 @@ EVENT_TEXT_TAPS = 30
 EVENT_TAP_EVERY, EVENT_READ_EVERY = 0.15, 3
 EVENT_TAKE = 1.5  # s a tap on an event page has to show
 EVENT_LABELS = {"skip", "proceed", "continue", "commence"}  # the Event node's expected, compact()ed
-EVENT_BUTTON_LABEL = [1040, 612, 190, 66]  # the Event node's roi; on the map the bottom bar's lever reads there (#511)
+EVENT_BUTTON_LABEL = [1040, 612, 190, 66]  # the Event node's roi; on most maps the bottom bar's lever reads there (#511)
 # s the map an event ends on holds still before Event hands back: GET! windows come over it, and close on the corner taps
 # (#309). The 2026-10-23 window recording, 28 event ends (#511): the map held still at most 0.23 s before a window came;
 # the last map stopped moving 0-0.27 s after it showed.
@@ -3482,7 +3482,7 @@ class Event(CustomAction):
         if pressed_at is not None:
             last, pressed_label = pressed_at, compact(text(context, image, EVENT_BUTTON_LABEL))
         shot_at = still_since = time.monotonic()
-        small, map_seen_at = recovery.thumb(image), None
+        thumb, map_seen_at = recovery.thumb(image), None
         for n in range(1, EVENT_TEXT_TAPS + 1):
             time.sleep(max(0.0, last + EVENT_TAP_EVERY - time.monotonic()))
             last = time.monotonic()
@@ -3495,8 +3495,8 @@ class Event(CustomAction):
                 raise PageEnded("Event")
             tap(context, *EVENT_NEUTRAL, wait=0)
             image, shot_at = screen(context), time.monotonic()
-            before, small = small, recovery.thumb(image)
-            if not recovery.same_screen(before, small):
+            before, thumb = thumb, recovery.thumb(image)
+            if not recovery.same_screen(before, thumb):
                 still_since = shot_at
             if red_button(image):
                 if pressed_label is None or time.monotonic() - pressed_at >= EVENT_TAKE:
