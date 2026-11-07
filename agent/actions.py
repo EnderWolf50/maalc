@@ -2559,7 +2559,8 @@ class RouteMap(CustomAction):
         while); on a floor's fresh NORMAL map (no node entered since the theme pack) for up to MAP_PAN_LIMIT s: live
         2026-10-19, a new map took no drag for its first seconds. Once a pan has moved the bus, one that does not is
         the map's edge. A pan's screenshot as the finger stops that shows the bus where it was lifts the finger at
-        once and is the next look: no rest, no 0.5 s wait (#486).
+        once and is the next look: no rest, no 0.5 s wait (#486). On the six runs' recordings, at the last move the
+        bus had moved 0 px on 20 ignored drags and 270 px or more on 108 taken ones.
         """
         def stays(hit, at):  # a MapBus hit within BUS_JITTER of at: the map has not moved
             return hit is not None and at is not None and abs(hit.box[0] - at[0]) <= BUS_JITTER and abs(hit.box[1] - at[1]) <= BUS_JITTER
