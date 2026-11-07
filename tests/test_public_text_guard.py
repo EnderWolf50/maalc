@@ -251,9 +251,10 @@ def test_the_guard_runs_on_powershell_too(repo):
 
 
 def test_powershell_reads_a_backslash_as_a_character_and_an_expression_as_unreadable(repo):
-    # PowerShell has no backslash escape: "<dir>\" is a whole string, so the body file after it is still read.
-    assert denied(f'git -C "{repo}\\" commit -F dirty.md', repo, tool="PowerShell")
-    assert not denied(f'git -C "{repo}\\" commit -F clean.md', repo, tool="PowerShell")
+    # PowerShell has no backslash escape: "x\" is a whole string (as a folder "<dir>\" is), so the body file after it
+    # is still read; read as bash, the quote stayed open and the file went unread.
+    assert denied('gh issue create --title "x\\" --body-file dirty.md', repo, tool="PowerShell")
+    assert not denied('gh issue create --title "x\\" --body-file clean.md', repo, tool="PowerShell")
     assert not denied(f'gh issue comment 1 --body-file "{repo / "clean.md"}"', repo, tool="PowerShell")
     # ( ... ) and @( ... ) run a command and pass its output, as $( ... ) does in bash
     for cmd in ("gh issue comment 1 --body (Get-Content dirty.md -Raw)", "gh issue comment 1 --body @(cat dirty.md)"):
