@@ -3630,7 +3630,7 @@ class RewardCard(CustomAction):
 
 
 GIFT_CARDS = [100, 150, 1080, 410]  # 1-4 cards; on the boss page the Mounting Trials half below each
-GIFT_COUNT = [1060, 555, 160, 50]  # "Select 0/2"; no count with one card
+GIFT_COUNT = [1060, 555, 160, 50]  # "Select 0/2"; "Select" alone on a page that takes one card (#494)
 GIFT_SELECT = (1138, 579)
 REFUSE_GIFT = [870, 560, 160, 40]
 # A boss card's trial half, around the card's centre x: the Enemy Level Up badge's "+N" at its left (from x - 103), the
@@ -3643,8 +3643,7 @@ ROMAN = ("I", "II", "III", "IV", "V")
 
 
 def gift_count(context, image=None):
-    m = re.search(r"(\d)\s*/\s*(\d)", text(context, screen(context) if image is None else image, GIFT_COUNT))
-    return (int(m[1]), int(m[2])) if m else None
+    return gift_search.select_count(text(context, screen(context) if image is None else image, GIFT_COUNT))
 
 
 def gift_tier(image, x):
@@ -3740,7 +3739,7 @@ class PickGift(CustomAction):
             tap(context, centres[i], 300, wait=0)
             until(context, lambda im: gift_count(context, im) != before, timeout=1.5)
 
-        taken = rewards.pick_gifts(ranked, lambda: gift_count(context), pick)
+        taken = rewards.pick_gifts(ranked, lambda: text(context, screen(context), GIFT_COUNT), pick, trials)
         for _ in range(3):
             page_guard(context, "GiftChoice")
             tap(context, *GIFT_SELECT, wait=0)

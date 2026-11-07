@@ -246,6 +246,8 @@ const screens: [image: string, hits: string[]][] = [
   ['BossGiftTrialsHard.png', ['GiftChoice']],
   // Live 2026-10-28 (#381, a NORMAL run's recording frame scaled to 720p): after the floor-3 boss, wrapped effect lines.
   ['BossGiftTrialsFloor3.png', ['GiftChoice']],
+  // Live 2026-11-07 (#494, a HARD run's recording frame, floor 4): after the boss's page, three cards, no trials, no n/m.
+  ['GiftChoiceNoCount.png', ['GiftChoice']],
   ['GiftRefuseDialog.png', ['GiftRefuseDialog', 'GiftChoice']],
   ['EventStory.png', ['Event']],
   ['EventChoices.png', ['Event']],
