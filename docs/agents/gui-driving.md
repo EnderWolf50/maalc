@@ -1,6 +1,6 @@
 # Driving the settings GUI with cua-driver
 
-What `cua-driver` needs to operate the Tauri settings app (`gui/`) on this machine. Each fact names its source: `[run]` is the run of 2026-10-30 with `cua-driver 0.38.0` on the user's Windows 11 machine, `[second run]` a later run that day on the same machine (a check of the guard-turns note), `[third run]` a run of 2026-10-31 on the same machine (a check of the trial notes and the teams tab), `[cua docs]` the installed cua-driver skill (`~/.claude/skills/cua-driver/`) or `cua-driver describe <tool>`, `[retro]` a session report of the 2026-10-30 retro (kept on one machine; the agent sessions it names ran 2026-10-16 and 2026-10-17). The `maalc-gui-check` skill is the procedure; this file is what it relies on.
+What `cua-driver` needs to operate the Tauri settings app (`gui/`) on Windows. Each fact names its source: `[run]` is the run of 2026-10-30 with `cua-driver 0.38.0` on Windows 11, `[second run]` a later run that day on the same machine (a check of the guard-turns note), `[third run]` a run of 2026-10-31 on the same machine (a check of the trial notes and the teams tab), `[cua docs]` the installed cua-driver skill (`~/.claude/skills/cua-driver/`) or `cua-driver describe <tool>`, `[retro]` a session report of the 2026-10-30 retro (kept on one machine; the agent sessions it names ran 2026-10-16 and 2026-10-17). The `maalc-gui-check` skill is the procedure; this file is what it relies on.
 
 ## Build and launch
 
@@ -14,7 +14,7 @@ What `cua-driver` needs to operate the Tauri settings app (`gui/`) on this machi
 ## Seeing the window
 
 - `get_window_state` with `include_accessibility_tree:false` returns a screenshot of that one window plus its bounds; `--screenshot-out-file <png>` on `cua-driver call` saves it. It never captures the screen. `get_desktop_state` captures the whole display: not for a GUI check. [run; cua docs `describe get_window_state`]
-- Sizes on this machine: the window is 1100x760 in `tauri.conf.json`, `list_windows` reports 1654x1187 and the screenshot is 1455x1044. Action coordinates are pixels of the latest screenshot, not window or screen pixels. A retro report names 1620x1500 for another setup: read the sizes again each run. [run; retro batch4]
+- Sizes follow the display's scaling: the window is 1100x760 in `tauri.conf.json`; in the [run], `list_windows` reported 1654x1187 and the screenshot was 1455x1044. Action coordinates are pixels of the latest screenshot, not window or screen pixels. A retro report names 1620x1500 for another setup: read the sizes again each run. [run; retro batch4]
 - Each `cua-driver call` is a session of its own. A `drag` or `click` needs a `get_window_state` of the same window in the same session first, else it fails with `screenshot_context_missing` / `window_never_read`. Pass the same `"session":"<name>"` to every call (read, then act, then read), or put the steps in one `run_script`. [run]
 - The page is a WebView2: the first tree read showed only the title bar (5 elements), a later one 138 elements with a `Document` node. Act by pixel off the screenshot and judge by the next screenshot. [run]
 
