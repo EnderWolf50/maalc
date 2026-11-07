@@ -1,5 +1,5 @@
 """The number beside a map node's Cost coin (#257, #284): read by MaaFramework's OCR on every labelled coin of the
-map captures in tests/screens, as read, with no table to snap it to.
+map captures in tests/screens, as read, with no table to snap it to; and every node of those captures typed by it (#228).
 
 actions.coin_text runs inside a real MaaFramework task (resource bundle loaded, a still controller), so the OCR
 is the agent's on the device. The pytest process holds MaaFramework in AgentServer mode, so the task runs in a
@@ -36,11 +36,34 @@ UNREAD = {("GiftGetOverMap.png", 1221, 438), ("PauseExploration.png", 1221, 438)
 # in a crop. File name: <difficulty><number printed>-<tag>.
 CROPS = sorted((ROOT / "tests" / "data" / "cost_crops").glob("*.png"))
 CROP_COIN = (8, 8, *COIN)
-# node_at end to end on a floor of the given difficulty: (image, node centre, hard) -> type
-# #268, live 2026-10-23 HARD floor 5 (MapHardF5Warn): the WARNING rings read from the Cost, not the ring that is often missed (the
-# first HARD round read a Risky and an Abnormality as Focused): column 1 down Focused 120, column 2 mid Risky 150, down Abnormality 180.
-NODES = {("MapBossCost500.png", 583, 357, True): "boss", ("MapHardF5Warn.png", 328, 570, True): "focused",
-         ("MapHardF5Warn.png", 583, 357, True): "risky", ("MapHardF5Warn.png", 583, 570, True): "abno"}
+# node_at end to end on every node of the map captures (#228), labelled by eye: image -> the floor's difficulty (null: not
+# known, both are run) and [x, y, the Cost printed, or the kind on screen where no Cost shows] of each node centre. Left out:
+# the node under the bus, MapEvent's at 1235, 72 and MapFocused's at 980, 72 (under the HUD, their kind unseen), and the
+# captures with a popup over the map or zoomed in on the bus, which RouteMap does not read. MapHardRest.synthetic's top row,
+# under the HUD, has the kinds of MapHardTwoColsUp, the capture it was made from. Among them, #268's (live 2026-10-23, HARD):
+# MapBossCost500's boss, its glow unmatched, by its Cost; MapHardF5Warn's Focused 120, Risky 150 and Abnormality 180 by
+# their Costs, not the ring that is often missed.
+MAP_NODES = json.loads((ROOT / "tests" / "data" / "map_nodes.json").read_text(encoding="utf-8"))
+SWEEP = [(name, x, y, difficulty) for name, shot in MAP_NODES.items() for x, y, _ in shot["nodes"]
+         for difficulty in ([shot["difficulty"]] if shot["difficulty"] else ["normal", "hard"])]
+TYPED_INSTEAD = {
+    # Misread: HARD, the map at rest. A fight (crossed swords, the WARNING ring) with its Cost under the star panel: the
+    # ring unmatched, only the gift box seen, so an event.
+    ("MapCards.png", 980, 72): "event",
+    # Misread: in the bus's column, which RouteMap does not read. Its 120 under the floor's title read 'icli', and the
+    # gift box unmatched, so a battle.
+    ("MapHardTwoColsUpOnly.png", 73, 144): "battle",
+    # Top-row nodes whose badges sit under the HUD: no mark at all, unknown by node_at's rule. MapPanned's 100 shows
+    # below the resource bar, its coin cut by it.
+    **{(name, x, y): "unknown" for name, x, y in [
+        ("MapBoss.png", 215, 72), ("MapEvent.png", 725, 72), ("MapFocused.png", 215, 72), ("MapFocused.png", 470, 72),
+        ("MapHardRest.synthetic.png", 723, 72), ("MapHardRest.synthetic.png", 978, 72), ("MapPanned.png", 725, 106),
+        ("MapPanned.png", 980, 106), ("MapPanned.png", 1235, 106), ("MapRock.png", 725, 72), ("MirrorMap.png", 725, 72)]},
+}
+# Besides TYPED_INSTEAD's fights, the fights typed with no Cost read: the boss by its glow, before any Cost is read,
+# and a battle by its marks, its coin under the star panel read '1'.
+UNCOSTED = {("MapBoss.png", 725, 285), ("MapFloor4Panned.png", 1093, 357), ("MapShop.png", 980, 498),
+            ("MapRock.png", 980, 72)}
 
 
 def child():
@@ -85,11 +108,16 @@ def child():
                         out[f"{name} {x} {y}"] = actions.coin_number(actions.coin_text(context, image, (x, y, *COIN)))
                 for crop in CROPS:
                     out[f"crop {crop.name}"] = actions.coin_number(actions.coin_text(context, load(crop), CROP_COIN))
+                lines = []
+                actions.log = lines.append
                 with tempfile.TemporaryDirectory() as logs:
                     actions.ROOT = Path(logs)  # a miss keeps its crop under logs/cost
-                    for name, cx, cy, hard in NODES:
-                        actions.RUN.update(settings={}, difficulty="hard" if hard else "normal", floor_hard=hard)
-                        out[f"node {name} {cx} {cy}"] = actions.node_at(context, load(SCREENS / name), cx, cy)
+                    for name, cx, cy, difficulty in SWEEP:
+                        actions.RUN.update(settings={}, difficulty=difficulty, floor_hard=difficulty == "hard")
+                        lines.clear()
+                        kind = actions.node_at(context, load(SCREENS / name), cx, cy)
+                        cost = next((m[1] for line in lines if (m := re.match(r"map: node at .* reads Cost (\d+)", line))), None)
+                        out[f"node {name} {cx} {cy} {difficulty}"] = [kind, cost and int(cost)]
             except Exception:  # MaaFramework swallows it: hand it to the test
                 out["error"] = traceback.format_exc()
             return True
@@ -146,10 +174,27 @@ def test_the_sweep_has_no_unlisted_miss(read):
     assert missed <= {(n, str(x), str(y)) for n, x, y in UNREAD}
 
 
-@pytest.mark.parametrize(("name", "cx", "cy", "hard"), list(NODES))
-def test_node_at_types_by_the_cost_as_read(read, name, cx, cy, hard):
-    # MapBossCost500: the boss' glow went unmatched; its Cost (hard floor 4: 250 x 2) says boss.
-    assert read[f"node {name} {cx} {cy}"] == NODES[name, cx, cy, hard]
+def label(name, x, y):
+    return next(label for nx, ny, label in MAP_NODES[name]["nodes"] if (nx, ny) == (x, y))
+
+
+def fight(name, x, y):
+    return label(name, x, y) not in ("event", "shop")
+
+
+@pytest.mark.parametrize(("name", "x", "y", "difficulty"), [pytest.param(*c, id=f"{c[0]}-{c[1]}-{c[2]}-{c[3]}") for c in SWEEP])
+def test_every_map_node_is_typed_as_the_capture_shows_or_as_listed(read, name, x, y, difficulty):
+    import actions
+    shown = label(name, x, y)
+    if isinstance(shown, int):
+        shown = actions.map_data()["node_costs"][difficulty][shown]
+    assert read[f"node {name} {x} {y} {difficulty}"][0] == TYPED_INSTEAD.get((name, x, y), shown)
+
+
+def test_the_fights_typed_with_no_cost_read_are_the_listed_ones(read):
+    unread = {(name, x, y) for name, x, y, difficulty in SWEEP
+              if fight(name, x, y) and read[f"node {name} {x} {y} {difficulty}"][1] is None}
+    assert unread == UNCOSTED | {node for node in TYPED_INSTEAD if fight(*node)}
 
 
 @pytest.mark.parametrize(("found", "number"), [
