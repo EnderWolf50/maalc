@@ -1412,7 +1412,7 @@ class PlanRun(CustomAction):
             return finish(context, f"{TASK['runs']} of {run['runs']} runs done")
         if run["stop_when_weekly_bonus_out"] and weekly == 0:
             return finish(context, "weekly bonuses used up")
-        difficulty = run_start.run_difficulty(run["difficulty"], weekly)
+        difficulty = run_start.run_difficulty(run["difficulty"], weekly, run["target_floor"])
         team = pick_team(settings["teams"], read_cursor(ROOT, address(context)), difficulty)
         if team is None:
             return finish(context, f"no enabled team may run {difficulty}")

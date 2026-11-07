@@ -132,6 +132,9 @@ function RunTab() {
   return (
     <div className="grid">
       {pick("difficulty")}
+      <Field label={t("run.target_floor")} path="run/target_floor" note={run.target_floor > 5 ? t("run.target_floor_note") : undefined}>
+        <Select value={String(run.target_floor)} options={runEnum("target_floor").map(String)} onChange={(v) => set({ target_floor: Number(v) })} />
+      </Field>
       <ToggleNum label={t("run.runs")} path="run/runs" value={run.runs} on={1} min={1} note={t("run.runs_note")}
         onChange={(v) => set({ runs: v })} />
       {pick("weekly_bonus_use", run.weekly_bonus_use === "normal" ? t("run.weekly_bonus_normal_note") : undefined)}

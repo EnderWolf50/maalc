@@ -1441,7 +1441,7 @@ def test_tap_until_logs_how_long_the_screen_took(context, clock):
 
 def test_plan_run_waits_for_the_enter_dialog_after_pressing_enter(context, clock, monkeypatch):
     team = {"id": 1, "name": "t", "game_team": 1, "guard_turns": 3, "hard_from_floor": 1, "gift_list": "default", "enabled": True}
-    run = {"runs": 0, "stop_when_weekly_bonus_out": False, "difficulty": "normal"}
+    run = {"runs": 0, "stop_when_weekly_bonus_out": False, "difficulty": "normal", "target_floor": 5}
     monkeypatch.setattr(actions, "load_settings", lambda root, need_team=False: {"run": run, "teams": [team], "gift_lists": []})
     monkeypatch.setattr(actions, "pick_team", lambda teams, cursor, difficulty: team)
     monkeypatch.setattr(actions, "read_cursor", lambda root, address: None)
@@ -1460,11 +1460,11 @@ def test_a_planned_run_of_a_team_that_never_switches_to_hard(context, clock, mon
     # #137: auto with weekly bonuses left decides hard, but this team's switch to hard is off: the run is NORMAL.
     # Only the global "hard" makes it HARD (every floor, hard_wanted).
     team = {"id": 1, "name": "t", "game_team": 1, "guard_turns": 0, "hard_from_floor": None, "gift_list": "default", "enabled": True}
-    run = {"runs": None, "stop_when_weekly_bonus_out": False, "difficulty": setting}
+    run = {"runs": None, "stop_when_weekly_bonus_out": False, "difficulty": setting, "target_floor": 5}
     monkeypatch.setattr(actions, "load_settings", lambda root, need_team=False: {"run": run, "teams": [team], "gift_lists": []})
     monkeypatch.setattr(actions, "pick_team", lambda teams, cursor, difficulty: team)
     monkeypatch.setattr(actions, "read_cursor", lambda root, address: None)
-    monkeypatch.setattr(actions.run_start, "run_difficulty", lambda setting, weekly: "hard")
+    monkeypatch.setattr(actions.run_start, "run_difficulty", lambda setting, weekly, target: "hard")
     monkeypatch.setattr(actions.recovery, "read_runs", lambda root: [])
     monkeypatch.setattr(actions.recovery, "floor_limit", lambda runs, team: 1800)
     actions.TASK["modules"] = 20  # read on the Drive page (#369)
@@ -1740,7 +1740,7 @@ def test_the_default_list_makes_burn_the_main_keyword():
 
 
 def test_a_planned_run_plays_the_main_keyword_of_the_teams_list(context, clock, monkeypatch):
-    settings = {**listed("Bleed"), "run": {"runs": None, "stop_when_weekly_bonus_out": False, "difficulty": "normal"}}
+    settings = {**listed("Bleed"), "run": {"runs": None, "stop_when_weekly_bonus_out": False, "difficulty": "normal", "target_floor": 5}}
     monkeypatch.setattr(actions, "load_settings", lambda root, need_team=False: settings)
     monkeypatch.setattr(actions, "read_cursor", lambda root, address: None)
     monkeypatch.setattr(actions.recovery, "read_runs", lambda root: [])
@@ -2020,7 +2020,7 @@ def test_a_run_without_a_packs_note_stays_unknown_after_a_pull(context, monkeypa
 
 def test_a_new_run_starts_with_no_packs_taken(context, clock, monkeypatch):
     team = {"id": 1, "name": "t", "game_team": 1, "guard_turns": 3, "hard_from_floor": 1, "gift_list": "default", "enabled": True}
-    run = {"runs": 0, "stop_when_weekly_bonus_out": False, "difficulty": "normal"}
+    run = {"runs": 0, "stop_when_weekly_bonus_out": False, "difficulty": "normal", "target_floor": 5}
     monkeypatch.setattr(actions, "load_settings", lambda root, need_team=False: {"run": run, "teams": [team], "gift_lists": []})
     monkeypatch.setattr(actions, "pick_team", lambda teams, cursor, difficulty: team)
     monkeypatch.setattr(actions, "read_cursor", lambda root, address: None)

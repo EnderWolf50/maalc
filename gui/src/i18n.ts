@@ -25,6 +25,8 @@ const zh_tw = {
   newFile: "建立新的設定檔",
   // run
   "run.difficulty": "難度",
+  "run.target_floor": "目標層數",
+  "run.target_floor_note": "需要整局困難：第 6 層起要求這一局每一層都是困難，所以所有輪替的隊伍都要從第 1 層起打困難，難度也不能選普通。",
   "run.runs": "限制局數",
   "run.runs_note": "這個鏡牢任務要領到獎勵的局數；關閉時不限局數，跑到其他停止條件成立。",
   "run.weekly_bonus_use": "每週獎勵用法",
@@ -304,6 +306,8 @@ const en_us: typeof zh_tw = {
   loadError: "The settings file cannot be read. Fix it, or start a new one (overwrites it):",
   newFile: "Start a new settings file",
   "run.difficulty": "Difficulty",
+  "run.target_floor": "Target floor",
+  "run.target_floor_note": "Needs the whole run HARD: floor 6 and up open only when every floor of the run was HARD, so every team in the rotation must be HARD from floor 1 and the difficulty cannot be Normal.",
   "run.runs": "Limit runs",
   "run.runs_note": "Runs to claim in this Mirror Dungeon task; off runs until another stop condition holds.",
   "run.weekly_bonus_use": "Use weekly bonuses on",

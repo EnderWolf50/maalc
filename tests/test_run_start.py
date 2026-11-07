@@ -19,6 +19,15 @@ def test_run_difficulty(setting, weekly, expected):
     assert rs.run_difficulty(setting, weekly) == expected
 
 
+@pytest.mark.parametrize(("setting", "weekly", "target", "expected"), [
+    ("auto", 0, 10, "hard"), ("auto", 0, 15, "hard"), ("auto", 3, 15, "hard"), ("auto", 0, 5, "normal"),
+    ("hard", 0, 15, "hard"), ("normal", 3, 5, "normal"),
+])
+def test_run_difficulty_target_above_5_is_hard_whatever_the_weekly_bonuses(setting, weekly, target, expected):
+    # #385: floors 6+ need every floor of the run HARD, so auto never falls back to normal
+    assert rs.run_difficulty(setting, weekly, target) == expected
+
+
 def test_resolve_plan():
     settings = {"starlight_plans": [{"id": "a", "levels": LEVELS}]}
     assert rs.resolve_plan(settings, {"starlight": {"plan": "a"}}, "starlight")["levels"] == LEVELS
