@@ -275,7 +275,7 @@ def test_settle_claims_a_run_past_floor_5_and_toggles_bonuses_only_at_the_target
     taps, on_at_claim, lines = settle(context, monkeypatch, tmp_path, window, target, {f: True for f in range(1, 16)})
     assert actions.GIVE_UP not in taps and actions.CLAIM in taps
     assert on_at_claim == [claimed_on]
-    assert [(line["result"], line["floors"], line["target_reached"]) for line in lines] == [("clear", floors, reached)]
+    assert [(line["result"], line["floors"], line["target_reached"], line["target"]) for line in lines] == [("clear", floors, reached, target)]
 
 
 @pytest.mark.parametrize("window, difficulty", [("Floor 8 [INFINITY] 7/7", "hard"), ("Floor 5 [NORMAL] 6/6", "normal"), ("Floor 8 7/7", "hard"), ("Floor 5 6/6", None)])

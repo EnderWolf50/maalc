@@ -43,7 +43,7 @@ L2_PER_RUN, L3_PER_RUN, L3_PER_EXECUTION = 3, 2, 3
 BATTLE = {"BattleTurn", "BattlePause", "BattleMenu"}  # L2 cannot go through mid-battle: only the map has To Window
 BATTLE_LIMIT = 20 * 60
 RUN_LIMIT_DEFAULT, RUN_LIMIT_MIN_RUNS = 60 * 60, 10
-FLOOR_LIMIT, FLOORS = 45 * 60, 5  # live (#34): a HARD floor took up to ~25 min of real progress
+FLOOR_LIMIT = 45 * 60  # live (#34): a HARD floor took up to ~25 min of real progress
 
 
 def thumb(image):
@@ -226,16 +226,19 @@ def _seconds(start, end):
     return (datetime.fromisoformat(end.replace("Z", "+00:00")) - datetime.fromisoformat(start.replace("Z", "+00:00"))).total_seconds()
 
 
-def run_limit(lines, team_id):
-    """Seconds team_id's whole run may take, floor_limit's history part (spec 06 每層超時).
+def run_limit(lines, team_id, target):
+    """Seconds team_id's whole run to target floors may take, floor_limit's history part (spec 06 每層超時).
 
-    Only the team's cleared runs with both times after its latest reset marker count:
+    Only the team's cleared runs of the same target (a line without one is a 5) with both times after its latest
+    reset marker count, and not one that cleared but stopped short of its target (`target_reached` false: its time
+    is a shorter run's, #390):
     10 or more of them give twice their 95th percentile, fewer give 60 minutes.
     """
     since = max((i for i, x in enumerate(lines) if x.get("reset") == team_id), default=-1)
     times = []
     for x in lines[since + 1:]:
-        if x.get("team") == team_id and x.get("result") == "clear" and x.get("start") and x.get("end"):
+        if (x.get("team") == team_id and x.get("result") == "clear" and (x.get("target") or 5) == target
+                and x.get("target_reached") is not False and x.get("start") and x.get("end")):
             try:
                 times.append(_seconds(x["start"], x["end"]))
             except (TypeError, ValueError):
@@ -245,15 +248,15 @@ def run_limit(lines, team_id):
     return 2 * statistics.quantiles(times, n=20, method="inclusive")[-1]
 
 
-def floor_limit(lines, team_id):
+def floor_limit(lines, team_id, target):
     """Seconds one floor of team_id's run may take (spec 06 每層超時): 45 minutes, or the team's
-    run_limit spread over the 5 floors when that is longer.
+    run_limit spread over the target floors when that is longer.
 
     Live 2026-10-16 (#34): two HARD runs took 80 and 107 minutes of steady progress, so a whole-run
     limit of 60 minutes broke into runs that were fine. A floor restarts the clock, so a run that keeps
     reaching new floors is never cut off; a floor stuck past it still is.
     """
-    return max(FLOOR_LIMIT, run_limit(lines, team_id) / FLOORS)
+    return max(FLOOR_LIMIT, run_limit(lines, team_id, target) / target)
 
 
 def over_time(kind, deadline, now):
