@@ -3340,8 +3340,8 @@ EVENT_TAKE = 1.5  # s a tap on an event page has to show
 EVENT_LABELS = {"skip", "proceed", "continue", "commence"}  # the Event node's expected, compact()ed
 EVENT_BUTTON_LABEL = [1040, 612, 190, 66]  # the Event node's roi; on the map the bottom bar's lever reads there (#511)
 # s the map an event ends on holds still before Event hands back: GET! windows come over it, and close on the corner taps
-# (#309). The 2026-10-23 window recording, 28 event ends (#511): the map held still at most 0.23 s before a window came,
-# and not at all between two windows; the last map held still 0-0.27 s after it showed.
+# (#309). The 2026-10-23 window recording, 28 event ends (#511): the map held still at most 0.23 s before a window came;
+# the last map stopped moving 0-0.27 s after it showed.
 EVENT_MAP_REST = 0.4
 EVENT_LIMIT = 180  # s one event may take before recovery L1 (AALC allows 300); a boss quiz of several rounds stays well under
 EVENT_ODDS_WAIT = 2.0  # s after a check's prompt first shows that no odds read hands back to MirrorHub, not a sinner (#380); live: the odds came 1.8 s after
@@ -3482,7 +3482,7 @@ class Event(CustomAction):
         if pressed_at is not None:
             last, pressed_label = pressed_at, compact(text(context, image, EVENT_BUTTON_LABEL))
         shot_at = still_since = time.monotonic()
-        small, ended = recovery.thumb(image), None  # ended: the time of the screenshot a look last saw the map on
+        small, map_seen_at = recovery.thumb(image), None
         for n in range(1, EVENT_TEXT_TAPS + 1):
             time.sleep(max(0.0, last + EVENT_TAP_EVERY - time.monotonic()))
             last = time.monotonic()
@@ -3490,8 +3490,8 @@ class Event(CustomAction):
                 try:
                     page_guard(context, "Event", image=image)
                 except PageEnded:
-                    ended = shot_at
-            if ended is not None and still_since <= ended and shot_at - still_since >= EVENT_MAP_REST:
+                    map_seen_at = shot_at
+            if map_seen_at is not None and still_since <= map_seen_at and shot_at - still_since >= EVENT_MAP_REST:
                 raise PageEnded("Event")
             tap(context, *EVENT_NEUTRAL, wait=0)
             image, shot_at = screen(context), time.monotonic()
@@ -3509,8 +3509,12 @@ class Event(CustomAction):
             pressed_label = None
             if card_alone(image):
                 break
-            if read and (not text(context, image, EVENT_BUTTON_LABEL) or any(
-                    has(text(context, image, roi), k) for k, roi in (("Choices", CHOICES_HEADER), ("Choose a character", CHECK_PROMPT)))):
+            if not read:
+                continue
+            # The label roi reads empty off the event page, on a map too (MapCostFloor3.png): the map waits for the guard.
+            if not text(context, image, EVENT_BUTTON_LABEL) and not on_page(context, image, *ENDS_ON["Event"]):
+                break
+            if any(has(text(context, image, roi), k) for k, roi in (("Choices", CHOICES_HEADER), ("Choose a character", CHECK_PROMPT))):
                 break
 
     @staticmethod
