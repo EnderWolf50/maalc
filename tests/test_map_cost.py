@@ -42,7 +42,7 @@ CROP_COIN = (8, 8, *COIN)
 # centre, beside a gift box. MapHardRest.synthetic's top row, under the HUD, has the kinds of MapHardTwoColsUp, the
 # capture it was made from. Left out: the node the bus stands on, which the bus hides; MapEvent's at 1235, 72 and
 # MapFocused's at 980, 72, their kind unseen under the HUD; the captures of a popup over the map (DungeonProgress*,
-# GiftGetOverMap, PauseExploration, ProgressPanel), each answered by MirrorHub before MirrorMap, and of the map zoomed in
+# GiftGetOverMap, PauseExploration, ProgressPanel), each answered before the map is read, and of the map zoomed in
 # on the bus (MapZoomed, MapNodePanel), which RouteMap.unzoom resets first. Among them, #268's (live 2026-10-23, HARD):
 # MapBossCost500's boss, its glow unmatched, by its Cost; MapHardF5Warn's Focused 120, Risky 150 and Abnormality 180 by
 # their Costs, not the ring that is often missed.
