@@ -208,6 +208,27 @@ def test_plan_ends_with_the_freeze_when_max_runs_out_first(tmp_path, monkeypatch
     assert "PLAN cut by the freeze's --max" in out and "timeout" not in out
 
 
+def test_lines_after_a_cut_plan_do_not_run(tmp_path, monkeypatch):
+    # The freeze is over when plan is cut by --max: a tap written after it would hit a bot that has resumed.
+    clock = iter(range(1000))
+    monkeypatch.setattr(dv.time, "time", lambda: next(clock))
+    ctl, cmd = FakeCtl([screen("EnterDialog.png")]), tmp_path / "cmd.txt"
+    cmd.write_text("plan 100\ntap 10 20\n")
+    monkeypatch.setattr(dv, "PLAN_EVERY", 0)
+    dv.run_commands(ctl, cmd, tmp_path, deadline=3, poll=0)
+    assert ctl.calls == []
+
+
+def test_plan_does_not_sleep_past_its_end(tmp_path, monkeypatch):
+    slept = []
+    clock = iter(range(1000))
+    monkeypatch.setattr(dv.time, "time", lambda: next(clock))
+    monkeypatch.setattr(dv.time, "sleep", slept.append)
+    monkeypatch.setattr(dv, "PLAN_EVERY", 3)
+    dv.plan(FakeCtl([screen("EnterDialog.png")]), tmp_path, 4, float("inf"))
+    assert slept and all(s <= 3 for s in slept) and slept[-1] < 3
+
+
 def test_commands_after_plan_run_once_it_ends(tmp_path, monkeypatch):
     ctl, cmd = FakeCtl([screen("BattleTurn.png")]), tmp_path / "cmd.txt"
     cmd.write_text("plan 5\ntap 10 20\nresume\n")

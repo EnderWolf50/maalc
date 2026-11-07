@@ -26,7 +26,7 @@ run on, so a long freeze can time a node out. Screenshots go to `--out` (default
 Rate label up, BattleTurn) or an E.G.O card (EgoCard), read with tools/live/ego_card.py. It prints `PLANNING <file>` or
 `CARD <file>`, and the commands after it in the file run then. It ends at the first of: that screen, S seconds (default
 120, printed `PLAN timeout after S s`), or the freeze's own `--max` (printed `PLAN cut by the freeze's --max`, and the
-bot resumes at that moment). So S above what is left of `--max` is cut to it: raise `--max` for a longer wait. A
+bot resumes at that moment, the lines after `plan` unrun). So S above what is left of `--max` is cut to it: raise `--max` for a longer wait. A
 `resume` written while `plan` runs waits until it ends.
 """
 from __future__ import annotations
@@ -38,6 +38,7 @@ import sys
 import time
 from pathlib import Path
 
+import numpy as np
 from PIL import Image
 
 TOOLS = Path(__file__).resolve().parents[1]
@@ -64,7 +65,7 @@ def connect(port: int):
     return ctl
 
 
-def shot(ctl, out):
+def shot(ctl, out) -> np.ndarray:
     """Save a screenshot; returns it as MaaFramework hands it out (BGR)."""
     img = ctl.post_screencap().wait().get()
     Image.fromarray(img[..., ::-1]).save(out)
@@ -76,9 +77,10 @@ PLAN_LIMIT = 120.0  # s `plan` waits when no time is given
 PLAN_EVERY = 3.0  # s between two of its shots
 
 
-def plan(ctl, out: Path, limit: float, deadline: float) -> None:
+def plan(ctl, out: Path, limit: float, deadline: float) -> bool:
     """Shots every PLAN_EVERY s until a planning phase or an E.G.O card shows, `limit` s pass, or `deadline` (the
-    freeze's own end) comes: the first of the three ends it, and the line it prints says which."""
+    freeze's own end) comes: the first of the three ends it, and the line it prints says which. True when the
+    deadline ended it."""
     from live import ego_card
 
     end = time.time() + limit
@@ -93,12 +95,13 @@ def plan(ctl, out: Path, limit: float, deadline: float) -> None:
         print(stamp(), "win rate x", x, "card", card, flush=True)
         if x is not None or card:
             print("PLANNING" if x is not None else "CARD", path, flush=True)
-            return
-        time.sleep(PLAN_EVERY)
+            return False
+        time.sleep(min(PLAN_EVERY, max(0.0, end - time.time())))
     if cut:
         print(f"PLAN cut by the freeze's --max after {i} shots; the bot resumes now", flush=True)
     else:
         print(f"PLAN timeout after {limit:g} s ({i} shots)", flush=True)
+    return cut
 
 
 PRESS_HOLD = 1.0  # s a press holds when no time is given
@@ -163,7 +166,8 @@ def run_commands(ctl, cmd: Path, out: Path, deadline: float, poll: float = 0.2) 
                 shot(ctl, out / f"{stamp()}-{a[1]}.png")
                 continue
             elif a[0] == "plan":
-                plan(ctl, out, float(a[1]) if len(a) > 1 else PLAN_LIMIT, deadline)
+                if plan(ctl, out, float(a[1]) if len(a) > 1 else PLAN_LIMIT, deadline):
+                    return  # the freeze is over: the lines after it do not run on a bot that resumes
                 continue
             else:
                 print("unknown command", line, flush=True)
