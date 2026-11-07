@@ -99,13 +99,13 @@ def child():
         actions.STUCK["l3"] = 0 if scenario in ("restart", "tab_restart") else actions.recovery.L3_PER_EXECUTION
         actions.ROOT.joinpath("logs").mkdir(exist_ok=True)
         stops = len(list(actions.ROOT.joinpath("logs").rglob("agent.log")))
-        override = {"GoHome": {"timeout": 4000}, "RecoverL3": {"post_delay": 0}, "RecoverStartApp": {"post_delay": 0}}
+        override = {"GoHome": {"timeout": 4000}}
         if scenario in ("tab_stuck", "tab_restart"):  # the tab's tap is ignored; its wait cut short
             game.on_tap = lambda x, y: True
             override["GoHome"]["timeout"] = 8000
             override["HomeWindowTab"] = {"custom_action_param": {"left": True, "timeout": 0.1}}
         if scenario in ("tab_restart", "restarts_used"):  # no title after the restart: its 180 s wait cut short
-            override["RecoverStartApp"]["timeout"] = 3000
+            override["RecoverStartApp"] = {"timeout": 3000}
         if scenario == "tab_restart":
             game.start_app = lambda intent, game=game: (Game.start_app(game, intent), setattr(game, "screen", "drive"),
                                                         setattr(game, "on_tap", Game.on_tap.__get__(game)))[0]
@@ -152,7 +152,9 @@ def test_go_home_waits_for_the_screens_not_for_fixed_delays():
     o = run_child(__file__)["closed_slow"]
     assert o["succeeded"] and o["starts"] == 1 and "GoHomeLost" not in o["nodes"] and "HomeGameUp" in o["nodes"]
     assert "NavTitle" in o["nodes"] and o["nodes"][-1] == "HomeReached"
-    assert run_child(__file__)["closed"]["seconds"] < 10  # HomeGameAway's post_delay was 10 s
+    # A fixed wait in the agent's own steps. The child runs every node's post_delay at 0 (#480), so HomeGameAway's old
+    # 10 s one is test_pipeline.py's to catch.
+    assert run_child(__file__)["closed"]["seconds"] < 10
 
 
 def test_go_home_fails_after_a_limited_number_of_back_keys_when_the_game_restarts_are_used_up():
