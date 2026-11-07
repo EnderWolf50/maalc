@@ -5,7 +5,7 @@ on:
     tags: ["v*"]
   # Build (artifact only) when the release pipeline itself changes.
   pull_request:
-    paths: [.github/workflows/release.yml, tools/install.py]
+    paths: [.github/workflows/release.yml, tools/install.py, agent/main.py, tests/test_release_zip.py]
   workflow_dispatch:
     inputs:
       tag:

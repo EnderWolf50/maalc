@@ -64,11 +64,12 @@ def bundle_python() -> None:
     requirements = install / "requirements.txt"
     subprocess.run(["uv", "export", "--frozen", "--no-dev", "--no-emit-project",
                     "--output-file", str(requirements)], cwd=repo, check=True)
-    subprocess.run(["uv", "pip", "install", "--target", str(python / "Lib" / "site-packages"),
+    site_packages = python / "Lib" / "site-packages"
+    subprocess.run(["uv", "pip", "install", "--target", str(site_packages),
                     "--python-version", "3.12", "--python-platform", "x86_64-pc-windows-msvc",
                     "--requirements", str(requirements)], check=True)
     requirements.unlink()
-    wheel_dlls = python / "Lib" / "site-packages" / "maa" / "bin"
+    wheel_dlls = site_packages / "maa" / "bin"
     if wheel_dlls.exists():  # a rerun finds maafw installed already, its bin/ gone
         shutil.rmtree(wheel_dlls)
 

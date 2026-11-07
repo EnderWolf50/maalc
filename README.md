@@ -12,7 +12,7 @@ zip 不是安裝程式，也不會自動更新；換版時下載新 zip，把舊
 
 ### 用 MFAAvalonia 執行
 
-zip 只附 MXU。要用 MFAAvalonia，下載它的 win-x64 zip 解壓到 `maalc/` 裡，再把 `maafw\MaaFramework.dll` 複製到 `runtimes\win-x64\native\`，蓋掉同名的檔案。MFAAvalonia 每次更新都會換回自己的 `runtimes\`，所以更新後要再複製一次。
+zip 只附 MXU。要用 MFAAvalonia，下載它的 win-x64 zip 解壓到 `maalc/` 裡，再把 `maafw\MaaFramework.dll` 複製到 `runtimes\win-x64\native\`，蓋掉同名的檔案。MFAAvalonia 本體或它附的 MaaFramework 更新時會換回自己的 `runtimes\`，更新後要再複製一次。
 
 MFAAvalonia 只從自己的 `runtimes\` 載入 MaaFramework，不讀 `maafw\`。不換也能跑，但會少了 `maafw\MaaFramework.dll` 的兩個修正，跑久了記憶體會漲：
 
