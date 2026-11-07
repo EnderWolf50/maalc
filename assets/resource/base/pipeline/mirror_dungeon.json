@@ -603,9 +603,11 @@
     },
     // Waiting for input: the Win Rate label, off or on. It moves half a slot (~40 px) right with every
     // extra skill slot: x 984 with 7 slots, ~740 with 1 (a 1-sinner formation, live 2026-10-16).
-    // Both delays stay at 200 ms (#258): the action is 7.4 s (hold_turn lifts the finger after HOLD_LIMIT, 6 s, and 223 of
-    // 232 live hits are followed by BattlePause, which holds again), and no log shows what a look 0.2 s sooner finds: the
-    // 3 hits followed by BattleTurn again would be a second submit of the same turn, a second tap on Win Rate.
+    // No pre_delay (#177): PlayTurn starts with still(), which takes a screenshot at once and goes on only once another
+    // 0.2 s later reads alike, so a 200 ms pre_delay slept back to back with that 0.2 s. post_delay stays at 200 ms
+    // (#258): the action is 7.4 s (hold_turn lifts the finger after HOLD_LIMIT, 6 s, and 223 of 232 live hits are
+    // followed by BattlePause, which holds again), and no log shows what a look 0.2 s sooner finds: the 3 hits followed
+    // by BattleTurn again would be a second submit of the same turn, a second tap on Win Rate.
     "BattleTurn": {
         "recognition": "TemplateMatch",
         "roi": [700, 515, 580, 60],
@@ -616,7 +618,7 @@
         "threshold": 0.8,
         "action": "Custom",
         "custom_action": "PlayTurn",
-        "pre_delay": 200,
+        "pre_delay": 0,
         "post_delay": 200
     },
     // A turn playing out: the pause button replaces the top-right controls. PlayTurn holds a finger down
