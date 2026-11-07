@@ -364,7 +364,9 @@ def test_packs_settle_runs_from_the_deal_to_eight_still_frames():
 
 REFRESH = """\
 15:52:51.591 [maalc] floor 1 packs, threshold 0: Flat-broke Gamblers (0), Nagel und Hammer (0), Automated Factory (-2)
+15:52:51.591 [maalc] floor 1 card reads: Flat-broke Gamblers <- name, Nagel und Hammer <- name, Automated Factory <- name
 15:52:56.000 [maalc] floor 1 packs, threshold 0: Lake World (0), The Outcast (-1), Line 3 (-5)
+15:52:56.000 [maalc] floor 1 card reads: Lake World <- name, The Outcast <- name, Line 3 <- name
 15:52:56.100 [maalc] floor 1: pull Lake World (0)
 """
 
@@ -380,19 +382,27 @@ def test_packs_after_a_refresh_draws_the_new_hand_once_it_stands_still(tmp_path,
         times = [t0 + i / fps for i in range(round((t1 - t0) * fps))]
         out = []
         for i, t in enumerate(times):  # empty, deal and swing, still; the Refresh swaps the hand, swing, still
-            hand, swinging = (old, deal <= t < still) if t < refresh else (new, t < still2)
+            if t < refresh:
+                hand, swinging = old, deal <= t < still
+            else:
+                hand, swinging = new, t < still2
             out.append(np.zeros((720, 1280), np.uint8) if t < deal else hand + np.uint8(10 * (i % 2) * swinging))
         return times, np.array(out)
 
     grabbed = []
+
+    def fake_grab(f, t):
+        grabbed.append(t)
+        return Image.new("RGB", (1280, 720))
+
     monkeypatch.setattr(ev, "frames", fake_frames)
-    monkeypatch.setattr(ev, "grab", lambda f, t: grabbed.append(t) or Image.new("RGB", (1280, 720)))
+    monkeypatch.setattr(ev, "grab", fake_grab)
     monkeypatch.setattr(ev, "masks_path", lambda a: None)
     monkeypatch.setattr(ev, "load_masks", lambda path: ([1280, 720], []))
     (tmp_path / "run.log").write_text(REFRESH, encoding="utf-8")
     ev.main(["packs", str(tmp_path / "run.log"), "--floor", "1", "-o", str(tmp_path / "packs"), "--video", "rec.mp4@15:50:00"])
     first, second = json.loads((tmp_path / "packs/packs.json").read_text(encoding="utf-8"))
-    assert still < grabbed[0] < still + 0.5 and first["settle_s"] == pytest.approx(2.0, abs=0.05)  # no Refresh: as before
+    assert still < grabbed[0] < still + 0.5 and first["settle_s"] == pytest.approx(2.0, abs=0.02)  # no Refresh: as before
     assert still2 < grabbed[1] < still2 + 0.5  # the new hand, not the old one that stood still before the Refresh
     assert second["settle_s"] == pytest.approx(still2 - refresh, abs=0.05) and not second["partial"]
 
