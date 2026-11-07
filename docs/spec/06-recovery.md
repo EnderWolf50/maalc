@@ -96,7 +96,7 @@
 
 1. 保存最近 20 張畫面作為證據，放在 `<root>/logs/evidence/<時間>/`（`<root>` 是 Agent 的根目錄）。（#14、#19）實作：`<時間>` 是 UTC ISO 時間、冒號換成 `-`；`00.png` 起依序是 hub 最近分派的畫面，最後一張是停止當下的畫面；另有 `agent.log`，是 Agent 最近 500 行記錄。（#31）
 2. 執行期間必須開著 `SaveOnError`（`Toolkit.init_option` 的 `save_on_error`），讓辨識失敗的繪圖一併留下。（#13、#14）這是用戶端的選項（MXU 寫在 `config/maa_option.json`），Agent 設不到。（#31）
-3. 在 `<root>/logs/runs.jsonl` 寫入這局，結果為「停止」。（#14、#19）只在有進行中的局時寫；Agent 這次啟動後還沒碰過這局（例如一啟動就卡住）時沒有這一行。（#31）
+3. 在 `<root>/logs/runs.jsonl` 寫入這局，結果為「停止」。（#14、#19）鏡牢任務的停止都寫這一行：Agent 這次啟動後還沒碰過這局（例如一啟動就卡住）時，和接續的局一樣從設定與輪替游標補出這局的計畫來寫（[03-decisions.md](03-decisions.md) 第 1 節）；設定讀不到時不寫。其他任務（Luxcavation、日常）的停止不寫。（#31、#436）
 4. 若使用者設定了 webhook，送出失敗通知（見下節）。（#14）
 5. 結束任務。帳號層級的停止（維護公告、用戶端過舊、`auto_download` 關閉時遇到下載或更新、遊戲一直要求更新、`auto_accept_terms` 關閉時遇到使用者協議）之後的任務都會撞上同一個畫面，所以再呼叫 `post_stop` 清空 tasker 的任務佇列，並記住這次啟動有過它（之後的任務在入口就失敗）；一次送整串的 client（MXU）因此整串結束，一次送一個的（MFAAvalonia）只結束這個任務，見 [spec 01「帳號層級的停止與 client 的任務佇列」](01-architecture.md)。其他停止只結束這個任務，清單繼續。（#364）
 
@@ -120,7 +120,7 @@
 | 結果 | 通關／停止／放棄 |
 | L1、L2、L3 | 各級恢復各觸發幾次 |
 
-- 鍵名（#30）：`start`、`end`（UTC ISO 8601，和重置標記的 `time` 同格式；接續的局沒有 `start`，寫 `null`）、`team`、`team_name`（bot 沒有自己選隊時寫 `null`）、`difficulty`（`hard`／`normal`）、`weekly_bonus`（用了幾次）、`floors`、`result`（`clear` 通關／`stop` 停止／`giveup` 放棄）、`l1`、`l2`、`l3`。結算與停止程序都會寫入（#31）。結算以外的停止：`difficulty` 取目前這層的難度，`floors` 是主題包頁讀到的層數減 1；Resume 接手、Agent 沒看過主題包頁的局寫 0。`l1`–`l3` 是 Agent 這次啟動後這局的恢復次數。這局觀測了飾品時多一個 `gift_search`：`{"gifts": [英文名…], "starlight": 確認彈窗的價格, "owned_before": 觀測前的持有星光, "owned_after": 扣掉價格後}`，讀不到的值寫 `null`（#54）。
+- 鍵名（#30）：`start`、`end`（UTC ISO 8601，和重置標記的 `time` 同格式；接續的局沒有 `start`，寫 `null`）、`team`、`team_name`（不知道這局的隊伍時寫 `null`：接續的局從輪替游標推不回隊伍，見 [03-decisions.md](03-decisions.md) 第 1 節，#436）、`difficulty`（`hard`／`normal`）、`weekly_bonus`（用了幾次）、`floors`、`result`（`clear` 通關／`stop` 停止／`giveup` 放棄）、`l1`、`l2`、`l3`。結算與停止程序都會寫入（#31）。結算以外的停止：`difficulty` 取目前這層的難度，`floors` 是主題包頁讀到的層數減 1；Resume 接手、Agent 沒看過主題包頁的局寫 0。`l1`–`l3` 是 Agent 這次啟動後這局的恢復次數。這局觀測了飾品時多一個 `gift_search`：`{"gifts": [英文名…], "starlight": 確認彈窗的價格, "owned_before": 觀測前的持有星光, "owned_after": 扣掉價格後}`，讀不到的值寫 `null`（#54）。
 - 這份記錄是唯讀的：只用來驗收（見 [07-assets-and-testing.md](07-assets-and-testing.md)）和計算每層時間上限，必須不拿來做中途接續或輪替的判斷。（#14，[ADR 0003](../adr/0003-screen-is-truth-state-file-only-rotation-cursor.md)）
 - 輪替游標仍只存在 Agent 狀態檔，不從 `runs.jsonl` 推算。（[ADR 0003](../adr/0003-screen-is-truth-state-file-only-rotation-cursor.md)）
 - 設定 GUI 的「重置時間記錄」會附加一行重置標記，只含隊伍 id 與時間。計算該隊的時間上限時，只看最新一個標記之後的記錄；舊記錄保留。（#14、#19，2026-10-14 定案）重置標記的格式是 `{"reset": "<隊伍 id>", "time": "<ISO 時間>"}`。算耗時只用該隊結果為 `clear`、`start` 與 `end` 都有的行，第 95 百分位用線性內插（Python `statistics.quantiles(..., n=20, method="inclusive")`）。（#31）
