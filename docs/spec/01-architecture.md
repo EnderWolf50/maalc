@@ -85,7 +85,7 @@
 開頭與結尾照上面「日常任務的入口」（`GoHomeRun`、`go_home()`、`TaskDone`，#371）。另外：（#366）
 
 - **入口節點**的動作可以是 `TaskStart` 的子類別，名稱是 `<任務>Start`（例如 `LuxStart`：先 `TaskStart`，再讀這個任務的設定；設定不能用就走停止程序，不點任何東西）。之後接 `<任務>Home` 節點：回主畫面（`GoHomeRun`，或它加上開頭檢查的動作，例如 `LuxHome`），再進 `<任務>Hub`。各任務的節點名稱都照這個：`MailHome`、`PassHome`、`AssembleHome`、`ChargeHome`、`ExpHome`、`ThreadHome`。
-- **hub**：`next` 第一項是 `<任務>Stuck`（`StuckFlag` 加 `StopTask`：看門狗認定卡住就停止，日常頁還沒有恢復階梯），第二項是 `TaskDone`，其餘都標 `[JumpBack]`：伺服器彈窗與說明頁、OCR 畫面集中在自己的 `HubText` 節點（`custom_recognition` 都是 `HubText`，清單用 `base` 引用共用的彈窗；理由見〈MirrorHub〉，#157）、任務自己的畫面、最後是導航（`NavTitle`、`NavMainTabs` 這類）。`on_error` 接 `StopTask`：60 秒認不出畫面就停止，任務失敗，清單繼續。
+- **hub**：`next` 第一項是 `<任務>Stuck`（`StuckFlag` 加 `DailyRecover`，`next` 是自己的 hub：遊戲凍在主畫面就重開遊戲、`GoHome` 後回到 hub；其他卡住就停止，日常頁沒有 L1、L2，見 [06](06-recovery.md)），第二項是 `TaskDone`，其餘都標 `[JumpBack]`：伺服器彈窗與說明頁、OCR 畫面集中在自己的 `HubText` 節點（`custom_recognition` 都是 `HubText`，清單用 `base` 引用共用的彈窗；理由見〈MirrorHub〉，#157）、任務自己的畫面、最後是導航（`NavTitle`、`NavMainTabs` 這類）。`on_error` 接 `StopTask`：60 秒認不出畫面就停止，任務失敗，清單繼續。
 - **記憶體**：任務自己的計數放 `RUN`（Luxcavation 兩個任務的 `RUN["lux"]`）或 `TASK`（換腦啡肽模組的 `assemble`、狂氣換腦啡肽的 `charge`），兩者都由 `TaskStart` 清空；不放 `RUN["settings"]`，那是鏡牢一局的計畫，停止程序會依它寫 `runs.jsonl`。`TaskStart` 只在上一個任務以 `done()` 或停止程序結束時清 `RUN`；上一個任務被 client 中途打斷（兩者都沒走）、而且這次是同一個任務、`RUN` 裡有一局的計畫（`settings`）時保留它，鏡牢接手同一局，和任務鏈之前一樣。換成別的任務一律清掉：日常任務的停止程序不能寫出鏡牢那一局的 `runs.jsonl` 行。卡住階梯、看門狗、證據畫面、任務局數照舊每個任務重設。（#362 D3）
 
 ### 經驗本（`ExpLuxcavation`）

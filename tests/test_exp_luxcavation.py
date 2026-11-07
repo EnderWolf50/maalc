@@ -12,7 +12,7 @@ or LuxResultDefeat.png), which stays until Confirm or the back key and leads bac
 import json
 
 import numpy as np
-from daily_child import ROOT, bind, game_class, inside, interface as interface_json, load, result, run_child, screen
+from daily_child import ROOT, bind, game_class, inside, interface as interface_json, live_frame, load, result, run_child, screen
 
 WINDOW_TAB = (790, 608, 70, 64)
 DRIVE_TAB = (930, 600, 110, 80)
@@ -80,9 +80,10 @@ SCENARIOS = {"drive": ("drive", "b", 1, 0, WIN), "locked": ("locked", "b", 1, 0,
 CONSECUTIVE = {"x1", "x3", "x12", "x3_unread", "x3_lose_retry"}
 DAILY = {"drive", "done_today", "done_today_count_2", "weekly_tab", "no_pass", "row_unread"}
 # #429: the pass's Clear EXP Luxcavation row done (one won today), the pass page opening on its Weekly tab, no pass page
-# (its hub's 60 s cut to 5), the row not found on the Daily tab.
+# (its hub's 60 s cut to 5; the main window live, as a still one that takes no tap is a frozen game, #440), the row not
+# found on the Daily tab.
 STATES = {"done_today": {"pass_row": "done"}, "done_today_count_2": {"pass_row": "done"}, "weekly_tab": {"pass_tab": "weekly"},
-          "no_pass": {"pass_row": None, "override": {"ExpPassHub": {"timeout": 5000}}}, "row_unread": {"pass_row": "unread"},
+          "no_pass": {"pass_row": None, "live": True, "override": {"ExpPassHub": {"timeout": 5000}}}, "row_unread": {"pass_row": "unread"},
           "count_done_today": {"pass_row": "done"}}
 
 
@@ -120,7 +121,7 @@ def child(task="ExpLuxcavation", scenarios=SCENARIOS, consecutive=CONSECUTIVE, s
 
         images = {**{name: screen(png) if png else np.full((720, 1280, 3), 40, np.uint8) for name, png in SCREENS.items()},
                   **{f"pass_{name}": screen(png) for name, png in PASS.items()}, "pass": screen("PassBattlePass.png"),
-                  "pass_unread": unread_row(),
+                  "pass_unread": unread_row(), "main_live": live_frame(screen(SCREENS["main"])),
                   **{f"{name}{n}": bonuses(SCREENS[name], n) for name in ("thread", "scrolled") for n in (None, 0, 1, 2, 3)}}
 
         def set(self, start, lux_tab="thread", after="thread"):
@@ -140,6 +141,7 @@ def child(task="ExpLuxcavation", scenarios=SCENARIOS, consecutive=CONSECUTIVE, s
             self.unread = False  # the Consecutive Battle title does not read
             self.fights = []  # the N each battle started with
             self.presses = []  # the box's buttons pressed, by name
+            self.live, self.frames = False, 0  # the main window's picture moves at every other screenshot, as a live game's banners
 
         def reset_boxes(self):
             """The game's Consecutive Battle goes back to x1 on leaving Luxcavation and after a result (live 2026-10-28)."""
@@ -179,6 +181,9 @@ def child(task="ExpLuxcavation", scenarios=SCENARIOS, consecutive=CONSECUTIVE, s
                 return self.images["thread_win" if self.outcome == "win" and self.after == "levels" else self.outcome]
             if self.screen in ("thread", "scrolled"):
                 return self.images[f"{self.screen}{self.bonuses}"]
+            if self.screen == "main" and self.live:
+                self.frames += 1
+                return self.images["main_live" if self.frames % 2 else "main"]
             return self.images[self.screen]
 
         def on_tap(self, x, y):
