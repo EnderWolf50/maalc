@@ -429,12 +429,26 @@
         "action": "Custom",
         "custom_action": "PickGift"
     },
-    // Shop and Super Shop (spec 03 section 13): the Leave button, also under the shop's own dialogs and pages.
-    // Shop heals, then sells, buys, refreshes and fuses in rounds, and leaves.
+    // Shop and Super Shop (spec 03 section 13): the Leave button, also under the shop's own dialogs and pages; or ID Skill
+    // Search's select mode (#456), where Leave reads Return: its title, so a hand-back there comes to Shop, whose to_main
+    // leaves by Return, and page_guard holds while the step picks a sinner (tests/screens/ShopIdSkillSearchSelect.png).
+    // Shop heals, replaces skills, then sells, buys, refreshes and fuses in rounds, and leaves.
     "Shop": {
-        "recognition": "OCR",
-        "roi": [1040, 615, 180, 65],
-        "expected": "^Leave$",
+        "recognition": "Or",
+        "any_of": [
+            {
+                "recognition": "OCR",
+                "sub_name": "ShopLeave",
+                "roi": [1040, 615, 180, 65],
+                "expected": "^Leave$"
+            },
+            {
+                "recognition": "OCR",
+                "sub_name": "ShopSelectSinner",
+                "roi": [430, 15, 420, 35],
+                "expected": "Select a Sinner for Skill"
+            }
+        ],
         "action": "Custom",
         "custom_action": "Shop"
     },

@@ -102,6 +102,316 @@ def test_heal_plan(mode, cost, reserve, dead, plan):
     assert s.heal_plan(mode, cost, reserve, dead, 100) == plan
 
 
+# Skill replacement (#455): the swap table as data/shop.yaml holds it, and the team's entries in the settings' shape.
+SWAPS = yaml.safe_load((Path(__file__).resolve().parents[1] / "assets/resource/base/data/shop.yaml").read_text(encoding="utf-8"))["skill_replacement"]
+
+
+def skill_entry(sinner, s1, s2, s3, s1_s3_first=True):
+    """One entry of a team's skill_replacement.sinners (docs/spec/04-settings.md section 9)."""
+    return {"sinner": sinner, "target": {"s1": s1, "s2": s2, "s3": s3}, "s1_s3_first": s1_s3_first}
+
+
+@pytest.mark.parametrize("target, owned, first, wanted", [
+    ((3, 2, 1), (3, 2, 1), True, []),  # the game's deck: nothing to do
+    ((2, 2, 2), (3, 2, 1), True, ["s1_s3"]),
+    ((1, 3, 2), (3, 2, 1), True, ["s1_s3", "s1_s2"]),  # two kinds count: s1_s3_first orders them
+    ((1, 3, 2), (3, 2, 1), False, ["s1_s2", "s1_s3"]),
+    ((1, 3, 2), (2, 2, 2), True, ["s1_s2"]),  # after one s1_s3: skill 3 is at its target
+    ((3, 0, 3), (3, 1, 2), True, ["s2_s3"]),
+    ((3, 0, 3), (3, 2, 1), False, ["s2_s3"]),  # one kind: the order does not matter
+    ((1, 3, 2), (3, 2, 0), True, ["s1_s2"]),  # SKILL 3x0, 5 cards: skill 3 locked under Uptie 3, only s1_s2 (#264)
+    ((2, 2, 2), (3, 2, 0), True, []),  # locked and skill 2 at its target: nothing the game lets it do
+    ((2, 2, 2), (1, 3, 2), True, []),  # off the path (changed by hand): no swap lowers a skill back
+])
+def test_swaps_wanted(target, owned, first, wanted):
+    assert s.swaps_wanted(dict(zip(("s1", "s2", "s3"), target)), owned, first, SWAPS) == wanted
+
+
+def fixed_swaps(s1, s2, s3):
+    """The swaps #264 says a target takes from 3/2/1: s1_s2 x(S2-2) and s1_s3 x(S3-1) when S2 > 2, else s2_s3 x(2-S2) and
+    s1_s3 x(3-S1)."""
+    counts = {"s1_s2": s2 - 2, "s1_s3": s3 - 1} if s2 > 2 else {"s2_s3": 2 - s2, "s1_s3": 3 - s1}
+    return {k: n for k, n in counts.items() if n}
+
+
+@pytest.mark.parametrize("first", [True, False])
+def test_following_the_wanted_swaps_from_the_games_deck_reaches_every_target_with_its_fixed_swaps(first):
+    # #455 graft 4: every target the settings allow (total 6, S1 <= 3, S3 >= 1: 18 of them), one swap a slot, each time the
+    # first one wanted, reaches the target and uses exactly the swaps #264 fixes for it, in either order.
+    targets = [(s1, 6 - s1 - s3, s3) for s1 in range(4) for s3 in range(1, 7) if 6 - s1 - s3 >= 0]
+    assert len(targets) == 18
+    for target in targets:
+        goal, owned, used = dict(zip(("s1", "s2", "s3"), target)), (3, 2, 1), {}
+        while wanted := s.swaps_wanted(goal, owned, first, SWAPS):
+            owned = s.after_swap(owned, wanted[0], SWAPS)
+            used[wanted[0]] = used.get(wanted[0], 0) + 1
+        assert (owned, used) == (target, fixed_swaps(*target)), target
+
+
+def test_after_swap_moves_one_card():
+    assert s.after_swap((3, 2, 1), "s1_s3", SWAPS) == (2, 2, 2)
+    assert s.after_swap([3, 2, 0], "s1_s2", SWAPS) == (2, 3, 0)
+
+
+LIT = {"s1_s2": True, "s2_s3": True, "s1_s3": True}
+PRICES = {"s1_s2": 45, "s2_s3": 75, "s1_s3": 120}
+
+
+def test_skill_choice_falls_to_the_next_swap_when_the_first_is_too_dear():
+    ryoshu = skill_entry("Ryōshū", 1, 3, 2)  # s1_s3 first, then s1_s2
+    assert s.skill_choice(ryoshu, (3, 2, 1), LIT, PRICES, 220, 100, SWAPS) == ("s1_s3", 120)
+    assert s.skill_choice(ryoshu, (3, 2, 1), LIT, PRICES, 160, 100, SWAPS) == ("s1_s2", 45)  # 160 - 120 breaks the 100 reserve
+    assert s.skill_choice(ryoshu, (3, 2, 1), LIT, PRICES, 144, 100, SWAPS) is None  # 144 - 45 breaks it too
+    assert s.skill_choice(skill_entry("Ryōshū", 1, 3, 2, False), (3, 2, 1), LIT, PRICES, 500, 0, SWAPS) == ("s1_s2", 45)
+
+
+def test_skill_choice_buys_nothing_when_the_cost_is_unread_and_skips_a_price_that_is():
+    ryoshu = skill_entry("Ryōshū", 1, 3, 2)
+    assert s.skill_choice(ryoshu, (3, 2, 1), LIT, PRICES, None, 0, SWAPS) is None  # #455: nothing when the Cost does not read
+    assert s.skill_choice(ryoshu, (3, 2, 1), LIT, {**PRICES, "s1_s3": None}, 500, 0, SWAPS) == ("s1_s2", 45)
+    assert s.skill_choice(ryoshu, (3, 2, 1), LIT, {**PRICES, "s1_s3": None, "s1_s2": None}, 500, 0, SWAPS) is None
+
+
+def test_skill_choice_takes_the_screens_price_and_only_a_lit_option():
+    gregor = skill_entry("Gregor", 1, 3, 2)
+    # Locked skill 3 (#453: 75 and 120 dim): only s1_s2 is wanted at all.
+    assert s.skill_choice(gregor, (3, 2, 0), {"s1_s2": True, "s2_s3": False, "s1_s3": False}, PRICES, 350, 0, SWAPS) == ("s1_s2", 45)
+    # A wanted option dim for another reason (unseen: a Cost too short) is passed over for the next.
+    assert s.skill_choice(gregor, (3, 2, 1), {**LIT, "s1_s3": False}, PRICES, 350, 0, SWAPS) == ("s1_s2", 45)
+    # The price on screen wins over the data file's (#455 以畫面為準).
+    assert s.skill_choice(gregor, (3, 2, 1), LIT, {**PRICES, "s1_s3": 130}, 130, 0, SWAPS) == ("s1_s3", 130)
+    assert s.skill_choice(gregor, (3, 2, 1), LIT, {**PRICES, "s1_s3": 130}, 125, 0, SWAPS) == ("s1_s2", 45)
+
+
+def slot(name, x=624, purchased=False):
+    return {"name": name, "price": None, "purchased": purchased, "short": False, "x": x, "y": 318}
+
+
+GIFT = {"name": "Rags", "price": 155, "purchased": False, "short": False, "x": 778, "y": 318}
+
+
+def plan_lines(listed_, slots, known=None, handled=()):
+    return [(p["name"], e and e["sinner"], why) for p, e, why in s.skill_plan(listed_, slots, known or {}, list(handled), SWAPS)]
+
+
+def test_skill_plan_skips_every_slot_the_team_does_not_ask_for():
+    team = [skill_entry("Gregor", 1, 3, 2), skill_entry("Faust", 3, 2, 1)]  # Faust still at the game's deck: the GUI's "還沒變更"
+    assert plan_lines(team, [slot("Replace Faust's Skill"), GIFT]) == [
+        ("Replace Faust's Skill", None, "'Faust' targets the game's 3/2/1: skip")]
+    assert plan_lines(team, [slot("Replace Rodion's Skill")]) == [("Replace Rodion's Skill", None, "'Rodion' is not listed: skip")]
+    assert plan_lines(team, [slot("Replace Gregor's Skill", purchased=True)]) == [
+        ("Replace Gregor's Skill", None, "replaced already (Purchased): skip")]
+    assert plan_lines(team, [slot("Replace Grgor's Skill")]) == [("Replace Grgor's Skill", None, "the sinner's name is unread: skip")]
+    assert plan_lines(team, [slot("ID Skill Search")]) == []  # #456's, not a replacement slot
+    assert plan_lines(team, [slot("Replace Gregor's Skill")], handled=["Gregor"]) == [
+        ("Replace Gregor's Skill", None, "'Gregor' handled this visit: skip")]
+
+
+def test_skill_plan_opens_a_sinner_whose_counts_are_unknown_or_short_of_the_target():
+    team = [skill_entry("Gregor", 1, 3, 2)]
+    assert plan_lines(team, [slot("Replace Gregor's Skill")]) == [
+        ("Replace Gregor's Skill", "Gregor", "'Gregor' counts not read this run, toward 1/3/2: open")]
+    assert plan_lines(team, [slot("REPLACE GREGOR'S SKILL")], known={"Gregor": [2, 2, 2]}) == [
+        ("REPLACE GREGOR'S SKILL", "Gregor", "'Gregor' 2/2/2 read this run, toward 1/3/2: open")]
+
+
+def test_skill_plan_does_not_open_a_sinner_read_at_the_target_or_with_no_swap_left():
+    team = [skill_entry("Gregor", 1, 3, 2), skill_entry("Ryōshū", 2, 2, 2)]
+    assert plan_lines(team, [slot("Replace Gregor's Skill")], known={"Gregor": [1, 3, 2]}) == [
+        ("Replace Gregor's Skill", None, "'Gregor' is at 1/3/2 (read this run): skip")]
+    assert plan_lines(team, [slot("Replace RYOSHU's Skill")], known={"Ryōshū": [3, 2, 0]}) == [
+        ("Replace RYOSHU's Skill", None, "'Ryōshū' at 3/2/0 can make no swap toward 2/2/2 (skill 3 locked): skip")]
+    assert plan_lines(team, [slot("Replace Ryōshū's Skill")], known={"Ryōshū": [1, 3, 2]}) == [
+        ("Replace Ryōshū's Skill", None, "'Ryōshū' at 1/3/2 can make no swap toward 2/2/2: skip")]
+
+
+def test_skill_plan_opens_the_listed_first_sinner_first_whatever_the_grid_order():
+    # #264: two slots on one page (a Super Shop) with Cost for one: the earlier entry of the list goes first.
+    team = [skill_entry("Don Quixote", 2, 2, 2), skill_entry("Rodion", 3, 0, 3), skill_entry("Gregor", 1, 3, 2)]
+    grid = [slot("ID Skill Search", 624), slot("Replace Gregor's Skill", 778), slot("Replace Faust's Skill", 932),
+            slot("Replace Don Quixote's Skill", 1086)]
+    assert [(n, e) for n, e, _ in plan_lines(team, grid)] == [
+        ("Replace Don Quixote's Skill", "Don Quixote"), ("Replace Gregor's Skill", "Gregor"), ("Replace Faust's Skill", None)]
+
+
+def test_a_replacement_slot_read_twice_is_one_slot():
+    # SuperShop.png's top row (tests/test_shop_skill_screens reads it live): Gregor's "??" reads as a coin glyph and "7?", two
+    # price lines under one name, so read_slots gives his slot twice; ID Skill Search is no replacement slot.
+    grid = s.read_slots(ocr(("ID Skill Search", (575, 330, 95, 20)), ("??", (599, 306, 41, 23)),
+                            ("Replace Gregor's Skill", (712, 331, 130, 18)), ("米", (754, 308, 19, 18)), ("7?", (768, 306, 25, 22)),
+                            ("Replace Don Quixote's Skill", (866, 333, 130, 14)), ("未??", (905, 305, 43, 24))))
+    assert [x["name"] for x in grid] == ["ID Skill Search", "Replace Gregor's Skill", "Replace Gregor's Skill", "Replace Don Quixote's Skill"]
+    assert [(x["sinner"], x["x"]) for x in s.skill_slots(grid)] == [("Gregor", 763), ("Don Quixote", 926)]
+
+
+@pytest.mark.parametrize("name, sinner, is_replace", [
+    ("Replace Meursault's Skil", "Meursault", True),  # the OCR read that dropped the slot (clipped tail), floors 1 and 5
+    ("Replace Gregor's Skil", "Gregor", True),
+    ("Replace Grgor's Skil", None, True),  # a replace slot, sinner unread: kept so the plan logs it
+    ("Replace Ryōshū's Skill", "Ryōshū", True),
+    ("ID Skill Search", None, False),  # #456's slot, whole and clipped the same way
+    ("ID Skil Search", None, False),
+    ("ID Skill Searc", None, False),
+    ("ID Skil", None, False),
+    ("Rusted Muzzle", None, False),
+])
+def test_a_replace_slot_survives_a_clipped_skill(name, sinner, is_replace):
+    got = s.skill_slots([slot(name)])
+    assert [x["sinner"] for x in got] == ([sinner] if is_replace else [])
+    assert s.replace_slot(name) is is_replace
+
+
+def test_a_clipped_replace_slot_still_gets_its_plan_line():
+    team = [skill_entry("Gregor", 1, 3, 2)]
+    assert plan_lines(team, [slot("Replace Gregor's Skil")]) == [
+        ("Replace Gregor's Skil", "Gregor", "'Gregor' counts not read this run, toward 1/3/2: open")]
+    assert plan_lines(team, [slot("Replace Grgor's Skil")]) == [("Replace Grgor's Skil", None, "the sinner's name is unread: skip")]
+    assert plan_lines(team, [slot("ID Skil Search")]) == []
+
+
+def test_a_clipped_skill_slot_is_never_on_sale():
+    for name in ("Replace Gregor's Skil", "ID Skil Search", "ID Skill Search"):
+        assert not s.on_sale({"name": name, "price": 120, "purchased": False, "short": False})
+
+
+def test_skill_plan_opens_one_slot_a_sinner():
+    # Two slots for one sinner (never seen): keyed by sinner, the second waits for the next visit.
+    team = [skill_entry("Gregor", 1, 3, 2)]
+    assert plan_lines(team, [slot("Replace Gregor's Skill", 778), slot("Replace Gregor's Skill", 1086)]) == [
+        ("Replace Gregor's Skill", "Gregor", "'Gregor' counts not read this run, toward 1/3/2: open"),
+        ("Replace Gregor's Skill", None, "'Gregor' has another slot opened this visit: skip")]
+
+
+def id_lines(listed_, known=None, tried=(), dead=()):
+    return [(e and e["sinner"], why) for e, why in s.id_search_plan(listed_, known or {}, list(tried), list(dead), SWAPS)]
+
+
+def test_id_search_tries_the_listed_sinners_in_the_lists_order():
+    # #456: the first listed sinner with a feasible swap; the list order, not the bar's (Gregor is last on it).
+    team = [skill_entry("Gregor", 1, 3, 2), skill_entry("Faust", 3, 2, 1), skill_entry("Don Quixote", 2, 2, 2)]
+    assert id_lines(team) == [("Gregor", "'Gregor' counts not read this run, toward 1/3/2: try"),
+                              (None, "'Faust' targets the game's 3/2/1: skip"),
+                              ("Don Quixote", "'Don Quixote' counts not read this run, toward 2/2/2: try")]
+    assert id_lines(team, known={"Gregor": [2, 3, 1]})[0] == ("Gregor", "'Gregor' 2/3/1 read this run, toward 1/3/2: try")
+
+
+def test_id_search_skips_a_sinner_at_the_target_with_no_swap_left_dead_or_tried_this_visit():
+    team = [skill_entry("Gregor", 1, 3, 2), skill_entry("Ryōshū", 2, 2, 2), skill_entry("Meursault", 2, 3, 1),
+            skill_entry("Yi Sang", 2, 2, 2)]
+    assert id_lines(team, known={"Gregor": [1, 3, 2], "Ryōshū": [3, 2, 0]}, tried=["Meursault"], dead=["Yi Sang"]) == [
+        (None, "'Gregor' is at 1/3/2 (read this run): skip"),
+        (None, "'Ryōshū' at 3/2/0 can make no swap toward 2/2/2 (skill 3 locked): skip"),
+        (None, "'Meursault' tried this visit: skip"),
+        (None, "'Yi Sang' is dead (grey on the shop's bar): skip")]
+
+
+def test_id_search_has_nobody_to_try_with_no_sinner_listed():
+    assert id_lines([]) == []
+
+
+def test_id_search_passes_a_sinner_whose_own_replace_slot_is_still_to_come():
+    # #264 先後: opened on Ryōshū, whose dialog may show no swap, ID Skill Search goes on down the list but leaves Meursault
+    # to his own Replace slot on this page (half the price) and tries Yi Sang.
+    team = [skill_entry("Ryōshū", 1, 3, 2), skill_entry("Meursault", 2, 3, 1), skill_entry("Yi Sang", 2, 3, 1)]
+    assert [(e and e["sinner"], why) for e, why in s.id_search_plan(team, {}, [], [], SWAPS, waiting={"Meursault"})] == [
+        ("Ryōshū", "'Ryōshū' counts not read this run, toward 1/3/2: try"),
+        (None, "'Meursault' has a Replace slot on this page, used first: skip"),
+        ("Yi Sang", "'Yi Sang' counts not read this run, toward 2/3/1: try")]
+
+
+RYOSHU_TWICE, MEURSAULT_ONCE = skill_entry("Ryōshū", 1, 4, 1), skill_entry("Meursault", 2, 3, 1)  # two s1_s2 from 3/2/1; one
+
+
+@pytest.mark.parametrize("waiting, walk", [
+    # #264 先後's examples, list 1 Ryōshū, 2 Meursault: each sinner's own Replace slot, then ID Skill Search on them.
+    ({"Ryōshū", "Meursault"}, [("replace", "Ryōshū"), ("search", "Ryōshū"), ("replace", "Meursault"), ("search", "Meursault")]),
+    ({"Meursault"}, [("search", "Ryōshū"), ("replace", "Meursault"), ("search", "Meursault")]),
+    (set(), [("search", "Ryōshū"), ("search", "Meursault")]),
+])
+def test_the_skill_walk_finishes_one_sinner_before_the_next(waiting, walk):
+    team = [RYOSHU_TWICE, MEURSAULT_ONCE]
+    assert [(kind, team[n]["sinner"]) for kind, n in s.skill_walk(team, waiting)] == walk
+
+
+@pytest.mark.parametrize("entry, known, tried, turn", [
+    (RYOSHU_TWICE, {}, [], True),  # never read this run: wants one
+    (RYOSHU_TWICE, {"Ryōshū": (2, 3, 1)}, [], True),  # one swap made, one to go
+    (RYOSHU_TWICE, {"Ryōshū": (1, 4, 1)}, [], False),  # at the target
+    (RYOSHU_TWICE, {}, ["Ryōshū"], False),  # tried this visit
+    (skill_entry("Ryōshū", 3, 2, 1), {}, [], False),  # the game's deck
+    (skill_entry("Ryōshū", 2, 2, 2), {"Ryōshū": (3, 2, 0)}, [], False),  # skill 3 locked: no swap left
+])
+def test_id_search_takes_a_turn_on_a_sinner_still_wanting_a_swap(entry, known, tried, turn):
+    assert s.search_turn(entry, known, tried, SWAPS) is turn
+
+
+ID_COST = {"s1_s2": 90, "s2_s3": 150, "s1_s3": 240}
+ID_STARLIGHT = {"s1_s2": 25, "s2_s3": 50, "s1_s3": 75}
+
+
+@pytest.mark.parametrize("prices, mode", [
+    (ID_COST, "cost"), (ID_STARLIGHT, "starlight"),
+    ({**ID_STARLIGHT, "s1_s3": None}, "starlight"),  # a price unread: the others tell
+    (PRICES, None),  # a Replace slot's dialog: neither
+    ({"s1_s2": 25, "s2_s3": 150, "s1_s3": 75}, None),  # mixed: never a guess
+    ({"s1_s2": None, "s2_s3": None, "s1_s3": None}, None),
+])
+def test_the_pay_mode_is_told_by_the_three_prices(prices, mode):
+    # #456 capture: the switch turns 90/150/240 into 25/50/75; the Cost box then shows the owned starlight.
+    assert s.pay_mode(prices, SWAPS) == mode
+
+
+def test_id_search_pays_starlight_without_the_reserve_and_never_beyond_what_is_owned():
+    ryoshu = skill_entry("Ryōshū", 1, 3, 2)
+    # Starlight: the Cost reserve does not apply; 74 starlight pays no 75 but a 25.
+    assert s.id_search_choice(ryoshu, (3, 2, 1), LIT, ID_STARLIGHT, 75, "starlight", 500, SWAPS) == ("s1_s3", 75)
+    assert s.id_search_choice(ryoshu, (3, 2, 1), LIT, ID_STARLIGHT, 74, "starlight", 500, SWAPS) == ("s1_s2", 25)
+    assert s.id_search_choice(ryoshu, (3, 2, 1), LIT, ID_STARLIGHT, 24, "starlight", 0, SWAPS) is None
+
+
+def test_id_search_pays_cost_keeping_the_reserve():
+    ryoshu = skill_entry("Ryōshū", 1, 3, 2)
+    assert s.id_search_choice(ryoshu, (3, 2, 1), LIT, ID_COST, 340, "cost", 100, SWAPS) == ("s1_s3", 240)
+    assert s.id_search_choice(ryoshu, (3, 2, 1), LIT, ID_COST, 339, "cost", 100, SWAPS) == ("s1_s2", 90)
+    assert s.id_search_choice(ryoshu, (3, 2, 1), LIT, ID_COST, 189, "cost", 100, SWAPS) is None
+
+
+def test_the_id_skill_search_slot_is_found_whole_or_clipped_and_tells_whether_it_was_used():
+    grid = [slot("Replace Gregor's Skill", 778), slot("ID Skil Search", 624, purchased=True), GIFT]
+    assert s.id_search_slot(grid)["x"] == 624 and s.id_search_slot(grid)["purchased"]
+    assert s.id_search_slot([slot("Replace Gregor's Skill"), GIFT]) is None
+
+
+def test_any_change_is_false_for_the_default_and_for_entries_left_at_the_games_deck():
+    assert not s.any_change([])
+    assert not s.any_change([skill_entry("Faust", 3, 2, 1)])
+    assert s.any_change([skill_entry("Faust", 3, 2, 1), skill_entry("Gregor", 2, 2, 2)])
+
+
+@pytest.mark.parametrize("text, sinner", [
+    ("Replace Ryōshū's Skill", "Ryōshū"), ("REPLACE RYOSHU'S SKILL", "Ryōshū"), ("ReplaceRyōshū'sSkill", "Ryōshū"),
+    ("Replace Don Quixote's Skill", "Don Quixote"), ("Replace Yi Sang's Skill", "Yi Sang"), ("Replace Hong Lu's Skill", "Hong Lu"),
+    ("Replace Grgor's Skill", None),  # a misread letter names nobody: skipped, never guessed
+    ("Gregor Rodion", None),  # two names: none
+    ("", None),
+])
+def test_sinner_named_tolerates_case_accents_and_spaces(text, sinner):
+    assert s.sinner_named(text) == sinner
+
+
+@pytest.mark.parametrize("text, owned", [
+    ("SKILL 1x3 SKILL 2x2 SKILL 3x1", (3, 2, 1)),
+    ("SKILL1x3SKILL2x2SKILL3x0", (3, 2, 0)),  # 5 cards: skill 3 locked
+    ("Skills Owned SKILL 1×2 SKILL 2×2 SKILL 3×2", (2, 2, 2)),
+    ("SKILL 1x3 SKILL 2x2", None),  # a count unread: cancel, never a guess (#264)
+    ("SKILL 1x3 SKILL 2x2 SKILL 3x3", None),  # 8 cards: not a deck
+    ("SKILL 1x2 SKILL 2x2 SKILL 3x0", None),  # 4 cards
+    ("", None),
+])
+def test_skills_owned_reads_the_three_counts_of_a_deck_of_five_or_six(text, owned):
+    assert s.skills_owned(text) == owned
+
+
 def counts(keyword, normal):
     return {"keyword": keyword, "normal": normal}
 
@@ -348,13 +658,14 @@ def test_a_super_shop_is_told_by_its_red_title(name, is_super):
 def test_the_super_shop_title_sweep_over_tests_screens():
     # CODING_STANDARDS "Recognition": is_super only runs on a shop's main page, but over every 1280x720 screen of tests/screens
     # its one false positive is not a shop page: the update download, a red screen (the resource download and a battle
-    # turn have a few red pixels, under the threshold).
+    # turn have a few red pixels, under the threshold). #456's Super Shop (live 2026-11-07) hits at rest, scrolled and after
+    # the ID Skill Search swap; its select mode (ShopIdSkillSearchSelect) dims the title and does not.
     hits = []
     for path in sorted(SCREENS.glob("*.png")):
         image = np.asarray(Image.open(path).convert("RGB"))[:, :, ::-1]
         if image.shape[:2] == (720, 1280) and s.is_super(image):
             hits.append(path.stem)
-    assert hits == ["DownloadingUpdate", "SuperShop"]
+    assert hits == ["DownloadingUpdate", "ShopIdSkillSearchDone", "SuperShop", "SuperShopIdSkillSearch", "SuperShopScrolled"]
 
 
 def test_pick_fusion_any_makes_every_group_it_can():
@@ -489,13 +800,14 @@ def test_a_tooltip_over_the_fuse_page_is_told_by_its_red_head(name, shown):
 
 def test_the_tooltip_sweep_over_tests_screens_hits_no_fuse_page():
     # CODING_STANDARDS' sweep: close_tooltip looks at the fuse page only. No fuse page of tests/screens reads a tooltip;
-    # 18 other screens do (red banners and buttons over the area): there a hit would only tap as every read did before #378.
+    # 21 other screens do (red banners and buttons over the area): there a hit would only tap as every read did before #378.
+    # #456's Ryōshū dialog and its second layer are three of them: Rend Space's red skill banner sits there.
     hits = [p.stem for p in sorted(SCREENS.glob("*.png")) if s.tooltip(np.asarray(Image.open(p).convert("RGB"))[:, :, ::-1])]
     assert not [h for h in hits if h.startswith("ShopFus")]
     assert hits == ["BattleTurnFocused", "EntryNewRun", "EntryParallelOn", "EntryPaused", "Formation", "LuxConsecExp10Open",
                     "LuxConsecExp2Open", "LuxConsecExp9Open", "LuxEventCommence", "LuxEventContinue", "LuxEventPassed",
-                    "LuxEventText", "LuxTeamSelect", "LuxTeamSelectChain", "StarlightConfirm", "StarlightConfirmConnecting",
-                    "StarlightPage", "WipeDialog"]
+                    "LuxEventText", "LuxTeamSelect", "LuxTeamSelectChain", "ShopIdSkillSearchAll", "ShopIdSkillSearchConfirm",
+                    "ShopIdSkillSearchConnecting", "StarlightConfirm", "StarlightConfirmConnecting", "StarlightPage", "WipeDialog"]
 
 
 def test_an_unselectable_cell_is_told_by_its_tag_though_it_is_flat():
@@ -534,10 +846,11 @@ def test_an_ex_gift_shows_its_green_ex_where_the_numerals_go():
         assert shown == ([1] if name == "fuse_ex" else []), name
 
 
-def test_the_ex_mark_sweep_over_tests_screens_hits_no_shop_page():
+def test_the_ex_mark_sweep_over_tests_screens_hits_no_shop_page_but_gregors_replacement_dialog():
     # CODING_STANDARDS' sweep: read_cells looks for the "EX" only on a shop page's cell holding a gift whose numeral it did
-    # not read. No shop page of tests/screens has one; 14 other screens do (green art, map nodes, banners at a cell's place;
-    # BattleEgoCard, BattleEgoCardsTwo: the green E.G.O card's frame, #468).
+    # not read. No fuse or sell page of tests/screens has one; 14 other screens do (green art, map nodes, banners at a cell's
+    # place; BattleEgoCard, BattleEgoCardsTwo: the green E.G.O card's frame, #468), and so does Gregor's skill replacement
+    # dialog (#453), the one with two options dimmed.
     import actions  # noqa: PLC0415  (as above)
     hits = set()
     for png in sorted(SCREENS.glob("*.png")):
@@ -550,10 +863,14 @@ def test_the_ex_mark_sweep_over_tests_screens_hits_no_shop_page():
                 cell = s.cell_crop(image, x, y, OWNED)
                 if actions.held(image, x, y, page) and s.tier(cell) is None and s.ex_mark(cell):
                     hits.add(png.stem)
-    assert not [h for h in hits if "Shop" in h]
+    # #453: only Gregor's dialog (two options dimmed) has a green skill icon where a fuse or sell cell is; Don Quixote's
+    # (ShopReplaceSkillAll, PickedMiddle, PickedRight) has none there. #456's ID Skill Search dialog of Gregor is the same
+    # dialog (Cost or Starlight); Ryōshū's (ShopIdSkillSearchAll) has none there.
+    gregor_dialog = ["ShopIdSkillSearchDialog", "ShopIdSkillSearchPicked", "ShopIdSkillSearchStarlight",
+                     "ShopReplaceSkillDimmed", "ShopReplaceSkillPickedLeft"]
     assert sorted(hits) == ["BattleEgoCard", "BattleEgoCardsTwo", "BattlePause", "BattleTurnEven", "EnkephalinAssembled", "GiftSearchSelected", "HelpPagerSinners",
                             "Mailbox", "MainWindow", "MainWindowFadeIn", "MainWindowLater", "MainWindowLowEnkephalin.synthetic",
-                            "MapHardRest.synthetic", "Victory"]
+                            "MapHardRest.synthetic", *gregor_dialog, "Victory"]
 
 
 def test_the_get_popup_tells_an_ex_gift_by_its_green_mark():
@@ -586,15 +903,15 @@ def test_the_get_popup_tier_sweep_over_tests_screens_reads_the_get_popups_and_th
                     "TeamSelect": 1}
 
 
-def test_the_get_popup_sweep_over_tests_screens_hits_nothing():
-    # CODING_STANDARDS' sweep: gift_get's screenshot is looked at only after a fusion, but no 1280x720 screen of tests/screens
-    # reads an "EX" at the popup's icon corner.
+def test_the_get_popup_sweep_over_tests_screens_hits_only_the_skill_replacement_confirm():
+    # CODING_STANDARDS' sweep: gift_get's screenshot is looked at only after a fusion. Of the 1280x720 screens of tests/screens
+    # only the skill replacement's second layer (#453) reads an "EX" at the popup's icon corner: its green SKILL 1 icon sits there.
     hits = []
     for png in sorted(SCREENS.glob("*.png")):
         img = Image.open(png)
         if img.size == (1280, 720) and s.ex_got(np.asarray(img.convert("RGB"))[:, :, ::-1]):
             hits.append(png.stem)
-    assert hits == []
+    assert hits == ["ShopReplaceSkillConfirm", "ShopReplaceSkillConnecting"]
 
 
 def test_the_forecasts_row_sweep_over_tests_screens_finds_no_unlisted_hit():

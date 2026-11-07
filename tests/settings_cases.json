@@ -1,5 +1,5 @@
 {
-  "description": "Shared by tests/test_settings.py and gui/src/validate.test.ts so the agent and the GUI reject the same files. Each case applies edits to valid: set (a last path segment of - appends) or delete. schema lists the error paths; every error must sit at or under one of them. cross lists the exact cross-check messages, in order. migrations apply edits to valid10, a version 10 file, and say what migrating it gives (teams: each team's gift_list; dropped: keep_gifts matching no gift; lists: id, name, order_first, fusion_condition, want_count and keep_count, want_has, keep_has and keep_lacks, ids that must be in or out of want and keep). clean_gift_list cases give a list (want, keep, gorder; an unset gorder is {}) and what cleaning it gives (want, keep, dropped, gorder_head: a keyword's first ids, gorder_size: how many ids each keyword has).",
+  "description": "Shared by tests/test_settings.py and gui/src/validate.test.ts so the agent and the GUI reject the same files. Each case applies edits to valid: set (a last path segment of - appends) or delete. schema lists the error paths; every error must sit at or under one of them. cross lists the exact cross-check messages, in order. migrations apply edits to valid10, a version 10 file, and say what migrating it gives (teams: each team's gift_list; dropped: keep_gifts matching no gift; lists: id, name, order_first, fusion_condition, want_count and keep_count, want_has, keep_has and keep_lacks, ids that must be in or out of want and keep). skill_replacement_default is what a team of a version 18 file (and a new team) gets in version 19, no sinner listed: tests/test_settings.py and gui/src/validate.test.ts migrate valid without its teams' skill_replacement and expect it, and the schema's default is the same. clean_gift_list cases give a list (want, keep, gorder; an unset gorder is {}) and what cleaning it gives (want, keep, dropped, gorder_head: a keyword's first ids, gorder_size: how many ids each keyword has).",
   "valid10": {
     "version": 10,
     "language": "zh_tw",
@@ -41,7 +41,7 @@
     "trial_risk_overrides": [{"trial": "Growth I", "risk": 3}]
   },
   "valid": {
-    "version": 18,
+    "version": 19,
     "language": "zh_tw",
     "run": {
       "difficulty": "auto", "runs": null, "weekly_bonus_use": "hard", "weekly_bonus_amount": "all",
@@ -67,7 +67,11 @@
         "reward_cards": ["Starlight", "Random E.G.O Gift", "Cost & Keyword Gift Chance", "Cost", "E.G.O Resource"],
         "shop_refresh_keyword": 2, "shop_refresh_normal": 1, "heal": "revive", "reserve_cost": 0, "min_alive": 0, "guard_turns": 0,
         "gift_search": {"enabled": false, "gifts": []}, "allow_white_gossypium": true,
-        "gift_list": "g1", "sell_max_tier": 4, "sell_vestiges": false
+        "gift_list": "g1", "sell_max_tier": 4, "sell_vestiges": false,
+        "skill_replacement": {
+          "sinners": [],
+          "id_skill_search": {"enabled": false, "pay": "cost"}
+        }
       },
       {
         "id": "b", "name": "Team b", "enabled": true, "game_team": 2, "usage": "hard_only", "hard_from_floor": 3,
@@ -77,7 +81,15 @@
         "reward_cards": ["Cost", "Starlight", "Random E.G.O Gift", "Cost & Keyword Gift Chance", "E.G.O Resource"],
         "shop_refresh_keyword": 0, "shop_refresh_normal": 0, "heal": "none", "reserve_cost": 50, "min_alive": 3, "guard_turns": 3,
         "gift_search": {"enabled": true, "gifts": [{"keyword": "Bleed", "tier": 3, "name": "Smokes and Wires"}, {"keyword": "Bleed", "tier": 1, "name": "Layered Bandages"}]},
-        "allow_white_gossypium": false, "gift_list": "default", "sell_max_tier": 5, "sell_vestiges": true
+        "allow_white_gossypium": false, "gift_list": "default", "sell_max_tier": 5, "sell_vestiges": true,
+        "skill_replacement": {
+          "sinners": [
+            {"sinner": "Gregor", "target": {"s1": 1, "s2": 1, "s3": 4}, "s1_s3_first": true},
+            {"sinner": "Yi Sang", "target": {"s1": 2, "s2": 2, "s3": 2}, "s1_s3_first": false},
+            {"sinner": "Ryōshū", "target": {"s1": 3, "s2": 2, "s3": 1}, "s1_s3_first": true}
+          ],
+          "id_skill_search": {"enabled": true, "pay": "starlight"}
+        }
       }
     ],
     "event_overrides": [{"question": "Q?", "option": "Yes"}],
@@ -199,8 +211,58 @@
        {"set": "event_overrides/-", "value": {"question": "Q?", "option": "No"}},
        {"set": "trial_risk_overrides/-", "value": {"trial": "Growth I", "risk": 0.25}},
        {"set": "trial_risk_overrides/-", "value": {"trial": "Growth I", "risk": 2}}],
-     "cross": ["event_overrides: question 'Q?' appears 2 times", "trial_risk_overrides: trial 'Growth I' appears 3 times"]}
+     "cross": ["event_overrides: question 'Q?' appears 2 times", "trial_risk_overrides: trial 'Growth I' appears 3 times"]},
+    {"name": "a partial list in any order, a target may be any reachable split of 6, ID Skill Search may pay starlight", "edits": [{"set": "teams/0/skill_replacement/sinners", "value": [{"sinner": "Outis", "target": {"s1": 0, "s2": 0, "s3": 6}, "s1_s3_first": false}, {"sinner": "Faust", "target": {"s1": 0, "s2": 5, "s3": 1}, "s1_s3_first": true}, {"sinner": "Hong Lu", "target": {"s1": 3, "s2": 0, "s3": 3}, "s1_s3_first": true}]}, {"set": "teams/0/skill_replacement/id_skill_search", "value": {"enabled": true, "pay": "starlight"}}],
+     "cross": []},
+    {"name": "no sinner listed", "edits": [{"set": "teams/1/skill_replacement/sinners", "value": []}], "cross": []},
+    {"name": "targets that total more than 6", "edits": [{"set": "teams/1/skill_replacement/sinners/1/target/s3", "value": 3}],
+     "cross": ["teams/1/skill_replacement/sinners/1/target: team 'Team b' sinner 'Yi Sang' targets 7 skills, not 6"]},
+    {"name": "targets that total less than 6", "edits": [{"set": "teams/1/skill_replacement/sinners/0/target/s3", "value": 1}],
+     "cross": ["teams/1/skill_replacement/sinners/0/target: team 'Team b' sinner 'Gregor' targets 3 skills, not 6"]},
+    {"name": "a sinner listed twice", "edits": [{"set": "teams/1/skill_replacement/sinners/1/sinner", "value": "Gregor"}],
+     "cross": ["teams/1/skill_replacement/sinners: sinner 'Gregor' appears 2 times"]},
+    {"name": "more than 3 of skill 1, which no swap reaches", "edits": [{"set": "teams/1/skill_replacement/sinners/1/target", "value": {"s1": 4, "s2": 1, "s3": 1}}],
+     "cross": ["teams/1/skill_replacement/sinners/1/target/s1: team 'Team b' sinner 'Yi Sang' targets 4 of skill 1, but swaps only lower it from the game's 3"]},
+    {"name": "no skill 3, which no swap reaches", "edits": [{"set": "teams/1/skill_replacement/sinners/1/target", "value": {"s1": 3, "s2": 3, "s3": 0}}],
+     "cross": ["teams/1/skill_replacement/sinners/1/target/s3: team 'Team b' sinner 'Yi Sang' targets 0 of skill 3, but swaps only raise it from the game's 1"]},
+    {"name": "a target wrong in every way names each", "edits": [{"set": "teams/1/skill_replacement/sinners/2/target", "value": {"s1": 5, "s2": 2, "s3": 0}}],
+     "cross": ["teams/1/skill_replacement/sinners/2/target: team 'Team b' sinner 'Ryōshū' targets 7 skills, not 6",
+               "teams/1/skill_replacement/sinners/2/target/s1: team 'Team b' sinner 'Ryōshū' targets 5 of skill 1, but swaps only lower it from the game's 3",
+               "teams/1/skill_replacement/sinners/2/target/s3: team 'Team b' sinner 'Ryōshū' targets 0 of skill 3, but swaps only raise it from the game's 1"]},
+    {"name": "a target above 6", "edits": [{"set": "teams/1/skill_replacement/sinners/0/target/s3", "value": 7}],
+     "schema": ["teams/1/skill_replacement/sinners/0/target/s3"]},
+    {"name": "a negative target", "edits": [{"set": "teams/1/skill_replacement/sinners/0/target/s1", "value": -1}],
+     "schema": ["teams/1/skill_replacement/sinners/0/target/s1"]},
+    {"name": "a target that is not a whole number", "edits": [{"set": "teams/1/skill_replacement/sinners/0/target/s2", "value": 2.5}],
+     "schema": ["teams/1/skill_replacement/sinners/0/target/s2"]},
+    {"name": "a target without s2", "edits": [{"delete": "teams/1/skill_replacement/sinners/0/target/s2"}],
+     "schema": ["teams/1/skill_replacement/sinners/0/target"]},
+    {"name": "an entry without s1_s3_first", "edits": [{"delete": "teams/1/skill_replacement/sinners/0/s1_s3_first"}],
+     "schema": ["teams/1/skill_replacement/sinners/0"]},
+    {"name": "s1_s3_first that is not true or false", "edits": [{"set": "teams/1/skill_replacement/sinners/0/s1_s3_first", "value": "s1_s3"}],
+     "schema": ["teams/1/skill_replacement/sinners/0/s1_s3_first"]},
+    {"name": "an entry with the options of before 2026-11-06", "edits": [{"set": "teams/1/skill_replacement/sinners/0/options", "value": ["s1_s3", "s2_s3", "s1_s2"]}],
+     "schema": ["teams/1/skill_replacement/sinners/0"]},
+    {"name": "a sinner that is not one of the 12", "edits": [{"set": "teams/1/skill_replacement/sinners/0/sinner", "value": "Dante"}],
+     "schema": ["teams/1/skill_replacement/sinners/0/sinner"]},
+    {"name": "more than 12 entries", "edits": [{"set": "teams/1/skill_replacement/sinners", "value": [
+       {"sinner": "Yi Sang", "target": {"s1": 3, "s2": 2, "s3": 1}, "s1_s3_first": true}, {"sinner": "Faust", "target": {"s1": 3, "s2": 2, "s3": 1}, "s1_s3_first": true},
+       {"sinner": "Don Quixote", "target": {"s1": 3, "s2": 2, "s3": 1}, "s1_s3_first": true}, {"sinner": "Ryōshū", "target": {"s1": 3, "s2": 2, "s3": 1}, "s1_s3_first": true},
+       {"sinner": "Meursault", "target": {"s1": 3, "s2": 2, "s3": 1}, "s1_s3_first": true}, {"sinner": "Hong Lu", "target": {"s1": 3, "s2": 2, "s3": 1}, "s1_s3_first": true},
+       {"sinner": "Heathcliff", "target": {"s1": 3, "s2": 2, "s3": 1}, "s1_s3_first": true}, {"sinner": "Ishmael", "target": {"s1": 3, "s2": 2, "s3": 1}, "s1_s3_first": true},
+       {"sinner": "Rodion", "target": {"s1": 3, "s2": 2, "s3": 1}, "s1_s3_first": true}, {"sinner": "Sinclair", "target": {"s1": 3, "s2": 2, "s3": 1}, "s1_s3_first": true},
+       {"sinner": "Outis", "target": {"s1": 3, "s2": 2, "s3": 1}, "s1_s3_first": true}, {"sinner": "Gregor", "target": {"s1": 3, "s2": 2, "s3": 1}, "s1_s3_first": true},
+       {"sinner": "Gregor", "target": {"s1": 3, "s2": 2, "s3": 1}, "s1_s3_first": true}]}],
+     "schema": ["teams/1/skill_replacement/sinners"]},
+    {"name": "an unknown ID Skill Search payment", "edits": [{"set": "teams/0/skill_replacement/id_skill_search/pay", "value": "lunacy"}],
+     "schema": ["teams/0/skill_replacement/id_skill_search/pay"]},
+    {"name": "a team without skill_replacement", "edits": [{"delete": "teams/1/skill_replacement"}],
+     "schema": ["teams/1"]}
   ],
+  "skill_replacement_default": {
+    "sinners": [],
+    "id_skill_search": {"enabled": false, "pay": "cost"}
+  },
   "migrations": [
     {"name": "each team gets the list its keep settings come to",
      "edits": [],

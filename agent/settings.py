@@ -305,8 +305,18 @@ def _v17_to_v18(data):
     return data
 
 
+def _v18_to_v19(data):
+    """Version 19 adds teams[].skill_replacement (#454): no sinner listed, so every deck stays the game's 3/2/1 and the shop
+    plays as before; ID Skill Search off and paid in Cost."""
+    teams = data.get("teams")
+    for team in teams if isinstance(teams, list) else []:
+        if isinstance(team, dict):
+            team.setdefault("skill_replacement", {"sinners": [], "id_skill_search": {"enabled": False, "pay": "cost"}})
+    return data
+
+
 # MIGRATIONS[n] turns a version-n dict into a version-(n + 1) dict; keep in step with gui/src/model.ts.
-MIGRATIONS = {1: _v1_to_v2, 2: _v2_to_v3, 3: _v3_to_v4, 4: _v4_to_v5, 5: _v5_to_v6, 6: _v6_to_v7, 7: _v7_to_v8, 8: _v8_to_v9, 9: _v9_to_v10, 10: _v10_to_v11, 11: _v11_to_v12, 12: _v12_to_v13, 13: _v13_to_v14, 14: _v14_to_v15, 15: _v15_to_v16, 16: _v16_to_v17, 17: _v17_to_v18}
+MIGRATIONS = {1: _v1_to_v2, 2: _v2_to_v3, 3: _v3_to_v4, 4: _v4_to_v5, 5: _v5_to_v6, 6: _v6_to_v7, 7: _v7_to_v8, 8: _v8_to_v9, 9: _v9_to_v10, 10: _v10_to_v11, 11: _v11_to_v12, 12: _v12_to_v13, 13: _v13_to_v14, 14: _v14_to_v15, 15: _v15_to_v16, 16: _v16_to_v17, 17: _v17_to_v18, 18: _v18_to_v19}
 NOTES = []  # what the last migrate() dropped, for the agent's log: the file on disk keeps it until the GUI saves
 
 NO_TEAM = "No enabled team: set up a team in the settings GUI first."
@@ -394,6 +404,19 @@ def cross_check(data):
         for field, ref, key in refs:
             if ref is not None and ref not in plan_ids[key]:
                 errors.append(f"teams/{i}/{field}: team {t['name']!r} uses missing plan {ref!r} (not in {key})")
+
+    for i, t in enumerate(teams):
+        sinners = t["skill_replacement"]["sinners"]
+        dupes(f"teams/{i}/skill_replacement/sinners", [s["sinner"] for s in sinners], "sinner")
+        for j, s in enumerate(sinners):
+            # the deck starts at the game's 3/2/1 and every swap moves a card up, so S1 above 3 or S3 below 1 is never reached
+            path, who, target = f"teams/{i}/skill_replacement/sinners/{j}/target", f"team {t['name']!r} sinner {s['sinner']!r}", s["target"]
+            if sum(target.values()) != 6:
+                errors.append(f"{path}: {who} targets {sum(target.values())} skills, not 6")
+            if target["s1"] > 3:
+                errors.append(f"{path}/s1: {who} targets {target['s1']} of skill 1, but swaps only lower it from the game's 3")
+            if target["s3"] < 1:
+                errors.append(f"{path}/s3: {who} targets {target['s3']} of skill 3, but swaps only raise it from the game's 1")
 
     for i, gift_list in enumerate(data["gift_lists"]):
         errors.extend(

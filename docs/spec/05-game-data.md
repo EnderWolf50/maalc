@@ -179,7 +179,15 @@ Boss 的 Cost 是遊戲資料 `mirror-dungeon-common-data-md8.json` 的 BOSS cos
 | 刷新條件 | Cost ≥ 刷新費用 + 120（定向與普通刷新相同） |
 | 全體治療門檻 | 100 |
 
-**檔案**：`resource/base/data/shop.yaml`，只放全體治療（每項治療）費用 `heal_cost` 與刷新條件的 `refresh_margin`。刷新費用 bot 從商店按鈕下方讀，不放資料檔。（#29）
+**檔案**：`resource/base/data/shop.yaml`，放全體治療（每項治療）費用 `heal_cost`、刷新條件的 `refresh_margin`、合成點數（`fusion_points`、`fusion_tiers`）和技能替換的換法（`skill_replacement`，下表）。刷新費用 bot 從商店按鈕下方讀，不放資料檔。（#29）
+
+**技能替換**（#264、#454）：`skill_replacement` 列三種換法。換法 `a_b` 把一張技能 a 換成技能 b。設定檔只寫目標張數，要用哪幾種換法由目標推得（[04](04-settings.md) 第 9 節），所以設定裡不出現這些鍵。價格取自遊戲資料的 `upgradePersonality`（#264 查證）；bot 點之前照樣讀畫面上的價格，以畫面為準。GUI 用這份的 `from`、`to` 標出換法（不標價格），GUI 在建置時把這個 YAML 一起打包。商店（#455，`Shop.replace_skill`）用 `from`、`to` 判斷哪些換法讓張數更接近目標、算出換後的張數；要付多少只看對話框上讀到的價格，`shop` 這欄不拿來預測或決定，只由測試核對它等於 #453 實機對話框的 45／75／120（`tests/test_shop_skill.py`）。`id_search` 兩欄是 ID Skill Search（#456）的價格，同樣不拿來預測或決定要付多少（付的是對話框讀到的價格）：只用來認出對話框現在付哪一種（`shop.pay_mode`：三個價格等於 `cost` 欄是 Cost、等於 `starlight` 欄是星光，[03](03-decisions.md) 第 13 節「ID Skill Search」）。#456 實機的對話框是 90／150／240 與 25／50／75，和這兩欄一致（`tests/test_shop_skill_screens.py`）。
+
+| 換法 | 鍵 | `from` → `to` | 替換格（Cost）`shop` | ID Skill Search（Cost）`id_search.cost` | ID Skill Search（星光）`id_search.starlight` |
+|---|---|---|---|---|---|
+| 技能 1 → 3 | `s1_s3` | 1 → 3 | 120 | 240 | 75 |
+| 技能 2 → 3 | `s2_s3` | 2 → 3 | 75 | 150 | 50 |
+| 技能 1 → 2 | `s1_s2` | 1 → 2 | 45 | 90 | 25 |
 
 實機的刷新費用（普通 15 → 30、定向 90 → 105）與治療費用（每項 100）和上表一致（實機：captures/107_shop_after_refresh.png、captures/82_shop_heal_page.png）。
 

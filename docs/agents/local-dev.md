@@ -95,6 +95,6 @@ To query it, search the unpacked tree with `rg`: `rg -l "<text>" .local/unpack/r
 
 The Huiji wiki (`limbuscompany.huijiwiki.com`) is behind Cloudflare: `curl` got 403 on 2026-10-30, and WebFetch got 403 on 2026-10-16. Use the unpacked data first; a wiki answer means a browser session.
 
-A personality's skill deck is always S1 ×3, S2 ×2, S3 ×1: `attributeList[].number` of every `personality-*.json` under `static/.../StaticData/static-data/personality/` is 3, 2, 1 (202 personalities, counted 2026-10-30).
+The game data gives every personality a skill deck of S1 ×3, S2 ×2, S3 ×1: `attributeList[].number` of every `personality-*.json` under `static/.../StaticData/static-data/personality/` is 3, 2, 1 (202 personalities, counted 2026-10-30). Below Uptie 3 skill 3 is locked, so the shop's skill replacement dialog shows `SKILL 3x0` (#264).
 
 The AALC source, the bot that AGENTS.md "Goal" sets feature parity with, is upstream `KIYI671/AhabAssistantLimbusCompany`. `docs/research/aalc/` is the written reading of it, pinned to commit `b0f4393` (its README): start there, and open the source only for what it lacks. Read one file with `gh api repos/KIYI671/AhabAssistantLimbusCompany/contents/<path>`, or clone it once into `.local/aalc/` of the main checkout (resolve it with `tools/local_dir.py`) and search it with `rg`. A fork on your machine can be stale, so compare a file with upstream before you rely on it.

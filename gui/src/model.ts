@@ -4,6 +4,7 @@ import { parse as parseYaml } from "yaml";
 import schema from "../../agent/settings.schema.json";
 import gifts from "../../assets/resource/base/data/gift_search.json";
 import recipes from "../../assets/resource/base/data/gift_recipes.json";
+import shopYaml from "../../assets/resource/base/data/shop.yaml?raw";
 import graces from "./graces.json";
 
 export { schema };
@@ -26,6 +27,43 @@ export const runEnum = (k: keyof typeof P.run.properties) => (P.run.properties[k
 export const teamEnum = (k: keyof typeof TEAM) => (TEAM[k] as { enum: string[] }).enum;
 
 export type Order = string[];
+
+/** A skill swap of the shop (#264, #454): one skill `from` becomes one skill `to`; `shop` is the Replace <sinner>'s Skill cell's
+ * price in Cost, `id_search` the ID Skill Search's price in Cost or starlight. The GUI names a swap by `from` and `to` and shows
+ * no price; the prices are for the agent (#455). */
+export interface SkillSwap { from: number; to: number; shop: number; id_search: { cost: number; starlight: number } }
+export type SkillSwapKey = "s1_s3" | "s2_s3" | "s1_s2";
+/** data/shop.yaml's skill_replacement, keyed by swap; the agent reads the same entry, the screen's own price wins when the bot taps. */
+export const SKILL_SWAPS: Record<SkillSwapKey, SkillSwap> = parseYaml(shopYaml).skill_replacement;
+/** A sinner's target counts: skill 1, 2 and 3 in a deck of 6. */
+export interface SkillTarget { s1: number; s2: number; s3: number }
+/** The game's deck: 3 of skill 1, 2 of skill 2, 1 of skill 3; a sinner at it is left alone. */
+export const GAME_DECK: SkillTarget = { s1: 3, s2: 2, s3: 1 };
+/** Why a target can never be reached: a count that is not a whole number 0 to 6 (the schema's rule; a hand-edited file still
+ * opens with it), a total other than 6, or, since every swap moves a card up from 3/2/1, S1 above 3 or S3 below 1. */
+export type SkillFault = "range" | "total" | "s1" | "s3";
+/** What a target takes from the game's 3/2/1 (spec 04 section 9, #264): a swap a→b counts only while skill a is above its target
+ * and skill b below it, so the swaps are fixed. With S2 above 2, S1→S2 × (S2 − 2) and S1→S3 × (S3 − 1); otherwise S2→S3 × (2 − S2)
+ * and S1→S3 × (3 − S1). `need` lists them with S1→S3 last, and is empty for a target with faults (validate.ts reports those). */
+export function skillPlan(t: SkillTarget): { untouched: boolean; faults: SkillFault[]; need: { key: SkillSwapKey; n: number }[] } {
+  const untouched = t.s1 === GAME_DECK.s1 && t.s2 === GAME_DECK.s2 && t.s3 === GAME_DECK.s3;
+  const faults: SkillFault[] = [];
+  if (![t.s1, t.s2, t.s3].every((v) => Number.isInteger(v) && v >= 0 && v <= 6)) return { untouched, faults: ["range"], need: [] };
+  if (t.s1 + t.s2 + t.s3 !== 6) faults.push("total");
+  if (t.s1 > GAME_DECK.s1) faults.push("s1");
+  if (t.s3 < GAME_DECK.s3) faults.push("s3");
+  if (faults.length) return { untouched, faults, need: [] };
+  const counts: [SkillSwapKey, number][] = t.s2 > GAME_DECK.s2
+    ? [["s1_s2", t.s2 - GAME_DECK.s2], ["s1_s3", t.s3 - GAME_DECK.s3]]
+    : [["s2_s3", GAME_DECK.s2 - t.s2], ["s1_s3", GAME_DECK.s1 - t.s1]];
+  return { untouched, faults, need: counts.filter(([, n]) => n > 0).map(([key, n]) => ({ key, n })) };
+}
+export type SkillPay = "cost" | "starlight";
+/** Spec 04 section 9 skill_replacement: only the sinners to change, in priority order, each with its target; s1_s3_first says
+ * which kind of swap to try first when the target needs two. */
+export interface SkillSinner { sinner: string; target: SkillTarget; s1_s3_first: boolean }
+export interface SkillReplacement { sinners: SkillSinner[]; id_skill_search: { enabled: boolean; pay: SkillPay } }
+export const SKILL_PAYMENTS: SkillPay[] = TEAM.skill_replacement.properties.id_skill_search.properties.pay.enum as SkillPay[];
 
 /** Spec 04 section 7: base prices; + and ++ cost 2x and 3x (agent/run_start.py GRACE_BASE). */
 export const BOOST_COST = [10, 10, 20, 20, 30, 30, 40, 40, 50, 60];
@@ -282,7 +320,7 @@ export interface Team {
   theme_pack_plan: string; reward_cards: string[]; shop_refresh_keyword: number; shop_refresh_normal: number; heal: string;
   reserve_cost: number; min_alive: number; guard_turns: number;
   gift_search: { enabled: boolean; gifts: GiftRef[] }; allow_white_gossypium: boolean;
-  gift_list: string; sell_max_tier: number; sell_vestiges: boolean;
+  gift_list: string; sell_max_tier: number; sell_vestiges: boolean; skill_replacement: SkillReplacement;
 }
 /** A gift on the E.G.O Gift Search page: its keyword tab, tier and English name (spec 04 section 9). */
 export interface GiftRef { keyword: string; tier: number; name: string }
@@ -315,6 +353,7 @@ const newLuxcavation = (count = 1): Luxcavation =>
   ({ ...defaultsOf(schema.$defs.luxcavation.properties), count }) as unknown as Luxcavation;
 
 const clone = <T,>(v: T): T => structuredClone(v);
+const defaultSkillReplacement = (): SkillReplacement => clone(TEAM.skill_replacement.default) as SkillReplacement;
 const defaultsOf = (props: Record<string, object>) =>
   Object.fromEntries(Object.entries(props).map(([k, v]) => [k, clone((v as { default?: unknown }).default)]));
 
@@ -448,6 +487,9 @@ const MIGRATIONS: Record<number, (d: Record<string, unknown>) => Record<string, 
     const fixed = Object.fromEntries(Object.entries(lux).map(([k, o]) => [k, o && typeof o === "object" ? { mode: "daily", ...o } : o]));
     return { ...d, luxcavation: fixed };
   },
+  // Version 19 adds teams[].skill_replacement (#454): no sinner listed, so every deck stays the game's 3/2/1 and the shop plays
+  // as before; ID Skill Search off and paid in Cost.
+  18: (d) => withTeamDefault(d, { skill_replacement: defaultSkillReplacement() }),
 };
 /** The version 10 keep_gifts the last migration found no gift for (parseSettings returns it). */
 let v10Dropped = 0;
@@ -460,7 +502,7 @@ function withTeamDefault(d: Record<string, unknown>, field: Record<string, unkno
   return {
     ...d,
     teams: Array.isArray(d.teams)
-      ? d.teams.map((t) => (t && typeof t === "object" ? { ...clone(field), ...t } : t)) : d.teams,
+      ? d.teams.map((t) => (t && typeof t === "object" && !Array.isArray(t) ? { ...clone(field), ...t } : t)) : d.teams,
   };
 }
 

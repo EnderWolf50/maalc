@@ -3,13 +3,15 @@
 actions.py reads the shop pages and taps; everything here is plain data in, plain data out.
 """
 
+import re
 from difflib import SequenceMatcher
 from itertools import combinations
 
 import numpy as np
 
+from battle import SINNERS
 from gift_search import _runs
-from ocrtext import has
+from ocrtext import compact, has
 from settings import vestige_ids
 
 ROUNDS = 10
@@ -184,6 +186,255 @@ def heal_plan(mode, cost, reserve, dead, heal_cost):
     return None
 
 
+# Skill replacement (#455, docs/spec/03-decisions.md section 13 「換技能」). A swap is a key of data/shop.yaml's
+# skill_replacement ({"s1_s3": {"from": 1, "to": 3, "shop": 120, ...}, ...}): the functions take that table as `swaps`, as
+# heal_plan takes heal_cost. Counts are (c1, c2, c3), the cards of skill 1, 2 and 3 in a sinner's deck: 6, or 5 with skill 3
+# at 0 under Uptie 3 (#264). A team's entry is {"sinner", "target": {"s1", "s2", "s3"}, "s1_s3_first"}; the settings'
+# cross-checks keep a target at a total of 6, S1 <= 3 and S3 >= 1, so it is trusted here.
+DECK = {"s1": 3, "s2": 2, "s3": 1}  # the game's deck: a target equal to it asks for nothing (#264)
+
+
+def counts_line(counts):
+    """"3/2/1" for counts as a tuple or a target dict, for the log."""
+    return "/".join(str(n) for n in ((counts["s1"], counts["s2"], counts["s3"]) if isinstance(counts, dict) else counts))
+
+
+def any_change(listed):
+    """Whether any listed sinner's target is off the game's 3/2/1: with none, the shop reads and taps nothing for skills
+    (#264 User Story 3)."""
+    return any(e["target"] != DECK for e in listed)
+
+
+def sinner_named(text):
+    """The sinner (battle.SINNERS) an OCR line names, or None when it names none or two: never a guess (#264).
+
+    has() drops case, accents and spaces, so "REPLACE RYOSHU'S SKILL" and "ReplaceRyōshū'sSkill" name Ryōshū; no name is a
+    part of another, and the title's other words hold none.
+    """
+    found = [n for n in SINNERS if has(text, n)]
+    return found[0] if len(found) == 1 else None
+
+
+# OCR clips the tail of a 130 px name: "Replace Meursault's Skil" and "Replace Gregor's Skil" (2026-11-06 run), so the stem
+# is "Skil", not "Skill". The same clip hits "ID Skil Search"; the buy side and the Replace check both go through these.
+SKILL_STEM = "Skil"
+
+
+def id_skill_slot(name):
+    """Whether a slot name is ID Skill Search (#456), clipped or whole."""
+    return has(name, "ID " + SKILL_STEM)
+
+
+def replace_slot(name):
+    """Whether a slot name is a Replace <sinner>'s Skill slot: Replace and the Skill stem, and not ID Skill Search."""
+    return has(name, "Replace") and has(name, SKILL_STEM) and not id_skill_slot(name)
+
+
+def skill_slots(slots):
+    """The Replace <sinner>'s Skill slots of a grid read (read_slots), each a copy with its "sinner" (or None).
+
+    A name replace_slot() accepts (#264; the stem survives a clipped tail); bought ones stay, tagged purchased, so the plan logs them.
+    ID Skill Search is #456's slot, not one of these. One slot read twice is one: SuperShop.png's "??" reads as a coin
+    glyph and "7?", two price lines under one name (same_offer: the same column, price and name).
+    """
+    found = []
+    for slot in slots:
+        name = slot["name"]
+        if replace_slot(name) and not any(same_offer(slot, s) for s in found):
+            found.append({**slot, "sinner": sinner_named(name)})
+    return found
+
+
+def skills_owned(text):
+    """(c1, c2, c3) from the dialog's "SKILL 1x3 SKILL 2x2 SKILL 3x1" line, or None unless all three read and they total 5
+    or 6 (#264: anything else cancels). Matched compacted: OCR drops spaces, and a "×" drops out."""
+    m = re.search(r"skill1x?(\d)skill2x?(\d)skill3x?(\d)", compact(text))
+    if m is None:
+        return None
+    owned = tuple(int(d) for d in m.groups())
+    return owned if sum(owned) in (5, 6) else None
+
+
+def locked(owned):
+    """Whether the sinner's skill 3 is locked (under Uptie 3): 5 cards, none of skill 3 (#264; Gregor, #453)."""
+    return sum(owned) == 5 and owned[2] == 0
+
+
+def swaps_wanted(target, owned, s1_s3_first, swaps):
+    """The swaps that move owned toward target, in the order to try; [] at the target or when none helps (#264 換法的決策).
+
+    A swap a_b counts when skill a is over its target and skill b under it, so it never overshoots. A locked skill 3 takes
+    none (the game dims those options). At most two kinds count at once (s1_s2 needs c2 under its target, s2_s3 over it);
+    s1_s3_first puts s1_s3 before the other or after it.
+    """
+    wanted = [k for k, sw in swaps.items()
+              if owned[sw["from"] - 1] > target[f"s{sw['from']}"] and owned[sw["to"] - 1] < target[f"s{sw['to']}"]
+              and not (sw["to"] == 3 and locked(owned))]
+    return sorted(wanted, key=lambda k: (k != "s1_s3") if s1_s3_first else (k == "s1_s3"))
+
+
+def after_swap(owned, swap, swaps):
+    """The counts after one swap: a card of `from` fewer, one of `to` more."""
+    sw = swaps[swap]
+    return tuple(n - (i == sw["from"] - 1) + (i == sw["to"] - 1) for i, n in enumerate(owned))
+
+
+def skill_choice(entry, owned, lit, prices, cost, reserve, swaps):
+    """(swap, price) to buy in the dialog, or None: the first wanted swap whose price read, which is lit and whose price
+    keeps the reserve (#264: closer to the target, priced, affordable, the game lets it be picked).
+
+    owned, lit ({swap: bool}), prices ({swap: int or None}) and cost (None when unread: then nothing, #455) are what the
+    dialog shows: the screen's price is the price, the data file's is not asked.
+    """
+    if cost is None:
+        return None
+    for k in swaps_wanted(entry["target"], owned, entry["s1_s3_first"], swaps):
+        if prices.get(k) is not None and lit.get(k) and can_spend(cost, prices[k], reserve):
+            return k, prices[k]
+    return None
+
+
+def skill_plan(listed, slots, known, handled, swaps):
+    """[(slot, entry or None, why)] for every replacement slot of a grid read: the ones to open (entry set) first, in the
+    list's order (#264: with Cost for one, the earlier sinner), then the skipped in the grid's order. `why` is the slot's
+    log line (#264 log).
+
+    listed: the team's skill_replacement.sinners; known: {sinner: counts} read this run; handled: the sinners tapped this
+    visit. A sinner whose counts are unknown is opened: the dialog is where they show. Keyed by sinner: a second slot of
+    one (never seen) waits for the next visit.
+    """
+    rank = {e["sinner"]: (n, e) for n, e in enumerate(listed)}
+    opened, out = set(), []
+    for at, slot in enumerate(skill_slots(slots)):
+        sinner = slot["sinner"]
+        n, entry = rank.get(sinner, (None, None))
+        why, opens = None, False
+        if slot["purchased"]:
+            why = "replaced already (Purchased): skip"
+        elif sinner is None:
+            why = "the sinner's name is unread: skip"
+        elif entry is None:
+            why = f"{sinner!r} is not listed: skip"
+        elif entry["target"] == DECK:
+            why = f"{sinner!r} targets the game's 3/2/1: skip"
+        elif sinner in handled:
+            why = f"{sinner!r} handled this visit: skip"
+        elif sinner in opened:
+            why = f"{sinner!r} has another slot opened this visit: skip"
+        else:
+            why, opens = by_counts(entry, known, swaps, "open")
+        if opens:
+            opened.add(sinner)
+        out.append(((0, n) if opens else (1, at), slot, entry if opens else None, why))
+    return [(slot, entry, why) for _, slot, entry, why in sorted(out, key=lambda o: o[0])]
+
+
+def by_counts(entry, known, swaps, verb):
+    """(why, whether to go on) for a listed sinner by the counts read this run (known): at the target or with no swap left
+    is a skip; unknown counts or a swap wanted go on (`verb` ends the line): the dialog is where the counts show."""
+    sinner, target = entry["sinner"], entry["target"]
+    if sinner not in known:
+        return f"{sinner!r} counts not read this run, toward {counts_line(target)}: {verb}", True
+    owned = known[sinner]
+    if tuple(owned) == (target["s1"], target["s2"], target["s3"]):
+        return f"{sinner!r} is at {counts_line(owned)} (read this run): skip", False
+    if not swaps_wanted(target, owned, entry["s1_s3_first"], swaps):
+        return (f"{sinner!r} at {counts_line(owned)} can make no swap toward {counts_line(target)}"
+                f"{' (skill 3 locked)' if locked(owned) else ''}: skip"), False
+    return f"{sinner!r} {counts_line(owned)} read this run, toward {counts_line(target)}: {verb}", True
+
+
+def id_search_slot(slots):
+    """The ID Skill Search slot of a grid read (read_slots), whole or clipped, or None (#456)."""
+    return next((slot for slot in slots if id_skill_slot(slot["name"])), None)
+
+
+def skill_walk(listed, waiting):
+    """[(kind, n)]: the order of the shop's skill step (#264 先後), n an entry's place in listed. The listed sinners one by
+    one in the list's order, each finished before the next: "replace", the sinner's own Replace slot on this page when
+    `waiting` (the sinners skill_plan opens a slot for) holds them, half ID Skill Search's price for the same swap; then "search", ID
+    Skill Search on them, which search_turn judges when it comes, on the counts the slot left."""
+    return [(kind, n) for n, entry in enumerate(listed)
+            for kind in (("replace", "search") if entry["sinner"] in waiting else ("search",))]
+
+
+def search_turn(entry, known, tried, swaps):
+    """Whether ID Skill Search takes a turn on a listed sinner (#264 先後: one still wanting a swap): off the game's 3/2/1,
+    not tried this visit, and wanting a swap by the counts read this run (known); counts never read want one."""
+    return entry["target"] != DECK and entry["sinner"] not in tried and by_counts(entry, known, swaps, "try")[1]
+
+
+def id_search_plan(listed, known, tried, dead, swaps, waiting=()):
+    """[(entry or None, why)] for every listed sinner, in the list's order: the sinners ID Skill Search tries (entry set),
+    each judged on its dialog, and the skipped (#456; #264: the first listed sinner with a feasible swap).
+
+    A sinner is skipped at the game's 3/2/1, when tried this visit (`tried`, each at most once), when its own Replace slot
+    on this page is still to come (`waiting`, #264 先後: half the price), dead (`dead`: grey on the shop's bar, a portrait
+    that takes no tap), or when its counts read this run are at the target or allow no swap.
+    """
+    out = []
+    for entry in listed:
+        sinner = entry["sinner"]
+        if entry["target"] == DECK:
+            why, tries = f"{sinner!r} targets the game's 3/2/1: skip", False
+        elif sinner in tried:
+            why, tries = f"{sinner!r} tried this visit: skip", False
+        elif sinner in waiting:
+            why, tries = f"{sinner!r} has a Replace slot on this page, used first: skip", False
+        elif sinner in dead:
+            why, tries = f"{sinner!r} is dead (grey on the shop's bar): skip", False
+        else:
+            why, tries = by_counts(entry, known, swaps, "try")
+        out.append((entry if tries else None, why))
+    return out
+
+
+def pay_mode(prices, swaps):
+    """"cost" or "starlight": the ID Skill Search dialog's payment, told by its prices (#456: 90/150/240 for Cost, 25/50/75
+    for starlight), or None. Every price that read must be that mode's, and one at least: a mix or none is never a guess."""
+    read = {k: p for k, p in prices.items() if p is not None}
+    modes = [m for m in ("cost", "starlight") if read and all(swaps[k]["id_search"][m] == p for k, p in read.items())]
+    return modes[0] if len(modes) == 1 else None
+
+
+def id_search_choice(entry, owned, lit, prices, funds, pay, reserve, swaps):
+    """skill_choice for ID Skill Search (#456): funds is what the dialog's top right shows, the Cost or the owned starlight.
+    Cost keeps the team's reserve; starlight is not under it, and too little of it is no swap (#264 價格)."""
+    return skill_choice(entry, owned, lit, prices, funds, reserve if pay == "cost" else 0, swaps)
+
+
+# Pixel readers of the dialog (#453), image BGR. Measured on tests/screens/ShopReplaceSkill*.png; test_shop_skill sweeps
+# every tests/screens capture.
+# A price box's bright px (max channel over 100), their median: lit orange RGB 191-196, 88-95, 14-17 (11 boxes), dimmed red
+# 152-156, 30-51, 1-6 (4 boxes). Orange: G at least PRICE_LIT_G, R over G by PRICE_LIT_RG, B under PRICE_LIT_B (white text fails).
+PRICE_LIT_G, PRICE_LIT_RG, PRICE_LIT_B = 70, 60, 60
+PICKED_BAND, PICKED_MIN = 8, 0.2  # px just inside an option's frame; orange share 0.452-0.457 picked, 0.002 at most on 15 others
+
+
+def option_lit(image, box):
+    """Whether the option whose price sits in box (x, y, w, h) can be picked: its price orange, a dimmed one's red (#453:
+    Gregor's 75 and 120 under Uptie 3). A box with no bright pixel is not lit."""
+    x, y, w, h = box
+    px = image[y:y + h, x:x + w].reshape(-1, 3)
+    px = px[px.max(axis=1) > 100]
+    if not len(px):
+        return False
+    b, g, r = np.median(px, axis=0)
+    return bool(g >= PRICE_LIT_G and r - g >= PRICE_LIT_RG and b < PRICE_LIT_B)
+
+
+def option_picked(image, frame):
+    """Whether the option framed by frame (x, y, w, h) is picked: its orange glow (R over 120 and G + 40, G 31-139, B under
+    60) fills PICKED_MIN of the PICKED_BAND px just inside the frame (#453: a 1-px 242/184/0 line on the edge, a halo
+    about 178/78/6 inside it)."""
+    x, y, w, h = frame
+    d = PICKED_BAND
+    band = np.concatenate([image[y:y + d, x:x + w].reshape(-1, 3), image[y + h - d:y + h, x:x + w].reshape(-1, 3),
+                           image[y + d:y + h - d, x:x + d].reshape(-1, 3), image[y + d:y + h - d, x + w - d:x + w].reshape(-1, 3)])
+    b, g, r = (band[:, i].astype(int) for i in range(3))
+    return bool(((r > 120) & (g > 30) & (g < 140) & (b < 60) & (r > g + 40)).mean() >= PICKED_MIN)
+
+
 def has_letters(t):
     """Whether OCR text t has an ASCII letter: a name or a tag, not a price, a numeral or a glyph."""
     return any(c.isascii() and c.isalpha() for c in t)
@@ -269,7 +520,7 @@ def same_offer(a, b):
 def on_sale(slot):
     """Whether a shop slot is a gift on sale for Cost, affordable or not: not bought, not a skill, not "??"."""
     name = slot["name"]
-    return slot["price"] is not None and not slot["purchased"] and not has(name, "Replace", "ID Skill")
+    return slot["price"] is not None and not slot["purchased"] and not has(name, "Replace") and not id_skill_slot(name)  # wider than replace_slot on purpose: any Replace name is no gift
 
 
 def buy_plan(offers, cost, reserve, sold):

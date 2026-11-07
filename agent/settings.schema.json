@@ -20,7 +20,7 @@
     "charge_enkephalin"
   ],
   "properties": {
-    "version": { "const": 18 },
+    "version": { "const": 19 },
     "language": { "enum": ["zh_tw", "en_us"], "default": "zh_tw" },
     "run": {
       "type": "object",
@@ -152,7 +152,8 @@
           "allow_white_gossypium",
           "gift_list",
           "sell_max_tier",
-          "sell_vestiges"
+          "sell_vestiges",
+          "skill_replacement"
         ],
         "properties": {
           "id": { "$ref": "#/$defs/id" },
@@ -265,6 +266,30 @@
             "type": "boolean",
             "default": false,
             "description": "the shop may sell vestiges (pure fusion-material gifts, data/shop.yaml); off: never sold"
+          },
+          "skill_replacement": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["sinners", "id_skill_search"],
+            "description": "the shop's Replace <sinner>'s Skill and ID Skill Search (#264, docs/spec/04-settings.md section 9): per listed sinner, the skill counts to aim for; the list order is the sinners' priority",
+            "properties": {
+              "sinners": {
+                "type": "array",
+                "maxItems": 12,
+                "items": { "$ref": "#/$defs/skill_sinner" },
+                "description": "only the sinners to change, each at most once (the cross-check names a repeat), in priority order; an unlisted sinner keeps the game's deck"
+              },
+              "id_skill_search": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["enabled", "pay"],
+                "properties": {
+                  "enabled": { "type": "boolean", "default": false },
+                  "pay": { "enum": ["cost", "starlight"], "default": "cost", "description": "starlight is the owned starlight; choosing it in the GUI is consent to spend it" }
+                }
+              }
+            },
+            "default": { "sinners": [], "id_skill_search": { "enabled": false, "pay": "cost" } }
           }
         }
       }
@@ -325,6 +350,30 @@
         "team": { "type": ["string", "null"], "minLength": 1, "default": null, "description": "a teams[] id: its TEAMS #N and guard_turns; null: none picked yet" },
         "retries": { "type": "integer", "minimum": 0, "default": 0, "description": "defeats of one battle fought again before the task fails; a win starts the next battle with them all" },
         "consecutive": { "type": "boolean", "default": true, "description": "set the stage's Consecutive Battle to min(10, battles left) and fight them as one battle (a x N win counts N); off: one battle at a time" }
+      }
+    },
+    "skill_sinner": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sinner", "target", "s1_s3_first"],
+      "properties": {
+        "sinner": { "$ref": "#/$defs/order/items" },
+        "target": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["s1", "s2", "s3"],
+          "description": "how many of skill 1, 2 and 3 the sinner's deck of 6 should hold; the total must be 6, s1 at most 3 and s3 at least 1, since every swap moves a card up from the game's 3/2/1 (cross-check); a target of 3/2/1 does nothing",
+          "properties": {
+            "s1": { "type": "integer", "minimum": 0, "maximum": 6 },
+            "s2": { "type": "integer", "minimum": 0, "maximum": 6 },
+            "s3": { "type": "integer", "minimum": 0, "maximum": 6 }
+          }
+        },
+        "s1_s3_first": {
+          "type": "boolean",
+          "default": true,
+          "description": "only for a target that needs two kinds of swap (s1_s3 and s1_s2, or s1_s3 and s2_s3): true tries s1_s3 first, false the other kind; the swaps a target needs follow from it (docs/spec/04-settings.md section 9)"
+        }
       }
     },
     "id": { "type": "string", "minLength": 1 },
