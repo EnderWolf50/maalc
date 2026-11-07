@@ -1,4 +1,4 @@
-"""The emulator through MaaFramework's adb controller: screenshots, taps, keys, starting an app, freezing the bot.
+"""The emulator through MaaFramework's adb controller: screenshots, taps, keys, starting or restarting an app, freezing the bot.
 
     uv run --group probe python tools/live/device.py [--port 16384] <command> ...
 
@@ -6,6 +6,8 @@
   tap X Y [--wait S] [--shot OUT.png]   a tap in game pixels (1280x720), then a screenshot after S seconds
   key CODE [--wait S] [--shot OUT.png]  an Android key code: 4 back, 3 home
   start [PACKAGE] [--shots DIR --every S --count N]   start an app (default the game), screenshots while it boots
+  restart [PACKAGE] [--wait S] [--shot OUT.png]   stop the app and start it again, as the pipeline's L3 does; a
+                                        screenshot S seconds (30) after the start
   freeze --log run.log --fire RE --pid PID [--arm RE] [--cmd FILE] [--out DIR] [--max S]
 
 `--port` picks the MuMu instance: 16384 is instance 0, 16416 instance 1. A live test owns the emulator
@@ -139,6 +141,18 @@ def each(call) -> bool:
         return False
 
 
+RESTART_PAUSE = 3.0  # s between the stop and the start: RecoverL3's post_delay (recovery.json)
+
+
+def restart(ctl, package: str) -> None:
+    """Stop the app, then start it: the pipeline's L3 (RecoverL3, RecoverStartApp)."""
+    ctl.post_stop_app(package).wait()
+    print(stamp(), "stopped", package, flush=True)
+    time.sleep(RESTART_PAUSE)
+    ctl.post_start_app(package).wait()
+    print(stamp(), "started", package, flush=True)
+
+
 def main(argv=None) -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--port", type=int, default=16384)
@@ -155,6 +169,10 @@ def main(argv=None) -> None:
     p.add_argument("--shots")
     p.add_argument("--every", type=float, default=15)
     p.add_argument("--count", type=int, default=10)
+    p = sub.add_parser("restart")
+    p.add_argument("package", nargs="?", default=GAME)
+    p.add_argument("--wait", type=float, default=30)
+    p.add_argument("--shot")
     p = sub.add_parser("freeze")
     p.add_argument("--log", required=True)
     p.add_argument("--fire", required=True)
@@ -177,6 +195,11 @@ def main(argv=None) -> None:
         for i in range(a.count if a.shots else 0):
             time.sleep(a.every)
             shot(ctl, Path(a.shots) / f"boot-{i:02}.png")
+    elif command == "restart":
+        restart(ctl, a.package)
+        if a.shot:
+            time.sleep(a.wait)
+            shot(ctl, a.shot)
     elif command == "freeze":
         freeze(a, ctl)
 
