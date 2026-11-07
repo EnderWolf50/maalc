@@ -29,9 +29,10 @@ def repo(tmp_path):
     return tmp_path
 
 
-def reason(cmd, cwd, **env):
+def reason(cmd, cwd, tool="Bash", **env):
     """The deny reason, or None when the guard lets the command through."""
-    out = subprocess.run([sys.executable, str(GUARD)], input=json.dumps({"tool_input": {"command": cmd}, "cwd": str(cwd)}),
+    hook_input = {"tool_name": tool, "tool_input": {"command": cmd}, "cwd": str(cwd)}
+    out = subprocess.run([sys.executable, str(GUARD)], input=json.dumps(hook_input),
                          capture_output=True, text=True, check=True, env={**os.environ, "USERNAME": "", "USER": "", **env}).stdout
     if not out:
         return None
@@ -236,3 +237,26 @@ def test_only_pr_create_and_edit_bodies_are_linted(repo):
 
 def test_cannot_run_is_not_a_not_run_item(repo):
     assert pr_body(repo, GOOD_BODY + "- Live: cannot run on Linux\n") is None
+
+
+def test_the_guard_runs_on_powershell_too(repo):
+    # A subagent whose Bash tool is broken publishes through PowerShell (subagent-preamble.md, "Bash check").
+    settings = json.loads((GUARD.parents[1] / "settings.json").read_text(encoding="utf-8"))
+    wired = [h["matcher"] for h in settings["hooks"]["PreToolUse"]
+             if any("public-text-guard.py" in " ".join(c.get("args", [])) for c in h["hooks"])]
+    assert wired and all(set(m.split("|")) >= {"Bash", "PowerShell"} for m in wired)
+    assert denied(f"gh issue comment 1 --body @'\nsee {WIN}\n'@", repo, tool="PowerShell")  # a here-string's text is read
+    assert denied("gh issue comment 1 `\n  --body-file clean.md", repo, tool="PowerShell")  # a line continuation: fail closed
+    assert not denied(f"gh issue comment 1 --body-file '{repo / 'clean.md'}'", repo, tool="PowerShell")
+
+
+def test_powershell_reads_a_backslash_as_a_character_and_an_expression_as_unreadable(repo):
+    # PowerShell has no backslash escape: "x\" is a whole string (as a folder "<dir>\" is), so the body file after it
+    # is still read; read as bash, the quote stayed open and the file went unread.
+    assert denied('gh issue create --title "x\\" --body-file dirty.md', repo, tool="PowerShell")
+    assert not denied('gh issue create --title "x\\" --body-file clean.md', repo, tool="PowerShell")
+    assert not denied(f'gh issue comment 1 --body-file "{repo / "clean.md"}"', repo, tool="PowerShell")
+    # ( ... ) and @( ... ) run a command and pass its output, as $( ... ) does in bash
+    for cmd in ("gh issue comment 1 --body (Get-Content dirty.md -Raw)", "gh issue comment 1 --body @(cat dirty.md)"):
+        assert denied(cmd, repo, tool="PowerShell"), cmd
+    assert not denied('gh issue comment 1 --body "a note (with brackets)"', repo, tool="PowerShell")
