@@ -362,6 +362,47 @@ def test_packs_settle_runs_from_the_deal_to_eight_still_frames():
     assert ev.settle(rows, k_log=50)[0] == 17
 
 
+REFRESH = """\
+15:52:51.591 [maalc] floor 1 packs, threshold 0: Flat-broke Gamblers (0), Nagel und Hammer (0), Automated Factory (-2)
+15:52:56.000 [maalc] floor 1 packs, threshold 0: Lake World (0), The Outcast (-1), Line 3 (-5)
+15:52:56.100 [maalc] floor 1: pull Lake World (0)
+"""
+
+
+def test_packs_after_a_refresh_draws_the_new_hand_once_it_stands_still(tmp_path, monkeypatch):
+    """Floor 5 of 2026-11-07: a Refresh swaps the hand in one frame without an empty card area, so the old rule took
+    the hand before the Refresh, which stood still in the 10 s before the second `packs` line."""
+    deal, still, refresh, still2 = (ev.secs(t) for t in ("15:52:48.6", "15:52:50.6", "15:52:53.4", "15:52:55.3"))
+    # two hands whose swap changes the card area by 30 on average, a swing by 10
+    old, new = (np.random.default_rng(seed).integers(10, 100, (720, 1280), np.uint8) for seed in (1, 2))
+
+    def fake_frames(f, t0, t1, fps, gray=False):
+        times = [t0 + i / fps for i in range(round((t1 - t0) * fps))]
+        out = []
+        for i, t in enumerate(times):  # empty, deal and swing, still; the Refresh swaps the hand, swing, still
+            hand, swinging = (old, deal <= t < still) if t < refresh else (new, t < still2)
+            out.append(np.zeros((720, 1280), np.uint8) if t < deal else hand + np.uint8(10 * (i % 2) * swinging))
+        return times, np.array(out)
+
+    grabbed = []
+    monkeypatch.setattr(ev, "frames", fake_frames)
+    monkeypatch.setattr(ev, "grab", lambda f, t: grabbed.append(t) or Image.new("RGB", (1280, 720)))
+    monkeypatch.setattr(ev, "masks_path", lambda a: None)
+    monkeypatch.setattr(ev, "load_masks", lambda path: ([1280, 720], []))
+    (tmp_path / "run.log").write_text(REFRESH, encoding="utf-8")
+    ev.main(["packs", str(tmp_path / "run.log"), "--floor", "1", "-o", str(tmp_path / "packs"), "--video", "rec.mp4@15:50:00"])
+    first, second = json.loads((tmp_path / "packs/packs.json").read_text(encoding="utf-8"))
+    assert still < grabbed[0] < still + 0.5 and first["settle_s"] == pytest.approx(2.0, abs=0.05)  # no Refresh: as before
+    assert still2 < grabbed[1] < still2 + 0.5  # the new hand, not the old one that stood still before the Refresh
+    assert second["settle_s"] == pytest.approx(still2 - refresh, abs=0.05) and not second["partial"]
+
+
+def test_packs_settle_takes_the_deal_from_a_refresh_swap():
+    rows = [(0, 0)] * 5 + [(30, 9)] * 20 + [(40, 1)] * 20 + [(8.3, 21.5)] + [(30, 9)] * 20 + [(40, 1)] * 20
+    assert ev.settle(rows, k_log=80) == (46, 66, False)  # the Refresh at 45 deals again; the old hand stood at 25
+    assert ev.settle(rows, k_log=40) == (5, 25, False)  # a read before the Refresh keeps the first hand
+
+
 def test_packs_draw_puts_a_thick_border_on_the_pulled_card():
     r = {"cards": [("A", 0, False), ("B", 3, True)], "pull": "B"}
     px = np.asarray(ev.draw_packs(Image.new("RGB", (1280, 720)), r, "banner"))
