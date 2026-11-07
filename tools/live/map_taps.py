@@ -68,8 +68,13 @@ from live.evidence import TOUCH, Footage, hms, read_log, secs  # noqa: E402
 
 FPS = 30
 PRE = 0.2  # s before the touch reaches the screen: the frame the screen is judged against
-ANSWER = 2.0  # s a touch has to answer; #473: taken taps answered within 0.23 s, ignored ones not in 2 s
-BLACK = 8  # whole-frame mean grey under this is black: the map fades in from it
+# s a touch has to answer. #473: 75 taken follow taps (5 runs) answered within 0.23 s; 26 ignored ones (3 runs) moved
+# at most 1.0% of the blocks over 2 s, and the next touch was taken within 2.6 s
+ANSWER = 2.0
+# whole-frame mean grey under this is black, the map fading in from it (#473's analysis). On the recordings of
+# 2026-11-07 the map read 20-50 and Now Loading 50.9; a Now Loading that cuts to the map showed a single frame of
+# 1.7 (13:59:43.5) or 7.4 (00:48:53.6) between them, which a 10 fps read can miss
+BLACK = 8
 FADE_WINDOW = 10.0  # s before a touch the fade is looked for
 CHAIN = 2.5  # s from a touch's last point to the next touch, at most, for find_bus's drags to be one chain
 DWELL = 0.05  # s: a gap this long inside a drag is scroll()'s rest after the threshold move
@@ -122,6 +127,7 @@ class Row(Touch):
     answer: float | None  # s from the touch reaching the screen to the first frame that left it
     since_fade: float | None
     first_after_fade: bool
+    fade_searched: float = FADE_WINDOW  # s of video before the touch the fade was looked for in
 
 
 @dataclass
@@ -190,14 +196,17 @@ def map_touches(log) -> list[Touch]:
         add = lambda s, kind, how=outcome(nxt): out.append(Touch(s.t, s.x, s.y, kind, how, s.drag, s.moves_at))  # noqa: E731
         if prev.startswith("map: zoomed in on the bus") and not group[0].drag:
             add(group[0], "unzoom")
-        elif FOLLOW_END.match(nxt) and not group[-1].drag:
+            group = group[1:]  # then the map as usual: find_bus's drags, a read
+            if not group:
+                continue
+        if FOLLOW_END.match(nxt) and not group[-1].drag:
             for s in trailing_drags(group[:-1]):
                 add(s, "find_bus")
             add(group[-1], "follow")
         elif TAKE_END.match(nxt):
             taps = [s for s in (group if prev.startswith("map: ") else chain(group)) if not s.drag]
             for k, s in enumerate(taps):
-                add(s, "take", "map: take" if k == len(taps) - 1 or not nxt.startswith("map: take") else "next try")
+                add(s, "take", outcome(nxt) if k == len(taps) - 1 else "next try")
         elif re.match(r"map: (dragged the map|a drag moved)", nxt):
             for s in trailing_drags(group):
                 add(s, "read_on")
@@ -238,7 +247,7 @@ def stretch(spans: list[Frames], t: float) -> Frames | None:
     return next((f for f in spans if f.covers(t)), None)
 
 
-def answer(f: Frames, at: float, until: float):
+def screen_answer(f: Frames, at: float, until: float):
     """(verdict, share, answer s) of the screen from PRE s before at to until (module doc)."""
     ref = int(np.searchsorted(f.times, at - PRE, "right")) - 1
     end = int(np.searchsorted(f.times, until, "left"))
@@ -247,7 +256,7 @@ def answer(f: Frames, at: float, until: float):
     before, window = f.thumbs[ref], f.thumbs[ref + 1:end]
     if not np.any(window != before):
         return "frozen", None, None
-    moved = (np.abs(window - before) > 8).mean(axis=(1, 2))
+    moved = (np.abs(window - before) > 8).mean(axis=(1, 2))  # the share recovery.same_screen holds under 3%
     share = float(moved.max())
     k = next((k for k, th in enumerate(window) if not recovery.same_screen(before, th)), None)
     return ("ignored", share, None) if k is None else ("taken", share, round(float(f.times[ref + 1 + k] - at), 3))
@@ -261,20 +270,22 @@ def last_black(f: Frames, at: float, window: float) -> float | None:
 def judge(spans: list[Frames], touches: list[Touch], every: list[Stroke], offset: float,
           fade_window: float = FADE_WINDOW) -> list[Row]:
     """A Row per touch: its verdict on the frames and the time since the fade (module doc). every: all the log's
-    touches, on the map or not, which end each touch's window and say whether it was the first after the fade."""
+    touches, on the map or not, which end each touch's window and say whether it was the first after the fade: the
+    touch before it ended before the black frame."""
     starts = [s.t for s in every]
     rows = []
     for tc in touches:
         at = tc.t + offset
-        k = bisect.bisect_right(starts, tc.t)
+        k = bisect.bisect_right(starts, tc.t)  # every[k - 1] is this touch
         until = min(at + ANSWER, starts[k] + offset) if k < len(starts) else at + ANSWER
         f = stretch(spans, at)
-        verdict, share, ans = answer(f, at, until) if f else ("no video", None, None)
+        verdict, share, ans = screen_answer(f, at, until) if f else ("no video", None, None)
         black = last_black(f, at, fade_window) if f else None
-        prev = starts[k - 2] + offset if k >= 2 else None  # the touch before this one (starts[k - 1] is this one)
-        first = black is not None and (prev is None or prev < black)
+        prev_end = every[k - 2].end + offset if k >= 2 else None
+        first = black is not None and (prev_end is None or prev_end < black)
+        searched = min(fade_window, at - f.times[0]) if f else 0.0
         rows.append(Row(tc.t, tc.x, tc.y, tc.kind, tc.outcome, tc.drag, tc.moves_at, verdict, share, ans,
-                        None if black is None else round(at - black, 3), first))
+                        None if black is None else round(at - black, 3), first, round(searched, 3)))
     return rows
 
 
@@ -303,6 +314,8 @@ def decode(path, ss: float, dur: float, start: float) -> Frames:
     with subprocess.Popen(cmd, stdout=subprocess.PIPE) as p:
         while len(buf := p.stdout.read(size)) == size:
             thumbs.append(recovery.thumb(np.frombuffer(buf, np.uint8).reshape(720, 1280, 3)))
+    if p.returncode:
+        raise subprocess.CalledProcessError(p.returncode, cmd)
     th = np.array(thumbs, np.float32).reshape(-1, 18, 32)
     return Frames(start + ss + np.arange(len(th)) / FPS, th, th.mean(axis=(1, 2)))
 
@@ -336,7 +349,8 @@ def csv_row(r: Row, fade_window: float = FADE_WINDOW) -> dict:
     fmt = lambda v: "" if v is None else f"{v:.3f}"  # noqa: E731
     return {"time": hms(r.t), "x": r.x, "y": r.y, "kind": r.kind, "outcome": r.outcome, "verdict": r.verdict,
             "share": fmt(r.share), "answer_s": fmt(r.answer),
-            "since_fade_s": f"none in {fade_window:g} s" if r.since_fade is None else f"{r.since_fade:.2f}",
+            "since_fade_s": f"{r.since_fade:.2f}" if r.since_fade is not None else f"none in {fade_window:g} s"
+            if r.fade_searched >= fade_window else f"none in {r.fade_searched:.1f} s of video",
             "first_after_fade": "yes" if r.first_after_fade else ""}
 
 
@@ -346,13 +360,15 @@ def summary(rows: list[Row], off: Offset | None, given: float | None = None) -> 
     elif off:
         lines = [f"offset {off.value:+.3f} s (median of {off.n} map drags the map followed, quartiles {off.lo:+.3f} to {off.hi:+.3f} s)"]
     else:
-        lines = ["offset: no map drag to measure it on"]
-    lines.append(f"{'kind':<9} {'verdict':<8} {'touches':>7} {'first after a fade':>7}  since the fade (first touches)")
+        lines = ["offset +0.000 s (no map drag to measure it on)"]
+    span = lambda v: f"{v[0]:.2f}-{v[-1]:.2f} s" if v else "-"  # noqa: E731
+    lines += ["first: the first touch after a fade; since the fade: the range over those, then over every touch with one",
+              f"{'kind':<9} {'verdict':<8} {'touches':>7} {'first':>5}  {'since: first':<13} since: all"]
     for kind, verdict in sorted({(r.kind, r.verdict) for r in rows}):
         sel = [r for r in rows if (r.kind, r.verdict) == (kind, verdict)]
         first = sorted(r.since_fade for r in sel if r.first_after_fade)
-        span = f"{first[0]:.2f}-{first[-1]:.2f} s" if first else "-"
-        lines.append(f"{kind:<9} {verdict:<8} {len(sel):>7} {len(first):>7}  {span}")
+        every = sorted(r.since_fade for r in sel if r.since_fade is not None)
+        lines.append(f"{kind:<9} {verdict:<8} {len(sel):>7} {len(first):>5}  {span(first):<13} {span(every)}")
     return "\n".join(lines)
 
 

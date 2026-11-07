@@ -72,6 +72,26 @@ def test_a_full_read_tap_before_the_one_that_took_is_its_next_try():
     assert [(r.kind, r.outcome) for r in mt.map_touches(log)] == [("take", "next try"), ("take", "map: take")]
 
 
+def test_a_full_read_no_slot_took_ends_on_its_own_outcome():
+    log = ev.parse_log([
+        "11:00:00.000 [maalc] map: path up event > mid risky, score 22",
+        touch("11:00:00.100", 1077, 144),
+        touch("11:00:02.400", 1077, 357),
+        "11:00:04.500 [maalc] map: no node took a tap; MirrorHub looks again",
+    ])
+    assert [(r.kind, r.outcome) for r in mt.map_touches(log)] == [("take", "next try"), ("take", "no node took a tap")]
+
+
+def test_the_touches_after_the_unzoom_tap_still_count():
+    log = ev.parse_log([
+        "11:00:00.000 [maalc] map: zoomed in on the bus; opening and closing its node panel",
+        touch("11:00:00.100", 500, 400),
+        *drag("11:00:01.500", 852, 391, -406),
+        "11:00:03.000 [maalc] map: column 1: mid battle (1 onward)",
+    ])
+    assert [(r.kind, r.outcome) for r in mt.map_touches(log)] == [("unzoom", "read"), ("find_bus", "read")]
+
+
 def test_the_theme_pack_drag_before_the_new_floor_is_no_map_touch():
     log = ev.parse_log([
         "12:00:00.000 [maalc] floor 2: pull 'Emotional Seduction' (0)",
@@ -120,6 +140,20 @@ def test_a_taken_tap_answers_and_an_ignored_one_does_not_until_the_tap_after_it(
     assert second.answer == pytest.approx(0.0, abs=1 / FPS) and not second.first_after_fade
 
 
+def test_a_touch_that_ended_after_the_black_frame_makes_the_next_one_not_the_first():
+    # the event page's taps at (5, 5), three within 0.25 s, the last one while the screen is black
+    log = ev.parse_log([
+        touch("10:00:21.000", 5, 5), touch("10:00:21.150", 5, 5), touch("10:00:21.300", 5, 5),
+        "10:00:22.000 [maalc] Event: Event is gone: back to MirrorHub",
+        *drag("10:00:24.000", 852, 391, -406),
+        "10:00:25.500 [maalc] map: node at 328, 357 reads Cost 85: battle",
+    ])
+    t = ev.secs("10:00:24.000")
+    frames = screen(t - 4, [(t - 4, BLACK), (ev.secs("10:00:21.250"), MAP)], t + 2)
+    row = mt.judge([frames], mt.map_touches(log), mt.strokes(log), offset=0.1)[0]
+    assert row.since_fade is not None and not row.first_after_fade
+
+
 def test_a_touch_with_no_black_frame_in_the_window_has_no_fade():
     t = ev.secs("10:00:25.000")
     frames = screen(t - 12, [(t - 12, MAP), (t + 0.2, PANEL)], t + 1)
@@ -127,6 +161,14 @@ def test_a_touch_with_no_black_frame_in_the_window_has_no_fade():
     row = mt.judge([frames], mt.map_touches(log)[2:3], mt.strokes(log), offset=0.1, fade_window=10)[0]
     assert row.verdict == "taken" and row.since_fade is None
     assert mt.csv_row(row, fade_window=10)["since_fade_s"] == "none in 10 s"
+
+
+def test_a_fade_window_the_recording_does_not_cover_says_how_far_it_looked():
+    t = ev.secs("10:00:25.000")
+    frames = screen(t - 2, [(t - 2, MAP), (t + 0.2, PANEL)], t + 1)  # the recording starts 2 s before the tap
+    log = ev.parse_log(RUN)
+    row = mt.judge([frames], mt.map_touches(log)[2:3], mt.strokes(log), offset=0.1, fade_window=10)[0]
+    assert mt.csv_row(row, fade_window=10)["since_fade_s"] == "none in 2.1 s of video"
 
 
 def test_a_window_the_recorder_froze_on_is_frozen_not_ignored():
@@ -156,5 +198,9 @@ def test_the_summary_counts_each_kind_and_verdict_and_the_range_after_a_fade():
                        row("follow", "taken", 1.32, True), row("follow", "taken", 8.0, False)],
                       mt.Offset(0.067, 9, 0.033, 0.1))
     assert "offset +0.067 s" in text
-    assert "follow    ignored        2       2  1.16-1.46 s" in text
-    assert "follow    taken          2       1  1.32-1.32 s" in text
+    assert "follow    ignored        2     2  1.16-1.46 s   1.16-1.46 s" in text
+    assert "follow    taken          2     1  1.32-1.32 s   1.32-8.00 s" in text
+
+
+def test_the_summary_prints_the_offset_it_used_when_none_was_measured():
+    assert mt.summary([], None).startswith("offset +0.000 s (no map drag to measure it on)")
