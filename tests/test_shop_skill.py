@@ -305,8 +305,10 @@ def test_a_refresh_that_shows_another_sinner_is_judged_again(context, monkeypatc
     assert opened == ["Gregor", "Rodion"] and visit["refreshes"]["normal"] == 1
 
 
-def test_a_hand_back_mid_dialog_is_not_paid_again(context, monkeypatch):
-    # ADR 0007: the sinner is marked before the tap, as the heal is.
+@pytest.mark.parametrize("recovered", [False, True])
+def test_a_hand_back_mid_dialog_is_not_paid_again(context, monkeypatch, recovered):
+    # ADR 0007: the sinner is marked before the tap, as the heal is. A recovery in between keeps the mark too (#459 drops
+    # only the fusion scan).
     actions.RUN["team"] = shop_team({"heal": "none", "skill_replacement": replacing(skill_entry("Gregor", 1, 3, 2))})
     game = gregor_shop(context, monkeypatch)
     for step in ("sell", "buy", "fuse"):
@@ -320,6 +322,8 @@ def test_a_hand_back_mid_dialog_is_not_paid_again(context, monkeypatch):
     assert actions.Shop().run(context, argv())
     assert actions.RUN["shop"]["skill_tapped"] == ["Gregor"] and game.state == "dialog"
     monkeypatch.setattr(actions.Shop, "replace_skill", staticmethod(real))
+    if recovered:
+        actions.forget_game_state()
     lines = logged(monkeypatch)
     assert actions.Shop().run(context, argv())  # MirrorHub enters the same visit again: to_main cancels the dialog first
     assert game.taps.count(slot_tap(0)) == 1 and actions.REPLACE_CONFIRM not in game.taps and game.cost == 350
@@ -652,9 +656,11 @@ def test_a_starlight_swap_without_purchased_forgets_the_counts(context, monkeypa
     assert game.taps.count(ID_SLOT) == 1
 
 
-def test_a_hand_back_at_the_paying_tap_does_not_pay_twice(context, monkeypatch):
+@pytest.mark.parametrize("recovered", [False, True])
+def test_a_hand_back_at_the_paying_tap_does_not_pay_twice(context, monkeypatch, recovered):
     # #264 Implementation Decisions (the heal's rule, ADR 0007): the visit is marked before the paying tap. Here the tap is
-    # lost to a popup (nothing paid, the slot not Purchased): the visit memory alone keeps the re-entered visit from paying.
+    # lost to a popup (nothing paid, the slot not Purchased): the visit memory alone keeps the re-entered visit from paying,
+    # a recovery in between too (#459 drops only the fusion scan).
     actions.RUN["team"] = searching(RYOSHU) | {"heal": "none"}
     game = IdGame(context, monkeypatch, {"Ryōshū": (2, 3, 1)})
     for step in ("sell", "buy", "fuse"):
@@ -669,6 +675,8 @@ def test_a_hand_back_at_the_paying_tap_does_not_pay_twice(context, monkeypatch):
     assert actions.Shop().run(context, argv())
     assert actions.RUN["shop"]["id_searched"] and game.state == "ask"
     context.tasker.controller.post_click.side_effect = click
+    if recovered:
+        actions.forget_game_state()
     lines = logged(monkeypatch)
     assert actions.Shop().run(context, argv())  # MirrorHub enters the same visit again: to_main cancels both layers
     assert game.taps.count(ID_SLOT) == 1 and game.cost == 868 and game.state == "left"

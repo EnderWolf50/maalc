@@ -410,9 +410,7 @@ def test_a_recipe_whose_cell_is_not_where_the_fusion_put_it_is_not_counted_faile
 def test_a_recovery_reads_the_fuse_page_again_on_the_same_visit(context, monkeypatch):
     # #459, live: the game froze on the fuse page, a material's tap was lost and the scan made none. The recovery restarted
     # the game into the same shop, whose visit kept fuse_scanned: the page was not opened again that floor.
-    # The skill step's keys are kept as the heal's flag is: a swap tapped before the freeze is not paid again (#264).
-    paid = {"healed": True, "refreshes": {"keyword": 1, "normal": 0},
-            "skill_tapped": ["Faust"], "id_tried": ["Faust"], "id_searched": True}
+    paid = {"healed": True, "refreshes": {"keyword": 1, "normal": 0}}
     visit = actions.RUN.setdefault("shop", {**paid, "wanted": None, "sold": False})
     lost_tap_fuse_page(context, monkeypatch)
     actions.Shop.fuse(context, shop_team({}), visit)

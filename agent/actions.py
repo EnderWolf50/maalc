@@ -1182,9 +1182,8 @@ def foreground(context):
 def forget_game_state():
     """The game came back from a recovery or a restart: drop the streak, the battle clock and the map retries.
 
-    A shop visit keeps what it paid for (healed, refreshes, the skill step's skill_tapped, id_tried and id_searched) but
-    not fuse_scanned: a fuse page that made none may have been a game that took no tap (#459), so the next round reads it
-    again."""
+    A shop visit keeps the rest of RUN["shop"] (what it paid for or tapped, Shop lists it) but not fuse_scanned: a fuse
+    page that made none may have been a game that took no tap (#459), so the next round reads it again."""
     STUCK["watch"].reset()
     for key in ("turn", "battle_start", "map_misses", "event_tried", "map_plan", "map_entered"):
         RUN.pop(key, None)
