@@ -258,6 +258,28 @@ def test_a_fight_s_gift_page_does_not_weigh_tiers(context, monkeypatch):
     assert [t for t in taps if t[1] == 300] == [(236, 300)]
 
 
+def select_alone(monkeypatch):
+    """The Select button reads "Select" alone, as on a page that takes one card (GiftChoiceNoCount.png, #494)."""
+    inner = actions.ocr
+    monkeypatch.setattr(actions, "ocr", lambda context, image, roi, only_rec=False:
+                        [("Select", (1102, 566, 73, 26))] if roi == actions.GIFT_COUNT else inner(context, image, roi, only_rec))
+
+
+def test_a_page_without_trials_whose_select_reads_alone_takes_its_best_card_alone(context, monkeypatch):
+    taps = test_actions.gift_page(context, monkeypatch, ["Ashes to Ashes", "Barbed Lasso", "Nebulizer"])
+    select_alone(monkeypatch)
+    actions.PickGift().run(context, None)
+    assert [t for t in taps if t[1] == 300] == [(236, 300)]
+
+
+def test_a_boss_page_whose_select_reads_alone_takes_every_card(context, monkeypatch):
+    # #494: a page with trials always showed its count, so "Select" alone there is a count missed (#81), not one pick
+    taps, _ = boss_page(context, monkeypatch, FLOOR_3, 3)
+    select_alone(monkeypatch)
+    actions.PickGift().run(context, None)
+    assert [t for t in taps if t[1] == 300] == [(375, 300), (639, 300), (903, 300)]
+
+
 def test_a_card_read_by_its_effects_or_not_at_all_says_what_was_read(context, monkeypatch):
     cards = [("Disk Fragment", False, 2, "Resilient Il", ["Defense Level +1, Max HP", "+7.5%"]),
              ("Phlebotomy Pack", False, 1, "", [])]
