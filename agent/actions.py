@@ -2130,8 +2130,8 @@ MAP_LOOKS = 4  # looks, 1 s apart, for a linked slot before the fallback taps
 # Past them only the marks, which miss the WARNING ring (#238); a drag brings those columns here to be read again.
 MAP_NEAR = 650
 MAP_DRAGS = 3  # drags of two columns RouteMap.read_on makes at most: the first screen shows four, a floor ~7 and the boss
-# #490: read_on leaves a drag back shorter than this undone; find_bus takes the bus where it is. Live, a 1 px drag did
-# not move the map (2026-11-06, 5 of 5); 50 px is the shortest map drag #114 measured, 10 of 10 moved.
+# #490: the shortest drag back read_on makes. Live, a 1 px drag did not move the map (2026-11-06, 5 of 5); 50 px is the
+# shortest map drag #114 measured, 10 of 10 moved.
 MAP_DRAG_MIN = 50
 PANEL_REWARDS = [700, 495, 110, 30]  # the "Clear Rewards" label
 PANEL_COST = [730, 545, 40, 35]  # the number by its Cost coin
@@ -2709,8 +2709,7 @@ class RouteMap(CustomAction):
         with nothing read past it (hard mode's two columns), a drag that moves the map less than half a column or
         leaves no column to read on from (its edge), or one that cannot be measured (what was read stands), or after
         MAP_DRAGS drags.
-        The map is then dragged back as far, less a remainder too short to move it (MAP_DRAG_MIN), and the bus found again
-        (find_bus).
+        The map is then dragged back as far, less a remainder under MAP_DRAG_MIN, and the bus found again (find_bus).
         """
         dx, (bx, by) = map_route.COLUMN_DX, bus
         x0, y, moved, back = bx + SLOT[0], by + SLOT[1], 0, 0
