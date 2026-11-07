@@ -313,13 +313,18 @@ def rank_gifts(cards):
 def pick_gifts(ranked, read, tap):
     """Tap gift cards best first until Select n/m is full (spec 03 section 12); the cards tapped, in order.
 
-    read() gives the Select button's OCR text off the screen; tap(i) taps card i. A lone card shows no count.
-    With several cards and no count read, it is read again, then cards are tapped in order until
-    it reads, every card when it never does (#81).
+    read() gives the Select button's OCR text off the screen; tap(i) taps card i. With several cards and no count read,
+    it is read again. A button that reads "Select" alone shows no count: a lone card, or a page that takes one card,
+    where a tap on another moves the pick to it (#494); the best card alone is tapped. Any other read without n/m is a
+    count missed: cards are tapped in order until it reads, every card when it never does (#81).
     """
-    count = select_count(read())
-    if count is None and len(ranked) > 1:
-        count = select_count(read())
+    shown = read()
+    if select_count(shown) is None and len(ranked) > 1:
+        shown = read()
+    if compact(shown) == "select":
+        tap(ranked[0])
+        return ranked[:1]
+    count = select_count(shown)
     taken = []
     for i in ranked:
         if count and count[0] >= count[1]:

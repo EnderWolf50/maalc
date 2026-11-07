@@ -282,14 +282,15 @@ class GiftPage:
     moves the pick to it.
     """
 
-    def __init__(self, picks, unread=0, counted=True):
-        self.picks, self.unread, self.counted = picks, unread, counted  # unread: count reads that come back empty first
+    def __init__(self, picks, unread=0, counted=True, missed=""):
+        self.picks, self.unread, self.counted = picks, unread, counted  # unread: count reads that come back as missed first
+        self.missed = missed
         self.picked, self.taps = [], []
 
     def read(self):
         if self.unread:
             self.unread -= 1
-            return ""
+            return self.missed
         return f"Select {len(self.picked)}/{self.picks}" if self.counted else "Select"
 
     def tap(self, i):
@@ -302,8 +303,9 @@ class GiftPage:
             self.picked = [i]
 
 
-def test_pick_gifts_taps_every_card_when_the_count_never_reads():
-    page = GiftPage(picks=2, unread=99)  # #81: hard boss, Select 0/2 not read
+@pytest.mark.parametrize("missed", ["", "Select O/2"])  # nothing read, or the count misread: not a page with no count
+def test_pick_gifts_taps_every_card_when_the_count_never_reads(missed):
+    page = GiftPage(picks=2, unread=99, missed=missed)  # #81: hard boss, Select 0/2 not read
     r.pick_gifts([1, 0], page.read, page.tap)
     assert sorted(page.picked) == [0, 1]
 
