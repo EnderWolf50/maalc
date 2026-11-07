@@ -220,10 +220,14 @@ POPUPS = ("Connecting", "RetryPopup", "PopupButton")  # MirrorHub's global popup
 # Windows that leave a page's anchor readable under them, answered by MirrorHub before that page. #213: a GET! window
 # over the map after a fight leaves its buttons (MirrorMap) lit. Not the shop's: Shop closes its own GET! windows.
 COVERS = {"MirrorMap": ("GiftGet",)}
+# Windows that hide a page's anchor where the action's own taps close them anyway: they pass its guard as its page.
+# #309: an event's GET! windows, over its page or the map it ends on, close on any tap, the text taps on the dead corner too.
+TAPPED_THROUGH = {"Event": ("GiftGet",)}
 
 
 def page_guard(context, home, image=None):
-    """Before a tap: a screenshot that still shows home (MirrorHub's node for the action's page); else PageGone.
+    """Before a tap: a screenshot that still shows home (MirrorHub's node for the action's page) or one of its
+    TAPPED_THROUGH windows; else PageGone.
 
     ADR 0007, #118: an action that taps on for long checks its page first, so a screen changed under it is
     handed back to MirrorHub at once instead of tapped blind until the action gives up. A miss is looked at
@@ -232,8 +236,10 @@ def page_guard(context, home, image=None):
     one of POPUPS showing is the page gone too: MirrorHub answers it first. So is one of home's COVERS.
     image: a screenshot just taken, looked at first.
     """
+    pages = (home, *TAPPED_THROUGH.get(home, ()))
+
     def shown(im):
-        return on_page(context, im, *POPUPS, *COVERS.get(home, ()), home) == home
+        return on_page(context, im, *POPUPS, *COVERS.get(home, ()), *pages) in pages
 
     if image is not None and shown(image):
         return image
@@ -3424,7 +3430,6 @@ class Event(CustomAction):
 
     @hands_back
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
-        image = screen(context)
         # One event's clock: a call more than EVENT_GAP s after the last starts the next event's (#92).
         now = time.monotonic()
         event = RUN.get("event")
@@ -3434,6 +3439,10 @@ class Event(CustomAction):
         if now - event["since"] > EVENT_LIMIT:
             RUN.pop("event")
             return stuck(f"one event went on over {EVENT_LIMIT} s")
+        image = still(context)
+        if image is None:
+            log("event: the page did not hold still; MirrorHub looks again")
+            return True
         tried = RUN.setdefault("event_tried", set())  # this question's options a tap did nothing on
         checked = event["checked"]  # portraits a tap did nothing on in this check
         if red_button(image):
@@ -3493,6 +3502,9 @@ class Event(CustomAction):
             if until(context, lambda im: not Event.panel_same(image, im), timeout=EVENT_TAKE) is None:
                 log(f"event: {options[i][0]!r} did nothing: try another")
                 tried.add(options[i][0])
+            # A lit card changes the panel before the page goes: MirrorHub reading Choices would take one again.
+            elif until(context, gone(context, {"roi": CHOICES_HEADER, "expected": "Choices"}, image), timeout=EVENT_TAKE) is None:
+                log(f"event: Choices still up {EVENT_TAKE} s after taking {options[i][0]!r}")
         else:
             tried.clear()
             Event.advance(context, image)
