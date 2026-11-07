@@ -388,12 +388,22 @@ Cost 表是 wiki 與簡中客戶端的表，實機 log 的節點面板 Cost 沒�
 
 隊伍的 `skill_replacement.sinners`（[04](04-settings.md) 第 9 節）列出要換技能的罪人、每位的目標張數與 `s1_s3_first`；清單是空的，或每位的目標都還是遊戲的 3／2／1 時，這一步什麼都不讀、不點（`shop.any_change`），商店和以前完全一樣。
 
-- **時機**（#264 定案）：治療之後、出售 → 購買與刷新 → 合成的循環之前做一次（`Shop.replace_skills`）；每次刷新成功（Cost 有扣）後、回去讀商品之前再做一次，因為刷新會換掉替換格的罪人（#264 附圖 106 → 107）。不為了換技能而刷新：刷新照舊只由購買的規則決定。MirrorHub 交回後重新進同一次造訪時也會再跑這一步，已處理過的罪人跳過。
+- **時機**（#264 定案）：治療之後、出售 → 購買與刷新 → 合成的循環之前做一次（`Shop.skill_step`，替換格與 ID Skill Search 是同一步）；每次刷新成功（Cost 有扣）後、回去讀商品之前再做一次，因為刷新會換掉替換格的罪人（#264 附圖 106 → 107）。不為了換技能而刷新：刷新照舊只由購買的規則決定。MirrorHub 交回後重新進同一次造訪時也會再跑這一步，已處理過的罪人跳過。
+- **先後**（#264 定案，使用者 2026-11-07；`shop.skill_walk`）：依 `sinners` 的順序一位一位處理，處理完這位才輪到下一位。每位先用他自己在這一頁的替換格（同一種換法替換格只要 ID Skill Search 一半的價格）；這位照這一局的張數還要換（`shop.search_turn`：這一局沒讀過張數的算要換），而且 ID Skill Search 開著、這一頁有、這次造訪還沒用過，再用 ID Skill Search 換他。每一格每次造訪只用一次。付星光時順序不變：星光不花 Cost，換到的結果和付 Cost 夠多時一樣。#264 的例子（清單 1 良秀（Ryōshū）、2 莫爾索（Meursault），付 Cost；`tests/test_shop_skill.py` 照這張表測）：
+
+  | 這一頁 | Cost 夠換 | 順序 |
+  |---|---|---|
+  | Replace 良秀、Replace 莫爾索、ID Skill Search | 三次 | 良秀的替換格 → ID Skill Search 換良秀 → 莫爾索的替換格 |
+  | 同上 | 兩次 | 良秀換兩次，莫爾索不換 |
+  | 同上 | 一次 | 良秀的替換格 |
+  | Replace 莫爾索、ID Skill Search | — | ID Skill Search 先換良秀，再輪到莫爾索的替換格 |
+
+  ID Skill Search 為某位罪人點開、他的對話框卻沒有可行的換法時，照下面的「挑罪人」往清單下面找，但跳過自己的替換格在這一頁還沒輪到的罪人（先用半價的替換格），也不回頭找排在他前面、已經輪過的罪人。
 - **讀商品格**：整塊 `OFFER_GRID` OCR 一次（`shop.read_slots`，不讀名牌與圖示）；名稱有 `Replace` 和 `Skil`、沒有 `ID Skil` 的是替換格（`shop.skill_slots`；OCR 會截掉 `Skill` 的字尾，驗收 #455 讀到 `Skil`，所以比對字根），罪人名用 `ocrtext.has` 比對 12 位罪人（大小寫、重音、空白都不計，`RYOSHU` 也算 Ryōshū），對不到或對到兩位就是讀不出來。同一格讀成兩行價格（`SuperShop.png` 的 `??` 讀成金幣字形和 `7?`）只算一格（`shop.same_offer`）。Super Shop 和購買頁一樣讀頂端與拖到底的兩屏，每格記下在哪一屏，點之前用 `Shop.find_offer` 重找。
-- **先開哪一格**（`shop.skill_plan`）：要開的格子照清單順序排（同一頁有兩格、錢只夠一格時先換清單前面的罪人），其餘照格子順序寫 log。不開的格子：標 `Purchased`（換過了）、罪人名讀不出來、罪人不在清單上、目標是 3／2／1、這次造訪已處理過、這一局讀到的張數已達標、或讀到的張數已經沒有換法能更接近目標（例如技能 3 上鎖）。張數還不知道的罪人要開：對話框是唯一讀得到張數的地方。同一位罪人一次造訪只開一格（兩格同一位罪人沒看過）。
+- **先開哪一格**（`shop.skill_plan`）：要開的格子照清單順序排（同一頁有兩格、錢只夠一格時先換清單前面的罪人；和 ID Skill Search 怎麼穿插見「先後」），其餘照格子順序寫 log。不開的格子：標 `Purchased`（換過了）、罪人名讀不出來、罪人不在清單上、目標是 3／2／1、這次造訪已處理過、這一局讀到的張數已達標、或讀到的張數已經沒有換法能更接近目標（例如技能 3 上鎖）。張數還不知道的罪人要開：對話框是唯一讀得到張數的地方。同一位罪人一次造訪只開一格（兩格同一位罪人沒看過）。
 - **換法的決策**（#264 定案；`shop.swaps_wanted`、`shop.skill_choice`）：換法 `a_b` 只在技能 a 多於目標、技能 b 少於目標時算（每次只動一張，不會超過目標）。兩種都算時依 `s1_s3_first` 先試 `s1_s3` 或另一種。技能 3 上鎖（`Skills Owned` 總數 5 且技能 3 是 0，Uptie 未滿 3）時換到技能 3 的兩種都不算，只剩 `s1_s2`。照順序取第一個「價格讀得到、選項亮著（價格是橘字，暗掉的是紅字，`shop.option_lit`）、付完不低於預留金額」的換法；都不行就不換。價格看畫面（以畫面為準），資料檔的價格不拿來預測或決定。Cost 讀不到就什麼都不選。從 3／2／1 照這個規則一格換一張，18 種合法目標兩種先後都會走到目標，用到的換法正好是 #264 寫的固定數量（`tests/test_shop.py`）。
-- **一格的流程**（`Shop.replace_skill`）：點格子（`Shop.open_offer`，等左上標題 `Replace` 出現）→ 讀對話框（`Shop.read_replace_dialog`：標題的罪人、`Skills Owned` 的三個張數、右上的 Cost、三個價格與是否亮著）→ 點選換法，等那一格出現橘框（`shop.option_picked`）→ Confirm，等第二層 `Spend <n> Cost to replace this Skill?` → 核對 `<n>` 和右上 `<Cost> ▸ <換後>` 的預覽都等於要付的價格（預覽也擋下讀高的 Cost，否則會花進預留金額）→ 再按 Confirm 付款 → 等主畫面的 Cost 變成新的數字（最多 4 秒）→ 讀 Cost 核對。最後一次 Confirm 之後到對話框消失之前**不做畫面檢查**（`page_guard`）：付款時右上出現 `CONNECTING`，會被當成全域的 `Connecting` 彈窗而把商店交回 MirrorHub（`tests/test_shop_skill_screens.py`：`ShopReplaceSkillConnecting.png` 上 `Connecting` 節點會命中）。4 秒後對話框還在，才檢查畫面（真的 `Connecting` 由 MirrorHub 等），之後回商店主畫面，結果當作不知道。每一格處理完都回商店主畫面（`Shop.to_main`）；處理下一格之前重讀商品格，用罪人名找到那一格（換過的格會不會移位沒看過，#264），找不到就不點（`'<罪人>''s slot is no longer on the grid: skip`）。
-- **處理過**：點格子之前就把罪人記成這次造訪處理過（`RUN["shop"]["replaced"]`，和治療一樣，ADR 0007），所以中途被交回 MirrorHub、再進商店時不會重付。只有一種情況會拿掉這個記號：還沒按任何 Confirm、bot 自己按 Cancel，原因是沒有亮著、讀得到價格又付得起的換法；之後刷新再判斷時（可能賣過東西、Cost 變多了）會再開一次。
+- **一格的流程**（`Shop.replace_skill`）：點格子（`Shop.open_offer`，等左上標題 `Replace` 出現）→ 讀對話框（`Shop.read_replace_dialog`：標題的罪人、`Skills Owned` 的三個張數、右上的 Cost、三個價格與是否亮著）→ 點選換法，等那一格出現橘框（`shop.option_picked`）→ Confirm，等第二層 `Spend <n> Cost to replace this Skill?` → 核對 `<n>` 和右上 `<Cost> ▸ <換後>` 的預覽都等於要付的價格（預覽也擋下讀高的 Cost，否則會花進預留金額）→ 再按 Confirm 付款 → 等主畫面的 Cost 變成新的數字（最多 4 秒）→ 讀 Cost 核對。最後一次 Confirm 之後到對話框消失之前**不做畫面檢查**（`page_guard`）：付款時右上出現 `CONNECTING`，會被當成全域的 `Connecting` 彈窗而把商店交回 MirrorHub（`tests/test_shop_skill_screens.py`：`ShopReplaceSkillConnecting.png` 上 `Connecting` 節點會命中）。4 秒後對話框還在，才檢查畫面（真的 `Connecting` 由 MirrorHub 等），之後回商店主畫面，結果當作不知道。每一格處理完都回商店主畫面（`Shop.to_main`）；處理下一格之前（中間點過格子的話，包括 ID Skill Search）重讀商品格，用罪人名找到那一格（換過的格會不會移位沒看過，#264），找不到就不點（`'<罪人>''s slot is no longer on the grid: skip`）。
+- **處理過**：點格子之前就把罪人記成這次造訪處理過（`RUN["shop"]["skill_tapped"]`：點過的格子，不一定換成，和治療一樣，ADR 0007），所以中途被交回 MirrorHub、再進商店時不會重付。只有一種情況會拿掉這個記號：還沒按任何 Confirm、bot 自己按 Cancel，原因是沒有亮著、讀得到價格又付得起的換法；之後刷新再判斷時（可能賣過東西、Cost 變多了）會再開一次。
 - **這一局的張數**（`RUN["skills"]`，只由 `actions.note_skills` 寫）：對話框讀到的張數立刻記下；換成功就記成換後的張數。記住的張數絕不超前遊戲：Cost 扣的正好是價格才算換成；Cost 沒變就保留原來的張數；Cost 讀不到、扣的數字不是價格、或對話框 4 秒後還在，就忘掉這位罪人的張數，下次再開來讀（多開一次而已；超前的話可能跳過還需要換的格子）。張數跟著 `RUN` 走：結算的 Claim、Give up、新的一局與換任務時清掉（離開鏡牢就清掉），換層與 MirrorHub 交回都留著；Agent 重啟後不在，就再開一次讀。
 - **換不了的情況**（#264 定案）：一律不換、寫一行 log、繼續商店的其他步驟。
 
@@ -422,27 +432,28 @@ Cost 表是 wiki 與簡中客戶端的表，實機 log 的節點面板 Cost 沒�
 
 隊伍的 `skill_replacement.id_skill_search`（[04](04-settings.md) 第 9 節）`enabled` 打開、而且 `sinners` 有目標不是 3／2／1 的罪人時才做；否則什麼都不讀、不點。它和替換格共用上面的換法決策、對話框讀法與付款流程，只差在怎麼選罪人、付哪一種。
 
-- **時機**（#456 決定 1）：和替換格是同一步（`Shop.skill_step`）：治療之後、每次刷新成功後，**先**處理替換格（`Shop.replace_skills`），**再**做 ID Skill Search（`Shop.id_skill_search`），用替換格換完之後的張數（`RUN["skills"]`）與 Cost 判斷。理由：同一種換法替換格只要一半的價格。
+- **時機**（#264 先後）：和替換格是同一步（`Shop.skill_step`）：治療之後、每次刷新成功後。順序見上面的「先後」：輪到一位罪人、他自己在這一頁的替換格用過（或這一頁沒有）之後，照這一局的張數（`RUN["skills"]`，替換格剛換過就是換後的張數）他還要換，才為他點 ID Skill Search（`Shop.id_skill_search`）。
 - **找格子**：讀商品格（`Shop.skill_offers`，Super Shop 兩屏），名稱有 `ID Skil` 的那格（`shop.id_search_slot`，截掉字尾也認得）。沒有這格就什麼都不做；標 `Purchased` 就記成這次造訪處理過，不點（換過之後點它沒有反應，#456 實機）。
-- **挑罪人**（`shop.id_search_plan`，#264 定案）：照 `sinners` 的順序，每位寫一行 log。跳過：目標是 3／2／1、這次造訪試過（每位最多試一次，`RUN["shop"]["id_tried"]`）、陣亡（商店主畫面罪人列的灰色頭像，`actions.bar_dead`：選人模式點陣亡罪人的頭像沒有反應）、這一局讀到的張數已達標或已經沒有換法。其餘的照順序一位一位試，在對話框上判斷（以畫面為準）。一位都沒有就不點格子（`nobody to try: not opened`）。
+- **挑罪人**（`shop.id_search_plan`，#264 定案）：從輪到的那位罪人起照 `sinners` 的順序往下（排在他前面的不回頭），每位寫一行 log。跳過：目標是 3／2／1、這次造訪試過（每位最多試一次，`RUN["shop"]["id_tried"]`）、自己的替換格在這一頁還沒輪到（`has a Replace slot on this page, used first: skip`，先用半價的替換格，#264 先後）、陣亡（商店主畫面罪人列的灰色頭像，`actions.bar_dead`：選人模式點陣亡罪人的頭像沒有反應）、這一局讀到的張數已達標或已經沒有換法。其餘的照順序一位一位試，在對話框上判斷（以畫面為準）。照這一局讀過的張數，已知清單上每位都已達標或換不了、一位都沒有可試的，就不點格子（`nobody to try: not opened`，#264）。
 - **一位的流程**（`Shop.id_search_swap`）：點格子進選人模式（`Shop.open_offer`，等頂端 `Select a Sinner` 出現）→ 先把罪人記成試過 → 點他的頭像（`SHOP_PORTRAIT_X`，y 655），等對話框標題 `Replace` → 讀對話框（`Shop.read_replace_dialog`，罪人要對得上）→ 讀到的張數立刻記下 → 看付款方式 → 判斷換法（`shop.id_search_choice`）→ 和替換格同一段付款（`Shop.pay_swap`：選換法、等橘框、Confirm、核對第二層、付款 Confirm、等主畫面）→ 核對。對話框的 Cancel 直接回商店主畫面（不是選人模式），所以試下一位要再點一次格子；點了頭像沒出現對話框時還在選人模式，直接點下一位的頭像。試完都沒換成、而還停在選人模式時按 Return（`no listed sinner has a feasible swap: Return`）。一次造訪最多換一次（格子換過就標 `Purchased`）。
-- **付款方式**（#456 決定 3）：對話框的三個價格決定現在付哪一種（`shop.pay_mode`：讀得到的價格全部等於資料檔 `id_search.cost` 的 90／150／240 是 Cost，全部等於 `id_search.starlight` 的 25／50／75 是星光，混雜或都讀不到就不知道）。三個價格都讀不到時付款方式不知道，直接 Cancel（點雙箭頭可能把本來對的方式切走）。和 `pay` 不同就點右上 Cost 左邊的雙箭頭（`PAY_SWITCH` (957, 140)），等三個價格變成另一種才往下（不假設上次的方式會保留：停在星光時關掉再打開會怎樣沒拍到）；切不過去就 Cancel。星光模式下右上的數字是持有的星光，`read_replace_dialog` 的 `cost` 讀的就是它。
+- **付款方式**（#456）：對話框的三個價格決定現在付哪一種（`shop.pay_mode`：讀得到的價格全部等於資料檔 `id_search.cost` 的 90／150／240 是 Cost，全部等於 `id_search.starlight` 的 25／50／75 是星光，混雜或都讀不到就不知道）。三個價格都讀不到時付款方式不知道，直接 Cancel（點雙箭頭可能把本來對的方式切走）。和 `pay` 不同就點右上 Cost 左邊的雙箭頭（`PAY_SWITCH` (957, 140)），等三個價格變成另一種才往下（不假設上次的方式會保留：截圖裡對話框打開時是 Cost（`tests/screens/ShopIdSkillSearchDialog.png`），停在星光時關掉再打開會怎樣沒拍到）；切不過去就 Cancel。星光模式下右上的數字是持有的星光，`read_replace_dialog` 的 `cost` 讀的就是它。
 - **付 Cost**：遵守預留金額，和替換格一樣；付完核對主畫面的 Cost 正好少了價格（`Shop.cost_paid`，三種結果和替換格相同）。
-- **付星光**：不受預留金額限制，星光不夠視為不可行。第二層只在 `Spend <價格> Starlight to replace this Skill?` 出現、而且 `<數字> ▸ <數字>` 的預覽正好少了價格時才付款；**星光的第二層沒有實機截圖**，這個字樣是照 Cost 那層（`Spend 240 Cost to replace this Skill?`、`868 ▸ 628`）把 `Cost` 換成 `Starlight` 推的；讀到別的字樣就不付（`no second confirm asking Starlight: back to the shop`），預覽對不上就 Cancel。預覽照 Cost 那層的框讀（`REPLACE_PREVIEW` [980, 115, 130, 45]，照三位數的 `350 ▸ 305` 量的）：四位數的星光（例如 `3433 ▸ 3358`）多兩位數字，可能超出框而讀錯，那就每次都 Cancel、付不出星光（往不付的方向錯）；實機驗收要先看這一層。付完之後主畫面讀不到星光、格子也點不開，所以用畫面上看得到的兩件事核對：格子標 `Purchased`，而且主畫面的 Cost 沒變；兩件都對才算換成，否則忘掉這位罪人的張數。
-- **處理過**（#456 決定 5）：付款的那一下 Confirm **之前**就記下 `RUN["shop"]["id_searched"]`（和治療一樣），之後這次造訪不再點這格；格子標 `Purchased` 時也記。所以付款途中被交回 MirrorHub 再進來不會重付。只是試過、沒按到付款的罪人不會讓整格算處理過，刷新後還能試沒試過的罪人。
-- **選人模式與畫面檢查**（#456 決定 4）：選人模式下 `Leave` 變成 `Return`，原本 MirrorHub 的 `Shop` 節點（`Leave`）不命中，`Shop.way_out` 也會因為讀得到刷新費用而誤判成主畫面。所以 `Shop` 節點改成「`Leave`，或頂端的 `Select a Sinner for Skill`」（`mirror_dungeon.json`），選人模式下 `page_guard` 照常成立，被交回 MirrorHub 時 HubText 也會選 `Shop`（`tests/test_hub_text_screens.py`）；`Shop.way_out` 在讀刷新費用之前先讀頂端（`SELECT_TITLE` [430, 15, 420, 35]；`Shop` 節點的 `ShopSelectSinner` 寫著同一個框，改一處要一起改），是選人模式就按 Return（`BOTTOM_RIGHT`），所以 `Shop.to_main` 一定回到商店主畫面。改之前，選人模式下 MirrorHub 沒有節點命中（`ShopIdSkillSearchSelect.png` 上 `Shop` 不命中，#456 的探測），只能等復原處理。付款 Confirm 之後到對話框消失之前一樣不做畫面檢查（`CONNECTING` 會命中全域的 `Connecting`，`ShopIdSkillSearchConnecting.png`）。
+- **付星光**：不受預留金額限制，星光不夠視為不可行。第二層只在 `Spend <價格> Starlight to replace this Skill?` 出現、而且 `<數字> ▸ <數字>` 的預覽正好少了價格時才付款；**星光的第二層沒有實機截圖**，這個字樣是照 Cost 那層（`Spend 240 Cost to replace this Skill?`、`868 ▸ 628`）把 `Cost` 換成 `Starlight` 推的；讀到別的字樣就不付（`no second confirm asking Starlight: back to the shop`），預覽對不上就 Cancel。預覽照 Cost 那層的框讀（`REPLACE_PREVIEW` [980, 115, 130, 45]，照三位數的 `350 ▸ 305` 量的）：四位數的星光（例如 `3433 ▸ 3358`）多兩位數字，可能超出框而讀錯，那就每次都 Cancel、付不出星光（往不付的方向錯）；實機驗收要先看這一層。付完之後主畫面讀不到星光、格子也點不開，所以用畫面上看得到的兩件事核對：格子標 `Purchased`，而且主畫面的 Cost 沒變（#264 Implementation Decisions，使用者 2026-11-07 同意）；兩件都對才算換成，否則忘掉這位罪人的張數。
+- **處理過**（#264 Implementation Decisions：點格子之前先記成處理過，和治療一樣）：付款的那一下 Confirm **之前**就記下 `RUN["shop"]["id_searched"]`（和治療一樣），之後這次造訪不再點這格；格子標 `Purchased` 時也記。所以付款途中被交回 MirrorHub 再進來不會重付。只是試過、沒按到付款的罪人不會讓整格算處理過，刷新後還能試沒試過的罪人。
+- **選人模式與畫面檢查**（#456，`tests/screens/ShopIdSkillSearchSelect.png`）：選人模式下 `Leave` 變成 `Return`，原本 MirrorHub 的 `Shop` 節點（`Leave`）不命中，`Shop.way_out` 也會因為讀得到刷新費用而誤判成主畫面。所以 `Shop` 節點改成「`Leave`，或頂端的 `Select a Sinner for Skill`」（`mirror_dungeon.json`），選人模式下 `page_guard` 照常成立，被交回 MirrorHub 時 HubText 也會選 `Shop`（`tests/test_hub_text_screens.py`）；`Shop.way_out` 在讀刷新費用之前先讀頂端（`SELECT_TITLE` [430, 15, 420, 35]；`Shop` 節點的 `ShopSelectSinner` 寫著同一個框，改一處要一起改），是選人模式就按 Return（`BOTTOM_RIGHT`），所以 `Shop.to_main` 一定回到商店主畫面。改之前，選人模式下 MirrorHub 沒有節點命中（`ShopIdSkillSearchSelect.png` 上 `Shop` 不命中，#456 的探測），只能等復原處理。付款 Confirm 之後到對話框消失之前一樣不做畫面檢查（`CONNECTING` 會命中全域的 `Connecting`，`ShopIdSkillSearchConnecting.png`）。
 - **換不了的情況**：和替換格同一張表（第一次 Confirm 沒出現第二層的那行寫 `no second confirm asking <Cost|Starlight>`），另外：
 
   | 情況 | 處理 | log |
   |---|---|---|
-  | 沒有這格、或沒有可試的罪人 | 不點 | `nobody to try: not opened`（沒有格子時不寫） |
+  | 沒有這格 | 不點 | 不寫 |
+  | 照這一局讀過的張數，已知清單上沒有罪人可換（#264） | 不點這格 | `nobody to try: not opened` |
   | 格子標 `Purchased` | 不點，算處理過 | `used already (Purchased): skip` |
   | 點了格子沒出現選人模式 | 算處理過，不再點 | `shop: 'ID Skill Search' opened no select a sinner dialog`（`Shop.open_offer` 寫的，不是下面的開頭） |
   | 點了頭像沒出現對話框 | 還在選人模式，試下一位；都沒有就 Return | `'<罪人>''s portrait opened no dialog` |
   | 三個價格都讀不到 | Cancel，試下一位 | `the payment is unknown: cancel` |
   | 切不到要付的方式 | Cancel，試下一位 | `the payment does not show <pay>: cancel` |
   | 沒有亮著、讀得到價格又付得起的換法（星光不夠也是） | Cancel，試下一位 | `no swap toward <目標> is lit, priced and affordable in <Cost|starlight>: cancel` |
-  | 試完都不行、還在選人模式 | Return | `no listed sinner has a feasible swap: Return` |
+  | 點開後清單上沒有罪人有可行的換法（#264） | 還在選人模式就按 Return；最後一位的對話框 Cancel 已回到主畫面時不用 | `no listed sinner has a feasible swap: Return` |
   | 付星光後格子沒標 `Purchased` 或 Cost 變了 | 忘掉張數 | `the slot reads no Purchased, the Cost <a> -> <b>: the counts are not known` |
 
 - **log**：除了點格子沒反應那行（`Shop.open_offer` 寫的），每行以 `shop: ID Skill Search: ` 開頭。每位罪人一行（`'Gregor' counts not read this run, toward 1/3/2: try`、`'Yi Sang' is dead (grey on the shop's bar): skip`）；對話框一行寫張數、三個價格、付款的數字與單位：`'Ryōshū': Skills Owned 2/3/1, s1_s2 90, s2_s3 150, s1_s3 240, 868 Cost, reserve 0: try s1_s3`（星光：`... 3433 starlight (no reserve): try ...`）；換成功：`replaced 'Ryōshū' s1_s3 (skill 1 -> 3) for 240: 868 -> 628 Cost`，星光：`replaced 'Ryōshū' s1_s3 (skill 1 -> 3) for 75 starlight: 3433 -> 3358 starlight (unread after the dialog), the slot reads Purchased, the Cost stays 868`（換後的星光是算的：對話框關掉後讀不到）。
@@ -529,7 +540,7 @@ Cost 表是 wiki 與簡中客戶端的表，實機 log 的節點面板 Cost 沒�
 - **放入後回讀**（#77）：放材料前材料槽必須是空的；每點一格（再點列表上方 Recipes 與 Fusion Guide 之間的空白處關掉說明框；列表裡的標籤捲動後可能是別的格子）就截圖確認：有材料的槽多 1 個（空槽是純黑，亮度標準差 0–1，有材料 29–85），而且點的那格外框變橘（外框一圈橘色像素 17–23%，被說明框遮暗時 11%，沒選的 0–2%）。實機截圖顯示點了的格子留在原位、格子不重排，所以外框變橘就表示放進去的是預期的那格。任何一格不符就 Close 整頁、不按 Fuse，這次造訪在持有飾品改變前不再試。確認對話框的 `n/m` 的 n 要等於放入的個數才確認。log 記放入的材料（格子、階級、體系）與預期的結果階級。
 - 合成頁的列表上方可能多出其他區塊：持有的飾品湊得出固定配方時的 `Fusion Available`（配方產物列在上面，#103；實機：tests/screens/ShopFuseRecipe.png），也可能有主題包限定合成（`Theme Pack Exclusive Fusion Gift`：`Recipes` 彈窗最上面在另一局看過這一區（截圖沒有附檔），合成頁本身的區塊還沒看過）。持有飾品整區因此往下移，所以合成頁先拖回列表最上面，再用 OCR 找 `E.G.O Gifts Owned` 標題（找不到就往上拖一筆再找，拖不動就不讀、不合成），第一列持有飾品的中心在標題中心下方 66 px（實機：無區塊時 228 → 294，有固定配方時約 361 → 427）；#304 另量到標題 229／363、第一列 293／427，差 1–2 px，再照「讀格子」捲動讀完。標題上方的區塊不讀、不點（固定配方的實機流程見 [02-screens.md](02-screens.md) 合成頁的配方合成，#304；Agent 的做法見第 13 節配方合成，#300），限定合成另開 issue。（#205；以前讀到 `Fusion Available` 就直接 Close，2026-10-21 實機 F4、F5 兩次因此沒有合成。）這次造訪在持有飾品改變（買或賣）前不再試合成；確認對話框的 `n/m` 的 n 不等於放入的個數、沒合成成功時也一樣。
 - 治療的陣亡者以商店罪人列的灰色頭像為準（`actions.bar_dead`：頭像的平均飽和度低於 65；陣亡的 24–51，超過舊的 30（目測是 SP 徽章的藍色），存活的 83–158，`tests/screens` 12 張商店主畫面、144 個頭像，#456）；戰前編隊記下的存活人數只拿來核對，不一致時寫進記錄。
-- 進行中的商店狀態（是否已治療、兩種刷新各用了幾次、想買的價格與是否已為它出售、持有飾品是否已掃過、讀到的持有飾品）存在 Agent 記憶體，離開商店時清掉。Agent 重啟後會重新判斷治療。
+- 進行中的商店狀態（是否已治療、兩種刷新各用了幾次、想買的價格與是否已為它出售、持有飾品是否已掃過、讀到的持有飾品、點過哪些罪人的替換格（`skill_tapped`）、ID Skill Search 試過哪些罪人（`id_tried`）與用過沒有（`id_searched`））存在 Agent 記憶體，離開商店時清掉。Agent 重啟後會重新判斷治療。
 - 尚未處理：出售後若有確認對話框（還沒看過）。
 
 實機觀察（1.117.0，2026-10-15，普通局第 5 層商店）：

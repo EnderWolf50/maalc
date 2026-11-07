@@ -18,6 +18,7 @@ from maa.define import Rect
 import actions
 import recovery
 from settings import gift_tables
+from test_settings import DEFAULT_SKILLS
 from test_shop import OLD_DOLL_SHOP
 
 REAL_GUARD = actions.page_guard
@@ -823,9 +824,6 @@ def wants(*ids, order=("Burn", "Bleed"), keep=(), condition="any"):
                 gorder[g["keyword"]].append(i)
     return {"order": [*order, *(k for k in ORDER if k not in order)], "want": list(ids), "keep": list(keep), "gorder": gorder,
             "fusion_condition": condition}
-
-
-DEFAULT_SKILLS = json.loads((Path(__file__).parent / "settings_cases.json").read_text(encoding="utf-8"))["skill_replacement_default"]
 
 
 def replacing(*entries):

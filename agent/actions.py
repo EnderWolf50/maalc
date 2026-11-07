@@ -4434,8 +4434,9 @@ class Shop(CustomAction):
     """Heal, replace skills, then sell -> buy and refresh -> fuse until a round does nothing, then leave (spec 03 section 13).
 
     The visit's state (healed, refreshes used, the gift wanted and whether a sale was tried for it, whether the
-    owned gifts were scanned for a fusion, the sinners whose replacement slot was tapped) lives in RUN["shop"], so a
-    re-entry from MirrorHub carries on; leaving drops it. Every spend keeps the team's reserve_cost.
+    owned gifts were scanned for a fusion, the sinners whose Replace slot was tapped (skill_tapped), the sinners ID Skill
+    Search tried (id_tried) and whether it was used (id_searched)) lives in RUN["shop"], so a re-entry from MirrorHub
+    carries on; leaving drops it. Every spend keeps the team's reserve_cost.
     """
 
     @hands_back
@@ -4584,77 +4585,94 @@ class Shop(CustomAction):
 
     @staticmethod
     def skill_step(context, team, visit):
-        """Replace skills (#264 時機): the Replace slots first, then ID Skill Search on what they left (#456: a Replace slot
-        makes the same swap for half the price)."""
-        Shop.replace_skills(context, team, visit)
-        Shop.id_skill_search(context, team, visit)
+        """Replace skills (#264 時機, 先後): the listed sinners one by one in the list's order (shop.skill_walk), each
+        finished before the next: their own Replace <sinner>'s Skill slot on this page first (#455; half ID Skill Search's
+        price for the same swap), then, while they still want a swap by the run's counts (shop.search_turn), ID Skill Search
+        on them (#456); how many swaps went through. Called after the heal and after each refresh that took; it never refreshes.
 
-    @staticmethod
-    def replace_skills(context, team, visit):
-        """Open each Replace <sinner>'s Skill slot the team's skill_replacement asks for and make one swap in it (#455); how
-        many swaps went through. Called after the heal and after each refresh that took (#264 時機); it never refreshes.
-
-        visit["replaced"] names the sinners whose slot was tapped this visit, added before the tap as the heal's flag is
-        (ADR 0007): a visit handed back mid-dialog and entered again does not pay twice. A sinner leaves it again only when
-        the bot itself cancelled the dialog before any Confirm because no swap was lit, priced and affordable: the pass after
-        the next refresh judges it again. With every target at 3/2/1, or no sinner listed, nothing is read and nothing tapped.
-        Before each slot after the first the grid is read again and the slot found by its sinner (#264: whether a swapped
-        slot moves is unseen); one gone is not tapped.
+        visit["skill_tapped"] names the sinners whose Replace slot was tapped this visit, added before the tap as the heal's
+        flag is (ADR 0007): a visit handed back mid-dialog and entered again does not pay twice. A sinner leaves it again only
+        when the bot itself cancelled the dialog before any Confirm because no swap was lit, priced and affordable: the step
+        after the next refresh judges it again. With every target at 3/2/1, or no sinner listed, nothing is read and nothing
+        tapped. After a slot or a search that tapped, the grid is read again and the next slot found by its sinner (#264:
+        whether a swapped slot moves is unseen); one gone is not tapped. ID Skill Search opened on a sinner whose dialog has
+        no swap goes on down the list from them, past the sinners whose own Replace slot on this page is still to come.
         """
         listed = team["skill_replacement"]["sinners"]
         if not shop.any_change(listed):
             return 0
-        swaps, handled = data("shop.yaml")["skill_replacement"], visit.setdefault("replaced", [])
-        plan = shop.skill_plan(listed, Shop.skill_offers(context), RUN.get("skills", {}), handled, swaps)
+        conf, swaps = team["skill_replacement"]["id_skill_search"], data("shop.yaml")["skill_replacement"]
+        tapped = visit.setdefault("skill_tapped", [])
+        offers = Shop.skill_offers(context)
+        plan = shop.skill_plan(listed, offers, RUN.get("skills", {}), tapped, swaps)
         for slot, _, why in plan:
             log(f"shop: {slot['name']!r}: {why}")
-        made = 0
-        for n, (slot, entry) in enumerate((slot, entry) for slot, entry, _ in plan if entry):
-            if n:
-                slot = next((s for s in shop.skill_slots(Shop.skill_offers(context))
-                             if s["sinner"] == slot["sinner"] and not s["purchased"]), None)
+        waiting = {entry["sinner"] for _, entry, _ in plan if entry}  # the Replace slots still to come
+        made, fresh = 0, True  # fresh: offers is the grid as it stands
+        for kind, n in shop.skill_walk(listed, waiting):
+            entry = listed[n]
+            sinner = entry["sinner"]
+            if kind == "replace":
+                waiting.discard(sinner)
+                if not fresh:
+                    offers, fresh = Shop.skill_offers(context), True
+                slot = next((s for s in shop.skill_slots(offers) if s["sinner"] == sinner and not s["purchased"]), None)
                 if slot is None:
-                    log(f"shop: {entry['sinner']!r}'s slot is no longer on the grid: skip")
+                    log(f"shop: {sinner!r}'s slot is no longer on the grid: skip")
                     continue
-            handled.append(slot["sinner"])  # first: a hand-back mid-dialog (#118) is not paid twice
-            outcome = Shop.replace_skill(context, slot, entry, team["reserve_cost"], swaps)
-            made += outcome == "replaced"
-            if outcome == "unchosen":
-                handled.remove(slot["sinner"])
+                tapped.append(sinner)  # first: a hand-back mid-dialog (#118) is not paid twice
+                outcome = Shop.replace_skill(context, slot, entry, team["reserve_cost"], swaps)
+                made += outcome == "replaced"
+                if outcome == "unchosen":
+                    tapped.remove(sinner)
+            elif conf["enabled"] and not visit.get("id_searched") and shop.search_turn(
+                    entry, RUN.get("skills", {}), visit.get("id_tried", ()), swaps):
+                if not fresh:
+                    offers, fresh = Shop.skill_offers(context), True
+                outcome = Shop.id_skill_search(context, team, visit, listed[n:], waiting, offers)
+                if outcome is None:
+                    continue  # nothing tapped: the grid read still stands
+                made += outcome
+            else:
+                continue
+            fresh = False
             if not Shop.to_main(context):
                 break  # on the map: the shop was left
         return made
 
     @staticmethod
-    def id_skill_search(context, team, visit):
+    def id_skill_search(context, team, visit, listed=None, waiting=(), offers=None):
         """ID Skill Search (#456): with the team's switch on, tap the Super Shop's slot, try the listed sinners in the list's
-        order (shop.id_search_plan) on their dialog and make one swap, paid the team's way; 1 on a swap, else 0. Called right
-        after replace_skills, so it judges on the counts and the Cost the Replace slots left (half the price for one swap).
+        order (shop.id_search_plan) on their dialog and make one swap, paid the team's way; 1 on a swap, 0 when the slot was
+        opened for none, None when it was not tapped. skill_step calls it on a sinner's turn (#264 先後) with listed from
+        that sinner on and `waiting`, the sinners whose own Replace slot on this page is still to come (skipped: half the
+        price); offers is its grid read. Without them it tries the team's whole list on a grid it reads itself.
 
         A dialog's Cancel lands on the main page (#456 capture), so each next sinner taps the slot again; a portrait that
         opens nothing leaves the select mode up for the next one, and the last such leaves by Return. Each sinner is tried
         once a visit (visit["id_tried"], marked before its portrait's tap); visit["id_searched"] is set before the paying tap
         (the heal's rule) and when the slot shows Purchased: after either, the slot is never opened again this visit.
         """
-        conf, listed = team["skill_replacement"]["id_skill_search"], team["skill_replacement"]["sinners"]
-        if not conf["enabled"] or not shop.any_change(listed) or visit.get("id_searched"):
-            return 0
-        slot = shop.id_search_slot(Shop.skill_offers(context))
+        conf, team_list = team["skill_replacement"]["id_skill_search"], team["skill_replacement"]["sinners"]
+        if not conf["enabled"] or not shop.any_change(team_list) or visit.get("id_searched"):
+            return None
+        slot = shop.id_search_slot(Shop.skill_offers(context) if offers is None else offers)
         if slot is None:
-            return 0
+            return None
         if slot["purchased"]:
             log("shop: ID Skill Search: used already (Purchased): skip")
             visit["id_searched"] = True
-            return 0
+            return None
         swaps, tried = data("shop.yaml")["skill_replacement"], visit.setdefault("id_tried", [])
         image = page_guard(context, "Shop")
-        plan = shop.id_search_plan(listed, RUN.get("skills", {}), tried, bar_dead(image), swaps)
+        plan = shop.id_search_plan(team_list if listed is None else listed, RUN.get("skills", {}), tried, bar_dead(image),
+                                   swaps, waiting)
         for _, why in plan:
             log(f"shop: ID Skill Search: {why}")
         entries = [entry for entry, _ in plan if entry]
         if not entries:
             log("shop: ID Skill Search: nobody to try: not opened")
-            return 0
+            return None
         before, selecting = read_cost(context), False
         for entry in entries:
             if not selecting:
@@ -4694,7 +4712,8 @@ class Shop(CustomAction):
             return "handled"
         if read["owned"] is not None:
             note_skills(sinner, read["owned"])  # the counts are real whatever follows
-        # Never assumed to carry over (#456 decision 3): the prices tell the payment; a switch must show the other prices.
+        # Never assumed to carry over: the dialog opened on Cost in the capture (tests/screens/ShopIdSkillSearchDialog.png);
+        # whether the game keeps the payment mode is unverified (#456). The prices tell it; a switch must show the other prices.
         # With no price read the payment is unknown, and a switch could flip the wanted one away: cancel.
         mode = shop.pay_mode(read["prices"], swaps)
         if mode is None:

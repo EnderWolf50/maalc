@@ -328,12 +328,28 @@ def id_search_slot(slots):
     return next((slot for slot in slots if id_skill_slot(slot["name"])), None)
 
 
-def id_search_plan(listed, known, tried, dead, swaps):
+def skill_walk(listed, slotted):
+    """[(kind, n)]: the order of the shop's skill step (#264 先後), n an entry's place in listed. The listed sinners one by
+    one in the list's order, each finished before the next: "replace", the sinner's own Replace slot on this page when
+    `slotted` (the sinners skill_plan opens) has one, half ID Skill Search's price for the same swap; then "search", ID
+    Skill Search on them, which search_turn judges when it comes, on the counts the slot left."""
+    return [(kind, n) for n, entry in enumerate(listed)
+            for kind in (("replace", "search") if entry["sinner"] in slotted else ("search",))]
+
+
+def search_turn(entry, known, tried, swaps):
+    """Whether ID Skill Search takes a turn on a listed sinner (#264 先後: one still wanting a swap): off the game's 3/2/1,
+    not tried this visit, and wanting a swap by the counts read this run (known); counts never read want one."""
+    return entry["target"] != DECK and entry["sinner"] not in tried and by_counts(entry, known, swaps, "try")[1]
+
+
+def id_search_plan(listed, known, tried, dead, swaps, waiting=()):
     """[(entry or None, why)] for every listed sinner, in the list's order: the sinners ID Skill Search tries (entry set),
     each judged on its dialog, and the skipped (#456; #264: the first listed sinner with a feasible swap).
 
-    A sinner is skipped at the game's 3/2/1, when tried this visit (`tried`, each at most once), dead (`dead`: grey on the
-    shop's bar, a portrait that takes no tap), or when its counts read this run are at the target or allow no swap.
+    A sinner is skipped at the game's 3/2/1, when tried this visit (`tried`, each at most once), when its own Replace slot
+    on this page is still to come (`waiting`, #264 先後: half the price), dead (`dead`: grey on the shop's bar, a portrait
+    that takes no tap), or when its counts read this run are at the target or allow no swap.
     """
     out = []
     for entry in listed:
@@ -342,6 +358,8 @@ def id_search_plan(listed, known, tried, dead, swaps):
             why, tries = f"{sinner!r} targets the game's 3/2/1: skip", False
         elif sinner in tried:
             why, tries = f"{sinner!r} tried this visit: skip", False
+        elif sinner in waiting:
+            why, tries = f"{sinner!r} has a Replace slot on this page, used first: skip", False
         elif sinner in dead:
             why, tries = f"{sinner!r} is dead (grey on the shop's bar): skip", False
         else:

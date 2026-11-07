@@ -305,6 +305,42 @@ def test_id_search_has_nobody_to_try_with_no_sinner_listed():
     assert id_lines([]) == []
 
 
+def test_id_search_passes_a_sinner_whose_own_replace_slot_is_still_to_come():
+    # #264 先後: opened on Ryōshū, whose dialog may show no swap, ID Skill Search goes on down the list but leaves Meursault
+    # to his own Replace slot on this page (half the price) and tries Yi Sang.
+    team = [skill_entry("Ryōshū", 1, 3, 2), skill_entry("Meursault", 2, 3, 1), skill_entry("Yi Sang", 2, 3, 1)]
+    assert [(e and e["sinner"], why) for e, why in s.id_search_plan(team, {}, [], [], SWAPS, waiting={"Meursault"})] == [
+        ("Ryōshū", "'Ryōshū' counts not read this run, toward 1/3/2: try"),
+        (None, "'Meursault' has a Replace slot on this page, used first: skip"),
+        ("Yi Sang", "'Yi Sang' counts not read this run, toward 2/3/1: try")]
+
+
+RYOSHU_TWICE, MEURSAULT_ONCE = skill_entry("Ryōshū", 1, 4, 1), skill_entry("Meursault", 2, 3, 1)  # two s1_s2 from 3/2/1; one
+
+
+@pytest.mark.parametrize("slotted, walk", [
+    # #264 先後's examples, list 1 Ryōshū, 2 Meursault: each sinner's own Replace slot, then ID Skill Search on them.
+    ({"Ryōshū", "Meursault"}, [("replace", "Ryōshū"), ("search", "Ryōshū"), ("replace", "Meursault"), ("search", "Meursault")]),
+    ({"Meursault"}, [("search", "Ryōshū"), ("replace", "Meursault"), ("search", "Meursault")]),
+    (set(), [("search", "Ryōshū"), ("search", "Meursault")]),
+])
+def test_the_skill_walk_finishes_one_sinner_before_the_next(slotted, walk):
+    team = [RYOSHU_TWICE, MEURSAULT_ONCE]
+    assert [(kind, team[n]["sinner"]) for kind, n in s.skill_walk(team, slotted)] == walk
+
+
+@pytest.mark.parametrize("entry, known, tried, turn", [
+    (RYOSHU_TWICE, {}, [], True),  # never read this run: wants one
+    (RYOSHU_TWICE, {"Ryōshū": (2, 3, 1)}, [], True),  # one swap made, one to go
+    (RYOSHU_TWICE, {"Ryōshū": (1, 4, 1)}, [], False),  # at the target
+    (RYOSHU_TWICE, {}, ["Ryōshū"], False),  # tried this visit
+    (skill_entry("Ryōshū", 3, 2, 1), {}, [], False),  # the game's deck
+    (skill_entry("Ryōshū", 2, 2, 2), {"Ryōshū": (3, 2, 0)}, [], False),  # skill 3 locked: no swap left
+])
+def test_id_search_takes_a_turn_on_a_sinner_still_wanting_a_swap(entry, known, tried, turn):
+    assert s.search_turn(entry, known, tried, SWAPS) is turn
+
+
 ID_COST = {"s1_s2": 90, "s2_s3": 150, "s1_s3": 240}
 ID_STARLIGHT = {"s1_s2": 25, "s2_s3": 50, "s1_s3": 75}
 
