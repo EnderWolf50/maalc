@@ -4,6 +4,7 @@ from types import SimpleNamespace
 from unittest.mock import DEFAULT
 
 import numpy as np
+import pytest
 
 import actions
 import test_actions
@@ -90,54 +91,74 @@ def test_a_choices_page_that_stays_after_the_tap_is_handed_back_in_time(context,
     assert actions.time.monotonic() - began <= 2 * actions.EVENT_TAKE + 1
 
 
-class GiftWindows:
-    """#309 live, from the last Continue: the event page fades out with the button lit (0.4 s here), then two GET!
-    windows over the map, the second 0.34 s after the first closes; a tap closes a window 0.1 s later. The bottom bar's
-    lever reads "0" in the button's label roi there (OCR of GiftGetOverMap.png), so the corner taps go on."""
+# #309 live, from the last Continue: the event page fades out with the button lit (FADE here), the first GET! window
+# shows, the second GAP s after the first closes, and a tap closes a window CLOSE_LAG s later.
+FADE, GAP, CLOSE_LAG = 0.4, 0.34, 0.1
+# Offline medians with the bot's MaaFramework resource and agent link (#309): a node that reads text about 53 ms, a
+# template about 5 ms; RetryPopup's template matches the window's Confirm, and its text is read there too. SHOT and TAP:
+# not measured.
+COST = {"Connecting": 0.006, "RetryPopup": 0.009, "PopupButton": 0.005, "Event": 0.053, "GiftGet": 0.053}
+OCR, RETRY_ON_WINDOW, SHOT, TAP = 0.053, 0.045, 0.03, 0.01
+PAGES = ["event", "window", "map"]
 
-    def __init__(self, context):
-        self.start, self.shown_at, self.closed_at = actions.time.monotonic(), [], []
+
+class GiftWindows:
+    """The gift windows after an event's last Continue, each screenshot, tap and recognition taking its COST on the clock.
+    The bottom bar's lever reads "0" in the button's label roi on the map (OCR of GiftGetOverMap.png), so the corner taps
+    go on there. tapped_at: the time of the tap that closed each window, s from the start, as shown_at."""
+
+    def __init__(self, context, first):
+        self.start, self.first = actions.time.monotonic(), first
+        self.shown_at, self.tapped_at = [], []
         ctl = context.tasker.controller
         ctl.post_screencap.return_value.wait.return_value.get.side_effect = self.render
         ctl.post_click.side_effect = self.click
         context.run_recognition.side_effect = self.read
 
-    def screen(self):
+    def page(self):
         t = actions.time.monotonic() - self.start
-        if t < 0.4:
+        if t < FADE:
             return "event"
-        due = 0.49 if not self.shown_at else self.closed_at[0] + 0.34 if len(self.shown_at) == len(self.closed_at) == 1 else None
-        if due is not None and t >= due:
-            self.shown_at.append(due)
-        up = any(s <= t and (k >= len(self.closed_at) or t < self.closed_at[k]) for k, s in enumerate(self.shown_at))
+        if not self.shown_at and t >= self.first:
+            self.shown_at.append(self.first)
+        elif len(self.shown_at) == len(self.tapped_at) == 1 and t >= self.tapped_at[0] + CLOSE_LAG + GAP:
+            self.shown_at.append(self.tapped_at[0] + CLOSE_LAG + GAP)
+        closed_at = [tap + CLOSE_LAG for tap in self.tapped_at]
+        up = any(s <= t and (k >= len(closed_at) or t < closed_at[k]) for k, s in enumerate(self.shown_at))
         return "window" if up else "map"
 
     def render(self):
+        actions.time.sleep(SHOT)
         image = np.zeros((720, 1280, 3), np.uint8)
-        if self.screen() == "event":
+        image[0, 0, 0] = PAGES.index(page := self.page())
+        if page == "event":
             image[640:650, 1080:1180] = (0, 0, 200)
         return image
 
     def click(self, x, y):
-        if self.screen() == "window" and len(self.closed_at) < len(self.shown_at):
-            self.closed_at.append(actions.time.monotonic() - self.start + 0.1)
+        actions.time.sleep(TAP)
+        if self.page() == "window" and len(self.tapped_at) < len(self.shown_at):
+            self.tapped_at.append(actions.time.monotonic() - self.start)
         return DEFAULT
 
     def read(self, name, image, override=None):
-        page = self.screen()
+        page = PAGES[image[0, 0, 0]]
         if override is None:
+            actions.time.sleep(RETRY_ON_WINDOW if (name, page) == ("RetryPopup", "window") else COST.get(name, OCR))
             return SimpleNamespace(hit=True, box=[0, 0, 1, 1]) if (name, page) in {("Event", "event"), ("GiftGet", "window")} else None
+        actions.time.sleep(OCR)
         if tuple(override.get(name, {}).get("roi", ())) == tuple(actions.EVENT_BUTTON_LABEL):
             label = "Continue" if page == "event" else "0"
-            return SimpleNamespace(all_results=[SimpleNamespace(text=label, box=(1065, 625, 140, 40))])
+            return SimpleNamespace(all_results=[SimpleNamespace(text=label, box=(1155, 661, 14, 12))])
         return None
 
 
-def test_gift_windows_after_the_last_continue_close_as_fast_as_one_alone(context, clock, monkeypatch):
+@pytest.mark.parametrize("first", [0.45, 0.49, 0.53, 0.57, 0.61])
+def test_gift_windows_after_the_last_continue_are_tapped_as_fast_as_one_alone(context, clock, monkeypatch, first):
     # #309 live: a lone gift's window, closed by the next corner tap, was up 0.27-0.33 s; the second of two waited
-    # 1.7-2.5 s for GiftGet.
+    # 1.7-2.5 s for GiftGet. first: when the first window shows, which sets where both fall in the tap rhythm.
     monkeypatch.setattr(actions, "page_guard", test_actions.REAL_GUARD)
-    windows = GiftWindows(context)
+    windows = GiftWindows(context, first)
     assert actions.Event().run(context, None) is True
-    assert len(windows.shown_at) == 2 and len(windows.closed_at) == 2
-    assert max(c - s for s, c in zip(windows.shown_at, windows.closed_at)) < 0.5
+    assert len(windows.shown_at) == 2 and len(windows.tapped_at) == 2
+    assert max(tap - shown for shown, tap in zip(windows.shown_at, windows.tapped_at)) < 0.5
