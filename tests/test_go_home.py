@@ -185,9 +185,9 @@ def test_go_home_in_a_battle_ends_the_task_list_without_a_back_key():
     # J2 (live 2026-10-28): in a battle the back key opens the pause menu, Give Up one tap away. Nothing is pressed: the
     # stop procedure, and the rest of the list goes, as after an account-level stop, for the user to end it by hand.
     o = run_child(__file__)["battle"]
-    # Not its status: MaaFramework ends a task that stopped its tasker as succeeded (#461). A red prints the whole
-    # outcome (a string message, which pytest prints in full: a dict is cut short).
-    assert o["nodes"][-1] == "HomeInBattle" and o["keys"] == [] and o["clicks"] == [], json.dumps(o)
+    # succeeded: post_stop took effect. MaaFramework ends a task that stopped its tasker as succeeded; without the stop,
+    # Halt's False fails it (#461). A red prints the whole outcome (a string message: pytest cuts a dict short).
+    assert o["succeeded"] is True and o["nodes"][-1] == "HomeInBattle" and o["keys"] == [] and o["clicks"] == [], json.dumps(o)
     assert o["stopped"] == 1 and o["halted"].startswith("HomeInBattle: "), json.dumps(o)
 
 
