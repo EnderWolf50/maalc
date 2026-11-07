@@ -611,6 +611,21 @@ def test_a_pressed_win_rate_is_not_tapped_again_while_the_disc_reads_unlit(conte
     assert len(win_rate_taps(context)) == 1
 
 
+def test_a_turn_at_rest_is_tapped_one_wait_after_its_label_shows(context, clock, monkeypatch):
+    # #177: BattleTurn's 200 ms pre_delay and still()'s 0.2 s between its two screenshots slept back to back (live
+    # 2026-11-03 to 07: 201 and 235 ms a turn). Two alike screenshots 0.2 s apart are the rest a tap needs, no more.
+    from test_pipeline import load_nodes
+    clicks = context.tasker.controller.post_click.call_args_list
+    monkeypatch.setattr(actions.battle, "disc_lit", lambda image, x, y: bool(clicks))
+    first = []
+    context.tasker.controller.post_click.side_effect = lambda *a: first.append(
+        (sum(clock), context.tasker.controller.post_screencap.call_count)) or DEFAULT
+    actions.PlayTurn().run(context, SimpleNamespace(box=[984, 531, 40, 20]))
+    slept, shots = first[0]
+    assert load_nodes("mirror_dungeon.json")["BattleTurn"].get("pre_delay", 200) / 1000 + slept == pytest.approx(0.2)
+    assert shots == 3  # still()'s two, then win_rate's look at the disc
+
+
 def test_a_turn_starts_after_win_rate_lights_the_disc(context, monkeypatch):
     lit = iter([False, True])  # unlit on the turn's first look, lit after the Win Rate tap
     monkeypatch.setattr(actions.battle, "disc_lit", lambda image, x, y: next(lit, True))
