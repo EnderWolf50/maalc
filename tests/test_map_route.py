@@ -1,6 +1,6 @@
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import MagicMock
+from unittest.mock import DEFAULT, MagicMock
 
 import numpy as np
 import pytest
@@ -827,3 +827,60 @@ def test_a_new_runs_first_floor_does_not_tap_the_bus_first(context, monkeypatch)
     monkeypatch.setattr(actions.time, "sleep", sleeps.append)
     assert not actions.RouteMap.tap_bus_first(context)
     ctl.post_click.assert_not_called()
+
+
+# #473, live 2026-11-07 HARD: back on the map after a fight, the map still and the tap on the planned node, the game
+# took no touch for a while; each such miss cost a full read (~4 s), 12 times in the run.
+NODE = (446 + actions.SLOT[0], actions.BUS_HOME[1] + actions.SLOT[1])  # the middle slot by the bus at x 446: no drag first
+
+
+def deaf_map(context, monkeypatch, hears):
+    """Floor 1's plan goes on to the battle at NODE; its node panel shows only while hears(clicks, drags) holds.
+
+    The log lines, the clicks as ((x, y), time) and the drags as (time, clicks before it) on the fake clock.
+    """
+    monkeypatch.setattr(actions, "map_weights", lambda context: AB_WEIGHTS)
+    logs, clicks, drags = [], [], []
+    monkeypatch.setattr(actions, "log", logs.append)
+    actions.RUN.update(floor=1, map_plan={"floor": 1, "steps": [("mid", "battle")]})
+    map_world(context, {(1, "mid"): {"cost"}}, [], bus_x=446)
+    ctl, inner = context.tasker.controller, context.run_recognition.side_effect
+    ctl.post_click.side_effect = lambda x, y: clicks.append(((x, y), actions.time.monotonic())) or DEFAULT
+    down = ctl.post_touch_down.side_effect
+    ctl.post_touch_down.side_effect = lambda x, y: drags.append((actions.time.monotonic(), len(clicks))) or down(x, y)
+
+    def run_recognition(name, image, override=None):
+        return None if name == "MapNodePanel" and not hears(clicks, drags) else inner(name, image, override)
+    context.run_recognition.side_effect = run_recognition
+    return logs, clicks, drags
+
+
+def test_a_planned_node_the_map_ignores_is_tapped_again_until_its_panel_shows(context, monkeypatch):
+    logs, clicks, drags = deaf_map(context, monkeypatch, lambda clicks, drags: len(clicks) >= 3)
+    assert actions.RouteMap().run(context, None)
+    assert not drags  # followed: no drag for a full read
+    assert [xy for xy, _ in clicks if xy != actions.ENTER] == [NODE] * 3
+    assert logs.count(f"map: no answer to the tap at {NODE[0]}, {NODE[1]}; tapping again") == 2
+    assert actions.RUN["map_plan"]["steps"] == []
+    assert "entered the node" in logs
+
+
+def test_a_planned_node_that_takes_no_tap_for_long_is_left_for_a_full_read(context, monkeypatch):
+    logs, clicks, drags = deaf_map(context, monkeypatch, lambda clicks, drags: bool(drags))
+    assert actions.RouteMap().run(context, None)
+    at, before = drags[0]
+    assert before > 1  # tapped again while the map gave no answer
+    assert {xy for xy, _ in clicks[:before]} == {NODE}
+    assert actions.MAP_DEAF <= at - clicks[0][1] < actions.MAP_DEAF + 2
+    assert f"map: planned mid battle took no tap in {actions.MAP_DEAF} s; reading the map again" in logs
+
+
+def test_a_tap_that_changes_the_map_but_opens_no_panel_is_not_made_again(context, monkeypatch):
+    # The screen it answered with is another one now (a window over the map): a second tap there could hit something else.
+    logs, clicks, drags = deaf_map(context, monkeypatch, lambda clicks, drags: bool(drags))
+    get = context.tasker.controller.post_screencap.return_value.wait.return_value.get
+    shot = get.side_effect
+    get.side_effect = lambda: 255 - shot() if clicks and not drags else shot()
+    assert actions.RouteMap().run(context, None)
+    assert [xy for xy, _ in clicks[:drags[0][1]]] == [NODE]
+    assert "map: planned mid battle moved the map but showed no panel; reading the map again" in logs
