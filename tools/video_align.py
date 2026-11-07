@@ -369,12 +369,12 @@ def main(argv=None) -> None:
         if r:
             up = sorted(x["up_s"] for x in r)
 
-            def median(key):
-                xs = sorted(x[key] for x in r if x[key] != "")
+            def median(key, rows=r):
+                xs = sorted(x[key] for x in rows if x[key] != "")
                 return xs[len(xs) // 2] if xs else "-"
             print(f"{n}: {len(r)} intervals, {sum(x['recognized'] for x in r)} recognized, up {up[0]}-{up[-1]} s"
                   f" (median {up[len(up) // 2]}), hit after median {median('hit_after_s')} s,"
-                  f" next pass after gone median {median('pass_after_gone_s')} s")
+                  f" next pass after gone median {median('pass_after_gone_s', [x for x in r if x['recognized']])} s (recognized)")
 
 
 if __name__ == "__main__":
