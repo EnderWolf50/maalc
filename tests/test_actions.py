@@ -1487,7 +1487,7 @@ def infinity_switch(context, monkeypatch, takes):
 
     def ocr(context, image, roi, only_rec=False):
         if roi == actions.INFINITY_TITLE:
-            # As MaaFramework read the live entry page, OFF and the red ON (2026-11-08)
+            # As the bot's MaaFramework log read the entry page live, OFF and the red ON (2026-11-08)
             text = "Parallel Superposition Mode : OFF" if takes and taps else "PParallel Superposition Mode : oN "
             return [(text, (894, 333, 316, 17))]
         return []
