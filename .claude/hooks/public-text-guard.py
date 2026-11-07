@@ -50,7 +50,8 @@ NOT_RUN = re.compile(r"\bnot run\b", re.I)
 NOT_RUN_OK = re.compile(r"#\d+|not run:?\s*(?:none|n/a)\b", re.I)
 HEREDOC = re.compile(r"<<-?\s*[\"']?\w")
 EMPTY_FLAG = re.compile(r"(?<![\w-])(?:--[a-z]+-file|--file|-F)\s*$")  # xargs supplies the file
-UNREADABLE_REASON = "write the body to a file with the Write tool and pass its absolute Windows path to --body-file"
+UNREADABLE_REASON = ("write the body to a file with the Write tool and pass its absolute Windows path to --body-file (gh)"
+                     " or -F (git commit)")
 
 
 def unquote(s: str) -> str:

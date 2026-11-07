@@ -19,7 +19,7 @@ Taken on 2026-10-22: every `.py`, `.sh` and `.ps1` under `.local/`, leaving out 
 | Identity masks | 8 | `scratch/top-live-video4/mask85.py`, `scratch/retry-capture/mask_still.py` | yes | `evidence.py mask` (the templates of `.local/evidence/masks.json`, not fixed boxes) |
 | Start the bot, run the tasker | 94 | `scratch/combined-verify/tasker.py`, `tsrun.py`, `start_game.py` | yes | `bot.py run`; `device.py start` |
 | adb screenshot, tap, freeze the bot | 109 | `scratch/combined-verify/shot.py`, `tap.py`, `freezer.py` | yes | `device.py shot`, `tap`, `key`, `freeze` |
-| Log statistics | 102 | `scratch/top-live-video4/loadspans.py`, `scratch/170-parchment/maafw_timeline.py`, `scratch/*/gaps.py` | already tools | `tools/wait_spans.py`, `tools/maafw_timeline.py`; `gaps.py` (4) is not taken: PR #256 adds `tools/hit_gaps.py` for it |
+| Log statistics | 102 | `scratch/top-live-video4/loadspans.py`, `scratch/170-parchment/maafw_timeline.py`, `scratch/*/gaps.py` | already tools | `tools/wait_spans.py`, `tools/maafw_timeline.py`; `gaps.py` (4) became `tools/hit_gaps.py` (#256) |
 | Test install settings, keeping the screen on | 34 | `scratch/zoom194/prep.py`, `scratch/top-live-video2/keepawake.ps1` | yes | `bot.py prep`, `bot.py awake` |
 | Recording by adb screenrecord, scrcpy or OBS | 26 | `scratch/shop-speed/adbrec.py`, `probe/obs/obsrec.py` | no | the `screen-record` skill only (MuMu window capture); the other ways were never agreed to |
 | One-shot batch edits (`edit_*.py`, `fix*.py`, `resolve*.py`) | 251 | none: each edits one task's files once | no | |
@@ -52,7 +52,7 @@ Not replaced: `scratch/combined-verify/mkclip248.py` (a clip joined from two pie
 
 ## Design
 
-Three tools under `tools/live/`, one per thing they act on, each with subcommands; `--help` lists them, the `maalc-live-test` skill says when each runs.
+Three new tools under `tools/live/`, one per thing they act on, each with subcommands; `--help` lists them, the `maalc-live-test` skill says when each runs.
 
 - `evidence.py`, the evidence files: `events`, `steps`, `frames`, `clip`, `mask`, `map`, `packs`. Input is the bot's stamped `run.log` and the recording as `--video PATH@START`, START the wall time of its first frame (screen-record's `started`), once per piece, so no clock offset is needed. `map` and `packs` port `route.py` and `packs.py`; their image analysis runs on frames ffmpeg decodes into numpy arrays, so the tests drive it with synthetic frames. Every still and every annotated clip is masked with `.local/evidence/masks.json`; only template matching needs OpenCV (the probe group), as evidence-annotate's `annotate.py` does it the same way.
 - `device.py`, the emulator through MaaFramework's adb controller: `shot`, `tap`, `key`, `start`, `freeze`. A single screenshot is its only capture; recording stays with screen-record.

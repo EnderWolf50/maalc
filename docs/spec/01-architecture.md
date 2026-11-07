@@ -21,7 +21,11 @@
 
 - `MirrorHub` 是鏡牢流程的分派節點。每種鏡牢畫面都必須列在它的 `next` 裡，並標上 `[JumpBack]`；每個畫面處理完就回到 hub，重新判斷畫面。（#8）
 - `next` 的順序就是優先權。全域彈窗必須排在最前面（只有卡住偵測的 `Stuck` 節點排在它們之前，見 [06-recovery.md](06-recovery.md#實作31)），各子流程也引用同一組全域彈窗節點。（#8）
-- 用 OCR 認的畫面不直接列在 `next`，而是依同樣的順序列在 `HubText` 裡：MaaFramework 會把同一個 `next` 清單裡的 OCR 合併成一次辨識，再把跨過 roi 邊緣的字框切成 1 px 細條重讀，戰鬥中一次就吃掉好幾 GB 記憶體（wheel 原版的行為；`install/` 的 fork DLL 已修，見〈分工〉，但 `HubText` 只讀一次、只排可能的畫面，所以照留）。`HubText` 由 Agent 自己讀一次，只把可能的畫面排進它的清單，每個畫面再用自己的 OCR 確認。det 會把寬或高超過 960 px 的圖縮小，小字因此讀錯，所以它把 roi 由左到右分組（每組最寬 960 px），把各組疊在同一張畫布上只跑一次 det（每個視窗都是一次 det，分視窗讀的成本隨視窗數增加）；疊起來超過 960 px 高時（`MirrorHub` 的 `HubText`）改成每段最寬 960 px 的視窗分次讀；勝利畫面的 VICTORY 只有 det 找不到框、整個 roi 交給 rec 時才讀得出來，它的那一次讀不到，所以 `Victory` 放在 tail，每輪都自己檢查；`next` 只剩 `Stuck`、`BattleHUD`（戰鬥畫面：回合或暫停鍵，伺服器彈窗仍先看）、`Connecting`、`HubText`、`NoBatchOCR` 後的 `Victory`（唯一直接列在 `next` 的 OCR，理由見下）和幾個模板畫面。戰鬥中每輪都會先看的三個伺服器彈窗（`Connecting`、`RetryPopup`、`PopupButton`）都先比模板，模板沒中就不跑 OCR；`HubText` 只用 `And` 裡的 OCR 判讀，模板留給節點自己確認。（#157）
+- 用 OCR 認的畫面不直接列在 `next`，而是依同樣的順序列在 `HubText` 裡。`HubText` 由 Agent 自己讀一次，只把可能的畫面排進它的清單，每個畫面再用自己的 OCR 確認；它只用 `And` 裡的 OCR 判讀，模板留給節點自己確認。這是各 hub（`MirrorHub`、`GoHome`、經驗本與紐本、`ClaimMail`）的 OCR 畫面唯一的讀法，理由是準確與戰鬥中的速度，不是記憶體（#157）：
+  - **記憶體已修好**：MaaFramework 會把同一個 `next` 清單裡的 OCR 合成一批，再把跨過 roi 邊緣的字框切成 1 px 細條重讀，戰鬥中一次 7.6 s、Tasker 從 4 GB 漲到 12 GB 不回落。這是 wheel 原版的行為；`install/` 的 fork DLL 已修（見〈分工〉），只有直接 `import maa` 的測試與離線工具還會遇到。不在戰鬥中每輪跑、roi 外接矩形不超過 960 px 的清單可以批次 OCR，例如等遊戲開機的 `HomeGameAway` 與 `RecoverStartApp`（各 5 個 OCR，外接矩形 585 × 420 px）。
+  - **準確**：det 會把寬或高超過 960 px 的圖縮小，小字因此讀錯。5.14.3 的批次 OCR 把整批 roi 的外接矩形交給一次 det，wheel 與 fork 都是（上游 MaaXYZ/MaaFramework#1531 改成依 960 px 分組，5.15.0 才有）；`MirrorHub` 的 roi 橫跨 1210 px。`HubText` 自己把 roi 由左到右分組（每組最寬 960 px），把各組疊在同一張畫布上只跑一次 det（每個視窗都是一次 det，分視窗讀的成本隨視窗數增加）；疊起來超過 960 px 高時（`MirrorHub` 的 `HubText`）改成每段最寬 960 px 的視窗分次讀。
+  - **戰鬥中的速度**：戰鬥中每輪都會先看的三個伺服器彈窗（`Connecting`、`RetryPopup`、`PopupButton`）都先比模板，模板沒中就不跑 OCR。實機 A/B（兩邊都載入 fork DLL，#166）裡這三個 OCR 每個戰鬥輪各跑一次，一趟 2141 輪共 405 s；改成先比模板後，戰鬥輪的中位數從 206 ms 降到 48 ms。新加進 `BattleHUD` 清單的畫面照這個做。
+  - 勝利畫面的 VICTORY 只有 det 找不到框、整個 roi 交給 rec 時才讀得出來，`HubText` 的那一次讀不到，所以 `Victory` 放在 tail，每輪都自己檢查。`next` 只剩 `Stuck`、`BattleHUD`（戰鬥畫面：回合或暫停鍵，伺服器彈窗仍先看）、`Connecting`、`HubText`、`NoBatchOCR` 後的 `Victory`（唯一直接列在 `next` 的 OCR）和幾個模板畫面。
 - 點下地圖節點之後出現什麼畫面，由 `MirrorHub` 依畫面判斷，不依預期的節點類型走分支；兩者不符時只記錄。（#12）
 - 看到 `VICTORY` 就算戰鬥結束；Confirm 有出現才按，之後的畫面交給 `MirrorHub`。實機：`VICTORY` → 載入畫面（`Combat Tips`）→ 地圖頁；Focused、異想體戰與 Boss 之後先出現飾品選擇頁或獎勵卡頁。（#16、#19；實機：captures/63_battle_victory.png、captures/64_loading_combat_tips.png）
 - `MirrorHub` 的 `timeout` 為 60 秒，逾時經 `on_error` 交給卡住處理；載入畫面另看畫面有沒有在動（不動 80 秒、最長 150 秒）。`on_error` 路徑裡 `[JumpBack]` 不生效，恢復後必須明確回到 `MirrorHub`。細節見 [06-recovery.md](06-recovery.md)。（#14）
@@ -57,7 +61,7 @@
 ### 回主畫面（`GoHome`）
 
 - 日常任務的第一步和最後一步都走 `GoHome`（`navigation.json`），下一個任務因此一定從主畫面開始。（#365）
-- 一個 hub，依序處理：連線中、說明頁、全域彈窗（`HomeText`，讀法同 `HubText`，不進批次 OCR；伺服器與用戶端的彈窗列在 `ServerPopups` 一份，`MirrorHub` 的 `HubText`、`HomeText`、`MailText` 用 `base` 引用它）、**到了主畫面**（Window 分頁亮起，`HomeReached`，任務成功結束）、標題畫面（`NavTitle`）、底部分頁列在但 Window 沒亮（點 Window 分頁，`HomeWindowTab`）、遊戲不在前景（`HomeGameAway`，`StartApp`，最多 3 次）、戰鬥（`HomeInBattle`，見下）、都不是就按返回鍵（`HomeBack`，最多 5 次）。
+- 一個 hub，依序處理：連線中、說明頁、全域彈窗（`HomeText`，讀法與理由同〈MirrorHub〉的 `HubText`；伺服器與用戶端的彈窗列在 `ServerPopups` 一份，`MirrorHub` 的 `HubText`、`HomeText`、`MailText` 用 `base` 引用它）、**到了主畫面**（Window 分頁亮起，`HomeReached`，任務成功結束）、標題畫面（`NavTitle`）、底部分頁列在但 Window 沒亮（點 Window 分頁，`HomeWindowTab`）、遊戲不在前景（`HomeGameAway`，`StartApp`，最多 3 次）、戰鬥（`HomeInBattle`，見下）、都不是就按返回鍵（`HomeBack`，最多 5 次）。
 - 彈窗排在 `HomeReached` 前面：設定選單蓋著主畫面時 Window 分頁仍是亮的。其他分頁亮起、彈窗壓暗分頁列時，Window 模板的分數最多 0.80，門檻 0.9。
 - 畫面是戰鬥（`BattleHUD` 認的戰鬥畫面、暫停選單）：不按返回鍵，走 `Halt`，停止程序後整串清單結束（`whole_list`，同帳號層級的停止，這次啟動之後的任務也在入口失敗）。上一個任務停在戰鬥裡時（例如紐本 60 秒認不出畫面），下一個任務的 `HomeBack` 會在戰鬥裡按返回：戰鬥中的返回鍵開暫停選單，Give Up 一點就是戰敗，而放棄戰鬥不是 bot 該做的；後面每個任務都會遇到同一場戰鬥，所以停整串，讓使用者手動結束戰鬥再重開清單。選在 `GoHome` 而不是讓失敗的任務自己停整串：每個任務的開頭都經過它，使用者手動開清單時遊戲正在戰鬥也一樣擋下。事件頁（劇情、選項）不認、不停：紐本和鏡牢的事件畫面長得一樣，靠畫面分不出來（使用者決定，2026-10-28），所以照舊按返回鍵（`HomeBack`，最多 5 次；實機在紐本劇情頁按 5 次畫面不變），用完走 `GoHomeLost` 的 L3。絕不自動 Give Up。（live-4 J2、驗收 #5）
 - 前景不是遊戲時直接啟動遊戲，不等 hub 逾時走 L3（`GameAway` 讀 `dumpsys window`，讀不到時不算）。
@@ -81,12 +85,12 @@
 開頭與結尾照上面「日常任務的入口」（`GoHomeRun`、`go_home()`、`TaskDone`，#371）。另外：（#366）
 
 - **入口節點**的動作可以是 `TaskStart` 的子類別，名稱是 `<任務>Start`（例如 `LuxStart`：先 `TaskStart`，再讀這個任務的設定；設定不能用就走停止程序，不點任何東西）。之後接 `<任務>Home` 節點：回主畫面（`GoHomeRun`，或它加上開頭檢查的動作，例如 `LuxHome`），再進 `<任務>Hub`。各任務的節點名稱都照這個：`MailHome`、`PassHome`、`AssembleHome`、`ChargeHome`、`ExpHome`、`ThreadHome`。
-- **hub**：`next` 第一項是 `<任務>Stuck`（`StuckFlag` 加 `StopTask`：看門狗認定卡住就停止，日常頁還沒有恢復階梯），第二項是 `TaskDone`，其餘都標 `[JumpBack]`：伺服器彈窗與說明頁、OCR 畫面集中在自己的 `HubText` 節點（`custom_recognition` 都是 `HubText`，清單用 `base` 引用共用的彈窗；不進批次 OCR，#157）、任務自己的畫面、最後是導航（`NavTitle`、`NavMainTabs` 這類）。`on_error` 接 `StopTask`：60 秒認不出畫面就停止，任務失敗，清單繼續。
+- **hub**：`next` 第一項是 `<任務>Stuck`（`StuckFlag` 加 `StopTask`：看門狗認定卡住就停止，日常頁還沒有恢復階梯），第二項是 `TaskDone`，其餘都標 `[JumpBack]`：伺服器彈窗與說明頁、OCR 畫面集中在自己的 `HubText` 節點（`custom_recognition` 都是 `HubText`，清單用 `base` 引用共用的彈窗；理由見〈MirrorHub〉，#157）、任務自己的畫面、最後是導航（`NavTitle`、`NavMainTabs` 這類）。`on_error` 接 `StopTask`：60 秒認不出畫面就停止，任務失敗，清單繼續。
 - **記憶體**：任務自己的計數放 `RUN`（Luxcavation 兩個任務的 `RUN["lux"]`）或 `TASK`（換腦啡肽模組的 `assemble`、狂氣換腦啡肽的 `charge`），兩者都由 `TaskStart` 清空；不放 `RUN["settings"]`，那是鏡牢一局的計畫，停止程序會依它寫 `runs.jsonl`。`TaskStart` 只在上一個任務以 `done()` 或停止程序結束時清 `RUN`；上一個任務被 client 中途打斷（兩者都沒走）、而且這次是同一個任務、`RUN` 裡有一局的計畫（`settings`）時保留它，鏡牢接手同一局，和任務鏈之前一樣。換成別的任務一律清掉：日常任務的停止程序不能寫出鏡牢那一局的 `runs.jsonl` 行。卡住階梯、看門狗、證據畫面、任務局數照舊每個任務重設。（#362 D3）
 
 ### 經驗本（`ExpLuxcavation`）
 
-- 從主畫面點 Drive（`NavMainTabs`）→ Luxcavation（`NavLuxcavation`）→ EXP 分頁（停在 Thread 分頁時點 EXP，`LuxExpTab`）→ EXP 分頁預設畫面最右邊的 Enter（`LuxExpEnter`，`ExpEnter`）。上鎖的卡顯示 KEEP OUT、沒有 Enter，所以最右邊的 Enter 就是最難的開放關卡。不按 Skip Battle；Consecutive Battle 見下一條。（#366）
+- 從主畫面點 Drive（`NavMainTabs`）→ Luxcavation（`NavLuxcavation`）→ EXP 分頁（停在 Thread 分頁時點 EXP，`LuxExpTab`）→ EXP 分頁預設畫面最右邊的 Enter（`LuxExpEnter`，動作 `LuxEnter`）。上鎖的卡顯示 KEEP OUT、沒有 Enter，所以最右邊的 Enter 就是最難的開放關卡。不按 Skip Battle；Consecutive Battle 見下一條。（#366）
 - **每場花費**：3 個腦啡肽模組（`luxcavation.EXP_COST`；實機 2026-10-26 第 4–9 關都是 3），紐本每場 2 個（`luxcavation.THREAD_COST`，見下方紐本）。
 - **連戰**（`luxcavation.exp.consecutive`，預設開，#375）：卡片上方一條 `Consecutive Battle ×N ▲`，點它展開一列 `1« − N + »10`，範圍 1–10。框長在卡片上，卡片的位置會變（EXP 分頁最右邊已開放的關是中間那張卡時），所以標題、數字、列與按鍵的座標依實際按的 Enter 平移（基準 `ENTER_AT`，`actions.consecutive_box`），不寫死座標（`tests/screens/LuxConsecExp*.png`）。開時 `LuxEnter` 在按 Enter 之前把 N 設成 `luxcavation.batch(這次要打的場數, 已贏, 開)` = min(10, 剩下的場數)，一場打完，一場 ×N 算 N 場（獎勵與腦啡肽模組消耗都是 ×N，一張結算頁）；剩下的場數超過 10 就先 ×10，打完再開下一場打剩下的。遊戲離開 Luxcavation 或結算後會把 N 歸零成 ×1，所以每次進場都要設，不信畫面上的預設。設法（`actions.set_consecutive`）：OCR 讀標題的 N（`consecutive_now`：先讀 ×N 旁的窄 roi，再讀整個標題），不等於目標就點標題展開、照 `luxcavation.presses` 按最少的鍵（1«、−、+、»10）、再點標題收合，再讀一次必須等於目標；讀不到或調不到就停止程序（帶證據），不照錯的次數開戰。關：不碰這個框，一場一場打。剩下的場數是這個模式算出的場數還差的（#429、#431，[spec 03 第 15 節](03-decisions.md)）。戰敗：不算次數，重打時重設同樣的 N。
 - 分頁亮起看橘色邊框（ColorMatch）：亮和不亮的分頁對模板的分數差不多（0.93），分不開。
@@ -100,10 +104,10 @@
 
 照經驗本的做法：`ThreadLuxcavation`（`LuxStart`，`custom_action_param` 是 `"thread"`，讀 `luxcavation.thread`）→ `ThreadHome`（`LuxHome`）→ `ThreadHub`。兩個任務共用同一組動作：`LuxStart`（參數 `"exp"`／`"thread"` 決定任務名稱和每場的腦啡肽模組消耗）、`LuxHome`、`LuxEnter`（EXP 的 Enter、Thread 卡片的 Enter、Level Select 的 Enter；卡片的 Enter 開的是 Level Select 不是戰鬥，參數 `{"opens_battle": false}`），計次、腦啡肽模組檢查與勝敗判斷都在 `battle_over`；OCR 畫面共用 `ExpText`。（#368）
 
-- 從主畫面點 Drive → Luxcavation（`NavLuxcavation`）→ Thread 分頁（停在 EXP 分頁時點 Thread，`LuxThreadTab`：Luxcavation 面板加上 EXP 分頁亮著）→ 今天唯一開放的異想體卡的 Enter（`LuxThreadEnter`，`ThreadEnter`）→ Level Select（`LuxThreadLevel`，`ThreadLevel`）→ 最下面那一列的 Enter。
+- 從主畫面點 Drive → Luxcavation（`NavLuxcavation`）→ Thread 分頁（停在 EXP 分頁時點 Thread，`LuxThreadTab`：Luxcavation 面板加上 EXP 分頁亮著）→ 今天唯一開放的異想體卡的 Enter（`LuxThreadEnter`，動作 `LuxEnter`）→ Level Select（`LuxThreadLevel`，動作 `LuxEnter`）→ 最下面那一列的 Enter。
 - 開放的卡才有亮的 Enter 按鈕（對模板 1.0，其他天才開的卡最多 0.6）。清單從今天的卡開始排，所以進頁就看得到；但清單記得上次捲到哪裡，捲走後看不到亮的 Enter，這時往右滑（`LuxThreadSwipe`，`max_hit` 4）把左邊的卡帶進來。滑的方向沒實機驗證（unverified）。
 - 每日模式：`ThreadHome`（`LuxHome`）只讀腦啡肽模組數；第一次看到開放卡片的 Enter 時，`LuxEnter` 先讀分頁頂部的 Daily Bonuses（`ThreadBonuses`），剩 n 次就打 n 場，再決定打不打（`actions.plan`，#429）。自訂次數模式：`ThreadHome` 讀完腦啡肽模組就決定打 `count` 場，不讀 Daily Bonuses（#431）。
-- Level Select 一開啟清單就停在最底，最難的等級（Lust 是 Lv60）是最下面那一列；每級消耗 2 個腦啡肽模組（`luxcavation.THREAD_COST`），所以腦啡肽模組檢查是 2 × 這次要打的場數。`ThreadLevel` 點畫面上最低的那個 Enter；按 Enter 本身不扣腦啡肽模組、不開戰。不按 Skip Battle。連戰（`luxcavation.thread.consecutive`，預設開）設在外層開放卡片的框（座標依實際 Enter 平移，`ENTER_AT`，`LuxThreadEnter` 在按卡片的 Enter 之前設），Level Select 頂端的框位置固定，數字從外層帶入，`LuxThreadLevel` 在按 Enter 前再讀一次確認（不符就用同一套方法改；在 Level Select 改不會存回外層）。做法、拆 10 加剩下的，同經驗本。（#375）
+- Level Select 一開啟清單就停在最底，最難的等級（Lust 是 Lv60）是最下面那一列；每級消耗 2 個腦啡肽模組（`luxcavation.THREAD_COST`），所以腦啡肽模組檢查是 2 × 這次要打的場數。`LuxThreadLevel` 點畫面上最低的那個 Enter；按 Enter 本身不扣腦啡肽模組、不開戰。不按 Skip Battle。連戰（`luxcavation.thread.consecutive`，預設開）設在外層開放卡片的框（座標依實際 Enter 平移，`ENTER_AT`，`LuxThreadEnter` 在按卡片的 Enter 之前設），Level Select 頂端的框位置固定，數字從外層帶入，`LuxThreadLevel` 在按 Enter 前再讀一次確認（不符就用同一套方法改；在 Level Select 改不會存回外層）。做法、拆 10 加剩下的，同經驗本。（#375）
 - Level Select 之後接選隊頁：和經驗本同一個節點，`ThreadHub` 與 `ExpHub` 都列 `[JumpBack]LuxTeamSelect`。（#366、#368）
 - 打完一場經結算頁（`LuxResult`）回到 Thread 分頁就算一場（實機 2026-10-27：Confirm 後落在 Thread 分頁，不是 Level Select）：`battle_over` 依勝敗計次、再打或回主畫面結束；停在 Level Select 也照算。
 - 隊伍是 `luxcavation.thread.team`。

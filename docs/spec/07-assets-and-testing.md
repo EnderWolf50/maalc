@@ -61,7 +61,7 @@
 
 ## 換季後找出失效的素材
 
-- CI 每次都跑截圖測試。PR 只改文件（`docs/`、根目錄的 `*.md`、`LICENSE`）或只改 `gui/` 時不跑，其他變更和 main 的每個 commit 都跑。（#13）
+- CI 每次都跑截圖測試。PR 只改文件（`docs/`、根目錄的 `*.md`、`LICENSE`）或只改 `gui/` 時不跑，其他變更都跑；push 到 main 時，同一棵 tree 已在 PR 的 CI 全部通過就略過（`docs/agents/local-dev.md`〈Checks〉）。（#13）
 - 每季更新遊戲資料檔時，重截約 20 個關鍵畫面加進測試。清單在實作素材時再列。（#13、#19）
 - 命中分數與門檻的餘裕小於 0.05 的節點，標出來人工檢查。（#13）
 - 執行時開著 `save_on_error`，讓實機辨識失敗留下繪圖。（#13）
@@ -88,14 +88,14 @@
 | 畫面節點 | `maa-tools test`，每個畫面節點一份 | 節點命中與不命中 | #13、#14 |
 | 設定檢查 | GUI 與 Agent 各自的單元測試，共用同一批範例設定檔 | `settings.schema.json` 的結構檢查與跨物件檢查；兩邊對同一份檔案必須給出相同的錯誤 | #19 |
 | Agent 邏輯 | pytest，用 Python `CustomController` 餵截圖 | 輪替游標、地圖重試額度、選路、卡住偵測、恢復升級上限 | #4、#14 |
-| 回歸 | `RecordController` 錄下驗收局，`ReplayController` 重播 | 整條流程；行為不符就失敗 | #4、#14 |
-| 批次 OCR | pytest（`tests/test_pipeline.py`） | 同一個 next 清單裡沒有兩個 OCR 用同一個名字（內嵌 OCR 都要有自己的 `sub_name`）；`MirrorHub` 的清單只有 `Victory` 一個 OCR，排在 `NoBatchOCR` 後面（`HubText` 與 `ExpText` 的 tail 都有它）：OCR 畫面放在 `HubText`，由 Agent 讀一次、只把可能的畫面排進它的清單（`NoBatchOCR` 在前，不批次）；`BattleHUD`（戰鬥畫面的模板）排在 `HubText` 前面，它自己的清單也不批次（照 `prepare_batch_ocr` 的規則算），清單裡回合前的伺服器彈窗都先比模板。`tests/test_hub_text.py` 測 Agent 的判讀規則 | #149、#157 |
+| 回歸（未實作） | `RecordController` 錄下驗收局，`ReplayController` 重播 | 整條流程；行為不符就失敗 | #4、#14 |
+| 批次 OCR | pytest（`tests/test_pipeline.py`） | 同一個 next 清單裡沒有兩個 OCR 用同一個名字（內嵌 OCR 都要有自己的 `sub_name`）；`MirrorHub` 的清單只有 `Victory` 一個 OCR，排在 `NoBatchOCR` 後面（`HubText` 與 `ExpText` 的 tail 都有它）：OCR 畫面放在 `HubText`，由 Agent 讀一次、只把可能的畫面排進它的清單（`NoBatchOCR` 在前，不批次）；`BattleHUD`（戰鬥畫面的模板）排在 `HubText` 前面，它自己的清單也不批次（照 `prepare_batch_ocr` 的規則算），清單裡回合前的伺服器彈窗都先比模板。`tests/test_hub_text.py` 測 Agent 的判讀規則。理由是準確與戰鬥中的速度，記憶體已由 fork DLL 修好（[01 MirrorHub](01-architecture.md#mirrorhub)） | #149、#157 |
 
 - `maa-tools test` 不跑 Agent；Agent 的部分由 pytest 涵蓋。（#4）
 - 不使用官方 `DbgController`：pip wheel 沒附它的動態庫。（#4）
 - 錄製檔容易隨改版失效。（#4）
 - 錄製的重播檔不放主 repo。第一批要進版本控制時，才建獨立的 testset repo，用 submodule 掛在重播檔自己的路徑，不和 `tests/screens` 混在一起。testset repo 的 CI 要對重播檔裡的畫面檢查同樣三個身分區域（`tests/test_screens_privacy.py`）。（#19，2026-10-19 使用者確認）
-- Tasker 端記憶體：`tools/ocr_memory_check.py` 用 `tests/screens` 輪流餵 `MirrorHub` 跑幾分鐘、記下行程記憶體；最後一分鐘的中位數比第二分鐘多 300 MB 以上，或任何時候超過 6 GB，就失敗。要 OCR 模型，CI 不跑，改 pipeline 的 OCR 或升級 MaaFramework 時手動跑；`--screens` 可換成錄影抽出的畫面（例如戰鬥）。（#149、#157）
+- Tasker 端記憶體：`tools/ocr_memory_check.py` 用 `tests/screens` 輪流餵 `MirrorHub` 跑幾分鐘、記下行程記憶體；最後一分鐘的中位數比第二分鐘多 300 MB 以上，或任何時候超過 6 GB，就失敗。它 `import maa`，量的是 wheel 原版，不是 `install/` 的 fork DLL。要 OCR 模型，CI 不跑，改 pipeline 的 OCR 或升級 MaaFramework 時手動跑；`--screens` 可換成錄影抽出的畫面（例如戰鬥）。（#149、#157）
 
 ### 只能實機
 
@@ -140,7 +140,7 @@
 | 觸控方式 | `MuMuPlayerExtras`，約 51 ms |
 
 - `Toolkit.find_adb_devices()` 會自動找到 MuMu，回傳 `EmulatorExtras` 截圖方式與 MuMu 的路徑和實例 index。（#7）
-- 輸入方式的 `Default` 不含 `EmulatorExtras`，但 PI V2 的 ADB 控制器沒有輸入方式欄位，GUI 會沿用 Toolkit 找到的裝置 `input_methods`。不強制 `EmulatorExtras`，能連上、能點擊即可。（#7、#22）
+- 輸入方式的 `Default` 不含 `EmulatorExtras`，但 PI V2 的 ADB 控制器沒有輸入方式欄位，client（MXU 這類 PI 介面）會沿用 Toolkit 找到的裝置 `input_methods`（`assets/interface.json`）。不強制 `EmulatorExtras`，能連上、能點擊即可。（#7、#22）
 - 使用者必須在遊戲設定裡關掉戰鬥中的旁白等待。（#16）
 - 使用者必須把遊戲設定的 Change UI Design 維持 Default；Dark 未驗證。（#48）
 - 建議把遊戲設定的 Normal FPS 與 Combat FPS 設為 60：30 FPS 時每次等待會慢約 0.045 秒。（#191）

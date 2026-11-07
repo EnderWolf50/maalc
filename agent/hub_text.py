@@ -3,6 +3,9 @@
 MaaFramework 5.14.3 batches a next list's OCR: one pass over all their rois, then each OCR re-reads every box of
 that pass crossing its roi edge (OCRer::handle_cached). A box 1 px into a roi is re-read as a 1 px sliver padded to
 48 px x (width / height): a battle skill text 443 x 1 took 7.6 s and the Tasker from 4 to 12 GB, any sliver ~4.4 GB.
+The fork DLL that tools/install.py puts in install/ no longer reads slivers (MaaXYZ/MaaFramework#1573), so memory
+is a reason only under the wheel the tests load. HubText stays for accuracy: a 5.14.3 batch dets the union of its
+rois in one image and shrinks it (MaaXYZ/MaaFramework#1531, in 5.15.0), which the grouping below avoids (spec 01).
 HubText runs that one pass itself (run_recognition_direct has no batch cache) and judges each screen from its boxes:
 a box counts for a roi when at least half of it lies inside, so no sliver is ever read. The screens that pass then
 check with their own OCR, unbatched, so a hit is what MaaFramework reads.

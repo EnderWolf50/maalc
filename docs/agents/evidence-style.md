@@ -4,9 +4,9 @@ How an evidence still or clip looks. A rule below is the user's own word, or the
 
 ## What goes in a report
 
-- A live test, experiment or acceptance run comes back with images, clips and annotations, not text alone: routing (the drag, the nodes recognised, the weight per path, the route chosen) drawn on the screenshots. Captions, boxes and labels are burned into the clips. [user, 2026-10-18, memory `visual-live-test-reports`]
-- Every run reports all the map routing and all the theme pack picks, per floor: the stitched floor with every node it read labelled, and the pack page with its cards, weights and the pick. Post them to the issue or PR when useful (#251 routes, #252 packs). [user, 2026-10-22, memory `route-and-pack-evidence-every-run`]
-- A still that leaves a read node unlabelled cannot be checked. Label every node the bot read, not only the route. [same memory, "Why"]
+- A live test, experiment or acceptance run comes back with images, clips and annotations, not text alone: routing (the drag, the nodes recognised, the weight per path, the route chosen) drawn on the screenshots. Captions, boxes and labels are burned into the clips. [user, 2026-10-18]
+- Every run reports all the map routing and all the theme pack picks, per floor: the stitched floor with every node it read labelled, and the pack page with its cards, weights and the pick. Post them to the issue or PR when useful (#251 routes, #252 packs). [user, 2026-10-22]
+- A still that leaves a read node unlabelled cannot be checked. Label every node the bot read, not only the route. [user, 2026-10-22]
 - A GUI check returns screenshots of the GUI window only, never the full screen. [user rule, brief of this work package]
 
 ## Privacy
@@ -29,11 +29,12 @@ Settled over seven rounds with the user [main.20 10-27T06:12 to 07:47]. Start a 
 10. **The caption under the picture is right-aligned**: "數字＝路線分數，越低越優先" [07:02, 07:09].
 11. The user accepted round 7 with "非常好，採用這版" [07:47].
 
-Check by measurement, not by eye: the label's outer edge equals the box's outer edge, and a ring sampled across the box edge shows no stair step (`tests/test_live_evidence.py`).
+Check by measurement, not by eye: the label's outer edge equals the box's outer edge, and a ring sampled across the box edge shows no stair step. `tests/test_live_evidence.py` checks the ring colour and that a plate widens to its label, not these two edges.
 
 ## Clips and stills in general
 
-- `evidence-annotate` burns the touches, step captions, boxes and zoom into a clip; drawtext needs an explicit font file (`C:/Windows/Fonts/msjhbd.ttc`), without it ffmpeg crashes here. [memory `visual-live-test-reports`]
-- The recording of a live test is the MuMu window only, 720p, with its 60 px title bar cropped (`maalc-live-test` step 5). A GUI clip or still is the GUI window only.
+- `evidence-annotate` burns the touches, step captions, boxes and zoom into a clip; drawtext needs an explicit font file (`C:/Windows/Fonts/msjhbd.ttc`), without it ffmpeg crashes here.
+- The recording of a live test is the MuMu window only (`--window "Android Device"`), 720p, with its 60 px title bar cropped (`--crop-top 60`; `maalc-live-test` step 5). A GUI clip or still is the GUI window only.
+- A clip may speed up or skip the stretches outside the issue's focus (battles, map walks, loading when the issue is the shop), each marked on the clip ("×4", "略過 2:10"); the part the issue is about stays at normal speed, and the archive recording stays uncut. [user, 2026-11-04]
 - `gh ... --attach '<file>#<alt>'`: the `#alt` works for images; a video takes no alt text, so attach it without. [main.20 10-27T06:09; the `gh issue comment` error "cannot set alt text on video"]
 - An attached file is described by its content in the text, never by a local path (AGENTS.md "Public repo").
