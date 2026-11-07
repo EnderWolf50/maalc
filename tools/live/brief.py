@@ -43,9 +43,9 @@ COMMON = """# Brief: {task}
 
 ## Queue and waiting
 
-- The full `tools/check.py` goes through the bench queue, one ticket per run: `uv run python tools/live/queue.py run --resource bench --name {task}-check -- uv run python tools/check.py > <log> 2>&1`, started with `run_in_background` and waited on in the same turn.
+- The full `tools/check.py` goes through the bench queue, one ticket per run: `uv run python tools/live/queue.py run --resource bench --name {task}-check --log <log> -- uv run python tools/check.py > <log> 2>&1`, started with `run_in_background` and waited on in the same turn.
 - Do not poll in a loop. Keep your turn open while a queued, background or CI task runs; never end it on "I will be notified".
-- Stop only processes you started, by pid: `taskkill /T /PID <pid>`.
+- Stop only processes you started, by pid: `taskkill /T /F /PID <pid>`.
 {live_queue}
 ## Report
 

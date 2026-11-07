@@ -81,7 +81,7 @@ _Avoid_: 鎖定、保護
 _Avoid_: 技能升級、換牌、skill upgrade
 
 **ID Skill Search（人格技能觀測）**：
-Super Shop（只在困難隨機出現）的一格，GUI 標「人格技能觀測」（社群漢化 LLC 的譯名，遊戲沒有官方中文）。點了進選人模式（`Select a Sinner for Skill Replacement.`），點一位存活罪人的頭像開的是同一個技能替換對話框，換法一樣，價格是替換格的兩倍（90／150／240 Cost），或切到星光付 25／50／75 持有的星光。一次造訪只能用一次，用過標 `Purchased`。隊伍的 `skill_replacement.id_skill_search` 決定開不開、付哪一種；Agent 依 `sinners` 的順序挑第一位有可行換法的罪人。
+Super Shop（只在困難隨機出現）的一格，GUI 標「人格技能觀測」（社群漢化 LLC 的譯名，遊戲沒有官方中文）。點了進選人模式（`Select a Sinner for Skill Replacement.`），點一位存活罪人的頭像開的是同一個技能替換對話框，換法一樣，價格是替換格的兩倍（90／150／240 Cost），或切到星光付 25／50／75 持有的星光。一次造訪只能用一次，用過標 `Purchased`。隊伍的 `skill_replacement.id_skill_search` 決定開不開、付哪一種；Agent 依 `sinners` 的順序一位一位處理，每位先用他自己的替換格，還要換才為他點 ID Skill Search（替換格半價）；點開後他換不了，就往清單下面挑第一位有可行換法的罪人，跳過自己的替換格在這一頁還沒輪到的（spec 03 第 13 節「先後」）。
 _Avoid_: 技能搜尋、人格搜尋
 
 **主題包方案**：

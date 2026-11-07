@@ -116,9 +116,9 @@ def ex_mark(cell):
     return int(green(numeral_place(cell)).sum()) >= EX_CELL_PX
 
 
-GET_MARK = (338, 228, 50, 50)  # x, y, w, h: the GET! popup's icon corner, its gift's tier numeral or "EX" (#449)
+GET_MARK = (338, 228, 50, 50)  # x, y, w, h: the GET! popup's icon corner, its gift's tier numeral (#451) or "EX" (#449)
 # Green px there that make the "EX". Live: the EX's popup 966-974 (its 9 frames at 30 fps, 2026-11-04); the 1006 other
-# popups of 34 archived 1280x720 recordings (2026-10-18 to 11-05, 10 fps) 39 at most (a green icon's art at the corner).
+# popups of 34 archived 1280x720 recordings (2026-10-18 to 11-04, 10 fps) 39 at most (a green icon's art at the corner).
 EX_GET_PX = 500
 
 
@@ -126,6 +126,27 @@ def ex_got(image):
     """Whether the E.G.O Gift GET! popup shows an EX gift: the green "EX" at its icon's top left, not a yellow numeral (#449)."""
     x, y, w, h = GET_MARK
     return int(green(image[y:y + h, x:x + w]).sum()) >= EX_GET_PX
+
+
+def got_tier(image):
+    """The tier (1-5) of the E.G.O Gift GET! popup's gift from the yellow numeral at its icon's top left, or None (#451).
+
+    The numeral is a cell's (numeral) about twice as big, 38 px tall once the popup stands still (rows 6-43 of the box). It
+    slides in from the lower right over its first two frames, 9 px right, 7 px low and 2 rows shorter at most, so the rows
+    read are found under its top yellow row: 6 and 32 under it, the middle of the offsets that read every sample right (1-11
+    and 30-35). An icon's yellow art in the box (seen right of the numeral, under its top) stays out: numeral reads the
+    bottom row under the top row's bars only. Live: the first frame (10 fps) of the 1007 GET! popups of the 34 archived
+    1280x720 recordings that show one (2026-10-18 to 11-04, the sample of EX_GET_PX): 1006 read their tier (I 342, II 408,
+    III 216, IV 40, checked by eye), the EX gift's none; the 42 popups of the 2026-11-06 recording at 30 fps: no frame reads
+    another tier than its popup's, and 3 of its 604 frames with the numeral's yellow read none, cut off as the popup slides
+    out. A V is unseen.
+    """
+    x, y, w, h = GET_MARK
+    mask = yellow(image[y:y + h, x:x + w])
+    rows = np.flatnonzero(mask.any(axis=1))
+    if not len(rows) or rows[0] + 32 >= h:
+        return None
+    return numeral(mask, rows[0] + 6, rows[0] + 32)
 
 
 FORECAST_NUMERAL = (298, 452, 34, 34)  # x, y, w, h: the Forecasts row's numeral on the fuse page, centred at x 315
@@ -328,12 +349,28 @@ def id_search_slot(slots):
     return next((slot for slot in slots if id_skill_slot(slot["name"])), None)
 
 
-def id_search_plan(listed, known, tried, dead, swaps):
+def skill_walk(listed, waiting):
+    """[(kind, n)]: the order of the shop's skill step (#264 先後), n an entry's place in listed. The listed sinners one by
+    one in the list's order, each finished before the next: "replace", the sinner's own Replace slot on this page when
+    `waiting` (the sinners skill_plan opens a slot for) holds them, half ID Skill Search's price for the same swap; then "search", ID
+    Skill Search on them, which search_turn judges when it comes, on the counts the slot left."""
+    return [(kind, n) for n, entry in enumerate(listed)
+            for kind in (("replace", "search") if entry["sinner"] in waiting else ("search",))]
+
+
+def search_turn(entry, known, tried, swaps):
+    """Whether ID Skill Search takes a turn on a listed sinner (#264 先後: one still wanting a swap): off the game's 3/2/1,
+    not tried this visit, and wanting a swap by the counts read this run (known); counts never read want one."""
+    return entry["target"] != DECK and entry["sinner"] not in tried and by_counts(entry, known, swaps, "try")[1]
+
+
+def id_search_plan(listed, known, tried, dead, swaps, waiting=()):
     """[(entry or None, why)] for every listed sinner, in the list's order: the sinners ID Skill Search tries (entry set),
     each judged on its dialog, and the skipped (#456; #264: the first listed sinner with a feasible swap).
 
-    A sinner is skipped at the game's 3/2/1, when tried this visit (`tried`, each at most once), dead (`dead`: grey on the
-    shop's bar, a portrait that takes no tap), or when its counts read this run are at the target or allow no swap.
+    A sinner is skipped at the game's 3/2/1, when tried this visit (`tried`, each at most once), when its own Replace slot
+    on this page is still to come (`waiting`, #264 先後: half the price), dead (`dead`: grey on the shop's bar, a portrait
+    that takes no tap), or when its counts read this run are at the target or allow no swap.
     """
     out = []
     for entry in listed:
@@ -342,6 +379,8 @@ def id_search_plan(listed, known, tried, dead, swaps):
             why, tries = f"{sinner!r} targets the game's 3/2/1: skip", False
         elif sinner in tried:
             why, tries = f"{sinner!r} tried this visit: skip", False
+        elif sinner in waiting:
+            why, tries = f"{sinner!r} has a Replace slot on this page, used first: skip", False
         elif sinner in dead:
             why, tries = f"{sinner!r} is dead (grey on the shop's bar): skip", False
         else:

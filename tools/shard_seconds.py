@@ -2,12 +2,16 @@
 shards with tests/shard_seconds.json.
 
     python tools/shard_seconds.py check <junit.xml>...   fails when the table no longer matches these reports
-    python tools/shard_seconds.py update --run <run id>  rewrites the table from that CI run's junit artifacts
+    python tools/shard_seconds.py update --run <run id>  rewrites the table from the junit artifacts of that CI run and
+                                                         of the EARLIER_RUNS before it whose agent shards all passed:
+                                                         each file's median, or that run's own time when it is off from
+                                                         the median by more than RATIO (#463)
 """
 
 import argparse
 import json
 import os
+import statistics
 import subprocess
 import sys
 import tempfile
@@ -20,6 +24,10 @@ TABLE = ROOT / "tests" / "shard_seconds.json"
 SLOW = 30
 # Runner speed varies from run to run; a file off by more than this factor changed, not the runner.
 RATIO = 2
+# CI runs before the one update names whose times the median takes too: one runner's speed is not the table's (#463).
+EARLIER_RUNS = 4
+# How many completed CI runs update looks back through for them: about four weeks; junit artifacts are kept 14 days.
+LISTED_RUNS = 200
 
 
 def measured(reports):
@@ -66,15 +74,64 @@ def check(reports):
     return 1
 
 
+def gh_json(*args):
+    return json.loads(subprocess.run(["gh", *args], capture_output=True, text=True, check=True).stdout)
+
+
+def earlier(run):
+    """The completed CI runs before run, newest first."""
+    listed = gh_json("run", "list", "--workflow", "ci.yml", "--status", "completed", "--limit", str(LISTED_RUNS),
+                     "--json", "databaseId")
+    return [r["databaseId"] for r in listed if r["databaseId"] < int(run)]
+
+
+def agents_passed(run):
+    """Every agent shard of run passed: none failed, was cancelled or cut short, and the run did not skip them (docs only)."""
+    agents = [j for j in gh_json("run", "view", str(run), "--json", "jobs")["jobs"] if j["name"].split(" (")[0] == "agent"]
+    return bool(agents) and all(j["conclusion"] == "success" for j in agents)
+
+
+def reports_of(run, folder):
+    """An earlier run's junit reports, downloaded into folder; none when its artifacts expired."""
+    try:
+        download(run, folder)
+    except subprocess.CalledProcessError:
+        return []
+    return sorted(Path(folder).rglob("*.xml"))
+
+
+def median_table(seconds, others):
+    """The table from a run's seconds and earlier runs' (#463): each file's median, or the run's own time when that is off
+    from the median by more than RATIO (the file changed, not the runner). Either way the run passes the check."""
+    table = {}
+    for name, took in sorted(seconds.items()):
+        median = round(statistics.median([took] + [other[name] for other in others if name in other]))
+        table[name] = median if median / RATIO <= took <= median * RATIO else round(took)
+    return table
+
+
 def update(run):
     with tempfile.TemporaryDirectory() as folder:
         download(run, folder)
-        seconds = measured(sorted(Path(folder).rglob("*.xml")))
+        reports = sorted(Path(folder).rglob("*.xml"))
+        seconds = measured(reports)
     if missing := unmeasured(seconds):
         print(f"run {run} has no time for {', '.join(missing)}: a shard was cut short; use a run whose shards all passed")
         return 1
-    TABLE.write_text(json.dumps({n: round(s) for n, s in sorted(seconds.items())}, indent=0) + "\n", encoding="utf-8")
-    print(f"wrote {len(seconds)} files to tests/shard_seconds.json, {sum(seconds.values()):.0f} s in all")
+    others = {}
+    for other in earlier(run):
+        if len(others) == EARLIER_RUNS:
+            break
+        if agents_passed(other):
+            with tempfile.TemporaryDirectory() as folder:
+                if found := reports_of(other, folder):
+                    others[other] = measured(found)
+    TABLE.write_text(json.dumps(median_table(seconds, list(others.values())), indent=0) + "\n", encoding="utf-8")
+    print(f"wrote {len(seconds)} files to tests/shard_seconds.json, the median of run {run} and {len(others)} before it"
+          f" ({', '.join(map(str, others)) or 'none'})")
+    if len(others) < EARLIER_RUNS:
+        print(f"only {len(others)} earlier CI runs (of the last {LISTED_RUNS} completed) had every agent shard pass with its"
+              " junit kept: a slow or fast runner can still set the table")
     return 0
 
 

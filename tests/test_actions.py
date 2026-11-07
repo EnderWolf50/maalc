@@ -18,6 +18,7 @@ from maa.define import Rect
 import actions
 import recovery
 from settings import gift_tables
+from test_settings import DEFAULT_SKILLS
 from test_shop import OLD_DOLL_SHOP
 
 REAL_GUARD = actions.page_guard
@@ -825,9 +826,6 @@ def wants(*ids, order=("Burn", "Bleed"), keep=(), condition="any"):
             "fusion_condition": condition}
 
 
-DEFAULT_SKILLS = json.loads((Path(__file__).parent / "settings_cases.json").read_text(encoding="utf-8"))["skill_replacement_default"]
-
-
 def replacing(*entries):
     """A team's skill_replacement listing entries (test_shop.skill_entry), else the settings' default: no sinner listed, so
     the shop taps no replacement slot (#455)."""
@@ -1271,12 +1269,17 @@ def test_a_super_shop_fuses_up_to_5(context, monkeypatch):
     assert fused and taps == [1] * 5
 
 
-def test_a_material_that_does_not_show_in_the_fusion_closes_the_page(context, monkeypatch):
-    # #77: the second tap put nothing in (or another gift): Close, no Fuse, and not the same scan again.
-    visit = {}
+def lost_tap_fuse_page(context, monkeypatch):
+    """A fuse page of three materials whose second one's tap puts nothing in."""
     reads(context, FUSE_PAGE)
     fuse_slots(context, monkeypatch, ignored=[actions.FUSE_CELLS[1]])
     cells_read(monkeypatch, *with_ids([("Bleed",), ("Tremor",), ("Pierce",)]))
+
+
+def test_a_material_that_does_not_show_in_the_fusion_closes_the_page(context, monkeypatch):
+    # #77: the second tap put nothing in (or another gift): Close, no Fuse, and not the same scan again.
+    visit = {}
+    lost_tap_fuse_page(context, monkeypatch)
     assert not actions.Shop.fuse(context, shop_team({}), visit)
     taps = [c.args for c in context.tasker.controller.post_click.call_args_list]
     assert actions.PAGE_OK not in taps and actions.PAGE_CLOSE in taps

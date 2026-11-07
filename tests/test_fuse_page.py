@@ -6,7 +6,7 @@ import actions
 import test_actions
 import test_shop
 import test_shop_scroll
-from test_actions import FUSING, after_last, fuse_page, reads, shop_team, taps, wants, with_ids
+from test_actions import FUSING, after_last, fuse_page, lost_tap_fuse_page, reads, shop_team, taps, wants, with_ids
 from test_shop_scroll import KEYWORDS, UNLISTED, by_points, fusion, kept_but
 
 clock, context, grid = test_actions.clock, test_actions.context, test_shop_scroll.grid  # their fixtures
@@ -270,15 +270,10 @@ def test_a_gift_made_that_looks_like_a_gift_listed_is_its_twin_only_by_the_same_
         assert g.reads == list(range(16)) + [1001, 1002]
 
 
-def test_a_fusion_whose_get_popup_shows_ex_places_the_ex_gift_as_tier_v(context, grid, monkeypatch):
-    # #449, live 2026-11-04 (F2's second fusion): forecast IV at 99%, the fusion gave A Certain Philosophy (EX, tier V in the
-    # data); read as tier V where the forecast's tier was made, the owned gifts were read again. Its GET! popup (the
-    # recording's frame, over the page left of the grid from the fusion's Confirm until its own) shows the green "EX": the
-    # gift made is tier V, placed ahead of the IIIs and read there alone. The fusion: III 4, II 10 and I 15 (a III by points).
-    lines = []
-    monkeypatch.setattr(actions, "log", lines.append)
-    g = grid("fuse", 16, tiers=[3] * 5 + [2] * 6 + [1] * 5, makes=lambda tiers, ids: (5, EX))
-    popup = test_shop.screen_with("get_ex")
+def show_get_popup(context, g, name):
+    """g's screen shows the GET! popup tests/shop/<name> (a recording's frame) over its page left of the grid, from a
+    fusion's Confirm until its own."""
+    popup = test_shop.screen_with(name)
 
     def screen():
         image = g.screen()
@@ -286,9 +281,47 @@ def test_a_fusion_whose_get_popup_shows_ex_places_the_ex_gift_as_tier_v(context,
             image[160:500, 300:640] = popup[160:500, 300:640]
         return image
     context.tasker.controller.post_screencap.return_value.wait.return_value.get.side_effect = screen
+
+
+def test_a_fusion_whose_get_popup_shows_ex_places_the_ex_gift_as_tier_v(context, grid, monkeypatch):
+    # #449, live 2026-11-04 (F2's second fusion): forecast IV at 99%, the fusion gave A Certain Philosophy (EX, tier V in the
+    # data); read as tier V where the forecast's tier was made, the owned gifts were read again. Its GET! popup shows the
+    # green "EX": the gift made is tier V, placed ahead of the IIIs and read there alone. The fusion: III 4, II 10 and I 15
+    # (a III by points).
+    lines = []
+    monkeypatch.setattr(actions, "log", lines.append)
+    g = grid("fuse", 16, tiers=[3] * 5 + [2] * 6 + [1] * 5, makes=lambda tiers, ids: (5, EX))
+    show_get_popup(context, g, "get_ex")
     assert fusion(context, monkeypatch, g, kept_but(16, 4, 10, 13, 14, 15))
     assert "shop: the GET! popup shows an EX gift (green EX): the gift made is placed as tier V" in lines
     assert placed_lines(lines) == [PLACED + "0)"] and not read_again(lines)
+    assert g.reads == list(range(16)) + [1001]
+
+
+@pytest.mark.parametrize("popup, forecast, tier, cell, line", [
+    ("get_ii", None, 2, 9, "shows tier 2, not the points' tier 3: the gift made is placed as tier 2"),
+    ("get_iv", None, 4, 0, "shows tier 4, not the points' tier 3: the gift made is placed as tier 4"),
+    ("get_ii", 3, 2, 9, "shows tier 2, not the forecast's tier 3: the gift made is placed as tier 2"),
+    (None, None, 3, 4, "shows no tier numeral: the gift made is placed as the points' tier 3"),
+])
+def test_a_fusion_places_the_gift_made_by_the_tier_its_get_popup_shows(context, grid, monkeypatch, popup, forecast, tier,
+                                                                       cell, line):
+    # #451: when the tier a fusion's materials give has no gift left to obtain, the game may give another tier (its Fusion
+    # Guide). III 4, II 10 and I 13 make a III by the points, and by the Forecasts row where it reads (the fake's reads
+    # nothing otherwise); the gift made is a II or a IV, its GET! popup (a recording's frame) shows that numeral: it is
+    # placed last of the IIs or ahead of the IIIs and read there alone, the tiers logged. A popup whose numeral is not read
+    # leaves the points' tier. The list keeps the gift made, so the two I left make no second fusion.
+    lines = []
+    monkeypatch.setattr(actions, "log", lines.append)
+    g = grid("fuse", 16, tiers=[3] * 5 + [2] * 6 + [1] * 5, makes=lambda tiers, ids: (tier, None))
+    if popup:
+        show_get_popup(context, g, popup)
+    if forecast:
+        monkeypatch.setattr(actions.shop, "forecast_tier", lambda image: forecast)
+    keep = [UNLISTED + i for i in (*range(16), 1001) if i not in (4, 10, 13, 14, 15)]
+    assert fusion(context, monkeypatch, g, shop_team({"list": wants(keep=keep)}))
+    assert "shop: the GET! popup " + line in lines
+    assert placed_lines(lines) == [PLACED + f"{cell})"] and not read_again(lines)
     assert g.reads == list(range(16)) + [1001]
 
 
@@ -372,3 +405,17 @@ def test_a_recipe_whose_cell_is_not_where_the_fusion_put_it_is_not_counted_faile
         grid = {"page": "fuse", "at": 0, "placed": placed, "missed": False}
         assert actions.Shop.fuse_recipe(context, shop_team({"list": wants(SOOTHE)}), cells, grid, 3, visit) is False
         assert visit["recipes_failed"] == failed
+
+
+def test_a_recovery_reads_the_fuse_page_again_on_the_same_visit(context, monkeypatch):
+    # #459, live: the game froze on the fuse page, a material's tap was lost and the scan made none. The recovery restarted
+    # the game into the same shop, whose visit kept fuse_scanned: the page was not opened again that floor.
+    paid = {"healed": True, "refreshes": {"keyword": 1, "normal": 0}}
+    visit = actions.RUN.setdefault("shop", {**paid, "wanted": None, "sold": False})
+    lost_tap_fuse_page(context, monkeypatch)
+    actions.Shop.fuse(context, shop_team({}), visit)
+    assert visit["fuse_scanned"]
+    actions.forget_game_state()  # the recovery that brought the game back
+    actions.Shop.fuse(context, shop_team({}), visit)
+    assert taps(context).count(actions.SHOP_BUTTONS["fuse"]) == 2  # opened again
+    assert {k: visit[k] for k in paid} == paid  # what the visit paid for is not paid again

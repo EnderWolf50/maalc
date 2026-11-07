@@ -141,8 +141,42 @@ def test_map_command_writes_the_stitched_floor_and_its_nodes(tmp_path, footage):
     ev.main(["map", str(tmp_path / "run.log"), "--floor", "1", "-o", str(tmp_path / "route"), *footage])
     route = json.loads((tmp_path / "route/route.json").read_text(encoding="utf-8"))
     assert Image.open(tmp_path / "route/stitched.png").size[0] == 1790  # 1280 + the 510 px drag: no frame to measure, the log's px stand
-    assert route["path"]["score"] == 22 and len(route["nodes"]) == 5 and len(route["shots"]) == 2
+    assert route["path"]["score"] == 22 and len(route["nodes"]) == 5
+    reads = [ev.secs("15:52:55.967"), ev.secs("15:52:59.345")]  # the first reading, 0.1 s after the `dragged` line
+    assert [ev.secs(t) for t in route["shots"]] == pytest.approx(reads, abs=0.05)  # the nearest of frames 0.1 s apart
     assert (tmp_path / "route/before-1.png").exists() and (tmp_path / "route/after-1.png").exists()
+
+
+REREAD = """\
+15:52:56.500 [maalc] map: take mid battle
+15:52:57.000 [maalc] map: node at 583, 570 reads Cost 120: focused
+15:52:57.100 [maalc] map: planned down battle took no tap; reading the map again
+15:52:59.500 [maalc] map: node at 328, 357 reads Cost 85: battle
+15:52:59.600 [maalc] map: column 1: mid battle (1 onward)
+15:52:59.700 [maalc] map: column 2: down shop (from mid)
+15:52:59.800 [maalc] map: dragged the map 510 px; reading on from column 3
+15:52:59.900 [maalc] map: column 3: down boss (from down)
+15:53:00.000 [maalc] map: path mid battle > down shop > down boss, score 18
+"""
+
+FOLLOWED = """\
+15:52:56.500 [maalc] map: take down event
+15:52:57.000 [maalc] map: node at 583, 357 reads Cost 120: focused
+15:52:57.100 [maalc] map: follow plan mid battle
+15:52:59.600 [maalc] map: column 1: mid shop (1 onward)
+15:52:59.700 [maalc] map: column 2: mid boss (from mid)
+15:53:00.000 [maalc] map: path mid shop > mid boss, score 16
+"""
+
+
+@pytest.mark.parametrize("run, drags", [(REREAD, 1), (FOLLOWED, 0)], ids=["read-again", "followed"])
+def test_map_draws_the_reading_that_planned_the_path(tmp_path, footage, run, drags):
+    (tmp_path / "run.log").write_text(run, encoding="utf-8")
+    ev.main(["map", str(tmp_path / "run.log"), "--floor", "1", "--after", "15:52:56", "-o", str(tmp_path / "route"), *footage])
+    route = json.loads((tmp_path / "route/route.json").read_text(encoding="utf-8"))
+    assert len(route["drags"]) == drags and len(route["shots"]) == 1 + drags
+    assert all(ev.secs("15:52:59.0") <= ev.secs(t) <= ev.secs("15:53:00.0") for t in route["shots"])
+    assert "120" not in [n["cost"] for n in route["nodes"]]  # only the check read it
 
 
 def test_map_clip_cuts_into_local_not_beside_the_output(tmp_path, footage, monkeypatch):
@@ -360,6 +394,57 @@ def test_packs_settle_runs_from_the_deal_to_eight_still_frames():
     # floor 1 of 2026-10-22: the screen fades in, then the cards leave a starfield of mean 6.7 before the deal
     rows = [(0.4, 0)] * 3 + [(35, 3)] * 10 + [(6.7, 9)] * 4 + [(30, 9)] * 20 + [(40, 1)] * 20
     assert ev.settle(rows, k_log=50)[0] == 17
+
+
+REFRESH = """\
+15:52:51.591 [maalc] floor 1 packs, threshold 0: Flat-broke Gamblers (0), Nagel und Hammer (0), Automated Factory (-2)
+15:52:51.591 [maalc] floor 1 card reads: Flat-broke Gamblers <- name, Nagel und Hammer <- name, Automated Factory <- name
+15:52:56.000 [maalc] floor 1 packs, threshold 0: Lake World (0), The Outcast (-1), Line 3 (-5)
+15:52:56.000 [maalc] floor 1 card reads: Lake World <- name, The Outcast <- name, Line 3 <- name
+15:52:56.100 [maalc] floor 1: pull Lake World (0)
+"""
+
+
+def test_packs_after_a_refresh_draws_the_new_hand_once_it_stands_still(tmp_path, monkeypatch):
+    """Floor 5 of 2026-11-07: a Refresh swaps the hand in one frame without an empty card area, so the old rule took
+    the hand before the Refresh, which stood still in the 10 s before the second `packs` line."""
+    deal, still, refresh, still2 = (ev.secs(t) for t in ("15:52:48.6", "15:52:50.6", "15:52:53.4", "15:52:55.3"))
+    # two hands whose swap changes the card area by 30 on average, a swing by 10
+    old, new = (np.random.default_rng(seed).integers(10, 100, (720, 1280), np.uint8) for seed in (1, 2))
+
+    def fake_frames(f, t0, t1, fps, gray=False):
+        times = [t0 + i / fps for i in range(round((t1 - t0) * fps))]
+        out = []
+        for i, t in enumerate(times):  # empty, deal and swing, still; the Refresh swaps the hand, swing, still
+            if t < refresh:
+                hand, swinging = old, deal <= t < still
+            else:
+                hand, swinging = new, t < still2
+            out.append(np.zeros((720, 1280), np.uint8) if t < deal else hand + np.uint8(10 * (i % 2) * swinging))
+        return times, np.array(out)
+
+    grabbed = []
+
+    def fake_grab(f, t):
+        grabbed.append(t)
+        return Image.new("RGB", (1280, 720))
+
+    monkeypatch.setattr(ev, "frames", fake_frames)
+    monkeypatch.setattr(ev, "grab", fake_grab)
+    monkeypatch.setattr(ev, "masks_path", lambda a: None)
+    monkeypatch.setattr(ev, "load_masks", lambda path: ([1280, 720], []))
+    (tmp_path / "run.log").write_text(REFRESH, encoding="utf-8")
+    ev.main(["packs", str(tmp_path / "run.log"), "--floor", "1", "-o", str(tmp_path / "packs"), "--video", "rec.mp4@15:50:00"])
+    first, second = json.loads((tmp_path / "packs/packs.json").read_text(encoding="utf-8"))
+    assert still < grabbed[0] < still + 0.5 and first["settle_s"] == pytest.approx(2.0, abs=0.02)  # no Refresh: as before
+    assert still2 < grabbed[1] < still2 + 0.5  # the new hand, not the old one that stood still before the Refresh
+    assert second["settle_s"] == pytest.approx(still2 - refresh, abs=0.05) and not second["partial"]
+
+
+def test_packs_settle_takes_the_deal_from_a_refresh_swap():
+    rows = [(0, 0)] * 5 + [(30, 9)] * 20 + [(40, 1)] * 20 + [(8.3, 21.5)] + [(30, 9)] * 20 + [(40, 1)] * 20
+    assert ev.settle(rows, k_log=80) == (46, 66, False)  # the Refresh at 45 deals again; the old hand stood at 25
+    assert ev.settle(rows, k_log=40) == (5, 25, False)  # a read before the Refresh keeps the first hand
 
 
 def test_packs_draw_puts_a_thick_border_on_the_pulled_card():
