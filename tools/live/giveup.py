@@ -12,13 +12,15 @@ first (the maalc-live-test skill).
   BattleTurn (the planning phase)        the gear, top right; it takes a tap only in the planning phase
   BattlePause (a turn playing out)       no tap: wait for the planning phase
   BattleMenu (the pause menu)            Give Up
-  MirrorMap                              the gear
+  WipeDialog (DEFEAT, the team wiped)    Accept results, then Confirm: to the map
+  Formation (the bot stopped there)      back: to the map
+  MapNodePanel, MirrorMap                the gear
   ProgressPanel (Dungeon Progress)       Forfeit
   ForfeitDialog (Quit exploring the dungeon?)   Confirm
   DefeatScreen                           Confirm
   ExplorationComplete                    Claim Rewards: it only opens the Exploration Reward window
   ExplorationReward                      GiveUpRewards
-  GiveUpDialog (End expedition without claiming rewards?)   Confirm, the last tap
+  GiveUpDialog (End expedition without claiming rewards?)   Confirm, the last tap; then the reward window fades out
   ClaimDialog (a Claim's confirm dialog) Cancel; the window's Claim is never tapped
 
 It may start on any of these screens. Each screen is named with the pipeline's own node (`look`'s probe), and the three
@@ -35,6 +37,7 @@ import json
 import sys
 import time
 from pathlib import Path
+from typing import NamedTuple
 
 REPO = Path(__file__).resolve().parents[2]
 TOOLS = REPO / "tools"
@@ -43,7 +46,9 @@ if str(TOOLS) not in sys.path:
 
 BATTLE_GEAR = (1235, 40)  # the pause menu's gear, top right of the planning phase (tests/screens/BattleTurn.png)
 GIVE_UP = (640, 428)  # the pause menu's Give Up bar (BattleMenu.png)
-MAP_GEAR = (1232, 45)  # agent/actions.py GEAR
+ACCEPT_RESULTS, WIPE_CONFIRM = (790, 446), (645, 527)  # the DEFEAT dialog's card and Confirm (actions.DEFEAT_OPTIONS, DEFEAT_CONFIRM)
+FORMATION_BACK = (98, 43)  # actions.FORMATION_BACK
+MAP_GEAR = (1232, 45)  # actions.GEAR
 FORFEIT = (541, 435)  # the Dungeon Progress panel's Forfeit (actions.FORFEIT)
 FORFEIT_CONFIRM = (760, 488)  # actions.FORFEIT_CONFIRM
 FORFEIT_DIALOG = [450, 335, 380, 40]  # actions.FORFEIT_DIALOG
@@ -52,29 +57,46 @@ CLAIM_REWARDS = (1135, 597)  # the centre of ExplorationComplete's target
 GIVE_UP_REWARDS = (393, 544)  # actions.GIVE_UP
 DIALOG_TEXT = [360, 280, 560, 140]  # actions.DIALOG_TEXT
 DIALOG_CANCEL, DIALOG_CONFIRM = (515, 493), (763, 493)  # actions.DIALOG_CANCEL, actions.DIALOG_CONFIRM
+# Copied, not imported: agent/actions.py imports MaaFramework's AgentServer, and a process that has loaded it runs no
+# Tasker of its own (the tests run theirs in a child process, tests/test_hub_text_screens.py). tests/test_live_giveup.py
+# checks that they match.
 
-# Screen -> (tap, seconds before the next look, taps in a row before it gives up), in the order the probe tries them:
-# the first that hits names the screen. Dialogs come before the page under them, which still reads (GiveUpDialog.png
-# reads as ExplorationReward too, ForfeitDialog.png and DungeonProgress.png as MirrorMap, BattleMenu.png as BattleTurn).
+
+class Step(NamedTuple):
+    taps: tuple  # the points tapped in turn, TAP_GAP s apart; none: only wait
+    wait: float  # s before the next look
+    tries: int  # looks in a row at this screen before it gives up
+
+
+TAP_GAP = 1.2  # s between two taps of one screen: the DEFEAT dialog's card, then its Confirm (as the bot's Wipe waits)
+# Screen -> its step, in the order the probe tries them: the first that hits names the screen. Dialogs come before the
+# page under them, which still reads (GiveUpDialog.png reads as ExplorationReward too, ForfeitDialog.png and
+# DungeonProgress.png as MirrorMap, BattleMenu.png as BattleTurn).
 STEPS = {
-    "GiveUpDialog": (DIALOG_CONFIRM, 3, 3),
-    "ClaimDialog": (DIALOG_CANCEL, 2, 3),
-    "ExplorationReward": (GIVE_UP_REWARDS, 2, 3),
-    "ExplorationComplete": (CLAIM_REWARDS, 3, 3),
-    "DefeatScreen": (DEFEAT_CONFIRM, 3, 3),
-    "ForfeitDialog": (FORFEIT_CONFIRM, 5, 3),
-    "ProgressPanel": (FORFEIT, 2, 3),
-    "MirrorMap": (MAP_GEAR, 2, 3),
-    "BattleMenu": (GIVE_UP, 5, 3),
-    "BattleTurn": (BATTLE_GEAR, 1.5, 20),
-    "BattlePause": (None, 1, 180),
+    "GiveUpDialog": Step((DIALOG_CONFIRM,), 3, 3),
+    "ClaimDialog": Step((DIALOG_CANCEL,), 2, 3),
+    "ExplorationReward": Step((GIVE_UP_REWARDS,), 2, 3),
+    "ExplorationComplete": Step((CLAIM_REWARDS,), 3, 3),
+    "DefeatScreen": Step((DEFEAT_CONFIRM,), 3, 3),
+    "ForfeitDialog": Step((FORFEIT_CONFIRM,), 5, 3),
+    "ProgressPanel": Step((FORFEIT,), 2, 3),
+    "WipeDialog": Step((ACCEPT_RESULTS, WIPE_CONFIRM), 3, 3),
+    "Formation": Step((FORMATION_BACK,), 2, 3),
+    "MapNodePanel": Step((MAP_GEAR,), 2, 3),
+    "MirrorMap": Step((MAP_GEAR,), 2, 3),
+    "BattleMenu": Step((GIVE_UP,), 5, 3),
+    "BattleTurn": Step((BATTLE_GEAR,), 1.5, 20),
+    "BattlePause": Step((), 1, 180),
 }
 # The probe's own nodes: the dialogs the bot reads inside Settle and forfeit, not as pipeline nodes.
-OWN = {
+DIALOG_NODES = {
     "GiveUpDialog": {"recognition": "OCR", "roi": DIALOG_TEXT, "expected": "without claiming"},
     "ClaimDialog": {"recognition": "OCR", "roi": DIALOG_TEXT, "expected": "without using|Claim the rewards|Spend your"},
     "ForfeitDialog": {"recognition": "OCR", "roi": FORFEIT_DIALOG, "expected": "Quit exploring"},
 }
+# Behind the give-up dialog: after its Confirm they fade out, with no tap, for up to FADE_LOOKS looks a second apart.
+FADING = ("ExplorationReward", "ExplorationComplete")
+FADE_LOOKS = 10
 PROBE = "GiveUpProbe"
 LOOK_MS = 1500  # how long one look tries before it names no screen
 
@@ -82,7 +104,7 @@ LOOK_MS = 1500  # how long one look tries before it names no screen
 def probe_override() -> dict:
     """The pipeline override of one look: the screens tried in order, each with its action switched off."""
     nodes = {n: {"action": "DoNothing", "next": [], "pre_delay": 0, "post_delay": 0} for n in STEPS}
-    for n, reco in OWN.items():
+    for n, reco in DIALOG_NODES.items():
         nodes[n].update(reco)
     nodes[PROBE] = {"recognition": "DirectHit", "action": "DoNothing", "next": list(STEPS), "timeout": LOOK_MS}
     return nodes
@@ -112,39 +134,45 @@ def look(t) -> str | None:
 
 
 def give_up(look, tap, shot, timeout: float = 60, clock=time.monotonic, sleep=time.sleep, say=print) -> int:
-    """Look, tap what the screen asks, look again, until the give-up dialog's Confirm went through (exit 0).
-
-    Nothing is tapped after that Confirm: the window behind it fades out. Exit 1 when no known screen shows for
-    `timeout` seconds, or one screen stays after its taps in a row.
+    """Look, tap what the screen asks, look again, until the give-up dialog's Confirm went through and the reward window
+    has gone (exit 0). Nothing is tapped after that Confirm. Exit 1 when no known screen shows for `timeout` seconds, or
+    one screen stays after its looks in a row.
     """
-    seen, last, row, confirmed = clock(), None, 0, False
+    known_at, last, in_row, confirmed = clock(), None, 0, False
     while True:
         name = look()
-        if confirmed and name != "GiveUpDialog":
+        if confirmed and name not in ("GiveUpDialog", *FADING):
             shot("end")
             say("gave the rewards up: the run is over, nothing claimed")
             return 0
         if name is None:
-            if clock() - seen >= timeout:
+            if clock() - known_at >= timeout:
                 shot("unknown")
                 say(f"stop: no known screen for {timeout:.0f} s")
                 return 1
             sleep(1)
             continue
-        seen = clock()
-        xy, wait, tries = STEPS[name]
-        row = row + 1 if name == last else 1
+        known_at = clock()
+        in_row = in_row + 1 if name == last else 1
         last = name
-        if row > tries:
+        step = STEPS[name]
+        fading = confirmed and name in FADING
+        if in_row > (FADE_LOOKS if fading else step.tries):
             shot(f"stuck-{name}")
-            say(f"stop: {name} stayed after {tries} looks")
+            say(f"stop: {name} stayed after {in_row - 1} looks")
             return 1
-        if xy:
+        if fading:
+            sleep(1)
+            continue
+        if step.taps:
             shot(name)
-            tap(*xy)
-            say(f"{name}: tap {xy}")
-            confirmed = name == "GiveUpDialog"
-        sleep(wait)
+            for i, xy in enumerate(step.taps):
+                if i:
+                    sleep(TAP_GAP)
+                tap(*xy)
+            say(f"{name}: tap {' then '.join(map(str, step.taps))}")
+            confirmed = confirmed or name == "GiveUpDialog"
+        sleep(step.wait)
 
 
 def still_controller():

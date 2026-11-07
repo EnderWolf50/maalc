@@ -6,8 +6,8 @@
   tap X Y [--wait S] [--shot OUT.png]   a tap in game pixels (1280x720), then a screenshot after S seconds
   key CODE [--wait S] [--shot OUT.png]  an Android key code: 4 back, 3 home
   start [PACKAGE] [--shots DIR --every S --count N]   start an app (default the game), screenshots while it boots
-  restart [PACKAGE] [--wait S] [--shot OUT.png]   stop the app and start it again, as the pipeline's L3 does; a
-                                        screenshot S seconds (30) after the start
+  restart [PACKAGE] [--wait S] [--shot OUT.png]   stop the app (default the game) and start it again, as the
+                                        pipeline's L3 does; with --shot, a screenshot S seconds (30) after the start
   freeze --log run.log --fire RE --pid PID [--arm RE] [--cmd FILE] [--out DIR] [--max S]
 
 `--port` picks the MuMu instance: 16384 is instance 0, 16416 instance 1. A live test owns the emulator

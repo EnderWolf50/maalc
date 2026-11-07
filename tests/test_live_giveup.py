@@ -23,6 +23,10 @@ NAMED = {
     "BattleTurn.png": "BattleTurn",
     "BattleMenu.png": "BattleMenu",
     "BattlePause.png": "BattlePause",
+    "WipeDialog.png": "WipeDialog",
+    "Formation.png": "Formation",
+    "FormationDetails.png": "Formation",
+    "MapNodePanel.png": "MapNodePanel",
     "MirrorMap.png": "MirrorMap",
     "DungeonProgress.png": "ProgressPanel",
     "ProgressPanel.png": "ProgressPanel",
@@ -71,6 +75,8 @@ def test_the_taps_are_the_bots_own():
     assert (gu.MAP_GEAR, gu.FORFEIT, gu.FORFEIT_CONFIRM) == (actions.GEAR, actions.FORFEIT, actions.FORFEIT_CONFIRM)
     assert (gu.FORFEIT_DIALOG, gu.DIALOG_TEXT) == (actions.FORFEIT_DIALOG, actions.DIALOG_TEXT)
     assert (gu.GIVE_UP_REWARDS, gu.DIALOG_CANCEL, gu.DIALOG_CONFIRM) == (actions.GIVE_UP, actions.DIALOG_CANCEL, actions.DIALOG_CONFIRM)
+    assert (gu.ACCEPT_RESULTS, gu.WIPE_CONFIRM, gu.FORMATION_BACK) == (actions.DEFEAT_OPTIONS["forfeit"], actions.DEFEAT_CONFIRM,
+                                                                     actions.FORMATION_BACK)
     assert gu.DEFEAT_CONFIRM == centre(nodes["DefeatScreen"]["custom_action_param"]["target"])
     assert gu.CLAIM_REWARDS == centre(nodes["ExplorationComplete"]["custom_action_param"]["target"])
 
@@ -82,17 +88,17 @@ def test_the_battle_taps_land_on_the_gear_give_up_and_forfeit():
 
 
 def test_claim_is_never_tapped():
-    taps = {name: xy for name, (xy, _, _) in gu.STEPS.items() if xy}
-    assert not any(touches(point(xy), CLAIM_BOX) for xy in taps.values())
+    taps = {name: step.taps for name, step in gu.STEPS.items()}
+    assert not any(touches(point(xy), CLAIM_BOX) for points in taps.values() for xy in points)
     # A dialog's Confirm sits where a Claim dialog's does: it is tapped on the give-up dialog only; a Claim dialog is cancelled.
-    assert [n for n, xy in taps.items() if xy == gu.DIALOG_CONFIRM] == ["GiveUpDialog"]
-    assert taps["ClaimDialog"] == gu.DIALOG_CANCEL
+    assert [n for n, points in taps.items() if gu.DIALOG_CONFIRM in points] == ["GiveUpDialog"]
+    assert taps["ClaimDialog"] == (gu.DIALOG_CANCEL,)
 
 
 def test_the_probe_names_only_screens_with_a_node():
     nodes = load_nodes()
-    assert not set(gu.OWN) & set(nodes) and gu.PROBE not in nodes  # the probe's own nodes override no pipeline node
-    assert set(gu.STEPS) - set(gu.OWN) <= set(nodes)
+    assert not set(gu.DIALOG_NODES) & set(nodes) and gu.PROBE not in nodes  # the probe's own nodes override no pipeline node
+    assert set(gu.STEPS) - set(gu.DIALOG_NODES) <= set(nodes)
 
 
 class Game:
@@ -114,11 +120,27 @@ class Game:
 
 def test_a_run_ends_from_a_turn_playing_out_to_the_give_up_dialogs_confirm():
     game = Game(["BattlePause", "BattleTurn", "BattleTurn", "BattleMenu", None, "MirrorMap", "ProgressPanel", "ForfeitDialog",
-                 "DefeatScreen", "ExplorationComplete", "ExplorationReward", "GiveUpDialog", "ExplorationReward"])
+                 "DefeatScreen", "ExplorationComplete", "ExplorationReward", "GiveUpDialog", "ExplorationReward", "ExplorationComplete",
+                 None])
     assert game.run() == 0
     assert game.taps == [gu.BATTLE_GEAR, gu.BATTLE_GEAR, gu.GIVE_UP, gu.MAP_GEAR, gu.FORFEIT, gu.FORFEIT_CONFIRM, gu.DEFEAT_CONFIRM,
                          gu.CLAIM_REWARDS, gu.GIVE_UP_REWARDS, gu.DIALOG_CONFIRM]  # nothing after the confirm: the window fades out
     assert game.shots[-1] == "end" and game.shots[:3] == ["BattleTurn", "BattleTurn", "BattleMenu"]
+
+
+def test_the_end_waits_for_the_reward_window_to_go():
+    # After the give-up Confirm the window fades out: no tap, and success only once it has gone.
+    game = Game(["GiveUpDialog", "ExplorationReward"])
+    assert game.run() == 1
+    assert game.taps == [gu.DIALOG_CONFIRM] and game.shots[-1] == "stuck-ExplorationReward"
+
+
+def test_a_wipe_accepts_the_results_and_a_formation_backs_out_to_the_map():
+    # The bot stops at either when it ran out of retries or sinners (`after_retries: stop`): both lead to the map's Forfeit.
+    game = Game(["WipeDialog", "Formation", "MapNodePanel", "ProgressPanel", "ForfeitDialog", "DefeatScreen", "ExplorationComplete",
+                 "ExplorationReward", "GiveUpDialog", None])
+    assert game.run() == 0
+    assert game.taps[:4] == [gu.ACCEPT_RESULTS, gu.WIPE_CONFIRM, gu.FORMATION_BACK, gu.MAP_GEAR]
 
 
 def test_the_give_up_dialog_is_confirmed_again_while_it_stays():
@@ -135,4 +157,4 @@ def test_no_known_screen_for_the_timeout_stops_with_a_screenshot():
 def test_a_screen_that_stays_after_its_taps_stops():
     game = Game(["ProgressPanel"])
     assert game.run() == 1
-    assert game.taps == [gu.FORFEIT] * gu.STEPS["ProgressPanel"][2] and game.shots[-1] == "stuck-ProgressPanel"
+    assert game.taps == [gu.FORFEIT] * gu.STEPS["ProgressPanel"].tries and game.shots[-1] == "stuck-ProgressPanel"
