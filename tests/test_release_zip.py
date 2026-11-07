@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from install import MAAFW_FIX, fetch_zip
+from install import fixed_framework_dll
 from install import install as TREE
 
 PYTHON = TREE / "python" / "python.exe"
@@ -23,7 +23,7 @@ def test_each_maafw_binary_ships_once():
 
 def test_maafw_holds_the_fixed_framework_dll():
     """MXU loads MaaFramework from <root>/maafw/."""
-    assert (TREE / "maafw" / "MaaFramework.dll").read_bytes() == fetch_zip(*MAAFW_FIX).read("MaaFramework.dll")
+    assert (TREE / "maafw" / "MaaFramework.dll").read_bytes() == fixed_framework_dll()
 
 
 def test_bundled_python_loads_the_agent_server_from_maafw():
