@@ -454,16 +454,15 @@
         "custom_action": "Shop"
     },
     // The red button bottom right reads SKIP, Proceed, Continue or Commence, grey while it does nothing.
-    // Both delays stay at MaaFramework's 200 ms (#258): the action reads the screen at once, with no still() before it,
-    // so pre_delay lets a page finish fading in, and a Choices page it has just tapped is still fading out when it returns.
+    // No delays (#273): the action starts with still(), and once a taken option's Choices page has gone.
     "Event": {
         "recognition": "OCR",
         "roi": [1040, 612, 190, 66],
         "expected": "SKIP|Proceed|Continue|Commence",
         "action": "Custom",
         "custom_action": "Event",
-        "pre_delay": 200,
-        "post_delay": 200
+        "pre_delay": 0,
+        "post_delay": 0
     },
     // The Dungeon Progress panel (the gear, or the back key on the map or an event): Continue closes it, never Forfeit
     // (gives the run up) or To Window. Over the map, whose icons still show, or an event, whose button still reads:

@@ -3362,7 +3362,6 @@ class Event(CustomAction):
 
     @hands_back
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
-        image = screen(context)
         # One event's clock: a call more than EVENT_GAP s after the last starts the next event's (#92).
         now = time.monotonic()
         event = RUN.get("event")
@@ -3372,6 +3371,10 @@ class Event(CustomAction):
         if now - event["since"] > EVENT_LIMIT:
             RUN.pop("event")
             return stuck(f"one event went on over {EVENT_LIMIT} s")
+        image = still(context)  # #273: MirrorHub hands the page over as soon as its button reads, maybe mid-fade
+        if image is None:
+            log("event: the page did not hold still; MirrorHub looks again")
+            return True
         tried = RUN.setdefault("event_tried", set())  # this question's options a tap did nothing on
         checked = event["checked"]  # portraits a tap did nothing on in this check
         if red_button(image):
@@ -3431,6 +3434,8 @@ class Event(CustomAction):
             if until(context, lambda im: not Event.panel_same(image, im), timeout=EVENT_TAKE) is None:
                 log(f"event: {options[i][0]!r} did nothing: try another")
                 tried.add(options[i][0])
+            else:  # #273: the page fades out; MirrorHub reading it then would take an option again
+                until(context, lambda im: not has(text(context, im, CHOICES_HEADER), "Choices"), timeout=EVENT_TAKE)
         else:
             tried.clear()
             Event.advance(context, image)

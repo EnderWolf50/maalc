@@ -182,16 +182,17 @@ def test_event_text_is_tapped_through_until_the_choices_show(context):
 
 
 def event_text(context, choices_from=None, red_from=None, red_to=float("inf"), label_to=float("inf"), skip_to=0, misread=()):
-    """Event text running on: screenshot n (1 = Event.run's own) shows the Choices from choices_from on, the lit
-    button from red_from on until red_to and the button's label until label_to (SKIP until skip_to, then Continue,
-    read "Contnue" on the screenshots in misread); returns the rois OCR read, in order."""
+    """Event text running on: screenshot n (1 = Event.run's own, its still() taking two) shows the Choices from
+    choices_from on, the lit button from red_from on until red_to and the button's label until label_to (SKIP until
+    skip_to, then Continue, read "Contnue" on the screenshots in misread); returns the rois OCR read, in order."""
     shots, reads = [], []
 
     def screencap():
         shots.append(1)
+        n = max(1, len(shots) - 1)
         image = np.zeros((720, 1280, 3), np.uint8)
-        image[0, 0, 0] = len(shots)
-        if red_from and red_from <= len(shots) < red_to:
+        image[0, 0, 0] = n
+        if red_from and red_from <= n < red_to:
             image[640:650, 1080:1180] = (0, 0, 200)
         return image
     context.tasker.controller.post_screencap.return_value.wait.return_value.get.side_effect = screencap
@@ -220,7 +221,7 @@ def test_event_text_is_tapped_every_0_15_s_and_read_every_third_tap(context, clo
     actions.Event().run(context, None)
     assert len(corner_taps(context)) == 6  # read at taps 3 and 6
     assert reads.count(tuple(actions.EVENT_BUTTON_LABEL)) == 2
-    assert sum(clock) == pytest.approx(5 * actions.EVENT_TAP_EVERY)
+    assert sum(clock) == pytest.approx(0.2 + 5 * actions.EVENT_TAP_EVERY)  # still()'s second look, then the 5 gaps
 
 
 def test_event_text_stops_on_the_lit_button_without_reading_text(context, clock):
@@ -244,7 +245,7 @@ def test_the_text_is_tapped_on_right_after_the_lit_button(context, clock):
     clicks = context.tasker.controller.post_click.call_args_list
     assert clicks[0].args == actions.EVENT_BUTTON and len(button_taps(context)) == 1
     assert len(corner_taps(context)) == 6  # 2 while it fades, read at once on the first unlit screen, then every third
-    waits = [s for s in clock if s]  # tap(wait=0) sleeps 0
+    waits = [s for s in clock if s][1:]  # tap(wait=0) sleeps 0; the first is still()'s, before the press
     assert waits[0] == pytest.approx(actions.EVENT_TAP_EVERY) and max(waits) <= actions.EVENT_TAP_EVERY
 
 
@@ -2272,7 +2273,9 @@ def test_a_check_with_odds_read_takes_the_next_best_when_a_tap_did_nothing(conte
 
 def test_a_check_tap_that_took_is_not_held_against_the_sinner(context):
     check_page(context, [(actions.EVENT_PORTRAIT_X[0], "High")])
-    screens(context, [0, 9])  # the first tap changes the screen
+    ctl = context.tasker.controller
+    ctl.post_screencap.return_value.wait.return_value.get.side_effect = \
+        lambda: np.full((720, 1280, 3), 9 if ctl.post_click.called else 0, np.uint8)  # the first tap changes the screen
     actions.Event().run(context, None)
     actions.Event().run(context, None)
     assert event_portrait_taps(context) == [actions.EVENT_PORTRAIT_X[0]] * 2
