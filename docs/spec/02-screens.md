@@ -34,7 +34,7 @@
 
 入口頁上的 `Parallel Superposition Mode` 必須保持 OFF。bot 在入口頁讀 `Parallel Superposition Mode : ON`／`OFF`（遊戲文字 `EN_MirrorDungeonUI_5_InfinityFloor` 的 `InfinityFloor_Mode_Button_Title` 加 `IsOnInfinityMod`／`IsOFFInfinityMod`），讀到 ON 就點下方的 `INFINITY MIRROR` 關掉，讀回 OFF 才繼續；點兩次仍是 ON 就停止（`ParallelModeOn` → `ParallelModeOff`，排在入口頁各分流之前、入口頁的對話框之後）。開關開著時只會在通過第 5 層後跳提示（`ParallelModePrompt`，點 Cancel），作為第二道保險。（#17、#94，2026-10-18 定案）
 
-實作（#94）：ON 的畫面還沒有實機截圖，`tests/screens/EntryParallelOn.png` 是把 `EntryNewRun.png` 的 OFF 改畫成 ON 的合成圖；點 `INFINITY MIRROR` 會直接切換還是先跳確認，也還沒實機看過（跳出別的畫面時讀不回 OFF，會停止，不會亂點）。
+實作（#94）：`tests/screens/EntryParallelOn.png` 是實機截圖（2026-11-08）：HARD 局第 1 層在 Dungeon Progress 把 `Parallel S.` 拉桿切到 ON、To Window 之後的入口頁。紅字的 ON 會讀成 `oN`，所以 `ParallelModeOn` 收小寫的 o；OFF 讀得出大寫。點 `INFINITY MIRROR` 會直接切換還是先跳確認，還沒實機看過（跳出別的畫面時讀不回 OFF，會停止，不會亂點）。
 
 ### Luxcavation（經驗本，#366）
 

@@ -121,8 +121,8 @@ const screens: [image: string, hits: string[]][] = [
   ['PassMissionsSeasonalEnd.png', ['PassSeasonalLit', 'PassSeasonalSwipe', 'PassFinish', 'ExpPassDaily']],
   ['EntryNewRun.png', ['MirrorEntryNewRun']],
   ['EntryPaused.png', ['MirrorEntryPaused']],
-  // Synthetic (#94), no live capture yet: EntryNewRun.png with the Parallel Superposition label's OFF redrawn as ON.
-  ['EntryParallelOn.png', ['ParallelModeOn', 'MirrorEntryNewRun']],
+  // Live 2026-11-08 (#94): a paused HARD run with the Parallel S. lever set ON on floor 1; the red ON reads `oN`.
+  ['EntryParallelOn.png', ['ParallelModeOn', 'MirrorEntryPaused']],
   ['ResumeDialog.png', ['ResumeDialog', 'MirrorEntryPaused', 'RecoverToWindow']],  // the entry page reads through it
   ['EnterDialog.png', ['MirrorEnterDialog', 'MirrorEntryNewRun']],
   ['TeamSelect.png', ['TeamSelect']],
