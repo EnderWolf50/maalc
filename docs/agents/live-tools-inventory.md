@@ -48,6 +48,7 @@ The old scripts stay in `.local/`, unchanged. These are replaced, every copy und
 - `scratch/combined-verify/`: `common.py`, `route.py`, `packs.py`, `mkclip.py`, `packclip.py` → `evidence.py`
 - `scratch/top-live-video4/`: `mkevents.py`, `grabframes.py` → `evidence.py events`, `frames`; `loadspans.py` → `tools/wait_spans.py`; `mask85.py`, `mask197.py` → `evidence.py mask`
 - `scratch/*/maafw_timeline.py` → `tools/maafw_timeline.py`
+- #473's map-touch analysis, `taps.py`, `after_black.py`, `answer.py`, `first_touch.py`, and #479's acceptance copies of them (`taps_all.py`) → `map_taps.py` (2026-11-07); the stills (`still.py`) and frame diffs (`framediff.py`) of that analysis stay one-offs
 
 Not replaced: `scratch/combined-verify/mkclip248.py` (a clip joined from two pieces with time-ranged masks of the Play Store's avatar) and `adbrec.py`/`adbrec.sh` (adb screenrecord).
 
