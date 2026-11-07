@@ -423,8 +423,9 @@ def test_the_map_title_gives_the_floor(context, shown, floor):
     assert actions.map_floor(context, np.zeros((720, 1280, 3), np.uint8)) == floor
 
 
-def test_a_map_that_does_not_pan_costs_no_extra_drags_once_a_node_is_entered(context):
-    # Only a floor's fresh map waits out its drags; elsewhere three pans stay the limit.
+def test_a_map_that_does_not_pan_once_a_node_is_entered_is_dragged_for_map_tap_limit_s(context):
+    # Only a floor's fresh map waits out its drags for MAP_PAN_LIMIT s; elsewhere a map that ignores them (#486: for a
+    # while after it fades in) is dragged again for MAP_TAP_LIMIT s.
     actions.RUN["fresh_floor"] = True  # set by the theme pack pull
     nodes = {(1, "mid"): {"cost"}}
     map_world(context, nodes, [], bus_x=446)
@@ -432,18 +433,20 @@ def test_a_map_that_does_not_pan_costs_no_extra_drags_once_a_node_is_entered(con
     ctl.post_click(725, 391)  # a node's tap opens its panel
     assert actions.enter_node(context)
     ctl.post_touch_move.side_effect = lambda x, y: MagicMock()
+    t0 = actions.time.monotonic()
     actions.RouteMap.find_bus(context)
-    assert ctl.post_touch_down.call_count == 3
+    assert actions.MAP_TAP_LIMIT < actions.time.monotonic() - t0 < actions.MAP_TAP_LIMIT + 1
 
 
-def test_a_fresh_hard_map_that_cannot_pan_costs_no_extra_drags(context, clock):
-    # A HARD floor's map shows two columns and does not pan (#129): its drags are not waited out.
+def test_a_fresh_hard_map_that_cannot_pan_is_not_dragged_for_the_fresh_floors_limit(context, clock):
+    # A HARD floor's map shows two columns and does not pan (#129): its drags are not waited out for MAP_PAN_LIMIT s,
+    # only for MAP_TAP_LIMIT s as any map that ignores them (#486).
     actions.RUN.update(fresh_floor=True, floor_hard=True)
     map_world(context, {(1, "mid"): {"cost"}}, [], bus_x=446)
     ctl = context.tasker.controller
     ctl.post_touch_move.side_effect = lambda x, y: MagicMock()
     actions.RouteMap.find_bus(context)
-    assert ctl.post_touch_down.call_count == 3
+    assert actions.MAP_TAP_LIMIT < sum(clock) < actions.MAP_TAP_LIMIT + 1
 
 
 def touch_times(context):
@@ -454,15 +457,10 @@ def touch_times(context):
     return events
 
 
-# Lit links across the screen: map_world's noise alone averages out over recovery.thumb's blocks, so a drag of it reads as
-# no change; a live map's nodes and links moved 12.8% of the blocks or more by a drag's last move (#486).
-ROW_LINKS = [((1, r), (2, r)) for r in ("up", "mid", "down")]
-
-
 def test_a_first_drag_the_map_ignores_is_made_again_without_resting_or_waiting(context):
     # #486: after the map faded in, the game ignored find_bus's first drag in 20 of 60 map visits (six runs); the drag
     # still rested SCROLL_HOLD s before the lift and waited 0.5 s after it, 1.50-1.58 s from that drag to the next.
-    offsets = map_world(context, {(1, "mid"): {"cost"}}, ROW_LINKS, bus_x=446)
+    offsets = map_world(context, {(1, "mid"): {"cost"}}, [], bus_x=446)
     ctl = context.tasker.controller
     move = ctl.post_touch_move.side_effect
     ctl.post_touch_move.side_effect = lambda x, y: MagicMock() if ctl.post_touch_down.call_count == 1 else move(x, y)
@@ -477,7 +475,7 @@ def test_a_first_drag_the_map_ignores_is_made_again_without_resting_or_waiting(c
 def test_a_drag_the_map_follows_rests_and_waits_as_before(context):
     # #486: the screenshot that tells an ignored drag is taken while the finger rests; a drag the map follows still rests
     # SCROLL_HOLD s from its last move (no fling, #114), that screenshot's time inside the rest, and waits 0.5 s after it.
-    map_world(context, {(1, "mid"): {"cost"}}, ROW_LINKS, bus_x=446)
+    map_world(context, {(1, "mid"): {"cost"}}, [], bus_x=446)
     shot = context.tasker.controller.post_screencap.return_value.wait.return_value.get
     grab, looks = shot.side_effect, []
     shot.side_effect = lambda: actions.time.sleep(0.1) or looks.append(actions.time.monotonic()) or grab()
@@ -488,6 +486,17 @@ def test_a_drag_the_map_follows_rests_and_waits_as_before(context):
     last_move, lift = max(t for k, t in events if k == "move"), next(t for k, t in events if k == "up")
     assert actions.SCROLL_HOLD <= lift - last_move < actions.SCROLL_HOLD + 0.1  # the screenshot's 0.1 s is inside the rest
     assert min(t for t in looks if t > lift) - lift >= 0.5
+
+
+def test_three_drags_the_map_ignores_after_a_fight_still_take_the_bus_home(context):
+    # #486 review: an ignored drag is made again ~0.5 s after the last instead of ~1.5 s, so three pans would span ~1 s
+    # of a map that ignores touches, not ~3 s; drags that leave the bus where it was count for time, not as pans.
+    offsets = map_world(context, {(1, "mid"): {"cost"}}, [], bus_x=446)  # a node entered: not a fresh floor
+    ctl = context.tasker.controller
+    move = ctl.post_touch_move.side_effect
+    ctl.post_touch_move.side_effect = lambda x, y: MagicMock() if ctl.post_touch_down.call_count <= 3 else move(x, y)
+    _, bus = actions.RouteMap.find_bus(context)
+    assert abs(bus[0] - actions.BUS_HOME[0]) <= actions.BUS_SLACK[0] and len(offsets) == 4
 
 
 def test_a_gift_window_over_the_map_after_a_battle_goes_back_to_mirror_hub(context, monkeypatch):
@@ -675,9 +684,9 @@ def test_the_drag_back_leaves_undone_a_remainder_find_bus_takes_as_home(context,
     offsets = map_world(context, *floor, bus_x=actions.BUS_HOME[0], width=width)
     asked, scroll = [], actions.scroll
 
-    def live_scroll(context, x, y, dx, dy):  # map_world's map moves 10 px past dx; the live one 1 px, and none for 1 px
+    def live_scroll(context, x, y, dx, dy, **kw):  # map_world's map moves 10 px past dx; the live one 1 px, and none for 1 px
         asked.append(dx)
-        scroll(context, x, y, dx - 9 if dx > 9 else dx + 9 if dx < -9 else 0, dy)
+        return scroll(context, x, y, dx - 9 if dx > 9 else dx + 9 if dx < -9 else 0, dy, **kw)
     monkeypatch.setattr(actions, "scroll", live_scroll)
     actions.RouteMap().run(context, None)
     assert asked == drags

@@ -307,7 +307,7 @@ def drag(context, points, settle=0.3, dwell=0.1, hold=0.0, pause=0.02, step=10):
 
 
 def press(context, points, settle, dwell, pause, step):
-    """drag's touch up to its lift: the finger is left down on the last point."""
+    """drag without its rest and lift: the finger goes down and moves through points, and stays down on the last."""
     ctl = context.tasker.controller
     ctl.post_touch_down(*points[0]).wait()
     time.sleep(settle)
@@ -2173,7 +2173,7 @@ BUS_JITTER = 3  # px the bus's match moves on a map that did not move
 # from 0.13-0.23 s after it was sent (75 taps); one it ignored moved 1.0% at most over 2 s (26 taps, 3 runs), and the
 # next touch, at most 2.6 s later, was always taken.
 MAP_ANSWER = 0.7  # s a tap on the map has to answer (its node panel, or the screen moving) before follow taps again
-MAP_TAP_LIMIT = 4  # s follow taps its node again while the map ignores taps
+MAP_TAP_LIMIT = 4  # s follow taps its node again, and find_bus drags the map again (#486), while the map ignores touches
 
 
 def seen(context, image, node, roi=None):
@@ -2554,15 +2554,18 @@ class RouteMap(CustomAction):
     def find_bus(context):
         """A screenshot and the bus's top-left in it, after panning the bus to BUS_HOME.
 
-        Up to three pans. On a floor's fresh map (no node entered since the theme pack) a pan that leaves the
-        bus where it was does not count and is made again, for up to MAP_PAN_LIMIT s: live 2026-10-19, a new
-        map took no drag for its first seconds. Once a pan has moved the bus, one that does not is the map's edge.
-        #486: after a fade-in the game ignores the map's touches for a while. A pan's screenshot as the finger stops
-        that shows the screen it started on (recovery.same_screen) lifts the finger at once and is the next look: no
-        rest, no 0.5 s wait. On the six runs' recordings, at the last move 20 ignored drags had moved at most 1.9% of
-        the blocks, 108 taken ones 12.8% or more.
+        Up to three pans that move the bus. A pan that leaves the bus where it was (the map ignored it) does not count
+        and is made again, for up to MAP_TAP_LIMIT s (#486: after a fade-in the game ignores the map's touches for a
+        while); on a floor's fresh NORMAL map (no node entered since the theme pack) for up to MAP_PAN_LIMIT s: live
+        2026-10-19, a new map took no drag for its first seconds. Once a pan has moved the bus, one that does not is
+        the map's edge. A pan's screenshot as the finger stops that shows the bus where it was lifts the finger at
+        once and is the next look: no rest, no 0.5 s wait (#486).
         """
-        end, pans, last, moved = time.monotonic() + MAP_PAN_LIMIT, 0, None, False
+        def stays(hit, at):  # a MapBus hit within BUS_JITTER of at: the map has not moved
+            return hit is not None and at is not None and abs(hit.box[0] - at[0]) <= BUS_JITTER and abs(hit.box[1] - at[1]) <= BUS_JITTER
+
+        limit = MAP_PAN_LIMIT if RUN.get("fresh_floor") and not RUN.get("floor_hard") else MAP_TAP_LIMIT  # a HARD map does not pan (#129)
+        end, pans, last, moved = time.monotonic() + limit, 0, None, False
         image = screen(context)
         while True:
             bus = seen(context, image, "MapBus")
@@ -2572,13 +2575,13 @@ class RouteMap(CustomAction):
             dx, dy = BUS_HOME[0] - bx, BUS_HOME[1] - by
             if abs(dx) <= BUS_SLACK[0] and abs(dy) <= BUS_SLACK[1]:
                 return image, (bx, by)
-            held = last is not None and abs(bx - last[0]) <= BUS_JITTER and abs(by - last[1]) <= BUS_JITTER
+            held = stays(bus, last)
             if held and moved:
                 return image, (bx, by)  # live 2026-10-21 NORMAL: the map's left edge stopped the bus at 196
             moved = last is not None and not held
-            if held and RUN.get("fresh_floor") and not RUN.get("floor_hard"):  # a HARD map does not pan (#129)
+            if held:
                 if time.monotonic() > end:
-                    log(f"map: the bus stayed at {bx}, {by} through {MAP_PAN_LIMIT} s of drags")
+                    log(f"map: the bus stayed at {bx}, {by} through {limit} s of drags")
                     return image, (bx, by)
             else:
                 if pans == 3:
@@ -2587,9 +2590,9 @@ class RouteMap(CustomAction):
             # Look again after each pan. Start on map background: between the first and second columns,
             # between the middle and bottom rows. #213: a GET! window rising over the map ends the pans.
             page_guard(context, "MirrorMap", image=image)
-            last, before = (bx, by), recovery.thumb(image)
+            last = (bx, by)
             image = scroll(context, min(bx + SLOT[0] + map_route.COLUMN_DX // 2, 1100), by + SLOT[1] + 106, dx, dy,
-                           ignored=lambda im: recovery.same_screen(before, recovery.thumb(im)))
+                           ignored=lambda im: stays(seen(context, im, "MapBus"), last))
             if image is None:
                 time.sleep(0.5)
                 image = screen(context)
