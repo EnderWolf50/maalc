@@ -164,7 +164,7 @@ def test_the_event_labels_are_the_event_nodes():
     assert event["roi"] == actions.EVENT_BUTTON_LABEL
 
 
-KEPT_DELAYS = ["Event", "BattleTurn"]  # #258: the default 200 ms, written out with the reason in the pipeline
+KEPT_DELAYS = ["Event", "BattleTurn"]  # #258: a post_delay of the default 200 ms, written out with the reason in the pipeline
 
 SETTLEMENT = ["ProgressPanel", "RewardCardForgo", "GiftRefuseDialog", "RunVictory", "DefeatScreen", "ExplorationComplete",
               "ClaimPopup", "ResumeDialog"]

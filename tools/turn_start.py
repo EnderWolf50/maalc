@@ -110,9 +110,9 @@ def events(lines):
             name, at = h[1], stamp(t[1])
             if name == "context_run_recognition":
                 if "[req=" in line:
-                    look = [at, e[1] if (e := ENTRY.search(line)) else "", False, ""]
+                    look = {"t": at, "entry": e[1] if (e := ENTRY.search(line)) else "", "hit": False, "text": ""}
                 elif "| leave" in line and look:
-                    yield Look(look[0], at, *look[1:])
+                    yield Look(look["t"], at, look["entry"], look["hit"], look["text"])
                     look = None
             elif "[req=" not in line:
                 continue
@@ -124,11 +124,11 @@ def events(lines):
             elif name == "controller_post_touch_up":
                 yield Up(at)
         elif "msg=Node.RecognitionNode." in line and look:
-            if (d := DETAILS.search(line)) and (n := NAME.search(d[1])) and n[1] == look[1]:
-                look[2] = "RecognitionNode.Succeeded" in line
-                if look[1] == "ReadText":  # text() joins every result, as agent/actions.py ocr() does
+            if (d := DETAILS.search(line)) and (n := NAME.search(d[1])) and n[1] == look["entry"]:
+                look["hit"] = "RecognitionNode.Succeeded" in line
+                if look["entry"] == "ReadText":  # text() joins every result, as agent/actions.py ocr() does
                     found = json.loads(d[1]).get("reco_details") or {}
-                    look[3] = " ".join(r.get("text", "") for r in (found.get("detail") or {}).get("all") or [])
+                    look["text"] = " ".join(r.get("text", "") for r in (found.get("detail") or {}).get("all") or [])
         elif "reco hit [result.name=" in line:
             if (m := HIT.search(line)) and (t := TS.match(line)):
                 yield Hit(stamp(t[1]), m[1])
@@ -273,7 +273,7 @@ def spread(xs):
     return f"{len(xs)}: {min(xs):.2f} / {statistics.median(xs):.2f} / {p90(xs):.2f} / {max(xs):.2f}" if xs else "-"
 
 
-def caps(found):
+def cap_counts(found):
     return ", ".join(f"{n}: {c}" for n, c in sorted(Counter(t.caps for t in found).items()))
 
 
@@ -302,7 +302,7 @@ def summary(found, title, key):
         groups.setdefault(key(t), []).append(t)
     for name, ts in sorted(groups.items(), key=lambda kv: -len(kv[1])):
         gaps = [t.gap for t in ts if t.gap is not None]
-        out.append(f"| {name} | {len(ts)} | {medians(ts)} | {caps(ts)} | {sum(t.again for t in ts)} | "
+        out.append(f"| {name} | {len(ts)} | {medians(ts)} | {cap_counts(ts)} | {sum(t.again for t in ts)} | "
                    f"{spread(t.pause_age for t in ts)} | {spread(t.turn_age for t in ts)} | "
                    f"{secs(statistics.median(gaps)) if gaps else '-'} |")
     return out
@@ -327,7 +327,7 @@ def report(found, left, skipped):
         return head
     out = [head, "",
            "Median (p90) ms:", "", "| turns " + SEGMENTS + " caps: turns | again |", "|---:" * 6 + "|---|---:|",
-           f"| {len(found)} | {medians(found, with_p90=True)} | {caps(found)} | {sum(t.again for t in found)} |", ""]
+           f"| {len(found)} | {medians(found, with_p90=True)} | {cap_counts(found)} | {sum(t.again for t in found)} |", ""]
     out += summary(found, "before", lambda t: t.before) + [""]
     out += summary(found, "pause_age", lambda t: "set" if t.pause_age is not None else "unset") + [""]
     out += summary(found, "tap", lambda t: "Win Rate" if t.win_rate else "other") + [""]
@@ -335,7 +335,7 @@ def report(found, left, skipped):
     return "\n".join(out + rows(found))
 
 
-def read(path):
+def lines_of(path):
     with open(path, encoding="utf-8", errors="replace") as f:
         yield from f
 
@@ -344,7 +344,7 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("logs", nargs="+", help="maafw.log files, oldest first")
     args = ap.parse_args(argv)
-    print(report(*turns(read(p) for p in args.logs)))
+    print(report(*turns(lines_of(p) for p in args.logs)))
 
 
 if __name__ == "__main__":
