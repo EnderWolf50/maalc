@@ -621,7 +621,7 @@ SIX = ({**{k: v for k, v in WIDE.items() if k[0] <= 5}, (6, "mid"): {"boss"}},
     ((WIDE, WIDE_LINKS), 2900, [-510, -510, 510, 510]),
     ((WIDE, WIDE_LINKS), 2676, [-510, -510, 510, 490]),
 ], ids=["read on the first screen", "511 px", "511 then 511 px", "511 then 489 px to the edge"])
-def test_the_drag_back_leaves_out_a_remainder_too_short_to_move_the_map(context, monkeypatch, floor, width, drags):
+def test_the_drag_back_leaves_undone_a_remainder_find_bus_takes_as_home(context, monkeypatch, floor, width, drags):
     # #490, live 2026-11-06 NORMAL: each drag of 510 px measured 511; the 1 px drag back after the 510 px one did not
     # move the map.
     monkeypatch.setattr(actions, "map_weights", lambda context: WIDE_WEIGHTS)
