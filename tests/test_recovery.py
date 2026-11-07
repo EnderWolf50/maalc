@@ -146,6 +146,27 @@ def test_watchdog_reset():
     assert not w.see("MirrorMap", A, 4)
 
 
+def test_two_dead_taps_of_one_picture_are_a_frozen_game():
+    # #440: the main window shown to the byte through two taps' whole waits.
+    w = Watchdog()
+    assert w.tapped(A) is None
+    assert "frozen" in w.tapped(A)
+
+
+def test_a_dead_tap_streak_starts_over_on_a_live_tap_another_picture_or_a_reset():
+    live = Watchdog()
+    live.tapped(A)
+    assert live.tapped(None) is None and live.tapped(A) is None  # the game took a tap between: alive
+    moved = Watchdog()
+    moved.tapped(A)
+    assert moved.tapped(B) is None  # the picture changed between the two waits: alive
+    assert "frozen" in moved.tapped(B)
+    reset = Watchdog()
+    reset.tapped(A)
+    reset.reset()  # forget_game_state, after any recovery
+    assert reset.tapped(A) is None
+
+
 def test_ladder_climbs_until_the_screen_is_past():
     ladder = Ladder()
     assert ladder.stuck("MirrorMap", 1, 0) == (1, None)

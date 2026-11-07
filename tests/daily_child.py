@@ -37,6 +37,16 @@ def screen(png):
     return np.ascontiguousarray(np.array(Image.open(ROOT / "tests" / "screens" / png).convert("RGB"))[:, :, ::-1])
 
 
+def live_frame(image):
+    """The next frame of a live main window: a patch of image brighter, clear of the rois the nodes that hit on the main
+    window read (maatools.config.mts: the tab bar, the banner's caption, the resource panel). The game's banners
+    keep moving (spec 06), so a model's main window that takes a tap late or never shows this every other screenshot; a
+    main window that stays one picture through two taps is a frozen game to the bot (#440)."""
+    image = image.copy()
+    image[100:300, 100:500] = np.minimum(image[100:300, 100:500].astype(int) + 30, 255).astype(np.uint8)
+    return image
+
+
 def load():
     """(actions, resource): MaaFramework's Resource first, then actions under a stand-in AgentServer that records what
     the agent registers; every custom action and recognition goes on the resource, as the agent serves them. ROOT is a
