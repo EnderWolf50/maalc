@@ -38,7 +38,8 @@ def screen(png):
 
 
 def live_frame(image):
-    """The next frame of a live main window: a patch of image away from every node's roi, brighter. The game's banners
+    """The next frame of a live main window: a patch of image brighter, clear of the rois the nodes that hit on the main
+    window read (maatools.config.mts: the tab bar, the banner's caption, the resource panel). The game's banners
     keep moving (spec 06), so a model's main window that takes a tap late or never shows this every other screenshot; a
     main window that stays one picture through two taps is a frozen game to the bot (#440)."""
     image = image.copy()

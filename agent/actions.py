@@ -146,7 +146,7 @@ def tap_then(context, x, y, done, timeout=2.0):
     tap(context, x, y, wait=0)
     image = until(context, watch, timeout=timeout)
     first = shots["first"]
-    dead = image is None and shots["still"] and first is not None and seen(context, first, "HomeReached") is not None
+    dead = image is None and shots["still"] and seen(context, first, "HomeReached") is not None
     if why := STUCK["watch"].tapped(recovery.thumb(first) if dead else None):
         stuck(why, level=3)
     return image
@@ -375,9 +375,10 @@ def current_run(context):
 
 # Stuck detection, recovery and the stop procedure (spec 06).
 def stuck(reason, level=1):
-    """Hand the screen being handled to recovery: MirrorHub's Stuck node picks it up next.
+    """Hand the screen being handled to recovery: the hub's Stuck node picks it up next (MirrorHub's Recover, a daily
+    hub's DailyRecover). level: the least recovery level it starts at.
 
-    Returns True, for the action to return: its [JumpBack] leads to MirrorHub.
+    Returns True, for the action to return: its [JumpBack] leads to the hub.
     """
     log(f"stuck: {reason}")
     STUCK["flag"] = (None, level, reason)  # StuckFlag fills in the screen type
@@ -865,8 +866,9 @@ class HomeLost(CustomAction):
 class DailyRecover(CustomAction):
     """A daily hub's Stuck node (#440, spec 06): the daily pages have L3 only. A stuck that starts at L3, a game frozen on
     the main window (tap_then), restarts the game; GoHome takes it to the main window and the node's next goes back to its
-    hub, whose taps count afresh (the dead taps used up PassBanner's or MailOpen's), the task's own flow, RUN and TASK
-    kept. Any other stuck ends the task through the stop procedure, the param saying why."""
+    hub, whose taps count afresh (two dead taps are MailOpen's whole max_hit): the task's own flow, TASK and the run's plan
+    kept, the game state forgotten as after any recovery. Any other stuck ends the task through the stop procedure, the
+    param saying why."""
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         _, level, reason = STUCK["flag"]

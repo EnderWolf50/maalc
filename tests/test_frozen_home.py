@@ -4,15 +4,14 @@ the game is restarted; and on a live main window, whose picture keeps moving, th
 """
 
 import json
+import math
 
 import numpy as np
 from daily_child import GAME, bind, game_class, inside, live_frame, load, result, run_child, screen
-from test_pass_task import BANNER, MISSIONS_TAB, SEASONAL_TAB, WEEKLY_TAB
+from test_pass_task import BANNER, MISSIONS_TAB, SCREENS as PASS_SCREENS, SEASONAL_TAB, WEEKLY_TAB
 
 TITLE_TAP = (540, 300, 200, 120)
-SCREENS = {"main": "MainWindow.png", "title": "Title.png", "pass": "PassBattlePass.png", "daily": "PassMissionsDaily.png",
-           "weekly": "PassMissionsWeekly.png", "seasonal": "PassMissionsSeasonal.png",
-           "seasonal_end": "PassMissionsSeasonalEnd.png"}
+SCREENS = {**PASS_SCREENS, "title": "Title.png"}
 HUB_TIMEOUT = 5000  # PassHub's 60 s, cut short: a pass page that never opens fails the task in 5 s
 
 
@@ -26,8 +25,8 @@ def child():
 
         def set(self, frozen=False, live=False, ignored=0, ignored_after=0):
             """frozen: the main window takes no tap and shows the same picture until the game restarts. live: the main
-            window's picture moves at every screenshot. ignored: the banner taps the game lets go by before one opens the
-            pass page (None: none does); ignored_after: the same, once the game restarted."""
+            window's picture moves at every other screenshot. ignored: the banner taps the game lets go by before one opens
+            the pass page (math.inf: none does); ignored_after: the same, once the game restarted."""
             self.screen, self.focus, self.frozen, self.live, self.ignored = "main", GAME, frozen, live, ignored
             self.ignored_after = ignored_after
             self.clicks, self.keys, self.swipes, self.starts, self.stops, self.frames = [], [], [], 0, 0, 0
@@ -47,8 +46,8 @@ def child():
             elif self.screen == "title" and inside(TITLE_TAP, x, y):
                 self.screen = "main"
             elif self.screen == "main" and inside(BANNER, x, y):
-                if self.ignored is None or self.ignored > 0:
-                    self.ignored = self.ignored and self.ignored - 1
+                if self.ignored > 0:
+                    self.ignored -= 1
                 else:
                     self.screen = "pass"
             elif self.screen == "pass" and inside(MISSIONS_TAB, x, y):
@@ -93,7 +92,7 @@ def child():
         "frozen_late": ({"frozen": True, "ignored_after": 1}, 0),
         "frozen_restarts_used": ({"frozen": True}, actions.recovery.L3_PER_EXECUTION),
         "late": ({"live": True, "ignored": 1}, 0),
-        "never": ({"live": True, "ignored": None}, 0),
+        "never": ({"live": True, "ignored": math.inf}, 0),
     }.items():
         game.set(**model)
         actions.STUCK["l3"] = restarts_used

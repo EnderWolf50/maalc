@@ -20,12 +20,13 @@ SCENARIOS = {"thread": ("drive", "b", 1, 0, WIN, "exp"), "thread_on_thread": ("d
              "thread_x12": ("drive", "b", 12, 0, WIN, "exp"),
              "thread_done_today": ("drive", "b", 3, 0, WIN, "exp"), "thread_one_today": ("drive", "b", 1, 0, WIN, "exp"),
              "thread_bonuses_unread": ("drive", "b", 3, 0, WIN, "exp"), "thread_daily": ("drive", "b", 1, 0, WIN, "exp"),
-             "thread_count_spent": ("drive", "b", 2, 0, WIN, "exp")}
+             "thread_count_spent": ("drive", "b", 2, 0, WIN, "exp"), "thread_frozen": ("main", "b", 1, 0, WIN, "exp")}
 CONSECUTIVE = {"thread_x3", "thread_x12"}
 DAILY = {"thread_done_today", "thread_one_today", "thread_bonuses_unread", "thread_daily"}
 # #429: the Daily Bonuses n/3 (n left; the model's default 3/3, a fresh day): 0/3 three won today, 2/3 one, blank.
+# #440: the game frozen on the main window until it restarts.
 STATES = {"thread_done_today": {"bonuses": 0}, "thread_one_today": {"bonuses": 2}, "thread_bonuses_unread": {"bonuses": None},
-          "thread_count_spent": {"bonuses": 0}}
+          "thread_count_spent": {"bonuses": 0}, "thread_frozen": {"frozen": True}}
 
 
 def test_thread_luxcavation_is_a_task_of_the_interface():
@@ -50,6 +51,14 @@ def test_thread_luxcavation_goes_home_first_taps_thread_the_open_card_and_the_bo
     assert o["keys"] == [4] and inside(WINDOW_TAB, *taps[-1]) and len(taps) == 9  # GoHome again: the back key, the Window tab
     assert o["nodes"].count("LuxTeamSelect") == 1
     assert o["nodes"][:3] == ["ThreadLuxcavation", "ThreadHome", "ThreadHub"] and o["nodes"][-1] == "TaskDone"
+
+
+def test_a_thread_task_on_a_frozen_main_window_restarts_the_game_and_fights_its_battle():
+    # #440, live 2026-11-05: the Drive tab tapped 5 times, the same picture each time, then ThreadStuck stopped the task.
+    o = run_child(__file__)["thread_frozen"]
+    assert o["restarts"] == [1, 1] and "ThreadStuck" in o["nodes"], o["nodes"]
+    assert o["succeeded"] and o["nodes"][-1] == "TaskDone" and len(level_enters(o)) == 1, o["nodes"]
+    assert sum(inside(DRIVE_TAB, *xy) for xy in o["clicks"]) == 3  # 2 frozen, then the restarted game's
 
 
 def test_thread_luxcavation_on_the_thread_tab_does_not_tap_it():

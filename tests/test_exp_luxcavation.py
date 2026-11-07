@@ -45,11 +45,12 @@ CARD = {"exp": (1079, 479), "locked": (738, 479), "thread": (372, 481)}
 FIGHT_SHOTS = 4  # screenshots the battle takes before its results page: the first of them gray, the rest VICTORY on a win
 # The pass page (#429, test_pass_task.py's): the main window's banner, the Pass Missions tab, the Daily tab.
 BANNER = (940, 190, 270, 90)
+TITLE_TAP = (540, 300, 200, 120)
 MISSIONS_TAB = (305, 38, 140, 38)
 DAILY_TAB = (256, 210, 30, 100)
 PASS = {"underway": "PassMissionsDailyUnderway.png", "done": "PassMissionsDaily.png", "weekly": "PassMissionsWeekly.png"}
 
-SCREENS = {"main": "MainWindow.png", "drive": "Drive.png", "exp": "LuxExp.png", "locked": "LuxExpLocked.png",
+SCREENS = {"main": "MainWindow.png", "title": "Title.png", "drive": "Drive.png", "exp": "LuxExp.png", "locked": "LuxExpLocked.png",
            "thread": "LuxThread.png", "team": "LuxTeamSelect.png", "scrolled": "LuxThreadScrolled.png", "levels": "LuxThreadLevels.png", "fight": None,
            "victory": "Victory.png", "win": "LuxResultVictory.png", "thread_win": "LuxResultThread.png", "lose": "LuxResultDefeat.png",
            "ev_story": "LuxEventStory.png", "ev_card": "LuxEventCard.png", "ev_check": "LuxEventCheck.png",
@@ -142,6 +143,17 @@ def child(task="ExpLuxcavation", scenarios=SCENARIOS, consecutive=CONSECUTIVE, s
             self.fights = []  # the N each battle started with
             self.presses = []  # the box's buttons pressed, by name
             self.live, self.frames = False, 0  # the main window's picture moves at every other screenshot, as a live game's banners
+            self.frozen, self.stops, self.starts = False, 0, 0  # frozen: no tap taken until the game restarts (#440)
+
+        def stop_app(self, intent):
+            self.stops += 1
+            self.frozen = False
+            return True
+
+        def start_app(self, intent):
+            self.starts += 1
+            self.screen = "title"
+            return True
 
         def reset_boxes(self):
             """The game's Consecutive Battle goes back to x1 on leaving Luxcavation and after a result (live 2026-10-28)."""
@@ -187,6 +199,8 @@ def child(task="ExpLuxcavation", scenarios=SCENARIOS, consecutive=CONSECUTIVE, s
             return self.images[self.screen]
 
         def on_tap(self, x, y):
+            if self.frozen:
+                return True
             before = self.screen
             box = self.box()
             if box and self.tap_box(box, x, y):
@@ -219,6 +233,8 @@ def child(task="ExpLuxcavation", scenarios=SCENARIOS, consecutive=CONSECUTIVE, s
             elif s == "ev_text" and not inside(EVENT_BUTTON, x, y):
                 self.screen = "ev_continue"
             elif s == "drive" and inside(WINDOW_TAB, x, y):
+                self.screen = "main"
+            elif s == "title" and inside(TITLE_TAP, x, y):
                 self.screen = "main"
             elif s == "main" and inside(BANNER, x, y) and self.pass_row:
                 self.screen = "pass"
@@ -296,7 +312,8 @@ def child(task="ExpLuxcavation", scenarios=SCENARIOS, consecutive=CONSECUTIVE, s
         for name, value in state.items():
             setattr(game, name, value)
         out[scenario] = {**result(tasker.post_task(task, override).wait().get(), game, actions), "swipes": game.swipes,
-                         "drags": game.drags, "fights": game.fights, "presses": game.presses}
+                         "drags": game.drags, "fights": game.fights, "presses": game.presses,
+                         "restarts": [game.stops, game.starts]}
     print(json.dumps(out))
 
 
