@@ -3434,8 +3434,9 @@ class Event(CustomAction):
             if until(context, lambda im: not Event.panel_same(image, im), timeout=EVENT_TAKE) is None:
                 log(f"event: {options[i][0]!r} did nothing: try another")
                 tried.add(options[i][0])
-            else:  # a lit card changes the panel before the page goes: MirrorHub reading Choices would take one again
-                until(context, lambda im: not has(text(context, im, CHOICES_HEADER), "Choices"), timeout=EVENT_TAKE)
+            # A lit card changes the panel before the page goes: MirrorHub reading Choices would take one again.
+            elif until(context, gone(context, {"roi": CHOICES_HEADER, "expected": "Choices"}, image), timeout=EVENT_TAKE) is None:
+                log(f"event: Choices still up {EVENT_TAKE} s after taking {options[i][0]!r}")
         else:
             tried.clear()
             Event.advance(context, image)

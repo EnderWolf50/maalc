@@ -454,7 +454,7 @@
         "custom_action": "Shop"
     },
     // The red button bottom right reads SKIP, Proceed, Continue or Commence, grey while it does nothing.
-    // No delays (#273): the action starts with still(), and after a taken option returns only once the Choices page has gone.
+    // No delays (#273): the action starts with still(), and after a taken option waits up to 1.5 s for the Choices page to go.
     "Event": {
         "recognition": "OCR",
         "roi": [1040, 612, 190, 66],
