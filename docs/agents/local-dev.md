@@ -9,7 +9,7 @@
 
 Done: `uv run python tools/check.py` passes in the worktree.
 
-Once per clone, `lefthook install` turns on the pre-commit hook (`lefthook.yml`): ruff on the staged Python files and the screenshot privacy test. `lefthook` is a global tool on the user's machines.
+Once per clone, `lefthook install` turns on the pre-commit hook (`lefthook.yml`): ruff on the staged Python files and the screenshot privacy test. `lefthook` is installed globally, not by `uv sync` or `pnpm install`.
 
 ## Checks
 
@@ -83,7 +83,7 @@ Retention: an archive folder older than 7 days whose `INDEX.md` rows name only c
 
 ## The emulator lane
 
-Every MuMu instance on this PC logs in to the same game account, and starting the game on one instance kicks the other out (the user, 2026-10-20). So the `emulator` resource covers all instances: `tools/live/queue.py` describes it as the user's game account on the emulator. Take an `emulator` ticket before you drive any instance.
+Every MuMu instance logs in to the same game account, and starting the game on one instance kicks the other out (the user, 2026-10-20). So the `emulator` resource covers all instances: `tools/live/queue.py` describes it as the user's game account on the emulator. Take an `emulator` ticket before you drive any instance.
 
 ## Game data
 
@@ -93,7 +93,7 @@ Look in `.local/unpack/` first (gift tables, prices, theme packs, every dialog s
 
 To query it, search the unpacked tree with `rg`: `rg -l "<text>" .local/unpack/raw/Localize/en` finds a dialog or a name, and `rg -l "<key>" .local/unpack/static` finds a table (`static/` holds about 2200 JSON files, counted 2026-10-30). Mounting Trial names are in `raw/Localize/en/EN_Bufs_Mirror5.json`, and the mirror node data for the `-hard`, `-extreme` and `-infinite` variants is `static/Assets/Resources_moved/StaticData/static-data/mirrordungeon/mirrordungeon-08-*.json`.
 
-The Huiji wiki (`limbuscompany.huijiwiki.com`) is behind Cloudflare: `curl` got 403 from this PC on 2026-10-30, and WebFetch got 403 on 2026-10-16. Use the unpacked data first; a wiki answer means a browser session.
+The Huiji wiki (`limbuscompany.huijiwiki.com`) is behind Cloudflare: `curl` got 403 on 2026-10-30, and WebFetch got 403 on 2026-10-16. Use the unpacked data first; a wiki answer means a browser session.
 
 A personality's skill deck is always S1 ×3, S2 ×2, S3 ×1: `attributeList[].number` of every `personality-*.json` under `static/.../StaticData/static-data/personality/` is 3, 2, 1 (202 personalities, counted 2026-10-30).
 
