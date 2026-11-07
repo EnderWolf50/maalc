@@ -13,7 +13,8 @@ GiveUpRewards:
   BattleTurn (the planning phase)        the gear, top right; it takes a tap only in the planning phase
   BattlePause (a turn playing out)       no tap: wait for the planning phase
   BattleMenu (the pause menu)            Give Up
-  WipeDialog (DEFEAT, the team wiped)    Accept results, then Confirm: to the map
+  WipeDialog (DEFEAT, the team wiped)    Accept results, then Confirm 1.2 s later with no look between (the cards
+                                         read the same picked or not; the bot's Wipe taps them so too): to the map
   Formation (the bot stopped there)      back: to the map
   MapNodePanel, MirrorMap                the gear
   ProgressPanel (Dungeon Progress)       Forfeit
@@ -26,7 +27,7 @@ GiveUpRewards:
   ClaimDialog (a Claim's confirm dialog) Cancel; the window's Claim is never tapped
 
 It may start on any of these screens. Each screen is named with the pipeline's own node (`look`'s probe), and the three
-dialogs with the text the bot reads inside its actions; it is checked before every tap. A screenshot of each screen
+dialogs with the text the bot reads inside its actions; it is checked before every tap but WipeDialog's Confirm. A screenshot of each screen
 before its tap goes to --out, and one of the main window at the end. Exit 1, with a screenshot, when no known screen
 shows for --timeout seconds (60), one screen stays after its looks, or the main window shows before any give-up.
 
@@ -96,22 +97,23 @@ DIALOG_NODES = {
     "ClaimDialog": {"recognition": "OCR", "roi": DIALOG_TEXT, "expected": "without using|Claim the rewards|Spend your"},
     "ForfeitDialog": {"recognition": "OCR", "roi": FORFEIT_DIALOG, "expected": "Quit exploring"},
 }
-# Behind the give-up dialog: after its Confirm they fade out, with no tap, for up to FADE_LOOKS looks a second apart.
+# After GiveUpRewards (and its dialog's Confirm, when one shows) these fade out: nothing is tapped on them again, for up
+# to FADE_LOOKS looks a second apart in all, whichever of them shows.
 FADING = ("ExplorationReward", "ExplorationComplete")
 FADE_LOOKS = 10
 # The end: the main window, after GiveUpRewards (live 2026-11-07: with no dialog, then Connecting and Now Loading) or
 # after the dialog's Confirm. Tried after every step's screen.
 END = "HomeReached"
 PROBE = "GiveUpProbe"
+OFF = {"action": "DoNothing", "next": [], "pre_delay": 0, "post_delay": 0}  # a probe node: its recognition only
 LOOK_MS = 1500  # how long one look tries before it names no screen
 
 
 def probe_override() -> dict:
     """The pipeline override of one look: the screens tried in order, each with its action switched off."""
-    nodes = {n: {"action": "DoNothing", "next": [], "pre_delay": 0, "post_delay": 0} for n in STEPS}
+    nodes = {n: dict(OFF) for n in (*STEPS, END)}
     for n, reco in DIALOG_NODES.items():
         nodes[n].update(reco)
-    nodes[END] = {"action": "DoNothing", "next": [], "pre_delay": 0, "post_delay": 0}
     nodes[PROBE] = {"recognition": "DirectHit", "action": "DoNothing", "next": [*STEPS, END], "timeout": LOOK_MS}
     return nodes
 
@@ -140,11 +142,12 @@ def look(t) -> str | None:
 
 
 def give_up(look, tap, shot, timeout: float = 60, clock=time.monotonic, sleep=time.sleep, say=print) -> int:
-    """Look, tap what the screen asks, look again, until the main window shows after GiveUpRewards (exit 0). Nothing is
-    tapped after the give-up dialog's Confirm. Exit 1 when no known screen shows for `timeout` seconds, one screen stays
-    after its looks in a row, or the main window shows before any give-up (no run to end).
+    """Look, tap what the screen asks, look again, until the main window shows after GiveUpRewards (exit 0). After
+    GiveUpRewards only the give-up dialog's Confirm is tapped. Exit 1 when no known screen shows for `timeout` seconds,
+    one screen stays after its looks in a row, the reward screens stay FADE_LOOKS looks after GiveUpRewards, or the main
+    window shows before any give-up (no run to end).
     """
-    known_at, last, in_row, gave_up, confirmed = clock(), None, 0, False, False
+    known_at, last, in_row, gave_up, faded = clock(), None, 0, False, 0
     while True:
         name = look()
         if name == END:
@@ -165,14 +168,18 @@ def give_up(look, tap, shot, timeout: float = 60, clock=time.monotonic, sleep=ti
         in_row = in_row + 1 if name == last else 1
         last = name
         step = STEPS[name]
-        fading = confirmed and name in FADING
-        if in_row > (FADE_LOOKS if fading else step.tries):
+        if gave_up and name in FADING:
+            faded += 1
+            if faded > FADE_LOOKS:
+                shot(f"stuck-{name}")
+                say(f"stop: the reward screens stayed {FADE_LOOKS} looks after GiveUpRewards")
+                return 1
+            sleep(1)
+            continue
+        if in_row > step.tries:
             shot(f"stuck-{name}")
             say(f"stop: {name} stayed after {in_row - 1} looks")
             return 1
-        if fading:
-            sleep(1)
-            continue
         if step.taps:
             shot(name)
             for i, xy in enumerate(step.taps):
@@ -181,7 +188,6 @@ def give_up(look, tap, shot, timeout: float = 60, clock=time.monotonic, sleep=ti
                 tap(*xy)
             say(f"{name}: tap {' then '.join(map(str, step.taps))}")
             gave_up = gave_up or name in ("ExplorationReward", "GiveUpDialog")
-            confirmed = confirmed or name == "GiveUpDialog"
         sleep(step.wait)
 
 

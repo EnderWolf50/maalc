@@ -154,6 +154,19 @@ def test_giveuprewards_with_no_dialog_ends_on_the_main_window():
     assert game.run() == 0 and game.taps == [gu.GIVE_UP_REWARDS] and game.shots[-1] == "end"
 
 
+def test_nothing_behind_the_give_up_is_tapped_again_while_it_fades_out():
+    # With no dialog the window and the page under it may still read for a moment after GiveUpRewards.
+    game = Game(["ExplorationReward", "ExplorationReward", "ExplorationComplete", None, "HomeReached"])
+    assert game.run() == 0 and game.taps == [gu.GIVE_UP_REWARDS]
+
+
+def test_reward_screens_that_keep_alternating_after_the_give_up_stop_it():
+    # A screen change resets the looks-in-a-row count: the fade has a count of its own.
+    game = Game(["GiveUpDialog"] + ["ExplorationReward", "ExplorationComplete"] * 200)
+    assert game.run() == 1
+    assert game.taps == [gu.DIALOG_CONFIRM] and game.shots[-1].startswith("stuck-") and len(game.screens) > 350
+
+
 def test_the_main_window_before_any_give_up_is_no_run_to_end():
     game = Game(["HomeReached"])
     assert game.run() == 1 and game.taps == []
