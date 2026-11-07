@@ -1834,13 +1834,18 @@ def test_a_difficulty_label_not_readable_yet_is_looked_at_again_not_slept_on(con
 
 
 REFRESH = (1083, 47)
+# A floor page's screenshots (#482): Refresh lit with no count (one free refresh), and greyed once it is used.
+PACK_LIT, PACK_GREY = (np.asarray(Image.open(SCREENS / f"{name}.png").convert("RGB"))[:, :, ::-1]
+                       for name in ("ThemePack", "ThemePackRefreshGrey"))
 
 
-def pack_page(context, monkeypatch, floor, setting, mode, covers=None, spent_after=None):
+def pack_page(context, monkeypatch, floor, setting, mode, covers=None, spent_after=None, grey_after=None):
     """PickThemePack on a fake floor page of two cards weighing -5 and read as packs the data file lacks (a new pair
     after each of 4 refreshes; a 5th changes nothing: used up). Returns (refresh taps, log lines); covers collects the
     cover reader each page's ranking is handed (#274). The button reads `0/3` after spent_after refreshes, unread if None
-    (#319)."""
+    (#319); the screen is PACK_GREY after grey_after refreshes, PACK_LIT before or if None (#482)."""
+    context.tasker.controller.post_screencap.return_value.wait.return_value.get.side_effect = \
+        lambda: (PACK_GREY if grey_after is not None and len(taps) >= grey_after else PACK_LIT).copy()
     actions.RUN.update(settings={"run": {"theme_pack_refresh": setting}}, team={"hard_from_floor": 0}, difficulty=None)
     plan = {"weights": {}, "threshold": 0, "unlisted": -5, "event_packs": mode}
     art = {"Hello Bus": "S.E.A."}
@@ -1913,6 +1918,15 @@ def test_a_spent_refresh_button_is_not_pressed_again(context, monkeypatch):
     assert used == 3
     assert "floor 2: no free refresh left" in lines
     assert lines[-1] == "floor 2: pull 'Pack 3a' (-5, below the threshold)"
+
+
+def test_a_greyed_refresh_button_with_no_count_is_not_pressed_again(context, monkeypatch):
+    # #482, #322: with one free refresh the button reads `Refresh` alone and greys once it is used (live 2026-11-07,
+    # ThemePackRefreshGrey.png). One tap, not a second one on the grey button that changes nothing (about 4 s a floor).
+    used, lines = pack_page(context, monkeypatch, 2, "all", "prefer", grey_after=1)
+    assert used == 1
+    assert "floor 2: no free refresh left" in lines
+    assert lines[-1] == "floor 2: pull 'Pack 1a' (-5, below the threshold)"
 
 
 def test_a_theme_pack_page_is_not_refreshed_by_a_spent_button_it_did_not_need(context, monkeypatch):
