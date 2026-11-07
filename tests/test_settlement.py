@@ -11,33 +11,94 @@ from unittest.mock import MagicMock
 import pytest
 from daily_child import probe_child, run_child, screen
 
-from settlement import NOT_SEEN, all_hard, append_run, bonus_toggles, claim_dialog, counts_as_run, first_floor_hard, floors_passed, goal_met, new_run_gate, now, read_result, runs_done
+from settlement import NOT_SEEN, Result, all_hard, append_run, bonus_toggles, claim_bonuses, claim_dialog, claim_ok, counts_as_run, first_floor_hard, floors_passed, new_run_gate, now, read_result, runs_done, target_reached
 
 
 @pytest.mark.parametrize("text, expected", [
-    ("Floor 5 [NORMAL] 6/6", (5, False, 6, 6)),
-    ("Floor 5 [HARD] 5/6", (5, True, 5, 6)),
-    ("Floor 3 HARD 2 / 6", (3, True, 2, 6)),  # OCR may drop the brackets
-    ("Floor 12 [HARD] 5/7", (12, True, 5, 7)),  # #383: floors run to 15
-    ("Floor 15 [NORMAL] 6/6", (15, False, 6, 6)),
+    ("Floor 5 [NORMAL] 6/6", (5, "normal", 6, 6)),
+    ("Floor 5 [HARD] 5/6", (5, "hard", 5, 6)),
+    ("Floor 3 HARD 2 / 6", (3, "hard", 2, 6)),  # OCR may drop the brackets
+    ("Floor 12 [HARD] 5/7", (12, "hard", 5, 7)),  # #383: floors run to 15
+    ("Floor 15 [NORMAL] 6/6", (15, "normal", 6, 6)),
+    ("Floor 12 [HARD] 12/12", (12, "hard", 12, 12)),  # #384: progress takes two digits
+    # The INFINITY and EXTREME markers are a guess from the game data (uiConfig.difficultyLabel), no capture shows them.
+    ("Floor 8 [INFINITY] 7/7", (8, "infinity", 7, 7)),
+    ("Floor 15 [EXTREME] 9/9", (15, "extreme", 9, 9)),
+    ("Floor 9 INFINITY 3 / 8", (9, "infinity", 3, 8)),
+    ("Floor 8 [!NFINITY] 7/7", (8, None, 7, 7)),  # floor and progress read, the marker did not
+    ("Floor 3 7/7", (3, None, 7, 7)),
     ("Floor 5", None),
+    ("[HARD] 5/6", None),
     ("", None),
 ])
 def test_read_result(text, expected):
     assert read_result(text) == expected
 
 
-@pytest.mark.parametrize("result, met, passed", [
-    ((5, False, 6, 6), True, 5),
-    ((5, True, 5, 6), False, 4),
-    ((4, True, 6, 6), False, 4),
-    ((1, False, 5, 5), False, 1),
-    ((5, True, 7, 7), True, 5),  # live 2026-10-16: a HARD floor 5 may have 7 nodes
-    ((5, True, 6, 7), False, 4),
+@pytest.mark.parametrize("difficulty, floor, hard", [
+    ("normal", 5, False), ("hard", 3, True), ("infinity", 8, True), ("extreme", 15, True),
+    (None, 3, None),  # an unread marker below floor 6 is neither
+    (None, 8, True),  # floors 6 and up need every floor HARD
 ])
-def test_goal_and_floors(result, met, passed):
-    assert goal_met(result) is met
-    assert floors_passed(result) == passed
+def test_hard_follows_the_marker_or_the_floor(difficulty, floor, hard):
+    assert Result(floor, difficulty, 1, 1).hard is hard
+
+
+@pytest.mark.parametrize("result, passed", [
+    ((5, "normal", 6, 6), 5),
+    ((5, "hard", 5, 6), 4),
+    ((4, "hard", 6, 6), 4),
+    ((1, "normal", 5, 5), 1),
+    ((5, "hard", 7, 7), 5),  # live 2026-10-16: a HARD floor 5 may have 7 nodes
+    ((5, "hard", 6, 7), 4),
+    ((8, "infinity", 7, 7), 8),
+    ((8, "infinity", 3, 7), 7),
+    ((15, "extreme", 9, 9), 15),
+])
+def test_floors_passed(result, passed):
+    assert floors_passed(Result(*result)) == passed
+
+
+# The issue's four windows (target 15 for the first, 5 for the others) and the neighbours of floor 5 and of the target.
+@pytest.mark.parametrize("text, target, claim, reached", [
+    ("Floor 8 [INFINITY] 7/7", 15, True, False),  # past floor 5, short of the target: Claim
+    ("Floor 15 [EXTREME] 9/9", 15, True, True),
+    ("Floor 15 [EXTREME] 4/9", 15, True, False),  # died on floor 15: 14 floors passed
+    ("Floor 5 [HARD] 6/6", 5, True, True),
+    ("Floor 5 [HARD] 6/6", 10, True, False),
+    ("Floor 3 [NORMAL] 2/6", 5, False, False),  # short of floor 5: give up
+    ("Floor 5 [HARD] 5/7", 5, False, False),
+    ("Floor 6 [HARD] 1/7", 5, True, True),  # floor 5 passed, then died on floor 6
+    ("Floor 6 [HARD] 1/7", 10, True, False),
+    ("Floor 12 [HARD] 12/12", 10, True, True),
+    ("Floor 8 7/7", 15, True, False),  # no readable marker: the floors still decide
+])
+def test_claim_ok_and_target_reached(text, target, claim, reached):
+    result = read_result(text)
+    assert claim_ok(result) is claim
+    assert target_reached(result, target) is reached
+
+
+@pytest.mark.parametrize("text, target, expected", [
+    ("Floor 5 [HARD] 6/6", 5, 3),  # reached: the toggles follow use and amount
+    ("Floor 5 [NORMAL] 6/6", 5, 0),  # use is "hard": a NORMAL run takes none
+    ("Floor 8 [INFINITY] 7/7", 15, 0),  # claimed short of the target: no toggle
+    ("Floor 8 [INFINITY] 7/7", 8, 3),  # INFINITY counts as HARD
+    ("Floor 15 [EXTREME] 9/9", 15, 3),
+    ("Floor 5 6/6", 5, 0),  # an unread marker is never a guess to spend a bonus on
+    ("Floor 8 7/7", 8, 0),
+])
+def test_claim_bonuses(text, target, expected):
+    got = claim_bonuses(read_result(text), target, "hard", "all", 3, {f: True for f in range(1, 16)}, lambda: pytest.fail("the tile was read"))
+    assert got == expected
+
+
+def test_claim_bonuses_reads_the_first_tile_only_when_floors_are_missing():
+    tiles = []
+    assert claim_bonuses(read_result("Floor 5 [HARD] 6/6"), 5, "hard", "all", 3, {}, lambda: tiles.append(1) or "[HARD] Floor1") == 3
+    assert tiles == [1]
+    assert claim_bonuses(read_result("Floor 8 [INFINITY] 7/7"), 15, "hard", "all", 3, {}, lambda: tiles.append(2) or "[HARD] Floor1") == 0
+    assert tiles == [1]
 
 
 @pytest.mark.parametrize("use, amount, hard, left, all_hard, expected", [
@@ -185,7 +246,7 @@ def child():
         out["asked"] = {}
         for name, floors in SEEN.items():
             actions.RUN.clear()
-            actions.RUN.update(settings={"run": {"weekly_bonus_use": "hard", "weekly_bonus_amount": "all"}, "teams": [team]},
+            actions.RUN.update(settings={"run": {"weekly_bonus_use": "hard", "weekly_bonus_amount": "all", "target_floor": 5}, "teams": [team]},
                                team=team, floors_hard=floors)  # no "planned": the run began on the expired session's dialog
             asked.clear()
             try:
