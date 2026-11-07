@@ -335,7 +335,7 @@ def test_pick_gifts_a_page_with_no_count_takes_the_best_card():
 def test_pick_gifts_select_alone_on_a_page_with_trials_is_a_count_missed():
     # #494: every page with trials showed its count (20 of 20 in #344's runs); a Select 0/2 read short goes on as #81
     page = GiftPage(picks=2, unread=99, missed="Select")
-    r.pick_gifts([1, 0, 2], page.read, page.tap, trials=True)
+    r.pick_gifts([1, 0, 2], page.read, page.tap, has_trials=True)
     assert sorted(page.picked) == [0, 1]
 
 
