@@ -58,12 +58,14 @@ def test_an_issue_untouched_past_the_window_is_listed_even_when_a_tracker():
     assert flagged(issues, "untouched for 14 days") == ["#8"]
 
 
-def test_an_open_issue_an_open_pr_closes_needs_an_assignee():
+def test_an_open_issue_an_open_pr_closes_needs_an_assignee_even_when_the_pr_is_stacked():
     issues = [issue(10, ["ready-for-agent"]), issue(11, ["ready-for-agent"], assignees=["someone"]),
               issue(12, ["ready-for-agent"]), issue(13, ["tracking"], milestone=None)]
-    open_prs = [{"number": 200, "closingIssuesReferences": [{"number": n} for n in (10, 11, 13)]}]
+    open_prs = [{"number": 200, "body": "", "closingIssuesReferences": [{"number": n} for n in (10, 11, 13)]},
+                {"number": 201, "body": "Stacked on #200.\r\n\r\nCloses #12", "closingIssuesReferences": []}]
     found = audit(issues, [], TRIAGE, NOW, 14, open_prs=open_prs)
-    assert found["no assignee, an open PR closes it"] == ["#10 [ready-for-agent] t <- #200"]
+    assert found["no assignee, an open PR closes it"] == ["#10 [ready-for-agent] t <- #200",
+                                                          "#12 [ready-for-agent] t <- #201"]
 
 
 def test_an_issue_closed_as_completed_needs_an_assignee():

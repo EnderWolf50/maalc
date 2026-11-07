@@ -21,6 +21,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 MAPS_AND_TRACKERS = {"wayfinder:map", "tracking"}
 FAILING = ("no milestone", "triage labels != 1", "no assignee, an open PR closes it", "closed as completed, no assignee")
+CLOSING_KEYWORD = re.compile(r"\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?):?\s+#(\d+)", re.I)
 
 
 def triage_labels(table: str) -> set[str]:
@@ -32,7 +33,7 @@ def label_names(issue: dict) -> set[str]:
     return {label["name"] for label in issue["labels"]}
 
 
-def describe(issue: dict) -> str:
+def issue_line(issue: dict) -> str:
     return f"#{issue['number']} [{','.join(sorted(label_names(issue)))}] {issue['title']}"
 
 
@@ -52,13 +53,16 @@ def audit(issues: list[dict], prs: list[dict], triage: set[str], now: datetime, 
                 named.setdefault(n, []).append(pr["number"])
     closing: dict[int, list[int]] = {}
     for pr in open_prs:
-        for ref in pr["closingIssuesReferences"]:
-            closing.setdefault(ref["number"], []).append(pr["number"])
+        # GitHub links a closing keyword only on a PR into the default branch; a stacked PR's body still names its issue.
+        refs = {ref["number"] for ref in pr["closingIssuesReferences"]} | {
+            int(n) for n in CLOSING_KEYWORD.findall(pr["body"])}
+        for n in sorted(refs):
+            closing.setdefault(n, []).append(pr["number"])
     found: dict[str, list[str]] = {rule: [] for rule in (*FAILING, f"named by a PR merged in {days} days",
                                                           f"untouched for {days} days")}
     for issue in issues:
         labels = label_names(issue)
-        line = describe(issue)
+        line = issue_line(issue)
         if not labels & MAPS_AND_TRACKERS:
             if issue["milestone"] is None:
                 found["no milestone"].append(line)
@@ -72,7 +76,7 @@ def audit(issues: list[dict], prs: list[dict], triage: set[str], now: datetime, 
             found[f"untouched for {days} days"].append(f"{line} ({issue['updatedAt'][:10]})")
     for issue in closed:
         if issue["stateReason"] == "COMPLETED" and not issue["assignees"] and not label_names(issue) & MAPS_AND_TRACKERS:
-            found["closed as completed, no assignee"].append(describe(issue))
+            found["closed as completed, no assignee"].append(issue_line(issue))
     return found
 
 
@@ -93,7 +97,7 @@ def main() -> int:
                 "number,title,labels,stateReason,assignees")
     prs = gh("pr", "list", "--state", "merged", "--limit", "1000", "--search",
              f"merged:>={(now - timedelta(days=args.days)).date()}", "--json", "number,title,body,mergedAt")
-    open_prs = gh("pr", "list", "--state", "open", "--limit", "1000", "--json", "number,closingIssuesReferences")
+    open_prs = gh("pr", "list", "--state", "open", "--limit", "1000", "--json", "number,body,closingIssuesReferences")
     triage = triage_labels((ROOT / "docs/agents/triage-labels.md").read_text(encoding="utf-8"))
     found = audit(issues, prs, triage, now, args.days, open_prs=open_prs, closed=closed)
     for rule, lines in found.items():
