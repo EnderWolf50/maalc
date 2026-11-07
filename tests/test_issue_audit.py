@@ -7,17 +7,18 @@ NOW = datetime(2026, 11, 5, tzinfo=UTC)
 TRIAGE = triage_labels((Path(__file__).resolve().parent.parent / "docs/agents/triage-labels.md").read_text("utf-8"))
 
 
-def issue(number, labels=(), milestone="v1", updated="2026-11-04T00:00:00Z"):
+def issue(number, labels=(), milestone="v1", updated="2026-11-04T00:00:00Z", assignees=(), reason=None):
     return {"number": number, "title": "t", "labels": [{"name": n} for n in labels],
-            "milestone": {"title": milestone} if milestone else None, "updatedAt": updated}
+            "milestone": {"title": milestone} if milestone else None, "updatedAt": updated,
+            "assignees": [{"login": a} for a in assignees], "stateReason": reason}
 
 
 def pr(number, body, merged="2026-11-01T00:00:00Z"):
     return {"number": number, "title": "fix", "body": body, "mergedAt": merged}
 
 
-def flagged(issues, rule, prs=()):
-    found = audit(issues, list(prs), TRIAGE, NOW, 14)
+def flagged(issues, rule, prs=(), closed=()):
+    found = audit(issues, list(prs), TRIAGE, NOW, 14, closed=closed)
     return [line.split()[0] for line in found[rule]]
 
 
@@ -55,3 +56,17 @@ def test_an_issue_untouched_past_the_window_is_listed_even_when_a_tracker():
     issues = [issue(8, ["tracking"], milestone=None, updated="2026-10-01T00:00:00Z"),
               issue(9, ["needs-triage"], updated="2026-10-30T00:00:00Z")]
     assert flagged(issues, "untouched for 14 days") == ["#8"]
+
+
+def test_an_open_issue_an_open_pr_closes_needs_an_assignee():
+    issues = [issue(10, ["ready-for-agent"]), issue(11, ["ready-for-agent"], assignees=["someone"]),
+              issue(12, ["ready-for-agent"]), issue(13, ["tracking"], milestone=None)]
+    open_prs = [{"number": 200, "closingIssuesReferences": [{"number": n} for n in (10, 11, 13)]}]
+    found = audit(issues, [], TRIAGE, NOW, 14, open_prs=open_prs)
+    assert found["no assignee, an open PR closes it"] == ["#10 [ready-for-agent] t <- #200"]
+
+
+def test_an_issue_closed_as_completed_needs_an_assignee():
+    closed = [issue(14, reason="COMPLETED"), issue(15, reason="NOT_PLANNED"),
+              issue(16, reason="COMPLETED", assignees=["someone"]), issue(17, ["tracking"], reason="COMPLETED")]
+    assert flagged([], "closed as completed, no assignee", closed=closed) == ["#14"]
