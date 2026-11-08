@@ -34,9 +34,17 @@ def last_line():
     return json.loads((actions.ROOT / "logs" / "runs.jsonl").read_text(encoding="utf-8").splitlines()[-1])
 
 
-def claim(context, monkeypatch):
-    """Exploration Reward of a cleared NORMAL run, no weekly bonus left: Settle claims."""
-    page(context, {tuple(actions.RESULT): [("Floor 5 [NORMAL] 6/6", (300, 420, 90, 20))]})
+def edit_settings(change):
+    """change(data) edits the settings file under the agent's ROOT in place."""
+    path = actions.ROOT / "config" / "settings.json"
+    data = json.loads(path.read_text(encoding="utf-8"))
+    change(data)
+    path.write_text(json.dumps(data), encoding="utf-8")
+
+
+def claim(context, monkeypatch, difficulty="NORMAL"):
+    """Exploration Reward of a cleared run, no weekly bonus left: Settle claims."""
+    page(context, {tuple(actions.RESULT): [(f"Floor 5 [{difficulty}] 6/6", (300, 420, 90, 20))]})
     monkeypatch.setattr(actions, "toggles", lambda context, image: [False, False, False])
     assert actions.Settle().run(context, argv())
 
@@ -58,14 +66,13 @@ def test_a_cursor_that_picks_another_team_on_the_other_difficulty_names_no_team(
 
 
 def test_auto_with_a_target_above_floor_5_begins_hard_so_the_cursors_hard_team_is_known(resumed, monkeypatch):
-    # #509: auto plays a target above 5 hard (run_start.run_difficulty), so only b (hard_only) can have begun the run.
-    path = actions.ROOT / "config" / "settings.json"
-    data = json.loads(path.read_text(encoding="utf-8"))
-    data["run"]["target_floor"] = 10
-    data["teams"][1]["hard_from_floor"] = 1  # a target above 5 needs the whole run HARD
-    path.write_text(json.dumps(data), encoding="utf-8")
+    # #385: auto plays a target above 5 hard (run_start.run_difficulty), so only b (hard_only) can have begun the run.
+    def target_10(data):
+        data["run"]["target_floor"] = 10
+        data["teams"][1]["hard_from_floor"] = 1  # a target above 5 needs the whole run HARD
+    edit_settings(target_10)
     actions.write_cursor(actions.ROOT, "default", "b")
-    claim(resumed, monkeypatch)
+    claim(resumed, monkeypatch, "HARD")
     assert cursor() == "a" and last_line()["team"] == "b"
 
 
@@ -92,12 +99,11 @@ def test_a_mirror_dungeon_stopped_before_it_touched_the_run_writes_its_stop_line
 
 def test_a_stop_line_is_written_when_no_team_fits_the_set_difficulty(resumed, monkeypatch):
     # NORMAL set, every team hard_only: no new run would start, but the stop procedure still writes its line.
-    path = actions.ROOT / "config" / "settings.json"
-    data = json.loads(path.read_text(encoding="utf-8"))
-    data["run"]["difficulty"] = "normal"
-    for team in data["teams"]:
-        team["usage"] = "hard_only"
-    path.write_text(json.dumps(data), encoding="utf-8")
+    def normal_set_hard_only_teams(data):
+        data["run"]["difficulty"] = "normal"
+        for team in data["teams"]:
+            team["usage"] = "hard_only"
+    edit_settings(normal_set_hard_only_teams)
     stopped_at_once(resumed, monkeypatch, "MirrorDungeon")
     assert (last_line()["team"], last_line()["result"]) == (None, "stop")
 

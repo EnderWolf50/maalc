@@ -352,7 +352,7 @@ def current_run(context):
     if "settings" not in RUN:  # a run plan, not just counters left by an action
         settings = load_settings(ROOT, need_team=True)
         run = settings["run"]
-        # What the run began on, unless the weekly bonuses left then decided it (auto with a target of 5): None.
+        # The weekly bonuses left when the run began are not known: the difficulty is known when both answers agree.
         began = {run_start.run_difficulty(run["difficulty"], left, run["target_floor"]) for left in (0, 1)}
         difficulty = began.pop() if len(began) == 1 else None
         team, known = resumed_team(settings["teams"], read_cursor(ROOT, address(context)), difficulty)
