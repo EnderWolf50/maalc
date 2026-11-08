@@ -130,6 +130,8 @@ describe("in the editor", () => {
     render(<App />);
     await waitFor(() => expect(nameBox()).toHaveValue("Ta"));
     file.text = null;
+    act(() => { window.dispatchEvent(new Event("focus")); });
+    expect(await screen.findByText(zh.diskGone)).toBeInTheDocument();
     await user.type(nameBox(), "!");
     await user.click(screen.getByRole("button", { name: zh.save }));
     await waitFor(() => expect(file.saved).toHaveLength(1));
@@ -153,6 +155,16 @@ describe("in the editor", () => {
     await user.click(screen.getByRole("button", { name: zh.save }));
     await waitFor(() => expect(file.saved).toHaveLength(1));
     expect(JSON.parse(file.saved[0]).teams.map((t: { id: string }) => t.id)).toEqual(["b", "c", "a"]);
+  });
+
+  test("a file put there while the editor had none is read", async () => {
+    const put = file.text;
+    file.text = null;
+    render(<App />);
+    expect(await screen.findByText(zh.noTeams)).toBeInTheDocument();
+    file.text = put;
+    act(() => { window.dispatchEvent(new Event("focus")); });
+    await waitFor(() => expect(shown()).toEqual(["Ta", "Tb", "Tc"]));
   });
 
   test("New file writes over a file that does not parse", async () => {

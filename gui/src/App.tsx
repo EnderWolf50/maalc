@@ -40,9 +40,8 @@ export default function App() {
   /** Take what another writer changed in the file, under the unsaved edits (rebase); the settings the editor holds now. */
   const sync = async () => {
     const text = await api.loadSettings();
-    const { s: draft, savedText: base } = latest.current;
-    // No base: the load is not done, or there was no file then; nothing is taken as read, so a save is refused.
-    if (text === disk.current || !draft || !base) return draft;
+    const { s: draft, savedText: base } = latest.current; // set in one render: no draft is a load not done
+    if (text === disk.current || !draft) return draft;
     let data: Settings | undefined;
     try {
       data = text === null ? undefined : parseSettings(text).data;
@@ -50,8 +49,11 @@ export default function App() {
       return draft; // half an edit by hand: not taken as read, so a save is refused until it parses
     }
     disk.current = text;
-    if (!data) return draft; // the file is gone: a save writes it again
-    const next = rebase(JSON.parse(base), draft, data);
+    if (!data) {
+      setStatus("diskGone");
+      return draft;
+    }
+    const next = rebase(base ? JSON.parse(base) : newSettings(), draft, data); // no base: a new file, not saved yet
     setS(next);
     setSavedText(toText(data));
     setStatus("diskChanged");
@@ -72,12 +74,13 @@ export default function App() {
       disk.current = text; // read, even when it does not parse: New file then writes over it
       try {
         const { data, migrated, dropped, unknown, trials } = parseSettings(text);
+        const migratedText = toText(data);
         setS(data);
-        setSavedText(toText(data)); // dirty = content changed, not formatting; before the write-back, which a poll may meet
+        setSavedText(migratedText); // dirty = content changed, not formatting; before the write-back, which a poll may meet
         if (migrated && !validate(data).length) {
           try {
-            await api.saveSettings(toText(data), text);
-            disk.current = toText(data);
+            await api.saveSettings(migratedText, text);
+            disk.current = migratedText;
           } catch (e) {
             if (!api.isChanged(e)) throw e; // the Agent wrote first: the next poll reads its file
           }
@@ -114,7 +117,7 @@ export default function App() {
     tv: (field, v) => TEXT[lang][`${field}.${v}` as Key] ?? v,
   };
   const dirty = toText(s) !== savedText;
-  const said = status in TEXT[lang] ? t(status as Key) : status;
+  const said = Object.prototype.hasOwnProperty.call(TEXT[lang], status) ? t(status as Key) : status;
   const note = status === "saved" ? "" : said; // shown beside "unsaved" too: a refused save, the file read again
 
   const save = async () => {
@@ -123,15 +126,16 @@ export default function App() {
       for (let tries = 1; ; tries++) {
         const current = (await sync())!; // what another writer changed since goes under the edits first (#501)
         if (validate(current).length) return setStatus("");
+        const written = toText(current);
         try {
-          await api.saveSettings(toText(current), disk.current);
+          await api.saveSettings(written, disk.current);
         } catch (e) {
           if (!api.isChanged(e)) throw e;
           if (tries < 3) continue; // it changed between that read and this write
           return setStatus("saveConflict");
         }
-        disk.current = toText(current);
-        setSavedText(toText(current));
+        disk.current = written;
+        setSavedText(written);
         return setStatus("saved");
       }
     } catch (e) {
