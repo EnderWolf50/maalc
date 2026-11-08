@@ -43,8 +43,7 @@ MAAFW_FIX = ("https://github.com/EnderWolf50/MaaFramework/releases/download/v5.1
              "5f606362da84fbaf94ef1753bf04cafc023bccb53da0efd6faf2fdb43c25da81")
 MXU = ("https://github.com/MistEO/MXU/releases/download/v2.7.1/MXU-win-x86_64-v2.7.1.zip",
        "825a62af7a344a7a47adca09d1414128e6f53a222a11cdf456f08d2e83d31724")
-# GitHub's release downloads answered 504 after about 2 minutes, four times on 2026-11-08 (#571). A socket silent this
-# long counts as a timeout, and a 5xx or a timeout is tried again after each wait.
+# GitHub's release downloads answered 504, some after about 2 minutes, five times on 2026-11-08 (#571).
 DOWNLOAD_TIMEOUT = 60
 DOWNLOAD_WAITS = (10, 20, 40)
 
@@ -53,8 +52,8 @@ install = repo / "install"
 wheel_bin = Path(maa.__file__).parent / "bin"
 
 
-def transient(error: OSError) -> bool:
-    """A 5xx or a timeout, which the next try may not get; a 4xx it would."""
+def retryable(error: OSError) -> bool:
+    """A 5xx or a timeout may pass on the next try; a 4xx comes back the same."""
     if isinstance(error, HTTPError):
         return error.code >= 500
     return isinstance(error, TimeoutError) or isinstance(getattr(error, "reason", None), TimeoutError)
@@ -68,7 +67,7 @@ def fetch_zip(url: str, sha256: str) -> zipfile.ZipFile:
                 data = response.read()
             break
         except OSError as error:
-            if wait is None or not transient(error):
+            if wait is None or not retryable(error):
                 raise
             print(f"{url}: {error} on try {n} of {tries}; trying again in {wait} s", flush=True)
             sleep(wait)
