@@ -11,7 +11,9 @@ an Event call goes in one group, measured from:
 
 A press with the action handed back in between splits into **action** (the tap to the action's end), **hub** (to the
 next Event call's start) and **next** (that start to the press); their medians are over the handed-back presses. Medians
-and ranges in seconds, from the logs given oldest first; the table is markdown.
+and ranges in seconds, from the logs given oldest first; the table is markdown. Under it, the presses that came under
+TAKE s after the press before (`--list` marks them `soon`): SKIP then Continue, or one button pressed twice, which only
+the recording tells apart.
 """
 
 from __future__ import annotations
@@ -29,14 +31,16 @@ START = re.compile(r"CustomAction::run\] \[context\.task_id\(\)=\d+\] \[node_nam
 END = re.compile(r"CustomAction::run\] \[node_name=Event\].*\[ret=")
 CONNECTING = re.compile(r'Recognizer::recognize\] reco \[result=\{"algorithm":"\w+","box":\[.*"name":"Connecting"')
 MAX_GAP = 10.0
+# agent/actions.py's EVENT_NEUTRAL, EVENT_BUTTON, CHOICE_X and EVENT_TAKE (tests/test_event_gaps.py holds them equal).
+CORNER, BUTTON, OPTION_X, TAKE = (5, 5), (1130, 645), 925, 1.5
 
 
 def kind(x, y):
-    if x <= 10 and y <= 10:
+    if (x, y) == CORNER:
         return "corner"
-    if abs(x - 1130) <= 3 and abs(y - 645) <= 3:
+    if (x, y) == BUTTON:
         return "button"
-    return "option" if abs(x - 925) <= 3 else "other"
+    return "option" if x == OPTION_X else "other"
 
 
 @dataclass
@@ -116,7 +120,14 @@ def table(found, log):
                     f"{len(back)} | {med('action')} | {med('hub')} | {med('next')} |")
     rows.append("")
     rows.append(f"Event calls: {len(log.starts)}; most corner taps in one call: {max(log.corners, default=0)}")
+    rows.append(f"presses under {TAKE} s after the press before: {len(soon(log))}")
     return "\n".join(rows)
+
+
+def soon(log):
+    """The times of the button presses that came under TAKE s after the press before."""
+    pressed = [at for at, k, _ in log.taps if k == "button"]
+    return [at for before, at in zip(pressed, pressed[1:]) if at - before < TAKE]
 
 
 def main(argv=None):
@@ -134,8 +145,13 @@ def main(argv=None):
     if args.list:
         for r in found:
             split = "" if r["action"] is None else f" = action {r['action']:.3f} + hub {r['hub']:.3f} + next {r['next']:.3f}"
-            clock = datetime.fromtimestamp(r["at"]).strftime("%H:%M:%S.%f")[:-3]
-            print(f"{clock} {r['group']}{' CONNECTING' if r['connecting'] else ''} {r['total']:.3f}{split}")
+            print(f"{clock(r['at'])} {r['group']}{' CONNECTING' if r['connecting'] else ''} {r['total']:.3f}{split}")
+        for at in soon(log):
+            print(f"{clock(at)} soon")
+
+
+def clock(at):
+    return datetime.fromtimestamp(at).strftime("%H:%M:%S.%f")[:-3]
 
 
 if __name__ == "__main__":

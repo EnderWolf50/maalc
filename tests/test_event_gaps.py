@@ -1,4 +1,5 @@
-from event_gaps import presses, read, table
+import actions
+from event_gaps import BUTTON, CORNER, OPTION_X, TAKE, presses, read, soon, table
 
 
 def click(t, x, y):
@@ -20,7 +21,11 @@ def connecting(t, box="[1040,48,186,46]"):
             f'"box":{box},"detail":{{}},"name":"Connecting","reco_id":1}}] \n')
 
 
-OPTION, CORNER, BUTTON = (925, 400), (5, 5), (1130, 645)
+OPTION = (OPTION_X, 400)
+
+
+def test_the_taps_it_tells_apart_are_the_agents():
+    assert (CORNER, BUTTON, OPTION_X, TAKE) == (actions.EVENT_NEUTRAL, actions.EVENT_BUTTON, actions.CHOICE_X, actions.EVENT_TAKE)
 
 
 def groups(lines):
@@ -56,4 +61,11 @@ def test_the_table_has_a_row_per_group_seen_and_the_longest_call():
     lines = [start("10:00:00.000"), click("10:00:00.150", *CORNER), click("10:00:00.400", *BUTTON), end("10:00:01.000")]
     rows = table(presses(log := read(lines)), log).splitlines()
     assert rows[2] == "| corner | 1 | 0.25 | 0.25-0.25 | 0 | - | - | - |"
-    assert rows[-1] == "Event calls: 1; most corner taps in one call: 1"
+    assert rows[-2:] == ["Event calls: 1; most corner taps in one call: 1", "presses under 1.5 s after the press before: 0"]
+
+
+def test_a_press_soon_after_the_one_before_is_flagged_for_the_recording():
+    # #557's acceptance: one lit button pressed twice shows only as two presses close together.
+    lines = [start("10:00:00.000"), click("10:00:00.100", *BUTTON), click("10:00:00.250", *CORNER),
+             click("10:00:01.500", *BUTTON), click("10:00:01.650", *CORNER), click("10:00:03.100", *BUTTON), end("10:00:04.000")]
+    assert len(soon(read(lines))) == 1
