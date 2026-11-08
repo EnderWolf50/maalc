@@ -4,7 +4,7 @@ Issues and specs for this repo live as GitHub issues. Use the `gh` CLI for all o
 
 ## Conventions
 
-- **Language**: titles, bodies and comments in Traditional Chinese, code and log lines as they are; `docs/agents/pr.md` "Language" says what stays English and how to rewrite an English issue.
+- **Language**: an issue's title, body and comments follow `docs/agents/pr.md` "Language".
 - **Create an issue**: `gh issue create --title "..." --body "..." --milestone <v1|v2> --label <triage label>` (see **Keeping issues current**). A multi-line body: write it with the Write tool and pass `--body-file <absolute path>` (the form `.claude/hooks/public-text-guard.py` can read; it denies a heredoc, `$(...)` and stdin).
 - **Read an issue**: `gh issue view <number> --json number,title,body,labels,comments`.
 - **List issues**: `gh issue list --state open --json number,title,body,labels,comments --jq '[.[] | {number, title, body, labels: [.labels[].name], comments: [.comments[].body]}]'` with appropriate `--label` and `--state` filters.

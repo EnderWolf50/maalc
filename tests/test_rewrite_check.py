@@ -51,6 +51,13 @@ def test_english_prose_left_in_the_rewrite_is_listed_and_code_is_not():
     assert english == ["compiles", "CSP", "runtime"]
 
 
+def test_numbers_references_and_words_set_against_chinese_with_no_space_are_still_found():
+    dropped, english = rc.check("Fails after 3 runs on floor 5 (#21), see CSP.", "在第5層跑3次後失敗（#21），見CSP。")
+    assert dropped == [] and english == ["CSP"]
+    dropped, _ = rc.check("floor 5 (#21)", "第層（#2）")
+    assert set(dropped) == {"number: 5", "reference: #21"}
+
+
 def test_the_cli_exits_1_on_a_drop_and_0_on_a_clean_rewrite(tmp_path, capsys):
     (tmp_path / "a.md").write_text(ORIGINAL, encoding="utf-8")
     (tmp_path / "b.md").write_text(REWRITE, encoding="utf-8")

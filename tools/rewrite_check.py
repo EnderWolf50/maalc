@@ -17,9 +17,10 @@ from pathlib import Path
 FENCE = re.compile(r"^```.*?^```", re.S | re.M)
 CODE = re.compile(r"`[^`\n]+`")
 URL = re.compile(r"https?://[^\s)>\]]+")
-REF = re.compile(r"(?<![\w/])#\d+\b")
-NUMBER = re.compile(r"(?<![\w.#])\d+(?:[.:]\d+)*\b")
-WORD = re.compile(r"\b[A-Za-z][A-Za-z'-]{2,}\b")
+# ASCII word boundaries: Chinese counts as \w otherwise, and 第5層 or 用CSP來 would hide the number or the word.
+REF = re.compile(r"(?<![\w/])#\d+\b", re.ASCII)
+NUMBER = re.compile(r"(?<![\w.#])\d+(?:[.:]\d+)*\b", re.ASCII)
+WORD = re.compile(r"\b[A-Za-z][A-Za-z'-]{2,}\b", re.ASCII)
 
 
 def tokens(text: str) -> tuple[Counter, str]:

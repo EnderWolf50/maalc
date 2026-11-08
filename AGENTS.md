@@ -24,7 +24,7 @@ A feature that needs more than one issue goes through the `to-spec`, `to-tickets
 
 ### Public repo
 
-This repo is public. Issue and PR titles, bodies and comments are in Traditional Chinese, with code and log lines as they are (`docs/agents/pr.md` "Language"). Issue, PR and commit text describes evidence by its content and attaches the files (`gh issue comment <n> --attach <file>`); it names no local path, account name, UID, e-mail or label of a local-only note (a file that exists only in `.local/`, or an item number in one), and that holds for the text of a committed test or comment too. A screenshot under `tests/screens/` has its three identity regions blacked out before it is committed: the UID plate, the account e-mail and the player name above the LV panel at the bottom left of the main window (36,626,98,20 in game pixels). `.claude/hooks/public-text-guard.py` checks the text, `tests/test_screens_privacy.py` the screenshots.
+This repo is public. Issue, PR and commit text describes evidence by its content and attaches the files (`gh issue comment <n> --attach <file>`); it names no local path, account name, UID, e-mail or label of a local-only note (a file that exists only in `.local/`, or an item number in one), and that holds for the text of a committed test or comment too. A screenshot under `tests/screens/` has its three identity regions blacked out before it is committed: the UID plate, the account e-mail and the player name above the LV panel at the bottom left of the main window (36,626,98,20 in game pixels). `.claude/hooks/public-text-guard.py` checks the text, `tests/test_screens_privacy.py` the screenshots.
 
 ### Pointers
 
@@ -32,7 +32,7 @@ This repo is public. Issue and PR titles, bodies and comments are in Traditional
 - Anything on the emulator: the `maalc-live-test` skill. The emulator's resolution and window stay as the user set them; MaaFramework scales screenshots to 720p by itself.
 - Subagents and delegated threads: `docs/agents/subagent-preamble.md`. The SubagentStart hook hands it to a subagent; a delegated thread (T3 `delegate_task`, Codex) starts as a session of its own, so it reads the file before its first step.
 - A change to `gui/` or what the settings window shows: the `maalc-gui-check` skill builds and drives the real app (`docs/agents/gui-driving.md`); how evidence stills and clips look: `docs/agents/evidence-style.md`.
-- Writing a PR body, or a PR or issue comment: `docs/agents/pr.md`.
+- Writing an issue or PR title or body, or a comment on either, all in Traditional Chinese: `docs/agents/pr.md`.
 - Review standards: `CODING_STANDARDS.md`.
 - Pipeline JSON under `assets/resource/base/pipeline/` allows whole-line `//` comments, so `json.load` fails on it; drop those lines first, as `tests/test_pipeline.py` does.
 
