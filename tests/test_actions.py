@@ -82,8 +82,8 @@ def screens(context, values):
 class TimedGame:
     """A fake game for the waits that replaced a tap's fixed sleep (#258). `reads` is what each roi (a tuple) reads and
     `level` the screenshot's brightness. A tap at a point of `answers` takes that point's next answer, (lag, reads, level)
-    or None for a tap the game loses, which shows `lag` s later; level None keeps the picture. A tap sleeps its wait, as
-    actions.tap does, so a fixed wait still costs its seconds. The taps are kept, in order."""
+    or None for a tap the game loses, which shows `lag` s later. A tap sleeps its wait, as actions.tap does, so a fixed
+    wait still costs its seconds. The taps are kept, in order."""
 
     def __init__(self, monkeypatch, context, reads, answers, level=10):
         self.reads, self.level, self.answers, self.taps, self.due = dict(reads), level, {k: list(v) for k, v in answers.items()}, [], []
@@ -97,7 +97,7 @@ class TimedGame:
         for due in sorted((d for d in self.due if d[0] <= t), key=lambda d: d[0]):
             self.due.remove(due)
             self.reads.update(due[1])
-            self.level = self.level if due[2] is None else due[2]
+            self.level = due[2]
         return self.reads
 
     def shot(self):
@@ -2961,7 +2961,7 @@ RETRY_STAGE = actions.DEFEAT_OPTIONS["retry"]
 
 
 def wipe(context, monkeypatch, card, confirm):
-    """The DEFEAT dialog's Wipe with one retry left: the answers of the Retry Stage card and of Confirm."""
+    """The DEFEAT dialog's Wipe with retries left: the answers of the Retry Stage card and of Confirm."""
     actions.RUN.update(settings={"run": {"wipe_retries": 2, "after_retries": "stop"}}, wipes=0)
     game = TimedGame(monkeypatch, context, {WIPE_TEXT: "All participating Sinners have been killed."},
                      {RETRY_STAGE: card, actions.DEFEAT_CONFIRM: confirm})

@@ -3019,11 +3019,11 @@ class Formation(CustomAction):
                 return stop(context, reason)
             log(f"{reason}: forfeit the run")
             RUN["forfeit"] = True
-            # Up to the old 2 s for the page to go: MirrorHub must not find it again and back out twice.
+            # MirrorHub must not find the page again and back out twice.
             tap_then(context, *FORMATION_BACK, lambda im: seen(context, im, "Formation") is None, timeout=2)
             return True
         if not has(text(context, image, DETAILS_BUTTON), "Details"):
-            # its » folds the details view (skills, E.G.O), which hides the order marks; they are read once it is still
+            # its » folds the details view (skills, E.G.O), which hides the order marks
             tap_shown(context, 826, 125, lambda im: has(text(context, im, DETAILS_BUTTON), "Details"), timeout=1.5)
             image = screen(context)
         dead = dead_sinners(image)
@@ -3464,7 +3464,7 @@ def forfeit(context):
             return has(text(context, im, roi), want) == shown
 
         for _ in range(3):
-            # A panel or dialog that shows is tapped next once it stops moving; the game ignores taps while it slides in.
+            # the panel and the dialog take the next tap once they stop moving
             if (tap_shown if shown else tap_then)(context, *xy, answered, timeout=2) is not None:
                 break
         else:
@@ -4745,13 +4745,13 @@ class Shop(CustomAction):
                 page_guard(context, "Shop", image=image)  # not a shop page MirrorHub knows: hand it back
                 still(context, timeout=1.5)  # a page fading in or out
             else:
-                tap_settled(context, *(BOTTOM_RIGHT if at == "heal" else at))  # a heal page's Return or Leave
+                tap_settled(context, *at)
         return False
 
     @staticmethod
     def way_out(context, image):
-        """What image asks of to_main: "map" (the shop was left), "main" (the main page: its Refresh fee shows), "heal" (a heal
-        page), the point to tap to close a page or dialog, or None (a page the shop does not know)."""
+        """What image asks of to_main: "map" (the shop was left), "main" (the main page: its Refresh fee shows), the point to
+        tap to close a page or dialog (a heal page's Return or Leave too), or None (a page the shop does not know)."""
         if Shop.on_map(context, image):
             return "map"
         title = text(context, image, DIALOG_TITLE)
@@ -4774,7 +4774,7 @@ class Shop(CustomAction):
         if has(text(context, image, LEAVE_DIALOG), "Leave the shop"):
             return LEAVE_CANCEL
         if has(text(context, image, HEAL_TITLE), "Heal"):
-            return "heal"
+            return BOTTOM_RIGHT
         # Before the Refresh fee too: it still reads in ID Skill Search's select mode (#456), whose Return leaves it.
         if has(text(context, image, SELECT_TITLE), "Select a Sinner"):
             return BOTTOM_RIGHT
@@ -4806,7 +4806,6 @@ class Shop(CustomAction):
         kind, n = plan
         for x in dead[:n] if kind == "revive" else [None]:
             page_guard(context, "Shop")
-            # Each step waits for what it brings, up to its old fixed wait; a page read or tapped next once it is still.
             if tap_shown(context, *SHOP_BUTTONS["heal"], lambda im: has(text(context, im, HEAL_TITLE), "Heal"), timeout=2) is None:
                 log("shop: the heal page did not open")
                 break
@@ -4817,7 +4816,7 @@ class Shop(CustomAction):
             if x is None:
                 tap_shown(context, *HEAL_OPTIONS[kind], paid, timeout=1.5)
             else:
-                tap_settled(context, *HEAL_OPTIONS[kind], timeout=1.5)  # the bar's portraits turn selectable
+                tap_settled(context, *HEAL_OPTIONS[kind], timeout=1.5)
                 # only a dead sinner takes the tap; then Select shows
                 tap_shown(context, x, 655, lambda im: has(text(context, im, BOTTOM_LABEL), "Select"), timeout=1.2)
                 tap_shown(context, *BOTTOM_RIGHT, paid, timeout=2)
@@ -5669,7 +5668,7 @@ DIALOG_CANCEL, DIALOG_CONFIRM = (515, 493), (763, 493)
 
 
 def reward_up(context, image):
-    """Whether the Exploration Reward window's title reads, under its dialogs too."""
+    """Whether the Exploration Reward window's title reads; it does under its dialogs too."""
     return has(text(context, image, REWARD_TITLE_ROI), "Exploration Reward")
 
 
@@ -5750,7 +5749,8 @@ class Settle(CustomAction):
             if not reward_up(context, image):
                 break
             if claim_asks(context, image) == asked:
-                still(context, timeout=1.5)  # the dialog slides in, and takes no tap before it stops (as the shop's Leave)
+                # it moves for about 0.5 s after its first frame (2026-10-29, 2026-11-08 recordings); tapped once still
+                still(context, timeout=1.5)
                 tap_then(context, *DIALOG_CONFIRM, lambda im: not reward_up(context, im), timeout=2)
                 continue
             until(context, answered, timeout=1)

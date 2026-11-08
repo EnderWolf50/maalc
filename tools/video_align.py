@@ -88,7 +88,7 @@ def parse_log(lines, names, hub: str):
 def video_scores(video: Path, nodes: dict, started: float, fps: float = 10.0, keep=(), kept=None):
     """(wall time of each scored frame by its pts, {name: score per frame}, whether the frame is the one before
     it, unchanged); `fps` frames a second are scored. kept(wall time, frame at 1280x720) is called with every frame
-    inside one of keep's (start, end) wall-time windows, scored or not (tools/tap_waits.py)."""
+    inside one of keep's (start, end) wall-time windows, scored or not."""
     import cv2  # the probe group's; the rest of the tool runs without it
 
     tpl = {n: cv2.imread(str(f)) for n, (f, _, _) in nodes.items()}

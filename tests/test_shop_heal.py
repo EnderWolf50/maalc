@@ -54,7 +54,14 @@ def test_a_full_heal_reads_the_cost_once_it_drops(context, clock, monkeypatch):
 
 def test_a_heal_page_left_over_is_left_by_its_bottom_right_button(context, clock, monkeypatch):
     # Shop.to_main on a heal page (handed back mid-heal, #118): Return, then the main page once it stops moving.
-    monkeypatch.setattr(actions.Shop, "way_out", staticmethod(lambda context, image: "heal" if image[0, 0, 0] == 30 else "main"))
-    game = test_actions.TimedGame(monkeypatch, context, {}, {actions.BOTTOM_RIGHT: [(0.3, {}, 60)]}, level=30)
+    leaves = {tuple(actions.HEAL_TITLE): "", tuple(actions.REFRESH["normal"][1]): "100"}  # the main page's Refresh fee
+    game = test_actions.TimedGame(monkeypatch, context, {tuple(actions.HEAL_TITLE): "Heal Sinners"},
+                                  {actions.BOTTOM_RIGHT: [(0.3, leaves, 60)]})
     assert actions.Shop.to_main(context)
     assert game.taps == [actions.BOTTOM_RIGHT]
+
+
+def test_the_heal_pages_bottom_label_is_read_where_the_shop_node_reads_leave():
+    from test_pipeline import load_nodes
+    leave = next(n for n in load_nodes("mirror_dungeon.json")["Shop"]["any_of"] if n["sub_name"] == "ShopLeave")
+    assert actions.BOTTOM_LABEL == leave["roi"]

@@ -38,14 +38,16 @@ import video_align as va
 from maafw_timeline import TS, stamp
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "agent"))
-import recovery  # noqa: E402  (agent/: numpy and stdlib only)
+import recovery  # noqa: E402
 
 ENTER = re.compile(r"CustomAction::run\] \[context\.task_id\(\)=\d+\] \[node_name=(\w+)\].*\[param\.name=(\w+)\].*\| enter")
 LEAVE = re.compile(r"CustomAction::run\] \[node_name=\w+\] \[param\.name=\w+\].*\[ret=")
 CALL = re.compile(r"handle_controller_post_\w+\] \[req=")
 CLICK = re.compile(r'handle_controller_post_click\] \[req=\{.*?"x":(\d+),"y":(\d+)')
 BEFORE = 0.5  # s of video looked at before a tap
-MARGIN = 3.0  # s around a tap's frames kept before the fit: the offset the fit may find either way
+# s around a tap's frames kept while decoding, before the fit knows the offset: a chunk fitted further off has its taps
+# outside what was kept, counted as not on the video, and warned of.
+MARGIN = 3.0
 
 
 class Tap(NamedTuple):
@@ -159,6 +161,9 @@ def main(argv=None) -> None:
     for s in segs:
         print(f"video {va.clock(s.v0)}-{va.clock(s.v1)}  " + (f"offset {s.offset:+.3f} s" if s.offset is not None else "unaligned")
               + f"  corr {s.corr:.3f}", file=sys.stderr)
+        if s.offset is not None and abs(s.offset) > MARGIN - BEFORE:
+            print(f"warning: offset {s.offset:+.3f} s is past the {MARGIN:g} s kept around each tap: rerun with a --started "
+                  "nearer the first frame", file=sys.stderr)
     lt = va.log_times(np.array(kt), segs, frozen)
     rows, missed = [], 0
     for t in found:
