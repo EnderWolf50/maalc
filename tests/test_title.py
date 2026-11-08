@@ -19,6 +19,8 @@ TITLE_TAP = (540, 300, 200, 120)
 GLITCH = 1.3  # s: the recording's longest glitch
 SCREENS = {"title": "Title.png", "connecting": "TitleConnecting.png", "loading": "Loading.png", "main": "MainWindow.png"}
 LIMIT = 40  # s: a scenario still going by then is stopped (a title tapped for ever)
+CAP = 5  # s: GoHome's wait on CONNECTING in the frozen_connecting scenario, for the pipeline's 150; its restarted game's
+# CONNECTING (5 screenshots) ends well within it
 
 
 def glitched(image):
@@ -38,14 +40,16 @@ def child():
         images["title_moved"] = live_frame(images["title"])
         images["glitch"] = glitched(images["title"])
 
-        def set(self, frozen=False, ignored=0, answer="connecting", answer_for=20, glitch=0.0, glitch_after_tap=0.0,
+        def set(self, frozen=False, ignored=0, answer=("connecting",), answer_for=20, glitch=0.0, glitch_after_tap=0.0,
                 screen="title"):
-            """frozen: the title takes no tap and shows one picture until the game restarts; a live title's picture moves at
-            every other screenshot. ignored: the taps the live title lets go by. answer: the screen a taken tap shows for
-            answer_for screenshots before the main window. glitch: the seconds from the start that show the glitch;
-            glitch_after_tap: the seconds right after a taken tap, before its answer. screen: the one at the start."""
+            """frozen: the game takes no tap and shows one picture, the screen it starts on, until it restarts; a live
+            title's picture moves at every other screenshot. ignored: the taps the live title lets go by. answer: the
+            screens a taken tap shows in turn, each for answer_for screenshots, before the main window. glitch: the seconds
+            from the start that show the glitch; glitch_after_tap: the seconds right after a taken tap, before its answer.
+            screen: the one at the start."""
             self.screen, self.focus, self.frozen, self.ignored = screen, GAME, frozen, ignored
             self.answer, self.answer_for, self.left, self.glitch_after_tap = answer, answer_for, 0, glitch_after_tap
+            self.coming = []
             self.glitch_until = time.monotonic() + glitch
             self.clicks, self.keys, self.starts, self.stops, self.frames = [], [], 0, 0, 0
 
@@ -55,10 +59,10 @@ def child():
                 return self.images["black"]
             if time.monotonic() < self.glitch_until:
                 return self.images["glitch"]
-            if self.screen in ("connecting", "loading"):
+            if self.screen in ("connecting", "loading") and not self.frozen:
                 self.left -= 1
                 if self.left < 0:
-                    self.screen = "main"
+                    self.screen, self.left = (self.coming.pop(0), self.answer_for) if self.coming else ("main", 0)
             if self.screen == "title" and not self.frozen and self.frames % 2:
                 return self.images["title_moved"]
             return self.images[self.screen]
@@ -70,7 +74,8 @@ def child():
                 self.ignored -= 1
                 return True
             self.glitch_until = time.monotonic() + self.glitch_after_tap
-            self.screen, self.left = self.answer, self.answer_for
+            self.screen, *self.coming = self.answer
+            self.left = self.answer_for
             return True
 
         def stop_app(self, intent):
@@ -91,7 +96,8 @@ def child():
     out = {"error": None}
     for scenario, (model, in_a_row) in {
         "connects": ({}, 0),
-        "loads": ({"answer": "loading"}, 0),
+        "loads": ({"answer": ("loading",)}, 0),
+        "connects_then_loads": ({"answer": ("connecting", "loading")}, 0),
         "glitch": ({"glitch": GLITCH}, 0),
         "glitch_after_tap": ({"glitch_after_tap": GLITCH}, 0),
         # a picture no node reads (the glitch frame), then the main window within HomeBack's wait: a page that comes late
@@ -99,6 +105,7 @@ def child():
         "ignored_once": ({"ignored": 1}, 0),
         "frozen": ({"frozen": True}, 0),
         "frozen_restarts_used": ({"frozen": True}, L3_FAILED_IN_A_ROW),
+        "frozen_connecting": ({"frozen": True, "screen": "connecting", "answer_for": 5}, 0),
     }.items():
         game.set(**model)
         actions.STUCK["restarts"] = actions.recovery.Restarts()
@@ -114,7 +121,8 @@ def child():
         began = time.monotonic()
         timer = threading.Timer(LIMIT, tasker.post_stop)
         timer.start()
-        job = tasker.post_task("GoHome").wait()
+        override = {"HomeConnecting": {"timeout": CAP * 1000}} if scenario == "frozen_connecting" else {}
+        job = tasker.post_task("GoHome", override).wait()
         while not (detail := job.get()).status.done:  # #461: post_stop's queue clear ends wait() before the task does
             time.sleep(0.01)
         timer.cancel()
@@ -178,6 +186,23 @@ def test_a_title_frozen_through_its_taps_restarts_the_game_and_go_home_reaches_t
     assert o["succeeded"] and o["nodes"][-1] == "HomeReached" and o["stopped"] == 0, json.dumps(o)
     assert (o["stops"], o["starts"]) == (1, 1), json.dumps(o)
     assert o["title_taps"] == DEAD_TAPS + 1, json.dumps(o)  # the frozen game's, then the restarted title's one
+
+
+def test_a_normal_login_through_connecting_and_loading_is_not_restarted():
+    o = run_child(__file__)["connects_then_loads"]
+    assert o["succeeded"] and o["nodes"][-1] == "HomeReached" and o["title_taps"] == 1, json.dumps(o)
+    assert (o["stops"], o["starts"]) == (0, 0) and not any("recovery L3" in line for line in o["log"]), json.dumps(o)
+
+
+def test_a_title_frozen_under_connecting_restarts_the_game_once_the_wait_is_up_and_reaches_the_main_window():
+    # #540: each look at CONNECTING went back to GoHome with a new 60 s timeout, so a game frozen on it was never
+    # restarted (the model: 4578 looks in 30 s). The wait is the pipeline's 150 s here cut to CAP; the restart is the
+    # task's first of its 2, and the restarted game's CONNECTING, shorter than the wait, is let through.
+    o = run_child(__file__)["frozen_connecting"]
+    assert o["succeeded"] and o["nodes"][-1] == "HomeReached" and o["stopped"] == 0, json.dumps(o)
+    assert (o["stops"], o["starts"]) == (1, 1) and o["title_taps"] == 1, json.dumps(o)
+    assert CAP <= o["seconds"] < LIMIT, json.dumps(o)
+    assert [line for line in o["log"] if "recovery L3" in line and "1 of 2 this task" in line], json.dumps(o)
 
 
 def test_a_frozen_title_with_the_restarts_used_up_ends_through_the_stop_procedure():
