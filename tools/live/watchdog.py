@@ -71,23 +71,24 @@ OUTCOMES = {
         **dict.fromkeys(("cancelled", "rolled_back"), CANCELLED),
     },
 }
+DONE = "`uv run python tools/live/watchdog.py done {label}`"
 RESUME_MSG = ("You were interrupted. Run `uv run python tools/live/queue.py resume --task {task}` and "
               "`queue.py status`, read .local/scratch/{task}/next.md, and continue from there; never start a second hold or bot.")
 
 
 class Row:
-    def __init__(self, task_id: str, task: str, label: str):
-        self.task_id, self.task, self.label = task_id, task, label
+    def __init__(self, id: str, task: str, label: str):
+        self.id, self.task, self.label = id, task, label
 
     def key(self) -> str:
-        return unquote(self.task_id)
+        return unquote(self.id)
 
     @property
     def kind(self) -> str:
         return "task" if self.key().startswith("node:delegated-task:") else "thread"
 
     def matches(self, ref: str) -> bool:
-        return ref in (self.task_id, self.label) or unquote(ref) == self.key()
+        return ref in (self.id, self.label) or unquote(ref) == self.key()
 
 
 def load(path: Path) -> list[Row]:
@@ -104,15 +105,15 @@ def load(path: Path) -> list[Row]:
 
 
 def save(path: Path, rows: list[Row]) -> None:
-    lines = HEADER + [f"{r.task_id}\t{r.task}\t{r.label}" for r in rows]
+    lines = HEADER + [f"{r.id}\t{r.task}\t{r.label}" for r in rows]
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
-def add(path: Path, task_id: str, task: str, label: str) -> list[str]:
+def add(path: Path, id: str, task: str, label: str) -> list[str]:
     rows = load(path)
-    if any(r.key() == unquote(task_id) for r in rows):
+    if any(r.key() == unquote(id) for r in rows):
         return [f"{label}: already in the list ({len(rows)} line(s)); nothing written"]
-    save(path, rows + [Row(task_id, task, label)])
+    save(path, rows + [Row(id, task, label)])
     out = [f"added {label} ({len(rows) + 1} line(s))"]
     if not rows:
         out.append("the list was empty: switch the watchdog schedule ON")
@@ -133,7 +134,7 @@ def done(path: Path, ref: str) -> list[str]:
 
 
 def listing(path: Path) -> list[str]:
-    return [f"{r.task_id}\t{r.task}\t{r.label}\t{READER[r.kind]}" for r in load(path)] or ["(empty)"]
+    return [f"{r.id}\t{r.task}\t{r.label}\t{READER[r.kind]}" for r in load(path)] or ["(empty)"]
 
 
 def sh(cmd: list[str]) -> str:
@@ -172,29 +173,30 @@ def tick(rows: list[Row], statuses: dict[str, str], queue_text: str, ci_json: st
             events.append(text)
 
     live = {r.key() for r in rows}
-    said = {unquote(i) for i in reported_ids}
+    reported_threads = {unquote(i) for i in reported_ids}
     outcomes: dict[str, str | None] = {}
     for r in rows:
-        s = statuses.get(r.key(), "").lower()
-        o = OUTCOMES[r.kind].get(s)
-        if o == ENDED and r.key() in said:
-            o = FINISHED
-        outcomes[r.key()] = o
-        if o == FINISHED:
-            fire(f"done|{r.key()}", f"FINISHED {r.label}: relay its result to the user, decisions first, then "
-                                    f"`uv run python tools/live/watchdog.py done {r.label}`")
-        elif o == ENDED:
-            fire(f"ended|{r.key()}", f"ENDED {r.label} ({s}): its turn ended with no report to the main thread, so it "
+        raw = statuses.get(r.key(), "").lower()
+        outcome = OUTCOMES[r.kind].get(raw)
+        # one that reported is finished; one already reported finished stays so when a tick misses its --reported
+        if outcome == ENDED and (r.key() in reported_threads or f"done|{r.key()}" in reported):
+            outcome = FINISHED
+        outcomes[r.key()] = outcome
+        done_cmd = DONE.format(label=r.label)
+        if outcome == FINISHED:
+            fire(f"done|{r.key()}", f"FINISHED {r.label}: relay its result to the user, decisions first, then {done_cmd}")
+        elif outcome == ENDED:
+            fire(f"ended|{r.key()}", f"ENDED {r.label} ({raw}): its turn ended with no report to the main thread, so it "
                  "may be waiting: read its last message with t3_thread_read, relay its question to the user or answer "
-                 f"it with t3_thread_send; when its work is done, `uv run python tools/live/watchdog.py done {r.label}`")
-        elif o == CANCELLED:
+                 f"it with t3_thread_send; when its work is done, {done_cmd}")
+        elif outcome == CANCELLED:
             fire(f"cancelled|{r.key()}", f"CANCELLED {r.label}: stopped on purpose, not resumed; the coordinator decides, "
-                                         f"and `uv run python tools/live/watchdog.py done {r.label}` drops the line")
-        elif o == FAILED:
-            fire(f"failed|{r.key()}|{hour}", f"FAILED {r.label} ({s}) with no result: resume it once with t3_thread_send "
+                                         f"and {done_cmd} drops the line")
+        elif outcome == FAILED:
+            fire(f"failed|{r.key()}|{hour}", f"FAILED {r.label} ({raw}) with no result: resume it once with t3_thread_send "
                  f"(mode auto, clientRequestId resume-{r.label}-{hour}), message: "
                  + RESUME_MSG.format(task=r.task if r.task != "-" else r.label))
-        elif o == WORKING:
+        elif outcome == WORKING:
             # sent more work, it can finish or end again; the hourly `failed|` key stays to throttle the resume
             reported.difference_update({f"done|{r.key()}", f"ended|{r.key()}"})
     for name, mins in stranded_holders(queue_text):
@@ -204,6 +206,8 @@ def tick(rows: list[Row], statuses: dict[str, str], queue_text: str, ci_json: st
                 who = "its owner is not in the list: report it to the user"
             elif outcomes.get(owner.key()) == CANCELLED:
                 who = f"{owner.label} was cancelled on purpose, do not resume it: the coordinator releases the hold"
+            elif outcomes.get(owner.key()) == ENDED:
+                who = f"{owner.label} ended its turn and may be waiting on a question: answer it first (its ENDED line)"
             else:
                 who = f"tell {owner.label} to resume (as for FAILED)"
             fire(f"stranded:{name}", f"STRANDED holder {name}: bot ended {mins} min ago, no done file; {who}")
@@ -240,7 +244,7 @@ def main(argv=None) -> int:
     ap.add_argument("--dir", type=Path, help="the folder of agents.tsv (default .local/scratch/ of the main checkout)")
     sub = ap.add_subparsers(dest="cmd", required=True)
     a_ = sub.add_parser("add")
-    for n in ("task_id", "task", "label"):
+    for n in ("id", "task", "label"):
         a_.add_argument(n)
     sub.add_parser("done").add_argument("ref", help="an id (encoded or not) or a label")
     sub.add_parser("list")
@@ -252,7 +256,7 @@ def main(argv=None) -> int:
     folder = a.dir or local_dir("scratch")
     path = folder / "agents.tsv"
     if a.cmd == "add":
-        out = add(path, a.task_id, a.task, a.label)
+        out = add(path, a.id, a.task, a.label)
     elif a.cmd == "done":
         out = done(path, a.ref)
     elif a.cmd == "list":

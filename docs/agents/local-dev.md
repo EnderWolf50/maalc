@@ -83,7 +83,7 @@ Retention: an archive folder older than 7 days whose `INDEX.md` rows name only c
 
 The main thread dispatches work in these steps:
 
-1. **Register.** After `t3_thread_launch` or `delegate_task`, `uv run python tools/live/watchdog.py add <id> <live task or -> <label>` with the thread or task id it returned. Done when it prints `added <label>` or `already in the list`.
+1. **Register.** After `t3_thread_launch` or `delegate_task`, `uv run python tools/live/watchdog.py add <id> <live-task|-> <label>` with the thread or task id it returned. Done when it prints `added <label>` or `already in the list`.
 2. **Switch on.** When `add` prints `switch the watchdog schedule ON`, call `schedule_task` with `enabled: true` and the `scheduledTaskId` of the task "maalc agent watchdog" (`list_scheduled_tasks` names it). Done when `schedule_task` returns its next run time.
 3. **Stay awake.** For a run left unattended at night, start `uv run python tools/live/bot.py awake --minutes 118` as a background command and start it again each time it ends: a background command lasts at most 2 hours. Done when the last registered line has left the list.
 

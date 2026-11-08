@@ -121,6 +121,18 @@ def test_a_completed_thread_that_reported_is_finished_once():
     assert wd.tick(threads(), {THREAD: "completed"}, "", "", state, "h", reported_ids=[THREAD])[0] == []
 
 
+def test_a_finished_thread_stays_finished_when_a_later_tick_misses_its_reported_flag():
+    _, state = wd.tick(threads(), {THREAD: "completed"}, "", "", {}, "h", [THREAD])
+    assert wd.tick(threads(), {THREAD: "completed"}, "", "", state, "h")[0] == []
+
+
+def test_a_stranded_holder_of_an_ended_thread_says_to_answer_its_question_not_to_resume():
+    row = wd.Row(THREAD, "live1", "b")
+    events, _ = wd.tick([row], {row.key(): "completed"}, STRANDED, "", {}, "h")
+    stranded = [e for e in events if e.startswith("STRANDED")]
+    assert len(stranded) == 1 and "answer it first" in stranded[0] and "tell b to resume" not in stranded[0]
+
+
 def test_a_completed_thread_that_did_not_report_is_ended_once_until_it_runs_again():
     events, state = wd.tick(threads(), {THREAD: "completed"}, "", "", {}, "h")
     assert len(events) == 1 and events[0].startswith("ENDED b (completed)")
