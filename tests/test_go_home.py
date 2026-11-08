@@ -142,7 +142,7 @@ def child():
         if scenario in ("tab_stuck", "tab_restart"):  # the tab's tap is ignored; its wait cut short
             game.on_tap = lambda x, y: True
             override["GoHome"]["timeout"] = 8000
-            override["HomeWindowTab"] = {"custom_action_param": {"left": True, "timeout": 0.1}}
+            override["HomeWindowTab"] = {"custom_action_param": {"until": "HomeReached", "timeout": 0.1}}
         if scenario in ("tab_restart", "restarts_used"):  # no title after the restart: its 180 s wait cut short
             override["RecoverStartApp"] = {"timeout": 3000}
         if scenario == "tab_restart":
@@ -194,7 +194,7 @@ def test_go_home_starts_the_game_when_it_is_not_in_front_and_taps_through_the_ti
 
 
 def test_go_home_waits_for_the_screens_not_for_fixed_delays():
-    # #362: the Window tab's tap waits until the tab reads unlit no more, so a page that comes late is not tapped twice;
+    # #362: the Window tab's tap waits until the main window shows (#496), so a page that comes late is not tapped twice;
     # the game's start waits for its title, not 10 s.
     o = run_child(__file__)["drive_late"]
     assert o["succeeded"] and len(o["clicks"]) == 1 and inside(WINDOW_TAB, *o["clicks"][0]) and o["keys"] == []
