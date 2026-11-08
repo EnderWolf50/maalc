@@ -24,7 +24,7 @@
 - 繞完一圈都沒有用途符合的隊伍，就以成功結束任務：沒有事可做不是錯誤，client 的清單繼續下一個任務。（#9、#364）
 - 在選隊頁選出該隊的遊戲內隊伍欄位，確認畫面上的標題是 `TEAMS #N` 後再按確認。標題已經是 `TEAMS #N` 就不點也不捲；清單上看得到 `#N` 的列就直接點；都沒有，就從清單目前的位置往 `#N` 的方向捲（清單開啟時停在上次捲到的地方）；一列都讀不到時，才先拖回最上面（讀到的列號不再變為止，不比列的 y：OCR 框在靜止時也會差 1–2 px）。只認編號，不認名稱：隊伍名稱是玩家自己取的。（#8、#9、#226；實機 2026-10-27：`#3` 一開始就在畫面上，舊做法仍拖了 10 下）
 - 輪替游標只在 bot 親眼看到某隊完成一局並領到結算獎勵後才前進，前進到該隊的下一支啟用隊伍。手動跑的局不影響游標。（#8，[ADR 0003](../adr/0003-screen-is-truth-state-file-only-rotation-cursor.md)）
-- 放棄的局（全滅後重打用完而放棄，或沒達到目標而放棄獎勵）沒有領獎，游標不前進：下一局仍是同一支隊伍。（#95，2026-10-18 定案）
+- 放棄的局（全滅後重打用完而放棄，或沒過第 5 層而放棄獎勵）沒有領獎，游標不前進：下一局仍是同一支隊伍。（#95，2026-10-18 定案）
 - 選隊頁或戰前編隊頁顯示的隊伍和游標不同時，以畫面為準，照畫面上那支隊伍的設定繼續這一局。（#8）
 - 接續暫停中的局時，設定面板與 Resume 對話框不顯示隊伍。Agent 必須等下一次戰前編隊讀到 `TEAMS #N` 才得知隊伍；整局都沒讀到，就不推進輪替游標。選隊前暫停的空局 Resume 後直接進選隊頁，記憶體裡沒有計畫：不退回入口頁（入口頁只會再給 Resume，形成迴圈），而是和重啟後一樣依設定與輪替游標選隊、當作這局的計畫。（#8、#19、#128）
 - 選隊確認後出現「隊伍平均等級低於建議等級」警告時，按 Confirm 繼續。（#8、#19）
@@ -32,7 +32,7 @@
 
 **停止條件**（#8）
 
-- 「限制局數」開啟時，只計算這個任務開始後 bot 達到目標並領到獎勵的局數（第 14 節），不存檔；達到就停止。關閉時不限局數。（#137、#364）
+- 「限制局數」開啟時，只計算這個任務開始後 bot 領到獎勵的局數（第 14 節），不存檔；達到就停止。關閉時不限局數。（#137、#364）
 - 「每週獎勵用完就停」開啟時，開新局前讀入口頁的 Weekly Bonuses；三格全空就停止。
 - 這兩項和「沒有可用的隊伍」都是正常做完：任務以成功結束（hub 的 `TaskDone`），不走停止程序。（#364）
 - 沒有任何用途符合的隊伍時停止（如上）。
@@ -256,7 +256,7 @@ Cost 表是 wiki 與簡中客戶端的表，實機 log 的節點面板 Cost 沒�
 
 - 辨識：DEFEAT 對話框，顯示 `All participating Sinners have been killed.` 與 `Remaining Units: <n>/12`，選項有 `Return to Stage Select`、`Retry Stage`、`Accept results and return to Stage select`。實機：`<n>` 是沒上場的存活人數，不一定是 0；選項要先點選再按 Confirm。（實機：captures/236_finalboss_unknown.png）
 - 按 `Retry Stage` 重打。同一場最多重打 N 次（全域，預設 2）。計數以每場遭遇戰為單位，打贏就歸零。
-- 重打次數用完後依全域選項處理：放棄這局（預設）或停止。停止時保存證據。預設放棄這局，讓無人掛機時一場打不過的戰鬥不會停掉整批；放棄的局不領獎勵、輪替游標不前進（第 1 節），同一隊下一局再跑。L2／L3 的重開上限不變（[06-recovery.md](06-recovery.md)）。（#95，2026-10-18 定案）
+- 重打次數用完後依全域選項處理：放棄這局（預設）或停止。停止時保存證據。預設放棄這局，讓無人掛機時一場打不過的戰鬥不會停掉整批；放棄的局若已通過第 5 層，在 Exploration Reward 視窗照常 Claim（第 14 節 `claim_ok`），輪替游標和任何領過的局一樣前進；沒過第 5 層則放棄獎勵、游標不前進（第 1 節），同一隊下一局再跑。L2／L3 的重開上限不變（[06-recovery.md](06-recovery.md)）。（#95，2026-10-18 定案）
 - 只有重打次數用完、而全域選項為「放棄這局」時，才放棄這局：（#16、#19，2026-10-14 定案）
   1. 按 `Accept results`。它只保留陣亡結果，經載入畫面回到地圖，不會結束這局。
   2. 開設定面板（`Dungeon Progress`）→ 按 Forfeit → `Quit exploring the dungeon?` 按 Confirm。
@@ -567,23 +567,26 @@ Cost 表是 wiki 與簡中客戶端的表，實機 log 的節點面板 Cost 沒�
 
 **規則**
 
-- 結算前必須先判斷這一局有沒有達到目標。目標是五層全部通過：Exploration Reward 視窗顯示 `Floor 5` 且進度是 `n/n`（已通過數等於總數）才算達到。困難層的節點數不一定是 6：2026-10-16 實機第 5 層是 `Floor 5 [HARD] 7/7`（#67）。不看 Exploration Complete 摘要的逐層 `n/6`。（#8、#19，2026-10-14 定案）
-- 達到目標時：
-  - 這一局的難度符合「用在普通」或「用在困難」時才使用每週獎勵；選「不用」或難度不符時，所有開關保持 OFF。提供「不用」是因為有些玩家還沒開放困難鏡牢。困難局的判斷見第 2 節。（#9、#19）
+- 結算前必須先判斷這一局的兩件事，都從 Exploration Reward 視窗最後一層的 `Floor N [標記] a/b` 算：已通過的層數是 N（`a` 等於 `b`，打完這一層）或 N−1。困難層的節點數不一定是 6：2026-10-16 實機第 5 層是 `Floor 5 [HARD] 7/7`（#67）；層數與進度各讀兩位數（`Floor 12 [HARD] 12/12`，#383、#384）。不看 Exploration Complete 摘要的逐層 `n/6`。（#8、#19，2026-10-14 定案）
+  - `claim_ok`：已通過第 5 層（通過層數 ≥ 5）。遊戲在第 5 層之後不另給結算獎勵，第 5 層之後失敗或離開仍領完整的第 5 層獎勵，所以 `claim_ok` 就 Claim，不管打到第幾層；沒過第 5 層就放棄獎勵。（#384，使用者 2026-10-29 決定；依據 1.117.0 解包資料的新手提示文字與 `exitRewardListByCondition`）
+  - `target_reached`：通過層數 ≥ 這局的 `target_floor`（[04](04-settings.md) 第 5 節）。`target_floor` 是 5 時兩者相同。`target_reached` 寫進 `runs.jsonl`；**只有 `target_reached` 的局才依每週獎勵設定切開關**，`claim_ok` 但沒到目標的局 Claim 時所有開關保持 OFF（不花每週獎勵在沒打完的局上）。（#384）
+  - 標記是 `NORMAL`、`HARD`、`INFINITY` 或 `EXTREME`；`INFINITY`／`EXTREME` 是依遊戲資料（`uiConfig.difficultyLabel`）的推測，沒有實機畫面。第 6 層以後每一層都要 HARD，所以 `INFINITY`／`EXTREME` 與第 6 層以上的視窗都算困難局。標記讀不到但層數與進度讀得到時，照層數決定 Claim，不當成還在淡入；難度未知，不切開關（不拿每週獎勵賭猜測），`runs.jsonl` 的 `difficulty` 在第 1–5 層寫 `null`。
+- `claim_ok` 時：
+  - `target_reached` 而且這一局的難度符合「用在普通」或「用在困難」時才使用每週獎勵；選「不用」或難度不符時，所有開關保持 OFF。提供「不用」是因為有些玩家還沒開放困難鏡牢。困難局的判斷見第 2 節。（#9、#19）
   - 用量：每局只用一次 = 切 1 個開關到 ON；一次全用 = 把剩餘次數全部切到 ON。開關的數量和剩餘次數都從結算視窗讀。（#9、#17）
   - 切好開關後按 Claim。Claim 要花的腦啡肽模組不夠時，必須停止並通知（[06-recovery.md](06-recovery.md)）。（#8、#19）
-- 沒達到目標時：按 GiveUpRewards 放棄獎勵，不花模組。（#19）
-- 實機：視窗的三個按鈕是 `GiveUpRewards`、`To Window`、`Claim`，Claim 上標示花 5 個腦啡肽模組（`-5`）；bot 不按 To Window。視窗只顯示最後到達的那一層（例如 `Floor 5 [HARD] 5/6`，表示第 5 層沒打完，沒達到目標）。（實機：captures/252_exploration_reward_window.png、captures/245_after_defeat_confirm.png）
+- 不是 `claim_ok` 時：按 GiveUpRewards 放棄獎勵，不花腦啡肽模組。（#19）
+- 實機：視窗的三個按鈕是 `GiveUpRewards`、`To Window`、`Claim`，Claim 上標示花 5 個腦啡肽模組（`-5`）；bot 不按 To Window。視窗只顯示最後到達的那一層（例如 `Floor 5 [HARD] 5/6`，表示第 5 層沒打完，沒過第 5 層）。（實機：captures/252_exploration_reward_window.png、captures/245_after_defeat_confirm.png）
 - 這條規則適用於：一般結算；入口頁顯示 `Unclaimed Rewards` 時補領上一局沒領的獎勵；每週重置後過期的局；全滅後重打次數用完、全域選項為「放棄這局」時從設定面板 Forfeit 之後的結算（第 9 節）。（#8、#16、#19）
 - 看到 Claim 完成後，輪替游標才前進（第 1 節）。（#8）
 - 實作（#30）：
-  - 一局算不算困難局，看視窗上最後一層的 `[HARD]`／`[NORMAL]`：任何一層選了 HARD 就不能切回普通，所以最後一層就代表整局（第 2 節）。
-  - 一次用 2 次以上的每週獎勵，要每一層都是 HARD（遊戲內說明頁，`captures/29_help_page_02.png`）。所以「一次全用」只在打到的每一層都是 HARD 時才切多個開關，其他情況最多切 1 個。每層的難度取自主題包頁在該層顯示的難度（`RUN["floors_hard"]`，`set_difficulty` 記下），不看開局規劃：開局先跳出過期上一局的對話框而沒有規劃時，五層都 HARD 一樣算（#382）；沒看到前幾層的局（接續的局，沒看到第 1 層）：最後一層是 HARD，而且領獎視窗左邊 Dungeon Progress 的第 1 層標記讀到 `[HARD]`（`FIRST_FLOOR`，實機讀到 `[HARD] Floor1`）就算全 HARD（HARD 不會切回普通），log 寫 `floors before N were not seen: the window's floor 1 tile reads …`；讀不到才算不是全 HARD。過期上一局的對話框（`The previous session has expired. Please claim your rewards.`）實際怎麼結算沒有實機證據（unverified）：只知道 2026-10-29 驗收時按下後就進了新局，log 沒有領取或放棄的行。按下時 log 記一行 `popup: '<對話框文字>': pressed '<按鈕文字>'`（按鈕文字取自 `PopupButton` 辨識已讀到的結果），之後若出現 `exploration reward: Floor …` 與 `claimed with N weekly bonus(es)` 或 `goal not met: gave up the rewards`，就是這局怎麼結算的；沒有這幾行就是沒有結算。
+  - 一局算不算困難局，看視窗上最後一層的標記：`[HARD]`、`[INFINITY]`、`[EXTREME]` 都算困難，`[NORMAL]` 算普通，讀不到標記時（層數與進度有讀到）難度未知，`runs.jsonl` 的 `difficulty` 在 1–5 層寫 `null`，且不切每週獎勵開關：任何一層選了 HARD 就不能切回普通，所以最後一層就代表整局（第 2 節）。
+  - 一次用 2 次以上的每週獎勵，要每一層都是 HARD（遊戲內說明頁，`captures/29_help_page_02.png`）。所以「一次全用」只在打到的每一層都是 HARD 時才切多個開關，其他情況最多切 1 個。每層的難度取自主題包頁在該層顯示的難度（`RUN["floors_hard"]`，`set_difficulty` 記下），不看開局規劃：開局先跳出過期上一局的對話框而沒有規劃時，五層都 HARD 一樣算（#382）；沒看到前幾層的局（接續的局，沒看到第 1 層）：最後一層是 HARD，而且領獎視窗左邊 Dungeon Progress 的第 1 層標記讀到 `[HARD]`（`FIRST_FLOOR`，實機讀到 `[HARD] Floor1`）就算全 HARD（HARD 不會切回普通），log 寫 `floors before N were not seen: the window's floor 1 tile reads …`；讀不到才算不是全 HARD。過期上一局的對話框（`The previous session has expired. Please claim your rewards.`）實際怎麼結算沒有實機證據（unverified）：只知道 2026-10-29 驗收時按下後就進了新局，log 沒有領取或放棄的行。按下時 log 記一行 `popup: '<對話框文字>': pressed '<按鈕文字>'`（按鈕文字取自 `PopupButton` 辨識已讀到的結果），之後若出現 `exploration reward: Floor …` 與 `claimed with N weekly bonus(es)` 或 `floor 5 not passed: gave up the rewards`，就是這局怎麼結算的；沒有這幾行就是沒有結算。
   - 遊戲會預設切好開關（實機：普通局也預設第 1 個 ON），所以每個開關都要從畫面讀成 ON 或 OFF，把 ON 的數量調到剛好等於要用的數量，再讀一次確認；讀不出來或調不到就停止，不按 Claim。
   - 按 Claim 後會跳確認對話框：開關全 OFF、還有剩餘次數時是「不使用每週獎勵確認」，有開關 ON 時是「使用每週獎勵確認」（`Spend your 「Weekly Bonuses」 to claim the bonus rewards?`）。只按和切好、讀回的開關相符的那一個的 Confirm，所以只有 bot 自己決定用每週獎勵時才會花掉它。用了每週獎勵時，之後依序跳 `Rewards Acquired` 與 `Pass Level Up` 彈窗，各按 Confirm 關掉（hub 的 `ClaimPopup`）。（#65，2026-10-16 實機）
   - 按 Claim 後視窗沒有關掉，而且不是上面相符的確認對話框，就停止、不再點任何東西（模組不夠時的畫面還沒見過，這樣不會誤點購買）。這局在 `runs.jsonl` 記為「停止」。
   - 輪替游標只在這局是 bot 自己在入口頁選的隊伍時才前進；接續或補領的局不前進（第 1 節）。
-  - 「限制局數」只算這個任務開始後達到目標並領到獎勵的局；放棄獎勵（沒達到目標、放棄這局）與停止的局不算。達到時在入口頁停止，不開新局。（2026-10-16 定案）
+  - 「限制局數」只算這個任務開始後領到獎勵（`claim_ok`）的局；放棄獎勵（沒過第 5 層、放棄這局）與停止的局不算。達到時在入口頁停止，不開新局。（2026-10-16 定案）
 - **開新局前的腦啡肽模組門檻**（#369）：入口頁左下沒有腦啡肽模組面板（`EntryNewRun.png` 等），所以導航經過 Drive 頁時讀：`NavDrive` 是自訂動作 `OpenDrive`，點 Mirror Dungeons 之前用 `actions.module_count` 讀一次，存在任務狀態 `TASK["modules"]`（讀不到存 None）。`PlanRun` 開新局前用 `settlement.new_run_gate` 判斷：這趟讀到 m < 5（Claim 的費用，`settlement.CLAIM_COST`）→ log 腦啡肽模組數、`done()` 成功結束；m ≥ 5 或 None → 開局，讀不到不擋。這趟沒經過 Drive（例如上一局 Claim 後直接停在入口頁）→ 按返回鍵（最多 `BACKS` 次），由 hub 的導航重新走過 Drive 讀；返回鍵沒有把人帶到有面板的頁就不查、照常開局。值只用一次：`PlanRun` 取走，每層 `PickThemePack` 也清掉（Claim 會扣 5，舊值不能沿用）。接手暫停中的局不走這裡。返回鍵從入口頁會到哪一頁還沒有截圖，待實機。
 
 ## 15. 日常 Luxcavation 的腦啡肽模組與計次

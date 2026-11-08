@@ -385,11 +385,13 @@ def run_line(run, outcome, hard, floors, bonuses=0):
     """This run's runs.jsonl line (spec 06 執行記錄)."""
     team = run["team"] if run.get("planned") else None
     counts = STUCK["ladder"].counts
+    target = run.get("settings", {}).get("run", {}).get("target_floor")
     return {
         "start": run.get("start"), "end": settlement.now(),
         "team": team and team["id"], "team_name": team and team["name"],
-        "difficulty": "hard" if hard else "normal", "weekly_bonus": bonuses,
-        "floors": floors, "result": outcome, "l1": counts[1], "l2": counts[2], "l3": counts[3],
+        "difficulty": None if hard is None else "hard" if hard else "normal", "weekly_bonus": bonuses,
+        "floors": floors, "target_reached": None if target is None else settlement.target_reached(floors, target),
+        "result": outcome, "l1": counts[1], "l2": counts[2], "l3": counts[3],
         **({"gift_search": run["gift_search"]} if "gift_search" in run else {}),
     }
 
@@ -5503,7 +5505,7 @@ def toggles(context, image):
 
 @AgentServer.custom_action("Settle")
 class Settle(CustomAction):
-    """Goal check, weekly-bonus toggles, then Claim or GiveUpRewards; then the cursor and runs.jsonl (spec 03 section 14).
+    """Claim check, weekly-bonus toggles, then Claim or GiveUpRewards; then the cursor and runs.jsonl (spec 03 section 14).
 
     Claim is pressed only after the toggles read back exactly as wanted; anything unexpected stops.
     """
@@ -5519,9 +5521,9 @@ class Settle(CustomAction):
         result = settlement.read_result(" ".join(t for t, _ in lines))
         if not result:
             return True  # fading in: let MirrorHub look again
-        floor, hard, cleared, total = result
-        log(f"exploration reward: Floor {floor} [{'HARD' if hard else 'NORMAL'}] {cleared}/{total}")
-        if not settlement.goal_met(result):
+        floor, hard = result.floor, result.hard
+        log(f"exploration reward: Floor {floor} [{(result.difficulty or '?').upper()}] {result.cleared}/{result.total}")
+        if not settlement.claim_ok(result):
             return self.give_up(context, run, result)
 
         s, team = run["settings"]["run"], run["team"]
@@ -5534,8 +5536,7 @@ class Settle(CustomAction):
             tile = text(context, image, FIRST_FLOOR)
             log(f"floors before {min(floors_hard, default=floor + 1)} were not seen: the window's floor 1 tile reads {tile!r}")
             return tile
-        all_hard = settlement.all_hard(floors_hard, floor, hard, first_tile)
-        want = settlement.bonus_toggles(s["weekly_bonus_use"], s["weekly_bonus_amount"], hard, left or 0, all_hard)
+        want = settlement.claim_bonuses(result, s["target_floor"], s["weekly_bonus_use"], s["weekly_bonus_amount"], left or 0, floors_hard, first_tile)
         for _ in range(6):
             states = toggles(context, page_guard(context, "ExplorationReward"))
             on = [i for i, v in enumerate(states) if v]
@@ -5589,13 +5590,13 @@ class Settle(CustomAction):
             return stuck("GiveUpRewards brought up no `End expedition without claiming rewards?`")
         page_guard(context, "ExplorationReward", image=image)
         tap(context, *DIALOG_CONFIRM, wait=2)
-        log("goal not met: gave up the rewards")
+        log("floor 5 not passed: gave up the rewards")
         self.record(run, result, 0, "giveup")
         RUN.clear()
         return True
 
     @staticmethod
     def record(run, result, bonuses, outcome):
-        settlement.append_run(ROOT, run_line(run, outcome, result[1], settlement.floors_passed(result), bonuses))
+        settlement.append_run(ROOT, run_line(run, outcome, result.hard, settlement.floors_passed(result), bonuses))
         TASK["runs"] += settlement.counts_as_run(outcome)
         STUCK["ladder"] = recovery.Ladder()

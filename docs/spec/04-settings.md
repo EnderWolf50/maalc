@@ -102,7 +102,7 @@
 | 每週獎勵用完就停 | `stop_when_weekly_bonus_out` | 布林 | 開／關 | 關 | #8、#19 |
 | 星光買不起時 | `starlight_unaffordable` | 字串 | `stop` 停止任務／`skip` 跳過這個加成（見第 7 節） | `skip` | #9、#19 |
 | 全滅重打次數 N | `wipe_retries` | 整數 ≥ 0 | 同一場遭遇戰最多重打幾次 | 2 | #16 |
-| 重打用完後 | `after_retries` | 字串 | `stop` 停止／`forfeit` 放棄這局（不領獎勵，輪替游標不前進） | `forfeit` | #16、#95 |
+| 重打用完後 | `after_retries` | 字串 | `stop` 停止／`forfeit` 放棄這局（已通過第 5 層就在結算視窗 Claim、游標照常前進，沒過第 5 層則不領獎勵、游標不前進） | `forfeit` | #16、#95 |
 | 失敗通知 webhook | `webhook_url` | 字串 | 停止時送出摘要的網址；空字串 = 不送 | 空字串 | #14 |
 | 每層最多刷新主題包 | `theme_pack_refresh` | 字串 | `none` 不用／`once` 用一次／`all` 全用：最好的包低於方案的刷新門檻時用的免費刷新次數（見 [03](03-decisions.md#6-主題包) 第 6 節） | `all` | #41、#240 |
 | 自動同意使用者條款 | `auto_accept_terms` | 布林 | 開：標題畫面的 User Agreement 勾兩個 I agree.、確認都勾上再按 Confirm；關：停下並通知（停止程序） | 開 | #85、2026-10-21 |
@@ -112,10 +112,10 @@
 規則：
 
 - 自動難度：開局前讀入口頁的 Weekly Bonuses，還有剩就跑困難，用完改普通。`target_floor` 大於 5 時一律跑困難，不看每週獎勵（`run_start.run_difficulty`；使用者 2026-11-08 定案：整局困難，不改打普通）。（#9、#385）
-- 「限制局數」只算這個任務開始後達到目標並領到獎勵的局數，放棄獎勵的局不算；不存檔。（#8、#30，[ADR 0003](../adr/0003-screen-is-truth-state-file-only-rotation-cursor.md)）
+- 「限制局數」只算這個任務開始後領到獎勵的局數，放棄獎勵的局不算；不存檔。（#8、#30，[ADR 0003](../adr/0003-screen-is-truth-state-file-only-rotation-cursor.md)）
 - 「每週獎勵用完就停」的剩餘次數直接從畫面讀。（#8）
 - 每週獎勵用法選「用在普通」時，設定 GUI 在欄位下提示「普通局的每週獎勵報酬很少，建議只用在困難」。（#30，2026-10-16 定案）
-- 每週獎勵的剩餘次數從結算視窗讀；這一局五層全部通過（結算視窗顯示 `Floor 5` 且 `6/6`）時，才依用法與用量切開關再按 Claim，否則放棄獎勵。只要有一層是困難，這一局就算困難局。`target_floor` 大於 5 時，只有到達目標層數的局才切開關（細節見 #384）。規則見 [03-decisions.md](03-decisions.md) 第 14 節。（#9、#17、#19、#385）
+- 每週獎勵的剩餘次數從結算視窗讀。已通過第 5 層（`claim_ok`，結算視窗的 `Floor` 後面可到 15）就 Claim，沒過第 5 層放棄獎勵；只有通過層數到達 `target_floor` 的局（`target_reached`）才依用法與用量切開關。只要有一層是困難，這一局就算困難局。規則的全文只在 [03-decisions.md](03-decisions.md) 第 14 節。（#9、#17、#19、#384、#385）
 - 全滅重打的計數以每場遭遇戰為單位，打贏就歸零。只有重打次數用完、而「重打用完後」為「放棄這局」時，才按 `Accept results` 回到地圖，再從設定面板按 Forfeit 結束這局，然後結算（[03-decisions.md](03-decisions.md#9-全滅與陣亡) 第 9 節）。停止時保存證據。（#16、#19）
 - webhook 在停止時由 Agent 以 JSON POST 送出這局的摘要與證據存放路徑。MFAAvalonia 內建的通知可以另外使用。（#14、#19）
 

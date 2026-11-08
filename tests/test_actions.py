@@ -2986,8 +2986,8 @@ def test_a_map_gone_while_looking_for_its_bus_is_not_dragged(context, guarded):
 
 
 def test_an_exploration_reward_gone_is_handed_back_untouched(context, guarded, monkeypatch):
-    actions.RUN.update(settings={"run": {"weekly_bonus_use": "none", "weekly_bonus_amount": 0}}, team={"hard_from_floor": None}, difficulty="normal")
-    monkeypatch.setattr(actions.settlement, "read_result", lambda text: (5, False, 5, 5))
+    actions.RUN.update(settings={"run": {"weekly_bonus_use": "none", "weekly_bonus_amount": 0, "target_floor": 5}}, team={"hard_from_floor": None}, difficulty="normal")
+    monkeypatch.setattr(actions.settlement, "read_result", lambda text: actions.settlement.Result(5, "normal", 5, 5))
     assert actions.Settle().run(context, argv())
     assert moved(context) == 0 and actions.STUCK["flag"] is None
 
@@ -3081,8 +3081,8 @@ def test_a_battle_gone_after_the_portrait_taps_swaps_nothing_back(context, guard
 
 
 def test_an_exploration_reward_gone_after_a_toggle_tap_does_not_claim(context, guarded, monkeypatch):
-    actions.RUN.update(settings={"run": {"weekly_bonus_use": "all", "weekly_bonus_amount": 3}}, team={"hard_from_floor": None}, difficulty="normal")
-    monkeypatch.setattr(actions.settlement, "read_result", lambda text: (5, False, 5, 5))
+    actions.RUN.update(settings={"run": {"weekly_bonus_use": "all", "weekly_bonus_amount": 3, "target_floor": 5}}, team={"hard_from_floor": None}, difficulty="normal")
+    monkeypatch.setattr(actions.settlement, "read_result", lambda text: actions.settlement.Result(5, "normal", 5, 5))
     monkeypatch.setattr(actions.settlement, "bonus_toggles", lambda *a: 1)
     monkeypatch.setattr(actions, "toggles", lambda context, image: [False, False, False])
     page_until(context, "ExplorationReward", 1)
@@ -3104,7 +3104,7 @@ def test_a_gift_search_gone_after_a_pick_does_not_press_select(context, guarded,
 
 
 def test_an_exploration_reward_gone_mid_give_up_is_handed_back_not_stuck(context, guarded, monkeypatch):
-    monkeypatch.setattr(actions.settlement, "read_result", lambda text: (5, False, 3, 5))  # goal not met: give up
+    monkeypatch.setattr(actions.settlement, "read_result", lambda text: actions.settlement.Result(5, "normal", 3, 5))  # short of floor 5: give up
     page_until(context, "ExplorationReward", 1)
     assert actions.Settle().run(context, argv())
     assert taps(context) == [actions.GIVE_UP] and actions.STUCK["flag"] is None
