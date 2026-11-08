@@ -1,6 +1,6 @@
-"""GoHome on the title screen (#495, #506). The real task in a child process (daily_child.py), on a model of the game: a
-live title whose picture keeps moving, a tap that brings CONNECTING (or a loading screen) and then the main window, the
-title's glitch effect, and a game frozen on the title until it is restarted.
+"""GoHome on the title screen (#495, #506, #540). The real task in a child process (daily_child.py), on a model of the
+game: a live title whose picture keeps moving, a tap that brings CONNECTING (or a loading screen) and then the main window,
+the title's glitch effect, and a game frozen on the title, with or without CONNECTING up, until it is restarted.
 
 Live 2026-11-08 (a recording and the MaaFramework log of a title tap): CONNECTING showed within 0.6 s of each of 2 taps
 and stayed up to 28 s with the title under it, its template still hitting; the glitch warped the whole picture for
@@ -19,8 +19,8 @@ TITLE_TAP = (540, 300, 200, 120)
 GLITCH = 1.3  # s: the recording's longest glitch
 SCREENS = {"title": "Title.png", "connecting": "TitleConnecting.png", "loading": "Loading.png", "main": "MainWindow.png"}
 LIMIT = 40  # s: a scenario still going by then is stopped (a title tapped for ever)
-CAP = 5  # s: GoHome's wait on CONNECTING in the frozen_connecting scenario, for the pipeline's 150; its restarted game's
-# CONNECTING (5 screenshots) ends well within it
+CONNECTING_WAIT = 5  # s: GoHome's wait on CONNECTING in the frozen_connecting scenarios, for the pipeline's 150; their
+# restarted game's CONNECTING (5 screenshots) ends well within it
 
 
 def glitched(image):
@@ -106,6 +106,7 @@ def child():
         "frozen": ({"frozen": True}, 0),
         "frozen_restarts_used": ({"frozen": True}, L3_FAILED_IN_A_ROW),
         "frozen_connecting": ({"frozen": True, "screen": "connecting", "answer_for": 5}, 0),
+        "frozen_connecting_restarts_used": ({"frozen": True, "screen": "connecting"}, L3_FAILED_IN_A_ROW),
     }.items():
         game.set(**model)
         actions.STUCK["restarts"] = actions.recovery.Restarts()
@@ -124,8 +125,8 @@ def child():
         # The model's CONNECTING lasts answer_for screenshots, not seconds: HomeConnecting's 300 ms between looks would only
         # stretch each scenario, as the node delays did (#480).
         override = {"HomeConnecting": {"rate_limit": 0}}
-        if scenario == "frozen_connecting":
-            override["HomeConnecting"]["timeout"] = CAP * 1000
+        if scenario.startswith("frozen_connecting"):
+            override["HomeConnecting"]["timeout"] = CONNECTING_WAIT * 1000
         job = tasker.post_task("GoHome", override).wait()
         while not (detail := job.get()).status.done:  # #461: post_stop's queue clear ends wait() before the task does
             time.sleep(0.01)
@@ -194,18 +195,18 @@ def test_a_title_frozen_through_its_taps_restarts_the_game_and_go_home_reaches_t
 
 def test_a_normal_login_through_connecting_and_loading_is_not_restarted():
     o = run_child(__file__)["connects_then_loads"]
-    assert o["succeeded"] and o["nodes"][-1] == "HomeReached" and o["title_taps"] == 1, json.dumps(o)
+    assert o["succeeded"] and o["nodes"][-1] == "HomeReached" and o["title_taps"] == 1 and o["keys"] == [], json.dumps(o)
     assert (o["stops"], o["starts"]) == (0, 0) and not any("recovery L3" in line for line in o["log"]), json.dumps(o)
 
 
 def test_a_title_frozen_under_connecting_restarts_the_game_once_the_wait_is_up_and_reaches_the_main_window():
     # #540: each look at CONNECTING went back to GoHome with a new 60 s timeout, so a game frozen on it was never
-    # restarted (the model: 4578 looks in 30 s). The wait is the pipeline's 150 s here cut to CAP; the restart is the
-    # task's first of its 2, and the restarted game's CONNECTING, shorter than the wait, is let through.
+    # restarted (the model: 5181 looks in 40 s). The wait is the pipeline's 150 s here cut to CONNECTING_WAIT; the
+    # restart is the task's first of its 2, and the restarted game's CONNECTING, shorter than the wait, is let through.
     o = run_child(__file__)["frozen_connecting"]
     assert o["succeeded"] and o["nodes"][-1] == "HomeReached" and o["stopped"] == 0, json.dumps(o)
     assert (o["stops"], o["starts"]) == (1, 1) and o["title_taps"] == 1, json.dumps(o)
-    assert CAP <= o["seconds"] < LIMIT, json.dumps(o)
+    assert CONNECTING_WAIT <= o["seconds"] < LIMIT, json.dumps(o)
     assert [line for line in o["log"] if "recovery L3: CONNECTING" in line and "1 of 2 this task" in line], json.dumps(o)
 
 
@@ -223,6 +224,13 @@ def test_a_frozen_title_with_the_restarts_used_up_ends_through_the_stop_procedur
     o = run_child(__file__)["frozen_restarts_used"]
     assert o["succeeded"] is False and (o["stops"], o["starts"]) == (0, 0) and o["stopped"] == 1, json.dumps(o)
     assert o["title_taps"] == DEAD_TAPS, json.dumps(o)
+
+
+def test_connecting_frozen_with_the_restarts_used_up_ends_through_the_stop_procedure():
+    # Review of #540: the restart is the wait's on_error, inside a JumpBack from GoHome; it must end the task, not go back.
+    o = run_child(__file__)["frozen_connecting_restarts_used"]
+    assert o["succeeded"] is False and (o["stops"], o["starts"]) == (0, 0) and o["stopped"] == 1, json.dumps(o)
+    assert o["title_taps"] == 0 and CONNECTING_WAIT <= o["seconds"] < LIMIT, json.dumps(o)
 
 
 if __name__ == "__main__":
