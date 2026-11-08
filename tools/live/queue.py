@@ -99,21 +99,27 @@ def alive(pid: int, start: int | None = None) -> bool:
     return win_alive(kernel32(), pid, start)
 
 
-def read(p: Path) -> tuple[str, int | None, bool]:
+def read(p: Path) -> tuple[str, int | None, bool] | None:
     """(command, start time of the holder, queued with --first) of a ticket; a ticket without a start time is plain
-    text."""
+    text. None: the ticket is gone, its run ended after the queue was listed (#577)."""
     try:
-        doc = json.loads(p.read_text(encoding="utf-8"))
+        text = p.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return None
+    try:
+        doc = json.loads(text)
         return doc["cmd"], doc.get("start"), doc.get("first") is True
     except (ValueError, KeyError, TypeError, AttributeError):
-        return p.read_text(encoding="utf-8"), None, False
+        return text, None, False
 
 
 def tickets(qdir: Path, is_alive=alive) -> list[Path]:
     """The live tickets in arrival order; tickets of dead processes are deleted."""
     out = []
     for p in sorted(qdir.glob("*.ticket")):
-        if is_alive(int(p.stem.split("-", 2)[1]), read(p)[1]):
+        if (t := read(p)) is None:
+            continue
+        if is_alive(int(p.stem.split("-", 2)[1]), t[1]):
             out.append(p)
         else:
             p.unlink(missing_ok=True)
@@ -137,7 +143,7 @@ def place(qdir: Path, name: str, cmd: list[str], first: bool, is_alive=alive) ->
         q = tickets(qdir, is_alive) if first else []
         stamp = str(time.time_ns())
         if q:
-            behind = next((i for i, p in enumerate(q[1:], 1) if not read(p)[2]), len(q)) - 1
+            behind = next((i for i, p in enumerate(q[1:], 1) if (t := read(p)) is None or not t[2]), len(q)) - 1
             last = q[behind].name.split("-", 1)[0]
             stamp = str(int(last) + 1).zfill(len(last))  # same width: ticket names sort as text
         me = qdir / f"{stamp}-{os.getpid()}-{name}.ticket"
@@ -268,9 +274,9 @@ FIRST_NOTE = " — FIRST: the daily task, due before the 05:00 reset; the holder
 
 def status(qdir: Path, is_alive=alive, now: float | None = None) -> list[str]:
     lines = []
-    for i, p in enumerate(tickets(qdir, is_alive) if qdir.exists() else []):
+    listed = [(p, t) for p in (tickets(qdir, is_alive) if qdir.exists() else []) if (t := read(p)) is not None]
+    for i, (p, (cmd, _, first)) in enumerate(listed):
         _, pid, name = p.stem.split("-", 2)
-        cmd, _, first = read(p)
         note = hold_note(cmd, now) if i == 0 else FIRST_NOTE if first else ""
         lines.append(("RUNNING " if i == 0 else f"#{i:<6} ") + f"{name} (pid {pid}){stranded(cmd, is_alive, now)}{note}: {cmd[:120]}")
     return lines
