@@ -6,8 +6,9 @@ spec = importlib.util.spec_from_file_location("live_watchdog", Path(__file__).re
 wd = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(wd)
 
-ENCODED = "ns%3Aabc%3A123"
-DECODED = "ns:abc:123"
+ENCODED = "node:delegated-task:command%3Amcp%3Aabc%3Adelegate-task%3Aa"
+DECODED = "node:delegated-task:command:mcp:abc:delegate-task:a"
+THREAD = "mcp:launch:" + "0f" * 32
 STRANDED = "  RUNNING live1 (pid 42) — bot ended 75 min ago, waiting for the agent: python backup.py hold"
 CI_RED = json.dumps([{"conclusion": "failure", "headSha": "deadbeef0000"}])
 CI_GREEN = json.dumps([{"conclusion": "success", "headSha": "cafebabe0000"}])
@@ -50,7 +51,12 @@ def test_done_on_an_unknown_ref_changes_nothing(tmp_path):
 def test_list_prints_lines_and_skips_the_header(tmp_path):
     assert wd.listing(tsv(tmp_path)) == ["(empty)"]
     wd.add(tsv(tmp_path), ENCODED, "live1", "a")
-    assert wd.listing(tsv(tmp_path)) == [f"{ENCODED}\tlive1\ta"]
+    assert wd.listing(tsv(tmp_path)) == [f"{ENCODED}\tlive1\ta\ttask_status"]
+
+
+def test_list_names_t3_thread_read_for_a_launched_thread(tmp_path):
+    wd.add(tsv(tmp_path), THREAD, "-", "b")
+    assert wd.listing(tsv(tmp_path)) == [f"{THREAD}\t-\tb\tt3_thread_read"]
 
 
 def rows():
@@ -87,16 +93,60 @@ def test_a_cancelled_task_is_reported_once_as_cancelled_and_never_told_to_resume
         assert wd.tick(rows(), {DECODED: spelling}, "", "", state, "2026103013")[0] == []
 
 
-def test_a_stranded_holder_of_a_cancelled_task_is_not_told_to_resume():
+def test_a_stranded_holder_of_a_cancelled_task_or_rolled_back_thread_is_not_told_to_resume():
     queue = "RUNNING live1 (pid 5) — bot ended 90 min ago, waiting for the agent\n"
-    events, _ = wd.tick(rows(), {DECODED: "cancelled"}, queue, "", {}, "h")
-    stranded = [e for e in events if e.startswith("STRANDED")]
-    assert len(stranded) == 1 and "resume" not in stranded[0].replace("not resume", "")
+    for row, status in ((wd.Row(ENCODED, "live1", "a"), "cancelled"), (wd.Row(THREAD, "live1", "b"), "rolled_back")):
+        events, _ = wd.tick([row], {row.key(): status}, queue, "", {}, "h")
+        stranded = [e for e in events if e.startswith("STRANDED")]
+        assert len(stranded) == 1 and "resume" not in stranded[0].replace("not resume", "")
 
 
 def test_a_running_task_and_a_missing_state_are_silent():
     assert wd.tick(rows(), {DECODED: "running"}, "", "", {}, "h")[0] == []
     assert wd.tick(rows(), {}, "", "", {}, "h")[0] == []
+
+
+def threads():
+    return [wd.Row(THREAD, "-", "b")]
+
+
+def test_a_running_thread_is_silent():
+    for working in ("preparing", "queued", "starting", "running"):
+        assert wd.tick(threads(), {THREAD: working}, "", "", {}, "h")[0] == []
+
+
+def test_a_completed_thread_that_reported_is_finished_once():
+    events, state = wd.tick(threads(), {THREAD: "completed"}, "", "", {}, "h", reported_ids=[THREAD])
+    assert len(events) == 1 and "FINISHED b" in events[0] and "watchdog.py done b" in events[0]
+    assert wd.tick(threads(), {THREAD: "completed"}, "", "", state, "h", reported_ids=[THREAD])[0] == []
+
+
+def test_a_completed_thread_that_did_not_report_is_ended_once_until_it_runs_again():
+    events, state = wd.tick(threads(), {THREAD: "completed"}, "", "", {}, "h")
+    assert len(events) == 1 and events[0].startswith("ENDED b (completed)")
+    assert "t3_thread_read" in events[0] and "watchdog.py done b" in events[0]
+    events, state = wd.tick(threads(), {THREAD: "completed"}, "", "", state, "h")
+    assert events == []
+    events, state = wd.tick(threads(), {THREAD: "running"}, "", "", state, "h")
+    assert events == []
+    events, _ = wd.tick(threads(), {THREAD: "completed"}, "", "", state, "h")
+    assert len(events) == 1 and events[0].startswith("ENDED b")
+
+
+def test_an_interrupted_or_failed_thread_is_told_to_resume_once_per_hour_even_after_running():
+    for status in ("interrupted", "failed"):
+        events, state = wd.tick(threads(), {THREAD: status}, "", "", {}, "2026103012")
+        assert len(events) == 1 and events[0].startswith(f"FAILED b ({status})")
+        assert "resume-b-2026103012" in events[0] and "queue.py resume --task b" in events[0]
+        _, state = wd.tick(threads(), {THREAD: "running"}, "", "", state, "2026103012")
+        assert wd.tick(threads(), {THREAD: status}, "", "", state, "2026103012")[0] == []
+        assert len(wd.tick(threads(), {THREAD: status}, "", "", state, "2026103013")[0]) == 1
+
+
+def test_a_cancelled_or_rolled_back_thread_is_reported_as_cancelled():
+    for status in ("cancelled", "rolled_back"):
+        events, _ = wd.tick(threads(), {THREAD: status}, "", "", {}, "h")
+        assert len(events) == 1 and events[0].startswith("CANCELLED b")
 
 
 def test_a_holder_stranded_over_an_hour_is_reported_once_and_a_short_one_is_not():
@@ -127,10 +177,11 @@ def test_an_unreadable_ci_answer_is_silent():
     assert wd.tick([], {}, "", "", {}, "h")[0] == []
 
 
-def test_a_task_that_left_the_list_can_be_reported_again(tmp_path):
-    _, state = wd.tick(rows(), {DECODED: "completed"}, "", "", {}, "h")
-    _, state = wd.tick([], {}, "", "", state, "h")
-    assert wd.tick(rows(), {DECODED: "completed"}, "", "", state, "h")[0]
+def test_a_task_or_thread_that_left_the_list_can_be_reported_again():
+    for listed, statuses in ((rows(), {DECODED: "completed"}), (threads(), {THREAD: "completed"})):
+        _, state = wd.tick(listed, statuses, "", "", {}, "h")
+        _, state = wd.tick([], {}, "", "", state, "h")
+        assert wd.tick(listed, statuses, "", "", state, "h")[0]
 
 
 def test_parse_statuses_decodes_the_id():
@@ -149,6 +200,16 @@ def test_cli_tick_prints_news_once_then_nothing_new(tmp_path, monkeypatch, capsy
     wd.main(base + ["tick", "--status", f"{ENCODED}=completed"])
     assert capsys.readouterr().out.strip() == "NOTHING NEW"
     assert (tmp_path / "agents.state.json").exists()
+
+
+def test_cli_tick_reads_a_reported_thread_as_finished(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(wd, "queue_status", lambda: "")
+    monkeypatch.setattr(wd, "main_ci", lambda: "")
+    base = ["--dir", str(tmp_path)]
+    wd.main(base + ["add", THREAD, "-", "b"])
+    capsys.readouterr()
+    wd.main(base + ["tick", "--status", f"{THREAD}=completed", "--reported", THREAD])
+    assert capsys.readouterr().out.startswith("FINISHED b")
 
 
 def test_the_sh_helper_returns_empty_for_a_failing_command():
