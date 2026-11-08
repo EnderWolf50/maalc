@@ -3,11 +3,12 @@ shards with tests/shard_seconds.json.
 
     python tools/shard_seconds.py check <junit.xml>...   fails when the table no longer matches these reports, one per
                                                          shard: a file off by more than RATIO both as measured and at
-                                                         its shard's runner pace (#536)
+                                                         its shard's runner pace
     python tools/shard_seconds.py update --run <run id>  rewrites the table from the junit artifacts of that CI run and
                                                          of the EARLIER_RUNS before it whose agent shards all passed:
                                                          each file's median, or that run's own time when it is off from
-                                                         the median by more than RATIO both ways (#463)
+                                                         the median by more than RATIO both as measured and at its
+                                                         shard's runner pace
 """
 
 import argparse
@@ -24,13 +25,11 @@ ROOT = Path(__file__).resolve().parent.parent
 TABLE = ROOT / "tests" / "shard_seconds.json"
 # A file faster than this cannot unbalance a shard on its own; conftest counts an unlisted one 0.15 s a test.
 SLOW = 30
-# A file off by more than this factor, both as measured and at its shard's runner pace, changed, not the runner.
 RATIO = 2
-# A shard's runner pace is the median of its files' time over their table value, over the files of at least TIMED s in
-# the table (whole seconds round them by 10 % at most). It takes TIMED_FILES of them, so that one changed file does not
-# set the pace; with fewer the pace is the table's. CI's shards had 8-10 each on 2026-11-08 (#536).
-TIMED = 5
-TIMED_FILES = 3
+# Whole seconds round a file of PACE_MIN_SECONDS by 10 % at most; with PACE_MIN_FILES one changed file cannot set the
+# median.
+PACE_MIN_SECONDS = 5
+PACE_MIN_FILES = 3
 # CI runs before the one update names whose times the median takes too: one runner's speed is not the table's (#463).
 EARLIER_RUNS = 4
 # How many completed CI runs update looks back through for them: about four weeks; junit artifacts are kept 14 days.
@@ -48,15 +47,11 @@ def measured(reports):
 
 
 def pace(table, shard):
-    """How fast a shard's runner ran its files against table (#536): the median, not the total, so that one changed
-    file, however long, does not move it."""
-    ratios = [took / table[name] for name, took in shard.items() if table.get(name, 0) >= TIMED]
-    return statistics.median(ratios) if len(ratios) >= TIMED_FILES else 1
+    ratios = [took / table[name] for name, took in shard.items() if table.get(name, 0) >= PACE_MIN_SECONDS]
+    return statistics.median(ratios) if len(ratios) >= PACE_MIN_FILES else 1
 
 
-def explained(took, listed, runner_pace):
-    """Both ways, since most files follow the runner and a few that wait on timeouts do not (test_charge_enkephalin took
-    76 s on fast runners, 87 s on usual ones)."""
+def within_ratio(took, listed, runner_pace):
     return any(listed * p / RATIO <= took <= listed * p * RATIO for p in (1, runner_pace))
 
 
@@ -68,7 +63,7 @@ def stale(table, shard):
         if listed is None:
             if took >= SLOW:
                 problems.append(f"{name} took {took:.0f} s and is not in the table")
-        elif max(took, listed) >= SLOW and not explained(took, listed, runner_pace):
+        elif max(took, listed) >= SLOW and not within_ratio(took, listed, runner_pace):
             problems.append(f"{name} took {took:.0f} s, the table says {listed} (its shard's pace x{runner_pace:.2f})")
     return problems
 
@@ -122,10 +117,8 @@ def reports_of(run, folder):
 
 
 def median_table(shards, others):
-    """The table from a run's shards' seconds and earlier runs' (#463): each file's median, or the run's own time when
-    that is off from the median by more than RATIO both as measured and at its shard's runner pace (the file changed, not
-    the runner, #536). The pace is taken again from what is written until no file changes: check takes it from the
-    table, so the run passes the check."""
+    """check takes the pace from the table, so each shard's pace is taken again from what is written until no file
+    changes: the run passes the check."""
     table = {}
     for shard in shards:
         written = {name: round(statistics.median([took] + [other[name] for other in others if name in other]))
@@ -133,7 +126,7 @@ def median_table(shards, others):
         while True:
             runner_pace = pace(written, shard)
             changed = {name: round(took) for name, took in shard.items()
-                       if round(took) != written[name] and not explained(took, written[name], runner_pace)}
+                       if round(took) != written[name] and not within_ratio(took, written[name], runner_pace)}
             if not changed:
                 break
             written |= changed

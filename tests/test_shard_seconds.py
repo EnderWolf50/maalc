@@ -69,20 +69,18 @@ def test_fast_files_never_fail_the_check(tmp_path, table, monkeypatch):
 
 
 LISTED = [100, 80, 60, 50, 40]
-# A file's time on a usual runner, 0.7-1.4 times its table value: the table's medians come from runners of several paces.
-USUAL = [70, 68, 60, 60, 56]
+USUAL_OVER_LISTED = [0.7, 0.85, 1, 1.2, 1.4]
 
 
 def shard(prefix, pace):
-    """A shard of five files of USUAL seconds, run at pace times that, and their table entries."""
-    return ([(f"tests.test_{prefix}{i}", str(usual * pace)) for i, usual in enumerate(USUAL)],
+    return ([(f"tests.test_{prefix}{i}", str(listed * usual * pace))
+             for i, (listed, usual) in enumerate(zip(LISTED, USUAL_OVER_LISTED))],
             {f"test_{prefix}{i}.py": listed for i, listed in enumerate(LISTED)})
 
 
 @pytest.mark.parametrize("pace", [0.5, 2])
-def test_a_runner_at_half_or_double_the_tables_pace_fails_no_file(tmp_path, table, capsys, monkeypatch, pace):
-    # #536: run 42440944197's shard 3 ran about 0.66 of its usual time, test_shop_skill_screens 0.48, while shards 0-2
-    # ran theirs at 0.98-1.20: the pace is each shard's own runner's.
+def test_one_shard_on_a_runner_at_half_or_double_the_tables_pace_beside_usual_ones_fails_no_file(
+        tmp_path, table, capsys, monkeypatch, pace):
     monkeypatch.setattr(shard_seconds, "unmeasured", lambda seconds: [])
     (fast, fast_table), (usual_a, table_a), (usual_b, table_b) = shard("a", pace), shard("b", 1), shard("c", 1)
     table(fast_table | table_a | table_b)
@@ -93,7 +91,6 @@ def test_a_runner_at_half_or_double_the_tables_pace_fails_no_file(tmp_path, tabl
 @pytest.mark.parametrize("pace", [1, 0.5])
 def test_one_file_down_to_a_third_fails_alone_even_when_it_is_most_of_its_shard(tmp_path, table, capsys, monkeypatch,
                                                                                  pace):
-    # test_thread_luxcavation is about two thirds of its shard's time: the shard's total pace would follow it down.
     monkeypatch.setattr(shard_seconds, "unmeasured", lambda seconds: [])
     listed = {"test_thread_luxcavation.py": 216, "test_assemble_modules.py": 49, "test_live_evidence.py": 22,
               "test_pause_menus.py": 18, "test_live_giveup.py": 15}
@@ -105,8 +102,6 @@ def test_one_file_down_to_a_third_fails_alone_even_when_it_is_most_of_its_shard(
 
 
 def test_a_file_whose_time_ignores_the_runner_passes_too(tmp_path, table, capsys, monkeypatch):
-    # test_charge_enkephalin took 76 s on fast runners and 87 s on usual ones: on a runner at half pace it looks more than
-    # double off, but its time as measured matches the table.
     monkeypatch.setattr(shard_seconds, "unmeasured", lambda seconds: [])
     fast, listed = shard("a", 0.5)
     table(listed | {"test_charge_enkephalin.py": 77})
@@ -181,21 +176,18 @@ def test_a_file_off_by_more_than_double_from_the_median_takes_the_runs_own_time(
 
 
 def test_a_file_a_fast_runner_ran_at_under_half_its_median_keeps_the_median(table, monkeypatch):
-    # #536: run 42440944197's shard 3, on a fast runner, and the four runs before it. test_shop_skill_screens took 41 s
-    # against 85-94 s; writing 41 turned the next usual runner's 85 s red.
+    # Shard 3 of run 42440944197 and of the four runs before it (#536).
     table({})
-    before = {"test_shop_skill_screens": 85, "test_go_home": 102, "test_pass_task": 41, "test_shop": 34,
-              "test_frozen_home": 65}
-    fast = {"test_shop_skill_screens": 41, "test_go_home": 83, "test_pass_task": 23, "test_shop": 24,
-            "test_frozen_home": 55}
-    ci_runs(monkeypatch, {9: fast, **{run: before for run in (8, 7, 6, 5)}})
+    names = ["test_shop_skill_screens", "test_go_home", "test_pass_task", "test_shop", "test_frozen_home"]
+    seconds = {9: [41, 83, 23, 24, 55], 8: [86, 102, 40, 33, 65], 7: [85, 100, 41, 34, 65], 6: [85, 102, 41, 34, 65],
+               5: [94, 107, 44, 37, 67]}
+    ci_runs(monkeypatch, {run: dict(zip(names, times)) for run, times in seconds.items()})
     assert shard_seconds.update(9) == 0
     assert written()["test_shop_skill_screens.py"] == 85
 
 
-def test_the_table_update_writes_passes_the_check_of_its_own_run(tmp_path, table, monkeypatch, capsys):
-    # Three of five files got slower: 2.2, 5 and 6 times. Against the medians the shard's pace is 2.2, which would excuse
-    # test_go_home; written with the other two files' own times, the table puts the pace back at 1, and so does check.
+def test_the_table_update_writes_passes_its_own_runs_check_when_changed_files_pull_the_pace(tmp_path, table,
+                                                                                             monkeypatch, capsys):
     table({})
     took = {"test_gift_cells": 90, "test_shop": 100, "test_go_home": 220, "test_pass_task": 500, "test_frozen_home": 600}
     ci_runs(monkeypatch, {9: took, **{run: dict.fromkeys(took, 100) for run in (8, 7, 6, 5)}})
