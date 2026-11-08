@@ -16,6 +16,7 @@ from daily_child import GAME, bind, game_class, inside, live_frame, load, result
 from recovery import DEAD_TAPS, L3_FAILED_IN_A_ROW
 
 TITLE_TAP = (540, 300, 200, 120)
+GLITCH = 1.1  # s: the recording's longest glitch
 SCREENS = {"title": "Title.png", "connecting": "TitleConnecting.png", "loading": "Loading.png", "main": "MainWindow.png"}
 LIMIT = 40  # s: a scenario still going by then is stopped (a title tapped for ever)
 
@@ -37,20 +38,22 @@ def child():
         images["title_moved"] = live_frame(images["title"])
         images["glitch"] = glitched(images["title"])
 
-        def set(self, frozen=False, ignored=0, answer="connecting", answer_for=20, glitch=(), glitch_after_tap=0):
+        def set(self, frozen=False, ignored=0, answer="connecting", answer_for=20, glitch=0.0, glitch_after_tap=0.0,
+                screen="title"):
             """frozen: the title takes no tap and shows one picture until the game restarts; a live title's picture moves at
             every other screenshot. ignored: the taps the live title lets go by. answer: the screen a taken tap shows for
-            answer_for screenshots before the main window. glitch: the screenshots (counted from 1) that show the glitch;
-            glitch_after_tap: that many right after a taken tap, before its answer."""
-            self.screen, self.focus, self.frozen, self.ignored = "title", GAME, frozen, ignored
-            self.answer, self.answer_for, self.left, self.glitch, self.glitch_after_tap = answer, answer_for, 0, set(glitch), glitch_after_tap
+            answer_for screenshots before the main window. glitch: the seconds from the start that show the glitch;
+            glitch_after_tap: the seconds right after a taken tap, before its answer. screen: the one at the start."""
+            self.screen, self.focus, self.frozen, self.ignored = screen, GAME, frozen, ignored
+            self.answer, self.answer_for, self.left, self.glitch_after_tap = answer, answer_for, 0, glitch_after_tap
+            self.glitch_until = time.monotonic() + glitch
             self.clicks, self.keys, self.starts, self.stops, self.frames = [], [], 0, 0, 0
 
         def screencap(self):
             self.frames += 1
             if self.focus != GAME:
                 return self.images["black"]
-            if self.frames in self.glitch:
+            if time.monotonic() < self.glitch_until:
                 return self.images["glitch"]
             if self.screen in ("connecting", "loading"):
                 self.left -= 1
@@ -66,7 +69,7 @@ def child():
             if self.ignored:
                 self.ignored -= 1
                 return True
-            self.glitch |= set(range(self.frames + 1, self.frames + 1 + self.glitch_after_tap))
+            self.glitch_until = time.monotonic() + self.glitch_after_tap
             self.screen, self.left = self.answer, self.answer_for
             return True
 
@@ -89,8 +92,10 @@ def child():
     for scenario, (model, in_a_row) in {
         "connects": ({}, 0),
         "loads": ({"answer": "loading"}, 0),
-        "glitch": ({"glitch": (1, 2, 3)}, 0),
-        "glitch_after_tap": ({"glitch_after_tap": 3}, 0),
+        "glitch": ({"glitch": GLITCH}, 0),
+        "glitch_after_tap": ({"glitch_after_tap": GLITCH}, 0),
+        # a picture no node reads (the glitch frame), then the main window within HomeBack's wait: a page that comes late
+        "late_main": ({"screen": "main", "glitch": 0.5}, 0),
         "ignored_once": ({"ignored": 1}, 0),
         "frozen": ({"frozen": True}, 0),
         "frozen_restarts_used": ({"frozen": True}, L3_FAILED_IN_A_ROW),
@@ -142,9 +147,16 @@ def test_a_title_tap_that_goes_to_the_loading_screen_is_not_a_frozen_game():
 
 
 def test_the_titles_glitch_gets_no_back_key():
-    # #495: for about 1 s the glitch hides the title from every template, and GoHome pressed back on it.
+    # #495: for about 1 s (GLITCH, the recording's longest) the glitch hides the title from every template, and GoHome
+    # pressed back on it.
     o = run_child(__file__)["glitch"]
     assert o["succeeded"] and o["nodes"][-1] == "HomeReached" and o["keys"] == [] and o["title_taps"] == 1, json.dumps(o)
+
+
+def test_a_screen_go_home_knows_showing_during_the_back_keys_wait_gets_no_back_key():
+    # Review of #495's fix: the back key waited for the title only, then went to whatever had come in the meantime.
+    o = run_child(__file__)["late_main"]
+    assert o["succeeded"] and o["nodes"][-1] == "HomeReached" and o["keys"] == [] and o["clicks"] == [], json.dumps(o)
 
 
 def test_a_glitch_right_after_the_tap_is_not_the_title_leaving():

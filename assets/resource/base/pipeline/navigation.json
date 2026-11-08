@@ -61,7 +61,7 @@
     // a new timeout. Its taps went by with the picture still (NavTitle's lively): restart it.
     "HomeFrozen": {
         "recognition": "Custom",
-        "custom_recognition": "Frozen",
+        "custom_recognition": "StuckWaiting",
         "action": "Custom",
         "custom_action": "HomeFrozen"
     },
@@ -159,14 +159,13 @@
     },
     // A page with no tab bar (the entry page, Luxcavation): the back key goes up one page. The 2 s stay: nothing is known
     // to wait for, and a second back key while the page is still going can go past the main window (max_hit counts it).
-    // Not the title's glitch, which hides the title from every template for about 1 s (#495): it must stay unseen 1.5 s.
+    // Only on a screen GoHome still knows nothing of after 1.5 s (StaysUnknown): the title's glitch hides it from every
+    // template for about 1 s (#495), and the back key then went to the title.
     "HomeBack": {
         "recognition": "Custom",
-        "custom_recognition": "Unseen",
+        "custom_recognition": "StaysUnknown",
         "custom_recognition_param": {
-            "nodes": [
-                "NavTitle"
-            ],
+            "hub": "GoHome",
             "timeout": 1.5
         },
         "action": "Custom",

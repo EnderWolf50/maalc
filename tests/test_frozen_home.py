@@ -5,6 +5,8 @@ the game is restarted; and on a live main window, whose picture keeps moving, th
 
 import json
 import math
+import threading
+import time
 
 import numpy as np
 from daily_child import GAME, bind, game_class, inside, live_frame, load, result, run_child, screen
@@ -14,6 +16,7 @@ from test_pass_task import BANNER, MISSIONS_TAB, SCREENS as PASS_SCREENS, SEASON
 TITLE_TAP = (540, 300, 200, 120)
 SCREENS = {**PASS_SCREENS, "title": "Title.png"}
 HUB_TIMEOUT = 5000  # PassHub's 60 s, cut short: a pass page that never opens fails the task in 5 s
+LIMIT = 60  # s: a scenario still going by then is stopped (GoHome tapping a frozen title for ever, #506)
 
 
 def child():
@@ -24,11 +27,12 @@ def child():
         images = {**{name: screen(png) for name, png in SCREENS.items()}, "black": np.zeros((720, 1280, 3), np.uint8)}
         images["main_moved"] = live_frame(images["main"])
 
-        def set(self, frozen=False, live=False, ignored=0, ignored_after=0, refreezes=False):
+        def set(self, frozen=False, live=False, ignored=0, ignored_after=0, refreezes=False, screen="main"):
             """frozen: the main window takes no tap and shows the same picture until the game restarts. live: the main
             window's picture moves at every other screenshot. ignored: the banner taps the game lets go by before one opens
-            the pass page (math.inf: none does); ignored_after: the same, once the game restarted."""
-            self.screen, self.focus, self.frozen, self.live, self.ignored = "main", GAME, frozen, live, ignored
+            the pass page (math.inf: none does); ignored_after: the same, once the game restarted. screen: where the
+            task starts, the main window or the title (frozen there too)."""
+            self.screen, self.focus, self.frozen, self.live, self.ignored = screen, GAME, frozen, live, ignored
             self.ignored_after, self.refreezes = ignored_after, refreezes
             self.clicks, self.keys, self.swipes, self.starts, self.stops, self.frames = [], [], [], 0, 0, 0
             self.tapped_frozen = 0
@@ -95,6 +99,7 @@ def child():
         "frozen_restarts_used": ({"frozen": True}, actions.recovery.L3_FAILED_IN_A_ROW),
         "late": ({"live": True, "ignored": 1}, 0),
         "never": ({"live": True, "ignored": math.inf}, 0),
+        "title_frozen": ({"frozen": True, "screen": "title"}, 0),
     }.items():
         game.set(**model)
         actions.STUCK["restarts"] = actions.recovery.Restarts()
@@ -102,7 +107,12 @@ def child():
             actions.STUCK["restarts"].attempt("PassBanner")
         actions.ROOT.joinpath("logs").mkdir(exist_ok=True)
         stopped = len(list(actions.ROOT.joinpath("logs").rglob("agent.log")))
-        detail = tasker.post_task("ClaimPassMissions", {"PassHub": {"timeout": HUB_TIMEOUT}}).wait().get()
+        timer = threading.Timer(LIMIT, tasker.post_stop)
+        timer.start()
+        job = tasker.post_task("ClaimPassMissions", {"PassHub": {"timeout": HUB_TIMEOUT}}).wait()
+        while not (detail := job.get()).status.done:  # #461: post_stop's queue clear ends wait() before the task does
+            time.sleep(0.01)
+        timer.cancel()
         out[scenario] = {**result(detail, game, actions), "starts": game.starts, "stops": game.stops,
                          "tapped_frozen": game.tapped_frozen, "in_a_row": actions.STUCK["restarts"].in_a_row,
                          "stopped": len(list(actions.ROOT.joinpath("logs").rglob("agent.log"))) - stopped,
@@ -140,6 +150,14 @@ def test_a_main_window_frozen_again_after_each_restart_stops_after_two():
 def test_a_frozen_main_window_with_the_restarts_used_up_ends_the_task_through_the_stop_procedure():
     o = run_child(__file__)["frozen_restarts_used"]
     assert o["succeeded"] is False and (o["stops"], o["starts"]) == (0, 0) and o["stopped"] == 1, json.dumps(o)
+
+
+def test_a_task_started_on_a_frozen_title_restarts_the_game_and_is_done():
+    # #506: the task's first step, GoHome, tapped a title that took no tap for ever; the title is known on every look, so
+    # GoHome never timed out into its restart.
+    o = run_child(__file__)["title_frozen"]
+    assert (o["stops"], o["starts"]) == (1, 1), json.dumps(o)
+    assert o["succeeded"] and o["done"] == "pass missions: nothing to claim" and o["stopped"] == 0, json.dumps(o)
 
 
 def test_a_live_main_window_that_takes_the_banner_late_is_not_restarted():

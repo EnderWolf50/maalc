@@ -921,10 +921,10 @@ def restart_game(context, reason, kind=None):
     return True
 
 
-@AgentServer.custom_recognition("Frozen")
-class Frozen(CustomRecognition):
-    """GoHome's HomeFrozen: hits while a stuck waits, a game frozen on the title (tap_then's dead taps, #506). Not
-    StuckFlag: GoHome feeds no watchdog."""
+@AgentServer.custom_recognition("StuckWaiting")
+class StuckWaiting(CustomRecognition):
+    """GoHome's HomeFrozen: hits while a stuck waits for recovery. In GoHome only tap_then's dead taps on the title raise
+    one (#506). Not StuckFlag: GoHome feeds no watchdog."""
 
     def analyze(self, context: Context, argv: CustomRecognition.AnalyzeArg):
         return CustomRecognition.AnalyzeResult(box=(0, 0, 1, 1), detail={}) if STUCK["flag"] else None
@@ -935,20 +935,22 @@ class HomeFrozen(CustomAction):
     """GoHome on a game frozen on the title (#506): restart it (restart_game); GoHome goes on from the new title."""
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
-        reason = STUCK["flag"][2]
+        _, _, reason = STUCK["flag"]
         STUCK["flag"] = None
         return restart_game(context, reason)
 
 
-@AgentServer.custom_recognition("Unseen")
-class Unseen(CustomRecognition):
-    """Hits once none of the param's nodes ({"nodes": [...], "timeout": s}) shows on a screenshot for timeout s. GoHome's
-    back key (HomeBack) waits out the title's glitch this way: it warps the whole picture for about 1 s, and no template
-    there hits (#495; live 2026-11-08, 3 glitches of 0.9-1.1 s, NavTitle 0.51-0.61)."""
+@AgentServer.custom_recognition("StaysUnknown")
+class StaysUnknown(CustomRecognition):
+    """Hits once none of the hub's other screens (the nodes of its next but this one; param {"hub", "timeout": s}) shows
+    on a screenshot for timeout s. GoHome's back key (HomeBack) waits out a moment no template reads this way: the
+    title's glitch warps the whole picture for about 1 s (#495; live 2026-11-08, 3 glitches of 0.9-1.1 s, NavTitle
+    0.51-0.61). A screen that shows in the meantime is the hub's next pass, not the back key's."""
 
     def analyze(self, context: Context, argv: CustomRecognition.AnalyzeArg):
         p = json.loads(argv.custom_recognition_param)
-        if until(context, lambda im: any(seen(context, im, n) for n in p["nodes"]), timeout=p["timeout"]) is not None:
+        known = [n["name"] for n in context.get_node_data(p["hub"])["next"] if n["name"] != argv.node_name]
+        if until(context, lambda im: any(seen(context, im, n) for n in known), timeout=p["timeout"]) is not None:
             return None
         return CustomRecognition.AnalyzeResult(box=(0, 0, 1, 1), detail={})
 
