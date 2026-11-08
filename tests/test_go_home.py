@@ -81,25 +81,29 @@ def child():
     calls = {"go_home": actions.go_home, "finish": lambda context: actions.finish(context, "nothing left")}
     returned = {}
 
-    class Step(CustomAction):  # a daily task's action that runs GoHome itself; its param names the call
+    class RunsGoHome(CustomAction):
         def run(self, context, argv):
             returned["value"] = calls[json.loads(argv.custom_action_param)](context)
             return True
 
-    resource.register_custom_action("Step", Step())
-    actions.RUN["lux"] = {"name": "Thread Luxcavation", "mode": "daily"}  # what LuxStart leaves for LuxHome to read
+    resource.register_custom_action("RunsGoHome", RunsGoHome())
+    actions.RUN["lux"] = {"name": "Thread Luxcavation", "mode": "daily"}
+    actions.ROOT.joinpath("logs").mkdir(exist_ok=True)
     for scenario, (start, entry, call) in {
-        "go_home_main": ("main", "Step", "go_home"), "go_home_battle": ("battle", "Step", "go_home"),
-        "finish_battle": ("battle", "Step", "finish"), "lux_home_battle": ("battle", "ThreadHome", None),
+        "go_home_main": ("main", "RunsGoHome", "go_home"), "go_home_battle": ("battle", "RunsGoHome", "go_home"),
+        "finish_battle": ("battle", "RunsGoHome", "finish"), "lux_home_battle": ("battle", "ThreadHome", None),
     }.items():
         game.set(start)
         returned.clear()
         actions.LOG.clear()
-        override = {"Step": {"action": "Custom", "custom_action": "Step", "custom_action_param": call}, "ThreadHome": {"next": []}}
+        stops = len(list(actions.ROOT.joinpath("logs").rglob("agent.log")))
+        override = {"RunsGoHome": {"action": "Custom", "custom_action": "RunsGoHome", "custom_action_param": call},
+                    "ThreadHome": {"next": []}}
         job = tasker.post_task(entry, override).wait()
         while not (detail := job.get()).status.done:  # #461: post_stop's queue clear ends wait() before the task does
             time.sleep(0.01)
         out[scenario] = {**result(detail, game, actions), "returned": returned.get("value"), "log": list(actions.LOG),
+                         "stopped": len(list(actions.ROOT.joinpath("logs").rglob("agent.log"))) - stops,
                          "halted": actions.STUCK["halted"]}
         actions.STUCK["halted"] = None
     actions.RUN.clear()
@@ -216,28 +220,22 @@ def test_go_home_in_a_battle_ends_the_task_list_without_a_back_key():
     assert o["stopped"] == 1 and o["halted"].startswith("HomeInBattle: "), json.dumps(o)
 
 
-def stops(o):
-    """The stop procedures a scenario ran: its log lines (`HH:MM:SS message`) that start with stop."""
-    return sum(line.split(" ", 1)[1].startswith("stop: ") for line in o["log"])
-
-
 def test_a_task_step_that_runs_go_home_hears_whether_the_main_window_was_reached():
     # #514: MaaFramework ends a sub-task that stopped its tasker as succeeded, so GoHome halted in a battle read as home.
     o = run_child(__file__)["go_home_main"]
-    assert o["returned"] is True and o["keys"] == [] and o["clicks"] == [] and stops(o) == 0, json.dumps(o)
+    assert o["returned"] is True and o["keys"] == [] and o["clicks"] == [] and o["stopped"] == 0, json.dumps(o)
     o = run_child(__file__)["go_home_battle"]
-    assert o["returned"] is False and o["halted"].startswith("HomeInBattle: ") and stops(o) == 1, json.dumps(o)
+    assert o["returned"] is False and o["halted"].startswith("HomeInBattle: ") and o["stopped"] == 1, json.dumps(o)
 
 
 def test_finish_on_a_battle_records_no_done_after_the_stop():
     o = run_child(__file__)["finish_battle"]
-    assert o["returned"] is False and o["done"] is None and stops(o) == 1, json.dumps(o)
+    assert o["returned"] is False and o["done"] is None and o["stopped"] == 1, json.dumps(o)
 
 
 def test_lux_home_on_a_battle_stops_once_and_reads_no_modules():
-    # Before #514 LuxHome went on to read the Modules on the battle, failed, and ran the stop procedure a second time.
     o = run_child(__file__)["lux_home_battle"]
-    assert o["nodes"] == ["ThreadHome"] and stops(o) == 1 and o["halted"].startswith("HomeInBattle: "), json.dumps(o)
+    assert o["nodes"] == ["ThreadHome"] and o["stopped"] == 1 and o["halted"].startswith("HomeInBattle: "), json.dumps(o)
     assert not any("Modules" in line for line in o["log"]), json.dumps(o)
 
 
