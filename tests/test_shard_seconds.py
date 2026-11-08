@@ -110,7 +110,7 @@ def test_a_file_whose_time_ignores_the_runner_passes_too(tmp_path, table, capsys
     monkeypatch.setattr(shard_seconds, "unmeasured", lambda seconds: [])
     fast, listed = shard("a", 0.5)
     table(listed | {"test_charge_enkephalin.py": 77})
-    xml = report(tmp_path, "a.xml", fast + [("tests.test_charge_enkephalin", "85")])
+    xml = report(tmp_path, "a.xml", fast + [("tests.test_charge_enkephalin", "90")])
     assert shard_seconds.check([xml]) == 0, capsys.readouterr().out
 
 
@@ -191,6 +191,19 @@ def test_a_file_a_fast_runner_ran_at_under_half_its_median_keeps_the_median(tabl
     ci_runs(monkeypatch, {9: fast, **{run: before for run in (8, 7, 6, 5)}})
     assert shard_seconds.update(9) == 0
     assert written()["test_shop_skill_screens.py"] == 85
+
+
+def test_the_table_update_writes_passes_the_check_of_its_own_run(tmp_path, table, monkeypatch, capsys):
+    # Three of five files got slower: 2.2, 5 and 6 times. Against the medians the shard's pace is 2.2, which would excuse
+    # test_go_home; written with the other two files' own times, the table puts the pace back at 1, and so does check.
+    table({})
+    took = {"test_gift_cells": 90, "test_shop": 100, "test_go_home": 220, "test_pass_task": 500, "test_frozen_home": 600}
+    ci_runs(monkeypatch, {9: took, **{run: dict.fromkeys(took, 100) for run in (8, 7, 6, 5)}})
+    assert shard_seconds.update(9) == 0
+    monkeypatch.setattr(shard_seconds, "unmeasured", lambda seconds: [])
+    xml = report(tmp_path, "a.xml", [(f"tests.{name}", str(seconds)) for name, seconds in took.items()])
+    assert shard_seconds.check([xml]) == 0, capsys.readouterr().out
+    assert written()["test_go_home.py"] == 220
 
 
 def test_an_earlier_run_whose_agent_shards_did_not_all_pass_or_whose_junit_expired_is_skipped(table, monkeypatch, capsys):

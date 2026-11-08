@@ -2,11 +2,12 @@
 shards with tests/shard_seconds.json.
 
     python tools/shard_seconds.py check <junit.xml>...   fails when the table no longer matches these reports, one per
-                                                         shard, as measured or at that shard's runner pace (#536)
+                                                         shard: a file off by more than RATIO both as measured and at
+                                                         its shard's runner pace (#536)
     python tools/shard_seconds.py update --run <run id>  rewrites the table from the junit artifacts of that CI run and
                                                          of the EARLIER_RUNS before it whose agent shards all passed:
-                                                         each file's median, or that run's own time when the median
-                                                         matches it neither way (#463)
+                                                         each file's median, or that run's own time when it is off from
+                                                         the median by more than RATIO both ways (#463)
 """
 
 import argparse
@@ -53,22 +54,22 @@ def pace(table, shard):
     return statistics.median(ratios) if len(ratios) >= TIMED_FILES else 1
 
 
-def explained(took, listed, runner):
-    """took is within RATIO of listed as measured or at the runner's pace: most files follow the runner, a few that wait
-    on timeouts do not (test_charge_enkephalin took 76 s on fast runners, 87 s on usual ones)."""
-    return any(listed * p / RATIO <= took <= listed * p * RATIO for p in (1, runner))
+def explained(took, listed, runner_pace):
+    """Both ways, since most files follow the runner and a few that wait on timeouts do not (test_charge_enkephalin took
+    76 s on fast runners, 87 s on usual ones)."""
+    return any(listed * p / RATIO <= took <= listed * p * RATIO for p in (1, runner_pace))
 
 
 def stale(table, shard):
     problems = []
-    runner = pace(table, shard)
+    runner_pace = pace(table, shard)
     for name, took in sorted(shard.items()):
         listed = table.get(name)
         if listed is None:
             if took >= SLOW:
                 problems.append(f"{name} took {took:.0f} s and is not in the table")
-        elif max(took, listed) >= SLOW and not explained(took, listed, runner):
-            problems.append(f"{name} took {took:.0f} s, the table says {listed}, on a runner at x{runner:.2f} the table")
+        elif max(took, listed) >= SLOW and not explained(took, listed, runner_pace):
+            problems.append(f"{name} took {took:.0f} s, the table says {listed} (its shard's pace x{runner_pace:.2f})")
     return problems
 
 
@@ -123,14 +124,20 @@ def reports_of(run, folder):
 def median_table(shards, others):
     """The table from a run's shards' seconds and earlier runs' (#463): each file's median, or the run's own time when
     that is off from the median by more than RATIO both as measured and at its shard's runner pace (the file changed, not
-    the runner, #536)."""
+    the runner, #536). The pace is taken again from what is written until no file changes: check takes it from the
+    table, so the run passes the check."""
     table = {}
     for shard in shards:
-        medians = {name: round(statistics.median([took] + [other[name] for other in others if name in other]))
+        written = {name: round(statistics.median([took] + [other[name] for other in others if name in other]))
                    for name, took in shard.items()}
-        runner = pace(medians, shard)
-        for name, took in shard.items():
-            table[name] = medians[name] if explained(took, medians[name], runner) else round(took)
+        while True:
+            runner_pace = pace(written, shard)
+            changed = {name: round(took) for name, took in shard.items()
+                       if round(took) != written[name] and not explained(took, written[name], runner_pace)}
+            if not changed:
+                break
+            written |= changed
+        table |= written
     return dict(sorted(table.items()))
 
 
