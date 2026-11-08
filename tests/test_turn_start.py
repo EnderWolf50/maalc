@@ -80,11 +80,16 @@ def hold_turn(s, looks):
     return [hit(s, "BattlePause"), *enter(s, "HoldTurn", "BattlePause"), *held, leave(end)], end
 
 
+def formation(s):
+    """Formation from s, then the battle's Loading."""
+    return [*enter(s, "Formation", "Formation"), leave(s + 1), hit(s + 2, "Loading")]
+
+
 def battle():
     """Formation, Loading, then turn 1 (still() took 3 screenshots); turn 2 after the hold of turn 1 saw BattleTurn;
     turn 3 after a HoldTurn (turn 2's hold timed out on BattlePause); turn 3 again, a guard turn, after a hold that
     saw neither; a still() that timed out (PlayTurn hands back); a new battle's turn 1."""
-    lines = [*enter(1, "Formation", "Formation"), leave(2), hit(3, "Loading"), hit(5, "BattleHUD")]
+    lines = [*formation(1), hit(5, "BattleHUD")]
     one, end = play_turn(10, "1", caps=3)
     two, end = play_turn(end + 0.27, "2", looks=[("BattlePause", True)] * 3)
     held, end = hold_turn(end + 0.1, [("BattlePause", True), ("BattlePause", False), ("BattleTurn", True)])
@@ -147,10 +152,8 @@ def process_start(s):
 
 def test_a_bot_stopped_inside_an_action_does_not_hide_the_next_process_logging_to_the_same_file():
     # live 2026-11-08: the bot was stopped inside RouteMap and started again, MaaFramework logging on in the same file
-    lines = [*enter(1, "Formation", "Formation"), leave(2), hit(3, "Loading")]
     one, end = play_turn(10, "1")
-    lines += one + enter(end + 1, "RouteMap", "MirrorMap")
-    lines += [process_start(end + 30), *enter(end + 31, "Formation", "Formation"), leave(end + 32), hit(end + 33, "Loading")]
+    lines = formation(1) + one + enter(end + 1, "RouteMap", "MirrorMap") + [process_start(end + 30), *formation(end + 31)]
     again, _ = play_turn(end + 40, "1")
     found, left, _ = turns([lines + again])
     assert [(t.number, t.before, t.again) for t in found] == [("1", "Formation", False), ("1", "Formation", False)]
@@ -161,8 +164,7 @@ def test_a_bot_stopped_inside_an_action_does_not_hide_the_next_process_logging_t
 def test_a_turn_its_process_stopped_in_is_left_out():
     one, _ = play_turn(10, "1")
     cut = next(i for i, x in enumerate(one) if "post_click" in x)  # before its first tap
-    lines = [*enter(1, "Formation", "Formation"), leave(2), hit(3, "Loading"), *one[:cut], process_start(20)]
-    lines += [*enter(21, "Formation", "Formation"), leave(22), hit(23, "Loading")]
+    lines = formation(1) + one[:cut] + [process_start(20), *formation(21)]
     two, _ = play_turn(30, "1")
     found, left, _ = turns([lines + two])
     assert left == {"log or process ended in it": 1}

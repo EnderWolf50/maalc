@@ -201,13 +201,13 @@ def turns(logs):
     for lines in logs:
         last["skipped"] = 0
         evs = events(after(lines, last))
-        while process(evs, done, out):
+        while read_process(evs, done, out):
             pass
         skipped.append(last["skipped"])
     return done, out, skipped
 
 
-def process(evs, done, out):
+def read_process(evs, done, out):
     """Reads evs, the events of a log, up to its next Start or its end, adding the complete turns to done and the
     left-out ones to out. True when it stopped on a Start."""
     hit = action = prior = cur = prev = battle = None
