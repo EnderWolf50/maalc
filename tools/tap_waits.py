@@ -9,10 +9,11 @@ A **tap** is a `post_click` inside the `CustomAction::run` of one of `--actions`
 **look** is the action's next controller call (screencap, click, swipe, touch) or the action's end: where the bot looked
 again, so look minus tap is the wait (a `tap(wait=)` shows as its seconds and about 0.05 s). A wait that polls
 (`tap_then`: a screenshot every 0.2 s until the page changes) then measures about 0.05 s every time; `--until next-tap`
-skips the screenshots, so the look is the action's next click, swipe or touch, or its end: where the bot went on, and
-`settled` is read against the screen it went on from (#567). The video is aligned with
-the log as `tools/video_align.py` aligns it, with the same `--started`, `--node` and fitting options. Every frame from
-0.5 s before a tap to its look is scored with the bot's own `recovery.thumb` (32x18, one block per 40x40 pixels):
+skips the screenshots, so the look is the action's next controller call that is no screenshot (a click, swipe, touch,
+key or shell command) or its end: where the bot went on, and `settled` is read against the screen it went on from
+(#567). The video is aligned with the log as `tools/video_align.py` aligns it, with the same `--started`, `--node` and
+fitting options. Every frame from 0.5 s before a tap to its look is scored with the bot's own `recovery.thumb` (32x18,
+one block per 40x40 pixels):
 
 - **moved**: the first frame after the tap with any block more than 8 levels off the last frame before it, the test of
   `actions.moved`: the game took the tap. Empty when no frame moved.
@@ -46,7 +47,6 @@ import recovery  # noqa: E402
 ENTER = re.compile(r"CustomAction::run\] \[context\.task_id\(\)=\d+\] \[node_name=(\w+)\].*\[param\.name=(\w+)\].*\| enter")
 LEAVE = re.compile(r"CustomAction::run\] \[node_name=\w+\] \[param\.name=\w+\].*\[ret=")
 CALL = re.compile(r"handle_controller_post_\w+\] \[req=")
-# --until: the controller calls that end a tap's wait, besides the action's end.
 UNTIL = {"next-call": CALL, "next-tap": re.compile(r"handle_controller_post_(?!screencap)\w+\] \[req=")}
 CLICK = re.compile(r'handle_controller_post_click\] \[req=\{.*?"x":(\d+),"y":(\d+)')
 BEFORE = 0.5  # s of video looked at before a tap
@@ -61,12 +61,12 @@ class Tap(NamedTuple):
     node: str
     x: int
     y: int
-    look: float  # log time of the action's next controller call, or of its end
+    look: float  # log time of the action's next controller call (--until next-tap: no screenshot), or of its end
 
 
 def taps(lines, actions, until="next-call") -> list[Tap]:
     """Every click of `actions` in lines (maafw.log), with its look: the action's next call of UNTIL[until], or its end."""
-    looks, found, stack, open_tap = UNTIL[until], [], [], None
+    ends_wait, found, stack, open_tap = UNTIL[until], [], [], None
     for line in lines:
         if "CustomAction::run]" not in line and "handle_controller_post_" not in line:
             continue
@@ -77,7 +77,7 @@ def taps(lines, actions, until="next-call") -> list[Tap]:
             stack.append((e[1], e[2]))
             continue
         ends = bool(LEAVE.search(line))
-        if not ends and not (stack and looks.search(line)):
+        if not ends and not (stack and ends_wait.search(line)):
             continue
         if open_tap is not None:
             found.append(open_tap._replace(look=t))
