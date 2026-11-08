@@ -12,6 +12,18 @@ def test_the_main_window_popups_click_their_close_button_only():
         assert node.get("custom_action") == "DismissShot" and re.search(clicked, button) and not re.search(clicked, "Claim All")
 
 
+def test_connecting_is_looked_at_again_at_the_pace_of_the_hub_that_saw_it():
+    # #258: CONNECTING has nothing to press; each hit slept 1.2 s (pre 200 ms, post 1000 ms), so the screen after it was
+    # seen up to 1.2 s late (live logs: 1.27-2.42 s from the last hit to the next screen, 266 spans). A hit skips the
+    # hub's rate_limit (Loading, 0 / 0 ms, hit again every 0.15-0.32 s on 2026-10-29), so 0 would shoot the screen as
+    # fast as a pass runs: the post_delay is the hub's own pace instead.
+    nodes = load_nodes()
+    connecting = nodes["Connecting"]
+    hubs = {n: d.get("rate_limit") for n, d in nodes.items() if any(x.endswith("]Connecting") or x == "Connecting" for x in d.get("next", []))}
+    assert len(hubs) >= 7 and connecting.get("pre_delay") == 0
+    assert set(hubs.values()) == {connecting["post_delay"]}, hubs
+
+
 def test_the_help_pager_is_looked_at_before_the_entry_page_under_it():
     hub = load_nodes()["MirrorHub"]["next"]
     assert hub.index("[JumpBack]HelpPager") < hub.index("[JumpBack]HubText")

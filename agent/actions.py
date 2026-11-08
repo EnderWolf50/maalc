@@ -160,6 +160,12 @@ def tap_then(context, x, y, done, timeout=2.0):
     return image
 
 
+def log_change(node, image, began):
+    """Log how long the screen after a node's tap or key took to come, from before it (image: until()'s, None when it
+    never did); a live run reads each wait from these lines (#254)."""
+    log(f"{node}: {'screen changed' if image is not None else 'no change'} after {time.monotonic() - began:.1f} s")
+
+
 def tap_moved(context, x, y, timeout=1.0):
     """Tap, then until() the screen moves: that screen, or None after timeout s (nothing took the tap)."""
     before = screen(context)
@@ -1321,12 +1327,15 @@ def popup_button(detail):
 
 @AgentServer.custom_action("DismissShot")
 class DismissShot(CustomAction):
-    """Keep the screen in logs/dismissed/ (run.keep_dismissed_screens), then close it (#244): the back key when the
-    param is "back", else a tap on the recognised box. File name: time and node, so what the bot closed can be told later.
+    """Keep the screen in logs/dismissed/ (run.keep_dismissed_screens), then close it (#244): the back key with
+    {"back": true}, else a tap on the recognised box. File name: time and node, so what the bot closed can be told later.
     RetryPopup: one screen per DISMISSED_GAP, or a dropped link fills the folder with one popup.
+    "until": a node that hits once the popup is gone (the main window's lit tab under the Mailbox); every 0.2 s, at
+    most "timeout" s, until it hits and the popup's own node misses, instead of a post_delay (#258).
     """
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
+        p = json.loads(argv.custom_action_param or "null") or {}  # "null" when the node sets none
         now = time.monotonic()
         gap = DISMISSED_GAP if argv.node_name in GAPPED else 0
         keep = allowed("keep_dismissed_screens") and now - DISMISSED_AT.get(argv.node_name, -gap) >= gap
@@ -1343,11 +1352,16 @@ class DismissShot(CustomAction):
                 log(f"{argv.node_name}: screen not saved: {e}")
         if popup:  # what was closed, e.g. the previous session's "Please claim your rewards" (#382)
             log(f"popup: {text(context, image, DIALOG_TEXT)!r}: pressed {popup_button(argv.reco_detail)!r}")
-        if json.loads(argv.custom_action_param or "null") == "back":
+        began = time.monotonic() if "until" in p else None
+        if p.get("back"):
             context.tasker.controller.post_click_key(BACK_KEY).wait()
         else:
             x, y, w, h = argv.box
             context.tasker.controller.post_click(x + w // 2, y + h // 2).wait()
+        if "until" in p:
+            def closed(im):
+                return seen(context, im, p["until"]) is not None and seen(context, im, argv.node_name) is None
+            log_change(argv.node_name, until(context, closed, timeout=p["timeout"]), began)
         return True
 
 
@@ -1458,8 +1472,7 @@ class TapUntil(CustomAction):
         if p.get("left"):
             pages.append(lambda im: seen(context, im, argv.node_name) is None)
         began = time.monotonic()
-        changed = tap_then(context, x + w // 2, y + h // 2, lambda im: any(page(im) for page in pages), timeout=p.get("timeout", 3))
-        log(f"{argv.node_name}: {'screen changed' if changed is not None else 'no change'} after {time.monotonic() - began:.1f} s")
+        log_change(argv.node_name, tap_then(context, x + w // 2, y + h // 2, lambda im: any(page(im) for page in pages), timeout=p.get("timeout", 3)), began)
         return True
 
 
