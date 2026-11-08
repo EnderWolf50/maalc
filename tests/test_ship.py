@@ -12,6 +12,8 @@ import ship
 
 HEAD = "a" * 40
 MERGE = "b" * 40
+MAIN = "d" * 40
+MAIN_REF = "repos/{owner}/{repo}/git/ref/heads/main"
 
 
 @pytest.fixture(autouse=True)
@@ -50,17 +52,23 @@ class Fake:
         return [c for c in self.calls if c[:len(prefix)] == list(prefix)]
 
 
-def ok_routes(queue):
+def runs(states):
+    return [(0, json.dumps([{"status": s, "conclusion": c, "url": "u"}])) for s, c in states]
+
+
+def ok_routes(queue, main_head=(("completed", "success"),)):
     return {"gh pr merge": (0, ""), "gh pr edit": (0, ""), "gh api": (0, ""),
+            f"gh api {MAIN_REF}": (0, json.dumps({"object": {"sha": MAIN}})),
+            f"gh run list --workflow ci --branch main --commit {MAIN}": runs(main_head),
             f"{ship.sys.executable} tools/live/queue.py status": (0, queue),
             "uv run python tools/after_land.py": (0, "after_land done")}
 
 
-def land_fake(pr=None, stacked=(), main_ci=(("completed", "success"),), queue="emulator:\n  free\n", **extra):
-    runs = [(0, json.dumps([{"status": s, "conclusion": c, "url": "u"}])) for s, c in main_ci]
-    return Fake(**{**ok_routes(queue), "gh pr view 7": [(0, json.dumps(pr or info())),
-                                                        (0, json.dumps({"mergeCommit": {"oid": MERGE}}))],
-                   "gh pr list": (0, json.dumps(list(stacked))), "gh run list": runs, **extra})
+def land_fake(pr=None, stacked=(), main_ci=(("completed", "success"),), queue="emulator:\n  free\n",
+              main_head=(("completed", "success"),), **extra):
+    return Fake(**{**ok_routes(queue, main_head), "gh pr view 7": [(0, json.dumps(pr or info())),
+                                                                   (0, json.dumps({"mergeCommit": {"oid": MERGE}}))],
+                   "gh pr list": (0, json.dumps(list(stacked))), "gh run list": runs(main_ci), **extra})
 
 
 def land(fake, go=True, prs=(7,)):
@@ -91,9 +99,8 @@ def batch_fake(*prs, stacked=None, main_ci=None, queue="emulator:\n  free\n"):
         n = p["number"]
         routes[f"gh pr view {n}"] = [(0, json.dumps(p)), (0, json.dumps({"mergeCommit": {"oid": merge_of(n)}}))]
         routes[f"gh pr list --base {p['headRefName']}"] = (0, json.dumps((stacked or {}).get(n, [])))
-        runs = (main_ci or {}).get(n, [("completed", "success")])
-        routes[f"gh run list --workflow ci --branch main --commit {merge_of(n)}"] = [
-            (0, json.dumps([{"status": s, "conclusion": c, "url": "u"}])) for s, c in runs]
+        routes[f"gh run list --workflow ci --branch main --commit {merge_of(n)}"] = runs(
+            (main_ci or {}).get(n, [("completed", "success")]))
     return GitHub(**routes)
 
 
@@ -310,15 +317,36 @@ def test_land_retargets_stacked_prs_before_the_branch_is_deleted():
 
 def test_land_keeps_the_branch_of_a_fork():
     fake = land_fake(pr=info(isCrossRepository=True))
-    land(fake)
-    assert not fake.ran("gh", "api")
+    assert land(fake) == 0
+    assert fake.ran("gh", "pr", "merge") and not fake.ran("gh", "api", "-X", "DELETE")
 
 
 def test_land_waits_until_the_main_run_finishes():
     fake = land_fake(main_ci=[("queued", None), ("in_progress", None), ("completed", "success")])
     assert land(fake) == 0
-    assert len(fake.ran("gh", "run", "list")) == 3
+    assert len(fake.ran("gh", "run", "list", "--workflow", "ci", "--branch", "main", "--commit", MERGE)) == 3
     assert fake.ran("uv", "run", "python", "tools/after_land.py")
+
+
+def test_land_refuses_to_merge_onto_a_red_main_head(capsys):
+    fake = land_fake(main_head=[("completed", "failure")])
+    assert land(fake) == 1
+    assert not fake.ran("gh", "pr", "merge")
+    err = capsys.readouterr().err
+    assert MAIN[:10] in err and "failure" in err and "--onto-red" in err
+
+
+def test_land_waits_for_a_pending_main_head_then_merges():
+    fake = land_fake(main_head=[("in_progress", None), ("completed", "success")])
+    assert land(fake) == 0
+    head = ("gh", "run", "list", "--workflow", "ci", "--branch", "main", "--commit", MAIN)
+    assert len(fake.ran(*head)) == 2 and last(fake, *head) < first(fake, "gh", "pr", "merge")
+
+
+def test_land_onto_red_merges_onto_a_red_main_head():
+    fake = land_fake(main_head=[("completed", "failure")])
+    assert ship.main(["land", "7", "--go", "--onto-red"], runner=fake) == 0
+    assert fake.ran("gh", "pr", "merge", "7")
 
 
 def test_land_exits_non_zero_on_a_red_main_and_skips_after_land(capsys):
@@ -339,6 +367,7 @@ def test_land_into_a_stacked_base_does_not_wait_for_a_main_run(capsys):
     fake = land_fake(pr=info(baseRefName="feat/base"))
     assert land(fake) == 0
     assert not fake.ran("gh", "run", "list") and not fake.ran("uv", "run", "python", "tools/after_land.py")
+    assert not fake.ran("gh", "api", MAIN_REF)
     assert "feat/base" in capsys.readouterr().out
 
 
