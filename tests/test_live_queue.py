@@ -72,6 +72,19 @@ def test_a_first_ticket_still_goes_behind_the_first_ones_when_one_of_them_leaves
         "holder.ticket", "daily1.ticket", "daily2.ticket", "waiting.ticket"]
 
 
+def test_turn_names_only_the_tickets_ahead_still_there_when_it_says_it_waits(tmp_path):
+    left = ticket(tmp_path, "1000000000000000001", "holder", 111)
+    ahead = ticket(tmp_path, "1000000000000000002", "next", 222)
+    said = []
+
+    def on_wait(calls):
+        said.append(calls)
+        ahead.unlink()
+
+    with lq.turn(tmp_path, "me", ["hold"], is_alive=ends_on_check(111, left), sleep=lambda s: None, on_wait=on_wait):
+        assert said == [[(str(os.getpid()), "hold")]]
+
+
 def test_run_waits_for_the_ticket_ahead_then_leaves_no_ticket(tmp_path):
     ahead = tmp_path / f"1-{os.getpid()}-ahead.ticket"  # a live holder that arrived first
     ahead.write_text("x")
