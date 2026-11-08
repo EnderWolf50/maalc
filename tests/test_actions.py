@@ -185,7 +185,7 @@ def test_too_few_alive_forfeits_the_run_like_used_up_wipe_retries(context, monke
     # #137: fewer than K alive goes the way of after_retries; forfeit backs out to the map, RouteMap forfeits there.
     result, stops, taps = few_alive(context, monkeypatch, "forfeit", 5)
     assert result is True and stops == []
-    assert actions.RUN["forfeit"] is True
+    assert actions.RUN["forfeit"]
     assert taps == [actions.FORMATION_BACK]
 
 
