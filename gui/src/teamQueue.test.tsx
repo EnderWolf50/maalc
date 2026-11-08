@@ -112,6 +112,20 @@ describe("in the editor", () => {
     expect(saved.teams.map((t) => t.name)).toEqual(["Tb", "Tc", "Ta!"]);
   });
 
+  test("a poll and a save that read the Agent's write together save the Agent's order", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await waitFor(() => expect(nameBox()).toHaveValue("Ta"));
+    await user.type(nameBox(), "!");
+    agentClaims("a");
+    act(() => { // both syncs read the same file before React renders what the first one took
+      window.dispatchEvent(new Event("focus"));
+      screen.getByRole("button", { name: zh.save }).click();
+    });
+    await waitFor(() => expect(file.saved).toHaveLength(1));
+    expect(JSON.parse(file.saved[0]).teams.map((t: { name: string }) => t.name)).toEqual(["Tb", "Tc", "Ta!"]);
+  });
+
   test("a save the Agent's write overtakes reads the file again and keeps that order too", async () => {
     const user = userEvent.setup();
     render(<App />);

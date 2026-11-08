@@ -54,6 +54,7 @@ export default function App() {
       return draft;
     }
     const next = rebase(base ? JSON.parse(base) : newSettings(), draft, data); // no base: a new file, not saved yet
+    latest.current = { s: next, savedText: toText(data) }; // now, not at the render: a save's sync may run before it
     setS(next);
     setSavedText(toText(data));
     setStatus("diskChanged");
@@ -102,7 +103,7 @@ export default function App() {
       <main className="load-error">
         <p>{t("loadError")}</p>
         <pre>{loadError}</pre>
-        <button type="button" onClick={() => { setLoadError(""); setS(newSettings()); }}>{t("newFile")}</button>
+        <button type="button" onClick={() => { setLoadError(""); setS(newSettings()); setSavedText(""); }}>{t("newFile")}</button>
       </main>
     );
   }
@@ -135,6 +136,7 @@ export default function App() {
           return setStatus("saveConflict");
         }
         disk.current = written;
+        latest.current = { s: current, savedText: written };
         setSavedText(written);
         return setStatus("saved");
       }
