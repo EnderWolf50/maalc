@@ -2194,6 +2194,8 @@ class PickThemePack(CustomAction):
                 log(f"floor {floor}: no free refresh left")
                 break
             prev = titles
+            # A fixed 3 s (#258): the new hand swings in and stood still 2.75-2.97 s after the tap (6 refreshes on the
+            # 2026-10-29 and 2026-11-08 recordings, tools/tap_waits.py), so the still() above would read it at most 0.3 s sooner.
             tap(context, 1083, 47, wait=3)
         x = cards[i][0]
         log(f"floor {floor}: pull {ranked[i][0]!r} ({ranked[i][1]}{'' if meets else ', below the threshold'})")
