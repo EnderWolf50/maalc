@@ -12,6 +12,8 @@
 emulator (see the maalc-live-test skill). A run takes one ticket, waits until it is first,
 runs the command and leaves the queue, so a chain of runs interleaves with other tasks' runs.
 The tickets of dead processes are dropped. A `run` leaves `<name>.result` (exit code, `--log`) when its command ends.
+A run whose ticket is removed while it waits (a cleared queue folder) does not start its command: it says so, leaves
+exit 1 as its result, and has to be queued again.
 `run --first` is for the daily task, which a 05:00 game reset ends (#465): its ticket goes right behind the one that
 holds the resource, ahead of every waiting one, and `status` marks it FIRST. The holder's run is not cut short; a
 live-test hold that spans several bot runs ends before its next one (the maalc-live-test skill). With no holder it
@@ -154,20 +156,26 @@ def place(qdir: Path, name: str, cmd: list[str], first: bool, is_alive=alive) ->
         me.unlink(missing_ok=True)
 
 
+class TicketGone(SystemExit):
+    """The ticket of a waiting turn() was removed (#582). Uncaught, it ends the process with exit 1 and its message."""
+
+
 @contextmanager
 def turn(qdir: Path, name: str, cmd: list[str], first: bool = False, is_alive=alive, poll: float = 5.0,
          sleep=time.sleep, on_wait=lambda ahead: None):
     """Hold this process's ticket in `qdir` from when it is first until the block ends. When it has to wait, `on_wait`
     is called once with (pid, command) of each ticket ahead of it that is still there; when none is, it waits a poll
-    and looks again."""
+    and looks again. When its own ticket is removed while it waits, it raises TicketGone and the block does not run."""
     qdir.mkdir(parents=True, exist_ok=True)
     me = place(qdir, ticket_name(name), cmd, first, is_alive)
     try:
         said = False
         while (q := tickets(qdir, is_alive))[:1] != [me]:
+            if me not in q:
+                raise TicketGone(f"[queue] the ticket {me.name} was removed while {name} waited; "
+                                 f"{name} did not start: queue it again")
             if not said:
-                ahead = [(p.stem.split("-", 2)[1], t[0]) for p in (q[:q.index(me)] if me in q else q)
-                         if (t := read(p)) is not None]
+                ahead = [(p.stem.split("-", 2)[1], t[0]) for p in q[:q.index(me)] if (t := read(p)) is not None]
                 if ahead:
                     on_wait(ahead)
                     said = True
@@ -180,13 +188,22 @@ def turn(qdir: Path, name: str, cmd: list[str], first: bool = False, is_alive=al
 def run(qdir: Path, name: str, cmd: list[str], is_alive=alive, poll: float = 5.0, log: str | None = None,
         first: bool = False) -> int:
     name = ticket_name(name)
-    result_path(qdir, name).unlink(missing_ok=True)  # a result of an earlier run under this name is not this one's
-    with turn(qdir, name, cmd, first, is_alive, poll,
-              on_wait=lambda ahead: print(f"[queue] waiting, {len(ahead)} ahead", flush=True)):
-        print(f"[queue] start {name}", flush=True)
-        code = subprocess.call(cmd)
-        result_path(qdir, name).write_text(json.dumps({"exit": code, "log": log, "ended": datetime.now().isoformat(timespec="seconds")}), encoding="utf-8")
+    result = result_path(qdir, name)
+    result.unlink(missing_ok=True)  # a result of an earlier run under this name is not this one's
+
+    def ended(code: int) -> int:
+        qdir.mkdir(parents=True, exist_ok=True)  # a hand-cleared queue may have taken the folder with the ticket
+        result.write_text(json.dumps({"exit": code, "log": log, "ended": datetime.now().isoformat(timespec="seconds")}), encoding="utf-8")
         return code
+
+    try:
+        with turn(qdir, name, cmd, first, is_alive, poll,
+                  on_wait=lambda ahead: print(f"[queue] waiting, {len(ahead)} ahead", flush=True)):
+            print(f"[queue] start {name}", flush=True)
+            return ended(subprocess.call(cmd))  # inside the turn: `wait` sees the result before the ticket goes
+    except TicketGone as gone:
+        print(gone, flush=True)
+        return ended(1)
 
 
 WAIT_TIMEOUT, WAIT_UNKNOWN, WAIT_DIED = 75, 2, 3
