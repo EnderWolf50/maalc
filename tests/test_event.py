@@ -91,74 +91,116 @@ def test_a_choices_page_that_stays_after_the_tap_is_handed_back_in_time(context,
     assert actions.time.monotonic() - began <= 2 * actions.EVENT_TAKE + 1
 
 
-# #309 live, from the last Continue: the event page fades out with the button lit (FADE here), the first GET! window
-# shows, the second GAP s after the first closes, and a tap closes a window CLOSE_LAG s later.
-FADE, GAP, CLOSE_LAG = 0.4, 0.34, 0.1
+# From the last Continue tap, live: the event page fades out with the button lit for FADE s, the map shows lead s before
+# the first GET! window, a tap closes a window CLOSE_LAG s later (#309), the next one shows GAP s after (#309), and the
+# screen moves for MOTION s after each of these. The 2026-10-23 window recording (28 event ends, #511): the map showed
+# 0-0.27 s before the first window, the screen stopped moving 0-0.27 s after a change, and the map held still at most
+# 0.23 s before a window came; the last of LEADS holds it still that long.
+FADE, CLOSE_LAG, GAP, MOTION = 0.3, 0.1, 0.34, 0.23
+LEADS = [0.03, 0.12, 0.21, 0.3, 0.39, 0.47]
 # Offline medians with the bot's MaaFramework resource and agent link (#309): a node that reads text about 53 ms, a
 # template about 5 ms; RetryPopup's template matches the window's Confirm, and its text is read there too. SHOT and TAP:
 # not measured.
-COST = {"Connecting": 0.006, "RetryPopup": 0.009, "PopupButton": 0.005, "Event": 0.053, "GiftGet": 0.053}
+COST = {"Connecting": 0.006, "RetryPopup": 0.009, "PopupButton": 0.005, "Event": 0.053, "GiftGet": 0.053, "MirrorMap": 0.005}
 OCR, RETRY_ON_WINDOW, SHOT, TAP = 0.053, 0.045, 0.03, 0.01
 PAGES = ["event", "window", "map"]
+# GiftGetOverMap.png: MirrorMap hits under a GET! window too.
+HITS = {("Event", "event"), ("GiftGet", "window"), ("MirrorMap", "window"), ("MirrorMap", "map")}
 
 
-class GiftWindows:
-    """The gift windows after an event's last Continue, each screenshot, tap and recognition taking its COST on the clock.
-    The bottom bar's lever reads "0" in the button's label roi on the map (OCR of GiftGetOverMap.png), so the corner taps
-    go on there. tapped_at: the time of the tap that closed each window, s from the start, as shown_at."""
+class Outro:
+    """What an event's last Continue leads to: `windows` GET! windows over the map, the first `lead` s after the map shows.
+    `lever`: what OCR reads in the button's label roi off the event page, the bottom bar's lever: "0" on
+    GiftGetOverMap.png, nothing on MapCostFloor3.png."""
 
-    def __init__(self, context, first):
-        self.start, self.first = actions.time.monotonic(), first
-        self.shown_at, self.tapped_at = [], []
+    def __init__(self, context, windows, lead, lever="0"):
+        self.windows, self.lead, self.lever = windows, lead, lever
+        self.pressed, self.last_tap, self.shown_at, self.tapped_at = None, None, [], []
         ctl = context.tasker.controller
         ctl.post_screencap.return_value.wait.return_value.get.side_effect = self.render
         ctl.post_click.side_effect = self.click
         context.run_recognition.side_effect = self.read
 
-    def page(self):
-        t = actions.time.monotonic() - self.start
+    def now(self):
+        return -1.0 if self.pressed is None else actions.time.monotonic() - self.pressed
+
+    def changes(self):
+        return sorted([FADE, *self.shown_at, *(tap + CLOSE_LAG for tap in self.tapped_at)])
+
+    def page(self, t):
         if t < FADE:
             return "event"
-        if not self.shown_at and t >= self.first:
-            self.shown_at.append(self.first)
-        elif len(self.shown_at) == len(self.tapped_at) == 1 and t >= self.tapped_at[0] + CLOSE_LAG + GAP:
-            self.shown_at.append(self.tapped_at[0] + CLOSE_LAG + GAP)
-        closed_at = [tap + CLOSE_LAG for tap in self.tapped_at]
-        up = any(s <= t and (k >= len(closed_at) or t < closed_at[k]) for k, s in enumerate(self.shown_at))
-        return "window" if up else "map"
+        closed = len(self.tapped_at) == len(self.shown_at)
+        if closed and len(self.shown_at) < self.windows:
+            due = self.tapped_at[-1] + CLOSE_LAG + GAP if self.shown_at else FADE + self.lead
+            if t >= due:
+                self.shown_at.append(due)
+                closed = False
+        return "map" if closed and (not self.tapped_at or t >= self.tapped_at[-1] + CLOSE_LAG) else "window"
+
+    @property
+    def still_at(self):
+        return self.changes()[-1] + MOTION
 
     def render(self):
         actions.time.sleep(SHOT)
-        image = np.zeros((720, 1280, 3), np.uint8)
-        image[0, 0, 0] = PAGES.index(page := self.page())
+        t = self.now()
+        page = self.page(t)
+        image = np.full((720, 1280, 3), 60 if page == "event" else 30, np.uint8)
         if page == "event":
             image[640:650, 1080:1180] = (0, 0, 200)
+        elif page == "window":
+            image[160:560, 300:980] = 120
+        if t >= FADE:
+            image[680:720, 600:640] = 30 + 20 * (int(t * 30) % 2)  # the bus flame flickers on every frame (same_screen)
+            since = t - max(c for c in self.changes() if c <= t)
+            if since < MOTION:
+                x = int(since / MOTION * 1080)
+                image[100:620, x:x + 200] = 200
+        image[0, 0, 0] = PAGES.index(page)
         return image
 
     def click(self, x, y):
         actions.time.sleep(TAP)
-        if self.page() == "window" and len(self.tapped_at) < len(self.shown_at):
-            self.tapped_at.append(actions.time.monotonic() - self.start)
+        if self.pressed is None and (x, y) == actions.EVENT_BUTTON:
+            self.pressed = actions.time.monotonic()
+        t = self.now()
+        self.last_tap = t
+        if self.page(t) == "window" and len(self.tapped_at) < len(self.shown_at):
+            self.tapped_at.append(t)
         return DEFAULT
 
     def read(self, name, image, override=None):
         page = PAGES[image[0, 0, 0]]
         if override is None:
             actions.time.sleep(RETRY_ON_WINDOW if (name, page) == ("RetryPopup", "window") else COST.get(name, OCR))
-            return SimpleNamespace(hit=True, box=[0, 0, 1, 1]) if (name, page) in {("Event", "event"), ("GiftGet", "window")} else None
+            return SimpleNamespace(hit=True, box=[0, 0, 1, 1]) if (name, page) in HITS else None
         actions.time.sleep(OCR)
-        if tuple(override.get(name, {}).get("roi", ())) == tuple(actions.EVENT_BUTTON_LABEL):
-            label = "Continue" if page == "event" else "0"
+        label = "Continue" if page == "event" else self.lever
+        if label and tuple(override.get(name, {}).get("roi", ())) == tuple(actions.EVENT_BUTTON_LABEL):
             return SimpleNamespace(all_results=[SimpleNamespace(text=label, box=(1155, 661, 14, 12))])
         return None
 
 
-@pytest.mark.parametrize("first", [0.45, 0.49, 0.53, 0.57, 0.61])
-def test_gift_windows_after_the_last_continue_are_tapped_as_fast_as_one_alone(context, clock, monkeypatch, first):
+@pytest.mark.parametrize("lead", LEADS)
+def test_gift_windows_after_the_last_continue_are_tapped_as_fast_as_one_alone(context, clock, monkeypatch, lead):
     # #309 live: a lone gift's window, closed by the next corner tap, was up 0.27-0.33 s; the second of two waited
-    # 1.7-2.5 s for GiftGet. first: when the first window shows, which sets where both fall in the tap rhythm.
+    # 1.7-2.5 s for GiftGet.
     monkeypatch.setattr(actions, "page_guard", test_actions.REAL_GUARD)
-    windows = GiftWindows(context, first)
+    outro = Outro(context, 2, lead)
     assert actions.Event().run(context, None) is True
-    assert len(windows.shown_at) == 2 and len(windows.tapped_at) == 2
-    assert max(tap - shown for shown, tap in zip(windows.shown_at, windows.tapped_at)) < 0.5
+    assert len(outro.shown_at) == 2 and len(outro.tapped_at) == 2
+    assert max(tap - shown for shown, tap in zip(outro.shown_at, outro.tapped_at)) < 0.5
+
+
+@pytest.mark.parametrize("lever", ["0", ""])
+@pytest.mark.parametrize("windows, lead", [(0, 0.0)] + [(n, lead) for n in (1, 2) for lead in LEADS])
+def test_an_event_hands_back_once_the_map_it_ends_on_holds_still(context, clock, monkeypatch, windows, lead, lever):
+    # #511 live: Event looked at the map 1 s more before it handed back, 1.4-1.6 s after its last corner tap.
+    monkeypatch.setattr(actions, "page_guard", test_actions.REAL_GUARD)
+    outro = Outro(context, windows, lead, lever)
+    assert actions.Event().run(context, None) is True
+    handed_back = outro.now()
+    assert len(outro.tapped_at) == windows
+    assert handed_back - outro.last_tap < 0.5
+    assert handed_back - outro.still_at < 1.0
