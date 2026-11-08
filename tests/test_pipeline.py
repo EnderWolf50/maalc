@@ -164,7 +164,7 @@ def test_the_event_labels_are_the_event_nodes():
     assert event["roi"] == actions.EVENT_BUTTON_LABEL
 
 
-KEPT_DELAYS = ["BattleTurn"]  # #258: a post_delay of the default 200 ms, written out with the reason in the pipeline
+KEPT_DELAYS = ["BattleTurn", "MapNodePanel"]  # #258: a post_delay of the default 200 ms, written out with the reason in the pipeline
 
 SETTLEMENT = ["ProgressPanel", "RewardCardForgo", "GiftRefuseDialog", "RunVictory", "DefeatScreen", "ExplorationComplete",
               "ClaimPopup", "ResumeDialog"]
@@ -236,6 +236,17 @@ def test_the_busiest_nodes_state_their_delays():
     for name in ["MirrorMap", "Event"]:
         assert (nodes[name].get("pre_delay"), nodes[name].get("post_delay")) == (0, 0), name
     assert (nodes["BattleTurn"].get("pre_delay"), nodes["BattleTurn"].get("post_delay")) == (0, 200)
+
+
+def test_the_reward_shop_and_node_panel_state_their_delays():
+    # #258: RewardCard starts with still() and ends once its title is gone or a GET! window is up, which GiftGet takes
+    # with its own pre_delay. PickGift and Shop read their page on the first screenshot, so the 200 ms before them stay;
+    # each ends once its own text is gone (Refuse Gift) or the map is up, so nothing after. enter_node taps Enter on its
+    # first look, and the hub meets the panel only after a restart (0 hits in 7 debug logs): both written out.
+    nodes = load_nodes("mirror_dungeon.json")
+    delays = {name: (nodes[name].get("pre_delay"), nodes[name].get("post_delay")) for name in ["RewardCard", "GiftChoice", "Shop", "MapNodePanel"]}
+    assert delays == {"RewardCard": (0, 0), "GiftChoice": (200, 0), "Shop": (200, 0), "MapNodePanel": (200, 200)}
+    assert nodes["GiftGet"].get("pre_delay", 200) > 0  # the window after both is waited for there
 
 
 def test_mirror_entry_paused_outwaits_the_chains():
