@@ -48,8 +48,10 @@
         "template": "Map/MapNodeCost.png",
         "threshold": 0.8
     },
-    // #522: the Cost coin with its top rows under the resource bar (actions.cut_coin): 0.658 on MapPanned.png's Focused
-    // at 725, 106; the 42 events and shops of the labelled map captures 0.408 at most.
+    // #522: the Cost coin with its top rows under the resource bar (actions.coin_cut_by_bar): 0.658 on MapPanned.png's
+    // Focused at 725, 106; the 42 events and shops of the labelled map captures 0.408 at most. Over the full frame of
+    // the 227 captures in tests/screens, 74 hits under MapNodeCost's 0.8: on the map captures 11, each a Cost coin (cut
+    // by the HUD, behind a popup or the bus); the 63 others on pages RouteMap does not read.
     "MapNodeCostCut": {
         "recognition": "TemplateMatch",
         "roi": [640, 0, 180, 620],
@@ -73,7 +75,8 @@
     },
     // Ring pixels only (green-masked): the node art inside differs on every such pack.
     // #522: the Cards ring scored 0.791 on MapCards.png's Risky at 980, 72 and 1.0 on its Abnormality at 725, 498;
-    // the 114 other labelled nodes of the map captures 0.362 at most.
+    // the 114 other labelled nodes of the map captures 0.362 at most. Over the full frame of the 227 captures in
+    // tests/screens it hits from 0.6 on those two rings only.
     "MapNodeFocusedRound": {
         "recognition": "TemplateMatch",
         "roi": [640, 0, 180, 620],

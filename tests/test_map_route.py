@@ -29,6 +29,7 @@ NORMAL, HARD = WEIGHTS["normal"], WEIGHTS["hard"]
     ({"ring"}, "risky"),  # its Cost coin under the resource bar
     ({"cost", "gift"}, "focused"),
     ({"gift"}, "focused"),  # #522: its Cost coin under the star panel; no event or shop carries a gift box
+    ({"gift", "shop"}, "focused"),  # a fight's badge outranks the shop mark, as the Cost coin does
     ({"cost"}, "battle"),
     ({"event"}, "event"),
     ({"shop"}, "shop"),
