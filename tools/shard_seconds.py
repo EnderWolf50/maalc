@@ -3,7 +3,8 @@ shards with tests/shard_seconds.json.
 
     python tools/shard_seconds.py check <junit.xml>...   fails when the table no longer matches these reports, one per
                                                          shard: a file off by more than RATIO both as measured and at
-                                                         its shard's runner pace
+                                                         its shard's runner pace, or a file not in it that took SLOW
+                                                         both ways (SLOW / RATIO on a pull request)
     python tools/shard_seconds.py update --run <run id>  rewrites the table from the junit artifacts of that CI run and
                                                          of the EARLIER_RUNS before it whose agent shards all passed:
                                                          each file's median, or that run's own time when it is off from
@@ -55,14 +56,15 @@ def within_ratio(took, listed, runner_pace):
     return any(listed * p / RATIO <= took <= listed * p * RATIO for p in (1, runner_pace))
 
 
-def stale(table, shard):
+def stale(table, shard, new_file_limit):
     problems = []
     runner_pace = pace(table, shard)
     for name, took in sorted(shard.items()):
         listed = table.get(name)
         if listed is None:
-            if took >= SLOW:
-                problems.append(f"{name} took {took:.0f} s and is not in the table")
+            if min(took, took / runner_pace) >= new_file_limit:
+                problems.append(f"{name} took {took:.0f} s and is not in the table:"
+                                f" a new file from {new_file_limit:g} s needs a row")
         elif max(took, listed) >= SLOW and not within_ratio(took, listed, runner_pace):
             problems.append(f"{name} took {took:.0f} s, the table says {listed} (its shard's pace x{runner_pace:.2f})")
     return problems
@@ -78,10 +80,12 @@ def download(run, folder):
 
 def check(reports):
     table = json.loads(TABLE.read_text(encoding="utf-8"))
-    problems = [problem for report in reports for problem in stale(table, measured([report]))]
+    new_file_limit = SLOW / RATIO if os.environ.get("GITHUB_EVENT_NAME") == "pull_request" else SLOW
+    problems = [problem for report in reports for problem in stale(table, measured([report]), new_file_limit)]
     problems += [f"{name} has no time in this run's reports" for name in unmeasured(measured(reports))]
     if not problems:
-        print(f"tests/shard_seconds.json matches this run ({len(reports)} reports)")
+        print(f"tests/shard_seconds.json matches this run ({len(reports)} reports;"
+              f" a new file from {new_file_limit:g} s needs a row)")
         return 0
     run = os.environ.get("GITHUB_RUN_ID", "<run id>")
     fix = f"uv run python tools/shard_seconds.py update --run {run}, then commit tests/shard_seconds.json"

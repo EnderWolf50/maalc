@@ -16,6 +16,12 @@ def report(folder, name, cases):
     return path
 
 
+# The agent shards run these tests under a pull request's GITHUB_EVENT_NAME too.
+@pytest.fixture(autouse=True)
+def no_ci_event(monkeypatch):
+    monkeypatch.delenv("GITHUB_EVENT_NAME", raising=False)
+
+
 @pytest.fixture
 def table(tmp_path, monkeypatch):
     path = tmp_path / "shard_seconds.json"
@@ -99,6 +105,36 @@ def test_one_file_down_to_a_third_fails_alone_even_when_it_is_most_of_its_shard(
     assert shard_seconds.check([report(tmp_path, "a.xml", [(f"tests.{n[:-3]}", str(t)) for n, t in took.items()])]) == 1
     errors = [line for line in capsys.readouterr().out.splitlines() if line.startswith("::error")]
     assert len(errors) == 1 and f"test_thread_luxcavation.py took {72 * pace:.0f} s, the table says 216" in errors[0]
+
+
+@pytest.fixture
+def new_file_check(tmp_path, table, monkeypatch):
+    monkeypatch.setattr(shard_seconds, "unmeasured", lambda seconds: [])
+
+    def check(event, pace, took):
+        monkeypatch.setenv("GITHUB_EVENT_NAME", event)
+        cases, listed = shard("a", pace)
+        table(listed)
+        return shard_seconds.check([report(tmp_path, "a.xml", cases + [("tests.test_new", str(took))])])
+    return check
+
+
+def test_542s_new_file_fails_its_pull_request_and_passes_main_on_a_slower_runner(new_file_check, capsys):
+    verdicts = {"pull_request": new_file_check("pull_request", 1, 29), "push": new_file_check("push", 1.26, 31)}
+    assert verdicts == {"pull_request": 1, "push": 0}, capsys.readouterr().out
+
+
+def test_no_new_file_passes_a_pull_request_and_fails_main_at_half_to_double_the_pace(new_file_check):
+    paces = [0.5, 1, 2]
+
+    def passes(event, pace, usual, scales):
+        return new_file_check(event, pace, usual * pace if scales else usual) == 0
+
+    for scales in [True, False]:
+        through = [(usual, pr) for usual in range(1, 61) for pr in paces if passes("pull_request", pr, usual, scales)]
+        assert through and len(through) < 60 * len(paces)
+        red = [(usual, pr, main) for usual, pr in through for main in paces if not passes("push", main, usual, scales)]
+        assert red == [], f"scales with the runner: {scales}"
 
 
 def test_a_file_whose_time_ignores_the_runner_passes_too(tmp_path, table, capsys, monkeypatch):
