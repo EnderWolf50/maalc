@@ -62,13 +62,14 @@ def test_status_leaves_out_a_ticket_that_left_after_the_listing(tmp_path):
     assert [line.split(" (")[0] for line in lines] == ["RUNNING holder", "#1      other"]
 
 
-def test_a_first_ticket_goes_right_behind_the_holder_when_the_first_one_ahead_leaves_as_it_is_placed(tmp_path):
+def test_a_first_ticket_still_goes_behind_the_first_ones_when_one_of_them_leaves_as_it_is_placed(tmp_path):
     ticket(tmp_path, "1000000000000000001", "holder", 111)
-    left = ticket(tmp_path, "1000000000000000002", "daily1", 222, first=True)
-    ticket(tmp_path, "1000000000000000009", "waiting", 333)
+    left = ticket(tmp_path, "1000000000000000002", "left", 222, first=True)
+    ticket(tmp_path, "1000000000000000003", "daily1", 333, first=True)
+    ticket(tmp_path, "1000000000000000009", "waiting", 444)
     lq.place(tmp_path, "daily2", ["hold"], first=True, is_alive=ends_on_check(222, left))
     assert [p.name.split("-", 2)[2] for p in sorted(tmp_path.glob("*.ticket"))] == [
-        "holder.ticket", "daily2.ticket", "waiting.ticket"]
+        "holder.ticket", "daily1.ticket", "daily2.ticket", "waiting.ticket"]
 
 
 def test_run_waits_for_the_ticket_ahead_then_leaves_no_ticket(tmp_path):
