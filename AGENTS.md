@@ -28,7 +28,7 @@ This repo is public. Issue, PR and commit text describes evidence by its content
 
 ### Pointers
 
-- Worktree setup, checks, post-land steps, `.local/` and the game data: `docs/agents/local-dev.md`.
+- Worktree setup, checks, post-land steps, `.local/`, the game data, and dispatching a thread or task to the watchdog: `docs/agents/local-dev.md`.
 - Anything on the emulator: the `maalc-live-test` skill. The emulator's resolution and window stay as the user set them; MaaFramework scales screenshots to 720p by itself.
 - Subagents and delegated threads: `docs/agents/subagent-preamble.md`. The SubagentStart hook hands it to a subagent; a delegated thread (T3 `delegate_task`, Codex) starts as a session of its own, so it reads the file before its first step.
 - A change to `gui/` or what the settings window shows: the `maalc-gui-check` skill builds and drives the real app (`docs/agents/gui-driving.md`); how evidence stills and clips look: `docs/agents/evidence-style.md`.

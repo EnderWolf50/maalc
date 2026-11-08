@@ -81,6 +81,12 @@ Retention: an archive folder older than 7 days whose `INDEX.md` rows name only c
 - `tools/live/watchdog.py add|done|list|tick` owns `agents.tsv` (and `agents.state.json`, what `tick` already reported) in `.local/scratch/`: nobody edits the file by hand. `tick` prints only news or `NOTHING NEW`; the scheduled prompt is `docs/agents/watchdog-prompt.md`.
 - `tools/live/brief.py live|code --task <name> ...` writes the standard header of `.local/scratch/<name>/brief.md`; every run setting is a required argument. Rules the public repo must not state go in `.local/brief-rules.md` (gitignored), which the script appends to the brief as "Machine-local rules".
 
+The main thread dispatches work in these steps:
+
+1. **Register.** After `t3_thread_launch` or `delegate_task`, `uv run python tools/live/watchdog.py add <id> <live-task|-> <label>` with the thread or task id it returned. Done when it prints `added <label>` or `already in the list`.
+2. **Switch on.** When `add` prints `switch the watchdog schedule ON`, call `schedule_task` with `enabled: true` and the `scheduledTaskId` of the task "maalc agent watchdog" (`list_scheduled_tasks` names it). Done when `schedule_task` returns its next run time.
+3. **Stay awake.** For a run left unattended at night, start `uv run python tools/live/bot.py awake --minutes 118` as a background command and start it again each time it ends: a background command lasts at most 2 hours. Done when the last registered line has left the list.
+
 ## The emulator lane
 
 The MuMu instances the live tests use all log in to one game account, and starting the game on one instance kicks the others out (the user, 2026-10-20). So the `emulator` resource covers all instances: `tools/live/queue.py` describes it as the user's game account on the emulator. Take an `emulator` ticket before you drive any instance.
