@@ -20,6 +20,7 @@ The tools are in `tools/live/`, each with its options in `--help`. Reach for the
 | `maafw_loaded.py` | given a client's PID (MXU, MFAAvalonia): the Maa DLLs it and its agent have loaded, and whether its MaaFramework.dll is the fixed one |
 | `map_taps.py` | every touch on the Mirror Dungeon map (follow, a full read's take, `find_bus` and the other drags) as a CSV row: taken or ignored by `recovery.same_screen`, seconds since the map faded in, the log line it led to; a summary per kind and verdict |
 | `dialogs.py` | the game's confirm dialogs, to diff against the pipeline before an unattended run |
+| `memwatch.py` | the bot's (or a client's) process tree sampled until it ends: a CSV row per process (role tasker, agent, client or other; working set, private) and the peak and last per role, the memory half of a performance fix's before/after |
 
 Log statistics: `tools/wait_spans.py` (Now Loading and other waiting screens), `tools/maafw_timeline.py` (time per node), `tools/video_align.py` (a recording against the log, its drift and freezes). A one-off script none of these covers goes in `.local/scratch/<task>/`; `docs/agents/live-tools-inventory.md` lists which old scripts the tools replaced.
 
