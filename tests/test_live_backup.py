@@ -2,6 +2,7 @@ import importlib.util
 import threading
 import time
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -106,13 +107,18 @@ def test_hold_does_not_time_out_while_paused_and_shows_its_deadline(tmp_path, ca
     assert not (done.parent / "hold.deadline").exists()  # removed when the hold ends
 
 
-def test_hold_writes_the_deadline_a_second_agent_reads_in_status(tmp_path):
+def test_hold_writes_the_deadline_a_second_agent_reads_in_status(tmp_path, monkeypatch):
+    """At this monotonic time, monotonic() + 500 rounds up: the file read 1500.0000000000018 for wall 1000 (#578)."""
     (tmp_path / "install").mkdir()
-    done = tmp_path / "done"
-    seen = []
-    threading.Timer(0.1, lambda: (seen.append((tmp_path / "hold.deadline").read_text()), done.write_text(""))).start()
+    done, seen = tmp_path / "done", []
+
+    def sleep(_):
+        seen.append((tmp_path / "hold.deadline").read_text(encoding="utf-8"))
+        done.write_text("")
+
+    monkeypatch.setattr(bk, "time", SimpleNamespace(monotonic=lambda: 16240.694345345151, sleep=sleep))
     bk.hold(tmp_path / "install", tmp_path / "bak", done, timeout=500, poll=0.02, wall=lambda: 1000.0)
-    assert 1000 + 400 < float(seen[0]) <= 1500
+    assert [float(text) for text in seen] == [1500]
 
 
 def test_hold_requires_an_explicit_timeout(tmp_path):
