@@ -1,4 +1,5 @@
 import json
+import uuid
 
 from wait_spans import passes, spans
 
@@ -9,8 +10,10 @@ def reco(t, name, score, hit=True):
 
 
 def hub(t, name, score):
-    """One MirrorHub pass: HubText picks the OCR screens first (#157), then the screen hits."""
-    return [reco(t, "Stuck", 0, hit=False), reco(t, "HubText", 0), reco(t, name, score)]
+    """One MirrorHub pass: HubText picks the OCR screens first (#157) with an OCR read of its own, which MaaFramework
+    logs under a fresh name each pass, then the screen hits."""
+    return [reco(t, "Stuck", 0, hit=False), reco(t, "HubText", 0), reco(t, f"recognition/OCR/{uuid.uuid4()}", 0.98),
+            reco(t, name, score)]
 
 
 def test_a_span_and_its_longest_still_stretch():

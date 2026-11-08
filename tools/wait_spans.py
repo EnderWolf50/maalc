@@ -4,8 +4,8 @@
         [--min 15]
 
 A **pass** starts at each recognition of `Stuck`, MirrorHub's first node; its screen is the first node that hit after
-it (not HubText, which only picks the OCR screens to check, #157), and its **scores** every score each node logged
-in it, to 6 decimals. A **span** is a run of passes on one screen of `--kinds`. **Still** is the longest stretch of passes with the very same scores: a still game gives the same pixels
+it (not HubText, which only picks the OCR screens to check, #157, nor the OCR reads HubText runs itself), and its
+**scores** every score each node logged in it, to 6 decimals. A **span** is a run of passes on one screen of `--kinds`. **Still** is the longest stretch of passes with the very same scores: a still game gives the same pixels
 every time, so the bot's scores do not move either (live 2026-10-19, checked against the recording of the 105 s
 Now Loading of #179). Scores cover only the rois the bot looks at, so still can run longer than the picture did.
 Give the logs oldest first; spans under `--min` s are left out.
@@ -22,6 +22,7 @@ from datetime import datetime
 from maafw_timeline import TS
 
 RESULT = re.compile(r"Recognizer::recognize\] reco \[result=(.*)\] $")
+DIRECT = "recognition/"  # MaaFramework's name for a run_recognition_direct result: recognition/OCR/<a new uuid>
 
 
 @dataclass
@@ -57,9 +58,12 @@ def passes(lines):
         if name == "Stuck":
             found.append(Pass(datetime.fromisoformat(t[1])))
         elif found:
-            found[-1].scores.setdefault(name, all_scores(result.get("detail")))
-            if result.get("box") and found[-1].screen is None and name not in ("NoBatchOCR", "HubText"):
-                found[-1].screen = name
+            p = found[-1]
+            if str(name).startswith(DIRECT):  # HubText's own reads: keyed by their order, the name changes every pass
+                name = f"{name.rsplit('/', 1)[0]}#{sum(k.startswith(DIRECT) for k in p.scores)}"
+            elif result.get("box") and p.screen is None and name not in ("NoBatchOCR", "HubText"):
+                p.screen = name
+            p.scores.setdefault(name, all_scores(result.get("detail")))
     return found
 
 
