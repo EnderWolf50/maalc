@@ -13,13 +13,13 @@ import time
 
 import numpy as np
 from daily_child import GAME, bind, game_class, inside, live_frame, load, result, run_child, screen
-from recovery import DEAD_TAPS, L3_FAILED_IN_A_ROW, WAIT_CAP
+from recovery import DEAD_TAPS, L3_FAILED_IN_A_ROW
 
 TITLE_TAP = (540, 300, 200, 120)
 GLITCH = 1.3  # s: the recording's longest glitch
 SCREENS = {"title": "Title.png", "connecting": "TitleConnecting.png", "loading": "Loading.png", "main": "MainWindow.png"}
 LIMIT = 40  # s: a scenario still going by then is stopped (a title tapped for ever)
-CONNECTING_WAIT = 5  # s: GoHome's wait on CONNECTING in the frozen_connecting scenarios, for the pipeline's 150; their
+CONNECTING_WAIT = 5  # s: GoHome's wait on CONNECTING in the frozen_connecting scenarios, for the pipeline's 60; their
 # restarted game's CONNECTING (5 screenshots) ends well within it
 
 
@@ -201,7 +201,7 @@ def test_a_normal_login_through_connecting_and_loading_is_not_restarted():
 
 def test_a_title_frozen_under_connecting_restarts_the_game_once_the_wait_is_up_and_reaches_the_main_window():
     # #540: each look at CONNECTING went back to GoHome with a new 60 s timeout, so a game frozen on it was never
-    # restarted (the model: 5181 looks in 40 s). The wait is the pipeline's 150 s here cut to CONNECTING_WAIT; the
+    # restarted (the model: 5181 looks in 40 s). The wait is the pipeline's 60 s here cut to CONNECTING_WAIT; the
     # restart is the task's first of its 2, and the restarted game's CONNECTING, shorter than the wait, is let through.
     o = run_child(__file__)["frozen_connecting"]
     assert o["succeeded"] and o["nodes"][-1] == "HomeReached" and o["stopped"] == 0, json.dumps(o)
@@ -210,14 +210,14 @@ def test_a_title_frozen_under_connecting_restarts_the_game_once_the_wait_is_up_a
     assert [line for line in o["log"] if "recovery L3: CONNECTING" in line and "1 of 2 this task" in line], json.dumps(o)
 
 
-def test_go_home_waits_on_connecting_as_long_as_mirror_hubs_watchdog():
-    # #540: MirrorHub's cap (recovery.WAIT_CAP), past the ~130 s after which the game shows its own server error on a
-    # CONNECTING that never answers (#84).
+def test_go_home_waits_on_connecting_up_to_60_s():
+    # #540: the user's pick of 2026-11-08 for GoHome alone; spec 01 "回主畫面" says what it costs.
     from test_pipeline import load_nodes
 
     nodes = load_nodes("navigation.json")
-    assert nodes["HomeConnecting"]["timeout"] == WAIT_CAP["Connecting"] * 1000 > 130 * 1000
-    assert f"after {WAIT_CAP['Connecting']} s" in nodes["HomeConnectingLost"]["custom_action_param"]
+    timeout = nodes["HomeConnecting"]["timeout"]
+    assert timeout == 60_000
+    assert f"after {timeout // 1000} s" in nodes["HomeConnectingLost"]["custom_action_param"]
 
 
 def test_a_frozen_title_with_the_restarts_used_up_ends_through_the_stop_procedure():

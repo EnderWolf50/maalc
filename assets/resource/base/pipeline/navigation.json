@@ -65,9 +65,10 @@
         "action": "Custom",
         "custom_action": "HomeFrozen"
     },
-    // CONNECTING: waited on until it goes (HomeConnected), up to 150 s in a row as MirrorHub's watchdog (recovery.WAIT_CAP),
-    // longer than the ~130 s after which the game shows its own server error (#84). Still up then, the game is frozen under
-    // it: restart it. A JumpBack to GoHome at each look gave GoHome a new 60 s timeout, for ever (#540).
+    // CONNECTING: waited on until it goes (HomeConnected), up to 60 s in a row. Still up then, the game is frozen under
+    // it: restart it. A JumpBack to GoHome at each look gave GoHome a new 60 s timeout, for ever (#540). 60 s is the
+    // user's pick for GoHome alone (MirrorHub's watchdog keeps recovery.WAIT_CAP's 150); spec 01 "回主畫面" says what
+    // it costs.
     "HomeConnecting": {
         "recognition": "Or",
         "any_of": [
@@ -76,7 +77,7 @@
         "pre_delay": 0,
         "post_delay": 0,
         "rate_limit": 300,
-        "timeout": 150000,
+        "timeout": 60000,
         "next": [
             "HomeConnected"
         ],
@@ -96,7 +97,7 @@
     "HomeConnectingLost": {
         "action": "Custom",
         "custom_action": "HomeLost",
-        "custom_action_param": "CONNECTING still up after 150 s",
+        "custom_action_param": "CONNECTING still up after 60 s",
         "next": [
             "GoHome"
         ]
