@@ -3438,7 +3438,6 @@ class Event(CustomAction):
 
     @hands_back
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
-        image = screen(context)
         # One event's clock: a call more than EVENT_GAP s after the last starts the next event's (#92).
         now = time.monotonic()
         event = RUN.get("event")
@@ -3448,6 +3447,10 @@ class Event(CustomAction):
         if now - event["since"] > EVENT_LIMIT:
             RUN.pop("event")
             return stuck(f"one event went on over {EVENT_LIMIT} s")
+        image = still(context)
+        if image is None:
+            log("event: the page did not hold still; MirrorHub looks again")
+            return True
         tried = RUN.setdefault("event_tried", set())  # this question's options a tap did nothing on
         checked = event["checked"]  # portraits a tap did nothing on in this check
         if red_button(image):
@@ -3507,6 +3510,9 @@ class Event(CustomAction):
             if until(context, lambda im: not Event.panel_same(image, im), timeout=EVENT_TAKE) is None:
                 log(f"event: {options[i][0]!r} did nothing: try another")
                 tried.add(options[i][0])
+            # A lit card changes the panel before the page goes: MirrorHub reading Choices would take one again.
+            elif until(context, gone(context, {"roi": CHOICES_HEADER, "expected": "Choices"}, image), timeout=EVENT_TAKE) is None:
+                log(f"event: Choices still up {EVENT_TAKE} s after taking {options[i][0]!r}")
         else:
             tried.clear()
             Event.advance(context, image)
