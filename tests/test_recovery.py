@@ -408,13 +408,14 @@ def test_ladder_a_game_not_in_front_goes_straight_to_l3():
 
 @pytest.fixture
 def hub(monkeypatch, tmp_path):
-    """A fake Maa context for Recover and DailyRecover: a blank screen, every recovery level goes through; a fresh ladder
-    and task."""
+    """A fake Maa context for Recover and DailyRecover: a blank screen, every recovery level goes through and GoHome ends
+    on the main window; a fresh ladder and task."""
     monkeypatch.setattr(actions.time, "sleep", lambda s: None)
     monkeypatch.setattr(actions, "ROOT", tmp_path)
     monkeypatch.setattr(actions, "TASK", {"runs": 0, "done": None})  # the module's own back after the test
     ctx = MagicMock()
     ctx.tasker.controller.post_screencap.return_value.wait.return_value.get.return_value = np.zeros((720, 1280, 3), np.uint8)
+    ctx.tasker.get_node_detail.return_value.name = "HomeReached"  # go_home() reads GoHome's last node (#514)
     actions.RUN.clear()
     actions.STUCK["flag"] = None
     actions.STUCK["watch"].reset()
