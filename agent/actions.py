@@ -2145,7 +2145,7 @@ MAP_LOOKS = 4  # looks, 1 s apart, for a linked slot before the fallback taps
 # #202: columns up to this x are typed by their Cost too: with the bus at the far left, its two columns (329, 584).
 # Past them only the marks, which miss the WARNING ring (#238); a drag brings those columns here to be read again.
 MAP_NEAR = 650
-BAR_BOTTOM = 60  # y the resource bar ends at (its border: 59-60); a node's badges above it may sit under the HUD
+BAR_BOTTOM = 60  # the resource bar's border: y 59-60 on the map captures
 MAP_DRAGS = 3  # drags of two columns RouteMap.read_on makes at most: the first screen shows four, a floor ~7 and the boss
 PANEL_REWARDS = [700, 495, 110, 30]  # the "Clear Rewards" label
 PANEL_COST = [730, 545, 40, 35]  # the number by its Cost coin
@@ -2237,7 +2237,7 @@ def node_at(context, image, cx, cy, marks=None, costs=True):
         return "unknown"
     if not (costs and "cost" in marks and "boss" not in marks):
         return map_route.node_type(set(marks))
-    difficulty, table = node_costs(context)
+    difficulty, table = difficulty_costs(context)
     found = coin_text(context, image, marks["cost"].box)
     cost = coin_number(found)
     kind = map_route.node_type(set(marks), table.get(cost))
@@ -2250,21 +2250,19 @@ def node_at(context, image, cx, cy, marks=None, costs=True):
 def coin_cut_by_bar(context, image, cx, cy):
     """The hit of the node's Cost coin with its top rows under the resource bar, None when there is none (#522).
 
-    MapNodeCost misses such a coin (0.658 on MapPanned.png's Focused at 725, 106). MapNodeCostCut takes it, and it
-    counts only when its number, which starts on the coin's bottom row (coin_text), sits below the bar and reads as a
-    Cost of the floor's difficulty. A coin wholly under the bar scores as high: 0.60-0.79 on the top-row battles of
-    MapBoss.png at 215, 72, MapEvent.png and MapRock.png at 725, 72, MapFocused.png at 470, 72; and its number's crop
-    lands on the bar's resource counts (MapFocused's read 19).
+    Its number, read from the coin box's bottom row as coin_text reads it, decides: a coin wholly under the bar scores
+    as high (0.60-0.79 on the top-row battles of MapBoss.png at 215, 72, MapEvent.png and MapRock.png at 725, 72,
+    MapFocused.png at 470, 72), and its number's crop lands on the bar's resource counts (MapFocused's read 19).
     """
     ox, oy, w, h = MARKS["MapNodeCost"][1]
     coin = seen(context, image, "MapNodeCostCut", (cx + ox, cy + oy, w, h))
     if not coin or coin.box[1] + coin.box[3] < BAR_BOTTOM:
         return None
-    return coin if coin_number(coin_text(context, image, coin.box)) in node_costs(context)[1] else None
+    _, table = difficulty_costs(context)
+    return coin if coin_number(coin_text(context, image, coin.box)) in table else None
 
 
-def node_costs(context):
-    """The floor's difficulty and its node_costs (map_weights.yaml): Cost number -> fight kind."""
+def difficulty_costs(context):
     difficulty = "hard" if is_hard(context) else "normal"
     return difficulty, map_data()["node_costs"][difficulty]
 
