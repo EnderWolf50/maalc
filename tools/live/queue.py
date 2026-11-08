@@ -172,8 +172,8 @@ def turn(qdir: Path, name: str, cmd: list[str], first: bool = False, is_alive=al
         said = False
         while (q := tickets(qdir, is_alive))[:1] != [me]:
             if me not in q:
-                raise TicketGone(f"[queue] the ticket {me.name} was removed while {name} waited; "
-                                 f"{name} did not start: queue it again")
+                raise TicketGone(f"[queue] the ticket {me.name} left the queue while {name} waited (removed, or dropped "
+                                 f"as a dead process's); {name} did not start: queue it again")
             if not said:
                 ahead = [(p.stem.split("-", 2)[1], t[0]) for p in q[:q.index(me)] if (t := read(p)) is not None]
                 if ahead:
@@ -191,19 +191,20 @@ def run(qdir: Path, name: str, cmd: list[str], is_alive=alive, poll: float = 5.0
     result = result_path(qdir, name)
     result.unlink(missing_ok=True)  # a result of an earlier run under this name is not this one's
 
-    def ended(code: int) -> int:
+    def write_result(code: int, not_started: str | None = None) -> int:
         qdir.mkdir(parents=True, exist_ok=True)  # a hand-cleared queue may have taken the folder with the ticket
-        result.write_text(json.dumps({"exit": code, "log": log, "ended": datetime.now().isoformat(timespec="seconds")}), encoding="utf-8")
+        doc = {"exit": code, "log": log, "ended": datetime.now().isoformat(timespec="seconds"), "not_started": not_started}
+        result.write_text(json.dumps(doc), encoding="utf-8")
         return code
 
     try:
         with turn(qdir, name, cmd, first, is_alive, poll,
                   on_wait=lambda ahead: print(f"[queue] waiting, {len(ahead)} ahead", flush=True)):
             print(f"[queue] start {name}", flush=True)
-            return ended(subprocess.call(cmd))  # inside the turn: `wait` sees the result before the ticket goes
+            return write_result(subprocess.call(cmd))  # inside the turn: `wait` sees the result before the ticket goes
     except TicketGone as gone:
         print(gone, flush=True)
-        return ended(1)
+        return write_result(1, str(gone))
 
 
 WAIT_TIMEOUT, WAIT_UNKNOWN, WAIT_DIED = 75, 2, 3
@@ -230,10 +231,17 @@ def wait(qdir: Path, name: str, timeout_s: float, is_alive=alive, poll: float = 
             return WAIT_TIMEOUT
         sleep(poll)
     result = result_path(qdir, name)
+    for _ in range(int(grace // poll) if seen and poll else 0):  # a run whose ticket was removed writes it a poll later
+        if result.exists():
+            break
+        sleep(poll)
     if not result.exists():
         say(f"[queue] {name}: " + ("the run ended without a result (its process died)" if seen else "no such ticket or result"))
         return WAIT_DIED if seen else WAIT_UNKNOWN
     doc = json.loads(result.read_text(encoding="utf-8"))
+    if doc.get("not_started"):
+        say(f"[queue] {name} did not start, exit code {doc['exit']}: {doc['not_started']}")
+        return doc["exit"]
     say(f"[queue] {name} ended with exit code {doc['exit']} at {doc['ended']}; log: {doc['log'] or '(none: pass --log to run)'}")
     return doc["exit"]
 
