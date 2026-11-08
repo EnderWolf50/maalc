@@ -211,34 +211,54 @@ def test_ladder_limits(counts, l3_execution, start, expected):
     assert ladder.stuck("MirrorMap", start, l3_execution) == expected
 
 
-def line(team, minutes, result="clear"):
+def line(team, minutes, result="clear", **extra):
     return {"start": "2026-10-16T00:00:00.000Z", "end": f"2026-10-16T{minutes // 60:02}:{minutes % 60:02}:00.000Z",
-            "team": team, "result": result}
+            "team": team, "result": result, **extra}
 
 
 def test_run_limit_default_under_10_runs():
-    assert run_limit([line("a", 30)] * 9, "a") == 3600
+    assert run_limit([line("a", 30)] * 9, "a", 5) == 3600
 
 
 def test_run_limit_twice_p95():
     lines = [line("a", m) for m in range(30, 50)] + [line("b", 300)]  # 30..49 min; b is another team
-    assert run_limit(lines, "a") == pytest.approx(2 * 48.05 * 60)
+    assert run_limit(lines, "a", 5) == pytest.approx(2 * 48.05 * 60)
 
 
 def test_run_limit_only_clears_after_the_latest_reset():
     old = [line("a", 200)] * 20
     new = [line("a", 40)] * 10 + [line("a", 5, "stop"), line("a", 5, "giveup"), {**line("a", 5), "start": None}]
     lines = old + [{"reset": "a", "time": "x"}] + [line("a", 300)] * 5 + [{"reset": "a", "time": "y"}] + new
-    assert run_limit(lines, "a") == pytest.approx(2 * 40 * 60)
-    assert run_limit(lines + [{"reset": "a", "time": "z"}], "a") == 3600
-    assert run_limit(lines, "b") == 3600
+    assert run_limit(lines, "a", 5) == pytest.approx(2 * 40 * 60)
+    assert run_limit(lines + [{"reset": "a", "time": "z"}], "a", 5) == 3600
+    assert run_limit(lines, "b", 5) == 3600
 
 
 def test_floor_limit_45_min_unless_history_says_longer():
     # Live 2026-10-16 (#34): hard runs took 80 and 107 min, floors up to ~25 min, all of it progress.
-    assert floor_limit([], "a") == 45 * 60
-    assert floor_limit([line("a", 40)] * 10, "a") == 45 * 60  # a fast team keeps the floor's 45 min
-    assert floor_limit([line("a", 150)] * 10, "a") == pytest.approx(2 * 150 * 60 / 5)
+    assert floor_limit([], "a", 5) == 45 * 60
+    assert floor_limit([line("a", 40)] * 10, "a", 5) == 45 * 60  # a fast team keeps the floor's 45 min
+    assert floor_limit([line("a", 150)] * 10, "a", 5) == pytest.approx(2 * 150 * 60 / 5)
+
+
+def test_floor_limit_follows_the_runs_target_and_history_of_another_target_does_not_count():
+    five, fifteen = [line("a", 150, target=5)] * 10, [line("a", 450, target=15)] * 10
+    assert floor_limit(five + fifteen, "a", 5) == floor_limit(five, "a", 5) == pytest.approx(2 * 150 * 60 / 5)
+    assert floor_limit(five + fifteen, "a", 15) == floor_limit(fifteen, "a", 15) == pytest.approx(2 * 450 * 60 / 15)
+    assert run_limit(five, "a", 15) == 3600  # no 15-floor run yet
+
+
+def test_a_line_without_target_counts_as_target_5():
+    old = [line("a", 150)] * 10
+    assert run_limit(old, "a", 5) == pytest.approx(2 * 150 * 60)
+    assert run_limit(old, "a", 10) == 3600
+
+
+def test_run_limit_skips_a_clear_that_stopped_short_of_its_target():
+    short = [line("a", 20, target=15, target_reached=False)] * 10  # claimed past floor 5, short time
+    full = [line("a", 100, target=15, target_reached=True)] * 5 + [line("a", 100, target=15)] * 5  # older lines have no key
+    assert run_limit(short, "a", 15) == 3600
+    assert run_limit(short + full, "a", 15) == pytest.approx(2 * 100 * 60)
 
 
 @pytest.mark.parametrize("kind, now, expected", [

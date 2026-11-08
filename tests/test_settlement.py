@@ -275,7 +275,7 @@ def test_settle_claims_a_run_past_floor_5_and_toggles_bonuses_only_at_the_target
     taps, on_at_claim, lines = settle(context, monkeypatch, tmp_path, window, target, {f: True for f in range(1, 16)})
     assert actions.GIVE_UP not in taps and actions.CLAIM in taps
     assert on_at_claim == [claimed_on]
-    assert [(line["result"], line["floors"], line["target_reached"]) for line in lines] == [("clear", floors, reached)]
+    assert [(line["result"], line["floors"], line["target_reached"], line["target"]) for line in lines] == [("clear", floors, reached, target)]
 
 
 @pytest.mark.parametrize("window, difficulty", [("Floor 8 [INFINITY] 7/7", "hard"), ("Floor 5 [NORMAL] 6/6", "normal"), ("Floor 8 7/7", "hard"), ("Floor 5 6/6", None)])
@@ -301,6 +301,12 @@ def test_a_forfeited_run_past_floor_5_claims_its_floor_5_rewards(context, monkey
     taps, on_at_claim, lines = settle(context, monkeypatch, tmp_path, "Floor 7 [HARD] 3/7", 15)
     assert actions.CLAIM in taps and actions.GIVE_UP not in taps
     assert [(line["result"], line["floors"]) for line in lines] == [("clear", 6)]
+
+
+def test_a_stop_line_of_a_run_with_no_settings_in_memory_is_a_target_5_line(context):
+    actions.RUN.clear()
+    line = actions.run_line(actions.RUN, "stop", None, 0)
+    assert (line["target"], line["target_reached"]) == (5, False)
 
 
 # The acceptance's claim page (2026-10-29): Floor 5 [HARD] 7/7, five HARD floors, 3 weekly bonuses left, no run plan.
