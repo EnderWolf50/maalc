@@ -21,15 +21,16 @@ SHIFT_CLEAR = 0.6  # shift: the best shift's difference, at most this share of t
 def node_type(marks, by_cost=None):
     """The node type for the set of marks seen on a slot, and the fight's kind its Cost number gives, if read.
 
-    boss: red glow. A fight (Cost coin or WARNING ring) is by_cost when given (#91): the ring and the gift box
-    are often missed live. Else by its marks: the ring is Risky's or Abnormality's, taken for the later, risky;
-    a gift box with no ring is Focused's; the Cost coin alone a battle. Every fight carries a lit Cost coin,
-    so a node with none and no shop mark is an event, matched or not: its "?" takes the theme pack's look
-    (live 2026-10-18, a bright cyan one missed every template) and dims with distance (MapPanned.png).
+    boss: red glow. A fight (Cost coin, WARNING ring or gift box) is by_cost when given (#91): the ring and the
+    gift box are often missed live. Else by its marks: the ring is Risky's or Abnormality's, taken for the later,
+    risky; a gift box with no ring is Focused's; the Cost coin alone a battle. Every fight carries a lit Cost coin,
+    but the HUD may cover it (#522: a Risky's under the star panel, its gift box seen); so a node with none, no
+    gift box and no shop mark is an event, matched or not: its "?" takes the theme pack's look (live 2026-10-18,
+    a bright cyan one missed every template) and dims with distance (MapPanned.png).
     """
     if "boss" in marks:
         return "boss"
-    if "cost" in marks or "ring" in marks:
+    if marks & {"cost", "ring", "gift"}:
         if by_cost:
             return by_cost
         if "ring" in marks:
