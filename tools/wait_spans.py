@@ -22,14 +22,15 @@ from datetime import datetime
 from maafw_timeline import TS
 
 RESULT = re.compile(r"Recognizer::recognize\] reco \[result=(.*)\] $")
-DIRECT = "recognition/"  # MaaFramework's name for a run_recognition_direct result: recognition/OCR/<a new uuid>
+DIRECT_PREFIX = "recognition/"  # MaaFramework's name for a run_recognition_direct result: recognition/OCR/<a new uuid>
 
 
 @dataclass
 class Pass:
     time: datetime
     screen: str | None = None  # the first node that hit
-    scores: dict = field(default_factory=dict)  # node -> every score it logged, to 6 decimals
+    scores: dict = field(default_factory=dict)  # node, or recognition/#n for HubText's nth own read -> every score, to 6 decimals
+    reads: int = 0  # HubText's own reads so far
 
 
 def all_scores(x):
@@ -59,8 +60,9 @@ def passes(lines):
             found.append(Pass(datetime.fromisoformat(t[1])))
         elif found:
             p = found[-1]
-            if str(name).startswith(DIRECT):  # HubText's own reads: keyed by their order, the name changes every pass
-                name = f"{name.rsplit('/', 1)[0]}#{sum(k.startswith(DIRECT) for k in p.scores)}"
+            if str(name).startswith(DIRECT_PREFIX):  # HubText's own read: a new name every pass, so keyed by its order
+                name = f"{DIRECT_PREFIX}#{p.reads}"
+                p.reads += 1
             elif result.get("box") and p.screen is None and name not in ("NoBatchOCR", "HubText"):
                 p.screen = name
             p.scores.setdefault(name, all_scores(result.get("detail")))
