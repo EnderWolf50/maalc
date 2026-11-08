@@ -531,7 +531,8 @@ def test_a_restart_that_did_not_go_through_is_not_one_of_the_tasks_two(hub, stop
 
 
 def test_the_opening_go_homes_restart_is_one_of_the_tasks_two(hub, stops):
-    assert actions.HomeLost().run(hub, None) is True  # GoHome did not reach the main window: restart 1
+    # GoHome did not reach the main window: restart 1
+    assert actions.HomeLost().run(hub, SimpleNamespace(custom_action_param=None)) is True
     actions.StuckFlag.see("PassBanner", screen(0))
     actions.StuckFlag.see("PassMissionsTab", screen(0))
     assert daily_restarts(hub, 2) == [True, False]

@@ -20,8 +20,10 @@ def test_connecting_is_looked_at_again_at_the_pace_of_the_hub_that_saw_it():
     nodes = load_nodes()
     connecting = nodes["Connecting"]
     hubs = {n: d.get("rate_limit") for n, d in nodes.items() if any(x.endswith("]Connecting") or x == "Connecting" for x in d.get("next", []))}
-    assert len(hubs) >= 7 and connecting.get("pre_delay") == 0
+    assert len(hubs) >= 6 and connecting.get("pre_delay") == 0
     assert set(hubs.values()) == {connecting["post_delay"]}, hubs
+    # GoHome waits on CONNECTING in a node of its own (#540), at the same pace.
+    assert nodes["HomeConnecting"]["rate_limit"] == connecting["post_delay"]
 
 
 def test_the_help_pager_is_looked_at_before_the_entry_page_under_it():
