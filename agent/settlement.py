@@ -122,6 +122,21 @@ def counts_as_run(result):
     return result == "clear"
 
 
+# Settings that forfeit every run (min_alive above the sinners left alive) forfeit each one; used-up wipe retries are bad
+# luck, which #34's acceptance expects up to 4 times in 14 runs. Two in a row may be luck, three hardly (#560).
+FORFEITS_IN_A_ROW = 3
+
+
+def forfeits_stop(forfeits):
+    """Why no new run starts after the runs given up in a row since the last claim, or None.
+
+    forfeits: each run's forfeit reason, None when the agent did not see it (a run picked up after a restart).
+    """
+    if len(forfeits) < FORFEITS_IN_A_ROW:
+        return None
+    return f"{len(forfeits)} runs in a row forfeited" + (f" ({forfeits[-1]})" if forfeits[-1] else "")
+
+
 CLAIM_COST = 5  # the Enkephalin Modules one Claim takes (Claim, spec 03 section 14)
 
 
