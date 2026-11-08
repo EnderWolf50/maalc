@@ -249,6 +249,42 @@ def test_a_second_land_waits_until_the_first_ends(tmp_path, capsys, first_ci, ma
     assert not list(lane(tmp_path).glob("*.ticket"))
 
 
+def test_a_land_whose_ticket_is_removed_while_it_waits_exits_and_merges_nothing(tmp_path):
+    earlier_land(tmp_path, os.getpid())
+    (holder,) = lane(tmp_path).glob("*.ticket")
+    mine, ended = {}, {}
+
+    def removes_the_tickets(s):
+        if not mine:
+            for p in list(lane(tmp_path).glob("*.ticket")):
+                if p != holder:
+                    mine[p] = p.read_text()
+                    p.unlink()
+            holder.unlink()
+        time.sleep(0.01)
+
+    fake = batch_fake(pr_of(7))
+
+    def lands():
+        try:
+            ended["rc"] = ship.cmd_land(fake, [7], True, sleep=removes_the_tickets, repo=tmp_path)
+        except SystemExit as e:
+            ended["exit"] = e
+
+    t = threading.Thread(target=lands, daemon=True)
+    t.start()
+    t.join(2)
+    if t.is_alive():
+        for p, text in mine.items():
+            p.write_text(text)
+        t.join(5)
+        pytest.fail("ship.py land --go still waits after its ticket was removed")
+    (me,) = mine
+    gone = ended.get("exit")
+    assert isinstance(gone, SystemExit) and isinstance(gone.code, str) and me.name in gone.code
+    assert fake.calls == [], "the land started: it read or merged a PR"
+
+
 def test_a_dry_run_lands_nothing_and_never_waits_for_a_land_that_runs(tmp_path, capsys):
     earlier_land(tmp_path, os.getpid())
 

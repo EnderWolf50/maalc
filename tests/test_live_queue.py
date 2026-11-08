@@ -1,6 +1,7 @@
 import importlib.util
 import json
 import os
+import shutil
 import signal
 import subprocess
 import sys
@@ -104,6 +105,85 @@ def test_run_waits_for_the_ticket_ahead_then_leaves_no_ticket(tmp_path):
     t.join(5)
     assert done["rc"] == 0
     assert list(tmp_path.glob("*.ticket")) == []
+
+
+def all_live(_pid, _start):
+    return True
+
+
+def remove(mine: dict[Path, str], own, holder: Path) -> None:
+    """Delete the waiter's own ticket, then the holder's; `mine` keeps the own one's text to let the waiter go again."""
+    for p in own:
+        mine[p] = p.read_text()
+        p.unlink()
+    holder.unlink()
+
+
+def ends_soon(t: threading.Thread, mine: dict[Path, str], what: str) -> None:
+    t.join(2)
+    if t.is_alive():
+        for p, text in mine.items():
+            p.parent.mkdir(parents=True, exist_ok=True)
+            p.write_text(text)
+        t.join(5)
+        pytest.fail(f"{what} still waits after its ticket was removed")
+
+
+def test_turn_does_not_run_the_block_when_its_ticket_is_removed_while_it_waits(tmp_path):
+    holder = ticket(tmp_path, "1000000000000000001", "holder", 111)
+    mine, ran, ended = {}, [], {}
+
+    def waits():
+        try:
+            with lq.turn(tmp_path, "me", ["hold"], is_alive=all_live, sleep=lambda s: time.sleep(0.01),
+                         on_wait=lambda ahead: remove(mine, list(tmp_path.glob("*-me.ticket")), holder)):
+                ran.append("block")
+        except SystemExit as e:
+            ended["exit"] = e
+
+    t = threading.Thread(target=waits, daemon=True)
+    t.start()
+    ends_soon(t, mine, "turn()")
+    (me,) = mine
+    assert isinstance(ended.get("exit"), lq.TicketGone) and me.name in str(ended["exit"])
+    assert ran == []
+
+
+def clears_when_it_waits(qdir: Path, holder: Path, mine: dict[Path, str], folder: bool):
+    """An is_alive under which every process lives. Its second look at the holder (start 111) comes after the waiter
+    queued behind it and said it waits: it removes the waiter's ticket and the holder's, or the whole queue folder."""
+    looks = []
+
+    def is_alive(_pid, start):
+        if start == 111:
+            looks.append(start)
+            if len(looks) == 2:
+                own = list(qdir.glob("*-me.ticket"))
+                if folder:
+                    mine.update((p, p.read_text()) for p in own)
+                    shutil.rmtree(qdir)
+                else:
+                    remove(mine, own, holder)
+        return True
+    return is_alive
+
+
+@pytest.mark.parametrize("folder", [False, True], ids=["tickets-removed", "folder-removed"])
+def test_run_does_not_start_its_command_when_its_ticket_is_removed_while_it_waits(tmp_path, capsys, folder):
+    qdir = tmp_path / "bench"
+    qdir.mkdir()
+    holder = ticket(qdir, "1000000000000000001", "holder", 111)
+    marker, mine, done = tmp_path / "ran", {}, {}
+    touch = [sys.executable, "-c", "import pathlib, sys; pathlib.Path(sys.argv[1]).touch()", str(marker)]
+    is_alive = clears_when_it_waits(qdir, holder, mine, folder)
+    t = threading.Thread(target=lambda: done.setdefault("rc", lq.run(qdir, "me", touch, is_alive=is_alive, poll=0.01)),
+                         daemon=True)
+    t.start()
+    ends_soon(t, mine, "run()")
+    (me,) = mine
+    assert done["rc"] == 1 and not marker.exists()
+    assert json.loads(lq.result_path(qdir, "me").read_text())["exit"] == 1
+    assert me.name in capsys.readouterr().out
 
 
 def test_a_first_ticket_runs_right_after_the_holder_ahead_of_the_waiting_ones(tmp_path):
