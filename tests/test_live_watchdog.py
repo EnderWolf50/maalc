@@ -1,5 +1,6 @@
 import importlib.util
 import json
+import re
 from pathlib import Path
 
 spec = importlib.util.spec_from_file_location("live_watchdog", Path(__file__).resolve().parent.parent / "tools/live/watchdog.py")
@@ -227,3 +228,13 @@ def test_cli_tick_reads_a_reported_thread_as_finished(tmp_path, monkeypatch, cap
 def test_the_sh_helper_returns_empty_for_a_failing_command():
     assert wd.sh(["python", "-c", "import sys; sys.exit(3)"]) == ""
     assert wd.sh(["python", "-c", "print('x')"]).strip() == "x"
+
+
+def test_installing_the_prompt_fills_the_schedule_id_only_where_it_names_the_schedule():
+    head, _, prompt = (Path(__file__).resolve().parent.parent / "docs/agents/watchdog-prompt.md").read_text(
+        encoding="utf-8").partition("\n---\n")
+    placeholder = re.search(r"filling in `(<[^>]+>)`", head).group(1)
+    installed = prompt.replace(placeholder, "SCHEDULE-42")
+    assert "--status <line-id>=<state>" in installed and "--reported <line-id>" in installed
+    filled = [line for line in installed.splitlines() if "SCHEDULE-42" in line]
+    assert filled and all("scheduled task's id is" in line or "scheduledTaskId" in line for line in filled), filled
