@@ -53,8 +53,9 @@ fn load_theme_packs() -> Result<String, String> {
 const CHANGED: &str = "settings.json changed on disk";
 
 /// Write a temp file next to settings.json, then rename over it, so a crash never leaves half a file.
-/// expected: the text the GUI last read or wrote. When the file holds other text now, another writer changed it since
-/// (the Agent moves a team to the end of the queue after a claim, #501): nothing is written, for the GUI to read it again.
+/// expected: the text the GUI last read or wrote, None for no file then. When the file holds anything else now, another
+/// writer changed it since (the Agent moves a team to the end of the queue after a claim, #501): nothing is written, for
+/// the GUI to read it again.
 #[tauri::command]
 fn save_settings(text: String, expected: Option<String>) -> Result<(), String> {
     let path = settings_path()?;
@@ -66,10 +67,13 @@ fn save_settings(text: String, expected: Option<String>) -> Result<(), String> {
         f.write_all(text.as_bytes())?;
         f.sync_all()?;
         drop(f);
-        if let Some(expected) = &expected {
-            if fs::read_to_string(&path)? != *expected {
-                return Err(std::io::Error::other(CHANGED));
-            }
+        let current = match fs::read_to_string(&path) {
+            Ok(current) => Some(current),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
+            Err(e) => return Err(e),
+        };
+        if current != expected {
+            return Err(std::io::Error::other(CHANGED));
         }
         fs::rename(&tmp, &path) // replaces the old file on Windows too
     })();

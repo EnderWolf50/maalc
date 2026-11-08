@@ -349,7 +349,7 @@ def write_settings(root, data, expected):
     path = settings_path(root)
     fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=path.name, suffix=".tmp")
     try:
-        with os.fdopen(fd, "w", encoding="utf-8") as f:
+        with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as f:
             f.write(json.dumps(data, ensure_ascii=False, indent=2) + "\n")
             f.flush()
             os.fsync(f.fileno())

@@ -41,14 +41,15 @@ export default function App() {
   const sync = async () => {
     const text = await api.loadSettings();
     const { s: draft, savedText: base } = latest.current;
-    if (text === null || text === disk.current || !draft || !base) return draft;
-    disk.current = text;
-    let data: Settings;
+    if (text === disk.current || !draft) return draft;
+    let data: Settings | undefined;
     try {
-      data = parseSettings(text).data;
+      data = text === null ? undefined : parseSettings(text).data;
     } catch {
-      return draft; // half an edit by hand: the next change is read again
+      return draft; // half an edit by hand: not taken as read, so a save is refused until it parses
     }
+    disk.current = text;
+    if (!data || !base) return draft; // no file now, or none when the editor opened: nothing to merge
     const next = rebase(JSON.parse(base), draft, data);
     setS(next);
     setSavedText(toText(data));
@@ -72,8 +73,12 @@ export default function App() {
         disk.current = text;
         setS(data);
         if (migrated && !validate(data).length) {
-          await api.saveSettings(toText(data), text);
-          disk.current = toText(data);
+          try {
+            await api.saveSettings(toText(data), text);
+            disk.current = toText(data);
+          } catch (e) {
+            if (!String(e).includes(api.CHANGED)) throw e; // the Agent wrote first: the next poll reads its file
+          }
         }
         setSavedText(toText(data)); // dirty = content changed, not formatting
         const warn = (key: Key, n: number) => (n ? [TEXT[data.language][key].replace("{n}", String(n))] : []);
@@ -108,6 +113,7 @@ export default function App() {
     tv: (field, v) => TEXT[lang][`${field}.${v}` as Key] ?? v,
   };
   const dirty = toText(s) !== savedText;
+  const note = status === t("saved") ? "" : status; // shown beside "unsaved" too: a refused save, the file read again
 
   const save = async () => {
     setChecked(true);
@@ -118,8 +124,9 @@ export default function App() {
         try {
           await api.saveSettings(toText(current), disk.current);
         } catch (e) {
-          if (String(e).includes(api.CHANGED) && tries < 3) continue; // it changed between that read and this write
-          throw e;
+          if (!String(e).includes(api.CHANGED)) throw e;
+          if (tries < 3) continue; // it changed between that read and this write
+          return setStatus(t("saveConflict"));
         }
         disk.current = toText(current);
         setSavedText(toText(current));
@@ -142,7 +149,7 @@ export default function App() {
             <option value="en_us">English</option>
           </select>
         </label>
-        <span className="status">{dirty ? t("unsaved") : status}</span>
+        <span className="status">{dirty ? [t("unsaved"), note].filter(Boolean).join(" ") : status}</span>
         <button type="button" className="primary" onClick={save}>{t("save")}</button>
       </header>
       {checked && problems.length > 0 && (

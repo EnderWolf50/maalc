@@ -70,10 +70,11 @@ def test_a_claim_moves_the_team_to_the_end_of_the_queue_and_keeps_the_rest_of_th
     path = settings_file(tmp_path, ["a", "b", "c"], run={"runs": None})
     requeue(tmp_path, "a")
     assert queue(tmp_path) == ["b", "c", "a"]
-    text = path.read_text(encoding="utf-8")
-    data = json.loads(text)
+    raw = path.read_bytes()
+    data = json.loads(raw)
     assert data["version"] == 20 and data["run"] == {"runs": None} and data["teams"][2]["name"] == "隊 a"
-    assert text.endswith("\n}\n") and '"name": "隊 a"' in text  # the GUI's own format: indent 2, no \u escapes
+    # The GUI's own format (App.tsx toText): indent 2, no \u escapes, LF line ends on Windows too.
+    assert raw.endswith(b"\n}\n") and b"\r" not in raw and '"name": "隊 a"'.encode() in raw
 
 
 def test_the_claimed_team_moves_wherever_the_gui_put_it_since_the_run_began(tmp_path):

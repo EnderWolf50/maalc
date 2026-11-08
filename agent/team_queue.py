@@ -44,8 +44,10 @@ def requeue(root, team_id):
     Returns a line for the log.
     """
     def to_end(teams):
-        i = next((i for i, t in enumerate(teams) if t["id"] == team_id), len(teams) - 1)
-        return teams[:i] + teams[i + 1:] + [teams[i]] if i < len(teams) - 1 else None
+        i = next((i for i, t in enumerate(teams) if t["id"] == team_id), None)
+        if i is None or i == len(teams) - 1:
+            return None
+        return teams[:i] + teams[i + 1:] + [teams[i]]
 
     try:
         teams = _reorder(root, to_end)

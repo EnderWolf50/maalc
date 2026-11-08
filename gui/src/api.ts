@@ -19,7 +19,7 @@ export const loadSettings = (): Promise<string | null> =>
 /** The error text of a save refused because the file no longer holds `expected` (lib.rs save_settings). */
 export const CHANGED = "settings.json changed on disk";
 
-/** expected: the text last read or written, null for a file not there then; another text there refuses the save (#501). */
+/** expected: the text last read or written, null for no file then; anything else there now refuses the save (#501). */
 export function saveSettings(text: string, expected: string | null): Promise<void> {
   if (tauri) return invoke("save_settings", { text, expected });
   if (expected !== null && localStorage.getItem("settings.json") !== expected) return Promise.reject(CHANGED);

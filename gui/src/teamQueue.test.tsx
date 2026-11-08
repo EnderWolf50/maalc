@@ -9,7 +9,7 @@ import { TEXT } from "./i18n";
 import { movedToEnd, newSettings, newTeam, rebase, type Settings } from "./model";
 
 // lib.rs save_settings: refused when the file is no longer the text the editor last read or wrote.
-const file = vi.hoisted(() => ({ text: "", saved: [] as string[], beforeSave: undefined as (() => void) | undefined }));
+const file = vi.hoisted(() => ({ text: "" as string | null, saved: [] as string[], beforeSave: undefined as (() => void) | undefined }));
 vi.mock("./api", async (original) => {
   const api = await original<typeof import("./api")>();
   return {
@@ -72,7 +72,7 @@ describe("in the editor", () => {
   beforeEach(() => { file.text = text(queue("a", "b", "c")); file.saved = []; file.beforeSave = undefined; });
   const shown = () => within(document.querySelector("aside")!).getAllByRole("listitem").map((li) => li.textContent!.match(/T\w/)![0]);
   const nameBox = () => screen.getByRole("textbox", { name: zh.name });
-  const agentClaims = (id: string) => { file.text = text(claimed(JSON.parse(file.text), id)); };
+  const agentClaims = (id: string) => { file.text = text(claimed(JSON.parse(file.text!), id)); };
 
   test("the teams tab says the list is the queue", async () => {
     render(<App />);
@@ -120,5 +120,27 @@ describe("in the editor", () => {
     const saved: Settings = JSON.parse(file.saved[0]);
     expect(saved.teams.map((t) => t.name)).toEqual(["Tb", "Tc", "Ta!"]);
     expect(screen.getByText(zh.saved)).toBeInTheDocument();
+  });
+
+  test("a file deleted while the editor is open is written again by a save", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await waitFor(() => expect(nameBox()).toHaveValue("Ta"));
+    file.text = null;
+    await user.type(nameBox(), "!");
+    await user.click(screen.getByRole("button", { name: zh.save }));
+    await waitFor(() => expect(file.saved).toHaveLength(1));
+    expect(JSON.parse(file.saved[0]).teams[0].name).toBe("Ta!");
+  });
+
+  test("a file left half edited by hand is not saved over", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await waitFor(() => expect(nameBox()).toHaveValue("Ta"));
+    file.text = "{";
+    await user.type(nameBox(), "!");
+    await user.click(screen.getByRole("button", { name: zh.save }));
+    expect(await screen.findByText(zh.saveConflict, { exact: false })).toHaveTextContent(zh.unsaved);
+    expect(file.saved).toEqual([]);
   });
 });
