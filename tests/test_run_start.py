@@ -16,7 +16,16 @@ PRIORITY = [3, 1, 10, 4, 2, 5, 6, 7, 8, 9]
     ("auto", 3, "hard"), ("auto", 0, "normal"), ("hard", 0, "hard"), ("normal", 3, "normal"),
 ])
 def test_run_difficulty(setting, weekly, expected):
-    assert rs.run_difficulty(setting, weekly) == expected
+    assert rs.run_difficulty(setting, weekly, 5) == expected
+
+
+@pytest.mark.parametrize(("setting", "weekly", "target", "expected"), [
+    ("auto", 0, 10, "hard"), ("auto", 0, 15, "hard"), ("auto", 3, 15, "hard"), ("auto", 0, 5, "normal"),
+    ("hard", 0, 15, "hard"), ("normal", 3, 5, "normal"),
+])
+def test_run_difficulty_target_above_5_is_hard_whatever_the_weekly_bonuses(setting, weekly, target, expected):
+    # #385: floors 6+ need every floor of the run HARD, so auto never falls back to normal
+    assert rs.run_difficulty(setting, weekly, target) == expected
 
 
 def test_resolve_plan():

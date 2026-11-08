@@ -315,8 +315,16 @@ def _v18_to_v19(data):
     return data
 
 
+def _v19_to_v20(data):
+    """Version 20 adds run.target_floor (#385): 5, the floors the bot has always played."""
+    run = data.get("run")
+    if isinstance(run, dict):
+        run.setdefault("target_floor", 5)
+    return data
+
+
 # MIGRATIONS[n] turns a version-n dict into a version-(n + 1) dict; keep in step with gui/src/model.ts.
-MIGRATIONS = {1: _v1_to_v2, 2: _v2_to_v3, 3: _v3_to_v4, 4: _v4_to_v5, 5: _v5_to_v6, 6: _v6_to_v7, 7: _v7_to_v8, 8: _v8_to_v9, 9: _v9_to_v10, 10: _v10_to_v11, 11: _v11_to_v12, 12: _v12_to_v13, 13: _v13_to_v14, 14: _v14_to_v15, 15: _v15_to_v16, 16: _v16_to_v17, 17: _v17_to_v18, 18: _v18_to_v19}
+MIGRATIONS = {1: _v1_to_v2, 2: _v2_to_v3, 3: _v3_to_v4, 4: _v4_to_v5, 5: _v5_to_v6, 6: _v6_to_v7, 7: _v7_to_v8, 8: _v8_to_v9, 9: _v9_to_v10, 10: _v10_to_v11, 11: _v11_to_v12, 12: _v12_to_v13, 13: _v13_to_v14, 14: _v14_to_v15, 15: _v15_to_v16, 16: _v16_to_v17, 17: _v17_to_v18, 18: _v18_to_v19, 19: _v19_to_v20}
 NOTES = []  # what the last migrate() dropped, for the agent's log: the file on disk keeps it until the GUI saves
 
 NO_TEAM = "No enabled team: set up a team in the settings GUI first."
@@ -417,6 +425,22 @@ def cross_check(data):
                 errors.append(f"{path}/s1: {who} targets {target['s1']} of skill 1, but swaps only lower it from the game's 3")
             if target["s3"] < 1:
                 errors.append(f"{path}/s3: {who} targets {target['s3']} of skill 3, but swaps only raise it from the game's 1")
+
+    target_floor = data["run"]["target_floor"]
+    if target_floor > 5:
+        # floors 6+ open only when every floor of the run was HARD, and the rotation picks from the enabled teams (#385)
+        need = f"but target_floor {target_floor} needs the whole run HARD"
+        if data["run"]["difficulty"] == "normal":
+            errors.append(f"run/difficulty: difficulty is 'normal', {need}")
+        for i, t in enumerate(teams):
+            if not t["enabled"]:
+                continue
+            if t["usage"] == "normal_only":
+                errors.append(f"teams/{i}/usage: team {t['name']!r} is normal_only, {need}")
+            if t["hard_from_floor"] is None:
+                errors.append(f"teams/{i}/hard_from_floor: team {t['name']!r} never switches to HARD, {need} (hard_from_floor 1)")
+            elif t["hard_from_floor"] != 1:
+                errors.append(f"teams/{i}/hard_from_floor: team {t['name']!r} starts HARD at floor {t['hard_from_floor']}, {need} (hard_from_floor 1)")
 
     for i, gift_list in enumerate(data["gift_lists"]):
         errors.extend(

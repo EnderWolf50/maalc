@@ -328,7 +328,7 @@ export interface Settings {
   version: number;
   language: "zh_tw" | "en_us";
   run: {
-    difficulty: string; runs: number | null; weekly_bonus_use: string; weekly_bonus_amount: string;
+    difficulty: string; target_floor: number; runs: number | null; weekly_bonus_use: string; weekly_bonus_amount: string;
     stop_when_weekly_bonus_out: boolean; starlight_unaffordable: string; wipe_retries: number;
     after_retries: string; webhook_url: string; theme_pack_refresh: string;
     auto_accept_terms: boolean; auto_download: boolean; keep_dismissed_screens: boolean;
@@ -490,6 +490,8 @@ const MIGRATIONS: Record<number, (d: Record<string, unknown>) => Record<string, 
   // Version 19 adds teams[].skill_replacement (#454): no sinner listed, so every deck stays the game's 3/2/1 and the shop plays
   // as before; ID Skill Search off and paid in Cost.
   18: (d) => withTeamDefault(d, { skill_replacement: defaultSkillReplacement() }),
+  // Version 20 adds run.target_floor (#385): 5, the floors the bot has always played.
+  19: (d) => (d.run && typeof d.run === "object" && !Array.isArray(d.run) ? { ...d, run: { target_floor: 5, ...d.run } } : d),
 };
 /** The version 10 keep_gifts the last migration found no gift for (parseSettings returns it). */
 let v10Dropped = 0;

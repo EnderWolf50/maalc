@@ -20,13 +20,14 @@
     "charge_enkephalin"
   ],
   "properties": {
-    "version": { "const": 19 },
+    "version": { "const": 20 },
     "language": { "enum": ["zh_tw", "en_us"], "default": "zh_tw" },
     "run": {
       "type": "object",
       "additionalProperties": false,
       "required": [
         "difficulty",
+        "target_floor",
         "runs",
         "weekly_bonus_use",
         "weekly_bonus_amount",
@@ -41,6 +42,7 @@
       ],
       "properties": {
         "difficulty": { "enum": ["hard", "normal", "auto"], "default": "auto" },
+        "target_floor": { "enum": [5, 10, 15], "default": 5, "description": "the floor the run is meant to reach: 5 NORMAL/HARD, 10 INFINITY, 15 EXTREME; above 5 every floor of the run must be HARD" },
         "runs": { "type": ["integer", "null"], "minimum": 1, "default": 1, "description": "null: no limit" },
         "weekly_bonus_use": { "enum": ["none", "normal", "hard"], "default": "hard" },
         "weekly_bonus_amount": { "enum": ["one", "all"], "default": "all" },
