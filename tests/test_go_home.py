@@ -94,8 +94,8 @@ def child():
                 time.sleep(HOLD)
                 self.held += 1
 
-    hold = HoldsTheStop()
-    tasker.add_sink(hold)
+    holder = HoldsTheStop()
+    tasker.add_sink(holder)
     out = {"error": None}
     calls = {"go_home": actions.go_home, "finish": lambda context: actions.finish(context, "nothing left")}
     returned = {}
@@ -176,7 +176,7 @@ def child():
                          "stopped": len(list(actions.ROOT.joinpath("logs").rglob("agent.log"))) - stops,
                          "halted": actions.STUCK["halted"]}
         actions.STUCK["halted"] = None
-    out["held"] = hold.held
+    out["held"] = holder.held
     print(json.dumps(out))
 
 
