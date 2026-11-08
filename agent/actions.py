@@ -3600,11 +3600,7 @@ class Event(CustomAction):
         tried = RUN.setdefault("event_tried", set())  # this question's options a tap did nothing on
         checked = event["checked"]  # portraits a tap did nothing on in this check
         if red_button(image):
-            tried.clear()
-            checked.clear()
-            event.pop("prompt_at", None)
-            tap(context, *EVENT_BUTTON, wait=0)
-            Event.advance(context, image, pressed_at=time.monotonic())
+            Event.advance(context, image, pressed_at=Event.press(context))
         elif card_alone(image):
             tap(context, *EVENT_CARD, wait=0)
             Event.settle(context, image)
@@ -3657,26 +3653,43 @@ class Event(CustomAction):
                 log(f"event: {options[i][0]!r} did nothing: try another")
                 tried.add(options[i][0])
             # A lit card changes the panel before the page goes: MirrorHub reading Choices would take one again.
-            elif until(context, gone(context, {"roi": CHOICES_HEADER, "expected": "Choices"}, image), timeout=EVENT_TAKE) is None:
+            elif (after := until(context, gone(context, {"roi": CHOICES_HEADER, "expected": "Choices"}, image), timeout=EVENT_TAKE)) is None:
                 log(f"event: Choices still up {EVENT_TAKE} s after taking {options[i][0]!r}")
+            else:
+                Event.advance(context, after)
         else:
             tried.clear()
             Event.advance(context, image)
         return True
 
     @staticmethod
+    def press(context):
+        """Tap the lit button, and return when (time.monotonic()): the page it leads to starts its question's and its
+        check's tries over."""
+        RUN.get("event_tried", set()).clear()
+        if event := RUN.get("event"):
+            event["checked"].clear()
+            event.pop("prompt_at", None)
+        tap(context, *EVENT_BUTTON, wait=0)
+        return time.monotonic()
+
+    @staticmethod
     def advance(context, image, pressed_at=None):
         """Text running on (the button grey, or a press of it lit fading out): taps on a dead corner show it line by
-        line; keep tapping until there is something to act on, for MirrorHub's next look.
+        line, and a button that lights is pressed; keep on until there is something else to act on, for MirrorHub's
+        next look (#557: handed back, a lit button waited 0.6-1.2 s for it).
 
         A Choices page or a check prompt shows up to EVENT_READ_EVERY - 1 taps late: a tap on the dead corner picks nothing.
         pressed_at: time.monotonic() of a tap on the lit button just now, image the screen it was tapped on (#188:
         MirrorHub's look after it paused the taps 1.6-5.3 s). The button stays lit while the press fades out, its
-        label read once a screen (1 OCR, besides the page check every EVENT_READ_EVERY taps); the first screen
-        without it is read before the next tap (3 OCRs). Lit with another label (SKIP, then Continue), it is the
-        next button; lit EVENT_TAKE s on, the press was lost.
+        label read once a screen that has not moved since the last (1 OCR, besides the page check every
+        EVENT_READ_EVERY taps); the first screen without it is read before the next tap (3 OCRs). Lit with another
+        label (SKIP, then Continue), it is the next button; lit EVENT_TAKE s on, the press was lost.
         Only two labels read whole tell another button: one read empty or in part while it fades ("Contnue") is not,
         as MirrorHub's Event node would still match the fading button and press it twice.
+        A next button is pressed on the first screen that has not moved since the last (a press mid-fade is lost, #273),
+        its label read whole, else MirrorHub presses it. A popup over it (CONNECTING after a taken option) is waited
+        out as page_guard waits, before MirrorHub would answer it.
         On the map the event ends on, the taps go on until the screen a look saw it on has not changed for
         EVENT_MAP_REST s (#511).
         """
@@ -3698,14 +3711,24 @@ class Event(CustomAction):
             tap(context, *EVENT_NEUTRAL, wait=0)
             image, shot_at = screen(context), time.monotonic()
             before, thumb = thumb, recovery.thumb(image)
-            if not recovery.same_screen(before, thumb):
+            if moved := not recovery.same_screen(before, thumb):
                 still_since = shot_at
             if red_button(image):
-                if pressed_label is None or time.monotonic() - pressed_at >= EVENT_TAKE:
+                if pressed_label is not None and time.monotonic() - pressed_at >= EVENT_TAKE:
                     break
+                if moved:
+                    continue
                 label = compact(text(context, image, EVENT_BUTTON_LABEL))
-                if pressed_label in EVENT_LABELS and label in EVENT_LABELS and label != pressed_label:
+                if pressed_label is not None and not (pressed_label in EVENT_LABELS and label in EVENT_LABELS and label != pressed_label):
+                    continue
+                if label not in EVENT_LABELS:
                     break
+                if on_page(context, image, *POPUPS):
+                    image = page_guard(context, "Event")
+                    thumb = recovery.thumb(image)
+                    continue
+                pressed_at = last = Event.press(context)
+                pressed_label = label
                 continue
             read = n % EVENT_READ_EVERY == 0 or pressed_label is not None
             pressed_label = None
