@@ -1,4 +1,9 @@
 import json
+import os
+import subprocess
+import sys
+import threading
+import time
 from pathlib import Path
 
 import pytest
@@ -7,6 +12,13 @@ import ship
 
 HEAD = "a" * 40
 MERGE = "b" * 40
+MAIN = "d" * 40
+MAIN_REF = "repos/{owner}/{repo}/git/ref/heads/main"
+
+
+@pytest.fixture(autouse=True)
+def main_checkout(tmp_path, monkeypatch):
+    monkeypatch.setattr(ship, "main_checkout", lambda: tmp_path)
 
 
 def info(**kw):
@@ -40,21 +52,27 @@ class Fake:
         return [c for c in self.calls if c[:len(prefix)] == list(prefix)]
 
 
-def ok_routes(queue):
+def runs(states):
+    return [(0, json.dumps([{"status": s, "conclusion": c, "url": "u"}])) for s, c in states]
+
+
+def ok_routes(queue, main_head=(("completed", "success"),)):
     return {"gh pr merge": (0, ""), "gh pr edit": (0, ""), "gh api": (0, ""),
+            f"gh api {MAIN_REF}": (0, json.dumps({"object": {"sha": MAIN}})),
+            f"gh run list --workflow ci --branch main --commit {MAIN}": runs(main_head),
             f"{ship.sys.executable} tools/live/queue.py status": (0, queue),
             "uv run python tools/after_land.py": (0, "after_land done")}
 
 
-def land_fake(pr=None, stacked=(), main_ci=(("completed", "success"),), queue="emulator:\n  free\n", **extra):
-    runs = [(0, json.dumps([{"status": s, "conclusion": c, "url": "u"}])) for s, c in main_ci]
-    return Fake(**{**ok_routes(queue), "gh pr view 7": [(0, json.dumps(pr or info())),
-                                                        (0, json.dumps({"mergeCommit": {"oid": MERGE}}))],
-                   "gh pr list": (0, json.dumps(list(stacked))), "gh run list": runs, **extra})
+def land_fake(pr=None, stacked=(), main_ci=(("completed", "success"),), queue="emulator:\n  free\n",
+              main_head=(("completed", "success"),), **extra):
+    return Fake(**{**ok_routes(queue, main_head), "gh pr view 7": [(0, json.dumps(pr or info())),
+                                                                   (0, json.dumps({"mergeCommit": {"oid": MERGE}}))],
+                   "gh pr list": (0, json.dumps(list(stacked))), "gh run list": runs(main_ci), **extra})
 
 
 def land(fake, go=True, prs=(7,)):
-    return ship.cmd_land(fake, list(prs), go, sleep=lambda s: None, repo=Path("main-checkout"))
+    return ship.cmd_land(fake, list(prs), go, sleep=lambda s: None)
 
 
 def merge_of(pr):
@@ -74,16 +92,15 @@ class GitHub(Fake):
         return super().__call__(argv, cwd)
 
 
-def batch_fake(*prs, stacked=None, main_ci=None, queue="emulator:\n  free\n"):
+def batch_fake(*prs, stacked=None, main_ci=None, queue="emulator:\n  free\n", main_head=(("completed", "success"),)):
     """A fake GitHub with the PRs `prs` (info dicts); `stacked` and `main_ci` are keyed by PR number."""
-    routes = ok_routes(queue)
+    routes = ok_routes(queue, main_head)
     for p in prs:
         n = p["number"]
         routes[f"gh pr view {n}"] = [(0, json.dumps(p)), (0, json.dumps({"mergeCommit": {"oid": merge_of(n)}}))]
         routes[f"gh pr list --base {p['headRefName']}"] = (0, json.dumps((stacked or {}).get(n, [])))
-        runs = (main_ci or {}).get(n, [("completed", "success")])
-        routes[f"gh run list --workflow ci --branch main --commit {merge_of(n)}"] = [
-            (0, json.dumps([{"status": s, "conclusion": c, "url": "u"}])) for s, c in runs]
+        routes[f"gh run list --workflow ci --branch main --commit {merge_of(n)}"] = runs(
+            (main_ci or {}).get(n, [("completed", "success")]))
     return GitHub(**routes)
 
 
@@ -165,6 +182,85 @@ def test_land_cli_takes_several_prs(capsys):
     assert "stopped" not in capsys.readouterr().err
 
 
+def lane(repo):
+    return repo / ".local" / "queue" / "land"
+
+
+def dead_pid() -> int:
+    p = subprocess.Popen([sys.executable, "-c", "pass"])
+    p.wait()
+    return p.pid
+
+
+def earlier_land(repo, pid):
+    lane(repo).mkdir(parents=True)
+    (lane(repo) / f"1000000000000000001-{pid}-land.ticket").write_text(
+        json.dumps({"cmd": "ship.py land #6", "start": None, "first": False}))
+
+
+@pytest.mark.parametrize("first_ci, main_after, dead_ahead", [
+    ("success", "success", False), ("failure", "failure", False), ("failure", "success", False),
+    ("success", "success", True),
+], ids=["first-green", "first-red-main-still-red", "first-red-main-rerun-green", "dead-holder-ahead"])
+def test_a_second_land_waits_until_the_first_ends(tmp_path, capsys, first_ci, main_after, dead_ahead):
+    if dead_ahead:
+        earlier_land(tmp_path, dead_pid())
+    log, reached, release, second_waits = [], threading.Event(), threading.Event(), threading.Event()
+    one, two = batch_fake(pr_of(7), main_ci={7: [("completed", first_ci)]}), batch_fake(pr_of(8))
+    two.routes[f"gh api {MAIN_REF}"] = (0, json.dumps({"object": {"sha": merge_of(7)}}))
+    two.routes[f"gh run list --workflow ci --branch main --commit {merge_of(7)}"] = runs([("completed", main_after)])
+
+    def first_runner(argv, cwd=None):
+        log.append(("first", list(argv)))
+        if argv[:3] == ["gh", "run", "list"] and merge_of(7) in argv:
+            reached.set()
+            release.wait(5)
+        return one(argv, cwd)
+
+    def second_runner(argv, cwd=None):
+        log.append(("second", list(argv)))
+        return two(argv, cwd)
+
+    def second_sleep(s):
+        second_waits.set()
+        time.sleep(0.01)
+
+    rc = {}
+    t1 = threading.Thread(target=lambda: rc.update(
+        first=ship.cmd_land(first_runner, [7], True, sleep=lambda s: time.sleep(0.01), repo=tmp_path)))
+    t2 = threading.Thread(target=lambda: rc.update(
+        second=ship.cmd_land(second_runner, [8], True, sleep=second_sleep, repo=tmp_path)))
+    t1.start()
+    try:
+        assert reached.wait(2), "the first call reached the CI wait of its merge"
+        t2.start()
+        assert second_waits.wait(2), "the second call waits while the first one runs"
+    finally:
+        release.set()
+        t1.join(5)
+        t2.join(5)
+    assert rc == {"first": 0 if first_ci == "success" else 1, "second": 0 if main_after == "success" else 1}
+    last_first = max(i for i, (who, _) in enumerate(log) if who == "first")
+    assert log[last_first][1][:4] == (list(AFTER_LAND) if first_ci == "success" else ["gh", "run", "list", "--workflow"])
+    assert min(i for i, (who, _) in enumerate(log) if who == "second") > last_first
+    assert bool(two.ran("gh", "pr", "merge", "8")) == (main_after == "success")
+    waits = [line for line in capsys.readouterr().out.splitlines() if line.startswith("ship: waiting")]
+    assert waits == [f"ship: waiting for pid {os.getpid()} (ship.py land #7) to end before landing #8"]
+    assert not list(lane(tmp_path).glob("*.ticket"))
+
+
+def test_a_dry_run_lands_nothing_and_never_waits_for_a_land_that_runs(tmp_path, capsys):
+    earlier_land(tmp_path, os.getpid())
+
+    def no_wait(s):
+        raise AssertionError("the dry run waited")
+
+    fake = batch_fake(pr_of(7))
+    assert ship.cmd_land(fake, [7], False, sleep=no_wait, repo=tmp_path) == 0
+    assert not fake.ran("gh", "pr", "merge")
+    assert "Would merge" in capsys.readouterr().out
+
+
 @pytest.mark.parametrize("rollup, want", [
     ([{"name": "ci-ok", "status": "COMPLETED", "conclusion": "SUCCESS"}], "SUCCESS"),
     ([{"name": "ci-ok", "status": "COMPLETED", "conclusion": "FAILURE"}], "FAILURE"),
@@ -203,6 +299,42 @@ def test_land_refuses_and_merges_nothing(kw, text, capsys):
     assert not fake.ran("gh", "pr", "merge")
 
 
+def pr_reads(*reads):
+    """`gh pr view 7` answers: one PR read per dict of `info` fields, then the merge commit read after the merge."""
+    return [(0, json.dumps(info(**kw))) for kw in reads] + [(0, json.dumps({"mergeCommit": {"oid": MERGE}}))]
+
+
+def reads_before_merge(fake):
+    merge = first(fake, "gh", "pr", "merge")
+    return [i for i in range(merge) if fake.calls[i][:4] == ["gh", "pr", "view", "7"]]
+
+
+def test_land_reads_a_pr_again_while_github_reports_mergeable_unknown_then_merges():
+    unknown = {"mergeable": "UNKNOWN"}
+    fake = land_fake(**{"gh pr view 7": pr_reads(unknown, unknown, {"mergeable": "MERGEABLE"})})
+    assert land(fake) == 0
+    assert len(reads_before_merge(fake)) == 3
+
+
+def test_land_refuses_a_pr_still_unknown_after_about_a_minute(capsys):
+    waits = []
+    fake = land_fake(**{"gh pr view 7": [(0, json.dumps(info(mergeable="UNKNOWN")))]})
+    assert ship.cmd_land(fake, [7], True, sleep=waits.append) == 1
+    assert not fake.ran("gh", "pr", "merge")
+    assert "unknown, not mergeable" in capsys.readouterr().err
+    assert 50 <= sum(waits) <= 70
+
+
+@pytest.mark.parametrize("kw", [{"mergeable": "CONFLICTING"}, {"state": "MERGED", "mergeable": "UNKNOWN"},
+                                {"isDraft": True, "mergeable": "UNKNOWN"}], ids=["conflicting", "merged", "draft"])
+def test_land_refuses_at_the_first_read_a_pr_that_more_than_unknown_blocks(kw):
+    waits = []
+    fake = land_fake(**{"gh pr view 7": pr_reads(kw, {})})
+    assert ship.cmd_land(fake, [7], True, sleep=waits.append) == 1
+    assert not fake.ran("gh", "pr", "merge")
+    assert len(fake.ran("gh", "pr", "view", "7")) == 1 and not waits
+
+
 def test_land_without_go_merges_nothing():
     fake = land_fake()
     assert land(fake, go=False) == 0
@@ -227,15 +359,52 @@ def test_land_retargets_stacked_prs_before_the_branch_is_deleted():
 
 def test_land_keeps_the_branch_of_a_fork():
     fake = land_fake(pr=info(isCrossRepository=True))
-    land(fake)
-    assert not fake.ran("gh", "api")
+    assert land(fake) == 0
+    assert fake.ran("gh", "pr", "merge") and not fake.ran("gh", "api", "-X", "DELETE")
 
 
 def test_land_waits_until_the_main_run_finishes():
     fake = land_fake(main_ci=[("queued", None), ("in_progress", None), ("completed", "success")])
     assert land(fake) == 0
-    assert len(fake.ran("gh", "run", "list")) == 3
+    assert len(fake.ran("gh", "run", "list", "--workflow", "ci", "--branch", "main", "--commit", MERGE)) == 3
     assert fake.ran("uv", "run", "python", "tools/after_land.py")
+
+
+def test_land_refuses_to_merge_onto_a_red_main_head(capsys):
+    fake = land_fake(main_head=[("completed", "failure")])
+    assert land(fake) == 1
+    assert not fake.ran("gh", "pr", "merge")
+    err = capsys.readouterr().err
+    assert MAIN[:10] in err and "failure" in err and "--onto-red" in err
+
+
+def test_land_waits_for_a_pending_main_head_then_merges():
+    fake = land_fake(main_head=[("in_progress", None), ("completed", "success")])
+    assert land(fake) == 0
+    head = ("gh", "run", "list", "--workflow", "ci", "--branch", "main", "--commit", MAIN)
+    assert len(fake.ran(*head)) == 2 and last(fake, *head) < first(fake, "gh", "pr", "merge")
+
+
+def test_land_onto_red_merges_the_named_pr_onto_a_red_main_head_and_no_other():
+    fake = batch_fake(pr_of(7), pr_of(8), main_head=[("completed", "failure")])
+    assert ship.main(["land", "7", "8", "--go", "--onto-red", "7"], runner=fake) == 1
+    assert [c[3] for c in fake.ran("gh", "pr", "merge")] == ["7"]
+
+
+def test_land_onto_red_must_name_a_pr_of_the_call(capsys):
+    fake = land_fake()
+    with pytest.raises(SystemExit) as e:
+        ship.main(["land", "7", "--go", "--onto-red", "8"], runner=fake)
+    assert e.value.code == 2 and not fake.calls
+    assert "--onto-red 8 is not one of the PRs to land" in capsys.readouterr().err
+
+
+def test_land_skips_after_land_when_main_turns_red_before_a_later_pr(capsys):
+    fake = batch_fake(pr_of(7), pr_of(8), main_head=[("completed", "success"), ("completed", "failure")])
+    assert land(fake, prs=[7, 8]) == 1
+    assert [c[3] for c in fake.ran("gh", "pr", "merge")] == ["7"]
+    assert "ship: stopped at #8; not started: none" in capsys.readouterr().err
+    assert not fake.ran(*AFTER_LAND)
 
 
 def test_land_exits_non_zero_on_a_red_main_and_skips_after_land(capsys):
@@ -256,6 +425,7 @@ def test_land_into_a_stacked_base_does_not_wait_for_a_main_run(capsys):
     fake = land_fake(pr=info(baseRefName="feat/base"))
     assert land(fake) == 0
     assert not fake.ran("gh", "run", "list") and not fake.ran("uv", "run", "python", "tools/after_land.py")
+    assert not fake.ran("gh", "api", MAIN_REF)
     assert "feat/base" in capsys.readouterr().out
 
 
