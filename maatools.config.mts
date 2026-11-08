@@ -121,8 +121,9 @@ const screens: [image: string, hits: string[]][] = [
   ['PassMissionsSeasonalEnd.png', ['PassSeasonalLit', 'PassSeasonalSwipe', 'PassFinish', 'ExpPassDaily']],
   ['EntryNewRun.png', ['MirrorEntryNewRun']],
   ['EntryPaused.png', ['MirrorEntryPaused']],
-  // Live 2026-11-08 (#94): a paused run with Parallel Superposition Mode ON.
-  ['EntryParallelOn.png', ['ParallelModeOn', 'MirrorEntryPaused']],
+  // Live 2026-11-08 (#94): a paused run with Parallel Superposition Mode ON. ChargePrice: the glowing "! Exploring !"
+  // panel reads `95` in its roi; the price is read only on the Use Lunacy tab (ChargeCount).
+  ['EntryParallelOn.png', ['ParallelModeOn', 'MirrorEntryPaused', 'ChargePrice']],
   ['ResumeDialog.png', ['ResumeDialog', 'MirrorEntryPaused', 'RecoverToWindow']],  // the entry page reads through it
   ['EnterDialog.png', ['MirrorEnterDialog', 'MirrorEntryNewRun']],
   ['TeamSelect.png', ['TeamSelect']],
