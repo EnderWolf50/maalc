@@ -388,11 +388,12 @@ def test_land_onto_red_merges_the_named_pr_onto_a_red_main_head_and_no_other():
     assert [c[3] for c in fake.ran("gh", "pr", "merge")] == ["7"]
 
 
-def test_land_onto_red_must_name_a_pr_of_the_call():
+def test_land_onto_red_must_name_a_pr_of_the_call(capsys):
     fake = land_fake()
     with pytest.raises(SystemExit) as e:
         ship.main(["land", "7", "--go", "--onto-red", "8"], runner=fake)
     assert e.value.code == 2 and not fake.calls
+    assert "--onto-red 8 is not one of the PRs to land" in capsys.readouterr().err
 
 
 def test_land_skips_after_land_when_main_turns_red_before_a_later_pr(capsys):
