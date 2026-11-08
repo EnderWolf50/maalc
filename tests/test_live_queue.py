@@ -32,6 +32,66 @@ def test_dead_tickets_are_dropped_and_live_ones_keep_arrival_order(tmp_path):
     assert not gone.exists()
 
 
+def ticket(qdir: Path, stamp: str, name: str, start: int, first: bool = False, cmd: str = "hold") -> Path:
+    p = qdir / f"{stamp}-{os.getpid()}-{name}.ticket"
+    p.write_text(json.dumps({"cmd": cmd, "start": start, "first": first}))
+    return p
+
+
+def ends_on_check(start: int, gone: Path):
+    """An is_alive under which every process lives, and checking the one that started at `start` deletes `gone`: a run
+    that ends after the listing globbed its ticket and before the ticket is read (#577)."""
+    def is_alive(_pid, s):
+        if s == start:
+            gone.unlink(missing_ok=True)
+        return True
+    return is_alive
+
+
+def test_a_ticket_that_leaves_before_the_listing_reads_it_is_skipped(tmp_path):
+    kept = ticket(tmp_path, "1000000000000000001", "kept", 111)
+    left = ticket(tmp_path, "1000000000000000002", "left", 222)
+    assert lq.tickets(tmp_path, ends_on_check(111, left)) == [kept]
+
+
+def test_status_leaves_out_a_ticket_that_left_after_the_listing(tmp_path):
+    ticket(tmp_path, "1000000000000000001", "holder", 111)
+    left = ticket(tmp_path, "1000000000000000002", "left", 222)
+    ticket(tmp_path, "1000000000000000003", "other", 333)
+    lines = lq.status(tmp_path, ends_on_check(222, left))
+    assert [line.split(" (")[0] for line in lines] == ["RUNNING holder", "#1      other"]
+
+
+def test_a_first_ticket_still_goes_behind_the_first_ones_when_one_of_them_leaves_as_it_is_placed(tmp_path):
+    ticket(tmp_path, "1000000000000000001", "holder", 111)
+    left = ticket(tmp_path, "1000000000000000002", "left", 222, first=True)
+    ticket(tmp_path, "1000000000000000003", "daily1", 333, first=True)
+    ticket(tmp_path, "1000000000000000009", "waiting", 444)
+    lq.place(tmp_path, "daily2", ["hold"], first=True, is_alive=ends_on_check(222, left))
+    assert [p.name.split("-", 2)[2] for p in sorted(tmp_path.glob("*.ticket"))] == [
+        "holder.ticket", "daily1.ticket", "daily2.ticket", "waiting.ticket"]
+
+
+def test_turn_names_only_the_tickets_ahead_still_there_when_it_says_it_waits(tmp_path):
+    left = ticket(tmp_path, "1000000000000000001", "holder", 111, cmd="holder run")
+    ahead = ticket(tmp_path, "1000000000000000002", "next", 222, cmd="next run")
+    said = []
+
+    def on_wait(calls):
+        said.append(calls)
+        ahead.unlink()
+
+    with lq.turn(tmp_path, "me", ["hold"], is_alive=ends_on_check(111, left), sleep=lambda s: None, on_wait=on_wait):
+        assert said == [[(str(os.getpid()), "next run")]]
+
+
+def test_turn_says_nothing_when_every_ticket_ahead_left_before_it_names_them(tmp_path):
+    left = ticket(tmp_path, "1000000000000000001", "holder", 111)
+    said = []
+    with lq.turn(tmp_path, "me", ["hold"], is_alive=ends_on_check(111, left), sleep=lambda s: None, on_wait=said.append):
+        assert said == []
+
+
 def test_run_waits_for_the_ticket_ahead_then_leaves_no_ticket(tmp_path):
     ahead = tmp_path / f"1-{os.getpid()}-ahead.ticket"  # a live holder that arrived first
     ahead.write_text("x")
