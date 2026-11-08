@@ -68,6 +68,52 @@ def test_fast_files_never_fail_the_check(tmp_path, table, monkeypatch):
     assert shard_seconds.check([report(tmp_path, "a.xml", [("tests.test_map_cost", "20"), ("tests.test_x", "29")])]) == 0
 
 
+LISTED = [100, 80, 60, 50, 40]
+# A file's time on a usual runner, 0.7-1.4 times its table value: the table's medians come from runners of several paces.
+USUAL = [70, 68, 60, 60, 56]
+
+
+def shard(prefix, pace):
+    """A shard of five files of USUAL seconds, run at pace times that, and their table entries."""
+    return ([(f"tests.test_{prefix}{i}", str(usual * pace)) for i, usual in enumerate(USUAL)],
+            {f"test_{prefix}{i}.py": listed for i, listed in enumerate(LISTED)})
+
+
+@pytest.mark.parametrize("pace", [0.5, 2])
+def test_a_runner_at_half_or_double_the_tables_pace_fails_no_file(tmp_path, table, capsys, monkeypatch, pace):
+    # #536: run 42440944197's shard 3 ran about 0.66 of its usual time, test_shop_skill_screens 0.48, while shards 0-2
+    # ran theirs at 0.98-1.20: the pace is each shard's own runner's.
+    monkeypatch.setattr(shard_seconds, "unmeasured", lambda seconds: [])
+    (fast, fast_table), (usual_a, table_a), (usual_b, table_b) = shard("a", pace), shard("b", 1), shard("c", 1)
+    table(fast_table | table_a | table_b)
+    reports = [report(tmp_path, f"{i}.xml", cases) for i, cases in enumerate([fast, usual_a, usual_b])]
+    assert shard_seconds.check(reports) == 0, capsys.readouterr().out
+
+
+@pytest.mark.parametrize("pace", [1, 0.5])
+def test_one_file_down_to_a_third_fails_alone_even_when_it_is_most_of_its_shard(tmp_path, table, capsys, monkeypatch,
+                                                                                 pace):
+    # test_thread_luxcavation is about two thirds of its shard's time: the shard's total pace would follow it down.
+    monkeypatch.setattr(shard_seconds, "unmeasured", lambda seconds: [])
+    listed = {"test_thread_luxcavation.py": 216, "test_assemble_modules.py": 49, "test_live_evidence.py": 22,
+              "test_pause_menus.py": 18, "test_live_giveup.py": 15}
+    table(listed)
+    took = {name: seconds * pace for name, seconds in listed.items()} | {"test_thread_luxcavation.py": 72 * pace}
+    assert shard_seconds.check([report(tmp_path, "a.xml", [(f"tests.{n[:-3]}", str(t)) for n, t in took.items()])]) == 1
+    errors = [line for line in capsys.readouterr().out.splitlines() if line.startswith("::error")]
+    assert len(errors) == 1 and f"test_thread_luxcavation.py took {72 * pace:.0f} s, the table says 216" in errors[0]
+
+
+def test_a_file_whose_time_ignores_the_runner_passes_too(tmp_path, table, capsys, monkeypatch):
+    # test_charge_enkephalin took 76 s on fast runners and 87 s on usual ones: on a runner at half pace it looks more than
+    # double off, but its time as measured matches the table.
+    monkeypatch.setattr(shard_seconds, "unmeasured", lambda seconds: [])
+    fast, listed = shard("a", 0.5)
+    table(listed | {"test_charge_enkephalin.py": 77})
+    xml = report(tmp_path, "a.xml", fast + [("tests.test_charge_enkephalin", "85")])
+    assert shard_seconds.check([xml]) == 0, capsys.readouterr().out
+
+
 def test_update_refuses_a_run_that_lacks_a_test_file(table, monkeypatch, capsys):
     table({"test_go_home.py": 1})
 
@@ -132,6 +178,19 @@ def test_a_file_off_by_more_than_double_from_the_median_takes_the_runs_own_time(
     ci_runs(monkeypatch, {9: {"test_gift_cells": 380}, **{run: {"test_gift_cells": 126} for run in (8, 7, 6, 5)}})
     assert shard_seconds.update(9) == 0
     assert written()["test_gift_cells.py"] == 380
+
+
+def test_a_file_a_fast_runner_ran_at_under_half_its_median_keeps_the_median(table, monkeypatch):
+    # #536: run 42440944197's shard 3, on a fast runner, and the four runs before it. test_shop_skill_screens took 41 s
+    # against 85-94 s; writing 41 turned the next usual runner's 85 s red.
+    table({})
+    before = {"test_shop_skill_screens": 85, "test_go_home": 102, "test_pass_task": 41, "test_shop": 34,
+              "test_frozen_home": 65}
+    fast = {"test_shop_skill_screens": 41, "test_go_home": 83, "test_pass_task": 23, "test_shop": 24,
+            "test_frozen_home": 55}
+    ci_runs(monkeypatch, {9: fast, **{run: before for run in (8, 7, 6, 5)}})
+    assert shard_seconds.update(9) == 0
+    assert written()["test_shop_skill_screens.py"] == 85
 
 
 def test_an_earlier_run_whose_agent_shards_did_not_all_pass_or_whose_junit_expired_is_skipped(table, monkeypatch, capsys):
