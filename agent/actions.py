@@ -957,11 +957,12 @@ class StaysUnknown(CustomRecognition):
 
 @AgentServer.custom_action("HomeLost")
 class HomeLost(CustomAction):
-    """GoHome's on_error (#362 D4): 60 s of nothing known, or the back key used up. The game is restarted (restart_game)
-    and GoHome goes again from the title; once the restarts are used up, the stop procedure ends the task."""
+    """GoHome's on_error (#362 D4): 60 s of nothing known, or the back key used up; HomeConnecting's, its param saying why
+    (#540). The game is restarted (restart_game) and GoHome goes again from the title; once the restarts are used up, the
+    stop procedure ends the task."""
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
-        return restart_game(context, "the main window was not reached")
+        return restart_game(context, json.loads(argv.custom_action_param or '""') or "the main window was not reached")
 
 
 @AgentServer.custom_action("DailyRecover")
