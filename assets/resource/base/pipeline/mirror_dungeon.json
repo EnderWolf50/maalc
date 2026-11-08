@@ -182,11 +182,12 @@
     },
     // Entry page with Parallel Superposition Mode ON (#94): switched OFF before anything else, the bot never plays
     // past floor 5. Texts: EN_MirrorDungeonUI_5_InfinityFloor ("Parallel Superposition Mode : " + ON / OFF).
-    // Its dialogs (Resume, Enter) come first in the hub: the label reads through them.
+    // Its dialogs (Resume, Enter) come first in the hub: the label reads through them. The red ON reads `oN` (live
+    // 2026-11-08, EntryParallelOn.png).
     "ParallelModeOn": {
         "recognition": "OCR",
         "roi": [890, 330, 330, 28],
-        "expected": "Superposition.*:\\s*[O0]N\\b",
+        "expected": "Superposition.*:\\s*[Oo0]N\\b",
         "action": "Custom",
         "custom_action": "ParallelModeOff"
     },
@@ -454,16 +455,15 @@
         "custom_action": "Shop"
     },
     // The red button bottom right reads SKIP, Proceed, Continue or Commence, grey while it does nothing.
-    // Both delays stay at MaaFramework's 200 ms (#258): the action reads the screen at once, with no still() before it,
-    // so pre_delay lets a page finish fading in, and a Choices page it has just tapped is still fading out when it returns.
+    // No delays (#273): the action starts with still(), and after a taken option waits up to 1.5 s for the Choices page to go.
     "Event": {
         "recognition": "OCR",
         "roi": [1040, 612, 190, 66],
         "expected": "SKIP|Proceed|Continue|Commence",
         "action": "Custom",
         "custom_action": "Event",
-        "pre_delay": 200,
-        "post_delay": 200
+        "pre_delay": 0,
+        "post_delay": 0
     },
     // The Dungeon Progress panel (the gear, or the back key on the map or an event): Continue closes it, never Forfeit
     // (gives the run up) or To Window. Over the map, whose icons still show, or an event, whose button still reads:

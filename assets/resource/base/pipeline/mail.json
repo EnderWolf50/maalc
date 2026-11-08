@@ -41,8 +41,11 @@
         "recognition": "Custom",
         "custom_recognition": "StuckFlag",
         "action": "Custom",
-        "custom_action": "StopTask",
-        "custom_action_param": "Claim Mail is stuck"
+        "custom_action": "DailyRecover",
+        "custom_action_param": "Claim Mail is stuck",
+        "next": [
+            "ClaimMailHub"
+        ]
     },
     // The open Mailbox and what can be over it, read in one OCR pass (hub_text.py, #157). The server's popups first: the
     // box still reads under them (ServerErrorRetry.png). Then the empty box, ahead of the one-button popup: the game's

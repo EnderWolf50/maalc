@@ -325,7 +325,7 @@ describe("in the whole editor", () => {
     await user.click(await screen.findByText(zh["skill.title"], { exact: false, selector: "summary" }));
     expect(within(panel()).getByText(zh["skill.empty"])).toBeInTheDocument();
     await waitFor(() => expect(file.saved).toHaveLength(1));
-    expect(JSON.parse(file.saved[0]).version).toBe(19);
+    expect(JSON.parse(file.saved[0]).version).toBe(20);
     expect(JSON.parse(file.saved[0]).teams[0].skill_replacement.sinners).toEqual([]);
   });
 });

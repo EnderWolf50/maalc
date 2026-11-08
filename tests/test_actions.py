@@ -182,16 +182,17 @@ def test_event_text_is_tapped_through_until_the_choices_show(context):
 
 
 def event_text(context, choices_from=None, red_from=None, red_to=float("inf"), label_to=float("inf"), skip_to=0, misread=()):
-    """Event text running on: screenshot n (1 = Event.run's own) shows the Choices from choices_from on, the lit
-    button from red_from on until red_to and the button's label until label_to (SKIP until skip_to, then Continue,
-    read "Contnue" on the screenshots in misread); returns the rois OCR read, in order."""
+    """Event text running on: screenshot n (1 = Event.run's own, its still() taking two) shows the Choices from
+    choices_from on, the lit button from red_from on until red_to and the button's label until label_to (SKIP until
+    skip_to, then Continue, read "Contnue" on the screenshots in misread); returns the rois OCR read, in order."""
     shots, reads = [], []
 
     def screencap():
         shots.append(1)
+        n = max(1, len(shots) - 1)
         image = np.zeros((720, 1280, 3), np.uint8)
-        image[0, 0, 0] = len(shots)
-        if red_from and red_from <= len(shots) < red_to:
+        image[0, 0, 0] = n
+        if red_from and red_from <= n < red_to:
             image[640:650, 1080:1180] = (0, 0, 200)
         return image
     context.tasker.controller.post_screencap.return_value.wait.return_value.get.side_effect = screencap
@@ -220,7 +221,7 @@ def test_event_text_is_tapped_every_0_15_s_and_read_every_third_tap(context, clo
     actions.Event().run(context, None)
     assert len(corner_taps(context)) == 6  # read at taps 3 and 6
     assert reads.count(tuple(actions.EVENT_BUTTON_LABEL)) == 2
-    assert sum(clock) == pytest.approx(5 * actions.EVENT_TAP_EVERY)
+    assert sum(clock) == pytest.approx(0.2 + 5 * actions.EVENT_TAP_EVERY)  # still()'s second look, then the 5 gaps
 
 
 def test_event_text_stops_on_the_lit_button_without_reading_text(context, clock):
@@ -244,7 +245,7 @@ def test_the_text_is_tapped_on_right_after_the_lit_button(context, clock):
     clicks = context.tasker.controller.post_click.call_args_list
     assert clicks[0].args == actions.EVENT_BUTTON and len(button_taps(context)) == 1
     assert len(corner_taps(context)) == 6  # 2 while it fades, read at once on the first unlit screen, then every third
-    waits = [s for s in clock if s]  # tap(wait=0) sleeps 0
+    waits = [s for s in clock if s][1:]  # tap(wait=0) sleeps 0; the first is still()'s, before the press
     assert waits[0] == pytest.approx(actions.EVENT_TAP_EVERY) and max(waits) <= actions.EVENT_TAP_EVERY
 
 
@@ -1456,13 +1457,13 @@ def test_tap_until_logs_how_long_the_screen_took(context, clock):
 
 def test_plan_run_waits_for_the_enter_dialog_after_pressing_enter(context, clock, monkeypatch):
     team = {"id": 1, "name": "t", "game_team": 1, "guard_turns": 3, "hard_from_floor": 1, "gift_list": "default", "enabled": True}
-    run = {"runs": 0, "stop_when_weekly_bonus_out": False, "difficulty": "normal"}
+    run = {"runs": 0, "stop_when_weekly_bonus_out": False, "difficulty": "normal", "target_floor": 5}
     monkeypatch.setattr(actions, "load_settings", lambda root, need_team=False: {"run": run, "teams": [team], "gift_lists": []})
     monkeypatch.setattr(actions, "pick_team", lambda teams, cursor, difficulty: team)
     monkeypatch.setattr(actions, "read_cursor", lambda root, address: None)
     monkeypatch.setattr(actions.settlement, "runs_done", lambda done, limit: False)
     monkeypatch.setattr(actions.recovery, "read_runs", lambda root: [])
-    monkeypatch.setattr(actions.recovery, "floor_limit", lambda runs, team: 1800)
+    monkeypatch.setattr(actions.recovery, "floor_limit", lambda runs, team, target: 1800)
     actions.TASK["modules"] = 20  # read on the Drive page (#369)
     page(context, {(400, 325, 480, 45): lambda clicks, looks: "Will you enter X?" if clicks and looks >= 3 else None})
     assert actions.PlanRun().run(context, argv())
@@ -1475,13 +1476,13 @@ def test_a_planned_run_of_a_team_that_never_switches_to_hard(context, clock, mon
     # #137: auto with weekly bonuses left decides hard, but this team's switch to hard is off: the run is NORMAL.
     # Only the global "hard" makes it HARD (every floor, hard_wanted).
     team = {"id": 1, "name": "t", "game_team": 1, "guard_turns": 0, "hard_from_floor": None, "gift_list": "default", "enabled": True}
-    run = {"runs": None, "stop_when_weekly_bonus_out": False, "difficulty": setting}
+    run = {"runs": None, "stop_when_weekly_bonus_out": False, "difficulty": setting, "target_floor": 5}
     monkeypatch.setattr(actions, "load_settings", lambda root, need_team=False: {"run": run, "teams": [team], "gift_lists": []})
     monkeypatch.setattr(actions, "pick_team", lambda teams, cursor, difficulty: team)
     monkeypatch.setattr(actions, "read_cursor", lambda root, address: None)
-    monkeypatch.setattr(actions.run_start, "run_difficulty", lambda setting, weekly: "hard")
+    monkeypatch.setattr(actions.run_start, "run_difficulty", lambda setting, weekly, target: "hard")
     monkeypatch.setattr(actions.recovery, "read_runs", lambda root: [])
-    monkeypatch.setattr(actions.recovery, "floor_limit", lambda runs, team: 1800)
+    monkeypatch.setattr(actions.recovery, "floor_limit", lambda runs, team, target: 1800)
     actions.TASK["modules"] = 20  # read on the Drive page (#369)
     page(context, {})
     actions.PlanRun().run(context, argv())
@@ -1502,8 +1503,9 @@ def infinity_switch(context, monkeypatch, takes):
 
     def ocr(context, image, roi, only_rec=False):
         if roi == actions.INFINITY_TITLE:
-            # As MaaFramework read EntryNewRun.png and the synthetic EntryParallelOn.png
-            return [(f"Alll/Parallel Superposition Mode:{'OFF' if takes and taps else 'ON'}/l", (891, 333, 324, 20))]
+            # As the bot's MaaFramework log read the entry page live, OFF and the red ON (2026-11-08)
+            text = "Parallel Superposition Mode : OFF" if takes and taps else "PParallel Superposition Mode : oN "
+            return [(text, (894, 333, 316, 17))]
         return []
     monkeypatch.setattr(actions, "ocr", ocr)
     return taps, stops, actions.ParallelModeOff().run(context, None)
@@ -1619,9 +1621,8 @@ def test_a_team_list_that_reads_no_row_is_dragged_to_its_top_first(context, cloc
 def test_select_team_makes_a_plan_for_an_abandoned_empty_run_instead_of_backing_out(context, clock, monkeypatch):
     # #128 (live 2026-10-18): Resume on a run paused before team selection reaches the picker with no plan in memory;
     # backing out to the entry page, which only offers Resume, looped every 8 s.
-    team = {"id": 1, "name": "t", "game_team": 3, "guard_turns": 0, "gift_list": "default"}
-    monkeypatch.setattr(actions, "load_settings", lambda root, need_team=False: {"run": {"difficulty": "normal"}, "teams": [team], "gift_lists": []})
-    monkeypatch.setattr(actions, "pick_team", lambda teams, cursor, difficulty: team)
+    team = {"id": 1, "name": "t", "game_team": 3, "guard_turns": 0, "gift_list": "default", "enabled": True, "usage": "any"}
+    monkeypatch.setattr(actions, "load_settings", lambda root, need_team=False: {"run": {"difficulty": "normal", "target_floor": 5}, "teams": [team], "gift_lists": []})
     monkeypatch.setattr(actions, "read_cursor", lambda root, address: None)
     actions.RUN.clear()
     team_picker(context, "TEAMS #3", lambda clicks, looks: "recommended level" if clicks else None)
@@ -1755,11 +1756,11 @@ def test_the_default_list_makes_burn_the_main_keyword():
 
 
 def test_a_planned_run_plays_the_main_keyword_of_the_teams_list(context, clock, monkeypatch):
-    settings = {**listed("Bleed"), "run": {"runs": None, "stop_when_weekly_bonus_out": False, "difficulty": "normal"}}
+    settings = {**listed("Bleed"), "run": {"runs": None, "stop_when_weekly_bonus_out": False, "difficulty": "normal", "target_floor": 5}}
     monkeypatch.setattr(actions, "load_settings", lambda root, need_team=False: settings)
     monkeypatch.setattr(actions, "read_cursor", lambda root, address: None)
     monkeypatch.setattr(actions.recovery, "read_runs", lambda root: [])
-    monkeypatch.setattr(actions.recovery, "floor_limit", lambda runs, team: 1800)
+    monkeypatch.setattr(actions.recovery, "floor_limit", lambda runs, team, target: 1800)
     monkeypatch.setattr(actions.settlement, "runs_done", lambda done, limit: False)
     actions.RUN.clear()
     assert actions.current_run(context)["team"]["keyword"] == "Bleed"  # the agent restarted mid-run
@@ -2035,13 +2036,13 @@ def test_a_run_without_a_packs_note_stays_unknown_after_a_pull(context, monkeypa
 
 def test_a_new_run_starts_with_no_packs_taken(context, clock, monkeypatch):
     team = {"id": 1, "name": "t", "game_team": 1, "guard_turns": 3, "hard_from_floor": 1, "gift_list": "default", "enabled": True}
-    run = {"runs": 0, "stop_when_weekly_bonus_out": False, "difficulty": "normal"}
+    run = {"runs": 0, "stop_when_weekly_bonus_out": False, "difficulty": "normal", "target_floor": 5}
     monkeypatch.setattr(actions, "load_settings", lambda root, need_team=False: {"run": run, "teams": [team], "gift_lists": []})
     monkeypatch.setattr(actions, "pick_team", lambda teams, cursor, difficulty: team)
     monkeypatch.setattr(actions, "read_cursor", lambda root, address: None)
     monkeypatch.setattr(actions.settlement, "runs_done", lambda done, limit: False)
     monkeypatch.setattr(actions.recovery, "read_runs", lambda root: [])
-    monkeypatch.setattr(actions.recovery, "floor_limit", lambda runs, team: 1800)
+    monkeypatch.setattr(actions.recovery, "floor_limit", lambda runs, team, target: 1800)
     actions.RUN["packs"] = [1004, 1005]  # the last run's
     actions.TASK["modules"] = 20  # read on the Drive page (#369)
     page(context, {})
@@ -2287,7 +2288,9 @@ def test_a_check_with_odds_read_takes_the_next_best_when_a_tap_did_nothing(conte
 
 def test_a_check_tap_that_took_is_not_held_against_the_sinner(context):
     check_page(context, [(actions.EVENT_PORTRAIT_X[0], "High")])
-    screens(context, [0, 9])  # the first tap changes the screen
+    ctl = context.tasker.controller
+    ctl.post_screencap.return_value.wait.return_value.get.side_effect = \
+        lambda: np.full((720, 1280, 3), 9 if ctl.post_click.called else 0, np.uint8)
     actions.Event().run(context, None)
     actions.Event().run(context, None)
     assert event_portrait_taps(context) == [actions.EVENT_PORTRAIT_X[0]] * 2
@@ -3001,8 +3004,8 @@ def test_a_map_gone_while_looking_for_its_bus_is_not_dragged(context, guarded):
 
 
 def test_an_exploration_reward_gone_is_handed_back_untouched(context, guarded, monkeypatch):
-    actions.RUN.update(settings={"run": {"weekly_bonus_use": "none", "weekly_bonus_amount": 0}}, team={"hard_from_floor": None}, difficulty="normal")
-    monkeypatch.setattr(actions.settlement, "read_result", lambda text: (5, False, 5, 5))
+    actions.RUN.update(settings={"run": {"weekly_bonus_use": "none", "weekly_bonus_amount": 0, "target_floor": 5}}, team={"hard_from_floor": None}, difficulty="normal")
+    monkeypatch.setattr(actions.settlement, "read_result", lambda text: actions.settlement.Result(5, "normal", 5, 5))
     assert actions.Settle().run(context, argv())
     assert moved(context) == 0 and actions.STUCK["flag"] is None
 
@@ -3096,8 +3099,8 @@ def test_a_battle_gone_after_the_portrait_taps_swaps_nothing_back(context, guard
 
 
 def test_an_exploration_reward_gone_after_a_toggle_tap_does_not_claim(context, guarded, monkeypatch):
-    actions.RUN.update(settings={"run": {"weekly_bonus_use": "all", "weekly_bonus_amount": 3}}, team={"hard_from_floor": None}, difficulty="normal")
-    monkeypatch.setattr(actions.settlement, "read_result", lambda text: (5, False, 5, 5))
+    actions.RUN.update(settings={"run": {"weekly_bonus_use": "all", "weekly_bonus_amount": 3, "target_floor": 5}}, team={"hard_from_floor": None}, difficulty="normal")
+    monkeypatch.setattr(actions.settlement, "read_result", lambda text: actions.settlement.Result(5, "normal", 5, 5))
     monkeypatch.setattr(actions.settlement, "bonus_toggles", lambda *a: 1)
     monkeypatch.setattr(actions, "toggles", lambda context, image: [False, False, False])
     page_until(context, "ExplorationReward", 1)
@@ -3119,7 +3122,7 @@ def test_a_gift_search_gone_after_a_pick_does_not_press_select(context, guarded,
 
 
 def test_an_exploration_reward_gone_mid_give_up_is_handed_back_not_stuck(context, guarded, monkeypatch):
-    monkeypatch.setattr(actions.settlement, "read_result", lambda text: (5, False, 3, 5))  # goal not met: give up
+    monkeypatch.setattr(actions.settlement, "read_result", lambda text: actions.settlement.Result(5, "normal", 3, 5))  # short of floor 5: give up
     page_until(context, "ExplorationReward", 1)
     assert actions.Settle().run(context, argv())
     assert taps(context) == [actions.GIVE_UP] and actions.STUCK["flag"] is None

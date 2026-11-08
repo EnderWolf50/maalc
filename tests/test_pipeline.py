@@ -164,7 +164,7 @@ def test_the_event_labels_are_the_event_nodes():
     assert event["roi"] == actions.EVENT_BUTTON_LABEL
 
 
-KEPT_DELAYS = ["Event", "BattleTurn"]  # #258: a post_delay of the default 200 ms, written out with the reason in the pipeline
+KEPT_DELAYS = ["BattleTurn"]  # #258: a post_delay of the default 200 ms, written out with the reason in the pipeline
 
 SETTLEMENT = ["ProgressPanel", "RewardCardForgo", "GiftRefuseDialog", "RunVictory", "DefeatScreen", "ExplorationComplete",
               "ClaimPopup", "ResumeDialog"]
@@ -228,12 +228,13 @@ def test_the_opening_waits_for_screens_not_for_delays():
 
 def test_the_busiest_nodes_state_their_delays():
     # #258: a node that says nothing sleeps MaaFramework's 200 ms before and after every hit. MirrorMap's action starts
-    # with still() and its enter_node waits out the map's fade, so it needs neither. PlayTurn starts with still() too, so
-    # BattleTurn needs no pre_delay (#177); its post_delay and Event's delays have no such guard (Event reads at once; no
-    # log shows what an earlier look at BattleTurn finds after a turn): their 200 ms stay, written out.
+    # with still() and its enter_node waits out the map's fade, so it needs neither; Event's starts with still() and
+    # waits for a taken option's Choices page to go (#273). PlayTurn starts with still() too, so BattleTurn needs no
+    # pre_delay (#177); its post_delay has no such guard (no log shows what an earlier look at BattleTurn finds after
+    # a turn): its 200 ms stay, written out.
     nodes = load_nodes("mirror_dungeon.json")
-    assert (nodes["MirrorMap"].get("pre_delay"), nodes["MirrorMap"].get("post_delay")) == (0, 0)
-    assert (nodes["Event"].get("pre_delay"), nodes["Event"].get("post_delay")) == (200, 200)
+    for name in ["MirrorMap", "Event"]:
+        assert (nodes[name].get("pre_delay"), nodes[name].get("post_delay")) == (0, 0), name
     assert (nodes["BattleTurn"].get("pre_delay"), nodes["BattleTurn"].get("post_delay")) == (0, 200)
 
 

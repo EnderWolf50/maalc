@@ -68,7 +68,7 @@ function asV13() {
 }
 
 test("parseSettings refuses newer and unmigratable versions", () => {
-  expect(() => parseSettings('{"version": 20}')).toThrow("newer");
+  expect(() => parseSettings('{"version": 21}')).toThrow("newer");
   expect(() => parseSettings('{"version": 0}')).toThrow("cannot be migrated");
 });
 
@@ -197,6 +197,19 @@ test("version 16 drops each team's trial risk weight, with nothing to count (the
   for (const t of data.teams) expect(t).not.toHaveProperty("trial_risk_weight");
   expect(validate(data)).toEqual([]);
   expect(newTeam(1, "隊伍 1")).not.toHaveProperty("trial_risk_weight");
+});
+
+test("version 19 plays the 5 floors it always did, and keeps a target floor the file has (#385)", () => {
+  const old = structuredClone(cases.valid) as unknown as { version: number; run: Record<string, unknown> };
+  old.version = 19;
+  delete old.run.target_floor;
+  const { data, migrated } = parseSettings(JSON.stringify(old));
+  expect(migrated).toBe(true);
+  expect(data.version).toBe(20);
+  expect(data.run.target_floor).toBe(5);
+  expect(validate(data)).toEqual([]);
+  old.run.target_floor = 10;
+  expect(parseSettings(JSON.stringify(old)).data.run.target_floor).toBe(10);
 });
 
 /** A team's skill replacement as a new team has it: no sinner listed, so every deck stays 3/2/1; ID Skill Search off, paid in Cost. */

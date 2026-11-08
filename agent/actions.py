@@ -38,19 +38,21 @@ from gifts import effective, main_keyword, purchases, recipe_fusion, resolve_lis
 from ocrtext import compact, digits, floor_number, has, normalize
 from settings import NOTES as settings_notes
 from settings import SettingsError, data_dir, gift_tables, load_settings, vestige_ids
-from state import next_cursor, pick_team, read_cursor, write_cursor
+from state import next_cursor, pick_team, read_cursor, resumed_team, write_cursor
 
 # Same <root> as main.ROOT; resource/ sits under it in a release, under assets/ in the repo.
 ROOT = Path(__file__).resolve().parent.parent
 
 # This run's plan, made on the entry page: {"settings", "team", "difficulty"}.
-# Memory only (ADR 0003); an agent restarted mid-run falls back to current_run's guess. TaskStart keeps it for the same
-# task when the client interrupted the last one (no done, no stop): the run is picked up as before the task chain.
+# Memory only (ADR 0003); an agent restarted mid-run makes one up from the rotation cursor (current_run). TaskStart
+# keeps it for the same task when the client interrupted the last one (no done, no stop): the run is picked up as before
+# the task chain.
 RUN = {}
 # This task's own state (#364, ADR 0010), reset by TaskStart: the runs claimed since it started (the run count stop,
 # spec 01; never saved), why it is done ("done", None while it runs), which ends it a success (TaskDone), its entry
 # node, and "ended" once done() or stop() ended it. Set as a task needs them: "modules" and "gate_backs" (the mirror's new
-# run gate), "assemble" (Assemble Modules' reads and confirms), "charge" (Charge Enkephalin's count and its steps).
+# run gate), "settled" (a mirror run claimed or given up: none is under way until the next is planned, #436),
+# "assemble" (Assemble Modules' reads and confirms), "charge" (Charge Enkephalin's count and its steps).
 TASK = {"runs": 0, "done": None}
 # Stuck detection and recovery (spec 06), memory only: the last node seen ("node", its id) and the
 # screen type it handled ("kind"), a pending stuck for MirrorHub's Stuck node ("flag": (kind, start
@@ -133,9 +135,29 @@ def gone(context, spec, image):
 
 
 def tap_then(context, x, y, done, timeout=2.0):
-    """Tap, then until() done(image) holds: that image, or None after timeout s (#115)."""
+    """Tap, then until() done(image) holds: that image, or None after timeout s (#115).
+
+    The wait also tells the watchdog whether the game took the tap (#440): no page, every screenshot of the wait the
+    same as its first to the byte (a frozen game repeats its bytes), and that screenshot the main window (HomeReached),
+    whose banners always move on a live game, is a dead tap. Not other still pages: a live game's map or title can let a
+    tap go by. recovery.DEAD_TAPS of them in a row flag the game frozen, a stuck from L3, for the hub's Stuck node.
+    """
+    shots = {"first": None, "still": True}
+
+    def watch(image):
+        if shots["first"] is None:
+            shots["first"] = image
+        elif shots["still"] and not np.array_equal(image, shots["first"]):
+            shots["still"] = False
+        return done(image)
+
     tap(context, x, y, wait=0)
-    return until(context, done, timeout=timeout)
+    image = until(context, watch, timeout=timeout)
+    first = shots["first"]
+    dead = image is None and shots["still"] and seen(context, first, "HomeReached") is not None
+    if why := STUCK["watch"].tapped(recovery.thumb(first) if dead else None):
+        stuck(why, level=3)
+    return image
 
 
 def tap_moved(context, x, y, timeout=1.0):
@@ -198,10 +220,14 @@ POPUPS = ("Connecting", "RetryPopup", "PopupButton")  # MirrorHub's global popup
 # Windows that leave a page's anchor readable under them, answered by MirrorHub before that page. #213: a GET! window
 # over the map after a fight leaves its buttons (MirrorMap) lit. Not the shop's: Shop closes its own GET! windows.
 COVERS = {"MirrorMap": ("GiftGet",)}
+# Windows that hide a page's anchor where the action's own taps close them anyway: they pass its guard as its page.
+# #309: an event's GET! windows, over its page or the map it ends on, close on any tap, the text taps on the dead corner too.
+TAPPED_THROUGH = {"Event": ("GiftGet",)}
 
 
 def page_guard(context, home, image=None):
-    """Before a tap: a screenshot that still shows home (MirrorHub's node for the action's page); else PageGone.
+    """Before a tap: a screenshot that still shows home (MirrorHub's node for the action's page) or one of its
+    TAPPED_THROUGH windows; else PageGone.
 
     ADR 0007, #118: an action that taps on for long checks its page first, so a screen changed under it is
     handed back to MirrorHub at once instead of tapped blind until the action gives up. A miss is looked at
@@ -210,8 +236,10 @@ def page_guard(context, home, image=None):
     one of POPUPS showing is the page gone too: MirrorHub answers it first. So is one of home's COVERS.
     image: a screenshot just taken, looked at first.
     """
+    pages = (home, *TAPPED_THROUGH.get(home, ()))
+
     def shown(im):
-        return on_page(context, im, *POPUPS, *COVERS.get(home, ()), home) == home
+        return on_page(context, im, *POPUPS, *COVERS.get(home, ()), *pages) in pages
 
     if image is not None and shown(image):
         return image
@@ -267,16 +295,26 @@ def swipe(context, x1, y1, x2, y2, ms=500, wait=1.0):
     time.sleep(wait)
 
 
-def scroll(context, x, y, dx, dy):
+def scroll(context, x, y, dx, dy, ignored=None):
     """Drag the content under (x, y) by (dx, dy) px and let go without a fling (spec 07).
 
     The game's drag threshold eats the first move, so the finger first moves 10 px and rests 0.1 s (a move
     right after it can be eaten too), then moves (dx, dy) in 20 px moves 10 ms apart. The game flings the content
     on with the speed the finger still has at the lift, decaying while it rests, so it rests SCROLL_HOLD s first.
+    ignored(image) judges a screenshot taken as the rest starts: when it says the content did not follow the finger,
+    nothing moves to fling, so the finger lifts at once and that screenshot is returned (#486). Else None, the
+    screenshot's time taken out of the rest.
     """
     d = max(abs(dx), abs(dy), 1)
     lx, ly = x + round(10 * dx / d), y + round(10 * dy / d)
-    drag(context, [(x, y), (lx, ly), (lx + dx, ly + dy)], settle=0, dwell=0.1, hold=SCROLL_HOLD, pause=0.01, step=20)
+    press(context, [(x, y), (lx, ly), (lx + dx, ly + dy)], settle=0, dwell=0.1, pause=0.01, step=20)
+    end = time.monotonic() + SCROLL_HOLD
+    image = screen(context) if ignored else None
+    stayed = image is not None and ignored(image)
+    if not stayed:
+        time.sleep(max(0.0, end - time.monotonic()))
+    context.tasker.controller.post_touch_up().wait()
+    return image if stayed else None
 
 
 # Live 2026-10-18 (#114): with these moves (~1000 px/s) a 0.55 s rest left at most 1 px of fling in 126 drags of
@@ -291,6 +329,13 @@ def drag(context, points, settle=0.3, dwell=0.1, hold=0.0, pause=0.02, step=10):
 
     Lifts on the last point after hold s; at once by default: a finger held on a battle skill opens its details.
     """
+    press(context, points, settle, dwell, pause, step)
+    time.sleep(hold)
+    context.tasker.controller.post_touch_up().wait()
+
+
+def press(context, points, settle, dwell, pause, step):
+    """drag without its rest and lift: the finger goes down and moves through points, and stays down on the last."""
     ctl = context.tasker.controller
     ctl.post_touch_down(*points[0]).wait()
     time.sleep(settle)
@@ -301,8 +346,6 @@ def drag(context, points, settle=0.3, dwell=0.1, hold=0.0, pause=0.02, step=10):
             time.sleep(pause)
         if (x1, y1) != points[-1]:
             time.sleep(dwell)
-    time.sleep(hold)
-    ctl.post_touch_up().wait()
 
 
 def ocr(context, image, roi, only_rec=False):
@@ -349,21 +392,24 @@ def current_run(context):
     """The run plan; made up from settings and the rotation cursor when the agent restarted mid-run."""
     if "settings" not in RUN:  # a run plan, not just counters left by an action
         settings = load_settings(ROOT, need_team=True)
-        difficulty = settings["run"]["difficulty"]
-        difficulty = None if difficulty == "auto" else difficulty
-        cursor = read_cursor(ROOT, address(context))
-        team = pick_team(settings["teams"], cursor, difficulty or "hard") or pick_team(settings["teams"], cursor, "normal")
-        RUN.update(settings=settings, team=run_team(settings, team), difficulty=difficulty)
+        run = settings["run"]
+        # The weekly bonuses left when the run began are not known: the difficulty is known when both answers agree.
+        began = {run_start.run_difficulty(run["difficulty"], left, run["target_floor"]) for left in (0, 1)}
+        difficulty = began.pop() if len(began) == 1 else None
+        team, known = resumed_team(settings["teams"], read_cursor(ROOT, address(context)), difficulty)
+        RUN.update(settings=settings, team=run_team(settings, team), difficulty=difficulty, planned=known)
         # The guard turns left are unknown after a restart: they count as used up (spec 03 section 8).
-        log(f"no run plan in memory: assuming team {team['name']!r}, difficulty {difficulty or 'unknown'}, no guard turns")
+        how = "from the rotation cursor" if known else "assumed: the rotation cursor does not tell the run's team"
+        log(f"no run plan in memory: team {team['name']!r} {how}, difficulty {difficulty or 'unknown'}, no guard turns")
     return RUN
 
 
 # Stuck detection, recovery and the stop procedure (spec 06).
 def stuck(reason, level=1):
-    """Hand the screen being handled to recovery: MirrorHub's Stuck node picks it up next.
+    """Hand the screen being handled to recovery: the hub's Stuck node picks it up next (MirrorHub's Recover, a daily
+    hub's DailyRecover). level: the least recovery level it starts at.
 
-    Returns True, for the action to return: its [JumpBack] leads to MirrorHub.
+    Returns True, for the action to return: its [JumpBack] leads to the hub.
     """
     log(f"stuck: {reason}")
     STUCK["flag"] = (None, level, reason)  # StuckFlag fills in the screen type
@@ -385,11 +431,13 @@ def run_line(run, outcome, hard, floors, bonuses=0):
     """This run's runs.jsonl line (spec 06 執行記錄)."""
     team = run["team"] if run.get("planned") else None
     counts = STUCK["ladder"].counts
+    target = run.get("settings", {}).get("run", {}).get("target_floor", 5)
     return {
         "start": run.get("start"), "end": settlement.now(),
         "team": team and team["id"], "team_name": team and team["name"],
-        "difficulty": "hard" if hard else "normal", "weekly_bonus": bonuses,
-        "floors": floors, "result": outcome, "l1": counts[1], "l2": counts[2], "l3": counts[3],
+        "difficulty": None if hard is None else "hard" if hard else "normal", "weekly_bonus": bonuses,
+        "target": target, "floors": floors, "target_reached": settlement.target_reached(floors, target),
+        "result": outcome, "l1": counts[1], "l2": counts[2], "l3": counts[3],
         **({"gift_search": run["gift_search"]} if "gift_search" in run else {}),
     }
 
@@ -397,13 +445,19 @@ def run_line(run, outcome, hard, floors, bonuses=0):
 def stop(context, reason, line=None, whole_list=False):
     """The stop procedure (spec 06 停止程序): evidence, a `stop` line in runs.jsonl, the webhook.
 
-    line is this run's line when the caller knows it better (Settle); otherwise one is made up while a
-    run is under way. whole_list: an account-level stop (maintenance, an outdated client, a download or the terms
-    with their auto setting off, an update that keeps coming back), which every later task would meet too: post_stop then empties the client's
-    queue (#364). Returns False, for the action to return: that ends the task.
+    line is this run's line when the caller knows it better (Settle); otherwise one is made up from the run plan, in a
+    Mirror Dungeon task that stops before it touched the run too, unless it ended one already (#436). whole_list: an account-level stop (maintenance,
+    an outdated client, a download or the terms with their auto setting off, an update that keeps coming back), which
+    every later task would meet too: post_stop then empties the client's queue (#364). Returns False, for the action to
+    return: that ends the task.
     """
     log(f"stop: {reason}")
     TASK["ended"] = True
+    if line is None and TASK.get("entry") == "MirrorDungeon" and not TASK.get("settled"):
+        try:
+            current_run(context)
+        except SettingsError as e:
+            log(f"no runs.jsonl line: {e}")
     if line is None and "settings" in RUN:
         line = run_line(RUN, "stop", RUN.get("floor_hard", RUN.get("difficulty") == "hard"), max(RUN.get("floor", 1) - 1, 0))
     if line:
@@ -820,24 +874,52 @@ def go_home(context):
     return bool(detail and detail.status.succeeded)
 
 
+def restart_game(context, reason):
+    """L3 outside the mirror's Ladder (spec 06), for GoHome's HomeLost and the daily hubs' DailyRecover: RecoverL3 within
+    L3_PER_EXECUTION a bot launch, then GoHome's back keys, game starts and Window tab taps count afresh and the game
+    state is forgotten. True once RecoverL3 ran, through or not (GoHome goes on from wherever it left the game); False
+    after the stop procedure, the restarts used up."""
+    if STUCK["l3"] >= recovery.L3_PER_EXECUTION:
+        return stop(context, f"{reason}; the game restarted {recovery.L3_PER_EXECUTION} times since the bot started")
+    STUCK["l3"] += 1  # every attempt counts, as Recover's: a restart that always fails still ends
+    log(f"recovery L3: {reason} ({STUCK['l3']} of {recovery.L3_PER_EXECUTION} restarts)")
+    detail = context.run_task("RecoverL3")
+    if not (detail and detail.status.succeeded):
+        log("L3 did not go through")
+    for node in ("HomeBack", "HomeGameAway", "HomeWindowTab"):
+        context.clear_hit_count(node)
+    forget_game_state()
+    return True
+
+
 @AgentServer.custom_action("HomeLost")
 class HomeLost(CustomAction):
-    """GoHome's on_error (#362 D4): 60 s of nothing known, or the back key used up. The game is restarted (RecoverL3,
-    within L3_PER_EXECUTION a bot launch) and GoHome goes again from the title, with its back keys and game starts counted
-    afresh; once the restarts are used up, the stop procedure ends the task."""
+    """GoHome's on_error (#362 D4): 60 s of nothing known, or the back key used up. The game is restarted (restart_game)
+    and GoHome goes again from the title; once the restarts are used up, the stop procedure ends the task."""
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
-        if STUCK["l3"] >= recovery.L3_PER_EXECUTION:
-            return stop(context, f"the main window was not reached; the game restarted {recovery.L3_PER_EXECUTION} times since the bot started")
-        STUCK["l3"] += 1  # every attempt counts, as Recover's: a restart that always fails still ends
-        log(f"recovery L3: the main window was not reached ({STUCK['l3']} of {recovery.L3_PER_EXECUTION} restarts)")
-        detail = context.run_task("RecoverL3")
-        if not (detail and detail.status.succeeded):
-            log("L3 did not go through")
-        for node in ("HomeBack", "HomeGameAway", "HomeWindowTab"):
-            context.clear_hit_count(node)
-        forget_game_state()
-        return True
+        return restart_game(context, "the main window was not reached")
+
+
+@AgentServer.custom_action("DailyRecover")
+class DailyRecover(CustomAction):
+    """A daily hub's Stuck node (#440, spec 06): the daily pages have L3 only. A stuck that starts at L3, a game frozen on
+    the main window (tap_then), restarts the game; GoHome takes it to the main window and the node's next goes back to its
+    hub, whose taps count afresh (two dead taps are MailOpen's whole max_hit): the task's own flow, TASK and the run's plan
+    kept, the game state forgotten as after any recovery. Any other stuck ends the task through the stop procedure, the
+    param saying why."""
+
+    def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
+        _, level, reason = STUCK["flag"]
+        STUCK["flag"] = None
+        if level < 3:
+            return stop(context, f"{argv.node_name}: {json.loads(argv.custom_action_param or '""')}")
+        if not restart_game(context, reason):
+            return False
+        hub = context.get_node_data(argv.node_name)["next"][0]["name"]
+        for node in context.get_node_data(hub)["next"]:
+            context.clear_hit_count(node["name"])
+        return go_home(context)
 
 
 @AgentServer.custom_action("GoHomeRun")
@@ -1412,7 +1494,7 @@ class PlanRun(CustomAction):
             return finish(context, f"{TASK['runs']} of {run['runs']} runs done")
         if run["stop_when_weekly_bonus_out"] and weekly == 0:
             return finish(context, "weekly bonuses used up")
-        difficulty = run_start.run_difficulty(run["difficulty"], weekly)
+        difficulty = run_start.run_difficulty(run["difficulty"], weekly, run["target_floor"])
         team = pick_team(settings["teams"], read_cursor(ROOT, address(context)), difficulty)
         if team is None:
             return finish(context, f"no enabled team may run {difficulty}")
@@ -1435,8 +1517,9 @@ class PlanRun(CustomAction):
         else:
             log(f"new run: Modules {modules} >= {settlement.CLAIM_COST}")
         RUN.clear()
-        # planned: the bot picked the team itself, so the rotation cursor may move after the claim.
-        limit = recovery.floor_limit(recovery.read_runs(ROOT), team["id"])
+        # planned: the run's team is known (picked here, or after a restart the cursor's, current_run), so the rotation
+        # cursor may move after the claim and runs.jsonl names it.
+        limit = recovery.floor_limit(recovery.read_runs(ROOT), team["id"], run["target_floor"])
         # guard: the run's guard turns left (spec 03 section 8), counted across its battles.
         # floor_limit: each floor's time; the first clock runs from here, PickThemePack restarts it (spec 06).
         RUN.update(settings=settings, team=run_team(settings, team), difficulty=difficulty, planned=True, start=settlement.now(), deadline=time.time() + limit,
@@ -1455,7 +1538,8 @@ INFINITY_BUTTON = (1053, 377)  # INFINITY MIRROR under it
 class ParallelModeOff(CustomAction):
     """Entry page with Parallel Superposition Mode ON: tap INFINITY MIRROR until it reads OFF (#94, spec 02).
 
-    The bot never plays past floor 5; the prompt after floor 5 (ParallelModePrompt) is cancelled as a second guard.
+    v1 never plays past floor 5 (#434 opens it for a target above 5); the prompt after floor 5 (ParallelModePrompt)
+    is cancelled as a second guard.
     Still ON after two taps: stop, nothing else is tried.
     """
 
@@ -1532,6 +1616,7 @@ class SelectTeam(CustomAction):
         image = pick_team_slot(context, n)
         if image is None:
             return stop(context, f"could not select TEAMS #{n}")
+        RUN["planned"] = True  # the title reads the slot: the run's team is known, whatever the cursor fits (#436)
         bonus = number(text(context, image, [1160, 522, 60, 34]))
         log(f"team TEAMS #{n}, Starlight Bonus {bonus}")
         # LevelWarning when the team is under the recommended level, else the starlight page; the team page
@@ -2145,12 +2230,17 @@ MAP_LOOKS = 4  # looks, 1 s apart, for a linked slot before the fallback taps
 # #202: columns up to this x are typed by their Cost too: with the bus at the far left, its two columns (329, 584).
 # Past them only the marks, which miss the WARNING ring (#238); a drag brings those columns here to be read again.
 MAP_NEAR = 650
+BAR_BOTTOM = 60  # the resource bar's border: y 59-60 on the map captures
 MAP_DRAGS = 3  # drags of two columns RouteMap.read_on makes at most: the first screen shows four, a floor ~7 and the boss
 PANEL_REWARDS = [700, 495, 110, 30]  # the "Clear Rewards" label
 PANEL_COST = [730, 545, 40, 35]  # the number by its Cost coin
 MAP_TITLE = [40, 85, 240, 35]  # "Exploring Floor 3", top left
 MAP_LEAVING = 6  # s RouteMap waits for the last floor's map to give way to this floor's
-MAP_PAN_LIMIT = 8  # s find_bus drags a fresh map again that took none of its drags
+MAP_PAN_LIMIT = 8  # s find_bus drags a fresh NORMAL map again that took none of its drags
+# px (a pan's larger axis) from which find_bus looks as the finger stops whether the map ignored the pan (#486). On the six
+# runs' recordings every find_bus pan was 396 px: at its last move the bus had moved 0 px on the 20 ignored ones and trailed
+# the finger by 126 px at most on the 108 taken ones. A shorter pan, taken, may not have moved yet: it rests as before.
+PAN_LOOK_MIN = 300
 BUS_JITTER = 3  # px the bus's match moves on a map that did not move
 # #473: back on the map from a fight's loading screen or its reward pages, the game ignores taps on the still map for a
 # time that differs by run, with no sign on screen (over 1.46 s after the fade-in on 2026-11-07, under 1.32 s on
@@ -2158,7 +2248,7 @@ BUS_JITTER = 3  # px the bus's match moves on a map that did not move
 # from 0.13-0.23 s after it was sent (75 taps); one it ignored moved 1.0% at most over 2 s (26 taps, 3 runs), and the
 # next touch, at most 2.6 s later, was always taken.
 MAP_ANSWER = 0.7  # s a tap on the map has to answer (its node panel, or the screen moving) before follow taps again
-MAP_TAP_LIMIT = 4  # s follow taps its node again while the map ignores taps
+MAP_TAP_LIMIT = 4  # s follow taps its node again, and find_bus drags the map again (#486), while the map ignores touches
 
 
 def seen(context, image, node, roi=None):
@@ -2192,7 +2282,7 @@ def node_marks(context, image, cx, cy):
     The shop is also looked for by its icon's shape alone (shop_icon) where nothing says a fight or the boss.
     """
     marks = {mark: hit for n, (mark, (ox, oy, w, h)) in MARKS.items() if (hit := seen(context, image, n, (cx + ox, cy + oy, w, h)))}
-    if not marks.keys() & {"boss", "ring", "cost", "shop"} and (hit := shop_icon(context, image, cx, cy)):
+    if not marks.keys() & {"boss", "ring", "cost", "gift", "shop"} and (hit := shop_icon(context, image, cx, cy)):
         marks["shop"] = hit
     return marks
 
@@ -2219,7 +2309,8 @@ def node_at(context, image, cx, cy, marks=None, costs=True):
     """The type of the map node centred at (cx, cy), by its marks and Cost number (map_route.node_type).
 
     No mark at all where the badges (80 px above the centre) sit under the resource bar: unknown, not an
-    event; a fight's Cost coin may be hidden there (the top row with the map at rest).
+    event; a fight's Cost coin may be hidden there (the top row with the map at rest). With costs, a coin the bar
+    cuts counts when its number shows below it (coin_cut_by_bar).
     #91: with costs, a fight's kind is its Cost number looked up in the floor's difficulty's node_costs
     (map_weights.yaml), as read: a number unread or not in the table leaves the marks to decide (cost_miss logs it).
     The boss' Costs are in the table too: a boss whose red glow went unmatched reads as the boss by its Cost.
@@ -2228,12 +2319,14 @@ def node_at(context, image, cx, cy, marks=None, costs=True):
     again once next to the bus (RouteMap.follow).
     """
     marks = node_marks(context, image, cx, cy) if marks is None else marks
-    if not marks and cy - 80 < 60:
+    under_bar = cy - 80 < BAR_BOTTOM
+    if costs and under_bar and not marks.keys() & {"cost", "boss"} and (coin := coin_cut_by_bar(context, image, cx, cy)):
+        marks = {**marks, "cost": coin}
+    if not marks and under_bar:
         return "unknown"
     if not (costs and "cost" in marks and "boss" not in marks):
         return map_route.node_type(set(marks))
-    difficulty = "hard" if is_hard(context) else "normal"
-    table = map_data()["node_costs"][difficulty]
+    difficulty, table = difficulty_costs(context)
     found = coin_text(context, image, marks["cost"].box)
     cost = coin_number(found)
     kind = map_route.node_type(set(marks), table.get(cost))
@@ -2241,6 +2334,26 @@ def node_at(context, image, cx, cy, marks=None, costs=True):
     if cost not in table:
         cost_miss(image, marks["cost"].box, cx, cy, found, difficulty)
     return kind
+
+
+def coin_cut_by_bar(context, image, cx, cy):
+    """The hit of the node's Cost coin with its top rows under the resource bar, None when there is none (#522).
+
+    Its number, read from the coin box's bottom row as coin_text reads it, decides: a coin wholly under the bar scores
+    as high (0.60-0.79 on the top-row battles of MapBoss.png at 215, 72, MapEvent.png and MapRock.png at 725, 72,
+    MapFocused.png at 470, 72), and its number's crop lands on the bar's resource counts (MapFocused's read 19).
+    """
+    ox, oy, w, h = MARKS["MapNodeCost"][1]
+    coin = seen(context, image, "MapNodeCostCut", (cx + ox, cy + oy, w, h))
+    if not coin or coin.box[1] + coin.box[3] < BAR_BOTTOM:
+        return None
+    _, table = difficulty_costs(context)
+    return coin if coin_number(coin_text(context, image, coin.box)) in table else None
+
+
+def difficulty_costs(context):
+    difficulty = "hard" if is_hard(context) else "normal"
+    return difficulty, map_data()["node_costs"][difficulty]
 
 
 def coin_text(context, image, box):
@@ -2539,13 +2652,20 @@ class RouteMap(CustomAction):
     def find_bus(context):
         """A screenshot and the bus's top-left in it, after panning the bus to BUS_HOME.
 
-        Up to three pans. On a floor's fresh map (no node entered since the theme pack) a pan that leaves the
-        bus where it was does not count and is made again, for up to MAP_PAN_LIMIT s: live 2026-10-19, a new
-        map took no drag for its first seconds. Once a pan has moved the bus, one that does not is the map's edge.
+        Up to three pans that move the bus. A pan that leaves the bus where it was (the map ignored it) does not count
+        and is made again, for up to MAP_TAP_LIMIT s (#486: after a fade-in the game ignores the map's touches for a
+        while); on a floor's fresh NORMAL map (no node entered since the theme pack) for up to MAP_PAN_LIMIT s: live
+        2026-10-19, a new map took no drag for its first seconds. Once a pan has moved the bus, one that does not is
+        the map's edge. On a pan of PAN_LOOK_MIN px or more, a screenshot as the finger stops that shows the bus where
+        it was lifts the finger at once and is the next look: no rest, no 0.5 s wait (#486).
         """
-        end, pans, last, moved = time.monotonic() + MAP_PAN_LIMIT, 0, None, False
+        def stays(hit, at):  # a MapBus hit within BUS_JITTER of at: the map has not moved
+            return hit is not None and at is not None and abs(hit.box[0] - at[0]) <= BUS_JITTER and abs(hit.box[1] - at[1]) <= BUS_JITTER
+
+        limit = MAP_PAN_LIMIT if RUN.get("fresh_floor") and not RUN.get("floor_hard") else MAP_TAP_LIMIT  # a HARD map does not pan (#129)
+        end, pans, last, moved = time.monotonic() + limit, 0, None, False
+        image = screen(context)
         while True:
-            image = screen(context)
             bus = seen(context, image, "MapBus")
             if not bus:
                 return image, None
@@ -2553,13 +2673,13 @@ class RouteMap(CustomAction):
             dx, dy = BUS_HOME[0] - bx, BUS_HOME[1] - by
             if abs(dx) <= BUS_SLACK[0] and abs(dy) <= BUS_SLACK[1]:
                 return image, (bx, by)
-            held = last is not None and abs(bx - last[0]) <= BUS_JITTER and abs(by - last[1]) <= BUS_JITTER
+            held = stays(bus, last)
             if held and moved:
                 return image, (bx, by)  # live 2026-10-21 NORMAL: the map's left edge stopped the bus at 196
             moved = last is not None and not held
-            if held and RUN.get("fresh_floor") and not RUN.get("floor_hard"):  # a HARD map does not pan (#129)
+            if held:
                 if time.monotonic() > end:
-                    log(f"map: the bus stayed at {bx}, {by} through {MAP_PAN_LIMIT} s of drags")
+                    log(f"map: the bus stayed at {bx}, {by} through {limit} s of drags")
                     return image, (bx, by)
             else:
                 if pans == 3:
@@ -2568,9 +2688,13 @@ class RouteMap(CustomAction):
             # Look again after each pan. Start on map background: between the first and second columns,
             # between the middle and bottom rows. #213: a GET! window rising over the map ends the pans.
             page_guard(context, "MirrorMap", image=image)
-            scroll(context, min(bx + SLOT[0] + map_route.COLUMN_DX // 2, 1100), by + SLOT[1] + 106, dx, dy)
-            time.sleep(0.5)
             last = (bx, by)
+            look = max(abs(dx), abs(dy)) >= PAN_LOOK_MIN
+            image = scroll(context, min(bx + SLOT[0] + map_route.COLUMN_DX // 2, 1100), by + SLOT[1] + 106, dx, dy,
+                           ignored=(lambda im: stays(seen(context, im, "MapBus"), last)) if look else None)
+            if image is None:
+                time.sleep(0.5)
+                image = screen(context)
 
     @staticmethod
     def search_bus(context):
@@ -2631,7 +2755,7 @@ class RouteMap(CustomAction):
         bus = bus and tuple(bus.box[:2])
 
         def clear(bx, by):  # the slot's node, badges included, clear of the resource bar and the buttons
-            return bx + SLOT[0] + 80 <= 1200 and by + SLOT[1] + map_route.ROW_DY[row] - 80 >= 60
+            return bx + SLOT[0] + 80 <= 1200 and by + SLOT[1] + map_route.ROW_DY[row] - 80 >= BAR_BOTTOM
         if not bus or not clear(*bus):
             image, bus = RouteMap.find_bus(context)
         if not bus or not RouteMap.linked(context, image, *bus, row):
@@ -3362,7 +3486,6 @@ class Event(CustomAction):
 
     @hands_back
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
-        image = screen(context)
         # One event's clock: a call more than EVENT_GAP s after the last starts the next event's (#92).
         now = time.monotonic()
         event = RUN.get("event")
@@ -3372,6 +3495,10 @@ class Event(CustomAction):
         if now - event["since"] > EVENT_LIMIT:
             RUN.pop("event")
             return stuck(f"one event went on over {EVENT_LIMIT} s")
+        image = still(context)
+        if image is None:
+            log("event: the page did not hold still; MirrorHub looks again")
+            return True
         tried = RUN.setdefault("event_tried", set())  # this question's options a tap did nothing on
         checked = event["checked"]  # portraits a tap did nothing on in this check
         if red_button(image):
@@ -3431,6 +3558,9 @@ class Event(CustomAction):
             if until(context, lambda im: not Event.panel_same(image, im), timeout=EVENT_TAKE) is None:
                 log(f"event: {options[i][0]!r} did nothing: try another")
                 tried.add(options[i][0])
+            # A lit card changes the panel before the page goes: MirrorHub reading Choices would take one again.
+            elif until(context, gone(context, {"roi": CHOICES_HEADER, "expected": "Choices"}, image), timeout=EVENT_TAKE) is None:
+                log(f"event: Choices still up {EVENT_TAKE} s after taking {options[i][0]!r}")
         else:
             tried.clear()
             Event.advance(context, image)
@@ -5479,7 +5609,7 @@ def toggles(context, image):
 
 @AgentServer.custom_action("Settle")
 class Settle(CustomAction):
-    """Goal check, weekly-bonus toggles, then Claim or GiveUpRewards; then the cursor and runs.jsonl (spec 03 section 14).
+    """Claim check, weekly-bonus toggles, then Claim or GiveUpRewards; then the cursor and runs.jsonl (spec 03 section 14).
 
     Claim is pressed only after the toggles read back exactly as wanted; anything unexpected stops.
     """
@@ -5495,9 +5625,9 @@ class Settle(CustomAction):
         result = settlement.read_result(" ".join(t for t, _ in lines))
         if not result:
             return True  # fading in: let MirrorHub look again
-        floor, hard, cleared, total = result
-        log(f"exploration reward: Floor {floor} [{'HARD' if hard else 'NORMAL'}] {cleared}/{total}")
-        if not settlement.goal_met(result):
+        floor, hard = result.floor, result.hard
+        log(f"exploration reward: Floor {floor} [{(result.difficulty or '?').upper()}] {result.cleared}/{result.total}")
+        if not settlement.claim_ok(result):
             return self.give_up(context, run, result)
 
         s, team = run["settings"]["run"], run["team"]
@@ -5510,8 +5640,7 @@ class Settle(CustomAction):
             tile = text(context, image, FIRST_FLOOR)
             log(f"floors before {min(floors_hard, default=floor + 1)} were not seen: the window's floor 1 tile reads {tile!r}")
             return tile
-        all_hard = settlement.all_hard(floors_hard, floor, hard, first_tile)
-        want = settlement.bonus_toggles(s["weekly_bonus_use"], s["weekly_bonus_amount"], hard, left or 0, all_hard)
+        want = settlement.claim_bonuses(result, s["target_floor"], s["weekly_bonus_use"], s["weekly_bonus_amount"], left or 0, floors_hard, first_tile)
         for _ in range(6):
             states = toggles(context, page_guard(context, "ExplorationReward"))
             on = [i for i, v in enumerate(states) if v]
@@ -5549,7 +5678,7 @@ class Settle(CustomAction):
                 write_cursor(ROOT, address(context), cursor)
                 log(f"rotation cursor -> {cursor}")
         else:
-            log("team not picked by the bot this run: rotation cursor stays")
+            log("this run's team is not known: rotation cursor stays")
         RUN.clear()
         return True
 
@@ -5565,13 +5694,14 @@ class Settle(CustomAction):
             return stuck("GiveUpRewards brought up no `End expedition without claiming rewards?`")
         page_guard(context, "ExplorationReward", image=image)
         tap(context, *DIALOG_CONFIRM, wait=2)
-        log("goal not met: gave up the rewards")
+        log("floor 5 not passed: gave up the rewards")
         self.record(run, result, 0, "giveup")
         RUN.clear()
         return True
 
     @staticmethod
     def record(run, result, bonuses, outcome):
-        settlement.append_run(ROOT, run_line(run, outcome, result[1], settlement.floors_passed(result), bonuses))
+        settlement.append_run(ROOT, run_line(run, outcome, result.hard, settlement.floors_passed(result), bonuses))
         TASK["runs"] += settlement.counts_as_run(outcome)
+        TASK["settled"] = True
         STUCK["ladder"] = recovery.Ladder()

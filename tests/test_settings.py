@@ -61,10 +61,10 @@ def custom_skills():
 
 
 VALID = {
-    "version": 19,
+    "version": 20,
     "language": "zh_tw",
     "run": {
-        "difficulty": "auto", "runs": 1, "weekly_bonus_use": "hard", "weekly_bonus_amount": "all",
+        "difficulty": "auto", "target_floor": 5, "runs": 1, "weekly_bonus_use": "hard", "weekly_bonus_amount": "all",
         "stop_when_weekly_bonus_out": False, "starlight_unaffordable": "skip", "wipe_retries": 2,
         "after_retries": "stop", "webhook_url": "", "theme_pack_refresh": "all",
         "auto_accept_terms": True, "auto_download": True, "keep_dismissed_screens": True,
@@ -86,9 +86,17 @@ VALID = {
 }
 
 
+def as_v19(valid):
+    """The same settings as version 19 wrote them: no target floor."""
+    old = copy.deepcopy(valid)
+    old["version"] = 19
+    del old["run"]["target_floor"]
+    return old
+
+
 def as_v18(valid):
     """The same settings as version 18 wrote them: no skill replacement."""
-    old = copy.deepcopy(valid)
+    old = as_v19(valid)
     old["version"] = 18
     for t in old["teams"]:
         del t["skill_replacement"]
@@ -154,6 +162,7 @@ def defaulted(data):
     return {**data, "teams": [{**t, "skill_replacement": DEFAULT_SKILLS} for t in data["teams"]]}
 
 
+V19 = as_v19(VALID)
 V18 = as_v18(VALID)
 V17 = as_v17(VALID)
 V16 = as_v16(VALID)
@@ -278,7 +287,21 @@ def test_schema_errors_name_the_field(tmp_path, fn, where):
 
 
 def test_newer_version_is_refused(tmp_path):
-    assert "newer" in errors(tmp_path, {**VALID, "version": 20})[0]
+    assert "newer" in errors(tmp_path, {**VALID, "version": 21})[0]
+
+
+def test_version_19_gets_the_target_floor_5(tmp_path):
+    # #385: a file from before the setting plays the 5 floors it always did
+    got = load(tmp_path, V19)
+    assert got["version"] == 20 and got["run"]["target_floor"] == 5
+    assert {**got, "gift_lists": None} == {**VALID, "gift_lists": None}  # the list is cleaned on load
+    assert settings.NOTES == []
+
+
+def test_version_19_keeps_a_target_floor_the_file_already_has(tmp_path):
+    data = copy.deepcopy(V19)
+    data["run"]["target_floor"] = 10
+    assert load(tmp_path, data)["run"]["target_floor"] == 10
 
 
 def test_version_1_gets_guard_turns_off(tmp_path):
@@ -599,7 +622,7 @@ def test_shared_valid_loads(tmp_path):
 
 def test_shared_valid10_migrates_and_loads(tmp_path):
     loaded = load(tmp_path, CASES["valid10"])
-    assert loaded["version"] == 19 and [t["gift_list"] for t in loaded["teams"]] == ["gift-list-1", "gift-list-2"]
+    assert loaded["version"] == 20 and [t["gift_list"] for t in loaded["teams"]] == ["gift-list-1", "gift-list-2"]
 
 
 @pytest.mark.parametrize("case", CASES["migrations"], ids=lambda c: c["name"])
