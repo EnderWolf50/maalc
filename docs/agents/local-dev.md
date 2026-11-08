@@ -19,14 +19,14 @@ CI splits pytest over the `agent` shards by each file's seconds on a CI runner, 
 
 ## After landing a PR
 
-Land one PR at a time with `tools/ship.py`:
+Land PRs with `tools/ship.py`; one call takes several and lands them one at a time:
 
 - `uv run python tools/ship.py ready <pr>...` prints head SHA, `ci-ok` state, mergeable, draft, base and the PRs stacked on each.
-- `uv run python tools/ship.py land <pr> --go` merges (merge commit) only when `ci-ok` passed on the current head and the PR is mergeable, retargets the PRs stacked on its branch to the base before the branch is deleted, waits for the CI run of the merge commit on `main` and exits non-zero when it is red. The wait is short when that run skips its jobs (see "Checks"). Start the next `land` after this one returned green. A PR whose base is not `main` merges without that wait (`ci.yml` runs on pushes to `main` only). `land` runs no review (AGENTS.md "Review and CI").
+- `uv run python tools/ship.py land <pr>... --go` lands the PRs in the given order. Each merges (merge commit) only when `ci-ok` passed on its current head and it is mergeable, retargets the PRs stacked on its branch to the base before the branch is deleted, and waits for the CI run of the merge commit on `main`. The wait is short when that run skips its jobs (see "Checks"). A PR whose base is not `main` merges without that wait (`ci.yml` runs on pushes to `main` only). The first PR that is not ready, fails to merge or turns `main` red stops the call: it exits non-zero and, for several PRs, prints `stopped at #<pr>; not started: ...`. `land` runs no review (AGENTS.md "Review and CI").
 - `uv run python tools/ship.py into <integration-branch> <branch>` merges `<branch>` into the integration branch (`--no-ff`, in a worktree of it), runs `tools/check.py` through the bench queue and pushes only on green; a conflict or a red check pushes nothing. The first merge into an integration branch with no open PR opens a draft PR, so Linux CI runs from the first merge.
 - `uv run python tools/review_pack.py <pr>` writes the diff, body, CI state and the issues the PR closes or names to `.local/scratch/review-<pr>/`, for a reviewer whose Bash tool does not run. Before the push there is no PR yet: save `git diff origin/<base>...HEAD` to a file under `.local/scratch/` instead.
 
-After a green `land`, `ship.py` runs `tools/after_land.py` in the main checkout unless `uv run python tools/live/queue.py status` shows a holder for `emulator` (a live run is using `install/`); then it prints the command to run later: `uv run python tools/after_land.py`. It first fetches and fast-forwards the checkout's `main` (refusing off main, with local changes, or when it cannot fast-forward), then builds the settings GUI, assembles `install/` and checks that `install/config/settings.json` still loads.
+`ship.py` runs `tools/after_land.py` in the main checkout once per `land` call, after the last PR landed or the batch stopped, when at least one PR landed green on `main` and the call did not leave `main` red. When `uv run python tools/live/queue.py status` shows a holder for `emulator` (a live run is using `install/`), it prints the command to run later instead: `uv run python tools/after_land.py`. `after_land.py` first fetches and fast-forwards the checkout's `main` (refusing off main, with local changes, or when it cannot fast-forward), then builds the settings GUI, assembles `install/` and checks that `install/config/settings.json` still loads.
 
 Done: `after_land.py` ends without a "failed" line.
 
