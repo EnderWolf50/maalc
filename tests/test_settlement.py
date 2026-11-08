@@ -309,6 +309,84 @@ def test_a_stop_line_of_a_run_with_no_settings_in_memory_is_a_target_5_line(cont
     assert (line["target"], line["target_reached"]) == (5, False)
 
 
+NO_BONUS = "You have Weekly Bonus Eligibility remaining. Are you sure you want to claim the current rewards without using the Eligibility?"
+
+
+def timed_settle(context, monkeypatch, tmp_path, window, use, answers, reads=None):
+    """Settle as a test_actions.TimedGame of `answers`: the window reads `window`, its toggles OFF, 3 weekly bonuses
+    left, "one" to spend on a `use` run. Returns what Settle returned, the game and the runs.jsonl lines."""
+    import test_actions
+    monkeypatch.setattr(actions, "ROOT", tmp_path)
+    monkeypatch.setattr(actions, "address", lambda context: "emulator")
+    team = {"id": "a", "name": "A", "enabled": True}
+    actions.RUN.update(settings={"run": {"weekly_bonus_use": use, "weekly_bonus_amount": "one", "target_floor": 5}, "teams": [team]},
+                       team=team, planned=True, floors_hard={f: True for f in range(1, 6)})
+    game = test_actions.TimedGame(monkeypatch, context, {
+        tuple(actions.REWARD_TITLE_ROI): "Exploration Reward", tuple(actions.WEEKLY_LEFT): "3/3",
+        **{toggle_roi(i): "OFF" for i in range(3)}, **(reads or {})}, answers)
+    monkeypatch.setattr(actions, "ocr", lambda context, image, roi, only_rec=False: [(window, (300, 420, 90, 20))] if roi == actions.RESULT else [])
+    done = actions.Settle().run(context, None)
+    path = tmp_path / "logs" / "runs.jsonl"
+    return done, game, [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()] if path.exists() else []
+
+
+def toggle_roi(i):
+    dx, y, w, h = actions.TOGGLE_ROI
+    return actions.TOGGLE_X[i] + dx, y, w, h
+
+
+def window_gone(lag):
+    return lag, {tuple(actions.REWARD_TITLE_ROI): "", tuple(actions.DIALOG_TEXT): ""}, 90
+
+
+def test_claim_confirms_its_dialog_once_it_stops_and_ends_once_the_window_goes(context, clock, monkeypatch, tmp_path):
+    # #258: Claim and its Confirm slept 2 s each (the 2026-10-29 and 2026-11-08 claims both asked to confirm). Claim now
+    # waits for the dialog, Confirm for the window to go.
+    done, game, lines = timed_settle(context, monkeypatch, tmp_path, "Floor 5 [NORMAL] 6/6", "none", {
+        actions.CLAIM: [(0.5, {tuple(actions.DIALOG_TEXT): NO_BONUS}, 30)], actions.DIALOG_CONFIRM: [window_gone(0.5)]})
+    assert done and game.taps == [actions.CLAIM, actions.DIALOG_CONFIRM]
+    assert [line["result"] for line in lines] == ["clear"]
+    assert sum(clock) < 2.2  # was 4 s
+
+
+def test_a_weekly_bonus_toggle_is_read_back_once_it_flips_not_after_1_5_s(context, clock, monkeypatch, tmp_path):
+    spend = "Spend your 「Weekly Bonuses」 to claim the bonus rewards?"
+    done, game, lines = timed_settle(context, monkeypatch, tmp_path, "Floor 5 [HARD] 6/6", "hard", {
+        (actions.TOGGLE_X[0], 252): [(0.3, {toggle_roi(0): "ON"}, 20)],
+        actions.CLAIM: [(0.5, {tuple(actions.DIALOG_TEXT): spend}, 30)], actions.DIALOG_CONFIRM: [window_gone(0.5)]})
+    assert done and game.taps == [(actions.TOGGLE_X[0], 252), actions.CLAIM, actions.DIALOG_CONFIRM]
+    assert [line["result"] for line in lines] == ["clear"]
+    assert sum(clock) < 2.6  # was 1.5 + 4 s
+
+
+def test_a_claim_dialog_that_is_not_the_one_asked_for_is_never_confirmed(context, clock, monkeypatch, tmp_path):
+    # Toggles read back OFF, so only the no-bonus dialog may be confirmed: a bonus one waits out the five looks and stops.
+    spend = "Spend your 「Weekly Bonuses」 to claim the bonus rewards?"
+    monkeypatch.setattr(actions, "stop", lambda context, reason, line=None: False)
+    done, game, lines = timed_settle(context, monkeypatch, tmp_path, "Floor 5 [NORMAL] 6/6", "none", {
+        actions.CLAIM: [(0.5, {tuple(actions.DIALOG_TEXT): spend}, 30)], actions.DIALOG_CONFIRM: [window_gone(0.5)]})
+    assert not done and game.taps == [actions.CLAIM] and lines == []
+
+
+def test_give_up_confirms_once_its_dialog_stops_and_ends_once_the_window_goes(context, clock, monkeypatch, tmp_path):
+    # #258: GiveUpRewards slept 1.5 s, its Confirm 2 s.
+    done, game, lines = timed_settle(context, monkeypatch, tmp_path, "Floor 3 [NORMAL] 2/6", "none", {
+        actions.GIVE_UP: [(0.5, {tuple(actions.DIALOG_TEXT): "End expedition without claiming rewards?"}, 30)],
+        actions.DIALOG_CONFIRM: [window_gone(0.5)]})
+    assert done and game.taps == [actions.GIVE_UP, actions.DIALOG_CONFIRM]
+    assert [line["result"] for line in lines] == ["giveup"]
+    assert sum(clock) < 2  # was 3.5 s
+
+
+def test_a_leftover_claim_dialog_is_cancelled_and_handed_back_once_it_goes(context, clock, monkeypatch, tmp_path):
+    done, game, lines = timed_settle(context, monkeypatch, tmp_path, "Floor 5 [NORMAL] 6/6", "none",
+                               {actions.DIALOG_CANCEL: [(0.4, {tuple(actions.DIALOG_TEXT): ""}, 20)]},
+                               reads={tuple(actions.DIALOG_TEXT): NO_BONUS})
+    assert done and game.taps == [actions.DIALOG_CANCEL] and lines == []
+    assert not game.now()[tuple(actions.DIALOG_TEXT)]
+    assert sum(clock) < 1  # was 1.5 s
+
+
 # The acceptance's claim page (2026-10-29): Floor 5 [HARD] 7/7, five HARD floors, 3 weekly bonuses left, no run plan.
 CLAIM = "ExplorationRewardHard5.png"
 SEEN = {"all five": {f: True for f in range(1, 6)}, "none": {}, "last two": {4: True, 5: True},

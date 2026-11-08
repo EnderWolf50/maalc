@@ -79,6 +79,40 @@ def screens(context, values):
         lambda: images.pop(0) if len(images) > 1 else images[0]
 
 
+class TimedGame:
+    """A fake game for the waits that replaced a tap's fixed sleep (#258). `reads` is what each roi (a tuple) reads and
+    `level` the screenshot's brightness. A tap at a point of `answers` takes that point's next answer, (lag, reads, level)
+    or None for a tap the game loses, which shows `lag` s later; level None keeps the picture. A tap sleeps its wait, as
+    actions.tap does, so a fixed wait still costs its seconds. The taps are kept, in order."""
+
+    def __init__(self, monkeypatch, context, reads, answers, level=10):
+        self.reads, self.level, self.answers, self.taps, self.due = dict(reads), level, {k: list(v) for k, v in answers.items()}, [], []
+        monkeypatch.setattr(actions, "tap", self.tap)
+        monkeypatch.setattr(actions, "text", lambda context, image, roi, only_rec=False: self.now().get(tuple(roi), ""))
+        context.tasker.controller.post_screencap.return_value.wait.return_value.get.side_effect = self.shot
+
+    def now(self):
+        """The reads at the fake clock's now, every answer due by then shown."""
+        t = actions.time.monotonic()
+        for due in sorted((d for d in self.due if d[0] <= t), key=lambda d: d[0]):
+            self.due.remove(due)
+            self.reads.update(due[1])
+            self.level = self.level if due[2] is None else due[2]
+        return self.reads
+
+    def shot(self):
+        self.now()
+        return np.full((720, 1280, 3), self.level, np.uint8)
+
+    def tap(self, context, x, y, wait=1.0):
+        self.taps.append((x, y))
+        queue = self.answers.get((x, y))
+        if queue and (answer := queue.pop(0)) is not None:
+            lag, reads, level = answer
+            self.due.append((actions.time.monotonic() + lag, reads, level))
+        actions.time.sleep(wait)
+
+
 def test_until_returns_the_first_screen_that_shows_the_change(context, clock):
     screens(context, [0, 0, 9, 0])
     image = actions.until(context, lambda im: im[0, 0, 0] == 9, timeout=3)
@@ -2891,6 +2925,64 @@ def test_forfeit_reads_its_dialogs_however_ocr_cases_them(context, monkeypatch):
     actions.RUN["forfeit"] = True
     assert actions.forfeit(context) is True
     assert actions.STUCK["flag"] is None and "forfeit" not in actions.RUN
+
+
+PROGRESS_TITLE, QUIT_DIALOG = (520, 212, 240, 30), tuple(actions.FORFEIT_DIALOG)
+
+
+def forfeit_game(context, monkeypatch, gear=((0.5, {PROGRESS_TITLE: "Dungeon Progress"}, 30),)):
+    return TimedGame(monkeypatch, context, {}, {
+        actions.GEAR: list(gear),
+        actions.FORFEIT: [(0.5, {QUIT_DIALOG: "Quit exploring the dungeon?"}, 40)],
+        actions.FORFEIT_CONFIRM: [(0.5, {QUIT_DIALOG: ""}, 50)]})
+
+
+def test_forfeit_taps_each_step_once_its_panel_shows_not_after_2_s(context, clock, monkeypatch):
+    # #258: the gear, Forfeit and Confirm slept 2 s each; each now goes on once the panel or dialog it brings is still,
+    # and Confirm hands back once the dialog goes.
+    game = forfeit_game(context, monkeypatch)
+    actions.RUN["forfeit"] = True
+    assert actions.forfeit(context) is True
+    assert game.taps == [actions.GEAR, actions.FORFEIT, actions.FORFEIT_CONFIRM]
+    assert "forfeit" not in actions.RUN and actions.STUCK["flag"] is None
+    assert sum(clock) < 3  # was 6 s
+
+
+def test_forfeit_taps_the_gear_again_when_the_panel_does_not_show_in_2_s(context, clock, monkeypatch):
+    game = forfeit_game(context, monkeypatch, gear=[None, (0.5, {PROGRESS_TITLE: "Dungeon Progress"}, 30)])
+    actions.RUN["forfeit"] = True
+    assert actions.forfeit(context) is True
+    assert game.taps == [actions.GEAR, actions.GEAR, actions.FORFEIT, actions.FORFEIT_CONFIRM]
+    assert sum(clock) >= 2  # the lost tap's old wait
+
+
+WIPE_TEXT = tuple(actions.DEFEAT_TEXT)
+RETRY_STAGE = actions.DEFEAT_OPTIONS["retry"]
+
+
+def wipe(context, monkeypatch, card, confirm):
+    """The DEFEAT dialog's Wipe with one retry left: the answers of the Retry Stage card and of Confirm."""
+    actions.RUN.update(settings={"run": {"wipe_retries": 2, "after_retries": "stop"}}, wipes=0)
+    game = TimedGame(monkeypatch, context, {WIPE_TEXT: "All participating Sinners have been killed."},
+                     {RETRY_STAGE: card, actions.DEFEAT_CONFIRM: confirm})
+    assert actions.Wipe().run(context, None)
+    return game
+
+
+def test_wipe_confirms_once_the_picked_card_settles_and_hands_back_once_the_dialog_goes(context, clock, monkeypatch):
+    # #258: the card slept 1.2 s, Confirm 2.5 s. The card now waits for the dialog to move and stop; Confirm for the
+    # dialog's text to go.
+    game = wipe(context, monkeypatch, [(0.2, {}, 60)], [(0.6, {WIPE_TEXT: ""}, 0)])
+    assert game.taps == [RETRY_STAGE, actions.DEFEAT_CONFIRM]
+    assert actions.RUN["wipes"] == 1
+    assert sum(clock) < 1.6  # was 3.7 s
+
+
+def test_wipe_picks_the_card_again_when_confirm_does_not_take(context, clock, monkeypatch):
+    # The card's tap lost: the dialog never moves, Confirm on no card does nothing, and after its old 2.5 s both go again.
+    game = wipe(context, monkeypatch, [None, (0.2, {}, 60)], [None, (0.6, {WIPE_TEXT: ""}, 0)])
+    assert game.taps == [RETRY_STAGE, actions.DEFEAT_CONFIRM, RETRY_STAGE, actions.DEFEAT_CONFIRM]
+    assert actions.RUN["wipes"] == 1 and actions.STUCK["flag"] is None
 
 
 def test_the_theme_pack_page_reads_its_floor_in_any_case(context, monkeypatch):

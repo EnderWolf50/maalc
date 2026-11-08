@@ -3017,10 +3017,12 @@ class Formation(CustomAction):
                 return stop(context, reason)
             log(f"{reason}: forfeit the run")
             RUN["forfeit"] = True
-            tap(context, *FORMATION_BACK, wait=2)
+            # Up to the old 2 s for the page to go: MirrorHub must not find it again and back out twice.
+            tap_then(context, *FORMATION_BACK, lambda im: seen(context, im, "Formation") is None, timeout=2)
             return True
         if not has(text(context, image, DETAILS_BUTTON), "Details"):
-            tap(context, 826, 125, wait=1.5)  # its » folds the details view (skills, E.G.O), which hides the order marks
+            # its » folds the details view (skills, E.G.O), which hides the order marks; they are read once it is still
+            tap_shown(context, 826, 125, lambda im: has(text(context, im, DETAILS_BUTTON), "Details"), timeout=1.5)
             image = screen(context)
         dead = dead_sinners(image)
         if len(dead) != 12 - alive:
@@ -3427,9 +3429,9 @@ class Wipe(CustomAction):
         if choice == "stop":
             return stop(context, "retries used up")
         for _ in range(3):
-            tap(context, *DEFEAT_OPTIONS[choice], wait=1.2)  # the options are cards: pick one, then Confirm
-            tap(context, *DEFEAT_CONFIRM, wait=2.5)
-            if not has(text(context, screen(context), DEFEAT_TEXT), "participating"):
+            tap_settled(context, *DEFEAT_OPTIONS[choice], timeout=1.2)  # the options are cards: pick one, then Confirm
+            if tap_then(context, *DEFEAT_CONFIRM, lambda im: not has(text(context, im, DEFEAT_TEXT), "participating"),
+                        timeout=2.5) is not None:
                 break
         else:
             return stuck(f"the DEFEAT dialog did not take {choice}")
@@ -3456,9 +3458,12 @@ def forfeit(context):
         (FORFEIT_CONFIRM, FORFEIT_DIALOG, "Quit exploring", False),
     ]
     for xy, roi, want, shown in steps:
+        def answered(im):
+            return has(text(context, im, roi), want) == shown
+
         for _ in range(3):
-            tap(context, *xy, wait=2)
-            if has(text(context, screen(context), roi), want) == shown:
+            # A panel or dialog that shows is tapped next once it stops moving; the game ignores taps while it slides in.
+            if (tap_shown if shown else tap_then)(context, *xy, answered, timeout=2) is not None:
                 break
         else:
             return stuck(f"forfeit: {want!r} did not {'show' if shown else 'go'}")
@@ -4016,6 +4021,7 @@ HEAL_TITLE, HEAL_COST = [130, 30, 220, 45], [1100, 90, 110, 50]
 HEAL_OPTIONS = {"full": (1020, 330), "revive": (1020, 455)}
 SHOP_PORTRAIT_X = [98 + 77 * i for i in range(12)]  # the shop's sinner bar (step 77, not the event bar's)
 BOTTOM_RIGHT = (1130, 647)  # Leave on the shop; Return, Select or Leave on the heal pages
+BOTTOM_LABEL = [1040, 615, 180, 65]  # its label (the Shop node's ShopLeave roi)
 OUTSIDE = (40, 400)  # left of every shop dialog, on nothing
 LEAVE_DIALOG, LEAVE_CONFIRM, LEAVE_CANCEL = [440, 320, 400, 45], (765, 493), (515, 493)
 # The Replace <sinner>'s Skill dialog (#455; spec 02 「技能替換對話框」), measured on tests/screens/ShopReplaceSkill*.png. Both
@@ -4733,13 +4739,11 @@ class Shop(CustomAction):
             at = Shop.way_out(context, image)
             if at in ("map", "main"):
                 return at == "main"
-            if at == "heal":
-                tap(context, *BOTTOM_RIGHT, wait=1.5)  # the heal pages keep their fixed waits: not seen live
-            elif at is None:
+            if at is None:
                 page_guard(context, "Shop", image=image)  # not a shop page MirrorHub knows: hand it back
                 still(context, timeout=1.5)  # a page fading in or out
             else:
-                tap_settled(context, *at)
+                tap_settled(context, *(BOTTOM_RIGHT if at == "heal" else at))  # a heal page's Return or Leave
         return False
 
     @staticmethod
@@ -4800,22 +4804,29 @@ class Shop(CustomAction):
         kind, n = plan
         for x in dead[:n] if kind == "revive" else [None]:
             page_guard(context, "Shop")
-            tap(context, *SHOP_BUTTONS["heal"], wait=2)
-            if not has(text(context, screen(context), HEAL_TITLE), "Heal"):
+            # Each step waits for what it brings, up to its old fixed wait; a page read or tapped next once it is still.
+            if tap_shown(context, *SHOP_BUTTONS["heal"], lambda im: has(text(context, im, HEAL_TITLE), "Heal"), timeout=2) is None:
                 log("shop: the heal page did not open")
                 break
             before = read_cost(context, HEAL_COST)
-            tap(context, *HEAL_OPTIONS[kind], wait=1.5)
-            if x is not None:
-                tap(context, x, 655, wait=1.2)  # only a dead sinner takes the tap; then Select shows
-                tap(context, *BOTTOM_RIGHT, wait=2)
+
+            def paid(im):
+                return cost_in(context, im, HEAL_COST) not in (None, before)
+            if x is None:
+                tap_shown(context, *HEAL_OPTIONS[kind], paid, timeout=1.5)
+            else:
+                tap_settled(context, *HEAL_OPTIONS[kind], timeout=1.5)  # the bar's portraits turn selectable
+                # only a dead sinner takes the tap; then Select shows
+                tap_shown(context, x, 655, lambda im: has(text(context, im, BOTTOM_LABEL), "Select"), timeout=1.2)
+                tap_shown(context, *BOTTOM_RIGHT, paid, timeout=2)
             after = read_cost(context, HEAL_COST)
             log(f"shop: {kind}: {before} -> {after} Cost")
             if after == before:
                 break
             if kind == "revive" and "alive" in RUN:
                 RUN["alive"] += 1
-            tap(context, *BOTTOM_RIGHT, wait=2)  # the result's Leave: back to the shop
+            # the result's Leave: back to the shop
+            tap_then(context, *BOTTOM_RIGHT, lambda im: not has(text(context, im, HEAL_TITLE), "Heal"), timeout=2)
             Shop.to_main(context)
         Shop.to_main(context)
 
@@ -5655,6 +5666,16 @@ FIRST_FLOOR = [96, 238, 64, 36]  # Dungeon Progress's floor 1 tile, left of the 
 DIALOG_CANCEL, DIALOG_CONFIRM = (515, 493), (763, 493)
 
 
+def reward_up(context, image):
+    """Whether the Exploration Reward window's title reads, under its dialogs too."""
+    return has(text(context, image, REWARD_TITLE_ROI), "Exploration Reward")
+
+
+def claim_asks(context, image):
+    """The window's dialog that shows (settlement.claim_dialog), or None."""
+    return settlement.claim_dialog(text(context, image, DIALOG_TEXT))
+
+
 def toggles(context, image):
     """Each weekly-bonus toggle as True (ON), False (OFF) or None (unread)."""
     out = []
@@ -5676,8 +5697,9 @@ class Settle(CustomAction):
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         run = current_run(context)
         image = screen(context)
-        if settlement.claim_dialog(text(context, image, DIALOG_TEXT)):
-            tap(context, *DIALOG_CANCEL, wait=1.5)  # left over from an earlier try: back out and decide again
+        if claim_asks(context, image):
+            # left over from an earlier try: back out and decide again
+            tap_then(context, *DIALOG_CANCEL, lambda im: not claim_asks(context, im), timeout=1.5)
             return True
         lines = sorted(ocr(context, image, RESULT), key=lambda r: r[1][1])  # results come out of order
         result = settlement.read_result(" ".join(t for t, _ in lines))
@@ -5703,27 +5725,33 @@ class Settle(CustomAction):
             states = toggles(context, page_guard(context, "ExplorationReward"))
             on = [i for i, v in enumerate(states) if v]
             if None in states and len(on) <= want:
-                time.sleep(1)  # an unread toggle may be ON: never claim on a guess
+                # an unread toggle may be ON: never claim on a guess
+                until(context, lambda im: None not in toggles(context, im), timeout=1)
                 continue
             if len(on) == want:
                 break
             i = on[-1] if len(on) > want else states.index(False)
-            tap(context, TOGGLE_X[i], 252, wait=1.5)
+            tap_then(context, TOGGLE_X[i], 252, lambda im: toggles(context, im)[i] is (not states[i]), timeout=1.5)
         else:
             return stop(context, f"weekly bonus toggles read {states}, want {want} ON: not claiming")
         log(f"weekly bonuses left {left}, use {s['weekly_bonus_use']}/{s['weekly_bonus_amount']}: toggles {states} verified, {want} ON")
 
-        tap(context, *CLAIM, wait=2)
+        # Live: Claim asks to confirm with bonuses left and none ON (2026-10-15), and with any ON (2026-10-16).
+        # Confirm only the dialog of what the toggles were set and read back to; a bonus is spent only then.
+        asked = "bonus" if want else "no_bonus"
+
+        def answered(im):
+            return not reward_up(context, im) or claim_asks(context, im) == asked
+        tap_then(context, *CLAIM, answered, timeout=2)
         for _ in range(5):
             image = screen(context)
-            if not has(text(context, image, REWARD_TITLE_ROI), "Exploration Reward"):
+            if not reward_up(context, image):
                 break
-            # Live: Claim asks to confirm with bonuses left and none ON (2026-10-15), and with any ON (2026-10-16).
-            # Confirm only the dialog of what the toggles were set and read back to; a bonus is spent only then.
-            if settlement.claim_dialog(text(context, image, DIALOG_TEXT)) == ("bonus" if want else "no_bonus"):
-                tap(context, *DIALOG_CONFIRM, wait=2)
+            if claim_asks(context, image) == asked:
+                still(context, timeout=1.5)  # the dialog slides in, and takes no tap before it stops (as the shop's Leave)
+                tap_then(context, *DIALOG_CONFIRM, lambda im: not reward_up(context, im), timeout=2)
                 continue
-            time.sleep(1)
+            until(context, answered, timeout=1)
         else:
             # Anything else, too few Enkephalin Modules most likely: nothing more is tapped, so nothing is bought.
             return stop(context, f"Claim did not close the window: {text(context, image, DIALOG_TEXT)!r}",
@@ -5744,14 +5772,13 @@ class Settle(CustomAction):
         """GiveUpRewards, then `End expedition without claiming rewards?` Confirm; no module is spent."""
         for _ in range(3):
             page_guard(context, "ExplorationReward")  # also under its give-up dialog (maatools: GiveUpDialog.png)
-            tap(context, *GIVE_UP, wait=1.5)
-            image = screen(context)
-            if settlement.claim_dialog(text(context, image, DIALOG_TEXT)) == "giveup":
+            image = tap_shown(context, *GIVE_UP, lambda im: claim_asks(context, im) == "giveup", timeout=1.5)
+            if image is not None:
                 break
         else:
             return stuck("GiveUpRewards brought up no `End expedition without claiming rewards?`")
         page_guard(context, "ExplorationReward", image=image)
-        tap(context, *DIALOG_CONFIRM, wait=2)
+        tap_then(context, *DIALOG_CONFIRM, lambda im: not reward_up(context, im), timeout=2)
         log("floor 5 not passed: gave up the rewards")
         self.record(run, result, 0, "giveup")
         RUN.clear()

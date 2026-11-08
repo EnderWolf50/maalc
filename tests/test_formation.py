@@ -1,4 +1,6 @@
 """#253: Formation.pick looks at Total Participants right after each tap, instead of sleeping a fixed 1.2 s first."""
+from types import SimpleNamespace
+
 import actions
 import test_actions
 
@@ -138,3 +140,39 @@ def test_a_formation_that_does_not_clear_after_three_tries_is_stuck_and_no_card_
     assert [xy for _, xy in game.taps].count(actions.CLEAR_SELECTION) == 3
     assert not any(xy == card(s) for _, xy in game.taps for s in ORDER)
     assert actions.STUCK["flag"][2] == "Clear Selection did not clear the formation"
+
+
+def formation_page(context, monkeypatch, reads, answers):
+    """A formation page (MirrorHub's Formation node hits while `"Formation"` reads True) as a TimedGame."""
+    game = test_actions.TimedGame(monkeypatch, context, {"Formation": True, **reads}, answers)
+    context.run_recognition.side_effect = lambda name, image, override=None: \
+        SimpleNamespace(hit=True, box=[0, 0, 1, 1]) if name == "Formation" and game.now()["Formation"] else None
+    return game
+
+
+def test_too_few_alive_backs_out_and_hands_back_once_the_page_goes_not_after_2_s(context, clock, monkeypatch):
+    # #258: the back arrow slept 2 s so that MirrorHub would not find the page again and back out twice; the wait now
+    # ends when the Formation node no longer hits.
+    actions.RUN.update(team={"min_alive": 5, "name": "t"}, settings={"run": {"after_retries": "forfeit"}})
+    monkeypatch.setattr(actions, "participants", lambda context, image: (4, 4))
+    game = formation_page(context, monkeypatch, {}, {actions.FORMATION_BACK: [(0.5, {"Formation": False}, 20)]})
+    assert actions.Formation().run(context, None)
+    assert game.taps == [actions.FORMATION_BACK] and actions.RUN["forfeit"] is True
+    assert not game.now()["Formation"]  # gone before the hub looks again
+    assert sum(clock) < 1.5  # still() 0.2 s, then the page's 0.5 s; was 0.2 + 2 s
+
+
+def test_the_details_view_is_folded_and_read_once_its_button_shows_not_after_1_5_s(context, clock, monkeypatch):
+    # #258: the » slept 1.5 s; now the order marks are read on the folded page once Details shows and the page is still.
+    actions.RUN.update(team={"min_alive": 0, "name": "t"}, settings={"run": {"after_retries": "stop"}})
+    monkeypatch.setattr(actions, "participants", lambda context, image: (5, 12))
+    monkeypatch.setattr(actions.run_start, "resolve_plan", lambda *a: [])  # ends the action after the dead are read
+    monkeypatch.setattr(actions, "stop", lambda context, reason, line=None: False)
+    read = []
+    monkeypatch.setattr(actions, "dead_sinners", lambda image: read.append(int(image[0, 0, 0])) or set())
+    game = formation_page(context, monkeypatch, {tuple(actions.DETAILS_BUTTON): ""},
+                          {(826, 125): [(0.4, {tuple(actions.DETAILS_BUTTON): "Details"}, 30)]})
+    actions.Formation().run(context, None)
+    assert game.taps == [(826, 125)]
+    assert read == [30]  # the folded page
+    assert sum(clock) < 1.3  # was 0.2 + 1.5 s
