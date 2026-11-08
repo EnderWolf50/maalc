@@ -38,19 +38,21 @@ from gifts import effective, main_keyword, purchases, recipe_fusion, resolve_lis
 from ocrtext import compact, digits, floor_number, has, normalize
 from settings import NOTES as settings_notes
 from settings import SettingsError, data_dir, gift_tables, load_settings, vestige_ids
-from state import next_cursor, pick_team, read_cursor, write_cursor
+from state import next_cursor, pick_team, read_cursor, resumed_team, write_cursor
 
 # Same <root> as main.ROOT; resource/ sits under it in a release, under assets/ in the repo.
 ROOT = Path(__file__).resolve().parent.parent
 
 # This run's plan, made on the entry page: {"settings", "team", "difficulty"}.
-# Memory only (ADR 0003); an agent restarted mid-run falls back to current_run's guess. TaskStart keeps it for the same
-# task when the client interrupted the last one (no done, no stop): the run is picked up as before the task chain.
+# Memory only (ADR 0003); an agent restarted mid-run makes one up from the rotation cursor (current_run). TaskStart
+# keeps it for the same task when the client interrupted the last one (no done, no stop): the run is picked up as before
+# the task chain.
 RUN = {}
 # This task's own state (#364, ADR 0010), reset by TaskStart: the runs claimed since it started (the run count stop,
 # spec 01; never saved), why it is done ("done", None while it runs), which ends it a success (TaskDone), its entry
 # node, and "ended" once done() or stop() ended it. Set as a task needs them: "modules" and "gate_backs" (the mirror's new
-# run gate), "assemble" (Assemble Modules' reads and confirms), "charge" (Charge Enkephalin's count and its steps).
+# run gate), "settled" (a mirror run claimed or given up: none is under way until the next is planned, #436),
+# "assemble" (Assemble Modules' reads and confirms), "charge" (Charge Enkephalin's count and its steps).
 TASK = {"runs": 0, "done": None}
 # Stuck detection and recovery (spec 06), memory only: the last node seen ("node", its id) and the
 # screen type it handled ("kind"), a pending stuck for MirrorHub's Stuck node ("flag": (kind, start
@@ -375,13 +377,15 @@ def current_run(context):
     """The run plan; made up from settings and the rotation cursor when the agent restarted mid-run."""
     if "settings" not in RUN:  # a run plan, not just counters left by an action
         settings = load_settings(ROOT, need_team=True)
-        difficulty = settings["run"]["difficulty"]
-        difficulty = None if difficulty == "auto" else difficulty
-        cursor = read_cursor(ROOT, address(context))
-        team = pick_team(settings["teams"], cursor, difficulty or "hard") or pick_team(settings["teams"], cursor, "normal")
-        RUN.update(settings=settings, team=run_team(settings, team), difficulty=difficulty)
+        run = settings["run"]
+        # The weekly bonuses left when the run began are not known: the difficulty is known when both answers agree.
+        began = {run_start.run_difficulty(run["difficulty"], left, run["target_floor"]) for left in (0, 1)}
+        difficulty = began.pop() if len(began) == 1 else None
+        team, known = resumed_team(settings["teams"], read_cursor(ROOT, address(context)), difficulty)
+        RUN.update(settings=settings, team=run_team(settings, team), difficulty=difficulty, planned=known)
         # The guard turns left are unknown after a restart: they count as used up (spec 03 section 8).
-        log(f"no run plan in memory: assuming team {team['name']!r}, difficulty {difficulty or 'unknown'}, no guard turns")
+        how = "from the rotation cursor" if known else "assumed: the rotation cursor does not tell the run's team"
+        log(f"no run plan in memory: team {team['name']!r} {how}, difficulty {difficulty or 'unknown'}, no guard turns")
     return RUN
 
 
@@ -426,13 +430,19 @@ def run_line(run, outcome, hard, floors, bonuses=0):
 def stop(context, reason, line=None, whole_list=False):
     """The stop procedure (spec 06 停止程序): evidence, a `stop` line in runs.jsonl, the webhook.
 
-    line is this run's line when the caller knows it better (Settle); otherwise one is made up while a
-    run is under way. whole_list: an account-level stop (maintenance, an outdated client, a download or the terms
-    with their auto setting off, an update that keeps coming back), which every later task would meet too: post_stop then empties the client's
-    queue (#364). Returns False, for the action to return: that ends the task.
+    line is this run's line when the caller knows it better (Settle); otherwise one is made up from the run plan, in a
+    Mirror Dungeon task that stops before it touched the run too, unless it ended one already (#436). whole_list: an account-level stop (maintenance,
+    an outdated client, a download or the terms with their auto setting off, an update that keeps coming back), which
+    every later task would meet too: post_stop then empties the client's queue (#364). Returns False, for the action to
+    return: that ends the task.
     """
     log(f"stop: {reason}")
     TASK["ended"] = True
+    if line is None and TASK.get("entry") == "MirrorDungeon" and not TASK.get("settled"):
+        try:
+            current_run(context)
+        except SettingsError as e:
+            log(f"no runs.jsonl line: {e}")
     if line is None and "settings" in RUN:
         line = run_line(RUN, "stop", RUN.get("floor_hard", RUN.get("difficulty") == "hard"), max(RUN.get("floor", 1) - 1, 0))
     if line:
@@ -1492,7 +1502,8 @@ class PlanRun(CustomAction):
         else:
             log(f"new run: Modules {modules} >= {settlement.CLAIM_COST}")
         RUN.clear()
-        # planned: the bot picked the team itself, so the rotation cursor may move after the claim.
+        # planned: the run's team is known (picked here, or after a restart the cursor's, current_run), so the rotation
+        # cursor may move after the claim and runs.jsonl names it.
         limit = recovery.floor_limit(recovery.read_runs(ROOT), team["id"], run["target_floor"])
         # guard: the run's guard turns left (spec 03 section 8), counted across its battles.
         # floor_limit: each floor's time; the first clock runs from here, PickThemePack restarts it (spec 06).
@@ -1590,6 +1601,7 @@ class SelectTeam(CustomAction):
         image = pick_team_slot(context, n)
         if image is None:
             return stop(context, f"could not select TEAMS #{n}")
+        RUN["planned"] = True  # the title reads the slot: the run's team is known, whatever the cursor fits (#436)
         bonus = number(text(context, image, [1160, 522, 60, 34]))
         log(f"team TEAMS #{n}, Starlight Bonus {bonus}")
         # LevelWarning when the team is under the recommended level, else the starlight page; the team page
@@ -5636,7 +5648,7 @@ class Settle(CustomAction):
                 write_cursor(ROOT, address(context), cursor)
                 log(f"rotation cursor -> {cursor}")
         else:
-            log("team not picked by the bot this run: rotation cursor stays")
+            log("this run's team is not known: rotation cursor stays")
         RUN.clear()
         return True
 
@@ -5661,4 +5673,5 @@ class Settle(CustomAction):
     def record(run, result, bonuses, outcome):
         settlement.append_run(ROOT, run_line(run, outcome, result.hard, settlement.floors_passed(result), bonuses))
         TASK["runs"] += settlement.counts_as_run(outcome)
+        TASK["settled"] = True
         STUCK["ladder"] = recovery.Ladder()

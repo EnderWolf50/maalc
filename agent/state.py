@@ -57,6 +57,21 @@ def pick_team(teams, cursor, difficulty):
     return next((t for t in _from_cursor(teams, cursor) if difficulty in USAGE_FITS[t["usage"]]), None)
 
 
+def resumed_team(teams, cursor, difficulty):
+    """The team of a run under way that this agent did not plan (a restart, a paused run picked up), and whether it is
+    known (#436).
+
+    No screen shows the team after the team page, so it comes from the cursor, which only a claim moves: a run the bot
+    began plays pick_team for the difficulty it began on. difficulty None: that is not known (auto), and the team is
+    known only when every difficulty a run could begin on picks it. The run is played by the first pick (hard before
+    normal); when no team fits, by the cursor's own team, so a team comes back whenever one is enabled.
+    """
+    difficulties = [difficulty] if difficulty else ["hard", "normal"]
+    fits = [t for t in (pick_team(teams, cursor, d) for d in difficulties) if t]
+    team = fits[0] if fits else _from_cursor(teams, cursor)[0]
+    return team, len({t["id"] for t in fits}) == 1
+
+
 def next_cursor(teams, finished_id):
     """Cursor after the bot saw team finished_id complete a run and claim the reward: the next enabled team.
 
