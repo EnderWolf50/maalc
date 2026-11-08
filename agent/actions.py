@@ -881,10 +881,9 @@ def restart_game(context, reason, kind=None):
     the launch's Restarts, then GoHome's back keys, game starts and Window tab taps count afresh and the game state is
     forgotten. kind: the screen type the game is stuck on; None for HomeLost, which no hub read. True once RecoverL3
     ran, through or not (GoHome goes on from wherever it left the game); False after the stop procedure."""
-    if why := STUCK["restarts"].stop_reason():
+    if why := STUCK["restarts"].attempt(kind):
         return stop(context, f"{reason}; {why}")
-    STUCK["restarts"].attempt(kind)
-    log(f"recovery L3: {reason} (restart {STUCK['restarts'].failed} of {recovery.L3_FAILED_IN_A_ROW} in a row)")
+    log(f"recovery L3: {reason} (restart {STUCK['restarts'].in_a_row} of {recovery.L3_FAILED_IN_A_ROW} in a row)")
     detail = context.run_task("RecoverL3")
     if not (detail and detail.status.succeeded):
         log("L3 did not go through")

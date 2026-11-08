@@ -184,20 +184,18 @@ class Restarts:
     """
 
     def __init__(self):
-        self.failed, self.stuck_on = 0, None
-
-    def stop_reason(self):
-        if self.failed >= L3_FAILED_IN_A_ROW:
-            return f"game restarted {L3_FAILED_IN_A_ROW} times in a row without getting past {self.stuck_on or 'the screen it was stuck on'}"
-        return None
+        self.in_a_row, self.stuck_on = 0, None
 
     def attempt(self, kind):
-        self.failed += 1
-        self.stuck_on = kind
+        """A restart to get past screen type kind is about to run: why it may not, or None once it is counted."""
+        if self.in_a_row >= L3_FAILED_IN_A_ROW:
+            return f"game restarted {L3_FAILED_IN_A_ROW} times in a row without getting past {self.stuck_on or 'the screen it was stuck on'}"
+        self.in_a_row, self.stuck_on = self.in_a_row + 1, kind
+        return None
 
     def progress(self, kind):
-        if self.failed and got_past(self.stuck_on, kind):
-            self.failed, self.stuck_on = 0, None
+        if self.in_a_row and got_past(self.stuck_on, kind):
+            self.in_a_row, self.stuck_on = 0, None
 
 
 class Ladder:
@@ -227,11 +225,9 @@ class Ladder:
             return None, f"L2 used {L2_PER_RUN} times this run"
         if level == 3 and self.counts[3] >= L3_PER_RUN:
             return None, f"game restarted {L3_PER_RUN} times this run"
-        if level == 3 and (why := restarts.stop_reason()):
+        if level == 3 and (why := restarts.attempt(kind)):
             return None, why
         self.counts[level] += 1
-        if level == 3:
-            restarts.attempt(kind)
         self.open = (kind, level)
         return level, None
 

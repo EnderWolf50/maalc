@@ -126,7 +126,7 @@ def test_each_task_starts_with_a_clean_slate_but_the_game_restarts_count_per_lau
     assert (actions.STUCK["flag"], actions.STUCK["kind"]) == (None, None)
     assert actions.STUCK["ladder"].counts == recovery.Ladder().counts
     assert not actions.STUCK["watch"].held(1.0)
-    assert actions.STUCK["restarts"].stop_reason() and actions.STUCK["updates"] == 1
+    assert actions.STUCK["restarts"].attempt("MailOpen") and actions.STUCK["updates"] == 1
 
 
 def interrupted_run(context, how):

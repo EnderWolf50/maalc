@@ -103,7 +103,7 @@ def child():
         stopped = len(list(actions.ROOT.joinpath("logs").rglob("agent.log")))
         detail = tasker.post_task("ClaimPassMissions", {"PassHub": {"timeout": HUB_TIMEOUT}}).wait().get()
         out[scenario] = {**result(detail, game, actions), "starts": game.starts, "stops": game.stops,
-                         "tapped_frozen": game.tapped_frozen, "l3": actions.STUCK["restarts"].failed,
+                         "tapped_frozen": game.tapped_frozen, "in_a_row": actions.STUCK["restarts"].in_a_row,
                          "stopped": len(list(actions.ROOT.joinpath("logs").rglob("agent.log"))) - stopped,
                          "log": list(actions.LOG)[-40:]}
         actions.LOG.clear()
@@ -113,7 +113,7 @@ def child():
 def test_a_main_window_that_takes_no_tap_restarts_the_game_and_the_task_goes_on():
     o = run_child(__file__)["frozen"]
     assert (o["stops"], o["starts"]) == (1, 1), json.dumps(o)
-    assert o["l3"] == 0, json.dumps(o)
+    assert o["in_a_row"] == 0, json.dumps(o)
     # Within the banner's own 3 taps (PassBanner's max_hit): after them the hub has nothing left to tap.
     assert 1 <= o["tapped_frozen"] <= 3, json.dumps(o)
     assert o["succeeded"] and o["screen"] == "main" and o["nodes"][-1] == "TaskDone", json.dumps(o)
@@ -130,7 +130,7 @@ def test_after_the_restart_the_hub_taps_the_banner_afresh():
 
 def test_a_main_window_frozen_again_after_each_restart_stops_after_three():
     o = run_child(__file__)["frozen_again"]
-    assert (o["stops"], o["starts"], o["l3"]) == (3, 3, 3), json.dumps(o)
+    assert (o["stops"], o["starts"], o["in_a_row"]) == (3, 3, 3), json.dumps(o)
     assert o["succeeded"] is False and o["stopped"] == 1, json.dumps(o)
 
 

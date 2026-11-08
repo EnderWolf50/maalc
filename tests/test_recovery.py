@@ -247,9 +247,9 @@ def test_a_restart_that_needed_another_before_the_bot_got_past_counts_as_failed(
     for kind in (*WAY_BACK, "BattlePause"):
         ladder.progress(kind)
         restarts.progress(kind)
-    assert restarts.failed == 2
+    assert restarts.in_a_row == 2
     restarts.progress("MirrorMap")
-    assert restarts.failed == 0 and restarts.stop_reason() is None
+    assert restarts.in_a_row == 0
 
 
 def line(team, minutes, result="clear", **extra):
@@ -465,7 +465,7 @@ def test_ten_runs_with_a_restart_each_never_stop(hub, monkeypatch):
             actions.StuckFlag.see(kind, screen(0))
     assert stops == []
     assert [c.args for c in hub.run_task.call_args_list] == [("RecoverL1",), ("RecoverL3",)] * 10
-    assert actions.STUCK["restarts"].stop_reason() is None
+    assert actions.STUCK["restarts"].in_a_row == 0
 
 
 def test_a_force_stop_that_fails_three_times_in_a_row_stops(hub, monkeypatch):

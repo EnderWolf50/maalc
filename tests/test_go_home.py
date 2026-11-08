@@ -95,7 +95,8 @@ def child():
         if scenario == "restart":  # the restarted game works again, and its title opens on a page with no tab bar
             game.start_app = lambda intent, game=game: (Game.start_app(game, intent), setattr(game, "on_key", Game.on_key.__get__(game)))[0]
             game.on_tap = lambda x, y, game=game: (setattr(game, "screen", "entry") if game.screen == "title" else Game.on_tap(game, x, y)) or True
-        failed = 0 if scenario in ("restart", "tab_restart") else actions.recovery.L3_FAILED_IN_A_ROW
+        # stuck: the restarts in a row that L3 allows were used up before; restart: none were.
+        in_a_row = 0 if scenario in ("restart", "tab_restart") else actions.recovery.L3_FAILED_IN_A_ROW
         actions.ROOT.joinpath("logs").mkdir(exist_ok=True)
         stops = len(list(actions.ROOT.joinpath("logs").rglob("agent.log")))
         override = {"GoHome": {"timeout": 4000}}
@@ -109,10 +110,10 @@ def child():
             game.start_app = lambda intent, game=game: (Game.start_app(game, intent), setattr(game, "screen", "drive"),
                                                         setattr(game, "on_tap", Game.on_tap.__get__(game)))[0]
         if scenario == "restarts_used":  # one restart left, and the restarted game is as stuck as before
-            failed = actions.recovery.L3_FAILED_IN_A_ROW - 1
+            in_a_row = actions.recovery.L3_FAILED_IN_A_ROW - 1
             game.start_app = lambda intent, game=game: (setattr(game, "focus", GAME), setattr(game, "screen", "entry"), True)[-1]
         actions.STUCK["restarts"] = actions.recovery.Restarts()
-        for _ in range(failed):
+        for _ in range(in_a_row):
             actions.STUCK["restarts"].attempt(None)
         began = time.monotonic()
         job = tasker.post_task("GoHome", override).wait()
@@ -120,7 +121,7 @@ def child():
             time.sleep(0.01)
         out[scenario] = {**result(detail, game, actions), "starts": game.starts,
                          "seconds": time.monotonic() - began,
-                         "stops": game.stops, "l3": actions.STUCK["restarts"].failed,
+                         "stops": game.stops, "in_a_row": actions.STUCK["restarts"].in_a_row,
                          "stopped": len(list(actions.ROOT.joinpath("logs").rglob("agent.log"))) - stops,
                          "halted": actions.STUCK["halted"]}
         actions.STUCK["halted"] = None
@@ -173,13 +174,13 @@ def test_go_home_that_cannot_reach_the_main_window_restarts_the_game_and_goes_ag
     # the restarted game's page with no tab bar takes one more.
     o = run_child(__file__)["restart"]
     assert o["succeeded"] and o["nodes"][-1] == "HomeReached" and o["stopped"] == 0
-    assert (o["stops"], o["starts"], o["l3"]) == (1, 1, 1)
+    assert (o["stops"], o["starts"], o["in_a_row"]) == (1, 1, 1)
     assert o["keys"] == [4] * 6 and "GoHomeLost" in o["nodes"] and "NavTitle" in o["nodes"]
 
 
 def test_go_home_stops_once_the_last_restart_did_not_help():
     o = run_child(__file__)["restarts_used"]
-    assert o["succeeded"] is False and o["stops"] == 1 and o["l3"] == 3 and o["stopped"] == 1
+    assert o["succeeded"] is False and o["stops"] == 1 and o["in_a_row"] == 3 and o["stopped"] == 1
     assert o["nodes"].count("GoHomeLost") == 2
 
 
@@ -214,7 +215,7 @@ def test_go_home_taps_the_window_tab_again_after_the_game_restarted():
     # Review of #375: L3 cleared HomeBack's and HomeGameAway's hit counts but not HomeWindowTab's, so a task that used its
     # 10 taps could not tap the restarted game's Window tab at all.
     o = run_child(__file__)["tab_restart"]
-    assert o["succeeded"] and o["l3"] == 1 and "GoHomeLost" in o["nodes"], o
+    assert o["succeeded"] and o["in_a_row"] == 1 and "GoHomeLost" in o["nodes"], o
     assert len(o["clicks"]) == 11 and all(inside(WINDOW_TAB, *c) for c in o["clicks"]), o
 
 
