@@ -299,6 +299,39 @@ def test_land_refuses_and_merges_nothing(kw, text, capsys):
     assert not fake.ran("gh", "pr", "merge")
 
 
+def views(*mergeable):
+    """`gh pr view 7` answers: one PR read per `mergeable` value, then the merge commit read after the merge."""
+    return [(0, json.dumps(info(mergeable=m))) for m in mergeable] + [(0, json.dumps({"mergeCommit": {"oid": MERGE}}))]
+
+
+def reads_before_merge(fake):
+    merge = first(fake, "gh", "pr", "merge")
+    return [i for i in range(merge) if fake.calls[i][:4] == ["gh", "pr", "view", "7"]]
+
+
+def test_land_reads_a_pr_again_while_github_reports_mergeable_unknown_then_merges():
+    fake = land_fake(**{"gh pr view 7": views("UNKNOWN", "UNKNOWN", "MERGEABLE")})
+    assert land(fake) == 0
+    assert len(reads_before_merge(fake)) == 3
+
+
+def test_land_refuses_a_pr_still_unknown_after_about_a_minute(capsys):
+    waits = []
+    fake = land_fake(**{"gh pr view 7": [(0, json.dumps(info(mergeable="UNKNOWN")))]})
+    assert ship.cmd_land(fake, [7], True, sleep=waits.append) == 1
+    assert not fake.ran("gh", "pr", "merge")
+    assert "unknown, not mergeable" in capsys.readouterr().err
+    assert 50 <= sum(waits) <= 70
+
+
+def test_land_refuses_a_conflicting_pr_at_the_first_read():
+    waits = []
+    fake = land_fake(**{"gh pr view 7": views("CONFLICTING", "MERGEABLE")})
+    assert ship.cmd_land(fake, [7], True, sleep=waits.append) == 1
+    assert not fake.ran("gh", "pr", "merge")
+    assert len(fake.ran("gh", "pr", "view", "7")) == 1 and not waits
+
+
 def test_land_without_go_merges_nothing():
     fake = land_fake()
     assert land(fake, go=False) == 0

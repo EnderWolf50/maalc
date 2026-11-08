@@ -6,20 +6,21 @@
 
 `ready` prints one line per PR: head SHA, `ci-ok` state, mergeable, draft, base and the open PRs stacked on its branch.
 
-`land` merges each PR (merge commit) once `ci-ok` passed on its current head and it is mergeable. A PR into main
-also waits for the CI run of main's head and is not merged when that run is not green. It retargets every PR
-stacked on the branch to the base before deleting the branch, waits for the CI run of the merge commit on the base
-branch and exits non-zero when that run is red. Several PRs land in the given order; the first that is not ready,
-finds main red, fails to merge or turns main red stops the batch, and the PRs after it are not started. Once the
-batch ends with main green, `tools/after_land.py` runs once in the main checkout, unless the emulator queue has a
-holder (`install/` is in use): then the command to run later is printed.
+`land` merges each PR (merge commit) once `ci-ok` passed on its current head and it is mergeable (an UNKNOWN
+mergeable, which GitHub reports for a few seconds after a merge into the base or a retarget, is read again every 5 s
+for up to a minute). A PR into main also waits for the CI run of main's head and is not merged when that run is not
+green. It retargets every PR stacked on the branch to the base before deleting the branch, waits for the CI run of
+the merge commit on the base branch and exits non-zero when that run is red. Several PRs land in the given order;
+the first that is not ready, finds main red, fails to merge or turns main red stops the batch, and the PRs after it
+are not started. Once the batch ends with main green, `tools/after_land.py` runs once in the main checkout, unless
+the emulator queue has a holder (`install/` is in use): then the command to run later is printed.
 A main red from an outside failure (a GitHub 504) gets a rerun of its CI. `--onto-red <pr>` skips the check of
 main's head for that one PR: use it only for the PR that fixes a red main.
 Calls with `--go` take turns in the land lane (`<main checkout>/.local/queue/land/`, a `tools/live/queue.py` queue):
 each holds its ticket for the whole batch, `after_land.py` included. A call that has to wait prints once
 `ship: waiting for pid <pid> (ship.py land #<pr>...) to end before landing #<pr>...` and starts when that call ends,
 whether it landed or stopped. The ticket of a call whose process is gone is dropped, so the next call takes over.
-A dry run (no `--go`) never waits.
+A dry run (no `--go`) never waits for a turn.
 
 `into` merges `<branch>` into the integration branch (`--no-ff`) in a worktree of it, runs `tools/check.py`
 through the bench queue and pushes only on green. A conflict or a red check leaves the branch as it was.
@@ -44,6 +45,8 @@ CI_CHECK = "ci-ok"
 PR_FIELDS = "number,state,isDraft,mergeable,baseRefName,headRefName,headRefOid,isCrossRepository,statusCheckRollup"
 MAIN_CI_TIMEOUT = 45 * 60
 POLL = 30.0
+MERGEABLE_POLL = 5.0
+MERGEABLE_READS = 12
 
 
 def run(argv: list[str], cwd: str | Path | None = None) -> tuple[int, str]:
@@ -137,6 +140,11 @@ STOPS = {Outcome.REFUSED, Outcome.RED}
 
 def land_one(runner, pr: int, go: bool, sleep=time.sleep, onto_red: bool = False) -> Outcome:
     info = pr_info(runner, pr)
+    for _ in range(MERGEABLE_READS - 1):  # GitHub recomputes `mergeable` for a few seconds after the base moves
+        if info["mergeable"] != "UNKNOWN":
+            break
+        sleep(MERGEABLE_POLL)
+        info = pr_info(runner, pr)
     if problems := blockers(info):
         print(f"ship: #{pr} is not ready: " + "; ".join(problems), file=sys.stderr)
         return Outcome.REFUSED
