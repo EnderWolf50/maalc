@@ -1,11 +1,14 @@
 """Seconds each test file takes on a CI runner, summed from the agent shards' junit XML. tests/conftest.py balances the
 shards with tests/shard_seconds.json.
 
-    python tools/shard_seconds.py check <junit.xml>...   fails when the table no longer matches these reports
+    python tools/shard_seconds.py check <junit.xml>...   fails when the table no longer matches these reports, one per
+                                                         shard: a file off by more than RATIO both as measured and at
+                                                         its shard's runner pace
     python tools/shard_seconds.py update --run <run id>  rewrites the table from the junit artifacts of that CI run and
                                                          of the EARLIER_RUNS before it whose agent shards all passed:
                                                          each file's median, or that run's own time when it is off from
-                                                         the median by more than RATIO (#463)
+                                                         the median by more than RATIO both as measured and at its
+                                                         shard's runner pace
 """
 
 import argparse
@@ -22,8 +25,11 @@ ROOT = Path(__file__).resolve().parent.parent
 TABLE = ROOT / "tests" / "shard_seconds.json"
 # A file faster than this cannot unbalance a shard on its own; conftest counts an unlisted one 0.15 s a test.
 SLOW = 30
-# Runner speed varies from run to run; a file off by more than this factor changed, not the runner.
 RATIO = 2
+# Whole seconds round a file of PACE_MIN_SECONDS by 10 % at most; with PACE_MIN_FILES one changed file cannot set the
+# median.
+PACE_MIN_SECONDS = 5
+PACE_MIN_FILES = 3
 # CI runs before the one update names whose times the median takes too: one runner's speed is not the table's (#463).
 EARLIER_RUNS = 4
 # How many completed CI runs update looks back through for them: about four weeks; junit artifacts are kept 14 days.
@@ -40,15 +46,25 @@ def measured(reports):
     return seconds
 
 
-def stale(table, seconds):
+def pace(table, shard):
+    ratios = [took / table[name] for name, took in shard.items() if table.get(name, 0) >= PACE_MIN_SECONDS]
+    return statistics.median(ratios) if len(ratios) >= PACE_MIN_FILES else 1
+
+
+def within_ratio(took, listed, runner_pace):
+    return any(listed * p / RATIO <= took <= listed * p * RATIO for p in (1, runner_pace))
+
+
+def stale(table, shard):
     problems = []
-    for name, took in sorted(seconds.items()):
+    runner_pace = pace(table, shard)
+    for name, took in sorted(shard.items()):
         listed = table.get(name)
         if listed is None:
             if took >= SLOW:
                 problems.append(f"{name} took {took:.0f} s and is not in the table")
-        elif max(took, listed) >= SLOW and not listed / RATIO <= took <= listed * RATIO:
-            problems.append(f"{name} took {took:.0f} s, the table says {listed}")
+        elif max(took, listed) >= SLOW and not within_ratio(took, listed, runner_pace):
+            problems.append(f"{name} took {took:.0f} s, the table says {listed} (its shard's pace x{runner_pace:.2f})")
     return problems
 
 
@@ -62,8 +78,8 @@ def download(run, folder):
 
 def check(reports):
     table = json.loads(TABLE.read_text(encoding="utf-8"))
-    seconds = measured(reports)
-    problems = stale(table, seconds) + [f"{name} has no time in this run's reports" for name in unmeasured(seconds)]
+    problems = [problem for report in reports for problem in stale(table, measured([report]))]
+    problems += [f"{name} has no time in this run's reports" for name in unmeasured(measured(reports))]
     if not problems:
         print(f"tests/shard_seconds.json matches this run ({len(reports)} reports)")
         return 0
@@ -100,14 +116,22 @@ def reports_of(run, folder):
     return sorted(Path(folder).rglob("*.xml"))
 
 
-def median_table(seconds, others):
-    """The table from a run's seconds and earlier runs' (#463): each file's median, or the run's own time when that is off
-    from the median by more than RATIO (the file changed, not the runner). Either way the run passes the check."""
+def median_table(shards, others):
+    """check takes the pace from the table, so each shard's pace is taken again from what is written until no file
+    changes: the run passes the check."""
     table = {}
-    for name, took in sorted(seconds.items()):
-        median = round(statistics.median([took] + [other[name] for other in others if name in other]))
-        table[name] = median if median / RATIO <= took <= median * RATIO else round(took)
-    return table
+    for shard in shards:
+        written = {name: round(statistics.median([took] + [other[name] for other in others if name in other]))
+                   for name, took in shard.items()}
+        while True:
+            runner_pace = pace(written, shard)
+            changed = {name: round(took) for name, took in shard.items()
+                       if round(took) != written[name] and not within_ratio(took, written[name], runner_pace)}
+            if not changed:
+                break
+            written |= changed
+        table |= written
+    return dict(sorted(table.items()))
 
 
 def update(run):
@@ -115,6 +139,7 @@ def update(run):
         download(run, folder)
         reports = sorted(Path(folder).rglob("*.xml"))
         seconds = measured(reports)
+        shards = [measured([report]) for report in reports]
     if missing := unmeasured(seconds):
         print(f"run {run} has no time for {', '.join(missing)}: a shard was cut short; use a run whose shards all passed")
         return 1
@@ -126,7 +151,7 @@ def update(run):
             with tempfile.TemporaryDirectory() as folder:
                 if found := reports_of(other, folder):
                     others[other] = measured(found)
-    TABLE.write_text(json.dumps(median_table(seconds, list(others.values())), indent=0) + "\n", encoding="utf-8")
+    TABLE.write_text(json.dumps(median_table(shards, list(others.values())), indent=0) + "\n", encoding="utf-8")
     print(f"wrote {len(seconds)} files to tests/shard_seconds.json, the median of run {run} and {len(others)} before it"
           f" ({', '.join(map(str, others)) or 'none'})")
     if len(others) < EARLIER_RUNS:
