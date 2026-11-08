@@ -62,7 +62,7 @@
 ### 回主畫面（`GoHome`）
 
 - 日常任務的第一步和最後一步都走 `GoHome`（`navigation.json`），下一個任務因此一定從主畫面開始。（#365）
-- 一個 hub，依序處理：連線中、說明頁、全域彈窗（`HomeText`，讀法與理由同〈MirrorHub〉的 `HubText`；伺服器與用戶端的彈窗列在 `ServerPopups` 一份，`MirrorHub` 的 `HubText`、`HomeText`、`MailText` 用 `base` 引用它）、**到了主畫面**（Window 分頁亮起，`HomeReached`，任務成功結束）、標題畫面（`NavTitle`）、底部分頁列在但 Window 沒亮（點 Window 分頁，`HomeWindowTab`，等到 `HomeReached` 中才交回：點下去後分頁先在舊頁面上亮一圈光暈約 0.37 s，兩個 Window 模板都不中，只等分頁本身不中時 hub 下一眼會按返回鍵，#496）、遊戲不在前景（`HomeGameAway`，`StartApp`，最多 3 次）、戰鬥（`HomeInBattle`，見下）、都不是就按返回鍵（`HomeBack`，最多 5 次）。
+- 一個 hub，依序處理：連線中、說明頁、全域彈窗（`HomeText`，讀法與理由同〈MirrorHub〉的 `HubText`；伺服器與用戶端的彈窗列在 `ServerPopups` 一份，`MirrorHub` 的 `HubText`、`HomeText`、`MailText` 用 `base` 引用它）、**到了主畫面**（Window 分頁亮起，`HomeReached`，任務成功結束）、標題畫面（`NavTitle`）、底部分頁列在但 Window 沒亮（點 Window 分頁，`HomeWindowTab`，等到 `HomeReached` 中才交回：點下去後分頁先在舊頁面上亮一圈光暈（錄影裡 2 次點擊各 0.23、0.37 s），兩個 Window 模板都不中，只等分頁本身不中時 hub 下一眼會按返回鍵，#496）、遊戲不在前景（`HomeGameAway`，`StartApp`，最多 3 次）、戰鬥（`HomeInBattle`，見下）、都不是就按返回鍵（`HomeBack`，最多 5 次）。
 - 彈窗排在 `HomeReached` 前面：設定選單蓋著主畫面時 Window 分頁仍是亮的。其他分頁亮起、彈窗壓暗分頁列時，Window 模板的分數最多 0.80，門檻 0.9。
 - 畫面是戰鬥（`BattleHUD` 認的戰鬥畫面、暫停選單）：不按返回鍵，走 `Halt`，停止程序後整串清單結束（`whole_list`，同帳號層級的停止，這次啟動之後的任務也在入口失敗）。上一個任務停在戰鬥裡時（例如紐本 60 秒認不出畫面），下一個任務的 `HomeBack` 會在戰鬥裡按返回：戰鬥中的返回鍵開暫停選單，Give Up 一點就是戰敗，而放棄戰鬥不是 bot 該做的；後面每個任務都會遇到同一場戰鬥，所以停整串，讓使用者手動結束戰鬥再重開清單。選在 `GoHome` 而不是讓失敗的任務自己停整串：每個任務的開頭都經過它，使用者手動開清單時遊戲正在戰鬥也一樣擋下。事件頁（劇情、選項）不認、不停：紐本和鏡牢的事件畫面長得一樣，靠畫面分不出來（使用者決定，2026-10-28），所以照舊按返回鍵（`HomeBack`，最多 5 次；實機在紐本劇情頁按 5 次畫面不變），用完走 `GoHomeLost` 的 L3。絕不自動 Give Up。（live-4 J2、驗收 #5）
 - 前景不是遊戲時直接啟動遊戲，不等 hub 逾時走 L3（`GameAway` 讀 `dumpsys window`，讀不到時不算）。

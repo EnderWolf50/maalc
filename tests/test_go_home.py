@@ -208,8 +208,9 @@ def test_go_home_waits_for_the_screens_not_for_fixed_delays():
 
 def test_go_home_presses_no_back_key_while_the_tapped_window_tab_glows_on_the_old_page():
     # #496: 13 of 18 live Window tab taps since #375 were followed by a back key and its 2 s. The tapped tab glows on
-    # the Drive page for about 0.37 s before the main window shows (WindowTabPressed.png, a frame of a daily task's
-    # recording); neither tab template reads the glow, so GoHome's next look found nothing it knew.
+    # the Drive page before the main window shows, 0.23 and 0.37 s on the 2 taps of a daily task's recording
+    # (WindowTabPressed.png is a frame of it); neither tab template reads the glow, so GoHome's next look found nothing
+    # it knew.
     o = run_child(__file__)["drive_pressed"]
     assert o["succeeded"] and o["keys"] == [] and o["nodes"][-1] == "HomeReached", o
     assert len(o["clicks"]) == 1 and inside(WINDOW_TAB, *o["clicks"][0]), o
