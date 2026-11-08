@@ -43,6 +43,16 @@ def test_a_tap_looks_again_at_the_next_call_or_the_action_end():
     assert got[0].at == at("34.507")
 
 
+def test_next_tap_waits_through_the_screenshots_of_a_polling_wait():
+    # #567: a wait that polls (tap_then) takes a screenshot every 0.2 s until the page changes, so the next call is its
+    # first look, about 0.05 s after every tap; the next tap is where the bot went on (batch 3's Heal Sinner, 0.59 s).
+    lines = [enter("34.000", "Shop", "Shop"), click("34.100", 610, 230), shot("34.150"), shot("34.350"), shot("34.550"),
+             click("34.690", 640, 400), shot("34.740"), leave("35.000", "Shop", "Shop")]
+    waits = {until: [round(t.look - t.at, 3) for t in tw.taps(lines, {"Shop"}, until)] for until in ("next-call", "next-tap")}
+    assert waits == {"next-call": [0.05, 0.05], "next-tap": [0.59, 0.31]}
+    assert tw.taps(lines, {"Shop"}) == tw.taps(lines, {"Shop"}, "next-call")
+
+
 def frames(spec):
     """Log times every 1/30 s from -0.5 s, and a thumbnail per frame: spec(t) is its brightness, all blocks alike."""
     lt = np.arange(-0.5, 3.0, 1 / 30)
