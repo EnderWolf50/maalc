@@ -13,7 +13,8 @@ task list, and runs them in turn (#364). It exits 0 when every task succeeded. S
 
 **prep** copies `config/settings.json`, `config/maa_option.json` and `state/` from `--source` (default the
 main checkout's install/) into DIR, then sets each dotted KEY to VALUE (JSON, else a string):
-`--set run.runs=1 --set run.difficulty=normal --set run.weekly_bonus_use=none`. DIR comes from
+`--set run.runs=1 --set run.difficulty=normal --set run.weekly_bonus_use=none`; a list's item goes by its id,
+`--set teams.t3.heal=revive`. DIR comes from
 `tools/install.py` (a worktree's install/) or a copy of one under `.local/scratch/<task>/`.
 
 **awake** keeps the display and the machine on for that many minutes: a recording needs the screen awake
@@ -119,7 +120,12 @@ def prep(install: Path, source: Path, sets: list[str]) -> dict:
         *parents, last = key.split(".")
         node = settings
         for k in parents:
-            node = node.setdefault(k, {})
+            if isinstance(node, list):
+                node = next((i for i in node if isinstance(i, dict) and i.get("id") == k), None)
+                if node is None:
+                    raise SystemExit(f"prep: {key}: no item with id {k!r}")
+            else:
+                node = node.setdefault(k, {})
         try:
             node[last] = json.loads(value)
         except ValueError:

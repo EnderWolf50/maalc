@@ -2,6 +2,8 @@ import json
 import sys
 from types import SimpleNamespace
 
+import pytest
+
 from live import bot
 
 
@@ -28,6 +30,20 @@ def test_prep_copies_config_and_state_and_sets_keys(tmp_path):
     assert s["run"] == {"runs": 1, "difficulty": "normal", "weekly_bonus_use": "none"}
     assert (dst / "config/maa_option.json").exists() and (dst / "state/progress.json").exists()
     assert json.loads((src / "config/settings.json").read_text())["run"]["runs"] == 5  # the source stays
+
+
+def test_prep_sets_a_list_item_by_its_id(tmp_path):
+    src, dst = tmp_path / "main", tmp_path / "test"
+    (src / "config").mkdir(parents=True)
+    (src / "state").mkdir()
+    teams = [{"id": "t1", "heal": "none"}, {"id": "t3", "heal": "none", "min_alive": 3}]
+    (src / "config/settings.json").write_text(json.dumps({"teams": teams}))
+    (src / "config/maa_option.json").write_text("{}")
+    bot.main(["prep", "--install", str(dst), "--source", str(src), "--set", "teams.t3.heal=revive", "--set", "teams.t3.min_alive=4"])
+    s = json.loads((dst / "config/settings.json").read_text())
+    assert s["teams"] == [{"id": "t1", "heal": "none"}, {"id": "t3", "heal": "revive", "min_alive": 4}]
+    with pytest.raises(SystemExit, match="t9"):
+        bot.main(["prep", "--install", str(dst), "--source", str(src), "--set", "teams.t9.heal=revive"])
 
 
 def test_awake_holds_the_display_for_the_minutes():
