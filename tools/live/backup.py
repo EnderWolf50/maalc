@@ -89,7 +89,7 @@ def hold(root: Path, dest: Path, done: Path, timeout: float, poll: float = 2.0, 
             stop_profile = None
         if time.monotonic() - shown >= 30:
             shown = time.monotonic()
-            # Whole seconds: status shows minutes, and monotonic() + timeout alone can round past wall() + timeout (#578).
+            # Whole seconds are all status needs (it shows minutes), and they carry no float rounding noise (#578).
             (done.parent / "hold.deadline").write_text(str(round(wall() + deadline - time.monotonic())), encoding="utf-8")
         time.sleep(poll)
     (done.parent / "hold.deadline").unlink(missing_ok=True)

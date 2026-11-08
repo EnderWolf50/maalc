@@ -117,8 +117,8 @@ def test_hold_writes_the_deadline_a_second_agent_reads_in_status(tmp_path, monke
         done.write_text("")
 
     monkeypatch.setattr(bk, "time", SimpleNamespace(monotonic=lambda: 16240.694345345151, sleep=sleep))
-    bk.hold(tmp_path / "install", tmp_path / "bak", done, timeout=500, poll=0.02, wall=lambda: 1000.0)
-    assert [float(text) for text in seen] == [1500]
+    bk.hold(tmp_path / "install", tmp_path / "bak", done, timeout=500, wall=lambda: 1000.0)
+    assert seen == ["1500"]
 
 
 def test_hold_requires_an_explicit_timeout(tmp_path):
