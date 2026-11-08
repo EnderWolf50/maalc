@@ -3096,9 +3096,10 @@ def test_a_map_gone_while_looking_for_its_bus_is_not_dragged(context, guarded):
     assert moved(context) == 0 and actions.STUCK["flag"] is None
 
 
-def test_an_exploration_reward_gone_is_handed_back_untouched(context, guarded, monkeypatch):
+@pytest.mark.parametrize("cleared", [5, 3])  # claimed, given up
+def test_an_exploration_reward_gone_is_handed_back_untouched(context, guarded, monkeypatch, cleared):
     actions.RUN.update(settings={"run": {"weekly_bonus_use": "none", "weekly_bonus_amount": 0, "target_floor": 5}}, team={"hard_from_floor": None}, difficulty="normal")
-    monkeypatch.setattr(actions.settlement, "read_result", lambda text: actions.settlement.Result(5, "normal", 5, 5))
+    monkeypatch.setattr(actions.settlement, "read_result", lambda text: actions.settlement.Result(5, "normal", cleared, 5))
     assert actions.Settle().run(context, argv())
     assert moved(context) == 0 and actions.STUCK["flag"] is None
 
@@ -3212,13 +3213,6 @@ def test_a_gift_search_gone_after_a_pick_does_not_press_select(context, guarded,
     page_until(context, "GiftSearch", 1)
     assert actions.GiftSearch().run(context, argv())
     assert taps(context) == [(400, 400)] and actions.STUCK["flag"] is None
-
-
-def test_an_exploration_reward_gone_mid_give_up_is_handed_back_not_stuck(context, guarded, monkeypatch):
-    monkeypatch.setattr(actions.settlement, "read_result", lambda text: actions.settlement.Result(5, "normal", 3, 5))  # short of floor 5: give up
-    page_until(context, "ExplorationReward", 1)
-    assert actions.Settle().run(context, argv())
-    assert taps(context) == [actions.GIVE_UP] and actions.STUCK["flag"] is None
 
 
 def test_a_gift_search_gone_under_its_consume_dialog_is_not_confirmed(context, guarded, monkeypatch):
