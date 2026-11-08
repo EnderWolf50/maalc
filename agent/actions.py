@@ -888,7 +888,8 @@ def restart_game(context, reason, kind=None):
         return stop(context, f"{reason}; game restarted {recovery.L3_PER_TASK} times this task")
     if why := STUCK["restarts"].attempt(kind):
         return stop(context, f"{reason}; {why}")
-    log(f"recovery L3: {reason} (restart {STUCK['restarts'].in_a_row} of {recovery.L3_FAILED_IN_A_ROW} in a row)")
+    log(f"recovery L3: {reason} (restart {STUCK['restarts'].in_a_row} of {recovery.L3_FAILED_IN_A_ROW} in a row, "
+        f"{TASK.get('l3', 0) + 1} of {recovery.L3_PER_TASK} this task)")
     detail = context.run_task("RecoverL3")
     if detail and detail.status.succeeded:
         TASK["l3"] = TASK.get("l3", 0) + 1

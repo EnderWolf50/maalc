@@ -8,6 +8,7 @@ import math
 
 import numpy as np
 from daily_child import GAME, bind, game_class, inside, live_frame, load, result, run_child, screen
+from recovery import L3_PER_TASK
 from test_pass_task import BANNER, MISSIONS_TAB, SCREENS as PASS_SCREENS, SEASONAL_TAB, WEEKLY_TAB
 
 TITLE_TAP = (540, 300, 200, 120)
@@ -131,9 +132,9 @@ def test_after_the_restart_the_hub_taps_the_banner_afresh():
 def test_a_main_window_frozen_again_after_each_restart_stops_after_two():
     # Each restart went through (the title came), so the task's 2 stop it before the launch's 3 in a row (#520).
     o = run_child(__file__)["frozen_again"]
-    assert (o["stops"], o["starts"], o["in_a_row"]) == (2, 2, 2), json.dumps(o)
+    assert (o["stops"], o["starts"], o["in_a_row"]) == (L3_PER_TASK,) * 3, json.dumps(o)
     assert o["succeeded"] is False and o["stopped"] == 1, json.dumps(o)
-    assert any("game restarted 2 times this task" in line for line in o["log"]), json.dumps(o)
+    assert any(f"game restarted {L3_PER_TASK} times this task" in line for line in o["log"]), json.dumps(o)
 
 
 def test_a_frozen_main_window_with_the_restarts_used_up_ends_the_task_through_the_stop_procedure():

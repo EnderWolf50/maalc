@@ -455,10 +455,16 @@ def test_recover_climbs_as_before_when_the_focus_cannot_be_read(hub, failed):
     assert hub.run_task.call_args_list[0].args == ("RecoverL1",)
 
 
-def test_ten_runs_with_a_restart_each_never_stop(hub, monkeypatch):
+@pytest.fixture
+def stops(monkeypatch):
+    """The reasons actions.stop was called with; the stop procedure itself does not run."""
+    reasons = []
+    monkeypatch.setattr(actions, "stop", lambda context, reason, line=None: reasons.append(reason) or False)
+    return reasons
+
+
+def test_ten_runs_with_a_restart_each_never_stop(hub, stops):
     # #520, for #34's 10 HARD runs in one launch.
-    stops = []
-    monkeypatch.setattr(actions, "stop", lambda context, reason, line=None: stops.append(reason) or False)
     for _ in range(10):
         actions.STUCK["ladder"] = Ladder()
         for _ in range(2):
@@ -471,9 +477,7 @@ def test_ten_runs_with_a_restart_each_never_stop(hub, monkeypatch):
     assert actions.STUCK["restarts"].in_a_row == 0
 
 
-def test_a_force_stop_that_fails_three_times_in_a_row_stops(hub, monkeypatch):
-    stops = []
-    monkeypatch.setattr(actions, "stop", lambda context, reason, line=None: stops.append(reason) or False)
+def test_a_force_stop_that_fails_three_times_in_a_row_stops(hub, stops):
     hub.run_task.return_value.status.succeeded = False
     actions.STUCK["flag"] = ("MirrorMap", 3, "the game is frozen")
     assert actions.Recover().run(hub, None) is False
@@ -500,32 +504,35 @@ def restarts_run(ctx):
     return [c.args for c in ctx.run_task.call_args_list].count(("RecoverL3",))
 
 
-def test_a_daily_task_stops_at_its_third_restart_though_each_got_past(hub, monkeypatch):
+def test_a_daily_task_stops_at_its_third_restart_though_each_got_past(hub, stops):
     # #520: each restart got the bot past the main window, so the launch's streak never grows; the task's 2 end it.
-    stops = []
-    monkeypatch.setattr(actions, "stop", lambda context, reason, line=None: stops.append(reason) or False)
     assert daily_restarts(hub, 3) == [True, True, False]
     assert restarts_run(hub) == 2
     assert len(stops) == 1 and "2 times this task" in stops[0], stops
 
 
-def test_the_next_task_has_its_own_two_restarts(hub, monkeypatch):
-    stops = []
-    monkeypatch.setattr(actions, "stop", lambda context, reason, line=None: stops.append(reason) or False)
+def test_the_next_task_has_its_own_two_restarts(hub, stops):
     daily_restarts(hub, 2)
     assert actions.TaskStart().run(hub, SimpleNamespace(node_name="ClaimPassMissions")) is True
     assert daily_restarts(hub, 3) == [True, True, False]
     assert restarts_run(hub) == 4 and len(stops) == 1, stops
 
 
-def test_a_restart_that_did_not_go_through_is_not_one_of_the_tasks_two(hub, monkeypatch):
+def test_a_restart_that_did_not_go_through_is_not_one_of_the_tasks_two(hub, stops):
     # The failed force-stop stays in the launch's streak only, as Ladder.failed uncharges the run: two more restarts run.
-    stops = []
-    monkeypatch.setattr(actions, "stop", lambda context, reason, line=None: stops.append(reason) or False)
     hub.run_task.side_effect = lambda name: MagicMock(**{"status.succeeded": name != "RecoverL3"})
     actions.STUCK["flag"] = FROZEN
     assert actions.DailyRecover().run(hub, PASS_STUCK) is True
     hub.run_task.side_effect = None
     assert daily_restarts(hub, 3) == [True, True, False]
     assert restarts_run(hub) == 3
+    assert len(stops) == 1 and "2 times this task" in stops[0], stops
+
+
+def test_the_opening_go_homes_restart_is_one_of_the_tasks_two(hub, stops):
+    assert actions.HomeLost().run(hub, None) is True  # GoHome did not reach the main window: restart 1
+    actions.StuckFlag.see("PassBanner", screen(0))
+    actions.StuckFlag.see("PassMissionsTab", screen(0))
+    assert daily_restarts(hub, 2) == [True, False]
+    assert restarts_run(hub) == 2
     assert len(stops) == 1 and "2 times this task" in stops[0], stops
