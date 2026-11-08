@@ -165,7 +165,8 @@ def test_an_interrupted_run_does_not_reach_another_task(context, monkeypatch):
 
 
 def entry_page(context, edit=lambda run, teams: None):
-    """settings.json under the agent's ROOT (settings_cases' valid file, edited); the entry page reads no weekly bonus."""
+    """settings.json under the agent's ROOT (settings_cases' valid file, edited); the entry page reads no weekly bonus;
+    GoHome ends on the main window."""
     data = json.loads((Path(__file__).parent / "settings_cases.json").read_text(encoding="utf-8"))["valid"]
     edit(data["run"], data["teams"])
     data["run"]["webhook_url"] = "http://hook.invalid/"
@@ -174,6 +175,7 @@ def entry_page(context, edit=lambda run, teams: None):
     actions.RUN.clear()
     context.tasker.controller.info = {}  # the default rotation cursor
     actions.TASK["modules"] = 20  # what OpenDrive read on this trip (#369)
+    context.tasker.get_node_detail.return_value = SimpleNamespace(name="HomeReached")
 
 
 @pytest.mark.parametrize("edit, done", [
