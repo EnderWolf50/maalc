@@ -3096,9 +3096,10 @@ def test_a_map_gone_while_looking_for_its_bus_is_not_dragged(context, guarded):
     assert moved(context) == 0 and actions.STUCK["flag"] is None
 
 
-def test_an_exploration_reward_gone_is_handed_back_untouched(context, guarded, monkeypatch):
+@pytest.mark.parametrize("cleared", [5, 3])  # claimed, given up
+def test_an_exploration_reward_gone_is_handed_back_untouched(context, guarded, monkeypatch, cleared):
     actions.RUN.update(settings={"run": {"weekly_bonus_use": "none", "weekly_bonus_amount": 0, "target_floor": 5}}, team={"hard_from_floor": None}, difficulty="normal")
-    monkeypatch.setattr(actions.settlement, "read_result", lambda text: actions.settlement.Result(5, "normal", 5, 5))
+    monkeypatch.setattr(actions.settlement, "read_result", lambda text: actions.settlement.Result(5, "normal", cleared, 5))
     assert actions.Settle().run(context, argv())
     assert moved(context) == 0 and actions.STUCK["flag"] is None
 

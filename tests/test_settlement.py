@@ -405,6 +405,13 @@ def test_a_run_that_earned_nothing_is_given_up_when_its_window_closes_with_no_di
     assert [line["result"] for line in lines] == ["giveup"]
 
 
+def test_a_give_up_that_brings_no_dialog_and_leaves_the_window_up_is_handed_to_recovery_unrecorded(context, clock, monkeypatch, tmp_path):
+    # #566 with #586: only the window closing counts as a run given up with no dialog.
+    done, game, lines = timed_settle(context, monkeypatch, tmp_path, "Floor 1 [NORMAL] 0/6", "none", {})
+    assert done and lines == []
+    assert actions.STUCK["flag"] is not None and game.taps == [actions.GIVE_UP] * 3
+
+
 def test_a_give_up_confirm_the_game_lost_is_tapped_again_and_the_run_recorded_once(context, clock, monkeypatch, tmp_path):
     # #566: the first Confirm does not take. Settle recorded the run all the same and left the window up; MirrorHub,
     # finding it again, had Settle cancel the dialog, give up once more and write a second giveup line for the run.

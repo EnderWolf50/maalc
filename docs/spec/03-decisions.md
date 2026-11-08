@@ -576,7 +576,7 @@ Cost 表是 wiki 與簡中客戶端的表，實機 log 的節點面板 Cost 沒�
   - 用量：每局只用一次 = 切 1 個開關到 ON；一次全用 = 把剩餘次數全部切到 ON。開關的數量和剩餘次數都從結算視窗讀。（#9、#17）
   - 切好開關後按 Claim。Claim 要花的腦啡肽模組不夠時，必須停止並通知（[06-recovery.md](06-recovery.md)）。（#8、#19）
 - 不是 `claim_ok` 時：按 GiveUpRewards 放棄獎勵，不花腦啡肽模組。（#19）
-  - 有獎勵可放棄時跳 `End expedition without claiming rewards?`，按 Confirm；什麼都沒拿到的局不跳，視窗直接關掉，經 Now Loading 回主畫面，這樣也算放棄，照樣寫 `floor 5 not passed: gave up the rewards` 與一行 `giveup` 到 `runs.jsonl`。實機 2026-11-08：`Floor 3 [NORMAL] 1/6` 有對話框；`Floor 1 [NORMAL] 0/6`（Starlight -10，其餘獎勵 0）與 Halt Exploration 後的 `Floor 1 ??/??` 都沒有。視窗關掉、確認框也沒出現之前不記錄（#566）。（#586）
+  - 有獎勵可放棄時跳 `End expedition without claiming rewards?`，按 Confirm；什麼都沒拿到的局不跳，視窗直接關掉，經 Now Loading 回主畫面，這樣也算放棄，照樣寫 `floor 5 not passed: gave up the rewards` 與一行 `giveup` 到 `runs.jsonl`。實機 2026-11-08：`Floor 3 [NORMAL] 1/6` 有對話框；`Floor 1 [NORMAL] 0/6`（Starlight -10，其餘獎勵 0）沒有；手動按 Halt Exploration 放棄的局（視窗讀 `Floor 1 ??/??`，bot 讀不出結果，不會走到這裡）也沒有。視窗關掉、確認框也沒出現之前不記錄（#566）。（#586）
 - 實機：視窗的三個按鈕是 `GiveUpRewards`、`To Window`、`Claim`，Claim 上標示花 5 個腦啡肽模組（`-5`）；bot 不按 To Window。視窗只顯示最後到達的那一層（例如 `Floor 5 [HARD] 5/6`，表示第 5 層沒打完，沒過第 5 層）。（實機：captures/252_exploration_reward_window.png、captures/245_after_defeat_confirm.png）
 - 這條規則適用於：一般結算；入口頁顯示 `Unclaimed Rewards` 時補領上一局沒領的獎勵；每週重置後過期的局；全滅後重打次數用完、全域選項為「放棄這局」時從設定面板 Forfeit 之後的結算（第 9 節）。（#8、#16、#19）
 - 看到 Claim 完成後，這局的隊伍才移到佇列最後（第 1 節）。（#8、#501）

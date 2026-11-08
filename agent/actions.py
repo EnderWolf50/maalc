@@ -5852,7 +5852,7 @@ class Settle(CustomAction):
             if image is not None:
                 break
         else:
-            return stuck("GiveUpRewards brought up no `End expedition without claiming rewards?`")
+            return stuck("GiveUpRewards brought up no `End expedition without claiming rewards?` and left the window up")
         for _ in range(5):
             if claim_asks(context, image) == "giveup":
                 page_guard(context, "ExplorationReward", image=image)
