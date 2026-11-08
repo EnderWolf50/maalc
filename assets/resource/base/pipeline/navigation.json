@@ -20,7 +20,7 @@
     // open; a page with no bar gets the back key, at most 5 times (HomeBack's max_hit). The popups are HubText's
     // (accuracy, not memory: spec 01, MirrorHub, #157), the game away from the front starts it, and 60 s of nothing
     // known (the back keys used up too) restarts the game and goes again (HomeLost, #362), the stop procedure once the
-    // restarts are used up.
+    // restarts are used up. So does a game frozen on the title (HomeFrozen, #506).
     "GoHome": {
         "timeout": 60000,
         "rate_limit": 300,
@@ -28,6 +28,7 @@
             "GoHomeLost"
         ],
         "next": [
+            "[JumpBack]HomeFrozen",
             "[JumpBack]Connecting",
             "[JumpBack]HelpPager",
             "[JumpBack]HomeText",
@@ -55,6 +56,14 @@
         "action": "Custom",
         "custom_action": "Halt",
         "custom_action_param": "a battle is on: end it by hand, then start the list again"
+    },
+    // A game frozen on the title (#506): the title is known on every look, so GoHome would tap it for ever, each JumpBack
+    // a new timeout. Its taps went by with the picture still (NavTitle's lively): restart it.
+    "HomeFrozen": {
+        "recognition": "Custom",
+        "custom_recognition": "Frozen",
+        "action": "Custom",
+        "custom_action": "HomeFrozen"
     },
     "GoHomeLost": {
         "action": "Custom",
@@ -148,7 +157,16 @@
     },
     // A page with no tab bar (the entry page, Luxcavation): the back key goes up one page. The 2 s stay: nothing is known
     // to wait for, and a second back key while the page is still going can go past the main window (max_hit counts it).
+    // Not the title's glitch, which hides the title from every template for about 1 s (#495): it must stay unseen 1.5 s.
     "HomeBack": {
+        "recognition": "Custom",
+        "custom_recognition": "Unseen",
+        "custom_recognition_param": {
+            "nodes": [
+                "NavTitle"
+            ],
+            "timeout": 1.5
+        },
         "action": "Custom",
         "custom_action": "DismissShot",
         "custom_action_param": {
@@ -157,7 +175,10 @@
         "post_delay": 2000,
         "max_hit": 5
     },
-    // The title: a tap, then until it goes (TapUntil; after 3 s the hub taps again, as after the old 3 s post_delay).
+    // The title: a tap, then until CONNECTING shows (TapUntil; after 3 s the hub taps again, as after the old 3 s
+    // post_delay). Not until the title goes (#495): it stays under CONNECTING, and its glitch hides it for about 1 s.
+    // Live 2026-11-08: CONNECTING within 0.6 s of each of 2 taps. Its picture keeps moving while no CONNECTING is up, so
+    // a wait that showed one picture is a dead tap (lively, #506).
     "NavTitle": {
         "recognition": "TemplateMatch",
         "roi": [20, 620, 200, 70],
@@ -167,7 +188,8 @@
         "custom_action": "TapUntil",
         "custom_action_param": {
             "target": [540, 300, 200, 120],
-            "left": true
+            "next": "Connecting",
+            "lively": "NavTitle"
         },
         "post_delay": 0
     },

@@ -32,6 +32,10 @@ NAV_TAPS, NAV_TAP_LIMIT = {"NavMainTabs", "NavDrive", "NavLuxcavation", "LuxExpT
 # Live 2026-11-05: the banner tapped 3 times and the Drive tab 5, every screenshot the same to the byte, while a live main
 # window's banners keep moving. 2 is MailOpen's whole max_hit: it fires on a task's last tap off the main window at the latest.
 DEAD_TAPS = 2
+# The screens whose picture always moves on a live game while a tap on them is waited on, by the node that reads them:
+# a wait there that showed one picture is a dead tap (actions.tap_then). The title only for its own tap (NavTitle), whose
+# wait ends on CONNECTING (#506): live 2026-11-08 (a recording, 40 s of title) it stood still only with CONNECTING up.
+LIVELY = {"HomeReached": "the main window", "NavTitle": "the title"}
 # Screens on the way back to a run or a daily task's page after L2/L3: seeing them does not mean the stuck screen was
 # got past.
 TRANSIT = {"Loading", "Connecting", "RetryPopup", "GoToMirrorEntry", "NavTitle", "NavMainTabs", "NavDrive",
@@ -116,8 +120,8 @@ class Watchdog:
     def tapped(self, picture):
         """One tap's wait just ended (actions.tap_then); why the game is frozen, or None.
 
-        picture: the thumbnail of the main window the whole wait showed byte for byte, with no page coming: a dead tap.
-        None for any other tap (its page came, the screen moved, not the main window), which ends the streak; a dead tap
+        picture: the thumbnail of a LIVELY screen the whole wait showed byte for byte, with no page coming: a dead tap.
+        None for any other tap (its page came, the screen moved, not such a screen), which ends the streak; a dead tap
         of another picture starts it over. Only taps count, never stillness alone: a sleeping emulator screen is still
         too (#441).
         """
@@ -128,7 +132,7 @@ class Watchdog:
             self.dead, self.dead_picture = 0, picture
         self.dead += 1
         if self.dead >= DEAD_TAPS:
-            return f"the main window took none of {self.dead} taps, the same picture after each: the game is frozen"
+            return f"took none of {self.dead} taps, the same picture after each: the game is frozen"
         return None
 
     def see(self, kind, small, now):

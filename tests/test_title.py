@@ -2,7 +2,7 @@
 live title whose picture keeps moving, a tap that brings CONNECTING (or a loading screen) and then the main window, the
 title's glitch effect, and a game frozen on the title until it is restarted.
 
-Live 2026-11-08 (a recording and the MaaFramework log of a title tap): CONNECTING showed 0.2-0.5 s after each of 2 taps
+Live 2026-11-08 (a recording and the MaaFramework log of a title tap): CONNECTING showed within 0.6 s of each of 2 taps
 and stayed up to 28 s with the title under it, its template still hitting; the glitch warped the whole picture for
 0.9-1.1 s three times in 40 s, NavTitle scoring 0.51-0.61 then.
 """

@@ -136,13 +136,15 @@ def gone(context, spec, image):
     return lambda image: found is None or found[0] not in normalize(text(context, image, spec["roi"]))
 
 
-def tap_then(context, x, y, done, timeout=2.0):
+def tap_then(context, x, y, done, timeout=2.0, lively="HomeReached"):
     """Tap, then until() done(image) holds: that image, or None after timeout s (#115).
 
     The wait also tells the watchdog whether the game took the tap (#440): no page, every screenshot of the wait the
-    same as its first to the byte (a frozen game repeats its bytes), and that screenshot the main window (HomeReached),
-    whose banners always move on a live game, is a dead tap. Not other still pages: a live game's map or title can let a
-    tap go by. recovery.DEAD_TAPS of them in a row flag the game frozen, a stuck from L3, for the hub's Stuck node.
+    same as its first to the byte (a frozen game repeats its bytes), and that screenshot the screen of lively, a node of
+    recovery.LIVELY (the main window, whose banners always move on a live game; the title for its own tap, #506), is a
+    dead tap. Not other still pages: a live game's map, or the title under a dialog, can let a tap go by.
+    recovery.DEAD_TAPS of them in a row flag the game frozen, a stuck from L3, for the hub's Stuck node (GoHome's
+    HomeFrozen).
     """
     shots = {"first": None, "still": True}
 
@@ -156,9 +158,9 @@ def tap_then(context, x, y, done, timeout=2.0):
     tap(context, x, y, wait=0)
     image = until(context, watch, timeout=timeout)
     first = shots["first"]
-    dead = image is None and shots["still"] and seen(context, first, "HomeReached") is not None
+    dead = image is None and shots["still"] and seen(context, first, lively) is not None
     if why := STUCK["watch"].tapped(recovery.thumb(first) if dead else None):
-        stuck(why, level=3)
+        stuck(f"{recovery.LIVELY[lively]} {why}", level=3)
     return image
 
 
@@ -919,6 +921,38 @@ def restart_game(context, reason, kind=None):
     return True
 
 
+@AgentServer.custom_recognition("Frozen")
+class Frozen(CustomRecognition):
+    """GoHome's HomeFrozen: hits while a stuck waits, a game frozen on the title (tap_then's dead taps, #506). Not
+    StuckFlag: GoHome feeds no watchdog."""
+
+    def analyze(self, context: Context, argv: CustomRecognition.AnalyzeArg):
+        return CustomRecognition.AnalyzeResult(box=(0, 0, 1, 1), detail={}) if STUCK["flag"] else None
+
+
+@AgentServer.custom_action("HomeFrozen")
+class HomeFrozen(CustomAction):
+    """GoHome on a game frozen on the title (#506): restart it (restart_game); GoHome goes on from the new title."""
+
+    def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
+        reason = STUCK["flag"][2]
+        STUCK["flag"] = None
+        return restart_game(context, reason)
+
+
+@AgentServer.custom_recognition("Unseen")
+class Unseen(CustomRecognition):
+    """Hits once none of the param's nodes ({"nodes": [...], "timeout": s}) shows on a screenshot for timeout s. GoHome's
+    back key (HomeBack) waits out the title's glitch this way: it warps the whole picture for about 1 s, and no template
+    there hits (#495; live 2026-11-08, 3 glitches of 0.9-1.1 s, NavTitle 0.51-0.61)."""
+
+    def analyze(self, context: Context, argv: CustomRecognition.AnalyzeArg):
+        p = json.loads(argv.custom_recognition_param)
+        if until(context, lambda im: any(seen(context, im, n) for n in p["nodes"]), timeout=p["timeout"]) is not None:
+            return None
+        return CustomRecognition.AnalyzeResult(box=(0, 0, 1, 1), detail={})
+
+
 @AgentServer.custom_action("HomeLost")
 class HomeLost(CustomAction):
     """GoHome's on_error (#362 D4): 60 s of nothing known, or the back key used up. The game is restarted (restart_game)
@@ -1474,11 +1508,13 @@ class Halt(CustomAction):
 class TapUntil(CustomAction):
     """A Click node that waits for the page that follows instead of a post_delay (#115).
 
-    Param: {"target": [x, y, w, h], "next": {"roi": [...], "expected": regex} or a list of them (any),
-    "gone": {"roi": [...], "expected": regex}, "left": true, "timeout": s (default 3)}; any of "next", "gone" and "left",
-    the first to hold ends it. The page it leaves may still read like itself for a moment; MirrorHub would act on it twice.
+    Param: {"target": [x, y, w, h], "next": {"roi": [...], "expected": regex}, a node's name (its hit) or a list of them
+    (any), "gone": {"roi": [...], "expected": regex}, "left": true, "timeout": s (default 3), "lively": a node of
+    recovery.LIVELY}; any of "next", "gone" and "left", the first to hold ends it. The page it leaves may still read like
+    itself for a moment; MirrorHub would act on it twice.
     gone: the node's own roi and expected (#254), for a page whose next one is not known or reads the same (ClaimPopup).
     left: the node's own recognition misses, for a node that is no OCR (a template: the daily pages' tabs and buttons).
+    lively: the screen whose still wait is a dead tap (tap_then), HomeReached by default.
     No target: the node's box.
     """
 
@@ -1486,13 +1522,16 @@ class TapUntil(CustomAction):
         p = json.loads(argv.custom_action_param)
         x, y, w, h = p.get("target", argv.box)
         nxt = p.get("next", [])
-        pages = [shows(context, n["roi"], n["expected"]) for n in (nxt if isinstance(nxt, list) else [nxt])]
+        pages = [(lambda im, n=n: seen(context, im, n) is not None) if isinstance(n, str) else shows(context, n["roi"], n["expected"])
+                 for n in (nxt if isinstance(nxt, list) else [nxt])]
         if "gone" in p:
             pages.append(gone(context, p["gone"], screen(context)))
         if p.get("left"):
             pages.append(lambda im: seen(context, im, argv.node_name) is None)
         began = time.monotonic()
-        log_change(argv.node_name, tap_then(context, x + w // 2, y + h // 2, lambda im: any(page(im) for page in pages), timeout=p.get("timeout", 3)), began)
+        image = tap_then(context, x + w // 2, y + h // 2, lambda im: any(page(im) for page in pages), timeout=p.get("timeout", 3),
+                         lively=p.get("lively", "HomeReached"))
+        log_change(argv.node_name, image, began)
         return True
 
 
