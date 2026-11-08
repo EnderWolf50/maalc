@@ -2,7 +2,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from install import mirror_repo
+from install import mirror_maafw, mirror_repo
 
 INSTALL = Path(__file__).resolve().parent.parent / "tools/install.py"
 
@@ -35,6 +35,21 @@ def test_assembling_again_drops_what_the_repo_deleted_and_keeps_config(tmp_path)
                            "resource/base/pipeline/Kept.json", "config/settings.json"}
     assert not (root / "agent/old").exists()
     assert (root / "config/settings.json").read_text(encoding="utf-8") == "{}"
+
+
+def test_maafw_drops_what_the_wheel_dropped_and_keeps_the_fixed_dll(tmp_path):
+    wheel, root = tmp_path / "bin", tmp_path / "install"
+    wheel.mkdir()
+    for name in ("MaaFramework.dll", "MaaToolkit.dll", "Dropped.dll"):
+        (wheel / name).write_bytes(f"wheel {name}".encode())
+    mirror_maafw(wheel, root, b"fixed")
+
+    (wheel / "Dropped.dll").unlink()
+    mirror_maafw(wheel, root, b"fixed")
+
+    assert files(root) == {"maafw/MaaFramework.dll", "maafw/MaaToolkit.dll"}
+    assert (root / "maafw/MaaFramework.dll").read_bytes() == b"fixed"
+    assert (root / "maafw/MaaToolkit.dll").read_bytes() == b"wheel MaaToolkit.dll"
 
 
 def run(*args):
