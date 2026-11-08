@@ -1,4 +1,9 @@
 import json
+import os
+import subprocess
+import sys
+import threading
+import time
 from pathlib import Path
 
 import pytest
@@ -7,6 +12,11 @@ import ship
 
 HEAD = "a" * 40
 MERGE = "b" * 40
+
+
+@pytest.fixture(autouse=True)
+def main_checkout(tmp_path, monkeypatch):
+    monkeypatch.setattr(ship, "main_checkout", lambda: tmp_path)
 
 
 def info(**kw):
@@ -54,7 +64,7 @@ def land_fake(pr=None, stacked=(), main_ci=(("completed", "success"),), queue="e
 
 
 def land(fake, go=True, prs=(7,)):
-    return ship.cmd_land(fake, list(prs), go, sleep=lambda s: None, repo=Path("main-checkout"))
+    return ship.cmd_land(fake, list(prs), go, sleep=lambda s: None)
 
 
 def merge_of(pr):
@@ -163,6 +173,79 @@ def test_land_cli_takes_several_prs(capsys):
     assert ship.main(["land", "7", "8", "--go"], runner=fake) == 0
     assert [c[3] for c in fake.ran("gh", "pr", "merge")] == ["7", "8"]
     assert "stopped" not in capsys.readouterr().err
+
+
+def lane(repo):
+    return repo / ".local" / "queue" / "land"
+
+
+def dead_pid() -> int:
+    p = subprocess.Popen([sys.executable, "-c", "pass"])
+    p.wait()
+    return p.pid
+
+
+@pytest.mark.parametrize("first_ci, dead_ahead", [("success", False), ("failure", False), ("success", True)],
+                         ids=["first-green", "first-red", "dead-holder-ahead"])
+def test_a_second_land_waits_until_the_first_ends(tmp_path, capsys, first_ci, dead_ahead):
+    if dead_ahead:
+        lane(tmp_path).mkdir(parents=True)
+        (lane(tmp_path) / f"1000000000000000001-{dead_pid()}-land.ticket").write_text(
+            json.dumps({"cmd": "ship.py land #6", "start": None, "first": False}))
+    log, reached, release, second_waits = [], threading.Event(), threading.Event(), threading.Event()
+    one, two = batch_fake(pr_of(7), main_ci={7: [("completed", first_ci)]}), batch_fake(pr_of(8))
+
+    def first_runner(argv, cwd=None):
+        log.append(("first", list(argv)))
+        if argv[:3] == ["gh", "run", "list"] and merge_of(7) in argv:
+            reached.set()
+            release.wait(5)
+        return one(argv, cwd)
+
+    def second_runner(argv, cwd=None):
+        log.append(("second", list(argv)))
+        return two(argv, cwd)
+
+    def second_sleep(s):
+        second_waits.set()
+        time.sleep(0.01)
+
+    rc = {}
+    t1 = threading.Thread(target=lambda: rc.update(
+        first=ship.cmd_land(first_runner, [7], True, sleep=lambda s: time.sleep(0.01), repo=tmp_path)))
+    t2 = threading.Thread(target=lambda: rc.update(
+        second=ship.cmd_land(second_runner, [8], True, sleep=second_sleep, repo=tmp_path)))
+    t1.start()
+    try:
+        assert reached.wait(2), "the first call reached the CI wait of its merge"
+        t2.start()
+        assert second_waits.wait(2), "the second call waits while the first one runs"
+    finally:
+        release.set()
+        t1.join(5)
+        t2.join(5)
+    assert rc == {"first": 0 if first_ci == "success" else 1, "second": 0}
+    last_first = max(i for i, (who, _) in enumerate(log) if who == "first")
+    assert log[last_first][1][:4] == (list(AFTER_LAND) if first_ci == "success" else ["gh", "run", "list", "--workflow"])
+    assert min(i for i, (who, _) in enumerate(log) if who == "second") > last_first
+    assert two.ran("gh", "pr", "merge", "8")
+    waits = [line for line in capsys.readouterr().out.splitlines() if line.startswith("ship: waiting")]
+    assert waits == [f"ship: waiting for pid {os.getpid()} (ship.py land #7) to end before landing #8"]
+    assert not list(lane(tmp_path).glob("*.ticket"))
+
+
+def test_a_dry_run_lands_nothing_and_never_waits_for_a_land_that_runs(tmp_path, capsys):
+    lane(tmp_path).mkdir(parents=True)
+    (lane(tmp_path) / f"1000000000000000001-{os.getpid()}-land.ticket").write_text(
+        json.dumps({"cmd": "ship.py land #6", "start": None, "first": False}))
+
+    def no_wait(s):
+        raise AssertionError("the dry run waited")
+
+    fake = batch_fake(pr_of(7))
+    assert ship.cmd_land(fake, [7], False, sleep=no_wait, repo=tmp_path) == 0
+    assert not fake.ran("gh", "pr", "merge")
+    assert "Would merge" in capsys.readouterr().out
 
 
 @pytest.mark.parametrize("rollup, want", [

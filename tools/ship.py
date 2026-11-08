@@ -12,6 +12,11 @@ merge commit on the base branch and exits non-zero when that run is red. Several
 the first that is not ready, fails to merge or turns main red stops the batch, and the PRs after it are not
 started. Once the batch ends with main green, `tools/after_land.py` runs once in the main checkout, unless the
 emulator queue has a holder (`install/` is in use): then the command to run later is printed.
+Calls with `--go` take turns in the land lane (`<main checkout>/.local/queue/land/`, a `tools/live/queue.py` queue):
+each holds its ticket for the whole batch, `after_land.py` included. A call that has to wait prints once
+`ship: waiting for pid <pid> (ship.py land #<pr>...) to end before landing #<pr>...` and starts when that call ends,
+whether it landed or stopped. The ticket of a call whose process is gone is dropped, so the next call takes over.
+A dry run (no `--go`) never waits.
 
 `into` merges `<branch>` into the integration branch (`--no-ff`) in a worktree of it, runs `tools/check.py`
 through the bench queue and pushes only on green. A conflict or a red check leaves the branch as it was.
@@ -26,8 +31,10 @@ import subprocess
 import sys
 import tempfile
 import time
+from contextlib import nullcontext
 from pathlib import Path
 
+from live.queue import read, turn
 from local_dir import local_dir, main_checkout
 
 CI_CHECK = "ci-ok"
@@ -155,28 +162,36 @@ def land_one(runner, pr: int, go: bool, sleep=time.sleep) -> Outcome:
     return Outcome.GREEN
 
 
+def waiting_line(ahead: list[Path], prs: list[int]) -> str:
+    calls = ", ".join(f"pid {p.stem.split('-', 2)[1]} ({read(p)[0]})" for p in ahead)
+    return f"ship: waiting for {calls} to end before landing {' '.join(f'#{p}' for p in prs)}"
+
+
 def cmd_land(runner, prs: list[int], go: bool, sleep=time.sleep, repo: Path | None = None) -> int:
     repo = repo or main_checkout()
-    outcomes = []
-    for i, pr in enumerate(prs):
-        outcomes.append(land_one(runner, pr, go, sleep))
-        if outcomes[-1] in STOPS:
-            if len(prs) > 1:
-                rest = ", ".join(f"#{p}" for p in prs[i + 1:]) or "none"
-                print(f"ship: stopped at #{pr}; not started: {rest}", file=sys.stderr)
-            break
-    stop_rc = int(outcomes[-1] in STOPS)
-    if Outcome.GREEN not in outcomes or outcomes[-1] is Outcome.RED:
-        return stop_rc
-    later = "uv run python tools/after_land.py"
-    if emulator_busy(runner, repo):
-        print(f"ship: green. The emulator queue has a holder (install/ is in use); run later in the main checkout: {later}")
-        return stop_rc
-    rc, out = runner(["uv", "run", "python", "tools/after_land.py"], repo)  # the main checkout's venv, not the caller's
-    print(out.strip())
-    if rc:
-        print("ship: green, but after_land failed", file=sys.stderr)
-    return rc or stop_rc
+    lane = turn(repo / ".local" / "queue" / "land", "land", ["ship.py", "land", *(f"#{p}" for p in prs)], sleep=sleep,
+                on_wait=lambda ahead: print(waiting_line(ahead, prs), flush=True)) if go else nullcontext()
+    with lane:
+        outcomes = []
+        for i, pr in enumerate(prs):
+            outcomes.append(land_one(runner, pr, go, sleep))
+            if outcomes[-1] in STOPS:
+                if len(prs) > 1:
+                    rest = ", ".join(f"#{p}" for p in prs[i + 1:]) or "none"
+                    print(f"ship: stopped at #{pr}; not started: {rest}", file=sys.stderr)
+                break
+        stop_rc = int(outcomes[-1] in STOPS)
+        if Outcome.GREEN not in outcomes or outcomes[-1] is Outcome.RED:
+            return stop_rc
+        later = "uv run python tools/after_land.py"
+        if emulator_busy(runner, repo):
+            print(f"ship: green. The emulator queue has a holder (install/ is in use); run later in the main checkout: {later}")
+            return stop_rc
+        rc, out = runner(["uv", "run", "python", "tools/after_land.py"], repo)  # the main checkout's venv, not the caller's
+        print(out.strip())
+        if rc:
+            print("ship: green, but after_land failed", file=sys.stderr)
+        return rc or stop_rc
 
 
 def worktree_of(runner, repo: Path, branch: str) -> Path | None:
