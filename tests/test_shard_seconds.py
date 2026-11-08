@@ -103,7 +103,6 @@ def test_one_file_down_to_a_third_fails_alone_even_when_it_is_most_of_its_shard(
 
 def test_a_new_file_a_pull_request_lets_through_does_not_turn_main_red_on_a_slower_runner(tmp_path, table, capsys,
                                                                                           monkeypatch):
-    """#542's test_title.py, not in the table: 29 s at pace x1.00 on its pull request, 31 s at x1.26 on main (#544)."""
     monkeypatch.setattr(shard_seconds, "unmeasured", lambda seconds: [])
     verdicts = {}
     for event, pace, took in [("pull_request", 1, 29), ("push", 1.26, 31)]:
