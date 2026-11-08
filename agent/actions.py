@@ -3664,8 +3664,8 @@ class Event(CustomAction):
 
     @staticmethod
     def press(context):
-        """Tap the lit button: the page that follows starts its question's and its check's tries over. Its
-        time.monotonic()."""
+        """Tap the lit button, and return when (time.monotonic()): the page it leads to starts its question's and its
+        check's tries over."""
         RUN.get("event_tried", set()).clear()
         if event := RUN.get("event"):
             event["checked"].clear()
