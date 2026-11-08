@@ -5,6 +5,7 @@ test_consecutive_ocr.py does.
 """
 
 import json
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
@@ -387,6 +388,37 @@ def test_give_up_confirms_once_its_dialog_stops_and_ends_once_the_window_goes(co
     assert done and game.taps == [actions.GIVE_UP, actions.DIALOG_CONFIRM]
     assert [line["result"] for line in lines] == ["giveup"]
     assert sum(clock) < 2  # was 3.5 s
+
+
+def give_up_asks():
+    return 0.5, {tuple(actions.DIALOG_TEXT): "End expedition without claiming rewards?"}, 30
+
+
+def test_a_give_up_confirm_the_game_lost_is_tapped_again_and_the_run_recorded_once(context, clock, monkeypatch, tmp_path):
+    # #566: the first Confirm does not take. Settle recorded the run all the same and left the window up; MirrorHub,
+    # finding it again, had Settle cancel the dialog, give up once more and write a second giveup line for the run.
+    data = json.loads((Path(__file__).parent / "settings_cases.json").read_text(encoding="utf-8"))["valid"]
+    (tmp_path / "config").mkdir()
+    (tmp_path / "config" / "settings.json").write_text(json.dumps(data), encoding="utf-8")  # Settle makes up a run plan again
+    done, game, _ = timed_settle(context, monkeypatch, tmp_path, "Floor 3 [NORMAL] 2/6", "none", {
+        actions.GIVE_UP: [give_up_asks(), give_up_asks()], actions.DIALOG_CONFIRM: [None, window_gone(0.5)],
+        actions.DIALOG_CANCEL: [(0.4, {tuple(actions.DIALOG_TEXT): ""}, 20)]})
+    for _ in range(4):  # MirrorHub hands Settle the window while it is up
+        if not game.now()[tuple(actions.REWARD_TITLE_ROI)]:
+            break
+        actions.Settle().run(context, None)
+    lines = (tmp_path / "logs" / "runs.jsonl").read_text(encoding="utf-8").splitlines()
+    assert [json.loads(line)["result"] for line in lines] == ["giveup"]
+    assert game.taps == [actions.GIVE_UP, actions.DIALOG_CONFIRM, actions.DIALOG_CONFIRM]
+
+
+def test_a_give_up_whose_window_stays_is_handed_to_recovery_unrecorded(context, clock, monkeypatch, tmp_path):
+    # #566: the window and its dialog stay whatever Confirm does: not a run given up yet.
+    done, game, lines = timed_settle(context, monkeypatch, tmp_path, "Floor 3 [NORMAL] 2/6", "none", {
+        actions.GIVE_UP: [give_up_asks()]})
+    assert done and lines == []
+    assert actions.STUCK["flag"] is not None
+    assert game.taps.count(actions.DIALOG_CONFIRM) > 1
 
 
 def test_a_leftover_claim_dialog_is_cancelled_and_handed_back_once_it_goes(context, clock, monkeypatch, tmp_path):
