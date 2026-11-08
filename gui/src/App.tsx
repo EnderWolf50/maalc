@@ -31,7 +31,7 @@ export default function App() {
   const [tab, setTab] = useState<(typeof TABS)[number][0]>("teams");
   const [giftList, setGiftList] = useState("default"); // what the gift list tab shows; the teams tab can point it at a list
   const [checked, setChecked] = useState(false); // marks show after the first save attempt
-  const [status, setStatus] = useState("");
+  const [status, setStatus] = useState(""); // a TEXT key, or text as it is (an error, the migration warnings)
   // The file's text as last read or written: other text there is another writer's, the Agent's after a claim (#501).
   const disk = useRef<string | null>(null);
   const latest = useRef({ s, savedText });
@@ -41,7 +41,8 @@ export default function App() {
   const sync = async () => {
     const text = await api.loadSettings();
     const { s: draft, savedText: base } = latest.current;
-    if (text === disk.current || !draft) return draft;
+    // No base: the load is not done, or there was no file then; nothing is taken as read, so a save is refused.
+    if (text === disk.current || !draft || !base) return draft;
     let data: Settings | undefined;
     try {
       data = text === null ? undefined : parseSettings(text).data;
@@ -49,11 +50,11 @@ export default function App() {
       return draft; // half an edit by hand: not taken as read, so a save is refused until it parses
     }
     disk.current = text;
-    if (!data || !base) return draft; // no file now, or none when the editor opened: nothing to merge
+    if (!data) return draft; // the file is gone: a save writes it again
     const next = rebase(JSON.parse(base), draft, data);
     setS(next);
     setSavedText(toText(data));
-    setStatus(TEXT[next.language].diskChanged);
+    setStatus("diskChanged");
     return next;
   };
 
@@ -68,19 +69,19 @@ export default function App() {
     api.rootDir().then(setRoot, (e) => setLoadError(String(e)));
     api.loadSettings().then(async (text) => {
       if (text === null) return setS(newSettings());
+      disk.current = text; // read, even when it does not parse: New file then writes over it
       try {
         const { data, migrated, dropped, unknown, trials } = parseSettings(text);
-        disk.current = text;
         setS(data);
+        setSavedText(toText(data)); // dirty = content changed, not formatting; before the write-back, which a poll may meet
         if (migrated && !validate(data).length) {
           try {
             await api.saveSettings(toText(data), text);
             disk.current = toText(data);
           } catch (e) {
-            if (!String(e).includes(api.CHANGED)) throw e; // the Agent wrote first: the next poll reads its file
+            if (!api.isChanged(e)) throw e; // the Agent wrote first: the next poll reads its file
           }
         }
-        setSavedText(toText(data)); // dirty = content changed, not formatting
         const warn = (key: Key, n: number) => (n ? [TEXT[data.language][key].replace("{n}", String(n))] : []);
         setStatus([...warn("migrate.dropped", dropped), ...warn("migrate.unknown", unknown), ...warn("migrate.trials", trials)].join(" "));
       } catch (e) {
@@ -113,7 +114,8 @@ export default function App() {
     tv: (field, v) => TEXT[lang][`${field}.${v}` as Key] ?? v,
   };
   const dirty = toText(s) !== savedText;
-  const note = status === t("saved") ? "" : status; // shown beside "unsaved" too: a refused save, the file read again
+  const said = status in TEXT[lang] ? t(status as Key) : status;
+  const note = status === "saved" ? "" : said; // shown beside "unsaved" too: a refused save, the file read again
 
   const save = async () => {
     setChecked(true);
@@ -124,13 +126,13 @@ export default function App() {
         try {
           await api.saveSettings(toText(current), disk.current);
         } catch (e) {
-          if (!String(e).includes(api.CHANGED)) throw e;
+          if (!api.isChanged(e)) throw e;
           if (tries < 3) continue; // it changed between that read and this write
-          return setStatus(t("saveConflict"));
+          return setStatus("saveConflict");
         }
         disk.current = toText(current);
         setSavedText(toText(current));
-        return setStatus(t("saved"));
+        return setStatus("saved");
       }
     } catch (e) {
       setStatus(String(e));
@@ -149,7 +151,7 @@ export default function App() {
             <option value="en_us">English</option>
           </select>
         </label>
-        <span className="status">{dirty ? [t("unsaved"), note].filter(Boolean).join(" ") : status}</span>
+        <span className="status">{dirty ? [t("unsaved"), note].filter(Boolean).join(" ") : said}</span>
         <button type="button" className="primary" onClick={save}>{t("save")}</button>
       </header>
       {checked && problems.length > 0 && (

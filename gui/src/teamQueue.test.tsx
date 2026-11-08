@@ -15,13 +15,16 @@ vi.mock("./api", async (original) => {
   return {
     ...api,
     loadSettings: () => Promise.resolve(file.text),
-    saveSettings: (text: string, expected: string | null) => {
-      file.beforeSave?.();
-      file.beforeSave = undefined;
-      if (expected !== file.text) return Promise.reject(api.CHANGED);
+    saveSettings: async (text: string, expected: string | null) => {
+      if (file.beforeSave) { // inside the IPC call's few ms, after React rendered what the caller set before it
+        await new Promise((r) => setTimeout(r, 20));
+        file.beforeSave();
+        file.beforeSave = undefined;
+        await new Promise((r) => setTimeout(r, 20));
+      }
+      if (expected !== file.text) throw api.CHANGED;
       file.saved.push(text);
       file.text = text;
-      return Promise.resolve();
     },
     rootDir: () => Promise.resolve("root"),
   };
@@ -131,6 +134,44 @@ describe("in the editor", () => {
     await user.click(screen.getByRole("button", { name: zh.save }));
     await waitFor(() => expect(file.saved).toHaveLength(1));
     expect(JSON.parse(file.saved[0]).teams[0].name).toBe("Ta!");
+  });
+
+  test("an old file the Agent reorders while the editor writes its migration back shows and keeps the Agent's order", async () => {
+    const old = JSON.parse(file.text!);
+    old.version -= 1;
+    delete old.run.target_floor; // version 20 added it (model.ts MIGRATIONS)
+    file.text = text(old);
+    file.beforeSave = () => { // the load's write-back meets the Agent's write, and a poll runs while it waits
+      agentClaims("a");
+      window.dispatchEvent(new Event("focus"));
+    };
+    const user = userEvent.setup();
+    render(<App />);
+    await waitFor(() => expect(nameBox()).toHaveValue("Ta"));
+    act(() => { window.dispatchEvent(new Event("focus")); });
+    await waitFor(() => expect(shown()).toEqual(["Tb", "Tc", "Ta"]));
+    await user.click(screen.getByRole("button", { name: zh.save }));
+    await waitFor(() => expect(file.saved).toHaveLength(1));
+    expect(JSON.parse(file.saved[0]).teams.map((t: { id: string }) => t.id)).toEqual(["b", "c", "a"]);
+  });
+
+  test("New file writes over a file that does not parse", async () => {
+    file.text = "{";
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(await screen.findByRole("button", { name: zh.newFile }));
+    await user.click(screen.getByRole("button", { name: zh.save }));
+    await waitFor(() => expect(file.saved).toHaveLength(1));
+  });
+
+  test("a save then a switch of language shows no stale saved note", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await waitFor(() => expect(nameBox()).toHaveValue("Ta"));
+    await user.click(screen.getByRole("button", { name: zh.save }));
+    await waitFor(() => expect(file.saved).toHaveLength(1));
+    await user.selectOptions(screen.getByRole("combobox", { name: zh.language }), "en_us");
+    expect(document.querySelector(".status")).toHaveTextContent(/^Unsaved changes$/);
   });
 
   test("a file left half edited by hand is not saved over", async () => {
