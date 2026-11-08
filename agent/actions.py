@@ -5822,17 +5822,19 @@ class Settle(CustomAction):
                 break
         else:
             return stuck("GiveUpRewards brought up no `End expedition without claiming rewards?`")
-        def gone(im):
+        def closed(im):
             return not reward_up(context, im)
         for _ in range(5):
             if claim_asks(context, image) == "giveup":
                 page_guard(context, "ExplorationReward", image=image)
-                image = tap_then(context, *DIALOG_CONFIRM, gone, timeout=2)
+                image = tap_then(context, *DIALOG_CONFIRM, closed, timeout=2)
             else:
-                image = until(context, gone, timeout=1)
+                image = until(context, closed, timeout=1)
             if image is not None:
                 break
-            image = screen(context)
+            image = still(context, timeout=1.5)  # a dialog fading out is not tapped again
+            if image is None:
+                image = screen(context)
         else:
             return stuck("the Exploration Reward window stayed after its give-up Confirm")
         log("floor 5 not passed: gave up the rewards")
