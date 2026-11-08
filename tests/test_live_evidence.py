@@ -387,6 +387,17 @@ def test_packs_reading_names_weights_event_and_pull(log):
     assert (r["threshold"], r["pull"]) == (0, "Flat-broke Gamblers")
 
 
+def test_packs_pull_after_other_lines_belongs_to_its_reading_only():
+    # the last free refresh spent: the pull comes third, after "no free refresh left"
+    msgs = [(0.0, "floor 5 packs, threshold 0: Blade and Artwork (-5), The Dream Ending (-5), Line 1 (-5)"),
+            (0.0, "floor 5 card reads: Blade and Artwork <- name, The Dream Ending <- name, Line 1 <- name"),
+            (4.1, "floor 5 packs, threshold 0: Yield My Flesh (-5), Line 4 - Section #3 (-5), Line 4 - Section #4 (-5)"),
+            (4.1, "floor 5 card reads: Yield My Flesh <- name, Line 4 - Section #3 <- name, Line 4 - Section #4 <- name"),
+            (4.1, "floor 5: no free refresh left"),
+            (4.1, "floor 5: pull 'Yield My Flesh' (-5, below the threshold)")]
+    assert [r["pull"] for r in ev.pack_readings(msgs, 5)] == [None, "Yield My Flesh"]
+
+
 def test_packs_settle_runs_from_the_deal_to_eight_still_frames():
     rows = [(0, 0)] * 5 + [(30, 9)] * 20 + [(40, 1)] * 20  # empty, dealing and swinging, standing still
     assert ev.settle(rows, k_log=30) == (5, 25, False)

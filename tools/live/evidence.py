@@ -584,13 +584,20 @@ def map_cmd(a) -> None:
 # --- packs -----------------------------------------------------------------------------------------------
 
 def pack_readings(msgs, floor: int) -> list[dict]:
-    """Each `floor N packs` line: its time, threshold, cards [(name, weight, event)] and the pulled card's name."""
+    """Each `floor N packs` line: its time, threshold, cards [(name, weight, event)] and the pulled card's name, the first
+    `floor N: pull` before the floor's next `packs` line (a refresh's reading has none)."""
+    reading = re.compile(rf"floor {floor} packs, threshold (-?\d+): (.*)")
     out = []
     for i, (t, x) in enumerate(msgs):
-        if m := re.match(rf"floor {floor} packs, threshold (-?\d+): (.*)", x):
+        if m := reading.match(x):
             cards = [(c[1], int(c[2]), bool(c[3])) for c in re.finditer(r"(?:^|, )(.+?) \((-?\d+)(, event)?\)(?=,|$)", m[2])]
-            pull = next((p for _, y in msgs[i + 1:i + 3] if (p := re.match(rf"floor {floor}: pull (.+) \((-?\d+)", y))), None)
-            out.append({"t": t, "threshold": int(m[1]), "cards": cards, "pull": pull and pull[1].strip("'\"")})
+            hit = None
+            for _, y in msgs[i + 1:]:
+                if reading.match(y):
+                    break
+                if hit := re.match(rf"floor {floor}: pull (.+) \((-?\d+)", y):
+                    break
+            out.append({"t": t, "threshold": int(m[1]), "cards": cards, "pull": hit and hit[1].strip("'\"")})
     return out
 
 
