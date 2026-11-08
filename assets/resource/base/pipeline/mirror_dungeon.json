@@ -416,25 +416,36 @@
             "gone": {"roi": [440, 280, 400, 35], "expected": "remaining E.G.O Gift choices"}
         }
     },
+    // No delays (#258): RewardCard reads the cards once they stand still (still()), and returns once the title is gone or
+    // a GET! window is up, which GiftGet, before it in HubText, takes with its own pre_delay.
     "RewardCard": {
         "recognition": "OCR",
         "roi": [290, 112, 490, 48],
         "expected": "Encounter Reward",
         "action": "Custom",
-        "custom_action": "RewardCard"
+        "custom_action": "RewardCard",
+        "pre_delay": 0,
+        "post_delay": 0
     },
     // After a fight, an event or a boss (with Mounting Trials); the starting gift page is matched before.
+    // pre_delay 200 (#258): PickGift reads the cards on its first screenshot, with no still(); the page fading in would
+    // miss a card. post_delay 0: it returns once Refuse Gift no longer reads, and the GET! window that follows (21 of 21
+    // live hits) is GiftGet's, whose own pre_delay waits for it.
     "GiftChoice": {
         "recognition": "OCR",
         "roi": [870, 560, 160, 40],
         "expected": "Refuse Gift",
         "action": "Custom",
-        "custom_action": "PickGift"
+        "custom_action": "PickGift",
+        "pre_delay": 200,
+        "post_delay": 0
     },
     // Shop and Super Shop (spec 03 section 13): the Leave button, also under the shop's own dialogs and pages; or ID Skill
     // Search's select mode (#456), where Leave reads Return: its title, so a hand-back there comes to Shop, whose to_main
     // leaves by Return, and page_guard holds while the step picks a sinner (tests/screens/ShopIdSkillSearchSelect.png).
     // Shop heals, replaces skills, then sells, buys, refreshes and fuses in rounds, and leaves.
+    // pre_delay 200 (#258): the visit reads the Cost and the sinner bar as soon as the Refresh fee reads (to_main), with no
+    // still(). post_delay 0: it returns once the map shows (Leave's Confirm), and RouteMap starts with still().
     "Shop": {
         "recognition": "Or",
         "any_of": [
@@ -452,7 +463,9 @@
             }
         ],
         "action": "Custom",
-        "custom_action": "Shop"
+        "custom_action": "Shop",
+        "pre_delay": 200,
+        "post_delay": 0
     },
     // The red button bottom right reads SKIP, Proceed, Continue or Commence, grey while it does nothing.
     // No delays (#273): the action starts with still(), and after a taken option waits up to 1.5 s for the Choices page to go.
@@ -481,13 +494,17 @@
         }
     },
     // Node selection panel: right-hand Enter. Before MirrorMap: the panel hides part of its icons.
+    // pre_delay 200 (#258): enter_node taps Enter on its first look, with no still(), and the panel slides in. post_delay 0:
+    // it returns once the panel is gone and the map has faded, as MirrorMap's enter_node does.
     "MapNodePanel": {
         "recognition": "TemplateMatch",
         "roi": [1030, 495, 210, 95],
         "template": "Map/MapNodePanel.png",
         "threshold": 0.8,
         "action": "Custom",
-        "custom_action": "EnterNode"
+        "custom_action": "EnterNode",
+        "pre_delay": 200,
+        "post_delay": 0
     },
     // Right-hand icon column (pack detail, team); the Exploring Floor title is often covered.
     // RouteMap picks and enters the next node, or forfeits the run after a wipe's Accept results.

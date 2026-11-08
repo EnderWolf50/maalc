@@ -85,9 +85,10 @@ def parse_log(lines, names, hub: str):
     return starts, hits, bot
 
 
-def video_scores(video: Path, nodes: dict, started: float, fps: float = 10.0):
+def video_scores(video: Path, nodes: dict, started: float, fps: float = 10.0, windows=(), on_frame=None):
     """(wall time of each scored frame by its pts, {name: score per frame}, whether the frame is the one before
-    it, unchanged); `fps` frames a second are scored."""
+    it, unchanged); `fps` frames a second are scored. on_frame(wall time, frame at 1280x720) is called with every frame
+    inside one of the (start, end) wall-time windows, scored or not."""
     import cv2  # the probe group's; the rest of the tool runs without it
 
     tpl = {n: cv2.imread(str(f)) for n, (f, _, _) in nodes.items()}
@@ -98,21 +99,28 @@ def video_scores(video: Path, nodes: dict, started: float, fps: float = 10.0):
     # (Connecting.png: the word on green, shown over the page). Every pipeline template with such pixels sets it.
     masks = {n: (~(img == (0, 255, 0)).all(axis=2)).astype(np.uint8) * 255 for n, img in tpl.items()}
     masks = {n: m if not m.all() else None for n, m in masks.items()}
+    starts, ends = np.array(sorted(a for a, _ in windows)), np.array(sorted(b for _, b in windows))
     vt, vs, still, prev = [], {n: [] for n in nodes}, [], None
     cap, due = cv2.VideoCapture(str(video)), 0.0
     while cap.grab():
         pts = cap.get(cv2.CAP_PROP_POS_MSEC) / 1000
-        if pts < due:
+        # as many windows start at or before the frame as end before it: it is in none
+        wanted = np.searchsorted(starts, started + pts, "right") > np.searchsorted(ends, started + pts, "left")
+        if pts < due and not wanted:
             continue
-        due = pts + 1 / fps - 1e-3
         ok, im = cap.retrieve()
         if not ok:
             break
+        if im.shape[:2] != (720, 1280):
+            im = cv2.resize(im, (1280, 720))
+        if wanted:
+            on_frame(started + pts, im)
+        if pts < due:
+            continue
+        due = pts + 1 / fps - 1e-3
         vt.append(started + pts)
         if len(vt) % round(600 * fps) == 0:
             print(f"{pts / 60:.0f} min of video scored", file=sys.stderr, flush=True)
-        if im.shape[:2] != (720, 1280):
-            im = cv2.resize(im, (1280, 720))
         grey = cv2.cvtColor(im, cv2.COLOR_BGR2GRAY)
         still.append(prev is not None and not cv2.countNonZero(cv2.absdiff(grey, prev)))
         prev = grey
