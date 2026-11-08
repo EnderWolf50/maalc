@@ -136,13 +136,15 @@ def gone(context, spec, image):
     return lambda image: found is None or found[0] not in normalize(text(context, image, spec["roi"]))
 
 
-def tap_then(context, x, y, done, timeout=2.0):
+def tap_then(context, x, y, done, timeout=2.0, lively="HomeReached"):
     """Tap, then until() done(image) holds: that image, or None after timeout s (#115).
 
     The wait also tells the watchdog whether the game took the tap (#440): no page, every screenshot of the wait the
-    same as its first to the byte (a frozen game repeats its bytes), and that screenshot the main window (HomeReached),
-    whose banners always move on a live game, is a dead tap. Not other still pages: a live game's map or title can let a
-    tap go by. recovery.DEAD_TAPS of them in a row flag the game frozen, a stuck from L3, for the hub's Stuck node.
+    same as its first to the byte (a frozen game repeats its bytes), and that screenshot the screen of lively, a node of
+    recovery.LIVELY (the main window, whose banners always move on a live game; the title for its own tap, #506), is a
+    dead tap. Not other still pages: a live game's map, or the title under a dialog, can let a tap go by.
+    recovery.DEAD_TAPS of them in a row flag the game frozen, a stuck from L3, for the hub's Stuck node (GoHome's
+    HomeFrozen).
     """
     shots = {"first": None, "still": True}
 
@@ -156,9 +158,9 @@ def tap_then(context, x, y, done, timeout=2.0):
     tap(context, x, y, wait=0)
     image = until(context, watch, timeout=timeout)
     first = shots["first"]
-    dead = image is None and shots["still"] and seen(context, first, "HomeReached") is not None
+    dead = image is None and shots["still"] and seen(context, first, lively) is not None
     if why := STUCK["watch"].tapped(recovery.thumb(first) if dead else None):
-        stuck(why, level=3)
+        stuck(f"{recovery.LIVELY[lively]} {why}", level=3)
     return image
 
 
@@ -919,6 +921,40 @@ def restart_game(context, reason, kind=None):
     return True
 
 
+@AgentServer.custom_recognition("StuckWaiting")
+class StuckWaiting(CustomRecognition):
+    """GoHome's HomeFrozen: hits while a stuck waits for recovery. In GoHome only tap_then's dead taps on the title raise
+    one (#506). Not StuckFlag: GoHome feeds no watchdog."""
+
+    def analyze(self, context: Context, argv: CustomRecognition.AnalyzeArg):
+        return CustomRecognition.AnalyzeResult(box=(0, 0, 1, 1), detail={}) if STUCK["flag"] else None
+
+
+@AgentServer.custom_action("HomeFrozen")
+class HomeFrozen(CustomAction):
+    """GoHome on a game frozen on the title (#506): restart it (restart_game); GoHome goes on from the new title."""
+
+    def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
+        _, _, reason = STUCK["flag"]
+        STUCK["flag"] = None
+        return restart_game(context, reason)
+
+
+@AgentServer.custom_recognition("StaysUnknown")
+class StaysUnknown(CustomRecognition):
+    """Hits once none of the hub's other screens (the nodes of its next but this one; param {"hub", "timeout": s}) shows
+    on a screenshot for timeout s. GoHome's back key (HomeBack) waits out a moment no template reads this way: the
+    title's glitch warps the whole picture for about 1 s (#495; live 2026-11-08, 3 glitches of 0.9-1.3 s, NavTitle
+    0.51-0.61). A screen that shows in the meantime is the hub's next pass, not the back key's."""
+
+    def analyze(self, context: Context, argv: CustomRecognition.AnalyzeArg):
+        p = json.loads(argv.custom_recognition_param)
+        known = [n["name"] for n in context.get_node_data(p["hub"])["next"] if n["name"] != argv.node_name]
+        if until(context, lambda im: any(seen(context, im, n) for n in known), timeout=p["timeout"]) is not None:
+            return None
+        return CustomRecognition.AnalyzeResult(box=(0, 0, 1, 1), detail={})
+
+
 @AgentServer.custom_action("HomeLost")
 class HomeLost(CustomAction):
     """GoHome's on_error (#362 D4): 60 s of nothing known, or the back key used up. The game is restarted (restart_game)
@@ -1475,13 +1511,14 @@ class TapUntil(CustomAction):
     """A Click node that waits for the page that follows instead of a post_delay (#115).
 
     Param: {"target": [x, y, w, h], "next": {"roi": [...], "expected": regex} or a list of them (any),
-    "gone": {"roi": [...], "expected": regex}, "left": true, "until": node, "timeout": s (default 3)}; any of "next",
-    "gone", "left" and "until", the first to hold ends it. The page it leaves may still read like itself for a moment;
-    MirrorHub would act on it twice.
+    "gone": {"roi": [...], "expected": regex}, "left": true, "until": node, "timeout": s (default 3), "lively": a node of
+    recovery.LIVELY}; any of "next", "gone", "left" and "until", the first to hold ends it. The page it leaves may still
+    read like itself for a moment; MirrorHub would act on it twice.
     gone: the node's own roi and expected (#254), for a page whose next one is not known or reads the same (ClaimPopup).
     left: the node's own recognition misses, for a node that is no OCR (a template: the daily pages' tabs and buttons).
     until: that node's recognition hits, for a next page a template knows. The Window tab glows on the old page before
     the main window comes, and that glow misses the tab's own template (#496).
+    lively: the screen whose still wait is a dead tap (tap_then), HomeReached by default.
     No target: the node's box.
     """
 
@@ -1497,7 +1534,9 @@ class TapUntil(CustomAction):
         if "until" in p:
             pages.append(lambda im: seen(context, im, p["until"]) is not None)
         began = time.monotonic()
-        log_change(argv.node_name, tap_then(context, x + w // 2, y + h // 2, lambda im: any(page(im) for page in pages), timeout=p.get("timeout", 3)), began)
+        image = tap_then(context, x + w // 2, y + h // 2, lambda im: any(page(im) for page in pages), timeout=p.get("timeout", 3),
+                         lively=p.get("lively", "HomeReached"))
+        log_change(argv.node_name, image, began)
         return True
 
 

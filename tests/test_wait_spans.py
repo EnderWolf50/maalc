@@ -1,4 +1,5 @@
 import json
+import uuid
 
 from wait_spans import passes, spans
 
@@ -8,9 +9,11 @@ def reco(t, name, score, hit=True):
     return f"[2026-10-19 {t}][INF][Px1][Tx1][Recognizer.cpp][L103][MaaNS::TaskNS::Recognizer::recognize] reco [result={json.dumps(result)}] \n"
 
 
-def hub(t, name, score):
-    """One MirrorHub pass: HubText picks the OCR screens first (#157), then the screen hits."""
-    return [reco(t, "Stuck", 0, hit=False), reco(t, "HubText", 0), reco(t, name, score)]
+def hub(t, name, score, read=0.98):
+    """One MirrorHub pass as MaaFramework logs it: HubText's two OCR reads, each under a fresh name every pass, HubText
+    picking the OCR screens (#157), then the screen hits."""
+    return [reco(t, "Stuck", 0, hit=False), reco(t, f"recognition/OCR/{uuid.uuid4()}", 0.98),
+            reco(t, f"recognition/OCR/{uuid.uuid4()}", read), reco(t, "HubText", 0), reco(t, name, score)]
 
 
 def test_a_span_and_its_longest_still_stretch():
@@ -19,3 +22,9 @@ def test_a_span_and_its_longest_still_stretch():
            + hub("19:45:00.000", "Victory", 0.9) + hub("19:45:10.000", "Loading", 0.9))
     out = spans(passes(log), {"Loading"})
     assert [(kind, seconds, n, still) for _, kind, seconds, n, still in out] == [("Loading", 50.0, 4, 30.0), ("Loading", 0.0, 1, 0.0)]
+
+
+def test_a_hubtext_read_that_changes_ends_the_still_stretch():
+    log = (hub("19:44:00.000", "Loading", 0.99, read=0.90) + hub("19:44:30.000", "Loading", 0.99, read=0.95)
+           + hub("19:44:40.000", "Loading", 0.99, read=0.95))
+    assert [(seconds, still) for _, _, seconds, _, still in spans(passes(log), {"Loading"})] == [(40.0, 10.0)]
