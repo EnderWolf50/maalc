@@ -3508,6 +3508,8 @@ def forfeit(context):
                 break
         else:
             return stuck(f"forfeit: {want!r} did not {'show' if shown else 'go'}")
+    # The map can stay up a moment after Quit; RouteMap, back on it with no forfeit flag, would pick a node.
+    until(context, lambda im: not Shop.on_map(context, im), timeout=2)
     RUN.pop("forfeit")
     log("forfeited the run")
     return True

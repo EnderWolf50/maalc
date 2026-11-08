@@ -312,9 +312,10 @@ def test_a_stop_line_of_a_run_with_no_settings_in_memory_is_a_target_5_line(cont
 NO_BONUS = "You have Weekly Bonus Eligibility remaining. Are you sure you want to claim the current rewards without using the Eligibility?"
 
 
-def timed_settle(context, monkeypatch, tmp_path, window, use, answers, reads=None):
+def timed_settle(context, monkeypatch, tmp_path, window, use, answers, reads=None, later=()):
     """Settle as a test_actions.TimedGame of `answers`: the window reads `window`, its toggles OFF, 3 weekly bonuses
-    left, "one" to spend on a `use` run. Returns what Settle returned, the game and the runs.jsonl lines."""
+    left, "one" to spend on a `use` run; `later`'s changes show with no tap. Returns what Settle returned, the game and
+    the runs.jsonl lines."""
     import test_actions
     monkeypatch.setattr(actions, "ROOT", tmp_path)
     monkeypatch.setattr(actions, "address", lambda context: "emulator")
@@ -324,6 +325,7 @@ def timed_settle(context, monkeypatch, tmp_path, window, use, answers, reads=Non
     game = test_actions.TimedGame(monkeypatch, context, {
         tuple(actions.REWARD_TITLE_ROI): "Exploration Reward", tuple(actions.WEEKLY_LEFT): "3/3",
         **{toggle_roi(i): "OFF" for i in range(3)}, **(reads or {})}, answers)
+    game.shows(*later)
     monkeypatch.setattr(actions, "ocr", lambda context, image, roi, only_rec=False: [(window, (300, 420, 90, 20))] if roi == actions.RESULT else [])
     done = actions.Settle().run(context, None)
     path = tmp_path / "logs" / "runs.jsonl"
@@ -366,6 +368,15 @@ def test_a_claim_dialog_that_is_not_the_one_asked_for_is_never_confirmed(context
     done, game, lines = timed_settle(context, monkeypatch, tmp_path, "Floor 5 [NORMAL] 6/6", "none", {
         actions.CLAIM: [(0.5, {tuple(actions.DIALOG_TEXT): spend}, 30)], actions.DIALOG_CONFIRM: [window_gone(0.5)]})
     assert not done and game.taps == [actions.CLAIM] and lines == []
+
+
+def test_unread_toggles_are_read_again_as_soon_as_they_read_not_after_1_s(context, clock, monkeypatch, tmp_path):
+    # An unread toggle may be ON: Claim waits until all three read. They read 0.4 s in; a fixed 1 s sleep waited past that.
+    done, game, lines = timed_settle(context, monkeypatch, tmp_path, "Floor 5 [NORMAL] 6/6", "none", {
+        actions.CLAIM: [(0.5, {tuple(actions.DIALOG_TEXT): NO_BONUS}, 30)], actions.DIALOG_CONFIRM: [window_gone(0.5)]},
+        reads={toggle_roi(i): "" for i in range(3)}, later=[(0.4, {toggle_roi(i): "OFF" for i in range(3)}, 20)])
+    assert done and game.taps == [actions.CLAIM, actions.DIALOG_CONFIRM]
+    assert game.at[0] - game.t0 < 0.9  # Claim went out before the old 1 s sleep ended
 
 
 def test_give_up_confirms_once_its_dialog_stops_and_ends_once_the_window_goes(context, clock, monkeypatch, tmp_path):

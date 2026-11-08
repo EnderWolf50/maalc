@@ -151,11 +151,11 @@ def main(argv=None) -> None:
     _, _, bot = va.parse_log(lines(), list(nodes), a.hub)
     kt, kthumbs = [], []
 
-    def kept(t, im):
+    def on_frame(t, im):
         kt.append(t)
         kthumbs.append(recovery.thumb(im))
-    keep = [(t.at - BEFORE - MARGIN, t.look + MARGIN) for t in found]
-    vt, vs, still = va.video_scores(a.video, nodes, stamp(a.started), a.fps, keep, kept)
+    windows = [(t.at - BEFORE - MARGIN, t.look + MARGIN) for t in found]
+    vt, vs, still = va.video_scores(a.video, nodes, stamp(a.started), a.fps, windows, on_frame)
     frozen = va.freezes(vt, still, bot, blip=max(1.0, 3 / a.fps))
     segs = va.fit(vt, vs, bot, a.chunk, a.max_lost, a.min_corr, a.drift, frozen)
     for s in segs:

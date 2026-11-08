@@ -81,12 +81,15 @@ def screens(context, values):
 
 class TimedGame:
     """A fake game for the waits that replaced a tap's fixed sleep (#258). `reads` is what each roi (a tuple) reads and
-    `level` the screenshot's brightness. A tap at a point of `answers` takes that point's next answer, (lag, reads, level)
-    or None for a tap the game loses, which shows `lag` s later. A tap sleeps its wait, as actions.tap does, so a fixed
-    wait still costs its seconds. The taps are kept, in order."""
+    `level` the screenshot's brightness. A tap at a point of `answers` takes that point's next answer: (lag, reads, level),
+    which shows `lag` s after the tap, a list of them, or None for a tap the game loses. A tap sleeps its wait, as
+    actions.tap does, so a fixed wait still costs its seconds. The taps are kept in order, their times in `at`, the
+    game's start in `t0`."""
 
     def __init__(self, monkeypatch, context, reads, answers, level=10):
-        self.reads, self.level, self.answers, self.taps, self.due = dict(reads), level, {k: list(v) for k, v in answers.items()}, [], []
+        self.reads, self.level, self.answers, self.taps, self.at, self.due = \
+            dict(reads), level, {k: list(v) for k, v in answers.items()}, [], [], []
+        self.t0 = actions.time.monotonic()
         monkeypatch.setattr(actions, "tap", self.tap)
         monkeypatch.setattr(actions, "text", lambda context, image, roi, only_rec=False: self.now().get(tuple(roi), ""))
         context.tasker.controller.post_screencap.return_value.wait.return_value.get.side_effect = self.shot
@@ -106,11 +109,15 @@ class TimedGame:
 
     def tap(self, context, x, y, wait=1.0):
         self.taps.append((x, y))
+        self.at.append(actions.time.monotonic())
         queue = self.answers.get((x, y))
         if queue and (answer := queue.pop(0)) is not None:
-            lag, reads, level = answer
-            self.due.append((actions.time.monotonic() + lag, reads, level))
+            self.shows(*(answer if isinstance(answer, list) else [answer]))
         actions.time.sleep(wait)
+
+    def shows(self, *changes):
+        """Each (lag, reads, level) shows lag s from now, with no tap."""
+        self.due += [(actions.time.monotonic() + lag, reads, level) for lag, reads, level in changes]
 
 
 def test_until_returns_the_first_screen_that_shows_the_change(context, clock):
@@ -2946,6 +2953,18 @@ def test_forfeit_taps_each_step_once_its_panel_shows_not_after_2_s(context, cloc
     assert game.taps == [actions.GEAR, actions.FORFEIT, actions.FORFEIT_CONFIRM]
     assert "forfeit" not in actions.RUN and actions.STUCK["flag"] is None
     assert sum(clock) < 3  # was 6 s
+
+
+def test_forfeit_hands_back_once_the_map_is_gone_after_quit(context, clock, monkeypatch):
+    # The map stays up a moment after Quit: handed back on it, RouteMap (forfeit flag gone) would pick a node.
+    game = forfeit_game(context, monkeypatch)
+    game.answers[actions.FORFEIT_CONFIRM] = [[(0.4, {QUIT_DIALOG: ""}, 50), (1.0, {"map": False}, 70)]]
+    game.reads["map"] = True
+    context.run_recognition.side_effect = lambda name, image, override=None: \
+        SimpleNamespace(hit=True, box=[0, 0, 1, 1]) if name == "MirrorMap" and game.now()["map"] else None
+    actions.RUN["forfeit"] = True
+    assert actions.forfeit(context) is True
+    assert not game.now()["map"] and game.taps.count(actions.FORFEIT_CONFIRM) == 1
 
 
 def test_forfeit_taps_the_gear_again_when_the_panel_does_not_show_in_2_s(context, clock, monkeypatch):

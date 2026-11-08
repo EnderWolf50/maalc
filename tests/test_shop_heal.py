@@ -41,6 +41,7 @@ def test_a_revive_the_cost_does_not_show_taps_nothing_more(context, clock, monke
         actions.HEAL_OPTIONS["revive"]: [(0.3, {}, 60)],
         YI_SANG: [(0.3, {tuple(actions.BOTTOM_LABEL): "Select"}, 90)]})
     assert game.taps == [actions.SHOP_BUTTONS["heal"], actions.HEAL_OPTIONS["revive"], YI_SANG, actions.BOTTOM_RIGHT]
+    assert sum(clock) < 5  # Select's old 2 s spent in full; the steps before it were 4.75 s
 
 
 def test_a_full_heal_reads_the_cost_once_it_drops(context, clock, monkeypatch):
@@ -59,6 +60,7 @@ def test_a_heal_page_left_over_is_left_by_its_bottom_right_button(context, clock
                                   {actions.BOTTOM_RIGHT: [(0.3, leaves, 60)]})
     assert actions.Shop.to_main(context)
     assert game.taps == [actions.BOTTOM_RIGHT]
+    assert sum(clock) < 1.2  # was 1.5 s
 
 
 def test_the_heal_pages_bottom_label_is_read_where_the_shop_node_reads_leave():
