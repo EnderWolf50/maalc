@@ -123,6 +123,7 @@ export default function App() {
 function RunTab() {
   const { s, update, t, tv, bad } = useEditor();
   const run = s.run;
+  const pastFive = run.target_floor > 5;
   const set = (patch: Partial<Settings["run"]>) => update((d) => { Object.assign(d.run, patch); });
   const pick = (k: "difficulty" | "weekly_bonus_use" | "weekly_bonus_amount" | "starlight_unaffordable" | "after_retries" | "theme_pack_refresh", note?: string) => (
     <Field label={t(`run.${k}`)} path={`run/${k}`} note={note}>
@@ -132,8 +133,10 @@ function RunTab() {
   return (
     <div className="grid">
       {pick("difficulty")}
-      <Field label={t("run.target_floor")} path="run/target_floor" note={run.target_floor > 5 ? t("run.target_floor_note") : undefined}>
+      <Field label={t("run.target_floor")} path="run/target_floor" note={pastFive ? t("run.target_floor_note") : undefined}>
         <Select value={String(run.target_floor)} options={runEnum("target_floor").map(String)} label={(v) => tv("target_floor", v)} onChange={(v) => set({ target_floor: Number(v) })} />
+        {/* Remove with #434: until the entrance switches Parallel Superposition on, a target above 5 still stops at floor 5. */}
+        {pastFive && <small>{t("run.target_floor_entry_note")}</small>}
       </Field>
       <ToggleNum label={t("run.runs")} path="run/runs" value={run.runs} on={1} min={1} note={t("run.runs_note")}
         onChange={(v) => set({ runs: v })} />

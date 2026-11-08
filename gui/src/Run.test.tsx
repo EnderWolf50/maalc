@@ -1,4 +1,5 @@
-// The Run tab's target floor (#385): 5, 10 or 15; a target above 5 shows that the whole run must be HARD.
+// The Run tab's target floor (#385): 5, 10 or 15; a target above 5 shows that the whole run must be HARD,
+// and, until #434 switches Parallel Superposition on at the entrance, that each run still stops at floor 5.
 import { screen } from "@testing-library/react";
 import { expect, test } from "vitest";
 import { TABS } from "./App";
@@ -30,4 +31,16 @@ test("picking 10 or 15 saves the number and shows the whole-run-HARD note; picki
   await user.selectOptions(select, "5");
   expect(settings().run.target_floor).toBe(5);
   expect(screen.queryByText(zh["run.target_floor_note"])).toBeNull();
+});
+
+test("a target of 10 or 15 says each run still stops at floor 5; 5 does not", async () => {
+  const { user } = renderEditor(<RunTab />, newSettings());
+  const select = screen.getByRole("combobox", { name: new RegExp(zh["run.target_floor"]) });
+  expect(screen.queryByText(zh["run.target_floor_entry_note"])).toBeNull();
+  await user.selectOptions(select, "10");
+  expect(screen.getByText(zh["run.target_floor_entry_note"])).toBeVisible();
+  await user.selectOptions(select, "15");
+  expect(screen.getByText(zh["run.target_floor_entry_note"])).toBeVisible();
+  await user.selectOptions(select, "5");
+  expect(screen.queryByText(zh["run.target_floor_entry_note"])).toBeNull();
 });
