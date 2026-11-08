@@ -16,6 +16,12 @@ def report(folder, name, cases):
     return path
 
 
+# The agent shards run these tests under a pull request's GITHUB_EVENT_NAME too.
+@pytest.fixture(autouse=True)
+def no_ci_event(monkeypatch):
+    monkeypatch.delenv("GITHUB_EVENT_NAME", raising=False)
+
+
 @pytest.fixture
 def table(tmp_path, monkeypatch):
     path = tmp_path / "shard_seconds.json"
@@ -101,28 +107,28 @@ def test_one_file_down_to_a_third_fails_alone_even_when_it_is_most_of_its_shard(
     assert len(errors) == 1 and f"test_thread_luxcavation.py took {72 * pace:.0f} s, the table says 216" in errors[0]
 
 
-def test_a_new_file_a_pull_request_lets_through_does_not_turn_main_red_on_a_slower_runner(tmp_path, table, capsys,
-                                                                                          monkeypatch):
+@pytest.fixture
+def new_file_check(tmp_path, table, monkeypatch):
     monkeypatch.setattr(shard_seconds, "unmeasured", lambda seconds: [])
-    verdicts = {}
-    for event, pace, took in [("pull_request", 1, 29), ("push", 1.26, 31)]:
+
+    def check(event, pace, took):
         monkeypatch.setenv("GITHUB_EVENT_NAME", event)
         cases, listed = shard("a", pace)
         table(listed)
-        verdicts[event] = shard_seconds.check([report(tmp_path, f"{event}.xml", cases + [("tests.test_title", str(took))])])
+        return shard_seconds.check([report(tmp_path, "a.xml", cases + [("tests.test_new", str(took))])])
+    return check
+
+
+def test_542s_new_file_fails_its_pull_request_and_passes_main_on_a_slower_runner(new_file_check, capsys):
+    verdicts = {"pull_request": new_file_check("pull_request", 1, 29), "push": new_file_check("push", 1.26, 31)}
     assert verdicts == {"pull_request": 1, "push": 0}, capsys.readouterr().out
 
 
-def test_no_new_file_passes_a_pull_request_and_fails_main_at_half_to_double_the_pace(tmp_path, table, monkeypatch):
-    monkeypatch.setattr(shard_seconds, "unmeasured", lambda seconds: [])
+def test_no_new_file_passes_a_pull_request_and_fails_main_at_half_to_double_the_pace(new_file_check):
     paces = [0.5, 1, 2]
 
     def passes(event, pace, usual, scales):
-        monkeypatch.setenv("GITHUB_EVENT_NAME", event)
-        cases, listed = shard("a", pace)
-        table(listed)
-        took = usual * pace if scales else usual
-        return shard_seconds.check([report(tmp_path, "a.xml", cases + [("tests.test_new", str(took))])]) == 0
+        return new_file_check(event, pace, usual * pace if scales else usual) == 0
 
     for scales in [True, False]:
         through = [(usual, pr) for usual in range(1, 61) for pr in paces if passes("pull_request", pr, usual, scales)]
