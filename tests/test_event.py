@@ -47,12 +47,13 @@ def test_a_page_that_never_holds_still_is_handed_back_untapped(context, clock):
 class Picked(Choices):
     """A Choices page that fades out once an option is tapped: the panel dims at once, the header still reads on the
     next `fade` screenshots, then the page that follows shows: no text, or with `then` that page's brightness on each of
-    its screenshots (the last one repeats), its button lit with Proceed until pressed (a page fading in). pressed: the
-    screenshot of that page (1 its first) each tap on the button came after."""
+    its screenshots (the last one repeats), its button lit until pressed (a page fading in), its label read as
+    `fading` while the page moves and Proceed after. pressed: the screenshot of that page (1 its first) each tap on the
+    button came after."""
 
-    def __init__(self, context, monkeypatch, fade, then=()):
+    def __init__(self, context, monkeypatch, fade, then=(), fading="Proceed"):
         super().__init__(context, monkeypatch, [("Take it.", ""), ("Leave it.", "")], ["Unknown story."])
-        self.fade, self.then, self.shots_since_tap, self.pressed = fade, then, None, []
+        self.fade, self.then, self.fading, self.shots_since_tap, self.pressed = fade, then, fading, None, []
 
     def next_page(self):
         return 0 if self.shots_since_tap is None else max(0, self.shots_since_tap - self.fade)
@@ -81,17 +82,20 @@ class Picked(Choices):
         if self.shots_since_tap is None or self.shots_since_tap <= self.fade:
             return super().read(name, image, override)
         if actions.red_button(image) and tuple((override or {}).get(name, {}).get("roi", ())) == tuple(actions.EVENT_BUTTON_LABEL):
-            return SimpleNamespace(all_results=[SimpleNamespace(text="Proceed", box=(1065, 625, 140, 40))])
+            label = self.fading if self.next_page() <= len(self.then) else "Proceed"
+            return SimpleNamespace(all_results=[SimpleNamespace(text=label, box=(1065, 625, 140, 40))]) if label else None
         return None
 
 
-def test_a_taken_option_presses_the_next_pages_button_once_it_holds_still(context, clock, monkeypatch):
+@pytest.mark.parametrize("fading", ["Proceed", "Proc", ""])
+def test_a_taken_option_presses_the_next_pages_button_once_it_holds_still(context, clock, monkeypatch, fading):
     # #273: the tap returned once the panel changed, which a lit card does before the page goes; with MaaFramework's
     # 200 ms post_delay gone, MirrorHub's next look would read the Choices still up and take an option again.
-    # #557: handed back once the Choices went, the next page's Proceed waited 0.9-1.2 s lit. A press mid-fade is lost.
+    # #557: handed back once the Choices went, the next page's Proceed waited 0.9-1.2 s lit. A press mid-fade is lost,
+    # and a label read in part mid-fade hands nothing back.
     actions.RUN["team"] = {"keyword": "Burn"}
     actions.RUN["settings"] = {"event_overrides": []}
-    page = Picked(context, monkeypatch, fade=3, then=[40, 80, 120])
+    page = Picked(context, monkeypatch, fade=3, then=[40, 80, 120], fading=fading)
     actions.Event().run(context, None)
     assert len(page.tapped) == 1
     assert page.pressed == [4]  # 2 and 3 still fading in
@@ -122,9 +126,9 @@ def test_a_choices_page_that_stays_after_the_tap_is_handed_back_in_time(context,
     assert actions.time.monotonic() - began <= 2 * actions.EVENT_TAKE + 1
 
 
-def presses(context):
-    """[(n, shot_at, at)] for each tap on the lit button of test_actions.event_text's pages: the screenshot n it came
-    after, that screenshot's time and its own."""
+def shot_taps(context):
+    """[((x, y), n, shot_at, at)] for each tap on test_actions.event_text's pages: the screenshot n it came after, that
+    screenshot's time and its own."""
     ctl, taps, last = context.tasker.controller, [], [None, None]
     capture = ctl.post_screencap.return_value.wait.return_value.get
     shoot = capture.side_effect
@@ -135,29 +139,33 @@ def presses(context):
         return image
 
     def click(x, y):
-        if (x, y) == actions.EVENT_BUTTON:
-            taps.append((*last, actions.time.monotonic()))
+        taps.append(((x, y), *last, actions.time.monotonic()))
         return DEFAULT
     capture.side_effect, ctl.post_click.side_effect = screencap, click
     return taps
 
 
+def button_presses(taps):
+    """shot_taps' taps on the lit button, as (n, shot_at, at)."""
+    return [t[1:] for t in taps if t[0] == actions.EVENT_BUTTON]
+
+
 def test_a_button_that_lights_under_the_text_is_pressed_before_another_tap(context, clock):
     # #557: a lit button handed back to MirrorHub was pressed 0.6-0.8 s after the last corner tap.
     test_actions.event_text(context, red_from=3, red_to=5, choices_from=9)
-    taps = presses(context)
+    taps = shot_taps(context)
     actions.Event().run(context, None)
-    assert [n for n, _, _ in taps] == [3]
-    assert all(at - shot_at < actions.EVENT_TAP_EVERY for _, shot_at, at in taps)
+    assert [n for n, _, _ in button_presses(taps)] == [3]
+    assert all(at - shot_at < actions.EVENT_TAP_EVERY for _, shot_at, at in button_presses(taps))
     assert len(test_actions.corner_taps(context)) > 2  # the text taps went on after it, in the same call
 
 
 def test_a_lit_button_that_became_another_is_pressed_too(context, clock):
     # A check's result page: SKIP pressed, Continue lit in its place (spec 02), with no unlit screen between.
     test_actions.event_text(context, red_from=1, red_to=5, skip_to=3, choices_from=9)
-    taps = presses(context)
+    taps = shot_taps(context)
     actions.Event().run(context, None)
-    assert [n for n, _, _ in taps] == [1, 3]
+    assert [n for n, _, _ in button_presses(taps)] == [1, 3]
 
 
 @pytest.mark.parametrize("label_to, misread", [(3, ()), (float("inf"), (3,))])  # read empty, read in part
@@ -168,22 +176,45 @@ def test_a_new_lit_button_whose_label_is_not_read_whole_is_handed_back(context, 
     assert test_actions.button_taps(context) == [] and len(test_actions.corner_taps(context)) == 2
 
 
-def test_a_lit_button_under_a_popup_is_handed_back(context, clock):
-    # MirrorHub answers its global popups before any page; the press can wait for the popup to go.
-    test_actions.event_text(context, red_from=3)
+def connecting(context, monkeypatch, shots):
+    """CONNECTING over event_text's screenshots n in shots, the Event node reading through it (as the title's nodes
+    read under RetryCountdown.png); page_guard as it runs."""
+    monkeypatch.setattr(actions, "page_guard", test_actions.REAL_GUARD)
     inner = context.run_recognition.side_effect
-    context.run_recognition.side_effect = lambda name, image, override=None: \
-        SimpleNamespace(hit=True, box=[0, 0, 1, 1]) if name == "Connecting" and image[0, 0, 0] >= 3 else inner(name, image, override)
+
+    def read(name, image, override=None):
+        if override is None and (name == "Event" or name == "Connecting" and image[0, 0, 0] in shots):
+            return SimpleNamespace(hit=True, box=[0, 0, 1, 1])
+        return inner(name, image, override)
+    context.run_recognition.side_effect = read
+
+
+def test_a_lit_button_under_a_popup_is_pressed_once_the_popup_goes(context, clock, monkeypatch):
+    # #557: after a taken option CONNECTING often shows; handed back, MirrorHub's Connecting node slept its 300 ms.
+    test_actions.event_text(context, red_from=3)
+    connecting(context, monkeypatch, {3, 4})
+    taps = shot_taps(context)
     actions.Event().run(context, None)
-    assert test_actions.button_taps(context) == [] and len(test_actions.corner_taps(context)) == 2
+    (n, _, _), = button_presses(taps)
+    assert n > 4
+    assert not [t for t in taps if t[1] in (3, 4)]  # nothing tapped under it
+
+
+def test_a_lit_button_under_a_popup_that_stays_is_handed_back(context, clock, monkeypatch):
+    # MirrorHub answers its global popups before any page.
+    test_actions.event_text(context, red_from=3)
+    connecting(context, monkeypatch, set(range(3, 100)))
+    taps = shot_taps(context)
+    assert actions.Event().run(context, None) is True
+    assert button_presses(taps) == [] and max(t[1] for t in taps) < 3
 
 
 def test_a_press_of_a_button_lit_under_the_text_that_did_not_take_is_handed_back(context, clock):
     # The button lit on for EVENT_TAKE s after the press: MirrorHub presses it again.
     test_actions.event_text(context, red_from=3)
-    taps = presses(context)
+    taps = shot_taps(context)
     actions.Event().run(context, None)
-    (_, _, pressed), = taps
+    (_, _, pressed), = button_presses(taps)
     assert actions.EVENT_TAKE <= actions.time.monotonic() - pressed < actions.EVENT_TAKE + 2 * actions.EVENT_TAP_EVERY
 
 
