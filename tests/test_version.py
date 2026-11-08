@@ -10,17 +10,17 @@ import pytest
 from daily_child import ROOT, interface
 
 
-def read(path):
+def repo_text(path):
     return (ROOT / path).read_text(encoding="utf-8")
 
 
 def test_every_manifest_names_the_version_mxu_shows():
     shown = interface()["version"].removeprefix("v")
     versions = {
-        "pyproject.toml": tomllib.loads(read("pyproject.toml"))["project"]["version"],
-        "gui/package.json": json.loads(read("gui/package.json"))["version"],
-        "gui/src-tauri/tauri.conf.json": json.loads(read("gui/src-tauri/tauri.conf.json"))["version"],
-        "gui/src-tauri/Cargo.toml": tomllib.loads(read("gui/src-tauri/Cargo.toml"))["package"]["version"],
+        "pyproject.toml": tomllib.loads(repo_text("pyproject.toml"))["project"]["version"],
+        "gui/package.json": json.loads(repo_text("gui/package.json"))["version"],
+        "gui/src-tauri/tauri.conf.json": json.loads(repo_text("gui/src-tauri/tauri.conf.json"))["version"],
+        "gui/src-tauri/Cargo.toml": tomllib.loads(repo_text("gui/src-tauri/Cargo.toml"))["package"]["version"],
     }
     assert {path: v for path, v in versions.items() if v != shown} == {}, f"interface.json shows {shown}"
 
