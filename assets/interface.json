@@ -8,7 +8,7 @@
     "name": "maalc",
     "label": "$maalc",
     "github": "https://github.com/EnderWolf50/maalc",
-    "version": "v0.0.0",
+    "version": "v0.1.0",
     "license": "PolyForm-Noncommercial-1.0.0",
     "controller": [
         {

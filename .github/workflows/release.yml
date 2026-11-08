@@ -5,7 +5,7 @@ on:
     tags: ["v*"]
   # Build (artifact only) when the release pipeline itself changes.
   pull_request:
-    paths: [.github/workflows/release.yml, tools/install.py, agent/main.py, tests/test_release_zip.py]
+    paths: [.github/workflows/release.yml, tools/install.py, agent/main.py, tests/test_release_zip.py, tests/test_version.py]
   workflow_dispatch:
     inputs:
       tag:
@@ -23,6 +23,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
+      - name: Check every manifest and the tag name the version MXU shows
+        run: uv run --frozen pytest tests/test_version.py
       - uses: pnpm/action-setup@v4
         with:
           package_json_file: gui/package.json
