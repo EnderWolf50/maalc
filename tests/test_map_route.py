@@ -28,12 +28,12 @@ NORMAL, HARD = WEIGHTS["normal"], WEIGHTS["hard"]
     ({"ring", "cost", "gift"}, "risky"),
     ({"ring"}, "risky"),  # its Cost coin under the resource bar
     ({"cost", "gift"}, "focused"),
+    ({"gift"}, "focused"),  # #522: its Cost coin under the star panel; no event or shop carries a gift box
     ({"cost"}, "battle"),
     ({"event"}, "event"),
     ({"shop"}, "shop"),
-    # No Cost coin, no boss, ring or shop mark: an event, its "?" missed by the templates. Live 2026-10-18,
+    # No Cost coin, no boss, ring, gift box or shop mark: an event, its "?" missed by the templates. Live 2026-10-18,
     # floor 2 "Lake World" (cyan): a bright "?" next to the bus; MapPanned.png: a dim one two columns out.
-    ({"gift"}, "event"),
     (set(), "event"),
 ])
 def test_node_type(marks, expected):
