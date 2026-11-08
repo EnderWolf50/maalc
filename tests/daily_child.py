@@ -193,7 +193,7 @@ def run_child(path, timeout=600):
             # faulthandler: a crash inside MaaFramework leaves no Python traceback, only the threads' stacks it prints
             run = subprocess.run([sys.executable, "-X", "faulthandler", str(path)], capture_output=True, text=True,
                                  timeout=timeout, cwd=ROOT)
-            assert run.returncode == 0, f"exit {run.returncode}\nstdout ends: {run.stdout[-1500:]}\nstderr ends: {run.stderr[-3000:]}"
+            assert run.returncode == 0, f"exit {run.returncode}\nstdout ends: {run.stdout[-1500:]}\nstderr ends: {run.stderr[-8000:]}"
             out = json.loads(run.stdout.strip().splitlines()[-1])
             assert out["error"] is None, out["error"]
             CHILD_RUNS[path] = out
