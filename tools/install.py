@@ -103,6 +103,13 @@ def mirror_repo(repo: Path, root: Path) -> None:
             shutil.copy2(src, root)
 
 
+def mirror_maafw(wheel_bin: Path, root: Path, fixed_dll: bytes | None) -> None:
+    maafw = root / "maafw"
+    mirror(wheel_bin, maafw)
+    if fixed_dll is not None:
+        (maafw / "MaaFramework.dll").write_bytes(fixed_dll)
+
+
 def bundle_python() -> None:
     python = install / "python"
     fetch_zip(*PYTHON).extractall(python)
@@ -137,6 +144,7 @@ def parse_args(argv=None) -> argparse.Namespace:
 
 if __name__ == "__main__":
     release = parse_args().release  # before anything changes: --help and a typo leave install/ alone
+    fixed_dll = None
     if sys.platform == "win32":
         if version("maafw").lstrip("v") != MAAFW_FIX_VERSION:  # the wheel's metadata says "v5.14.3"
             sys.exit(f"maafw {version('maafw')} installed, MAAFW_FIX is built for {MAAFW_FIX_VERSION}: update or drop it")
@@ -149,9 +157,7 @@ if __name__ == "__main__":
     exe = "./python/python.exe" if release else Path(sys.executable).as_posix()
     interface.write_text(text.replace('"child_exec": "python"', f'"child_exec": "{exe}"'),
                          encoding="utf-8")
-    shutil.copytree(wheel_bin, install / "maafw", dirs_exist_ok=True)
-    if sys.platform == "win32":
-        (install / "maafw" / "MaaFramework.dll").write_bytes(fixed_dll)
+    mirror_maafw(wheel_bin, install, fixed_dll)
     for name in ("LICENSE", "NOTICE.md"):
         shutil.copy2(repo / name, install)
     # The settings GUI finds <root> from its own folder, so it sits next to agent/.
