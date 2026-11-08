@@ -57,6 +57,18 @@ def test_a_cursor_that_picks_another_team_on_the_other_difficulty_names_no_team(
     assert last_line()["team"] is None
 
 
+def test_auto_with_a_target_above_floor_5_begins_hard_so_the_cursors_hard_team_is_known(resumed, monkeypatch):
+    # #509: auto plays a target above 5 hard (run_start.run_difficulty), so only b (hard_only) can have begun the run.
+    path = actions.ROOT / "config" / "settings.json"
+    data = json.loads(path.read_text(encoding="utf-8"))
+    data["run"]["target_floor"] = 10
+    data["teams"][1]["hard_from_floor"] = 1  # a target above 5 needs the whole run HARD
+    path.write_text(json.dumps(data), encoding="utf-8")
+    actions.write_cursor(actions.ROOT, "default", "b")
+    claim(resumed, monkeypatch)
+    assert cursor() == "a" and last_line()["team"] == "b"
+
+
 def test_the_team_the_bot_picks_on_the_team_page_is_known(resumed, monkeypatch):
     # A run paused before its team page: the bot picks the slot itself, here b's TEAMS #2, so the run is b's.
     actions.write_cursor(actions.ROOT, "default", "b")
