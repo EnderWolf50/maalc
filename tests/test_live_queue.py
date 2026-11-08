@@ -32,9 +32,9 @@ def test_dead_tickets_are_dropped_and_live_ones_keep_arrival_order(tmp_path):
     assert not gone.exists()
 
 
-def ticket(qdir: Path, stamp: str, name: str, start: int, first: bool = False) -> Path:
+def ticket(qdir: Path, stamp: str, name: str, start: int, first: bool = False, cmd: str = "hold") -> Path:
     p = qdir / f"{stamp}-{os.getpid()}-{name}.ticket"
-    p.write_text(json.dumps({"cmd": "hold", "start": start, "first": first}))
+    p.write_text(json.dumps({"cmd": cmd, "start": start, "first": first}))
     return p
 
 
@@ -73,8 +73,8 @@ def test_a_first_ticket_still_goes_behind_the_first_ones_when_one_of_them_leaves
 
 
 def test_turn_names_only_the_tickets_ahead_still_there_when_it_says_it_waits(tmp_path):
-    left = ticket(tmp_path, "1000000000000000001", "holder", 111)
-    ahead = ticket(tmp_path, "1000000000000000002", "next", 222)
+    left = ticket(tmp_path, "1000000000000000001", "holder", 111, cmd="holder run")
+    ahead = ticket(tmp_path, "1000000000000000002", "next", 222, cmd="next run")
     said = []
 
     def on_wait(calls):
@@ -82,7 +82,14 @@ def test_turn_names_only_the_tickets_ahead_still_there_when_it_says_it_waits(tmp
         ahead.unlink()
 
     with lq.turn(tmp_path, "me", ["hold"], is_alive=ends_on_check(111, left), sleep=lambda s: None, on_wait=on_wait):
-        assert said == [[(str(os.getpid()), "hold")]]
+        assert said == [[(str(os.getpid()), "next run")]]
+
+
+def test_turn_says_nothing_when_every_ticket_ahead_left_before_it_names_them(tmp_path):
+    left = ticket(tmp_path, "1000000000000000001", "holder", 111)
+    said = []
+    with lq.turn(tmp_path, "me", ["hold"], is_alive=ends_on_check(111, left), sleep=lambda s: None, on_wait=said.append):
+        assert said == []
 
 
 def test_run_waits_for_the_ticket_ahead_then_leaves_no_ticket(tmp_path):

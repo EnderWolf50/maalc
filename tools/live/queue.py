@@ -158,16 +158,19 @@ def place(qdir: Path, name: str, cmd: list[str], first: bool, is_alive=alive) ->
 def turn(qdir: Path, name: str, cmd: list[str], first: bool = False, is_alive=alive, poll: float = 5.0,
          sleep=time.sleep, on_wait=lambda ahead: None):
     """Hold this process's ticket in `qdir` from when it is first until the block ends. When it has to wait, `on_wait`
-    is called once with (pid, command) of each ticket ahead of it."""
+    is called once with (pid, command) of each ticket ahead of it that is still there; when none is, it waits a poll
+    and looks again."""
     qdir.mkdir(parents=True, exist_ok=True)
     me = place(qdir, ticket_name(name), cmd, first, is_alive)
     try:
         said = False
         while (q := tickets(qdir, is_alive))[:1] != [me]:
-            if not said and (ahead := [(p.stem.split("-", 2)[1], t[0]) for p in (q[:q.index(me)] if me in q else q)
-                                       if (t := read(p)) is not None]):
-                on_wait(ahead)
-                said = True
+            if not said:
+                ahead = [(p.stem.split("-", 2)[1], t[0]) for p in (q[:q.index(me)] if me in q else q)
+                         if (t := read(p)) is not None]
+                if ahead:
+                    on_wait(ahead)
+                    said = True
             sleep(poll)
         yield
     finally:
