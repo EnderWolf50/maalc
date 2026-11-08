@@ -430,6 +430,69 @@ def test_a_leftover_claim_dialog_is_cancelled_and_handed_back_once_it_goes(conte
     assert sum(clock) < 1  # was 1.5 s
 
 
+def mirror_task(context, monkeypatch, runs):
+    """A Mirror Dungeon task on a fake game, one run per letter of runs, its floor 1 rewards given up after a forfeit:
+    F one the settings forfeit (3 sinners alive at the first formation where the team needs 4), W one whose first battle
+    wipes with no retries left, and C one that passes floor 5 and claims.
+    The screen reads one text wherever OCR looks, and a tap leads to the next screen. Returns PlanRun's result on the
+    entry page after those runs, the log, the runs started (taps on the entry page) and the runs.jsonl results."""
+    data = json.loads((Path(__file__).parent / "settings_cases.json").read_text(encoding="utf-8"))["valid"]
+    data["run"].update(after_retries="forfeit", wipe_retries=0, weekly_bonus_use="none")
+    data["teams"] = [{**data["teams"][0], "name": "A", "min_alive": 4}]
+    (actions.ROOT / "config").mkdir()
+    (actions.ROOT / "config" / "settings.json").write_text(json.dumps(data), encoding="utf-8")
+    reads = {"formation": "3/3", "defeat": "All participating Sinners have been killed.", "panel": "Dungeon Progress", "quit": "Quit exploring the dungeon?",
+             "reward": "Floor 1 [NORMAL] 0/6", "giveup": "End expedition without claiming rewards?", "cleared": "Floor 5 [NORMAL] 6/6"}
+    leads = {("formation", actions.FORMATION_BACK): "map", ("defeat", actions.DEFEAT_CONFIRM): "map", ("map", actions.GEAR): "panel", ("panel", actions.FORFEIT): "quit",
+             ("quit", actions.FORFEIT_CONFIRM): "reward", ("reward", actions.GIVE_UP): "giveup",
+             ("giveup", actions.DIALOG_CONFIRM): "entry", ("cleared", actions.CLAIM): "entry"}
+    plan, page, started, logged = iter(runs), ["entry"], [], []
+
+    def tap(context, x, y, wait=1.0):
+        if page[0] == "entry":  # Enter: the run's first screen
+            started.append((x, y))
+            page[0] = {"F": "formation", "W": "defeat", "C": "cleared"}[next(plan, "F")]
+        else:
+            page[0] = leads.get((page[0], (x, y)), page[0])
+
+    monkeypatch.setattr(actions, "TASK", {"runs": 0, "done": None})  # a task under way would reach the next test's TaskStart
+    monkeypatch.setattr(actions, "tap", tap)
+    monkeypatch.setattr(actions, "ocr", lambda context, image, roi, only_rec=False: [(reads[page[0]], (0, 0, 9, 9))] if page[0] in reads else [])
+    monkeypatch.setattr(actions, "toggles", lambda context, image: [False] * 3)
+    monkeypatch.setattr(actions, "log", logged.append)
+    actions.TaskStart().run(context, SimpleNamespace(node_name="MirrorDungeon"))
+    for run in runs:
+        actions.TASK["modules"] = 20  # what OpenDrive read on the way to the entry page (#369)
+        actions.PlanRun().run(context, None)
+        if run != "C":
+            (actions.Formation if run == "F" else actions.Wipe)().run(context, None)
+            actions.RouteMap().run(context, None)
+        actions.Settle().run(context, None)
+    actions.TASK["modules"] = 20
+    result = actions.PlanRun().run(context, None)
+    lines = (actions.ROOT / "logs" / "runs.jsonl").read_text(encoding="utf-8").splitlines()
+    return result, logged, len(started), [json.loads(line)["result"] for line in lines]
+
+
+@pytest.mark.parametrize("runs, why", [("FFF", "3 sinners alive, team 'A' needs 4"), ("FWW", "wipe retries used up")])
+def test_a_task_whose_settings_forfeit_every_run_stops_after_3_in_a_row(context, monkeypatch, runs, why):
+    # #560: a forfeited run does not count toward run.runs (as in AALC), so with no cap the bot started runs forever,
+    # each one spending starlight at the run start. The third forfeit in a row, either way, ends the task before a fourth.
+    result, logged, started, lines = mirror_task(context, monkeypatch, runs)
+    assert result is False
+    assert f"stop: 3 runs in a row forfeited ({why})" in logged
+    assert started == 3 and lines == ["giveup"] * 3
+
+
+@pytest.mark.parametrize("runs", ["FF", "FFCFF"])
+def test_a_forfeit_that_is_not_the_third_in_a_row_starts_the_next_run(context, monkeypatch, runs):
+    # #560: two forfeits in a row may be bad luck (#34's acceptance expects up to 4 of 14 runs to use up their wipe
+    # retries), and a claimed run starts the count over.
+    result, logged, started, lines = mirror_task(context, monkeypatch, runs)
+    assert result is True and started == len(runs) + 1
+    assert not any(line.startswith("stop:") for line in logged)
+
+
 # The acceptance's claim page (2026-10-29): Floor 5 [HARD] 7/7, five HARD floors, 3 weekly bonuses left, no run plan.
 CLAIM = "ExplorationRewardHard5.png"
 SEEN = {"all five": {f: True for f in range(1, 6)}, "none": {}, "last two": {4: True, 5: True},

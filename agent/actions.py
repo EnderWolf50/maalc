@@ -52,6 +52,7 @@ RUN = {}
 # spec 01; never saved), why it is done ("done", None while it runs), which ends it a success (TaskDone), its entry
 # node, and "ended" once done() or stop() ended it. Set as a task needs them: "modules" and "gate_backs" (the mirror's new
 # run gate), "settled" (a mirror run claimed or given up: none is under way until the next is planned, #436),
+# "forfeits" (the forfeit reasons of the runs given up since the last claim: too many in a row stop the task, #560),
 # "assemble" (Assemble Modules' reads and confirms), "charge" (Charge Enkephalin's count and its steps), "l3"
 # (restart_game's restarts that went through, #520).
 TASK = {"runs": 0, "done": None}
@@ -1553,7 +1554,8 @@ class PlanRun(CustomAction):
     """Entry page, no run under way: check settings, pick difficulty and team, press Enter (spec 03 sections 1, 2).
 
     Nothing left to do (the run count reached, the weekly bonuses out, no enabled team, none for the difficulty) ends
-    the task a success at the main window (GoHome, then done; live-2 G4); bad settings fail it (returning False).
+    the task a success at the main window (GoHome, then done; live-2 G4); bad settings fail it (returning False), and
+    so do settings that forfeit run after run (the stop procedure, settlement.forfeits_stop).
     """
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
@@ -1572,6 +1574,8 @@ class PlanRun(CustomAction):
         run = settings["run"]
         if settlement.runs_done(TASK["runs"], run["runs"]):
             return finish(context, f"{TASK['runs']} of {run['runs']} runs done")
+        if why := settlement.forfeits_stop(TASK.get("forfeits", [])):
+            return stop(context, why)
         if run["stop_when_weekly_bonus_out"] and weekly == 0:
             return finish(context, "weekly bonuses used up")
         difficulty = run_start.run_difficulty(run["difficulty"], weekly, run["target_floor"])
@@ -3061,7 +3065,7 @@ class Formation(CustomAction):
             if run["settings"]["run"]["after_retries"] == "stop":
                 return stop(context, reason)
             log(f"{reason}: forfeit the run")
-            RUN["forfeit"] = True
+            RUN["forfeit"] = reason
             # MirrorHub must not find the page again and back out twice.
             tap_then(context, *FORMATION_BACK, lambda im: seen(context, im, "Formation") is None, timeout=2)
             return True
@@ -3485,7 +3489,7 @@ class Wipe(CustomAction):
         if choice == "retry":
             RUN["wipes"] = used + 1
         else:
-            RUN["forfeit"] = True  # Accept results lands on the map; RouteMap forfeits from there
+            RUN["forfeit"] = "wipe retries used up"  # Accept results lands on the map; RouteMap forfeits from there
         return True
 
 
@@ -3514,7 +3518,7 @@ def forfeit(context):
             return stuck(f"forfeit: {want!r} did not {'show' if shown else 'go'}")
     # The map can stay up a moment after Quit; RouteMap, back on it with no forfeit flag, would pick a node.
     until(context, lambda im: not Shop.on_map(context, im), timeout=2)
-    RUN.pop("forfeit")
+    RUN["forfeited"] = RUN.pop("forfeit")  # why, for the forfeits in a row Settle counts
     log("forfeited the run")
     return True
 
@@ -5845,6 +5849,8 @@ class Settle(CustomAction):
     @staticmethod
     def record(run, result, bonuses, outcome):
         settlement.append_run(ROOT, run_line(run, outcome, result.hard, settlement.floors_passed(result), bonuses))
-        TASK["runs"] += settlement.counts_as_run(outcome)
+        counts = settlement.counts_as_run(outcome)
+        TASK["runs"] += counts
+        TASK["forfeits"] = [] if counts else [*TASK.get("forfeits", []), run.get("forfeited")]
         TASK["settled"] = True
         STUCK["ladder"] = recovery.Ladder()

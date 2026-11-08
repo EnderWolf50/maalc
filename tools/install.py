@@ -60,6 +60,28 @@ def fixed_framework_dll() -> bytes:
     return fetch_zip(*MAAFW_FIX).read("MaaFramework.dll")
 
 
+def mirror(src: Path, dst: Path) -> None:
+    shutil.copytree(src, dst, dirs_exist_ok=True, ignore=shutil.ignore_patterns("__pycache__"))
+    for path in sorted(dst.rglob("*"), reverse=True):  # a folder after what it holds, so it is empty by then
+        if (src / path.relative_to(dst)).exists():
+            continue
+        if path.is_dir():
+            path.rmdir()
+        else:
+            path.unlink()
+
+
+def mirror_repo(repo: Path, root: Path) -> None:
+    """Copy agent/ and what assets/ holds (interface.json, resource/, locales/) into root. A file the repo deleted
+    leaves those folders too; the rest of root (config/, state/, logs/, maafw/) is left alone."""
+    root.mkdir(parents=True, exist_ok=True)
+    for src in (*(repo / "assets").iterdir(), repo / "agent"):
+        if src.is_dir():
+            mirror(src, root / src.name)
+        else:
+            shutil.copy2(src, root)
+
+
 def bundle_python() -> None:
     python = install / "python"
     fetch_zip(*PYTHON).extractall(python)
@@ -100,9 +122,7 @@ if __name__ == "__main__":
         # Fetched before anything is copied: a failed download or hash leaves install/ as it was,
         # never with the wheel's unpatched DLL.
         fixed_dll = fixed_framework_dll()
-    shutil.copytree(repo / "assets", install, dirs_exist_ok=True)
-    shutil.copytree(repo / "agent", install / "agent", dirs_exist_ok=True,
-                    ignore=shutil.ignore_patterns("__pycache__"))
+    mirror_repo(repo, install)
     interface = install / "interface.json"
     text = interface.read_text(encoding="utf-8")
     exe = "./python/python.exe" if release else Path(sys.executable).as_posix()

@@ -157,7 +157,7 @@ def test_too_few_alive_backs_out_and_hands_back_once_the_page_goes_not_after_2_s
     monkeypatch.setattr(actions, "participants", lambda context, image: (4, 4))
     game = formation_page(context, monkeypatch, {}, {actions.FORMATION_BACK: [(0.5, {"Formation": False}, 20)]})
     assert actions.Formation().run(context, None)
-    assert game.taps == [actions.FORMATION_BACK] and actions.RUN["forfeit"] is True
+    assert game.taps == [actions.FORMATION_BACK] and actions.RUN["forfeit"]
     assert not game.now()["Formation"]  # gone before the hub looks again
     assert sum(clock) < 1.5  # still() 0.2 s, then the page's 0.5 s; was 0.2 + 2 s
 

@@ -256,6 +256,7 @@ Cost 表是 wiki 與簡中客戶端的表，實機 log 的節點面板 Cost 沒�
 - 辨識：DEFEAT 對話框，顯示 `All participating Sinners have been killed.` 與 `Remaining Units: <n>/12`，選項有 `Return to Stage Select`、`Retry Stage`、`Accept results and return to Stage select`。實機：`<n>` 是沒上場的存活人數，不一定是 0；選項要先點選再按 Confirm。（實機：captures/236_finalboss_unknown.png）
 - 按 `Retry Stage` 重打。同一場最多重打 N 次（全域，預設 2）。計數以每場遭遇戰為單位，打贏就歸零。
 - 重打次數用完後依全域選項處理：放棄這局（預設）或停止。停止時保存證據。預設放棄這局，讓無人掛機時一場打不過的戰鬥不會停掉整批；放棄的局若已通過第 5 層，在 Exploration Reward 視窗照常 Claim（第 14 節 `claim_ok`），它和任何領過的局一樣移到佇列最後；沒過第 5 層則放棄獎勵、佇列不動（第 1 節），同一隊下一局再跑。L2／L3 的重開上限不變（[06-recovery.md](06-recovery.md)）。（#95，2026-10-18 定案）
+- 放棄獎勵的局不算進「限制局數」，所以設定讓每局都放棄時（例如存活少於 K 人每局都成立），bot 會一直開新局，每局開局還花星光觀測飾品。連續 3 局放棄獎勵就走停止程序結束任務，log 寫 `stop: 3 runs in a row forfeited (<最後一局放棄的原因>)`；中間領過一局就重新計算。設定逼出來的放棄每局都會發生；重打用完是運氣，#34 的十局驗收預期 14 局最多 4 局，連 2 局有可能、連 3 局就不太可能。AALC 失敗的局同樣不扣次數，但沒有上限，會一直重開（`tasks/base/script_task_scheme.py` 的 `Mirror_task`）。（#560）
 - 只有重打次數用完、而全域選項為「放棄這局」時，才放棄這局：（#16、#19，2026-10-14 定案）
   1. 按 `Accept results`。它只保留陣亡結果，經載入畫面回到地圖，不會結束這局。
   2. 開設定面板（`Dungeon Progress`）→ 按 Forfeit → `Quit exploring the dungeon?` 按 Confirm。
