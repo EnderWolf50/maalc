@@ -18,7 +18,7 @@ TITLE_TAP = (540, 300, 200, 120)
 # screen name -> tests/screens image (None: black, the game is not up)
 SCREENS = {"main": "MainWindow.png", "drive": "Drive.png", "sinners": "SinnersTab.png", "mailbox": "Mailbox.png",
            "settings": "SettingsMenu.png", "entry": "EntryNewRun.png", "title": "Title.png", "black": None,
-           "battle": "LuxBattleTurn.png", "event": "LuxEventStory.png"}
+           "battle": "LuxBattleTurn.png", "event": "LuxEventStory.png", "pressed": "WindowTabPressed.png"}
 # where a tap moves: (screens it works on, its box, the screen it shows)
 TAPS = [(("drive", "sinners"), WINDOW_TAB, "main"), (("mailbox",), MAILBOX_CLOSE, "main"),
         (("settings",), SETTINGS_RETURN, "main"), (("title",), TITLE_TAP, "main")]
@@ -34,9 +34,10 @@ def child():
     class Game(game_class()):
         images = {name: screen(png) if png else np.zeros((720, 1280, 3), np.uint8) for name, png in SCREENS.items()}
 
-        def set(self, start, focus=GAME, lag=0, splash=0):
+        def set(self, start, focus=GAME, lag=0, splash=0, press=0):
             self.screen, self.focus, self.clicks, self.keys, self.starts, self.stops = start, focus, [], [], 0, 0
             self.lag, self.splash, self.pending = lag, splash, None  # lag: screenshots a tap's screen takes to show
+            self.press = press  # screenshots the Drive page shows the tapped Window tab glowing before the main window
 
         def screencap(self):
             if self.pending:
@@ -50,7 +51,9 @@ def child():
 
         def on_tap(self, x, y):
             to = next((to for on, box, to in TAPS if self.screen in on and inside(box, x, y)), self.screen)
-            if self.lag and to != self.screen:
+            if self.press and self.screen == "drive" and to == "main":
+                self.screen, self.pending = "pressed", [to, self.press]
+            elif self.lag and to != self.screen:
                 self.pending = [to, self.lag]
             else:
                 self.screen = to
@@ -112,6 +115,8 @@ def child():
         "settings": ("settings", GAME), "entry": ("entry", GAME), "closed": ("black", "com.android.launcher"),
         # the Window tab's page shows 4 screenshots after the tap; the game shows black for 15 before its title
         "drive_late": ("drive", GAME, 4), "closed_slow": ("black", "com.android.launcher", 0, 15),
+        # the tapped Window tab glows on the Drive page for 2 screenshots before the main window (#496)
+        "drive_pressed": ("drive", GAME, 0, 0, 2),
         # the Mailbox closes 3 screenshots after its Close (#258)
         "mailbox_late": ("mailbox", GAME, 3),
         # these last: they change the model's methods
@@ -199,6 +204,15 @@ def test_go_home_waits_for_the_screens_not_for_fixed_delays():
     # A fixed wait in the agent's own steps. The child runs every node's post_delay at 0 (#480), so HomeGameAway's old
     # 10 s one is test_pipeline.py's to catch.
     assert run_child(__file__)["closed"]["seconds"] < 10
+
+
+def test_go_home_presses_no_back_key_while_the_tapped_window_tab_glows_on_the_old_page():
+    # #496: 13 of 18 live Window tab taps since #375 were followed by a back key and its 2 s. The tapped tab glows on
+    # the Drive page for about 0.37 s before the main window shows (WindowTabPressed.png, a frame of a daily task's
+    # recording); neither tab template reads the glow, so GoHome's next look found nothing it knew.
+    o = run_child(__file__)["drive_pressed"]
+    assert o["succeeded"] and o["keys"] == [] and o["nodes"][-1] == "HomeReached", o
+    assert len(o["clicks"]) == 1 and inside(WINDOW_TAB, *o["clicks"][0]), o
 
 
 def test_go_home_fails_after_a_limited_number_of_back_keys_when_the_game_restarts_are_used_up():
