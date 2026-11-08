@@ -3214,13 +3214,6 @@ def test_a_gift_search_gone_after_a_pick_does_not_press_select(context, guarded,
     assert taps(context) == [(400, 400)] and actions.STUCK["flag"] is None
 
 
-def test_an_exploration_reward_gone_mid_give_up_is_handed_back_not_stuck(context, guarded, monkeypatch):
-    monkeypatch.setattr(actions.settlement, "read_result", lambda text: actions.settlement.Result(5, "normal", 3, 5))  # short of floor 5: give up
-    page_until(context, "ExplorationReward", 1)
-    assert actions.Settle().run(context, argv())
-    assert taps(context) == [actions.GIVE_UP] and actions.STUCK["flag"] is None
-
-
 def test_a_gift_search_gone_under_its_consume_dialog_is_not_confirmed(context, guarded, monkeypatch):
     ctl = context.tasker.controller
     actions.RUN["team"] = {"gift_search": {"enabled": True, "gifts": [{"name": "Phlebotomy Pack"}]}}

@@ -5839,18 +5839,20 @@ class Settle(CustomAction):
     def give_up(self, context, run, result):
         """GiveUpRewards, then `End expedition without claiming rewards?` Confirm; no module is spent.
 
-        The run is recorded once the window goes: one that stays would bring Settle back to give it up again and write
-        a second line for it (#566). The dialog is confirmed again while it stays, as Claim's is.
+        A run that earned nothing (`Floor 1 [NORMAL] 0/6`) gets no dialog: the window closes on GiveUpRewards, a run
+        given up all the same (live 2026-11-08, #586). The run is recorded once the window goes: one that stays would
+        bring Settle back to give it up again and write a second line for it (#566). The dialog is confirmed again while
+        it stays, as Claim's is.
         """
+        def closed(im):
+            return not reward_up(context, im)
         for _ in range(3):
             page_guard(context, "ExplorationReward")  # also under its give-up dialog (maatools: GiveUpDialog.png)
-            image = tap_shown(context, *GIVE_UP, lambda im: claim_asks(context, im) == "giveup", timeout=1.5)
+            image = tap_shown(context, *GIVE_UP, lambda im: claim_asks(context, im) == "giveup" or closed(im), timeout=1.5)
             if image is not None:
                 break
         else:
             return stuck("GiveUpRewards brought up no `End expedition without claiming rewards?`")
-        def closed(im):
-            return not reward_up(context, im)
         for _ in range(5):
             if claim_asks(context, image) == "giveup":
                 page_guard(context, "ExplorationReward", image=image)

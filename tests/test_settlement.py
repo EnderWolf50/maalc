@@ -235,6 +235,7 @@ def settle(context, monkeypatch, tmp_path, window, target, floors_hard=None):
     """
     monkeypatch.setattr(actions, "ROOT", tmp_path)
     monkeypatch.setattr(actions, "address", lambda context: "emulator")
+    monkeypatch.setattr(actions, "TASK", {"runs": 0, "done": None})  # a run given up here is no later test's forfeit in a row
     team = {"id": "a", "name": "A", "enabled": True}
     actions.RUN.update(settings={"run": {"weekly_bonus_use": "hard", "weekly_bonus_amount": "all", "target_floor": target}, "teams": [team]},
                        team=team, planned=True, floors_hard=floors_hard or {})
@@ -320,6 +321,7 @@ def timed_settle(context, monkeypatch, tmp_path, window, use, answers, reads=Non
     import test_actions
     monkeypatch.setattr(actions, "ROOT", tmp_path)
     monkeypatch.setattr(actions, "address", lambda context: "emulator")
+    monkeypatch.setattr(actions, "TASK", {"runs": 0, "done": None})  # a run given up here is no later test's forfeit in a row
     team = {"id": "a", "name": "A", "enabled": True}
     actions.RUN.update(settings={"run": {"weekly_bonus_use": use, "weekly_bonus_amount": "one", "target_floor": 5}, "teams": [team]},
                        team=team, planned=True, floors_hard={f: True for f in range(1, 6)})
@@ -392,6 +394,15 @@ def test_give_up_confirms_once_its_dialog_stops_and_ends_once_the_window_goes(co
     assert done and game.taps == [actions.GIVE_UP, actions.DIALOG_CONFIRM]
     assert [line["result"] for line in lines] == ["giveup"]
     assert sum(clock) < 2  # was 3.5 s
+
+
+def test_a_run_that_earned_nothing_is_given_up_when_its_window_closes_with_no_dialog(context, clock, monkeypatch, tmp_path):
+    # #586, live 2026-11-08: Floor 1 0/6, GiveUpRewards closed the window with no dialog. Settle, waiting for the dialog,
+    # found the window gone and handed it back: no runs.jsonl line, no forfeit counted, and the bot opened a new run.
+    done, game, lines = timed_settle(context, monkeypatch, tmp_path, "Floor 1 [NORMAL] 0/6", "none", {
+        actions.GIVE_UP: [window_gone(0.5)]})
+    assert done and game.taps == [actions.GIVE_UP] and actions.STUCK["flag"] is None
+    assert [line["result"] for line in lines] == ["giveup"]
 
 
 def test_a_give_up_confirm_the_game_lost_is_tapped_again_and_the_run_recorded_once(context, clock, monkeypatch, tmp_path):
