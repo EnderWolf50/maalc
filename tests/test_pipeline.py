@@ -249,10 +249,8 @@ def test_mirror_entry_paused_outwaits_the_chains():
 DAILY = ["navigation.json", "luxcavation.json", "assemble_modules.json", "pass_missions.json", "mail.json",
          "charge_enkephalin.json"]
 # A tap on a template's tab or button, then the node's own recognition missing: the page it was on is left.
-DAILY_LEFT = ["HomeWindowTab", "NavMainTabs", "NavLuxcavation", "LuxExpTab", "LuxThreadTab", "PassBanner",
+DAILY_LEFT = ["NavMainTabs", "NavLuxcavation", "LuxExpTab", "LuxThreadTab", "PassBanner",
               "PassMissionsTab", "PassDailyDone", "PassWeeklyDone"]
-# The title's tap waits for CONNECTING instead: the title stays under it, and its glitch hides it for about 1 s (#495).
-DAILY_TAPS = [*DAILY_LEFT, "NavTitle"]
 # Kept, each with its reason in the pipeline: nothing to wait on is known (a back key, a swipe, a claim's window).
 DAILY_KEPT = ["HomeBack", "NavDrive", "LuxThreadSwipe", "PassDailyClaim", "PassWeeklyClaim", "PassSeasonalClaim",
               "PassSeasonalEndClaim", "PassSeasonalSwipe", "MailClaimAll", "AssemblePanel", "ChargePanel"]
@@ -263,10 +261,14 @@ def test_the_daily_pages_wait_for_screens_not_for_delays():
     nodes = {}
     for f in DAILY:
         nodes |= load_nodes(f)
-    for name in DAILY_TAPS:
+    for name in DAILY_LEFT:
         node = nodes[name]
-        assert node["custom_action"] == "TapUntil" and node.get("post_delay") == 0, name
-        assert name not in DAILY_LEFT or node["custom_action_param"]["left"] is True, name
+        assert node["custom_action"] == "TapUntil" and node["custom_action_param"]["left"] is True, name
+        assert node.get("post_delay") == 0, name
+    # The Window tab waits for the main window instead (#496, test_go_home.py), the title's tap for CONNECTING (#495,
+    # test_title.py).
+    for name in ("HomeWindowTab", "NavTitle"):
+        assert nodes[name]["custom_action"] == "TapUntil" and nodes[name].get("post_delay") == 0, name
     for name in ("NavTitle", "LuxExpTab", "LuxThreadTab", "PassBanner", "PassDailyDone", "PassWeeklyDone"):
         assert "target" in nodes[name]["custom_action_param"], name  # the old Click's target; the others tap the box found
     # The envelope opens the box: its title, as MailEmpty and MailClaimAll read it.

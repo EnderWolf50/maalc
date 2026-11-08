@@ -107,10 +107,12 @@
         "template": "Navigation/HomeReached.png",
         "threshold": 0.9
     },
-    // The Window tab unlit (Drive.png, SinnersTab.png): tapped until it reads unlit no more (TapUntil, the page left),
-    // not a fixed 2 s (#362). At most 10 taps (max_hit, as the watchdog's NAV_TAP_LIMIT): a tab that shows its tap but
-    // never opens its page would be tapped for ever, each JumpBack giving GoHome a new timeout; GoHome then times out
-    // into GoHomeLost's L3.
+    // The Window tab unlit (Drive.png, SinnersTab.png): tapped until the main window shows (TapUntil), not a fixed 2 s
+    // (#362). Not until the tab reads unlit no more: the tapped tab glows on the old page first, 0.23 and 0.37 s on the
+    // 2 taps of a recording (WindowTabPressed.png is a frame of it), which neither Window template reads, and GoHome met
+    // it with the back key after 13 of 18 logged taps (#496). At most 10 taps (max_hit, as the watchdog's
+    // NAV_TAP_LIMIT): a tab that shows its tap but never opens its page would be tapped for ever, each JumpBack giving
+    // GoHome a new timeout; GoHome then times out into GoHomeLost's L3.
     "HomeWindowTab": {
         "recognition": "TemplateMatch",
         "roi": [770, 598, 110, 84],
@@ -119,7 +121,7 @@
         "action": "Custom",
         "custom_action": "TapUntil",
         "custom_action_param": {
-            "left": true
+            "until": "HomeReached"
         },
         "post_delay": 0,
         "max_hit": 10
@@ -188,7 +190,7 @@
         "custom_action": "TapUntil",
         "custom_action_param": {
             "target": [540, 300, 200, 120],
-            "next": "Connecting",
+            "until": "Connecting",
             "lively": "NavTitle"
         },
         "post_delay": 0

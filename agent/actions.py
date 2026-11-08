@@ -1508,12 +1508,14 @@ class Halt(CustomAction):
 class TapUntil(CustomAction):
     """A Click node that waits for the page that follows instead of a post_delay (#115).
 
-    Param: {"target": [x, y, w, h], "next": {"roi": [...], "expected": regex}, a node's name (its hit) or a list of them
-    (any), "gone": {"roi": [...], "expected": regex}, "left": true, "timeout": s (default 3), "lively": a node of
-    recovery.LIVELY}; any of "next", "gone" and "left", the first to hold ends it. The page it leaves may still read like
-    itself for a moment; MirrorHub would act on it twice.
+    Param: {"target": [x, y, w, h], "next": {"roi": [...], "expected": regex} or a list of them (any),
+    "gone": {"roi": [...], "expected": regex}, "left": true, "until": node, "timeout": s (default 3), "lively": a node of
+    recovery.LIVELY}; any of "next", "gone", "left" and "until", the first to hold ends it. The page it leaves may still
+    read like itself for a moment; MirrorHub would act on it twice.
     gone: the node's own roi and expected (#254), for a page whose next one is not known or reads the same (ClaimPopup).
     left: the node's own recognition misses, for a node that is no OCR (a template: the daily pages' tabs and buttons).
+    until: that node's recognition hits, for a next page a template knows. The Window tab glows on the old page before
+    the main window comes, and that glow misses the tab's own template (#496).
     lively: the screen whose still wait is a dead tap (tap_then), HomeReached by default.
     No target: the node's box.
     """
@@ -1522,12 +1524,13 @@ class TapUntil(CustomAction):
         p = json.loads(argv.custom_action_param)
         x, y, w, h = p.get("target", argv.box)
         nxt = p.get("next", [])
-        pages = [(lambda im, n=n: seen(context, im, n) is not None) if isinstance(n, str) else shows(context, n["roi"], n["expected"])
-                 for n in (nxt if isinstance(nxt, list) else [nxt])]
+        pages = [shows(context, n["roi"], n["expected"]) for n in (nxt if isinstance(nxt, list) else [nxt])]
         if "gone" in p:
             pages.append(gone(context, p["gone"], screen(context)))
         if p.get("left"):
             pages.append(lambda im: seen(context, im, argv.node_name) is None)
+        if "until" in p:
+            pages.append(lambda im: seen(context, im, p["until"]) is not None)
         began = time.monotonic()
         image = tap_then(context, x + w // 2, y + h // 2, lambda im: any(page(im) for page in pages), timeout=p.get("timeout", 3),
                          lively=p.get("lively", "HomeReached"))
