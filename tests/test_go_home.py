@@ -25,7 +25,10 @@ TAPS = [(("drive", "sinners"), WINDOW_TAB, "main"), (("mailbox",), MAILBOX_CLOSE
 
 
 def child():
-    """Run GoHome from each start; print one JSON line {scenario: {succeeded, nodes, clicks, keys, starts}}."""
+    """Run GoHome from each start, and a daily task's own steps that run it (go_home, #514); print one JSON line
+    {scenario: {succeeded, nodes, clicks, keys, starts ...}}."""
+    from maa.custom_action import CustomAction
+
     actions, resource = load()
 
     class Game(game_class()):
@@ -75,6 +78,35 @@ def child():
     actions.foreground = lambda context: actions.recovery.focused_package(game.shell("dumpsys window", 0))
     tasker = bind(resource, game)
     out = {"error": None}
+    calls = {"go_home": actions.go_home, "finish": lambda context: actions.finish(context, "nothing left")}
+    returned = {}
+
+    class RunsGoHome(CustomAction):
+        def run(self, context, argv):
+            returned["value"] = calls[json.loads(argv.custom_action_param)](context)
+            return True
+
+    resource.register_custom_action("RunsGoHome", RunsGoHome())
+    actions.RUN["lux"] = {"name": "Thread Luxcavation", "mode": "daily"}
+    actions.ROOT.joinpath("logs").mkdir(exist_ok=True)
+    for scenario, (start, entry, call) in {
+        "go_home_main": ("main", "RunsGoHome", "go_home"), "go_home_battle": ("battle", "RunsGoHome", "go_home"),
+        "finish_battle": ("battle", "RunsGoHome", "finish"), "lux_home_battle": ("battle", "ThreadHome", None),
+    }.items():
+        game.set(start)
+        returned.clear()
+        actions.LOG.clear()
+        stops = len(list(actions.ROOT.joinpath("logs").rglob("agent.log")))
+        override = {"RunsGoHome": {"action": "Custom", "custom_action": "RunsGoHome", "custom_action_param": call},
+                    "ThreadHome": {"next": []}}
+        job = tasker.post_task(entry, override).wait()
+        while not (detail := job.get()).status.done:  # #461: post_stop's queue clear ends wait() before the task does
+            time.sleep(0.01)
+        out[scenario] = {**result(detail, game, actions), "returned": returned.get("value"), "log": list(actions.LOG),
+                         "stopped": len(list(actions.ROOT.joinpath("logs").rglob("agent.log"))) - stops,
+                         "halted": actions.STUCK["halted"]}
+        actions.STUCK["halted"] = None
+    actions.RUN.clear()
     for scenario, (start, focus, *model) in {
         "drive": ("drive", GAME), "sinners": ("sinners", GAME), "main": ("main", GAME), "mailbox": ("mailbox", GAME),
         "settings": ("settings", GAME), "entry": ("entry", GAME), "closed": ("black", "com.android.launcher"),
@@ -195,6 +227,25 @@ def test_go_home_in_a_battle_ends_the_task_list_without_a_back_key():
     # prints the whole outcome (a string message: pytest cuts a dict short).
     assert o["succeeded"] is True and o["nodes"][-1] == "HomeInBattle" and o["keys"] == [] and o["clicks"] == [], json.dumps(o)
     assert o["stopped"] == 1 and o["halted"].startswith("HomeInBattle: "), json.dumps(o)
+
+
+def test_a_task_step_that_runs_go_home_hears_whether_the_main_window_was_reached():
+    # #514: MaaFramework ends a sub-task that stopped its tasker as succeeded, so GoHome halted in a battle read as home.
+    o = run_child(__file__)["go_home_main"]
+    assert o["returned"] is True and o["keys"] == [] and o["clicks"] == [] and o["stopped"] == 0, json.dumps(o)
+    o = run_child(__file__)["go_home_battle"]
+    assert o["returned"] is False and o["halted"].startswith("HomeInBattle: ") and o["stopped"] == 1, json.dumps(o)
+
+
+def test_finish_on_a_battle_records_no_done_after_the_stop():
+    o = run_child(__file__)["finish_battle"]
+    assert o["returned"] is False and o["done"] is None and o["stopped"] == 1, json.dumps(o)
+
+
+def test_lux_home_on_a_battle_stops_once_and_reads_no_modules():
+    o = run_child(__file__)["lux_home_battle"]
+    assert o["nodes"] == ["ThreadHome"] and o["stopped"] == 1 and o["halted"].startswith("HomeInBattle: "), json.dumps(o)
+    assert not any("Modules" in line for line in o["log"]), json.dumps(o)
 
 
 def test_go_home_on_an_event_page_presses_back_then_restarts_the_game():
