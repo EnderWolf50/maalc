@@ -20,7 +20,7 @@
     // open; a page with no bar gets the back key, at most 5 times (HomeBack's max_hit). The popups are HubText's
     // (accuracy, not memory: spec 01, MirrorHub, #157), the game away from the front starts it, and 60 s of nothing
     // known (the back keys used up too) restarts the game and goes again (HomeLost, #362), the stop procedure once the
-    // restarts are used up. So does a game frozen on the title (HomeFrozen, #506).
+    // restarts are used up. So does a game frozen on the title (HomeFrozen, #506) or under CONNECTING (HomeConnecting, #540).
     "GoHome": {
         "timeout": 60000,
         "rate_limit": 300,
@@ -29,7 +29,7 @@
         ],
         "next": [
             "[JumpBack]HomeFrozen",
-            "[JumpBack]Connecting",
+            "[JumpBack]HomeConnecting",
             "[JumpBack]HelpPager",
             "[JumpBack]HomeText",
             "HomeReached",
@@ -64,6 +64,42 @@
         "custom_recognition": "StuckWaiting",
         "action": "Custom",
         "custom_action": "HomeFrozen"
+    },
+    // CONNECTING: waited on until it goes (HomeConnected), up to 150 s in a row as MirrorHub's watchdog (recovery.WAIT_CAP),
+    // longer than the ~130 s after which the game shows its own server error (#84). Still up then, the game is frozen under
+    // it: restart it. A JumpBack to GoHome at each look gave GoHome a new 60 s timeout, for ever (#540).
+    "HomeConnecting": {
+        "recognition": "Or",
+        "any_of": [
+            "Connecting"
+        ],
+        "pre_delay": 0,
+        "post_delay": 0,
+        "rate_limit": 300,
+        "timeout": 150000,
+        "next": [
+            "HomeConnected"
+        ],
+        "on_error": [
+            "HomeConnectingLost"
+        ]
+    },
+    "HomeConnected": {
+        "recognition": "Or",
+        "any_of": [
+            "Connecting"
+        ],
+        "inverse": true,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "HomeConnectingLost": {
+        "action": "Custom",
+        "custom_action": "HomeLost",
+        "custom_action_param": "CONNECTING still up after 150 s",
+        "next": [
+            "GoHome"
+        ]
     },
     "GoHomeLost": {
         "action": "Custom",

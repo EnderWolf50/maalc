@@ -13,7 +13,7 @@ import time
 
 import numpy as np
 from daily_child import GAME, bind, game_class, inside, live_frame, load, result, run_child, screen
-from recovery import DEAD_TAPS, L3_FAILED_IN_A_ROW
+from recovery import DEAD_TAPS, L3_FAILED_IN_A_ROW, WAIT_CAP
 
 TITLE_TAP = (540, 300, 200, 120)
 GLITCH = 1.3  # s: the recording's longest glitch
@@ -121,7 +121,11 @@ def child():
         began = time.monotonic()
         timer = threading.Timer(LIMIT, tasker.post_stop)
         timer.start()
-        override = {"HomeConnecting": {"timeout": CAP * 1000}} if scenario == "frozen_connecting" else {}
+        # The model's CONNECTING lasts answer_for screenshots, not seconds: HomeConnecting's 300 ms between looks would only
+        # stretch each scenario, as the node delays did (#480).
+        override = {"HomeConnecting": {"rate_limit": 0}}
+        if scenario == "frozen_connecting":
+            override["HomeConnecting"]["timeout"] = CAP * 1000
         job = tasker.post_task("GoHome", override).wait()
         while not (detail := job.get()).status.done:  # #461: post_stop's queue clear ends wait() before the task does
             time.sleep(0.01)
@@ -202,7 +206,17 @@ def test_a_title_frozen_under_connecting_restarts_the_game_once_the_wait_is_up_a
     assert o["succeeded"] and o["nodes"][-1] == "HomeReached" and o["stopped"] == 0, json.dumps(o)
     assert (o["stops"], o["starts"]) == (1, 1) and o["title_taps"] == 1, json.dumps(o)
     assert CAP <= o["seconds"] < LIMIT, json.dumps(o)
-    assert [line for line in o["log"] if "recovery L3" in line and "1 of 2 this task" in line], json.dumps(o)
+    assert [line for line in o["log"] if "recovery L3: CONNECTING" in line and "1 of 2 this task" in line], json.dumps(o)
+
+
+def test_go_home_waits_on_connecting_as_long_as_mirror_hubs_watchdog():
+    # #540: MirrorHub's cap (recovery.WAIT_CAP), past the ~130 s after which the game shows its own server error on a
+    # CONNECTING that never answers (#84).
+    from test_pipeline import load_nodes
+
+    nodes = load_nodes("navigation.json")
+    assert nodes["HomeConnecting"]["timeout"] == WAIT_CAP["Connecting"] * 1000 > 130 * 1000
+    assert f"after {WAIT_CAP['Connecting']} s" in nodes["HomeConnectingLost"]["custom_action_param"]
 
 
 def test_a_frozen_title_with_the_restarts_used_up_ends_through_the_stop_procedure():
