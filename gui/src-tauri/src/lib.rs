@@ -49,9 +49,15 @@ fn load_theme_packs() -> Result<String, String> {
     fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))
 }
 
+/// Error text of a save refused because the file is no longer `expected` (api.ts CHANGED).
+const CHANGED: &str = "settings.json changed on disk";
+
 /// Write a temp file next to settings.json, then rename over it, so a crash never leaves half a file.
+/// expected: the text the GUI last read or wrote, None for no file then. When the file holds anything else now, another
+/// writer changed it since (the Agent moves a team to the end of the queue after a claim, #501): nothing is written, for
+/// the GUI to read it again.
 #[tauri::command]
-fn save_settings(text: String) -> Result<(), String> {
+fn save_settings(text: String, expected: Option<String>) -> Result<(), String> {
     let path = settings_path()?;
     let dir = path.parent().unwrap();
     fs::create_dir_all(dir).map_err(|e| e.to_string())?;
@@ -61,6 +67,14 @@ fn save_settings(text: String) -> Result<(), String> {
         f.write_all(text.as_bytes())?;
         f.sync_all()?;
         drop(f);
+        let current = match fs::read_to_string(&path) {
+            Ok(current) => Some(current),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
+            Err(e) => return Err(e),
+        };
+        if current != expected {
+            return Err(std::io::Error::other(CHANGED));
+        }
         fs::rename(&tmp, &path) // replaces the old file on Windows too
     })();
     if written.is_err() {

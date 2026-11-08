@@ -536,3 +536,23 @@ export function parseSettings(text: string): { data: Settings; migrated: boolean
   };
   return { data, migrated, dropped, unknown, trials };
 }
+
+/** The ids `after` moved to its end, in order, when that explains every difference from `before` (the Agent moves a
+ * team to the end of the queue after a claim, #501); the fewest such moves; null when no moves do (a team deleted). */
+export function movedToEnd(before: string[], after: string[]): string[] | null {
+  for (let k = 0; k <= after.length; k++) {
+    const tail = after.slice(after.length - k);
+    const rest = before.filter((id) => !tail.includes(id));
+    if (rest.length === after.length - k && rest.every((id, i) => id === after[i])) return tail;
+  }
+  return null;
+}
+
+/** The editor's settings once another writer changed the file from `base` to `disk` under it (#501): with no unsaved
+ * edit, the file; otherwise the edits stay, and the teams the file moved to the end of the queue go there in them too. */
+export function rebase(base: Settings, draft: Settings, disk: Settings): Settings {
+  if (JSON.stringify(draft) === JSON.stringify(base)) return disk;
+  const moved = movedToEnd(base.teams.map((t) => t.id), disk.teams.map((t) => t.id)) ?? [];
+  const inDraft = (id: string) => draft.teams.filter((t) => t.id === id);
+  return { ...draft, teams: [...draft.teams.filter((t) => !moved.includes(t.id)), ...moved.flatMap(inDraft)] };
+}

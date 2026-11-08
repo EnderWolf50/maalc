@@ -1,8 +1,8 @@
 // Shell: load <root>/config/settings.json, the tabs, and check-then-save (spec 04 section 2).
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import * as api from "./api";
 import { TEXT, type Key } from "./i18n";
-import { LUX_MODES, newSettings, parseSettings, runEnum, type Luxcavation, type LuxMode, type Settings } from "./model";
+import { LUX_MODES, newSettings, parseSettings, rebase, runEnum, type Luxcavation, type LuxMode, type Settings } from "./model";
 import { DeploymentTab, StarlightTab, ThemePackTab } from "./Plans";
 import { GiftListsTab } from "./GiftLists";
 import { TeamsTab } from "./Teams";
@@ -31,17 +31,61 @@ export default function App() {
   const [tab, setTab] = useState<(typeof TABS)[number][0]>("teams");
   const [giftList, setGiftList] = useState("default"); // what the gift list tab shows; the teams tab can point it at a list
   const [checked, setChecked] = useState(false); // marks show after the first save attempt
-  const [status, setStatus] = useState("");
+  const [status, setStatus] = useState(""); // a TEXT key, or text as it is (an error, the migration warnings)
+  // The file's text as last read or written: other text there is another writer's, the Agent's after a claim (#501).
+  const disk = useRef<string | null>(null);
+  const latest = useRef({ s, savedText });
+  latest.current = { s, savedText };
+
+  /** Take what another writer changed in the file, under the unsaved edits (rebase); the settings the editor holds now. */
+  const sync = async () => {
+    const text = await api.loadSettings();
+    const { s: draft, savedText: base } = latest.current; // set in one render: no draft is a load not done
+    if (text === disk.current || !draft) return draft;
+    let data: Settings | undefined;
+    try {
+      data = text === null ? undefined : parseSettings(text).data;
+    } catch {
+      return draft; // half an edit by hand: not taken as read, so a save is refused until it parses
+    }
+    disk.current = text;
+    if (!data) {
+      setStatus("diskGone");
+      return draft;
+    }
+    const next = rebase(base ? JSON.parse(base) : newSettings(), draft, data); // no base: a new file, not saved yet
+    latest.current = { s: next, savedText: toText(data) }; // now, not at the render: a save's sync may run before it
+    setS(next);
+    setSavedText(toText(data));
+    setStatus("diskChanged");
+    return next;
+  };
+
+  useEffect(() => {
+    const poll = () => { sync().catch(() => {}); };
+    const timer = setInterval(poll, 2000);
+    window.addEventListener("focus", poll);
+    return () => { clearInterval(timer); window.removeEventListener("focus", poll); };
+  }, []);
 
   useEffect(() => {
     api.rootDir().then(setRoot, (e) => setLoadError(String(e)));
     api.loadSettings().then(async (text) => {
       if (text === null) return setS(newSettings());
+      disk.current = text; // read, even when it does not parse: New file then writes over it
       try {
         const { data, migrated, dropped, unknown, trials } = parseSettings(text);
+        const migratedText = toText(data);
         setS(data);
-        if (migrated && !validate(data).length) await api.saveSettings(toText(data));
-        setSavedText(toText(data)); // dirty = content changed, not formatting
+        setSavedText(migratedText); // dirty = content changed, not formatting; before the write-back, which a poll may meet
+        if (migrated && !validate(data).length) {
+          try {
+            await api.saveSettings(migratedText, text);
+            disk.current = migratedText;
+          } catch (e) {
+            if (!api.isChanged(e)) throw e; // the Agent wrote first: the next poll reads its file
+          }
+        }
         const warn = (key: Key, n: number) => (n ? [TEXT[data.language][key].replace("{n}", String(n))] : []);
         setStatus([...warn("migrate.dropped", dropped), ...warn("migrate.unknown", unknown), ...warn("migrate.trials", trials)].join(" "));
       } catch (e) {
@@ -59,7 +103,7 @@ export default function App() {
       <main className="load-error">
         <p>{t("loadError")}</p>
         <pre>{loadError}</pre>
-        <button type="button" onClick={() => { setLoadError(""); setS(newSettings()); }}>{t("newFile")}</button>
+        <button type="button" onClick={() => { setLoadError(""); setS(newSettings()); setSavedText(""); }}>{t("newFile")}</button>
       </main>
     );
   }
@@ -74,14 +118,28 @@ export default function App() {
     tv: (field, v) => TEXT[lang][`${field}.${v}` as Key] ?? v,
   };
   const dirty = toText(s) !== savedText;
+  const said = Object.prototype.hasOwnProperty.call(TEXT[lang], status) ? t(status as Key) : status;
+  const note = status === "saved" ? "" : said; // shown beside "unsaved" too: a refused save, the file read again
 
   const save = async () => {
     setChecked(true);
-    if (problems.length) return setStatus("");
     try {
-      await api.saveSettings(toText(s));
-      setSavedText(toText(s));
-      setStatus(t("saved"));
+      for (let tries = 1; ; tries++) {
+        const current = (await sync())!; // what another writer changed since goes under the edits first (#501)
+        if (validate(current).length) return setStatus("");
+        const written = toText(current);
+        try {
+          await api.saveSettings(written, disk.current);
+        } catch (e) {
+          if (!api.isChanged(e)) throw e;
+          if (tries < 3) continue; // it changed between that read and this write
+          return setStatus("saveConflict");
+        }
+        disk.current = written;
+        latest.current = { s: current, savedText: written };
+        setSavedText(written);
+        return setStatus("saved");
+      }
     } catch (e) {
       setStatus(String(e));
     }
@@ -99,7 +157,7 @@ export default function App() {
             <option value="en_us">English</option>
           </select>
         </label>
-        <span className="status">{dirty ? t("unsaved") : status}</span>
+        <span className="status">{dirty ? [t("unsaved"), note].filter(Boolean).join(" ") : said}</span>
         <button type="button" className="primary" onClick={save}>{t("save")}</button>
       </header>
       {checked && problems.length > 0 && (

@@ -1459,8 +1459,7 @@ def test_plan_run_waits_for_the_enter_dialog_after_pressing_enter(context, clock
     team = {"id": 1, "name": "t", "game_team": 1, "guard_turns": 3, "hard_from_floor": 1, "gift_list": "default", "enabled": True}
     run = {"runs": 0, "stop_when_weekly_bonus_out": False, "difficulty": "normal", "target_floor": 5}
     monkeypatch.setattr(actions, "load_settings", lambda root, need_team=False: {"run": run, "teams": [team], "gift_lists": []})
-    monkeypatch.setattr(actions, "pick_team", lambda teams, cursor, difficulty: team)
-    monkeypatch.setattr(actions, "read_cursor", lambda root, address: None)
+    monkeypatch.setattr(actions, "pick_team", lambda teams, difficulty: team)
     monkeypatch.setattr(actions.settlement, "runs_done", lambda done, limit: False)
     monkeypatch.setattr(actions.recovery, "read_runs", lambda root: [])
     monkeypatch.setattr(actions.recovery, "floor_limit", lambda runs, team, target: 1800)
@@ -1478,8 +1477,7 @@ def test_a_planned_run_of_a_team_that_never_switches_to_hard(context, clock, mon
     team = {"id": 1, "name": "t", "game_team": 1, "guard_turns": 0, "hard_from_floor": None, "gift_list": "default", "enabled": True}
     run = {"runs": None, "stop_when_weekly_bonus_out": False, "difficulty": setting, "target_floor": 5}
     monkeypatch.setattr(actions, "load_settings", lambda root, need_team=False: {"run": run, "teams": [team], "gift_lists": []})
-    monkeypatch.setattr(actions, "pick_team", lambda teams, cursor, difficulty: team)
-    monkeypatch.setattr(actions, "read_cursor", lambda root, address: None)
+    monkeypatch.setattr(actions, "pick_team", lambda teams, difficulty: team)
     monkeypatch.setattr(actions.run_start, "run_difficulty", lambda setting, weekly, target: "hard")
     monkeypatch.setattr(actions.recovery, "read_runs", lambda root: [])
     monkeypatch.setattr(actions.recovery, "floor_limit", lambda runs, team, target: 1800)
@@ -1623,7 +1621,6 @@ def test_select_team_makes_a_plan_for_an_abandoned_empty_run_instead_of_backing_
     # backing out to the entry page, which only offers Resume, looped every 8 s.
     team = {"id": 1, "name": "t", "game_team": 3, "guard_turns": 0, "gift_list": "default", "enabled": True, "usage": "any"}
     monkeypatch.setattr(actions, "load_settings", lambda root, need_team=False: {"run": {"difficulty": "normal", "target_floor": 5}, "teams": [team], "gift_lists": []})
-    monkeypatch.setattr(actions, "read_cursor", lambda root, address: None)
     actions.RUN.clear()
     team_picker(context, "TEAMS #3", lambda clicks, looks: "recommended level" if clicks else None)
     assert actions.SelectTeam().run(context, argv())
@@ -1758,7 +1755,6 @@ def test_the_default_list_makes_burn_the_main_keyword():
 def test_a_planned_run_plays_the_main_keyword_of_the_teams_list(context, clock, monkeypatch):
     settings = {**listed("Bleed"), "run": {"runs": None, "stop_when_weekly_bonus_out": False, "difficulty": "normal", "target_floor": 5}}
     monkeypatch.setattr(actions, "load_settings", lambda root, need_team=False: settings)
-    monkeypatch.setattr(actions, "read_cursor", lambda root, address: None)
     monkeypatch.setattr(actions.recovery, "read_runs", lambda root: [])
     monkeypatch.setattr(actions.recovery, "floor_limit", lambda runs, team, target: 1800)
     monkeypatch.setattr(actions.settlement, "runs_done", lambda done, limit: False)
@@ -2038,8 +2034,7 @@ def test_a_new_run_starts_with_no_packs_taken(context, clock, monkeypatch):
     team = {"id": 1, "name": "t", "game_team": 1, "guard_turns": 3, "hard_from_floor": 1, "gift_list": "default", "enabled": True}
     run = {"runs": 0, "stop_when_weekly_bonus_out": False, "difficulty": "normal", "target_floor": 5}
     monkeypatch.setattr(actions, "load_settings", lambda root, need_team=False: {"run": run, "teams": [team], "gift_lists": []})
-    monkeypatch.setattr(actions, "pick_team", lambda teams, cursor, difficulty: team)
-    monkeypatch.setattr(actions, "read_cursor", lambda root, address: None)
+    monkeypatch.setattr(actions, "pick_team", lambda teams, difficulty: team)
     monkeypatch.setattr(actions.settlement, "runs_done", lambda done, limit: False)
     monkeypatch.setattr(actions.recovery, "read_runs", lambda root: [])
     monkeypatch.setattr(actions.recovery, "floor_limit", lambda runs, team, target: 1800)
@@ -2748,10 +2743,12 @@ def test_a_cost_that_stays_unread_is_none(context):
 
 
 def test_a_forfeited_run_gives_up_its_rewards_and_the_same_team_runs_next(context, monkeypatch, tmp_path):
-    # #95: after_retries "forfeit" ends the run at Exploration Reward short of floor 5; the rotation
-    # cursor does not move on, so the team that lost runs the next run again.
+    # #95: after_retries "forfeit" ends the run at Exploration Reward short of floor 5; the team keeps its place
+    # at the head of the queue, so the team that lost runs the next run again.
     monkeypatch.setattr(actions, "ROOT", tmp_path)
     teams = [{"id": "a", "name": "A", "enabled": True}, {"id": "b", "name": "B", "enabled": True}]
+    (tmp_path / "config").mkdir()
+    (tmp_path / "config" / "settings.json").write_text(json.dumps({"teams": teams}), encoding="utf-8")
     actions.RUN.update(settings={"run": {}, "teams": teams}, team=teams[0], planned=True, difficulty="hard")
     taps = []
 
@@ -2766,7 +2763,7 @@ def test_a_forfeited_run_gives_up_its_rewards_and_the_same_team_runs_next(contex
 
     actions.Settle().run(context, None)
     assert taps == [actions.GIVE_UP, actions.DIALOG_CONFIRM]
-    assert not (tmp_path / "state").exists()  # no cursor written
+    assert [t["id"] for t in json.loads((tmp_path / "config" / "settings.json").read_text(encoding="utf-8"))["teams"]] == ["a", "b"]
     line = json.loads((tmp_path / "logs" / "runs.jsonl").read_text(encoding="utf-8"))
     assert line["result"] == "giveup" and line["team"] == "a"
 

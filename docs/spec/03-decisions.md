@@ -2,7 +2,7 @@
 
 本章列出 Agent 在鏡牢中要做的每一種判斷：從畫面、使用者設定與遊戲資料檔讀進什麼，依什麼規則決定，預設值、上限與後備做法。流程如何在畫面之間切換見 [01-architecture.md](01-architecture.md) 與 [02-screens.md](02-screens.md)；設定的完整清單見 [04-settings.md](04-settings.md)；資料檔的格式見 [05-game-data.md](05-game-data.md)；卡住後的 L1/L2/L3 處理見 [06-recovery.md](06-recovery.md)。
 
-所有判斷都以當下畫面為準。Agent 狀態檔只存輪替游標，其他數值每次都從畫面重新讀取（[ADR 0003](../adr/0003-screen-is-truth-state-file-only-rotation-cursor.md)）。需要判斷的選擇寫成 Agent 的 custom action 或 custom recognition，畫面之間的流程留在 `MirrorHub`（[ADR 0002](../adr/0002-pipeline-hub-and-agent-decisions.md)）。
+所有判斷都以當下畫面為準。Agent 沒有狀態檔：隊伍輪到誰就是設定裡隊伍清單的順序（[ADR 0011](../adr/0011-team-list-order-is-the-queue.md)），其他數值每次都從畫面重新讀取（[ADR 0003](../adr/0003-screen-is-truth-state-file-only-rotation-cursor.md)）。需要判斷的選擇寫成 Agent 的 custom action 或 custom recognition，畫面之間的流程留在 `MirrorHub`（[ADR 0002](../adr/0002-pipeline-hub-and-agent-decisions.md)）。
 
 本章用「每隊」標示設定檔裡每支隊伍的欄位，用「全域」標示設定檔的執行選項（`run`），用「資料檔」標示遊戲資料（[ADR 0005](../adr/0005-game-data-files-separate-from-user-settings.md)、[ADR 0006](../adr/0006-settings-gui-writes-one-settings-file.md)）。
 
@@ -12,21 +12,20 @@
 
 | 來源 | 內容 | 層級 |
 |---|---|---|
-| 設定 | 隊伍是否啟用、遊戲內隊伍欄位（`TEAMS #1`–`#40`）、用途（都可／只跑困難／只跑普通） | 每隊 |
+| 設定 | 隊伍佇列（隊伍清單的順序）、隊伍是否啟用、遊戲內隊伍欄位（`TEAMS #1`–`#40`）、用途（都可／只跑困難／只跑普通） | 每隊 |
 | 設定 | 難度（困難／普通／自動）、限制局數、每週獎勵用完就停 | 全域 |
-| 狀態檔 | 輪替游標 | Agent 狀態檔 |
 | 畫面 | 入口頁的 Weekly Bonuses 剩餘次數；選隊頁與戰前編隊頁的 `TEAMS #N` | — |
 
 **規則**
 
-- 輪替：啟用的隊伍依設定裡隊伍清單的順序各跑一局，循環下去。（#9、#19）
-- 開新局前先決定這一局的難度（見第 2 節），再從輪替游標開始往後找第一支用途符合的隊伍。用途不符的隊伍跳過，但游標不因跳過而前進。（#9）
-- 繞完一圈都沒有用途符合的隊伍，就以成功結束任務：沒有事可做不是錯誤，client 的清單繼續下一個任務。（#9、#364）
+- 輪替：設定裡隊伍清單的順序就是隊伍佇列。每一局由佇列裡第一支用途符合的隊伍出戰，領到結算獎勵後移到佇列最後，所以啟用的隊伍依序各跑一局、循環下去。GUI 拖曳排序就決定下一局輪到誰。（#9、#19、#501，[ADR 0011](../adr/0011-team-list-order-is-the-queue.md)）
+- 開新局前先決定這一局的難度（見第 2 節），再從佇列第一支往後找第一支用途符合的隊伍。用途不符的隊伍跳過，留在原位。（#9、#501）
+- 整個佇列都沒有用途符合的隊伍，就以成功結束任務：沒有事可做不是錯誤，client 的清單繼續下一個任務。（#9、#364）
 - 在選隊頁選出該隊的遊戲內隊伍欄位，確認畫面上的標題是 `TEAMS #N` 後再按確認。標題已經是 `TEAMS #N` 就不點也不捲；清單上看得到 `#N` 的列就直接點；都沒有，就從清單目前的位置往 `#N` 的方向捲（清單開啟時停在上次捲到的地方）；一列都讀不到時，才先拖回最上面（讀到的列號不再變為止，不比列的 y：OCR 框在靜止時也會差 1–2 px）。只認編號，不認名稱：隊伍名稱是玩家自己取的。（#8、#9、#226；實機 2026-10-27：`#3` 一開始就在畫面上，舊做法仍拖了 10 下）
-- 輪替游標只在 bot 親眼看到某隊完成一局並領到結算獎勵後才前進，前進到該隊的下一支啟用隊伍。手動跑的局不影響游標；手動開、交給 bot 接續的局見本節最後一項。（#8，[ADR 0003](../adr/0003-screen-is-truth-state-file-only-rotation-cursor.md)）
-- 放棄的局（全滅後重打用完而放棄，或沒過第 5 層而放棄獎勵）沒有領獎，游標不前進：下一局仍是同一支隊伍。（#95，2026-10-18 定案）
-- 選隊頁顯示的隊伍和游標不同時，以畫面為準，照畫面上那支隊伍的設定繼續這一局。（#8）
-- 接續的局（Agent 中途重啟、Resume 暫停中的局、領上一局沒領的獎勵）記憶體裡沒有計畫。選隊之後沒有畫面顯示隊伍：設定面板、Resume 對話框、入口頁、地圖、戰前編隊頁與結算頁都沒有 `TEAMS #N`（`tests/screens/` 的這些畫面，#436）。所以隊伍從輪替游標推回：游標只在領獎時前進，bot 開的局用的就是開局時從游標選出的隊伍。設定的難度是 `hard` 或 `normal`、是 `auto` 而目標層數大於 5（這時一定開在困難，[04](04-settings.md) 第 5 節），或兩種難度從游標選到同一支隊伍時，就是那一支：結算後游標照常前進，`runs.jsonl` 寫這支隊伍，log 記 `no run plan in memory: team '<隊名>' from the rotation cursor`。難度是 `auto` 而兩種難度選到不同隊伍時（例如游標指著只打困難的隊伍），不知道這局開在哪個難度：照舊先用困難選到的隊伍打（log 記 `assumed`），游標不前進、`runs.jsonl` 的隊伍寫 `null`。使用者手動開、暫停後交給 bot 接續的局，畫面分辨不出來，也當成游標那支隊伍的局；開局到接續之間在設定裡改了隊伍的順序、啟用、用途或難度，推回的也可能不是這局實際用的隊伍。選隊前暫停的空局 Resume 後直接進選隊頁，記憶體裡沒有計畫：不退回入口頁（入口頁只會再給 Resume，形成迴圈），而是和重啟後一樣依設定與輪替游標選隊、當作這局的計畫；選隊頁的標題讀到 bot 選的 `TEAMS #N`，這局的隊伍就確定了。（#8、#19、#128、#436）
+- 只有 bot 親眼看到某隊完成一局並領到結算獎勵後，Agent 才把它移到佇列最後：這時重新讀設定檔，只改 `teams` 的順序再寫回，GUI 這局中途存的修改照留（[ADR 0011](../adr/0011-team-list-order-is-the-queue.md)）。手動跑的局不影響佇列；手動開、交給 bot 接續的局見本節最後一項。（#8，[ADR 0003](../adr/0003-screen-is-truth-state-file-only-rotation-cursor.md)）
+- 放棄的局（全滅後重打用完而放棄，或沒過第 5 層而放棄獎勵）沒有領獎，佇列不動：下一局仍是同一支隊伍。停止的局也一樣。（#95，2026-10-18 定案）
+- 選隊頁顯示的隊伍和佇列選出的不同時，以畫面為準，照畫面上那支隊伍的設定繼續這一局。（#8）
+- 接續的局（Agent 中途重啟、Resume 暫停中的局、領上一局沒領的獎勵）記憶體裡沒有計畫。選隊之後沒有畫面顯示隊伍：設定面板、Resume 對話框、入口頁、地圖、戰前編隊頁與結算頁都沒有 `TEAMS #N`（`tests/screens/` 的這些畫面，#436）。所以隊伍從隊伍佇列推回：佇列只在領獎時變動，bot 開的局用的就是開局時佇列裡第一支符合的隊伍。設定的難度是 `hard` 或 `normal`、是 `auto` 而目標層數大於 5（這時一定開在困難，[04](04-settings.md) 第 5 節），或兩種難度從佇列選到同一支隊伍時，就是那一支：結算後它照常移到佇列最後，`runs.jsonl` 寫這支隊伍，log 記 `no run plan in memory: team '<隊名>' from the team queue`。難度是 `auto` 而兩種難度選到不同隊伍時（例如佇列第一支只打困難），不知道這局開在哪個難度：照舊先用困難選到的隊伍打（log 記 `assumed`），佇列不動、`runs.jsonl` 的隊伍寫 `null`。使用者手動開、暫停後交給 bot 接續的局，畫面分辨不出來，也當成佇列那支隊伍的局；開局到接續之間在設定裡改了隊伍的順序、啟用、用途或難度，推回的也可能不是這局實際用的隊伍。選隊前暫停的空局 Resume 後直接進選隊頁，記憶體裡沒有計畫：不退回入口頁（入口頁只會再給 Resume，形成迴圈），而是和重啟後一樣依設定與佇列選隊、當作這局的計畫；選隊頁的標題讀到 bot 選的 `TEAMS #N`，這局的隊伍就確定了。（#8、#19、#128、#436）
 - 選隊確認後出現「隊伍平均等級低於建議等級」警告時，按 Confirm 繼續。（#8、#19）
 - 任務開始時，Agent 必須檢查設定，例如同一個出戰順序裡同一位罪人被選兩次、隊伍引用的方案不存在，有錯就報錯停止；沒有任何啟用的隊伍不算錯（鏡牢開局時才看，沒有就成功結束，#364）。完整清單見 [04-settings.md](04-settings.md#2-寫入與檢查)。（#9、#19，[ADR 0006](../adr/0006-settings-gui-writes-one-settings-file.md)）
 
@@ -256,7 +255,7 @@ Cost 表是 wiki 與簡中客戶端的表，實機 log 的節點面板 Cost 沒�
 
 - 辨識：DEFEAT 對話框，顯示 `All participating Sinners have been killed.` 與 `Remaining Units: <n>/12`，選項有 `Return to Stage Select`、`Retry Stage`、`Accept results and return to Stage select`。實機：`<n>` 是沒上場的存活人數，不一定是 0；選項要先點選再按 Confirm。（實機：captures/236_finalboss_unknown.png）
 - 按 `Retry Stage` 重打。同一場最多重打 N 次（全域，預設 2）。計數以每場遭遇戰為單位，打贏就歸零。
-- 重打次數用完後依全域選項處理：放棄這局（預設）或停止。停止時保存證據。預設放棄這局，讓無人掛機時一場打不過的戰鬥不會停掉整批；放棄的局若已通過第 5 層，在 Exploration Reward 視窗照常 Claim（第 14 節 `claim_ok`），輪替游標和任何領過的局一樣前進；沒過第 5 層則放棄獎勵、游標不前進（第 1 節），同一隊下一局再跑。L2／L3 的重開上限不變（[06-recovery.md](06-recovery.md)）。（#95，2026-10-18 定案）
+- 重打次數用完後依全域選項處理：放棄這局（預設）或停止。停止時保存證據。預設放棄這局，讓無人掛機時一場打不過的戰鬥不會停掉整批；放棄的局若已通過第 5 層，在 Exploration Reward 視窗照常 Claim（第 14 節 `claim_ok`），它和任何領過的局一樣移到佇列最後；沒過第 5 層則放棄獎勵、佇列不動（第 1 節），同一隊下一局再跑。L2／L3 的重開上限不變（[06-recovery.md](06-recovery.md)）。（#95，2026-10-18 定案）
 - 只有重打次數用完、而全域選項為「放棄這局」時，才放棄這局：（#16、#19，2026-10-14 定案）
   1. 按 `Accept results`。它只保留陣亡結果，經載入畫面回到地圖，不會結束這局。
   2. 開設定面板（`Dungeon Progress`）→ 按 Forfeit → `Quit exploring the dungeon?` 按 Confirm。
@@ -578,14 +577,14 @@ Cost 表是 wiki 與簡中客戶端的表，實機 log 的節點面板 Cost 沒�
 - 不是 `claim_ok` 時：按 GiveUpRewards 放棄獎勵，不花腦啡肽模組。（#19）
 - 實機：視窗的三個按鈕是 `GiveUpRewards`、`To Window`、`Claim`，Claim 上標示花 5 個腦啡肽模組（`-5`）；bot 不按 To Window。視窗只顯示最後到達的那一層（例如 `Floor 5 [HARD] 5/6`，表示第 5 層沒打完，沒過第 5 層）。（實機：captures/252_exploration_reward_window.png、captures/245_after_defeat_confirm.png）
 - 這條規則適用於：一般結算；入口頁顯示 `Unclaimed Rewards` 時補領上一局沒領的獎勵；每週重置後過期的局；全滅後重打次數用完、全域選項為「放棄這局」時從設定面板 Forfeit 之後的結算（第 9 節）。（#8、#16、#19）
-- 看到 Claim 完成後，輪替游標才前進（第 1 節）。（#8）
+- 看到 Claim 完成後，這局的隊伍才移到佇列最後（第 1 節）。（#8、#501）
 - 實作（#30）：
   - 一局算不算困難局，看視窗上最後一層的標記：`[HARD]`、`[INFINITY]`、`[EXTREME]` 都算困難，`[NORMAL]` 算普通，讀不到標記時（層數與進度有讀到）難度未知，`runs.jsonl` 的 `difficulty` 在 1–5 層寫 `null`，且不切每週獎勵開關：任何一層選了 HARD 就不能切回普通，所以最後一層就代表整局（第 2 節）。
   - 一次用 2 次以上的每週獎勵，要每一層都是 HARD（遊戲內說明頁，`captures/29_help_page_02.png`）。所以「一次全用」只在打到的每一層都是 HARD 時才切多個開關，其他情況最多切 1 個。每層的難度取自主題包頁在該層顯示的難度（`RUN["floors_hard"]`，`set_difficulty` 記下），不看開局規劃：開局先跳出過期上一局的對話框而沒有規劃時，每一層都 HARD 一樣算（#382）；沒看到前幾層的局（接續的局，沒看到第 1 層）：最後一層是 HARD，而且領獎視窗左邊 Dungeon Progress 的第 1 層標記讀到 `[HARD]`（`FIRST_FLOOR`，實機讀到 `[HARD] Floor1`）就算全 HARD（HARD 不會切回普通），log 寫 `floors before N were not seen: the window's floor 1 tile reads …`；讀不到才算不是全 HARD。過期上一局的對話框（`The previous session has expired. Please claim your rewards.`）實際怎麼結算沒有實機證據（unverified）：只知道 2026-10-29 驗收時按下後就進了新局，log 沒有領取或放棄的行。按下時 log 記一行 `popup: '<對話框文字>': pressed '<按鈕文字>'`（按鈕文字取自 `PopupButton` 辨識已讀到的結果），之後若出現 `exploration reward: Floor …` 與 `claimed with N weekly bonus(es)` 或 `floor 5 not passed: gave up the rewards`，就是這局怎麼結算的；沒有這幾行就是沒有結算。
   - 遊戲會預設切好開關（實機：普通局也預設第 1 個 ON），所以每個開關都要從畫面讀成 ON 或 OFF，把 ON 的數量調到剛好等於要用的數量，再讀一次確認；讀不出來或調不到就停止，不按 Claim。
   - 按 Claim 後會跳確認對話框：開關全 OFF、還有剩餘次數時是「不使用每週獎勵確認」，有開關 ON 時是「使用每週獎勵確認」（`Spend your 「Weekly Bonuses」 to claim the bonus rewards?`）。只按和切好、讀回的開關相符的那一個的 Confirm，所以只有 bot 自己決定用每週獎勵時才會花掉它。用了每週獎勵時，之後依序跳 `Rewards Acquired` 與 `Pass Level Up` 彈窗，各按 Confirm 關掉（hub 的 `ClaimPopup`）。（#65，2026-10-16 實機）
   - 按 Claim 後視窗沒有關掉，而且不是上面相符的確認對話框，就停止、不再點任何東西（模組不夠時的畫面還沒見過，這樣不會誤點購買）。這局在 `runs.jsonl` 記為「停止」。
-  - 輪替游標只在知道這局的隊伍時才前進：bot 自己開局或在選隊頁選的隊伍，或接續的局從游標推回的隊伍；推不回隊伍的局不前進（第 1 節，#436）。
+  - 只有知道這局的隊伍時才移動佇列：bot 自己開局或在選隊頁選的隊伍，或接續的局從佇列推回的隊伍；推不回隊伍的局不動（第 1 節，#436）。
   - 「限制局數」只算這個任務開始後領到獎勵（`claim_ok`）的局；放棄獎勵（沒過第 5 層、放棄這局）與停止的局不算。達到時在入口頁停止，不開新局。（2026-10-16 定案）
 - **開新局前的腦啡肽模組門檻**（#369）：入口頁左下沒有腦啡肽模組面板（`EntryNewRun.png` 等），所以導航經過 Drive 頁時讀：`NavDrive` 是自訂動作 `OpenDrive`，點 Mirror Dungeons 之前用 `actions.module_count` 讀一次，存在任務狀態 `TASK["modules"]`（讀不到存 None）。`PlanRun` 開新局前用 `settlement.new_run_gate` 判斷：這趟讀到 m < 5（Claim 的費用，`settlement.CLAIM_COST`）→ log 腦啡肽模組數、`done()` 成功結束；m ≥ 5 或 None → 開局，讀不到不擋。這趟沒經過 Drive（例如上一局 Claim 後直接停在入口頁）→ 按返回鍵（最多 `BACKS` 次），由 hub 的導航重新走過 Drive 讀；返回鍵沒有把人帶到有面板的頁就不查、照常開局。值只用一次：`PlanRun` 取走，每層 `PickThemePack` 也清掉（Claim 會扣 5，舊值不能沿用）。接手暫停中的局不走這裡。返回鍵從入口頁會到哪一頁還沒有截圖，待實機。
 
@@ -605,7 +604,7 @@ Cost 表是 wiki 與簡中客戶端的表，實機 log 的節點面板 Cost 沒�
 - **打贏才算一次**：戰後的結算頁（`LuxResult`，[01](01-architecture.md) 經驗本）右上的 `Victory`／`Defeat` 記下這場的結果，按 Confirm 回到 EXP（或 Thread）分頁；`LuxEnter` 照 `decide` 走：贏了而未滿這次要打的場數（`RUN["lux"]["fights"]`）就再點 Enter，滿了就 `go_home()` 後 `done()`。每場只記一次（結算頁會停留好幾次 hub）。戰場上的 VICTORY 字樣不再當訊號（live-1 F2）。
 - **戰敗**：不算次數，不扣腦啡肽模組；`retries` 內重打同一關（再點 Enter），用完就停止程序（任務失敗，清單繼續）。`retries` 是每一場各自的次數，打贏就重算（同鏡牢的全滅重打）：`retries` 1、這次要打 3 場時，每一場都可以輸一次再打。`lose` 的訊號是結算頁的紅字 `Defeat`（實機 2026-10-27：手動 Give Up，沒有確認框；戰敗不扣腦啡肽模組、不吃紐本的 Daily Bonuses，verified）。回到分頁卻沒看到結算頁，也走停止程序，不算一次。（live-1 F2、F3）
 - **連戰**（`luxcavation.<任務>.consecutive`，預設開，#375）：`luxcavation.batch` 給下一場的 N = min(10, 這次要打的場數 − 這次已贏)（關：1）；`decide` 的 `size` 是這場的 N：贏了 `won` 加 N，`won` + N ≥ 這次要打的場數結束。戰敗不算，重打用同一個 N。`LuxEnter` 的設定與讀回見 [01](01-architecture.md) 經驗本，N 讀不到或調不到就停止程序，不照錯的次數開戰。
-- 計數存在記憶體（`RUN["lux"]`：`mode` 模式、`target` 目標（自訂次數是 `count`，每日模式是 `DAILY` 的當天場數）、`today` 讀到的今天已贏、`fights` 這次要打的場數，`plan` 之前是 None），每個任務開始時由 `TaskStart` 清掉（ADR 0003：狀態檔不存這個；今天已做的次數每次從畫面讀，不記憶）。
+- 計數存在記憶體（`RUN["lux"]`：`mode` 模式、`target` 目標（自訂次數是 `count`，每日模式是 `DAILY` 的當天場數）、`today` 讀到的今天已贏、`fights` 這次要打的場數，`plan` 之前是 None），每個任務開始時由 `TaskStart` 清掉（ADR 0003：不存檔；今天已做的次數每次從畫面讀，不記憶）。
 
 ## 16. 狂氣換腦啡肽的價格核對
 
