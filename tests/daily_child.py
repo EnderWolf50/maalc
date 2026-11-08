@@ -8,6 +8,7 @@ import json
 import subprocess
 import sys
 import tempfile
+import time
 import traceback
 import types
 from pathlib import Path
@@ -145,6 +146,20 @@ def bind(resource, game):
     tasker = Tasker()
     tasker.bind(resource, game)
     return tasker
+
+
+def run_task(tasker, scenario, entry, override=None):
+    """Run entry on tasker as a child's scenario: its TaskDetail, once the task is done and the tasker has stopped.
+
+    A stop (post_stop: an account-level stop, a test's time limit) queues MaaFramework's own stop task, which runs on
+    after the task ends; until it has, MaaFramework ignores a post (Tasker::check_stop: task id 0, no detail), and
+    Tasker.stopping is that same condition. A post MaaFramework did not take fails here, naming the scenario."""
+    job = tasker.post_task(entry, override)
+    if job.wait().get() is None:
+        raise AssertionError(f"{scenario}: MaaFramework did not take the post of {entry} (task id {job.job_id})")
+    while not (detail := job.get()).status.done or tasker.stopping:  # #461: post_stop's queue clear ends wait() early
+        time.sleep(0.01)
+    return detail
 
 
 def result(detail, game, actions):

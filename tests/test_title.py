@@ -12,7 +12,7 @@ import threading
 import time
 
 import numpy as np
-from daily_child import GAME, bind, game_class, inside, live_frame, load, result, run_child, screen
+from daily_child import GAME, bind, game_class, inside, live_frame, load, result, run_child, run_task, screen
 from recovery import DEAD_TAPS, L3_FAILED_IN_A_ROW
 
 TITLE_TAP = (540, 300, 200, 120)
@@ -127,9 +127,7 @@ def child():
         override = {"HomeConnecting": {"rate_limit": 0}}
         if scenario.startswith("frozen_connecting"):
             override["HomeConnecting"]["timeout"] = CONNECTING_WAIT * 1000
-        job = tasker.post_task("GoHome", override).wait()
-        while not (detail := job.get()).status.done:  # #461: post_stop's queue clear ends wait() before the task does
-            time.sleep(0.01)
+        detail = run_task(tasker, scenario, "GoHome", override)
         timer.cancel()
         out[scenario] = {**result(detail, game, actions), "starts": game.starts, "stops": game.stops,
                          "seconds": time.monotonic() - began, "in_a_row": actions.STUCK["restarts"].in_a_row,

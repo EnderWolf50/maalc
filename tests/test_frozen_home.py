@@ -6,10 +6,9 @@ the game is restarted; and on a live main window, whose picture keeps moving, th
 import json
 import math
 import threading
-import time
 
 import numpy as np
-from daily_child import GAME, bind, game_class, inside, live_frame, load, result, run_child, screen
+from daily_child import GAME, bind, game_class, inside, live_frame, load, result, run_child, run_task, screen
 from recovery import L3_PER_TASK
 from test_pass_task import BANNER, MISSIONS_TAB, SCREENS as PASS_SCREENS, SEASONAL_TAB, WEEKLY_TAB
 
@@ -109,9 +108,7 @@ def child():
         stopped = len(list(actions.ROOT.joinpath("logs").rglob("agent.log")))
         timer = threading.Timer(LIMIT, tasker.post_stop)
         timer.start()
-        job = tasker.post_task("ClaimPassMissions", {"PassHub": {"timeout": HUB_TIMEOUT}}).wait()
-        while not (detail := job.get()).status.done:  # #461: post_stop's queue clear ends wait() before the task does
-            time.sleep(0.01)
+        detail = run_task(tasker, scenario, "ClaimPassMissions", {"PassHub": {"timeout": HUB_TIMEOUT}})
         timer.cancel()
         out[scenario] = {**result(detail, game, actions), "starts": game.starts, "stops": game.stops,
                          "tapped_frozen": game.tapped_frozen, "in_a_row": actions.STUCK["restarts"].in_a_row,

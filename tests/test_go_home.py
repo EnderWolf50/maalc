@@ -8,9 +8,9 @@ import json
 import time
 
 import numpy as np
-from daily_child import GAME, bind, game_class, inside, interface as interface_json, load, result, run_child, screen
+from daily_child import GAME, bind, game_class, inside, interface as interface_json, load, result, run_child, run_task, screen
 
-HOLD = 0.5  # s: how long the child holds the stop task an account-level stop leaves behind its task
+HOLD = 0.5  # s: how long the child holds the stop task that an account-level stop queues behind its task
 WINDOW_TAB = (790, 608, 70, 64)  # the bottom tab bar's Window tab
 MAILBOX_CLOSE = (690, 530, 175, 45)
 SETTINGS_RETURN = (500, 370, 280, 45)
@@ -118,9 +118,7 @@ def child():
         stops = len(list(actions.ROOT.joinpath("logs").rglob("agent.log")))
         override = {"RunsGoHome": {"action": "Custom", "custom_action": "RunsGoHome", "custom_action_param": call},
                     "ThreadHome": {"next": []}}
-        job = tasker.post_task(entry, override).wait()
-        while not (detail := job.get()).status.done:  # #461: post_stop's queue clear ends wait() before the task does
-            time.sleep(0.01)
+        detail = run_task(tasker, scenario, entry, override)
         out[scenario] = {**result(detail, game, actions), "returned": returned.get("value"), "log": list(actions.LOG),
                          "stopped": len(list(actions.ROOT.joinpath("logs").rglob("agent.log"))) - stops,
                          "halted": actions.STUCK["halted"]}
@@ -171,9 +169,7 @@ def child():
         for _ in range(in_a_row):
             actions.STUCK["restarts"].attempt(None)
         began = time.monotonic()
-        job = tasker.post_task("GoHome", override).wait()
-        while not (detail := job.get()).status.done:  # #461: post_stop's queue clear ends wait() before the task does
-            time.sleep(0.01)
+        detail = run_task(tasker, scenario, "GoHome", override)
         out[scenario] = {**result(detail, game, actions), "starts": game.starts,
                          "seconds": time.monotonic() - began,
                          "stops": game.stops, "in_a_row": actions.STUCK["restarts"].in_a_row,
