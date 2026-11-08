@@ -161,6 +161,24 @@ def test_a_green_masked_template_scores_its_word_over_any_page(tmp_path):
     assert (vs["Connecting"][:5] < 0.5).all() and (vs["Connecting"][5:] >= 0.9).all(), vs["Connecting"]
 
 
+def test_kept_gets_every_frame_of_a_window_scored_or_not(tmp_path):
+    # tools/tap_waits.py: a tap's fade is read frame by frame, while only fps frames a second are scored for the fit.
+    import cv2
+
+    path = tmp_path / "rec.avi"
+    out = cv2.VideoWriter(str(path), cv2.VideoWriter_fourcc(*"MJPG"), 30, (640, 360))
+    for i in range(60):
+        out.write(np.full((360, 640, 3), i * 4, np.uint8))
+    out.release()
+    got = []
+    tpl = va.RESOURCE / "image/Screen/Connecting.png"
+    vt, _, _ = va.video_scores(path, {"Connecting": (tpl, (995, 45, 250, 60), 0.8)}, started=100.0, fps=10,
+                               keep=[(100.5, 101.0)], kept=lambda t, im: got.append((round(t - 100, 3), im.shape)))
+    assert len(vt) == 20  # 10 a second of the 2 s clip
+    assert [t for t, _ in got] == [round(i / 30, 3) for i in range(15, 31)]  # every frame 0.5 s to 1.0 s in
+    assert {s for _, s in got} == {(720, 1280, 3)}  # at the bot's size, as the scored frames
+
+
 def test_unaligned_frames_end_an_interval():
     lt = np.array([0.0, 0.1, np.nan, 0.3, 0.4])
     rows = va.intervals(lt, np.full(5, 0.9), 0.6, hub=[], hits=[])
