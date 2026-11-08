@@ -299,9 +299,9 @@ def test_land_refuses_and_merges_nothing(kw, text, capsys):
     assert not fake.ran("gh", "pr", "merge")
 
 
-def views(*mergeable):
-    """`gh pr view 7` answers: one PR read per `mergeable` value, then the merge commit read after the merge."""
-    return [(0, json.dumps(info(mergeable=m))) for m in mergeable] + [(0, json.dumps({"mergeCommit": {"oid": MERGE}}))]
+def pr_reads(*reads):
+    """`gh pr view 7` answers: one PR read per dict of `info` fields, then the merge commit read after the merge."""
+    return [(0, json.dumps(info(**kw))) for kw in reads] + [(0, json.dumps({"mergeCommit": {"oid": MERGE}}))]
 
 
 def reads_before_merge(fake):
@@ -310,7 +310,8 @@ def reads_before_merge(fake):
 
 
 def test_land_reads_a_pr_again_while_github_reports_mergeable_unknown_then_merges():
-    fake = land_fake(**{"gh pr view 7": views("UNKNOWN", "UNKNOWN", "MERGEABLE")})
+    unknown = {"mergeable": "UNKNOWN"}
+    fake = land_fake(**{"gh pr view 7": pr_reads(unknown, unknown, {"mergeable": "MERGEABLE"})})
     assert land(fake) == 0
     assert len(reads_before_merge(fake)) == 3
 
@@ -324,9 +325,11 @@ def test_land_refuses_a_pr_still_unknown_after_about_a_minute(capsys):
     assert 50 <= sum(waits) <= 70
 
 
-def test_land_refuses_a_conflicting_pr_at_the_first_read():
+@pytest.mark.parametrize("kw", [{"mergeable": "CONFLICTING"}, {"state": "MERGED", "mergeable": "UNKNOWN"},
+                                {"isDraft": True, "mergeable": "UNKNOWN"}], ids=["conflicting", "merged", "draft"])
+def test_land_refuses_at_the_first_read_a_pr_that_more_than_unknown_blocks(kw):
     waits = []
-    fake = land_fake(**{"gh pr view 7": views("CONFLICTING", "MERGEABLE")})
+    fake = land_fake(**{"gh pr view 7": pr_reads(kw, {})})
     assert ship.cmd_land(fake, [7], True, sleep=waits.append) == 1
     assert not fake.ran("gh", "pr", "merge")
     assert len(fake.ran("gh", "pr", "view", "7")) == 1 and not waits

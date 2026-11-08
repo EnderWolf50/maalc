@@ -141,7 +141,7 @@ STOPS = {Outcome.REFUSED, Outcome.RED}
 def land_one(runner, pr: int, go: bool, sleep=time.sleep, onto_red: bool = False) -> Outcome:
     info = pr_info(runner, pr)
     for _ in range(MERGEABLE_READS - 1):  # GitHub recomputes `mergeable` for a few seconds after the base moves
-        if info["mergeable"] != "UNKNOWN":
+        if info["mergeable"] != "UNKNOWN" or blockers({**info, "mergeable": "MERGEABLE"}):  # a merged PR stays UNKNOWN
             break
         sleep(MERGEABLE_POLL)
         info = pr_info(runner, pr)
