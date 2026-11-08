@@ -2,11 +2,39 @@ import subprocess
 import sys
 from pathlib import Path
 
+import install
+
 INSTALL = Path(__file__).resolve().parent.parent / "tools/install.py"
 
 
 def snapshot(root: Path):
     return sorted((str(p), p.stat().st_mtime_ns) for p in root.rglob("*")) if root.exists() else None
+
+
+def files(root: Path) -> set[str]:
+    return {p.relative_to(root).as_posix() for p in root.rglob("*") if p.is_file()}
+
+
+def test_assembling_again_drops_what_the_repo_deleted_and_keeps_config(tmp_path):
+    repo, root = tmp_path / "repo", tmp_path / "install"
+    for name in ("agent/main.py", "agent/state.py", "agent/old/__init__.py", "assets/interface.json",
+                 "assets/locales/zh_tw.json", "assets/resource/base/pipeline/Kept.json",
+                 "assets/resource/base/pipeline/Deleted.json"):
+        (repo / name).parent.mkdir(parents=True, exist_ok=True)
+        (repo / name).write_text(name, encoding="utf-8")
+    install.copy_repo(repo, root)
+    (root / "config").mkdir()
+    (root / "config/settings.json").write_text("{}", encoding="utf-8")
+
+    for name in ("agent/state.py", "agent/old/__init__.py", "assets/resource/base/pipeline/Deleted.json"):
+        (repo / name).unlink()
+    (repo / "agent/old").rmdir()
+    install.copy_repo(repo, root)
+
+    assert files(root) == {"agent/main.py", "interface.json", "locales/zh_tw.json",
+                           "resource/base/pipeline/Kept.json", "config/settings.json"}
+    assert not (root / "agent/old").exists()
+    assert (root / "config/settings.json").read_text(encoding="utf-8") == "{}"
 
 
 def run(*args):
