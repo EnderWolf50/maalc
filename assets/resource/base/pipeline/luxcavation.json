@@ -50,8 +50,11 @@
         "recognition": "Custom",
         "custom_recognition": "StuckFlag",
         "action": "Custom",
-        "custom_action": "StopTask",
-        "custom_action_param": "EXP Luxcavation is stuck on the way to the pass page"
+        "custom_action": "DailyRecover",
+        "custom_action_param": "EXP Luxcavation is stuck on the way to the pass page",
+        "next": [
+            "ExpPassHub"
+        ]
     },
     "ExpPassLost": {
         "action": "Custom",
@@ -109,8 +112,8 @@
     },
     // To Battle! goes straight to the battle (live 2026-10-27: no level warning, no start confirm); after it the results
     // page (LuxResult) leads back to the EXP tab. A screen with no node times out here and the task stops with evidence,
-    // a failure the client's list goes past. Stuck (the watchdog: the same screen over and over) stops it too: no
-    // recovery ladder on the daily pages yet.
+    // a failure the client's list goes past. Stuck (the watchdog: the same screen over and over) stops it too, the daily
+    // pages having no L1 or L2; a game frozen on the main window is restarted and the hub goes on (DailyRecover, #440).
     "ExpHub": {
         "timeout": 60000,
         "rate_limit": 300,
@@ -143,8 +146,11 @@
         "recognition": "Custom",
         "custom_recognition": "StuckFlag",
         "action": "Custom",
-        "custom_action": "StopTask",
-        "custom_action_param": "EXP Luxcavation is stuck"
+        "custom_action": "DailyRecover",
+        "custom_action_param": "EXP Luxcavation is stuck",
+        "next": [
+            "ExpHub"
+        ]
     },
     // ExpHub's OCR screens, read in one pass as HubText (#157): GoHome's popups (HomeText), then the battle's end: the
     // battlefield's VICTORY and the results page, and an event mid-battle (the mirror's Event: live 2026-10-28, J1,
@@ -369,8 +375,11 @@
         "recognition": "Custom",
         "custom_recognition": "StuckFlag",
         "action": "Custom",
-        "custom_action": "StopTask",
-        "custom_action_param": "Thread Luxcavation is stuck"
+        "custom_action": "DailyRecover",
+        "custom_action_param": "Thread Luxcavation is stuck",
+        "next": [
+            "ThreadHub"
+        ]
     },
     // The Thread tab lit: its orange frame, as the EXP tab's (LuxExpLit).
     "LuxThreadLit": {

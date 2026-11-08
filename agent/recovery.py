@@ -28,6 +28,10 @@ HASH_FLOOR = {"BattlePause": 30}  # a turn playing out may sit still a while: al
 # screen moves. Acceptance 5 (live 2026-10-28): after an L3 the Drive tab was tapped 2188 times in 45 min, the game
 # showing the tap but never the Drive page, and the main window's banners kept the same-screen count from 5.
 NAV_TAPS, NAV_TAP_LIMIT = {"NavMainTabs", "NavDrive", "NavLuxcavation", "LuxExpTab", "LuxThreadTab"}, 10
+# Taps on the main window in a row whose whole wait showed one picture, the same each time: the game is frozen (#440).
+# Live 2026-11-05: the banner tapped 3 times and the Drive tab 5, every screenshot the same to the byte, while a live main
+# window's banners keep moving. 2 is MailOpen's whole max_hit: it fires on a task's last tap off the main window at the latest.
+DEAD_TAPS = 2
 # Screens on the way back to a run after L2/L3: seeing them does not mean the stuck screen was got past.
 TRANSIT = {"Loading", "Connecting", "RetryPopup", "GoToMirrorEntry", "NavTitle", "NavMainTabs", "NavDrive",
            "MirrorEntryPaused", "ResumeDialog", "ProgressPanel", "DownloadDialog", "PopupButton",
@@ -103,6 +107,25 @@ class Watchdog:
         self.first, self.count, self.since = None, 0, 0.0  # the streak's first thumbnail
         self.last, self.moved = None, 0.0  # the last thumbnail, and when the screen last changed at all
         self.hold_until = 0.0  # a download is under way until then: no screen counts as stuck
+        self.dead, self.dead_picture = 0, None  # dead taps in a row (tapped), and the thumbnail they all showed
+
+    def tapped(self, picture):
+        """One tap's wait just ended (actions.tap_then); why the game is frozen, or None.
+
+        picture: the thumbnail of the main window the whole wait showed byte for byte, with no page coming: a dead tap.
+        None for any other tap (its page came, the screen moved, not the main window), which ends the streak; a dead tap
+        of another picture starts it over. Only taps count, never stillness alone: a sleeping emulator screen is still
+        too (#441).
+        """
+        if picture is None:
+            self.dead, self.dead_picture = 0, None
+            return None
+        if self.dead_picture is None or not np.array_equal(picture, self.dead_picture):
+            self.dead, self.dead_picture = 0, picture
+        self.dead += 1
+        if self.dead >= DEAD_TAPS:
+            return f"the main window took none of {self.dead} taps, the same picture after each: the game is frozen"
+        return None
 
     def see(self, kind, small, now):
         """Record one screen handed out by MirrorHub (its type and thumb); why it makes the bot stuck, or None.

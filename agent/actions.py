@@ -133,9 +133,29 @@ def gone(context, spec, image):
 
 
 def tap_then(context, x, y, done, timeout=2.0):
-    """Tap, then until() done(image) holds: that image, or None after timeout s (#115)."""
+    """Tap, then until() done(image) holds: that image, or None after timeout s (#115).
+
+    The wait also tells the watchdog whether the game took the tap (#440): no page, every screenshot of the wait the
+    same as its first to the byte (a frozen game repeats its bytes), and that screenshot the main window (HomeReached),
+    whose banners always move on a live game, is a dead tap. Not other still pages: a live game's map or title can let a
+    tap go by. recovery.DEAD_TAPS of them in a row flag the game frozen, a stuck from L3, for the hub's Stuck node.
+    """
+    shots = {"first": None, "still": True}
+
+    def watch(image):
+        if shots["first"] is None:
+            shots["first"] = image
+        elif shots["still"] and not np.array_equal(image, shots["first"]):
+            shots["still"] = False
+        return done(image)
+
     tap(context, x, y, wait=0)
-    return until(context, done, timeout=timeout)
+    image = until(context, watch, timeout=timeout)
+    first = shots["first"]
+    dead = image is None and shots["still"] and seen(context, first, "HomeReached") is not None
+    if why := STUCK["watch"].tapped(recovery.thumb(first) if dead else None):
+        stuck(why, level=3)
+    return image
 
 
 def tap_moved(context, x, y, timeout=1.0):
@@ -361,9 +381,10 @@ def current_run(context):
 
 # Stuck detection, recovery and the stop procedure (spec 06).
 def stuck(reason, level=1):
-    """Hand the screen being handled to recovery: MirrorHub's Stuck node picks it up next.
+    """Hand the screen being handled to recovery: the hub's Stuck node picks it up next (MirrorHub's Recover, a daily
+    hub's DailyRecover). level: the least recovery level it starts at.
 
-    Returns True, for the action to return: its [JumpBack] leads to MirrorHub.
+    Returns True, for the action to return: its [JumpBack] leads to the hub.
     """
     log(f"stuck: {reason}")
     STUCK["flag"] = (None, level, reason)  # StuckFlag fills in the screen type
@@ -822,24 +843,52 @@ def go_home(context):
     return bool(detail and detail.status.succeeded)
 
 
+def restart_game(context, reason):
+    """L3 outside the mirror's Ladder (spec 06), for GoHome's HomeLost and the daily hubs' DailyRecover: RecoverL3 within
+    L3_PER_EXECUTION a bot launch, then GoHome's back keys, game starts and Window tab taps count afresh and the game
+    state is forgotten. True once RecoverL3 ran, through or not (GoHome goes on from wherever it left the game); False
+    after the stop procedure, the restarts used up."""
+    if STUCK["l3"] >= recovery.L3_PER_EXECUTION:
+        return stop(context, f"{reason}; the game restarted {recovery.L3_PER_EXECUTION} times since the bot started")
+    STUCK["l3"] += 1  # every attempt counts, as Recover's: a restart that always fails still ends
+    log(f"recovery L3: {reason} ({STUCK['l3']} of {recovery.L3_PER_EXECUTION} restarts)")
+    detail = context.run_task("RecoverL3")
+    if not (detail and detail.status.succeeded):
+        log("L3 did not go through")
+    for node in ("HomeBack", "HomeGameAway", "HomeWindowTab"):
+        context.clear_hit_count(node)
+    forget_game_state()
+    return True
+
+
 @AgentServer.custom_action("HomeLost")
 class HomeLost(CustomAction):
-    """GoHome's on_error (#362 D4): 60 s of nothing known, or the back key used up. The game is restarted (RecoverL3,
-    within L3_PER_EXECUTION a bot launch) and GoHome goes again from the title, with its back keys and game starts counted
-    afresh; once the restarts are used up, the stop procedure ends the task."""
+    """GoHome's on_error (#362 D4): 60 s of nothing known, or the back key used up. The game is restarted (restart_game)
+    and GoHome goes again from the title; once the restarts are used up, the stop procedure ends the task."""
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
-        if STUCK["l3"] >= recovery.L3_PER_EXECUTION:
-            return stop(context, f"the main window was not reached; the game restarted {recovery.L3_PER_EXECUTION} times since the bot started")
-        STUCK["l3"] += 1  # every attempt counts, as Recover's: a restart that always fails still ends
-        log(f"recovery L3: the main window was not reached ({STUCK['l3']} of {recovery.L3_PER_EXECUTION} restarts)")
-        detail = context.run_task("RecoverL3")
-        if not (detail and detail.status.succeeded):
-            log("L3 did not go through")
-        for node in ("HomeBack", "HomeGameAway", "HomeWindowTab"):
-            context.clear_hit_count(node)
-        forget_game_state()
-        return True
+        return restart_game(context, "the main window was not reached")
+
+
+@AgentServer.custom_action("DailyRecover")
+class DailyRecover(CustomAction):
+    """A daily hub's Stuck node (#440, spec 06): the daily pages have L3 only. A stuck that starts at L3, a game frozen on
+    the main window (tap_then), restarts the game; GoHome takes it to the main window and the node's next goes back to its
+    hub, whose taps count afresh (two dead taps are MailOpen's whole max_hit): the task's own flow, TASK and the run's plan
+    kept, the game state forgotten as after any recovery. Any other stuck ends the task through the stop procedure, the
+    param saying why."""
+
+    def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
+        _, level, reason = STUCK["flag"]
+        STUCK["flag"] = None
+        if level < 3:
+            return stop(context, f"{argv.node_name}: {json.loads(argv.custom_action_param or '""')}")
+        if not restart_game(context, reason):
+            return False
+        hub = context.get_node_data(argv.node_name)["next"][0]["name"]
+        for node in context.get_node_data(hub)["next"]:
+            context.clear_hit_count(node["name"])
+        return go_home(context)
 
 
 @AgentServer.custom_action("GoHomeRun")
