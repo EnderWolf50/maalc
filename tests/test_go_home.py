@@ -8,8 +8,9 @@ import json
 import time
 
 import numpy as np
-from daily_child import GAME, bind, game_class, inside, interface as interface_json, load, result, run_child, screen
+from daily_child import GAME, bind, game_class, inside, interface as interface_json, load, result, run_child, run_task, screen
 
+HOLD = 0.5  # s: how long the child holds the stop task that an account-level stop queues behind its task
 WINDOW_TAB = (790, 608, 70, 64)  # the bottom tab bar's Window tab
 MAILBOX_CLOSE = (690, 530, 175, 45)
 SETTINGS_RETURN = (500, 370, 280, 45)
@@ -28,6 +29,8 @@ def child():
     """Run GoHome from each start, and a daily task's own steps that run it (go_home, #514); print one JSON line
     {scenario: {succeeded, nodes, clicks, keys, starts ...}}."""
     from maa.custom_action import CustomAction
+    from maa.event_sink import NotificationType
+    from maa.tasker import TaskerEventSink
 
     actions, resource = load()
 
@@ -80,6 +83,19 @@ def child():
     # controller type"), so foreground() reads None there and GameAway never hits: read the model's dumpsys directly.
     actions.foreground = lambda context: actions.recovery.focused_package(game.shell("dumpsys window", 0))
     tasker = bind(resource, game)
+
+    class HoldsTheStop(TaskerEventSink):
+        """Holds the task Tasker::post_stop queues behind an account-level stop (MaaTaskerPostStop) for HOLD s: the
+        tasker is still stopping when the next scenario comes, as on CI 2026-11-08 (#564)."""
+        held = 0
+
+        def on_tasker_task(self, tasker, noti_type, detail):
+            if noti_type == NotificationType.Starting and detail.entry == "MaaTaskerPostStop":
+                time.sleep(HOLD)
+                self.held += 1
+
+    holder = HoldsTheStop()
+    tasker.add_sink(holder)
     out = {"error": None}
     calls = {"go_home": actions.go_home, "finish": lambda context: actions.finish(context, "nothing left")}
     returned = {}
@@ -102,9 +118,7 @@ def child():
         stops = len(list(actions.ROOT.joinpath("logs").rglob("agent.log")))
         override = {"RunsGoHome": {"action": "Custom", "custom_action": "RunsGoHome", "custom_action_param": call},
                     "ThreadHome": {"next": []}}
-        job = tasker.post_task(entry, override).wait()
-        while not (detail := job.get()).status.done:  # #461: post_stop's queue clear ends wait() before the task does
-            time.sleep(0.01)
+        detail = run_task(tasker, scenario, entry, override)
         out[scenario] = {**result(detail, game, actions), "returned": returned.get("value"), "log": list(actions.LOG),
                          "stopped": len(list(actions.ROOT.joinpath("logs").rglob("agent.log"))) - stops,
                          "halted": actions.STUCK["halted"]}
@@ -155,15 +169,14 @@ def child():
         for _ in range(in_a_row):
             actions.STUCK["restarts"].attempt(None)
         began = time.monotonic()
-        job = tasker.post_task("GoHome", override).wait()
-        while not (detail := job.get()).status.done:  # #461: post_stop's queue clear ends wait() before the task does
-            time.sleep(0.01)
+        detail = run_task(tasker, scenario, "GoHome", override)
         out[scenario] = {**result(detail, game, actions), "starts": game.starts,
                          "seconds": time.monotonic() - began,
                          "stops": game.stops, "in_a_row": actions.STUCK["restarts"].in_a_row,
                          "stopped": len(list(actions.ROOT.joinpath("logs").rglob("agent.log"))) - stops,
                          "halted": actions.STUCK["halted"]}
         actions.STUCK["halted"] = None
+    out["held"] = holder.held
     print(json.dumps(out))
 
 
@@ -253,6 +266,16 @@ def test_a_task_step_that_runs_go_home_hears_whether_the_main_window_was_reached
     assert o["returned"] is True and o["keys"] == [] and o["clicks"] == [] and o["stopped"] == 0, json.dumps(o)
     o = run_child(__file__)["go_home_battle"]
     assert o["returned"] is False and o["halted"].startswith("HomeInBattle: ") and o["stopped"] == 1, json.dumps(o)
+
+
+def test_a_scenario_after_an_account_level_stop_posts_once_the_tasker_has_stopped():
+    # #564: MaaFramework ignores a post while the tasker still stops (task id 0, no detail); on CI 2026-11-08 the
+    # scenario after finish_battle posted while its stop task still ran, and the child died on the missing detail.
+    # go_home_battle, finish_battle, lux_home_battle and battle each end in an account-level stop whose stop task the
+    # child holds, and the scenario after each of the first three ran.
+    out = run_child(__file__)
+    assert out["held"] == 4, out["held"]
+    assert out["finish_battle"]["nodes"] and out["lux_home_battle"]["nodes"] and out["drive"]["nodes"], json.dumps(out)
 
 
 def test_finish_on_a_battle_records_no_done_after_the_stop():
