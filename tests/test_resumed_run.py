@@ -125,4 +125,3 @@ def test_a_stop_after_the_tasks_claim_writes_no_line_for_a_run_not_begun(resumed
     claim(resumed, monkeypatch)
     actions.stop(resumed, "Parallel Superposition Mode stays ON after tapping INFINITY MIRROR")
     assert last_line()["result"] == "clear"
-

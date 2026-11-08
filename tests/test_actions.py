@@ -2747,6 +2747,8 @@ def test_a_forfeited_run_gives_up_its_rewards_and_the_same_team_runs_next(contex
     # at the head of the queue, so the team that lost runs the next run again.
     monkeypatch.setattr(actions, "ROOT", tmp_path)
     teams = [{"id": "a", "name": "A", "enabled": True}, {"id": "b", "name": "B", "enabled": True}]
+    (tmp_path / "config").mkdir()
+    (tmp_path / "config" / "settings.json").write_text(json.dumps({"teams": teams}), encoding="utf-8")
     actions.RUN.update(settings={"run": {}, "teams": teams}, team=teams[0], planned=True, difficulty="hard")
     taps = []
 
@@ -2761,7 +2763,7 @@ def test_a_forfeited_run_gives_up_its_rewards_and_the_same_team_runs_next(contex
 
     actions.Settle().run(context, None)
     assert taps == [actions.GIVE_UP, actions.DIALOG_CONFIRM]
-    assert not (tmp_path / "config").exists()  # the settings file, the queue, is not written
+    assert [t["id"] for t in json.loads((tmp_path / "config" / "settings.json").read_text(encoding="utf-8"))["teams"]] == ["a", "b"]
     line = json.loads((tmp_path / "logs" / "runs.jsonl").read_text(encoding="utf-8"))
     assert line["result"] == "giveup" and line["team"] == "a"
 

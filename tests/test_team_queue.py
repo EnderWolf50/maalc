@@ -5,7 +5,7 @@ from types import SimpleNamespace
 import pytest
 
 import actions
-import team_queue
+import settings
 import test_actions
 from team_queue import migrate_cursor, pick_team, requeue, resumed_team
 from test_resumed_run import claim
@@ -53,11 +53,11 @@ def test_a_resumed_run_with_no_team_that_fits_is_the_first_enabled_teams():
     assert (team["id"], known) == ("b", False)
 
 
-def settings_file(root, ids, **extra):
+def settings_file(root, ids, disabled=(), **extra):
     """A settings file as the GUI writes it, teams in the order ids."""
     path = root / "config" / "settings.json"
     path.parent.mkdir(exist_ok=True)
-    data = {"version": 20, "teams": [{"id": i, "name": f"隊 {i}", "enabled": True} for i in ids], **extra}
+    data = {"version": 20, "teams": [{"id": i, "name": f"隊 {i}", "enabled": i not in disabled} for i in ids], **extra}
     path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     return path
 
@@ -105,9 +105,27 @@ def test_a_failed_write_keeps_the_old_file_and_no_temp(tmp_path, monkeypatch):
     def boom(*_):
         raise OSError("disk gone")
 
-    monkeypatch.setattr(team_queue.os, "replace", boom)
+    monkeypatch.setattr(settings.os, "replace", boom)
     assert "not written" in requeue(tmp_path, "a")
     assert path.read_bytes() == before
+    assert os.listdir(path.parent) == ["settings.json"]
+
+
+def test_a_gui_save_between_the_read_and_the_write_is_kept(tmp_path, monkeypatch):
+    path = settings_file(tmp_path, ["a", "b", "c"])
+    fsync = settings.os.fsync
+
+    def gui_saves_once(fd):  # the GUI renames b while the agent's temp file is being written
+        monkeypatch.setattr(settings.os, "fsync", fsync)
+        data = json.loads(path.read_text(encoding="utf-8"))
+        data["teams"][1]["name"] = "renamed"
+        path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        fsync(fd)
+
+    monkeypatch.setattr(settings.os, "fsync", gui_saves_once)
+    requeue(tmp_path, "a")
+    teams = json.loads(path.read_text(encoding="utf-8"))["teams"]
+    assert [(t["id"], t["name"]) for t in teams] == [("b", "renamed"), ("c", "隊 c"), ("a", "隊 a")]
     assert os.listdir(path.parent) == ["settings.json"]
 
 
@@ -135,10 +153,7 @@ def test_the_old_cursor_becomes_the_queue_head_and_the_state_files_go(tmp_path):
     ("127.0.0.1_16416.json", "c"),  # only another instance's cursor
 ])
 def test_a_cursor_that_changes_nothing_leaves_the_order_and_still_removes_the_state(tmp_path, name, cursor):
-    path = settings_file(tmp_path, ["a", "b", "c"])
-    data = json.loads(path.read_text(encoding="utf-8"))
-    data["teams"].insert(1, {"id": "x", "name": "x", "enabled": False})
-    path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    path = settings_file(tmp_path, ["a", "x", "b", "c"], disabled={"x"})
     before = path.read_bytes()
     old_state(tmp_path, name, cursor)
     assert migrate_cursor(tmp_path, ADDR)

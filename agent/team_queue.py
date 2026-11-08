@@ -6,14 +6,13 @@ to the end of the list (requeue): the one write the agent makes to the settings 
 
 import contextlib
 import json
-import os
 import re
-import tempfile
 from pathlib import Path
 
-from settings import settings_path
+from settings import settings_path, write_settings
 
 USAGE_FITS = {"any": {"hard", "normal"}, "hard_only": {"hard"}, "normal_only": {"normal"}}
+UNUSABLE = (OSError, ValueError, LookupError, TypeError)  # a settings file missing, broken or of the wrong shape
 
 
 def pick_team(teams, difficulty):
@@ -40,23 +39,20 @@ def resumed_team(teams, difficulty):
 
 
 def requeue(root, team_id):
-    """After the bot saw team team_id complete a run and claim: move it to the end of the queue (pop and append).
+    """After the bot saw team team_id complete a run and claim: move it to the end of the queue.
 
-    The file is read again, as the GUI may have saved since the run began; nothing but the order of `teams` changes.
     Returns a line for the log.
     """
+    def to_end(teams):
+        i = next((i for i, t in enumerate(teams) if t["id"] == team_id), len(teams) - 1)
+        return teams[:i] + teams[i + 1:] + [teams[i]] if i < len(teams) - 1 else None
+
     try:
-        data = json.loads(settings_path(root).read_text(encoding="utf-8"))
-        teams = data["teams"]
-        i = next((i for i, t in enumerate(teams) if t["id"] == team_id), None)
-        if i is None:
-            return f"team queue: {team_id!r} is no longer in the settings, the queue stays"
-        if i == len(teams) - 1:
-            return f"team queue: {team_id!r} is already last"
-        teams.append(teams.pop(i))
-        write_settings(root, data)
-    except (OSError, ValueError, LookupError, TypeError) as e:
+        teams = _reorder(root, to_end)
+    except UNUSABLE as e:
         return f"team queue not written ({e!r}): {team_id!r} keeps its place"
+    if teams is None:
+        return f"team queue: {team_id!r} is already last or no longer listed, the queue stays"
     return f"team queue: {team_id!r} to the end, next {teams[0]['id']!r}"
 
 
@@ -74,36 +70,44 @@ def migrate_cursor(root, address):
     if not files:
         return None
     try:
-        cursor = json.loads((folder / (re.sub(r'[<>:"/\\|?*]', "_", address) + ".json")).read_text(encoding="utf-8"))["cursor"]
-    except (OSError, ValueError, LookupError, TypeError):
+        cursor = json.loads(_cursor_file(folder, address).read_text(encoding="utf-8"))["cursor"]
+    except UNUSABLE:
         cursor = None
-    try:
-        data = json.loads(settings_path(root).read_text(encoding="utf-8"))
-        teams = data["teams"]
+
+    def turn(teams):
         i = next((i for i, t in enumerate(teams) if t["id"] == cursor and t["enabled"]), 0)
-        if i:
-            data["teams"] = teams[i:] + teams[:i]
-            write_settings(root, data)
-    except (OSError, ValueError, LookupError, TypeError) as e:
+        return teams[i:] + teams[:i] if i else None
+
+    try:
+        turned = _reorder(root, turn)
+    except UNUSABLE as e:
         return f"rotation cursor not migrated ({e!r}): the state files stay"
     for f in files:
         f.unlink()
     with contextlib.suppress(OSError):
         folder.rmdir()
-    return f"rotation cursor {cursor!r} migrated ({'now the queue head' if i else 'the queue stays'}), state files removed"
+    return f"rotation cursor {cursor!r} migrated ({'now the queue head' if turned else 'the queue stays'}), state files removed"
 
 
-def write_settings(root, data):
-    """In the GUI's format (gui/src/App.tsx toText), via a temp file in the same folder and os.replace, so a crash never
-    leaves half a file."""
+def _cursor_file(folder, address):
+    # "127.0.0.1:16384" -> "127.0.0.1_16384.json"; any character Windows forbids became "_".
+    return folder / (re.sub(r'[<>:"/\\|?*]', "_", address) + ".json")
+
+
+def _reorder(root, change):
+    """change(teams) gives the new order, or None to leave the file alone; returns what was written, or None.
+
+    The file is read now, not at the run's start, as the GUI may have saved since; nothing but the order of `teams`
+    changes. A file that changed between this read and the write (a GUI save) is read again (ADR 0011).
+    """
     path = settings_path(root)
-    fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=path.name, suffix=".tmp")
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8") as f:
-            f.write(json.dumps(data, ensure_ascii=False, indent=2) + "\n")
-            f.flush()
-            os.fsync(f.fileno())
-        os.replace(tmp, path)
-    except BaseException:
-        os.unlink(tmp)
-        raise
+    for _ in range(3):
+        text = path.read_text(encoding="utf-8")
+        data = json.loads(text)
+        teams = change(data["teams"])
+        if teams is None:
+            return None
+        data["teams"] = teams
+        if write_settings(root, data, expected=text):
+            return teams
+    raise OSError(f"{path} kept changing under the write")

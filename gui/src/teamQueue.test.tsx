@@ -8,13 +8,24 @@ import App from "./App";
 import { TEXT } from "./i18n";
 import { movedToEnd, newSettings, newTeam, rebase, type Settings } from "./model";
 
-const file = vi.hoisted(() => ({ text: "", saved: [] as string[] }));
-vi.mock("./api", async (original) => ({
-  ...(await original<typeof import("./api")>()),
-  loadSettings: () => Promise.resolve(file.text),
-  saveSettings: (text: string) => { file.saved.push(text); file.text = text; return Promise.resolve(); },
-  rootDir: () => Promise.resolve("root"),
-}));
+// lib.rs save_settings: refused when the file is no longer the text the editor last read or wrote.
+const file = vi.hoisted(() => ({ text: "", saved: [] as string[], beforeSave: undefined as (() => void) | undefined }));
+vi.mock("./api", async (original) => {
+  const api = await original<typeof import("./api")>();
+  return {
+    ...api,
+    loadSettings: () => Promise.resolve(file.text),
+    saveSettings: (text: string, expected: string | null) => {
+      file.beforeSave?.();
+      file.beforeSave = undefined;
+      if (expected !== file.text) return Promise.reject(api.CHANGED);
+      file.saved.push(text);
+      file.text = text;
+      return Promise.resolve();
+    },
+    rootDir: () => Promise.resolve("root"),
+  };
+});
 
 const zh = TEXT.zh_tw;
 const queue = (...ids: string[]): Settings => ({ ...newSettings(), teams: ids.map((id, n) => ({ ...newTeam(n + 1, `T${id}`), id })) });
@@ -58,7 +69,7 @@ describe("rebase: the editor's settings once another writer changed the file", (
 });
 
 describe("in the editor", () => {
-  beforeEach(() => { file.text = text(queue("a", "b", "c")); file.saved = []; });
+  beforeEach(() => { file.text = text(queue("a", "b", "c")); file.saved = []; file.beforeSave = undefined; });
   const shown = () => within(document.querySelector("aside")!).getAllByRole("listitem").map((li) => li.textContent!.match(/T\w/)![0]);
   const nameBox = () => screen.getByRole("textbox", { name: zh.name });
   const agentClaims = (id: string) => { file.text = text(claimed(JSON.parse(file.text), id)); };
@@ -96,5 +107,18 @@ describe("in the editor", () => {
     await waitFor(() => expect(file.saved).toHaveLength(1));
     const saved: Settings = JSON.parse(file.saved[0]);
     expect(saved.teams.map((t) => t.name)).toEqual(["Tb", "Tc", "Ta!"]);
+  });
+
+  test("a save the Agent's write overtakes reads the file again and keeps that order too", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await waitFor(() => expect(nameBox()).toHaveValue("Ta"));
+    await user.type(nameBox(), "!");
+    file.beforeSave = () => agentClaims("a"); // after the save read the file, before it writes
+    await user.click(screen.getByRole("button", { name: zh.save }));
+    await waitFor(() => expect(file.saved).toHaveLength(1));
+    const saved: Settings = JSON.parse(file.saved[0]);
+    expect(saved.teams.map((t) => t.name)).toEqual(["Tb", "Tc", "Ta!"]);
+    expect(screen.getByText(zh.saved)).toBeInTheDocument();
   });
 });

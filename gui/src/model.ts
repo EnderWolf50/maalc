@@ -553,6 +553,6 @@ export function movedToEnd(before: string[], after: string[]): string[] | null {
 export function rebase(base: Settings, draft: Settings, disk: Settings): Settings {
   if (JSON.stringify(draft) === JSON.stringify(base)) return disk;
   const moved = movedToEnd(base.teams.map((t) => t.id), disk.teams.map((t) => t.id)) ?? [];
-  const at = (id: string) => draft.teams.filter((t) => t.id === id);
-  return { ...draft, teams: [...draft.teams.filter((t) => !moved.includes(t.id)), ...moved.flatMap(at)] };
+  const inDraft = (id: string) => draft.teams.filter((t) => t.id === id);
+  return { ...draft, teams: [...draft.teams.filter((t) => !moved.includes(t.id)), ...moved.flatMap(inDraft)] };
 }

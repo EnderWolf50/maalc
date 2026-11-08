@@ -1,6 +1,6 @@
 # 01 架構
 
-本章說明 `maalc` 的整體架構：`MirrorHub` 的結構、從主畫面到鏡牢入口頁的導航與入口頁的分流、Pipeline 與 Agent 的分工、中途接續與狀態檔、執行記錄 `runs.jsonl`、各畫面讀取的資訊，以及一局從頭到尾的流程。各畫面的細節見 [02-screens.md](02-screens.md)，決策規則見 [03-decisions.md](03-decisions.md)，卡住與恢復見 [06-recovery.md](06-recovery.md)。
+本章說明 `maalc` 的整體架構：`MirrorHub` 的結構、從主畫面到鏡牢入口頁的導航與入口頁的分流、Pipeline 與 Agent 的分工、中途接續與隊伍佇列、執行記錄 `runs.jsonl`、各畫面讀取的資訊，以及一局從頭到尾的流程。各畫面的細節見 [02-screens.md](02-screens.md)，決策規則見 [03-decisions.md](03-decisions.md)，卡住與恢復見 [06-recovery.md](06-recovery.md)。
 
 ## 分工：流程放 Pipeline，決策放 Agent
 
@@ -141,7 +141,7 @@
 | `Exploration Complete` 與 `Unclaimed Rewards` | 依[結算規則](#結算規則)處理上局沒領的獎勵，再開新局 | #8、#19 |
 | 過期的局（每週重置後） | 依[結算規則](#結算規則)處理；畫面見[未決](#未決) | #8、#19 |
 
-## 中途接續與狀態檔
+## 中途接續與隊伍佇列
 
 - 中途接續必須以畫面為準，不讀存檔。理由見 [ADR 0003](../adr/0003-screen-is-truth-state-file-only-rotation-cursor.md)。（#8）
 - Agent 沒有狀態檔。設定裡隊伍清單的順序就是**隊伍佇列**：每一局由第一支用途符合的隊伍出戰。（#8、#9、#19、#501，[ADR 0011](../adr/0011-team-list-order-is-the-queue.md)）
@@ -149,9 +149,9 @@
 - 用途和這一局難度不符的隊伍跳過，留在原位；沒有任何可用的隊伍就以成功結束任務（#364）。（#9）
 - 接續暫停中的局時，選隊之後沒有畫面顯示隊伍，Agent 從佇列推回這局的隊伍；推不回就不移動佇列（[03-decisions.md](03-decisions.md) 第 1 節，#436）。（#8、#19）
 - 「限制局數」只算這個任務開始後完成的局數，不存檔；清單裡第二個鏡牢任務從 0 局算起（#364）。「每週獎勵用完就停」的剩餘次數從畫面讀。（#8）
-- 難度、每週獎勵用法這類策略屬於設定檔，不寫進狀態檔。（#8、#19）
+- 難度、每週獎勵用法這類策略屬於設定檔，不另外存檔。（#8、#19）
 - 刷新次數這類以層為單位的計數記在 Agent 記憶體，不存檔。（#10）
-- 狀態檔必須放在 Agent 自己的子目錄 `<root>/state/`，避開 MXU 與 MFAAvalonia 的設定檔（`mxu-*.json`、`instances/`）；用暫存檔加改名的方式寫入；根目錄用 Agent 腳本自身的位置定位，不依賴工作目錄。（#6）
+- Agent 寫的檔案（設定檔裡的隊伍順序、`logs/`）都在 `<root>` 底下自己的子目錄，避開 MXU 與 MFAAvalonia 的設定檔（`mxu-*.json`、`instances/`）；設定檔用暫存檔加改名的方式寫入；根目錄用 Agent 腳本自身的位置定位，不依賴工作目錄。舊版的 `<root>/state/` 在遷移後刪除（[04](04-settings.md) 第 9 節）。（#6、#501）
 
 ## 執行記錄 runs.jsonl
 

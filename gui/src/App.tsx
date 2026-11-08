@@ -72,7 +72,7 @@ export default function App() {
         disk.current = text;
         setS(data);
         if (migrated && !validate(data).length) {
-          await api.saveSettings(toText(data));
+          await api.saveSettings(toText(data), text);
           disk.current = toText(data);
         }
         setSavedText(toText(data)); // dirty = content changed, not formatting
@@ -112,12 +112,19 @@ export default function App() {
   const save = async () => {
     setChecked(true);
     try {
-      const current = (await sync())!; // what another writer changed since goes under the edits first (#501)
-      if (validate(current).length) return setStatus("");
-      await api.saveSettings(toText(current));
-      disk.current = toText(current);
-      setSavedText(toText(current));
-      setStatus(t("saved"));
+      for (let tries = 1; ; tries++) {
+        const current = (await sync())!; // what another writer changed since goes under the edits first (#501)
+        if (validate(current).length) return setStatus("");
+        try {
+          await api.saveSettings(toText(current), disk.current);
+        } catch (e) {
+          if (String(e).includes(api.CHANGED) && tries < 3) continue; // it changed between that read and this write
+          throw e;
+        }
+        disk.current = toText(current);
+        setSavedText(toText(current));
+        return setStatus(t("saved"));
+      }
     } catch (e) {
       setStatus(String(e));
     }

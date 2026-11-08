@@ -16,8 +16,16 @@ export const rootDir = (): Promise<string> => (tauri ? invoke("root_dir") : Prom
 export const loadSettings = (): Promise<string | null> =>
   tauri ? invoke("load_settings") : Promise.resolve(localStorage.getItem("settings.json"));
 
-export const saveSettings = (text: string): Promise<void> =>
-  tauri ? invoke("save_settings", { text }) : Promise.resolve(localStorage.setItem("settings.json", text));
+/** The error text of a save refused because the file no longer holds `expected` (lib.rs save_settings). */
+export const CHANGED = "settings.json changed on disk";
+
+/** expected: the text last read or written, null for a file not there then; another text there refuses the save (#501). */
+export function saveSettings(text: string, expected: string | null): Promise<void> {
+  if (tauri) return invoke("save_settings", { text, expected });
+  if (expected !== null && localStorage.getItem("settings.json") !== expected) return Promise.reject(CHANGED);
+  localStorage.setItem("settings.json", text);
+  return Promise.resolve();
+}
 
 /** Spec 04 section 12 / spec 06: a reset marker holds only the team id and the time. */
 export function resetTeamTimes(teamId: string): Promise<void> {

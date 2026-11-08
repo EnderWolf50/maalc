@@ -4,6 +4,8 @@ Old versions are migrated in memory only. The one write the agent makes is the o
 """
 
 import json
+import os
+import tempfile
 from collections import Counter
 from functools import cache
 from pathlib import Path
@@ -338,6 +340,27 @@ class SettingsError(Exception):
 
 def settings_path(root):
     return Path(root) / "config" / "settings.json"
+
+
+def write_settings(root, data, expected):
+    """Write data in the GUI's format (gui/src/App.tsx toText) when the file still reads `expected`, the text the caller
+    read; False, and nothing written, when another writer changed it since. Via a temp file in the same folder and
+    os.replace, so a crash never leaves half a file."""
+    path = settings_path(root)
+    fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=path.name, suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(json.dumps(data, ensure_ascii=False, indent=2) + "\n")
+            f.flush()
+            os.fsync(f.fileno())
+        if path.read_text(encoding="utf-8") != expected:
+            os.unlink(tmp)
+            return False
+        os.replace(tmp, path)
+    except BaseException:
+        os.unlink(tmp)
+        raise
+    return True
 
 
 def load_settings(root, need_team=False):
