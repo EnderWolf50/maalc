@@ -20,7 +20,8 @@ Calls with `--go` take turns in the land lane (`<main checkout>/.local/queue/lan
 each holds its ticket for the whole batch, `after_land.py` included. A call that has to wait prints once
 `ship: waiting for pid <pid> (ship.py land #<pr>...) to end before landing #<pr>...` and starts when that call ends,
 whether it landed or stopped. The ticket of a call whose process is gone is dropped, so the next call takes over.
-A dry run (no `--go`) never waits for a turn.
+A call whose own ticket is removed while it waits exits 1, says so and lands nothing. A dry run (no `--go`) never
+waits for a turn.
 
 `into` merges `<branch>` into the integration branch (`--no-ff`) in a worktree of it, runs `tools/check.py`
 through the bench queue and pushes only on green. A conflict or a red check leaves the branch as it was.
