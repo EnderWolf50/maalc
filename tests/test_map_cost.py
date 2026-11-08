@@ -53,12 +53,13 @@ TYPED_INSTEAD = {
     # Misread: in the bus's column, which RouteMap does not read. Its 120 under the floor's title read 'icli', and the
     # gift box unmatched, so a battle.
     ("MapHardTwoColsUpOnly.png", 73, 144): "battle",
-    # Top-row nodes whose badges sit under the HUD: no mark at all, unknown by node_at's rule. MapPanned's 100 shows
-    # below the resource bar, its coin cut by it.
+    # Top-row nodes whose badges sit under the HUD: no mark at all, unknown by node_at's rule. MapPanned's 150 at
+    # 1235, 106 (#522): its coin cut by the buttons, its last digit by the screen's edge, the rest dimmed by the edge's
+    # shade (read '1'); RouteMap types no node past x 1120.
     **{(name, x, y): "unknown" for name, x, y in [
         ("MapBoss.png", 215, 72), ("MapEvent.png", 725, 72), ("MapFocused.png", 215, 72), ("MapFocused.png", 470, 72),
-        ("MapHardRest.synthetic.png", 723, 72), ("MapHardRest.synthetic.png", 978, 72), ("MapPanned.png", 725, 106),
-        ("MapPanned.png", 980, 106), ("MapPanned.png", 1235, 106), ("MapRock.png", 725, 72), ("MirrorMap.png", 725, 72)]},
+        ("MapHardRest.synthetic.png", 723, 72), ("MapHardRest.synthetic.png", 978, 72), ("MapPanned.png", 980, 106),
+        ("MapPanned.png", 1235, 106), ("MapRock.png", 725, 72), ("MirrorMap.png", 725, 72)]},
 }
 # Besides TYPED_INSTEAD's fights, the fights typed with no Cost read: the boss by its glow, before any Cost is read;
 # a battle by its marks, its coin under the star panel read '1'; and a Risky by its ring and gift box, its coin and
