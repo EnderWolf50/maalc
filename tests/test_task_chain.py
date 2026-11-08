@@ -173,7 +173,6 @@ def entry_page(context, edit=lambda run, teams: None):
     (actions.ROOT / "config").mkdir()
     (actions.ROOT / "config" / "settings.json").write_text(json.dumps(data), encoding="utf-8")
     actions.RUN.clear()
-    context.tasker.controller.info = {}  # the default rotation cursor
     actions.TASK["modules"] = 20  # what OpenDrive read on this trip (#369)
     context.tasker.get_node_detail.return_value = SimpleNamespace(name="HomeReached")
 

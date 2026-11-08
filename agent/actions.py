@@ -38,13 +38,13 @@ from gifts import effective, main_keyword, purchases, recipe_fusion, resolve_lis
 from ocrtext import compact, digits, floor_number, has, normalize
 from settings import NOTES as settings_notes
 from settings import SettingsError, data_dir, gift_tables, load_settings, vestige_ids
-from state import next_cursor, pick_team, read_cursor, resumed_team, write_cursor
+from team_queue import migrate_cursor, pick_team, requeue, resumed_team
 
 # Same <root> as main.ROOT; resource/ sits under it in a release, under assets/ in the repo.
 ROOT = Path(__file__).resolve().parent.parent
 
 # This run's plan, made on the entry page: {"settings", "team", "difficulty"}.
-# Memory only (ADR 0003); an agent restarted mid-run makes one up from the rotation cursor (current_run). TaskStart
+# Memory only (ADR 0003); an agent restarted mid-run makes one up from the team queue (current_run). TaskStart
 # keeps it for the same task when the client interrupted the last one (no done, no stop): the run is picked up as before
 # the task chain.
 RUN = {}
@@ -409,17 +409,17 @@ def run_team(settings, team):
 
 
 def current_run(context):
-    """The run plan; made up from settings and the rotation cursor when the agent restarted mid-run."""
+    """The run plan; made up from settings and the team queue when the agent restarted mid-run."""
     if "settings" not in RUN:  # a run plan, not just counters left by an action
         settings = load_settings(ROOT, need_team=True)
         run = settings["run"]
         # The weekly bonuses left when the run began are not known: the difficulty is known when both answers agree.
         began = {run_start.run_difficulty(run["difficulty"], left, run["target_floor"]) for left in (0, 1)}
         difficulty = began.pop() if len(began) == 1 else None
-        team, known = resumed_team(settings["teams"], read_cursor(ROOT, address(context)), difficulty)
+        team, known = resumed_team(settings["teams"], difficulty)
         RUN.update(settings=settings, team=run_team(settings, team), difficulty=difficulty, planned=known)
         # The guard turns left are unknown after a restart: they count as used up (spec 03 section 8).
-        how = "from the rotation cursor" if known else "assumed: the rotation cursor does not tell the run's team"
+        how = "from the team queue" if known else "assumed: the team queue does not tell the run's team"
         log(f"no run plan in memory: team {team['name']!r} {how}, difficulty {difficulty or 'unknown'}, no guard turns")
     return RUN
 
@@ -529,6 +529,8 @@ class TaskStart(CustomAction):
         STUCK.update(node=None, kind=None, flag=None, watch=recovery.Watchdog(), ladder=recovery.Ladder())
         SCREENS.clear()
         log(f"task {argv.node_name} started")
+        if argv.node_name == "MirrorDungeon" and (note := migrate_cursor(ROOT, address(context))):
+            log(note)
         return True
 
 
@@ -1573,7 +1575,7 @@ class PlanRun(CustomAction):
         if run["stop_when_weekly_bonus_out"] and weekly == 0:
             return finish(context, "weekly bonuses used up")
         difficulty = run_start.run_difficulty(run["difficulty"], weekly, run["target_floor"])
-        team = pick_team(settings["teams"], read_cursor(ROOT, address(context)), difficulty)
+        team = pick_team(settings["teams"], difficulty)
         if team is None:
             return finish(context, f"no enabled team may run {difficulty}")
         if run_start.team_difficulty(run["difficulty"], difficulty, team["hard_from_floor"]) != difficulty:
@@ -1595,8 +1597,8 @@ class PlanRun(CustomAction):
         else:
             log(f"new run: Modules {modules} >= {settlement.CLAIM_COST}")
         RUN.clear()
-        # planned: the run's team is known (picked here, or after a restart the cursor's, current_run), so the rotation
-        # cursor may move after the claim and runs.jsonl names it.
+        # planned: the run's team is known (picked here, or after a restart the queue's, current_run), so the claim may
+        # move it to the end of the queue and runs.jsonl names it.
         limit = recovery.floor_limit(recovery.read_runs(ROOT), team["id"], run["target_floor"])
         # guard: the run's guard turns left (spec 03 section 8), counted across its battles.
         # floor_limit: each floor's time; the first clock runs from here, PickThemePack restarts it (spec 06).
@@ -1694,7 +1696,7 @@ class SelectTeam(CustomAction):
         image = pick_team_slot(context, n)
         if image is None:
             return stop(context, f"could not select TEAMS #{n}")
-        RUN["planned"] = True  # the title reads the slot: the run's team is known, whatever the cursor fits (#436)
+        RUN["planned"] = True  # the title reads the slot: the run's team is known, whatever the queue fits (#436)
         bonus = number(text(context, image, [1160, 522, 60, 34]))
         log(f"team TEAMS #{n}, Starlight Bonus {bonus}")
         # LevelWarning when the team is under the recommended level, else the starlight page; the team page
@@ -5707,7 +5709,7 @@ def toggles(context, image):
 
 @AgentServer.custom_action("Settle")
 class Settle(CustomAction):
-    """Claim check, weekly-bonus toggles, then Claim or GiveUpRewards; then the cursor and runs.jsonl (spec 03 section 14).
+    """Claim check, weekly-bonus toggles, then Claim or GiveUpRewards; then the team queue and runs.jsonl (spec 03 section 14).
 
     Claim is pressed only after the toggles read back exactly as wanted; anything unexpected stops.
     """
@@ -5770,13 +5772,7 @@ class Settle(CustomAction):
                         run_line(run, "stop", hard, settlement.floors_passed(result), want))
         log(f"claimed with {want} weekly bonus(es)")
         self.record(run, result, want, "clear")
-        if run.get("planned"):
-            cursor = next_cursor(run["settings"]["teams"], team["id"])
-            if cursor:
-                write_cursor(ROOT, address(context), cursor)
-                log(f"rotation cursor -> {cursor}")
-        else:
-            log("this run's team is not known: rotation cursor stays")
+        log(requeue(ROOT, team["id"]) if run.get("planned") else "this run's team is not known: the team queue stays")
         RUN.clear()
         return True
 

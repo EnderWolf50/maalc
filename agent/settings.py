@@ -1,6 +1,6 @@
 """Read <root>/config/settings.json and check it (docs/spec/04-settings.md section 2).
 
-The agent never writes settings: old versions are migrated in memory only.
+Old versions are migrated in memory only. The one write the agent makes is the order of `teams` (team_queue.py).
 """
 
 import json
@@ -336,12 +336,16 @@ class SettingsError(Exception):
         super().__init__("Invalid settings:\n" + "\n".join(f"- {e}" for e in errors))
 
 
+def settings_path(root):
+    return Path(root) / "config" / "settings.json"
+
+
 def load_settings(root, need_team=False):
     """Return the checked settings dict, or raise SettingsError listing every problem.
 
     need_team: MirrorDungeon's own check, an enabled team (#364); the dailies run without one.
     """
-    path = Path(root) / "config" / "settings.json"
+    path = settings_path(root)
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
     except FileNotFoundError:
