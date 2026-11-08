@@ -1,6 +1,7 @@
 import importlib.util
 import json
 import os
+import shutil
 import signal
 import subprocess
 import sys
@@ -104,6 +105,86 @@ def test_run_waits_for_the_ticket_ahead_then_leaves_no_ticket(tmp_path):
     t.join(5)
     assert done["rc"] == 0
     assert list(tmp_path.glob("*.ticket")) == []
+
+
+def all_live(_pid, _start):
+    return True
+
+
+def remove_own_and_holder(mine: dict[Path, str], own: list[Path], holder: Path) -> None:
+    """Delete the waiter's own ticket, then the holder's; `mine` keeps the own one's text to let the waiter go again."""
+    for p in own:
+        mine[p] = p.read_text()
+        p.unlink()
+    holder.unlink()
+
+
+def ends_soon(t: threading.Thread, mine: dict[Path, str], what: str) -> None:
+    t.join(2)
+    if t.is_alive():
+        for p, text in mine.items():
+            p.parent.mkdir(parents=True, exist_ok=True)
+            p.write_text(text)
+        t.join(5)
+        pytest.fail(f"{what} still waits after its ticket was removed")
+
+
+def test_turn_does_not_run_the_block_when_its_ticket_is_removed_while_it_waits(tmp_path):
+    holder = ticket(tmp_path, "1000000000000000001", "holder", 111)
+    mine, ran, ended = {}, [], {}
+
+    def waits():
+        try:
+            with lq.turn(tmp_path, "me", ["hold"], is_alive=all_live, sleep=lambda s: time.sleep(0.01),
+                         on_wait=lambda ahead: remove_own_and_holder(mine, list(tmp_path.glob("*-me.ticket")), holder)):
+                ran.append("block")
+        except SystemExit as e:
+            ended["exit"] = e
+
+    t = threading.Thread(target=waits, daemon=True)
+    t.start()
+    ends_soon(t, mine, "turn()")
+    (me,) = mine
+    assert isinstance(ended.get("exit"), lq.TicketGone) and me.name in str(ended["exit"])
+    assert ran == []
+
+
+def clears_when_it_waits(qdir: Path, holder: Path, holder_start: int, mine: dict[Path, str], folder: bool):
+    """An is_alive under which every process lives. Its second look at the holder comes after the waiter queued behind
+    it and said it waits: it removes the waiter's ticket and the holder's, or the whole queue folder."""
+    looks = []
+
+    def is_alive(_pid, start):
+        if start == holder_start:
+            looks.append(start)
+            if len(looks) == 2:
+                own = list(qdir.glob("*-me.ticket"))
+                if folder:
+                    mine.update((p, p.read_text()) for p in own)
+                    shutil.rmtree(qdir)
+                else:
+                    remove_own_and_holder(mine, own, holder)
+        return True
+    return is_alive
+
+
+@pytest.mark.parametrize("folder", [False, True], ids=["tickets-removed", "folder-removed"])
+def test_run_does_not_start_its_command_when_its_ticket_is_removed_while_it_waits(tmp_path, capsys, folder):
+    qdir = tmp_path / "bench"
+    qdir.mkdir()
+    holder = ticket(qdir, "1000000000000000001", "holder", 111)
+    marker, mine, done = tmp_path / "ran", {}, {}
+    touch = [sys.executable, "-c", "import pathlib, sys; pathlib.Path(sys.argv[1]).touch()", str(marker)]
+    is_alive = clears_when_it_waits(qdir, holder, 111, mine, folder)
+    t = threading.Thread(target=lambda: done.setdefault("rc", lq.run(qdir, "me", touch, is_alive=is_alive, poll=0.01)),
+                         daemon=True)
+    t.start()
+    ends_soon(t, mine, "run()")
+    (me,) = mine
+    assert done["rc"] == 1 and not marker.exists()
+    result = json.loads(lq.result_path(qdir, "me").read_text())
+    assert result["exit"] == 1 and me.name in result["not_started"]
+    assert me.name in capsys.readouterr().out
 
 
 def test_a_first_ticket_runs_right_after_the_holder_ahead_of_the_waiting_ones(tmp_path):
@@ -426,8 +507,27 @@ def test_wait_names_an_unknown_ticket_and_a_run_that_died(tmp_path):
     ticket = tmp_path / f"1-{os.getpid()}-dead.ticket"
     ticket.write_text("cmd")
     said = []
-    assert lq.wait(tmp_path, "dead", 60, poll=5, say=said.append, clock=Clock().now, sleep=lambda s: ticket.unlink()) == lq.WAIT_DIED
+    assert lq.wait(tmp_path, "dead", 60, poll=5, say=said.append, clock=Clock().now,
+                   sleep=lambda s: ticket.unlink(missing_ok=True)) == lq.WAIT_DIED
     assert "died" in said[-1]  # the ticket went with no result
+
+
+def test_wait_reports_a_run_whose_ticket_was_removed_once_it_leaves_its_result(tmp_path):
+    ticket = tmp_path / f"1-{os.getpid()}-chk.ticket"
+    ticket.write_text("cmd")
+    sleeps, said = [], []
+    gone = "[queue] the ticket 1-0-chk.ticket left the queue while chk waited; chk did not start: queue it again"
+
+    def sleep(s):
+        sleeps.append(s)
+        if len(sleeps) == 1:
+            ticket.unlink()
+        elif len(sleeps) == 2:
+            lq.result_path(tmp_path, "chk").write_text(json.dumps(
+                {"exit": 1, "log": None, "ended": "2026-11-08T21:00:00", "not_started": gone}))
+
+    assert lq.wait(tmp_path, "chk", 60, poll=5, say=said.append, clock=Clock().now, sleep=sleep) == 1
+    assert said[-1] == f"[queue] chk did not start, exit code 1: {gone}"
 
 
 def test_pause_keeps_the_hold_and_status_says_who_owns_the_emulator(tmp_path):
