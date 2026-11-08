@@ -164,8 +164,9 @@ def turn(qdir: Path, name: str, cmd: list[str], first: bool = False, is_alive=al
     try:
         said = False
         while (q := tickets(qdir, is_alive))[:1] != [me]:
-            if not said:
-                on_wait([(p.stem.split("-", 2)[1], read(p)[0]) for p in (q[:q.index(me)] if me in q else q)])
+            if not said and (ahead := [(p.stem.split("-", 2)[1], t[0]) for p in (q[:q.index(me)] if me in q else q)
+                                       if (t := read(p)) is not None]):
+                on_wait(ahead)
                 said = True
             sleep(poll)
         yield
