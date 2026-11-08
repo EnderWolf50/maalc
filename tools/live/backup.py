@@ -89,7 +89,8 @@ def hold(root: Path, dest: Path, done: Path, timeout: float, poll: float = 2.0, 
             stop_profile = None
         if time.monotonic() - shown >= 30:
             shown = time.monotonic()
-            (done.parent / "hold.deadline").write_text(str(wall() + deadline - time.monotonic()), encoding="utf-8")
+            # Whole seconds: status shows minutes, and monotonic() + timeout alone can round past wall() + timeout (#578).
+            (done.parent / "hold.deadline").write_text(str(round(wall() + deadline - time.monotonic())), encoding="utf-8")
         time.sleep(poll)
     (done.parent / "hold.deadline").unlink(missing_ok=True)
     print("done file found" if done.exists() else f"timed out after {timeout:.0f} s", flush=True)
