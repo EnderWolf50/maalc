@@ -944,7 +944,7 @@ class HomeFrozen(CustomAction):
 class StaysUnknown(CustomRecognition):
     """Hits once none of the hub's other screens (the nodes of its next but this one; param {"hub", "timeout": s}) shows
     on a screenshot for timeout s. GoHome's back key (HomeBack) waits out a moment no template reads this way: the
-    title's glitch warps the whole picture for about 1 s (#495; live 2026-11-08, 3 glitches of 0.9-1.1 s, NavTitle
+    title's glitch warps the whole picture for about 1 s (#495; live 2026-11-08, 3 glitches of 0.9-1.3 s, NavTitle
     0.51-0.61). A screen that shows in the meantime is the hub's next pass, not the back key's."""
 
     def analyze(self, context: Context, argv: CustomRecognition.AnalyzeArg):

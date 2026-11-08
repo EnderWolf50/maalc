@@ -4,7 +4,7 @@ title's glitch effect, and a game frozen on the title until it is restarted.
 
 Live 2026-11-08 (a recording and the MaaFramework log of a title tap): CONNECTING showed within 0.6 s of each of 2 taps
 and stayed up to 28 s with the title under it, its template still hitting; the glitch warped the whole picture for
-0.9-1.1 s three times in 40 s, NavTitle scoring 0.51-0.61 then.
+0.9-1.3 s three times in 40 s, NavTitle scoring 0.51-0.61 then.
 """
 
 import json
@@ -16,7 +16,7 @@ from daily_child import GAME, bind, game_class, inside, live_frame, load, result
 from recovery import DEAD_TAPS, L3_FAILED_IN_A_ROW
 
 TITLE_TAP = (540, 300, 200, 120)
-GLITCH = 1.1  # s: the recording's longest glitch
+GLITCH = 1.3  # s: the recording's longest glitch
 SCREENS = {"title": "Title.png", "connecting": "TitleConnecting.png", "loading": "Loading.png", "main": "MainWindow.png"}
 LIMIT = 40  # s: a scenario still going by then is stopped (a title tapped for ever)
 
@@ -147,7 +147,7 @@ def test_a_title_tap_that_goes_to_the_loading_screen_is_not_a_frozen_game():
 
 
 def test_the_titles_glitch_gets_no_back_key():
-    # #495: for about 1 s (GLITCH, the recording's longest) the glitch hides the title from every template, and GoHome
+    # #495: for up to 1.3 s (GLITCH, the recording's longest) the glitch hides the title from every template, and GoHome
     # pressed back on it.
     o = run_child(__file__)["glitch"]
     assert o["succeeded"] and o["nodes"][-1] == "HomeReached" and o["keys"] == [] and o["title_taps"] == 1, json.dumps(o)

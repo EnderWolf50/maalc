@@ -159,14 +159,14 @@
     },
     // A page with no tab bar (the entry page, Luxcavation): the back key goes up one page. The 2 s stay: nothing is known
     // to wait for, and a second back key while the page is still going can go past the main window (max_hit counts it).
-    // Only on a screen GoHome still knows nothing of after 1.5 s (StaysUnknown): the title's glitch hides it from every
-    // template for about 1 s (#495), and the back key then went to the title.
+    // Only on a screen GoHome still knows nothing of after 2 s (StaysUnknown): the title's glitch hides it from every
+    // template for up to 1.3 s (#495, 3 glitches on a recording), and the back key then went to the title.
     "HomeBack": {
         "recognition": "Custom",
         "custom_recognition": "StaysUnknown",
         "custom_recognition_param": {
             "hub": "GoHome",
-            "timeout": 1.5
+            "timeout": 2
         },
         "action": "Custom",
         "custom_action": "DismissShot",
