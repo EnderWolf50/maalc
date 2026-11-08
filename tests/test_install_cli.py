@@ -2,7 +2,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-import install
+from install import mirror_repo
 
 INSTALL = Path(__file__).resolve().parent.parent / "tools/install.py"
 
@@ -22,14 +22,14 @@ def test_assembling_again_drops_what_the_repo_deleted_and_keeps_config(tmp_path)
                  "assets/resource/base/pipeline/Deleted.json"):
         (repo / name).parent.mkdir(parents=True, exist_ok=True)
         (repo / name).write_text(name, encoding="utf-8")
-    install.copy_repo(repo, root)
+    mirror_repo(repo, root)
     (root / "config").mkdir()
     (root / "config/settings.json").write_text("{}", encoding="utf-8")
 
     for name in ("agent/state.py", "agent/old/__init__.py", "assets/resource/base/pipeline/Deleted.json"):
         (repo / name).unlink()
     (repo / "agent/old").rmdir()
-    install.copy_repo(repo, root)
+    mirror_repo(repo, root)
 
     assert files(root) == {"agent/main.py", "interface.json", "locales/zh_tw.json",
                            "resource/base/pipeline/Kept.json", "config/settings.json"}
