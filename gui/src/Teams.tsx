@@ -1,4 +1,4 @@
-// Teams (spec 04 section 9): list order is rotation order.
+// Teams (spec 04 section 9): the list order is the team queue (#501).
 import { useState } from "react";
 import { resetTeamTimes } from "./api";
 import { TIERS, kwText } from "./KeywordGrid";
@@ -13,13 +13,15 @@ import { Field, Num, ReorderList, Select, ToggleNum, useEditor } from "./ui";
 
 export function TeamsTab() {
   const { s, update, t, bad } = useEditor();
-  const [sel, setSel] = useState(0);
-  const i = Math.min(sel, s.teams.length - 1);
+  const [sel, setSel] = useState(s.teams[0]?.id); // by id: the team stays in the editor when the Agent moves it (#501)
+  const i = Math.max(0, s.teams.findIndex((x) => x.id === sel));
   return (
     <div className="split">
       <aside>
+        <p className="muted">{t("teams.queue")}</p>
         {s.teams.length ? (
-          <ReorderList items={s.teams} keyOf={(x) => x.id} selected={i} onSelect={setSel} badAt={(j) => bad(`teams/${j}`)}
+          <ReorderList items={s.teams} keyOf={(x) => x.id} selected={i} onSelect={(j, teams) => setSel(teams[j].id)}
+            badAt={(j) => bad(`teams/${j}`)}
             onChange={(teams) => update((d) => { d.teams = teams; })}
             render={(x) => (
               <span className={x.enabled ? "" : "muted"}>{x.name || "—"} <small>#{x.game_team}</small></span>
@@ -27,11 +29,12 @@ export function TeamsTab() {
         ) : <p className={"muted" + (bad("teams") ? " bad" : "")}>{t("noTeams")}</p>}
         <button type="button" onClick={() => {
           const n = s.teams.length + 1;
-          update((d) => { d.teams.push(newTeam(n, `${t("teamName")} ${n}`)); });
-          setSel(n - 1);
+          const team = newTeam(n, `${t("teamName")} ${n}`);
+          update((d) => { d.teams.push(team); });
+          setSel(team.id);
         }}>+ {t("add")}</button>
       </aside>
-      <section>{s.teams[i] && <TeamEditor i={i} onRemove={() => setSel(Math.max(0, i - 1))} />}</section>
+      <section>{s.teams[i] && <TeamEditor i={i} onRemove={() => setSel(s.teams[i - 1]?.id)} />}</section>
     </div>
   );
 }

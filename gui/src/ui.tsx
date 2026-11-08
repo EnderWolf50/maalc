@@ -86,7 +86,7 @@ export function ToggleNum({ label, path, value, on, min, max, note, onChange }: 
  * window (tauri.conf.json): on Windows Tauri otherwise replaces WebView2's drop handler and no HTML5 drop fires (#64). */
 export function ReorderList<T>({ items, onChange, render, keyOf, selected, onSelect, badAt }: {
   items: T[]; onChange: (items: T[]) => void; render: (item: T, i: number) => ReactNode; keyOf: (item: T) => string;
-  selected?: number; onSelect?: (i: number) => void; badAt?: (i: number) => boolean;
+  selected?: number; onSelect?: (i: number, items: T[]) => void; badAt?: (i: number) => boolean;
 }) {
   const { t } = useEditor();
   const [dragging, setDragging] = useState<number | null>(null);
@@ -95,14 +95,14 @@ export function ReorderList<T>({ items, onChange, render, keyOf, selected, onSel
     const next = [...items];
     next.splice(to, 0, ...next.splice(from, 1));
     onChange(next);
-    if (selected === from) onSelect?.(to);
+    if (selected === from) onSelect?.(to, next);
   };
   return (
     <ol className="reorder" title={t("dragHint")}>
       {items.map((item, i) => (
         <li key={keyOf(item)} draggable
           className={[selected === i && "selected", dragging === i && "dragging", badAt?.(i) && "bad"].filter(Boolean).join(" ")}
-          onClick={() => onSelect?.(i)}
+          onClick={() => onSelect?.(i, items)}
           onDragStart={(e) => { setDragging(i); e.dataTransfer.effectAllowed = "move"; }}
           onDragEnd={() => setDragging(null)}
           onDragOver={(e) => e.preventDefault()}

@@ -1,8 +1,8 @@
 // Shell: load <root>/config/settings.json, the tabs, and check-then-save (spec 04 section 2).
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import * as api from "./api";
 import { TEXT, type Key } from "./i18n";
-import { LUX_MODES, newSettings, parseSettings, runEnum, type Luxcavation, type LuxMode, type Settings } from "./model";
+import { LUX_MODES, newSettings, parseSettings, rebase, runEnum, type Luxcavation, type LuxMode, type Settings } from "./model";
 import { DeploymentTab, StarlightTab, ThemePackTab } from "./Plans";
 import { GiftListsTab } from "./GiftLists";
 import { TeamsTab } from "./Teams";
@@ -32,6 +32,36 @@ export default function App() {
   const [giftList, setGiftList] = useState("default"); // what the gift list tab shows; the teams tab can point it at a list
   const [checked, setChecked] = useState(false); // marks show after the first save attempt
   const [status, setStatus] = useState("");
+  // The file's text as last read or written: other text there is another writer's, the Agent's after a claim (#501).
+  const disk = useRef<string | null>(null);
+  const latest = useRef({ s, savedText });
+  latest.current = { s, savedText };
+
+  /** Take what another writer changed in the file, under the unsaved edits (rebase); the settings the editor holds now. */
+  const sync = async () => {
+    const text = await api.loadSettings();
+    const { s: draft, savedText: base } = latest.current;
+    if (text === null || text === disk.current || !draft || !base) return draft;
+    disk.current = text;
+    let data: Settings;
+    try {
+      data = parseSettings(text).data;
+    } catch {
+      return draft; // half an edit by hand: the next change is read again
+    }
+    const next = rebase(JSON.parse(base), draft, data);
+    setS(next);
+    setSavedText(toText(data));
+    setStatus(TEXT[next.language].diskChanged);
+    return next;
+  };
+
+  useEffect(() => {
+    const poll = () => { sync().catch(() => {}); };
+    const timer = setInterval(poll, 2000);
+    window.addEventListener("focus", poll);
+    return () => { clearInterval(timer); window.removeEventListener("focus", poll); };
+  }, []);
 
   useEffect(() => {
     api.rootDir().then(setRoot, (e) => setLoadError(String(e)));
@@ -39,8 +69,12 @@ export default function App() {
       if (text === null) return setS(newSettings());
       try {
         const { data, migrated, dropped, unknown, trials } = parseSettings(text);
+        disk.current = text;
         setS(data);
-        if (migrated && !validate(data).length) await api.saveSettings(toText(data));
+        if (migrated && !validate(data).length) {
+          await api.saveSettings(toText(data));
+          disk.current = toText(data);
+        }
         setSavedText(toText(data)); // dirty = content changed, not formatting
         const warn = (key: Key, n: number) => (n ? [TEXT[data.language][key].replace("{n}", String(n))] : []);
         setStatus([...warn("migrate.dropped", dropped), ...warn("migrate.unknown", unknown), ...warn("migrate.trials", trials)].join(" "));
@@ -77,10 +111,12 @@ export default function App() {
 
   const save = async () => {
     setChecked(true);
-    if (problems.length) return setStatus("");
     try {
-      await api.saveSettings(toText(s));
-      setSavedText(toText(s));
+      const current = (await sync())!; // what another writer changed since goes under the edits first (#501)
+      if (validate(current).length) return setStatus("");
+      await api.saveSettings(toText(current));
+      disk.current = toText(current);
+      setSavedText(toText(current));
       setStatus(t("saved"));
     } catch (e) {
       setStatus(String(e));
