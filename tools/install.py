@@ -82,11 +82,11 @@ def mirror_repo(repo: Path, root: Path) -> None:
             shutil.copy2(src, root)
 
 
-def mirror_maafw(wheel: Path, root: Path, fixed_dll: bytes | None) -> None:
-    """root/maafw holds what the maafw wheel's bin/ holds, with fixed_dll (MAAFW_FIX's, on Windows) as MaaFramework.dll."""
-    mirror(wheel, root / "maafw")
+def mirror_maafw(wheel_bin: Path, root: Path, fixed_dll: bytes | None) -> None:
+    maafw = root / "maafw"
+    mirror(wheel_bin, maafw)
     if fixed_dll is not None:
-        (root / "maafw" / "MaaFramework.dll").write_bytes(fixed_dll)
+        (maafw / "MaaFramework.dll").write_bytes(fixed_dll)
 
 
 def bundle_python() -> None:
