@@ -233,8 +233,11 @@ def test_the_sh_helper_returns_empty_for_a_failing_command():
 def test_installing_the_prompt_fills_the_schedule_id_only_where_it_names_the_schedule():
     head, _, prompt = (Path(__file__).resolve().parent.parent / "docs/agents/watchdog-prompt.md").read_text(
         encoding="utf-8").partition("\n---\n")
-    placeholder = re.search(r"filling in `(<[^>]+>)`", head).group(1)
-    installed = prompt.replace(placeholder, "SCHEDULE-42")
-    assert "--status <line-id>=<state>" in installed and "--reported <line-id>" in installed
+    fill = re.search(r"filling in `(<[^>]+>)`", head)
+    line = re.search(r"`(<[^>]+>)` in step 2 stands for each listed line's id", head)
+    assert fill and line and fill[1] != line[1], "the header names the placeholder to fill and the per-line one apart"
+    assert set(re.findall(r"<[\w-]*id>", prompt)) == {fill[1], line[1]}
+    installed = prompt.replace(fill[1], "SCHEDULE-42")
+    assert f"--status {line[1]}=<state>" in installed and f"--reported {line[1]}" in installed
     filled = [line for line in installed.splitlines() if "SCHEDULE-42" in line]
     assert filled and all("scheduled task's id is" in line or "scheduledTaskId" in line for line in filled), filled
