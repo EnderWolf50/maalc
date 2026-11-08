@@ -52,18 +52,23 @@ READER = {"task": "task_status", "thread": "t3_thread_read"}
 # `result_available` is task_status's workState for a task with a result and no live child work: a finished turn with
 # live child work is `waiting_for_children`, still working. `cancelled` is a stop on purpose by the coordinator:
 # reported once, never resumed.
+FINISHED = "finished"
+ENDED = "ended"
+FAILED = "failed"
+CANCELLED = "cancelled"
+WORKING = "working"
 OUTCOMES = {
     "task": {
-        **dict.fromkeys(("result_available", "completed", "complete", "succeeded", "success", "done"), "finished"),
-        **dict.fromkeys(("failed", "error", "errored", "interrupted", "rate_limited", "overloaded"), "failed"),
-        **dict.fromkeys(("cancelled", "canceled"), "cancelled"),
-        **dict.fromkeys(("working", "waiting_for_children"), "working"),
+        **dict.fromkeys(("result_available", "completed", "complete", "succeeded", "success", "done"), FINISHED),
+        **dict.fromkeys(("failed", "error", "errored", "interrupted", "rate_limited", "overloaded"), FAILED),
+        **dict.fromkeys(("cancelled", "canceled"), CANCELLED),
+        **dict.fromkeys(("working", "waiting_for_children"), WORKING),
     },
     "thread": {
-        **dict.fromkeys(("preparing", "queued", "starting", "running"), "working"),
-        **dict.fromkeys(("completed", "waiting", "idle"), "ended"),
-        **dict.fromkeys(("interrupted", "failed"), "failed"),
-        **dict.fromkeys(("cancelled", "rolled_back"), "cancelled"),
+        **dict.fromkeys(("preparing", "queued", "starting", "running"), WORKING),
+        **dict.fromkeys(("completed", "waiting", "idle"), ENDED),
+        **dict.fromkeys(("interrupted", "failed"), FAILED),
+        **dict.fromkeys(("cancelled", "rolled_back"), CANCELLED),
     },
 }
 RESUME_MSG = ("You were interrupted. Run `uv run python tools/live/queue.py resume --task {task}` and "
@@ -172,24 +177,24 @@ def tick(rows: list[Row], statuses: dict[str, str], queue_text: str, ci_json: st
     for r in rows:
         s = statuses.get(r.key(), "").lower()
         o = OUTCOMES[r.kind].get(s)
-        if o == "ended" and r.key() in said:
-            o = "finished"
+        if o == ENDED and r.key() in said:
+            o = FINISHED
         outcomes[r.key()] = o
-        if o == "finished":
+        if o == FINISHED:
             fire(f"done|{r.key()}", f"FINISHED {r.label}: relay its result to the user, decisions first, then "
                                     f"`uv run python tools/live/watchdog.py done {r.label}`")
-        elif o == "ended":
+        elif o == ENDED:
             fire(f"ended|{r.key()}", f"ENDED {r.label} ({s}): its turn ended with no report to the main thread, so it "
                  "may be waiting: read its last message with t3_thread_read, relay its question to the user or answer "
                  f"it with t3_thread_send; when its work is done, `uv run python tools/live/watchdog.py done {r.label}`")
-        elif o == "cancelled":
+        elif o == CANCELLED:
             fire(f"cancelled|{r.key()}", f"CANCELLED {r.label}: stopped on purpose, not resumed; the coordinator decides, "
                                          f"and `uv run python tools/live/watchdog.py done {r.label}` drops the line")
-        elif o == "failed":
+        elif o == FAILED:
             fire(f"failed|{r.key()}|{hour}", f"FAILED {r.label} ({s}) with no result: resume it once with t3_thread_send "
                  f"(mode auto, clientRequestId resume-{r.label}-{hour}), message: "
                  + RESUME_MSG.format(task=r.task if r.task != "-" else r.label))
-        elif o == "working":
+        elif o == WORKING:
             # sent more work, it can finish or end again; the hourly `failed|` key stays to throttle the resume
             reported.difference_update({f"done|{r.key()}", f"ended|{r.key()}"})
     for name, mins in stranded_holders(queue_text):
@@ -197,7 +202,7 @@ def tick(rows: list[Row], statuses: dict[str, str], queue_text: str, ci_json: st
             owner = next((r for r in rows if r.task == name or r.label == name), None)
             if owner is None:
                 who = "its owner is not in the list: report it to the user"
-            elif outcomes.get(owner.key()) == "cancelled":
+            elif outcomes.get(owner.key()) == CANCELLED:
                 who = f"{owner.label} was cancelled on purpose, do not resume it: the coordinator releases the hold"
             else:
                 who = f"tell {owner.label} to resume (as for FAILED)"
