@@ -52,7 +52,8 @@ RUN = {}
 # spec 01; never saved), why it is done ("done", None while it runs), which ends it a success (TaskDone), its entry
 # node, and "ended" once done() or stop() ended it. Set as a task needs them: "modules" and "gate_backs" (the mirror's new
 # run gate), "settled" (a mirror run claimed or given up: none is under way until the next is planned, #436),
-# "assemble" (Assemble Modules' reads and confirms), "charge" (Charge Enkephalin's count and its steps).
+# "assemble" (Assemble Modules' reads and confirms), "charge" (Charge Enkephalin's count and its steps), "l3"
+# (restart_game's restarts that went through, #520).
 TASK = {"runs": 0, "done": None}
 # Stuck detection and recovery (spec 06), memory only: the last node seen ("node", its id) and the
 # screen type it handled ("kind"), a pending stuck for MirrorHub's Stuck node ("flag": (kind, start
@@ -491,10 +492,11 @@ def stop(context, reason, line=None, whole_list=False):
 @AgentServer.custom_action("TaskStart")
 class TaskStart(CustomAction):
     """A task's entry node (#364, ADR 0010): a task list runs its tasks on one agent, so what the last task left in
-    memory goes: its Ladder, the watchdog, the screens kept for evidence, this task's runs. The run goes too once the
-    last task ended (done, stop); one the client interrupted stays for the same task, which picks it up (#362 D3). The
-    game restarts (STUCK restarts, updates) still count per bot launch. After an account-level stop this launch the task fails
-    here, before any tap, evidence or webhook (#362 D8): it would meet the same screen."""
+    memory goes: its Ladder, the watchdog, the screens kept for evidence, this task's runs and restarts. The run goes too
+    once the last task ended (done, stop); one the client interrupted stays for the same task, which picks it up (#362 D3).
+    The failed game restarts in a row and the update restarts (STUCK restarts, updates) still count per bot launch. After
+    an account-level stop this launch the task fails here, before any tap, evidence or webhook (#362 D8): it would meet
+    the same screen."""
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         if STUCK["halted"]:
@@ -878,14 +880,19 @@ def go_home(context):
 
 def restart_game(context, reason, kind=None):
     """L3 outside the mirror's Ladder (spec 06), for GoHome's HomeLost and the daily hubs' DailyRecover: RecoverL3 within
-    the launch's Restarts, then GoHome's back keys, game starts and Window tab taps count afresh and the game state is
+    the task's L3_PER_TASK that went through (one that did not is not counted, as Ladder.failed uncharges the run) and the
+    launch's Restarts, then GoHome's back keys, game starts and Window tab taps count afresh and the game state is
     forgotten. kind: the screen type the game is stuck on; None for HomeLost, which no hub read. True once RecoverL3
     ran, through or not (GoHome goes on from wherever it left the game); False after the stop procedure."""
+    if TASK.get("l3", 0) >= recovery.L3_PER_TASK:
+        return stop(context, f"{reason}; game restarted {recovery.L3_PER_TASK} times this task")
     if why := STUCK["restarts"].attempt(kind):
         return stop(context, f"{reason}; {why}")
     log(f"recovery L3: {reason} (restart {STUCK['restarts'].in_a_row} of {recovery.L3_FAILED_IN_A_ROW} in a row)")
     detail = context.run_task("RecoverL3")
-    if not (detail and detail.status.succeeded):
+    if detail and detail.status.succeeded:
+        TASK["l3"] = TASK.get("l3", 0) + 1
+    else:
         log("L3 did not go through")
     for node in ("HomeBack", "HomeGameAway", "HomeWindowTab"):
         context.clear_hit_count(node)

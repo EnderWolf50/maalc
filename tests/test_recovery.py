@@ -1,4 +1,5 @@
 import json
+from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import numpy as np
@@ -407,9 +408,11 @@ def test_ladder_a_game_not_in_front_goes_straight_to_l3():
 
 @pytest.fixture
 def hub(monkeypatch, tmp_path):
-    """A fake Maa context for Recover: a blank screen, every recovery level goes through; a fresh ladder."""
+    """A fake Maa context for Recover and DailyRecover: a blank screen, every recovery level goes through; a fresh ladder
+    and task."""
     monkeypatch.setattr(actions.time, "sleep", lambda s: None)
     monkeypatch.setattr(actions, "ROOT", tmp_path)
+    monkeypatch.setattr(actions, "TASK", {"runs": 0, "done": None})  # the module's own back after the test
     ctx = MagicMock()
     ctx.tasker.controller.post_screencap.return_value.wait.return_value.get.return_value = np.zeros((720, 1280, 3), np.uint8)
     actions.RUN.clear()
@@ -477,3 +480,52 @@ def test_a_force_stop_that_fails_three_times_in_a_row_stops(hub, monkeypatch):
     assert [c.args for c in hub.run_task.call_args_list] == [("RecoverL3",)] * 3
     assert len(stops) == 1 and "3 times in a row" in stops[0], stops
     assert actions.STUCK["ladder"].counts[3] == 0
+
+
+FROZEN = ("PassBanner", 3, "PassBanner: the main window took none of 2 taps, the same picture after each: the game is frozen")
+PASS_STUCK = SimpleNamespace(node_name="PassStuck", custom_action_param=None)
+
+
+def daily_restarts(ctx, times):
+    """PassStuck's DailyRecover on a game frozen on the main window, times; after each, the hub gets past it to a pass page."""
+    results = []
+    for _ in range(times):
+        actions.STUCK["flag"] = FROZEN
+        results.append(actions.DailyRecover().run(ctx, PASS_STUCK))
+        actions.StuckFlag.see("PassMissionsTab", screen(0))
+    return results
+
+
+def restarts_run(ctx):
+    return [c.args for c in ctx.run_task.call_args_list].count(("RecoverL3",))
+
+
+def test_a_daily_task_stops_at_its_third_restart_though_each_got_past(hub, monkeypatch):
+    # #520: each restart got the bot past the main window, so the launch's streak never grows; the task's 2 end it.
+    stops = []
+    monkeypatch.setattr(actions, "stop", lambda context, reason, line=None: stops.append(reason) or False)
+    assert daily_restarts(hub, 3) == [True, True, False]
+    assert restarts_run(hub) == 2
+    assert len(stops) == 1 and "2 times this task" in stops[0], stops
+
+
+def test_the_next_task_has_its_own_two_restarts(hub, monkeypatch):
+    stops = []
+    monkeypatch.setattr(actions, "stop", lambda context, reason, line=None: stops.append(reason) or False)
+    daily_restarts(hub, 2)
+    assert actions.TaskStart().run(hub, SimpleNamespace(node_name="ClaimPassMissions")) is True
+    assert daily_restarts(hub, 3) == [True, True, False]
+    assert restarts_run(hub) == 4 and len(stops) == 1, stops
+
+
+def test_a_restart_that_did_not_go_through_is_not_one_of_the_tasks_two(hub, monkeypatch):
+    # The failed force-stop stays in the launch's streak only, as Ladder.failed uncharges the run: two more restarts run.
+    stops = []
+    monkeypatch.setattr(actions, "stop", lambda context, reason, line=None: stops.append(reason) or False)
+    hub.run_task.side_effect = lambda name: MagicMock(**{"status.succeeded": name != "RecoverL3"})
+    actions.STUCK["flag"] = FROZEN
+    assert actions.DailyRecover().run(hub, PASS_STUCK) is True
+    hub.run_task.side_effect = None
+    assert daily_restarts(hub, 3) == [True, True, False]
+    assert restarts_run(hub) == 3
+    assert len(stops) == 1 and "2 times this task" in stops[0], stops
