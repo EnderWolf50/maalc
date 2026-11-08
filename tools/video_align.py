@@ -32,8 +32,9 @@ and the tool prints it. A hole in the pts (over `HOLE` s without a frame) is pri
 **Output.** One CSV row per interval a node was up (score over its threshold, frames under 0.25 s apart, or 1.5
 frames at a lower `--fps`):
 when it came up (log time), how long it stayed, how many `--hub` passes started while it was up, how many until
-the node's first `Node.Recognition.Succeeded`, and how long after it came up that hit was logged. A summary per
-node follows. The logs go oldest first, as for `tools/maafw_timeline.py`.
+the node's first `Node.Recognition.Succeeded`, how long after it came up that hit was logged, and how long after
+its last frame the next `--hub` pass started (the first look that could see it gone; a delay after the node's hit
+shows here). A summary per node follows. The logs go oldest first, as for `tools/maafw_timeline.py`.
 """
 
 from __future__ import annotations
@@ -93,6 +94,10 @@ def video_scores(video: Path, nodes: dict, started: float, fps: float = 10.0):
     for n, img in tpl.items():
         if img is None:
             sys.exit(f"cannot read the template of {n}: {nodes[n][0]}")
+    # A template's pure green (0, 255, 0) is left out of the match, as the node's green_mask has MaaFramework do
+    # (Connecting.png: the word on green, shown over the page). Every pipeline template with such pixels sets it.
+    masks = {n: (~(img == (0, 255, 0)).all(axis=2)).astype(np.uint8) * 255 for n, img in tpl.items()}
+    masks = {n: m if not m.all() else None for n, m in masks.items()}
     vt, vs, still, prev = [], {n: [] for n in nodes}, [], None
     cap, due = cv2.VideoCapture(str(video)), 0.0
     while cap.grab():
@@ -112,7 +117,8 @@ def video_scores(video: Path, nodes: dict, started: float, fps: float = 10.0):
         still.append(prev is not None and not cv2.countNonZero(cv2.absdiff(grey, prev)))
         prev = grey
         for n, (_, (x, y, w, h), _) in nodes.items():
-            vs[n].append(float(cv2.matchTemplate(im[y:y + h, x:x + w], tpl[n], cv2.TM_CCOEFF_NORMED).max()))
+            r = cv2.matchTemplate(im[y:y + h, x:x + w], tpl[n], cv2.TM_CCOEFF_NORMED, mask=masks[n])
+            vs[n].append(float(np.nan_to_num(r, nan=0.0, posinf=0.0, neginf=0.0).max()))  # a flat region masked
     return np.array(vt), {n: np.array(s) for n, s in vs.items()}, np.array(still)
 
 
@@ -302,9 +308,11 @@ def intervals(lt, scores, threshold, hub, hits, gap=GAP) -> list[dict]:
         passes = [h for h in hub if a <= h <= b]
         hit = [h for h in hits if a <= h <= b + 0.5]  # a hit is logged after its screenshot
         first = min(hit) if hit else None
+        later = [h for h in hub if h > b]
         rows.append({"up_at": round(float(a), 3), "up_s": round(float(b - a), 3), "hub_passes_while_up": len(passes),
                      "passes_until_hit": len([h for h in passes if first is None or h <= first]),
-                     "recognized": bool(hit), "hit_after_s": round(float(first - a), 3) if hit else ""})
+                     "recognized": bool(hit), "hit_after_s": round(float(first - a), 3) if hit else "",
+                     "pass_after_gone_s": round(float(min(later) - b), 3) if later else ""})
     return rows
 
 
@@ -352,16 +360,21 @@ def main(argv=None) -> None:
     rows = [{"screen": n, **r} for n in nodes for r in intervals(lt, vs[n], nodes[n][2], hub, hits[n], max(GAP, 1.5 / a.fps)) if lo <= r["up_at"] <= hi]
     rows.sort(key=lambda r: r["up_at"])
     with open(a.out, "w", newline="", encoding="utf-8") as f:
-        w = csv.DictWriter(f, ["screen", "up_at", "up_s", "hub_passes_while_up", "passes_until_hit", "recognized", "hit_after_s"])
+        w = csv.DictWriter(f, ["screen", "up_at", "up_s", "hub_passes_while_up", "passes_until_hit", "recognized", "hit_after_s",
+                               "pass_after_gone_s"])
         w.writeheader()
         w.writerows({**r, "up_at": clock(r["up_at"])} for r in rows)
     for n in nodes:
         r = [x for x in rows if x["screen"] == n]
         if r:
             up = sorted(x["up_s"] for x in r)
-            after = sorted(x["hit_after_s"] for x in r if x["hit_after_s"] != "")
+
+            def median(key, rows=r):
+                xs = sorted(x[key] for x in rows if x[key] != "")
+                return xs[len(xs) // 2] if xs else "-"
             print(f"{n}: {len(r)} intervals, {sum(x['recognized'] for x in r)} recognized, up {up[0]}-{up[-1]} s"
-                  f" (median {up[len(up) // 2]}), hit after median {after[len(after) // 2] if after else '-'} s")
+                  f" (median {up[len(up) // 2]}), hit after median {median('hit_after_s')} s,"
+                  f" next pass after gone median {median('pass_after_gone_s', [x for x in r if x['recognized']])} s (recognized)")
 
 
 if __name__ == "__main__":

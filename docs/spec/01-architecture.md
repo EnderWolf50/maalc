@@ -10,6 +10,7 @@
 - 使用者設定由設定 GUI 寫進 `<root>/config/settings.json`，Agent 在任務開始時讀取並檢查；PI 不帶使用者選項（[ADR 0006](../adr/0006-settings-gui-writes-one-settings-file.md)）。格式見 [04-settings.md](04-settings.md)。（#6、#19，2026-10-14 定案）
 - 遊戲資料（主題包清單與預設主題包方案、事件覆寫表、尋路權重、Cost 對照表與商店數字、試煉表）放在 `resource/base/data/` 的 YAML 資料檔，由 Agent 讀取（[ADR 0005](../adr/0005-game-data-files-separate-from-user-settings.md)）。格式見 [05-game-data.md](05-game-data.md)。（#11、#12、#17、#19）
 - Windows 上，`tools/install.py` 組出的 `install/maafw/` 用 `maafw` wheel 的檔案，只把 `MaaFramework.dll` 換成 fork（EnderWolf50/MaaFramework）的修改版；MXU 與 `tools/live/bot.py`（設 `MAAFW_BINARY_PATH`）載入這份，其他直接 `import maa` 的程式（測試、離線工具）載入的仍是 wheel 原版。fork 是 wheel 那一版加上兩個修正：批次 OCR 裡被 roi 切掉一半以上高度的字框，改由那個 roi 自己跑一次 det+rec，不再切成細條重讀（上游 MaaXYZ/MaaFramework#1568，修正 PR 為 MaaXYZ/MaaFramework#1573）；每個任務只保留最後 200 個節點的詳情（上游 MaaXYZ/MaaFramework#1578）。`MAAFW_FIX` 釘下載網址與 SHA-256，`MAAFW_FIX_VERSION` 是它對應的 wheel 版本，wheel 版本不符時安裝中止；對應原始碼見 [NOTICE.md](../../NOTICE.md)。等 maafw 正式版同時包含這兩個修正，就拿掉 fork、改回 wheel 的 DLL。（#157、#176）
+- Agent 的 `main.py` 在 `<root>/maafw/` 存在時，把沒設過的 `MAAFW_BINARY_PATH` 設成它，所以 Agent 也從 `maafw/` 載入。Agent 程序只載入 `MaaAgentServer.dll` 和它要的 `MaaUtils.dll`、`opencv_world4_maa.dll`、`DirectML.dll`，不載入 `MaaFramework.dll`：辨識在 client 的程序裡跑。發佈 zip 的內嵌 Python 因此不帶 wheel 的 `maa/bin/`，MaaFramework 的二進位只有 `maafw/` 一份。MFAAvalonia 只從它自己的 `runtimes/win-x64/native/` 載入 MaaFramework，不讀 `maafw/`；換成 fork 的做法見 README。（#497）
 
 | 層 | 負責 | 不負責 |
 |---|---|---|

@@ -80,6 +80,8 @@ def child():
         "settings": ("settings", GAME), "entry": ("entry", GAME), "closed": ("black", "com.android.launcher"),
         # the Window tab's page shows 4 screenshots after the tap; the game shows black for 15 before its title
         "drive_late": ("drive", GAME, 4), "closed_slow": ("black", "com.android.launcher", 0, 15),
+        # the Mailbox closes 3 screenshots after its Close (#258)
+        "mailbox_late": ("mailbox", GAME, 3),
         # these last: they change the model's methods
         "stuck": ("entry", GAME), "restart": ("entry", GAME), "restarts_used": ("entry", GAME), "event": ("event", GAME),
         # the Window tab shows its tap but the page never changes: tapped up to its limit (the taps stay ignored after it)
@@ -134,6 +136,10 @@ def test_go_home_reaches_the_main_window_from_each_start():
     assert out["mailbox"]["succeeded"] and len(out["mailbox"]["clicks"]) == 1
     assert inside(MAILBOX_CLOSE, *out["mailbox"]["clicks"][0]) and out["mailbox"]["nodes"][-1] == "HomeReached"
     assert out["settings"]["succeeded"] and "SettingsMenu" in out["settings"]["nodes"]
+    # A Mailbox slow to close is waited for until the main window shows (#258): a 1.5 s sleep took no screenshot, so the
+    # look after it still saw the box and pressed Close again.
+    o = out["mailbox_late"]
+    assert o["succeeded"] and len(o["clicks"]) == 1 and o["keys"] == [] and o["nodes"][-1] == "HomeReached", o
     # A page with no tab bar: the back key, then the tab.
     assert out["entry"]["succeeded"] and out["entry"]["keys"] == [4] and len(out["entry"]["clicks"]) == 1
 
