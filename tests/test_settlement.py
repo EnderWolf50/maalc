@@ -342,6 +342,10 @@ def window_gone(lag):
     return lag, {tuple(actions.REWARD_TITLE_ROI): "", tuple(actions.DIALOG_TEXT): ""}, 90
 
 
+def give_up_asks():
+    return 0.5, {tuple(actions.DIALOG_TEXT): "End expedition without claiming rewards?"}, 30
+
+
 def test_claim_confirms_its_dialog_once_it_stops_and_ends_once_the_window_goes(context, clock, monkeypatch, tmp_path):
     # #258: Claim and its Confirm slept 2 s each (the 2026-10-29 and 2026-11-08 claims both asked to confirm). Claim now
     # waits for the dialog, Confirm for the window to go.
@@ -383,11 +387,38 @@ def test_unread_toggles_are_read_again_as_soon_as_they_read_not_after_1_s(contex
 def test_give_up_confirms_once_its_dialog_stops_and_ends_once_the_window_goes(context, clock, monkeypatch, tmp_path):
     # #258: GiveUpRewards slept 1.5 s, its Confirm 2 s.
     done, game, lines = timed_settle(context, monkeypatch, tmp_path, "Floor 3 [NORMAL] 2/6", "none", {
-        actions.GIVE_UP: [(0.5, {tuple(actions.DIALOG_TEXT): "End expedition without claiming rewards?"}, 30)],
+        actions.GIVE_UP: [give_up_asks()],
         actions.DIALOG_CONFIRM: [window_gone(0.5)]})
     assert done and game.taps == [actions.GIVE_UP, actions.DIALOG_CONFIRM]
     assert [line["result"] for line in lines] == ["giveup"]
     assert sum(clock) < 2  # was 3.5 s
+
+
+def test_a_give_up_confirm_the_game_lost_is_tapped_again_and_the_run_recorded_once(context, clock, monkeypatch, tmp_path):
+    # #566: the first Confirm does not take. Settle recorded the run all the same and left the window up; MirrorHub,
+    # finding it again, had Settle cancel the dialog, give up once more and write a second giveup line for the run.
+    data = json.loads((Path(__file__).parent / "settings_cases.json").read_text(encoding="utf-8"))["valid"]
+    (tmp_path / "config").mkdir()
+    (tmp_path / "config" / "settings.json").write_text(json.dumps(data), encoding="utf-8")  # Settle makes up a run plan again
+    _, game, _ = timed_settle(context, monkeypatch, tmp_path, "Floor 3 [NORMAL] 2/6", "none", {
+        actions.GIVE_UP: [give_up_asks(), give_up_asks()], actions.DIALOG_CONFIRM: [None, window_gone(0.5)],
+        actions.DIALOG_CANCEL: [(0.4, {tuple(actions.DIALOG_TEXT): ""}, 20)]})
+    for _ in range(4):  # MirrorHub hands Settle the window while it is up
+        if not game.now()[tuple(actions.REWARD_TITLE_ROI)]:
+            break
+        actions.Settle().run(context, None)
+    lines = (tmp_path / "logs" / "runs.jsonl").read_text(encoding="utf-8").splitlines()
+    assert [json.loads(line)["result"] for line in lines] == ["giveup"]
+    assert game.taps == [actions.GIVE_UP, actions.DIALOG_CONFIRM, actions.DIALOG_CONFIRM]
+
+
+def test_a_give_up_whose_window_stays_is_handed_to_recovery_unrecorded(context, clock, monkeypatch, tmp_path):
+    # #566: the window and its dialog stay whatever Confirm does: not a run given up yet.
+    done, game, lines = timed_settle(context, monkeypatch, tmp_path, "Floor 3 [NORMAL] 2/6", "none", {
+        actions.GIVE_UP: [give_up_asks()]})
+    assert done and lines == []
+    assert actions.STUCK["flag"] is not None
+    assert game.taps.count(actions.DIALOG_CONFIRM) == 5  # the bound: 5 looks, each confirming the dialog that stays
 
 
 def test_a_leftover_claim_dialog_is_cancelled_and_handed_back_once_it_goes(context, clock, monkeypatch, tmp_path):
