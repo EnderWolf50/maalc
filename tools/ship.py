@@ -1,20 +1,20 @@
 """Merge pull requests one at a time and test integration merges.
 
   uv run python tools/ship.py ready <pr>...
-  uv run python tools/ship.py land <pr>... --go [--onto-red]
+  uv run python tools/ship.py land <pr>... --go [--onto-red <pr>]
   uv run python tools/ship.py into <integration-branch> <branch>
 
 `ready` prints one line per PR: head SHA, `ci-ok` state, mergeable, draft, base and the open PRs stacked on its branch.
 
-`land` merges each PR (merge commit) once `ci-ok` passed on its current head and it is mergeable. It
-retargets every PR stacked on the branch to the base before deleting the branch, waits for the CI run of the
-merge commit on the base branch and exits non-zero when that run is red. Before a PR merges into main, `land`
-waits for the CI run of main's head too: when that run is not green the PR is not merged and the batch stops.
-Rerun main's CI when an outside failure (a GitHub 504) turned it red; `--onto-red` skips the check, only for
-the PR that fixes a red main. Several PRs land in the given order;
-the first that is not ready, fails to merge or turns main red stops the batch, and the PRs after it are not
-started. Once the batch ends with main green, `tools/after_land.py` runs once in the main checkout, unless the
-emulator queue has a holder (`install/` is in use): then the command to run later is printed.
+`land` merges each PR (merge commit) once `ci-ok` passed on its current head and it is mergeable. A PR into main
+also waits for the CI run of main's head and is not merged when that run is not green. It retargets every PR
+stacked on the branch to the base before deleting the branch, waits for the CI run of the merge commit on the base
+branch and exits non-zero when that run is red. Several PRs land in the given order; the first that is not ready,
+finds main red, fails to merge or turns main red stops the batch, and the PRs after it are not started. Once the
+batch ends with main green, `tools/after_land.py` runs once in the main checkout, unless the emulator queue has a
+holder (`install/` is in use): then the command to run later is printed.
+A main red from an outside failure (a GitHub 504) gets a rerun of its CI. `--onto-red <pr>` skips the check of
+main's head for that one PR: use it only for the PR that fixes a red main.
 Calls with `--go` take turns in the land lane (`<main checkout>/.local/queue/land/`, a `tools/live/queue.py` queue):
 each holds its ticket for the whole batch, `after_land.py` included. A call that has to wait prints once
 `ship: waiting for pid <pid> (ship.py land #<pr>...) to end before landing #<pr>...` and starts when that call ends,
@@ -37,7 +37,7 @@ import time
 from contextlib import nullcontext
 from pathlib import Path
 
-from live.queue import read, turn
+from live.queue import turn
 from local_dir import local_dir, main_checkout
 
 CI_CHECK = "ci-ok"
@@ -147,11 +147,12 @@ def land_one(runner, pr: int, go: bool, sleep=time.sleep, onto_red: bool = False
               f"{[s['number'] for s in stacked] or 'no PR'} and wait for main CI. Add --go.")
         return Outcome.PREVIEWED
     if base == "main" and not onto_red:
-        main_sha = gh_json(runner, "api", "repos/{owner}/{repo}/git/ref/heads/main")["object"]["sha"]
+        main_sha = gh_json(runner, "api", f"repos/{{owner}}/{{repo}}/git/ref/heads/{base}")["object"]["sha"]
         if (state := wait_for_main_ci(runner, base, main_sha, sleep)) != "success":
-            print(f"ship: #{pr} not merged: CI of main's head {main_sha[:10]} is {state}. Rerun main's CI when an outside "
-                  "failure (a GitHub 504) turned it red; land the PR that fixes main with --onto-red.", file=sys.stderr)
-            return Outcome.REFUSED
+            print(f"ship: #{pr} not merged: CI of {base}'s head {main_sha[:10]} is {state}. Rerun its CI when an outside "
+                  f"failure (a GitHub 504) turned it red; land the PR that fixes {base} with --onto-red <pr>.",
+                  file=sys.stderr)
+            return Outcome.RED
     rc, out = runner(["gh", "pr", "merge", str(pr), "--merge", "--match-head-commit", head])
     if rc:  # GitHub can still refuse (the head moved): nothing merged, so it stops the batch like a blocker
         print(f"ship: gh pr merge {pr} failed\n{out.strip()}", file=sys.stderr)
@@ -171,19 +172,20 @@ def land_one(runner, pr: int, go: bool, sleep=time.sleep, onto_red: bool = False
     return Outcome.GREEN
 
 
-def waiting_line(ahead: list[Path], prs: list[int]) -> str:
-    calls = ", ".join(f"pid {p.stem.split('-', 2)[1]} ({read(p)[0]})" for p in ahead)
+def waiting_line(ahead: list[tuple[str, str]], prs: list[int]) -> str:
+    calls = ", ".join(f"pid {pid} ({cmd})" for pid, cmd in ahead)
     return f"ship: waiting for {calls} to end before landing {' '.join(f'#{p}' for p in prs)}"
 
 
-def cmd_land(runner, prs: list[int], go: bool, sleep=time.sleep, repo: Path | None = None, onto_red: bool = False) -> int:
+def cmd_land(runner, prs: list[int], go: bool, sleep=time.sleep, repo: Path | None = None,
+             onto_red: int | None = None) -> int:
     repo = repo or main_checkout()
     lane = turn(repo / ".local" / "queue" / "land", "land", ["ship.py", "land", *(f"#{p}" for p in prs)], sleep=sleep,
                 on_wait=lambda ahead: print(waiting_line(ahead, prs), flush=True)) if go else nullcontext()
     with lane:
         outcomes = []
         for i, pr in enumerate(prs):
-            outcomes.append(land_one(runner, pr, go, sleep, onto_red))
+            outcomes.append(land_one(runner, pr, go, sleep, onto_red=pr == onto_red))
             if outcomes[-1] in STOPS:
                 if len(prs) > 1:
                     rest = ", ".join(f"#{p}" for p in prs[i + 1:]) or "none"
@@ -277,9 +279,9 @@ def main(argv=None, runner=run) -> int:
     land = sub.add_parser("land")
     land.add_argument("prs", type=int, nargs="+")
     land.add_argument("--go", action="store_true", help="merge; without it only say what would happen")
-    land.add_argument("--onto-red", action="store_true",
-                      help="merge even when the CI of main's head is not green: only for a PR that fixes a red main. "
-                           "A main red from an outside failure (a GitHub 504) gets a rerun of its CI instead")
+    land.add_argument("--onto-red", type=int, metavar="PR",
+                      help="merge this PR even when the CI of main's head is not green: only the PR that fixes a red "
+                           "main. A main red from an outside failure (a GitHub 504) gets a rerun of its CI instead")
     into = sub.add_parser("into")
     into.add_argument("integration")
     into.add_argument("branch")
@@ -287,6 +289,8 @@ def main(argv=None, runner=run) -> int:
     if a.cmd == "ready":
         return cmd_ready(runner, a.prs)
     if a.cmd == "land":
+        if a.onto_red is not None and a.onto_red not in a.prs:
+            ap.error(f"--onto-red {a.onto_red} is not one of the PRs to land")
         return cmd_land(runner, a.prs, a.go, onto_red=a.onto_red)
     return cmd_into(runner, a.integration, a.branch)
 

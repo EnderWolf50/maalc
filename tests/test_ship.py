@@ -92,9 +92,9 @@ class GitHub(Fake):
         return super().__call__(argv, cwd)
 
 
-def batch_fake(*prs, stacked=None, main_ci=None, queue="emulator:\n  free\n"):
+def batch_fake(*prs, stacked=None, main_ci=None, queue="emulator:\n  free\n", main_head=(("completed", "success"),)):
     """A fake GitHub with the PRs `prs` (info dicts); `stacked` and `main_ci` are keyed by PR number."""
-    routes = ok_routes(queue)
+    routes = ok_routes(queue, main_head)
     for p in prs:
         n = p["number"]
         routes[f"gh pr view {n}"] = [(0, json.dumps(p)), (0, json.dumps({"mergeCommit": {"oid": merge_of(n)}}))]
@@ -192,15 +192,23 @@ def dead_pid() -> int:
     return p.pid
 
 
-@pytest.mark.parametrize("first_ci, dead_ahead", [("success", False), ("failure", False), ("success", True)],
-                         ids=["first-green", "first-red", "dead-holder-ahead"])
-def test_a_second_land_waits_until_the_first_ends(tmp_path, capsys, first_ci, dead_ahead):
+def earlier_land(repo, pid):
+    lane(repo).mkdir(parents=True)
+    (lane(repo) / f"1000000000000000001-{pid}-land.ticket").write_text(
+        json.dumps({"cmd": "ship.py land #6", "start": None, "first": False}))
+
+
+@pytest.mark.parametrize("first_ci, main_after, dead_ahead", [
+    ("success", "success", False), ("failure", "failure", False), ("failure", "success", False),
+    ("success", "success", True),
+], ids=["first-green", "first-red-main-still-red", "first-red-main-rerun-green", "dead-holder-ahead"])
+def test_a_second_land_waits_until_the_first_ends(tmp_path, capsys, first_ci, main_after, dead_ahead):
     if dead_ahead:
-        lane(tmp_path).mkdir(parents=True)
-        (lane(tmp_path) / f"1000000000000000001-{dead_pid()}-land.ticket").write_text(
-            json.dumps({"cmd": "ship.py land #6", "start": None, "first": False}))
+        earlier_land(tmp_path, dead_pid())
     log, reached, release, second_waits = [], threading.Event(), threading.Event(), threading.Event()
     one, two = batch_fake(pr_of(7), main_ci={7: [("completed", first_ci)]}), batch_fake(pr_of(8))
+    two.routes[f"gh api {MAIN_REF}"] = (0, json.dumps({"object": {"sha": merge_of(7)}}))
+    two.routes[f"gh run list --workflow ci --branch main --commit {merge_of(7)}"] = runs([("completed", main_after)])
 
     def first_runner(argv, cwd=None):
         log.append(("first", list(argv)))
@@ -231,20 +239,18 @@ def test_a_second_land_waits_until_the_first_ends(tmp_path, capsys, first_ci, de
         release.set()
         t1.join(5)
         t2.join(5)
-    assert rc == {"first": 0 if first_ci == "success" else 1, "second": 0}
+    assert rc == {"first": 0 if first_ci == "success" else 1, "second": 0 if main_after == "success" else 1}
     last_first = max(i for i, (who, _) in enumerate(log) if who == "first")
     assert log[last_first][1][:4] == (list(AFTER_LAND) if first_ci == "success" else ["gh", "run", "list", "--workflow"])
     assert min(i for i, (who, _) in enumerate(log) if who == "second") > last_first
-    assert two.ran("gh", "pr", "merge", "8")
+    assert bool(two.ran("gh", "pr", "merge", "8")) == (main_after == "success")
     waits = [line for line in capsys.readouterr().out.splitlines() if line.startswith("ship: waiting")]
     assert waits == [f"ship: waiting for pid {os.getpid()} (ship.py land #7) to end before landing #8"]
     assert not list(lane(tmp_path).glob("*.ticket"))
 
 
 def test_a_dry_run_lands_nothing_and_never_waits_for_a_land_that_runs(tmp_path, capsys):
-    lane(tmp_path).mkdir(parents=True)
-    (lane(tmp_path) / f"1000000000000000001-{os.getpid()}-land.ticket").write_text(
-        json.dumps({"cmd": "ship.py land #6", "start": None, "first": False}))
+    earlier_land(tmp_path, os.getpid())
 
     def no_wait(s):
         raise AssertionError("the dry run waited")
@@ -343,10 +349,25 @@ def test_land_waits_for_a_pending_main_head_then_merges():
     assert len(fake.ran(*head)) == 2 and last(fake, *head) < first(fake, "gh", "pr", "merge")
 
 
-def test_land_onto_red_merges_onto_a_red_main_head():
-    fake = land_fake(main_head=[("completed", "failure")])
-    assert ship.main(["land", "7", "--go", "--onto-red"], runner=fake) == 0
-    assert fake.ran("gh", "pr", "merge", "7")
+def test_land_onto_red_merges_the_named_pr_onto_a_red_main_head_and_no_other():
+    fake = batch_fake(pr_of(7), pr_of(8), main_head=[("completed", "failure")])
+    assert ship.main(["land", "7", "8", "--go", "--onto-red", "7"], runner=fake) == 1
+    assert [c[3] for c in fake.ran("gh", "pr", "merge")] == ["7"]
+
+
+def test_land_onto_red_must_name_a_pr_of_the_call():
+    fake = land_fake()
+    with pytest.raises(SystemExit) as e:
+        ship.main(["land", "7", "--go", "--onto-red", "8"], runner=fake)
+    assert e.value.code == 2 and not fake.calls
+
+
+def test_land_skips_after_land_when_main_turns_red_before_a_later_pr(capsys):
+    fake = batch_fake(pr_of(7), pr_of(8), main_head=[("completed", "success"), ("completed", "failure")])
+    assert land(fake, prs=[7, 8]) == 1
+    assert [c[3] for c in fake.ran("gh", "pr", "merge")] == ["7"]
+    assert "ship: stopped at #8; not started: none" in capsys.readouterr().err
+    assert not fake.ran(*AFTER_LAND)
 
 
 def test_land_exits_non_zero_on_a_red_main_and_skips_after_land(capsys):
