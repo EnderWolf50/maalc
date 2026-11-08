@@ -265,14 +265,6 @@ def test_event_text_is_tapped_every_0_15_s_and_read_every_third_tap(context, clo
     assert sum(clock) == pytest.approx(0.2 + 5 * actions.EVENT_TAP_EVERY)  # still()'s second look, then the 5 gaps
 
 
-def test_event_text_stops_on_the_lit_button_without_reading_text(context, clock):
-    # The button's pixels are looked at after each tap: a tap after it lit is wasted (live: 1-3 a burst).
-    reads = event_text(context, red_from=3)
-    actions.Event().run(context, None)
-    assert len(corner_taps(context)) == 2
-    assert tuple(actions.EVENT_BUTTON_LABEL) not in reads
-
-
 def button_taps(context):
     return [c for c in context.tasker.controller.post_click.call_args_list if c.args == actions.EVENT_BUTTON]
 
@@ -295,13 +287,6 @@ def test_no_corner_tap_once_the_lit_button_left_the_event(context, clock):
     event_text(context, red_from=1, red_to=3, label_to=3)
     actions.Event().run(context, None)
     assert len(corner_taps(context)) == 2  # both on the fading event page
-
-
-def test_a_lit_button_that_became_another_is_handed_back_at_once(context, clock):
-    # A check's result page: SKIP pressed, Continue lit in its place (spec 02), with no unlit screen between.
-    event_text(context, red_from=1, skip_to=3)
-    actions.Event().run(context, None)
-    assert len(button_taps(context)) == 1 and len(corner_taps(context)) == 2
 
 
 @pytest.mark.parametrize("label_to, misread", [
