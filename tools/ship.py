@@ -1,22 +1,24 @@
 """Merge pull requests one at a time and test integration merges.
 
   uv run python tools/ship.py ready <pr>...
-  uv run python tools/ship.py land <pr> --go
+  uv run python tools/ship.py land <pr>... --go
   uv run python tools/ship.py into <integration-branch> <branch>
 
 `ready` prints one line per PR: head SHA, `ci-ok` state, mergeable, draft, base and the open PRs stacked on its branch.
 
-`land` merges one PR (merge commit) once `ci-ok` passed on its current head and it is mergeable. It
+`land` merges each PR (merge commit) once `ci-ok` passed on its current head and it is mergeable. It
 retargets every PR stacked on the branch to the base before deleting the branch, waits for the CI run of the
-merge commit on the base branch and exits non-zero when that run is red. A green run is followed by
-`tools/after_land.py` in the main checkout, unless the emulator queue has a holder (`install/` is in use):
-then the command to run later is printed. A second PR is the caller's next step, after this call returned green.
+merge commit on the base branch and exits non-zero when that run is red. Several PRs land in the given order;
+the first that is not ready, fails to merge or turns main red stops the batch, and the PRs after it are not
+started. Once the batch ends with main green, `tools/after_land.py` runs once in the main checkout, unless the
+emulator queue has a holder (`install/` is in use): then the command to run later is printed.
 
 `into` merges `<branch>` into the integration branch (`--no-ff`) in a worktree of it, runs `tools/check.py`
 through the bench queue and pushes only on green. A conflict or a red check leaves the branch as it was.
 The first merge into an integration branch with no open PR opens a draft one, so Linux CI runs from then on.
 """
 import argparse
+import enum
 import json
 import os
 import re
@@ -112,19 +114,32 @@ def emulator_busy(runner, repo: Path) -> bool:
     return "free" not in out.split()
 
 
-def cmd_land(runner, pr: int, go: bool, sleep=time.sleep, repo: Path | None = None) -> int:
-    repo = repo or main_checkout()
+class Outcome(enum.Enum):
+    REFUSED = enum.auto()
+    PREVIEWED = enum.auto()
+    INTO_STACK = enum.auto()
+    GREEN = enum.auto()
+    RED = enum.auto()
+
+
+STOPS = {Outcome.REFUSED, Outcome.RED}
+
+
+def land_one(runner, pr: int, go: bool, sleep=time.sleep) -> Outcome:
     info = pr_info(runner, pr)
     if problems := blockers(info):
         print(f"ship: #{pr} is not ready: " + "; ".join(problems), file=sys.stderr)
-        return 1
+        return Outcome.REFUSED
     branch, base, head = info["headRefName"], info["baseRefName"], info["headRefOid"]
     stacked = stacked_on(runner, branch)
     if not go:
         print(f"ship: #{pr} head {head[:10]} is ready. Would merge into {base}, retarget "
               f"{[s['number'] for s in stacked] or 'no PR'} and wait for main CI. Add --go.")
-        return 0
-    need(runner, ["gh", "pr", "merge", str(pr), "--merge", "--match-head-commit", head])
+        return Outcome.PREVIEWED
+    rc, out = runner(["gh", "pr", "merge", str(pr), "--merge", "--match-head-commit", head])
+    if rc:  # GitHub can still refuse (the head moved): nothing merged, so it stops the batch like a blocker
+        print(f"ship: gh pr merge {pr} failed\n{out.strip()}", file=sys.stderr)
+        return Outcome.REFUSED
     for s in stacked:  # before the branch goes, or GitHub closes them
         need(runner, ["gh", "pr", "edit", str(s["number"]), "--base", base])
     if not info["isCrossRepository"]:
@@ -132,20 +147,36 @@ def cmd_land(runner, pr: int, go: bool, sleep=time.sleep, repo: Path | None = No
     sha = gh_json(runner, "pr", "view", str(pr), "--json", "mergeCommit")["mergeCommit"]["oid"]
     if base != "main":  # ci.yml runs on pushes to main only: a stacked base gets no run to wait for
         print(f"ship: #{pr} merged as {sha[:10]} into {base}, which has no push CI; the stack's last PR lands on main")
-        return 0
+        return Outcome.INTO_STACK
     print(f"ship: #{pr} merged as {sha[:10]}; waiting for CI on {base}", flush=True)
     if (result := wait_for_main_ci(runner, base, sha, sleep)) != "success":
         print(f"ship: CI of {sha[:10]} on {base} is {result}. Do not land another PR.", file=sys.stderr)
-        return 1
+        return Outcome.RED
+    return Outcome.GREEN
+
+
+def cmd_land(runner, prs: list[int], go: bool, sleep=time.sleep, repo: Path | None = None) -> int:
+    repo = repo or main_checkout()
+    outcomes = []
+    for i, pr in enumerate(prs):
+        outcomes.append(land_one(runner, pr, go, sleep))
+        if outcomes[-1] in STOPS:
+            if len(prs) > 1:
+                rest = ", ".join(f"#{p}" for p in prs[i + 1:]) or "none"
+                print(f"ship: stopped at #{pr}; not started: {rest}", file=sys.stderr)
+            break
+    stop_rc = int(outcomes[-1] in STOPS)
+    if Outcome.GREEN not in outcomes or outcomes[-1] is Outcome.RED:
+        return stop_rc
     later = "uv run python tools/after_land.py"
     if emulator_busy(runner, repo):
         print(f"ship: green. The emulator queue has a holder (install/ is in use); run later in the main checkout: {later}")
-        return 0
+        return stop_rc
     rc, out = runner(["uv", "run", "python", "tools/after_land.py"], repo)  # the main checkout's venv, not the caller's
     print(out.strip())
     if rc:
         print("ship: green, but after_land failed", file=sys.stderr)
-    return rc
+    return rc or stop_rc
 
 
 def worktree_of(runner, repo: Path, branch: str) -> Path | None:
@@ -220,7 +251,7 @@ def main(argv=None, runner=run) -> int:
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("ready").add_argument("prs", type=int, nargs="+")
     land = sub.add_parser("land")
-    land.add_argument("pr", type=int)
+    land.add_argument("prs", type=int, nargs="+")
     land.add_argument("--go", action="store_true", help="merge; without it only say what would happen")
     into = sub.add_parser("into")
     into.add_argument("integration")
@@ -229,7 +260,7 @@ def main(argv=None, runner=run) -> int:
     if a.cmd == "ready":
         return cmd_ready(runner, a.prs)
     if a.cmd == "land":
-        return cmd_land(runner, a.pr, a.go)
+        return cmd_land(runner, a.prs, a.go)
     return cmd_into(runner, a.integration, a.branch)
 
 

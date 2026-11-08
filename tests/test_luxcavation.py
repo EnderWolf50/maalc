@@ -152,9 +152,8 @@ def test_no_other_screen_is_a_check_card_alone():
 def test_a_check_card_alone_is_tapped_to_open_its_prompt(context, monkeypatch):
     taps = []
     monkeypatch.setattr(actions, "tap", lambda context, x, y, wait=1.0: taps.append((x, y)))
-    shots = [LUX_EVENT["LuxEventCard"], LUX_EVENT["LuxEventCheck"]]
     context.tasker.controller.post_screencap.return_value.wait.return_value.get.side_effect = (
-        lambda: shots.pop(0) if len(shots) > 1 else shots[0])
+        lambda: LUX_EVENT["LuxEventCheck"] if taps else LUX_EVENT["LuxEventCard"])
     actions.RUN.clear()
     actions.RUN.update(lux={"name": "Thread Luxcavation"}, team={"keyword": "Burn"})
     assert actions.Event().run(context, None) is True
