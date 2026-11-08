@@ -3,7 +3,8 @@ shards with tests/shard_seconds.json.
 
     python tools/shard_seconds.py check <junit.xml>...   fails when the table no longer matches these reports, one per
                                                          shard: a file off by more than RATIO both as measured and at
-                                                         its shard's runner pace
+                                                         its shard's runner pace, or a file not in it that took SLOW
+                                                         both ways (SLOW / RATIO on a pull request)
     python tools/shard_seconds.py update --run <run id>  rewrites the table from the junit artifacts of that CI run and
                                                          of the EARLIER_RUNS before it whose agent shards all passed:
                                                          each file's median, or that run's own time when it is off from
@@ -23,7 +24,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 TABLE = ROOT / "tests" / "shard_seconds.json"
-# A file faster than this cannot unbalance a shard on its own; conftest counts an unlisted one 0.15 s a test.
+# A file faster than this cannot unbalance a shard on its own; conftest counts an unlisted one 0.15 s a test. A pull
+# request asks for a new file's row from SLOW / RATIO, so a file it lets through stays under SLOW on main: its time at
+# its shard's pace still moves between runs (#544).
 SLOW = 30
 RATIO = 2
 # Whole seconds round a file of PACE_MIN_SECONDS by 10 % at most; with PACE_MIN_FILES one changed file cannot set the
@@ -55,14 +58,14 @@ def within_ratio(took, listed, runner_pace):
     return any(listed * p / RATIO <= took <= listed * p * RATIO for p in (1, runner_pace))
 
 
-def stale(table, shard):
+def stale(table, shard, slow):
     problems = []
     runner_pace = pace(table, shard)
     for name, took in sorted(shard.items()):
         listed = table.get(name)
         if listed is None:
-            if took >= SLOW:
-                problems.append(f"{name} took {took:.0f} s and is not in the table")
+            if min(took, took / runner_pace) >= slow:
+                problems.append(f"{name} took {took:.0f} s and is not in the table: a new file from {slow:g} s needs a row")
         elif max(took, listed) >= SLOW and not within_ratio(took, listed, runner_pace):
             problems.append(f"{name} took {took:.0f} s, the table says {listed} (its shard's pace x{runner_pace:.2f})")
     return problems
@@ -78,10 +81,11 @@ def download(run, folder):
 
 def check(reports):
     table = json.loads(TABLE.read_text(encoding="utf-8"))
-    problems = [problem for report in reports for problem in stale(table, measured([report]))]
+    slow = SLOW / RATIO if os.environ.get("GITHUB_EVENT_NAME") == "pull_request" else SLOW
+    problems = [problem for report in reports for problem in stale(table, measured([report]), slow)]
     problems += [f"{name} has no time in this run's reports" for name in unmeasured(measured(reports))]
     if not problems:
-        print(f"tests/shard_seconds.json matches this run ({len(reports)} reports)")
+        print(f"tests/shard_seconds.json matches this run ({len(reports)} reports; a new file from {slow:g} s needs a row)")
         return 0
     run = os.environ.get("GITHUB_RUN_ID", "<run id>")
     fix = f"uv run python tools/shard_seconds.py update --run {run}, then commit tests/shard_seconds.json"
