@@ -24,7 +24,7 @@
 | 標題畫面 | 模板：`Change Account`、`Clear all caches` 按鈕 | 點畫面中央進入遊戲 | 連線中（`CONNECTING`）、載入畫面、主畫面 | #2、#7 | — |
 | 主畫面（Window 分頁） | 模板：底部分頁列（Window／Sinners／Drive／Theater／Extract／Dispense） | 點 Drive | Drive | #8 | `captures/255_final_window.png` |
 | Drive | 模板：`Mirror Dungeons` 入口按鈕 | 點 Mirror Dungeons | 鏡牢入口頁 | #8 | — |
-| 鏡牢入口頁：Before Entry | OCR：`Exploring:` 欄位為 `Before Entry`；模板：右下 Enter 按鈕。旁邊另有 `Rental` 按鈕，不要點（#24 實機） | 讀 Weekly Bonuses 剩餘格數（全域難度「自動」與「每週獎勵用完就停」要用）；依輪替游標開新局，點 Enter | 進入確認對話框 | #8、#9 | `captures/00_md_enter_dialog.png`（對話框背後） |
+| 鏡牢入口頁：Before Entry | OCR：`Exploring:` 欄位為 `Before Entry`；模板：右下 Enter 按鈕。旁邊另有 `Rental` 按鈕，不要點（#24 實機） | 讀 Weekly Bonuses 剩餘格數（全域難度「自動」與「每週獎勵用完就停」要用）；依隊伍佇列開新局，點 Enter | 進入確認對話框 | #8、#9 | `captures/00_md_enter_dialog.png`（對話框背後） |
 | 鏡牢入口頁：暫停中的局 | OCR：`Exploring:` 欄位為 `<季名> - F<N>`，下一行是 `<主題包> [NORMAL]` 或 `[HARD]`；還沒選主題包就暫停時是 `-`（#24 實機） | 點 Enter 接續 | Resume 對話框 | #8 | — |
 | 鏡牢入口頁：Exploration Complete | OCR：`Exploring:` 欄位為 `Exploration Complete`，卡片中央 `Unclaimed Rewards` | 點 Enter，依結算規則處理上局沒領的獎勵（[01](01-architecture.md#結算規則)） | Exploration Reward 視窗 | #8、#19 | — |
 | 鏡牢入口頁：過期的局（待截圖確認） | 未知 | 依結算規則處理（[01](01-architecture.md#結算規則)） | 未知 | #8、#19 | — |
@@ -65,7 +65,7 @@
 
 | 畫面 | 辨識方式 | 處理 | 可能的下一個畫面 | 來源 | 實機截圖 |
 |---|---|---|---|---|---|
-| 選隊頁 | OCR：左側 `TEAMS` 清單（`TEAMS #1`–`#40`）；模板：右下 Confirm | 選輪替游標指到的隊伍所設定的遊戲內隊伍欄位，點 Confirm（[03](03-decisions.md) 輪替）。清單一次只顯示約 7 欄（完整的 6 欄，列距 36.4 px），要捲動才看得到後面的欄位；`#40` 是最後一欄。實機 2026-10-18（#113）：每次捲 140 px，選 `#15`、`#30`、`#40`、`#22`、`#5` 都讀到正確標題，最多捲 8 次。右下的 `Starlight Bonus` 是這支隊伍可用的星光 | 等級警告對話框、星光頁 | #8、#9 | `captures/01_team_picker.png` |
+| 選隊頁 | OCR：左側 `TEAMS` 清單（`TEAMS #1`–`#40`）；模板：右下 Confirm | 選隊伍佇列選出的隊伍所設定的遊戲內隊伍欄位，點 Confirm（[03](03-decisions.md) 輪替）。清單一次只顯示約 7 欄（完整的 6 欄，列距 36.4 px），要捲動才看得到後面的欄位；`#40` 是最後一欄。實機 2026-10-18（#113）：每次捲 140 px，選 `#15`、`#30`、`#40`、`#22`、`#5` 都讀到正確標題，最多捲 8 次。右下的 `Starlight Bonus` 是這支隊伍可用的星光 | 等級警告對話框、星光頁 | #8、#9 | `captures/01_team_picker.png` |
 | 等級警告對話框 | OCR：`lower than the recommended level`、`Current Avg. Level`、`Recommended Level` | 點 Confirm 繼續 | 星光頁 | #8、#19 | `captures/02_after_team_confirm.png` |
 | 星光頁（Grace of Stars） | 模板：右側 `Select All Graces`、`Enter`；OCR：右上 `Owned` → `Available` → Cost 三個數字 | 依隊伍的星光方案逐張點 Grace 的等級，讀可用星光（`Available`，等於選隊頁的 `Starlight Bonus`，不是 `Owned`）；買不起時依全域選項停止或跳過（[03](03-decisions.md) 星光）。完成後點 Enter。10 張卡排成兩列，每張卡右上是基礎價格，底部是 `+`、`++` 兩個按鈕；右側另有 `Enhance All` 的 `+`／`++`，bot 不用。名稱與等級的對應見 [04](04-settings.md#6-星光方案6-組) | 星光確認對話框 | #8、#9 | `captures/03_starlight_page.png` |
 | 星光確認對話框 | OCR：標題 `Select Grace of Stars`、`Continue with selected effects?`；模板：`Convert Starlight to Cost` 勾選框 | 依星光方案切換 `Convert Starlight to Cost`，點 Confirm。不勾選時，沒用掉的星光會加進這局的結算獎勵（對話框文字 `Any unspent Starlight will be added to your Dungeon clear rewards.`） | 初始飾品頁 | #8、#9 | `captures/04_starlight_confirm.png` |
@@ -204,7 +204,7 @@
 | 通關畫面 | OCR：右上 `Victory`（和戰鬥的 `VICTORY` 不同位置）；右下 Confirm | 點 Confirm。2026-10-15 實機（1.117.0）：第 5 層 Boss 打完、經載入畫面後出現，左邊是 `Most Valued Employee`，右邊是經驗與 12 位罪人 | Exploration Complete 摘要 | #30 | `tests/screens/RunVictory.png` |
 | Defeat 畫面 | OCR：`Defeat`；模板：右下 Confirm | 點 Confirm | Exploration Complete 摘要 | #8 | `captures/244_after_forfeit_confirm.png` |
 | Exploration Complete 摘要 | OCR：`Exploration Complete`、逐層結果（例如 `Floor 5 [HARD] 5/6`）、`Total Progress`；模板：右下 `Claim Rewards` | 點 Claim Rewards。摘要有 6 頁，不用翻頁 | Exploration Reward 視窗 | #8、#19 | `captures/245_after_defeat_confirm.png`、`246_exploration_complete_p6.png` |
-| Exploration Reward 視窗 | OCR：標題 `Exploration Reward`、`Weekly Bonuses <n>/3`、這局的結果（最後到達的一層與進度，例如 `Floor 5 [HARD] 5/6`）；模板：三個 ON／OFF 開關、`GiveUpRewards`／`To Window`／`Claim` | 依結算規則（[01](01-architecture.md#結算規則)）：讀結果，已通過第 5 層（`claim_ok`）就 Claim，通過層數到達這局的 `target_floor`（`target_reached`）才依每週獎勵設定（規則見 [03](03-decisions.md#14-結算與每週獎勵) 第 14 節；不用／普通／困難、每局一次或全用）把對應數量的開關切到 ON，數量和剩餘次數從畫面讀，再點 Claim；Claim 要花的腦啡肽模組不夠就停止並通知。沒過第 5 層就點 GiveUpRewards。Claim 完成後輪替游標前進。bot 不點 To Window。實機：Claim 按鈕上標示花 5 個腦啡肽模組（`-5`）；視窗只顯示最後到達的那一層，不看背後摘要的逐層結果。2026-10-15 實機（1.117.0，普通局 `Floor 5 [NORMAL] 6/6`）：`n/3` 是剩餘次數；還有剩時遊戲**預設把第 1 個開關切到 ON**（普通局也是），開關是黃底 `ON`／暗底 `OFF` 文字；開關不影響 Claim 的 `-5`；Claim 後經載入畫面回到主畫面，不經過獎勵畫面；用了每週獎勵時先跳使用每週獎勵確認，再跳 `Rewards Acquired` 與 `Pass Level Up`（2026-10-16 實機，#65） | 主畫面、結束確認（不領獎）、不使用每週獎勵確認、移往 Window 確認 | #8、#9、#17、#19、#30、ADR 0003 | `captures/252_exploration_reward_window.png`、`tests/screens/ExplorationReward.png`、`ExplorationRewardOff.png` |
+| Exploration Reward 視窗 | OCR：標題 `Exploration Reward`、`Weekly Bonuses <n>/3`、這局的結果（最後到達的一層與進度，例如 `Floor 5 [HARD] 5/6`）；模板：三個 ON／OFF 開關、`GiveUpRewards`／`To Window`／`Claim` | 依結算規則（[01](01-architecture.md#結算規則)）：讀結果，已通過第 5 層（`claim_ok`）就 Claim，通過層數到達這局的 `target_floor`（`target_reached`）才依每週獎勵設定（規則見 [03](03-decisions.md#14-結算與每週獎勵) 第 14 節；不用／普通／困難、每局一次或全用）把對應數量的開關切到 ON，數量和剩餘次數從畫面讀，再點 Claim；Claim 要花的腦啡肽模組不夠就停止並通知。沒過第 5 層就點 GiveUpRewards。Claim 完成後這局的隊伍移到佇列最後。bot 不點 To Window。實機：Claim 按鈕上標示花 5 個腦啡肽模組（`-5`）；視窗只顯示最後到達的那一層，不看背後摘要的逐層結果。2026-10-15 實機（1.117.0，普通局 `Floor 5 [NORMAL] 6/6`）：`n/3` 是剩餘次數；還有剩時遊戲**預設把第 1 個開關切到 ON**（普通局也是），開關是黃底 `ON`／暗底 `OFF` 文字；開關不影響 Claim 的 `-5`；Claim 後經載入畫面回到主畫面，不經過獎勵畫面；用了每週獎勵時先跳使用每週獎勵確認，再跳 `Rewards Acquired` 與 `Pass Level Up`（2026-10-16 實機，#65） | 主畫面、結束確認（不領獎）、不使用每週獎勵確認、移往 Window 確認 | #8、#9、#17、#19、#30、ADR 0003 | `captures/252_exploration_reward_window.png`、`tests/screens/ExplorationReward.png`、`ExplorationRewardOff.png` |
 | 不使用每週獎勵確認 | OCR：`You have Weekly Bonus Eligibility remaining. Are you sure you want to claim the current rewards without using the Eligibility?` | 依結算規則不用每週獎勵時點 Confirm；其他情況點 Cancel。2026-10-15 實機：還有剩餘次數、開關全 OFF 時按 Claim 才出現；Cancel／Confirm 位置和結束確認相同 | 主畫面（Confirm）、Exploration Reward 視窗（Cancel） | #30 | `tests/screens/ClaimNoBonusDialog.png` |
 | 領獎確認（沒有每週獎勵） | OCR：`Claim the rewards?` | 本週每週獎勵已用完時按 Claim 出現，視同不使用每週獎勵確認：點 Confirm。實機觀察 (2026-10-17) | 主畫面 | #34 | 實機觀察 (2026-10-17) |
 | 使用每週獎勵確認 | OCR：`Spend your 「Weekly Bonuses」 to claim the bonus rewards?` | 依結算規則切好、讀回要用的每週獎勵開關後點 Confirm；其他情況點 Cancel。2026-10-16 實機：有開關 ON 時按 Claim 才出現；Cancel／Confirm 位置和結束確認相同 | `Rewards Acquired`（Confirm）、Exploration Reward 視窗（Cancel） | #65 | `tests/screens/ClaimBonusDialog.png` |
@@ -212,7 +212,7 @@
 | 移往 Window 確認 | OCR：`Would you like to move to the Window?` | 誤入時點 Cancel。按 Confirm 會回主畫面，獎勵保留到下次進鏡牢選單時再彈出 | Exploration Reward 視窗、主畫面 | #8 | `captures/253_after_to_window.png` |
 | 結束確認（不領獎） | OCR：`End expedition without claiming rewards?` | 依結算規則放棄獎勵時點確認；其他情況誤入時點 Cancel。2026-10-15 實機：Cancel（515, 493）回到視窗；Confirm 之後的畫面未實測 | 入口頁（待截圖確認）、Exploration Reward 視窗 | #8、#19 | `tests/screens/GiveUpDialog.png` |
 
-輪替游標前進的理由見 [ADR 0003](../adr/0003-screen-is-truth-state-file-only-rotation-cursor.md)。
+隊伍佇列為什麼在領獎後才移動，見 [ADR 0011](../adr/0011-team-list-order-is-the-queue.md)。
 
 ## 全域彈窗
 

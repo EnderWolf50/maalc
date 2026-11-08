@@ -1,6 +1,8 @@
 ---
-status: accepted（取代 ADR 0004，修訂 ADR 0005）
+status: accepted（取代 ADR 0004，修訂 ADR 0005）；由 ADR 0011 修訂
 ---
+
+> [ADR 0011](0011-team-list-order-is-the-queue.md) 修訂：Agent 在領獎後改寫設定檔裡 `teams` 的順序（隊伍佇列），只改順序；其他設定仍只由 GUI 寫。下文的「輪替游標」已被隊伍佇列取代。（#501，2026-11-08）
 
 # 使用者設定改由自製設定 GUI 寫進一份設定檔
 

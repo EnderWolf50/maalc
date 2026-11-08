@@ -214,10 +214,10 @@ def main(argv=None) -> int:
     elif a.cmd == "list":
         out = listing(path)
     else:
-        state_path = folder / "agents.state.json"
-        state = json.loads(state_path.read_text(encoding="utf-8")) if state_path.exists() else {}
+        reported_path = folder / "agents.state.json"
+        state = json.loads(reported_path.read_text(encoding="utf-8")) if reported_path.exists() else {}
         events, state = tick(load(path), parse_statuses(a.status), queue_status(), main_ci(), state, time.strftime("%Y%m%d%H"))
-        state_path.write_text(json.dumps(state, indent=1), encoding="utf-8")
+        reported_path.write_text(json.dumps(state, indent=1), encoding="utf-8")
         out = events or [NOTHING]
     print("\n".join(out))
     return 0
