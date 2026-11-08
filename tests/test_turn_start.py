@@ -136,9 +136,37 @@ def test_a_log_cut_inside_a_turn_is_left_out_and_a_repeated_log_head_is_skipped(
     lines = battle()
     start, cut = lines.index(hit(10, "BattleTurn")), lines.index(next(x for x in lines if "post_click" in x))
     found, left, skipped = turns([lines[:cut], lines[start:]])  # the first log ends before turn 1's first tap
-    assert left["log ended in it"] == 1
+    assert left["log or process ended in it"] == 1
     assert skipped == [0, cut - start]
     assert [t.number for t in found] == ["2", "3", "3", "1"]  # the second log starts after its repeated lines
+
+
+def process_start(s):
+    return head(s, where="Logger") + " MAA Process Start \n"
+
+
+def test_a_bot_stopped_inside_an_action_does_not_hide_the_next_process_logging_to_the_same_file():
+    # live 2026-11-08: the bot was stopped inside RouteMap and started again, MaaFramework logging on in the same file
+    lines = [*enter(1, "Formation", "Formation"), leave(2), hit(3, "Loading")]
+    one, end = play_turn(10, "1")
+    lines += one + enter(end + 1, "RouteMap", "MirrorMap")
+    lines += [process_start(end + 30), *enter(end + 31, "Formation", "Formation"), leave(end + 32), hit(end + 33, "Loading")]
+    again, _ = play_turn(end + 40, "1")
+    found, left, _ = turns([lines + again])
+    assert [(t.number, t.before, t.again) for t in found] == [("1", "Formation", False), ("1", "Formation", False)]
+    assert len({t.battle for t in found}) == 2
+    assert left == {}
+
+
+def test_a_turn_its_process_stopped_in_is_left_out():
+    one, _ = play_turn(10, "1")
+    cut = next(i for i, x in enumerate(one) if "post_click" in x)  # before its first tap
+    lines = [*enter(1, "Formation", "Formation"), leave(2), hit(3, "Loading"), *one[:cut], process_start(20)]
+    lines += [*enter(21, "Formation", "Formation"), leave(22), hit(23, "Loading")]
+    two, _ = play_turn(30, "1")
+    found, left, _ = turns([lines + two])
+    assert left == {"log or process ended in it": 1}
+    assert [(t.number, ms(t)) for t in found] == [("1", [540, 200, 240, 40, 60])]  # the second process's whole turn
 
 
 def test_the_report_rows_and_summary():

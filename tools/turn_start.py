@@ -17,25 +17,27 @@ A **turn** is one `CustomAction::run ... [param.name=PlayTurn] | enter`, **seen*
 `total` is seen to that touch. What came before the hit, to tell whether BattlePause was seen after the previous action:
 
 - `before`: the custom action that ran last before the hit, by its custom action name (`PlayTurn`: the previous turn's
-  own hold ended; `HoldTurn`: the hub saw BattlePause and held again), `-` at the start of a log. `gap`: s from its
-  end to the hit.
+  own hold ended; `HoldTurn`: the hub saw BattlePause and held again), `-` at the start of a log or process. `gap`: s
+  from its end to the hit.
 - `pause_age`: s from the last BattlePause hit to the hit: the hub's `reco hit [result.name=BattlePause]` or an agent
   run_recognition of BattlePause that hit (hold_turn's looks, press_start's).
 - `turn_age`: s from the last agent run_recognition of BattleTurn that hit during a hold (hold_turn returning on it)
   to the hit. A hold runs from a `post_touch_down` at (1, 1) (agent/actions.py HOLD_SPOT) to the next
   `post_touch_up`.
 
-Both ages count only looks since the previous turn's first touch, the battle's last Loading hit or the log's start,
-whichever is last; `-` when there was none.
+Both ages count only looks since the previous turn's first touch, the battle's last Loading hit or the log's or
+process's start, whichever is last; `-` when there was none.
 
 An agent run_recognition is the lines from `AgentClient::handle_context_run_recognition] [req={..."entry":"X"...}] |
 enter` to its `| leave, N ms`; it hit when the `msg=Node.RecognitionNode.Succeeded` event between them names X, and
 missed on `msg=Node.RecognitionNode.Failed`. The hub's own looks are not agent calls: a hub hit is its `reco hit` line.
 
-A battle starts at a log's first turn and at the first turn after a hub hit of Loading (an event inside a Luxcavation
-battle shows none). A turn whose PlayTurn ended before its ReadText or its first touch, or whose log ends first, is
-left out and counted. Give the logs oldest first: lines of a log stamped no later than the end of the one before it
-are skipped (a rotated log can repeat them). The tables are markdown; ages and gaps are in s, segments in ms.
+A battle starts at a log's or process's first turn and at the first turn after a hub hit of Loading (an event inside
+a Luxcavation battle shows none). A turn whose PlayTurn ended before its ReadText or its first touch, or whose log or
+process ends first, is left out and counted. Give the logs oldest first: lines of a log stamped no later than the end
+of the one before it are skipped (a rotated log can repeat them). A log goes on across a bot restart, so each
+`[Logger] MAA Process Start` line starts afresh, as a log does: the process before it may have stopped inside an
+action. The tables are markdown; ages and gaps are in s, segments in ms.
 """
 
 from __future__ import annotations
@@ -100,8 +102,13 @@ class Up(NamedTuple):
     t: float
 
 
+class Start(NamedTuple):
+    t: float
+
+
 def events(lines):
-    """The log lines this tool reads, as Hit, Enter and Leave (top-level custom actions), Look, Cap, Touch and Up."""
+    """The log lines this tool reads, as Hit, Enter and Leave (top-level custom actions), Look, Cap, Touch, Up and
+    Start (a MaaFramework process starting)."""
     depth, look = 0, None
     for line in lines:
         if "AgentClient::handle_" in line:
@@ -142,6 +149,9 @@ def events(lines):
                     r = RECT.search(line)
                     yield Enter(stamp(t[1]), p[1], tuple(map(int, r.groups())) if r else None)
                 depth += 1
+        elif "[Logger] MAA Process Start" in line and (t := TS.match(line)):
+            depth, look = 0, None
+            yield Start(stamp(t[1]))
 
 
 @dataclass
@@ -189,66 +199,78 @@ def turns(logs):
     iterable of lines, oldest first."""
     done, out, last, skipped = [], Counter(), {"stamp": ""}, []
     for lines in logs:
-        hit = action = prior = cur = prev = battle = None
-        pause = turn_seen = mark = float("-inf")
-        holding, loading = False, True
         last["skipped"] = 0
-        for ev in events(after(lines, last)):
-            match ev:
-                case Hit(t, name):
-                    hit = ev
-                    if name == "BattlePause":
-                        pause = t
-                    elif name == "Loading":
-                        loading, mark = True, t
-                case Enter(t, name, box):
-                    action = name
-                    if name != "PlayTurn":
-                        continue
-                    if not hit or hit.name != "BattleTurn":
-                        out["no BattleTurn hit before it"] += 1
-                        continue
-                    if loading:
-                        battle, prev, loading = hit.t, None, False
-                    cur = Turn(hit.t, t, box, battle)
-                    if prior:
-                        cur.before, cur.gap = prior[0], hit.t - prior[1]
-                    cur.pause_age = hit.t - pause if pause > mark else None
-                    cur.turn_age = hit.t - turn_seen if turn_seen > mark else None
-                case Look(t, end, entry, found, text):
-                    if entry == "BattlePause" and found:
-                        pause = t
-                    elif entry == "BattleTurn" and found and holding:
-                        turn_seen = t
-                    elif entry == "ReadText" and cur and cur.read is None:
-                        cur.read, cur.read_end, cur.number = t, end, text.strip() or None
-                case Cap(t):
-                    if cur and cur.read is None:
-                        cur.caps += 1
-                case Touch(t, kind, x, y):
-                    if kind == "down" and (x, y) == HOLD_SPOT:
-                        holding = True
-                    if cur and cur.touch is None:
-                        cur.touch, mark = t, t
-                        bx, by, bw, bh = cur.box or (0, 0, -1, -1)
-                        cur.win_rate = bx <= x <= bx + bw and by <= y <= by + bh
-                case Up(t):
-                    holding = False
-                case Leave(t):
-                    if action:
-                        prior, action = (action, t), None
-                    if cur:
-                        if cur.read is None or cur.touch is None:
-                            out["PlayTurn ended before its ReadText or touch"] += 1
-                        else:
-                            cur.again = bool(prev and cur.number and prev.number == cur.number)
-                            done.append(cur)
-                            prev = cur
-                        cur = None
-        if cur:
-            out["log ended in it"] += 1
+        evs = events(after(lines, last))
+        while process(evs, done, out):
+            pass
         skipped.append(last["skipped"])
     return done, out, skipped
+
+
+def process(evs, done, out):
+    """Reads evs, the events of a log, up to its next Start or its end, adding the complete turns to done and the
+    left-out ones to out. True when it stopped on a Start."""
+    hit = action = prior = cur = prev = battle = None
+    pause = turn_seen = mark = float("-inf")
+    holding, loading, restarted = False, True, False
+    for ev in evs:
+        match ev:
+            case Start():
+                restarted = True
+                break
+            case Hit(t, name):
+                hit = ev
+                if name == "BattlePause":
+                    pause = t
+                elif name == "Loading":
+                    loading, mark = True, t
+            case Enter(t, name, box):
+                action = name
+                if name != "PlayTurn":
+                    continue
+                if not hit or hit.name != "BattleTurn":
+                    out["no BattleTurn hit before it"] += 1
+                    continue
+                if loading:
+                    battle, prev, loading = hit.t, None, False
+                cur = Turn(hit.t, t, box, battle)
+                if prior:
+                    cur.before, cur.gap = prior[0], hit.t - prior[1]
+                cur.pause_age = hit.t - pause if pause > mark else None
+                cur.turn_age = hit.t - turn_seen if turn_seen > mark else None
+            case Look(t, end, entry, found, text):
+                if entry == "BattlePause" and found:
+                    pause = t
+                elif entry == "BattleTurn" and found and holding:
+                    turn_seen = t
+                elif entry == "ReadText" and cur and cur.read is None:
+                    cur.read, cur.read_end, cur.number = t, end, text.strip() or None
+            case Cap(t):
+                if cur and cur.read is None:
+                    cur.caps += 1
+            case Touch(t, kind, x, y):
+                if kind == "down" and (x, y) == HOLD_SPOT:
+                    holding = True
+                if cur and cur.touch is None:
+                    cur.touch, mark = t, t
+                    bx, by, bw, bh = cur.box or (0, 0, -1, -1)
+                    cur.win_rate = bx <= x <= bx + bw and by <= y <= by + bh
+            case Up(t):
+                holding = False
+            case Leave(t):
+                if action:
+                    prior, action = (action, t), None
+                if cur:
+                    if cur.read is None or cur.touch is None:
+                        out["PlayTurn ended before its ReadText or touch"] += 1
+                    else:
+                        cur.again = bool(prev and cur.number and prev.number == cur.number)
+                        done.append(cur)
+                        prev = cur
+                    cur = None
+    if cur:
+        out["log or process ended in it"] += 1
+    return restarted
 
 
 SEGMENTS = "| total | 1 | 2 | 3 | 4 |"
