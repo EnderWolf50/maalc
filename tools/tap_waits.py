@@ -3,11 +3,14 @@
     uv run --group probe python tools/tap_waits.py VIDEO --started 2026-11-08T07:31:35.992 \\
         --log install/debug/maafw.bak.2026.11.08-08.37.11.105.log install/debug/maafw.log \\
         --node MirrorMap image/Map/MirrorMap.png 1195,65,75,130 0.8 [--node ...] \\
-        --actions Wipe Settle Shop PickThemePack [--from ...] [--to ...] [-o taps.csv]
+        --actions Wipe Settle Shop PickThemePack [--until next-tap] [--from ...] [--to ...] [-o taps.csv]
 
 A **tap** is a `post_click` inside the `CustomAction::run` of one of `--actions` (the innermost action running). Its
 **look** is the action's next controller call (screencap, click, swipe, touch) or the action's end: where the bot looked
-again, so look minus tap is the wait (a `tap(wait=)` shows as its seconds and about 0.05 s). The video is aligned with
+again, so look minus tap is the wait (a `tap(wait=)` shows as its seconds and about 0.05 s). A wait that polls
+(`tap_then`: a screenshot every 0.2 s until the page changes) then measures about 0.05 s every time; `--until next-tap`
+skips the screenshots, so the look is the action's next click, swipe or touch, or its end: where the bot went on, and
+`settled` is read against the screen it went on from (#567). The video is aligned with
 the log as `tools/video_align.py` aligns it, with the same `--started`, `--node` and fitting options. Every frame from
 0.5 s before a tap to its look is scored with the bot's own `recovery.thumb` (32x18, one block per 40x40 pixels):
 
@@ -43,6 +46,8 @@ import recovery  # noqa: E402
 ENTER = re.compile(r"CustomAction::run\] \[context\.task_id\(\)=\d+\] \[node_name=(\w+)\].*\[param\.name=(\w+)\].*\| enter")
 LEAVE = re.compile(r"CustomAction::run\] \[node_name=\w+\] \[param\.name=\w+\].*\[ret=")
 CALL = re.compile(r"handle_controller_post_\w+\] \[req=")
+# --until: the controller calls that end a tap's wait, besides the action's end.
+UNTIL = {"next-call": CALL, "next-tap": re.compile(r"handle_controller_post_(?!screencap)\w+\] \[req=")}
 CLICK = re.compile(r'handle_controller_post_click\] \[req=\{.*?"x":(\d+),"y":(\d+)')
 BEFORE = 0.5  # s of video looked at before a tap
 # s around a tap's frames kept while decoding, before the fit knows the offset: a chunk fitted further off has its taps
@@ -59,9 +64,9 @@ class Tap(NamedTuple):
     look: float  # log time of the action's next controller call, or of its end
 
 
-def taps(lines, actions) -> list[Tap]:
-    """Every click of `actions` in lines (maafw.log), with its look."""
-    found, stack, open_tap = [], [], None
+def taps(lines, actions, until="next-call") -> list[Tap]:
+    """Every click of `actions` in lines (maafw.log), with its look: the action's next call of UNTIL[until], or its end."""
+    looks, found, stack, open_tap = UNTIL[until], [], [], None
     for line in lines:
         if "CustomAction::run]" not in line and "handle_controller_post_" not in line:
             continue
@@ -72,7 +77,7 @@ def taps(lines, actions) -> list[Tap]:
             stack.append((e[1], e[2]))
             continue
         ends = bool(LEAVE.search(line))
-        if not ends and not (stack and CALL.search(line)):
+        if not ends and not (stack and looks.search(line)):
             continue
         if open_tap is not None:
             found.append(open_tap._replace(look=t))
@@ -128,6 +133,8 @@ def main(argv=None) -> None:
     ap.add_argument("--log", nargs="+", type=Path, required=True)
     ap.add_argument("--node", nargs=4, action="append", required=True, metavar=("NAME", "TEMPLATE", "ROI", "THRESHOLD"))
     ap.add_argument("--actions", nargs="+", required=True)
+    ap.add_argument("--until", choices=list(UNTIL), default="next-call",
+                    help="where a tap's wait ends: the action's next controller call, or its next one that is no screenshot")
     ap.add_argument("--hub", default="MirrorHub")
     ap.add_argument("--from", dest="lo", help="log time, ISO")
     ap.add_argument("--to", dest="hi", help="log time, ISO")
@@ -147,7 +154,7 @@ def main(argv=None) -> None:
             with open(path, encoding="utf-8", errors="replace") as f:
                 yield from f
 
-    found = [t for t in taps(lines(), set(a.actions)) if lo <= t.at <= hi]
+    found = [t for t in taps(lines(), set(a.actions), a.until) if lo <= t.at <= hi]
     _, _, bot = va.parse_log(lines(), list(nodes), a.hub)
     kt, kthumbs = [], []
 
