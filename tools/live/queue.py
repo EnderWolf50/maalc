@@ -37,6 +37,7 @@ import re
 import subprocess
 import sys
 import time
+from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
 
@@ -147,25 +148,35 @@ def place(qdir: Path, name: str, cmd: list[str], first: bool, is_alive=alive) ->
         me.unlink(missing_ok=True)
 
 
-def run(qdir: Path, name: str, cmd: list[str], is_alive=alive, poll: float = 5.0, log: str | None = None,
-        first: bool = False) -> int:
+@contextmanager
+def turn(qdir: Path, name: str, cmd: list[str], first: bool = False, is_alive=alive, poll: float = 5.0,
+         sleep=time.sleep, on_wait=lambda ahead: None):
+    """Hold this process's ticket in `qdir` from when it is first until the block ends. When it has to wait, `on_wait`
+    is called once with the tickets ahead of it."""
     qdir.mkdir(parents=True, exist_ok=True)
-    name = ticket_name(name)
-    result_path(qdir, name).unlink(missing_ok=True)  # a result of an earlier run under this name is not this one's
-    me = place(qdir, name, cmd, first, is_alive)
+    me = place(qdir, ticket_name(name), cmd, first, is_alive)
     try:
         said = False
         while (q := tickets(qdir, is_alive))[:1] != [me]:
             if not said:
-                print(f"[queue] waiting, {q.index(me) if me in q else '?'} ahead", flush=True)
+                on_wait(q[:q.index(me)] if me in q else q)
                 said = True
-            time.sleep(poll)
+            sleep(poll)
+        yield
+    finally:
+        me.unlink(missing_ok=True)
+
+
+def run(qdir: Path, name: str, cmd: list[str], is_alive=alive, poll: float = 5.0, log: str | None = None,
+        first: bool = False) -> int:
+    name = ticket_name(name)
+    result_path(qdir, name).unlink(missing_ok=True)  # a result of an earlier run under this name is not this one's
+    with turn(qdir, name, cmd, first, is_alive, poll,
+              on_wait=lambda ahead: print(f"[queue] waiting, {len(ahead)} ahead", flush=True)):
         print(f"[queue] start {name}", flush=True)
         code = subprocess.call(cmd)
         result_path(qdir, name).write_text(json.dumps({"exit": code, "log": log, "ended": datetime.now().isoformat(timespec="seconds")}), encoding="utf-8")
         return code
-    finally:
-        me.unlink(missing_ok=True)
 
 
 WAIT_TIMEOUT, WAIT_UNKNOWN, WAIT_DIED = 75, 2, 3
