@@ -15,11 +15,14 @@ GRACE_BASE = (10, 10, 20, 20, 30, 30, 40, 40, 50, 60)
 LEVEL_MULT = {"base": 1, "plus": 2, "plus2": 3}
 
 
-def run_difficulty(setting, weekly_left):
-    """"hard" or "normal" for this run; auto runs hard while weekly bonuses remain (spec 03 section 2)."""
+def run_difficulty(setting, weekly_left, target_floor):
+    """"hard" or "normal" for this run; auto runs hard while weekly bonuses remain (spec 03 section 2).
+
+    Floors 6+ need every floor of the run HARD, so auto is hard whatever is left when the target is above 5 (#385).
+    """
     if setting != "auto":
         return setting
-    return "hard" if weekly_left > 0 else "normal"
+    return "hard" if weekly_left > 0 or target_floor > 5 else "normal"
 
 
 def resolve_plan(settings, team, key):

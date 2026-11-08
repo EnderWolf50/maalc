@@ -81,6 +81,12 @@ PACK_TITLES = [120, 400, 1040, 100]  # up to 5 cards (live: 5 with two Theme Pac
 # #246, recordings: dealt cards slide in and swing until ~2.8 s after the deal; their titles are read once they stop.
 PACK_CARDS = [120, 170, 1040, 360]
 CARDS_SETTLE = 4.0  # s; a page still swinging by then is read anyway
+# The theme pack page's Refresh button (frame, icon and word): lit while a free refresh is left, greyed once none is,
+# with or without its `n/m` (#482: one free refresh shows none). How many of its px are brighter than REFRESH_BRIGHT
+# (max channel), on the pack pages of 46 live runs' recordings (2026-10-22 to 11-07, 288 frames): lit 765-2108 (253
+# frames), greyed 0 (35 frames, the brightest px 54-56). The ThemePack captures of tests/screens: lit 1176-1321, greyed 0.
+REFRESH_BUTTON = (1001, 25, 163, 45)
+REFRESH_BRIGHT, REFRESH_LIT_MIN = 120, 100
 
 
 def log(msg):
@@ -381,11 +387,13 @@ def run_line(run, outcome, hard, floors, bonuses=0):
     """This run's runs.jsonl line (spec 06 執行記錄)."""
     team = run["team"] if run.get("planned") else None
     counts = STUCK["ladder"].counts
+    target = run.get("settings", {}).get("run", {}).get("target_floor", 5)
     return {
         "start": run.get("start"), "end": settlement.now(),
         "team": team and team["id"], "team_name": team and team["name"],
-        "difficulty": "hard" if hard else "normal", "weekly_bonus": bonuses,
-        "floors": floors, "result": outcome, "l1": counts[1], "l2": counts[2], "l3": counts[3],
+        "difficulty": None if hard is None else "hard" if hard else "normal", "weekly_bonus": bonuses,
+        "target": target, "floors": floors, "target_reached": settlement.target_reached(floors, target),
+        "result": outcome, "l1": counts[1], "l2": counts[2], "l3": counts[3],
         **({"gift_search": run["gift_search"]} if "gift_search" in run else {}),
     }
 
@@ -1414,7 +1422,7 @@ class PlanRun(CustomAction):
             return finish(context, f"{TASK['runs']} of {run['runs']} runs done")
         if run["stop_when_weekly_bonus_out"] and weekly == 0:
             return finish(context, "weekly bonuses used up")
-        difficulty = run_start.run_difficulty(run["difficulty"], weekly)
+        difficulty = run_start.run_difficulty(run["difficulty"], weekly, run["target_floor"])
         team = pick_team(settings["teams"], read_cursor(ROOT, address(context)), difficulty)
         if team is None:
             return finish(context, f"no enabled team may run {difficulty}")
@@ -1439,7 +1447,7 @@ class PlanRun(CustomAction):
         RUN.clear()
         # planned: the run's team is known (picked here, or after a restart the cursor's, current_run), so the rotation
         # cursor may move after the claim and runs.jsonl names it.
-        limit = recovery.floor_limit(recovery.read_runs(ROOT), team["id"])
+        limit = recovery.floor_limit(recovery.read_runs(ROOT), team["id"], run["target_floor"])
         # guard: the run's guard turns left (spec 03 section 8), counted across its battles.
         # floor_limit: each floor's time; the first clock runs from here, PickThemePack restarts it (spec 06).
         RUN.update(settings=settings, team=run_team(settings, team), difficulty=difficulty, planned=True, start=settlement.now(), deadline=time.time() + limit,
@@ -1458,7 +1466,8 @@ INFINITY_BUTTON = (1053, 377)  # INFINITY MIRROR under it
 class ParallelModeOff(CustomAction):
     """Entry page with Parallel Superposition Mode ON: tap INFINITY MIRROR until it reads OFF (#94, spec 02).
 
-    The bot never plays past floor 5; the prompt after floor 5 (ParallelModePrompt) is cancelled as a second guard.
+    v1 never plays past floor 5 (#434 opens it for a target above 5); the prompt after floor 5 (ParallelModePrompt)
+    is cancelled as a second guard.
     Still ON after two taps: stop, nothing else is tried.
     """
 
@@ -2020,6 +2029,12 @@ def columns(results):
     return [(g[0][0], [t for _, _, t in sorted(g, key=lambda line: line[1])]) for g in groups]
 
 
+def refresh_lit(image):
+    """Whether the theme pack page's Refresh button is lit: REFRESH_LIT_MIN of its px over REFRESH_BRIGHT (#482)."""
+    x, y, w, h = REFRESH_BUTTON
+    return bool((image[y:y + h, x:x + w].max(axis=2) > REFRESH_BRIGHT).sum() >= REFRESH_LIT_MIN)
+
+
 @AgentServer.custom_action("PickThemePack")
 class PickThemePack(CustomAction):
     """Set this floor's difficulty, then pull the best pack: highest weight, leftmost first (spec 03 sections 2, 6)."""
@@ -2047,7 +2062,7 @@ class PickThemePack(CustomAction):
         names = packs + list(plan["weights"])  # a weighed pack the data file dropped still matches
         setting = run["settings"]["run"]["theme_pack_refresh"]
         prev = None
-        for used in range(10):  # the button's `Refresh 0/m` ends it; unread, a refresh that changes nothing does (#319)
+        for used in range(10):  # a greyed button or its `0/m` ends it (#319, #482); unread, a refresh that changes nothing does
             settled = still(context, timeout=CARDS_SETTLE, roi=PACK_CARDS, runs=2)
             if settled is None:
                 log(f"floor {floor}: the cards still moved after {CARDS_SETTLE:g} s")
@@ -2065,7 +2080,7 @@ class PickThemePack(CustomAction):
             i, meets = run_start.pick_pack([w for _, w, _ in ranked], slots, plan)
             if not run_start.refresh_wanted(meets, setting, used) or titles == prev:
                 break
-            if seen(context, page, "PackRefreshSpent"):
+            if not refresh_lit(page) or seen(context, page, "PackRefreshSpent"):
                 log(f"floor {floor}: no free refresh left")
                 break
             prev = titles
@@ -2143,6 +2158,7 @@ MAP_LOOKS = 4  # looks, 1 s apart, for a linked slot before the fallback taps
 # #202: columns up to this x are typed by their Cost too: with the bus at the far left, its two columns (329, 584).
 # Past them only the marks, which miss the WARNING ring (#238); a drag brings those columns here to be read again.
 MAP_NEAR = 650
+BAR_BOTTOM = 60  # the resource bar's border: y 59-60 on the map captures
 MAP_DRAGS = 3  # drags of two columns RouteMap.read_on makes at most: the first screen shows four, a floor ~7 and the boss
 PANEL_REWARDS = [700, 495, 110, 30]  # the "Clear Rewards" label
 PANEL_COST = [730, 545, 40, 35]  # the number by its Cost coin
@@ -2190,7 +2206,7 @@ def node_marks(context, image, cx, cy):
     The shop is also looked for by its icon's shape alone (shop_icon) where nothing says a fight or the boss.
     """
     marks = {mark: hit for n, (mark, (ox, oy, w, h)) in MARKS.items() if (hit := seen(context, image, n, (cx + ox, cy + oy, w, h)))}
-    if not marks.keys() & {"boss", "ring", "cost", "shop"} and (hit := shop_icon(context, image, cx, cy)):
+    if not marks.keys() & {"boss", "ring", "cost", "gift", "shop"} and (hit := shop_icon(context, image, cx, cy)):
         marks["shop"] = hit
     return marks
 
@@ -2217,7 +2233,8 @@ def node_at(context, image, cx, cy, marks=None, costs=True):
     """The type of the map node centred at (cx, cy), by its marks and Cost number (map_route.node_type).
 
     No mark at all where the badges (80 px above the centre) sit under the resource bar: unknown, not an
-    event; a fight's Cost coin may be hidden there (the top row with the map at rest).
+    event; a fight's Cost coin may be hidden there (the top row with the map at rest). With costs, a coin the bar
+    cuts counts when its number shows below it (coin_cut_by_bar).
     #91: with costs, a fight's kind is its Cost number looked up in the floor's difficulty's node_costs
     (map_weights.yaml), as read: a number unread or not in the table leaves the marks to decide (cost_miss logs it).
     The boss' Costs are in the table too: a boss whose red glow went unmatched reads as the boss by its Cost.
@@ -2226,12 +2243,14 @@ def node_at(context, image, cx, cy, marks=None, costs=True):
     again once next to the bus (RouteMap.follow).
     """
     marks = node_marks(context, image, cx, cy) if marks is None else marks
-    if not marks and cy - 80 < 60:
+    under_bar = cy - 80 < BAR_BOTTOM
+    if costs and under_bar and not marks.keys() & {"cost", "boss"} and (coin := coin_cut_by_bar(context, image, cx, cy)):
+        marks = {**marks, "cost": coin}
+    if not marks and under_bar:
         return "unknown"
     if not (costs and "cost" in marks and "boss" not in marks):
         return map_route.node_type(set(marks))
-    difficulty = "hard" if is_hard(context) else "normal"
-    table = map_data()["node_costs"][difficulty]
+    difficulty, table = difficulty_costs(context)
     found = coin_text(context, image, marks["cost"].box)
     cost = coin_number(found)
     kind = map_route.node_type(set(marks), table.get(cost))
@@ -2239,6 +2258,26 @@ def node_at(context, image, cx, cy, marks=None, costs=True):
     if cost not in table:
         cost_miss(image, marks["cost"].box, cx, cy, found, difficulty)
     return kind
+
+
+def coin_cut_by_bar(context, image, cx, cy):
+    """The hit of the node's Cost coin with its top rows under the resource bar, None when there is none (#522).
+
+    Its number, read from the coin box's bottom row as coin_text reads it, decides: a coin wholly under the bar scores
+    as high (0.60-0.79 on the top-row battles of MapBoss.png at 215, 72, MapEvent.png and MapRock.png at 725, 72,
+    MapFocused.png at 470, 72), and its number's crop lands on the bar's resource counts (MapFocused's read 19).
+    """
+    ox, oy, w, h = MARKS["MapNodeCost"][1]
+    coin = seen(context, image, "MapNodeCostCut", (cx + ox, cy + oy, w, h))
+    if not coin or coin.box[1] + coin.box[3] < BAR_BOTTOM:
+        return None
+    _, table = difficulty_costs(context)
+    return coin if coin_number(coin_text(context, image, coin.box)) in table else None
+
+
+def difficulty_costs(context):
+    difficulty = "hard" if is_hard(context) else "normal"
+    return difficulty, map_data()["node_costs"][difficulty]
 
 
 def coin_text(context, image, box):
@@ -2629,7 +2668,7 @@ class RouteMap(CustomAction):
         bus = bus and tuple(bus.box[:2])
 
         def clear(bx, by):  # the slot's node, badges included, clear of the resource bar and the buttons
-            return bx + SLOT[0] + 80 <= 1200 and by + SLOT[1] + map_route.ROW_DY[row] - 80 >= 60
+            return bx + SLOT[0] + 80 <= 1200 and by + SLOT[1] + map_route.ROW_DY[row] - 80 >= BAR_BOTTOM
         if not bus or not clear(*bus):
             image, bus = RouteMap.find_bus(context)
         if not bus or not RouteMap.linked(context, image, *bus, row):
@@ -3628,7 +3667,7 @@ class RewardCard(CustomAction):
 
 
 GIFT_CARDS = [100, 150, 1080, 410]  # 1-4 cards; on the boss page the Mounting Trials half below each
-GIFT_COUNT = [1060, 555, 160, 50]  # "Select 0/2"; no count with one card
+GIFT_COUNT = [1060, 555, 160, 50]  # "Select 0/2"; "Select" alone on a page that takes one card (#494)
 GIFT_SELECT = (1138, 579)
 REFUSE_GIFT = [870, 560, 160, 40]
 # A boss card's trial half, around the card's centre x: the Enemy Level Up badge's "+N" at its left (from x - 103), the
@@ -3641,8 +3680,7 @@ ROMAN = ("I", "II", "III", "IV", "V")
 
 
 def gift_count(context, image=None):
-    m = re.search(r"(\d)\s*/\s*(\d)", text(context, screen(context) if image is None else image, GIFT_COUNT))
-    return (int(m[1]), int(m[2])) if m else None
+    return gift_search.select_count(text(context, screen(context) if image is None else image, GIFT_COUNT))
 
 
 def gift_tier(image, x):
@@ -3738,7 +3776,7 @@ class PickGift(CustomAction):
             tap(context, centres[i], 300, wait=0)
             until(context, lambda im: gift_count(context, im) != before, timeout=1.5)
 
-        taken = rewards.pick_gifts(ranked, lambda: gift_count(context), pick)
+        taken = rewards.pick_gifts(ranked, lambda: text(context, screen(context), GIFT_COUNT), pick, trials)
         for _ in range(3):
             page_guard(context, "GiftChoice")
             tap(context, *GIFT_SELECT, wait=0)
@@ -5478,7 +5516,7 @@ def toggles(context, image):
 
 @AgentServer.custom_action("Settle")
 class Settle(CustomAction):
-    """Goal check, weekly-bonus toggles, then Claim or GiveUpRewards; then the cursor and runs.jsonl (spec 03 section 14).
+    """Claim check, weekly-bonus toggles, then Claim or GiveUpRewards; then the cursor and runs.jsonl (spec 03 section 14).
 
     Claim is pressed only after the toggles read back exactly as wanted; anything unexpected stops.
     """
@@ -5494,9 +5532,9 @@ class Settle(CustomAction):
         result = settlement.read_result(" ".join(t for t, _ in lines))
         if not result:
             return True  # fading in: let MirrorHub look again
-        floor, hard, cleared, total = result
-        log(f"exploration reward: Floor {floor} [{'HARD' if hard else 'NORMAL'}] {cleared}/{total}")
-        if not settlement.goal_met(result):
+        floor, hard = result.floor, result.hard
+        log(f"exploration reward: Floor {floor} [{(result.difficulty or '?').upper()}] {result.cleared}/{result.total}")
+        if not settlement.claim_ok(result):
             return self.give_up(context, run, result)
 
         s, team = run["settings"]["run"], run["team"]
@@ -5509,8 +5547,7 @@ class Settle(CustomAction):
             tile = text(context, image, FIRST_FLOOR)
             log(f"floors before {min(floors_hard, default=floor + 1)} were not seen: the window's floor 1 tile reads {tile!r}")
             return tile
-        all_hard = settlement.all_hard(floors_hard, floor, hard, first_tile)
-        want = settlement.bonus_toggles(s["weekly_bonus_use"], s["weekly_bonus_amount"], hard, left or 0, all_hard)
+        want = settlement.claim_bonuses(result, s["target_floor"], s["weekly_bonus_use"], s["weekly_bonus_amount"], left or 0, floors_hard, first_tile)
         for _ in range(6):
             states = toggles(context, page_guard(context, "ExplorationReward"))
             on = [i for i, v in enumerate(states) if v]
@@ -5564,14 +5601,14 @@ class Settle(CustomAction):
             return stuck("GiveUpRewards brought up no `End expedition without claiming rewards?`")
         page_guard(context, "ExplorationReward", image=image)
         tap(context, *DIALOG_CONFIRM, wait=2)
-        log("goal not met: gave up the rewards")
+        log("floor 5 not passed: gave up the rewards")
         self.record(run, result, 0, "giveup")
         RUN.clear()
         return True
 
     @staticmethod
     def record(run, result, bonuses, outcome):
-        settlement.append_run(ROOT, run_line(run, outcome, result[1], settlement.floors_passed(result), bonuses))
+        settlement.append_run(ROOT, run_line(run, outcome, result.hard, settlement.floors_passed(result), bonuses))
         TASK["runs"] += settlement.counts_as_run(outcome)
         TASK["settled"] = True
         STUCK["ladder"] = recovery.Ladder()

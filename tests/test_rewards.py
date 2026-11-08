@@ -276,17 +276,22 @@ def test_rank_gifts_with_trials():
 
 
 class GiftPage:
-    """Select n/m over the gift cards: a tap picks a card, or drops it when picked; full, a tap does nothing."""
+    """Select n/m over the gift cards: a tap picks a card, or drops it when picked; full, a tap does nothing.
 
-    def __init__(self, picks, unread=0):
-        self.picks, self.unread = picks, unread  # unread: count reads that come back empty first
+    A page that shows no count (counted=False, #494) reads "Select" alone and takes one card: a tap on another card
+    moves the pick to it.
+    """
+
+    def __init__(self, picks, unread=0, counted=True, missed=""):
+        self.picks, self.unread, self.counted = picks, unread, counted  # unread: count reads that come back as missed first
+        self.missed = missed
         self.picked, self.taps = [], []
 
     def read(self):
         if self.unread:
             self.unread -= 1
-            return None
-        return len(self.picked), self.picks
+            return self.missed
+        return f"Select {len(self.picked)}/{self.picks}" if self.counted else "Select"
 
     def tap(self, i):
         self.taps.append(i)
@@ -294,10 +299,13 @@ class GiftPage:
             self.picked.remove(i)
         elif len(self.picked) < self.picks:
             self.picked.append(i)
+        elif not self.counted:
+            self.picked = [i]
 
 
-def test_pick_gifts_taps_every_card_when_the_count_never_reads():
-    page = GiftPage(picks=2, unread=99)  # #81: hard boss, Select 0/2 not read
+@pytest.mark.parametrize("missed", ["", "Select O/2"])  # nothing read, or the count misread: not a page with no count
+def test_pick_gifts_taps_every_card_when_the_count_never_reads(missed):
+    page = GiftPage(picks=2, unread=99, missed=missed)  # #81: hard boss, Select 0/2 not read
     r.pick_gifts([1, 0], page.read, page.tap)
     assert sorted(page.picked) == [0, 1]
 
@@ -311,10 +319,24 @@ def test_pick_gifts_stops_at_the_count_once_it_reads():
     assert page.taps == [2]
 
 
-def test_pick_gifts_a_lone_card_is_tapped_once():
-    page = GiftPage(picks=1, unread=99)  # one card shows no count
+@pytest.mark.parametrize("unread", [0, 99])
+def test_pick_gifts_a_lone_card_is_tapped_once(unread):
+    page = GiftPage(picks=1, unread=unread, counted=False)
     r.pick_gifts([0], page.read, page.tap)
     assert page.taps == [0]
+
+
+def test_pick_gifts_a_page_with_no_count_takes_the_best_card():
+    page = GiftPage(picks=1, counted=False)  # #494's floor-4 page, ranked [0, 2, 1]
+    assert r.pick_gifts([0, 2, 1], page.read, page.tap) == [0]
+    assert page.picked == [0]
+
+
+def test_pick_gifts_select_alone_on_a_page_with_trials_is_a_count_missed():
+    # #494: every page with trials showed its count (20 of 20 in #344's runs); a Select 0/2 read short goes on as #81
+    page = GiftPage(picks=2, unread=99, missed="Select")
+    r.pick_gifts([1, 0, 2], page.read, page.tap, has_trials=True)
+    assert sorted(page.picked) == [0, 1]
 
 
 def test_pick_gifts_repicks_a_card_the_tap_dropped():

@@ -6,6 +6,7 @@ actions.py reads the pages and taps; everything here is plain data in, plain dat
 import re
 from difflib import SequenceMatcher
 
+from gift_search import select_count
 from ocrtext import compact, has, normalize
 from run_start import match_pack
 
@@ -309,26 +310,33 @@ def rank_gifts(cards):
     return sorted(range(len(cards)), key=key)
 
 
-def pick_gifts(ranked, read, tap):
+def pick_gifts(ranked, read, tap, has_trials=False):
     """Tap gift cards best first until Select n/m is full (spec 03 section 12); the cards tapped, in order.
 
-    read() gives (n, m) off the screen or None; tap(i) taps card i. A lone card shows no count.
-    With several cards and no count read, it is read again, then cards are tapped in order until
-    it reads, every card when it never does (#81).
+    read() gives the Select button's OCR text off the screen; tap(i) taps card i; has_trials: Mounting Trials hang under
+    the cards. With several cards and no count read, it is read again. A button that reads "Select" alone on a page
+    without trials shows no count: a lone card, or a page that takes one card, where a tap on another moves the pick to
+    it (#494); the best card alone is tapped. Any other read without n/m is a count missed, and so is "Select" alone on
+    a page with trials, where every page seen showed its count (#494): cards are tapped in order until it reads, every
+    card when it never does (#81).
     """
-    count = read()
-    if count is None and len(ranked) > 1:
-        count = read()
+    shown = read()
+    if select_count(shown) is None and len(ranked) > 1:
+        shown = read()
+    if not has_trials and compact(shown) == "select":
+        tap(ranked[0])
+        return ranked[:1]
+    count = select_count(shown)
     taken = []
     for i in ranked:
         if count and count[0] >= count[1]:
             break
         tap(i)
         taken.append(i)
-        now = read()
+        now = select_count(read())
         if count and now and now[0] < count[0]:  # it was picked already: pick it again, go on to the next
             tap(i)
-            now = read()
+            now = select_count(read())
         count = now or count
     return taken
 

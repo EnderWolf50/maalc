@@ -10,6 +10,24 @@
 
 zip 不是安裝程式，也不會自動更新；換版時下載新 zip，把舊資料夾的 `config/` 複製過去，就能沿用 maalc 的設定。
 
+### 用 MFAAvalonia 執行
+
+zip 只附 MXU。要用 MFAAvalonia，下載它的 win-x64 zip 解壓到 `maalc/` 裡，再把 `maafw\MaaFramework.dll` 複製到 `runtimes\win-x64\native\`，蓋掉同名的檔案。MFAAvalonia 本體或它附的 MaaFramework 更新時會換回自己的 `runtimes\`，更新後要再複製一次。
+
+MFAAvalonia 只從自己的 `runtimes\` 載入 MaaFramework，不讀 `maafw\`。不換也能跑，但會少了 `maafw\MaaFramework.dll` 的兩個修正，跑久了記憶體會漲：
+
+- 一個任務會留下每個節點的詳情。一整局鏡牢是一個任務，記憶體約每小時漲 0.5 GB（#176）。
+- 批次 OCR 會把被 roi 切掉一半以上的字框切成 1 px 細條重讀，曾讓記憶體從 4 GB 漲到 12 GB（#157）。現在只有等遊戲開機的畫面用到批次 OCR。
+
+這份 `MaaFramework.dll` 是 MaaFramework 5.14.3 加上這兩個修正，MFAAvalonia v2.16.4 附的也是 5.14.3。換之前先看 MFAAvalonia「設定」→「更新設定」的「框架版本」，不是 `v5.14.3` 就先不要換：不同版本的 MaaFramework DLL 混用沒有試過。換完後這裡仍然顯示 `v5.14.3`，修過的版本號沒有變。
+
+### 辨識失敗時的截圖（`save_on_error`）
+
+辨識沒對上時，MaaFramework 會把當下的畫面存進 `debug/on_error/`，回報問題時請附上。這是 client 的選項，maalc 設不到。兩個 client 預設都開著，值存在 `config/maa_option.json` 的 `save_on_error`，同一個資料夾裡的兩個 client 讀同一份（用發佈 zip 在 MXU v2.7.1 與 MFAAvalonia v2.16.4 實機確認）：
+
+- MXU：第一次啟動時寫入這個檔案，值是 `true`；改這個檔案，下次啟動 MXU 就會照新的值。
+- MFAAvalonia：「設定」→「執行設定」→「啟用錯誤時儲存截圖 (用於除錯)」（依 MFAAvalonia v2.16.4 原始碼，介面上沒有實機看過）。
+
 ## 日常任務
 
 鏡牢以外的日常各是一個獨立任務，在 MXU 或 MFAAvalonia 的任務清單裡勾選、排序：

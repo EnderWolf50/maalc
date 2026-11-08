@@ -1,11 +1,16 @@
+import os
 import sys
 from pathlib import Path
-
-from maa.agent.agent_server import AgentServer
 
 # <root> holds interface.json in a release and the repo checkout in development;
 # config/, state/ and logs/ live under it. Located from this file, never from cwd.
 ROOT = Path(__file__).resolve().parent.parent
+# An install ships the MaaFramework DLLs once, in <root>/maafw/ where MXU loads them; a release's
+# bundled Python has no maa/bin of its own (#497).
+if (ROOT / "maafw").is_dir():
+    os.environ.setdefault("MAAFW_BINARY_PATH", str(ROOT / "maafw"))
+
+from maa.agent.agent_server import AgentServer  # noqa: E402
 
 import actions  # noqa: E402,F401  registers custom actions
 

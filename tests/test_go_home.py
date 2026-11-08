@@ -113,7 +113,10 @@ def child():
             actions.STUCK["l3"] = actions.recovery.L3_PER_EXECUTION - 1
             game.start_app = lambda intent, game=game: (setattr(game, "focus", GAME), setattr(game, "screen", "entry"), True)[-1]
         began = time.monotonic()
-        out[scenario] = {**result(tasker.post_task("GoHome", override).wait().get(), game, actions), "starts": game.starts,
+        job = tasker.post_task("GoHome", override).wait()
+        while not (detail := job.get()).status.done:  # #461: post_stop's queue clear ends wait() before the task does
+            time.sleep(0.01)
+        out[scenario] = {**result(detail, game, actions), "starts": game.starts,
                          "seconds": time.monotonic() - began,
                          "stops": game.stops, "l3": actions.STUCK["l3"],
                          "stopped": len(list(actions.ROOT.joinpath("logs").rglob("agent.log"))) - stops,
@@ -182,9 +185,9 @@ def test_go_home_in_a_battle_ends_the_task_list_without_a_back_key():
     # J2 (live 2026-10-28): in a battle the back key opens the pause menu, Give Up one tap away. Nothing is pressed: the
     # stop procedure, and the rest of the list goes, as after an account-level stop, for the user to end it by hand.
     o = run_child(__file__)["battle"]
-    # #461: the task reads succeeded now and then on CI; its whole outcome shows in that red's log (a string message,
-    # which pytest prints in full: a dict is cut short).
-    assert o["succeeded"] is False and o["keys"] == [] and o["clicks"] == [], json.dumps(o)
+    # MaaFramework ends a task that stopped its tasker as succeeded; without the stop, Halt's False fails it (#461). A red
+    # prints the whole outcome (a string message: pytest cuts a dict short).
+    assert o["succeeded"] is True and o["nodes"][-1] == "HomeInBattle" and o["keys"] == [] and o["clicks"] == [], json.dumps(o)
     assert o["stopped"] == 1 and o["halted"].startswith("HomeInBattle: "), json.dumps(o)
 
 

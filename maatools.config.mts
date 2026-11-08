@@ -158,6 +158,9 @@ const screens: [image: string, hits: string[]][] = [
   ['ThemePackNormal.png', ['ThemePack']],
   ['ThemePackRefresh0.png', ['ThemePack', 'PackRefreshSpent']],  // live 2026-10-23 (#319): Refresh 0/3, greyed
   ['ThemePackRefresh1.png', ['ThemePack']],  // the same floor, Refresh 1/3
+  // Live 2026-11-07 (#482, a frame of the run's recording), HARD floor 5 after its one free refresh: the button greyed
+  // with no count, so PackRefreshSpent misses; PickThemePack reads it by its brightness (refresh_lit).
+  ['ThemePackRefreshGrey.png', ['ThemePack']],
   ['MirrorMap.png', ['MirrorMap', 'MapBus', 'MapLinkUp', 'MapLinkMid', 'MapLinkDown', 'MapNodeCost', 'MapNodeEvent']],
   // Map marks: the default ROIs fit a map at rest; RouteMap moves them with the bus.
   ['MapEvent.png', ['MirrorMap', 'MapBus', 'MapLinkUp', 'MapLinkMid', 'MapLinkDown', 'MapNodeCost', 'MapNodeEvent']],
@@ -243,6 +246,8 @@ const screens: [image: string, hits: string[]][] = [
   ['BossGiftTrialsHard.png', ['GiftChoice']],
   // Live 2026-10-28 (#381, a NORMAL run's recording frame scaled to 720p): after the floor-3 boss, wrapped effect lines.
   ['BossGiftTrialsFloor3.png', ['GiftChoice']],
+  // Live 2026-11-07 (#494, a HARD run's recording frame, floor 4): after the boss's page, three cards, no trials, no n/m.
+  ['GiftChoiceNoCount.png', ['GiftChoice']],
   ['GiftRefuseDialog.png', ['GiftRefuseDialog', 'GiftChoice']],
   ['EventStory.png', ['Event']],
   ['EventChoices.png', ['Event']],
