@@ -5,8 +5,8 @@ import numpy as np
 import pytest
 
 import actions
-from recovery import (GAME, TRANSIT, WAIT_STILL, Ladder, Watchdog, floor_limit, focused_package, over_time, read_runs,
-                      run_limit, same_screen, thumb)
+from recovery import (GAME, TRANSIT, WAIT_STILL, Ladder, Restarts, Watchdog, floor_limit, focused_package, over_time,
+                      read_runs, run_limit, same_screen, thumb)
 from test_pipeline import load_nodes
 
 
@@ -15,6 +15,8 @@ def screen(level):
 
 
 A, B = thumb(screen(100)), thumb(screen(200))
+WAY_BACK = ("NavTitle", "Connecting", "Loading", "NavMainTabs", "NavDrive", "GoToMirrorEntry", "MirrorEntryPaused",
+            "ResumeDialog", "Loading")
 
 
 def test_same_screen_ignores_flicker_not_change():
@@ -57,13 +59,13 @@ def test_watchdog_a_tab_tapped_over_and_over_is_stuck_however_the_screen_moves()
 def test_a_tab_that_never_opens_after_a_restart_restarts_again_then_stops():
     # Acceptance 5: the battle froze (L1, then L3), and the restarted game would not open Drive. The tab's stuck is the
     # same episode (NavMainTabs is on the way back): L3 again, and once this run's restarts are used up, the stop.
-    ladder = Ladder()
-    assert ladder.stuck("BattlePause", 1, 0) == (1, None)
-    assert ladder.stuck("BattlePause", 1, 0) == (3, None)
+    ladder, restarts = Ladder(), Restarts()
+    assert ladder.stuck("BattlePause", 1, restarts) == (1, None)
+    assert ladder.stuck("BattlePause", 1, restarts) == (3, None)
     ladder.progress("NavMainTabs")
-    assert ladder.stuck("NavMainTabs", 1, 1) == (3, None)
+    assert ladder.stuck("NavMainTabs", 1, restarts) == (3, None)
     ladder.progress("NavMainTabs")
-    assert ladder.stuck("NavMainTabs", 1, 2) == (None, "game restarted 2 times this run")
+    assert ladder.stuck("NavMainTabs", 1, restarts) == (None, "game restarted 2 times this run")
 
 
 def dots(n):
@@ -168,31 +170,31 @@ def test_a_dead_tap_streak_starts_over_on_a_live_tap_another_picture_or_a_reset(
 
 
 def test_ladder_climbs_until_the_screen_is_past():
-    ladder = Ladder()
-    assert ladder.stuck("MirrorMap", 1, 0) == (1, None)
+    ladder, restarts = Ladder(), Restarts()
+    assert ladder.stuck("MirrorMap", 1, restarts) == (1, None)
     ladder.progress("MirrorMap")  # still the same screen
     ladder.progress("Loading")  # on the way back: not past it
-    assert ladder.stuck("MirrorMap", 1, 0) == (2, None)
-    assert ladder.stuck("NavDrive", 1, 0) == (3, None)  # any stuck in an open episode climbs
-    assert ladder.stuck("MirrorMap", 1, 1) == (3, None)  # L3 again: a restart may hang too
-    assert ladder.stuck("MirrorMap", 1, 2) == (None, "game restarted 2 times this run")
+    assert ladder.stuck("MirrorMap", 1, restarts) == (2, None)
+    assert ladder.stuck("NavDrive", 1, restarts) == (3, None)  # any stuck in an open episode climbs
+    assert ladder.stuck("MirrorMap", 1, restarts) == (3, None)  # L3 again: a restart may hang too
+    assert ladder.stuck("MirrorMap", 1, restarts) == (None, "game restarted 2 times this run")
     assert ladder.counts == {1: 1, 2: 1, 3: 2}
 
 
 def test_ladder_progress_starts_the_next_stuck_over():
-    ladder = Ladder()
-    assert ladder.stuck("Event", 1, 0) == (1, None)
-    assert ladder.stuck("Event", 1, 0) == (2, None)
+    ladder, restarts = Ladder(), Restarts()
+    assert ladder.stuck("Event", 1, restarts) == (1, None)
+    assert ladder.stuck("Event", 1, restarts) == (2, None)
     ladder.progress("MirrorMap")  # got past it
-    assert ladder.stuck("Event", 1, 0) == (1, None)  # the same screen again: a fresh episode, not a stop
+    assert ladder.stuck("Event", 1, restarts) == (1, None)  # the same screen again: a fresh episode, not a stop
     ladder.progress("Event")  # still the stuck screen: the episode stays open
-    assert ladder.stuck("Event", 1, 0) == (2, None)
+    assert ladder.stuck("Event", 1, restarts) == (2, None)
     assert ladder.counts == {1: 2, 2: 2, 3: 0}
 
 
 def test_ladder_time_limits_start_at_l2():
     ladder = Ladder()
-    assert ladder.stuck("MirrorMap", 2, 0) == (2, None)
+    assert ladder.stuck("MirrorMap", 2, Restarts()) == (2, None)
     assert ladder.counts == {1: 0, 2: 1, 3: 0}
 
 
@@ -200,36 +202,54 @@ def test_ladder_time_limits_start_at_l2():
 def test_ladder_skips_l2_in_battle(kind):
     # L2 only goes through on the map: mid-battle it failed after 20 s and the L3 restart followed anyway
     # (live 2026-10-17, #70). A battle climbs from L1 straight to L3; its time limit starts there.
-    ladder = Ladder()
-    assert ladder.stuck(kind, 1, 0) == (1, None)
-    assert ladder.stuck(kind, 1, 0) == (3, None)
-    assert Ladder().stuck(kind, 2, 0) == (3, None)
+    ladder, restarts = Ladder(), Restarts()
+    assert ladder.stuck(kind, 1, restarts) == (1, None)
+    assert ladder.stuck(kind, 1, restarts) == (3, None)
+    assert Ladder().stuck(kind, 2, Restarts()) == (3, None)
     assert ladder.counts == {1: 1, 2: 0, 3: 1}
 
 
 def test_ladder_a_level_that_did_not_go_through_is_not_charged_to_the_run():
     # Live 2026-10-17 (#70): `am force-stop` failed once (adb exit 1), then the restart that went through
     # hung on NOW LOADING; the failed one had used up one of the run's 2 restarts, so the bot stopped.
-    ladder = Ladder()
-    assert ladder.stuck("BattleTurn", 1, 0) == (1, None)
-    assert ladder.stuck("BattleTurn", 1, 0) == (3, None)
+    ladder, restarts = Ladder(), Restarts()
+    assert ladder.stuck("BattleTurn", 1, restarts) == (1, None)
+    assert ladder.stuck("BattleTurn", 1, restarts) == (3, None)
     ladder.failed(3)
-    assert ladder.stuck("BattleTurn", 1, 1) == (3, None)  # the same episode retries the restart
-    assert ladder.stuck("Loading", 1, 2) == (3, None)  # the restarted game hangs: one more within the run's 2
+    assert ladder.stuck("BattleTurn", 1, restarts) == (3, None)  # the same episode retries the restart
+    assert ladder.stuck("Loading", 1, restarts) == (3, None)  # the restarted game hangs: one more within the run's 2
     assert ladder.counts == {1: 1, 2: 0, 3: 2}
-    assert ladder.stuck("Loading", 1, 2) == (None, "game restarted 2 times this run")
+    assert ladder.stuck("Loading", 1, restarts) == (None, "game restarted 2 times this run")
 
 
-@pytest.mark.parametrize("counts, l3_execution, start, expected", [
+@pytest.mark.parametrize("counts, failed, start, expected", [
     ({1: 0, 2: 3, 3: 0}, 0, 2, (None, "L2 used 3 times this run")),
     ({1: 0, 2: 0, 3: 2}, 0, 3, (None, "game restarted 2 times this run")),
-    ({1: 0, 2: 0, 3: 1}, 3, 3, (None, "game restarted 3 times since the bot started")),
+    ({1: 0, 2: 0, 3: 1}, 3, 3, (None, "game restarted 3 times in a row without getting past MirrorMap")),
     ({1: 0, 2: 2, 3: 1}, 2, 2, (2, None)),
 ])
-def test_ladder_limits(counts, l3_execution, start, expected):
-    ladder = Ladder()
+def test_ladder_limits(counts, failed, start, expected):
+    ladder, restarts = Ladder(), Restarts()
     ladder.counts = dict(counts)
-    assert ladder.stuck("MirrorMap", start, l3_execution) == expected
+    for _ in range(failed):
+        restarts.attempt("MirrorMap")
+    assert ladder.stuck("MirrorMap", start, restarts) == expected
+
+
+def test_a_restart_that_needed_another_before_the_bot_got_past_counts_as_failed():
+    ladder, restarts = Ladder(), Restarts()
+    ladder.stuck("BattlePause", 1, restarts)
+    ladder.stuck("BattlePause", 1, restarts)
+    for kind in ("NavTitle", "Connecting", "NavMainTabs"):
+        ladder.progress(kind)
+        restarts.progress(kind)
+    assert ladder.stuck("NavMainTabs", 1, restarts) == (3, None)
+    for kind in (*WAY_BACK, "BattlePause"):
+        ladder.progress(kind)
+        restarts.progress(kind)
+    assert restarts.failed == 2
+    restarts.progress("MirrorMap")
+    assert restarts.failed == 0 and restarts.stop_reason() is None
 
 
 def line(team, minutes, result="clear", **extra):
@@ -330,11 +350,11 @@ def test_watchdog_a_download_is_no_stuck_while_held():
 
 
 def test_ladder_the_downloading_screens_are_on_the_way_back_not_past_the_stuck_one():
-    ladder = Ladder()
-    assert ladder.stuck("NavTitle", 1, 0) == (1, None)
+    ladder, restarts = Ladder(), Restarts()
+    assert ladder.stuck("NavTitle", 1, restarts) == (1, None)
     for kind in ("DownloadDialog", "PopupButton"):
         ladder.progress(kind)  # an acknowledged dialog on the title does not end the episode
-    assert ladder.stuck("NavTitle", 1, 0) == (2, None)
+    assert ladder.stuck("NavTitle", 1, restarts) == (2, None)
 
 
 def test_keep_capture_saves_the_screen_and_keeps_only_the_latest(tmp_path):
@@ -351,6 +371,11 @@ def test_keep_capture_saves_the_screen_and_keeps_only_the_latest(tmp_path):
 def test_notices_at_login_do_not_end_a_stuck_spell():
     # spec 06: screens on the way back to a run (a login may open the notices) are not progress.
     assert "Notices" in TRANSIT
+
+
+def test_the_daily_hubs_main_window_nodes_are_on_the_way_back_not_past_a_stuck_screen():
+    main_window = {name for name, node in load_nodes().items() if "HomeReached" in node.get("all_of", [])}
+    assert main_window and main_window <= TRANSIT, sorted(main_window - TRANSIT)
 
 
 GAME_FOCUS = "  mCurrentFocus=Window{1d4e2f0 u0 com.ProjectMoon.LimbusCompany/com.unity3d.player.UnityPlayerActivity}\n"
@@ -374,9 +399,9 @@ def test_the_game_package_is_the_one_l3_restarts():
 
 
 def test_ladder_a_game_not_in_front_goes_straight_to_l3():
-    ladder = Ladder()
-    assert ladder.stuck("MirrorMap", 1, 0) == (1, None)
-    assert ladder.stuck("MirrorMap", 3, 0) == (3, None)  # in an open episode too: L2 cannot help
+    ladder, restarts = Ladder(), Restarts()
+    assert ladder.stuck("MirrorMap", 1, restarts) == (1, None)
+    assert ladder.stuck("MirrorMap", 3, restarts) == (3, None)  # in an open episode too: L2 cannot help
     assert ladder.counts == {1: 1, 2: 0, 3: 1}
 
 
@@ -391,10 +416,12 @@ def hub(monkeypatch, tmp_path):
     actions.STUCK["flag"] = None
     actions.STUCK["watch"].reset()
     actions.STUCK["ladder"].__init__()
+    actions.STUCK["restarts"].__init__()
     yield ctx
     actions.RUN.clear()
     actions.STUCK["flag"] = None
     actions.STUCK["ladder"].__init__()
+    actions.STUCK["restarts"].__init__()
 
 
 @pytest.mark.parametrize("focus, flag, first", [
@@ -423,3 +450,30 @@ def test_recover_climbs_as_before_when_the_focus_cannot_be_read(hub, failed):
         job.get.return_value = "  mCurrentFocus=Window{1 u0 com.android.vending/x}\n"
     actions.Recover().run(hub, None)
     assert hub.run_task.call_args_list[0].args == ("RecoverL1",)
+
+
+def test_ten_runs_with_a_restart_each_never_stop(hub, monkeypatch):
+    # #520, for #34's 10 HARD runs in one launch.
+    stops = []
+    monkeypatch.setattr(actions, "stop", lambda context, reason, line=None: stops.append(reason) or False)
+    for _ in range(10):
+        actions.STUCK["ladder"] = Ladder()
+        for _ in range(2):
+            actions.STUCK["flag"] = ("BattlePause", 1, "BattlePause: the screen did not change")
+            actions.Recover().run(hub, None)
+        for kind in (*WAY_BACK, "MirrorMap"):
+            actions.StuckFlag.see(kind, screen(0))
+    assert stops == []
+    assert [c.args for c in hub.run_task.call_args_list] == [("RecoverL1",), ("RecoverL3",)] * 10
+    assert actions.STUCK["restarts"].stop_reason() is None
+
+
+def test_a_force_stop_that_fails_three_times_in_a_row_stops(hub, monkeypatch):
+    stops = []
+    monkeypatch.setattr(actions, "stop", lambda context, reason, line=None: stops.append(reason) or False)
+    hub.run_task.return_value.status.succeeded = False
+    actions.STUCK["flag"] = ("MirrorMap", 3, "the game is frozen")
+    assert actions.Recover().run(hub, None) is False
+    assert [c.args for c in hub.run_task.call_args_list] == [("RecoverL3",)] * 3
+    assert len(stops) == 1 and "3 times in a row" in stops[0], stops
+    assert actions.STUCK["ladder"].counts[3] == 0

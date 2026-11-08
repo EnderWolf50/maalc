@@ -54,9 +54,10 @@ RUN = {}
 TASK = {"runs": 0, "done": None}
 # Stuck detection and recovery (spec 06), memory only: the last node seen ("node", its id) and the
 # screen type it handled ("kind"), a pending stuck for MirrorHub's Stuck node ("flag": (kind, start
-# level, reason)), this run's Ladder, the game restarts since this agent started ("l3"), and the reason of an
-# account-level stop this launch ("halted", #362 D8): every later task then fails at its entry.
-STUCK = {"node": None, "kind": None, "flag": None, "watch": recovery.Watchdog(), "ladder": recovery.Ladder(), "l3": 0,
+# level, reason)), this run's Ladder, this launch's game restarts ("restarts", a recovery.Restarts), and the reason
+# of an account-level stop this launch ("halted", #362 D8): every later task then fails at its entry.
+STUCK = {"node": None, "kind": None, "flag": None, "watch": recovery.Watchdog(), "ladder": recovery.Ladder(),
+         "restarts": recovery.Restarts(),
          "updates": 0,  # game restarts for update notices since this agent started (AcceptUpdate)
          "halted": None}
 SCREENS = deque(maxlen=20)  # the last screens MirrorHub handed out: the evidence on a stop
@@ -461,7 +462,7 @@ class TaskStart(CustomAction):
     """A task's entry node (#364, ADR 0010): a task list runs its tasks on one agent, so what the last task left in
     memory goes: its Ladder, the watchdog, the screens kept for evidence, this task's runs. The run goes too once the
     last task ended (done, stop); one the client interrupted stays for the same task, which picks it up (#362 D3). The
-    game restarts (STUCK l3, updates) still count per bot launch. After an account-level stop this launch the task fails
+    game restarts (STUCK restarts, updates) still count per bot launch. After an account-level stop this launch the task fails
     here, before any tap, evidence or webhook (#362 D8): it would meet the same screen."""
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
@@ -518,6 +519,7 @@ class StuckFlag(CustomRecognition):
         STUCK["kind"] = kind
         SCREENS.append(image)
         STUCK["ladder"].progress(kind)
+        STUCK["restarts"].progress(kind)
         if STUCK["flag"]:
             return
         if kind == "Downloading":  # the game is away; the floor gets its whole time once the download is done
@@ -843,15 +845,15 @@ def go_home(context):
     return bool(detail and detail.status.succeeded)
 
 
-def restart_game(context, reason):
+def restart_game(context, reason, kind=None):
     """L3 outside the mirror's Ladder (spec 06), for GoHome's HomeLost and the daily hubs' DailyRecover: RecoverL3 within
-    L3_PER_EXECUTION a bot launch, then GoHome's back keys, game starts and Window tab taps count afresh and the game
-    state is forgotten. True once RecoverL3 ran, through or not (GoHome goes on from wherever it left the game); False
-    after the stop procedure, the restarts used up."""
-    if STUCK["l3"] >= recovery.L3_PER_EXECUTION:
-        return stop(context, f"{reason}; the game restarted {recovery.L3_PER_EXECUTION} times since the bot started")
-    STUCK["l3"] += 1  # every attempt counts, as Recover's: a restart that always fails still ends
-    log(f"recovery L3: {reason} ({STUCK['l3']} of {recovery.L3_PER_EXECUTION} restarts)")
+    the launch's Restarts, then GoHome's back keys, game starts and Window tab taps count afresh and the game state is
+    forgotten. kind: the screen type the game is stuck on; None for HomeLost, which no hub read. True once RecoverL3
+    ran, through or not (GoHome goes on from wherever it left the game); False after the stop procedure."""
+    if why := STUCK["restarts"].stop_reason():
+        return stop(context, f"{reason}; {why}")
+    STUCK["restarts"].attempt(kind)
+    log(f"recovery L3: {reason} (restart {STUCK['restarts'].failed} of {recovery.L3_FAILED_IN_A_ROW} in a row)")
     detail = context.run_task("RecoverL3")
     if not (detail and detail.status.succeeded):
         log("L3 did not go through")
@@ -879,11 +881,11 @@ class DailyRecover(CustomAction):
     param saying why."""
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
-        _, level, reason = STUCK["flag"]
+        kind, level, reason = STUCK["flag"]
         STUCK["flag"] = None
         if level < 3:
             return stop(context, f"{argv.node_name}: {json.loads(argv.custom_action_param or '""')}")
-        if not restart_game(context, reason):
+        if not restart_game(context, reason, kind):
             return False
         hub = context.get_node_data(argv.node_name)["next"][0]["name"]
         for node in context.get_node_data(hub)["next"]:
@@ -1212,11 +1214,10 @@ class Recover(CustomAction):
             # an update): the back key and To Window do nothing there, so the game is restarted at once.
             start, reason = 3, f"{reason}; the game is not in front ({app or 'no window has focus'})"
         while True:
-            level, why = STUCK["ladder"].stuck(kind, start, STUCK["l3"])
+            level, why = STUCK["ladder"].stuck(kind, start, STUCK["restarts"])
             if level is None:
                 return stop(context, f"{reason}; {why}")
             log(f"recovery L{level}: {reason}")
-            STUCK["l3"] += level == 3
             detail = context.run_task(f"RecoverL{level}")
             if detail and detail.status.succeeded:
                 break

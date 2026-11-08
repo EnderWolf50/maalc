@@ -23,12 +23,12 @@ def child():
         images = {**{name: screen(png) for name, png in SCREENS.items()}, "black": np.zeros((720, 1280, 3), np.uint8)}
         images["main_moved"] = live_frame(images["main"])
 
-        def set(self, frozen=False, live=False, ignored=0, ignored_after=0):
+        def set(self, frozen=False, live=False, ignored=0, ignored_after=0, refreezes=False):
             """frozen: the main window takes no tap and shows the same picture until the game restarts. live: the main
             window's picture moves at every other screenshot. ignored: the banner taps the game lets go by before one opens
             the pass page (math.inf: none does); ignored_after: the same, once the game restarted."""
             self.screen, self.focus, self.frozen, self.live, self.ignored = "main", GAME, frozen, live, ignored
-            self.ignored_after = ignored_after
+            self.ignored_after, self.refreezes = ignored_after, refreezes
             self.clicks, self.keys, self.swipes, self.starts, self.stops, self.frames = [], [], [], 0, 0, 0
             self.tapped_frozen = 0
 
@@ -44,7 +44,7 @@ def child():
             if self.frozen:
                 self.tapped_frozen += 1
             elif self.screen == "title" and inside(TITLE_TAP, x, y):
-                self.screen = "main"
+                self.screen, self.frozen = "main", self.refreezes
             elif self.screen == "main" and inside(BANNER, x, y):
                 if self.ignored > 0:
                     self.ignored -= 1
@@ -76,7 +76,7 @@ def child():
 
         def start_app(self, intent):
             self.starts += 1
-            self.focus, self.screen, self.live = GAME, "title", True  # the restarted game is live again
+            self.focus, self.screen, self.live = GAME, "title", not self.refreezes
             self.ignored = self.ignored_after
             return True
 
@@ -90,17 +90,20 @@ def child():
         "frozen": ({"frozen": True}, 0),
         # the restarted game lets the banner's first tap go by: its 4th tap in all, past PassBanner's max_hit 3
         "frozen_late": ({"frozen": True, "ignored_after": 1}, 0),
-        "frozen_restarts_used": ({"frozen": True}, actions.recovery.L3_PER_EXECUTION),
+        "frozen_again": ({"frozen": True, "refreezes": True}, 0),
+        "frozen_restarts_used": ({"frozen": True}, actions.recovery.L3_FAILED_IN_A_ROW),
         "late": ({"live": True, "ignored": 1}, 0),
         "never": ({"live": True, "ignored": math.inf}, 0),
     }.items():
         game.set(**model)
-        actions.STUCK["l3"] = restarts_used
+        actions.STUCK["restarts"] = actions.recovery.Restarts()
+        for _ in range(restarts_used):
+            actions.STUCK["restarts"].attempt("PassBanner")
         actions.ROOT.joinpath("logs").mkdir(exist_ok=True)
         stopped = len(list(actions.ROOT.joinpath("logs").rglob("agent.log")))
         detail = tasker.post_task("ClaimPassMissions", {"PassHub": {"timeout": HUB_TIMEOUT}}).wait().get()
         out[scenario] = {**result(detail, game, actions), "starts": game.starts, "stops": game.stops,
-                         "tapped_frozen": game.tapped_frozen, "l3": actions.STUCK["l3"],
+                         "tapped_frozen": game.tapped_frozen, "l3": actions.STUCK["restarts"].failed,
                          "stopped": len(list(actions.ROOT.joinpath("logs").rglob("agent.log"))) - stopped,
                          "log": list(actions.LOG)[-40:]}
         actions.LOG.clear()
@@ -109,7 +112,8 @@ def child():
 
 def test_a_main_window_that_takes_no_tap_restarts_the_game_and_the_task_goes_on():
     o = run_child(__file__)["frozen"]
-    assert (o["stops"], o["starts"], o["l3"]) == (1, 1, 1), json.dumps(o)
+    assert (o["stops"], o["starts"]) == (1, 1), json.dumps(o)
+    assert o["l3"] == 0, json.dumps(o)
     # Within the banner's own 3 taps (PassBanner's max_hit): after them the hub has nothing left to tap.
     assert 1 <= o["tapped_frozen"] <= 3, json.dumps(o)
     assert o["succeeded"] and o["screen"] == "main" and o["nodes"][-1] == "TaskDone", json.dumps(o)
@@ -122,6 +126,12 @@ def test_after_the_restart_the_hub_taps_the_banner_afresh():
     assert (o["stops"], o["starts"]) == (1, 1), json.dumps(o)
     assert o["succeeded"] and o["done"] == "pass missions: nothing to claim", json.dumps(o)
     assert sum(inside(BANNER, *c) for c in o["clicks"]) == 4, json.dumps(o)
+
+
+def test_a_main_window_frozen_again_after_each_restart_stops_after_three():
+    o = run_child(__file__)["frozen_again"]
+    assert (o["stops"], o["starts"], o["l3"]) == (3, 3, 3), json.dumps(o)
+    assert o["succeeded"] is False and o["stopped"] == 1, json.dumps(o)
 
 
 def test_a_frozen_main_window_with_the_restarts_used_up_ends_the_task_through_the_stop_procedure():

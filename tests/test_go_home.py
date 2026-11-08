@@ -95,8 +95,7 @@ def child():
         if scenario == "restart":  # the restarted game works again, and its title opens on a page with no tab bar
             game.start_app = lambda intent, game=game: (Game.start_app(game, intent), setattr(game, "on_key", Game.on_key.__get__(game)))[0]
             game.on_tap = lambda x, y, game=game: (setattr(game, "screen", "entry") if game.screen == "title" else Game.on_tap(game, x, y)) or True
-        # stuck: the game restarts that L3 allows were used up before; restart: none were.
-        actions.STUCK["l3"] = 0 if scenario in ("restart", "tab_restart") else actions.recovery.L3_PER_EXECUTION
+        failed = 0 if scenario in ("restart", "tab_restart") else actions.recovery.L3_FAILED_IN_A_ROW
         actions.ROOT.joinpath("logs").mkdir(exist_ok=True)
         stops = len(list(actions.ROOT.joinpath("logs").rglob("agent.log")))
         override = {"GoHome": {"timeout": 4000}}
@@ -110,15 +109,18 @@ def child():
             game.start_app = lambda intent, game=game: (Game.start_app(game, intent), setattr(game, "screen", "drive"),
                                                         setattr(game, "on_tap", Game.on_tap.__get__(game)))[0]
         if scenario == "restarts_used":  # one restart left, and the restarted game is as stuck as before
-            actions.STUCK["l3"] = actions.recovery.L3_PER_EXECUTION - 1
+            failed = actions.recovery.L3_FAILED_IN_A_ROW - 1
             game.start_app = lambda intent, game=game: (setattr(game, "focus", GAME), setattr(game, "screen", "entry"), True)[-1]
+        actions.STUCK["restarts"] = actions.recovery.Restarts()
+        for _ in range(failed):
+            actions.STUCK["restarts"].attempt(None)
         began = time.monotonic()
         job = tasker.post_task("GoHome", override).wait()
         while not (detail := job.get()).status.done:  # #461: post_stop's queue clear ends wait() before the task does
             time.sleep(0.01)
         out[scenario] = {**result(detail, game, actions), "starts": game.starts,
                          "seconds": time.monotonic() - began,
-                         "stops": game.stops, "l3": actions.STUCK["l3"],
+                         "stops": game.stops, "l3": actions.STUCK["restarts"].failed,
                          "stopped": len(list(actions.ROOT.joinpath("logs").rglob("agent.log"))) - stops,
                          "halted": actions.STUCK["halted"]}
         actions.STUCK["halted"] = None

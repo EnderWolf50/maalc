@@ -112,18 +112,21 @@ def test_each_task_starts_with_a_clean_slate_but_the_game_restarts_count_per_lau
     # #364, ADR 0010: a task list runs tasks on one agent; what one task left must not reach the next.
     actions.RUN.update(floor=3, guard=2)
     actions.TASK.update(runs=1, done="1 of 1 runs done")
-    for key, value in dict(l3=2, updates=1, watch=recovery.Watchdog(), ladder=recovery.Ladder()).items():
+    restarts = recovery.Restarts()
+    for _ in range(recovery.L3_FAILED_IN_A_ROW):
+        restarts.attempt("MirrorMap")
+    for key, value in dict(restarts=restarts, updates=1, watch=recovery.Watchdog(), ladder=recovery.Ladder()).items():
         monkeypatch.setitem(actions.STUCK, key, value)  # restored afterwards: the later tests count from 0
     actions.STUCK.update(flag=(None, 1, "x"), kind="MirrorMap")
     actions.STUCK["watch"].hold(0.0, 600)
-    actions.STUCK["ladder"].stuck("MirrorMap", 1, 0)
+    actions.STUCK["ladder"].stuck("MirrorMap", 1, restarts)
     actions.SCREENS.append(np.zeros((720, 1280, 3), np.uint8))
     assert actions.TaskStart().run(context, SimpleNamespace(node_name="MirrorDungeon")) is True
     assert actions.RUN == {} and actions.TASK == {"runs": 0, "done": None, "entry": "MirrorDungeon", "ended": False} and not actions.SCREENS
     assert (actions.STUCK["flag"], actions.STUCK["kind"]) == (None, None)
     assert actions.STUCK["ladder"].counts == recovery.Ladder().counts
     assert not actions.STUCK["watch"].held(1.0)
-    assert (actions.STUCK["l3"], actions.STUCK["updates"]) == (2, 1)
+    assert actions.STUCK["restarts"].stop_reason() and actions.STUCK["updates"] == 1
 
 
 def interrupted_run(context, how):

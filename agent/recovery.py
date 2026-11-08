@@ -32,18 +32,21 @@ NAV_TAPS, NAV_TAP_LIMIT = {"NavMainTabs", "NavDrive", "NavLuxcavation", "LuxExpT
 # Live 2026-11-05: the banner tapped 3 times and the Drive tab 5, every screenshot the same to the byte, while a live main
 # window's banners keep moving. 2 is MailOpen's whole max_hit: it fires on a task's last tap off the main window at the latest.
 DEAD_TAPS = 2
-# Screens on the way back to a run after L2/L3: seeing them does not mean the stuck screen was got past.
+# Screens on the way back to a run or a daily task's page after L2/L3: seeing them does not mean the stuck screen was
+# got past.
 TRANSIT = {"Loading", "Connecting", "RetryPopup", "GoToMirrorEntry", "NavTitle", "NavMainTabs", "NavDrive",
            "MirrorEntryPaused", "ResumeDialog", "ProgressPanel", "DownloadDialog", "PopupButton",
            "Downloading", "UpdateDialog", "UserAgreement",
-           "Notices"}  # the notices may open by themselves at login (unverified, #85)
+           "Notices",  # the notices may open by themselves at login (unverified, #85)
+           # the daily hubs' main window (their HomeReached nodes): a game frozen there shows it too (#440, #520)
+           "AssembleMain", "ChargeMain", "MailOpen", "PassBanner"}
 UNKNOWN_KEEP = 30  # screens MirrorHub did not recognise that logs/unknown/ keeps
 DISMISSED_KEEP = 100  # screens of notices, popups and recovery's back key that logs/dismissed/ keeps (#244)
 COST_KEEP = 50  # crops of map Cost coins that read as no Cost that logs/cost/ keeps (#284)
 # Seconds after confirming the title's download dialog in which nothing is stuck: until its progress screen
 # (Downloading, a waiting screen) is up, 22 s live 2026-10-21. 30 min ran out there before the download was done.
 DOWNLOAD_HOLD = 3 * 60
-L2_PER_RUN, L3_PER_RUN, L3_PER_EXECUTION = 3, 2, 3
+L2_PER_RUN, L3_PER_RUN, L3_FAILED_IN_A_ROW = 3, 2, 3
 BATTLE = {"BattleTurn", "BattlePause", "BattleMenu"}  # L2 cannot go through mid-battle: only the map has To Window
 BATTLE_LIMIT = 20 * 60
 RUN_LIMIT_DEFAULT, RUN_LIMIT_MIN_RUNS = 60 * 60, 10
@@ -168,6 +171,35 @@ class Watchdog:
         self.__init__()
 
 
+def got_past(stuck, kind):
+    return kind != stuck and kind not in TRANSIT
+
+
+class Restarts:
+    """One bot launch's game restarts (L3), the mirror's and the daily tasks' (spec 06 上限與停止, #520).
+
+    Each restart counts from its attempt, before RecoverL3 runs, and the count goes back to 0 at the first screen a hub
+    hands out past the one it was stuck on: read at the next restart, it is the failed ones in a row. TaskStart leaves
+    it, so a game that never comes back ends each later task at its first restart.
+    """
+
+    def __init__(self):
+        self.failed, self.stuck_on = 0, None
+
+    def stop_reason(self):
+        if self.failed >= L3_FAILED_IN_A_ROW:
+            return f"game restarted {L3_FAILED_IN_A_ROW} times in a row without getting past {self.stuck_on or 'the screen it was stuck on'}"
+        return None
+
+    def attempt(self, kind):
+        self.failed += 1
+        self.stuck_on = kind
+
+    def progress(self, kind):
+        if self.failed and got_past(self.stuck_on, kind):
+            self.failed, self.stuck_on = 0, None
+
+
 class Ladder:
     """One run's recovery levels and their limits (spec 06 恢復的三級, 上限與停止).
 
@@ -183,7 +215,7 @@ class Ladder:
         self.counts = {1: 0, 2: 0, 3: 0}
         self.open = None  # (screen type, level) of the episode under way
 
-    def stuck(self, kind, start, l3_this_execution):
+    def stuck(self, kind, start, restarts):
         """(level, None) to recover with, or (None, why) to stop. start is the least level, in an open episode too."""
         if self.open:  # L3 repeats while its limits allow
             kind, level = self.open[0], max(start, min(self.open[1] + 1, 3))
@@ -195,23 +227,25 @@ class Ladder:
             return None, f"L2 used {L2_PER_RUN} times this run"
         if level == 3 and self.counts[3] >= L3_PER_RUN:
             return None, f"game restarted {L3_PER_RUN} times this run"
-        if level == 3 and l3_this_execution >= L3_PER_EXECUTION:
-            return None, f"game restarted {L3_PER_EXECUTION} times since the bot started"
+        if level == 3 and (why := restarts.stop_reason()):
+            return None, why
         self.counts[level] += 1
+        if level == 3:
+            restarts.attempt(kind)
         self.open = (kind, level)
         return level, None
 
     def failed(self, level):
         """The level just given did not go through (L2 off the map, a failed force-stop): uncharge it.
 
-        The episode stays at that level, so the next stuck climbs on or repeats L3; the caller still
-        counts every L3 attempt towards L3_PER_EXECUTION, which bounds a force-stop that always fails.
+        The episode stays at that level, so the next stuck climbs on or repeats L3; the launch's Restarts keeps the
+        attempt, which bounds a force-stop that always fails.
         """
         self.counts[level] -= 1
 
     def progress(self, kind):
         """MirrorHub handed out kind: a screen other than the stuck one closes the episode."""
-        if self.open and kind != self.open[0] and kind not in TRANSIT:
+        if self.open and got_past(self.open[0], kind):
             self.open = None
 
 
