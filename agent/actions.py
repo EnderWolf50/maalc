@@ -351,8 +351,10 @@ def current_run(context):
     """The run plan; made up from settings and the rotation cursor when the agent restarted mid-run."""
     if "settings" not in RUN:  # a run plan, not just counters left by an action
         settings = load_settings(ROOT, need_team=True)
-        difficulty = settings["run"]["difficulty"]
-        difficulty = None if difficulty == "auto" else difficulty
+        run = settings["run"]
+        # What the run began on, unless the weekly bonuses left then decided it (auto with a target of 5): None.
+        began = {run_start.run_difficulty(run["difficulty"], left, run["target_floor"]) for left in (0, 1)}
+        difficulty = began.pop() if len(began) == 1 else None
         team, known = resumed_team(settings["teams"], read_cursor(ROOT, address(context)), difficulty)
         RUN.update(settings=settings, team=run_team(settings, team), difficulty=difficulty, planned=known)
         # The guard turns left are unknown after a restart: they count as used up (spec 03 section 8).
