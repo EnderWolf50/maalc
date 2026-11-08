@@ -51,7 +51,102 @@ def land_fake(pr=None, stacked=(), main_ci=(("completed", "success"),), queue="e
 
 
 def land(fake, go=True):
-    return ship.cmd_land(fake, 7, go, sleep=lambda s: None, repo=Path("main-checkout"))
+    return ship.cmd_land(fake, [7], go, sleep=lambda s: None, repo=Path("main-checkout"))
+
+
+def merge_of(pr):
+    return f"{pr:x}".rjust(40, "c")
+
+
+def pr_of(pr, **kw):
+    return info(number=pr, headRefName=f"feat/{pr}", headRefOid=f"{pr:x}".rjust(40, "a"), **kw)
+
+
+def batch_fake(*prs, stacked=None, main_ci=None, queue="emulator:\n  free\n"):
+    """A Fake for the PRs `prs` (info dicts); `stacked` and `main_ci` are keyed by PR number."""
+    routes = {"gh pr merge": (0, ""), "gh pr edit": (0, ""), "gh api": (0, ""),
+              f"{ship.sys.executable} tools/live/queue.py status": (0, queue),
+              "uv run python tools/after_land.py": (0, "after_land done")}
+    for p in prs:
+        n = p["number"]
+        routes[f"gh pr view {n}"] = [(0, json.dumps(p)), (0, json.dumps({"mergeCommit": {"oid": merge_of(n)}}))]
+        routes[f"gh pr list --base {p['headRefName']}"] = (0, json.dumps((stacked or {}).get(n, [])))
+        runs = (main_ci or {}).get(n, [("completed", "success")])
+        routes[f"gh run list --workflow ci --branch main --commit {merge_of(n)}"] = [
+            (0, json.dumps([{"status": s, "conclusion": c, "url": "u"}])) for s, c in runs]
+    return Fake(**routes)
+
+
+def land_many(fake, prs):
+    return ship.cmd_land(fake, prs, True, sleep=lambda s: None, repo=Path("main-checkout"))
+
+
+def first(fake, *prefix):
+    return next(i for i, c in enumerate(fake.calls) if c[:len(prefix)] == list(prefix))
+
+
+def last(fake, *prefix):
+    return max(i for i, c in enumerate(fake.calls) if c[:len(prefix)] == list(prefix))
+
+
+def touched(fake, pr):
+    return [c for c in fake.calls if c[:2] == ["gh", "pr"] and str(pr) in c[2:4]]
+
+
+AFTER_LAND = ("uv", "run", "python", "tools/after_land.py")
+
+
+def test_land_lands_several_prs_in_order_and_runs_after_land_once():
+    fake = batch_fake(pr_of(7), pr_of(8), pr_of(9))
+    assert land_many(fake, [7, 8, 9]) == 0
+    assert [c[3] for c in fake.ran("gh", "pr", "merge")] == ["7", "8", "9"]
+    for done, nxt in ((7, "8"), (8, "9")):
+        assert last(fake, "gh", "run", "list", "--workflow", "ci", "--branch", "main", "--commit", merge_of(done)) \
+            < first(fake, "gh", "pr", "merge", nxt)
+    assert len(fake.ran(*AFTER_LAND)) == 1
+    assert first(fake, *AFTER_LAND) > last(fake, "gh", "pr", "merge")
+
+
+def test_land_stops_at_a_pr_that_is_not_ready_and_leaves_the_rest(capsys):
+    red = [{"name": "ci-ok", "status": "COMPLETED", "conclusion": "FAILURE"}]
+    fake = batch_fake(pr_of(7), pr_of(8, statusCheckRollup=red), pr_of(9))
+    assert land_many(fake, [7, 8, 9]) == 1
+    assert [c[3] for c in fake.ran("gh", "pr", "merge")] == ["7"]
+    assert not touched(fake, 9)
+    assert "ship: stopped at #8; not started: #9" in capsys.readouterr().err
+    assert len(fake.ran(*AFTER_LAND)) == 1
+
+
+def test_land_retargets_the_next_pr_of_a_stack_then_lands_it_on_main():
+    fake = batch_fake(pr_of(7), pr_of(8), stacked={7: [{"number": 8, "headRefName": "feat/8"}]})
+    assert land_many(fake, [7, 8]) == 0
+    retarget = fake.calls.index(["gh", "pr", "edit", "8", "--base", "main"])
+    assert first(fake, "gh", "pr", "merge", "7") < retarget < first(fake, "gh", "api", "-X", "DELETE")
+    assert fake.ran("gh", "api", "-X", "DELETE")[0][-1].endswith("/heads/feat/7")
+    assert retarget < first(fake, "gh", "pr", "merge", "8")
+    assert fake.ran("gh", "run", "list", "--workflow", "ci", "--branch", "main", "--commit", merge_of(8))
+
+
+def test_land_stops_on_a_red_main_and_skips_after_land(capsys):
+    fake = batch_fake(pr_of(7), pr_of(8), main_ci={7: [("completed", "failure")]})
+    assert land_many(fake, [7, 8]) == 1
+    assert not touched(fake, 8)
+    assert "ship: stopped at #7; not started: #8" in capsys.readouterr().err
+    assert not fake.ran(*AFTER_LAND)
+
+
+def test_land_skips_after_land_when_a_later_pr_turns_main_red():
+    fake = batch_fake(pr_of(7), pr_of(8), main_ci={8: [("completed", "failure")]})
+    assert land_many(fake, [7, 8]) == 1
+    assert [c[3] for c in fake.ran("gh", "pr", "merge")] == ["7", "8"]
+    assert not fake.ran(*AFTER_LAND)
+
+
+def test_land_cli_takes_several_prs(capsys):
+    fake = batch_fake(pr_of(7), pr_of(8))
+    assert ship.main(["land", "7", "8", "--go"], runner=fake) == 0
+    assert [c[3] for c in fake.ran("gh", "pr", "merge")] == ["7", "8"]
+    assert "stopped" not in capsys.readouterr().err
 
 
 @pytest.mark.parametrize("rollup, want", [
@@ -87,7 +182,8 @@ def test_ready_prints_one_line_per_pr(capsys):
 def test_land_refuses_and_merges_nothing(kw, text, capsys):
     fake = land_fake(pr=info(**kw))
     assert land(fake) == 1
-    assert text in capsys.readouterr().err
+    err = capsys.readouterr().err
+    assert text in err and "stopped" not in err
     assert not fake.ran("gh", "pr", "merge")
 
 
