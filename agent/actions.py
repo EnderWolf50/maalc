@@ -2219,7 +2219,8 @@ def node_at(context, image, cx, cy, marks=None, costs=True):
     """The type of the map node centred at (cx, cy), by its marks and Cost number (map_route.node_type).
 
     No mark at all where the badges (80 px above the centre) sit under the resource bar: unknown, not an
-    event; a fight's Cost coin may be hidden there (the top row with the map at rest).
+    event; a fight's Cost coin may be hidden there (the top row with the map at rest). With costs, a coin the bar
+    cuts counts when its number shows below it (cut_coin).
     #91: with costs, a fight's kind is its Cost number looked up in the floor's difficulty's node_costs
     (map_weights.yaml), as read: a number unread or not in the table leaves the marks to decide (cost_miss logs it).
     The boss' Costs are in the table too: a boss whose red glow went unmatched reads as the boss by its Cost.
@@ -2228,7 +2229,10 @@ def node_at(context, image, cx, cy, marks=None, costs=True):
     again once next to the bus (RouteMap.follow).
     """
     marks = node_marks(context, image, cx, cy) if marks is None else marks
-    if not marks and cy - 80 < 60:
+    under_bar = cy - 80 < 60
+    if costs and under_bar and not marks.keys() & {"cost", "boss"} and (coin := cut_coin(context, image, cx, cy)):
+        marks = {**marks, "cost": coin}
+    if not marks and under_bar:
         return "unknown"
     if not (costs and "cost" in marks and "boss" not in marks):
         return map_route.node_type(set(marks))
@@ -2241,6 +2245,22 @@ def node_at(context, image, cx, cy, marks=None, costs=True):
     if cost not in table:
         cost_miss(image, marks["cost"].box, cx, cy, found, difficulty)
     return kind
+
+
+def cut_coin(context, image, cx, cy):
+    """The hit of the node's Cost coin with its top rows under the resource bar, None when there is none (#522).
+
+    MapNodeCost misses such a coin (0.658 on MapPanned.png's Focused at 725, 106). MapNodeCostCut takes it, and it
+    counts only when its number (coin_text's rows, from y + 24) sits below the bar (y 60) and reads as a Cost of the
+    floor's difficulty: a coin wholly under the bar scores as high (0.60-0.79 on four top-row battles), and its number's
+    crop lands on the bar's resource counts (one read 19).
+    """
+    ox, oy, w, h = MARKS["MapNodeCost"][1]
+    coin = seen(context, image, "MapNodeCostCut", (cx + ox, cy + oy, w, h))
+    table = map_data()["node_costs"]["hard" if is_hard(context) else "normal"]
+    if coin and coin.box[1] + 24 >= 60 and coin_number(coin_text(context, image, coin.box)) in table:
+        return coin
+    return None
 
 
 def coin_text(context, image, box):

@@ -48,6 +48,14 @@
         "template": "Map/MapNodeCost.png",
         "threshold": 0.8
     },
+    // #522: the Cost coin with its top rows under the resource bar (actions.cut_coin): 0.658 on MapPanned.png's Focused
+    // at 725, 106; the 42 events and shops of the labelled map captures 0.408 at most.
+    "MapNodeCostCut": {
+        "recognition": "TemplateMatch",
+        "roi": [640, 0, 180, 620],
+        "template": "Map/MapNodeCost.png",
+        "threshold": 0.5
+    },
     "MapNodeGift": {
         "recognition": "TemplateMatch",
         "roi": [640, 0, 180, 620],
