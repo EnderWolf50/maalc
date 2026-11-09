@@ -6,7 +6,8 @@
 - A test added to tests/test_actions.py whose name starts with another feature file's name belongs in that file.
 - An added line of a Markdown, locale or i18n file uses a term GLOSSARY.md lists under `_Avoid_`.
   A line carrying `avoid-ok` is skipped (a doc that quotes the term to explain it).
-- A node, task or helper removed by the diff is still named somewhere in the tree.
+- A node, task or helper removed by the diff is still named somewhere in the tree. A branch commit's
+  `Removed-name-ok: <name> (<why>)` line skips a name the tree uses for another thing (#439: the game's BATTLE node).
 - A commit from the merge base to HEAD (merge commits left out) carries a GitHub closing keyword before an issue
   number (`fix: #387`, `Fixes #12`, `closes owner/repo#5`): merged into main it closes the issue whatever the PR
   body says (docs/agents/pr.md "Language").
@@ -130,9 +131,18 @@ def removed_names(removed: dict[str, list[str]], added: dict[str, list[tuple[int
     return out
 
 
-def stale_references(removed: dict[str, list[str]], added: dict[str, list[tuple[int, str]]]) -> list[str]:
+REMOVED_OK = re.compile(r"^Removed-name-ok:\s*(\w+)", re.M)
+
+
+def removed_name_oks(base: str) -> set[str]:
+    """Names a branch commit marks `Removed-name-ok: <name> (<why>)`: the tree still names them, but as another thing
+    (the game's BATTLE node, an AALC asset group), not the removed one."""
+    return set(REMOVED_OK.findall(git("log", "--no-merges", "--format=%B", f"{merge_base(base)}..HEAD")))
+
+
+def stale_references(removed: dict[str, list[str]], added: dict[str, list[tuple[int, str]]], ok: set[str] = frozenset()) -> list[str]:
     problems = []
-    for name, path in sorted(set(removed_names(removed, added))):
+    for name, path in sorted({(n, p) for n, p in removed_names(removed, added) if n not in ok}):
         hits = git("grep", "-n", "-w", "-e", name, "--", ".", ":(exclude)tests/screens", check=False).splitlines()  # exit 1: no match
         hits = [h for h in hits if not h.startswith((".local/", "docs/adr/"))]  # an ADR records history
         defined = [h for h in hits if any((m := p.match(h.split(":", 2)[2])) and name in m.groups() for p in (NODE_KEY, TASK_NAME, PY_DEF))]
@@ -166,7 +176,7 @@ def commit_closing_hits(base: str) -> list[str]:
 def main(base: str) -> int:
     added, removed = diff_lines(base)
     glossary = (ROOT / "GLOSSARY.md").read_text(encoding="utf-8")
-    problems = [*misplaced_tests(added, feature_files()), *avoid_hits(glossary, added), *stale_references(removed, added),
+    problems = [*misplaced_tests(added, feature_files()), *avoid_hits(glossary, added), *stale_references(removed, added, removed_name_oks(base)),
                 *commit_closing_hits(base)]
     for p in problems:
         print(p)
