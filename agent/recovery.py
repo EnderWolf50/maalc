@@ -55,7 +55,10 @@ L2_PER_RUN, L3_PER_RUN, L3_FAILED_IN_A_ROW = 3, 2, 3
 # allowance was sized for a 5-floor run (#435). Not every floor: a run that keeps freezing would then go on for hours.
 REFILL_FLOORS = 5
 L3_PER_TASK = L3_PER_RUN  # restarts outside the Ladder (restart_game) that went through: as many as a mirror run's (#520)
-BATTLE = {"BattleTurn", "BattlePause", "BattleMenu"}  # L2 cannot go through mid-battle: only the map has To Window
+# The screens L2 goes through on (RecoverL2): the map, whose gear opens Dungeon Progress, and that panel open. Anywhere else
+# it waited out its 20 s timeout before L3 (#439; mid-battle live 2026-10-17, #70). An event's back key opens the panel too,
+# but the hub's ProgressPanel closes it before the next stuck. AALC's back_init_menu takes To Window from these two only.
+TO_WINDOW = {"MirrorMap", "ProgressPanel"}
 BATTLE_LIMIT = 20 * 60
 RUN_LIMIT_DEFAULT, RUN_LIMIT_MIN_RUNS = 60 * 60, 10
 FLOOR_LIMIT = 45 * 60  # live (#34): a HARD floor took up to ~25 min of real progress
@@ -213,7 +216,7 @@ class Ladder:
     each further stuck before the bot gets past that screen climbs one level, up to L3, which may repeat
     within its limits (live: a restarted game sometimes hangs on CONNECTING). Getting past it closes
     the episode: a later stuck, even on the same screen type, starts over at its start level
-    (2026-10-16). Only the per-run and per-launch caps stop. A battle skips L2 (live 2026-10-17, #70: it
+    (2026-10-16). Only the per-run and per-launch caps stop. A screen off TO_WINDOW skips L2 (#70, #439: it
     failed there and L3 followed anyway), and a level that did not go through is not charged to the run.
     A run with a target above 5 gets the per-run caps again from floors 6 and 11 (floor, #435); counts stays the run's.
     """
@@ -238,12 +241,13 @@ class Ladder:
 
     def stuck(self, kind, start, restarts):
         """(level, None) to recover with, or (None, why) to stop. start is the least level, in an open episode too."""
-        if self.open:  # L3 repeats while its limits allow
-            kind, level = self.open[0], max(start, min(self.open[1] + 1, 3))
-        else:
-            level = start
-        if level == 2 and kind in BATTLE:
+        # L3 repeats while its limits allow. L2 only on a screen it goes through on: kind is the screen now, an open
+        # episode's own may be one on the way back (TRANSIT).
+        level = max(start, min(self.open[1] + 1, 3)) if self.open else start
+        if level == 2 and kind not in TO_WINDOW:
             level = 3
+        if self.open:
+            kind = self.open[0]
         since = f"since floor {self.stretch * REFILL_FLOORS + 1}" if self.stretch else "this run"
         if level == 2 and self.counts[2] - self.stretch_start[2] >= L2_PER_RUN:
             return None, f"L2 used {L2_PER_RUN} times {since}"

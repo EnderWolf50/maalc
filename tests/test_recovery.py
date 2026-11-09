@@ -6,9 +6,9 @@ import numpy as np
 import pytest
 
 import actions
-from recovery import (GAME, TRANSIT, WAIT_STILL, Ladder, Restarts, Watchdog, floor_limit, focused_package, over_time,
-                      read_runs, run_limit, same_screen, thumb)
-from test_pipeline import load_nodes
+from recovery import (GAME, TO_WINDOW, TRANSIT, WAIT_STILL, Ladder, Restarts, Watchdog, floor_limit, focused_package,
+                      over_time, read_runs, run_limit, same_screen, thumb)
+from test_pipeline import hub_entries, load_nodes
 
 
 def screen(level):
@@ -184,30 +184,73 @@ def test_ladder_climbs_until_the_screen_is_past():
 
 def test_ladder_progress_starts_the_next_stuck_over():
     ladder, restarts = Ladder(), Restarts()
-    assert ladder.stuck("Event", 1, restarts) == (1, None)
-    assert ladder.stuck("Event", 1, restarts) == (2, None)
-    ladder.progress("MirrorMap")  # got past it
-    assert ladder.stuck("Event", 1, restarts) == (1, None)  # the same screen again: a fresh episode, not a stop
-    ladder.progress("Event")  # still the stuck screen: the episode stays open
-    assert ladder.stuck("Event", 1, restarts) == (2, None)
+    assert ladder.stuck("MirrorMap", 1, restarts) == (1, None)
+    assert ladder.stuck("MirrorMap", 1, restarts) == (2, None)
+    ladder.progress("Event")  # got past it
+    assert ladder.stuck("MirrorMap", 1, restarts) == (1, None)  # the same screen again: a fresh episode, not a stop
+    ladder.progress("MirrorMap")  # still the stuck screen: the episode stays open
+    assert ladder.stuck("MirrorMap", 1, restarts) == (2, None)
     assert ladder.counts == {1: 2, 2: 2, 3: 0}
+
+
+def test_ladder_on_the_map_climbs_l1_l2_l3():
+    # The map is where L2 goes through: its gear opens Dungeon Progress, whose To Window saves the run (spec 06).
+    ladder, restarts = Ladder(), Restarts()
+    assert [ladder.stuck("MirrorMap", 1, restarts) for _ in range(3)] == [(1, None), (2, None), (3, None)]
+    assert ladder.counts == {1: 1, 2: 1, 3: 1}
+
+
+def test_ladder_l2_on_an_open_dungeon_progress_panel():
+    # A panel the hub's Continue does not close: RecoverToWindow taps its To Window, so L2 goes through there too. The
+    # panel is on the way back (TRANSIT): a map episode that L1's back key left on it is still that episode.
+    ladder, restarts = Ladder(), Restarts()
+    assert ladder.stuck("ProgressPanel", 1, restarts) == (1, None)
+    assert ladder.stuck("ProgressPanel", 1, restarts) == (2, None)
+    episode = Ladder()
+    assert episode.stuck("Shop", 1, restarts) == (1, None)
+    episode.progress("ProgressPanel")
+    assert episode.stuck("ProgressPanel", 1, restarts) == (2, None)
+
+
+# Every screen but the map and the open panel: RecoverL2 recognises neither its gear (MirrorMap) nor its panel there, and
+# waited out its 20 s timeout before L3 (#439). An event's back key opens the panel, but the hub's ProgressPanel closes it
+# before the next stuck. MapNodePanel and GiftGet hide the map (maatools.config.mts: MapNodePanel.png reads no MirrorMap).
+@pytest.mark.parametrize("kind", ["BattleTurn", "BattlePause", "BattleMenu",  # BattleMenu: the pause menu (#215)
+                                  "Event", "Shop", "ThemePack", "RewardCard", "GiftGet", "MapNodePanel", "Formation",
+                                  "Loading", "ResumeDialog", "MirrorMap, then nothing recognised"])
+def test_ladder_skips_l2_off_the_map(kind):
+    # Live 2026-10-17 (#70): mid-battle L2 failed after 20 s and the L3 restart followed anyway. Off the map a stuck climbs
+    # from L1 straight to L3, not charged to L2; a time limit that starts at L2 starts there.
+    ladder, restarts = Ladder(), Restarts()
+    assert ladder.stuck(kind, 1, restarts) == (1, None)
+    assert ladder.stuck(kind, 1, restarts) == (3, None)
+    assert Ladder().stuck(kind, 2, Restarts()) == (3, None)
+    assert ladder.counts == {1: 1, 2: 0, 3: 1}
+
+
+def test_to_window_is_what_recover_l2_recognises():
+    # RecoverL2 acts on the map its gear node recognises and on the panel RecoverToWindow reads; the hub hands both out.
+    nodes = load_nodes()
+    assert nodes["RecoverL2"]["next"] == ["RecoverToWindow", "RecoverGear"]
+    assert TO_WINDOW == set(nodes["RecoverGear"]["any_of"]) | {"ProgressPanel"}
+    assert nodes["ProgressPanel"]["expected"] == "^Continue$" and nodes["RecoverToWindow"]["expected"] == "Dungeon Progress"
+    hub = hub_entries(nodes, "HubText") + nodes["HubText"]["custom_recognition_param"]["tail"]
+    assert TO_WINDOW <= set(hub)
+
+
+def test_ladder_a_map_episode_on_a_loading_screen_skips_l2():
+    # L1 on the map, then the game hangs on the way back (Loading is TRANSIT: the same episode). L2 asks the screen now.
+    ladder, restarts = Ladder(), Restarts()
+    assert ladder.stuck("MirrorMap", 1, restarts) == (1, None)
+    ladder.progress("Loading")
+    assert ladder.stuck("Loading", 1, restarts) == (3, None)
+    assert ladder.counts == {1: 1, 2: 0, 3: 1}
 
 
 def test_ladder_time_limits_start_at_l2():
     ladder = Ladder()
     assert ladder.stuck("MirrorMap", 2, Restarts()) == (2, None)
     assert ladder.counts == {1: 0, 2: 1, 3: 0}
-
-
-@pytest.mark.parametrize("kind", ["BattleTurn", "BattlePause", "BattleMenu"])  # BattleMenu: the pause menu (#215)
-def test_ladder_skips_l2_in_battle(kind):
-    # L2 only goes through on the map: mid-battle it failed after 20 s and the L3 restart followed anyway
-    # (live 2026-10-17, #70). A battle climbs from L1 straight to L3; its time limit starts there.
-    ladder, restarts = Ladder(), Restarts()
-    assert ladder.stuck(kind, 1, restarts) == (1, None)
-    assert ladder.stuck(kind, 1, restarts) == (3, None)
-    assert Ladder().stuck(kind, 2, Restarts()) == (3, None)
-    assert ladder.counts == {1: 1, 2: 0, 3: 1}
 
 
 def test_ladder_a_level_that_did_not_go_through_is_not_charged_to_the_run():
@@ -427,7 +470,7 @@ def test_ladder_the_downloading_screens_are_on_the_way_back_not_past_the_stuck_o
     assert ladder.stuck("NavTitle", 1, restarts) == (1, None)
     for kind in ("DownloadDialog", "PopupButton"):
         ladder.progress(kind)  # an acknowledged dialog on the title does not end the episode
-    assert ladder.stuck("NavTitle", 1, restarts) == (2, None)
+    assert ladder.stuck("NavTitle", 1, restarts) == (3, None)  # climbs (a fresh episode is L1); the title skips L2
 
 
 def test_keep_capture_saves_the_screen_and_keeps_only_the_latest(tmp_path):
