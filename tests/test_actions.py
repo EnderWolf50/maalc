@@ -2429,6 +2429,66 @@ TABLE = [{"key": "doesthiswoodendollwishforanything",
           "options": [{"text": t, "hint": h, "kind": "other"} for t, h in SCROLLED]}]
 
 
+def wanting_table(monkeypatch, *options):
+    """An event table whose one page (DOLL's) has these (text, hint, kind, [(gift id, how)]) options."""
+    table = [{"key": TABLE[0]["key"], "options": [
+        {"text": t, "hint": h, "kind": k, "gifts": [["Burn", how] for _, how in g], "gift_ids": [[i, how] for i, how in g]}
+        for t, h, k, g in options]}]
+    monkeypatch.setattr(actions, "event_table", lambda: table)
+    return [(t, h) for t, h, _, _ in options]
+
+
+def want_team(*wanted):
+    actions.RUN["team"] = {"keyword": "Burn", "list": {"want": list(wanted), "keep": [], "order": ["Burn"]}}
+    actions.RUN["settings"] = {"event_overrides": []}
+
+
+def test_an_event_option_giving_a_wanted_gift_is_taken_before_the_hint_levels(context, monkeypatch):
+    want_team(9001)
+    options = wanting_table(monkeypatch, ("Gamble.", "???", "random", []), ("Reach out.", "Select to gain a Burn E.G.O Gift", "direct", [(9001, "direct")]))
+    page = Choices(context, monkeypatch, options, DOLL)
+    actions.Event().run(context, None)
+    assert page.tapped == ["Reach out."]
+
+
+@pytest.mark.parametrize("shop, owned", [({"owned": [9001, 9002]}, [9001, 9002]), ({"bought": [9003]}, [9003]), (None, [])])
+def test_the_want_is_asked_with_the_gifts_the_shop_s_last_visit_counts_as_owned(context, monkeypatch, shop, owned):
+    want_team(9001)
+    if shop is not None:
+        actions.RUN["shop"] = shop
+    asked = []
+    monkeypatch.setattr(actions, "want_kind", lambda gift_list, i, packs, held: asked.append((packs, list(held))) or "want")
+    options = wanting_table(monkeypatch, ("Reach out.", "Select to gain a Burn E.G.O Gift", "direct", [(9001, "direct")]))
+    Choices(context, monkeypatch, options, DOLL)
+    actions.Event().run(context, None)
+    assert asked and all(held == owned for _, held in asked)
+
+
+def test_a_gift_only_a_failed_check_gives_sends_the_lowest_odds_sinner(context, monkeypatch):
+    want_team(9769)
+    options = wanting_table(monkeypatch, ("Leave.", "Select to gain a Burn E.G.O Gift", "direct", [(9100, "direct")]),
+                            ("Learn.", "Advantage check", "check_fail_gift", [(9769, "check_fail")]))
+    page = Choices(context, monkeypatch, options, DOLL)
+    actions.Event().run(context, None)
+    assert page.tapped == ["Learn."]
+    assert actions.RUN["event"]["lowest"] is True
+    odds = [(x, t) for x, t in zip(actions.EVENT_PORTRAIT_X, ["High", "Very Low", "Normal", "Very High", "Low"])]
+    check_page(context, odds)
+    actions.Event().run(context, None)
+    assert event_portrait_taps(context) == [actions.EVENT_PORTRAIT_X[1]]
+
+
+def test_a_check_after_an_option_with_no_fail_only_gift_still_sends_the_best_odds_sinner(context, monkeypatch):
+    want_team(9769)
+    options = wanting_table(monkeypatch, ("Learn.", "Advantage check", "check", [(9769, "check_pass"), (9769, "check_fail")]))
+    page = Choices(context, monkeypatch, options, DOLL)
+    actions.Event().run(context, None)
+    assert page.tapped == ["Learn."] and actions.RUN["event"]["lowest"] is False
+    check_page(context, list(zip(actions.EVENT_PORTRAIT_X, ["High", "Very Low", "Normal", "Very High", "Low"])))
+    actions.Event().run(context, None)
+    assert event_portrait_taps(context) == [actions.EVENT_PORTRAIT_X[3]]
+
+
 @pytest.mark.parametrize("best", [0, 2, 4])
 def test_a_list_that_scrolls_is_read_whole_and_the_pick_scrolled_into_view(context, monkeypatch, best):
     # #93: more options than fit: read top to bottom anchored on their texts, the pick tapped whole in view.
