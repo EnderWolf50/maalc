@@ -15,6 +15,7 @@ import json
 import re
 import sys
 from pathlib import Path
+from typing import NamedTuple
 
 import yaml
 
@@ -38,17 +39,26 @@ def floors(row):
     return {m: out[m] for m in MODES if m in out}
 
 
+class Row(NamedTuple):
+    """A pack of the static data: its English name, its floors (floors()), whether the data marks it DIFFICULT."""
+    name: str
+    floors: dict
+    difficult: bool
+
+
 def key(name):
-    """The name as a YAML key: quoted where a character of it would make YAML read it otherwise."""
-    return f'"{name}"' if any(c in name for c in "&,:'#\"") else name
+    """The name as a YAML key: plain where YAML reads it back as written, else double-quoted (JSON escapes are YAML's)."""
+    plain = not any(c in name for c in "&,:'#\"") and name[:1] not in "-?[]{}!*|>%@`" and name == name.strip()
+    return name if plain else json.dumps(name, ensure_ascii=False)
 
 
-def value(f):
-    return "{" + ", ".join(f"{m}: {'true' if v is True else '[' + ', '.join(map(str, v)) + ']'}" for m, v in f.items()) + "}"
+def floors_text(floors):
+    """{N: [1, 2], I: true}: the flow mapping theme_packs.yaml writes floors as."""
+    return "{" + ", ".join(f"{m}: {'true' if v is True else '[' + ', '.join(map(str, v)) + ']'}" for m, v in floors.items()) + "}"
 
 
-def pack_line(name, f, difficult):
-    return f"  {key(name)}: {value(f)}" + ("  # DIFFICULT" if difficult else "")
+def pack_line(name, row):
+    return f"  {key(name)}: {floors_text(row.floors)}" + ("  # DIFFICULT" if row.difficult else "")
 
 
 def block(lines, header):
@@ -61,7 +71,7 @@ def block(lines, header):
 
 
 def update(text, rows):
-    """theme_packs.yaml's text with the floors of rows ({id: (data name, floors, difficult)}); see the module doc."""
+    """theme_packs.yaml's text with the floors of rows ({id: Row}); see the module doc."""
     lines = text.split("\n")
     ids = {}
     start, end = block(lines, "pack_ids")
@@ -75,12 +85,12 @@ def update(text, rows):
             name = yaml.safe_load(m[1])
             if ids.get(name) not in rows:
                 raise SystemExit(f"pack {name!r} (id {ids.get(name)}) is not in the game data")
-            _, f, difficult = rows[ids[name]]
-            lines[i] = pack_line(name, f, difficult)
+            lines[i] = pack_line(name, rows[ids[name]])
             listed.append(name)
     by_id = {i: n for n, i in ids.items()}
-    new = [(by_id.get(pid, name), pid) for pid, (name, f, _) in sorted(rows.items()) if f and pid not in {ids.get(n) for n in listed}]
-    lines[end:end] = [pack_line(name, rows[pid][1], rows[pid][2]) for name, pid in new]
+    taken = {ids.get(n) for n in listed}
+    new = [(by_id.get(pid, row.name), pid) for pid, row in sorted(rows.items()) if row.floors and pid not in taken]
+    lines[end:end] = [pack_line(name, rows[pid]) for name, pid in new]
     ids.update({name: pid for name, pid in new})
     order = listed + [n for n, _ in new]
     start, end = block(lines, "pack_ids")
@@ -93,7 +103,7 @@ def game_rows(unpack):
     rows = {}
     for f in sorted((unpack / THEME_FLOOR_DIR).glob("*.json")):
         for r in json.loads(f.read_text(encoding="utf-8-sig"))["list"]:
-            rows[r["id"]] = (names.get(r["id"], f"#{r['id']}"), floors(r), r.get("difficulty") == "DIFFICULT")
+            rows[r["id"]] = Row(names.get(r["id"], f"#{r['id']}"), floors(r), r.get("difficulty") == "DIFFICULT")
     return rows
 
 

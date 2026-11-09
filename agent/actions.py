@@ -2226,8 +2226,8 @@ class PickThemePack(CustomAction):
             cards = pack_titles(context, page)
             if not cards:
                 return stuck("no theme pack titles read")
-            ranked = run_start.rank_packs([lines for _, lines in cards], names, plan, title_art,  # a title like none: the floor's covers
-                                          lambda i, allowed: pack_cover.read_cover(page, cards[i][0], allowed or set(names)))
+            ranked = run_start.rank_packs([lines for _, lines in cards], names, plan, title_art,
+                                          lambda i, allowed: pack_cover.read_cover(page, cards[i][0], allowed))
             slots = run_start.event_slots(floor, [t for t, _, _ in ranked], event_packs, packs)
             log(f"floor {floor} packs, threshold {plan['threshold']}: "
                 + ", ".join(f"{t} ({w}{', event' if e else ''})" for (t, w, _), e in zip(ranked, slots)))

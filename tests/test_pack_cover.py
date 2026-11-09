@@ -118,7 +118,7 @@ def read_pages():
                         cards[blank] = (cards[blank][0], ["WOPIS"])
                     for reading, (names, art) in READS.items():
                         ranked = rs.rank_packs([lines for _, lines in cards], names, PLAN, art,
-                                               lambda i, allowed: pc.read_cover(image, cards[i][0], allowed or set(names)))
+                                               lambda i, allowed: pc.read_cover(image, cards[i][0], allowed))
                         out[f"{reading}:{key}"] = [[title, how.split()[0]] for title, _, how in ranked]
             except Exception:  # MaaFramework swallows it: hand it to the test
                 out["error"] = traceback.format_exc()

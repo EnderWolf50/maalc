@@ -1,3 +1,5 @@
+import yaml
+
 import theme_pack_floors as tpf
 
 TEXT = (
@@ -33,12 +35,12 @@ def test_a_rows_floors_are_its_selectable_floors_per_mode_counted_from_1_and_tru
 
 def test_the_listed_packs_get_their_floors_and_the_missing_ones_are_appended_with_their_ids():
     rows = {
-        3001: ("The B.E.", tpf.floors(row(3001, [{"dungeonIdx": 1, "selectableFloors": [2, 3, 4]}, {"dungeonIdx": 2}])), False),
-        1111: ("Line 4 - Section #3", {"H": [5], "I": True, "X": True}, True),
-        1102: ("S.E.A.", {"N": [2], "H": [2, 3]}, False),
-        1507: ("Who Couldn't be Bloodfiends", {"X": True}, True),
-        1513: ("Line 1 : MADNESS", {"X": True}, True),
-        1122: ("Pilgrimage of Compassion", {}, False),  # on no floor of any mode: left out
+        3001: tpf.Row("The B.E.", tpf.floors(row(3001, [{"dungeonIdx": 1, "selectableFloors": [2, 3, 4]}, {"dungeonIdx": 2}])), False),
+        1111: tpf.Row("Line 4 - Section #3", {"H": [5], "I": True, "X": True}, True),
+        1102: tpf.Row("S.E.A.", {"N": [2], "H": [2, 3]}, False),
+        1507: tpf.Row("Who Couldn't be Bloodfiends", {"X": True}, True),
+        1513: tpf.Row("Line 1 : MADNESS", {"X": True}, True),
+        1122: tpf.Row("Pilgrimage of Compassion", {}, False),  # on no floor of any mode: left out
     }
     assert tpf.update(TEXT, rows) == (
         "# header\n"
@@ -66,7 +68,7 @@ def test_the_listed_packs_get_their_floors_and_the_missing_ones_are_appended_wit
 def test_a_listed_name_keeps_its_spelling_though_the_data_spells_it_otherwise():
     # 1119's title was read live as "Walpurgis Night: Hatred and Despair"; the data says "Hatred and Despair"
     text = "packs:\n  \"Walpurgis Night: Hatred and Despair\": {N: [3]}\n\npack_ids:\n  \"Walpurgis Night: Hatred and Despair\": 1119\n"
-    rows = {1119: ("Hatred and Despair", {"N": [3, 4], "H": [3, 4]}, False)}
+    rows = {1119: tpf.Row("Hatred and Despair", {"N": [3, 4], "H": [3, 4]}, False)}
     assert tpf.update(text, rows) == (
         "packs:\n  \"Walpurgis Night: Hatred and Despair\": {N: [3, 4], H: [3, 4]}\n\npack_ids:\n  \"Walpurgis Night: Hatred and Despair\": 1119\n"
     )
@@ -77,3 +79,5 @@ def test_a_name_yaml_would_misread_is_quoted():
                                  "Hell's Chicken", "Nest, Workshop, and Technology")] == [
         "S.E.A.", "N Corp. New League of Nine Littérateurs", "\"Faith & Erosion\"", "\"Line 1 : MADNESS\"", "\"Hell's Chicken\"",
         "\"Nest, Workshop, and Technology\""]
+    for name in ('Say "Hi"', "- Dash", "[Bracket]", "*Star", "Trailing ", "A Midspring Night's Dream 2", "Line 4 - Section #3"):
+        assert yaml.safe_load(f"{tpf.key(name)}: 1") == {name: 1}, name

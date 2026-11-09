@@ -165,7 +165,7 @@ def read(reading, results, page):
     try:
         if reading in ("main", "#270", "list, no span", "list"):  # no keyword path
             run_start.match_keyword = lambda text, names: None
-        cover = (lambda i, allowed: pack_cover.read_cover(page, cards[i][0], allowed or set(NAMES))) if reading in ("+cover", "#270+all") else None
+        cover = (lambda i, allowed: pack_cover.read_cover(page, cards[i][0], allowed)) if reading in ("+cover", "#270+all") else None
         ranked = run_start.rank_packs([lines for _, lines in cards], NAMES, PLAN, art, cover)
     finally:
         run_start.match_keyword = real_keyword
@@ -186,7 +186,7 @@ def per_pack(seen_by):
         left = int(640 - pack_cover.CARD[0] / 2)
         page[pack_cover.CARD_TOP:pack_cover.CARD_TOP + pack_cover.CARD[1], left:left + pack_cover.CARD[0]] = \
             np.asarray(Image.open(covers / index[name]).convert("RGB").resize(pack_cover.CARD))[:, :, ::-1]
-        found = pack_cover.read_cover(page, 640)
+        found = pack_cover.read_cover(page, 640, set(NAMES))
         words = [w for w in re.split(r"[\W_]+", name) if len(w) >= 3]
         by_name = sum(run_start.match_card([w], names)[0] == name for w in words)
         by_key = sum(run_start.match_card([w], names)[0] == name or run_start.match_keyword(w, names) == name for w in words)
@@ -226,7 +226,7 @@ def main():
         for x, lines, name, how in truth:
             truth_cards += 1
             seen_by[name] += 1
-            verdict = pack_cover.read_cover(page, x)
+            verdict = pack_cover.read_cover(page, x, set(NAMES))
             word = run_start.match_keyword(" ".join(lines), NAMES + list(ART))
             word = word and run_start.rerun_copy(ART.get(word, word), " ".join(lines), NAMES)  # as rank_packs: the BokGak line
             covered.append((page, x, name))

@@ -2004,7 +2004,6 @@ def test_the_cover_reader_of_a_theme_pack_page_looks_at_that_pages_card(context,
     found = covers[0](1, {"Line 1"})
     assert found[0] == "Cover pack" and found[2] == 545 and found[3] == {"Line 1"}
     assert found[1].shape == (720, 1280, 3)
-    assert covers[0](1, None)[3] == {"S.E.A."}  # a title like no pack: the covers of the floor's packs, no EXTREME-only one (#387)
 
 
 def test_floor_5s_leftmost_new_pack_is_taken_when_event_packs_are_preferred(context, monkeypatch):

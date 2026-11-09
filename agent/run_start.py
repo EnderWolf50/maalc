@@ -267,7 +267,8 @@ def rank_packs(cards, names, plan, title_art=None, cover=None):
     A card is named by the first of these paths that reads it, and how says which: "name" (its whole title), "title_art"
     (what OCR reads off title art that does not spell its pack's name -> that pack, the data file's title_art, #246),
     "keyword" (the word that sets its pack apart, pack_keywords #274), "cover N" (cover(i, allowed) is the pack its
-    art looks like and the correlation, or None; allowed: the packs the title is alike to, None when to none, #274).
+    art looks like and the correlation, or None; allowed: the packs the title is alike to, #274, else every pack of
+    names, so a cover outside them never takes the card, #387).
     A title alike to several packs that share one weight takes it ("shared"): live, "Line 1" read as "Line", and every
     Line pack is avoided (#89); else "unread". A matched card's title is the pack's name; a card showing the BokGak
     line is the re-run copy of the pack a path names (rerun_copy).
@@ -283,7 +284,7 @@ def rank_packs(cards, names, plan, title_art=None, cover=None):
             name, how = match_keyword(title, names), "keyword"
         candidates = [] if name else title_candidates(title, names)
         if not name and cover:
-            found = cover(i, {title_art.get(n, n) for n in candidates} or None)
+            found = cover(i, {title_art.get(n, n) for n in candidates or names})
             name, how = found and found[0], found and f"cover {found[1]:.2f}"
         if name:
             name = rerun_copy(title_art.get(name, name), " ".join(lines), names)

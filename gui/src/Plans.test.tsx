@@ -26,7 +26,7 @@ test("the floor filter reaches floor 15: an EXTREME-only pack shows on floors 11
   expect(shown("Chachihu")).toBe(false);
 });
 
-test("INFINITY and EXTREME are difficulties of the filter and badges of a pack", async () => {
+test("INFINITY and EXTREME are choices of the filter and badges of a pack", async () => {
   const { user } = renderEditor(<ThemePackTab />, newSettings());
   await waitFor(() => expect(shown("Chachihu")).toBe(true));
   await user.click(chip("EXTREME"));

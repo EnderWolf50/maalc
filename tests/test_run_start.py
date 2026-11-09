@@ -484,10 +484,11 @@ def test_each_path_of_a_card_is_named_in_the_ranking_and_a_failed_path_falls_thr
     ranked = rs.rank_packs(cards, DATA_NAMES, plan, DATA_TITLE_ART, cover)
     assert ranked == [("Nagel und Hammer", 0, "name"), ("Line 1", -5, "title_art"), ("Four Houses and Greed", 0, "keyword"),
                       ("Line 5", -5, "cover 0.93"), ("Line", -5, "shared"), ("ZZZ", 0, "unread")]
-    # the first three never ask the cover; the title narrows it to the packs it is alike to; a title like none leaves it free
+    # the first three never ask the cover; the title narrows it to the packs it is alike to; a title like none leaves it to
+    # every pack it is matched against (#387: a floor's, so no EXTREME-only cover takes a floor 1-5 card)
     assert [i for i, _ in asked] == [3, 4, 5]
     assert asked[0][1] == {"Line 1", "Line 2", "Line 3", "Line 5"} == asked[1][1]
-    assert asked[2][1] is None
+    assert asked[2][1] == set(DATA_NAMES)
 
 
 def test_without_a_cover_a_card_no_title_path_reads_is_unlisted_as_before():
