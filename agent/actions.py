@@ -34,7 +34,7 @@ import rewards
 import run_start
 import settlement
 import shop
-from gifts import effective, main_keyword, purchases, recipe_fusion, resolve_list, state
+from gifts import effective, main_keyword, purchases, recipe_fusion, resolve_list, state, want_kind
 from ocrtext import compact, digits, floor_number, has, normalize
 from settings import NOTES as settings_notes
 from settings import SettingsError, data_dir, gift_tables, load_settings, vestige_ids
@@ -3985,6 +3985,8 @@ class PickGift(CustomAction):
         overrides = {o["trial"]: o["risk"] for o in run["settings"]["trial_risk_overrides"]}
         scores = rewards.scores(pool, table["model"], run.get("trial_coins", 0), overrides)
         avoid = [g["name"] for g in avoided_gifts(run["team"])]
+        shop = RUN.get("shop")  # the shop's last owned read, else none held (#418, reversible)
+        held = owned_now(shop) if shop else []
         cards, names = [], []
         for x, card in zip(centres, lines):
             gift = " ".join(t for y, t in card if y < 410)
@@ -3992,6 +3994,7 @@ class PickGift(CustomAction):
             kind = rewards.gift_kind(gift, run["team"]["keyword"], owned, avoid)
             gift_id = rewards.card_gift(card, GIFT_IDS)
             label = GIFT_NAMES[gift_id] if gift_id else repr(rewards.card_title(card))
+            want = want_kind(run["team"]["list"], gift_id, run_packs(), held) if gift_id else None
             name, tier, cost, part = None, None, None, None
             if trials:  # the tier counts on the boss page only (#381); a fight's page stays main > other > owned
                 tier = gift_tier(image, x)
@@ -4002,7 +4005,7 @@ class PickGift(CustomAction):
                 part = f"{name or '?'} +{'?' if level is None else level} score {score:g}"
                 if not name or compact(read) != compact(name):  # the name read is not the trial's: what was, for the log
                     part += f" ({f'by its {how}' if how else 'unread: the pool worst'}, read {read!r} / {line!r})"
-            cards.append(rewards.Card(kind, tier, cost, label, gift_id, part))
+            cards.append(rewards.Card(kind, tier, cost, label, gift_id, part, rewards.category(kind, want)))
             names.append(name)
         ranked = rewards.rank_gifts(cards)
         log("gifts: " + ", ".join(rewards.card_line(c) for c in cards) + f": order {ranked}")

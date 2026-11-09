@@ -338,3 +338,16 @@ def test_an_unmatched_title_is_logged_as_read_and_a_fight_s_page_logs_name_categ
     test_actions.gift_page(context, monkeypatch, ["Ashes to Ashes", "Zzqx Glorp"])
     actions.PickGift().run(context, None)
     assert logs[0] == "gifts: Ashes to Ashes/main gift 3 total 3, 'Zzqx Glorp'/main gift 3 total 3: order [0, 1]"
+
+
+def test_a_wanted_card_is_logged_with_its_category_but_picked_as_before(context, monkeypatch):
+    # #418: the want classes score in #419; here a wanted card scores as the main it is, so the leftmost tie still wins
+    logs = []
+    monkeypatch.setattr(actions, "log", logs.append)
+    taps = test_actions.gift_page(context, monkeypatch, ["Zzqx Glorp", "Ashes to Ashes"])
+    actions.RUN["team"] = {**test_actions.NO_GOSSYPIUM, "list": test_actions.wants(9003)}
+    actions.PickGift().run(context, None)
+    assert logs[0].startswith("gifts: 'Zzqx Glorp'/main gift 3 total 3, Ashes to Ashes/")
+    assert logs[0].endswith(" gift 3 total 3: order [0, 1]")
+    assert logs[0].split("Ashes to Ashes/")[1].split(" ")[0] in ("want", "pack-want")
+    assert [t for t in taps if t[1] == 300] == [(236, 300)]  # the first card, as before

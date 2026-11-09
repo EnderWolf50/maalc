@@ -314,6 +314,12 @@ class Card(NamedTuple):
     label: str
     gift_id: int | None
     trial: str | None
+    category: str | None = None  # what the log shows: kind, or the want class (#416) kind scores as until #419
+
+
+def category(kind, want):
+    """A card's category (#416): avoid > owned > the want class (pack-want, want, material) > main > other."""
+    return kind if kind in ("avoid", "owned") or not want else want
 
 
 def card_title(lines):
@@ -339,9 +345,10 @@ def card_line(card):
     """A card for the gifts: log: `<name>/<kind> gift <score>[ tier N][ trial <trial>] total <gift - trial>`."""
     gift = gift_score(card.kind, card.tier)
     tier = f" tier {ROMAN[card.tier - 1]}" if card.tier else ""
+    shown = card.category or card.kind
     if card.burden is None:
-        return f"{card.label}/{card.kind} gift {gift:g}{tier} total {gift:g}"
-    return f"{card.label}/{card.kind} gift {gift:g}{tier} trial {card.trial} total {gift - card.burden:g}"
+        return f"{card.label}/{shown} gift {gift:g}{tier} total {gift:g}"
+    return f"{card.label}/{shown} gift {gift:g}{tier} trial {card.trial} total {gift - card.burden:g}"
 
 
 def rank_gifts(cards):
