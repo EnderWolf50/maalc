@@ -6,8 +6,8 @@ Runs the branch's tests/ files against the base's code in a temporary worktree a
 that passes there. Such a test proves nothing about the change, unless it guards behaviour the base already has: say
 so in the PR. The branch's test data goes along (every file it adds or edits under tests/, screenshots too, and
 maatools.config.mts), so a test fails on the base for the base's code, not for a missing picture (#541). The rest are
-listed in two groups: red (the test failed there) and could not read data (a file it opens is missing there, so the
-run proves nothing). Exit code 1 when one passes on the base or could not read its data.
+listed in two groups: red (the test failed there) and could not read data (a file it opens outside assets/ is missing
+there, or it skipped, so the run proves nothing). Exit code 1 when one passes on the base or could not read its data.
 """
 import ast
 import re
@@ -20,7 +20,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 OCR = Path("assets/resource/base/model/ocr")  # gitignored; the base worktree borrows this checkout's
 TEST_DATA = ("tests", "maatools.config.mts")  # what the branch's tests read, copied over the base
-MISSING = "FileNotFoundError"  # a failure that names it read no data on the base
+# A test that raised this read no data on the base; a file missing under assets/ is the base's code, so it stays red
+NO_DATA_ERROR = re.compile(r"FileNotFoundError\b(?!.*\bassets[\\/])")
 
 
 def git(*args: str, check: bool = True) -> str:
@@ -42,7 +43,7 @@ def changed_lines(base: str) -> dict[str, set[int]]:
 
 def changed_files(base: str) -> list[str]:
     """Every file under TEST_DATA the branch adds or edits, binary ones too (a diff's line numbers skip those)."""
-    return git("diff", "--name-only", "--no-color", "--diff-filter=AM", f"{base}...HEAD", "--", *TEST_DATA).splitlines()
+    return git("diff", "--name-only", "--no-color", "--no-renames", "--diff-filter=AM", f"{base}...HEAD", "--", *TEST_DATA).splitlines()
 
 
 def changed_tests(source: str, lines: set[int], path: str) -> list[str]:
@@ -62,19 +63,20 @@ def changed_tests(source: str, lines: set[int], path: str) -> list[str]:
     return ids
 
 
-PASS, RED, NO_DATA = "pass", "red", "no data"
+OUTCOMES = PASS, RED, NO_DATA = "passes on", "red on", "could not read data on"  # each one's report line, worst last
 
 
 def outcomes(junit: Path) -> dict[tuple[str, str], str]:
     """(test module, function) -> PASS, RED or NO_DATA from a junit file. A parametrized test passes when all its cases do;
-    one case that could not read its data makes it NO_DATA, otherwise one failed case makes it RED."""
+    one case that could not read its data or was skipped (it did not run) makes it NO_DATA, otherwise one failed case RED."""
     results: dict[tuple[str, str], str] = {}
     for case in ET.parse(junit).getroot().iter("testcase"):
         module = next((part for part in case.get("classname", "").split(".") if part.startswith("test_")), "")
         key = (module, case.get("name", "").split("[")[0])
         bad = [child for child in case if child.tag in ("failure", "error", "skipped")]
-        outcome = PASS if not bad else NO_DATA if any(MISSING in f"{c.get('message', '')}{c.text or ''}" for c in bad) else RED
-        results[key] = max(results.get(key, PASS), outcome, key=(PASS, RED, NO_DATA).index)
+        no_data = any(c.tag == "skipped" or NO_DATA_ERROR.match(c.get("message", "")) for c in bad)
+        outcome = PASS if not bad else NO_DATA if no_data else RED
+        results[key] = max(results.get(key, PASS), outcome, key=OUTCOMES.index)
     return results
 
 
@@ -120,10 +122,10 @@ def main(base: str) -> int:
             unlink(work / OCR)
             git("worktree", "remove", "--force", str(work), check=False)
     keys = {(Path(w.split("::")[0]).stem, w.split("::")[-1]) for w in wanted}
-    group = {outcome: sorted(k for k in keys if results.get(k, RED) == outcome) for outcome in (PASS, RED, NO_DATA)}
-    for outcome, label in ((PASS, "passes on"), (RED, "red on"), (NO_DATA, "could not read data on")):
+    group = {outcome: sorted(k for k in keys if results.get(k, RED) == outcome) for outcome in OUTCOMES}
+    for outcome in OUTCOMES:
         for module, name in group[outcome]:
-            print(f"{label} {base}: {module}::{name}")
+            print(f"{outcome} {base}: {module}::{name}")
     print(f"red_check: {len(keys)} test(s) added or changed, {len(group[PASS])} pass on {base}, {len(group[RED])} red, "
           f"{len(group[NO_DATA])} could not read data")
     return 1 if group[PASS] or group[NO_DATA] else 0
