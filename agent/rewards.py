@@ -12,13 +12,14 @@ from run_start import match_pack
 
 ODDS = ("very low", "low", "normal", "high", "very high")
 GIFT_SCORE = {"main": 3, "other": 2, "owned": 0}
+WANT_SCORE = {"pack-want": 9, "want": 6, "material": 5.5}  # gifts.want_kind's classes (#416)
 TIER_STEP = 0.5  # a main or other gift's score per tier above I (#381)
 UNREAD_LEVELS = 2  # an Enemy Level Up badge that does not read counts as +2, the most seen live (#381)
 KEYWORDS = ("Burn", "Bleed", "Tremor", "Rupture", "Sinking", "Poise", "Charge", "Slash", "Pierce", "Blunt", "Keywordless")
 
 
 def pick_choice(options, keyword, override=None, closed=(), event=None):
-    """Index of the event option to take (spec 03 section 10), or None when every option is closed.
+    """Index of the event option to take (spec 03 section 10), or None when every option is closed: choice_plan's, with no gift wanted.
 
     options are each option's OCR text (its line plus the hint under it); closed are the indices that
     cannot be taken (greyed out, or a tap left the page as it was). Among the rest an override's option
@@ -27,12 +28,38 @@ def pick_choice(options, keyword, override=None, closed=(), event=None):
     first, then the screen order. With the event's table options (match_event) each option is ranked by its
     own entry, found by its texts; an option no entry matches (or no table at all) is ranked by its hint.
     """
+    return choice_plan(options, keyword, override, closed, event)[0]
+
+
+def choice_plan(options, keyword, override=None, closed=(), event=None, want=None):
+    """(index of the option to take, whether its check goes to the lowest-odds sinner) (spec 03 section 10, #420).
+
+    As pick_choice, but with `want(gift_id)` -> "pack-want" | "want" | "material" | None (gifts.want_kind) an option whose
+    table entry gives a wanted gift, by any way (gift_ids), goes ahead of every level: the higher gift score first
+    (WANT_SCORE), then the levels above, then the screen order. The flag is set when that option's best wanted gift is
+    only given when a check fails: the sinner least likely to pass is sent. An override's option wins over all of it.
+    """
     open_ = [i for i in range(len(options)) if i not in closed]
     if override:
         for i in open_:
             if compact(override) in compact(options[i]):
-                return i
-    return min(open_, key=lambda i: (*_rank(options[i], _entry(options[i], event) if event else None, keyword), i), default=None)
+                return i, False
+    entries = {i: _entry(options[i], event) if event else None for i in open_}
+    wanted = {i: _wanted(entries[i], want) for i in open_} if want else {}
+    best = min(open_, key=lambda i: (wanted.get(i) is None, -(wanted[i][0] if wanted.get(i) else 0),
+                                      *_rank(options[i], entries[i], keyword), i), default=None)
+    return best, bool(wanted.get(best) and wanted[best][1])
+
+
+def _wanted(entry, want):
+    """(score, fail only) of the best wanted gift a table option gives, or None: fail only when every way that gift is given is check_fail."""
+    best = None
+    for gift_id, _ in (entry or {}).get("gift_ids", ()):
+        score = WANT_SCORE.get(want(gift_id))
+        if score is not None and (best is None or score > best[0]):
+            hows = {how for g, how in entry["gift_ids"] if g == gift_id}
+            best = (score, hows == {"check_fail"})
+    return best
 
 
 def _gift(text):
@@ -177,13 +204,13 @@ def odds_rank(caption):
     return ODDS.index(f"very {level}" if very else level)
 
 
-def pick_checker(captions, skip=()):
+def pick_checker(captions, skip=(), lowest=False):
     """Index into captions [(text, x)] of the sinner to take the check: best odds, leftmost; None when none read.
 
-    skip: indices a tap did nothing on.
+    skip: indices a tap did nothing on. lowest: the worst odds instead (a gift only a failed check gives, #420).
     """
     ranked = [(odds_rank(t), x, i) for i, (t, x) in enumerate(captions) if odds_rank(t) is not None and i not in skip]
-    return min(ranked, key=lambda r: (-r[0], r[1]))[2] if ranked else None
+    return min(ranked, key=lambda r: ((r[0] if lowest else -r[0]), r[1]))[2] if ranked else None
 
 
 def card_type(text):

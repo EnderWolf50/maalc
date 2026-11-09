@@ -385,3 +385,72 @@ def test_event_table_matches_the_game_data_when_it_is_unpacked():
         pytest.skip("no unpacked game data")
     got = event_table.build(src, static)
     assert got == (DATA / "event_table.json").read_text(encoding="utf-8")
+
+
+def gift_opt(text, hint, kind, gifts, how="direct"):
+    return {"text": text, "hint": hint, "kind": kind, "gifts": [["Burn", how]] * bool(gifts),
+            **({"gift_ids": [[g, h] for g, h in gifts]} if gifts else {})}
+
+
+WANT = {9001: "want", 9002: "pack-want", 9003: "material"}.get
+PAGE = [gift_opt("Reach out.", "Select to gain a Burn E.G.O Gift", "direct", [(9001, "direct")]),
+        gift_opt("???", "???", "random", []),
+        gift_opt("Look closer.", "Pass to gain a Burn E.G.O Gift", "check", [(9001, "check_pass"), (9005, "check_fail")])]
+
+
+def plan(options, entries, **kw):
+    return r.choice_plan(options, "Burn", event=entries, want=WANT, **kw)
+
+
+def test_an_option_giving_a_wanted_gift_goes_ahead_of_the_hint_levels():
+    # Without a want the ??? option is first; with 9001 wanted "Reach out." is.
+    texts = ["Reach out. Select to gain a Burn E.G.O Gift", "??? ???"]
+    assert r.pick_choice(texts, "Burn", event=PAGE[:2]) == 1
+    assert plan(texts, PAGE[:2]) == (0, False)
+
+
+def test_a_wanted_gift_given_only_after_a_check_or_a_battle_goes_first_too():
+    page = [gift_opt("Reach out.", "Select to gain a Burn E.G.O Gift", "direct", [(9100, "direct")]),
+            gift_opt("Look closer.", "Pass to gain a Burn E.G.O Gift", "check", [(9001, "check_pass")]),
+            gift_opt("Fight.", "Win the battle to gain", "battle", [(9001, "win_battle")]),
+            gift_opt("Wait.", "", "other", [(9001, "later_direct")])]
+    texts = [o["text"] + " " + o["hint"] for o in page]
+    assert plan(texts, page)[0] == 1  # the old level breaks the tie between equal scores: the check (2) before battle (4)
+    assert plan(texts, page, closed={1})[0] == 2
+    assert plan(texts, page, closed={1, 2})[0] == 3
+
+
+def test_the_higher_gift_score_wins_between_wanted_options():
+    page = [gift_opt("A.", "Select to gain a Burn E.G.O Gift", "direct", [(9001, "direct")]),
+            gift_opt("B.", "Pass to gain a Burn E.G.O Gift", "check", [(9003, "check_pass")]),
+            gift_opt("C.", "Win the battle to gain", "battle", [(9002, "win_battle")])]
+    texts = [o["text"] + " " + o["hint"] for o in page]
+    assert plan(texts, page)[0] == 2  # pack-want 9 > want 6 > material 5.5
+    assert plan(texts, page, closed={2})[0] == 0
+    assert plan(texts, page, closed={2, 0})[0] == 1
+
+
+def test_a_wanted_gift_only_a_failed_check_gives_asks_for_the_lowest_odds_sinner():
+    fail_only = gift_opt("Learn.", "Advantage check", "check_fail_gift", [(9001, "check_fail")])
+    both = gift_opt("Look closer.", "Pass to gain a Burn E.G.O Gift", "check", [(9001, "check_pass"), (9001, "check_fail")])
+    other = gift_opt("Leave.", "Select to gain a Burn E.G.O Gift", "direct", [(9100, "direct")])
+    texts = ["Leave. Select to gain a Burn E.G.O Gift", "Learn. Advantage check"]
+    assert plan(texts, [other, fail_only]) == (1, True)
+    assert plan(["Look closer. Pass to gain a Burn E.G.O Gift", texts[0]], [both, other]) == (0, False)
+    # The best wanted gift decides: a pack-want 9002 on pass beats a want 9001 on fail.
+    mixed = gift_opt("Mixed.", "Advantage check", "check", [(9001, "check_fail"), (9002, "check_pass")])
+    assert plan(["Mixed. Advantage check"], [mixed]) == (0, False)
+
+
+def test_without_a_want_the_plan_is_the_old_choice():
+    texts = [o["text"] + " " + o["hint"] for o in PAGE]
+    none = lambda i: None
+    assert r.choice_plan(texts, "Burn", event=PAGE, want=none) == (r.pick_choice(texts, "Burn", event=PAGE), False)
+    assert r.choice_plan(texts, "Burn", event=None, want=WANT) == (r.pick_choice(texts, "Burn"), False)
+
+
+def test_pick_checker_lowest_takes_the_worst_odds_leftmost():
+    captions = [("High", 216), ("Very Low", 286), ("Very Low", 355), ("Normal", 147)]
+    assert r.pick_checker(captions, lowest=True) == 1
+    assert r.pick_checker(captions, skip=(1,), lowest=True) == 2
+    assert r.pick_checker([("??", 77)], lowest=True) is None

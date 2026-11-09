@@ -34,7 +34,7 @@ import rewards
 import run_start
 import settlement
 import shop
-from gifts import effective, main_keyword, purchases, recipe_fusion, resolve_list, state
+from gifts import effective, main_keyword, purchases, recipe_fusion, resolve_list, state, want_kind
 from ocrtext import compact, digits, floor_number, has, normalize
 from settings import NOTES as settings_notes
 from settings import SettingsError, data_dir, gift_tables, load_settings, vestige_ids
@@ -3612,7 +3612,7 @@ class Event(CustomAction):
             if all(rewards.odds_rank(t) is None for t, _ in captions) and now - event.setdefault("prompt_at", now) < EVENT_ODDS_WAIT:
                 log("event check: no odds read yet; MirrorHub looks again")
                 return True
-            i = rewards.pick_checker(captions, checked)
+            i = rewards.pick_checker(captions, checked, lowest=event.get("lowest", False))
             if i is None:  # all the odds read were tried: the next sinner not tried yet, round again when all are
                 i = next((k for k in range(len(captions)) if k not in checked), None)
                 if i is None:
@@ -3636,18 +3636,21 @@ class Event(CustomAction):
             known = rewards.match_event(" ".join(story), event_table())
             # Grey options (taken in an earlier round of the same questions) and ones a tap did nothing on are closed.
             closed = {k for k, (t, is_open, _) in enumerate(options) if t in tried or not is_open}
-            i = rewards.pick_choice([t for t, _, _ in options], run["team"]["keyword"], overrides.get(question), closed, known)
+            held = owned_now(RUN["shop"]) if RUN.get("shop") else []  # the shop's last owned read: an event page shows none
+            i, lowest = rewards.choice_plan([t for t, _, _ in options], run["team"]["keyword"], overrides.get(question), closed, known,
+                                            lambda g: want_kind(run["team"]["list"], g, run_packs(), held) if run["team"].get("list") else None)
             shown = " | ".join(("(closed) " if k in closed else "") + t for k, (t, _, _) in enumerate(options))
             if i is None:
                 log(f"event: {shown}: all closed, scroll for more")
                 scroll(context, CHOICE_X, 420, 0, -CHOICE_STEP)  # in case the list scrolls with no sign of it
                 return True
             log(f"event: {shown}: take {options[i][0]!r}" + (f" (override {question!r})" if question else "")
-                + ("" if known else " (not in the event table: hint rules)"))
+                + ("" if known else " (not in the event table: hint rules)") + (" (a wanted gift only a failed check gives: lowest odds)" if lowest else ""))
             y, image = self.into_view(context, image, options, i) if scrolls else (options[i][2], image)
             if y is None:
                 log(f"event: {options[i][0]!r} not found again in the list")
                 return True
+            event["lowest"] = lowest  # for this option's check; the next option taken sets its own
             tap(context, CHOICE_X, y, wait=0)
             if until(context, lambda im: not Event.panel_same(image, im), timeout=EVENT_TAKE) is None:
                 log(f"event: {options[i][0]!r} did nothing: try another")
