@@ -44,6 +44,8 @@ def test_default_list_wants_the_keywordless_fusions_and_the_pack_pools_keywordle
     assert len(LIST["want"]) == 50
     assert all(i in BUYABLE for i in PACK_POOL)
     assert set(PACK_POOL_EXTRA) <= {g["id"] for g in RECIPES["extra_gifts"]}
+    pooled = {i for pool in RECIPES["pack_gifts"].values() for i in pool}  # #417: the committed pools, the unpack is not in CI
+    assert {g["id"] for g in KEYWORD_GIFTS if g["keyword"] == "Keywordless"} & pooled == set(PACK_POOL) | set(PACK_POOL_EXTRA)
     assert set(PACK_POOL_EXTRA) <= set(LIST["keep"])
     keywordless = {g["id"] for g in KEYWORD_GIFTS if g["keyword"] == "Keywordless"}  # extra_gifts' too (#310's live run)
     # vestiges I-IV (9991-9994) are fusion materials, so `drop`; Lunar Vestige (V, 9995) is never a material, so `keep`
