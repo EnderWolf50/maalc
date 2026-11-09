@@ -2,14 +2,16 @@
 # Developer-maintained, replaced every season; users build their own plans in the settings GUI.
 #
 # Source: the Limbus Company client 1.117.0's static data (mirrordungeon-theme-floor, 121 packs; © Project Moon,
-# see NOTICE.md), unpacked 2026-10-18. Listed: every pack with a NORMAL or HARD floor; the Extreme-only packs are
-# left out. Names as the data gives them, except one read live:
+# see NOTICE.md), unpacked 2026-10-18. Listed: every pack on a floor of some mode (120; Pilgrimage of Compassion is on
+# none). Names as the data gives them, except one read live:
 # 1119 shows "Walpurgis Night: Hatred and Despair". Each pack maps to its floors: N (NORMAL) and H (HARD) are lists of
 # floor numbers 1-15, I (INFINITY) and X (EXTREME) are true where the pack shows on every floor of that mode ({N: [1, 2],
-# H: [1]} is NORMAL floors 1-2 and HARD floor 1); the settings GUI filters by them. The comment after a pack: DIFFICULT
-# when the data marks it so (difficulty: DIFFICULT). `pack_ids` below gives each pack's id.
+# H: [1]} is NORMAL floors 1-2 and HARD floor 1); the agent and the settings GUI take floors 6-10 as INFINITY's and
+# 11-15 as EXTREME's (run_start.floor_packs, #387). The comment after a pack: DIFFICULT when the data marks it so
+# (difficulty: DIFFICULT). `pack_ids` below gives each pack's id. tools/theme_pack_floors.py writes the floors, the
+# DIFFICULT comments and `pack_ids` from the game data; the other lines are hand-written.
 packs:
-  The B.E.: {H: [3, 4, 5]}
+  The B.E.: {H: [3, 4, 5], I: true}
   The Forgotten: {N: [1], H: [1]}
   The Outcast: {N: [1], H: [1]}  # DIFFICULT
   Flat-broke Gamblers: {N: [1, 2], H: [1]}
@@ -21,32 +23,32 @@ packs:
   "Nest, Workshop, and Technology": {N: [1, 2], H: [1]}
   Falling Flowers: {N: [3], H: [2, 3]}
   Tearful Things: {N: [4, 5], H: [3, 4]}
-  The Unchanging: {H: [4, 5]}  # DIFFICULT
+  The Unchanging: {H: [4, 5], I: true}  # DIFFICULT
   Lake World: {N: [2], H: [1]}
   Crawling Abyss: {N: [4, 5], H: [3, 4]}
-  The Evil Defining: {H: [4, 5]}  # DIFFICULT
+  The Evil Defining: {H: [4, 5], I: true}  # DIFFICULT
   Dregs of the Manor: {N: [3], H: [1]}
   A Certain World: {N: [4, 5], H: [3, 4]}
-  The Heartbreaking: {H: [5]}  # DIFFICULT
-  La Manchaland Re-opening: {H: [5]}  # DIFFICULT
-  The Infinite Procession: {H: [5]}  # DIFFICULT
-  The Dream Ending: {H: [5]}  # DIFFICULT
-  Four Houses and Greed: {H: [5]}
-  The Surrendered Witnessing: {H: [5]}
+  The Heartbreaking: {H: [5], I: true}  # DIFFICULT
+  La Manchaland Re-opening: {H: [5], I: true}  # DIFFICULT
+  The Infinite Procession: {H: [5], I: true}  # DIFFICULT
+  The Dream Ending: {H: [5], I: true}  # DIFFICULT
+  Four Houses and Greed: {H: [5], I: true}
+  The Surrendered Witnessing: {H: [5], I: true}
   "Charm, Wander, Doubt": {N: [4, 5], H: [3, 4]}
-  Textbook: {H: [5]}
-  Blade and Artwork: {H: [5]}
-  The Unsevering: {H: [5]}
+  Textbook: {H: [5], I: true}
+  Blade and Artwork: {H: [5], I: true}
+  The Unsevering: {H: [5], I: true}
   Storefront Campout: {N: [3, 4], H: [3, 4]}
-  An Anarchy of Colors: {H: [4, 5]}
-  Creed of Preservation: {H: [4, 5]}
-  Readvent of Gluttony: {H: [4, 5]}
-  Line 1: {H: [5]}  # DIFFICULT
-  Line 2: {H: [4, 5]}  # DIFFICULT
-  Line 3: {H: [5]}  # DIFFICULT
-  "Line 4 - Section #3": {H: [5]}  # DIFFICULT
-  "Line 4 - Section #4": {H: [5]}  # DIFFICULT
-  Line 5: {H: [5]}  # DIFFICULT
+  An Anarchy of Colors: {H: [4, 5], I: true}
+  Creed of Preservation: {H: [4, 5], I: true}
+  Readvent of Gluttony: {H: [4, 5], I: true}
+  Line 1: {H: [5], I: true}  # DIFFICULT
+  Line 2: {H: [4, 5], I: true}  # DIFFICULT
+  Line 3: {H: [5], I: true, X: true}  # DIFFICULT
+  "Line 4 - Section #3": {H: [5], I: true, X: true}  # DIFFICULT
+  "Line 4 - Section #4": {H: [5], I: true, X: true}  # DIFFICULT
+  Line 5: {H: [5], I: true, X: true}  # DIFFICULT
   "Slicers & Dicers": {N: [5], H: [4]}
   To be Cleaved: {N: [2, 3], H: [1, 2]}
   "Piercers & Penetrators": {N: [5], H: [4]}
@@ -54,69 +56,90 @@ packs:
   "Crushers & Breakers": {N: [5], H: [4]}
   To be Crushed: {N: [2, 3], H: [1, 2]}
   Repressed Wrath: {N: [4, 5], H: [3, 4]}
-  Unbound Wrath: {H: [5]}  # DIFFICULT
+  Unbound Wrath: {H: [5], I: true}  # DIFFICULT
   Emotional Repression: {N: [3], H: [2]}
   Addicting Lust: {N: [4, 5], H: [3, 4]}
-  Tangling Lust: {H: [5]}  # DIFFICULT
+  Tangling Lust: {H: [5], I: true}  # DIFFICULT
   Emotional Seduction: {N: [3], H: [2]}
   Treadwheel Sloth: {N: [4, 5], H: [3, 4]}
-  Inert Sloth: {H: [5]}  # DIFFICULT
+  Inert Sloth: {H: [5], I: true}  # DIFFICULT
   Emotional Indolence: {N: [3], H: [2]}
   Devoured Gluttony: {N: [4, 5], H: [3, 4]}
-  Excessive Gluttony: {H: [5]}  # DIFFICULT
+  Excessive Gluttony: {H: [5], I: true}  # DIFFICULT
   Emotional Craving: {N: [3], H: [2]}
   Degraded Gloom: {N: [4, 5], H: [3, 4]}
-  Sunk Gloom: {H: [5]}  # DIFFICULT
+  Sunk Gloom: {H: [5], I: true}  # DIFFICULT
   Emotional Flood: {N: [3], H: [2]}
   Vain Pride: {N: [4, 5], H: [3, 4]}
-  Tyrannical Pride: {H: [5]}  # DIFFICULT
+  Tyrannical Pride: {H: [5], I: true}  # DIFFICULT
   Emotional Subservience: {N: [3], H: [2]}
   Insignificant Envy: {N: [4, 5], H: [3, 4]}
-  Pitiful Envy: {H: [5]}  # DIFFICULT
+  Pitiful Envy: {H: [5], I: true}  # DIFFICULT
   Emotional Judgment: {N: [3], H: [2]}
   Burning Haze: {H: [3]}
-  Season of the Flame: {H: [4, 5]}  # DIFFICULT
+  Season of the Flame: {H: [4, 5], I: true}  # DIFFICULT
   Trickled Sanguine Blood: {H: [3]}
-  "Mountain of Corpses, Sea of Blood": {H: [4, 5]}  # DIFFICULT
+  "Mountain of Corpses, Sea of Blood": {H: [4, 5], I: true}  # DIFFICULT
   Dizzying Waves: {H: [3]}
-  Abnormal Seismic Zone: {H: [4, 5]}  # DIFFICULT
+  Abnormal Seismic Zone: {H: [4, 5], I: true}  # DIFFICULT
   Crushing External Force: {H: [3]}
-  Unrelenting Might: {H: [4, 5]}  # DIFFICULT
+  Unrelenting Might: {H: [4, 5], I: true}  # DIFFICULT
   Sinking Pang: {H: [3]}
-  Sinking Deluge: {H: [4, 5]}  # DIFFICULT
+  Sinking Deluge: {H: [4, 5], I: true}  # DIFFICULT
   Deep Sigh: {H: [3]}
-  Poised Breathing: {H: [4, 5]}  # DIFFICULT
+  Poised Breathing: {H: [4, 5], I: true}  # DIFFICULT
   Rising Power Supply: {H: [3]}
-  Thunder and Lightning: {H: [4, 5]}  # DIFFICULT
+  Thunder and Lightning: {H: [4, 5], I: true}  # DIFFICULT
   # Event packs: added for good once their event story is cleared (unlockCode 9xxx, #89).
   "Hell's Chicken": {N: [2], H: [2]}
   S.E.A.: {N: [2], H: [2, 3]}
   Miracle in District 20: {N: [4], H: [3, 4]}
   Yield My Flesh to Claim Their Bones: {N: [4, 5], H: [3, 4]}
-  Timekilling Time: {N: [4, 5], H: [4, 5]}
-  Murder on the WARP Express: {N: [4, 5], H: [4, 5]}
+  Timekilling Time: {N: [4, 5], H: [4, 5], I: true}
+  Murder on the WARP Express: {N: [4, 5], H: [4, 5], I: true}
   The Noon of Violet: {N: [4], H: [3, 4]}
   Full-Stopped by a Bullet: {N: [4], H: [3, 4]}
-  LCB Regular Check-up: {N: [5], H: [4, 5]}
-  Nocturnal Sweeping: {N: [5], H: [4, 5]}  # DIFFICULT
+  LCB Regular Check-up: {N: [5], H: [4, 5], I: true}
+  Nocturnal Sweeping: {N: [5], H: [4, 5], I: true}  # DIFFICULT
   "Walpurgis Night: Hatred and Despair": {N: [3, 4], H: [3, 4]}
-  Spring Cultivation: {N: [5], H: [5]}  # DIFFICULT
-  The Dusk of Amber: {N: [4, 5], H: [4, 5]}
-  Twining Threads: {N: [5], H: [5]}
-  Mnestic Experience: {N: [5], H: [5]}
+  Spring Cultivation: {N: [5], H: [5], I: true}  # DIFFICULT
+  The Dusk of Amber: {N: [4, 5], H: [4, 5], I: true}
+  Twining Threads: {N: [5], H: [5], I: true}
+  Mnestic Experience: {N: [5], H: [5], I: true}
   # Re-run copies of event packs (bokgak in the data): the original's title with a small "BokGak" line under it and
   # their own boss picture (1113 also the Long Battle overlay). Not event packs. A card reads as one by that line
   # (run_start.rerun_copy) or by its own cover.
-  Miracle in District 20 BokGak: {H: [4, 5]}  # DIFFICULT
-  Yield My Flesh to Claim Their Bones BokGak: {H: [4, 5]}  # DIFFICULT
-  Timekilling Time BokGak: {H: [4, 5]}
-  Murder on the WARP Express BokGak: {H: [4, 5]}
-  LCB Regular Check-up BokGak: {H: [4, 5]}
-  Nocturnal Sweeping BokGak: {H: [4, 5]}  # DIFFICULT
+  Miracle in District 20 BokGak: {H: [4, 5], I: true}  # DIFFICULT
+  Yield My Flesh to Claim Their Bones BokGak: {H: [4, 5], I: true}  # DIFFICULT
+  Timekilling Time BokGak: {H: [4, 5], I: true}
+  Murder on the WARP Express BokGak: {H: [4, 5], I: true}
+  LCB Regular Check-up BokGak: {H: [4, 5], I: true}
+  Nocturnal Sweeping BokGak: {H: [4, 5], I: true}  # DIFFICULT
+  # EXTREME-only packs (1501-1520, mirrordungeon-theme-floor-t6): no NORMAL or HARD floor, so floors 1-5 never match
+  # them (#387). No capture of their cards yet: their names are the data's, not read off a live title.
+  N Corp. New League of Nine Littérateurs: {X: true}  # DIFFICULT
+  Efflorescing Greenery: {X: true}  # DIFFICULT
+  Line 3 - Terminus: {X: true}  # DIFFICULT
+  Bridle of Infinity: {X: true}  # DIFFICULT
+  S.E.A. C.R: {X: true}  # DIFFICULT
+  Impenetrable Path: {X: true}  # DIFFICULT
+  "Who Couldn't be Bloodfiends": {X: true}  # DIFFICULT
+  A Beautiful Voice: {X: true}  # DIFFICULT
+  The Dawn of Green: {X: true}  # DIFFICULT
+  "Into a Certain Library's Book": {X: true}  # DIFFICULT
+  Code Purple: {X: true}  # DIFFICULT
+  Bearers of Weight: {X: true}  # DIFFICULT
+  "Line 1 : MADNESS": {X: true}  # DIFFICULT
+  Blessed Carnival: {X: true}  # DIFFICULT
+  Fairy Tale: {X: true}  # DIFFICULT
+  Bloodtinged Ichthyic Odor: {X: true}  # DIFFICULT
+  "Complete & Total Extermination": {X: true}  # DIFFICULT
+  The Master of La Manchaland: {X: true}  # DIFFICULT
+  Chachihu: {X: true}  # DIFFICULT
+  "A Midspring Night's Dream 2": {X: true}  # DIFFICULT
 
 # The packs above that are event packs, told by their English name (#89).
-# Every pack's id by name: `packs` above plus, last, the Extreme-only packs left out of it (no plan weighs them) that recipes
-# still name, named as the data gives them (EN_MirrorDungeonTheme).
+# Every pack's id by name, in the order of `packs` above (EN_MirrorDungeonTheme names).
 # gift_recipes.json speaks ids; the agent notes the run's packs by id and the GUI shows them by name (#306).
 pack_ids:
   The B.E.: 3001
@@ -219,9 +242,26 @@ pack_ids:
   Murder on the WARP Express BokGak: 1123
   LCB Regular Check-up BokGak: 1125
   Nocturnal Sweeping BokGak: 1127
+  N Corp. New League of Nine Littérateurs: 1501
+  Efflorescing Greenery: 1502
+  Line 3 - Terminus: 1503
+  Bridle of Infinity: 1504
+  S.E.A. C.R: 1505
+  Impenetrable Path: 1506
   "Who Couldn't be Bloodfiends": 1507
+  A Beautiful Voice: 1508
+  The Dawn of Green: 1509
+  "Into a Certain Library's Book": 1510
+  Code Purple: 1511
+  Bearers of Weight: 1512
+  "Line 1 : MADNESS": 1513
   Blessed Carnival: 1514
+  Fairy Tale: 1515
+  Bloodtinged Ichthyic Odor: 1516
+  "Complete & Total Extermination": 1517
   The Master of La Manchaland: 1518
+  Chachihu: 1519
+  "A Midspring Night's Dream 2": 1520
 
 event_packs:
   - "Hell's Chicken"

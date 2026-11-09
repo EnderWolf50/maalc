@@ -154,16 +154,26 @@ export function parseThemePacks(text: string): ThemePacks {
   return { packs: data.packs ?? {}, pack_ids: data.pack_ids ?? {}, default_plan: { ...newPackPlan(), ...data.default_plan } };
 }
 
-/** Whether a pack with these floors ({N: [1, 2], H: [1]}: NORMAL 1-2, HARD 1) shows on difficulty ("" any) and floor (0 any).
- * INFINITY and EXTREME are no difficulty of the filter. */
-export function onFloor(floors: PackFloors, difficulty: "" | "normal" | "hard", floor: number) {
-  const sets = difficulty ? [floors[difficulty === "hard" ? "H" : "N"]] : [floors.N, floors.H];
-  return sets.some((f) => f !== undefined && (floor === 0 || f.includes(floor)));
+/** The pack filter's difficulties, "" any: the modes of the data file's floors. */
+export type PackMode = "" | "normal" | "hard" | "infinity" | "extreme";
+const MODE_KEYS = { normal: "N", hard: "H", infinity: "I", extreme: "X" } as const;
+/** The floors a 15-floor run plays as INFINITY and as EXTREME, as the agent reads them (agent/run_start.py MODE_BANDS, #387). */
+export const MODE_BANDS = { I: [6, 10], X: [11, 15] } as const;
+
+/** Whether a pack with these floors ({N: [1, 2], H: [1]}: NORMAL 1-2, HARD 1; I, X: every floor of MODE_BANDS) shows on
+ * difficulty ("" any) and floor (0 any). */
+export function onFloor(floors: PackFloors, difficulty: PackMode, floor: number) {
+  const keys = difficulty ? [MODE_KEYS[difficulty]] : (["N", "H", "I", "X"] as const);
+  return keys.some((k) => {
+    if (k === "I" || k === "X") return floors[k] === true && (floor === 0 || (floor >= MODE_BANDS[k][0] && floor <= MODE_BANDS[k][1]));
+    const list = floors[k];
+    return list !== undefined && (floor === 0 || list.includes(floor));
+  });
 }
 
-/** A pack's floors as badges, NORMAL first: each difficulty it has with its runs of floors as ranges ("1–2"),
- * the rest joined by sep ("1–2、4"). A difficulty it lacks has no badge. */
-export function floorBadges(floors: PackFloors, sep: string) {
+/** A pack's floors as badges, NORMAL, HARD, INFINITY, EXTREME: each mode it has with its runs of floors as ranges ("1–2"),
+ * the rest joined by sep ("1–2、4"); INFINITY and EXTREME their MODE_BANDS. A mode it lacks has no badge. */
+export function floorBadges(floors: PackFloors, sep: string): { mode: keyof PackFloors; text: string }[] {
   const runs = (list: number[]) => {
     const groups: number[][] = [];
     for (const n of [...list].sort((a, b) => a - b)) {
@@ -173,9 +183,10 @@ export function floorBadges(floors: PackFloors, sep: string) {
     }
     return groups.map((g) => (g.length > 1 ? `${g[0]}–${g[g.length - 1]}` : `${g[0]}`)).join(sep);
   };
-  return (["N", "H"] as const).flatMap((d) => {
-    const list = floors[d];
-    return list?.length ? [{ hard: d === "H", text: runs(list) }] : [];
+  return (["N", "H", "I", "X"] as const).flatMap((mode): { mode: keyof PackFloors; text: string }[] => {
+    if (mode === "I" || mode === "X") return floors[mode] ? [{ mode, text: MODE_BANDS[mode].join("–") }] : [];
+    const list = floors[mode];
+    return list?.length ? [{ mode, text: runs(list) }] : [];
   });
 }
 

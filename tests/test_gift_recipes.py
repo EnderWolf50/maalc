@@ -124,7 +124,7 @@ def test_every_pack_a_pool_names_is_a_theme_pack_and_every_pool_gift_a_known_gif
     ids = set(yaml.safe_load((BASE / "data" / "theme_packs.yaml").read_text(encoding="utf-8"))["pack_ids"].values())
     known = SEARCHABLE | {g["id"] for k in ("gifts", "materials", "extra_gifts", "vestiges") for g in DATA[k]}
     pools = DATA["pack_gifts"]
-    assert sorted(int(p) for p in pools if int(p) not in ids) == [1504]  # a pack the game has and theme_packs.yaml names not
+    assert sorted(int(p) for p in pools if int(p) not in ids) == []  # every pool pack is named by theme_packs.yaml (1504 since #387)
     assert {i for pool in pools.values() for i in pool} - known <= {9247}  # the one gift without a name or an icon (note)
     assert all(int(p) in {int(q) for q in pools} for g in DATA["gifts"] for p in g.get("packs", []))  # every recipe pack has a pool
 

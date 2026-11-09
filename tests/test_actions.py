@@ -1944,10 +1944,12 @@ def pack_page(context, monkeypatch, floor, setting, mode, covers=None, spent_aft
     actions.RUN.update(settings={"run": {"theme_pack_refresh": setting}}, team={"hard_from_floor": 0}, difficulty=None)
     plan = {"weights": {}, "threshold": 0, "unlisted": -5, "event_packs": mode}
     art = {"Hello Bus": "S.E.A."}
-    monkeypatch.setattr(actions, "theme_pack_plan", lambda settings, team: (plan, [], set(), art))
+    packs = {"S.E.A.": {"N": [2], "H": [2, 3]}, "Extreme Pack": {"X": True}}
+    monkeypatch.setattr(actions, "theme_pack_plan", lambda settings, team: (plan, packs, set(), art))
 
     def rank_packs(cards, names, plan, title_art, cover):
-        assert title_art is art  # every page, a refreshed one too, gets the data file's title art (#246)
+        assert title_art == art  # every page, a refreshed one too, gets the data file's title art (#246)
+        assert names == ["S.E.A."]  # floors 1-5 never read a card as an EXTREME-only pack (#387)
         covers.append(cover)
         return [(c[0], -5, "name") for c in cards]
     monkeypatch.setattr(actions.run_start, "rank_packs", rank_packs)
@@ -3136,6 +3138,17 @@ def test_floor_10_to_11_restarts_the_clock_and_the_map_quota(context, monkeypatc
     actions.RUN.update(difficulty=None, floor=10, map_misses=3)
     actions.PickThemePack().run(context, None)
     assert actions.RUN["floor"] == 11 and actions.RUN["map_misses"] == 0 and restarted == [1]
+
+
+def test_a_new_floor_tells_the_ladder_the_floor_and_the_run_target(context, monkeypatch):
+    # #435: a target-15 run's recovery allowance refills at floors 6 and 11 (recovery.Ladder.floor).
+    monkeypatch.setattr(actions, "text", lambda *a, **k: "SELECT FLOOR 6 THEME PACK")
+    monkeypatch.setattr(actions.PickThemePack, "set_difficulty", lambda *a: False)
+    seen = []
+    monkeypatch.setattr(actions.STUCK["ladder"], "floor", lambda floor, target: seen.append((floor, target)))
+    actions.RUN.update(difficulty=None, floor=5, settings={"run": {"target_floor": 15}})
+    actions.PickThemePack().run(context, None)
+    assert seen == [(6, 15)]
 
 
 def moved(context):
