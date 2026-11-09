@@ -150,14 +150,46 @@ def test_title_art_finds_its_pack_through_the_data_file(lines, expected):
     assert rs.rank_packs([lines], DATA_NAMES, plan, DATA_TITLE_ART)[0][0] == expected
 
 
-def test_every_pack_of_the_season_matches_itself_and_with_a_letter_lost():
-    # The data file's own names: each one read back, and read with one letter dropped, finds itself.
-    packs = yaml.safe_load(DATA.read_text(encoding="utf-8"))["packs"]
-    for name in packs:
+@pytest.mark.parametrize("floor", [1, 7, 12])
+def test_every_pack_of_the_season_matches_itself_and_with_a_letter_lost(floor):
+    # The data file's own names: each one read back, and read with one letter dropped, finds itself among the names of a
+    # floor it shows on; floor 12's are the EXTREME packs, the 20 EXTREME-only ones among them (#387).
+    on, packs, _ = rs.floor_reads(yaml.safe_load(DATA.read_text(encoding="utf-8"))["packs"], {}, {}, floor)
+    for name in on:
         assert rs.match_card([name], packs)[0] == name
         i = len(name) // 2
         if len(compact(name)) >= 6:
             assert rs.match_card([name[:i] + name[i + 1:]], packs)[0] == name, name
+
+
+@pytest.mark.parametrize(("floor", "expected"), [
+    (1, ["Normal 1", "Hard 5 Infinity", "Every mode", "Hard 12"]),  # 1-5: every pack with a NORMAL or HARD floor, as before #387
+    (5, ["Normal 1", "Hard 5 Infinity", "Every mode", "Hard 12"]),
+    (6, ["Hard 5 Infinity", "Every mode"]),  # 6-10: the INFINITY packs
+    (10, ["Hard 5 Infinity", "Every mode"]),
+    (11, ["Extreme only", "Every mode"]),  # 11-15: the EXTREME packs
+    (12, ["Extreme only", "Every mode", "Hard 12"]),  # and a HARD list that holds the floor
+    (15, ["Extreme only", "Every mode"]),
+])
+def test_the_packs_a_floor_can_show_follow_its_mode(floor, expected):
+    # #387: an EXTREME-only pack never joins the names of floors 1-5, so their matching stays as it was
+    packs = {"Normal 1": {"N": [1]}, "Hard 5 Infinity": {"H": [5], "I": True}, "Extreme only": {"X": True},
+             "Every mode": {"N": [1], "H": [5], "I": True, "X": True}, "Hard 12": {"H": [12]}}
+    assert rs.floor_packs(packs, floor) == expected
+
+
+def test_a_floor_reads_its_cards_against_its_packs_the_weighed_ones_the_file_lacks_and_their_title_art():
+    # (the floor's packs, the names its cards match, the title art reads that name one of them)
+    packs = {"Line 1": {"H": [5], "I": True}, "Line 1 : MADNESS": {"X": True}, "S.E.A.": {"N": [2]}}
+    weights = {"Line 1 : MADNESS": -5, "Gone Pack": 3, "S.E.A.": 1}  # "Gone Pack": weighed, dropped from the data file
+    art = {"MADNESS": "Line 1", "Hello Bus": "S.E.A."}
+    assert rs.floor_reads(packs, weights, art, 5) == (["Line 1", "S.E.A."], ["Line 1", "S.E.A.", "Gone Pack"], art)
+    # floor 12: an EXTREME floor; Line 1 shows on no floor past 10, so MADNESS no longer names it
+    assert rs.floor_reads(packs, weights, art, 12) == (["Line 1 : MADNESS"], ["Line 1 : MADNESS", "Gone Pack"], {})
+    # a re-run copy shows its original's title: the original's name matches it (rerun_copy), on a floor without the original too
+    packs = {"Miracle": {"N": [4], "H": [3, 4]}, "Miracle BokGak": {"H": [4, 5], "I": True}}
+    assert rs.floor_reads(packs, {}, {}, 7) == (["Miracle BokGak"], ["Miracle BokGak", "Miracle"], {})
+    assert rs.floor_reads(packs, {}, {}, 4) == (["Miracle", "Miracle BokGak"], ["Miracle", "Miracle BokGak"], {})
 
 
 def test_a_title_alike_to_several_packs_takes_their_weight_when_they_share_it():
@@ -281,7 +313,8 @@ def test_team_list_move(visible, target, expected):
 
 DATA = Path(__file__).resolve().parent.parent / "assets/resource/base/data/theme_packs.yaml"
 DATA_YAML = yaml.safe_load(DATA.read_text(encoding="utf-8"))
-DATA_NAMES, DATA_TITLE_ART = list(DATA_YAML["packs"]), DATA_YAML["title_art"]
+# the names PickThemePack matches a floor 1-5 card against (#387: no EXTREME-only pack)
+DATA_NAMES, DATA_TITLE_ART = rs.floor_packs(DATA_YAML["packs"], 5), DATA_YAML["title_art"]
 
 
 def test_theme_pack_data_file():
@@ -297,14 +330,20 @@ def test_theme_pack_data_file():
         return lists and all(v is True for k, v in f.items() if k in "IX")
 
     assert packs and all(isinstance(p, str) and floors_ok(f) for p, f in packs.items())
-    assert packs["The Forgotten"] == {"N": [1], "H": [1]} and packs["The B.E."] == {"H": [3, 4, 5]}
+    assert packs["The Forgotten"] == {"N": [1], "H": [1]} and packs["The B.E."] == {"H": [3, 4, 5], "I": True}
     assert floors_ok({"N": [1, 12], "H": [10, 11], "I": True, "X": True}) and not floors_ok({"N": [12, 1]}) and not floors_ok("N12 H1")
     # #240: the default plan is AALC's weights, threshold 0, unlisted 0, event packs by weight.
     assert (plan["threshold"], plan["unlisted"], plan["event_packs"]) == (0, 0, "weight")
     assert all(p in packs and isinstance(w, int) and -10 <= w <= 10 for p, w in plan["weights"].items())
     assert plan["weights"]["The B.E."] == 10 and plan["weights"]["Hell's Chicken"] == 1
-    # #89: the 1.117.0 client's packs with a NORMAL or HARD floor.
-    assert len(packs) >= 90
+    # #89: the 1.117.0 client's packs with a NORMAL or HARD floor; #387: and the EXTREME-only ones (1501-1520). The 1.117.0
+    # static data flags 49 packs INFINITY (every one a HARD pack too) and 24 EXTREME: the 20 EXTREME-only and Line 3 to 5.
+    assert len(floor_names := rs.floor_packs(packs, 1)) >= 90
+    extreme_only = [p for p in packs if p not in floor_names]
+    assert sorted(data["pack_ids"][p] for p in extreme_only) == list(range(1501, 1521))
+    assert all(packs[p] == {"X": True} for p in extreme_only)
+    assert sum("I" in f for f in packs.values()) == 49 and all("H" in f for f in packs.values() if "I" in f)
+    assert sorted(data["pack_ids"][p] for p, f in packs.items() if "X" in f and p not in extreme_only) == [1110, 1111, 1112, 1118]
     assert set(data["event_packs"]) <= set(packs) and len(data["event_packs"]) == 15
     # #246: each title art read names a pack of the season.
     assert data["title_art"] and set(data["title_art"].values()) <= set(packs)
@@ -445,10 +484,11 @@ def test_each_path_of_a_card_is_named_in_the_ranking_and_a_failed_path_falls_thr
     ranked = rs.rank_packs(cards, DATA_NAMES, plan, DATA_TITLE_ART, cover)
     assert ranked == [("Nagel und Hammer", 0, "name"), ("Line 1", -5, "title_art"), ("Four Houses and Greed", 0, "keyword"),
                       ("Line 5", -5, "cover 0.93"), ("Line", -5, "shared"), ("ZZZ", 0, "unread")]
-    # the first three never ask the cover; the title narrows it to the packs it is alike to; a title like none leaves it free
+    # the first three never ask the cover; the title narrows it to the packs it is alike to; a title like none leaves it to
+    # every pack it is matched against (#387: a floor's, so no EXTREME-only cover takes a floor 1-5 card)
     assert [i for i, _ in asked] == [3, 4, 5]
     assert asked[0][1] == {"Line 1", "Line 2", "Line 3", "Line 5"} == asked[1][1]
-    assert asked[2][1] is None
+    assert asked[2][1] == set(DATA_NAMES)
 
 
 def test_without_a_cover_a_card_no_title_path_reads_is_unlisted_as_before():
@@ -481,7 +521,7 @@ def test_the_bokgak_rerun_copies_are_packs_of_their_own_weighed_as_their_origina
     weights = DATA_YAML["default_plan"]["weights"]
     for original, pid in RERUN_COPIES.items():
         copy = f"{original}{rs.RERUN}"
-        assert DATA_YAML["packs"][copy] == {"H": [4, 5]} and DATA_YAML["pack_ids"][copy] == pid
+        assert DATA_YAML["packs"][copy] == {"H": [4, 5], "I": True} and DATA_YAML["pack_ids"][copy] == pid
         assert weights[copy] == weights[original] and copy not in DATA_YAML["event_packs"]
 
 

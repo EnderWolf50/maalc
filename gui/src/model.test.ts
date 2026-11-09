@@ -17,18 +17,39 @@ test("a pack shows on the floors the data file gives it", () => {
   expect(onFloor({ H: [10, 11] }, "hard", 1)).toBe(false);
   expect(onFloor({ H: [10, 11] }, "hard", 11)).toBe(true);
   expect(onFloor({ H: [10, 11] }, "", 15)).toBe(false);
-  expect(onFloor({ I: true, X: true }, "", 0)).toBe(false); // INFINITY and EXTREME are no difficulty of the filter
 });
 
-test("a pack's floors become badges: ranges for runs, the rest listed, only the difficulties it has", () => {
-  expect(floorBadges({ N: [1, 2], H: [1] }, "、")).toEqual([{ hard: false, text: "1–2" }, { hard: true, text: "1" }]);
-  expect(floorBadges({ H: [1, 3] }, "、")).toEqual([{ hard: true, text: "1、3" }]); // one difficulty, a gap
-  expect(floorBadges({ H: [3, 4, 5] }, "、")).toEqual([{ hard: true, text: "3–5" }]);
-  expect(floorBadges({ N: [1, 2, 4], H: [5] }, "、")).toEqual([{ hard: false, text: "1–2、4" }, { hard: true, text: "5" }]);
-  expect(floorBadges({ N: [5] }, "、")).toEqual([{ hard: false, text: "5" }]);
-  expect(floorBadges({ N: [4, 5], H: [3, 4] }, ", ")).toEqual([{ hard: false, text: "4–5" }, { hard: true, text: "3–4" }]);
-  expect(floorBadges({ H: [9, 10, 11, 13] }, "、")).toEqual([{ hard: true, text: "9–11、13" }]); // #387: floors 6-15
-  expect(floorBadges({ I: true, X: true }, "、")).toEqual([]); // not a difficulty of the filter either
+test("an INFINITY pack shows on floors 6-10 and an EXTREME one on 11-15, as the agent reads them", () => {
+  // #387: run_start.floor_packs takes floors 6-10 as INFINITY's and 11-15 as EXTREME's
+  const line3 = { H: [5], I: true as const, X: true as const }; // Line 3: HARD 5, INFINITY and EXTREME
+  const extremeOnly = { X: true as const };
+  expect(onFloor(extremeOnly, "", 0)).toBe(true);
+  expect(onFloor(extremeOnly, "", 5)).toBe(false);
+  expect(onFloor(extremeOnly, "", 10)).toBe(false);
+  expect(onFloor(extremeOnly, "", 11)).toBe(true);
+  expect(onFloor(extremeOnly, "", 15)).toBe(true);
+  expect(onFloor(extremeOnly, "extreme", 0)).toBe(true);
+  expect(onFloor(extremeOnly, "hard", 0)).toBe(false);
+  expect(onFloor(line3, "infinity", 6)).toBe(true);
+  expect(onFloor(line3, "infinity", 12)).toBe(false); // INFINITY has floors 6-10
+  expect(onFloor(line3, "extreme", 12)).toBe(true);
+  expect(onFloor(line3, "", 5)).toBe(true);
+  expect(onFloor(line3, "", 8)).toBe(true);
+  expect(onFloor(line3, "hard", 8)).toBe(false);
+  expect(onFloor({ N: [1], H: [1] }, "infinity", 0)).toBe(false);
+});
+
+test("a pack's floors become badges: ranges for runs, the rest listed, only the modes it has", () => {
+  expect(floorBadges({ N: [1, 2], H: [1] }, "、")).toEqual([{ mode: "N", text: "1–2" }, { mode: "H", text: "1" }]);
+  expect(floorBadges({ H: [1, 3] }, "、")).toEqual([{ mode: "H", text: "1、3" }]); // one difficulty, a gap
+  expect(floorBadges({ H: [3, 4, 5] }, "、")).toEqual([{ mode: "H", text: "3–5" }]);
+  expect(floorBadges({ N: [1, 2, 4], H: [5] }, "、")).toEqual([{ mode: "N", text: "1–2、4" }, { mode: "H", text: "5" }]);
+  expect(floorBadges({ N: [5] }, "、")).toEqual([{ mode: "N", text: "5" }]);
+  expect(floorBadges({ N: [4, 5], H: [3, 4] }, ", ")).toEqual([{ mode: "N", text: "4–5" }, { mode: "H", text: "3–4" }]);
+  expect(floorBadges({ H: [9, 10, 11, 13] }, "、")).toEqual([{ mode: "H", text: "9–11、13" }]); // #387: floors 6-15
+  // #387: INFINITY and EXTREME show on every floor of their band
+  expect(floorBadges({ H: [5], I: true, X: true }, "、")).toEqual([{ mode: "H", text: "5" }, { mode: "I", text: "6–10" }, { mode: "X", text: "11–15" }]);
+  expect(floorBadges({ X: true }, "、")).toEqual([{ mode: "X", text: "11–15" }]);
   expect(floorBadges({}, "、")).toEqual([]);
 });
 

@@ -5,7 +5,7 @@ import {
   EVENT_MODES, GRACES, LEVELS, SINNERS, buyOrder, clickCard, clickEnhance, defaultStarlight, enhanceAll, floorBadges, freeName,
   gracePrice,
   lanesOf, lineAt, newId, newPackPlan, onFloor, parseThemePacks, selectAll, starlightCost, toggleSinner, weightOf,
-  type DeploymentPlan, type Order, type PackPlanValues, type StarlightPlan, type StarlightValues, type ThemePackPlan,
+  type DeploymentPlan, type Order, type PackMode, type PackPlanValues, type StarlightPlan, type StarlightValues, type ThemePackPlan,
   type ThemePacks,
 } from "./model";
 import { Field, ReorderList, Select, useEditor } from "./ui";
@@ -178,6 +178,12 @@ const coverOf = (name: string): string | undefined => COVER_URLS[COVERS_DIR + CO
 
 const UNLISTED = "\u0000unlisted"; // what the "unlisted packs" chip drags: no pack name starts with NUL
 const LINE = "\u0000line";
+/** The floor filter's chips (0: any): a run's 15 floors, 6-10 INFINITY's and 11-15 EXTREME's (#387). */
+const FLOORS = Array.from({ length: 16 }, (_, i) => i);
+/** A floor badge's label and class per mode of the data file. */
+const BADGES = {
+  N: ["packs.floorsNormal", ""], H: ["packs.floorsHard", " hard"], I: ["packs.floorsInfinity", " inf"], X: ["packs.floorsExtreme", " ext"],
+} as const;
 
 /** Design A of #240: one lane per weight in use (0 always), highest first, and the threshold line between lanes.
  * Drag a pack to another lane, or onto + for a new weight; click one to type its weight. Read-only without onChange. */
@@ -185,7 +191,7 @@ function PackPlanEditor({ data, plan, path, onChange }: {
   data: ThemePacks; plan: PackPlanValues; path: string; onChange?: (p: PackPlanValues) => void;
 }) {
   const { t, tv, bad } = useEditor();
-  const [difficulty, setDifficulty] = useState<"" | "normal" | "hard">("");
+  const [difficulty, setDifficulty] = useState<PackMode>("");
   const [floor, setFloor] = useState(0);
   const [images, setImages] = useState(false);
   const [drag, setDrag] = useState<string | null>(null);
@@ -232,8 +238,8 @@ function PackPlanEditor({ data, plan, path, onChange }: {
         {!cover && <span className="nm">{name}</span>}
         {floors
           ? floors.map((f) => {
-            const label = `${t(f.hard ? "packs.floorsHard" : "packs.floorsNormal")} ${f.text}`;
-            return <small key={+f.hard} className={"fl" + (f.hard ? " hard" : "")} role="img" title={label} aria-label={label}>{f.text}</small>;
+            const label = `${t(BADGES[f.mode][0])} ${f.text}`;
+            return <small key={f.mode} className={"fl" + BADGES[f.mode][1]} role="img" title={label} aria-label={label}>{f.text}</small>;
           })
           : <small><em>{t("packNotInData")}</em></small>}
       </span>
@@ -257,15 +263,15 @@ function PackPlanEditor({ data, plan, path, onChange }: {
     ));
   return (<>
     <div className="packbar">
-      {chips<"" | "normal" | "hard">(["", "normal", "hard"], difficulty, (v) => (v ? v.toUpperCase() : t("packs.anyDifficulty")), setDifficulty)}
+      {chips<PackMode>(["", "normal", "hard", "infinity", "extreme"], difficulty, (v) => (v ? v.toUpperCase() : t("packs.anyDifficulty")), setDifficulty)}
       <span className="gap" />
-      {chips([0, 1, 2, 3, 4, 5], floor, (v) => (v ? t("packs.floor").replace("{n}", String(v)) : t("packs.anyFloor")), setFloor)}
+      {chips(FLOORS, floor, (v) => (v ? t("packs.floor").replace("{n}", String(v)) : t("packs.anyFloor")), setFloor)}
       <span className="spacer" />
       {chips([false, true].map(String), String(images), (v) => t(v === "true" ? "packs.images" : "packs.names"), (v) => setImages(v === "true"))}
     </div>
     {onChange && <p className="muted">{t("packs.hint")}</p>}
     <p className="muted floorkey">
-      <small className="fl">{t("packs.floorsNormal")}</small><small className="fl hard">{t("packs.floorsHard")}</small>{t("packs.floorsKey")}
+      {Object.values(BADGES).map(([key, cls]) => <small key={key} className={"fl" + cls}>{t(key)}</small>)}{t("packs.floorsKey")}
     </p>
     <div className={"lanes" + (images ? " images" : "") + (drag === LINE ? " moving" : "")}>
       {line === 0 && lineBar}

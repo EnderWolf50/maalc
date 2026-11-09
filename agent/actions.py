@@ -2135,12 +2135,12 @@ class GiftSearch(CustomAction):
 
 
 def theme_pack_plan(settings, team):
-    """(the team's plan, the data file's packs, its event packs, its title art reads): the default plan or the user's
-    (spec 04 section 8)."""
+    """(the team's plan, the data file's packs (name -> floors), its event packs, its title art reads): the default plan or
+    the user's (spec 04 section 8)."""
     file = data("theme_packs.yaml")
     ref = team["theme_pack_plan"]
     plan = file["default_plan"] if ref == "default" else next(p for p in settings["theme_pack_plans"] if p["id"] == ref)
-    return plan, list(file["packs"]), set(file["event_packs"]), file["title_art"]
+    return plan, file["packs"], set(file["event_packs"]), file["title_art"]
 
 
 @functools.cache
@@ -2215,8 +2215,8 @@ class PickThemePack(CustomAction):
         if not self.set_difficulty(context, floor, want):
             return stuck(f"floor {floor} difficulty did not switch to {'HARD' if want else 'NORMAL'}")
 
-        plan, packs, event_packs, title_art = theme_pack_plan(run["settings"], run["team"])
-        names = packs + list(plan["weights"])  # a weighed pack the data file dropped still matches
+        plan, file_packs, event_packs, file_art = theme_pack_plan(run["settings"], run["team"])
+        packs, names, title_art = run_start.floor_reads(file_packs, plan["weights"], file_art, floor)  # #387: the floor's packs
         setting = run["settings"]["run"]["theme_pack_refresh"]
         prev = None
         for used in range(10):  # a greyed button or its `0/m` ends it (#319, #482); unread, a refresh that changes nothing does

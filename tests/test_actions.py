@@ -1891,10 +1891,12 @@ def pack_page(context, monkeypatch, floor, setting, mode, covers=None, spent_aft
     actions.RUN.update(settings={"run": {"theme_pack_refresh": setting}}, team={"hard_from_floor": 0}, difficulty=None)
     plan = {"weights": {}, "threshold": 0, "unlisted": -5, "event_packs": mode}
     art = {"Hello Bus": "S.E.A."}
-    monkeypatch.setattr(actions, "theme_pack_plan", lambda settings, team: (plan, [], set(), art))
+    packs = {"S.E.A.": {"N": [2], "H": [2, 3]}, "Extreme Pack": {"X": True}}
+    monkeypatch.setattr(actions, "theme_pack_plan", lambda settings, team: (plan, packs, set(), art))
 
     def rank_packs(cards, names, plan, title_art, cover):
-        assert title_art is art  # every page, a refreshed one too, gets the data file's title art (#246)
+        assert title_art == art  # every page, a refreshed one too, gets the data file's title art (#246)
+        assert names == ["S.E.A."]  # floors 1-5 never read a card as an EXTREME-only pack (#387)
         covers.append(cover)
         return [(c[0], -5, "name") for c in cards]
     monkeypatch.setattr(actions.run_start, "rank_packs", rank_packs)
