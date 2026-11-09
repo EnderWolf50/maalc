@@ -177,7 +177,8 @@ def test_a_removed_name_a_commit_marks_ok_is_not_stale(tmp_path, monkeypatch):
     run("commit", "-qm", "base")
     run("checkout", "-qb", "feat")
     (tmp_path / "a.py").write_text("\n")
-    run("commit", "-qam", "drop the constants\n\nRemoved-name-ok: BATTLE (the game's word in the docs)")
+    run("commit", "-qam", "drop the constants\n\nRemoved-name-ok: BATTLE (the game's word in the docs)\n"
+                          "Removed-name-ok: OLD_LIMIT\nRemoved-name-ok:\n\nRefs #439")  # no why, no name: not ok
     monkeypatch.setattr(review_lint, "ROOT", Path(tmp_path))
     assert review_lint.removed_name_oks("main") == {"BATTLE"}
     removed = {"a.py": ["BATTLE = 1", "OLD_LIMIT = 3"]}

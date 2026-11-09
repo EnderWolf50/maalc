@@ -131,16 +131,24 @@ def removed_names(removed: dict[str, list[str]], added: dict[str, list[tuple[int
     return out
 
 
-REMOVED_OK = re.compile(r"^Removed-name-ok:\s*(\w+)", re.M)
+REMOVED_OK = re.compile(r"^Removed-name-ok:[ \t]*(\w+)[ \t]+\(.+\)", re.M)  # one name a line, its why required
+
+
+def branch_messages(base: str) -> list[tuple[str, str]]:
+    """(short sha, message) of the branch's own commits, merge commits left out."""
+    log = git("log", "--no-merges", "--format=%h%x00%B%x1e", f"{merge_base(base)}..HEAD")
+    return [tuple(entry.strip("\n").split("\x00", 1)) for entry in log.split("\x1e") if "\x00" in entry]
 
 
 def removed_name_oks(base: str) -> set[str]:
     """Names a branch commit marks `Removed-name-ok: <name> (<why>)`: the tree still names them, but as another thing
-    (the game's BATTLE node, an AALC asset group), not the removed one."""
-    return set(REMOVED_OK.findall(git("log", "--no-merges", "--format=%B", f"{merge_base(base)}..HEAD")))
+    (the game's BATTLE node, an AALC asset group), not the removed one. The whole name, on this branch only: the merge
+    base moves on once it lands."""
+    return {name for _, message in branch_messages(base) for name in REMOVED_OK.findall(message)}
 
 
-def stale_references(removed: dict[str, list[str]], added: dict[str, list[tuple[int, str]]], ok: set[str] = frozenset()) -> list[str]:
+def stale_references(removed: dict[str, list[str]], added: dict[str, list[tuple[int, str]]],
+                     ok: frozenset[str] | set[str] = frozenset()) -> list[str]:
     problems = []
     for name, path in sorted({(n, p) for n, p in removed_names(removed, added) if n not in ok}):
         hits = git("grep", "-n", "-w", "-e", name, "--", ".", ":(exclude)tests/screens", check=False).splitlines()  # exit 1: no match
@@ -168,9 +176,7 @@ def closing_keyword_hits(sha: str, message: str) -> list[str]:
 
 def commit_closing_hits(base: str) -> list[str]:
     """Closing keywords in the messages of the branch's own commits, merge commits left out."""
-    log = git("log", "--no-merges", "--format=%h%x00%B%x1e", f"{merge_base(base)}..HEAD")
-    return [p for entry in log.split("\x1e") if "\x00" in entry
-            for p in closing_keyword_hits(*entry.strip("\n").split("\x00", 1))]
+    return [p for sha, message in branch_messages(base) for p in closing_keyword_hits(sha, message)]
 
 
 def main(base: str) -> int:
