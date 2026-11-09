@@ -163,3 +163,24 @@ def test_commit_messages_skip_merge_commits_and_stop_at_the_merge_base(tmp_path,
     monkeypatch.setattr(review_lint, "ROOT", Path(tmp_path))
     hits = review_lint.commit_closing_hits("main")
     assert len(hits) == 1 and "`fix: #387 review: names` closes #387" in hits[0]
+
+
+def test_a_removed_name_a_commit_marks_ok_is_not_stale(tmp_path, monkeypatch):
+    # #439: `BATTLE` left recovery.py, but the docs name the game's BATTLE node and AALC's BATTLE assets, not the constant.
+    def run(*args):
+        subprocess.run(["git", "-C", str(tmp_path), "-c", "user.name=t", "-c", "user.email=t@example.test", *args], check=True,
+                       capture_output=True)
+    (tmp_path / "a.py").write_text("BATTLE = 1\nOLD_LIMIT = 3\n")
+    (tmp_path / "README.md").write_text("the game's BATTLE node; OLD_LIMIT is the cap\n")
+    run("init", "-q", "-b", "main")
+    run("add", ".")
+    run("commit", "-qm", "base")
+    run("checkout", "-qb", "feat")
+    (tmp_path / "a.py").write_text("\n")
+    run("commit", "-qam", "drop the constants\n\nRemoved-name-ok: BATTLE (the game's word in the docs)\n"
+                          "Removed-name-ok: OLD_LIMIT\nRemoved-name-ok:\n\nRefs #439")  # no why, no name: not ok
+    monkeypatch.setattr(review_lint, "ROOT", Path(tmp_path))
+    assert review_lint.removed_name_oks("main") == {"BATTLE"}
+    removed = {"a.py": ["BATTLE = 1", "OLD_LIMIT = 3"]}
+    assert review_lint.stale_references(removed, {}, review_lint.removed_name_oks("main")) == [
+        "a.py: `OLD_LIMIT` was removed but is still named at README.md:1"]
