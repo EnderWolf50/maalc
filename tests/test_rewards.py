@@ -352,3 +352,36 @@ def test_data_files():
     assert events["client"] == "1.117.0" and "Project Moon" in events["note"]
     nails = next(e for e in events["events"] if e["id"] == 901008)["options"][0]  # Grimy Iron Stake is a Bleed gift
     assert (nails["text"], nails["kind"], nails["gifts"]) == ("Remove the nails.", "check", [["Bleed", "check_pass"]])
+
+
+def _option(event_id, text):
+    events = json.loads((DATA / "event_table.json").read_text(encoding="utf-8"))["events"]
+    return next(o for e in events if e["id"] == event_id for o in e["options"] if o["text"] == text)
+
+
+def test_event_table_keeps_each_gift_id_with_how_it_is_given():
+    assert _option(901001, "Reach out.")["gift_ids"] == [[9001, "direct"]]
+    assert _option(971003, "Give a few subtle hints.")["gift_ids"] == [[9705, "direct_random"]]
+
+
+def test_event_table_gift_ids_are_gifts_and_match_the_keyword_pairs():
+    events = json.loads((DATA / "event_table.json").read_text(encoding="utf-8"))["events"]
+    assert len(events) == 197
+    for e in events:
+        for o in e["options"]:
+            assert ("gifts" in o) == ("gift_ids" in o)
+            if "gifts" in o:  # the same ways of giving, once as the keyword pairs and once as the ids
+                assert {h for _, h in o["gifts"]} == {h for _, h in o["gift_ids"]}
+            assert all(i < 990000 for i, _ in o.get("gift_ids", []))  # a hidden battle buff is no gift
+
+
+def test_event_table_matches_the_game_data_when_it_is_unpacked():
+    import event_table
+    from local_dir import local_dir
+    unpack = local_dir("unpack")
+    src = unpack / "out/events-md8.json"
+    static = unpack / "static/Assets/Resources_moved/StaticData/static-data"
+    if not src.is_file() or not static.is_dir():
+        pytest.skip("no unpacked game data")
+    got = event_table.build(src, static)
+    assert got == (DATA / "event_table.json").read_text(encoding="utf-8")
