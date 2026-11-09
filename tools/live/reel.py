@@ -11,17 +11,18 @@ REEL.json, paths relative to its folder or absolute, times wall clock `HH:MM:SS[
                 {"image": "gui.png", "caption": "...", "seconds"?: 4}]}]}
 
 A clip is rendered from the uncut recording with evidence-annotate (`evidence.py`'s `annotated_clip`, masks
-included) into `clips/` beside REEL.json, again only when one of its inputs changed. `speed` plays a stretch
+included) into `clips/` beside REEL.json, again only when one of its inputs, the masks or annotate.py changed. `speed` plays a stretch
 faster (4) or slower (0.5), `freeze` holds the frame at T for that many seconds; the strip marks each
 ("快轉 4×", "慢放 0.5×", "停格"). The reel is 1280x776: a 56 px chapter strip above the 1280x720 picture, so
 the strip never hides game UI. It shows the chapter (number/total, issue, line) at every moment; the opening
-list gives each chapter's start time; the MP4 carries a chapter mark per chapter. Writes reel.mp4 and
-chapters.md beside REEL.json.
+list gives each chapter's start time; the MP4 carries a chapter mark per chapter. Writes reel.mp4,
+chapters.md and stills/NN.png (the reel at the middle of each caption) beside REEL.json.
 
-Before it builds, it checks every chapter against docs/agents/evidence-style.md "Review reel" and refuses, listing
-each problem: a caption with no Chinese character or with log text or a code name outside 「」, a caption on screen
-shorter than max(3 s, characters / 5), overlapping captions, a box outside its events' grid. A 1920x1080 grid
-whose boxes all fit inside 1280x720 gets a warning: the boxes may be in game pixels. `--check` only checks.
+Before it builds, it checks every chapter against docs/agents/evidence-style.md ("Clips and stills in general",
+"Review reel") and refuses, listing each problem: a caption with no Chinese character, a caption on screen shorter
+than max(3 s, characters / 5), overlapping captions or speed stretches, a box outside its events' grid. It warns
+about a caption that reads like log text or a code name outside 「」, and about a 1920x1080 grid whose boxes all
+fit inside 1280x720 (they may be in game pixels). `--check` only checks.
 """
 from __future__ import annotations
 
@@ -43,14 +44,20 @@ if str(TOOLS) not in sys.path:
     sys.path.insert(0, str(TOOLS))
 
 from live import evidence  # noqa: E402
-from live.evidence import hms, secs  # noqa: E402
+from live.evidence import H, W, hms, secs  # noqa: E402
 from local_dir import local_dir  # noqa: E402
 
-W, H, BAND, FPS = 1280, 720, 56, 30
+BAND, FPS = 56, 30
 OPENING_S = 10.0  # the opening list is a table of contents to pause on; the chapter marks are for jumping
 FONTS = {False: evidence.FONTS, True: ["C:/Windows/Fonts/msjhbd.ttc", "/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc"]}
 AMBER, WHITE, DIM, BG = (255, 196, 64), (245, 245, 245), (190, 194, 204), (17, 19, 26)
 ENC = ["-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-pix_fmt", "yuv420p", "-r", str(FPS), "-an"]
+
+@dataclass
+class Report:
+    problems: list[str]
+    warnings: list[str]
+
 
 HAN = re.compile(r"[\u3400-\u9fff]")
 QUOTED = re.compile(r"「[^」]*」")
@@ -65,13 +72,12 @@ def min_seconds(text: str) -> float:
     return max(3.0, len(re.sub(r"\s", "", text)) / 5)
 
 
-def wording(text: str) -> str | None:
-    """Why `text` fails as a caption (no Chinese, or log text / a code name outside 「」), or None."""
+def caption_text(text: str, where: str, report: Report) -> None:
+    """A caption with no Chinese character is a problem; one that reads like log text outside 「」, a warning."""
     if not HAN.search(text):
-        return "has no Chinese character"
+        report.problems.append(f"{where}: has no Chinese character")
     if m := CODE.search(QUOTED.sub("", text)):
-        return f"reads like log text or a code name ({m[0]}); a game label goes in 「」"
-    return None
+        report.warnings.append(f"{where}: reads like log text or a code name ({m[0]}); a game label goes in 「」")
 
 
 # --- the model -------------------------------------------------------------------------------------------
@@ -128,7 +134,7 @@ class Step:
 @dataclass(frozen=True)
 class Clip:
     video: Path
-    start: str
+    first_frame: str  # wall time of the recording's first frame
     timeline: Timeline
     events: Path
     steps_file: Path
@@ -149,7 +155,7 @@ class Chapter:
     line: str
     short: str
     note: str
-    pieces: tuple
+    clips: tuple  # of Clip and Still
 
 
 @dataclass(frozen=True)
@@ -173,10 +179,10 @@ def load(path: Path) -> Reel:
     doc = read_json(path)
     chapters = []
     for c in doc["chapters"]:
-        pieces = []
+        clips = []
         for p in c["clips"]:
             if "image" in p:
-                pieces.append(Still(at(p["image"]), p["caption"], float(p.get("seconds", max(4.0, min_seconds(p["caption"]))))))
+                clips.append(Still(at(p["image"]), p["caption"], float(p.get("seconds", max(4.0, min_seconds(p["caption"]))))))
                 continue
             events, steps_file = at(p["events"]), at(p["steps"])
             space = tuple(int(v) for v in read_json(events)["space"])
@@ -184,21 +190,14 @@ def load(path: Path) -> Reel:
                           for s in read_json(steps_file))
             timeline = Timeline(secs(p["from"]), secs(p["to"]), tuple((secs(a), secs(b), float(x)) for a, b, x in p.get("speed", ())),
                                 tuple((secs(t), float(s)) for t, s in p.get("freeze", ())))
-            pieces.append(Clip(at(p["video"]), p["start"], timeline, events, steps_file, space, steps))
-        chapters.append(Chapter(c["issue"], c["line"], c.get("short", c["line"]), c.get("note", ""), tuple(pieces)))
+            clips.append(Clip(at(p["video"]), p["start"], timeline, events, steps_file, space, steps))
+        chapters.append(Chapter(c["issue"], c["line"], c.get("short", c["line"]), c.get("note", ""), tuple(clips)))
     return Reel(doc.get("title", "驗收總集"), folder, tuple(chapters))
-
-
-# --- the check -------------------------------------------------------------------------------------------
-
-@dataclass
-class Report:
-    problems: list[str]
-    warnings: list[str]
 
 
 def check_clip(clip: Clip, where: str, report: Report) -> None:
     tl, (gw, gh) = clip.timeline, clip.space
+    before = len(report.problems)
     for i, (a, b, x) in enumerate(sorted(tl.speed)):
         if not (tl.t0 <= a < b <= tl.t1) or x <= 0:
             report.problems.append(f"{where}: speed {hms(a)}-{hms(b)} x{x:g} is not a stretch of the cut {hms(tl.t0)}-{hms(tl.t1)}")
@@ -207,14 +206,14 @@ def check_clip(clip: Clip, where: str, report: Report) -> None:
     for at, sec in tl.freeze:
         if not tl.t0 <= at <= tl.t1 or sec <= 0:
             report.problems.append(f"{where}: freeze at {hms(at)} for {sec:g} s is outside the cut {hms(tl.t0)}-{hms(tl.t1)}")
+    timed = len(report.problems) == before  # a broken timeline gives no screen times
     boxes = []
     for i, s in enumerate(clip.steps, 1):
         name = f"{where}, step {i} {s.title!r}"
-        if why := wording(s.title):
-            report.problems.append(f"{name}: {why}")
+        caption_text(s.title, name, report)
         if i > 1 and s.start < clip.steps[i - 2].end:
             report.problems.append(f"{name}: overlaps step {i - 1} (from {hms(s.start)} before its end {hms(clip.steps[i - 2].end)})")
-        shown, need = tl.screen(s.end) - tl.screen(s.start), min_seconds(s.title)
+        shown, need = (tl.screen(s.end) - tl.screen(s.start), min_seconds(s.title)) if timed else (math.inf, 0)
         if shown < need - 1e-6:
             report.problems.append(f"{name}: shown {shown:.1f} s, needs {need:.1f} s (3 s or a second per 5 characters)")
         for x, y, w, h, *_ in s.boxes:
@@ -227,16 +226,17 @@ def check_clip(clip: Clip, where: str, report: Report) -> None:
 
 
 def check(path) -> Report:
-    reel = load(Path(path))
+    return audit(load(Path(path)))
+
+
+def audit(reel: Reel) -> Report:
     report = Report([], [])
     for n, c in enumerate(reel.chapters, 1):
-        if why := wording(c.line):
-            report.problems.append(f"{reel.label(n)}: line {c.line!r} {why}")
-        for k, p in enumerate(c.pieces, 1):
+        caption_text(c.line, f"{reel.label(n)}: line {c.line!r}", report)
+        for p in c.clips:
             if isinstance(p, Still):
                 where = f"{reel.label(n)}, still {p.image.name} {p.caption!r}"
-                if why := wording(p.caption):
-                    report.problems.append(f"{where}: {why}")
+                caption_text(p.caption, where, report)
                 if p.seconds < min_seconds(p.caption):
                     report.problems.append(f"{where}: shown {p.seconds:.1f} s, needs {min_seconds(p.caption):.1f} s")
             else:
@@ -270,6 +270,15 @@ def clock(t: float) -> str:
     return f"{t // 3600}:{t // 60 % 60:02d}:{t % 60:02d}" if t >= 3600 else f"{t // 60:02d}:{t % 60:02d}"
 
 
+def fit(d, text: str, f, width: float) -> str:
+    """text, cut with an ellipsis to `width` px."""
+    if d.textlength(text, font=f) <= width:
+        return text
+    while text and d.textlength(text + "…", font=f) > width:
+        text = text[:-1]
+    return text + "…"
+
+
 def band(n: int, total: int, issue: str, line: str, mark: str = "") -> Image.Image:
     """The chapter strip: 第 n/total 章, the issue, the line; a speed or freeze mark at the right."""
     im = Image.new("RGB", (W, BAND), BG)
@@ -278,6 +287,7 @@ def band(n: int, total: int, issue: str, line: str, mark: str = "") -> Image.Ima
     for text, f, colour in ((f"第 {n}/{total} 章" if n else "目錄", font(24, True), AMBER), (issue, font(24, True), WHITE),
                             (line, font(22), DIM)):
         if text:
+            text = fit(d, text, f, W - 200 - x)  # the right 200 px stay free for the mark
             d.text((x, cy), text, font=f, fill=colour, anchor="lm")
             x += d.textlength(text, font=f) + 22
     if mark:
@@ -343,24 +353,30 @@ class Builder:
         run(["ffmpeg", "-y", "-v", "error", *inputs, "-filter_complex", ";".join(graph), "-map", f"[{last}]", *ENC, out])
         return out
 
-    def picture(self, im: Image.Image, seconds: float, n: int, c: Chapter) -> Path:
+    def strip(self, n: int, c: Chapter, mark: str = "") -> Image.Image:
+        return band(n, self.total, c.issue, c.line, mark)
+
+    def picture(self, im: Image.Image, seconds: float, strip: Image.Image) -> Path:
         png = self.file(".png")
         im.save(png)
         return self.segment(["-loop", "1", "-framerate", str(FPS), "-t", f"{seconds:.3f}", "-i", png], "setsar=1,format=yuv420p",
-                            [(band(n, self.total, c.issue, c.line), 0, math.inf)], self.file(".mp4"))
+                            [(strip, 0, math.inf)], self.file(".mp4"))
 
     def render(self, clip: Clip, out: Path) -> None:
-        """Annotate the cut from the uncut recording, unless the clip and its inputs are what made `out` last time."""
+        """Annotate the cut from the uncut recording, unless the clip, its inputs, the masks and annotate.py are what
+        made `out` last time."""
         tl = clip.timeline
-        stat = clip.video.stat()
-        key = hashlib.sha256(json.dumps([str(clip.video), stat.st_size, stat.st_mtime, clip.start, tl.t0, tl.t1,
-                                         clip.events.read_text(encoding="utf-8"), clip.steps_file.read_text(encoding="utf-8")]).encode()).hexdigest()
+        masks = evidence.masks_path(SimpleNamespace(masks=None))
+        files = [clip.video, evidence.ANNOTATE, *sorted(masks.parent.glob("*.png"))]
+        key = hashlib.sha256(json.dumps([[str(f), f.stat().st_size, f.stat().st_mtime] for f in files] + [
+            clip.first_frame, tl.t0, tl.t1, masks.read_text(encoding="utf-8"), clip.events.read_text(encoding="utf-8"),
+            clip.steps_file.read_text(encoding="utf-8")]).encode()).hexdigest()
         stamp = out.with_suffix(".key")
         if out.exists() and stamp.exists() and stamp.read_text() == key:
             return
         events = read_json(clip.events)
         steps = read_json(clip.steps_file)
-        footage = evidence.Footage([f"{clip.video}@{clip.start}"])
+        footage = evidence.Footage([f"{clip.video}@{clip.first_frame}"])
         evidence.annotated_clip(footage, tl.t0, tl.t1, out, events, steps, SimpleNamespace(annotate=evidence.ANNOTATE, masks=None))
         stamp.write_text(key)
 
@@ -381,16 +397,15 @@ class Builder:
         split = f"split={len(pieces)}" + "".join(f"[s{i}]" for i in range(len(pieces)))
         filters = (f"{split};" + ";".join(graph) + f";{''.join(parts)}concat=n={len(pieces)}:v=1:a=0,fps={FPS},"
                    f"scale={W}:{H},setsar=1,format=yuv420p")
-        bands = [(band(n, self.total, c.issue, c.line), 0, math.inf)]
-        bands += [(band(n, self.total, c.issue, c.line, text), a, b) for a, b, text in tl.marks()]
+        bands = [(self.strip(n, c), 0, math.inf)] + [(self.strip(n, c, text), a, b) for a, b, text in tl.marks()]
         return self.segment(["-i", src], filters, bands, self.file(".mp4"))
 
     def chapter(self, n: int, c: Chapter) -> list[Path]:
         card = [(f"第 {n}/{self.total} 章", 30, True, AMBER), (c.issue, 60, True, WHITE), (c.line, 40, False, WHITE)]
-        segs = [self.picture(still_frame(card), max(3.0, min_seconds(c.line)), n, c)]
-        for k, p in enumerate(c.pieces, 1):
+        segs = [self.picture(still_frame(card), max(3.0, min_seconds(c.line)), self.strip(n, c))]
+        for k, p in enumerate(c.clips, 1):
             if isinstance(p, Still):
-                segs.append(self.picture(still_frame([(p.caption, 30, False, WHITE)], p.image, self.masks), p.seconds, n, c))
+                segs.append(self.picture(still_frame([(p.caption, 30, False, WHITE)], p.image, self.masks), p.seconds, self.strip(n, c)))
             else:
                 out = self.clips / f"{n:02d}-{k}.mp4"
                 self.render(p, out)
@@ -409,10 +424,7 @@ class Builder:
             d.text((x, y), f"{i + 1:02d}", font=fb, fill=AMBER)
             d.text((x + 44, y), clock(t), font=fb, fill=WHITE)
             d.text((x + 130, y), c.short, font=f, fill=DIM)
-        png = self.file(".png")
-        im.save(png)
-        return self.segment(["-loop", "1", "-framerate", str(FPS), "-t", f"{OPENING_S:.3f}", "-i", png], "setsar=1,format=yuv420p",
-                            [(band(0, self.total, "", f"{self.total} 章，章節開始時間如下；播放器也可跳章"), 0, math.inf)], self.file(".mp4"))
+        return self.picture(im, OPENING_S, band(0, self.total, "", f"{self.total} 章，章節開始時間如下；播放器也可跳章"))
 
     def build(self) -> None:
         chapters = [self.chapter(n, c) for n, c in enumerate(self.reel.chapters, 1)]
@@ -441,7 +453,7 @@ class Builder:
         folder.mkdir(exist_ok=True)
         for n, (c, t, secs_) in enumerate(zip(self.reel.chapters, starts, seconds), 1):
             shots = [("章名卡", t + secs_[0] / 2)]
-            for p, off in zip(c.pieces, (t + sum(secs_[:k]) for k in range(1, len(secs_)))):
+            for p, off in zip(c.clips, (t + sum(secs_[:k]) for k in range(1, len(secs_)))):
                 if isinstance(p, Still):
                     shots.append((p.image.name, off + p.seconds / 2))
                     continue
@@ -467,7 +479,7 @@ class Builder:
                 "| 開始 | 章 | Issue | 看什麼 | 來源 | 變速 | 備註 |", "|---|---|---|---|---|---|---|"]
         for n, (c, t) in enumerate(zip(self.reel.chapters, starts), 1):
             srcs, speeds = [], []
-            for p in c.pieces:
+            for p in c.clips:
                 if isinstance(p, Still):
                     srcs.append(p.image.name)
                     continue
@@ -483,7 +495,8 @@ def main(argv=None) -> None:
     ap.add_argument("reel", type=Path)
     ap.add_argument("--check", action="store_true", help="only check the chapters")
     a = ap.parse_args(argv)
-    report = check(a.reel)
+    reel = load(a.reel)
+    report = audit(reel)
     for w in report.warnings:
         print(f"warning: {w}")
     for p in report.problems:
@@ -491,9 +504,9 @@ def main(argv=None) -> None:
     if report.problems:
         print(f"refused: {len(report.problems)} problem(s); docs/agents/evidence-style.md \"Review reel\" has the rules")
         sys.exit(1)
-    print(f"ok: {len(load(a.reel).chapters)} chapters pass the rules")
+    print(f"ok: {len(reel.chapters)} chapters pass the rules", flush=True)
     if not a.check:
-        Builder(load(a.reel)).build()
+        Builder(reel).build()
 
 
 if __name__ == "__main__":

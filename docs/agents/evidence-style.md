@@ -1,6 +1,6 @@
 # Evidence style
 
-How an evidence still or clip looks. A rule below is the user's own word, or the version the user accepted, with its date. `tools/live/evidence.py` (`draw_map`) is the code that draws it; where this file and the code differ, the code is what the user accepted. `tools/live/reel.py` builds a review reel and refuses a chapter that breaks the caption and box rules below.
+How an evidence still or clip looks. A rule below is the user's own word, or the version the user accepted, with its date. `tools/live/evidence.py` (`draw_map`) is the code that draws it; where this file and the code differ, the code is what the user accepted. `tools/live/reel.py` builds a review reel; it refuses a chapter whose captions break the language or duration rule below or whose boxes leave the events grid, and warns about log text and about boxes that look like game pixels.
 
 ## What goes in a report
 
@@ -38,7 +38,7 @@ Check by measurement, not by eye: the label's outer edge equals the box's outer 
 - A clip may speed up or skip the stretches outside the issue's focus (battles, map walks, loading when the issue is the shop); the part the issue is about stays at normal speed. [user, 2026-11-04: 「非當次 issue 重點的證據片段可以些微加速跳過」] Mark each such stretch on the clip ("×4", "略過 2:10") so a reviewer knows it was cut; the archive recording stays uncut.
 - Captions are Traditional Chinese in game terms: no log text, pipeline node names or function names. A game label the viewer must read stays as the game shows it, in 「」 (「To Window」, 「Parallel Superposition Mode : ON」). [user, 2026-11-09: 「部分 log 直出成 step，無法閱讀」; 「部分 step 顯示為英文，可以閱讀，但會增加驗收時的成本，請統一語系」] `evidence.py steps` writes one caption per log line: a draft to rewrite, not a caption to ship.
 - A caption stays up at least max(3 s, characters ÷ 5 s), spaces not counted: 20 characters, 4 s (the user leaves the numbers to us). Actions faster than that share one caption, or are held with a freeze frame or slow motion that the clip marks (「停格」, 「慢放 0.5×」), as a speed-up is marked. A speed-up inside a caption shortens it. [user, 2026-11-09: 「部分 step 顯示時間太短，無法閱讀」; the first reel had 98 of 167 captions under 3 s, 23 of them 0 s]
-- A box uses the clip's coordinate grid, the `space` of its `events.json`: 1920x1080 for a touch log, 1280x720 only when the events say so. It shows only while its target is on screen, and it is checked on stills before the clip is handed over. [2026-11-09: the #94 chapter's boxes were written in 1280x720 game pixels on a 1920x1080 grid and landed at 2/3 of their place, the lever's on the progress track]
+- A box uses the clip's coordinate grid, the `space` of its `events.json`: 1920x1080 for a touch log, 1280x720 only when the events say so. It shows only while its target is on screen, and it is checked on stills before the clip is handed over (`reel.py` writes a sheet per chapter, one still at the middle of each caption). [2026-11-09: the #94 chapter's boxes were written in 1280x720 game pixels on a 1920x1080 grid and landed at 2/3 of their place, the lever's on the progress track]
 - `gh ... --attach '<file>#<alt>'`: the `#alt` works for images; a video takes no alt text, so attach it without. [2026-10-27, the `gh issue comment` error "cannot set alt text on video"]
 - An attached file is described by its content in the text, never by a local path (AGENTS.md "Public repo").
 
@@ -49,4 +49,3 @@ A review reel strings the acceptance clips of several issues into one MP4, a cha
 - The current chapter shows at every moment: number/total, issue and one line. The strip is a 56 px band above the 1280x720 picture, so it never hides game UI, and it carries the speed and freeze marks. [user, 2026-11-09: 「分了章節，但是影片播放過程中沒有『持續可見的』章節資訊，我只能依每個章節前面的 3s title 來判斷」]
 - The opening list gives each chapter's start time, and the MP4 carries a chapter mark per chapter that a player can jump to. [user, 2026-11-09: 「開頭的清單沒有時間戳記」]
 - A chapter shows the run that met the acceptance: cross-check it with the issue's acceptance comment. A failing run from before the fix appears only in a before/after chapter that says so. [2026-11-09: the #94 chapter of the first reel showed the run before PR #524, which read `oN`]
-- `reel.py` writes a sheet of stills per chapter, one at the middle of each caption: look at every sheet before the reel is handed over.

@@ -46,16 +46,17 @@ def test_a_caption_shorter_than_three_seconds_is_refused(tmp_path):
 
 
 def test_a_long_caption_needs_a_second_per_five_characters(tmp_path):
-    title = "第 5 層打完後按 Claim，不用每週獎勵，扣 5 個模組"  # 25 characters without spaces: 5 s
-    assert reel.check(manifest(tmp_path, [step("10:00:01", "10:00:05.9", title)])).problems != []
-    assert reel.check(manifest(tmp_path, [step("10:00:01", "10:00:06", title)])).problems == []
+    title = "第 5 層打完後按 Claim，不用每週獎勵，扣 5 個腦啡肽模組"  # 28 characters without spaces: 5.6 s
+    assert reel.check(manifest(tmp_path, [step("10:00:01", "10:00:06.5", title)])).problems != []
+    assert reel.check(manifest(tmp_path, [step("10:00:01", "10:00:06.6", title)])).problems == []
 
 
-def test_a_caption_reading_like_a_log_line_is_refused(tmp_path):
+def test_a_caption_reading_like_a_log_line_warns(tmp_path):
     report = reel.check(manifest(tmp_path, [step("10:00:01", "10:00:07", "暫停後 MirrorEntryPaused 按 Resume"),
                                             step("10:00:07", "10:00:11", "按下「GiveUpRewards」")]))
-    assert len(report.problems) == 1
-    assert "MirrorEntryPaused" in report.problems[0]
+    assert report.problems == []
+    assert len(report.warnings) == 1
+    assert "MirrorEntryPaused" in report.warnings[0]
 
 
 def test_a_box_outside_the_clip_grid_is_refused(tmp_path):
@@ -111,6 +112,12 @@ def test_overlapping_speed_stretches_are_refused(tmp_path):
     report = reel.check(manifest(tmp_path, [step("10:00:01", "10:00:05")], speed=[["10:00:10", "10:00:20", 4], ["10:00:15", "10:00:25", 2]]))
     assert len(report.problems) == 1
     assert "overlaps" in report.problems[0]
+
+
+def test_a_zero_speed_is_a_problem_not_a_crash(tmp_path):
+    report = reel.check(manifest(tmp_path, [step("10:00:10", "10:00:14")], speed=[["10:00:08", "10:00:20", 0]]))
+    assert len(report.problems) == 1
+    assert "speed" in report.problems[0]
 
 
 def test_build_refuses_and_lists_every_problem(tmp_path, capsys):
