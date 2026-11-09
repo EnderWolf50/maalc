@@ -5,7 +5,9 @@ actions.py reads the pages and taps; everything here is plain data in, plain dat
 
 import re
 from difflib import SequenceMatcher
+from typing import NamedTuple
 
+from gift_cells import name_id
 from gift_search import select_count
 from ocrtext import compact, has, normalize
 from run_start import match_pack
@@ -295,16 +297,70 @@ def gift_score(kind, tier):
     return GIFT_SCORE.get(kind, 0) + (TIER_STEP * (tier - 1) if tier and kind in ("main", "other") else 0)
 
 
+ROMAN = ("I", "II", "III", "IV", "V")
+TITLE_ROW = 8  # px: boxes whose tops are this near the topmost line's are one title (a name may come as two boxes)
+
+
+class Card(NamedTuple):
+    """One gift card of the choice page, what the pick and its log need (#418).
+
+    kind: its category, for the score (main, other, owned, avoid; the want categories come before them, #416); tier: from
+    the numeral over the icon (boss page only, else None); burden: its trial's cost in pt, None without trials; label: the
+    gift's name, or the title as read when no gift matches; gift_id: None then; trial: the log's words for its trial.
+    """
+    kind: str
+    tier: int | None
+    burden: float | None
+    label: str
+    gift_id: int | None
+    trial: str | None
+    category: str | None = None  # what the log shows: kind, or the want class (#416) kind scores as until #419
+
+
+def category(kind, want):
+    """A card's category (#416): avoid > owned > the want class (pack-want, want, material) > main > other."""
+    return kind if kind in ("avoid", "owned") or not want else want
+
+
+def card_title(lines):
+    """The title of a card from its [(y, OCR line)]: the topmost lines, joined in the order read (left to right) ("Owned" is no title)."""
+    rows = [(y, t) for y, t in lines if compact(t) != "owned"]
+    if not rows:
+        return ""
+    top = min(y for y, _ in rows)
+    return " ".join(t for y, t in rows if y < top + TITLE_ROW)
+
+
+def card_gift(lines, ids):
+    """The id of the gift a card is, by the whole of its title line against every gift's name (ids: {English name: id}), else None.
+
+    The title line alone: not the description, and not the longest word of it, so a description that says "gift" is no
+    gift named Gift (9764).
+    """
+    title = card_title(lines)
+    return name_id(title, ids) if title else None
+
+
+def card_line(card):
+    """A card for the gifts: log: `<name>/<kind> gift <score>[ tier N][ trial <trial>] total <gift - trial>`."""
+    gift = gift_score(card.kind, card.tier)
+    tier = f" tier {ROMAN[card.tier - 1]}" if card.tier else ""
+    shown = card.category or card.kind
+    if card.burden is None:
+        return f"{card.label}/{shown} gift {gift:g}{tier} total {gift:g}"
+    return f"{card.label}/{shown} gift {gift:g}{tier} trial {card.trial} total {gift - card.burden:g}"
+
+
 def rank_gifts(cards):
     """Card indexes best first (spec 03 section 12).
 
-    cards are (kind, tier, burden or None); score = gift_score - burden, ties to the lighter burden, then the leftmost.
+    cards are Cards, or (kind, tier, burden or None); score = gift_score - burden, ties to the lighter burden, then the leftmost.
     Without trials (burden None) the gift score alone. An avoided gift comes after every other card: taken only to fill
     the count, rather than a random trial (#90).
     """
 
     def key(i):
-        kind, tier, cost = cards[i]
+        kind, tier, cost = cards[i][:3]
         return (kind == "avoid", -(gift_score(kind, tier) - (cost or 0)), cost or 0, i)
 
     return sorted(range(len(cards)), key=key)
