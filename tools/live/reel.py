@@ -217,7 +217,7 @@ def load(path: Path) -> Reel:
             raw = tuple(read_json(steps_file))
             steps = tuple(Step(secs(s["from"]), secs(s["to"]), s["title"], tuple(tuple(b) for b in s.get("boxes", ())),
                                tuple(s.get("zoom") or ()), s.get("note", "")) for s in raw)
-            box_space = tuple(int(v) for v in p["box_space"]) if "box_space" in p else None
+            box_space = tuple(p["box_space"]) if isinstance(p.get("box_space"), list) else p.get("box_space")
             timeline = Timeline(secs(p["from"]), secs(p["to"]), tuple((secs(a), secs(b), float(x)) for a, b, x in p.get("speed", ())),
                                 tuple((secs(t), float(s)) for t, s in p.get("freeze", ())))
             clips.append(Clip(at(p["video"]), p["start"], timeline, events, steps_file, space, steps, raw, box_space))
@@ -237,7 +237,11 @@ def check_clip(clip: Clip, where: str, report: Report) -> None:
         if not tl.t0 <= at <= tl.t1 or sec <= 0:
             report.problems.append(f"{where}: freeze at {hms(at)} for {sec:g} s is outside the cut {hms(tl.t0)}-{hms(tl.t1)}")
     timed = len(report.problems) == before  # a broken timeline gives no screen times
-    if not clip.box_space and any(s.boxes or s.zoom for s in clip.steps):
+    grid = clip.box_space
+    if grid is not None and not (isinstance(grid, tuple) and len(grid) == 2 and all(isinstance(v, int) and v > 0 for v in grid)):
+        report.problems.append(f"{where}: box_space {grid!r} is not [width, height] in pixels")
+        grid = None
+    elif not grid and any(s.boxes or s.zoom for s in clip.steps):
         report.problems.append(f"{where}: has boxes but no box_space: name the grid they are written in, "
                                f"[1920, 1080] for a touch log or [1280, 720] for game pixels")
     for i, s in enumerate(clip.steps, 1):
@@ -252,8 +256,8 @@ def check_clip(clip: Clip, where: str, report: Report) -> None:
         shown, need = (tl.screen(s.end) - tl.screen(s.start), min_seconds(s.title)) if timed else (math.inf, 0)
         if shown < need - 1e-6:
             report.problems.append(f"{name}: shown {shown:.1f} s, needs {need:.1f} s (3 s or a second per 5 characters)")
-        if clip.box_space:
-            gw, gh = clip.box_space
+        if grid:
+            gw, gh = grid
             for x, y, w, h, *_ in s.boxes + ((s.zoom,) if s.zoom else ()):
                 if w <= 0 or h <= 0 or x < 0 or y < 0 or x + w > gw or y + h > gh:
                     report.problems.append(f"{name}: box {[x, y, w, h]} is outside its box_space {gw}x{gh}")
@@ -524,20 +528,35 @@ class Builder:
         (self.reel.folder / "chapters.md").write_text("\n".join(rows) + "\n", encoding="utf-8")
 
 
+def sheet_frames(footage, t0: float, t1: float, every: float):
+    """(wall time, 1280x720 frame) from t0 to t1, one every `every` s, decoded one at a time from the piece covering t0."""
+    path, off = footage.locate(t0)
+    dec = subprocess.Popen(["ffmpeg", "-v", "error", "-ss", f"{off:.3f}", "-t", f"{t1 - t0 + every / 2:.3f}", "-i", str(path), "-vf",
+                            f"fps=1/{every:g},scale={W}:{H}", "-f", "rawvideo", "-pix_fmt", "rgb24", "-"], stdout=subprocess.PIPE)
+    i = 0
+    while len(buf := dec.stdout.read(W * H * 3)) == W * H * 3:
+        yield t0 + i * every, Image.frombytes("RGB", (W, H), buf)
+        i += 1
+    dec.wait()
+
+
 def sheet(footage, t0: float, t1: float, every: float, out: Path, masks=None, cols: int = 6) -> None:
-    """The recording's frames from t0 to t1, one every `every` s, at a quarter size, each labelled with its wall time."""
-    times, frames = evidence.frames(footage, t0, t1, 1 / every)
+    """The recording's frames from t0 to t1, one every `every` s, masked at full size, laid out at a quarter size, each
+    labelled with its wall time."""
     w, h, label = W // 4, H // 4, 22
-    im = Image.new("RGB", (cols * w, math.ceil(len(times) / cols) * (h + label)), (0, 0, 0))
+    shots = []
+    for t, frame in sheet_frames(footage, t0, t1, every):
+        shots.append((t, (evidence.apply_masks(frame, masks) if masks else frame).resize((w, h))))
+    if not shots or shots[-1][0] < t1 - every:
+        print(f"sheet: the recording that covers {hms(t0)} ends before {hms(t1)}; {len(shots)} frames")
+    im = Image.new("RGB", (cols * w, max(1, math.ceil(len(shots) / cols)) * (h + label)), (0, 0, 0))
     d = ImageDraw.Draw(im)
-    for i, (t, frame) in enumerate(zip(times, frames)):
-        shot = Image.fromarray(frame)
-        shot = evidence.apply_masks(shot, masks) if masks else shot
+    for i, (t, shot) in enumerate(shots):
         x, y = i % cols * w, i // cols * (h + label)
-        im.paste(shot.resize((w, h)), (x, y + label))
+        im.paste(shot, (x, y + label))
         d.text((x + 4, y + 2), hms(t), font=font(15), fill=AMBER)
     im.save(out)
-    print(f"{len(times)} frames -> {out}")
+    print(f"{len(shots)} frames -> {out}")
 
 
 def main(argv=None) -> None:
@@ -554,6 +573,8 @@ def main(argv=None) -> None:
     p.add_argument("--masks", help="masks.json (default .local/evidence/masks.json)")
     p.add_argument("-o", "--out", type=Path, required=True)
     a = ap.parse_args(argv)
+    if a.cmd == "sheet" and (a.every <= 0 or a.cols <= 0):
+        ap.error("--every and --cols must be above 0")
     if a.cmd == "sheet":
         sheet(evidence.Footage(a.video), secs(a.t0), secs(a.t1), a.every, a.out, evidence.load_masks(evidence.masks_path(a)), a.cols)
         return

@@ -15,8 +15,8 @@ LOG is the bot's stdout with a wall time on each line, as `tools/live/bot.py run
 maafw.log (through `maafw_events.py`, in game pixels); from LOG it takes the controller's
 `x: X, y: Y, width: W, height: H` lines, in device pixels, and a burst under 0.25 s apart is one swipe.
 `steps` writes one draft per moment: the `[maalc]` lines less than --hold s (default 3, the shortest a caption
-stays up) after the moment's first line go in its `note`, and its `title` stays empty for you to write in Chinese;
-`reel.py` refuses a draft left unwritten. Every time T is wall clock, `HH:MM:SS[.fff]`, of the log's day. `--video PATH@START` is a recording and the
+stays up) after the moment's first line go in its `note`, and its `title` stays empty for you to write in
+Chinese; `reel.py` refuses a draft left unwritten. Every time T is wall clock, `HH:MM:SS[.fff]`, of the log's day. `--video PATH@START` is a recording and the
 wall time of its first frame (screen-record's `started`); give one per piece of a run recorded in pieces.
 
 **map** stitches the floor from the frames before and after each `map: dragged the map N px` and boxes every
@@ -712,7 +712,8 @@ def main(argv=None) -> None:
         p.add_argument("-o", "--out", required=True)
         if name == "steps":
             p.add_argument("--grep", default="")
-            p.add_argument("--hold", type=float, default=3.0)
+            p.add_argument("--hold", type=float, default=3.0, help="lines this many s after a draft's first line join it, "
+                           "and a draft lasts this long after its last line")
     p = sub.add_parser("frames", parents=[video, masks])
     p.add_argument("times", nargs="+")
     p.add_argument("-o", "--out", required=True)

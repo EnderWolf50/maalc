@@ -1,6 +1,5 @@
 import json
 
-import numpy as np
 import pytest
 from PIL import Image
 
@@ -68,7 +67,16 @@ def test_boxes_with_no_declared_grid_are_refused(tmp_path):
                                  box_space=None))
     assert len(report.problems) == 1
     assert "box_space" in report.problems[0]
+    zoomed = {**step("10:00:01", "10:00:05"), "zoom": [0, 0, 640, 360]}
+    assert len(reel.check(manifest(tmp_path, [zoomed], box_space=None)).problems) == 1
     assert reel.check(manifest(tmp_path, [step("10:00:01", "10:00:05")], box_space=None)).problems == []
+
+
+def test_a_box_space_that_is_not_a_size_is_refused(tmp_path):
+    for bad in ([1280], [0, 0], "1280x720"):
+        report = reel.check(manifest(tmp_path, [step("10:00:01", "10:00:05", boxes=[[10, 10, 50, 50, "開關"]])], box_space=bad))
+        assert len(report.problems) == 1, bad
+        assert "box_space" in report.problems[0]
 
 
 def test_a_box_outside_its_declared_grid_is_refused(tmp_path):
@@ -76,6 +84,8 @@ def test_a_box_outside_its_declared_grid_is_refused(tmp_path):
                                  box_space=(1280, 720)))
     assert len(report.problems) == 1
     assert "1280x720" in report.problems[0]
+    zoomed = {**step("10:00:01", "10:00:05"), "zoom": [800, 400, 640, 360]}
+    assert len(reel.check(manifest(tmp_path, [zoomed], space=(1920, 1080), box_space=(1280, 720))).problems) == 1
 
 
 def test_game_pixel_boxes_are_drawn_on_the_touch_log_grid(tmp_path):
@@ -83,6 +93,9 @@ def test_game_pixel_boxes_are_drawn_on_the_touch_log_grid(tmp_path):
     assert reel.check(path) == reel.Report([], [])
     clip = reel.load(path).chapters[0].clips[0]
     assert clip.annotation_steps()[0]["boxes"] == [[1432.5, 607.5, 120.0, 187.5, "拉桿"]]
+    zoomed = {**step("10:00:01", "10:00:05"), "zoom": [640, 360, 640, 360]}
+    clip = reel.load(manifest(tmp_path, [zoomed], space=(1920, 1080), box_space=(1280, 720))).chapters[0].clips[0]
+    assert clip.annotation_steps()[0]["zoom"] == [960.0, 540.0, 960.0, 540.0]
 
 
 def test_an_unwritten_draft_is_refused(tmp_path):
@@ -149,11 +162,10 @@ def test_build_refuses_and_lists_every_problem(tmp_path, capsys):
 
 
 def test_a_sheet_lays_the_recording_out_a_frame_per_step(tmp_path, monkeypatch):
-    def frames(footage, t0, t1, fps, gray=False):
-        n = int((t1 - t0) * fps) + 1
-        return [t0 + i / fps for i in range(n)], np.zeros((n, 720, 1280, 3), np.uint8)
+    def frames(footage, t0, t1, every):
+        return ((t0 + i * every, Image.new("RGB", (1280, 720))) for i in range(int((t1 - t0) / every) + 1))
 
-    monkeypatch.setattr(evidence, "frames", frames)
+    monkeypatch.setattr(reel, "sheet_frames", frames)
     out = tmp_path / "sheet.png"
     reel.sheet(evidence.Footage(["rec.mp4@10:00:00"]), evidence.secs("10:00:10"), evidence.secs("10:00:22"), 2.0, out, cols=3)
     w, h = Image.open(out).size
