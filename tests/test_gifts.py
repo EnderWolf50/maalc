@@ -43,6 +43,8 @@ def run(case):
             bought = gifts.purchases(gift_list, packs, owned, tables)
             ids = [i for i, _ in bought]
             return {"count": len(bought), "for_fusion": sum(f is not None for _, f in bought), "has": [i for i in args["ids"] if i in ids]}
+        case "want_kind":
+            return {str(i): gifts.want_kind(gift_list, i, packs, owned, tables) for i in args["ids"]}
         case "recipe_fusion":
             return gifts.recipe_fusion(gift_list, owned, tables, args.get("slots"))
     raise AssertionError(case["fn"])
