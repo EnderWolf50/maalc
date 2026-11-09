@@ -170,3 +170,27 @@ def test_a_sheet_lays_the_recording_out_a_frame_per_step(tmp_path, monkeypatch):
     reel.sheet(evidence.Footage(["rec.mp4@10:00:00"]), evidence.secs("10:00:10"), evidence.secs("10:00:22"), 2.0, out, cols=3)
     w, h = Image.open(out).size
     assert (w, h) == (3 * 320, 3 * (180 + 22))  # 7 frames, 10 to 22 s every 2 s: three rows of three
+
+
+def chapters(count):
+    return tuple(reel.Chapter(f"#{500 + n}", f"第 {n} 章要看的事", f"短名 {n}", "", ()) for n in range(1, count + 1))
+
+
+def test_the_opening_list_fills_the_whole_frame_with_no_strip(tmp_path, monkeypatch):
+    # the user, 2026-11-09: 「目錄感覺不需要上方那條」
+    encoded = []
+    monkeypatch.setattr(reel.Builder, "file", lambda self, suffix: tmp_path / f"{len(encoded)}{suffix}")
+    monkeypatch.setattr(reel.Builder, "segment", lambda self, picture, filters, bands, out: encoded.append((picture[-1], bands)))
+    builder = object.__new__(reel.Builder)  # no work folder or masks: nothing is encoded
+    builder.reel = reel.Reel("驗收總集", tmp_path, chapters(21))
+    builder.opening([10.0 + 30 * i for i in range(21)])
+    [(png, bands)] = encoded
+    assert Image.open(png).size == (1280, 776)
+    assert bands == []
+
+
+def test_the_chapter_marks_name_a_chapter_by_its_number_alone():
+    # the user, 2026-11-09: 「「第 xx/XX 章」不美觀，可能只顯示當前章節數字還比較好看」
+    marks = reel.chapter_marks(chapters(21), [10.0 + 30 * i for i in range(21)], [30.0] * 21)
+    assert marks[0] == (0.0, 10.0, "目錄")
+    assert marks[8] == (220.0, 250.0, "08 #508 第 8 章要看的事")
