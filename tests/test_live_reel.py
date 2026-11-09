@@ -1,8 +1,10 @@
 import json
 
+import numpy as np
 import pytest
+from PIL import Image
 
-from live import reel
+from live import evidence, reel
 
 GOOD = "第 1 層地圖：拖回一下就到位"  # 14 characters: shown at least 3 s
 
@@ -12,11 +14,12 @@ def write(path, doc):
     return path.name
 
 
-def manifest(tmp_path, steps, space=(1280, 720), cut=("10:00:00", "10:01:00"), **clip):
+def manifest(tmp_path, steps, space=(1280, 720), cut=("10:00:00", "10:01:00"), box_space="space", **clip):
     events = write(tmp_path / "ev.json", {"space": list(space), "pointer": "touch", "events": []})
     steps_file = write(tmp_path / "steps.json", steps)
+    grid = {} if box_space is None else {"box_space": list(space if box_space == "space" else box_space)}
     doc = {"title": "驗收總集", "chapters": [{"issue": "#490", "line": "地圖拖回一下就到位", "clips": [
-        {"video": "rec.mp4", "start": "09:59:00.000", "from": cut[0], "to": cut[1], "events": events, "steps": steps_file, **clip}]}]}
+        {"video": "rec.mp4", "start": "09:59:00.000", "from": cut[0], "to": cut[1], "events": events, "steps": steps_file, **grid, **clip}]}]}
     path = tmp_path / "reel.json"
     write(path, doc)
     return path
@@ -59,20 +62,34 @@ def test_a_caption_reading_like_a_log_line_warns(tmp_path):
     assert "MirrorEntryPaused" in report.warnings[0]
 
 
-def test_a_box_outside_the_clip_grid_is_refused(tmp_path):
-    report = reel.check(manifest(tmp_path, [step("10:00:01", "10:00:05", boxes=[[1200, 600, 120, 40, "開關"]])]))
+def test_boxes_with_no_declared_grid_are_refused(tmp_path):
+    """The #94 chapter of the first reel: boxes written in 1280x720 game pixels on a 1920x1080 clip landed at 2/3."""
+    report = reel.check(manifest(tmp_path, [step("10:00:01", "10:00:05", boxes=[[955, 405, 80, 125, "拉桿"]])], space=(1920, 1080),
+                                 box_space=None))
+    assert len(report.problems) == 1
+    assert "box_space" in report.problems[0]
+    assert reel.check(manifest(tmp_path, [step("10:00:01", "10:00:05")], box_space=None)).problems == []
+
+
+def test_a_box_outside_its_declared_grid_is_refused(tmp_path):
+    report = reel.check(manifest(tmp_path, [step("10:00:01", "10:00:05", boxes=[[1200, 600, 120, 40, "開關"]])], space=(1920, 1080),
+                                 box_space=(1280, 720)))
     assert len(report.problems) == 1
     assert "1280x720" in report.problems[0]
 
 
-def test_game_pixel_boxes_on_a_touch_log_grid_warn(tmp_path):
-    """The #94 chapter of the first reel: boxes in 1280x720 game pixels on a 1920x1080 events grid landed at 2/3."""
-    report = reel.check(manifest(tmp_path, [step("10:00:01", "10:00:05", boxes=[[955, 405, 80, 125, "拉桿"]])], space=(1920, 1080)))
-    assert report.problems == []
-    assert len(report.warnings) == 1
-    assert "1920x1080" in report.warnings[0]
-    report = reel.check(manifest(tmp_path, [step("10:00:01", "10:00:05", boxes=[[1430, 600, 120, 190, "拉桿"]])], space=(1920, 1080)))
-    assert report.warnings == []
+def test_game_pixel_boxes_are_drawn_on_the_touch_log_grid(tmp_path):
+    path = manifest(tmp_path, [step("10:00:01", "10:00:05", boxes=[[955, 405, 80, 125, "拉桿"]])], space=(1920, 1080), box_space=(1280, 720))
+    assert reel.check(path) == reel.Report([], [])
+    clip = reel.load(path).chapters[0].clips[0]
+    assert clip.annotation_steps()[0]["boxes"] == [[1432.5, 607.5, 120.0, 187.5, "拉桿"]]
+
+
+def test_an_unwritten_draft_is_refused(tmp_path):
+    draft = {"from": "10:00:01", "to": "10:00:05", "title": "", "note": "map: take up event"}
+    report = reel.check(manifest(tmp_path, [draft, step("10:00:05", "10:00:09")]))
+    assert len(report.problems) == 1
+    assert "draft" in report.problems[0]
 
 
 def test_a_speed_up_counts_against_the_caption_and_a_freeze_for_it(tmp_path):
@@ -123,9 +140,21 @@ def test_a_zero_speed_is_a_problem_not_a_crash(tmp_path):
 def test_build_refuses_and_lists_every_problem(tmp_path, capsys):
     path = manifest(tmp_path, [step("10:00:01", "10:00:02"), step("10:00:05", "10:00:09", "bot started")])
     with pytest.raises(SystemExit) as stop:
-        reel.main([str(path)])
+        reel.main(["build", str(path)])
     assert stop.value.code == 1
     out = capsys.readouterr()
     text = out.out + out.err
     assert "bot started" in text and "1.0 s" in text
     assert not (tmp_path / "reel.mp4").exists()
+
+
+def test_a_sheet_lays_the_recording_out_a_frame_per_step(tmp_path, monkeypatch):
+    def frames(footage, t0, t1, fps, gray=False):
+        n = int((t1 - t0) * fps) + 1
+        return [t0 + i / fps for i in range(n)], np.zeros((n, 720, 1280, 3), np.uint8)
+
+    monkeypatch.setattr(evidence, "frames", frames)
+    out = tmp_path / "sheet.png"
+    reel.sheet(evidence.Footage(["rec.mp4@10:00:00"]), evidence.secs("10:00:10"), evidence.secs("10:00:22"), 2.0, out, cols=3)
+    w, h = Image.open(out).size
+    assert (w, h) == (3 * 320, 3 * (180 + 22))  # 7 frames, 10 to 22 s every 2 s: three rows of three

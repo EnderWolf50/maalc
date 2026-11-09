@@ -3,7 +3,7 @@
     uv run --group probe python tools/live/evidence.py <command> ...
 
   events LOG [--from T --to T] -o events.json      taps and swipes, for evidence-annotate's --events
-  steps  LOG [--from T --to T] [--grep RE] [--hold S] -o steps.json   one caption per `[maalc]` line
+  steps  LOG [--from T --to T] [--grep RE] [--hold S] -o steps.json   caption drafts: the log lines in `note`
   frames --video V@START... -o DIR T [T ...]       one PNG per wall time, named HH-MM-SS.fff.png
   clip   --video V@START... --from T --to T -o OUT.mp4   a constant-frame-rate cut
   map    LOG --video V@START... --floor N -o DIR [--after T] [--fix FIX.json] [--clip]
@@ -14,7 +14,9 @@ LOG is the bot's stdout with a wall time on each line, as `tools/live/bot.py run
 (`HH:MM:SS.fff <line>`; MXU's `YYYY-MM-DD HH:MM:SS [stdout] <line>` reads too). `events` also takes a
 maafw.log (through `maafw_events.py`, in game pixels); from LOG it takes the controller's
 `x: X, y: Y, width: W, height: H` lines, in device pixels, and a burst under 0.25 s apart is one swipe.
-Every time T is wall clock, `HH:MM:SS[.fff]`, of the log's day. `--video PATH@START` is a recording and the
+`steps` writes one draft per moment: the `[maalc]` lines less than --hold s (default 3, the shortest a caption
+stays up) after the moment's first line go in its `note`, and its `title` stays empty for you to write in Chinese;
+`reel.py` refuses a draft left unwritten. Every time T is wall clock, `HH:MM:SS[.fff]`, of the log's day. `--video PATH@START` is a recording and the
 wall time of its first frame (screen-record's `started`); give one per piece of a run recorded in pieces.
 
 **map** stitches the floor from the frames before and after each `map: dragged the map N px` and boxes every
@@ -130,10 +132,19 @@ def touches(log, t0: float, t1: float) -> dict:
 
 
 def captions(log, t0: float, t1: float, grep: str = "", hold: float = 3.0) -> list[dict]:
-    """A step per `[maalc]` line in [t0, t1] matching grep, up to the next one or hold seconds."""
-    kept = [(t, x) for t, x in maalc(log) if t0 <= t <= t1 and re.search(grep, x)]
-    ends = [t for t, _ in kept[1:]] + [t1]
-    return [{"from": hms(t), "to": hms(min(end, t + hold, t1)), "title": x} for (t, x), end in zip(kept, ends)]
+    """Caption drafts for the `[maalc]` lines in [t0, t1] matching grep: lines less than hold s after a draft's first line
+    join it, and a draft lasts until hold s after its last line or the next draft. The lines go in `note`; `title`
+    stays empty, for a person to write."""
+    groups = []
+    for t, x in maalc(log):
+        if t0 <= t <= t1 and re.search(grep, x):
+            if groups and t - groups[-1][0][0] < hold:
+                groups[-1].append((t, x))
+            else:
+                groups.append([(t, x)])
+    starts = [g[0][0] for g in groups[1:]] + [t1]
+    return [{"from": hms(g[0][0]), "to": hms(min(nxt, g[-1][0] + hold, t1)), "title": "", "note": "\n".join(x for _, x in g)}
+            for g, nxt in zip(groups, starts)]
 
 
 # --- footage ---------------------------------------------------------------------------------------------

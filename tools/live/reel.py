@@ -1,14 +1,19 @@
 """The review reel: annotated clips of live tests strung together by chapter, one chapter per issue.
 
-    uv run --group probe python tools/live/reel.py REEL.json [--check]
+    uv run --group probe python tools/live/reel.py check REEL.json
+    uv run --group probe python tools/live/reel.py build REEL.json
+    uv run --group probe python tools/live/reel.py sheet --video V@START --from T --to T [--every S] -o OUT.png
 
 REEL.json, paths relative to its folder or absolute, times wall clock `HH:MM:SS[.fff]`:
 
     {"title": "...", "chapters": [{"issue": "#94", "line": "one line on what to watch", "short"?: "...", "note"?: "...",
       "clips": [{"video": "rec.mp4", "start": "<wall time of its first frame>", "from": T, "to": T,
-                 "events": "events.json", "steps": "steps.json",
+                 "events": "events.json", "steps": "steps.json", "box_space"?: [1280, 720],
                  "speed"?: [[T, T, 4]], "freeze"?: [[T, 2.0]]},
                 {"image": "gui.png", "caption": "...", "seconds"?: 4}]}]}
+
+`box_space` is the grid the steps' boxes and zoom are written in ([1920, 1080] for a touch log, [1280, 720] for
+game pixels); a clip with a box or a zoom must name it, and the boxes are drawn on the events' grid from it.
 
 A clip is rendered from the uncut recording with evidence-annotate (`evidence.py`'s `annotated_clip`, masks
 included) into `clips/` beside REEL.json, again only when one of its inputs, the masks or annotate.py changed. `speed` plays a stretch
@@ -18,11 +23,14 @@ the strip never hides game UI. It shows the chapter (number/total, issue, line) 
 list gives each chapter's start time; the MP4 carries a chapter mark per chapter. Writes reel.mp4,
 chapters.md and stills/NN.png (the reel at the middle of each caption) beside REEL.json.
 
-Before it builds, it checks every chapter against docs/agents/evidence-style.md ("Clips and stills in general",
-"Review reel") and refuses, listing each problem: a caption with no Chinese character, a caption on screen shorter
-than max(3 s, characters / 5), overlapping captions or speed stretches, a box outside its events' grid. It warns
-about a caption that reads like log text or a code name outside 「」, and about a 1920x1080 grid whose boxes all
-fit inside 1280x720 (they may be in game pixels). `--check` only checks.
+`check`, and `build` before it builds, check every chapter against docs/agents/evidence-style.md ("Clips and stills
+in general", "Review reel") and refuse, listing each problem: an unwritten draft (an empty title, as `evidence.py
+steps` writes it), a caption with no Chinese character, a caption on screen shorter than max(3 s, characters / 5),
+overlapping captions or speed stretches, boxes with no `box_space`, a box outside its `box_space`. They warn about
+a caption that reads like log text or a code name outside 「」.
+
+`sheet` lays out the frames of a recording from T to T, one every S seconds (default 2), each labelled with its wall
+time and masked, to find the moments before writing the steps.
 """
 from __future__ import annotations
 
@@ -129,6 +137,8 @@ class Step:
     end: float
     title: str
     boxes: tuple
+    zoom: tuple
+    note: str
 
 
 @dataclass(frozen=True)
@@ -140,6 +150,24 @@ class Clip:
     steps_file: Path
     space: tuple[int, int]
     steps: tuple[Step, ...]
+    raw_steps: tuple[dict, ...]  # as the steps file holds them
+    box_space: tuple[int, int] | None
+
+    def annotation_steps(self) -> list[dict]:
+        """The steps as evidence-annotate gets them: boxes and zoom moved from `box_space` onto the events' grid."""
+        if not self.box_space:
+            return [dict(s) for s in self.raw_steps]
+        sx, sy = self.space[0] / self.box_space[0], self.space[1] / self.box_space[1]
+        scale = lambda x, y, w, h: [x * sx, y * sy, w * sx, h * sy]  # noqa: E731
+        out = []
+        for s in self.raw_steps:
+            s = dict(s)
+            if s.get("boxes"):
+                s["boxes"] = [scale(*b[:4]) + list(b[4:]) for b in s["boxes"]]
+            if s.get("zoom"):
+                s["zoom"] = scale(*s["zoom"])
+            out.append(s)
+        return out
 
 
 @dataclass(frozen=True)
@@ -186,17 +214,19 @@ def load(path: Path) -> Reel:
                 continue
             events, steps_file = at(p["events"]), at(p["steps"])
             space = tuple(int(v) for v in read_json(events)["space"])
-            steps = tuple(Step(secs(s["from"]), secs(s["to"]), s["title"], tuple(tuple(b) for b in s.get("boxes", ())))
-                          for s in read_json(steps_file))
+            raw = tuple(read_json(steps_file))
+            steps = tuple(Step(secs(s["from"]), secs(s["to"]), s["title"], tuple(tuple(b) for b in s.get("boxes", ())),
+                               tuple(s.get("zoom") or ()), s.get("note", "")) for s in raw)
+            box_space = tuple(int(v) for v in p["box_space"]) if "box_space" in p else None
             timeline = Timeline(secs(p["from"]), secs(p["to"]), tuple((secs(a), secs(b), float(x)) for a, b, x in p.get("speed", ())),
                                 tuple((secs(t), float(s)) for t, s in p.get("freeze", ())))
-            clips.append(Clip(at(p["video"]), p["start"], timeline, events, steps_file, space, steps))
+            clips.append(Clip(at(p["video"]), p["start"], timeline, events, steps_file, space, steps, raw, box_space))
         chapters.append(Chapter(c["issue"], c["line"], c.get("short", c["line"]), c.get("note", ""), tuple(clips)))
     return Reel(doc.get("title", "驗收總集"), folder, tuple(chapters))
 
 
 def check_clip(clip: Clip, where: str, report: Report) -> None:
-    tl, (gw, gh) = clip.timeline, clip.space
+    tl = clip.timeline
     before = len(report.problems)
     for i, (a, b, x) in enumerate(sorted(tl.speed)):
         if not (tl.t0 <= a < b <= tl.t1) or x <= 0:
@@ -207,22 +237,26 @@ def check_clip(clip: Clip, where: str, report: Report) -> None:
         if not tl.t0 <= at <= tl.t1 or sec <= 0:
             report.problems.append(f"{where}: freeze at {hms(at)} for {sec:g} s is outside the cut {hms(tl.t0)}-{hms(tl.t1)}")
     timed = len(report.problems) == before  # a broken timeline gives no screen times
-    boxes = []
+    if not clip.box_space and any(s.boxes or s.zoom for s in clip.steps):
+        report.problems.append(f"{where}: has boxes but no box_space: name the grid they are written in, "
+                               f"[1920, 1080] for a touch log or [1280, 720] for game pixels")
     for i, s in enumerate(clip.steps, 1):
         name = f"{where}, step {i} {s.title!r}"
-        caption_text(s.title, name, report)
+        if s.title.strip():
+            caption_text(s.title, name, report)
+        else:
+            report.problems.append(f"{where}, step {i}: an unwritten draft (the log lines evidence.py steps put in its note: "
+                                   f"{s.note!r}); write the caption")
         if i > 1 and s.start < clip.steps[i - 2].end:
             report.problems.append(f"{name}: overlaps step {i - 1} (from {hms(s.start)} before its end {hms(clip.steps[i - 2].end)})")
         shown, need = (tl.screen(s.end) - tl.screen(s.start), min_seconds(s.title)) if timed else (math.inf, 0)
         if shown < need - 1e-6:
             report.problems.append(f"{name}: shown {shown:.1f} s, needs {need:.1f} s (3 s or a second per 5 characters)")
-        for x, y, w, h, *_ in s.boxes:
-            boxes.append((x, y, w, h))
-            if w <= 0 or h <= 0 or x < 0 or y < 0 or x + w > gw or y + h > gh:
-                report.problems.append(f"{name}: box {[x, y, w, h]} is outside the events grid {gw}x{gh}")
-    if (gw, gh) == (1920, 1080) and boxes and all(x + w <= W and y + h <= H for x, y, w, h in boxes):
-        report.warnings.append(f"{where}: every box fits inside 1280x720 on a 1920x1080 grid; they may be in game pixels "
-                               f"(scale by 1.5 to the touch log's grid)")
+        if clip.box_space:
+            gw, gh = clip.box_space
+            for x, y, w, h, *_ in s.boxes + ((s.zoom,) if s.zoom else ()):
+                if w <= 0 or h <= 0 or x < 0 or y < 0 or x + w > gw or y + h > gh:
+                    report.problems.append(f"{name}: box {[x, y, w, h]} is outside its box_space {gw}x{gh}")
 
 
 def check(path) -> Report:
@@ -368,14 +402,14 @@ class Builder:
         tl = clip.timeline
         masks = evidence.masks_path(SimpleNamespace(masks=None))
         files = [clip.video, evidence.ANNOTATE, *sorted(masks.parent.glob("*.png"))]
+        steps = clip.annotation_steps()
         key = hashlib.sha256(json.dumps([[str(f), f.stat().st_size, f.stat().st_mtime] for f in files] + [
             clip.first_frame, tl.t0, tl.t1, masks.read_text(encoding="utf-8"), clip.events.read_text(encoding="utf-8"),
-            clip.steps_file.read_text(encoding="utf-8")]).encode()).hexdigest()
+            steps], ensure_ascii=False).encode()).hexdigest()
         stamp = out.with_suffix(".key")
         if out.exists() and stamp.exists() and stamp.read_text() == key:
             return
         events = read_json(clip.events)
-        steps = read_json(clip.steps_file)
         footage = evidence.Footage([f"{clip.video}@{clip.first_frame}"])
         evidence.annotated_clip(footage, tl.t0, tl.t1, out, events, steps, SimpleNamespace(annotate=evidence.ANNOTATE, masks=None))
         stamp.write_text(key)
@@ -490,11 +524,39 @@ class Builder:
         (self.reel.folder / "chapters.md").write_text("\n".join(rows) + "\n", encoding="utf-8")
 
 
+def sheet(footage, t0: float, t1: float, every: float, out: Path, masks=None, cols: int = 6) -> None:
+    """The recording's frames from t0 to t1, one every `every` s, at a quarter size, each labelled with its wall time."""
+    times, frames = evidence.frames(footage, t0, t1, 1 / every)
+    w, h, label = W // 4, H // 4, 22
+    im = Image.new("RGB", (cols * w, math.ceil(len(times) / cols) * (h + label)), (0, 0, 0))
+    d = ImageDraw.Draw(im)
+    for i, (t, frame) in enumerate(zip(times, frames)):
+        shot = Image.fromarray(frame)
+        shot = evidence.apply_masks(shot, masks) if masks else shot
+        x, y = i % cols * w, i // cols * (h + label)
+        im.paste(shot.resize((w, h)), (x, y + label))
+        d.text((x + 4, y + 2), hms(t), font=font(15), fill=AMBER)
+    im.save(out)
+    print(f"{len(times)} frames -> {out}")
+
+
 def main(argv=None) -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("reel", type=Path)
-    ap.add_argument("--check", action="store_true", help="only check the chapters")
+    sub = ap.add_subparsers(dest="cmd", required=True)
+    for name in ("check", "build"):
+        sub.add_parser(name).add_argument("reel", type=Path)
+    p = sub.add_parser("sheet")
+    p.add_argument("--video", action="append", required=True, help="PATH@START, the wall time of its first frame")
+    p.add_argument("--from", dest="t0", required=True)
+    p.add_argument("--to", dest="t1", required=True)
+    p.add_argument("--every", type=float, default=2.0, help="seconds between frames")
+    p.add_argument("--cols", type=int, default=6)
+    p.add_argument("--masks", help="masks.json (default .local/evidence/masks.json)")
+    p.add_argument("-o", "--out", type=Path, required=True)
     a = ap.parse_args(argv)
+    if a.cmd == "sheet":
+        sheet(evidence.Footage(a.video), secs(a.t0), secs(a.t1), a.every, a.out, evidence.load_masks(evidence.masks_path(a)), a.cols)
+        return
     reel = load(a.reel)
     report = audit(reel)
     for w in report.warnings:
@@ -505,7 +567,7 @@ def main(argv=None) -> None:
         print(f"refused: {len(report.problems)} problem(s); the rules are in docs/agents/evidence-style.md")
         sys.exit(1)
     print(f"ok: {len(reel.chapters)} chapters pass the rules", flush=True)
-    if not a.check:
+    if a.cmd == "build":
         Builder(reel).build()
 
 

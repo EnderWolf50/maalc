@@ -60,13 +60,15 @@ def test_events_read_maafw_log_through_maafw_events(tmp_path):
     assert json.loads(out.read_text())["events"] == [{"t": "14:30:14.710", "kind": "tap", "x": 1108, "y": 494}]
 
 
-def test_steps_caption_each_maalc_line_until_the_next_or_hold(log, tmp_path):
-    steps = ev.captions(log, ev.secs("15:53:00"), ev.secs("15:53:10"), "map: (path|take)", hold=1.5)
+def test_steps_draft_a_caption_per_moment_with_the_log_in_its_note(log, tmp_path):
+    steps = ev.captions(log, ev.secs("15:52:50"), ev.secs("15:53:10"), "map: (column 1|path|take)")
     assert steps == [
-        {"from": "15:53:03.523", "to": "15:53:05.023", "title": "map: path up event > mid risky > up event > mid shop, score 22"},
-        {"from": "15:53:05.492", "to": "15:53:06.992", "title": "map: take up event"}]
-    ev.main(["steps", str(tmp_path / "run.log"), "--from", "15:53:00", "--to", "15:53:10", "--grep", "map: (path|take)",
-             "--hold", "1.5", "-o", str(tmp_path / "steps.json")])
+        {"from": "15:52:56.365", "to": "15:52:59.365", "title": "",
+         "note": "map: column 1: mid battle (1 onward), up event (2 onward)"},
+        {"from": "15:53:03.523", "to": "15:53:08.492", "title": "",
+         "note": "map: path up event > mid risky > up event > mid shop, score 22\nmap: take up event"}]
+    ev.main(["steps", str(tmp_path / "run.log"), "--from", "15:52:50", "--to", "15:53:10", "--grep", "map: (column 1|path|take)",
+             "-o", str(tmp_path / "steps.json")])
     assert json.loads((tmp_path / "steps.json").read_text(encoding="utf-8")) == steps
 
 
