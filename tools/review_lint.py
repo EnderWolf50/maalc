@@ -1,11 +1,15 @@
 """Checks on what a branch adds, for findings reviewers caught by hand (CODING_STANDARDS.md "Tests", GLOSSARY.md).
 
   python tools/review_lint.py <base>      # e.g. origin/main; looks at the diff from the merge base to the working tree
+                                          # and at the commits from the merge base to HEAD
 
 - A test added to tests/test_actions.py whose name starts with another feature file's name belongs in that file.
 - An added line of a Markdown, locale or i18n file uses a term GLOSSARY.md lists under `_Avoid_`.
   A line carrying `avoid-ok` is skipped (a doc that quotes the term to explain it).
 - A node, task or helper removed by the diff is still named somewhere in the tree.
+- A commit from the merge base to HEAD (merge commits left out) carries a GitHub closing keyword before an issue
+  number (`fix: #387`, `Fixes #12`, `closes owner/repo#5`): merged into main it closes the issue whatever the PR
+  body says (docs/agents/pr.md "Language").
 
 Exit code = number of problems. CI runs it on every pull request.
 """
@@ -23,12 +27,16 @@ def git(*args: str, check: bool = True) -> str:
     return subprocess.run(["git", *args], cwd=ROOT, capture_output=True, text=True, encoding="utf-8", check=check).stdout
 
 
+def merge_base(base: str) -> str:
+    return git("merge-base", base, "HEAD").strip()
+
+
 def diff_lines(base: str) -> tuple[dict[str, list[tuple[int, str]]], dict[str, list[str]]]:
     """(added, removed) lines per file of `git diff -U0 <merge base of base and HEAD>`; added ones carry their line number."""
     added: dict[str, list[tuple[int, str]]] = {}
     removed: dict[str, list[str]] = {}
     path, old, at = "", "", 0
-    for line in git("diff", "-U0", "--no-color", git("merge-base", base, "HEAD").strip()).splitlines():
+    for line in git("diff", "-U0", "--no-color", merge_base(base)).splitlines():
         if line.startswith("diff --git "):
             path, old = "", ""
         elif not path and line.startswith("--- a/"):
@@ -134,10 +142,32 @@ def stale_references(removed: dict[str, list[str]], added: dict[str, list[tuple[
     return problems
 
 
+# GitHub's closing keywords, any case, an optional colon, then #N or owner/repo#N:
+# https://docs.github.com/en/issues/tracking-your-work-with-issues/using-issues/linking-a-pull-request-to-an-issue
+CLOSING = re.compile(r"\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\b:?\s*((?:[\w.-]+/[\w.-]+)?#\d+)", re.I)
+
+
+def closing_keyword_hits(sha: str, message: str) -> list[str]:
+    problems = []
+    for line in message.splitlines():
+        for m in CLOSING.finditer(line):
+            problems.append(f"commit {sha}: `{line.strip()}` closes {m[1]} on merge; say Closes or Refs in the PR body"
+                            f" and reword the commit to `review({m[1]}): ...` or `Refs {m[1]}`")
+    return problems
+
+
+def commit_closing_hits(base: str) -> list[str]:
+    """Closing keywords in the messages of the branch's own commits, merge commits left out."""
+    log = git("log", "--no-merges", "--format=%h%x00%B%x1e", f"{merge_base(base)}..HEAD")
+    return [p for entry in log.split("\x1e") if "\x00" in entry
+            for p in closing_keyword_hits(*entry.strip("\n").split("\x00", 1))]
+
+
 def main(base: str) -> int:
     added, removed = diff_lines(base)
     glossary = (ROOT / "GLOSSARY.md").read_text(encoding="utf-8")
-    problems = [*misplaced_tests(added, feature_files()), *avoid_hits(glossary, added), *stale_references(removed, added)]
+    problems = [*misplaced_tests(added, feature_files()), *avoid_hits(glossary, added), *stale_references(removed, added),
+                *commit_closing_hits(base)]
     for p in problems:
         print(p)
     print(f"review_lint: {len(problems)} problem(s)")

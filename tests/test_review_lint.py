@@ -121,3 +121,45 @@ def test_diff_lines_reads_the_lines_of_a_deleted_file(tmp_path, monkeypatch):
     run("commit", "-qm", "delete")
     monkeypatch.setattr(review_lint, "ROOT", Path(tmp_path))
     assert review_lint.diff_lines("main")[1] == {"gone.py": ["GONE_LIMIT = 3"]}
+
+
+def test_a_closing_keyword_before_an_issue_number_is_a_hit():
+    for message in ["fix: #387 review: one cover default", "Fixes #12", "closes EnderWolf50/maalc#5", "CLOSED: #7",
+                    "feat: shop\n\nResolves #9"]:
+        assert review_lint.closing_keyword_hits("abc1234", message), message
+
+
+def test_refs_a_keyword_without_an_issue_and_a_merge_subject_are_not_hits():
+    for message in ["Refs #387", "fix(release): tag the build", "Merge pull request #601 from EnderWolf50/feat/x",
+                    "review(#387): quoted names", "prefix #3 is fine", "feat: floors 1-15 (#387)"]:
+        assert review_lint.closing_keyword_hits("abc1234", message) == [], message
+
+
+def test_a_hit_names_the_commit_the_line_and_the_fix():
+    hits = review_lint.closing_keyword_hits("142a2c2", "fix: #387 review: one cover default\n\nbody")
+    assert len(hits) == 1
+    assert hits[0].startswith("commit 142a2c2: `fix: #387 review: one cover default` closes #387 on merge")
+    assert "PR body" in hits[0] and "review(#387): ..." in hits[0] and "Refs #387" in hits[0]
+    other = review_lint.closing_keyword_hits("abc1234", "closes owner/repo#5")
+    assert len(other) == 1 and "closes owner/repo#5 on merge" in other[0] and "Refs owner/repo#5" in other[0]
+
+
+def test_commit_messages_skip_merge_commits_and_stop_at_the_merge_base(tmp_path, monkeypatch):
+    def run(*args):
+        subprocess.run(["git", "-C", str(tmp_path), "-c", "user.name=t", "-c", "user.email=t@example.test", *args], check=True,
+                       capture_output=True)
+    run("init", "-q", "-b", "main")
+    (tmp_path / "a.md").write_text("one\n")
+    run("add", ".")
+    run("commit", "-qm", "fix: #1 on main already")
+    run("checkout", "-qb", "side")
+    (tmp_path / "b.md").write_text("side\n")
+    run("add", ".")
+    run("commit", "-qm", "side work")
+    run("checkout", "-qb", "feat", "main")
+    (tmp_path / "a.md").write_text("two\n")
+    run("commit", "-qam", "fix: #387 review: names")
+    run("merge", "-q", "--no-ff", "side", "-m", "Merge branch side, fixes #2")
+    monkeypatch.setattr(review_lint, "ROOT", Path(tmp_path))
+    hits = review_lint.commit_closing_hits("main")
+    assert len(hits) == 1 and "`fix: #387 review: names` closes #387" in hits[0]
