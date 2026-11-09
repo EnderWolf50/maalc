@@ -18,7 +18,7 @@ game pixels); a clip with a box or a zoom must name it, and the boxes are drawn 
 A clip is rendered from the uncut recording with evidence-annotate (`evidence.py`'s `annotated_clip`, masks
 included) into `clips/` beside REEL.json, again only when one of its inputs, the masks or annotate.py changed. `speed` plays a stretch
 faster (4) or slower (0.5), `freeze` holds the frame at T for that many seconds; evidence-annotate's bottom-left
-corner marks each beside its clock ("快轉 4×", "慢放 0.5×", "停格"). The reel is 1280x776: a 56 px chapter strip above the 1280x720 picture, so
+corner marks each beside its clock ("快轉 4×", "慢放 0.5×", "定格"). The reel is 1280x776: a 56 px chapter strip above the 1280x720 picture, so
 the strip never hides game UI. It shows the chapter (its number, issue, line) at every moment after the opening
 list, which fills the whole frame and gives each chapter's start time; the MP4 carries a chapter mark per chapter. Writes reel.mp4,
 chapters.md and stills/NN.png (the reel at the middle of each caption) beside REEL.json.
@@ -146,7 +146,7 @@ class Timeline:
             b = max([b] + [h + fade for h in held if b - fade < h <= b])
             return mark(a, b, f"快轉 {x:g}×" if x > 1 else f"慢放 {x:g}×")
 
-        return {"blocks": [stretch(*s) for s in self.speed] + [mark(h - fade, h + fade, "停格") for h in held]}
+        return {"blocks": [stretch(*s) for s in self.speed] + [mark(h - fade, h + fade, "定格") for h in held]}
 
     def pieces(self) -> list[tuple]:
         """("play", a, b, factor) and ("hold", at, seconds) in wall order, covering [t0, t1]."""
@@ -565,7 +565,7 @@ class Builder:
                     continue
                 srcs.append(f"{p.video.name} {hms(p.timeline.t0)}–{hms(p.timeline.t1)}（{p.steps_file.name}）")
                 speeds += [f"{hms(a)}–{hms(b)} {x:g}×" for a, b, x in p.timeline.speed]
-                speeds += [f"{hms(at)} 停格 {sec:g} s" for at, sec in p.timeline.freeze]
+                speeds += [f"{hms(at)} 定格 {sec:g} s" for at, sec in p.timeline.freeze]
             rows.append(f"| {clock(t)} | {chapter_label(n)} | {c.issue} | {c.line} | {'<br>'.join(srcs)} | {'<br>'.join(speeds)} | {c.note} |")
         (self.reel.folder / "chapters.md").write_text("\n".join(rows) + "\n", encoding="utf-8")
 
