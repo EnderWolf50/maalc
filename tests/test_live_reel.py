@@ -180,13 +180,13 @@ def test_the_opening_list_fills_the_whole_frame_with_no_strip(tmp_path, monkeypa
     # the user, 2026-11-09: 「目錄感覺不需要上方那條」
     encoded = []
     monkeypatch.setattr(reel.Builder, "file", lambda self, suffix: tmp_path / f"{len(encoded)}{suffix}")
-    monkeypatch.setattr(reel.Builder, "segment", lambda self, picture, filters, bands, out: encoded.append((picture[-1], bands)))
+    monkeypatch.setattr(reel.Builder, "segment", lambda self, picture, filters, strip, out: encoded.append((picture[-1], strip)))
     builder = object.__new__(reel.Builder)  # no work folder or masks: nothing is encoded
     builder.reel = reel.Reel("驗收總集", tmp_path, chapters(21))
     builder.opening([10.0 + 30 * i for i in range(21)])
-    [(png, bands)] = encoded
+    [(png, strip)] = encoded
     assert Image.open(png).size == (1280, 776)
-    assert bands == []
+    assert strip is None
 
 
 def test_the_chapter_marks_name_a_chapter_by_its_number_alone():
@@ -216,3 +216,58 @@ def test_a_title_opening_with_before_or_after_warns_to_use_the_tag(tmp_path):
     report = reel.check(manifest(tmp_path, [step("10:00:01", "10:00:05", "改前：等了 1.5 秒才重拖")]))
     assert report.problems == []
     assert len(report.warnings) == 1 and "tag" in report.warnings[0]
+
+
+# The speed and freeze marks sit beside the clock in evidence-annotate's bottom-left corner, not on the strip
+# (the user, 2026-11-09: 「感覺倍速可以整合到左下角時間就好」).
+
+def test_the_marks_are_blocks_beside_the_corner_clock():
+    t0 = evidence.secs("10:00:00")
+    tl = reel.Timeline(t0, t0 + 10, speed=((t0 + 2, t0 + 4, 0.5), (t0 + 6, t0 + 10, 4.0)), freeze=((t0 + 3, 1.5),))
+    blocks = tl.corner_blocks()["blocks"]
+    shown = [(b["from"], b["to"], b["lines"][0][-1]["text"]) for b in blocks]
+    assert shown == [("10:00:02.000", "10:00:04.000", "慢放 0.5×"), ("10:00:06.000", "10:00:10.000", "快轉 4×"),
+                     ("10:00:02.648", "10:00:03.352", "停格")]  # centred on the held frame, shown fully there
+    assert all(b["at"] == "bottom-left" and b["beside"] and not b["read"] for b in blocks)
+
+
+def test_the_strip_carries_no_mark(tmp_path, monkeypatch):
+    path = manifest(tmp_path, [step("10:00:01", "10:00:05")], speed=[["10:00:01", "10:00:03", 0.5]], freeze=[["10:00:04", 1.0]])
+    r = reel.load(path)
+    encoded = []
+    monkeypatch.setattr(reel.Builder, "file", lambda self, suffix: tmp_path / f"{len(encoded)}{suffix}")
+    monkeypatch.setattr(reel.Builder, "segment", lambda self, picture, filters, strip, out: encoded.append(strip))
+    builder = object.__new__(reel.Builder)
+    builder.reel = r
+    builder.timed(r.chapters[0].clips[0], tmp_path / "clip.mp4", 1, r.chapters[0])
+    [strip] = encoded
+    assert strip.size == (1280, 56)  # the strip alone, over the whole clip: no mark of its own
+
+
+def alpha(block, t):
+    """evidence-annotate's opacity of a timed block at t (scripts/text.py: fading in and out over 0.35 s)."""
+    a, b = evidence.secs(block["from"]), evidence.secs(block["to"])
+    return max(0.0, min(1.0, (t - a) / 0.35, (b - t) / 0.35)) if a <= t <= b else None
+
+
+def test_a_freeze_mark_shows_fully_on_the_frame_it_holds():
+    t0 = evidence.secs("10:00:00")
+    for at in (t0 + 3.123, t0 + 10):  # between two frames; the cut's end, which holds its last frame
+        tl = reel.Timeline(t0, t0 + 10, freeze=((at, 1.0),))
+        [freeze] = tl.corner_blocks()["blocks"]
+        assert alpha(freeze, tl.held(at)) == 1.0
+
+
+def test_a_speed_mark_shows_fully_on_a_frame_held_at_its_edge():
+    t0 = evidence.secs("10:00:00")
+    for at in (t0 + 2.0, t0 + 2.1, t0 + 4.0):  # its first frame, inside its fade-in, its last
+        tl = reel.Timeline(t0, t0 + 10, speed=((t0 + 2, t0 + 4, 0.5),), freeze=((at, 1.0),))
+        slow, freeze = tl.corner_blocks()["blocks"]
+        assert alpha(slow, tl.held(at)) == 1.0 and alpha(freeze, tl.held(at)) == 1.0
+
+
+def test_the_strip_numbers_the_chapter_in_amber_text_not_on_a_pill():
+    # the user, 2026-11-09: 「左上不要做成標籤，顏色字就好」
+    im = reel.band(8, "#486/#513", "拖曳被吃掉")
+    assert im.getpixel((17, reel.BAND // 2)) == reel.BG  # where the pill began
+    assert any(im.getpixel((x, y)) == reel.AMBER for x in range(20, 60) for y in range(reel.BAND))

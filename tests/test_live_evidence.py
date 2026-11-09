@@ -480,3 +480,17 @@ def test_mask_blacks_out_boxes_where_the_template_matches(tmp_path):
     ev.main(["mask", "--masks", str(tmp_path / "masks.json"), str(shot)])
     px = np.asarray(Image.open(shot))
     assert px[600:620, 300:350].max() == 0 and px[0:10, 0:10].max() > 0
+
+
+def test_an_annotated_clip_hands_its_blocks_to_annotate(tmp_path, monkeypatch):
+    runs = []
+    monkeypatch.setattr(ev, "cut", lambda footage, t0, t1, out: None)
+    monkeypatch.setattr(ev, "local_dir", lambda *parts: tmp_path)
+    monkeypatch.setattr(ev.subprocess, "run", lambda cmd, check: runs.append(cmd))
+    (masks := tmp_path / "masks.json").write_text("{}")
+    a = type("A", (), {"annotate": "annotate.py", "masks": str(masks)})()
+    blocks = {"blocks": [{"from": "10:00:02", "to": "10:00:04", "lines": ["停格"]}]}
+    ev.annotated_clip(ev.Footage(["a.mp4@10:00:00"]), 1.0, 5.0, tmp_path / "c.mp4", {"space": [1280, 720], "events": []}, [], a, blocks)
+    [cmd] = runs
+    path = Path(cmd[cmd.index("--blocks") + 1])
+    assert json.loads(path.read_text(encoding="utf-8")) == blocks

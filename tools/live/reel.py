@@ -17,8 +17,8 @@ game pixels); a clip with a box or a zoom must name it, and the boxes are drawn 
 
 A clip is rendered from the uncut recording with evidence-annotate (`evidence.py`'s `annotated_clip`, masks
 included) into `clips/` beside REEL.json, again only when one of its inputs, the masks or annotate.py changed. `speed` plays a stretch
-faster (4) or slower (0.5), `freeze` holds the frame at T for that many seconds; the strip marks each
-("快轉 4×", "慢放 0.5×", "停格"). The reel is 1280x776: a 56 px chapter strip above the 1280x720 picture, so
+faster (4) or slower (0.5), `freeze` holds the frame at T for that many seconds; evidence-annotate's bottom-left
+corner marks each beside its clock ("快轉 4×", "慢放 0.5×", "停格"). The reel is 1280x776: a 56 px chapter strip above the 1280x720 picture, so
 the strip never hides game UI. It shows the chapter (its number, issue, line) at every moment after the opening
 list, which fills the whole frame and gives each chapter's start time; the MP4 carries a chapter mark per chapter. Writes reel.mp4,
 chapters.md and stills/NN.png (the reel at the middle of each caption) beside REEL.json.
@@ -61,6 +61,13 @@ BAND, FPS = 56, 30
 OPENING_S = 10.0  # the opening list is a table of contents to pause on; the chapter marks are for jumping
 FONTS = {False: evidence.FONTS, True: ["C:/Windows/Fonts/msjhbd.ttc", "/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc"]}
 AMBER, WHITE, DIM, BG = (255, 196, 64), (245, 245, 245), (190, 194, 204), (17, 19, 26)
+AMBER_HEX = "#ffc440"  # AMBER, as evidence-annotate's own accent (scripts/text.py ACCENT)
+CORNER_TEXT = "#e6e6e6e6"  # evidence-annotate's corner text (scripts/text.py CORNER), for the dot before a mark
+ANNOTATE_FADE_S = 0.35  # evidence-annotate fades a block in and out over this (scripts/text.py FADE_S)
+# A mark's padding, from evidence-annotate's scripts/text.py with style.corner left at its size, 13 px: a block's default
+# pad is (0.62, 0.27) x size, so 3.5 px keeps the corner's height; beside the corner (its 8 px right pad, SIDE_GAP 6 px)
+# 4 px of left pad makes the gap about as wide as the corner's own "  ·  ".
+MARK_PAD = [4, 3.5]
 ENC = ["-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-pix_fmt", "yuv420p", "-r", str(FPS), "-an"]
 
 @dataclass
@@ -118,6 +125,29 @@ class Timeline:
     def factor(self, t: float) -> float:
         return next((x for a, b, x in self.speed if a <= t < b), 1.0)
 
+    def held(self, at: float) -> float:
+        """The recording's time of the frame a freeze at `at` holds: the nearest frame, the cut's last at most."""
+        return self.t0 + min(round((at - self.t0) * FPS), round((self.t1 - self.t0) * FPS) - 1) / FPS
+
+    def corner_blocks(self) -> dict:
+        """evidence-annotate's blocks.json: each stretch not at normal speed marked beside the clock in its bottom-left
+        corner, on the recording's clock. A block fades in and out, and one fading takes its place in the row while
+        faint, so every held frame shows its marks fully: the freeze's own centred on it, a speed mark whose edge is
+        less than a fade away from it pushed out past it."""
+        fade = ANNOTATE_FADE_S + 0.002  # the times are written to the millisecond
+        held = [self.held(at) for at, _ in self.freeze]
+
+        def mark(a: float, b: float, text: str) -> dict:
+            return {"from": hms(a), "to": hms(b), "at": "bottom-left", "beside": True, "read": False, "sep": "  ", "pad": MARK_PAD,
+                    "lines": [[{"text": "·", "color": CORNER_TEXT}, {"text": text, "color": AMBER_HEX}]]}
+
+        def stretch(a: float, b: float, x: float) -> dict:
+            a = min([a] + [h - fade for h in held if a <= h < a + fade])
+            b = max([b] + [h + fade for h in held if b - fade < h <= b])
+            return mark(a, b, f"快轉 {x:g}×" if x > 1 else f"慢放 {x:g}×")
+
+        return {"blocks": [stretch(*s) for s in self.speed] + [mark(h - fade, h + fade, "停格") for h in held]}
+
     def pieces(self) -> list[tuple]:
         """("play", a, b, factor) and ("hold", at, seconds) in wall order, covering [t0, t1]."""
         cuts = sorted({self.t0, self.t1, *(v for a, b, _ in self.speed for v in (a, b)), *(at for at, _ in self.freeze)})
@@ -128,12 +158,6 @@ class Timeline:
             if q is not None:
                 out.append(("play", p, q, self.factor(p)))
         return out
-
-    def marks(self) -> list[tuple[float, float, str]]:
-        """(from, to, text) on the played clip's clock for each stretch not at normal speed."""
-        out = [(self.screen(a), self.screen(b), f"快轉 {x:g}×" if x > 1 else f"慢放 {x:g}×") for a, b, x in self.speed]
-        out += [(self.screen(at), self.screen(at) + sec, "停格") for at, sec in self.freeze]
-        return sorted(out)
 
 
 @dataclass(frozen=True)
@@ -332,27 +356,15 @@ def fit(d, text: str, f, width: float) -> str:
     return text + "…"
 
 
-def pill(d, x: float, cy: int, text: str, f) -> float:
-    """`text` dark on an amber pill from x; returns where the pill ends."""
-    tw = d.textlength(text, font=f)
-    d.rounded_rectangle([x, cy - 17, x + tw + 32, cy + 17], radius=17, fill=AMBER)
-    d.text((x + 16 + tw / 2, cy), text, font=f, fill=BG, anchor="mm")
-    return x + tw + 32
-
-
-def band(n: int, issue: str, line: str, mark: str = "") -> Image.Image:
-    """The chapter strip: the chapter's number on a pill, the issue, the line; a speed or freeze mark at the right."""
+def band(n: int, issue: str, line: str) -> Image.Image:
+    """The chapter strip: the chapter's number in amber, the issue, the line."""
     im = Image.new("RGB", (W, BAND), BG)
     d = ImageDraw.Draw(im)
-    cy = BAND // 2
-    x = pill(d, 16, cy, chapter_label(n), font(24, True)) + 18
-    for text, f, colour in ((issue, font(24, True), WHITE), (line, font(22), DIM)):
-        text = fit(d, text, f, W - 200 - x)  # the right 200 px stay free for the mark
+    x, cy = 20, BAND // 2
+    for text, f, colour in ((chapter_label(n), font(26, True), AMBER), (issue, font(24, True), WHITE), (line, font(22), DIM)):
+        text = fit(d, text, f, W - 20 - x)
         d.text((x, cy), text, font=f, fill=colour, anchor="lm")
         x += d.textlength(text, font=f) + 22
-    if mark:
-        f = font(22, True)
-        pill(d, W - 48 - d.textlength(mark, font=f), cy, mark, f)
     d.line([(0, BAND - 1), (W, BAND - 1)], fill=(60, 64, 76))
     return im
 
@@ -421,28 +433,24 @@ class Builder:
         self.n += 1
         return self.work / f"{self.n:03d}{suffix}"
 
-    def segment(self, picture: list, filters: str, bands: list[tuple[Image.Image, float, float]], out: Path) -> Path:
+    def segment(self, picture: list, filters: str, strip: Image.Image | None, out: Path) -> Path:
         """Encode `picture` (ffmpeg input args, 1280x720 or the whole 1280x776 after `filters`) at the bottom of the
-        frame; each band shows from-to (s) over the top."""
+        frame, the strip, if any, over the top."""
         inputs, graph, last = list(picture), [f"[0:v]{filters},pad={W}:{H + BAND}:0:oh-ih[v0]"], "v0"
-        for i, (im, a, b) in enumerate(bands, 1):
+        if strip:
             png = self.file(".png")
-            im.save(png)
+            strip.save(png)
             inputs += ["-i", png]
-            when = f":enable='between(t,{a:.3f},{b:.3f})'" if b < math.inf else ""
-            graph.append(f"[{last}][{i}:v]overlay=0:0{when}[v{i}]")
-            last = f"v{i}"
+            graph.append("[v0][1:v]overlay=0:0[v1]")
+            last = "v1"
         run(["ffmpeg", "-y", "-v", "error", *inputs, "-filter_complex", ";".join(graph), "-map", f"[{last}]", *ENC, out])
         return out
-
-    def strip(self, n: int, c: Chapter, mark: str = "") -> Image.Image:
-        return band(n, c.issue, c.line, mark)
 
     def picture(self, im: Image.Image, seconds: float, strip: Image.Image | None) -> Path:
         png = self.file(".png")
         im.save(png)
         return self.segment(["-loop", "1", "-framerate", str(FPS), "-t", f"{seconds:.3f}", "-i", png], "setsar=1,format=yuv420p",
-                            [(strip, 0, math.inf)] if strip else [], self.file(".mp4"))
+                            strip, self.file(".mp4"))
 
     def render(self, clip: Clip, out: Path) -> None:
         """Annotate the cut from the uncut recording, unless the clip, its inputs, the masks and annotate.py are what
@@ -450,20 +458,21 @@ class Builder:
         tl = clip.timeline
         masks = evidence.masks_path(SimpleNamespace(masks=None))
         files = [clip.video, evidence.ANNOTATE, *sorted(masks.parent.glob("*.png"))]
-        steps = clip.annotation_steps()
+        steps, blocks = clip.annotation_steps(), tl.corner_blocks()
         key = hashlib.sha256(json.dumps([[str(f), f.stat().st_size, f.stat().st_mtime] for f in files] + [
             clip.first_frame, tl.t0, tl.t1, masks.read_text(encoding="utf-8"), clip.events.read_text(encoding="utf-8"),
-            steps], ensure_ascii=False).encode()).hexdigest()
+            steps, blocks], ensure_ascii=False).encode()).hexdigest()
         stamp = out.with_suffix(".key")
         if out.exists() and stamp.exists() and stamp.read_text() == key:
             return
         events = read_json(clip.events)
         footage = evidence.Footage([f"{clip.video}@{clip.first_frame}"])
-        evidence.annotated_clip(footage, tl.t0, tl.t1, out, events, steps, SimpleNamespace(annotate=evidence.ANNOTATE, masks=None))
+        evidence.annotated_clip(footage, tl.t0, tl.t1, out, events, steps, SimpleNamespace(annotate=evidence.ANNOTATE, masks=None),
+                                blocks)
         stamp.write_text(key)
 
     def timed(self, clip: Clip, src: Path, n: int, c: Chapter) -> Path:
-        """The annotated clip played by its timeline, under the strip with its marks."""
+        """The annotated clip played by its timeline, under the strip."""
         tl, parts, graph = clip.timeline, [], []
         pieces = tl.pieces()
         for i, p in enumerate(pieces):
@@ -472,22 +481,22 @@ class Builder:
                 graph.append(f"[s{i}]trim=start={a - tl.t0:.3f}:end={b - tl.t0:.3f},setpts=(PTS-STARTPTS)/{x:g}[p{i}]")
             else:
                 _, at, sec = p
-                k = min(round((at - tl.t0) * FPS), round((tl.t1 - tl.t0) * FPS) - 1)
+                k = round((tl.held(at) - tl.t0) * FPS)
                 graph.append(f"[s{i}]trim=start_frame={k}:end_frame={k + 1},setpts=PTS-STARTPTS,"
                              f"tpad=stop_mode=clone:stop_duration={sec:.3f}[p{i}]")
             parts.append(f"[p{i}]")
         split = f"split={len(pieces)}" + "".join(f"[s{i}]" for i in range(len(pieces)))
         filters = (f"{split};" + ";".join(graph) + f";{''.join(parts)}concat=n={len(pieces)}:v=1:a=0,fps={FPS},"
                    f"scale={W}:{H},setsar=1,format=yuv420p")
-        bands = [(self.strip(n, c), 0, math.inf)] + [(self.strip(n, c, text), a, b) for a, b, text in tl.marks()]
-        return self.segment(["-i", src], filters, bands, self.file(".mp4"))
+        return self.segment(["-i", src], filters, band(n, c.issue, c.line), self.file(".mp4"))
 
     def chapter(self, n: int, c: Chapter) -> list[Path]:
         card = [(chapter_label(n), 44, True, AMBER), (c.issue, 60, True, WHITE), (c.line, 40, False, WHITE)]
-        segs = [self.picture(still_frame(card), max(3.0, min_seconds(c.line)), self.strip(n, c))]
+        strip = band(n, c.issue, c.line)
+        segs = [self.picture(still_frame(card), max(3.0, min_seconds(c.line)), strip)]
         for k, p in enumerate(c.clips, 1):
             if isinstance(p, Still):
-                segs.append(self.picture(still_frame([(p.caption, 30, False, WHITE)], p.image, self.masks), p.seconds, self.strip(n, c)))
+                segs.append(self.picture(still_frame([(p.caption, 30, False, WHITE)], p.image, self.masks), p.seconds, strip))
             else:
                 out = self.clips / f"{n:02d}-{k}.mp4"
                 self.render(p, out)

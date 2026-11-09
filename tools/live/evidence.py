@@ -193,17 +193,20 @@ def cut(footage: Footage, t0: float, t1: float, out) -> None:
                     "-c:v", "libx264", "-crf", "20", "-pix_fmt", "yuv420p", str(out)], check=True)
 
 
-def annotated_clip(footage: Footage, t0: float, t1: float, out: Path, events: dict, steps: list, a) -> None:
-    """Cut [t0, t1] and burn events, steps and masks into it with evidence-annotate."""
+def annotated_clip(footage: Footage, t0: float, t1: float, out: Path, events: dict, steps: list, a, blocks: dict | None = None) -> None:
+    """Cut [t0, t1] and burn events, steps, masks and any blocks (evidence-annotate's blocks.json) into it with evidence-annotate."""
     stem = out.with_suffix("")
-    files = {k: Path(f"{stem}-{k}.json") for k in ("events", "steps")}
+    files = {k: Path(f"{stem}-{k}.json") for k in ("events", "steps", "blocks")}
     files["events"].write_text(json.dumps(events, indent=1), encoding="utf-8")
     files["steps"].write_text(json.dumps(steps, ensure_ascii=False, indent=1), encoding="utf-8")
+    if blocks:
+        files["blocks"].write_text(json.dumps(blocks, ensure_ascii=False, indent=1), encoding="utf-8")
     raw = local_dir("scratch") / f"cut-{os.getpid()}-{out.stem}.mp4"  # unmasked: never beside out, which may be shared
     try:
         cut(footage, t0, t1, raw)
         subprocess.run(["uv", "run", str(a.annotate), str(raw), "-o", str(out), "--start", hms(t0), "--events", str(files["events"]),
-                        "--steps", str(files["steps"]), "--masks", str(masks_path(a))], check=True)
+                        "--steps", str(files["steps"]), "--masks", str(masks_path(a)),
+                        *(["--blocks", str(files["blocks"])] if blocks else [])], check=True)
     finally:
         raw.unlink(missing_ok=True)
 
