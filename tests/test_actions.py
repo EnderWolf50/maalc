@@ -16,6 +16,7 @@ from PIL import Image
 from maa.define import Rect
 
 import actions
+import gifts
 import recovery
 from settings import gift_tables
 from test_settings import DEFAULT_SKILLS
@@ -1212,8 +1213,8 @@ def test_a_team_without_white_gossypium_does_not_buy_it(context, monkeypatch):
     assert [t for t in tapped if t[1] == 268] == [(775, 268)]
 
 
-def gift_page(context, monkeypatch, names):
-    """A gift choice page with a Bleed card per name, Select 0/1."""
+def gift_page(context, monkeypatch, names, slots=1):
+    """A gift choice page with a Bleed card per name, Select 0/`slots`."""
     taps = []
     monkeypatch.setattr(actions, "tap", lambda context, x, y, wait=1.0: taps.append((x, y)))
 
@@ -1225,7 +1226,7 @@ def gift_page(context, monkeypatch, names):
         picked = any(y == 300 for _, y in taps)
         selected = actions.GIFT_SELECT in taps
         if roi == actions.GIFT_COUNT:
-            return [(f"Select {int(picked)}/1", (1080, 565, 100, 30))]
+            return [(f"Select {min(slots, sum(y == 300 for _, y in taps))}/{slots}", (1080, 565, 100, 30))]
         if roi == actions.REFUSE_GIFT and not (selected and picked):
             return [("Refuse Gift", (900, 570, 100, 25))]
         return []
@@ -1238,6 +1239,58 @@ def test_a_team_without_white_gossypium_picks_another_gift(context, monkeypatch)
     taps = gift_page(context, monkeypatch, [GOSSYPIUM, "Wound Clerid"])
     actions.PickGift().run(context, None)
     assert [t for t in taps if t[1] == 300] == [(536, 300)]  # the second card only
+
+
+def picked(taps):
+    return [x for x, y in taps if y == 300]
+
+
+def test_a_wanted_gift_is_taken_over_a_main_keyword_card(context, monkeypatch):
+    # #419: a normal page, no trials: Rusted Muzzle wanted (6) over Wound Clerid (main, 3), though Clerid is leftmost
+    taps = gift_page(context, monkeypatch, ["Wound Clerid", "Rusted Muzzle"])
+    actions.RUN["team"]["list"] = wants(9089)
+    actions.PickGift().run(context, None)
+    assert picked(taps) == [536]
+
+
+def test_a_page_without_wants_takes_the_leftmost_of_equal_cards(context, monkeypatch):
+    taps = gift_page(context, monkeypatch, ["Wound Clerid", "Rusted Muzzle"])
+    actions.RUN["team"]["list"] = wants()
+    actions.PickGift().run(context, None)
+    assert picked(taps) == [236]
+
+
+def test_two_want_cards_on_a_page_that_takes_two_are_both_taken(context, monkeypatch):
+    # #416 story 9: Select 0/2 with the main card leftmost
+    taps = gift_page(context, monkeypatch, ["Wound Clerid", "Rusted Muzzle", "Gift"], slots=2)
+    actions.RUN["team"]["list"] = wants(9089, 9764)
+    actions.PickGift().run(context, None)
+    assert picked(taps) == [536, 836]
+
+
+def test_a_pack_exclusive_material_is_taken_over_a_plain_want(context, monkeypatch):
+    # #419: Oil-gunked Spanner (pack 1102's own pool, a material of the Violin the default list makes) 9 over Gift (6)
+    taps = gift_page(context, monkeypatch, ["Gift", "Oil-gunked Spanner"])
+    actions.RUN["team"]["list"] = gifts.default_list()
+    actions.PickGift().run(context, None)
+    assert picked(taps) == [536]
+
+
+def test_a_material_of_a_fusion_already_held_scores_as_a_main_card(context, monkeypatch):
+    # #419: the Violin (9249) held, the Spanner is a main card like Wound Clerid (leftmost), not a 9
+    taps = gift_page(context, monkeypatch, ["Wound Clerid", "Oil-gunked Spanner"])
+    actions.RUN["team"]["list"] = gifts.default_list()
+    actions.RUN["shop"] = {"owned": [9249]}
+    actions.PickGift().run(context, None)
+    assert picked(taps) == [236]
+
+
+def test_a_wanted_gift_the_team_avoids_is_still_taken_last(context, monkeypatch):
+    # #90: White Gossypium is on the list as a want; with the team not holding it, the other card goes first
+    taps = gift_page(context, monkeypatch, [GOSSYPIUM, "Rusted Muzzle"])
+    actions.RUN["team"]["list"] = wants(9020)
+    actions.PickGift().run(context, None)
+    assert picked(taps) == [536]
 
 
 def test_a_team_without_white_gossypium_takes_it_when_it_is_the_only_card(context, monkeypatch):

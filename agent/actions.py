@@ -3966,8 +3966,9 @@ def gift_cards(context, image):
 class PickGift(CustomAction):
     """Gift choice after a fight, an event or a boss: best cards until Select n/m is full, then Select (spec 03 section 12).
 
-    Cards are main keyword > other > owned; when Mounting Trials hang under them (after a boss), each scores gift (with
-    its tier) - (trial + level x Enemy Level Up N), the trial told from the pool of the floor just cleared
+    Each card scores by its category (rewards.gift_score): pack-want 9 > want 6 > material 5.5 > main keyword 3 > other 2 >
+    owned 0 (#416). When Mounting Trials hang under them (after a boss), each scores gift (main and other with its tier) -
+    (trial + level x Enemy Level Up N), the trial told from the pool of the floor just cleared
     (data/trials.yaml, #381). Refuse Gift is never pressed: it hands out random trials.
     A gift the team avoids (#90) comes last: taken only when nothing else fills the count.
     """

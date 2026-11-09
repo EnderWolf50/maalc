@@ -13,7 +13,7 @@ from ocrtext import compact, has, normalize
 from run_start import match_pack
 
 ODDS = ("very low", "low", "normal", "high", "very high")
-GIFT_SCORE = {"main": 3, "other": 2, "owned": 0}
+GIFT_SCORE = {"pack-want": 9, "want": 6, "material": 5.5, "main": 3, "other": 2, "owned": 0}  # by category (#416)
 TIER_STEP = 0.5  # a main or other gift's score per tier above I (#381)
 UNREAD_LEVELS = 2  # an Enemy Level Up badge that does not read counts as +2, the most seen live (#381)
 KEYWORDS = ("Burn", "Bleed", "Tremor", "Rupture", "Sinking", "Poise", "Charge", "Slash", "Pierce", "Blunt", "Keywordless")
@@ -292,9 +292,10 @@ def burden(score, levels, model):
     return score + model["level"] * (UNREAD_LEVELS if levels is None else levels)
 
 
-def gift_score(kind, tier):
-    """A gift card's worth: main 3, other 2, owned 0; main and other TIER_STEP more per tier above I (unread: I)."""
-    return GIFT_SCORE.get(kind, 0) + (TIER_STEP * (tier - 1) if tier and kind in ("main", "other") else 0)
+def gift_score(category, tier):
+    """A gift card's worth by its category (spec 03 section 12): pack-want 9, want 6, material 5.5, main 3, other 2, owned 0,
+    avoid 0 (ranked last anyway); main and other TIER_STEP more per tier above I (unread: I), the want classes never."""
+    return GIFT_SCORE.get(category, 0) + (TIER_STEP * (tier - 1) if tier and category in ("main", "other") else 0)
 
 
 ROMAN = ("I", "II", "III", "IV", "V")
@@ -304,7 +305,8 @@ TITLE_ROW = 8  # px: boxes whose tops are this near the topmost line's are one t
 class Card(NamedTuple):
     """One gift card of the choice page, what the pick and its log need (#418).
 
-    kind: its category, for the score (main, other, owned, avoid; the want categories come before them, #416); tier: from
+    kind: main, other, owned or avoid, the page's own reading; category: what the card scores as, kind or the want class
+    (pack-want, want, material, #416), None meaning kind; tier: from
     the numeral over the icon (boss page only, else None); burden: its trial's cost in pt, None without trials; label: the
     gift's name, or the title as read when no gift matches; gift_id: None then; trial: the log's words for its trial.
     """
@@ -314,7 +316,7 @@ class Card(NamedTuple):
     label: str
     gift_id: int | None
     trial: str | None
-    category: str | None = None  # what the log shows: kind, or the want class (#416) kind scores as until #419
+    category: str | None = None
 
 
 def category(kind, want):
@@ -343,9 +345,9 @@ def card_gift(lines, ids):
 
 def card_line(card):
     """A card for the gifts: log: `<name>/<kind> gift <score>[ tier N][ trial <trial>] total <gift - trial>`."""
-    gift = gift_score(card.kind, card.tier)
-    tier = f" tier {ROMAN[card.tier - 1]}" if card.tier else ""
     shown = card.category or card.kind
+    gift = gift_score(shown, card.tier)
+    tier = f" tier {ROMAN[card.tier - 1]}" if card.tier else ""
     if card.burden is None:
         return f"{card.label}/{shown} gift {gift:g}{tier} total {gift:g}"
     return f"{card.label}/{shown} gift {gift:g}{tier} trial {card.trial} total {gift - card.burden:g}"
@@ -354,14 +356,15 @@ def card_line(card):
 def rank_gifts(cards):
     """Card indexes best first (spec 03 section 12).
 
-    cards are Cards, or (kind, tier, burden or None); score = gift_score - burden, ties to the lighter burden, then the leftmost.
+    cards are Cards, or (kind, tier, burden or None); score = gift_score(category) - burden, ties to the lighter burden, then the leftmost.
     Without trials (burden None) the gift score alone. An avoided gift comes after every other card: taken only to fill
     the count, rather than a random trial (#90).
     """
 
     def key(i):
         kind, tier, cost = cards[i][:3]
-        return (kind == "avoid", -(gift_score(kind, tier) - (cost or 0)), cost or 0, i)
+        shown = (cards[i].category if isinstance(cards[i], Card) else None) or kind
+        return (kind == "avoid", -(gift_score(shown, tier) - (cost or 0)), cost or 0, i)
 
     return sorted(range(len(cards)), key=key)
 
