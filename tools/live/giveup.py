@@ -197,7 +197,10 @@ def give_up(look, tap, shot, key, timeout: float = 60, clock=time.monotonic, sle
             for i, xy in enumerate(step.taps):
                 if i:
                     sleep(TAP_GAP)
-                key(xy.code) if isinstance(xy, Key) else tap(*xy)
+                if isinstance(xy, Key):
+                    key(xy.code)
+                else:
+                    tap(*xy)
             say(f"{name}: tap {' then '.join(map(str, step.taps))}")
             gave_up = gave_up or name in ("ExplorationReward", "GiveUpDialog")
         sleep(step.wait)

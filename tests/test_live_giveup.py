@@ -73,6 +73,7 @@ def test_the_taps_are_the_bots_own():
 
     nodes = load_nodes()
     assert (gu.MAP_GEAR, gu.FORFEIT, gu.FORFEIT_CONFIRM) == (actions.GEAR, actions.FORFEIT, actions.FORFEIT_CONFIRM)
+    assert gu.BACK == gu.Key(actions.BACK_KEY)
     assert (gu.FORFEIT_DIALOG, gu.DIALOG_TEXT) == (actions.FORFEIT_DIALOG, actions.DIALOG_TEXT)
     assert (gu.GIVE_UP_REWARDS, gu.DIALOG_CANCEL, gu.DIALOG_CONFIRM) == (actions.GIVE_UP, actions.DIALOG_CANCEL, actions.DIALOG_CONFIRM)
     assert (gu.ACCEPT_RESULTS, gu.WIPE_CONFIRM, gu.FORMATION_BACK) == (actions.DEFEAT_OPTIONS["forfeit"], actions.DEFEAT_CONFIRM,
@@ -152,11 +153,6 @@ def test_an_open_node_panel_is_closed_with_back_before_the_gear(named):
     assert game.run() == 0
     assert game.taps[:3] == [gu.BACK, gu.MAP_GEAR, gu.FORFEIT] and game.shots[:2] == ["MapNodePanel", "MirrorMap"]
 
-
-def test_back_is_the_bots_back_key():
-    import actions
-
-    assert gu.BACK == gu.Key(actions.BACK_KEY)
 
 
 def test_the_give_up_dialog_is_confirmed_again_while_it_stays():
