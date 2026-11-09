@@ -140,6 +140,8 @@ def test_a_hit_names_the_commit_the_line_and_the_fix():
     assert len(hits) == 1
     assert hits[0].startswith("commit 142a2c2: `fix: #387 review: one cover default` closes #387 on merge")
     assert "PR body" in hits[0] and "review(#387): ..." in hits[0] and "Refs #387" in hits[0]
+    other = review_lint.closing_keyword_hits("abc1234", "closes owner/repo#5")
+    assert len(other) == 1 and "closes owner/repo#5 on merge" in other[0] and "Refs owner/repo#5" in other[0]
 
 
 def test_commit_messages_skip_merge_commits_and_stop_at_the_merge_base(tmp_path, monkeypatch):
@@ -159,5 +161,5 @@ def test_commit_messages_skip_merge_commits_and_stop_at_the_merge_base(tmp_path,
     run("commit", "-qam", "fix: #387 review: names")
     run("merge", "-q", "--no-ff", "side", "-m", "Merge branch side, fixes #2")
     monkeypatch.setattr(review_lint, "ROOT", Path(tmp_path))
-    hits = review_lint.closing_keywords("main")
+    hits = review_lint.commit_closing_hits("main")
     assert len(hits) == 1 and "`fix: #387 review: names` closes #387" in hits[0]

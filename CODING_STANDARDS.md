@@ -1,6 +1,6 @@
 # Coding standards
 
-Judgement rules for review; the machine-checkable ones live in ruff (`E9`, `F`), the tests (`tests/test_review_rules.py`), `tools/review_lint.py` (CI job `review-lint`: a test in the wrong file, a `GLOSSARY.md` `_Avoid_` term, a removed name still in use) and `.claude/hooks/public-text-guard.py` (the PR body's test line).
+Judgement rules for review; the machine-checkable ones live in ruff (`E9`, `F`), the tests (`tests/test_review_rules.py`), `tools/review_lint.py` (CI job `review-lint`: a test in the wrong file, a `GLOSSARY.md` `_Avoid_` term, a removed name still in use, a closing keyword in a commit message) and `.claude/hooks/public-text-guard.py` (the PR body's test line).
 
 ## Recognition
 
