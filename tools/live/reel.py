@@ -25,9 +25,11 @@ chapters.md and stills/NN.png (the reel at the middle of each caption) beside RE
 
 `check`, and `build` before it builds, check every chapter against docs/agents/evidence-style.md ("Clips and stills
 in general", "Review reel") and refuse, listing each problem: an unwritten draft (an empty title, as `evidence.py
-steps` writes it), a caption with no Chinese character, a caption on screen shorter than max(3 s, characters / 5),
+steps` writes it), a caption or a step `tag` with no Chinese character, a caption on screen shorter than
+max(3 s, characters / 5) with the tag's characters counted,
 overlapping captions or speed stretches, boxes with no `box_space`, a box outside its `box_space`. They warn about
-a caption that reads like log text or a code name outside 「」.
+a caption that reads like log text or a code name outside 「」, and about a title that opens with 改前： or 改後：,
+which goes in the step's `tag` instead (evidence-annotate shows the tag in place of the step number).
 
 `sheet` lays out the frames of a recording from T to T, one every S seconds (default 2), each labelled with its wall
 time and masked, to find the moments before writing the steps.
@@ -78,6 +80,9 @@ CODE = re.compile(r"[A-Za-z][A-Za-z0-9]*_[A-Za-z0-9_]+"  # snake_case
 def min_seconds(text: str) -> float:
     """How long a caption stays up at least: 3 s, or a second per five characters (spaces not counted)."""
     return max(3.0, len(re.sub(r"\s", "", text)) / 5)
+
+
+SIDE = re.compile(r"^\s*(改前|改後)\s*[：:]")  # a before/after side written into the title
 
 
 def caption_text(text: str, where: str, report: Report) -> None:
@@ -139,6 +144,7 @@ class Step:
     boxes: tuple
     zoom: tuple
     note: str
+    tag: str = ""  # evidence-annotate shows it in place of the step number: 改前, 改後
 
 
 @dataclass(frozen=True)
@@ -216,7 +222,7 @@ def load(path: Path) -> Reel:
             space = tuple(int(v) for v in read_json(events)["space"])
             raw = tuple(read_json(steps_file))
             steps = tuple(Step(secs(s["from"]), secs(s["to"]), s["title"], tuple(tuple(b) for b in s.get("boxes", ())),
-                               tuple(s.get("zoom") or ()), s.get("note", "")) for s in raw)
+                               tuple(s.get("zoom") or ()), s.get("note", ""), s.get("tag", "")) for s in raw)
             box_space = tuple(p["box_space"]) if isinstance(p.get("box_space"), list) else p.get("box_space")
             timeline = Timeline(secs(p["from"]), secs(p["to"]), tuple((secs(a), secs(b), float(x)) for a, b, x in p.get("speed", ())),
                                 tuple((secs(t), float(s)) for t, s in p.get("freeze", ())))
@@ -248,12 +254,16 @@ def check_clip(clip: Clip, where: str, report: Report) -> None:
         name = f"{where}, step {i} {s.title!r}"
         if s.title.strip():
             caption_text(s.title, name, report)
+            if m := SIDE.match(s.title):
+                report.warnings.append(f"{name}: opens with {m[1]}; put it in the step's tag (\"tag\": \"{m[1]}\")")
         else:
             report.problems.append(f"{where}, step {i}: an unwritten draft (the log lines evidence.py steps put in its note: "
                                    f"{s.note!r}); write the caption")
+        if s.tag:
+            caption_text(s.tag, f"{name}, tag {s.tag!r}", report)
         if i > 1 and s.start < clip.steps[i - 2].end:
             report.problems.append(f"{name}: overlaps step {i - 1} (from {hms(s.start)} before its end {hms(clip.steps[i - 2].end)})")
-        shown, need = (tl.screen(s.end) - tl.screen(s.start), min_seconds(s.title)) if timed else (math.inf, 0)
+        shown, need = (tl.screen(s.end) - tl.screen(s.start), min_seconds(s.tag + s.title)) if timed else (math.inf, 0)
         if shown < need - 1e-6:
             report.problems.append(f"{name}: shown {shown:.1f} s, needs {need:.1f} s (3 s or a second per 5 characters)")
         if grid:
