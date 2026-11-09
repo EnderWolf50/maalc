@@ -18,7 +18,7 @@ game pixels); a clip with a box or a zoom must name it, and the boxes are drawn 
 A clip is rendered from the uncut recording with evidence-annotate (`evidence.py`'s `annotated_clip`, masks
 included) into `clips/` beside REEL.json, again only when one of its inputs, the masks or annotate.py changed. `speed` plays a stretch
 faster (4) or slower (0.5), `freeze` holds the frame at T for that many seconds; evidence-annotate's bottom-left
-corner marks each beside its clock ("快轉 4×", "慢放 0.5×", "定格"). The reel is 1280x776: a 56 px chapter strip above the 1280x720 picture, so
+corner marks each beside its clock ("4×", "0.5×", "定格"), the corner showing the clock alone. The reel is 1280x776: a 56 px chapter strip above the 1280x720 picture, so
 the strip never hides game UI. It shows the chapter (its number, issue, line) at every moment after the opening
 list, which fills the whole frame and gives each chapter's start time; the MP4 carries a chapter mark per chapter. Writes reel.mp4,
 chapters.md and stills/NN.png (the reel at the middle of each caption) beside REEL.json.
@@ -62,13 +62,8 @@ OPENING_S = 10.0  # the opening list is a table of contents to pause on; the cha
 FONTS = {False: evidence.FONTS, True: ["C:/Windows/Fonts/msjhbd.ttc", "/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc"]}
 AMBER, WHITE, DIM, BG = (255, 196, 64), (245, 245, 245), (190, 194, 204), (17, 19, 26)
 AMBER_HEX = "#ffc440"  # AMBER, as evidence-annotate's own accent (scripts/text.py ACCENT)
-CORNER_TEXT = "#e6e6e6e6"  # evidence-annotate's corner text (scripts/text.py CORNER), for the dot before a mark
 FREEZE_MARK = "定格"  # a held frame, in the corner and in chapters.md (the user, 2026-11-10)
 ANNOTATE_FADE_S = 0.35  # evidence-annotate fades a block in and out over this (scripts/text.py FADE_S)
-# A mark's padding, from evidence-annotate's scripts/text.py with style.corner left at its size, 13 px: a block's default
-# pad is (0.62, 0.27) x size, so 3.5 px keeps the corner's height; beside the corner (its 8 px right pad, SIDE_GAP 6 px)
-# 4 px of left pad makes the gap about as wide as the corner's own "  ·  ".
-MARK_PAD = [4, 3.5]
 ENC = ["-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-pix_fmt", "yuv420p", "-r", str(FPS), "-an"]
 
 @dataclass
@@ -139,13 +134,13 @@ class Timeline:
         held = [self.held(at) for at, _ in self.freeze]
 
         def mark(a: float, b: float, text: str) -> dict:
-            return {"from": hms(a), "to": hms(b), "at": "bottom-left", "beside": True, "read": False, "sep": "  ", "pad": MARK_PAD,
-                    "lines": [[{"text": "·", "color": CORNER_TEXT}, {"text": text, "color": AMBER_HEX}]]}
+            return {"from": hms(a), "to": hms(b), "at": "bottom-left", "beside": True, "read": False,
+                    "lines": [[{"text": text, "color": AMBER_HEX}]]}
 
         def stretch(a: float, b: float, x: float) -> dict:
             a = min([a] + [h - fade for h in held if a <= h < a + fade])
             b = max([b] + [h + fade for h in held if b - fade < h <= b])
-            return mark(a, b, f"快轉 {x:g}×" if x > 1 else f"慢放 {x:g}×")
+            return mark(a, b, f"{x:g}×")
 
         return {"blocks": [stretch(*s) for s in self.speed] + [mark(h - fade, h + fade, FREEZE_MARK) for h in held]}
 
@@ -183,6 +178,12 @@ class Clip:
     steps: tuple[Step, ...]
     raw_steps: tuple[dict, ...]  # as the steps file holds them
     box_space: tuple[int, int] | None
+
+    def annotation_events(self) -> dict:
+        """The events as evidence-annotate gets them: its bottom-left corner showing the clock alone, since the step
+        or its tag is already in the caption."""
+        events = read_json(self.events)
+        return {**events, "style": {**events.get("style", {}), "corner": {"lines": [["{clock}"]]}}}
 
     def annotation_steps(self) -> list[dict]:
         """The steps as evidence-annotate gets them: boxes and zoom moved from `box_space` onto the events' grid."""
@@ -459,14 +460,13 @@ class Builder:
         tl = clip.timeline
         masks = evidence.masks_path(SimpleNamespace(masks=None))
         files = [clip.video, evidence.ANNOTATE, *sorted(masks.parent.glob("*.png"))]
-        steps, blocks = clip.annotation_steps(), tl.corner_blocks()
+        events, steps, blocks = clip.annotation_events(), clip.annotation_steps(), tl.corner_blocks()
         key = hashlib.sha256(json.dumps([[str(f), f.stat().st_size, f.stat().st_mtime] for f in files] + [
-            clip.first_frame, tl.t0, tl.t1, masks.read_text(encoding="utf-8"), clip.events.read_text(encoding="utf-8"),
-            steps, blocks], ensure_ascii=False).encode()).hexdigest()
+            clip.first_frame, tl.t0, tl.t1, masks.read_text(encoding="utf-8"), events, steps, blocks],
+            ensure_ascii=False).encode()).hexdigest()
         stamp = out.with_suffix(".key")
         if out.exists() and stamp.exists() and stamp.read_text() == key:
             return
-        events = read_json(clip.events)
         footage = evidence.Footage([f"{clip.video}@{clip.first_frame}"])
         evidence.annotated_clip(footage, tl.t0, tl.t1, out, events, steps, SimpleNamespace(annotate=evidence.ANNOTATE, masks=None),
                                 blocks)

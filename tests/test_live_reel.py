@@ -226,7 +226,8 @@ def test_the_marks_are_blocks_beside_the_corner_clock():
     tl = reel.Timeline(t0, t0 + 10, speed=((t0 + 2, t0 + 4, 0.5), (t0 + 6, t0 + 10, 4.0)), freeze=((t0 + 3, 1.5),))
     blocks = tl.corner_blocks()["blocks"]
     shown = [(b["from"], b["to"], b["lines"][0][-1]["text"]) for b in blocks]
-    assert shown == [("10:00:02.000", "10:00:04.000", "慢放 0.5×"), ("10:00:06.000", "10:00:10.000", "快轉 4×"),
+    # the user, 2026-11-10: 「快轉跟慢放也不用，0.5x 4x 已經看得懂」
+    assert shown == [("10:00:02.000", "10:00:04.000", "0.5×"), ("10:00:06.000", "10:00:10.000", "4×"),
                      ("10:00:02.648", "10:00:03.352", "定格")]  # centred on the held frame, shown fully there
     assert all(b["at"] == "bottom-left" and b["beside"] and not b["read"] for b in blocks)
 
@@ -271,3 +272,21 @@ def test_the_strip_numbers_the_chapter_in_amber_text_not_on_a_pill():
     im = reel.band(8, "#486/#513", "拖曳被吃掉")
     assert im.getpixel((17, reel.BAND // 2)) == reel.BG  # where the pill began
     assert any(im.getpixel((x, y)) == reel.AMBER for x in range(20, 60) for y in range(reel.BAND))
+
+
+def test_the_corner_shows_the_clock_alone(tmp_path):
+    # the user, 2026-11-10: 「左下角不用改前改後，跟中間重複了」: the step or its tag is already in the caption
+    path = manifest(tmp_path, [step("10:00:01", "10:00:05", tag="改前")])
+    events = json.loads((tmp_path / "ev.json").read_text(encoding="utf-8"))
+    (tmp_path / "ev.json").write_text(json.dumps({**events, "style": {"caption_size": 18}}), encoding="utf-8")
+    clip = reel.load(path).chapters[0].clips[0]
+    style = clip.annotation_events()["style"]
+    assert style["corner"]["lines"] == [["{clock}"]]
+    assert style["caption_size"] == 18  # the clip's own style stays
+
+
+def test_a_mark_is_its_own_block_with_no_separator():
+    # the user, 2026-11-10, on the mark as a block of its own: 「應該就不用用 · 分隔了」
+    t0 = evidence.secs("10:00:00")
+    [mark] = reel.Timeline(t0, t0 + 10, speed=((t0 + 2, t0 + 4, 4.0),)).corner_blocks()["blocks"]
+    assert [part["text"] for part in mark["lines"][0]] == ["4×"]
