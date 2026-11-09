@@ -19,8 +19,8 @@ A clip is rendered from the uncut recording with evidence-annotate (`evidence.py
 included) into `clips/` beside REEL.json, again only when one of its inputs, the masks or annotate.py changed. `speed` plays a stretch
 faster (4) or slower (0.5), `freeze` holds the frame at T for that many seconds; the strip marks each
 ("快轉 4×", "慢放 0.5×", "停格"). The reel is 1280x776: a 56 px chapter strip above the 1280x720 picture, so
-the strip never hides game UI. It shows the chapter (number/total, issue, line) at every moment; the opening
-list gives each chapter's start time; the MP4 carries a chapter mark per chapter. Writes reel.mp4,
+the strip never hides game UI. It shows the chapter (its number, issue, line) at every moment after the opening
+list, which fills the whole frame and gives each chapter's start time; the MP4 carries a chapter mark per chapter. Writes reel.mp4,
 chapters.md and stills/NN.png (the reel at the middle of each caption) beside REEL.json.
 
 `check`, and `build` before it builds, check every chapter against docs/agents/evidence-style.md ("Clips and stills
@@ -308,6 +308,11 @@ def clock(t: float) -> str:
     return f"{t // 3600}:{t // 60 % 60:02d}:{t % 60:02d}" if t >= 3600 else f"{t // 60:02d}:{t % 60:02d}"
 
 
+def number(n: int) -> str:
+    """A chapter as the strip, its card, the opening list and the chapter marks name it: `08`."""
+    return f"{n:02d}"
+
+
 def fit(d, text: str, f, width: float) -> str:
     """text, cut with an ellipsis to `width` px."""
     if d.textlength(text, font=f) <= width:
@@ -317,22 +322,27 @@ def fit(d, text: str, f, width: float) -> str:
     return text + "…"
 
 
-def band(n: int, total: int, issue: str, line: str, mark: str = "") -> Image.Image:
-    """The chapter strip: 第 n/total 章, the issue, the line; a speed or freeze mark at the right."""
+def pill(d, x: float, cy: int, text: str, f) -> float:
+    """`text` dark on an amber pill from x; returns where the pill ends."""
+    tw = d.textlength(text, font=f)
+    d.rounded_rectangle([x, cy - 17, x + tw + 32, cy + 17], radius=17, fill=AMBER)
+    d.text((x + 16 + tw / 2, cy), text, font=f, fill=BG, anchor="mm")
+    return x + tw + 32
+
+
+def band(n: int, issue: str, line: str, mark: str = "") -> Image.Image:
+    """The chapter strip: the chapter's number on a pill, the issue, the line; a speed or freeze mark at the right."""
     im = Image.new("RGB", (W, BAND), BG)
     d = ImageDraw.Draw(im)
-    x, cy = 20, BAND // 2
-    for text, f, colour in ((f"第 {n}/{total} 章" if n else "目錄", font(24, True), AMBER), (issue, font(24, True), WHITE),
-                            (line, font(22), DIM)):
-        if text:
-            text = fit(d, text, f, W - 200 - x)  # the right 200 px stay free for the mark
-            d.text((x, cy), text, font=f, fill=colour, anchor="lm")
-            x += d.textlength(text, font=f) + 22
+    cy = BAND // 2
+    x = pill(d, 16, cy, number(n), font(24, True)) + 18
+    for text, f, colour in ((issue, font(24, True), WHITE), (line, font(22), DIM)):
+        text = fit(d, text, f, W - 200 - x)  # the right 200 px stay free for the mark
+        d.text((x, cy), text, font=f, fill=colour, anchor="lm")
+        x += d.textlength(text, font=f) + 22
     if mark:
         f = font(22, True)
-        tw = d.textlength(mark, font=f)
-        d.rounded_rectangle([W - tw - 48, cy - 17, W - 16, cy + 17], radius=17, fill=AMBER)
-        d.text((W - tw / 2 - 32, cy), mark, font=f, fill=BG, anchor="mm")
+        pill(d, W - 48 - d.textlength(mark, font=f), cy, mark, f)
     d.line([(0, BAND - 1), (W, BAND - 1)], fill=(60, 64, 76))
     return im
 
@@ -365,6 +375,29 @@ def still_frame(lines: list[tuple[str, int, bool, tuple]], image: Path | None = 
     return im
 
 
+def opening_frame(title: str, chapters: tuple[Chapter, ...], starts: list[float]) -> Image.Image:
+    """The opening list over the whole 1280x776 frame, no strip above it: each chapter's number, start time and name."""
+    im = Image.new("RGB", (W, H + BAND), (0, 0, 0))
+    d = ImageDraw.Draw(im)
+    d.text((W // 2, 56), title, font=font(40, True), fill=WHITE, anchor="mm")
+    d.text((W // 2, 104), f"{len(chapters)} 章，每章的開始時間如下；播放器也可跳章", font=font(22), fill=DIM, anchor="mm")
+    rows = math.ceil(len(chapters) / 2)
+    step = min(48, (H + BAND - 170) // max(rows, 1))
+    f, fb = font(min(24, step - 14)), font(min(24, step - 14), True)
+    for i, (c, t) in enumerate(zip(chapters, starts)):
+        x, y = 60 + (i // rows) * 620, 150 + (i % rows) * step
+        d.text((x, y), number(i + 1), font=fb, fill=AMBER)
+        d.text((x + 44, y), clock(t), font=fb, fill=WHITE)
+        d.text((x + 130, y), c.short, font=f, fill=DIM)
+    return im
+
+
+def chapter_marks(chapters: tuple[Chapter, ...], starts: list[float], lengths: list[float]) -> list[tuple[float, float, str]]:
+    """The MP4's chapter marks, (from, to, title) in seconds: the opening list, then each chapter by its number."""
+    return [(0.0, OPENING_S, "目錄")] + [(t, t + d, f"{number(n)} {c.issue} {c.line}")
+                                         for n, (c, t, d) in enumerate(zip(chapters, starts, lengths), 1)]
+
+
 class Builder:
     def __init__(self, reel: Reel):
         self.reel, self.total = reel, len(reel.chapters)
@@ -379,8 +412,9 @@ class Builder:
         return self.work / f"{self.n:03d}{suffix}"
 
     def segment(self, picture: list, filters: str, bands: list[tuple[Image.Image, float, float]], out: Path) -> Path:
-        """Encode `picture` (ffmpeg input args, 1280x720 after `filters`) under the strip; each band shows from-to (s)."""
-        inputs, graph, last = list(picture), [f"[0:v]{filters},pad={W}:{H + BAND}:0:{BAND}[v0]"], "v0"
+        """Encode `picture` (ffmpeg input args, 1280x720 or the whole 1280x776 after `filters`) at the bottom of the
+        frame; each band shows from-to (s) over the top."""
+        inputs, graph, last = list(picture), [f"[0:v]{filters},pad={W}:{H + BAND}:0:oh-ih[v0]"], "v0"
         for i, (im, a, b) in enumerate(bands, 1):
             png = self.file(".png")
             im.save(png)
@@ -392,13 +426,13 @@ class Builder:
         return out
 
     def strip(self, n: int, c: Chapter, mark: str = "") -> Image.Image:
-        return band(n, self.total, c.issue, c.line, mark)
+        return band(n, c.issue, c.line, mark)
 
-    def picture(self, im: Image.Image, seconds: float, strip: Image.Image) -> Path:
+    def picture(self, im: Image.Image, seconds: float, strip: Image.Image | None) -> Path:
         png = self.file(".png")
         im.save(png)
         return self.segment(["-loop", "1", "-framerate", str(FPS), "-t", f"{seconds:.3f}", "-i", png], "setsar=1,format=yuv420p",
-                            [(strip, 0, math.inf)], self.file(".mp4"))
+                            [(strip, 0, math.inf)] if strip else [], self.file(".mp4"))
 
     def render(self, clip: Clip, out: Path) -> None:
         """Annotate the cut from the uncut recording, unless the clip, its inputs, the masks and annotate.py are what
@@ -439,7 +473,7 @@ class Builder:
         return self.segment(["-i", src], filters, bands, self.file(".mp4"))
 
     def chapter(self, n: int, c: Chapter) -> list[Path]:
-        card = [(f"第 {n}/{self.total} 章", 30, True, AMBER), (c.issue, 60, True, WHITE), (c.line, 40, False, WHITE)]
+        card = [(number(n), 44, True, AMBER), (c.issue, 60, True, WHITE), (c.line, 40, False, WHITE)]
         segs = [self.picture(still_frame(card), max(3.0, min_seconds(c.line)), self.strip(n, c))]
         for k, p in enumerate(c.clips, 1):
             if isinstance(p, Still):
@@ -451,18 +485,7 @@ class Builder:
         return segs
 
     def opening(self, starts: list[float]) -> Path:
-        im = Image.new("RGB", (W, H), (0, 0, 0))
-        d = ImageDraw.Draw(im)
-        d.text((W // 2, 50), self.reel.title, font=font(40, True), fill=WHITE, anchor="mm")
-        rows = math.ceil(self.total / 2)
-        step = min(46, (H - 120) // max(rows, 1))
-        f, fb = font(min(24, step - 14)), font(min(24, step - 14), True)
-        for i, (c, t) in enumerate(zip(self.reel.chapters, starts)):
-            x, y = 60 + (i // rows) * 620, 110 + (i % rows) * step
-            d.text((x, y), f"{i + 1:02d}", font=fb, fill=AMBER)
-            d.text((x + 44, y), clock(t), font=fb, fill=WHITE)
-            d.text((x + 130, y), c.short, font=f, fill=DIM)
-        return self.picture(im, OPENING_S, band(0, self.total, "", f"{self.total} 章，章節開始時間如下；播放器也可跳章"))
+        return self.picture(opening_frame(self.reel.title, self.reel.chapters, starts), OPENING_S, None)
 
     def build(self) -> None:
         chapters = [self.chapter(n, c) for n, c in enumerate(self.reel.chapters, 1)]
@@ -474,8 +497,7 @@ class Builder:
         listing.write_text("".join(f"file '{s.as_posix()}'\n" for s in [opening, *(s for segs in chapters for s in segs)]), encoding="utf-8")
         meta = self.work / "chapters.txt"
         esc = lambda s: re.sub(r"([=;#\\\n])", r"\\\1", s)  # noqa: E731
-        marks = [(0.0, OPENING_S, "目錄")] + [(t, t + d, f"{n}/{self.total} {c.issue} {c.line}")
-                                             for n, (c, t, d) in enumerate(zip(self.reel.chapters, starts, lengths), 1)]
+        marks = chapter_marks(self.reel.chapters, starts, lengths)
         meta.write_text(";FFMETADATA1\ntitle=" + esc(self.reel.title) + "\n" + "".join(
             f"[CHAPTER]\nTIMEBASE=1/1000\nSTART={round(a * 1000)}\nEND={round(b * 1000)}\ntitle={esc(t)}\n" for a, b, t in marks), encoding="utf-8")
         out = self.reel.folder / "reel.mp4"
@@ -512,7 +534,8 @@ class Builder:
 
     def write_chapters(self, starts: list[float], lengths: list[float], total: float) -> None:
         rows = ["# " + self.reel.title, "",
-                f"reel.mp4 長 {clock(total)}（{total:.1f} s），1280x776：上方 56 px 章節列，下方 1280x720 畫面。開頭目錄 {OPENING_S:g} s；"
+                f"reel.mp4 長 {clock(total)}（{total:.1f} s），1280x776：上方 56 px 章節列（章號、issue、一句話），下方 1280x720 畫面。"
+                f"開頭目錄 {OPENING_S:g} s，占滿整個畫面、沒有章節列；"
                 "每章先一張章名卡，MP4 帶章節標記。", "",
                 "| 開始 | 章 | Issue | 看什麼 | 來源 | 變速 | 備註 |", "|---|---|---|---|---|---|---|"]
         for n, (c, t) in enumerate(zip(self.reel.chapters, starts), 1):
