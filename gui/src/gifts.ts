@@ -40,16 +40,17 @@ export const state = (list: ListRules, id: number): GiftState => (list.want.incl
 /** Every gift in a fusion's recipes (all of a group's too), once each. */
 export const materialsOf = (f: Fusion): number[] => [...new Set([...(f.recipes ?? []).flat(), ...(f.groups ?? []).flatMap((g) => g.ids)])];
 
-/** Whether the list still makes a fusion: wanted, not in `owned` (the gifts held; none when unknown), and not pack-specific
- * (data `specific`) unless runPacks and its `packs` share one, or runPacks is null (unknown). */
-const toMake = (list: ListRules, f: Fusion, runPacks: number[] | null, owned: number[]) =>
-  state(list, f.id) === "want" && !owned.includes(f.id) && (!f.specific || runPacks === null || (f.packs ?? []).some((p) => runPacks.includes(p)));
+/** Whether the list still makes a fusion: wanted, not in `held` (id to count of the gifts held; none when unknown), and not
+ * pack-specific (data `specific`) unless runPacks and its `packs` share one, or runPacks is null (unknown). */
+const toMake = (list: ListRules, f: Fusion, runPacks: number[] | null, held: Map<number, number>) =>
+  state(list, f.id) === "want" && !held.has(f.id) && (!f.specific || runPacks === null || (f.packs ?? []).some((p) => runPacks.includes(p)));
 
 /** The fusions the list still makes (toMake) that lock a drop gift, in data-file order: it is a material of any of their
  * recipes, or of any group. A wanted fusion owned locks nothing: it is made no more (the user, 2026-10-30). */
 export function lockers(list: ListRules, id: number, runPacks: number[] | null = null, owned: number[] = [], tables: GiftTables = GAME_TABLES): number[] {
   if (state(list, id) !== "drop") return [];
-  return tables.fusions.filter((f) => materialsOf(f).includes(id) && toMake(list, f, runPacks, owned)).map((f) => f.id);
+  const held = counts(owned);
+  return tables.fusions.filter((f) => materialsOf(f).includes(id) && toMake(list, f, runPacks, held)).map((f) => f.id);
 }
 
 /** "want", "keep" (kept, or a drop gift something locks) or "drop". */
@@ -90,15 +91,15 @@ export function purchases(list: ListRules, runPacks: number[] | null = null, own
   const buyable = new Set(tables.buyable.map((g) => g.id)), held = counts(owned);
   const out = new Map<number, number | null>(queue(list, tables).map((id) => [id, null]));
   for (const f of inListOrder(list, tables.fusions)) {
-    for (const id of shortOf(list, f, runPacks, owned, held)) if (buyable.has(id) && !out.has(id)) out.set(id, f.id);
+    for (const id of shortOf(list, f, runPacks, held)) if (buyable.has(id) && !out.has(id)) out.set(id, f.id);
   }
   return [...out];
 }
 
-/** The materials a fusion still lacks, none unless the list still makes it (toMake) and `held` (id to count, of `owned`)
+/** The materials a fusion still lacks, none unless the list still makes it (toMake) and `held` (id to count of the gifts held)
  * completes none of its recipes or groups: each id a recipe needs more of than held, and the ids not held of a group short of its `need`. */
-function shortOf(list: ListRules, f: Fusion, runPacks: number[] | null, owned: number[], held: Map<number, number>): number[] {
-  if (!toMake(list, f, runPacks, owned) || pick(f, held)) return [];
+function shortOf(list: ListRules, f: Fusion, runPacks: number[] | null, held: Map<number, number>): number[] {
+  if (!toMake(list, f, runPacks, held) || pick(f, held)) return [];
   const have = (id: number) => held.get(id) ?? 0;
   return [
     ...(f.recipes ?? []).flatMap((r) => [...counts(r)].filter(([id, n]) => have(id) < n).map(([id]) => id)),
@@ -114,7 +115,7 @@ export type WantKind = "pack-want" | "want" | "material";
  * held is the caller's: it is not looked at for a gift the list wants. runPacks null: unknown. */
 export function wantKind(list: ListRules, id: number, runPacks: number[] | null = null, owned: number[] = [], tables: GiftTables = GAME_TABLES): WantKind | null {
   const held = counts(owned), wanted = state(list, id) === "want";
-  const material = tables.fusions.some((f) => materialsOf(f).includes(id) && shortOf(list, f, runPacks, owned, held).includes(id));
+  const material = tables.fusions.some((f) => materialsOf(f).includes(id) && shortOf(list, f, runPacks, held).includes(id));
   if (!wanted && !material) return null;
   if (Object.values(tables.pack_gifts).some((pool) => pool.includes(id))) return "pack-want";
   return wanted ? "want" : "material";
