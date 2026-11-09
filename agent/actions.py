@@ -2210,6 +2210,7 @@ class PickThemePack(CustomAction):
             TASK.pop("modules", None)  # a run is under way: Claim will take 5, the next one reads the Modules again (#369)
             RUN.update(floor=floor, map_misses=0)  # a new floor's map gets a fresh retry quota (spec 06)
             restart_floor_clock()
+            STUCK["ladder"].floor(floor, run["settings"].get("run", {}).get("target_floor", 5))  # floors 6 and 11 refill L2/L3 (#435)
         want = None if run["difficulty"] is None else run_start.hard_wanted(floor, run["difficulty"] == "hard", run["team"]["hard_from_floor"])
         if not self.set_difficulty(context, floor, want):
             return stuck(f"floor {floor} difficulty did not switch to {'HARD' if want else 'NORMAL'}")

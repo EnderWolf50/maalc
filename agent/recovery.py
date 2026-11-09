@@ -51,6 +51,9 @@ COST_KEEP = 50  # crops of map Cost coins that read as no Cost that logs/cost/ k
 # (Downloading, a waiting screen) is up, 22 s live 2026-10-21. 30 min ran out there before the download was done.
 DOWNLOAD_HOLD = 3 * 60
 L2_PER_RUN, L3_PER_RUN, L3_FAILED_IN_A_ROW = 3, 2, 3
+# A run with a target above 5 gets L2_PER_RUN and L3_PER_RUN again for each stretch of this many floors (6-10, 11-15): the
+# allowance was sized for a 5-floor run (#435). Not every floor: a run that keeps freezing would then go on for hours.
+REFILL_FLOORS = 5
 L3_PER_TASK = L3_PER_RUN  # restarts outside the Ladder (restart_game) that went through: as many as a mirror run's (#520)
 BATTLE = {"BattleTurn", "BattlePause", "BattleMenu"}  # L2 cannot go through mid-battle: only the map has To Window
 BATTLE_LIMIT = 20 * 60
@@ -212,11 +215,19 @@ class Ladder:
     the episode: a later stuck, even on the same screen type, starts over at its start level
     (2026-10-16). Only the per-run and per-launch caps stop. A battle skips L2 (live 2026-10-17, #70: it
     failed there and L3 followed anyway), and a level that did not go through is not charged to the run.
+    A run with a target above 5 gets the per-run caps again from floors 6 and 11 (floor, #435); counts stays the run's.
     """
 
     def __init__(self):
         self.counts = {1: 0, 2: 0, 3: 0}
         self.open = None  # (screen type, level) of the episode under way
+        self.stretch, self.before = 0, dict(self.counts)  # the floors' stretch under way; counts when it began
+
+    def floor(self, floor, target):
+        """The run is on floor `floor` of `target`: a new stretch of REFILL_FLOORS floors past the first starts its caps over."""
+        stretch = (floor - 1) // REFILL_FLOORS if target > REFILL_FLOORS else 0
+        if stretch > self.stretch:
+            self.stretch, self.before = stretch, dict(self.counts)
 
     def stuck(self, kind, start, restarts):
         """(level, None) to recover with, or (None, why) to stop. start is the least level, in an open episode too."""
@@ -226,10 +237,11 @@ class Ladder:
             level = start
         if level == 2 and kind in BATTLE:
             level = 3
-        if level == 2 and self.counts[2] >= L2_PER_RUN:
-            return None, f"L2 used {L2_PER_RUN} times this run"
-        if level == 3 and self.counts[3] >= L3_PER_RUN:
-            return None, f"game restarted {L3_PER_RUN} times this run"
+        since = f"since floor {self.stretch * REFILL_FLOORS + 1}" if self.stretch else "this run"
+        if level == 2 and self.counts[2] - self.before[2] >= L2_PER_RUN:
+            return None, f"L2 used {L2_PER_RUN} times {since}"
+        if level == 3 and self.counts[3] - self.before[3] >= L3_PER_RUN:
+            return None, f"game restarted {L3_PER_RUN} times {since}"
         if level == 3 and (why := restarts.attempt(kind)):
             return None, why
         self.counts[level] += 1

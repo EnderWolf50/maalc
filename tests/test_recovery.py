@@ -237,6 +237,69 @@ def test_ladder_limits(counts, failed, start, expected):
     assert ladder.stuck("MirrorMap", start, restarts) == expected
 
 
+def restart(ladder, restarts, kind="BattlePause"):
+    """One restart (L3) that went through and got past its screen."""
+    ladder.progress("MirrorMap")
+    restarts.progress("MirrorMap")
+    if not ladder.open:
+        assert ladder.stuck(kind, 1, restarts) == (1, None)
+    return ladder.stuck(kind, 1, restarts)
+
+
+def test_ladder_a_target_15_run_gets_the_allowance_again_at_floors_6_and_11():
+    # #435: each 5-floor stretch of a long run gets what a v1 run gets, 3 L2 and 2 L3; floors 2-5 and 7-10 do not refill.
+    ladder, restarts = Ladder(), Restarts()
+    for floor in range(1, 6):
+        ladder.floor(floor, 15)
+    assert [restart(ladder, restarts) for _ in range(3)] == [(3, None), (3, None), (None, "game restarted 2 times this run")]
+    for floor in range(6, 11):
+        ladder.floor(floor, 15)
+    assert [restart(ladder, restarts) for _ in range(3)] == [(3, None), (3, None), (None, "game restarted 2 times since floor 6")]
+    ladder.progress("Event")
+    for _ in range(3):
+        assert ladder.stuck("MirrorMap", 2, restarts) == (2, None)
+        ladder.progress("Event")
+    assert ladder.stuck("MirrorMap", 2, restarts) == (None, "L2 used 3 times since floor 6")
+    ladder.progress("Event")
+    ladder.floor(11, 15)
+    assert ladder.stuck("MirrorMap", 2, restarts) == (2, None)
+    assert restart(ladder, restarts) == (3, None)
+    assert ladder.counts == {1: 6, 2: 4, 3: 5}  # runs.jsonl's l1/l2/l3 stay the run's totals
+
+
+def test_ladder_a_target_15_run_that_restarts_twice_on_floor_3_and_once_on_floor_8_goes_on():
+    # The PR's worked example: before #435 the third restart stopped the run, whatever the target.
+    ladder, restarts = Ladder(), Restarts()
+    ladder.floor(3, 15)
+    assert [restart(ladder, restarts) for _ in range(2)] == [(3, None), (3, None)]
+    ladder.floor(8, 15)  # a resumed run's first floor may be past 6: it starts the stretch it is in
+    assert restart(ladder, restarts) == (3, None)
+
+
+@pytest.mark.parametrize("floors", [range(1, 6), [5, 6, 11]])  # a target-5 run never sees floor 6; the rule needs the target
+def test_ladder_a_target_5_run_keeps_one_allowance(floors):
+    ladder, restarts = Ladder(), Restarts()
+    for floor in floors:
+        ladder.floor(floor, 5)
+    assert [restart(ladder, restarts) for _ in range(3)] == [(3, None), (3, None), (None, "game restarted 2 times this run")]
+    ladder.progress("Event")
+    for _ in range(3):
+        assert ladder.stuck("MirrorMap", 2, restarts) == (2, None)
+        ladder.progress("Event")
+    assert ladder.stuck("MirrorMap", 2, restarts) == (None, "L2 used 3 times this run")
+
+
+def test_ladder_the_refill_leaves_the_failed_restarts_in_a_row():
+    # L3_FAILED_IN_A_ROW is the launch's: a game that never comes back stops at its third failed restart, refill or not.
+    ladder, restarts = Ladder(), Restarts()
+    ladder.floor(5, 15)
+    assert ladder.stuck("Loading", 3, restarts) == (3, None)
+    assert ladder.stuck("Loading", 3, restarts) == (3, None)
+    ladder.floor(6, 15)
+    assert ladder.stuck("Loading", 3, restarts) == (3, None)
+    assert ladder.stuck("Loading", 3, restarts) == (None, "game restarted 3 times in a row without getting past Loading")
+
+
 def test_a_restart_that_needed_another_before_the_bot_got_past_counts_as_failed():
     ladder, restarts = Ladder(), Restarts()
     ladder.stuck("BattlePause", 1, restarts)
