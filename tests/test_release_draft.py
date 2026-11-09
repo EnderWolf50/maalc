@@ -26,13 +26,13 @@ class FakeGh:
 def test_a_tag_with_a_release_creates_nothing(tags):
     # v0.1.0 (#587): published by hand, then its tag push ran the workflow again and made a second draft.
     gh, said = FakeGh(tags), []
-    assert rd.draft("v0.1.0", "maalc-v0.1.0.zip", "a14a5d25", gh=gh, say=said.append) == 0
+    rd.draft("v0.1.0", "maalc-v0.1.0.zip", "a14a5d25", gh=gh, say=said.append)
     assert gh.creates() == [] and len(said) == 1 and "already has a release" in said[0]
 
 
 def test_a_tag_with_no_release_creates_the_draft():
     gh = FakeGh(["v0.0.9", "v0.1.0-rc"])
-    assert rd.draft("v0.1.0", "maalc-v0.1.0.zip", "a14a5d25", gh=gh, say=lambda line: None) == 0
+    rd.draft("v0.1.0", "maalc-v0.1.0.zip", "a14a5d25", gh=gh, say=lambda line: None)
     assert gh.creates() == [["release", "create", "v0.1.0", "maalc-v0.1.0.zip", "--draft", "--target", "a14a5d25",
                              "--title", "v0.1.0", "--generate-notes"]]
 
@@ -59,4 +59,4 @@ def test_the_workflow_runs_the_guard_in_place_of_a_bare_create():
     wf = (Path(__file__).resolve().parent.parent / ".github/workflows/release.yml").read_text(encoding="utf-8")
     assert "gh release create" not in wf
     assert "tools/release_draft.py $env:TAG $env:ZIP $env:GITHUB_SHA" in wf
-    assert "tools/release_draft.py" in wf.split("paths:")[1].splitlines()[0]
+    assert "tools/release_draft.py" in wf.split("paths:")[1].splitlines()[0]  # a change to the guard builds on its PR

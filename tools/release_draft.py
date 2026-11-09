@@ -1,6 +1,6 @@
 """Attach the release zip to a draft release of TAG, unless TAG already has a release (draft or published).
 
-    uv run --no-dev python tools/release_draft.py TAG ZIP SHA
+    uv run --frozen --no-dev python tools/release_draft.py TAG ZIP SHA
 
 The release workflow's last step (.github/workflows/release.yml). A release goes: `workflow_dispatch` with the tag
 builds the draft, the draft is checked by hand, then published; publishing creates the tag, and the tag's push runs the
@@ -26,18 +26,18 @@ def release_tags(gh) -> set[str]:
     return {line.strip() for line in out.splitlines() if line.strip()}
 
 
-def draft(tag: str, zip_path: str, sha: str, gh=run_gh, say=print) -> int:
+def draft(tag: str, zip_path: str, sha: str, gh=run_gh, say=print) -> None:
     if tag in release_tags(gh):
         say(f"{tag} already has a release: nothing created (draft, check, publish; the tag push after publishing ends here)")
-        return 0
+        return
     gh(["release", "create", tag, zip_path, "--draft", "--target", sha, "--title", tag, "--generate-notes"])
     say(f"{tag}: draft release created with {zip_path}")
-    return 0
 
 
 def main(argv=None) -> int:
     tag, zip_path, sha = argv if argv is not None else sys.argv[1:]
-    return draft(tag, zip_path, sha)
+    draft(tag, zip_path, sha)
+    return 0
 
 
 if __name__ == "__main__":
