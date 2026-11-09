@@ -16,7 +16,9 @@ GiveUpRewards:
   WipeDialog (DEFEAT, the team wiped)    Accept results, then Confirm 1.2 s later with no look between (the cards
                                          read the same picked or not; the bot's Wipe taps them so too): to the map
   Formation (the bot stopped there)      back: to the map
-  MapNodePanel, MirrorMap                the gear
+  MapNodePanel (a node's panel open)     the Back key: it closes the panel, and the next look sees MirrorMap; live
+                                         (2026-11-08) the gear took no tap while the panel was open
+  MirrorMap                              the gear
   ProgressPanel (Dungeon Progress)       Forfeit
   ForfeitDialog (Quit exploring the dungeon?)   Confirm
   DefeatScreen                           Confirm
@@ -65,8 +67,18 @@ DIALOG_CANCEL, DIALOG_CONFIRM = (515, 493), (763, 493)  # actions.DIALOG_CANCEL,
 # checks that they match.
 
 
+class Key(NamedTuple):
+    code: int  # an Android key code, pressed in place of a tap
+
+    def __str__(self):
+        return f"key {self.code}"
+
+
+BACK = Key(4)  # actions.BACK_KEY: closes the node panel
+
+
 class Step(NamedTuple):
-    taps: tuple  # the points tapped in turn, TAP_GAP s apart; none: only wait
+    taps: tuple  # the points tapped (or Keys pressed) in turn, TAP_GAP s apart; none: only wait
     wait: float  # s before the next look
     tries: int  # looks in a row at this screen before it gives up
 
@@ -85,7 +97,7 @@ STEPS = {
     "ProgressPanel": Step((FORFEIT,), 2, 3),
     "WipeDialog": Step((ACCEPT_RESULTS, WIPE_CONFIRM), 3, 3),
     "Formation": Step((FORMATION_BACK,), 2, 3),
-    "MapNodePanel": Step((MAP_GEAR,), 2, 3),
+    "MapNodePanel": Step((BACK,), 2, 3),
     "MirrorMap": Step((MAP_GEAR,), 2, 3),
     "BattleMenu": Step((GIVE_UP,), 5, 3),
     "BattleTurn": Step((BATTLE_GEAR,), 1.5, 20),
@@ -141,8 +153,8 @@ def look(t) -> str | None:
     return first_hit([n.name for n in detail.nodes] if detail else [])
 
 
-def give_up(look, tap, shot, timeout: float = 60, clock=time.monotonic, sleep=time.sleep, say=print) -> int:
-    """Look, tap what the screen asks, look again, until the main window shows after GiveUpRewards (exit 0). After
+def give_up(look, tap, shot, key, timeout: float = 60, clock=time.monotonic, sleep=time.sleep, say=print) -> int:
+    """Look, tap (or press the key) what the screen asks, look again, until the main window shows after GiveUpRewards (exit 0). After
     GiveUpRewards only the give-up dialog's Confirm is tapped. Exit 1 when no known screen shows for `timeout` seconds,
     one screen stays after its looks in a row, the reward screens stay FADE_LOOKS looks after GiveUpRewards, or the main
     window shows before any give-up (no run to end).
@@ -185,7 +197,10 @@ def give_up(look, tap, shot, timeout: float = 60, clock=time.monotonic, sleep=ti
             for i, xy in enumerate(step.taps):
                 if i:
                     sleep(TAP_GAP)
-                tap(*xy)
+                if isinstance(xy, Key):
+                    key(xy.code)
+                else:
+                    tap(*xy)
             say(f"{name}: tap {' then '.join(map(str, step.taps))}")
             gave_up = gave_up or name in ("ExplorationReward", "GiveUpDialog")
         sleep(step.wait)
@@ -241,7 +256,8 @@ def run(a) -> int:
         print(stamp(), line, flush=True)
 
     return give_up(lambda: look(t), lambda x, y: ctl.post_click(x, y).wait(),
-                   lambda name: shot(ctl, a.out / f"{stamp()}-{name}.png"), timeout=a.timeout, say=say)
+                   lambda name: shot(ctl, a.out / f"{stamp()}-{name}.png"), lambda code: ctl.post_click_key(code).wait(),
+                   timeout=a.timeout, say=say)
 
 
 def main(argv=None) -> int:
