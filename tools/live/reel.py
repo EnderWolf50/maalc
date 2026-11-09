@@ -308,7 +308,7 @@ def clock(t: float) -> str:
     return f"{t // 3600}:{t // 60 % 60:02d}:{t % 60:02d}" if t >= 3600 else f"{t // 60:02d}:{t % 60:02d}"
 
 
-def number(n: int) -> str:
+def chapter_label(n: int) -> str:
     """A chapter as the strip, its card, the opening list and the chapter marks name it: `08`."""
     return f"{n:02d}"
 
@@ -335,7 +335,7 @@ def band(n: int, issue: str, line: str, mark: str = "") -> Image.Image:
     im = Image.new("RGB", (W, BAND), BG)
     d = ImageDraw.Draw(im)
     cy = BAND // 2
-    x = pill(d, 16, cy, number(n), font(24, True)) + 18
+    x = pill(d, 16, cy, chapter_label(n), font(24, True)) + 18
     for text, f, colour in ((issue, font(24, True), WHITE), (line, font(22), DIM)):
         text = fit(d, text, f, W - 200 - x)  # the right 200 px stay free for the mark
         d.text((x, cy), text, font=f, fill=colour, anchor="lm")
@@ -386,7 +386,7 @@ def opening_frame(title: str, chapters: tuple[Chapter, ...], starts: list[float]
     f, fb = font(min(24, step - 14)), font(min(24, step - 14), True)
     for i, (c, t) in enumerate(zip(chapters, starts)):
         x, y = 60 + (i // rows) * 620, 150 + (i % rows) * step
-        d.text((x, y), number(i + 1), font=fb, fill=AMBER)
+        d.text((x, y), chapter_label(i + 1), font=fb, fill=AMBER)
         d.text((x + 44, y), clock(t), font=fb, fill=WHITE)
         d.text((x + 130, y), c.short, font=f, fill=DIM)
     return im
@@ -394,7 +394,7 @@ def opening_frame(title: str, chapters: tuple[Chapter, ...], starts: list[float]
 
 def chapter_marks(chapters: tuple[Chapter, ...], starts: list[float], lengths: list[float]) -> list[tuple[float, float, str]]:
     """The MP4's chapter marks, (from, to, title) in seconds: the opening list, then each chapter by its number."""
-    return [(0.0, OPENING_S, "目錄")] + [(t, t + d, f"{number(n)} {c.issue} {c.line}")
+    return [(0.0, OPENING_S, "目錄")] + [(t, t + d, f"{chapter_label(n)} {c.issue} {c.line}")
                                          for n, (c, t, d) in enumerate(zip(chapters, starts, lengths), 1)]
 
 
@@ -473,7 +473,7 @@ class Builder:
         return self.segment(["-i", src], filters, bands, self.file(".mp4"))
 
     def chapter(self, n: int, c: Chapter) -> list[Path]:
-        card = [(number(n), 44, True, AMBER), (c.issue, 60, True, WHITE), (c.line, 40, False, WHITE)]
+        card = [(chapter_label(n), 44, True, AMBER), (c.issue, 60, True, WHITE), (c.line, 40, False, WHITE)]
         segs = [self.picture(still_frame(card), max(3.0, min_seconds(c.line)), self.strip(n, c))]
         for k, p in enumerate(c.clips, 1):
             if isinstance(p, Still):
@@ -547,7 +547,7 @@ class Builder:
                 srcs.append(f"{p.video.name} {hms(p.timeline.t0)}–{hms(p.timeline.t1)}（{p.steps_file.name}）")
                 speeds += [f"{hms(a)}–{hms(b)} {x:g}×" for a, b, x in p.timeline.speed]
                 speeds += [f"{hms(at)} 停格 {sec:g} s" for at, sec in p.timeline.freeze]
-            rows.append(f"| {clock(t)} | {n} | {c.issue} | {c.line} | {'<br>'.join(srcs)} | {'<br>'.join(speeds)} | {c.note} |")
+            rows.append(f"| {clock(t)} | {chapter_label(n)} | {c.issue} | {c.line} | {'<br>'.join(srcs)} | {'<br>'.join(speeds)} | {c.note} |")
         (self.reel.folder / "chapters.md").write_text("\n".join(rows) + "\n", encoding="utf-8")
 
 
