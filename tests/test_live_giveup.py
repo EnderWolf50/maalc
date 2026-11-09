@@ -88,7 +88,7 @@ def test_the_battle_taps_land_on_the_gear_give_up_and_forfeit():
 
 
 def test_claim_is_never_tapped():
-    taps = {name: step.taps for name, step in gu.STEPS.items()}
+    taps = {name: tuple(xy for xy in step.taps if not isinstance(xy, gu.Key)) for name, step in gu.STEPS.items()}
     assert not any(touches(point(xy), CLAIM_BOX) for points in taps.values() for xy in points)
     # A dialog's Confirm sits where a Claim dialog's does: it is tapped on the give-up dialog only; a Claim dialog is cancelled.
     assert [n for n, points in taps.items() if gu.DIALOG_CONFIRM in points] == ["GiveUpDialog"]
@@ -111,7 +111,8 @@ class Game:
         return self.screens.pop(0) if len(self.screens) > 1 else self.screens[0]
 
     def run(self, timeout=60):
-        return gu.give_up(self.look, lambda x, y: self.taps.append((x, y)), self.shots.append, timeout=timeout,
+        return gu.give_up(self.look, lambda x, y: self.taps.append((x, y)), self.shots.append,
+                          key=lambda code: self.taps.append(gu.Key(code)), timeout=timeout,
                           clock=lambda: self.now, sleep=self.sleep, say=self.said.append)
 
     def sleep(self, s):
@@ -137,10 +138,25 @@ def test_the_end_waits_for_the_reward_window_to_go():
 
 def test_a_wipe_accepts_the_results_and_a_formation_backs_out_to_the_map():
     # The bot stops at either when it ran out of retries or sinners (`after_retries: stop`): both lead to the map's Forfeit.
-    game = Game(["WipeDialog", "Formation", "MapNodePanel", "ProgressPanel", "ForfeitDialog", "DefeatScreen", "ExplorationComplete",
+    game = Game(["WipeDialog", "Formation", "MirrorMap", "ProgressPanel", "ForfeitDialog", "DefeatScreen", "ExplorationComplete",
                  "ExplorationReward", "GiveUpDialog", None, "HomeReached"])
     assert game.run() == 0
     assert game.taps[:4] == [gu.ACCEPT_RESULTS, gu.WIPE_CONFIRM, gu.FORMATION_BACK, gu.MAP_GEAR]
+
+
+def test_an_open_node_panel_is_closed_with_back_before_the_gear(named):
+    # Live 2026-11-08 (#585): with the node panel open the gear did not respond; Back closed it, then the map's gear did.
+    assert gu.STEPS[named["MapNodePanel.png"]].taps == (gu.BACK,)
+    game = Game(["MapNodePanel", "MirrorMap", "ProgressPanel", "ForfeitDialog", "DefeatScreen", "ExplorationComplete",
+                 "ExplorationReward", "GiveUpDialog", None, "HomeReached"])
+    assert game.run() == 0
+    assert game.taps[:3] == [gu.BACK, gu.MAP_GEAR, gu.FORFEIT] and game.shots[:2] == ["MapNodePanel", "MirrorMap"]
+
+
+def test_back_is_the_bots_back_key():
+    import actions
+
+    assert gu.BACK == gu.Key(actions.BACK_KEY)
 
 
 def test_the_give_up_dialog_is_confirmed_again_while_it_stays():
