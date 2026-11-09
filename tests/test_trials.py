@@ -12,6 +12,7 @@ import yaml
 from PIL import Image
 
 import actions
+import gifts
 import rewards as r
 import test_actions
 
@@ -122,6 +123,44 @@ def test_the_gift_score_rises_half_a_point_a_tier_for_main_and_other():
     assert r.gift_score("owned", 4) == r.gift_score("avoid", 2) == 0
 
 
+def test_the_gift_score_of_a_want_class_ignores_the_tier():
+    # #416 / #419: pack-want 9, want 6, material 5.5; the tier adds half a point to main and other only
+    assert [r.gift_score(c, t) for c in ("pack-want", "want", "material") for t in (None, 1, 5)] == [9] * 3 + [6] * 3 + [5.5] * 3
+    assert [r.gift_score(c, 3) for c in ("main", "other", "owned", "avoid")] == [4, 3, 0, 0]
+
+
+def card(kind, category=None, tier=None, cost=None):
+    return r.Card(kind, tier, cost, kind, 1, None, category)
+
+
+def test_a_pack_want_loses_only_when_its_trial_outweighs_the_gap():
+    # #416 Boss page: 9 against a main II card (3.5, no trial) is a 5.5 gap; the trial counts 1 pt = 1 point
+    rival = card("main", tier=2, cost=0.0)
+    assert r.rank_gifts([card("other", "pack-want", 1, 5.4), rival]) == [0, 1]
+    assert r.rank_gifts([card("other", "pack-want", 1, 5.6), rival]) == [1, 0]
+    # a plain want (6) loses from 2.5
+    assert r.rank_gifts([card("other", "want", 1, 2.4), rival]) == [0, 1]
+    assert r.rank_gifts([card("other", "want", 1, 2.6), rival]) == [1, 0]
+
+
+def test_the_want_classes_rank_pack_want_then_want_then_material_then_main_whatever_the_tier():
+    cards = [card("main", tier=5), card("other", "material"), card("other", "want"), card("main", "pack-want"), card("other", tier=5)]
+    assert r.rank_gifts(cards) == [3, 2, 1, 0, 4]
+
+
+def test_an_owned_or_avoided_card_stays_below_the_want_classes_it_would_be():
+    # category() puts owned and avoid before the want class; avoid is last whatever its score
+    assert r.category("owned", "want") == "owned" and r.category("avoid", "pack-want") == "avoid"
+    assert r.rank_gifts([card("avoid", "avoid"), card("owned", "owned"), card("other", "material")]) == [2, 1, 0]
+    assert r.rank_gifts([card("avoid", "avoid", cost=0.0), card("other", cost=30.0)]) == [1, 0]
+
+
+def test_a_want_card_line_shows_its_category_score_and_total():
+    c = r.Card("other", 2, 4.72, "Rusted Muzzle", 9089, "Take Less Damage +2 score 4", "want")
+    assert r.card_line(c) == "Rusted Muzzle/want gift 6 tier II trial Take Less Damage +2 score 4 total 1.28"
+    assert r.card_line(r.Card("other", None, None, "Gift", 9764, None, "pack-want")) == "Gift/pack-want gift 9 total 9"
+
+
 def test_rank_gifts_takes_level_ups_at_0_36_a_level():
     # card = gift - (trial + 0.36 x N), ties to the lighter trial, then the leftmost
     cards = [("main", 1, r.burden(4.0, 2, MODEL)), ("other", 1, r.burden(0.1, 1, MODEL)), ("owned", 1, r.burden(0.8, 1, MODEL))]
@@ -186,7 +225,7 @@ def test_the_2026_10_30_hard_pages_take_the_cards_they_took_live(floor, taken):
     assert set(ranked(HARD_PAGES[floor], floor)[:2]) == taken
 
 
-def boss_page(context, monkeypatch, cards, floor=None):
+def boss_page(context, monkeypatch, cards, floor=None, slots=1, says=None):
     """A boss gift page whose OCR reads cards [(gift text, owned, N, trial name, effect lines)] (the trial half's read,
     TRIAL_HALF), card i centred at 375 + 264 i, Select 0/1; a Sinking team. Its taps and log lines."""
     taps, logs = [], []
@@ -201,12 +240,13 @@ def boss_page(context, monkeypatch, cards, floor=None):
         if roi == actions.GIFT_CARDS:
             return [r for x, (gift, owned, *_) in zip(centres, cards) for r in
                     [("Acquire E.G.O Gift", (x + 7, 152, 107, 22)), (gift, (x - 60, 181, 120, 20)),
-                     ("Mounting Trials", (x + 10, 421, 98, 16))] + ([("Owned", (x - 80, 152, 55, 17))] if owned else [])]
+                     ("Mounting Trials", (x + 10, 421, 98, 16))] + ([("Owned", (x - 80, 152, 55, 17))] if owned else [])
+                    + ([(says, (x - 60, 300, 120, 20))] if says else [])]
         if tuple(roi) in halves:
             return halves[tuple(roi)]
         picked = any(y == 300 for _, y in taps)
         if roi == actions.GIFT_COUNT:
-            return [(f"Select {int(picked)}/1", (1080, 565, 100, 30))]
+            return [(f"Select {min(slots, sum(y == 300 for _, y in taps))}/{slots}", (1080, 565, 100, 30))]
         if roi == actions.REFUSE_GIFT and not (actions.GIFT_SELECT in taps and picked):
             return [("Refuse Gift", (900, 570, 100, 25))]
         return []
@@ -340,14 +380,52 @@ def test_an_unmatched_title_is_logged_as_read_and_a_fight_s_page_logs_name_categ
     assert logs[0] == "gifts: Ashes to Ashes/main gift 3 total 3, 'Zzqx Glorp'/main gift 3 total 3: order [0, 1]"
 
 
-def test_a_wanted_card_is_logged_with_its_category_but_picked_as_before(context, monkeypatch):
-    # #418: the want classes score in #419; here a wanted card scores as the main it is, so the leftmost tie still wins
+def test_a_wanted_card_is_logged_with_its_category_and_score_and_picked_first(context, monkeypatch):
+    # #418 / #419: the wanted card scores 6 (9 in a pack's own pool) against the main 3 on its left
     logs = []
     monkeypatch.setattr(actions, "log", logs.append)
     taps = test_actions.gift_page(context, monkeypatch, ["Zzqx Glorp", "Ashes to Ashes"])
     actions.RUN["team"] = {**test_actions.NO_GOSSYPIUM, "list": test_actions.wants(9003)}
     actions.PickGift().run(context, None)
-    assert logs[0].startswith("gifts: 'Zzqx Glorp'/main gift 3 total 3, Ashes to Ashes/")
-    assert logs[0].endswith(" gift 3 total 3: order [0, 1]")
-    assert logs[0].split("Ashes to Ashes/")[1].split(" ")[0] in ("want", "pack-want")
-    assert [t for t in taps if t[1] == 300] == [(236, 300)]  # the first card, as before
+    assert logs[0] == "gifts: 'Zzqx Glorp'/main gift 3 total 3, Ashes to Ashes/want gift 6 total 6: order [1, 0]"
+    assert [t for t in taps if t[1] == 300] == [(536, 300)]
+
+
+HARD_PAGE_1 = [("Melted Spring", False, 1, "Defense Level Up", []), ("Talisman Bundle", False, 1, "Defense Skill Up", []),
+               ("Rusted Muzzle", False, 2, "Take Less Damage", []), ("Hellterfly's Dream", False, 2, "Growth I", [])]
+
+
+def hard_page(context, monkeypatch, cards, wanted):
+    """The 2026-10-30 HARD boss page (its four gifts and trials, Select 0/2, tiers II I I II) whose team list wants `wanted`."""
+    taps, logs = boss_page(context, monkeypatch, cards, 1, slots=2, says="Inflict Sinking")
+    monkeypatch.setattr(actions, "gift_tier", lambda image, x: {375: 2, 639: 1, 903: 1, 1167: 2}[x])  # as on the capture
+    actions.RUN["team"]["list"] = test_actions.wants(*wanted)
+    actions.RUN["team"]["keyword"] = "Sinking"
+    return taps, logs
+
+
+def test_a_boss_page_without_wants_is_scored_as_before(context, monkeypatch):
+    taps, logs = hard_page(context, monkeypatch, HARD_PAGE_1, [])
+    assert actions.PickGift().run(context, None)
+    assert logs[0].endswith("order [0, 3, 1, 2]")  # 3.1, 1.755, 1.54, -2.72
+    assert [t[0] for t in taps if t[1] == 300] == [375, 1167]
+
+
+def test_a_wanted_gift_on_a_boss_page_scores_6_minus_its_trial(context, monkeypatch):
+    # Rusted Muzzle (not in a pack's own pool) wanted: Take Less Damage +2 costs 4 + 0.72, so 1.28, last of the four
+    taps, logs = hard_page(context, monkeypatch, HARD_PAGE_1, [9089])
+    assert actions.PickGift().run(context, None)
+    assert "Rusted Muzzle/want gift 6 tier I trial Take Less Damage +2 score 4 total 1.28" in logs[0]
+    assert logs[0].endswith("order [0, 3, 1, 2]")
+
+
+def test_a_pack_want_on_a_boss_page_beats_a_main_card_through_a_heavy_trial(context, monkeypatch):
+    # Regular Operational Gear (9778, in a pack's own pool, a material of the default list's fusion): 9 - 4.72 = 4.28 over
+    # Melted Spring's 3.1 (main II), though its trial is the page's worst
+    cards = [*HARD_PAGE_1[:2], ("Regular Operational Gear", *HARD_PAGE_1[2][1:]), HARD_PAGE_1[3]]
+    taps, logs = hard_page(context, monkeypatch, cards, [])
+    actions.RUN["team"]["list"] = gifts.default_list()
+    assert actions.PickGift().run(context, None)
+    assert "Regular Operational Gear/pack-want gift 9 tier I trial Take Less Damage +2 score 4 total 4.28" in logs[0]
+    assert logs[0].endswith("order [2, 0, 3, 1]")
+    assert [t[0] for t in taps if t[1] == 300] == [903, 375]
