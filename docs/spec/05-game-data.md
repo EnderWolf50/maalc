@@ -19,7 +19,7 @@
 | 試煉表 `trials.yaml` | Boss 後的選擇評分 | 開發者每季從拆包的客戶端資料重新產生（第 4 節）；使用者在設定檔另加覆寫 | 1.117.0 的 14 池 105 個試煉 | #17、#19、#381 |
 | 選路權重 | 地圖頁選下一個節點 | 開發者 | 有預設值 | #12 |
 | Cost 對照表與商店數字 | 節點 Cost 參考值（不用於辨識）、商店的刷新與治療判斷 | 開發者 | 有預設值 | #10、#12、#19 |
-| 事件表 `event_table.json` | 事件頁依選項的實際效果排序 | 開發者每季從拆包的客戶端資料重新產生（第 7 節） | 1.117.0 的 195 個事件 | #93 |
+| 事件表 `event_table.json` | 事件頁依選項的實際效果排序 | 開發者每季從拆包的客戶端資料重新產生（第 7 節） | 1.117.0 的 197 個事件 | #93 |
 | 觀測飾品表 `gift_search.json` 與圖示 `image/GiftSearch/<id>.png` | E.G.O Gift Search 頁找飾品（位置預測、圖示比對）；GUI 的飾品清單 | 開發者每季依遊戲客戶端的觀測表重新產生（產生方式寫在檔頭 `note` 與 [04-settings.md](04-settings.md) 第 9 節） | 這一季的 320 個，另有 5 個殘影圖示（9991–9995，#161） | #54 |
 | 合成飾品表 `gift_recipes.json` 與圖示 `image/GiftRecipe/<id>.png` | 飾品清單把合成品標成想要時，查它的配方與材料（固定配方、月之記憶的 N 選 K） | 開發者每季跑 `tools/gift_recipes.py`（中文名取自 LLC release）（用法寫在工具檔頭與 `note`，要 `bench` 號碼牌） | 這一季 60 個合成品（59 個固定配方共 67 條，月之記憶 1 條 N 選 K），其中 39 條固定配方（`isSpecific`）用到主題包專屬飾品，該合成品帶 `specific: true` 與 `packs`（那些主題包的 id，取自各包 `specificEgoGiftPool`）；另有 12 個 `gift_search.json` 沒有的材料，與 `extra_gifts`（遊戲資料 9000–9999 其餘有名字的 id，464 個減去商店、合成、殘影已列的，共 67 個：不賣、不當配方材料，逐格辨識當候選，飾品清單只能保留或不要；9247 不收：遊戲資料裡它是 LCB Regular Check-up 復刻組的一筆（暴怒、燒傷、III 階、售價 255），但英、日、韓、簡中語言檔與灰機 wiki 都沒有它的名字與圖示，候選表認不出它，#332），139 個圖示 | #277、#286、#332 |
 | 預設飾品清單 `gift_lists.yaml` 與 GUI 圖示 `gift_icons/<id>.webp` | 飾品清單的「預設」；GUI 顯示 464 個飾品的圖示（第 9 節） | 開發者每季確認 id 還在、重跑 `tools/gift_icons.py` | 預設清單 50 個想要、66 個保留；464 個圖示（含 67 個 `extra_gifts`） | #291、#293 |
@@ -197,7 +197,7 @@ Boss 的 Cost 是遊戲資料 `mirror-dungeon-common-data-md8.json` 的 BOSS cos
 
 **檔案**：`resource/base/data/event_table.json`，由 `tools/event_table.py` 從拆包的事件表（limbus-unpack 的 `scripts/events_md8.py` 產生的 `events-md8.json`，遊戲客戶端 1.117.0 的靜態資料與英文在地化）裁出。檔頭的 `note` 與 `client` 寫來源與版本。使用者不能修改；例外改用事件覆寫表。
 
-**內容**：每個有敘事文字的選擇事件一筆（195 筆，同一頁不同 id 的合併），只留 bot 要用的欄位：
+**內容**：每個有敘事文字的選擇事件一筆（197 筆，同一頁不同 id 的合併），只留 bot 要用的欄位：
 
 | 欄位 | 內容 |
 |---|---|
@@ -206,6 +206,9 @@ Boss 的 Cost 是遊戲資料 `mirror-dungeon-common-data-md8.json` 的 BOSS cos
 | `options[].text`、`hint` | 選項文字與下方提示（去掉標籤）；畫面上的選項靠這兩項對到表上 |
 | `options[].kind` | `direct`、`random`、`check`、`check_fail_gift`、`followup`、`battle`、`check_other`、`followup_other`、`other`；`random` 的提示是 `???`（971055）或寫明機率（971003），兩者在 03 第 10 節分屬不同級 |
 | `options[].gifts` | `[體系, 取得方式]`，取得方式如 `direct`、`check_pass`、`check_fail`、`win_battle`、`later_direct` |
+| `options[].gift_ids` | `[飾品 id, 取得方式]`，與 `gifts` 同一批飾品、同樣的取得方式，但留下 id，供依想要類別（03 第 10 節）判斷；id ≥ 990000 的是隱藏的戰鬥 buff，不算飾品，不收 |
+
+取得方式共八種，對到 #420 列的六類：`direct` 直接給；`check_pass` 判定通過才給；`check_fail` 判定失敗才給；`win_battle` 打贏才給；`direct_random` 機率給；`later_direct`、`later_direct_random`、`later_win_battle` 下一頁才給（之後那一頁再依自己的條件給）。表內存原本的八種，六類是讀取端的對照。
 
 飾品的體系取自靜態資料 `ego-gift-mirrordungeon` 的 `keyword`：`events_md8.py` 取到的是同 id 第一筆、沒有 keyword 的紀錄，會把 Grimy Iron Stake 這類飾品讀成 Keywordless，`tools/event_table.py` 重新查一次。沒有敘事文字的 13 個事件（Boss 戰中途與部分後續頁）不收，照提示文字規則處理。
 
@@ -219,7 +222,7 @@ Boss 的 Cost 是遊戲資料 `mirror-dungeon-common-data-md8.json` 的 BOSS cos
 2. 重產試煉表：`uv run python tools/trial_table.py`（讀 `.local/unpack/`），檢查失敗時先看資料改了什麼；NOTICE.md 的版本一併更新。（#17、#381）
 3. 檢查選路權重、Cost 對照表與商店數字是否仍符合遊戲。（#10、#12）
 4. 依上一季的記錄補充事件覆寫表。（#11）
-5. 拆包新版客戶端，重跑 `events_md8.py`（換成這一季的鏡牢編號）與 `tools/event_table.py` 更新事件表，NOTICE.md 的版本一併更新。（#93）
+5. 拆包新版客戶端，重跑 `events_md8.py`（換成這一季的鏡牢編號）與 `tools/event_table.py` 更新事件表（`tests/test_rewards.py` 有拆包時會比對重產結果與已提交的檔案，不一致就失敗），NOTICE.md 的版本一併更新。（#93）
    - 重產合成飾品表（連 `extra_gifts`，和每個主題包的專屬飾品池 `pack_gifts`：主題包 id → 它的 `specificEgoGiftPool`，想要類別 `want_kind` 用它，#417；換季先看遊戲資料 9000–9999 的飾品 id 有沒有新增，重產後 `tests/test_gift_cells.py` 會對照）：`uv run python tools/live/queue.py run --resource bench --name gift_recipes -- uv run --group unpack python tools/gift_recipes.py`（用法見工具檔頭）。（#277）
    - 更新中文名：`uv run --group unpack python tools/llc_text.py --release <LLC 最新 release>`，改寫 `gift_search.json`、`gift_recipes.json`、`gui/src/graces.json` 的中文名與星之恩惠效果文字，並記下所用 release；NOTICE.md 的 release 一併更新。（#280）
    - 預設飾品清單：確認 `gift_lists.yaml` 的 id 都還在 `gift_search.json`、`gift_recipes.json`、殘影裡（`tests/test_gift_lists.py` 會檢查，也檢查內容符合第 9 節）；重產 GUI 圖示：`uv run python tools/live/queue.py run --resource bench --name gift_icons -- uv run --group unpack python tools/gift_icons.py`。（#293）

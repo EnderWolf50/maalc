@@ -271,6 +271,7 @@ ol.skill-sinners .grip { color: var(--muted); font-size: 11px; }
 /* Floor badges: blue NORMAL, red HARD, only the floors inside. */
 small.fl { background: var(--fl-n-bg); color: var(--fl-n-fg); font-size: 10.5px; font-weight: 600; padding: 0 4px; border-radius: 3px; }
 small.fl.hard { background: var(--fl-h-bg); color: var(--fl-h-fg); }
+small.wk { background: #fff1c2; color: #7a5200; font-size: 10.5px; font-weight: 600; padding: 0 4px; border-radius: 3px; } /* the "含想要" mark (#421) */
 .floorkey { display: flex; align-items: center; gap: 4px; }
 .pk.unlisted { border-style: dashed; color: var(--muted); }
 .pk.bad { border-color: var(--bad); outline: 1px solid var(--bad); }
