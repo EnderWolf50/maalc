@@ -1,7 +1,7 @@
 // Runs tests/gift_list_cases.json, which tests/test_gifts.py runs against agent/gifts.py too.
 import { describe, expect, test } from "vitest";
 import cases from "../../tests/gift_list_cases.json";
-import { effective, lockers, mainKeyword, purchases, queue, recipeFusion, resolveList, state, teamKeyword, type GiftTables } from "./gifts";
+import { effective, lockers, mainKeyword, purchases, queue, recipeFusion, resolveList, state, teamKeyword, wantKind, type GiftTables } from "./gifts";
 import type { GiftList } from "./model";
 
 type Case = { name: string; fn: string; list: string; args: Record<string, any>; expect: unknown };
@@ -29,6 +29,7 @@ function run(c: Case) {
       const bought = purchases(list, packs, owned, tables), ids = bought.map(([i]) => i);
       return { count: bought.length, for_fusion: bought.filter(([, f]) => f !== null).length, has: (c.args.ids as number[]).filter((i) => ids.includes(i)) };
     }
+    case "want_kind": return each((id) => wantKind(list, id, packs, owned, tables));
     case "recipe_fusion": return recipeFusion(list, owned, tables, c.args.slots);
   }
   throw new Error(c.fn);
