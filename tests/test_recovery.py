@@ -272,8 +272,17 @@ def test_ladder_a_target_15_run_that_restarts_twice_on_floor_3_and_once_on_floor
     ladder, restarts = Ladder(), Restarts()
     ladder.floor(3, 15)
     assert [restart(ladder, restarts) for _ in range(2)] == [(3, None), (3, None)]
-    ladder.floor(8, 15)  # a resumed run's first floor may be past 6: it starts the stretch it is in
+    ladder.floor(8, 15)  # floors 6 and 7 not seen (their page did not read): floor 8 starts the stretch all the same
     assert restart(ladder, restarts) == (3, None)
+
+
+def test_ladder_a_resumed_run_gets_no_refill_from_its_first_floor_seen():
+    # A bot launched or a task started mid-run has a fresh Ladder (actions.TaskStart) and sees floor 13 as its first new
+    # floor: its restarts on floor 12 are this stretch's, not a refill's.
+    ladder, restarts = Ladder(), Restarts()
+    assert [restart(ladder, restarts) for _ in range(2)] == [(3, None), (3, None)]
+    ladder.floor(13, 15)
+    assert restart(ladder, restarts) == (None, "game restarted 2 times since floor 11")
 
 
 @pytest.mark.parametrize("floors", [range(1, 6), [5, 6, 11]])  # a target-5 run never sees floor 6; the rule needs the target

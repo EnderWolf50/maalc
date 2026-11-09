@@ -221,13 +221,20 @@ class Ladder:
     def __init__(self):
         self.counts = {1: 0, 2: 0, 3: 0}
         self.open = None  # (screen type, level) of the episode under way
-        self.stretch, self.before = 0, dict(self.counts)  # the floors' stretch under way; counts when it began
+        # The stretch of floors under way (None: no floor seen yet) and counts when it began.
+        self.stretch, self.stretch_start = None, dict(self.counts)
 
     def floor(self, floor, target):
-        """The run is on floor `floor` of `target`: a new stretch of REFILL_FLOORS floors past the first starts its caps over."""
+        """The run is on floor `floor` of `target`: a new stretch of REFILL_FLOORS floors past the first starts its caps over.
+
+        The first floor this Ladder sees only names the stretch: a run resumed mid-stretch (a fresh Ladder) spent what it
+        used before it in that same stretch.
+        """
         stretch = (floor - 1) // REFILL_FLOORS if target > REFILL_FLOORS else 0
-        if stretch > self.stretch:
-            self.stretch, self.before = stretch, dict(self.counts)
+        if self.stretch is None:
+            self.stretch = stretch
+        elif stretch > self.stretch:
+            self.stretch, self.stretch_start = stretch, dict(self.counts)
 
     def stuck(self, kind, start, restarts):
         """(level, None) to recover with, or (None, why) to stop. start is the least level, in an open episode too."""
@@ -238,9 +245,9 @@ class Ladder:
         if level == 2 and kind in BATTLE:
             level = 3
         since = f"since floor {self.stretch * REFILL_FLOORS + 1}" if self.stretch else "this run"
-        if level == 2 and self.counts[2] - self.before[2] >= L2_PER_RUN:
+        if level == 2 and self.counts[2] - self.stretch_start[2] >= L2_PER_RUN:
             return None, f"L2 used {L2_PER_RUN} times {since}"
-        if level == 3 and self.counts[3] - self.before[3] >= L3_PER_RUN:
+        if level == 3 and self.counts[3] - self.stretch_start[3] >= L3_PER_RUN:
             return None, f"game restarted {L3_PER_RUN} times {since}"
         if level == 3 and (why := restarts.attempt(kind)):
             return None, why
