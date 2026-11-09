@@ -5,7 +5,7 @@ on:
     tags: ["v*"]
   # Build (artifact only) when the release pipeline itself changes.
   pull_request:
-    paths: [.github/workflows/release.yml, tools/install.py, agent/main.py, tests/test_release_zip.py, tests/test_version.py]
+    paths: [.github/workflows/release.yml, tools/install.py, tools/release_draft.py, agent/main.py, tests/test_release_zip.py, tests/test_version.py]
   workflow_dispatch:
     inputs:
       tag:
@@ -59,7 +59,9 @@ jobs:
           path: ${{ env.ZIP }}
           compression-level: 0
           retention-days: 3
+      # A tag that already has a release (the tag push after publishing, a second dispatch) creates nothing (#587).
       - if: env.TAG != ''
-        run: gh release create $env:TAG $env:ZIP --draft --target $env:GITHUB_SHA --title $env:TAG --generate-notes
+        name: Attach the zip to a draft release, unless the tag has a release already
+        run: uv run --frozen --no-dev python tools/release_draft.py $env:TAG $env:ZIP $env:GITHUB_SHA
         env:
           GH_TOKEN: ${{ github.token }}
