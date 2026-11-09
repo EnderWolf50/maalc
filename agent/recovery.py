@@ -58,7 +58,7 @@ L3_PER_TASK = L3_PER_RUN  # restarts outside the Ladder (restart_game) that went
 # The screens L2 goes through on (RecoverL2): the map, whose gear opens Dungeon Progress, and that panel open. Anywhere else
 # it waited out its 20 s timeout before L3 (#439; mid-battle live 2026-10-17, #70). An event's back key opens the panel too,
 # but the hub's ProgressPanel closes it before the next stuck. AALC's back_init_menu takes To Window from these two only.
-TO_WINDOW = {"MirrorMap", "ProgressPanel"}
+L2_SCREENS = {"MirrorMap", "ProgressPanel"}
 BATTLE_LIMIT = 20 * 60
 RUN_LIMIT_DEFAULT, RUN_LIMIT_MIN_RUNS = 60 * 60, 10
 FLOOR_LIMIT = 45 * 60  # live (#34): a HARD floor took up to ~25 min of real progress
@@ -216,7 +216,7 @@ class Ladder:
     each further stuck before the bot gets past that screen climbs one level, up to L3, which may repeat
     within its limits (live: a restarted game sometimes hangs on CONNECTING). Getting past it closes
     the episode: a later stuck, even on the same screen type, starts over at its start level
-    (2026-10-16). Only the per-run and per-launch caps stop. A screen off TO_WINDOW skips L2 (#70, #439: it
+    (2026-10-16). Only the per-run and per-launch caps stop. A screen off L2_SCREENS skips L2 (#70, #439: it
     failed there and L3 followed anyway), and a level that did not go through is not charged to the run.
     A run with a target above 5 gets the per-run caps again from floors 6 and 11 (floor, #435); counts stays the run's.
     """
@@ -244,23 +244,22 @@ class Ladder:
         # L3 repeats while its limits allow. L2 only on a screen it goes through on: kind is the screen now, an open
         # episode's own may be one on the way back (TRANSIT).
         level = max(start, min(self.open[1] + 1, 3)) if self.open else start
-        if level == 2 and kind not in TO_WINDOW:
+        if level == 2 and kind not in L2_SCREENS:
             level = 3
-        if self.open:
-            kind = self.open[0]
+        episode = self.open[0] if self.open else kind
         since = f"since floor {self.stretch * REFILL_FLOORS + 1}" if self.stretch else "this run"
         if level == 2 and self.counts[2] - self.stretch_start[2] >= L2_PER_RUN:
             return None, f"L2 used {L2_PER_RUN} times {since}"
         if level == 3 and self.counts[3] - self.stretch_start[3] >= L3_PER_RUN:
             return None, f"game restarted {L3_PER_RUN} times {since}"
-        if level == 3 and (why := restarts.attempt(kind)):
+        if level == 3 and (why := restarts.attempt(episode)):
             return None, why
         self.counts[level] += 1
-        self.open = (kind, level)
+        self.open = (episode, level)
         return level, None
 
     def failed(self, level):
-        """The level just given did not go through (L2 off the map, a failed force-stop): uncharge it.
+        """The level just given did not go through (the map's gear or To Window took no tap, a failed force-stop): uncharge it.
 
         The episode stays at that level, so the next stuck climbs on or repeats L3; the launch's Restarts keeps the
         attempt, which bounds a force-stop that always fails.

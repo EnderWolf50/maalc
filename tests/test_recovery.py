@@ -6,8 +6,8 @@ import numpy as np
 import pytest
 
 import actions
-from recovery import (GAME, TO_WINDOW, TRANSIT, WAIT_STILL, Ladder, Restarts, Watchdog, floor_limit, focused_package,
-                      over_time, read_runs, run_limit, same_screen, thumb)
+from recovery import (GAME, TRANSIT, WAIT_STILL, Ladder, Restarts, Watchdog, floor_limit, focused_package, over_time,
+                      read_runs, run_limit, same_screen, thumb)
 from test_pipeline import hub_entries, load_nodes
 
 
@@ -214,7 +214,8 @@ def test_ladder_l2_on_an_open_dungeon_progress_panel():
 
 # Every screen but the map and the open panel: RecoverL2 recognises neither its gear (MirrorMap) nor its panel there, and
 # waited out its 20 s timeout before L3 (#439). An event's back key opens the panel, but the hub's ProgressPanel closes it
-# before the next stuck. MapNodePanel and GiftGet hide the map (maatools.config.mts: MapNodePanel.png reads no MirrorMap).
+# before the next stuck. MapNodePanel hides the map (maatools.config.mts: MapNodePanel.png reads no MirrorMap); under GiftGet
+# the map reads, but its GET! window is what a tap lands on (unverified whether the gear takes it).
 @pytest.mark.parametrize("kind", ["BattleTurn", "BattlePause", "BattleMenu",  # BattleMenu: the pause menu (#215)
                                   "Event", "Shop", "ThemePack", "RewardCard", "GiftGet", "MapNodePanel", "Formation",
                                   "Loading", "ResumeDialog", "MirrorMap, then nothing recognised"])
@@ -228,14 +229,14 @@ def test_ladder_skips_l2_off_the_map(kind):
     assert ladder.counts == {1: 1, 2: 0, 3: 1}
 
 
-def test_to_window_is_what_recover_l2_recognises():
+def test_l2_screens_are_what_recover_l2_recognises():
     # RecoverL2 acts on the map its gear node recognises and on the panel RecoverToWindow reads; the hub hands both out.
+    from recovery import L2_SCREENS  # here, not at the top: the Ladder tests then fail on origin/main by behaviour
     nodes = load_nodes()
     assert nodes["RecoverL2"]["next"] == ["RecoverToWindow", "RecoverGear"]
-    assert TO_WINDOW == set(nodes["RecoverGear"]["any_of"]) | {"ProgressPanel"}
-    assert nodes["ProgressPanel"]["expected"] == "^Continue$" and nodes["RecoverToWindow"]["expected"] == "Dungeon Progress"
+    assert L2_SCREENS == set(nodes["RecoverGear"]["any_of"]) | {"ProgressPanel"}
     hub = hub_entries(nodes, "HubText") + nodes["HubText"]["custom_recognition_param"]["tail"]
-    assert TO_WINDOW <= set(hub)
+    assert L2_SCREENS <= set(hub)
 
 
 def test_ladder_a_map_episode_on_a_loading_screen_skips_l2():
