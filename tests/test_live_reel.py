@@ -227,7 +227,7 @@ def test_the_marks_are_blocks_beside_the_corner_clock():
     blocks = tl.corner_blocks()["blocks"]
     shown = [(b["from"], b["to"], b["lines"][0][-1]["text"]) for b in blocks]
     assert shown == [("10:00:02.000", "10:00:04.000", "慢放 0.5×"), ("10:00:06.000", "10:00:10.000", "快轉 4×"),
-                     ("10:00:02.648", "10:00:03.352", "停格")]  # centred on the held frame, shown fully there
+                     ("10:00:02.648", "10:00:03.352", "定格")]  # centred on the held frame, shown fully there
     assert all(b["at"] == "bottom-left" and b["beside"] and not b["read"] for b in blocks)
 
 
