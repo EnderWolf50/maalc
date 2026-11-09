@@ -106,3 +106,37 @@ def test_the_five_vestiges_are_data_ids_9991_to_9995_keywordless_tier_i_to_v():
         (9991, 1, "Keywordless", "Dark Vestige"), (9992, 2, "Keywordless", "Faint Vestige"), (9993, 3, "Keywordless", "Twinkling Vestige"),
         (9994, 4, "Keywordless", "Brilliant Vestige"), (9995, 5, "Keywordless", "Lunar Vestige")]
     assert all(v["zh"] for v in DATA["vestiges"])
+
+
+def test_the_pack_pools_hold_the_check_up_packs_materials_of_the_9780_fusion():
+    # #417: "pack_gifts" is pack id -> the gifts of its specificEgoGiftPool; 9778 and 9779 (materials of 9780) are in both Check-up packs.
+    import yaml
+    pools = DATA["pack_gifts"]
+    ids = yaml.safe_load((BASE / "data" / "theme_packs.yaml").read_text(encoding="utf-8"))["pack_ids"]
+    assert ids["LCB Regular Check-up"] == 1115 and ids["LCB Regular Check-up BokGak"] == 1125
+    assert {9778, 9779} <= set(pools["1115"]) and {9778, 9779} <= set(pools["1125"])
+    assert next(g for g in DATA["gifts"] if g["id"] == 9780)["packs"] == [1115, 1125]
+    assert all(pool == sorted(set(pool)) for pool in pools.values()) and list(pools) == sorted(pools, key=int)
+
+
+def test_every_pack_a_pool_names_is_a_theme_pack_and_every_pool_gift_a_known_gift():
+    import yaml
+    ids = set(yaml.safe_load((BASE / "data" / "theme_packs.yaml").read_text(encoding="utf-8"))["pack_ids"].values())
+    known = SEARCHABLE | {g["id"] for k in ("gifts", "materials", "extra_gifts", "vestiges") for g in DATA[k]}
+    pools = DATA["pack_gifts"]
+    assert sorted(int(p) for p in pools if int(p) not in ids) == []  # every pool pack is named by theme_packs.yaml (1504 since #387)
+    assert {i for pool in pools.values() for i in pool} - known <= {9247}  # the one gift without a name or an icon (note)
+    assert all(int(p) in {int(q) for q in pools} for g in DATA["gifts"] for p in g.get("packs", []))  # every recipe pack has a pool
+
+
+def test_regenerating_the_recipe_data_gives_the_committed_file_when_it_is_unpacked():
+    import pytest
+    if not (unpack := local_dir("unpack")).joinpath("static").is_dir():
+        pytest.skip("no unpacked game data")
+    release = json.loads((BASE / "data" / "gift_search.json").read_text(encoding="utf-8"))["zh_release"]
+    if not local_dir("llc").joinpath(f"{release}.zip").is_file():
+        pytest.skip("no Chinese names release downloaded")
+    pytest.importorskip("cv2", reason="cv2 is in the unpack group: `uv sync --group unpack` to run this check")
+    import gift_recipes  # noqa: PLC0415
+    built, _ = gift_recipes.build(unpack, release)
+    assert json.loads(json.dumps(built, ensure_ascii=False)) == DATA  # run `tools/gift_recipes.py --no-icons` when this fails

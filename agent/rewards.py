@@ -5,20 +5,23 @@ actions.py reads the pages and taps; everything here is plain data in, plain dat
 
 import re
 from difflib import SequenceMatcher
+from typing import NamedTuple
 
+from gift_cells import name_id
 from gift_search import select_count
 from ocrtext import compact, has, normalize
 from run_start import match_pack
 
 ODDS = ("very low", "low", "normal", "high", "very high")
-GIFT_SCORE = {"main": 3, "other": 2, "owned": 0}
+GIFT_SCORE = {"pack-want": 9, "want": 6, "material": 5.5, "main": 3, "other": 2, "owned": 0}  # by category (#416)
+WANT_CLASSES = ("pack-want", "want", "material")  # gifts.want_kind's classes, scored in GIFT_SCORE (#416)
 TIER_STEP = 0.5  # a main or other gift's score per tier above I (#381)
 UNREAD_LEVELS = 2  # an Enemy Level Up badge that does not read counts as +2, the most seen live (#381)
 KEYWORDS = ("Burn", "Bleed", "Tremor", "Rupture", "Sinking", "Poise", "Charge", "Slash", "Pierce", "Blunt", "Keywordless")
 
 
 def pick_choice(options, keyword, override=None, closed=(), event=None):
-    """Index of the event option to take (spec 03 section 10), or None when every option is closed.
+    """Index of the event option to take (spec 03 section 10), or None when every option is closed: choice_plan's, with no gift wanted.
 
     options are each option's OCR text (its line plus the hint under it); closed are the indices that
     cannot be taken (greyed out, or a tap left the page as it was). Among the rest an override's option
@@ -27,12 +30,39 @@ def pick_choice(options, keyword, override=None, closed=(), event=None):
     first, then the screen order. With the event's table options (match_event) each option is ranked by its
     own entry, found by its texts; an option no entry matches (or no table at all) is ranked by its hint.
     """
+    return choice_plan(options, keyword, override, closed, event)[0]
+
+
+def choice_plan(options, keyword, override=None, closed=(), event=None, want=None):
+    """(index of the option to take, whether its check goes to the lowest-odds sinner) (spec 03 section 10, #420).
+
+    As pick_choice, but with `want(gift_id)` -> "pack-want" | "want" | "material" | None (gifts.want_kind) an option whose
+    table entry gives a wanted gift, by any way (gift_ids), goes ahead of every level: the higher gift score first
+    (GIFT_SCORE), then the levels above, then the screen order. The flag is set when that option's best wanted gift is
+    only given when a check fails: the sinner least likely to pass is sent. An override's option wins over all of it.
+    """
     open_ = [i for i in range(len(options)) if i not in closed]
     if override:
         for i in open_:
             if compact(override) in compact(options[i]):
-                return i
-    return min(open_, key=lambda i: (*_rank(options[i], _entry(options[i], event) if event else None, keyword), i), default=None)
+                return i, False
+    entries = {i: _entry(options[i], event) if event else None for i in open_}
+    wanted = {i: _wanted(entries[i], want) for i in open_} if want else {}
+    best = min(open_, key=lambda i: (wanted.get(i) is None, -(wanted[i][0] if wanted.get(i) else 0),
+                                      *_rank(options[i], entries[i], keyword), i), default=None)
+    return best, bool(wanted.get(best) and wanted[best][1])
+
+
+def _wanted(entry, want):
+    """(score, fail only) of the best wanted gift a table option gives, or None: fail only when every way that gift is given is check_fail."""
+    best = None
+    for gift_id, _ in (entry or {}).get("gift_ids", ()):
+        kind = want(gift_id)
+        score = GIFT_SCORE.get(kind) if kind in WANT_CLASSES else None
+        if score is not None and (best is None or score > best[0]):
+            hows = {how for g, how in entry["gift_ids"] if g == gift_id}
+            best = (score, hows == {"check_fail"})
+    return best
 
 
 def _gift(text):
@@ -177,13 +207,13 @@ def odds_rank(caption):
     return ODDS.index(f"very {level}" if very else level)
 
 
-def pick_checker(captions, skip=()):
+def pick_checker(captions, skip=(), lowest=False):
     """Index into captions [(text, x)] of the sinner to take the check: best odds, leftmost; None when none read.
 
-    skip: indices a tap did nothing on.
+    skip: indices a tap did nothing on. lowest: the worst odds instead (a gift only a failed check gives, #420).
     """
     ranked = [(odds_rank(t), x, i) for i, (t, x) in enumerate(captions) if odds_rank(t) is not None and i not in skip]
-    return min(ranked, key=lambda r: (-r[0], r[1]))[2] if ranked else None
+    return min(ranked, key=lambda r: ((r[0] if lowest else -r[0]), r[1]))[2] if ranked else None
 
 
 def card_type(text):
@@ -290,22 +320,79 @@ def burden(score, levels, model):
     return score + model["level"] * (UNREAD_LEVELS if levels is None else levels)
 
 
-def gift_score(kind, tier):
-    """A gift card's worth: main 3, other 2, owned 0; main and other TIER_STEP more per tier above I (unread: I)."""
-    return GIFT_SCORE.get(kind, 0) + (TIER_STEP * (tier - 1) if tier and kind in ("main", "other") else 0)
+def gift_score(category, tier):
+    """A gift card's worth by its category (spec 03 section 12): pack-want 9, want 6, material 5.5, main 3, other 2, owned 0,
+    avoid 0 (ranked last anyway); main and other TIER_STEP more per tier above I (unread: I), the want classes never."""
+    return GIFT_SCORE.get(category, 0) + (TIER_STEP * (tier - 1) if tier and category in ("main", "other") else 0)
+
+
+ROMAN = ("I", "II", "III", "IV", "V")
+TITLE_ROW = 8  # px: boxes whose tops are this near the topmost line's are one title (a name may come as two boxes)
+
+
+class Card(NamedTuple):
+    """One gift card of the choice page, what the pick and its log need (#418).
+
+    kind: main, other, owned or avoid, the page's own reading; category: what the card scores as, kind or the want class
+    (pack-want, want, material, #416), None meaning kind; tier: from
+    the numeral over the icon (boss page only, else None); burden: its trial's cost in pt, None without trials; label: the
+    gift's name, or the title as read when no gift matches; gift_id: None then; trial: the log's words for its trial.
+    """
+    kind: str
+    tier: int | None
+    burden: float | None
+    label: str
+    gift_id: int | None
+    trial: str | None
+    category: str | None = None
+
+
+def category(kind, want):
+    """A card's category (#416): avoid > owned > the want class (pack-want, want, material) > main > other."""
+    return kind if kind in ("avoid", "owned") or not want else want
+
+
+def card_title(lines):
+    """The title of a card from its [(y, OCR line)]: the topmost lines, joined in the order read (left to right) ("Owned" is no title)."""
+    rows = [(y, t) for y, t in lines if compact(t) != "owned"]
+    if not rows:
+        return ""
+    top = min(y for y, _ in rows)
+    return " ".join(t for y, t in rows if y < top + TITLE_ROW)
+
+
+def card_gift(lines, ids):
+    """The id of the gift a card is, by the whole of its title line against every gift's name (ids: {English name: id}), else None.
+
+    The title line alone: not the description, and not the longest word of it, so a description that says "gift" is no
+    gift named Gift (9764).
+    """
+    title = card_title(lines)
+    return name_id(title, ids) if title else None
+
+
+def card_line(card):
+    """A card for the gifts: log: `<name>/<kind> gift <score>[ tier N][ trial <trial>] total <gift - trial>`."""
+    shown = card.category or card.kind
+    gift = gift_score(shown, card.tier)
+    tier = f" tier {ROMAN[card.tier - 1]}" if card.tier else ""
+    if card.burden is None:
+        return f"{card.label}/{shown} gift {gift:g}{tier} total {gift:g}"
+    return f"{card.label}/{shown} gift {gift:g}{tier} trial {card.trial} total {gift - card.burden:g}"
 
 
 def rank_gifts(cards):
     """Card indexes best first (spec 03 section 12).
 
-    cards are (kind, tier, burden or None); score = gift_score - burden, ties to the lighter burden, then the leftmost.
+    cards are Cards, or (kind, tier, burden or None); score = gift_score(category) - burden, ties to the lighter burden, then the leftmost.
     Without trials (burden None) the gift score alone. An avoided gift comes after every other card: taken only to fill
     the count, rather than a random trial (#90).
     """
 
     def key(i):
-        kind, tier, cost = cards[i]
-        return (kind == "avoid", -(gift_score(kind, tier) - (cost or 0)), cost or 0, i)
+        kind, tier, cost = cards[i][:3]
+        shown = (cards[i].category if isinstance(cards[i], Card) else None) or kind
+        return (kind == "avoid", -(gift_score(shown, tier) - (cost or 0)), cost or 0, i)
 
     return sorted(range(len(cards)), key=key)
 

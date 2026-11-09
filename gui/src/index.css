@@ -8,6 +8,7 @@
   --bad: #c62828;
   --fl-n-bg: #e3edff; --fl-n-fg: #2457c5; --fl-h-bg: #ffe5e0; --fl-h-fg: #b23a1e; /* floor badges: NORMAL blue, HARD red, */
   --fl-i-bg: #efe6ff; --fl-i-fg: #6b3fc0; --fl-x-bg: #2e2a33; --fl-x-fg: #f4efe6; /* INFINITY purple, EXTREME dark */
+  --wk-bg: #fff1c2; --wk-fg: #7a5200; /* the "含想要" mark on a theme pack: amber */
   font: 14px/1.45 "Segoe UI", "Microsoft JhengHei UI", system-ui, sans-serif;
   color: var(--fg);
   background: var(--bg);
@@ -274,6 +275,7 @@ small.fl { background: var(--fl-n-bg); color: var(--fl-n-fg); font-size: 10.5px;
 small.fl.hard { background: var(--fl-h-bg); color: var(--fl-h-fg); }
 small.fl.inf { background: var(--fl-i-bg); color: var(--fl-i-fg); }
 small.fl.ext { background: var(--fl-x-bg); color: var(--fl-x-fg); }
+small.wk { background: var(--wk-bg); color: var(--wk-fg); font-size: 10.5px; font-weight: 600; padding: 0 4px; border-radius: 3px; } /* the "含想要" mark (#421) */
 .floorkey { display: flex; align-items: center; gap: 4px; }
 .pk.unlisted { border-style: dashed; color: var(--muted); }
 .pk.bad { border-color: var(--bad); outline: 1px solid var(--bad); }

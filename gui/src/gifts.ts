@@ -11,11 +11,12 @@ export type GiftState = "want" | "keep" | "drop";
 export interface Fusion {
   id: number; keyword: string; recipes?: number[][]; groups?: { ids: number[]; need: number }[]; specific?: boolean; packs?: number[];
 }
-/** gift_search.json's gifts (the buyable ones) and gift_recipes.json's gifts, the game files' unless a test passes its own. */
-export interface GiftTables { buyable: { id: number }[]; fusions: Fusion[] }
+/** gift_search.json's gifts (the buyable ones), gift_recipes.json's gifts and its `pack_gifts` (theme pack id -> the gifts only
+ * that pack's pool holds), the game files' unless a test passes its own. */
+export interface GiftTables { buyable: { id: number }[]; fusions: Fusion[]; pack_gifts: Record<string, number[]> }
 /** The fusion gifts' recipe data (gift_recipes.json), in data order. */
 export const FUSIONS: Fusion[] = recipes.gifts;
-const GAME_TABLES: GiftTables = { buyable: SEARCH_GIFTS, fusions: FUSIONS };
+const GAME_TABLES: GiftTables = { buyable: SEARCH_GIFTS, fusions: FUSIONS, pack_gifts: recipes.pack_gifts };
 
 /** The data file's default list: the fields of a gift list without id and name. */
 export const DEFAULT_LIST: Omit<GiftList, "id" | "name"> = parseYaml(listsYaml).default_list;
@@ -39,16 +40,17 @@ export const state = (list: ListRules, id: number): GiftState => (list.want.incl
 /** Every gift in a fusion's recipes (all of a group's too), once each. */
 export const materialsOf = (f: Fusion): number[] => [...new Set([...(f.recipes ?? []).flat(), ...(f.groups ?? []).flatMap((g) => g.ids)])];
 
-/** Whether the list still makes a fusion: wanted, not in `owned` (the gifts held; none when unknown), and not pack-specific
- * (data `specific`) unless runPacks and its `packs` share one, or runPacks is null (unknown). */
-const toMake = (list: ListRules, f: Fusion, runPacks: number[] | null, owned: number[]) =>
-  state(list, f.id) === "want" && !owned.includes(f.id) && (!f.specific || runPacks === null || (f.packs ?? []).some((p) => runPacks.includes(p)));
+/** Whether the list still makes a fusion: wanted, not in `held` (id to count of the gifts held; none when unknown), and not
+ * pack-specific (data `specific`) unless runPacks and its `packs` share one, or runPacks is null (unknown). */
+const toMake = (list: ListRules, f: Fusion, runPacks: number[] | null, held: Map<number, number>) =>
+  state(list, f.id) === "want" && !held.has(f.id) && (!f.specific || runPacks === null || (f.packs ?? []).some((p) => runPacks.includes(p)));
 
 /** The fusions the list still makes (toMake) that lock a drop gift, in data-file order: it is a material of any of their
  * recipes, or of any group. A wanted fusion owned locks nothing: it is made no more (the user, 2026-10-30). */
 export function lockers(list: ListRules, id: number, runPacks: number[] | null = null, owned: number[] = [], tables: GiftTables = GAME_TABLES): number[] {
   if (state(list, id) !== "drop") return [];
-  return tables.fusions.filter((f) => materialsOf(f).includes(id) && toMake(list, f, runPacks, owned)).map((f) => f.id);
+  const held = counts(owned);
+  return tables.fusions.filter((f) => materialsOf(f).includes(id) && toMake(list, f, runPacks, held)).map((f) => f.id);
 }
 
 /** "want", "keep" (kept, or a drop gift something locks) or "drop". */
@@ -86,17 +88,50 @@ const counts = (ids: number[]) => {
  * is owned (the user, 2026-10-30). While runPacks is null (the agent restarted mid-run), a pack-specific fusion buys as it
  * locks, though the run may never have pulled its pack (the user, 2026-10-30: rather spend more Cost than miss a wanted fusion). */
 export function purchases(list: ListRules, runPacks: number[] | null = null, owned: number[] = [], tables: GiftTables = GAME_TABLES): [number, number | null][] {
-  const buyable = new Set(tables.buyable.map((g) => g.id)), held = counts(owned), have = (id: number) => held.get(id) ?? 0;
+  const buyable = new Set(tables.buyable.map((g) => g.id)), held = counts(owned);
   const out = new Map<number, number | null>(queue(list, tables).map((id) => [id, null]));
   for (const f of inListOrder(list, tables.fusions)) {
-    if (!toMake(list, f, runPacks, owned) || pick(f, held)) continue;
-    const short = [
-      ...(f.recipes ?? []).flatMap((r) => [...counts(r)].filter(([id, n]) => have(id) < n).map(([id]) => id)),
-      ...(f.groups ?? []).filter((g) => g.ids.filter(have).length < g.need).flatMap((g) => g.ids.filter((id) => !have(id))),
-    ];
-    for (const id of short) if (buyable.has(id) && !out.has(id)) out.set(id, f.id);
+    for (const id of shortOf(list, f, runPacks, held)) if (buyable.has(id) && !out.has(id)) out.set(id, f.id);
   }
   return [...out];
+}
+
+/** The materials a fusion still lacks, none unless the list still makes it (toMake) and `held` (id to count of the gifts held)
+ * completes none of its recipes or groups: each id a recipe needs more of than held, and the ids not held of a group short of its `need`. */
+function shortOf(list: ListRules, f: Fusion, runPacks: number[] | null, held: Map<number, number>): number[] {
+  if (!toMake(list, f, runPacks, held) || pick(f, held)) return [];
+  const have = (id: number) => held.get(id) ?? 0;
+  return [
+    ...(f.recipes ?? []).flatMap((r) => [...counts(r)].filter(([id, n]) => have(id) < n).map(([id]) => id)),
+    ...(f.groups ?? []).filter((g) => g.ids.filter(have).length < g.need).flatMap((g) => g.ids.filter((id) => !have(id))),
+  ];
+}
+
+export type WantKind = "pack-want" | "want" | "material";
+
+/** How much the list wants a gift (#416): "pack-want", "want", "material" or null. A material is one the shop's rule would buy
+ * (shortOf: a fusion the list still makes lacks it, the shop selling it or not); a gift the list wants or that is a material
+ * is a "pack-want" when it is in a theme pack's own pool (`pack_gifts`), else a "want" or a "material". Whether `id` itself is
+ * held is the caller's: it is not looked at for a gift the list wants. runPacks null: unknown. */
+export function wantKind(list: ListRules, id: number, runPacks: number[] | null = null, owned: number[] = [], tables: GiftTables = GAME_TABLES): WantKind | null {
+  const held = counts(owned), wanted = state(list, id) === "want";
+  const material = tables.fusions.some((f) => materialsOf(f).includes(id) && shortOf(list, f, runPacks, held).includes(id));
+  if (!wanted && !material) return null;
+  if (Object.values(tables.pack_gifts).some((pool) => pool.includes(id))) return "pack-want";
+  return wanted ? "want" : "material";
+}
+
+/** The lists the teams using theme pack plan `planId` hold ("default": the data file's plan), enabled teams or not; the default
+ * list when no team uses the plan (a team naming a list that is gone adds none). */
+export function listsOfPlan(planId: string, teams: { theme_pack_plan: string; gift_list: string }[], lists: GiftList[]): ListRules[] {
+  const used = teams.filter((t) => t.theme_pack_plan === planId).map((t) => resolveList(t.gift_list, lists));
+  return used.length ? used.filter((l): l is ListRules => !!l) : [DEFAULT_LIST];
+}
+
+/** The gifts of theme pack `packId`'s own pool that any of `lists` wants or still needs as a material (the screen cannot know the
+ * run's packs or what is held), in pool order. */
+export function packWanted(lists: ListRules[], packId: number, tables: GiftTables = GAME_TABLES): number[] {
+  return (tables.pack_gifts[String(packId)] ?? []).filter((id) => lists.some((l) => wantKind(l, id, null, [], tables) !== null));
 }
 
 /** The materials to put in for a fusion, or undefined: the first recipe `owned` (id to count) has all of; for groups the
