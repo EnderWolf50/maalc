@@ -1,4 +1,5 @@
 import json
+import math
 
 import pytest
 from PIL import Image
@@ -216,3 +217,29 @@ def test_a_title_opening_with_before_or_after_warns_to_use_the_tag(tmp_path):
     report = reel.check(manifest(tmp_path, [step("10:00:01", "10:00:05", "改前：等了 1.5 秒才重拖")]))
     assert report.problems == []
     assert len(report.warnings) == 1 and "tag" in report.warnings[0]
+
+
+# The speed and freeze marks sit beside the clock in evidence-annotate's bottom-left corner, not on the strip
+# (the user, 2026-11-09: 「感覺倍速可以整合到左下角時間就好」).
+
+def test_the_marks_are_blocks_beside_the_corner_clock():
+    t0 = evidence.secs("10:00:00")
+    tl = reel.Timeline(t0, t0 + 10, speed=((t0 + 2, t0 + 4, 0.5), (t0 + 6, t0 + 10, 4.0)), freeze=((t0 + 3, 1.5),))
+    blocks = tl.corner_blocks()["blocks"]
+    shown = [(b["from"], b["to"], b["lines"][0][-1]["text"]) for b in blocks]
+    assert shown == [("10:00:02.000", "10:00:04.000", "慢放 0.5×"), ("10:00:06.000", "10:00:10.000", "快轉 4×"),
+                     ("10:00:02.650", "10:00:03.350", "停格")]  # centred on the held frame, shown fully there
+    assert all(b["at"] == "bottom-left" and b["beside"] and not b["read"] for b in blocks)
+
+
+def test_the_strip_carries_no_mark(tmp_path, monkeypatch):
+    path = manifest(tmp_path, [step("10:00:01", "10:00:05")], speed=[["10:00:01", "10:00:03", 0.5]], freeze=[["10:00:04", 1.0]])
+    r = reel.load(path)
+    encoded = []
+    monkeypatch.setattr(reel.Builder, "file", lambda self, suffix: tmp_path / f"{len(encoded)}{suffix}")
+    monkeypatch.setattr(reel.Builder, "segment", lambda self, picture, filters, bands, out: encoded.append(bands))
+    builder = object.__new__(reel.Builder)
+    builder.reel = r
+    builder.timed(r.chapters[0].clips[0], tmp_path / "clip.mp4", 1, r.chapters[0])
+    [bands] = encoded
+    assert [(a, b) for _, a, b in bands] == [(0, math.inf)]  # the strip alone, the whole clip

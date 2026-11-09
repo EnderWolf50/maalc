@@ -17,8 +17,8 @@ game pixels); a clip with a box or a zoom must name it, and the boxes are drawn 
 
 A clip is rendered from the uncut recording with evidence-annotate (`evidence.py`'s `annotated_clip`, masks
 included) into `clips/` beside REEL.json, again only when one of its inputs, the masks or annotate.py changed. `speed` plays a stretch
-faster (4) or slower (0.5), `freeze` holds the frame at T for that many seconds; the strip marks each
-("快轉 4×", "慢放 0.5×", "停格"). The reel is 1280x776: a 56 px chapter strip above the 1280x720 picture, so
+faster (4) or slower (0.5), `freeze` holds the frame at T for that many seconds; evidence-annotate's bottom-left
+corner marks each beside its clock ("快轉 4×", "慢放 0.5×", "停格"). The reel is 1280x776: a 56 px chapter strip above the 1280x720 picture, so
 the strip never hides game UI. It shows the chapter (its number, issue, line) at every moment after the opening
 list, which fills the whole frame and gives each chapter's start time; the MP4 carries a chapter mark per chapter. Writes reel.mp4,
 chapters.md and stills/NN.png (the reel at the middle of each caption) beside REEL.json.
@@ -61,6 +61,8 @@ BAND, FPS = 56, 30
 OPENING_S = 10.0  # the opening list is a table of contents to pause on; the chapter marks are for jumping
 FONTS = {False: evidence.FONTS, True: ["C:/Windows/Fonts/msjhbd.ttc", "/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc"]}
 AMBER, WHITE, DIM, BG = (255, 196, 64), (245, 245, 245), (190, 194, 204), (17, 19, 26)
+CORNER_TEXT = "#e6e6e6e6"  # evidence-annotate's corner text (scripts/text.py CORNER), for the dot before a mark
+ANNOTATE_FADE_S = 0.35  # evidence-annotate fades a block in and out over this (scripts/text.py FADE_S)
 ENC = ["-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-pix_fmt", "yuv420p", "-r", str(FPS), "-an"]
 
 @dataclass
@@ -118,6 +120,16 @@ class Timeline:
     def factor(self, t: float) -> float:
         return next((x for a, b, x in self.speed if a <= t < b), 1.0)
 
+    def corner_blocks(self) -> dict:
+        """evidence-annotate's blocks.json: each stretch not at normal speed marked beside the clock in its bottom-left
+        corner, on the recording's clock; a freeze's mark centred on the held frame, so it shows fully there."""
+        def mark(a: float, b: float, text: str) -> dict:
+            return {"from": hms(a), "to": hms(b), "at": "bottom-left", "beside": True, "read": False, "sep": "  ",
+                    "pad": [4, 3.5],  # the corner's own height (0.27 x 13 px); 4 px in, so the gap reads as its "  ·  "
+                    "lines": [[{"text": "·", "color": CORNER_TEXT}, {"text": text, "color": "#%02x%02x%02x" % AMBER}]]}
+        return {"blocks": [mark(a, b, f"快轉 {x:g}×" if x > 1 else f"慢放 {x:g}×") for a, b, x in self.speed]
+                + [mark(at - ANNOTATE_FADE_S, at + ANNOTATE_FADE_S, "停格") for at, _ in self.freeze]}
+
     def pieces(self) -> list[tuple]:
         """("play", a, b, factor) and ("hold", at, seconds) in wall order, covering [t0, t1]."""
         cuts = sorted({self.t0, self.t1, *(v for a, b, _ in self.speed for v in (a, b)), *(at for at, _ in self.freeze)})
@@ -128,12 +140,6 @@ class Timeline:
             if q is not None:
                 out.append(("play", p, q, self.factor(p)))
         return out
-
-    def marks(self) -> list[tuple[float, float, str]]:
-        """(from, to, text) on the played clip's clock for each stretch not at normal speed."""
-        out = [(self.screen(a), self.screen(b), f"快轉 {x:g}×" if x > 1 else f"慢放 {x:g}×") for a, b, x in self.speed]
-        out += [(self.screen(at), self.screen(at) + sec, "停格") for at, sec in self.freeze]
-        return sorted(out)
 
 
 @dataclass(frozen=True)
@@ -332,27 +338,15 @@ def fit(d, text: str, f, width: float) -> str:
     return text + "…"
 
 
-def pill(d, x: float, cy: int, text: str, f) -> float:
-    """`text` dark on an amber pill from x; returns where the pill ends."""
-    tw = d.textlength(text, font=f)
-    d.rounded_rectangle([x, cy - 17, x + tw + 32, cy + 17], radius=17, fill=AMBER)
-    d.text((x + 16 + tw / 2, cy), text, font=f, fill=BG, anchor="mm")
-    return x + tw + 32
-
-
-def band(n: int, issue: str, line: str, mark: str = "") -> Image.Image:
-    """The chapter strip: the chapter's number on a pill, the issue, the line; a speed or freeze mark at the right."""
+def band(n: int, issue: str, line: str) -> Image.Image:
+    """The chapter strip: the chapter's number in amber, the issue, the line."""
     im = Image.new("RGB", (W, BAND), BG)
     d = ImageDraw.Draw(im)
-    cy = BAND // 2
-    x = pill(d, 16, cy, chapter_label(n), font(24, True)) + 18
-    for text, f, colour in ((issue, font(24, True), WHITE), (line, font(22), DIM)):
-        text = fit(d, text, f, W - 200 - x)  # the right 200 px stay free for the mark
+    x, cy = 20, BAND // 2
+    for text, f, colour in ((chapter_label(n), font(26, True), AMBER), (issue, font(24, True), WHITE), (line, font(22), DIM)):
+        text = fit(d, text, f, W - 20 - x)
         d.text((x, cy), text, font=f, fill=colour, anchor="lm")
         x += d.textlength(text, font=f) + 22
-    if mark:
-        f = font(22, True)
-        pill(d, W - 48 - d.textlength(mark, font=f), cy, mark, f)
     d.line([(0, BAND - 1), (W, BAND - 1)], fill=(60, 64, 76))
     return im
 
@@ -435,8 +429,8 @@ class Builder:
         run(["ffmpeg", "-y", "-v", "error", *inputs, "-filter_complex", ";".join(graph), "-map", f"[{last}]", *ENC, out])
         return out
 
-    def strip(self, n: int, c: Chapter, mark: str = "") -> Image.Image:
-        return band(n, c.issue, c.line, mark)
+    def strip(self, n: int, c: Chapter) -> Image.Image:
+        return band(n, c.issue, c.line)
 
     def picture(self, im: Image.Image, seconds: float, strip: Image.Image | None) -> Path:
         png = self.file(".png")
@@ -450,20 +444,21 @@ class Builder:
         tl = clip.timeline
         masks = evidence.masks_path(SimpleNamespace(masks=None))
         files = [clip.video, evidence.ANNOTATE, *sorted(masks.parent.glob("*.png"))]
-        steps = clip.annotation_steps()
+        steps, blocks = clip.annotation_steps(), tl.corner_blocks()
         key = hashlib.sha256(json.dumps([[str(f), f.stat().st_size, f.stat().st_mtime] for f in files] + [
             clip.first_frame, tl.t0, tl.t1, masks.read_text(encoding="utf-8"), clip.events.read_text(encoding="utf-8"),
-            steps], ensure_ascii=False).encode()).hexdigest()
+            steps, blocks], ensure_ascii=False).encode()).hexdigest()
         stamp = out.with_suffix(".key")
         if out.exists() and stamp.exists() and stamp.read_text() == key:
             return
         events = read_json(clip.events)
         footage = evidence.Footage([f"{clip.video}@{clip.first_frame}"])
-        evidence.annotated_clip(footage, tl.t0, tl.t1, out, events, steps, SimpleNamespace(annotate=evidence.ANNOTATE, masks=None))
+        evidence.annotated_clip(footage, tl.t0, tl.t1, out, events, steps, SimpleNamespace(annotate=evidence.ANNOTATE, masks=None),
+                                blocks)
         stamp.write_text(key)
 
     def timed(self, clip: Clip, src: Path, n: int, c: Chapter) -> Path:
-        """The annotated clip played by its timeline, under the strip with its marks."""
+        """The annotated clip played by its timeline, under the strip."""
         tl, parts, graph = clip.timeline, [], []
         pieces = tl.pieces()
         for i, p in enumerate(pieces):
@@ -479,8 +474,7 @@ class Builder:
         split = f"split={len(pieces)}" + "".join(f"[s{i}]" for i in range(len(pieces)))
         filters = (f"{split};" + ";".join(graph) + f";{''.join(parts)}concat=n={len(pieces)}:v=1:a=0,fps={FPS},"
                    f"scale={W}:{H},setsar=1,format=yuv420p")
-        bands = [(self.strip(n, c), 0, math.inf)] + [(self.strip(n, c, text), a, b) for a, b, text in tl.marks()]
-        return self.segment(["-i", src], filters, bands, self.file(".mp4"))
+        return self.segment(["-i", src], filters, [(self.strip(n, c), 0, math.inf)], self.file(".mp4"))
 
     def chapter(self, n: int, c: Chapter) -> list[Path]:
         card = [(chapter_label(n), 44, True, AMBER), (c.issue, 60, True, WHITE), (c.line, 40, False, WHITE)]
