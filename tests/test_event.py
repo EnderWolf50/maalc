@@ -355,17 +355,38 @@ def test_an_event_option_giving_a_wanted_gift_is_taken_before_the_hint_levels(co
     assert page.tapped == ["Reach out."]
 
 
-@pytest.mark.parametrize("shop, owned", [({"owned": [9001, 9002]}, [9001, 9002]), ({"bought": [9003]}, [9003]), (None, [])])
-def test_the_want_is_asked_with_the_gifts_the_shop_s_last_visit_counts_as_owned(context, monkeypatch, shop, owned):
+@pytest.mark.parametrize("held, owned", [([9001, 9002], [9001, 9002]), (None, [])])
+def test_the_want_is_asked_with_the_gifts_the_run_holds(context, monkeypatch, held, owned):
     want_team(9001)
-    if shop is not None:
-        actions.RUN["shop"] = shop
+    if held is not None:
+        actions.RUN["owned"] = held
     asked = []
     monkeypatch.setattr(actions, "want_kind", lambda gift_list, i, packs, held: asked.append((packs, list(held))) or "want")
     options = wanting_table(monkeypatch, ("Reach out.", "Select to gain a Burn E.G.O Gift", "direct", [(9001, "direct")]))
     Choices(context, monkeypatch, options, test_actions.DOLL)
     actions.Event().run(context, None)
     assert asked and all(held == owned for _, held in asked)
+
+
+def test_a_wanted_gift_the_run_already_holds_does_not_jump_the_hint_levels(context, monkeypatch):
+    # #416 "已擁有 0": 9001 is wanted but held, so the ??? option keeps its place ahead of the direct gain
+    want_team(9001)
+    actions.RUN["owned"] = [9001]
+    options = wanting_table(monkeypatch, ("Gamble.", "???", "random", []), ("Reach out.", "Select to gain a Burn E.G.O Gift", "direct", [(9001, "direct")]))
+    page = Choices(context, monkeypatch, options, test_actions.DOLL)
+    actions.Event().run(context, None)
+    assert page.tapped == ["Gamble."]
+
+
+@pytest.mark.parametrize("wanted, taken", [(9001, "Reach out."), (9104, "Enter the haze.")])
+def test_the_committed_table_entry_of_901001_sends_the_option_that_gives_the_wanted_gift(context, monkeypatch, wanted, taken):
+    # #420: 9001 comes from Reach out. (direct) and Enter the haze. (battle, with 9104); the real story and option texts
+    want_team(wanted)
+    entry = next(e for e in actions.event_table() if e["id"] == 901001)
+    page = Choices(context, monkeypatch, [(o["text"], o["hint"]) for o in entry["options"]],
+                   ["Burning to death within.", "Would you be scorched as well if the flames touched you?"])
+    actions.Event().run(context, None)
+    assert page.tapped == [taken]
 
 
 def test_a_gift_only_a_failed_check_gives_sends_the_lowest_odds_sinner(context, monkeypatch):

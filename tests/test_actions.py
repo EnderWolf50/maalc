@@ -1276,11 +1276,50 @@ def test_a_pack_exclusive_material_is_taken_over_a_plain_want(context, monkeypat
     assert picked(taps) == [536]
 
 
-def test_a_material_of_a_fusion_already_held_scores_as_a_main_card(context, monkeypatch):
-    # #419: the Violin (9249) held, the Spanner is a main card like Wound Clerid (leftmost), not a 9
+def left_shop_holding(context, monkeypatch, owned):
+    """A shop visit that read `owned` on its pages and was left by hand, then the next node entered: the flow that ends RUN["shop"]."""
+    actions.RUN["team"] = shop_team({"heal": "none", "list": gifts.default_list()})
+    monkeypatch.setattr(actions.Shop, "to_main", staticmethod(lambda context: True))
+    monkeypatch.setattr(actions.Shop, "sell", staticmethod(lambda *a: False))
+    handed_over = actions.page_guard
+    monkeypatch.setattr(actions, "page_guard", REAL_GUARD)
+
+    def buy(context, team, visit):
+        visit["owned"] = list(owned)
+        actions.page_guard(context, "Shop")
+    monkeypatch.setattr(actions.Shop, "buy", staticmethod(buy))
+    assert actions.Shop().run(context, argv())
+    actions.enter_node(context)
+    assert "shop" not in actions.RUN
+    monkeypatch.setattr(actions, "page_guard", handed_over)
+
+
+def test_a_material_of_a_fusion_made_in_the_shop_scores_as_a_main_card_on_the_next_gift_page(context, monkeypatch):
+    # #419: the Violin (9249) was made in the shop; on the gift page after it the Spanner is a main card like Wound
+    # Clerid (leftmost), not a 9. RUN["shop"] is gone by then (#118), so the run must remember what the shop held.
+    left_shop_holding(context, monkeypatch, [9249])
     taps = gift_page(context, monkeypatch, ["Wound Clerid", "Oil-gunked Spanner"])
     actions.RUN["team"]["list"] = gifts.default_list()
-    actions.RUN["shop"] = {"owned": [9249]}
+    actions.PickGift().run(context, None)
+    assert picked(taps) == [236]
+
+
+@pytest.mark.parametrize("visit, before, held", [({"owned": [9249]}, [9001], [9249]), ({"bought": [9249]}, [9001], [9001, 9249]), (None, [9001], [9001])])
+def test_a_shop_visit_that_ends_leaves_the_run_holding_what_it_counted_as_owned(visit, before, held):
+    actions.RUN["owned"] = before
+    if visit is not None:
+        actions.RUN["shop"] = visit
+    actions.leave_shop()
+    assert actions.RUN["owned"] == held and "shop" not in actions.RUN
+
+
+def test_a_gift_taken_on_a_gift_page_is_held_for_the_next_one(context, monkeypatch):
+    # #416: the Violin (9249) taken from a page; a page after it ranks the Spanner (its material) as a main card
+    taps = gift_page(context, monkeypatch, ["A Small, Lovely Violin"])
+    actions.RUN["team"]["list"] = gifts.default_list()
+    actions.PickGift().run(context, None)
+    taps = gift_page(context, monkeypatch, ["Wound Clerid", "Oil-gunked Spanner"])
+    actions.RUN["team"]["list"] = gifts.default_list()
     actions.PickGift().run(context, None)
     assert picked(taps) == [236]
 
