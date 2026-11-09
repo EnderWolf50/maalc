@@ -13,7 +13,7 @@ Issues, PRs and every comment on them are written in Traditional Chinese, titles
 - the keys of the 驗證 template (`Tests:`, `Live:`, `Acceptance:`, `Fixtures:`); `public-text-guard.py` reads the counts `N passed, M failed`, `Tests: none (docs only)`, and `not run` with its issue;
 - a map issue's `Notes` and `Decisions so far` headings, which the `wayfinder` skill looks up: in parentheses after the Chinese, `## 目前的決定（Decisions so far）`.
 
-Commit messages stay English (the user confirmed it, 2026-11-08).
+Commit messages stay English (the user confirmed it, 2026-11-08), and carry no closing keyword: a `fix: #387` subject closed #387 when its PR merged although the PR body said `Refs #387` (#602). Whether an issue closes goes in the PR body; a commit writes `review(#N): ...` or `Refs #N`, and `tools/review_lint.py` flags the rest.
 
 The `pr` skill's headings in Chinese: 為什麼, 摘要, 範圍, 取捨, 證據 (**之前：** / **之後：**), 合併風險 (**門：** 單向 / 雙向, **影響範圍：**).
 
