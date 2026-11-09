@@ -502,7 +502,7 @@ def main(argv=None) -> None:
     for p in report.problems:
         print(f"problem: {p}")
     if report.problems:
-        print(f"refused: {len(report.problems)} problem(s); docs/agents/evidence-style.md \"Review reel\" has the rules")
+        print(f"refused: {len(report.problems)} problem(s); the rules are in docs/agents/evidence-style.md")
         sys.exit(1)
     print(f"ok: {len(reel.chapters)} chapters pass the rules", flush=True)
     if not a.check:
