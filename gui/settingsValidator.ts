@@ -10,14 +10,19 @@ import schema from "../agent/settings.schema.json";
 const ID = "virtual:settings-validator";
 const RESOLVED = "\0" + ID;
 
-/** The ES module source: settings checks a whole settings file, giftList one gift_lists entry. */
+/** The ES module source: settings checks a whole settings file, giftList one gift_lists entry (src/vite-env.d.ts types
+ * these two names). */
 export function settingsValidatorCode(): string {
   const ajv = new Ajv2020({ allErrors: true, strict: false, code: { source: true, esm: true } });
   ajv.addSchema(schema);
-  return standaloneCode(ajv, { settings: schema.$id, giftList: `${schema.$id}#/$defs/gift_list` });
+  const code = standaloneCode(ajv, { settings: schema.$id, giftList: `${schema.$id}#/$defs/gift_list` });
+  // Ajv 8 still requires its runtime helpers (ucs2length for minLength, equal for uniqueItems) in esm mode. The build
+  // bundles a require, but the dev server sends this module to the browser as is, where require does not exist.
+  return code.replace(/const (\w+) = require\("(ajv\/dist\/runtime\/[\w-]+)"\)\.default;/g, (_, name: string, path: string) =>
+    `import ${name} from "${path}";`);
 }
 
-export function settingsValidator(): Plugin {
+export function settingsValidatorPlugin(): Plugin {
   return {
     name: "settings-validator",
     resolveId: (id) => (id === ID ? RESOLVED : undefined),

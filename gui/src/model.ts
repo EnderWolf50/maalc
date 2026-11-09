@@ -1,11 +1,11 @@
 // Settings types and the values that come from agent/settings.schema.json (docs/spec/04-settings.md).
+import { giftList as giftListCheck } from "virtual:settings-validator";
 import { parse as parseYaml } from "yaml";
 import schema from "../../agent/settings.schema.json";
 import gifts from "../../assets/resource/base/data/gift_search.json";
 import recipes from "../../assets/resource/base/data/gift_recipes.json";
 import shopYaml from "../../assets/resource/base/data/shop.yaml?raw";
 import graces from "./graces.json";
-import { giftList as giftListCheck } from "virtual:settings-validator";
 
 export { schema };
 

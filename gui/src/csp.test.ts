@@ -9,7 +9,7 @@ test("images may be data: URLs: vite inlines every icon under 4 KB as one, the g
   expect(directive("img-src")).toEqual(expect.arrayContaining(["'self'", "data:"]));
 });
 
-test("scripts come only from the app itself: the settings validator is compiled at build time, so no 'unsafe-eval' (#220)", () => {
+test("scripts come only from the app itself: the settings validator is compiled at build time, so no 'unsafe-eval', in dev too: no devCsp (#220)", () => {
   expect(directive("script-src")).toEqual(["'self'"]);
   expect("devCsp" in conf.app.security).toBe(false);
 });

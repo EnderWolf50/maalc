@@ -7,5 +7,5 @@
     "allowSyntheticDefaultImports": true,
     "resolveJsonModule": true
   },
-  "include": ["vite.config.ts", "settingsValidator.ts"]
+  "include": ["vite.config.ts", "settingsValidator.ts", "settingsValidator.test.ts"]
 }
