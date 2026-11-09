@@ -3906,7 +3906,6 @@ TRIAL_HALF = (-125, 438, 250, 105)  # x from the centre, y, w, h
 # Measured on the 10 boss cards of tests/screens (16 with two more 2026-10-28 frames, not committed):
 TRIAL_NAME_FOOT = 470  # a name's box starts above it (y 444-451), an effect line's below (475+)
 TRIAL_BADGE_X = -60  # a "+N" box starts left of the centre by more (-103), the name's by at most 24
-ROMAN = ("I", "II", "III", "IV", "V")
 
 
 def gift_count(context, image=None):
@@ -3948,6 +3947,21 @@ def trial_card(context, image, x):
     return level, " ".join(name), " ".join(line)
 
 
+def gift_cards(context, image):
+    """(card centres x, each card's [(y, OCR line)], whether Mounting Trials hang under the cards) of a gift choice page (#418).
+
+    The "Acquire E.G.O Gift" tab sits on each card's top-right corner, 114 px right of its centre; no tab, no centres.
+    """
+    results = ocr(context, image, GIFT_CARDS)
+    centres = sorted(x + w - 114 for t, (x, y, w, h) in results if has(t, "Acquire"))
+    lines = [[] for _ in centres]
+    for t, (x, y, w, h) in results:
+        i = min(range(len(centres)), key=lambda i: abs(centres[i] - x - w // 2), default=None)
+        if i is not None and abs(centres[i] - x - w // 2) < 130 and not has(t, "Acquire"):
+            lines[i].append((y, t))
+    return centres, lines, any(has(t, "Mounting") for t, _ in results)
+
+
 @AgentServer.custom_action("PickGift")
 class PickGift(CustomAction):
     """Gift choice after a fight, an event or a boss: best cards until Select n/m is full, then Select (spec 03 section 12).
@@ -3962,44 +3976,36 @@ class PickGift(CustomAction):
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         run = current_run(context)
         image = screen(context)
-        results = ocr(context, image, GIFT_CARDS)
-        # The "Acquire E.G.O Gift" tab sits on each card's top-right corner, 114 px right of its centre.
-        centres = sorted(x + w - 114 for t, (x, y, w, h) in results if has(t, "Acquire"))
+        centres, lines, trials = gift_cards(context, image)
         if not centres:
             return True  # page fading in or out: let MirrorHub look again
-        lines = [[] for _ in centres]
-        for t, (x, y, w, h) in results:
-            i = min(range(len(centres)), key=lambda i: abs(centres[i] - x - w // 2))
-            if abs(centres[i] - x - w // 2) < 130 and not has(t, "Acquire"):
-                lines[i].append((y, t))
-        trials = any(has(t, "Mounting") for t, _ in results)
         table = data("trials.yaml")
         # The pool of the floor just cleared; every trial when the floor is unknown (the agent restarted mid-run).
         pool = rewards.trials_of(table, run.get("floor")) or rewards.trials_of(table, None)
         overrides = {o["trial"]: o["risk"] for o in run["settings"]["trial_risk_overrides"]}
         scores = rewards.scores(pool, table["model"], run.get("trial_coins", 0), overrides)
         avoid = [g["name"] for g in avoided_gifts(run["team"])]
-        cards, shown, names = [], [], []
+        cards, names = [], []
         for x, card in zip(centres, lines):
             gift = " ".join(t for y, t in card if y < 410)
             owned = any(compact(t) == "owned" for _, t in card)
             kind = rewards.gift_kind(gift, run["team"]["keyword"], owned, avoid)
-            name, tier, part, note = None, None, "", ""
+            gift_id = rewards.card_gift(card, GIFT_IDS)
+            label = GIFT_NAMES[gift_id] if gift_id else repr(rewards.card_title(card))
+            name, tier, cost, part = None, None, None, None
             if trials:  # the tier counts on the boss page only (#381); a fight's page stays main > other > owned
                 tier = gift_tier(image, x)
                 level, read, line = trial_card(context, image, x)
                 name, how = rewards.read_trial(read, line, pool)
                 score = scores[name] if name else max(scores.values())  # unread: the pool's worst
-                cards.append((kind, tier, rewards.burden(score, level, table["model"])))
-                part = f"/{name or '?'} +{'?' if level is None else level} score {score:g}" + (f" tier {ROMAN[tier - 1]}" if tier else "")
+                cost = rewards.burden(score, level, table["model"])
+                part = f"{name or '?'} +{'?' if level is None else level} score {score:g}"
                 if not name or compact(read) != compact(name):  # the name read is not the trial's: what was, for the log
-                    note = f" ({f'by its {how}' if how else 'unread: the pool worst'}, read {read!r} / {line!r})"
-            else:
-                cards.append((kind, None, None))
+                    part += f" ({f'by its {how}' if how else 'unread: the pool worst'}, read {read!r} / {line!r})"
+            cards.append(rewards.Card(kind, tier, cost, label, gift_id, part))
             names.append(name)
-            shown.append(kind + part + note)
         ranked = rewards.rank_gifts(cards)
-        log("gifts: " + ", ".join(shown) + f": order {ranked}")
+        log("gifts: " + ", ".join(rewards.card_line(c) for c in cards) + f": order {ranked}")
 
         def pick(i):
             before = gift_count(context, page_guard(context, "GiftChoice"))

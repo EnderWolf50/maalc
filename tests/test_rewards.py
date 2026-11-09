@@ -352,3 +352,36 @@ def test_data_files():
     assert events["client"] == "1.117.0" and "Project Moon" in events["note"]
     nails = next(e for e in events["events"] if e["id"] == 901008)["options"][0]  # Grimy Iron Stake is a Bleed gift
     assert (nails["text"], nails["kind"], nails["gifts"]) == ("Remove the nails.", "check", [["Bleed", "check_pass"]])
+
+
+IDS = {"Gift": 9764, "Melted Spring": 9054, "Illusory Hunt": 9038, "Hellterfly's Dream": 9001, "Rusted Muzzle": 9089}
+
+
+def test_a_card_s_title_is_its_topmost_line_with_the_boxes_on_it_joined_left_to_right():
+    # BossGiftTrialsHard.png / GiftChoiceNoCount.png: the Owned label sits above the title, a long title may come as two boxes
+    assert r.card_title([(152, "Owned"), (182, "Nebulizer"), (242, "0"), (281, "First Turn Start of an")]) == "Nebulizer"
+    assert r.card_title([(176, "Illusory"), (180, "Hunt"), (301, "Focused Encounter Start:")]) == "Illusory Hunt"
+    assert r.card_title([]) == ""
+
+
+@pytest.mark.parametrize(("lines", "gift_id"), [
+    ([(177, "Melted Spring"), (281, "Turn Start: enemies with")], 9054),
+    ([(180, "Hellterfly's Dream"), (281, "When applyingBurn")], 9001),
+    ([(176, "Illusory"), (180, "Hunt"), (301, "Focused Encounter Start:")], 9038),
+    ([(152, "Owned"), (181, "Rusted Muzzle")], 9089),
+    ([(181, "Rusted Muzle")], 9089),  # an OCR slip
+    ([(181, "Gift"), (281, "Gain a Gift")], 9764),  # a card named Gift
+    ([(181, "Rusted Muzzle"), (281, "Gift of the Rust Spring")], 9089),  # "gift" in the description: not 9764
+    ([(181, "Frosted Gift Box"), (281, "Gift")], None),  # another gift's name that holds the word is no Gift
+    ([(181, "Unheard Of"), (281, "Gift")], None),
+    ([], None),
+])
+def test_a_card_is_the_gift_whose_whole_name_its_title_line_reads(lines, gift_id):
+    assert r.card_gift(lines, IDS) == gift_id
+
+
+def test_a_card_line_names_the_gift_its_category_scores_and_the_total():
+    card = r.Card("main", 2, 0.465, "Melted Spring", 9054, "Defense Level Up +1 score 0.105")
+    assert r.card_line(card) == "Melted Spring/main gift 3.5 tier II trial Defense Level Up +1 score 0.105 total 3.035"
+    assert r.card_line(r.Card("other", None, None, "'Mystery'", None, None)) == "'Mystery'/other gift 2 total 2"
+    assert r.rank_gifts([r.Card("other", None, None, "a", 1, None), r.Card("main", None, None, "b", 2, None)]) == [1, 0]

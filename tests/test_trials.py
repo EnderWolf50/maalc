@@ -228,8 +228,9 @@ def test_a_boss_page_takes_the_card_whose_trial_and_level_ups_weigh_least(contex
     taps, logs = boss_page(context, monkeypatch, FLOOR_3, floor)
     assert actions.PickGift().run(context, None)
     assert [t for t in taps if t[1] == 300] == [(375, 300)]
-    assert logs[0] == ("gifts: other/Resilient V +2 score 0.105, other/Final Power Boost +1 score 1.075, "
-                       "owned/Keen III +1 score 1.045: order [0, 1, 2]")
+    assert logs[0] == ("gifts: Ashes to Ashes/other gift 2 trial Resilient V +2 score 0.105 total 1.175, "
+                       "Barbed Lasso/other gift 2 trial Final Power Boost +1 score 1.075 total 0.565, "
+                       "Nebulizer/owned gift 0 trial Keen III +1 score 1.045 total -1.405: order [0, 1, 2]")
     assert "trial_coins" not in actions.RUN
 
 
@@ -241,8 +242,9 @@ def test_a_boss_page_adds_the_tier_the_numeral_over_each_icon_shows(context, mon
     taps, logs = boss_page(context, monkeypatch, FLOOR_3, 3)
     assert actions.PickGift().run(context, None)
     assert [t for t in taps if t[1] == 300] == [(375, 300)]
-    assert logs[0] == ("gifts: other/Resilient V +2 score 0.105 tier I, other/Final Power Boost +1 score 1.075 tier II, "
-                       "owned/Keen III +1 score 1.045 tier II: order [0, 1, 2]")
+    assert logs[0] == ("gifts: Ashes to Ashes/other gift 2 tier I trial Resilient V +2 score 0.105 total 1.175, "
+                       "Barbed Lasso/other gift 2.5 tier II trial Final Power Boost +1 score 1.075 total 1.065, "
+                       "Nebulizer/owned gift 0 tier II trial Keen III +1 score 1.045 total -1.405: order [0, 1, 2]")
 
 
 def test_a_fight_s_gift_page_does_not_weigh_tiers(context, monkeypatch):
@@ -285,8 +287,9 @@ def test_a_card_read_by_its_effects_or_not_at_all_says_what_was_read(context, mo
              ("Phlebotomy Pack", False, 1, "", [])]
     taps, logs = boss_page(context, monkeypatch, cards, 2)
     actions.PickGift().run(context, None)
-    assert logs[0] == ("gifts: other/Resilient II +2 score 0.0575 (by its effects, read 'Resilient Il' / "
-                       "'Defense Level +1, Max HP +7.5%'), other/? +1 score 12 (unread: the pool worst, read '' / ''): order [0, 1]")
+    assert logs[0] == ("gifts: Disk Fragment/other gift 2 trial Resilient II +2 score 0.0575 (by its effects, read 'Resilient Il' / "
+                       "'Defense Level +1, Max HP +7.5%') total 1.2225, Phlebotomy Pack/other gift 2 trial ? +1 score 12 "
+                       "(unread: the pool worst, read '' / '') total -10.36: order [0, 1]")
 
 
 def test_a_coin_power_trial_taken_counts_toward_the_run_s_budget(context, monkeypatch):
@@ -327,3 +330,11 @@ def test_the_table_is_what_the_game_data_gives_when_it_is_unpacked():
     sys.path.insert(0, str(ROOT / "tools"))
     import trial_table  # noqa: PLC0415
     assert trial_table.main(["--check"]) == 0
+
+
+def test_an_unmatched_title_is_logged_as_read_and_a_fight_s_page_logs_name_category_and_score(context, monkeypatch):
+    logs = []
+    monkeypatch.setattr(actions, "log", logs.append)
+    test_actions.gift_page(context, monkeypatch, ["Ashes to Ashes", "Zzqx Glorp"])
+    actions.PickGift().run(context, None)
+    assert logs[0] == "gifts: Ashes to Ashes/main gift 3 total 3, 'Zzqx Glorp'/main gift 3 total 3: order [0, 1]"
