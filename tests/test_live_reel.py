@@ -283,6 +283,9 @@ def test_the_corner_shows_the_clock_alone(tmp_path):
     style = clip.annotation_events()["style"]
     assert style["corner"]["lines"] == [["{clock}"]]
     assert style["caption_size"] == 18  # the clip's own style stays
+    for own, kept in (({"margin": 0}, {"margin": 0, "lines": [["{clock}"]]}), (False, False)):
+        (tmp_path / "ev.json").write_text(json.dumps({**events, "style": {"corner": own}}), encoding="utf-8")
+        assert reel.load(path).chapters[0].clips[0].annotation_events()["style"]["corner"] == kept
 
 
 def test_a_mark_is_its_own_block_with_no_separator():

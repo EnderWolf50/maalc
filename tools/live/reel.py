@@ -183,7 +183,11 @@ class Clip:
         """The events as evidence-annotate gets them: its bottom-left corner showing the clock alone, since the step
         or its tag is already in the caption."""
         events = read_json(self.events)
-        return {**events, "style": {**events.get("style", {}), "corner": {"lines": [["{clock}"]]}}}
+        style = events.get("style", {})
+        corner = style.get("corner", True)
+        if corner is not False:  # a clip that turns the corner off keeps it off; one that moves it keeps the move
+            corner = {**(corner if isinstance(corner, dict) else {}), "lines": [["{clock}"]]}
+        return {**events, "style": {**style, "corner": corner}}
 
     def annotation_steps(self) -> list[dict]:
         """The steps as evidence-annotate gets them: boxes and zoom moved from `box_space` onto the events' grid."""
