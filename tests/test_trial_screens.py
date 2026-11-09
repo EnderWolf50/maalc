@@ -83,6 +83,7 @@ def child():
                         out[f"{name} {x}"] = list(actions.trial_card(context, image, x))
                 for name in COUNTS:
                     out[f"{name} count"] = actions.text(context, load(name), actions.GIFT_COUNT)
+                    out[f"{name} cards"] = actions.gift_cards(context, load(name))
             except Exception:  # MaaFramework swallows it: hand it to the test
                 out["error"] = traceback.format_exc()
             return True
@@ -126,6 +127,21 @@ def test_the_tier_numeral_over_a_gift_card_reads_as_the_gift_data_s_tier(name, x
     # 2026-10-28 frame that is not committed (Disk Fragment, floor 2); IV and V are on no capture yet.
     import actions
     assert actions.gift_tier(load(name), x) == tier
+
+
+# capture -> the gift id of each card, left to right, by its name on the capture (labelled by eye)
+GIFTS = {"BossGiftTrialsHard.png": [9054, 9013, 9089, 9001], "BossGiftTrials.png": [9064, 9707, 9003],
+         "BossGiftTrialsFloor3.png": [9003, 9047, 9066], "GiftChoice.png": [9007],
+         "GiftChoiceNoCount.png": [9038, 9151, 9076]}
+
+
+@pytest.mark.parametrize(("name", "ids"), GIFTS.items())
+def test_every_card_of_a_gift_page_is_the_gift_its_title_line_names(read, name, ids):
+    # #418: the title line against every gift's name (a boss page, a lone card, a normal page of three)
+    import actions
+    import rewards
+    _, lines, _ = read[f"{name} cards"]
+    assert [rewards.card_gift(card, actions.GIFT_IDS) for card in lines] == ids
 
 
 @pytest.mark.parametrize(("name", "count"), COUNTS.items())
