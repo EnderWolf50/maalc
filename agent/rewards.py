@@ -57,7 +57,8 @@ def _wanted(entry, want):
     """(score, fail only) of the best wanted gift a table option gives, or None: fail only when every way that gift is given is check_fail."""
     best = None
     for gift_id, _ in (entry or {}).get("gift_ids", ()):
-        score = GIFT_SCORE.get(want(gift_id)) if want(gift_id) in WANT_CLASSES else None
+        kind = want(gift_id)
+        score = GIFT_SCORE.get(kind) if kind in WANT_CLASSES else None
         if score is not None and (best is None or score > best[0]):
             hows = {how for g, how in entry["gift_ids"] if g == gift_id}
             best = (score, hows == {"check_fail"})
