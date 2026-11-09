@@ -1,11 +1,11 @@
 // Settings types and the values that come from agent/settings.schema.json (docs/spec/04-settings.md).
-import Ajv2020 from "ajv/dist/2020";
 import { parse as parseYaml } from "yaml";
 import schema from "../../agent/settings.schema.json";
 import gifts from "../../assets/resource/base/data/gift_search.json";
 import recipes from "../../assets/resource/base/data/gift_recipes.json";
 import shopYaml from "../../assets/resource/base/data/shop.yaml?raw";
 import graces from "./graces.json";
+import { giftList as giftListCheck } from "virtual:settings-validator";
 
 export { schema };
 
@@ -228,7 +228,6 @@ export function cleanGiftList(list: GiftList): { list: GiftList; dropped: number
 }
 
 /** Whether a loaded gift list passes the schema, so cleaning it hides no schema error (the agent cleans after the schema check too). */
-const giftListCheck = new Ajv2020({ strict: false }).compile({ $ref: "#/$defs/gift_list", $defs: schema.$defs });
 const wellFormed = (l: unknown): l is GiftList => giftListCheck(l);
 
 /** The gift list a version 10 team's keep settings come to, without id and name; lost: its keep_gifts that match no gift

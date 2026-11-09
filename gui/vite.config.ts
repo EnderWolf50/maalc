@@ -1,9 +1,10 @@
 import { defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react";
+import { settingsValidator } from "./settingsValidator";
 
 // Tauri expects a fixed port (tauri.conf.json devUrl).
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), settingsValidator()],
   clearScreen: false,
   server: {
     port: 1420,
