@@ -2,7 +2,8 @@
 
 Pure data in, data out, no MaaFramework (the shop, the other actions and the GUI's model.ts use the same rules; both
 sides run tests/gift_list_cases.json). A gift list here is a cleaned one (settings.clean_gift_list): `order`, `want`, `keep`,
-`gorder`. `tables` is {"buyable": gift_search.json's gifts, "fusions": gift_recipes.json's gifts}, the game files' when None.
+`gorder`. `tables` is {"buyable": gift_search.json's gifts, "fusions": gift_recipes.json's gifts, "pack_gifts": its pack id -> exclusive
+gift ids}, the game files' when None.
 `run_packs` are the ids of the theme packs the run took, None when unknown (the agent restarted mid-run): then a pack-specific
 fusion locks its materials all the same. `owned` are the ids of the gifts held (repeats count), none when unknown: a wanted
 fusion held is made no more, so it locks and buys nothing (the user, 2026-10-30).
@@ -18,7 +19,7 @@ import settings
 @cache
 def _game_tables():
     buyable, fusions, _ = settings.gift_tables()
-    return {"buyable": buyable, "fusions": fusions}
+    return {"buyable": buyable, "fusions": fusions, "pack_gifts": settings.pack_gifts()}
 
 
 @cache
@@ -85,15 +86,36 @@ def purchases(gift_list, run_packs=None, owned=(), tables=None):
     tables = tables or _game_tables()
     buyable, held, out = {g["id"] for g in tables["buyable"]}, Counter(owned), {i: None for i in queue(gift_list, tables)}
     for fusion in _in_list_order(gift_list, tables["fusions"]):
-        if not _to_make(gift_list, fusion, run_packs, held) or _pick(fusion, held, None):
-            continue
-        short = [i for recipe in fusion.get("recipes", []) for i, n in Counter(recipe).items() if held[i] < n]
-        short += [i for group in fusion.get("groups", []) if sum(held[i] > 0 for i in group["ids"]) < group["need"]
-                  for i in group["ids"] if not held[i]]
-        for i in short:
+        for i in _short(gift_list, fusion, run_packs, held):
             if i in buyable:
                 out.setdefault(i, fusion["id"])
     return list(out.items())
+
+
+def _short(gift_list, fusion, run_packs, held):
+    """The materials `fusion` still lacks, [] unless the list still makes it (_to_make) and `held` (a Counter) completes none of
+    its recipes or groups: each id a recipe needs more of than held, and the ids not held of a group short of its `need`."""
+    if not _to_make(gift_list, fusion, run_packs, held) or _pick(fusion, held, None):
+        return []
+    short = [i for recipe in fusion.get("recipes", []) for i, n in Counter(recipe).items() if held[i] < n]
+    return short + [i for group in fusion.get("groups", []) if sum(held[i] > 0 for i in group["ids"]) < group["need"]
+                    for i in group["ids"] if not held[i]]
+
+
+def want_kind(gift_list, gift_id, run_packs=None, owned=(), tables=None):
+    """How much the list wants `gift_id` (#416): "pack-want", "want", "material" or None. A material is one the shop's rule
+    would buy (_short: a fusion the list still makes lacks it, the shop selling it or not); a gift the list wants or that is a
+    material is a "pack-want" when it is in a theme pack's own pool (data `pack_gifts`), else a "want" or a "material". Whether
+    `gift_id` itself is held is the caller's: it is not looked at for a gift the list wants. `run_packs` None: unknown."""
+    tables = tables or _game_tables()
+    held = Counter(owned)
+    wanted = state(gift_list, gift_id) == "want"
+    material = any(gift_id in _short(gift_list, f, run_packs, held) for f in tables["fusions"] if gift_id in _materials(f))
+    if wanted or material:
+        if any(gift_id in pool for pool in tables["pack_gifts"].values()):
+            return "pack-want"
+        return "want" if wanted else "material"
+    return None
 
 
 def _in_list_order(gift_list, fusions):

@@ -3,6 +3,7 @@
 Usage: uv run --group unpack python tools/gift_recipes.py [--release 2026101602] [--no-icons]
 Reads `.local/unpack/` (static data, English localization, the pulled UnityCache bundles; see docs/agents/local-dev.md).
 Chinese names: tools/llc_text.py (the Localize Limbus Company release; this tool only fills `zh` from it).
+Pools: `pack_gifts` is each theme pack's whole `specificEgoGiftPool` (the want_kind rule of agent/gifts.py reads it, #417).
 Recipes: `combineFixed` and `combineMixed` of mirror-dungeon-common-data-md8.json; `specific` is its `isSpecific`, `packs` the
 theme packs whose `specificEgoGiftPool` (mirrordungeon-theme-floor-*.json) holds a recipe ingredient.
 Icons: the game's EgoGiftIcon sprite of each fusion gift and of each recipe material that gift_search.json lacks, scaled
@@ -45,6 +46,8 @@ NOTE = ("Fusion gifts and their recipes. Recipes: combineFixed (any one of a gif
         "them and no recipe uses them, so a shop cell may still show one (some are the theme packs' specificEgoGiftPool gifts); "
         "the Gift Search icons ignore them, the shop cell match (agent/gift_cells.py) takes them as candidates, and a gift list "
         "names them as any gift of their keyword (keep or drop: they cannot be wanted). "+NOTE_ZH+" "
+        "`pack_gifts` (#417) is the theme pack id (as a string) -> the gift ids of that pack's specificEgoGiftPool (the gifts only "
+        "it can offer), for every pack that has a pool, whether theme_packs.yaml names it or not. "
         "Written by tools/gift_recipes.py.")
 
 
@@ -108,7 +111,8 @@ def build(unpack, release):
     listed = searchable | set(results) | {m["id"] for m in materials} | set(VESTIGE_IDS)
     extra = [entry(i) for i in sorted(table) if i in GIFT_IDS and i in en and i not in listed]
     vestiges = [entry(i) for i in VESTIGE_IDS]
-    return {"note": NOTE, **credit(release), "gifts": gifts, "materials": materials, "extra_gifts": extra, "vestiges": vestiges}, table
+    return {"note": NOTE, **credit(release), "gifts": gifts, "materials": materials, "extra_gifts": extra, "vestiges": vestiges,
+            "pack_gifts": {str(p): sorted(pool) for p, pool in sorted(pools.items())}}, table
 
 
 def sprite_index(cache, index_path):
