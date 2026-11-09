@@ -40,7 +40,7 @@ import pack_cover  # noqa: E402
 import run_start  # noqa: E402
 
 DATA = yaml.safe_load((ROOT / "assets/resource/base/data/theme_packs.yaml").read_text(encoding="utf-8"))
-NAMES, ART = list(DATA["packs"]), DATA["title_art"]
+NAMES, ART = run_start.floor_packs(DATA["packs"], 5), DATA["title_art"]  # the captures are floors 1-5 (#387)
 PLAN = {"weights": DATA["default_plan"]["weights"], "unlisted": 0}
 READINGS = ("main", "#270", "list, no span", "list", "+key", "+cover", "#270+all")
 
@@ -165,7 +165,7 @@ def read(reading, results, page):
     try:
         if reading in ("main", "#270", "list, no span", "list"):  # no keyword path
             run_start.match_keyword = lambda text, names: None
-        cover = (lambda i, allowed: pack_cover.read_cover(page, cards[i][0], allowed)) if reading in ("+cover", "#270+all") else None
+        cover = (lambda i, allowed: pack_cover.read_cover(page, cards[i][0], allowed or set(NAMES))) if reading in ("+cover", "#270+all") else None
         ranked = run_start.rank_packs([lines for _, lines in cards], NAMES, PLAN, art, cover)
     finally:
         run_start.match_keyword = real_keyword

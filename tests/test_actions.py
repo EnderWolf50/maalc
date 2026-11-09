@@ -1891,10 +1891,12 @@ def pack_page(context, monkeypatch, floor, setting, mode, covers=None, spent_aft
     actions.RUN.update(settings={"run": {"theme_pack_refresh": setting}}, team={"hard_from_floor": 0}, difficulty=None)
     plan = {"weights": {}, "threshold": 0, "unlisted": -5, "event_packs": mode}
     art = {"Hello Bus": "S.E.A."}
-    monkeypatch.setattr(actions, "theme_pack_plan", lambda settings, team: (plan, [], set(), art))
+    packs = {"S.E.A.": {"N": [2], "H": [2, 3]}, "Extreme Pack": {"X": True}}
+    monkeypatch.setattr(actions, "theme_pack_plan", lambda settings, team: (plan, packs, set(), art))
 
     def rank_packs(cards, names, plan, title_art, cover):
-        assert title_art is art  # every page, a refreshed one too, gets the data file's title art (#246)
+        assert title_art == art  # every page, a refreshed one too, gets the data file's title art (#246)
+        assert names == ["S.E.A."]  # floors 1-5 never read a card as an EXTREME-only pack (#387)
         covers.append(cover)
         return [(c[0], -5, "name") for c in cards]
     monkeypatch.setattr(actions.run_start, "rank_packs", rank_packs)
@@ -2002,6 +2004,7 @@ def test_the_cover_reader_of_a_theme_pack_page_looks_at_that_pages_card(context,
     found = covers[0](1, {"Line 1"})
     assert found[0] == "Cover pack" and found[2] == 545 and found[3] == {"Line 1"}
     assert found[1].shape == (720, 1280, 3)
+    assert covers[0](1, None)[3] == {"S.E.A."}  # a title like no pack: the covers of the floor's packs, no EXTREME-only one (#387)
 
 
 def test_floor_5s_leftmost_new_pack_is_taken_when_event_packs_are_preferred(context, monkeypatch):

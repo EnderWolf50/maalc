@@ -28,6 +28,9 @@ SCREENS = ROOT / "tests" / "screens"
 YAML = yaml.safe_load((DATA / "theme_packs.yaml").read_text(encoding="utf-8"))
 NAMES, ART = list(YAML["packs"]), YAML["title_art"]
 PLAN = {"weights": YAML["default_plan"]["weights"], "unlisted": 0}
+# what PickThemePack matches a floor 1-5 page against (#387: no EXTREME-only pack); EVERY: every pack of the file
+FLOOR_NAMES, FLOOR_ART = rs.floor_reads(YAML["packs"], PLAN["weights"], ART, 5)[1:]
+READS = {"floor": (FLOOR_NAMES, FLOOR_ART), "every": (NAMES + list(PLAN["weights"]), ART)}
 
 # page: [(pack, how)] left to right, what PickThemePack names on the committed screenshots
 PAGES = {
@@ -75,7 +78,8 @@ BLANKED = {
 
 
 def read_pages():
-    """Every page of PAGES through actions.pack_titles and run_start.rank_packs; print {page: [[pack, how], ...]}."""
+    """Every page of PAGES through actions.pack_titles and run_start.rank_packs as PickThemePack ranks them, for each of
+    READS; print {"<read>:<page>": [[pack, how], ...]}."""
     from maa.controller import CustomController
     from maa.custom_action import CustomAction
     from maa.resource import Resource
@@ -112,9 +116,10 @@ def read_pages():
                     cards = actions.pack_titles(context, image)
                     if blank is not None:
                         cards[blank] = (cards[blank][0], ["WOPIS"])
-                    ranked = rs.rank_packs([lines for _, lines in cards], NAMES, PLAN, ART,
-                                           lambda i, allowed: pc.read_cover(image, cards[i][0], allowed))
-                    out[key] = [[title, how.split()[0]] for title, _, how in ranked]
+                    for reading, (names, art) in READS.items():
+                        ranked = rs.rank_packs([lines for _, lines in cards], names, PLAN, art,
+                                               lambda i, allowed: pc.read_cover(image, cards[i][0], allowed or set(names)))
+                        out[f"{reading}:{key}"] = [[title, how.split()[0]] for title, _, how in ranked]
             except Exception:  # MaaFramework swallows it: hand it to the test
                 out["error"] = traceback.format_exc()
             return True
@@ -141,14 +146,25 @@ def read():
 @pytest.mark.parametrize("page", list(PAGES))
 def test_every_card_of_a_real_page_is_named_by_the_path_that_reads_it(read, page):
     # each path of rank_packs on a real capture: whole title, title art, keyword, cover; and what the old read gave
-    assert read[page] == [list(p) for p in PAGES[page]]
+    assert read[f"floor:{page}"] == [list(p) for p in PAGES[page]]
 
 
 @pytest.mark.parametrize("key", list(BLANKED))
 def test_a_card_whose_title_is_lost_is_read_by_its_cover_or_left_unread(read, key):
     # real OCR on the other cards of a capture; one card's title replaced by the logo's noise. The cover names it where
     # it stands clear; where it does not, the card keeps its place, unread, rather than guessed.
-    assert read[key] == [list(p) for p in BLANKED[key][2]]
+    assert read[f"floor:{key}"] == [list(p) for p in BLANKED[key][2]]
+
+
+def test_no_extreme_only_pack_takes_a_card_of_a_floor_1_to_5_page_but_line_1s_capitals(read):
+    # #387: the same pages read against every pack of the file, as if floors 1-5 kept the EXTREME-only packs. The one card of
+    # the 57 a new name takes is Line 1's where OCR reads its title art "LINE 1 MADNESS" whole (#266): it spells
+    # "Line 1 : MADNESS". So floors 1-5 leave them out (run_start.floor_packs) and read every card as the tests above
+    pages = list(PAGES) + list(BLANKED)
+    assert sum(len(read[f"floor:{key}"]) for key in pages) == 57
+    changed = sorted((key, i, got, want) for key in pages
+                     for i, (got, want) in enumerate(zip(read[f"every:{key}"], read[f"floor:{key}"])) if got != want)
+    assert changed == [("ThemePackHardLineCover", 2, ["Line 1 : MADNESS", "name"], ["Line 1", "title_art"])]
 
 
 def test_the_overlapped_cards_of_the_page_swinging_in_are_not_guessed_by_their_covers():
@@ -165,7 +181,7 @@ def test_the_cover_alone_names_most_cards_of_a_real_page_and_never_a_wrong_one()
         image = np.asarray(Image.open(SCREENS / f"{page}.png").convert("RGB"))[:, :, ::-1]
         n = len(PAGES[page])
         for (name, _), x in zip(PAGES[page], [640 + (i - (n - 1) / 2) * pc.PITCH for i in range(n)]):
-            found = pc.read_cover(image, x)
+            found = pc.read_cover(image, x, set(FLOOR_NAMES))  # a floor 1-5 card: the covers of the floor's packs (#387)
             spoke += found is not None
             right += found is not None and found[0] == name
     # of 24 cards; silent: the boss silhouette of Sinking Deluge and The Dream Ending on the HARD page. Without its own cover
@@ -292,10 +308,12 @@ def test_every_cover_is_read_as_itself_but_look_alikes_and_none_as_another():
         found = pc.read_cover(page, 640)
         assert found is None or found[0] == name
         silent += [name] * (found is None)
-    # the look-alike pairs are silent; the others read, bar the odd one a decoder's rounding tips under MIN_LEAD (The Outcast and
-    # The Dream Ending lead each other by 0.101)
-    assert {"Line 4 - Section #3", "Line 4 - Section #4", "Repressed Wrath", "Unbound Wrath"} <= set(silent)
-    assert len(silent) <= 6
+    # the look-alike pairs are silent, two of the EXTREME-only packs among them (#387: dark red silhouettes); the others read
+    # (the other 18 EXTREME-only packs too), bar the odd one a decoder's rounding tips under MIN_LEAD (The Outcast and The
+    # Dream Ending lead each other by 0.101)
+    assert {"Line 4 - Section #3", "Line 4 - Section #4", "Repressed Wrath", "Unbound Wrath", "A Beautiful Voice",
+            "Bearers of Weight"} <= set(silent)
+    assert len(silent) <= 8
 
 
 def test_the_signatures_load_from_an_installed_tree(tmp_path):

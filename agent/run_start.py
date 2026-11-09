@@ -294,6 +294,36 @@ def rank_packs(cards, names, plan, title_art=None, cover=None):
     return out
 
 
+MODE_BANDS = ((6, 10, "I"), (11, 15, "X"))  # the floors a 15-floor run plays as INFINITY and as EXTREME (spec 05 section 2, #387)
+
+
+def floor_packs(packs, floor):
+    """The names of the data file's packs (name -> floors) whose cards floor can show, in file order (#387).
+
+    Floors 1-5 take every pack with a NORMAL or HARD floor, whichever floor it is: the list the agent matched against
+    before the EXTREME-only packs joined the file, so a floor 1-5 card is named as it was. Floors 6-10 take the INFINITY
+    packs (I), 11-15 the EXTREME packs (X), each with a NORMAL or HARD list that holds the floor.
+    """
+    if floor <= 5:
+        return [n for n, f in packs.items() if "N" in f or "H" in f]
+    mode = next(m for low, high, m in MODE_BANDS if low <= floor <= high) if floor <= 15 else None
+    return [n for n, f in packs.items() if f.get(mode) or floor in f.get("N", []) + f.get("H", [])]
+
+
+def floor_reads(packs, weights, title_art, floor):
+    """(the floor's packs, the names its cards are matched against, the title art reads that name one of them) (#387).
+
+    packs: the data file's (name -> floors); weights: the plan's. The names are floor_packs, the original of each re-run
+    copy among them (the copy's card shows the original's title, rerun_copy; INFINITY has two copies without their
+    originals) and the weighed packs the data file dropped (they still match). On floors 1-5 that is the set the agent
+    matched before #387.
+    """
+    on = floor_packs(packs, floor)
+    originals = [n[:-len(RERUN)] for n in on if n.endswith(RERUN) and n[:-len(RERUN)] not in on]
+    names = on + originals + [n for n in weights if n not in packs]
+    return on, names, {read: n for read, n in title_art.items() if n in names}
+
+
 def event_slots(floor, titles, event_packs, packs):
     """Per card, whether the plan's event_packs mode applies to it (spec 03 section 6, #240).
 

@@ -392,8 +392,9 @@ describe("cleanGiftList (tests/settings_cases.json clean_gift_list)", () => {
 test("parseThemePacks reads the season's data file", () => {
   const data = parseThemePacks(themePacksYaml);
   expect(data.packs["Walpurgis Night: Hatred and Despair"]).toEqual({ N: [3, 4], H: [3, 4] });
-  // the BokGak re-runs are packs of their own, on HARD floors 4-5, weighed as their originals
-  expect(data.packs["Miracle in District 20 BokGak"]).toEqual({ H: [4, 5] });
+  // the BokGak re-runs are packs of their own, on HARD floors 4-5 and INFINITY, weighed as their originals
+  expect(data.packs["Miracle in District 20 BokGak"]).toEqual({ H: [4, 5], I: true });
+  expect(data.packs["Chachihu"]).toEqual({ X: true }); // #387: an EXTREME-only pack
   expect(data.default_plan.weights["Timekilling Time BokGak"]).toBe(data.default_plan.weights["Timekilling Time"]);
   // #240: AALC's weights, threshold 0, unlisted 0.
   expect(data.default_plan).toMatchObject({ threshold: 0, unlisted: 0, event_packs: "weight" });
