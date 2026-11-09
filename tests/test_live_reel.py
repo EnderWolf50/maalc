@@ -194,3 +194,30 @@ def test_the_chapter_marks_name_a_chapter_by_its_number_alone():
     marks = reel.chapter_marks(chapters(21), [10.0 + 30 * i for i in range(21)], [30.0] * 21)
     assert marks[0] == (0.0, 10.0, "目錄")
     assert marks[8] == (220.0, 250.0, "08 #508 第 8 章要看的事")
+
+
+# A before/after step names its side in the step's tag, which evidence-annotate shows in place of the step number
+# (the user, 2026-11-09, on using the skill's step tag for 改前／改後: 「都跟進」).
+
+def test_a_tag_reaches_evidence_annotate(tmp_path):
+    clip = reel.load(manifest(tmp_path, [{**step("10:00:01", "10:00:05", "等了 1.5 秒才重拖"), "tag": "改前"}])).chapters[0].clips[0]
+    assert clip.annotation_steps()[0]["tag"] == "改前"
+
+
+def test_a_tag_with_no_chinese_character_is_refused(tmp_path):
+    report = reel.check(manifest(tmp_path, [{**step("10:00:01", "10:00:05"), "tag": "before"}]))
+    assert len(report.problems) == 1
+    assert "tag" in report.problems[0] and "Chinese" in report.problems[0]
+
+
+def test_a_tag_counts_toward_the_reading_time(tmp_path):
+    title = "等了 1.5 秒才重拖，地圖沒動了"  # 15 characters without spaces: 3 s alone; with 改前 it is 17, 3.4 s
+    assert reel.check(manifest(tmp_path, [step("10:00:01", "10:00:04.1", title)])).problems == []
+    assert reel.check(manifest(tmp_path, [{**step("10:00:01", "10:00:04.1", title), "tag": "改前"}])).problems != []
+    assert reel.check(manifest(tmp_path, [{**step("10:00:01", "10:00:04.4", title), "tag": "改前"}])).problems == []
+
+
+def test_a_title_opening_with_before_or_after_warns_to_use_the_tag(tmp_path):
+    report = reel.check(manifest(tmp_path, [step("10:00:01", "10:00:05", "改前：等了 1.5 秒才重拖")]))
+    assert report.problems == []
+    assert len(report.warnings) == 1 and "tag" in report.warnings[0]
