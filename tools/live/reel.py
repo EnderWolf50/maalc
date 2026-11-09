@@ -25,8 +25,8 @@ chapters.md and stills/NN.png (the reel at the middle of each caption) beside RE
 
 `check`, and `build` before it builds, check every chapter against docs/agents/evidence-style.md ("Clips and stills
 in general", "Review reel") and refuse, listing each problem: an unwritten draft (an empty title, as `evidence.py
-steps` writes it), a caption or a step `tag` with no Chinese character, a caption on screen shorter than max(3 s,
-characters / 5, the tag's counted),
+steps` writes it), a caption or a step `tag` with no Chinese character, a caption on screen shorter than
+max(3 s, characters / 5) with the tag's characters counted,
 overlapping captions or speed stretches, boxes with no `box_space`, a box outside its `box_space`. They warn about
 a caption that reads like log text or a code name outside 「」, and about a title that opens with 改前： or 改後：,
 which goes in the step's `tag` instead (evidence-annotate shows the tag in place of the step number).
