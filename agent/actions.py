@@ -2519,7 +2519,7 @@ def enter_node(context):
     image = screen(context)
     cost = number(text(context, image, PANEL_COST)) if has(text(context, image, PANEL_REWARDS), "Rewards") else None
     log(f"node panel: Clear Rewards Cost {cost}")
-    RUN.pop("shop", None)  # a shop left without its Leave (#118): the next shop is a new visit
+    leave_shop()  # a shop left without its Leave (#118): the next shop is a new visit
     for _ in range(3):
         tap(context, *ENTER, wait=0)
         if until(context, lambda im: not seen(context, im, "MapNodePanel")) is not None:
@@ -3637,9 +3637,8 @@ class Event(CustomAction):
             known = rewards.match_event(" ".join(story), event_table())
             # Grey options (taken in an earlier round of the same questions) and ones a tap did nothing on are closed.
             closed = {k for k, (t, is_open, _) in enumerate(options) if t in tried or not is_open}
-            held = owned_now(RUN["shop"]) if RUN.get("shop") else []  # the shop's last owned read: an event page shows none
             i, lowest = rewards.choice_plan([t for t, _, _ in options], run["team"]["keyword"], overrides.get(question), closed, known,
-                                            lambda g: want_kind(run["team"]["list"], g, run_packs(), held) if run["team"].get("list") else None)
+                                            want_of(run))
             shown = " | ".join(("(closed) " if k in closed else "") + t for k, (t, _, _) in enumerate(options))
             if i is None:
                 log(f"event: {shown}: all closed, scroll for more")
@@ -3990,8 +3989,7 @@ class PickGift(CustomAction):
         overrides = {o["trial"]: o["risk"] for o in run["settings"]["trial_risk_overrides"]}
         scores = rewards.scores(pool, table["model"], run.get("trial_coins", 0), overrides)
         avoid = [g["name"] for g in avoided_gifts(run["team"])]
-        shop = RUN.get("shop")  # the shop's last owned read, else none held (#418, reversible)
-        held = owned_now(shop) if shop else []
+        wanting = want_of(run)
         cards, names = [], []
         for x, card in zip(centres, lines):
             gift = " ".join(t for y, t in card if y < 410)
@@ -3999,18 +3997,18 @@ class PickGift(CustomAction):
             kind = rewards.gift_kind(gift, run["team"]["keyword"], owned, avoid)
             gift_id = rewards.card_gift(card, GIFT_IDS)
             label = GIFT_NAMES[gift_id] if gift_id else repr(rewards.card_title(card))
-            want = want_kind(run["team"]["list"], gift_id, run_packs(), held) if gift_id else None
-            name, tier, cost, part = None, None, None, None
+            want = wanting(gift_id) if gift_id else None
+            name, tier, cost, trial_note = None, None, None, None
             if trials:  # the tier counts on the boss page only (#381); a fight's page stays main > other > owned
                 tier = gift_tier(image, x)
                 level, read, line = trial_card(context, image, x)
                 name, how = rewards.read_trial(read, line, pool)
                 score = scores[name] if name else max(scores.values())  # unread: the pool's worst
                 cost = rewards.burden(score, level, table["model"])
-                part = f"{name or '?'} +{'?' if level is None else level} score {score:g}"
+                trial_note = f"{name or '?'} +{'?' if level is None else level} score {score:g}"
                 if not name or compact(read) != compact(name):  # the name read is not the trial's: what was, for the log
-                    part += f" ({f'by its {how}' if how else 'unread: the pool worst'}, read {read!r} / {line!r})"
-            cards.append(rewards.Card(kind, tier, cost, label, gift_id, part, rewards.category(kind, want)))
+                    trial_note += f" ({f'by its {how}' if how else 'unread: the pool worst'}, read {read!r} / {line!r})"
+            cards.append(rewards.Card(kind, tier, cost, label, gift_id, trial_note, rewards.category(kind, want)))
             names.append(name)
         ranked = rewards.rank_gifts(cards)
         log("gifts: " + ", ".join(rewards.card_line(c) for c in cards) + f": order {ranked}")
@@ -4026,6 +4024,7 @@ class PickGift(CustomAction):
             tap(context, *GIFT_SELECT, wait=0)
             if until(context, lambda im: not has(text(context, im, REFUSE_GIFT), "Refuse")) is not None:
                 # The run's Coin Power units so far, for the budget of pools past early_pools (spec 03 section 12)
+                RUN["owned"] = RUN.get("owned", []) + [cards[i].gift_id for i in taken if cards[i].gift_id]  # held from now on
                 coins = sum(table["trials"][names[i]]["effects"].get("coin", 0) for i in taken if names[i])
                 if coins:
                     RUN["trial_coins"] = run.get("trial_coins", 0) + coins
@@ -4205,6 +4204,28 @@ def owned_now(visit):
     """A copy of the gifts the visit counts as owned (gifts.purchases): visit["owned"] once a page was read (note_owned), else
     only what this visit bought (visit["bought"]): an owned gift not read counts as none (spec 03), a gift bought counts."""
     return list(visit["owned"] if visit.get("owned") is not None else visit.get("bought", ()))
+
+
+def leave_shop():
+    """The shop visit RUN["shop"] is over, left by its Leave or without it (#118): the run holds what the visit counted as owned
+    (owned_now), RUN["owned"], for the gift pages and events after it. A visit that read no owned page adds only what it bought."""
+    visit = RUN.pop("shop", None)
+    if visit and visit.get("owned") is not None:
+        RUN["owned"] = owned_now(visit)
+    elif visit:
+        RUN["owned"] = RUN.get("owned", []) + owned_now(visit)
+
+
+def want_of(run):
+    """`want(gift_id)` -> "pack-want" | "want" | "material" | None for the team's list (gifts.want_kind), the run's packs and the
+    gifts the run holds (RUN["owned"]: the last shop visit's, plus the cards taken on gift pages; the start gifts and the events'
+    are not told). Always None for a team with no list. A wanted gift held is no want (#416: owned 0), a material is still counted."""
+    gift_list, held = run["team"].get("list"), RUN.get("owned", [])
+
+    def want(gift_id):
+        kind = want_kind(gift_list, gift_id, run_packs(), held) if gift_list else None
+        return None if kind in ("pack-want", "want") and gift_id in held else kind
+    return want
 
 
 def owned_change(visit, gone=(), got=()):
@@ -4797,7 +4818,7 @@ class Shop(CustomAction):
             image = screen(context)
             if Shop.on_map(context, image):
                 log("shop: already out of the shop")
-                RUN.pop("shop", None)
+                leave_shop()
                 return True
             # The dialog slides down; Confirm takes no tap before it stops.
             page_guard(context, "Shop", image=image)
@@ -4806,7 +4827,7 @@ class Shop(CustomAction):
                 log(f"shop: leave with {read_cost(context)} Cost")
                 # Up to the old 2 s for the map: MirrorHub must not find the shop fading out and start a new visit.
                 tap_then(context, *LEAVE_CONFIRM, lambda im: Shop.on_map(context, im), timeout=2)
-                RUN.pop("shop")
+                leave_shop()
                 return True
         return stuck("Leave did not bring up `Leave the shop?`")
 

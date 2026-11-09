@@ -8,6 +8,7 @@ import { TEXT } from "./i18n";
 import { GIFT_KEYWORDS, defaultGorder, newSettings, newTeam, type GiftList, type Settings } from "./model";
 import { ThemePackTab } from "./Plans";
 import { renderEditor } from "./testing";
+import { useEditor } from "./ui";
 
 const zh = TEXT.zh_tw;
 const mine = (want: number[]): GiftList => ({
@@ -38,6 +39,21 @@ describe("the 含想要 mark", () => {
     const own = recipes.pack_gifts["1002"][0]; // The Outcast
     const team = { ...newTeam(1, "T1"), gift_list: "mine", theme_pack_plan: "default" };
     renderEditor(<ThemePackTab />, settings({ gift_lists: [mine([own])], teams: [team] }));
+    const mark = await markOf("The Outcast");
+    expect(mark?.getAttribute("title")).toBe(zh["packs.wantedTip"].replace("{names}", GIFT_BY_ID.get(own)!.zh));
+  });
+
+  test("changing a pack's own gift to wanted in the list shows the mark on that pack", async () => {
+    // #421: the edit goes through the same settings update the gift list editor uses
+    const own = recipes.pack_gifts["1002"][0];
+    const team = { ...newTeam(1, "T1"), gift_list: "mine", theme_pack_plan: "default" };
+    function WantIt() {
+      const { update } = useEditor();
+      return <button onClick={() => update((s) => { s.gift_lists[0].want = [own]; })}>want it</button>;
+    }
+    const r = renderEditor(<><ThemePackTab /><WantIt /></>, settings({ gift_lists: [mine([])], teams: [team] }));
+    expect(await markOf("The Outcast")).toBeNull();
+    await r.user.click(screen.getByRole("button", { name: "want it" }));
     const mark = await markOf("The Outcast");
     expect(mark?.getAttribute("title")).toBe(zh["packs.wantedTip"].replace("{names}", GIFT_BY_ID.get(own)!.zh));
   });
