@@ -8,6 +8,9 @@ import {
   type DeploymentPlan, type Order, type PackPlanValues, type StarlightPlan, type StarlightValues, type ThemePackPlan,
   type ThemePacks,
 } from "./model";
+import { GIFT_BY_ID, giftName } from "./giftCatalog";
+import { listsOfPlan, packWanted } from "./gifts";
+import { fill } from "./i18n";
 import { Field, ReorderList, Select, useEditor } from "./ui";
 
 /** The 12 sinners in the game's grid; clicking adds one at the end of the order or leaves it out
@@ -158,11 +161,11 @@ export function ThemePackTab() {
     <PlanTab<ThemePackPlan> planKey="theme_pack_plans" tab="tab.themepacks" make={newPackPlan}
       lead={{ label: t("defaultPlanLocked"), body: <>
         <p className="muted">{t("defaultPlanNote")}</p>{note}
-        <PackPlanEditor data={data} plan={data.default_plan} path="" />
+        <PackPlanEditor data={data} plan={data.default_plan} planId="default" path="" />
       </> }}
       editor={(p, change, path) => <>
         {note}
-        <PackPlanEditor data={data} plan={p} path={path} onChange={(v) => change({ ...p, ...v })} />
+        <PackPlanEditor data={data} plan={p} planId={p.id} path={path} onChange={(v) => change({ ...p, ...v })} />
       </>} />
   );
 }
@@ -181,10 +184,12 @@ const LINE = "\u0000line";
 
 /** Design A of #240: one lane per weight in use (0 always), highest first, and the threshold line between lanes.
  * Drag a pack to another lane, or onto + for a new weight; click one to type its weight. Read-only without onChange. */
-function PackPlanEditor({ data, plan, path, onChange }: {
-  data: ThemePacks; plan: PackPlanValues; path: string; onChange?: (p: PackPlanValues) => void;
+function PackPlanEditor({ data, plan, planId, path, onChange }: {
+  data: ThemePacks; plan: PackPlanValues; planId: string; path: string; onChange?: (p: PackPlanValues) => void;
 }) {
-  const { t, tv, bad } = useEditor();
+  const { s, t, tv, bad } = useEditor();
+  const lists = listsOfPlan(planId, s.teams, s.gift_lists);
+  const zh = s.language === "zh_tw";
   const [difficulty, setDifficulty] = useState<"" | "normal" | "hard">("");
   const [floor, setFloor] = useState(0);
   const [images, setImages] = useState(false);
@@ -225,6 +230,9 @@ function PackPlanEditor({ data, plan, path, onChange }: {
   const chip = (name: string) => {
     const floors = data.packs[name] === undefined ? undefined : floorBadges(data.packs[name], t("packs.floorSep"));
     const cover = images ? coverOf(name) : undefined; // the card has its title printed on it: the name moves to the tooltip
+    const wanted = packWanted(lists, data.pack_ids[name]).map((id) => GIFT_BY_ID.get(id)).filter((g) => g !== undefined)
+      .map((g) => giftName(g, zh));
+    const wantedTip = fill(t("packs.wantedTip"), { names: wanted.join(t("gl.sep")) });
     return (
       <span key={name} className={"pk" + (path && bad(`${path}/weights/${name}`) ? " bad" : "")}
         {...dragged(name)} {...clickable(name, weightOf(plan, name))} title={cover ? name : undefined}>
@@ -236,6 +244,7 @@ function PackPlanEditor({ data, plan, path, onChange }: {
             return <small key={+f.hard} className={"fl" + (f.hard ? " hard" : "")} role="img" title={label} aria-label={label}>{f.text}</small>;
           })
           : <small><em>{t("packNotInData")}</em></small>}
+        {wanted.length > 0 && <small className="wk" role="img" title={wantedTip} aria-label={wantedTip}>{t("packs.wanted")}</small>}
       </span>
     );
   };
