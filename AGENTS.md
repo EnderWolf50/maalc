@@ -44,4 +44,4 @@ A PR merges on a green `ci-ok`. When CI does not start, say so and wait; a local
 
 ### Acceptance
 
-When an acceptance run takes too long: verify what ran, report progress against the target, and let the user decide the next step. The bar stays where the issue put it.
+An acceptance bar is the one the issue sets; only the user relaxes it, case by case. When a run falls short of the bar or takes too long: verify what ran, report the result against the bar, and let the user decide the next step, with relaxing the bar as one option and what it gives up.

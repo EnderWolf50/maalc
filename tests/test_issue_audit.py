@@ -72,3 +72,9 @@ def test_an_issue_closed_as_completed_needs_an_assignee():
     closed = [issue(14, reason="COMPLETED"), issue(15, reason="NOT_PLANNED"),
               issue(16, reason="COMPLETED", assignees=["someone"]), issue(17, ["tracking"], reason="COMPLETED")]
     assert flagged([], "closed as completed, no assignee", closed=closed) == ["#14"]
+
+
+def test_a_tooling_issue_needs_no_milestone_but_still_one_triage_label():
+    issues = [issue(18, ["tooling", "ready-for-agent"], milestone=None), issue(19, ["tooling"], milestone=None)]
+    assert flagged(issues, "no milestone") == []
+    assert flagged(issues, "triage labels != 1") == ["#19"]
