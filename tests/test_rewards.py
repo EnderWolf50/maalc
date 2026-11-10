@@ -442,6 +442,27 @@ def test_a_wanted_gift_only_a_failed_check_gives_asks_for_the_lowest_odds_sinner
     assert plan(["Mixed. Advantage check"], [mixed]) == (0, False)
 
 
+def test_between_equally_wanted_gifts_the_one_a_passed_check_gives_decides_whatever_their_order():
+    # 901015's "I don't know how to live without alcohol." gives one gift on a pass, another on a fail.
+    want = {9001: "want", 9004: "want"}.get
+    for ids in ([(9001, "check_pass"), (9004, "check_fail")], [(9004, "check_fail"), (9001, "check_pass")]):
+        drink = gift_opt("Drink.", "Advantage check", "check", ids)
+        assert r.choice_plan(["Drink. Advantage check"], "Burn", event=[drink], want=want) == (0, False)
+
+
+def test_pooled_pages_whose_same_option_gives_another_gift_rank_it_by_its_hint():
+    # 971098 and 971099 share their story's end and option texts; only "Accept the deal."'s gift id differs
+    # (9237, 9236). The screen cannot tell them apart, so a want of one of the two ids is no reason to go first.
+    take = "Take it. Select to gain a Burn E.G.O Gift"
+    deal = "Accept the deal. Wrath check. Pass to gain a Burn E.G.O Gift"
+    pooled = [gift_opt("Accept the deal.", "Wrath check. Pass to gain a Burn E.G.O Gift", "check", [(9001, "check_pass")]),
+              gift_opt("Take it.", "Select to gain a Burn E.G.O Gift", "direct", [(9100, "direct")]),
+              gift_opt("Accept the deal.", "Wrath check. Pass to gain a Burn E.G.O Gift", "check", [(9101, "check_pass")]),
+              gift_opt("Take it.", "Select to gain a Burn E.G.O Gift", "direct", [(9100, "direct")])]
+    assert plan([deal, take], pooled) == (1, False)  # the direct gain (level 1) before the check (2)
+    assert plan([deal, take], pooled[:2]) == (0, False)  # one page alone: the wanted 9001 goes first
+
+
 def test_without_a_want_the_plan_is_the_old_choice():
     texts = [o["text"] + " " + o["hint"] for o in PAGE]
     none = lambda i: None

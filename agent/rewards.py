@@ -54,14 +54,18 @@ def choice_plan(options, keyword, override=None, closed=(), event=None, want=Non
 
 
 def _wanted(entry, want):
-    """(score, fail only) of the best wanted gift a table option gives, or None: fail only when every way that gift is given is check_fail."""
+    """(score, fail only) of the best wanted gift a table option gives, or None: fail only when every way that gift is given is check_fail.
+
+    Between equally wanted gifts one a passed check gives too decides, whichever the table lists first.
+    """
     best = None
     for gift_id, _ in (entry or {}).get("gift_ids", ()):
         kind = want(gift_id)
         score = GIFT_SCORE.get(kind) if kind in WANT_CLASSES else None
-        if score is not None and (best is None or score > best[0]):
-            hows = {how for g, how in entry["gift_ids"] if g == gift_id}
-            best = (score, hows == {"check_fail"})
+        if score is not None:
+            fail_only = {how for g, how in entry["gift_ids"] if g == gift_id} == {"check_fail"}
+            if best is None or (score, not fail_only) > (best[0], not best[1]):
+                best = (score, fail_only)
     return best
 
 
@@ -104,7 +108,8 @@ def _entry(text, event, min_ratio=0.8):
 
     The OCR may stop short (a hint cut off at the panel edge): it is held against as much of the entry,
     but must cover the option line. Ties go to the entry closest in length; a tie between entries of
-    different outcomes is None, as is no entry close enough: the hint ranks that option then.
+    different outcomes (kind, gift keywords or gift ids: pooled pages 971098 and 971099 differ only in the
+    id) is None, as is no entry close enough: the hint ranks that option then.
     """
     s = _key(text)
     scored = []
@@ -122,7 +127,7 @@ def _entry(text, event, min_ratio=0.8):
 
 
 def _outcome(o):
-    return o["kind"], sorted(map(tuple, o.get("gifts", ())))
+    return o["kind"], sorted(map(tuple, o.get("gifts", ()))), sorted(map(tuple, o.get("gift_ids", ())))
 
 
 def match_event(story, events, min_ratio=0.85):
