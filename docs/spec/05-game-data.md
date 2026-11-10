@@ -208,10 +208,16 @@ Boss 的 Cost 是遊戲資料 `mirror-dungeon-common-data-md8.json` 的 BOSS cos
 | `options[].kind` | `direct`、`random`、`check`、`check_fail_gift`、`followup`、`battle`、`check_other`、`followup_other`、`other`；`random` 的提示是 `???`（971055）或寫明機率（971003），兩者在 03 第 10 節分屬不同級 |
 | `options[].gifts` | `[體系, 取得方式]`，取得方式如 `direct`、`check_pass`、`check_fail`、`win_battle`、`later_direct` |
 | `options[].gift_ids` | `[飾品 id, 取得方式]`，與 `gifts` 同一批飾品、同樣的取得方式，但留下 id，供依想要類別（03 第 10 節）判斷；id ≥ 990000 的是隱藏的戰鬥 buff，不算飾品，不收 |
+| `options[].odds` | 結果不確定的選項（隨機選項，或看隊伍 SP 的選項）的各分支，見下方「分支」；結果確定的選項沒有這欄。bot 目前不用（#234） |
+| `options[].fail` | 選項開始的判定失敗時的各分支（HP、SP、開戰、Cost 增減等），見下方「分支」；不開判定的選項沒有這欄。bot 目前不用（#234） |
+| `options[].next` | 選項通往的、沒有敘事文字的後續頁 id（在 `pages`） |
+| `pages` | 沒有敘事文字的 14 個選擇頁（Boss 戰中途與部分後續頁）：`id` 與 `options`，選項欄位同上；沒有 `key`，bot 比不到，只供查閱（例如 90102301 每選一次機率加 12.5%） |
 
 取得方式共八種，對到 #420 列的六類：`direct` 直接給；`check_pass` 判定通過才給；`check_fail` 判定失敗才給；`win_battle` 打贏才給；`direct_random` 機率給；`later_direct`、`later_direct_random`、`later_win_battle` 下一頁才給（之後那一頁再依自己的條件給）。表內存原本的八種，六類是讀取端的對照。
 
-飾品的體系取自靜態資料 `ego-gift-mirrordungeon` 的 `keyword`：`events_md8.py` 取到的是同 id 第一筆、沒有 keyword 的紀錄，會把 Grimy Iron Stake 這類飾品讀成 Keywordless，`tools/event_table.py` 重新查一次。沒有敘事文字的 13 個事件（Boss 戰中途與部分後續頁）不收，照提示文字規則處理。
+飾品的體系取自靜態資料 `ego-gift-mirrordungeon` 的 `keyword`：`events_md8.py` 取到的是同 id 第一筆、沒有 keyword 的紀錄，會把 Grimy Iron Stake 這類飾品讀成 Keywordless，`tools/event_table.py` 重新查一次。沒有敘事文字的 14 個選擇頁（Boss 戰中途與部分後續頁）不在 `events`，照提示文字規則處理；它們的選項寫在 `pages`。
+
+**分支**（`odds`、`fail` 的每一項）：`{"p": 機率, "gets": [...]}`；機率隨選過的次數累加時寫 `{"p_per_pick": 每次的增量, ...}`（另一分支寫負的增量，表示其餘）；其他條件（如隊伍平均 SP）寫 `{"if": "遊戲的條件", ...}`。`gets` 是效果：`[hp|sp|hp%, 量, 對象]`（扣為負，`max` 為補滿）、`[cost, 量]`、`[gift|win_gift|buff|win_buff, id]`（`win_` 打贏才給，`buff` 是隱藏的戰鬥 buff）、`[battle, 戰鬥 id]`（開戰）、`[next, 事件 id]`；`Nothing` 不寫，效果本身的條件（如只對沒有某屬性技能的人格）不留。例：971055 `???` 是 `[{"p": 0.01, "gets": [["gift", 9800]]}, {"p": 0.99, "gets": [["cost", 50]]}]`。`tools/event_table.py` 遇到不認得的效果就停下，換季時補上。
 
 ## 8. 每季更新檢查清單
 
