@@ -968,9 +968,16 @@ def sale_taps(context, monkeypatch, team, prices, *readings, slots=None):
     """Shop.sell with 100 Cost and a 180 wanted, readings (cells_read) priced prices on the grid: the cells it tapped.
     A cell tapped is picked: the Cost previews a sale (#174), read as 100 followed by more digits."""
     lines = [(str(p), (x - 3, y + 37, 26, 20)) for p, (x, y) in zip(prices, actions.SELL_CELLS)]
-    live_shop(context, lambda taps: {
-        tuple(actions.DIALOG_TITLE): [("Sell E.G.O Gift", (500, 90, 200, 40))], tuple(actions.SELL_GRID): lines,
-        tuple(actions.SELL_COST): [("100190" if set(taps) & set(actions.SELL_CELLS) else "100", (980, 90, 60, 30))]})
+    clicks = context.tasker.controller.post_click.call_args_list
+    texts = {tuple(actions.DIALOG_TITLE): [("Sell E.G.O Gift", (500, 90, 200, 40))], tuple(actions.SELL_GRID): lines}
+    reads(context, texts)
+    shown = context.run_recognition.side_effect
+
+    def run_recognition(name, image, override=None):
+        picked = any(c.args in actions.SELL_CELLS for c in clicks)
+        texts[tuple(actions.SELL_COST)] = [("100190" if picked else "100", (980, 90, 60, 30))]
+        return shown(name, image, override)
+    context.run_recognition.side_effect = run_recognition
     cells_read(monkeypatch, *with_ids(readings))
     actions.Shop.sell(context, shop_team(team), {"wanted": 180, "sold": False, **({"slots": slots} if slots else {})})
     return [c.args for c in context.tasker.controller.post_click.call_args_list if c.args in actions.SELL_CELLS]
