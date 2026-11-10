@@ -56,7 +56,7 @@ def choice_plan(options, keyword, override=None, closed=(), event=None, want=Non
 def _wanted(entry, want):
     """(score, fail only) of the best wanted gift a table option gives, or None: fail only when every way that gift is given is check_fail.
 
-    Between equally wanted gifts one a passed check gives too decides, whichever the table lists first.
+    Between equally wanted gifts one not only a failed check gives decides, whatever the table's order.
     """
     best = None
     for gift_id, _ in (entry or {}).get("gift_ids", ()):
@@ -108,8 +108,8 @@ def _entry(text, event, min_ratio=0.8):
 
     The OCR may stop short (a hint cut off at the panel edge): it is held against as much of the entry,
     but must cover the option line. Ties go to the entry closest in length; a tie between entries of
-    different outcomes (kind, gift keywords or gift ids: pooled pages 971098 and 971099 differ only in the
-    id) is None, as is no entry close enough: the hint ranks that option then.
+    different outcomes (kind, gift keywords or gift ids: pooled pages 971098 and 971099, 971105 and 971107
+    differ only in the id) is None, as is no entry close enough: the hint ranks that option then.
     """
     s = _key(text)
     scored = []

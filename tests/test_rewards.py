@@ -443,7 +443,7 @@ def test_a_wanted_gift_only_a_failed_check_gives_asks_for_the_lowest_odds_sinner
 
 
 def test_between_equally_wanted_gifts_the_one_a_passed_check_gives_decides_whatever_their_order():
-    # 901015's "I don't know how to live without alcohol." gives one gift on a pass, another on a fail.
+    # As 901015's "I don't know how to live without alcohol.": one gift on a pass, another on a fail, in either order.
     want = {9001: "want", 9004: "want"}.get
     for ids in ([(9001, "check_pass"), (9004, "check_fail")], [(9004, "check_fail"), (9001, "check_pass")]):
         drink = gift_opt("Drink.", "Advantage check", "check", ids)
@@ -451,8 +451,8 @@ def test_between_equally_wanted_gifts_the_one_a_passed_check_gives_decides_whate
 
 
 def test_pooled_pages_whose_same_option_gives_another_gift_rank_it_by_its_hint():
-    # 971098 and 971099 share their story's end and option texts; only "Accept the deal."'s gift id differs
-    # (9237, 9236). The screen cannot tell them apart, so a want of one of the two ids is no reason to go first.
+    # Shaped after 971098 and 971099: they share their story's end and option texts, only "Accept the deal."'s gift
+    # id differs (9237, 9236). The screen cannot tell them apart, so a want of one of the ids is no reason to go first.
     take = "Take it. Select to gain a Burn E.G.O Gift"
     deal = "Accept the deal. Wrath check. Pass to gain a Burn E.G.O Gift"
     pooled = [gift_opt("Accept the deal.", "Wrath check. Pass to gain a Burn E.G.O Gift", "check", [(9001, "check_pass")]),
