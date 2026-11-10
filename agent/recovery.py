@@ -230,13 +230,15 @@ class Ladder:
     def floor(self, floor, target):
         """The run is on floor `floor` of `target`: a new stretch of REFILL_FLOORS floors past the first starts its caps over.
 
-        The first floor this Ladder sees only names the stretch: a run resumed mid-stretch (a fresh Ladder) spent what it
-        used before it in that same stretch.
+        A run resumed mid-run (a fresh Ladder) spent what it used before the first floor it sees on the floor before that
+        one: it refills only when that floor ends a stretch (5, 10).
         """
-        stretch = (floor - 1) // REFILL_FLOORS if target > REFILL_FLOORS else 0
+        def stretch_of(n):
+            return max(n - 1, 0) // REFILL_FLOORS if target > REFILL_FLOORS else 0
+        stretch = stretch_of(floor)
         if self.stretch is None:
-            self.stretch = stretch
-        elif stretch > self.stretch:
+            self.stretch = stretch_of(floor - 1)
+        if stretch > self.stretch:
             self.stretch, self.stretch_start = stretch, dict(self.counts)
 
     def stuck(self, kind, start, restarts):

@@ -6,8 +6,8 @@ import numpy as np
 import pytest
 
 import actions
-from recovery import (GAME, TRANSIT, WAIT_STILL, Ladder, Restarts, Watchdog, floor_limit, focused_package, over_time,
-                      read_runs, run_limit, same_screen, thumb)
+from recovery import (GAME, L2_SCREENS, TRANSIT, WAIT_STILL, Ladder, Restarts, Watchdog, floor_limit, focused_package,
+                      over_time, read_runs, run_limit, same_screen, thumb)
 from test_pipeline import hub_entries, load_nodes
 
 
@@ -231,7 +231,6 @@ def test_ladder_skips_l2_off_the_map(kind):
 
 def test_l2_screens_are_what_recover_l2_recognises():
     # RecoverL2 acts on the map its gear node recognises and on the panel RecoverToWindow reads; the hub hands both out.
-    from recovery import L2_SCREENS  # here, not at the top: the Ladder tests then fail on origin/main by behaviour
     nodes = load_nodes()
     assert nodes["RecoverL2"]["next"] == ["RecoverToWindow", "RecoverGear"]
     assert L2_SCREENS == set(nodes["RecoverGear"]["any_of"]) | {"ProgressPanel"}
@@ -327,6 +326,16 @@ def test_ladder_a_resumed_run_gets_no_refill_from_its_first_floor_seen():
     assert [restart(ladder, restarts) for _ in range(2)] == [(3, None), (3, None)]
     ladder.floor(13, 15)
     assert restart(ladder, restarts) == (None, "game restarted 2 times since floor 11")
+
+
+@pytest.mark.parametrize("first_seen", [6, 11])
+def test_ladder_a_resumed_run_whose_first_floor_seen_starts_a_stretch_gets_its_refill(first_seen):
+    # The restarts before a resumed run's first floor seen were on the floor before it: when that floor is 5 or 10, they
+    # are the last stretch's, and floor 6 or 11 refills as it would without the resume.
+    ladder, restarts = Ladder(), Restarts()
+    assert [restart(ladder, restarts) for _ in range(2)] == [(3, None), (3, None)]
+    ladder.floor(first_seen, 15)
+    assert [restart(ladder, restarts) for _ in range(3)] == [(3, None), (3, None), (None, f"game restarted 2 times since floor {first_seen}")]
 
 
 @pytest.mark.parametrize("floors", [range(1, 6), [5, 6, 11]])  # a target-5 run never sees floor 6; the rule needs the target
