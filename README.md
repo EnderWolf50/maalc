@@ -96,7 +96,7 @@ uv run python tools/install.py            # 開發用：child_exec 指向本機 
 uv run python tools/install.py --release  # 發佈用：再加上內嵌 Python 與 MXU
 ```
 
-推送 `v*` tag 時，[release workflow](.github/workflows/release.yml) 會在 windows-latest 上跑同樣的步驟，把 `install/` 壓成 zip 附到 draft release。
+推送 `v*` tag 時，[release workflow](.github/workflows/release.yml) 會在 windows-latest 上跑同樣的步驟，把 `install/` 壓成 zip 附到 draft release；tag 已經有 release（草稿或已公開）時什麼都不建，所以草稿公開後 tag 的 push 不會多一份草稿（`tools/release_draft.py`）。
 
 ## 授權
 
