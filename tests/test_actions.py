@@ -965,10 +965,19 @@ def test_an_offer_with_a_red_price_is_not_tapped_though_ocr_read_it_as_affordabl
 
 
 def sale_taps(context, monkeypatch, team, prices, *readings, slots=None):
-    """Shop.sell with 100 Cost and a 180 wanted, readings (cells_read) priced prices on the grid: the cells it tapped."""
+    """Shop.sell with 100 Cost and a 180 wanted, readings (cells_read) priced prices on the grid: the cells it tapped.
+    A cell tapped is picked: the Cost previews a sale (#174), read as 100 followed by more digits."""
     lines = [(str(p), (x - 3, y + 37, 26, 20)) for p, (x, y) in zip(prices, actions.SELL_CELLS)]
-    reads(context, {tuple(actions.DIALOG_TITLE): [("Sell E.G.O Gift", (500, 90, 200, 40))],
-                    tuple(actions.SELL_COST): [("100", (980, 90, 60, 30))], tuple(actions.SELL_GRID): lines})
+    clicks = context.tasker.controller.post_click.call_args_list
+    texts = {tuple(actions.DIALOG_TITLE): [("Sell E.G.O Gift", (500, 90, 200, 40))], tuple(actions.SELL_GRID): lines}
+    reads(context, texts)
+    shown = context.run_recognition.side_effect
+
+    def run_recognition(name, image, override=None):
+        picked = any(c.args in actions.SELL_CELLS for c in clicks)
+        texts[tuple(actions.SELL_COST)] = [("100190" if picked else "100", (980, 90, 60, 30))]
+        return shown(name, image, override)
+    context.run_recognition.side_effect = run_recognition
     cells_read(monkeypatch, *with_ids(readings))
     actions.Shop.sell(context, shop_team(team), {"wanted": 180, "sold": False, **({"slots": slots} if slots else {})})
     return [c.args for c in context.tasker.controller.post_click.call_args_list if c.args in actions.SELL_CELLS]
@@ -1422,7 +1431,7 @@ def test_a_material_that_does_not_show_in_the_fusion_closes_the_page(context, mo
     assert not actions.Shop.fuse(context, shop_team({}), visit)
     taps = [c.args for c in context.tasker.controller.post_click.call_args_list]
     assert actions.PAGE_OK not in taps and actions.PAGE_CLOSE in taps
-    assert [taps.count(c) for c in actions.FUSE_CELLS[:3]] == [1, 1, 0]  # stopped at the second
+    assert [taps.count(c) for c in actions.FUSE_CELLS[:3]] == [1, 2, 0]  # stopped at the second, tapped again once (#611)
     assert visit["fuse_scanned"]
 
 

@@ -5538,14 +5538,9 @@ class Shop(CustomAction):
         before, by_i = cost, {c["i"]: c for c in cells}
         for i in picked or []:
             price = dict(gifts)[i]
-            at = cell_at(context, grid, by_i[i])
-            if at is None:
+            asked = Shop.ask_sale(context, grid, by_i[i], before)
+            if asked is False:
                 break
-            page_guard(context, "Shop")
-            tap_settled(context, *at, timeout=1.2)
-            # Sell asks "Sell [<gift>] for <price> Cost?"; it slides down from the top before Confirm takes a tap (#174).
-            page_guard(context, "Shop")
-            asked = tap_shown(context, *PAGE_OK, shows(context, DIALOG_TEXT, r"Sell.*Cost"), timeout=2)
             if asked is not None:
                 if not re.search(rf"(?<!\d){price}(?!\d)", normalize(text(context, asked, DIALOG_TEXT))):
                     log(f"shop: the sale of cell {i} asks another price than {price}: cancelled")  # another cell picked
@@ -5566,6 +5561,32 @@ class Shop(CustomAction):
                 grid["at"] = 0
         Shop.to_main(context)
         return bool(picked)
+
+    @staticmethod
+    def ask_sale(context, grid, cell, before):
+        """Tap cell (owned_cells) on the sell page, then Sell: the screenshot of the dialog that asks "Sell [<gift>] for
+        <price> Cost?", None when none came, False when the cell is not where the grid puts it (cell_at).
+
+        No dialog and the Cost still reads `before` with no dialog up: nothing was picked (a picked cell previews the Cost as
+        "51 > 146", #174), so the cell tap was not taken (#611): the cell is found again and tapped once more, then Sell.
+        A Cost that reads anything else may be a pick whose Sell tap was lost: a second cell tap would unpick it.
+        """
+        asks = shows(context, DIALOG_TEXT, r"Sell.*Cost")
+        for again in (False, True):
+            at = cell_at(context, grid, cell)
+            if at is None:
+                return False
+            page_guard(context, "Shop")
+            tap_settled(context, *at, timeout=1.2)
+            # Sell's dialog slides down from the top before Confirm takes a tap (#174).
+            page_guard(context, "Shop")
+            asked = tap_shown(context, *PAGE_OK, asks, timeout=2)
+            if asked is not None or again:
+                return asked
+            image = screen(context)
+            if cost_in(context, image, SELL_COST) != before or asks(image):
+                return None
+            log(f"shop: sell cell {cell['i']} tapped: nothing picked, tapped again")
 
     @staticmethod
     def fuse(context, team, visit):
@@ -5742,24 +5763,38 @@ class Shop(CustomAction):
         Each is dragged into view first (cell_at). After a tap one slot more holds a material and the tapped cell's
         frame turns orange: the gift went in, and it is the one meant (cell_at found it, the grid is not sorted again).
         out: the other way round (#285), the materials in taken out again: one slot fewer, the frame gone.
+        A tap that changed nothing (the slots and the cell's frame as before it) was not taken (#611: the game kept the cell
+        pressed, 1 tap in 147 live, its touch_up sent 53 ms after touch_down; the release is lost in the game or the emulator,
+        out of the bot's reach): once the screen stops it is read again, and still unchanged, the cell is found again and
+        tapped once more. Any other read-back gives up at once: that tap may have been taken, and another would undo it.
         """
+        def reads(image, x, y):  # the slots holding a material, and whether the cell at (x, y) is framed
+            return shop.placed(image, slots), shop.picked(image, x, y, CELL_PAGES["fuse"][1])
         filled = shop.placed(screen(context), slots)
         if filled != (len(cells) if out else 0):
             log(f"shop: {filled} materials in before any tap: " + ("not the group to take out" if out else "no fusion"))
             return False
         for n, c in enumerate(cells, 1):
-            at = cell_at(context, grid, c)
-            if at is None:
-                return False
-            x, y = at
-            page_guard(context, "Shop")
-            tap_moved(context, x, y, timeout=0.5)
-            image = close_tooltip(context, "fuse", force=True)  # its tooltip shades the grid, still fading in maybe
-            filled, framed = shop.placed(image, slots), shop.picked(image, x, y, CELL_PAGES["fuse"][1])
-            if filled != (len(cells) - n if out else n) or framed == out:
-                log(f"shop: cell {c['i']} tapped: {filled} materials in, {'framed' if framed else 'not framed'}: "
-                    + ("not taken out" if out else "no fusion"))
-                return False
+            meant, unchanged = (len(cells) - n, len(cells) - n + 1) if out else (n, n - 1)
+            for again in (False, True):
+                at = cell_at(context, grid, c)
+                if at is None:
+                    return False
+                x, y = at
+                page_guard(context, "Shop")
+                tap_moved(context, x, y, timeout=0.5)
+                filled, framed = reads(close_tooltip(context, "fuse", force=True), x, y)  # its tooltip shades the grid, still fading in maybe
+                if filled == unchanged and framed == out and not again:
+                    still(context, timeout=1.0)  # a tap taken late shows now: no second tap then
+                    filled, framed = reads(close_tooltip(context, "fuse"), x, y)
+                    if filled == unchanged and framed == out:
+                        log(f"shop: cell {c['i']} tapped: nothing changed, tapped again")
+                        continue
+                if filled != meant or framed == out:
+                    log(f"shop: cell {c['i']} tapped: {filled} materials in, {'framed' if framed else 'not framed'}: "
+                        + ("not taken out" if out else "no fusion"))
+                    return False
+                break
         return True
 
 
