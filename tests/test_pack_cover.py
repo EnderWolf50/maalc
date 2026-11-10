@@ -77,6 +77,37 @@ BLANKED = {
 }
 
 
+COMPOSED_FLOORS = (7, 12)  # an INFINITY and an EXTREME floor: floors 6-10 and 11-15 each match one list (#387)
+
+
+def card_x(i, n):
+    """The centre x of card i of a page of n cards."""
+    return 640 + (i - (n - 1) / 2) * pc.PITCH
+
+
+def cover_card(name):
+    """name's composed card (#241) at the live card's size over black, BGR."""
+    file = json.loads((DATA / "theme_pack_covers" / "index.json").read_text(encoding="utf-8"))[name]
+    card = Image.new("RGBA", pc.CARD, (0, 0, 0, 255))
+    card.alpha_composite(Image.open(DATA / "theme_pack_covers" / file).convert("RGBA").resize(pc.CARD))
+    return np.ascontiguousarray(np.asarray(card.convert("RGB"))[:, :, ::-1])
+
+
+def composed_page(names):
+    """ThemePackNormal with its five cards replaced by the composed cards of names."""
+    page = np.ascontiguousarray(np.asarray(Image.open(SCREENS / "ThemePackNormal.png").convert("RGB"))[:, :, ::-1])
+    for i, name in enumerate(names):
+        left = int(card_x(i, len(names)) - pc.CARD[0] / 2)
+        page[pc.CARD_TOP:pc.CARD_TOP + pc.CARD[1], left:left + pc.CARD[0]] = cover_card(name)
+    return page
+
+
+def composed_hands(floor):
+    """The floor's packs in hands of five, the last one filled up from the first packs: [(names, how many are new)]."""
+    on = rs.floor_reads(YAML["packs"], PLAN["weights"], ART, floor)[0]
+    return [((on[i:i + 5] + on[:5])[:5], len(on[i:i + 5])) for i in range(0, len(on), 5)]
+
+
 def read_pages():
     """Every page of PAGES through actions.pack_titles and run_start.rank_packs as PickThemePack ranks them, for each of
     READS; print {"<read>:<page>": [[pack, how], ...]}."""
@@ -120,6 +151,14 @@ def read_pages():
                         ranked = rs.rank_packs([lines for _, lines in cards], names, PLAN, art,
                                                lambda i, allowed: pc.read_cover(image, cards[i][0], allowed))
                         out[f"{reading}:{key}"] = [[title, how.split()[0]] for title, _, how in ranked]
+                for floor in COMPOSED_FLOORS:
+                    _, names, art = rs.floor_reads(YAML["packs"], PLAN["weights"], ART, floor)
+                    for k, (hand, _) in enumerate(composed_hands(floor)):
+                        image = composed_page(hand)
+                        cards = actions.pack_titles(context, image)
+                        ranked = rs.rank_packs([lines for _, lines in cards], names, PLAN, art,
+                                               lambda i, allowed: pc.read_cover(image, cards[i][0], allowed))
+                        out[f"composed:{floor}:{k}"] = [[title, how.split()[0]] for title, _, how in ranked]
             except Exception:  # MaaFramework swallows it: hand it to the test
                 out["error"] = traceback.format_exc()
             return True
@@ -156,6 +195,22 @@ def test_a_card_whose_title_is_lost_is_read_by_its_cover_or_left_unread(read, ke
     assert read[f"floor:{key}"] == [list(p) for p in BLANKED[key][2]]
 
 
+@pytest.mark.parametrize("floor", COMPOSED_FLOORS)
+def test_every_pack_of_floors_6_to_15_is_read_off_its_composed_card(read, floor):
+    # #615: no live capture of floors 6-15 yet; each pack's composed card (#241) on a real page, read against the floor's
+    # list. A guard: these clean cards read right before #615's fixes too (the misreads came off softened cards). The title names nearly all; art titles OCR cannot spell fall to the cover (Line 5's "ROLND", The Dawn of
+    # Green's "TheDaWRiSf Green", Line 1's "NESS" on floor 7)
+    got, cover = [], []
+    for k, (hand, new) in enumerate(composed_hands(floor)):
+        reads = read[f"composed:{floor}:{k}"]
+        assert len(reads) == len(hand), (hand, reads)
+        got += reads[:new]
+        cover += [name for name, how in reads[:new] if how == "cover"]
+    on = rs.floor_reads(YAML["packs"], PLAN["weights"], ART, floor)[0]
+    assert [name for name, _ in got] == on
+    assert len(cover) <= 3, cover
+
+
 def test_no_extreme_only_pack_takes_a_card_of_a_floor_1_to_5_page_but_line_1s_capitals(read):
     # #387: the same pages read against every pack of the file, as if floors 1-5 kept the EXTREME-only packs. The one card of
     # the 57 a new name takes is Line 1's where OCR reads its title art "LINE 1 MADNESS" whole (#266): it spells
@@ -180,7 +235,7 @@ def test_the_cover_alone_names_most_cards_of_a_real_page_and_never_a_wrong_one()
     for page in ("ThemePackNormal", "ThemePackHardLine1", "ThemePackHardLineCover", "ThemePackHardLine5", "ThemePackMiracle"):
         image = np.asarray(Image.open(SCREENS / f"{page}.png").convert("RGB"))[:, :, ::-1]
         n = len(PAGES[page])
-        for (name, _), x in zip(PAGES[page], [640 + (i - (n - 1) / 2) * pc.PITCH for i in range(n)]):
+        for (name, _), x in zip(PAGES[page], [card_x(i, n) for i in range(n)]):
             found = pc.read_cover(image, x, set(FLOOR_NAMES))  # a floor 1-5 card: the covers of the floor's packs (#387)
             spoke += found is not None
             right += found is not None and found[0] == name
@@ -198,11 +253,8 @@ def art_shift(page, x, name):
     w, h = pc.CARD
     left, top, right, bottom = pc.ART
     band = (slice(int(top * h), int(bottom * h)), slice(int(left * w), int(right * w)))
-    file = json.loads((DATA / "theme_pack_covers" / "index.json").read_text(encoding="utf-8"))[name]
-    cover = Image.new("RGBA", pc.CARD, (0, 0, 0, 255))
-    cover.alpha_composite(Image.open(DATA / "theme_pack_covers" / file).convert("RGBA").resize(pc.CARD))
     grey = [cv2.cvtColor(np.ascontiguousarray(im), cv2.COLOR_BGR2GRAY)[band].astype(np.float32)
-            for im in (np.asarray(cover.convert("RGB"))[:, :, ::-1], pc.card_image(page, x))]
+            for im in (cover_card(name), pc.card_image(page, x))]
     window = cv2.createHanningWindow((grey[0].shape[1], grey[0].shape[0]), cv2.CV_32F)
     return cv2.phaseCorrelate(grey[0], grey[1], window)[0]
 
@@ -218,7 +270,7 @@ def test_the_cover_art_sits_where_the_live_card_has_it(page, i, name):
     assert PAGES[page][i][0] == name
     n = len(PAGES[page])
     image = np.asarray(Image.open(SCREENS / f"{page}.png").convert("RGB"))[:, :, ::-1]
-    dx, dy = art_shift(image, 640 + (i - (n - 1) / 2) * pc.PITCH, name)
+    dx, dy = art_shift(image, card_x(i, n), name)
     assert abs(dx) <= 2 and abs(dy) <= 2, (dx, dy)
 
 
@@ -234,13 +286,10 @@ def test_the_long_battle_overlay_sits_where_the_live_card_has_it(page, i, name):
     assert PAGES[page][i][0] == name
     n = len(PAGES[page])
     image = np.asarray(Image.open(SCREENS / f"{page}.png").convert("RGB"))[:, :, ::-1]
-    card = pc.card_image(image, 640 + (i - (n - 1) / 2) * pc.PITCH)
-    file = json.loads((DATA / "theme_pack_covers" / "index.json").read_text(encoding="utf-8"))[name]
-    cover = Image.new("RGBA", pc.CARD, (0, 0, 0, 255))
-    cover.alpha_composite(Image.open(DATA / "theme_pack_covers" / file).convert("RGBA").resize(pc.CARD))
+    card = pc.card_image(image, card_x(i, n))
     w, h = pc.CARD
     band = (slice(int(0.18 * h), int(0.36 * h)), slice(int(0.25 * w), int(0.75 * w)))  # the triangle and "Long Battle"
-    assert pc.correlation(card[band], np.asarray(cover.convert("RGB"))[:, :, ::-1][band]) >= 0.72
+    assert pc.correlation(card[band], cover_card(name)[band]) >= 0.72
 
 
 def tiny_page(seed, x=640):
