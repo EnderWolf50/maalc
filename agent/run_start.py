@@ -140,8 +140,11 @@ def rerun_copy(name, text, names):
     return copy if copy in names and compact(RERUN) in compact(text) else name
 
 
-SHORT_NAME = 6  # letters: one slip in a name this short (Line 1, The B.E.) passes min_ratio, so it needs the text to be ...
-SHORT_SHARE = 3  # ... at most this many times its length: "ON THE EX" in a broken Murder on the WARP Express read is not The B.E. (#615)
+# A name of up to SHORT_NAME letters (Line 1, The B.E.) read with a slip counts only in a text at most SHORT_READ_TIMES times as
+# long: a stretch one letter off so short a name turns up in a long read of another title. "ON THE EX" of a broken Murder on
+# the WARP Express read is "theex", one letter off "thebe" (#615); the live "Line" and "WOPIS Line" reads stay within it.
+SHORT_NAME = 6
+SHORT_READ_TIMES = 3
 
 
 def title_candidates(text, names, min_ratio=0.8):
@@ -149,7 +152,7 @@ def title_candidates(text, names, min_ratio=0.8):
 
     A re-run copy's name is left out: it holds its original's, which a plain title would match as well as the copy's
     (rerun_copy tells them apart by the BokGak line). A name of up to SHORT_NAME letters read with a slip counts only in
-    a text at most SHORT_SHARE times as long: in a longer one, a stretch one letter off it is likely a piece of another title.
+    a text at most SHORT_READ_TIMES times as long: in a longer one, a stretch one letter off it is likely a piece of another title.
     """
     key = compact(text)
     found = []
@@ -158,7 +161,7 @@ def title_candidates(text, names, min_ratio=0.8):
         if not key or not n or name.endswith(RERUN):
             continue
         r = max(SequenceMatcher(None, key[i:i + len(n)], n).ratio() for i in range(max(1, len(key) - len(n) + 1)))
-        if r < 1 and len(n) <= SHORT_NAME and len(key) > SHORT_SHARE * len(n):
+        if r < 1 and len(n) <= SHORT_NAME and len(key) > SHORT_READ_TIMES * len(n):
             continue
         if r >= min_ratio:
             found.append((r * len(n), name))
