@@ -103,7 +103,7 @@ def test_materials_that_will_not_come_out_close_the_page(context, monkeypatch):
     cells = [("Bleed", 3), ("Tremor", 3), ("Pierce", 2), ("Slash", 2), ("Sinking", 2)]
     fused, taps, ok, lines = fuse(context, monkeypatch, {"fusion_condition": "upgrade"}, cells, {(0, 1, 2): 3}, stuck=True, visit=visit, get=False)
     assert not fused and not ok
-    assert taps == [2, 1, 1, 0, 0]  # the first tap out did not show: the rest stay, the next group is not tried
+    assert taps == [3, 1, 1, 0, 0]  # the first tap out did not show, nor the one more (#611): the rest stay, the next group is not tried
     assert any("not taken out" in m for m in lines)
     assert actions.PAGE_CLOSE in [c.args for c in context.tasker.controller.post_click.call_args_list]
     assert visit["fuse_scanned"]
