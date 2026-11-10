@@ -120,13 +120,15 @@ def test_missing_data_and_a_skip_are_listed_apart_from_red(tmp_path, monkeypatch
 
 
 def test_a_moved_test_file_lists_the_tests_it_changed(tmp_path, monkeypatch, capsys):
-    """A test file moved and edited (git sees a rename) still has its new test checked, and only that one."""
+    """A test file moved and edited (git sees a rename) still has its new test checked, and only that one; a file only
+    moved has no test listed."""
     old = "".join(f"def test_old_{n}():\n    assert {n} == {n}\n\n\n" for n in range(6))
-    branch(tmp_path, monkeypatch, {"tests/test_a.py": old},
-           {"tests/test_b.py": old + "def test_new():\n    assert True\n"}, moves=[("tests/test_a.py", "tests/test_b.py")])
+    branch(tmp_path, monkeypatch, {"tests/test_a.py": old, "tests/test_c.py": old},
+           {"tests/test_b.py": old + "def test_new():\n    assert True\n"},
+           moves=[("tests/test_a.py", "tests/test_b.py"), ("tests/test_c.py", "tests/test_d.py")])
     assert red_check.main("main") == 1
     out = capsys.readouterr().out
-    assert "passes on main: test_b::test_new" in out and "test_old_" not in out
+    assert "passes on main: test_b::test_new" in out and "test_old_" not in out and "test_d" not in out
     assert "red_check: 1 test(s) added or changed" in out
 
 

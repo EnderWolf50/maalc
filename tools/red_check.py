@@ -21,7 +21,8 @@ ROOT = Path(__file__).resolve().parent.parent
 OCR = Path("assets/resource/base/model/ocr")  # gitignored; the base worktree borrows this checkout's
 TEST_DATA = ("tests", "maatools.config.mts")  # what the branch's tests read, copied over the base
 # A test that raised this read no data on the base; a file missing under assets/ is the base's code, so it stays red.
-# A fixture that raised it fails the test at setup, and junit quotes the error: `failed on setup with "FileNotFoundError: ..."`.
+# Matched at the start (`DID NOT RAISE <class 'FileNotFoundError'>` is a failed assertion), so a fixture's error, which
+# junit quotes after a prefix (`failed on setup with "FileNotFoundError: ..."`), spells the prefix out.
 NO_DATA_ERROR = re.compile(r"(?:failed on setup with \")?FileNotFoundError\b(?!.*\bassets[\\/])")
 
 
