@@ -20,8 +20,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 OCR = Path("assets/resource/base/model/ocr")  # gitignored; the base worktree borrows this checkout's
 TEST_DATA = ("tests", "maatools.config.mts")  # what the branch's tests read, copied over the base
-# A test that raised this read no data on the base; a file missing under assets/ is the base's code, so it stays red
-NO_DATA_ERROR = re.compile(r"FileNotFoundError\b(?!.*\bassets[\\/])")
+# A test that raised this read no data on the base; a file missing under assets/ is the base's code, so it stays red.
+# A fixture that raised it fails the test at setup, and junit quotes the error: `failed on setup with "FileNotFoundError: ..."`.
+NO_DATA_ERROR = re.compile(r"(?:failed on setup with \")?FileNotFoundError\b(?!.*\bassets[\\/])")
 
 
 def git(*args: str, check: bool = True) -> str:
@@ -32,7 +33,8 @@ def changed_lines(base: str) -> dict[str, set[int]]:
     """New-side line numbers each tests/ file of the branch adds or edits, from the merge base to HEAD."""
     lines: dict[str, set[int]] = {}
     path = ""
-    for line in git("diff", "-U0", "--no-color", "--diff-filter=AM", f"{base}...HEAD", "--", "tests").splitlines():
+    # R: a moved and edited file's hunks name only its edited lines (a pure move has no hunk, so no test of it is listed)
+    for line in git("diff", "-U0", "--no-color", "--diff-filter=AMR", f"{base}...HEAD", "--", "tests").splitlines():
         if line.startswith("+++ "):
             path = line[6:] if line.startswith("+++ b/") else ""
         elif path and (m := re.match(r"@@ -\S+ \+(\d+)(?:,(\d+))?", line)):

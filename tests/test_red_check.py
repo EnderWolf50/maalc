@@ -117,3 +117,26 @@ def test_missing_data_and_a_skip_are_listed_apart_from_red(tmp_path, monkeypatch
     assert "could not read data on main: test_x::test_skipped" in out
     assert "red on main" not in out
     assert "red_check: 2 test(s) added or changed, 0 pass on main, 0 red, 2 could not read data" in out
+
+
+def test_a_moved_test_file_lists_the_tests_it_changed(tmp_path, monkeypatch, capsys):
+    """A test file moved and edited (git sees a rename) still has its new test checked, and only that one."""
+    old = "".join(f"def test_old_{n}():\n    assert {n} == {n}\n\n\n" for n in range(6))
+    branch(tmp_path, monkeypatch, {"tests/test_a.py": old},
+           {"tests/test_b.py": old + "def test_new():\n    assert True\n"}, moves=[("tests/test_a.py", "tests/test_b.py")])
+    assert red_check.main("main") == 1
+    out = capsys.readouterr().out
+    assert "passes on main: test_b::test_new" in out and "test_old_" not in out
+    assert "red_check: 1 test(s) added or changed" in out
+
+
+def test_a_fixture_that_cannot_read_its_data_is_not_red(tmp_path, monkeypatch, capsys):
+    """A missing file read in a fixture fails the test at setup (junit: `failed on setup with "FileNotFoundError: ..."`)."""
+    branch(tmp_path, monkeypatch, {".gitignore": "local.bin\n", "tests/test_x.py": "def test_old():\n    assert True\n"},
+           {"local.bin": b"x",
+            "tests/test_x.py": "from pathlib import Path\n\nimport pytest\n\n\n@pytest.fixture\ndef data():\n"
+                               "    return Path('local.bin').read_bytes()\n\n\ndef test_old():\n    assert True\n\n\n"
+                               "def test_local(data):\n    assert data == b'x'\n"})
+    assert red_check.main("main") == 1
+    out = capsys.readouterr().out
+    assert "could not read data on main: test_x::test_local" in out and "red on main" not in out
