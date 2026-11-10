@@ -319,23 +319,20 @@ def test_ladder_a_target_15_run_that_restarts_twice_on_floor_3_and_once_on_floor
     assert restart(ladder, restarts) == (3, None)
 
 
-def test_ladder_a_resumed_run_gets_no_refill_from_its_first_floor_seen():
-    # A bot launched or a task started mid-run has a fresh Ladder (actions.TaskStart) and sees floor 13 as its first new
-    # floor: its restarts on floor 12 are this stretch's, not a refill's.
-    ladder, restarts = Ladder(), Restarts()
-    assert [restart(ladder, restarts) for _ in range(2)] == [(3, None), (3, None)]
-    ladder.floor(13, 15)
-    assert restart(ladder, restarts) == (None, "game restarted 2 times since floor 11")
-
-
-@pytest.mark.parametrize("first_seen", [6, 11])
-def test_ladder_a_resumed_run_whose_first_floor_seen_starts_a_stretch_gets_its_refill(first_seen):
-    # The restarts before a resumed run's first floor seen were on the floor before it: when that floor is 5 or 10, they
-    # are the last stretch's, and floor 6 or 11 refills as it would without the resume.
+@pytest.mark.parametrize(("first_seen", "after"), [
+    (13, [(None, "game restarted 2 times since floor 11")]),
+    (7, [(None, "game restarted 2 times since floor 6")]),
+    (6, [(3, None), (3, None), (None, "game restarted 2 times since floor 6")]),
+    (11, [(3, None), (3, None), (None, "game restarted 2 times since floor 11")]),
+])
+def test_ladder_a_resumed_run_refills_at_its_first_floor_seen_only_when_that_floor_starts_a_stretch(first_seen, after):
+    # A bot launched or a task started mid-run has a fresh Ladder (actions.TaskStart), and PickThemePack tells it the next
+    # floor only: its restarts were on the floor before. Floor 12's or 6's are the stretch's of floor 13 or 7; floor 5's
+    # or 10's are the last stretch's, and floor 6 or 11 refills as it would without the resume.
     ladder, restarts = Ladder(), Restarts()
     assert [restart(ladder, restarts) for _ in range(2)] == [(3, None), (3, None)]
     ladder.floor(first_seen, 15)
-    assert [restart(ladder, restarts) for _ in range(3)] == [(3, None), (3, None), (None, f"game restarted 2 times since floor {first_seen}")]
+    assert [restart(ladder, restarts) for _ in after] == after
 
 
 @pytest.mark.parametrize("floors", [range(1, 6), [5, 6, 11]])  # a target-5 run never sees floor 6; the rule needs the target
