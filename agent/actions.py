@@ -5764,15 +5764,18 @@ class Shop(CustomAction):
         frame turns orange: the gift went in, and it is the one meant (cell_at found it, the grid is not sorted again).
         out: the other way round (#285), the materials in taken out again: one slot fewer, the frame gone.
         A tap that changed nothing (the slots and the cell's frame as before it) was not taken (#611: the game kept the cell
-        pressed, 1 tap in 147 live): once the screen stops, the cell is found again and tapped once more. Any other read-back
-        gives up at once: that tap may have been taken, and another would undo it.
+        pressed, 1 tap in 147 live, its touch_up sent 53 ms after touch_down; the release is lost in the game or the emulator,
+        out of the bot's reach): once the screen stops it is read again, and still unchanged, the cell is found again and
+        tapped once more. Any other read-back gives up at once: that tap may have been taken, and another would undo it.
         """
+        def reads(image, x, y):  # the slots holding a material, and whether the cell at (x, y) is framed
+            return shop.placed(image, slots), shop.picked(image, x, y, CELL_PAGES["fuse"][1])
         filled = shop.placed(screen(context), slots)
         if filled != (len(cells) if out else 0):
             log(f"shop: {filled} materials in before any tap: " + ("not the group to take out" if out else "no fusion"))
             return False
         for n, c in enumerate(cells, 1):
-            meant, before = (len(cells) - n, len(cells) - n + 1) if out else (n, n - 1)
+            meant, unchanged = (len(cells) - n, len(cells) - n + 1) if out else (n, n - 1)
             for again in (False, True):
                 at = cell_at(context, grid, c)
                 if at is None:
@@ -5780,16 +5783,18 @@ class Shop(CustomAction):
                 x, y = at
                 page_guard(context, "Shop")
                 tap_moved(context, x, y, timeout=0.5)
-                image = close_tooltip(context, "fuse", force=True)  # its tooltip shades the grid, still fading in maybe
-                filled, framed = shop.placed(image, slots), shop.picked(image, x, y, CELL_PAGES["fuse"][1])
-                if filled == meant and framed != out:
-                    break
-                if again or filled != before or framed != out:
+                filled, framed = reads(close_tooltip(context, "fuse", force=True), x, y)  # its tooltip shades the grid, still fading in maybe
+                if filled == unchanged and framed == out and not again:
+                    still(context, timeout=1.0)  # a tap taken late shows now: no second tap then
+                    filled, framed = reads(close_tooltip(context, "fuse"), x, y)
+                    if filled == unchanged and framed == out:
+                        log(f"shop: cell {c['i']} tapped: nothing changed, tapped again")
+                        continue
+                if filled != meant or framed == out:
                     log(f"shop: cell {c['i']} tapped: {filled} materials in, {'framed' if framed else 'not framed'}: "
                         + ("not taken out" if out else "no fusion"))
                     return False
-                log(f"shop: cell {c['i']} tapped: nothing changed, tapped again")
-                still(context, timeout=1.0)
+                break
         return True
 
 

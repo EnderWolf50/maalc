@@ -1,19 +1,20 @@
-"""#611: a cell tap the game did not take (the screen reads back as before it) is tapped once more; only a second one
-gives up. A read-back that is neither as before nor the one meant gives up at once: the first tap may have been taken."""
+"""The shop's cell taps on the fuse and sell pages (#611): a tap the game did not take (the screen reads back as before
+it, read again once it stops) is tapped once more; only a second one gives up. A read-back that is neither as before nor
+the one meant gives up at once: the first tap may have been taken."""
 import pytest
 
 import actions
 import test_actions
-import test_shop_scroll
 from test_actions import live_shop, sell_page, SELLER, cells_read, with_ids
 
-clock, context, grid = test_actions.clock, test_actions.context, test_shop_scroll.grid  # their fixtures
+clock, context = test_actions.clock, test_actions.context  # its fixtures
 CELLS = [{"i": 10 + k, "x": x, "y": y} for k, (x, y) in enumerate(actions.FUSE_CELLS[:3])]
 
 
 def placing(context, monkeypatch, reads, out=False):
-    """Shop.place of CELLS (into the fusion, or out) on a page whose read-back after each tap is the next of reads
-    ((materials in, the tapped cell framed)); (its result, the cells tapped by their i, the log lines)."""
+    """Shop.place of CELLS (into the fusion, or out) on a page whose every read-back (after a tap, and again once the
+    screen stops) is the next of reads ((materials in, the tapped cell framed)); (its result, the cells tapped by their
+    i, the log lines)."""
     lines, tapped, now = [], [], {"cell": None}
     reads = iter(reads)
     monkeypatch.setattr(actions, "log", lines.append)
@@ -35,7 +36,8 @@ RETAP = "shop: cell 11 tapped: nothing changed, tapped again"
 @pytest.mark.parametrize("out", [False, True])
 def test_a_tap_that_changed_nothing_is_made_once_more_and_the_fusion_goes_on(context, monkeypatch, out):
     # #611 (live 2026-11-10): the game showed cell 13 pressed and took nothing in; tapped again, it goes in.
-    reads = [(2, False), (2, True), (1, False), (0, False)] if out else [(1, True), (1, False), (2, True), (3, True)]
+    reads = ([(2, False), (2, True), (2, True), (1, False), (0, False)] if out
+             else [(1, True), (1, False), (1, False), (2, True), (3, True)])
     done, tapped, lines = placing(context, monkeypatch, reads, out)
     assert done and tapped == [10, 11, 11, 12]
     assert lines == [RETAP]
@@ -43,7 +45,7 @@ def test_a_tap_that_changed_nothing_is_made_once_more_and_the_fusion_goes_on(con
 
 @pytest.mark.parametrize("out", [False, True])
 def test_two_taps_that_change_nothing_give_up_as_before(context, monkeypatch, out):
-    reads = [(2, False), (2, True), (2, True)] if out else [(1, True), (1, False), (1, False)]
+    reads = [(2, False), (2, True), (2, True), (2, True)] if out else [(1, True), (1, False), (1, False), (1, False)]
     done, tapped, lines = placing(context, monkeypatch, reads, out)
     assert not done and tapped == [10, 11, 11]
     assert lines == [RETAP, "shop: cell 11 tapped: " + ("2 materials in, framed: not taken out" if out
@@ -51,10 +53,20 @@ def test_two_taps_that_change_nothing_give_up_as_before(context, monkeypatch, ou
 
 
 @pytest.mark.parametrize("out", [False, True])
+def test_a_tap_taken_late_shows_once_the_screen_stops_and_is_not_made_again(context, monkeypatch, out):
+    # The read-back straight after the tap is as before, the one once the screen stops shows it taken: a second tap would
+    # undo it.
+    reads = [(2, False), (2, True), (1, False), (0, False)] if out else [(1, True), (1, False), (2, True), (3, True)]
+    done, tapped, lines = placing(context, monkeypatch, reads, out)
+    assert done and tapped == [10, 11, 12] and lines == []
+
+
+@pytest.mark.parametrize("out", [False, True])
 @pytest.mark.parametrize("read", ["count", "frame"])
 def test_a_read_back_that_is_not_as_before_gives_up_with_no_second_tap(context, monkeypatch, out, read):
-    # Another slot count, or the frame turned with the count unchanged (another cell picked): the tap may have been taken,
-    # and a second one would take the material out again (or put it back).
+    # Another slot count, or the tapped cell's frame turned with the count unchanged: the tap may have been taken, and a
+    # second one would take the material out again (or put it back). (Another cell framed is not seen: shop.picked looks
+    # at the tapped cell only, as before #611.)
     wrong = {"count": (0, True) if out else (3, False), "frame": (2, False) if out else (1, True)}[read]
     reads = [(2, False) if out else (1, True), wrong]
     done, tapped, lines = placing(context, monkeypatch, reads, out)
