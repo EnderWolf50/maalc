@@ -5,16 +5,8 @@ Defaults: <unpack dir>/out/events-md8.json (from limbus-unpack's scripts/events_
 and that unpack's static-data folder, read again for each gift's keyword: events_md8.py takes the first record of
 a gift id it finds, and the plain ego-gift files carry no keyword (Grimy Iron Stake read Keywordless, not Bleed).
 
-Besides kind and gifts, an option keeps what the bot does not use yet (#234):
-- odds: the branches of an option whose outcome is not sure (a random option, or one that depends on the team's SP).
-- fail: the failure branches of the check the option starts.
-- next: the follow-up pages without story text the option leads to; they are under "pages", by id, not under "events".
-A branch is {"p": chance, "gets": [...]}; {"p_per_pick": x, ...} when the chance is x times the times the page was
-picked (the other branch then has -x: the rest); {"if": "<the game's condition>", ...} for any other condition.
-gets lists the effects: [hp|sp|hp%, amount, target] (a loss is negative, amount "max" heals to full),
-[cost, amount], [gift|win_gift|buff|win_buff, id] (win_: only when the fight is won; buff: a hidden battle buff),
-[battle, battle id], [next, event id]; "Nothing" is left out. An effect's own condition (only Identities without
-some affinity, for instance) is not kept. An effect this file does not know stops the build.
+The table's fields, the odds and failure branches (#234) and the follow-up "pages" included, are described in
+docs/spec/05-game-data.md section 7. An effect effect() does not know stops the build.
 """
 
 import json
@@ -55,13 +47,21 @@ def effect(x):
         args = x.get("args", [])
         out = []
         for i, stat in enumerate(stats):
-            amount = "max" if full else -args[min(i, len(args) - 1)] if lose == "Lose" else args[min(i, len(args) - 1)]
-            out.append([stat + "%" * bool(ratio), amount, *[x["target"]] * ("target" in x)])
+            if full:
+                amount = "max"
+            else:
+                amount = args[min(i, len(args) - 1)]  # SameAmount has one number for both
+                if lose == "Lose":
+                    amount = -amount
+            entry = [stat + "%" if ratio else stat, amount]
+            if "target" in x:
+                entry.append(x["target"])
+            out.append(entry)
         return out
     if name in ("MirrorDungeonAcquireCost", "MirrorDungeonLossCost"):
         return [["cost", x["cost"] if name.endswith("AcquireCost") else -x["cost"]]]
     if name in ("GetConfirmedEgogift", "GetConfirmedEgogiftOnWinBattle") and ("gift" in x or "hiddenBuff" in x):
-        win = "win_" * name.endswith("OnWinBattle")
+        win = "win_" if name.endswith("OnWinBattle") else ""
         return [[win + "gift", x["gift"]["id"]]] if "gift" in x else [[win + "buff", x["hiddenBuff"]]]
     if name.startswith("StartBattle") and "battle" in x:
         return [["battle", x["battle"]]]
@@ -70,11 +70,14 @@ def effect(x):
     raise ValueError(f"unknown event effect {name}: add it to tools/event_table.py's effect()")
 
 
+def cond(r):
+    return r.get("cond") or "Prob_1"  # a result with no condition always happens
+
+
 def branch(r):
     """One result of events_md8.py -> {"p"|"p_per_pick"|"if": ..., "gets": [...]}."""
-    cond = r.get("cond") or "Prob_1"
-    how, _, x = cond.partition("_")
-    head = {"p": number(x)} if how == "Prob" else {"p_per_pick": number(x)} if how == "ProbTimesRepeatCount" else {"if": cond}
+    how, _, x = cond(r).partition("_")
+    head = {"p": number(x)} if how == "Prob" else {"p_per_pick": number(x)} if how == "ProbTimesRepeatCount" else {"if": cond(r)}
     gets = [g for e in r["effects"] for g in effect(e)]
     return {**head, "gets": gets + ([["next", r["next"]]] if r.get("next") else [])}
 
@@ -84,12 +87,13 @@ def option(o, keyword, pages):
     gifts = sorted({(keyword.get(g["id"], "Keywordless"), g["how"]) for g in real})
     ids = sorted({(g["id"], g["how"]) for g in real})
     rs = o["results"]
-    sure = len(rs) <= 1 and all((r.get("cond") or "Prob_1") == "Prob_1" for r in rs)  # no result: the page just goes on
+    sure = len(rs) <= 1 and all(cond(r) == "Prob_1" for r in rs)  # no result: the page just goes on
+    fails = [branch(r) for c in o["checks"] for r in c.get("failure", [])]  # a check with no failure result: no field
     nexts = sorted({r["next"] for r in rs if r.get("next") in pages})
     return {"text": plain(o["text"]), "hint": plain(o["hint"]), "kind": o["kind"],
             **({"gifts": [list(g) for g in gifts], "gift_ids": [list(g) for g in ids]} if gifts else {}),
             **({} if sure else {"odds": [branch(r) for r in rs]}),
-            **({"fail": [branch(r) for c in o["checks"] for r in c.get("failure", [])]} if o["checks"] else {}),
+            **({"fail": fails} if fails else {}),
             **({"next": nexts} if nexts else {})}
 
 
@@ -119,7 +123,7 @@ def build(src_path, static):
             "tools/event_table.py. key: the story text's last 60 letters and digits, lower case. kind: direct, random, "
             "check, check_fail_gift, followup, battle, check_other, followup_other, other. gifts: [keyword, how]. "
             "gift_ids: [gift id, how]. how: direct, direct_random, check_pass, check_fail, win_battle, later_direct, "
-            "later_direct_random, later_win_battle. odds, fail, next and pages (#234): see tools/event_table.py. "
+            "later_direct_random, later_win_battle. odds, fail, next and pages (#234): see docs/spec/05-game-data.md section 7. "
             "Game data (c) Project Moon, see NOTICE.md.")
     def rows(rs):  # one row per line, so a regenerated table diffs by event
         return "[\n" + ",\n".join("  " + json.dumps(e, ensure_ascii=False) for e in rs) + "\n ]" if rs else "[]"

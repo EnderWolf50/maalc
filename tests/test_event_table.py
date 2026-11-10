@@ -18,9 +18,10 @@ def test_the_bizarre_machine_gives_its_gift_one_time_in_a_hundred():
         {"p": 0.01, "gets": [["gift", 9800]]}, {"p": 0.99, "gets": [["cost", 50]]}]
 
 
-def test_a_coin_flip_option_gives_its_gift_half_the_time():
+def test_a_coin_flip_option_gives_its_gift_half_the_time_and_a_sure_one_has_no_odds():
     assert _option(971003, "Give a few subtle hints.")["odds"] == [
         {"p": 0.5, "gets": [["gift", 9705]]}, {"p": 0.5, "gets": []}]
+    assert "odds" not in _option(971003, "You saw nothing.")
 
 
 def test_a_page_without_story_text_keeps_its_odds_and_the_option_that_leads_there_names_it():
@@ -30,20 +31,17 @@ def test_a_page_without_story_text_keeps_its_odds_and_the_option_that_leads_ther
         {"p_per_pick": -0.125, "gets": [["next", 90102301]]}]
 
 
-def test_a_sure_option_has_no_odds_and_an_option_without_a_check_no_failure_cost():
-    reach = _option(901001, "Reach out.")
-    assert "odds" not in reach and "fail" not in reach
-
-
 def test_a_check_keeps_what_its_failure_costs():
     # 901008 Remove the nails: failing the check still gives 40 Cost
     assert _option(901008, "Remove the nails.")["fail"] == [{"p": 1, "gets": [["cost", 40]]}]
+    # 858502's checks have no failure result in the data: no field, rather than one that reads as a safe failure
+    assert all("fail" not in o for e in TABLE["events"] if e["id"] == 858502 for o in e["options"])
 
 
 def test_a_check_whose_failure_starts_a_fight_is_marked_so():
     fights = [o for e in TABLE["events"] for o in e["options"]
               if any(g[0] == "battle" for b in o.get("fail", []) for g in b["gets"])]
-    assert len(fights) >= 10  # the issue counts about 14 failures that start a fight
+    assert len(fights) == 14  # client 1.117.0; a new season's table may change it
     assert all(o["kind"].startswith("check") or o["kind"] in ("battle", "followup") for o in fights)
 
 
