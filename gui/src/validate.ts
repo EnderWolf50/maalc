@@ -1,13 +1,12 @@
 // The two layers of checks of docs/spec/04-settings.md section 2, run before every save.
 // crossCheck mirrors cross_check in agent/settings.py message for message;
 // tests/settings_cases.json holds the cases both test suites run.
-import Ajv2020 from "ajv/dist/2020";
-import { schema, skillPlan, type Settings, type SkillFault } from "./model";
+// The schema layer is compiled at build time (settingsValidator.ts): the built GUI's CSP allows no run-time compile (#220).
+import { settings as schemaCheck } from "virtual:settings-validator";
+import { skillPlan, type Settings, type SkillFault } from "./model";
 
 /** paths mark the fields in the editor; text is what agent/settings.py would say. */
 export interface Problem { paths: string[]; text: string }
-
-const schemaCheck = new Ajv2020({ allErrors: true, strict: false }).compile(schema);
 
 export function validate(data: unknown): Problem[] {
   if (!schemaCheck(data)) {
