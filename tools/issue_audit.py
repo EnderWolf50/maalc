@@ -3,11 +3,11 @@
   uv run python tools/issue_audit.py                # look back 14 days
   uv run python tools/issue_audit.py --days 30
 
-Lists every open issue without a milestone or without exactly one triage label (docs/agents/triage-labels.md), and every
-issue without an assignee that an open PR closes or that was closed as completed; a map (`wayfinder:map`) or a tracker
-(`tracking`) needs none of these. Exit code 1 when one does. Then lists, without failing, the open issues a PR merged in
-the last --days names, and those untouched for --days: only a person can tell whether the body still lists work that
-is done.
+Lists every open issue without a milestone (a `tooling` issue needs none) or without exactly one triage label
+(docs/agents/triage-labels.md), and every issue without an assignee that an open PR closes or that was closed as
+completed; a map (`wayfinder:map`) or a tracker (`tracking`) needs none of these. Exit code 1 when one does. Then
+lists, without failing, the open issues a PR merged in the last --days names, and those untouched for --days: only
+a person can tell whether the body still lists work that is done.
 """
 import argparse
 import json
@@ -20,6 +20,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 MAPS_AND_TRACKERS = {"wayfinder:map", "tracking"}
+TOOLING = "tooling"
 FAILING = ("no milestone", "triage labels != 1", "no assignee, an open PR closes it", "closed as completed, no assignee")
 CLOSING_KEYWORD = re.compile(r"\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?):?\s+#(\d+)", re.I)
 
@@ -64,7 +65,7 @@ def audit(issues: list[dict], prs: list[dict], triage: set[str], now: datetime, 
         labels = label_names(issue)
         line = issue_line(issue)
         if not labels & MAPS_AND_TRACKERS:
-            if issue["milestone"] is None:
+            if issue["milestone"] is None and TOOLING not in labels:
                 found["no milestone"].append(line)
             if len(labels & triage) != 1:
                 found["triage labels != 1"].append(line)

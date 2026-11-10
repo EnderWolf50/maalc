@@ -51,6 +51,7 @@ Used by `/wayfinder`. The **map** is a single issue with **child** issues as tic
 Every open issue carries:
 
 - **A milestone.** `v1` when #34's acceptance or AALC parity (#21) needs it; `v2` for #1's Deferred items and work beyond AALC parity. A sub-issue takes its parent's milestone; an issue split off another takes the milestone of the part it carries.
+  A **tooling** issue carries the `tooling` label in place of a milestone: its work changes how maalc is developed (`tools/`, CI, review-lint, hooks, `.claude/`, agent docs), not what maalc does in the game. An issue that changes both takes a milestone and no `tooling`.
 - **Exactly one triage label** from `triage-labels.md`. A new issue starts at `needs-triage` unless its body is already fully specified. An issue labelled `wontfix` is closed.
 
 An issue in progress carries **an assignee**, its claim, and keeps it through the close: an issue closed as completed has one.
@@ -59,8 +60,8 @@ A map (`wayfinder:map`) or a long-running tracker (`tracking`, such as #203, #25
 
 When to act:
 
-- **Creating an issue:** pass `--milestone` and `--label` in the same `gh issue create`.
+- **Creating an issue:** pass `--milestone` (a tooling issue: `--label tooling`) and the triage `--label` in the same `gh issue create`.
 - **Starting work on an issue** (its branch or worktree): claim it first, `gh issue edit <n> --add-assignee @me`. A session that delegates an issue claims it before the hand-off. The session that claimed an issue drops the claim (`--remove-assignee @me`) when the work stops without a PR.
 - **A PR finishes part of an issue it does not close:** in the same session, rewrite the issue body. Done items move to a `已完成` list with the PR or commit, and the `file:line` references the body cites are refreshed. A map or tracker that lists an issue the PR closes gets its box ticked.
-- **A comment widens an issue's scope** (as #94 gained the 15-floor switch): split the new scope into its own issue with its own milestone instead.
-- **Session start for issue or PR work, and after creating issues:** run `uv run python tools/issue_audit.py`. Exit 1 lists issues without a milestone or a single triage label, and issues without an assignee that an open PR closes or that were closed as completed; fix them. It also lists the open issues a PR merged in the last 14 days names, and those untouched for 14 days. Check each against `main`: close it, rewrite its body, or comment why it is still current.
+- **A comment widens an issue's scope** (as #94 gained the 15-floor switch): split the new scope into its own issue with its own milestone (or `tooling`) instead.
+- **Session start for issue or PR work, and after creating issues:** run `uv run python tools/issue_audit.py`. Exit 1 lists issues without a milestone or `tooling`, or without a single triage label, and issues without an assignee that an open PR closes or that were closed as completed; fix them. It also lists the open issues a PR merged in the last 14 days names, and those untouched for 14 days. Check each against `main`: close it, rewrite its body, or comment why it is still current.
