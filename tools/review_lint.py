@@ -12,7 +12,7 @@
   number (`fix: #387`, `Fixes #12`, `closes owner/repo#5`): merged into main it closes the issue whatever the PR
   body says (docs/agents/pr.md "Language").
 
-Exit code = number of problems. CI runs it on every pull request.
+Exit code 1 when there is a problem, else 0. CI runs it on every pull request.
 """
 import re
 import subprocess
