@@ -6,8 +6,8 @@ import numpy as np
 import pytest
 
 import actions
-from recovery import (GAME, TRANSIT, WAIT_STILL, Ladder, Restarts, Watchdog, floor_limit, focused_package, over_time,
-                      read_runs, run_limit, same_screen, thumb)
+from recovery import (GAME, L2_SCREENS, TRANSIT, WAIT_STILL, Ladder, Restarts, Watchdog, floor_limit, focused_package,
+                      over_time, read_runs, run_limit, same_screen, thumb)
 from test_pipeline import hub_entries, load_nodes
 
 
@@ -231,7 +231,6 @@ def test_ladder_skips_l2_off_the_map(kind):
 
 def test_l2_screens_are_what_recover_l2_recognises():
     # RecoverL2 acts on the map its gear node recognises and on the panel RecoverToWindow reads; the hub hands both out.
-    from recovery import L2_SCREENS  # here, not at the top: the Ladder tests then fail on origin/main by behaviour
     nodes = load_nodes()
     assert nodes["RecoverL2"]["next"] == ["RecoverToWindow", "RecoverGear"]
     assert L2_SCREENS == set(nodes["RecoverGear"]["any_of"]) | {"ProgressPanel"}
@@ -320,13 +319,20 @@ def test_ladder_a_target_15_run_that_restarts_twice_on_floor_3_and_once_on_floor
     assert restart(ladder, restarts) == (3, None)
 
 
-def test_ladder_a_resumed_run_gets_no_refill_from_its_first_floor_seen():
-    # A bot launched or a task started mid-run has a fresh Ladder (actions.TaskStart) and sees floor 13 as its first new
-    # floor: its restarts on floor 12 are this stretch's, not a refill's.
+@pytest.mark.parametrize(("first_seen", "after"), [
+    (13, [(None, "game restarted 2 times since floor 11")]),
+    (7, [(None, "game restarted 2 times since floor 6")]),
+    (6, [(3, None), (3, None), (None, "game restarted 2 times since floor 6")]),
+    (11, [(3, None), (3, None), (None, "game restarted 2 times since floor 11")]),
+])
+def test_ladder_a_resumed_run_refills_at_its_first_floor_seen_only_when_that_floor_starts_a_stretch(first_seen, after):
+    # A bot launched or a task started mid-run has a fresh Ladder (actions.TaskStart), and PickThemePack tells it the next
+    # floor only: its restarts were on the floor before. Floor 12's or 6's are the stretch's of floor 13 or 7; floor 5's
+    # or 10's are the last stretch's, and floor 6 or 11 refills as it would without the resume.
     ladder, restarts = Ladder(), Restarts()
     assert [restart(ladder, restarts) for _ in range(2)] == [(3, None), (3, None)]
-    ladder.floor(13, 15)
-    assert restart(ladder, restarts) == (None, "game restarted 2 times since floor 11")
+    ladder.floor(first_seen, 15)
+    assert [restart(ladder, restarts) for _ in after] == after
 
 
 @pytest.mark.parametrize("floors", [range(1, 6), [5, 6, 11]])  # a target-5 run never sees floor 6; the rule needs the target
