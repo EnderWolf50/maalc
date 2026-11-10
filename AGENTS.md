@@ -2,7 +2,7 @@
 
 ### Issue tracker
 
-Issues are tracked in GitHub Issues (EnderWolf50/maalc) via the `gh` CLI. See `docs/agents/issue-tracker.md`; its "Keeping issues current" section says which milestone and triage label every open issue carries and when to claim one, and `tools/issue_audit.py` lists the ones that break it.
+Issues are tracked in GitHub Issues (EnderWolf50/maalc) via the `gh` CLI. See `docs/agents/issue-tracker.md`; its "Keeping issues current" section says which milestone (or `tooling` label) and triage label every open issue carries and when to claim one, and `tools/issue_audit.py` lists the ones that break it.
 
 ### Triage labels
 

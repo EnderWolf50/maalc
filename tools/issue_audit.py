@@ -5,9 +5,9 @@
 
 Lists every open issue without a milestone (a `tooling` issue needs none) or without exactly one triage label
 (docs/agents/triage-labels.md), and every issue without an assignee that an open PR closes or that was closed as
-completed; a map (`wayfinder:map`) or a tracker (`tracking`) needs none of these. Exit code 1 when one does. Then lists, without failing, the open issues a PR merged in
-the last --days names, and those untouched for --days: only a person can tell whether the body still lists work that
-is done.
+completed; a map (`wayfinder:map`) or a tracker (`tracking`) needs none of these. Exit code 1 when one does. Then
+lists, without failing, the open issues a PR merged in the last --days names, and those untouched for --days: only
+a person can tell whether the body still lists work that is done.
 """
 import argparse
 import json
