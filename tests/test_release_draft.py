@@ -3,6 +3,7 @@
 A fake `gh` answers the release listing and records every call; nothing reaches GitHub.
 """
 import subprocess
+import sys
 
 import pytest
 import release_draft as rd
@@ -51,6 +52,22 @@ def test_a_listing_that_fails_creates_nothing():
 
     with pytest.raises(subprocess.CalledProcessError):
         rd.draft("v0.1.0", "z.zip", "abc", gh=gh, say=lambda line: None)
+
+
+def test_a_failing_gh_leaves_its_error_in_the_log(monkeypatch, capfd):
+    # The workflow log is all a failed release run shows: gh's own error (a token scope, a rate limit) must reach it.
+    real_run, exit_code = subprocess.run, [1]
+
+    def fake_gh(args, **kwargs):
+        script = f"import sys; print('v0.1.0'); sys.stderr.write('HTTP 403: Resource not accessible'); sys.exit({exit_code[0]})"
+        return real_run([sys.executable, "-c", script], **kwargs)
+
+    monkeypatch.setattr(rd.subprocess, "run", fake_gh)
+    with pytest.raises(subprocess.CalledProcessError):
+        rd.run_gh(["api", "repos/{owner}/{repo}/releases"])
+    assert "HTTP 403" in capfd.readouterr().err
+    exit_code[0] = 0
+    assert rd.run_gh(["api", "repos/{owner}/{repo}/releases"]).strip() == "v0.1.0"  # stdout is still the answer
 
 
 def test_the_workflow_runs_the_guard_in_place_of_a_bare_create():

@@ -17,7 +17,8 @@ import sys
 
 
 def run_gh(args: list[str]) -> str:
-    return subprocess.run(["gh", *args], check=True, capture_output=True, text=True).stdout
+    """gh's output; its stderr goes on to the workflow log, which is all a failed run shows."""
+    return subprocess.run(["gh", *args], check=True, stdout=subprocess.PIPE, text=True).stdout
 
 
 def release_tags(gh) -> set[str]:

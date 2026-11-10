@@ -154,6 +154,12 @@ def test_an_open_node_panel_is_closed_with_back_before_the_gear(named):
     assert game.taps[:3] == [gu.BACK, gu.MAP_GEAR, gu.FORFEIT] and game.shots[:2] == ["MapNodePanel", "MirrorMap"]
 
 
+def test_a_node_panel_that_back_does_not_close_stops_with_exit_1():
+    # #585: Back is pressed once per look, never the gear, and the run stops once the panel outlasts its tries.
+    game = Game(["MapNodePanel"])
+    assert game.run() == 1
+    assert game.taps == [gu.BACK] * gu.STEPS["MapNodePanel"].tries and game.shots[-1] == "stuck-MapNodePanel"
+
 
 def test_the_give_up_dialog_is_confirmed_again_while_it_stays():
     game = Game(["GiveUpDialog", "GiveUpDialog", None, "HomeReached"])
