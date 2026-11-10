@@ -140,11 +140,16 @@ def rerun_copy(name, text, names):
     return copy if copy in names and compact(RERUN) in compact(text) else name
 
 
+SHORT_NAME = 6  # letters: one slip in a name this short (Line 1, The B.E.) passes min_ratio, so it needs the text to be ...
+SHORT_SHARE = 3  # ... at most this many times its length: "ON THE EX" in a broken Murder on the WARP Express read is not The B.E. (#615)
+
+
 def title_candidates(text, names, min_ratio=0.8):
     """The names tied for the best match of text (match_title), best first; [] when none passes.
 
     A re-run copy's name is left out: it holds its original's, which a plain title would match as well as the copy's
-    (rerun_copy tells them apart by the BokGak line).
+    (rerun_copy tells them apart by the BokGak line). A name of up to SHORT_NAME letters read with a slip counts only in
+    a text at most SHORT_SHARE times as long: in a longer one, a stretch one letter off it is likely a piece of another title.
     """
     key = compact(text)
     found = []
@@ -153,6 +158,8 @@ def title_candidates(text, names, min_ratio=0.8):
         if not key or not n or name.endswith(RERUN):
             continue
         r = max(SequenceMatcher(None, key[i:i + len(n)], n).ratio() for i in range(max(1, len(key) - len(n) + 1)))
+        if r < 1 and len(n) <= SHORT_NAME and len(key) > SHORT_SHARE * len(n):
+            continue
         if r >= min_ratio:
             found.append((r * len(n), name))
     found.sort(reverse=True)
@@ -314,15 +321,15 @@ def floor_packs(packs, floor):
 def floor_reads(packs, weights, title_art, floor):
     """(the floor's packs, the names its cards are matched against, the title art reads that name one of them) (#387).
 
-    packs: the data file's (name -> floors); weights: the plan's. The names are floor_packs, the original of each re-run
-    copy among them (the copy's card shows the original's title, rerun_copy; INFINITY has two copies without their
-    originals) and the weighed packs the data file dropped (they still match). On floors 1-5 that is the set the agent
-    matched before #387.
+    packs: the data file's (name -> floors); weights: the plan's. The names are floor_packs and the weighed packs the data
+    file dropped (they still match). On floors 1-5 that is the set the agent matched before #387. A re-run copy's card
+    shows its original's title (rerun_copy); on a floor without the original (INFINITY has two copies without theirs) that
+    title is the copy's title art, so a card whose BokGak line OCR lost is still the copy (#615).
     """
     on = floor_packs(packs, floor)
-    originals = [n[:-len(RERUN)] for n in on if n.endswith(RERUN) and n[:-len(RERUN)] not in on]
-    names = on + originals + [n for n in weights if n not in packs]
-    return on, names, {read: n for read, n in title_art.items() if n in names}
+    names = on + [n for n in weights if n not in packs]
+    copies = {n[:-len(RERUN)]: n for n in on if n.endswith(RERUN) and n[:-len(RERUN)] not in on}
+    return on, names, {**{read: n for read, n in title_art.items() if n in names}, **copies}
 
 
 def event_slots(floor, titles, event_packs, packs):

@@ -77,6 +77,27 @@ BLANKED = {
 }
 
 
+COMPOSED_FLOORS = (7, 12)  # an INFINITY and an EXTREME floor: floors 6-10 and 11-15 each match one list (#387)
+
+
+def composed_page(names):
+    """ThemePackNormal with its five cards replaced by the composed cards of names (#241), as art_shift draws them."""
+    page = np.ascontiguousarray(np.asarray(Image.open(SCREENS / "ThemePackNormal.png").convert("RGB"))[:, :, ::-1])
+    index = json.loads((DATA / "theme_pack_covers" / "index.json").read_text(encoding="utf-8"))
+    for name, x in zip(names, [640 + (i - (len(names) - 1) / 2) * pc.PITCH for i in range(len(names))]):
+        card = Image.new("RGBA", pc.CARD, (0, 0, 0, 255))
+        card.alpha_composite(Image.open(DATA / "theme_pack_covers" / index[name]).convert("RGBA").resize(pc.CARD))
+        left = int(x - pc.CARD[0] / 2)
+        page[pc.CARD_TOP:pc.CARD_TOP + pc.CARD[1], left:left + pc.CARD[0]] = np.asarray(card.convert("RGB"))[:, :, ::-1]
+    return page
+
+
+def composed_hands(floor):
+    """The floor's packs in hands of five, the last one filled up from the first packs: [(names, how many are new)]."""
+    on = rs.floor_reads(YAML["packs"], PLAN["weights"], ART, floor)[0]
+    return [((on[i:i + 5] + on[:5])[:5], len(on[i:i + 5])) for i in range(0, len(on), 5)]
+
+
 def read_pages():
     """Every page of PAGES through actions.pack_titles and run_start.rank_packs as PickThemePack ranks them, for each of
     READS; print {"<read>:<page>": [[pack, how], ...]}."""
@@ -120,6 +141,14 @@ def read_pages():
                         ranked = rs.rank_packs([lines for _, lines in cards], names, PLAN, art,
                                                lambda i, allowed: pc.read_cover(image, cards[i][0], allowed))
                         out[f"{reading}:{key}"] = [[title, how.split()[0]] for title, _, how in ranked]
+                for floor in COMPOSED_FLOORS:
+                    _, names, art = rs.floor_reads(YAML["packs"], PLAN["weights"], ART, floor)
+                    for k, (hand, _) in enumerate(composed_hands(floor)):
+                        image = composed_page(hand)
+                        cards = actions.pack_titles(context, image)
+                        ranked = rs.rank_packs([lines for _, lines in cards], names, PLAN, art,
+                                               lambda i, allowed: pc.read_cover(image, cards[i][0], allowed))
+                        out[f"composed:{floor}:{k}"] = [[title, how.split()[0]] for title, _, how in ranked]
             except Exception:  # MaaFramework swallows it: hand it to the test
                 out["error"] = traceback.format_exc()
             return True
@@ -154,6 +183,22 @@ def test_a_card_whose_title_is_lost_is_read_by_its_cover_or_left_unread(read, ke
     # real OCR on the other cards of a capture; one card's title replaced by the logo's noise. The cover names it where
     # it stands clear; where it does not, the card keeps its place, unread, rather than guessed.
     assert read[f"floor:{key}"] == [list(p) for p in BLANKED[key][2]]
+
+
+@pytest.mark.parametrize("floor", COMPOSED_FLOORS)
+def test_every_pack_of_floors_6_to_15_is_read_off_its_composed_card(read, floor):
+    # #615: no live capture of floors 6-15 yet; each pack's composed card (#241) on a real page, read against the floor's
+    # list. The title names nearly all; art titles OCR cannot spell fall to the cover (Line 5's "ROLND", The Dawn of
+    # Green's "TheDaWRiSf Green", Line 1's "NESS" on floor 7)
+    got, cover = [], []
+    for k, (hand, new) in enumerate(composed_hands(floor)):
+        reads = read[f"composed:{floor}:{k}"]
+        assert len(reads) == len(hand), (hand, reads)
+        got += reads[:new]
+        cover += [name for name, how in reads[:new] if how == "cover"]
+    on = rs.floor_reads(YAML["packs"], PLAN["weights"], ART, floor)[0]
+    assert [name for name, _ in got] == on
+    assert len(cover) <= 3, cover
 
 
 def test_no_extreme_only_pack_takes_a_card_of_a_floor_1_to_5_page_but_line_1s_capitals(read):

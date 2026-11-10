@@ -125,6 +125,19 @@ def test_a_title_is_found_despite_ocr_slips(text, expected):
     assert rs.match_title(text, SHORT) == expected
 
 
+@pytest.mark.parametrize("lines", [
+    # #615: Murder on the WARP Express's card, OCR'd off a blurred composed card: "ON THE" and "EX" join into "theex", one
+    # letter off The B.E.'s "thebe", and the title itself is too broken to match
+    ["MURDER", "ON THE", "EX", "er on the WAiRP", "morde", "Express"],
+    ["MURDER", "NTHE", "EX", "mára", "RP", "Express BokGak"],
+])
+def test_a_short_name_one_letter_off_a_stretch_of_a_long_read_is_no_match(lines):
+    # The B.E. weighs 10 in the default plan, the most: a guess at it pulls the card
+    plan = DATA_YAML["default_plan"]
+    assert "The B.E." not in rs.title_candidates(" ".join(lines), DATA_NAMES)
+    assert rs.rank_packs([lines], DATA_NAMES, plan, DATA_TITLE_ART) == [(" ".join(lines), plan["unlisted"], "unread")]
+
+
 @pytest.mark.parametrize(("lines", "expected"), [
     (["World", "Lake"], "Lake World"),  # live logs: a tilted card's two title boxes sorted bottom word first
     (["WONr", "Abyss", "Crawling"], "Crawling Abyss"),  # with a logo fragment
@@ -153,13 +166,15 @@ def test_title_art_finds_its_pack_through_the_data_file(lines, expected):
 @pytest.mark.parametrize("floor", [1, 7, 12])
 def test_every_pack_of_the_season_matches_itself_and_with_a_letter_lost(floor):
     # The data file's own names: each one read back, and read with one letter dropped, finds itself among the names of a
-    # floor it shows on; floor 12's are the EXTREME packs, the 20 EXTREME-only ones among them (#387).
-    on, packs, _ = rs.floor_reads(yaml.safe_load(DATA.read_text(encoding="utf-8"))["packs"], {}, {}, floor)
+    # floor it shows on; floor 12's are the EXTREME packs, the 20 EXTREME-only ones among them (#387). Floor 7's re-run
+    # copies match through their originals' titles, the floor's title art (#615).
+    on, packs, art = rs.floor_reads(yaml.safe_load(DATA.read_text(encoding="utf-8"))["packs"], {}, {}, floor)
+    plan = {"weights": {}, "unlisted": 0}
     for name in on:
-        assert rs.match_card([name], packs)[0] == name
+        assert rs.rank_packs([[name]], packs, plan, art)[0][0] == name
         i = len(name) // 2
         if len(compact(name)) >= 6:
-            assert rs.match_card([name[:i] + name[i + 1:]], packs)[0] == name, name
+            assert rs.rank_packs([[name[:i] + name[i + 1:]]], packs, plan, art)[0][0] == name, name
 
 
 @pytest.mark.parametrize(("floor", "expected"), [
@@ -186,9 +201,10 @@ def test_a_floor_reads_its_cards_against_its_packs_the_weighed_ones_the_file_lac
     assert rs.floor_reads(packs, weights, art, 5) == (["Line 1", "S.E.A."], ["Line 1", "S.E.A.", "Gone Pack"], art)
     # floor 12: an EXTREME floor; Line 1 shows on no floor past 10, so MADNESS no longer names it
     assert rs.floor_reads(packs, weights, art, 12) == (["Line 1 : MADNESS"], ["Line 1 : MADNESS", "Gone Pack"], {})
-    # a re-run copy shows its original's title: the original's name matches it (rerun_copy), on a floor without the original too
+    # a re-run copy shows its original's title: the original's name matches it (rerun_copy); on a floor without the original
+    # that title is the copy's title art (#615: its card is the copy, BokGak line read or not)
     packs = {"Miracle": {"N": [4], "H": [3, 4]}, "Miracle BokGak": {"H": [4, 5], "I": True}}
-    assert rs.floor_reads(packs, {}, {}, 7) == (["Miracle BokGak"], ["Miracle BokGak", "Miracle"], {})
+    assert rs.floor_reads(packs, {}, {}, 7) == (["Miracle BokGak"], ["Miracle BokGak"], {"Miracle": "Miracle BokGak"})
     assert rs.floor_reads(packs, {}, {}, 4) == (["Miracle", "Miracle BokGak"], ["Miracle", "Miracle BokGak"], {})
 
 
@@ -541,6 +557,21 @@ def test_the_bokgak_rerun_copies_are_packs_of_their_own_weighed_as_their_origina
 def test_a_card_with_the_bokgak_line_is_the_rerun_copy_and_one_without_it_the_original(lines, expected):
     assert rs.match_card(lines, DATA_NAMES)[0] == expected
     assert rs.rank_packs([lines], DATA_NAMES, DATA_YAML["default_plan"], DATA_TITLE_ART)[0][0] == expected
+
+
+def test_a_floor_without_a_rerun_copys_original_names_its_card_the_copy_when_the_bokgak_line_is_lost():
+    # #615: floors 6-10 show Miracle in District 20 and Yield My Flesh only as their BokGak copies. The composed cards read
+    # "20 BokG" and no BokGak line; on such a floor the original's title is the copy's
+    plan = DATA_YAML["default_plan"]
+    cards = [["Miracle", "InDistrict", "20 BokG", "NELN"], ["Yield My Flesh to Claim", "Their Bones"], ["Miracle in District 20", "BokGak"]]
+    _, names, art = rs.floor_reads(DATA_YAML["packs"], plan["weights"], DATA_TITLE_ART, 7)
+    assert [(t, how) for t, _, how in rs.rank_packs(cards, names, plan, art)] == [
+        ("Miracle in District 20 BokGak", "title_art"), ("Yield My Flesh to Claim Their Bones BokGak", "title_art"),
+        ("Miracle in District 20 BokGak", "name")]
+    # floor 4 shows both: without the line the card is the original
+    _, names, art = rs.floor_reads(DATA_YAML["packs"], plan["weights"], DATA_TITLE_ART, 4)
+    assert [t for t, _, _ in rs.rank_packs(cards, names, plan, art)] == [
+        "Miracle in District 20", "Yield My Flesh to Claim Their Bones", "Miracle in District 20 BokGak"]
 
 
 def test_a_rerun_copy_read_by_its_keyword_or_cover_is_the_copy():
