@@ -157,9 +157,15 @@ def checkout_state(has_base_ref):
     the point the branch left origin/main (the same change has the same blob ids in the next run, so the summary can
     tell what changed between two runs without the commits)."""
     head = git("rev-parse", "HEAD").strip()
-    base = git("merge-base", "HEAD", BASE).strip() if has_base_ref else head
+    base = None
+    if has_base_ref:
+        try:
+            base = git("merge-base", "HEAD", BASE).strip()
+        except subprocess.CalledProcessError:  # a shallow clone, or histories that share nothing: no common point
+            pass
     return {"worktree": git("rev-parse", "--show-toplevel").strip(), "branch": git("rev-parse", "--abbrev-ref", "HEAD").strip(),
-            "base": base if has_base_ref else None, "head": head, "dirty": bool(git("status", "--porcelain").strip()), "files": work_tree_files(base)}
+            "base": base, "head": head, "dirty": bool(git("status", "--porcelain").strip()),
+            "files": work_tree_files(base or head)}
 
 
 def record(started, steps, junit_dir, maa_texts, has_base_ref, wall):

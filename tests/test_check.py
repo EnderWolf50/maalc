@@ -189,3 +189,13 @@ def test_each_shard_gets_its_own_number_in_the_arguments():
     popen = Popen([0, 0])
     check.run_step(["x", "--junitxml=/j/{shard}.xml"], 2, popen)
     assert [cmd[1] for cmd in popen.cmds] == ["--junitxml=/j/0.xml", "--junitxml=/j/1.xml"]
+
+
+def test_a_checkout_with_no_common_point_with_origin_main_records_no_base(tmp_path, monkeypatch):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    for args in (["init", "-q"], ["config", "user.email", "a@b"], ["config", "user.name", "n"], ["commit", "-q", "--allow-empty", "-m", "x"]):
+        subprocess.run(["git", *args], cwd=repo, check=True)
+    monkeypatch.setattr(check, "ROOT", repo)
+    state = check.checkout_state(True)  # has_base said yes, but this repo has no origin/main to compare with
+    assert state["base"] is None and state["files"] == {} and len(state["head"]) == 40
