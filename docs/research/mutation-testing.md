@@ -4,9 +4,10 @@
 
 ## 結論
 
-- 18 個檔案、3311 個突變：測試抓到 2637 個（79.9%），沒抓到 665 個（其中 30 個在任何測試裡都不會執行到），9 個確認改了不影響行為（等價）。
-- 沒抓到的 665 個裡，399 個是「某個數字加 1」，多半是像素座標、顏色門檻、ROI 大小這類辨識常數：離線截圖剛好不落在邊界上，所以 +1 不會讓測試變紅。這類常數靠 `tests/screens/` 的掃描把關，加 1 之後依然判對同一批截圖，本來就不是單元測試抓得到的東西。
-- 真正值得補的是決策邏輯的邊界：自動難度、星光購買、主題包門檻、結算的樓層邊界、設定檢查。前 10 名列在「最值得補測試的 10 個」。
+- 18 個檔案、3311 個突變：測試抓到 2637 個（80.1%），沒抓到 655 個（其中 30 個在任何測試裡都不會執行到），19 個確認改了不影響行為（等價，各附理由）。
+- 沒抓到的 655 個裡，395 個是「某個數字加 1」，多半是像素座標、顏色門檻、ROI 大小這類辨識常數：這次跑的測試用到的截圖沒有落在邊界上，所以 +1 之後測試照樣全過。要量到這種常數，得有剛好落在門檻附近的截圖。
+- 真正值得補的是決策邏輯的分支：結算時的每週獎勵、星光恩典的購買、事件選項的排序、試煉辨認、設定檢查。前 10 名列在「最值得補測試的 10 個」。
+- 其餘 260 個不是數字的存活突變沒有逐一證明「改了一定有影響」；清單裡可能還有等價的，確認過的才列進等價表。
 - 分數最低的是 `pass_missions`（38%）、`shop`（67%）、`battle`（68%）、`gift_search`（71%）、`hub_text`（75%）：除了 `shop` 的融合與購買邏輯，主要都是像素辨識。`pass_missions` 與 `hub_text` 的 `CustomRecognition.analyze` 沒有任何測試會執行到（「沒有測試執行」那 30 個大多在這）。
 
 ## 工具：自己寫的 AST 突變工具
@@ -50,7 +51,7 @@ uv run python tools/mutation.py baseline                   # 未突變時各檔�
 uv run python tools/live/queue.py run --resource bench --name mutation-1 -- uv run python tools/mutation.py run --budget 840
 uv run python tools/live/queue.py run --resource bench --name mutation-cover -- uv run python tools/mutation.py cover
 uv run python tools/live/queue.py run --resource bench --name mutation-r1 -- uv run python tools/mutation.py recheck --budget 840
-uv run python tools/mutation.py report                     # 下面的表與清單
+uv run python tools/mutation.py report                     # 下面的表與清單（英文表頭；本文翻成中文）
 ```
 
 `run` 與 `recheck` 每次最多 14 分鐘，輸出的最後一行寫還剩幾個；剩下的再排一張 ticket。結果寫在主 checkout 的 `.local/scratch/mutation/results.jsonl`，以檔案原始碼的雜湊為鍵：程式改了，該檔案的舊結果自動不算。等價突變列在 `docs/research/mutation-equivalent.json`（`檔案:行:欄:突變` → 理由）。
@@ -59,31 +60,31 @@ uv run python tools/mutation.py report                     # 下面的表與清�
 
 ## 最值得補測試的 10 個
 
-挑法：決策邏輯（不是像素常數）、錯了在實機看不出來或要很久才看得出來、會花掉資源或讓一趟白跑。
+挑法：從最後仍沒抓到的突變裡（複驗後、等價的已排除）挑決策邏輯，不挑像素常數；錯了在實機不容易看出來，或會花掉資源、讓一局白跑。後果是讀程式推得的，沒有實機跑過。
 
 | # | 位置 | 突變 | 錯了在實機會怎樣 |
 |---|---|---|---|
-| 1 | `agent/run_start.py:25` | `weekly_left > 0` → `> 1` | `difficulty: auto` 在本週只剩 1 個每週加成時改打 NORMAL，最後一個加成到週四重置前都用不掉 |
-| 2 | `agent/run_start.py:25` | `target_floor > 5` → `> 6` | 自動難度、目標第 6 層、加成用完時打 NORMAL；第 6 層起要整趟 HARD，這一趟到不了目標 |
-| 3 | `agent/settings.py:480` | `target_floor > 5` → `> 6` | 設定檢查放過「目標第 6 層 + difficulty normal」，bot 開跑後才發現第 6 層開不了 |
-| 4 | `agent/settlement.py:28` | `floor > 5` → `> 6` | 停在第 6 層、樓層標記沒讀到的一趟，難度記為不明而不是 HARD：結算的每週加成開關可能不開，run 紀錄的 difficulty 變 null |
-| 5 | `agent/run_start.py:55` | `price > available` → `>=` | 星光剛好夠的那個恩典不買；`unaffordable: stop` 時連後面的全都不買 |
-| 6 | `agent/run_start.py:53` | `continue` → `break` | 優先順序中某個恩典設成 none，它後面的恩典全部不買 |
-| 7 | `agent/run_start.py:364` | `and` → `or` | `event_packs: prefer` 時任何主題包都算「達到門檻」，低於門檻也不用免費刷新 |
-| 8 | `agent/rewards.py:93`、`:98`、`:102`、`:103` | `not main` → `main` | 同一級的事件選項裡，不再優先給隊伍關鍵字（如燒傷、流血）的 E.G.O 飾品，拿到偏離流派的飾品 |
-| 9 | `agent/shop.py:260` | `and` → `or` | 「技能 3 被鎖」的判斷變成 5 張牌或沒有技能 3 任一成立即可：6 張牌 3/3/0 或 5 張牌 2/2/1 的罪人會被當成鎖住，技能替換跳過或替換錯 |
+| 1 | `agent/settlement.py:87` | `if 1 in floors_hard:` → `if 2 in floors_hard:` | 重啟後從第 2 層以後接手的 HARD 局，第 1 層沒看到，`floors_hard.get(1)` 是空的，`all_hard` 變成假：結算只開 1 個每週獎勵，不是 3 個，剩下的要另開一局才用得掉 |
+| 2 | `agent/run_start.py:53` | `continue` → `break` | 星光方案的優先順序裡有一個恩典設成 none，排在它後面的恩典全部不買 |
+| 3 | `agent/run_start.py:14` | `GRACE_BASE` 第 5–9 個價格加 1 | 恩典 5–9 的價格算錯：星光剛好夠時判成買不起而跳過（`unaffordable: stop` 時後面全停） |
+| 4 | `agent/rewards.py:48` | `return i, False` → `return i, True` | 設定指定的事件選項（override）被標成「只有檢定失敗才給」，派出最不可能過檢定的罪人，檢定失敗、拿不到那個選項的獎勵 |
+| 5 | `agent/rewards.py:93`、`:98` | `not main` → `main` | 同一級的事件選項裡，不再優先給隊伍主要體系（如燒傷、流血）的 E.G.O 飾品，拿到別的體系的飾品 |
+| 6 | `agent/rewards.py:102`、`:103` | 層級 `2` → `3`、`3` → `4`、`1` → `2` | 事件選項的層級被打亂：例如 `1` → `2` 讓直接拿飾品的選項和要過檢定的選項同級，可能選了會失敗的那個 |
+| 7 | `agent/rewards.py:296` | `alike[1][0] < alike[0][0]` → `<=`；`alike[0][0]` → `alike[0][1]` | Mounting Trials 的卡：兩個試煉效果一樣接近時不再改用名字判斷，直接取第一個；或一個數值都對不上也認定是某個試煉。試煉認錯，評分跟著錯 |
+| 8 | `agent/settings.py:487` | `continue` → `break` | 目標 10 或 15 層時，隊伍清單裡第一個停用的隊伍之後就不再檢查，排在後面、`usage: normal_only` 的啟用隊伍不會被擋下；輪到它時整局 NORMAL，到不了第 6 層 |
+| 9 | `agent/luxcavation.py:12` | `THREAD_COST` `2` → `3` | 紐本一場以為要花 3 個腦啡肽模組（※ 依 `actions.py` 用它排場數推得）：腦啡肽模組剛好夠時少打一場 |
 | 10 | `agent/pass_missions.py:64` | 點擊框座標（`- 20` → `+ 20` 等） | 沒有任何測試執行 `PassClaimable.analyze`：回傳的點擊框錯了，領通行證任務時點到旁邊，只有實機看得出來 |
 
-其他也值得一看但沒排進前 10：`agent/luxcavation.py:12`（紐本一場花的腦啡肽模組 2 → 3，每日少打一場）、`agent/team_queue.py:114`（`return teams` → `None`：佇列其實寫了，log 卻說沒動）、`agent/hub_text.py:188`-`194`（`HubText.analyze` 沒有測試執行）、`agent/recovery.py:327`（runs 紀錄裡一行時間壞掉就停止讀後面的時間，`run_limit` 退回預設；沒有測試執行）、`agent/settings.py:76`-`78`、`:111`（舊版設定遷移時漏補 `keep_keywords` 等預設值）。
+其他也值得一看但沒排進前 10：`agent/settlement.py:28`（停在第 6 層、樓層標記沒讀到的局，run 紀錄的 difficulty 變 null，不是 HARD）、`agent/rewards.py:317`（試煉評分裡，最後一個前期池的金幣也算進去）、`agent/team_queue.py:114`（`return teams` → `None`：佇列其實寫了，log 卻說沒動）、`agent/hub_text.py:188`-`194`（`HubText.analyze` 沒有測試執行）、`agent/recovery.py:327`（runs 紀錄裡一行時間壞掉就停止讀後面的時間，`run_limit` 退回預設；沒有測試執行）。`agent/shop.py:260`（`locked` 的 `and` → `or`）也沒抓到，但只在 6 張牌、技能 3 為 0 張時才有差，而技能替換只會增加技能 3，實際碰不到，所以沒排進來。
 
 ## 各檔案的數字
 
 | 檔案 | 突變 | 抓到 | 複驗才抓到 | 逾時 | 沒抓到 | 沒有測試執行 | 等價 | 錯誤 | 沒跑 | 分數 |
 |---|---|---|---|---|---|---|---|---|---|---|
 | settlement | 103 | 93 | 0 | 0 | 9 | 0 | 1 | 0 | 0 | 91% |
-| rewards | 405 | 335 | 2 | 0 | 63 | 4 | 1 | 0 | 0 | 83% |
+| rewards | 405 | 335 | 2 | 0 | 62 | 4 | 2 | 0 | 0 | 84% |
 | battle | 173 | 113 | 4 | 0 | 56 | 0 | 0 | 0 | 0 | 68% |
-| run_start | 328 | 290 | 3 | 0 | 32 | 0 | 3 | 0 | 0 | 90% |
+| run_start | 328 | 290 | 3 | 0 | 29 | 0 | 6 | 0 | 0 | 91% |
 | recovery | 296 | 258 | 1 | 0 | 35 | 1 | 1 | 0 | 0 | 88% |
 | gift_search | 166 | 115 | 3 | 0 | 48 | 0 | 0 | 0 | 0 | 71% |
 | shop | 785 | 488 | 32 | 6 | 258 | 0 | 1 | 0 | 0 | 67% |
@@ -92,10 +93,10 @@ uv run python tools/mutation.py report                     # 下面的表與清�
 | gift_cells | 64 | 6 | 47 | 0 | 11 | 0 | 0 | 0 | 0 | 83% |
 | team_queue | 44 | 41 | 0 | 0 | 3 | 0 | 0 | 0 | 0 | 93% |
 | lunacy | 43 | 43 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 100% |
-| luxcavation | 62 | 60 | 0 | 0 | 2 | 0 | 0 | 0 | 0 | 97% |
+| luxcavation | 62 | 60 | 0 | 0 | 1 | 0 | 1 | 0 | 0 | 98% |
 | ocrtext | 12 | 12 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 100% |
 | pack_cover | 100 | 87 | 0 | 0 | 12 | 0 | 1 | 0 | 0 | 88% |
-| settings | 285 | 266 | 2 | 0 | 16 | 0 | 1 | 0 | 0 | 94% |
+| settings | 285 | 266 | 2 | 0 | 11 | 0 | 6 | 0 | 0 | 96% |
 | hub_text | 153 | 111 | 4 | 0 | 27 | 11 | 0 | 0 | 0 | 75% |
 | pass_missions | 80 | 30 | 0 | 0 | 36 | 14 | 0 | 0 | 0 | 38% |
 
@@ -107,17 +108,27 @@ uv run python tools/mutation.py report                     # 下面的表與清�
 
 | 位置 | 突變 | 為什麼不影響行為 |
 |---|---|---|
-| `agent/settlement.py:100` | `3` -> `4` | min(want, left) 的 left 最多 3（一週的每週加成數），3 與 4 開出的加成一樣多 |
+| `agent/settlement.py:100` | `3` -> `4` | min(want, left) 的 left 最多 3（一週的每週獎勵數），3 與 4 開出的獎勵一樣多 |
+| `agent/rewards.py:67` | `>` -> `>=` | 相等時新的 (score, fail_only) 和原本的 best 是同一組值，換不換都一樣 |
 | `agent/rewards.py:425` | `break` -> `continue` | count 滿了之後不再變，後面每張卡都碰到同一個檢查而被跳過 |
+| `agent/run_start.py:25` | `5` -> `6` | settings.schema.json 的 target_floor 只能是 5、10、15，> 5 與 > 6 結果相同 |
 | `agent/run_start.py:97` | `1024` -> `1025` | lru_cache 的大小：只影響快取留多少，不影響回傳值 |
 | `agent/run_start.py:176` | `8` -> `9` | lru_cache 的大小：只影響快取留多少，不影響回傳值 |
+| `agent/run_start.py:308` | `15` -> `16` | target_floor 最多 15，一局沒有第 16 層，(11, 16) 與 (11, 15) 涵蓋的樓層相同 |
+| `agent/run_start.py:320` | `15` -> `16` | target_floor 最多 15，一局沒有第 16 層，floor <= 16 與 floor <= 15 結果相同 |
 | `agent/run_start.py:383` | `>` -> `>=` | target == max(visible) 代表 target 在 visible 裡，上一行已經回傳 |
-| `agent/recovery.py:237` | `0` -> `1` | 樓層從 1 起，max(n - 1, 1) 只在 n = 1 時不同，而 1 // 5 與 0 // 5 都是 0 |
+| `agent/recovery.py:237` | `0` -> `1` | n 是 0 以上，max(n - 1, 1) 只在 n <= 1 時不同，而那時 1 // 5 與 0 // 5 都是 0 |
 | `agent/shop.py:584` | `break` -> `continue` | cost 夠了之後不再變，後面每個飾品都碰到同一個檢查而被跳過 |
+| `agent/luxcavation.py:56` | `>` -> `>=` | target == now 在上一行已經回傳 []，這裡 target 不會等於 now |
 | `agent/pack_cover.py:46` | `1` -> `2` | lru_cache 的大小：只影響快取留多少，不影響回傳值 |
+| `agent/settings.py:76` | call deleted | 第 14 版遷移（_team_gift_list）用同樣的預設值 [] 讀 keep_keywords，接著把它刪掉 |
+| `agent/settings.py:77` | call deleted | 第 14 版遷移不讀 keywordless（Keywordless 一律保留），接著把它刪掉 |
+| `agent/settings.py:78` | call deleted | 第 14 版遷移（_team_gift_list）用同樣的預設值 [] 讀 keep_gifts，接著把它刪掉 |
+| `agent/settings.py:111` | call deleted | 第 14 版遷移（_team_gift_list）用同樣的預設值 "any" 讀 fusion_condition，接著把它刪掉 |
 | `agent/settings.py:381` | `return x` -> `return None` | 唯一的呼叫端（team_queue._reorder）只看真假，None 與 False 一樣是假 |
+| `agent/settings.py:480` | `5` -> `6` | settings.schema.json 的 target_floor 只能是 5、10、15，schema 錯誤時不跑這段交叉檢查 |
 
-## 沒抓到的突變（665 個）
+## 沒抓到的突變（655 個）
 
 「跑過的測試」是複驗時執行到那一行的測試數；「沒有測試執行」表示沒有任何測試執行到。
 
@@ -136,7 +147,6 @@ uv run python tools/mutation.py report                     # 下面的表與清�
 | `agent/settlement.py:174` | `False` -> `True` | 43 個 | `f.write(json.dumps(line, ensure_ascii=False) + "\n")` |
 | `agent/rewards.py:48` | `False` -> `True` | 2 個 | `return i, False` |
 | `agent/rewards.py:51` | `0` -> `1` | 38 個 | `best = min(open_, key=lambda i: (wanted.get(i) is None, -(wanted[i][0] if wanted.get(i) el` |
-| `agent/rewards.py:67` | `>` -> `>=` | 12 個 | `if best is None or (score, not fail_only) > (best[0], not best[1]):` |
 | `agent/rewards.py:93` | `not x` -> `x` | 4 個 | `return 3, not main` |
 | `agent/rewards.py:94` | `True` -> `False` | 5 個 | `return 4, True  # a hint with neither text (901061, 901023, 971088) matches no AALC templa` |
 | `agent/rewards.py:98` | `not x` -> `x` | 4 個 | `return 0, not main` |
@@ -262,7 +272,6 @@ uv run python tools/mutation.py report                     # 下面的表與清�
 | `agent/run_start.py:14` | `40` -> `41` | 11 個 | `GRACE_BASE = (10, 10, 20, 20, 30, 30, 40, 40, 50, 60)` |
 | `agent/run_start.py:14` | `40` -> `41` | 11 個 | `GRACE_BASE = (10, 10, 20, 20, 30, 30, 40, 40, 50, 60)` |
 | `agent/run_start.py:14` | `50` -> `51` | 11 個 | `GRACE_BASE = (10, 10, 20, 20, 30, 30, 40, 40, 50, 60)` |
-| `agent/run_start.py:25` | `5` -> `6` | 22 個 | `return "hard" if weekly_left > 0 or target_floor > 5 else "normal"` |
 | `agent/run_start.py:53` | `continue` -> `break` | 1 個 | `continue` |
 | `agent/run_start.py:111` | `and` -> `or` | 59 個 | `if m.real_quick_ratio() >= min_ratio - margin and m.quick_ratio() >= min_ratio - margin:` |
 | `agent/run_start.py:111` | `>=` -> `>` | 59 個 | `if m.real_quick_ratio() >= min_ratio - margin and m.quick_ratio() >= min_ratio - margin:` |
@@ -287,8 +296,6 @@ uv run python tools/mutation.py report                     # 下面的表與清�
 | `agent/run_start.py:246` | `0` -> `1` | 1 個 | `cards[-1] = [cards[-1][0], max(cards[-1][1], right), cards[-1][2] + group]` |
 | `agent/run_start.py:249` | `//` -> `/` | 39 個 | `return [((left + right) // 2, [t for _, t in sorted((y, t) for _, _, y, t in group)]) for ` |
 | `agent/run_start.py:267` | `break` -> `continue` | 44 個 | `break` |
-| `agent/run_start.py:308` | `15` -> `16` | 11 個 | `MODE_BANDS = ((6, 10, "I"), (11, 15, "X"))  # the floors a 15-floor run plays as INFINITY ` |
-| `agent/run_start.py:320` | `15` -> `16` | 11 個 | `mode = next(m for low, high, m in MODE_BANDS if low <= floor <= high) if floor <= 15 else ` |
 | `agent/recovery.py:24` | `80` -> `81` | 10 個 | `WAIT_STILL, WAIT_CAP = 80, {"Loading": 150, "Connecting": 150}` |
 | `agent/recovery.py:24` | `150` -> `151` | 10 個 | `WAIT_STILL, WAIT_CAP = 80, {"Loading": 150, "Connecting": 150}` |
 | `agent/recovery.py:47` | `30` -> `31` | 10 個 | `UNKNOWN_KEEP = 30  # screens MirrorHub did not recognise that logs/unknown/ keeps` |
@@ -673,7 +680,6 @@ uv run python tools/mutation.py report                     # 下面的表與清�
 | `agent/team_queue.py:106` | `3` -> `4` | 39 個 | `for _ in range(3):` |
 | `agent/team_queue.py:114` | `return x` -> `return None` | 11 個 | `return teams` |
 | `agent/luxcavation.py:12` | `2` -> `3` | 12 個 | `THREAD_COST = 2  # a Thread Luxcavation battle's, every level of Lust's Level Select (live` |
-| `agent/luxcavation.py:56` | `>` -> `>=` | 12 個 | `step = "plus" if target > now else "minus"` |
 | `agent/pack_cover.py:37` | `1` -> `2` | 9 個 | `part = np.add.reduceat(part, edges[:-1], axis=axis) / np.diff(edges).reshape((-1, 1, 1) if` |
 | `agent/pack_cover.py:37` | `1` -> `2` | 9 個 | `part = np.add.reduceat(part, edges[:-1], axis=axis) / np.diff(edges).reshape((-1, 1, 1) if` |
 | `agent/pack_cover.py:50` | `1` -> `2` | 1 個 | `return {name: np.frombuffer(base64.b64decode(b), np.uint8).reshape(-1, COLUMNS, 3) for nam` |
@@ -686,11 +692,7 @@ uv run python tools/mutation.py report                     # 下面的表與清�
 | `agent/pack_cover.py:77` | `>` -> `>=` | 7 個 | `if len(scores) > 1 and scores[0][0] - scores[1][0] < MIN_LEAD:` |
 | `agent/pack_cover.py:77` | `1` -> `2` | 7 個 | `if len(scores) > 1 and scores[0][0] - scores[1][0] < MIN_LEAD:` |
 | `agent/pack_cover.py:77` | `<` -> `<=` | 7 個 | `if len(scores) > 1 and scores[0][0] - scores[1][0] < MIN_LEAD:` |
-| `agent/settings.py:76` | call deleted | 8 個 | `team.setdefault("keep_keywords", [])` |
-| `agent/settings.py:77` | call deleted | 8 個 | `team.setdefault("keywordless", "keep")` |
-| `agent/settings.py:78` | call deleted | 8 個 | `team.setdefault("keep_gifts", [])` |
 | `agent/settings.py:110` | `if c:` -> `if not c:` | 12 個 | `if isinstance(team, dict):` |
-| `agent/settings.py:111` | call deleted | 12 個 | `team.setdefault("fusion_condition", "any")` |
 | `agent/settings.py:199` | `not in` -> `in` | 119 個 | `dropped += sum(i not in known for i in ids)` |
 | `agent/settings.py:245` | `3` -> `4` | 28 個 | `name = next(n for n in (base, *(f"{base} {i}" for i in range(2, len(names) + 3))) if n not` |
 | `agent/settings.py:298` | `0` -> `1` | 29 個 | `team.setdefault("shop_refresh_keyword", team.pop("shop_refresh_limit", 0))` |
@@ -700,7 +702,6 @@ uv run python tools/mutation.py report                     # 下面的表與清�
 | `agent/settings.py:386` | `return x` -> `return None` | 11 個 | `return True` |
 | `agent/settings.py:386` | `True` -> `False` | 11 個 | `return True` |
 | `agent/settings.py:421` | `or` -> `and` | 233 個 | `if not isinstance(version, int) or isinstance(version, bool):` |
-| `agent/settings.py:480` | `5` -> `6` | 117 個 | `if target_floor > 5:` |
 | `agent/settings.py:487` | `continue` -> `break` | 1 個 | `continue` |
 | `agent/hub_text.py:33` | `960` -> `961` | 13 個 | `DET_SIDE = 960  # the det model's max side (fastdeploy DBDetector's max_side_len)` |
 | `agent/hub_text.py:34` | `16` -> `17` | 13 個 | `GAP = 16  # black rows between two groups of rois on the det canvas, so det joins no text ` |

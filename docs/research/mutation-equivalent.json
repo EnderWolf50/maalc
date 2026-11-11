@@ -1,11 +1,21 @@
 {
- "settlement:100:53:`3` -> `4`": "min(want, left) 的 left 最多 3（一週的每週加成數），3 與 4 開出的加成一樣多",
+ "settlement:100:53:`3` -> `4`": "min(want, left) 的 left 最多 3（一週的每週獎勵數），3 與 4 開出的獎勵一樣多",
+ "rewards:67:31:`>` -> `>=`": "相等時新的 (score, fail_only) 和原本的 best 是同一組值，換不換都一樣",
  "rewards:425:12:`break` -> `continue`": "count 滿了之後不再變，後面每張卡都碰到同一個檢查而被跳過",
+ "run_start:25:55:`5` -> `6`": "settings.schema.json 的 target_floor 只能是 5、10、15，> 5 與 > 6 結果相同",
  "run_start:97:19:`1024` -> `1025`": "lru_cache 的大小：只影響快取留多少，不影響回傳值",
  "run_start:176:19:`8` -> `9`": "lru_cache 的大小：只影響快取留多少，不影響回傳值",
+ "run_start:308:33:`15` -> `16`": "target_floor 最多 15，一局沒有第 16 層，(11, 16) 與 (11, 15) 涵蓋的樓層相同",
+ "run_start:320:86:`15` -> `16`": "target_floor 最多 15，一局沒有第 16 層，floor <= 16 與 floor <= 15 結果相同",
  "run_start:383:22:`>` -> `>=`": "target == max(visible) 代表 target 在 visible 裡，上一行已經回傳",
- "recovery:237:30:`0` -> `1`": "樓層從 1 起，max(n - 1, 1) 只在 n = 1 時不同，而 1 // 5 與 0 // 5 都是 0",
+ "recovery:237:30:`0` -> `1`": "n 是 0 以上，max(n - 1, 1) 只在 n <= 1 時不同，而那時 1 // 5 與 0 // 5 都是 0",
  "shop:584:12:`break` -> `continue`": "cost 夠了之後不再變，後面每個飾品都碰到同一個檢查而被跳過",
  "pack_cover:46:19:`1` -> `2`": "lru_cache 的大小：只影響快取留多少，不影響回傳值",
- "settings:381:12:`return x` -> `return None`": "唯一的呼叫端（team_queue._reorder）只看真假，None 與 False 一樣是假"
+ "luxcavation:56:21:`>` -> `>=`": "target == now 在上一行已經回傳 []，這裡 target 不會等於 now",
+ "settings:76:12:call deleted": "第 14 版遷移（_team_gift_list）用同樣的預設值 [] 讀 keep_keywords，接著把它刪掉",
+ "settings:77:12:call deleted": "第 14 版遷移不讀 keywordless（Keywordless 一律保留），接著把它刪掉",
+ "settings:78:12:call deleted": "第 14 版遷移（_team_gift_list）用同樣的預設值 [] 讀 keep_gifts，接著把它刪掉",
+ "settings:111:12:call deleted": "第 14 版遷移（_team_gift_list）用同樣的預設值 \"any\" 讀 fusion_condition，接著把它刪掉",
+ "settings:381:12:`return x` -> `return None`": "唯一的呼叫端（team_queue._reorder）只看真假，None 與 False 一樣是假",
+ "settings:480:22:`5` -> `6`": "settings.schema.json 的 target_floor 只能是 5、10、15，schema 錯誤時不跑這段交叉檢查"
 }

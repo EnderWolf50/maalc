@@ -1,6 +1,9 @@
 import ast
+import json
+from types import SimpleNamespace
 
 import mutation
+import pytest
 
 SOURCE = '''"""Docstring."""
 
@@ -19,7 +22,7 @@ if __name__ == "__main__":
 
 
 def whats(source):
-    return [what for _, _, _, _, what in mutation.points(ast.parse(source))]
+    return [what for _, _, _, what in mutation.points(ast.parse(source))]
 
 
 def test_every_operator_gets_its_mutant_and_annotations_docstrings_fstrings_and_main_are_left_alone():
@@ -38,7 +41,7 @@ def test_every_operator_gets_its_mutant_and_annotations_docstrings_fstrings_and_
 
 def apply(source, what):
     tree = ast.parse(source)
-    for _, do, _, _, w in mutation.points(tree):
+    for do, _, _, w in mutation.points(tree):
         if w == what:
             do()
             return ast.unparse(ast.fix_missing_locations(tree))
@@ -70,6 +73,37 @@ def test_a_module_constant_is_rechecked_on_the_tests_that_run_a_line_reading_it(
     assert mutation.wide_tests(cover, "m", 1) == ["tests/test_a.py::test_over"]  # test_b failed unmutated
     assert mutation.wide_tests(cover, "m", 9) == ["tests/test_a.py::test_other"]
     assert mutation.wide_tests(cover, "m", 2) == []
+
+
+@pytest.mark.parametrize("index, code, status", [
+    (None, 0, "passed"), (None, 1, "error 1"),  # red unmutated: an error, never a kill
+    (3, 0, "survived"), (3, 1, "killed"), (3, 2, "killed"), (3, 5, "error 5"),  # 5: pytest collected no test
+])
+def test_a_pytest_exit_code_is_read_as_the_status_it_means(monkeypatch, index, code, status):
+    monkeypatch.setattr(mutation.subprocess, "run", lambda *a, **k: SimpleNamespace(returncode=code, stdout=b"tail"))
+    assert mutation.run_tests("settlement", index)[0].split(":")[0] == status
+
+
+def test_a_half_written_last_row_is_skipped_and_an_error_runs_again(monkeypatch, tmp_path):
+    path = tmp_path / "results.jsonl"
+    rows = [{"module": "m", "digest": "d", "index": 0, "status": "killed"},
+            {"module": "m", "digest": "d", "index": 1, "status": "error 4: tail"},
+            {"module": "m", "digest": "d", "index": 2, "status": "survived", "phase": "wide"}]
+    path.write_text("".join(json.dumps(r) + "\n" for r in rows) + '{"module": "m", "dig', encoding="utf-8")
+    monkeypatch.setattr(mutation, "results_path", lambda: path)
+    assert mutation.read_results() == rows
+    assert mutation.done_keys(rows) == {("m", "d", 0)}
+    assert mutation.done_keys(rows, "wide") == {("m", "d", 2)}
+
+
+def test_a_recheck_kill_and_a_listed_equivalent_are_told_apart():
+    eq = {"m:5:3:`<` -> `<=`": "why"}
+    assert mutation.kind({"status": "killed", "phase": "wide"}, eq) == "wide"
+    assert mutation.kind({"status": "killed"}, eq) == "killed"
+    assert mutation.kind({"module": "m", "line": 5, "col": 3, "what": "`<` -> `<=`", "status": "survived"}, eq) == \
+        "equivalent"
+    assert mutation.kind({"module": "m", "line": 5, "col": 4, "what": "`<` -> `<=`", "status": "unreached"}, eq) == \
+        "unreached"
 
 
 def test_every_module_in_the_sweep_has_its_tests_on_disk():

@@ -27,7 +27,7 @@ import os
 import subprocess
 import sys
 import time
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 from local_dir import local_dir
@@ -103,13 +103,13 @@ def replace(parent, old, new):
 
 
 def points(tree):
-    """Every mutation of the tree, in a fixed order: (node, apply, line, col, what). `apply()` changes the tree."""
+    """Every mutation of the tree, in a fixed order: (apply, line, col, what). `apply()` changes the tree."""
     skip = skipped_nodes(tree)
     parents = {id(child): node for node in ast.walk(tree) for child in ast.iter_child_nodes(node)}
     out = []
 
     def add(node, apply, what):
-        out.append((node, apply, node.lineno, node.col_offset, what))
+        out.append((apply, node.lineno, node.col_offset, what))
 
     for node in ast.walk(tree):
         if id(node) in skip:
@@ -159,7 +159,7 @@ def digest(module):
 def mutant(module, index):
     """The module's tree with its `index`-th mutation applied, and that mutation's (line, col, what)."""
     tree = ast.parse(source(module))
-    node, apply, line, col, what = points(tree)[index]
+    apply, line, col, what = points(tree)[index]
     apply()
     ast.fix_missing_locations(tree)
     return tree, (line, col, what)
@@ -173,14 +173,14 @@ def pytest_command(module, files=None):
 
 def plugin_env(**extra):
     env = dict(os.environ, PYTHONPATH=os.pathsep.join([str(ROOT / "tools"), str(AGENT)]))
-    env.pop("MAALC_MUTANT", None)
-    env.pop("MAALC_COVER", None)
+    for name in ("MAALC_MUTANT", "MAALC_COVER", "MAALC_TESTS"):
+        env.pop(name, None)
     return {**env, **extra}
 
 
 def run_tests(module, index=None, timeout=None, files=None, only=None):
     """(status, seconds) of the module's tests (or `files`, and of them the ids listed in the file `only`), on the
-    mutant `index` or (None) unmutated."""
+    mutant `index`: killed, survived, timeout or error; unmutated (index None): passed or error."""
     env = plugin_env(**({"MAALC_MUTANT": f"{module}:{index}"} if index is not None else {}),
                      **({"MAALC_TESTS": str(only)} if only else {}))
     start = time.monotonic()
@@ -190,7 +190,7 @@ def run_tests(module, index=None, timeout=None, files=None, only=None):
         return "timeout", time.monotonic() - start
     seconds = time.monotonic() - start
     if proc.returncode == 0:
-        return "survived", seconds
+        return ("survived" if index is not None else "passed"), seconds
     if proc.returncode in (1, 2) and index is not None:
         return "killed", seconds
     tail = proc.stdout.decode("utf-8", "replace")[-600:]
@@ -202,66 +202,106 @@ def results_path():
 
 
 def read_results():
+    """The rows written so far; a last line a killed run left half written is skipped (its mutant runs again)."""
     path = results_path()
     if not path.exists():
         return []
-    return [json.loads(ln) for ln in path.read_text(encoding="utf-8").splitlines() if ln.strip()]
+    rows = []
+    for ln in path.read_text(encoding="utf-8").splitlines():
+        try:
+            rows.append(json.loads(ln))
+        except json.JSONDecodeError:
+            continue
+    return rows
 
 
-def cmd_list(args):
-    for module in args.modules or MODULES:
-        print(f"{module}: {len(points(ast.parse(source(module))))} mutants")
+def done_keys(rows, phase=None):
+    """The mutants a run of `phase` need not run again: those with a result that is not an error."""
+    return {(r["module"], r["digest"], r["index"]) for r in rows
+            if r.get("phase") == phase and not r["status"].startswith("error")}
 
 
-def baselines(modules):
-    out = {}
-    for module in modules:
-        status, seconds = run_tests(module)
-        out[module] = (status, seconds)
-        print(f"{module}: {status} in {seconds:.1f} s", flush=True)
-    return out
+def count(module):
+    return len(points(ast.parse(source(module))))
 
 
-def cmd_baseline(args):
-    found = baselines(args.modules or MODULES)
-    path = local_dir("scratch", "mutation") / "baseline.json"
-    path.write_text(json.dumps({m: s for m, (_, s) in found.items()}, indent=1), encoding="utf-8")
-    return 0 if all(s == "survived" for s, _ in found.values()) else 1
-
-
-def cmd_run(args):
-    """Run the mutants not in the results yet, `workers` at a time, until none is left or `budget` seconds pass."""
-    start = time.monotonic()
-    path = local_dir("scratch", "mutation") / "baseline.json"
-    base = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
-    done = {(r["module"], r["digest"], r["index"]) for r in read_results()}
-    todo = []
-    for module in args.modules or MODULES:
-        if module not in base:
-            base[module] = baselines([module])[module][1]
-        d = digest(module)
-        todo += [(module, d, i) for i in range(len(points(ast.parse(source(module))))) if (module, d, i) not in done]
-    print(f"{len(todo)} mutants to run", flush=True)
+def sweep(jobs, one, workers, start, budget):
+    """Run one(job) on `workers` threads, append each row to the results as it ends, and return how many of each status
+    ran. A job starting after `budget` seconds from `start` returns None and is left for the next run."""
     counts = {}
 
-    def one(job):
-        module, d, i = job
-        if time.monotonic() - start > args.budget:
-            return None
-        status, seconds = run_tests(module, i, timeout=base[module] * 3 + 10)
-        _, (line, col, what) = mutant(module, i)
-        return {"module": module, "digest": d, "index": i, "line": line, "col": col, "what": what,
-                "status": status, "seconds": round(seconds, 1)}
+    def timed(job):
+        return None if time.monotonic() - start > budget else one(job)
 
-    with ThreadPoolExecutor(args.workers) as pool, results_path().open("a", encoding="utf-8") as out:
-        for row in pool.map(one, todo):
+    with ThreadPoolExecutor(workers) as pool, results_path().open("a", encoding="utf-8") as out:
+        for future in as_completed([pool.submit(timed, job) for job in jobs]):
+            row = future.result()
             if row is None:
                 continue
             out.write(json.dumps(row, ensure_ascii=False) + "\n")
             out.flush()
-            counts[row["status"][:5]] = counts.get(row["status"][:5], 0) + 1
+            status = row["status"].split()[0]
+            counts[status] = counts.get(status, 0) + 1
+    return counts
+
+
+def report_sweep(what, todo, counts, start):
     left = len(todo) - sum(counts.values())
-    print(f"ran {sum(counts.values())} in {time.monotonic() - start:.0f} s: {counts}; {left} left", flush=True)
+    print(f"{what} {sum(counts.values())} in {time.monotonic() - start:.0f} s: {counts}; {left} left", flush=True)
+
+
+def cmd_list(args):
+    for module in args.modules or MODULES:
+        print(f"{module}: {count(module)} mutants")
+
+
+def baseline_path():
+    return local_dir("scratch", "mutation") / "baseline.json"
+
+
+def baselines(modules):
+    """Each module's tests run unmutated, kept in baseline.json by module: {status, seconds, digest}."""
+    path = baseline_path()
+    base = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+    for module in modules:
+        status, seconds = run_tests(module)
+        base[module] = {"status": status.split()[0], "seconds": round(seconds, 1), "digest": digest(module)}
+        print(f"{module}: {status} in {seconds:.1f} s", flush=True)
+    path.write_text(json.dumps(base, indent=1), encoding="utf-8")
+    return base
+
+
+def cmd_baseline(args):
+    base = baselines(args.modules or MODULES)
+    return 0 if all(base[m]["status"] == "passed" for m in args.modules or MODULES) else 1
+
+
+def cmd_run(args):
+    """Run the mutants not in the results yet, `workers` at a time, until none is left or `budget` seconds pass. A
+    module whose tests fail unmutated is left out: each of its mutants would count as killed."""
+    start = time.monotonic()
+    path = baseline_path()
+    base = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+    done = done_keys(read_results())
+    todo = []
+    for module in args.modules or MODULES:
+        d = digest(module)
+        if not isinstance(base.get(module), dict) or base[module]["digest"] != d:
+            base = baselines([module])
+        if base[module]["status"] != "passed":
+            print(f"{module}: left out, its tests do not pass unmutated", flush=True)
+            continue
+        todo += [(module, d, i) for i in range(count(module)) if (module, d, i) not in done]
+    print(f"{len(todo)} mutants to run", flush=True)
+
+    def one(job):
+        module, d, i = job
+        status, seconds = run_tests(module, i, timeout=base[module]["seconds"] * 3 + 10)
+        _, (line, col, what) = mutant(module, i)
+        return {"module": module, "digest": d, "index": i, "line": line, "col": col, "what": what,
+                "status": status, "seconds": round(seconds, 1)}
+
+    report_sweep("ran", todo, sweep(todo, one, args.workers, start, args.budget), start)
     return 0
 
 
@@ -323,18 +363,14 @@ def cmd_recheck(args):
     start = time.monotonic()
     cover = json.loads(cover_path().read_text(encoding="utf-8"))
     rows = read_results()
-    done = {(r["module"], r["digest"], r["index"]) for r in rows if r.get("phase") == "wide"}
+    done = done_keys(rows, "wide")
     todo = [r for r in rows if r.get("phase") is None and r["status"] == "survived" and r["module"] in MODULES
             and r["digest"] == digest(r["module"]) and (r["module"], r["digest"], r["index"]) not in done
             and (not args.modules or r["module"] in args.modules)]
     print(f"{len(todo)} survivors to recheck", flush=True)
-    counts = {}
-
     ids_dir = local_dir("scratch", "mutation", "ids")
 
     def one(r):
-        if time.monotonic() - start > args.budget:
-            return None
         ids = wide_tests(cover, r["module"], r["line"])
         if not ids:
             return {**r, "phase": "wide", "status": "unreached", "seconds": 0.0, "tests": 0}
@@ -345,15 +381,7 @@ def cmd_recheck(args):
         status, seconds = run_tests(r["module"], r["index"], timeout=timeout, files=files, only=listed)
         return {**r, "phase": "wide", "status": status, "seconds": round(seconds, 1), "tests": len(ids)}
 
-    with ThreadPoolExecutor(args.workers) as pool, results_path().open("a", encoding="utf-8") as out:
-        for row in pool.map(one, todo):
-            if row is None:
-                continue
-            out.write(json.dumps(row, ensure_ascii=False) + "\n")
-            out.flush()
-            counts[row["status"][:5]] = counts.get(row["status"][:5], 0) + 1
-    left = len(todo) - sum(counts.values())
-    print(f"rechecked {sum(counts.values())} in {time.monotonic() - start:.0f} s: {counts}; {left} left", flush=True)
+    report_sweep("rechecked", todo, sweep(todo, one, args.workers, start, args.budget), start)
     return 0
 
 
@@ -395,7 +423,7 @@ def cmd_report(args):
              "| not run | score |", "|---|" + "---|" * 10]
     survivors, equivalents = [], []
     for module in args.modules or MODULES:
-        total = len(points(ast.parse(source(module))))
+        total = count(module)
         mine = sorted((r for (m, _), r in rows.items() if m == module), key=lambda r: (r["line"], r["col"], r["index"]))
         text = source(module).splitlines()
         n = dict.fromkeys(KINDS, 0)
