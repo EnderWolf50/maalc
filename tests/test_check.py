@@ -191,7 +191,7 @@ def test_each_shard_gets_its_own_number_in_the_arguments():
     assert [cmd[1] for cmd in popen.cmds] == ["--junitxml=/j/0.xml", "--junitxml=/j/1.xml"]
 
 
-def test_a_checkout_with_no_common_point_with_origin_main_records_no_base(tmp_path, monkeypatch):
+def test_a_checkout_that_has_no_origin_main_to_compare_with_records_no_base(tmp_path, monkeypatch):
     repo = tmp_path / "repo"
     repo.mkdir()
     for args in (["init", "-q"], ["config", "user.email", "a@b"], ["config", "user.name", "n"], ["commit", "-q", "--allow-empty", "-m", "x"]):

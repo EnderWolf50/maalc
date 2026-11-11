@@ -32,11 +32,11 @@ Every `check.py` run appends one JSON line to `.local/check-runs.jsonl` of the m
 
 The log costs one junit XML per pytest shard (written by pytest as in CI), its parse, and a few `git` calls that build the `files` map in a throwaway index: about 1 s per run, against the 9 minutes of the check (the git calls measured at 0.8 s on 2026-11-11).
 
-`uv run python tools/check_stats.py` summarises the last 14 days (`--days N`, `--since YYYY-MM-DD`, `--log <file>`, `--top N`): runs, red runs, the tests that went red, and the slowest steps and test files. Each red run followed by a green run of the same branch in the same worktree (several reds in a row count once, from the last one) is put in one of three classes by the files that differ between the two (a fourth, `rebased`, when `base` moved between them, because the files are then measured from a new base and say nothing):
+`uv run python tools/check_stats.py` summarises the last 14 days (`--days N`, `--since YYYY-MM-DD`, `--log <file>`, `--top N`): runs, red runs, the tests that went red, and the slowest steps and test files. Each red run followed by a green run of the same branch in the same worktree (several reds in a row count once, from the last one) is put in one of three classes by the files that differ between the two (a fourth, `rebased`, when `base` moved between them or, with no base, HEAD did, because the files are then measured from a new base and say nothing):
 
 - **code**: a file other than a test changed (a doc too: `review_lint` reads the docs). The check stopped a real error (an estimate: the change may be unrelated to the failure).
 - **test**: only test files changed (`tests/`, `test_*.py`, `conftest.py`). The test's own problem.
-- **flaky**: nothing changed and the run went green. Without `origin/main` the files show uncommitted changes only, so a committed fix reads as flaky.
+- **flaky**: nothing changed and the run went green. Without `origin/main` (`base` null) the files show uncommitted changes only, so two runs at different HEADs count as `rebased`.
 
 A red branch that never ran green in the period is counted apart. The log is machine-local: it covers the runs of this machine only.
 

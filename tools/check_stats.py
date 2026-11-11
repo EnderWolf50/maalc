@@ -62,8 +62,8 @@ def changed_files(red, green):
 def classify(red, green):
     """`rebased`, `code`, `test` or `flaky` for a red run and the green run after it. A doc counts as code:
     review_lint reads the docs."""
-    if red.get("base") != green.get("base"):
-        return "rebased"  # origin/main moved under the branch: files are measured from a new base, so they say nothing
+    if red.get("base") != green.get("base") or (red.get("base") is None and red.get("head") != green.get("head")):
+        return "rebased"  # origin/main moved under the branch, or there was no base and HEAD moved: the files say nothing
     changed = changed_files(red, green)
     if any(not is_test(path) for path in changed):
         return "code"

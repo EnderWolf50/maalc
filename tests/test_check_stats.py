@@ -100,3 +100,11 @@ def test_main_reads_the_period_from_the_log_and_survives_a_missing_or_damaged_lo
     assert "runs: 1, red: 1" in out
     assert check_stats.main(["--log", str(log), "--since", "2026-10-01"], now=now) == 0
     assert "runs: 2, red: 1" in capsys.readouterr().out
+
+
+def test_without_a_base_two_heads_are_not_comparable_but_one_head_is():
+    red, green = rec(1, red=True), rec(2)
+    red.update(base=None, head="a"), green.update(base=None, head="b")
+    assert kinds([red, green]) == ["rebased"]
+    green["head"] = "a"
+    assert kinds([red, green]) == ["flaky"]
