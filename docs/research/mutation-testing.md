@@ -1,14 +1,16 @@
 # 決策程式的突變測試（#634）
 
 > 量測日：2026-11-11。16 個檔案量在 `main` 7449099d 上；`agent/gifts.py`、`agent/settings.py` 之後在 `main` 有改，這兩個在 e3f5b724 上重量，其餘檔案兩者相同。全部離線，沒碰模擬器。數字可以用下面「重跑」一節的指令在 repo 裡重算。
+>
+> 補測試後（#640）：`settlement`、`run_start`、`rewards`、`settings`、`luxcavation`、`pass_missions` 六個檔案在補了前 10 名的測試後重量（同一份程式，測試多了；覆蓋率與複驗也重跑），其餘 12 個檔案的數字沒動。全表的總數、各檔案的表、沒抓到的清單都是補測試後的；「最值得補測試的 10 個」一節留著原來的位置與突變，旁邊多一欄補了哪個測試。
 
 ## 結論
 
-- 18 個檔案、3311 個突變：測試抓到 2637 個（80.1%），沒抓到 655 個（其中 30 個在任何測試裡都不會執行到），19 個確認改了不影響行為（等價，各附理由）。
-- 沒抓到的 655 個裡，395 個是「某個數字加 1」，多半是像素座標、顏色門檻、ROI 大小這類辨識常數：這次跑的測試用到的截圖沒有落在邊界上，所以 +1 之後測試照樣全過。要量到這種常數，得有剛好落在門檻附近的截圖。
+- 18 個檔案、3311 個突變：測試抓到 2669 個（81.0%；補前 2637 個、80.1%），沒抓到 623 個（其中 16 個在任何測試裡都不會執行到；補前 655 與 30 個），19 個確認改了不影響行為（等價，各附理由）。
+- 沒抓到的 623 個裡，361 個是「某個數字加 1」，多半是像素座標、顏色門檻、ROI 大小這類辨識常數：這次跑的測試用到的截圖沒有落在邊界上，所以 +1 之後測試照樣全過。要量到這種常數，得有剛好落在門檻附近的截圖。
 - 真正值得補的是決策邏輯的分支：結算時的每週獎勵、星光恩典的購買、事件選項的排序、試煉辨認、設定檢查。前 10 名列在「最值得補測試的 10 個」。
-- 其餘 260 個不是數字的存活突變沒有逐一證明「改了一定有影響」；清單裡可能還有等價的，確認過的才列進等價表。
-- 分數最低的是 `pass_missions`（38%）、`shop`（67%）、`battle`（68%）、`gift_search`（71%）、`hub_text`（75%）：除了 `shop` 的融合與購買邏輯，主要都是像素辨識。`pass_missions` 與 `hub_text` 的 `CustomRecognition.analyze` 沒有任何測試會執行到（「沒有測試執行」那 30 個大多在這）。
+- 其餘 262 個不是數字的存活突變沒有逐一證明「改了一定有影響」；清單裡可能還有等價的，確認過的才列進等價表。
+- 分數最低的是 `pass_missions`（56%，補前 38%）、`shop`（67%）、`battle`（68%）、`gift_search`（71%）、`hub_text`（75%）：除了 `shop` 的融合與購買邏輯，主要都是像素辨識。`hub_text` 的 `CustomRecognition.analyze` 沒有任何測試會執行到（「沒有測試執行」那 16 個有 11 個在這）；`pass_missions` 的 `PassClaimable.analyze` 在 #640 補了測試。
 
 ## 工具：自己寫的 AST 突變工具
 
@@ -56,24 +58,24 @@ uv run python tools/mutation.py report                     # 下面的表與清�
 
 `run` 與 `recheck` 每次最多 14 分鐘，輸出的最後一行寫還剩幾個；剩下的再排一張 ticket。結果寫在主 checkout 的 `.local/scratch/mutation/results.jsonl`，以檔案原始碼的雜湊為鍵：程式改了，該檔案的舊結果自動不算。等價突變列在 `docs/research/mutation-equivalent.json`（`檔案:行:欄:突變` → 理由）。
 
-這次的 bench 時間：第一輪 8 批約 6300 秒（第 7 批被背景任務的 2 小時上限中斷，結果檔完好，第 8 批續跑）、覆蓋率 4 次約 950 秒、複驗 4 批約 2760 秒，rebase 後重量 `gifts`、`settings` 約 190 秒，合計約 10200 秒（2.8 小時）。
+這次的 bench 時間：第一輪 8 批約 6300 秒（第 7 批被背景任務的 2 小時上限中斷，結果檔完好，第 8 批續跑）、覆蓋率 4 次約 950 秒、複驗 4 批約 2760 秒，rebase 後重量 `gifts`、`settings` 約 190 秒，合計約 10200 秒（2.8 小時）。#640 補測試後重量六個檔案：第一輪 2 批（843 秒＋69 秒）、覆蓋率 1 次（約 240 秒）、複驗 1 批（312 秒）。
 
 ## 最值得補測試的 10 個
 
 挑法：從最後仍沒抓到的突變裡（複驗後、等價的已排除）挑決策邏輯，不挑像素常數；錯了在實機不容易看出來，或會花掉資源、讓一局白跑。後果是讀程式推得的，沒有實機跑過。
 
-| # | 位置 | 突變 | 錯了在實機會怎樣 |
-|---|---|---|---|
-| 1 | `agent/settlement.py:87` | `if 1 in floors_hard:` → `if 2 in floors_hard:` | 重啟後從第 2 層以後接手的 HARD 局，第 1 層沒看到，`floors_hard.get(1)` 是空的，`all_hard` 變成假：結算只開 1 個每週獎勵，不是 3 個，剩下的要另開一局才用得掉 |
-| 2 | `agent/run_start.py:53` | `continue` → `break` | 星光方案的優先順序裡有一個恩典設成 none，排在它後面的恩典全部不買 |
-| 3 | `agent/run_start.py:14` | `GRACE_BASE` 第 5–9 個價格加 1 | 恩典 5–9 的價格算錯：星光剛好夠時判成買不起而跳過（`unaffordable: stop` 時後面全停） |
-| 4 | `agent/rewards.py:48` | `return i, False` → `return i, True` | 設定指定的事件選項（override）被標成「只有檢定失敗才給」，派出最不可能過檢定的罪人，檢定失敗、拿不到那個選項的獎勵 |
-| 5 | `agent/rewards.py:93`、`:98` | `not main` → `main` | 同一級的事件選項裡，不再優先給隊伍主要體系（如燒傷、流血）的 E.G.O 飾品，拿到別的體系的飾品 |
-| 6 | `agent/rewards.py:102`、`:103` | 層級 `2` → `3`、`3` → `4`、`1` → `2` | 事件選項的層級被打亂：例如 `1` → `2` 讓直接拿飾品的選項和要過檢定的選項同級，可能選了會失敗的那個 |
-| 7 | `agent/rewards.py:296` | `alike[1][0] < alike[0][0]` → `<=`；`alike[0][0]` → `alike[0][1]` | Mounting Trials 的卡：兩個試煉效果一樣接近時不再改用名字判斷，直接取第一個；或一個數值都對不上也認定是某個試煉。試煉認錯，評分跟著錯 |
-| 8 | `agent/settings.py:487` | `continue` → `break` | 目標 10 或 15 層時，隊伍清單裡第一個停用的隊伍之後就不再檢查，排在後面、`usage: normal_only` 的啟用隊伍不會被擋下；輪到它時整局 NORMAL，到不了第 6 層 |
-| 9 | `agent/luxcavation.py:12` | `THREAD_COST` `2` → `3` | 紐本一場以為要花 3 個腦啡肽模組（※ 依 `actions.py` 用它排場數推得）：腦啡肽模組剛好夠時少打一場 |
-| 10 | `agent/pass_missions.py:64` | 點擊框座標（`- 20` → `+ 20` 等） | 沒有任何測試執行 `PassClaimable.analyze`：回傳的點擊框錯了，領通行證任務時點到旁邊，只有實機看得出來 |
+| # | 位置 | 突變 | 錯了在實機會怎樣 | 補的測試（#640，各在對應突變下紅、現在的程式上綠） |
+|---|---|---|---|---|
+| 1 | `agent/settlement.py:87` | `if 1 in floors_hard:` → `if 2 in floors_hard:` | 重啟後從第 2 層以後接手的 HARD 局，第 1 層沒看到，`floors_hard.get(1)` 是空的，`all_hard` 變成假：結算只開 1 個每週獎勵，不是 3 個，剩下的要另開一局才用得掉 | `test_settlement.py::test_all_hard`（新增一組） |
+| 2 | `agent/run_start.py:53` | `continue` → `break` | 星光方案的優先順序裡有一個恩典設成 none，排在它後面的恩典全部不買 | `test_run_start.py::test_a_grace_set_to_none_is_passed_over_and_the_ones_after_it_are_still_bought` |
+| 3 | `agent/run_start.py:14` | `GRACE_BASE` 第 5–9 個價格加 1 | 恩典 5–9 的價格算錯：星光剛好夠時判成買不起而跳過（`unaffordable: stop` 時後面全停） | `test_run_start.py::test_each_grace_is_bought_with_exactly_its_price_in_starlight` |
+| 4 | `agent/rewards.py:48` | `return i, False` → `return i, True` | 設定指定的事件選項（override）被標成「只有檢定失敗才給」，派出最不可能過檢定的罪人，檢定失敗、拿不到那個選項的獎勵 | `test_rewards.py::test_an_override_s_option_is_taken_whatever_its_check_and_never_marked_for_the_weakest_sinner` |
+| 5 | `agent/rewards.py:93`、`:98` | `not main` → `main` | 同一級的事件選項裡，不再優先給隊伍主要體系（如燒傷、流血）的 E.G.O 飾品，拿到別的體系的飾品 | `test_rewards.py::test_the_main_keyword_breaks_a_tie_inside_a_tier_of_the_table`、`…_among_question_mark_options_read_from_the_hint` |
+| 6 | `agent/rewards.py:102`、`:103` | 層級 `2` → `3`、`3` → `4`、`1` → `2` | 事件選項的層級被打亂：例如 `1` → `2` 讓直接拿飾品的選項和要過檢定的選項同級，可能選了會失敗的那個 | `test_rewards.py::test_the_hint_tiers_without_a_table_are_question_mark_then_direct_then_check_then_depending_on_then_the_rest` |
+| 7 | `agent/rewards.py:296` | `alike[1][0] < alike[0][0]` → `<=`；`alike[0][0]` → `alike[0][1]` | Mounting Trials 的卡：兩個試煉效果一樣接近時不再改用名字判斷，直接取第一個；或一個數值都對不上也認定是某個試煉。試煉認錯，評分跟著錯 | `test_trials.py::test_two_trials_the_line_fits_equally_leave_the_decision_to_the_name`、`…test_a_line_whose_numbers_fit_no_trial_names_none_by_the_line` |
+| 8 | `agent/settings.py:487` | `continue` → `break` | 目標 10 或 15 層時，隊伍清單裡第一個停用的隊伍之後就不再檢查，排在後面、`usage: normal_only` 的啟用隊伍不會被擋下；輪到它時整局 NORMAL，到不了第 6 層 | `test_settings.py::test_a_disabled_team_does_not_hide_a_normal_only_team_behind_it_from_a_target_past_floor_5` |
+| 9 | `agent/luxcavation.py:12` | `THREAD_COST` `2` → `3` | 紐本一場以為要花 3 個腦啡肽模組（※ 依 `actions.py` 用它排場數推得）：腦啡肽模組剛好夠時少打一場 | `test_luxcavation.py::test_a_thread_battle_takes_2_modules_and_an_exp_battle_3_whatever_the_stage` |
+| 10 | `agent/pass_missions.py:64` | 點擊框座標（`- 20` → `+ 20` 等） | 沒有任何測試執行 `PassClaimable.analyze`：回傳的點擊框錯了，領通行證任務時點到旁邊，只有實機看得出來 | `test_pass_missions.py::test_the_recognition_boxes_the_first_row_to_claim_as_40_by_40_on_its_coin`、`…_has_no_hit_when_no_row_waits_for_a_tap`（用 `PassMissionsDailyClaimable.png` 等現有截圖） |
 
 其他也值得一看但沒排進前 10：`agent/settlement.py:28`（停在第 6 層、樓層標記沒讀到的局，run 紀錄的 difficulty 變 null，不是 HARD）、`agent/rewards.py:317`（試煉評分裡，最後一個前期池的金幣也算進去）、`agent/team_queue.py:114`（`return teams` → `None`：佇列其實寫了，log 卻說沒動）、`agent/hub_text.py:188`-`194`（`HubText.analyze` 沒有測試執行）、`agent/recovery.py:327`（runs 紀錄裡一行時間壞掉就停止讀後面的時間，`run_limit` 退回預設；沒有測試執行）。`agent/shop.py:260`（`locked` 的 `and` → `or`）也沒抓到，但只在 6 張牌、技能 3 為 0 張時才有差，而技能替換只會增加技能 3，實際碰不到，所以沒排進來。
 
@@ -81,10 +83,10 @@ uv run python tools/mutation.py report                     # 下面的表與清�
 
 | 檔案 | 突變 | 抓到 | 複驗才抓到 | 逾時 | 沒抓到 | 沒有測試執行 | 等價 | 錯誤 | 沒跑 | 分數 |
 |---|---|---|---|---|---|---|---|---|---|---|
-| settlement | 103 | 93 | 0 | 0 | 9 | 0 | 1 | 0 | 0 | 91% |
-| rewards | 405 | 335 | 2 | 0 | 62 | 4 | 2 | 0 | 0 | 84% |
+| settlement | 103 | 94 | 0 | 0 | 8 | 0 | 1 | 0 | 0 | 92% |
+| rewards | 405 | 343 | 2 | 0 | 54 | 4 | 2 | 0 | 0 | 86% |
 | battle | 173 | 113 | 4 | 0 | 56 | 0 | 0 | 0 | 0 | 68% |
-| run_start | 328 | 290 | 3 | 0 | 29 | 0 | 6 | 0 | 0 | 91% |
+| run_start | 328 | 296 | 3 | 0 | 23 | 0 | 6 | 0 | 0 | 93% |
 | recovery | 296 | 258 | 1 | 0 | 35 | 1 | 1 | 0 | 0 | 88% |
 | gift_search | 166 | 115 | 3 | 0 | 48 | 0 | 0 | 0 | 0 | 71% |
 | shop | 785 | 488 | 32 | 6 | 258 | 0 | 1 | 0 | 0 | 67% |
@@ -93,12 +95,12 @@ uv run python tools/mutation.py report                     # 下面的表與清�
 | gift_cells | 64 | 6 | 47 | 0 | 11 | 0 | 0 | 0 | 0 | 83% |
 | team_queue | 44 | 41 | 0 | 0 | 3 | 0 | 0 | 0 | 0 | 93% |
 | lunacy | 43 | 43 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 100% |
-| luxcavation | 62 | 60 | 0 | 0 | 1 | 0 | 1 | 0 | 0 | 98% |
+| luxcavation | 62 | 61 | 0 | 0 | 0 | 0 | 1 | 0 | 0 | 100% |
 | ocrtext | 12 | 12 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 100% |
 | pack_cover | 100 | 87 | 0 | 0 | 12 | 0 | 1 | 0 | 0 | 88% |
-| settings | 285 | 266 | 2 | 0 | 11 | 0 | 6 | 0 | 0 | 96% |
+| settings | 285 | 267 | 2 | 0 | 10 | 0 | 6 | 0 | 0 | 96% |
 | hub_text | 153 | 111 | 4 | 0 | 27 | 11 | 0 | 0 | 0 | 75% |
-| pass_missions | 80 | 30 | 0 | 0 | 36 | 14 | 0 | 0 | 0 | 38% |
+| pass_missions | 80 | 45 | 0 | 0 | 35 | 0 | 0 | 0 | 0 | 56% |
 
 「抓到」是第一輪抓到的，「沒跑」是還沒跑的突變（這次 0）。
 
@@ -128,7 +130,7 @@ uv run python tools/mutation.py report                     # 下面的表與清�
 | `agent/settings.py:381` | `return x` -> `return None` | 唯一的呼叫端（team_queue._reorder）只看真假，None 與 False 一樣是假 |
 | `agent/settings.py:480` | `5` -> `6` | settings.schema.json 的 target_floor 只能是 5、10、15，schema 錯誤時不跑這段交叉檢查 |
 
-## 沒抓到的突變（655 個）
+## 沒抓到的突變（623 個）
 
 「跑過的測試」是複驗時執行到那一行的測試數；「沒有測試執行」表示沒有任何測試執行到。
 
@@ -138,25 +140,18 @@ uv run python tools/mutation.py report                     # 下面的表與清�
 |---|---|---|---|
 | `agent/settlement.py:28` | `5` -> `6` | 7 個 | `return True if self.floor > 5 else None` |
 | `agent/settlement.py:47` | `1` -> `2` | 11 個 | `return Result(floor, None, int(m[1]), int(m[2])) if m else None` |
-| `agent/settlement.py:87` | `1` -> `2` | 30 個 | `if 1 in floors_hard:` |
 | `agent/settlement.py:88` | `>=` -> `>` | 14 個 | `return floor >= 1 and all(floors_hard.get(f) for f in range(1, floor + 1))` |
 | `agent/settlement.py:88` | `1` -> `2` | 14 個 | `return floor >= 1 and all(floors_hard.get(f) for f in range(1, floor + 1))` |
 | `agent/settlement.py:137` | `-x` -> `x` | 2 個 | `return f"{len(forfeits)} runs in a row forfeited" + (f" ({forfeits[-1]})" if forfeits[-1] ` |
 | `agent/settlement.py:137` | `1` -> `2` | 2 個 | `return f"{len(forfeits)} runs in a row forfeited" + (f" ({forfeits[-1]})" if forfeits[-1] ` |
 | `agent/settlement.py:172` | `True` -> `False` | 43 個 | `path.parent.mkdir(parents=True, exist_ok=True)` |
 | `agent/settlement.py:174` | `False` -> `True` | 43 個 | `f.write(json.dumps(line, ensure_ascii=False) + "\n")` |
-| `agent/rewards.py:48` | `False` -> `True` | 2 個 | `return i, False` |
-| `agent/rewards.py:51` | `0` -> `1` | 38 個 | `best = min(open_, key=lambda i: (wanted.get(i) is None, -(wanted[i][0] if wanted.get(i) el` |
-| `agent/rewards.py:93` | `not x` -> `x` | 4 個 | `return 3, not main` |
+| `agent/rewards.py:51` | `0` -> `1` | 41 個 | `best = min(open_, key=lambda i: (wanted.get(i) is None, -(wanted[i][0] if wanted.get(i) el` |
 | `agent/rewards.py:94` | `True` -> `False` | 5 個 | `return 4, True  # a hint with neither text (901061, 901023, 971088) matches no AALC templa` |
-| `agent/rewards.py:98` | `not x` -> `x` | 4 個 | `return 0, not main` |
-| `agent/rewards.py:102` | `2` -> `3` | 2 個 | `return 2, not main` |
-| `agent/rewards.py:103` | `3` -> `4` | 9 個 | `return (3 if re.search(r"\bdepending on\b", text, re.I) else 1), not main` |
-| `agent/rewards.py:103` | `1` -> `2` | 9 個 | `return (3 if re.search(r"\bdepending on\b", text, re.I) else 1), not main` |
-| `agent/rewards.py:118` | `and` -> `or` | 26 個 | `if len(s) >= len(_key(o["text"])) and s:` |
-| `agent/rewards.py:119` | `-x` -> `x` | 26 個 | `scored.append((SequenceMatcher(None, s, target[:len(s)]).ratio(), -abs(len(target) - len(s` |
-| `agent/rewards.py:119` | `-` -> `+` | 26 個 | `scored.append((SequenceMatcher(None, s, target[:len(s)]).ratio(), -abs(len(target) - len(s` |
-| `agent/rewards.py:121` | `<` -> `<=` | 26 個 | `if not scored or scored[0][0] < min_ratio:` |
+| `agent/rewards.py:118` | `and` -> `or` | 27 個 | `if len(s) >= len(_key(o["text"])) and s:` |
+| `agent/rewards.py:119` | `-x` -> `x` | 27 個 | `scored.append((SequenceMatcher(None, s, target[:len(s)]).ratio(), -abs(len(target) - len(s` |
+| `agent/rewards.py:119` | `-` -> `+` | 27 個 | `scored.append((SequenceMatcher(None, s, target[:len(s)]).ratio(), -abs(len(target) - len(s` |
+| `agent/rewards.py:121` | `<` -> `<=` | 27 個 | `if not scored or scored[0][0] < min_ratio:` |
 | `agent/rewards.py:141` | `>=` -> `>` | 23 個 | `hits = [e for e in events if s and SequenceMatcher(None, e["key"], s[-len(e["key"]):]).rat` |
 | `agent/rewards.py:142` | `0` -> `1` | 23 個 | `longest = max((len(e["key"]) for e in hits), default=0)` |
 | `agent/rewards.py:152` | `5` -> `6` | 22 個 | `b, _, r = image[y - 5:y + 5, 700:728].reshape(-1, 3).mean(0)` |
@@ -199,9 +194,7 @@ uv run python tools/mutation.py report                     # 下面的表與清�
 | `agent/rewards.py:258` | `+` -> `-` | 29 個 | `for i in range(max(1, len(key) - len(word) + 1)))` |
 | `agent/rewards.py:258` | `-` -> `+` | 29 個 | `for i in range(max(1, len(key) - len(word) + 1)))` |
 | `agent/rewards.py:258` | `1` -> `2` | 29 個 | `for i in range(max(1, len(key) - len(word) + 1)))` |
-| `agent/rewards.py:294` | `<` -> `<=` | 21 個 | `alike = sorted(((sum(abs(t["effects"][k] - v) < 1e-6 for k, v in read.items()), n)` |
-| `agent/rewards.py:296` | `0` -> `1` | 21 個 | `if alike and alike[0][0] and (len(alike) == 1 or alike[1][0] < alike[0][0]):` |
-| `agent/rewards.py:296` | `<` -> `<=` | 21 個 | `if alike and alike[0][0] and (len(alike) == 1 or alike[1][0] < alike[0][0]):` |
+| `agent/rewards.py:294` | `<` -> `<=` | 23 個 | `alike = sorted(((sum(abs(t["effects"][k] - v) < 1e-6 for k, v in read.items()), n)` |
 | `agent/rewards.py:310` | `0` -> `1` | 12 個 | `def scores(trials, model, coins=0, overrides=None):` |
 | `agent/rewards.py:317` | `0` -> `1` | 33 個 | `coin = t["effects"].get("coin", 0) if t["pool"] > model["early_pools"] else 0` |
 | `agent/rewards.py:317` | `>` -> `>=` | 33 個 | `coin = t["effects"].get("coin", 0) if t["pool"] > model["early_pools"] else 0` |
@@ -267,15 +260,9 @@ uv run python tools/mutation.py report                     # 下面的表與清�
 | `agent/battle.py:191` | `+` -> `-` | 19 個 | `best = max(best, circles.mean(axis=1).var() / (circles.var(axis=1).mean() + 1))` |
 | `agent/battle.py:191` | `1` -> `2` | 19 個 | `best = max(best, circles.mean(axis=1).var() / (circles.var(axis=1).mean() + 1))` |
 | `agent/battle.py:192` | `>` -> `>=` | 19 個 | `return bool(best > 0.5)` |
-| `agent/run_start.py:14` | `30` -> `31` | 11 個 | `GRACE_BASE = (10, 10, 20, 20, 30, 30, 40, 40, 50, 60)` |
-| `agent/run_start.py:14` | `30` -> `31` | 11 個 | `GRACE_BASE = (10, 10, 20, 20, 30, 30, 40, 40, 50, 60)` |
-| `agent/run_start.py:14` | `40` -> `41` | 11 個 | `GRACE_BASE = (10, 10, 20, 20, 30, 30, 40, 40, 50, 60)` |
-| `agent/run_start.py:14` | `40` -> `41` | 11 個 | `GRACE_BASE = (10, 10, 20, 20, 30, 30, 40, 40, 50, 60)` |
-| `agent/run_start.py:14` | `50` -> `51` | 11 個 | `GRACE_BASE = (10, 10, 20, 20, 30, 30, 40, 40, 50, 60)` |
-| `agent/run_start.py:53` | `continue` -> `break` | 1 個 | `continue` |
-| `agent/run_start.py:111` | `and` -> `or` | 59 個 | `if m.real_quick_ratio() >= min_ratio - margin and m.quick_ratio() >= min_ratio - margin:` |
-| `agent/run_start.py:111` | `>=` -> `>` | 59 個 | `if m.real_quick_ratio() >= min_ratio - margin and m.quick_ratio() >= min_ratio - margin:` |
-| `agent/run_start.py:111` | `>=` -> `>` | 59 個 | `if m.real_quick_ratio() >= min_ratio - margin and m.quick_ratio() >= min_ratio - margin:` |
+| `agent/run_start.py:111` | `and` -> `or` | 60 個 | `if m.real_quick_ratio() >= min_ratio - margin and m.quick_ratio() >= min_ratio - margin:` |
+| `agent/run_start.py:111` | `>=` -> `>` | 60 個 | `if m.real_quick_ratio() >= min_ratio - margin and m.quick_ratio() >= min_ratio - margin:` |
+| `agent/run_start.py:111` | `>=` -> `>` | 60 個 | `if m.real_quick_ratio() >= min_ratio - margin and m.quick_ratio() >= min_ratio - margin:` |
 | `agent/run_start.py:116` | `1` -> `2` | 56 個 | `if len(scores) > 1 and scores[0][0] - scores[1][0] < margin:` |
 | `agent/run_start.py:116` | `<` -> `<=` | 56 個 | `if len(scores) > 1 and scores[0][0] - scores[1][0] < margin:` |
 | `agent/run_start.py:146` | `6` -> `7` | 11 個 | `SHORT_NAME = 6` |
@@ -679,7 +666,6 @@ uv run python tools/mutation.py report                     # 下面的表與清�
 | `agent/team_queue.py:58` | `return x` -> `return None` | 8 個 | `return f"team queue: {team_id!r} to the end, next {teams[0]['id']!r}"` |
 | `agent/team_queue.py:106` | `3` -> `4` | 39 個 | `for _ in range(3):` |
 | `agent/team_queue.py:114` | `return x` -> `return None` | 11 個 | `return teams` |
-| `agent/luxcavation.py:12` | `2` -> `3` | 12 個 | `THREAD_COST = 2  # a Thread Luxcavation battle's, every level of Lust's Level Select (live` |
 | `agent/pack_cover.py:37` | `1` -> `2` | 9 個 | `part = np.add.reduceat(part, edges[:-1], axis=axis) / np.diff(edges).reshape((-1, 1, 1) if` |
 | `agent/pack_cover.py:37` | `1` -> `2` | 9 個 | `part = np.add.reduceat(part, edges[:-1], axis=axis) / np.diff(edges).reshape((-1, 1, 1) if` |
 | `agent/pack_cover.py:50` | `1` -> `2` | 1 個 | `return {name: np.frombuffer(base64.b64decode(b), np.uint8).reshape(-1, COLUMNS, 3) for nam` |
@@ -693,16 +679,15 @@ uv run python tools/mutation.py report                     # 下面的表與清�
 | `agent/pack_cover.py:77` | `1` -> `2` | 7 個 | `if len(scores) > 1 and scores[0][0] - scores[1][0] < MIN_LEAD:` |
 | `agent/pack_cover.py:77` | `<` -> `<=` | 7 個 | `if len(scores) > 1 and scores[0][0] - scores[1][0] < MIN_LEAD:` |
 | `agent/settings.py:110` | `if c:` -> `if not c:` | 12 個 | `if isinstance(team, dict):` |
-| `agent/settings.py:199` | `not in` -> `in` | 119 個 | `dropped += sum(i not in known for i in ids)` |
+| `agent/settings.py:199` | `not in` -> `in` | 121 個 | `dropped += sum(i not in known for i in ids)` |
 | `agent/settings.py:245` | `3` -> `4` | 28 個 | `name = next(n for n in (base, *(f"{base} {i}" for i in range(2, len(names) + 3))) if n not` |
 | `agent/settings.py:298` | `0` -> `1` | 29 個 | `team.setdefault("shop_refresh_keyword", team.pop("shop_refresh_limit", 0))` |
-| `agent/settings.py:361` | call deleted | 158 個 | `super().__init__("Invalid settings:\n" + "\n".join(f"- {e}" for e in errors))` |
+| `agent/settings.py:361` | call deleted | 160 個 | `super().__init__("Invalid settings:\n" + "\n".join(f"- {e}" for e in errors))` |
 | `agent/settings.py:376` | `2` -> `3` | 12 個 | `f.write(json.dumps(data, ensure_ascii=False, indent=2) + "\n")` |
 | `agent/settings.py:377` | call deleted | 12 個 | `f.flush()` |
 | `agent/settings.py:386` | `return x` -> `return None` | 11 個 | `return True` |
 | `agent/settings.py:386` | `True` -> `False` | 11 個 | `return True` |
-| `agent/settings.py:421` | `or` -> `and` | 233 個 | `if not isinstance(version, int) or isinstance(version, bool):` |
-| `agent/settings.py:487` | `continue` -> `break` | 1 個 | `continue` |
+| `agent/settings.py:421` | `or` -> `and` | 235 個 | `if not isinstance(version, int) or isinstance(version, bool):` |
 | `agent/hub_text.py:33` | `960` -> `961` | 13 個 | `DET_SIDE = 960  # the det model's max side (fastdeploy DBDetector's max_side_len)` |
 | `agent/hub_text.py:34` | `16` -> `17` | 13 個 | `GAP = 16  # black rows between two groups of rois on the det canvas, so det joins no text ` |
 | `agent/hub_text.py:59` | `0` -> `1` | 3 個 | `iw = max(0, min(x + w, rx + rw) - max(x, rx))` |
@@ -744,52 +729,37 @@ uv run python tools/mutation.py report                     # 下面的表與清�
 | `agent/pass_missions.py:22` | `100` -> `101` | 12 個 | `LIT = 100  # orange pixels of the coin's 40 x 40 square: lit; a claimed row's grey coin ha` |
 | `agent/pass_missions.py:23` | `50` -> `51` | 12 個 | `STAMP = 50  # red pixels of the CLEAR stamp (x 600-700): ~180 where it is, 0 where it is n` |
 | `agent/pass_missions.py:24` | `170` -> `171` | 12 個 | `BAR = 170  # of the bar's 175 columns bright: full` |
-| `agent/pass_missions.py:29` | `20` -> `21` | 18 個 | `b, g, r = (image[y - 20:y + 20, 350:390, i].astype(int) for i in range(3))` |
-| `agent/pass_missions.py:29` | `20` -> `21` | 18 個 | `b, g, r = (image[y - 20:y + 20, 350:390, i].astype(int) for i in range(3))` |
-| `agent/pass_missions.py:29` | `350` -> `351` | 18 個 | `b, g, r = (image[y - 20:y + 20, 350:390, i].astype(int) for i in range(3))` |
-| `agent/pass_missions.py:29` | `390` -> `391` | 18 個 | `b, g, r = (image[y - 20:y + 20, 350:390, i].astype(int) for i in range(3))` |
-| `agent/pass_missions.py:30` | `-` -> `+` | 18 個 | `stamp = image[y - 25:y + 25, 600:700].astype(int)` |
-| `agent/pass_missions.py:30` | `25` -> `26` | 18 個 | `stamp = image[y - 25:y + 25, 600:700].astype(int)` |
-| `agent/pass_missions.py:30` | `+` -> `-` | 18 個 | `stamp = image[y - 25:y + 25, 600:700].astype(int)` |
-| `agent/pass_missions.py:30` | `25` -> `26` | 18 個 | `stamp = image[y - 25:y + 25, 600:700].astype(int)` |
-| `agent/pass_missions.py:30` | `600` -> `601` | 18 個 | `stamp = image[y - 25:y + 25, 600:700].astype(int)` |
-| `agent/pass_missions.py:30` | `700` -> `701` | 18 個 | `stamp = image[y - 25:y + 25, 600:700].astype(int)` |
-| `agent/pass_missions.py:31` | `>` -> `>=` | 18 個 | `red = ((stamp[..., 2] > 150) & (stamp[..., 1] < 60) & (stamp[..., 0] < 60)).sum()` |
-| `agent/pass_missions.py:31` | `150` -> `151` | 18 個 | `red = ((stamp[..., 2] > 150) & (stamp[..., 1] < 60) & (stamp[..., 0] < 60)).sum()` |
-| `agent/pass_missions.py:31` | `<` -> `<=` | 18 個 | `red = ((stamp[..., 2] > 150) & (stamp[..., 1] < 60) & (stamp[..., 0] < 60)).sum()` |
-| `agent/pass_missions.py:31` | `1` -> `2` | 18 個 | `red = ((stamp[..., 2] > 150) & (stamp[..., 1] < 60) & (stamp[..., 0] < 60)).sum()` |
-| `agent/pass_missions.py:31` | `60` -> `61` | 18 個 | `red = ((stamp[..., 2] > 150) & (stamp[..., 1] < 60) & (stamp[..., 0] < 60)).sum()` |
-| `agent/pass_missions.py:31` | `<` -> `<=` | 18 個 | `red = ((stamp[..., 2] > 150) & (stamp[..., 1] < 60) & (stamp[..., 0] < 60)).sum()` |
-| `agent/pass_missions.py:31` | `0` -> `1` | 18 個 | `red = ((stamp[..., 2] > 150) & (stamp[..., 1] < 60) & (stamp[..., 0] < 60)).sum()` |
-| `agent/pass_missions.py:31` | `60` -> `61` | 18 個 | `red = ((stamp[..., 2] > 150) & (stamp[..., 1] < 60) & (stamp[..., 0] < 60)).sum()` |
-| `agent/pass_missions.py:32` | `>` -> `>=` | 18 個 | `full = (image[y + 10:y + 22, 420:595].astype(int).mean(axis=2) > 150).any(axis=0).sum()` |
-| `agent/pass_missions.py:32` | `10` -> `11` | 18 個 | `full = (image[y + 10:y + 22, 420:595].astype(int).mean(axis=2) > 150).any(axis=0).sum()` |
-| `agent/pass_missions.py:32` | `22` -> `23` | 18 個 | `full = (image[y + 10:y + 22, 420:595].astype(int).mean(axis=2) > 150).any(axis=0).sum()` |
-| `agent/pass_missions.py:32` | `420` -> `421` | 18 個 | `full = (image[y + 10:y + 22, 420:595].astype(int).mean(axis=2) > 150).any(axis=0).sum()` |
-| `agent/pass_missions.py:32` | `595` -> `596` | 18 個 | `full = (image[y + 10:y + 22, 420:595].astype(int).mean(axis=2) > 150).any(axis=0).sum()` |
-| `agent/pass_missions.py:32` | `150` -> `151` | 18 個 | `full = (image[y + 10:y + 22, 420:595].astype(int).mean(axis=2) > 150).any(axis=0).sum()` |
-| `agent/pass_missions.py:33` | `>` -> `>=` | 18 個 | `return ((r > 200) & (g > 100) & (b < 80)).sum() > LIT, red >= STAMP, full >= BAR` |
-| `agent/pass_missions.py:33` | `>` -> `>=` | 18 個 | `return ((r > 200) & (g > 100) & (b < 80)).sum() > LIT, red >= STAMP, full >= BAR` |
-| `agent/pass_missions.py:33` | `200` -> `201` | 18 個 | `return ((r > 200) & (g > 100) & (b < 80)).sum() > LIT, red >= STAMP, full >= BAR` |
-| `agent/pass_missions.py:33` | `>` -> `>=` | 18 個 | `return ((r > 200) & (g > 100) & (b < 80)).sum() > LIT, red >= STAMP, full >= BAR` |
-| `agent/pass_missions.py:33` | `100` -> `101` | 18 個 | `return ((r > 200) & (g > 100) & (b < 80)).sum() > LIT, red >= STAMP, full >= BAR` |
-| `agent/pass_missions.py:33` | `<` -> `<=` | 18 個 | `return ((r > 200) & (g > 100) & (b < 80)).sum() > LIT, red >= STAMP, full >= BAR` |
-| `agent/pass_missions.py:33` | `80` -> `81` | 18 個 | `return ((r > 200) & (g > 100) & (b < 80)).sum() > LIT, red >= STAMP, full >= BAR` |
-| `agent/pass_missions.py:33` | `>=` -> `>` | 18 個 | `return ((r > 200) & (g > 100) & (b < 80)).sum() > LIT, red >= STAMP, full >= BAR` |
-| `agent/pass_missions.py:33` | `>=` -> `>` | 18 個 | `return ((r > 200) & (g > 100) & (b < 80)).sum() > LIT, red >= STAMP, full >= BAR` |
-| `agent/pass_missions.py:63` | `or` -> `and` | 沒有測試執行 | `rows = claimable(np.asarray(argv.image), (json.loads(argv.custom_recognition_param or "nul` |
-| `agent/pass_missions.py:63` | `or` -> `and` | 沒有測試執行 | `rows = claimable(np.asarray(argv.image), (json.loads(argv.custom_recognition_param or "nul` |
-| `agent/pass_missions.py:63` | `0` -> `1` | 沒有測試執行 | `rows = claimable(np.asarray(argv.image), (json.loads(argv.custom_recognition_param or "nul` |
-| `agent/pass_missions.py:64` | `return x` -> `return None` | 沒有測試執行 | `return CustomRecognition.AnalyzeResult(box=(rows[0][0] - 20, rows[0][1] - 20, 40, 40), det` |
-| `agent/pass_missions.py:64` | `-` -> `+` | 沒有測試執行 | `return CustomRecognition.AnalyzeResult(box=(rows[0][0] - 20, rows[0][1] - 20, 40, 40), det` |
-| `agent/pass_missions.py:64` | `0` -> `1` | 沒有測試執行 | `return CustomRecognition.AnalyzeResult(box=(rows[0][0] - 20, rows[0][1] - 20, 40, 40), det` |
-| `agent/pass_missions.py:64` | `0` -> `1` | 沒有測試執行 | `return CustomRecognition.AnalyzeResult(box=(rows[0][0] - 20, rows[0][1] - 20, 40, 40), det` |
-| `agent/pass_missions.py:64` | `20` -> `21` | 沒有測試執行 | `return CustomRecognition.AnalyzeResult(box=(rows[0][0] - 20, rows[0][1] - 20, 40, 40), det` |
-| `agent/pass_missions.py:64` | `-` -> `+` | 沒有測試執行 | `return CustomRecognition.AnalyzeResult(box=(rows[0][0] - 20, rows[0][1] - 20, 40, 40), det` |
-| `agent/pass_missions.py:64` | `0` -> `1` | 沒有測試執行 | `return CustomRecognition.AnalyzeResult(box=(rows[0][0] - 20, rows[0][1] - 20, 40, 40), det` |
-| `agent/pass_missions.py:64` | `1` -> `2` | 沒有測試執行 | `return CustomRecognition.AnalyzeResult(box=(rows[0][0] - 20, rows[0][1] - 20, 40, 40), det` |
-| `agent/pass_missions.py:64` | `20` -> `21` | 沒有測試執行 | `return CustomRecognition.AnalyzeResult(box=(rows[0][0] - 20, rows[0][1] - 20, 40, 40), det` |
-| `agent/pass_missions.py:64` | `40` -> `41` | 沒有測試執行 | `return CustomRecognition.AnalyzeResult(box=(rows[0][0] - 20, rows[0][1] - 20, 40, 40), det` |
-| `agent/pass_missions.py:64` | `40` -> `41` | 沒有測試執行 | `return CustomRecognition.AnalyzeResult(box=(rows[0][0] - 20, rows[0][1] - 20, 40, 40), det` |
+| `agent/pass_missions.py:29` | `20` -> `21` | 20 個 | `b, g, r = (image[y - 20:y + 20, 350:390, i].astype(int) for i in range(3))` |
+| `agent/pass_missions.py:29` | `20` -> `21` | 20 個 | `b, g, r = (image[y - 20:y + 20, 350:390, i].astype(int) for i in range(3))` |
+| `agent/pass_missions.py:29` | `350` -> `351` | 20 個 | `b, g, r = (image[y - 20:y + 20, 350:390, i].astype(int) for i in range(3))` |
+| `agent/pass_missions.py:29` | `390` -> `391` | 20 個 | `b, g, r = (image[y - 20:y + 20, 350:390, i].astype(int) for i in range(3))` |
+| `agent/pass_missions.py:30` | `-` -> `+` | 20 個 | `stamp = image[y - 25:y + 25, 600:700].astype(int)` |
+| `agent/pass_missions.py:30` | `25` -> `26` | 20 個 | `stamp = image[y - 25:y + 25, 600:700].astype(int)` |
+| `agent/pass_missions.py:30` | `+` -> `-` | 20 個 | `stamp = image[y - 25:y + 25, 600:700].astype(int)` |
+| `agent/pass_missions.py:30` | `25` -> `26` | 20 個 | `stamp = image[y - 25:y + 25, 600:700].astype(int)` |
+| `agent/pass_missions.py:30` | `600` -> `601` | 20 個 | `stamp = image[y - 25:y + 25, 600:700].astype(int)` |
+| `agent/pass_missions.py:30` | `700` -> `701` | 20 個 | `stamp = image[y - 25:y + 25, 600:700].astype(int)` |
+| `agent/pass_missions.py:31` | `>` -> `>=` | 20 個 | `red = ((stamp[..., 2] > 150) & (stamp[..., 1] < 60) & (stamp[..., 0] < 60)).sum()` |
+| `agent/pass_missions.py:31` | `150` -> `151` | 20 個 | `red = ((stamp[..., 2] > 150) & (stamp[..., 1] < 60) & (stamp[..., 0] < 60)).sum()` |
+| `agent/pass_missions.py:31` | `<` -> `<=` | 20 個 | `red = ((stamp[..., 2] > 150) & (stamp[..., 1] < 60) & (stamp[..., 0] < 60)).sum()` |
+| `agent/pass_missions.py:31` | `1` -> `2` | 20 個 | `red = ((stamp[..., 2] > 150) & (stamp[..., 1] < 60) & (stamp[..., 0] < 60)).sum()` |
+| `agent/pass_missions.py:31` | `60` -> `61` | 20 個 | `red = ((stamp[..., 2] > 150) & (stamp[..., 1] < 60) & (stamp[..., 0] < 60)).sum()` |
+| `agent/pass_missions.py:31` | `<` -> `<=` | 20 個 | `red = ((stamp[..., 2] > 150) & (stamp[..., 1] < 60) & (stamp[..., 0] < 60)).sum()` |
+| `agent/pass_missions.py:31` | `0` -> `1` | 20 個 | `red = ((stamp[..., 2] > 150) & (stamp[..., 1] < 60) & (stamp[..., 0] < 60)).sum()` |
+| `agent/pass_missions.py:31` | `60` -> `61` | 20 個 | `red = ((stamp[..., 2] > 150) & (stamp[..., 1] < 60) & (stamp[..., 0] < 60)).sum()` |
+| `agent/pass_missions.py:32` | `>` -> `>=` | 20 個 | `full = (image[y + 10:y + 22, 420:595].astype(int).mean(axis=2) > 150).any(axis=0).sum()` |
+| `agent/pass_missions.py:32` | `10` -> `11` | 20 個 | `full = (image[y + 10:y + 22, 420:595].astype(int).mean(axis=2) > 150).any(axis=0).sum()` |
+| `agent/pass_missions.py:32` | `420` -> `421` | 20 個 | `full = (image[y + 10:y + 22, 420:595].astype(int).mean(axis=2) > 150).any(axis=0).sum()` |
+| `agent/pass_missions.py:32` | `595` -> `596` | 20 個 | `full = (image[y + 10:y + 22, 420:595].astype(int).mean(axis=2) > 150).any(axis=0).sum()` |
+| `agent/pass_missions.py:32` | `150` -> `151` | 20 個 | `full = (image[y + 10:y + 22, 420:595].astype(int).mean(axis=2) > 150).any(axis=0).sum()` |
+| `agent/pass_missions.py:33` | `>` -> `>=` | 20 個 | `return ((r > 200) & (g > 100) & (b < 80)).sum() > LIT, red >= STAMP, full >= BAR` |
+| `agent/pass_missions.py:33` | `>` -> `>=` | 20 個 | `return ((r > 200) & (g > 100) & (b < 80)).sum() > LIT, red >= STAMP, full >= BAR` |
+| `agent/pass_missions.py:33` | `200` -> `201` | 20 個 | `return ((r > 200) & (g > 100) & (b < 80)).sum() > LIT, red >= STAMP, full >= BAR` |
+| `agent/pass_missions.py:33` | `>` -> `>=` | 20 個 | `return ((r > 200) & (g > 100) & (b < 80)).sum() > LIT, red >= STAMP, full >= BAR` |
+| `agent/pass_missions.py:33` | `100` -> `101` | 20 個 | `return ((r > 200) & (g > 100) & (b < 80)).sum() > LIT, red >= STAMP, full >= BAR` |
+| `agent/pass_missions.py:33` | `<` -> `<=` | 20 個 | `return ((r > 200) & (g > 100) & (b < 80)).sum() > LIT, red >= STAMP, full >= BAR` |
+| `agent/pass_missions.py:33` | `80` -> `81` | 20 個 | `return ((r > 200) & (g > 100) & (b < 80)).sum() > LIT, red >= STAMP, full >= BAR` |
+| `agent/pass_missions.py:33` | `>=` -> `>` | 20 個 | `return ((r > 200) & (g > 100) & (b < 80)).sum() > LIT, red >= STAMP, full >= BAR` |
+| `agent/pass_missions.py:33` | `>=` -> `>` | 20 個 | `return ((r > 200) & (g > 100) & (b < 80)).sum() > LIT, red >= STAMP, full >= BAR` |
 
 </details>
