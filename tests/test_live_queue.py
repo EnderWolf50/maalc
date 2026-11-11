@@ -33,14 +33,16 @@ def test_dead_tickets_are_dropped_and_live_ones_keep_arrival_order(tmp_path):
     assert not gone.exists()
 
 
-def test_a_ticket_sorts_after_the_ones_already_there_when_the_clock_steps_back(tmp_path, monkeypatch):
-    # #636: on a Windows CI runner a second `ship.py land`, placed milliseconds after the first, sorted ahead of it and
-    # landed at once: the wall clock had stepped back between the two stamps.
-    clock = iter([1_800_000_000_000_000_000, 1_799_999_999_999_000_000])
+@pytest.mark.parametrize("second", [1_800_000_000_000_000_000, 1_799_999_999_999_000_000], ids=["same-tick", "clock-back"])
+def test_a_ticket_of_the_same_process_and_name_sorts_after_the_one_already_there(tmp_path, monkeypatch, second):
+    # #636: Python 3.12's wall clock on Windows ticks every 15.6 ms, so two `ship.py land` threads of one test got the
+    # same stamp, pid and name: the second ticket overwrote the first and landed at once on the Windows CI runner.
+    clock = iter([1_800_000_000_000_000_000, second])
     monkeypatch.setattr(lq.time, "time_ns", lambda: next(clock))
-    one = lq.place(tmp_path, "one", ["a"], False)
-    two = lq.place(tmp_path, "two", ["b"], False)
-    assert lq.tickets(tmp_path) == [one, two]
+    one = lq.place(tmp_path, "land", ["a"], False)
+    two = lq.place(tmp_path, "land", ["b"], False)
+    assert one != two and lq.tickets(tmp_path) == [one, two]
+    assert lq.read(one)[0] == "a"
 
 
 def ticket(qdir: Path, stamp: str, name: str, start: int, first: bool = False, cmd: str = "hold") -> Path:

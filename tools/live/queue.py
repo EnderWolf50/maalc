@@ -144,8 +144,8 @@ def place(qdir: Path, name: str, cmd: list[str], first: bool, is_alive=alive) ->
     body = json.dumps({"cmd": " ".join(cmd), "start": started(os.getpid()), "first": first})
     while True:
         q = tickets(qdir, is_alive) if first else []
-        # After every ticket already there, also when the wall clock stepped back since one was written (#636: on a
-        # Windows CI runner a ticket placed milliseconds later sorted ahead).
+        # After every ticket already there: Python 3.12's wall clock on Windows ticks every 15.6 ms, and a ticket of the
+        # same tick, pid and name would overwrite the one before it (#636); a clock stepped back would sort it ahead.
         stamps = [int(s) for p in qdir.glob("*.ticket") if (s := p.name.split("-", 1)[0]).isdigit()]
         stamp = str(max([time.time_ns(), *(s + 1 for s in stamps)]))
         if q:
@@ -153,7 +153,11 @@ def place(qdir: Path, name: str, cmd: list[str], first: bool, is_alive=alive) ->
             last = q[behind].name.split("-", 1)[0]
             stamp = str(int(last) + 1).zfill(len(last))  # same width: ticket names sort as text
         me = qdir / f"{stamp}-{os.getpid()}-{name}.ticket"
-        me.write_text(body, encoding="utf-8")
+        try:
+            with me.open("x", encoding="utf-8") as f:  # a thread of this process may have taken the stamp meanwhile
+                f.write(body)
+        except FileExistsError:
+            continue
         if not q or q[0].exists():  # the holder is still there: no ticket behind it has started
             return me
         me.unlink(missing_ok=True)
