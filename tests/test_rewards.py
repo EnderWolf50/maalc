@@ -135,7 +135,7 @@ def test_an_override_s_option_is_taken_whatever_its_check_and_never_marked_for_t
 
 
 def test_the_main_keyword_breaks_a_tie_inside_a_tier_of_the_table():
-    # #640 (rewards.py:93): "gain ... depending on" options of one tier; the one giving the main keyword's gift first.
+    # #640 (rewards.py): "gain ... depending on" options of one tier; the one giving the main keyword's gift first.
     other = opt("Wait.", "Gain a Bleed E.G.O Gift depending on the result of the following choice", "check", ("Bleed", "check_pass"))
     main = opt("Hold on.", "Gain a Burn E.G.O Gift depending on the result of the following choice", "check", ("Burn", "check_pass"))
     event = [other, main]
@@ -144,14 +144,14 @@ def test_the_main_keyword_breaks_a_tie_inside_a_tier_of_the_table():
 
 
 def test_the_main_keyword_breaks_a_tie_among_question_mark_options_read_from_the_hint():
-    # #640 (rewards.py:98): no table; two "???" options, the second names the main keyword.
+    # #640 (rewards.py): no table; two "???" options, the second names the main keyword.
     options = ["Pull the lever. ???", "Push the lever. ??? Burn"]
     assert r.pick_choice(options, "Burn") == 1
     assert r.pick_choice(options, "Bleed") == 0
 
 
 def test_the_hint_tiers_without_a_table_are_question_mark_then_direct_then_check_then_depending_on_then_the_rest():
-    # #640 (rewards.py:102-103): each tier number matters, so each neighbouring pair is ranked in both screen orders.
+    # #640 (rewards.py): each tier number matters, so each neighbouring pair is ranked in both screen orders.
     question = "Open it. ???"
     direct = "Take it. Select to gain a Bleed E.G.O Gift"
     check = "Pull. Lust check. Pass to gain a Bleed E.G.O Gift."

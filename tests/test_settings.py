@@ -580,7 +580,7 @@ def test_cross_check_allows_what_the_spec_allows(tmp_path):
 
 @pytest.mark.parametrize("target", [10, 15])
 def test_a_disabled_team_does_not_hide_a_normal_only_team_behind_it_from_a_target_past_floor_5(tmp_path, target):
-    # #640 (settings.py:487): the check passed over a disabled team with `break`, so teams after it went unchecked.
+    # #640 (settings.py): the check passed over a disabled team with `break`, so teams after it went unchecked.
     def fn(d):
         d["run"]["target_floor"] = target
         d["teams"][0]["enabled"] = False

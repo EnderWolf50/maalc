@@ -92,7 +92,7 @@ def analyze(image, param=None):
 
 
 def test_the_recognition_boxes_the_first_row_to_claim_as_40_by_40_on_its_coin():
-    # #640 (pass_missions.py:64): no test ran PassClaimable.analyze; the tap lands in the box's middle, on the coin.
+    # #640 (pass_missions.py): no test ran PassClaimable.analyze; the tap lands in the box's middle, on the coin.
     result = analyze(frame("PassMissionsDailyClaimable.png"))
     assert tuple(result.box) == (350, 292, 40, 40)  # centred on CLAIMABLE[0] = (370, 312)
     assert result.detail == {"rows": CLAIMABLE}
@@ -104,7 +104,8 @@ def test_the_recognition_boxes_the_first_row_to_claim_as_40_by_40_on_its_coin():
 def test_the_recognition_has_no_hit_when_no_row_waits_for_a_tap():
     assert analyze(frame("PassMissionsDaily.png")) is None
     assert analyze(seasonal_end_claimable()) is None  # without dy the swiped tab's rows are 10 px off: none lit
-    assert analyze(daily_claimed(3)) is not None and analyze(daily_claimed(4)) is None
+    assert analyze(daily_claimed(3)) is not None  # one row left
+    assert analyze(daily_claimed(4)) is None  # all claimed
 
 
 def test_each_claimed_row_drops_out():

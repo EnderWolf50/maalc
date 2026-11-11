@@ -55,7 +55,7 @@ def test_a_grace_set_to_none_is_passed_over_and_the_ones_after_it_are_still_boug
     assert missed == []
 
 
-@pytest.mark.parametrize(("n", "base"), enumerate((10, 10, 20, 20, 30, 30, 40, 40, 50, 60), 1))
+@pytest.mark.parametrize(("n", "base"), tuple(enumerate((10, 10, 20, 20, 30, 30, 40, 40, 50, 60), 1)))
 def test_each_grace_is_bought_with_exactly_its_price_in_starlight(n, base):
     # #640: a base price one too high read 'cannot afford' with just enough starlight. Prices: spec 04 section 7.
     for level, mult in (("base", 1), ("plus", 2), ("plus2", 3)):
