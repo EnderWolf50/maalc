@@ -15,6 +15,31 @@ Once per clone, `lefthook install` turns on the pre-commit hook (`lefthook.yml`)
 
 A full `check.py` is for a task that changes code; a live run with no code change skips it. `uv run python tools/check.py` runs ruff, `tools/review_lint.py` against `origin/main`, pytest, `maa-tools check` and `maa-tools test` and prints one summary line each, with its exit code and seconds; a failing step adds the tail of its output. pytest runs as 4 shards at once, split as CI's agent shards are (#484). `review_lint` is skipped, with the reason printed, when the checkout has no `origin/main` (`git fetch origin main`); with it, a GLOSSARY `_Avoid_` term in a doc fails locally as CI's `review-lint` job would (#628). CI runs the same checks, and a PR merges on a green `ci-ok`. The `pipeline` job (`maa-tools`) runs only when the PR changes a file the bot reads: `assets/`, `agent/`, `tests/screens/`, `maatools.config.mts`, `package.json`, `pnpm-lock.yaml`, `tools/fetch_ocr.py` or `ci.yml`; otherwise it is skipped and `ci-ok` stays green. A push to `main` skips them when a PR run already passed every job on the same file tree. The trees match when `main` did not move between that PR run and the merge.
 
+### The run log (#633)
+
+Every `check.py` run appends one JSON line to `.local/check-runs.jsonl` of the main checkout (`tools/local_dir.py`, so a worktree's run lands in the same file). A log that cannot be written prints `check log not written: …` and the run goes on; the exit code stays the number of failed steps. A run that is interrupted (Ctrl-C) leaves no line. The line holds:
+
+| Key | Value |
+| --- | --- |
+| `v` | format version, 1 |
+| `started`, `seconds` | start time (ISO, local offset) and the whole run's seconds |
+| `worktree`, `branch`, `head`, `dirty` | the checkout, its branch, HEAD, and whether anything is uncommitted |
+| `files` | `{path: blob id}` of every file the working tree (committed or not, untracked included, ignored left out) has different from the point the branch left `origin/main` (HEAD when there is no `origin/main`). The same change has the same blob ids in the next run, so the summary tells what changed between two runs without the commits |
+| `steps` | `[{name, exit, seconds}]` for `ruff`, `review_lint` (absent when skipped), `pytest`, `maa-tools check`, `maa-tools test` |
+| `failed_tests` | pytest node ids that failed or errored (from the shards' junit XML, the way CI's `shard-balance` reads its artifacts) |
+| `failed_maa` | `maa-tools test` cases that went red, as `<image> <node>: <reason>` |
+| `test_seconds` | `{test file: seconds}` summed over the shards (empty when pytest wrote no junit) |
+
+The log costs one junit XML per pytest shard (written by pytest as in CI), its parse, and a few `git` calls that build the `files` map in a throwaway index: about 1 s per run, against the 9 minutes of the check (measured, see #633).
+
+`uv run python tools/check_stats.py` summarises the last 14 days (`--days N`, `--since YYYY-MM-DD`, `--log <file>`, `--top N`): runs, red runs, the tests that went red, and the slowest steps and test files. Each red run followed by a green run of the same branch in the same worktree (several reds in a row count once, from the last one) is put in one of three classes by the files that differ between the two:
+
+- **code**: a file other than a test or a doc changed. The check stopped a real error (an estimate: the change may be unrelated to the failure).
+- **test**: only test files changed (`tests/`, `test_*.py`, `conftest.py`). The test's own problem.
+- **flaky**: nothing, or only docs (`docs/`, `*.md`), changed and the run went green.
+
+A red branch that never ran green in the period is counted apart. The log is machine-local: it covers the runs of this machine only.
+
 CI splits pytest over the `agent` shards by each file's seconds on a CI runner, from `tests/shard_seconds.json`. A PR that adds a slow test file, or makes one much slower or faster, makes the `shard-balance` job report it (a warning and the job summary; `ci-ok` does not wait for it, #628); its report names the command that rewrites the table (`uv run python tools/shard_seconds.py update --run <run id>`). A fast or slow runner does not report it: a file passes when its time is within double the table's, as measured or at its shard's pace, the median of its files' time over the table's (#536). A file not in the table fails from 30 s both as measured and at its shard's pace, and from 15 s on a PR, so a new file a PR lets through stays under main's limit on a slower or faster runner (#544). Each file gets the median of that run and the 4 CI runs before it whose agent shards all passed, so one fast or slow runner does not set the table; a file whose time in that run is more than double off the median, as measured and at its shard's pace, takes that run's time. Commit the new table in the same PR.
 
 ## After landing a PR
