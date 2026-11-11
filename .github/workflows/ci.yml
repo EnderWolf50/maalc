@@ -16,6 +16,8 @@ jobs:
   # passed every job on the same tree, and otherwise runs them all, as workflow_dispatch does.
   # code: a changed file outside docs and gui/ (agent, assets, tests, tools, configs, lock files, workflows).
   # gui: any changed file outside docs; gui/ imports agent/, assets/ and tests/ files.
+  # bot: a changed file the pipeline job reads: the bot's data and code (assets/, agent/), maa-tools' config, its
+  # dependencies and the OCR fetch, and this workflow. Anything else (tests, other tools, docs) leaves maa-tools out (#628).
   changes:
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -26,6 +28,7 @@ jobs:
     outputs:
       code: ${{ steps.tested.outputs.tested != 'true' && (github.event_name != 'pull_request' || steps.filter.outputs.code == 'true') }}
       gui: ${{ steps.tested.outputs.tested != 'true' && (github.event_name != 'pull_request' || steps.filter.outputs.gui == 'true') }}
+      bot: ${{ steps.tested.outputs.tested != 'true' && (github.event_name != 'pull_request' || steps.filter.outputs.bot == 'true') }}
       tree: ${{ steps.tree.outputs.tree }}
     steps:
       - id: tree
@@ -54,6 +57,14 @@ jobs:
           filters: |
             code: ['**', '!docs/**', '!*.md', '!LICENSE', '!gui/**']
             gui: ['**', '!docs/**', '!*.md', '!LICENSE']
+            bot:
+              - 'assets/**'
+              - 'agent/**'
+              - 'maatools.config.mts'
+              - 'package.json'
+              - 'pnpm-lock.yaml'
+              - 'tools/fetch_ocr.py'
+              - '.github/workflows/ci.yml'
 
   agent:
     needs: changes
@@ -86,7 +97,8 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
-  # Fails when tests/shard_seconds.json no longer matches this run, and names the command that rewrites it.
+  # Reports when tests/shard_seconds.json no longer matches this run, and names the command that rewrites it. It does
+  # not block: ci-ok does not wait for it (#628). The step stays green; the report is a warning and the job summary.
   shard-balance:
     needs: agent
     if: needs.agent.result == 'success'
@@ -98,11 +110,19 @@ jobs:
         with:
           pattern: junit-*
           path: junit
-      - run: python3 tools/shard_seconds.py check junit/*/junit.xml
+      - run: |
+          if python3 tools/shard_seconds.py check junit/*/junit.xml > shard-balance.txt 2>&1; then
+            cat shard-balance.txt
+          else
+            cat shard-balance.txt
+            echo "::warning title=shard-balance::tests/shard_seconds.json is out of date; the report is in the job summary"
+            { echo '### shard-balance: tests/shard_seconds.json is out of date'; echo '```'; cat shard-balance.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          fi
 
+  # maa-tools check and test: only a change to a file the bot reads (the changes job's bot output).
   pipeline:
     needs: changes
-    if: needs.changes.outputs.code == 'true'
+    if: needs.changes.outputs.bot == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
@@ -166,17 +186,18 @@ jobs:
           fetch-depth: 0
       - run: python3 tools/review_lint.py origin/${{ github.base_ref }}
 
-  # The one check to require: fails if the filter or any job it asked for failed or was cancelled.
+  # The one check to require: fails if the filter or any job it asked for failed or was cancelled. A skipped job (not
+  # asked for) is fine, and shard-balance only reports.
   ci-ok:
     if: always()
-    needs: [changes, agent, shard-balance, pipeline, gui, review-lint]
+    needs: [changes, agent, pipeline, gui, review-lint]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - if: needs.changes.result != 'success' || contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
         run: exit 1
-      # Only a run that ran every job proves the whole tree, so a docs-only or gui-only PR leaves no marker.
-      - if: github.event_name == 'pull_request' && needs.changes.outputs.code == 'true' && needs.changes.outputs.gui == 'true' && needs.changes.outputs.tree != ''
+      # Only a run that ran every job proves the whole tree, so a docs-only, gui-only or no-bot-file PR leaves no marker.
+      - if: github.event_name == 'pull_request' && needs.changes.outputs.code == 'true' && needs.changes.outputs.gui == 'true' && needs.changes.outputs.bot == 'true' && needs.changes.outputs.tree != ''
         id: marker
         env:
           TREE: ${{ needs.changes.outputs.tree }}

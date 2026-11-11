@@ -68,10 +68,30 @@ def test_a_shard_that_cannot_start_ends_the_ones_already_running():
 
 def test_only_pytest_runs_as_shards_and_every_line_has_its_seconds(capsys):
     calls = []
-    assert check.main(run=lambda cmd, shards: calls.append((cmd[2], shards)) or (0, "")) == 0
-    assert calls == [("ruff", 1), ("pytest", check.SHARDS), ("maa-tools", 1), ("maa-tools", 1)]
+    assert check.main(run=lambda cmd, shards: calls.append((cmd[2], shards)) or (0, ""), has_base=lambda base: True) == 0
+    assert calls == [("ruff", 1), ("python", 1), ("pytest", check.SHARDS), ("maa-tools", 1), ("maa-tools", 1)]
     lines = capsys.readouterr().out.splitlines()
-    assert len(lines) == 4 and all(line.startswith("== ") and line.endswith(" s") and ": exit 0, " in line for line in lines)
+    assert len(lines) == 5 and all(line.startswith("== ") and line.endswith(" s") and ": exit 0, " in line for line in lines)
+
+
+def test_review_lint_compares_with_origin_main_and_a_failure_counts(capsys):
+    calls = []
+    assert check.main(run=lambda cmd, shards: calls.append(cmd) or (1 if "tools/review_lint.py" in cmd else 0, "term"),
+                      has_base=lambda base: True) == 1
+    assert ["uv", "run", "python", "tools/review_lint.py", "origin/main"] in calls
+    assert "term" in capsys.readouterr().out
+
+
+def test_review_lint_is_skipped_with_its_reason_when_there_is_no_base_to_compare_with(capsys):
+    calls = []
+    assert check.main(run=lambda cmd, shards: calls.append(cmd[2]) or (0, ""), has_base=lambda base: False) == 0
+    assert "python" not in calls and len(calls) == 4
+    out = capsys.readouterr().out
+    assert "skipped" in out and "origin/main" in out and "git fetch" in out
+
+
+def test_has_base_asks_git_whether_the_ref_exists():
+    assert check.has_base("HEAD") and not check.has_base("origin/no-such-branch-628")
 
 
 @pytest.mark.parametrize(("cores", "shards"), [(32, 4), (16, 4), (8, 2), (4, 1), (2, 1), (1, 1)])

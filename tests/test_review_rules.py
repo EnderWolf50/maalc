@@ -78,3 +78,19 @@ def test_every_ci_job_has_a_timeout_and_pytest_a_default():
     jobs = yaml.safe_load((ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8"))["jobs"]
     assert [name for name, job in jobs.items() if "timeout-minutes" not in job] == []
     assert "timeout = " in (ROOT / "pyproject.toml").read_text(encoding="utf-8")
+
+
+def ci_jobs():
+    return yaml.safe_load((ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8"))["jobs"]
+
+
+def test_ci_ok_does_not_wait_for_shard_balance_and_pipeline_runs_for_bot_files_only():
+    # #628: shard-balance reports only; pipeline (maa-tools) runs when the changes job saw a file the bot reads.
+    jobs = ci_jobs()
+    assert "shard-balance" not in jobs["ci-ok"]["needs"] and "pipeline" in jobs["ci-ok"]["needs"]
+    assert jobs["pipeline"]["if"] == "needs.changes.outputs.bot == 'true'"
+    assert "bot" in jobs["changes"]["outputs"]
+    filters = next(s["with"]["filters"] for s in jobs["changes"]["steps"] if s.get("id") == "filter")
+    bot = yaml.safe_load(filters)["bot"]
+    assert {"assets/**", "agent/**", "maatools.config.mts"} <= set(bot)
+    assert not any(p.startswith(("docs", "tests")) for p in bot)
