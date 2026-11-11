@@ -4241,8 +4241,10 @@ def owned_change(visit, gone=(), got=()):
 
 
 def buy_list(team, visit):
-    """gifts.purchases for the team's list, the run's packs and the gifts the visit counts as owned (owned_now)."""
-    return purchases(team["list"], run_packs(), owned_now(visit))
+    """gifts.purchases for the team's list, the run's packs, the gifts the visit counts as owned (owned_now) and the floor's
+    difficulty (set_difficulty's floor_hard, else the run's; None when neither is known, #626)."""
+    hard = RUN.get("floor_hard", {"hard": True, "normal": False}.get(RUN.get("difficulty")))
+    return purchases(team["list"], run_packs(), owned_now(visit), hard=hard)
 
 
 def cell_role(cell, team, page, avoid, owned=()):

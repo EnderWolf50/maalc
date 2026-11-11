@@ -158,12 +158,11 @@ describe("hover popover: setting the state", () => {
   });
 
   test("a locked gift that cannot be wanted has all three disabled, and says only the fusion's want frees it", async () => {
-    // Lunar Memory's fragment: no shop sells it, so plan refuses want as well as keep and drop.
-    const fragment = lunar.groups![0].ids[0];
-    const r = await open([mine({ want: [lunar.id] })]);
-    const p = await hover(r, fragment);
+    // 9205 WB Flask, a material of 9213: no shop sells it (#626), so plan refuses want as well as keep and drop.
+    const r = await open([mine({ want: [9213] })]);
+    const p = await hover(r, 9205);
     for (const s of ["want", "keep", "drop"]) expect(p.getByRole("button", { name: zh[`state.${s}` as Text] })).toBeDisabled();
-    expect(p.getByText(say(zh["gl.tip_locked_nowant"], { by: nameOf(lunar.id) }))).toBeInTheDocument();
+    expect(p.getByText(say(zh["gl.tip_locked_nowant"], { by: nameOf(9213) }))).toBeInTheDocument();
   });
 
   test("on the read-only default they are disabled with the reason", async () => {
@@ -183,6 +182,14 @@ describe("hover popover: what it says", () => {
     expect(p.getByText(say(zh["gl.tip_cat_line"], { kw: zh["kw.Burn"], tier: "III" }))).toBeInTheDocument();
     const q = await hover(r, fixed.id);
     expect(q.getByText(say(zh["gl.tip_cat_line"], { kw: zh[`kw.${fixed.keyword}` as Text], tier: "IV" }) + zh["gl.tip_cat_fusion"])).toBeInTheDocument();
+  });
+
+  test("a gift only a theme pack's own pool holds names that pack; another one does not (#626)", async () => {
+    const r = await open([mine()]);
+    const p = await hover(r, 9302); // The Measure of Frost: pack 1005's specificEgoGiftPool
+    expect(p.getByText(say(zh["gl.tip_cat_line"], { kw: zh["kw.Keywordless"], tier: "III" }) + say(zh["gl.tip_cat_pack"], { packs: packName(1005) }))).toBeInTheDocument();
+    const q = await hover(r, 9070);
+    expect(q.getByText(say(zh["gl.tip_cat_line"], { kw: zh["kw.Poise"], tier: "IV" }))).toBeInTheDocument();
   });
 
   test("a locked gift: why, and a way to the wanted fusion or to stop wanting it", async () => {

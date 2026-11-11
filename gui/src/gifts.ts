@@ -3,7 +3,7 @@
 import { parse as parseYaml } from "yaml";
 import recipes from "../../assets/resource/base/data/gift_recipes.json";
 import listsYaml from "../../assets/resource/base/data/gift_lists.yaml?raw";
-import { SEARCH_GIFTS, type GiftList } from "./model";
+import { SHOP_GIFTS, type GiftList } from "./model";
 
 /** The part of a gift list these rules read. */
 export type ListRules = Pick<GiftList, "order" | "want" | "keep" | "gorder">;
@@ -11,12 +11,13 @@ export type GiftState = "want" | "keep" | "drop";
 export interface Fusion {
   id: number; keyword: string; recipes?: number[][]; groups?: { ids: number[]; need: number }[]; specific?: boolean; packs?: number[];
 }
-/** gift_search.json's gifts (the buyable ones), gift_recipes.json's gifts and its `pack_gifts` (theme pack id -> the gifts only
- * that pack's pool holds), the game files' unless a test passes its own. */
+/** The gifts a shop may sell (SHOP_GIFTS, #626), gift_recipes.json's gifts and its `pack_gifts` (theme pack id -> the gifts
+ * only that pack's pool holds), the game files' unless a test passes its own. The GUI does not know a floor's difficulty, so
+ * it leaves in the gifts a NORMAL floor never sells (agent/gifts.py purchases' `hard`). */
 export interface GiftTables { buyable: { id: number }[]; fusions: Fusion[]; pack_gifts: Record<string, number[]> }
 /** The fusion gifts' recipe data (gift_recipes.json), in data order. */
 export const FUSIONS: Fusion[] = recipes.gifts;
-const GAME_TABLES: GiftTables = { buyable: SEARCH_GIFTS, fusions: FUSIONS, pack_gifts: recipes.pack_gifts };
+const GAME_TABLES: GiftTables = { buyable: SHOP_GIFTS, fusions: FUSIONS, pack_gifts: recipes.pack_gifts };
 
 /** The data file's default list: the fields of a gift list without id and name. */
 export const DEFAULT_LIST: Omit<GiftList, "id" | "name"> = parseYaml(listsYaml).default_list;

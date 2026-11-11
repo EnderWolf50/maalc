@@ -170,3 +170,16 @@ def test_a_sale_does_not_count_a_held_recipes_materials_in_an_ordinary_fusion(co
     taps = sale_taps(context, monkeypatch, {"list": wants(9410)}, [90, 90, 300],
                      ("Sinking", 2, 9408), ("Sinking", 2, 9409), ("Bleed", 2))
     assert taps == [actions.SELL_CELLS[2]]
+
+
+@pytest.mark.parametrize("run, bought", [
+    ({"floor_hard": False}, False),  # a NORMAL floor's shop never shows excludeEgoGifts (#626)
+    ({"floor_hard": True}, True),
+    ({"difficulty": "hard", "floor_hard": False}, False),  # the floor's difficulty wins over the run's
+    ({"difficulty": "normal"}, False),  # no floor read yet: the run's
+    ({}, True),  # neither known (the agent restarted): any shop may sell it
+])
+def test_a_normal_floor_buys_no_gift_its_shop_never_sells(monkeypatch, run, bought):
+    monkeypatch.setattr(actions, "RUN", run)
+    team = {"list": {"order": list(settings.GIFT_KEYWORDS), "want": [9156], "keep": [], "gorder": settings.default_gorder()}}
+    assert ((9156, None) in actions.buy_list(team, {"owned": []})) is bought  # 9156 Decamillennial Hearthflame, Burn II

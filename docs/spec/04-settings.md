@@ -238,7 +238,7 @@
 - 隊伍沒有試煉的權重：Boss 後的選擇評分是飾品分數 −（試煉分 + 0.36 × Enemy Level Up 的 N），每隊相同，1 pt 抵主要體系與其他飾品之間的 1 分（[03](03-decisions.md#12-選飾品boss-後的選擇與試煉)；版本 17 拿掉 `trial_risk_weight`）。（#17、#381）
 - 開局連續防禦的做法、失敗時的退路與 Agent 重啟後的處理見 [03-decisions.md](03-decisions.md#8-戰鬥) 第 8 節。（#52）
 - 觀測飾品花的是持有的星光；在 GUI 選了飾品就表示同意花費；遊戲一次最多觀測 3 個（觀測表只有 1／2／3 個的價格 70／160／270），所以清單最多 3 個：GUI 選滿後其餘飾品停用，schema 的 `gifts` 為 `maxItems: 3`，Agent 也以 3 為上限。舊設定超過 3 個時不默默丟掉，而是驗證報錯，使用者自己移除多的才能儲存（2026-10-16 使用者確認同意花費，#63）。選取規則見 [03-decisions.md](03-decisions.md#5-初始飾品與-gift-search) 第 5 節。（#54）
-- GUI 的觀測飾品區塊預設收合，和遊戲的觀測頁一樣分體系分頁、III／II／I 三段；點飾品加到清單最後，再點一次移除，清單可拖曳排序。飾品列表是 `assets/resource/base/data/gift_search.json`（320 個）：清單、id、等級與英文名取自遊戲客戶端 1.117.0 靜態資料的觀測表 `mirror-dungeon-egogift-observation-data-md8`（分頁順序即表的 `uiKeyword` 順序；表裡等級空白的用 `ego-gift*.json` 的 `TIER_n` 標籤補上；英文名來自 `EN_EGOgift_*` 在地化檔），依等級 III → I、表內順序排列；中文名依 id 取自都市零漢化組（LLC）的 release（`tools/llc_text.py`，見 `NOTICE.md`）。2026-10-16 實機逐格點過整頁對照：順序與等級一致，只有 5 個沒出現在頁面上（見 [02-screens.md](02-screens.md#ego-gift-search-頁的版面)）。換季時要依新的觀測表重新產生。（#54）
+- GUI 的觀測飾品區塊預設收合，和遊戲的觀測頁一樣分體系分頁、III／II／I 三段；點飾品加到清單最後，再點一次移除，清單可拖曳排序。飾品列表是 `assets/resource/base/data/gift_search.json`（321 個）：清單、id、等級與英文名取自遊戲客戶端 1.118.1 靜態資料的觀測表（`tools/gift_search_table.py` 產生） `mirror-dungeon-egogift-observation-data-md8`（分頁順序即表的 `uiKeyword` 順序；表裡等級空白的用 `ego-gift*.json` 的 `TIER_n` 標籤補上；英文名來自 `EN_EGOgift_*` 在地化檔），依等級 III → I、表內順序排列；中文名依 id 取自都市零漢化組（LLC）的 release（`tools/llc_text.py`，見 `NOTICE.md`）。2026-10-16 實機逐格點過整頁對照：順序與等級一致，只有 5 個沒出現在頁面上（見 [02-screens.md](02-screens.md#ego-gift-search-頁的版面)）。換季時要依新的觀測表重新產生。（#54）
 - 技能替換（#264、#454）：沒列的罪人、和目標是 3／2／1（遊戲原本的牌組）的罪人不換，所以清單空著就等於關閉，沒有全域開關。三種換法和價格（替換格 45／75／120 Cost；ID Skill Search 90／150／240 Cost 或 25／50／75 星光）是遊戲資料，放在 `data/shop.yaml` 的 `skill_replacement`（[05](05-game-data.md) 第 6 節），Agent 從那裡讀每種換法動哪兩種技能；要付的價格看對話框，以畫面為準；GUI 不標價格。付星光花的是持有的星光；在 GUI 選了 `starlight` 就表示同意花費。Agent 在商店照這份設定換技能（#455，[03](03-decisions.md) 第 13 節「換技能」）；`id_skill_search.enabled` 打開時，Super Shop 的 ID Skill Search 也照 `sinners` 的順序換一張，`pay` 決定付 Cost（遵守 `reserve_cost`）或持有的星光（不受 `reserve_cost` 限制）（#456，同一節「ID Skill Search」）。
 - 技能替換要用哪些換法（#264 的規則，給 #455）：換法 a→b 只在技能 a 多於目標、技能 b 少於目標時才算。牌組從 3／2／1 開始，所以一個走得到的目標要用的換法是固定的：
   - S2 大於 2：`s1_s2` ×（S2 − 2）和 `s1_s3` ×（S3 − 1）；
@@ -339,7 +339,7 @@ PI 任務 `ChargeEnkephalin`，GUI 的「日常」分頁編輯。它花 Lunacy�
 
 | 狀態 | 購買 | 當合成材料 | 出售 | 拿到後 |
 |---|---|---|---|---|
-| 想要 `want` | 買（只有可購買的 I–III 階），被合成吃掉後再出現也再買；合成品則是商店買它缺的材料、湊齊就合成，到手後不再合 | 只當想要的合成品的配方材料（使用者 2026-10-30 決定）；一般合成不用 | 否 | 留著 |
+| 想要 `want` | 買（只有商店可能賣的，I–IV 階，#626），被合成吃掉後再出現也再買；合成品則是商店買它缺的材料、湊齊就合成，到手後不再合 | 只當想要的合成品的配方材料（使用者 2026-10-30 決定）；一般合成不用 | 否 | 留著 |
 | 保留 `keep` | 不買，想要的合成品缺它時除外 | 只當想要的合成品的配方材料（使用者 2026-10-30 決定：「想要」優先於「保留」）；一般合成不用 | 否 | 留著 |
 | 不要 `drop`（預設） | 不買 | 可以 | 可以（受 `sell_max_tier`、`sell_vestiges` 限制） | 當材料或賣掉 |
 
@@ -352,12 +352,13 @@ PI 任務 `ChargeEnkephalin`，GUI 的「日常」分頁編輯。它花 Lunacy�
 | 體系順序 | `order` | 陣列，11 項，不重複 | `Burn`、`Bleed`、`Tremor`、`Rupture`、`Sinking`、`Poise`、`Charge`、`Slash`、`Pierce`、`Blunt`、`Keywordless`；排前面的先買 | 如左（遊戲觀測頁的順序，`Keywordless` 最後） |
 | 想要 | `want` | 陣列，不重複 | 飾品 id | `[]` |
 | 保留 | `keep` | 陣列，不重複 | 飾品 id | `[]`；GUI 新增空白清單時 `want` 和 `keep` 都是 `[]`，所有飾品都是 `drop`（使用者 2026-10-30 決定：「新增保持全空，使用者如果需要可以用複製」，推翻 2026-10-29 的定案「新清單的無體系飾品不會被合成或賣掉」，當時是填入 116 個無體系飾品）。要從預設清單開始，用「複製這份清單」 |
-| 飾品順序 | `gorder` | 物件：體系 → id 陣列 | 該體系內的購買先後，可跨階級；只影響「想要」的可購買飾品 | 每體系：III、II、I 階，階內照資料檔順序 |
+| 飾品順序 | `gorder` | 物件：體系 → id 陣列 | 該體系內的購買先後，可跨階級；只影響「想要」的可購買飾品 | 每體系商店可能賣的飾品：IV、III、II、I 階，階內照資料檔順序（#626） |
 | 合成條件 | `fusion_condition` | 字串 | `any` 材料夠就合（能升階的組合先合，再合出材料能做到的最高階）／`upgrade` 合出的階級比這組材料的最高階還高才合／`tier4` 只在能合出 IV 級時才合。階級由材料點數算出（[03](03-decisions.md) 第 13 節），不花星光；不合成的材料照一般規則仍可能被出售。GUI 的名稱（使用者 2026-10-22 定案）：任意合成／升階才合／只合 IV，英文 Any／Upgrades only／Tier IV only | `any` |
 
-- 飾品 id 存**數字 id**，不存名字：`gift_search.json`（可購買的 320 個，I–III 階）、`gift_recipes.json`（60 個合成品、12 個 `gift_search.json` 沒有的配方材料，與 67 個 `extra_gifts`：商店不賣、配方也不做，只會從體系合成、事件或主題包專屬的飾品池拿到，例如呼吸 IV 階的 Clear Mirror, Calm Water 9070，只能保留或不要）和殘影 9991–9995（黯淡、微茫、閃耀、輝煌的殘影、月之殘影，階級 I–V）。`extra_gifts` 以前不在清單裡，遷移與 GUI 都設不到，商店認出後一律當 `drop`：#310 的實機驗收裡，遷移後的呼吸清單把第 4 層合成出的 9070 在第 5 層當材料合掉；舊設定保留整個主要體系，所以現在照樣保留。名字會因中文化改變；id 換季時是否穩定、舊 id 會不會消失還沒驗證（同一季內 `gift_search.json` 的 320 個 id、體系、階級、英文名在 2026-10-16 與 2026-10-23 的版本完全相同；跨季沒有資料），所以載入時不認得的 id 不報錯：GUI 顯示警告並丟掉，Agent 靜默略過。（#291、#292）
-- `gorder` 缺的飾品補在該體系最後（資料檔順序），多的 id（不是該體系可購買的飾品）丟掉，缺的體系用預設順序；所以 `gorder` 不檢查是不是排列，換季後的舊設定仍可載入。（#292）
-- `want` 裡出現殘影或不能購買的非合成品不報錯：GUI 不讓選，Agent 的購買清單略過它們，因為資料檔換季後可能變動。（#292，未驗證換季時的實際情形）
+- 飾品 id 存**數字 id**，不存名字：`gift_search.json`（Gift Search 頁的 321 個，I–III 階）、`gift_recipes.json`（61 個合成品、13 個 `gift_search.json` 沒有的配方材料，與 66 個 `extra_gifts`：不在 Gift Search 頁、配方也不用）和殘影 9991–9995（黯淡、微茫、閃耀、輝煌的殘影、月之殘影，階級 I–V）。
+- 可以標「想要」的是商店可能賣的飾品與合成品（#626，使用者 2026-11-11 決定）。商店可能賣的是 `gift_recipes.json` 的 `shop.sells`：遊戲的飾品池（`mirrordungeon-egogift-droppool-8.json` 的 `egoGifts`）扣掉全域排除（`globalExcludeEgoGifts`），扣掉圖鑑只寫一個取得條件「Shops - 「Fuse E.G.O Gift」」的飾品（`EN_MirrorDungeonEgoGiftLockedDesc.json`，1.118.1 有 55 個），再扣掉所有合成品（月之記憶 9083 與 5 個主題包專屬合成品圖鑑沒寫只能合成，照樣當合成品）。1.118.1 有 365 個，比 Gift Search 頁多 45 個 IV 階（例如呼吸 IV 階的 Clear Mirror, Calm Water 9070：實機上架過 5 次），而 Gift Search 頁的 9205 不在飾品池裡，不能標想要。其中 67 個（`shop.not_on_normal`，飾品池的 `excludeEgoGifts`）普通難度的樓層不賣：`excludeTargetIdxList` 是 `[0]`，對到 `mirrordungeon-08*.json` 的 `typeIndex`（普通 0、困難 1、無限 2、極限 3；程式本體沒讀到，是照欄位對出來的；實機在困難樓層看過 79 次，普通樓層 158 次裡一次都沒有）。Agent 在普通樓層的購買清單略過它們，所以它們不會讓普通樓層的商店刷新；不知道樓層難度時照樣列入。主題包專屬的飾品（`pack_gifts`）只在自己的主題包出現，GUI 的提示寫出是哪個包。每次上架的清單由伺服器挑選（`HttpRefreshShopEgoGiftsMirrorDungeonCommand`），客戶端看不到挑選方式。`extra_gifts` 以前不在清單裡，遷移與 GUI 都設不到，商店認出後一律當 `drop`：#310 的實機驗收裡，遷移後的呼吸清單把第 4 層合成出的 9070 在第 5 層當材料合掉；舊設定保留整個主要體系，所以現在照樣保留。名字會因中文化改變；id 換季時是否穩定、舊 id 會不會消失還沒驗證（同一季內 `gift_search.json` 的 320 個 id、體系、階級、英文名在 2026-10-16 與 2026-10-23 的版本完全相同；跨季沒有資料），所以載入時不認得的 id 不報錯：GUI 顯示警告並丟掉，Agent 靜默略過。（#291、#292）
+- `gorder` 缺的飾品補在該體系最後（資料檔順序），多的 id（不是該體系商店可能賣的飾品）丟掉，缺的體系用預設順序；所以 `gorder` 不檢查是不是排列，換季後的舊設定仍可載入。（#292）
+- `want` 裡出現殘影或商店不賣的非合成品不報錯：GUI 不讓選，Agent 的購買清單略過它們，因為資料檔換季後可能變動。（#292，未驗證換季時的實際情形）
 - schema 檢查型別、`order` 的列舉與不重複（11 項）、`want`／`keep` 的不重複、`gorder` 的鍵是 11 個體系之一。跨物件檢查（GUI 與 Agent 各做一份，訊息一致）：清單的 id 或名稱重複（`gift_lists: id 'x' appears 2 times`）；隊伍引用不存在的清單（`teams/0/gift_list: team 'T' uses missing plan 'x' (not in gift_lists)`）；同一個 id 同時在 `want` 與 `keep`（`gift_lists/0: list 'L' has gift 9053 in both want and keep`）。（#292）
 - 匯出是這份清單去掉 `id` 的 JSON（`name`、`order`、`want`、`keep`、`gorder`、`fusion_condition`）。匯入建立一份新清單：名稱加「（匯入）」、撞名加數字，不覆蓋現有清單；壞的或不認得的 id 略過並提示個數，同時在 `want` 與 `keep` 的留在 `want`，`order` 不是 11 個體系各一次就用預設，`fusion_condition` 不是三個值之一就用 `any`。（#292）
 - **主要體系**：隊伍不再有自己的主要體系設定。主要體系是隊伍的 `gift_list` 指到的清單（「預設」是資料檔的預設清單，主要體系 `Burn`；2026-10-30 起它只放無體系飾品，`order` 沒變，所以主要體系照舊是 `Burn`）`order` 裡第一個不是 `Keywordless` 的體系。無體系排第一時它照樣最先買，但主要體系取下一個，因為初始飾品頁、定向刷新與合成的體系選單只有 10 個體系，沒有無體系。開局飾品的體系欄、事件選項的同級主體系優先、戰後選飾品的主體系優先、商店的定向刷新、一般合成的指定體系，GUI 觀測飾品挑選畫面的起始分頁，都讀這個主要體系。（#305）

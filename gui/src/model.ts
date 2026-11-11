@@ -118,6 +118,10 @@ export interface SearchGift { id: number; keyword: string; tier: number; en: str
 /** The fusion gifts, the recipe materials the search page lacks and the game's other gifts (extra_gifts: a keyword fusion or
  * an event gives one, #332), data/gift_recipes.json, spec 05: with the search page's, every gift a list names by its keyword. */
 const RECIPE_GIFTS: { id: number; keyword: string }[] = [...recipes.gifts, ...recipes.materials, ...recipes.extra_gifts];
+/** The gifts a shop may sell (#626, data/gift_recipes.json `shop.sells`; agent/settings.py shop_gifts): the search page's in
+ * page order, then the materials' and extra_gifts' in data order. A list may want them, and the shop buys them. */
+const SOLD = new Set(recipes.shop.sells);
+export const SHOP_GIFTS: SearchGift[] = [...SEARCH_GIFTS, ...recipes.materials, ...recipes.extra_gifts].filter((g) => SOLD.has(g.id));
 
 /** The game searches 3 gifts at most; agent/settings.schema.json caps gift_search.gifts the same. */
 export const MAX_GIFTS: number = TEAM.gift_search.properties.gifts.maxItems;
@@ -208,9 +212,10 @@ export interface GiftList {
   id: string; name: string; order: string[]; want: number[]; keep: number[]; gorder: Record<string, number[]>; fusion_condition: string;
 }
 
-/** Every keyword's buyable gifts, tier III first, within a tier in data-file order (agent/settings.py default_gorder). */
+/** Every keyword's gifts a shop may sell (SHOP_GIFTS), the highest tier first, within a tier in SHOP_GIFTS' order
+ * (agent/settings.py default_gorder). */
 export const defaultGorder = (): Record<string, number[]> => Object.fromEntries(GIFT_KEYWORDS.map((k) => [
-  k, [3, 2, 1].flatMap((tier) => SEARCH_GIFTS.filter((g) => g.keyword === k && g.tier === tier).map((g) => g.id)),
+  k, [5, 4, 3, 2, 1].flatMap((tier) => SHOP_GIFTS.filter((g) => g.keyword === k && g.tier === tier).map((g) => g.id)),
 ]));
 
 const KNOWN_GIFTS = new Set([...SEARCH_GIFTS, ...RECIPE_GIFTS].map((g) => g.id).concat(VESTIGES.map((v) => v.id)));
