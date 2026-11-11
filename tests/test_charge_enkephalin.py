@@ -154,6 +154,7 @@ class Tab:
     def __init__(self, context, monkeypatch, used=0, price=None, confirm_works=True, step=1, readable=True):
         self.used, self.price, self.confirm_works, self.step, self.readable = used, price, confirm_works, step, readable
         self.taps, self.stops = [], []
+        monkeypatch.setattr(actions, "TASK", {"runs": 0, "done": None})  # the panel's state, gone after the test
         monkeypatch.setattr(actions, "tap", self.tap)
         monkeypatch.setattr(actions, "ocr_texts", self.ocr)
         monkeypatch.setattr(actions, "stop", lambda context, reason, **kw: self.stops.append(reason) or False)
@@ -171,7 +172,6 @@ class Tab:
 
 def panel(context, count, passes):
     """ChargePanel `passes` times on a task of target `count`, as the hub hands the open window over; the returns."""
-    actions.TASK.clear()
     actions.TASK["charge"] = {"count": count, "reads": 0, "opened": 0, "charged": 0}
     return [actions.ChargePanel().run(context, None) for _ in range(passes)]
 
