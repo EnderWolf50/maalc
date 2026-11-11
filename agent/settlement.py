@@ -122,7 +122,7 @@ def counts_as_run(result):
     return result == "clear"
 
 
-# Settings that forfeit every run (min_alive above the sinners left alive) forfeit each one; used-up wipe retries are bad
+# Settings that forfeit every run (min_alive above the deployment order's sinners left alive, or above its length) forfeit each one; used-up wipe retries are bad
 # luck, which #34's acceptance expects up to 4 times in 14 runs. Two in a row may be luck, three hardly (#560).
 FORFEITS_IN_A_ROW = 3
 

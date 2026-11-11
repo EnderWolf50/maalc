@@ -155,8 +155,9 @@ def test_still_wants_its_runs_of_alike_screenshots_in_a_row(context, clock):
 
 def test_a_formation_page_still_fading_in_is_read_once_it_is_still(context, monkeypatch):
     # Live (#58): read mid-fade, Total Participants gave 3 alive of 12.
-    actions.RUN["team"] = {"min_alive": 5, "name": "t"}
+    actions.RUN.update(team={"min_alive": 5, "name": "t"}, settings={"run": {"after_retries": "stop"}})
     monkeypatch.setattr(actions, "stop", lambda context, reason, line=None: False)
+    monkeypatch.setattr(actions, "tap_shown", lambda *a, **k: None)
     monkeypatch.setattr(actions.run_start, "resolve_plan", lambda *a: [])  # ends the action after the count
     screens(context, [60, 120, 120])
     reads_by_image = {60: "3/3", 120: "12/12"}
@@ -177,7 +178,8 @@ def few_alive(context, monkeypatch, after_retries, min_alive):
     monkeypatch.setattr(actions, "stop", lambda context, reason, line=None: stops.append(reason) or False)
     monkeypatch.setattr(actions, "tap", lambda context, x, y, wait=1.0: taps.append((x, y)))
     monkeypatch.setattr(actions.run_start, "resolve_plan", lambda *a: [])  # ends the action after the count
-    reads(context, {tuple(actions.PARTICIPANTS): [("4/4", (1125, 500, 60, 30))]})
+    reads(context, {tuple(actions.PARTICIPANTS): [("4/4", (1125, 500, 60, 30))],
+                    tuple(actions.DETAILS_BUTTON): [("Details", (0, 0, 10, 10))]})
     result = actions.Formation().run(context, None)
     return result, stops, taps
 
@@ -193,6 +195,67 @@ def test_too_few_alive_forfeits_the_run_like_used_up_wipe_retries(context, monke
 def test_too_few_alive_stops_when_used_up_wipe_retries_stop(context, monkeypatch):
     result, stops, taps = few_alive(context, monkeypatch, "stop", 5)
     assert result is False and len(stops) == 1 and taps == []
+
+
+SPIDER_NEST = ["Yi Sang", "Don Quixote", "Faust", "Hong Lu", "Rodion", "Ishmael", "Outis", "Heathcliff", "Sinclair", "Ryōshū"]
+
+
+def order_page(context, monkeypatch, plan, dead, min_alive, screen_alive, after_retries="forfeit"):
+    """A formation page (screen count screen_alive of 12) whose grey cards are `dead`; the stops, taps and log lines (#616)."""
+    actions.RUN.update(team={"min_alive": min_alive, "name": "t"}, settings={"run": {"after_retries": after_retries}})
+    actions.RUN.pop("forfeit", None)
+    stops, taps, lines = [], [], []
+    monkeypatch.setattr(actions, "stop", lambda context, reason, line=None: stops.append(reason) or False)
+    monkeypatch.setattr(actions, "tap", lambda context, x, y, wait=1.0: taps.append((x, y)))
+    monkeypatch.setattr(actions, "log", lines.append)
+    monkeypatch.setattr(actions, "participants", lambda context, image: (0, screen_alive))
+    monkeypatch.setattr(actions, "dead_sinners", lambda image: set(dead))
+    monkeypatch.setattr(actions.run_start, "resolve_plan", lambda *a: plan)
+    monkeypatch.setattr(actions, "order_marks", lambda context, image: {})
+    monkeypatch.setattr(actions.Formation, "pick", staticmethod(lambda context, order: taps.append(("pick", order)) or False))
+    reads(context, {tuple(actions.DETAILS_BUTTON): [("Details", (0, 0, 10, 10))]})
+    result = actions.Formation().run(context, None)
+    return result, stops, taps, lines
+
+
+def test_only_the_deployment_order_counts_toward_min_alive(context, monkeypatch):
+    # #616: Yi Sang, Meursault and Gregor alive; the order names Yi Sang only among them: K 1 is met, no forfeit.
+    dead = set(actions.battle.SINNERS) - {"Yi Sang", "Meursault", "Gregor"}
+    result, stops, taps, lines = order_page(context, monkeypatch, SPIDER_NEST, dead, 1, 3)
+    assert "forfeit" not in actions.RUN and stops == []
+    assert ("pick", ["Yi Sang"]) in taps
+    assert any("1 of the deployment order alive" in line and "3 alive on screen" in line for line in lines)
+
+
+def test_a_dead_sinner_of_the_order_forfeits_below_k(context, monkeypatch):
+    # #616: Yi Sang grey, Meursault and Gregor alive: nobody of the order is left, K 1 forfeits.
+    dead = set(actions.battle.SINNERS) - {"Meursault", "Gregor", "Ryōshū"}
+    result, stops, taps, lines = order_page(context, monkeypatch, SPIDER_NEST[:-1], dead, 1, 3)
+    assert result is True and actions.RUN["forfeit"] and "0 sinners of" in actions.RUN["forfeit"]
+    assert stops == []
+
+
+def test_the_grey_cards_win_over_the_screen_count(context, monkeypatch):
+    # #616: the screen says 4 alive, the grey cards say Yi Sang is dead: the grey cards decide, and the log says so.
+    dead = {"Yi Sang"}
+    result, stops, taps, lines = order_page(context, monkeypatch, ["Yi Sang"], dead, 1, 4)
+    assert actions.RUN["forfeit"]
+    assert any("grey cards" in line for line in lines)
+
+
+def test_a_full_order_counts_as_the_screen_count_did(context, monkeypatch):
+    # #616: an order of all 12: K 5 with 4 alive forfeits, with 5 alive it does not (as before).
+    plan = list(actions.battle.SINNERS)
+    dead = set(plan[:8])
+    order_page(context, monkeypatch, plan, dead, 5, 4)
+    assert actions.RUN["forfeit"]
+    order_page(context, monkeypatch, plan, set(plan[:7]), 5, 5)
+    assert "forfeit" not in actions.RUN
+
+
+def test_an_order_shorter_than_k_stops_with_after_retries_stop(context, monkeypatch):
+    result, stops, taps, lines = order_page(context, monkeypatch, SPIDER_NEST, set(), 12, 12, "stop")
+    assert result is False and len(stops) == 1 and "deployment order" in stops[0]
 
 
 def test_no_alive_check_at_0(context, monkeypatch):

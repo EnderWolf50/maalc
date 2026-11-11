@@ -3060,9 +3060,19 @@ class Formation(CustomAction):
             return True  # page fading in or out: let MirrorHub look again
         alive, need = count[1], run["team"]["min_alive"]
         RUN["alive"] = alive  # the shop's heal reads it (spec 03 section 13)
-        if alive < need:  # need 0: no check
+        if not has(text(context, image, DETAILS_BUTTON), "Details"):
+            # its » folds the details view (skills, E.G.O), which hides the order marks
+            tap_shown(context, 826, 125, lambda im: has(text(context, im, DETAILS_BUTTON), "Details"), timeout=1.5)
+            image = screen(context)
+        dead = dead_sinners(image)
+        if len(dead) != 12 - alive:
+            # The grey cards say who is dead, which the order needs; they decide (#616).
+            log(f"formation: {12 - alive} dead by the count, grey cards {sorted(dead)}: the grey cards decide")
+        order = battle.formation_order(run_start.resolve_plan(run["settings"], run["team"], "deployment_order"), dead)
+        log(f"formation: {len(order)} of the deployment order alive, {12 - len(dead)} alive on screen, team needs {need}")
+        if len(order) < need:  # need 0: no check; only the deployment order's sinners count (#616)
             # Like used-up wipe retries (#137): stop, or back out to the map, where RouteMap forfeits.
-            reason = f"{alive} sinners alive, team {run['team']['name']!r} needs {need}"
+            reason = f"{len(order)} sinners of the deployment order alive, team {run['team']['name']!r} needs {need}"
             if run["settings"]["run"]["after_retries"] == "stop":
                 return stop(context, reason)
             log(f"{reason}: forfeit the run")
@@ -3070,14 +3080,6 @@ class Formation(CustomAction):
             # MirrorHub must not find the page again and back out twice.
             tap_then(context, *FORMATION_BACK, lambda im: seen(context, im, "Formation") is None, timeout=2)
             return True
-        if not has(text(context, image, DETAILS_BUTTON), "Details"):
-            # its » folds the details view (skills, E.G.O), which hides the order marks
-            tap_shown(context, 826, 125, lambda im: has(text(context, im, DETAILS_BUTTON), "Details"), timeout=1.5)
-            image = screen(context)
-        dead = dead_sinners(image)
-        if len(dead) != 12 - alive:
-            log(f"formation: {12 - alive} dead by the count, grey cards {sorted(dead)}")
-        order = battle.formation_order(run_start.resolve_plan(run["settings"], run["team"], "deployment_order"), dead)
         if not order:  # a short order (sinners left out) with all its sinners dead
             return stop(context, f"no sinner in team {run['team']['name']!r}'s deployment order is alive")
         if battle.formation_matches(order_marks(context, image), order):

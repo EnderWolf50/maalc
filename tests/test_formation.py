@@ -155,7 +155,9 @@ def test_too_few_alive_backs_out_and_hands_back_once_the_page_goes_not_after_2_s
     # ends when the Formation node no longer hits.
     actions.RUN.update(team={"min_alive": 5, "name": "t"}, settings={"run": {"after_retries": "forfeit"}})
     monkeypatch.setattr(actions, "participants", lambda context, image: (4, 4))
-    game = formation_page(context, monkeypatch, {}, {actions.FORMATION_BACK: [(0.5, {"Formation": False}, 20)]})
+    monkeypatch.setattr(actions.run_start, "resolve_plan", lambda *a: [])
+    monkeypatch.setattr(actions, "dead_sinners", lambda image: set())
+    game = formation_page(context, monkeypatch, {tuple(actions.DETAILS_BUTTON): "Details"}, {actions.FORMATION_BACK: [(0.5, {"Formation": False}, 20)]})
     assert actions.Formation().run(context, None)
     assert game.taps == [actions.FORMATION_BACK] and actions.RUN["forfeit"]
     assert not game.now()["Formation"]  # gone before the hub looks again
