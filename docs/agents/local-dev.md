@@ -23,20 +23,20 @@ Every `check.py` run appends one JSON line to `.local/check-runs.jsonl` of the m
 | --- | --- |
 | `v` | format version, 1 |
 | `started`, `seconds` | start time (ISO, local offset) and the whole run's seconds |
-| `worktree`, `branch`, `head`, `dirty` | the checkout, its branch, HEAD, and whether anything is uncommitted |
+| `worktree`, `branch`, `base`, `head`, `dirty` | the checkout, its branch, the point it left `origin/main` (null without `origin/main`), HEAD, and whether anything is uncommitted |
 | `files` | `{path: blob id}` of every file the working tree (committed or not, untracked included, ignored left out) has different from the point the branch left `origin/main` (HEAD when there is no `origin/main`). The same change has the same blob ids in the next run, so the summary tells what changed between two runs without the commits |
 | `steps` | `[{name, exit, seconds}]` for `ruff`, `review_lint` (absent when skipped), `pytest`, `maa-tools check`, `maa-tools test` |
 | `failed_tests` | pytest node ids that failed or errored (from the shards' junit XML, the way CI's `shard-balance` reads its artifacts) |
 | `failed_maa` | `maa-tools test` cases that went red, as `<image> <node>: <reason>` |
 | `test_seconds` | `{test file: seconds}` summed over the shards (empty when pytest wrote no junit) |
 
-The log costs one junit XML per pytest shard (written by pytest as in CI), its parse, and a few `git` calls that build the `files` map in a throwaway index: about 1 s per run, against the 9 minutes of the check (measured, see #633).
+The log costs one junit XML per pytest shard (written by pytest as in CI), its parse, and a few `git` calls that build the `files` map in a throwaway index: about 1 s per run, against the 9 minutes of the check (the git calls measured at 0.8 s on 2026-11-11).
 
-`uv run python tools/check_stats.py` summarises the last 14 days (`--days N`, `--since YYYY-MM-DD`, `--log <file>`, `--top N`): runs, red runs, the tests that went red, and the slowest steps and test files. Each red run followed by a green run of the same branch in the same worktree (several reds in a row count once, from the last one) is put in one of three classes by the files that differ between the two:
+`uv run python tools/check_stats.py` summarises the last 14 days (`--days N`, `--since YYYY-MM-DD`, `--log <file>`, `--top N`): runs, red runs, the tests that went red, and the slowest steps and test files. Each red run followed by a green run of the same branch in the same worktree (several reds in a row count once, from the last one) is put in one of three classes by the files that differ between the two (a fourth, `rebased`, when `base` moved between them, because the files are then measured from a new base and say nothing):
 
-- **code**: a file other than a test or a doc changed. The check stopped a real error (an estimate: the change may be unrelated to the failure).
+- **code**: a file other than a test changed (a doc too: `review_lint` reads the docs). The check stopped a real error (an estimate: the change may be unrelated to the failure).
 - **test**: only test files changed (`tests/`, `test_*.py`, `conftest.py`). The test's own problem.
-- **flaky**: nothing, or only docs (`docs/`, `*.md`), changed and the run went green.
+- **flaky**: nothing changed and the run went green. Without `origin/main` the files show uncommitted changes only, so a committed fix reads as flaky.
 
 A red branch that never ran green in the period is counted apart. The log is machine-local: it covers the runs of this machine only.
 
@@ -74,6 +74,7 @@ Everything that belongs to one machine lives in `.local/` of the **main checkout
 | --- | --- |
 | `.local/scratch/` | throwaway scripts and output of a task, `install-backup/<label>/` |
 | `.local/archive/` | evidence of every live test and experiment, with `INDEX.md` (one row per folder) |
+| `.local/check-runs.jsonl` | the run log of `tools/check.py` ("Checks") |
 | `.local/queue/<resource>/` | the tickets of `tools/live/queue.py` (`bench`, `emulator`) and of `tools/ship.py land --go` (`land`) |
 | `.local/unpack/` | unpacked game data |
 | `.local/llc/` | the Localize Limbus Company release zips `tools/llc_text.py` downloads |

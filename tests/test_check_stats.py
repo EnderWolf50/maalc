@@ -14,7 +14,7 @@ def rec(n, red=False, branch="b", files=None, tests=(), maa=(), steps=None, test
 
 
 def kinds(records):
-    return [kind for _, _, kind in check_stats.fixes(records)]
+    return [kind for _, _, kind in check_stats.transitions(records)]
 
 
 def test_a_changed_program_file_between_red_and_green_is_a_stopped_error():
@@ -36,10 +36,19 @@ def test_a_test_change_beside_a_program_change_is_a_stopped_error():
     assert kinds([rec(1, red=True), rec(2, files={"tests/test_a.py": "1", "agent/a.py": "1"})]) == ["code"]
 
 
-def test_nothing_changed_is_flaky_and_so_is_a_doc_edit():
+def test_nothing_changed_is_flaky():
     same = {"agent/a.py": "1"}
     assert kinds([rec(1, red=True, files=same), rec(2, files=same)]) == ["flaky"]
-    assert kinds([rec(1, red=True, files=same), rec(2, files={**same, "docs/x.md": "1", "README.md": "1"})]) == ["flaky"]
+
+
+def test_a_doc_edit_counts_as_code_because_review_lint_reads_docs():
+    assert kinds([rec(1, red=True), rec(2, files={"docs/x.md": "1"})]) == ["code"]
+
+
+def test_a_moved_base_makes_the_pair_not_comparable():
+    red, green = rec(1, red=True, files={"agent/a.py": "1"}), rec(2, files={"agent/a.py": "1"})
+    red["base"], green["base"] = "aaa", "bbb"
+    assert kinds([red, green]) == ["rebased"]
 
 
 def test_several_reds_in_a_row_compare_the_last_red_with_the_green():

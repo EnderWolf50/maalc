@@ -22,13 +22,14 @@ class Popen:
     given and ends with codes[shard]; the start of shard `fails` raises. events lists the starts and waits in order."""
 
     def __init__(self, codes, fails=None):
-        self.codes, self.fails, self.envs, self.events, self.started = codes, fails, [], [], []
+        self.codes, self.fails, self.envs, self.events, self.started, self.cmds = codes, fails, [], [], [], []
 
     def __call__(self, cmd, stdout, stderr, env=None):
         shard = int(env["SHARD"]) if env and "SHARD" in env else 0
         if shard == self.fails:
             raise FileNotFoundError(cmd[0])
         self.envs.append(env)
+        self.cmds.append(cmd)
         self.events.append(("start", shard))
         stdout.write(f"output of shard {shard}\n")
         stdout.flush()
@@ -165,7 +166,7 @@ def test_a_log_that_cannot_be_written_warns_and_the_run_goes_on(tmp_path, capsys
     assert "check log not written" in out and "== uv run ruff check: exit 1" in out
 
 
-def test_the_files_of_a_record_follow_the_working_tree_not_the_commits(tmp_path):
+def test_the_files_of_a_record_follow_the_working_tree_not_the_commits(tmp_path, monkeypatch):
     repo = tmp_path / "repo"
     repo.mkdir()
     for args in (["init", "-q"], ["config", "user.email", "a@b"], ["config", "user.name", "n"]):
@@ -176,13 +177,15 @@ def test_the_files_of_a_record_follow_the_working_tree_not_the_commits(tmp_path)
     base = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo, capture_output=True, text=True, check=True).stdout.strip()
     (repo / "a.py").write_text("2", encoding="utf-8")  # unstaged edit
     (repo / "new.py").write_text("3", encoding="utf-8")  # untracked
-    old = check.ROOT
-    check.ROOT = repo
-    try:
-        files = check.work_tree_files(base)
-        assert set(files) == {"a.py", "new.py"}
-        subprocess.run(["git", "add", "."], cwd=repo, check=True)
-        subprocess.run(["git", "commit", "-qm", "two"], cwd=repo, check=True)
-        assert check.work_tree_files(base) == files  # committing the same change gives the same blobs
-    finally:
-        check.ROOT = old
+    monkeypatch.setattr(check, "ROOT", repo)
+    files = check.work_tree_files(base)
+    assert set(files) == {"a.py", "new.py"}
+    subprocess.run(["git", "add", "."], cwd=repo, check=True)
+    subprocess.run(["git", "commit", "-qm", "two"], cwd=repo, check=True)
+    assert check.work_tree_files(base) == files  # committing the same change gives the same blobs
+
+
+def test_each_shard_gets_its_own_number_in_the_arguments():
+    popen = Popen([0, 0])
+    check.run_step(["x", "--junitxml=/j/{shard}.xml"], 2, popen)
+    assert [cmd[1] for cmd in popen.cmds] == ["--junitxml=/j/0.xml", "--junitxml=/j/1.xml"]

@@ -9,10 +9,13 @@ A run is red when any step exited non-zero. Each red run followed by a green run
 (several reds in a row count once, from the last one) is put in one of three classes by the files that differ between the
 two (check.py records each run's files, as blob ids, against the point the branch left origin/main):
 
-  code    a file other than a test or a doc changed: the check stopped a real error (estimate: the change may be
+  code    a file other than a test changed (a doc too: review_lint reads docs): the check stopped a real error (estimate: the change may be
           unrelated to the failure)
   test    only test files changed (tests/, test_*.py, conftest.py): the test's own problem
-  flaky   nothing but docs, or nothing at all, changed and the run went green
+  flaky   nothing changed and the run went green
+
+A fourth line counts the transitions where the base (the point the branch left origin/main) moved between the two runs,
+since the files are then measured from a new base and cannot be compared.
 """
 import argparse
 import datetime
@@ -51,24 +54,23 @@ def is_test(path):
     return pure.parts[0] == "tests" or pure.name.startswith("test_") or pure.name == "conftest.py"
 
 
-def is_doc(path):
-    return path.endswith(".md") or PurePosixPath(path).parts[0] == "docs"
-
-
 def changed_files(red, green):
     before, after = red.get("files", {}), green.get("files", {})
     return sorted(path for path in before.keys() | after.keys() if before.get(path) != after.get(path))
 
 
 def classify(red, green):
-    """`code`, `test` or `flaky` for a red run and the green run after it."""
+    """`rebased`, `code`, `test` or `flaky` for a red run and the green run after it. A doc counts as code:
+    review_lint reads the docs."""
+    if red.get("base") != green.get("base"):
+        return "rebased"  # origin/main moved under the branch: files are measured from a new base, so they say nothing
     changed = changed_files(red, green)
-    if any(not is_test(path) and not is_doc(path) for path in changed):
+    if any(not is_test(path) for path in changed):
         return "code"
     return "test" if any(is_test(path) for path in changed) else "flaky"
 
 
-def fixes(records):
+def transitions(records):
     """[(red, green, class)] for every red run and the green one that follows it on the same branch and worktree."""
     out, last = [], {}
     for rec in records:
@@ -94,13 +96,13 @@ def summary(records, top=10):
     lines.append("")
     lines.append("tests that went red (runs):")
     lines += [f"  {count:>3}  {name}" for name, count in red_tests.most_common(top)] or ["  none"]
-    red_steps = Counter(step["name"] for rec in reds for step in rec["steps"] if step["exit"])
+    red_steps = Counter(step["name"] for rec in reds for step in rec.get("steps", []) if step["exit"])
     lines.append("steps that went red: " + (", ".join(f"{name} {count}" for name, count in red_steps.most_common()) or "none"))
-    done = fixes(records)
+    done = transitions(records)
     lines.append("")
     lines.append(f"red -> next green on the same branch: {len(done)}")
     notes = {"code": "code changed: the check stopped an error (estimate)", "test": "only tests changed: the test's own problem",
-             "flaky": "nothing relevant changed: flaky"}
+             "flaky": "nothing changed: flaky", "rebased": "base moved (rebase or pull of main): not comparable"}
     counts = Counter(kind for _, _, kind in done)
     lines += [f"  {counts[kind]:>3}  {note}" for kind, note in notes.items()]
     still = len({(r.get("worktree"), r.get("branch")) for r in reds} - {(g.get("worktree"), g.get("branch")) for _, g, _ in done})
@@ -110,7 +112,7 @@ def summary(records, top=10):
     lines.append("slowest steps:")
     steps = {}
     for rec in records:
-        for step in rec["steps"]:
+        for step in rec.get("steps", []):
             steps.setdefault(step["name"], []).append(step["seconds"])
     lines += ranking(steps, top)
     files = {}

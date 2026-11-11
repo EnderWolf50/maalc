@@ -159,7 +159,7 @@ def checkout_state(has_base_ref):
     head = git("rev-parse", "HEAD").strip()
     base = git("merge-base", "HEAD", BASE).strip() if has_base_ref else head
     return {"worktree": git("rev-parse", "--show-toplevel").strip(), "branch": git("rev-parse", "--abbrev-ref", "HEAD").strip(),
-            "head": head, "dirty": bool(git("status", "--porcelain").strip()), "files": work_tree_files(base)}
+            "base": base if has_base_ref else None, "head": head, "dirty": bool(git("status", "--porcelain").strip()), "files": work_tree_files(base)}
 
 
 def record(started, steps, junit_dir, maa_texts, has_base_ref, wall):
@@ -208,7 +208,7 @@ def main(run=run_step, has_base=has_base, log=default_log):
             label = " ".join(cmd) + (f" ({shards} shards)" if shards > 1 else "")
             print(f"== {label}: exit {code}, {took:.0f} s", flush=True)
             logged.append({"name": step_name(cmd), "exit": code, "seconds": round(took, 1)})
-            if cmd[-2:] == ["maa-tools", "test"]:
+            if step_name(cmd) == "maa-tools test":
                 maa_texts = getattr(shown, "texts", ())
             if code:
                 print(shown, flush=True)
