@@ -8,14 +8,16 @@ Usage: uv run --group unpack python tools/game_data.py <command> [--serial 127.0
            APKs (their player data unzipped to apk-data/); then dumps the static data of every bundle that holds some
            (the pulled ones and the unchanged ones, by the bundle index out/sprite-index.tsv).
   dump     dumps `.local/unpack/`'s static data again from its bundles, into static/.
-  install  moves the pulled files into place; what they replace goes to `.local/unpack/prev/<old version>/`, and
-           `.local/unpack/client.json` names the version.
+  install  moves the pulled files into place; what they replace, and the bundles gone from the device, go to
+           `.local/unpack/prev/<old version>/`, and `.local/unpack/client.json` names the version.
   regen    runs every generator (GENERATORS) against `.local/unpack/`; `--release` names the Localize Limbus Company
            release (default: the newest).
   diff     the per-file summary of what regen changed against git HEAD (`--ref`), and of the static data against prev/.
-  update   pull, install, regen and diff in one go.
-Run pull, regen and update as a `bench` ticket (tools/live/queue.py): the icon and cover generators open the 12 GB of
-bundles. Nothing here starts, stops or taps the game; it reads the files of
+  update   pull and install (unless `.local/unpack/` holds the emulator's version already), then regen and diff.
+A step that stops half way leaves nothing a later step takes for whole: each pulled piece is written as `<name>.part` and
+renamed once whole, pull writes `incoming/<version>/pulled.json` last, and install checks every destination before it
+moves anything. Run pull, regen and update as a `bench` ticket (tools/live/queue.py): the icon and cover generators open
+the 12 GB of bundles. Nothing here starts, stops or taps the game; it reads the files of
 /sdcard/Android/data/com.ProjectMoon.LimbusCompany/files/ and the installed APKs.
 """
 
@@ -42,24 +44,17 @@ CACHE = f"{FILES}/UnityCache/Shared"
 SERIAL = "127.0.0.1:16384"  # MuMu instance 0
 STATIC = "static/Assets/Resources_moved/StaticData/static-data"
 INDEX = "out/sprite-index.tsv"  # every bundle's container entries (bundle_index)
-UNITY_VERSION = "6000.3.12f1"  # the bundles carry a stripped version (.local/unpack/NOTES.md "Engine")
+UNITY_VERSION = "6000.3.12f1"  # the engine in libunity.so (1.117.0 and 1.118.1); the bundles carry a stripped version
 LLC_LATEST = "https://api.github.com/repos/LocalizeLimbusCompany/LocalizeLimbusCompany/releases/latest"
 # Pulled piece -> its place under .local/unpack/ (the UnityCache bundles go one by one).
 PIECES = {"localize": "raw/Localize", "catalog": "raw/addressables", "metadata": "raw/Metadata", "apk": "raw/apk",
           "player": "apk-data", "static": "static"}
-# The generators, in order: theme packs before their covers, gift_search before gift_recipes, both before the icons.
-GENERATORS = [
-    ["tools/theme_pack_floors.py"],
-    ["tools/trial_table.py"],
-    ["tools/events_md8.py"],
-    ["tools/event_table.py"],
-    ["tools/gift_search_table.py"],
-    ["tools/gift_recipes.py"],
-    ["tools/llc_text.py"],
-    ["tools/gift_icons.py"],
-    ["tools/theme_pack_covers.py"],
-    ["tools/theme_pack_signatures.py"],
-]
+# The generators in order (theme packs before their covers, gift_search before gift_recipes, both before the icons):
+# (script, whether it takes --release, the Localize Limbus Company release of the Chinese names).
+GENERATORS = [("tools/theme_pack_floors.py", False), ("tools/trial_table.py", False), ("tools/events_md8.py", False),
+              ("tools/event_table.py", False), ("tools/gift_search_table.py", True), ("tools/gift_recipes.py", True),
+              ("tools/llc_text.py", True), ("tools/gift_icons.py", False), ("tools/theme_pack_covers.py", False),
+              ("tools/theme_pack_signatures.py", False)]
 # What regen writes, for diff.
 OUTPUTS = ["assets/resource/base/data", "assets/resource/base/image/GiftSearch", "assets/resource/base/image/GiftRecipe",
            "gui/src/graces.json"]
@@ -83,39 +78,47 @@ def client_version(dumpsys: str) -> str:
     return re.search(r"versionName=(\S+)", dumpsys).group(1)
 
 
-def id_changes(old, new) -> dict:
-    """Top-level key -> what changed: for a list of {"id": ...} rows or a dict, the ids (keys) added, removed and changed;
-    "changed" for any other value. Keys whose value is the same are left out."""
+def id_changes(old: dict, new: dict, prefix="") -> dict:
+    """Key path ("a.b") -> what changed, for every value that differs: a nested mapping is walked; a list of {"id": ...}
+    rows gives the ids added, removed and changed; a list of plain values the values added and removed; anything else
+    "added", "removed" or "changed"."""
     out = {}
     for key in sorted(old.keys() | new.keys(), key=str):
-        a, b = old.get(key), new.get(key)
+        a, b, path = old.get(key), new.get(key), f"{prefix}{key}"
         if a == b:
             continue
-        rows_a, rows_b = keyed(a), keyed(b)
-        if rows_a is None or rows_b is None:
-            out[key] = "added" if a is None else "removed" if b is None else "changed"
-            continue
-        out[key] = {"added": sorted(rows_b.keys() - rows_a.keys()), "removed": sorted(rows_a.keys() - rows_b.keys()),
-                    "changed": sorted(k for k in rows_a.keys() & rows_b.keys() if rows_a[k] != rows_b[k])}
+        if isinstance(a, dict) and isinstance(b, dict):
+            out |= id_changes(a, b, path + ".")
+        elif rows(a) is not None and rows(b) is not None:
+            ra, rb = rows(a), rows(b)
+            out[path] = {"added": sorted(rb.keys() - ra.keys()), "removed": sorted(ra.keys() - rb.keys()),
+                         "changed": sorted(k for k in ra.keys() & rb.keys() if ra[k] != rb[k])}
+        elif plain_list(a) and plain_list(b):
+            out[path] = {"added": sorted(set(b) - set(a), key=str), "removed": sorted(set(a) - set(b), key=str)}
+        else:
+            out[path] = "added" if a is None else "removed" if b is None else "changed"
     return out
 
 
-def keyed(value):
-    if isinstance(value, dict):
-        return value
+def rows(value):
+    """A list of {"id": ...} rows by id, else None."""
     if isinstance(value, list) and value and all(isinstance(r, dict) and "id" in r for r in value):
         return {r["id"]: r for r in value}
     return None
 
 
+def plain_list(value) -> bool:
+    return isinstance(value, list) and all(not isinstance(v, (dict, list)) for v in value)
+
+
 # ---- the device
 
 
-def adb(serial, *args, capture=True) -> str:
-    run = subprocess.run(["adb", "-s", serial, *args], capture_output=capture, text=True, encoding="utf-8", errors="replace")
+def adb(serial, *args) -> str:
+    run = subprocess.run(["adb", "-s", serial, *args], capture_output=True, text=True, encoding="utf-8", errors="replace")
     if run.returncode:
         raise SystemExit(f"adb {' '.join(args)} failed: {run.stderr or run.stdout}")
-    return run.stdout if capture else ""
+    return run.stdout
 
 
 def device_client(serial) -> str:
@@ -130,12 +133,31 @@ def local_cache(cache: Path) -> dict[str, str]:
     return {p.parent.parent.name: p.parent.name for p in cache.glob("*/*/__data")}
 
 
-def pull(serial, src, dest: Path):
+def fetch(dest: Path, make):
+    """`make(part)` writes dest's content at a `.part` path, which becomes dest once whole; a dest that exists is done."""
+    if dest.exists():
+        return
+    part = dest.with_name(dest.name + ".part")
+    if part.is_dir():
+        shutil.rmtree(part)
+    elif part.exists():
+        part.unlink()
     dest.parent.mkdir(parents=True, exist_ok=True)
-    adb(serial, "pull", src, str(dest))
+    make(part)
+    os.replace(part, dest)
+
+
+def pull(serial, src, dest: Path):
+    """adb pull of a device file or folder to dest, whole or not at all (fetch)."""
+    fetch(dest, lambda part: adb(serial, "pull", src, str(part)))
 
 
 # ---- .local/unpack
+
+
+def unpack_of(path: Path) -> Path:
+    """The unpack folder `path` is in: the nearest one holding client.json, else the main checkout's .local/unpack/."""
+    return next((p for p in [Path(path), *Path(path).parents] if (p / "client.json").is_file()), None) or local_dir("unpack")
 
 
 def unpack_client(unpack: Path) -> str:
@@ -181,13 +203,18 @@ def static_bundles(index: list[str]) -> set[str]:
 
 
 def dump_static(bundles: list[Path], out: Path) -> int:
-    """The TextAssets under StaticData of these bundles -> out/Assets/Resources_moved/StaticData/... (as scripts/scan.py)."""
+    """The TextAssets under StaticData of these bundles -> out/Assets/Resources_moved/StaticData/..."""
     import UnityPy
 
     UnityPy.config.FALLBACK_UNITY_VERSION = UNITY_VERSION
     hits = 0
     for path in bundles:
-        for p, obj in UnityPy.load(str(path)).container.items():
+        try:
+            entries = UnityPy.load(str(path)).container.items()
+        except Exception as e:  # as in bundle_index: a bundle UnityPy cannot read holds no static data we know of
+            print("skip", path, e, file=sys.stderr)
+            continue
+        for p, obj in entries:
             if "staticdata" in p.lower() and obj.type.name == "TextAsset":
                 data = obj.read().m_Script
                 dest = out / p.replace("assets/resources_moved/staticdata/", "Assets/Resources_moved/StaticData/")
@@ -211,36 +238,35 @@ def cmd_pull(args):
     if version == unpack_client(unpack) and not args.force:
         print(f".local/unpack/ holds {version} already: nothing to pull (--force pulls the changed bundles all the same)")
         return 1
-    incoming = unpack / "incoming" / version
-    device = device_cache(args.serial)
-    changed = changed_bundles(device, local_cache(unpack / "raw/UnityCache"))
-    print(f"client {version}: {len(changed)} changed bundles -> {incoming}")
+    incoming, cache = unpack / "incoming" / version, unpack / "raw/UnityCache"
+    device, local = device_cache(args.serial), local_cache(cache)
+    changed, gone = changed_bundles(device, local), sorted(local.keys() - device.keys())
+    print(f"client {version}: {len(changed)} changed bundles, {len(gone)} gone from the device -> {incoming}")
     for name in changed:
-        dest = incoming / "raw/UnityCache" / name / device[name]
-        if not (dest / "__data").is_file():
-            pull(args.serial, f"{CACHE}/{name}/{device[name]}", dest)
+        pull(args.serial, f"{CACHE}/{name}/{device[name]}", incoming / "raw/UnityCache" / name / device[name])
     for key, src in (("localize", f"{FILES}/Assets/Resources_moved/Localize"), ("catalog", f"{FILES}/com.unity.addressables"),
                      ("metadata", f"{FILES}/il2cpp/Metadata")):
-        if not (incoming / PIECES[key]).is_dir():
-            pull(args.serial, src, incoming / PIECES[key])
-    apks = [line.removeprefix("package:").strip() for line in adb(args.serial, "shell", f"pm path {PACKAGE}").splitlines() if line.strip()]
-    for apk in apks:
-        dest = incoming / PIECES["apk"] / apk.rsplit("/", 1)[-1]
-        if not dest.is_file():
-            pull(args.serial, apk, dest)
-    player = incoming / PIECES["player"]
-    if not player.is_dir():
+        pull(args.serial, src, incoming / PIECES[key])
+    for apk in (line.removeprefix("package:").strip() for line in adb(args.serial, "shell", f"pm path {PACKAGE}").splitlines()):
+        if apk:
+            pull(args.serial, apk, incoming / PIECES["apk"] / apk.rsplit("/", 1)[-1])
+
+    def unzip(part):
         for apk in sorted((incoming / PIECES["apk"]).glob("*.apk")):
             with zipfile.ZipFile(apk) as z:
-                z.extractall(player, [n for n in z.namelist() if n.startswith("assets/bin/Data/")])
-    static = incoming / PIECES["static"]
-    if not static.is_dir():
-        cache = unpack / "raw/UnityCache"
-        kept = [cache / key / "__data" for key in static_bundles(bundle_index(cache, unpack / INDEX)) if key.split("/")[0] not in changed]
-        pulled = sorted((incoming / "raw/UnityCache").glob("*/*/__data"))
-        n = dump_static(kept + pulled, static)
-        print(f"static data: {n} files from {len(kept)} unchanged and the {len(pulled)} pulled bundles")
-    (incoming / "pulled.json").write_text(json.dumps({"client": version, "bundles": changed,
+                z.extractall(part, [n for n in z.namelist() if n.startswith("assets/bin/Data/")])
+
+    fetch(incoming / PIECES["player"], unzip)
+    unchanged = [cache / key / "__data" for key in sorted(static_bundles(bundle_index(cache, unpack / INDEX)))
+                 if key.split("/")[0] not in {*changed, *gone}]
+    pulled = sorted((incoming / "raw/UnityCache").glob("*/*/__data"))
+
+    def dump(part):
+        print(f"static data: {dump_static(unchanged + pulled, part)} files from {len(unchanged)} unchanged and the "
+              f"{len(pulled)} pulled bundles")
+
+    fetch(incoming / PIECES["static"], dump)
+    (incoming / "pulled.json").write_text(json.dumps({"client": version, "bundles": changed, "gone": gone,
                                                       "date": datetime.date.today().isoformat()}, indent=1) + "\n", encoding="utf-8")
     return 0
 
@@ -259,35 +285,43 @@ def cmd_dump(args):
     return 0
 
 
-def cmd_install(args):
-    unpack = local_dir("unpack")
-    pulled = sorted((unpack / "incoming").glob("*/pulled.json"))
-    if not pulled:
-        raise SystemExit("nothing pulled: run `game_data.py pull` first")
-    info = json.loads(pulled[-1].read_text(encoding="utf-8"))
-    incoming, old = pulled[-1].parent, unpack_client(unpack)
-    prev = unpack / "prev" / old
+def install_moves(unpack: Path, incoming: Path, prev: Path, info: dict) -> list[tuple[Path, Path]]:
+    """The renames install makes, in order: each replaced piece or bundle to prev/ before the pulled one takes its place,
+    and the bundles gone from the device to prev/."""
+    moves = []
     for rel in PIECES.values():
         if (incoming / rel).exists():
-            move(unpack / rel, prev / rel)
-            move(incoming / rel, unpack / rel)
+            moves += [(unpack / rel, prev / rel), (incoming / rel, unpack / rel)]
     for name in info["bundles"]:
-        move(unpack / "raw/UnityCache" / name, prev / "raw/UnityCache" / name)
-        move(incoming / "raw/UnityCache" / name, unpack / "raw/UnityCache" / name)
+        moves += [(unpack / "raw/UnityCache" / name, prev / "raw/UnityCache" / name),
+                  (incoming / "raw/UnityCache" / name, unpack / "raw/UnityCache" / name)]
+    moves += [(unpack / "raw/UnityCache" / name, prev / "raw/UnityCache" / name) for name in info.get("gone", [])]
+    return [(a, b) for a, b in moves if a.exists()]
+
+
+def cmd_install(args):
+    unpack = local_dir("unpack")
+    pulled = list((unpack / "incoming").glob("*/pulled.json"))
+    if len(pulled) != 1:
+        raise SystemExit("nothing pulled: run `game_data.py pull` first" if not pulled else
+                         f"{len(pulled)} pulls under {unpack / 'incoming'}: keep the one to install, move the others away")
+    info = json.loads(pulled[0].read_text(encoding="utf-8"))
+    incoming, old = pulled[0].parent, unpack_client(unpack)
+    prev = unpack / "prev" / old
+    moves = install_moves(unpack, incoming, prev, info)
+    vacated = {a for a, _ in moves}
+    taken = [b for _, b in moves if b.exists() and b not in vacated]
+    if taken:
+        raise SystemExit(f"nothing installed: {taken[0]} exists already ({len(taken)} in all); move them away first")
+    for a, b in moves:
+        b.parent.mkdir(parents=True, exist_ok=True)
+        os.replace(a, b)
     (unpack / "client.json").write_text(json.dumps({"client": info["client"], "installed": datetime.date.today().isoformat(),
-                                                    "previous": old, "bundles": info["bundles"]}, indent=1) + "\n", encoding="utf-8")
+                                                    "previous": old, "bundles": info["bundles"], "gone": info.get("gone", [])},
+                                                   indent=1) + "\n", encoding="utf-8")
     shutil.rmtree(incoming)
     print(f"installed {info['client']} in {unpack}; the replaced files of {old} are in {prev}")
     return 0
-
-
-def move(src: Path, dest: Path):
-    if not src.exists():
-        return
-    if dest.exists():
-        raise SystemExit(f"{dest} exists already: move it away before installing")
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    os.replace(src, dest)
 
 
 def latest_release() -> str:
@@ -297,12 +331,11 @@ def latest_release() -> str:
 
 def cmd_regen(args):
     release = args.release or latest_release()
-    for gen in GENERATORS:
-        extra = ["--release", release] if gen[0].endswith(("gift_search_table.py", "gift_recipes.py", "llc_text.py")) else []
-        print("==", " ".join(gen + extra), flush=True)
-        run = subprocess.run(["uv", "run", "--group", "unpack", "python", *gen, *extra], cwd=REPO)
-        if run.returncode:
-            raise SystemExit(f"{gen[0]} failed ({run.returncode})")
+    for script, takes_release in GENERATORS:
+        command = [script, *(["--release", release] if takes_release else [])]
+        print("==", " ".join(command), flush=True)
+        if code := subprocess.run(["uv", "run", "--group", "unpack", "python", *command], cwd=REPO).returncode:
+            raise SystemExit(f"{script} failed ({code})")
     return 0
 
 
@@ -322,7 +355,8 @@ def cmd_diff(args):
 
 
 def summary(ref) -> list[str]:
-    """One line per changed output file: the ids of JSON tables, line counts of text, counts of image folders."""
+    """One line per changed output file: what id_changes finds in a JSON or YAML table, else line counts; counts of the
+    image folders."""
     status = git("status", "--porcelain", "--untracked-files=all", "--", *OUTPUTS).splitlines()
     status += [f" M {p}" for p in git("diff", "--name-only", ref, "--", *OUTPUTS).splitlines()]
     paths = sorted({line[3:].strip().strip('"') for line in status})
@@ -336,8 +370,7 @@ def summary(ref) -> list[str]:
         if (what := describe(ref, p)) is not None:
             lines.append(f"{p}: {what}")
     for folder, kinds in sorted(images.items()):
-        lines.append(f"{folder}: " + ", ".join(f"{k} {len(v)} ({' '.join(sorted(v)[:12])}{' ...' if len(v) > 12 else ''})"
-                                               for k, v in sorted(kinds.items())))
+        lines.append(f"{folder}: " + ", ".join(f"{k} {len(v)} {short(sorted(v))}" for k, v in sorted(kinds.items())))
     return lines
 
 
@@ -346,21 +379,21 @@ def exists_at(ref, path) -> bool:
 
 
 def describe(ref, path) -> str | None:
+    """What changed in one text file; None when only its line endings did."""
     new = (REPO / path).read_text(encoding="utf-8") if (REPO / path).exists() else None
     old = git("show", f"{ref}:{path}") if exists_at(ref, path) else None
     if old is None or new is None:
         return "added" if old is None else "removed"
-    if path.endswith(".json"):
-        try:
-            changes = id_changes(json.loads(old), json.loads(new))
-        except (json.JSONDecodeError, AttributeError):
-            changes = None
-        if changes is not None:
+    if path.endswith((".json", ".yaml")):
+        import yaml
+
+        a, b = (json.loads(t) if path.endswith(".json") else yaml.safe_load(t) for t in (old, new))
+        if isinstance(a, dict) and isinstance(b, dict):
             return "; ".join(f"{k} {v}" if isinstance(v, str) else
                              f"{k}: " + ", ".join(f"{n} {len(ids)} {short(ids)}" for n, ids in v.items() if ids)
-                             for k, v in changes.items()) or None  # the same content (another line ending)
+                             for k, v in id_changes(a, b).items()) or None
     stat = git("diff", "--numstat", ref, "--", path).split()
-    return f"+{stat[0]} -{stat[1]} lines" if stat else None  # only the line endings differ
+    return f"+{stat[0]} -{stat[1]} lines" if stat else None
 
 
 def short(ids) -> str:
@@ -384,12 +417,15 @@ def main(argv=None):
     ap.add_argument("--force", action="store_true", help="pull although .local/unpack/ holds the emulator's version")
     args = ap.parse_args(argv)
     if args.command == "update":
-        if cmd_pull(args):
-            return 1
-        for step in (cmd_install, cmd_regen, cmd_diff):
-            step(args)
-        return 0
-    return {"status": cmd_status, "pull": cmd_pull, "dump": cmd_dump, "install": cmd_install, "regen": cmd_regen, "diff": cmd_diff}[args.command](args)
+        if args.force or device_client(args.serial) != unpack_client(local_dir("unpack")):
+            if cmd_pull(args) == 0:
+                cmd_install(args)
+        else:
+            print(".local/unpack/ holds the emulator's client already: nothing to pull; regenerating")
+        cmd_regen(args)
+        return cmd_diff(args)
+    return {"status": cmd_status, "pull": cmd_pull, "dump": cmd_dump, "install": cmd_install, "regen": cmd_regen,
+            "diff": cmd_diff}[args.command](args)
 
 
 if __name__ == "__main__":

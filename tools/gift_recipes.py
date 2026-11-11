@@ -24,7 +24,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from llc_text import NOTE_ZH, credit, gift_names, release_zip  # noqa: E402
-from game_data import bundle_index, unpack_client  # noqa: E402
+from game_data import INDEX, UNITY_VERSION, bundle_index, unpack_client  # noqa: E402
 from local_dir import local_dir  # noqa: E402
 
 REPO = Path(__file__).resolve().parent.parent
@@ -38,7 +38,7 @@ VESTIGE_IDS = range(9991, 9996)  # written to `vestiges`: the one place the ids 
 SCALE = 0.21  # the icon on the Gift Search page, as for GiftSearch/<id>.png
 
 
-def note(client, gift_ids, named):
+def note(client, gift_count, named):
     return ("Fusion gifts and their recipes. Recipes: combineFixed (any one of a gift's `recipes` fuses it; each is a list of the "
         "required gift ids; `specific` marks a gift whose recipe uses a theme pack's exclusive gift, `packs` is the union of the "
         "theme pack ids of those gifts (one recipe can need several packs), from isSpecific and the packs' specificEgoGiftPool) and combineMixed (`groups`: take `need` of each group's `ids`) of the game client " + client + "'s "
@@ -46,7 +46,7 @@ def note(client, gift_ids, named):
         "EN_EGOgift localization. `materials` are the recipe ingredients gift_search.json does not list. `vestiges` (#161) are the five gifts 9991-9995 (tier I-V, keywordless) that are only fusion or sale material. Icons: "
         "image/GiftRecipe/<id>.png, the game's EgoGiftIcon sprites (by the ego-gift iconId) scaled by 0.21 with transparency "
         "filled green. `extra_gifts` (#332) are the rest of the client's gift ids 9000-9999 (static data ego-gift*, "
-        f"{gift_ids} in {client}, {named} with a name: 9247 has neither a name nor an icon sprite, so it is left out): no shop sells "
+        f"{gift_count} in {client}, {named} with a name: 9247 has neither a name nor an icon sprite, so it is left out): no shop sells "
         "them and no recipe uses them, so a shop cell may still show one (some are the theme packs' specificEgoGiftPool gifts); "
         "the Gift Search icons ignore them, the shop cell match (agent/gift_cells.py) takes them as candidates, and a gift list "
         "names them as any gift of their keyword (keep or drop: they cannot be wanted). "+NOTE_ZH+" "
@@ -131,21 +131,22 @@ def sprite_index(cache, index_path):
     return where
 
 
-def extract_icons(unpack, ids_to_icon, write=None):
-    """Write ICONS/<gift id>.png for each {gift id: iconId} (or call `write(sprite image, gift id)`); returns the gift ids without a sprite."""
+def extract_icons(unpack, ids_to_icon, write=None, out=ICONS):
+    """Write out/<gift id>.png (the green-filled template, GiftRecipe/ unless told) for each {gift id: iconId}, or call
+    `write(sprite image, gift id)`; returns the gift ids without a sprite."""
     import UnityPy
 
-    UnityPy.config.FALLBACK_UNITY_VERSION = "6000.3.12f1"
+    UnityPy.config.FALLBACK_UNITY_VERSION = UNITY_VERSION
     cache = unpack / "raw/UnityCache"
-    where = sprite_index(cache, unpack / "out/sprite-index.tsv")
+    where = sprite_index(cache, unpack / INDEX)
     by_icon = defaultdict(list)
     for gid, icon in ids_to_icon.items():
         by_icon[icon].append(gid)
     if write is None:
-        ICONS.mkdir(parents=True, exist_ok=True)
+        out.mkdir(parents=True, exist_ok=True)
 
         def png(image, gid):
-            scaled(np.array(image.convert("RGBA")), ICONS / f"{gid}.png")
+            scaled(np.array(image.convert("RGBA")), out / f"{gid}.png")
 
         write = png
 

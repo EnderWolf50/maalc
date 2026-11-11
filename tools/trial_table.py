@@ -24,7 +24,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "agent"))
 sys.path.insert(0, str(ROOT / "tools"))
-from game_data import unpack_client  # noqa: E402
+from game_data import unpack_client, unpack_of  # noqa: E402
 from local_dir import local_dir  # noqa: E402
 from rewards import parse_effects  # noqa: E402
 
@@ -130,7 +130,7 @@ def main(argv):
     unpack = None if len(args) >= 2 else local_dir("unpack")
     static = Path(args[0]) if args else unpack / "static/Assets/Resources_moved/StaticData/static-data"
     en = Path(args[1]) if len(args) > 1 else unpack / "raw/Localize/en"
-    text = render(*table(static, en), unpack_client(local_dir("unpack")))
+    text = render(*table(static, en), unpack_client(unpack_of(static)))
     if check:
         same = OUT.read_text(encoding="utf-8") == text
         print("trials.yaml is up to date" if same else "trials.yaml differs from the game data: rerun tools/trial_table.py")

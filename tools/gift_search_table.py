@@ -28,8 +28,8 @@ KEYWORDLESS_TAB = "None"
 def note(client):
     return ("Gifts the E.G.O Gift Search page offers, tab by tab, tiers III-I, in page order. List, ids, tiers and English "
             f"names: the game client {client}'s static data (mirror-dungeon-egogift-observation-data-md8: its tabs in order, "
-            "the keywordless tab last, each tab's gifts by tier III-I in the table's order, as the live page of 2026-10-16 "
-            "showed them; the ego-gift tier tags, EN_EGOgift localization). Icon templates: image/GiftSearch/<id>.png, the "
+            "the keywordless tab last, each tab's gifts by tier III-I in the table's order: the order the live page showed for "
+            "1.117.0 on 2026-10-16; the ego-gift tier tags, EN_EGOgift localization). Icon templates: image/GiftSearch/<id>.png, the "
             "game's EgoGiftIcon sprites (by the ego-gift iconId) scaled by 0.21. English names: the plain apostrophe where the "
             "game writes ’ (as this file always had; a version 10 keep_gifts name matches it). Written by "
             "tools/gift_search_table.py. " + NOTE_ZH)
@@ -69,7 +69,7 @@ def main():
     if not args.no_icons:
         table = gr.gift_table(unpack)
         new = {g["id"]: table[g["id"]][2] for g in rows if not (ICONS / f"{g['id']}.png").is_file()}
-        missing = gr.extract_icons(unpack, new, lambda image, gid: gr.scaled(gr.np.array(image.convert("RGBA")), ICONS / f"{gid}.png"))
+        missing = gr.extract_icons(unpack, new, out=ICONS)
         print(f"{len(new) - len(missing)} new icons; no sprite: {missing}")  # an icon of a gift that left the page stays (the vestiges' are here too)
 
 
