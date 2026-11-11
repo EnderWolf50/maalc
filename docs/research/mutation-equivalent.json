@@ -7,5 +7,5 @@
  "recovery:237:30:`0` -> `1`": "樓層從 1 起，max(n - 1, 1) 只在 n = 1 時不同，而 1 // 5 與 0 // 5 都是 0",
  "shop:584:12:`break` -> `continue`": "cost 夠了之後不再變，後面每個飾品都碰到同一個檢查而被跳過",
  "pack_cover:46:19:`1` -> `2`": "lru_cache 的大小：只影響快取留多少，不影響回傳值",
- "settings:363:12:`return x` -> `return None`": "唯一的呼叫端（team_queue._reorder）只看真假，None 與 False 一樣是假"
+ "settings:381:12:`return x` -> `return None`": "唯一的呼叫端（team_queue._reorder）只看真假，None 與 False 一樣是假"
 }
