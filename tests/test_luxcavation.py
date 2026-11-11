@@ -225,7 +225,7 @@ def lux_start(context, monkeypatch, key, **opts):
     stops = []
     monkeypatch.setattr(actions, "stop", lambda context, reason, **kw: stops.append(reason) or False)
     # TaskStart starts a task afresh: its TASK and STUCK are put back after the test
-    monkeypatch.setattr(actions, "TASK", dict(actions.TASK))
+    monkeypatch.setattr(actions, "TASK", {"runs": 0, "done": None})  # as at launch: no task before it
     monkeypatch.setattr(actions, "STUCK", dict(actions.STUCK))
     entry = {"exp": "ExpLuxcavation", "thread": "ThreadLuxcavation"}[key]
     return actions.LuxStart().run(context, SimpleNamespace(node_name=entry, custom_action_param=json.dumps(key))), stops
