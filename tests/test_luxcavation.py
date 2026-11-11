@@ -1,4 +1,7 @@
+import json
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import MagicMock
 
 import numpy as np
 import pytest
@@ -208,3 +211,200 @@ def test_the_consecutive_battle_that_does_not_read_or_set_logs_it(context, monke
     assert got is None and [ln.split(" ", 1)[1] for ln in actions.LOG] == ["Consecutive Battle (exp): does not read, wants x4"]
     got, _ = run_set_consecutive(context, monkeypatch, [1, 2], 4)
     assert got == 2 and actions.LOG[-1].endswith("Consecutive Battle (exp): shows x2 after closing the row, wanted x4")
+
+
+# The task's steps in actions.py, in process (#641): the branches the integration scenarios of test_exp_luxcavation.py
+# and test_thread_luxcavation.py once ran in MaaFramework, test_actions.py's fake context around them.
+
+def lux_start(context, monkeypatch, key, **opts):
+    """LuxStart on the settings luxcavation.<key> = opts over a daily task of count 2 and team "b"; its return, the stops."""
+    settings = json.loads((SCREENS.parent / "settings_cases.json").read_text(encoding="utf-8"))["valid"]
+    settings["luxcavation"][key] = {"mode": "daily", "count": 2, "team": "b", "retries": 0, "consecutive": False, **opts}
+    (actions.ROOT / "config").mkdir()
+    (actions.ROOT / "config" / "settings.json").write_text(json.dumps(settings), encoding="utf-8")
+    stops = []
+    monkeypatch.setattr(actions, "stop", lambda context, reason, **kw: stops.append(reason) or False)
+    entry = {"exp": "ExpLuxcavation", "thread": "ThreadLuxcavation"}[key]
+    return actions.LuxStart().run(context, SimpleNamespace(node_name=entry, custom_action_param=json.dumps(key))), stops
+
+
+@pytest.mark.parametrize("key, mode, target, cost", [
+    ("exp", "daily", 1, 3), ("thread", "daily", 3, 2),  # #431: daily mode fights to the day's battles, count 2 unused
+    ("exp", "count", 2, 3), ("thread", "count", 2, 2),
+])
+def test_a_luxcavation_task_aims_at_the_days_battles_in_daily_mode_and_at_count_in_count_mode(context, monkeypatch, key, mode, target, cost):
+    ok, stops = lux_start(context, monkeypatch, key, mode=mode)
+    lux = actions.RUN["lux"]
+    assert ok is True and stops == [] and (lux["mode"], lux["target"], lux["cost"], lux["fights"]) == (mode, target, cost, None)
+
+
+@pytest.mark.parametrize("key, name", [("exp", "EXP Luxcavation"), ("thread", "Thread Luxcavation")])
+def test_a_luxcavation_task_with_no_team_picked_stops_before_any_tap(context, monkeypatch, key, name):
+    ok, stops = lux_start(context, monkeypatch, key, team=None)
+    assert ok is False and stops == [f"{name} has no team: pick one in the settings GUI's Daily tab"]
+    assert context.tasker.controller.post_click.call_count == 0
+
+
+def run_plan(monkeypatch, today, seen, **lux):
+    """actions.plan on RUN["lux"] = lux over an EXP task in daily mode with 182 Modules; its return, the finish reasons."""
+    ends = []
+    monkeypatch.setattr(actions, "finish", lambda context, reason: ends.append(reason) or True)
+    actions.RUN.clear()
+    actions.RUN["lux"] = {"name": "EXP Luxcavation", "cost": 3, "mode": "daily", "target": 1, "today": None, "seen": None,
+                          "fights": None, "retries": 0, "modules": 182, **lux}
+    return actions.plan(MagicMock(), today, seen), ends
+
+
+def test_the_modules_are_checked_against_this_runs_battles(monkeypatch):
+    # #429: one won today leaves 2 of the day's 3, 4 Modules at 2 each: fought, where 3 x 2 = 6 would skip. #431: count
+    # mode checks count's battles.
+    thread = {"name": "Thread Luxcavation", "cost": 2, "target": 3}
+    over, ends = run_plan(monkeypatch, 1, "Daily Bonuses 2/3", **thread, modules=4)
+    assert over is None and actions.RUN["lux"]["fights"] == 2 and ends == []
+    over, ends = run_plan(monkeypatch, 1, "Daily Bonuses 2/3", **thread, modules=3)
+    assert over is True and ends == ["Thread Luxcavation: Daily Bonuses 2/3 (1 won today), 3 a day: Modules 3 < 4 needed for 2, skipped"]
+    over, ends = run_plan(monkeypatch, None, None, **{**thread, "target": 91}, mode="count")
+    assert over is None and actions.RUN["lux"]["fights"] == 91
+    over, ends = run_plan(monkeypatch, None, None, **{**thread, "target": 91}, mode="count", modules=181)
+    assert over is True and ends == ["Thread Luxcavation: count mode, 91 this run: Modules 181 < 182 needed for 91, skipped"]
+    # EXP in count mode, 61 x 3 = 183 > the 182 the main window shows: skipped before any battle
+    over, ends = run_plan(monkeypatch, None, None, mode="count", target=61)
+    assert over is True and ends == ["EXP Luxcavation: count mode, 61 this run: Modules 182 < 183 needed for 61, skipped"]
+
+
+@pytest.mark.parametrize("today, seen, end", [
+    (1, "the pass's Clear EXP Luxcavation row done",  # #429: the day's one won: nothing fought, Drive never opened
+     "EXP Luxcavation: the pass's Clear EXP Luxcavation row done (1 won today), 1 a day: nothing to fight"),
+    (None, "the pass's Clear EXP Luxcavation row did not read",  # #429 item 4: a day not read is a day not fought
+     "EXP Luxcavation: the pass's Clear EXP Luxcavation row did not read: nothing fought"),
+    (None, "the pass page was not reached in 60 s", "EXP Luxcavation: the pass page was not reached in 60 s: nothing fought"),
+])
+def test_daily_mode_with_nothing_left_or_nothing_read_ends_at_the_main_window_unfought(monkeypatch, today, seen, end):
+    over, ends = run_plan(monkeypatch, today, seen)
+    assert over is True and ends == [end] and actions.RUN["lux"]["fights"] is None
+
+
+@pytest.mark.parametrize("png, found, param, today, seen", [
+    ("PassMissionsDailyUnderway.png", True, None, 0, "the pass's Clear EXP Luxcavation row under way"),
+    ("PassMissionsDaily.png", True, None, 1, "the pass's Clear EXP Luxcavation row done"),
+    ("PassMissionsDailyUnderway.png", False, None, None, "the pass's Clear EXP Luxcavation row did not read"),
+    ("PassMissionsDailyUnderway.png", False, '{"lost": true}', None, "the pass page was not reached in 60 s"),  # ExpPassLost
+])
+def test_the_pass_row_reads_as_the_battles_won_today(context, png, found, param, today, seen):
+    # #429: ExpPassRead finds the row by its text (PassExpRow: row 2 of the Daily tab) and reads it by its look.
+    image = np.array(Image.open(SCREENS / png).convert("RGB"))[:, :, ::-1]
+    context.tasker.controller.post_screencap.return_value.wait.return_value.get.return_value = image
+    row = SimpleNamespace(hit=True, best_result=SimpleNamespace(box=(405, 285, 280, 27)))
+    context.run_recognition.side_effect = lambda name, image: row if found and name == "PassExpRow" else None
+    actions.RUN.clear()
+    actions.RUN["lux"] = {"name": "EXP Luxcavation", "today": None, "seen": None}
+    assert actions.ExpPassRead().run(context, SimpleNamespace(custom_action_param=param)) is True
+    assert (actions.RUN["lux"]["today"], actions.RUN["lux"]["seen"]) == (today, seen)
+    assert context.tasker.controller.post_click.call_count == 0  # nothing tapped
+
+
+def over_after(monkeypatch, results, **lux):
+    """actions.battle_over after each battle of results in turn (a result, or (result, its Consecutive Battle size)), from
+    a fresh EXP task (lux over its defaults); the steps, the stop reasons and the finish reasons."""
+    stops, ends, steps = [], [], []
+    monkeypatch.setattr(actions, "stop", lambda context, reason, **kw: stops.append(reason) or False)
+    monkeypatch.setattr(actions, "finish", lambda context, reason: ends.append(reason) or True)
+    actions.RUN.clear()
+    actions.RUN["team"] = {"guard_turns": 0}
+    actions.RUN["lux"] = {"name": "EXP", "cost": 3, "fights": 3, "retries": 1, "modules": 99, "won": 0, "retried": 0,
+                          "result": None, "size": 1, **lux}
+    for result in results:
+        result, size = result if isinstance(result, tuple) else (result, 1)
+        actions.RUN.update(entered=True)
+        actions.RUN["lux"].update(result=result, size=size)
+        steps.append(actions.battle_over(MagicMock()))
+    return steps, stops, ends
+
+
+def test_each_battle_has_its_own_retries_a_win_resets_them(monkeypatch):
+    # Review S6, as the mirror's wipe retries: retries 1 lets every battle lose once; the task fails only when one battle
+    # loses twice.
+    steps, stops, ends = over_after(monkeypatch, ("lose", "win", "lose", "win", "lose", "lose"))
+    assert steps == [None] * 5 + [False] and stops == ["EXP: defeated with the 1 retries used up"] and ends == []
+
+
+@pytest.mark.parametrize("retries, results", [(1, ("lose", "lose")), (0, ("lose",))])
+def test_a_defeat_past_the_retries_stops_the_task(monkeypatch, retries, results):
+    steps, stops, ends = over_after(monkeypatch, results, fights=1, retries=retries)
+    assert steps == [None] * (len(results) - 1) + [False] and len(stops) == 1 and ends == []
+
+
+def test_a_defeat_within_the_retries_counts_nothing_and_a_win_after_it_finishes(monkeypatch):
+    # live-1 F2, F3: a red Defeat, Confirm, the same stage again. A Consecutive Battle x3 lost counts none of its three.
+    steps, stops, ends = over_after(monkeypatch, ("lose", "win"), fights=1)
+    assert steps == [None, True] and ends == ["EXP: 1 won"] and stops == []
+    steps, stops, ends = over_after(monkeypatch, [("lose", 3)], fights=3)
+    assert steps == [None] and (actions.RUN["lux"]["won"], actions.RUN["lux"]["retried"]) == (0, 1) and stops == ends == []
+
+
+def test_a_consecutive_win_counts_its_battles_and_the_next_takes_the_rest(monkeypatch):
+    steps, stops, ends = over_after(monkeypatch, [("win", 10), ("win", 2)], fights=12, retries=0)  # #375: x10, then x2
+    assert steps == [None, True] and ends == ["EXP: 12 won"] and stops == []
+
+
+def test_a_battle_with_no_results_page_stops_the_task_instead_of_counting(monkeypatch):
+    steps, stops, ends = over_after(monkeypatch, [None])
+    assert steps == [False] and stops == ["EXP: back on the page with no results page seen"] and ends == []
+    assert actions.RUN["lux"]["won"] == 0
+
+
+def test_each_battle_starts_its_guard_turns_afresh():
+    # 2026-10-27 decision: the team's guard_turns count per battle, not once for the whole task.
+    actions.RUN.clear()
+    actions.RUN.update(team={"guard_turns": 2}, guard=0, entered=True)
+    actions.RUN["lux"] = {"name": "EXP", "cost": 3, "fights": 2, "retries": 0, "modules": 99, "won": 0, "retried": 0, "result": "win", "size": 1}
+    try:
+        assert actions.battle_over(MagicMock()) is None and actions.RUN["guard"] == 2
+    finally:
+        actions.RUN.clear()
+
+
+CARD_ENTER = (293, 462, 157, 36)  # LuxThreadEnter's box on tests/screens/LuxThread.png
+CARD_TAP = (293 + 157 // 2, 462 + 36 // 2)
+
+
+def enter_card(context, monkeypatch, bonuses=(), box_shows=None, **lux):
+    """LuxEnter on the Thread tab's card, its Daily Bonuses box reading `bonuses` (texts) and its Consecutive Battle box
+    left at `box_shows`; its return, the taps of the Enter, the stops, the finish reasons and the OCR nodes read."""
+    taps, stops, ends, reads = [], [], [], []
+    monkeypatch.setattr(actions, "ocr_texts", lambda context, image, node: reads.append(node) or list(bonuses))
+    monkeypatch.setattr(actions, "tap_then", lambda context, x, y, done, timeout=2.0: taps.append((x, y)) or "page")
+    monkeypatch.setattr(actions, "set_consecutive", lambda context, box, target, enter=None: box_shows)
+    monkeypatch.setattr(actions, "stop", lambda context, reason, **kw: stops.append(reason) or False)
+    monkeypatch.setattr(actions, "finish", lambda context, reason: ends.append(reason) or True)
+    actions.RUN.clear()
+    actions.RUN["lux"] = {"name": "Thread Luxcavation", "cost": 2, "mode": "daily", "target": 3, "today": None, "seen": None,
+                          "fights": None, "retries": 0, "modules": 182, "won": 0, "retried": 0, "result": None,
+                          "consecutive": False, "size": 1, **lux}
+    argv = SimpleNamespace(box=CARD_ENTER, node_name="LuxThreadEnter", custom_action_param=json.dumps({"opens_battle": False, "box": "thread"}))
+    return actions.LuxEnter().run(context, argv), taps, stops, ends, reads
+
+
+@pytest.mark.parametrize("bonuses, fights, end", [
+    (["Daily Bonuses", "3/3"], 3, None),  # a fresh day: all three
+    (["Daily Bonuses", "1/3"], 1, None),
+    (["Daily Bonuses", "0/3"], None, "Thread Luxcavation: Daily Bonuses 0/3 (3 won today), 3 a day: nothing to fight"),
+    (["Daily Bonuses"], None, "Thread Luxcavation: Daily Bonuses did not read: nothing fought"),  # #429 item 4
+])
+def test_thread_in_daily_mode_plans_from_the_daily_bonuses_on_the_card(context, monkeypatch, bonuses, fights, end):
+    ok, taps, stops, ends, reads = enter_card(context, monkeypatch, bonuses)
+    assert ok is True and stops == [] and reads == ["ThreadBonuses"] and actions.RUN["lux"]["fights"] == fights
+    assert (ends, taps) == (([], [CARD_TAP]) if end is None else ([end], []))  # nothing to fight: the card not entered
+
+
+def test_a_task_planned_already_never_reads_the_daily_bonuses(context, monkeypatch):
+    # #431: count mode plans in LuxHome; 0/3 (the bonuses spent) is not read, count's 2 battles go on
+    ok, taps, stops, ends, reads = enter_card(context, monkeypatch, ["0/3"], mode="count", target=2, fights=2)
+    assert ok is True and reads == [] and taps == [CARD_TAP] and stops == ends == []
+
+
+@pytest.mark.parametrize("box_shows, why", [(None, "did not read"), (2, "shows x2")])
+def test_a_consecutive_battle_that_does_not_read_or_set_stops_the_task_before_the_enter(context, monkeypatch, box_shows, why):
+    ok, taps, stops, ends, _ = enter_card(context, monkeypatch, box_shows=box_shows, mode="count", target=3, fights=3, consecutive=True)
+    assert ok is False and taps == [] and ends == []
+    assert stops == [f"Thread Luxcavation: Consecutive Battle {why}, wanted x3"]
