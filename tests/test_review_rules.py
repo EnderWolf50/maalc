@@ -74,14 +74,15 @@ def test_no_module_constant_is_defined_twice(path):
     assert not twice, twice
 
 
-def test_every_ci_job_has_a_timeout_and_pytest_a_default():
-    jobs = yaml.safe_load((ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8"))["jobs"]
-    assert [name for name, job in jobs.items() if "timeout-minutes" not in job] == []
-    assert "timeout = " in (ROOT / "pyproject.toml").read_text(encoding="utf-8")
-
-
 def ci_jobs():
     return yaml.safe_load((ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8"))["jobs"]
+
+
+
+def test_every_ci_job_has_a_timeout_and_pytest_a_default():
+    jobs = ci_jobs()
+    assert [name for name, job in jobs.items() if "timeout-minutes" not in job] == []
+    assert "timeout = " in (ROOT / "pyproject.toml").read_text(encoding="utf-8")
 
 
 def test_ci_ok_does_not_wait_for_shard_balance_and_pipeline_runs_for_bot_files_only():
@@ -90,7 +91,8 @@ def test_ci_ok_does_not_wait_for_shard_balance_and_pipeline_runs_for_bot_files_o
     assert "shard-balance" not in jobs["ci-ok"]["needs"] and "pipeline" in jobs["ci-ok"]["needs"]
     assert jobs["pipeline"]["if"] == "needs.changes.outputs.bot == 'true'"
     assert "bot" in jobs["changes"]["outputs"]
-    filters = next(s["with"]["filters"] for s in jobs["changes"]["steps"] if s.get("id") == "filter")
-    bot = yaml.safe_load(filters)["bot"]
-    assert {"assets/**", "agent/**", "maatools.config.mts"} <= set(bot)
-    assert not any(p.startswith(("docs", "tests")) for p in bot)
+    step = next(s for s in jobs["changes"]["steps"] if s.get("id") == "botfilter")
+    assert "predicate-quantifier" not in step["with"]  # `every` would need one file to match all of them
+    bot = yaml.safe_load(step["with"]["filters"])["bot"]
+    assert {"assets/**", "agent/**", "tests/screens/**", "maatools.config.mts"} <= set(bot)  # imageRoot of maa-tools test
+    assert not any(p.startswith("docs") for p in bot)
