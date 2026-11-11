@@ -135,8 +135,11 @@ def test_the_queue_and_stop_commands_match_the_preamble(tmp_path):
 
 
 @pytest.mark.parametrize("args", [LIVE, ["code", "--task", "t1"]])
-def test_the_full_check_is_for_a_task_that_changes_code(tmp_path, args):
+def test_ci_runs_the_checks_and_the_full_check_is_for_when_ci_cannot(tmp_path, args):
+    # #636: the agent runs the test files it changes, CI runs the rest; check.py only when CI cannot run.
     assert run(tmp_path, args) == 0
     text = (tmp_path / "t1" / "brief.md").read_text(encoding="utf-8")
-    assert "A task that changes code runs the full `tools/check.py`" in text
-    assert "A live run that changes no code skips it." in text
+    assert "Run the test files you change or add" in text and "no full `tools/check.py` before the push" in text
+    assert "wait for `ci-ok`" in text and "a red one is fixed and pushed again" in text
+    assert "`tools/check.py` is for when CI cannot run" in text
+    assert "A task that changes code runs the full `tools/check.py`" not in text

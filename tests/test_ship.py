@@ -471,30 +471,31 @@ def test_wait_for_main_ci_times_out():
     assert ship.wait_for_main_ci(fake, "main", MERGE, sleep=lambda s: None, now=lambda: next(clock), timeout=300) == "timeout"
 
 
-def into_fake(merge=(0, ""), check=(0, "checks ok"), conflicts="a.py\nb.py\n", prs="[]", tree="/wt/integration"):
+def into_fake(merge=(0, ""), conflicts="a.py\nb.py\n", prs="[]", tree="/wt/integration"):
     listing = f"worktree {tree}\nHEAD {HEAD}\nbranch refs/heads/integration\n\n"
     return Fake(**{"git worktree list": (0, listing), "git status": (0, ""), "git rev-parse": (0, HEAD + "\n"),
                    "git merge --ff-only": (0, ""), "git merge --abort": (0, ""), "git merge": merge, "git diff": (0, conflicts),
-                   "uv run python tools/live/queue.py": check, "gh pr list": (0, prs), "gh pr create": (0, "https://example.test/pr/1\n")})
+                   "gh pr list": (0, prs), "gh pr create": (0, "https://example.test/pr/1\n")})
 
 
-def test_into_pushes_only_after_green_checks_and_opens_a_draft_pr():
+def test_into_pushes_the_merge_for_the_draft_prs_ci_and_runs_no_local_check(capsys):
+    # #636: the integration branch's draft PR runs the checks in CI; the merge is not checked on this machine first.
     fake = into_fake()
     assert ship.cmd_into(fake, "integration", "feat/x", repo=Path("main-checkout")) == 0
-    names = [" ".join(c[:2]) for c in fake.calls]
-    assert names.index("git push") > max(i for i, c in enumerate(fake.calls) if "tools/check.py" in c)
-    bench = next(c for c in fake.calls if "tools/check.py" in c and "queue.py" in " ".join(c))
-    assert bench[bench.index("--resource") + 1] == "bench"
+    assert not [c for c in fake.calls if "tools/check.py" in c or "queue.py" in " ".join(c) or c[:2] == ["pnpm", "install"]]
     merge = fake.ran("git", "merge", "--no-ff", "-m")[0]
     assert merge[-1] == "origin/feat/x"
+    assert fake.ran("git", "push", "origin", "integration")
     create = fake.ran("gh", "pr", "create")[0]
     assert "--draft" in create and create[create.index("--head") + 1] == "integration"
+    assert "https://example.test/pr/1" in capsys.readouterr().out
 
 
-def test_into_opens_no_second_pr():
+def test_into_opens_no_second_pr_and_names_the_one_whose_ci_checks_it(capsys):
     fake = into_fake(prs='[{"number": 3}]')
     assert ship.cmd_into(fake, "integration", "feat/x", repo=Path("main-checkout")) == 0
     assert not fake.ran("gh", "pr", "create")
+    assert "gh pr checks 3 --watch" in capsys.readouterr().out
 
 
 def test_into_stops_on_a_conflict_and_aborts_the_merge(capsys):
@@ -504,29 +505,12 @@ def test_into_stops_on_a_conflict_and_aborts_the_merge(capsys):
     assert fake.ran("git", "merge", "--abort") and not fake.ran("git", "push")
 
 
-def test_into_resets_and_does_not_push_on_red_checks(capsys):
-    fake = into_fake(check=(1, "pytest failed"))
-    assert ship.cmd_into(fake, "integration", "feat/x", repo=Path("main-checkout")) == 1
-    assert fake.ran("git", "reset", "--hard", HEAD) and not fake.ran("git", "push")
-    assert not fake.ran("gh", "pr", "create")
-
-
-def test_into_installs_the_packages_of_a_new_worktree():
+def test_into_resets_a_merge_it_did_not_push_when_the_push_fails():
     fake = into_fake()
-    fake.routes["git worktree list"] = (0, "worktree main-checkout\nbranch refs/heads/main\n\n")
-    assert ship.cmd_into(fake, "integration", "feat/x", repo=Path("main-checkout")) == 0
-    add = next(i for i, c in enumerate(fake.calls) if c[:3] == ["git", "worktree", "add"])
-    pnpm = next(i for i, c in enumerate(fake.calls) if c[:2] == ["pnpm", "install"])
-    check = next(i for i, c in enumerate(fake.calls) if "queue.py" in " ".join(c))
-    assert add < pnpm < check
-
-
-def test_into_resets_a_merge_it_did_not_push_when_a_step_exits():
-    fake = into_fake()
-    fake.routes["uv run python tools/fetch_ocr.py"] = (1, "no network")
+    fake.routes["git push"] = (1, "rejected")
     with pytest.raises(SystemExit):
         ship.cmd_into(fake, "integration", "feat/x", repo=Path("main-checkout"))
-    assert fake.ran("git", "reset", "--hard", HEAD) and not fake.ran("git", "push")
+    assert fake.ran("git", "reset", "--hard", HEAD) and not fake.ran("gh", "pr", "create")
 
 
 def test_into_reports_a_failed_merge_that_is_not_a_conflict(capsys):

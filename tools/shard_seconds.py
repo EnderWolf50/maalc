@@ -6,7 +6,8 @@ shards with tests/shard_seconds.json.
                                                          its shard's runner pace, or a file not in it that took SLOW
                                                          both ways (SLOW / RATIO on a pull request)
     python tools/shard_seconds.py update --run <run id>  rewrites the table from the junit artifacts of that CI run and
-                                                         of the EARLIER_RUNS before it whose agent shards all passed:
+                                                         of the EARLIER_RUNS before it whose agent shards all passed
+                                                         on RUNNER:
                                                          each file's median, or that run's own time when it is off from
                                                          the median by more than RATIO both as measured and at its
                                                          shard's runner pace
@@ -33,6 +34,9 @@ PACE_MIN_SECONDS = 5
 PACE_MIN_FILES = 3
 # CI runs before the one update names whose times the median takes too: one runner's speed is not the table's (#463).
 EARLIER_RUNS = 4
+# The agent job's runs-on in .github/workflows/ci.yml: an earlier run counts only when its agent shards ran there, so a
+# run from before the job moved to Windows (#636) does not set a Windows shard with Linux times.
+RUNNER = "windows-latest"
 # How many completed CI runs update looks back through for them: about four weeks; junit artifacts are kept 14 days.
 LISTED_RUNS = 200
 
@@ -106,9 +110,11 @@ def earlier(run):
 
 
 def agents_passed(run):
-    """Every agent shard of run passed: none failed, was cancelled or cut short, and the run did not skip them (docs only)."""
-    agents = [j for j in gh_json("run", "view", str(run), "--json", "jobs")["jobs"] if j["name"].split(" (")[0] == "agent"]
-    return bool(agents) and all(j["conclusion"] == "success" for j in agents)
+    """Every agent shard of run passed on RUNNER: none failed, was cancelled or cut short, and the run did not skip them
+    (docs only). The REST jobs list, not `gh run view`: only it has the runner's labels."""
+    jobs = gh_json("api", f"repos/{{owner}}/{{repo}}/actions/runs/{run}/jobs?per_page=100")["jobs"]
+    agents = [j for j in jobs if j["name"].split(" (")[0] == "agent"]
+    return bool(agents) and all(j["conclusion"] == "success" and RUNNER in j.get("labels", []) for j in agents)
 
 
 def reports_of(run, folder):

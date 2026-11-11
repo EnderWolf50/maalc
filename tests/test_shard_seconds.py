@@ -257,11 +257,19 @@ def test_earlier_lists_the_completed_ci_runs_before_the_run_newest_first(monkeyp
     assert {"ci.yml", "completed"} <= set(calls[0])
 
 
-def test_only_a_run_whose_agent_shards_all_passed_counts(monkeypatch):
-    jobs = {1: [("agent (0)", "success"), ("agent (1)", "success"), ("shard-balance", "failure")],  # a runner's times
-            2: [("agent (0)", "success"), ("agent (1)", "failure")],
-            3: [("agent (0)", "success"), ("agent (1)", "cancelled")],
-            4: [("changes", "success"), ("agent", "skipped")]}  # docs only: the matrix never ran
-    monkeypatch.setattr(shard_seconds, "gh_json",
-                        lambda *args: {"jobs": [{"name": n, "conclusion": c} for n, c in jobs[int(args[2])]]})
+def test_only_a_run_whose_agent_shards_all_passed_on_the_ci_runner_counts(monkeypatch):
+    win, linux = ["windows-latest"], ["ubuntu-latest"]
+    jobs = {1: [("agent (0)", "success", win), ("agent (1)", "success", win), ("shard-balance", "failure", linux)],
+            2: [("agent (0)", "success", win), ("agent (1)", "failure", win)],
+            3: [("agent (0)", "success", win), ("agent (1)", "cancelled", win)],
+            4: [("changes", "success", linux), ("agent", "skipped", [])],  # docs only: the matrix never ran
+            5: [("agent (0)", "success", linux), ("agent (1)", "success", linux)]}  # before #636: not a Windows runner's
+    calls = []
+
+    def gh_json(*args):
+        calls.append(args)
+        run = int(args[1].split("/runs/")[1].split("/")[0])
+        return {"jobs": [{"name": n, "conclusion": c, "labels": labels} for n, c, labels in jobs[run]]}
+    monkeypatch.setattr(shard_seconds, "gh_json", gh_json)
     assert [run for run in jobs if shard_seconds.agents_passed(run)] == [1]
+    assert calls[0][0] == "api"
