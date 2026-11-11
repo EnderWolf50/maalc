@@ -477,6 +477,7 @@ def mirror_task(context, monkeypatch, runs):
     monkeypatch.setattr(actions, "tap", tap)
     monkeypatch.setattr(actions, "ocr", lambda context, image, roi, only_rec=False: [(reads[page[0]], (0, 0, 9, 9))] if page[0] in reads else [])
     monkeypatch.setattr(actions, "toggles", lambda context, image: [False] * 3)
+    monkeypatch.setattr(actions, "dead_sinners", lambda image: set(actions.battle.SINNERS[3:]))  # the 3 alive of "3/3": the first 3 cards
     monkeypatch.setattr(actions, "log", logged.append)
     actions.TaskStart().run(context, SimpleNamespace(node_name="MirrorDungeon"))
     for run in runs:
@@ -492,7 +493,7 @@ def mirror_task(context, monkeypatch, runs):
     return result, logged, len(started), [json.loads(line)["result"] for line in lines]
 
 
-@pytest.mark.parametrize("runs, why", [("FFF", "3 sinners alive, team 'A' needs 4"), ("FWW", "wipe retries used up")])
+@pytest.mark.parametrize("runs, why", [("FFF", "3 sinners of the deployment order alive, team 'A' needs 4"), ("FWW", "wipe retries used up")])
 def test_a_task_whose_settings_forfeit_every_run_stops_after_3_in_a_row(context, monkeypatch, runs, why):
     # #560: a forfeited run does not count toward run.runs (as in AALC), so with no cap the bot started runs forever,
     # each one spending starlight at the run start. The third forfeit in a row, either way, ends the task before a fourth.

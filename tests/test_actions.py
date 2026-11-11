@@ -155,8 +155,9 @@ def test_still_wants_its_runs_of_alike_screenshots_in_a_row(context, clock):
 
 def test_a_formation_page_still_fading_in_is_read_once_it_is_still(context, monkeypatch):
     # Live (#58): read mid-fade, Total Participants gave 3 alive of 12.
-    actions.RUN["team"] = {"min_alive": 5, "name": "t"}
+    actions.RUN.update(team={"min_alive": 5, "name": "t"}, settings={"run": {"after_retries": "stop"}})
     monkeypatch.setattr(actions, "stop", lambda context, reason, line=None: False)
+    monkeypatch.setattr(actions, "tap_shown", lambda *a, **k: None)
     monkeypatch.setattr(actions.run_start, "resolve_plan", lambda *a: [])  # ends the action after the count
     screens(context, [60, 120, 120])
     reads_by_image = {60: "3/3", 120: "12/12"}
@@ -177,7 +178,8 @@ def few_alive(context, monkeypatch, after_retries, min_alive):
     monkeypatch.setattr(actions, "stop", lambda context, reason, line=None: stops.append(reason) or False)
     monkeypatch.setattr(actions, "tap", lambda context, x, y, wait=1.0: taps.append((x, y)))
     monkeypatch.setattr(actions.run_start, "resolve_plan", lambda *a: [])  # ends the action after the count
-    reads(context, {tuple(actions.PARTICIPANTS): [("4/4", (1125, 500, 60, 30))]})
+    reads(context, {tuple(actions.PARTICIPANTS): [("4/4", (1125, 500, 60, 30))],
+                    tuple(actions.DETAILS_BUTTON): [("Details", (0, 0, 10, 10))]})
     result = actions.Formation().run(context, None)
     return result, stops, taps
 
