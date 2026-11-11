@@ -18,6 +18,7 @@ const idsOf = (keyword: string, tier: number) => SEARCH_GIFTS.filter((g) => g.ke
 
 const burnFusion = recipes.gifts.find((g) => g.keyword === "Burn")!.id;
 const [b1, b2, b3] = idsOf("Burn", 3), [l1, l2] = idsOf("Bleed", 3), [b2a] = idsOf("Burn", 2);
+const tierIV = defaultGorder().Burn.filter((i) => GIFT_BY_ID.get(i)!.tier === 4).length; // 4 since #626
 const REST = GIFT_KEYWORDS.filter((k) => k !== "Burn" && k !== "Bleed");
 /** Burn first, then Bleed; three Burn gifts and two Bleed gifts wanted, so the buy queue is b1 b2 b3 l1 l2. */
 const mine = (patch: Partial<GiftList> = {}): GiftList => ({
@@ -272,14 +273,15 @@ describe("dragging in the dialog", () => {
 describe("dragging on the main screen", () => {
   test("a gift dropped on another of the same keyword and tier moves in gorder", async () => {
     const r = await open(mine());
+    const top = (g: number[]) => g.slice(tierIV, tierIV + 3); // Burn's tier III starts after its tier IV gifts (#626)
     drag(tileOf(b3), tileOf(b1));
     const g = held(r).gorder.Burn;
-    expect(g.slice(0, 3)).toEqual([b3, b1, b2]);
+    expect(top(g)).toEqual([b3, b1, b2]);
     expect(held(r)).toMatchObject({ order: mine().order, want: mine().want, keep: [] });
     drag(tileOf(b1), tileOf(b3)); // up again: before the target
-    expect(held(r).gorder.Burn.slice(0, 3)).toEqual([b1, b3, b2]);
+    expect(top(held(r).gorder.Burn)).toEqual([b1, b3, b2]);
     drag(tileOf(b1), tileOf(b2)); // down: after the target
-    expect(held(r).gorder.Burn.slice(0, 3)).toEqual([b3, b2, b1]);
+    expect(top(held(r).gorder.Burn)).toEqual([b3, b2, b1]);
   });
 
   test("a gift dropped on another tier is refused", async () => {
@@ -307,12 +309,12 @@ describe("dragging on the main screen", () => {
 });
 
 describe("the default list in the dialog", () => {
-  test("it can be looked at; it buys its 47 wanted Keywordless gifts, and every move only shows the notice", async () => {
+  test("it can be looked at; it buys its 54 wanted Keywordless gifts, and every move only shows the notice", async () => {
     // The default list wants Keywordless gifts only (the user, 2026-10-30): the dialog has rows under Keywordless alone.
     const r = await open(null);
     const before = JSON.stringify(r.settings());
-    expect(queue(DEFAULT_LIST)).toHaveLength(47);
-    expect(buyButton()).toHaveTextContent("（47）");
+    expect(queue(DEFAULT_LIST)).toHaveLength(54);
+    expect(buyButton()).toHaveTextContent("（54）");
     const d = await openDialog(r);
     expect(rowIds()).toEqual([]); // the keywords start folded
     const main = DEFAULT_LIST.order.find((k) => k !== "Keywordless")!;

@@ -63,3 +63,29 @@ def test_gifts_needs_no_maafw():
     subprocess.run([sys.executable, "-c", code], env=env, check=True, capture_output=True)
 
 
+
+
+def plain_list(**fields):
+    import settings
+
+    return {"order": list(settings.GIFT_KEYWORDS), "want": [], "keep": [], "gorder": settings.default_gorder(), **fields}
+
+
+def test_a_tier_iv_gift_the_shop_sells_is_bought_when_wanted():
+    # #626: Clear Mirror, Calm Water (9070, Poise IV) is not on the Gift Search page, but shops sell it.
+    assert (9070, None) in gifts.purchases(plain_list(want=[9070]))
+    assert (9070, None) in gifts.purchases(plain_list(want=[9070]), hard=False)
+
+
+def test_a_gift_the_normal_floors_never_sell_is_bought_on_hard_only():
+    # 9156 Decamillennial Hearthflame is in the drop pool's excludeEgoGifts: no NORMAL floor's shop shows it.
+    wanted = plain_list(want=[9156])
+    assert (9156, None) in gifts.purchases(wanted, hard=True)
+    assert (9156, None) in gifts.purchases(wanted)  # the floor's difficulty unknown: any shop may
+    assert gifts.purchases(wanted, hard=False) == []
+
+
+def test_a_wanted_fusion_s_materials_a_shop_sells_are_bought_for_it_and_never_the_fusion_itself():
+    # Lunar Memory 9083: its 7 fragments and 3 memories are in the drop pool (#626), so a list wanting it buys them for it.
+    assert gifts.purchases(plain_list(want=[9083])) == [(i, 9083) for i in (9105, 9110, 9116, 9121, 9126, 9131, 9136, 9142, 9147, 9152)]
+    assert gifts.purchases(plain_list(want=[9207])) == []  # globalExcludeEgoGifts

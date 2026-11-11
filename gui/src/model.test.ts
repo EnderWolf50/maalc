@@ -178,10 +178,10 @@ const SHARED: GiftList = {
   id: "g1", name: "Fire", order: GIFT_KEYWORDS, want: [9053], keep: [9071], gorder: { Burn: [9071, 9053] }, fusion_condition: "tier4",
 };
 
-test("the default gorder lists a keyword's buyable gifts tier III first, in data-file order", () => {
+test("the default gorder lists the gifts a shop may sell of a keyword, the highest tier first, in data-file order", () => {
   const burn = defaultGorder().Burn;
-  expect(burn).toHaveLength(22);
-  expect(burn.slice(0, 2)).toEqual([9053, 9071]);
+  expect(burn).toHaveLength(26); // #626: the Gift Search page's 22 and 4 of tier IV (9105, 9045, 9267, 9756)
+  expect(burn.slice(0, 5)).toEqual([9105, 9045, 9267, 9756, 9053]);
   expect(Object.keys(defaultGorder())).toEqual(GIFT_KEYWORDS);
 });
 

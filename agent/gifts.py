@@ -2,8 +2,9 @@
 
 Pure data in, data out, no MaaFramework (the shop, the other actions and the GUI's model.ts use the same rules; both
 sides run tests/gift_list_cases.json). A gift list here is a cleaned one (settings.clean_gift_list): `order`, `want`, `keep`,
-`gorder`. `tables` is {"buyable": gift_search.json's gifts, "fusions": gift_recipes.json's gifts, "pack_gifts": its pack id -> exclusive
-gift ids}, the game files' when None.
+`gorder`. `tables` is {"buyable": the gifts a shop may sell (settings.shop_gifts, #626), "fusions": gift_recipes.json's gifts,
+"pack_gifts": its pack id -> exclusive gift ids, "not_on_normal": the buyable ids no NORMAL floor's shop shows}, the game
+files' when None (a table without "not_on_normal" has none).
 `run_packs` are the ids of the theme packs the run took, None when unknown (the agent restarted mid-run): then a pack-specific
 fusion locks its materials all the same. `owned` are the ids of the gifts held (repeats count), none when unknown: a wanted
 fusion held is made no more, so it locks and buys nothing (the user, 2026-10-30).
@@ -18,8 +19,8 @@ import settings
 
 @cache
 def _game_tables():
-    buyable, fusions, _ = settings.gift_tables()
-    return {"buyable": buyable, "fusions": fusions, "pack_gifts": settings.pack_gifts()}
+    return {"buyable": settings.shop_gifts(), "fusions": settings.gift_tables()[1], "pack_gifts": settings.pack_gifts(),
+            "not_on_normal": frozenset(settings.shop_pool()["not_on_normal"])}
 
 
 @cache
@@ -76,15 +77,18 @@ def queue(gift_list, tables=None):
     return [i for k in gift_list["order"] for i in gift_list["gorder"][k] if i in buyable and state(gift_list, i) == "want"]
 
 
-def purchases(gift_list, run_packs=None, owned=(), tables=None):
+def purchases(gift_list, run_packs=None, owned=(), tables=None, hard=None):
     """What the shop buys, first first: (id, None) for each gift of `queue` (the list wants it), then (id, fusion id) for each
     gift the shop sells that a fusion the list still makes (_to_make; in recipe_fusion's order) lacks: none once `owned`
     completes one of its recipes or its groups; else each id a recipe needs more of than owned, and the ids not owned of
     a group short of its `need`. Each id once, for its first reason. Nothing marks a material: it keeps its own state, and is
     bought no more once its fusion is owned (the user, 2026-10-30). While run_packs is None (the agent restarted mid-run),
-    a pack-specific fusion buys as it locks, though the run may never have pulled its pack (the user, 2026-10-30: rather spend more Cost than miss a wanted fusion)."""
+    a pack-specific fusion buys as it locks, though the run may never have pulled its pack (the user, 2026-10-30: rather spend more Cost than miss a wanted fusion).
+    `hard` is the floor's difficulty: on a NORMAL floor (False) the gifts its shop never shows (not_on_normal) are left
+    out, so they hold no refresh; None (not known) leaves them in (#626)."""
     tables = tables or _game_tables()
-    buyable, held, out = {g["id"] for g in tables["buyable"]}, Counter(owned), {i: None for i in queue(gift_list, tables)}
+    buyable = {g["id"] for g in tables["buyable"]} - (set(tables.get("not_on_normal", ())) if hard is False else set())
+    held, out = Counter(owned), {i: None for i in queue(gift_list, tables) if i in buyable}
     for fusion in _in_list_order(gift_list, tables["fusions"]):
         for i in _short(gift_list, fusion, run_packs, held):
             if i in buyable:

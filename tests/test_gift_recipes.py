@@ -100,6 +100,19 @@ def test_specific_and_packs_match_the_game_data_when_it_is_unpacked():
     assert sum(1 for c in fixed if c.get("isSpecific")) == 40
 
 
+def test_the_shop_may_sell_the_drop_pool_less_its_global_excludes_and_the_fusion_gifts():
+    # #626: Clear Mirror, Calm Water (9070, Poise IV) was seen on sale 5 times and bought twice for 390 Cost.
+    shop = DATA["shop"]
+    sells, hard_only = set(shop["sells"]), set(shop["not_on_normal"])
+    assert 9070 in sells and 9070 not in hard_only
+    assert 9083 not in sells  # Lunar Memory: no codex text says "fuse only", it stays a fusion gift
+    assert not {g["id"] for g in DATA["gifts"]} & sells  # no fusion gift is sold, 9301 (new in 1.118.1) included
+    assert 9207 not in sells  # globalExcludeEgoGifts
+    assert 9156 in sells and 9156 in hard_only  # excludeEgoGifts (excludeTargetIdxList [0]): not on a NORMAL floor
+    assert 9302 in sells and 9205 in sells  # 9205: in no egoGifts, but in theme packs' own pools, and seen on sale (live 2026-10-22)
+    assert hard_only <= sells and (len(sells), len(hard_only)) == (366, 68)
+
+
 def test_the_five_vestiges_are_data_ids_9991_to_9995_keywordless_tier_i_to_v():
     # #161: agent/settings.py and the GUI take the vestiges (ids, names, tiers) from here, not from the schema.
     assert [(v["id"], v["tier"], v["keyword"], v["en"]) for v in DATA["vestiges"]] == [

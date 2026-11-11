@@ -2,30 +2,34 @@
 # `id` and `name`. Read-only for users, who copy it to make their own. Developer-maintained, checked every season.
 #
 # Content (the user, 2026-10-30: "the default list only holds the Keywordless gifts; the user sets the rest"; then "want the
-# Keywordless gifts that need a fusion again"; then "as you suggest, the default wants add Keywordless gifts only"): `want`, 51:
-# gift_recipes.json's 4 Keywordless fusion gifts (Lunar Memory 9083, 9249, 9764, 9780), so the shop buys the materials it sells
-# for them and fuses them, kept materials too; then the 47 Keywordless gifts the shop sells that a theme pack's own pool holds
-# (specificEgoGiftPool of the game's mirrordungeon-theme-floor-* data, 1.118.1: 181 gifts in all, 54 Keywordless; the other 7
-# are extra_gifts, which cannot be wanted, so they stay kept). `keep`: every other Keywordless gift (of gift_search.json, then
-# gift_recipes.json's Keywordless extra_gifts, #332; Lunar Vestige 9995), 66; all others are `drop`, Burn too, and vestiges
-# I-IV (9991-9994), so they stay fusion materials (Lunar Vestige, tier V, never is one).
+# Keywordless gifts that need a fusion again"; then "as you suggest, the default wants add Keywordless gifts only"): `want`, 57:
+# gift_recipes.json's Keywordless fusion gifts but Lunar Memory (9249, 9764, 9780), so the shop buys the materials it sells
+# for them and fuses them, kept materials too; then the 54 Keywordless gifts a shop may sell (gift_recipes.json `shop.sells`,
+# #626) that a theme pack's own pool holds (specificEgoGiftPool of the game's mirrordungeon-theme-floor-* data, 1.118.1: 181
+# gifts in all, 54 Keywordless, all of them sold; until #626 the 7 extra_gifts among them counted as unsold and were kept).
+# `keep`, 70: every other Keywordless gift (of gift_search.json, Lunar Vestige 9995, then gift_recipes.json's Keywordless
+# extra_gifts and Lunar Memory 9083, #332), then Lunar Memory's 10 materials (the user, 2026-11-11, #626 option C: 5 tier IV
+# materials at about 400 Cost each and a 5-slot fusion only a Super Shop allows, so nothing is bought or refreshed for them,
+# and they are never sold or used by an ordinary fusion); all others are `drop`, Burn too, and vestiges I-IV (9991-9994), so
+# they stay fusion materials (Lunar Vestige, tier V, never is one).
 # Until 2026-10-30 the list was the former default team (the user, 2026-10-23). `order`: the Gift Search page's tab order
-# (Burn first, so the main keyword stays Burn). `gorder`: per keyword tier III, II, I, inside a tier in the order of
-# gift_search.json. tests/test_gift_lists.py derives all of it from the data files.
+# (Burn first, so the main keyword stays Burn). `gorder`: per keyword the gifts a shop may sell, tier IV first (#626), inside a
+# tier gift_search.json's order, then gift_recipes.json's. tools/default_gift_list.py writes want, keep and gorder;
+# tests/test_gift_lists.py derives them from the data files on its own.
 default_list:
   order: [Burn, Bleed, Tremor, Rupture, Sinking, Poise, Charge, Slash, Pierce, Blunt, Keywordless]
-  want: [9083, 9249, 9764, 9780, 9219, 9225, 9266, 9273, 9276, 9284, 9285, 9302, 9414, 9419, 9420, 9423, 9427, 9431, 9433, 9435, 9439, 9703, 9705, 9707, 9711, 9712, 9723, 9727, 9732, 9733, 9748, 9749, 9751, 9753, 9755, 9757, 9760, 9762, 9763, 9766, 9769, 9778, 9779, 9781, 9794, 9801, 9805, 9810, 9811, 9813, 9826]
-  keep: [9011, 9014, 9022, 9038, 9058, 9067, 9068, 9076, 9154, 9188, 9189, 9190, 9191, 9006, 9007, 9025, 9026, 9036, 9037, 9039, 9077, 9078, 9079, 9080, 9153, 9185, 9186, 9187, 9002, 9004, 9010, 9017, 9021, 9028, 9035, 9040, 9995, 9081, 9082, 9084, 9085, 9207, 9208, 9209, 9227, 9228, 9229, 9230, 9231, 9232, 9241, 9242, 9246, 9250, 9752, 9754, 9758, 9797, 9799, 9800, 9830, 9831, 9832, 9833, 9834, 9835]
+  want: [9249, 9764, 9780, 9208, 9209, 9219, 9225, 9246, 9266, 9273, 9276, 9284, 9285, 9302, 9414, 9419, 9420, 9423, 9427, 9431, 9433, 9435, 9439, 9703, 9705, 9707, 9711, 9712, 9723, 9727, 9732, 9733, 9748, 9749, 9751, 9752, 9753, 9754, 9755, 9757, 9758, 9760, 9762, 9763, 9766, 9769, 9778, 9779, 9781, 9794, 9797, 9801, 9805, 9810, 9811, 9813, 9826]
+  keep: [9011, 9014, 9022, 9038, 9058, 9067, 9068, 9076, 9154, 9188, 9189, 9190, 9191, 9006, 9007, 9025, 9026, 9036, 9037, 9039, 9077, 9078, 9079, 9080, 9153, 9185, 9186, 9187, 9002, 9004, 9010, 9017, 9021, 9028, 9035, 9040, 9995, 9083, 9081, 9082, 9084, 9085, 9207, 9227, 9228, 9229, 9230, 9231, 9232, 9241, 9242, 9250, 9799, 9800, 9830, 9831, 9832, 9833, 9834, 9835, 9105, 9110, 9116, 9121, 9126, 9131, 9136, 9142, 9147, 9152]
   gorder:
-    Burn: [9053, 9071, 9104, 9701, 9772, 9774, 9776, 9215, 9240, 9243, 9282, 9001, 9009, 9034, 9103, 9155, 9156, 9819, 9003, 9087, 9101, 9102]
-    Bleed: [9042, 9048, 9109, 9160, 9404, 9437, 9438, 9714, 9842, 9843, 9206, 9221, 9234, 9236, 9005, 9020, 9029, 9108, 9159, 9413, 9415, 9704, 9739, 9744, 9205, 9222, 9223, 9237, 9262, 9268, 9275, 9008, 9089, 9106, 9107, 9192]
-    Tremor: [9024, 9091, 9111, 9115, 9726, 9814, 9214, 9286, 9015, 9044, 9086, 9113, 9114, 9164, 9165, 9407, 9721, 9722, 9724, 9725, 9812, 9820, 9016, 9031, 9112, 9163, 9706, 9759]
-    Rupture: [9023, 9033, 9120, 9702, 9708, 9773, 9775, 9777, 9790, 9803, 9244, 9047, 9093, 9117, 9119, 9168, 9169, 9403, 9787, 9788, 9822, 9823, 9824, 9271, 9013, 9018, 9064, 9118]
-    Sinking: [9059, 9095, 9125, 9432, 9750, 9807, 9817, 9217, 9233, 9238, 9261, 9041, 9054, 9061, 9124, 9173, 9174, 9408, 9409, 9746, 9747, 9806, 9049, 9074, 9122, 9123, 9172]
-    Poise: [9056, 9073, 9130, 9715, 9771, 9804, 9218, 9274, 9046, 9051, 9066, 9129, 9177, 9178, 9429, 9710, 9770, 9226, 9063, 9097, 9127, 9128, 9709]
-    Charge: [9072, 9099, 9135, 9734, 9735, 9809, 9818, 9245, 9260, 9287, 9289, 9288, 9043, 9052, 9057, 9134, 9181, 9182, 9736, 9737, 9738, 9745, 9802, 9808, 9840, 9290, 9291, 9062, 9069, 9132, 9133]
-    Slash: [9141, 9195, 9713, 9716, 9782, 9791, 9821, 9032, 9139, 9140, 9194, 9277, 9278, 9137, 9138, 9193, 9279]
-    Pierce: [9146, 9199, 9767, 9768, 9030, 9144, 9145, 9198, 9019, 9143, 9197]
-    Blunt: [9151, 9203, 9789, 9220, 9265, 9012, 9027, 9149, 9150, 9202, 9786, 9269, 9148, 9201, 9210]
-    Keywordless: [9011, 9014, 9022, 9038, 9058, 9067, 9068, 9076, 9154, 9188, 9189, 9190, 9191, 9419, 9420, 9431, 9433, 9703, 9705, 9711, 9727, 9748, 9749, 9763, 9766, 9778, 9779, 9781, 9794, 9805, 9219, 9273, 9276, 9284, 9302, 9006, 9007, 9025, 9026, 9036, 9037, 9039, 9077, 9078, 9079, 9080, 9153, 9185, 9186, 9187, 9414, 9423, 9427, 9435, 9439, 9707, 9712, 9723, 9733, 9751, 9753, 9755, 9757, 9801, 9810, 9811, 9769, 9760, 9813, 9826, 9266, 9285, 9002, 9004, 9010, 9017, 9021, 9028, 9035, 9040, 9732, 9762, 9225]
+    Burn: [9105, 9045, 9267, 9756, 9053, 9071, 9104, 9701, 9772, 9774, 9776, 9215, 9240, 9243, 9282, 9001, 9009, 9034, 9103, 9155, 9156, 9819, 9003, 9087, 9101, 9102]
+    Bleed: [9110, 9440, 9050, 9795, 9798, 9042, 9048, 9109, 9160, 9404, 9437, 9438, 9714, 9842, 9843, 9206, 9221, 9234, 9236, 9005, 9020, 9029, 9108, 9159, 9413, 9415, 9704, 9739, 9744, 9205, 9222, 9223, 9237, 9262, 9268, 9275, 9008, 9089, 9106, 9107, 9192]
+    Tremor: [9116, 9055, 9283, 9816, 9024, 9091, 9111, 9115, 9726, 9814, 9214, 9286, 9015, 9044, 9086, 9113, 9114, 9164, 9165, 9407, 9721, 9722, 9724, 9725, 9812, 9820, 9016, 9031, 9112, 9163, 9706, 9759]
+    Rupture: [9121, 9060, 9023, 9033, 9120, 9702, 9708, 9773, 9775, 9777, 9790, 9803, 9244, 9047, 9093, 9117, 9119, 9168, 9169, 9403, 9787, 9788, 9822, 9823, 9824, 9271, 9013, 9018, 9064, 9118]
+    Sinking: [9126, 9436, 9065, 9211, 9059, 9095, 9125, 9432, 9750, 9807, 9817, 9217, 9233, 9238, 9261, 9041, 9054, 9061, 9124, 9173, 9174, 9408, 9409, 9746, 9747, 9806, 9049, 9074, 9122, 9123, 9172]
+    Poise: [9131, 9428, 9070, 9719, 9796, 9056, 9073, 9130, 9715, 9771, 9804, 9218, 9274, 9046, 9051, 9066, 9129, 9177, 9178, 9429, 9710, 9770, 9226, 9063, 9097, 9127, 9128, 9709]
+    Charge: [9136, 9075, 9072, 9099, 9135, 9734, 9735, 9809, 9818, 9245, 9260, 9287, 9289, 9288, 9043, 9052, 9057, 9134, 9181, 9182, 9736, 9737, 9738, 9745, 9802, 9808, 9840, 9290, 9291, 9062, 9069, 9132, 9133]
+    Slash: [9142, 9196, 9720, 9785, 9141, 9195, 9713, 9716, 9782, 9791, 9821, 9032, 9139, 9140, 9194, 9277, 9278, 9137, 9138, 9193, 9279]
+    Pierce: [9147, 9200, 9146, 9199, 9767, 9768, 9030, 9144, 9145, 9198, 9019, 9143, 9197]
+    Blunt: [9152, 9204, 9151, 9203, 9789, 9220, 9265, 9012, 9027, 9149, 9150, 9202, 9786, 9269, 9148, 9201, 9210]
+    Keywordless: [9081, 9082, 9084, 9085, 9208, 9209, 9246, 9752, 9754, 9758, 9797, 9011, 9014, 9022, 9038, 9058, 9067, 9068, 9076, 9154, 9188, 9189, 9190, 9191, 9419, 9420, 9431, 9433, 9703, 9705, 9711, 9727, 9748, 9749, 9763, 9766, 9778, 9779, 9781, 9794, 9805, 9219, 9273, 9276, 9284, 9302, 9006, 9007, 9025, 9026, 9036, 9037, 9039, 9077, 9078, 9079, 9080, 9153, 9185, 9186, 9187, 9414, 9423, 9427, 9435, 9439, 9707, 9712, 9723, 9733, 9751, 9753, 9755, 9757, 9801, 9810, 9811, 9769, 9760, 9813, 9826, 9266, 9285, 9002, 9004, 9010, 9017, 9021, 9028, 9035, 9040, 9732, 9762, 9225]
   fusion_condition: any

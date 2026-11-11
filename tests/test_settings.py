@@ -11,6 +11,7 @@ from settings import SettingsError, load_settings
 DATA = Path(__file__).parent.parent / "assets" / "resource" / "base" / "data"
 SEARCH = json.loads((DATA / "gift_search.json").read_text(encoding="utf-8"))["gifts"]
 RECIPES = json.loads((DATA / "gift_recipes.json").read_text(encoding="utf-8"))
+SOLD = [g for g in SEARCH + RECIPES["materials"] + RECIPES["extra_gifts"] if g["id"] in RECIPES["shop"]["sells"]]  # what a shop may sell (#626)
 KEYWORDS = ["Burn", "Bleed", "Tremor", "Rupture", "Sinking", "Poise", "Charge", "Slash", "Pierce", "Blunt", "Keywordless"]
 ORDER = ["Yi Sang", "Faust", "Don Quixote", "Ryōshū", "Meursault", "Hong Lu",
          "Heathcliff", "Ishmael", "Rodion", "Sinclair", "Outis", "Gregor"]
@@ -40,7 +41,7 @@ def gift_list(keyword="Burn", **kw):
     want = sorted(g["id"] for g in SEARCH if g["keyword"] == keyword)
     every = SEARCH + RECIPES["gifts"] + RECIPES["materials"] + RECIPES["extra_gifts"]
     keep = {g["id"] for g in every if g["keyword"] in (keyword, "Keywordless")}
-    gorder = {k: [g["id"] for tier in (3, 2, 1) for g in SEARCH if g["keyword"] == k and g["tier"] == tier] for k in KEYWORDS}
+    gorder = {k: [g["id"] for tier in (4, 3, 2, 1) for g in SOLD if g["keyword"] == k and g["tier"] == tier] for k in KEYWORDS}  # no V is sold
     return {
         "order": [keyword] + [k for k in KEYWORDS if k != keyword], "want": want, "keep": sorted(keep - set(want)),
         "gorder": gorder, "fusion_condition": "any", **kw,
@@ -214,7 +215,8 @@ def test_loading_drops_ids_no_data_file_has_and_fills_gorder(tmp_path):
     data = edited(lambda d: d["gift_lists"][0].update(want=[9053, 424242], keep=[9071, 424242], gorder={"Burn": [9071, 5]}))
     loaded = load(tmp_path, data)["gift_lists"][0]
     assert (loaded["want"], loaded["keep"]) == ([9053], [9071])
-    assert loaded["gorder"]["Burn"][:2] == [9071, 9053] and sorted(loaded["gorder"]["Burn"]) == sorted(gift_list()["gorder"]["Burn"])
+    # 9105 Fragment of Hellfire: the first Burn gift a shop may sell, tier IV (#626)
+    assert loaded["gorder"]["Burn"][:2] == [9071, 9105] and sorted(loaded["gorder"]["Burn"]) == sorted(gift_list()["gorder"]["Burn"])
     assert list(loaded["gorder"]) == KEYWORDS
 
 
@@ -652,7 +654,7 @@ def test_shared_clean_gift_list(case):
         assert cleaned["gorder"][kw][: len(head)] == head
     for kw, size in case["gorder_size"].items():
         assert len(cleaned["gorder"][kw]) == size
-    assert all(sorted(ids) == sorted(g["id"] for g in SEARCH if g["keyword"] == kw) for kw, ids in cleaned["gorder"].items())
+    assert all(sorted(ids) == sorted(g["id"] for g in SOLD if g["keyword"] == kw) for kw, ids in cleaned["gorder"].items())
 
 
 def test_version_10_keeps_what_the_team_kept(tmp_path):

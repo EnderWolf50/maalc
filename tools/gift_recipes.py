@@ -33,12 +33,16 @@ ICONS = REPO / "assets/resource/base/image/GiftRecipe"
 STATIC = "static/Assets/Resources_moved/StaticData/static-data"
 KEYWORDS = {"Combustion": "Burn", "Laceration": "Bleed", "Vibration": "Tremor", "Burst": "Rupture", "Sinking": "Sinking",
             "Breath": "Poise", "Charge": "Charge", "Slash": "Slash", "Penetrate": "Pierce", "Hit": "Blunt"}  # the rest: Keywordless
-GIFT_IDS = range(9000, 10000)  # the game's gift ids; `extra_gifts` holds those neither the shop, a recipe nor the vestiges list (#332)
+GIFT_IDS = range(9000, 10000)  # the game's gift ids; `extra_gifts` holds those neither gift_search.json, a recipe nor the vestiges list (#332)
 VESTIGE_IDS = range(9991, 9996)  # written to `vestiges`: the one place the ids are named, every reader takes them from the data file
 SCALE = 0.21  # the icon on the Gift Search page, as for GiftSearch/<id>.png
+DROP_POOL = "mirrordungeon-egogift-droppool/mirrordungeon-egogift-droppool-8.json"
+LOCKED_DESC = "raw/Localize/en/EN_MirrorDungeonEgoGiftLockedDesc.json"  # the codex text of a gift not acquired yet
+FUSE_ONLY = "- Shops - 「Fuse E.G.O Gift」"  # its one unlock condition for a gift only fusing makes
+NORMAL = 0  # the typeIndex of mirrordungeon-08.json (hard 1, infinite 2, extreme 3), what excludeTargetIdxList names
 
 
-def note(client, gift_count, named):
+def note(client, gift_count, named, fuse_only, unmarked):
     return ("Fusion gifts and their recipes. Recipes: combineFixed (any one of a gift's `recipes` fuses it; each is a list of the "
         "required gift ids; `specific` marks a gift whose recipe uses a theme pack's exclusive gift, `packs` is the union of the "
         "theme pack ids of those gifts (one recipe can need several packs), from isSpecific and the packs' specificEgoGiftPool) and combineMixed (`groups`: take `need` of each group's `ids`) of the game client " + client + "'s "
@@ -46,10 +50,18 @@ def note(client, gift_count, named):
         "EN_EGOgift localization. `materials` are the recipe ingredients gift_search.json does not list. `vestiges` (#161) are the five gifts 9991-9995 (tier I-V, keywordless) that are only fusion or sale material. Icons: "
         "image/GiftRecipe/<id>.png, the game's EgoGiftIcon sprites (by the ego-gift iconId) scaled by 0.21 with transparency "
         "filled green. `extra_gifts` (#332) are the rest of the client's gift ids 9000-9999 (static data ego-gift*, "
-        f"{gift_count} in {client}, {named} with a name: 9247 has neither a name nor an icon sprite, so it is left out): no shop sells "
-        "them and no recipe uses them, so a shop cell may still show one (some are the theme packs' specificEgoGiftPool gifts); "
+        f"{gift_count} in {client}, {named} with a name: 9247 has neither a name nor an icon sprite, so it is left out): no recipe uses "
+        "them (some are the theme packs' specificEgoGiftPool gifts, and `shop` names those a shop may sell); "
         "the Gift Search icons ignore them, the shop cell match (agent/gift_cells.py) takes them as candidates, and a gift list "
-        "names them as any gift of their keyword (keep or drop: they cannot be wanted). "+NOTE_ZH+" "
+        "names them as any gift of their keyword. "+NOTE_ZH+" "
+        "`shop` (#626) holds the gifts a shop may sell, which a gift list may want: `sells` is the drop pool "
+        "mirrordungeon-egogift-droppool-8's egoGifts and the theme packs' own pools (`pack_gifts`: 9205 is in no egoGifts and "
+        "was seen on sale, live 2026-10-22), less its globalExcludeEgoGifts, less the gifts whose codex text "
+        f"(EN_MirrorDungeonEgoGiftLockedDesc) names one unlock condition, fusing at a shop ({fuse_only} in {client}), less every "
+        f"fusion gift here (the codex text does not mark {unmarked}: they stay fusion gifts, never bought). `not_on_normal` are "
+        "those of its excludeEgoGifts: excludeTargetIdxList [0] is the typeIndex of mirrordungeon-08.json, NORMAL (read from "
+        "the fields, not the game code; live, 79 sightings of them on HARD floors and none in 158 on NORMAL ones). The server "
+        "picks each shop's offers from the pool; a theme pack's own gifts (`pack_gifts`) show only in that pack. "
         "`pack_gifts` (#417) is the theme pack id (as a string) -> the gift ids of that pack's specificEgoGiftPool (the gifts only "
         "it can offer), for every pack that has a pool, whether theme_packs.yaml names it or not. "
         "Written by tools/gift_recipes.py.")
@@ -85,6 +97,27 @@ def pack_pools(unpack):
             for x in load(p)["list"] if x.get("specificEgoGiftPool")}
 
 
+def fusion_only(unpack):
+    """The gifts whose codex text names one unlock condition: fusing them at a shop (FUSE_ONLY)."""
+    out = set()
+    for x in load(unpack / LOCKED_DESC)["dataList"]:
+        ways = [line.strip() for line in x["content"].partition("<Unlock Conditions>")[2].splitlines() if line.strip().startswith("-")]
+        if ways == [FUSE_ONLY]:
+            out.add(int(x["id"]))
+    return out
+
+
+def shop_pool(unpack, fusions, fuse_only, pack_pool):
+    """{"sells": the ids a shop may sell, "not_on_normal": those a NORMAL floor's shop does not} (the note's `shop`): the drop
+    pool's egoGifts and the theme packs' own pools (`pack_pool`), less the global excludes, the fusion-only gifts
+    (`fuse_only`) and the fusion gifts."""
+    pool = load(unpack / STATIC / DROP_POOL)["list"][0]
+    if pool["excludeTargetIdxList"] != [NORMAL]:
+        raise SystemExit(f"{DROP_POOL}: excludeTargetIdxList is {pool['excludeTargetIdxList']}, not [{NORMAL}]: read it again (#626)")
+    sells = (set(pool["egoGifts"]) | pack_pool) - set(pool["globalExcludeEgoGifts"]) - fuse_only - set(fusions)
+    return {"sells": sorted(sells), "not_on_normal": sorted(sells & set(pool["excludeEgoGifts"]))}
+
+
 def build(unpack, release):
     combine = load(unpack / STATIC / "mirror-dungeon-common-data/mirror-dungeon-common-data-md8.json")["egoGiftCombineFixedTable"]
     table, en, zh = gift_table(unpack), english_names(unpack), gift_names(release_zip(release))
@@ -116,8 +149,15 @@ def build(unpack, release):
     extra = [entry(i) for i in sorted(table) if i in GIFT_IDS and i in en and i not in listed]
     vestiges = [entry(i) for i in VESTIGE_IDS]
     ids = [i for i in table if i in GIFT_IDS]
-    return {"note": note(unpack_client(unpack), len(ids), sum(i in en for i in ids)), **credit(release), "gifts": gifts, "materials": materials, "extra_gifts": extra, "vestiges": vestiges,
-            "pack_gifts": {str(p): sorted(pool) for p, pool in sorted(pools.items())}}, table
+    fuse_only = fusion_only(unpack)
+    unmarked = " ".join(map(str, sorted(set(results) - fuse_only)))
+    shop = shop_pool(unpack, results, fuse_only, {i for p in pools.values() for i in p})
+    unknown = set(shop["sells"]) - searchable - {g["id"] for g in materials + extra}
+    if unknown:
+        raise SystemExit(f"the drop pool sells gifts no list here holds: {sorted(unknown)}")
+    return {"note": note(unpack_client(unpack), len(ids), sum(i in en for i in ids), len(fuse_only), unmarked), **credit(release),
+            "gifts": gifts, "materials": materials, "extra_gifts": extra, "vestiges": vestiges,
+            "pack_gifts": {str(p): sorted(pool) for p, pool in sorted(pools.items())}, "shop": shop}, table
 
 
 def sprite_index(cache, index_path):

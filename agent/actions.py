@@ -4243,8 +4243,10 @@ def owned_change(visit, gone=(), got=()):
 
 
 def buy_list(team, visit):
-    """gifts.purchases for the team's list, the run's packs and the gifts the visit counts as owned (owned_now)."""
-    return purchases(team["list"], run_packs(), owned_now(visit))
+    """gifts.purchases for the team's list, the run's packs, the gifts the visit counts as owned (owned_now) and the floor's
+    difficulty as set_difficulty read it (floor_hard; None when it was not read, #626: a HARD run plays NORMAL floors before
+    hard_from_floor, so the run's difficulty does not stand in for it)."""
+    return purchases(team["list"], run_packs(), owned_now(visit), hard=RUN.get("floor_hard"))
 
 
 def cell_role(cell, team, page, avoid, owned=()):

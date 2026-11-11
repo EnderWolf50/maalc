@@ -254,11 +254,13 @@ def test_the_owned_gifts_are_read_off_the_sell_page_before_a_wanted_fusions_mate
     assert visit["owned"] == [COUPLED] and taps[0] == actions.SHOP_BUTTONS["sell"]
 
 
-def test_the_owned_gifts_are_not_read_for_a_list_whose_fusions_lack_nothing_the_shop_sells(context, monkeypatch):
+def test_the_owned_gifts_are_not_read_for_a_list_that_wants_no_fusion(context, monkeypatch):
     monkeypatch.setattr(actions.Shop, "buy_offers", staticmethod(lambda *a: 0))
     taps = refresh_shop(context)
     visit = {"wanted": None, "sold": False, "refreshes": {"keyword": 0, "normal": 0}}
-    actions.Shop.buy(context, buying(wants(9053, 9083), shop_refresh_keyword=0), visit)  # Lunar Memory: no shop material
+    # Since #626 every wanted fusion of the data lacks a material some shop sells (Lunar Memory's fragments too): only a list
+    # wanting no fusion buys nothing for one, so the sell page is not opened to read the owned gifts.
+    actions.Shop.buy(context, buying(wants(9053), shop_refresh_keyword=0), visit)
     assert "owned" not in visit and actions.SHOP_BUTTONS["sell"] not in taps
 
 

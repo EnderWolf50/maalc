@@ -127,7 +127,7 @@ def _recipes():
 
 @cache
 def gift_tables():
-    """data/gift_search.json's gifts (the buyable ones, page order) and data/gift_recipes.json's gifts and materials."""
+    """data/gift_search.json's gifts (the Gift Search page's, page order) and data/gift_recipes.json's gifts and materials."""
     recipes = _recipes()
     return json.loads((data_dir() / "gift_search.json").read_text(encoding="utf-8"))["gifts"], recipes["gifts"], recipes["materials"]
 
@@ -138,8 +138,24 @@ def pack_gifts():
 
 
 def extra_gifts():
-    """data/gift_recipes.json's `extra_gifts`: the game's other gift ids 9000-9999, no shop sells and no recipe uses (#332)."""
+    """data/gift_recipes.json's `extra_gifts`: the game's other gift ids 9000-9999, neither on the Gift Search page nor in a
+    recipe (#332); a shop sells some of them (shop_gifts)."""
     return _recipes()["extra_gifts"]
+
+
+def shop_pool():
+    """data/gift_recipes.json's `shop` (#626): `sells`, the ids a shop may sell, and `not_on_normal`, those no NORMAL floor's
+    shop shows (the file's note says where they come from)."""
+    return _recipes()["shop"]
+
+
+@cache
+def shop_gifts():
+    """The gifts a shop may sell, so a list may want and the shop buy them (#626): gift_search.json's in page order, then
+    the materials' and extra_gifts' of gift_recipes.json in data order."""
+    sells = set(shop_pool()["sells"])
+    search, _, materials = gift_tables()
+    return [g for g in search + materials + extra_gifts() if g["id"] in sells]
 
 
 def vestiges():
@@ -153,14 +169,16 @@ def vestige_ids():
 
 
 def default_gorder():
-    """Spec 04 section 13: every keyword's buyable gifts, tier III first, within a tier in data-file order."""
-    search = gift_tables()[0]
-    return {k: [g["id"] for tier in (3, 2, 1) for g in search if g["keyword"] == k and g["tier"] == tier] for k in GIFT_KEYWORDS}
+    """Spec 04 section 13: every keyword's gifts a shop may sell (shop_gifts), the highest tier first, within a tier in
+    shop_gifts' order."""
+    by_tier = sorted(shop_gifts(), key=lambda g: -g["tier"])  # stable: shop_gifts' order within a tier
+    return {k: [g["id"] for g in by_tier if g["keyword"] == k] for k in GIFT_KEYWORDS}
 
 
 def keyword_gifts():
-    """Every gift a list names by its keyword (spec 04 section 13): the buyable ones, the fusion gifts, the recipe materials and
-    the other gifts (extra_gifts: a keyword fusion or an event gives one, and the shop tells it apart, #332); not the vestiges."""
+    """Every gift a list names by its keyword (spec 04 section 13): the Gift Search page's, the fusion gifts, the recipe
+    materials and the other gifts (extra_gifts: a shop, a keyword fusion or an event gives one, and the shop tells it apart,
+    #332); not the vestiges."""
     search, fusions, materials = gift_tables()
     return search + fusions + materials + extra_gifts()
 

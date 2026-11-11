@@ -229,16 +229,6 @@ describe("locked gifts", () => {
     expect((await tile(r, m)).getAttribute("aria-label")).toContain(zh["gl.locked"]);
   });
 
-  test("a locked material no shop sells cannot be wanted either: the click says only the fusion's want frees it", async () => {
-    const lunar = recipes.gifts.find((g) => g.groups)!, fragment = lunar.groups![0].ids[0];
-    const r = await open([mine({ want: [lunar.id] })]);
-    const t = await tile(r, fragment);
-    await r.user.keyboard("1");
-    await r.user.click(t);
-    expect(flash()).toBe(say(zh["gl.lock_why_nowant"], { name: nameOf(fragment), by: nameOf(lunar.id) }));
-    expect(list(r)).toMatchObject({ want: [lunar.id], keep: [] });
-  });
-
   test("a locked material may be wanted for itself, and is no longer locked; keep is still refused", async () => {
     // The user, 2026-10-30: want means the gift itself (bought again once a fusion ate it); keep and drop both keep it already.
     const r = await open([mine({ want: [fixed.id] })]);
@@ -284,12 +274,14 @@ describe("read-only default", () => {
     const r = await open([mine()], "zh_tw", "default");
     expect(screen.getByRole("combobox", { name: zh["gl.list"] })).toHaveValue("default");
     expect(screen.getByText(zh["gl.readonly"])).toBeInTheDocument();
-    // The user, 2026-10-30: it holds the Keywordless gifts only, wanting the 4 fusion gifts and the 47 of the packs' own pools.
-    expect(DEFAULT_LIST.want.slice(0, 4)).toEqual([9083, 9249, 9764, 9780]);
-    expect(DEFAULT_LIST.want).toHaveLength(51);
+    // The user, 2026-10-30: it holds the Keywordless gifts only, wanting the fusion gifts and the 54 of the packs' own pools a shop
+    // sells (#626); 2026-11-11: not Lunar Memory, whose 10 materials it keeps.
+    expect(DEFAULT_LIST.want.slice(0, 3)).toEqual([9249, 9764, 9780]);
+    expect(DEFAULT_LIST.want).toHaveLength(57);
+    expect(DEFAULT_LIST.keep).toEqual(expect.arrayContaining([9083, 9105, 9152]));
     const kept = DEFAULT_LIST.keep.find((id) => GIFT_BY_ID.get(id)!.kind === "buyable")!;
     expect(await tile(r, kept)).toHaveAccessibleName(new RegExp(zh["state.keep"]));
-    const burn = DEFAULT_LIST.gorder.Burn[0];
+    const burn = 9053; // Dust to Dust, Burn III: drop (Burn's first gorder gift, the fragment 9105, is kept for Lunar Memory)
     expect(await tile(r, burn)).toHaveAccessibleName(new RegExp(zh["state.drop"]));
     const before = JSON.stringify(r.settings());
     await r.user.keyboard("1");
@@ -308,14 +300,22 @@ describe("read-only default", () => {
   });
 });
 
-describe("gifts that cannot be wanted", () => {
-  test("a gift no shop sells and no recipe makes shows in its keyword's tier and becomes keep when wanted", async () => {
-    // #310's live run: Clear Mirror, Calm Water (9070, Poise IV) comes from a keyword fusion; the list must be able to keep it.
+describe("gifts a shop may sell, and the ones it cannot (#626)", () => {
+  test("a tier IV gift a shop sells, though the Gift Search page lacks it, can be wanted", async () => {
+    // Clear Mirror, Calm Water (9070, Poise IV): on sale 5 times in live run.logs, bought twice for 390 Cost.
     const r = await open([mine()]);
-    expect(GIFT_BY_ID.get(9070)).toMatchObject({ keyword: "Poise", tier: 4, kind: "other" });
+    expect(GIFT_BY_ID.get(9070)).toMatchObject({ keyword: "Poise", tier: 4, kind: "buyable" });
     await r.user.click(await tile(r, 9070));
-    expect(list(r)).toMatchObject({ want: [], keep: [9070] });
-    expect(flash()).toBe(say(zh["gl.unbuyable_keep"], { name: nameOf(9070) }));
+    expect(list(r)).toMatchObject({ want: [9070], keep: [] });
+    expect(screen.queryByRole("status")?.textContent ?? "").not.toContain(nameOf(9070));
+  });
+
+  test("a gift the drop pool excludes everywhere becomes keep when wanted", async () => {
+    const r = await open([mine()]);
+    expect(GIFT_BY_ID.get(9207)).toMatchObject({ kind: "other" }); // globalExcludeEgoGifts
+    await r.user.click(await tile(r, 9207));
+    expect(list(r)).toMatchObject({ want: [], keep: [9207] });
+    expect(flash()).toBe(say(zh["gl.unbuyable_keep"], { name: nameOf(9207) }));
   });
 
   test("a vestige set to want becomes keep, with a notice", async () => {
@@ -325,8 +325,8 @@ describe("gifts that cannot be wanted", () => {
     expect(flash()).toBe(say(zh["gl.unbuyable_keep"], { name: nameOf(vestige) }));
   });
 
-  test("so does a recipe material the shop does not sell; a vestige can still be dropped", async () => {
-    const unbuyable = recipes.materials[0].id;
+  test("so does another gift no shop sells (9207, globally excluded); a vestige can still be dropped", async () => {
+    const unbuyable = 9207;
     const r = await open([mine({ keep: [vestige] })]);
     await r.user.click(await tile(r, unbuyable));
     expect(list(r).keep).toEqual([vestige, unbuyable]);

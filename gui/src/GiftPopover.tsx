@@ -1,7 +1,7 @@
 // The hover popover of a gift tile (#291 GUI, #307): the gift's name, a "set to" row and what the list and the recipes make of it.
 // One popover for the whole tab: a tile shows it for itself (GiftEdit.tip), the tab renders it.
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { FUSION_BY_ID, GIFT_BY_ID, giftName, iconUrl, packName, usedIn } from "./giftCatalog";
+import { FUSION_BY_ID, GIFT_BY_ID, giftName, iconUrl, packName, packsOf, usedIn } from "./giftCatalog";
 import { plan, STATES, useGiftEdit, type GiftTip } from "./giftEdit";
 import { lockers, materialsOf, purchases, queue, type GiftState } from "./gifts";
 import { fill, TEXT, type Key } from "./i18n";
@@ -83,6 +83,7 @@ export function GiftPopover({ id, anchor }: { id: number; anchor: HTMLElement })
   const users = usedIn(id);
   const buy = queue(list), at = buy.indexOf(id) + 1;
   const forFusion = at ? null : purchases(list).find(([i]) => i === id)?.[1]; // a wanted fusion's material, bought after the wants
+  const packs = g.kind === "buyable" ? packsOf(id) : []; // the only packs a pack's own gift shows in (#626)
 
   // After every render (its height changes with the content): place it against the tile.
   useLayoutEffect(() => {
@@ -124,7 +125,8 @@ export function GiftPopover({ id, anchor }: { id: number; anchor: HTMLElement })
       </div>
       <div className="gl-tip-rows">
         <Row label={t("gl.tip_cat")}>
-          <span>{fill(t("gl.tip_cat_line"), { kw: t(`kw.${g.keyword}` as Key), tier: TIERS[g.tier] })}{g.kind === "fusion" && t("gl.tip_cat_fusion")}</span>
+          <span>{fill(t("gl.tip_cat_line"), { kw: t(`kw.${g.keyword}` as Key), tier: TIERS[g.tier] })}{g.kind === "fusion" && t("gl.tip_cat_fusion")}
+            {packs.length > 0 && fill(t("gl.tip_cat_pack"), { packs: packs.map(packName).join(t("gl.sep")) })}</span>
         </Row>
         {locked && (
           <Row label={t("gl.tip_lock")}>

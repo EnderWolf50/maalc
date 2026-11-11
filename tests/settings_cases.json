@@ -341,10 +341,10 @@
   "clean_gift_list": [
     {"name": "ids no data file has are dropped and counted",
      "list": {"want": [9053, 1, 2], "keep": [9071, 9991, 5], "gorder": {}},
-     "want": [9053], "keep": [9071, 9991], "dropped": 3, "gorder_head": {}, "gorder_size": {"Burn": 22, "Bleed": 36, "Keywordless": 83}},
+     "want": [9053], "keep": [9071, 9991], "dropped": 3, "gorder_head": {}, "gorder_size": {"Burn": 26, "Bleed": 41, "Keywordless": 94}},
     {"name": "gorder puts the given gifts first, the rest after them in data-file order, and drops what the keyword lacks",
      "list": {"want": [], "keep": [], "gorder": {"Burn": [9003, 9042, 99999, 9053, 9003]}},
-     "want": [], "keep": [], "dropped": 0, "gorder_head": {"Burn": [9003, 9053, 9071, 9104], "Bleed": [9042, 9048]},
-     "gorder_size": {"Burn": 22, "Bleed": 36}}
+     "want": [], "keep": [], "dropped": 0, "gorder_head": {"Burn": [9003, 9053, 9105, 9045], "Bleed": [9110, 9440]},
+     "gorder_size": {"Burn": 26, "Bleed": 41}}
   ]
 }

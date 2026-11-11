@@ -1,21 +1,26 @@
-// Every gift the gift list tab shows: what the shop sells, the fusion gifts, the recipe materials and the vestiges, with their icons.
+// Every gift the gift list tab shows: the Gift Search page's, the fusion gifts, the recipe materials, the other gifts and the vestiges, with their icons.
 import recipes from "../../assets/resource/base/data/gift_recipes.json";
 import packsYaml from "../../assets/resource/base/data/theme_packs.yaml?raw";
 import { FUSIONS, materialsOf, type Fusion } from "./gifts";
-import { SEARCH_GIFTS, VESTIGES, parseThemePacks } from "./model";
+import { SEARCH_GIFTS, SHOP_GIFTS, VESTIGES, parseThemePacks } from "./model";
 
-/** buyable: on the Gift Search page (tier I-III); fusion: made by fusing, so wantable but never bought; material: a recipe's
- * material the shop does not sell; other: no shop sells it and no recipe makes it (extra_gifts, #332), a keyword fusion, an
- * event or a theme pack's own pool gives one; vestige: sold or fused only. Only a buyable or fusion gift can be "want". */
+/** buyable: a shop may sell it (SHOP_GIFTS, #626: the drop pool less its global excludes and the fusion gifts), tier I-IV;
+ * fusion: made by fusing, so wantable but never bought; material: a recipe's material no shop sells; other: no shop sells it
+ * and no recipe uses it, a keyword fusion or an event gives one; vestige: sold or fused only. Only a buyable or fusion gift
+ * can be "want". */
 export type Kind = "buyable" | "fusion" | "material" | "other" | "vestige";
 export interface CatalogGift { id: number; keyword: string; tier: number; en: string; zh: string; kind: Kind }
 
-/** The data files' order: the shop's gifts in page order, then fusion gifts, materials, other gifts and vestiges. */
+const SOLD = new Set(SHOP_GIFTS.map((g) => g.id));
+const USED = new Set(FUSIONS.flatMap(materialsOf));
+const kindOf = (g: { id: number }, unsold: Kind): Kind => (SOLD.has(g.id) ? "buyable" : USED.has(g.id) ? "material" : unsold);
+
+/** The data files' order: the Gift Search page's gifts in page order, then fusion gifts, materials, other gifts and vestiges. */
 export const CATALOG: CatalogGift[] = [
-  ...SEARCH_GIFTS.map((g): CatalogGift => ({ ...g, kind: "buyable" })),
+  ...SEARCH_GIFTS.map((g): CatalogGift => ({ ...g, kind: kindOf(g, "other") })),
   ...recipes.gifts.map((g): CatalogGift => ({ id: g.id, keyword: g.keyword, tier: g.tier, en: g.en, zh: g.zh, kind: "fusion" })),
-  ...recipes.materials.map((g): CatalogGift => ({ id: g.id, keyword: g.keyword, tier: g.tier, en: g.en, zh: g.zh, kind: "material" })),
-  ...recipes.extra_gifts.map((g): CatalogGift => ({ id: g.id, keyword: g.keyword, tier: g.tier, en: g.en, zh: g.zh, kind: "other" })),
+  ...recipes.materials.map((g): CatalogGift => ({ id: g.id, keyword: g.keyword, tier: g.tier, en: g.en, zh: g.zh, kind: kindOf(g, "material") })),
+  ...recipes.extra_gifts.map((g): CatalogGift => ({ id: g.id, keyword: g.keyword, tier: g.tier, en: g.en, zh: g.zh, kind: kindOf(g, "other") })),
   ...VESTIGES.map((g): CatalogGift => ({ ...g, kind: "vestige" })),
 ];
 export const GIFT_BY_ID = new Map(CATALOG.map((g) => [g.id, g]));
@@ -52,3 +57,7 @@ export const usedIn = (id: number): Fusion[] => FUSIONS.filter((f) => materialsO
 const PACK_NAMES = new Map(Object.entries(parseThemePacks(packsYaml).pack_ids).map(([name, id]): [number, string] => [id, name]));
 /** A theme pack's name in the season's file (its `pack_ids`); its id as "#1234" for a pack the file does not know. */
 export const packName = (id: number): string => PACK_NAMES.get(id) ?? `#${id}`;
+
+/** The theme packs whose own pool (`pack_gifts`) holds the gift, by id: the only packs it shows in. */
+export const packsOf = (id: number): number[] =>
+  Object.entries(recipes.pack_gifts).filter(([, pool]) => pool.includes(id)).map(([pack]) => Number(pack)).sort((a, b) => a - b);

@@ -52,7 +52,7 @@ PIECES = {"localize": "raw/Localize", "catalog": "raw/addressables", "metadata":
 # The generators in order (theme packs before their covers, gift_search before gift_recipes, both before the icons):
 # (script, whether it takes --release, the Localize Limbus Company release of the Chinese names).
 GENERATORS = [("tools/theme_pack_floors.py", False), ("tools/trial_table.py", False), ("tools/events_md8.py", False),
-              ("tools/event_table.py", False), ("tools/gift_search_table.py", True), ("tools/gift_recipes.py", True),
+              ("tools/event_table.py", False), ("tools/gift_search_table.py", True), ("tools/gift_recipes.py", True), ("tools/default_gift_list.py", False),
               ("tools/llc_text.py", True), ("tools/gift_icons.py", False), ("tools/theme_pack_covers.py", False),
               ("tools/theme_pack_signatures.py", False)]
 # What regen writes, for diff.

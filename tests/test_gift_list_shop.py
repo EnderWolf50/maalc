@@ -2,6 +2,7 @@
 import pytest
 
 import actions
+import gifts
 import settings
 import test_actions
 from test_actions import fusion_taps, sale_taps, wants
@@ -126,6 +127,15 @@ def test_the_cells_of_the_sell_and_fuse_pages_are_logged_with_their_state_in_the
             assert text in line, (page, text, line)
 
 
+@pytest.mark.parametrize("page_name", ["sell", "fuse"])
+def test_the_default_list_neither_sells_nor_fuses_lunar_memory_s_materials(page_name):
+    # The user, 2026-11-11 (#626, option C): Lunar Memory's 7 fragments and 3 memories are kept, and nothing locks them.
+    team = test_actions.shop_team({"list": gifts.default_list()})
+    for gift_id in (9105, 9110, 9116, 9121, 9126, 9131, 9136, 9142, 9147, 9152):
+        assert actions.cell_role({"id": gift_id}, team, page_name, ()) == "keep"
+        assert actions.cell_state({"id": gift_id}, team["list"]) == "keep"
+
+
 def exclusive_team(*, keep=()):
     """A team that wants Hoarfrost Footprint (9410, exclusive to packs 1004 and 1005; materials 9408, 9409), nothing else."""
     return test_actions.shop_team({"list": wants(9410, keep=keep)})
@@ -170,3 +180,16 @@ def test_a_sale_does_not_count_a_held_recipes_materials_in_an_ordinary_fusion(co
     taps = sale_taps(context, monkeypatch, {"list": wants(9410)}, [90, 90, 300],
                      ("Sinking", 2, 9408), ("Sinking", 2, 9409), ("Bleed", 2))
     assert taps == [actions.SELL_CELLS[2]]
+
+
+@pytest.mark.parametrize("run, bought", [
+    ({"floor_hard": False}, False),  # a NORMAL floor's shop never shows excludeEgoGifts (#626)
+    ({"floor_hard": True}, True),
+    ({"difficulty": "hard", "floor_hard": False}, False),  # a HARD run's floor before hard_from_floor
+    ({"difficulty": "normal"}, True),  # the floor not read (the agent restarted): any shop may sell it
+    ({}, True),
+])
+def test_a_normal_floor_buys_no_gift_its_shop_never_sells(monkeypatch, run, bought):
+    monkeypatch.setattr(actions, "RUN", run)
+    team = {"list": {"order": list(settings.GIFT_KEYWORDS), "want": [9156], "keep": [], "gorder": settings.default_gorder()}}
+    assert ((9156, None) in actions.buy_list(team, {"owned": []})) is bought  # 9156 Decamillennial Hearthflame, Burn II
