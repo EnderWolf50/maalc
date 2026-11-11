@@ -1,13 +1,12 @@
 """Rewrite the default gift list's want, keep and gorder in assets/resource/base/data/gift_lists.yaml from the data files.
 
 Usage: uv run python tools/default_gift_list.py [--check]
-The rules are docs/spec/05-game-data.md section 9 (the user, 2026-10-30): the list holds Keywordless gifts only. `want`:
-gift_recipes.json's Keywordless fusion gifts in data order but Lunar Memory, then, by id, the Keywordless gifts a shop may
-sell (`shop.sells`, #626) that a theme pack's own pool holds (`pack_gifts`). `keep`: every other Keywordless gift
-(gift_search.json's in page order, the Lunar Vestige 9995, then gift_recipes.json's in data order), then Lunar Memory's
-materials by id (the user, 2026-11-11: never bought, sold or used by an ordinary fusion). `gorder`: agent/settings.py
-default_gorder. The
-file's other lines (the comment, `order`, `fusion_condition`) stay. --check writes nothing and exits 1 when the file differs.
+The rules are docs/spec/05-game-data.md section 9 (the user, 2026-10-30 and 2026-11-11): the list holds the Keywordless
+gifts and Lunar Memory's materials. `want`: gift_recipes.json's Keywordless fusion gifts in data order but Lunar Memory,
+then, by id, the Keywordless gifts a shop may sell (`shop.sells`, #626) that a theme pack's own pool holds (`pack_gifts`).
+`keep`: every other Keywordless gift (gift_search.json's in page order, the Lunar Vestige 9995, then gift_recipes.json's in
+data order), then Lunar Memory's materials by id (never bought, sold or used by an ordinary fusion). `gorder`:
+agent/settings.py default_gorder. The file's other lines (the comment, `order`, `fusion_condition`) stay. --check writes nothing and exits 1 when the file differs.
 Rerun it after gift_search_table.py and gift_recipes.py (tools/game_data.py regen does).
 """
 

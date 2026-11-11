@@ -51,14 +51,14 @@ def test_default_list_wants_the_keywordless_fusions_and_the_pack_pools_keywordle
     keywordless = {g["id"] for g in KEYWORD_GIFTS if g["keyword"] == "Keywordless"}  # extra_gifts' too (#310's live run)
     # vestiges I-IV (9991-9994) are fusion materials, so `drop`; Lunar Vestige (V, 9995) is never a material, so `keep`
     assert set(LIST["keep"]) == keywordless - set(LIST["want"]) | {max(VESTIGES)} | set(LUNAR_MATERIALS)
-    assert len(LIST["keep"]) == 70  # 59 Keywordless gifts and the Lunar Vestige, Lunar Memory itself, its 10 materials
+    assert len(LIST["keep"]) == 70  # 59 Keywordless gifts (Lunar Memory among them), the Lunar Vestige, its 10 materials
     assert LIST["order"] == KEYWORDS
     assert LIST["fusion_condition"] == "any"
 
 
 def test_default_list_keeps_lunar_memory_s_materials_and_buys_nothing_for_it():
     # The user, 2026-11-11 (#626, option C): its 5 materials of tier IV cost about 400 Cost each, and its 5-slot fusion only a
-    # Super Shop allows; kept, they are never bought, sold or used by an ordinary fusion, and no recipe fusion is made from them.
+    # Super Shop allows; kept, they are never bought (here), sold or used by an ordinary fusion (tests/test_gift_list_shop.py).
     import gifts  # noqa: PLC0415
 
     lunar = next(g for g in RECIPES["gifts"] if g["id"] == LUNAR_MEMORY)
@@ -66,7 +66,6 @@ def test_default_list_keeps_lunar_memory_s_materials_and_buys_nothing_for_it():
     assert LUNAR_MEMORY not in LIST["want"] and set(LUNAR_MATERIALS) <= set(LIST["keep"])
     bought = [i for i, _ in gifts.purchases(LIST)]
     assert not set(bought) & set(LUNAR_MATERIALS)
-    assert all(gifts.effective(LIST, i) == "keep" for i in LUNAR_MATERIALS)
 
 
 def test_default_gorder_is_what_a_shop_may_sell_tier_iv_to_i_in_data_order():

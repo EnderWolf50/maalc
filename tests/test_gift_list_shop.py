@@ -2,6 +2,7 @@
 import pytest
 
 import actions
+import gifts
 import settings
 import test_actions
 from test_actions import fusion_taps, sale_taps, wants
@@ -124,6 +125,15 @@ def test_the_cells_of_the_sell_and_fuse_pages_are_logged_with_their_state_in_the
         for text in ("9009 Fiery Down (0.90): keep, want", "9053 Dust to Dust (0.90): keep, keep",
                      "(0.90): keep, locked", "9005 Wound Clerid (0.90): material, drop", "(best 0.90): keep, unknown"):
             assert text in line, (page, text, line)
+
+
+@pytest.mark.parametrize("page_name", ["sell", "fuse"])
+def test_the_default_list_neither_sells_nor_fuses_lunar_memory_s_materials(page_name):
+    # The user, 2026-11-11 (#626, option C): Lunar Memory's 7 fragments and 3 memories are kept, and nothing locks them.
+    team = test_actions.shop_team({"list": gifts.default_list()})
+    for gift_id in (9105, 9110, 9116, 9121, 9126, 9131, 9136, 9142, 9147, 9152):
+        assert actions.cell_role({"id": gift_id}, team, page_name, ()) == "keep"
+        assert actions.cell_state({"id": gift_id}, team["list"]) == "keep"
 
 
 def exclusive_team(*, keep=()):
