@@ -27,7 +27,7 @@ def pool(n):
 
 
 def test_the_table_holds_every_pool_of_a_15_floor_run():
-    assert TABLE["client"] == "1.117.0"
+    assert TABLE["client"] == "1.118.1"
     assert TABLE["pools"] == {1: 6, 2: 7, 3: 8, 4: 9, 5: 8, 6: 8, 7: 8, 8: 8, 9: 8, 10: 7, 11: 7, 12: 7, 13: 7, 14: 7}
     assert len(TABLE["trials"]) == 105
     assert [sum(t["pool"] == n for t in TABLE["trials"].values()) for n in TABLE["pools"]] == list(TABLE["pools"].values())

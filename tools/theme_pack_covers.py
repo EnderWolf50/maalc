@@ -21,6 +21,7 @@ import yaml
 from PIL import Image
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from game_data import UNITY_VERSION  # noqa: E402
 from local_dir import local_dir  # noqa: E402
 from theme_pack_card import card  # noqa: E402
 
@@ -75,7 +76,7 @@ def player_files(data: Path) -> list[Path]:
 def unity(path: Path):
     import UnityPy
 
-    UnityPy.config.FALLBACK_UNITY_VERSION = "6000.3.12f1"  # the files carry a stripped version, 1.117.0's engine
+    UnityPy.config.FALLBACK_UNITY_VERSION = UNITY_VERSION  # the files carry a stripped version
     return UnityPy.load(str(path))
 
 

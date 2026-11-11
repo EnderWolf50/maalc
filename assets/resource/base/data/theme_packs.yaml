@@ -2,7 +2,7 @@
 # Developer-maintained, replaced every season; users build their own plans in the settings GUI.
 #
 # Source: the Limbus Company client 1.117.0's static data (mirrordungeon-theme-floor, 121 packs; © Project Moon,
-# see NOTICE.md), unpacked 2026-10-18. Listed: every pack on a floor of some mode (120; Pilgrimage of Compassion is on
+# see NOTICE.md), unpacked 2026-10-18; 1.118.1 (unpacked 2026-11-11) has the same packs and floors. Listed: every pack on a floor of some mode (120; Pilgrimage of Compassion is on
 # none). Names as the data gives them, except one read live:
 # 1119 shows "Walpurgis Night: Hatred and Despair". Each pack maps to its floors: N (NORMAL) and H (HARD) are lists of
 # floor numbers 1-15, I (INFINITY) and X (EXTREME) are true where the pack shows on every floor of that mode ({N: [1, 2],

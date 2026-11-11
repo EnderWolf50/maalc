@@ -121,6 +121,8 @@ The MuMu instances the live tests use all log in to one game account, and starti
 
 `tools/live/dialogs.py` lists the confirm-style dialog strings of `.local/unpack/`, to diff against the pipeline's known dialogs; run it before an unattended run.
 
+`.local/unpack/client.json` names the client version `.local/unpack/` holds; `tools/game_data.py` pulls a new client from the emulator (read-only `adb pull`, no emulator ticket), regenerates every data file and prints the diff (docs/spec/05-game-data.md section 8, step 0).
+
 Look in `.local/unpack/` first (gift tables, prices, theme packs, every dialog string, under `raw/` and `static/`; its `NOTES.md` says what is where). The Simplified Chinese strings come from the Localize project, https://github.com/LocalizeLimbusCompany: clone it next to the other data to read them. The Chinese names the data files ship come from its release zip through `tools/llc_text.py`, which converts them to Traditional (OpenCC `s2twp` plus a few fixes). Reach for a wiki only when neither has it.
 
 To query it, search the unpacked tree with `rg`: `rg -l "<text>" .local/unpack/raw/Localize/en` finds a dialog or a name, and `rg -l "<key>" .local/unpack/static` finds a table (`static/` holds about 2200 JSON files, counted 2026-10-30). Mounting Trial names are in `raw/Localize/en/EN_Bufs_Mirror5.json`, and the mirror node data for the `-hard`, `-extreme` and `-infinite` variants is `static/Assets/Resources_moved/StaticData/static-data/mirrordungeon/mirrordungeon-08-*.json`.

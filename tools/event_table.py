@@ -1,8 +1,8 @@
 """Trim the unpacked client's Mirror Dungeon event table into assets/resource/base/data/event_table.json (#93).
 
 Usage: uv run python tools/event_table.py [events-md8.json] [static-data dir]
-Defaults: <unpack dir>/out/events-md8.json (from limbus-unpack's scripts/events_md8.py, client 1.117.0)
-and that unpack's static-data folder, read again for each gift's keyword: events_md8.py takes the first record of
+Defaults: the main checkout's .local/unpack/out/events-md8.json (from tools/events_md8.py) and .local/unpack's
+static-data folder, read again for each gift's keyword: events_md8.py takes the first record of
 a gift id it finds, and the plain ego-gift files carry no keyword (Grimy Iron Stake read Keywordless, not Bleed).
 
 The table's fields, the odds and failure branches (#234) and the follow-up "pages" included, are described in
@@ -14,9 +14,11 @@ import re
 import sys
 from pathlib import Path
 
-UNPACK = "<unpack dir>/"
-SRC = UNPACK + "out/events-md8.json"
-STATIC = UNPACK + "static/Assets/Resources_moved/StaticData/static-data"
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from local_dir import local_dir  # noqa: E402
+
+SRC = "out/events-md8.json"  # under .local/unpack/ (tools/local_dir.py)
+STATIC = "static/Assets/Resources_moved/StaticData/static-data"
 OUT = Path(__file__).resolve().parent.parent / "assets/resource/base/data/event_table.json"
 UI_KW = {"Combustion": "Burn", "Laceration": "Bleed", "Vibration": "Tremor", "Burst": "Rupture", "Sinking": "Sinking",
          "Breath": "Poise", "Charge": "Charge", "Slash": "Slash", "Penetrate": "Pierce", "Hit": "Blunt"}
@@ -119,7 +121,7 @@ def build(src_path, static):
         events.append({"id": e["id"], "key": key, "options": options})
     page_rows = [{"id": e["id"], "options": [option(o, keyword, pages) for o in e["options"]]} for e in choices if e["id"] in pages]
     note = (f"Mirror Dungeon choice events (#93): the game client {src['meta']['client']}'s static data (abnormality-event, "
-            "EN_ActionEvents/EN_AbEvents localization, ego-gift keywords), via limbus-unpack scripts/events_md8.py and "
+            "EN_ActionEvents/EN_AbEvents localization, ego-gift keywords), via tools/events_md8.py and "
             "tools/event_table.py. key: the story text's last 60 letters and digits, lower case. kind: direct, random, "
             "check, check_fail_gift, followup, battle, check_other, followup_other, other. gifts: [keyword, how]. "
             "gift_ids: [gift id, how]. how: direct, direct_random, check_pass, check_fail, win_battle, later_direct, "
@@ -133,7 +135,8 @@ def build(src_path, static):
 
 
 def main():
-    text = build(sys.argv[1] if len(sys.argv) > 1 else SRC, sys.argv[2] if len(sys.argv) > 2 else STATIC)
+    unpack = local_dir("unpack") if len(sys.argv) < 3 else None
+    text = build(sys.argv[1] if len(sys.argv) > 1 else unpack / SRC, sys.argv[2] if len(sys.argv) > 2 else unpack / STATIC)
     OUT.write_text(text, encoding="utf-8")
     table = json.loads(text)
     print(f"{len(table['events'])} events, {len(table['pages'])} pages -> {OUT} ({OUT.stat().st_size} bytes)")
