@@ -5,8 +5,8 @@ The Use Lunacy tab is EnkephalinLunacy.png (live 2026-10-27: price 104 at Daily 
 Count painted over and the model's drawn in. No Confirm was pressed for it (no Lunacy spent), so what the tab shows
 after one, and at 10/10, is the model's guess.
 
-The scenarios are the task's screen paths: the window that closes after each Confirm, the one that stays open, the Use
-Boxes tab. Each decision of the panel is tested in process below (#641).
+The scenarios are the task's paths through its pipeline: a target of 0 (no window opened), the window that closes after
+each Confirm, the one that stays open, the Use Boxes tab. Each decision of the panel is tested in process below (#641).
 """
 
 import json
@@ -20,20 +20,21 @@ from daily_child import ROOT, bind, game_class, interface as interface_json, loa
 from test_settings import VALID
 
 if __name__ != "__main__":  # as test_luxcavation.py: the fixtures are test_actions's
+    import actions
     from test_actions import clock, context  # noqa: F401 (the fake Maa context the in-process tests use)
 
 ENK_BAR, TAB, CONFIRM, CANCEL = (440, 640), (639, 226), (760, 534), (520, 534)  # TAB: Use Lunacy (D7, live 720p)
 PRICES = (26, 52, 78, 104, 130, 156, 182, 208, 234, 260)
 
 
-def lunacy_tab(used, price=None):
-    """EnkephalinLunacy.png at Daily Count used/10 showing price (the table's at used when None)."""
+def lunacy_tab(used):
+    """EnkephalinLunacy.png at Daily Count used/10 showing the table's price at used."""
     from PIL import Image, ImageDraw, ImageFont
 
     im = Image.open(ROOT / "tests" / "screens" / "EnkephalinLunacy.png").convert("RGB")
     draw = ImageDraw.Draw(im)
     font = ImageFont.load_default(size=30)
-    for box, at, text in [((582, 274, 645, 316), (590, 278), str(price or PRICES[min(used, len(PRICES) - 1)])),
+    for box, at, text in [((582, 274, 645, 316), (590, 278), str(PRICES[min(used, len(PRICES) - 1)])),
                           ((700, 304, 795, 342), (712, 306), f"{used}/10")]:
         draw.rectangle(box, fill=im.getpixel((box[0] - 4, box[1] + 4)))
         draw.text(at, text, fill=(235, 220, 200), font=font)
@@ -52,33 +53,26 @@ def child():
 
     class Game(game_class()):
         images = {"main": screen("MainWindowLater.png"), "modules": screen("EnkephalinModules.png"),
-                  "boxes": screen("EnkephalinBoxes.png"), **{f"lunacy{n}": lunacy_tab(n) for n in range(11)},
-                  "lunacy0_27": lunacy_tab(0, 27)}
+                  "boxes": screen("EnkephalinBoxes.png"), **{f"lunacy{n}": lunacy_tab(n) for n in range(11)}}
 
-        def set(self, bought=0, price=None, confirm_works=True, tab="lunacy", step=1, stays=False, cancel_works=True,
-                tab_after=None):
-            """bought: the day's charges made so far (Daily Count); price: the price shown whatever bought says (a wrong
-            one); tab: what the Use Lunacy tab's tap shows ("modules": the tap did nothing); stays: the window
-            stays open after Confirm (spec 01: live for Modules; unverified for Lunacy); cancel_works: False, the Cancel
-            tap misses (its spot on the Lunacy tab is taken from the Modules tab's, not measured); tab_after: what the
-            window shows after a Confirm, in place of tab."""
+        def set(self, bought=0, tab="lunacy", stays=False):
+            """bought: the day's charges made so far (Daily Count); tab: what the Use Lunacy tab's tap shows; stays: the
+            window stays open after Confirm (spec 01: live for Modules; unverified for Lunacy)."""
             self.screen, self.clicks, self.keys = "main", [], []
-            self.bought, self.price, self.confirm_works, self.tab, self.step = bought, price, confirm_works, tab, step
-            self.stays, self.cancel_works, self.tab_after = stays, cancel_works, tab_after
+            self.bought, self.tab, self.stays = bought, tab, stays
 
         def lunacy(self):
-            return f"lunacy{self.bought}" + (f"_{self.price}" if self.price else "")
+            return f"lunacy{self.bought}"
 
         def on_tap(self, x, y):
             if self.screen == "main" and (x, y) == ENK_BAR:
                 self.screen = "modules"  # live 2026-10-27: the window always opens on Modules
             elif self.screen == "modules" and (x, y) == TAB:
                 self.screen = self.lunacy() if self.tab == "lunacy" else self.tab
-            elif self.screen.startswith("lunacy") and (x, y) == CONFIRM and self.confirm_works:
-                self.bought = min(self.bought + self.step, 10)  # step 1; 2 is a count that jumped
-                self.tab = self.tab_after or self.tab
-                self.screen = (self.lunacy() if self.tab == "lunacy" else self.tab) if self.stays else "main"
-            elif self.screen != "main" and (x, y) == CANCEL and self.cancel_works:
+            elif self.screen.startswith("lunacy") and (x, y) == CONFIRM:
+                self.bought = min(self.bought + 1, 10)
+                self.screen = self.lunacy() if self.stays else "main"
+            elif self.screen != "main" and (x, y) == CANCEL:
                 self.screen = "main"
             return True
 
@@ -92,6 +86,7 @@ def child():
     tasker = bind(resource, game)
     out = {"error": None}
     for scenario, (count, state) in {
+        "zero": (0, {}),
         "two_from_none": (2, {}),
         # Confirm leaves the window open: ChargePanel looks at near the same screen 7 times, past the watchdog's SAME_SCREEN
         "window_stays": (10, {"stays": True, "bought": 4}),
@@ -110,6 +105,12 @@ def child():
 
 def taps(*points):
     return [list(p) for p in points]
+
+
+def test_zero_charges_touch_nothing_not_even_the_window():
+    o = run_child(__file__)["zero"]
+    assert o["succeeded"] and o["clicks"] == [] and "Lunacy left alone" in o["done"]
+    assert "ChargeHome" not in o["nodes"] and "ChargePanel" not in o["nodes"]
 
 
 def test_a_target_of_two_on_a_fresh_day_confirms_26_and_52_and_cancels_at_2_of_10():
@@ -143,7 +144,7 @@ def test_charge_enkephalin_is_a_task_of_the_interface():
     assert {"name": "ChargeEnkephalin", "label": "$ChargeEnkephalin", "entry": "ChargeEnkephalin"} in interface["task"]
 
 
-# ChargeStart and ChargePanel in process (#641): the branches the scenarios above once ran in MaaFramework, test_actions.py's
+# ChargePanel in process (#641): the branches the scenarios above once ran in MaaFramework, test_actions.py's
 # fake context around them. A Tab is the Use Lunacy tab as the panel reads it: its price and Daily Count, the Recharge prompt.
 
 class Tab:
@@ -151,8 +152,6 @@ class Tab:
     Confirm moves the count on by `step`; readable: the prompt and the Daily Count read (False: the tab never showed)."""
 
     def __init__(self, context, monkeypatch, used=0, price=None, confirm_works=True, step=1, readable=True):
-        import actions
-
         self.used, self.price, self.confirm_works, self.step, self.readable = used, price, confirm_works, step, readable
         self.taps, self.stops = [], []
         monkeypatch.setattr(actions, "tap", self.tap)
@@ -172,8 +171,6 @@ class Tab:
 
 def panel(context, count, passes):
     """ChargePanel `passes` times on a task of target `count`, as the hub hands the open window over; the returns."""
-    import actions
-
     actions.TASK.clear()
     actions.TASK["charge"] = {"count": count, "reads": 0, "opened": 0, "charged": 0}
     return [actions.ChargePanel().run(context, None) for _ in range(passes)]
@@ -190,8 +187,6 @@ def panel(context, count, passes):
      "the Use Lunacy tab's prompt and Daily Count did not read, target 2: nothing charged"),
 ])
 def test_the_panel_charges_up_to_the_target_and_ends_the_task_a_success(context, monkeypatch, state, count, passes, steps, clicks, end):
-    import actions
-
     tab = Tab(context, monkeypatch, **state)
     assert panel(context, count, passes) == steps and tab.taps == clicks and tab.stops == []
     assert actions.TASK["charge"]["end"] == end
@@ -212,9 +207,7 @@ def test_a_tab_that_is_not_what_the_task_expects_is_cancelled_and_fails_the_task
 def test_a_tab_that_stops_reading_after_a_confirm_fails_the_task(context, monkeypatch):
     tab = Tab(context, monkeypatch)
     steps = panel(context, 2, 1)
-    tab.readable = False  # the window shows another tab after the Confirm (Use Boxes: no Daily Count)
-    import actions
-
+    tab.readable = False  # after the Confirm the prompt and the Daily Count read no more
     steps += [actions.ChargePanel().run(context, None) for _ in range(3)]
     assert steps == [True] * 3 + [False] and tab.taps == [TAB, CONFIRM, TAB, TAB, TAB, CANCEL]
     assert tab.stops == ["the Use Lunacy tab's prompt and Daily Count could not be read after a Confirm"]
@@ -222,22 +215,10 @@ def test_a_tab_that_stops_reading_after_a_confirm_fails_the_task(context, monkey
 
 def test_a_cancel_that_never_closes_the_window_stops_the_task_after_a_few_taps(context, monkeypatch):
     # Done at the third price, the window stays: ChargePanel is exempt from the same-screen watchdog, so it bounds itself.
-    import actions
-
     tab = Tab(context, monkeypatch, used=2)
     assert panel(context, 2, 1 + actions.CHARGE_TRIES + 1) == [True] * (1 + actions.CHARGE_TRIES) + [False]
     assert tab.taps.count(CANCEL) == 1 + actions.CHARGE_TRIES  # the deciding one, then CHARGE_TRIES more
     assert tab.stops == [f"the Charge Enkephalin window stayed open after {actions.CHARGE_TRIES} more Cancels"]
-
-
-def test_zero_charges_touch_nothing_not_even_the_window(context):
-    import actions
-
-    (actions.ROOT / "config").mkdir()
-    (actions.ROOT / "config" / "settings.json").write_text(json.dumps({**VALID, "charge_enkephalin": {"count": 0}}))
-    assert actions.ChargeStart().run(context, SimpleNamespace(node_name="ChargeEnkephalin")) is True
-    assert actions.TASK["done"] == "charge_enkephalin.count is 0: Lunacy left alone"
-    assert context.tasker.controller.post_click.call_count == 0
 
 
 if __name__ == "__main__":

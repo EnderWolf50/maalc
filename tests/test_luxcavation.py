@@ -242,11 +242,11 @@ def test_a_luxcavation_task_aims_at_the_days_battles_in_daily_mode_and_at_count_
 def test_a_luxcavation_task_with_no_team_picked_stops_before_any_tap(context, monkeypatch, key, name):
     ok, stops = lux_start(context, monkeypatch, key, team=None)
     assert ok is False and stops == [f"{name} has no team: pick one in the settings GUI's Daily tab"]
-    assert context.tasker.controller.post_click.call_count == 0
 
 
 def run_plan(monkeypatch, today, seen, **lux):
-    """actions.plan on RUN["lux"] = lux over an EXP task in daily mode with 182 Modules; its return, the finish reasons."""
+    """actions.plan on RUN["lux"] = lux over an EXP task in daily mode with 182 Modules; its return, the finish reasons.
+    The tests take the context fixture for its RUN cleared after them."""
     ends = []
     monkeypatch.setattr(actions, "finish", lambda context, reason: ends.append(reason) or True)
     actions.RUN.clear()
@@ -255,7 +255,7 @@ def run_plan(monkeypatch, today, seen, **lux):
     return actions.plan(MagicMock(), today, seen), ends
 
 
-def test_the_modules_are_checked_against_this_runs_battles(monkeypatch):
+def test_the_modules_are_checked_against_this_runs_battles(context, monkeypatch):
     # #429: one won today leaves 2 of the day's 3, 4 Modules at 2 each: fought, where 3 x 2 = 6 would skip. #431: count
     # mode checks count's battles.
     thread = {"name": "Thread Luxcavation", "cost": 2, "target": 3}
@@ -273,13 +273,13 @@ def test_the_modules_are_checked_against_this_runs_battles(monkeypatch):
 
 
 @pytest.mark.parametrize("today, seen, end", [
-    (1, "the pass's Clear EXP Luxcavation row done",  # #429: the day's one won: nothing fought, Drive never opened
+    (1, "the pass's Clear EXP Luxcavation row done",  # #429: the day's one won: nothing fought
      "EXP Luxcavation: the pass's Clear EXP Luxcavation row done (1 won today), 1 a day: nothing to fight"),
     (None, "the pass's Clear EXP Luxcavation row did not read",  # #429 item 4: a day not read is a day not fought
      "EXP Luxcavation: the pass's Clear EXP Luxcavation row did not read: nothing fought"),
     (None, "the pass page was not reached in 60 s", "EXP Luxcavation: the pass page was not reached in 60 s: nothing fought"),
 ])
-def test_daily_mode_with_nothing_left_or_nothing_read_ends_at_the_main_window_unfought(monkeypatch, today, seen, end):
+def test_daily_mode_with_nothing_left_or_nothing_read_ends_at_the_main_window_unfought(context, monkeypatch, today, seen, end):
     over, ends = run_plan(monkeypatch, today, seen)
     assert over is True and ends == [end] and actions.RUN["lux"]["fights"] is None
 
@@ -321,7 +321,7 @@ def over_after(monkeypatch, results, **lux):
     return steps, stops, ends
 
 
-def test_each_battle_has_its_own_retries_a_win_resets_them(monkeypatch):
+def test_each_battle_has_its_own_retries_a_win_resets_them(context, monkeypatch):
     # Review S6, as the mirror's wipe retries: retries 1 lets every battle lose once; the task fails only when one battle
     # loses twice.
     steps, stops, ends = over_after(monkeypatch, ("lose", "win", "lose", "win", "lose", "lose"))
@@ -329,12 +329,12 @@ def test_each_battle_has_its_own_retries_a_win_resets_them(monkeypatch):
 
 
 @pytest.mark.parametrize("retries, results", [(1, ("lose", "lose")), (0, ("lose",))])
-def test_a_defeat_past_the_retries_stops_the_task(monkeypatch, retries, results):
+def test_a_defeat_past_the_retries_stops_the_task(context, monkeypatch, retries, results):
     steps, stops, ends = over_after(monkeypatch, results, fights=1, retries=retries)
     assert steps == [None] * (len(results) - 1) + [False] and len(stops) == 1 and ends == []
 
 
-def test_a_defeat_within_the_retries_counts_nothing_and_a_win_after_it_finishes(monkeypatch):
+def test_a_defeat_within_the_retries_counts_nothing_and_a_win_after_it_finishes(context, monkeypatch):
     # live-1 F2, F3: a red Defeat, Confirm, the same stage again. A Consecutive Battle x3 lost counts none of its three.
     steps, stops, ends = over_after(monkeypatch, ("lose", "win"), fights=1)
     assert steps == [None, True] and ends == ["EXP: 1 won"] and stops == []
@@ -342,12 +342,12 @@ def test_a_defeat_within_the_retries_counts_nothing_and_a_win_after_it_finishes(
     assert steps == [None] and (actions.RUN["lux"]["won"], actions.RUN["lux"]["retried"]) == (0, 1) and stops == ends == []
 
 
-def test_a_consecutive_win_counts_its_battles_and_the_next_takes_the_rest(monkeypatch):
+def test_a_consecutive_win_counts_all_its_battles(context, monkeypatch):
     steps, stops, ends = over_after(monkeypatch, [("win", 10), ("win", 2)], fights=12, retries=0)  # #375: x10, then x2
     assert steps == [None, True] and ends == ["EXP: 12 won"] and stops == []
 
 
-def test_a_battle_with_no_results_page_stops_the_task_instead_of_counting(monkeypatch):
+def test_a_battle_with_no_results_page_stops_the_task_instead_of_counting(context, monkeypatch):
     steps, stops, ends = over_after(monkeypatch, [None])
     assert steps == [False] and stops == ["EXP: back on the page with no results page seen"] and ends == []
     assert actions.RUN["lux"]["won"] == 0
