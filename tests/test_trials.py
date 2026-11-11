@@ -99,6 +99,23 @@ def test_the_effect_line_wins_over_the_name():
     assert r.read_trial("Resilient II", "Defense Level +1, Max HP", pool(2)) == ("Resilient II", "name")
 
 
+def test_two_trials_the_line_fits_equally_leave_the_decision_to_the_name():
+    # #640 (rewards.py): a tie in the effect line (the first two have the same effects) is no answer.
+    twins = {"Alpha I": {"effects": {"hp": 5.0}}, "Beta I": {"effects": {"hp": 5.0}}}
+    assert r.read_trial("Alpha I", "Max HP +5%", twins) == ("Alpha I", "name")
+    assert r.read_trial("Beta I", "Max HP +5%", twins) == ("Beta I", "name")
+    # one of them fitting better wins on the line alone
+    same_keys = {"Alpha I": {"effects": {"hp": 5.0, "base": 1.0}}, "Beta I": {"effects": {"hp": 6.0, "base": 1.0}}}
+    assert r.read_trial("Beta I", "Max HP +5%, Base Power +1", same_keys) == ("Alpha I", "effects")
+
+
+def test_a_line_whose_numbers_fit_no_trial_names_none_by_the_line():
+    # #640 (rewards.py): the keys of the line are a trial's, but not one number agrees: the name decides.
+    trials = {"Alpha I": {"effects": {"hp": 5.0}}}
+    assert r.read_trial("Alpha I", "Max HP +9%", trials) == ("Alpha I", "name")
+    assert r.read_trial("Nothing", "Max HP +9%", trials) == (None, None)
+
+
 def test_an_unread_card_scores_the_pool_s_worst():
     scores = r.scores(pool(4), MODEL)
     assert max(scores.values()) == scores["Headstrong II"] == pytest.approx(40)

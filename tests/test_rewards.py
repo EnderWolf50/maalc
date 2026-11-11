@@ -128,6 +128,42 @@ def test_pick_choice_a_random_option_with_a_stated_chance_is_no_question_mark_ti
     assert r.pick_choice(["Hints. Select for a 50% chance to gain a Burn E.G.O Gift.", "Leave."], "Burn") == 0  # the rest: screen order
 
 
+def test_an_override_s_option_is_taken_whatever_its_check_and_never_marked_for_the_weakest_sinner():
+    # #640: the override branch returned (i, True), sending the sinner least likely to pass to an option the setting chose.
+    assert r.choice_plan(["Leave.", "Run a check. Pass to gain a Burn E.G.O Gift."], "Burn", "Run a check") == (1, False)
+    assert r.choice_plan(["Leave.", "Take it."], "Burn", "Take it", want=lambda g: "want") == (1, False)
+
+
+def test_the_main_keyword_breaks_a_tie_inside_a_tier_of_the_table():
+    # #640 (rewards.py): "gain ... depending on" options of one tier; the one giving the main keyword's gift first.
+    other = opt("Wait.", "Gain a Bleed E.G.O Gift depending on the result of the following choice", "check", ("Bleed", "check_pass"))
+    main = opt("Hold on.", "Gain a Burn E.G.O Gift depending on the result of the following choice", "check", ("Burn", "check_pass"))
+    event = [other, main]
+    assert r.pick_choice(shown(event), "Burn", event=event) == 1
+    assert r.pick_choice(shown(event), "Bleed", event=event) == 0
+
+
+def test_the_main_keyword_breaks_a_tie_among_question_mark_options_read_from_the_hint():
+    # #640 (rewards.py): no table; two "???" options, the second names the main keyword.
+    options = ["Pull the lever. ???", "Push the lever. ??? Burn"]
+    assert r.pick_choice(options, "Burn") == 1
+    assert r.pick_choice(options, "Bleed") == 0
+
+
+def test_the_hint_tiers_without_a_table_are_question_mark_then_direct_then_check_then_depending_on_then_the_rest():
+    # #640 (rewards.py): each tier number matters, so each neighbouring pair is ranked in both screen orders.
+    question = "Open it. ???"
+    direct = "Take it. Select to gain a Bleed E.G.O Gift"
+    check = "Pull. Lust check. Pass to gain a Bleed E.G.O Gift."
+    depending = "Wait. Gain a Bleed E.G.O Gift depending on the result of the following choice"
+    rest = "Leave."
+    ranked = [question, direct, check, depending, rest]
+    for i in range(len(ranked) - 1):
+        better, worse = ranked[i], ranked[i + 1]
+        assert r.pick_choice([better, worse], "Burn") == 0
+        assert r.pick_choice([worse, better], "Burn") == 1
+
+
 def test_pick_choice_ties_go_to_the_main_keyword_then_the_screen_order():
     event = [opt("Pull.", "Wrath check. Pass to gain a Burn E.G.O Gift.", "check", ("Burn", "check_pass")),
              opt("Push.", "Wrath check. Pass to gain a Bleed E.G.O Gift.", "check", ("Bleed", "check_pass"))]

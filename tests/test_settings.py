@@ -578,6 +578,18 @@ def test_cross_check_allows_what_the_spec_allows(tmp_path):
     load(tmp_path, edited(fn))
 
 
+@pytest.mark.parametrize("target", [10, 15])
+def test_a_disabled_team_does_not_hide_a_normal_only_team_behind_it_from_a_target_past_floor_5(tmp_path, target):
+    # #640 (settings.py): the check passed over a disabled team with `break`, so teams after it went unchecked.
+    def fn(d):
+        d["run"]["target_floor"] = target
+        d["teams"][0]["enabled"] = False
+        d["teams"][1]["usage"] = "normal_only"
+    got = errors(tmp_path, edited(fn))
+    assert [e for e in got if "teams/1/usage" in e and "normal_only" in e], got
+    assert not [e for e in got if "teams/0/" in e]  # the disabled team itself is not asked
+
+
 def test_every_error_is_reported(tmp_path):
     data = edited(lambda d: (d["teams"][1].update(game_team=1), d["teams"][0].update(starlight={"plan": "x"})))
     assert len(errors(tmp_path, data)) == 2

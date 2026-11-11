@@ -1,6 +1,8 @@
 """Pass Missions rows to claim (#371): which rows of a tab the bot taps."""
 
+import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -81,6 +83,29 @@ def test_the_nearest_row_of_a_rows_text():
 
 def test_the_swiped_seasonal_tab_reads_its_rows_10_px_lower():
     assert pass_missions.claimable(seasonal_end_claimable(), 10) == [(370, 235)]
+
+
+def analyze(image, param=None):
+    """PassClaimable.analyze on a frame, with the param the pipeline passes (None: no param)."""
+    argv = SimpleNamespace(image=image, custom_recognition_param=None if param is None else json.dumps(param))
+    return pass_missions.PassClaimable().analyze(None, argv)
+
+
+def test_the_recognition_boxes_the_first_row_to_claim_as_40_by_40_on_its_coin():
+    # #640 (pass_missions.py): no test ran PassClaimable.analyze; the tap lands in the box's middle, on the coin.
+    result = analyze(frame("PassMissionsDailyClaimable.png"))
+    assert tuple(result.box) == (350, 292, 40, 40)  # centred on CLAIMABLE[0] = (370, 312)
+    assert result.detail == {"rows": CLAIMABLE}
+    # the swiped Seasonal tab: the param's dy moves the rows down, and the box with them
+    result = analyze(seasonal_end_claimable(), {"dy": 10})
+    assert tuple(result.box) == (350, 215, 40, 40) and result.detail == {"rows": [(370, 235)]}
+
+
+def test_the_recognition_has_no_hit_when_no_row_waits_for_a_tap():
+    assert analyze(frame("PassMissionsDaily.png")) is None
+    assert analyze(seasonal_end_claimable()) is None  # without dy the swiped tab's rows are 10 px off: none lit
+    assert analyze(daily_claimed(3)) is not None  # one row left
+    assert analyze(daily_claimed(4)) is None  # all claimed
 
 
 def test_each_claimed_row_drops_out():

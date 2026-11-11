@@ -47,6 +47,24 @@ def test_starlight_stop_buys_nothing_after_an_unaffordable_grace():
     assert missed == [(10, "base", 60)]
 
 
+def test_a_grace_set_to_none_is_passed_over_and_the_ones_after_it_are_still_bought():
+    # #640: `continue` became `break` and nothing past the first "none" in the priority was bought.
+    levels = ["base", "base", "none", "base", "base", "base", "base", "base", "base", "base"]
+    buys, missed = rs.starlight_purchases({"levels": levels, "priority": [1, 3, 2, 4]}, 1000, "skip")
+    assert buys == [(1, "base", 10), (2, "base", 10), (4, "base", 20)]
+    assert missed == []
+
+
+@pytest.mark.parametrize(("n", "base"), tuple(enumerate((10, 10, 20, 20, 30, 30, 40, 40, 50, 60), 1)))
+def test_each_grace_is_bought_with_exactly_its_price_in_starlight(n, base):
+    # #640: a base price one too high read 'cannot afford' with just enough starlight. Prices: spec 04 section 7.
+    for level, mult in (("base", 1), ("plus", 2), ("plus2", 3)):
+        assert rs.grace_price(n, level) == base * mult
+        plan = {"levels": [level] * 10, "priority": [n]}
+        assert rs.starlight_purchases(plan, base * mult, "skip") == ([(n, level, base * mult)], [])
+        assert rs.starlight_purchases(plan, base * mult - 1, "skip") == ([], [(n, level, base * mult)])
+
+
 def test_starlight_never_buys_more_than_available():
     plan = {"levels": ["plus2"] * 10, "priority": list(range(1, 11))}
     for available in range(0, 400, 7):
