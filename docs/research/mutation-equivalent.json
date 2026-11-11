@@ -1,0 +1,11 @@
+{
+ "settlement:100:53:`3` -> `4`": "min(want, left) 的 left 最多 3（一週的每週加成數），3 與 4 開出的加成一樣多",
+ "rewards:425:12:`break` -> `continue`": "count 滿了之後不再變，後面每張卡都碰到同一個檢查而被跳過",
+ "run_start:97:19:`1024` -> `1025`": "lru_cache 的大小：只影響快取留多少，不影響回傳值",
+ "run_start:176:19:`8` -> `9`": "lru_cache 的大小：只影響快取留多少，不影響回傳值",
+ "run_start:383:22:`>` -> `>=`": "target == max(visible) 代表 target 在 visible 裡，上一行已經回傳",
+ "recovery:237:30:`0` -> `1`": "樓層從 1 起，max(n - 1, 1) 只在 n = 1 時不同，而 1 // 5 與 0 // 5 都是 0",
+ "shop:584:12:`break` -> `continue`": "cost 夠了之後不再變，後面每個飾品都碰到同一個檢查而被跳過",
+ "pack_cover:46:19:`1` -> `2`": "lru_cache 的大小：只影響快取留多少，不影響回傳值",
+ "settings:363:12:`return x` -> `return None`": "唯一的呼叫端（team_queue._reorder）只看真假，None 與 False 一樣是假"
+}
