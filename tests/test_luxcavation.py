@@ -48,6 +48,15 @@ def test_needed(count, cost, need):
     assert needed(cost, count) == need
 
 
+def test_a_thread_battle_takes_2_modules_and_an_exp_battle_3_whatever_the_stage():
+    # #640 (luxcavation.py:12): live 2026-10-26, Thread Lv20-60 all take 2, EXP stages 4-9 take 3; actions.py reads them from here.
+    assert (luxcavation.THREAD_COST, luxcavation.EXP_COST) == (2, 3)
+    assert [actions.LUX[k][1] for k in ("thread", "exp")] == [2, 3]
+    thread = luxcavation.THREAD_COST
+    assert decide(6, thread, 3, 0, 0, 0) == FIGHT  # the 3 bonuses of a day on exactly 6 Modules
+    assert decide(5, thread, 3, 0, 0, 0) == SKIP
+
+
 @pytest.mark.parametrize("modules, count, step", [
     (6, 2, FIGHT),  # exactly enough
     (5, 2, SKIP),  # one short: the log says "5 < 6"

@@ -186,6 +186,7 @@ def test_first_floor_hard(tile, expected):
     ({1: False, 2: True, 3: True, 4: True, 5: True}, 5, True, "[HARD] Floor1", False),  # seen NORMAL beats the tile
     ({4: True, 5: True}, 5, True, "[HARD] Floor1", True),  # a resumed run: floors 1-3 not seen, the tile says HARD
     ({}, 5, True, "[HARD] Floor1", True),  # no floor seen (the agent restarted)
+    ({2: True, 3: True}, 3, True, "[HARD] Floor1", True),  # resumed from floor 2: floor 1 is missing, not floor 2 (#640)
     ({4: True, 5: True}, 5, True, "[NORMAL] Floor1", False),
     ({4: True, 5: True}, 5, True, "", False),  # unreadable: not all HARD
     ({}, 5, False, "[HARD] Floor1", False),  # the last floor NORMAL: the run is not HARD
