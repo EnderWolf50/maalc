@@ -4,6 +4,7 @@ import re
 from pathlib import Path
 
 import pytest
+import shard_seconds
 import yaml
 
 from test_pipeline import PIPELINE, load_nodes
@@ -96,3 +97,15 @@ def test_ci_ok_does_not_wait_for_shard_balance_and_pipeline_runs_for_bot_files_o
     bot = yaml.safe_load(step["with"]["filters"])["bot"]
     assert {"assets/**", "agent/**", "tests/screens/**", "maatools.config.mts"} <= set(bot)  # imageRoot of maa-tools test
     assert not any(p.startswith("docs") for p in bot)
+
+
+def test_the_test_jobs_run_on_windows_and_shard_seconds_reads_their_runner():
+    # #636: the bot runs on Windows only, so the jobs that test it do too; the shard table's earlier runs must be the same
+    # runner's, or a Linux time sets a Windows shard.
+    jobs = ci_jobs()
+    assert {name: jobs[name]["runs-on"] for name in ("agent", "pipeline", "gui")} == dict.fromkeys(
+        ("agent", "pipeline", "gui"), "windows-latest")
+    assert shard_seconds.RUNNER == jobs["agent"]["runs-on"]
+    # Windows' default shell is pwsh, which has no python3
+    runs = [step["run"] for name in ("agent", "pipeline") for step in jobs[name]["steps"] if "run" in step]
+    assert not [run for run in runs if "python3" in run]

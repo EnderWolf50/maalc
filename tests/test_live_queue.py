@@ -33,6 +33,39 @@ def test_dead_tickets_are_dropped_and_live_ones_keep_arrival_order(tmp_path):
     assert not gone.exists()
 
 
+@pytest.mark.parametrize("second", [1_800_000_000_000_000_000, 1_799_999_999_999_000_000], ids=["same-tick", "clock-back"])
+def test_a_ticket_of_the_same_process_and_name_sorts_after_the_one_already_there(tmp_path, monkeypatch, second):
+    # #636: Python 3.12's wall clock on Windows ticks every 15.6 ms, so two `ship.py land` threads of one test got the
+    # same stamp, pid and name: the second ticket overwrote the first and landed at once on the Windows CI runner.
+    clock = iter([1_800_000_000_000_000_000, second])
+    monkeypatch.setattr(lq.time, "time_ns", lambda: next(clock))
+    one = lq.place(tmp_path, "land", ["a"], False)
+    two = lq.place(tmp_path, "land", ["b"], False)
+    assert one != two and lq.tickets(tmp_path) == [one, two]
+    assert lq.read(one)[0] == "a"
+
+
+def test_a_first_ticket_whose_place_is_taken_by_one_of_its_own_process_goes_behind_it(tmp_path):
+    # #636: a plain ticket of this process and name just behind the holder holds the name a first ticket would take.
+    alive = lambda pid, start: True  # noqa: E731
+    holder = ticket(tmp_path, "1000000000000000001", "holder", 111)
+    plain = tmp_path / f"1000000000000000002-{os.getpid()}-land.ticket"
+    plain.write_text(json.dumps({"cmd": "plain", "start": None, "first": False}))
+    first = lq.place(tmp_path, "land", ["urgent"], True, alive)
+    assert first != plain and lq.read(plain)[0] == "plain" and lq.read(first)[0] == "urgent"
+    assert lq.tickets(tmp_path, alive) == [holder, plain, first]
+
+
+def test_a_first_ticket_goes_ahead_of_a_plain_one_placed_in_the_holders_clock_tick(tmp_path, monkeypatch):
+    # #636: a plain ticket of the holder's tick sits FIRST_GAP behind it, so a first ticket placed later still goes ahead.
+    alive = lambda pid, start: True  # noqa: E731
+    holder = ticket(tmp_path, "1800000000000000000", "holder", 111)
+    monkeypatch.setattr(lq.time, "time_ns", lambda: 1_800_000_000_000_000_000)
+    plain = lq.place(tmp_path, "plain", ["plain"], False, alive)
+    first = lq.place(tmp_path, "urgent", ["urgent"], True, alive)
+    assert lq.tickets(tmp_path, alive) == [holder, first, plain]
+
+
 def ticket(qdir: Path, stamp: str, name: str, start: int, first: bool = False, cmd: str = "hold") -> Path:
     p = qdir / f"{stamp}-{os.getpid()}-{name}.ticket"
     p.write_text(json.dumps({"cmd": cmd, "start": start, "first": first}))

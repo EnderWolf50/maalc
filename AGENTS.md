@@ -40,6 +40,8 @@ This repo is public. Issue, PR and commit text describes evidence by its content
 
 Whoever writes a change runs the `code-review` skill (Standards + Spec) on it after committing and before the push, with fixed point `origin/<base>` and the issue or brief as the spec, and fixes its findings before pushing; a later push that adds commits reviews them first, with fixed point `origin/<branch>`. CI then runs on reviewed code, and a merge starts no review round.
 
+CI runs the full check, on Windows as the bot does (#636). While writing, run the test files you change or add (`tdd`); push without a full `tools/check.py`, then wait for `ci-ok` (`gh pr checks <n> --watch`) and fix a red one with another push. `tools/check.py` is for when CI cannot run (quota, a GitHub outage): `docs/agents/local-dev.md` "Checks".
+
 A PR merges on a green `ci-ok`. When CI does not start, say so and wait; a local check does not replace it.
 
 ### Acceptance

@@ -151,6 +151,7 @@ def test_update_refuses_a_run_that_lacks_a_test_file(table, monkeypatch, capsys)
     def download(run, folder):
         report(folder, "junit.xml", [("tests.test_go_home", "380")])
     monkeypatch.setattr(shard_seconds, "download", download)
+    monkeypatch.setattr(shard_seconds, "agents_passed", lambda run: True)
     assert shard_seconds.update(9) == 1
     assert "use a run whose shards all passed" in capsys.readouterr().out
     assert json.loads(shard_seconds.TABLE.read_text(encoding="utf-8")) == {"test_go_home.py": 1}
@@ -164,8 +165,18 @@ def test_update_writes_every_file_rounded(table, monkeypatch):
         report(folder, "junit.xml", [(f"tests.{n}", "1.6") for n in names])
     monkeypatch.setattr(shard_seconds, "download", download)
     monkeypatch.setattr(shard_seconds, "earlier", lambda run: [])
+    monkeypatch.setattr(shard_seconds, "agents_passed", lambda run: True)
     assert shard_seconds.update(9) == 0
     assert json.loads(shard_seconds.TABLE.read_text(encoding="utf-8")) == {f"{n}.py": 2 for n in names}
+
+
+def test_update_refuses_a_run_whose_agent_shards_did_not_all_pass_on_the_ci_runner(table, monkeypatch, capsys):
+    # #636: a run from before the move to Windows would write a table of Linux times.
+    table({"test_go_home.py": 1})
+    downloaded = ci_runs(monkeypatch, {9: {}}, failed={9})
+    assert shard_seconds.update(9) == 1
+    assert "windows-latest" in capsys.readouterr().out
+    assert downloaded == [] and written() == {"test_go_home.py": 1}
 
 
 def ci_runs(monkeypatch, runs, failed=(), expired=()):
@@ -257,11 +268,19 @@ def test_earlier_lists_the_completed_ci_runs_before_the_run_newest_first(monkeyp
     assert {"ci.yml", "completed"} <= set(calls[0])
 
 
-def test_only_a_run_whose_agent_shards_all_passed_counts(monkeypatch):
-    jobs = {1: [("agent (0)", "success"), ("agent (1)", "success"), ("shard-balance", "failure")],  # a runner's times
-            2: [("agent (0)", "success"), ("agent (1)", "failure")],
-            3: [("agent (0)", "success"), ("agent (1)", "cancelled")],
-            4: [("changes", "success"), ("agent", "skipped")]}  # docs only: the matrix never ran
-    monkeypatch.setattr(shard_seconds, "gh_json",
-                        lambda *args: {"jobs": [{"name": n, "conclusion": c} for n, c in jobs[int(args[2])]]})
+def test_only_a_run_whose_agent_shards_all_passed_on_the_ci_runner_counts(monkeypatch):
+    win, linux = ["windows-latest"], ["ubuntu-latest"]
+    jobs = {1: [("agent (0)", "success", win), ("agent (1)", "success", win), ("shard-balance", "failure", linux)],
+            2: [("agent (0)", "success", win), ("agent (1)", "failure", win)],
+            3: [("agent (0)", "success", win), ("agent (1)", "cancelled", win)],
+            4: [("changes", "success", linux), ("agent", "skipped", [])],  # docs only: the matrix never ran
+            5: [("agent (0)", "success", linux), ("agent (1)", "success", linux)]}  # before #636: not a Windows runner's
+    calls = []
+
+    def gh_json(*args):
+        calls.append(args)
+        run = int(args[1].split("/runs/")[1].split("/")[0])
+        return {"jobs": [{"name": n, "conclusion": c, "labels": labels} for n, c, labels in jobs[run]]}
+    monkeypatch.setattr(shard_seconds, "gh_json", gh_json)
     assert [run for run in jobs if shard_seconds.agents_passed(run)] == [1]
+    assert calls[0][0] == "api"

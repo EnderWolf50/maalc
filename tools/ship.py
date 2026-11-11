@@ -23,9 +23,10 @@ whether it landed or stopped. The ticket of a call whose process is gone is drop
 A call whose own ticket is removed while it waits exits 1, says so and lands nothing. A dry run (no `--go`) never
 waits for a turn.
 
-`into` merges `<branch>` into the integration branch (`--no-ff`) in a worktree of it, runs `tools/check.py`
-through the bench queue and pushes only on green. A conflict or a red check leaves the branch as it was.
-The first merge into an integration branch with no open PR opens a draft one, so Linux CI runs from then on.
+`into` merges `<branch>` into the integration branch (`--no-ff`) in a worktree of it and pushes it; a conflict
+leaves the branch as it was. The checks run in CI on the integration branch's draft PR, not on this machine (#636):
+the first merge into an integration branch with no open PR opens it, and every `into` names the PR whose `ci-ok` to
+wait for. A red `ci-ok` is fixed on the branch and merged in with another `into`.
 """
 import argparse
 import enum
@@ -233,11 +234,11 @@ def draft_pr(runner, integration: str, base: str = "main") -> str:
     fd, name = tempfile.mkstemp(suffix=".md")
     os.close(fd)
     body = Path(name)
-    body.write_text(f"Integration branch `{integration}`. Each merge into it runs the checks first, so CI runs "
-                    "here from the first merge. Draft until the branch is ready to land.\n", encoding="utf-8")
+    body.write_text(f"整合分支 `{integration}`。這個 PR 的 CI 檢查每一次併入（`tools/ship.py into`），從第一次起。"
+                    "分支可以合併前保持 draft。\n", encoding="utf-8")
     try:
         return need(runner, ["gh", "pr", "create", "--draft", "--base", base, "--head", integration,
-                             "--title", f"Integration: {integration}", "--body-file", str(body)]).strip()
+                             "--title", f"chore: 整合分支 {integration}", "--body-file", str(body)]).strip()
     finally:
         body.unlink(missing_ok=True)
 
@@ -249,7 +250,6 @@ def cmd_into(runner, integration: str, branch: str, repo: Path | None = None) ->
     if tree is None:
         tree = local_dir("scratch", f"into-{re.sub(r'[^\w.-]', '_', integration)}") / "wt"
         need(runner, ["git", "worktree", "add", str(tree), integration], repo)
-        need(runner, ["pnpm", "install", "--frozen-lockfile"], tree)
     if need(runner, ["git", "status", "--porcelain", "--untracked-files=no"], tree).strip():
         sys.exit(f"ship: the worktree of {integration} has local changes ({tree})")
     need(runner, ["git", "merge", "--ff-only", f"origin/{integration}"], tree)
@@ -263,21 +263,16 @@ def cmd_into(runner, integration: str, branch: str, repo: Path | None = None) ->
         return 1
     pushed = False
     try:
-        need(runner, ["uv", "run", "python", "tools/fetch_ocr.py"], tree)
-        rc, out = runner(["uv", "run", "python", "tools/live/queue.py", "run", "--resource", "bench", "--name",
-                          f"into-{branch}", "--", "uv", "run", "python", "tools/check.py"], tree)
-        print(out.strip()[-3000:])
-        if rc:
-            print(f"ship: the checks failed with {branch} merged; {integration} is as it was, nothing pushed", file=sys.stderr)
-            return 1
         need(runner, ["git", "push", "origin", integration], tree)
         pushed = True
     finally:
-        if not pushed:  # a merge that was not checked and pushed must not ride along with the next `into`
+        if not pushed:  # a merge that was not pushed must not ride along with the next `into`
             runner(["git", "reset", "--hard", before], tree)
-    if not open_pr_of(runner, integration):
-        print(f"ship: opened {draft_pr(runner, integration)}")
     print(f"ship: {branch} merged into {integration} and pushed")
+    if prs := open_pr_of(runner, integration):
+        print(f"ship: CI checks it on #{prs[0]['number']}: gh pr checks {prs[0]['number']} --watch")
+    else:
+        print(f"ship: opened {draft_pr(runner, integration)}; its CI checks the merge")
     return 0
 
 

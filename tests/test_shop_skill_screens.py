@@ -128,7 +128,7 @@ def child():
     tasker = Tasker()
     tasker.bind(resource, controller)
     tasker.post_task("Probe", {"Probe": {"action": "Custom", "custom_action": "Probe"}}).wait()
-    print(json.dumps(out, ensure_ascii=False))
+    print(json.dumps(out))  # ASCII: a sinner name (Ryōshū) does not fit a cp1252 stdout, as on the Windows runner (#636)
 
 
 @pytest.fixture(scope="module")
