@@ -9,9 +9,9 @@ SEARCHABLE = {g["id"] for g in json.loads((BASE / "data" / "gift_search.json").r
 
 
 def test_the_game_s_fusion_gifts_are_all_there():
-    # combineFixed: 67 recipes of 59 gifts (8 with two); combineMixed: the Memory of the Moon (9083), 2 of 7 fragments + 3 of 3 memories.
+    # combineFixed (1.118.1): 68 recipes of 60 gifts (8 with two; 9301 is new); combineMixed: the Memory of the Moon (9083), 2 of 7 fragments + 3 of 3 memories.
     fixed = [g for g in DATA["gifts"] if "recipes" in g]
-    assert len(fixed) == 59 and sum(len(g["recipes"]) for g in fixed) == 67
+    assert len(fixed) == 60 and sum(len(g["recipes"]) for g in fixed) == 68
     assert sum(len(g["recipes"]) == 2 for g in fixed) == 8
     mixed = [g for g in DATA["gifts"] if "groups" in g]
     assert [g["id"] for g in mixed] == [9083]
@@ -50,9 +50,9 @@ def test_chinese_names_are_traditional():
     assert not [g["id"] for g in DATA["gifts"] + DATA["materials"] if "记" in g["zh"] or "镜" in g["zh"]]
 
 
-def test_39_recipes_use_a_theme_pack_exclusive_gift():
+def test_40_recipes_use_a_theme_pack_exclusive_gift():
     specific = [g for g in DATA["gifts"] if g.get("specific")]
-    assert sum(len(g["recipes"]) for g in specific) == 39
+    assert sum(len(g["recipes"]) for g in specific) == 40  # 1.118.1: 9301 Wuthering Heights is new
     assert all(g["packs"] == sorted(g["packs"]) and g["packs"] for g in specific)
     assert not [g for g in DATA["gifts"] if "packs" in g and not g.get("specific")]
     by_id = {g["id"]: g for g in DATA["gifts"]}
@@ -97,7 +97,7 @@ def test_specific_and_packs_match_the_game_data_when_it_is_unpacked():
         if g.get("specific"):  # the packs of all the gift's recipes' exclusive ingredients
             used = {i for c in mine for i in c["requiredEgoGiftIds"]}
             assert g["packs"] == sorted(p for p, pool in pools.items() if pool & used), g["id"]
-    assert sum(1 for c in fixed if c.get("isSpecific")) == 39
+    assert sum(1 for c in fixed if c.get("isSpecific")) == 40
 
 
 def test_the_five_vestiges_are_data_ids_9991_to_9995_keywordless_tier_i_to_v():

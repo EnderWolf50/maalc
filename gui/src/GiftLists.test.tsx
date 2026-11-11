@@ -284,9 +284,9 @@ describe("read-only default", () => {
     const r = await open([mine()], "zh_tw", "default");
     expect(screen.getByRole("combobox", { name: zh["gl.list"] })).toHaveValue("default");
     expect(screen.getByText(zh["gl.readonly"])).toBeInTheDocument();
-    // The user, 2026-10-30: it holds the Keywordless gifts only, wanting the 4 fusion gifts and the 46 of the packs' own pools.
+    // The user, 2026-10-30: it holds the Keywordless gifts only, wanting the 4 fusion gifts and the 47 of the packs' own pools.
     expect(DEFAULT_LIST.want.slice(0, 4)).toEqual([9083, 9249, 9764, 9780]);
-    expect(DEFAULT_LIST.want).toHaveLength(50);
+    expect(DEFAULT_LIST.want).toHaveLength(51);
     const kept = DEFAULT_LIST.keep.find((id) => GIFT_BY_ID.get(id)!.kind === "buyable")!;
     expect(await tile(r, kept)).toHaveAccessibleName(new RegExp(zh["state.keep"]));
     const burn = DEFAULT_LIST.gorder.Burn[0];

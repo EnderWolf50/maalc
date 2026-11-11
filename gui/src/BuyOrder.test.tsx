@@ -307,12 +307,12 @@ describe("dragging on the main screen", () => {
 });
 
 describe("the default list in the dialog", () => {
-  test("it can be looked at; it buys its 46 wanted Keywordless gifts, and every move only shows the notice", async () => {
+  test("it can be looked at; it buys its 47 wanted Keywordless gifts, and every move only shows the notice", async () => {
     // The default list wants Keywordless gifts only (the user, 2026-10-30): the dialog has rows under Keywordless alone.
     const r = await open(null);
     const before = JSON.stringify(r.settings());
-    expect(queue(DEFAULT_LIST)).toHaveLength(46);
-    expect(buyButton()).toHaveTextContent("（46）");
+    expect(queue(DEFAULT_LIST)).toHaveLength(47);
+    expect(buyButton()).toHaveTextContent("（47）");
     const d = await openDialog(r);
     expect(rowIds()).toEqual([]); // the keywords start folded
     const main = DEFAULT_LIST.order.find((k) => k !== "Keywordless")!;

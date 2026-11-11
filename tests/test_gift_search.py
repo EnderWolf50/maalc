@@ -10,7 +10,7 @@ BASE = Path(__file__).resolve().parent.parent / "assets" / "resource" / "base"
 
 def test_every_searchable_gift_has_its_icon_template():
     gifts = json.loads((BASE / "data" / "gift_search.json").read_text(encoding="utf-8"))["gifts"]
-    assert len(gifts) == 320
+    assert len(gifts) == 321  # 1.118.1 added 9302 The Measure of Frost
     missing = [x["id"] for x in gifts if not (BASE / "image" / "GiftSearch" / f"{x['id']}.png").is_file()]
     assert not missing
 
@@ -149,3 +149,19 @@ def test_owned_starlight_before_and_after():
     assert g.owned_starlight("1315-0", "1315") == (1315, 0, 1315)
     assert g.owned_starlight("1315-270", "1046") is None  # misread: the numbers must add up
     assert g.owned_starlight("", "1315") is None
+
+
+def test_regenerating_the_search_table_gives_the_committed_file_when_it_is_unpacked():
+    import pytest
+    from local_dir import local_dir
+
+    if not (unpack := local_dir("unpack")).joinpath("static").is_dir():
+        pytest.skip("no unpacked game data")
+    committed = (BASE / "data" / "gift_search.json").read_text(encoding="utf-8")
+    release = json.loads(committed)["zh_release"]
+    if not local_dir("llc").joinpath(f"{release}.zip").is_file():
+        pytest.skip("no Chinese names release downloaded")
+    pytest.importorskip("opencc", reason="opencc is in the unpack group: `uv sync --group unpack` to run this check")
+    import gift_search_table  # noqa: PLC0415
+
+    assert gift_search_table.build(unpack, release) == committed  # run `tools/gift_search_table.py` when this fails

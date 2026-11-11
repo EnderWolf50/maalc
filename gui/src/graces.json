@@ -1,7 +1,7 @@
 {
   "note": "Chinese names and effect text: the Localize Limbus Company release (Simplified Chinese): MirrorDungeonUI_5 titles and DungeonStartBuffs_MD7 templates filled with the client's start-buff values, converted with OpenCC s2twp, then 指標->指針, 重新整理->刷新, 映象->鏡像, 透過階層->通過階層, 松肉->鬆肉. English names: the game's starlight page. Licensed CC BY-NC-SA 4.0 (see NOTICE.md).",
   "zh_source": "https://github.com/LocalizeLimbusCompany/LocalizeLimbusCompany",
-  "zh_release": "2026101602",
+  "zh_release": "2026110501",
   "license": "CC BY-NC-SA 4.0",
   "license_url": "https://creativecommons.org/licenses/by-nc-sa/4.0/",
   "graces": [
