@@ -33,6 +33,16 @@ def test_dead_tickets_are_dropped_and_live_ones_keep_arrival_order(tmp_path):
     assert not gone.exists()
 
 
+def test_a_ticket_sorts_after_the_ones_already_there_when_the_clock_steps_back(tmp_path, monkeypatch):
+    # #636: on a Windows CI runner a second `ship.py land`, placed milliseconds after the first, sorted ahead of it and
+    # landed at once: the wall clock had stepped back between the two stamps.
+    clock = iter([1_800_000_000_000_000_000, 1_799_999_999_999_000_000])
+    monkeypatch.setattr(lq.time, "time_ns", lambda: next(clock))
+    one = lq.place(tmp_path, "one", ["a"], False)
+    two = lq.place(tmp_path, "two", ["b"], False)
+    assert lq.tickets(tmp_path) == [one, two]
+
+
 def ticket(qdir: Path, stamp: str, name: str, start: int, first: bool = False, cmd: str = "hold") -> Path:
     p = qdir / f"{stamp}-{os.getpid()}-{name}.ticket"
     p.write_text(json.dumps({"cmd": cmd, "start": start, "first": first}))

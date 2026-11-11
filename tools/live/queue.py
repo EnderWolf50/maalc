@@ -144,7 +144,10 @@ def place(qdir: Path, name: str, cmd: list[str], first: bool, is_alive=alive) ->
     body = json.dumps({"cmd": " ".join(cmd), "start": started(os.getpid()), "first": first})
     while True:
         q = tickets(qdir, is_alive) if first else []
-        stamp = str(time.time_ns())
+        # After every ticket already there, also when the wall clock stepped back since one was written (#636: on a
+        # Windows CI runner a ticket placed milliseconds later sorted ahead).
+        stamps = [int(s) for p in qdir.glob("*.ticket") if (s := p.name.split("-", 1)[0]).isdigit()]
+        stamp = str(max([time.time_ns(), *(s + 1 for s in stamps)]))
         if q:
             behind = next((i for i, p in enumerate(q[1:], 1) if (t := read(p)) is not None and not t[2]), len(q)) - 1
             last = q[behind].name.split("-", 1)[0]
