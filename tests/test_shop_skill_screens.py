@@ -133,7 +133,8 @@ def child():
 
 @pytest.fixture(scope="module")
 def read():
-    env = {**os.environ, "PYTHONPATH": os.pathsep.join([str(ROOT / "agent"), str(ROOT / "tests")])}
+    # The child prints sinner names (Ryōshū) and is read as UTF-8: a Windows runner's stdout is cp1252 otherwise (#636).
+    env = {**os.environ, "PYTHONPATH": os.pathsep.join([str(ROOT / "agent"), str(ROOT / "tests")]), "PYTHONIOENCODING": "utf-8"}
     done = subprocess.run([sys.executable, __file__], capture_output=True, text=True, encoding="utf-8", timeout=600, cwd=ROOT, env=env)
     assert done.returncode == 0, done.stderr[-2000:]
     out = json.loads(done.stdout.strip().splitlines()[-1])
