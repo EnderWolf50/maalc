@@ -109,8 +109,8 @@ def test_the_shop_may_sell_the_drop_pool_less_its_global_excludes_and_the_fusion
     assert not {g["id"] for g in DATA["gifts"]} & sells  # no fusion gift is sold, 9301 (new in 1.118.1) included
     assert 9207 not in sells  # globalExcludeEgoGifts
     assert 9156 in sells and 9156 in hard_only  # excludeEgoGifts (excludeTargetIdxList [0]): not on a NORMAL floor
-    assert 9302 in sells and 9205 not in sells  # 9205 is on the Gift Search page but not in the drop pool
-    assert hard_only <= sells and (len(sells), len(hard_only)) == (365, 67)
+    assert 9302 in sells and 9205 in sells  # 9205: in no egoGifts, but in theme packs' own pools, and seen on sale (live 2026-10-22)
+    assert hard_only <= sells and (len(sells), len(hard_only)) == (366, 68)
 
 
 def test_the_five_vestiges_are_data_ids_9991_to_9995_keywordless_tier_i_to_v():

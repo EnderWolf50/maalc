@@ -55,7 +55,8 @@ def note(client, gift_count, named, fuse_only, unmarked):
         "the Gift Search icons ignore them, the shop cell match (agent/gift_cells.py) takes them as candidates, and a gift list "
         "names them as any gift of their keyword. "+NOTE_ZH+" "
         "`shop` (#626) holds the gifts a shop may sell, which a gift list may want: `sells` is the drop pool "
-        "mirrordungeon-egogift-droppool-8's egoGifts, less its globalExcludeEgoGifts, less the gifts whose codex text "
+        "mirrordungeon-egogift-droppool-8's egoGifts and the theme packs' own pools (`pack_gifts`: 9205 is in no egoGifts and "
+        "was seen on sale, live 2026-10-22), less its globalExcludeEgoGifts, less the gifts whose codex text "
         f"(EN_MirrorDungeonEgoGiftLockedDesc) names one unlock condition, fusing at a shop ({fuse_only} in {client}), less every "
         f"fusion gift here (the codex text does not mark {unmarked}: they stay fusion gifts, never bought). `not_on_normal` are "
         "those of its excludeEgoGifts: excludeTargetIdxList [0] is the typeIndex of mirrordungeon-08.json, NORMAL (read from "
@@ -106,12 +107,14 @@ def fusion_only(unpack):
     return out
 
 
-def shop_pool(unpack, fusions):
-    """{"sells": the ids a shop may sell, "not_on_normal": those a NORMAL floor's shop does not} (the note's `shop`)."""
+def shop_pool(unpack, fusions, fuse_only, pack_pool):
+    """{"sells": the ids a shop may sell, "not_on_normal": those a NORMAL floor's shop does not} (the note's `shop`): the drop
+    pool's egoGifts and the theme packs' own pools (`pack_pool`), less the global excludes, the fusion-only gifts
+    (`fuse_only`) and the fusion gifts."""
     pool = load(unpack / STATIC / DROP_POOL)["list"][0]
     if pool["excludeTargetIdxList"] != [NORMAL]:
         raise SystemExit(f"{DROP_POOL}: excludeTargetIdxList is {pool['excludeTargetIdxList']}, not [{NORMAL}]: read it again (#626)")
-    sells = set(pool["egoGifts"]) - set(pool["globalExcludeEgoGifts"]) - fusion_only(unpack) - set(fusions)
+    sells = (set(pool["egoGifts"]) | pack_pool) - set(pool["globalExcludeEgoGifts"]) - fuse_only - set(fusions)
     return {"sells": sorted(sells), "not_on_normal": sorted(sells & set(pool["excludeEgoGifts"]))}
 
 
@@ -148,7 +151,7 @@ def build(unpack, release):
     ids = [i for i in table if i in GIFT_IDS]
     fuse_only = fusion_only(unpack)
     unmarked = " ".join(map(str, sorted(set(results) - fuse_only)))
-    shop = shop_pool(unpack, results)
+    shop = shop_pool(unpack, results, fuse_only, {i for p in pools.values() for i in p})
     unknown = set(shop["sells"]) - searchable - {g["id"] for g in materials + extra}
     if unknown:
         raise SystemExit(f"the drop pool sells gifts no list here holds: {sorted(unknown)}")

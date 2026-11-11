@@ -229,17 +229,6 @@ describe("locked gifts", () => {
     expect((await tile(r, m)).getAttribute("aria-label")).toContain(zh["gl.locked"]);
   });
 
-  test("a locked material no shop sells cannot be wanted either: the click says only the fusion's want frees it", async () => {
-    // 9205 WB Flask: on the Gift Search page, not in the drop pool (#626), a material of the pack-specific 9213.
-    const fusion = 9213, unsold = 9205;
-    const r = await open([mine({ want: [fusion] })]);
-    const t = await tile(r, unsold);
-    await r.user.keyboard("1");
-    await r.user.click(t);
-    expect(flash()).toBe(say(zh["gl.lock_why_nowant"], { name: nameOf(unsold), by: nameOf(fusion) }));
-    expect(list(r)).toMatchObject({ want: [fusion], keep: [] });
-  });
-
   test("a locked material may be wanted for itself, and is no longer locked; keep is still refused", async () => {
     // The user, 2026-10-30: want means the gift itself (bought again once a fusion ate it); keep and drop both keep it already.
     const r = await open([mine({ want: [fixed.id] })]);
@@ -334,9 +323,8 @@ describe("gifts a shop may sell, and the ones it cannot (#626)", () => {
     expect(flash()).toBe(say(zh["gl.unbuyable_keep"], { name: nameOf(vestige) }));
   });
 
-  test("so does a recipe material the shop does not sell (9205: on the Gift Search page, not in the drop pool); a vestige can still be dropped", async () => {
-    const unbuyable = 9205;
-    expect(GIFT_BY_ID.get(unbuyable)).toMatchObject({ kind: "material" });
+  test("so does another gift no shop sells (9207, globally excluded); a vestige can still be dropped", async () => {
+    const unbuyable = 9207;
     const r = await open([mine({ keep: [vestige] })]);
     await r.user.click(await tile(r, unbuyable));
     expect(list(r).keep).toEqual([vestige, unbuyable]);

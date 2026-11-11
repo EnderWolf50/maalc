@@ -467,7 +467,7 @@ const en_us: typeof zh_tw = {
   "usage.any": "Any", "usage.hard_only": "Hard only", "usage.normal_only": "Normal only",
   "team.gift_list": "Gift list",
   "team.edit_list": "Edit this list",
-  "team.gift_list_note": "What the shop buys, keeps, sells and fuses. \"Default\" is a read-only list: it holds only the keywordless gifts: it wants the 4 keywordless fusion gifts (the shop buys what they lack) and the 46 the shop sells from the theme packs' own pools, and keeps the rest; copy it to choose what to buy and fuse.",
+  "team.gift_list_note": "What the shop buys, keeps, sells and fuses. \"Default\" is a read-only list: it holds only the keywordless gifts: it wants the 4 keywordless fusion gifts (the shop buys what they lack) and the 54 the shop sells from the theme packs' own pools, and keeps the rest; copy it to choose what to buy and fuse.",
   "migrate.dropped": "While turning the old settings into gift lists, {n} kept gifts matched no gift and were dropped.",
   "migrate.unknown": "{n} gift ids in the gift lists are in no data file (a new season?) and were dropped from the lists.",
   "migrate.trials": "Trials score on a new scale (pt) now: the {n} old trial risk overrides (0–5) do not carry over and were emptied.",

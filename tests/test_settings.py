@@ -41,7 +41,7 @@ def gift_list(keyword="Burn", **kw):
     want = sorted(g["id"] for g in SEARCH if g["keyword"] == keyword)
     every = SEARCH + RECIPES["gifts"] + RECIPES["materials"] + RECIPES["extra_gifts"]
     keep = {g["id"] for g in every if g["keyword"] in (keyword, "Keywordless")}
-    gorder = {k: [g["id"] for tier in (5, 4, 3, 2, 1) for g in SOLD if g["keyword"] == k and g["tier"] == tier] for k in KEYWORDS}
+    gorder = {k: [g["id"] for tier in (4, 3, 2, 1) for g in SOLD if g["keyword"] == k and g["tier"] == tier] for k in KEYWORDS}  # no V is sold
     return {
         "order": [keyword] + [k for k in KEYWORDS if k != keyword], "want": want, "keep": sorted(keep - set(want)),
         "gorder": gorder, "fusion_condition": "any", **kw,

@@ -175,9 +175,9 @@ def test_a_sale_does_not_count_a_held_recipes_materials_in_an_ordinary_fusion(co
 @pytest.mark.parametrize("run, bought", [
     ({"floor_hard": False}, False),  # a NORMAL floor's shop never shows excludeEgoGifts (#626)
     ({"floor_hard": True}, True),
-    ({"difficulty": "hard", "floor_hard": False}, False),  # the floor's difficulty wins over the run's
-    ({"difficulty": "normal"}, False),  # no floor read yet: the run's
-    ({}, True),  # neither known (the agent restarted): any shop may sell it
+    ({"difficulty": "hard", "floor_hard": False}, False),  # a HARD run's floor before hard_from_floor
+    ({"difficulty": "normal"}, True),  # the floor not read (the agent restarted): any shop may sell it
+    ({}, True),
 ])
 def test_a_normal_floor_buys_no_gift_its_shop_never_sells(monkeypatch, run, bought):
     monkeypatch.setattr(actions, "RUN", run)

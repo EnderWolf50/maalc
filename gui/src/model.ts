@@ -115,8 +115,8 @@ export const VESTIGES = recipes.vestiges;
  * static data, Chinese names from LLC (data/gift_search.json carries its sources and license). */
 export const SEARCH_GIFTS: SearchGift[] = gifts.gifts;
 export interface SearchGift { id: number; keyword: string; tier: number; en: string; zh: string }
-/** The fusion gifts, the recipe materials the search page lacks and the game's other gifts (extra_gifts: a keyword fusion or
- * an event gives one, #332), data/gift_recipes.json, spec 05: with the search page's, every gift a list names by its keyword. */
+/** The fusion gifts, the recipe materials the search page lacks and the game's other gifts (extra_gifts: a shop, a keyword
+ * fusion or an event gives one, #332), data/gift_recipes.json, spec 05: with the search page's, every gift a list names by its keyword. */
 const RECIPE_GIFTS: { id: number; keyword: string }[] = [...recipes.gifts, ...recipes.materials, ...recipes.extra_gifts];
 /** The gifts a shop may sell (#626, data/gift_recipes.json `shop.sells`; agent/settings.py shop_gifts): the search page's in
  * page order, then the materials' and extra_gifts' in data order. A list may want them, and the shop buys them. */
@@ -215,7 +215,7 @@ export interface GiftList {
 /** Every keyword's gifts a shop may sell (SHOP_GIFTS), the highest tier first, within a tier in SHOP_GIFTS' order
  * (agent/settings.py default_gorder). */
 export const defaultGorder = (): Record<string, number[]> => Object.fromEntries(GIFT_KEYWORDS.map((k) => [
-  k, [5, 4, 3, 2, 1].flatMap((tier) => SHOP_GIFTS.filter((g) => g.keyword === k && g.tier === tier).map((g) => g.id)),
+  k, [...SHOP_GIFTS].sort((a, b) => b.tier - a.tier).filter((g) => g.keyword === k).map((g) => g.id), // a stable sort
 ]));
 
 const KNOWN_GIFTS = new Set([...SEARCH_GIFTS, ...RECIPE_GIFTS].map((g) => g.id).concat(VESTIGES.map((v) => v.id)));

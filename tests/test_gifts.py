@@ -85,6 +85,7 @@ def test_a_gift_the_normal_floors_never_sell_is_bought_on_hard_only():
     assert gifts.purchases(wanted, hard=False) == []
 
 
-def test_a_fusion_gift_and_a_globally_excluded_gift_are_never_bought():
+def test_a_wanted_fusion_s_materials_a_shop_sells_are_bought_for_it_and_never_the_fusion_itself():
+    # Lunar Memory 9083: its 7 fragments and 3 memories are in the drop pool (#626), so a list wanting it buys them for it.
+    assert gifts.purchases(plain_list(want=[9083])) == [(i, 9083) for i in (9105, 9110, 9116, 9121, 9126, 9131, 9136, 9142, 9147, 9152)]
     assert gifts.purchases(plain_list(want=[9207])) == []  # globalExcludeEgoGifts
-    assert all(f is not None for _, f in gifts.purchases(plain_list(want=[9083])))  # Lunar Memory: only its materials, if any

@@ -83,6 +83,7 @@ export function GiftPopover({ id, anchor }: { id: number; anchor: HTMLElement })
   const users = usedIn(id);
   const buy = queue(list), at = buy.indexOf(id) + 1;
   const forFusion = at ? null : purchases(list).find(([i]) => i === id)?.[1]; // a wanted fusion's material, bought after the wants
+  const packs = g.kind === "buyable" ? packsOf(id) : []; // the only packs a pack's own gift shows in (#626)
 
   // After every render (its height changes with the content): place it against the tile.
   useLayoutEffect(() => {
@@ -125,7 +126,7 @@ export function GiftPopover({ id, anchor }: { id: number; anchor: HTMLElement })
       <div className="gl-tip-rows">
         <Row label={t("gl.tip_cat")}>
           <span>{fill(t("gl.tip_cat_line"), { kw: t(`kw.${g.keyword}` as Key), tier: TIERS[g.tier] })}{g.kind === "fusion" && t("gl.tip_cat_fusion")}
-            {g.kind === "buyable" && packsOf(id).length > 0 && fill(t("gl.tip_cat_pack"), { packs: packsOf(id).map(packName).join(t("gl.sep")) })}</span>
+            {packs.length > 0 && fill(t("gl.tip_cat_pack"), { packs: packs.map(packName).join(t("gl.sep")) })}</span>
         </Row>
         {locked && (
           <Row label={t("gl.tip_lock")}>

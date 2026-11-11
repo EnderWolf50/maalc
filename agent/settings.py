@@ -171,8 +171,8 @@ def vestige_ids():
 def default_gorder():
     """Spec 04 section 13: every keyword's gifts a shop may sell (shop_gifts), the highest tier first, within a tier in
     shop_gifts' order."""
-    sold = shop_gifts()
-    return {k: [g["id"] for tier in (5, 4, 3, 2, 1) for g in sold if g["keyword"] == k and g["tier"] == tier] for k in GIFT_KEYWORDS}
+    by_tier = sorted(shop_gifts(), key=lambda g: -g["tier"])  # stable: shop_gifts' order within a tier
+    return {k: [g["id"] for g in by_tier if g["keyword"] == k] for k in GIFT_KEYWORDS}
 
 
 def keyword_gifts():

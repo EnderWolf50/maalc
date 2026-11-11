@@ -59,7 +59,7 @@ def test_default_gorder_is_what_a_shop_may_sell_tier_iv_to_i_in_data_order():
     for kw in KEYWORDS:
         want = [g["id"] for t in (4, 3, 2, 1) for g in sold if g["keyword"] == kw and g["tier"] == t]
         assert LIST["gorder"][kw] == want
-    assert 9070 in LIST["gorder"]["Poise"] and 9205 not in LIST["gorder"]["Bleed"]  # #626: sold IV; on Gift Search, never sold
+    assert 9070 in LIST["gorder"]["Poise"] and 9205 in LIST["gorder"]["Bleed"]  # #626: a sold IV; a pack pool's gift
 
 
 def test_every_gift_has_a_small_transparent_icon():
