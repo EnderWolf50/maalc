@@ -45,6 +45,16 @@ def test_a_ticket_of_the_same_process_and_name_sorts_after_the_one_already_there
     assert lq.read(one)[0] == "a"
 
 
+def test_a_first_ticket_whose_place_is_taken_by_one_of_its_own_process_goes_behind_it(tmp_path):
+    # #636: a plain ticket of this process and name just behind the holder holds the name a first ticket would take.
+    alive = lambda pid, start: True  # noqa: E731
+    ticket(tmp_path, "1000000000000000001", "holder", 111)
+    plain = tmp_path / f"1000000000000000002-{os.getpid()}-land.ticket"
+    plain.write_text(json.dumps({"cmd": "plain", "start": None, "first": False}))
+    first = lq.place(tmp_path, "land", ["urgent"], True, alive)
+    assert first != plain and lq.read(plain)[0] == "plain" and lq.read(first)[0] == "urgent"
+
+
 def ticket(qdir: Path, stamp: str, name: str, start: int, first: bool = False, cmd: str = "hold") -> Path:
     p = qdir / f"{stamp}-{os.getpid()}-{name}.ticket"
     p.write_text(json.dumps({"cmd": cmd, "start": start, "first": first}))

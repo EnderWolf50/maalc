@@ -142,6 +142,7 @@ def place(qdir: Path, name: str, cmd: list[str], first: bool, is_alive=alive) ->
     holds the resource and the --first ones already waiting behind it. A first ticket is written again when the holder
     left meanwhile: the run that took over may have started, and a ticket ahead of it would start a second command."""
     body = json.dumps({"cmd": " ".join(cmd), "start": started(os.getpid()), "first": first})
+    taken = 0  # first tickets: stamps behind the holder already taken by a ticket of this process and name
     while True:
         q = tickets(qdir, is_alive) if first else []
         # After every ticket already there: Python 3.12's wall clock on Windows ticks every 15.6 ms, and a ticket of the
@@ -151,12 +152,13 @@ def place(qdir: Path, name: str, cmd: list[str], first: bool, is_alive=alive) ->
         if q:
             behind = next((i for i, p in enumerate(q[1:], 1) if (t := read(p)) is not None and not t[2]), len(q)) - 1
             last = q[behind].name.split("-", 1)[0]
-            stamp = str(int(last) + 1).zfill(len(last))  # same width: ticket names sort as text
+            stamp = str(int(last) + 1 + taken).zfill(len(last))  # same width: ticket names sort as text
         me = qdir / f"{stamp}-{os.getpid()}-{name}.ticket"
         try:
             with me.open("x", encoding="utf-8") as f:  # a thread of this process may have taken the stamp meanwhile
                 f.write(body)
         except FileExistsError:
+            taken += 1
             continue
         if not q or q[0].exists():  # the holder is still there: no ticket behind it has started
             return me
