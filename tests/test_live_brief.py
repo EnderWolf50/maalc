@@ -139,7 +139,7 @@ def test_ci_runs_the_checks_and_the_full_check_is_for_when_ci_cannot(tmp_path, a
     # #636: the agent runs the test files it changes, CI runs the rest; check.py only when CI cannot run.
     assert run(tmp_path, args) == 0
     text = (tmp_path / "t1" / "brief.md").read_text(encoding="utf-8")
-    assert "Run the test files you change or add" in text and "no full `tools/check.py` before the push" in text
+    assert "Run the test files you change or add" in text and "push without a full `tools/check.py`" in text
     assert "wait for `ci-ok`" in text and "a red one is fixed and pushed again" in text
     assert "`tools/check.py` is for when CI cannot run" in text
     assert "A task that changes code runs the full `tools/check.py`" not in text

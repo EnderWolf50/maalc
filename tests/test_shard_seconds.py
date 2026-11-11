@@ -151,6 +151,7 @@ def test_update_refuses_a_run_that_lacks_a_test_file(table, monkeypatch, capsys)
     def download(run, folder):
         report(folder, "junit.xml", [("tests.test_go_home", "380")])
     monkeypatch.setattr(shard_seconds, "download", download)
+    monkeypatch.setattr(shard_seconds, "agents_passed", lambda run: True)
     assert shard_seconds.update(9) == 1
     assert "use a run whose shards all passed" in capsys.readouterr().out
     assert json.loads(shard_seconds.TABLE.read_text(encoding="utf-8")) == {"test_go_home.py": 1}
@@ -164,8 +165,18 @@ def test_update_writes_every_file_rounded(table, monkeypatch):
         report(folder, "junit.xml", [(f"tests.{n}", "1.6") for n in names])
     monkeypatch.setattr(shard_seconds, "download", download)
     monkeypatch.setattr(shard_seconds, "earlier", lambda run: [])
+    monkeypatch.setattr(shard_seconds, "agents_passed", lambda run: True)
     assert shard_seconds.update(9) == 0
     assert json.loads(shard_seconds.TABLE.read_text(encoding="utf-8")) == {f"{n}.py": 2 for n in names}
+
+
+def test_update_refuses_a_run_whose_agent_shards_did_not_all_pass_on_the_ci_runner(table, monkeypatch, capsys):
+    # #636: a run from before the move to Windows would write a table of Linux times.
+    table({"test_go_home.py": 1})
+    downloaded = ci_runs(monkeypatch, {9: {}}, failed={9})
+    assert shard_seconds.update(9) == 1
+    assert "windows-latest" in capsys.readouterr().out
+    assert downloaded == [] and written() == {"test_go_home.py": 1}
 
 
 def ci_runs(monkeypatch, runs, failed=(), expired=()):

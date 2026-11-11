@@ -234,11 +234,11 @@ def draft_pr(runner, integration: str, base: str = "main") -> str:
     fd, name = tempfile.mkstemp(suffix=".md")
     os.close(fd)
     body = Path(name)
-    body.write_text(f"Integration branch `{integration}`. The CI of this PR checks each merge into it, from the "
-                    "first one (`tools/ship.py into`). Draft until the branch is ready to land.\n", encoding="utf-8")
+    body.write_text(f"整合分支 `{integration}`。這個 PR 的 CI 檢查每一次併入（`tools/ship.py into`），從第一次起。"
+                    "分支可以合併前保持 draft。\n", encoding="utf-8")
     try:
         return need(runner, ["gh", "pr", "create", "--draft", "--base", base, "--head", integration,
-                             "--title", f"Integration: {integration}", "--body-file", str(body)]).strip()
+                             "--title", f"chore: 整合分支 {integration}", "--body-file", str(body)]).strip()
     finally:
         body.unlink(missing_ok=True)
 

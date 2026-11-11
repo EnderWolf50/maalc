@@ -5,7 +5,8 @@ shards with tests/shard_seconds.json.
                                                          shard: a file off by more than RATIO both as measured and at
                                                          its shard's runner pace, or a file not in it that took SLOW
                                                          both ways (SLOW / RATIO on a pull request)
-    python tools/shard_seconds.py update --run <run id>  rewrites the table from the junit artifacts of that CI run and
+    python tools/shard_seconds.py update --run <run id>  rewrites the table from the junit artifacts of that CI run (its
+                                                         agent shards all passed on RUNNER) and
                                                          of the EARLIER_RUNS before it whose agent shards all passed
                                                          on RUNNER:
                                                          each file's median, or that run's own time when it is off from
@@ -145,6 +146,9 @@ def median_table(shards, others):
 
 
 def update(run):
+    if not agents_passed(run):
+        print(f"run {run}'s agent shards did not all pass on {RUNNER}: use a run whose shards all passed there")
+        return 1
     with tempfile.TemporaryDirectory() as folder:
         download(run, folder)
         reports = sorted(Path(folder).rglob("*.xml"))
