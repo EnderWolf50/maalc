@@ -1,10 +1,13 @@
-"""Every local check, one summary line each with its exit code and seconds: ruff, pytest, maa-tools check, maa-tools test.
+"""Every local check, one summary line each with its exit code and seconds: ruff, review_lint, pytest, maa-tools check,
+maa-tools test.
 
   uv run python tools/check.py
 
 pytest runs as SHARDS processes at once, SHARD=i of SHARDS each: tests/conftest.py splits the test files as it does for
 CI's agent shards (#484). A failing step prints the last 15 lines of its output, of each failing shard for pytest.
 Exit code = number of failed steps.
+review_lint (CI's review-lint job, #628) compares the branch with origin/main; a checkout without that ref skips it and
+prints why (run `git fetch origin main`).
 A worktree without the gitignored OCR model gets it from `fetch_ocr.py` first, since every OCR test fails without it.
 """
 import os
@@ -24,8 +27,11 @@ def pytest_shards(cores):
 
 
 SHARDS = pytest_shards(os.cpu_count() or 4)
+BASE = "origin/main"
 # (command, processes at once). pytest leaves its cache alone: the shards would overwrite each other's.
-STEPS = [(["uv", "run", "ruff", "check"], 1), (["uv", "run", "pytest", "-q", "-p", "no:cacheprovider"], SHARDS),
+RUFF = (["uv", "run", "ruff", "check"], 1)
+REVIEW_LINT = (["uv", "run", "python", "tools/review_lint.py", BASE], 1)
+STEPS = [RUFF, (["uv", "run", "pytest", "-q", "-p", "no:cacheprovider"], SHARDS),
          (["pnpm", "exec", "maa-tools", "check"], 1), (["pnpm", "exec", "maa-tools", "test"], 1)]
 TAIL = 15
 
@@ -73,14 +79,23 @@ def run_step(cmd, shards=1, popen=subprocess.Popen, stop=stop):
     return next((code for code in codes if code), 0), "\n".join(shown)
 
 
-def main(run=run_step):
+def has_base(ref):
+    """Whether git knows `ref` here (an offline or never-fetched checkout has no origin/main)."""
+    return subprocess.run(["git", "rev-parse", "--verify", "--quiet", ref + "^{commit}"], capture_output=True).returncode == 0
+
+
+def main(run=run_step, has_base=has_base):
     ocr_dir = Path(__file__).resolve().parent.parent / "assets/resource/base/model/ocr"
     if not all((ocr_dir / name).exists() for name in ("det.onnx", "rec.onnx", "keys.txt")):
         print("== OCR model missing: uv run python tools/fetch_ocr.py", flush=True)
         if subprocess.run([sys.executable, str(Path(__file__).with_name("fetch_ocr.py"))]).returncode:
             sys.exit("fetch_ocr.py failed; the OCR tests cannot run without the model")
+    steps = STEPS[:1] + [REVIEW_LINT] + STEPS[1:]
+    if not has_base(BASE):
+        print(f"== tools/review_lint.py: skipped, no {BASE} to compare with (git fetch origin main)", flush=True)
+        steps.remove(REVIEW_LINT)
     failed = 0
-    for cmd, shards in STEPS:
+    for cmd, shards in steps:
         began = time.monotonic()
         code, shown = run(cmd, shards)
         label = " ".join(cmd) + (f" ({shards} shards)" if shards > 1 else "")

@@ -132,3 +132,11 @@ def test_the_queue_and_stop_commands_match_the_preamble(tmp_path):
     text = settings_of(tmp_path)
     assert "--name t1-check --log <log> -- uv run python tools/check.py" in text
     assert "taskkill /T /F /PID <pid>" in text
+
+
+@pytest.mark.parametrize("args", [LIVE, ["code", "--task", "t1"]])
+def test_the_full_check_is_for_a_task_that_changes_code(tmp_path, args):
+    assert run(tmp_path, args) == 0
+    text = (tmp_path / "t1" / "brief.md").read_text(encoding="utf-8")
+    assert "A task that changes code runs the full `tools/check.py`" in text
+    assert "A live run that changes no code skips it." in text
