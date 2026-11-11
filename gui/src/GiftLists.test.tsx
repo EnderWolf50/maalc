@@ -274,12 +274,14 @@ describe("read-only default", () => {
     const r = await open([mine()], "zh_tw", "default");
     expect(screen.getByRole("combobox", { name: zh["gl.list"] })).toHaveValue("default");
     expect(screen.getByText(zh["gl.readonly"])).toBeInTheDocument();
-    // The user, 2026-10-30: it holds the Keywordless gifts only, wanting the 4 fusion gifts and the 54 of the packs' own pools a shop sells (#626).
-    expect(DEFAULT_LIST.want.slice(0, 4)).toEqual([9083, 9249, 9764, 9780]);
-    expect(DEFAULT_LIST.want).toHaveLength(58);
+    // The user, 2026-10-30: it holds the Keywordless gifts only, wanting the fusion gifts and the 54 of the packs' own pools a shop
+    // sells (#626); 2026-11-11: not Lunar Memory, whose 10 materials it keeps.
+    expect(DEFAULT_LIST.want.slice(0, 3)).toEqual([9249, 9764, 9780]);
+    expect(DEFAULT_LIST.want).toHaveLength(57);
+    expect(DEFAULT_LIST.keep).toEqual(expect.arrayContaining([9083, 9105, 9152]));
     const kept = DEFAULT_LIST.keep.find((id) => GIFT_BY_ID.get(id)!.kind === "buyable")!;
     expect(await tile(r, kept)).toHaveAccessibleName(new RegExp(zh["state.keep"]));
-    const burn = 9053; // Dust to Dust, Burn III: drop (Burn's first gorder gift, the fragment 9105, is Lunar Memory's locked material since #626)
+    const burn = 9053; // Dust to Dust, Burn III: drop (Burn's first gorder gift, the fragment 9105, is kept for Lunar Memory)
     expect(await tile(r, burn)).toHaveAccessibleName(new RegExp(zh["state.drop"]));
     const before = JSON.stringify(r.settings());
     await r.user.keyboard("1");

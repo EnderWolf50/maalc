@@ -33,25 +33,40 @@ PACK_POOL = [9219, 9225, 9266, 9273, 9276, 9284, 9285, 9302, 9414, 9419, 9420, 9
              9711, 9712, 9723, 9727, 9732, 9733, 9748, 9749, 9751, 9753, 9755, 9757, 9760, 9762, 9763, 9766, 9769, 9778, 9779,
              9781, 9794, 9801, 9805, 9810, 9811, 9813, 9826]
 PACK_POOL_EXTRA = [9208, 9209, 9246, 9752, 9754, 9758, 9797]  # the pools' Keywordless extra_gifts: sold, so wanted since #626
+LUNAR_MEMORY = 9083
+LUNAR_MATERIALS = [9105, 9110, 9116, 9121, 9126, 9131, 9136, 9142, 9147, 9152]  # its 7 fragments and 3 memories, all tier IV
 
 
 def test_default_list_wants_the_keywordless_fusions_and_the_pack_pools_keywordless_gifts():
     # The user, 2026-10-30: the default list only holds the Keywordless gifts; it wants the ones a fusion makes, then the
-    # ones only a theme pack's pool gives that the shop sells.
+    # ones only a theme pack's pool gives that the shop sells; but not Lunar Memory (the user, 2026-11-11: see the next test).
     fusions = [g["id"] for g in RECIPES["gifts"] if g["keyword"] == "Keywordless"]
     assert fusions == [9083, 9249, 9764, 9780]
-    assert LIST["want"] == fusions + sorted(PACK_POOL + PACK_POOL_EXTRA)
-    assert len(LIST["want"]) == 58
+    assert LIST["want"] == [9249, 9764, 9780] + sorted(PACK_POOL + PACK_POOL_EXTRA)
+    assert len(LIST["want"]) == 57
     assert set(PACK_POOL) <= {g["id"] for g in SEARCH} and set(PACK_POOL + PACK_POOL_EXTRA) <= SOLD
     assert set(PACK_POOL_EXTRA) <= {g["id"] for g in RECIPES["extra_gifts"]}
     pooled = {i for pool in RECIPES["pack_gifts"].values() for i in pool}  # #417: the committed pools, the unpack is not in CI
     assert {g["id"] for g in KEYWORD_GIFTS if g["keyword"] == "Keywordless"} & pooled == set(PACK_POOL) | set(PACK_POOL_EXTRA)
     keywordless = {g["id"] for g in KEYWORD_GIFTS if g["keyword"] == "Keywordless"}  # extra_gifts' too (#310's live run)
     # vestiges I-IV (9991-9994) are fusion materials, so `drop`; Lunar Vestige (V, 9995) is never a material, so `keep`
-    assert set(LIST["keep"]) == keywordless - set(LIST["want"]) | {max(VESTIGES)}
-    assert len(LIST["keep"]) == 59
+    assert set(LIST["keep"]) == keywordless - set(LIST["want"]) | {max(VESTIGES)} | set(LUNAR_MATERIALS)
+    assert len(LIST["keep"]) == 70  # 59 Keywordless gifts and the Lunar Vestige, Lunar Memory itself, its 10 materials
     assert LIST["order"] == KEYWORDS
     assert LIST["fusion_condition"] == "any"
+
+
+def test_default_list_keeps_lunar_memory_s_materials_and_buys_nothing_for_it():
+    # The user, 2026-11-11 (#626, option C): its 5 materials of tier IV cost about 400 Cost each, and its 5-slot fusion only a
+    # Super Shop allows; kept, they are never bought, sold or used by an ordinary fusion, and no recipe fusion is made from them.
+    import gifts  # noqa: PLC0415
+
+    lunar = next(g for g in RECIPES["gifts"] if g["id"] == LUNAR_MEMORY)
+    assert sorted(i for group in lunar["groups"] for i in group["ids"]) == LUNAR_MATERIALS
+    assert LUNAR_MEMORY not in LIST["want"] and set(LUNAR_MATERIALS) <= set(LIST["keep"])
+    bought = [i for i, _ in gifts.purchases(LIST)]
+    assert not set(bought) & set(LUNAR_MATERIALS)
+    assert all(gifts.effective(LIST, i) == "keep" for i in LUNAR_MATERIALS)
 
 
 def test_default_gorder_is_what_a_shop_may_sell_tier_iv_to_i_in_data_order():
