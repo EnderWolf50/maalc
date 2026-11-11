@@ -128,13 +128,12 @@ def child():
     tasker = Tasker()
     tasker.bind(resource, controller)
     tasker.post_task("Probe", {"Probe": {"action": "Custom", "custom_action": "Probe"}}).wait()
-    print(json.dumps(out, ensure_ascii=False))
+    print(json.dumps(out))  # ASCII: a sinner name (Ryōshū) does not fit a cp1252 stdout, as on the Windows runner (#636)
 
 
 @pytest.fixture(scope="module")
 def read():
-    # The child prints sinner names (Ryōshū) and is read as UTF-8: a Windows runner's stdout is cp1252 otherwise (#636).
-    env = {**os.environ, "PYTHONPATH": os.pathsep.join([str(ROOT / "agent"), str(ROOT / "tests")]), "PYTHONIOENCODING": "utf-8"}
+    env = {**os.environ, "PYTHONPATH": os.pathsep.join([str(ROOT / "agent"), str(ROOT / "tests")])}
     done = subprocess.run([sys.executable, __file__], capture_output=True, text=True, encoding="utf-8", timeout=600, cwd=ROOT, env=env)
     assert done.returncode == 0, done.stderr[-2000:]
     out = json.loads(done.stdout.strip().splitlines()[-1])
