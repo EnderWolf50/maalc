@@ -19,8 +19,7 @@ from typing import NamedTuple
 
 import yaml
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-from local_dir import local_dir  # noqa: E402
+from local_dir import local_dir
 
 DATA = Path(__file__).resolve().parent.parent / "assets/resource/base/data/theme_packs.yaml"
 THEME_FLOOR_DIR = "static/Assets/Resources_moved/StaticData/static-data/mirrordungeon-theme-floor"

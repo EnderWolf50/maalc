@@ -23,7 +23,6 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "agent"))
-sys.path.insert(0, str(ROOT / "tools"))
 from game_data import unpack_client, unpack_of  # noqa: E402
 from local_dir import local_dir  # noqa: E402
 from rewards import parse_effects  # noqa: E402

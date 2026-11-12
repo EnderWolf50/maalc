@@ -20,10 +20,9 @@ from pathlib import Path
 import yaml
 from PIL import Image
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-from game_data import UNITY_VERSION  # noqa: E402
-from local_dir import local_dir  # noqa: E402
-from theme_pack_card import card  # noqa: E402
+from game_data import UNITY_VERSION
+from local_dir import local_dir
+from theme_pack_card import card
 
 REPO = Path(__file__).resolve().parent.parent
 DATA = REPO / "assets/resource/base/data"

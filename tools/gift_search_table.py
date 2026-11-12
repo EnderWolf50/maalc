@@ -10,14 +10,11 @@ tools/llc_text.py. Icons: the EgoGiftIcon sprite scaled as gift_recipes.py's, wr
 
 import argparse
 import json
-import sys
-from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-import gift_recipes as gr  # noqa: E402
-from game_data import unpack_client  # noqa: E402
-from llc_text import NOTE_ZH, credit, current_release, dump_search, gift_names, release_zip  # noqa: E402
-from local_dir import local_dir  # noqa: E402
+import gift_recipes as gr
+from game_data import unpack_client
+from llc_text import NOTE_ZH, credit, current_release, dump_search, gift_names, release_zip
+from local_dir import local_dir
 
 OUT = gr.DATA / "gift_search.json"
 ICONS = gr.REPO / "assets/resource/base/image/GiftSearch"

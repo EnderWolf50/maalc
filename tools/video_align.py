@@ -49,7 +49,7 @@ from typing import NamedTuple
 
 import numpy as np
 
-from maafw_timeline import TS as STAMP, stamp
+from maafw_timeline import TS as STAMP, log_lines, stamp
 
 RESOURCE = Path(__file__).resolve().parents[1] / "assets/resource/base"
 GAP = 0.25  # s: frames up closer than this make one interval
@@ -347,13 +347,7 @@ def main(argv=None) -> None:
     nodes = {n: (RESOURCE / f if (RESOURCE / f).exists() else Path(f), tuple(map(int, roi.split(","))), float(th))
              for n, f, roi, th in a.node}
     lo, hi = stamp(a.lo) if a.lo else 0.0, stamp(a.hi) if a.hi else float("inf")
-
-    def lines():
-        for path in a.log:
-            with open(path, encoding="utf-8", errors="replace") as f:
-                yield from f
-
-    hub, hits, bot = parse_log(lines(), list(nodes), a.hub)
+    hub, hits, bot = parse_log(log_lines(a.log), list(nodes), a.hub)
     vt, vs, still = video_scores(a.video, nodes, stamp(a.started), a.fps)
     frozen = freezes(vt, still, bot, blip=max(1.0, 3 / a.fps))
     segs = fit(vt, vs, bot, a.chunk, a.max_lost, a.min_corr, a.drift, frozen)

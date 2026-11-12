@@ -33,8 +33,7 @@ import urllib.request
 import zipfile
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-from local_dir import local_dir  # noqa: E402
+from local_dir import local_dir
 
 REPO = Path(__file__).resolve().parent.parent
 DATA = REPO / "assets/resource/base/data"
