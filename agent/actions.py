@@ -2389,6 +2389,19 @@ BUS_HOME = (50, 320)
 BUS_SLACK = (30, 25)
 BUS_REST = (446, 248)
 SLOT = (279, 37)  # middle-row slot centre; map_route.ROW_DY gives the other rows
+BUS_TAP = (22, 37)  # px off the bus box's top-left where it is tapped and where its links start
+
+
+def slot_centre(bx, by, row):
+    """(x, y) of the slot in row of the column after the bus at (bx, by)."""
+    return bx + SLOT[0], by + SLOT[1] + map_route.ROW_DY[row]
+
+
+def bus_tap(bx, by):
+    """(x, y) of the bus at (bx, by) to tap, and where its links start."""
+    return bx + BUS_TAP[0], by + BUS_TAP[1]
+
+
 LINKS = {
     "up": ("MapLinkUp", (90, -115, 110, 110)),
     "mid": ("MapLinkMid", (95, -10, 110, 80)),
@@ -2716,14 +2729,11 @@ class RouteMap(CustomAction):
             if steps is None:  # #212: a path no link joins; take its first node and read the map again after
                 log("map: the path steps two rows; no plan")
 
-        def centre(row):
-            return bx + SLOT[0], by + SLOT[1] + map_route.ROW_DY[row]
-
-        ranked = [(f"{r} {slots[r][0]}", centre(r)) for r in order]
-        on_bus = [("the bus", (bx + 22, by + 37))]
+        ranked = [(f"{r} {slots[r][0]}", slot_centre(bx, by, r)) for r in order]
+        on_bus = [("the bus", bus_tap(bx, by))]
         # #88: after a restart or a recovery the bus may stand on a node not entered yet; its own tap opens it.
         tries = ranked + on_bus if RUN.get("map_entered") else on_bus + ranked
-        tries += [(f"{r} slot", centre(r)) for r in map_route.ROWS if r not in order]
+        tries += [(f"{r} slot", slot_centre(bx, by, r)) for r in map_route.ROWS if r not in order]
         # #130: a bus tap on a node already entered shows nothing; a panel shows within ~0.5 s, so that probe is short.
         probe = not RUN.get("map_entered")
         for name, (x, y) in tries:
@@ -2802,7 +2812,7 @@ class RouteMap(CustomAction):
         bus = seen(context, image, "MapBus") if image is not None else None
         if not bus or RouteMap.read_slots(context, image, bus.box[0], bus.box[1]):
             return False
-        if not RouteMap.tap_for_panel(context, bus.box[0] + 22, bus.box[1] + 37, BUS_PROBE, image=image):
+        if not RouteMap.tap_for_panel(context, *bus_tap(bus.box[0], bus.box[1]), BUS_PROBE, image=image):
             return False
         log("map: column 1: no linked slot read")
         log("map: take the bus")
@@ -2908,7 +2918,7 @@ class RouteMap(CustomAction):
         slots = {}
         for row in map_route.ROWS:
             if RouteMap.linked(context, image, bx, by, row):
-                cx, cy = bx + SLOT[0], by + SLOT[1] + map_route.ROW_DY[row]
+                cx, cy = slot_centre(bx, by, row)
                 slots[row] = (node_at(context, image, cx, cy), map_route.routes(v, cx, cy))
         return slots
 
@@ -2920,7 +2930,7 @@ class RouteMap(CustomAction):
         itself 157-171 against -2 unlinked; either one counts.
         """
         node, (rx, ry, rw, rh) = LINKS[row]
-        lit = map_route.line_contrast(image.max(axis=2), bx + 22, by + 37, bx + SLOT[0], by + SLOT[1] + map_route.ROW_DY[row])
+        lit = map_route.line_contrast(image.max(axis=2), *bus_tap(bx, by), *slot_centre(bx, by, row))
         return lit is not None and lit >= BUS_LINK or bool(seen(context, image, node, (bx + rx, by + ry, rw, rh)))
 
     @staticmethod
@@ -2941,14 +2951,14 @@ class RouteMap(CustomAction):
         bus = bus and tuple(bus.box[:2])
 
         def clear(bx, by):  # the slot's node, badges included, clear of the resource bar and the buttons
-            return bx + SLOT[0] + 80 <= 1200 and by + SLOT[1] + map_route.ROW_DY[row] - 80 >= BAR_BOTTOM
+            x, y = slot_centre(bx, by, row)
+            return x + 80 <= 1200 and y - 80 >= BAR_BOTTOM
         if not bus or not clear(*bus):
             image, bus = RouteMap.find_bus(context)
         if not bus or not RouteMap.linked(context, image, *bus, row):
             log(f"map: planned {row} {node} not linked to the bus; reading the map again")
             return False
-        bx, by = bus
-        cx, cy = bx + SLOT[0], by + SLOT[1] + map_route.ROW_DY[row]
+        cx, cy = slot_centre(*bus, row)
         kind = "boss" if RUN.get("after_shop") else node_at(context, image, cx, cy)  # #279: the shop was the last page
         if kind != node:
             log(f"map: planned {row} {node} reads {kind}; reading the map again")
@@ -2976,7 +2986,7 @@ class RouteMap(CustomAction):
         """
         dx, dy = map_route.COLUMN_DX, map_route.ROW_DY
         v, ahead = image.max(axis=2), []
-        if any(t == "boss" for t, _ in before.values()):  # #279: its red glow reads 7.7-12.4 towards the next column, as a faint link
+        if map_route.has_kind(before, "boss"):  # #279: its red glow reads 7.7-12.4 towards the next column, as a faint link
             return ahead
         while x + dx + 80 <= 1200:  # MapNodeFocusedHex reads 80 px either side; buttons from x 1205
             x += dx
@@ -2991,17 +3001,17 @@ class RouteMap(CustomAction):
                     # A node with no mark may still be lit: a red pack's dim "?" (live 2026-10-18) reads 48-60
                     # here; hard mode's dark columns read 0.
                     lit = lit or bool(marks) or np.percentile(v[ry - 45:ry + 45, x - 45:x + 45], 90) >= 20
-            if not lit and not (column and any(t == "shop" for t, _ in before.values())):  # #279: the boss after a shop may read dark
+            if not lit and not (column and map_route.has_kind(before, "shop")):  # #279: the boss after a shop may read dark
                 break
             n = first + len(ahead)
             glow = [row for row, (t, _) in column.items() if t == "boss"]
             if changed := map_route.boss_after_shop(before, column):  # #279: the shop decides, the boss' glow only helps
                 log(f"map: column {n}: after the shop, so the boss; {', '.join(changed)} read as something else")
-            elif glow and not any(t == "shop" for t, _ in before.values()):
+            elif glow and not map_route.has_kind(before, "shop"):
                 log(f"map: column {n}: the boss' glow without a shop before it")
             ahead.append(column)
             RouteMap.log_column(n, column)
-            if any(t == "boss" for t, _ in column.values()):
+            if map_route.has_kind(column, "boss"):
                 break
             before = column
         return ahead
@@ -3035,18 +3045,18 @@ class RouteMap(CustomAction):
         The map is then dragged back as far, less a remainder within BUS_SLACK, and the bus found again (find_bus).
         """
         dx, (bx, by) = map_route.COLUMN_DX, bus
-        x0, y, moved, back = bx + SLOT[0], by + SLOT[1], 0, 0
+        x0, y, moved, undo = bx + SLOT[0], by + SLOT[1], 0, 0
         edge = x0 + len(ahead) * dx + dx + 80 > 1200  # the last column read was the last on screen: more may follow
         for _ in range(MAP_DRAGS):
             columns = [slots, *ahead]
-            if not edge or any(t == "boss" for t, _ in columns[-1].values()):
+            if not edge or map_route.has_kind(columns[-1], "boss"):
                 break
             page_guard(context, "MirrorMap", image=image)
             scroll(context, x0 + 5 * dx // 2, y + 106, -2 * dx, 0)  # from map background, as find_bus: between columns and rows
             time.sleep(0.5)  # kept (#58): the map coasts on after the lift, and map_route.shift reads the drag at rest
             after = screen(context)
             s = map_route.shift(image.max(axis=2), after.max(axis=2), 2 * dx + 20)  # the drag, its threshold move and some fling
-            back += 2 * dx if s is None else s
+            undo += 2 * dx if s is None else s
             # Read on from the last column whose next two come up to MAP_NEAR, typed by their Cost.
             k = None if s is None else max((i for i in range(len(columns)) if x0 + i * dx - moved - s <= MAP_NEAR - 2 * dx), default=None)
             if k is None or s < dx // 2:
@@ -3058,7 +3068,7 @@ class RouteMap(CustomAction):
                 RouteMap.retype(context, image, columns[k], x0 + k * dx - moved, y, k + 1)
             more = RouteMap.read_ahead(context, image, x0 + k * dx - moved, y, columns[k], first=k + 2)
             edge = x0 + (k + len(more)) * dx - moved + dx + 80 > 1200
-            if (tail := ahead[k + len(more):]) and not (more and any(t == "boss" for t, _ in more[-1].values())):
+            if (tail := ahead[k + len(more):]) and not (more and map_route.has_kind(more[-1], "boss")):
                 # A near read ending short: what was read past it stays, up to an edge; near now, by its Cost.
                 for i, column in enumerate(tail, start=k + len(more) + 1):
                     if (x := x0 + i * dx - moved) <= MAP_NEAR:
@@ -3067,13 +3077,13 @@ class RouteMap(CustomAction):
             if not more:
                 break
             ahead = ahead[:k] + more
-        if not back:
+        if not undo:
             return ahead, bus
-        while back > BUS_SLACK[0]:
+        while undo > BUS_SLACK[0]:
             page_guard(context, "MirrorMap")
-            scroll(context, x0 + dx // 2, y + 106, min(back, 2 * dx), 0)
+            scroll(context, x0 + dx // 2, y + 106, min(undo, 2 * dx), 0)
             time.sleep(0.5)  # kept (#58): the map coasts on after the lift
-            back -= 2 * dx
+            undo -= 2 * dx
         bus = RouteMap.find_bus(context)[1]
         if not bus and RouteMap.search_bus(context):
             bus = RouteMap.find_bus(context)[1]
