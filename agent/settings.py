@@ -1,6 +1,6 @@
 """Read <root>/config/settings.json and check it (docs/spec/04-settings.md section 2).
 
-Old versions are migrated in memory only. The one write the agent makes is the order of `teams` (team_queue.py).
+An older version is migrated in memory only, one older than OLDEST_VERSION refused. The one write the agent makes is the order of `teams` (team_queue.py).
 """
 
 import json
@@ -14,102 +14,11 @@ from jsonschema import Draft202012Validator
 
 SCHEMA = json.loads((Path(__file__).parent / "settings.schema.json").read_text(encoding="utf-8"))
 CURRENT_VERSION = SCHEMA["properties"]["version"]["const"]
-
-def _v1_to_v2(data):
-    """Version 2 adds teams[].guard_turns (#52); its short orders need nothing."""
-    teams = data.get("teams")
-    for team in teams if isinstance(teams, list) else []:  # a broken file is left to the checks
-        if isinstance(team, dict):
-            team.setdefault("guard_turns", 0)
-    return data
-
-
-def _v2_to_v3(data):
-    """Version 3 adds teams[].gift_search (#54), off."""
-    teams = data.get("teams")
-    for team in teams if isinstance(teams, list) else []:
-        if isinstance(team, dict):
-            team.setdefault("gift_search", {"enabled": False, "gifts": []})
-    return data
-
-
-def _v3_to_v4(data):
-    """Version 4 adds run.theme_pack_refresh (#41), "all" as before."""
-    if isinstance(data.get("run"), dict):
-        data["run"].setdefault("theme_pack_refresh", "all")
-    return data
-
-
-def _v4_to_v5(data):
-    """Version 5 adds teams[].allow_white_gossypium (#90), on as before."""
-    teams = data.get("teams")
-    for team in teams if isinstance(teams, list) else []:
-        if isinstance(team, dict):
-            team.setdefault("allow_white_gossypium", True)
-    return data
-
-
-def _v5_to_v6(data):
-    """Version 6 turns the numbers whose 0 meant something into switches (#137).
-
-    run.runs 0 (no limit) becomes null, off; teams[].hard_from_floor 0 (the whole run HARD) becomes 1,
-    which says the same. teams[].min_alive stays a number: 0 is no check.
-    """
-    run = data.get("run")
-    if isinstance(run, dict) and run.get("runs") == 0:
-        run["runs"] = None
-    teams = data.get("teams")
-    for team in teams if isinstance(teams, list) else []:
-        if isinstance(team, dict):
-            if team.get("hard_from_floor") == 0:
-                team["hard_from_floor"] = 1
-    return data
-
-
-def _v6_to_v7(data):
-    """Version 7 adds what the shop keeps out of fusions and sales (#77, #161), as before: teams[].keep_keywords none,
-    keywordless "keep" (keep_keywordless on before #161 merged it), keep_gifts none. sell_max_tier 4 and sell_vestiges
-    off are the user's defaults (#161): a tier V and a vestige are never sold (a vestige is keywordless: "keep" kept it)."""
-    teams = data.get("teams")
-    for team in teams if isinstance(teams, list) else []:
-        if isinstance(team, dict):
-            team.setdefault("keep_keywords", [])
-            team.setdefault("keywordless", "keep")
-            team.setdefault("keep_gifts", [])
-            team.setdefault("sell_max_tier", 4)
-            team.setdefault("sell_vestiges", False)
-    return data
-
-
-def _v7_to_v8(data):
-    """Version 8 adds run.auto_accept_terms and run.auto_download (#85, #86), on: the user's decision (2026-10-21)."""
-    if isinstance(data.get("run"), dict):
-        data["run"].setdefault("auto_accept_terms", True)
-        data["run"].setdefault("auto_download", True)
-    return data
-
-
-MARK_WEIGHTS = {"prefer": 5, "neutral": 0, "avoid": -5}
-
-
-def _v8_to_v9(data):
-    """Version 9 weighs theme packs (#240): prefer / neutral / avoid become 5 / 0 / -5, threshold 0 (refresh while every
-    pack is avoided), unlisted 0 (neutral), event packs by weight: the same picks as before."""
-    plans = data.get("theme_pack_plans")
-    for plan in plans if isinstance(plans, list) else []:
-        if isinstance(plan, dict) and isinstance(plan.get("marks"), dict):
-            plan["weights"] = {k: MARK_WEIGHTS.get(v, v) for k, v in plan.pop("marks").items()}  # a bad mark stays bad
-            plan.update(threshold=0, unlisted=0, event_packs="weight")
-    return data
-
-
-def _v9_to_v10(data):
-    """Version 10 adds teams[].fusion_condition (#263), "any": the shop fuses as before."""
-    teams = data.get("teams")
-    for team in teams if isinstance(teams, list) else []:
-        if isinstance(team, dict):
-            team.setdefault("fusion_condition", "any")
-    return data
+# v0.1.0's, the first release: the versions before it were the developers' own files, and their migrations went (#653)
+OLDEST_VERSION = 20
+# MIGRATIONS[n] turns a version-n dict into a version-(n + 1) dict, one for each n from OLDEST_VERSION up; keep in step with
+# gui/src/model.ts.
+MIGRATIONS = {}
 
 
 ROOT = Path(__file__).resolve().parent.parent  # resource/ sits under it in a release, under assets/ in the repo
@@ -206,152 +115,6 @@ def clean_gift_list(gift_list):
     return {**gift_list, "want": known_only(gift_list["want"]), "keep": known_only(gift_list["keep"]), "gorder": gorder}, dropped
 
 
-def _team_gift_list(team):
-    """The version 14 gift list the shop's keep settings of a version 10 team come to (spec 04 section 2, version 14):
-    (list without id and name, number of keep_gifts that match no gift)."""
-    search = gift_tables()[0]
-    listed = lambda key: team[key] if isinstance(team.get(key), list) else []  # a broken file is left to the checks
-    main = team.get("keyword") if isinstance(team.get("keyword"), str) else None
-    kept_kw = {main, *(k for k in listed("keep_keywords") if isinstance(k, str))}
-    want = {g["id"] for g in search if g["keyword"] == main}
-    keep = {g["id"] for g in keyword_gifts() if g["keyword"] in kept_kw or g["keyword"] == "Keywordless"}
-    dropped = 0
-    for kept in listed("keep_gifts"):
-        kept = kept if isinstance(kept, dict) else {}
-        tier = None if isinstance(kept.get("tier"), bool) else kept.get("tier")  # True == 1 in Python only
-        by_name = {g["en"]: g["id"] for g in search if (g["keyword"], g["tier"]) == (kept.get("keyword"), tier)}
-        name = kept.get("name") if isinstance(kept.get("name"), str) else None
-        found = by_name.get(name) or {v["en"]: v["id"] for v in vestiges()}.get(name)
-        if found:
-            keep.add(found)
-        else:
-            dropped += 1
-    order = [main, *(k for k in GIFT_KEYWORDS if k != main)] if main in GIFT_KEYWORDS else list(GIFT_KEYWORDS)
-    fusion_condition = team.get("fusion_condition", "any")
-    return {"order": order, "want": sorted(want), "keep": sorted(keep - want), "gorder": default_gorder(), "fusion_condition": fusion_condition}, dropped
-
-
-def gift_lists_from_v10(teams):
-    """(gift_lists, each team's gift_list id, dropped keep_gifts) for version 10 teams: one list per team, teams with the
-    same content share the first one's list, named after the first team, "Name 2" when the name is taken."""
-    lists, ids, dropped = [], [], 0
-    for team in teams:
-        content, lost = _team_gift_list(team)
-        dropped += lost
-        same = next((g for g in lists if {k: g[k] for k in content} == content), None)
-        if not same:
-            names = {g["name"] for g in lists}
-            base = team.get("name") if isinstance(team.get("name"), str) and team["name"] else "Gift list"
-            name = next(n for n in (base, *(f"{base} {i}" for i in range(2, len(names) + 3))) if n not in names)
-            same = {"id": f"gift-list-{len(lists) + 1}", "name": name, **content}
-            lists.append(same)
-        ids.append(same["id"])
-    return lists, ids, dropped
-
-
-def _v10_to_v11(data):
-    """Version 11 adds run.keep_dismissed_screens (#244), on."""
-    if isinstance(data.get("run"), dict):
-        data["run"].setdefault("keep_dismissed_screens", True)
-    return data
-
-
-def _v11_to_v12(data):
-    """Version 12 adds the daily tasks (#362): luxcavation.exp and .thread (#366, #368: one win for EXP, three for Thread
-    (its 3 Daily Bonuses), no team picked yet, no
-    retries) and charge_enkephalin (#373: no Lunacy charges)."""
-    lux = data.setdefault("luxcavation", {})
-    if isinstance(lux, dict):  # a broken file is left to the checks
-        for task, count in (("exp", 1), ("thread", 3)):
-            lux.setdefault(task, {"count": count, "team": None, "retries": 0})
-    data.setdefault("charge_enkephalin", {"count": 0})
-    return data
-
-
-def _v12_to_v13(data):
-    """Version 13 adds luxcavation.<task>.consecutive (#375), on: the Luxcavation tasks fight their wins as Consecutive Battles."""
-    lux = data.get("luxcavation")
-    for opts in lux.values() if isinstance(lux, dict) else []:
-        if isinstance(opts, dict):
-            opts.setdefault("consecutive", True)
-    return data
-
-
-def _v13_to_v14(data):
-    """Version 14 (#291) moves the shop's keep settings from the teams to gift lists: a list per team (teams that kept the same
-    share one), teams[].gift_list names it; keyword (the list's order starts with it), keep_keywords, keywordless, keep_gifts and
-    fusion_condition go. A keywordless gift is always kept now, whatever keywordless said: "fuse" and "fuse_or_sell" no longer make it material."""
-    teams = [t for t in data.get("teams") if isinstance(t, dict)] if isinstance(data.get("teams"), list) else []
-    data["gift_lists"], ids, _ = gift_lists_from_v10(teams)
-    for team, gift_list in zip(teams, ids):
-        for old in ("keyword", "keep_keywords", "keywordless", "keep_gifts", "fusion_condition"):
-            team.pop(old, None)
-        team["gift_list"] = gift_list
-    return data
-
-
-def _v14_to_v15(data):
-    """Version 15 splits a team's shop_refresh_limit N into shop_refresh_keyword N and shop_refresh_normal 0 (the user,
-    2026-10-30): the shop used the keyword refresh first, so it spends no more than before."""
-    for team in data.get("teams") if isinstance(data.get("teams"), list) else []:
-        if isinstance(team, dict):
-            team.setdefault("shop_refresh_keyword", team.pop("shop_refresh_limit", 0))
-            team.setdefault("shop_refresh_normal", 0)
-    return data
-
-
-def _v15_to_v16(data):
-    """Version 16 scores trials in pt, 1 pt = the enemy's Clash Power +1 (#381): a 0-5 risk of trial_risk_overrides means
-    nothing on that scale, so the list is emptied and NOTES says how many went."""
-    old = data.get("trial_risk_overrides")
-    if isinstance(old, list) and old:
-        data["trial_risk_overrides"] = []
-        NOTES.append(f"settings version 16: {len(old)} trial risk override{'s' if len(old) > 1 else ''} (0-5) emptied, "
-                     "trials score in pt now (#381)")
-    return data
-
-
-def _v16_to_v17(data):
-    """Version 17 drops teams[].trial_risk_weight (the user, 2026-10-31): a trial's pt counts one gift point for every
-    team."""
-    for team in data.get("teams") if isinstance(data.get("teams"), list) else []:
-        if isinstance(team, dict):
-            team.pop("trial_risk_weight", None)
-    return data
-
-
-def _v17_to_v18(data):
-    """Version 18 adds luxcavation.<task>.mode (#431), "daily" (the user, 2026-11-05): the battles the day still needs,
-    read in the game; "count" fights count this run."""
-    lux = data.get("luxcavation")
-    for opts in lux.values() if isinstance(lux, dict) else []:
-        if isinstance(opts, dict):
-            opts.setdefault("mode", "daily")
-    return data
-
-
-def _v18_to_v19(data):
-    """Version 19 adds teams[].skill_replacement (#454): no sinner listed, so every deck stays the game's 3/2/1 and the shop
-    plays as before; ID Skill Search off and paid in Cost."""
-    teams = data.get("teams")
-    for team in teams if isinstance(teams, list) else []:
-        if isinstance(team, dict):
-            team.setdefault("skill_replacement", {"sinners": [], "id_skill_search": {"enabled": False, "pay": "cost"}})
-    return data
-
-
-def _v19_to_v20(data):
-    """Version 20 adds run.target_floor (#385): 5, the floors the bot has always played."""
-    run = data.get("run")
-    if isinstance(run, dict):
-        run.setdefault("target_floor", 5)
-    return data
-
-
-# MIGRATIONS[n] turns a version-n dict into a version-(n + 1) dict; keep in step with gui/src/model.ts.
-MIGRATIONS = {1: _v1_to_v2, 2: _v2_to_v3, 3: _v3_to_v4, 4: _v4_to_v5, 5: _v5_to_v6, 6: _v6_to_v7, 7: _v7_to_v8, 8: _v8_to_v9, 9: _v9_to_v10, 10: _v10_to_v11, 11: _v11_to_v12, 12: _v12_to_v13, 13: _v13_to_v14, 14: _v14_to_v15, 15: _v15_to_v16, 16: _v16_to_v17, 17: _v17_to_v18, 18: _v18_to_v19, 19: _v19_to_v20}
-NOTES = []  # what the last migrate() dropped, for the agent's log: the file on disk keeps it until the GUI saves
-
 NO_TEAM = "No enabled team: set up a team in the settings GUI first."
 
 
@@ -416,15 +179,15 @@ def load_settings(root, need_team=False):
 
 
 def migrate(data):
-    NOTES.clear()
     version = data.get("version") if isinstance(data, dict) else None
     if not isinstance(version, int) or isinstance(version, bool):
         raise SettingsError([f"version must be an integer, got {version!r}"])
     if version > CURRENT_VERSION:
         raise SettingsError([f"settings version {version} is newer than this agent supports ({CURRENT_VERSION}); update maalc"])
     while version < CURRENT_VERSION:
-        if version not in MIGRATIONS:
-            raise SettingsError([f"settings version {version} cannot be migrated"])
+        if version not in MIGRATIONS:  # the GUI says the same (gui/src/model.ts parseSettings)
+            raise SettingsError([f"settings version {version} is too old: maalc reads version {OLDEST_VERSION} and later; "
+                                 "start a new settings file in the settings GUI"])
         data = MIGRATIONS[version](data)
         version += 1
         data["version"] = version

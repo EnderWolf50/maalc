@@ -74,7 +74,7 @@ export default function App() {
       if (text === null) return setS(newSettings());
       disk.current = text; // read, even when it does not parse: New file then writes over it
       try {
-        const { data, migrated, dropped, unknown, trials } = parseSettings(text);
+        const { data, migrated, unknown } = parseSettings(text);
         const migratedText = toText(data);
         setS(data);
         setSavedText(migratedText); // dirty = content changed, not formatting; before the write-back, which a poll may meet
@@ -86,8 +86,7 @@ export default function App() {
             if (!api.isChanged(e)) throw e; // the Agent wrote first: the next poll reads its file
           }
         }
-        const warn = (key: Key, n: number) => (n ? [TEXT[data.language][key].replace("{n}", String(n))] : []);
-        setStatus([...warn("migrate.dropped", dropped), ...warn("migrate.unknown", unknown), ...warn("migrate.trials", trials)].join(" "));
+        setStatus(unknown ? TEXT[data.language]["migrate.unknown"].replace("{n}", String(unknown)) : "");
       } catch (e) {
         setLoadError(String(e));
       }
