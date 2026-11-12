@@ -69,6 +69,13 @@ STUCK = {"node": None, "kind": None, "flag": None, "watch": recovery.Watchdog(),
 SCREENS = deque(maxlen=20)  # the last screens MirrorHub handed out: the evidence on a stop
 LOG = deque(maxlen=500)
 
+
+def end_battle():
+    """The battle is over: the next one starts its turns and its clock afresh."""
+    RUN.pop("turn", None)
+    RUN.pop("battle_start", None)
+
+
 WEEKLY_SLOTS = (922, 960, 998)  # x of the 3 Weekly Bonuses slots on the entry page, y 285-297
 TEAM_LIST = [75, 292, 115, 245]
 ENTER_DIALOG = [400, 325, 480, 45]  # "Will you enter ...?"
@@ -896,8 +903,7 @@ class LuxResult(CustomAction):
         result = "win" if seen(context, image, "LuxWon") else "lose" if seen(context, image, "LuxLost") else None
         if result is None:
             return True
-        RUN.pop("turn", None)  # the battle is over: the next one starts its turns and its clock afresh
-        RUN.pop("battle_start", None)
+        end_battle()
         if RUN.get("entered") and RUN["lux"]["result"] is None:
             RUN["lux"]["result"] = result
             log(f"{RUN['lux']['name']}: results page, {'Victory' if result == 'win' else 'Defeat'}")
@@ -3121,9 +3127,7 @@ class Formation(CustomAction):
     @hands_back
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         run = current_run(context)
-        # A new battle: its clock and turn count start over, also when the last VICTORY went unseen (#80).
-        RUN.pop("turn", None)
-        RUN.pop("battle_start", None)
+        end_battle()  # a new battle: its clock and turn count start over, also when the last VICTORY went unseen (#80)
         image = still(context)
         count = image is not None and participants(context, image)
         if not count:
@@ -3525,8 +3529,7 @@ class Victory(CustomAction):
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         if "turn" in RUN:
             log("victory")
-        RUN.pop("turn", None)
-        RUN.pop("battle_start", None)
+        end_battle()
         RUN["wipes"] = 0
         return True
 
@@ -3557,8 +3560,7 @@ class Wipe(CustomAction):
                 break
         else:
             return stuck(f"the DEFEAT dialog did not take {choice}")
-        RUN.pop("turn", None)
-        RUN.pop("battle_start", None)
+        end_battle()
         if choice == "retry":
             RUN["wipes"] = used + 1
         else:
