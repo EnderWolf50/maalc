@@ -31,7 +31,7 @@ export default function App() {
   const [tab, setTab] = useState<(typeof TABS)[number][0]>("teams");
   const [giftList, setGiftList] = useState("default"); // what the gift list tab shows; the teams tab can point it at a list
   const [checked, setChecked] = useState(false); // marks show after the first save attempt
-  const [status, setStatus] = useState(""); // a TEXT key, or text as it is (an error, the migration warnings)
+  const [status, setStatus] = useState(""); // a TEXT key, or text as it is (an error, the gift ids a load dropped)
   // The file's text as last read or written: other text there is another writer's, the Agent's after a claim (#501).
   const disk = useRef<string | null>(null);
   const latest = useRef({ s, savedText });

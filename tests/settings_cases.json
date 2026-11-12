@@ -254,7 +254,8 @@
   },
   "too_old": [
     {"version": 19, "error": "settings version 19 is too old: maalc reads version 20 and later; start a new settings file in the settings GUI"},
-    {"version": 0, "error": "settings version 0 is too old: maalc reads version 20 and later; start a new settings file in the settings GUI"}
+    {"version": 0, "error": "settings version 0 is too old: maalc reads version 20 and later; start a new settings file in the settings GUI"},
+    {"version": -1, "error": "settings version -1 is too old: maalc reads version 20 and later; start a new settings file in the settings GUI"}
   ],
   "clean_gift_list": [
     {"name": "ids no data file has are dropped and counted",

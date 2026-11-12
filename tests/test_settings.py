@@ -90,8 +90,8 @@ def errors(tmp_path, data):
     return e.value.errors
 
 
-def edited(fn, base=VALID):
-    data = copy.deepcopy(base)
+def edited(fn):
+    data = copy.deepcopy(VALID)
     fn(data)
     return data
 

@@ -16,7 +16,7 @@
 
 - 設定檔的格式由一份 JSON Schema `settings.schema.json` 描述，GUI 與 Agent 共用同一份。檔案位置在實作時決定。（#19，2026-10-14 定案）
 - 設定檔有 `version` 欄位。格式改變時遞增版本，並提供遷移：GUI 讀到舊版本時遷移後寫回；Agent 讀到舊版本時在記憶體裡遷移，不寫回（移動隊伍佇列時也照舊版本寫回，只改順序）；讀到比自己新的版本就報錯。（#19）
-- 最舊只讀版本 20，也就是第一個發布版 v0.1.0 出貨時的版本。版本 1–19 只有發布前的開發用設定檔，它們的遷移 2026-11-13 刪掉了（#653）；下面的版本紀錄只說明各欄位的由來。讀到比 20 舊的檔，Agent 停下、GUI 顯示讀取失敗，兩邊的原因是同一句：`settings version <n> is too old: maalc reads version 20 and later; start a new settings file in the settings GUI`。之後的版本照上一條提供遷移，從版本 20 起每一版一個。（#653）
+- 最舊只讀版本 20，也就是第一個發布版 v0.1.0 出貨時的版本。版本 1–19 只有發布前的開發用設定檔，它們的遷移 2026-11-13 刪掉了（#653）；下面的版本紀錄只說明各欄位的由來，裡面寫的遷移、記錄行與狀態列提示都已經不存在。讀到比 20 舊的檔，Agent 停下、GUI 顯示讀取失敗，兩邊的原因是同一句：`settings version <n> is too old: maalc reads version 20 and later; start a new settings file in the settings GUI`。之後的版本照上一條提供遷移，從版本 20 起每一版一個。（#653）
   - 版本 2（#52）：隊伍新增 `guard_turns`，從版本 1 遷移時填 0；出戰順序可以少於 12 位，舊檔不用改。
   - 版本 3（#54）：隊伍新增 `gift_search`，從版本 2 遷移時填 `{"enabled": false, "gifts": []}`（照舊 Refuse）。
   - 版本 4（#41）：執行選項新增 `theme_pack_refresh`，從版本 3 遷移時填 `all`（照舊用完所有免費刷新）。

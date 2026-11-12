@@ -314,18 +314,4 @@ describe("in the whole editor", () => {
     await waitFor(() => expect(file.saved).toHaveLength(1));
     expect(JSON.parse(file.saved[0]).teams[0].skill_replacement.sinners).toEqual([]);
   });
-
-  test("a file from before version 19 opens with nobody listed and is written back migrated", async () => {
-    const old = JSON.parse(file.text);
-    old.version = 18;
-    delete old.teams[0].skill_replacement;
-    file.text = JSON.stringify(old);
-    const user = userEvent.setup();
-    render(<App />);
-    await user.click(await screen.findByText(zh["skill.title"], { exact: false, selector: "summary" }));
-    expect(within(panel()).getByText(zh["skill.empty"])).toBeInTheDocument();
-    await waitFor(() => expect(file.saved).toHaveLength(1));
-    expect(JSON.parse(file.saved[0]).version).toBe(20);
-    expect(JSON.parse(file.saved[0]).teams[0].skill_replacement.sinners).toEqual([]);
-  });
 });
