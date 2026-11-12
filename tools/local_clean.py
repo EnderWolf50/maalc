@@ -20,13 +20,11 @@ from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 
+from dir_link import is_link
+
 SHRINK_HEIGHT = 720
 SHRINK_MIN_BPS = 2e6
 DURATION_TOLERANCE_S = 1.0
-
-
-def is_link(path: Path) -> bool:
-    return path.is_symlink() or path.is_junction()
 
 
 # ---- usage ----

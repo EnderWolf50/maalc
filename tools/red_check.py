@@ -17,6 +17,10 @@ import tempfile
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
+import dir_link
+import git_diff
+from git_diff import git
+
 ROOT = Path(__file__).resolve().parent.parent
 OCR = Path("assets/resource/base/model/ocr")  # gitignored; the base worktree borrows this checkout's
 TEST_DATA = ("tests", "maatools.config.mts")  # what the branch's tests read, copied over the base
@@ -26,27 +30,19 @@ TEST_DATA = ("tests", "maatools.config.mts")  # what the branch's tests read, co
 NO_DATA_ERROR = re.compile(r"(?:failed on setup with \")?FileNotFoundError\b(?!.*\bassets[\\/])")
 
 
-def git(*args: str, check: bool = True) -> str:
-    return subprocess.run(["git", *args], cwd=ROOT, capture_output=True, text=True, encoding="utf-8", check=check).stdout
-
-
 def changed_lines(base: str) -> dict[str, set[int]]:
     """New-side line numbers each tests/ file of the branch adds or edits, from the merge base to HEAD."""
     lines: dict[str, set[int]] = {}
-    path = ""
     # R: a moved and edited file's hunks name only its edited lines (a pure move has no hunk, so no test of it is listed)
-    for line in git("diff", "-U0", "--no-color", "--diff-filter=AMR", f"{base}...HEAD", "--", "tests").splitlines():
-        if line.startswith("+++ "):
-            path = line[6:] if line.startswith("+++ b/") else ""
-        elif path and (m := re.match(r"@@ -\S+ \+(\d+)(?:,(\d+))?", line)):
-            start, count = int(m[1]), int(m[2] if m[2] is not None else 1)
-            lines.setdefault(path, set()).update(range(start, start + count))
+    for line in git_diff.lines(git("diff", "-U0", "--no-color", "--diff-filter=AMR", f"{base}...HEAD", "--", "tests", cwd=ROOT)):
+        if line.sign == "+" and line.new:
+            lines.setdefault(line.new, set()).add(line.no)
     return lines
 
 
 def changed_files(base: str) -> list[str]:
     """Every file under TEST_DATA the branch adds or edits, binary ones too (a diff's line numbers skip those)."""
-    return git("diff", "--name-only", "--no-color", "--no-renames", "--diff-filter=AM", f"{base}...HEAD", "--", *TEST_DATA).splitlines()
+    return git("diff", "--name-only", "--no-color", "--no-renames", "--diff-filter=AM", f"{base}...HEAD", "--", *TEST_DATA, cwd=ROOT).splitlines()
 
 
 def changed_tests(source: str, lines: set[int], path: str) -> list[str]:
@@ -83,22 +79,6 @@ def outcomes(junit: Path) -> dict[tuple[str, str], str]:
     return results
 
 
-def link(source: Path, target: Path) -> None:
-    """The gitignored OCR model of this checkout, reachable from the base worktree (a junction on Windows)."""
-    target.parent.mkdir(parents=True, exist_ok=True)
-    if sys.platform == "win32":
-        subprocess.run(["cmd", "/c", "mklink", "/J", str(target), str(source)], capture_output=True, check=True)
-    else:
-        target.symlink_to(source)
-
-
-def unlink(target: Path) -> None:
-    if sys.platform == "win32":  # rmdir on a junction removes the link, not the model behind it
-        subprocess.run(["cmd", "/c", "rmdir", str(target)], capture_output=True)
-    elif target.is_symlink():
-        target.unlink()
-
-
 def main(base: str) -> int:
     lines = changed_lines(base)
     wanted = [i for path, ls in sorted(lines.items()) if Path(path).name.startswith("test_") and path.endswith(".py")
@@ -108,13 +88,14 @@ def main(base: str) -> int:
         return 0
     with tempfile.TemporaryDirectory(prefix="red-check-") as tmp:
         work = Path(tmp) / "base"
-        git("worktree", "add", "--detach", str(work), base)
+        git("worktree", "add", "--detach", str(work), base, cwd=ROOT)
         try:
             for path in changed_files(base):  # the branch's tests, fixtures and screens, over the base's code
                 (work / path).parent.mkdir(parents=True, exist_ok=True)
                 (work / path).write_bytes(subprocess.run(["git", "show", f"HEAD:{path}"], cwd=ROOT, capture_output=True, check=True).stdout)
             if (ROOT / OCR).exists() and not (work / OCR).exists():
-                link(ROOT / OCR, work / OCR)
+                (work / OCR).parent.mkdir(parents=True, exist_ok=True)  # the gitignored model, reachable from the base worktree
+                dir_link.link(work / OCR, ROOT / OCR)
             results: dict[tuple[str, str], str] = {}
             for n, path in enumerate(sorted({w.split("::")[0] for w in wanted})):  # one run per file: a module that does not import
                 junit = Path(tmp) / f"result{n}.xml"                                # on the base must not stop the others
@@ -122,8 +103,8 @@ def main(base: str) -> int:
                                 *(w for w in wanted if w.split("::")[0] == path)], cwd=work, capture_output=True, text=True, encoding="utf-8")
                 results |= outcomes(junit) if junit.exists() else {}
         finally:
-            unlink(work / OCR)
-            git("worktree", "remove", "--force", str(work), check=False)
+            dir_link.unlink(work / OCR)  # the link only, never the model behind it
+            git("worktree", "remove", "--force", str(work), cwd=ROOT, check=False)
     keys = {(Path(w.split("::")[0]).stem, w.split("::")[-1]) for w in wanted}
     group = {outcome: sorted(k for k in keys if results.get(k, RED) == outcome) for outcome in OUTCOMES}
     for outcome in OUTCOMES:

@@ -12,44 +12,24 @@ anything else is a change the move did not announce. Read it next to
 Exit code 0 when nothing is left over, 1 otherwise.
 """
 
-import re
-import subprocess
 import sys
 from collections import Counter
 
-HUNK = re.compile(r"^@@ -(\d+)(?:,\d+)? \+(\d+)")
-
+import git_diff
+from git_diff import git
 
 def changed_lines(base, head, cwd=None):
     """(added, removed): (file, line number, text without leading whitespace) of every non-blank changed line."""
     # a/ b/ prefixes and unquoted paths whatever the user's diff.noprefix or core.quotepath says
-    diff = subprocess.run(["git", "-c", "core.quotepath=false", "diff", "-U0", "--no-color", "--no-ext-diff",
-                           "--src-prefix=a/", "--dst-prefix=b/", f"{base}...{head}"], cwd=cwd, check=True,
-                          capture_output=True, text=True, encoding="utf-8").stdout
+    diff = git("-c", "core.quotepath=false", "diff", "-U0", "--no-color", "--no-ext-diff",
+               "--src-prefix=a/", "--dst-prefix=b/", f"{base}...{head}", cwd=cwd)
     added, removed = [], []
-    old = new = None
-    old_no = new_no = 0
-    header = False  # between `diff --git` and the first hunk, where `--- a/x` names a file, not a removed line
-    for line in diff.splitlines():
-        if line.startswith("diff --git "):
-            header = True
-        elif header and line.startswith("--- "):
-            old = line[6:] if line.startswith("--- a/") else None
-        elif header and line.startswith("+++ "):
-            new = line[6:] if line.startswith("+++ b/") else None
-        elif m := HUNK.match(line):
-            header = False
-            old_no, new_no = int(m[1]), int(m[2])
-        elif header:
-            continue
-        elif line.startswith("-"):
-            if text := line[1:].strip():
-                removed.append((old, old_no, text))
-            old_no += 1
-        elif line.startswith("+"):
-            if text := line[1:].strip():
-                added.append((new, new_no, text))
-            new_no += 1
+    for line in git_diff.lines(diff):
+        if text := line.text.strip():
+            if line.sign == "+":
+                added.append((line.new, line.no, text))
+            else:
+                removed.append((line.old, line.no, text))
     return added, removed
 
 
