@@ -13,13 +13,11 @@ const P = schema.properties;
 const TEAM = P.teams.items.properties;
 
 export const SINNERS: string[] = schema.$defs.order.default;
-export const REWARD_CARDS: string[] = TEAM.reward_cards.default;
 export const LEVELS: string[] = schema.$defs.levels.items.enum;
 export const VERSION: number = P.version.const;
 /** Spec 04 section 7: the graces numbered 1-10, English names as the game shows them, Chinese name and
  * effect text from LLC (graces.json carries its source and license). */
 export const GRACES: Grace[] = graces.graces;
-export const BOOSTS = GRACES.map((g) => g.en);
 export interface Grace { en: string; zh: string; effects: { base: string[]; plus?: string[]; plus2?: string[] } }
 
 /** Enum values of a run or team field, in schema order. */
@@ -161,13 +159,15 @@ export function parseThemePacks(text: string): ThemePacks {
 /** The pack filter's difficulties, "" any: the modes of the data file's floors. */
 export type PackMode = "" | "normal" | "hard" | "infinity" | "extreme";
 const MODE_KEYS = { normal: "N", hard: "H", infinity: "I", extreme: "X" } as const;
+/** The floors' modes in badge order: NORMAL, HARD, INFINITY, EXTREME. */
+const FLOOR_MODES = ["N", "H", "I", "X"] as const;
 /** The floors a 15-floor run plays as INFINITY and as EXTREME, as the agent reads them (agent/run_start.py MODE_BANDS, #387). */
 export const MODE_BANDS = { I: [6, 10], X: [11, 15] } as const;
 
 /** Whether a pack with these floors ({N: [1, 2], H: [1]}: NORMAL 1-2, HARD 1; I, X: every floor of MODE_BANDS) shows on
  * difficulty ("" any) and floor (0 any). */
 export function onFloor(floors: PackFloors, difficulty: PackMode, floor: number) {
-  const keys = difficulty ? [MODE_KEYS[difficulty]] : (["N", "H", "I", "X"] as const);
+  const keys = difficulty ? [MODE_KEYS[difficulty]] : FLOOR_MODES;
   return keys.some((k) => {
     if (k === "I" || k === "X") return floors[k] === true && (floor === 0 || (floor >= MODE_BANDS[k][0] && floor <= MODE_BANDS[k][1]));
     const list = floors[k];
@@ -187,7 +187,7 @@ export function floorBadges(floors: PackFloors, sep: string): { mode: keyof Pack
     }
     return groups.map((g) => (g.length > 1 ? `${g[0]}–${g[g.length - 1]}` : `${g[0]}`)).join(sep);
   };
-  return (["N", "H", "I", "X"] as const).flatMap((mode): { mode: keyof PackFloors; text: string }[] => {
+  return FLOOR_MODES.flatMap((mode): { mode: keyof PackFloors; text: string }[] => {
     if (mode === "I" || mode === "X") return floors[mode] ? [{ mode, text: MODE_BANDS[mode].join("–") }] : [];
     const list = floors[mode];
     return list?.length ? [{ mode, text: runs(list) }] : [];
@@ -303,9 +303,8 @@ export const LUX_MODES = schema.$defs.luxcavation.properties.mode.enum as LuxMod
 const newLuxcavation = (count = 1): Luxcavation =>
   ({ ...defaultsOf(schema.$defs.luxcavation.properties), count }) as unknown as Luxcavation;
 
-const clone = <T,>(v: T): T => structuredClone(v);
 const defaultsOf = (props: Record<string, object>) =>
-  Object.fromEntries(Object.entries(props).map(([k, v]) => [k, clone((v as { default?: unknown }).default)]));
+  Object.fromEntries(Object.entries(props).map(([k, v]) => [k, structuredClone((v as { default?: unknown }).default)]));
 
 export const newId = () => crypto.randomUUID();
 
@@ -320,7 +319,7 @@ export function newSettings(): Settings {
 }
 
 export const defaultStarlight = (): StarlightValues => ({
-  levels: clone(schema.$defs.levels.default), priority: clone(schema.$defs.priority.default), convert_leftover: false,
+  levels: structuredClone(schema.$defs.levels.default), priority: structuredClone(schema.$defs.priority.default), convert_leftover: false,
 });
 
 /** Spec 04 section 9: a new team at 1-based position n. */
@@ -328,7 +327,7 @@ export function newTeam(n: number, name: string): Team {
   const d = defaultsOf(TEAM);
   return {
     ...d, id: newId(), name, enabled: true, game_team: Math.min(n, 40),
-    deployment_order: { custom: clone(SINNERS) }, starlight: { custom: defaultStarlight() },
+    deployment_order: { custom: structuredClone(SINNERS) }, starlight: { custom: defaultStarlight() },
   } as Team;
 }
 
