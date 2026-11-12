@@ -1,6 +1,6 @@
 import pytest
 
-from ocrtext import compact, digits, floor_number, has, normalize
+from ocrtext import compact, digits, floor_number, fraction, fractions, has, normalize, only_fraction
 
 
 @pytest.mark.parametrize("read, expected", [
@@ -68,3 +68,21 @@ def test_floor_number_takes_the_label_of_the_caller():
 ])
 def test_digits_reads_look_alike_letters_as_digits(read, cost):
     assert digits(read) == cost
+
+
+def test_fraction_reads_n_over_m():
+    assert fraction("Select 2 / 3") == (2, 3)
+    assert fraction("Total Participants 12/12") == (12, 12)  # two digits
+    assert fraction("Select") is None
+    assert fractions("22/136 > 2/136") == [(22, 136), (2, 136)]
+
+
+@pytest.mark.parametrize("texts, n", [
+    (["Daily Bonuses", "2/3"], 2),
+    (["2", "/ 3"], 2),  # the strings are read as one
+    (["2/3", "1/3"], None),  # more than one: not sure
+    (["2/10"], None),  # another cap
+    (["Daily Bonuses"], None),
+])
+def test_only_fraction_takes_the_one_n_of_its_cap(texts, n):
+    assert only_fraction(texts, 3) == n

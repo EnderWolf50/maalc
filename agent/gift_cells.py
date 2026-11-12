@@ -4,7 +4,7 @@ actions.read_cells reads a cell's tier and keyword badge; the gifts of that keyw
 their icons are matched on the cell. Everything here is plain data in, plain data out.
 """
 
-from run_start import match_pack
+from run_start import match_name
 from settings import extra_gifts, gift_tables, vestiges
 # CCOEFF score of an icon on its own cell and on another's: the gifts of the table's cells score 0.51-0.96, a gift the table
 # lacks 0.30-0.38, a lookalike 0.54 at most with the gift covered (#297, docs/spec/03-decisions.md section 13)
@@ -72,10 +72,10 @@ def plate_roi(x, y):
 def name_id(text, ids):
     """The id of the gift whose English name `text` (a plate's OCR) stands for, else None; ids: {English name: id}.
 
-    run_start.match_pack's bar (0.9, 0.04 ahead). A two-line name shows its first line only; a skill slot ("Replace ...
+    run_start.match_name's bar (0.9, 0.04 ahead). A two-line name shows its first line only; a skill slot ("Replace ...
     Skill") is no gift's name.
     """
-    name = match_pack(text, ids) if text else None
+    name = match_name(text, ids) if text else None
     return ids.get(name)
 
 

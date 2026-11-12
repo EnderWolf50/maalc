@@ -39,6 +39,11 @@ def node_type(marks, by_cost=None):
     return "shop" if "shop" in marks else "event"
 
 
+def has_kind(column, kind):
+    """Whether a column, {row: (node type, ...)}, holds a node of that type."""
+    return any(t == kind for t, _ in column.values())
+
+
 def boss_after_shop(before, column):
     """Type every node of column, the one right after before's, as the boss when before holds a shop, in place (#279).
 
@@ -49,7 +54,7 @@ def boss_after_shop(before, column):
     So the shop decides and the glow only helps (a node reading as the boss stays one). Both columns are rank's:
     row -> (node type, ...). Returns the rows whose type it changed.
     """
-    if not any(node == "shop" for node, _ in before.values()):
+    if not has_kind(before, "shop"):
         return []
     changed = [row for row, (node, _) in column.items() if node != "boss"]
     for row, (_, rest) in column.items():

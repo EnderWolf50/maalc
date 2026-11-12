@@ -35,8 +35,9 @@ import run_start
 import settlement
 import shop
 from gifts import effective, main_keyword, purchases, recipe_fusion, resolve_list, state, want_kind
-from ocrtext import compact, digits, floor_number, has, normalize
-from settings import SettingsError, data_dir, gift_tables, load_settings, vestige_ids
+from ocrtext import compact, digits, floor_number, fraction, has, normalize
+from ocrtext import fractions as text_fractions
+from settings import GIFT_KEYWORDS, SettingsError, data_dir, gift_tables, load_settings, vestige_ids
 from team_queue import migrate_cursor, pick_team, requeue, resumed_team
 
 # Same <root> as main.ROOT; resource/ sits under it in a release, under assets/ in the repo.
@@ -67,6 +68,13 @@ STUCK = {"node": None, "kind": None, "flag": None, "watch": recovery.Watchdog(),
          "halted": None}
 SCREENS = deque(maxlen=20)  # the last screens MirrorHub handed out: the evidence on a stop
 LOG = deque(maxlen=500)
+
+
+def end_battle():
+    """The battle is over: the next one starts its turns and its clock afresh."""
+    RUN.pop("turn", None)
+    RUN.pop("battle_start", None)
+
 
 WEEKLY_SLOTS = (922, 960, 998)  # x of the 3 Weekly Bonuses slots on the entry page, y 285-297
 TEAM_LIST = [75, 292, 115, 245]
@@ -105,6 +113,32 @@ def screen(context):
 def tap(context, x, y, wait=1.0):
     context.tasker.controller.post_click(x, y).wait()
     time.sleep(wait)
+
+
+def back(context):
+    """Android's back key (BACK_KEY)."""
+    context.tasker.controller.post_click_key(BACK_KEY).wait()
+
+
+def box_centre(box):
+    """(x, y) of an [x, y, w, h] box's centre."""
+    x, y, w, h = box
+    return x + w // 2, y + h // 2
+
+
+def param(raw, default=None):
+    """A node's custom_action_param or custom_recognition_param, parsed; default when it is empty."""
+    return json.loads(raw) if raw else default
+
+
+def next_names(context, node):
+    """The names of the node's next list, in order."""
+    return [n["name"] for n in context.get_node_data(node)["next"]]
+
+
+def flag_hit(**detail):
+    """A recognition hit on a state, not a place on screen: its box the screen's first pixel."""
+    return CustomRecognition.AnalyzeResult(box=(0, 0, 1, 1), detail=detail)
 
 
 def until(context, done, timeout=2.0, least=0.0, every=0.2):
@@ -568,12 +602,12 @@ class StuckFlag(CustomRecognition):
             self.away(why, argv.image)
         if STUCK["flag"] and STUCK["flag"][0] is None:
             STUCK["flag"] = (STUCK["kind"], *STUCK["flag"][1:])  # reported by the action of the node just handled
-        return CustomRecognition.AnalyzeResult(box=(0, 0, 1, 1), detail={}) if STUCK["flag"] else None
+        return flag_hit() if STUCK["flag"] else None
 
     @staticmethod
     def hub(context, name, stuck_node):
         """Whether the node is a hub, not a screen: its next list holds this Stuck node."""
-        return stuck_node in (n["name"] for n in context.get_node_data(name)["next"])
+        return stuck_node in next_names(context, name)
 
     @staticmethod
     def away(why, image):
@@ -611,7 +645,7 @@ class GameAway(CustomRecognition):
 
     def analyze(self, context: Context, argv: CustomRecognition.AnalyzeArg):
         app = foreground(context)
-        return CustomRecognition.AnalyzeResult(box=(0, 0, 1, 1), detail={"app": app}) if app not in (None, recovery.GAME) else None
+        return flag_hit(app=app) if app not in (None, recovery.GAME) else None
 
 
 @AgentServer.custom_recognition("LuxCountMode")
@@ -619,7 +653,7 @@ class LuxCountMode(CustomRecognition):
     """Hits when the Luxcavation task LuxStart began runs in count mode (#431): ExpCountMode, which skips the pass page."""
 
     def analyze(self, context: Context, argv: CustomRecognition.AnalyzeArg):
-        return CustomRecognition.AnalyzeResult(box=(0, 0, 1, 1), detail={}) if RUN["lux"]["mode"] == "count" else None
+        return flag_hit() if RUN["lux"]["mode"] == "count" else None
 
 
 # The Luxcavation tasks (#366, #368): their settings key (custom_action_param of LuxStart) -> name, Modules a battle.
@@ -678,9 +712,8 @@ class OpenDrive(CustomAction):
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         TASK["modules"] = module_count(context, screen(context))
         p = json.loads(argv.custom_action_param)
-        x, y, w, h = argv.box
         began = time.monotonic()
-        image = tap_then(context, x + w // 2, y + h // 2, shows(context, p["next"]["roi"], p["next"]["expected"]),
+        image = tap_then(context, *box_centre(argv.box), shows(context, p["next"]["roi"], p["next"]["expected"]),
                          timeout=p["timeout"])
         log_change(argv.node_name, image, began)
         return True
@@ -701,7 +734,7 @@ class LuxHome(CustomAction):
         if lux["modules"] is None:
             return stop(context, f"{lux['name']}: the Modules number did not read on the main window")
         log(f"{lux['name']}: Modules {lux['modules']} on the main window")
-        if lux["mode"] == "count" or (json.loads(argv.custom_action_param or "null") or {}).get("plan"):
+        if lux["mode"] == "count" or (param(argv.custom_action_param) or {}).get("plan"):
             over = plan(context, lux["today"], lux["seen"])
             return True if over is None else over
         return True
@@ -740,7 +773,7 @@ class ExpPassRead(CustomAction):
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         lux = RUN["lux"]
         found = []
-        lost = (json.loads(argv.custom_action_param or "null") or {}).get("lost")
+        lost = (param(argv.custom_action_param) or {}).get("lost")
         if not lost:
             def row(image):
                 detail = context.run_recognition("PassExpRow", image)
@@ -859,7 +892,7 @@ class LuxEnter(CustomAction):
             over = battle_over(context)
             if over is not None:
                 return over
-        opts = json.loads(argv.custom_action_param or "null") or {}
+        opts = param(argv.custom_action_param) or {}
         lux = RUN["lux"]
         if lux["fights"] is None:  # Thread in daily mode only: count mode was planned in LuxHome
             n = luxcavation.read_bonuses(ocr_texts(context, screen(context), "ThreadBonuses"))
@@ -867,16 +900,16 @@ class LuxEnter(CustomAction):
             over = plan(context, None if n is None else luxcavation.DAILY_BONUSES - n, shown)
             if over is not None:
                 return over
-        x, y, w, h = argv.box
+        cx, cy = box_centre(argv.box)
         if lux["consecutive"]:
             want = lux["size"] = luxcavation.batch(lux["fights"], lux["won"], True)
-            got = set_consecutive(context, opts["box"], want, (x + w // 2, y + h // 2))
+            got = set_consecutive(context, opts["box"], want, (cx, cy))
             if got != want:
                 return stop(context, f"{lux['name']}: Consecutive Battle {'did not read' if got is None else f'shows x{got}'}, wanted x{want}")
-        if tap_then(context, x + w // 2, y + h // 2, lambda im: seen(context, im, argv.node_name) is None, timeout=3) is not None:
+        if tap_then(context, cx, cy, lambda im: seen(context, im, argv.node_name) is None, timeout=3) is not None:
             RUN["entered"] = opts.get("opens_battle", True)
             RUN["team_picked"] = False
-            log(f"{RUN['lux']['name']}: {argv.node_name} at ({x + w // 2}, {y + h // 2})")
+            log(f"{RUN['lux']['name']}: {argv.node_name} at ({cx}, {cy})")
         return True
 
 
@@ -895,8 +928,7 @@ class LuxResult(CustomAction):
         result = "win" if seen(context, image, "LuxWon") else "lose" if seen(context, image, "LuxLost") else None
         if result is None:
             return True
-        RUN.pop("turn", None)  # the battle is over: the next one starts its turns and its clock afresh
-        RUN.pop("battle_start", None)
+        end_battle()
         if RUN.get("entered") and RUN["lux"]["result"] is None:
             RUN["lux"]["result"] = result
             log(f"{RUN['lux']['name']}: results page, {'Victory' if result == 'win' else 'Defeat'}")
@@ -910,7 +942,7 @@ class StopTask(CustomAction):
     the next task of the client's list starts from its own GoHome."""
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
-        return stop(context, f"{argv.node_name}: {json.loads(argv.custom_action_param or '""')}")
+        return stop(context, f"{argv.node_name}: {param(argv.custom_action_param, '')}")
 
 
 def go_home(context):
@@ -951,7 +983,7 @@ class StuckWaiting(CustomRecognition):
     one (#506). Not StuckFlag: GoHome feeds no watchdog."""
 
     def analyze(self, context: Context, argv: CustomRecognition.AnalyzeArg):
-        return CustomRecognition.AnalyzeResult(box=(0, 0, 1, 1), detail={}) if STUCK["flag"] else None
+        return flag_hit() if STUCK["flag"] else None
 
 
 @AgentServer.custom_action("HomeFrozen")
@@ -966,7 +998,7 @@ class HomeFrozen(CustomAction):
 
 def hub_knows(context, hub, node):
     """A done(image) for until(): one of the nodes of hub's next list but node hits, a screen the hub knows besides it."""
-    known = [n["name"] for n in context.get_node_data(hub)["next"] if n["name"] != node]
+    known = [n for n in next_names(context, hub) if n != node]
     return lambda image: any(seen(context, image, n) for n in known)
 
 
@@ -981,7 +1013,7 @@ class StaysUnknown(CustomRecognition):
         p = json.loads(argv.custom_recognition_param)
         if until(context, hub_knows(context, p["hub"], argv.node_name), timeout=p["timeout"]) is not None:
             return None
-        return CustomRecognition.AnalyzeResult(box=(0, 0, 1, 1), detail={})
+        return flag_hit()
 
 
 @AgentServer.custom_action("HomeLost")
@@ -991,7 +1023,7 @@ class HomeLost(CustomAction):
     stop procedure ends the task."""
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
-        return restart_game(context, json.loads(argv.custom_action_param or '""') or "the main window was not reached")
+        return restart_game(context, param(argv.custom_action_param) or "the main window was not reached")
 
 
 @AgentServer.custom_action("DailyRecover")
@@ -1006,12 +1038,12 @@ class DailyRecover(CustomAction):
         kind, level, reason = STUCK["flag"]
         STUCK["flag"] = None
         if level < 3:
-            return stop(context, f"{argv.node_name}: {json.loads(argv.custom_action_param or '""')}")
+            return stop(context, f"{argv.node_name}: {param(argv.custom_action_param, '')}")
         if not restart_game(context, reason, kind):
             return False
         hub = context.get_node_data(argv.node_name)["next"][0]["name"]
-        for node in context.get_node_data(hub)["next"]:
-            context.clear_hit_count(node["name"])
+        for node in next_names(context, hub):
+            context.clear_hit_count(node)
         return go_home(context)
 
 
@@ -1053,7 +1085,7 @@ class DoneFlag(CustomRecognition):
     a success (#364)."""
 
     def analyze(self, context: Context, argv: CustomRecognition.AnalyzeArg):
-        return CustomRecognition.AnalyzeResult(box=(0, 0, 1, 1), detail={"done": TASK["done"]}) if TASK["done"] else None
+        return flag_hit(done=TASK["done"]) if TASK["done"] else None
 
 
 # Assemble Enkephalin Modules (#370, pipeline/assemble_modules.json).
@@ -1067,12 +1099,17 @@ ASSEMBLE_TRIES = 3  # reads, taps of >> and Confirms the task spends before it g
 
 def fractions(results):
     """Every "n / cap" of OCR results [(text, box)], left to right, as (n, cap)."""
-    return [(int(n), int(cap)) for t, _ in sorted(results, key=lambda r: r[1][0]) for n, cap in re.findall(r"(\d+)\s*/\s*(\d+)", t)]
+    return [f for t, _ in sorted(results, key=lambda r: r[1][0]) for f in text_fractions(t)]
+
+
+def node_results(context, image, node):
+    """Every (text, box) the OCR node read on image, hit or not."""
+    detail = context.run_recognition(node, image)
+    return [(r.text, tuple(r.box)) for r in (detail.all_results if detail else [])]
 
 
 def read_fractions(context, image, node):
-    detail = context.run_recognition(node, image)
-    return fractions([(r.text, tuple(r.box)) for r in (detail.all_results if detail else [])])
+    return fractions(node_results(context, image, node))
 
 
 def panel_read(context, image):
@@ -1153,7 +1190,7 @@ class AssemblePanel(CustomAction):
         image = screen(context)
         if too_many(context, image):
             a["end"] = "too many Enkephalin Modules in storage"
-            context.tasker.controller.post_click_key(BACK_KEY).wait()
+            back(context)
             return True
         if a.get("end"):
             tap(context, *PANEL_CANCEL, wait=0.5)
@@ -1180,7 +1217,7 @@ class AssemblePanel(CustomAction):
             image = screen(context)
             if too_many(context, image):
                 a["end"] = "too many Enkephalin Modules in storage"
-                context.tasker.controller.post_click_key(BACK_KEY).wait()
+                back(context)
                 return True
             again = panel_read(context, image) if on_modules_tab(context, image) else []
             if not again:
@@ -1306,8 +1343,7 @@ class ChargePanel(CustomAction):
 
 def ocr_texts(context, image, node):
     """Every text the OCR node read on image, hit or not."""
-    detail = context.run_recognition(node, image)
-    return [r.text for r in (detail.all_results if detail else [])]
+    return [t for t, _ in node_results(context, image, node)]
 
 
 @AgentServer.custom_action("Recover")
@@ -1435,7 +1471,7 @@ class DismissShot(CustomAction):
     """
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
-        p = json.loads(argv.custom_action_param or "null") or {}  # "null" when the node sets none
+        p = param(argv.custom_action_param) or {}  # "null" when the node sets none
         now = time.monotonic()
         gap = DISMISSED_GAP if argv.node_name in GAPPED else 0
         keep = allowed("keep_dismissed_screens") and now - DISMISSED_AT.get(argv.node_name, -gap) >= gap
@@ -1454,10 +1490,9 @@ class DismissShot(CustomAction):
             log(f"popup: {text(context, image, DIALOG_TEXT)!r}: pressed {popup_button(argv.reco_detail)!r}")
         began = time.monotonic() if "until" in p or "known" in p else None
         if p.get("back"):
-            context.tasker.controller.post_click_key(BACK_KEY).wait()
+            back(context)
         else:
-            x, y, w, h = argv.box
-            context.tasker.controller.post_click(x + w // 2, y + h // 2).wait()
+            context.tasker.controller.post_click(*box_centre(argv.box)).wait()
         if "until" in p:
             def closed(im):
                 return seen(context, im, p["until"]) is not None and seen(context, im, argv.node_name) is None
@@ -1477,8 +1512,7 @@ class ConfirmDownload(CustomAction):
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         if not allowed("auto_download"):
             return stop(context, "the game asks to download data: run.auto_download is off", whole_list=True)
-        x, y, w, h = argv.box
-        context.tasker.controller.post_click(x + w // 2, y + h // 2).wait()
+        context.tasker.controller.post_click(*box_centre(argv.box)).wait()
         STUCK["watch"].hold(time.monotonic(), recovery.DOWNLOAD_HOLD)
         restart_floor_clock()  # live 2026-10-21: 32 min of download would trip it, and L3 mid-download
         log(f"download confirmed: nothing counts as stuck for {recovery.DOWNLOAD_HOLD // 60} min")
@@ -1499,8 +1533,7 @@ class AcceptUpdate(CustomAction):
         if STUCK["updates"] >= UPDATE_RESTARTS:
             return stop(context, f"the game asked for an update {UPDATE_RESTARTS + 1} times since the bot started", whole_list=True)
         STUCK["updates"] += 1
-        x, y, w, h = argv.box
-        context.tasker.controller.post_click(x + w // 2, y + h // 2).wait()
+        context.tasker.controller.post_click(*box_centre(argv.box)).wait()
         log("game update accepted: restarting the game")
         time.sleep(3)  # kept (#58): the game takes the tap before it is stopped; once per game update, nothing to time
         detail = context.run_task("RecoverL3")
@@ -1550,7 +1583,7 @@ class Halt(CustomAction):
     goes to the log and the webhook. An account-level stop: the whole task list ends."""
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
-        return stop(context, f"{argv.node_name}: {json.loads(argv.custom_action_param or '""')}", whole_list=True)
+        return stop(context, f"{argv.node_name}: {param(argv.custom_action_param, '')}", whole_list=True)
 
 
 # s after a taken tap that TapUntil's settle holds: a login's CONNECTINGs, GoHome's 60 s wait on each, and the gaps
@@ -1579,7 +1612,7 @@ class TapUntil(CustomAction):
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         p = json.loads(argv.custom_action_param)
-        x, y, w, h = p.get("target", argv.box)
+        x, y = box_centre(p.get("target", argv.box))
         nxt = p.get("next", [])
         pages = [shows(context, n["roi"], n["expected"]) for n in (nxt if isinstance(nxt, list) else [nxt])]
         if "gone" in p:
@@ -1597,7 +1630,7 @@ class TapUntil(CustomAction):
                 return True
             log(f"{argv.node_name}: still up {p['settle']} s after its last tap was taken: tapped again")
             began = time.monotonic()
-        image = tap_then(context, x + w // 2, y + h // 2, lambda im: any(page(im) for page in pages), timeout=p.get("timeout", 3),
+        image = tap_then(context, x, y, lambda im: any(page(im) for page in pages), timeout=p.get("timeout", 3),
                          lively=p.get("lively", "HomeReached"))
         if "settle" in p and image is not None:
             STUCK["taken"][argv.node_name] = time.monotonic()
@@ -1649,7 +1682,7 @@ class PlanRun(CustomAction):
         if step == "back":  # not through Drive since the last run: back out, the hub's navigation reads it on the way in
             TASK["gate_backs"] = TASK.get("gate_backs", 0) + 1
             log("new run: the Modules were not read on the way here, back to the Drive page to read them")
-            context.tasker.controller.post_click_key(BACK_KEY).wait()
+            back(context)
             return True
         modules = TASK.pop("modules", None)
         TASK.pop("gate_backs", None)
@@ -2013,7 +2046,7 @@ GIFT_WINDOWS = 6  # GET! windows GiftGet closes in one go: a cabinet's gifts or 
 
 # E.G.O Gift Search page (live 2026-10-16, 1.117.0). Tabs left to right, 62 px apart.
 GRID_SWITCH_TIMEOUT = 5  # s a tab's gifts may take to show; they change in well under that, an empty tab pays it all
-SEARCH_TABS = ["Burn", "Bleed", "Tremor", "Rupture", "Sinking", "Poise", "Charge", "Slash", "Pierce", "Blunt", "Keywordless"]
+SEARCH_TABS = tuple(GIFT_KEYWORDS)  # the schema's keyword enum is the tabs, in order
 SEARCH_COUNT = [1010, 550, 190, 50]  # "Select 0/3"
 SEARCH_OWNED = ([935, 26, 120, 38], [1065, 26, 80, 38])  # "1315-270" and "1045"
 SEARCH_PANEL_Y = (205, 316, 427)  # name lines of the Selected E.G.O Gift panel's 3 entries
@@ -2096,7 +2129,7 @@ class GiftSearch(CustomAction):
     def chosen(context, image, names):
         """The gifts the Selected E.G.O Gift panel lists, as the team's names where they match."""
         texts = [text(context, image, [922, y, 270, 34]) for y in SEARCH_PANEL_Y]
-        return [run_start.match_pack(t, names) or t for t in texts if t.strip()]
+        return [run_start.match_name(t, names) or t for t in texts if t.strip()]
 
     @staticmethod
     def pick(context, gift):
@@ -2107,7 +2140,7 @@ class GiftSearch(CustomAction):
         fell short) the tab is searched from the top, screen by screen. Cells are never tapped to read names.
         """
         tab = [g for g in gift_tables()[0] if g["keyword"] == gift["keyword"]]
-        entry = next((g for g in tab if g["tier"] == gift["tier"] and run_start.match_pack(g["en"], [gift["name"]])), None)
+        entry = next((g for g in tab if g["tier"] == gift["tier"] and run_start.match_name(g["en"], [gift["name"]])), None)
         if entry is None:
             log(f"gift search: {gift['name']} is not in data/gift_search.json")
             return False
@@ -2191,7 +2224,7 @@ class GiftSearch(CustomAction):
         before = GiftSearch.chosen(context, image, [])
         after = tap_then(context, x, y, lambda im: GiftSearch.chosen(context, im, []) != before, timeout=1)
         new = [t for t in GiftSearch.chosen(context, after if after is not None else screen(context), []) if t not in before]
-        if new and run_start.match_pack(new[0], [name]):
+        if new and run_start.match_name(new[0], [name]):
             return True
         if new:
             log(f"gift search: the icon match picked {new[0]}, not {name}: unselected")
@@ -2356,6 +2389,19 @@ BUS_HOME = (50, 320)
 BUS_SLACK = (30, 25)
 BUS_REST = (446, 248)
 SLOT = (279, 37)  # middle-row slot centre; map_route.ROW_DY gives the other rows
+BUS_TAP = (22, 37)  # px off the bus box's top-left where it is tapped and where its links start
+
+
+def slot_centre(bx, by, row):
+    """(x, y) of the slot in row of the column after the bus at (bx, by)."""
+    return bx + SLOT[0], by + SLOT[1] + map_route.ROW_DY[row]
+
+
+def bus_tap(bx, by):
+    """(x, y) of the bus at (bx, by) to tap, and where its links start."""
+    return bx + BUS_TAP[0], by + BUS_TAP[1]
+
+
 LINKS = {
     "up": ("MapLinkUp", (90, -115, 110, 110)),
     "mid": ("MapLinkMid", (95, -10, 110, 80)),
@@ -2683,14 +2729,11 @@ class RouteMap(CustomAction):
             if steps is None:  # #212: a path no link joins; take its first node and read the map again after
                 log("map: the path steps two rows; no plan")
 
-        def centre(row):
-            return bx + SLOT[0], by + SLOT[1] + map_route.ROW_DY[row]
-
-        ranked = [(f"{r} {slots[r][0]}", centre(r)) for r in order]
-        on_bus = [("the bus", (bx + 22, by + 37))]
+        ranked = [(f"{r} {slots[r][0]}", slot_centre(bx, by, r)) for r in order]
+        on_bus = [("the bus", bus_tap(bx, by))]
         # #88: after a restart or a recovery the bus may stand on a node not entered yet; its own tap opens it.
         tries = ranked + on_bus if RUN.get("map_entered") else on_bus + ranked
-        tries += [(f"{r} slot", centre(r)) for r in map_route.ROWS if r not in order]
+        tries += [(f"{r} slot", slot_centre(bx, by, r)) for r in map_route.ROWS if r not in order]
         # #130: a bus tap on a node already entered shows nothing; a panel shows within ~0.5 s, so that probe is short.
         probe = not RUN.get("map_entered")
         for name, (x, y) in tries:
@@ -2769,7 +2812,7 @@ class RouteMap(CustomAction):
         bus = seen(context, image, "MapBus") if image is not None else None
         if not bus or RouteMap.read_slots(context, image, bus.box[0], bus.box[1]):
             return False
-        if not RouteMap.tap_for_panel(context, bus.box[0] + 22, bus.box[1] + 37, BUS_PROBE, image=image):
+        if not RouteMap.tap_for_panel(context, *bus_tap(bus.box[0], bus.box[1]), BUS_PROBE, image=image):
             return False
         log("map: column 1: no linked slot read")
         log("map: take the bus")
@@ -2789,12 +2832,11 @@ class RouteMap(CustomAction):
         if seen(context, image, "MapBus") or not (zoomed := seen(context, image, "MapBusZoomed")):
             return True
         log("map: zoomed in on the bus; opening and closing its node panel")
-        x, y, w, h = zoomed.box
         page_guard(context, "MirrorMap", image=image)
-        if tap_then(context, x + w // 2, y + h // 2, lambda im: seen(context, im, "MapNodePanel")) is None:
+        if tap_then(context, *box_centre(zoomed.box), lambda im: seen(context, im, "MapNodePanel")) is None:
             log("map: the zoomed bus took no tap")
             return False
-        context.tasker.controller.post_click_key(BACK_KEY).wait()
+        back(context)
         if until(context, lambda im: seen(context, im, "MapBus"), timeout=3) is None:
             log("map: still zoomed in after the back key")
             return False
@@ -2876,7 +2918,7 @@ class RouteMap(CustomAction):
         slots = {}
         for row in map_route.ROWS:
             if RouteMap.linked(context, image, bx, by, row):
-                cx, cy = bx + SLOT[0], by + SLOT[1] + map_route.ROW_DY[row]
+                cx, cy = slot_centre(bx, by, row)
                 slots[row] = (node_at(context, image, cx, cy), map_route.routes(v, cx, cy))
         return slots
 
@@ -2888,7 +2930,7 @@ class RouteMap(CustomAction):
         itself 157-171 against -2 unlinked; either one counts.
         """
         node, (rx, ry, rw, rh) = LINKS[row]
-        lit = map_route.line_contrast(image.max(axis=2), bx + 22, by + 37, bx + SLOT[0], by + SLOT[1] + map_route.ROW_DY[row])
+        lit = map_route.line_contrast(image.max(axis=2), *bus_tap(bx, by), *slot_centre(bx, by, row))
         return lit is not None and lit >= BUS_LINK or bool(seen(context, image, node, (bx + rx, by + ry, rw, rh)))
 
     @staticmethod
@@ -2909,14 +2951,14 @@ class RouteMap(CustomAction):
         bus = bus and tuple(bus.box[:2])
 
         def clear(bx, by):  # the slot's node, badges included, clear of the resource bar and the buttons
-            return bx + SLOT[0] + 80 <= 1200 and by + SLOT[1] + map_route.ROW_DY[row] - 80 >= BAR_BOTTOM
+            x, y = slot_centre(bx, by, row)
+            return x + 80 <= 1200 and y - 80 >= BAR_BOTTOM
         if not bus or not clear(*bus):
             image, bus = RouteMap.find_bus(context)
         if not bus or not RouteMap.linked(context, image, *bus, row):
             log(f"map: planned {row} {node} not linked to the bus; reading the map again")
             return False
-        bx, by = bus
-        cx, cy = bx + SLOT[0], by + SLOT[1] + map_route.ROW_DY[row]
+        cx, cy = slot_centre(*bus, row)
         kind = "boss" if RUN.get("after_shop") else node_at(context, image, cx, cy)  # #279: the shop was the last page
         if kind != node:
             log(f"map: planned {row} {node} reads {kind}; reading the map again")
@@ -2944,7 +2986,7 @@ class RouteMap(CustomAction):
         """
         dx, dy = map_route.COLUMN_DX, map_route.ROW_DY
         v, ahead = image.max(axis=2), []
-        if any(t == "boss" for t, _ in before.values()):  # #279: its red glow reads 7.7-12.4 towards the next column, as a faint link
+        if map_route.has_kind(before, "boss"):  # #279: its red glow reads 7.7-12.4 towards the next column, as a faint link
             return ahead
         while x + dx + 80 <= 1200:  # MapNodeFocusedHex reads 80 px either side; buttons from x 1205
             x += dx
@@ -2959,17 +3001,17 @@ class RouteMap(CustomAction):
                     # A node with no mark may still be lit: a red pack's dim "?" (live 2026-10-18) reads 48-60
                     # here; hard mode's dark columns read 0.
                     lit = lit or bool(marks) or np.percentile(v[ry - 45:ry + 45, x - 45:x + 45], 90) >= 20
-            if not lit and not (column and any(t == "shop" for t, _ in before.values())):  # #279: the boss after a shop may read dark
+            if not lit and not (column and map_route.has_kind(before, "shop")):  # #279: the boss after a shop may read dark
                 break
             n = first + len(ahead)
             glow = [row for row, (t, _) in column.items() if t == "boss"]
             if changed := map_route.boss_after_shop(before, column):  # #279: the shop decides, the boss' glow only helps
                 log(f"map: column {n}: after the shop, so the boss; {', '.join(changed)} read as something else")
-            elif glow and not any(t == "shop" for t, _ in before.values()):
+            elif glow and not map_route.has_kind(before, "shop"):
                 log(f"map: column {n}: the boss' glow without a shop before it")
             ahead.append(column)
             RouteMap.log_column(n, column)
-            if any(t == "boss" for t, _ in column.values()):
+            if map_route.has_kind(column, "boss"):
                 break
             before = column
         return ahead
@@ -3003,18 +3045,18 @@ class RouteMap(CustomAction):
         The map is then dragged back as far, less a remainder within BUS_SLACK, and the bus found again (find_bus).
         """
         dx, (bx, by) = map_route.COLUMN_DX, bus
-        x0, y, moved, back = bx + SLOT[0], by + SLOT[1], 0, 0
+        x0, y, moved, undo = bx + SLOT[0], by + SLOT[1], 0, 0
         edge = x0 + len(ahead) * dx + dx + 80 > 1200  # the last column read was the last on screen: more may follow
         for _ in range(MAP_DRAGS):
             columns = [slots, *ahead]
-            if not edge or any(t == "boss" for t, _ in columns[-1].values()):
+            if not edge or map_route.has_kind(columns[-1], "boss"):
                 break
             page_guard(context, "MirrorMap", image=image)
             scroll(context, x0 + 5 * dx // 2, y + 106, -2 * dx, 0)  # from map background, as find_bus: between columns and rows
             time.sleep(0.5)  # kept (#58): the map coasts on after the lift, and map_route.shift reads the drag at rest
             after = screen(context)
             s = map_route.shift(image.max(axis=2), after.max(axis=2), 2 * dx + 20)  # the drag, its threshold move and some fling
-            back += 2 * dx if s is None else s
+            undo += 2 * dx if s is None else s
             # Read on from the last column whose next two come up to MAP_NEAR, typed by their Cost.
             k = None if s is None else max((i for i in range(len(columns)) if x0 + i * dx - moved - s <= MAP_NEAR - 2 * dx), default=None)
             if k is None or s < dx // 2:
@@ -3026,7 +3068,7 @@ class RouteMap(CustomAction):
                 RouteMap.retype(context, image, columns[k], x0 + k * dx - moved, y, k + 1)
             more = RouteMap.read_ahead(context, image, x0 + k * dx - moved, y, columns[k], first=k + 2)
             edge = x0 + (k + len(more)) * dx - moved + dx + 80 > 1200
-            if (tail := ahead[k + len(more):]) and not (more and any(t == "boss" for t, _ in more[-1].values())):
+            if (tail := ahead[k + len(more):]) and not (more and map_route.has_kind(more[-1], "boss")):
                 # A near read ending short: what was read past it stays, up to an edge; near now, by its Cost.
                 for i, column in enumerate(tail, start=k + len(more) + 1):
                     if (x := x0 + i * dx - moved) <= MAP_NEAR:
@@ -3035,13 +3077,13 @@ class RouteMap(CustomAction):
             if not more:
                 break
             ahead = ahead[:k] + more
-        if not back:
+        if not undo:
             return ahead, bus
-        while back > BUS_SLACK[0]:
+        while undo > BUS_SLACK[0]:
             page_guard(context, "MirrorMap")
-            scroll(context, x0 + dx // 2, y + 106, min(back, 2 * dx), 0)
+            scroll(context, x0 + dx // 2, y + 106, min(undo, 2 * dx), 0)
             time.sleep(0.5)  # kept (#58): the map coasts on after the lift
-            back -= 2 * dx
+            undo -= 2 * dx
         bus = RouteMap.find_bus(context)[1]
         if not bus and RouteMap.search_bus(context):
             bus = RouteMap.find_bus(context)[1]
@@ -3068,8 +3110,7 @@ def card_xy(i, ys):
 
 def participants(context, image):
     """(selected, alive) from Total Participants, or None when it is not readable."""
-    m = re.search(r"(\d+)\s*/\s*(\d+)", text(context, image, PARTICIPANTS))
-    return (int(m[1]), int(m[2])) if m else None
+    return fraction(text(context, image, PARTICIPANTS))
 
 
 def saturation(image):
@@ -3117,9 +3158,7 @@ class Formation(CustomAction):
     @hands_back
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         run = current_run(context)
-        # A new battle: its clock and turn count start over, also when the last VICTORY went unseen (#80).
-        RUN.pop("turn", None)
-        RUN.pop("battle_start", None)
+        end_battle()  # a new battle: its clock and turn count start over, also when the last VICTORY went unseen (#80)
         image = still(context)
         count = image is not None and participants(context, image)
         if not count:
@@ -3521,8 +3560,7 @@ class Victory(CustomAction):
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         if "turn" in RUN:
             log("victory")
-        RUN.pop("turn", None)
-        RUN.pop("battle_start", None)
+        end_battle()
         RUN["wipes"] = 0
         return True
 
@@ -3553,8 +3591,7 @@ class Wipe(CustomAction):
                 break
         else:
             return stuck(f"the DEFEAT dialog did not take {choice}")
-        RUN.pop("turn", None)
-        RUN.pop("battle_start", None)
+        end_battle()
         if choice == "retry":
             RUN["wipes"] = used + 1
         else:
@@ -3701,7 +3738,7 @@ class Event(CustomAction):
             if not options:
                 return True
             overrides = data("events.yaml") | {o["question"]: o["option"] for o in run.get("settings", {}).get("event_overrides", [])}
-            question = next(filter(None, (run_start.match_pack(t, list(overrides)) for t in story + [" ".join(story)])), None) if overrides else None
+            question = next(filter(None, (run_start.match_name(t, list(overrides)) for t in story + [" ".join(story)])), None) if overrides else None
             known = rewards.match_event(" ".join(story), event_table())
             # Grey options (taken in an earlier round of the same questions) and ones a tap did nothing on are closed.
             closed = {k for k, (t, is_open, _) in enumerate(options) if t in tried or not is_open}
@@ -3863,7 +3900,7 @@ class Event(CustomAction):
         options = []
         for _ in range(CHOICE_SCROLLS):
             for t, y in Event.shown(context, image, True):
-                if not run_start.match_pack(t, [o[0] for o in options], margin=0):
+                if not run_start.match_name(t, [o[0] for o in options], margin=0):
                     options.append((t, rewards.choice_open(image, y), y))
             after = Event.drag(context, image, -CHOICE_STEP)
             if after is None:
@@ -3886,7 +3923,7 @@ class Event(CustomAction):
         for _ in range(2 * CHOICE_SCROLLS + 1):
             seen = {}  # option index -> y, for the options on screen
             for t, y in Event.shown(context, image, True):
-                if name := run_start.match_pack(t, texts, margin=0):
+                if name := run_start.match_name(t, texts, margin=0):
                     seen.setdefault(texts.index(name), y)
             if i in seen:
                 return seen[i], image
@@ -4149,7 +4186,7 @@ GRID_SLIP = 12  # px a drag may move the grid past the finger, either way, and s
 GRID_SAME = 12.5
 # page: (its icon size over the GiftSearch template's, the grid's lower edge on screen)
 CELL_PAGES = {"fuse": (1.1, 493), "sell": (1.1, 495), "offer": (0.8, 530)}
-BADGES = ["Burn", "Bleed", "Tremor", "Rupture", "Sinking", "Poise", "Charge", "Slash", "Pierce", "Blunt"]
+BADGES = tuple(k for k in GIFT_KEYWORDS if k != "Keywordless")
 # On scaled cells (CCOEFF): its own badge 0.54-0.99, another keyword's up to 0.60 (the cell's best wins), a keywordless
 # cell's best 0.41; 160 cells of 60 live captures.
 BADGE_MIN = 0.5

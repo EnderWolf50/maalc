@@ -10,14 +10,15 @@ from typing import NamedTuple
 from gift_cells import name_id
 from gift_search import select_count
 from ocrtext import compact, has, normalize
-from run_start import match_pack
+from run_start import match_name
+from settings import GIFT_KEYWORDS
 
 ODDS = ("very low", "low", "normal", "high", "very high")
 GIFT_SCORE = {"pack-want": 9, "want": 6, "material": 5.5, "main": 3, "other": 2, "owned": 0}  # by category (#416)
 WANT_CLASSES = ("pack-want", "want", "material")  # gifts.want_kind's classes, scored in GIFT_SCORE (#416)
 TIER_STEP = 0.5  # a main or other gift's score per tier above I (#381)
 UNREAD_LEVELS = 2  # an Enemy Level Up badge that does not read counts as +2, the most seen live (#381)
-KEYWORDS = ("Burn", "Bleed", "Tremor", "Rupture", "Sinking", "Poise", "Charge", "Slash", "Pierce", "Blunt", "Keywordless")
+KEYWORDS = tuple(GIFT_KEYWORDS)
 
 
 def pick_choice(options, keyword, override=None, closed=(), event=None):
@@ -287,7 +288,7 @@ def read_trial(name, line, trials):
     The effect line goes first ("effects"): a pool's trials differ in what they do, and a numeral slip in the name
     ("Growth I" for Growth II, #381) does not touch it. It names the trial with the same effects whose values agree most
     (Body Up II shows Max HP +10%, its static data 12.5%); none when a value is cut off or two agree as much. Then the
-    name ("name"): found exactly, else by match_pack, and dropped when its numeral is not the one read (Keen I is
+    name ("name"): found exactly, else by match_name, and dropped when its numeral is not the one read (Keen I is
     neither Keen II nor III). Neither: (None, None).
     """
     read = parse_effects(line)
@@ -296,7 +297,7 @@ def read_trial(name, line, trials):
     if alike and alike[0][0] and (len(alike) == 1 or alike[1][0] < alike[0][0]):
         return alike[0][1], "effects"
     exact = {compact(n): n for n in trials}
-    found = exact.get(compact(name)) or match_pack(name, list(trials))
+    found = exact.get(compact(name)) or match_name(name, list(trials))
     if found and _numeral(found) == _numeral(name):
         return found, "name"
     return None, None

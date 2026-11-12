@@ -5,6 +5,8 @@ actions.py reads the Enkephalin Modules and the battle's result and taps; everyt
 
 import re
 
+from ocrtext import only_fraction
+
 # What the next step is (decide): SKIP and FINISH end the task a success, STOP a failure.
 SKIP, FIGHT, RETRY, FINISH, STOP = "skip", "fight", "retry", "finish", "stop"
 
@@ -26,8 +28,8 @@ def fights(mode, target, today):
 
 def read_bonuses(texts):
     """The n of the one "n/3" in the OCR strings of the Daily Bonuses box; None when there is none or more."""
-    found = re.findall(r"(\d+)\s*/\s*(\d+)", " ".join(texts))
-    return int(found[0][0]) if len(found) == 1 and int(found[0][1]) == DAILY_BONUSES and int(found[0][0]) <= DAILY_BONUSES else None
+    n = only_fraction(texts, DAILY_BONUSES)
+    return n if n is not None and n <= DAILY_BONUSES else None
 
 
 def needed(cost, count):

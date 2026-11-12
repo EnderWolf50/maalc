@@ -531,7 +531,7 @@ def test_without_a_cover_a_card_no_title_path_reads_is_unlisted_as_before():
 
 
 
-def test_match_pack_skips_only_names_that_cannot_be_the_answer():
+def test_match_name_skips_only_names_that_cannot_be_the_answer():
     # #329: names whose quick_ratio is under min_ratio - margin are not scored; the answer is the plain definition's.
     names = [e["en"] for e in gift_cells.load()]
 
@@ -543,7 +543,7 @@ def test_match_pack_skips_only_names_that_cannot_be_the_answer():
 
     for n in names[::7]:
         for text in (n, n[:-1], n[1:], n.replace("e", "c", 1), n[: len(n) * 2 // 3], n.upper() + "x"):
-            assert rs.match_pack(text, names) == plain(text), text
+            assert rs.match_name(text, names) == plain(text), text
 
 
 RERUN_COPIES = {"Miracle in District 20": 1113, "Yield My Flesh to Claim Their Bones": 1116, "Timekilling Time": 1120,
