@@ -1,5 +1,8 @@
 import json
+import os
+import signal
 import sys
+import threading
 from types import SimpleNamespace
 
 import pytest
@@ -15,6 +18,34 @@ def test_run_stamps_every_line_of_the_child_and_its_exit(tmp_path):
     assert code == 3
     assert lines[0].startswith("12:00:00.000 [run] child pid ")
     assert lines[1:] == ["12:00:00.000 [maalc] hello", "12:00:00.000 x: 1, y: 2", "12:00:00.000 [run] exit 3"]
+
+
+def test_run_ends_when_the_child_exits_though_a_process_it_started_holds_its_output(tmp_path, monkeypatch):
+    # #663: MaaFramework's `adb kill-server` then `adb connect` start an adb server that inherits the tasker's stdout
+    # and outlives it, so the output never reaches end of file; the run ends with the child, not with the output
+    monkeypatch.setattr(bot, "DRAIN", 0.5, raising=False)
+    log = tmp_path / "run.log"
+    server = "import time; time.sleep(60)"
+    child = ("import subprocess, sys; s = subprocess.Popen([sys.executable, '-c', %r], close_fds=False); "
+             "print('server', s.pid, flush=True)" % server)
+    child += "; sys.stdout.write('a\\rb\\r\\nlast, no newline')"
+    result = {}
+    run = threading.Thread(target=lambda: result.update(code=bot.stamped([sys.executable, "-c", child], log,
+                                                                          clock=lambda: "12:00:00.000")), daemon=True)
+    run.start()
+    run.join(20)
+    lines = log.read_text(encoding="utf-8").splitlines()
+    held = [int(line.split()[-1]) for line in lines if " server " in line]
+    try:
+        assert not run.is_alive(), "stamped still waits on the output the left-over process holds"
+        assert result["code"] == 0
+        assert lines[2:] == ["12:00:00.000 a", "12:00:00.000 b", "12:00:00.000 last, no newline",
+                             "12:00:00.000 [run] output still open 0.5 s after the child exited: a process it started holds it",
+                             "12:00:00.000 [run] exit 0"]
+    finally:
+        for pid in held:
+            os.kill(pid, signal.SIGTERM)
+        run.join(20)
 
 
 def test_prep_copies_config_and_state_and_sets_keys(tmp_path):
