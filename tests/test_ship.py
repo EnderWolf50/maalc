@@ -56,17 +56,15 @@ def runs(states):
     return [(0, json.dumps([{"status": s, "conclusion": c, "url": "u"}])) for s, c in states]
 
 
-def ok_routes(queue, main_head=(("completed", "success"),)):
+def ok_routes(main_head=(("completed", "success"),)):
     return {"gh pr merge": (0, ""), "gh pr edit": (0, ""), "gh api": (0, ""),
             f"gh api {MAIN_REF}": (0, json.dumps({"object": {"sha": MAIN}})),
             f"gh run list --workflow ci --branch main --commit {MAIN}": runs(main_head),
-            f"{ship.sys.executable} tools/live/queue.py status": (0, queue),
             "uv run python tools/after_land.py": (0, "after_land done")}
 
 
-def land_fake(pr=None, stacked=(), main_ci=(("completed", "success"),), queue="emulator:\n  free\n",
-              main_head=(("completed", "success"),), **extra):
-    return Fake(**{**ok_routes(queue, main_head), "gh pr view 7": [(0, json.dumps(pr or info())),
+def land_fake(pr=None, stacked=(), main_ci=(("completed", "success"),), main_head=(("completed", "success"),), **extra):
+    return Fake(**{**ok_routes(main_head), "gh pr view 7": [(0, json.dumps(pr or info())),
                                                                    (0, json.dumps({"mergeCommit": {"oid": MERGE}}))],
                    "gh pr list": (0, json.dumps(list(stacked))), "gh run list": runs(main_ci), **extra})
 
@@ -92,9 +90,9 @@ class GitHub(Fake):
         return super().__call__(argv, cwd)
 
 
-def batch_fake(*prs, stacked=None, main_ci=None, queue="emulator:\n  free\n", main_head=(("completed", "success"),)):
+def batch_fake(*prs, stacked=None, main_ci=None, main_head=(("completed", "success"),)):
     """A fake GitHub with the PRs `prs` (info dicts); `stacked` and `main_ci` are keyed by PR number."""
-    routes = ok_routes(queue, main_head)
+    routes = ok_routes(main_head)
     for p in prs:
         n = p["number"]
         routes[f"gh pr view {n}"] = [(0, json.dumps(p)), (0, json.dumps({"mergeCommit": {"oid": merge_of(n)}}))]
@@ -450,8 +448,10 @@ def test_land_exits_non_zero_on_a_red_main_and_skips_after_land(capsys):
     assert not fake.ran("uv", "run", "python", "tools/after_land.py")
 
 
-def test_land_prints_the_command_when_the_emulator_has_a_holder(capsys):
-    fake = land_fake(queue="emulator:\n  1234-bot (pid 5)\n")
+def test_land_prints_the_command_when_the_emulator_has_a_holder(capsys, tmp_path):
+    (tmp_path / ".local/queue/emulator").mkdir(parents=True)
+    (tmp_path / f".local/queue/emulator/1-{os.getpid()}-bot.ticket").write_text("bot")
+    fake = land_fake()
     assert land(fake) == 0
     assert "tools/after_land.py" in capsys.readouterr().out
     assert not fake.ran("uv", "run", "python", "tools/after_land.py")

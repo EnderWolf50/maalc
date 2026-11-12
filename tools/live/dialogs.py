@@ -13,9 +13,11 @@ import re
 import sys
 from pathlib import Path
 
-sys.path[0] = str(Path(__file__).resolve().parents[1])
+TOOLS = Path(__file__).resolve().parents[1]
+if str(TOOLS) not in sys.path:  # run as a script, local_dir is not importable until tools/ is on the path
+    sys.path.insert(0, str(TOOLS))
 
-from local_dir import main_checkout
+from local_dir import main_checkout  # noqa: E402
 
 CONFIRM = r"\?\s*$|\bClaim\b|\bConfirm\b|Give Up|\bSpend\b|Download|\bProceed\b"
 

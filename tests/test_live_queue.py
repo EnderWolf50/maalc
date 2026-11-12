@@ -41,6 +41,13 @@ def test_a_ticket_of_the_same_process_and_name_sorts_after_the_one_already_there
     assert lq.read(one)[0] == "a"
 
 
+def test_a_placed_ticket_names_its_stamp_pid_and_task(tmp_path, monkeypatch):
+    monkeypatch.setattr(lq.time, "time_ns", lambda: 1_800_000_000_000_000_000)
+    me = lq.place(tmp_path, "live1", ["a"], False)
+    assert lq.Ticket.of(me) == ("1800000000000000000", str(os.getpid()), "live1")
+    assert lq.Ticket.of(me).path(tmp_path) == me
+
+
 def test_a_first_ticket_whose_place_is_taken_by_one_of_its_own_process_goes_behind_it(tmp_path):
     # #636: a plain ticket of this process and name just behind the holder holds the name a first ticket would take.
     alive = lambda pid, start: True  # noqa: E731
@@ -579,3 +586,18 @@ def test_status_warns_before_a_hold_expires(tmp_path):
     (task / "hold.deadline").write_text("10000")
     assert "expires" not in lq.status(tmp_path, now=10000 - 3600)[0]
     assert "hold expires in 10 min" in lq.status(tmp_path, now=10000 - 600)[0]
+
+
+@pytest.mark.parametrize("module", ["live.queue", "live.backup", "live.dialogs"])
+def test_importing_a_live_tool_leaves_the_importers_path_as_it_was(module):
+    # #667: they overwrote sys.path[0], so a program that imported them lost its first path entry.
+    code = f"import sys; before = list(sys.path); import {module}; assert sys.path == before, (before, sys.path)"
+    env = {**os.environ, "PYTHONPATH": str(QUEUE_PY.parents[1])}
+    subprocess.run([sys.executable, "-c", code], env=env, check=True)
+
+
+@pytest.mark.parametrize("script", ["queue.py", "backup.py", "dialogs.py"])
+def test_a_live_tool_still_runs_as_a_script(script):
+    # A script's own folder, tools/live/, stays on its path: a module there that imported the stdlib `queue` would get
+    # this queue.py instead and fail.
+    subprocess.run([sys.executable, str(QUEUE_PY.parent / script), "--help"], check=True, capture_output=True)

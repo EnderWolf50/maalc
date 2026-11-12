@@ -40,7 +40,7 @@ import time
 from contextlib import nullcontext
 from pathlib import Path
 
-from live.queue import turn
+from live.queue import holders, queue_dir, turn
 from local_dir import local_dir, main_checkout
 
 CI_CHECK = "ci-ok"
@@ -124,9 +124,8 @@ def wait_for_main_ci(runner, base: str, sha: str, sleep=time.sleep, now=time.mon
     return "timeout"
 
 
-def emulator_busy(runner, repo: Path) -> bool:
-    out = need(runner, [sys.executable, "tools/live/queue.py", "status", "--resource", "emulator"], repo)
-    return "free" not in out.split()
+def emulator_busy(repo: Path) -> bool:
+    return bool(holders(queue_dir("emulator", repo)))
 
 
 class Outcome(enum.Enum):
@@ -190,7 +189,7 @@ def waiting_line(ahead: list[tuple[str, str]], prs: list[int]) -> str:
 def cmd_land(runner, prs: list[int], go: bool, sleep=time.sleep, repo: Path | None = None,
              onto_red: int | None = None) -> int:
     repo = repo or main_checkout()
-    lane = turn(repo / ".local" / "queue" / "land", "land", ["ship.py", "land", *(f"#{p}" for p in prs)], sleep=sleep,
+    lane = turn(queue_dir("land", repo), "land", ["ship.py", "land", *(f"#{p}" for p in prs)], sleep=sleep,
                 on_wait=lambda ahead: print(waiting_line(ahead, prs), flush=True)) if go else nullcontext()
     with lane:
         outcomes = []
@@ -205,7 +204,7 @@ def cmd_land(runner, prs: list[int], go: bool, sleep=time.sleep, repo: Path | No
         if Outcome.GREEN not in outcomes or outcomes[-1] is Outcome.RED:
             return stop_rc
         later = "uv run python tools/after_land.py"
-        if emulator_busy(runner, repo):
+        if emulator_busy(repo):
             print(f"ship: green. The emulator queue has a holder (install/ is in use); run later in the main checkout: {later}")
             return stop_rc
         rc, out = runner(["uv", "run", "python", "tools/after_land.py"], repo)  # the main checkout's venv, not the caller's

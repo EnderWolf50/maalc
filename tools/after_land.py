@@ -10,6 +10,7 @@ import shutil
 import subprocess
 import sys
 
+from live.queue import holders, queue_dir
 from local_dir import main_checkout
 
 REPO = main_checkout()
@@ -54,8 +55,7 @@ def sync_main(git=run_git) -> None:
 
 
 def main() -> None:
-    held = list((REPO / ".local/queue/emulator").glob("*.ticket"))
-    if held:
+    if held := holders(queue_dir("emulator", REPO)):
         sys.exit(f"after_land: the emulator queue holds {len(held)} ticket(s); install/ is in use. Run tools/live/queue.py status.")
     sync_main()
     step("build the settings GUI", "pnpm", "--dir", "gui", "tauri", "build", "--no-bundle")

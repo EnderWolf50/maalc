@@ -26,10 +26,12 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-sys.path[0] = str(Path(__file__).resolve().parents[1])
+TOOLS = Path(__file__).resolve().parents[1]
+if str(TOOLS) not in sys.path:  # run as a script, `live` is not importable until tools/ is on the path
+    sys.path.insert(0, str(TOOLS))
 
-from live.queue import detached_doc, detached_running, guard_logs, pause_until
-from local_dir import local_dir, main_checkout
+from live.queue import detached_doc, detached_running, guard_logs, pause_until  # noqa: E402
+from local_dir import local_dir, main_checkout  # noqa: E402
 
 RUNTIME = {"debug", "logs", "state", "cache"}
 
