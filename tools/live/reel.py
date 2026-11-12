@@ -47,19 +47,18 @@ from dataclasses import dataclass
 from pathlib import Path
 from types import SimpleNamespace
 
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw
 
 TOOLS = Path(__file__).resolve().parents[1]
 if str(TOOLS) not in sys.path:
     sys.path.insert(0, str(TOOLS))
 
 from live import evidence  # noqa: E402
-from live.evidence import H, W, hms, secs  # noqa: E402
+from live.evidence import H, W, font, hms, secs  # noqa: E402
 from local_dir import local_dir  # noqa: E402
 
 BAND, FPS = 56, 30
 OPENING_S = 10.0  # the opening list is a table of contents to pause on; the chapter marks are for jumping
-FONTS = {False: evidence.FONTS, True: ["C:/Windows/Fonts/msjhbd.ttc", "/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc"]}
 AMBER, WHITE, DIM, BG = (255, 196, 64), (245, 245, 245), (190, 194, 204), (17, 19, 26)
 AMBER_HEX = "#ffc440"  # AMBER, as evidence-annotate's own accent (scripts/text.py ACCENT)
 FREEZE_MARK = "定格"  # a held frame, in the corner and in chapters.md (the user, 2026-11-10)
@@ -323,13 +322,6 @@ def audit(reel: Reel) -> Report:
 
 
 # --- the build -------------------------------------------------------------------------------------------
-
-def font(size: int, bold: bool = False):
-    for f in FONTS[bold]:
-        if Path(f).exists():
-            return ImageFont.truetype(f, size)
-    return ImageFont.load_default(size)
-
 
 def run(cmd: list) -> None:
     r = subprocess.run([str(c) for c in cmd], capture_output=True, text=True, encoding="utf-8", errors="replace")

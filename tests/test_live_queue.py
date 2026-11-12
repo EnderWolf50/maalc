@@ -1,4 +1,3 @@
-import importlib.util
 import json
 import os
 import shutil
@@ -12,10 +11,7 @@ from pathlib import Path
 
 import pytest
 
-# tools/live/queue.py shares its name with the stdlib module: load it by path under another name.
-spec = importlib.util.spec_from_file_location("live_queue", Path(__file__).resolve().parent.parent / "tools/live/queue.py")
-lq = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(lq)
+from live import queue as lq
 
 
 def dead_pid() -> int:

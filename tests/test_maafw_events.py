@@ -1,9 +1,5 @@
-import importlib.util
-from pathlib import Path
+from live import maafw_events as me
 
-spec = importlib.util.spec_from_file_location("maafw_events", Path(__file__).resolve().parent.parent / "tools/live/maafw_events.py")
-me = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(me)
 
 AGENT = "[2026-10-18 {t}][DBG][Px1][Tx2][AgentClient.cpp][L2005][MaaNS::AgentNS::ClientNS::AgentClient::handle_controller_post_{k}] [req={req}] [ipc_addr_=x]"
 MUMU_DOWN = "[2026-10-18 {t}][INF][Px1][Tx3][MuMuPlayerExtras.cpp][L133][MaaNS::CtrlUnitNs::MuMuPlayerExtras::touch_down] [contact=0] [x={x}] [y={y}] [pressure=1] [display_id=0] "

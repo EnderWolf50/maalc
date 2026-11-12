@@ -1,5 +1,4 @@
 """tools/live/preflight.py: the screen verdicts on the pipeline's own fixtures, the recording and run-plan checks on fake files."""
-import importlib.util
 import json
 import re
 from pathlib import Path
@@ -8,10 +7,10 @@ import pytest
 
 from test_pipeline import load_nodes
 
+from live import preflight as pf
+
+
 REPO = Path(__file__).resolve().parent.parent
-spec = importlib.util.spec_from_file_location("preflight", REPO / "tools/live/preflight.py")
-pf = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(pf)
 
 
 def config_cases() -> dict[str, list[str]]:

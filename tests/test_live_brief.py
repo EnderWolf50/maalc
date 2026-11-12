@@ -1,11 +1,7 @@
-import importlib.util
-from pathlib import Path
-
 import pytest
 
-spec = importlib.util.spec_from_file_location("live_brief", Path(__file__).resolve().parent.parent / "tools/live/brief.py")
-brief = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(brief)
+from live import brief
+
 
 LIVE = ["live", "--task", "t1", "--difficulty", "normal", "--exp-mode", "daily", "--exp-count", "1",
         "--thread-mode", "daily", "--thread-count", "3", "--runs", "1", "--weekly-bonus", "none", "--recording", "yes"]

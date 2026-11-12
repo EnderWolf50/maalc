@@ -67,7 +67,8 @@ from local_dir import local_dir  # noqa: E402
 STAMP = re.compile(r"^(?:\d{4}-\d\d-\d\d )?(\d\d):(\d\d):(\d\d(?:\.\d+)?) (?:\[stdout\] )?(.*)$")
 TOUCH = re.compile(r"^x: (\d+), y: (\d+), width: (\d+), height: (\d+)")
 ANNOTATE = Path.home() / ".claude/skills/evidence-annotate/scripts/annotate.py"
-FONTS = ["C:/Windows/Fonts/msjh.ttc", "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc"]
+FONTS = {False: ["C:/Windows/Fonts/msjh.ttc", "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc"],  # bold: lists
+         True: ["C:/Windows/Fonts/msjhbd.ttc", "/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc"]}
 W, H = 1280, 720  # frames are scaled to the game's own 720p grid
 GREEN, RED, ORANGE, YELLOW, GREY, BLUE = (60, 220, 60), (255, 60, 60), (255, 160, 0), (255, 220, 0), (170, 170, 170), (90, 200, 255)
 VIOLET, MAGENTA, WHITE, CYAN = (170, 110, 255), (255, 70, 200), (245, 245, 245), (0, 225, 225)
@@ -90,7 +91,7 @@ hms = maafw_events.clock  # seconds since midnight -> HH:MM:SS.fff
 def parse_log(lines) -> list[tuple[float, str]]:
     """[(wall seconds since midnight, text)] of every stamped line."""
     # ponytail: a run across midnight wraps to 0; add the date when one does
-    return [(int(m[1]) * 3600 + int(m[2]) * 60 + float(m[3]), m[4]) for m in map(STAMP.match, lines) if m]
+    return [(maafw_events.seconds(m), m[4]) for m in map(STAMP.match, lines) if m]
 
 
 def read_log(path) -> list[tuple[float, str]]:
@@ -101,8 +102,8 @@ def maalc(log) -> list[tuple[float, str]]:
     return [(t, x[8:]) for t, x in log if x.startswith("[maalc] ")]
 
 
-def font(size: int):
-    for f in FONTS:
+def font(size: int, bold: bool = False):
+    for f in FONTS[bold]:
         if Path(f).exists():
             return ImageFont.truetype(f, size)
     return ImageFont.load_default(size)
