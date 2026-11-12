@@ -287,6 +287,50 @@ def focused_package(dumpsys):
     return GAME if GAME in found else next((p for p in found if p), "")
 
 
+# A hub that recognises nothing reads the foreground every AWAY_POLL s; the game out of front (another app, or no window
+# focused) at every read for AWAY_AFTER s restarts it, AWAY_POLL + AWAY_AFTER = 30 s after the last screen, not at the
+# hub's 60 s timeout (#530). Live 2026-11-08: a cold start sat on a blank window with no focus for over 60 s; on the
+# recordings of three that came through (the L3 after it, two on 11-12) it lasted about 6, under 12 and under 6 s.
+AWAY_POLL, AWAY_AFTER = 5, 25
+
+
+class Away:
+    """The game out of front while a hub recognises nothing (#530), from foreground reads AWAY_POLL s apart.
+
+    quiet: when the hub last handed out a screen (None until the first pass); read_at: the last read; since: the first
+    read of the streak that found the game out of front (None: in front, or not read yet).
+    """
+
+    def __init__(self):
+        self.quiet = self.read_at = self.since = None
+
+    def handled(self, now):
+        """The hub handed out a screen: the game is in use, the count starts over."""
+        self.__init__()
+        self.quiet = now
+
+    def due(self, now):
+        """Whether to read the foreground now: AWAY_POLL s since the last screen, and since the last read."""
+        if self.quiet is None:
+            self.quiet = now
+        return now - (self.read_at if self.read_at is not None else self.quiet) >= AWAY_POLL
+
+    def read(self, app, now):
+        """One read's package (focused_package: GAME, another, "" for no focus, None unread); why to restart, or None.
+
+        Only a streak of reads with the game out of front counts: one with it in front, or unread, starts it over.
+        """
+        self.read_at = now
+        if app in (None, GAME):
+            self.since = None
+            return None
+        if self.since is None:
+            self.since = now
+        if now - self.since >= AWAY_AFTER:
+            return f"the game is not in front ({app or 'no window has focus'}) for {now - self.since:.0f} s"
+        return None
+
+
 def read_runs(root):
     """Every line of <root>/logs/runs.jsonl as a dict; unreadable lines are skipped."""
     lines = []

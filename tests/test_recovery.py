@@ -6,8 +6,8 @@ import numpy as np
 import pytest
 
 import actions
-from recovery import (GAME, L2_SCREENS, TRANSIT, WAIT_STILL, Ladder, Restarts, Watchdog, floor_limit, focused_package,
-                      over_time, read_runs, run_limit, same_screen, thumb)
+from recovery import (AWAY_AFTER, AWAY_POLL, GAME, L2_SCREENS, TRANSIT, WAIT_STILL, Away, Ladder, Restarts, Watchdog,
+                      floor_limit, focused_package, over_time, read_runs, run_limit, same_screen, thumb)
 from test_pipeline import hub_entries, load_nodes
 
 
@@ -660,3 +660,93 @@ def test_the_opening_go_homes_restart_is_one_of_the_tasks_two(hub, stops):
     assert daily_restarts(hub, 2) == [True, False]
     assert restarts_run(hub) == 2
     assert len(stops) == 1 and "2 times this task" in stops[0], stops
+
+
+def away_reads(reads, start=0.0):
+    """Feed an Away a hub that recognises nothing from start on, one pass a second; reads(t) is what the foreground read
+    gives t s in. The pass times it read the foreground at, and (time, why) of the first restart, or None."""
+    away, read_at = Away(), []
+    away.handled(start)
+    for t in range(1, 121):
+        if away.due(start + t):
+            read_at.append(t)
+            if why := away.read(reads(t), start + t):
+                return read_at, (t, why)
+    return read_at, None
+
+
+def test_away_reads_the_foreground_only_while_the_hub_recognises_nothing_every_poll():
+    read_at, _ = away_reads(lambda t: GAME)
+    assert read_at[:3] == [AWAY_POLL, 2 * AWAY_POLL, 3 * AWAY_POLL]
+
+
+@pytest.mark.parametrize("app, shown", [
+    ("", "no window has focus"),  # #530: booting, a blank start window, no window focused
+    ("app.lawnchair", "app.lawnchair"),  # the launcher: the game closed or never started (2026-11-08, batch 3)
+    ("com.android.vending", "com.android.vending"),  # the Play Store (#86)
+])
+def test_a_game_out_of_front_is_restarted_well_before_the_hubs_60_s(app, shown):
+    _, (t, why) = away_reads(lambda t: app)
+    assert t == AWAY_POLL + AWAY_AFTER < 60
+    assert shown in why and "not in front" in why
+
+
+def test_a_normal_cold_start_is_not_restarted():
+    # Recordings 2026-11-08 and 11-12: the blank start window lasted under 12 s before the logo.
+    assert away_reads(lambda t: "" if t <= 12 else GAME)[1] is None
+
+
+@pytest.mark.parametrize("unread", [None, GAME])
+def test_one_read_with_the_game_in_front_or_unread_starts_the_count_over(unread):
+    read_at, (t, _) = away_reads(lambda t: unread if t == 20 else "")
+    assert t == 20 + AWAY_POLL + AWAY_AFTER
+
+
+def test_a_screen_handed_out_starts_the_count_over():
+    away = Away()
+    away.handled(0)
+    for t in range(AWAY_POLL, AWAY_AFTER + AWAY_POLL, AWAY_POLL):
+        assert away.due(t) and away.read("", t) is None
+    away.handled(AWAY_AFTER + 1)
+    assert not away.due(AWAY_AFTER + AWAY_POLL)
+    assert away.due(AWAY_AFTER + 1 + AWAY_POLL) and away.read("", AWAY_AFTER + 1 + AWAY_POLL) is None
+
+
+@pytest.fixture
+def clock(monkeypatch):
+    now = [1000.0]
+    monkeypatch.setattr(actions.time, "monotonic", lambda: now[0])
+    return now
+
+
+def hub_passes(ctx, clock, seconds, focus):
+    """MirrorHub's passes, one a second, with nothing recognised after its entry node: StuckFlag's analyze each pass.
+    focus(t): the window dumpsys reads t s in. The second it first hit, or None."""
+    shell = ctx.tasker.controller.post_shell.return_value.wait.return_value
+    ctx.tasker.get_node_detail.return_value.name = "MirrorDungeon"  # the task's entry node: no screen
+    argv = SimpleNamespace(task_detail=SimpleNamespace(node_id_list=[1]), node_name="Stuck", image=screen(0))
+    actions.STUCK.update(node=None, kind=None, away=Away())
+    for t in range(seconds):
+        shell.get.return_value = f"  mCurrentFocus={focus(t)}\n"
+        if actions.StuckFlag().analyze(ctx, argv):
+            return t
+        clock[0] += 1
+    return None
+
+
+@pytest.mark.parametrize("focus", ["null", "Window{1 u0 app.lawnchair/x}"])
+def test_mirror_hub_restarts_a_game_out_of_front_at_once(hub, clock, focus):
+    # #530: a blank start window (no focus) or the launcher in front went to L3 only at MirrorHub's 60 s timeout.
+    assert hub_passes(hub, clock, 60, lambda t: focus) == AWAY_POLL + AWAY_AFTER
+    kind, level, reason = actions.STUCK["flag"]
+    assert level == 3 and "not in front" in reason
+    actions.Recover().run(hub, None)
+    assert hub.run_task.call_args_list[0].args == ("RecoverL3",)
+    assert (actions.ROOT / "logs" / "unknown").is_dir()  # the screen it gave up on, as a timeout keeps it
+
+
+def test_mirror_hub_leaves_a_game_in_front_and_a_normal_boot_to_its_timeout(hub, clock):
+    game = "Window{1 u0 com.ProjectMoon.LimbusCompany/x}"
+    assert hub_passes(hub, clock, 60, lambda t: game) is None
+    assert hub_passes(hub, clock, 60, lambda t: "null" if t < 12 else game) is None
+    assert actions.STUCK["flag"] is None
