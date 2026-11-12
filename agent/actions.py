@@ -35,7 +35,8 @@ import run_start
 import settlement
 import shop
 from gifts import effective, main_keyword, purchases, recipe_fusion, resolve_list, state, want_kind
-from ocrtext import compact, digits, floor_number, has, normalize
+from ocrtext import compact, digits, floor_number, fraction, has, normalize
+from ocrtext import fractions as text_fractions
 from settings import GIFT_KEYWORDS, SettingsError, data_dir, gift_tables, load_settings, vestige_ids
 from team_queue import migrate_cursor, pick_team, requeue, resumed_team
 
@@ -1067,12 +1068,17 @@ ASSEMBLE_TRIES = 3  # reads, taps of >> and Confirms the task spends before it g
 
 def fractions(results):
     """Every "n / cap" of OCR results [(text, box)], left to right, as (n, cap)."""
-    return [(int(n), int(cap)) for t, _ in sorted(results, key=lambda r: r[1][0]) for n, cap in re.findall(r"(\d+)\s*/\s*(\d+)", t)]
+    return [f for t, _ in sorted(results, key=lambda r: r[1][0]) for f in text_fractions(t)]
+
+
+def node_results(context, image, node):
+    """Every (text, box) the OCR node read on image, hit or not."""
+    detail = context.run_recognition(node, image)
+    return [(r.text, tuple(r.box)) for r in (detail.all_results if detail else [])]
 
 
 def read_fractions(context, image, node):
-    detail = context.run_recognition(node, image)
-    return fractions([(r.text, tuple(r.box)) for r in (detail.all_results if detail else [])])
+    return fractions(node_results(context, image, node))
 
 
 def panel_read(context, image):
@@ -1306,8 +1312,7 @@ class ChargePanel(CustomAction):
 
 def ocr_texts(context, image, node):
     """Every text the OCR node read on image, hit or not."""
-    detail = context.run_recognition(node, image)
-    return [r.text for r in (detail.all_results if detail else [])]
+    return [t for t, _ in node_results(context, image, node)]
 
 
 @AgentServer.custom_action("Recover")
@@ -3068,8 +3073,7 @@ def card_xy(i, ys):
 
 def participants(context, image):
     """(selected, alive) from Total Participants, or None when it is not readable."""
-    m = re.search(r"(\d+)\s*/\s*(\d+)", text(context, image, PARTICIPANTS))
-    return (int(m[1]), int(m[2])) if m else None
+    return fraction(text(context, image, PARTICIPANTS))
 
 
 def saturation(image):

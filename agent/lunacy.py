@@ -6,6 +6,8 @@ taps; everything here is plain data in, a verdict out.
 
 import re
 
+from ocrtext import FRACTION, only_fraction
+
 # What check says to do: CHARGE taps Confirm, DONE cancels and ends the task a success, STOP cancels and fails it.
 CHARGE, DONE, STOP = "charge", "done", "stop"
 
@@ -40,11 +42,10 @@ def check(price, used, charged, count, expected):
 def read_price(texts):
     """The price in the OCR strings of its area: the one number left once any "n / cap" reading is dropped; None when
     there is none or more than one (a read that is not sure is no read)."""
-    found = re.findall(r"\d+", re.sub(r"\d+\s*/\s*\d+", " ", " ".join(texts)))
+    found = re.findall(r"\d+", FRACTION.sub(" ", " ".join(texts)))
     return int(found[0]) if len(found) == 1 else None
 
 
 def read_count(texts):
     """The Daily Count in the OCR strings under its label: n of the one "n/10"; None when there is none or more."""
-    found = re.findall(r"(\d+)\s*/\s*(\d+)", " ".join(texts))
-    return int(found[0][0]) if len(found) == 1 and int(found[0][1]) == DAILY_MAX else None
+    return only_fraction(texts, DAILY_MAX)

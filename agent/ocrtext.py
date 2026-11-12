@@ -7,6 +7,7 @@ import re
 import unicodedata
 
 LOOKALIKE = str.maketrans("OoDQIl|SsBZz", "000011155822")
+FRACTION = re.compile(r"(\d+)\s*/\s*(\d+)")  # "n / m": a count, a cap or a before and after
 
 
 def normalize(s):
@@ -33,6 +34,23 @@ def floor_number(text, label=r"floor"):
     """
     m = re.search(label + r"\s*(\d{1,2})(?!\d)", normalize(text))
     return int(m[1]) if m else None
+
+
+def fraction(text):
+    """(n, m) of the first "n / m" in text, or None."""
+    found = FRACTION.search(text)
+    return (int(found[1]), int(found[2])) if found else None
+
+
+def fractions(text):
+    """Every "n / m" in text, left to right, as (n, m)."""
+    return [(int(n), int(m)) for n, m in FRACTION.findall(text)]
+
+
+def only_fraction(texts, cap):
+    """n of the one "n / cap" in the strings texts; None when there is none, more than one or another cap."""
+    found = fractions(" ".join(texts))
+    return found[0][0] if len(found) == 1 and found[0][1] == cap else None
 
 
 def digits(text):

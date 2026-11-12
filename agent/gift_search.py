@@ -7,6 +7,8 @@ import re
 
 import numpy as np
 
+from ocrtext import fraction
+
 # The gift grid (live 2026-10-16, 1.117.0): 8 columns, rows 80 px apart, sections III, II, I top to bottom.
 # Each cell has its tier as 1-3 yellow bars at its top-left; an Owned cell is greyed and shows none.
 MAX_GIFTS = 3  # the game's observation table prices 1, 2 or 3 gifts (70/160/270 starlight)
@@ -111,8 +113,7 @@ def next_gift(wanted, chosen, tried, count):
 
 def select_count(text):
     """(n, m) of "Select n/m", or None."""
-    found = re.search(r"(\d+)\s*/\s*(\d+)", text)
-    return (int(found[1]), int(found[2])) if found else None
+    return fraction(text)
 
 
 def owned_starlight(left, right):
