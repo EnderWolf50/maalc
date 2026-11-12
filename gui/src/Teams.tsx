@@ -18,9 +18,8 @@ export function TeamsTab() {
   return (
     <div className="split">
       <aside>
-        <p className="muted">{t("teams.queue")}</p>
         {s.teams.length ? (
-          <ReorderList items={s.teams} keyOf={(x) => x.id} selected={i} onSelect={(j, teams) => setSel(teams[j].id)}
+          <ReorderList className="queue" items={s.teams} keyOf={(x) => x.id} selected={i} onSelect={(j, teams) => setSel(teams[j].id)}
             badAt={(j) => bad(`teams/${j}`)}
             onChange={(teams) => update((d) => { d.teams = teams; })}
             render={(x) => (
@@ -33,6 +32,7 @@ export function TeamsTab() {
           update((d) => { d.teams.push(team); });
           setSel(team.id);
         }}>+ {t("add")}</button>
+        <p className="muted">{t("teams.queue")}</p>
       </aside>
       <section>{s.teams[i] && <TeamEditor i={i} onRemove={() => setSel(s.teams[i - 1]?.id)} />}</section>
     </div>
@@ -95,8 +95,34 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
       </div>
       {notice && <p className="notice">{notice}</p>}
 
-      <fieldset>
-        <legend>{t("team.deployment_order")}</legend>
+      {/* What the shop buys and which packs the team takes: chosen here, near the top, edited on their own tabs. Every section
+          of the team is a panel that starts open, so one header style runs down the page and a long one (starlight) folds away. */}
+      <details className="panel" open>
+        <summary className={badIn(bad, path, ["gift_list", "theme_pack_plan"])}>{t("team.lists")}</summary>
+        <div className="rows">
+          <Field label={t("team.gift_list")} path={`${path}/gift_list`} note={t("team.gift_list_note")}>
+            <span className="inline">
+              <select value={team.gift_list} onChange={(e) => set({ gift_list: e.target.value })}>
+                <option value="default">{t("defaultPlan")}</option>
+                {s.gift_lists.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                {missing(team.gift_list !== "default" && team.gift_list, s.gift_lists)}
+              </select>
+              <button type="button" disabled={!main} onClick={() => chooseList(team.gift_list, true)}>{t("team.edit_list")}</button>
+            </span>
+            {main && <small>{t("team.main_keyword")}: <b>{t(kwText(main))}</b></small>}
+          </Field>
+          <Field label={t("team.theme_pack_plan")} path={`${path}/theme_pack_plan`}>
+            <select value={team.theme_pack_plan} onChange={(e) => set({ theme_pack_plan: e.target.value })}>
+              <option value="default">{t("defaultPlan")}</option>
+              {s.theme_pack_plans.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+              {missing(team.theme_pack_plan !== "default" && team.theme_pack_plan, s.theme_pack_plans)}
+            </select>
+          </Field>
+        </div>
+      </details>
+
+      <details className="panel" open>
+        <summary className={badIn(bad, path, ["deployment_order"])}>{t("team.deployment_order")}</summary>
         <div className={"row" + (bad(`${path}/deployment_order`) && !("custom" in team.deployment_order) ? " bad" : "")}>
           {planSelect(orderSource, s.deployment_order_plans, (id) => set({
             deployment_order: id ? { plan: id } : { custom: [...(order ?? SINNERS)] },
@@ -107,10 +133,10 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
           <SinnerGrid order={team.deployment_order.custom} path={`${path}/deployment_order/custom`}
             onChange={(custom) => set({ deployment_order: { custom } })} />
         ) : order && <SinnerGrid order={order} path={`${path}/deployment_order`} />}
-      </fieldset>
+      </details>
 
-      <fieldset>
-        <legend>{t("team.starlight")}</legend>
+      <details className="panel" open>
+        <summary className={badIn(bad, path, ["starlight"])}>{t("team.starlight")}</summary>
         <div className={"row" + (bad(`${path}/starlight`) && !("custom" in team.starlight) ? " bad" : "")}>
           {planSelect(starSource, s.starlight_plans, (id) => set({
             starlight: id ? { plan: id } : {
@@ -123,15 +149,15 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
           <StarlightEditor value={team.starlight.custom} path={`${path}/starlight/custom`}
             onChange={(custom) => set({ starlight: { custom } })} />
         ) : starPlan && <StarlightEditor value={starPlan} path={`${path}/starlight`} />}
-      </fieldset>
+      </details>
 
       <GiftSearchPanel i={i} />
       <KeepPanel i={i} />
       <SkillPanel i={i} />
 
       <details className="panel" open>
-        <summary>{t("team.more")}</summary>
-        <div className="options">
+        <summary className={badIn(bad, path, MORE)}>{t("team.more")}</summary>
+        <div className="rows">
           <div className={"toggle" + (bad(`${path}/guard_turns`) ? " bad" : "")}>
             <label className="check">
               <input type="checkbox" checked={team.guard_turns > 0} onChange={(e) => set({ guard_turns: e.target.checked ? 1 : 0 })} />
@@ -161,8 +187,6 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
               {teamEnum("usage").filter((u) => u !== "any").map((u) => <option key={u} value={u}>{tv("usage", u)}</option>)}
             </select>
           </div>
-        </div>
-        <div className="grid">
           <Field label={t("team.heal")} path={`${path}/heal`}>
             <Select value={team.heal} options={teamEnum("heal")} label={(v) => tv("heal", v)} onChange={(v) => set({ heal: v })} />
           </Field>
@@ -174,22 +198,6 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
           </Field>
           <Field label={t("team.shop_refresh_normal")} path={`${path}/shop_refresh_normal`} note={t("team.shop_refresh_note")}>
             <Num value={team.shop_refresh_normal} min={0} onChange={(v) => set({ shop_refresh_normal: v })} />
-          </Field>
-          <Field label={t("team.gift_list")} path={`${path}/gift_list`} note={t("team.gift_list_note")}>
-            <select value={team.gift_list} onChange={(e) => set({ gift_list: e.target.value })}>
-              <option value="default">{t("defaultPlan")}</option>
-              {s.gift_lists.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-              {missing(team.gift_list !== "default" && team.gift_list, s.gift_lists)}
-            </select>
-            {main && <small>{t("team.main_keyword")}: <b>{t(kwText(main))}</b></small>}
-            <button type="button" disabled={!main} onClick={() => chooseList(team.gift_list, true)}>{t("team.edit_list")}</button>
-          </Field>
-          <Field label={t("team.theme_pack_plan")} path={`${path}/theme_pack_plan`}>
-            <select value={team.theme_pack_plan} onChange={(e) => set({ theme_pack_plan: e.target.value })}>
-              <option value="default">{t("defaultPlan")}</option>
-              {s.theme_pack_plans.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-              {missing(team.theme_pack_plan !== "default" && team.theme_pack_plan, s.theme_pack_plans)}
-            </select>
           </Field>
           <Field label={t("team.min_alive")} path={`${path}/min_alive`} note={t("team.min_alive_note")}>
             <Num value={team.min_alive} min={0} max={12} onChange={(v) => set({ min_alive: v })} />
@@ -262,10 +270,11 @@ function KeepPanel({ i }: { i: number }) {
   const path = `teams/${i}`;
   const set = (patch: Partial<Team>) => update((d) => { Object.assign(d.teams[i], patch); });
   return (
-    <details className={"panel" + (["sell_max_tier", "sell_vestiges"].some((k) => bad(`${path}/${k}`)) ? " bad" : "")}>
-      <summary>{t("keep.title")}</summary>
+    <details className="panel">
+      {/* The summary, not the details: `.bad input` would outline every field of the panel (as in SkillPanel). */}
+      <summary className={badIn(bad, path, ["sell_max_tier", "sell_vestiges"])}>{t("keep.title")}</summary>
       <p className="muted">{t("keep.note")}</p>
-      <div className="options">
+      <div className="rows">
         <div className={"toggle" + (bad(`${path}/sell_max_tier`) ? " bad" : "")}>
           <span>{t("keep.sell_max_tier")}</span>
           <select value={team.sell_max_tier} onChange={(e) => set({ sell_max_tier: Number(e.target.value) })}>
@@ -297,13 +306,13 @@ function GiftSearchPanel({ i }: { i: number }) {
   const rank = (g: SearchGift) => search.gifts.findIndex((x) => sameRef(x, g)) + 1;
   const full = search.gifts.length >= MAX_GIFTS;
   return (
-    <details className={"panel" + (bad(path) ? " bad" : "")}>
-      <summary>{t("gift.title")}{search.enabled && search.gifts.length ? ` (${search.gifts.length})` : ""}</summary>
+    <details className="panel">
+      <summary className={bad(path) ? "bad" : ""}>{t("gift.title")}{search.enabled && search.gifts.length ? ` (${search.gifts.length})` : ""}</summary>
       <div className="toggle">
         <label className="check">
           <input type="checkbox" checked={search.enabled} onChange={(e) => set({ enabled: e.target.checked })} />{t("gift.enabled")}
         </label>
-        <small>{t("gift.note")}</small>
+        <small className="caution">{t("gift.note")}</small>
       </div>
       <GiftGrid gifts={search.gifts} start={main ?? SEARCH_TABS[0]} full={full} mark={(g) => (rank(g) ? String(rank(g)) : null)}
         onToggle={(g) => set({ gifts: toggleGift(search.gifts, g) })} />
@@ -324,6 +333,13 @@ function GiftSearchPanel({ i }: { i: number }) {
     </details>
   );
 }
+
+/** The fields of a team that 其他設定 edits. */
+const MORE = ["guard_turns", "hard_from_floor", "allow_white_gossypium", "usage", "heal", "reserve_cost", "shop_refresh_keyword",
+  "shop_refresh_normal", "min_alive", "reward_cards"];
+
+/** "bad" when a check failed on any of these fields of the team at `path`: the panel's summary shows it while the panel is closed. */
+const badIn = (bad: (path: string) => boolean, path: string, keys: string[]) => (keys.some((k) => bad(`${path}/${k}`)) ? "bad" : "");
 
 /** Keep a dangling plan id selectable so the select shows it instead of silently changing it. */
 function missing(id: string | false, plans: { id: string }[]) {

@@ -141,13 +141,15 @@ function PlanTab<P extends { id: string; name: string }>({ planKey, tab, make, e
 
 export const DeploymentTab = () => (
   <PlanTab<DeploymentPlan> planKey="deployment_order_plans" tab="tab.deployment" make={() => ({ order: [...SINNERS] })}
-    editor={(p, change, path) => <SinnerGrid order={p.order} path={`${path}/order`} onChange={(order) => change({ ...p, order })} />} />
+    editor={(p, change, path) => (
+      <div className="plan-card"><SinnerGrid order={p.order} path={`${path}/order`} onChange={(order) => change({ ...p, order })} /></div>
+    )} />
 );
 
 export const StarlightTab = () => (
   <PlanTab<StarlightPlan> planKey="starlight_plans" tab="tab.starlight" make={defaultStarlight}
     editor={(p, change, path) => (
-      <StarlightEditor value={p} path={path} onChange={(v) => change({ ...p, ...v })} />
+      <div className="plan-card"><StarlightEditor value={p} path={path} onChange={(v) => change({ ...p, ...v })} /></div>
     )} />
 );
 
@@ -270,13 +272,24 @@ function PackPlanEditor({ data, plan, planId, path, onChange }: {
     values.map((v) => (
       <button type="button" key={String(v)} className="chip" aria-pressed={v === value} onClick={() => pick(v)}>{label(v)}</button>
     ));
+  // The plan's one setting outside the lanes first; then the lanes with what filters them (the filters only change the view).
   return (<>
+    <div className="rows">
+      <Field label={t("packs.eventPacks")} path={path && `${path}/event_packs`} note={t("packs.eventPacksNote")}>
+        {onChange
+          ? <Select value={plan.event_packs} options={EVENT_MODES} label={(v) => tv("event_packs", v)} onChange={(v) => set({ event_packs: v })} />
+          : <span>{tv("event_packs", plan.event_packs)}</span>}
+      </Field>
+    </div>
     <div className="packbar">
       {chips<PackMode>(["", "normal", "hard", "infinity", "extreme"], difficulty, (v) => (v ? v.toUpperCase() : t("packs.anyDifficulty")), setDifficulty)}
       <span className="gap" />
       {chips(FLOORS, floor, (v) => (v ? t("packs.floor").replace("{n}", String(v)) : t("packs.anyFloor")), setFloor)}
       <span className="spacer" />
-      {chips([false, true].map(String), String(images), (v) => t(v === "true" ? "packs.images" : "packs.names"), (v) => setImages(v === "true"))}
+      {/* Names or cover images: a switch of the view, drawn as one segmented control, apart from the filters. */}
+      <span className="seg">
+        {chips([false, true].map(String), String(images), (v) => t(v === "true" ? "packs.images" : "packs.names"), (v) => setImages(v === "true"))}
+      </span>
     </div>
     {onChange && <p className="muted">{withBreaks(t("packs.hint"))}</p>}
     <p className="muted floorkey">
@@ -305,10 +318,5 @@ function PackPlanEditor({ data, plan, planId, path, onChange }: {
       {gapOrLine(lanes.length)}
       {onChange && <div className="lane add" {...target(drag !== null && drag !== LINE, null)}>＋ {t("packs.newLane")}</div>}
     </div>
-    <Field label={t("packs.eventPacks")} path={path && `${path}/event_packs`} note={t("packs.eventPacksNote")}>
-      {onChange
-        ? <Select value={plan.event_packs} options={EVENT_MODES} label={(v) => tv("event_packs", v)} onChange={(v) => set({ event_packs: v })} />
-        : <span>{tv("event_packs", plan.event_packs)}</span>}
-    </Field>
   </>);
 }

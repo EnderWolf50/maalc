@@ -112,7 +112,9 @@ export function SkillPanel({ i }: { i: number }) {
           {SKILL_PAYMENTS.map((v) => <option key={v} value={v}>{tv("skill_pay", v)}</option>)}
         </select>
         <small>{t("skill.id_search_note")}</small>
-        <small>{search.pay === "starlight" ? t("skill.pay_starlight_note") : t("skill.pay_cost_note")}</small>
+        {search.pay === "starlight"
+          ? <small className="caution">{t("skill.pay_starlight_note")}</small>
+          : <small>{t("skill.pay_cost_note")}</small>}
       </div>
     </details>
   );

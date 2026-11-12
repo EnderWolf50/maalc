@@ -47,11 +47,11 @@ export function Select({ value, options, label, onChange }: {
   );
 }
 
-export function Num({ value, min, max, disabled, onChange }: {
-  value: number; min: number; max?: number; disabled?: boolean; onChange: (v: number) => void;
+export function Num({ value, min, max, disabled, label, onChange }: {
+  value: number; min: number; max?: number; disabled?: boolean; label?: string; onChange: (v: number) => void;
 }) {
   return (
-    <input type="number" value={value} min={min} max={max} step={1} disabled={disabled}
+    <input type="number" value={value} min={min} max={max} step={1} disabled={disabled} aria-label={label}
       onChange={(e) => onChange(e.target.value === "" ? min : Math.trunc(Number(e.target.value)))} />
   );
 }
@@ -82,7 +82,7 @@ export function ToggleNum({ label, path, value, on, min, max, note, onChange }: 
         <input type="checkbox" checked={value !== null} onChange={(e) => onChange(e.target.checked ? on : null)} />
         {label}
       </label>
-      <Num value={value ?? on} min={min} max={max} disabled={value === null} onChange={onChange} />
+      <Num value={value ?? on} min={min} max={max} disabled={value === null} label={label} onChange={onChange} />
       {note && <small>{withBreaks(note)}</small>}
     </div>
   );
@@ -90,9 +90,9 @@ export function ToggleNum({ label, path, value, on, min, max, note, onChange }: 
 
 /** Native HTML drag and drop, plus up/down buttons for the keyboard. Needs "dragDropEnabled": false on the Tauri
  * window (tauri.conf.json): on Windows Tauri otherwise replaces WebView2's drop handler and no HTML5 drop fires (#64). */
-export function ReorderList<T>({ items, onChange, render, keyOf, selected, onSelect, badAt }: {
+export function ReorderList<T>({ items, onChange, render, keyOf, selected, onSelect, badAt, className }: {
   items: T[]; onChange: (items: T[]) => void; render: (item: T, i: number) => ReactNode; keyOf: (item: T) => string;
-  selected?: number; onSelect?: (i: number, items: T[]) => void; badAt?: (i: number) => boolean;
+  selected?: number; onSelect?: (i: number, items: T[]) => void; badAt?: (i: number) => boolean; className?: string;
 }) {
   const { t } = useEditor();
   const [dragging, setDragging] = useState<number | null>(null);
@@ -104,10 +104,13 @@ export function ReorderList<T>({ items, onChange, render, keyOf, selected, onSel
     if (selected === from) onSelect?.(to, next);
   };
   return (
-    <ol className="reorder" title={t("dragHint")}>
+    <ol className={"reorder" + (className ? " " + className : "")} title={t("dragHint")}>
       {items.map((item, i) => (
         <li key={keyOf(item)} draggable
           className={[selected === i && "selected", dragging === i && "dragging", badAt?.(i) && "bad"].filter(Boolean).join(" ")}
+          // A list that selects (teams, plans) is reached by Tab and picked with Enter or Space, as by a click.
+          tabIndex={onSelect ? 0 : undefined} aria-current={onSelect && selected === i ? true : undefined}
+          onKeyDown={(e) => { if (onSelect && e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); onSelect(i, items); } }}
           onClick={() => onSelect?.(i, items)}
           onDragStart={(e) => { setDragging(i); e.dataTransfer.effectAllowed = "move"; }}
           onDragEnd={() => setDragging(null)}

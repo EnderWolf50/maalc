@@ -20,6 +20,8 @@ export const TABS = [
   ["trials", "tab.trials", TrialsTab, ["trial_risk_overrides"]],
   ["daily", "tab.daily", DailyTab, ["luxcavation", "charge_enkephalin"]],
 ] as const;
+/** The tab bar's groups start at these: the run and what it uses, the named plans, the overrides, the daily tasks. */
+const GROUP_START = new Set<(typeof TABS)[number][0]>(["deployment", "events", "daily"]);
 
 const toText = (s: Settings) => JSON.stringify(s, null, 2) + "\n";
 
@@ -119,6 +121,8 @@ export default function App() {
   const dirty = toText(s) !== savedText;
   const said = Object.prototype.hasOwnProperty.call(TEXT[lang], status) ? t(status as Key) : status;
   const note = status === "saved" ? "" : said; // shown beside "unsaved" too: a refused save, the file read again
+  const blocked = checked && problems.length > 0;
+  const state = blocked ? " blocked" : dirty ? " dirty" : status === "saved" ? " saved" : ""; // the dot before the status text
 
   const save = async () => {
     setChecked(true);
@@ -150,16 +154,18 @@ export default function App() {
       <header>
         <h1>{t("title")}</h1>
         <span className="muted path" title={t("file")}>{root}\config\settings.json</span>
+        <span className={"status" + state} role="status">
+          {dirty ? [t("unsaved"), note].filter(Boolean).join(" ") : said}
+        </span>
         <label className="lang">{t("language")}{" "}
           <select value={s.language} onChange={(e) => ctx.update((d) => { d.language = e.target.value as Settings["language"]; })}>
             <option value="zh_tw">繁體中文</option>
             <option value="en_us">English</option>
           </select>
         </label>
-        <span className="status">{dirty ? [t("unsaved"), note].filter(Boolean).join(" ") : said}</span>
         <button type="button" className="primary" onClick={save}>{t("save")}</button>
       </header>
-      {checked && problems.length > 0 && (
+      {blocked && (
         <div className="problems" role="alert">
           <p>{t("saveBlocked")}</p>
           <ul>{problems.map((p, i) => <li key={i}>{p.text}</li>)}</ul>
@@ -167,12 +173,13 @@ export default function App() {
       )}
       <nav role="tablist">
         {TABS.map(([id, label, , prefixes]) => (
-          <button type="button" role="tab" key={id} aria-selected={tab === id}
-            className={(tab === id ? "selected" : "") + (prefixes.some(bad) ? " bad" : "")}
+          <button type="button" role="tab" key={id} data-tab={id} aria-selected={tab === id}
+            className={[tab === id && "selected", GROUP_START.has(id) && "group-start", prefixes.some(bad) && "bad"].filter(Boolean).join(" ")}
             onClick={() => setTab(id)}>{t(label)}</button>
         ))}
       </nav>
-      <main><Current /></main>
+      {/* Keyed by tab: a tab opens at its top, not at the scroll position the last tab left. */}
+      <main key={tab}><Current /></main>
     </EditorContext.Provider>
   );
 }
@@ -187,36 +194,58 @@ function RunTab() {
       <Select value={run[k]} options={runEnum(k)} label={(v) => tv(k, v)} onChange={(v) => set({ [k]: v })} />
     </Field>
   );
+  // Four groups, each a card of label | control rows: the run itself, the weekly bonuses, a wipe or a failure, the screens the bot
+  // answers on its own.
   return (
-    <div className="grid">
-      {pick("difficulty")}
-      <Field label={t("run.target_floor")} path="run/target_floor" note={pastFive ? t("run.target_floor_note") : undefined}>
-        <Select value={String(run.target_floor)} options={runEnum("target_floor").map(String)} label={(v) => tv("target_floor", v)} onChange={(v) => set({ target_floor: Number(v) })} />
-        {/* Remove with #434: until the entrance switches Parallel Superposition on, a target above 5 still stops at floor 5. */}
-        {pastFive && <small>{t("run.target_floor_entry_note")}</small>}
-      </Field>
-      <ToggleNum label={t("run.runs")} path="run/runs" value={run.runs} on={1} min={1} note={t("run.runs_note")}
-        onChange={(v) => set({ runs: v })} />
-      {pick("weekly_bonus_use", run.weekly_bonus_use === "normal" ? t("run.weekly_bonus_normal_note") : undefined)}
-      {pick("weekly_bonus_amount")}
-      <label className={"check" + (bad("run/stop_when_weekly_bonus_out") ? " bad" : "")}>
-        <input type="checkbox" checked={run.stop_when_weekly_bonus_out} onChange={(e) => set({ stop_when_weekly_bonus_out: e.target.checked })} />
-        {t("run.stop_when_weekly_bonus_out")}
-      </label>
-      {pick("starlight_unaffordable")}
-      <Field label={t("run.wipe_retries")} path="run/wipe_retries"><Num value={run.wipe_retries} min={0} onChange={(v) => set({ wipe_retries: v })} /></Field>
-      {pick("after_retries")}
-      {pick("theme_pack_refresh", t("run.theme_pack_refresh_note"))}
-      {(["auto_accept_terms", "auto_download", "keep_dismissed_screens"] as const).map((k) => (
-        <label key={k} className={"check" + (bad(`run/${k}`) ? " bad" : "")}>
-          <input type="checkbox" checked={run[k]} onChange={(e) => set({ [k]: e.target.checked })} />
-          {t(`run.${k}`)}
-        </label>
-      ))}
-      <Field label={t("run.webhook_url")} path="run/webhook_url">
-        <input type="url" value={run.webhook_url} onChange={(e) => set({ webhook_url: e.target.value })} />
-      </Field>
-    </div>
+    <>
+      <fieldset>
+        <legend>{t("run.group_run")}</legend>
+        <div className="rows">
+          {pick("difficulty")}
+          <Field label={t("run.target_floor")} path="run/target_floor" note={pastFive ? t("run.target_floor_note") : undefined}>
+            <Select value={String(run.target_floor)} options={runEnum("target_floor").map(String)} label={(v) => tv("target_floor", v)} onChange={(v) => set({ target_floor: Number(v) })} />
+            {/* Remove with #434: until the entrance switches Parallel Superposition on, a target above 5 still stops at floor 5. */}
+            {pastFive && <small>{t("run.target_floor_entry_note")}</small>}
+          </Field>
+          <ToggleNum label={t("run.runs")} path="run/runs" value={run.runs} on={1} min={1} note={t("run.runs_note")}
+            onChange={(v) => set({ runs: v })} />
+          {pick("theme_pack_refresh", t("run.theme_pack_refresh_note"))}
+          {pick("starlight_unaffordable")}
+        </div>
+      </fieldset>
+      <fieldset>
+        <legend>{t("run.group_weekly")}</legend>
+        <div className="rows">
+          {pick("weekly_bonus_use", run.weekly_bonus_use === "normal" ? t("run.weekly_bonus_normal_note") : undefined)}
+          {pick("weekly_bonus_amount")}
+          <label className={"check" + (bad("run/stop_when_weekly_bonus_out") ? " bad" : "")}>
+            <input type="checkbox" checked={run.stop_when_weekly_bonus_out} onChange={(e) => set({ stop_when_weekly_bonus_out: e.target.checked })} />
+            {t("run.stop_when_weekly_bonus_out")}
+          </label>
+        </div>
+      </fieldset>
+      <fieldset>
+        <legend>{t("run.group_failure")}</legend>
+        <div className="rows">
+          <Field label={t("run.wipe_retries")} path="run/wipe_retries"><Num value={run.wipe_retries} min={0} onChange={(v) => set({ wipe_retries: v })} /></Field>
+          {pick("after_retries")}
+          <Field label={t("run.webhook_url")} path="run/webhook_url">
+            <input type="url" value={run.webhook_url} onChange={(e) => set({ webhook_url: e.target.value })} />
+          </Field>
+        </div>
+      </fieldset>
+      <fieldset>
+        <legend>{t("run.group_screens")}</legend>
+        <div className="rows">
+          {(["auto_accept_terms", "auto_download", "keep_dismissed_screens"] as const).map((k) => (
+            <label key={k} className={"check" + (bad(`run/${k}`) ? " bad" : "")}>
+              <input type="checkbox" checked={run[k]} onChange={(e) => set({ [k]: e.target.checked })} />
+              {t(`run.${k}`)}
+            </label>
+          ))}
+        </div>
+      </fieldset>
+    </>
   );
 }
 
@@ -238,8 +267,8 @@ function ChargeFields() {
   return (
     <fieldset>
       <legend>{t("charge.title")}</legend>
-      <p className="muted">{withBreaks(t("charge.note"))}</p>
-      <div className="grid">
+      <p className="caution">{withBreaks(t("charge.note"))}</p>
+      <div className="rows">
         <Field label={t("charge.count")} path="charge_enkephalin/count">
           <Num value={s.charge_enkephalin.count} min={0} onChange={(v) => update((d) => { d.charge_enkephalin.count = v; })} />
         </Field>
@@ -257,7 +286,7 @@ function LuxFields({ task }: { task: keyof Settings["luxcavation"] }) {
     <fieldset>
       <legend>{t(`lux.${task}`)}</legend>
       <p className="muted">{withBreaks(t(`lux.${task}_note`))}</p>
-      <div className="grid">
+      <div className="rows">
         <Field label={t("lux.mode")} path={`${path}/mode`}>
           <Select value={opts.mode} options={LUX_MODES} label={(v) => tv("lux_mode", v)} onChange={(v) => set({ mode: v as LuxMode })} />
         </Field>
