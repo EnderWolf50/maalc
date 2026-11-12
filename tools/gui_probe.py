@@ -13,12 +13,13 @@ starting anything when `--root` exists without the marker file the probe writes 
 """
 import argparse
 import json
-import os
 import shutil
 import subprocess
 import sys
 import time
 from pathlib import Path
+
+import dir_link
 
 REPO = Path(__file__).resolve().parents[1]
 EXE_NAME = "maalc-gui.exe"
@@ -27,26 +28,6 @@ MARKER = ".gui-probe-root"  # written when the probe makes a root: only a folder
 
 class ForeignRoot(Exception):
     """`--root` exists and the probe did not make it."""
-
-
-def link_dir(link: Path, target: Path):
-    """A directory link that needs no privilege: a junction on Windows, a symlink elsewhere."""
-    if sys.platform == "win32":
-        import _winapi
-        _winapi.CreateJunction(str(target), str(link))
-    else:
-        os.symlink(target, link, target_is_directory=True)
-
-
-def unlink_dir(link: Path):
-    """Remove a directory link made by `link_dir` without touching its target; nothing when it is absent."""
-    try:
-        os.rmdir(link)  # a junction, or a symlink to a directory on Windows
-    except OSError:
-        try:
-            os.unlink(link)  # a symlink on POSIX
-        except OSError:
-            pass
 
 
 def demo_settings() -> str:
@@ -60,14 +41,14 @@ def prepare_root(exe: Path, root: Path, settings_text: str, assets: Path = REPO 
     if root.exists():
         if not (root / MARKER).is_file():
             raise ForeignRoot(f"{root} exists and has no {MARKER} marker: not made by this probe, so not deleted")
-        unlink_dir(root / "assets")  # the link goes first: rmtree must never follow it into the repo
+        dir_link.unlink(root / "assets")  # the link goes first: rmtree must never follow it into the repo
         shutil.rmtree(root)
     (root / "config").mkdir(parents=True)
     (root / MARKER).write_text("made by tools/gui_probe.py\n", encoding="utf-8")
     copied = root / EXE_NAME
     shutil.copy2(exe, copied)
     (root / "config" / "settings.json").write_text(settings_text, encoding="utf-8")
-    link_dir(root / "assets", assets)
+    dir_link.link(root / "assets", assets)
     return copied
 
 
