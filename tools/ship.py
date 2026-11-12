@@ -40,7 +40,7 @@ import time
 from contextlib import nullcontext
 from pathlib import Path
 
-from live.queue import holders, turn
+from live.queue import holders, queue_dir, turn
 from local_dir import local_dir, main_checkout
 
 CI_CHECK = "ci-ok"
@@ -125,7 +125,7 @@ def wait_for_main_ci(runner, base: str, sha: str, sleep=time.sleep, now=time.mon
 
 
 def emulator_busy(repo: Path) -> bool:
-    return bool(holders(repo / ".local" / "queue" / "emulator"))
+    return bool(holders(queue_dir("emulator", repo)))
 
 
 class Outcome(enum.Enum):
@@ -189,7 +189,7 @@ def waiting_line(ahead: list[tuple[str, str]], prs: list[int]) -> str:
 def cmd_land(runner, prs: list[int], go: bool, sleep=time.sleep, repo: Path | None = None,
              onto_red: int | None = None) -> int:
     repo = repo or main_checkout()
-    lane = turn(repo / ".local" / "queue" / "land", "land", ["ship.py", "land", *(f"#{p}" for p in prs)], sleep=sleep,
+    lane = turn(queue_dir("land", repo), "land", ["ship.py", "land", *(f"#{p}" for p in prs)], sleep=sleep,
                 on_wait=lambda ahead: print(waiting_line(ahead, prs), flush=True)) if go else nullcontext()
     with lane:
         outcomes = []

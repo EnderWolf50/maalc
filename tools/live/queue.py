@@ -48,6 +48,8 @@ from typing import NamedTuple
 TOOLS = Path(__file__).resolve().parents[1]
 if str(TOOLS) not in sys.path:  # run as a script, local_dir is not importable until tools/ is on the path
     sys.path.insert(0, str(TOOLS))
+# This file's name shadows the stdlib `queue` for a script in tools/live/, whose folder stays on its path: no module
+# such a script imports may import the stdlib `queue` (none does; tests/test_live_queue.py runs the three as scripts).
 
 from local_dir import local_dir, main_checkout  # noqa: E402
 
@@ -376,9 +378,9 @@ def status(qdir: Path, is_alive=alive, now: float | None = None) -> list[str]:
     return lines
 
 
-def queue_dir(resource: str) -> Path:
-    """The folder of a resource's tickets in the main checkout, created by the first `run`."""
-    return main_checkout() / ".local" / "queue" / resource
+def queue_dir(resource: str, root: Path | None = None) -> Path:
+    """The folder of a resource's tickets in the main checkout (or `root`), created by the first `run`."""
+    return (root or main_checkout()) / ".local" / "queue" / resource
 
 
 def pid_file(log: Path) -> Path:
