@@ -35,6 +35,7 @@ TOOLS = Path(__file__).resolve().parents[1]
 if str(TOOLS) not in sys.path:
     sys.path.insert(0, str(TOOLS))
 
+from live import screen_probe  # noqa: E402
 from local_dir import main_checkout  # noqa: E402
 
 # Pipeline node -> (verdict, what it means), in the order the probe tries them: the first that hits names the screen.
@@ -58,13 +59,11 @@ def classify(hit: str | None) -> tuple[str, str]:
 
 def probe_override() -> dict:
     """The pipeline override of one probe task: the known nodes tried in order, each with its action switched off."""
-    nodes = {n: {"action": "DoNothing", "next": [], "post_delay": 0, "pre_delay": 0} for n in SCREENS}
-    nodes[PROBE] = {"recognition": "DirectHit", "action": "DoNothing", "next": list(SCREENS), "timeout": PROBE_TIMEOUT_MS}
-    return nodes
+    return screen_probe.override(PROBE, SCREENS, PROBE_TIMEOUT_MS)
 
 
 def first_hit(node_names: list[str]) -> str | None:
-    return next((n for n in node_names if n in SCREENS), None)
+    return screen_probe.first_hit(node_names, SCREENS)
 
 
 def look(root: Path, port: int, shot: Path | None) -> str | None:
@@ -87,10 +86,7 @@ def look(root: Path, port: int, shot: Path | None) -> str | None:
     res.post_bundle(str(root / "resource/base")).wait()
     t = Tasker()
     t.bind(res, ctl)
-    job = t.post_task(PROBE, probe_override())
-    job.wait()
-    detail = job.get()
-    return first_hit([n.name for n in detail.nodes] if detail else [])
+    return screen_probe.look(t, PROBE, probe_override(), SCREENS)
 
 
 def screen(root: Path, port: int, shot: Path | None, say=print, see=look) -> int:

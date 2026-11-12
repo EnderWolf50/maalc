@@ -49,6 +49,8 @@ TOOLS = REPO / "tools"
 if str(TOOLS) not in sys.path:
     sys.path.insert(0, str(TOOLS))
 
+from live import screen_probe  # noqa: E402
+
 BATTLE_GEAR = (1235, 40)  # the pause menu's gear, top right of the planning phase (tests/screens/BattleTurn.png)
 GIVE_UP = (640, 428)  # the pause menu's Give Up bar (BattleMenu.png)
 ACCEPT_RESULTS, WIPE_CONFIRM = (790, 446), (645, 527)  # the DEFEAT dialog's card and Confirm (actions.DEFEAT_OPTIONS, DEFEAT_CONFIRM)
@@ -117,21 +119,17 @@ FADE_LOOKS = 10
 # after the dialog's Confirm. Tried after every step's screen.
 END = "HomeReached"
 PROBE = "GiveUpProbe"
-OFF = {"action": "DoNothing", "next": [], "pre_delay": 0, "post_delay": 0}  # a probe node: its recognition only
+SCREENS = (*STEPS, END)  # the probe's order
 LOOK_MS = 1500  # how long one look tries before it names no screen
 
 
 def probe_override() -> dict:
     """The pipeline override of one look: the screens tried in order, each with its action switched off."""
-    nodes = {n: dict(OFF) for n in (*STEPS, END)}
-    for n, reco in DIALOG_NODES.items():
-        nodes[n].update(reco)
-    nodes[PROBE] = {"recognition": "DirectHit", "action": "DoNothing", "next": [*STEPS, END], "timeout": LOOK_MS}
-    return nodes
+    return screen_probe.override(PROBE, SCREENS, LOOK_MS, DIALOG_NODES)
 
 
 def first_hit(node_names: list[str]) -> str | None:
-    return next((n for n in node_names if n in STEPS or n == END), None)
+    return screen_probe.first_hit(node_names, SCREENS)
 
 
 def tasker(controller, resource: Path):
@@ -147,10 +145,7 @@ def tasker(controller, resource: Path):
 
 def look(t) -> str | None:
     """The screen the probe names now, or None."""
-    job = t.post_task(PROBE, probe_override())
-    job.wait()
-    detail = job.get()
-    return first_hit([n.name for n in detail.nodes] if detail else [])
+    return screen_probe.look(t, PROBE, probe_override(), SCREENS)
 
 
 def give_up(look, tap, shot, key, timeout: float = 60, clock=time.monotonic, sleep=time.sleep, say=print) -> int:
