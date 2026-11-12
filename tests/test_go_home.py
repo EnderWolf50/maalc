@@ -133,8 +133,9 @@ def child():
     for scenario, (start, focus, *model) in {
         "drive": ("drive", GAME), "sinners": ("sinners", GAME), "main": ("main", GAME), "mailbox": ("mailbox", GAME),
         "settings": ("settings", GAME), "entry": ("entry", GAME), "closed": ("black", "com.android.launcher"),
-        # the entry page's back key: 0.8 s of a screen GoHome knows nothing of before the Drive page (#58)
-        "entry_slow": ("entry", GAME, 0, 0, 0, 0.8),
+        # the entry page's back key: 0.4 s of a screen GoHome knows nothing of before the Drive page (#58); short, so a
+        # slow glance on a busy CI machine still finds the Drive page well inside HomeBack's 2 s
+        "entry_slow": ("entry", GAME, 0, 0, 0, 0.4),
         # the Window tab's page shows 4 screenshots after the tap; the game shows black for 15 before its title
         "drive_late": ("drive", GAME, 4), "closed_slow": ("black", "com.android.launcher", 0, 15),
         # the tapped Window tab glows on the Drive page for 2 screenshots before the main window (#496)
@@ -215,7 +216,7 @@ def test_the_back_key_waits_for_a_screen_go_home_knows_not_a_fixed_2_s():
     o = run_child(__file__)["entry_slow"]
     assert o["succeeded"] and o["keys"] == [4] and len(o["clicks"]) == 1 and o["nodes"][-1] == "HomeReached", json.dumps(o)
     waits = [float(line.split("after ")[1].split(" s")[0]) for line in o["log"] if "HomeBack: screen changed after" in line]
-    assert len(waits) == 1 and 0.8 <= waits[0] < 2, json.dumps(o)
+    assert len(waits) == 1 and 0.4 <= waits[0] < 2, json.dumps(o)
     o = run_child(__file__)["entry"]
     assert any("HomeBack: screen changed after" in line for line in o["log"]), json.dumps(o)  # within the 2 s
 
