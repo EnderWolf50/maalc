@@ -43,6 +43,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
+from typing import NamedTuple
 
 sys.path[0] = str(Path(__file__).resolve().parents[1])  # this file's name shadows the stdlib `queue`
 
@@ -103,6 +104,21 @@ def alive(pid: int, start: int | None = None) -> bool:
     return win_alive(kernel32(), pid, start)
 
 
+class Ticket(NamedTuple):
+    """The parts of a ticket's file name, `<stamp>-<pid>-<name>.ticket`: the stamp (ns) sorts the queue, the pid is
+    the process that holds the ticket, the name is the task's (ticket_name())."""
+    stamp: str
+    pid: str
+    name: str
+
+    @classmethod
+    def of(cls, p: Path) -> "Ticket":
+        return cls(*p.stem.split("-", 2))
+
+    def path(self, qdir: Path) -> Path:
+        return qdir / f"{self.stamp}-{self.pid}-{self.name}.ticket"
+
+
 def read(p: Path) -> tuple[str, int | None, bool] | None:
     """(command, start time of the holder, queued with --first) of a ticket; a ticket without a start time is plain
     text. None: the ticket is gone, its run ended after the queue was listed (#577)."""
@@ -123,7 +139,7 @@ def tickets(qdir: Path, is_alive=alive) -> list[Path]:
     for p in sorted(qdir.glob("*.ticket")):
         if (t := read(p)) is None:
             continue
-        if is_alive(int(p.stem.split("-", 2)[1]), t[1]):
+        if is_alive(int(Ticket.of(p).pid), t[1]):
             out.append(p)
         else:
             p.unlink(missing_ok=True)
@@ -152,13 +168,13 @@ def place(qdir: Path, name: str, cmd: list[str], first: bool, is_alive=alive) ->
         # After every ticket already there: Python 3.12's wall clock on Windows ticks every 15.6 ms, and a ticket of the
         # same tick, pid and name would overwrite the one before it (#636); a clock stepped back would sort it ahead.
         # FIRST_GAP behind the last one, so the stamps a first ticket takes right behind a ticket stay free.
-        stamps = [int(s) for p in qdir.glob("*.ticket") if (s := p.name.split("-", 1)[0]).isdigit()]
+        stamps = [int(s) for p in qdir.glob("*.ticket") if (s := Ticket.of(p).stamp).isdigit()]
         stamp = str(max([time.time_ns(), *(s + FIRST_GAP for s in stamps)]))
         if q:
             behind = next((i for i, p in enumerate(q[1:], 1) if (t := read(p)) is not None and not t[2]), len(q)) - 1
-            last = q[behind].name.split("-", 1)[0]
+            last = Ticket.of(q[behind]).stamp
             stamp = str(int(last) + 1 + taken).zfill(len(last))  # same width: ticket names sort as text
-        me = qdir / f"{stamp}-{os.getpid()}-{name}.ticket"
+        me = Ticket(stamp, str(os.getpid()), name).path(qdir)
         try:
             with me.open("x", encoding="utf-8") as f:  # a thread of this process may have taken the stamp meanwhile
                 f.write(body)
@@ -189,7 +205,7 @@ def turn(qdir: Path, name: str, cmd: list[str], first: bool = False, is_alive=al
                 raise TicketGone(f"[queue] the ticket {me.name} left the queue while {name} waited (removed, or dropped "
                                  f"as a dead process's); {name} did not start: queue it again")
             if not said:
-                ahead = [(p.stem.split("-", 2)[1], t[0]) for p in q[:q.index(me)] if (t := read(p)) is not None]
+                ahead = [(Ticket.of(p).pid, t[0]) for p in q[:q.index(me)] if (t := read(p)) is not None]
                 if ahead:
                     on_wait(ahead)
                     said = True
@@ -231,7 +247,7 @@ def wait(qdir: Path, name: str, timeout_s: float, is_alive=alive, poll: float = 
          clock=time.monotonic, sleep=time.sleep, grace: float = WAIT_GRACE) -> int:
     """Block until the ticket `name` (queued or running) has ended; its exit code, or WAIT_TIMEOUT after timeout_s."""
     name, deadline, seen = ticket_name(name), clock() + timeout_s, False
-    queued = lambda: [p for p in tickets(qdir, is_alive) if p.stem.split("-", 2)[2] == name] if qdir.exists() else []
+    queued = lambda: [p for p in tickets(qdir, is_alive) if Ticket.of(p).name == name] if qdir.exists() else []
     for _ in range(int(grace // poll) if poll else 0):
         if queued():
             break
@@ -344,8 +360,8 @@ def holders(qdir: Path, is_alive=alive, now: float | None = None) -> list[Holder
     for p in tickets(qdir, is_alive) if qdir.exists() else []:
         if (t := read(p)) is not None:
             cmd, _, first = t
-            _, pid, name = p.stem.split("-", 2)
-            out.append(Holder(name, pid, cmd, first, stranded(cmd, is_alive, now)))
+            ticket = Ticket.of(p)
+            out.append(Holder(ticket.name, ticket.pid, cmd, first, stranded(cmd, is_alive, now)))
     return out
 
 

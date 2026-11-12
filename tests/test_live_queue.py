@@ -41,6 +41,13 @@ def test_a_ticket_of_the_same_process_and_name_sorts_after_the_one_already_there
     assert lq.read(one)[0] == "a"
 
 
+def test_a_placed_ticket_names_its_stamp_pid_and_task(tmp_path, monkeypatch):
+    monkeypatch.setattr(lq.time, "time_ns", lambda: 1_800_000_000_000_000_000)
+    me = lq.place(tmp_path, "live1", ["a"], False)
+    assert lq.Ticket.of(me) == ("1800000000000000000", str(os.getpid()), "live1")
+    assert lq.Ticket.of(me).path(tmp_path) == me
+
+
 def test_a_first_ticket_whose_place_is_taken_by_one_of_its_own_process_goes_behind_it(tmp_path):
     # #636: a plain ticket of this process and name just behind the holder holds the name a first ticket would take.
     alive = lambda pid, start: True  # noqa: E731
