@@ -126,6 +126,7 @@ def test_hold_does_not_time_out_while_paused_and_shows_its_deadline(tmp_path, ca
     done.parent.mkdir()
     (done.parent / "pause").write_text(str(clock.now + 0.3))  # paused for 0.3 s
     began = clock.now
+    # wall and monotonic share the virtual timeline here, so the pause file's wall time lapses as the clock moves
     assert bk.hold(tmp_path / "install", tmp_path / "bak", done, timeout=0.2, poll=0.01, wall=clock.monotonic) == 0
     assert clock.now - began >= 0.45  # the 0.2 s timeout ran only after the pause lapsed
     assert "timed out" in capsys.readouterr().out
