@@ -342,6 +342,20 @@ def test_shared_too_old(tmp_path, case):
     assert errors(tmp_path, {**CASES["valid"], "version": case["version"]}) == [case["error"]]
 
 
+def test_a_run_stops_on_a_too_old_file_and_logs_why(tmp_path, monkeypatch):
+    # #653: PlanRun fails before it looks at the screen (no context needed), as for any bad settings, and its log says why.
+    import actions
+
+    case = CASES["too_old"][0]
+    monkeypatch.setattr(actions, "ROOT", tmp_path)
+    logs = []
+    monkeypatch.setattr(actions, "log", logs.append)
+    (tmp_path / "config").mkdir()
+    (tmp_path / "config" / "settings.json").write_text(json.dumps({**VALID, "version": case["version"]}), encoding="utf-8")
+    assert actions.PlanRun().run(None, None) is False
+    assert logs == [f"stop: Invalid settings:\n- {case['error']}"]
+
+
 @pytest.mark.parametrize("case", CASES["clean_gift_list"], ids=lambda c: c["name"])
 def test_shared_clean_gift_list(case):
     cleaned, dropped = settings.clean_gift_list(case["list"])
