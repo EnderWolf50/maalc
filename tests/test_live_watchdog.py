@@ -1,11 +1,9 @@
-import importlib.util
 import json
 import re
 from pathlib import Path
 
-spec = importlib.util.spec_from_file_location("live_watchdog", Path(__file__).resolve().parent.parent / "tools/live/watchdog.py")
-wd = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(wd)
+from live import watchdog as wd
+
 
 ENCODED = "node:delegated-task:command%3Amcp%3Aabc%3Adelegate-task%3Aa"
 DECODED = "node:delegated-task:command:mcp:abc:delegate-task:a"

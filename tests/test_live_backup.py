@@ -1,12 +1,8 @@
-import importlib.util
-from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
-spec = importlib.util.spec_from_file_location("backup", Path(__file__).resolve().parent.parent / "tools/live/backup.py")
-bk = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(bk)
+from live import backup as bk
 
 
 class Clock:

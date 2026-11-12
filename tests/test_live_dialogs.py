@@ -1,10 +1,6 @@
-import importlib.util
 import json
-from pathlib import Path
 
-spec = importlib.util.spec_from_file_location("dialogs", Path(__file__).resolve().parent.parent / "tools/live/dialogs.py")
-dlg = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(dlg)
+from live import dialogs as dlg
 
 
 def test_only_text_ids_with_a_confirm_string_are_listed(tmp_path):
