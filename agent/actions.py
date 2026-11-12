@@ -115,6 +115,32 @@ def tap(context, x, y, wait=1.0):
     time.sleep(wait)
 
 
+def back(context):
+    """Android's back key (BACK_KEY)."""
+    context.tasker.controller.post_click_key(BACK_KEY).wait()
+
+
+def box_centre(box):
+    """(x, y) of an [x, y, w, h] box's centre."""
+    x, y, w, h = box
+    return x + w // 2, y + h // 2
+
+
+def param(raw, default=None):
+    """A node's custom_action_param or custom_recognition_param, parsed; default when it is empty."""
+    return json.loads(raw) if raw else default
+
+
+def next_names(context, node):
+    """The names of the node's next list, in order."""
+    return [n["name"] for n in context.get_node_data(node)["next"]]
+
+
+def flag_hit(**detail):
+    """A recognition hit on a state, not a place on screen: its box the screen's first pixel."""
+    return CustomRecognition.AnalyzeResult(box=(0, 0, 1, 1), detail=detail)
+
+
 def until(context, done, timeout=2.0, least=0.0, every=0.2):
     """Screenshots every `every` s until done(image) holds: that image, or None after timeout s (#58).
 
@@ -576,12 +602,12 @@ class StuckFlag(CustomRecognition):
             self.away(why, argv.image)
         if STUCK["flag"] and STUCK["flag"][0] is None:
             STUCK["flag"] = (STUCK["kind"], *STUCK["flag"][1:])  # reported by the action of the node just handled
-        return CustomRecognition.AnalyzeResult(box=(0, 0, 1, 1), detail={}) if STUCK["flag"] else None
+        return flag_hit() if STUCK["flag"] else None
 
     @staticmethod
     def hub(context, name, stuck_node):
         """Whether the node is a hub, not a screen: its next list holds this Stuck node."""
-        return stuck_node in (n["name"] for n in context.get_node_data(name)["next"])
+        return stuck_node in next_names(context, name)
 
     @staticmethod
     def away(why, image):
@@ -619,7 +645,7 @@ class GameAway(CustomRecognition):
 
     def analyze(self, context: Context, argv: CustomRecognition.AnalyzeArg):
         app = foreground(context)
-        return CustomRecognition.AnalyzeResult(box=(0, 0, 1, 1), detail={"app": app}) if app not in (None, recovery.GAME) else None
+        return flag_hit(app=app) if app not in (None, recovery.GAME) else None
 
 
 @AgentServer.custom_recognition("LuxCountMode")
@@ -627,7 +653,7 @@ class LuxCountMode(CustomRecognition):
     """Hits when the Luxcavation task LuxStart began runs in count mode (#431): ExpCountMode, which skips the pass page."""
 
     def analyze(self, context: Context, argv: CustomRecognition.AnalyzeArg):
-        return CustomRecognition.AnalyzeResult(box=(0, 0, 1, 1), detail={}) if RUN["lux"]["mode"] == "count" else None
+        return flag_hit() if RUN["lux"]["mode"] == "count" else None
 
 
 # The Luxcavation tasks (#366, #368): their settings key (custom_action_param of LuxStart) -> name, Modules a battle.
@@ -686,9 +712,8 @@ class OpenDrive(CustomAction):
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         TASK["modules"] = module_count(context, screen(context))
         p = json.loads(argv.custom_action_param)
-        x, y, w, h = argv.box
         began = time.monotonic()
-        image = tap_then(context, x + w // 2, y + h // 2, shows(context, p["next"]["roi"], p["next"]["expected"]),
+        image = tap_then(context, *box_centre(argv.box), shows(context, p["next"]["roi"], p["next"]["expected"]),
                          timeout=p["timeout"])
         log_change(argv.node_name, image, began)
         return True
@@ -709,7 +734,7 @@ class LuxHome(CustomAction):
         if lux["modules"] is None:
             return stop(context, f"{lux['name']}: the Modules number did not read on the main window")
         log(f"{lux['name']}: Modules {lux['modules']} on the main window")
-        if lux["mode"] == "count" or (json.loads(argv.custom_action_param or "null") or {}).get("plan"):
+        if lux["mode"] == "count" or (param(argv.custom_action_param) or {}).get("plan"):
             over = plan(context, lux["today"], lux["seen"])
             return True if over is None else over
         return True
@@ -748,7 +773,7 @@ class ExpPassRead(CustomAction):
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         lux = RUN["lux"]
         found = []
-        lost = (json.loads(argv.custom_action_param or "null") or {}).get("lost")
+        lost = (param(argv.custom_action_param) or {}).get("lost")
         if not lost:
             def row(image):
                 detail = context.run_recognition("PassExpRow", image)
@@ -867,7 +892,7 @@ class LuxEnter(CustomAction):
             over = battle_over(context)
             if over is not None:
                 return over
-        opts = json.loads(argv.custom_action_param or "null") or {}
+        opts = param(argv.custom_action_param) or {}
         lux = RUN["lux"]
         if lux["fights"] is None:  # Thread in daily mode only: count mode was planned in LuxHome
             n = luxcavation.read_bonuses(ocr_texts(context, screen(context), "ThreadBonuses"))
@@ -875,16 +900,16 @@ class LuxEnter(CustomAction):
             over = plan(context, None if n is None else luxcavation.DAILY_BONUSES - n, shown)
             if over is not None:
                 return over
-        x, y, w, h = argv.box
+        cx, cy = box_centre(argv.box)
         if lux["consecutive"]:
             want = lux["size"] = luxcavation.batch(lux["fights"], lux["won"], True)
-            got = set_consecutive(context, opts["box"], want, (x + w // 2, y + h // 2))
+            got = set_consecutive(context, opts["box"], want, (cx, cy))
             if got != want:
                 return stop(context, f"{lux['name']}: Consecutive Battle {'did not read' if got is None else f'shows x{got}'}, wanted x{want}")
-        if tap_then(context, x + w // 2, y + h // 2, lambda im: seen(context, im, argv.node_name) is None, timeout=3) is not None:
+        if tap_then(context, cx, cy, lambda im: seen(context, im, argv.node_name) is None, timeout=3) is not None:
             RUN["entered"] = opts.get("opens_battle", True)
             RUN["team_picked"] = False
-            log(f"{RUN['lux']['name']}: {argv.node_name} at ({x + w // 2}, {y + h // 2})")
+            log(f"{RUN['lux']['name']}: {argv.node_name} at ({cx}, {cy})")
         return True
 
 
@@ -917,7 +942,7 @@ class StopTask(CustomAction):
     the next task of the client's list starts from its own GoHome."""
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
-        return stop(context, f"{argv.node_name}: {json.loads(argv.custom_action_param or '""')}")
+        return stop(context, f"{argv.node_name}: {param(argv.custom_action_param, '')}")
 
 
 def go_home(context):
@@ -958,7 +983,7 @@ class StuckWaiting(CustomRecognition):
     one (#506). Not StuckFlag: GoHome feeds no watchdog."""
 
     def analyze(self, context: Context, argv: CustomRecognition.AnalyzeArg):
-        return CustomRecognition.AnalyzeResult(box=(0, 0, 1, 1), detail={}) if STUCK["flag"] else None
+        return flag_hit() if STUCK["flag"] else None
 
 
 @AgentServer.custom_action("HomeFrozen")
@@ -973,7 +998,7 @@ class HomeFrozen(CustomAction):
 
 def hub_knows(context, hub, node):
     """A done(image) for until(): one of the nodes of hub's next list but node hits, a screen the hub knows besides it."""
-    known = [n["name"] for n in context.get_node_data(hub)["next"] if n["name"] != node]
+    known = [n for n in next_names(context, hub) if n != node]
     return lambda image: any(seen(context, image, n) for n in known)
 
 
@@ -988,7 +1013,7 @@ class StaysUnknown(CustomRecognition):
         p = json.loads(argv.custom_recognition_param)
         if until(context, hub_knows(context, p["hub"], argv.node_name), timeout=p["timeout"]) is not None:
             return None
-        return CustomRecognition.AnalyzeResult(box=(0, 0, 1, 1), detail={})
+        return flag_hit()
 
 
 @AgentServer.custom_action("HomeLost")
@@ -998,7 +1023,7 @@ class HomeLost(CustomAction):
     stop procedure ends the task."""
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
-        return restart_game(context, json.loads(argv.custom_action_param or '""') or "the main window was not reached")
+        return restart_game(context, param(argv.custom_action_param) or "the main window was not reached")
 
 
 @AgentServer.custom_action("DailyRecover")
@@ -1013,12 +1038,12 @@ class DailyRecover(CustomAction):
         kind, level, reason = STUCK["flag"]
         STUCK["flag"] = None
         if level < 3:
-            return stop(context, f"{argv.node_name}: {json.loads(argv.custom_action_param or '""')}")
+            return stop(context, f"{argv.node_name}: {param(argv.custom_action_param, '')}")
         if not restart_game(context, reason, kind):
             return False
         hub = context.get_node_data(argv.node_name)["next"][0]["name"]
-        for node in context.get_node_data(hub)["next"]:
-            context.clear_hit_count(node["name"])
+        for node in next_names(context, hub):
+            context.clear_hit_count(node)
         return go_home(context)
 
 
@@ -1060,7 +1085,7 @@ class DoneFlag(CustomRecognition):
     a success (#364)."""
 
     def analyze(self, context: Context, argv: CustomRecognition.AnalyzeArg):
-        return CustomRecognition.AnalyzeResult(box=(0, 0, 1, 1), detail={"done": TASK["done"]}) if TASK["done"] else None
+        return flag_hit(done=TASK["done"]) if TASK["done"] else None
 
 
 # Assemble Enkephalin Modules (#370, pipeline/assemble_modules.json).
@@ -1165,7 +1190,7 @@ class AssemblePanel(CustomAction):
         image = screen(context)
         if too_many(context, image):
             a["end"] = "too many Enkephalin Modules in storage"
-            context.tasker.controller.post_click_key(BACK_KEY).wait()
+            back(context)
             return True
         if a.get("end"):
             tap(context, *PANEL_CANCEL, wait=0.5)
@@ -1192,7 +1217,7 @@ class AssemblePanel(CustomAction):
             image = screen(context)
             if too_many(context, image):
                 a["end"] = "too many Enkephalin Modules in storage"
-                context.tasker.controller.post_click_key(BACK_KEY).wait()
+                back(context)
                 return True
             again = panel_read(context, image) if on_modules_tab(context, image) else []
             if not again:
@@ -1446,7 +1471,7 @@ class DismissShot(CustomAction):
     """
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
-        p = json.loads(argv.custom_action_param or "null") or {}  # "null" when the node sets none
+        p = param(argv.custom_action_param) or {}  # "null" when the node sets none
         now = time.monotonic()
         gap = DISMISSED_GAP if argv.node_name in GAPPED else 0
         keep = allowed("keep_dismissed_screens") and now - DISMISSED_AT.get(argv.node_name, -gap) >= gap
@@ -1465,10 +1490,9 @@ class DismissShot(CustomAction):
             log(f"popup: {text(context, image, DIALOG_TEXT)!r}: pressed {popup_button(argv.reco_detail)!r}")
         began = time.monotonic() if "until" in p or "known" in p else None
         if p.get("back"):
-            context.tasker.controller.post_click_key(BACK_KEY).wait()
+            back(context)
         else:
-            x, y, w, h = argv.box
-            context.tasker.controller.post_click(x + w // 2, y + h // 2).wait()
+            context.tasker.controller.post_click(*box_centre(argv.box)).wait()
         if "until" in p:
             def closed(im):
                 return seen(context, im, p["until"]) is not None and seen(context, im, argv.node_name) is None
@@ -1488,8 +1512,7 @@ class ConfirmDownload(CustomAction):
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         if not allowed("auto_download"):
             return stop(context, "the game asks to download data: run.auto_download is off", whole_list=True)
-        x, y, w, h = argv.box
-        context.tasker.controller.post_click(x + w // 2, y + h // 2).wait()
+        context.tasker.controller.post_click(*box_centre(argv.box)).wait()
         STUCK["watch"].hold(time.monotonic(), recovery.DOWNLOAD_HOLD)
         restart_floor_clock()  # live 2026-10-21: 32 min of download would trip it, and L3 mid-download
         log(f"download confirmed: nothing counts as stuck for {recovery.DOWNLOAD_HOLD // 60} min")
@@ -1510,8 +1533,7 @@ class AcceptUpdate(CustomAction):
         if STUCK["updates"] >= UPDATE_RESTARTS:
             return stop(context, f"the game asked for an update {UPDATE_RESTARTS + 1} times since the bot started", whole_list=True)
         STUCK["updates"] += 1
-        x, y, w, h = argv.box
-        context.tasker.controller.post_click(x + w // 2, y + h // 2).wait()
+        context.tasker.controller.post_click(*box_centre(argv.box)).wait()
         log("game update accepted: restarting the game")
         time.sleep(3)  # kept (#58): the game takes the tap before it is stopped; once per game update, nothing to time
         detail = context.run_task("RecoverL3")
@@ -1561,7 +1583,7 @@ class Halt(CustomAction):
     goes to the log and the webhook. An account-level stop: the whole task list ends."""
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
-        return stop(context, f"{argv.node_name}: {json.loads(argv.custom_action_param or '""')}", whole_list=True)
+        return stop(context, f"{argv.node_name}: {param(argv.custom_action_param, '')}", whole_list=True)
 
 
 # s after a taken tap that TapUntil's settle holds: a login's CONNECTINGs, GoHome's 60 s wait on each, and the gaps
@@ -1590,7 +1612,7 @@ class TapUntil(CustomAction):
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         p = json.loads(argv.custom_action_param)
-        x, y, w, h = p.get("target", argv.box)
+        x, y = box_centre(p.get("target", argv.box))
         nxt = p.get("next", [])
         pages = [shows(context, n["roi"], n["expected"]) for n in (nxt if isinstance(nxt, list) else [nxt])]
         if "gone" in p:
@@ -1608,7 +1630,7 @@ class TapUntil(CustomAction):
                 return True
             log(f"{argv.node_name}: still up {p['settle']} s after its last tap was taken: tapped again")
             began = time.monotonic()
-        image = tap_then(context, x + w // 2, y + h // 2, lambda im: any(page(im) for page in pages), timeout=p.get("timeout", 3),
+        image = tap_then(context, x, y, lambda im: any(page(im) for page in pages), timeout=p.get("timeout", 3),
                          lively=p.get("lively", "HomeReached"))
         if "settle" in p and image is not None:
             STUCK["taken"][argv.node_name] = time.monotonic()
@@ -1660,7 +1682,7 @@ class PlanRun(CustomAction):
         if step == "back":  # not through Drive since the last run: back out, the hub's navigation reads it on the way in
             TASK["gate_backs"] = TASK.get("gate_backs", 0) + 1
             log("new run: the Modules were not read on the way here, back to the Drive page to read them")
-            context.tasker.controller.post_click_key(BACK_KEY).wait()
+            back(context)
             return True
         modules = TASK.pop("modules", None)
         TASK.pop("gate_backs", None)
@@ -2800,12 +2822,11 @@ class RouteMap(CustomAction):
         if seen(context, image, "MapBus") or not (zoomed := seen(context, image, "MapBusZoomed")):
             return True
         log("map: zoomed in on the bus; opening and closing its node panel")
-        x, y, w, h = zoomed.box
         page_guard(context, "MirrorMap", image=image)
-        if tap_then(context, x + w // 2, y + h // 2, lambda im: seen(context, im, "MapNodePanel")) is None:
+        if tap_then(context, *box_centre(zoomed.box), lambda im: seen(context, im, "MapNodePanel")) is None:
             log("map: the zoomed bus took no tap")
             return False
-        context.tasker.controller.post_click_key(BACK_KEY).wait()
+        back(context)
         if until(context, lambda im: seen(context, im, "MapBus"), timeout=3) is None:
             log("map: still zoomed in after the back key")
             return False
