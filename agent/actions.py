@@ -1504,7 +1504,7 @@ class AcceptUpdate(CustomAction):
         x, y, w, h = argv.box
         context.tasker.controller.post_click(x + w // 2, y + h // 2).wait()
         log("game update accepted: restarting the game")
-        time.sleep(3)
+        time.sleep(3)  # kept (#58): the game takes the tap before it is stopped; once per game update, nothing to time
         detail = context.run_task("RecoverL3")
         if not (detail and detail.status.succeeded):
             log("the restart after the update did not reach the title")
@@ -1541,7 +1541,7 @@ class AcceptTerms(CustomAction):
                     return True  # MirrorHub looks again
         if not all(agree_ticked(image, x, y) for x, y in AGREE_BOXES):
             return True
-        tap(context, *AGREE_CONFIRM, wait=2)
+        tap(context, *AGREE_CONFIRM, wait=2)  # kept (#58, #258): once per game update, no log has one to time
         log("User Agreement accepted")
         return True
 
@@ -1846,8 +1846,11 @@ class BuyStarlight(CustomAction):
                 return stuck(f"could not set grace {n} to {level}")
             for _ in range(2):
                 page_guard(context, "StarlightPage")
-                tap(context, x + 92, y + 100)
-                image = screen(context)
+                # Until Available reads what the grace leaves, at most the 1 s the tap slept (#58); any other number is
+                # read once that 1 s is over, as before, so a number still counting down is not judged.
+                image = tap_then(context, x + 92, y + 100, lambda im: read_available(context, im) == available - price,
+                                 timeout=1.0)
+                image = screen(context) if image is None else image
                 now = read_available(context, image)
                 if now != available:
                     break
@@ -1865,17 +1868,21 @@ class BuyStarlight(CustomAction):
         x, y = grace_box(n)
         base = run_start.GRACE_BASE[n - 1]
         want = run_start.LEVEL_MULT[level]
+        def shown(image):
+            price = number(text(context, image, [x + 112, y - 3, 80, 28]))
+            return price // base if price and price % base == 0 else None
+
         for _ in range(4):
-            price = number(text(context, screen(context), [x + 112, y - 3, 80, 28]))
-            shown = price // base if price and price % base == 0 else None
-            if shown == want:
+            now = shown(screen(context))
+            if now == want:
                 return True
-            if shown not in (1, 2, 3):
-                time.sleep(0.5)
+            if now not in (1, 2, 3):
+                time.sleep(0.5)  # kept: the price did not read (a fade, OCR); read it again
                 continue
-            button = want if want > 1 else shown  # back to base = tap the lit button again
+            button = want if want > 1 else now  # back to base = tap the lit button again
             page_guard(context, "StarlightPage")
-            tap(context, x + (50 if button == 2 else 132), y + 203)
+            # until the price shows the level, at most the 1 s the tap slept (#58)
+            tap_then(context, x + (50 if button == 2 else 132), y + 203, lambda im: shown(im) == want, timeout=1.0)
         return False
 
 
@@ -2649,7 +2656,7 @@ class RouteMap(CustomAction):
             slots = self.read_slots(context, image, bx, by) if bus else {}
             if slots:
                 break
-            time.sleep(1)
+            time.sleep(1)  # kept (#58): the bus and links come after the map stands still; MAP_LOOKS looks 1 s apart
         if not bus and self.search_bus(context):  # #61: the map dragged off by hand
             image, bus = self.find_bus(context)
             bx, by = bus or BUS_REST
@@ -2839,7 +2846,7 @@ class RouteMap(CustomAction):
             image = scroll(context, min(bx + SLOT[0] + map_route.COLUMN_DX // 2, 1100), by + SLOT[1] + 106, dx, dy,
                            ignored=(lambda im: stays(seen(context, im, "MapBus"), last)) if look else None)
             if image is None:
-                time.sleep(0.5)
+                time.sleep(0.5)  # kept (#58): the map coasts on after the lift; the look after the pan reads it at rest
                 image = screen(context)
 
     @staticmethod
@@ -2854,7 +2861,7 @@ class RouteMap(CustomAction):
             dx, dy = to[0] - at[0], to[1] - at[1]
             page_guard(context, "MirrorMap")
             scroll(context, 640 - dx // 2, 340 - dy // 2, dx, dy)
-            time.sleep(0.5)
+            time.sleep(0.5)  # kept (#58): the map coasts on after the lift
             at = to
             if seen(context, screen(context), "MapBus"):
                 log(f"map: the bus showed after dragging the map {to}")
@@ -3003,7 +3010,7 @@ class RouteMap(CustomAction):
                 break
             page_guard(context, "MirrorMap", image=image)
             scroll(context, x0 + 5 * dx // 2, y + 106, -2 * dx, 0)  # from map background, as find_bus: between columns and rows
-            time.sleep(0.5)
+            time.sleep(0.5)  # kept (#58): the map coasts on after the lift, and map_route.shift reads the drag at rest
             after = screen(context)
             s = map_route.shift(image.max(axis=2), after.max(axis=2), 2 * dx + 20)  # the drag, its threshold move and some fling
             back += 2 * dx if s is None else s
@@ -3032,7 +3039,7 @@ class RouteMap(CustomAction):
         while back > BUS_SLACK[0]:
             page_guard(context, "MirrorMap")
             scroll(context, x0 + dx // 2, y + 106, min(back, 2 * dx), 0)
-            time.sleep(0.5)
+            time.sleep(0.5)  # kept (#58): the map coasts on after the lift
             back -= 2 * dx
         bus = RouteMap.find_bus(context)[1]
         if not bus and RouteMap.search_bus(context):
@@ -3939,7 +3946,7 @@ class RewardCard(CustomAction):
                 continue
             cards = columns(ocr(context, image, CARD_TEXT))
             if not cards or len(taken) == len(cards):
-                time.sleep(1)
+                time.sleep(1)  # kept (#58): the cards still slide in; the next round's still() reads them at rest
                 continue
             types = [rewards.card_type(" ".join(lines)) for _, lines in cards]
             if None in types and rereads < CARD_REREADS:  # still sliding in, or misread: not ready

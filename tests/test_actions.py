@@ -1797,6 +1797,27 @@ def test_a_configured_grace_is_bought_with_owned_starlight_when_available_falls_
     assert actions.RUN["starlight_unspent"] == 0
 
 
+def test_a_grace_tap_waits_for_available_to_drop_not_a_fixed_1_s(context, clock, monkeypatch):
+    # #58: the card's tap slept 1 s before Available was read; it is read every 0.2 s now, at most that 1 s.
+    buy_grace_1(monkeypatch, "stop")
+    starlight_page(context, lambda clicks, looks: "20" if clicks == 0 else "10", "0")
+    assert actions.BuyStarlight().run(context, argv())
+    assert taps(context) == [(230, 252), (1195, 672)] and actions.RUN["starlight_unspent"] == 10
+    no_fixed_wait(clock)
+
+
+def test_a_grace_level_tap_waits_for_the_price_not_a_fixed_1_s(context, clock, monkeypatch):
+    # #58: the + button's tap slept 1 s before the price was read again.
+    actions.RUN["settings"] = {"run": {"starlight_unaffordable": "stop"}}
+    monkeypatch.setattr(actions.run_start, "resolve_plan", lambda *a: {"priority": [1], "levels": ["plus"] + ["none"] * 9})
+    page(context, {tuple(actions.STARLIGHT_AVAILABLE): lambda clicks, looks: "30" if clicks < 2 else "10",
+                   tuple(actions.STARLIGHT_OWNED): "0", (250, 149, 80, 28): lambda clicks, looks: "10" if clicks == 0 else "20",
+                   (480, 210, 320, 35): "Continue with selected effects?"})
+    assert actions.BuyStarlight().run(context, argv())
+    assert taps(context) == [(188, 355), (230, 252), (1195, 672)]
+    no_fixed_wait(clock)
+
+
 def test_graces_beyond_available_and_owned_follow_starlight_unaffordable_skip(context, clock, monkeypatch):
     buy_grace_1(monkeypatch, "skip")
     starlight_page(context, "5", "2")
@@ -3174,11 +3195,12 @@ def test_a_theme_pack_page_gone_is_handed_back_untouched(context, guarded, monke
 
 
 def starlight(monkeypatch, available):
-    """A starlight page planning graces 1 and 2 at base (10 each), Available reading available in turn, nothing owned."""
+    """A starlight page planning graces 1 and 2 at base (10 each), Available reading available in turn (the last for
+    good: the grace tap's wait reads it too, #58), nothing owned."""
     actions.RUN["settings"] = {"run": {"starlight_unaffordable": "stop"}}
     monkeypatch.setattr(actions.run_start, "resolve_plan", lambda *a: {"priority": [1, 2], "levels": ["base", "base"] + ["none"] * 8})
-    reads = iter(available)
-    monkeypatch.setattr(actions, "read_available", lambda context, image: next(reads))
+    reads = list(available)
+    monkeypatch.setattr(actions, "read_available", lambda context, image: reads.pop(0) if len(reads) > 1 else reads[0])
     monkeypatch.setattr(actions, "stop", lambda context, reason, line=None: pytest.fail(reason))
 
 
