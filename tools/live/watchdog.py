@@ -73,7 +73,7 @@ OUTCOMES = {
 }
 DONE = "`uv run python tools/live/watchdog.py done {label}`"
 RESUME_MSG = ("You were interrupted. Run `uv run python tools/live/queue.py resume --task {task}` and "
-              "`queue.py status`, read .local/scratch/{task}/next.md, and continue from there; never start a second hold or bot.")
+              "`queue.py status`, read <main checkout>/.local/scratch/{task}/next.md, and continue from there; never start a second hold or bot.")
 
 
 class Row:

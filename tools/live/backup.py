@@ -115,7 +115,10 @@ def main(argv=None) -> int:
             ap.error("hold needs --done")
         if a.timeout is None:
             ap.error("hold needs --timeout (seconds; 7200 is the old default)")
-        return hold(a.root, dest, a.done, a.timeout, guard=a.guard, stop_profile=a.stop_recording)
+        # a relative path is the main checkout's, as queue.py's hold_path reads it, whatever the cwd (a worktree's)
+        done = main_checkout() / a.done
+        guard = main_checkout() / a.guard if a.guard else None
+        return hold(a.root, dest, done, a.timeout, guard=guard, stop_profile=a.stop_recording)
     if a.cmd == "backup":
         print(f"backed up {backup(a.root, dest)} files of {a.root} -> {dest}")
         return 0

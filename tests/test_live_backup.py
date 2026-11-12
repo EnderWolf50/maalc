@@ -146,3 +146,14 @@ def test_hold_follows_a_second_bot_run_under_its_own_log(tmp_path, capsys):
             running=lambda log: up[log.name], stop_profile="p", grace=0.2, stop=lambda p: stopped.append(time.monotonic() - began))
     assert len(stopped) == 1 and stopped[0] >= 0.7  # 0.2 s after the second run's end, not the first's
     assert capsys.readouterr().out.count("[hold] bot ended 20") == 2
+
+
+def test_hold_reads_a_relative_done_and_guard_from_the_main_checkout(tmp_path, monkeypatch):
+    seen = {}
+    monkeypatch.setattr(bk, "main_checkout", lambda: tmp_path)
+    monkeypatch.setattr(bk, "local_dir", lambda *parts: tmp_path / "bak")
+    monkeypatch.setattr(bk, "hold", lambda root, dest, done, timeout, **kw: seen.update(done=done, guard=kw["guard"]) or 0)
+    bk.main(["hold", "--done", ".local/scratch/t/done", "--guard", ".local/scratch/t/bot*.log", "--timeout", "5"])
+    assert seen == {"done": tmp_path / ".local/scratch/t/done", "guard": tmp_path / ".local/scratch/t/bot*.log"}
+    bk.main(["hold", "--done", str(tmp_path / "abs-done"), "--timeout", "5"])
+    assert seen == {"done": tmp_path / "abs-done", "guard": None}
