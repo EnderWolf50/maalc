@@ -2129,7 +2129,7 @@ class GiftSearch(CustomAction):
     def chosen(context, image, names):
         """The gifts the Selected E.G.O Gift panel lists, as the team's names where they match."""
         texts = [text(context, image, [922, y, 270, 34]) for y in SEARCH_PANEL_Y]
-        return [run_start.match_pack(t, names) or t for t in texts if t.strip()]
+        return [run_start.match_name(t, names) or t for t in texts if t.strip()]
 
     @staticmethod
     def pick(context, gift):
@@ -2140,7 +2140,7 @@ class GiftSearch(CustomAction):
         fell short) the tab is searched from the top, screen by screen. Cells are never tapped to read names.
         """
         tab = [g for g in gift_tables()[0] if g["keyword"] == gift["keyword"]]
-        entry = next((g for g in tab if g["tier"] == gift["tier"] and run_start.match_pack(g["en"], [gift["name"]])), None)
+        entry = next((g for g in tab if g["tier"] == gift["tier"] and run_start.match_name(g["en"], [gift["name"]])), None)
         if entry is None:
             log(f"gift search: {gift['name']} is not in data/gift_search.json")
             return False
@@ -2224,7 +2224,7 @@ class GiftSearch(CustomAction):
         before = GiftSearch.chosen(context, image, [])
         after = tap_then(context, x, y, lambda im: GiftSearch.chosen(context, im, []) != before, timeout=1)
         new = [t for t in GiftSearch.chosen(context, after if after is not None else screen(context), []) if t not in before]
-        if new and run_start.match_pack(new[0], [name]):
+        if new and run_start.match_name(new[0], [name]):
             return True
         if new:
             log(f"gift search: the icon match picked {new[0]}, not {name}: unselected")
@@ -3738,7 +3738,7 @@ class Event(CustomAction):
             if not options:
                 return True
             overrides = data("events.yaml") | {o["question"]: o["option"] for o in run.get("settings", {}).get("event_overrides", [])}
-            question = next(filter(None, (run_start.match_pack(t, list(overrides)) for t in story + [" ".join(story)])), None) if overrides else None
+            question = next(filter(None, (run_start.match_name(t, list(overrides)) for t in story + [" ".join(story)])), None) if overrides else None
             known = rewards.match_event(" ".join(story), event_table())
             # Grey options (taken in an earlier round of the same questions) and ones a tap did nothing on are closed.
             closed = {k for k, (t, is_open, _) in enumerate(options) if t in tried or not is_open}
@@ -3900,7 +3900,7 @@ class Event(CustomAction):
         options = []
         for _ in range(CHOICE_SCROLLS):
             for t, y in Event.shown(context, image, True):
-                if not run_start.match_pack(t, [o[0] for o in options], margin=0):
+                if not run_start.match_name(t, [o[0] for o in options], margin=0):
                     options.append((t, rewards.choice_open(image, y), y))
             after = Event.drag(context, image, -CHOICE_STEP)
             if after is None:
@@ -3923,7 +3923,7 @@ class Event(CustomAction):
         for _ in range(2 * CHOICE_SCROLLS + 1):
             seen = {}  # option index -> y, for the options on screen
             for t, y in Event.shown(context, image, True):
-                if name := run_start.match_pack(t, texts, margin=0):
+                if name := run_start.match_name(t, texts, margin=0):
                     seen.setdefault(texts.index(name), y)
             if i in seen:
                 return seen[i], image

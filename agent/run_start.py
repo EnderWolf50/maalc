@@ -101,8 +101,10 @@ def _compact(name):
     return compact(name)
 
 
-def match_pack(text, names, min_ratio=0.9, margin=0.04):
-    """The pack name OCR text stands for, or None (spec 05 section 1: >= 0.9 and 0.04 ahead of the runner-up)."""
+def match_name(text, names, min_ratio=0.9, margin=0.04):
+    """The one of names OCR text stands for, or None (spec 05 section 1: >= 0.9 and 0.04 ahead of the runner-up).
+
+    Names of packs, gifts, events, trials and options alike."""
     key = compact(text)
     scores = []
     for n in set(names):

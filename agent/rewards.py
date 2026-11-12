@@ -10,7 +10,7 @@ from typing import NamedTuple
 from gift_cells import name_id
 from gift_search import select_count
 from ocrtext import compact, has, normalize
-from run_start import match_pack
+from run_start import match_name
 from settings import GIFT_KEYWORDS
 
 ODDS = ("very low", "low", "normal", "high", "very high")
@@ -288,7 +288,7 @@ def read_trial(name, line, trials):
     The effect line goes first ("effects"): a pool's trials differ in what they do, and a numeral slip in the name
     ("Growth I" for Growth II, #381) does not touch it. It names the trial with the same effects whose values agree most
     (Body Up II shows Max HP +10%, its static data 12.5%); none when a value is cut off or two agree as much. Then the
-    name ("name"): found exactly, else by match_pack, and dropped when its numeral is not the one read (Keen I is
+    name ("name"): found exactly, else by match_name, and dropped when its numeral is not the one read (Keen I is
     neither Keen II nor III). Neither: (None, None).
     """
     read = parse_effects(line)
@@ -297,7 +297,7 @@ def read_trial(name, line, trials):
     if alike and alike[0][0] and (len(alike) == 1 or alike[1][0] < alike[0][0]):
         return alike[0][1], "effects"
     exact = {compact(n): n for n in trials}
-    found = exact.get(compact(name)) or match_pack(name, list(trials))
+    found = exact.get(compact(name)) or match_name(name, list(trials))
     if found and _numeral(found) == _numeral(name):
         return found, "name"
     return None, None
