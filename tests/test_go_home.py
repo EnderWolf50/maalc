@@ -37,12 +37,15 @@ def child():
     class Game(game_class()):
         images = {name: screen(png) if png else np.zeros((720, 1280, 3), np.uint8) for name, png in SCREENS.items()}
 
-        def set(self, start, focus=GAME, lag=0, splash=0, press=0):
+        def set(self, start, focus=GAME, lag=0, splash=0, press=0, back_lag=0.0):
             self.screen, self.focus, self.clicks, self.keys, self.starts, self.stops = start, focus, [], [], 0, 0
             self.lag, self.splash, self.pending = lag, splash, None  # lag: screenshots a tap's screen takes to show
             self.press = press  # screenshots the Drive page shows the tapped Window tab glowing before the main window
+            self.back_lag, self.back_at = back_lag, None  # back_lag: s of black after the entry page's back key
 
         def screencap(self):
+            if self.back_at is not None and time.monotonic() >= self.back_at:
+                self.screen, self.back_at = "drive", None
             if self.pending:
                 self.pending[1] -= 1
                 if self.pending[1] < 0:
@@ -64,7 +67,10 @@ def child():
 
         def on_key(self, keycode):
             if keycode == 4 and self.screen == "entry":  # the entry page's back: the Drive tab
-                self.screen = "drive"
+                if self.back_lag:
+                    self.screen, self.back_at = "black", time.monotonic() + self.back_lag
+                else:
+                    self.screen = "drive"
             return True
 
         def start_app(self, intent):
@@ -127,6 +133,8 @@ def child():
     for scenario, (start, focus, *model) in {
         "drive": ("drive", GAME), "sinners": ("sinners", GAME), "main": ("main", GAME), "mailbox": ("mailbox", GAME),
         "settings": ("settings", GAME), "entry": ("entry", GAME), "closed": ("black", "com.android.launcher"),
+        # the entry page's back key: 1.5 s of a screen GoHome knows nothing of before the Drive page (#58)
+        "entry_slow": ("entry", GAME, 0, 0, 0, 1.5),
         # the Window tab's page shows 4 screenshots after the tap; the game shows black for 15 before its title
         "drive_late": ("drive", GAME, 4), "closed_slow": ("black", "com.android.launcher", 0, 15),
         # the tapped Window tab glows on the Drive page for 2 screenshots before the main window (#496)
@@ -168,10 +176,11 @@ def child():
         actions.STUCK["restarts"] = actions.recovery.Restarts()
         for _ in range(in_a_row):
             actions.STUCK["restarts"].attempt(None)
+        actions.LOG.clear()
         began = time.monotonic()
         detail = run_task(tasker, scenario, "GoHome", override)
         out[scenario] = {**result(detail, game, actions), "starts": game.starts,
-                         "seconds": time.monotonic() - began,
+                         "seconds": time.monotonic() - began, "log": list(actions.LOG),
                          "stops": game.stops, "in_a_row": actions.STUCK["restarts"].in_a_row,
                          "stopped": len(list(actions.ROOT.joinpath("logs").rglob("agent.log"))) - stops,
                          "halted": actions.STUCK["halted"]}
@@ -198,6 +207,17 @@ def test_go_home_reaches_the_main_window_from_each_start():
     assert o["succeeded"] and len(o["clicks"]) == 1 and o["keys"] == [] and o["nodes"][-1] == "HomeReached", o
     # A page with no tab bar: the back key, then the tab.
     assert out["entry"]["succeeded"] and out["entry"]["keys"] == [4] and len(out["entry"]["clicks"]) == 1
+
+
+def test_the_back_key_waits_for_a_screen_go_home_knows_not_a_fixed_2_s():
+    # #58: HomeBack slept 2 s after the key whatever came. It waits for the next screen GoHome knows now, at most those
+    # 2 s; one that comes within them gets no second back key, and the wait ends when it comes.
+    o = run_child(__file__)["entry_slow"]
+    assert o["succeeded"] and o["keys"] == [4] and len(o["clicks"]) == 1 and o["nodes"][-1] == "HomeReached", json.dumps(o)
+    waits = [float(line.split("after ")[1].split(" s")[0]) for line in o["log"] if "HomeBack: screen changed after" in line]
+    assert len(waits) == 1 and 1.5 <= waits[0] < 2, json.dumps(o)
+    o = run_child(__file__)["entry"]
+    assert any("HomeBack: screen changed after 0." in line for line in o["log"]), json.dumps(o)  # under 1 s
 
 
 def test_go_home_starts_the_game_when_it_is_not_in_front_and_taps_through_the_title():
