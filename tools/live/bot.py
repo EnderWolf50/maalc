@@ -29,6 +29,7 @@ import os
 import shutil
 import subprocess
 import sys
+import threading
 import time
 from pathlib import Path
 
@@ -45,17 +46,54 @@ def clock() -> str:
     return f"{datetime.datetime.now():%H:%M:%S.%f}"[:-3]
 
 
+# s the output is still read once the child has exited: what it printed is in the pipe by then and reads in
+# milliseconds (the exit line came 0.05 s after the last one in the 2026-11-13 runs, #663)
+DRAIN = 5.0
+
+
 def stamped(cmd, log: Path, clock=clock) -> int:
-    """Run cmd, appending each line it prints to log with the wall time; its exit code."""
+    """Run cmd, appending each line it prints to log with the wall time; its exit code. The run ends with the child,
+    not with the end of its output: a process the child started can inherit the output and outlive it, as the adb
+    server that MaaFramework's `adb kill-server` and `adb connect` start does (#663), and it never closes it."""
     env = {**os.environ, "PYTHONIOENCODING": "utf-8", "PYTHONUTF8": "1"}
+    read, write = os.pipe()
     with open(log, "a", encoding="utf-8", buffering=1) as f:
-        p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, encoding="utf-8", errors="replace", env=env)
+        try:
+            p = subprocess.Popen(cmd, stdout=write, stderr=subprocess.STDOUT, env=env)
+        finally:
+            os.close(write)
         f.write(f"{clock()} [run] child pid {p.pid}\n")
-        for line in p.stdout:
-            f.write(f"{clock()} {line.rstrip()}\n")
+        lock, done = threading.Lock(), threading.Event()
+
+        def line(raw: bytes):
+            with lock:
+                if not done.is_set():
+                    f.write(f"{clock()} {raw.decode('utf-8', 'replace').rstrip()}\n")
+
+        # os.read, not a file object: the reader may still be blocked in it when this process exits, and a buffered
+        # file's lock held by a daemon thread is fatal at interpreter shutdown
+        reader = threading.Thread(target=pump, args=(read, line), daemon=True)
+        reader.start()
         code = p.wait()
-        f.write(f"{clock()} [run] exit {code}\n")
+        reader.join(DRAIN)
+        with lock:
+            done.set()
+            if reader.is_alive():
+                f.write(f"{clock()} [run] output still open {DRAIN:g} s after the child exited: a process it started holds it\n")
+            f.write(f"{clock()} [run] exit {code}\n")
     return code
+
+
+def pump(fd: int, line) -> None:
+    """Hand each line read from fd to line, until its end."""
+    rest = b""
+    while chunk := os.read(fd, 65536):
+        *lines, rest = (rest + chunk).split(b"\n")
+        for raw in lines:
+            line(raw)
+    if rest:
+        line(rest)
+    os.close(fd)
 
 
 def run_tasks(t, tasks: list[str], say=print, sleep=time.sleep) -> list[str]:
