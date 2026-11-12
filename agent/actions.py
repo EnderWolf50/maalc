@@ -59,9 +59,10 @@ TASK = {"runs": 0, "done": None}
 # Stuck detection and recovery (spec 06), memory only: the last node seen ("node", its id) and the
 # screen type it handled ("kind"), a pending stuck for MirrorHub's Stuck node ("flag": (kind, start
 # level, reason)), this run's Ladder, this launch's game restarts ("restarts", a recovery.Restarts), and the reason
-# of an account-level stop this launch ("halted", #362 D8): every later task then fails at its entry.
+# of an account-level stop this launch ("halted", #362 D8): every later task then fails at its entry; the TapUntil
+# nodes with a settle whose tap the game took since its last recovery or restart ("taken", #58).
 STUCK = {"node": None, "kind": None, "flag": None, "watch": recovery.Watchdog(), "ladder": recovery.Ladder(),
-         "restarts": recovery.Restarts(),
+         "restarts": recovery.Restarts(), "taken": set(),
          "away": recovery.Away(),  # the game out of front while the hub recognises nothing (#530)
          "updates": 0,  # game restarts for update notices since this agent started (AcceptUpdate)
          "halted": None}
@@ -1366,6 +1367,7 @@ def forget_game_state():
     A shop visit keeps the rest of RUN["shop"] (what it paid for or tapped, Shop lists it) but not fuse_scanned: a fuse
     page that made none may have been a game that took no tap (#459), so the next round reads it again."""
     STUCK["watch"].reset()
+    STUCK["taken"].clear()
     for key in ("turn", "battle_start", "map_misses", "event_tried", "map_plan", "map_entered"):
         RUN.pop(key, None)
     RUN.get("shop", {}).pop("fuse_scanned", None)
@@ -1550,6 +1552,9 @@ class TapUntil(CustomAction):
     until: that node's recognition hits, for a next page a template knows. The Window tab glows on the old page before
     the main window comes, and that glow misses the tab's own template (#496).
     lively: the screen whose still wait is a dead tap (tap_then), HomeReached by default.
+    settle: s; once a tap of this node was taken (a page came) since the game's last recovery or restart, a later hit
+    first waits up to settle s for a page to come by itself or the node to miss, and taps only when neither does. The
+    title between two CONNECTINGs of one login (#58): the game's own gap, which a tap there does not answer.
     No target: the node's box.
     """
 
@@ -1565,8 +1570,18 @@ class TapUntil(CustomAction):
         if "until" in p:
             pages.append(lambda im: seen(context, im, p["until"]) is not None)
         began = time.monotonic()
+        if "settle" in p and argv.node_name in STUCK["taken"]:
+            if until(context, lambda im: any(page(im) for page in pages) or seen(context, im, argv.node_name) is None,
+                     timeout=p["settle"]) is not None:
+                log(f"{argv.node_name}: not tapped again, the screen moved on by itself after "
+                    f"{time.monotonic() - began:.1f} s")
+                return True
+            log(f"{argv.node_name}: still up {p['settle']} s after its last tap was taken: tapped again")
+            began = time.monotonic()
         image = tap_then(context, x + w // 2, y + h // 2, lambda im: any(page(im) for page in pages), timeout=p.get("timeout", 3),
                          lively=p.get("lively", "HomeReached"))
+        if "settle" in p and image is not None:
+            STUCK["taken"].add(argv.node_name)
         log_change(argv.node_name, image, began)
         return True
 

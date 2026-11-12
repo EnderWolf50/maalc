@@ -216,7 +216,11 @@
     // The title: a tap, then until CONNECTING shows (TapUntil; after 3 s the hub taps again, as after the old 3 s
     // post_delay). Not until the title goes (#495): it stays under CONNECTING, and its glitch hides it for about 1 s.
     // Live 2026-11-08: CONNECTING within 0.6 s of each of 2 taps. Its picture keeps moving while no CONNECTING is up, so
-    // a wait that showed one picture is a dead tap (lively, #506).
+    // a wait that showed one picture is a dead tap (lively, #506). One login shows CONNECTING more than once, the title
+    // alone between them: 2.8 s on the recording of 2026-11-12 (one tap, by hand). The daily logs of 2026-11-09 to 11-12
+    // show the bot tapping the title in that gap 0.4-0.8 s after CONNECTING went, each of the 4 mornings, and CONNECTING
+    // back 0.1-0.5 s after the tap (#58). So once a tap was taken, the title is tapped again only after 5 s of it with no
+    // CONNECTING (settle).
     "NavTitle": {
         "recognition": "TemplateMatch",
         "roi": [20, 620, 200, 70],
@@ -227,7 +231,8 @@
         "custom_action_param": {
             "target": [540, 300, 200, 120],
             "until": "Connecting",
-            "lively": "NavTitle"
+            "lively": "NavTitle",
+            "settle": 5
         },
         "post_delay": 0
     },

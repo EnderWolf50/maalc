@@ -1,10 +1,12 @@
 """GoHome on the title screen (#495, #506, #540). The real task in a child process (daily_child.py), on a model of the
 game: a live title whose picture keeps moving, a tap that brings CONNECTING (or a loading screen) and then the main window,
-the title's glitch effect, and a game frozen on the title, with or without CONNECTING up, until it is restarted.
+the title's glitch effect, a login that shows the title alone between two CONNECTINGs, and a game frozen on the title,
+with or without CONNECTING up, until it is restarted.
 
 Live 2026-11-08 (a recording and the MaaFramework log of a title tap): CONNECTING showed within 0.6 s of each of 2 taps
 and stayed up to 28 s with the title under it, its template still hitting; the glitch warped the whole picture for
-0.9-1.3 s three times in 40 s, NavTitle scoring 0.51-0.61 then.
+0.9-1.3 s three times in 40 s, NavTitle scoring 0.51-0.61 then. Live 2026-11-12 (a recording of one tap by hand):
+CONNECTING went for 2.8 s with the title alone up, then came back by itself before the main window (#58).
 """
 
 import json
@@ -17,6 +19,7 @@ from recovery import DEAD_TAPS, L3_FAILED_IN_A_ROW
 
 TITLE_TAP = (540, 300, 200, 120)
 GLITCH = 1.3  # s: the recording's longest glitch
+GAP = 2.8  # s: the title alone between two CONNECTINGs of one login, 2026-11-12's recording
 SCREENS = {"title": "Title.png", "connecting": "TitleConnecting.png", "loading": "Loading.png", "main": "MainWindow.png"}
 LIMIT = 40  # s: a scenario still going by then is stopped (a title tapped for ever)
 CONNECTING_WAIT = 5  # s: GoHome's wait on CONNECTING in the frozen_connecting scenarios, for the pipeline's 60; their
@@ -40,15 +43,17 @@ def child():
         images["title_moved"] = live_frame(images["title"])
         images["glitch"] = glitched(images["title"])
 
-        def set(self, frozen=False, ignored=0, answer=("connecting",), answer_for=20, glitch=0.0, glitch_after_tap=0.0,
-                screen="title"):
+        def set(self, frozen=False, ignored=0, answer=("connecting",), then=None, answer_for=20, glitch=0.0,
+                glitch_after_tap=0.0, screen="title"):
             """frozen: the game takes no tap and shows one picture, the screen it starts on, until it restarts; a live
             title's picture moves at every other screenshot. ignored: the taps the live title lets go by. answer: the
-            screens a taken tap shows in turn, each for answer_for screenshots, before the main window. glitch: the seconds
-            from the start that show the glitch; glitch_after_tap: the seconds right after a taken tap, before its answer.
-            screen: the one at the start."""
+            screens a taken tap shows in turn, each for answer_for screenshots ("gap": the title, taking no tap, for GAP
+            s), before the main window; then: the answer of the taps after the first taken one. glitch: the seconds
+            from the start that show the glitch; glitch_after_tap: the seconds right after a taken tap, before its
+            answer. screen: the one at the start."""
             self.screen, self.focus, self.frozen, self.ignored = screen, GAME, frozen, ignored
-            self.answer, self.answer_for, self.left, self.glitch_after_tap = answer, answer_for, 0, glitch_after_tap
+            self.answer, self.then, self.answer_for, self.left = answer, then or answer, answer_for, 0
+            self.glitch_after_tap, self.gap_until = glitch_after_tap, 0.0
             self.coming = []
             self.glitch_until = time.monotonic() + glitch
             self.clicks, self.keys, self.starts, self.stops, self.frames = [], [], 0, 0, 0
@@ -63,9 +68,12 @@ def child():
                 self.left -= 1
                 if self.left < 0:
                     self.screen, self.left = (self.coming.pop(0), self.answer_for) if self.coming else ("main", 0)
-            if self.screen == "title" and not self.frozen and self.frames % 2:
+                    self.gap_until = time.monotonic() + GAP
+            if self.screen == "gap" and time.monotonic() >= self.gap_until:
+                self.screen, self.left = (self.coming.pop(0), self.answer_for) if self.coming else ("main", 0)
+            if self.screen in ("title", "gap") and not self.frozen and self.frames % 2:
                 return self.images["title_moved"]
-            return self.images[self.screen]
+            return self.images["title" if self.screen == "gap" else self.screen]
 
         def on_tap(self, x, y):
             if self.screen != "title" or self.frozen or not inside(TITLE_TAP, x, y):
@@ -75,7 +83,7 @@ def child():
                 return True
             self.glitch_until = time.monotonic() + self.glitch_after_tap
             self.screen, *self.coming = self.answer
-            self.left = self.answer_for
+            self.answer, self.left = self.then, self.answer_for
             return True
 
         def stop_app(self, intent):
@@ -103,6 +111,8 @@ def child():
         # a picture no node reads (the glitch frame), then the main window within HomeBack's wait: a page that comes late
         "late_main": ({"screen": "main", "glitch": 0.5}, 0),
         "ignored_once": ({"ignored": 1}, 0),
+        "login_gap": ({"answer": ("connecting", "gap", "connecting")}, 0),
+        "back_to_title": ({"answer": ("connecting", "title"), "then": ("connecting",)}, 0),
         "frozen": ({"frozen": True}, 0),
         "frozen_restarts_used": ({"frozen": True}, L3_FAILED_IN_A_ROW),
         "frozen_connecting": ({"frozen": True, "screen": "connecting", "answer_for": 5}, 0),
@@ -114,6 +124,7 @@ def child():
             actions.STUCK["restarts"].attempt(None)
         actions.STUCK["watch"].reset()
         actions.STUCK["flag"] = None
+        actions.STUCK["taken"].clear()
         actions.TASK.clear()
         actions.TASK.update(runs=0, done=None)
         actions.LOG.clear()
@@ -181,6 +192,26 @@ def test_a_live_title_that_lets_a_tap_go_by_is_tapped_again_not_restarted():
     o = run_child(__file__)["ignored_once"]
     assert o["succeeded"] and o["nodes"][-1] == "HomeReached" and o["title_taps"] == 2, json.dumps(o)
     assert (o["stops"], o["starts"]) == (0, 0), json.dumps(o)
+
+
+def test_the_title_between_two_connectings_of_one_login_is_not_tapped_again():
+    # #58: CONNECTING goes for a moment with the title alone up (2.8 s on 2026-11-12's recording), then comes back by
+    # itself; the bot tapped the title in that gap every morning of 2026-11-09 to 11-12.
+    o = run_child(__file__)["login_gap"]
+    assert o["succeeded"] and o["nodes"][-1] == "HomeReached" and o["keys"] == [], json.dumps(o)
+    assert o["title_taps"] == 1, json.dumps(o)
+    assert any("not tapped again, the screen moved on by itself" in line for line in title_lines(o)), json.dumps(o)
+
+
+def test_a_title_still_up_once_the_settle_is_over_is_tapped_again():
+    # #58's settle: a title that stays with no CONNECTING for 5 s after a taken tap wants another one.
+    from test_pipeline import load_nodes
+
+    settle = load_nodes("navigation.json")["NavTitle"]["custom_action_param"]["settle"]
+    o = run_child(__file__)["back_to_title"]
+    assert o["succeeded"] and o["nodes"][-1] == "HomeReached" and o["title_taps"] == 2, json.dumps(o)
+    assert any(f"still up {settle} s after its last tap was taken" in line for line in title_lines(o)), json.dumps(o)
+    assert settle <= o["seconds"] < LIMIT, json.dumps(o)
 
 
 def test_a_title_frozen_through_its_taps_restarts_the_game_and_go_home_reaches_the_main_window():
