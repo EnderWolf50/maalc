@@ -675,14 +675,14 @@ def away_reads(reads, start=0.0):
     return read_at, None
 
 
-def test_away_reads_the_foreground_only_while_the_hub_recognises_nothing_every_poll():
+def test_away_reads_the_foreground_every_poll():
     read_at, _ = away_reads(lambda t: GAME)
     assert read_at[:3] == [AWAY_POLL, 2 * AWAY_POLL, 3 * AWAY_POLL]
 
 
 @pytest.mark.parametrize("app, shown", [
     ("", "no window has focus"),  # #530: booting, a blank start window, no window focused
-    ("app.lawnchair", "app.lawnchair"),  # the launcher: the game closed or never started (2026-11-08, batch 3)
+    ("app.lawnchair", "app.lawnchair"),  # the launcher: the game closed (live 2026-11-08: it refused a rooted emulator) or never started
     ("com.android.vending", "com.android.vending"),  # the Play Store (#86)
 ])
 def test_a_game_out_of_front_is_restarted_well_before_the_hubs_60_s(app, shown):
@@ -698,7 +698,7 @@ def test_a_normal_cold_start_is_not_restarted():
 
 @pytest.mark.parametrize("unread", [None, GAME])
 def test_one_read_with_the_game_in_front_or_unread_starts_the_count_over(unread):
-    read_at, (t, _) = away_reads(lambda t: unread if t == 20 else "")
+    _, (t, _) = away_reads(lambda t: unread if t == 20 else "")
     assert t == 20 + AWAY_POLL + AWAY_AFTER
 
 
@@ -719,22 +719,28 @@ def clock(monkeypatch):
     return now
 
 
-def hub_passes(ctx, clock, seconds, focus):
-    """MirrorHub's passes, one a second, with nothing recognised after its entry node: StuckFlag's analyze each pass.
-    focus(t): the window dumpsys reads t s in. The second it first hit, or None."""
+def hub_passes(ctx, clock, seconds, focus, stuck_node="Stuck", handing_out=False):
+    """A hub's passes, one a second, with nothing recognised after its entry node (handing_out: a node handled each pass):
+    its Stuck node's StuckFlag analyze each pass. focus(t): the window dumpsys reads t s in. The second it first hit, or None."""
     shell = ctx.tasker.controller.post_shell.return_value.wait.return_value
     ctx.tasker.get_node_detail.return_value.name = "MirrorDungeon"  # the task's entry node: no screen
-    argv = SimpleNamespace(task_detail=SimpleNamespace(node_id_list=[1]), node_name="Stuck", image=screen(0))
+    ids = [1]
+    argv = SimpleNamespace(task_detail=SimpleNamespace(node_id_list=ids), node_name=stuck_node, image=screen(0))
     actions.STUCK.update(node=None, kind=None, away=Away())
     for t in range(seconds):
         shell.get.return_value = f"  mCurrentFocus={focus(t)}\n"
         if actions.StuckFlag().analyze(ctx, argv):
             return t
         clock[0] += 1
+        if handing_out:
+            ids.append(ids[-1] + 1)
     return None
 
 
-@pytest.mark.parametrize("focus", ["null", "Window{1 u0 app.lawnchair/x}"])
+LAUNCHER = "Window{1 u0 app.lawnchair/x}"
+
+
+@pytest.mark.parametrize("focus", ["null", LAUNCHER])
 def test_mirror_hub_restarts_a_game_out_of_front_at_once(hub, clock, focus):
     # #530: a blank start window (no focus) or the launcher in front went to L3 only at MirrorHub's 60 s timeout.
     assert hub_passes(hub, clock, 60, lambda t: focus) == AWAY_POLL + AWAY_AFTER
@@ -750,3 +756,27 @@ def test_mirror_hub_leaves_a_game_in_front_and_a_normal_boot_to_its_timeout(hub,
     assert hub_passes(hub, clock, 60, lambda t: game) is None
     assert hub_passes(hub, clock, 60, lambda t: "null" if t < 12 else game) is None
     assert actions.STUCK["flag"] is None
+
+
+def test_a_hub_handing_out_screens_never_reads_the_foreground(hub, clock):
+    assert hub_passes(hub, clock, 60, lambda t: LAUNCHER, handing_out=True) is None
+    assert not hub.tasker.controller.post_shell.called
+
+
+def test_a_game_that_never_comes_back_stops_after_three_restarts_in_a_row(hub, clock, stops):
+    # Live 2026-11-08: the emulator's root switched on, the game showed Warning [50025] and closed after every restart, the
+    # launcher in front each time; no restart got the bot past it, so #520's failed-in-a-row cap ends it.
+    assert hub_passes(hub, clock, 60, lambda t: LAUNCHER) == AWAY_POLL + AWAY_AFTER
+    hub.run_task.return_value.status.succeeded = False  # RecoverStartApp: no title within 180 s
+    assert actions.Recover().run(hub, None) is False
+    assert [c.args for c in hub.run_task.call_args_list] == [("RecoverL3",)] * 3
+    assert len(stops) == 1 and "3 times in a row" in stops[0] and "not in front (app.lawnchair)" in stops[0], stops
+
+
+def test_a_daily_hub_restarts_a_game_out_of_front_and_goes_on(hub, clock, stops):
+    # A daily hub's own timeout ends its task (its *Lost node); the game out of front restarts it within the task's two.
+    assert hub_passes(hub, clock, 60, lambda t: LAUNCHER, stuck_node="PassStuck") == AWAY_POLL + AWAY_AFTER
+    hub.tasker.get_node_detail.return_value.name = "HomeReached"  # GoHome's last node
+    assert actions.DailyRecover().run(hub, PASS_STUCK) is True
+    assert [c.args for c in hub.run_task.call_args_list] == [("RecoverL3",), ("GoHome",)]
+    assert stops == []

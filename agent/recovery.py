@@ -297,8 +297,8 @@ AWAY_POLL, AWAY_AFTER = 5, 25
 class Away:
     """The game out of front while a hub recognises nothing (#530), from foreground reads AWAY_POLL s apart.
 
-    quiet: when the hub last handed out a screen (None until the first pass); read_at: the last read; since: the first
-    read of the streak that found the game out of front (None: in front, or not read yet).
+    quiet: when the hub last handed out a screen (None: none yet, nothing is read); read_at: the last read; since: the
+    first read of the streak that found the game out of front (None: in front, or not read yet).
     """
 
     def __init__(self):
@@ -312,7 +312,7 @@ class Away:
     def due(self, now):
         """Whether to read the foreground now: AWAY_POLL s since the last screen, and since the last read."""
         if self.quiet is None:
-            self.quiet = now
+            return False
         return now - (self.read_at if self.read_at is not None else self.quiet) >= AWAY_POLL
 
     def read(self, app, now):
@@ -327,8 +327,13 @@ class Away:
         if self.since is None:
             self.since = now
         if now - self.since >= AWAY_AFTER:
-            return f"the game is not in front ({app or 'no window has focus'}) for {now - self.since:.0f} s"
+            return f"{not_in_front(app)} for {now - self.since:.0f} s"
         return None
+
+
+def not_in_front(app):
+    """The log's words for a foreground read (focused_package) that is not the game: another package, or no focus."""
+    return f"the game is not in front ({app or 'no window has focus'})"
 
 
 def read_runs(root):

@@ -579,12 +579,10 @@ class StuckFlag(CustomRecognition):
     def away(why, image):
         """The game out of front while the hub recognised nothing: a stuck at L3, as Recover gives a hub timeout with the
         game out of front (#86), on the same screen type, and its screen kept in logs/unknown/ as a timeout keeps it."""
-        try:
-            recovery.keep_capture(ROOT, "unknown", image, settlement.now().replace(":", "-"), recovery.UNKNOWN_KEEP)
-        except OSError as e:
-            log(f"unknown screen not saved: {e}")
-        stuck(f"nothing recognised; {why}", level=3)
-        STUCK["flag"] = (f"{STUCK['kind']}, then nothing recognised", *STUCK["flag"][1:])
+        keep_unknown(image)
+        reason = f"nothing recognised; {why}"
+        log(f"stuck: {reason}")
+        STUCK["flag"] = (nothing_recognised(), 3, reason)
 
     @staticmethod
     def see(kind, image):
@@ -1312,13 +1310,10 @@ class Recover(CustomAction):
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         unknown = STUCK["flag"] is None  # MirrorHub's own timeout: a screen it has no node for
-        flag = STUCK["flag"] or (f"{STUCK['kind']}, then nothing recognised", 1, "MirrorHub recognised nothing for 60 s")
+        flag = STUCK["flag"] or (nothing_recognised(), 1, "MirrorHub recognised nothing for 60 s")
         STUCK["flag"] = None
         if unknown:  # also during a download: its progress screen is one to have a capture of
-            try:
-                recovery.keep_capture(ROOT, "unknown", screen(context), settlement.now().replace(":", "-"), recovery.UNKNOWN_KEEP)
-            except OSError as e:
-                log(f"unknown screen not saved: {e}")
+            keep_unknown(screen(context))
         if STUCK["watch"].held(time.monotonic()):
             log(f"{flag[2]}: a download is under way, waiting")
             return True
@@ -1326,7 +1321,7 @@ class Recover(CustomAction):
         if unknown and (app := foreground(context)) not in (None, recovery.GAME):
             # #86: the Play Store, the home screen, or a game whose window never took focus (live, black 5 min after
             # an update): the back key and To Window do nothing there, so the game is restarted at once.
-            start, reason = 3, f"{reason}; the game is not in front ({app or 'no window has focus'})"
+            start, reason = 3, f"{reason}; {recovery.not_in_front(app)}"
         while True:
             level, why = STUCK["ladder"].stuck(kind, start, STUCK["restarts"])
             if level is None:
@@ -1339,6 +1334,20 @@ class Recover(CustomAction):
             STUCK["ladder"].failed(level)
         forget_game_state()
         return True
+
+
+def nothing_recognised():
+    """The screen type of a stuck on a screen no node recognised: the last one handed out, then nothing. Any screen a hub
+    hands out after it gets past it."""
+    return f"{STUCK['kind']}, then nothing recognised"
+
+
+def keep_unknown(image):
+    """Keep a screen no node recognised in logs/unknown/ (recovery.keep_capture)."""
+    try:
+        recovery.keep_capture(ROOT, "unknown", image, settlement.now().replace(":", "-"), recovery.UNKNOWN_KEEP)
+    except OSError as e:
+        log(f"unknown screen not saved: {e}")
 
 
 def foreground(context):
