@@ -11,13 +11,14 @@ from gift_cells import name_id
 from gift_search import select_count
 from ocrtext import compact, has, normalize
 from run_start import match_pack
+from settings import GIFT_KEYWORDS
 
 ODDS = ("very low", "low", "normal", "high", "very high")
 GIFT_SCORE = {"pack-want": 9, "want": 6, "material": 5.5, "main": 3, "other": 2, "owned": 0}  # by category (#416)
 WANT_CLASSES = ("pack-want", "want", "material")  # gifts.want_kind's classes, scored in GIFT_SCORE (#416)
 TIER_STEP = 0.5  # a main or other gift's score per tier above I (#381)
 UNREAD_LEVELS = 2  # an Enemy Level Up badge that does not read counts as +2, the most seen live (#381)
-KEYWORDS = ("Burn", "Bleed", "Tremor", "Rupture", "Sinking", "Poise", "Charge", "Slash", "Pierce", "Blunt", "Keywordless")
+KEYWORDS = tuple(GIFT_KEYWORDS)
 
 
 def pick_choice(options, keyword, override=None, closed=(), event=None):

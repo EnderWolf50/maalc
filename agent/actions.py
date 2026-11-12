@@ -36,7 +36,7 @@ import settlement
 import shop
 from gifts import effective, main_keyword, purchases, recipe_fusion, resolve_list, state, want_kind
 from ocrtext import compact, digits, floor_number, has, normalize
-from settings import SettingsError, data_dir, gift_tables, load_settings, vestige_ids
+from settings import GIFT_KEYWORDS, SettingsError, data_dir, gift_tables, load_settings, vestige_ids
 from team_queue import migrate_cursor, pick_team, requeue, resumed_team
 
 # Same <root> as main.ROOT; resource/ sits under it in a release, under assets/ in the repo.
@@ -2013,7 +2013,7 @@ GIFT_WINDOWS = 6  # GET! windows GiftGet closes in one go: a cabinet's gifts or 
 
 # E.G.O Gift Search page (live 2026-10-16, 1.117.0). Tabs left to right, 62 px apart.
 GRID_SWITCH_TIMEOUT = 5  # s a tab's gifts may take to show; they change in well under that, an empty tab pays it all
-SEARCH_TABS = ["Burn", "Bleed", "Tremor", "Rupture", "Sinking", "Poise", "Charge", "Slash", "Pierce", "Blunt", "Keywordless"]
+SEARCH_TABS = tuple(GIFT_KEYWORDS)  # the schema's keyword enum is the tabs, in order
 SEARCH_COUNT = [1010, 550, 190, 50]  # "Select 0/3"
 SEARCH_OWNED = ([935, 26, 120, 38], [1065, 26, 80, 38])  # "1315-270" and "1045"
 SEARCH_PANEL_Y = (205, 316, 427)  # name lines of the Selected E.G.O Gift panel's 3 entries
@@ -4149,7 +4149,7 @@ GRID_SLIP = 12  # px a drag may move the grid past the finger, either way, and s
 GRID_SAME = 12.5
 # page: (its icon size over the GiftSearch template's, the grid's lower edge on screen)
 CELL_PAGES = {"fuse": (1.1, 493), "sell": (1.1, 495), "offer": (0.8, 530)}
-BADGES = ["Burn", "Bleed", "Tremor", "Rupture", "Sinking", "Poise", "Charge", "Slash", "Pierce", "Blunt"]
+BADGES = tuple(k for k in GIFT_KEYWORDS if k != "Keywordless")
 # On scaled cells (CCOEFF): its own badge 0.54-0.99, another keyword's up to 0.60 (the cell's best wins), a keywordless
 # cell's best 0.41; 160 cells of 60 live captures.
 BADGE_MIN = 0.5
