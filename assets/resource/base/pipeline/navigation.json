@@ -194,10 +194,11 @@
         "pre_delay": 0,
         "post_delay": 0
     },
-    // A page with no tab bar (the entry page, Luxcavation): the back key goes up one page. The 2 s stay: nothing is known
-    // to wait for, and a second back key while the page is still going can go past the main window (max_hit counts it).
-    // Only on a screen GoHome still knows nothing of after 2 s (StaysUnknown): the title's glitch hides it from every
-    // template for up to 1.3 s (#495, 3 glitches on a recording), and the back key then went to the title.
+    // A page with no tab bar (the entry page, Luxcavation): the back key goes up one page. Only on a screen GoHome still
+    // knows nothing of after 2 s (StaysUnknown): the title's glitch hides it from every template for up to 1.3 s (#495,
+    // 3 glitches on a recording), and the back key then went to the title. After the key, until a screen GoHome knows
+    // shows, at most the 2 s post_delay it had (#58, DismissShot's known): a second back key while the page is still
+    // going can go past the main window (max_hit counts it), so one comes only after 4 s with nothing known, as before.
     "HomeBack": {
         "recognition": "Custom",
         "custom_recognition": "StaysUnknown",
@@ -208,15 +209,21 @@
         "action": "Custom",
         "custom_action": "DismissShot",
         "custom_action_param": {
-            "back": true
+            "back": true,
+            "known": "GoHome",
+            "timeout": 2
         },
-        "post_delay": 2000,
+        "post_delay": 0,
         "max_hit": 5
     },
     // The title: a tap, then until CONNECTING shows (TapUntil; after 3 s the hub taps again, as after the old 3 s
     // post_delay). Not until the title goes (#495): it stays under CONNECTING, and its glitch hides it for about 1 s.
     // Live 2026-11-08: CONNECTING within 0.6 s of each of 2 taps. Its picture keeps moving while no CONNECTING is up, so
-    // a wait that showed one picture is a dead tap (lively, #506).
+    // a wait that showed one picture is a dead tap (lively, #506). One login shows CONNECTING more than once, the title
+    // alone between them: 2.8 s on the recording of 2026-11-12 (one tap, by hand). The daily logs of 2026-11-09 to 11-12
+    // show the bot tapping the title in that gap 0.4-0.8 s after CONNECTING went, each of the 4 mornings, and CONNECTING
+    // back 0.1-0.5 s after the tap (#58). So once a tap was taken, the title is tapped again only after 5 s of it with no
+    // CONNECTING (settle).
     "NavTitle": {
         "recognition": "TemplateMatch",
         "roi": [20, 620, 200, 70],
@@ -227,7 +234,8 @@
         "custom_action_param": {
             "target": [540, 300, 200, 120],
             "until": "Connecting",
-            "lively": "NavTitle"
+            "lively": "NavTitle",
+            "settle": 5
         },
         "post_delay": 0
     },
@@ -244,7 +252,9 @@
         },
         "post_delay": 0
     },
-    // Mirror Dungeons' way in only (GoToMirrorEntry): its 3 s stay with the mirror's navigation.
+    // Mirror Dungeons' way in only (GoToMirrorEntry): tapped until the entry page's text shows (the MirrorEntry nodes'
+    // roi), at most the 3 s post_delay it had (#58). The #34 recording of 2026-11-10: the entry page was up and still
+    // within 0.1-0.2 s of each of 4 taps, so the 3 s were about 2.8 s of nothing.
     "NavDrive": {
         "recognition": "TemplateMatch",
         "roi": [340, 240, 240, 140],
@@ -252,6 +262,10 @@
         "threshold": 0.8,
         "action": "Custom",
         "custom_action": "OpenDrive",
-        "post_delay": 3000
+        "custom_action_param": {
+            "next": {"roi": [990, 140, 230, 35], "expected": "Before Entry|F\\s*\\d|Exploration Complete"},
+            "timeout": 3
+        },
+        "post_delay": 0
     }
 }

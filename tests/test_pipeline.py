@@ -263,7 +263,7 @@ DAILY = ["navigation.json", "luxcavation.json", "assemble_modules.json", "pass_m
 DAILY_LEFT = ["NavMainTabs", "NavLuxcavation", "LuxExpTab", "LuxThreadTab", "PassBanner",
               "PassMissionsTab", "PassDailyDone", "PassWeeklyDone"]
 # Kept, each with its reason in the pipeline: nothing to wait on is known (a back key, a swipe, a claim's window).
-DAILY_KEPT = ["HomeBack", "NavDrive", "LuxThreadSwipe", "PassDailyClaim", "PassWeeklyClaim", "PassSeasonalClaim",
+DAILY_KEPT = ["LuxThreadSwipe", "PassDailyClaim", "PassWeeklyClaim", "PassSeasonalClaim",
               "PassSeasonalEndClaim", "PassSeasonalSwipe", "MailClaimAll", "AssemblePanel", "ChargePanel"]
 
 
@@ -294,7 +294,26 @@ def test_the_daily_pages_wait_for_screens_not_for_delays():
     # An action that ends the task (MailEmpty) or waits in itself (AssembleMain, ChargeMain: the window) sleeps nothing.
     for name in ("MailEmpty", "AssembleMain", "ChargeMain"):
         assert nodes[name].get("post_delay") == 0, name
+    # The back key waits for a screen GoHome knows, the Drive card for the entry page's text, each at most the old
+    # post_delay (#58; test_go_home.py, test_nav_drive.py).
+    assert nodes["HomeBack"]["custom_action_param"] == {"back": True, "known": "GoHome", "timeout": 2}
+    drive = nodes["NavDrive"]["custom_action_param"]
+    assert drive["timeout"] == 3 and drive["next"]["roi"] == load_nodes("mirror_dungeon.json")["MirrorEntryNewRun"]["roi"]
     assert [n for n, spec in nodes.items() if spec.get("post_delay", 0) > 0 and n not in DAILY_KEPT] == []
+
+
+# The recovery's fixed waits, kept on purpose with their reason above each (#58): the screen the key or tap brings is
+# not known (L1), a panel's opening that a tap must not race (L2), the game's process ending, the start's splash screens.
+RECOVERY_KEPT = {"RecoverL1": 2000, "RecoverGear": 2000, "RecoverToWindow": 2000, "RecoverPauseConfirm": 5000,
+                 "RecoverL3": 3000, "RecoverStartApp": 10000}
+
+
+def test_the_recoverys_fixed_waits_are_the_kept_ones():
+    nodes = load_nodes("recovery.json")
+    assert {n: spec["post_delay"] for n, spec in nodes.items() if spec.get("post_delay", 0) > 0} == RECOVERY_KEPT
+    text = (PIPELINE / "recovery.json").read_text(encoding="utf-8")
+    for name in [*RECOVERY_KEPT, "RecoverL2"]:  # each under a comment that says why
+        assert "#58" in text[:text.index(f'"{name}": {{')].rsplit("}", 1)[-1], name
 
 
 

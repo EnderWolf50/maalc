@@ -19,7 +19,9 @@
             "MirrorHub"
         ]
     },
-    // L1: the back key; the global popups come first in MirrorHub anyway.
+    // L1: the back key; the global popups come first in MirrorHub anyway. Its 2 s stay (#58): L1 runs on a screen the hub
+    // knows but got stuck on, so a screen the hub knows cannot tell the key's page from the one before it, and the hub
+    // would act on that one again; nothing else is known to wait for. 6 L1s in the archived logs.
     "RecoverL1": {
         "action": "Custom",
         "custom_action": "DismissShot",
@@ -31,12 +33,17 @@
     // L2: Dungeon Progress (already open, e.g. by L1's back key on the map, or by the map's gear),
     // To Window, Pause Exploration Confirm. The main menu follows; MirrorHub navigates back to the
     // entry page and resumes the run. Not on the map: L2 does not go through, so L3 follows.
+    // The 2 s, 2 s and 5 s of its taps stay (#58): a recovery that waits on purpose. The next node's recognition would
+    // hit while its panel or dialog still opens; the wait lets it finish first, as a tap it lets go by fails L2 into a
+    // game restart. The archived logs have 1 RecoverGear and no RecoverToWindow or RecoverPauseConfirm,
+    // nothing to time the panel on; after the last Confirm, the 5 s are the progress saving and the way to the window.
     "RecoverL2": {
         "next": [
             "RecoverToWindow",
             "RecoverGear"
         ]
     },
+    // 2 s (#58, as above): for Dungeon Progress to finish opening before To Window is tapped.
     "RecoverGear": {
         "recognition": "Or",
         "any_of": [
@@ -49,6 +56,7 @@
             "RecoverToWindow"
         ]
     },
+    // 2 s (#58, as above): for the Save your progress dialog to finish opening before its Confirm.
     "RecoverToWindow": {
         "recognition": "OCR",
         "roi": [520, 212, 240, 30],
@@ -60,6 +68,7 @@
             "RecoverPauseConfirm"
         ]
     },
+    // 5 s (#58, as above): the progress saving and the way to the window, before MirrorHub looks.
     "RecoverPauseConfirm": {
         "recognition": "OCR",
         "roi": [360, 280, 560, 140],
@@ -68,7 +77,8 @@
         "target": [670, 475, 180, 30],
         "post_delay": 5000
     },
-    // L3: restart the game and wait for its title screen.
+    // L3: restart the game and wait for its title screen. The 3 s after the stop stay (#58): the game's process takes time
+    // to end, which no screen shows, and a start before that brings the old one back to the front.
     "RecoverL3": {
         "action": "StopApp",
         "package": "com.ProjectMoon.LimbusCompany",
@@ -78,7 +88,9 @@
         ]
     },
     // timeout is the wait for next, so it sits here, not on RecoverTitle (there it was never read: a restart
-    // that took more than ~30 s to reach the title failed L3, 33.5 s in an offline run, #86).
+    // that took more than ~30 s to reach the title failed L3, 33.5 s in an offline run, #86). The 10 s stay (#58): in the
+    // 6 archived restarts that reached it, the title came 3.5-11.4 s after them (13.5-21.4 s after the start), so they
+    // cost nothing, and they keep the start's splash screens away from RecoverTitle's PopupButton OCR.
     "RecoverStartApp": {
         "action": "StartApp",
         "package": "com.ProjectMoon.LimbusCompany",

@@ -9,8 +9,8 @@ import json
 import pytest
 from daily_child import load, run_child, run_task
 
-# HomeBack sets post_delay 2000, LuxExpEnter pre_delay 500, GoHome keeps MaaFramework's 200 ms defaults.
-NODES = ["HomeBack", "LuxExpEnter", "GoHome"]
+# RecoverL1 sets post_delay 2000, LuxExpEnter pre_delay 500, GoHome keeps MaaFramework's 200 ms defaults.
+NODES = ["RecoverL1", "LuxExpEnter", "GoHome"]
 
 
 def child():

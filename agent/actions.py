@@ -59,9 +59,10 @@ TASK = {"runs": 0, "done": None}
 # Stuck detection and recovery (spec 06), memory only: the last node seen ("node", its id) and the
 # screen type it handled ("kind"), a pending stuck for MirrorHub's Stuck node ("flag": (kind, start
 # level, reason)), this run's Ladder, this launch's game restarts ("restarts", a recovery.Restarts), and the reason
-# of an account-level stop this launch ("halted", #362 D8): every later task then fails at its entry.
+# of an account-level stop this launch ("halted", #362 D8): every later task then fails at its entry; the TapUntil
+# nodes with a settle whose tap the game took since its last recovery or restart, and when ("taken", #58).
 STUCK = {"node": None, "kind": None, "flag": None, "watch": recovery.Watchdog(), "ladder": recovery.Ladder(),
-         "restarts": recovery.Restarts(),
+         "restarts": recovery.Restarts(), "taken": {},
          "away": recovery.Away(),  # the game out of front while the hub recognises nothing (#530)
          "updates": 0,  # game restarts for update notices since this agent started (AcceptUpdate)
          "halted": None}
@@ -672,12 +673,17 @@ def modules_now(context, timeout=3):
 @AgentServer.custom_action("OpenDrive")
 class OpenDrive(CustomAction):
     """NavDrive: the Drive page has the Modules panel (tests/screens/Drive.png), the entry page the next tap opens has
-    none. Read the number for PlanRun's gate (#369) before tapping Mirror Dungeons; None when it does not read."""
+    none. Read the number for PlanRun's gate (#369) before tapping Mirror Dungeons; None when it does not read. Then
+    until the entry page's text shows (param {"next": {"roi", "expected"}, "timeout": s}), not a fixed 3 s (#58)."""
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         TASK["modules"] = module_count(context, screen(context))
+        p = json.loads(argv.custom_action_param)
         x, y, w, h = argv.box
-        context.tasker.controller.post_click(x + w // 2, y + h // 2).wait()
+        began = time.monotonic()
+        image = tap_then(context, x + w // 2, y + h // 2, shows(context, p["next"]["roi"], p["next"]["expected"]),
+                         timeout=p["timeout"])
+        log_change(argv.node_name, image, began)
         return True
 
 
@@ -959,6 +965,12 @@ class HomeFrozen(CustomAction):
         return restart_game(context, reason)
 
 
+def hub_knows(context, hub, node):
+    """A done(image) for until(): one of the nodes of hub's next list but node hits, a screen the hub knows besides it."""
+    known = [n["name"] for n in context.get_node_data(hub)["next"] if n["name"] != node]
+    return lambda image: any(seen(context, image, n) for n in known)
+
+
 @AgentServer.custom_recognition("StaysUnknown")
 class StaysUnknown(CustomRecognition):
     """Hits once none of the hub's other screens (the nodes of its next but this one; param {"hub", "timeout": s}) shows
@@ -968,8 +980,7 @@ class StaysUnknown(CustomRecognition):
 
     def analyze(self, context: Context, argv: CustomRecognition.AnalyzeArg):
         p = json.loads(argv.custom_recognition_param)
-        known = [n["name"] for n in context.get_node_data(p["hub"])["next"] if n["name"] != argv.node_name]
-        if until(context, lambda im: any(seen(context, im, n) for n in known), timeout=p["timeout"]) is not None:
+        if until(context, hub_knows(context, p["hub"], argv.node_name), timeout=p["timeout"]) is not None:
             return None
         return CustomRecognition.AnalyzeResult(box=(0, 0, 1, 1), detail={})
 
@@ -1366,6 +1377,7 @@ def forget_game_state():
     A shop visit keeps the rest of RUN["shop"] (what it paid for or tapped, Shop lists it) but not fuse_scanned: a fuse
     page that made none may have been a game that took no tap (#459), so the next round reads it again."""
     STUCK["watch"].reset()
+    STUCK["taken"].clear()
     for key in ("turn", "battle_start", "map_misses", "event_tried", "map_plan", "map_entered"):
         RUN.pop(key, None)
     RUN.get("shop", {}).pop("fuse_scanned", None)
@@ -1419,6 +1431,8 @@ class DismissShot(CustomAction):
     RetryPopup: one screen per DISMISSED_GAP, or a dropped link fills the folder with one popup.
     "until": a node that hits once the popup is gone (the main window's lit tab under the Mailbox); every 0.2 s, at
     most "timeout" s, until it hits and the popup's own node misses, instead of a post_delay (#258).
+    "known": a hub; every 0.2 s, at most "timeout" s, until one of its other screens shows (hub_knows), instead of a
+    post_delay (HomeBack, #58).
     """
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
@@ -1439,7 +1453,7 @@ class DismissShot(CustomAction):
                 log(f"{argv.node_name}: screen not saved: {e}")
         if popup:  # what was closed, e.g. the previous session's "Please claim your rewards" (#382)
             log(f"popup: {text(context, image, DIALOG_TEXT)!r}: pressed {popup_button(argv.reco_detail)!r}")
-        began = time.monotonic() if "until" in p else None
+        began = time.monotonic() if "until" in p or "known" in p else None
         if p.get("back"):
             context.tasker.controller.post_click_key(BACK_KEY).wait()
         else:
@@ -1449,6 +1463,9 @@ class DismissShot(CustomAction):
             def closed(im):
                 return seen(context, im, p["until"]) is not None and seen(context, im, argv.node_name) is None
             log_change(argv.node_name, until(context, closed, timeout=p["timeout"]), began)
+        if "known" in p:
+            log_change(argv.node_name, until(context, hub_knows(context, p["known"], argv.node_name),
+                                             timeout=p["timeout"]), began)
         return True
 
 
@@ -1486,7 +1503,7 @@ class AcceptUpdate(CustomAction):
         x, y, w, h = argv.box
         context.tasker.controller.post_click(x + w // 2, y + h // 2).wait()
         log("game update accepted: restarting the game")
-        time.sleep(3)
+        time.sleep(3)  # kept (#58): the game takes the tap before it is stopped; once per game update, nothing to time
         detail = context.run_task("RecoverL3")
         if not (detail and detail.status.succeeded):
             log("the restart after the update did not reach the title")
@@ -1523,7 +1540,7 @@ class AcceptTerms(CustomAction):
                     return True  # MirrorHub looks again
         if not all(agree_ticked(image, x, y) for x, y in AGREE_BOXES):
             return True
-        tap(context, *AGREE_CONFIRM, wait=2)
+        tap(context, *AGREE_CONFIRM, wait=2)  # kept (#58, #258): once per game update, no log has one to time
         log("User Agreement accepted")
         return True
 
@@ -1535,6 +1552,11 @@ class Halt(CustomAction):
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         return stop(context, f"{argv.node_name}: {json.loads(argv.custom_action_param or '""')}", whole_list=True)
+
+
+# s after a taken tap that TapUntil's settle holds: a login's CONNECTINGs, GoHome's 60 s wait on each, and the gaps
+# between them (#58). A title met later (a session expired) is tapped at once.
+SETTLE_WITHIN = 120
 
 
 @AgentServer.custom_action("TapUntil")
@@ -1550,6 +1572,9 @@ class TapUntil(CustomAction):
     until: that node's recognition hits, for a next page a template knows. The Window tab glows on the old page before
     the main window comes, and that glow misses the tab's own template (#496).
     lively: the screen whose still wait is a dead tap (tap_then), HomeReached by default.
+    settle: s; within SETTLE_WITHIN s of a taken tap of this node (a page came), and no recovery or restart since, a
+    later hit first waits up to settle s for a page to come by itself or the node to miss, and taps only when neither
+    does. The title between two CONNECTINGs of one login (#58): the game's own gap, which a tap there does not answer.
     No target: the node's box.
     """
 
@@ -1565,8 +1590,18 @@ class TapUntil(CustomAction):
         if "until" in p:
             pages.append(lambda im: seen(context, im, p["until"]) is not None)
         began = time.monotonic()
+        if "settle" in p and began - STUCK["taken"].get(argv.node_name, -SETTLE_WITHIN) < SETTLE_WITHIN:
+            if until(context, lambda im: any(page(im) for page in pages) or seen(context, im, argv.node_name) is None,
+                     timeout=p["settle"]) is not None:
+                log(f"{argv.node_name}: not tapped again, the screen moved on by itself (or a glitch hid it) after "
+                    f"{time.monotonic() - began:.1f} s")
+                return True
+            log(f"{argv.node_name}: still up {p['settle']} s after its last tap was taken: tapped again")
+            began = time.monotonic()
         image = tap_then(context, x + w // 2, y + h // 2, lambda im: any(page(im) for page in pages), timeout=p.get("timeout", 3),
                          lively=p.get("lively", "HomeReached"))
+        if "settle" in p and image is not None:
+            STUCK["taken"][argv.node_name] = time.monotonic()
         log_change(argv.node_name, image, began)
         return True
 
@@ -1815,8 +1850,11 @@ class BuyStarlight(CustomAction):
                 return stuck(f"could not set grace {n} to {level}")
             for _ in range(2):
                 page_guard(context, "StarlightPage")
-                tap(context, x + 92, y + 100)
-                image = screen(context)
+                # Until Available reads what the grace leaves, at most the 1 s the tap slept (#58); any other number is
+                # read once that 1 s is over, as before, so a number still counting down is not judged.
+                image = tap_then(context, x + 92, y + 100, lambda im: read_available(context, im) == available - price,
+                                 timeout=1.0)
+                image = screen(context) if image is None else image
                 now = read_available(context, image)
                 if now != available:
                     break
@@ -1834,17 +1872,21 @@ class BuyStarlight(CustomAction):
         x, y = grace_box(n)
         base = run_start.GRACE_BASE[n - 1]
         want = run_start.LEVEL_MULT[level]
+        def shown(image):
+            price = number(text(context, image, [x + 112, y - 3, 80, 28]))
+            return price // base if price and price % base == 0 else None
+
         for _ in range(4):
-            price = number(text(context, screen(context), [x + 112, y - 3, 80, 28]))
-            shown = price // base if price and price % base == 0 else None
-            if shown == want:
+            now = shown(screen(context))
+            if now == want:
                 return True
-            if shown not in (1, 2, 3):
-                time.sleep(0.5)
+            if now not in (1, 2, 3):
+                time.sleep(0.5)  # kept: the price did not read (a fade, OCR); read it again
                 continue
-            button = want if want > 1 else shown  # back to base = tap the lit button again
+            button = want if want > 1 else now  # back to base = tap the lit button again
             page_guard(context, "StarlightPage")
-            tap(context, x + (50 if button == 2 else 132), y + 203)
+            # until the price shows the level, at most the 1 s the tap slept (#58)
+            tap_then(context, x + (50 if button == 2 else 132), y + 203, lambda im: shown(im) == want, timeout=1.0)
         return False
 
 
@@ -2618,7 +2660,7 @@ class RouteMap(CustomAction):
             slots = self.read_slots(context, image, bx, by) if bus else {}
             if slots:
                 break
-            time.sleep(1)
+            time.sleep(1)  # kept (#58): the bus and links come after the map stands still; MAP_LOOKS looks 1 s apart
         if not bus and self.search_bus(context):  # #61: the map dragged off by hand
             image, bus = self.find_bus(context)
             bx, by = bus or BUS_REST
@@ -2808,7 +2850,7 @@ class RouteMap(CustomAction):
             image = scroll(context, min(bx + SLOT[0] + map_route.COLUMN_DX // 2, 1100), by + SLOT[1] + 106, dx, dy,
                            ignored=(lambda im: stays(seen(context, im, "MapBus"), last)) if look else None)
             if image is None:
-                time.sleep(0.5)
+                time.sleep(0.5)  # kept (#58): the map coasts on after the lift; the look after the pan reads it at rest
                 image = screen(context)
 
     @staticmethod
@@ -2823,7 +2865,7 @@ class RouteMap(CustomAction):
             dx, dy = to[0] - at[0], to[1] - at[1]
             page_guard(context, "MirrorMap")
             scroll(context, 640 - dx // 2, 340 - dy // 2, dx, dy)
-            time.sleep(0.5)
+            time.sleep(0.5)  # kept (#58): the map coasts on after the lift
             at = to
             if seen(context, screen(context), "MapBus"):
                 log(f"map: the bus showed after dragging the map {to}")
@@ -2972,7 +3014,7 @@ class RouteMap(CustomAction):
                 break
             page_guard(context, "MirrorMap", image=image)
             scroll(context, x0 + 5 * dx // 2, y + 106, -2 * dx, 0)  # from map background, as find_bus: between columns and rows
-            time.sleep(0.5)
+            time.sleep(0.5)  # kept (#58): the map coasts on after the lift, and map_route.shift reads the drag at rest
             after = screen(context)
             s = map_route.shift(image.max(axis=2), after.max(axis=2), 2 * dx + 20)  # the drag, its threshold move and some fling
             back += 2 * dx if s is None else s
@@ -3001,7 +3043,7 @@ class RouteMap(CustomAction):
         while back > BUS_SLACK[0]:
             page_guard(context, "MirrorMap")
             scroll(context, x0 + dx // 2, y + 106, min(back, 2 * dx), 0)
-            time.sleep(0.5)
+            time.sleep(0.5)  # kept (#58): the map coasts on after the lift
             back -= 2 * dx
         bus = RouteMap.find_bus(context)[1]
         if not bus and RouteMap.search_bus(context):
@@ -3908,7 +3950,7 @@ class RewardCard(CustomAction):
                 continue
             cards = columns(ocr(context, image, CARD_TEXT))
             if not cards or len(taken) == len(cards):
-                time.sleep(1)
+                time.sleep(1)  # kept (#58): the cards still slide in; the next round's still() reads them at rest
                 continue
             types = [rewards.card_type(" ".join(lines)) for _, lines in cards]
             if None in types and rereads < CARD_REREADS:  # still sliding in, or misread: not ready
@@ -4174,7 +4216,7 @@ def read_cost(context, roi=SHOP_COST):
         cost = cost_in(context, screen(context), roi)
         if cost is not None:
             return cost
-        time.sleep(0.5)
+        time.sleep(0.5)  # kept (#58): an OCR retry on a fresh screenshot, the Cost still fading in
     return None
 
 
