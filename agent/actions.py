@@ -5166,13 +5166,8 @@ class Shop(CustomAction):
         if image is None:
             log(f"{head}{sinner!r}'s portrait opened no dialog")
             return "no dialog"
-        read = Shop.read_replace_dialog(context, image)
-        if read["sinner"] != sinner:
-            log(f"{head}the dialog is {read['sinner']!r}'s, not {sinner!r}'s: cancel")
-            Shop.cancel_replace(context)
+        if (read := Shop.read_own_dialog(context, head, sinner, image)) is None:
             return "handled"
-        if read["owned"] is not None:
-            note_skills(sinner, read["owned"])  # the counts are real whatever follows
         # Never assumed to carry over: the dialog opened on Cost in the capture (tests/screens/ShopIdSkillSearchDialog.png);
         # whether the game keeps the payment mode is unverified (#456). The prices tell it; a switch must show the other prices.
         # With no price read the payment is unknown, and a switch could flip the wanted one away: cancel.
@@ -5190,25 +5185,13 @@ class Shop(CustomAction):
                 Shop.cancel_replace(context)
                 return "handled"
             read = Shop.read_replace_dialog(context, switched)
-        owned, funds = read["owned"], read["cost"]
         unit, budget = ("Cost", f", reserve {reserve}") if pay == "cost" else ("starlight", " (no reserve)")
-        wanted = [] if owned is None else shop.swaps_wanted(entry["target"], owned, entry["s1_s3_first"], swaps)
-        log(f"{head}{sinner!r}: Skills Owned {'unread' if owned is None else shop.counts_line(owned)}, {Shop.price_line(read)}, "
-            f"{'unread' if funds is None else funds} {unit}{budget}: try {', '.join(wanted) or 'nothing'}")
-        if owned is None:
-            log(f"{head}{sinner!r}: Skills Owned unread or not 5-6 cards: cancel")
-            Shop.cancel_replace(context)
-            return "handled"
-        if funds is None:
-            log(f"{head}the {unit} reads nothing: cancel")
-            Shop.cancel_replace(context)
-            return "handled"
-        choice = shop.id_search_choice(entry, owned, read["lit"], read["prices"], funds, pay, reserve, swaps)
-        if choice is None:
-            log(f"{head}{sinner!r}: no swap toward {shop.counts_line(entry['target'])} is lit, priced and affordable in {unit}: cancel")
-            Shop.cancel_replace(context)
-            return "unchosen"
-        swap, price = choice
+        choice = Shop.judge_replace(
+            context, head, sinner, entry, read, unit, budget, swaps, f" in {unit}",
+            lambda owned, funds: shop.id_search_choice(entry, owned, read["lit"], read["prices"], funds, pay, reserve, swaps))
+        if isinstance(choice, str):
+            return choice
+        (swap, price), owned, funds = choice, read["owned"], read["cost"]
         if not Shop.pay_swap(context, head, sinner, swap, price, funds, unit.capitalize(),
                              paying=lambda: visit.__setitem__("id_searched", True)):
             return "handled"
@@ -5268,6 +5251,46 @@ class Shop(CustomAction):
         tap_settled(context, *REPLACE_CANCEL)
 
     @staticmethod
+    def read_own_dialog(context, head, sinner, image):
+        """The Replace dialog's read off image (a slot's or ID Skill Search's) when it is sinner's, whose Skills Owned it
+        notes when they read: the counts are real whatever follows. None, cancelled with a line starting with head, when
+        the dialog is another sinner's."""
+        read = Shop.read_replace_dialog(context, image)
+        if read["sinner"] != sinner:
+            log(f"{head}the dialog is {read['sinner']!r}'s, not {sinner!r}'s: cancel")
+            Shop.cancel_replace(context)
+            return None
+        if read["owned"] is not None:
+            note_skills(sinner, read["owned"])
+        return read
+
+    @staticmethod
+    def judge_replace(context, head, sinner, entry, read, unit, budget, swaps, in_unit, choose):
+        """sinner's open Replace dialog, read: a line of what it shows and the swaps wanted, then #264's cancels, each
+        with a line starting with head: the Skills Owned unread, the funds (read["cost"], in unit, "Cost" or "starlight";
+        budget: the reserve's words) unread, or no swap from choose(owned, funds) (in_unit: that line's words on the unit,
+        " in starlight", or "" for a slot's). The swap and its price; else, after the cancel, what the caller returns:
+        "unchosen" when no swap was chosen, "handled" otherwise."""
+        owned, funds = read["owned"], read["cost"]
+        wanted = [] if owned is None else shop.swaps_wanted(entry["target"], owned, entry["s1_s3_first"], swaps)
+        log(f"{head}{sinner!r}: Skills Owned {'unread' if owned is None else shop.counts_line(owned)}, {Shop.price_line(read)}, "
+            f"{'unread' if funds is None else funds} {unit}{budget}: try {', '.join(wanted) or 'nothing'}")
+        if owned is None:
+            log(f"{head}{sinner!r}: Skills Owned unread or not 5-6 cards: cancel")
+            Shop.cancel_replace(context)
+            return "handled"
+        if funds is None:
+            log(f"{head}the {unit} reads nothing: cancel")
+            Shop.cancel_replace(context)
+            return "handled"
+        choice = choose(owned, funds)
+        if choice is None:
+            log(f"{head}{sinner!r}: no swap toward {shop.counts_line(entry['target'])} is lit, priced and affordable{in_unit}: cancel")
+            Shop.cancel_replace(context)
+            return "unchosen"
+        return choice
+
+    @staticmethod
     def replace_skill(context, slot, entry, reserve, swaps):
         """One dialog: open the slot, read it, pick the swap shop.skill_choice gives, Confirm twice, check the Cost.
 
@@ -5279,30 +5302,14 @@ class Shop(CustomAction):
         image = Shop.open_offer(context, slot, "Replace", REPLACE_TITLE)
         if image is None:
             return "handled"
-        read = Shop.read_replace_dialog(context, image)
-        if read["sinner"] != sinner:
-            log(f"shop: the dialog is {read['sinner']!r}'s, not {sinner!r}'s: cancel")
-            Shop.cancel_replace(context)
+        if (read := Shop.read_own_dialog(context, "shop: ", sinner, image)) is None:
             return "handled"
-        owned, cost = read["owned"], read["cost"]
-        wanted = [] if owned is None else shop.swaps_wanted(entry["target"], owned, entry["s1_s3_first"], swaps)
-        log(f"shop: {sinner!r}: Skills Owned {'unread' if owned is None else shop.counts_line(owned)}, {Shop.price_line(read)}, "
-            f"{'unread' if cost is None else cost} Cost, reserve {reserve}: try {', '.join(wanted) or 'nothing'}")
-        if owned is None:
-            log(f"shop: {sinner!r}: Skills Owned unread or not 5-6 cards: cancel")
-            Shop.cancel_replace(context)
-            return "handled"
-        note_skills(sinner, owned)  # the counts are real whatever follows
-        if cost is None:
-            log("shop: the Cost reads nothing: cancel")
-            Shop.cancel_replace(context)
-            return "handled"
-        choice = shop.skill_choice(entry, owned, read["lit"], read["prices"], cost, reserve, swaps)
-        if choice is None:
-            log(f"shop: {sinner!r}: no swap toward {shop.counts_line(entry['target'])} is lit, priced and affordable: cancel")
-            Shop.cancel_replace(context)
-            return "unchosen"
-        swap, price = choice
+        choice = Shop.judge_replace(
+            context, "shop: ", sinner, entry, read, "Cost", f", reserve {reserve}", swaps, "",
+            lambda owned, cost: shop.skill_choice(entry, owned, read["lit"], read["prices"], cost, reserve, swaps))
+        if isinstance(choice, str):
+            return choice
+        (swap, price), owned, cost = choice, read["owned"], read["cost"]
         if not Shop.pay_swap(context, "shop: ", sinner, swap, price, cost, "Cost"):
             return "handled"
         return Shop.cost_paid(context, "shop: ", sinner, swap, price, cost, owned, swaps)
