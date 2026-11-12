@@ -15,17 +15,15 @@ import argparse
 import glob
 import json
 import os
-import sys
 from collections import defaultdict
 from pathlib import Path
 
 import cv2
 import numpy as np
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-from llc_text import NOTE_ZH, credit, gift_names, release_zip  # noqa: E402
-from game_data import INDEX, UNITY_VERSION, bundle_index, unpack_client  # noqa: E402
-from local_dir import local_dir  # noqa: E402
+from llc_text import NOTE_ZH, credit, gift_names, release_zip
+from game_data import INDEX, UNITY_VERSION, bundle_index, unpack_client
+from local_dir import local_dir
 
 REPO = Path(__file__).resolve().parent.parent
 DATA = REPO / "assets/resource/base/data"

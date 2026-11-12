@@ -39,7 +39,7 @@ from typing import NamedTuple
 import numpy as np
 
 import video_align as va
-from maafw_timeline import TS, stamp
+from maafw_timeline import TS, log_lines, stamp
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "agent"))
 import recovery  # noqa: E402
@@ -148,14 +148,8 @@ def main(argv=None) -> None:
     nodes = {n: (va.RESOURCE / f if (va.RESOURCE / f).exists() else Path(f), tuple(map(int, roi.split(","))), float(th))
              for n, f, roi, th in a.node}
     lo, hi = stamp(a.lo) if a.lo else 0.0, stamp(a.hi) if a.hi else float("inf")
-
-    def lines():
-        for path in a.log:
-            with open(path, encoding="utf-8", errors="replace") as f:
-                yield from f
-
-    found = [t for t in taps(lines(), set(a.actions), a.until) if lo <= t.at <= hi]
-    _, _, bot = va.parse_log(lines(), list(nodes), a.hub)
+    found = [t for t in taps(log_lines(a.log), set(a.actions), a.until) if lo <= t.at <= hi]
+    _, _, bot = va.parse_log(log_lines(a.log), list(nodes), a.hub)
     kt, kthumbs = [], []
 
     def on_frame(t, im):

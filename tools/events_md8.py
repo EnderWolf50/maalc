@@ -8,9 +8,8 @@ import csv, glob, json, os, re, sys
 from collections import Counter, defaultdict
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-from game_data import unpack_client  # noqa: E402
-from local_dir import local_dir  # noqa: E402
+from game_data import unpack_client
+from local_dir import local_dir
 
 ROOT = local_dir("unpack").as_posix() + "/"
 CLIENT = unpack_client(Path(ROOT))

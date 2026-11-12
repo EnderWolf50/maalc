@@ -37,6 +37,13 @@ def stamp(text: str) -> float:
     return datetime.fromisoformat(text).timestamp()
 
 
+def log_lines(paths):
+    """Every line of the logs in turn, read afresh on each call (a bad byte is replaced)."""
+    for path in paths:
+        with open(path, encoding="utf-8", errors="replace") as f:
+            yield from f
+
+
 @dataclass
 class Action:
     node: str
@@ -199,13 +206,7 @@ def main(argv=None) -> None:
         "--median", action="store_true", help="the median per run instead of the mean"
     )
     a = p.parse_args(argv)
-
-    def lines():
-        for path in a.logs:
-            with open(path, encoding="utf-8", errors="replace") as f:
-                yield from f
-
-    succeeded, actions = parse(lines())
+    succeeded, actions = parse(log_lines(a.logs))
     ranges = [(stamp(x), stamp(y)) for x, y in a.range or []]
     groups = [g for g in windows(steps(succeeded, actions), ranges, a.window) if g]
     stat = statistics.median if a.median else statistics.mean

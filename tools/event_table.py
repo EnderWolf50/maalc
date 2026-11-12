@@ -14,8 +14,7 @@ import re
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-from local_dir import local_dir  # noqa: E402
+from local_dir import local_dir
 
 SRC = "out/events-md8.json"  # under .local/unpack/ (tools/local_dir.py)
 STATIC = "static/Assets/Resources_moved/StaticData/static-data"
