@@ -1,3 +1,7 @@
+import os
+import subprocess
+import sys
+
 import pytest
 
 import after_land
@@ -67,8 +71,20 @@ def test_sync_refuses(kw, msg):
 
 def test_main_refuses_on_emulator_ticket_before_touching_git(tmp_path, monkeypatch):
     (tmp_path / ".local/queue/emulator").mkdir(parents=True)
-    (tmp_path / ".local/queue/emulator/x.ticket").write_text("1")
+    (tmp_path / f".local/queue/emulator/1-{os.getpid()}-x.ticket").write_text("1")
     monkeypatch.setattr(after_land, "REPO", tmp_path)
     monkeypatch.setattr(after_land, "sync_main", lambda: pytest.fail("git touched"))
     with pytest.raises(SystemExit, match="emulator queue"):
+        after_land.main()
+
+
+def test_main_goes_on_past_the_ticket_of_a_dead_process(tmp_path, monkeypatch):
+    # #667: the queue's own reading, as `queue.py status` shows it: a dead process's ticket holds nothing.
+    gone = subprocess.Popen([sys.executable, "-c", "pass"])
+    gone.wait()
+    (tmp_path / ".local/queue/emulator").mkdir(parents=True)
+    (tmp_path / f".local/queue/emulator/1-{gone.pid}-x.ticket").write_text("1")
+    monkeypatch.setattr(after_land, "REPO", tmp_path)
+    monkeypatch.setattr(after_land, "sync_main", lambda: sys.exit("synced"))
+    with pytest.raises(SystemExit, match="synced"):
         after_land.main()

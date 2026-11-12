@@ -40,6 +40,7 @@ import subprocess
 import sys
 import time
 from contextlib import contextmanager
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
@@ -275,14 +276,15 @@ def hold_path(cmd: str, flag: str) -> Path | None:
     return m and main_checkout() / m.group(1)
 
 
-def stranded(cmd: str, is_alive=alive, now: float | None = None) -> str:
-    """Why a holder waits for an agent that is not there: its guard bot ended long ago and no `done` file exists."""
+def stranded(cmd: str, is_alive=alive, now: float | None = None) -> int | None:
+    """Minutes since the guard bot of a holder that waits for an agent that is not there ended (no `done` file
+    exists), when that is over STRANDED seconds; None otherwise."""
     guard, done = hold_path(cmd, "guard"), hold_path(cmd, "done")
     logs = [p for p in guard_logs(guard) if p.exists() and detached_doc(p)] if guard else []
     if not logs or not done or done.exists() or any(detached_running(p, is_alive) for p in logs):
-        return ""
+        return None
     secs = (now or time.time()) - max(p.stat().st_mtime for p in logs)  # the last bot's last write is when it ended
-    return f" — bot ended {secs / 60:.0f} min ago, waiting for the agent" if secs > STRANDED else ""
+    return round(secs / 60) if secs > STRANDED else None
 
 
 EXPIRY_WARN = 1800  # seconds before a hold's timeout from which `status` says it will expire
@@ -325,14 +327,40 @@ def hold_note(cmd: str, now: float | None = None) -> str:
 FIRST_NOTE = " — FIRST: the daily task, due before the 05:00 reset; the holder ends its hold before its next bot run"
 
 
+@dataclass(frozen=True)
+class Holder:
+    """A live ticket of a queue, as `status` lists it: the first one holds the resource, the others wait in order."""
+    name: str
+    pid: str
+    cmd: str
+    first: bool  # queued with --first
+    stranded_min: int | None  # see stranded()
+
+
+def holders(qdir: Path, is_alive=alive, now: float | None = None) -> list[Holder]:
+    """The live tickets of `qdir` in turn order (none for a queue never used): what `status` prints, for the tools
+    that act on it (watchdog.py, ship.py, after_land.py), so none of them parses its text."""
+    out = []
+    for p in tickets(qdir, is_alive) if qdir.exists() else []:
+        if (t := read(p)) is not None:
+            cmd, _, first = t
+            _, pid, name = p.stem.split("-", 2)
+            out.append(Holder(name, pid, cmd, first, stranded(cmd, is_alive, now)))
+    return out
+
+
 def status(qdir: Path, is_alive=alive, now: float | None = None) -> list[str]:
     lines = []
-    listed = [(p, t) for p in (tickets(qdir, is_alive) if qdir.exists() else []) if (t := read(p)) is not None]
-    for i, (p, (cmd, _, first)) in enumerate(listed):
-        _, pid, name = p.stem.split("-", 2)
-        note = hold_note(cmd, now) if i == 0 else FIRST_NOTE if first else ""
-        lines.append(("RUNNING " if i == 0 else f"#{i:<6} ") + f"{name} (pid {pid}){stranded(cmd, is_alive, now)}{note}: {cmd[:120]}")
+    for i, h in enumerate(holders(qdir, is_alive, now)):
+        note = hold_note(h.cmd, now) if i == 0 else FIRST_NOTE if h.first else ""
+        why = "" if h.stranded_min is None else f" — bot ended {h.stranded_min} min ago, waiting for the agent"
+        lines.append(("RUNNING " if i == 0 else f"#{i:<6} ") + f"{h.name} (pid {h.pid}){why}{note}: {h.cmd[:120]}")
     return lines
+
+
+def queue_dir(resource: str) -> Path:
+    """The folder of a resource's tickets in the main checkout, created by the first `run`."""
+    return main_checkout() / ".local" / "queue" / resource
 
 
 def pid_file(log: Path) -> Path:
@@ -451,14 +479,14 @@ def main(argv=None) -> int:
         print(pause(main_checkout() / ".local" / "scratch" / a.task, None if a.end else a.minutes))
         return 0
     if a.cmd == "wait":
-        return wait(main_checkout() / ".local" / "queue" / a.resource, a.name, a.timeout_s)
+        return wait(queue_dir(a.resource), a.name, a.timeout_s)
     if a.cmd == "status" and a.log:
         running, text = detached_status(a.log)
         print(text)
         return 0 if running else 1
     if a.cmd == "status":
         for res in [a.resource] if a.resource else RESOURCES:
-            print(f"{res}:", *(status(main_checkout() / ".local" / "queue" / res) or ["free"]), sep="\n  ")
+            print(f"{res}:", *(status(queue_dir(res)) or ["free"]), sep="\n  ")
         return 0
     cmd = a.command[1:] if a.command[:1] == ["--"] else a.command
     if not cmd:

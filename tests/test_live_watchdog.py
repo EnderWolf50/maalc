@@ -1,14 +1,19 @@
+import dataclasses
 import json
+import os
 import re
+import subprocess
+import sys
 from pathlib import Path
 
+from live import queue as lq
 from live import watchdog as wd
 
 
 ENCODED = "node:delegated-task:command%3Amcp%3Aabc%3Adelegate-task%3Aa"
 DECODED = "node:delegated-task:command:mcp:abc:delegate-task:a"
 THREAD = "mcp:launch:" + "0f" * 32
-STRANDED = "  RUNNING live1 (pid 42) — bot ended 75 min ago, waiting for the agent: python backup.py hold"
+STRANDED = [lq.Holder("live1", "42", "python backup.py hold", False, 75)]
 CI_RED = json.dumps([{"conclusion": "failure", "headSha": "deadbeef0000"}])
 CI_GREEN = json.dumps([{"conclusion": "success", "headSha": "cafebabe0000"}])
 
@@ -63,37 +68,37 @@ def rows():
 
 
 def test_a_finished_task_is_reported_once_with_the_done_command():
-    events, state = wd.tick(rows(), {DECODED: "completed"}, "", "", {}, "2026103012")
+    events, state = wd.tick(rows(), {DECODED: "completed"}, [], "", {}, "2026103012")
     assert len(events) == 1 and "FINISHED a" in events[0] and "watchdog.py done a" in events[0]
-    events, _ = wd.tick(rows(), {DECODED: "completed"}, "", "", state, "2026103013")
+    events, _ = wd.tick(rows(), {DECODED: "completed"}, [], "", state, "2026103013")
     assert events == []
 
 
 def test_a_task_whose_work_state_is_result_available_is_finished_and_a_working_one_is_not():
     for waiting in ("working", "waiting_for_children"):
-        events, _ = wd.tick(rows(), {DECODED: waiting}, "", "", {}, "h")
+        events, _ = wd.tick(rows(), {DECODED: waiting}, [], "", {}, "h")
         assert events == []
-    events, _ = wd.tick(rows(), {DECODED: "result_available"}, "", "", {}, "h")
+    events, _ = wd.tick(rows(), {DECODED: "result_available"}, [], "", {}, "h")
     assert events and events[0].startswith("FINISHED a")
 
 
 def test_a_failed_task_is_resumed_once_per_hour():
-    events, state = wd.tick(rows(), {DECODED: "failed"}, "", "", {}, "2026103012")
+    events, state = wd.tick(rows(), {DECODED: "failed"}, [], "", {}, "2026103012")
     assert "resume-a-2026103012" in events[0] and "queue.py resume --task live1" in events[0]
-    assert wd.tick(rows(), {DECODED: "failed"}, "", "", state, "2026103012")[0] == []
-    assert len(wd.tick(rows(), {DECODED: "failed"}, "", "", state, "2026103013")[0]) == 1
+    assert wd.tick(rows(), {DECODED: "failed"}, [], "", state, "2026103012")[0] == []
+    assert len(wd.tick(rows(), {DECODED: "failed"}, [], "", state, "2026103013")[0]) == 1
 
 
 def test_a_cancelled_task_is_reported_once_as_cancelled_and_never_told_to_resume():
     for spelling in ("cancelled", "canceled"):
-        events, state = wd.tick(rows(), {DECODED: spelling}, "", "", {}, "2026103012")
+        events, state = wd.tick(rows(), {DECODED: spelling}, [], "", {}, "2026103012")
         assert len(events) == 1 and events[0].startswith("CANCELLED a")
         assert "resume-a" not in events[0] and "t3_thread_send" not in events[0]
-        assert wd.tick(rows(), {DECODED: spelling}, "", "", state, "2026103013")[0] == []
+        assert wd.tick(rows(), {DECODED: spelling}, [], "", state, "2026103013")[0] == []
 
 
 def test_a_stranded_holder_of_a_cancelled_task_or_rolled_back_thread_is_not_told_to_resume():
-    queue = "RUNNING live1 (pid 5) — bot ended 90 min ago, waiting for the agent\n"
+    queue = [lq.Holder("live1", "5", "", False, 90)]
     for row, status in ((wd.Row(ENCODED, "live1", "a"), "cancelled"), (wd.Row(THREAD, "live1", "b"), "rolled_back")):
         events, _ = wd.tick([row], {row.key(): status}, queue, "", {}, "h")
         stranded = [e for e in events if e.startswith("STRANDED")]
@@ -101,8 +106,8 @@ def test_a_stranded_holder_of_a_cancelled_task_or_rolled_back_thread_is_not_told
 
 
 def test_a_running_task_and_a_missing_state_are_silent():
-    assert wd.tick(rows(), {DECODED: "running"}, "", "", {}, "h")[0] == []
-    assert wd.tick(rows(), {}, "", "", {}, "h")[0] == []
+    assert wd.tick(rows(), {DECODED: "running"}, [], "", {}, "h")[0] == []
+    assert wd.tick(rows(), {}, [], "", {}, "h")[0] == []
 
 
 def threads():
@@ -111,18 +116,18 @@ def threads():
 
 def test_a_running_thread_is_silent():
     for working in ("preparing", "queued", "starting", "running"):
-        assert wd.tick(threads(), {THREAD: working}, "", "", {}, "h")[0] == []
+        assert wd.tick(threads(), {THREAD: working}, [], "", {}, "h")[0] == []
 
 
 def test_a_completed_thread_that_reported_is_finished_once():
-    events, state = wd.tick(threads(), {THREAD: "completed"}, "", "", {}, "h", reported_ids=[THREAD])
+    events, state = wd.tick(threads(), {THREAD: "completed"}, [], "", {}, "h", reported_ids=[THREAD])
     assert len(events) == 1 and "FINISHED b" in events[0] and "watchdog.py done b" in events[0]
-    assert wd.tick(threads(), {THREAD: "completed"}, "", "", state, "h", reported_ids=[THREAD])[0] == []
+    assert wd.tick(threads(), {THREAD: "completed"}, [], "", state, "h", reported_ids=[THREAD])[0] == []
 
 
 def test_a_finished_thread_stays_finished_when_a_later_tick_misses_its_reported_flag():
-    _, state = wd.tick(threads(), {THREAD: "completed"}, "", "", {}, "h", [THREAD])
-    assert wd.tick(threads(), {THREAD: "completed"}, "", "", state, "h")[0] == []
+    _, state = wd.tick(threads(), {THREAD: "completed"}, [], "", {}, "h", [THREAD])
+    assert wd.tick(threads(), {THREAD: "completed"}, [], "", state, "h")[0] == []
 
 
 def test_a_stranded_holder_of_an_ended_thread_says_to_answer_its_question_not_to_resume():
@@ -133,30 +138,30 @@ def test_a_stranded_holder_of_an_ended_thread_says_to_answer_its_question_not_to
 
 
 def test_a_completed_thread_that_did_not_report_is_ended_once_until_it_runs_again():
-    events, state = wd.tick(threads(), {THREAD: "completed"}, "", "", {}, "h")
+    events, state = wd.tick(threads(), {THREAD: "completed"}, [], "", {}, "h")
     assert len(events) == 1 and events[0].startswith("ENDED b (completed)")
     assert "t3_thread_read" in events[0] and "watchdog.py done b" in events[0]
-    events, state = wd.tick(threads(), {THREAD: "completed"}, "", "", state, "h")
+    events, state = wd.tick(threads(), {THREAD: "completed"}, [], "", state, "h")
     assert events == []
-    events, state = wd.tick(threads(), {THREAD: "running"}, "", "", state, "h")
+    events, state = wd.tick(threads(), {THREAD: "running"}, [], "", state, "h")
     assert events == []
-    events, _ = wd.tick(threads(), {THREAD: "completed"}, "", "", state, "h")
+    events, _ = wd.tick(threads(), {THREAD: "completed"}, [], "", state, "h")
     assert len(events) == 1 and events[0].startswith("ENDED b")
 
 
 def test_an_interrupted_or_failed_thread_is_told_to_resume_once_per_hour_even_after_running():
     for status in ("interrupted", "failed"):
-        events, state = wd.tick(threads(), {THREAD: status}, "", "", {}, "2026103012")
+        events, state = wd.tick(threads(), {THREAD: status}, [], "", {}, "2026103012")
         assert len(events) == 1 and events[0].startswith(f"FAILED b ({status})")
         assert "resume-b-2026103012" in events[0] and "queue.py resume --task b" in events[0]
-        _, state = wd.tick(threads(), {THREAD: "running"}, "", "", state, "2026103012")
-        assert wd.tick(threads(), {THREAD: status}, "", "", state, "2026103012")[0] == []
-        assert len(wd.tick(threads(), {THREAD: status}, "", "", state, "2026103013")[0]) == 1
+        _, state = wd.tick(threads(), {THREAD: "running"}, [], "", state, "2026103012")
+        assert wd.tick(threads(), {THREAD: status}, [], "", state, "2026103012")[0] == []
+        assert len(wd.tick(threads(), {THREAD: status}, [], "", state, "2026103013")[0]) == 1
 
 
 def test_a_cancelled_or_rolled_back_thread_is_reported_as_cancelled():
     for status in ("cancelled", "rolled_back"):
-        events, _ = wd.tick(threads(), {THREAD: status}, "", "", {}, "h")
+        events, _ = wd.tick(threads(), {THREAD: status}, [], "", {}, "h")
         assert len(events) == 1 and events[0].startswith("CANCELLED b")
 
 
@@ -164,7 +169,7 @@ def test_a_holder_stranded_over_an_hour_is_reported_once_and_a_short_one_is_not(
     events, state = wd.tick([wd.Row("i", "live1", "a")], {}, STRANDED, "", {}, "h")
     assert "STRANDED holder live1" in events[0] and "tell a to resume" in events[0]
     assert wd.tick(rows(), {}, STRANDED, "", state, "h")[0] == []
-    short = STRANDED.replace("75 min", "20 min")
+    short = [dataclasses.replace(STRANDED[0], stranded_min=20)]
     assert wd.tick(rows(), {}, short, "", {}, "h")[0] == []
 
 
@@ -173,26 +178,42 @@ def test_a_stranded_holder_nobody_owns_goes_to_the_user():
     assert "report it to the user" in events[0]
 
 
+def test_the_tick_reports_the_stranded_holder_that_queue_status_prints(tmp_path):
+    # #667: from one real hold ticket, `queue.py status` and the tick name the same holder and the same minutes.
+    qdir, bot, done = tmp_path / "queue", tmp_path / "bot.log", tmp_path / "done"
+    qdir.mkdir()
+    bot.write_text("x")
+    gone = subprocess.Popen([sys.executable, "-c", "pass"])
+    gone.wait()
+    lq.pid_file(bot).write_text(json.dumps({"pid": gone.pid, "start": None, "cmd": "bot"}))
+    (qdir / f"1-{os.getpid()}-live1.ticket").write_text(f"python tools/live/backup.py hold --done {done} --guard {bot}")
+    now = bot.stat().st_mtime + 75 * 60
+    line = lq.status(qdir, now=now)[0]
+    assert line.startswith("RUNNING live1 (pid ") and "bot ended 75 min ago, waiting for the agent" in line
+    events, _ = wd.tick([wd.Row("i", "live1", "a")], {}, lq.holders(qdir, now=now), "", {}, "h")
+    assert events == ["STRANDED holder live1: bot ended 75 min ago, no done file; tell a to resume (as for FAILED)"]
+
+
 def test_main_red_is_reported_once_and_green_only_after_a_red_report():
-    assert wd.tick([], {}, "", CI_GREEN, {}, "h")[0] == []
-    events, state = wd.tick([], {}, "", CI_RED, {}, "h")
+    assert wd.tick([], {}, [], CI_GREEN, {}, "h")[0] == []
+    events, state = wd.tick([], {}, [], CI_RED, {}, "h")
     assert "MAIN RED at deadbeef" in events[0]
-    assert wd.tick([], {}, "", CI_RED, state, "h")[0] == []
-    events, state = wd.tick([], {}, "", CI_GREEN, state, "h")
+    assert wd.tick([], {}, [], CI_RED, state, "h")[0] == []
+    events, state = wd.tick([], {}, [], CI_GREEN, state, "h")
     assert "MAIN GREEN again" in events[0]
-    assert wd.tick([], {}, "", CI_GREEN, state, "h")[0] == []
+    assert wd.tick([], {}, [], CI_GREEN, state, "h")[0] == []
 
 
 def test_an_unreadable_ci_answer_is_silent():
-    assert wd.tick([], {}, "", "not json", {}, "h")[0] == []
-    assert wd.tick([], {}, "", "", {}, "h")[0] == []
+    assert wd.tick([], {}, [], "not json", {}, "h")[0] == []
+    assert wd.tick([], {}, [], "", {}, "h")[0] == []
 
 
 def test_a_task_or_thread_that_left_the_list_can_be_reported_again():
     for listed, statuses in ((rows(), {DECODED: "completed"}), (threads(), {THREAD: "completed"})):
-        _, state = wd.tick(listed, statuses, "", "", {}, "h")
-        _, state = wd.tick([], {}, "", "", state, "h")
-        assert wd.tick(listed, statuses, "", "", state, "h")[0]
+        _, state = wd.tick(listed, statuses, [], "", {}, "h")
+        _, state = wd.tick([], {}, [], "", state, "h")
+        assert wd.tick(listed, statuses, [], "", state, "h")[0]
 
 
 def test_parse_statuses_decodes_the_id():
@@ -200,7 +221,7 @@ def test_parse_statuses_decodes_the_id():
 
 
 def test_cli_tick_prints_news_once_then_nothing_new(tmp_path, monkeypatch, capsys):
-    monkeypatch.setattr(wd, "queue_status", lambda: "")
+    monkeypatch.setattr(wd, "queue_holders", lambda: [])
     monkeypatch.setattr(wd, "main_ci", lambda: CI_RED)
     base = ["--dir", str(tmp_path)]
     wd.main(base + ["add", ENCODED, "live1", "a"])
@@ -214,7 +235,7 @@ def test_cli_tick_prints_news_once_then_nothing_new(tmp_path, monkeypatch, capsy
 
 
 def test_cli_tick_reads_a_reported_thread_as_finished(tmp_path, monkeypatch, capsys):
-    monkeypatch.setattr(wd, "queue_status", lambda: "")
+    monkeypatch.setattr(wd, "queue_holders", lambda: [])
     monkeypatch.setattr(wd, "main_ci", lambda: "")
     base = ["--dir", str(tmp_path)]
     wd.main(base + ["add", THREAD, "-", "b"])

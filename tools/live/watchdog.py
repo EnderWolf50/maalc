@@ -15,7 +15,7 @@ schedule is the coordinator's).
 `tick` is what the scheduled prompt runs (`docs/agents/watchdog-prompt.md`). A script cannot call those tools, so the
 agent passes the states it fetched, one `--status <id>=<state>` per list line, plus one `--reported <id>` per thread
 whose latest run sent its report to the main thread: a thread whose turn ended without one may be waiting on a
-question (ENDED). `tick` runs `queue.py status` and the latest CI run of `main` itself, compares them with
+question (ENDED). `tick` reads the queues (what `queue.py status` lists) and the latest CI run of `main` itself, compares them with
 `agents.state.json` (beside `agents.tsv`: what it already reported) and prints one event per line, each with the
 action to take, or exactly `NOTHING NEW`. An event prints once; the state file is what keeps a question already
 waiting on the user from being posted again. A line seen working again can end or finish again, so it is reported
@@ -25,7 +25,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import re
 import subprocess
 import sys
 import time
@@ -37,6 +36,7 @@ TOOLS = Path(__file__).resolve().parents[1]
 if str(TOOLS) not in sys.path:
     sys.path.insert(0, str(TOOLS))
 
+from live.queue import RESOURCES, Holder, holders, queue_dir  # noqa: E402
 from local_dir import local_dir  # noqa: E402
 
 REPO = "EnderWolf50/maalc"
@@ -142,26 +142,16 @@ def sh(cmd: list[str]) -> str:
     return p.stdout if p.returncode == 0 else ""
 
 
-def queue_status() -> str:
-    return sh([sys.executable, str(Path(__file__).with_name("queue.py")), "status"])
+def queue_holders() -> list[Holder]:
+    """What `queue.py status` lists, every resource."""
+    return [h for res in RESOURCES for h in holders(queue_dir(res))]
 
 
 def main_ci() -> str:
     return sh(["gh", "run", "list", "-R", REPO, "--branch", "main", "--limit", "1", "--json", "conclusion,headSha"])
 
 
-STRANDED = re.compile(r"^\s*(?:RUNNING|#\d+)\s+(\S+) \(pid \d+\) — bot ended (\d+) min ago, waiting for the agent")
-
-
-def stranded_holders(queue_text: str) -> list[tuple[str, int]]:
-    out = []
-    for line in queue_text.splitlines():
-        if m := STRANDED.match(line):
-            out.append((m.group(1), int(m.group(2))))
-    return out
-
-
-def tick(rows: list[Row], statuses: dict[str, str], queue_text: str, ci_json: str, state: dict,
+def tick(rows: list[Row], statuses: dict[str, str], queued: Iterable[Holder], ci_json: str, state: dict,
          hour: str, reported_ids: Iterable[str] = ()) -> tuple[list[str], dict]:
     """(events, new state). An event prints once: its key is in `state["reported"]` afterwards."""
     reported = set(state.get("reported", []))
@@ -199,7 +189,7 @@ def tick(rows: list[Row], statuses: dict[str, str], queue_text: str, ci_json: st
         elif outcome == WORKING:
             # sent more work, it can finish or end again; the hourly `failed|` key stays to throttle the resume
             reported.difference_update({f"done|{r.key()}", f"ended|{r.key()}"})
-    for name, mins in stranded_holders(queue_text):
+    for name, mins in ((h.name, h.stranded_min) for h in queued if h.stranded_min is not None):
         if mins > STRANDED_MIN:
             owner = next((r for r in rows if r.task == name or r.label == name), None)
             if owner is None:
@@ -264,7 +254,7 @@ def main(argv=None) -> int:
     else:
         state_file = folder / "agents.state.json"
         state = json.loads(state_file.read_text(encoding="utf-8")) if state_file.exists() else {}
-        events, state = tick(load(path), parse_statuses(a.status), queue_status(), main_ci(), state,
+        events, state = tick(load(path), parse_statuses(a.status), queue_holders(), main_ci(), state,
                              time.strftime("%Y%m%d%H"), a.reported)
         state_file.write_text(json.dumps(state, indent=1), encoding="utf-8")
         out = events or [NOTHING]
