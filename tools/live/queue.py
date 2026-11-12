@@ -45,9 +45,11 @@ from datetime import datetime
 from pathlib import Path
 from typing import NamedTuple
 
-sys.path[0] = str(Path(__file__).resolve().parents[1])  # this file's name shadows the stdlib `queue`
+TOOLS = Path(__file__).resolve().parents[1]
+if str(TOOLS) not in sys.path:  # run as a script, local_dir is not importable until tools/ is on the path
+    sys.path.insert(0, str(TOOLS))
 
-from local_dir import local_dir, main_checkout
+from local_dir import local_dir, main_checkout  # noqa: E402
 
 RESOURCES = ("bench", "emulator")
 

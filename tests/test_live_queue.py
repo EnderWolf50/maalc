@@ -586,3 +586,18 @@ def test_status_warns_before_a_hold_expires(tmp_path):
     (task / "hold.deadline").write_text("10000")
     assert "expires" not in lq.status(tmp_path, now=10000 - 3600)[0]
     assert "hold expires in 10 min" in lq.status(tmp_path, now=10000 - 600)[0]
+
+
+@pytest.mark.parametrize("module", ["live.queue", "live.backup", "live.dialogs"])
+def test_importing_a_live_tool_leaves_the_importers_path_as_it_was(module):
+    # #667: they overwrote sys.path[0], so a program that imported them lost its first path entry.
+    code = f"import sys; before = list(sys.path); import {module}; assert sys.path == before, (before, sys.path)"
+    env = {**os.environ, "PYTHONPATH": str(QUEUE_PY.parents[1])}
+    subprocess.run([sys.executable, "-c", code], env=env, check=True)
+
+
+@pytest.mark.parametrize("script", ["queue.py", "backup.py", "dialogs.py"])
+def test_a_live_tool_still_runs_as_a_script(script):
+    # A script's own folder, tools/live/, stays on its path: a module there that imported the stdlib `queue` would get
+    # this queue.py instead and fail.
+    subprocess.run([sys.executable, str(QUEUE_PY.parent / script), "--help"], check=True, capture_output=True)
