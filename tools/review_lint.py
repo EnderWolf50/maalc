@@ -15,42 +15,34 @@
 Exit code 1 when there is a problem, else 0. CI runs it on every pull request.
 """
 import re
-import subprocess
 import sys
 from pathlib import Path
+
+import git_diff
+from git_diff import git
 
 ROOT = Path(__file__).resolve().parent.parent
 PROSE = re.compile(r"(?:.*\.md|assets/locales/.*\.json|gui/src/i18n\.ts)$")
 DEF_TEST = re.compile(r"^\s*(?:async\s+)?def (test_\w+)")
 
 
-def git(*args: str, check: bool = True) -> str:
-    return subprocess.run(["git", *args], cwd=ROOT, capture_output=True, text=True, encoding="utf-8", check=check).stdout
-
-
 def merge_base(base: str) -> str:
-    return git("merge-base", base, "HEAD").strip()
+    return git("merge-base", base, "HEAD", cwd=ROOT).strip()
 
 
 def diff_lines(base: str) -> tuple[dict[str, list[tuple[int, str]]], dict[str, list[str]]]:
     """(added, removed) lines per file of `git diff -U0 <merge base of base and HEAD>`; added ones carry their line number."""
     added: dict[str, list[tuple[int, str]]] = {}
     removed: dict[str, list[str]] = {}
-    path, old, at = "", "", 0
-    for line in git("diff", "-U0", "--no-color", merge_base(base)).splitlines():
-        if line.startswith("diff --git "):
-            path, old = "", ""
-        elif not path and line.startswith("--- a/"):
-            old = line[6:]
-        elif not path and line.startswith("+++ "):
-            path = line[6:] if line.startswith("+++ b/") else old  # a deleted file: `+++ /dev/null`
-        elif m := re.match(r"@@ -\S+ \+(\d+)", line):
-            at = int(m[1])
-        elif path and line.startswith("+") and not line.startswith("+++"):
-            added.setdefault(path, []).append((at, line[1:]))
-            at += 1
-        elif path and line.startswith("-") and not line.startswith("---"):
-            removed.setdefault(path, []).append(line[1:])
+    for line in git_diff.lines(git("diff", "-U0", "--no-color", merge_base(base), cwd=ROOT)):
+        # left out, as this walk did before git_diff: a file named without a/ b/ (a quoted path) and a line that
+        # starts like a file header (`+++`, `---`)
+        if line.path is None or line.text.startswith(line.sign * 2):
+            continue
+        if line.sign == "+":
+            added.setdefault(line.path, []).append((line.no, line.text))
+        else:
+            removed.setdefault(line.path, []).append(line.text)  # a deleted file's under its old name
     return added, removed
 
 
@@ -136,7 +128,7 @@ REMOVED_OK = re.compile(r"^Removed-name-ok:[ \t]*(\w+)[ \t]+\(.+\)", re.M)  # on
 
 def branch_messages(base: str) -> list[tuple[str, str]]:
     """(short sha, message) of the branch's own commits, merge commits left out."""
-    log = git("log", "--no-merges", "--format=%h%x00%B%x1e", f"{merge_base(base)}..HEAD")
+    log = git("log", "--no-merges", "--format=%h%x00%B%x1e", f"{merge_base(base)}..HEAD", cwd=ROOT)
     return [tuple(entry.strip("\n").split("\x00", 1)) for entry in log.split("\x1e") if "\x00" in entry]
 
 
@@ -151,7 +143,7 @@ def stale_references(removed: dict[str, list[str]], added: dict[str, list[tuple[
                      ok: frozenset[str] | set[str] = frozenset()) -> list[str]:
     problems = []
     for name, path in sorted({(n, p) for n, p in removed_names(removed, added) if n not in ok}):
-        hits = git("grep", "-n", "-w", "-e", name, "--", ".", ":(exclude)tests/screens", check=False).splitlines()  # exit 1: no match
+        hits = git("grep", "-n", "-w", "-e", name, "--", ".", ":(exclude)tests/screens", cwd=ROOT, check=False).splitlines()  # exit 1: no match
         hits = [h for h in hits if not h.startswith((".local/", "docs/adr/"))]  # an ADR records history
         defined = [h for h in hits if any((m := p.match(h.split(":", 2)[2])) and name in m.groups() for p in (NODE_KEY, TASK_NAME, PY_DEF))]
         if hits and not defined:  # a definition elsewhere in the tree: the name was moved or defined twice, not removed
