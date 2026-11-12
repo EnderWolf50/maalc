@@ -62,6 +62,7 @@ TASK = {"runs": 0, "done": None}
 # of an account-level stop this launch ("halted", #362 D8): every later task then fails at its entry.
 STUCK = {"node": None, "kind": None, "flag": None, "watch": recovery.Watchdog(), "ladder": recovery.Ladder(),
          "restarts": recovery.Restarts(),
+         "away": recovery.Away(),  # the game out of front while the hub recognises nothing (#530)
          "updates": 0,  # game restarts for update notices since this agent started (AcceptUpdate)
          "halted": None}
 SCREENS = deque(maxlen=20)  # the last screens MirrorHub handed out: the evidence on a stop
@@ -549,16 +550,22 @@ class StuckFlag(CustomRecognition):
     a stuck waits for recovery.
 
     It runs first on each pass of a hub, so the task's last node is the screen just
-    handled and argv.image what it left: the watchdog, the evidence and the run time limit work from them.
+    handled and argv.image what it left: the watchdog, the evidence and the run time limit work from them. A pass with
+    no node handled since the last one may read the foreground (Away): the game out of front for a while starts a stuck
+    at L3, sooner than the hub's timeout (#530).
     """
 
     def analyze(self, context: Context, argv: CustomRecognition.AnalyzeArg):
         ids = argv.task_detail.node_id_list
+        now = time.monotonic()
         if ids and ids[-1] != STUCK["node"]:
             STUCK["node"] = ids[-1]
+            STUCK["away"].handled(now)
             node = context.tasker.get_node_detail(ids[-1])
             if node and node.name not in ("MirrorDungeon", "GlobalStuck", argv.node_name, *PASS_NODES) and not self.hub(context, node.name, argv.node_name):
                 self.see(node.name, argv.image)
+        elif not STUCK["flag"] and STUCK["away"].due(now) and (why := STUCK["away"].read(foreground(context), now)):
+            self.away(why, argv.image)
         if STUCK["flag"] and STUCK["flag"][0] is None:
             STUCK["flag"] = (STUCK["kind"], *STUCK["flag"][1:])  # reported by the action of the node just handled
         return CustomRecognition.AnalyzeResult(box=(0, 0, 1, 1), detail={}) if STUCK["flag"] else None
@@ -567,6 +574,15 @@ class StuckFlag(CustomRecognition):
     def hub(context, name, stuck_node):
         """Whether the node is a hub, not a screen: its next list holds this Stuck node."""
         return stuck_node in (n["name"] for n in context.get_node_data(name)["next"])
+
+    @staticmethod
+    def away(why, image):
+        """The game out of front while the hub recognised nothing: a stuck at L3, as Recover gives a hub timeout with the
+        game out of front (#86), on the same screen type, and its screen kept in logs/unknown/ as a timeout keeps it."""
+        keep_unknown(image)
+        reason = f"nothing recognised; {why}"
+        log(f"stuck: {reason}")
+        STUCK["flag"] = (nothing_recognised(), 3, reason)
 
     @staticmethod
     def see(kind, image):
@@ -1294,13 +1310,10 @@ class Recover(CustomAction):
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         unknown = STUCK["flag"] is None  # MirrorHub's own timeout: a screen it has no node for
-        flag = STUCK["flag"] or (f"{STUCK['kind']}, then nothing recognised", 1, "MirrorHub recognised nothing for 60 s")
+        flag = STUCK["flag"] or (nothing_recognised(), 1, "MirrorHub recognised nothing for 60 s")
         STUCK["flag"] = None
         if unknown:  # also during a download: its progress screen is one to have a capture of
-            try:
-                recovery.keep_capture(ROOT, "unknown", screen(context), settlement.now().replace(":", "-"), recovery.UNKNOWN_KEEP)
-            except OSError as e:
-                log(f"unknown screen not saved: {e}")
+            keep_unknown(screen(context))
         if STUCK["watch"].held(time.monotonic()):
             log(f"{flag[2]}: a download is under way, waiting")
             return True
@@ -1308,7 +1321,7 @@ class Recover(CustomAction):
         if unknown and (app := foreground(context)) not in (None, recovery.GAME):
             # #86: the Play Store, the home screen, or a game whose window never took focus (live, black 5 min after
             # an update): the back key and To Window do nothing there, so the game is restarted at once.
-            start, reason = 3, f"{reason}; the game is not in front ({app or 'no window has focus'})"
+            start, reason = 3, f"{reason}; {recovery.not_in_front(app)}"
         while True:
             level, why = STUCK["ladder"].stuck(kind, start, STUCK["restarts"])
             if level is None:
@@ -1321,6 +1334,20 @@ class Recover(CustomAction):
             STUCK["ladder"].failed(level)
         forget_game_state()
         return True
+
+
+def nothing_recognised():
+    """The screen type of a stuck on a screen no node recognised: the last one handed out, then nothing. Any screen a hub
+    hands out after it gets past it."""
+    return f"{STUCK['kind']}, then nothing recognised"
+
+
+def keep_unknown(image):
+    """Keep a screen no node recognised in logs/unknown/ (recovery.keep_capture)."""
+    try:
+        recovery.keep_capture(ROOT, "unknown", image, settlement.now().replace(":", "-"), recovery.UNKNOWN_KEEP)
+    except OSError as e:
+        log(f"unknown screen not saved: {e}")
 
 
 def foreground(context):
