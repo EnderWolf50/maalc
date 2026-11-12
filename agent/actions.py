@@ -1188,9 +1188,7 @@ class AssemblePanel(CustomAction):
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         a = TASK.setdefault("assemble", {"reads": 0, "confirms": 0})
         image = screen(context)
-        if too_many(context, image):
-            a["end"] = "too many Enkephalin Modules in storage"
-            back(context)
+        if self.refused(context, a, image):
             return True
         if a.get("end"):
             tap(context, *PANEL_CANCEL, wait=0.5)
@@ -1215,9 +1213,7 @@ class AssemblePanel(CustomAction):
                 break
             tap(context, *ASSEMBLE_MAX, wait=0.5)
             image = screen(context)
-            if too_many(context, image):
-                a["end"] = "too many Enkephalin Modules in storage"
-                back(context)
+            if self.refused(context, a, image):
                 return True
             again = panel_read(context, image) if on_modules_tab(context, image) else []
             if not again:
@@ -1231,6 +1227,15 @@ class AssemblePanel(CustomAction):
         log(f"assemble: Enkephalin {before} -> {after}, Confirm")
         a["before"] = before
         tap(context, *PANEL_CONFIRM, wait=0.5)
+        return True
+
+    @staticmethod
+    def refused(context, a, image):
+        """Whether the game's refusal (too many Modules in storage) shows: it ends the task and back closes it."""
+        if not too_many(context, image):
+            return False
+        a["end"] = "too many Enkephalin Modules in storage"
+        back(context)
         return True
 
     @staticmethod
