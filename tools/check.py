@@ -22,6 +22,7 @@ import sys
 import tempfile
 import time
 import xml.etree.ElementTree as ET
+from dataclasses import dataclass
 from pathlib import Path
 
 import local_dir
@@ -39,11 +40,24 @@ def pytest_shards(cores):
 
 SHARDS = pytest_shards(os.cpu_count() or 4)
 BASE = "origin/main"
-# (command, processes at once). pytest leaves its cache alone: the shards would overwrite each other's.
-RUFF = (["uv", "run", "ruff", "check"], 1)
-REVIEW_LINT = (["uv", "run", "python", "tools/review_lint.py", BASE], 1)
-PYTEST = ["uv", "run", "pytest", "-q", "-p", "no:cacheprovider"]
-STEPS = [RUFF, (PYTEST, SHARDS), (["pnpm", "exec", "maa-tools", "check"], 1), (["pnpm", "exec", "maa-tools", "test"], 1)]
+
+
+@dataclass(frozen=True)
+class Step:
+    name: str  # as the run log names it
+    cmd: list[str]
+    shards: int = 1  # processes at once
+    needs_base: bool = False  # skipped without BASE
+
+
+# In the order they run. pytest leaves its cache alone: the shards would overwrite each other's.
+STEPS = (
+    Step("ruff", ["uv", "run", "ruff", "check"]),
+    Step("review_lint", ["uv", "run", "python", "tools/review_lint.py", BASE], needs_base=True),
+    Step("pytest", ["uv", "run", "pytest", "-q", "-p", "no:cacheprovider"], SHARDS),
+    Step("maa-tools check", ["pnpm", "exec", "maa-tools", "check"]),
+    Step("maa-tools test", ["pnpm", "exec", "maa-tools", "test"]),
+)
 # pytest also gets this: {shard} becomes the shard's number, so each shard writes its own junit file, which gives the log
 # the seconds of every test file and the failed tests (as CI's shard-balance reads its junit artifacts).
 JUNIT = "--junitxml={junit}/{{shard}}.xml"
@@ -187,10 +201,8 @@ def default_log():
 
 
 def step_name(cmd):
-    """`ruff`, `review_lint`, `pytest`, `maa-tools check` or `maa-tools test`."""
-    if "maa-tools" in cmd:
-        return "maa-tools " + cmd[-1]
-    return "review_lint" if "tools/review_lint.py" in cmd else "pytest" if "pytest" in cmd else "ruff"
+    """The name of the step whose command `cmd` starts with (pytest's gets JUNIT appended)."""
+    return next(step.name for step in STEPS if cmd[:len(step.cmd)] == step.cmd)
 
 
 def main(run=run_step, has_base=has_base, log=default_log):
@@ -200,21 +212,20 @@ def main(run=run_step, has_base=has_base, log=default_log):
         print("== OCR model missing: uv run python tools/fetch_ocr.py", flush=True)
         if subprocess.run([sys.executable, str(Path(__file__).with_name("fetch_ocr.py"))]).returncode:
             sys.exit("fetch_ocr.py failed; the OCR tests cannot run without the model")
-    steps = STEPS[:1] + [REVIEW_LINT] + STEPS[1:]
     has_base_ref = has_base(BASE)
     if not has_base_ref:
         print(f"== tools/review_lint.py: skipped, no {BASE} to compare with (git fetch origin main)", flush=True)
-        steps.remove(REVIEW_LINT)
+    steps = [step for step in STEPS if has_base_ref or not step.needs_base]
     started, run_began, failed, logged, maa_texts = datetime.datetime.now().astimezone(), time.monotonic(), 0, [], ()
     with tempfile.TemporaryDirectory() as junit:
-        for cmd, shards in steps:
+        for step in steps:
             began = time.monotonic()
-            code, shown = run(cmd + [JUNIT.format(junit=junit)] if cmd is PYTEST else cmd, shards)
+            code, shown = run(step.cmd + [JUNIT.format(junit=junit)] if step.name == "pytest" else step.cmd, step.shards)
             took = time.monotonic() - began
-            label = " ".join(cmd) + (f" ({shards} shards)" if shards > 1 else "")
+            label = " ".join(step.cmd) + (f" ({step.shards} shards)" if step.shards > 1 else "")
             print(f"== {label}: exit {code}, {took:.0f} s", flush=True)
-            logged.append({"name": step_name(cmd), "exit": code, "seconds": round(took, 1)})
-            if step_name(cmd) == "maa-tools test":
+            logged.append({"name": step.name, "exit": code, "seconds": round(took, 1)})
+            if step.name == "maa-tools test":
                 maa_texts = getattr(shown, "texts", ())
             if code:
                 print(shown, flush=True)
