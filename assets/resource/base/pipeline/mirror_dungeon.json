@@ -67,6 +67,7 @@
             "entries": [
                 "ClaimPopup",
                 "ParallelModePrompt",
+                "PreviousSessionExpired",
                 "PopupButton",
                 "Notices",
                 "Mailbox",

@@ -56,6 +56,9 @@ const screens: [image: string, hits: string[]][] = [
   // GoHome reads its popups before HomeReached.
   ['EventNotices.png', ['Notices', 'EnkephalinBar']],
   ['SystemNotices.png', ['Notices', 'EnkephalinBar']],
+  // Live 2026-11-12 (#85, 1.118.1): the expired-run dialog over the Mirror Dungeon entry page, titled Notifs as the notices
+  // are: Notices reads it too, which is why PreviousSessionExpired sits ahead of it in HubText (tests/test_hub_text_screens.py).
+  ['PreviousSessionExpired.png', ['PreviousSessionExpired', 'Notices']],
   // ClaimMail (#372): the box with mail reads Claim All; the empty one (live 2026-10-26) reads "No mail in storage." and
   // has the button dimmed. MailOpen is the envelope tap on the main window, the Window tab lit as HomeReached.
   ['Mailbox.png', ['Mailbox', 'MailClaimAll', 'EnkephalinBar', 'ModuleIcon']],
