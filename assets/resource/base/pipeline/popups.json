@@ -1,8 +1,9 @@
 {
     // Global popups (spec 01, 全域彈窗): first in MirrorHub's next.
     // Not built yet, no screenshot of them so far: a tutorial that opens by itself (HelpPager is the one an "i" opens),
-    // weekly reset notice / expired run, the "?" effect-choice page (#87), level-up popups other than Pass Level Up
-    // (ClaimPopup). PopupButton presses
+    // a weekly reset notice (none showed at the 2026-11-12 reset), the "?" effect-choice page (#87), level-up popups
+    // other than Pass Level Up (ClaimPopup). The "previous session has expired" dialog has its node
+    // (PreviousSessionExpired, below). PopupButton presses
     // any lone Close / Confirm / OK meanwhile; Recover saves a screen MirrorHub does not know to logs/unknown/.
     // Connecting, RetryPopup and PopupButton run before the turn on every battle round (BattleHUD), so each starts with a
     // template and reads no text on a battle screen, for speed (#157; spec 01, MirrorHub, has the live numbers). RetryPopup
@@ -262,6 +263,12 @@
     // every 0.2 s up to the 1.5 s they used to sleep (#258; live, the main window was up at the first look after each of
     // 5 Mailbox closes; no live log has the notices). The menu leaves the Window tab lit, so its 1.5 s stay: only its
     // own text tells it gone, and that may stop reading while it still fades.
+    // The expired-run dialog is also titled "Notifs" and has Notices' roi: PreviousSessionExpired reads its body and
+    // sits before Notices in HubText, so Notices' back key (Cancel there) never answers it. Notices stays the answer
+    // for every other "Notifs" screen. Lists that reach Notices: MirrorHub's HubText gets the new node (the dialog shows
+    // on the entry page, and ExplorationReward, which the Confirm opens, is in that list); GoHome's HomeText does not:
+    // it has no ExplorationReward to hand to, so a dialog met there is still closed by Notices' back key (Cancel), and
+    // the entry page offers the rewards later, as before. ServerPopups lists neither.
     "Notices": {
         "recognition": "OCR",
         "roi": [480, 95, 330, 50],
@@ -274,6 +281,47 @@
             "timeout": 1.5
         },
         "post_delay": 0
+    },
+    // "The previous session has expired. Please claim your rewards." over the Mirror Dungeon entry page, Cancel / Confirm
+    // (live 2026-11-12 05:02:51, 1.118.1, the first look at the entry page after the weekly reset with a run left
+    // unclaimed; tests/screens/PreviousSessionExpired.png). Titled "Notifs" like Notices, so it is told by its body and
+    // sits ahead of Notices in HubText (the back key would be Cancel). Confirm is meant to open the Exploration Reward
+    // window, which ExplorationReward hands to Settle: the user's decision 2026-11-12; that window after Confirm has
+    // no live frame yet (the capture only has the back key's Cancel). The tap repeats until the dialog is gone or the
+    // window reads (4 s, a second over TapUntil's 3 for the window to open): if it never opens, the hub finds the entry
+    // page with Unclaimed Rewards, as after Notices' back key (Cancel) used to.
+    // The box is Confirm's own word, which OCR reads at (718-817, 487-505); its centre is the tap.
+    "PreviousSessionExpired": {
+        "recognition": "And",
+        "all_of": [
+            {
+                "recognition": "OCR",
+                "sub_name": "ExpiredTitle",
+                "roi": [480, 95, 330, 50],
+                "expected": "Notifs$"
+            },
+            {
+                "recognition": "OCR",
+                "sub_name": "ExpiredBody",
+                "roi": [440, 320, 400, 60],
+                "expected": "previous session has expired"
+            },
+            {
+                "recognition": "OCR",
+                "sub_name": "ExpiredConfirm",
+                "roi": [662, 477, 208, 38],
+                "expected": "Confirm$"
+            }
+        ],
+        "box_index": 2,
+        "action": "Custom",
+        "custom_action": "TapUntil",
+        "post_delay": 0,
+        "custom_action_param": {
+            "next": {"roi": [500, 100, 280, 45], "expected": "Exploration Reward"},
+            "gone": {"roi": [440, 320, 400, 60], "expected": "previous session has expired"},
+            "timeout": 4
+        }
     },
     "Mailbox": {
         "recognition": "And",

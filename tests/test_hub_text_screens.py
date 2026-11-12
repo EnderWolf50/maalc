@@ -26,7 +26,11 @@ PICKS = {("HubText", "FormationNoSinners.png"): "PopupButton", ("HomeText", "For
          ("ExpText", "EventChoicesLitBottom.png"): "Event", ("ExpText", "EventChoicesScrolledBack.png"): "Event",
          # #456: MirrorHub handed ID Skill Search's select mode (Leave reads Return there) comes to Shop by its title, whose
          # to_main leaves by Return; the plain shop still by Leave.
-         ("HubText", "ShopIdSkillSearchSelect.png"): "Shop", ("HubText", "Shop.png"): "Shop"}
+         ("HubText", "ShopIdSkillSearchSelect.png"): "Shop", ("HubText", "Shop.png"): "Shop",
+         # #85: the expired-run dialog, titled Notifs like the notices, comes to its own node
+         ("HubText", "PreviousSessionExpired.png"): "PreviousSessionExpired"}
+# (hub text node, capture) -> a node whose recognition box (the part of the screen it acts on) is read too
+BOXES = {("HubText", "PreviousSessionExpired.png"): "PreviousSessionExpired"}
 
 
 def child():
@@ -62,6 +66,9 @@ def child():
                     out[f"{hub} {capture}"] = ht.pick(nodes, ht.ocr_pass(context, image, rois))
                     out[f"{hub} {capture} own"] = [n for n, _, specs in nodes
                                                    if specs is not None and context.run_recognition(n, image).hit]
+                    if (hub, capture) in BOXES:
+                        detail = context.run_recognition(BOXES[hub, capture], image)
+                        out[f"{hub} {capture} box"] = list(detail.box) if detail and detail.hit else None
             except Exception:  # MaaFramework swallows it: hand it to the test
                 out["error"] = traceback.format_exc()
             return True
@@ -91,6 +98,24 @@ def test_the_pass_picks_every_screen_its_own_ocr_reads(picked, hub, capture):
     own = picked[f"{hub} {capture} own"]
     assert PICKS[hub, capture] in own  # the screen is up: its own OCR reads it
     assert set(own) <= set(picked[f"{hub} {capture}"])
+
+
+def test_the_expired_run_dialog_is_answered_by_its_own_node_before_the_notices(picked):
+    """Both read the dialog (its title is Notifs); the first picked entry is the one MirrorHub acts on."""
+    pick = picked["HubText PreviousSessionExpired.png"]
+    own = picked["HubText PreviousSessionExpired.png own"]
+    assert "Notices" in own and "PreviousSessionExpired" in own
+    assert pick.index("PreviousSessionExpired") < pick.index("Notices")
+    assert "PopupButton" not in pick[:pick.index("PreviousSessionExpired")]
+
+
+def test_the_expired_run_dialog_is_tapped_on_confirm_not_cancel(picked):
+    """The node's box is Confirm's word and its centre the tap (TapUntil without a target); Cancel is left of it."""
+    x, y, w, h = picked["HubText PreviousSessionExpired.png box"]
+    tap = (x + w // 2, y + h // 2)
+    confirm, cancel = (662, 477, 208, 38), (410, 477, 208, 38)  # the two buttons' frames on the capture
+    assert confirm[0] <= tap[0] < confirm[0] + confirm[2] and confirm[1] <= tap[1] < confirm[1] + confirm[3], (tap, (x, y, w, h))
+    assert not (cancel[0] <= tap[0] < cancel[0] + cancel[2])
 
 
 if __name__ == "__main__":
