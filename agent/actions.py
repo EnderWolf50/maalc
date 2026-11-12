@@ -60,9 +60,9 @@ TASK = {"runs": 0, "done": None}
 # screen type it handled ("kind"), a pending stuck for MirrorHub's Stuck node ("flag": (kind, start
 # level, reason)), this run's Ladder, this launch's game restarts ("restarts", a recovery.Restarts), and the reason
 # of an account-level stop this launch ("halted", #362 D8): every later task then fails at its entry; the TapUntil
-# nodes with a settle whose tap the game took since its last recovery or restart ("taken", #58).
+# nodes with a settle whose tap the game took since its last recovery or restart, and when ("taken", #58).
 STUCK = {"node": None, "kind": None, "flag": None, "watch": recovery.Watchdog(), "ladder": recovery.Ladder(),
-         "restarts": recovery.Restarts(), "taken": set(),
+         "restarts": recovery.Restarts(), "taken": {},
          "away": recovery.Away(),  # the game out of front while the hub recognises nothing (#530)
          "updates": 0,  # game restarts for update notices since this agent started (AcceptUpdate)
          "halted": None}
@@ -965,9 +965,10 @@ class HomeFrozen(CustomAction):
         return restart_game(context, reason)
 
 
-def hub_screens(context, hub, node):
-    """The nodes of hub's next list but node: the screens the hub knows besides it."""
-    return [n["name"] for n in context.get_node_data(hub)["next"] if n["name"] != node]
+def hub_knows(context, hub, node):
+    """A done(image) for until(): one of the nodes of hub's next list but node hits, a screen the hub knows besides it."""
+    known = [n["name"] for n in context.get_node_data(hub)["next"] if n["name"] != node]
+    return lambda image: any(seen(context, image, n) for n in known)
 
 
 @AgentServer.custom_recognition("StaysUnknown")
@@ -979,8 +980,7 @@ class StaysUnknown(CustomRecognition):
 
     def analyze(self, context: Context, argv: CustomRecognition.AnalyzeArg):
         p = json.loads(argv.custom_recognition_param)
-        known = hub_screens(context, p["hub"], argv.node_name)
-        if until(context, lambda im: any(seen(context, im, n) for n in known), timeout=p["timeout"]) is not None:
+        if until(context, hub_knows(context, p["hub"], argv.node_name), timeout=p["timeout"]) is not None:
             return None
         return CustomRecognition.AnalyzeResult(box=(0, 0, 1, 1), detail={})
 
@@ -1431,7 +1431,7 @@ class DismissShot(CustomAction):
     RetryPopup: one screen per DISMISSED_GAP, or a dropped link fills the folder with one popup.
     "until": a node that hits once the popup is gone (the main window's lit tab under the Mailbox); every 0.2 s, at
     most "timeout" s, until it hits and the popup's own node misses, instead of a post_delay (#258).
-    "known": a hub; every 0.2 s, at most "timeout" s, until one of its other screens shows (hub_screens), instead of a
+    "known": a hub; every 0.2 s, at most "timeout" s, until one of its other screens shows (hub_knows), instead of a
     post_delay (HomeBack, #58).
     """
 
@@ -1464,8 +1464,7 @@ class DismissShot(CustomAction):
                 return seen(context, im, p["until"]) is not None and seen(context, im, argv.node_name) is None
             log_change(argv.node_name, until(context, closed, timeout=p["timeout"]), began)
         if "known" in p:
-            known = hub_screens(context, p["known"], argv.node_name)
-            log_change(argv.node_name, until(context, lambda im: any(seen(context, im, n) for n in known),
+            log_change(argv.node_name, until(context, hub_knows(context, p["known"], argv.node_name),
                                              timeout=p["timeout"]), began)
         return True
 
@@ -1555,6 +1554,11 @@ class Halt(CustomAction):
         return stop(context, f"{argv.node_name}: {json.loads(argv.custom_action_param or '""')}", whole_list=True)
 
 
+# s after a taken tap that TapUntil's settle holds: a login's CONNECTINGs, GoHome's 60 s wait on each, and the gaps
+# between them (#58). A title met later (a session expired) is tapped at once.
+SETTLE_WITHIN = 120
+
+
 @AgentServer.custom_action("TapUntil")
 class TapUntil(CustomAction):
     """A Click node that waits for the page that follows instead of a post_delay (#115).
@@ -1568,9 +1572,9 @@ class TapUntil(CustomAction):
     until: that node's recognition hits, for a next page a template knows. The Window tab glows on the old page before
     the main window comes, and that glow misses the tab's own template (#496).
     lively: the screen whose still wait is a dead tap (tap_then), HomeReached by default.
-    settle: s; once a tap of this node was taken (a page came) since the game's last recovery or restart, a later hit
-    first waits up to settle s for a page to come by itself or the node to miss, and taps only when neither does. The
-    title between two CONNECTINGs of one login (#58): the game's own gap, which a tap there does not answer.
+    settle: s; within SETTLE_WITHIN s of a taken tap of this node (a page came), and no recovery or restart since, a
+    later hit first waits up to settle s for a page to come by itself or the node to miss, and taps only when neither
+    does. The title between two CONNECTINGs of one login (#58): the game's own gap, which a tap there does not answer.
     No target: the node's box.
     """
 
@@ -1586,10 +1590,10 @@ class TapUntil(CustomAction):
         if "until" in p:
             pages.append(lambda im: seen(context, im, p["until"]) is not None)
         began = time.monotonic()
-        if "settle" in p and argv.node_name in STUCK["taken"]:
+        if "settle" in p and began - STUCK["taken"].get(argv.node_name, -SETTLE_WITHIN) < SETTLE_WITHIN:
             if until(context, lambda im: any(page(im) for page in pages) or seen(context, im, argv.node_name) is None,
                      timeout=p["settle"]) is not None:
-                log(f"{argv.node_name}: not tapped again, the screen moved on by itself after "
+                log(f"{argv.node_name}: not tapped again, the screen moved on by itself (or a glitch hid it) after "
                     f"{time.monotonic() - began:.1f} s")
                 return True
             log(f"{argv.node_name}: still up {p['settle']} s after its last tap was taken: tapped again")
@@ -1597,7 +1601,7 @@ class TapUntil(CustomAction):
         image = tap_then(context, x + w // 2, y + h // 2, lambda im: any(page(im) for page in pages), timeout=p.get("timeout", 3),
                          lively=p.get("lively", "HomeReached"))
         if "settle" in p and image is not None:
-            STUCK["taken"].add(argv.node_name)
+            STUCK["taken"][argv.node_name] = time.monotonic()
         log_change(argv.node_name, image, began)
         return True
 
@@ -4212,7 +4216,7 @@ def read_cost(context, roi=SHOP_COST):
         cost = cost_in(context, screen(context), roi)
         if cost is not None:
             return cost
-        time.sleep(0.5)
+        time.sleep(0.5)  # kept (#58): an OCR retry on a fresh screenshot, the Cost still fading in
     return None
 
 

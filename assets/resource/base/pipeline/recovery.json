@@ -33,9 +33,9 @@
     // L2: Dungeon Progress (already open, e.g. by L1's back key on the map, or by the map's gear),
     // To Window, Pause Exploration Confirm. The main menu follows; MirrorHub navigates back to the
     // entry page and resumes the run. Not on the map: L2 does not go through, so L3 follows.
-    // The 2 s, 2 s and 5 s of its taps stay (#58): a recovery that waits on purpose. Each tap's next is a node of its own
-    // (MaaFramework waits for it), and the wait is for the panel or dialog to finish opening first: a tap it lets go by
-    // fails L2 into a game restart. The archived logs have 1 RecoverGear and no RecoverToWindow or RecoverPauseConfirm,
+    // The 2 s, 2 s and 5 s of its taps stay (#58): a recovery that waits on purpose. The next node's recognition would
+    // hit while its panel or dialog still opens; the wait lets it finish first, as a tap it lets go by fails L2 into a
+    // game restart. The archived logs have 1 RecoverGear and no RecoverToWindow or RecoverPauseConfirm,
     // nothing to time the panel on; after the last Confirm, the 5 s are the progress saving and the way to the window.
     "RecoverL2": {
         "next": [
@@ -43,6 +43,7 @@
             "RecoverGear"
         ]
     },
+    // 2 s (#58, as above): for Dungeon Progress to finish opening before To Window is tapped.
     "RecoverGear": {
         "recognition": "Or",
         "any_of": [
@@ -55,6 +56,7 @@
             "RecoverToWindow"
         ]
     },
+    // 2 s (#58, as above): for the Save your progress dialog to finish opening before its Confirm.
     "RecoverToWindow": {
         "recognition": "OCR",
         "roi": [520, 212, 240, 30],
@@ -66,6 +68,7 @@
             "RecoverPauseConfirm"
         ]
     },
+    // 5 s (#58, as above): the progress saving and the way to the window, before MirrorHub looks.
     "RecoverPauseConfirm": {
         "recognition": "OCR",
         "roi": [360, 280, 560, 140],

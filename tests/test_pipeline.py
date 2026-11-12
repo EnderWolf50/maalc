@@ -312,10 +312,8 @@ def test_the_recoverys_fixed_waits_are_the_kept_ones():
     nodes = load_nodes("recovery.json")
     assert {n: spec["post_delay"] for n, spec in nodes.items() if spec.get("post_delay", 0) > 0} == RECOVERY_KEPT
     text = (PIPELINE / "recovery.json").read_text(encoding="utf-8")
-    for name in RECOVERY_KEPT:  # each under a comment that says why: its own, or its step's (L2)
-        above = text[:text.index(f'"{name}": {{')].rsplit("}", 1)[-1]
-        assert "#58" in above or name in ("RecoverGear", "RecoverToWindow", "RecoverPauseConfirm"), name
-    assert "#58" in text[:text.index('"RecoverL2": {')].rsplit("}", 1)[-1]
+    for name in [*RECOVERY_KEPT, "RecoverL2"]:  # each under a comment that says why
+        assert "#58" in text[:text.index(f'"{name}": {{')].rsplit("}", 1)[-1], name
 
 
 

@@ -113,6 +113,8 @@ def child():
         "ignored_once": ({"ignored": 1}, 0),
         "login_gap": ({"answer": ("connecting", "gap", "connecting")}, 0),
         "back_to_title": ({"answer": ("connecting", "title"), "then": ("connecting",)}, 0),
+        "taken_long_ago": ({}, 0),  # NavTitle's last taken tap SETTLE_WITHIN s and more before
+        "taken_just_now": ({}, 0),  # ... and just before the scenario
         "frozen": ({"frozen": True}, 0),
         "frozen_restarts_used": ({"frozen": True}, L3_FAILED_IN_A_ROW),
         "frozen_connecting": ({"frozen": True, "screen": "connecting", "answer_for": 5}, 0),
@@ -124,7 +126,10 @@ def child():
             actions.STUCK["restarts"].attempt(None)
         actions.STUCK["watch"].reset()
         actions.STUCK["flag"] = None
-        actions.STUCK["taken"].clear()
+        actions.STUCK["taken"].clear()  # a scenario's own taps only
+        if scenario.startswith("taken_"):
+            ago = actions.SETTLE_WITHIN + 1 if scenario == "taken_long_ago" else 0
+            actions.STUCK["taken"]["NavTitle"] = time.monotonic() - ago
         actions.TASK.clear()
         actions.TASK.update(runs=0, done=None)
         actions.LOG.clear()
@@ -201,6 +206,16 @@ def test_the_title_between_two_connectings_of_one_login_is_not_tapped_again():
     assert o["succeeded"] and o["nodes"][-1] == "HomeReached" and o["keys"] == [], json.dumps(o)
     assert o["title_taps"] == 1, json.dumps(o)
     assert any("not tapped again, the screen moved on by itself" in line for line in title_lines(o)), json.dumps(o)
+
+
+def test_a_title_long_after_a_taken_tap_is_tapped_at_once_and_one_just_after_waits_the_settle():
+    # Review of #58: the settle held for the whole launch, so a title met long after the login (a session expired)
+    # waited 5 s too. It holds SETTLE_WITHIN s after a taken tap now.
+    late, soon = run_child(__file__)["taken_long_ago"], run_child(__file__)["taken_just_now"]
+    for o in (late, soon):
+        assert o["succeeded"] and o["nodes"][-1] == "HomeReached" and o["title_taps"] == 1, json.dumps(o)
+    assert not any("still up" in line for line in title_lines(late)) and late["seconds"] < 5, json.dumps(late)
+    assert any("still up" in line for line in title_lines(soon)), json.dumps(soon)
 
 
 def test_a_title_still_up_once_the_settle_is_over_is_tapped_again():
