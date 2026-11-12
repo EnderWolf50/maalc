@@ -265,7 +265,10 @@
     // own text tells it gone, and that may stop reading while it still fades.
     // The expired-run dialog is also titled "Notifs" and has Notices' roi: PreviousSessionExpired reads its body and
     // sits before Notices in HubText, so Notices' back key (Cancel there) never answers it. Notices stays the answer
-    // for every other "Notifs" screen.
+    // for every other "Notifs" screen. Lists that reach Notices: MirrorHub's HubText gets the new node (the dialog shows
+    // on the entry page, and ExplorationReward, which the Confirm opens, is in that list); GoHome's HomeText does not:
+    // it has no ExplorationReward to hand to, so a dialog met there is still closed by Notices' back key (Cancel), and
+    // the entry page offers the rewards later, as before. ServerPopups lists neither.
     "Notices": {
         "recognition": "OCR",
         "roi": [480, 95, 330, 50],
@@ -285,7 +288,8 @@
     // sits ahead of Notices in HubText (the back key would be Cancel). Confirm is meant to open the Exploration Reward
     // window, which ExplorationReward hands to Settle: the user's decision 2026-11-12; that window after Confirm has
     // no live frame yet (the capture only has the back key's Cancel). The tap repeats until the dialog is gone or the
-    // window reads: if it never opens, the hub finds the entry page with Unclaimed Rewards, as after the old Cancel.
+    // window reads (4 s, a second over TapUntil's 3 for the window to open): if it never opens, the hub finds the entry
+    // page with Unclaimed Rewards, as after Notices' back key (Cancel) used to.
     // The box is Confirm's own word, which OCR reads at (718-817, 487-505); its centre is the tap.
     "PreviousSessionExpired": {
         "recognition": "And",

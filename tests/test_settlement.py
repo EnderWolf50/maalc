@@ -229,9 +229,9 @@ def test_a_new_runs_first_floor_forgets_the_floors_of_the_last_run(monkeypatch):
     actions.RUN.clear()
 
 
-def settle(context, monkeypatch, tmp_path, window, target, floors_hard=None, start=None, use="hard", amount="all"):
+def settle(context, monkeypatch, tmp_path, window, target, floors_hard=None, toggles_on=None, use="hard", amount="all"):
     """Settle on a window reading `window` for a run with `target`, weekly bonuses `use`/`amount` ("hard"/"all") with 3 left,
-    the toggles OFF unless `start` says otherwise.
+    the toggles OFF unless `toggles_on` says otherwise.
 
     The toggles are three switches that a tap on one flips. Returns (taps, ON toggles when Claim was tapped, the runs.jsonl line).
     """
@@ -241,7 +241,7 @@ def settle(context, monkeypatch, tmp_path, window, target, floors_hard=None, sta
     team = {"id": "a", "name": "A", "enabled": True}
     actions.RUN.update(settings={"run": {"weekly_bonus_use": use, "weekly_bonus_amount": amount, "target_floor": target}, "teams": [team]},
                        team=team, planned=True, floors_hard=floors_hard or {})
-    taps, switches, on_at_claim = [], list(start or [False] * 3), []
+    taps, switches, on_at_claim = [], list(toggles_on or [False] * 3), []
 
     def tap(context, x, y, wait=1.0):
         taps.append((x, y))
@@ -290,7 +290,7 @@ def test_settle_claims_a_run_past_floor_5_and_toggles_bonuses_only_at_the_target
 def test_the_weekly_bonus_toggles_are_set_from_all_three_on(context, monkeypatch, tmp_path, use, amount, window, claimed_on):
     """After the weekly reset the window opens with all three weekly bonuses ON (Claim -18 Modules, live 2026-11-12, #85)."""
     taps, on_at_claim, lines = settle(context, monkeypatch, tmp_path, window, 5, {f: "HARD" in window for f in range(1, 6)},
-                                      start=[True] * 3, use=use, amount=amount)
+                                      toggles_on=[True] * 3, use=use, amount=amount)
     assert on_at_claim == [claimed_on]
     assert [x for x in taps if x[1] == 252] == [(actions.TOGGLE_X[i], 252) for i in (2, 1, 0)][:3 - claimed_on]  # the last ON one goes first
     assert [(line["result"], line["target_reached"]) for line in lines] == [("clear", True)]
