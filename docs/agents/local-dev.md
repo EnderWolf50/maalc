@@ -88,19 +88,11 @@ Strings that must not reach public text (the game account's e-mail, local folder
 
 A doc's evidence ships with the repo, since `.local/` stays on one machine: small data the doc's numbers come from goes under `docs/perf/data/<doc>/`, an analysis worth rerunning becomes a script in `tools/` (as `tools/maafw_timeline.py`), and the doc says what stayed local (recordings, raw logs, unmasked screenshots, one-off probe scripts) instead of naming a `.local/` path the reader cannot open. Scan anything copied out with the repo's private terms first.
 
-The data itself lives in `.local/`. `uv run python tools/local_migrate.py --probe <old probe folder> --unpack <unpacked data>` shows the move (dry run); `--probe` covers the **whole** probe folder, including hidden files, loose scripts, caches, virtual environments and experimental output. `--apply` moves it to `.local/probe/`, leaves a junction at the old root, makes `.local/archive/` point to its archive and generates `.local/evidence/masks.json`. An archive migrated by the older tool stays where it is, with a link from `.local/probe/archive/`. Nested links are preserved, not copied as duplicate data. The old root keeps scripts with hardcoded legacy paths working; new work uses `local_dir("scratch", …)` or `local_dir("archive", …)` directly. Historical evidence is under `.local/probe/`; it remains private until masked.
-
-Before applying, `uv run python tools/live/queue.py status` must show no holder or waiting task for `emulator` or `bench`; check for independent writers/recordings using the source too. Wait for them to finish, rather than stopping another task. On the same drive the move is a rename; across drives it is copied and checked twice, including byte comparison, before deletion. A folder in use or written to during copying stays as it was. A destination conflict stops instead of silently claiming success. After an interrupt, rerun: the tool completes states it can prove safe and stops with the original named otherwise. Once old consumers have been updated and no running process uses the old root, `local_migrate.py --remove-links --apply` removes only recorded external compatibility links; `.local/archive/`, nested links and data remain. If an internal link still targets an old external root, removal stops and names that dependency; update it first.
+The data itself lives in `.local/`. The probe folder and the unpacked game data that once lived outside the repo were moved into `.local/probe/` and `.local/unpack/` (2026-10-19), and the links left at their old roots were removed (2026-11-12), so a script that still names an old root no longer finds it; work uses `local_dir("scratch", …)` or `local_dir("archive", …)`. Historical evidence is under `.local/probe/`; it remains private until masked. `.local/evidence/masks.json` and its templates were made once, during that move; they are kept, not regenerated.
 
 ## Keeping disk space
 
-Three links tie the evidence folders together; they are junctions, so a size listing that follows links counts the data twice (`local_clean.py usage` skips them):
-
-- `.local/archive` points to `.local/probe/archive`.
-- The old probe root that `local_migrate.py --apply` left behind points to `.local/probe`.
-- The old unpacked-data folder it left behind points to `.local/unpack`.
-
-`local_migrate.py` records where those two old roots are.
+One link ties the evidence folders together: `.local/archive` is a junction to `.local/probe/archive`, so a size listing that follows links counts the data twice (`local_clean.py usage` skips it).
 
 Retention: an archive folder older than 7 days whose `INDEX.md` rows name only closed issues and PRs can be deleted with `prune`; a folder with no `INDEX.md` row, or with a number gh does not return, stays. A recording above 720p can be re-encoded with `shrink`. `recordings/` is never pruned. Before deleting or re-encoding, ask the chat that runs the live tests and owns the open issues which folders keep their original files (`shrink --keep <folder>`), and read the dry run first. `recordings/` holds hard links, not copies, so one file counts once.
 
