@@ -36,7 +36,6 @@ import settlement
 import shop
 from gifts import effective, main_keyword, purchases, recipe_fusion, resolve_list, state, want_kind
 from ocrtext import compact, digits, floor_number, has, normalize
-from settings import NOTES as settings_notes
 from settings import SettingsError, data_dir, gift_tables, load_settings, vestige_ids
 from team_queue import migrate_cursor, pick_team, requeue, resumed_team
 
@@ -1626,8 +1625,6 @@ class PlanRun(CustomAction):
         except SettingsError as e:
             log(f"stop: {e}")
             return False
-        for note in settings_notes:  # what migrating an older file dropped (it stays on disk until the GUI saves it)
-            log(note)
         if not any(t["enabled"] for t in settings["teams"]):
             return finish(context, "no enabled team")
         hsv_v = screen(context)[285:297].max(axis=2)  # V of HSV

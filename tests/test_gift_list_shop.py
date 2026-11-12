@@ -22,12 +22,12 @@ def test_a_fusion_taps_only_the_drop_gifts_it_knows(context, monkeypatch):
     assert fused and ok and taps == [0, 0, 0, 1, 1, 1]
 
 
-def test_a_migrated_list_keeps_its_main_keywords_fusion_only_tier_iv(context, monkeypatch):
-    # The HARD live acceptance of #310: a version 10 Poise team's list fused its Clear Mirror, Calm Water (9070, a tier IV no
-    # shop sells and no recipe makes, #332) into a tier III. The old team kept every Poise gift; so does its list, and every
-    # keywordless gift (One with the Blade 9228 is the same kind). Tremor III + Pierce III + Sinking II still make a IV.
-    lists, _, _ = settings.gift_lists_from_v10([{"keyword": "Poise", "keep_keywords": [], "keywordless": "keep", "keep_gifts": []}])
-    fused, taps, ok = fusion_taps(context, monkeypatch, {"list": lists[0]}, ("Poise", 4, 9070), ("Keywordless", 3, 9228),
+def test_a_list_that_keeps_its_main_keyword_keeps_its_fusion_only_tier_iv(context, monkeypatch):
+    # The HARD live acceptance of #310: a Poise team's list fused its Clear Mirror, Calm Water (9070, a tier IV no shop sells
+    # and no recipe makes, #332) into a tier III. A list that keeps every Poise gift and every keywordless gift (One with the
+    # Blade 9228 is the same kind) keeps both. Tremor III + Pierce III + Sinking II still make a IV.
+    kept = [g["id"] for g in settings.keyword_gifts() if g["keyword"] in ("Poise", "Keywordless")]
+    fused, taps, ok = fusion_taps(context, monkeypatch, {"list": wants(keep=kept)}, ("Poise", 4, 9070), ("Keywordless", 3, 9228),
                                   ("Tremor", 3), ("Pierce", 3), ("Sinking", 2))
     assert fused and ok and taps == [0, 0, 1, 1, 1]
 

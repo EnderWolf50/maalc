@@ -1,7 +1,6 @@
 """Mounting Trials after a boss (#381, spec 03 section 12): the trials.yaml table, telling a card's trial, its score,
 and PickGift on a boss page."""
 
-import json
 import re
 import sys
 from pathlib import Path
@@ -354,18 +353,6 @@ def test_a_coin_power_trial_taken_counts_toward_the_run_s_budget(context, monkey
     taps, logs = boss_page(context, monkeypatch, [("Huge Gift Sack", False, 2, "Brutality", ["Plus Coin Power +1, Minus", "Coin Power -1"])], 4)
     assert actions.PickGift().run(context, None)
     assert actions.RUN["trial_coins"] == 2 and logs[-1] == "trials: 2 Coin Power units this run"
-
-
-def test_a_run_logs_the_trial_overrides_the_settings_migration_emptied(context, monkeypatch, tmp_path):
-    import test_settings
-    (tmp_path / "config").mkdir()
-    (tmp_path / "config" / "settings.json").write_text(json.dumps(test_settings.V15), encoding="utf-8")  # ROOT: context's
-    logs = []
-    monkeypatch.setattr(actions, "log", logs.append)
-    monkeypatch.setattr(actions.settlement, "runs_done", lambda done, limit: True)
-    monkeypatch.setattr(actions, "finish", lambda context, reason: True)
-    assert actions.PlanRun().run(context, None)
-    assert logs == ["settings version 16: 1 trial risk override (0-5) emptied, trials score in pt now (#381)"]
 
 
 def test_the_overrides_tab_s_note_gives_the_table_s_numbers():

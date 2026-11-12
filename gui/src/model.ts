@@ -109,7 +109,7 @@ export function enhanceAll(v: StarlightValues, plus: 1 | 2) {
 
 /** The E.G.O Gift Search page's tabs, left to right (agent/settings.schema.json gift_search keywords). */
 export const SEARCH_TABS: string[] = schema.$defs.gift.properties.keyword.enum;
-/** Vestiges, tier I-V in this order (#161): the old keep_gifts named them; ids 9991-9995, from data/gift_recipes.json. */
+/** Vestiges, tier I-V in this order (#161): ids 9991-9995, from data/gift_recipes.json. */
 export const VESTIGES = recipes.vestiges;
 /** Spec 04 section 9: the gifts the search page offers, in page order; ids, tiers and English names from the game's
  * static data, Chinese names from LLC (data/gift_search.json carries its sources and license). */
@@ -235,70 +235,6 @@ export function cleanGiftList(list: GiftList): { list: GiftList; dropped: number
 /** Whether a loaded gift list passes the schema, so cleaning it hides no schema error (the agent cleans after the schema check too). */
 const wellFormed = (l: unknown): l is GiftList => giftListCheck(l);
 
-/** The gift list a version 10 team's keep settings come to, without id and name; lost: its keep_gifts that match no gift
- * (agent/settings.py _team_gift_list). */
-function listFromV10Team(team: Record<string, unknown>): { content: Omit<GiftList, "id" | "name">; lost: number } {
-  const arr = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
-  const main = typeof team.keyword === "string" ? team.keyword : null;
-  const keptKeywords = new Set([main, ...arr(team.keep_keywords).filter((k) => typeof k === "string")]);
-  const want = new Set(SEARCH_GIFTS.filter((g) => g.keyword === main).map((g) => g.id));
-  const keep = new Set([...SEARCH_GIFTS, ...RECIPE_GIFTS].filter((g) => keptKeywords.has(g.keyword) || g.keyword === "Keywordless").map((g) => g.id));
-  let lost = 0;
-  for (const raw of arr(team.keep_gifts)) {
-    const kept = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
-    const found = SEARCH_GIFTS.find((g) => g.keyword === kept.keyword && g.tier === kept.tier && g.en === kept.name)?.id
-      ?? VESTIGES.find((v) => v.en === kept.name)?.id;
-    if (found) keep.add(found);
-    else lost++;
-  }
-  const byId = (a: number, b: number) => a - b;
-  return {
-    content: {
-      order: main && GIFT_KEYWORDS.includes(main) ? [main, ...GIFT_KEYWORDS.filter((k) => k !== main)] : [...GIFT_KEYWORDS],
-      want: [...want].sort(byId), keep: [...keep].filter((i) => !want.has(i)).sort(byId), gorder: defaultGorder(),
-      fusion_condition: ("fusion_condition" in team ? team.fusion_condition : "any") as string, // a bad value is for the checks
-    },
-    lost,
-  };
-}
-
-/** Teams before version 14 to version 14 (agent/settings.py gift_lists_from_v10): a list per team, teams that keep the same share the
- * first one's list, named after the first team, "Name 2" when the name is taken. Returns each team's list id too. */
-function giftListsFromV10(teams: Record<string, unknown>[]) {
-  const lists: GiftList[] = [], ids: string[] = [];
-  let dropped = 0;
-  for (const team of teams) {
-    const { content, lost } = listFromV10Team(team);
-    dropped += lost;
-    let list = lists.find((g) => (Object.keys(content) as (keyof typeof content)[]).every((k) => JSON.stringify(g[k]) === JSON.stringify(content[k])));
-    if (!list) {
-      const base = typeof team.name === "string" && team.name ? team.name : "Gift list";
-      list = { id: `gift-list-${lists.length + 1}`, name: freeName(base, lists.map((g) => g.name)), ...content };
-      lists.push(list);
-    }
-    ids.push(list.id);
-  }
-  return { lists, ids, dropped };
-}
-
-function migrateV10(d: Record<string, unknown>) {
-  const teams = Array.isArray(d.teams) ? d.teams : [];
-  const objects = teams.filter((t): t is Record<string, unknown> => !!t && typeof t === "object" && !Array.isArray(t));
-  const { lists, ids, dropped } = giftListsFromV10(objects);
-  const gift_list = new Map(objects.map((t, i) => [t, ids[i]]));
-  return {
-    data: {
-      ...d, gift_lists: lists,
-      teams: Array.isArray(d.teams) ? d.teams.map((t) => {
-        if (!gift_list.has(t)) return t;
-        const { keyword, keep_keywords, keywordless, keep_gifts, fusion_condition, ...rest } = t;
-        return { ...rest, gift_list: gift_list.get(t) };
-      }) : d.teams,
-    },
-    dropped,
-  };
-}
-
 /** Spec 04 section 13: a gift list as text for a friend, without the id. */
 export const exportGiftList = (list: GiftList) => {
   const { id, ...rest } = list;
@@ -368,7 +304,6 @@ const newLuxcavation = (count = 1): Luxcavation =>
   ({ ...defaultsOf(schema.$defs.luxcavation.properties), count }) as unknown as Luxcavation;
 
 const clone = <T,>(v: T): T => structuredClone(v);
-const defaultSkillReplacement = (): SkillReplacement => clone(TEAM.skill_replacement.default) as SkillReplacement;
 const defaultsOf = (props: Record<string, object>) =>
   Object.fromEntries(Object.entries(props).map(([k, v]) => [k, clone((v as { default?: unknown }).default)]));
 
@@ -405,139 +340,26 @@ export function freeName(base: string, taken: string[]) {
   }
 }
 
-/** MIGRATIONS[n] turns a version-n file into a version-(n + 1) file; keep in step with agent/settings.py. */
-const MIGRATIONS: Record<number, (d: Record<string, unknown>) => Record<string, unknown>> = {
-  // Version 2 adds teams[].guard_turns (#52); its short orders need nothing.
-  1: (d) => withTeamDefault(d, { guard_turns: 0 }),
-  // Version 3 adds teams[].gift_search (#54), off.
-  2: (d) => withTeamDefault(d, { gift_search: { enabled: false, gifts: [] } }),
-  // Version 4 adds run.theme_pack_refresh (#41), "all" as before.
-  3: (d) => (d.run && typeof d.run === "object" ? { ...d, run: { theme_pack_refresh: "all", ...d.run } } : d),
-  // Version 5 adds teams[].allow_white_gossypium (#90), on as before.
-  4: (d) => withTeamDefault(d, { allow_white_gossypium: true }),
-  // Version 6 (#137): runs 0 (no limit) becomes null, off; hard_from_floor 0 (the whole run HARD) becomes 1,
-  // which says the same.
-  5: (d) => {
-    const run = d.run && typeof d.run === "object" ? (d.run as Record<string, unknown>) : null;
-    const teams = Array.isArray(d.teams) ? d.teams : null;
-    return {
-      ...d,
-      run: run && run.runs === 0 ? { ...run, runs: null } : d.run,
-      teams: teams ? teams.map((t) => (t && typeof t === "object" && t.hard_from_floor === 0
-        ? { ...t, hard_from_floor: 1 } : t)) : d.teams,
-    };
-  },
-  // Version 7 adds what the shop keeps out of fusions and sales (#77, #161), as before: no other keyword, keywordless
-  // kept, no gift; tier V and vestiges never sold.
-  6: (d) => withTeamDefault(d, { keep_keywords: [], keywordless: "keep", keep_gifts: [], sell_max_tier: 4, sell_vestiges: false }),
-  // Version 8 adds run.auto_accept_terms and run.auto_download (#85, #86), on: the user's decision (2026-10-21).
-  7: (d) => (d.run && typeof d.run === "object" ? { ...d, run: { auto_accept_terms: true, auto_download: true, ...d.run } } : d),
-  // Version 9 weighs theme packs (#240): prefer / neutral / avoid become 5 / 0 / -5, threshold 0, unlisted 0, event packs
-  // by weight: the same picks as before. A bad mark stays as it is for the checks to name.
-  8: (d) => ({
-    ...d,
-    theme_pack_plans: Array.isArray(d.theme_pack_plans) ? d.theme_pack_plans.map((p) => {
-      if (!p || typeof p !== "object" || !p.marks || typeof p.marks !== "object") return p;
-      const { marks, ...rest } = p as { marks: Record<string, unknown> };
-      const weights = Object.fromEntries(Object.entries(marks).map(([k, v]) => [k, MARK_WEIGHTS[v as string] ?? v]));
-      return { ...rest, weights, threshold: 0, unlisted: 0, event_packs: "weight" };
-    }) : d.theme_pack_plans,
-  }),
-  // Version 10 adds teams[].fusion_condition (#263), "any": the shop fuses as before.
-  9: (d) => withTeamDefault(d, { fusion_condition: "any" }),
-  // Version 11 adds run.keep_dismissed_screens (#244), on.
-  10: (d) => (d.run && typeof d.run === "object" ? { ...d, run: { keep_dismissed_screens: true, ...d.run } } : d),
-  // Version 12 adds the daily tasks (#362): luxcavation.exp and .thread (#366, #368: one win for EXP, three for Thread,
-  // no team picked yet, no retries) and charge_enkephalin (#373: no Lunacy charges).
-  11: (d) => {
-    const lux = d.luxcavation ?? {};
-    const out = { charge_enkephalin: { count: 0 }, ...d };
-    return lux && typeof lux === "object" ? { ...out, luxcavation: { exp: newLuxcavation(), thread: newLuxcavation(3), ...lux } } : out;
-  },
-  // Version 13 adds luxcavation.<task>.consecutive (#375), on.
-  12: (d) => {
-    const lux = d.luxcavation as Record<string, unknown> | undefined;
-    if (!lux || typeof lux !== "object") return d;
-    const fixed = Object.fromEntries(Object.entries(lux).map(([k, o]) => [k, o && typeof o === "object" ? { consecutive: true, ...o } : o]));
-    return { ...d, luxcavation: fixed };
-  },
-  // Version 14 (#291) moves the shop's keep settings from the teams to gift lists: a list per team, teams that kept the same
-  // share one; keyword (the list's order starts with it), keep_keywords, keywordless, keep_gifts and fusion_condition go. A
-  // keywordless gift is always kept now.
-  13: (d) => {
-    const { data, dropped } = migrateV10(d);
-    v10Dropped = dropped;
-    return data;
-  },
-  // Version 15 splits a team's shop_refresh_limit N into N keyword refreshes and no normal one (the user, 2026-10-30): the
-  // shop used the keyword refresh first, so it spends no more than before.
-  14: (d) => ({
-    ...d,
-    teams: Array.isArray(d.teams) ? d.teams.map((t) => {
-      if (!t || typeof t !== "object" || Array.isArray(t)) return t; // left to the schema check, as the agent does
-      const { shop_refresh_limit: limit = 0, ...rest } = t as Record<string, unknown>;
-      return { shop_refresh_keyword: limit, shop_refresh_normal: 0, ...rest };
-    }) : d.teams,
-  }),
-  // Version 16 scores trials in pt, 1 pt = the enemy's Clash Power +1 (#381): a 0-5 risk of trial_risk_overrides means
-  // nothing on that scale, so the list is emptied and counted.
-  15: (d) => {
-    if (!Array.isArray(d.trial_risk_overrides) || !d.trial_risk_overrides.length) return d;
-    v15Trials = d.trial_risk_overrides.length;
-    return { ...d, trial_risk_overrides: [] };
-  },
-  // Version 17 drops teams[].trial_risk_weight (the user, 2026-10-31): a trial's pt counts one gift point for every team.
-  16: (d) => ({
-    ...d,
-    teams: Array.isArray(d.teams) ? d.teams.map((t) => {
-      if (!t || typeof t !== "object" || Array.isArray(t)) return t; // left to the schema check, as the agent does
-      const { trial_risk_weight: _, ...rest } = t as Record<string, unknown>;
-      return rest;
-    }) : d.teams,
-  }),
-  // Version 18 adds luxcavation.<task>.mode (#431), daily (the user, 2026-11-05); count stays for count mode.
-  17: (d) => {
-    const lux = d.luxcavation as Record<string, unknown> | undefined;
-    if (!lux || typeof lux !== "object") return d;
-    const fixed = Object.fromEntries(Object.entries(lux).map(([k, o]) => [k, o && typeof o === "object" ? { mode: "daily", ...o } : o]));
-    return { ...d, luxcavation: fixed };
-  },
-  // Version 19 adds teams[].skill_replacement (#454): no sinner listed, so every deck stays the game's 3/2/1 and the shop plays
-  // as before; ID Skill Search off and paid in Cost.
-  18: (d) => withTeamDefault(d, { skill_replacement: defaultSkillReplacement() }),
-  // Version 20 adds run.target_floor (#385): 5, the floors the bot has always played.
-  19: (d) => (d.run && typeof d.run === "object" && !Array.isArray(d.run) ? { ...d, run: { target_floor: 5, ...d.run } } : d),
-};
-/** The version 10 keep_gifts the last migration found no gift for (parseSettings returns it). */
-let v10Dropped = 0;
-/** The version 15 trial risk overrides the last migration emptied (parseSettings returns it). */
-let v15Trials = 0;
+/** v0.1.0's, the first release: the versions before it were the developers' own files, and their migrations went (#653). */
+export const OLDEST_VERSION = 20;
+/** MIGRATIONS[n] turns a version-n file into a version-(n + 1) file, one for each n from OLDEST_VERSION up; keep in step with
+ * agent/settings.py. */
+export const MIGRATIONS: Record<number, (d: Record<string, unknown>) => Record<string, unknown>> = {};
 
-const MARK_WEIGHTS: Record<string, number> = { prefer: 5, neutral: 0, avoid: -5 };
-
-function withTeamDefault(d: Record<string, unknown>, field: Record<string, unknown>) {
-  return {
-    ...d,
-    teams: Array.isArray(d.teams)
-      ? d.teams.map((t) => (t && typeof t === "object" && !Array.isArray(t) ? { ...clone(field), ...t } : t)) : d.teams,
-  };
-}
-
-/** Parse a settings file; an older version is migrated and the caller writes it back (spec 04 section 2). */
-export function parseSettings(text: string): { data: Settings; migrated: boolean; dropped: number; unknown: number; trials: number } {
+/** Parse a settings file; an older version is migrated and the caller writes it back, one without a migration refused
+ * (spec 04 section 2). */
+export function parseSettings(text: string): { data: Settings; migrated: boolean; unknown: number } {
   let data = JSON.parse(text);
   let version = data?.version;
   if (!Number.isInteger(version)) throw new Error(`version must be an integer, got ${JSON.stringify(version)}`);
   if (version > VERSION) throw new Error(`settings version ${version} is newer than this GUI supports (${VERSION}); update maalc`);
   const migrated = version < VERSION;
-  v10Dropped = 0;
-  v15Trials = 0;
   for (; version < VERSION; version++) {
-    if (!MIGRATIONS[version]) throw new Error(`settings version ${version} cannot be migrated`);
+    if (!MIGRATIONS[version]) { // the agent says the same (agent/settings.py migrate)
+      throw new Error(`settings version ${version} is too old: maalc reads version ${OLDEST_VERSION} and later; start a new settings file in the settings GUI`);
+    }
     data = { ...MIGRATIONS[version](data), version: version + 1 };
   }
-  const dropped = v10Dropped;
-  const trials = v15Trials;
   const lists = Array.isArray(data.gift_lists) ? data.gift_lists : [];
   let unknown = 0; // ids in a list that no data file has (a new season): dropped, the caller warns
   data = {
@@ -549,7 +371,7 @@ export function parseSettings(text: string): { data: Settings; migrated: boolean
       return cleaned.list;
     }),
   };
-  return { data, migrated, dropped, unknown, trials };
+  return { data, migrated, unknown };
 }
 
 /** The ids `after` moved to its end, in order, when that explains every difference from `before` (the Agent moves a

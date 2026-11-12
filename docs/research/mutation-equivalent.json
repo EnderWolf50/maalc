@@ -12,10 +12,6 @@
  "shop:584:12:`break` -> `continue`": "cost 夠了之後不再變，後面每個飾品都碰到同一個檢查而被跳過",
  "pack_cover:46:19:`1` -> `2`": "lru_cache 的大小：只影響快取留多少，不影響回傳值",
  "luxcavation:56:21:`>` -> `>=`": "target == now 在上一行已經回傳 []，這裡 target 不會等於 now",
- "settings:76:12:call deleted": "第 14 版遷移（_team_gift_list）用同樣的預設值 [] 讀 keep_keywords，接著把它刪掉",
- "settings:77:12:call deleted": "第 14 版遷移不讀 keywordless（Keywordless 一律保留），接著把它刪掉",
- "settings:78:12:call deleted": "第 14 版遷移（_team_gift_list）用同樣的預設值 [] 讀 keep_gifts，接著把它刪掉",
- "settings:111:12:call deleted": "第 14 版遷移（_team_gift_list）用同樣的預設值 \"any\" 讀 fusion_condition，接著把它刪掉",
- "settings:381:12:`return x` -> `return None`": "唯一的呼叫端（team_queue._reorder）只看真假，None 與 False 一樣是假",
- "settings:480:22:`5` -> `6`": "settings.schema.json 的 target_floor 只能是 5、10、15，schema 錯誤時不跑這段交叉檢查"
+ "settings:144:12:`return x` -> `return None`": "唯一的呼叫端（team_queue._reorder）只看真假，None 與 False 一樣是假",
+ "settings:243:22:`5` -> `6`": "settings.schema.json 的 target_floor 只能是 5、10、15，schema 錯誤時不跑這段交叉檢查"
 }

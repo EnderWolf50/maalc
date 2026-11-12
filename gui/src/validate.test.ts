@@ -3,7 +3,8 @@ import { describe, expect, test } from "vitest";
 import cases from "../../tests/settings_cases.json";
 import themePacksYaml from "../../assets/resource/base/data/theme_packs.yaml?raw";
 import {
-  SKILL_SWAPS, cleanGiftList, defaultGorder, newSettings, newTeam, parseSettings, parseThemePacks, schema, skillPlan, type GiftList,
+  MIGRATIONS, OLDEST_VERSION, SKILL_SWAPS, VERSION, cleanGiftList, newSettings, newTeam, parseSettings, parseThemePacks, schema,
+  skillPlan, type GiftList,
 } from "./model";
 import { pyRepr, validate } from "./validate";
 
@@ -55,186 +56,20 @@ test("a new file is valid without a team (#364: only MirrorDungeon asks for one)
   expect(s.teams.map((x) => x.game_team)).toEqual([1, 2]);
 });
 
-/** valid10 as version 13 wrote it: the daily tasks and keep_dismissed_screens are in, the teams still keep the shop's settings. */
-function asV13() {
-  const old = structuredClone(cases.valid10) as Record<string, unknown> & { run: Record<string, unknown> };
-  old.version = 13;
-  old.run.keep_dismissed_screens = true;
-  old.luxcavation = {
-    exp: { count: 1, team: null, retries: 0, consecutive: true }, thread: { count: 3, team: null, retries: 0, consecutive: true },
-  };
-  old.charge_enkephalin = { count: 0 };
-  return old;
-}
-
-test("parseSettings refuses newer and unmigratable versions", () => {
+test("parseSettings refuses a newer version", () => {
   expect(() => parseSettings('{"version": 21}')).toThrow("newer");
-  expect(() => parseSettings('{"version": 0}')).toThrow("cannot be migrated");
 });
 
-test("version 1 gets guard turns off", () => {
-  const old = structuredClone(cases.valid10) as Record<string, unknown> & { teams: Record<string, unknown>[] };
-  for (const t of old.teams) delete t.guard_turns;
-  const { data, migrated } = parseSettings(JSON.stringify({ ...old, version: 1 }));
-  expect(migrated).toBe(true);
-  expect(data.teams.map((t) => t.guard_turns)).toEqual([0, 0]);
-  expect(validate(data)).toEqual([]);
+test.each(cases.too_old)("parseSettings refuses version $version as too old, in the agent's words (tests/settings_cases.json too_old)", ({ version, error }) => {
+  expect(() => parseSettings(JSON.stringify({ ...cases.valid, version }))).toThrow(new Error(error));
 });
 
-test("version 2 gets gift search off", () => {
-  const old = structuredClone(cases.valid10) as Record<string, unknown> & { teams: Record<string, unknown>[] };
-  for (const t of old.teams) delete t.gift_search;
-  const { data, migrated } = parseSettings(JSON.stringify({ ...old, version: 2 }));
-  expect(migrated).toBe(true);
-  expect(data.teams.map((t) => t.gift_search)).toEqual([{ enabled: false, gifts: [] }, { enabled: false, gifts: [] }]);
-  expect(validate(data)).toEqual([]);
-});
-
-test("version 3 refreshes all-avoid theme pack pages as before", () => {
-  const old = structuredClone(cases.valid10) as Record<string, unknown> & { run: Record<string, unknown> };
-  delete old.run.theme_pack_refresh;
-  const { data, migrated } = parseSettings(JSON.stringify({ ...old, version: 3 }));
-  expect(migrated).toBe(true);
-  expect(data.run.theme_pack_refresh).toBe("all");
-  expect(validate(data)).toEqual([]);
-});
-
-test("version 4 teams may hold White Gossypium as before", () => {
-  const old = structuredClone(cases.valid10) as Record<string, unknown> & { teams: Record<string, unknown>[] };
-  for (const t of old.teams) delete t.allow_white_gossypium;
-  const { data, migrated } = parseSettings(JSON.stringify({ ...old, version: 4 }));
-  expect(migrated).toBe(true);
-  expect(data.teams.map((t) => t.allow_white_gossypium)).toEqual([true, true]);
-  expect(validate(data)).toEqual([]);
-});
-
-test("version 5 zeros become switches", () => {
-  const old = structuredClone(cases.valid10) as Record<string, unknown> & { run: Record<string, unknown>; teams: Record<string, unknown>[] };
-  old.run.runs = 0;
-  old.teams[0].hard_from_floor = 0;
-  const { data, migrated } = parseSettings(JSON.stringify({ ...old, version: 5 }));
-  expect(migrated).toBe(true);
-  expect(data.run.runs).toBe(null); // no run limit
-  expect(data.teams.map((t) => t.hard_from_floor)).toEqual([1, 3]); // 0 was the whole run HARD: from floor 1
-  expect(validate(data)).toEqual([]);
-});
-
-test("version 6 keeps what the shop kept before", () => {
-  const old = structuredClone(cases.valid10) as Record<string, unknown> & { teams: Record<string, unknown>[] };
-  for (const t of old.teams) for (const k of ["keep_keywords", "keywordless", "keep_gifts", "sell_max_tier", "sell_vestiges"]) delete t[k];
-  const { data, migrated } = parseSettings(JSON.stringify({ ...old, version: 6 }));
-  expect(migrated).toBe(true);
-  // Nothing else kept: the lists want the main keyword's gifts and keep the rest of it and the keywordless gifts (#291).
-  expect(data.teams.map((t) => [t.sell_max_tier, t.sell_vestiges])).toEqual([[4, false], [4, false]]);
-  expect(data.gift_lists.map((l) => l.order[0])).toEqual(["Burn", "Bleed"]);
-  expect(data.gift_lists.map((l) => l.keep.includes(9273))).toEqual([true, true]); // a keywordless gift
-  expect(validate(data)).toEqual([]);
-});
-
-test("version 11 gets the daily tasks: both Luxcavations with no team picked, no Lunacy charges", () => {
-  const old = asV13();
-  delete old.luxcavation;
-  delete old.charge_enkephalin;
-  const { data, migrated } = parseSettings(JSON.stringify({ ...old, version: 11 }));
-  expect(migrated).toBe(true);
-  expect(data.luxcavation).toEqual({
-    exp: { mode: "daily", count: 1, team: null, retries: 0, consecutive: true },
-    thread: { mode: "daily", count: 3, team: null, retries: 0, consecutive: true },
-  });
-  expect(data.charge_enkephalin).toEqual({ count: 0 });
-  expect(validate(data)).toEqual([]);
-});
-
-test("version 13 turns the teams' keep settings into gift lists, the daily tasks left as they were (#291)", () => {
-  const old = asV13() as unknown as { luxcavation: { thread: { count: number } } };
-  old.luxcavation.thread.count = 2;
-  const { data, migrated, dropped } = parseSettings(JSON.stringify(old));
-  expect(migrated).toBe(true);
-  expect(dropped).toBe(0);
-  expect(data.luxcavation.thread.count).toBe(2);
-  expect(data.teams.map((t) => t.gift_list)).toEqual(["gift-list-1", "gift-list-2"]);
-  expect(data.gift_lists.map((l) => l.order[0])).toEqual(["Burn", "Bleed"]);
-  for (const t of data.teams) for (const k of ["keyword", "keep_keywords", "keywordless", "keep_gifts", "fusion_condition"]) expect(t).not.toHaveProperty(k);
-  expect(validate(data)).toEqual([]);
-});
-
-test("version 14's shop refresh limit becomes as many keyword refreshes and no normal one (the user, 2026-10-30)", () => {
-  const old = structuredClone(cases.valid) as unknown as { version: number; teams: Record<string, unknown>[] };
-  old.version = 14;
-  old.teams.forEach((t, i) => {
-    delete t.shop_refresh_keyword;
-    delete t.shop_refresh_normal;
-    t.shop_refresh_limit = [3, 0][i];
-  });
-  const { data, migrated } = parseSettings(JSON.stringify(old));
-  expect(migrated).toBe(true);
-  expect(data.teams.map((t) => [t.shop_refresh_keyword, t.shop_refresh_normal])).toEqual([[3, 0], [0, 0]]);
-  for (const t of data.teams) expect(t).not.toHaveProperty("shop_refresh_limit");
-  expect(validate(data)).toEqual([]);
-});
-
-test("version 15's 0-5 trial risks are emptied and counted (#381)", () => {
-  const old = structuredClone(cases.valid) as unknown as { version: number; teams: Record<string, unknown>[]; trial_risk_overrides: unknown[] };
-  old.version = 15;
-  old.teams.forEach((t) => { t.trial_risk_weight = "high"; });
-  old.trial_risk_overrides = [{ trial: "Growth I", risk: 3 }, { trial: "Growth II", risk: 0 }];
-  const { data, migrated, trials } = parseSettings(JSON.stringify(old));
-  expect(migrated).toBe(true);
-  expect(trials).toBe(2);
-  expect(data.trial_risk_overrides).toEqual([]);
-  expect(validate(data)).toEqual([]);
-  expect(parseSettings(JSON.stringify({ ...old, trial_risk_overrides: [] })).trials).toBe(0);
-  expect(parseSettings(JSON.stringify(cases.valid)).trials).toBe(0);
-});
-
-test("version 16 drops each team's trial risk weight, with nothing to count (the user, 2026-10-31)", () => {
-  const old = structuredClone(cases.valid) as unknown as { version: number; teams: Record<string, unknown>[] };
-  old.version = 16;
-  old.teams.forEach((t, i) => { t.trial_risk_weight = ["high", "low"][i]; });
-  const { data, migrated, trials } = parseSettings(JSON.stringify(old));
-  expect(migrated).toBe(true);
-  expect(trials).toBe(0);
-  for (const t of data.teams) expect(t).not.toHaveProperty("trial_risk_weight");
-  expect(validate(data)).toEqual([]);
-  expect(newTeam(1, "隊伍 1")).not.toHaveProperty("trial_risk_weight");
-});
-
-test("version 19 plays the 5 floors it always did, and keeps a target floor the file has (#385)", () => {
-  const old = structuredClone(cases.valid) as unknown as { version: number; run: Record<string, unknown> };
-  old.version = 19;
-  delete old.run.target_floor;
-  const { data, migrated } = parseSettings(JSON.stringify(old));
-  expect(migrated).toBe(true);
-  expect(data.version).toBe(20);
-  expect(data.run.target_floor).toBe(5);
-  expect(validate(data)).toEqual([]);
-  old.run.target_floor = 10;
-  expect(parseSettings(JSON.stringify(old)).data.run.target_floor).toBe(10);
+test("every version from the oldest has its migration", () => {
+  expect(Object.keys(MIGRATIONS).map(Number)).toEqual(Array.from({ length: VERSION - OLDEST_VERSION }, (_, i) => OLDEST_VERSION + i));
 });
 
 /** A team's skill replacement as a new team has it: no sinner listed, so every deck stays 3/2/1; ID Skill Search off, paid in Cost. */
 const DEFAULT_SKILLS = cases.skill_replacement_default;
-
-test("version 18 teams list no sinner to replace, each team with a copy of its own (#454, the user, 2026-11-06)", () => {
-  const old = structuredClone(cases.valid) as unknown as { version: number; teams: Record<string, unknown>[] };
-  old.version = 18;
-  for (const t of old.teams) delete t.skill_replacement;
-  const { data, migrated } = parseSettings(JSON.stringify(old));
-  expect(migrated).toBe(true);
-  expect(DEFAULT_SKILLS).toEqual({ sinners: [], id_skill_search: { enabled: false, pay: "cost" } });
-  expect(data.teams.map((t) => t.skill_replacement)).toEqual([DEFAULT_SKILLS, DEFAULT_SKILLS]);
-  expect(validate(data)).toEqual([]);
-  expect(data.teams[0].skill_replacement.sinners).not.toBe(data.teams[1].skill_replacement.sinners);
-});
-
-test("version 18 keeps a skill replacement the file already has, and older files come to the default", () => {
-  const old = structuredClone(cases.valid) as unknown as { version: number };
-  old.version = 18;
-  expect(parseSettings(JSON.stringify(old)).data.teams[1].skill_replacement).toEqual(cases.valid.teams[1].skill_replacement);
-  const v10 = parseSettings(JSON.stringify(cases.valid10)).data;
-  expect(v10.teams.map((t) => t.skill_replacement)).toEqual([DEFAULT_SKILLS, DEFAULT_SKILLS]);
-  expect(validate(v10)).toEqual([]);
-});
 
 test("a new team lists no sinner to replace (#454), and the swaps are data/shop.yaml's three", () => {
   expect(newTeam(1, "隊伍 1").skill_replacement).toEqual(DEFAULT_SKILLS);
@@ -276,100 +111,6 @@ describe("a skill target (#264's rule: a swap a→b counts only while skill a is
   ])("%o cannot be reached: %o, and needs no swap", (target, faults) => {
     expect(skillPlan(target)).toEqual({ untouched: false, faults, need: [] });
   });
-});
-
-test("version 17 runs both Luxcavations in daily mode and keeps their counts (#431, the user, 2026-11-05)", () => {
-  const old = structuredClone(cases.valid) as unknown as { version: number; luxcavation: Record<string, Record<string, unknown>> };
-  old.version = 17;
-  for (const o of Object.values(old.luxcavation)) delete o.mode;
-  old.luxcavation.thread.count = 5;
-  const { data, migrated } = parseSettings(JSON.stringify(old));
-  expect(migrated).toBe(true);
-  expect([data.luxcavation.exp, data.luxcavation.thread].map((o) => [o.mode, o.count])).toEqual([["daily", 1], ["daily", 5]]);
-  expect(validate(data)).toEqual([]);
-});
-
-test("version 12 fights the Luxcavation wins as Consecutive Battles, a switch each task keeps as it was set (#375)", () => {
-  const old = asV13() as unknown as { luxcavation: Record<string, Record<string, unknown>> };
-  delete old.luxcavation.exp.consecutive;
-  old.luxcavation.thread.consecutive = false;
-  const { data, migrated } = parseSettings(JSON.stringify({ ...old, version: 12 }));
-  expect(migrated).toBe(true);
-  expect([data.luxcavation.exp.consecutive, data.luxcavation.thread.consecutive]).toEqual([true, false]);
-  expect(validate(data)).toEqual([]);
-});
-
-test("version 10 keeps the dismissed screens", () => {
-  const old = structuredClone(cases.valid10) as Record<string, unknown> & { run: Record<string, unknown> };
-  delete old.run.keep_dismissed_screens;
-  const { data, migrated } = parseSettings(JSON.stringify(old));
-  expect(migrated).toBe(true);
-  expect(data.run.keep_dismissed_screens).toBe(true);
-  expect(validate(data)).toEqual([]);
-});
-
-test("version 9 fuses as before", () => {
-  const old = structuredClone(cases.valid10) as Record<string, unknown> & { teams: Record<string, unknown>[] };
-  for (const t of old.teams) delete t.fusion_condition;
-  const { data, migrated } = parseSettings(JSON.stringify({ ...old, version: 9 }));
-  expect(migrated).toBe(true);
-  expect(data.gift_lists.map((l) => l.fusion_condition)).toEqual(["any", "any"]);
-  expect(validate(data)).toEqual([]);
-});
-
-test("version 7 accepts the User Agreement and downloads", () => {
-  const old = structuredClone(cases.valid10) as Record<string, unknown> & { run: Record<string, unknown> };
-  delete old.run.auto_accept_terms;
-  delete old.run.auto_download;
-  const { data, migrated } = parseSettings(JSON.stringify({ ...old, version: 7 }));
-  expect(migrated).toBe(true);
-  expect([data.run.auto_accept_terms, data.run.auto_download]).toEqual([true, true]);
-  expect(validate(data)).toEqual([]);
-});
-
-test("version 8 theme pack marks become weights that pick as before", () => {
-  // #240: prefer / neutral / avoid -> 5 / 0 / -5, threshold 0, unlisted 0, event packs by weight.
-  const old = structuredClone(cases.valid10) as Record<string, unknown> & { theme_pack_plans: Record<string, unknown>[] };
-  old.theme_pack_plans = [{ id: "p1", name: "Mine", marks: { "Automated Factory": "avoid", "The Forgotten": "prefer", "Lake World": "neutral" } }];
-  const { data, migrated } = parseSettings(JSON.stringify({ ...old, version: 8 }));
-  expect(migrated).toBe(true);
-  expect(data.theme_pack_plans).toEqual([{
-    id: "p1", name: "Mine", weights: { "Automated Factory": -5, "The Forgotten": 5, "Lake World": 0 },
-    threshold: 0, unlisted: 0, event_packs: "weight",
-  }]);
-  expect(validate(data)).toEqual([]);
-});
-
-const sum = (ids: number[]) => ids.reduce((a, b) => a + b, 0);
-
-type MigrationCase = {
-  name: string; edits: Edit[]; teams: string[]; dropped: number;
-  lists: { id: string; name: string; order_first: string; fusion_condition: string; want_count: number; keep_count: number;
-    want_sum: number; keep_sum: number; want_has: number[]; keep_has: number[]; keep_lacks: number[] }[];
-};
-
-describe("version 10 teams become gift lists (tests/settings_cases.json migrations)", () => {
-  for (const c of cases.migrations as MigrationCase[]) {
-    test(c.name, () => {
-      const { data, migrated, dropped } = parseSettings(JSON.stringify(applyEdits(cases.valid10, c.edits)));
-      expect(migrated).toBe(true);
-      expect(dropped).toBe(c.dropped);
-      expect(data.teams.map((t) => t.gift_list)).toEqual(c.teams);
-      expect(data.gift_lists.map((l) => l.id)).toEqual(c.lists.map((l) => l.id));
-      data.gift_lists.forEach((got, i) => {
-        const want = c.lists[i];
-        expect([got.id, got.name, got.order[0], got.fusion_condition]).toEqual([want.id, want.name, want.order_first, want.fusion_condition]);
-        expect([got.want.length, got.keep.length]).toEqual([want.want_count, want.keep_count]);
-        expect([sum(got.want), sum(got.keep)]).toEqual([want.want_sum, want.keep_sum]);
-        expect(got.gorder).toEqual(defaultGorder());
-        for (const id of want.want_has) expect(got.want).toContain(id);
-        for (const id of want.keep_has) expect(got.keep).toContain(id);
-        for (const id of want.keep_lacks) expect(got.keep).not.toContain(id);
-      });
-      for (const t of data.teams) for (const k of ["keyword", "keep_keywords", "keywordless", "keep_gifts", "fusion_condition"]) expect(t).not.toHaveProperty(k);
-      expect(validate(data)).toEqual([]);
-    });
-  }
 });
 
 describe("cleanGiftList (tests/settings_cases.json clean_gift_list)", () => {
@@ -424,15 +165,6 @@ test("loading drops gift ids no data file has, fills gorder and counts them", ()
   expect([data.gift_lists[0].want, data.gift_lists[0].keep]).toEqual([[9053], [9071]]);
   expect(Object.keys(data.gift_lists[0].gorder)).toHaveLength(11); // a keyword the file lacks gets the default order
   expect(validate(data)).toEqual([]);
-});
-
-test("version 10 teams that are not objects get no list and stay for the schema check", () => {
-  const old = structuredClone(cases.valid10) as unknown as { teams: unknown[] };
-  old.teams.unshift([1]);
-  const { data } = parseSettings(JSON.stringify(old));
-  expect(data.gift_lists).toHaveLength(2); // the two real teams keep different things
-  expect(data.teams[0]).toEqual([1]);
-  expect(validate(data).some((p) => p.paths[0].startsWith("teams/0"))).toBe(true);
 });
 
 test("loading leaves ids below 1 and repeated ids to the schema check", () => {

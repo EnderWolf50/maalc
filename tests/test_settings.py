@@ -16,7 +16,7 @@ KEYWORDS = ["Burn", "Bleed", "Tremor", "Rupture", "Sinking", "Poise", "Charge", 
 ORDER = ["Yi Sang", "Faust", "Don Quixote", "Ryōshū", "Meursault", "Hong Lu",
          "Heathcliff", "Ishmael", "Rodion", "Sinclair", "Outis", "Gregor"]
 SWAPS = ["s1_s3", "s2_s3", "s1_s2"]  # data/shop.yaml skill_replacement
-# a new team and a migrated one: no sinner listed, so every deck stays the game's 3/2/1; ID Skill Search off, paid in Cost
+# a new team: no sinner listed, so every deck stays the game's 3/2/1; ID Skill Search off, paid in Cost
 # (#454); the GUI's tests read the same literal
 DEFAULT_SKILLS = json.loads((Path(__file__).parent / "settings_cases.json").read_text(encoding="utf-8"))["skill_replacement_default"]
 STARLIGHT = {"levels": ["none"] * 10, "priority": list(range(1, 11)), "convert_leftover": False}
@@ -35,17 +35,8 @@ def team(id, game_team, **kw):
     }
 
 
-def gift_list(keyword="Burn", **kw):
-    """What the version 14 migration makes of a team of this main keyword that keeps nothing else, worked out from the data
-    files on their own: the keyword's buyable gifts wanted, the rest of its gifts and every keywordless gift kept (a vestige only when keep_gifts names it)."""
-    want = sorted(g["id"] for g in SEARCH if g["keyword"] == keyword)
-    every = SEARCH + RECIPES["gifts"] + RECIPES["materials"] + RECIPES["extra_gifts"]
-    keep = {g["id"] for g in every if g["keyword"] in (keyword, "Keywordless")}
-    gorder = {k: [g["id"] for tier in (4, 3, 2, 1) for g in SOLD if g["keyword"] == k and g["tier"] == tier] for k in KEYWORDS}  # no V is sold
-    return {
-        "order": [keyword] + [k for k in KEYWORDS if k != keyword], "want": want, "keep": sorted(keep - set(want)),
-        "gorder": gorder, "fusion_condition": "any", **kw,
-    }
+# every keyword's gifts a shop may sell, the highest tier first (no V is sold): a list's gorder once loaded
+GORDER = {k: [g["id"] for tier in (4, 3, 2, 1) for g in SOLD if g["keyword"] == k and g["tier"] == tier] for k in KEYWORDS}
 
 
 def custom_skills():
@@ -87,97 +78,6 @@ VALID = {
 }
 
 
-def as_v19(valid):
-    """The same settings as version 19 wrote them: no target floor."""
-    old = copy.deepcopy(valid)
-    old["version"] = 19
-    del old["run"]["target_floor"]
-    return old
-
-
-def as_v18(valid):
-    """The same settings as version 18 wrote them: no skill replacement."""
-    old = as_v19(valid)
-    old["version"] = 18
-    for t in old["teams"]:
-        del t["skill_replacement"]
-    return old
-
-
-def as_v17(valid):
-    """The same settings as version 17 wrote them: no Luxcavation mode, count the day's target."""
-    old = as_v18(valid)
-    old["version"] = 17
-    for opts in old["luxcavation"].values():
-        del opts["mode"]
-    return old
-
-
-def as_v16(valid):
-    """The same settings as version 16 wrote them: each team's trial risk weight."""
-    old = as_v17(valid)
-    old["version"] = 16
-    for t, weight in zip(old["teams"], ("high", "low")):
-        t["trial_risk_weight"] = weight
-    return old
-
-
-def as_v15(valid):
-    """The same settings as version 15 wrote them: trial risks 0-5."""
-    old = as_v16(valid)
-    old["version"] = 15
-    old["trial_risk_overrides"] = [{"trial": "Growth I", "risk": 3}]
-    return old
-
-
-def as_v14(valid):
-    """The same settings as version 14 wrote them: one shop refresh limit, which the keyword refresh used first."""
-    old = as_v15(valid)
-    old["version"] = 14
-    for t in old["teams"]:
-        t["shop_refresh_limit"] = t.pop("shop_refresh_keyword") + t.pop("shop_refresh_normal")
-    return old
-
-
-def as_v13(valid):
-    """The same settings as version 13 wrote them: the teams keep the shop's keep settings themselves, there are no lists."""
-    old = as_v14(valid)
-    old["version"] = 13
-    del old["gift_lists"]
-    for t in old["teams"]:
-        del t["gift_list"]
-        t.update(keyword="Burn", keep_keywords=[], keywordless="keep", keep_gifts=[], fusion_condition="any")
-    return old
-
-
-def as_v10(valid):
-    """The same settings as version 10 wrote them: no daily tasks, no keep_dismissed_screens either."""
-    old = as_v13(valid)
-    old["version"] = 10
-    del old["run"]["keep_dismissed_screens"], old["luxcavation"], old["charge_enkephalin"]
-    return old
-
-
-def defaulted(data):
-    """What a file from before version 19 comes to: every team on the default skill replacement."""
-    return {**data, "teams": [{**t, "skill_replacement": DEFAULT_SKILLS} for t in data["teams"]]}
-
-
-V19 = as_v19(VALID)
-V18 = as_v18(VALID)
-V17 = as_v17(VALID)
-V16 = as_v16(VALID)
-V15 = as_v15(VALID)
-V14 = as_v14(VALID)
-CLEARED = {**VALID, "trial_risk_overrides": []}  # what an older file comes to: its 0-5 trial risks do not carry over (#381)
-V13 = as_v13(VALID)
-V10 = as_v10(VALID)
-# What migrating V10 gives: both teams keep nothing but Burn, so they share one list, named after the first team.
-MIGRATED = {**CLEARED, "gift_lists": [{"id": "gift-list-1", "name": "Team a", **gift_list()}],
-            "teams": [{**t, "gift_list": "gift-list-1", "skill_replacement": DEFAULT_SKILLS} for t in VALID["teams"]]}
-VALID_FROM_ZEROS = {**MIGRATED, "run": {**VALID["run"], "runs": None}}  # version 5's 0 run limit migrated
-
-
 def load(tmp_path, data):
     (tmp_path / "config").mkdir(exist_ok=True)
     (tmp_path / "config" / "settings.json").write_text(json.dumps(data), encoding="utf-8")
@@ -190,24 +90,16 @@ def errors(tmp_path, data):
     return e.value.errors
 
 
-def edited(fn, base=VALID):
-    data = copy.deepcopy(base)
+def edited(fn):
+    data = copy.deepcopy(VALID)
     fn(data)
     return data
-
-
-def edited10(fn):
-    return edited(fn, V10)
-
-
-def edited13(fn):
-    return edited(fn, V13)
 
 
 def test_valid_settings_load(tmp_path):
     loaded = load(tmp_path, VALID)
     assert {**loaded, "gift_lists": None} == {**VALID, "gift_lists": None}
-    assert loaded["gift_lists"] == [{**VALID["gift_lists"][0], "gorder": {**gift_list()["gorder"], "Burn": [9071, 9053] + [i for i in gift_list()["gorder"]["Burn"] if i not in (9071, 9053)]}}]
+    assert loaded["gift_lists"] == [{**VALID["gift_lists"][0], "gorder": {**GORDER, "Burn": [9071, 9053] + [i for i in GORDER["Burn"] if i not in (9071, 9053)]}}]
 
 
 def test_loading_drops_ids_no_data_file_has_and_fills_gorder(tmp_path):
@@ -216,7 +108,7 @@ def test_loading_drops_ids_no_data_file_has_and_fills_gorder(tmp_path):
     loaded = load(tmp_path, data)["gift_lists"][0]
     assert (loaded["want"], loaded["keep"]) == ([9053], [9071])
     # 9105 Fragment of Hellfire: the first Burn gift a shop may sell, tier IV (#626)
-    assert loaded["gorder"]["Burn"][:2] == [9071, 9105] and sorted(loaded["gorder"]["Burn"]) == sorted(gift_list()["gorder"]["Burn"])
+    assert loaded["gorder"]["Burn"][:2] == [9071, 9105] and sorted(loaded["gorder"]["Burn"]) == sorted(GORDER["Burn"])
     assert list(loaded["gorder"]) == KEYWORDS
 
 
@@ -292,154 +184,6 @@ def test_newer_version_is_refused(tmp_path):
     assert "newer" in errors(tmp_path, {**VALID, "version": 21})[0]
 
 
-def test_version_19_gets_the_target_floor_5(tmp_path):
-    # #385: a file from before the setting plays the 5 floors it always did
-    got = load(tmp_path, V19)
-    assert got["version"] == 20 and got["run"]["target_floor"] == 5
-    assert {**got, "gift_lists": None} == {**VALID, "gift_lists": None}  # the list is cleaned on load
-    assert settings.NOTES == []
-
-
-def test_version_19_keeps_a_target_floor_the_file_already_has(tmp_path):
-    data = copy.deepcopy(V19)
-    data["run"]["target_floor"] = 10
-    assert load(tmp_path, data)["run"]["target_floor"] == 10
-
-
-def test_version_1_gets_guard_turns_off(tmp_path):
-    old = edited10(lambda d: [old_numbers(d)] + [d["run"].pop("theme_pack_refresh")] + [(t.pop("guard_turns"), t.pop("gift_search"), t.pop("allow_white_gossypium")) for t in d["teams"]])
-    assert load(tmp_path, {**old, "version": 1}) == VALID_FROM_ZEROS
-
-
-def test_version_2_gets_gift_search_off(tmp_path):
-    old = edited10(lambda d: [old_numbers(d)] + [d["run"].pop("theme_pack_refresh")] + [(t.pop("gift_search"), t.pop("allow_white_gossypium")) for t in d["teams"]])
-    assert load(tmp_path, {**old, "version": 2}) == VALID_FROM_ZEROS
-
-
-def test_version_3_refreshes_all_avoid_theme_packs_as_before(tmp_path):
-    old = edited10(lambda d: [old_numbers(d)] + [d["run"].pop("theme_pack_refresh")] + [t.pop("allow_white_gossypium") for t in d["teams"]])
-    assert load(tmp_path, {**old, "version": 3}) == VALID_FROM_ZEROS
-
-
-def old_numbers(d):
-    """V10 as version 5 wrote it: 0 for no run limit and a whole HARD run, nothing kept out of the shop."""
-    d["run"]["runs"] = 0
-    for t in d["teams"]:
-        t.update(hard_from_floor=0)
-    no_keep(d)
-
-
-def no_keep(d):
-    """V10 as version 6 wrote it: no keep fields."""
-    for t in d["teams"]:
-        for k in ("keep_keywords", "keywordless", "keep_gifts", "sell_max_tier", "sell_vestiges"):
-            t.pop(k)
-
-
-def test_version_5_zeros_become_switches(tmp_path):
-    # #137: runs 0 -> off (no limit); hard_from_floor 0 (the whole run HARD) -> on from floor 1. min_alive 0 stays: no check.
-    assert load(tmp_path, {**edited10(old_numbers), "version": 5}) == VALID_FROM_ZEROS
-
-
-def test_version_5_numbers_stay(tmp_path):
-    def numbers(d):
-        d["run"].update(runs=3)
-        for t in d["teams"]:
-            t.update(hard_from_floor=3, min_alive=5)
-    assert load(tmp_path, {**edited10(lambda d: [numbers(d), no_keep(d)]), "version": 5}) == edited(numbers, MIGRATED)
-
-
-def test_version_6_keeps_what_the_shop_kept_before(tmp_path):
-    # #77: only the main keyword's and keywordless gifts (and the observed ones) stayed out of fusions and sales.
-    assert load(tmp_path, {**edited10(no_keep), "version": 6}) == MIGRATED
-
-
-def test_version_7_accepts_terms_and_downloads(tmp_path):
-    # The user's decision (2026-10-21): the bot may tick the User Agreement and accept downloads.
-    old = edited10(lambda d: [d["run"].pop("auto_accept_terms"), d["run"].pop("auto_download")])
-    assert load(tmp_path, {**old, "version": 7}) == MIGRATED
-
-
-def test_version_11_gets_the_daily_tasks_with_no_team_and_no_lunacy_charges(tmp_path):
-    # #366, #368: one EXP win and three Thread wins a day (its 3 Daily Bonuses), no team picked yet (the Daily tab), no
-    # retries. #373: Lunacy is
-    # spent only when the user sets a count.
-    old = edited13(lambda d: [d.pop("luxcavation"), d.pop("charge_enkephalin")])
-    assert load(tmp_path, {**old, "version": 11}) == MIGRATED
-
-
-def test_version_10_keeps_the_dismissed_screens(tmp_path):
-    # #244: on, so the first run after the update already keeps them.
-    assert "keep_dismissed_screens" not in V10["run"]
-    assert load(tmp_path, V10) == MIGRATED
-
-
-def test_version_13_keep_settings_become_gift_lists(tmp_path):
-    # #291: a file already at version 13 (daily tasks and all) gets only the lists; the same result as from version 10.
-    assert load(tmp_path, V13) == MIGRATED
-
-
-def test_version_13_teams_with_other_keep_settings_get_their_own_lists(tmp_path):
-    old = edited13(lambda d: d["teams"][1].update(keyword="Bleed", keywordless="fuse"))
-    got = load(tmp_path, old)
-    assert [t["gift_list"] for t in got["teams"]] == ["gift-list-1", "gift-list-2"]
-    assert [g["order"][0] for g in got["gift_lists"]] == ["Burn", "Bleed"]
-    assert all(not {"keyword", "keep_keywords", "keywordless", "keep_gifts", "fusion_condition"} & t.keys() for t in got["teams"])
-
-
-def test_version_14_refresh_limit_becomes_as_many_keyword_refreshes_and_no_normal_one(tmp_path):
-    # The user, 2026-10-30: two counts; N keyword refreshes first was what N allowed, so the shop spends no more than before.
-    old = edited(lambda d: [d["teams"][0].update(shop_refresh_limit=3), d["teams"][1].update(shop_refresh_limit=0)], V14)
-    got = load(tmp_path, old)
-    assert [(t["shop_refresh_keyword"], t["shop_refresh_normal"]) for t in got["teams"]] == [(3, 0), (0, 0)]
-    assert all("shop_refresh_limit" not in t for t in got["teams"])
-
-
-def test_version_14_loads_as_the_current_settings(tmp_path):
-    assert load(tmp_path, V14) == load(tmp_path, defaulted(CLEARED))
-
-
-def test_version_15_trial_risks_are_emptied_with_a_note(tmp_path):
-    # #381: trials score in pt now (1 pt = the enemy's Clash Power +1); a 0-5 risk means nothing on that scale.
-    got = load(tmp_path, edited(lambda d: d["trial_risk_overrides"].append({"trial": "Growth II", "risk": 0}), V15))
-    assert got == load(tmp_path, defaulted(CLEARED))
-    assert settings.NOTES == []  # loading the current file leaves none
-    load(tmp_path, V15)
-    assert settings.NOTES == ["settings version 16: 1 trial risk override (0-5) emptied, trials score in pt now (#381)"]
-    assert load(tmp_path, edited(lambda d: d.update(trial_risk_overrides=[]), V15)) and settings.NOTES == []
-
-
-def test_version_16_drops_the_teams_trial_risk_weight(tmp_path):
-    # The user, 2026-10-31: a trial counts at weight 1 for every team, so the setting goes, whatever it was
-    got = load(tmp_path, V16)
-    assert settings.NOTES == []  # nothing to log: every team now picks as weight medium did
-    assert got == load(tmp_path, defaulted(VALID))
-
-
-def test_version_17_runs_both_luxcavations_in_daily_mode_and_keeps_their_counts(tmp_path):
-    # #431, the user (2026-11-05): daily mode is the default, also for a migrated file; count is kept for count mode
-    old = edited(lambda d: d["luxcavation"]["thread"].update(count=5), V17)
-    got = load(tmp_path, old)["luxcavation"]
-    assert [(o["mode"], o["count"]) for o in (got["exp"], got["thread"])] == [("daily", 1), ("daily", 5)]
-    assert settings.NOTES == []
-
-
-def test_version_18_teams_list_no_sinner_to_replace(tmp_path):
-    # #454, the user (2026-11-06): an unlisted sinner keeps the game's 3/2/1, so the migrated file plays as before; each team
-    # gets its own copy
-    got = load(tmp_path, V18)
-    assert DEFAULT_SKILLS == {"sinners": [], "id_skill_search": {"enabled": False, "pay": "cost"}}
-    assert [t["skill_replacement"] for t in got["teams"]] == [DEFAULT_SKILLS, DEFAULT_SKILLS]
-    assert got["teams"][0]["skill_replacement"]["sinners"] is not got["teams"][1]["skill_replacement"]["sinners"]
-    assert settings.NOTES == []
-
-
-def test_version_18_keeps_a_setting_the_file_already_has(tmp_path):
-    data = copy.deepcopy(V18)
-    data["teams"][0]["skill_replacement"] = custom_skills()
-    assert load(tmp_path, data)["teams"][0]["skill_replacement"] == custom_skills()
-
-
 def test_skill_swaps_are_game_data_the_gui_shares():
     # data/shop.yaml holds the three swaps and their prices (ADR 0005, #264: read off the game's upgradePersonality); a target
     # names no swap, the swaps it needs follow from it (docs/spec/04-settings.md section 9).
@@ -455,10 +199,6 @@ def test_skill_swaps_are_game_data_the_gui_shares():
     assert settings.SCHEMA["$defs"]["skill_sinner"]["properties"]["s1_s3_first"]["default"] is True
 
 
-def test_older_versions_come_to_the_same_skill_replacement(tmp_path):
-    assert [t["skill_replacement"] for t in load(tmp_path, V10)["teams"]] == [DEFAULT_SKILLS, DEFAULT_SKILLS]
-
-
 @pytest.mark.parametrize("risk, ok", [(0, True), (0.25, True), (12, True), (-0.5, False), ("1", False)])
 def test_a_trial_override_is_a_score_of_0_or_more(tmp_path, risk, ok):
     data = edited(lambda d: d["trial_risk_overrides"][0].update(risk=risk))
@@ -468,59 +208,21 @@ def test_a_trial_override_is_a_score_of_0_or_more(tmp_path, risk, ok):
         assert [e.split(":")[0] for e in errors(tmp_path, data)] == ["trial_risk_overrides/0/risk"]
 
 
-def test_version_9_fuses_as_before(tmp_path):
-    # #263: any, the fusion the shop made before the condition existed.
-    old = edited10(lambda d: [t.pop("fusion_condition") for t in d["teams"]])
-    assert load(tmp_path, {**old, "version": 9}) == MIGRATED
-
-
-def v8_plan(marks):
-    """V10 as version 8 wrote it, its theme pack plan holding these marks."""
-    def fn(d):
-        plan = d["theme_pack_plans"][0]
-        for k in ("weights", "threshold", "unlisted", "event_packs"):
-            plan.pop(k)
-        plan["marks"] = marks
-    return {**edited10(fn), "version": 8}
-
-
-def test_version_8_theme_pack_marks_become_weights(tmp_path):
-    # #240: prefer / neutral / avoid -> 5 / 0 / -5, threshold 0, unlisted 0, event packs by weight: picks as before.
-    marks = {"Automated Factory": "avoid", "The Forgotten": "prefer", "Lake World": "neutral"}
-    plan = load(tmp_path, v8_plan(marks))["theme_pack_plans"][0]
-    assert plan == {"id": "p1", "name": "Mine", "weights": {"Automated Factory": -5, "The Forgotten": 5, "Lake World": 0},
-                    "threshold": 0, "unlisted": 0, "event_packs": "weight"}
-
-
-def test_version_8_bad_mark_stays_an_error(tmp_path):
-    assert any(e.startswith("theme_pack_plans/0/weights/X:") for e in errors(tmp_path, v8_plan({"X": "love"})))
-
-
-def test_version_4_teams_may_hold_white_gossypium_as_before(tmp_path):
-    old = edited10(lambda d: [old_numbers(d)] + [t.pop("allow_white_gossypium") for t in d["teams"]])
-    assert load(tmp_path, {**old, "version": 4}) == VALID_FROM_ZEROS
-
-
-def test_old_version_is_migrated_in_memory(tmp_path, monkeypatch):
-    def v0_to_v1(d):
-        d["language"] = d.pop("lang")
+def test_an_older_version_is_migrated_in_memory(tmp_path, monkeypatch):
+    # The frame a later version's migration plugs into: MIGRATIONS[n] takes version n to n + 1, the file on disk stays as it was.
+    def v19_to_v20(d):
+        d["run"]["target_floor"] = d["run"].pop("floors")
         return d
 
-    monkeypatch.setattr(settings, "MIGRATIONS", {**settings.MIGRATIONS, 0: v0_to_v1})
-    old = {**edited10(lambda d: d.pop("language")), "version": 0, "lang": "en_us"}
-    assert load(tmp_path, old)["language"] == "en_us"
-    assert json.loads((tmp_path / "config" / "settings.json").read_text(encoding="utf-8"))["version"] == 0
+    monkeypatch.setattr(settings, "MIGRATIONS", {19: v19_to_v20})
+    old = edited(lambda d: [d.update(version=19), d["run"].update(floors=d["run"].pop("target_floor"))])
+    got = load(tmp_path, old)
+    assert (got["version"], got["run"]) == (20, VALID["run"])
+    assert json.loads((tmp_path / "config" / "settings.json").read_text(encoding="utf-8"))["version"] == 19
 
 
-def test_version_12_fights_luxcavation_as_consecutive_battles_and_keeps_a_switch_set(tmp_path):
-    old = edited13(lambda d: [d["luxcavation"]["exp"].pop("consecutive"), d["luxcavation"]["thread"].update(consecutive=False)])
-    old = {**old, "version": 12}
-    got = load(tmp_path, old)["luxcavation"]
-    assert (got["exp"]["consecutive"], got["thread"]["consecutive"]) == (True, False)
-
-
-def test_unmigratable_version(tmp_path):
-    assert "cannot be migrated" in errors(tmp_path, {**VALID, "version": 0})[0]
+def test_every_version_from_the_oldest_has_its_migration():
+    assert set(settings.MIGRATIONS) == set(range(settings.OLDEST_VERSION, settings.CURRENT_VERSION))
 
 
 @pytest.mark.parametrize("fn, expected", [
@@ -634,27 +336,24 @@ def test_shared_valid_loads(tmp_path):
     assert {**loaded, "gift_lists": None} == {**CASES["valid"], "gift_lists": None}  # the list is cleaned on load
 
 
-def test_shared_valid10_migrates_and_loads(tmp_path):
-    loaded = load(tmp_path, CASES["valid10"])
-    assert loaded["version"] == 20 and [t["gift_list"] for t in loaded["teams"]] == ["gift-list-1", "gift-list-2"]
+@pytest.mark.parametrize("case", CASES["too_old"], ids=lambda c: str(c["version"]))
+def test_shared_too_old(tmp_path, case):
+    """The GUI refuses the same files in the same words (gui/src/validate.test.ts)."""
+    assert errors(tmp_path, {**CASES["valid"], "version": case["version"]}) == [case["error"]]
 
 
-@pytest.mark.parametrize("case", CASES["migrations"], ids=lambda c: c["name"])
-def test_shared_migrations(tmp_path, case):
-    """The GUI runs the same cases (gui/src/validate.test.ts); the migrated file must pass both layers of checks."""
-    old = apply_edits(CASES["valid10"], case["edits"])
-    assert settings.gift_lists_from_v10(old["teams"])[2] == case["dropped"]
-    data = load(tmp_path, old)
-    assert [t["gift_list"] for t in data["teams"]] == case["teams"]
-    assert [g["id"] for g in data["gift_lists"]] == [x["id"] for x in case["lists"]]
-    for got, want in zip(data["gift_lists"], case["lists"]):
-        assert (got["id"], got["name"], got["order"][0], got["fusion_condition"]) == (want["id"], want["name"], want["order_first"], want["fusion_condition"])
-        assert (len(got["want"]), len(got["keep"])) == (want["want_count"], want["keep_count"])
-        assert (sum(got["want"]), sum(got["keep"])) == (want["want_sum"], want["keep_sum"])
-        assert set(want["want_has"]) <= set(got["want"]) and set(want["keep_has"]) <= set(got["keep"])
-        assert not set(want["keep_lacks"]) & set(got["keep"])
-    assert all(g["gorder"] == gift_list()["gorder"] for g in data["gift_lists"])
-    assert all(not {"keyword", "keep_keywords", "keywordless", "keep_gifts", "fusion_condition"} & t.keys() for t in data["teams"])
+def test_a_run_stops_on_a_too_old_file_and_logs_why(tmp_path, monkeypatch):
+    # #653: PlanRun fails before it looks at the screen (no context needed), as for any bad settings, and its log says why.
+    import actions
+
+    case = CASES["too_old"][0]
+    monkeypatch.setattr(actions, "ROOT", tmp_path)
+    logs = []
+    monkeypatch.setattr(actions, "log", logs.append)
+    (tmp_path / "config").mkdir()
+    (tmp_path / "config" / "settings.json").write_text(json.dumps({**VALID, "version": case["version"]}), encoding="utf-8")
+    assert actions.PlanRun().run(None, None) is False
+    assert logs == [f"stop: Invalid settings:\n- {case['error']}"]
 
 
 @pytest.mark.parametrize("case", CASES["clean_gift_list"], ids=lambda c: c["name"])
@@ -667,35 +366,3 @@ def test_shared_clean_gift_list(case):
     for kw, size in case["gorder_size"].items():
         assert len(cleaned["gorder"][kw]) == size
     assert all(sorted(ids) == sorted(g["id"] for g in SOLD if g["keyword"] == kw) for kw, ids in cleaned["gorder"].items())
-
-
-def test_version_10_keeps_what_the_team_kept(tmp_path):
-    # #292: the main keyword's buyable gifts are wanted; its other gifts, the keep_keywords', every keywordless gift (whatever
-    # keywordless said) and the matching keep_gifts are kept; the shop's old fusion_condition goes with the team's list.
-    def fn(d):
-        a, b = d["teams"]
-        a.update(keyword="Tremor", keywordless="fuse_or_sell", fusion_condition="upgrade")
-        b.update(keyword="Pierce", keep_keywords=["Blunt"], keywordless="fuse", keep_gifts=[
-            {"keyword": "Poise", "tier": 2, "name": "Cigarette Holder"}, {"keyword": "Keywordless", "tier": 1, "name": "Dark Vestige"}])
-    data = load(tmp_path, edited(fn, V10))
-    first, second = data["gift_lists"]
-    assert first == {"id": "gift-list-1", "name": "Team a", **gift_list("Tremor", fusion_condition="upgrade")}
-    expected = gift_list("Pierce")
-    blunt = {g["id"] for g in SEARCH + RECIPES["gifts"] + RECIPES["materials"] + RECIPES["extra_gifts"] if g["keyword"] == "Blunt"}
-    poise = {g["id"] for g in SEARCH if g["keyword"] == "Poise" and g["en"] == "Cigarette Holder"}
-    assert poise  # the test names a real gift
-    expected["keep"] = sorted(set(expected["keep"]) | blunt | poise | {9991})  # 9991: Dark Vestige, named in keep_gifts
-    assert second == {"id": "gift-list-2", "name": "Team b", **expected}
-
-
-def test_version_10_one_team_one_list_no_team_no_list(tmp_path):
-    one = load(tmp_path, edited(lambda d: d.update(teams=d["teams"][:1]), V10))
-    assert [g["name"] for g in one["gift_lists"]] == ["Team a"]
-    assert settings.gift_lists_from_v10([]) == ([], [], 0)
-
-
-def test_version_10_skips_what_is_not_a_team(tmp_path):
-    # A broken file is left to the schema check: only the object teams get lists, the rest stays as it is.
-    data = settings._v13_to_v14(edited(lambda d: d["teams"].insert(0, [1]), V13))
-    assert data["teams"][0] == [1] and [t["gift_list"] for t in data["teams"][1:]] == ["gift-list-1", "gift-list-1"]
-    assert errors(tmp_path, {**data, "version": 14}) and len(data["gift_lists"]) == 1
