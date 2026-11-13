@@ -41,21 +41,36 @@ export function usePick(list: keyof Picked, items: { id: string }[], leadId?: st
   return [i, (id: string | undefined) => pick(list, id)] as const;
 }
 
-/** One step back after a delete: `deleted` remembers what went, and the note names it with an Undo button until the next delete
- * or until the tab closes. A confirmation would stop every delete to catch the rare wrong one; this lets it go and puts it back. */
+/** Delete with one step back: `remove` takes item `i` out of a list tab's items (`edit` changes that list in the settings, `pick`
+ * shows an item), and the note names it with an Undo button until the next delete or until the tab closes. Undo puts it back
+ * before the item that followed it, which stays right when the Agent reorders the list meanwhile (#501). A confirmation
+ * would stop every delete to catch the rare wrong one; this lets it go and puts it back. */
 export function useUndo() {
   const { t } = useEditor();
-  const [last, deleted] = useState<{ name: string; undo: () => void } | null>(null);
+  const [last, setLast] = useState<{ name: string; undo: () => void } | null>(null);
   const note = last && (
     <p className="notice" role="status">
       {fill(t("undo.deleted"), { name: last.name })}{" "}
-      <button type="button" onClick={() => { last.undo(); deleted(null); }}>{t("undo")}</button>
+      <button type="button" onClick={() => { last.undo(); setLast(null); }}>{t("undo")}</button>
     </p>
   );
-  return [note, deleted] as const;
+  const remove = <T extends { id: string; name: string }>(items: T[], i: number, edit: (fn: (list: T[]) => void) => void,
+    pick: (id: string | undefined) => void) => {
+    const item = items[i], next = items[i + 1]?.id;
+    edit((list) => { list.splice(i, 1); });
+    pick(items[i - 1]?.id ?? next);
+    setLast({
+      name: item.name || "—",
+      undo: () => {
+        edit((list) => { const at = list.findIndex((x) => x.id === next); list.splice(at < 0 ? Math.min(i, list.length) : at, 0, item); });
+        pick(item.id);
+      },
+    });
+  };
+  return [note, remove] as const;
 }
 
-const FOCUSABLE ="input:not(:disabled), select:not(:disabled), textarea:not(:disabled), button:not(:disabled), [tabindex]:not([tabindex='-1'])";
+const FOCUSABLE = "input:not(:disabled), select:not(:disabled), textarea:not(:disabled), button:not(:disabled), [tabindex]:not([tabindex='-1'])";
 
 /** Scroll to and focus the field a problem path points at: the element in <main> whose data-path is that path or the nearest
  * one above it ("teams/1/id" finds the team's editor, "teams/1"). Closed panels around it open. The element itself takes the

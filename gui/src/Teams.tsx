@@ -14,16 +14,8 @@ import { Field, Num, ReorderList, Select, ToggleNum, useEditor, usePick, useUndo
 export function TeamsTab() {
   const { s, update, t, bad } = useEditor();
   const [i, setSel] = usePick("teams", s.teams);
-  const [undoNote, deleted] = useUndo();
-  const remove = () => {
-    const team = s.teams[i];
-    update((d) => { d.teams.splice(i, 1); });
-    setSel(s.teams[i - 1]?.id);
-    deleted({
-      name: team.name || "—",
-      undo: () => { update((d) => { d.teams.splice(Math.min(i, d.teams.length), 0, team); }); setSel(team.id); },
-    });
-  };
+  const [undoNote, removeAt] = useUndo();
+  const remove = () => removeAt(s.teams, i, (fn) => update((d) => fn(d.teams)), setSel);
   return (
     <div className="split">
       <aside>

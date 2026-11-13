@@ -101,17 +101,9 @@ function PlanTab<P extends { id: string; name: string }>({ planKey, tab, make, e
   const { s, update, t, bad } = useEditor();
   const plans = s[planKey] as unknown as P[];
   const [i, setSel] = usePick(planKey, plans, lead?.id); // -1: the lead
-  const [undoNote, deleted] = useUndo();
+  const [undoNote, removeAt] = useUndo();
   const set = (fn: (list: P[]) => void) => update((d) => fn(d[planKey] as unknown as P[]));
-  const remove = () => {
-    const plan = plans[i];
-    set((l) => l.splice(i, 1));
-    setSel((plans[i - 1] ?? plans[i + 1])?.id);
-    deleted({
-      name: plan.name || "—",
-      undo: () => { set((l) => l.splice(Math.min(i, l.length), 0, plan)); setSel(plan.id); },
-    });
-  };
+  const remove = () => removeAt(plans, i, set, setSel);
   const add = () => {
     const id = newId();
     set((list) => list.push({ ...make(), id, name: freeName(t(tab), plans.map((p) => p.name)) } as P));

@@ -166,8 +166,8 @@ describe("clicking a problem", () => {
 
 describe("Ctrl+S", () => {
   /** Press Ctrl+S on the focused element; true when the editor kept the browser from its own Save page. */
-  const ctrlS = () => {
-    const e = new KeyboardEvent("keydown", { key: "s", code: "KeyS", ctrlKey: true, bubbles: true, cancelable: true });
+  const ctrlS = (more: KeyboardEventInit = {}) => {
+    const e = new KeyboardEvent("keydown", { key: "s", code: "KeyS", ctrlKey: true, bubbles: true, cancelable: true, ...more });
     act(() => { (document.activeElement ?? document.body).dispatchEvent(e); });
     return e.defaultPrevented;
   };
@@ -192,5 +192,24 @@ describe("Ctrl+S", () => {
     expect(ctrlS()).toBe(true);
     expect(await screen.findByRole("alert")).toHaveTextContent(zh.saveBlocked);
     expect(file.saved).toEqual([]);
+  });
+
+  test("held down, saves once: the key's repeats save nothing more", async () => {
+    file.text = JSON.stringify(settings());
+    const user = userEvent.setup();
+    render(<App />);
+    await user.type(await screen.findByRole("textbox", { name: zh.name }), "!");
+    ctrlS();
+    expect([1, 2, 3].map(() => ctrlS({ repeat: true }))).toEqual([true, true, true]); // still not the browser's Save page
+    await waitFor(() => expect(file.saved).toHaveLength(1));
+    await act(() => new Promise((r) => setTimeout(r, 50)));
+    expect(file.saved).toHaveLength(1);
+  });
+
+  test("on a Dvorak keyboard, the key that types O does not save", async () => {
+    file.text = JSON.stringify(settings());
+    render(<App />);
+    await screen.findByRole("tab", { name: zh["tab.run"] });
+    expect(ctrlS({ key: "o" })).toBe(false); // KeyS is where Dvorak puts O
   });
 });

@@ -102,12 +102,14 @@ export default function App() {
 
   // Ctrl+S is the Save button, in a field too; the browser's own Save page never opens.
   const saveRef = useRef(() => {});
+  saveRef.current = () => {}; // until this render has a save to offer: none on the load error screen
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      // the key's code too: under a Chinese input method the key itself can read "Process"
-      if (!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey || (e.key.toLowerCase() !== "s" && e.code !== "KeyS")) return;
+      // an input method can report the key as "Process": then its place on the keyboard says it is S
+      const s = e.key === "Process" ? e.code === "KeyS" : e.key.toLowerCase() === "s";
+      if (!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey || !s) return;
       e.preventDefault();
-      saveRef.current();
+      if (!e.repeat) saveRef.current(); // held down: one save, not one per repeat
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);

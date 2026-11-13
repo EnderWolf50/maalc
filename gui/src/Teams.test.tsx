@@ -9,6 +9,7 @@ import { TEXT, fill } from "./i18n";
 import { GIFT_KEYWORDS, defaultGorder, newSettings, newTeam, type GiftList, type Settings } from "./model";
 import { expectLines, renderEditor } from "./testing";
 import { TeamsTab } from "./Teams";
+import { useEditor } from "./ui";
 
 // The editor reads its settings through api.ts, which falls back to the browser's localStorage; the tests give it a file's text.
 const file = vi.hoisted(() => ({ text: "" }));
@@ -134,6 +135,21 @@ describe("deleting a team", () => {
     expect(r.settings().teams).toEqual(teams);
     expect(screen.getByRole("textbox", { name: zh.name })).toHaveValue("Tb");
     expect(screen.queryByRole("button", { name: zh.undo })).toBeNull();
+  });
+
+  test("undone after the Agent moved a team, it goes back before the team that followed it, not to its old index", async () => {
+    const teams = ["a", "b", "c"].map((id, n) => ({ ...newTeam(n + 1, `T${id}`), id }));
+    function AgentClaimsA() { // what the editor holds once the Agent's requeue of a is read (#501)
+      const { update } = useEditor();
+      return <button onClick={() => update((s) => { s.teams.push(...s.teams.splice(0, 1)); })}>claim a</button>;
+    }
+    const r = renderEditor(<><TeamsTab /><AgentClaimsA /></>, { ...newSettings(), language: "zh_tw", teams });
+    await r.user.click(within(document.querySelector("aside")!).getByText("Tb"));
+    await r.user.click(screen.getByRole("button", { name: zh.remove }));
+    await r.user.click(screen.getByRole("button", { name: "claim a" }));
+    expect(r.settings().teams.map((x) => x.id)).toEqual(["c", "a"]);
+    await r.user.click(screen.getByRole("button", { name: zh.undo }));
+    expect(r.settings().teams.map((x) => x.id)).toEqual(["b", "c", "a"]);
   });
 });
 
