@@ -1,12 +1,14 @@
-// Component tests of the theme pack plan screen's "含想要" mark (#421, spec 04 section 8): which packs carry it and what its
-// tooltip lists, for the list the teams using the plan hold.
-import { fireEvent, screen, waitFor, within } from "@testing-library/react";
+// Component tests of the plan tabs: the theme pack screen's "含想要" mark (#421, spec 04 section 8), its filters, badges and
+// weights typed in place, and for every plan tab which teams use a plan and how a deleted one comes back (#679).
+import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, onTestFinished, test, vi } from "vitest";
 import recipes from "../../assets/resource/base/data/gift_recipes.json";
 import { GIFT_BY_ID } from "./giftCatalog";
 import { TEXT, fill } from "./i18n";
-import { GIFT_KEYWORDS, SINNERS, defaultGorder, newSettings, newTeam, type GiftList, type Settings } from "./model";
-import { DeploymentTab, ThemePackTab } from "./Plans";
+import {
+  GIFT_KEYWORDS, SINNERS, defaultGorder, defaultStarlight, newSettings, newTeam, type GiftList, type Settings,
+} from "./model";
+import { DeploymentTab, StarlightTab, ThemePackTab } from "./Plans";
 import { expectLines, renderEditor } from "./testing";
 import { useEditor } from "./ui";
 
@@ -125,6 +127,40 @@ describe("a pack's weight, typed in place (no prompt dialog)", () => {
     expect(r.weights()["The Forgotten"]).toBe(-2);
     expect(r.asked).not.toHaveBeenCalled();
   });
+
+  test("Enter on a focused pack opens the box too, and the unlisted packs' chip has one", async () => {
+    const r = await open();
+    (await chipOf("The Forgotten")).focus();
+    await r.user.keyboard("{Enter}");
+    expect(box()).toHaveFocus();
+    await r.user.keyboard("{Escape}");
+    await r.user.click(await chipOf(zh["packs.unlisted"]));
+    await r.user.clear(box());
+    await r.user.type(box(), "-4{Enter}");
+    expect(r.settings().theme_pack_plans[0].unlisted).toBe(-4);
+  });
+
+  test("keys the box does not use still reach the window: Ctrl+S saves from it", async () => {
+    const r = await open();
+    const heard: string[] = [];
+    const listen = (e: KeyboardEvent) => { heard.push(e.key); };
+    window.addEventListener("keydown", listen);
+    onTestFinished(() => window.removeEventListener("keydown", listen));
+    await r.user.click(await chipOf("The Outcast"));
+    await r.user.keyboard("{Control>}s{/Control}");
+    expect(heard).toContain("s");
+  });
+
+  test("a click on the chip around the box keeps the box and what was typed", async () => {
+    const r = await open();
+    const chip = await chipOf("The Outcast");
+    await r.user.click(chip);
+    await r.user.clear(box());
+    await r.user.type(box(), "7");
+    await r.user.click(within(chip).getByText("The Outcast"));
+    expect(box()).toHaveValue(7);
+    expect(box()).toHaveFocus();
+  });
 });
 
 describe("dragging a pack chip", () => {
@@ -217,6 +253,18 @@ describe("which teams use a plan", () => {
     expect(screen.getByText(fill(zh["plan.usedBy"], { names: "Ta、Tc" }))).toBeInTheDocument();
     await r.user.click(within(document.querySelector("aside")!).getByText("D2"));
     expect(screen.getByText(zh["plan.unused"])).toBeInTheDocument();
+  });
+
+  test("a starlight plan and a named theme pack plan list theirs too", async () => {
+    const star = { ...defaultStarlight(), id: "s1", name: "S1" };
+    const t = teams();
+    t[2].starlight = { plan: "s1" };
+    renderEditor(<StarlightTab />, settings({ starlight_plans: [star], teams: t }));
+    expect(screen.getByText(fill(zh["plan.usedBy"], { names: "Tc" }))).toBeInTheDocument();
+    cleanup();
+    const r = renderEditor(<ThemePackTab />, settings({ theme_pack_plans: [{ id: "p1", name: "P1", weights: {}, threshold: 0, unlisted: 0, event_packs: "weight" }], teams: teams() }));
+    await r.user.click(await screen.findByText("P1"));
+    expect(screen.getByText(fill(zh["plan.usedBy"], { names: "Tb" }))).toBeInTheDocument();
   });
 
   test("the theme packs' default plan lists the teams on the default", async () => {

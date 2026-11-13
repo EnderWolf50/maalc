@@ -158,7 +158,7 @@ export function parseThemePacks(text: string): ThemePacks {
 
 /** The pack filter's difficulties, "" any: the modes of the data file's floors. */
 export type PackMode = "" | "normal" | "hard" | "infinity" | "extreme";
-const MODE_KEYS = { normal: "N", hard: "H", infinity: "I", extreme: "X" } as const;
+export const MODE_KEYS = { normal: "N", hard: "H", infinity: "I", extreme: "X" } as const;
 /** The floors' modes in badge order: NORMAL, HARD, INFINITY, EXTREME. */
 const FLOOR_MODES = ["N", "H", "I", "X"] as const;
 /** The floors a 15-floor run plays as INFINITY and as EXTREME, as the agent reads them (agent/run_start.py MODE_BANDS, #387). */

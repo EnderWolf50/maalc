@@ -1,8 +1,8 @@
 // Named plans (spec 04 sections 6–8) and the editors teams reuse for their custom values.
-import { Fragment, useEffect, useState, type DragEvent, type KeyboardEvent, type ReactNode } from "react";
+import { Fragment, useEffect, useState, type DragEvent, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
 import { loadThemePacks } from "./api";
 import {
-  EVENT_MODES, GRACES, LEVELS, SINNERS, buyOrder, clickCard, clickEnhance, defaultStarlight, enhanceAll, floorBadges, freeName,
+  EVENT_MODES, GRACES, LEVELS, MODE_KEYS, SINNERS, buyOrder, clickCard, clickEnhance, defaultStarlight, enhanceAll, floorBadges, freeName,
   gracePrice,
   lanesOf, lineAt, newId, newPackPlan, onFloor, parseThemePacks, selectAll, starlightCost, toggleSinner, weightOf,
   type DeploymentPlan, type Order, type PackMode, type PackPlanValues, type StarlightPlan, type StarlightValues, type ThemePackPlan,
@@ -203,8 +203,6 @@ const FLOORS = Array.from({ length: 16 }, (_, i) => i);
 const BADGES = {
   N: ["packs.floorsNormal", ""], H: ["packs.floorsHard", " hard"], I: ["packs.floorsInfinity", " inf"], X: ["packs.floorsExtreme", " ext"],
 } as const;
-/** The difficulty filter's choices by their badge, so both name a difficulty alike (普通, not NORMAL, in Chinese). */
-const MODE_BADGE = { normal: "N", hard: "H", infinity: "I", extreme: "X" } as const;
 
 /** A pack's weight typed in place (#679, in place of prompt()): Enter keeps a whole number from -10 to 10, or says why not
  * beside the box; Esc, or leaving the box, keeps the weight as it was. */
@@ -218,11 +216,10 @@ function WeightBox({ value, onDone }: { value?: number; onDone: (w: number | nul
     else setWrong(true);
   };
   return (
-    <span className="weigh" onClick={(e) => e.stopPropagation()}>
+    <span className="weigh">
       <input type="number" min={-10} max={10} step={1} autoFocus aria-label={t("packs.weightPrompt")} value={text}
         onChange={(e) => { setText(e.target.value); setWrong(false); }} onBlur={() => onDone(null)}
         onKeyDown={(e) => {
-          e.stopPropagation(); // the chip's own Enter would open the box again
           if (e.key === "Enter") { e.preventDefault(); keep(); }
           if (e.key === "Escape") onDone(null);
         }} />
@@ -251,7 +248,7 @@ function PackPlanEditor({ data, plan, planId, path, onChange }: {
   const weigh = (what: string, w: number) => (what === UNLISTED ? set({ unlisted: w }) : set({ weights: { ...plan.weights, [what]: w } }));
   // The pack whose weight is being typed: on its chip, or in the + lane for a new weight (`lane`).
   const [typing, setTyping] = useState<{ what: string; lane: boolean } | null>(null);
-  const ask = (what: string, current?: number) => setTyping({ what, lane: current === undefined });
+  const ask = (what: string, lane = false) => setTyping({ what, lane });
   const box = (what: string, current?: number) => (
     <WeightBox value={current} onDone={(w) => { if (w !== null) weigh(what, w); setTyping(null); }} />
   );
@@ -259,7 +256,7 @@ function PackPlanEditor({ data, plan, planId, path, onChange }: {
   const dropOn = (w: number | null) => (e: DragEvent) => {
     e.preventDefault();
     if (drag === LINE && w !== null) set({ threshold: w });
-    else if (drag && drag !== LINE) (w === null ? ask(drag) : weigh(drag, w));
+    else if (drag && drag !== LINE) (w === null ? ask(drag, true) : weigh(drag, w));
     setDrag(null);
   };
   const target = (accepts: boolean, w: number | null) => (onChange && accepts
@@ -269,10 +266,13 @@ function PackPlanEditor({ data, plan, planId, path, onChange }: {
     onDragStart: (e: DragEvent) => { setDrag(what); e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", what); },
     onDragEnd: () => setDrag(null),
   } : {});
-  const clickable = (what: string, current: number) => (onChange && !typingOn(what) ? {
-    role: "button", tabIndex: 0, onClick: () => ask(what, current),
-    onKeyDown: (e: KeyboardEvent) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); ask(what, current); } },
-  } : {});
+  const clickable = (what: string) => (!onChange ? {} : typingOn(what) ? {
+    // a press on the chip around its box would blur the box, which closes it, and the click would open it again, empty
+    onMouseDown: (e: MouseEvent) => { if (!(e.target instanceof HTMLInputElement)) e.preventDefault(); },
+  } : {
+    role: "button", tabIndex: 0, onClick: () => ask(what),
+    onKeyDown: (e: KeyboardEvent) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); ask(what); } },
+  });
   // The line stops between two lanes, or under the last one (never refresh): gap g (1..lanes) sits under lane g-1, so its
   // threshold is that lane's weight.
   const toGap = (g: number) => set({ threshold: lanes[g - 1] });
@@ -284,7 +284,7 @@ function PackPlanEditor({ data, plan, planId, path, onChange }: {
     const wantedTip = fill(t("packs.wantedTip"), { names: wanted.join(t("gl.sep")) });
     return (
       <span key={name} className={"pk" + (path && bad(`${path}/weights/${name}`) ? " bad" : "")} data-path={path && `${path}/weights/${name}`}
-        {...dragged(name)} {...clickable(name, weightOf(plan, name))} title={cover ? name : undefined}>
+        {...dragged(name)} {...clickable(name)} title={cover ? name : undefined}>
         {cover ? <img className="img" src={cover} alt={name} draggable={false} /> : images && <span className="img" aria-hidden />}
         {!cover && <span className="nm">{name}</span>}
         {floors
@@ -317,7 +317,7 @@ function PackPlanEditor({ data, plan, planId, path, onChange }: {
   return (<>
     <div className="packbar">
       {chips<PackMode>(["", "normal", "hard", "infinity", "extreme"], difficulty,
-        (v) => (v ? t(BADGES[MODE_BADGE[v]][0]) : t("packs.anyDifficulty")), setDifficulty)}
+        (v) => (v ? t(BADGES[MODE_KEYS[v]][0]) : t("packs.anyDifficulty")) /* a badge's name: 普通, not NORMAL, in Chinese */, setDifficulty)}
       <span className="gap" />
       {chips(FLOORS, floor, (v) => (v ? t("packs.floor").replace("{n}", String(v)) : t("packs.anyFloor")), setFloor)}
       <span className="spacer" />
@@ -338,7 +338,7 @@ function PackPlanEditor({ data, plan, planId, path, onChange }: {
               {shown.filter((n) => weightOf(plan, n) === w).map(chip)}
               {w === plan.unlisted && (
                 <span className={"pk unlisted" + (path && bad(`${path}/unlisted`) ? " bad" : "")} data-path={path && `${path}/unlisted`}
-                  {...dragged(UNLISTED)} {...clickable(UNLISTED, plan.unlisted)}>
+                  {...dragged(UNLISTED)} {...clickable(UNLISTED)}>
                   {images && <span className="img" aria-hidden />}
                   <span className="nm">{t("packs.unlisted")}</span>
                   {typingOn(UNLISTED) && box(UNLISTED, plan.unlisted)}
