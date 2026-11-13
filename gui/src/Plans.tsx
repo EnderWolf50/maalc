@@ -11,7 +11,7 @@ import {
 import { GIFT_BY_ID, giftName } from "./giftCatalog";
 import { listsOfPlan, packWanted } from "./gifts";
 import { fill } from "./i18n";
-import { Field, ReorderList, Select, useEditor, usePick, withBreaks } from "./ui";
+import { Field, ReorderList, Select, useEditor, usePick, withBreaks, type PlanKey } from "./ui";
 
 /** The 12 sinners in the game's grid; clicking adds one at the end of the order or leaves it out
  * (spec 04 section 6). Read-only without onChange. */
@@ -92,17 +92,15 @@ export function StarlightEditor({ value, onChange, path }: {
   );
 }
 
-type PlanKey = "deployment_order_plans" | "starlight_plans" | "theme_pack_plans";
-
-/** A list of named plans on the left, the selected plan's editor on the right. */
+/** A list of named plans on the left, the selected plan's editor on the right; `lead`, a read-only plan above the list. */
 function PlanTab<P extends { id: string; name: string }>({ planKey, tab, make, editor, lead }: {
   planKey: PlanKey; tab: "tab.deployment" | "tab.starlight" | "tab.themepacks"; make: () => Omit<P, "id" | "name">;
   editor: (plan: P, change: (p: P) => void, path: string) => ReactNode;
-  lead?: { label: string; body: ReactNode };
+  lead?: { id: string; label: string; body: ReactNode };
 }) {
   const { s, update, t, bad } = useEditor();
   const plans = s[planKey] as unknown as P[];
-  const [i, setSel] = usePick(planKey, plans, !!lead); // -1: the lead
+  const [i, setSel] = usePick(planKey, plans, lead?.id); // -1: the lead
   const set = (fn: (list: P[]) => void) => update((d) => fn(d[planKey] as unknown as P[]));
   const add = () => {
     const id = newId();
@@ -112,7 +110,7 @@ function PlanTab<P extends { id: string; name: string }>({ planKey, tab, make, e
   return (
     <div className="split">
       <aside>
-        {lead && <button type="button" className={"lead" + (i === -1 ? " selected" : "")} onClick={() => setSel("default")}>{lead.label}</button>}
+        {lead && <button type="button" className={"lead" + (i === -1 ? " selected" : "")} onClick={() => setSel(lead.id)}>{lead.label}</button>}
         {plans.length || lead ? (
           <ReorderList items={plans} keyOf={(p) => p.id} selected={i} onSelect={(j, list) => setSel(list[j].id)}
             badAt={(j) => bad(`${planKey}/${j}`)} onChange={(list) => set((l) => l.splice(0, l.length, ...list))}
@@ -159,7 +157,7 @@ export function ThemePackTab() {
   const note = error && <p className="bad">{t("themePacksError")}: {error}</p>;
   return (
     <PlanTab<ThemePackPlan> planKey="theme_pack_plans" tab="tab.themepacks" make={newPackPlan}
-      lead={{ label: t("defaultPlanLocked"), body: <>
+      lead={{ id: "default", label: t("defaultPlanLocked"), body: <>
         <p className="muted">{t("defaultPlanNote")}</p>{note}
         <PackPlanEditor data={data} plan={data.default_plan} planId="default" path="" />
       </> }}

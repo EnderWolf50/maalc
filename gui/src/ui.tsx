@@ -20,18 +20,20 @@ export interface Ctx {
   picked: Picked;
   pick: (list: keyof Picked, id: string | undefined) => void;
 }
-/** By id, so the pick stays on its item when the list is reordered; the theme pack tab's default plan is "default". */
-export type Picked = Partial<Record<"teams" | "deployment_order_plans" | "starlight_plans" | "theme_pack_plans", string>>;
+export type PlanKey = "deployment_order_plans" | "starlight_plans" | "theme_pack_plans";
+/** By id, so the pick stays on its item when the list is reordered; a tab's lead (the theme packs' default plan) by its own id. */
+export type Picked = Partial<Record<"teams" | PlanKey, string>>;
 export const EditorContext = createContext<Ctx>(null!);
 export const useEditor = () => useContext(EditorContext);
 
-/** The index of the item `list` shows, and a setter by id. None picked, or the picked one gone: the lead (-1) when the tab has
- * one, else the first. What shows is pinned by id, so it stays on screen when another writer reorders the list (#501). */
-export function usePick(list: keyof Picked, items: { id: string }[], lead = false) {
+/** The index of the item `list` shows (-1: the lead, or nothing in an empty list), and a setter by id. None picked, or the
+ * picked one gone: the lead when the tab has one (`leadId`), else the first. What shows is pinned by id, so it stays on screen
+ * when another writer reorders the list (#501). */
+export function usePick(list: keyof Picked, items: { id: string }[], leadId?: string) {
   const { picked, pick } = useEditor();
   const at = items.findIndex((x) => x.id === picked[list]);
-  const i = at >= 0 ? at : lead ? -1 : Math.min(0, items.length - 1);
-  const shown = i >= 0 ? items[i].id : lead ? "default" : undefined;
+  const i = at >= 0 ? at : leadId !== undefined || !items.length ? -1 : 0;
+  const shown = i >= 0 ? items[i].id : leadId;
   useEffect(() => { if (shown !== picked[list]) pick(list, shown); }, [list, shown, picked, pick]);
   return [i, (id: string | undefined) => pick(list, id)] as const;
 }
