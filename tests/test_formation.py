@@ -3,6 +3,8 @@ from types import SimpleNamespace
 
 import actions
 import battle_actions
+import battle
+import run_start
 import test_actions
 from agent_patch import patch_all
 
@@ -12,7 +14,7 @@ OCR = 0.3  # s one look at the count costs (live: ~0.33 s); the screenshot is ta
 
 
 def card(sinner):
-    return battle_actions.card_xy(battle_actions.battle.SINNERS.index(sinner), battle_actions.CARD_TAP_Y)
+    return battle_actions.card_xy(battle.SINNERS.index(sinner), battle_actions.CARD_TAP_Y)
 
 
 class Game:
@@ -157,7 +159,7 @@ def test_too_few_alive_backs_out_and_hands_back_once_the_page_goes_not_after_2_s
     # ends when the Formation node no longer hits.
     actions.RUN.update(team={"min_alive": 5, "name": "t"}, settings={"run": {"after_retries": "forfeit"}})
     patch_all(monkeypatch, "participants", lambda context, image: (4, 4))
-    monkeypatch.setattr(actions.run_start, "resolve_plan", lambda *a: [])
+    monkeypatch.setattr(run_start, "resolve_plan", lambda *a: [])
     patch_all(monkeypatch, "dead_sinners", lambda image: set())
     game = formation_page(context, monkeypatch, {tuple(battle_actions.DETAILS_BUTTON): "Details"}, {battle_actions.FORMATION_BACK: [(0.5, {"Formation": False}, 20)]})
     assert battle_actions.Formation().run(context, None)
@@ -170,7 +172,7 @@ def test_the_details_view_is_folded_and_read_once_its_button_shows_not_after_1_5
     # #258: the » slept 1.5 s; now the order marks are read on the folded page once Details shows and the page is still.
     actions.RUN.update(team={"min_alive": 0, "name": "t"}, settings={"run": {"after_retries": "stop"}})
     patch_all(monkeypatch, "participants", lambda context, image: (5, 12))
-    monkeypatch.setattr(actions.run_start, "resolve_plan", lambda *a: [])  # ends the action after the dead are read
+    monkeypatch.setattr(run_start, "resolve_plan", lambda *a: [])  # ends the action after the dead are read
     patch_all(monkeypatch, "stop", lambda context, reason, line=None: False)
     read = []
     patch_all(monkeypatch, "dead_sinners", lambda image: read.append(int(image[0, 0, 0])) or set())
@@ -195,7 +197,7 @@ def order_page(context, monkeypatch, plan, dead, min_alive, screen_alive, after_
     patch_all(monkeypatch, "log", lines.append)
     patch_all(monkeypatch, "participants", lambda context, image: (0, screen_alive))
     patch_all(monkeypatch, "dead_sinners", lambda image: set(dead))
-    monkeypatch.setattr(actions.run_start, "resolve_plan", lambda *a: plan)
+    monkeypatch.setattr(run_start, "resolve_plan", lambda *a: plan)
     patch_all(monkeypatch, "order_marks", lambda context, image: {})
     monkeypatch.setattr(battle_actions.Formation, "pick", staticmethod(lambda context, order: taps.append(("pick", order)) or False))
     test_actions.reads(context, {tuple(battle_actions.DETAILS_BUTTON): [("Details", (0, 0, 10, 10))]})
@@ -205,7 +207,7 @@ def order_page(context, monkeypatch, plan, dead, min_alive, screen_alive, after_
 
 def test_only_the_deployment_order_counts_toward_min_alive(context, monkeypatch):
     # #616: grey cards Yi Sang to Don Quixote plus Gregor; Ryōshū and Meursault alive: K 1 is met, no forfeit.
-    dead = set(battle_actions.battle.SINNERS) - {"Ryōshū", "Meursault"}
+    dead = set(battle.SINNERS) - {"Ryōshū", "Meursault"}
     result, stops, taps, lines = order_page(context, monkeypatch, SPIDER_NEST, dead, 1, 2)
     assert "forfeit" not in actions.RUN and stops == []
     assert ("pick", ["Ryōshū"]) in taps
@@ -214,7 +216,7 @@ def test_only_the_deployment_order_counts_toward_min_alive(context, monkeypatch)
 
 def test_a_dead_sinner_of_the_order_forfeits_below_k(context, monkeypatch):
     # #616: Ryōshū grey, only Meursault and Gregor alive: nobody of the order is left, K 1 forfeits.
-    dead = set(battle_actions.battle.SINNERS) - {"Meursault", "Gregor"}
+    dead = set(battle.SINNERS) - {"Meursault", "Gregor"}
     result, stops, taps, lines = order_page(context, monkeypatch, SPIDER_NEST, dead, 1, 2)
     assert result is True and actions.RUN["forfeit"] and "0 sinners of" in actions.RUN["forfeit"]
     assert stops == []
@@ -235,7 +237,7 @@ def test_the_log_gives_the_screen_count_not_the_grey_card_count(context, monkeyp
 
 def test_a_full_order_counts_as_the_screen_count_did(context, monkeypatch):
     # #616: an order of all 12: K 5 with 4 alive forfeits, with 5 alive it does not (as before).
-    plan = list(battle_actions.battle.SINNERS)
+    plan = list(battle.SINNERS)
     dead = set(plan[:8])
     order_page(context, monkeypatch, plan, dead, 5, 4)
     assert actions.RUN["forfeit"]

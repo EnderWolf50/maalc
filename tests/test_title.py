@@ -17,6 +17,7 @@ import numpy as np
 from daily_child import GAME, bind, game_class, inside, live_frame, load, result, run_child, run_task, screen
 from recovery import DEAD_TAPS, L3_FAILED_IN_A_ROW
 from agent_patch import rebind
+import recovery
 
 TITLE_TAP = (540, 300, 200, 120)
 GLITCH = 1.3  # s: the recording's longest glitch
@@ -100,7 +101,7 @@ def child():
     game = Game()
     game.set()
     # MaaFramework's Linux build (CI) passes no post_shell to a custom controller: read the model's dumpsys directly.
-    rebind("foreground", lambda context: actions.recovery.focused_package(game.shell("dumpsys window", 0)))
+    rebind("foreground", lambda context: recovery.focused_package(game.shell("dumpsys window", 0)))
     tasker = bind(resource, game)
     out = {"error": None}
     for scenario, (model, in_a_row) in {
@@ -122,7 +123,7 @@ def child():
         "frozen_connecting_restarts_used": ({"frozen": True, "screen": "connecting"}, L3_FAILED_IN_A_ROW),
     }.items():
         game.set(**model)
-        actions.STUCK["restarts"] = actions.recovery.Restarts()
+        actions.STUCK["restarts"] = recovery.Restarts()
         for _ in range(in_a_row):
             actions.STUCK["restarts"].attempt(None)
         actions.STUCK["watch"].reset()

@@ -5,8 +5,8 @@ import numpy as np
 import pytest
 
 import actions
-import event_actions
 import shop_actions
+import shop
 import test_actions
 from test_shop import screen_with
 from agent_patch import patch_all
@@ -33,10 +33,10 @@ def fuse(context, monkeypatch, team, readings, page, chance=True, slots=3, stuck
     def inside():
         n = [since().count(c) for c in shop_actions.FUSE_CELLS]
         return {i for i, k in enumerate(n) if (k and stuck) or k % 2}
-    monkeypatch.setattr(event_actions.shop, "placed", lambda image, n: len(inside()))
-    monkeypatch.setattr(event_actions.shop, "picked", lambda image, x, y, bottom=720: shop_actions.FUSE_CELLS.index((x, y)) in (
+    monkeypatch.setattr(shop, "placed", lambda image, n: len(inside()))
+    monkeypatch.setattr(shop, "picked", lambda image, x, y, bottom=720: shop_actions.FUSE_CELLS.index((x, y)) in (
         {i for i, c in enumerate(shop_actions.FUSE_CELLS) if since().count(c)} if framed else inside()))
-    monkeypatch.setattr(event_actions.shop, "forecast_tier", lambda image: page.get(tuple(sorted(inside()))))
+    monkeypatch.setattr(shop, "forecast_tier", lambda image: page.get(tuple(sorted(inside()))))
     fused = shop_actions.Shop.fuse(context, test_actions.shop_team(team), {} if visit is None else visit)
     tapped = test_actions.taps(context)
     return fused, [tapped.count(c) for c in shop_actions.FUSE_CELLS[:len(readings)]], shop_actions.PAGE_OK in tapped, lines
@@ -153,10 +153,10 @@ def real_read_cells(monkeypatch, tiers, ids):
     `ids`: only the pixel reading is replaced."""
     spots = shop_actions.FUSE_CELLS[:len(tiers)]
     named = iter(ids)
-    monkeypatch.setattr(event_actions.shop, "filled", lambda image, x, y: (x, y) in spots)
-    monkeypatch.setattr(event_actions.shop, "cell_crop", lambda image, x, y, scale: (x, y))
-    monkeypatch.setattr(event_actions.shop, "rescale", lambda image, factor: image)
-    monkeypatch.setattr(event_actions.shop, "tier", lambda crop: tiers[spots.index(crop)])
+    monkeypatch.setattr(shop, "filled", lambda image, x, y: (x, y) in spots)
+    monkeypatch.setattr(shop, "cell_crop", lambda image, x, y, scale: (x, y))
+    monkeypatch.setattr(shop, "rescale", lambda image, factor: image)
+    monkeypatch.setattr(shop, "tier", lambda crop: tiers[spots.index(crop)])
     patch_all(monkeypatch, "template_hits", lambda *args: [])
     patch_all(monkeypatch, "cell_id", lambda context, grid, at, keyword, tier: (next(named), 0.9))
 
@@ -177,7 +177,7 @@ def test_a_misread_tier_does_not_make_a_fusion_the_condition_refuses(context, mo
     test_actions.reads(context, {**test_actions.FUSE_PAGE, tuple(shop_actions.FUSE_CONFIRM): [("Selected E.G.O Gifts 3/3", (330, 175, 320, 30))],
                                  tuple(actions.GET_TITLE): [("E.G.O Gift GET!", (560, 165, 160, 30))], **CHANCE})
     test_actions.fuse_slots(context, monkeypatch)
-    monkeypatch.setattr(event_actions.shop, "forecast_tier", lambda image: 4)
+    monkeypatch.setattr(shop, "forecast_tier", lambda image: 4)
     fused = shop_actions.Shop.fuse(context, test_actions.shop_team({"fusion_condition": "upgrade"}), {})
     taps = [c.args for c in context.tasker.controller.post_click.call_args_list]
     assert not fused and not set(taps[4:]) & set(shop_actions.FUSE_CELLS)
