@@ -1,6 +1,4 @@
-"""The battle actions (agent/battle_actions.py): the formation, the turns, and a battle's end.
-
-Split out of tests/test_actions.py (#713); the fake Maa context and the helpers other files share stay there."""
+"""The battle actions (agent/battle_actions.py): the formation, the turns, and a battle's end."""
 
 import itertools
 import time

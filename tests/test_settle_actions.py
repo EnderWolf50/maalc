@@ -1,6 +1,4 @@
-"""The run's settlement actions (agent/settle_actions.py): the result page, the weekly bonuses, and the claim or the give-up.
-
-Split out of tests/test_actions.py (#713); the fake Maa context and the helpers other files share stay there."""
+"""The run's settlement actions (agent/settle_actions.py): the result page, the weekly bonuses, and the claim or the give-up."""
 
 import json
 

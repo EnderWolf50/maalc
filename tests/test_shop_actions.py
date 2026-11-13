@@ -1,6 +1,4 @@
-"""The mirror's shop page actions (agent/shop_actions.py): offers, buying, selling, fusing, healing and skill replacement.
-
-Split out of tests/test_actions.py (#713); the fake Maa context and the helpers other files share stay there."""
+"""The mirror's shop page actions (agent/shop_actions.py): offers, buying, selling, fusing, healing and skill replacement."""
 
 from types import SimpleNamespace
 from unittest.mock import MagicMock

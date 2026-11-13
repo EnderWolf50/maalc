@@ -1,6 +1,4 @@
-"""The mirror map's actions (agent/map_actions.py): entering a node, routing the floor, and forfeiting.
-
-Split out of tests/test_actions.py (#713); the fake Maa context and the helpers other files share stay there."""
+"""The mirror map's actions (agent/map_actions.py): entering a node, routing the floor, and forfeiting."""
 
 import json
 from pathlib import Path

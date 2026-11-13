@@ -1,6 +1,4 @@
-"""The encounter page actions (agent/event_actions.py): the event and its choices, the reward cards, and the gift choice.
-
-Split out of tests/test_actions.py (#713); the fake Maa context and the helpers other files share stay there."""
+"""The encounter page actions (agent/event_actions.py): the event and its choices, the reward cards, and the gift choice."""
 
 import math
 from types import SimpleNamespace

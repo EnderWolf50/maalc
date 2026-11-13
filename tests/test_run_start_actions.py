@@ -1,6 +1,4 @@
-"""A run's start actions (agent/run_start_actions.py): the plan, the team, starlight and its graces, the starting gift and its search, and the theme pack.
-
-Split out of tests/test_actions.py (#713); the fake Maa context and the helpers other files share stay there."""
+"""A run's start actions (agent/run_start_actions.py): the plan, the team, starlight and its graces, the starting gift and its search, and the theme pack."""
 
 from unittest.mock import MagicMock
 
