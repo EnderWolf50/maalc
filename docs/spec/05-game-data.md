@@ -240,6 +240,7 @@ Boss 的 Cost 是遊戲資料 `mirror-dungeon-common-data-md8.json` 的 BOSS cos
    - 重產合成飾品表（連 `extra_gifts`，和每個主題包的專屬飾品池 `pack_gifts`：主題包 id → 它的 `specificEgoGiftPool`，想要類別 `want_kind` 用它，#417；換季先看遊戲資料 9000–9999 的飾品 id 有沒有新增，重產後 `tests/test_gift_cells.py` 會對照）：`uv run python tools/live/queue.py run --resource bench --name gift_recipes -- uv run --group unpack python tools/gift_recipes.py`（用法見工具檔頭）。（#277）
    - 更新中文名：`uv run --group unpack python tools/llc_text.py --release <LLC 最新 release>`，改寫 `gift_search.json`、`gift_recipes.json`、`gui/src/graces.json` 的中文名與星之恩惠效果文字，並記下所用 release；NOTICE.md 的 release 一併更新。（#280）
    - 預設飾品清單：確認 `gift_lists.yaml` 的 id 都還在 `gift_search.json`、`gift_recipes.json`、殘影裡（`tests/test_gift_lists.py` 會檢查，也檢查內容符合第 9 節）；重產 GUI 圖示：`uv run python tools/live/queue.py run --resource bench --name gift_icons -- uv run --group unpack python tools/gift_icons.py`。（#293）
+   - 星之恩惠圖示：`uv run --group unpack python tools/grace_icons.py` 重產 `gui/src/grace_icons/<編號>.webp`（遊戲的 `StartBuffIcon_<id>`，依英文名稱對到 `graces.json` 的編號）；新版客戶端的資源包還沒進 bundle 索引時，它會讀全部資源包，那次要 `bench` 號碼牌。（#719）
 6. 重截約 20 個關鍵畫面加進測試，跑 `maa-tools test`；分數餘裕小於 0.05 的節點標出來檢查。（#13）
 7. 截圖必須經 MaaFramework 控制器縮到短邊 720，遮掉 UID 與帳號名稱。（#13）
 

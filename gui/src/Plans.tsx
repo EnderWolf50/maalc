@@ -10,6 +10,7 @@ import {
 } from "./model";
 import { GIFT_BY_ID, giftName } from "./giftCatalog";
 import { listsOfPlan, packWanted } from "./gifts";
+import { effectLines } from "./graceText";
 import { fill } from "./i18n";
 import { Field, Input, Mark, ReorderList, Select, useEditor, usePick, useSlashFocus, useUndo, withBreaks, type PlanKey } from "./ui";
 
@@ -54,7 +55,6 @@ export function StarlightEditor({ value, onChange, path }: {
           const n = i + 1;
           const level = value.levels[i];
           const rank = order.indexOf(n) + 1;
-          const effects = g.effects[level as "plus" | "plus2"] ?? g.effects.base;
           return (
             // A group, not a button around buttons: its name is a pick button beside + and ++. A click anywhere on the card
             // picks it, as in the game; from the keyboard the pick button does, its click reaching the card.
@@ -63,15 +63,27 @@ export function StarlightEditor({ value, onChange, path }: {
               onClick={() => set((v) => clickCard(v, n))}>
               {rank > 0 && <span className="rank" id={`${id}-rank-${n}`}>{rank}</span>}
               <span className="price" id={`${id}-price-${n}`}>★ {gracePrice(n, level === "none" ? "base" : level)}</span>
-              <button type="button" className="name" disabled={!onChange} aria-pressed={rank > 0} aria-label={graceName(g, zh)}
-                aria-describedby={[rank > 0 && `${id}-rank-${n}`, `${id}-price-${n}`, zh && `${id}-fx-${n}`].filter(Boolean).join(" ")}>
-                {graceName(g, zh)}{zh && g.zh && <small>{g.en}</small>}
-              </button>
-              {zh && <ul id={`${id}-fx-${n}`}>{effects.map((line, j) => <li key={j} className={line.startsWith("-") ? "sub" : ""}>{line.replace(/^-/, "")}</li>)}</ul>}
+              <div className="head">
+                <img className="icon" src={GRACE_ICONS[`./grace_icons/${n}.webp`]} alt="" />
+                <button type="button" className="name" disabled={!onChange} aria-pressed={rank > 0} aria-label={graceName(g, zh)}
+                  aria-describedby={[rank > 0 && `${id}-rank-${n}`, `${id}-price-${n}`, zh && `${id}-fx-${n}`].filter(Boolean).join(" ")}>
+                  <span className="title">{graceName(g, zh)}{plusOf(level)}</span>
+                </button>
+              </div>
+              {zh && g.zh && <small className="en">{g.en}</small>}
+              {zh && (
+                <ul id={`${id}-fx-${n}`}>
+                  {effectLines(g, level).map((line, j) => (
+                    <li key={j} className={line.sub ? "sub" : undefined}>
+                      {line.runs.map((r, k) => (r.up ? <mark key={k}>{r.text}</mark> : <Fragment key={k}>{r.text}</Fragment>))}
+                    </li>
+                  ))}
+                </ul>
+              )}
               <span className="enhance">
                 {([1, 2] as const).map((plus) => (
                   <button type="button" key={plus} disabled={!onChange} aria-pressed={level === LEVELS[plus + 1]}
-                    aria-label={`${graceName(g, zh)} ${"+".repeat(plus)}`} className={level === LEVELS[plus + 1] ? "lit" : ""}
+                    aria-label={`${graceName(g, zh)} ${"+".repeat(plus)}`}
                     onClick={(e) => { e.stopPropagation(); set((v) => clickEnhance(v, n, plus)); }}>{"+".repeat(plus)}</button>
                 ))}
               </span>
@@ -81,10 +93,15 @@ export function StarlightEditor({ value, onChange, path }: {
       </div>
       <div className="grace-side">
         {onChange && <>
-          <button type="button" onClick={() => set(selectAll)}>{t("starlight.selectAll")}</button>
+          {/* lit while a second click would undo them: every card selected, every card at + or at ++ */}
+          <button type="button" aria-pressed={!value.levels.includes("none")} onClick={() => set(selectAll)}>{t("starlight.selectAll")}</button>
           <span className="muted">{t("starlight.enhanceAll")}</span>
-          <button type="button" aria-label={`${t("starlight.enhanceAll")} +`} onClick={() => set((v) => enhanceAll(v, 1))}>+</button>
-          <button type="button" aria-label={`${t("starlight.enhanceAll")} ++`} onClick={() => set((v) => enhanceAll(v, 2))}>++</button>
+          {([1, 2] as const).map((plus) => (
+            <button type="button" key={plus} className="boost" aria-label={`${t("starlight.enhanceAll")} ${"+".repeat(plus)}`}
+              aria-pressed={value.levels.every((l) => l === LEVELS[plus + 1])} onClick={() => set((v) => enhanceAll(v, plus))}>
+              {"+".repeat(plus)}
+            </button>
+          ))}
         </>}
         <span className="total">{t("starlight.total")} <b>★ {starlightCost(value.levels)}</b></span>
         <Mark as="label" className="check" path={`${path}/convert_leftover`}>
@@ -113,6 +130,10 @@ function PlanUsers({ planKey, id }: { planKey: PlanKey; id: string }) {
 
 /** A grace's name in the GUI's language: the Chinese one when the data has it. */
 const graceName = (g: Grace, zh: boolean) => (zh && g.zh ? g.zh : g.en);
+/** The game's icon of each grace, ./grace_icons/<n>.webp (tools/grace_icons.py). */
+const GRACE_ICONS = import.meta.glob<string>("./grace_icons/*.webp", { eager: true, query: "?url", import: "default" });
+/** What the game adds to a grace's title at a level: "+" at +, "++" at ++, nothing below. */
+const plusOf = (level: string) => "+".repeat(Math.max(0, LEVELS.indexOf(level) - 1));
 
 /** A starlight plan on one line, for a team that uses it: the picks in buying order with their level, and the total. */
 export function StarlightReceipt({ value }: { value: StarlightValues }) {
@@ -125,7 +146,7 @@ export function StarlightReceipt({ value }: { value: StarlightValues }) {
         <ol>
           {order.map((n, i) => {
             const g = GRACES[n - 1], level = value.levels[n - 1];
-            return <li key={n}><b>{i + 1}</b>{graceName(g, zh)}{level !== "base" && <i>{"+".repeat(LEVELS.indexOf(level) - 1)}</i>}</li>;
+            return <li key={n}><b>{i + 1}</b>{graceName(g, zh)}{level !== "base" && <i>{plusOf(level)}</i>}</li>;
           })}
         </ol>
       ) : <span className="muted">{t("starlight.none")}</span>}
