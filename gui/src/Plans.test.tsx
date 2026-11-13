@@ -244,16 +244,22 @@ test("the difficulty filter names the difficulties as the floor badges do: 普�
   expect(chip("HARD")).toBeInTheDocument();
 });
 
-test("INFINITY and EXTREME are choices of the filter and badges of a pack", async () => {
-  const { user } = renderEditor(<ThemePackTab />, newSettings());
+test("INFINITY and EXTREME are choices of the filter and badges of a pack: 無限 and 極限 in Chinese", async () => {
+  expect([zh["packs.floorsInfinity"], zh["packs.floorsExtreme"]]).toEqual(["無限", "極限"]); // the user's words, 2026-11-14
+  const { user, unmount } = renderEditor(<ThemePackTab />, newSettings());
   await waitFor(() => expect(shown("Chachihu")).toBe(true));
-  await user.click(chip("EXTREME"));
+  await user.click(chip("極限"));
   expect(shown("Chachihu")).toBe(true);
   expect(shown("The Forgotten")).toBe(false);
-  await user.click(chip("INFINITY"));
+  await user.click(chip("無限"));
   expect(shown("Chachihu")).toBe(false);
   expect(shown("The Heartbreaking")).toBe(true);
-  expect(screen.getAllByRole("img", { name: `${zh["packs.floorsInfinity"]} 6–10` }).length).toBeGreaterThan(0);
+  expect(screen.getAllByRole("img", { name: "無限 6–10" }).length).toBeGreaterThan(0);
+  expect(document.querySelector(".floorkey")).toHaveTextContent(/無限.*極限/);
+  unmount();
+  renderEditor(<ThemePackTab />, { ...newSettings(), language: "en_us" });
+  expect(chip("INFINITY")).toBeInTheDocument();
+  expect(chip("EXTREME")).toBeInTheDocument();
 });
 
 describe("deleting a plan", () => {

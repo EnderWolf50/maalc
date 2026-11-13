@@ -41,6 +41,9 @@
   --card-top: #2c2219; --card-bottom: #120e0b; --card-line: #5a4630; --card-fg: #edcda6;
   --dep-top: #4a3413; --dep-bottom: #17100a; --bak-top: #12392f; --bak-bottom: #0b1311;
   --tone-dep: #f0a632; --on-tone: #1d1206;
+  /* deployed as the game draws it: a red plate with orange text. The game's orange #ffa20f as it is, its red #bd1600 darkened
+   * until the text reads 4.5:1 on it; one plate for both themes */
+  --dep-plate: #931001; --dep-ink: #ffa20f;
   /* backup as the game draws it: a dark teal plate (the frame too) with light cyan text, a bright cyan number */
   --bak-plate: #006e7e; --bak-ink: #81f1ff; --bak-num: #22fde3;
   /* Grace of the Star as the game draws it (a capture of 2026-11-13): grey-navy cards in a blue frame on a near-black page,
@@ -53,12 +56,12 @@
   --season-pick-top: #ffffff; --season-pick-mid: #e6eefb; --season-pick-bottom: #cfdcf1; --season-pick-ink: #0b1530; --season-pick-line: #ffffff;
   --season-btn: #060710; --season-btn-line: #80808c; --season-btn-ink: #e2c6a2; --season-btn-hover: #161a2e;
   /* Difficulty, as the game's banners: NORMAL yellow and HARD red-orange fills (theme pack page), INFINITY violet (no game
-   * screen), EXTREME magenta, away from the error red. A fill, the ink on it, and the mark of a filter chip, each as light
-   * or dark as its contrast needs. */
+   * screen), EXTREME the game's red (the user, 2026-11-14). A fill, the ink on it, and the mark of a filter chip, each as
+   * light or dark as its contrast needs. */
   --fl-n: #b89b21; --fl-n-ink: #100d03; --fl-n-mark: #b89b21;
   --fl-h: #c03b0b; --fl-h-ink: #fee5df; --fl-h-mark: #d04a21;
   --fl-i: #c2a6ff; --fl-i-ink: #1e003f;
-  --fl-x: #ff6ec0;
+  --fl-x: #c53125; --fl-x-ink: #fff2ef; --fl-x-mark: #d64335;
   --font-ui: "Segoe UI", "Microsoft JhengHei UI", system-ui, sans-serif;
   --font-display: "Barlow Condensed", "Microsoft JhengHei UI", "Segoe UI", sans-serif;
   font: 14px/1.5 var(--font-ui);
@@ -97,7 +100,7 @@
     --fl-n: #987e06; --fl-n-ink: #100d03; --fl-n-mark: #987e06;
     --fl-h: #bb3602; --fl-h-ink: #ffdcd3; --fl-h-mark: #bb3602;
     --fl-i: #6a40c4; --fl-i-ink: #f5f4fe;
-    --fl-x: #a3137a;
+    --fl-x: #a50000; --fl-x-ink: #fff2f0; --fl-x-mark: #a50000;
     --card-top: #fbf8f3; --card-bottom: #ece4d7; --card-line: #b9a68c; --card-fg: #1e1813;
     --dep-top: #fdf0d4; --dep-bottom: #f6dca6; --bak-top: #e3f5f1; --bak-bottom: #c1e7df;
     --tone-dep: #9a5c00; --on-tone: #ffffff; --bak-num: #046f63;
@@ -394,6 +397,7 @@ details.hint > p { margin: 6px 0 0; color: var(--muted); font-size: 12.5px; max-
 .sinner:hover:not(:disabled) { border-color: var(--accent-line); }
 .sinner:disabled { opacity: 1; cursor: default; }
 .sinner.deployed { --tone: var(--tone-dep); border: 2px solid var(--tone); background: linear-gradient(165deg, var(--dep-top), var(--dep-bottom) 75%); }
+.sinner.deployed .banner { background: var(--dep-plate); color: var(--dep-ink); }
 .sinner.backup { --tone: var(--bak-plate); border: 2px solid var(--tone); background: linear-gradient(165deg, var(--bak-top), var(--bak-bottom) 75%); }
 .sinner.backup .num { color: var(--bak-num); }
 .sinner.backup .banner { color: var(--bak-ink); }
@@ -567,7 +571,7 @@ ol.skill-sinners .grip { color: var(--muted); font-size: 11px; }
 .chip.mode { --c: var(--fl-n-mark); display: inline-flex; align-items: center; gap: 6px; }
 .chip.mode.hard { --c: var(--fl-h-mark); }
 .chip.mode.inf { --c: var(--fl-i); }
-.chip.mode.ext { --c: var(--fl-x); }
+.chip.mode.ext { --c: var(--fl-x-mark); }
 .chip.mode::before { content: ""; width: 8px; height: 8px; transform: rotate(45deg); background: var(--c); }
 .lanes { display: flex; flex-direction: column; padding: 4px 14px; }
 .lane { display: flex; align-items: flex-start; gap: 12px; padding: 7px 0; border-bottom: 1px dashed var(--line); min-height: 40px; }
@@ -598,13 +602,10 @@ small.fl, small.wk {
 }
 small.fl { --c: var(--fl-n); --ink: var(--fl-n-ink); color: var(--ink); background: var(--c); border-color: var(--c); }
 /* Besides the hue: NORMAL dark ink on a light fill, HARD light ink on a dark one; INFINITY has a dashed ring round its fill,
- * EXTREME a tinted double-weight frame. */
+ * EXTREME a double one. */
 small.fl.hard { --c: var(--fl-h); --ink: var(--fl-h-ink); }
 small.fl.inf { --c: var(--fl-i); --ink: var(--fl-i-ink); outline: 1px dashed var(--c); outline-offset: 1px; }
-small.fl.ext {
-  --c: var(--fl-x); color: var(--c); background: color-mix(in srgb, var(--c) 10%, var(--panel));
-  border: 2px solid color-mix(in srgb, var(--c) 45%, transparent); padding: 0 4px;
-}
+small.fl.ext { --c: var(--fl-x); --ink: var(--fl-x-ink); outline: 3px double var(--c); outline-offset: 1px; }
 small.wk { font: 700 12px/1.35 var(--font-ui); color: var(--on-accent); background: var(--accent); border-color: var(--accent); } /* the "含想要" mark (#421) */
 .floorkey { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
 .pk.unlisted { border-style: dashed; color: var(--muted); }

@@ -131,7 +131,7 @@ const zh_tw = {
   "packs.unlisted": "沒列出的包（新一季的包、讀不出名稱的包）",
   "packs.newLane": "拖到這裡，輸入新的分數",
   "packs.floorsNormal": "普通", "packs.floorsHard": "困難", "packs.floorSep": "、", "packs.floorsKey": "數字＝會出現的樓層", "packs.wanted": "含想要", "packs.wantedTip": "這個包的專屬飾品裡屬於想要類的：{names}",
-  "packs.floorsInfinity": "INFINITY", "packs.floorsExtreme": "EXTREME",
+  "packs.floorsInfinity": "無限", "packs.floorsExtreme": "極限", // the user's words, 2026-11-14; en_us keeps the game's
   "packs.weightPrompt": "分數（−10 到 10 的整數）：",
   "packs.weightRange": "分數必須是 −10 到 10 的整數。",
   "packs.eventPacks": "活動卡包",
