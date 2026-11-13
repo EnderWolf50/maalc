@@ -1,7 +1,7 @@
 // The team queue (#501): the order of the teams list is the queue the Agent rotates, and after a claim the Agent moves that
 // team to the end of settings.json. The editor shows the order on disk, keeps the user's unsaved edits on top of it, and
 // never saves its own stale order over the Agent's.
-import { act, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, onTestFinished, test, vi } from "vitest";
 import App from "./App";
@@ -80,6 +80,20 @@ describe("in the editor", () => {
   test("the teams tab says the list is the queue", async () => {
     render(<App />);
     expect(await screen.findByText(zh["teams.queue"])).toBeInTheDocument();
+  });
+
+  // The drag the real window takes only in the foreground (docs/agents/gui-driving.md): the HTML5 events the list handles.
+  test("dragging a team onto another moves it there in the queue", async () => {
+    render(<App />);
+    await waitFor(() => expect(shown()).toEqual(["Ta", "Tb", "Tc"]));
+    const rows = () => within(document.querySelector("aside")!).getAllByRole("listitem");
+    const dt = () => ({ setData() {}, effectAllowed: "", dropEffect: "" });
+    fireEvent.dragStart(rows()[2], { dataTransfer: dt() });
+    fireEvent.dragOver(rows()[0], { dataTransfer: dt() });
+    fireEvent.drop(rows()[0], { dataTransfer: dt() });
+    fireEvent.dragEnd(rows()[2], { dataTransfer: dt() });
+    expect(shown()).toEqual(["Tc", "Ta", "Tb"]);
+    expect(document.querySelector(".status")).toHaveTextContent(zh.unsaved);
   });
 
   test("the order the Agent wrote shows when the window comes back to the front", async () => {

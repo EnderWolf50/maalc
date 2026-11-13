@@ -1,4 +1,5 @@
-// The trial score overrides tab (#381): a score in pt, decimals and past the old 0-5 scale, typed as the user types it.
+// The trial score overrides tab (#381): a score in pt, decimals and past the old 0-5 scale, typed as the user types it; and
+// what the two override tabs say about themselves.
 import { screen } from "@testing-library/react";
 import { expect, test } from "vitest";
 import { TABS } from "./App";
@@ -8,6 +9,7 @@ import { expectLines, renderEditor } from "./testing";
 
 const zh = TEXT.zh_tw;
 const TrialsTab = TABS.find((tab) => tab[0] === "trials")![2];
+const EventsTab = TABS.find((tab) => tab[0] === "events")![2];
 
 test("a trial's score takes decimals, typed digit by digit", async () => {
   const { user, settings } = renderEditor(<TrialsTab />, newSettings());
@@ -33,7 +35,25 @@ test("a score that is no number or below 0 leaves the last one, and the field sh
   expect(score).toHaveValue("1.5");
 });
 
-test("the tab says what a score means, each paragraph on a line of its own", () => {
+test("the tab says what a score means, each paragraph on a line of its own, folded under Help until asked for", () => {
   renderEditor(<TrialsTab />, newSettings());
   expectLines(zh["trial.note"]);
+  const help = screen.getByText(zh["trial.help"]).closest("details")!;
+  expect(help).not.toHaveAttribute("open");
+});
+
+test("the event overrides tab says what to type and how the bot matches it", () => {
+  renderEditor(<EventsTab />, newSettings());
+  expectLines(zh["event.note"]);
+});
+
+test("a deleted row can be undone: it comes back in its place", async () => {
+  const rows = [{ trial: "Growth I", risk: 1 }, { trial: "Growth II", risk: 2 }, { trial: "Growth III", risk: 3 }];
+  const { user, settings } = renderEditor(<TrialsTab />, { ...newSettings(), trial_risk_overrides: rows });
+  await user.click(screen.getAllByRole("button", { name: zh.remove })[1]);
+  expect(settings().trial_risk_overrides.map((r) => r.trial)).toEqual(["Growth I", "Growth III"]);
+  expect(screen.getByRole("status")).toHaveTextContent("Growth II");
+  await user.click(screen.getByRole("button", { name: zh.undo }));
+  expect(settings().trial_risk_overrides).toEqual(rows);
+  expect(screen.queryByRole("status")).toBeNull();
 });

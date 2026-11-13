@@ -1,31 +1,35 @@
 // Teams (spec 04 section 9): the list order is the team queue (#501).
-import { useState } from "react";
+import { useRef, useState, type KeyboardEvent } from "react";
 import { resetTeamTimes } from "./api";
-import { TIERS, kwText } from "./KeywordGrid";
+import { KeywordIcon, TIERS, kwText } from "./KeywordGrid";
 import { teamKeyword } from "./gifts";
+import { fill } from "./i18n";
 import {
   MAX_GIFTS, SEARCH_GIFTS, SEARCH_TABS, SINNERS, defaultStarlight, freeName, newId, newTeam, teamEnum, toggleGift,
   type GiftRef, type SearchGift, type Team,
 } from "./model";
-import { SinnerGrid, StarlightEditor } from "./Plans";
+import { SinnerGrid, StarlightEditor, StarlightReceipt } from "./Plans";
 import { SkillPanel } from "./SkillReplacement";
-import { Choice, Field, Input, Mark, Num, ReorderList, Select, ToggleNum, useEditor, usePick, useUndo, withBreaks } from "./ui";
+import { Choice, Field, Input, Mark, Num, ReorderList, Select, ToggleNum, nextTab, useEditor, usePick, useUndo, withBreaks } from "./ui";
 
 export function TeamsTab() {
-  const { s, update, t, bad } = useEditor();
+  const { s, update, t, tv, bad } = useEditor();
   const [i, setSel] = usePick("teams", s.teams);
   const [undoNote, removeAt] = useUndo();
   const remove = () => removeAt(s.teams, i, (fn) => update((d) => fn(d.teams)), setSel);
   return (
     <div className="split">
-      <aside>
+      <aside className="queue">
         <p className="muted">{t("teams.queue")}</p>
         {s.teams.length ? (
           <ReorderList items={s.teams} keyOf={(x) => x.id} selected={i} onSelect={(j, teams) => setSel(teams[j].id)}
             badAt={(j) => bad(`teams/${j}`)}
             onChange={(teams) => update((d) => { d.teams = teams; })}
             render={(x) => (
-              <span className={x.enabled ? "" : "muted"}>{x.name || "—"} <small>#{x.game_team}</small></span>
+              <span className={x.enabled ? "" : "muted"}>{x.name || "—"} <small>TEAMS #{x.game_team}</small>
+                {!x.enabled && <em className="qtag off">{t("team.disabled")}</em>}
+                {x.usage !== "any" && <em className="qtag">{tv("usage", x.usage)}</em>}
+              </span>
             )} />
         ) : <p className={"muted" + (bad("teams") ? " bad" : "")}>{t("noTeams")}</p>}
         {undoNote}
@@ -35,9 +39,33 @@ export function TeamsTab() {
           update((d) => { d.teams.push(team); });
           setSel(team.id);
         }}>+ {t("add")}</button>
+        {s.teams[i] && <SectionIndex />}
       </aside>
       <section>{s.teams[i] && <TeamEditor i={i} onRemove={remove} />}</section>
     </div>
+  );
+}
+
+/** The team page's sections, so a long page is one click from each: a closed panel opens and its summary takes the focus, or a
+ * section's first control. */
+const SECTIONS = [
+  ["order", "team.deployment_order"], ["starlight", "team.starlight"], ["gift", "gift.title"], ["keep", "keep.title"],
+  ["skill", "skill.title"], ["more", "team.more"],
+] as const;
+function SectionIndex() {
+  const { t } = useEditor();
+  const go = (k: string) => {
+    const el = document.querySelector<HTMLElement>(`[data-section="${k}"]`);
+    if (!el) return;
+    if (el instanceof HTMLDetailsElement) el.open = true;
+    el.scrollIntoView?.({ block: "start" });
+    el.querySelector<HTMLElement>("summary, select, input, button")?.focus({ preventScroll: true });
+  };
+  return (
+    <nav className="sections" aria-label={t("team.sections")}>
+      <small>{t("team.sections")}</small>
+      {SECTIONS.map(([k, label]) => <button type="button" key={k} onClick={() => go(k)}>{t(label)}</button>)}
+    </nav>
   );
 }
 
@@ -47,12 +75,17 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
   const path = `teams/${i}`;
   const set = (patch: Partial<Team>) => update((d) => { Object.assign(d.teams[i], patch); });
   const main = teamKeyword(team.gift_list, s.gift_lists);
-  const [notice, setNotice] = useState("");
+  const [notice, setNotice] = useState<{ team: string; text: string } | null>(null); // shown on its own team only, also when the reset ends after a switch
+  const [askReset, setAskReset] = useState(false); // Reset time records asks first, in the page
+  // Picking another team drops the question (its Cancel takes the focus); the editor stays mounted, so the panels left open
+  // stay open.
+  const [shownTeam, setShownTeam] = useState(team.id);
+  if (shownTeam !== team.id) { setShownTeam(team.id); setAskReset(false); }
 
   // "plan id" or "" for custom. Switching to custom copies the plan's values (spec 04 section 9).
   const orderSource = "plan" in team.deployment_order ? team.deployment_order.plan : "";
-  const order = "custom" in team.deployment_order ? team.deployment_order.custom
-    : s.deployment_order_plans.find((p) => p.id === orderSource)?.order;
+  const orderPlan = s.deployment_order_plans.find((p) => p.id === orderSource);
+  const order = "custom" in team.deployment_order ? team.deployment_order.custom : orderPlan?.order;
   const starSource = "plan" in team.starlight ? team.starlight.plan : "";
   const starPlan = s.starlight_plans.find((p) => p.id === starSource);
   const star = "custom" in team.starlight ? team.starlight.custom : starPlan;
@@ -91,15 +124,50 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
           <Input type="checkbox" checked={team.enabled} onChange={(e) => set({ enabled: e.target.checked })} />{t("team.enabled")}
         </Mark>
         <span className="spacer" />
-        <button type="button" onClick={async () => {
-          if (!confirm(t("resetConfirm"))) return;
-          try { await resetTeamTimes(team.id); setNotice(t("resetDone")); } catch (e) { setNotice(String(e)); }
-        }}>{t("resetTimes")}</button>
+        <button type="button" onClick={() => setAskReset(true)}>{t("resetTimes")}</button>
         <button type="button" className="danger" onClick={onRemove}>{t("remove")}</button>
       </div>
-      {notice && <p className="notice">{notice}</p>}
+      {askReset && (
+        // asked in the page, not in a browser dialog: the window has no system frame for one to match
+        <div className="notice confirm" role="group" aria-label={t("resetTimes")}>
+          <span>{t("resetConfirm")}</span>
+          <button type="button" onClick={async () => {
+            setAskReset(false);
+            try { await resetTeamTimes(team.id); setNotice({ team: team.id, text: t("resetDone") }); }
+            catch (e) { setNotice({ team: team.id, text: String(e) }); }
+          }}>{t("resetGo")}</button>
+          {/* the focus starts on Cancel: the marker cannot be taken back */}
+          <button type="button" autoFocus onClick={() => setAskReset(false)}>{t("cancel")}</button>
+        </div>
+      )}
+      {notice?.team === team.id && <p className="notice">{notice.text}</p>}
+      {/* What the team plays with, under its name: read and changed without scrolling past the grids. */}
+      <div className="bar lists">
+        <Field label={t("team.gift_list")} path={`${path}/gift_list`}>
+          <span className="inline">
+            <Choice value={team.gift_list} onChange={(e) => set({ gift_list: e.target.value })}>
+              <option value="default">{t("defaultPlan")}</option>
+              {s.gift_lists.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+              {missing(team.gift_list !== "default" && team.gift_list, s.gift_lists)}
+            </Choice>
+            <button type="button" disabled={!main} onClick={() => chooseList(team.gift_list, true)}>{t("team.edit_list")}</button>
+          </span>
+          {main && <small>{t("team.main_keyword")}{t("colon")}<b>{t(kwText(main))}</b></small>}
+        </Field>
+        <Field label={t("team.theme_pack_plan")} path={`${path}/theme_pack_plan`}>
+          <Choice value={team.theme_pack_plan} onChange={(e) => set({ theme_pack_plan: e.target.value })}>
+            <option value="default">{t("defaultPlan")}</option>
+            {s.theme_pack_plans.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            {missing(team.theme_pack_plan !== "default" && team.theme_pack_plan, s.theme_pack_plans)}
+          </Choice>
+        </Field>
+        <details className="hint">
+          <summary>{t("gl.help")}</summary>
+          <p>{withBreaks(t("team.gift_list_note"))}</p>
+        </details>
+      </div>
 
-      <fieldset>
+      <fieldset data-section="order">
         <legend>{t("team.deployment_order")}</legend>
         <Mark className="row" path={`${path}/deployment_order`} marked={!("custom" in team.deployment_order)}>
           {planSelect(orderSource, s.deployment_order_plans, (id) => set({
@@ -110,10 +178,13 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
         {"custom" in team.deployment_order ? (
           <SinnerGrid order={team.deployment_order.custom} path={`${path}/deployment_order/custom`}
             onChange={(custom) => set({ deployment_order: { custom } })} />
-        ) : order && <SinnerGrid order={order} path={`${path}/deployment_order`} />}
+        ) : order && <>
+          <p className="muted">{fill(t("team.plan_note"), { name: orderPlan!.name, tab: t("tab.deployment"), custom: t("custom") })}</p>
+          <SinnerGrid order={order} path={`${path}/deployment_order`} />
+        </>}
       </fieldset>
 
-      <fieldset>
+      <fieldset data-section="starlight">
         <legend>{t("team.starlight")}</legend>
         <Mark className="row" path={`${path}/starlight`} marked={!("custom" in team.starlight)}>
           {planSelect(starSource, s.starlight_plans, (id) => set({
@@ -126,14 +197,22 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
         {"custom" in team.starlight ? (
           <StarlightEditor value={team.starlight.custom} path={`${path}/starlight/custom`}
             onChange={(custom) => set({ starlight: { custom } })} />
-        ) : starPlan && <StarlightEditor value={starPlan} path={`${path}/starlight`} />}
+        ) : starPlan && <>
+          {/* a plan is edited on its own tab: here its picks on one line, the cards folded away */}
+          <p className="muted">{fill(t("team.plan_note"), { name: starPlan.name, tab: t("tab.starlight"), custom: t("custom") })}</p>
+          <StarlightReceipt value={starPlan} />
+          <details className="hint">
+            <summary>{t("starlight.cards")}</summary>
+            <StarlightEditor value={starPlan} path={`${path}/starlight`} />
+          </details>
+        </>}
       </fieldset>
 
       <GiftSearchPanel i={i} />
       <KeepPanel i={i} />
       <SkillPanel i={i} />
 
-      <details className="panel" open>
+      <details className="panel" open data-section="more">
         <summary>{t("team.more")}</summary>
         <div className="options">
           <Mark className="toggle" path={`${path}/guard_turns`}>
@@ -179,28 +258,12 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
           <Field label={t("team.shop_refresh_normal")} path={`${path}/shop_refresh_normal`} note={t("team.shop_refresh_note")}>
             <Num value={team.shop_refresh_normal} min={0} onChange={(v) => set({ shop_refresh_normal: v })} />
           </Field>
-          <Field label={t("team.gift_list")} path={`${path}/gift_list`} note={t("team.gift_list_note")}>
-            <Choice value={team.gift_list} onChange={(e) => set({ gift_list: e.target.value })}>
-              <option value="default">{t("defaultPlan")}</option>
-              {s.gift_lists.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-              {missing(team.gift_list !== "default" && team.gift_list, s.gift_lists)}
-            </Choice>
-            {main && <small>{t("team.main_keyword")}: <b>{t(kwText(main))}</b></small>}
-            <button type="button" disabled={!main} onClick={() => chooseList(team.gift_list, true)}>{t("team.edit_list")}</button>
-          </Field>
-          <Field label={t("team.theme_pack_plan")} path={`${path}/theme_pack_plan`}>
-            <Choice value={team.theme_pack_plan} onChange={(e) => set({ theme_pack_plan: e.target.value })}>
-              <option value="default">{t("defaultPlan")}</option>
-              {s.theme_pack_plans.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-              {missing(team.theme_pack_plan !== "default" && team.theme_pack_plan, s.theme_pack_plans)}
-            </Choice>
-          </Field>
           <Field label={t("team.min_alive")} path={`${path}/min_alive`} note={t("team.min_alive_note")}>
             <Num value={team.min_alive} min={0} max={12} onChange={(v) => set({ min_alive: v })} />
           </Field>
         </div>
         <div className={"rewards" + (bad(`${path}/reward_cards`) ? " bad" : "")} data-path={`${path}/reward_cards`}>
-          <h4>{t("team.reward_cards")}</h4>
+          <h3>{t("team.reward_cards")}</h3>
           <ReorderList items={team.reward_cards} keyOf={(x) => x} onChange={(reward_cards) => set({ reward_cards })}
             render={(x, j) => <>{j + 1}. {x}</>} />
         </div>
@@ -226,18 +289,27 @@ function GiftGrid({ gifts, start, full, mark, onToggle }: {
   const [tab, setTab] = useState(SEARCH_TABS.includes(start) ? start : SEARCH_TABS[0]);
   const zh = s.language === "zh_tw";
   const count = (k: string) => gifts.filter((g) => g.keyword === k).length;
+  const refs = useRef<Record<string, HTMLButtonElement | null>>({});
+  const walk = (e: KeyboardEvent) => {
+    const next = nextTab(SEARCH_TABS, tab, e.key);
+    if (!next || next === tab) return;
+    e.preventDefault();
+    setTab(next);
+    refs.current[next]?.focus();
+  };
   return (
     <div className="gift-search">
-      <div className="gift-tabs" role="tablist">
+      <div className="gift-tabs" role="tablist" onKeyDown={walk}>
         {SEARCH_TABS.map((k) => (
-          <button type="button" key={k} role="tab" aria-selected={k === tab} className={k === tab ? "selected" : ""} onClick={() => setTab(k)}>
-            {k}{count(k) > 0 && <b>{count(k)}</b>}
+          <button type="button" key={k} role="tab" aria-selected={k === tab} tabIndex={k === tab ? 0 : -1} className={k === tab ? "selected" : ""}
+            ref={(el) => { refs.current[k] = el; }} onClick={() => setTab(k)}>
+            <KeywordIcon keyword={k} />{t(kwText(k))}{count(k) > 0 && <b>{count(k)}</b>}
           </button>
         ))}
       </div>
       {[3, 2, 1].map((tier) => (
         <div key={tier} className="gift-tier">
-          <h4>{TIERS[tier]}</h4>
+          <h3>{TIERS[tier]}</h3>
           <div className="gifts">
             {SEARCH_GIFTS.filter((g) => g.keyword === tab && g.tier === tier).map((g) => {
               const m = mark(g);
@@ -266,7 +338,7 @@ function KeepPanel({ i }: { i: number }) {
   const path = `teams/${i}`;
   const set = (patch: Partial<Team>) => update((d) => { Object.assign(d.teams[i], patch); });
   return (
-    <details className={"panel" + (["sell_max_tier", "sell_vestiges"].some((k) => bad(`${path}/${k}`)) ? " bad" : "")}>
+    <details className={"panel" + (["sell_max_tier", "sell_vestiges"].some((k) => bad(`${path}/${k}`)) ? " bad" : "")} data-section="keep">
       <summary>{t("keep.title")}</summary>
       <p className="muted">{t("keep.note")}</p>
       <div className="options">
@@ -301,24 +373,24 @@ function GiftSearchPanel({ i }: { i: number }) {
   const rank = (g: SearchGift) => search.gifts.findIndex((x) => sameRef(x, g)) + 1;
   const full = search.gifts.length >= MAX_GIFTS;
   return (
-    <details className={"panel" + (bad(path) ? " bad" : "")} data-path={path}>
+    <details className={"panel" + (bad(path) ? " bad" : "")} data-path={path} data-section="gift">
       <summary>{t("gift.title")}{search.enabled && search.gifts.length ? ` (${search.gifts.length})` : ""}</summary>
       <Mark className="toggle" path={`${path}/enabled`}>
         <label className="check">
           <Input type="checkbox" checked={search.enabled} onChange={(e) => set({ enabled: e.target.checked })} />{t("gift.enabled")}
         </label>
-        <small>{t("gift.note")}</small>
+        <small className="caution">{t("gift.note")}</small>
       </Mark>
-      <GiftGrid gifts={search.gifts} start={main ?? SEARCH_TABS[0]} full={full} mark={(g) => (rank(g) ? String(rank(g)) : null)}
+      <GiftGrid key={team.id} gifts={search.gifts} start={main ?? SEARCH_TABS[0]} full={full} mark={(g) => (rank(g) ? String(rank(g)) : null)}
         onToggle={(g) => set({ gifts: toggleGift(search.gifts, g) })} />
       <div className={"rewards" + (bad(`${path}/gifts`) ? " bad" : "")} data-path={`${path}/gifts`}>
-        <h4>{t("gift.order")} ({search.gifts.length}/{MAX_GIFTS})</h4>
+        <h3>{t("gift.order")} ({search.gifts.length}/{MAX_GIFTS})</h3>
         {full && <p className="muted">{t("gift.full")}</p>}
         {search.gifts.length ? (
           <ReorderList items={search.gifts} keyOf={(g) => `${g.keyword}|${g.tier}|${g.name}`} onChange={(gifts) => set({ gifts })}
             render={(g, j) => (
               <>
-                {j + 1}. {refName(g, zh)} <small className="muted">{g.keyword} {TIERS[g.tier]}</small>{" "}
+                {j + 1}. {refName(g, zh)} <small className="muted">{t(kwText(g.keyword))} {TIERS[g.tier]}</small>{" "}
                 <button type="button" className="icon" aria-label={t("remove")} title={t("remove")}
                   onClick={(e) => { e.stopPropagation(); set({ gifts: toggleGift(search.gifts, g) }); }}>×</button>
               </>

@@ -6,15 +6,16 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 import App from "./App";
 import { DEFAULT_LIST, mainKeyword } from "./gifts";
 import { TEXT, fill } from "./i18n";
-import { GIFT_KEYWORDS, defaultGorder, newSettings, newTeam, type GiftList, type Settings } from "./model";
+import { GIFT_KEYWORDS, GRACES, SEARCH_TABS, SINNERS, defaultGorder, newSettings, newTeam, starlightCost, type GiftList, type Settings } from "./model";
 import { expectLines, renderEditor } from "./testing";
 import { TeamsTab } from "./Teams";
 import { useEditor } from "./ui";
 
 // The editor reads its settings through api.ts, which falls back to the browser's localStorage; the tests give it a file's text.
-const file = vi.hoisted(() => ({ text: "" }));
+const file = vi.hoisted(() => ({ text: "", resets: [] as string[] }));
 vi.mock("./api", async (original) => ({
   ...(await original<typeof import("./api")>()),
+  resetTeamTimes: (id: string) => { file.resets.push(id); return Promise.resolve(); },
   loadSettings: () => Promise.resolve(file.text),
   saveSettings: () => Promise.resolve(),
   rootDir: () => Promise.resolve("root"),
@@ -32,6 +33,51 @@ const settings = (ref = "mine", language: Settings["language"] = "zh_tw"): Setti
 });
 const choice = () => screen.getByRole("combobox", { name: new RegExp(zh["team.gift_list"]) });
 const mainOf = () => screen.getByText(zh["team.main_keyword"], { exact: false }).closest("small")!;
+
+describe("Reset time records", () => {
+  beforeEach(() => { file.resets = []; });
+
+  test("a question left open goes with its team: the next team picked is not asked, and gets no marker", async () => {
+    const s = settings();
+    s.teams.push({ ...newTeam(2, "T2"), id: "t2" });
+    const r = renderEditor(<TeamsTab />, s);
+    await r.user.click(screen.getByRole("button", { name: zh.resetTimes }));
+    await r.user.click(within(document.querySelector("aside")!).getByText("T2"));
+    expect(screen.queryByRole("group", { name: zh.resetTimes })).toBeNull();
+    await r.user.click(within(document.querySelector("aside")!).getByText("T1"));
+    expect(screen.queryByRole("group", { name: zh.resetTimes })).toBeNull();
+    expect(file.resets).toEqual([]);
+  });
+
+  test("the note of a reset stays with its team: the next team picked does not show it, the way back does", async () => {
+    const s = settings();
+    s.teams.push({ ...newTeam(2, "T2"), id: "t2" });
+    const r = renderEditor(<TeamsTab />, s);
+    await r.user.click(screen.getByRole("button", { name: zh.resetTimes }));
+    await r.user.click(screen.getByRole("button", { name: zh.resetGo }));
+    await screen.findByText(zh.resetDone);
+    await r.user.click(within(document.querySelector("aside")!).getByText("T2"));
+    expect(screen.queryByText(zh.resetDone)).toBeNull();
+    await r.user.click(within(document.querySelector("aside")!).getByText("T1"));
+    expect(screen.getByText(zh.resetDone)).toBeTruthy();
+  });
+
+  test("asks in the page, not in a browser dialog; Cancel writes nothing, the confirm writes the marker", async () => {
+    const confirm = vi.spyOn(window, "confirm");
+    const r = renderEditor(<TeamsTab />, settings());
+    await r.user.click(screen.getByRole("button", { name: zh.resetTimes }));
+    expect(confirm).not.toHaveBeenCalled();
+    expect(screen.getByRole("group", { name: zh.resetTimes })).toHaveTextContent(zh.resetConfirm);
+    expect(screen.getByRole("button", { name: zh.cancel })).toHaveFocus(); // the marker cannot be taken back: Enter keeps things
+    await r.user.click(screen.getByRole("button", { name: zh.cancel }));
+    expect(file.resets).toEqual([]);
+    expect(screen.queryByRole("group", { name: zh.resetTimes })).toBeNull();
+    await r.user.click(screen.getByRole("button", { name: zh.resetTimes }));
+    await r.user.click(screen.getByRole("button", { name: zh.resetGo }));
+    expect(file.resets).toEqual([r.settings().teams[0].id]);
+    expect(await screen.findByText(zh.resetDone)).toBeInTheDocument();
+  });
+});
 
 describe("the gift list choice", () => {
   test("the dropdown offers the default and the user's lists, with the team's chosen", () => {
@@ -157,4 +203,116 @@ test("the team page's long notes show one topic to a line", () => {
   renderEditor(<TeamsTab />, settings());
   const keys = ["team.gift_list_note", "team.hard_from_floor_note", "team.min_alive_note", "keep.sell_vestiges_note", "skill.note"] as const;
   for (const key of keys) expectLines(zh[key]);
+});
+
+describe("a team on a starlight plan", () => {
+  const levels = GRACES.map(() => "none");
+  levels[2] = "plus";
+  levels[0] = "base";
+  const onPlan = (): Settings => {
+    const s = settings();
+    s.starlight_plans = [{ id: "p1", name: "Cheap", levels, priority: [3, 1, 2, 4, 5, 6, 7, 8, 9, 10], convert_leftover: false }];
+    s.teams[0].starlight = { plan: "p1" };
+    return s;
+  };
+
+  test("shows the plan's picks in buying order with their level and the total; the cards are folded away", () => {
+    renderEditor(<TeamsTab />, onPlan());
+    const receipt = document.querySelector(".receipt")!;
+    expect([...receipt.querySelectorAll("li")].map((li) => li.textContent)).toEqual([`1${GRACES[2].zh}+`, `2${GRACES[0].zh}`]);
+    expect(receipt).toHaveTextContent(`★ ${starlightCost(levels)}`);
+    expect(document.querySelector(".starlight")!.closest("details")).not.toHaveAttribute("open");
+  });
+
+  test("a plan that buys no grace says so on the receipt, not an empty line", () => {
+    const s = onPlan();
+    s.starlight_plans[0].levels = GRACES.map(() => "none");
+    renderEditor(<TeamsTab />, s);
+    const receipt = document.querySelector(".receipt")!;
+    expect(receipt.querySelector("ol")).toBeNull();
+    expect(receipt).toHaveTextContent(zh["starlight.none"]);
+    expect(receipt).toHaveTextContent("★ 0");
+  });
+
+  test("a team's own starlight shows the cards to edit, no receipt", () => {
+    renderEditor(<TeamsTab />, settings());
+    expect(document.querySelector(".receipt")).toBeNull();
+    expect(document.querySelector(".starlight")!.closest("details")).toBeNull();
+  });
+});
+
+test("the queue names a team that is off and a team kept to one difficulty", () => {
+  const s = settings();
+  s.teams = [{ ...newTeam(1, "T1") }, { ...newTeam(2, "T2"), enabled: false, usage: "hard_only" }];
+  renderEditor(<TeamsTab />, s);
+  const [first, second] = within(document.querySelector("aside")!).getAllByRole("listitem");
+  expect(first).not.toHaveTextContent(zh["team.disabled"]);
+  expect(first).not.toHaveTextContent(zh["usage.hard_only"]);
+  expect(second).toHaveTextContent(zh["team.disabled"]);
+  expect(second).toHaveTextContent(zh["usage.hard_only"]);
+});
+
+test("a team on a deployment order plan says where that plan is changed", () => {
+  const s = settings();
+  s.deployment_order_plans = [{ id: "d1", name: "Bleed order", order: [...SINNERS] }];
+  s.teams[0].deployment_order = { plan: "d1" };
+  renderEditor(<TeamsTab />, s);
+  expect(screen.getByText(fill(zh["team.plan_note"], { name: "Bleed order", tab: zh["tab.deployment"], custom: zh.custom }))).toBeInTheDocument();
+});
+
+describe("the E.G.O Gift Search keyword tabs", () => {
+  const tabs = () => within(document.querySelector(".gift-search")!).getAllByRole("tab");
+
+  test("name the keyword in the GUI's language and open on the list's main keyword", () => {
+    renderEditor(<TeamsTab />, settings());
+    expect(tabs().map((b) => b.textContent)).toEqual(SEARCH_TABS.map(kw));
+    const on = tabs().find((b) => b.getAttribute("aria-selected") === "true")!;
+    expect(on).toHaveTextContent(kw("Bleed"));
+  });
+
+  test("follow the team picked: the next team's grid opens on its own list's main keyword", async () => {
+    const s = settings();
+    s.teams.push({ ...newTeam(2, "T2"), id: "t2", gift_list: "other" });
+    const r = renderEditor(<TeamsTab />, s);
+    await r.user.click(within(document.querySelector("aside")!).getByText("T2"));
+    const on = tabs().find((b) => b.getAttribute("aria-selected") === "true")!;
+    expect(on).toHaveTextContent(kw("Tremor"));
+  });
+
+  test("walk with the arrow keys, one tab stop for the row", async () => {
+    const r = renderEditor(<TeamsTab />, settings());
+    const at = SEARCH_TABS.indexOf("Bleed");
+    expect(tabs().map((b) => b.getAttribute("tabindex"))).toEqual(SEARCH_TABS.map((_, i) => (i === at ? "0" : "-1")));
+    tabs()[at].focus();
+    await r.user.keyboard("{ArrowRight}");
+    expect(tabs()[at + 1]).toHaveAttribute("aria-selected", "true");
+    expect(tabs()[at + 1]).toHaveFocus();
+    await r.user.keyboard("{ArrowLeft}{ArrowLeft}");
+    expect(tabs()[at - 1]).toHaveAttribute("aria-selected", "true");
+    expect(tabs()[at - 1]).toHaveFocus();
+    await r.user.keyboard("{End}");
+    expect(tabs()[SEARCH_TABS.length - 1]).toHaveFocus();
+    await r.user.keyboard("{ArrowRight}"); // round at the end, as the main tabs
+    expect(tabs()[0]).toHaveAttribute("aria-selected", "true");
+    expect(tabs()[0]).toHaveFocus();
+  });
+});
+
+describe("the side column's section index", () => {
+  test("jumps to a section: a closed panel opens, and its summary takes the focus", async () => {
+    const r = renderEditor(<TeamsTab />, settings());
+    const jump = screen.getByRole("navigation", { name: zh["team.sections"] });
+    const gift = screen.getByText(zh["gift.title"], { exact: false, selector: "summary" });
+    expect(gift.closest("details")).not.toHaveAttribute("open");
+    await r.user.click(within(jump).getByRole("button", { name: zh["gift.title"] }));
+    expect(gift.closest("details")).toHaveAttribute("open");
+    expect(gift).toHaveFocus();
+  });
+
+  test("lists the team's sections in the order the page shows them", () => {
+    renderEditor(<TeamsTab />, settings());
+    const jump = screen.getByRole("navigation", { name: zh["team.sections"] });
+    expect(within(jump).getAllByRole("button").map((b) => b.textContent)).toEqual(
+      (["team.deployment_order", "team.starlight", "gift.title", "keep.title", "skill.title", "team.more"] as const).map((k) => zh[k]));
+  });
 });

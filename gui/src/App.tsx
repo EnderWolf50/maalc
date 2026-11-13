@@ -1,16 +1,17 @@
 // Shell: load <root>/config/settings.json, the tabs, and check-then-save (spec 04 section 2).
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
 import * as api from "./api";
-import { TEXT, type Key } from "./i18n";
+import { TEXT, fill, type Key } from "./i18n";
 import { LUX_MODES, newSettings, parseSettings, rebase, runEnum, type Luxcavation, type LuxMode, type Settings } from "./model";
 import { DeploymentTab, StarlightTab, ThemePackTab } from "./Plans";
 import { GiftListsTab } from "./GiftLists";
 import { TeamsTab } from "./Teams";
 import {
-  Decimal, EditorContext, Field, Input, Mark, Num, Select, ToggleNum, focusPath, isPickList, makeCtx, translate, useEditor, withBreaks,
+  Decimal, EditorContext, Field, Input, Mark, Num, Select, ToggleNum, focusPath, nextTab, isPickList, makeCtx, translate, useEditor,
+  useUndoRow, withBreaks,
   type Picked,
 } from "./ui";
-import { validate, type Problem } from "./validate";
+import { sayProblem, validate, type Problem } from "./validate";
 
 export const TABS = [
   ["run", "tab.run", RunTab, ["run"]],
@@ -23,6 +24,11 @@ export const TABS = [
   ["trials", "tab.trials", TrialsTab, ["trial_risk_overrides"]],
   ["daily", "tab.daily", DailyTab, ["luxcavation", "charge_enkephalin"]],
 ] as const;
+
+type TabId = (typeof TABS)[number][0];
+
+/** The tabs in groups (what a run plays with, the plans, the overrides, the daily tasks): the tabs that start a group. */
+const GROUP_STARTS = new Set<TabId>(["deployment", "events", "daily"]);
 
 /** What the prompt guards: the window closes, or the page reloads (F5, Ctrl+R). */
 type Leave = "close" | "reload";
@@ -37,14 +43,19 @@ export default function App() {
   const [savedText, setSavedText] = useState("");
   const [loadError, setLoadError] = useState("");
   const [root, setRoot] = useState("");
-  const [tab, setTab] = useState<(typeof TABS)[number][0]>("teams");
+  const [tab, setTab] = useState<TabId>("teams");
   const [giftList, setGiftList] = useState("default"); // what the gift list tab shows; the teams tab can point it at a list
   const [picked, setPicked] = useState<Picked>({});
   const [jump, setJump] = useState<string | null>(null); // the path of the problem the user clicked
   const [checked, setChecked] = useState(false); // marks show after the first save attempt
   const [status, setStatus] = useState(""); // a TEXT key, or text as it is (an error, the gift ids a load dropped)
+  const [failed, setFailed] = useState(false); // the last save did not write the file (a conflict or an error)
+  const [refused, setRefused] = useState(false); // the last save stopped at the checks, and its problems are not all fixed
   // The window was closed, or the page asked to reload (F5, Ctrl+R), with unsaved changes: the prompt for that shows (#695, #702).
   const [asking, setAsking] = useState<false | Leave>(false);
+  const [maximized, setMaximized] = useState(false); // the window fills the screen: the title bar offers Restore
+  // The edits Revert dropped: Undo puts them back while the editor still holds the file's settings.
+  const [revertedFrom, setRevertedFrom] = useState<Settings | null>(null);
   // The file's text as last read or written: other text there is another writer's, the Agent's after a claim (#501).
   const disk = useRef<string | null>(null);
   const latest = useRef({ s, savedText });
@@ -147,6 +158,7 @@ export default function App() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
+  useEffect(() => api.onMaximized(setMaximized), []);
   useEffect(() => {
     if (asking || !focusBefore.current) return;
     (focusBefore.current as HTMLElement).focus?.();
@@ -161,39 +173,57 @@ export default function App() {
   }, [jump]);
 
   const problems: Problem[] = useMemo(() => (s ? validate(s) : []), [s]);
+  useEffect(() => { if (!problems.length) setRefused(false); }, [problems.length]);
   const lang = s?.language ?? "zh_tw";
   const { t } = translate(lang);
 
+  // The title bar alone, before the settings are read and when they do not read: the window has no system bar to fall back on.
+  const bare = (
+    <header data-tauri-drag-region="deep">
+      <h1>{t("title")}</h1>
+      <span className="path" />
+      <WindowButtons t={t} maximized={maximized} onError={(e) => setLoadError((why) => (why ? `${why}\n${String(e)}` : String(e)))} />
+    </header>
+  );
   if (loadError) {
-    return (
+    return (<>
+      {bare}
       <main className="load-error">
         <p>{t("loadError")}</p>
         <pre>{loadError}</pre>
-        <button type="button" onClick={() => { setLoadError(""); setS(newSettings()); setSavedText(""); }}>{t("newFile")}</button>
+        <div className="row">
+          <button type="button" onClick={() => { setLoadError(""); setS(newSettings()); setSavedText(""); }}>{t("newFile")}</button>
+          <button type="button" onClick={() => { api.requestClose().catch(() => {}); }}>{t("win.close")}</button>
+        </div>
       </main>
-    );
+    </>);
   }
-  if (!s) return null;
+  if (!s) return bare;
 
   // marks show after the first save attempt; a marked field's controls are described by the problems' text (#695)
   const problemIds = (path: string) => (checked ? problems : [])
     .flatMap((p, i) => (p.paths.some((m) => m === path || m.startsWith(path + "/")) ? [problemId(i)] : [])).join(" ");
   const ctx = makeCtx({
     s, problemIds, giftList, picked, setPicked,
-    setS: (next) => setS((prev) => next(prev!)),
+    // any edit makes the edits that the revert (放棄變更) dropped no longer the newest: its Undo goes
+    setS: (next) => { setRevertedFrom(null); setS((prev) => next(prev!)); },
     chooseList: (id, open) => { setGiftList(id); if (open) setTab("gifts"); },
   });
   const dirty = toText(s) !== savedText;
   const said = Object.prototype.hasOwnProperty.call(TEXT[lang], status) ? t(status as Key) : status;
-  const note = status === "saved" ? "" : said; // shown beside "unsaved" too: a refused save, the file read again
+  // shown beside "unsaved" too (a refused save, the file read again), but not what an edit since has made stale
+  const note = status === "saved" || status === "reverted" ? "" : said;
 
   /** Check, then write; true when the file holds the edits. */
   const save = async () => {
     setChecked(true);
+    setFailed(false);
+    setRefused(false);
     try {
       for (let tries = 1; ; tries++) {
         const current = (await sync())!; // what another writer changed since goes under the edits first (#501)
         if (validate(current).length) {
+          setRefused(true);
           setStatus("");
           return false;
         }
@@ -203,6 +233,7 @@ export default function App() {
         } catch (e) {
           if (!api.isChanged(e)) throw e;
           if (tries < 3) continue; // it changed between that read and this write
+          setFailed(true);
           setStatus("saveConflict");
           return false;
         }
@@ -213,6 +244,7 @@ export default function App() {
         return true;
       }
     } catch (e) {
+      setFailed(true);
       setStatus(String(e));
       return false;
     }
@@ -229,6 +261,19 @@ export default function App() {
       onDiscard={() => { setAsking(false); leave(asking); }} />
   );
 
+  /** Back to the file's settings, every unsaved edit dropped; Undo, beside the plate, brings them back until the next edit. */
+  const revert = () => {
+    setRevertedFrom(s);
+    setS(JSON.parse(savedText) as Settings);
+    setFailed(false);
+    setStatus("reverted");
+  };
+  const undoRevert = () => {
+    setS(revertedFrom);
+    setRevertedFrom(null);
+    setStatus("");
+  };
+
   /** Show where a problem points: its tab and the team, plan or gift list it names; the effect above then focuses its field. */
   const goTo = (path: string) => {
     const [section, index] = path.split("/");
@@ -240,41 +285,95 @@ export default function App() {
   };
 
   const Current = TABS.find((x) => x[0] === tab)![2];
+  const blocked = checked && problems.length > 0; // the marks and the problems block show, from the first save attempt on
+  // The save state plate: problems to fix (a refused save, or problems a save would meet: the plate tells them before the
+  // fields are marked), a write that failed, unsaved, saved, or a note. Save takes the crimson frame while problems stop it
+  // or after a write failed, the caution stripe while unsaved changes can go through.
+  const state = problems.length ? "blocked" : failed ? "failed" : dirty ? "dirty" : status === "saved" ? "saved" : said ? "note" : "clean";
+  const stateText = [
+    problems.length > 0 && fill(t(refused ? "saveState.refused" : "saveState.toFix"), { n: problems.length }),
+    dirty ? [t("unsaved"), note].filter(Boolean).join(" ") : said || (!problems.length && t("saveState.clean")),
+  ].filter(Boolean).join(" · ");
+  const saveLook = state === "blocked" || state === "failed" ? " refused" : state === "dirty" ? " armed" : "";
+  const canRevert = dirty && savedText !== ""; // a file to go back to: a new one has none
+  const canUndoRevert = status === "reverted" && revertedFrom !== null && !dirty;
+  /** Arrow keys walk the tabs and open the one they reach (they are cheap to draw); Home and End go to the ends. */
+  const walkTabs = (e: ReactKeyboardEvent) => {
+    const next = nextTab(TABS.map((x) => x[0]), tab, e.key);
+    if (!next) return;
+    e.preventDefault();
+    setTab(next);
+    document.getElementById(`tab-${next}`)?.focus();
+  };
   return (
     <EditorContext.Provider value={ctx}>
-      <header inert={!!asking}>
+      {/* The title bar too: the system's is hidden (tauri.conf.json). Tauri drags the window from any of its parts that is not a
+          control (drag.js "deep"), and a double click there maximises it. */}
+      <header inert={!!asking} data-tauri-drag-region="deep">
         <h1>{t("title")}</h1>
-        <span className="muted path" title={t("file")}>{root}\config\settings.json</span>
-        <label className="lang">{t("language")}{" "}
+        <span className="muted path" title={`${root}\\config\\settings.json`}>{root}\config\settings.json</span>
+        <label className="lang">{t("language")}
           <select value={s.language} onChange={(e) => ctx.update((d) => { d.language = e.target.value as Settings["language"]; })}>
             <option value="zh_tw">繁體中文</option>
             <option value="en_us">English</option>
           </select>
         </label>
-        <span className="status">{dirty ? [t("unsaved"), note].filter(Boolean).join(" ") : said}</span>
-        <button type="button" className="primary" onClick={save}>{t("save")}</button>
+        <span className="status" data-state={state} aria-live="polite">{stateText}</span>
+        {canRevert && <button type="button" className="quiet" title={t("revert.note")} onClick={revert}>{t("revert")}</button>}
+        {canUndoRevert && <button type="button" className="quiet" onClick={undoRevert}>{t("undo")}</button>}
+        <button type="button" className={"primary" + saveLook} onClick={save}>{t("save")}</button>
+        <WindowButtons t={t} maximized={maximized} onError={(e) => setStatus(String(e))} />
       </header>
-      <nav role="tablist" inert={!!asking}>
+      <nav role="tablist" onKeyDown={walkTabs} inert={!!asking}>
         {TABS.map(([id, label, , prefixes]) => (
-          <button type="button" role="tab" key={id} aria-selected={tab === id}
-            className={(tab === id ? "selected" : "") + (prefixes.some(ctx.bad) ? " bad" : "")}
-            onClick={() => setTab(id)}>{t(label)}</button>
+          <Fragment key={id}>
+            {GROUP_STARTS.has(id) && <span className="tabsep" aria-hidden />}
+            <button type="button" role="tab" id={`tab-${id}`} data-tab={id} aria-selected={tab === id} aria-controls="tabpanel"
+              tabIndex={tab === id ? 0 : -1} className={(tab === id ? "selected" : "") + (prefixes.some(ctx.bad) ? " bad" : "")}
+              onClick={() => setTab(id)}>{t(label)}</button>
+          </Fragment>
         ))}
       </nav>
       <main inert={!!asking}>
-        {/* in the tab panel, so the tab bar stays where it is when problems come and go */}
-        {checked && problems.length > 0 && (
-          <div className="problems" role="alert">
-            <p>{t("saveBlocked")}</p>
-            <ul>{problems.map((p, i) => (
-              <li key={i} id={problemId(i)}>{tabOf(p.paths[0]) ? <button type="button" onClick={() => goTo(p.paths[0])}>{p.text}</button> : p.text}</li>
-            ))}</ul>
-          </div>
-        )}
-        <Current />
+        <div id="tabpanel" role="tabpanel" aria-labelledby={`tab-${tab}`}>
+          {/* the page's heading under the window's: the tab's name, for a screen reader's list of headings */}
+          <h2 className="sr-only">{t(TABS.find((x) => x[0] === tab)![1])}</h2>
+          {/* in the tab panel, so the tab bar stays where it is when problems come and go */}
+          {blocked && (
+            <div className="problems" role="alert">
+              <p>{t("saveBlocked")}</p>
+              <ul>{problems.map((p, i) => (
+                // the editor's words; the bot's own (English) text stays on hover, as the log and a bug report have it
+                <li key={i} id={problemId(i)} title={p.text}>
+                  {tabOf(p.paths[0]) ? <button type="button" onClick={() => goTo(p.paths[0])}>{sayProblem(p, lang)}</button> : sayProblem(p, lang)}
+                </li>
+              ))}</ul>
+            </div>
+          )}
+          <Current />
+        </div>
       </main>
       {leavePrompt}
     </EditorContext.Provider>
+  );
+}
+
+/** The window's own buttons at the title bar's right end. Close is a close request, as Alt+F4 is: with unsaved changes the
+ * prompt asks first. A call the window refuses (no permission) says why in the save state, as a failed close does. */
+function WindowButtons({ t, maximized, onError }: { t: (k: Key) => string; maximized: boolean; onError: (e: unknown) => void }) {
+  const button = (name: string, run: () => Promise<void>, glyph: ReactNode, className?: string) => (
+    <button type="button" className={className} aria-label={name} title={name} onClick={() => { run().catch(onError); }}>
+      <svg viewBox="0 0 10 10" aria-hidden="true">{glyph}</svg>
+    </button>
+  );
+  return (
+    <div className="winctl">
+      {button(t("win.minimize"), api.minimizeWindow, <path d="M0 5.5h10" />)}
+      {button(t(maximized ? "win.restore" : "win.maximize"), api.toggleMaximize, maximized
+        ? <path d="M2.5 2.5V.5h7v7h-2M.5 2.5h7v7h-7z" />
+        : <rect x="0.5" y="0.5" width="9" height="9" />)}
+      {button(t("win.close"), api.requestClose, <path d="M0 0l10 10M10 0L0 10" />, "close")}
+    </div>
   );
 }
 
@@ -316,35 +415,57 @@ function RunTab() {
       <Select value={run[k]} options={runEnum(k)} label={(v) => tv(k, v)} onChange={(v) => set({ [k]: v })} />
     </Field>
   );
+  // Four groups by what they decide: the run itself, the weekly bonuses, what happens when something fails, what the bot does
+  // on its own.
   return (
-    <div className="grid">
-      {pick("difficulty")}
-      <Field label={t("run.target_floor")} path="run/target_floor" note={pastFive ? t("run.target_floor_note") : undefined}>
-        <Select value={String(run.target_floor)} options={runEnum("target_floor").map(String)} label={(v) => tv("target_floor", v)} onChange={(v) => set({ target_floor: Number(v) })} />
-        {/* Remove with #434: until the entrance switches Parallel Superposition on, a target above 5 still stops at floor 5. */}
-        {pastFive && <small>{t("run.target_floor_entry_note")}</small>}
-      </Field>
-      <ToggleNum label={t("run.runs")} path="run/runs" value={run.runs} on={1} min={1} note={t("run.runs_note")}
-        onChange={(v) => set({ runs: v })} />
-      {pick("weekly_bonus_use", run.weekly_bonus_use === "normal" ? t("run.weekly_bonus_normal_note") : undefined)}
-      {pick("weekly_bonus_amount")}
-      <Mark as="label" className="check" path="run/stop_when_weekly_bonus_out">
-        <Input type="checkbox" checked={run.stop_when_weekly_bonus_out} onChange={(e) => set({ stop_when_weekly_bonus_out: e.target.checked })} />
-        {t("run.stop_when_weekly_bonus_out")}
-      </Mark>
-      {pick("starlight_unaffordable")}
-      <Field label={t("run.wipe_retries")} path="run/wipe_retries"><Num value={run.wipe_retries} min={0} onChange={(v) => set({ wipe_retries: v })} /></Field>
-      {pick("after_retries")}
-      {pick("theme_pack_refresh", t("run.theme_pack_refresh_note"))}
-      {(["auto_accept_terms", "auto_download", "keep_dismissed_screens"] as const).map((k) => (
-        <Mark as="label" key={k} className="check" path={`run/${k}`}>
-          <Input type="checkbox" checked={run[k]} onChange={(e) => set({ [k]: e.target.checked })} />
-          {t(`run.${k}`)}
-        </Mark>
-      ))}
-      <Field label={t("run.webhook_url")} path="run/webhook_url">
-        <Input type="url" value={run.webhook_url} onChange={(e) => set({ webhook_url: e.target.value })} />
-      </Field>
+    <div className="groups">
+      <fieldset>
+        <legend>{t("run.group_run")}</legend>
+        <div className="grid">
+          {pick("difficulty")}
+          <Field label={t("run.target_floor")} path="run/target_floor" note={pastFive ? t("run.target_floor_note") : undefined}>
+            <Select value={String(run.target_floor)} options={runEnum("target_floor").map(String)} label={(v) => tv("target_floor", v)} onChange={(v) => set({ target_floor: Number(v) })} />
+            {/* Remove with #434: until the entrance switches Parallel Superposition on, a target above 5 still stops at floor 5. */}
+            {pastFive && <small>{t("run.target_floor_entry_note")}</small>}
+          </Field>
+          <ToggleNum label={t("run.runs")} path="run/runs" value={run.runs} on={1} min={1} note={t("run.runs_note")}
+            onChange={(v) => set({ runs: v })} />
+          {pick("theme_pack_refresh", t("run.theme_pack_refresh_note"))}
+        </div>
+      </fieldset>
+      <fieldset>
+        <legend>{t("run.group_weekly")}</legend>
+        <div className="grid">
+          {pick("weekly_bonus_use", run.weekly_bonus_use === "normal" ? t("run.weekly_bonus_normal_note") : undefined)}
+          {pick("weekly_bonus_amount")}
+          <Mark as="label" className="check wide" path="run/stop_when_weekly_bonus_out">
+            <Input type="checkbox" checked={run.stop_when_weekly_bonus_out} onChange={(e) => set({ stop_when_weekly_bonus_out: e.target.checked })} />
+            {t("run.stop_when_weekly_bonus_out")}
+          </Mark>
+        </div>
+      </fieldset>
+      <fieldset>
+        <legend>{t("run.group_failure")}</legend>
+        <div className="grid">
+          {pick("starlight_unaffordable")}
+          <Field label={t("run.wipe_retries")} path="run/wipe_retries"><Num value={run.wipe_retries} min={0} onChange={(v) => set({ wipe_retries: v })} /></Field>
+          {pick("after_retries")}
+          <Field label={t("run.webhook_url")} path="run/webhook_url">
+            <Input type="url" value={run.webhook_url} onChange={(e) => set({ webhook_url: e.target.value })} />
+          </Field>
+        </div>
+      </fieldset>
+      <fieldset>
+        <legend>{t("run.group_auto")}</legend>
+        <div className="options">
+          {(["auto_accept_terms", "auto_download", "keep_dismissed_screens"] as const).map((k) => (
+            <Mark as="label" key={k} className="check" path={`run/${k}`}>
+              <Input type="checkbox" checked={run[k]} onChange={(e) => set({ [k]: e.target.checked })} />
+              {t(`run.${k}`)}
+            </Mark>
+          ))}
+        </div>
+      </fieldset>
     </div>
   );
 }
@@ -353,12 +474,12 @@ function RunTab() {
 function DailyTab() {
   const { t } = useEditor();
   return (
-    <>
+    <div className="stack">
       <p className="muted">{withBreaks(t("daily.note"))}</p>
       <LuxFields task="exp" />
       <LuxFields task="thread" />
       <ChargeFields />
-    </>
+    </div>
   );
 }
 
@@ -367,7 +488,7 @@ function ChargeFields() {
   return (
     <fieldset>
       <legend>{t("charge.title")}</legend>
-      <p className="muted">{withBreaks(t("charge.note"))}</p>
+      <p className="caution">{withBreaks(t("charge.note"))}</p>
       <div className="grid">
         <Field label={t("charge.count")} path="charge_enkephalin/count">
           <Num value={s.charge_enkephalin.count} min={0} onChange={(v) => update((d) => { d.charge_enkephalin.count = v; })} />
@@ -418,8 +539,10 @@ function OverrideTable<R extends Record<string, string | number>>({ listKey, col
   const { s, update, t } = useEditor();
   const rows = s[listKey] as unknown as R[];
   const set = (fn: (rows: R[]) => void) => update((d) => fn(d[listKey] as unknown as R[]));
+  const [undoNote, removeRow] = useUndoRow(set);
   return (
     <>
+      {undoNote}
       {rows.length ? (
         <table className="overrides">
           <thead><tr>{cols.map((c) => <th key={c.key}>{t(c.label)}</th>)}<th /></tr></thead>
@@ -433,7 +556,7 @@ function OverrideTable<R extends Record<string, string | number>>({ listKey, col
                       : <Input value={r[c.key] as string} onChange={(e) => set((l) => { (l[i] as Record<string, unknown>)[c.key] = e.target.value; })} />}
                   </Mark>
                 ))}
-                <td><button type="button" className="danger" onClick={() => set((l) => { l.splice(i, 1); })}>{t("remove")}</button></td>
+                <td><button type="button" className="danger" onClick={() => removeRow(rows, i, String(r[cols[0].key]))}>{t("remove")}</button></td>
               </tr>
             ))}
           </tbody>
@@ -445,17 +568,26 @@ function OverrideTable<R extends Record<string, string | number>>({ listKey, col
 }
 
 function EventsTab() {
-  return <OverrideTable listKey="event_overrides" blank={{ question: "", option: "" }}
-    cols={[{ key: "question", label: "event.question" }, { key: "option", label: "event.option" }]} />;
+  const { t } = useEditor();
+  return (
+    <div className="stack">
+      <p className="muted">{withBreaks(t("event.note"))}</p>
+      <OverrideTable listKey="event_overrides" blank={{ question: "", option: "" }}
+        cols={[{ key: "question", label: "event.question" }, { key: "option", label: "event.option" }]} />
+    </div>
+  );
 }
 
 function TrialsTab() {
   const { t } = useEditor();
   return (
-    <>
-      <p className="muted">{withBreaks(t("trial.note"))}</p>
+    <div className="stack">
+      <details className="hint">
+        <summary>{t("trial.help")}</summary>
+        <p>{withBreaks(t("trial.note"))}</p>
+      </details>
       <OverrideTable listKey="trial_risk_overrides" blank={{ trial: "", risk: 1 }}
         cols={[{ key: "trial", label: "trial.trial" }, { key: "risk", label: "trial.risk", number: true }]} />
-    </>
+    </div>
   );
 }

@@ -1,17 +1,17 @@
 // Named plans (spec 04 sections 6–8) and the editors teams reuse for their custom values.
-import { Fragment, useEffect, useState, type DragEvent, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
+import { Fragment, useEffect, useId, useRef, useState, type DragEvent, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
 import { loadThemePacks } from "./api";
 import {
   EVENT_MODES, GRACES, LEVELS, MODE_KEYS, SINNERS, buyOrder, clickCard, clickEnhance, defaultStarlight, enhanceAll, floorBadges, freeName,
   gracePrice,
   lanesOf, lineAt, newId, newPackPlan, onFloor, parseThemePacks, selectAll, starlightCost, toggleSinner, weightOf,
   type DeploymentPlan, type Order, type PackMode, type PackPlanValues, type StarlightPlan, type StarlightValues, type ThemePackPlan,
-  type Team, type ThemePacks,
+  type Grace, type Team, type ThemePacks,
 } from "./model";
 import { GIFT_BY_ID, giftName } from "./giftCatalog";
 import { listsOfPlan, packWanted } from "./gifts";
 import { fill } from "./i18n";
-import { Field, Input, Mark, ReorderList, Select, useEditor, usePick, useUndo, withBreaks, type PlanKey } from "./ui";
+import { Field, Input, Mark, ReorderList, Select, useEditor, usePick, useSlashFocus, useUndo, withBreaks, type PlanKey } from "./ui";
 
 /** The 12 sinners in the game's grid; clicking adds one at the end of the order or leaves it out
  * (spec 04 section 6). Read-only without onChange. */
@@ -19,7 +19,7 @@ export function SinnerGrid({ order, onChange, path }: { order: Order; onChange?:
   const { t, bad } = useEditor();
   return (<>
     {onChange && <p className="muted">{t("order.hint")}</p>}
-    <div className={"sinners" + (bad(path) ? " bad" : "")} data-path={path}>
+    <div className={"sinners" + (onChange ? "" : " readonly") + (bad(path) ? " bad" : "")} data-path={path}>
       {SINNERS.map((s) => {
         const n = order.indexOf(s) + 1;
         const kind = n === 0 ? "" : n <= 7 ? "deployed" : "backup";
@@ -45,6 +45,7 @@ export function StarlightEditor({ value, onChange, path }: {
   const zh = s.language === "zh_tw";
   const order = buyOrder(value);
   const set = (fn: (v: StarlightValues) => StarlightValues) => onChange?.(fn(value));
+  const id = useId(); // the cards' rank, price and effects describe their pick buttons
   return (
     <>{onChange && <p className="muted">{t("starlight.hint")}</p>}
     <div className={"starlight" + (onChange ? "" : " readonly")} data-path={path}>
@@ -55,19 +56,22 @@ export function StarlightEditor({ value, onChange, path }: {
           const rank = order.indexOf(n) + 1;
           const effects = g.effects[level as "plus" | "plus2"] ?? g.effects.base;
           return (
-            <div key={g.en} className={`grace ${level}`} role="button" tabIndex={onChange ? 0 : -1} aria-pressed={rank > 0}
+            // A group, not a button around buttons: its name is a pick button beside + and ++. A click anywhere on the card
+            // picks it, as in the game; from the keyboard the pick button does, its click reaching the card.
+            <div key={g.en} className={`grace ${level}`} role="group" aria-label={graceName(g, zh)}
               aria-disabled={!onChange} title={`${n}. ${g.en} (${tv("level", level)})`}
-              onClick={() => set((v) => clickCard(v, n))}
-              // the card's own keys only: Enter or Space on its + / ++ is that button's click, not a click on the card
-              onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); set((v) => clickCard(v, n)); } }}>
-              {rank > 0 && <span className="rank">{rank}</span>}
-              <span className="price">★ {gracePrice(n, level === "none" ? "base" : level)}</span>
-              <span className="name">{zh && g.zh ? g.zh : g.en}{zh && g.zh && <small>{g.en}</small>}</span>
-              {zh && <ul>{effects.map((line, j) => <li key={j} className={line.startsWith("-") ? "sub" : ""}>{line.replace(/^-/, "")}</li>)}</ul>}
+              onClick={() => set((v) => clickCard(v, n))}>
+              {rank > 0 && <span className="rank" id={`${id}-rank-${n}`}>{rank}</span>}
+              <span className="price" id={`${id}-price-${n}`}>★ {gracePrice(n, level === "none" ? "base" : level)}</span>
+              <button type="button" className="name" disabled={!onChange} aria-pressed={rank > 0} aria-label={graceName(g, zh)}
+                aria-describedby={[rank > 0 && `${id}-rank-${n}`, `${id}-price-${n}`, zh && `${id}-fx-${n}`].filter(Boolean).join(" ")}>
+                {graceName(g, zh)}{zh && g.zh && <small>{g.en}</small>}
+              </button>
+              {zh && <ul id={`${id}-fx-${n}`}>{effects.map((line, j) => <li key={j} className={line.startsWith("-") ? "sub" : ""}>{line.replace(/^-/, "")}</li>)}</ul>}
               <span className="enhance">
                 {([1, 2] as const).map((plus) => (
                   <button type="button" key={plus} disabled={!onChange} aria-pressed={level === LEVELS[plus + 1]}
-                    className={level === LEVELS[plus + 1] ? "lit" : ""}
+                    aria-label={`${graceName(g, zh)} ${"+".repeat(plus)}`} className={level === LEVELS[plus + 1] ? "lit" : ""}
                     onClick={(e) => { e.stopPropagation(); set((v) => clickEnhance(v, n, plus)); }}>{"+".repeat(plus)}</button>
                 ))}
               </span>
@@ -79,8 +83,8 @@ export function StarlightEditor({ value, onChange, path }: {
         {onChange && <>
           <button type="button" onClick={() => set(selectAll)}>{t("starlight.selectAll")}</button>
           <span className="muted">{t("starlight.enhanceAll")}</span>
-          <button type="button" onClick={() => set((v) => enhanceAll(v, 1))}>+</button>
-          <button type="button" onClick={() => set((v) => enhanceAll(v, 2))}>++</button>
+          <button type="button" aria-label={`${t("starlight.enhanceAll")} +`} onClick={() => set((v) => enhanceAll(v, 1))}>+</button>
+          <button type="button" aria-label={`${t("starlight.enhanceAll")} ++`} onClick={() => set((v) => enhanceAll(v, 2))}>++</button>
         </>}
         <span className="total">{t("starlight.total")} <b>★ {starlightCost(value.levels)}</b></span>
         <Mark as="label" className="check" path={`${path}/convert_leftover`}>
@@ -105,6 +109,29 @@ function PlanUsers({ planKey, id }: { planKey: PlanKey; id: string }) {
   const { s, t } = useEditor();
   const names = s.teams.filter((x) => PLAN_OF[planKey](x) === id).map((x) => x.name || "—");
   return <p className="muted">{names.length ? fill(t("plan.usedBy"), { names: names.join(t("gl.sep")) }) : t("plan.unused")}</p>;
+}
+
+/** A grace's name in the GUI's language: the Chinese one when the data has it. */
+const graceName = (g: Grace, zh: boolean) => (zh && g.zh ? g.zh : g.en);
+
+/** A starlight plan on one line, for a team that uses it: the picks in buying order with their level, and the total. */
+export function StarlightReceipt({ value }: { value: StarlightValues }) {
+  const { s, t } = useEditor();
+  const zh = s.language === "zh_tw";
+  const order = buyOrder(value);
+  return (
+    <div className="receipt">
+      {order.length ? (
+        <ol>
+          {order.map((n, i) => {
+            const g = GRACES[n - 1], level = value.levels[n - 1];
+            return <li key={n}><b>{i + 1}</b>{graceName(g, zh)}{level !== "base" && <i>{"+".repeat(LEVELS.indexOf(level) - 1)}</i>}</li>;
+          })}
+        </ol>
+      ) : <span className="muted">{t("starlight.none")}</span>}
+      <span className="total">{t("starlight.total")} <b>★ {starlightCost(value.levels)}</b></span>
+    </div>
+  );
 }
 
 /** A list of named plans on the left, the selected plan's editor on the right; `lead`, a read-only plan above the list. */
@@ -240,11 +267,15 @@ function PackPlanEditor({ data, plan, planId, path, onChange }: {
   const [difficulty, setDifficulty] = useState<PackMode>("");
   const [floor, setFloor] = useState(0);
   const [images, setImages] = useState(false);
+  const [query, setQuery] = useState(""); // a part of a pack's name: only the packs that hold it show
+  const searchBox = useRef<HTMLInputElement>(null);
   const [drag, setDrag] = useState<string | null>(null);
   const lanes = lanesOf(plan);
   const line = lineAt(lanes, plan.threshold);
   const extra = Object.keys(plan.weights).filter((n) => !(n in data.packs)); // weighed, gone from the data file
-  const shown = [...Object.keys(data.packs).filter((n) => onFloor(data.packs[n], difficulty, floor)), ...extra];
+  const matchesQuery = (n: string) => n.toLowerCase().includes(query.trim().toLowerCase());
+  const shown = [...Object.keys(data.packs).filter((n) => onFloor(data.packs[n], difficulty, floor)), ...extra].filter(matchesQuery);
+  useSlashFocus(searchBox); // as on the gift list tab
   const set = (patch: Partial<PackPlanValues>) => onChange?.({ ...plan, ...patch });
   const weigh = (what: string, w: number) => (what === UNLISTED ? set({ unlisted: w }) : set({ weights: { ...plan.weights, [what]: w } }));
   // The pack whose weight is being typed: on its chip, or in the + lane for a new weight (`lane`).
@@ -311,18 +342,26 @@ function PackPlanEditor({ data, plan, planId, path, onChange }: {
     </div>
   );
   const gapOrLine = (g: number) => (g === line ? lineBar : <div className="gap" {...target(drag === LINE, lanes[g - 1])} />);
-  const chips = <T extends string | number>(values: T[], value: T, label: (v: T) => string, pick: (v: T) => void) =>
+  const chips = <T extends string | number>(values: T[], value: T, label: (v: T) => string, pick: (v: T) => void, cls?: (v: T) => string) =>
     values.map((v) => (
-      <button type="button" key={String(v)} className="chip" aria-pressed={v === value} onClick={() => pick(v)}>{label(v)}</button>
+      <button type="button" key={String(v)} className={"chip" + (cls ? cls(v) : "")} aria-pressed={v === value} onClick={() => pick(v)}>{label(v)}</button>
     ));
   return (<>
     <div className="packbar">
-      {chips<PackMode>(["", "normal", "hard", "infinity", "extreme"], difficulty,
-        (v) => (v ? t(BADGES[MODE_KEYS[v]][0]) : t("packs.anyDifficulty")) /* a badge's name: 普通, not NORMAL, in Chinese */, setDifficulty)}
-      <span className="gap" />
-      {chips(FLOORS, floor, (v) => (v ? t("packs.floor").replace("{n}", String(v)) : t("packs.anyFloor")), setFloor)}
-      <span className="spacer" />
-      {chips([false, true].map(String), String(images), (v) => t(v === "true" ? "packs.images" : "packs.names"), (v) => setImages(v === "true"))}
+      <input ref={searchBox} type="search" className="pk-search" aria-label={t("packs.search")} placeholder={t("packs.search_ph")}
+        value={query} onChange={(e) => setQuery(e.target.value)}
+        onKeyDown={(e) => { if (e.key === "Escape" && query) { e.preventDefault(); setQuery(""); } }} />
+      <span className="seg">
+        {chips<PackMode>(["", "normal", "hard", "infinity", "extreme"], difficulty,
+          (v) => (v ? t(BADGES[MODE_KEYS[v]][0]) : t("packs.anyDifficulty")) /* a badge's name: 普通, not NORMAL, in Chinese */, setDifficulty,
+          (v) => (v ? " mode" + BADGES[MODE_KEYS[v]][1] : "")) /* and its colour */}
+      </span>
+      <span className="seg view">
+        {chips([false, true].map(String), String(images), (v) => t(v === "true" ? "packs.images" : "packs.names"), (v) => setImages(v === "true"))}
+      </span>
+      <span className="seg floors">
+        {chips(FLOORS, floor, (v) => (v ? t("packs.floor").replace("{n}", String(v)) : t("packs.anyFloor")), setFloor)}
+      </span>
     </div>
     {onChange && <p className="muted">{withBreaks(t("packs.hint"))}</p>}
     <p className="muted floorkey">
@@ -337,7 +376,7 @@ function PackPlanEditor({ data, plan, planId, path, onChange }: {
             <span className={"w" + (w > 0 ? " pos" : w < 0 ? " neg" : "")}>{w > 0 ? `+${w}` : w}</span>
             <div className="packs">
               {shown.filter((n) => weightOf(plan, n) === w).map(chip)}
-              {w === plan.unlisted && (
+              {w === plan.unlisted && !query.trim() && (
                 <span className={"pk unlisted" + (path && bad(`${path}/unlisted`) ? " bad" : "")} data-path={path && `${path}/unlisted`}
                   {...dragged(UNLISTED)} {...clickable(UNLISTED)}>
                   {images && <span className="img" aria-hidden />}

@@ -6,7 +6,7 @@ import { fill } from "./i18n";
 import {
   GAME_DECK, SINNERS, SKILL_PAYMENTS, SKILL_SWAPS, skillPlan, type SkillPay, type SkillReplacement, type SkillSwapKey, type SkillTarget,
 } from "./model";
-import { Choice, Input, Mark, useEditor, withBreaks } from "./ui";
+import { Choice, Input, Mark, useEditor, useUndoRow, withBreaks } from "./ui";
 
 const move = <T,>(list: T[], from: number, to: number) => {
   const next = [...list];
@@ -28,9 +28,10 @@ export function SkillPanel({ i }: { i: number }) {
   const rest = SINNERS.filter((n) => !sr.sinners.some((x) => x.sinner === n));
   const dragItem = useDragSort((from, to) => edit((d) => { d.sinners = move(d.sinners, Number(from), Number(to)); }), () => true);
 
+  const [undoNote, removeRow] = useUndoRow<SkillReplacement["sinners"][number]>((fn) => edit((d) => fn(d.sinners)), s.teams[i].id);
   const seen = new Map<string, number>(); // a hand-edited file can list a sinner twice (validate names it): keys stay unique
   return (
-    <details className="panel skill-panel">
+    <details className="panel skill-panel" data-section="skill">
       <summary className={bad(path) ? "bad" : ""}>{t("skill.title")}{changed ? ` (${changed})` : ""}</summary>
       <p className="muted">{withBreaks(t("skill.note"))}</p>
       <select className="skill-add" aria-label={t("skill.add")} value="" disabled={!rest.length}
@@ -38,6 +39,7 @@ export function SkillPanel({ i }: { i: number }) {
         <option value="">{t("skill.add")}</option>
         {rest.map((n) => <option key={n} value={n}>{n}</option>)}
       </select>
+      {undoNote}
       {!sr.sinners.length && <p className="muted">{t("skill.empty")}</p>}
       <ol className="skill-sinners">
         {sr.sinners.map((x, j) => {
@@ -94,7 +96,7 @@ export function SkillPanel({ i }: { i: number }) {
                 <button type="button" className="icon" aria-label={`${t("down")} ${x.sinner}`} title={t("down")} disabled={j === sr.sinners.length - 1}
                   onClick={() => edit((d) => { d.sinners = move(d.sinners, j, j + 1); })}>↓</button>
                 <button type="button" className="icon" aria-label={`${t("skill.remove")} ${x.sinner}`} title={t("skill.remove")}
-                  onClick={() => edit((d) => { d.sinners.splice(j, 1); })}>✕</button>
+                  onClick={() => removeRow(sr.sinners, j, x.sinner)}>✕</button>
               </span>
             </li>
           );
@@ -112,7 +114,7 @@ export function SkillPanel({ i }: { i: number }) {
           {SKILL_PAYMENTS.map((v) => <option key={v} value={v}>{tv("skill_pay", v)}</option>)}
         </Choice>
         <small>{t("skill.id_search_note")}</small>
-        <small>{search.pay === "starlight" ? t("skill.pay_starlight_note") : t("skill.pay_cost_note")}</small>
+        {search.pay === "starlight" ? <small className="caution">{t("skill.pay_starlight_note")}</small> : <small>{t("skill.pay_cost_note")}</small>}
       </Mark>
     </details>
   );

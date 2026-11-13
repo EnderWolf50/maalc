@@ -1,204 +1,509 @@
+/* The settings window drawn in the Mirror Dungeon's own UI language: a warm near-black ground, bronze rules, chamfered frames,
+ * condensed numerals, amber for what is in use, teal for what is kept, crimson for errors, the caution stripe for what needs
+ * care. Dark is the primary theme; the light theme inverts lightness and keeps every colour's job, the game-styled panels'
+ * too. Grace of the Star alone wears the season's colours (and a team's one-line receipt of a starlight plan, its rule). */
 :root {
-  --fg: #1d2330;
-  --muted: #6b7385;
-  --line: #d9dde5;
-  --bg: #f6f7f9;
-  --panel: #fff;
-  --accent: #2f5bd3;
-  --bad: #c62828;
-  --fl-n-bg: #e3edff; --fl-n-fg: #2457c5; --fl-h-bg: #ffe5e0; --fl-h-fg: #b23a1e; /* floor badges: NORMAL blue, HARD red, */
-  --fl-i-bg: #efe6ff; --fl-i-fg: #6b3fc0; --fl-x-bg: #2e2a33; --fl-x-fg: #f4efe6; /* INFINITY purple, EXTREME dark */
-  --wk-bg: #fff1c2; --wk-fg: #7a5200; /* the "含想要" mark on a theme pack: amber */
-  font: 14px/1.45 "Segoe UI", "Microsoft JhengHei UI", system-ui, sans-serif;
+  color-scheme: dark;
+  --bg: #120e0b;
+  --panel: #1b1510;
+  --raise: #261e16;
+  --field: #0d0a07;
+  --sel: #3b2c17; /* selection fill */
+  --hov: #2b2219;
+  --line: #3e3125;
+  --line-2: #7a5e46; /* bronze: field borders, frames that must read. The game's frame bronze #543a23, as light as 3:1 on the
+                        panel needs */
+  --fg: #edcda6; /* the game's button text (its Enter) */
+  --fg-2: #d6c6ad;
+  --muted: #ab9a82;
+  --accent: #f0a632; /* amber: selected, deployed, wanted, the primary action */
+  --accent-ink: #f6b955;
+  --accent-line: #f0a632; /* borders, outlines, bars: 3:1 on the panel */
+  --accent-hi: #f8c066; /* the primary button's hover fill */
+  --on-accent: #1d1206;
+  --accent-soft: #3a2a12;
+  --stripe: #4f3c14;
+  --bad: #ff7a68;
+  --bad-soft: #2d1210;
+  --close: #b3231b; /* the title bar's close under the pointer, white on it: one fill for both themes */
+  --keep: #4fcab7; /* teal: kept, backup */
+  --keep-soft: #11302b;
+  --fusion: #c2adff;
+  --fusion-soft: #2a2245;
+  --hazard: #815e35; /* the caution stripe: the game's ochre (its Enter key), as light as 3:1 on the dark stripe needs */
+  --hazard-2: #17120c;
+  /* The season: Mirror Dungeon 8, "Mirror of Sisyphe": its cobalt title plate and the cyan of its map (game captures of
+   * 2026-11-08). Only the season's own page, Grace of the Star, wears it (and the rule of a starlight plan's receipt); a
+   * new season changes the --season-* tokens. */
+  --season-plate: #4e61ba;
+  --gold: #ffd34d; /* the starlight's gold: a pick's place, a lit + or ++ */
+  /* The game panels. Sinner frames: */
+  --card-top: #2c2219; --card-bottom: #120e0b; --card-line: #5a4630; --card-fg: #edcda6;
+  --dep-top: #4a3413; --dep-bottom: #17100a; --bak-top: #12392f; --bak-bottom: #0b1311;
+  --tone-dep: #f0a632; --on-tone: #1d1206;
+  /* deployed as the game draws it: a red plate with orange text. The game's orange #ffa20f as it is, its red #bd1600 darkened
+   * until the text reads 4.5:1 on it; one plate for both themes */
+  --dep-plate: #931001; --dep-ink: #ffa20f;
+  /* backup as the game draws it: a dark teal plate (the frame too) with light cyan text, a bright cyan number */
+  --bak-plate: #006e7e; --bak-ink: #81f1ff; --bak-num: #22fde3;
+  /* Grace of the Star as the game draws it (a capture of 2026-11-13): grey-navy cards in a blue frame on a near-black page,
+   * cream price and + / ++ on near-black buttons with a grey outline; a picked card turns white. The same in both themes,
+   * as the game's page is. */
+  --season-bg-1: #131728; --season-bg-2: #050817; --season-side: #050817;
+  --season-card-top: #37383c; --season-card-mid: #1a1d31; --season-card-bottom: #0f1124; --season-frame: #54619a;
+  --season-ink: #e6eefc; --season-ink-2: #b9c7e4; --season-hint: #5ee4fe; --season-shadow: 0 1px 2px #000;
+  --season-price: #d5bb9c;
+  --season-pick-top: #ffffff; --season-pick-mid: #e6eefb; --season-pick-bottom: #cfdcf1; --season-pick-ink: #0b1530; --season-pick-line: #ffffff;
+  --season-btn: #060710; --season-btn-line: #80808c; --season-btn-ink: #e2c6a2; --season-btn-hover: #161a2e;
+  /* Difficulty, as the game's banners: NORMAL yellow and HARD red-orange fills (theme pack page), INFINITY violet (no game
+   * screen), EXTREME the game's red (the user, 2026-11-14). A fill, the ink on it, and the mark of a filter chip, each as
+   * light or dark as its contrast needs. */
+  --fl-n: #b89b21; --fl-n-ink: #100d03; --fl-n-mark: #b89b21;
+  --fl-h: #c03b0b; --fl-h-ink: #fee5df; --fl-h-mark: #d04a21;
+  --fl-i: #c2a6ff; --fl-i-ink: #1e003f;
+  --fl-x: #c53125; --fl-x-ink: #fff2ef; --fl-x-mark: #d64335;
+  --font-ui: "Segoe UI", "Microsoft JhengHei UI", system-ui, sans-serif;
+  --font-display: "Barlow Condensed", "Microsoft JhengHei UI", "Segoe UI", sans-serif;
+  font: 14px/1.5 var(--font-ui);
   color: var(--fg);
   background: var(--bg);
+  accent-color: var(--accent);
 }
-* { box-sizing: border-box; }
-body { margin: 0; }
-h1 { font-size: 16px; margin: 0; }
-h4 { margin: 0 0 6px; font-size: 13px; }
+@media (prefers-color-scheme: light) {
+  :root {
+    color-scheme: light;
+    --bg: #e9e5de;
+    --panel: #f8f6f2;
+    --raise: #efeae2;
+    --field: #fffdf9;
+    --sel: #f5dfb4;
+    --hov: #ece4d6;
+    --line: #cfc2b0;
+    --line-2: #543a23; /* the game's bronze as it is: 8:1 on the light panel */
+    --fg: #1e1813;
+    --fg-2: #40352a;
+    --muted: #645647;
+    --accent: #e8961d;
+    --accent-ink: #844a00;
+    --accent-line: #b06a00;
+    --accent-hi: #f2ae45;
+    --on-accent: #1d1206;
+    --accent-soft: #fae5bd;
+    --stripe: #f2c56f;
+    --bad: #b3231b;
+    --bad-soft: #fbe3df;
+    --keep: #0a6b60;
+    --keep-soft: #d7efea;
+    --fusion: #5b3fa6;
+    --fusion-soft: #e9e2f7;
+    --hazard-2: #1e1813;
+    --fl-n: #987e06; --fl-n-ink: #100d03; --fl-n-mark: #987e06;
+    --fl-h: #bb3602; --fl-h-ink: #ffdcd3; --fl-h-mark: #bb3602;
+    --fl-i: #6a40c4; --fl-i-ink: #f5f4fe;
+    --fl-x: #a50000; --fl-x-ink: #fff2f0; --fl-x-mark: #a50000;
+    --card-top: #fbf8f3; --card-bottom: #ece4d7; --card-line: #b9a68c; --card-fg: #1e1813;
+    --dep-top: #fdf0d4; --dep-bottom: #f6dca6; --bak-top: #e3f5f1; --bak-bottom: #c1e7df;
+    --tone-dep: #9a5c00; --on-tone: #ffffff; --bak-num: #046f63;
+  }
+}
 
+* { box-sizing: border-box; }
+html, body, #root { height: 100%; }
+body { margin: 0; }
+#root { display: flex; flex-direction: column; }
+::selection { background: var(--accent); color: var(--on-accent); }
+h1 { font-size: 16px; margin: 0; }
+h3, h4 { margin: 0 0 6px; font-size: 13.5px; color: var(--fg-2); }
+/* There for a screen reader's list of headings, not for the eye. */
+.sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+* { scrollbar-color: var(--line-2) var(--bg); }
+
+/* Controls: standard ones, in the game's chamfered plates. */
 button, select, input { font: inherit; color: inherit; }
 button {
-  border: 1px solid var(--line); background: var(--panel); border-radius: 6px; padding: 4px 12px; cursor: pointer;
+  border: 1px solid var(--line-2); background: var(--raise); color: var(--fg); padding: 4px 12px; cursor: pointer;
+  border-radius: 4px; corner-shape: bevel;
 }
-button:hover:not(:disabled) { border-color: var(--accent); }
-button:disabled { opacity: 0.35; cursor: default; }
-button.primary { background: var(--accent); border-color: var(--accent); color: #fff; padding: 5px 20px; }
-button.danger { color: var(--bad); }
-button.icon { padding: 0 6px; border-color: transparent; background: none; }
+button:hover:not(:disabled) { border-color: var(--accent-line); background: var(--hov); }
+button:disabled { opacity: 0.4; cursor: default; }
+button.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 700; padding: 5px 22px; }
+button.primary:hover:not(:disabled) { background: var(--accent-hi); border-color: var(--accent-hi); }
+button.danger { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 55%, var(--line)); }
+button.danger:hover:not(:disabled) { border-color: var(--bad); background: var(--bad-soft); }
+button.icon { padding: 0 6px; border-color: transparent; background: none; color: var(--muted); }
+button.icon:hover:not(:disabled) { color: var(--accent-ink); background: none; border-color: transparent; }
 select, input:not([type="checkbox"]) {
-  border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; background: var(--panel); min-width: 0;
+  border: 1px solid var(--line-2); padding: 4px 8px; background: var(--field); min-width: 0; border-radius: 2px;
 }
-input[type="number"], input.decimal { width: 7em; }
-input:disabled { opacity: 0.45; cursor: default; }
-:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+input[type="number"], input.decimal { width: 7em; font-variant-numeric: tabular-nums; }
+input[type="checkbox"] { width: 15px; height: 15px; margin: 0; flex: none; }
+input:disabled, select:disabled { opacity: 0.45; cursor: default; }
+::placeholder { color: var(--muted); opacity: 1; }
+/* Focus: the ink colour, so a focused row never reads as a selected (amber) one. */
+:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
 
+/* The shell: name plate, file, language, save state and Save on top, the tabs under it; both stay, the page scrolls below.
+ * The header is the window's title bar too: it drags the window, and its buttons sit flush in the top right corner. */
 header {
-  display: flex; align-items: center; gap: 16px; padding: 10px 16px; background: var(--panel); border-bottom: 1px solid var(--line);
+  flex: none; display: flex; align-items: center; gap: 14px; padding: 8px 0 8px 16px; background: var(--panel);
+  border-bottom: 1px solid var(--line); user-select: none;
 }
-header .path { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
-header .status { color: var(--muted); }
-header h1, header button { white-space: nowrap; } /* a long status wraps, not the title or Save */
+header .winctl { flex: none; align-self: stretch; display: flex; margin: -8px 0 -8px -2px; border-left: 1px solid var(--line); }
+header .winctl button {
+  width: 46px; padding: 0; display: grid; place-items: center; border: none; border-radius: 0; background: none; color: var(--fg-2);
+}
+header .winctl button:hover:not(:disabled) { background: var(--hov); color: var(--fg); }
+header .winctl button:focus-visible { outline-offset: -3px; }
+/* Close: the crimson of what cannot be undone, white on it in both themes, as the system's close turns red. */
+header .winctl button.close:hover:not(:disabled) { background: var(--close); color: #fff; }
+header .winctl svg { width: 10px; height: 10px; fill: none; stroke: currentColor; stroke-width: 1; shape-rendering: crispEdges; }
+header .winctl .close svg { shape-rendering: geometricPrecision; }
+header h1 {
+  font: 700 19px/1 var(--font-display); letter-spacing: 0.06em; text-transform: uppercase; color: var(--fg); white-space: nowrap;
+  padding: 6px 14px 5px; background: var(--bg); border: 1px solid var(--line-2); border-radius: 0 8px 0 8px; corner-shape: bevel;
+}
+header .path { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+header .lang { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 13px; white-space: nowrap; }
+header button { white-space: nowrap; } /* a long status wraps, not Save */
+/* Revert and its Undo: beside the plate, quieter than Save */
+header button.quiet { padding: 4px 12px; font-size: 13px; color: var(--fg-2); background: none; }
+/* The save state: a plate whose mark and colour say clean, unsaved, saved or blocked; the text is the app's own. */
+header .status {
+  display: inline-flex; align-items: center; gap: 8px; min-width: 10em; max-width: 34em; padding: 3px 10px; font-size: 13px; color: var(--fg-2);
+  border: 1px solid transparent; border-radius: 4px; corner-shape: bevel;
+}
+header .status::before { content: ""; flex: none; width: 9px; height: 9px; transform: rotate(45deg); background: var(--muted); }
+header .status[data-state="dirty"] { color: var(--accent-ink); border-color: var(--accent-line); background: var(--accent-soft); font-weight: 600; }
+header .status[data-state="dirty"]::before { background: var(--accent); }
+header .status[data-state="clean"] { color: var(--muted); }
+header .status[data-state="clean"]::before { background: none; border: 1px solid var(--muted); }
+header .status[data-state="saved"] { color: var(--keep); }
+header .status[data-state="saved"]::before { background: var(--keep); }
+header .status:is([data-state="blocked"], [data-state="failed"]) { color: var(--bad); border-color: var(--bad); background: var(--bad-soft); font-weight: 600; }
+/* blocked: a cross, not the diamond, so the state reads without its colour */
+header .status:is([data-state="blocked"], [data-state="failed"])::before {
+  width: 11px; height: 11px; transform: none;
+  background: linear-gradient(45deg, transparent 38%, var(--bad) 38% 62%, transparent 62%),
+    linear-gradient(-45deg, transparent 38%, var(--bad) 38% 62%, transparent 62%);
+}
+/* Save armed: unsaved changes put the game's yellow and black caution stripe round it, as on the game's Enter. */
+header button.primary { font-size: 15px; padding: 6px 26px; }
+header button.primary.armed {
+  border: 3px solid transparent; padding: 4px 24px;
+  background: linear-gradient(var(--accent), var(--accent)) padding-box,
+    repeating-linear-gradient(-45deg, var(--hazard) 0 6px, var(--hazard-2) 6px 12px) border-box;
+}
+header button.primary.armed:hover { background: linear-gradient(var(--accent-hi), var(--accent-hi)) padding-box,
+  repeating-linear-gradient(-45deg, var(--hazard) 0 6px, var(--hazard-2) 6px 12px) border-box; }
+header button.primary:not(.armed) { background: var(--raise); border-color: var(--line-2); color: var(--fg); }
+header button.primary:not(.armed):hover { border-color: var(--accent-line); }
+/* Save refused: the stripe gives way to a crimson frame until the problems are fixed. */
+header button.primary.refused { border: 2px solid var(--bad); background: var(--bad-soft); color: var(--bad); padding: 5px 25px; }
+header button.primary.refused:hover { background: var(--bad-soft); border-color: var(--bad); }
 
-nav { display: flex; gap: 2px; padding: 0 16px; background: var(--panel); border-bottom: 1px solid var(--line); overflow-x: auto; }
-nav button { border: none; border-bottom: 2px solid transparent; border-radius: 0; background: none; padding: 9px 14px 7px; white-space: nowrap; color: var(--muted); }
-nav button:hover:not(:disabled) { color: var(--fg); }
-nav button.selected { border-bottom-color: var(--accent); color: var(--fg); font-weight: 600; }
-nav button.bad::after { content: " ●"; color: var(--bad); }
-main { flex: 1; padding: 16px 20px; min-width: 0; }
+nav[role="tablist"] {
+  flex: none; display: flex; gap: 2px; padding: 6px 16px 0; background: var(--panel); box-shadow: inset 0 -1px var(--line-2);
+  overflow: auto hidden; scrollbar-width: thin;
+}
+nav[role="tablist"] button {
+  position: relative; border: 1px solid transparent; border-bottom: none; background: none; padding: 7px 14px 8px; white-space: nowrap;
+  color: var(--muted); font-weight: 600; border-radius: 8px 8px 0 0; corner-shape: bevel;
+}
+nav[role="tablist"] button:hover:not(:disabled) { color: var(--fg); background: var(--hov); border-color: transparent; }
+/* the tabs in groups (what a run plays with, the plans, the overrides, the daily tasks): a short bronze rule between */
+nav[role="tablist"] .tabsep { flex: none; align-self: center; width: 1px; height: 16px; margin: 0 8px; background: var(--line-2); }
+nav[role="tablist"] button.selected { color: var(--fg); background: var(--bg); border-color: var(--line-2); }
+nav[role="tablist"] button.selected::after { content: ""; position: absolute; left: 12px; right: 12px; top: 0; height: 3px; background: var(--accent-line); }
+nav[role="tablist"] button.bad { color: var(--bad); }
+nav[role="tablist"] button.bad::before {
+  content: ""; position: absolute; top: 6px; right: 4px; width: 9px; height: 9px; background: linear-gradient(45deg, transparent 38%, var(--bad) 38% 62%, transparent 62%),
+    linear-gradient(-45deg, transparent 38%, var(--bad) 38% 62%, transparent 62%);
+}
+main { flex: 1; min-height: 0; overflow: auto; padding: 16px 20px 28px; min-width: 0; }
 
-.problems { margin: 0 0 12px; padding: 8px 14px; border: 1px solid var(--bad); border-radius: 8px; background: #fdecea; }
-.problems p { margin: 0 0 4px; font-weight: 600; color: var(--bad); }
-.problems ul { margin: 0; padding-left: 20px; font-family: Consolas, monospace; font-size: 12px; }
+/* Save refused: inside the page, above the tab's content, never between the header and the tabs. */
+.problems {
+  margin: 0 0 16px; padding: 10px 16px 12px; background: var(--bad-soft); border: 1px solid var(--bad);
+  border-radius: 10px 0 10px 0; corner-shape: bevel;
+}
+.problems p { margin: 0 0 6px; font-weight: 700; color: var(--bad); display: flex; align-items: center; gap: 8px; }
+/* an error's mark is the cross everywhere (the plate, the banner, the tab, a list row); the diamond is the save state's */
+.problems p::before { content: ""; width: 11px; height: 11px; flex: none; background: linear-gradient(45deg, transparent 38%, var(--bad) 38% 62%, transparent 62%),
+    linear-gradient(-45deg, transparent 38%, var(--bad) 38% 62%, transparent 62%); }
+.problems ul { margin: 0; padding-left: 22px; font-size: 13px; color: var(--fg); }
+.problems li + li { margin-top: 2px; }
 /* a problem is a link to its field */
-.problems li button { all: unset; cursor: pointer; }
-.problems li button:hover { text-decoration: underline; }
-.problems li button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.problems li button {
+  all: unset; cursor: pointer; text-decoration: underline; text-underline-offset: 3px;
+  text-decoration-color: color-mix(in srgb, var(--bad) 60%, transparent);
+}
+.problems li button:hover { color: var(--bad); }
+.problems li button:focus-visible { outline: 2px solid var(--fg); outline-offset: 1px; }
 
 /* The close prompt (App.tsx ClosePrompt), over the dimmed editor. */
 .ask-back { position: fixed; inset: 0; z-index: 90; background: #0006; display: flex; align-items: center; justify-content: center; padding: 20px; }
 .ask {
-  background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 16px 18px; width: min(440px, 100%);
-  box-shadow: 0 12px 40px #0005;
+  background: var(--panel); border: 1px solid var(--line-2); border-radius: 12px 0 12px 0; corner-shape: bevel; padding: 16px 18px;
+  width: min(440px, 100%); box-shadow: 0 12px 40px #0005;
 }
 .ask p { margin: 0 0 14px; font-weight: 600; }
 .ask-buttons { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
 
 .muted { color: var(--muted); }
-.notice { color: var(--accent); margin: 4px 0; }
-.tag { font-style: normal; font-size: 11px; color: var(--accent); margin-left: 8px; }
+.caution { position: relative; color: var(--fg); padding-left: 24px; }
+.caution::before {
+  content: ""; position: absolute; left: 2px; top: 0.2em; width: 14px; height: 14px; border-radius: 2px; corner-shape: bevel;
+  background: repeating-linear-gradient(-45deg, var(--hazard) 0 3px, var(--hazard-2) 3px 6px);
+}
+p.caution { margin: 0; max-width: 56em; }
+.toggle small.caution { padding-left: 23px; color: var(--fg); }
+.toggle small.caution::before { left: 0; }
+p.muted { margin: 0; max-width: 56em; }
+.notice { color: var(--accent-ink); margin: 4px 0; }
+/* A question asked in the page (Reset time records): the question, then its buttons. */
+.notice.confirm { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; padding: 8px 12px; color: var(--fg);
+  background: var(--raise); border: 1px solid var(--line-2); border-radius: 6px 0 6px 0; corner-shape: bevel; }
+.notice.confirm span { flex: 1 1 24em; }
+.split aside .notice { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 4px 4px 4px 10px; margin: 0;
+  color: var(--fg-2); font-size: 12.5px; background: var(--raise); border: 1px dashed var(--line-2); }
+.split aside .notice button { padding: 1px 10px; }
+/* the team page's section index, under the team list in the sticky side column */
+nav.sections { display: flex; flex-wrap: wrap; gap: 4px 6px; align-items: center; margin-top: 6px; }
+nav.sections small { flex-basis: 100%; color: var(--muted); font-size: 12px; }
+nav.sections button { padding: 2px 9px; font-size: 12.5px; color: var(--fg-2); background: none; border-color: var(--line); }
+.tag { font-style: normal; font-size: 11.5px; color: var(--accent-ink); margin-left: 8px; }
 
 .split { display: flex; gap: 20px; align-items: flex-start; }
-.split aside { width: 240px; flex: none; display: flex; flex-direction: column; gap: 8px; }
-.split section { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 12px; }
+.split aside { width: 240px; flex: none; display: flex; flex-direction: column; gap: 8px; position: sticky; top: 0; }
+.split section { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 14px; }
 aside .lead { text-align: left; }
-aside .lead.selected { border-color: var(--accent); }
+aside .lead.selected { border-color: var(--accent-line); background: var(--sel); }
+aside > p.muted { font-size: 12.5px; }
 
 .row { display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; }
-.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px 20px; align-items: start; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px 20px; align-items: start; }
 .columns { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 
-.field { display: flex; flex-direction: column; gap: 3px; }
-.field > span { font-size: 12px; color: var(--muted); }
+.field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.field > span { font-size: 12.5px; font-weight: 600; color: var(--fg-2); }
 .field > span:empty { display: none; }
-.field small { color: var(--muted); font-size: 12px; }
-.check { display: flex; align-items: center; gap: 6px; }
+/* A field whose control is a checkbox: the box before its label, as every other checkbox; the note under both. */
+.field:has(> input[type="checkbox"]) { display: grid; grid-template-columns: auto 1fr; gap: 4px 8px; align-items: center; }
+.field:has(> input[type="checkbox"]) > span { grid-row: 1; grid-column: 2; }
+.field:has(> input[type="checkbox"]) > input { grid-row: 1; grid-column: 1; }
+.field:has(> input[type="checkbox"]) > small { grid-column: 1 / -1; }
+.field small { color: var(--muted); font-size: 12px; line-height: 1.45; }
+.check { display: flex; align-items: flex-start; gap: 8px; }
+.check > input[type="checkbox"] { margin-top: 3px; }
 
-.bad > select, .bad > input, .bad input, .bad select, ol.reorder li.bad, table.bad, .bad > .reorder { border-color: var(--bad) !important; outline: 1px solid var(--bad); }
-h4.bad, p.bad, .check.bad { color: var(--bad); }
-
-fieldset { border: 1px solid var(--line); border-radius: 8px; background: var(--panel); padding: 8px 12px 12px; display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
-legend { font-weight: 600; padding: 0 4px; }
-
-ol.reorder { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; width: 100%; min-width: 220px; }
-ol.reorder li {
-  display: flex; align-items: center; gap: 6px; padding: 3px 4px 3px 8px; background: var(--panel);
-  border: 1px solid var(--line); border-radius: 6px; cursor: grab; user-select: none;
+.bad > select, .bad > input, .bad input, .bad select, ol.reorder li.bad, table.bad, .bad > .reorder {
+  border-color: var(--bad) !important; outline: 1px solid var(--bad);
 }
-ol.reorder li.selected { border-color: var(--accent); box-shadow: inset 3px 0 0 var(--accent); }
+h3.bad, h4.bad, p.bad, .check.bad { color: var(--bad); }
+
+/* Frames: fieldset, collapsible panels, bars. A chamfer at two corners, a bronze rule, the title as a plate. */
+fieldset, details.panel, .bar, .lanes {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 10px 0 10px 0; corner-shape: bevel;
+}
+fieldset { margin: 0; min-width: 0; padding: 0 14px 14px; display: flex; flex-direction: column; gap: 10px; align-items: flex-start; }
+legend, details.panel > summary {
+  font: 700 15px/1.3 var(--font-display); letter-spacing: 0.02em; color: var(--fg); display: flex; align-items: center; gap: 9px;
+}
+legend { float: left; width: 100%; padding: 10px 0 8px; margin: 0 0 2px; border-bottom: 1px solid var(--line); }
+legend + * { clear: left; }
+legend::before { content: ""; width: 5px; height: 14px; background: var(--line-2); transform: skewX(-18deg); flex: none; } /* bronze: amber is for what is in use */
+
+details.panel { padding: 0 14px; display: flex; flex-direction: column; }
+details.panel[open] { padding-bottom: 14px; }
+details.panel > summary { cursor: pointer; padding: 10px 0; list-style: none; }
+details.panel > summary::-webkit-details-marker { display: none; }
+details.panel > summary::before {
+  content: ""; width: 0; height: 0; border-left: 6px solid var(--accent-line); border-top: 5px solid transparent;
+  border-bottom: 5px solid transparent; transition: transform 0.15s ease-out; flex: none;
+}
+details.panel[open] > summary::before { transform: rotate(90deg); }
+details.panel[open] > summary { border-bottom: 1px solid var(--line); margin-bottom: 12px; }
+details.panel > * + * { margin-top: 12px; }
+details.panel > summary + * { margin-top: 0; }
+details.panel.bad > summary { color: var(--bad); }
+.options { display: flex; flex-direction: column; gap: 10px; }
+.toggle { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.toggle .check { min-width: 9em; }
+.toggle small { color: var(--muted); font-size: 12px; flex-basis: 100%; padding-left: 23px; }
+.rewards { max-width: 380px; }
+details.panel > .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+/* The run options, in groups. */
+.groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(440px, 1fr)); gap: 16px; align-items: start; }
+.groups .grid { width: 100%; }
+.groups .grid > .check.wide { grid-column: 1 / -1; }
+
+ol.reorder { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; width: 100%; min-width: 220px; }
+ol.reorder li {
+  display: flex; align-items: center; gap: 6px; padding: 4px 4px 4px 8px; background: var(--raise); color: var(--fg);
+  border: 1px solid var(--line); border-radius: 4px; corner-shape: bevel; cursor: grab; user-select: none;
+}
+ol.reorder li:hover { border-color: var(--line-2); }
+ol.reorder li.selected { border-color: var(--accent-line); background: var(--sel); outline: 1px solid var(--accent-line); }
+ol.reorder li.selected.bad { border-color: var(--bad); outline-color: var(--bad); } /* picked and wrong: the error shows */
+ol.reorder li.bad { border-style: dashed; }
+ol.reorder .badmark { color: var(--bad); font-weight: 700; font-size: 12px; }
 ol.reorder li.dragging { opacity: 0.4; }
 ol.reorder .grip { color: var(--muted); font-size: 11px; }
-ol.reorder .item { flex: 1; }
+ol.reorder .item { flex: 1; min-width: 0; }
+ol.reorder .item small { font: 600 13px/1 var(--font-display); color: var(--muted); letter-spacing: 0.03em; }
+/* The team list is the queue: its place shows as the game's TEAMS number plate does. */
+.queue ol.reorder { counter-reset: q; }
+.queue ol.reorder li { counter-increment: q; }
+.queue ol.reorder li::before { content: counter(q) "."; min-width: 18px; text-align: right; font: 600 15px/20px var(--font-display); color: var(--muted); }
+.queue ol.reorder li.selected::before { color: var(--fg); }
+.qtag { margin-left: 5px; padding: 0 5px; font: 600 11.5px/1.5 var(--font-ui); font-style: normal; color: var(--fg-2); background: var(--raise);
+  border: 1px solid var(--line); border-radius: 2px; white-space: nowrap; }
+.qtag.off { color: var(--muted); border-style: dashed; }
+.queue ol.reorder .item small {
+  margin-left: 4px; padding: 0 5px; border: 1px solid var(--line-2); border-radius: 2px; corner-shape: bevel; color: var(--fg-2);
+}
 ol.preview { margin: 0; padding-left: 26px; columns: 2; column-gap: 40px; }
 
 table { border-collapse: collapse; background: var(--panel); }
-th, td { text-align: left; padding: 3px 8px; border-bottom: 1px solid var(--line); }
-th { font-size: 12px; color: var(--muted); font-weight: 500; }
-table.overrides { width: 100%; margin-bottom: 8px; }
+th, td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--line); }
+th { font-size: 12.5px; color: var(--fg-2); font-weight: 600; }
+table.overrides {
+  width: 100%; margin-bottom: 10px; border: 1px solid var(--line); border-collapse: separate; border-spacing: 0;
+  border-radius: 10px 0 10px 0; corner-shape: bevel; overflow: hidden;
+}
+table.overrides tr:last-child > td { border-bottom: none; }
+table.overrides td:last-child { width: 1%; text-align: right; white-space: nowrap; } /* Delete at the row's end */
 table.overrides input:not([type="number"]):not(.decimal) { width: 100%; }
 
 .load-error { padding: 24px; }
-.team { display: flex; flex-direction: column; gap: 14px; }
+.team, .stack { display: flex; flex-direction: column; gap: 14px; }
+.stack > button { align-self: flex-start; }
 
-/* Team page, laid out like AALC's: a top bar, the sinner grid, starlight selectors, then the rest. */
+/* Team page, laid out like AALC's: the name plate, the sinner grid, starlight selectors, then the rest. */
 .team > fieldset { align-items: stretch; min-width: 0; }
-.bar {
-  display: flex; align-items: flex-end; gap: 12px 16px; flex-wrap: wrap;
-  padding: 10px 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
-}
+.bar { display: flex; align-items: flex-end; gap: 12px 16px; flex-wrap: wrap; padding: 10px 14px; }
 .bar .spacer { flex: 1; }
+.bar .field:first-child input { font-weight: 700; font-size: 15px; }
+/* The lists bar: the team's gift list and theme pack plan, side by side under the name plate. */
+.bar.lists { align-items: flex-start; gap: 12px 28px; }
+.bar.lists .field { flex: 1 1 260px; max-width: 420px; }
+.bar.lists .inline { display: flex; gap: 8px; align-items: center; }
+.bar.lists .inline select { flex: 1; min-width: 0; }
+.bar.lists .hint { flex-basis: 100%; }
+details.hint > summary { cursor: pointer; color: var(--fg-2); font-size: 12.5px; font-weight: 600; width: max-content; }
+details.hint > p { margin: 6px 0 0; color: var(--muted); font-size: 12.5px; max-width: 56em; }
 
+/* The sinner grid: the game's identity frames, a big deployment number, a banner for deployed or backup. No portraits, so the
+ * frame is short: number, banner, name. */
 .sinners { display: grid; grid-template-columns: repeat(6, minmax(88px, 1fr)); gap: 8px; max-width: 760px; }
-.sinners.bad { outline: 1px solid var(--bad); outline-offset: 3px; border-radius: 8px; }
+.sinners.bad { outline: 1px solid var(--bad); outline-offset: 4px; }
 .sinner {
   --tone: var(--muted);
-  position: relative; aspect-ratio: 2 / 3; padding: 0; overflow: hidden; border-radius: 10px;
-  border: 2px solid var(--line); background: linear-gradient(160deg, #fafbfc, #e9ecf1);
+  position: relative; aspect-ratio: 5 / 4; padding: 0; overflow: hidden; color: var(--card-fg);
+  border: 1px solid var(--card-line); border-radius: 10px 0 10px 0; corner-shape: bevel;
+  background: linear-gradient(165deg, var(--card-top), var(--card-bottom) 75%);
 }
+.sinner:hover:not(:disabled) { border-color: var(--accent-line); }
 .sinner:disabled { opacity: 1; cursor: default; }
-.sinner.deployed { --tone: #c47f00; border-color: var(--tone); background: linear-gradient(160deg, #fff8e6, #f6dfa6); }
-.sinner.backup { --tone: #0f8a80; border-color: var(--tone); background: linear-gradient(160deg, #eafaf7, #b9e8e1); }
-.sinner .num { position: absolute; top: 12%; left: 0; right: 0; font-size: 34px; font-weight: 800; color: var(--tone); }
+/* A team on a plan: the plan's grid, quieter, so it does not read as one to click (the line above says where to change it). */
+.sinners.readonly .sinner { filter: saturate(0.45) brightness(0.85); border-style: dashed; }
+.sinner.deployed { --tone: var(--tone-dep); border: 2px solid var(--tone); background: linear-gradient(165deg, var(--dep-top), var(--dep-bottom) 75%); }
+.sinner.deployed .banner { background: var(--dep-plate); color: var(--dep-ink); }
+.sinner.backup { --tone: var(--bak-plate); border: 2px solid var(--tone); background: linear-gradient(165deg, var(--bak-top), var(--bak-bottom) 75%); }
+.sinner.backup .num { color: var(--bak-num); }
+.sinner.backup .banner { color: var(--bak-ink); }
+.sinner .num { position: absolute; top: 4px; left: 9px; font: 700 34px/1 var(--font-display); color: var(--tone); }
 .sinner .banner {
-  position: absolute; top: 46%; left: 0; right: 0; padding: 2px 0; background: var(--tone); color: #fff;
-  font-weight: 700; letter-spacing: 0.2em; font-size: 13px;
+  position: absolute; top: 4px; right: 0; padding: 1px 8px 1px 12px; background: var(--tone); color: var(--on-tone);
+  font-weight: 700; letter-spacing: 0.2em; font-size: 12.5px; clip-path: polygon(8px 0, 100% 0, 100% 100%, 0 100%);
 }
-.sinner .name { position: absolute; right: 8px; bottom: 6px; font-weight: 700; color: var(--fg); text-align: right; }
+.sinner .name {
+  position: absolute; right: 8px; bottom: 6px; left: 6px; font: 700 15px/1.1 var(--font-display); letter-spacing: 0.02em;
+  text-transform: uppercase; color: var(--card-fg); text-align: right;
+}
 
-/* Starlight, drawn after the game's "Grace of the Star" page: dark red cards, a selected one turns white. */
+/* Starlight, drawn after the game's "Grace of the Star" page: grey-navy cards in a blue frame, a selected one turns white,
+ * + and ++ add the starlight's gold rim. */
+.starlight :focus-visible { outline-color: var(--season-ink); } /* the page stays dark in the light theme: a light ring */
 .starlight {
-  --red: #b3141c; --deep: #2a0709;
-  display: flex; gap: 14px; align-items: flex-start; padding: 12px; border-radius: 8px;
-  background: radial-gradient(ellipse at 50% 40%, #3a0b0e, #120405 75%); color: #f2e9e9;
+  color-scheme: dark; /* the game's page in both themes: its checkbox and scrollbars dark too */
+  display: flex; gap: 14px; align-items: flex-start; padding: 12px; color: var(--season-ink);
+  border: 1px solid var(--season-plate); border-radius: 10px 0 10px 0; corner-shape: bevel;
+  background: radial-gradient(ellipse at 50% 30%, var(--season-bg-1), var(--season-bg-2) 75%);
 }
 .graces { flex: 1; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; min-width: 0; }
-.graces.bad { outline: 2px solid var(--bad); outline-offset: 4px; border-radius: 6px; }
+.graces.bad { outline: 2px solid var(--bad); outline-offset: 4px; }
 .grace {
-  position: relative; display: flex; flex-direction: column; gap: 6px; min-height: 210px; min-width: 0; padding: 26px 8px 8px; overflow-wrap: anywhere;
-  border: 2px solid var(--red); border-radius: 4px; cursor: pointer; user-select: none;
-  background: linear-gradient(180deg, #8c1016 0, #4a0a0d 38%, #140405 70%);
-  box-shadow: inset 0 0 0 1px #000, 0 0 0 1px #000;
+  position: relative; display: flex; flex-direction: column; gap: 6px; min-width: 0; padding: 26px 8px 8px; overflow-wrap: anywhere;
+  border: 2px solid var(--season-frame); border-radius: 6px 0 6px 0; corner-shape: bevel; cursor: pointer; user-select: none;
+  background: linear-gradient(180deg, var(--season-card-top) 0, var(--season-card-mid) 38%, var(--season-card-bottom) 72%);
+  color: var(--season-ink);
 }
-.grace:hover { border-color: #ff4a4a; }
+.grace:hover { border-color: var(--season-hint); }
 .grace[aria-disabled="true"] { cursor: default; }
+.starlight.readonly .grace:hover { border-color: var(--season-frame); }
+.starlight.readonly .grace:not(.none):hover { border-color: var(--season-pick-line); }
 .grace .price {
-  position: absolute; top: 0; right: 0; padding: 1px 8px 1px 10px; background: #000; color: #fff; font-weight: 700;
-  font-size: 15px; clip-path: polygon(10px 0, 100% 0, 100% 100%, 0 100%);
+  position: absolute; top: 0; right: 0; padding: 1px 8px 1px 10px; background: var(--season-btn); color: var(--season-price);
+  font: 700 16px/1.3 var(--font-display); clip-path: polygon(10px 0, 100% 0, 100% 100%, 0 100%);
 }
 .grace .rank {
   position: absolute; top: -2px; left: -2px; min-width: 26px; padding: 0 6px; height: 26px; line-height: 26px; text-align: center;
-  font-weight: 800; font-size: 16px; background: #ffd34d; color: #2a0709; border-radius: 4px 0 6px 0;
+  font: 700 18px/26px var(--font-display); background: var(--gold); color: #1a1406;
 }
-.grace .name { font-weight: 700; font-size: 14px; line-height: 1.2; text-align: right; text-shadow: 0 1px 2px #000; }
-.grace .name small { display: block; font-weight: 400; font-size: 10px; opacity: 0.7; }
-.grace ul { margin: 0; padding-left: 14px; font-size: 11.5px; line-height: 1.35; flex: 1; }
+.grace .name { font-weight: 700; font-size: 14px; line-height: 1.2; text-align: right; text-shadow: var(--season-shadow); }
+/* the pick button is the card's name: no plate of its own; its focus rings the whole card */
+.grace button.name { display: block; width: 100%; padding: 0; border: none; border-radius: 0; background: none; color: inherit; cursor: inherit; }
+.grace button.name:hover:not(:disabled) { background: none; }
+.grace button.name:disabled { opacity: 1; cursor: default; }
+.grace button.name:focus-visible { outline: none; }
+.grace:has(button.name:focus-visible) { outline: 2px solid var(--season-ink); outline-offset: 2px; }
+.grace .name small { display: block; font: 600 12px/1.2 var(--font-display); letter-spacing: 0.02em; opacity: 0.85; }
+.grace ul { margin: 0; padding-left: 14px; font-size: 12px; line-height: 1.4; flex: 1; }
 .grace li.sub { list-style: none; margin-left: 4px; opacity: 0.85; }
 .grace .enhance { display: flex; gap: 6px; }
 .grace .enhance button {
-  flex: 1; padding: 1px 0; border: 1px solid #000; border-radius: 0; background: var(--red); color: #fff; font-weight: 800;
+  flex: 1; padding: 1px 0; border: 1px solid var(--season-btn-line); background: var(--season-btn); color: var(--season-btn-ink);
+  font: 700 15px/1.3 var(--font-display);
 }
-.grace .enhance button:hover:not(:disabled) { border-color: #fff; }
+.grace .enhance button:hover:not(:disabled) { border-color: var(--season-hint); background: var(--season-btn-hover); }
 .grace .enhance button:disabled { opacity: 1; cursor: default; }
-.grace .enhance button.lit { background: #ffd34d; color: #2a0709; box-shadow: 0 0 8px #ffd34d; }
-/* Selected: the whole card goes white, as in the game; + and ++ add a gold rim. */
-.grace:not(.none) { background: linear-gradient(180deg, #fff 0, #f1e6e6 60%, #e3d3d3); color: var(--deep); border-color: #fff; }
-.grace:not(.none) .name { text-shadow: none; }
-.grace.plus { border-color: #ffd34d; box-shadow: 0 0 0 2px #ffd34d, 0 0 10px #ffd34d88; }
-.grace.plus2 { border-color: #ffb300; box-shadow: 0 0 0 3px #ffb300, 0 0 16px #ffb300; }
-.grace-side {
-  width: 150px; flex: none; display: flex; flex-direction: column; gap: 6px; padding: 10px; border: 2px solid var(--red);
-  background: #140405;
+.grace .enhance button.lit { background: var(--gold); color: #1a1406; box-shadow: 0 0 8px #ffd34d; }
+/* Selected: the whole card turns over, as in the game; + and ++ add a gold rim. */
+.grace:not(.none) {
+  background: linear-gradient(180deg, var(--season-pick-top) 0, var(--season-pick-mid) 60%, var(--season-pick-bottom));
+  color: var(--season-pick-ink); border-color: var(--season-pick-line);
 }
-.grace-side button { border-radius: 0; border-color: #000; background: var(--red); color: #fff; }
-.grace-side button:hover:not(:disabled) { border-color: #fff; }
-.grace-side .muted { color: #e46a6a; text-align: center; font-size: 12px; margin-top: 4px; }
-.grace-side .total { margin-top: 8px; color: #d9c2c2; }
-.grace-side .total b { display: block; font-size: 22px; color: #fff; }
-.grace-side .check { color: #f2e9e9; font-size: 12px; align-items: flex-start; }
-
-details.panel { border: 1px solid var(--line); border-radius: 8px; background: var(--panel); padding: 8px 12px 12px; display: flex; flex-direction: column; gap: 12px; }
-details.panel > summary { font-weight: 600; cursor: pointer; }
-details.panel[open] > summary { margin-bottom: 10px; }
-details.panel > * + * { margin-top: 12px; }
-.options { display: flex; flex-direction: column; gap: 8px; }
-.toggle { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.toggle .check { min-width: 9em; }
-.toggle small { color: var(--muted); font-size: 12px; }
-.rewards { max-width: 360px; }
+.grace:not(.none) .name { text-shadow: none; }
+.grace.plus { border-color: var(--gold); box-shadow: 0 0 0 2px var(--gold), 0 0 8px #ffd34d88; }
+.grace.plus2 { border-color: #ffb300; box-shadow: 0 0 0 3px #ffb300, 0 0 10px #ffb30099; }
+.starlight { flex-direction: column; align-items: stretch; }
+.grace-side {
+  order: -1; flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; padding: 8px 12px; border: 2px solid var(--season-plate);
+  background: var(--season-side); border-radius: 0 6px 0 6px; corner-shape: bevel;
+}
+.grace-side button { border-color: var(--season-btn-line); background: var(--season-btn); color: var(--season-btn-ink); font-weight: 700; padding: 3px 14px; }
+.grace-side button:hover:not(:disabled) { border-color: var(--season-hint); background: var(--season-btn-hover); }
+.grace-side .muted { color: var(--season-ink-2); font-size: 12.5px; margin-left: 8px; } /* a label for the + / ++ beside it, not a link */
+.grace-side .total { margin-left: auto; display: flex; align-items: baseline; gap: 8px; color: var(--season-ink-2); }
+.grace-side .total b { font: 700 26px/1 var(--font-display); color: var(--season-ink); }
+.grace-side .check { color: var(--season-ink); font-size: 12.5px; }
+/* A team on a starlight plan: the plan's picks on one line, in the season's plate colour. */
+.receipt {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 8px 18px; padding: 8px 12px; background: var(--raise);
+  border: 1px solid var(--season-plate); border-radius: 8px 0 8px 0; corner-shape: bevel;
+}
+.receipt ol { display: flex; flex-wrap: wrap; gap: 6px 16px; list-style: none; margin: 0; padding: 0; }
+.receipt li { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; }
+.receipt li b { min-width: 20px; text-align: center; font: 700 15px/20px var(--font-display); background: var(--gold); color: #1a1406; }
+.receipt li i { font: 700 15px/1 var(--font-display); font-style: normal; color: var(--accent-ink); }
+.receipt .total { margin-left: auto; color: var(--fg-2); }
+.receipt .total b { font: 700 20px/1 var(--font-display); color: var(--fg); }
 
 /* Skill replacement (#454), the layout the user adopted on 2026-11-06: one line per listed sinner, in priority order. */
 details.skill-panel > * + * { margin-top: 8px; }
+details.skill-panel > summary + * { margin-top: 0; }
 details.skill-panel > p { margin-bottom: 0; }
 /* not details.bad nor li.bad: `.bad input`, `.bad select` would outline every field of the panel or the row, not just the wrong row */
 details.skill-panel > summary.bad { color: var(--bad); }
@@ -206,90 +511,116 @@ details.skill-panel > summary.bad { color: var(--bad); }
 ol.skill-sinners { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
 ol.skill-sinners:empty { display: none; }
 ol.skill-sinners > li {
-  display: flex; align-items: center; gap: 6px; padding: 4px 8px; background: var(--panel); border: 1px solid var(--line);
-  border-radius: 6px; cursor: grab; user-select: none;
+  display: flex; align-items: center; gap: 6px; padding: 4px 8px; background: var(--raise); border: 1px solid var(--line);
+  border-radius: 4px; corner-shape: bevel; cursor: grab; user-select: none;
 }
 ol.skill-sinners > li.faulty { border-color: var(--bad); outline: 1px solid var(--bad); }
 ol.skill-sinners > li[data-dragging] { opacity: 0.4; }
-ol.skill-sinners > li[data-over] { background: var(--line); }
+ol.skill-sinners > li[data-over] { background: var(--sel); }
 ol.skill-sinners .grip { color: var(--muted); font-size: 11px; }
-.skill-rank { min-width: 1.5em; text-align: right; color: var(--muted); }
-.skill-name { flex: 0 1 6.5em; min-width: 3em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
-.skill-count { display: flex; align-items: center; gap: 3px; font-size: 12px; color: var(--muted); }
+.skill-rank { min-width: 1.5em; text-align: right; color: var(--accent-ink); font: 700 16px/1 var(--font-display); }
+.skill-name {
+  flex: 0 1 6.5em; min-width: 3em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font: 700 15px/1.2 var(--font-display); letter-spacing: 0.02em; text-transform: uppercase;
+}
+.skill-count { display: flex; align-items: center; gap: 4px; font: 600 13px/1 var(--font-display); color: var(--muted); }
 /* S1 is worked out, S2 and S3 are − n + in one box each: no free number field */
-.skill-box { display: inline-flex; align-items: stretch; width: 64px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); font-size: 14px; color: var(--fg); }
-.skill-box.ro { justify-content: center; padding: 4px 0; background: var(--bg); color: var(--muted); cursor: default; }
-.skill-spin button { flex: 1; min-width: 0; padding: 4px 0; border: none; border-radius: 0; background: none; font-weight: 600; }
-.skill-spin button:first-child { border-radius: 5px 0 0 5px; }
-.skill-spin button:last-child { border-radius: 0 5px 5px 0; }
-.skill-spin button:hover:not(:disabled) { background: color-mix(in srgb, var(--accent) 12%, var(--panel)); color: var(--accent); }
+.skill-box {
+  display: inline-flex; align-items: stretch; width: 66px; border: 1px solid var(--line-2); border-radius: 4px; corner-shape: bevel;
+  background: var(--field); font: 700 15px/1 var(--font-display); color: var(--fg);
+}
+.skill-box.ro { justify-content: center; padding: 5px 0; background: var(--raise); color: var(--muted); border-color: var(--line); cursor: default; }
+.skill-spin button { flex: 1; min-width: 0; padding: 4px 0; border: none; border-radius: 0; background: none; font-weight: 700; }
+.skill-spin button:hover:not(:disabled) { background: var(--accent-soft); color: var(--accent-ink); }
 .skill-spin button:focus-visible { outline-offset: -2px; }
-.skill-spin .n { width: 22px; flex: none; padding: 4px 0; text-align: center; border-left: 1px solid var(--line); border-right: 1px solid var(--line); }
+.skill-spin .n { width: 22px; flex: none; padding: 5px 0; text-align: center; border-left: 1px solid var(--line); border-right: 1px solid var(--line); }
 .skill-pillcell { width: 11em; flex: none; }
-.skill-pill { display: inline-block; padding: 1px 10px; border-radius: 999px; font-size: 12px; white-space: nowrap; border: 1px solid var(--line); }
-.skill-pill.off { color: var(--muted); border-color: var(--muted); background: transparent; }
-.skill-pill.on { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
-.skill-pill.err { background: var(--bad); border-color: var(--bad); color: #fff; white-space: normal; }
+/* A status tag, not a button: square, no border of its own. */
+.skill-pill { display: inline-block; padding: 1px 8px; font-size: 12.5px; white-space: nowrap; border-radius: 3px; corner-shape: bevel; }
+.skill-pill.off { color: var(--muted); }
+.skill-pill.on { background: var(--accent-soft); color: var(--accent-ink); font: 700 14px/1.4 var(--font-display); letter-spacing: 0.02em; }
+.skill-pill.err { background: var(--bad-soft); color: var(--bad); white-space: normal; font-weight: 600; }
 .skill-first { width: 8.5em; flex: none; }
 .skill-arrows { display: inline-flex; margin-left: auto; }
-.skill-arrows button:hover:not(:disabled) { color: var(--accent); }
 
-/* E.G.O Gift Search, drawn after the game's page: keyword tabs, a band per tier, text cards; a picked one glows gold. */
-.gift-search { display: flex; flex-direction: column; gap: 10px; padding: 12px; border-radius: 8px; background: #0d1424; color: #e6ebf5; }
+/* E.G.O Gift Search, drawn after the game's page: keyword tabs with the keyword's icon, a band per tier, text cards; a picked
+ * one takes the amber of what is in use, with its place in the order. The shell's colours, as the gift list tab has them. */
+.gift-search {
+  display: flex; flex-direction: column; gap: 10px; padding: 12px; background: var(--bg); color: var(--fg);
+  border: 1px solid var(--line); border-radius: 10px 0 10px 0; corner-shape: bevel;
+}
 .gift-tabs { display: flex; gap: 4px; flex-wrap: wrap; }
-.gift-tabs button { background: #1b2540; border-color: #2c3a60; color: #c5cee3; font-size: 12px; padding: 4px 10px; }
-.gift-tabs button.selected { background: #3a4d84; border-color: #9fb3ef; color: #fff; font-weight: 600; }
-.gift-tabs b { margin-left: 5px; padding: 0 5px; border-radius: 8px; background: #ffd34d; color: #1a1406; font-size: 11px; }
-.gift-tier h4 { margin: 0 0 6px; padding: 2px 8px; background: #23305a; color: #ffc53d; letter-spacing: 2px; }
+.gift-tabs button { display: inline-flex; align-items: center; gap: 6px; padding: 4px 9px; color: var(--muted); background: var(--panel); border-color: var(--line); }
+.gift-tabs button:hover:not(:disabled) { color: var(--fg); }
+.gift-tabs button.selected { background: var(--sel); border-color: var(--accent-line); color: var(--fg); font-weight: 700; }
+.gift-tabs b { padding: 0 5px; background: var(--accent); color: var(--on-accent); font: 700 13px/16px var(--font-display); border-radius: 2px; }
+.gift-tier h3 { margin: 0 0 6px; padding: 2px 10px; background: var(--raise); color: var(--accent-ink); font: 700 15px/1.4 var(--font-display); letter-spacing: 3px; }
 .gifts { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; }
 .gift {
   position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 1px; min-height: 48px; padding: 5px 8px 5px 10px;
-  text-align: left; background: #161f36; border: 1px solid #c58b1c; border-radius: 4px; color: #e6ebf5; overflow-wrap: anywhere;
+  text-align: left; background: var(--panel); border: 1px solid var(--line-2); border-radius: 4px; corner-shape: bevel;
+  color: var(--fg); overflow-wrap: anywhere;
 }
-.gift:hover:not(:disabled) { border-color: #ffd34d; }
+.gift:hover:not(:disabled) { border-color: var(--accent-line); background: var(--hov); }
 .gift .name { font-weight: 600; font-size: 13px; line-height: 1.25; }
-.gift small { font-size: 10.5px; opacity: 0.65; line-height: 1.2; }
-.gift.picked { background: #3a2f10; border-color: #ffd34d; box-shadow: 0 0 0 2px #ffd34d, 0 0 8px #ffd34d88; padding-left: 30px; }
+.gift small { font-size: 11.5px; color: var(--muted); line-height: 1.25; }
+.gift.picked { background: var(--sel); border-color: var(--accent-line); box-shadow: 0 0 0 1px var(--accent-line); padding-left: 30px; }
 .gift .rank {
   position: absolute; top: 0; left: 0; bottom: 0; width: 22px; display: flex; align-items: center; justify-content: center;
-  background: #ffd34d; color: #1a1406; font-weight: 800;
+  background: var(--gold); color: #1a1406; font: 700 16px/1 var(--font-display);
 }
 
-/* Theme pack plan, design A of #240: lanes of weights, the threshold line between them. */
-.packbar { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
-.packbar .gap { width: 10px; }
-.packbar .spacer { flex: 1; }
+/* Theme pack plan, design A of #240: lanes of weights, the refresh threshold between them as a double rule. */
+/* Filters: difficulty, then the view switch at the right; the floors on a row of their own. */
+.packbar { display: grid; grid-template-columns: 1fr auto; gap: 6px 16px; align-items: center; }
+.packbar .seg { display: flex; flex-wrap: wrap; gap: 4px; }
+.packbar .floors { grid-column: 1 / -1; }
+.packbar .pk-search { grid-column: 1 / -1; max-width: 360px; }
 .lanes + .field { max-width: 320px; }
-.chip { border-radius: 999px; padding: 1px 10px; font-size: 12px; color: var(--muted); }
-.chip[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
-.lanes { display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 4px 12px; }
-.lane { display: flex; align-items: flex-start; gap: 10px; padding: 6px 0; border-bottom: 1px dashed var(--line); min-height: 38px; }
-.lane .w { width: 40px; flex: none; text-align: right; font-weight: 700; padding-top: 4px; }
-.lane .w.pos { color: #1b7f3b; }
-.lane .w.neg { color: var(--bad); }
+.chip { padding: 2px 10px; font: 600 14px/1.3 var(--font-display); letter-spacing: 0.02em; color: var(--fg-2); background: var(--panel); border-color: var(--line); }
+.chip[aria-pressed="true"] { background: var(--sel); border-color: var(--accent-line); color: var(--fg); box-shadow: inset 0 -2px var(--accent-line); }
+.chip[aria-pressed="true"]:hover:not(:disabled) { background: var(--sel); border-color: var(--accent-line); }
+/* A difficulty chip carries its badge's colour, as the legend under it does. */
+.chip.mode { --c: var(--fl-n-mark); display: inline-flex; align-items: center; gap: 6px; }
+.chip.mode.hard { --c: var(--fl-h-mark); }
+.chip.mode.inf { --c: var(--fl-i); }
+.chip.mode.ext { --c: var(--fl-x-mark); }
+.chip.mode::before { content: ""; width: 8px; height: 8px; transform: rotate(45deg); background: var(--c); }
+.lanes { display: flex; flex-direction: column; padding: 4px 14px; }
+.lane { display: flex; align-items: flex-start; gap: 12px; padding: 7px 0; border-bottom: 1px dashed var(--line); min-height: 40px; }
+.lane .w { width: 40px; flex: none; text-align: right; font: 700 22px/1.2 var(--font-display); color: var(--muted); font-variant-numeric: tabular-nums; }
+.lane .w.pos { color: var(--accent-ink); }
+.lane .w.neg { color: var(--fg-2); }
 .lane .packs { display: flex; flex-wrap: wrap; gap: 6px; flex: 1; }
-.lane.add { color: var(--muted); justify-content: center; align-items: center; border: 1px dashed var(--line); border-radius: 6px; margin: 6px 0; }
+.lane.add { color: var(--muted); justify-content: center; align-items: center; border: 1px dashed var(--line-2); margin: 8px 0; }
 .lanes .gap { height: 12px; }
-.lanes.moving .gap { background: repeating-linear-gradient(90deg, var(--accent) 0 6px, transparent 6px 12px) center / 100% 2px no-repeat; }
-.thr { display: flex; align-items: center; gap: 8px; color: var(--accent); font-size: 12px; font-weight: 600; cursor: grab; }
-.thr::before, .thr > span::after { content: ""; }
-.thr::before { flex: none; width: 40px; border-top: 2px solid var(--accent); }
-.thr > span { flex: 1; display: flex; align-items: center; gap: 8px; }
-.thr > span::after { flex: 1; border-top: 2px solid var(--accent); }
+.lanes.moving .gap { background: repeating-linear-gradient(90deg, var(--accent-line) 0 6px, transparent 6px 12px) center / 100% 2px no-repeat; }
+.thr { display: flex; align-items: center; gap: 10px; color: var(--fg); font-size: 12.5px; font-weight: 600; cursor: grab; padding: 4px 0; }
+.thr::before, .thr > span::after { content: ""; height: 0; border-top: 3px double var(--fg-2); }
+.thr::before { flex: none; width: 40px; }
+.thr > span { flex: 1; display: flex; align-items: center; gap: 10px; }
+.thr > span::after { flex: 1; }
+.thr.bad { color: var(--bad); }
 .pk {
-  display: inline-flex; align-items: center; gap: 4px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px;
-  padding: 3px 8px; font-size: 12px; line-height: 1.3; cursor: default;
+  display: inline-flex; align-items: center; gap: 5px; background: var(--raise); border: 1px solid var(--line); border-radius: 4px; corner-shape: bevel;
+  padding: 3px 8px; font-size: 12.5px; line-height: 1.35; cursor: default; color: var(--fg);
 }
 .pk[draggable="true"] { cursor: grab; }
-.pk small { color: var(--muted); font-size: 10.5px; }
-.pk small em { font-style: normal; color: var(--accent); }
-/* Floor badges: blue NORMAL, red HARD, purple INFINITY, dark EXTREME, only the floors inside. */
-small.fl { background: var(--fl-n-bg); color: var(--fl-n-fg); font-size: 10.5px; font-weight: 600; padding: 0 4px; border-radius: 3px; }
-small.fl.hard { background: var(--fl-h-bg); color: var(--fl-h-fg); }
-small.fl.inf { background: var(--fl-i-bg); color: var(--fl-i-fg); }
-small.fl.ext { background: var(--fl-x-bg); color: var(--fl-x-fg); }
-small.wk { background: var(--wk-bg); color: var(--wk-fg); font-size: 10.5px; font-weight: 600; padding: 0 4px; border-radius: 3px; } /* the "含想要" mark (#421) */
-.floorkey { display: flex; align-items: center; gap: 4px; }
+.pk[role="button"]:hover { border-color: var(--accent-line); }
+.pk small { color: var(--muted); font-size: 11.5px; }
+.pk small em { font-style: normal; color: var(--accent-ink); }
+/* Floor badges: the game's difficulty banners, a fill of the difficulty's colour with its ink. */
+small.fl, small.wk {
+  font: 700 13px/1.25 var(--font-display); letter-spacing: 0.03em; padding: 0 5px; border: 1px solid; border-radius: 2px; corner-shape: bevel;
+}
+small.fl { --c: var(--fl-n); --ink: var(--fl-n-ink); color: var(--ink); background: var(--c); border-color: var(--c); }
+/* Besides the hue, a ring round the fill: NORMAL none, HARD solid, INFINITY dashed, EXTREME double (and NORMAL's ink is dark,
+ * HARD's light). */
+small.fl.hard { --c: var(--fl-h); --ink: var(--fl-h-ink); outline: 1px solid var(--c); outline-offset: 1px; }
+small.fl.inf { --c: var(--fl-i); --ink: var(--fl-i-ink); outline: 1px dashed var(--c); outline-offset: 1px; }
+small.fl.ext { --c: var(--fl-x); --ink: var(--fl-x-ink); outline: 3px double var(--c); outline-offset: 1px; }
+small.wk { font: 700 12px/1.35 var(--font-ui); color: var(--on-accent); background: var(--accent); border-color: var(--accent); } /* the "含想要" mark (#421) */
+.floorkey { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
 .pk.unlisted { border-style: dashed; color: var(--muted); }
 /* a pack's weight typed in place */
 .weigh { display: inline-flex; align-items: center; gap: 4px; }
@@ -297,5 +628,30 @@ small.wk { background: var(--wk-bg); color: var(--wk-fg); font-size: 10.5px; fon
 .weigh small { color: var(--bad); }
 .pk.bad { border-color: var(--bad); outline: 1px solid var(--bad); }
 .lanes.images .pk { flex-wrap: wrap; justify-content: center; width: 128px; text-align: center; padding: 4px; }
-.lanes.images .pk .img { display: block; flex: none; width: 120px; aspect-ratio: 180 / 322; object-fit: cover; border-radius: 4px; margin-bottom: 4px; background: linear-gradient(160deg, #3a3f4b, #151821); }
+.lanes.images .pk .img { display: block; flex: none; width: 120px; aspect-ratio: 180 / 322; object-fit: cover; margin-bottom: 4px; background: linear-gradient(160deg, #3a2f24, #120e0b); }
 .lanes.images .pk .nm { font-weight: 600; flex-basis: 100%; }
+
+/* A narrow window (the minimum is 800 px wide): the tabs and the team page fit without a sideways scroll. */
+@media (max-width: 1000px) {
+  nav[role="tablist"] { padding: 6px 10px 0; }
+  nav[role="tablist"] button { padding: 7px 9px 8px; }
+  nav[role="tablist"] .tabsep { margin: 0 3px; }
+  main { padding: 14px 14px 24px; }
+  .split { gap: 14px; }
+  .split aside { width: 190px; }
+  .split aside ol.reorder { min-width: 0; } /* the rows narrow with the list, not past it */
+  /* a skill replacement row: the name and its steps on one line, the state, the order and the arrows on the next */
+  ol.skill-sinners > li { flex-wrap: wrap; row-gap: 4px; }
+  .skill-pillcell { flex: 1 1 auto; width: auto; }
+  .sinners { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; }
+  .sinner .num { font-size: 28px; left: 7px; }
+  .sinner .banner { font-size: 11.5px; letter-spacing: 0.1em; padding: 1px 6px 1px 10px; }
+  .sinner .name { font-size: 13px; }
+  .graces { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); }
+  .groups { grid-template-columns: 1fr; }
+}
+
+/* A short window: the side column scrolls with the page, so its last buttons are never cut off below the fold. */
+@media (max-height: 640px) {
+  .split aside { position: static; }
+}

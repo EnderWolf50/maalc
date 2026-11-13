@@ -14,7 +14,7 @@ import { HelpPopover } from "./GiftHelp";
 import { GiftListOptions } from "./GiftListOptions";
 import { GiftPopover, useGiftTip } from "./GiftPopover";
 import { KeywordPanel, KeywordTabs, SearchResults } from "./KeywordGrid";
-import { useEditor } from "./ui";
+import { typingIn, useEditor, useSlashFocus } from "./ui";
 
 const FLASH_MS = 4200;
 
@@ -64,6 +64,7 @@ export function GiftListsTab() {
   const [help, setHelp] = useState(false);
   const [jump, setJump] = useState<number | null>(null);
   const searchBox = useRef<HTMLInputElement>(null);
+  useSlashFocus(searchBox); // / jumps to the search box
   const searching = query.trim() !== "";
   /** Show a gift: its keyword's tab (leaving the search), then its tile focused once the tab is on screen. */
   const goto = (id: number) => { tip.hide(); setQuery(""); setTab(GIFT_BY_ID.get(id)!.keyword); setJump(id); };
@@ -77,8 +78,8 @@ export function GiftListsTab() {
   }, [jump, tip]);
   const edit: GiftEdit = { list, readOnly, pick, apply, flash, tip, goto, editable, change };
 
-  // 1, 2 and 3 pick the state, unless the user is typing or choosing in a field; / jumps to the search box; Esc closes the popover,
-  // then the help, then clears the search.
+  // 1, 2 and 3 pick the state, unless the user is typing or choosing in a field; Esc closes the popover, then the help, then
+  // clears the search.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
@@ -89,12 +90,7 @@ export function GiftListsTab() {
         else if (query) setQuery("");
         return;
       }
-      const typing = (e.target as HTMLElement).closest("input, select, textarea, [role=dialog], [role=alertdialog]"); // a field or a dialog has its own keys
-      if (e.key === "/" && !typing && !e.ctrlKey && !e.metaKey && !e.altKey) {
-        e.preventDefault();
-        searchBox.current?.focus();
-        return;
-      }
+      const typing = typingIn(e.target); // a field or a dialog has its own keys
       const state = STATES[Number(e.key) - 1];
       if (!state || e.ctrlKey || e.metaKey || e.altKey || typing) return;
       setPick(state);

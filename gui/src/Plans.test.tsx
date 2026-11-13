@@ -6,7 +6,7 @@ import recipes from "../../assets/resource/base/data/gift_recipes.json";
 import { GIFT_BY_ID } from "./giftCatalog";
 import { TEXT, fill } from "./i18n";
 import {
-  GIFT_KEYWORDS, SINNERS, defaultGorder, defaultStarlight, newSettings, newTeam, type GiftList, type Settings,
+  GIFT_KEYWORDS, GRACES, SINNERS, defaultGorder, defaultStarlight, newSettings, newTeam, type GiftList, type Settings,
 } from "./model";
 import { DeploymentTab, StarlightTab, ThemePackTab } from "./Plans";
 import { expectLines, renderEditor } from "./testing";
@@ -66,6 +66,37 @@ describe("the 含想要 mark", () => {
     renderEditor(<ThemePackTab />, settings({ gift_lists: [mine([own])], teams: [team] }));
     expect(await markOf("The Outcast")).toBeNull();
     expect(await markOf("LCB Regular Check-up")).not.toBeNull();
+  });
+});
+
+describe("finding a pack by name", () => {
+  const plan = { id: "p1", name: "Mine", weights: {}, threshold: 0, unlisted: 0, event_packs: "weight" };
+  const open = async () => {
+    const r = renderEditor(<ThemePackTab />, settings({ theme_pack_plans: [plan] }));
+    await r.user.click(await screen.findByText("Mine"));
+    return r;
+  };
+  const names = () => [...document.querySelectorAll(".pk .nm")].map((x) => x.textContent);
+  const search = () => screen.getByRole("searchbox", { name: zh["packs.search"] });
+
+  test("the search shows only the packs whose name holds what is typed, any case; Esc clears it", async () => {
+    const r = await open();
+    const all = names().length;
+    await r.user.type(search(), "forg");
+    expect(names()).toContain("The Forgotten");
+    expect(names().every((n) => n!.toLowerCase().includes("forg"))).toBe(true);
+    expect(names().length).toBeLessThan(all);
+    await r.user.keyboard("{Escape}");
+    expect(search()).toHaveValue("");
+    expect(names().length).toBe(all);
+  });
+
+  test("/ jumps to the search from the page, and types a / in a field", async () => {
+    const r = await open();
+    (document.querySelector(".pk") as HTMLElement).focus();
+    await r.user.keyboard("/");
+    expect(search()).toHaveFocus();
+    expect(search()).toHaveValue("");
   });
 });
 
@@ -213,16 +244,22 @@ test("the difficulty filter names the difficulties as the floor badges do: 普�
   expect(chip("HARD")).toBeInTheDocument();
 });
 
-test("INFINITY and EXTREME are choices of the filter and badges of a pack", async () => {
-  const { user } = renderEditor(<ThemePackTab />, newSettings());
+test("INFINITY and EXTREME are choices of the filter and badges of a pack: 無限 and 極限 in Chinese", async () => {
+  expect([zh["packs.floorsInfinity"], zh["packs.floorsExtreme"]]).toEqual(["無限", "極限"]); // the user's words, 2026-11-14
+  const { user, unmount } = renderEditor(<ThemePackTab />, newSettings());
   await waitFor(() => expect(shown("Chachihu")).toBe(true));
-  await user.click(chip("EXTREME"));
+  await user.click(chip("極限"));
   expect(shown("Chachihu")).toBe(true);
   expect(shown("The Forgotten")).toBe(false);
-  await user.click(chip("INFINITY"));
+  await user.click(chip("無限"));
   expect(shown("Chachihu")).toBe(false);
   expect(shown("The Heartbreaking")).toBe(true);
-  expect(screen.getAllByRole("img", { name: `${zh["packs.floorsInfinity"]} 6–10` }).length).toBeGreaterThan(0);
+  expect(screen.getAllByRole("img", { name: "無限 6–10" }).length).toBeGreaterThan(0);
+  expect(document.querySelector(".floorkey")).toHaveTextContent(/無限.*極限/);
+  unmount();
+  renderEditor(<ThemePackTab />, { ...newSettings(), language: "en_us" });
+  expect(chip("INFINITY")).toBeInTheDocument();
+  expect(chip("EXTREME")).toBeInTheDocument();
 });
 
 describe("deleting a plan", () => {
@@ -282,17 +319,27 @@ test("a plan's hint and the event pack note show one topic to a line", async () 
   expectLines(zh["packs.eventPacksNote"]);
 });
 
+test("a grace card is a group named by its grace: a pick button says whether it is picked, the effects describe it", () => {
+  renderEditor(<StarlightTab />, settings({ starlight_plans: [{ id: "s1", name: "Plan", ...defaultStarlight() }] }));
+  const card = screen.getByRole("group", { name: GRACES[0].zh });
+  expect(card).not.toHaveAttribute("role", "button");
+  const pick = within(card).getByRole("button", { name: GRACES[0].zh });
+  expect(pick).toHaveAttribute("aria-pressed");
+  expect(pick).toHaveAccessibleDescription(new RegExp(GRACES[0].effects.base[0].replace(/^-/, "").replace(/[+()]/g, "\\$&")));
+  expect(within(card).getAllByRole("button").map((b) => b.getAttribute("aria-label"))).toEqual([GRACES[0].zh, `${GRACES[0].zh} +`, `${GRACES[0].zh} ++`]);
+});
+
 test("a grace's + and ++ take Enter and Space from the keyboard, as a click, and the card's own keys still pick it", async () => {
   const r = renderEditor(<StarlightTab />, settings({ starlight_plans: [{ id: "s1", name: "Plan", ...defaultStarlight() }] }));
+  const name = GRACES[0].zh;
   const levels = () => r.settings().starlight_plans[0].levels;
-  const first = document.querySelectorAll<HTMLElement>(".grace")[0];
-  within(first).getByRole("button", { name: "+" }).focus();
+  screen.getByRole("button", { name: `${name} +` }).focus();
   await r.user.keyboard("{Enter}");
   expect(levels()[0]).toBe("plus");
-  within(first).getByRole("button", { name: "++" }).focus();
+  screen.getByRole("button", { name: `${name} ++` }).focus();
   await r.user.keyboard(" ");
   expect(levels()[0]).toBe("plus2");
-  (document.querySelectorAll(".grace")[1] as HTMLElement).focus();
+  screen.getByRole("button", { name: GRACES[1].zh }).focus();
   await r.user.keyboard("{Enter}");
   expect(levels()[1]).toBe("base");
 });

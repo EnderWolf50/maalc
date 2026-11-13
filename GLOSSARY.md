@@ -14,7 +14,7 @@ _Avoid_: run（寫程式時可用）、輪、場
 **Parallel Superposition（INFINITY、無限鏡牢）**：
 入口頁的 `Parallel Superposition Mode` 開著時，通過第 5 層後跳提示，按 Confirm 進入第 6 層；第 6–10 層是 INFINITY，結算視窗的標記推測是 `[INFINITY]`。進第 6 層要整局 HARD（見「目標層數」）。v1 把這個開關一律關掉（#94）；#434 接上後，目標層數大於 5 時才打開。
 
-**EXTREME**：
+**EXTREME（極限）**：
 INFINITY 打完第 10 層後再跳 EXTREME 提示，按 Confirm 進入第 11 層；第 11–15 層是 EXTREME，結算視窗的標記推測是 `[EXTREME]`。
 
 **可領（`claim_ok`）**：

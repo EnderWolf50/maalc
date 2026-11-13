@@ -48,14 +48,8 @@ export function usePick(list: keyof Picked, items: { id: string }[], leadId?: st
  * before the item that followed it, which stays right when the Agent reorders the list meanwhile (#501). A confirmation
  * would stop every delete to catch the rare wrong one; this lets it go and puts it back. */
 export function useUndo() {
-  const { t } = useEditor();
   const [last, setLast] = useState<{ name: string; undo: () => void } | null>(null);
-  const note = last && (
-    <p className="notice" role="status">
-      {fill(t("undo.deleted"), { name: last.name })}{" "}
-      <button type="button" onClick={() => { last.undo(); setLast(null); }}>{t("undo")}</button>
-    </p>
-  );
+  const note = last && <UndoNote name={last.name} onUndo={() => { last.undo(); setLast(null); }} />;
   const remove = <T extends { id: string; name: string }>(items: T[], i: number, edit: (fn: (list: T[]) => void) => void,
     pick: (id: string | undefined) => void) => {
     const item = items[i], next = items[i + 1]?.id;
@@ -71,6 +65,53 @@ export function useUndo() {
   };
   return [note, remove] as const;
 }
+
+/** Delete a row with one step back, for a list the Agent never reorders (override rows, a team's skill rows): `remove` takes
+ * row `i` out of `rows` through `edit`, and the note names it with an Undo button that puts it back in its place (at the end
+ * when the list got shorter) until the next delete. `scope` names whose rows they are (a team's id): picking another drops the
+ * note, so an Undo never puts a row into the next team picked. The teams and plans, which the Agent can reorder, use useUndo. */
+export function useUndoRow<T>(edit: (fn: (rows: T[]) => void) => void, scope = "") {
+  const [last, setLast] = useState<{ row: T; at: number; name: string } | null>(null);
+  const [shownScope, setShownScope] = useState(scope);
+  if (shownScope !== scope) { setShownScope(scope); setLast(null); }
+  const note = last && (
+    <UndoNote name={last.name}
+      onUndo={() => { edit((rows) => { rows.splice(Math.min(last.at, rows.length), 0, last.row); }); setLast(null); }} />
+  );
+  const remove = (rows: T[], i: number, name: string) => {
+    setLast({ row: rows[i], at: i, name: name || "—" });
+    edit((list) => { list.splice(i, 1); });
+  };
+  return [note, remove] as const;
+}
+
+/** The note after a delete: what went, and the Undo button that puts it back. */
+function UndoNote({ name, onUndo }: { name: string; onUndo: () => void }) {
+  const { t } = useEditor();
+  return (
+    <p className="notice" role="status">
+      {fill(t("undo.deleted"), { name })}{" "}
+      <button type="button" onClick={onUndo}>{t("undo")}</button>
+    </p>
+  );
+}
+
+/** `/` focuses a search box from anywhere on the page but a field or a dialog, which have their own keys (the gift list, the theme
+ * pack plan). */
+export function useSlashFocus(box: { current: HTMLElement | null }) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "/" || e.ctrlKey || e.metaKey || e.altKey || typingIn(e.target)) return;
+      e.preventDefault();
+      box.current?.focus();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [box]);
+}
+/** Whether a key's target is a field or inside a dialog, whose keys are its own. */
+export const typingIn = (target: EventTarget | null) =>
+  !!(target as HTMLElement | null)?.closest?.("input, select, textarea, [role=dialog], [role=alertdialog]");
 
 const FOCUSABLE = "input:not(:disabled), select:not(:disabled), textarea:not(:disabled), button:not(:disabled), [tabindex]:not([tabindex='-1'])";
 
@@ -114,6 +155,14 @@ export function makeCtx({ s, setS, setPicked, ...rest }: Pick<Ctx, "s" | "proble
     update: (fn) => setS((prev) => { const next = structuredClone(prev); fn(next); return next; }),
     pick: (list, id) => setPicked((prev) => ({ ...prev, [list]: id })),
   };
+}
+
+/** The tab a key moves to in a row of tabs: the arrows step, round at the ends; Home and End jump to them. Undefined for
+ * any other key. */
+export function nextTab<T>(tabs: readonly T[], at: T, key: string): T | undefined {
+  const i = tabs.indexOf(at), n = tabs.length;
+  const to = ({ ArrowRight: i + 1, ArrowLeft: i - 1, Home: 0, End: n - 1 } as Record<string, number>)[key];
+  return to === undefined ? undefined : tabs[(to + n) % n];
 }
 
 /** The problem ids of the field around a control ("" for none), for its aria attributes (useMark). */
@@ -225,12 +274,17 @@ export function ReorderList<T>({ items, onChange, render, keyOf, selected, onSel
       {items.map((item, i) => (
         <li key={keyOf(item)} draggable
           className={[selected === i && "selected", dragging === i && "dragging", badAt?.(i) && "bad"].filter(Boolean).join(" ")}
+          // A list that selects (teams, plans) is reached by Tab and picked with Enter or Space, as by a click.
+          tabIndex={onSelect ? 0 : undefined} aria-current={onSelect && selected === i ? true : undefined}
+          onKeyDown={(e) => { if (onSelect && e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); onSelect(i, items); } }}
           onClick={() => onSelect?.(i, items)}
           onDragStart={(e) => { setDragging(i); e.dataTransfer.effectAllowed = "move"; }}
           onDragEnd={() => setDragging(null)}
           onDragOver={(e) => e.preventDefault()}
           onDrop={(e) => { e.preventDefault(); if (dragging !== null) move(dragging, i); setDragging(null); }}>
           <span className="grip" aria-hidden>⋮⋮</span>
+          {/* a wrong row says so besides its red frame: a cross, and words for a screen reader */}
+          {badAt?.(i) && <span className="badmark"><span aria-hidden>✕</span><span className="sr-only">{t("hasProblem")}</span></span>}
           <span className="item">{render(item, i)}</span>
           <button type="button" className="icon" aria-label={t("up")} title={t("up")} disabled={i === 0}
             onClick={(e) => { e.stopPropagation(); move(i, i - 1); }}>↑</button>

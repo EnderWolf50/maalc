@@ -83,20 +83,29 @@ describe("the problems block", () => {
     await blocked(s, zh["tab.run"]);
     expect(screen.getByRole("main")).toContainElement(screen.getByRole("alert"));
   });
+
+  test("says each problem in the editor's language, with the teams' names; the bot's own words stay on hover", async () => {
+    const s = settings();
+    s.teams[1].game_team = 1;
+    await blocked(s, zh["tab.run"]);
+    const item = problem(/隊伍「Ta」、「Tb」都啟用，也都用 TEAMS #1/).closest("li")!;
+    expect(item).not.toHaveTextContent("teams:");
+    expect(item).toHaveAttribute("title", "teams: enabled teams 'Ta', 'Tb' all use TEAMS #1");
+  });
 });
 
 describe("a field marked red", () => {
   const box = (role: "combobox" | "checkbox" | "textbox", label: Key) => () => screen.getByRole(role, { name: zh[label] });
   test.each([
-    ["a choice of a team", (s: Settings) => { s.teams[0].theme_pack_plan = "gone"; }, "tab.teams", /teams\/0\/theme_pack_plan/,
+    ["a choice of a team", (s: Settings) => { s.teams[0].theme_pack_plan = "gone"; }, "tab.teams", /隊伍「Ta」用的主題包方案已經不在了/,
       box("combobox", "team.theme_pack_plan")],
     ["a choice of the run options", (s: Settings) => { s.run.target_floor = 10; s.run.difficulty = "normal"; s.teams.forEach((x) => { x.hard_from_floor = 1; }); },
-      "tab.run", /run\/difficulty/, box("combobox", "run.difficulty")],
+      "tab.run", /但難度是普通/, box("combobox", "run.difficulty")],
     ["a team's switch", (s: Settings) => { s.teams[0].guard_turns = 9; }, "tab.teams", /teams\/0\/guard_turns/, box("checkbox", "team.guard_turns")],
     ["a switch of the run options", (s: Settings) => { (s.run as Record<string, unknown>).auto_download = "yes"; }, "tab.run",
       /run\/auto_download/, box("checkbox", "run.auto_download")],
     ["a cell of an override table", (s: Settings) => { s.event_overrides = [{ question: "q", option: "a" }, { question: "q", option: "b" }]; },
-      "tab.events", /event_overrides: question/, () => screen.getAllByDisplayValue("q")[1]],
+      "tab.events", /事件覆寫有 2 列是同一個問題「q」/, () => screen.getAllByDisplayValue("q")[1]],
     ["a team's on switch", (s: Settings) => { Object.assign(s.teams[0], { enabled: "yes" }); }, "tab.teams", /teams\/0\/enabled/,
       box("checkbox", "team.enabled")],
     ["the gift search switch", (s: Settings) => { Object.assign(s.teams[0].gift_search, { enabled: "yes" }); }, "tab.teams",
@@ -109,6 +118,19 @@ describe("a field marked red", () => {
     await blocked(s, zh[start]);
     expect(control()).toHaveAttribute("aria-invalid", "true");
     expect(control()).toHaveAccessibleDescription(problem(text).textContent!);
+  });
+
+  test("a wrong team row says so without its colour: a cross, and words a screen reader reads, also while picked", async () => {
+    const s = settings();
+    s.teams[1].game_team = 1;
+    await blocked(s, zh["tab.run"]);
+    await userEvent.setup().click(tab(zh["tab.teams"]));
+    const rows = [...document.querySelectorAll("aside li")] as HTMLElement[];
+    expect(rows[0]).toHaveClass("selected");
+    for (const row of rows) {
+      expect(row.querySelector(".badmark")).toHaveTextContent("✕");
+      expect(row).toHaveTextContent(zh.hasProblem);
+    }
   });
 
   test("a field the checks pass is not", async () => {
@@ -125,7 +147,7 @@ describe("clicking a problem", () => {
     const s = settings();
     s.teams[1].theme_pack_plan = "gone";
     const user = await blocked(s, zh["tab.run"]);
-    await user.click(problem(/teams\/1\/theme_pack_plan/));
+    await user.click(problem(/隊伍「Tb」用的主題包方案已經不在了/));
     expect(tab(zh["tab.teams"])).toHaveAttribute("aria-selected", "true");
     expect(nameBox()).toHaveValue("Tb");
     expect(screen.getByRole("combobox", { name: zh["team.theme_pack_plan"] })).toHaveFocus();
@@ -135,7 +157,7 @@ describe("clicking a problem", () => {
     const s = settings();
     s.teams[1].deployment_order = { plan: "gone" };
     const user = await blocked(s, zh["tab.run"]);
-    await user.click(problem(/teams\/1\/deployment_order/));
+    await user.click(problem(/隊伍「Tb」用的出戰順序方案已經不在了/));
     expect(nameBox()).toHaveValue("Tb");
     expect(document.activeElement).toHaveValue("gone");
   });
@@ -144,7 +166,7 @@ describe("clicking a problem", () => {
     const s = settings();
     s.teams[0].skill_replacement.sinners = [{ sinner: "Yi Sang", target: { s1: 3, s2: 2, s3: 2 }, s1_s3_first: true }];
     const user = await blocked(s, zh["tab.run"]);
-    await user.click(problem(/skill_replacement\/sinners\/0\/target/));
+    await user.click(problem(/Yi Sang：三個技能的目標合計 7/));
     expect(screen.getByText(new RegExp(zh["skill.title"]), { selector: "summary" }).closest("details")).toHaveAttribute("open");
     // the row itself: its first enabled control is its delete button, which Space would press
     expect(document.activeElement).toHaveAttribute("data-sinner", "Yi Sang");
@@ -154,7 +176,7 @@ describe("clicking a problem", () => {
     const s = settings();
     s.teams[1].id = "a"; // two teams with one id
     const user = await blocked(s, zh["tab.run"]);
-    await user.click(problem(/teams: id 'a'/));
+    await user.click(problem(/隊伍裡有 2 個用同一個 id「a」/));
     expect(nameBox()).toHaveValue("Ta");
     expect(nameBox()).toHaveFocus();
   });
@@ -175,7 +197,7 @@ describe("clicking a problem", () => {
     const s = settings();
     s.deployment_order_plans.push({ id: "d3", name: "D2", order: [...SINNERS] });
     const user = await blocked(s, zh["tab.teams"]);
-    await user.click(problem(/deployment_order_plans: name 'D2'/));
+    await user.click(problem(/出戰順序方案裡有 2 個都叫「D2」/));
     expect(tab(zh["tab.deployment"])).toHaveAttribute("aria-selected", "true");
     expect(nameBox()).toHaveValue("D2");
     expect(nameBox()).toHaveFocus();
@@ -187,7 +209,7 @@ describe("clicking a problem", () => {
     s.run.difficulty = "normal";
     s.teams.forEach((x) => { x.hard_from_floor = 1; });
     const user = await blocked(s, zh["tab.teams"]);
-    await user.click(problem(/run\/difficulty/));
+    await user.click(problem(/但難度是普通/));
     expect(tab(zh["tab.run"])).toHaveAttribute("aria-selected", "true");
     expect(screen.getByRole("combobox", { name: zh["run.difficulty"] })).toHaveFocus();
   });
@@ -196,7 +218,7 @@ describe("clicking a problem", () => {
     const s = settings();
     s.gift_lists = [{ id: "g1", name: "G1", order: [...GIFT_KEYWORDS], want: [9780], keep: [9780], gorder: defaultGorder(), fusion_condition: "any" }];
     const user = await blocked(s, zh["tab.teams"]);
-    await user.click(problem(/gift_lists\/0/));
+    await user.click(problem(/飾品清單「G1」/));
     expect(tab(zh["tab.gifts"])).toHaveAttribute("aria-selected", "true");
     expect(screen.getByRole("combobox", { name: zh["gl.list"] })).toHaveValue("g1");
     expect(screen.getByRole("combobox", { name: zh["gl.list"] })).toHaveFocus();
@@ -260,7 +282,7 @@ describe("closing the window", () => {
     await edited();
     requestClose();
     expect(screen.getByRole("button", { name: zh.closeSave })).toHaveFocus();
-    const behind = document.querySelectorAll("header, nav, main");
+    const behind = document.querySelectorAll("header, nav[role=tablist], main"); // the section index is a nav inside main
     expect(behind).toHaveLength(3);
     for (const el of behind) expect(el).toHaveAttribute("inert");
   });

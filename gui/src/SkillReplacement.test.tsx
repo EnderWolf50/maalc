@@ -308,10 +308,32 @@ describe("in the whole editor", () => {
     await user.click(await screen.findByText(zh["skill.title"], { exact: false, selector: "summary" }));
     await user.click(screen.getByRole("button", { name: zh.save }));
     expect(file.saved).toEqual([]);
-    expect(screen.getAllByRole("alert").map((a) => a.textContent).join("\n")).toContain("'Yi Sang' targets 4 of skill 1");
+    expect(screen.getAllByRole("alert").map((a) => a.textContent).join("\n")).toContain("Yi Sang：技能 1 的目標是 4");
     await user.click(within(row("Yi Sang")).getByRole("button", { name: `${zh["skill.remove"]} Yi Sang` }));
     await user.click(screen.getByRole("button", { name: zh.save }));
     await waitFor(() => expect(file.saved).toHaveLength(1));
     expect(JSON.parse(file.saved[0]).teams[0].skill_replacement.sinners).toEqual([]);
   });
+});
+
+test("a team switch drops a removed sinner's Undo, also on the way back, and the open panel stays open", async () => {
+  const s = settings([entry("Yi Sang", 2, 2, 2)]);
+  s.teams.push({ ...newTeam(2, "T2"), id: "t2" });
+  const r = renderEditor(<TeamsTab />, s);
+  await expand(r);
+  await r.user.click(within(row("Yi Sang")).getByRole("button", { name: `${zh["skill.remove"]} Yi Sang` }));
+  await r.user.click(within(document.querySelector("aside")!).getByText("T2"));
+  expect(panel().open).toBe(true);
+  expect(within(panel()).queryByRole("button", { name: zh.undo })).toBeNull();
+  await r.user.click(within(document.querySelector("aside")!).getByText("T1"));
+  expect(within(panel()).queryByRole("button", { name: zh.undo })).toBeNull();
+});
+
+test("a removed sinner can be undone, targets and place and all", async () => {
+  const r = renderEditor(<TeamsTab />, settings([entry("Yi Sang", 2, 2, 2), entry("Faust", 3, 2, 1, false)]));
+  await expand(r);
+  await r.user.click(within(row("Yi Sang")).getByRole("button", { name: `${zh["skill.remove"]} Yi Sang` }));
+  expect(listed()).toEqual(["Faust"]);
+  await r.user.click(within(panel()).getByRole("button", { name: zh.undo }));
+  expect(stored(r)).toEqual([entry("Yi Sang", 2, 2, 2), entry("Faust", 3, 2, 1, false)]);
 });
