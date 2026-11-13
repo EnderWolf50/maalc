@@ -66,7 +66,7 @@ export function StarlightEditor({ value, onChange, path }: {
               <span className="enhance">
                 {([1, 2] as const).map((plus) => (
                   <button type="button" key={plus} disabled={!onChange} aria-pressed={level === LEVELS[plus + 1]}
-                    className={level === LEVELS[plus + 1] ? "lit" : ""}
+                    aria-label={`${zh && g.zh ? g.zh : g.en} ${"+".repeat(plus)}`} className={level === LEVELS[plus + 1] ? "lit" : ""}
                     onClick={(e) => { e.stopPropagation(); set((v) => clickEnhance(v, n, plus)); }}>{"+".repeat(plus)}</button>
                 ))}
               </span>
@@ -78,8 +78,8 @@ export function StarlightEditor({ value, onChange, path }: {
         {onChange && <>
           <button type="button" onClick={() => set(selectAll)}>{t("starlight.selectAll")}</button>
           <span className="muted">{t("starlight.enhanceAll")}</span>
-          <button type="button" onClick={() => set((v) => enhanceAll(v, 1))}>+</button>
-          <button type="button" onClick={() => set((v) => enhanceAll(v, 2))}>++</button>
+          <button type="button" aria-label={`${t("starlight.enhanceAll")} +`} onClick={() => set((v) => enhanceAll(v, 1))}>+</button>
+          <button type="button" aria-label={`${t("starlight.enhanceAll")} ++`} onClick={() => set((v) => enhanceAll(v, 2))}>++</button>
         </>}
         <span className="total">{t("starlight.total")} <b>★ {starlightCost(value.levels)}</b></span>
         <label className="check">
@@ -310,15 +310,16 @@ function PackPlanEditor({ data, plan, planId, path, onChange }: {
     </div>
   );
   const gapOrLine = (g: number) => (g === line ? lineBar : <div className="gap" {...target(drag === LINE, lanes[g - 1])} />);
-  const chips = <T extends string | number>(values: T[], value: T, label: (v: T) => string, pick: (v: T) => void) =>
+  const chips = <T extends string | number>(values: T[], value: T, label: (v: T) => string, pick: (v: T) => void, cls?: (v: T) => string) =>
     values.map((v) => (
-      <button type="button" key={String(v)} className="chip" aria-pressed={v === value} onClick={() => pick(v)}>{label(v)}</button>
+      <button type="button" key={String(v)} className={"chip" + (cls ? cls(v) : "")} aria-pressed={v === value} onClick={() => pick(v)}>{label(v)}</button>
     ));
   return (<>
     <div className="packbar">
       <span className="seg">
         {chips<PackMode>(["", "normal", "hard", "infinity", "extreme"], difficulty,
-          (v) => (v ? t(BADGES[MODE_KEYS[v]][0]) : t("packs.anyDifficulty")) /* a badge's name: 普通, not NORMAL, in Chinese */, setDifficulty)}
+          (v) => (v ? t(BADGES[MODE_KEYS[v]][0]) : t("packs.anyDifficulty")) /* a badge's name: 普通, not NORMAL, in Chinese */, setDifficulty,
+          (v) => (v ? " mode" + BADGES[MODE_KEYS[v]][1] : "")) /* and its colour */}
       </span>
       <span className="seg view">
         {chips([false, true].map(String), String(images), (v) => t(v === "true" ? "packs.images" : "packs.names"), (v) => setImages(v === "true"))}

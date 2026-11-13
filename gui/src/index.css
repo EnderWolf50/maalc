@@ -39,6 +39,19 @@
   --season-mid: #13265a;
   --season-deep: #070d1c;
   --gold: #ffd34d;
+  --pick-ring: #ffd34d;
+  /* The game panels. Sinner frames: */
+  --card-top: #2c2219; --card-bottom: #120e0b; --card-line: #5a4630; --card-fg: #efe3cf;
+  --dep-top: #4a3413; --dep-bottom: #17100a; --bak-top: #12392f; --bak-bottom: #0b1311;
+  --tone-dep: #f0a632; --tone-bak: #4fcab7; --on-tone: #1d1206;
+  /* The season's pages (Grace of the Star, E.G.O Gift Search): */
+  --season-bg-1: #13265a; --season-bg-2: #070d1c; --season-side: #070d1c;
+  --season-card-top: #2b3f8f; --season-card-mid: #121f4a; --season-card-bottom: #070d1c;
+  --season-ink: #e6eefc; --season-ink-2: #b9c7e4; --season-hint: #5ee4fe; --season-shadow: 0 1px 2px #000;
+  --season-pick-top: #ffffff; --season-pick-mid: #e6eefb; --season-pick-bottom: #cfdcf1; --season-pick-ink: #0b1530; --season-pick-line: #ffffff;
+  --season-btn: #4e61ba; --season-btn-hover: #3d4fa6;
+  --season-tab: #121c38; --season-tab-line: #34467e; --season-band: #1a2650; --season-band-ink: #ffc53d;
+  --season-gift: #0f1830; --season-gift-hover: #18244a; --season-gift-pick: #3a2f10;
   /* Difficulty, as the game's theme pack page colours it: NORMAL yellow, HARD orange, EXTREME red; INFINITY violet. */
   --fl-n: #edcf2b;
   --fl-h: #ff8a4c;
@@ -85,6 +98,17 @@
     --fl-h: #a63700;
     --fl-i: #6a40c4;
     --fl-x: #b3161b;
+    --pick-ring: #b06a00;
+    --card-top: #fbf8f3; --card-bottom: #ece4d7; --card-line: #b9a68c; --card-fg: #1e1813;
+    --dep-top: #fdf0d4; --dep-bottom: #f6dca6; --bak-top: #e3f5f1; --bak-bottom: #c1e7df;
+    --tone-dep: #9a5c00; --tone-bak: #0a6b60; --on-tone: #ffffff;
+    --season-bg-1: #e6ecf8; --season-bg-2: #d5ddf0; --season-side: #f5f7fd;
+    --season-card-top: #ffffff; --season-card-mid: #f1f4fb; --season-card-bottom: #e3e9f6;
+    --season-ink: #13204a; --season-ink-2: #3a4870; --season-hint: #1b6a88; --season-shadow: none;
+    --season-pick-top: #2b3f8f; --season-pick-mid: #1d2c6b; --season-pick-bottom: #142155; --season-pick-ink: #ffffff; --season-pick-line: #13204a;
+    --season-btn: #4e61ba; --season-btn-hover: #3e50a3;
+    --season-tab: #eef2fb; --season-tab-line: #9fb0dc; --season-band: #dbe3f5; --season-band-ink: #7a4d00;
+    --season-gift: #ffffff; --season-gift-hover: #eef2fb; --season-gift-pick: #fff1cf;
   }
 }
 
@@ -144,7 +168,12 @@ header .status[data-state="dirty"]::before { background: var(--accent); }
 header .status[data-state="saved"] { color: var(--keep); }
 header .status[data-state="saved"]::before { background: var(--keep); }
 header .status[data-state="blocked"] { color: var(--bad); border-color: var(--bad); background: var(--bad-soft); font-weight: 600; }
-header .status[data-state="blocked"]::before { background: var(--bad); }
+/* blocked: a cross, not the diamond, so the state reads without its colour */
+header .status[data-state="blocked"]::before {
+  width: 11px; height: 11px; transform: none;
+  background: linear-gradient(45deg, transparent 38%, var(--bad) 38% 62%, transparent 62%),
+    linear-gradient(-45deg, transparent 38%, var(--bad) 38% 62%, transparent 62%);
+}
 /* Save armed: unsaved changes put the game's yellow and black caution stripe round it, as on the game's Enter. */
 header button.primary { font-size: 15px; padding: 6px 26px; }
 header button.primary.armed {
@@ -156,6 +185,9 @@ header button.primary.armed:hover { background: linear-gradient(var(--accent-hi)
   repeating-linear-gradient(-45deg, var(--hazard) 0 6px, var(--hazard-2) 6px 12px) border-box; }
 header button.primary:not(.armed) { background: var(--raise); border-color: var(--line-2); color: var(--fg); }
 header button.primary:not(.armed):hover { border-color: var(--accent-line); }
+/* Save refused: the stripe gives way to a crimson frame until the problems are fixed. */
+header button.primary.refused { border: 2px solid var(--bad); background: var(--bad-soft); color: var(--bad); padding: 5px 25px; }
+header button.primary.refused:hover { background: var(--bad-soft); border-color: var(--bad); }
 
 nav {
   flex: none; display: flex; gap: 2px; padding: 6px 16px 0; background: var(--panel); box-shadow: inset 0 -1px var(--line-2);
@@ -210,7 +242,11 @@ aside > p.muted { font-size: 12.5px; }
 .field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .field > span { font-size: 12.5px; font-weight: 600; color: var(--fg-2); }
 .field > span:empty { display: none; }
-.field > input[type="checkbox"] { align-self: flex-start; }
+/* A field whose control is a checkbox: the box before its label, as every other checkbox; the note under both. */
+.field:has(> input[type="checkbox"]) { display: grid; grid-template-columns: auto 1fr; gap: 4px 8px; align-items: center; }
+.field:has(> input[type="checkbox"]) > span { grid-row: 1; grid-column: 2; }
+.field:has(> input[type="checkbox"]) > input { grid-row: 1; grid-column: 1; }
+.field:has(> input[type="checkbox"]) > small { grid-column: 1 / -1; }
 .field small { color: var(--muted); font-size: 12px; line-height: 1.45; }
 .check { display: flex; align-items: center; gap: 8px; }
 
@@ -280,60 +316,69 @@ ol.preview { margin: 0; padding-left: 26px; columns: 2; column-gap: 40px; }
 table { border-collapse: collapse; background: var(--panel); }
 th, td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--line); }
 th { font-size: 12.5px; color: var(--fg-2); font-weight: 600; }
-table.overrides { width: 100%; margin-bottom: 10px; border: 1px solid var(--line); }
+table.overrides {
+  width: 100%; margin-bottom: 10px; border: 1px solid var(--line); border-collapse: separate; border-spacing: 0;
+  border-radius: 10px 0 10px 0; corner-shape: bevel; overflow: hidden;
+}
+table.overrides tr:last-child > td { border-bottom: none; }
 table.overrides input:not([type="number"]):not(.decimal) { width: 100%; }
 
 .load-error { padding: 24px; }
-.team { display: flex; flex-direction: column; gap: 14px; }
+.team, .stack { display: flex; flex-direction: column; gap: 14px; }
 
 /* Team page, laid out like AALC's: the name plate, the sinner grid, starlight selectors, then the rest. */
 .team > fieldset { align-items: stretch; min-width: 0; }
 .bar { display: flex; align-items: flex-end; gap: 12px 16px; flex-wrap: wrap; padding: 10px 14px; }
 .bar .spacer { flex: 1; }
 .bar .field:first-child input { font-weight: 700; font-size: 15px; }
+/* The lists bar: the team's gift list and theme pack plan, side by side under the name plate. */
+.bar.lists { align-items: flex-start; gap: 12px 28px; }
+.bar.lists .field { flex: 1 1 260px; max-width: 420px; }
+.bar.lists .field > button { align-self: flex-start; }
 
-/* The sinner grid: the game's identity frames, a big deployment number, a banner for deployed or backup. */
+/* The sinner grid: the game's identity frames, a big deployment number, a banner for deployed or backup. No portraits, so the
+ * frame is short: number, banner, name. */
 .sinners { display: grid; grid-template-columns: repeat(6, minmax(88px, 1fr)); gap: 8px; max-width: 760px; }
 .sinners.bad { outline: 1px solid var(--bad); outline-offset: 4px; }
 .sinner {
   --tone: var(--muted);
-  position: relative; aspect-ratio: 2 / 3; padding: 0; overflow: hidden; color: #efe3cf;
-  border: 1px solid #5a4630; border-radius: 10px 0 10px 0; corner-shape: bevel;
-  background: linear-gradient(165deg, #2c2219, #120e0b 70%);
+  position: relative; aspect-ratio: 5 / 4; padding: 0; overflow: hidden; color: var(--card-fg);
+  border: 1px solid var(--card-line); border-radius: 10px 0 10px 0; corner-shape: bevel;
+  background: linear-gradient(165deg, var(--card-top), var(--card-bottom) 75%);
 }
-.sinner:hover:not(:disabled) { border-color: #f0a632; background: linear-gradient(165deg, #3a2c1d, #15100b 70%); }
+.sinner:hover:not(:disabled) { border-color: var(--accent-line); }
 .sinner:disabled { opacity: 1; cursor: default; }
-.sinner.deployed { --tone: #f0a632; border: 2px solid var(--tone); background: linear-gradient(165deg, #4a3413, #17100a 72%); }
-.sinner.backup { --tone: #4fcab7; border: 2px solid var(--tone); background: linear-gradient(165deg, #12392f, #0b1311 72%); }
-.sinner .num { position: absolute; top: 9%; left: 0; right: 0; font: 700 44px/1 var(--font-display); color: var(--tone); }
+.sinner.deployed { --tone: var(--tone-dep); border: 2px solid var(--tone); background: linear-gradient(165deg, var(--dep-top), var(--dep-bottom) 75%); }
+.sinner.backup { --tone: var(--tone-bak); border: 2px solid var(--tone); background: linear-gradient(165deg, var(--bak-top), var(--bak-bottom) 75%); }
+.sinner .num { position: absolute; top: 4px; left: 9px; font: 700 34px/1 var(--font-display); color: var(--tone); }
 .sinner .banner {
-  position: absolute; top: 47%; left: 0; right: 0; padding: 2px 0; background: var(--tone); color: #1d1206;
-  font-weight: 700; letter-spacing: 0.25em; font-size: 13px;
+  position: absolute; top: 4px; right: 0; padding: 1px 8px 1px 12px; background: var(--tone); color: var(--on-tone);
+  font-weight: 700; letter-spacing: 0.2em; font-size: 12.5px; clip-path: polygon(8px 0, 100% 0, 100% 100%, 0 100%);
 }
 .sinner .name {
   position: absolute; right: 8px; bottom: 6px; left: 6px; font: 700 15px/1.1 var(--font-display); letter-spacing: 0.02em;
-  text-transform: uppercase; color: #efe3cf; text-align: right;
+  text-transform: uppercase; color: var(--card-fg); text-align: right;
 }
 
 /* Starlight, drawn after the game's "Grace of the Star" page in the season's colours: cobalt cards, a selected one turns
- * ice white, + and ++ add the starlight's gold rim. */
+ * ice white (in the light theme the other way round), + and ++ add the starlight's gold rim. */
 .starlight {
-  display: flex; gap: 14px; align-items: flex-start; padding: 12px; color: #e6eefc;
+  display: flex; gap: 14px; align-items: flex-start; padding: 12px; color: var(--season-ink);
   border: 1px solid var(--season-plate); border-radius: 10px 0 10px 0; corner-shape: bevel;
-  background: radial-gradient(ellipse at 50% 30%, var(--season-mid), var(--season-deep) 75%);
+  background: radial-gradient(ellipse at 50% 30%, var(--season-bg-1), var(--season-bg-2) 75%);
 }
 .graces { flex: 1; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; min-width: 0; }
 .graces.bad { outline: 2px solid var(--bad); outline-offset: 4px; }
 .grace {
-  position: relative; display: flex; flex-direction: column; gap: 6px; min-height: 210px; min-width: 0; padding: 26px 8px 8px; overflow-wrap: anywhere;
+  position: relative; display: flex; flex-direction: column; gap: 6px; min-width: 0; padding: 26px 8px 8px; overflow-wrap: anywhere;
   border: 2px solid var(--season-plate); border-radius: 6px 0 6px 0; corner-shape: bevel; cursor: pointer; user-select: none;
-  background: linear-gradient(180deg, var(--season-top) 0, #121f4a 38%, var(--season-deep) 72%);
-  box-shadow: inset 0 0 0 1px #000;
+  background: linear-gradient(180deg, var(--season-card-top) 0, var(--season-card-mid) 38%, var(--season-card-bottom) 72%);
+  color: var(--season-ink);
 }
-.grace:hover { border-color: var(--season); }
+.grace:hover { border-color: var(--season-hint); }
 .grace[aria-disabled="true"] { cursor: default; }
 .starlight.readonly .grace:hover { border-color: var(--season-plate); }
-.starlight.readonly .grace:not(.none):hover { border-color: #fff; }
+.starlight.readonly .grace:not(.none):hover { border-color: var(--season-pick-line); }
 .grace .price {
   position: absolute; top: 0; right: 0; padding: 1px 8px 1px 10px; background: #000; color: #fff;
   font: 700 16px/1.3 var(--font-display); clip-path: polygon(10px 0, 100% 0, 100% 100%, 0 100%);
@@ -342,33 +387,36 @@ table.overrides input:not([type="number"]):not(.decimal) { width: 100%; }
   position: absolute; top: -2px; left: -2px; min-width: 26px; padding: 0 6px; height: 26px; line-height: 26px; text-align: center;
   font: 700 18px/26px var(--font-display); background: var(--gold); color: #1a1406;
 }
-.grace .name { font-weight: 700; font-size: 14px; line-height: 1.2; text-align: right; text-shadow: 0 1px 2px #000; }
-.grace .name small { display: block; font: 600 12px/1.2 var(--font-display); letter-spacing: 0.02em; opacity: 0.8; }
-.grace ul { margin: 0; padding-left: 14px; font-size: 11.5px; line-height: 1.4; flex: 1; }
+.grace .name { font-weight: 700; font-size: 14px; line-height: 1.2; text-align: right; text-shadow: var(--season-shadow); }
+.grace .name small { display: block; font: 600 12px/1.2 var(--font-display); letter-spacing: 0.02em; opacity: 0.85; }
+.grace ul { margin: 0; padding-left: 14px; font-size: 12px; line-height: 1.4; flex: 1; }
 .grace li.sub { list-style: none; margin-left: 4px; opacity: 0.85; }
 .grace .enhance { display: flex; gap: 6px; }
 .grace .enhance button {
-  flex: 1; padding: 1px 0; border: 1px solid #000; border-radius: 0; background: var(--season-plate); color: #fff;
+  flex: 1; padding: 1px 0; border: 1px solid #000; border-radius: 0; background: var(--season-btn); color: #fff;
   font: 700 15px/1.3 var(--font-display);
 }
-.grace .enhance button:hover:not(:disabled) { border-color: var(--season); background: #5d72d6; }
+.grace .enhance button:hover:not(:disabled) { border-color: var(--season-hint); background: var(--season-btn-hover); }
 .grace .enhance button:disabled { opacity: 1; cursor: default; }
 .grace .enhance button.lit { background: var(--gold); color: #1a1406; box-shadow: 0 0 8px #ffd34d; }
-/* Selected: the whole card goes ice white, as in the game; + and ++ add a gold rim. */
-.grace:not(.none) { background: linear-gradient(180deg, #fff 0, #e6eefb 60%, #cfdcf1); color: #0b1530; border-color: #fff; }
+/* Selected: the whole card turns over, as in the game; + and ++ add a gold rim. */
+.grace:not(.none) {
+  background: linear-gradient(180deg, var(--season-pick-top) 0, var(--season-pick-mid) 60%, var(--season-pick-bottom));
+  color: var(--season-pick-ink); border-color: var(--season-pick-line);
+}
 .grace:not(.none) .name { text-shadow: none; }
-.grace.plus { border-color: var(--gold); box-shadow: 0 0 0 2px var(--gold), 0 0 10px #ffd34d88; }
-.grace.plus2 { border-color: #ffb300; box-shadow: 0 0 0 3px #ffb300, 0 0 16px #ffb300; }
+.grace.plus { border-color: var(--gold); box-shadow: 0 0 0 2px var(--gold), 0 0 8px #ffd34d88; }
+.grace.plus2 { border-color: #ffb300; box-shadow: 0 0 0 3px #ffb300, 0 0 10px #ffb30099; }
 .grace-side {
   width: 150px; flex: none; display: flex; flex-direction: column; gap: 6px; padding: 10px; border: 2px solid var(--season-plate);
-  background: var(--season-deep); border-radius: 0 6px 0 6px; corner-shape: bevel;
+  background: var(--season-side); border-radius: 0 6px 0 6px; corner-shape: bevel;
 }
-.grace-side button { border-radius: 0; border-color: #000; background: var(--season-plate); color: #fff; font-weight: 700; }
-.grace-side button:hover:not(:disabled) { border-color: var(--season); background: #5d72d6; }
-.grace-side .muted { color: var(--season); text-align: center; font-size: 12px; margin-top: 4px; }
-.grace-side .total { margin-top: 8px; color: #b9c7e4; }
-.grace-side .total b { display: block; font: 700 28px/1.1 var(--font-display); color: #fff; }
-.grace-side .check { color: #e6eefc; font-size: 12px; align-items: flex-start; }
+.grace-side button { border-radius: 0; border-color: #000; background: var(--season-btn); color: #fff; font-weight: 700; }
+.grace-side button:hover:not(:disabled) { border-color: var(--season-hint); background: var(--season-btn-hover); }
+.grace-side .muted { color: var(--season-hint); text-align: center; font-size: 12px; margin-top: 4px; }
+.grace-side .total { margin-top: 8px; color: var(--season-ink-2); }
+.grace-side .total b { display: block; font: 700 28px/1.1 var(--font-display); color: var(--season-ink); }
+.grace-side .check { color: var(--season-ink); font-size: 12px; align-items: flex-start; }
 
 /* Skill replacement (#454), the layout the user adopted on 2026-11-06: one line per listed sinner, in priority order. */
 details.skill-panel > * + * { margin-top: 8px; }
@@ -412,26 +460,31 @@ ol.skill-sinners .grip { color: var(--muted); font-size: 11px; }
 .skill-first { width: 8.5em; flex: none; }
 .skill-arrows { display: inline-flex; margin-left: auto; }
 
-/* E.G.O Gift Search, drawn after the game's page: keyword tabs, a band per tier, text cards; a picked one glows gold. */
+/* E.G.O Gift Search, drawn after the game's page in the season's colours: keyword tabs, a band per tier, text cards; a picked
+ * one takes the starlight's gold. */
 .gift-search {
-  display: flex; flex-direction: column; gap: 10px; padding: 12px; background: #0d1424; color: #e6ebf5;
-  border: 1px solid #2c3a60; border-radius: 10px 0 10px 0; corner-shape: bevel;
+  display: flex; flex-direction: column; gap: 10px; padding: 12px; background: var(--season-bg-2); color: var(--season-ink);
+  border: 1px solid var(--season-plate); border-radius: 10px 0 10px 0; corner-shape: bevel;
 }
 .gift-tabs { display: flex; gap: 4px; flex-wrap: wrap; }
-.gift-tabs button { background: #1b2540; border-color: #2c3a60; color: #c5cee3; font: 600 14px/1.3 var(--font-display); letter-spacing: 0.02em; padding: 3px 10px; }
-.gift-tabs button:hover:not(:disabled) { background: #26335a; border-color: #9fb3ef; }
-.gift-tabs button.selected { background: #3a4d84; border-color: #9fb3ef; color: #fff; }
+.gift-tabs button {
+  background: var(--season-tab); border-color: var(--season-tab-line); color: var(--season-ink-2); font: 600 14px/1.3 var(--font-display);
+  letter-spacing: 0.02em; padding: 3px 10px;
+}
+.gift-tabs button:hover:not(:disabled) { background: var(--season-gift-hover); border-color: var(--season-hint); }
+.gift-tabs button.selected { background: var(--season-btn); border-color: var(--season-pick-line); color: #fff; }
 .gift-tabs b { margin-left: 5px; padding: 0 5px; background: var(--gold); color: #1a1406; font-size: 12px; border-radius: 2px; }
-.gift-tier h4 { margin: 0 0 6px; padding: 2px 10px; background: #23305a; color: #ffc53d; font: 700 15px/1.4 var(--font-display); letter-spacing: 3px; }
+.gift-tier h4 { margin: 0 0 6px; padding: 2px 10px; background: var(--season-band); color: var(--season-band-ink); font: 700 15px/1.4 var(--font-display); letter-spacing: 3px; }
 .gifts { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; }
 .gift {
   position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 1px; min-height: 48px; padding: 5px 8px 5px 10px;
-  text-align: left; background: #161f36; border: 1px solid #c58b1c; border-radius: 4px; corner-shape: bevel; color: #e6ebf5; overflow-wrap: anywhere;
+  text-align: left; background: var(--season-gift); border: 1px solid var(--season-tab-line); border-radius: 4px; corner-shape: bevel;
+  color: var(--season-ink); overflow-wrap: anywhere;
 }
-.gift:hover:not(:disabled) { border-color: var(--gold); background: #1d2846; }
+.gift:hover:not(:disabled) { border-color: var(--season-hint); background: var(--season-gift-hover); }
 .gift .name { font-weight: 600; font-size: 13px; line-height: 1.25; }
-.gift small { font-size: 11.5px; color: #aeb8cf; line-height: 1.25; }
-.gift.picked { background: #3a2f10; border-color: var(--gold); box-shadow: 0 0 0 2px #ffd34d, 0 0 8px #ffd34d88; padding-left: 30px; }
+.gift small { font-size: 11.5px; color: var(--season-ink-2); line-height: 1.25; }
+.gift.picked { background: var(--season-gift-pick); border-color: var(--pick-ring); box-shadow: 0 0 0 2px var(--pick-ring); padding-left: 30px; }
 .gift .rank {
   position: absolute; top: 0; left: 0; bottom: 0; width: 22px; display: flex; align-items: center; justify-content: center;
   background: var(--gold); color: #1a1406; font: 700 16px/1 var(--font-display);
@@ -446,6 +499,13 @@ ol.skill-sinners .grip { color: var(--muted); font-size: 11px; }
 .chip { padding: 2px 10px; font: 600 14px/1.3 var(--font-display); letter-spacing: 0.02em; color: var(--fg-2); background: var(--panel); border-color: var(--line); }
 .chip[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
 .chip[aria-pressed="true"]:hover:not(:disabled) { background: var(--accent-hi); border-color: var(--accent-hi); }
+/* A difficulty chip carries its badge's colour, as the legend under it does. */
+.chip.mode { --c: var(--fl-n); display: inline-flex; align-items: center; gap: 6px; }
+.chip.mode.hard { --c: var(--fl-h); }
+.chip.mode.inf { --c: var(--fl-i); }
+.chip.mode.ext { --c: var(--fl-x); }
+.chip.mode::before { content: ""; width: 8px; height: 8px; transform: rotate(45deg); background: var(--c); }
+.chip.mode[aria-pressed="true"]::before { box-shadow: 0 0 0 1px var(--on-accent); }
 .lanes { display: flex; flex-direction: column; padding: 4px 14px; }
 .lane { display: flex; align-items: flex-start; gap: 12px; padding: 7px 0; border-bottom: 1px dashed var(--line); min-height: 40px; }
 .lane .w { width: 40px; flex: none; text-align: right; font: 700 22px/1.2 var(--font-display); color: var(--muted); font-variant-numeric: tabular-nums; }
@@ -476,9 +536,12 @@ small.fl, small.wk {
   font: 700 13px/1.25 var(--font-display); letter-spacing: 0.03em; padding: 0 5px; border: 1px solid; border-radius: 2px; corner-shape: bevel;
   --c: var(--fl-n); color: var(--c); background: color-mix(in srgb, var(--c) 15%, var(--panel)); border-color: color-mix(in srgb, var(--c) 45%, transparent);
 }
+/* Besides the hue: NORMAL is an outline, the harder ones are filled; INFINITY's rule is dashed, EXTREME's double weight. */
+small.fl { background: transparent; }
+small.fl.hard, small.fl.inf, small.fl.ext { background: color-mix(in srgb, var(--c) 15%, var(--panel)); }
 small.fl.hard { --c: var(--fl-h); }
-small.fl.inf { --c: var(--fl-i); }
-small.fl.ext { --c: var(--fl-x); }
+small.fl.inf { --c: var(--fl-i); border-style: dashed; }
+small.fl.ext { --c: var(--fl-x); border-width: 2px; padding: 0 4px; }
 small.wk { font: 700 12px/1.35 var(--font-ui); color: var(--on-accent); background: var(--accent); border-color: var(--accent); } /* the "含想要" mark (#421) */
 .floorkey { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
 .pk.unlisted { border-style: dashed; color: var(--muted); }

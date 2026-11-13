@@ -25,7 +25,7 @@ export function TeamsTab() {
             badAt={(j) => bad(`teams/${j}`)}
             onChange={(teams) => update((d) => { d.teams = teams; })}
             render={(x) => (
-              <span className={x.enabled ? "" : "muted"}>{x.name || "—"} <small>#{x.game_team}</small></span>
+              <span className={x.enabled ? "" : "muted"}>{x.name || "—"} <small>TEAMS #{x.game_team}</small></span>
             )} />
         ) : <p className={"muted" + (bad("teams") ? " bad" : "")}>{t("noTeams")}</p>}
         {undoNote}
@@ -96,6 +96,25 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
         <button type="button" className="danger" onClick={onRemove}>{t("remove")}</button>
       </div>
       {notice && <p className="notice">{notice}</p>}
+      {/* What the team plays with, under its name: read and changed without scrolling past the grids. */}
+      <div className="bar lists">
+        <Field label={t("team.gift_list")} path={`${path}/gift_list`} note={t("team.gift_list_note")}>
+          <select value={team.gift_list} onChange={(e) => set({ gift_list: e.target.value })}>
+            <option value="default">{t("defaultPlan")}</option>
+            {s.gift_lists.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            {missing(team.gift_list !== "default" && team.gift_list, s.gift_lists)}
+          </select>
+          {main && <small>{t("team.main_keyword")}: <b>{t(kwText(main))}</b></small>}
+          <button type="button" disabled={!main} onClick={() => chooseList(team.gift_list, true)}>{t("team.edit_list")}</button>
+        </Field>
+        <Field label={t("team.theme_pack_plan")} path={`${path}/theme_pack_plan`}>
+          <select value={team.theme_pack_plan} onChange={(e) => set({ theme_pack_plan: e.target.value })}>
+            <option value="default">{t("defaultPlan")}</option>
+            {s.theme_pack_plans.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            {missing(team.theme_pack_plan !== "default" && team.theme_pack_plan, s.theme_pack_plans)}
+          </select>
+        </Field>
+      </div>
 
       <fieldset>
         <legend>{t("team.deployment_order")}</legend>
@@ -177,22 +196,6 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
           </Field>
           <Field label={t("team.shop_refresh_normal")} path={`${path}/shop_refresh_normal`} note={t("team.shop_refresh_note")}>
             <Num value={team.shop_refresh_normal} min={0} onChange={(v) => set({ shop_refresh_normal: v })} />
-          </Field>
-          <Field label={t("team.gift_list")} path={`${path}/gift_list`} note={t("team.gift_list_note")}>
-            <select value={team.gift_list} onChange={(e) => set({ gift_list: e.target.value })}>
-              <option value="default">{t("defaultPlan")}</option>
-              {s.gift_lists.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-              {missing(team.gift_list !== "default" && team.gift_list, s.gift_lists)}
-            </select>
-            {main && <small>{t("team.main_keyword")}: <b>{t(kwText(main))}</b></small>}
-            <button type="button" disabled={!main} onClick={() => chooseList(team.gift_list, true)}>{t("team.edit_list")}</button>
-          </Field>
-          <Field label={t("team.theme_pack_plan")} path={`${path}/theme_pack_plan`}>
-            <select value={team.theme_pack_plan} onChange={(e) => set({ theme_pack_plan: e.target.value })}>
-              <option value="default">{t("defaultPlan")}</option>
-              {s.theme_pack_plans.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-              {missing(team.theme_pack_plan !== "default" && team.theme_pack_plan, s.theme_pack_plans)}
-            </select>
           </Field>
           <Field label={t("team.min_alive")} path={`${path}/min_alive`} note={t("team.min_alive_note")}>
             <Num value={team.min_alive} min={0} max={12} onChange={(v) => set({ min_alive: v })} />

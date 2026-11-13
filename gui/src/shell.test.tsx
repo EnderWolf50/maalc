@@ -1,0 +1,69 @@
+// The editor's shell (App.tsx): the main tabs from the keyboard, and the save state in the header when a save is refused.
+import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { beforeEach, expect, test, vi } from "vitest";
+import App from "./App";
+import { TEXT, fill } from "./i18n";
+import { newSettings, newTeam } from "./model";
+
+const zh = TEXT.zh_tw;
+const file = vi.hoisted(() => ({ text: "", saved: [] as string[] }));
+vi.mock("./api", async (original) => ({
+  ...(await original<typeof import("./api")>()),
+  loadSettings: () => Promise.resolve(file.text),
+  saveSettings: (text: string) => { file.saved.push(text); return Promise.resolve(); },
+  rootDir: () => Promise.resolve("root"),
+}));
+
+/** Two enabled teams on game team slot 1: a save is refused (validate.ts crossCheck). */
+function clash() {
+  const s = newSettings();
+  s.teams = [newTeam(1, "Ta"), newTeam(2, "Tb")];
+  s.teams[1].game_team = 1;
+  return JSON.stringify(s, null, 2) + "\n";
+}
+
+beforeEach(() => { file.text = JSON.stringify(newSettings(), null, 2) + "\n"; file.saved = []; });
+
+test("the arrow keys move along the main tabs and open the one they reach; Home and End go to the ends", async () => {
+  const user = userEvent.setup();
+  render(<App />);
+  const teams = await screen.findByRole("tab", { name: zh["tab.teams"] });
+  expect(teams).toHaveAttribute("tabindex", "0");
+  expect(screen.getByRole("tab", { name: zh["tab.run"] })).toHaveAttribute("tabindex", "-1");
+  teams.focus();
+  await user.keyboard("{ArrowRight}");
+  const gifts = screen.getByRole("tab", { name: zh["tab.gifts"] });
+  expect(gifts).toHaveAttribute("aria-selected", "true");
+  expect(gifts).toHaveFocus();
+  await user.keyboard("{ArrowLeft}{ArrowLeft}");
+  expect(screen.getByRole("tab", { name: zh["tab.run"] })).toHaveFocus();
+  await user.keyboard("{End}");
+  expect(screen.getByRole("tab", { name: zh["tab.daily"] })).toHaveAttribute("aria-selected", "true");
+  await user.keyboard("{Home}");
+  expect(screen.getByRole("tab", { name: zh["tab.run"] })).toHaveAttribute("aria-selected", "true");
+  expect(screen.getByRole("tabpanel")).toHaveAttribute("aria-labelledby", screen.getByRole("tab", { name: zh["tab.run"] }).id);
+});
+
+test("a refused save shows in the header with the number of problems, also when nothing was edited", async () => {
+  file.text = clash();
+  const user = userEvent.setup();
+  render(<App />);
+  const save = await screen.findByRole("button", { name: zh.save });
+  await user.click(save);
+  await waitFor(() => expect(document.querySelector(".status")).toHaveAttribute("data-state", "blocked"));
+  expect(document.querySelector(".status")).toHaveTextContent(fill(zh.blocked, { n: 1 }));
+  expect(save).not.toHaveClass("armed");
+  expect(file.saved).toEqual([]);
+});
+
+test("an edit after a refused save still shows the refusal, with the unsaved changes", async () => {
+  file.text = clash();
+  const user = userEvent.setup();
+  render(<App />);
+  await user.click(await screen.findByRole("button", { name: zh.save }));
+  await user.type(screen.getByRole("textbox", { name: zh.name }), "!");
+  expect(document.querySelector(".status")).toHaveAttribute("data-state", "blocked");
+  expect(document.querySelector(".status")).toHaveTextContent(fill(zh.blocked, { n: 1 }));
+  expect(document.querySelector(".status")).toHaveTextContent(zh.unsaved);
+});

@@ -59,7 +59,7 @@
 
 .gl-tier h4 { display: flex; align-items: center; gap: 8px; margin: 8px 0 6px; padding: 3px 8px; background: var(--gl-panel2); }
 .gl-tierno { background: var(--fg-2); color: var(--bg); font: 700 15px/1.25 var(--font-display); letter-spacing: 0.08em; padding: 0 9px; border-radius: 3px; corner-shape: bevel; }
-.gl-tierno.fusion { background: var(--accent); }
+.gl-tierno.fusion { background: var(--fusion); color: var(--bg); }
 .gl-tier h4 small { color: var(--gl-muted); font-size: 12px; font-weight: 400; }
 .gl-wall { display: flex; flex-wrap: wrap; gap: 9px; }
 

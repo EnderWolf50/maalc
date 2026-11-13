@@ -195,6 +195,9 @@ export function ReorderList<T>({ items, onChange, render, keyOf, selected, onSel
       {items.map((item, i) => (
         <li key={keyOf(item)} draggable
           className={[selected === i && "selected", dragging === i && "dragging", badAt?.(i) && "bad"].filter(Boolean).join(" ")}
+          // A list that selects (teams, plans) is reached by Tab and picked with Enter or Space, as by a click.
+          tabIndex={onSelect ? 0 : undefined} aria-current={onSelect && selected === i ? true : undefined}
+          onKeyDown={(e) => { if (onSelect && e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); onSelect(i, items); } }}
           onClick={() => onSelect?.(i, items)}
           onDragStart={(e) => { setDragging(i); e.dataTransfer.effectAllowed = "move"; }}
           onDragEnd={() => setDragging(null)}

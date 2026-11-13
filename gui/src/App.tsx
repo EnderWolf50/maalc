@@ -1,5 +1,5 @@
 // Shell: load <root>/config/settings.json, the tabs, and check-then-save (spec 04 section 2).
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import * as api from "./api";
 import { TEXT, type Key } from "./i18n";
 import { LUX_MODES, newSettings, parseSettings, rebase, runEnum, type Luxcavation, type LuxMode, type Settings } from "./model";
@@ -185,8 +185,20 @@ export default function App() {
 
   const Current = TABS.find((x) => x[0] === tab)![2];
   const blocked = checked && problems.length > 0;
-  // What the save state plate shows: blocked (a refused save not yet fixed), unsaved, saved, or nothing to say.
+  // The save state plate: a refused save not yet fixed (with the count, edited or not), unsaved, saved, or a note.
   const state = blocked ? "blocked" : dirty ? "dirty" : status === "saved" ? "saved" : "note";
+  const stateText = [blocked && t("blocked").replace("{n}", String(problems.length)), dirty ? [t("unsaved"), note].filter(Boolean).join(" ") : said]
+    .filter(Boolean).join(" · ");
+  /** Arrow keys walk the tabs and open the one they reach (they are cheap to draw); Home and End go to the ends. */
+  const walkTabs = (e: KeyboardEvent) => {
+    const at = TABS.findIndex((x) => x[0] === tab);
+    const to = { ArrowRight: at + 1, ArrowLeft: at - 1, Home: 0, End: TABS.length - 1 }[e.key];
+    if (to === undefined) return;
+    e.preventDefault();
+    const next = TABS[(to + TABS.length) % TABS.length][0];
+    setTab(next);
+    document.getElementById(`tab-${next}`)?.focus();
+  };
   return (
     <EditorContext.Provider value={ctx}>
       <header>
@@ -198,27 +210,30 @@ export default function App() {
             <option value="en_us">English</option>
           </select>
         </label>
-        <span className="status" data-state={state} aria-live="polite">{dirty ? [t("unsaved"), note].filter(Boolean).join(" ") : said}</span>
-        <button type="button" className={"primary" + (dirty ? " armed" : "")} onClick={save}>{t("save")}</button>
+        <span className="status" data-state={state} aria-live="polite">{stateText}</span>
+        {/* armed (the caution stripe) only while a save can go through; a refused save gets the crimson frame instead */}
+        <button type="button" className={"primary" + (blocked ? " refused" : dirty ? " armed" : "")} onClick={save}>{t("save")}</button>
       </header>
-      <nav role="tablist">
+      <nav role="tablist" onKeyDown={walkTabs}>
         {TABS.map(([id, label, , prefixes]) => (
-          <button type="button" role="tab" key={id} aria-selected={tab === id}
-            className={(tab === id ? "selected" : "") + (prefixes.some(bad) ? " bad" : "")}
+          <button type="button" role="tab" key={id} id={`tab-${id}`} aria-selected={tab === id} aria-controls="tabpanel"
+            tabIndex={tab === id ? 0 : -1} className={(tab === id ? "selected" : "") + (prefixes.some(bad) ? " bad" : "")}
             onClick={() => setTab(id)}>{t(label)}</button>
         ))}
       </nav>
       <main>
-        {/* in the tab panel, so the tab bar stays where it is when problems come and go */}
-        {blocked && (
-          <div className="problems" role="alert">
-            <p>{t("saveBlocked")}</p>
-            <ul>{problems.map((p, i) => (
-              <li key={i}>{tabOf(p.paths[0]) ? <button type="button" onClick={() => goTo(p.paths[0])}>{p.text}</button> : p.text}</li>
-            ))}</ul>
-          </div>
-        )}
-        <Current />
+        <div id="tabpanel" role="tabpanel" aria-labelledby={`tab-${tab}`}>
+          {/* in the tab panel, so the tab bar stays where it is when problems come and go */}
+          {blocked && (
+            <div className="problems" role="alert">
+              <p>{t("saveBlocked")}</p>
+              <ul>{problems.map((p, i) => (
+                <li key={i}>{tabOf(p.paths[0]) ? <button type="button" onClick={() => goTo(p.paths[0])}>{p.text}</button> : p.text}</li>
+              ))}</ul>
+            </div>
+          )}
+          <Current />
+        </div>
       </main>
     </EditorContext.Provider>
   );
@@ -293,12 +308,12 @@ function RunTab() {
 function DailyTab() {
   const { t } = useEditor();
   return (
-    <>
+    <div className="stack">
       <p className="muted">{withBreaks(t("daily.note"))}</p>
       <LuxFields task="exp" />
       <LuxFields task="thread" />
       <ChargeFields />
-    </>
+    </div>
   );
 }
 
@@ -392,10 +407,10 @@ function EventsTab() {
 function TrialsTab() {
   const { t } = useEditor();
   return (
-    <>
+    <div className="stack">
       <p className="muted">{withBreaks(t("trial.note"))}</p>
       <OverrideTable listKey="trial_risk_overrides" blank={{ trial: "", risk: 1 }}
         cols={[{ key: "trial", label: "trial.trial" }, { key: "risk", label: "trial.risk", number: true }]} />
-    </>
+    </div>
   );
 }
