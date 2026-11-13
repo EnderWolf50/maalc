@@ -11,6 +11,7 @@ import numpy as np
 from daily_child import GAME, bind, game_class, inside, live_frame, load, result, run_child, run_task, screen
 from recovery import L3_PER_TASK
 from test_pass_task import BANNER, MISSIONS_TAB, SCREENS as PASS_SCREENS, SEASONAL_TAB, WEEKLY_TAB
+from agent_patch import rebind
 
 TITLE_TAP = (540, 300, 200, 120)
 SCREENS = {**PASS_SCREENS, "title": "Title.png"}
@@ -87,7 +88,7 @@ def child():
     game = Game()
     game.set()
     # MaaFramework's Linux build (CI) passes no post_shell to a custom controller: read the model's dumpsys directly.
-    actions.foreground = lambda context: actions.recovery.focused_package(game.shell("dumpsys window", 0))
+    rebind("foreground", lambda context: actions.recovery.focused_package(game.shell("dumpsys window", 0)))
     tasker = bind(resource, game)
     out = {"error": None}
     for scenario, (model, restarts_used) in {

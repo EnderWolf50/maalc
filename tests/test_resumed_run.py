@@ -10,6 +10,7 @@ import pytest
 import actions
 import test_actions
 from test_actions import argv, page
+from agent_patch import patch_all
 
 clock, context = test_actions.clock, test_actions.context  # its fixtures: the fake Maa context
 
@@ -45,7 +46,7 @@ def edit_settings(change):
 def claim(context, monkeypatch, difficulty="NORMAL"):
     """Exploration Reward of a cleared run, no weekly bonus left: Settle claims."""
     page(context, {tuple(actions.RESULT): [(f"Floor 5 [{difficulty}] 6/6", (300, 420, 90, 20))]})
-    monkeypatch.setattr(actions, "toggles", lambda context, image: [False, False, False])
+    patch_all(monkeypatch, "toggles", lambda context, image: [False, False, False])
     assert actions.Settle().run(context, argv())
 
 
@@ -91,7 +92,7 @@ def test_the_team_the_bot_picks_on_the_team_page_is_known(resumed, monkeypatch):
 
 def stopped_at_once(context, monkeypatch, entry):
     """Stuck at once after the launch: TaskStart of entry, then the stop procedure."""
-    monkeypatch.setattr(actions, "TASK", {"runs": 0, "done": None})
+    patch_all(monkeypatch, "TASK", {"runs": 0, "done": None})
     actions.TaskStart().run(context, SimpleNamespace(node_name=entry))
     assert actions.stop(context, "recovery used up") is False
 
@@ -116,7 +117,7 @@ def test_a_stop_line_is_written_when_no_team_fits_the_set_difficulty(resumed, mo
 @pytest.mark.parametrize("action", [actions.SelectTeam, actions.ConfirmStarlight, actions.Wipe])
 def test_a_restart_mid_run_on_a_broken_settings_file_stops_and_says_why(resumed, monkeypatch, action):
     # #668: the first page action after the restart makes the run plan up from the file, which no longer loads.
-    monkeypatch.setattr(actions, "TASK", {"runs": 0, "done": None})
+    patch_all(monkeypatch, "TASK", {"runs": 0, "done": None})
     actions.TaskStart().run(resumed, SimpleNamespace(node_name="MirrorDungeon"))
     (actions.ROOT / "config" / "settings.json").write_text("{", encoding="utf-8")
     actions.LOG.clear()
@@ -133,7 +134,7 @@ def test_a_daily_task_stopped_with_no_run_plan_writes_no_mirror_line(resumed, mo
 
 def test_a_stop_after_the_tasks_claim_writes_no_line_for_a_run_not_begun(resumed, monkeypatch):
     # The claim ended the run; the task stops on its way to the next one (Parallel Superposition stays ON, say).
-    monkeypatch.setattr(actions, "TASK", {"runs": 0, "done": None})
+    patch_all(monkeypatch, "TASK", {"runs": 0, "done": None})
     actions.TaskStart().run(resumed, SimpleNamespace(node_name="MirrorDungeon"))
     claim(resumed, monkeypatch)
     actions.stop(resumed, "Parallel Superposition Mode stays ON after tapping INFINITY MIRROR")

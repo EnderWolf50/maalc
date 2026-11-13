@@ -6,6 +6,7 @@ import gifts
 import settings
 import test_actions
 from test_actions import fusion_taps, sale_taps, wants
+from agent_patch import patch_all
 
 clock, context = test_actions.clock, test_actions.context  # its fixtures
 
@@ -115,7 +116,7 @@ def test_a_vestige_the_list_keeps_is_not_sold_though_the_team_sells_vestiges(con
 def test_the_cells_of_the_sell_and_fuse_pages_are_logged_with_their_state_in_the_list(context, monkeypatch):
     # #291 user story 68: each cell's id and what the list makes of it: wanted, kept, locked by a wanted fusion, dropped, unknown.
     lines = []
-    monkeypatch.setattr(actions, "log", lines.append)
+    patch_all(monkeypatch, "log", lines.append)
     readings = [("Burn", 2, 9009), ("Burn", 3, 9053), ("Tremor", 2, 9031), ("Bleed", 2, 9005), ("Pierce", 2, None)]
     team = {"list": wants(9009, 9092, keep=[9053])}
     sale_taps(context, monkeypatch, team, [90, 80, 70, 60, 50], *readings)
@@ -190,6 +191,6 @@ def test_a_sale_does_not_count_a_held_recipes_materials_in_an_ordinary_fusion(co
     ({}, True),
 ])
 def test_a_normal_floor_buys_no_gift_its_shop_never_sells(monkeypatch, run, bought):
-    monkeypatch.setattr(actions, "RUN", run)
+    patch_all(monkeypatch, "RUN", run)
     team = {"list": {"order": list(settings.GIFT_KEYWORDS), "want": [9156], "keep": [], "gorder": settings.default_gorder()}}
     assert ((9156, None) in actions.buy_list(team, {"owned": []})) is bought  # 9156 Decamillennial Hearthflame, Burn II

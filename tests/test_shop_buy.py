@@ -12,6 +12,7 @@ import gifts
 import test_actions
 from settings import gift_tables
 from test_actions import NO_GOSSYPIUM, OLD_DOLL_SHOP, buying, cells_read, live_shop, reads, wants
+from agent_patch import patch_all
 
 clock, context = test_actions.clock, test_actions.context  # its fixtures
 
@@ -21,7 +22,7 @@ def plates_read(monkeypatch, *ids):
     def read_plates(context, image, centres):
         assert len(centres) == len(ids)  # one plate per slot, on the slot's own cell
         return [{"text": f"plate {i}", "id": i} for i in ids]
-    monkeypatch.setattr(actions, "read_plates", read_plates)
+    patch_all(monkeypatch, "read_plates", read_plates)
 
 
 def shelf(context, prices, cost, short=(), purchased=()):
@@ -129,7 +130,7 @@ def test_an_offer_whose_icon_and_plate_name_two_gifts_is_unknown_and_not_bought(
     cells_read(monkeypatch, ("Burn", 3, 9053))
     plates_read(monkeypatch, 9009)
     lines = []
-    monkeypatch.setattr(actions, "log", lines.append)
+    patch_all(monkeypatch, "log", lines.append)
     assert actions.Shop.buy_offers(context, buying(wants(9053, 9009)), {"wanted": None, "sold": False}) == 0
     assert any("9053" in line and "9009" in line and "unknown" in line for line in lines)
 
@@ -140,7 +141,7 @@ def test_every_cell_of_the_shop_is_logged_with_its_id_purchased_ones_too(context
     cells_read(monkeypatch, ("Burn", None), ("Burn", 1, 9003))
     plates_read(monkeypatch, 9053, 9003, 9009)
     lines = []
-    monkeypatch.setattr(actions, "log", lines.append)
+    patch_all(monkeypatch, "log", lines.append)
     assert actions.Shop.buy_offers(context, buying(wants(9053, 9003, 9009)), {"wanted": None, "sold": True}) == 1
     shown = "\n".join(lines)
     assert "9053 Dust to Dust" in shown and "9009" in shown and "Purchased" in shown
@@ -158,7 +159,7 @@ def test_a_material_a_wanted_fusion_lacks_is_bought_for_it_and_the_log_says_whic
     cells_read(monkeypatch, ("Tremor", 1, 9031))
     plates_read(monkeypatch, 9031)
     lines = []
-    monkeypatch.setattr(actions, "log", lines.append)
+    patch_all(monkeypatch, "log", lines.append)
     assert actions.Shop.buy_offers(context, buying(wants(COUPLED)), {"wanted": None, "sold": False, "owned": [9091]}) == 1
     assert any("9031" in line and line.endswith(f"locked, place 0 for fusion {COUPLED} Coupled Oscillation") for line in lines)
     assert any(line.startswith("shop: bought") and f"for fusion {COUPLED} " in line for line in lines)
@@ -169,7 +170,7 @@ def test_no_material_is_bought_for_a_wanted_fusion_owned(context, monkeypatch):
     cells_read(monkeypatch, ("Tremor", 1, 9031))
     plates_read(monkeypatch, 9031)
     lines = []
-    monkeypatch.setattr(actions, "log", lines.append)
+    patch_all(monkeypatch, "log", lines.append)
     assert actions.Shop.buy_offers(context, buying(wants(COUPLED)), {"wanted": None, "sold": False, "owned": [COUPLED]}) == 0
     assert any("9031" in line and line.endswith("drop") for line in lines)
 
@@ -246,7 +247,7 @@ def test_each_refresh_kind_has_its_own_count(context, monkeypatch, keyword, norm
 def test_the_owned_gifts_are_read_off_the_sell_page_before_a_wanted_fusions_material_is_bought(context, monkeypatch):
     # The visit has not read them yet: the sell page shows Coupled Oscillation owned, so nothing is bought for it.
     monkeypatch.setattr(actions.Shop, "buy_offers", staticmethod(lambda *a: 0))
-    monkeypatch.setattr(actions, "owned_cells", lambda context, page: ([{"i": 0, "id": COUPLED}, {"i": 1, "id": None}], {}))
+    patch_all(monkeypatch, "owned_cells", lambda context, page: ([{"i": 0, "id": COUPLED}, {"i": 1, "id": None}], {}))
     taps = live_shop(context, lambda taps: {tuple(actions.DIALOG_TITLE): [("Sell E.G.O Gift", (500, 90, 200, 40))]}
                      if taps[-1:] == [actions.SHOP_BUTTONS["sell"]] else {})
     visit = {"wanted": None, "sold": False, "refreshes": {"keyword": 0, "normal": 0}}
@@ -299,7 +300,7 @@ def test_the_shop_stops_refreshing_once_what_it_bought_meets_the_list(context, m
     monkeypatch.setattr(actions.Shop, "buy_offers", staticmethod(buy_offers))
     taps = refresh_shop(context)
     lines = []
-    monkeypatch.setattr(actions, "log", lines.append)
+    patch_all(monkeypatch, "log", lines.append)
     visit = {"wanted": None, "sold": False, "refreshes": {"keyword": 0, "normal": 0}, "owned": [9707, 9431]}
     assert actions.Shop.buy(context, buying(wants(VIOLIN), shop_refresh_keyword=2), visit)
     assert visit["refreshes"] == {"keyword": 0, "normal": 0} and actions.KEYWORD_REFRESH not in taps
@@ -346,7 +347,7 @@ def super_shop(context, monkeypatch, n=10, red=True, reset_on_buy=False, cost=20
     def scroll(context, x, y, dx, dy):
         game["scrolls"] += 1
         game["at"] = min(max(game["at"] - dy, 0), SCROLL_END)
-    monkeypatch.setattr(actions, "scroll", scroll)
+    patch_all(monkeypatch, "scroll", scroll)
 
     def click(x, y):
         if (x, y) == actions.PURCHASE:
@@ -382,9 +383,9 @@ def super_shop(context, monkeypatch, n=10, red=True, reset_on_buy=False, cost=20
     def read_cells(context, image, cells, page):
         return [{"i": i, "x": x, "y": y, "tier": 2, "keyword": "Burn", "id": offer_at(x, y), "score": 0.9}
                 for i, (x, y) in enumerate(cells)]
-    monkeypatch.setattr(actions, "read_cells", read_cells)
-    monkeypatch.setattr(actions, "read_plates", lambda context, image, centres: [{"text": f"plate {offer_at(x, y)}", "id": offer_at(x, y)}
-                                                                                 for x, y in centres])
+    patch_all(monkeypatch, "read_cells", read_cells)
+    patch_all(monkeypatch, "read_plates", lambda context, image, centres: [{"text": f"plate {offer_at(x, y)}", "id": offer_at(x, y)}
+                                                                           for x, y in centres])
     return game
 
 
@@ -392,7 +393,7 @@ def test_a_super_shops_last_two_offers_are_read_after_a_scroll_and_bought(contex
     # #341: 10 offers, the last 2 only show with the grid scrolled; the list wants exactly them.
     game = super_shop(context, monkeypatch)
     lines = []
-    monkeypatch.setattr(actions, "log", lines.append)
+    patch_all(monkeypatch, "log", lines.append)
     ids = game["ids"]
     assert actions.Shop.buy_offers(context, buying(wants(ids[9], ids[8])), {"wanted": None, "sold": False}) == 2
     assert sorted(game["bought"]) == [8, 9]
@@ -436,7 +437,7 @@ def test_an_offer_whose_badge_reads_nothing_is_not_opened_to_read_its_keyword(co
     # not read at all is not a gift to buy.
     context.tasker.controller.post_screencap.return_value.wait.return_value.get.return_value = np.zeros((720, 1280, 3), np.uint8)
     reads(context, {tuple(actions.OFFER_GRID): OLD_DOLL_SHOP, tuple(actions.SHOP_COST): [("787", (560, 120, 60, 30))]})
-    monkeypatch.setattr(actions, "read_cells", lambda *args: [])
+    patch_all(monkeypatch, "read_cells", lambda *args: [])
     visit = {"wanted": None, "sold": False}
     assert actions.Shop.buy_offers(context, buying(wants(9009)), visit) == 0
     assert not context.tasker.controller.post_click.called

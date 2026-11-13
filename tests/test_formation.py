@@ -3,6 +3,7 @@ from types import SimpleNamespace
 
 import actions
 import test_actions
+from agent_patch import patch_all
 
 clock, context = test_actions.clock, test_actions.context  # its fixtures
 ORDER = ["Yi Sang", "Hong Lu", "Rodion"]
@@ -22,9 +23,9 @@ class Game:
     def __init__(self, monkeypatch, start=7, lag=0.3, eaten=0, dialog=True, clears=True, blind=0.0):
         self.count, self.lag, self.eaten, self.dialog, self.clears, self.blind = start, lag, eaten, dialog, clears, blind
         self.open, self.pending, self.taps, self.picked, self.last_card = False, [], [], set(), -99.0
-        monkeypatch.setattr(actions, "tap", self.tap)
-        monkeypatch.setattr(actions, "participants", self.read)
-        monkeypatch.setattr(actions, "text", lambda context, image, roi, only_rec=False: "Reset Deployment Order?" if self.open else "")
+        patch_all(monkeypatch, "tap", self.tap)
+        patch_all(monkeypatch, "participants", self.read)
+        patch_all(monkeypatch, "text", lambda context, image, roi, only_rec=False: "Reset Deployment Order?" if self.open else "")
 
     def tap(self, context, x, y, wait=1.0):
         now = actions.time.monotonic()
@@ -154,9 +155,9 @@ def test_too_few_alive_backs_out_and_hands_back_once_the_page_goes_not_after_2_s
     # #258: the back arrow slept 2 s so that MirrorHub would not find the page again and back out twice; the wait now
     # ends when the Formation node no longer hits.
     actions.RUN.update(team={"min_alive": 5, "name": "t"}, settings={"run": {"after_retries": "forfeit"}})
-    monkeypatch.setattr(actions, "participants", lambda context, image: (4, 4))
+    patch_all(monkeypatch, "participants", lambda context, image: (4, 4))
     monkeypatch.setattr(actions.run_start, "resolve_plan", lambda *a: [])
-    monkeypatch.setattr(actions, "dead_sinners", lambda image: set())
+    patch_all(monkeypatch, "dead_sinners", lambda image: set())
     game = formation_page(context, monkeypatch, {tuple(actions.DETAILS_BUTTON): "Details"}, {actions.FORMATION_BACK: [(0.5, {"Formation": False}, 20)]})
     assert actions.Formation().run(context, None)
     assert game.taps == [actions.FORMATION_BACK] and actions.RUN["forfeit"]
@@ -167,11 +168,11 @@ def test_too_few_alive_backs_out_and_hands_back_once_the_page_goes_not_after_2_s
 def test_the_details_view_is_folded_and_read_once_its_button_shows_not_after_1_5_s(context, clock, monkeypatch):
     # #258: the » slept 1.5 s; now the order marks are read on the folded page once Details shows and the page is still.
     actions.RUN.update(team={"min_alive": 0, "name": "t"}, settings={"run": {"after_retries": "stop"}})
-    monkeypatch.setattr(actions, "participants", lambda context, image: (5, 12))
+    patch_all(monkeypatch, "participants", lambda context, image: (5, 12))
     monkeypatch.setattr(actions.run_start, "resolve_plan", lambda *a: [])  # ends the action after the dead are read
-    monkeypatch.setattr(actions, "stop", lambda context, reason, line=None: False)
+    patch_all(monkeypatch, "stop", lambda context, reason, line=None: False)
     read = []
-    monkeypatch.setattr(actions, "dead_sinners", lambda image: read.append(int(image[0, 0, 0])) or set())
+    patch_all(monkeypatch, "dead_sinners", lambda image: read.append(int(image[0, 0, 0])) or set())
     game = formation_page(context, monkeypatch, {tuple(actions.DETAILS_BUTTON): ""},
                           {(826, 125): [(0.4, {tuple(actions.DETAILS_BUTTON): "Details"}, 30)]})
     actions.Formation().run(context, None)
@@ -188,13 +189,13 @@ def order_page(context, monkeypatch, plan, dead, min_alive, screen_alive, after_
     actions.RUN.update(team={"min_alive": min_alive, "name": "t"}, settings={"run": {"after_retries": after_retries}})
     actions.RUN.pop("forfeit", None)
     stops, taps, lines = [], [], []
-    monkeypatch.setattr(actions, "stop", lambda context, reason, line=None: stops.append(reason) or False)
-    monkeypatch.setattr(actions, "tap", lambda context, x, y, wait=1.0: taps.append((x, y)))
-    monkeypatch.setattr(actions, "log", lines.append)
-    monkeypatch.setattr(actions, "participants", lambda context, image: (0, screen_alive))
-    monkeypatch.setattr(actions, "dead_sinners", lambda image: set(dead))
+    patch_all(monkeypatch, "stop", lambda context, reason, line=None: stops.append(reason) or False)
+    patch_all(monkeypatch, "tap", lambda context, x, y, wait=1.0: taps.append((x, y)))
+    patch_all(monkeypatch, "log", lines.append)
+    patch_all(monkeypatch, "participants", lambda context, image: (0, screen_alive))
+    patch_all(monkeypatch, "dead_sinners", lambda image: set(dead))
     monkeypatch.setattr(actions.run_start, "resolve_plan", lambda *a: plan)
-    monkeypatch.setattr(actions, "order_marks", lambda context, image: {})
+    patch_all(monkeypatch, "order_marks", lambda context, image: {})
     monkeypatch.setattr(actions.Formation, "pick", staticmethod(lambda context, order: taps.append(("pick", order)) or False))
     test_actions.reads(context, {tuple(actions.DETAILS_BUTTON): [("Details", (0, 0, 10, 10))]})
     result = actions.Formation().run(context, None)

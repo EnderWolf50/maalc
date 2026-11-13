@@ -4,6 +4,7 @@ Each test plays a team whose list order starts with Bleed (run_team makes its te
 import actions
 import test_actions
 from test_actions import Choices, FUSING, fuse_page, gift_page, listed, live_shop, reads, shop_team, with_ids, wants
+from agent_patch import patch_all
 
 clock, context = test_actions.clock, test_actions.context  # its fixtures
 
@@ -50,7 +51,7 @@ def test_the_gift_choice_takes_the_card_of_the_lists_first_keyword(context, monk
     def ocr(context, image, roi, only_rec=False):  # the first card says Burn, the second Bleed
         return [(t.replace("Inflict Bleed", "Inflict Burn") if b[0] < 400 else t, b) for t, b in inner(context, image, roi, only_rec)] \
             if roi == actions.GIFT_CARDS else inner(context, image, roi, only_rec)
-    monkeypatch.setattr(actions, "ocr", ocr)
+    patch_all(monkeypatch, "ocr", ocr)
     actions.RUN["team"] = bleed_team()
     actions.PickGift().run(context, None)
     assert taps[0] == (536, 300)  # the second card's centre: its tab sits at x 500 + 150 - 114

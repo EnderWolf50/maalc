@@ -10,6 +10,7 @@ import itertools
 import json
 
 from daily_child import bind, game_class, inside, interface as interface_json, load, result, run_child, screen
+from agent_patch import patch_all
 
 WINDOW_TAB = (790, 608, 70, 64)
 ENK_BAR = (440, 640)
@@ -153,14 +154,14 @@ def panel(monkeypatch, tmp_path, frames):
 
     shots = iter(frames)
     taps = []
-    monkeypatch.setattr(actions, "ROOT", tmp_path)
-    monkeypatch.setattr(actions, "screen", lambda context: next(shots))
-    monkeypatch.setattr(actions, "too_many", lambda context, image: image[2:] == (True,))
-    monkeypatch.setattr(actions, "on_modules_tab", lambda context, image: image[0])
-    monkeypatch.setattr(actions, "read_fractions", lambda context, image, node: image[1])
-    monkeypatch.setattr(actions, "tap", lambda context, x, y, wait=1.0: taps.append((x, y)))
-    monkeypatch.setattr(actions, "stop", lambda context, reason, **kw: taps.append("stop") or False)
-    monkeypatch.setattr(actions, "back", lambda context: taps.append("back"))
+    patch_all(monkeypatch, "ROOT", tmp_path)
+    patch_all(monkeypatch, "screen", lambda context: next(shots))
+    patch_all(monkeypatch, "too_many", lambda context, image: image[2:] == (True,))
+    patch_all(monkeypatch, "on_modules_tab", lambda context, image: image[0])
+    patch_all(monkeypatch, "read_fractions", lambda context, image, node: image[1])
+    patch_all(monkeypatch, "tap", lambda context, x, y, wait=1.0: taps.append((x, y)))
+    patch_all(monkeypatch, "stop", lambda context, reason, **kw: taps.append("stop") or False)
+    patch_all(monkeypatch, "back", lambda context: taps.append("back"))
     actions.TASK.clear()
     actions.TASK.update(runs=0, done=None)
     return actions, MagicMock(), taps

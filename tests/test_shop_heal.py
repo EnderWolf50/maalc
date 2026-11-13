@@ -1,6 +1,7 @@
 """#258: Shop.heal waits for what each tap brings (the heal page, Select, the Cost, the shop again), not a fixed sleep."""
 import actions
 import test_actions
+from agent_patch import patch_all
 
 clock, context = test_actions.clock, test_actions.context  # its fixtures
 
@@ -10,7 +11,7 @@ def heal(context, monkeypatch, mode, answers):
     reads = {tuple(actions.SHOP_COST): "3302", tuple(actions.HEAL_COST): "3302", tuple(actions.HEAL_TITLE): "",
              tuple(actions.BOTTOM_LABEL): "Leave"}
     game = test_actions.TimedGame(monkeypatch, context, reads, answers)
-    monkeypatch.setattr(actions, "bar_dead", lambda image: {"Yi Sang"})
+    patch_all(monkeypatch, "bar_dead", lambda image: {"Yi Sang"})
     monkeypatch.setattr(actions.Shop, "to_main", staticmethod(lambda context: True))
     actions.Shop.heal(context, test_actions.shop_team({"heal": mode}))
     return game

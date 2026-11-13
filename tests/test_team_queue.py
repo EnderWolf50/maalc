@@ -10,6 +10,7 @@ import test_actions
 from team_queue import migrate_cursor, pick_team, requeue, resumed_team
 from test_resumed_run import claim
 from test_task_chain import entry_page
+from agent_patch import patch_all
 
 clock, context = test_actions.clock, test_actions.context  # its fixtures: the fake Maa context
 
@@ -199,7 +200,7 @@ def test_a_mirror_dungeon_task_turns_the_old_rotation_cursor_into_the_queue_head
     entry_page(context)
     context.tasker.controller.info = {"adb_serial": ADDR}
     old_state(actions.ROOT, "127.0.0.1_16384.json", "b")
-    monkeypatch.setattr(actions, "TASK", {"runs": 0, "done": None})
+    patch_all(monkeypatch, "TASK", {"runs": 0, "done": None})
     actions.TaskStart().run(context, SimpleNamespace(node_name="ExpLuxcavation"))
     assert queue(actions.ROOT) == ["a", "b"]  # a daily task leaves it to the mirror
     actions.TaskStart().run(context, SimpleNamespace(node_name="MirrorDungeon"))

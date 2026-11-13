@@ -9,6 +9,7 @@ import time
 
 import numpy as np
 from daily_child import GAME, bind, game_class, inside, interface as interface_json, load, result, run_child, run_task, screen
+from agent_patch import rebind
 
 HOLD = 0.5  # s: how long the child holds the stop task that an account-level stop queues behind its task
 WINDOW_TAB = (790, 608, 70, 64)  # the bottom tab bar's Window tab
@@ -114,7 +115,7 @@ def child():
     game.set("main")
     # MaaFramework's Linux build (CI) does not pass post_shell to a custom controller ("Shell is not supported for this
     # controller type"), so foreground() reads None there and GameAway never hits: read the model's dumpsys directly.
-    actions.foreground = lambda context: actions.recovery.focused_package(game.shell("dumpsys window", 0))
+    rebind("foreground", lambda context: actions.recovery.focused_package(game.shell("dumpsys window", 0)))
     tasker = bind(resource, game)
 
     class HoldsTheStop(TaskerEventSink):
@@ -205,12 +206,13 @@ def child():
         for _ in range(in_a_row):
             actions.STUCK["restarts"].attempt(None)
         actions.LOG.clear()
-        actions.time = clock = time if scenario in WALL else SleptClock()
+        clock = time if scenario in WALL else SleptClock()
+        rebind("time", clock)
         began = clock.monotonic()
         try:
             detail = run_task(tasker, scenario, "GoHome", override)
         finally:
-            actions.time = time
+            rebind("time", time)
         out[scenario] = {**result(detail, game, actions), "starts": game.starts,
                          "seconds": clock.monotonic() - began, "log": list(actions.LOG),
                          "stops": game.stops, "in_a_row": actions.STUCK["restarts"].in_a_row,

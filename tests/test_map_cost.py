@@ -18,6 +18,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 from PIL import Image
+from agent_patch import rebind
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "agent"))  # run as a script: as pytest's pythonpath has it
@@ -111,9 +112,9 @@ def child():
                 for crop in CROPS:
                     out[f"crop {crop.name}"] = actions.coin_number(actions.coin_text(context, load(crop), CROP_COIN))
                 lines = []
-                actions.log = lines.append
+                rebind("log", lines.append)
                 with tempfile.TemporaryDirectory() as logs:
-                    actions.ROOT = Path(logs)  # a miss keeps its crop under logs/cost
+                    rebind("ROOT", Path(logs))  # a miss keeps its crop under logs/cost
                     for name, cx, cy, difficulty in NODE_CASES:
                         actions.RUN.update(settings={}, difficulty=difficulty, floor_hard=difficulty == "hard")
                         lines.clear()

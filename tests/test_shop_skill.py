@@ -17,6 +17,7 @@ import test_actions
 from test_actions import argv, buying, replacing, shop_team, wants
 from test_pipeline import load_nodes
 from test_shop import MEURSAULT_ONCE, RYOSHU_TWICE, skill_entry
+from agent_patch import patch_all
 
 clock, context = test_actions.clock, test_actions.context  # its fixtures
 SCREENS = Path(__file__).resolve().parent / "screens"
@@ -123,7 +124,7 @@ class Game:
 
 def logged(monkeypatch):
     lines = []
-    monkeypatch.setattr(actions, "log", lines.append)
+    patch_all(monkeypatch, "log", lines.append)
     return lines
 
 
@@ -161,7 +162,7 @@ def test_no_page_guard_runs_between_the_paying_confirm_and_the_main_page(context
     # there would hand the shop back in the middle of the payment.
     game = gregor_shop(context, monkeypatch)
     guarded = []
-    monkeypatch.setattr(actions, "page_guard", lambda context, home, image=None: guarded.append(len(game.taps)) or actions.screen(context))
+    patch_all(monkeypatch, "page_guard", lambda context, home, image=None: guarded.append(len(game.taps)) or actions.screen(context))
     actions.Shop.skill_step(context, GREGOR, {})
     paid = len(game.taps)  # the final Confirm is the last tap
     assert game.taps[-1] == actions.REPLACE_CONFIRM and guarded and max(guarded) < paid
@@ -410,7 +411,7 @@ class IdGame:
         monkeypatch.setattr(actions.shop, "option_lit", lambda image, box: self.lit(box))
         monkeypatch.setattr(actions.shop, "option_picked", lambda image, frame: self.picked is not None
                             and frame == actions.REPLACE_FRAMES[self.picked])
-        monkeypatch.setattr(actions, "bar_dead", lambda image: set(self.dead))
+        patch_all(monkeypatch, "bar_dead", lambda image: set(self.dead))
 
     def lit(self, box):
         swap, counts = next(k for k, b in actions.REPLACE_PRICES.items() if b == box), self.decks[self.open]

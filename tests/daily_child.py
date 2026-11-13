@@ -14,6 +14,7 @@ import types
 from pathlib import Path
 
 import numpy as np
+from agent_patch import rebind
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "agent"))  # run as a script: as pytest's pythonpath has it
@@ -49,9 +50,10 @@ def live_frame(image):
 
 
 def load():
-    """(actions, resource): MaaFramework's Resource first, then actions under a stand-in AgentServer that records what
-    the agent registers; every custom action and recognition goes on the resource, as the agent serves them. ROOT is a
-    new temporary folder (the settings, the stop procedure's evidence and log).
+    """(actions, resource): MaaFramework's Resource first, then the agent's main.py under a stand-in AgentServer that
+    records what the agent registers: main imports actions and every module split off it (#676), and every custom action
+    and recognition goes on the resource, as the agent serves them. ROOT is a new temporary folder in actions and its
+    page modules (the settings, the stop procedure's evidence and log).
 
     Every node's pre_delay and post_delay is 0 (#480): a game model shows the next screen at the tap, and those waits
     were half of a child's time (test_exp_luxcavation 285 s, 136 s without them, its 21 scenarios ending the same)."""
@@ -67,13 +69,14 @@ def load():
     stub.AgentServer = type("AgentServer", (), {"custom_action": record("action"), "custom_recognition": record("recognition")})
     sys.modules["maa.agent"] = types.ModuleType("maa.agent")
     sys.modules["maa.agent.agent_server"] = stub
+    import main  # noqa: F401  registers what the agent registers
     import actions
 
     for kind, name, cls in found:
         (resource.register_custom_action if kind == "action" else resource.register_custom_recognition)(name, cls())
     resource.post_bundle(ROOT / "assets" / "resource" / "base").wait()
     resource.override_pipeline({name: {"pre_delay": 0, "post_delay": 0} for name in resource.node_list})
-    actions.ROOT = Path(tempfile.mkdtemp())
+    rebind("ROOT", Path(tempfile.mkdtemp()))
     return actions, resource
 
 

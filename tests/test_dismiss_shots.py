@@ -10,6 +10,7 @@ import pytest
 import actions
 import recovery
 from test_pipeline import load_nodes
+from agent_patch import patch_all
 
 DISMISSERS = ["Notices", "Mailbox", "SettingsMenu", "HelpPager", "RetryPopup", "PopupButton", "ParallelModePrompt", "RecoverL1"]
 
@@ -21,7 +22,7 @@ def game(monkeypatch, tmp_path):
     ctx.tasker.controller.post_screencap.return_value.wait.return_value.get.side_effect = lambda: np.full((720, 1280, 3), 7, np.uint8)
     ctx.tasker.controller.post_click.side_effect = lambda x, y: state.taps.append((x, y)) or MagicMock()
     ctx.tasker.controller.post_click_key.side_effect = lambda k: state.keys.append(k) or MagicMock()
-    monkeypatch.setattr(actions, "ROOT", tmp_path)
+    patch_all(monkeypatch, "ROOT", tmp_path)
     actions.RUN.clear()
     actions.DISMISSED_AT.clear()
     actions.RUN["settings"] = {"run": {"keep_dismissed_screens": True}}
@@ -56,7 +57,7 @@ def test_a_box_is_tapped_at_its_centre(game):
 def test_a_popup_pressed_is_logged_with_its_text_and_button(game, monkeypatch, capsys):
     # #382: the previous session's "Please claim your rewards" was closed with no line saying what it was.
     texts = []
-    monkeypatch.setattr(actions, "text", lambda context, image, roi, only_rec=False: texts.append(roi) or "The previous session has expired. Please claim your rewards.")
+    patch_all(monkeypatch, "text", lambda context, image, roi, only_rec=False: texts.append(roi) or "The previous session has expired. Please claim your rewards.")
     actions.DismissShot().run(game.ctx, arg("PopupButton", reco_detail=button("Confirm")))
     assert texts == [actions.DIALOG_TEXT]  # the dialog is the only OCR it adds: the button's text is the recognition's
     assert "popup: 'The previous session has expired. Please claim your rewards.': pressed 'Confirm'" in capsys.readouterr().out

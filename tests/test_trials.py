@@ -14,6 +14,7 @@ import actions
 import gifts
 import rewards as r
 import test_actions
+from agent_patch import patch_all
 
 clock, context = test_actions.clock, test_actions.context  # its fixtures
 ROOT = Path(__file__).resolve().parent.parent
@@ -245,8 +246,8 @@ def boss_page(context, monkeypatch, cards, floor=None, slots=1, says=None):
     """A boss gift page whose OCR reads cards [(gift text, owned, N, trial name, effect lines)] (the trial half's read,
     TRIAL_HALF), card i centred at 375 + 264 i, Select 0/1; a Sinking team. Its taps and log lines."""
     taps, logs = [], []
-    monkeypatch.setattr(actions, "tap", lambda context, x, y, wait=1.0: taps.append((x, y)))
-    monkeypatch.setattr(actions, "log", logs.append)
+    patch_all(monkeypatch, "tap", lambda context, x, y, wait=1.0: taps.append((x, y)))
+    patch_all(monkeypatch, "log", logs.append)
     centres = [375 + 264 * i for i in range(len(cards))]
     halves = {(x - 125, 438, 250, 105): [(f"+{n}", (x - 103, 444, 22, 22)), (name, (x - 4, 448, 90, 20))]
               + [(t, (x - 92, 486 + 20 * k, 177, 20)) for k, t in enumerate(lines)]
@@ -266,7 +267,7 @@ def boss_page(context, monkeypatch, cards, floor=None, slots=1, says=None):
         if roi == actions.REFUSE_GIFT and not (actions.GIFT_SELECT in taps and picked):
             return [("Refuse Gift", (900, 570, 100, 25))]
         return []
-    monkeypatch.setattr(actions, "ocr", ocr)
+    patch_all(monkeypatch, "ocr", ocr)
     actions.RUN.update(settings={"trial_risk_overrides": []}, team={**test_actions.NO_GOSSYPIUM, "keyword": "Sinking"})
     if floor:
         actions.RUN["floor"] = floor
@@ -309,9 +310,9 @@ def test_a_fight_s_gift_page_does_not_weigh_tiers(context, monkeypatch):
     taps = test_actions.gift_page(context, monkeypatch, ["Ashes to Ashes", "Barbed Lasso"])  # "Inflict Bleed" on both
     actions.RUN["team"]["keyword"] = "Bleed"
     inner = actions.ocr
-    monkeypatch.setattr(actions, "ocr", lambda context, image, roi, only_rec=False: [
+    patch_all(monkeypatch, "ocr", lambda context, image, roi, only_rec=False: [
         (t.replace("Bleed", "Burn") if b[0] > 400 else t, b) for t, b in inner(context, image, roi, only_rec)])
-    monkeypatch.setattr(actions, "gift_tier", lambda image, x: 1 if x < 400 else 4)
+    patch_all(monkeypatch, "gift_tier", lambda image, x: 1 if x < 400 else 4)
     actions.PickGift().run(context, None)
     assert [t for t in taps if t[1] == 300] == [(236, 300)]
 
@@ -319,8 +320,8 @@ def test_a_fight_s_gift_page_does_not_weigh_tiers(context, monkeypatch):
 def select_alone(monkeypatch):
     """The Select button reads "Select" alone, as on a page that takes one card (GiftChoiceNoCount.png, #494)."""
     inner = actions.ocr
-    monkeypatch.setattr(actions, "ocr", lambda context, image, roi, only_rec=False:
-                        [("Select", (1102, 566, 73, 26))] if roi == actions.GIFT_COUNT else inner(context, image, roi, only_rec))
+    patch_all(monkeypatch, "ocr", lambda context, image, roi, only_rec=False:
+              [("Select", (1102, 566, 73, 26))] if roi == actions.GIFT_COUNT else inner(context, image, roi, only_rec))
 
 
 def test_a_page_without_trials_whose_select_reads_alone_takes_its_best_card_alone(context, monkeypatch):
@@ -378,7 +379,7 @@ def test_the_table_is_what_the_game_data_gives_when_it_is_unpacked():
 
 def test_an_unmatched_title_is_logged_as_read_and_a_fight_s_page_logs_name_category_and_score(context, monkeypatch):
     logs = []
-    monkeypatch.setattr(actions, "log", logs.append)
+    patch_all(monkeypatch, "log", logs.append)
     test_actions.gift_page(context, monkeypatch, ["Ashes to Ashes", "Zzqx Glorp"])
     actions.PickGift().run(context, None)
     assert logs[0] == "gifts: Ashes to Ashes/main gift 3 total 3, 'Zzqx Glorp'/main gift 3 total 3: order [0, 1]"
@@ -387,7 +388,7 @@ def test_an_unmatched_title_is_logged_as_read_and_a_fight_s_page_logs_name_categ
 def test_a_wanted_card_is_logged_with_its_category_and_score_and_picked_first(context, monkeypatch):
     # #418 / #419: the wanted card scores 6 (9 in a pack's own pool) against the main 3 on its left
     logs = []
-    monkeypatch.setattr(actions, "log", logs.append)
+    patch_all(monkeypatch, "log", logs.append)
     taps = test_actions.gift_page(context, monkeypatch, ["Zzqx Glorp", "Ashes to Ashes"])
     actions.RUN["team"] = {**test_actions.NO_GOSSYPIUM, "list": test_actions.wants(9003)}
     actions.PickGift().run(context, None)
@@ -402,7 +403,7 @@ HARD_PAGE_1 = [("Melted Spring", False, 1, "Defense Level Up", []), ("Talisman B
 def hard_page(context, monkeypatch, cards, wanted):
     """The 2026-10-30 HARD boss page (its four gifts and trials, Select 0/2, tiers II I I II) whose team list wants `wanted`."""
     taps, logs = boss_page(context, monkeypatch, cards, 1, slots=2, says="Inflict Sinking")
-    monkeypatch.setattr(actions, "gift_tier", lambda image, x: {375: 2, 639: 1, 903: 1, 1167: 2}[x])  # as on the capture
+    patch_all(monkeypatch, "gift_tier", lambda image, x: {375: 2, 639: 1, 903: 1, 1167: 2}[x])  # as on the capture
     actions.RUN["team"]["list"] = test_actions.wants(*wanted)
     actions.RUN["team"]["keyword"] = "Sinking"
     return taps, logs

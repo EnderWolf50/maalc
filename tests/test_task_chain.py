@@ -18,6 +18,7 @@ from unittest.mock import MagicMock
 
 import numpy as np
 import pytest
+from agent_patch import patch_all
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "agent"))  # run as a script: as pytest's pythonpath has it
@@ -154,7 +155,7 @@ def test_a_task_the_client_interrupted_leaves_its_run_to_the_same_task(context):
     lambda: actions.stop(MagicMock(), "recovery used up"),
 ])
 def test_a_task_that_ended_by_done_or_the_stop_procedure_leaves_no_run(context, monkeypatch, how):
-    monkeypatch.setattr(actions, "screen", lambda context: np.zeros((720, 1280, 3), np.uint8))
+    patch_all(monkeypatch, "screen", lambda context: np.zeros((720, 1280, 3), np.uint8))
     assert interrupted_run(context, how) == {}
 
 
@@ -212,7 +213,7 @@ def test_plan_run_logs_modules_that_cover_a_claim(context, monkeypatch):
     entry_page(context)
     actions.TASK.update(runs=0, done=None, modules=118)
     logged = []
-    monkeypatch.setattr(actions, "log", logged.append)
+    patch_all(monkeypatch, "log", logged.append)
     assert actions.PlanRun().run(context, None) is True and actions.RUN["planned"]
     assert "new run: Modules 118 >= 5" in logged
 

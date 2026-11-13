@@ -22,6 +22,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 from PIL import Image
+from agent_patch import rebind
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "agent"))  # run as a script: as pytest's pythonpath has it
@@ -83,7 +84,7 @@ def child():
         def run(self, context, argv):
             try:
                 with tempfile.TemporaryDirectory() as logs:
-                    actions.ROOT = Path(logs)  # a Cost miss keeps its crop under logs/cost
+                    rebind("ROOT", Path(logs))  # a Cost miss keeps its crop under logs/cost
                     actions.RUN.update(settings={}, difficulty="hard", floor_hard=True)
                     for name in (*FRAMES, "MapHardRest.synthetic"):
                         image = np.asarray(Image.open(ROOT / "tests" / "screens" / f"{name}.png").convert("RGB"))[:, :, ::-1].copy()

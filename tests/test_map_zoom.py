@@ -3,6 +3,7 @@ from types import SimpleNamespace
 
 import actions
 import test_actions
+from agent_patch import patch_all
 
 clock, context = test_actions.clock, test_actions.context  # its fixtures
 
@@ -43,7 +44,7 @@ def zoomed_map(context, back="resets"):
 
 
 def test_a_zoomed_map_is_reset_through_the_bus_node_panel_and_read_as_usual(context, monkeypatch):
-    monkeypatch.setattr(actions, "map_weights", lambda context: {"battle": 2, "unknown": 9})
+    patch_all(monkeypatch, "map_weights", lambda context: {"battle": 2, "unknown": 9})
     actions.RUN["map_entered"] = True  # the node was entered, then its formation backed out of
     actions.RUN["map_plan"] = {"floor": None, "steps": [("mid", "battle")]}  # the step after that node
     zoomed_map(context)
@@ -57,7 +58,7 @@ def test_a_zoomed_map_is_reset_through_the_bus_node_panel_and_read_as_usual(cont
 
 
 def test_a_zoomed_map_the_panel_does_not_reset_goes_to_l2_at_once(context, monkeypatch):
-    monkeypatch.setattr(actions, "map_weights", lambda context: {"battle": 2, "unknown": 9})
+    patch_all(monkeypatch, "map_weights", lambda context: {"battle": 2, "unknown": 9})
     actions.RUN["map_entered"] = True
     zoomed_map(context, back="closes")
     actions.RouteMap().run(context, None)
@@ -75,7 +76,7 @@ def test_a_node_panel_the_back_key_leaves_up_is_entered_not_handed_to_l2(context
 
 
 def test_a_map_at_rest_never_looks_for_the_zoomed_bus(context, monkeypatch):
-    monkeypatch.setattr(actions, "map_weights", lambda context: {"battle": 2, "unknown": 9})
+    patch_all(monkeypatch, "map_weights", lambda context: {"battle": 2, "unknown": 9})
     looked = []
 
     def run_recognition(name, image, override=None):

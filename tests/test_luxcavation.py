@@ -10,6 +10,7 @@ from PIL import Image
 import actions
 import luxcavation
 from luxcavation import EXP_COST, FIGHT, FINISH, RETRY, SKIP, STOP, batch, decide, needed, parse_consecutive, presses
+from agent_patch import patch_all
 
 if __name__ != "__main__":  # as test_task_chain.py: the fixtures are test_actions's
     from test_actions import Choices, clock, context  # noqa: F401 (the fake Maa context the in-process tests use)
@@ -163,7 +164,7 @@ def test_no_other_screen_is_a_check_card_alone():
 
 def test_a_check_card_alone_is_tapped_to_open_its_prompt(context, monkeypatch):
     taps = []
-    monkeypatch.setattr(actions, "tap", lambda context, x, y, wait=1.0: taps.append((x, y)))
+    patch_all(monkeypatch, "tap", lambda context, x, y, wait=1.0: taps.append((x, y)))
     context.tasker.controller.post_screencap.return_value.wait.return_value.get.side_effect = (
         lambda: LUX_EVENT["LuxEventCheck"] if taps else LUX_EVENT["LuxEventCard"])
     actions.RUN.clear()
@@ -175,8 +176,8 @@ def test_a_check_card_alone_is_tapped_to_open_its_prompt(context, monkeypatch):
 def run_set_consecutive(context, monkeypatch, reads, target, enter=None):
     """actions.set_consecutive on the exp page with the title reading `reads` in turn (the last repeats); the taps made."""
     taps, reads = [], list(reads)
-    monkeypatch.setattr(actions, "consecutive_now", lambda context, image, box, enter=None: reads.pop(0) if len(reads) > 1 else reads[0])
-    monkeypatch.setattr(actions, "tap", lambda context, x, y, wait=1.0: taps.append((x, y)))
+    patch_all(monkeypatch, "consecutive_now", lambda context, image, box, enter=None: reads.pop(0) if len(reads) > 1 else reads[0])
+    patch_all(monkeypatch, "tap", lambda context, x, y, wait=1.0: taps.append((x, y)))
     actions.LOG.clear()
     return actions.set_consecutive(context, "exp", target, enter), taps
 
@@ -223,10 +224,10 @@ def lux_start(context, monkeypatch, key, **opts):
     (actions.ROOT / "config").mkdir()
     (actions.ROOT / "config" / "settings.json").write_text(json.dumps(settings), encoding="utf-8")
     stops = []
-    monkeypatch.setattr(actions, "stop", lambda context, reason, **kw: stops.append(reason) or False)
+    patch_all(monkeypatch, "stop", lambda context, reason, **kw: stops.append(reason) or False)
     # TaskStart starts a task afresh: its TASK and STUCK are put back after the test
-    monkeypatch.setattr(actions, "TASK", {"runs": 0, "done": None})  # as at launch: no task before it
-    monkeypatch.setattr(actions, "STUCK", dict(actions.STUCK))
+    patch_all(monkeypatch, "TASK", {"runs": 0, "done": None})  # as at launch: no task before it
+    patch_all(monkeypatch, "STUCK", dict(actions.STUCK))
     entry = {"exp": "ExpLuxcavation", "thread": "ThreadLuxcavation"}[key]
     return actions.LuxStart().run(context, SimpleNamespace(node_name=entry, custom_action_param=json.dumps(key))), stops
 
@@ -251,7 +252,7 @@ def run_plan(monkeypatch, today, seen, **lux):
     """actions.plan on RUN["lux"] = lux over an EXP task in daily mode with 182 Modules; its return, the finish reasons.
     The tests take the context fixture for its RUN cleared after them."""
     ends = []
-    monkeypatch.setattr(actions, "finish", lambda context, reason: ends.append(reason) or True)
+    patch_all(monkeypatch, "finish", lambda context, reason: ends.append(reason) or True)
     actions.RUN.clear()
     actions.RUN["lux"] = {"name": "EXP Luxcavation", "cost": 3, "mode": "daily", "target": 1, "today": None, "seen": None,
                           "fights": None, "retries": 0, "modules": 182, **lux}
@@ -310,8 +311,8 @@ def over_after(monkeypatch, results, **lux):
     """actions.battle_over after each battle of results in turn (a result, or (result, its Consecutive Battle size)), from
     a fresh EXP task (lux over its defaults); the steps, the stop reasons and the finish reasons."""
     stops, ends, steps = [], [], []
-    monkeypatch.setattr(actions, "stop", lambda context, reason, **kw: stops.append(reason) or False)
-    monkeypatch.setattr(actions, "finish", lambda context, reason: ends.append(reason) or True)
+    patch_all(monkeypatch, "stop", lambda context, reason, **kw: stops.append(reason) or False)
+    patch_all(monkeypatch, "finish", lambda context, reason: ends.append(reason) or True)
     actions.RUN.clear()
     actions.RUN["team"] = {"guard_turns": 0}
     actions.RUN["lux"] = {"name": "EXP", "cost": 3, "fights": 3, "retries": 1, "modules": 99, "won": 0, "retried": 0,
@@ -375,11 +376,11 @@ def enter_card(context, monkeypatch, bonuses=(), box_shows=None, **lux):
     """LuxEnter on the Thread tab's card, its Daily Bonuses box reading `bonuses` (texts) and its Consecutive Battle box
     left at `box_shows`; its return, the taps of the Enter, the stops, the finish reasons and the OCR nodes read."""
     taps, stops, ends, reads = [], [], [], []
-    monkeypatch.setattr(actions, "ocr_texts", lambda context, image, node: reads.append(node) or list(bonuses))
-    monkeypatch.setattr(actions, "tap_then", lambda context, x, y, done, timeout=2.0: taps.append((x, y)) or "page")
-    monkeypatch.setattr(actions, "set_consecutive", lambda context, box, target, enter=None: box_shows)
-    monkeypatch.setattr(actions, "stop", lambda context, reason, **kw: stops.append(reason) or False)
-    monkeypatch.setattr(actions, "finish", lambda context, reason: ends.append(reason) or True)
+    patch_all(monkeypatch, "ocr_texts", lambda context, image, node: reads.append(node) or list(bonuses))
+    patch_all(monkeypatch, "tap_then", lambda context, x, y, done, timeout=2.0: taps.append((x, y)) or "page")
+    patch_all(monkeypatch, "set_consecutive", lambda context, box, target, enter=None: box_shows)
+    patch_all(monkeypatch, "stop", lambda context, reason, **kw: stops.append(reason) or False)
+    patch_all(monkeypatch, "finish", lambda context, reason: ends.append(reason) or True)
     actions.RUN.clear()
     actions.RUN["lux"] = {"name": "Thread Luxcavation", "cost": 2, "mode": "daily", "target": 3, "today": None, "seen": None,
                           "fights": None, "retries": 0, "modules": 182, "won": 0, "retried": 0, "result": None,

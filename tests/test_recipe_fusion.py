@@ -3,6 +3,7 @@ import actions
 import test_actions
 import test_fuse_page
 from test_actions import fusion_taps, wants
+from agent_patch import patch_all
 
 clock, context = test_actions.clock, test_actions.context  # its fixtures
 
@@ -67,7 +68,7 @@ def test_a_made_recipe_leaves_the_owned_gifts_to_be_read_again(context, monkeypa
     # The grid changed: on the page still open (#378) the fake shows no gift made where the fusion puts it, so the owned
     # gifts are read again; with nothing left to make the page is closed and not read again until the owned gifts change.
     visit, logs = {}, []
-    monkeypatch.setattr(actions, "log", logs.append)
+    patch_all(monkeypatch, "log", logs.append)
     test_actions.reads(context, test_actions.FUSING)
     test_actions.fuse_page(context, monkeypatch, ("Burn", 3, 9003), ("Burn", 3, 9053), ("Burn", 3, 9157))
     assert actions.Shop.fuse(context, test_actions.shop_team(team(SOOTHE)), visit)
@@ -116,7 +117,7 @@ def test_a_wanted_fusion_takes_a_material_the_list_keeps(context, monkeypatch):
 def test_the_materials_of_a_wanted_fusion_owned_are_ordinary_materials_again_and_the_log_says_so(context, monkeypatch):
     # Soothe the Dead owned: 9003 and 9053 are no longer locked, so they fuse with the Bleed II; Soothe itself is wanted, kept.
     logs = []
-    monkeypatch.setattr(actions, "log", logs.append)
+    patch_all(monkeypatch, "log", logs.append)
     fused, taps, ok = fusion_taps(context, monkeypatch, team(SOOTHE), ("Burn", 4, SOOTHE), ("Burn", 3, 9003), ("Burn", 3, 9053), *junk(1))
     assert fused and ok and taps == [0, 1, 1, 1]
     assert any(f"wanted fusion {SOOTHE} " in line and "no longer bought or kept" in line for line in logs)
@@ -132,7 +133,7 @@ def forecasting(monkeypatch, tier):
 
 def test_a_recipe_whose_forecast_is_not_its_tier_is_not_fused_and_the_materials_come_out(context, monkeypatch):
     logs = []
-    monkeypatch.setattr(actions, "log", logs.append)
+    patch_all(monkeypatch, "log", logs.append)
     forecasting(monkeypatch, 3)  # Soothe the Dead is a IV
     fused, taps, ok = fusion_taps(context, monkeypatch, team(SOOTHE), *SOOTHE_MATERIALS)
     assert not fused and not ok and taps == [2, 2, 2]

@@ -8,6 +8,7 @@ import test_shop
 import test_shop_scroll
 from test_actions import FUSING, after_last, fuse_page, lost_tap_fuse_page, reads, shop_team, taps, wants, with_ids
 from test_shop_scroll import KEYWORDS, UNLISTED, by_points, fusion, kept_but
+from agent_patch import patch_all
 
 clock, context, grid = test_actions.clock, test_actions.context, test_shop_scroll.grid  # their fixtures
 KEPT = "shop: fuse page kept: "
@@ -26,9 +27,9 @@ def fusing(context, monkeypatch, team, *readings):
     """Shop.fuse on fuse_page's readings, every fusion confirmed; (its result, the visit, the taps, the log lines, how
     often grid_top ran)."""
     lines, tops, visit = [], [], {}
-    monkeypatch.setattr(actions, "log", lines.append)
+    patch_all(monkeypatch, "log", lines.append)
     top = actions.grid_top
-    monkeypatch.setattr(actions, "grid_top", lambda *a: tops.append(a) or top(*a))
+    patch_all(monkeypatch, "grid_top", lambda *a: tops.append(a) or top(*a))
     reads(context, FUSING)
     fuse_page(context, monkeypatch, *readings)
     fused = actions.Shop.fuse(context, shop_team(team), visit)
@@ -77,7 +78,7 @@ def test_a_recipe_and_an_ordinary_fusion_are_made_one_after_the_other_on_one_pag
 def test_a_page_closes_after_fusions_per_page_and_leaves_the_rest_to_the_next_round(context, monkeypatch):
     # The bound: FUSIONS_PER_PAGE fusions on one page, then it is closed with a log line; the owned gifts changed, so the next
     # round of Shop.run opens it again (fuse_scanned stays False).
-    monkeypatch.setattr(actions, "FUSIONS_PER_PAGE", 2)
+    patch_all(monkeypatch, "FUSIONS_PER_PAGE", 2)
     fused, visit, tapped, lines, _ = fusing(context, monkeypatch, {}, *with_ids([("Bleed", 2)] * 9))
     assert fused and tapped.count(actions.FUSE_DIALOG_CONFIRM) == 2 and len(read_again(lines)) == 1
     assert "shop: 2 fusions on one fuse page: it is closed, the next round opens it again" in lines
@@ -90,7 +91,7 @@ def test_a_section_that_goes_with_the_fusion_does_not_lose_the_owned_gifts(conte
     # dragged back by where it was against its top, not against the owned gifts' first row, so their label shows again
     # (under 7 recipe cells it is 250 px down) and the 20 gifts left are read once more, in order.
     lines = []
-    monkeypatch.setattr(actions, "log", lines.append)
+    patch_all(monkeypatch, "log", lines.append)
     g = grid("fuse", 23, recipes=7)
     fused = g.fused
     monkeypatch.setattr(g, "fused", lambda gifts: fused(gifts) or g.drop_section())
@@ -104,7 +105,7 @@ def test_a_drag_back_the_game_took_less_of_goes_to_the_lists_top_again(context, 
     # the label still over the list's edge. owned_label only looks further up: the list goes to its top (grid_top) and the
     # 20 gifts left are read again.
     lines = []
-    monkeypatch.setattr(actions, "log", lines.append)
+    patch_all(monkeypatch, "log", lines.append)
     g = grid("fuse", 23, fling=0, share=0.6)
     assert fusion(context, monkeypatch, g, kept_but(23, 20, 21, 22))
     assert g.reads == list(range(23)) + list(range(20))
@@ -213,7 +214,7 @@ def test_after_a_fusion_only_the_gift_made_is_read(context, grid, monkeypatch):
     # The page kept open: the gifts left and the gift made are placed by the fusion, only the gift made's cell is read
     # (cell 4, last of the tier III run), and the next fusion takes it in. No gift the list keeps is tapped.
     lines = []
-    monkeypatch.setattr(actions, "log", lines.append)
+    patch_all(monkeypatch, "log", lines.append)
     g, team = three_tiers(grid)
     assert fusion(context, monkeypatch, g, team)
     assert placed_lines(lines) == [PLACED + "4)", PLACED + "9)"] and not read_again(lines)  # the II made: last of 5 II
@@ -226,7 +227,7 @@ def test_after_a_fusion_only_the_gift_made_is_read(context, grid, monkeypatch):
 def test_a_super_shops_gift_made_is_placed_too(context, grid, monkeypatch):
     # A Super Shop's 5 slots: five I (15 points, a III by its thresholds) go out, the III made goes first.
     lines = []
-    monkeypatch.setattr(actions, "log", lines.append)
+    patch_all(monkeypatch, "log", lines.append)
     g = grid("fuse", 12, tiers=[2] * 6 + [1] * 6, makes=by_points(5))
     assert fusion(context, monkeypatch, g, kept_but(12, 6, 7, 8, 9, 10, 11), slots=5)
     assert placed_lines(lines) == [PLACED + "0)"] and g.reads == list(range(12)) + [1001]
@@ -236,7 +237,7 @@ def test_a_super_shops_gift_made_is_placed_too(context, grid, monkeypatch):
 def test_a_gift_made_not_where_the_fusion_puts_it_has_the_owned_gifts_read_again(context, grid, monkeypatch):
     # No gift shows at cell 5, last of the tier I run: placed by their label once more, the same; read again.
     lines = []
-    monkeypatch.setattr(actions, "log", lines.append)
+    patch_all(monkeypatch, "log", lines.append)
     g = grid("fuse", 8)  # the gift made left out
     assert fusion(context, monkeypatch, g, kept_but(8, 0, 1, 2))
     assert KEPT + "the gift made reads no gift at cell 5, the owned gifts are placed by their label" in lines
@@ -250,7 +251,7 @@ def test_a_gift_made_that_looks_like_a_gift_listed_is_its_twin_only_by_the_same_
     # Finifugality's (III, cell 2): "cell 9, the gift made, looks like cell 2", twice, then read again (6.76 s). Its id read
     # is another gift's: it is placed. A look-alike that reads the same id may be that gift still: read again.
     lines = []
-    monkeypatch.setattr(actions, "log", lines.append)
+    patch_all(monkeypatch, "log", lines.append)
     g, team = three_tiers(grid)
     made = g.fused
 
@@ -289,7 +290,7 @@ def test_a_fusion_whose_get_popup_shows_ex_places_the_ex_gift_as_tier_v(context,
     # green "EX": the gift made is tier V, placed ahead of the IIIs and read there alone. The fusion: III 4, II 10 and I 15
     # (a III by points).
     lines = []
-    monkeypatch.setattr(actions, "log", lines.append)
+    patch_all(monkeypatch, "log", lines.append)
     g = grid("fuse", 16, tiers=[3] * 5 + [2] * 6 + [1] * 5, makes=lambda tiers, ids: (5, EX))
     show_get_popup(context, g, "get_ex")
     assert fusion(context, monkeypatch, g, kept_but(16, 4, 10, 13, 14, 15))
@@ -312,7 +313,7 @@ def test_a_fusion_places_the_gift_made_by_the_tier_its_get_popup_shows(context, 
     # placed last of the IIs or ahead of the IIIs and read there alone, the tiers logged. A popup whose numeral is not read
     # leaves the points' tier. The list keeps the gift made, so the two I left make no second fusion.
     lines = []
-    monkeypatch.setattr(actions, "log", lines.append)
+    patch_all(monkeypatch, "log", lines.append)
     g = grid("fuse", 16, tiers=[3] * 5 + [2] * 6 + [1] * 5, makes=lambda tiers, ids: (tier, None))
     if popup:
         show_get_popup(context, g, popup)
@@ -341,7 +342,7 @@ def test_a_cell_placed_by_the_fusion_that_is_not_there_has_the_page_opened_again
     # the next fusion's first cell does not match its look, so nothing is tapped; the page is closed and opened again,
     # its gifts read from the top, and the fusion made then.
     lines = []
-    monkeypatch.setattr(actions, "log", lines.append)
+    patch_all(monkeypatch, "log", lines.append)
     g, team = three_tiers(grid)
     place, placed = actions.fused_cells, []
 
@@ -352,7 +353,7 @@ def test_a_cell_placed_by_the_fusion_that_is_not_there_has_the_page_opened_again
             for c in out:
                 c["look"] = 255 - c["look"]
         return out
-    monkeypatch.setattr(actions, "fused_cells", fused_cells)
+    patch_all(monkeypatch, "fused_cells", fused_cells)
     assert fusion(context, monkeypatch, g, team)
     assert "shop: a cell placed by the fusion is not where it was put: the fuse page is opened again" in lines
     assert g.taps.count(actions.SHOP_BUTTONS["fuse"]) == 2 and g.taps.count(actions.FUSE_DIALOG_CONFIRM) == 2
@@ -363,7 +364,7 @@ def test_a_recipe_gift_is_placed_after_its_section_goes(context, grid, monkeypat
     # Soothe the Dead's materials (III 9053, III 9157, I 9003) under a Fusion Available section of 7 cells that goes with the
     # fusion (#304): the owned gifts are placed by their label, Soothe the Dead (IV) read at cell 0, nothing else read.
     lines = []
-    monkeypatch.setattr(actions, "log", lines.append)
+    patch_all(monkeypatch, "log", lines.append)
     recipe = {1: 9053, 2: 9157, 7: 9003}
     g = grid("fuse", 10, recipes=7, tiers=[3, 3, 3, 2, 2, 2, 1, 1, 1, 1], names=recipe,
              makes=lambda tiers, ids: (4, SOOTHE) if sorted(ids) == sorted(recipe.values()) else None)
@@ -382,7 +383,7 @@ def test_a_section_that_comes_with_the_fusion_has_the_owned_gifts_placed_by_thei
     # which move down a row and the label (#304). The cells on show are not where the fusion put them; placed by their
     # label, they are, and only the gift made is read.
     lines = []
-    monkeypatch.setattr(actions, "log", lines.append)
+    patch_all(monkeypatch, "log", lines.append)
     g = grid("fuse", 16, tiers=[3] * 5 + [2] * 6 + [1] * 5, makes=by_points())
     made = g.fused
     monkeypatch.setattr(g, "fused", lambda gifts: made(gifts) or g.add_section(2))
