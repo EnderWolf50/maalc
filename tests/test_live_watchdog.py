@@ -6,6 +6,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+from live import hold as hl
 from live import queue as lq
 from live import watchdog as wd
 
@@ -186,7 +187,9 @@ def test_the_tick_reports_the_stranded_holder_that_queue_status_prints(tmp_path)
     gone = subprocess.Popen([sys.executable, "-c", "pass"])
     gone.wait()
     lq.pid_file(bot).write_text(json.dumps({"pid": gone.pid, "start": None, "cmd": "bot"}))
-    (qdir / f"1-{os.getpid()}-live1.ticket").write_text(f"python tools/live/backup.py hold --done {done} --guard {bot}")
+    ticket = qdir / f"1-{os.getpid()}-live1.ticket"
+    ticket.write_text("python tools/live/backup.py hold")
+    hl.publish(hl.state_path(ticket), hl.State(done, bot))
     now = bot.stat().st_mtime + 75 * 60
     line = lq.status(qdir, now=now)[0]
     assert line.startswith("RUNNING live1 (pid ") and "bot ended 75 min ago, waiting for the agent" in line

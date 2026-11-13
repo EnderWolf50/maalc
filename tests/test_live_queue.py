@@ -11,6 +11,7 @@ from pathlib import Path
 
 import pytest
 
+from live import hold as hl
 from live import queue as lq
 
 
@@ -18,6 +19,14 @@ def dead_pid() -> int:
     p = subprocess.Popen([sys.executable, "-c", "pass"])
     p.wait()
     return p.pid
+
+
+def hold_ticket(qdir, state, name="t"):
+    """A live ticket of this process whose command is a hold that published `state` beside it (hold.py)."""
+    ticket = qdir / f"1-{os.getpid()}-{name}.ticket"
+    ticket.write_text("uv run python tools/live/backup.py hold")
+    hl.publish(hl.state_path(ticket), state)
+    return ticket
 
 
 def test_dead_tickets_are_dropped_and_live_ones_keep_arrival_order(tmp_path):
@@ -420,18 +429,18 @@ def test_resume_says_a_bot_that_ended_unwatched_needs_step_7(tmp_path):
     pid(task / "bot.log", {"pid": dead_pid(), "start": None, "cmd": "bot"})
     (task / "bot.log").write_text("[maalc] victory\n[maalc] claimed with 0 weekly bonus(es)\n[maalc] noise\n")
     (task / "hold.log").write_text("[queue] start t\n[hold] bot ended 2020-01-01T10:00:00\n")
-    out = "\n".join(lq.resume(task, now=datetime.fromisoformat("2020-01-01T10:25:00").timestamp()))
+    out = "\n".join(hl.resume(task, now=datetime.fromisoformat("2020-01-01T10:25:00").timestamp()))
     assert "bot ended at 10:00:00 (25 min ago)" in out and "claimed with 0" in out and "  [maalc] noise" not in out
     assert "done file: absent" in out and "next: bot ended while you were away: step 7" in out
     (task / "done").touch()
-    assert "step 10" in lq.resume(task)[-1]
+    assert "step 10" in hl.resume(task)[-1]
 
 
 def test_status_marks_a_holder_whose_bot_ended_long_ago_without_a_done_file(tmp_path):
     bot, done = tmp_path / "bot.log", tmp_path / "done"
     bot.write_text("x")
     lq.pid_file(bot).write_text(json.dumps({"pid": dead_pid(), "start": None, "cmd": "bot"}))
-    (tmp_path / f"1-{os.getpid()}-t.ticket").write_text(f"hold --done {done} --guard {bot}")
+    hold_ticket(tmp_path, hl.State(done, bot))
     later = bot.stat().st_mtime
     assert "bot ended 25 min ago, waiting for the agent" in lq.status(tmp_path, now=later + 1500)[0]
     assert "bot ended" not in lq.status(tmp_path, now=later + 60)[0]  # still within the 10 min
@@ -446,7 +455,7 @@ def test_status_with_a_glob_guard_counts_from_the_last_bot_and_not_while_one_run
         log.write_text("x")
         lq.pid_file(log).write_text(json.dumps({"pid": dead_pid(), "start": None, "cmd": "bot"}))
     os.utime(first, (0, second.stat().st_mtime - 1200))  # the first run ended 20 min before the second
-    (tmp_path / f"1-{os.getpid()}-t.ticket").write_text(f"hold --done {done} --guard {tmp_path / 'bot*.log'}")
+    hold_ticket(tmp_path, hl.State(done, tmp_path / "bot*.log"))
     later = second.stat().st_mtime
     assert "bot ended" not in lq.status(tmp_path, now=later + 60)[0]
     assert "bot ended 25 min ago" in lq.status(tmp_path, now=later + 1500)[0]
@@ -457,12 +466,12 @@ def test_status_with_a_glob_guard_counts_from_the_last_bot_and_not_while_one_run
 def test_resume_next_step_while_queued_or_when_nothing_started(tmp_path):
     task = tmp_path / "t"
     task.mkdir()
-    assert "nothing was started" in lq.resume(task)[-1]
+    assert "nothing was started" in hl.resume(task)[-1]
     lq.pid_file(task / "hold.log").write_text(json.dumps({"pid": os.getpid(), "start": lq.started(os.getpid()), "cmd": "hold"}))
     (task / "hold.log").write_text("[queue] waiting, 1 ahead\n")
-    assert "still queued" in lq.resume(task)[-1]
+    assert "still queued" in hl.resume(task)[-1]
     (task / "hold.log").write_text("[queue] start t\n")
-    assert "no bot started" in lq.resume(task)[-1]
+    assert "no bot started" in hl.resume(task)[-1]
 
 
 class Clock:
@@ -484,6 +493,16 @@ def waiting(tmp_path, name, timeout_s, ticket=True):
         (tmp_path / f"1-{os.getpid()}-{lq.ticket_name(name)}.ticket").write_text("cmd")  # as run() names it
     code = lq.wait(tmp_path, name, timeout_s, poll=5, say=said.append, clock=clock.now, sleep=clock.sleep)
     return code, said, clock
+
+
+def test_run_hands_its_command_the_ticket_it_holds(tmp_path):
+    # #693: a hold keeps its state beside this ticket (hold.py), where `status` looks for it
+    seen = tmp_path / "seen.txt"
+    code = (f"import os, pathlib, sys; t = os.environ[{lq.TICKET_ENV!r}]; "
+            "pathlib.Path(sys.argv[1]).write_text(t + '|' + str(pathlib.Path(t).exists()))")
+    assert lq.run(tmp_path / "q", "x", [sys.executable, "-c", code, str(seen)], poll=0.01) == 0
+    ticket, held = seen.read_text().split("|")
+    assert Path(ticket).parent == tmp_path / "q" and Path(ticket).name.endswith(f"-{os.getpid()}-x.ticket") and held == "True"
 
 
 def test_run_leaves_a_result_with_the_exit_code_and_log(tmp_path):
@@ -569,21 +588,20 @@ def test_wait_reports_a_run_whose_ticket_was_removed_once_it_leaves_its_result(t
 def test_pause_keeps_the_hold_and_status_says_who_owns_the_emulator(tmp_path):
     task = tmp_path / "t"
     done = task / "done"
-    (tmp_path / f"1-{os.getpid()}-t.ticket").write_text(f"hold --done {done} --timeout 7200")
+    hold_ticket(tmp_path, hl.State(done))
     assert "PAUSED" not in lq.status(tmp_path, now=1000)[0]
-    lq.pause(task, 30, now=1000)
-    assert lq.pause_until(task) == 1000 + 1800
+    hl.pause(task, 30, now=1000)
+    assert hl.pause_until(task) == 1000 + 1800
     assert "PAUSED until" in lq.status(tmp_path, now=1500)[0]
     assert "PAUSED" not in lq.status(tmp_path, now=1000 + 1801)[0]  # lapsed
-    lq.pause(task, None)
-    assert lq.pause_until(task) is None
+    hl.pause(task, None)
+    assert hl.pause_until(task) is None
 
 
 def test_status_warns_before_a_hold_expires(tmp_path):
     task = tmp_path / "t"
     task.mkdir()
-    (tmp_path / f"1-{os.getpid()}-t.ticket").write_text(f"hold --done {task / 'done'} --timeout 7200")
-    (task / "hold.deadline").write_text("10000")
+    hold_ticket(tmp_path, hl.State(task / "done", deadline=10000))
     assert "expires" not in lq.status(tmp_path, now=10000 - 3600)[0]
     assert "hold expires in 10 min" in lq.status(tmp_path, now=10000 - 600)[0]
 

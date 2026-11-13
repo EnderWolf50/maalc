@@ -9,11 +9,16 @@ import os
 import pytest
 
 import ci_filter
+from live.queue import TICKET_ENV
 from shard_seconds import TABLE
 
 # Seconds each file took on a CI runner, written by tools/shard_seconds.py; an unlisted file counts 0.15 s a test.
 # CI's shard-balance job reports (does not block) when a number no longer matches the run.
 FILE_SECONDS = json.loads(TABLE.read_text(encoding="utf-8"))
+
+# A run under a bench ticket (tools/check.py through tools/live/queue.py) inherits that ticket: a test hold must not
+# publish its state beside the real one (tools/live/hold.py).
+os.environ.pop(TICKET_ENV, None)
 
 
 ci_filter.install()  # from here on, every file the tests open is noted (#684)

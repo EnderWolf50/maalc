@@ -1,8 +1,14 @@
+import json
+import os
+import subprocess
+import sys
 from types import SimpleNamespace
 
 import pytest
 
 from live import backup as bk
+from live import hold as hl
+from live import queue as lq
 
 
 class Clock:
@@ -121,26 +127,26 @@ def test_hold_does_not_time_out_while_paused_and_shows_its_deadline(tmp_path, ca
     done = tmp_path / "t" / "done"
     done.parent.mkdir()
     (done.parent / "pause").write_text(str(clock.now + 0.3))  # paused for 0.3 s
-    began = clock.now
+    began, state = clock.now, tmp_path / "1-2-t.hold.json"
     # wall and monotonic share the virtual timeline here, so the pause file's wall time lapses as the clock moves
-    assert bk.hold(tmp_path / "install", tmp_path / "bak", done, timeout=0.2, poll=0.01, wall=clock.monotonic) == 0
+    assert bk.hold(tmp_path / "install", tmp_path / "bak", done, timeout=0.2, poll=0.01, wall=clock.monotonic, state_file=state) == 0
     assert clock.now - began >= 0.45  # the 0.2 s timeout ran only after the pause lapsed
     assert "timed out" in capsys.readouterr().out
-    assert not (done.parent / "hold.deadline").exists()  # removed when the hold ends
+    assert not state.exists()  # removed when the hold ends
 
 
 def test_hold_writes_the_deadline_a_second_agent_reads_in_status(tmp_path, monkeypatch):
     """At this monotonic time, monotonic() + 500 rounds up: the file read 1500.0000000000018 for wall 1000 (#578)."""
     (tmp_path / "install").mkdir()
-    done, seen = tmp_path / "done", []
+    done, seen, state = tmp_path / "done", [], tmp_path / "1-2-t.hold.json"
 
     def sleep(_):
-        seen.append((tmp_path / "hold.deadline").read_text(encoding="utf-8"))
+        seen.append(json.loads(state.read_text(encoding="utf-8"))["deadline"])
         done.write_text("")
 
     monkeypatch.setattr(bk, "time", SimpleNamespace(monotonic=lambda: 16240.694345345151, sleep=sleep))
-    bk.hold(tmp_path / "install", tmp_path / "bak", done, timeout=500, wall=lambda: 1000.0)
-    assert seen == ["1500"]
+    bk.hold(tmp_path / "install", tmp_path / "bak", done, timeout=500, wall=lambda: 1000.0, state_file=state)
+    assert seen == [1500]
 
 
 def test_hold_requires_an_explicit_timeout(tmp_path):
@@ -179,3 +185,43 @@ def test_hold_reads_a_relative_done_and_guard_from_the_main_checkout(tmp_path, m
     assert seen == {"done": tmp_path / ".local/scratch/t/done", "guard": tmp_path / ".local/scratch/t/bot*.log"}
     bk.main(["hold", "--done", str(tmp_path / "abs-done"), "--timeout", "5"])
     assert seen == {"done": tmp_path / "abs-done", "guard": None}
+
+
+def test_a_hold_under_a_queue_ticket_publishes_beside_it_and_one_outside_a_queue_does_not(tmp_path, monkeypatch):
+    # #693: `queue.py run` hands its command the ticket; `status` reads the hold's state beside it (hold.py)
+    seen, ticket = {}, tmp_path / "1-2-t.ticket"
+    monkeypatch.setattr(bk, "main_checkout", lambda: tmp_path)
+    monkeypatch.setattr(bk, "local_dir", lambda *parts: tmp_path / "bak")
+    monkeypatch.setattr(bk, "hold", lambda root, dest, done, timeout, **kw: seen.update(state=kw["state_file"]) or 0)
+    monkeypatch.setenv(lq.TICKET_ENV, str(ticket))
+    bk.main(["hold", "--done", "d", "--timeout", "5"])
+    assert seen["state"] == hl.state_path(ticket) == tmp_path / "1-2-t.hold.json"
+    monkeypatch.delenv(lq.TICKET_ENV)
+    bk.main(["hold", "--done", "d", "--timeout", "5"])
+    assert seen["state"] is None
+
+
+def test_status_shows_what_a_queued_hold_publishes_and_nothing_once_it_ended(tmp_path, clock):
+    """#693: the stranded bot and the deadline `queue.py status` shows come from the hold's own state file, from its
+    first poll to its end (they were read off the hold's command line and a hold.deadline file)."""
+    (tmp_path / "install").mkdir()
+    qdir, task = tmp_path / "queue", tmp_path / "t"
+    qdir.mkdir()
+    task.mkdir()
+    ticket = qdir / f"1-{os.getpid()}-t.ticket"
+    ticket.write_text("uv run python tools/live/backup.py hold")
+    bot, gone = task / "bot.log", subprocess.Popen([sys.executable, "-c", "pass"])
+    gone.wait()
+    bot.write_text("x")
+    lq.pid_file(bot).write_text(json.dumps({"pid": gone.pid, "start": None, "cmd": "bot"}))
+    ended, lines = bot.stat().st_mtime, []
+    look = lambda: lines.extend([lq.status(qdir, now=ended + 1500)[0], lq.status(qdir, now=8200 - 600)[0]])  # noqa: E731
+    clock.at(0.05, look)
+    clock.at(0.1, lambda: (task / "done").write_text(""))
+    assert bk.hold(tmp_path / "install", tmp_path / "bak", task / "done", timeout=7200, poll=0.01, guard=bot,
+                   running=lambda _log: False, wall=lambda: 1000.0, state_file=hl.state_path(ticket)) == 0
+    stranded, expiring = lines
+    assert "bot ended 25 min ago, waiting for the agent" in stranded  # the guard's bot ended 25 min ago, no done file
+    assert "hold expires in 10 min" in expiring  # the deadline: wall 1000 + the 7200 s timeout
+    assert not hl.state_path(ticket).exists()
+    assert lq.status(qdir, now=ended + 1500)[0].endswith(": uv run python tools/live/backup.py hold")  # no note left
