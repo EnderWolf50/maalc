@@ -5,7 +5,7 @@ import userEvent from "@testing-library/user-event";
 import { useState, type ReactElement } from "react";
 import { expect } from "vitest";
 import { newSettings, type Settings } from "./model";
-import { EditorContext, makeCtx } from "./ui";
+import { EditorContext, makeCtx, type Picked } from "./ui";
 
 /** Render `ui` over `initial` settings; `settings()` is what the editor holds now, `opened()` the lists something asked the
  * gift list tab to open (there is no tab bar here). */
@@ -15,9 +15,10 @@ export function renderEditor(ui: ReactElement, initial: Settings = newSettings()
   function Host() {
     const [s, setS] = useState(initial);
     const [giftList, setGiftList] = useState("default");
+    const [picked, setPicked] = useState<Picked>({});
     current = s;
     const ctx = makeCtx({
-      s, setS, bad: () => false, giftList,
+      s, setS, bad: () => false, giftList, picked, setPicked,
       chooseList: (id, open) => { setGiftList(id); if (open) opened.push(id); },
     });
     return <EditorContext.Provider value={ctx}>{ui}</EditorContext.Provider>;

@@ -11,7 +11,7 @@ import {
 import { GIFT_BY_ID, giftName } from "./giftCatalog";
 import { listsOfPlan, packWanted } from "./gifts";
 import { fill } from "./i18n";
-import { Field, ReorderList, Select, useEditor, withBreaks } from "./ui";
+import { Field, ReorderList, Select, useEditor, usePick, withBreaks } from "./ui";
 
 /** The 12 sinners in the game's grid; clicking adds one at the end of the order or leaves it out
  * (spec 04 section 6). Read-only without onChange. */
@@ -102,19 +102,19 @@ function PlanTab<P extends { id: string; name: string }>({ planKey, tab, make, e
 }) {
   const { s, update, t, bad } = useEditor();
   const plans = s[planKey] as unknown as P[];
-  const [sel, setSel] = useState(lead ? -1 : 0);
-  const i = Math.min(sel, plans.length - 1);
+  const [i, setSel] = usePick(planKey, plans, !!lead); // -1: the lead
   const set = (fn: (list: P[]) => void) => update((d) => fn(d[planKey] as unknown as P[]));
   const add = () => {
-    set((list) => list.push({ ...make(), id: newId(), name: freeName(t(tab), plans.map((p) => p.name)) } as P));
-    setSel(plans.length);
+    const id = newId();
+    set((list) => list.push({ ...make(), id, name: freeName(t(tab), plans.map((p) => p.name)) } as P));
+    setSel(id);
   };
   return (
     <div className="split">
       <aside>
-        {lead && <button type="button" className={"lead" + (i === -1 ? " selected" : "")} onClick={() => setSel(-1)}>{lead.label}</button>}
+        {lead && <button type="button" className={"lead" + (i === -1 ? " selected" : "")} onClick={() => setSel("default")}>{lead.label}</button>}
         {plans.length || lead ? (
-          <ReorderList items={plans} keyOf={(p) => p.id} selected={i} onSelect={setSel}
+          <ReorderList items={plans} keyOf={(p) => p.id} selected={i} onSelect={(j, list) => setSel(list[j].id)}
             badAt={(j) => bad(`${planKey}/${j}`)} onChange={(list) => set((l) => l.splice(0, l.length, ...list))}
             render={(p) => p.name || "—"} />
         ) : <p className="muted">{t("noPlans")}</p>}
@@ -127,7 +127,7 @@ function PlanTab<P extends { id: string; name: string }>({ planKey, tab, make, e
               <Field label={t("name")} path={`${planKey}/${i}/name`}>
                 <input value={plans[i].name} onChange={(e) => set((l) => { l[i].name = e.target.value; })} />
               </Field>
-              <button type="button" className="danger" onClick={() => { set((l) => l.splice(i, 1)); setSel(Math.max(0, i - 1)); }}>
+              <button type="button" className="danger" onClick={() => { set((l) => l.splice(i, 1)); setSel((plans[i - 1] ?? plans[i + 1])?.id); }}>
                 {t("remove")}
               </button>
             </div>

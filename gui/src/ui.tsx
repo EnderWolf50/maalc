@@ -1,5 +1,5 @@
 // Shared controls: the editor context, labelled fields, and a drag-or-button reorder list.
-import { Fragment, createContext, useContext, useState, type ReactNode } from "react";
+import { Fragment, createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { TEXT, type Key } from "./i18n";
 import type { Settings } from "./model";
 
@@ -16,9 +16,25 @@ export interface Ctx {
   giftList: string;
   /** Show that list in the gift list tab; with `open`, also switch to the tab. */
   chooseList: (id: string, open?: boolean) => void;
+  /** The team or plan each list tab shows, by id. Kept here: a tab switch unmounts the tab, and its own state with it. */
+  picked: Picked;
+  pick: (list: keyof Picked, id: string | undefined) => void;
 }
+/** By id, so the pick stays on its item when the list is reordered; the theme pack tab's default plan is "default". */
+export type Picked = Partial<Record<"teams" | "deployment_order_plans" | "starlight_plans" | "theme_pack_plans", string>>;
 export const EditorContext = createContext<Ctx>(null!);
 export const useEditor = () => useContext(EditorContext);
+
+/** The index of the item `list` shows, and a setter by id. None picked, or the picked one gone: the lead (-1) when the tab has
+ * one, else the first. What shows is pinned by id, so it stays on screen when another writer reorders the list (#501). */
+export function usePick(list: keyof Picked, items: { id: string }[], lead = false) {
+  const { picked, pick } = useEditor();
+  const at = items.findIndex((x) => x.id === picked[list]);
+  const i = at >= 0 ? at : lead ? -1 : Math.min(0, items.length - 1);
+  const shown = i >= 0 ? items[i].id : lead ? "default" : undefined;
+  useEffect(() => { if (shown !== picked[list]) pick(list, shown); }, [list, shown, picked, pick]);
+  return [i, (id: string | undefined) => pick(list, id)] as const;
+}
 
 /** A help text as shown: each "\n" in it starts a new line, one topic to a line (#664). A text without one stays a string. */
 export function withBreaks(text: string): ReactNode {
@@ -33,12 +49,14 @@ export function translate(lang: Settings["language"]): Pick<Ctx, "t" | "tv"> {
 }
 
 /** The context App and the test harness build over their settings state. */
-export function makeCtx({ s, setS, ...rest }: Pick<Ctx, "s" | "bad" | "giftList" | "chooseList"> & {
+export function makeCtx({ s, setS, setPicked, ...rest }: Pick<Ctx, "s" | "bad" | "giftList" | "chooseList" | "picked"> & {
   setS: (next: (prev: Settings) => Settings) => void;
+  setPicked: (next: (prev: Picked) => Picked) => void;
 }): Ctx {
   return {
     s, ...rest, ...translate(s.language),
     update: (fn) => setS((prev) => { const next = structuredClone(prev); fn(next); return next; }),
+    pick: (list, id) => setPicked((prev) => ({ ...prev, [list]: id })),
   };
 }
 

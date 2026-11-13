@@ -9,12 +9,11 @@ import {
 } from "./model";
 import { SinnerGrid, StarlightEditor } from "./Plans";
 import { SkillPanel } from "./SkillReplacement";
-import { Field, Num, ReorderList, Select, ToggleNum, useEditor, withBreaks } from "./ui";
+import { Field, Num, ReorderList, Select, ToggleNum, useEditor, usePick, withBreaks } from "./ui";
 
 export function TeamsTab() {
   const { s, update, t, bad } = useEditor();
-  const [sel, setSel] = useState(s.teams[0]?.id); // by id: the team stays in the editor when the Agent moves it (#501)
-  const i = Math.max(0, s.teams.findIndex((x) => x.id === sel));
+  const [i, setSel] = usePick("teams", s.teams);
   return (
     <div className="split">
       <aside>
