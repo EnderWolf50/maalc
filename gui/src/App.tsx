@@ -119,20 +119,20 @@ export default function App() {
   }, []);
 
   // Closing the window with unsaved changes asks first; with none it closes.
-  const back = useRef<Element | null>(null); // what had the focus when the prompt opened: it gets it back when the prompt goes
+  const focusBefore = useRef<Element | null>(null); // what had the focus when the prompt opened: it gets it back when the prompt goes
   useEffect(() => api.onCloseRequested(() => {
     const { s, savedText } = latest.current;
     const keep = s !== null && toText(s) !== savedText;
     if (keep) {
-      back.current ??= document.activeElement; // now: the page behind the prompt goes inert, which takes the focus away
+      focusBefore.current ??= document.activeElement; // now: the page behind the prompt goes inert, which takes the focus away
       setAsking(true);
     }
     return keep;
   }), []);
   useEffect(() => {
-    if (asking || !back.current) return;
-    (back.current as HTMLElement).focus?.();
-    back.current = null;
+    if (asking || !focusBefore.current) return;
+    (focusBefore.current as HTMLElement).focus?.();
+    focusBefore.current = null;
   }, [asking]);
 
   // A clicked problem's field, focused once its tab and its team or plan are on screen.
@@ -199,7 +199,7 @@ export default function App() {
       return false;
     }
   };
-  saveRef.current = save;
+  saveRef.current = asking ? () => {} : save; // while the close prompt asks, its buttons decide
 
   /** The window closes; a failed close (no permission to) says why, and the editor stays as it was. */
   const close = () => api.closeWindow().catch((e) => setStatus(String(e)));

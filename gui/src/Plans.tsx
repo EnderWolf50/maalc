@@ -11,7 +11,7 @@ import {
 import { GIFT_BY_ID, giftName } from "./giftCatalog";
 import { listsOfPlan, packWanted } from "./gifts";
 import { fill } from "./i18n";
-import { Field, Input, ReorderList, Select, useEditor, usePick, useUndo, withBreaks, type PlanKey } from "./ui";
+import { Field, Input, Mark, ReorderList, Select, useEditor, usePick, useUndo, withBreaks, type PlanKey } from "./ui";
 
 /** The 12 sinners in the game's grid; clicking adds one at the end of the order or leaves it out
  * (spec 04 section 6). Read-only without onChange. */
@@ -82,11 +82,11 @@ export function StarlightEditor({ value, onChange, path }: {
           <button type="button" onClick={() => set((v) => enhanceAll(v, 2))}>++</button>
         </>}
         <span className="total">{t("starlight.total")} <b>★ {starlightCost(value.levels)}</b></span>
-        <label className="check">
-          <input type="checkbox" checked={value.convert_leftover} disabled={!onChange}
+        <Mark as="label" className="check" path={`${path}/convert_leftover`}>
+          <Input type="checkbox" checked={value.convert_leftover} disabled={!onChange}
             onChange={(e) => set((v) => ({ ...v, convert_leftover: e.target.checked }))} />
           {t("starlight.convert_leftover")}
-        </label>
+        </Mark>
       </div>
     </div></>
   );

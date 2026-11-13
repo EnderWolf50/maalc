@@ -87,7 +87,9 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
         <Field label={t("team.game_team")} path={`${path}/game_team`}>
           <Num value={team.game_team} min={1} max={40} onChange={(v) => set({ game_team: v })} />
         </Field>
-        <label className="check" data-path={`${path}/enabled`}><input type="checkbox" checked={team.enabled} onChange={(e) => set({ enabled: e.target.checked })} />{t("team.enabled")}</label>
+        <Mark as="label" className="check" path={`${path}/enabled`}>
+          <Input type="checkbox" checked={team.enabled} onChange={(e) => set({ enabled: e.target.checked })} />{t("team.enabled")}
+        </Mark>
         <span className="spacer" />
         <button type="button" onClick={async () => {
           if (!confirm(t("resetConfirm"))) return;
@@ -301,12 +303,12 @@ function GiftSearchPanel({ i }: { i: number }) {
   return (
     <details className={"panel" + (bad(path) ? " bad" : "")} data-path={path}>
       <summary>{t("gift.title")}{search.enabled && search.gifts.length ? ` (${search.gifts.length})` : ""}</summary>
-      <div className="toggle">
+      <Mark className="toggle" path={`${path}/enabled`}>
         <label className="check">
-          <input type="checkbox" checked={search.enabled} onChange={(e) => set({ enabled: e.target.checked })} />{t("gift.enabled")}
+          <Input type="checkbox" checked={search.enabled} onChange={(e) => set({ enabled: e.target.checked })} />{t("gift.enabled")}
         </label>
         <small>{t("gift.note")}</small>
-      </div>
+      </Mark>
       <GiftGrid gifts={search.gifts} start={main ?? SEARCH_TABS[0]} full={full} mark={(g) => (rank(g) ? String(rank(g)) : null)}
         onToggle={(g) => set({ gifts: toggleGift(search.gifts, g) })} />
       <div className={"rewards" + (bad(`${path}/gifts`) ? " bad" : "")} data-path={`${path}/gifts`}>

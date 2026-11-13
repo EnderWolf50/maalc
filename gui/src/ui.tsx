@@ -141,7 +141,7 @@ export function Mark({ as: Tag = "div", path, className, marked = true, children
   );
 }
 
-/** An <input> or a <select> that takes the mark of its field. */
+/** A plain <input> or <select> that takes the mark of its field; Select, Num and Decimal are built on them. */
 export const Input = (props: ComponentProps<"input">) => <input {...useMark()} {...props} />;
 export const Choice = (props: ComponentProps<"select">) => <select {...useMark()} {...props} />;
 

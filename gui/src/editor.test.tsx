@@ -96,6 +96,12 @@ describe("a field marked red", () => {
       /run\/auto_download/, box("checkbox", "run.auto_download")],
     ["a cell of an override table", (s: Settings) => { s.event_overrides = [{ question: "q", option: "a" }, { question: "q", option: "b" }]; },
       "tab.events", /event_overrides: question/, () => screen.getAllByDisplayValue("q")[1]],
+    ["a team's on switch", (s: Settings) => { Object.assign(s.teams[0], { enabled: "yes" }); }, "tab.teams", /teams\/0\/enabled/,
+      box("checkbox", "team.enabled")],
+    ["the gift search switch", (s: Settings) => { Object.assign(s.teams[0].gift_search, { enabled: "yes" }); }, "tab.teams",
+      /teams\/0\/gift_search\/enabled/, box("checkbox", "gift.enabled")],
+    ["a starlight plan's leftover switch", (s: Settings) => { Object.assign(s.starlight_plans[0], { convert_leftover: "yes" }); },
+      "tab.starlight", /starlight_plans\/0\/convert_leftover/, box("checkbox", "starlight.convert_leftover")],
   ] as const)("%s is invalid to a screen reader, which reads the problem", async (_, change, start, text, control) => {
     const s = settings();
     change(s);
@@ -196,25 +202,26 @@ describe("clicking a problem", () => {
   });
 });
 
+/** The user closes the window (its ✕, Alt+F4); true when the editor keeps it open. */
+const requestClose = () => {
+  let kept = false;
+  act(() => { kept = file.keepOpen!(); });
+  return kept;
+};
+/** The editor with the first team's name changed and not saved. */
+const edited = async () => {
+  const user = userEvent.setup();
+  render(<App />);
+  await user.type(await screen.findByRole("textbox", { name: zh.name }), "!");
+  return user;
+};
+
 describe("closing the window", () => {
   beforeEach(() => { file.text = JSON.stringify(settings()); });
-  /** The user closes the window (its ✕, Alt+F4); true when the editor keeps it open. */
-  const closeWindow = () => {
-    let kept = false;
-    act(() => { kept = file.keepOpen!(); });
-    return kept;
-  };
-  /** The editor with the first team's name changed and not saved. */
-  const edited = async () => {
-    const user = userEvent.setup();
-    render(<App />);
-    await user.type(await screen.findByRole("textbox", { name: zh.name }), "!");
-    return user;
-  };
 
   test("with unsaved changes, asks first and keeps the window open", async () => {
     await edited();
-    expect(closeWindow()).toBe(true);
+    expect(requestClose()).toBe(true);
     expect(screen.getByRole("alertdialog")).toHaveTextContent(zh.closeAsk);
     expect(file.closed).toBe(0);
   });
@@ -223,13 +230,13 @@ describe("closing the window", () => {
     const user = await edited();
     await user.click(screen.getByRole("button", { name: zh.save }));
     await screen.findByText(zh.saved);
-    expect(closeWindow()).toBe(false);
+    expect(requestClose()).toBe(false);
     expect(screen.queryByRole("alertdialog")).toBeNull();
   });
 
   test("Close without saving closes it and writes nothing", async () => {
     const user = await edited();
-    closeWindow();
+    requestClose();
     await user.click(screen.getByRole("button", { name: zh.closeDiscard }));
     expect(file.closed).toBe(1);
     expect(file.saved).toEqual([]);
@@ -240,7 +247,7 @@ describe("closing the window", () => {
     ["Esc", (user: ReturnType<typeof userEvent.setup>) => user.keyboard("{Escape}")],
   ])("%s keeps the window open, the edits and the field the user was typing in", async (_, dismiss) => {
     const user = await edited();
-    closeWindow();
+    requestClose();
     await dismiss(user);
     expect(screen.queryByRole("alertdialog")).toBeNull();
     expect(file.closed).toBe(0);
@@ -250,7 +257,7 @@ describe("closing the window", () => {
 
   test("starts on Save and close, and the page behind it takes no click or key", async () => {
     await edited();
-    closeWindow();
+    requestClose();
     expect(screen.getByRole("button", { name: zh.closeSave })).toHaveFocus();
     const behind = document.querySelectorAll("header, nav, main");
     expect(behind).toHaveLength(3);
@@ -264,7 +271,7 @@ describe("closing the window", () => {
 
   test("Save and close saves, then closes", async () => {
     const user = await edited();
-    closeWindow();
+    requestClose();
     await user.click(screen.getByRole("button", { name: zh.closeSave }));
     await waitFor(() => expect(file.closed).toBe(1));
     expect(JSON.parse(file.saved[0]).teams[0].name).toBe("Ta!");
@@ -275,12 +282,26 @@ describe("closing the window", () => {
     s.teams[1].game_team = 1;
     file.text = JSON.stringify(s);
     const user = await edited();
-    closeWindow();
+    requestClose();
     await user.click(screen.getByRole("button", { name: zh.closeSave }));
     expect(await screen.findByRole("alert")).toHaveTextContent(zh.saveBlocked);
     expect(screen.queryByRole("alertdialog")).toBeNull();
     expect(file.closed).toBe(0);
     expect(file.saved).toEqual([]);
+  });
+
+  test("the gift list tab's keys wait while it asks: a number picks no state, Esc closes only the prompt", async () => {
+    const user = await edited();
+    await user.click(tab(zh["tab.gifts"]));
+    await user.type(screen.getByRole("searchbox", { name: zh["gl.search"] }), "Burn");
+    const states = () => screen.getAllByRole("radio").map((r) => r.getAttribute("aria-checked"));
+    const before = states();
+    requestClose();
+    await user.keyboard("2");
+    expect(states()).toEqual(before);
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+    expect(screen.getByRole("searchbox", { name: zh["gl.search"] })).toHaveValue("Burn");
   });
 });
 
@@ -324,6 +345,16 @@ describe("Ctrl+S", () => {
     await waitFor(() => expect(file.saved).toHaveLength(1));
     await act(() => new Promise((r) => setTimeout(r, 50)));
     expect(file.saved).toHaveLength(1);
+  });
+
+  test("while the close prompt asks, saves nothing: its buttons decide", async () => {
+    file.text = JSON.stringify(settings());
+    await edited();
+    requestClose();
+    expect(ctrlS()).toBe(true); // still not the browser's Save page
+    await act(() => new Promise((r) => setTimeout(r, 50)));
+    expect(file.saved).toEqual([]);
+    expect(screen.getByRole("alertdialog")).toBeInTheDocument();
   });
 
   test("on a Dvorak keyboard, the key that types O does not save", async () => {
