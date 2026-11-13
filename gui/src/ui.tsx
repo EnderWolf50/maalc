@@ -1,6 +1,6 @@
 // Shared controls: the editor context, labelled fields, and a drag-or-button reorder list.
-import { Fragment, createContext, useContext, useState, type ReactNode } from "react";
-import type { Key } from "./i18n";
+import { Fragment, createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { TEXT, type Key } from "./i18n";
 import type { Settings } from "./model";
 
 export interface Ctx {
@@ -16,14 +16,50 @@ export interface Ctx {
   giftList: string;
   /** Show that list in the gift list tab; with `open`, also switch to the tab. */
   chooseList: (id: string, open?: boolean) => void;
+  /** The team or plan each list tab shows, by id. Kept here: a tab switch unmounts the tab, and its own state with it. */
+  picked: Picked;
+  pick: (list: keyof Picked, id: string | undefined) => void;
 }
+export type PlanKey = "deployment_order_plans" | "starlight_plans" | "theme_pack_plans";
+/** By id, so the pick stays on its item when the list is reordered; a tab's lead (the theme packs' default plan) by its own id. */
+export type Picked = Partial<Record<"teams" | PlanKey, string>>;
 export const EditorContext = createContext<Ctx>(null!);
 export const useEditor = () => useContext(EditorContext);
+
+/** The index of the item `list` shows (-1: the lead, or nothing in an empty list), and a setter by id. None picked, or the
+ * picked one gone: the lead when the tab has one (`leadId`), else the first. What shows is pinned by id, so it stays on screen
+ * when another writer reorders the list (#501). */
+export function usePick(list: keyof Picked, items: { id: string }[], leadId?: string) {
+  const { picked, pick } = useEditor();
+  const at = items.findIndex((x) => x.id === picked[list]);
+  const i = at >= 0 ? at : leadId !== undefined || !items.length ? -1 : 0;
+  const shown = i >= 0 ? items[i].id : leadId;
+  useEffect(() => { if (shown !== picked[list]) pick(list, shown); }, [list, shown, picked, pick]);
+  return [i, (id: string | undefined) => pick(list, id)] as const;
+}
 
 /** A help text as shown: each "\n" in it starts a new line, one topic to a line (#664). A text without one stays a string. */
 export function withBreaks(text: string): ReactNode {
   const parts = text.split("\n");
   return parts.length === 1 ? text : parts.map((part, i) => <Fragment key={i}>{i > 0 && <br />}{part}</Fragment>);
+}
+
+/** The text of one language: a key, or an enum value of a field, falls back to itself. */
+export function translate(lang: Settings["language"]): Pick<Ctx, "t" | "tv"> {
+  const text = TEXT[lang];
+  return { t: (k) => text[k] ?? k, tv: (field, v) => text[`${field}.${v}` as Key] ?? v };
+}
+
+/** The context App and the test harness build over their settings state. */
+export function makeCtx({ s, setS, setPicked, ...rest }: Pick<Ctx, "s" | "bad" | "giftList" | "chooseList" | "picked"> & {
+  setS: (next: (prev: Settings) => Settings) => void;
+  setPicked: (next: (prev: Picked) => Picked) => void;
+}): Ctx {
+  return {
+    s, ...rest, ...translate(s.language),
+    update: (fn) => setS((prev) => { const next = structuredClone(prev); fn(next); return next; }),
+    pick: (list, id) => setPicked((prev) => ({ ...prev, [list]: id })),
+  };
 }
 
 export function Field({ label, path, note, children }: { label: string; path?: string; note?: string; children: ReactNode }) {

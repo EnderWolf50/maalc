@@ -6,7 +6,9 @@ import { LUX_MODES, newSettings, parseSettings, rebase, runEnum, type Luxcavatio
 import { DeploymentTab, StarlightTab, ThemePackTab } from "./Plans";
 import { GiftListsTab } from "./GiftLists";
 import { TeamsTab } from "./Teams";
-import { Decimal, EditorContext, Field, Num, Select, ToggleNum, useEditor, withBreaks, type Ctx } from "./ui";
+import {
+  Decimal, EditorContext, Field, Num, Select, ToggleNum, makeCtx, translate, useEditor, withBreaks, type Picked,
+} from "./ui";
 import { validate, type Problem } from "./validate";
 
 export const TABS = [
@@ -30,6 +32,7 @@ export default function App() {
   const [root, setRoot] = useState("");
   const [tab, setTab] = useState<(typeof TABS)[number][0]>("teams");
   const [giftList, setGiftList] = useState("default"); // what the gift list tab shows; the teams tab can point it at a list
+  const [picked, setPicked] = useState<Picked>({});
   const [checked, setChecked] = useState(false); // marks show after the first save attempt
   const [status, setStatus] = useState(""); // a TEXT key, or text as it is (an error, the gift ids a load dropped)
   // The file's text as last read or written: other text there is another writer's, the Agent's after a claim (#501).
@@ -95,7 +98,7 @@ export default function App() {
 
   const problems: Problem[] = useMemo(() => (s ? validate(s) : []), [s]);
   const lang = s?.language ?? "zh_tw";
-  const t = (k: Key) => TEXT[lang][k] ?? k;
+  const { t } = translate(lang);
 
   if (loadError) {
     return (
@@ -110,12 +113,11 @@ export default function App() {
 
   const marked = new Set(checked ? problems.flatMap((p) => p.paths) : []);
   const bad = (path: string) => [...marked].some((m) => m === path || m.startsWith(path + "/"));
-  const ctx: Ctx = {
-    s, t, bad, giftList,
+  const ctx = makeCtx({
+    s, bad, giftList, picked, setPicked,
+    setS: (next) => setS((prev) => next(prev!)),
     chooseList: (id, open) => { setGiftList(id); if (open) setTab("gifts"); },
-    update: (fn) => setS((prev) => { const next = structuredClone(prev!); fn(next); return next; }),
-    tv: (field, v) => TEXT[lang][`${field}.${v}` as Key] ?? v,
-  };
+  });
   const dirty = toText(s) !== savedText;
   const said = Object.prototype.hasOwnProperty.call(TEXT[lang], status) ? t(status as Key) : status;
   const note = status === "saved" ? "" : said; // shown beside "unsaved" too: a refused save, the file read again
