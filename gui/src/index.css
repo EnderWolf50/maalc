@@ -29,7 +29,7 @@
   --deployed: #9c6200; --deployed-a: #fff8e6; --deployed-b: #f6dfa6; --on-deployed: #fff;
   --backup: #0c7a71; --backup-a: #eafaf7; --backup-b: #b9e8e1; --on-backup: #fff;
   --fl-n-bg: #e3edff; --fl-n-fg: #2457c5; --fl-h-bg: #ffe5e0; --fl-h-fg: #b23a1e; /* floor badges: NORMAL blue, HARD red, */
-  --fl-i-bg: #efe6ff; --fl-i-fg: #6b3fc0; --fl-x-bg: #fbe1ea; --fl-x-fg: #a3164a; /* INFINITY purple, EXTREME crimson */
+  --fl-i-bg: #efe6ff; --fl-i-fg: #6b3fc0; --fl-x-bg: #e7e4ec; --fl-x-fg: #39323f; /* INFINITY purple, EXTREME graphite */
   --wk-bg: #fff1c2; --wk-fg: #7a5200; /* the "含想要" mark on a theme pack: amber */
   --shadow: 0 8px 24px rgb(16 22 36 / 0.16);
   --label-w: 15.5em;
@@ -55,7 +55,7 @@
     --deployed: #f0b43c; --deployed-a: #3b3014; --deployed-b: #2a220e; --on-deployed: #1a1406;
     --backup: #3fc1b4; --backup-a: #12332f; --backup-b: #0d2522; --on-backup: #06201d;
     --fl-n-bg: #1f2c4d; --fl-n-fg: #9db8ff; --fl-h-bg: #43211a; --fl-h-fg: #ffa38f;
-    --fl-i-bg: #2e2748; --fl-i-fg: #c3b0ff; --fl-x-bg: #4a1729; --fl-x-fg: #ff9dc0;
+    --fl-i-bg: #2e2748; --fl-i-fg: #c3b0ff; --fl-x-bg: #39343f; --fl-x-fg: #e3dcea;
     --wk-bg: #3b3014; --wk-fg: #f0b43c;
     --shadow: 0 8px 24px rgb(0 0 0 / 0.45);
     color-scheme: dark;
@@ -303,7 +303,7 @@ table.overrides input:not([type="number"]):not(.decimal) { width: 100%; }
 .jump button[aria-current] { color: var(--fg); text-decoration-color: var(--accent); }
 .jump button.bad { color: var(--bad); }
 .jump button.bad::after { content: ""; display: inline-block; width: 6px; height: 6px; margin-left: 6px; border-radius: 50%; background: var(--bad); vertical-align: 2px; }
-.team > details.panel { scroll-margin-top: 36px; }
+.team > details.panel { scroll-margin-top: 36px; } /* the sticky .jump bar's height; Teams.tsx useInView's rootMargin too */
 /* A plan's grid or starlight on a team: the plan's, so it reads as a view, not a control. */
 p.from-plan { font-size: 12.5px; }
 .plan-view { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
@@ -516,7 +516,8 @@ ol.skill-sinners > li[data-over] { background: var(--sel); }
 .pk[draggable="true"] { cursor: grab; }
 .pk small { color: var(--muted); font-size: 11px; }
 .pk small em { font-style: normal; color: var(--accent); }
-/* Floor badges: blue NORMAL, red HARD, purple INFINITY, crimson EXTREME, one tint each, only the floors inside. */
+/* Floor badges: blue NORMAL, red HARD, purple INFINITY, graphite EXTREME (the game's dark mode, as a tint like the others),
+ * only the floors inside. */
 small.fl { background: var(--fl-n-bg); color: var(--fl-n-fg); font-size: 11px; font-weight: 600; padding: 0 4px; border-radius: 3px; font-variant-numeric: tabular-nums; }
 small.fl.hard { background: var(--fl-h-bg); color: var(--fl-h-fg); }
 small.fl.inf { background: var(--fl-i-bg); color: var(--fl-i-fg); }

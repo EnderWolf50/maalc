@@ -399,8 +399,9 @@ function LuxFields({ task }: { task: keyof Settings["luxcavation"] }) {
 /** One editable table for both override lists (spec 04 sections 10 and 11). */
 function OverrideTable<R extends Record<string, string | number>>({ listKey, cols, blank, note }: {
   listKey: "event_overrides" | "trial_risk_overrides"; note?: string;
-  /** known: a column of names the data has (name -> its value there): the field offers them and says what a typed one is. */
-  cols: { key: keyof R & string; label: Key; number?: boolean; known?: Record<string, number> }[];
+  /** known: a column of names the data has (name -> its value there): the field offers them, and under it says `inTable`
+   * (with {score}) for a known name or `unknown` for another. */
+  cols: { key: keyof R & string; label: Key; number?: boolean; known?: { values: Record<string, number>; inTable: Key; unknown: Key } }[];
   blank: R;
 }) {
   const { s, update, t, bad } = useEditor();
@@ -423,9 +424,9 @@ function OverrideTable<R extends Record<string, string | number>>({ listKey, col
                       : <input value={r[c.key] as string} aria-label={`${t(c.label)} ${i + 1}`} list={c.known ? `${listKey}-${c.key}` : undefined}
                         onChange={(e) => set((l) => { (l[i] as Record<string, unknown>)[c.key] = e.target.value; })} />}
                     {c.known && (r[c.key] as string).trim() !== "" && (
-                      (r[c.key] as string) in c.known
-                        ? <small className="muted">{fill(t("trial.inTable"), { score: c.known[r[c.key] as string] })}</small>
-                        : <small className="caution">{t("trial.unknown")}</small>
+                      Object.prototype.hasOwnProperty.call(c.known.values, r[c.key] as string) // not `in`: a name like toString is no trial
+                        ? <small className="muted">{fill(t(c.known.inTable), { score: c.known.values[r[c.key] as string] })}</small>
+                        : <small className="caution">{t(c.known.unknown)}</small>
                     )}
                   </td>
                 ))}
@@ -437,7 +438,7 @@ function OverrideTable<R extends Record<string, string | number>>({ listKey, col
         </table>
       ) : <p className="muted">{t("noRows")}</p>}
       {cols.filter((c) => c.known).map((c) => (
-        <datalist key={c.key} id={`${listKey}-${c.key}`}>{Object.keys(c.known!).map((n) => <option key={n} value={n} />)}</datalist>
+        <datalist key={c.key} id={`${listKey}-${c.key}`}>{Object.keys(c.known!.values).map((n) => <option key={n} value={n} />)}</datalist>
       ))}
       <button type="button" className="add" onClick={() => set((l) => { l.push({ ...blank }); })}>+ {t("add")}</button>
     </div>
@@ -453,6 +454,7 @@ function TrialsTab() {
   const { t } = useEditor();
   return (
     <OverrideTable listKey="trial_risk_overrides" blank={{ trial: "", risk: 1 }} note={t("trial.note")}
-      cols={[{ key: "trial", label: "trial.trial", known: TRIAL_SCORES }, { key: "risk", label: "trial.risk", number: true }]} />
+      cols={[{ key: "trial", label: "trial.trial", known: { values: TRIAL_SCORES, inTable: "trial.inTable", unknown: "trial.unknown" } },
+        { key: "risk", label: "trial.risk", number: true }]} />
   );
 }

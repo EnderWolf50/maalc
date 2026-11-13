@@ -19,6 +19,8 @@ export const VERSION: number = P.version.const;
  * effect text from LLC (graces.json carries its source and license). */
 export const GRACES: Grace[] = graces.graces;
 export interface Grace { en: string; zh: string; effects: { base: string[]; plus?: string[]; plus2?: string[] } }
+/** A grace's name in the GUI's language: Chinese when the data has it. */
+export const graceName = (g: Grace, zh: boolean) => (zh && g.zh ? g.zh : g.en);
 
 /** Enum values of a run or team field, in schema order. */
 export const runEnum = (k: keyof typeof P.run.properties) => (P.run.properties[k] as { enum: string[] }).enum;

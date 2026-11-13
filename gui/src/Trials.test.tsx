@@ -54,3 +54,8 @@ test("the trial field offers the table's names, and each field is named by its c
   expect(options).toContain("Offense Level Up I");
   expect(screen.getByRole("textbox", { name: `${zh["trial.risk"]} 1` })).toBeInTheDocument();
 });
+
+test("a name like an object's own method (toString) is no trial: the row says it is not in the table", () => {
+  renderEditor(<TrialsTab />, { ...newSettings(), trial_risk_overrides: [{ trial: "toString", risk: 1 }] });
+  expect(screen.getByText(zh["trial.unknown"])).toBeInTheDocument();
+});

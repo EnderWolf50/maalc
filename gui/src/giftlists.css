@@ -58,8 +58,6 @@
 .gl-tierno { background: #4a5163; color: #fff; font-size: 12px; padding: 0 8px; border-radius: 4px; }
 .gl-tierno.fusion { background: #6b4f0b; }
 .gl-tier h4 small { color: var(--muted); font-size: 12px; font-weight: 400; }
-/* What a keyword's fusion or unbuyable gifts mean: once, under its header, not again in each tier band. */
-.gl-kwnote { margin: 0 0 4px; max-width: 60em; color: var(--muted); font-size: 12.5px; line-height: 1.55; }
 .gl-wall { display: flex; flex-wrap: wrap; gap: 9px; }
 
 /* A tile shows the state in its frame: want thick, double ring and stripes; keep solid with a tint; drop thin and faded; a gift

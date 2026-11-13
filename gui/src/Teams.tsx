@@ -5,7 +5,7 @@ import { TIERS, kwText } from "./KeywordGrid";
 import { teamKeyword } from "./gifts";
 import { fill } from "./i18n";
 import {
-  GRACES, MAX_GIFTS, SEARCH_GIFTS, SEARCH_TABS, SINNERS, buyOrder, defaultStarlight, freeName, newId, newTeam, starlightCost, teamEnum,
+  GRACES, MAX_GIFTS, SEARCH_GIFTS, SEARCH_TABS, SINNERS, buyOrder, defaultStarlight, freeName, graceName, newId, newTeam, starlightCost, teamEnum,
   toggleGift, type Order, type StarlightValues,
   type GiftRef, type SearchGift, type Team,
 } from "./model";
@@ -100,11 +100,12 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
       {/* The page runs about seven screens: a row of its sections, which stays at the top while it scrolls, opens one and goes
           there; a section holding a wrong field is red here too. */}
       <div className="jump" role="navigation" aria-label={t("team.sections")}>
-        {SECTIONS.map(([key, title, fields]) => {
-          const wrong = badIn(bad, path, [...fields]) !== "";
+        {SECTIONS.map(([key, title]) => {
+          const wrong = wrongIn(bad, path, key);
           return (
             <button type="button" key={key} className={wrong ? "bad" : ""} aria-current={inView === key ? "location" : undefined}
               onClick={(e) => jumpTo(e.currentTarget, key)}>
+              {/* a title's bracketed game name (觀測飾品（E.G.O Gift Search）) is left out: the chip stays short */}
               {t(title).replace(/[（(].*$/, "")}<ProblemMark on={wrong} />
             </button>
           );
@@ -112,10 +113,10 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
       </div>
 
       {/* What the shop buys and which packs the team takes: chosen here, near the top, edited on their own tabs. Every section
-          is a panel with one header style; the short ones and the sinner grid and starlight start open, Gift Search, shop sales
+          is a panel with one header style; the short ones and the sinner grid and starlight start open, E.G.O Gift Search, shop sales
           and skill replacement closed (their summaries say what they hold). */}
       <details className="panel" open data-sec="lists">
-        <summary className={badIn(bad, path, ["gift_list", "theme_pack_plan"])}>{t("team.lists")}<Holds>{t("team.gift_list")} {listName(team.gift_list, s.gift_lists, t("defaultPlan"))} · {t("team.theme_pack_plan")} {listName(team.theme_pack_plan, s.theme_pack_plans, t("defaultPlan"))}</Holds><ProblemMark on={badIn(bad, path, ["gift_list", "theme_pack_plan"]) !== ""} /></summary>
+        <summary className={wrongIn(bad, path, "lists") ? "bad" : ""}>{t("team.lists")}<Holds>{t("team.gift_list")} {listName(team.gift_list, s.gift_lists, t("defaultPlan"))} · {t("team.theme_pack_plan")} {listName(team.theme_pack_plan, s.theme_pack_plans, t("defaultPlan"))}</Holds><ProblemMark on={wrongIn(bad, path, "lists")} /></summary>
         <div className="rows">
           <Field label={t("team.gift_list")} path={`${path}/gift_list`} note={t("team.gift_list_note")}>
             <span className="inline">
@@ -139,7 +140,7 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
       </details>
 
       <details className="panel" open data-sec="deployment">
-        <summary className={badIn(bad, path, ["deployment_order"])}>{t("team.deployment_order")}<Holds>{orderSource ? listName(orderSource, s.deployment_order_plans, t("defaultPlan")) : t("custom")}</Holds><ProblemMark on={badIn(bad, path, ["deployment_order"]) !== ""} /></summary>
+        <summary className={wrongIn(bad, path, "deployment") ? "bad" : ""}>{t("team.deployment_order")}<Holds>{orderSource ? listName(orderSource, s.deployment_order_plans, t("defaultPlan")) : t("custom")}</Holds><ProblemMark on={wrongIn(bad, path, "deployment")} /></summary>
         <div className={"row" + (bad(`${path}/deployment_order`) && !("custom" in team.deployment_order) ? " bad" : "")}
           data-path={`${path}/deployment_order`}>
           {planSelect(t("team.deployment_order"), orderSource, s.deployment_order_plans, (id) => set({
@@ -158,7 +159,7 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
       </details>
 
       <details className="panel" open data-sec="starlight">
-        <summary className={badIn(bad, path, ["starlight"])}>{t("team.starlight")}<Holds>{starSource ? listName(starSource, s.starlight_plans, t("defaultPlan")) : t("custom")}{star && ` · ★ ${starlightCost(star.levels)}`}</Holds><ProblemMark on={badIn(bad, path, ["starlight"]) !== ""} /></summary>
+        <summary className={wrongIn(bad, path, "starlight") ? "bad" : ""}>{t("team.starlight")}<Holds>{starSource ? listName(starSource, s.starlight_plans, t("defaultPlan")) : t("custom")}{star && ` · ★ ${starlightCost(star.levels)}`}</Holds><ProblemMark on={wrongIn(bad, path, "starlight")} /></summary>
         <div className={"row" + (bad(`${path}/starlight`) && !("custom" in team.starlight) ? " bad" : "")} data-path={`${path}/starlight`}>
           {planSelect(t("team.starlight"), starSource, s.starlight_plans, (id) => set({
             starlight: id ? { plan: id } : {
@@ -182,7 +183,7 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
       <SkillPanel i={i} />
 
       <details className="panel" open data-sec="more">
-        <summary className={badIn(bad, path, MORE)}>{t("team.more")}<ProblemMark on={badIn(bad, path, MORE) !== ""} /></summary>
+        <summary className={wrongIn(bad, path, "more") ? "bad" : ""}>{t("team.more")}<ProblemMark on={wrongIn(bad, path, "more")} /></summary>
         <div className="rows">
           <div className={"toggle" + (bad(`${path}/guard_turns`) ? " bad" : "")} data-path={`${path}/guard_turns`}>
             <label className="check">
@@ -299,7 +300,7 @@ function KeepPanel({ i }: { i: number }) {
   return (
     <details className="panel" data-sec="keep">
       {/* The summary, not the details: `.bad input` would outline every field of the panel (as in SkillPanel). */}
-      <summary className={badIn(bad, path, ["sell_max_tier", "sell_vestiges"])}>{t("keep.title")}<Holds>{t("keep.sell_max_tier")} {TIERS[team.sell_max_tier]}</Holds><ProblemMark on={badIn(bad, path, ["sell_max_tier", "sell_vestiges"]) !== ""} /></summary>
+      <summary className={wrongIn(bad, path, "keep") ? "bad" : ""}>{t("keep.title")}<Holds>{t("keep.sell_max_tier")} {TIERS[team.sell_max_tier]}</Holds><ProblemMark on={wrongIn(bad, path, "keep")} /></summary>
       <p className="muted">{t("keep.note")}</p>
       <div className="rows">
         <div className={"toggle" + (bad(`${path}/sell_max_tier`) ? " bad" : "")} data-path={`${path}/sell_max_tier`}>
@@ -363,7 +364,6 @@ const MORE = ["guard_turns", "hard_from_floor", "allow_white_gossypium", "usage"
   "shop_refresh_normal", "min_alive", "reward_cards"];
 
 /** "bad" when a check failed on any of these fields of the team at `path`: the panel's summary shows it while the panel is closed. */
-const badIn = (bad: (path: string) => boolean, path: string, keys: readonly string[]) => (keys.some((k) => bad(`${path}/${k}`)) ? "bad" : "");
 
 /** The team page's panels, top to bottom (their `data-sec`), the title each shows and the fields it holds. */
 const SECTIONS = [
@@ -375,6 +375,11 @@ const SECTIONS = [
   ["skill", "skill.title", ["skill_replacement"]],
   ["more", "team.more", MORE],
 ] as const;
+type SectionKey = (typeof SECTIONS)[number][0];
+
+/** Whether a team's section holds a field a check marked. */
+const wrongIn = (bad: (path: string) => boolean, team: string, key: SectionKey) =>
+  SECTIONS.find((x) => x[0] === key)![2].some((k) => bad(`${team}/${k}`));
 
 /** A plan's order or starlight on a team: the note that it is the plan's, the plan as one line, and its game page behind a
  * toggle (the page is the plan tab's; drawn here in full it made the team page twice as long). */
@@ -411,14 +416,16 @@ function StarLine({ value }: { value: StarlightValues }) {
   return (<>
     <span className="tag-word">★ {starlightCost(value.levels)}</span>
     {buyOrder(value).map((n, j) => (
-      <span key={n}><b>{j + 1}</b> {zh && GRACES[n - 1].zh ? GRACES[n - 1].zh : GRACES[n - 1].en}{plus[value.levels[n - 1]]}</span>
+      <span key={n}><b>{j + 1}</b> {graceName(GRACES[n - 1], zh)}{plus[value.levels[n - 1]]}</span>
     ))}
   </>);
 }
 
 /** A named list's name by id ("default" is the read-only default), or "? id" when the list is gone. */
 function listName(id: string, lists: { id: string; name: string }[], fallback: string) {
-  return id === "default" ? fallback : lists.find((x) => x.id === id)?.name || `? ${id}`;
+  if (id === "default") return fallback;
+  const list = lists.find((x) => x.id === id);
+  return list ? list.name || "—" : `? ${id}`;
 }
 
 /** The data-sec of the team page's panel nearest the top of the scrolling tab, for the jump bar. */
@@ -432,7 +439,7 @@ function useInView(page: RefObject<HTMLDivElement | null>) {
     const io = new IntersectionObserver((entries) => {
       for (const e of entries) seen.set(e.target, e.isIntersecting);
       setKey(panels.find((el) => seen.get(el))?.dataset.sec);
-    }, { root, rootMargin: "-48px 0px -55% 0px" }); // under the jump bar, in the top half
+    }, { root, rootMargin: "-48px 0px -55% 0px" }); // under the jump bar (about 40 px, index.css .jump), in the top half
     panels.forEach((el) => io.observe(el));
     return () => io.disconnect();
   }, [page]);
