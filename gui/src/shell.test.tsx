@@ -45,6 +45,13 @@ test("the arrow keys move along the main tabs and open the one they reach; Home 
   expect(screen.getByRole("tabpanel")).toHaveAttribute("aria-labelledby", screen.getByRole("tab", { name: zh["tab.run"] }).id);
 });
 
+test("with nothing edited the header says there is nothing to save", async () => {
+  render(<App />);
+  await screen.findByRole("button", { name: zh.save });
+  expect(document.querySelector(".status")).toHaveAttribute("data-state", "clean");
+  expect(document.querySelector(".status")).toHaveTextContent(zh.clean);
+});
+
 test("a refused save shows in the header with the number of problems, also when nothing was edited", async () => {
   file.text = clash();
   const user = userEvent.setup();

@@ -186,8 +186,8 @@ export default function App() {
   const Current = TABS.find((x) => x[0] === tab)![2];
   const blocked = checked && problems.length > 0;
   // The save state plate: a refused save not yet fixed (with the count, edited or not), unsaved, saved, or a note.
-  const state = blocked ? "blocked" : dirty ? "dirty" : status === "saved" ? "saved" : "note";
-  const stateText = [blocked && t("blocked").replace("{n}", String(problems.length)), dirty ? [t("unsaved"), note].filter(Boolean).join(" ") : said]
+  const state = blocked ? "blocked" : dirty ? "dirty" : status === "saved" ? "saved" : said ? "note" : "clean";
+  const stateText = [blocked && t("blocked").replace("{n}", String(problems.length)), dirty ? [t("unsaved"), note].filter(Boolean).join(" ") : said || (!blocked && t("clean"))]
     .filter(Boolean).join(" · ");
   /** Arrow keys walk the tabs and open the one they reach (they are cheap to draw); Home and End go to the ends. */
   const walkTabs = (e: KeyboardEvent) => {
@@ -322,7 +322,7 @@ function ChargeFields() {
   return (
     <fieldset>
       <legend>{t("charge.title")}</legend>
-      <p className="muted">{withBreaks(t("charge.note"))}</p>
+      <p className="caution">{withBreaks(t("charge.note"))}</p>
       <div className="grid">
         <Field label={t("charge.count")} path="charge_enkephalin/count">
           <Num value={s.charge_enkephalin.count} min={0} onChange={(v) => update((d) => { d.charge_enkephalin.count = v; })} />

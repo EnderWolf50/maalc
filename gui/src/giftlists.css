@@ -11,7 +11,7 @@
 }
 .gl button, .gl select { background: var(--gl-panel); border-color: var(--line-2); color: var(--gl-fg); }
 .gl button:hover:not(:disabled) { background: var(--gl-hov); border-color: var(--accent-line); }
-.gl :focus-visible { outline-color: var(--accent-line); }
+.gl :focus-visible { outline-color: var(--fg); }
 .gl .spacer { flex: 1; }
 
 /* Top: list choice and fusion condition, then the apply bar and its status line; they stay in view while the grid scrolls. */

@@ -1,7 +1,7 @@
 // Teams (spec 04 section 9): the list order is the team queue (#501).
-import { useState } from "react";
+import { useRef, useState, type KeyboardEvent } from "react";
 import { resetTeamTimes } from "./api";
-import { TIERS, kwText } from "./KeywordGrid";
+import { KeywordIcon, TIERS, kwText } from "./KeywordGrid";
 import { teamKeyword } from "./gifts";
 import {
   MAX_GIFTS, SEARCH_GIFTS, SEARCH_TABS, SINNERS, defaultStarlight, freeName, newId, newTeam, teamEnum, toggleGift,
@@ -98,14 +98,16 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
       {notice && <p className="notice">{notice}</p>}
       {/* What the team plays with, under its name: read and changed without scrolling past the grids. */}
       <div className="bar lists">
-        <Field label={t("team.gift_list")} path={`${path}/gift_list`} note={t("team.gift_list_note")}>
-          <select value={team.gift_list} onChange={(e) => set({ gift_list: e.target.value })}>
-            <option value="default">{t("defaultPlan")}</option>
-            {s.gift_lists.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-            {missing(team.gift_list !== "default" && team.gift_list, s.gift_lists)}
-          </select>
+        <Field label={t("team.gift_list")} path={`${path}/gift_list`}>
+          <span className="inline">
+            <select value={team.gift_list} onChange={(e) => set({ gift_list: e.target.value })}>
+              <option value="default">{t("defaultPlan")}</option>
+              {s.gift_lists.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+              {missing(team.gift_list !== "default" && team.gift_list, s.gift_lists)}
+            </select>
+            <button type="button" disabled={!main} onClick={() => chooseList(team.gift_list, true)}>{t("team.edit_list")}</button>
+          </span>
           {main && <small>{t("team.main_keyword")}: <b>{t(kwText(main))}</b></small>}
-          <button type="button" disabled={!main} onClick={() => chooseList(team.gift_list, true)}>{t("team.edit_list")}</button>
         </Field>
         <Field label={t("team.theme_pack_plan")} path={`${path}/theme_pack_plan`}>
           <select value={team.theme_pack_plan} onChange={(e) => set({ theme_pack_plan: e.target.value })}>
@@ -114,6 +116,10 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
             {missing(team.theme_pack_plan !== "default" && team.theme_pack_plan, s.theme_pack_plans)}
           </select>
         </Field>
+        <details className="hint">
+          <summary>{t("gl.help")}</summary>
+          <p>{withBreaks(t("team.gift_list_note"))}</p>
+        </details>
       </div>
 
       <fieldset>
@@ -228,12 +234,21 @@ function GiftGrid({ gifts, start, full, mark, onToggle }: {
   const [tab, setTab] = useState(SEARCH_TABS.includes(start) ? start : SEARCH_TABS[0]);
   const zh = s.language === "zh_tw";
   const count = (k: string) => gifts.filter((g) => g.keyword === k).length;
+  const refs = useRef<Record<string, HTMLButtonElement | null>>({});
+  const walk = (e: KeyboardEvent) => {
+    const next = SEARCH_TABS[SEARCH_TABS.indexOf(tab) + (e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0)];
+    if (next === tab || !next) return;
+    e.preventDefault();
+    setTab(next);
+    refs.current[next]?.focus();
+  };
   return (
     <div className="gift-search">
-      <div className="gift-tabs" role="tablist">
+      <div className="gift-tabs" role="tablist" onKeyDown={walk}>
         {SEARCH_TABS.map((k) => (
-          <button type="button" key={k} role="tab" aria-selected={k === tab} className={k === tab ? "selected" : ""} onClick={() => setTab(k)}>
-            {k}{count(k) > 0 && <b>{count(k)}</b>}
+          <button type="button" key={k} role="tab" aria-selected={k === tab} tabIndex={k === tab ? 0 : -1} className={k === tab ? "selected" : ""}
+            ref={(el) => { refs.current[k] = el; }} onClick={() => setTab(k)}>
+            <KeywordIcon keyword={k} />{t(kwText(k))}{count(k) > 0 && <b>{count(k)}</b>}
           </button>
         ))}
       </div>
@@ -309,7 +324,7 @@ function GiftSearchPanel({ i }: { i: number }) {
         <label className="check">
           <input type="checkbox" checked={search.enabled} onChange={(e) => set({ enabled: e.target.checked })} />{t("gift.enabled")}
         </label>
-        <small>{t("gift.note")}</small>
+        <small className="caution">{t("gift.note")}</small>
       </div>
       <GiftGrid gifts={search.gifts} start={main ?? SEARCH_TABS[0]} full={full} mark={(g) => (rank(g) ? String(rank(g)) : null)}
         onToggle={(g) => set({ gifts: toggleGift(search.gifts, g) })} />

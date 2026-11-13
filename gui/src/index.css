@@ -29,34 +29,28 @@
   --keep-soft: #11302b;
   --fusion: #c2adff;
   --fusion-soft: #2a2245;
-  --hazard: #f2c230;
+  --hazard: #ffd34d; /* the caution stripe: the starlight's gold, one yellow for both */
   --hazard-2: #17120c;
   /* The season: Mirror Dungeon 8, "Mirror of Sisyphe": its cobalt title plate and the cyan of its map (game captures of
-   * 2026-11-08). A new season changes these five. */
-  --season: #5ee4fe;
+   * 2026-11-08). Only the season's own page, Grace of the Star, wears it; a new season changes the --season-* tokens. */
   --season-plate: #4e61ba;
-  --season-top: #2b3f8f;
-  --season-mid: #13265a;
-  --season-deep: #070d1c;
   --gold: #ffd34d;
-  --pick-ring: #ffd34d;
   /* The game panels. Sinner frames: */
   --card-top: #2c2219; --card-bottom: #120e0b; --card-line: #5a4630; --card-fg: #efe3cf;
   --dep-top: #4a3413; --dep-bottom: #17100a; --bak-top: #12392f; --bak-bottom: #0b1311;
   --tone-dep: #f0a632; --tone-bak: #4fcab7; --on-tone: #1d1206;
-  /* The season's pages (Grace of the Star, E.G.O Gift Search): */
+  /* Grace of the Star, in the season's colours: */
   --season-bg-1: #13265a; --season-bg-2: #070d1c; --season-side: #070d1c;
   --season-card-top: #2b3f8f; --season-card-mid: #121f4a; --season-card-bottom: #070d1c;
   --season-ink: #e6eefc; --season-ink-2: #b9c7e4; --season-hint: #5ee4fe; --season-shadow: 0 1px 2px #000;
   --season-pick-top: #ffffff; --season-pick-mid: #e6eefb; --season-pick-bottom: #cfdcf1; --season-pick-ink: #0b1530; --season-pick-line: #ffffff;
   --season-btn: #4e61ba; --season-btn-hover: #3d4fa6;
-  --season-tab: #121c38; --season-tab-line: #34467e; --season-band: #1a2650; --season-band-ink: #ffc53d;
-  --season-gift: #0f1830; --season-gift-hover: #18244a; --season-gift-pick: #3a2f10;
-  /* Difficulty, as the game's theme pack page colours it: NORMAL yellow, HARD orange, EXTREME red; INFINITY violet. */
-  --fl-n: #edcf2b;
+  /* Difficulty: NORMAL is the baseline and carries no hue; HARD orange and EXTREME red as the game's theme pack page has them
+   * (EXTREME leaning magenta, away from the error red), INFINITY violet. */
+  --fl-n: #d6c6ad;
   --fl-h: #ff8a4c;
   --fl-i: #c2a6ff;
-  --fl-x: #ff6b6b;
+  --fl-x: #ff6fa3;
   --font-ui: "Segoe UI", "Microsoft JhengHei UI", system-ui, sans-serif;
   --font-display: "Barlow Condensed", "Microsoft JhengHei UI", "Segoe UI", sans-serif;
   font: 14px/1.5 var(--font-ui);
@@ -92,13 +86,11 @@
     --keep-soft: #d7efea;
     --fusion: #5b3fa6;
     --fusion-soft: #e9e2f7;
-    --hazard: #e9b31c;
     --hazard-2: #1e1813;
-    --fl-n: #715a00;
+    --fl-n: #40352a;
     --fl-h: #a63700;
     --fl-i: #6a40c4;
-    --fl-x: #b3161b;
-    --pick-ring: #b06a00;
+    --fl-x: #a8124f;
     --card-top: #fbf8f3; --card-bottom: #ece4d7; --card-line: #b9a68c; --card-fg: #1e1813;
     --dep-top: #fdf0d4; --dep-bottom: #f6dca6; --bak-top: #e3f5f1; --bak-bottom: #c1e7df;
     --tone-dep: #9a5c00; --tone-bak: #0a6b60; --on-tone: #ffffff;
@@ -107,8 +99,6 @@
     --season-ink: #13204a; --season-ink-2: #3a4870; --season-hint: #1b6a88; --season-shadow: none;
     --season-pick-top: #2b3f8f; --season-pick-mid: #1d2c6b; --season-pick-bottom: #142155; --season-pick-ink: #ffffff; --season-pick-line: #13204a;
     --season-btn: #4e61ba; --season-btn-hover: #3e50a3;
-    --season-tab: #eef2fb; --season-tab-line: #9fb0dc; --season-band: #dbe3f5; --season-band-ink: #7a4d00;
-    --season-gift: #ffffff; --season-gift-hover: #eef2fb; --season-gift-pick: #fff1cf;
   }
 }
 
@@ -142,7 +132,8 @@ input[type="number"], input.decimal { width: 7em; font-variant-numeric: tabular-
 input[type="checkbox"] { width: 15px; height: 15px; margin: 0; flex: none; }
 input:disabled, select:disabled { opacity: 0.45; cursor: default; }
 ::placeholder { color: var(--muted); opacity: 1; }
-:focus-visible { outline: 2px solid var(--accent-line); outline-offset: 2px; }
+/* Focus: the ink colour, so a focused row never reads as a selected (amber) one. */
+:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
 
 /* The shell: name plate, file, language, save state and Save on top, the tabs under it; both stay, the page scrolls below. */
 header {
@@ -165,6 +156,8 @@ header .status:empty { display: none; }
 header .status::before { content: ""; flex: none; width: 9px; height: 9px; transform: rotate(45deg); background: var(--muted); }
 header .status[data-state="dirty"] { color: var(--accent-ink); border-color: var(--accent-line); background: var(--accent-soft); font-weight: 600; }
 header .status[data-state="dirty"]::before { background: var(--accent); }
+header .status[data-state="clean"] { color: var(--muted); }
+header .status[data-state="clean"]::before { background: none; border: 1px solid var(--muted); }
 header .status[data-state="saved"] { color: var(--keep); }
 header .status[data-state="saved"]::before { background: var(--keep); }
 header .status[data-state="blocked"] { color: var(--bad); border-color: var(--bad); background: var(--bad-soft); font-weight: 600; }
@@ -224,7 +217,15 @@ main { flex: 1; min-height: 0; overflow: auto; padding: 16px 20px 28px; min-widt
 .problems li button:focus-visible { outline: 2px solid var(--fg); outline-offset: 1px; }
 
 .muted { color: var(--muted); }
-p.muted { margin: 0; max-width: 72em; }
+.caution { position: relative; color: var(--fg); padding-left: 24px; }
+.caution::before {
+  content: ""; position: absolute; left: 2px; top: 0.2em; width: 14px; height: 14px; border-radius: 2px; corner-shape: bevel;
+  background: repeating-linear-gradient(-45deg, var(--hazard) 0 3px, var(--hazard-2) 3px 6px);
+}
+p.caution { margin: 0; max-width: 56em; }
+.toggle small.caution { padding-left: 23px; }
+.toggle small.caution::before { left: 0; }
+p.muted { margin: 0; max-width: 56em; }
 .notice { color: var(--accent-ink); margin: 4px 0; }
 .tag { font-style: normal; font-size: 11.5px; color: var(--accent-ink); margin-left: 8px; }
 
@@ -334,7 +335,11 @@ table.overrides input:not([type="number"]):not(.decimal) { width: 100%; }
 /* The lists bar: the team's gift list and theme pack plan, side by side under the name plate. */
 .bar.lists { align-items: flex-start; gap: 12px 28px; }
 .bar.lists .field { flex: 1 1 260px; max-width: 420px; }
-.bar.lists .field > button { align-self: flex-start; }
+.bar.lists .inline { display: flex; gap: 8px; align-items: center; }
+.bar.lists .inline select { flex: 1; min-width: 0; }
+.bar.lists .hint { flex-basis: 100%; }
+details.hint > summary { cursor: pointer; color: var(--fg-2); font-size: 12.5px; font-weight: 600; width: max-content; }
+details.hint > p { margin: 6px 0 0; color: var(--muted); font-size: 12.5px; max-width: 56em; }
 
 /* The sinner grid: the game's identity frames, a big deployment number, a banner for deployed or backup. No portraits, so the
  * frame is short: number, banner, name. */
@@ -407,16 +412,17 @@ table.overrides input:not([type="number"]):not(.decimal) { width: 100%; }
 .grace:not(.none) .name { text-shadow: none; }
 .grace.plus { border-color: var(--gold); box-shadow: 0 0 0 2px var(--gold), 0 0 8px #ffd34d88; }
 .grace.plus2 { border-color: #ffb300; box-shadow: 0 0 0 3px #ffb300, 0 0 10px #ffb30099; }
+.starlight { flex-direction: column; align-items: stretch; }
 .grace-side {
-  width: 150px; flex: none; display: flex; flex-direction: column; gap: 6px; padding: 10px; border: 2px solid var(--season-plate);
+  order: -1; flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; padding: 8px 12px; border: 2px solid var(--season-plate);
   background: var(--season-side); border-radius: 0 6px 0 6px; corner-shape: bevel;
 }
-.grace-side button { border-radius: 0; border-color: #000; background: var(--season-btn); color: #fff; font-weight: 700; }
+.grace-side button { border-radius: 0; border-color: #000; background: var(--season-btn); color: #fff; font-weight: 700; padding: 3px 14px; }
 .grace-side button:hover:not(:disabled) { border-color: var(--season-hint); background: var(--season-btn-hover); }
-.grace-side .muted { color: var(--season-hint); text-align: center; font-size: 12px; margin-top: 4px; }
-.grace-side .total { margin-top: 8px; color: var(--season-ink-2); }
-.grace-side .total b { display: block; font: 700 28px/1.1 var(--font-display); color: var(--season-ink); }
-.grace-side .check { color: var(--season-ink); font-size: 12px; align-items: flex-start; }
+.grace-side .muted { color: var(--season-hint); font-size: 12.5px; margin-left: 8px; }
+.grace-side .total { margin-left: auto; display: flex; align-items: baseline; gap: 8px; color: var(--season-ink-2); }
+.grace-side .total b { font: 700 26px/1 var(--font-display); color: var(--season-ink); }
+.grace-side .check { color: var(--season-ink); font-size: 12.5px; }
 
 /* Skill replacement (#454), the layout the user adopted on 2026-11-06: one line per listed sinner, in priority order. */
 details.skill-panel > * + * { margin-top: 8px; }
@@ -460,31 +466,28 @@ ol.skill-sinners .grip { color: var(--muted); font-size: 11px; }
 .skill-first { width: 8.5em; flex: none; }
 .skill-arrows { display: inline-flex; margin-left: auto; }
 
-/* E.G.O Gift Search, drawn after the game's page in the season's colours: keyword tabs, a band per tier, text cards; a picked
- * one takes the starlight's gold. */
+/* E.G.O Gift Search, drawn after the game's page: keyword tabs with the keyword's icon, a band per tier, text cards; a picked
+ * one takes the amber of what is in use, with its place in the order. The shell's colours, as the gift list tab has them. */
 .gift-search {
-  display: flex; flex-direction: column; gap: 10px; padding: 12px; background: var(--season-bg-2); color: var(--season-ink);
-  border: 1px solid var(--season-plate); border-radius: 10px 0 10px 0; corner-shape: bevel;
+  display: flex; flex-direction: column; gap: 10px; padding: 12px; background: var(--bg); color: var(--fg);
+  border: 1px solid var(--line); border-radius: 10px 0 10px 0; corner-shape: bevel;
 }
 .gift-tabs { display: flex; gap: 4px; flex-wrap: wrap; }
-.gift-tabs button {
-  background: var(--season-tab); border-color: var(--season-tab-line); color: var(--season-ink-2); font: 600 14px/1.3 var(--font-display);
-  letter-spacing: 0.02em; padding: 3px 10px;
-}
-.gift-tabs button:hover:not(:disabled) { background: var(--season-gift-hover); border-color: var(--season-hint); }
-.gift-tabs button.selected { background: var(--season-btn); border-color: var(--season-pick-line); color: #fff; }
-.gift-tabs b { margin-left: 5px; padding: 0 5px; background: var(--gold); color: #1a1406; font-size: 12px; border-radius: 2px; }
-.gift-tier h4 { margin: 0 0 6px; padding: 2px 10px; background: var(--season-band); color: var(--season-band-ink); font: 700 15px/1.4 var(--font-display); letter-spacing: 3px; }
+.gift-tabs button { display: inline-flex; align-items: center; gap: 6px; padding: 4px 9px; color: var(--muted); background: var(--panel); border-color: var(--line); }
+.gift-tabs button:hover:not(:disabled) { color: var(--fg); }
+.gift-tabs button.selected { background: var(--sel); border-color: var(--accent-line); color: var(--fg); font-weight: 700; }
+.gift-tabs b { padding: 0 5px; background: var(--accent); color: var(--on-accent); font: 700 13px/16px var(--font-display); border-radius: 2px; }
+.gift-tier h4 { margin: 0 0 6px; padding: 2px 10px; background: var(--raise); color: var(--accent-ink); font: 700 15px/1.4 var(--font-display); letter-spacing: 3px; }
 .gifts { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; }
 .gift {
   position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 1px; min-height: 48px; padding: 5px 8px 5px 10px;
-  text-align: left; background: var(--season-gift); border: 1px solid var(--season-tab-line); border-radius: 4px; corner-shape: bevel;
-  color: var(--season-ink); overflow-wrap: anywhere;
+  text-align: left; background: var(--panel); border: 1px solid var(--line-2); border-radius: 4px; corner-shape: bevel;
+  color: var(--fg); overflow-wrap: anywhere;
 }
-.gift:hover:not(:disabled) { border-color: var(--season-hint); background: var(--season-gift-hover); }
+.gift:hover:not(:disabled) { border-color: var(--accent-line); background: var(--hov); }
 .gift .name { font-weight: 600; font-size: 13px; line-height: 1.25; }
-.gift small { font-size: 11.5px; color: var(--season-ink-2); line-height: 1.25; }
-.gift.picked { background: var(--season-gift-pick); border-color: var(--pick-ring); box-shadow: 0 0 0 2px var(--pick-ring); padding-left: 30px; }
+.gift small { font-size: 11.5px; color: var(--muted); line-height: 1.25; }
+.gift.picked { background: var(--sel); border-color: var(--accent-line); box-shadow: 0 0 0 1px var(--accent-line); padding-left: 30px; }
 .gift .rank {
   position: absolute; top: 0; left: 0; bottom: 0; width: 22px; display: flex; align-items: center; justify-content: center;
   background: var(--gold); color: #1a1406; font: 700 16px/1 var(--font-display);
@@ -510,15 +513,13 @@ ol.skill-sinners .grip { color: var(--muted); font-size: 11px; }
 .lane { display: flex; align-items: flex-start; gap: 12px; padding: 7px 0; border-bottom: 1px dashed var(--line); min-height: 40px; }
 .lane .w { width: 40px; flex: none; text-align: right; font: 700 22px/1.2 var(--font-display); color: var(--muted); font-variant-numeric: tabular-nums; }
 .lane .w.pos { color: var(--accent-ink); }
-.lane .w.neg { color: var(--bad); }
+.lane .w.neg { color: var(--fg-2); }
 .lane .packs { display: flex; flex-wrap: wrap; gap: 6px; flex: 1; }
 .lane.add { color: var(--muted); justify-content: center; align-items: center; border: 1px dashed var(--line-2); margin: 8px 0; }
 .lanes .gap { height: 12px; }
 .lanes.moving .gap { background: repeating-linear-gradient(90deg, var(--accent-line) 0 6px, transparent 6px 12px) center / 100% 2px no-repeat; }
 .thr { display: flex; align-items: center; gap: 10px; color: var(--fg); font-size: 12.5px; font-weight: 600; cursor: grab; padding: 4px 0; }
-.thr::before, .thr > span::after {
-  content: ""; height: 6px; background: repeating-linear-gradient(-45deg, var(--hazard) 0 5px, var(--hazard-2) 5px 10px);
-}
+.thr::before, .thr > span::after { content: ""; height: 0; border-top: 3px double var(--fg-2); }
 .thr::before { flex: none; width: 40px; }
 .thr > span { flex: 1; display: flex; align-items: center; gap: 10px; }
 .thr > span::after { flex: 1; }
@@ -538,7 +539,7 @@ small.fl, small.wk {
 }
 /* Besides the hue: NORMAL is an outline, the harder ones are filled; INFINITY's rule is dashed, EXTREME's double weight. */
 small.fl { background: transparent; }
-small.fl.hard, small.fl.inf, small.fl.ext { background: color-mix(in srgb, var(--c) 15%, var(--panel)); }
+small.fl.hard, small.fl.inf, small.fl.ext { background: color-mix(in srgb, var(--c) 10%, var(--panel)); }
 small.fl.hard { --c: var(--fl-h); }
 small.fl.inf { --c: var(--fl-i); border-style: dashed; }
 small.fl.ext { --c: var(--fl-x); border-width: 2px; padding: 0 4px; }

@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 import App from "./App";
 import { DEFAULT_LIST, mainKeyword } from "./gifts";
 import { TEXT, fill } from "./i18n";
-import { GIFT_KEYWORDS, defaultGorder, newSettings, newTeam, type GiftList, type Settings } from "./model";
+import { GIFT_KEYWORDS, SEARCH_TABS, defaultGorder, newSettings, newTeam, type GiftList, type Settings } from "./model";
 import { expectLines, renderEditor } from "./testing";
 import { TeamsTab } from "./Teams";
 import { useEditor } from "./ui";
@@ -157,4 +157,28 @@ test("the team page's long notes show one topic to a line", () => {
   renderEditor(<TeamsTab />, settings());
   const keys = ["team.gift_list_note", "team.hard_from_floor_note", "team.min_alive_note", "keep.sell_vestiges_note", "skill.note"] as const;
   for (const key of keys) expectLines(zh[key]);
+});
+
+describe("the E.G.O Gift Search keyword tabs", () => {
+  const tabs = () => within(document.querySelector(".gift-search")!).getAllByRole("tab");
+
+  test("name the keyword in the GUI's language and open on the list's main keyword", () => {
+    renderEditor(<TeamsTab />, settings());
+    expect(tabs().map((b) => b.textContent)).toEqual(SEARCH_TABS.map(kw));
+    const on = tabs().find((b) => b.getAttribute("aria-selected") === "true")!;
+    expect(on).toHaveTextContent(kw("Bleed"));
+  });
+
+  test("walk with the arrow keys, one tab stop for the row", async () => {
+    const r = renderEditor(<TeamsTab />, settings());
+    const at = SEARCH_TABS.indexOf("Bleed");
+    expect(tabs().map((b) => b.getAttribute("tabindex"))).toEqual(SEARCH_TABS.map((_, i) => (i === at ? "0" : "-1")));
+    tabs()[at].focus();
+    await r.user.keyboard("{ArrowRight}");
+    expect(tabs()[at + 1]).toHaveAttribute("aria-selected", "true");
+    expect(tabs()[at + 1]).toHaveFocus();
+    await r.user.keyboard("{ArrowLeft}{ArrowLeft}");
+    expect(tabs()[at - 1]).toHaveAttribute("aria-selected", "true");
+    expect(tabs()[at - 1]).toHaveFocus();
+  });
 });
