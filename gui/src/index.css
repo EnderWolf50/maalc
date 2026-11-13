@@ -24,6 +24,7 @@
   --stripe: #4f3c14;
   --bad: #ff7a68;
   --bad-soft: #2d1210;
+  --close: #b3231b; /* the title bar's close under the pointer, white on it: one fill for both themes */
   --keep: #4fcab7; /* teal: kept, backup */
   --keep-soft: #11302b;
   --fusion: #c2adff;
@@ -134,11 +135,22 @@ input:disabled, select:disabled { opacity: 0.45; cursor: default; }
 /* Focus: the ink colour, so a focused row never reads as a selected (amber) one. */
 :focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
 
-/* The shell: name plate, file, language, save state and Save on top, the tabs under it; both stay, the page scrolls below. */
+/* The shell: name plate, file, language, save state and Save on top, the tabs under it; both stay, the page scrolls below.
+ * The header is the window's title bar too: it drags the window, and its buttons sit flush in the top right corner. */
 header {
-  flex: none; display: flex; align-items: center; gap: 14px; padding: 8px 16px; background: var(--panel);
-  border-bottom: 1px solid var(--line);
+  flex: none; display: flex; align-items: center; gap: 14px; padding: 8px 0 8px 16px; background: var(--panel);
+  border-bottom: 1px solid var(--line); user-select: none;
 }
+header .winctl { flex: none; align-self: stretch; display: flex; margin: -8px 0 -8px -2px; border-left: 1px solid var(--line); }
+header .winctl button {
+  width: 46px; padding: 0; display: grid; place-items: center; border: none; border-radius: 0; background: none; color: var(--fg-2);
+}
+header .winctl button:hover:not(:disabled) { background: var(--hov); color: var(--fg); }
+header .winctl button:focus-visible { outline-offset: -3px; }
+/* Close: the crimson of what cannot be undone, white on it in both themes, as the system's close turns red. */
+header .winctl button.close:hover:not(:disabled) { background: var(--close); color: #fff; }
+header .winctl svg { width: 10px; height: 10px; fill: none; stroke: currentColor; stroke-width: 1; shape-rendering: crispEdges; }
+header .winctl .close svg { shape-rendering: geometricPrecision; }
 header h1 {
   font: 700 19px/1 var(--font-display); letter-spacing: 0.06em; text-transform: uppercase; color: var(--fg); white-space: nowrap;
   padding: 6px 14px 5px; background: var(--bg); border: 1px solid var(--line-2); border-radius: 0 8px 0 8px; corner-shape: bevel;

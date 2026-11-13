@@ -38,6 +38,25 @@ export function onCloseRequested(keepOpen: () => boolean): () => void {
   return () => { listening.then((stop) => stop()); };
 }
 
+/** Ask the window to close, as Alt+F4 does: the page's title bar ✕ (tauri.conf.json has no system bar). The request goes
+ * to the onCloseRequested listener, which keeps the window open while it asks. */
+export const requestClose = (): Promise<void> => (tauri ? getCurrentWindow().close() : Promise.resolve());
+
+export const minimizeWindow = (): Promise<void> => (tauri ? getCurrentWindow().minimize() : Promise.resolve());
+
+export const toggleMaximize = (): Promise<void> => (tauri ? getCurrentWindow().toggleMaximize() : Promise.resolve());
+
+/** Tell `seen` whether the window is maximised, now and after each resize (a double click on the title bar, Win+Up, a drag
+ * to the screen's top edge). Returns the function that stops telling. A plain browser has no window to maximise. */
+export function onMaximized(seen: (on: boolean) => void): () => void {
+  if (!tauri) return () => {};
+  const w = getCurrentWindow();
+  const read = () => { w.isMaximized().then(seen, () => {}); };
+  read();
+  const listening = w.onResized(read);
+  return () => { listening.then((stop) => stop()); };
+}
+
 /** Close the window without asking again. */
 export const closeWindow = (): Promise<void> => (tauri ? getCurrentWindow().destroy() : Promise.resolve());
 

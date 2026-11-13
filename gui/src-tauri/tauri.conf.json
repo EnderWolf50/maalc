@@ -10,7 +10,10 @@
     "frontendDist": "../dist"
   },
   "app": {
-    "windows": [{ "title": "maalc", "width": 1100, "height": 760, "dragDropEnabled": false }],
+    "windows": [{
+      "title": "maalc", "width": 1100, "height": 760, "minWidth": 800, "minHeight": 480, "dragDropEnabled": false,
+      "decorations": false
+    }],
     "security": {
       "csp": "default-src 'self'; script-src 'self'; img-src 'self' data:; connect-src 'self' ipc: http://ipc.localhost"
     }

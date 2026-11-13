@@ -1,5 +1,5 @@
 // Shell: load <root>/config/settings.json, the tabs, and check-then-save (spec 04 section 2).
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
 import * as api from "./api";
 import { TEXT, fill, type Key } from "./i18n";
 import { LUX_MODES, newSettings, parseSettings, rebase, runEnum, type Luxcavation, type LuxMode, type Settings } from "./model";
@@ -47,6 +47,7 @@ export default function App() {
   const [refused, setRefused] = useState(false); // the last save stopped at the checks, and its problems are not all fixed
   // The window was closed, or the page asked to reload (F5, Ctrl+R), with unsaved changes: the prompt for that shows (#695, #702).
   const [asking, setAsking] = useState<false | Leave>(false);
+  const [maximized, setMaximized] = useState(false); // the window fills the screen: the title bar offers Restore
   // The file's text as last read or written: other text there is another writer's, the Agent's after a claim (#501).
   const disk = useRef<string | null>(null);
   const latest = useRef({ s, savedText });
@@ -149,6 +150,7 @@ export default function App() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
+  useEffect(() => api.onMaximized(setMaximized), []);
   useEffect(() => {
     if (asking || !focusBefore.current) return;
     (focusBefore.current as HTMLElement).focus?.();
@@ -268,7 +270,9 @@ export default function App() {
   };
   return (
     <EditorContext.Provider value={ctx}>
-      <header inert={!!asking}>
+      {/* The title bar too: the system's is hidden (tauri.conf.json). Tauri drags the window from any of its parts that is not a
+          control (drag.js "deep"), and a double click there maximises it. */}
+      <header inert={!!asking} data-tauri-drag-region="deep">
         <h1>{t("title")}</h1>
         <span className="muted path" title={t("file")}>{root}\config\settings.json</span>
         <label className="lang">{t("language")}
@@ -279,6 +283,7 @@ export default function App() {
         </label>
         <span className="status" data-state={state} aria-live="polite">{stateText}</span>
         <button type="button" className={"primary" + saveLook} onClick={save}>{t("save")}</button>
+        <WindowButtons maximized={maximized} onError={(e) => setStatus(String(e))} />
       </header>
       <nav role="tablist" onKeyDown={walkTabs} inert={!!asking}>
         {TABS.map(([id, label, , prefixes]) => (
@@ -303,6 +308,26 @@ export default function App() {
       </main>
       {leavePrompt}
     </EditorContext.Provider>
+  );
+}
+
+/** The window's own buttons at the title bar's right end. Close is a close request, as Alt+F4 is: with unsaved changes the
+ * prompt asks first. A call the window refuses (no permission) says why in the save state, as a failed close does. */
+function WindowButtons({ maximized, onError }: { maximized: boolean; onError: (e: unknown) => void }) {
+  const { t } = useEditor();
+  const button = (name: string, run: () => Promise<void>, glyph: ReactNode, className?: string) => (
+    <button type="button" className={className} aria-label={name} title={name} onClick={() => { run().catch(onError); }}>
+      <svg viewBox="0 0 10 10" aria-hidden="true">{glyph}</svg>
+    </button>
+  );
+  return (
+    <div className="winctl">
+      {button(t("win.minimize"), api.minimizeWindow, <path d="M0 5.5h10" />)}
+      {button(t(maximized ? "win.restore" : "win.maximize"), api.toggleMaximize, maximized
+        ? <path d="M2.5 2.5V.5h7v7h-2M.5 2.5h7v7h-7z" />
+        : <rect x="0.5" y="0.5" width="9" height="9" />)}
+      {button(t("win.close"), api.requestClose, <path d="M0 0l10 10M10 0L0 10" />, "close")}
+    </div>
   );
 }
 
