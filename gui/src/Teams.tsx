@@ -76,7 +76,7 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
 
   // Laid out like AALC's team page: who and what on top, the sinner grid, starlight, then the rest.
   return (
-    <div className="team">
+    <div className="team" data-path={path}>
       <div className="bar">
         <Field label={t("name")} path={`${path}/name`}>
           <input value={team.name} onChange={(e) => set({ name: e.target.value })} />
@@ -84,7 +84,7 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
         <Field label={t("team.game_team")} path={`${path}/game_team`}>
           <Num value={team.game_team} min={1} max={40} onChange={(v) => set({ game_team: v })} />
         </Field>
-        <label className="check"><input type="checkbox" checked={team.enabled} onChange={(e) => set({ enabled: e.target.checked })} />{t("team.enabled")}</label>
+        <label className="check" data-path={`${path}/enabled`}><input type="checkbox" checked={team.enabled} onChange={(e) => set({ enabled: e.target.checked })} />{t("team.enabled")}</label>
         <span className="spacer" />
         <button type="button" onClick={async () => {
           if (!confirm(t("resetConfirm"))) return;
@@ -96,7 +96,8 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
 
       <fieldset>
         <legend>{t("team.deployment_order")}</legend>
-        <div className={"row" + (bad(`${path}/deployment_order`) && !("custom" in team.deployment_order) ? " bad" : "")}>
+        <div className={"row" + (bad(`${path}/deployment_order`) && !("custom" in team.deployment_order) ? " bad" : "")}
+          data-path={`${path}/deployment_order`}>
           {planSelect(orderSource, s.deployment_order_plans, (id) => set({
             deployment_order: id ? { plan: id } : { custom: [...(order ?? SINNERS)] },
           }))}
@@ -110,7 +111,7 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
 
       <fieldset>
         <legend>{t("team.starlight")}</legend>
-        <div className={"row" + (bad(`${path}/starlight`) && !("custom" in team.starlight) ? " bad" : "")}>
+        <div className={"row" + (bad(`${path}/starlight`) && !("custom" in team.starlight) ? " bad" : "")} data-path={`${path}/starlight`}>
           {planSelect(starSource, s.starlight_plans, (id) => set({
             starlight: id ? { plan: id } : {
               custom: starPlan ? { levels: [...starPlan.levels], priority: [...starPlan.priority], convert_leftover: starPlan.convert_leftover } : defaultStarlight(),
@@ -131,7 +132,7 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
       <details className="panel" open>
         <summary>{t("team.more")}</summary>
         <div className="options">
-          <div className={"toggle" + (bad(`${path}/guard_turns`) ? " bad" : "")}>
+          <div className={"toggle" + (bad(`${path}/guard_turns`) ? " bad" : "")} data-path={`${path}/guard_turns`}>
             <label className="check">
               <input type="checkbox" checked={team.guard_turns > 0} onChange={(e) => set({ guard_turns: e.target.checked ? 1 : 0 })} />
               {t("team.guard_turns")}
@@ -143,14 +144,14 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
           </div>
           <ToggleNum label={t("team.hard_from_floor")} path={`${path}/hard_from_floor`} value={team.hard_from_floor} on={1} min={1} max={5}
             note={t("team.hard_from_floor_note")} onChange={(v) => set({ hard_from_floor: v })} />
-          <div className={"toggle" + (bad(`${path}/allow_white_gossypium`) ? " bad" : "")}>
+          <div className={"toggle" + (bad(`${path}/allow_white_gossypium`) ? " bad" : "")} data-path={`${path}/allow_white_gossypium`}>
             <label className="check">
               <input type="checkbox" checked={team.allow_white_gossypium} onChange={(e) => set({ allow_white_gossypium: e.target.checked })} />
               {t("team.allow_white_gossypium")}
             </label>
             <small>{t("team.allow_white_gossypium_note")}</small>
           </div>
-          <div className={"toggle" + (bad(`${path}/usage`) ? " bad" : "")}>
+          <div className={"toggle" + (bad(`${path}/usage`) ? " bad" : "")} data-path={`${path}/usage`}>
             <label className="check">
               <input type="checkbox" checked={team.usage !== "any"} onChange={(e) => set({ usage: e.target.checked ? "hard_only" : "any" })} />
               {t("team.usage")}
@@ -194,7 +195,7 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
             <Num value={team.min_alive} min={0} max={12} onChange={(v) => set({ min_alive: v })} />
           </Field>
         </div>
-        <div className={"rewards" + (bad(`${path}/reward_cards`) ? " bad" : "")}>
+        <div className={"rewards" + (bad(`${path}/reward_cards`) ? " bad" : "")} data-path={`${path}/reward_cards`}>
           <h4>{t("team.reward_cards")}</h4>
           <ReorderList items={team.reward_cards} keyOf={(x) => x} onChange={(reward_cards) => set({ reward_cards })}
             render={(x, j) => <>{j + 1}. {x}</>} />
@@ -265,14 +266,14 @@ function KeepPanel({ i }: { i: number }) {
       <summary>{t("keep.title")}</summary>
       <p className="muted">{t("keep.note")}</p>
       <div className="options">
-        <div className={"toggle" + (bad(`${path}/sell_max_tier`) ? " bad" : "")}>
+        <div className={"toggle" + (bad(`${path}/sell_max_tier`) ? " bad" : "")} data-path={`${path}/sell_max_tier`}>
           <span>{t("keep.sell_max_tier")}</span>
           <select value={team.sell_max_tier} onChange={(e) => set({ sell_max_tier: Number(e.target.value) })}>
             {[1, 2, 3, 4, 5].map((n) => <option key={n} value={n}>{TIERS[n]}</option>)}
           </select>
           <small>{t("keep.sell_max_tier_note")}</small>
         </div>
-        <div className={"toggle" + (bad(`${path}/sell_vestiges`) ? " bad" : "")}>
+        <div className={"toggle" + (bad(`${path}/sell_vestiges`) ? " bad" : "")} data-path={`${path}/sell_vestiges`}>
           <label className="check">
             <input type="checkbox" checked={team.sell_vestiges} onChange={(e) => set({ sell_vestiges: e.target.checked })} />
             {t("keep.sell_vestiges")}
@@ -296,7 +297,7 @@ function GiftSearchPanel({ i }: { i: number }) {
   const rank = (g: SearchGift) => search.gifts.findIndex((x) => sameRef(x, g)) + 1;
   const full = search.gifts.length >= MAX_GIFTS;
   return (
-    <details className={"panel" + (bad(path) ? " bad" : "")}>
+    <details className={"panel" + (bad(path) ? " bad" : "")} data-path={path}>
       <summary>{t("gift.title")}{search.enabled && search.gifts.length ? ` (${search.gifts.length})` : ""}</summary>
       <div className="toggle">
         <label className="check">
@@ -306,7 +307,7 @@ function GiftSearchPanel({ i }: { i: number }) {
       </div>
       <GiftGrid gifts={search.gifts} start={main ?? SEARCH_TABS[0]} full={full} mark={(g) => (rank(g) ? String(rank(g)) : null)}
         onToggle={(g) => set({ gifts: toggleGift(search.gifts, g) })} />
-      <div className={"rewards" + (bad(`${path}/gifts`) ? " bad" : "")}>
+      <div className={"rewards" + (bad(`${path}/gifts`) ? " bad" : "")} data-path={`${path}/gifts`}>
         <h4>{t("gift.order")} ({search.gifts.length}/{MAX_GIFTS})</h4>
         {full && <p className="muted">{t("gift.full")}</p>}
         {search.gifts.length ? (

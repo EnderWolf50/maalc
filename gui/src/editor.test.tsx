@@ -1,10 +1,10 @@
-// The editor shell (App.tsx) around the tabs: what a tab switch keeps.
+// The editor shell (App.tsx) around the tabs: what a tab switch keeps, and the problems a refused save lists.
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import App from "./App";
 import { TEXT } from "./i18n";
-import { defaultStarlight, newPackPlan, newSettings, newTeam, SINNERS, type Settings } from "./model";
+import { GIFT_KEYWORDS, defaultGorder, defaultStarlight, newPackPlan, newSettings, newTeam, SINNERS, type Settings } from "./model";
 
 const file = vi.hoisted(() => ({ text: "" }));
 vi.mock("./api", async (original) => ({
@@ -57,5 +57,108 @@ describe("a tab switch", () => {
     await user.click(tab(zh["tab.teams"]));
     await user.click(tab(zh[label]));
     expect(nameBox()).toHaveValue(plan);
+  });
+});
+
+/** The editor on `s`, the tab `start` open, Save clicked: the problems show. */
+async function blocked(s: Settings, start: string) {
+  file.text = JSON.stringify(s);
+  const user = userEvent.setup();
+  render(<App />);
+  await user.click(await screen.findByRole("tab", { name: start }));
+  await user.click(screen.getByRole("button", { name: zh.save }));
+  return user;
+}
+const problem = (text: string | RegExp) => within(screen.getByRole("alert")).getByRole("button", { name: text });
+
+describe("the problems block", () => {
+  test("sits inside the tab panel, below the tab bar", async () => {
+    const s = settings();
+    s.teams[1].game_team = 1;
+    await blocked(s, zh["tab.run"]);
+    expect(screen.getByRole("main")).toContainElement(screen.getByRole("alert"));
+  });
+});
+
+describe("clicking a problem", () => {
+  test("opens its team on the teams tab and focuses the field", async () => {
+    const s = settings();
+    s.teams[1].theme_pack_plan = "gone";
+    const user = await blocked(s, zh["tab.run"]);
+    await user.click(problem(/teams\/1\/theme_pack_plan/));
+    expect(tab(zh["tab.teams"])).toHaveAttribute("aria-selected", "true");
+    expect(nameBox()).toHaveValue("Tb");
+    expect(screen.getByRole("combobox", { name: zh["team.theme_pack_plan"] })).toHaveFocus();
+  });
+
+  test("focuses the plan choice of a team's deployment order", async () => {
+    const s = settings();
+    s.teams[1].deployment_order = { plan: "gone" };
+    const user = await blocked(s, zh["tab.run"]);
+    await user.click(problem(/teams\/1\/deployment_order/));
+    expect(nameBox()).toHaveValue("Tb");
+    expect(document.activeElement).toHaveValue("gone");
+  });
+
+  test("opens the closed panel that holds it", async () => {
+    const s = settings();
+    s.teams[0].skill_replacement.sinners = [{ sinner: "Yi Sang", target: { s1: 3, s2: 2, s3: 2 }, s1_s3_first: true }];
+    const user = await blocked(s, zh["tab.run"]);
+    await user.click(problem(/skill_replacement\/sinners\/0\/target/));
+    expect(screen.getByText(new RegExp(zh["skill.title"]), { selector: "summary" }).closest("details")).toHaveAttribute("open");
+    // the row itself: its first enabled control is its delete button, which Space would press
+    expect(document.activeElement).toHaveAttribute("data-sinner", "Yi Sang");
+  });
+
+  test("with no field of its own, focuses its team's first field, not the list beside it", async () => {
+    const s = settings();
+    s.teams[1].id = "a"; // two teams with one id
+    const user = await blocked(s, zh["tab.run"]);
+    await user.click(problem(/teams: id 'a'/));
+    expect(nameBox()).toHaveValue("Ta");
+    expect(nameBox()).toHaveFocus();
+  });
+
+  test.each([
+    ["a team's switch", (s: Settings) => { s.teams[0].guard_turns = 9; }, /teams\/0\/guard_turns/, "team.guard_turns"],
+    ["a switch of the run options", (s: Settings) => { (s.run as Record<string, unknown>).auto_download = "yes"; },
+      /run\/auto_download/, "run.auto_download"],
+  ] as const)("focuses %s", async (_, change, text, label) => {
+    const s = settings();
+    change(s);
+    const user = await blocked(s, zh["tab.daily"]);
+    await user.click(problem(text));
+    expect(screen.getByRole("checkbox", { name: zh[label] })).toHaveFocus();
+  });
+
+  test("opens its plan on the plan's tab and focuses the field", async () => {
+    const s = settings();
+    s.deployment_order_plans.push({ id: "d3", name: "D2", order: [...SINNERS] });
+    const user = await blocked(s, zh["tab.teams"]);
+    await user.click(problem(/deployment_order_plans: name 'D2'/));
+    expect(tab(zh["tab.deployment"])).toHaveAttribute("aria-selected", "true");
+    expect(nameBox()).toHaveValue("D2");
+    expect(nameBox()).toHaveFocus();
+  });
+
+  test("focuses a field of the run options", async () => {
+    const s = settings();
+    s.run.target_floor = 10;
+    s.run.difficulty = "normal";
+    s.teams.forEach((x) => { x.hard_from_floor = 1; });
+    const user = await blocked(s, zh["tab.teams"]);
+    await user.click(problem(/run\/difficulty/));
+    expect(tab(zh["tab.run"])).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("combobox", { name: zh["run.difficulty"] })).toHaveFocus();
+  });
+
+  test("shows its list on the gift list tab", async () => {
+    const s = settings();
+    s.gift_lists = [{ id: "g1", name: "G1", order: [...GIFT_KEYWORDS], want: [9780], keep: [9780], gorder: defaultGorder(), fusion_condition: "any" }];
+    const user = await blocked(s, zh["tab.teams"]);
+    await user.click(problem(/gift_lists\/0/));
+    expect(tab(zh["tab.gifts"])).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("combobox", { name: zh["gl.list"] })).toHaveValue("g1");
+    expect(screen.getByRole("combobox", { name: zh["gl.list"] })).toHaveFocus();
   });
 });

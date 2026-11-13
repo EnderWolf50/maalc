@@ -20,9 +20,12 @@ export interface Ctx {
   picked: Picked;
   pick: (list: keyof Picked, id: string | undefined) => void;
 }
-export type PlanKey = "deployment_order_plans" | "starlight_plans" | "theme_pack_plans";
+/** The lists whose tab shows one item at a time. */
+export const PICK_LISTS = ["teams", "deployment_order_plans", "starlight_plans", "theme_pack_plans"] as const;
+export type PlanKey = Exclude<(typeof PICK_LISTS)[number], "teams">;
 /** By id, so the pick stays on its item when the list is reordered; a tab's lead (the theme packs' default plan) by its own id. */
-export type Picked = Partial<Record<"teams" | PlanKey, string>>;
+export type Picked = Partial<Record<(typeof PICK_LISTS)[number], string>>;
+export const isPickList = (section: string): section is keyof Picked => PICK_LISTS.some((x) => x === section);
 export const EditorContext = createContext<Ctx>(null!);
 export const useEditor = () => useContext(EditorContext);
 
@@ -36,6 +39,25 @@ export function usePick(list: keyof Picked, items: { id: string }[], leadId?: st
   const shown = i >= 0 ? items[i].id : leadId;
   useEffect(() => { if (shown !== picked[list]) pick(list, shown); }, [list, shown, picked, pick]);
   return [i, (id: string | undefined) => pick(list, id)] as const;
+}
+
+const FOCUSABLE = "input:not(:disabled), select:not(:disabled), textarea:not(:disabled), button:not(:disabled), [tabindex]:not([tabindex='-1'])";
+
+/** Scroll to and focus the field a problem path points at: the element in <main> whose data-path is that path or the nearest
+ * one above it ("teams/1/id" finds the team's editor, "teams/1"). Closed panels around it open. The element itself takes the
+ * focus when it can (a row with tabIndex -1), else its first enabled control. */
+export function focusPath(path: string) {
+  let el: HTMLElement | undefined;
+  for (const at of document.querySelectorAll<HTMLElement>("main [data-path]")) {
+    const p = at.dataset.path!;
+    // on a tie the later one, inside the other in document order: a plan's editor in its tab's panel
+    if ((path === p || path.startsWith(p + "/")) && p.length >= (el?.dataset.path!.length ?? 0)) el = at;
+  }
+  if (!el) return;
+  for (let d = el.closest("details"); d; d = d.parentElement!.closest("details")) d.open = true;
+  el.scrollIntoView?.({ block: "center" });
+  const target = el.hasAttribute("tabindex") || el.matches(FOCUSABLE) ? el : el.querySelector<HTMLElement>(FOCUSABLE);
+  target?.focus({ preventScroll: true });
 }
 
 /** A help text as shown: each "\n" in it starts a new line, one topic to a line (#664). A text without one stays a string. */
@@ -65,7 +87,7 @@ export function makeCtx({ s, setS, setPicked, ...rest }: Pick<Ctx, "s" | "bad" |
 export function Field({ label, path, note, children }: { label: string; path?: string; note?: string; children: ReactNode }) {
   const { bad } = useEditor();
   return (
-    <label className={"field" + (path && bad(path) ? " bad" : "")}>
+    <label className={"field" + (path && bad(path) ? " bad" : "")} data-path={path}>
       <span>{label}</span>
       {children}
       {note && <small>{withBreaks(note)}</small>}
@@ -113,7 +135,7 @@ export function ToggleNum({ label, path, value, on, min, max, note, onChange }: 
 }) {
   const { bad } = useEditor();
   return (
-    <div className={"toggle" + (bad(path) ? " bad" : "")}>
+    <div className={"toggle" + (bad(path) ? " bad" : "")} data-path={path}>
       <label className="check">
         <input type="checkbox" checked={value !== null} onChange={(e) => onChange(e.target.checked ? on : null)} />
         {label}

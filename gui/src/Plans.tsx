@@ -19,7 +19,7 @@ export function SinnerGrid({ order, onChange, path }: { order: Order; onChange?:
   const { t, bad } = useEditor();
   return (<>
     {onChange && <p className="muted">{t("order.hint")}</p>}
-    <div className={"sinners" + (bad(path) ? " bad" : "")}>
+    <div className={"sinners" + (bad(path) ? " bad" : "")} data-path={path}>
       {SINNERS.map((s) => {
         const n = order.indexOf(s) + 1;
         const kind = n === 0 ? "" : n <= 7 ? "deployed" : "backup";
@@ -47,7 +47,7 @@ export function StarlightEditor({ value, onChange, path }: {
   const set = (fn: (v: StarlightValues) => StarlightValues) => onChange?.(fn(value));
   return (
     <>{onChange && <p className="muted">{t("starlight.hint")}</p>}
-    <div className={"starlight" + (onChange ? "" : " readonly")}>
+    <div className={"starlight" + (onChange ? "" : " readonly")} data-path={path}>
       <div className={"graces" + (bad(`${path}/levels`) || bad(`${path}/priority`) ? " bad" : "")}>
         {GRACES.map((g, i) => {
           const n = i + 1;
@@ -118,7 +118,7 @@ function PlanTab<P extends { id: string; name: string }>({ planKey, tab, make, e
         ) : <p className="muted">{t("noPlans")}</p>}
         <button type="button" onClick={add}>+ {t("add")}</button>
       </aside>
-      <section>
+      <section data-path={i >= 0 ? `${planKey}/${i}` : undefined}>
         {i === -1 && lead ? lead.body : plans[i] && (
           <>
             <div className="row">
@@ -238,7 +238,7 @@ function PackPlanEditor({ data, plan, planId, path, onChange }: {
       .map((g) => giftName(g, zh));
     const wantedTip = fill(t("packs.wantedTip"), { names: wanted.join(t("gl.sep")) });
     return (
-      <span key={name} className={"pk" + (path && bad(`${path}/weights/${name}`) ? " bad" : "")}
+      <span key={name} className={"pk" + (path && bad(`${path}/weights/${name}`) ? " bad" : "")} data-path={path && `${path}/weights/${name}`}
         {...dragged(name)} {...clickable(name, weightOf(plan, name))} title={cover ? name : undefined}>
         {cover ? <img className="img" src={cover} alt={name} draggable={false} /> : images && <span className="img" aria-hidden />}
         {!cover && <span className="nm">{name}</span>}
@@ -253,7 +253,7 @@ function PackPlanEditor({ data, plan, planId, path, onChange }: {
     );
   };
   const lineBar = (
-    <div className={"thr" + (path && bad(`${path}/threshold`) ? " bad" : "")} {...dragged(LINE)}>
+    <div className={"thr" + (path && bad(`${path}/threshold`) ? " bad" : "")} data-path={path && `${path}/threshold`} {...dragged(LINE)}>
       <span>{t("packs.threshold").replace("{n}", String(plan.threshold))}</span>
       {onChange && <>
         <button type="button" className="icon" aria-label={t("up")} title={t("up")} disabled={line - 1 < 1}
@@ -290,7 +290,7 @@ function PackPlanEditor({ data, plan, planId, path, onChange }: {
             <div className="packs">
               {shown.filter((n) => weightOf(plan, n) === w).map(chip)}
               {w === plan.unlisted && (
-                <span className={"pk unlisted" + (path && bad(`${path}/unlisted`) ? " bad" : "")}
+                <span className={"pk unlisted" + (path && bad(`${path}/unlisted`) ? " bad" : "")} data-path={path && `${path}/unlisted`}
                   {...dragged(UNLISTED)} {...clickable(UNLISTED, plan.unlisted)}>
                   {images && <span className="img" aria-hidden />}
                   <span className="nm">{t("packs.unlisted")}</span>
