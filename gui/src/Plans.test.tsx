@@ -281,3 +281,18 @@ test("a plan's hint and the event pack note show one topic to a line", async () 
   expectLines(zh["packs.hint"]);
   expectLines(zh["packs.eventPacksNote"]);
 });
+
+test("a grace's + and ++ take Enter and Space from the keyboard, as a click, and the card's own keys still pick it", async () => {
+  const r = renderEditor(<StarlightTab />, settings({ starlight_plans: [{ id: "s1", name: "Plan", ...defaultStarlight() }] }));
+  const levels = () => r.settings().starlight_plans[0].levels;
+  const first = document.querySelectorAll<HTMLElement>(".grace")[0];
+  within(first).getByRole("button", { name: "+" }).focus();
+  await r.user.keyboard("{Enter}");
+  expect(levels()[0]).toBe("plus");
+  within(first).getByRole("button", { name: "++" }).focus();
+  await r.user.keyboard(" ");
+  expect(levels()[0]).toBe("plus2");
+  (document.querySelectorAll(".grace")[1] as HTMLElement).focus();
+  await r.user.keyboard("{Enter}");
+  expect(levels()[1]).toBe("base");
+});
