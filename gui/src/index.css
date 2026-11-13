@@ -38,23 +38,30 @@
   --season-plate: #4e61ba;
   --gold: #ffd34d; /* the starlight's gold: a pick's place, a lit + or ++ */
   /* The game panels. Sinner frames: */
-  --card-top: #2c2219; --card-bottom: #120e0b; --card-line: #5a4630; --card-fg: #edcda6;
-  --dep-top: #4a3413; --dep-bottom: #17100a; --bak-top: #12392f; --bak-bottom: #0b1311;
+  --card-line: #5a4630; /* a tile's frame when the sinner is left out */
   --tone-dep: #f0a632; --on-tone: #1d1206;
   /* deployed as the game draws it: a red plate with orange text. The game's orange #ffa20f as it is, its red #bd1600 darkened
    * until the text reads 4.5:1 on it; one plate for both themes */
   --dep-plate: #931001; --dep-ink: #ffa20f;
   /* backup as the game draws it: a dark teal plate (the frame too) with light cyan text, a bright cyan number */
-  --bak-plate: #006e7e; --bak-ink: #81f1ff; --bak-num: #22fde3;
-  /* Grace of the Star as the game draws it (a capture of 2026-11-13): grey-navy cards in a blue frame on a near-black page,
-   * cream price and + / ++ on near-black buttons with a grey outline; a picked card turns white. The same in both themes,
-   * as the game's page is. */
+  --bak-plate: #006e7e; --bak-ink: #81f1ff;
+  /* A sinner tile is the identity's card art (#718): it stays the game's in both themes, as Grace of the Star does, so what
+   * sits on it keeps the dark theme's ink: the name, the deployed and backup numbers, and the shade under them. Over a white
+   * pixel of the art the name keeps 4.5:1 on 67% shade and more (the foot is 78% and more up to 34% of the tile; two lines of
+   * a narrow tile's name reach 31%), the numbers on their 85% plates 6.6:1 and 10.6:1. */
+  --art-shade: #0b0806; --art-top: #2c2219; --art-ink: #edcda6; --art-dep: #f0a632; --art-bak: #22fde3;
+  /* Grace of the Star as the game draws it (its four states, captures of 2026-11-13, #719): a dark slate card on a faint
+   * blueprint grid in a dim blue frame, on a near-black page; a selected card turns a saturated blue in a glowing blue frame;
+   * + and ++ light their button (a steel plate, the glyph orange) and the values they change show in yellow. Cream price
+   * and glyphs on near-black buttons with a grey outline. The same in both themes, as the game's page is. */
   --season-bg-1: #131728; --season-bg-2: #050817; --season-side: #050817;
-  --season-card-top: #37383c; --season-card-mid: #1a1d31; --season-card-bottom: #0f1124; --season-frame: #54619a;
+  --season-card-top: #2b2f45; --season-card-bottom: #12152a; --season-frame: #4a5584; --season-grid: #ffffff0b;
   --season-ink: #e6eefc; --season-ink-2: #b9c7e4; --season-hint: #5ee4fe; --season-shadow: 0 1px 2px #000;
-  --season-price: #d5bb9c;
-  --season-pick-top: #ffffff; --season-pick-mid: #e6eefb; --season-pick-bottom: #cfdcf1; --season-pick-ink: #0b1530; --season-pick-line: #ffffff;
+  --season-price: #e8d3a6;
+  --season-pick-top: #2c3dc4; --season-pick-bottom: #121b72; --season-pick-line: #8391ff; --season-pick-glow: #3a4cff;
+  --season-up: #ffd43b; /* a value + or ++ changed: 5.7:1 on the selected card's lightest blue */
   --season-btn: #060710; --season-btn-line: #80808c; --season-btn-ink: #e2c6a2; --season-btn-hover: #161a2e;
+  --season-lit: #3a4470; --season-lit-line: #b4c0ee; --season-lit-ink: #ffad3b; /* the orange glyph: 5:1 on the lit plate */
   /* Difficulty, as the game's banners: NORMAL yellow and HARD red-orange fills (theme pack page), INFINITY violet (no game
    * screen), EXTREME the game's red #a50000 as it is, darker than HARD (the user, 2026-11-14; #720). A fill, the ink on it,
    * and the mark of a filter chip, each as light or dark as its contrast needs; INFINITY has no fill, its colour is the ink. */
@@ -101,9 +108,8 @@
     --fl-h: #bb3602; --fl-h-ink: #ffdcd3; --fl-h-mark: #bb3602;
     --fl-i: #6a40c4;
     --fl-x: #a50000; --fl-x-ink: #fff2f0; --fl-x-mark: #a50000;
-    --card-top: #fbf8f3; --card-bottom: #ece4d7; --card-line: #b9a68c; --card-fg: #1e1813;
-    --dep-top: #fdf0d4; --dep-bottom: #f6dca6; --bak-top: #e3f5f1; --bak-bottom: #c1e7df;
-    --tone-dep: #9a5c00; --on-tone: #ffffff; --bak-num: #046f63;
+    --card-line: #b9a68c;
+    --tone-dep: #9a5c00; --on-tone: #ffffff;
   }
 }
 
@@ -267,10 +273,17 @@ p.muted { margin: 0; max-width: 56em; }
 .split aside .notice { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 4px 4px 4px 10px; margin: 0;
   color: var(--fg-2); font-size: 12.5px; background: var(--raise); border: 1px dashed var(--line-2); }
 .split aside .notice button { padding: 1px 10px; }
-/* the team page's section index, under the team list in the sticky side column */
-nav.sections { display: flex; flex-wrap: wrap; gap: 4px 6px; align-items: center; margin-top: 6px; }
-nav.sections small { flex-basis: 100%; color: var(--muted); font-size: 12px; }
+/* The team page's section index (#718): one row above the editor, the sections left to right in the page's order, held flush
+ * with the top of the scrolling page on the page's own ground, so what scrolls under it is hidden. It takes main's top padding
+ * into its own (the same 16 px, 14 in a narrow window), so its row lines up with the team list's first line. A section it
+ * jumps to stops below it (scroll-margin-top). */
+nav.sections {
+  position: sticky; top: -16px; z-index: 5; display: flex; flex-wrap: wrap; gap: 4px 6px; align-items: center;
+  margin: -16px 0 -4px; padding: 16px 0 8px; background: var(--bg); border-bottom: 1px solid var(--line);
+}
+nav.sections small { margin-right: 4px; color: var(--muted); font-size: 12px; }
 nav.sections button { padding: 2px 9px; font-size: 12.5px; color: var(--fg-2); background: none; border-color: var(--line); }
+.team [data-section] { scroll-margin-top: 56px; }
 .tag { font-style: normal; font-size: 11.5px; color: var(--accent-ink); margin-left: 8px; }
 
 .split { display: flex; gap: 20px; align-items: flex-start; }
@@ -394,37 +407,54 @@ table.overrides input:not([type="number"]):not(.decimal) { width: 100%; }
 details.hint > summary { cursor: pointer; color: var(--fg-2); font-size: 12.5px; font-weight: 600; width: max-content; }
 details.hint > p { margin: 6px 0 0; color: var(--muted); font-size: 12.5px; max-width: 56em; }
 
-/* The sinner grid: the game's identity frames, a big deployment number, a banner for deployed or backup. No portraits, so the
- * frame is short: number, banner, name. */
+/* The sinner grid, drawn after the game's identity list: each tile is the sinner's default identity card (#718) in the
+ * game's frame, a big deployment number on a shade plate, a banner for deployed or backup, the name on a shade at the foot.
+ * A sinner left out of the order is darkened, so the deployed and backup ones read first. */
 .sinners { display: grid; grid-template-columns: repeat(6, minmax(88px, 1fr)); gap: 8px; max-width: 760px; }
 .sinners.bad { outline: 1px solid var(--bad); outline-offset: 4px; }
 .sinner {
   --tone: var(--muted);
-  position: relative; aspect-ratio: 5 / 4; padding: 0; overflow: hidden; color: var(--card-fg);
+  position: relative; aspect-ratio: 3 / 4; padding: 0; overflow: hidden; color: var(--art-ink);
   border: 1px solid var(--card-line); border-radius: 10px 0 10px 0; corner-shape: bevel;
-  background: linear-gradient(165deg, var(--card-top), var(--card-bottom) 75%);
+  background: linear-gradient(165deg, var(--art-top), var(--art-shade) 75%); /* under the art; the whole tile when a card is missing */
 }
+/* the card from the top, where the face is; the foot is shaded for the name */
+.sinner img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 50% 0; transition: filter 0.18s ease-out; }
+.sinner::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(to top, color-mix(in srgb, var(--art-shade) 88%, transparent) 0,
+    color-mix(in srgb, var(--art-shade) 78%, transparent) 34%, transparent 56%);
+}
+.sinner > span { z-index: 1; }
 .sinner:hover:not(:disabled) { border-color: var(--accent-line); }
 .sinner:disabled { opacity: 1; cursor: default; }
 /* A team on a plan: the plan's grid, quieter, so it does not read as one to click (the line above says where to change it). */
-.sinners.readonly .sinner { filter: saturate(0.45) brightness(0.85); border-style: dashed; }
-.sinner.deployed { --tone: var(--tone-dep); border: 2px solid var(--tone); background: linear-gradient(165deg, var(--dep-top), var(--dep-bottom) 75%); }
+.sinners.readonly .sinner { border-style: dashed; }
+.sinners.readonly .sinner img { filter: saturate(0.6) brightness(0.85); }
+.sinners .sinner.out img { filter: saturate(0.35) brightness(0.4); }
+.sinners .sinner.out:hover:not(:disabled) img { filter: saturate(0.6) brightness(0.62); } /* a click puts it back in */
+.sinner.deployed { --tone: var(--tone-dep); border: 2px solid var(--tone); }
 .sinner.deployed .banner { background: var(--dep-plate); color: var(--dep-ink); }
-.sinner.backup { --tone: var(--bak-plate); border: 2px solid var(--tone); background: linear-gradient(165deg, var(--bak-top), var(--bak-bottom) 75%); }
-.sinner.backup .num { color: var(--bak-num); }
+.sinner.backup { --tone: var(--bak-plate); border: 2px solid var(--tone); }
+.sinner.backup .num { color: var(--art-bak); }
 .sinner.backup .banner { color: var(--bak-ink); }
-.sinner .num { position: absolute; top: 4px; left: 9px; font: 700 34px/1 var(--font-display); color: var(--tone); }
+.sinner .num {
+  position: absolute; top: 0; left: 0; min-width: 1.25em; padding: 6px 8px 3px 9px; text-align: center;
+  font: 700 30px/1 var(--font-display); color: var(--art-dep);
+  background: color-mix(in srgb, var(--art-shade) 85%, transparent); border-radius: 0 0 8px 0; corner-shape: bevel;
+}
 .sinner .banner {
   position: absolute; top: 4px; right: 0; padding: 1px 8px 1px 12px; background: var(--tone); color: var(--on-tone);
   font-weight: 700; letter-spacing: 0.2em; font-size: 12.5px; clip-path: polygon(8px 0, 100% 0, 100% 100%, 0 100%);
 }
 .sinner .name {
   position: absolute; right: 8px; bottom: 6px; left: 6px; font: 700 15px/1.1 var(--font-display); letter-spacing: 0.02em;
-  text-transform: uppercase; color: var(--card-fg); text-align: right;
+  text-transform: uppercase; color: var(--art-ink); text-align: right; text-shadow: 0 1px 2px var(--art-shade);
 }
 
-/* Starlight, drawn after the game's "Grace of the Star" page: grey-navy cards in a blue frame, a selected one turns white,
- * + and ++ add the starlight's gold rim. */
+/* Starlight, drawn after the game's "Grace of the Star" page in its four states (#719): unselected, a dark slate card in a dim
+ * frame; selected, a saturated blue card in a glowing blue frame; + and ++ light their own button and add "+" or "++" to the
+ * title, and the values they change show in yellow. */
 .starlight :focus-visible { outline-color: var(--season-ink); } /* the page stays dark in the light theme: a light ring */
 .starlight {
   color-scheme: dark; /* the game's page in both themes: its checkbox and scrollbars dark too */
@@ -435,56 +465,72 @@ details.hint > p { margin: 6px 0 0; color: var(--muted); font-size: 12.5px; max-
 .graces { flex: 1; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; min-width: 0; }
 .graces.bad { outline: 2px solid var(--bad); outline-offset: 4px; }
 .grace {
-  position: relative; display: flex; flex-direction: column; gap: 6px; min-width: 0; padding: 26px 8px 8px; overflow-wrap: anywhere;
-  border: 2px solid var(--season-frame); border-radius: 6px 0 6px 0; corner-shape: bevel; cursor: pointer; user-select: none;
-  background: linear-gradient(180deg, var(--season-card-top) 0, var(--season-card-mid) 38%, var(--season-card-bottom) 72%);
+  --fill: linear-gradient(180deg, var(--season-card-top), var(--season-card-bottom));
+  position: relative; display: flex; flex-direction: column; gap: 6px; min-width: 0; padding: 28px 8px 8px; overflow-wrap: anywhere;
+  border: 1px solid var(--season-frame); border-radius: 6px 0 6px 0; corner-shape: bevel; cursor: pointer; user-select: none;
+  background: /* the game's blueprint grid over the card's fill */
+    linear-gradient(var(--season-grid) 1px, transparent 1px) 0 0 / 14px 14px,
+    linear-gradient(90deg, var(--season-grid) 1px, transparent 1px) 0 0 / 14px 14px, var(--fill);
   color: var(--season-ink);
 }
 .grace:hover { border-color: var(--season-hint); }
 .grace[aria-disabled="true"] { cursor: default; }
 .starlight.readonly .grace:hover { border-color: var(--season-frame); }
+/* Selected, at any level: the card turns blue and its frame glows, as in the game. */
+.grace:not(.none) {
+  --fill: linear-gradient(180deg, var(--season-pick-top), var(--season-pick-bottom));
+  border-color: var(--season-pick-line); box-shadow: 0 0 0 1px var(--season-pick-line), 0 0 14px 2px var(--season-pick-glow);
+}
 .starlight.readonly .grace:not(.none):hover { border-color: var(--season-pick-line); }
 .grace .price {
-  position: absolute; top: 0; right: 0; padding: 1px 8px 1px 10px; background: var(--season-btn); color: var(--season-price);
+  position: absolute; top: 0; right: 0; padding: 1px 8px 1px 12px; background: var(--season-btn); color: var(--season-price);
   font: 700 16px/1.3 var(--font-display); clip-path: polygon(10px 0, 100% 0, 100% 100%, 0 100%);
 }
+/* Its place in the buying order (spec 04 section 7): the bot's, not the game's, so it keeps the starlight's gold. */
 .grace .rank {
-  position: absolute; top: -2px; left: -2px; min-width: 26px; padding: 0 6px; height: 26px; line-height: 26px; text-align: center;
-  font: 700 18px/26px var(--font-display); background: var(--gold); color: #1a1406;
+  position: absolute; top: 0; left: 0; min-width: 24px; padding: 0 10px 0 6px; text-align: left;
+  font: 700 16px/1.3 var(--font-display); background: var(--gold); color: #1a1406;
+  clip-path: polygon(0 0, 100% 0, calc(100% - 8px) 100%, 0 100%);
 }
-.grace .name { font-weight: 700; font-size: 14px; line-height: 1.2; text-align: right; text-shadow: var(--season-shadow); }
+/* The game's icon beside the title; the English name below them, the full width of the card (cards are narrow at 1100 px). */
+.grace .head { display: flex; align-items: center; gap: 5px; }
+.grace .icon { flex: none; width: 30px; height: 30px; object-fit: contain; filter: drop-shadow(0 1px 1px #000); }
+.grace .name { font-weight: 700; font-size: 14px; line-height: 1.2; text-align: right; text-wrap: balance; text-shadow: var(--season-shadow); }
 /* the pick button is the card's name: no plate of its own; its focus rings the whole card */
-.grace button.name { display: block; width: 100%; padding: 0; border: none; border-radius: 0; background: none; color: inherit; cursor: inherit; }
+.grace button.name { flex: 1; min-width: 0; padding: 0; border: none; border-radius: 0; background: none; color: inherit; cursor: inherit; }
 .grace button.name:hover:not(:disabled) { background: none; }
 .grace button.name:disabled { opacity: 1; cursor: default; }
 .grace button.name:focus-visible { outline: none; }
-.grace:has(button.name:focus-visible) { outline: 2px solid var(--season-ink); outline-offset: 2px; }
-.grace .name small { display: block; font: 600 12px/1.2 var(--font-display); letter-spacing: 0.02em; opacity: 0.85; }
-.grace ul { margin: 0; padding-left: 14px; font-size: 12px; line-height: 1.4; flex: 1; }
-.grace li.sub { list-style: none; margin-left: 4px; opacity: 0.85; }
+.grace:has(button.name:focus-visible) { outline: 2px solid var(--season-ink); outline-offset: 3px; }
+.grace small.en {
+  margin-top: -4px; text-align: right; text-wrap: balance; font: 600 12px/1.2 var(--font-display); letter-spacing: 0.02em;
+  opacity: 0.85; text-shadow: var(--season-shadow);
+}
+.grace ul { margin: 0; padding-left: 14px; font-size: 12px; line-height: 1.45; flex: 1; text-shadow: var(--season-shadow); }
+.grace li.sub { list-style: none; opacity: 0.9; } /* the game's "· " detail of the line above */
+.grace mark { background: none; color: var(--season-up); font-weight: 700; } /* a value + or ++ changed, a line it added */
 .grace .enhance { display: flex; gap: 6px; }
-.grace .enhance button {
-  flex: 1; padding: 1px 0; border: 1px solid var(--season-btn-line); background: var(--season-btn); color: var(--season-btn-ink);
-  font: 700 15px/1.3 var(--font-display);
+/* + / ++ and the page's own buttons share the game's plate: near-black with a grey outline; lit, a steel plate with an orange glyph. */
+.grace .enhance button, .grace-side button {
+  border: 1px solid var(--season-btn-line); background: var(--season-btn); color: var(--season-btn-ink); font-weight: 700;
 }
-.grace .enhance button:hover:not(:disabled) { border-color: var(--season-hint); background: var(--season-btn-hover); }
+.grace .enhance button { flex: 1; padding: 0; font: 700 18px/1.15 var(--font-display); } /* the game's glyphs are big */
+.grace .enhance button:hover:not(:disabled), .grace-side button:hover:not(:disabled) { border-color: var(--season-hint); background: var(--season-btn-hover); }
 .grace .enhance button:disabled { opacity: 1; cursor: default; }
-.grace .enhance button.lit { background: var(--gold); color: #1a1406; box-shadow: 0 0 8px #ffd34d; }
-/* Selected: the whole card turns over, as in the game; + and ++ add a gold rim. */
-.grace:not(.none) {
-  background: linear-gradient(180deg, var(--season-pick-top) 0, var(--season-pick-mid) 60%, var(--season-pick-bottom));
-  color: var(--season-pick-ink); border-color: var(--season-pick-line);
+.grace .enhance button[aria-pressed="true"], .grace-side button[aria-pressed="true"] {
+  border-color: var(--season-lit-line); background: var(--season-lit); color: var(--season-ink); box-shadow: inset 0 1px 0 #ffffff40;
 }
-.grace:not(.none) .name { text-shadow: none; }
-.grace.plus { border-color: var(--gold); box-shadow: 0 0 0 2px var(--gold), 0 0 8px #ffd34d88; }
-.grace.plus2 { border-color: #ffb300; box-shadow: 0 0 0 3px #ffb300, 0 0 10px #ffb30099; }
+.grace .enhance button[aria-pressed="true"], .grace-side button.boost[aria-pressed="true"] { color: var(--season-lit-ink); }
+.grace .enhance button[aria-pressed="true"]:hover:not(:disabled), .grace-side button[aria-pressed="true"]:hover:not(:disabled) {
+  border-color: var(--season-hint); background: var(--season-lit);
+}
 .starlight { flex-direction: column; align-items: stretch; }
 .grace-side {
   order: -1; flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; padding: 8px 12px; border: 2px solid var(--season-plate);
   background: var(--season-side); border-radius: 0 6px 0 6px; corner-shape: bevel;
 }
-.grace-side button { border-color: var(--season-btn-line); background: var(--season-btn); color: var(--season-btn-ink); font-weight: 700; padding: 3px 14px; }
-.grace-side button:hover:not(:disabled) { border-color: var(--season-hint); background: var(--season-btn-hover); }
+.grace-side button { padding: 3px 14px; }
+.grace-side button.boost { min-width: 52px; padding: 1px 14px; font: 700 18px/1.2 var(--font-display); }
 .grace-side .muted { color: var(--season-ink-2); font-size: 12.5px; margin-left: 8px; } /* a label for the + / ++ beside it, not a link */
 .grace-side .total { margin-left: auto; display: flex; align-items: baseline; gap: 8px; color: var(--season-ink-2); }
 .grace-side .total b { font: 700 26px/1 var(--font-display); color: var(--season-ink); }
@@ -507,7 +553,15 @@ details.skill-panel > summary + * { margin-top: 0; }
 details.skill-panel > p { margin-bottom: 0; }
 /* not details.bad nor li.bad: `.bad input`, `.bad select` would outline every field of the panel or the row, not just the wrong row */
 details.skill-panel > summary.bad { color: var(--bad); }
-.skill-add { align-self: flex-start; }
+/* 「＋ 加入罪人」(#718): its chevron is drawn, two strokes in the text's colour, as far in from the right edge as the text is from
+ * the left; the native one keeps its own inset of a few pixels whatever the padding. */
+.skill-add {
+  align-self: flex-start; appearance: none; cursor: pointer; padding: 4px 40px 4px 12px;
+  background-color: var(--field); background-repeat: no-repeat; background-size: 5px 5px; /* 10 x 5, the native chevron's size */
+  background-image: linear-gradient(45deg, transparent 36%, currentColor 44% 56%, transparent 64%),
+    linear-gradient(-45deg, transparent 36%, currentColor 44% 56%, transparent 64%);
+  background-position: right 20px center, right 15px center; /* measured: 16 px from each edge to the ink, like the text's */
+}
 ol.skill-sinners { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
 ol.skill-sinners:empty { display: none; }
 ol.skill-sinners > li {
@@ -646,6 +700,8 @@ small.fl.ext { --c: var(--fl-x); --ink: var(--fl-x-ink); box-shadow: inset 0 0 0
   nav[role="tablist"] button { padding: 7px 9px 8px; }
   nav[role="tablist"] .tabsep { margin: 0 3px; }
   main { padding: 14px 14px 24px; }
+  nav.sections { top: -14px; margin-top: -14px; padding-top: 14px; column-gap: 4px; }
+  nav.sections button { padding: 2px 7px; } /* the six still fit one row in the narrowest window (800 px) */
   .split { gap: 14px; }
   .split aside { width: 190px; }
   .split aside ol.reorder { min-width: 0; } /* the rows narrow with the list, not past it */
@@ -653,7 +709,7 @@ small.fl.ext { --c: var(--fl-x); --ink: var(--fl-x-ink); box-shadow: inset 0 0 0
   ol.skill-sinners > li { flex-wrap: wrap; row-gap: 4px; }
   .skill-pillcell { flex: 1 1 auto; width: auto; }
   .sinners { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; }
-  .sinner .num { font-size: 28px; left: 7px; }
+  .sinner .num { font-size: 24px; padding: 5px 6px 2px 7px; }
   .sinner .banner { font-size: 11.5px; letter-spacing: 0.1em; padding: 1px 6px 1px 10px; }
   .sinner .name { font-size: 13px; }
   .graces { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); }

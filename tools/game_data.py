@@ -52,11 +52,11 @@ PIECES = {"localize": "raw/Localize", "catalog": "raw/addressables", "metadata":
 # (script, whether it takes --release, the Localize Limbus Company release of the Chinese names).
 GENERATORS = [("tools/theme_pack_floors.py", False), ("tools/trial_table.py", False), ("tools/events_md8.py", False),
               ("tools/event_table.py", False), ("tools/gift_search_table.py", True), ("tools/gift_recipes.py", True), ("tools/default_gift_list.py", False),
-              ("tools/llc_text.py", True), ("tools/gift_icons.py", False), ("tools/theme_pack_covers.py", False),
-              ("tools/theme_pack_signatures.py", False)]
+              ("tools/llc_text.py", True), ("tools/gift_icons.py", False), ("tools/grace_icons.py", False), ("tools/theme_pack_covers.py", False),
+              ("tools/theme_pack_signatures.py", False), ("tools/sinner_cards.py", False)]
 # What regen writes, for diff.
 OUTPUTS = ["assets/resource/base/data", "assets/resource/base/image/GiftSearch", "assets/resource/base/image/GiftRecipe",
-           "gui/src/graces.json"]
+           "gui/src/graces.json", "gui/src/grace_icons"]
 
 
 def parse_cache_listing(text: str) -> dict[str, str]:

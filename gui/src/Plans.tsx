@@ -2,7 +2,8 @@
 import { Fragment, useEffect, useId, useRef, useState, type DragEvent, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
 import { loadThemePacks } from "./api";
 import {
-  EVENT_MODES, GRACES, LEVELS, MODE_KEYS, SINNERS, buyOrder, clickCard, clickEnhance, defaultStarlight, enhanceAll, floorBadges, freeName,
+  EVENT_MODES, GRACES, LEVELS, MODE_KEYS, SINNERS, allEnhanced, allSelected, buyOrder, clickCard, clickEnhance, defaultStarlight, enhanceAll,
+  floorBadges, freeName,
   gracePrice,
   lanesOf, lineAt, newId, newPackPlan, onFloor, parseThemePacks, selectAll, starlightCost, toggleSinner, weightOf,
   type DeploymentPlan, type Order, type PackMode, type PackPlanValues, type StarlightPlan, type StarlightValues, type ThemePackPlan,
@@ -10,11 +11,20 @@ import {
 } from "./model";
 import { GIFT_BY_ID, giftName } from "./giftCatalog";
 import { listsOfPlan, packWanted } from "./gifts";
+import { effectLines } from "./graceText";
 import { fill } from "./i18n";
 import { Field, Input, Mark, ReorderList, Select, useEditor, usePick, useSlashFocus, useUndo, withBreaks, type PlanKey } from "./ui";
 
-/** The 12 sinners in the game's grid; clicking adds one at the end of the order or leaves it out
- * (spec 04 section 6). Read-only without onChange. */
+// #718's cards (sinner_cards/index.json: sinner -> file, each sinner's default identity), bundled at build time; a sinner
+// without one, or a build before they exist, shows its frame alone. The name is printed on the tile, so the art is decoration.
+const CARDS_DIR = "../../assets/resource/base/data/sinner_cards/";
+const CARD_URLS = import.meta.glob<string>("../../assets/resource/base/data/sinner_cards/*.webp", { eager: true, query: "?url", import: "default" });
+const CARD_INDEX = Object.values(import.meta.glob<Record<string, string>>("../../assets/resource/base/data/sinner_cards/index.json",
+  { eager: true, import: "default" }))[0] ?? {};
+const cardOf = (sinner: string): string | undefined => CARD_URLS[CARDS_DIR + CARD_INDEX[sinner]];
+
+/** The 12 sinners in the game's grid, each on its default identity's card; clicking adds one at the end of the order or
+ * leaves it out (spec 04 section 6), and a sinner left out shows its card darkened. Read-only without onChange. */
 export function SinnerGrid({ order, onChange, path }: { order: Order; onChange?: (o: Order) => void; path: string }) {
   const { t, bad } = useEditor();
   return (<>
@@ -22,10 +32,12 @@ export function SinnerGrid({ order, onChange, path }: { order: Order; onChange?:
     <div className={"sinners" + (onChange ? "" : " readonly") + (bad(path) ? " bad" : "")} data-path={path}>
       {SINNERS.map((s) => {
         const n = order.indexOf(s) + 1;
-        const kind = n === 0 ? "" : n <= 7 ? "deployed" : "backup";
+        const kind = n === 0 ? "out" : n <= 7 ? "deployed" : "backup";
+        const art = cardOf(s);
         return (
           <button type="button" key={s} className={"sinner " + kind} disabled={!onChange} aria-pressed={n > 0}
             onClick={() => onChange?.(toggleSinner(order, s))}>
+            {art && <img src={art} alt="" draggable={false} />}
             {n > 0 && <span className="num">{n}</span>}
             {n > 0 && <span className="banner">{t(n <= 7 ? "order.deployed" : "order.backup")}</span>}
             <span className="name">{s}</span>
@@ -54,7 +66,6 @@ export function StarlightEditor({ value, onChange, path }: {
           const n = i + 1;
           const level = value.levels[i];
           const rank = order.indexOf(n) + 1;
-          const effects = g.effects[level as "plus" | "plus2"] ?? g.effects.base;
           return (
             // A group, not a button around buttons: its name is a pick button beside + and ++. A click anywhere on the card
             // picks it, as in the game; from the keyboard the pick button does, its click reaching the card.
@@ -63,15 +74,27 @@ export function StarlightEditor({ value, onChange, path }: {
               onClick={() => set((v) => clickCard(v, n))}>
               {rank > 0 && <span className="rank" id={`${id}-rank-${n}`}>{rank}</span>}
               <span className="price" id={`${id}-price-${n}`}>★ {gracePrice(n, level === "none" ? "base" : level)}</span>
-              <button type="button" className="name" disabled={!onChange} aria-pressed={rank > 0} aria-label={graceName(g, zh)}
-                aria-describedby={[rank > 0 && `${id}-rank-${n}`, `${id}-price-${n}`, zh && `${id}-fx-${n}`].filter(Boolean).join(" ")}>
-                {graceName(g, zh)}{zh && g.zh && <small>{g.en}</small>}
-              </button>
-              {zh && <ul id={`${id}-fx-${n}`}>{effects.map((line, j) => <li key={j} className={line.startsWith("-") ? "sub" : ""}>{line.replace(/^-/, "")}</li>)}</ul>}
+              <div className="head">
+                <img className="icon" src={graceIconUrl(n)} alt="" />
+                <button type="button" className="name" disabled={!onChange} aria-pressed={rank > 0}
+                  aria-describedby={[rank > 0 && `${id}-rank-${n}`, `${id}-price-${n}`, zh && `${id}-fx-${n}`].filter(Boolean).join(" ")}>
+                  <span className="title">{graceName(g, zh)}{plusOf(level)}</span>
+                </button>
+              </div>
+              {zh && g.zh && <small className="en">{g.en}</small>}
+              {zh && (
+                <ul id={`${id}-fx-${n}`}>
+                  {effectLines(g, level).map((line, j) => (
+                    <li key={j} className={line.sub ? "sub" : undefined}>
+                      {line.runs.map((r, k) => (r.up ? <mark key={k}>{r.text}</mark> : <Fragment key={k}>{r.text}</Fragment>))}
+                    </li>
+                  ))}
+                </ul>
+              )}
               <span className="enhance">
                 {([1, 2] as const).map((plus) => (
                   <button type="button" key={plus} disabled={!onChange} aria-pressed={level === LEVELS[plus + 1]}
-                    aria-label={`${graceName(g, zh)} ${"+".repeat(plus)}`} className={level === LEVELS[plus + 1] ? "lit" : ""}
+                    aria-label={`${graceName(g, zh)} ${"+".repeat(plus)}`}
                     onClick={(e) => { e.stopPropagation(); set((v) => clickEnhance(v, n, plus)); }}>{"+".repeat(plus)}</button>
                 ))}
               </span>
@@ -81,10 +104,15 @@ export function StarlightEditor({ value, onChange, path }: {
       </div>
       <div className="grace-side">
         {onChange && <>
-          <button type="button" onClick={() => set(selectAll)}>{t("starlight.selectAll")}</button>
+          {/* lit while a second click would undo them: every card selected, every card at + or at ++ */}
+          <button type="button" aria-pressed={allSelected(value)} onClick={() => set(selectAll)}>{t("starlight.selectAll")}</button>
           <span className="muted">{t("starlight.enhanceAll")}</span>
-          <button type="button" aria-label={`${t("starlight.enhanceAll")} +`} onClick={() => set((v) => enhanceAll(v, 1))}>+</button>
-          <button type="button" aria-label={`${t("starlight.enhanceAll")} ++`} onClick={() => set((v) => enhanceAll(v, 2))}>++</button>
+          {([1, 2] as const).map((plus) => (
+            <button type="button" key={plus} className="boost" aria-label={`${t("starlight.enhanceAll")} ${"+".repeat(plus)}`}
+              aria-pressed={allEnhanced(value, plus)} onClick={() => set((v) => enhanceAll(v, plus))}>
+              {"+".repeat(plus)}
+            </button>
+          ))}
         </>}
         <span className="total">{t("starlight.total")} <b>★ {starlightCost(value.levels)}</b></span>
         <Mark as="label" className="check" path={`${path}/convert_leftover`}>
@@ -113,6 +141,11 @@ function PlanUsers({ planKey, id }: { planKey: PlanKey; id: string }) {
 
 /** A grace's name in the GUI's language: the Chinese one when the data has it. */
 const graceName = (g: Grace, zh: boolean) => (zh && g.zh ? g.zh : g.en);
+const GRACE_ICONS = import.meta.glob<string>("./grace_icons/*.webp", { eager: true, query: "?url", import: "default" });
+/** The game's icon of grace n (1-10): ./grace_icons/<n>.webp (tools/grace_icons.py). */
+const graceIconUrl = (n: number): string | undefined => GRACE_ICONS[`./grace_icons/${n}.webp`];
+/** What the game adds to a grace's title at a level: "+" at +, "++" at ++, nothing below. */
+const plusOf = (level: string) => "+".repeat(Math.max(0, LEVELS.indexOf(level) - 1));
 
 /** A starlight plan on one line, for a team that uses it: the picks in buying order with their level, and the total. */
 export function StarlightReceipt({ value }: { value: StarlightValues }) {
@@ -125,7 +158,7 @@ export function StarlightReceipt({ value }: { value: StarlightValues }) {
         <ol>
           {order.map((n, i) => {
             const g = GRACES[n - 1], level = value.levels[n - 1];
-            return <li key={n}><b>{i + 1}</b>{graceName(g, zh)}{level !== "base" && <i>{"+".repeat(LEVELS.indexOf(level) - 1)}</i>}</li>;
+            return <li key={n}><b>{i + 1}</b>{graceName(g, zh)}{level !== "base" && <i>{plusOf(level)}</i>}</li>;
           })}
         </ol>
       ) : <span className="muted">{t("starlight.none")}</span>}
