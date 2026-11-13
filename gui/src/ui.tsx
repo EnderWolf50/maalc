@@ -1,5 +1,5 @@
 // Shared controls: the editor context, labelled fields, and a drag-or-button reorder list.
-import { Fragment, createContext, useContext, useState, type ReactNode } from "react";
+import { Fragment, createContext, useContext, useState, type KeyboardEvent, type ReactNode } from "react";
 import type { Key } from "./i18n";
 import type { Settings } from "./model";
 
@@ -26,15 +26,35 @@ export function withBreaks(text: string): ReactNode {
   return parts.length === 1 ? text : parts.map((part, i) => <Fragment key={i}>{i > 0 && <br />}{part}</Fragment>);
 }
 
+/** A labelled control. Its note sits outside the label, so the control's name is the label alone (a screen reader read the
+ * whole note as the name); the label is `display: contents`, so the span, the control and the note lay out as siblings. */
 export function Field({ label, path, note, children }: { label: string; path?: string; note?: string; children: ReactNode }) {
   const { bad } = useEditor();
   return (
-    <label className={"field" + (path && bad(path) ? " bad" : "")}>
-      <span>{label}</span>
-      {children}
+    <div className={"field" + (path && bad(path) ? " bad" : "")}>
+      <label><span>{label}</span>{children}</label>
       {note && <small>{withBreaks(note)}</small>}
-    </label>
+    </div>
   );
+}
+
+/** What a red mark (a tab's or a panel's dot) says to a screen reader. */
+export function ProblemMark({ on }: { on: boolean }) {
+  const { t } = useEditor();
+  return on ? <span className="sr-only">{t("hasProblem")}</span> : null;
+}
+
+/** Arrow keys, Home and End along a row of tabs (role=tab): the next tab is chosen and takes the focus. */
+export function tabKeys<T extends string>(ids: readonly T[], current: T, choose: (id: T) => void) {
+  return (e: KeyboardEvent<HTMLElement>) => {
+    const at = ids.indexOf(current), last = ids.length - 1;
+    const to = { ArrowRight: at + 1, ArrowLeft: at - 1, Home: 0, End: last }[e.key];
+    if (to === undefined) return;
+    e.preventDefault();
+    const next = ids[(to + ids.length) % ids.length];
+    choose(next);
+    e.currentTarget.parentElement?.querySelector<HTMLElement>(`[data-tab="${next}"]`)?.focus();
+  };
 }
 
 export function Select({ value, options, label, onChange }: {
@@ -88,11 +108,32 @@ export function ToggleNum({ label, path, value, on, min, max, note, onChange }: 
   );
 }
 
+/** The editor's icons, drawn in one stroke on a 16-unit square: every list that sorts or removes uses these. */
+const ICONS = {
+  up: "M8 13.5V3M3.5 7.5 8 3l4.5 4.5",
+  down: "M8 2.5V13M3.5 8.5 8 13l4.5-4.5",
+  remove: "M4 4l8 8M12 4l-8 8",
+  undo: "M5.5 3.5 2 7l3.5 3.5M2.5 7H10a3.5 3.5 0 0 1 0 7H7",
+  lock: "M4.5 7.5h7v6h-7zM6 7.5V5.5a2 2 0 0 1 4 0v2",
+  search: "M7 12a5 5 0 1 0 0-10 5 5 0 0 0 0 10zM10.6 10.6 14 14",
+} as const;
+export const Icon = ({ name }: { name: keyof typeof ICONS }) => (
+  <svg className="ic" viewBox="0 0 16 16" aria-hidden><path d={ICONS[name]} /></svg>
+);
+/** The handle of a row that takes a drag: two columns of three dots. */
+export const Grip = ({ className = "grip" }: { className?: string }) => (
+  <svg className={"ic " + className} viewBox="0 0 16 16" aria-hidden>
+    {[6, 10].flatMap((x) => [3.5, 8, 12.5].map((y) => <circle key={`${x}-${y}`} cx={x} cy={y} r={1.15} />))}
+  </svg>
+);
+
 /** Native HTML drag and drop, plus up/down buttons for the keyboard. Needs "dragDropEnabled": false on the Tauri
- * window (tauri.conf.json): on Windows Tauri otherwise replaces WebView2's drop handler and no HTML5 drop fires (#64). */
-export function ReorderList<T>({ items, onChange, render, keyOf, selected, onSelect, badAt, className }: {
+ * window (tauri.conf.json): on Windows Tauri otherwise replaces WebView2's drop handler and no HTML5 drop fires (#64).
+ * Every sorted list draws its rows alike: grip, place number (`numbered`), the item, then ↑ ↓ and, with `onRemove`, ✕. */
+export function ReorderList<T>({ items, onChange, render, keyOf, selected, onSelect, badAt, className, numbered, onRemove, removeLabel }: {
   items: T[]; onChange: (items: T[]) => void; render: (item: T, i: number) => ReactNode; keyOf: (item: T) => string;
   selected?: number; onSelect?: (i: number, items: T[]) => void; badAt?: (i: number) => boolean; className?: string;
+  numbered?: boolean; onRemove?: (i: number) => void; removeLabel?: string;
 }) {
   const { t } = useEditor();
   const [dragging, setDragging] = useState<number | null>(null);
@@ -104,7 +145,7 @@ export function ReorderList<T>({ items, onChange, render, keyOf, selected, onSel
     if (selected === from) onSelect?.(to, next);
   };
   return (
-    <ol className={"reorder" + (className ? " " + className : "")} title={t("dragHint")}>
+    <ol className={["reorder", numbered && "numbered", className].filter(Boolean).join(" ")} title={t("dragHint")}>
       {items.map((item, i) => (
         <li key={keyOf(item)} draggable
           className={[selected === i && "selected", dragging === i && "dragging", badAt?.(i) && "bad"].filter(Boolean).join(" ")}
@@ -116,12 +157,18 @@ export function ReorderList<T>({ items, onChange, render, keyOf, selected, onSel
           onDragEnd={() => setDragging(null)}
           onDragOver={(e) => e.preventDefault()}
           onDrop={(e) => { e.preventDefault(); if (dragging !== null) move(dragging, i); setDragging(null); }}>
-          <span className="grip" aria-hidden>⋮⋮</span>
+          <Grip />
           <span className="item">{render(item, i)}</span>
-          <button type="button" className="icon" aria-label={t("up")} title={t("up")} disabled={i === 0}
-            onClick={(e) => { e.stopPropagation(); move(i, i - 1); }}>↑</button>
-          <button type="button" className="icon" aria-label={t("down")} title={t("down")} disabled={i === items.length - 1}
-            onClick={(e) => { e.stopPropagation(); move(i, i + 1); }}>↓</button>
+          <span className="moves">
+            <button type="button" className="icon" aria-label={t("up")} title={t("up")} disabled={i === 0}
+              onClick={(e) => { e.stopPropagation(); move(i, i - 1); }}><Icon name="up" /></button>
+            <button type="button" className="icon" aria-label={t("down")} title={t("down")} disabled={i === items.length - 1}
+              onClick={(e) => { e.stopPropagation(); move(i, i + 1); }}><Icon name="down" /></button>
+            {onRemove && (
+              <button type="button" className="icon remove" aria-label={removeLabel ?? t("remove")} title={removeLabel ?? t("remove")}
+                onClick={(e) => { e.stopPropagation(); onRemove(i); }}><Icon name="remove" /></button>
+            )}
+          </span>
         </li>
       ))}
     </ol>

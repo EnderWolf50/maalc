@@ -6,7 +6,7 @@ import { LUX_MODES, newSettings, parseSettings, rebase, runEnum, type Luxcavatio
 import { DeploymentTab, StarlightTab, ThemePackTab } from "./Plans";
 import { GiftListsTab } from "./GiftLists";
 import { TeamsTab } from "./Teams";
-import { Decimal, EditorContext, Field, Num, Select, ToggleNum, useEditor, withBreaks, type Ctx } from "./ui";
+import { Decimal, EditorContext, Field, Icon, Num, ProblemMark, Select, ToggleNum, tabKeys, useEditor, withBreaks, type Ctx } from "./ui";
 import { validate, type Problem } from "./validate";
 
 export const TABS = [
@@ -24,6 +24,11 @@ export const TABS = [
 const GROUP_START = new Set<(typeof TABS)[number][0]>(["deployment", "events", "daily"]);
 
 const toText = (s: Settings) => JSON.stringify(s, null, 2) + "\n";
+/** A field whose text has its own undo (the browser's): Ctrl+Z there is the field's, and its keystrokes are one edit. */
+const isTextField = (el: EventTarget | null) => el instanceof HTMLTextAreaElement || (el instanceof HTMLInputElement
+  && !["checkbox", "radio", "button", "submit", "range", "color", "file"].includes(el.type));
+/** How many edits 復原 can take back. */
+const UNDO_DEPTH = 100;
 
 export default function App() {
   const [s, setS] = useState<Settings | null>(null);
@@ -38,6 +43,21 @@ export default function App() {
   const disk = useRef<string | null>(null);
   const latest = useRef({ s, savedText });
   latest.current = { s, savedText };
+  // Undo: the settings before each edit, newest last. A run of keystrokes in one text field is one edit.
+  const past = useRef<Settings[]>([]);
+  const [undoDepth, setUndoDepth] = useState(0);
+  const lastEdit = useRef<{ at: number; field: EventTarget | null }>({ at: 0, field: null });
+  const forget = () => { past.current = []; setUndoDepth(0); };
+  const undo = () => {
+    const before = past.current.pop();
+    if (!before) return;
+    setUndoDepth(past.current.length);
+    lastEdit.current = { at: 0, field: null };
+    latest.current = { ...latest.current, s: before };
+    setS(before);
+  };
+  const undoRef = useRef(undo);
+  undoRef.current = undo;
 
   /** Take what another writer changed in the file, under the unsaved edits (rebase); the settings the editor holds now. */
   const sync = async () => {
@@ -60,6 +80,7 @@ export default function App() {
     setS(next);
     setSavedText(toText(data));
     setStatus("diskChanged");
+    forget(); // the steps back were taken over the file as it was: undoing one would drop the other writer's change
     return next;
   };
 
@@ -68,6 +89,17 @@ export default function App() {
     const timer = setInterval(poll, 2000);
     window.addEventListener("focus", poll);
     return () => { clearInterval(timer); window.removeEventListener("focus", poll); };
+  }, []);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === "z" && !isTextField(e.target)) {
+        e.preventDefault();
+        undoRef.current();
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
   }, []);
 
   useEffect(() => {
@@ -115,7 +147,16 @@ export default function App() {
   const ctx: Ctx = {
     s, t, bad, giftList,
     chooseList: (id, open) => { setGiftList(id); if (open) setTab("gifts"); },
-    update: (fn) => setS((prev) => { const next = structuredClone(prev!); fn(next); return next; }),
+    update: (fn) => {
+      const field = isTextField(document.activeElement) ? document.activeElement : null, now = Date.now();
+      const sameTyping = field !== null && field === lastEdit.current.field && now - lastEdit.current.at < 1500;
+      lastEdit.current = { at: now, field };
+      if (!sameTyping) {
+        past.current = [...past.current.slice(1 - UNDO_DEPTH), latest.current.s!];
+        setUndoDepth(past.current.length);
+      }
+      setS((prev) => { const next = structuredClone(prev!); fn(next); return next; });
+    },
     tv: (field, v) => TEXT[lang][`${field}.${v}` as Key] ?? v,
   };
   const dirty = toText(s) !== savedText;
@@ -148,14 +189,14 @@ export default function App() {
     }
   };
 
-  const Current = TABS.find((x) => x[0] === tab)![2];
+  const [, tabLabel, Current] = TABS.find((x) => x[0] === tab)!;
   return (
     <EditorContext.Provider value={ctx}>
       <header>
         <h1>{t("title")}</h1>
         <span className="muted path" title={t("file")}>{root}\config\settings.json</span>
         <span className={"status" + state} role="status">
-          {dirty ? [t("unsaved"), note].filter(Boolean).join(" ") : said}
+          {dirty ? [t("unsaved"), note].filter(Boolean).join(" ") : blocked && !said ? t("blocked") : said}
         </span>
         <label className="lang">{t("language")}{" "}
           <select value={s.language} onChange={(e) => ctx.update((d) => { d.language = e.target.value as Settings["language"]; })}>
@@ -163,23 +204,31 @@ export default function App() {
             <option value="en_us">English</option>
           </select>
         </label>
+        <button type="button" className="undo" disabled={!undoDepth} title={`${t("undo")} (Ctrl+Z)`} onClick={undo}>
+          <Icon name="undo" />{t("undo")}
+        </button>
         <button type="button" className="primary" onClick={save}>{t("save")}</button>
       </header>
-      {blocked && (
-        <div className="problems" role="alert">
-          <p>{t("saveBlocked")}</p>
-          <ul>{problems.map((p, i) => <li key={i}>{p.text}</li>)}</ul>
-        </div>
-      )}
-      <nav role="tablist">
+      <nav role="tablist" aria-label={t("title")}>
         {TABS.map(([id, label, , prefixes]) => (
-          <button type="button" role="tab" key={id} data-tab={id} aria-selected={tab === id}
+          <button type="button" role="tab" key={id} id={`tab-${id}`} data-tab={id} aria-selected={tab === id} aria-controls="tabpanel"
+            tabIndex={tab === id ? 0 : -1} onKeyDown={tabKeys(TABS.map((x) => x[0]), tab, setTab)}
             className={[tab === id && "selected", GROUP_START.has(id) && "group-start", prefixes.some(bad) && "bad"].filter(Boolean).join(" ")}
-            onClick={() => setTab(id)}>{t(label)}</button>
+            onClick={() => setTab(id)}>{t(label)}<ProblemMark on={prefixes.some(bad)} /></button>
         ))}
       </nav>
-      {/* Keyed by tab: a tab opens at its top, not at the scroll position the last tab left. */}
-      <main key={tab}><Current /></main>
+      {/* Keyed by tab: a tab opens at its top, not at the scroll position the last tab left. A refused save's problems open the
+        tab, under the tab bar, so the frame above never moves; the tab bar's dots show which tabs hold them. */}
+      <main key={tab} id="tabpanel" role="tabpanel" aria-labelledby={`tab-${tab}`}>
+        <h2 className="sr-only">{t(tabLabel)}</h2>
+        {blocked && (
+          <div className="problems" role="alert">
+            <p>{t("saveBlocked")}</p>
+            <ul>{problems.map((p, i) => <li key={i}>{p.text}</li>)}</ul>
+          </div>
+        )}
+        <Current />
+      </main>
     </EditorContext.Provider>
   );
 }
@@ -278,7 +327,7 @@ function ChargeFields() {
 }
 
 function LuxFields({ task }: { task: keyof Settings["luxcavation"] }) {
-  const { s, update, t, tv } = useEditor();
+  const { s, update, t, tv, bad } = useEditor();
   const opts = s.luxcavation[task];
   const set = (patch: Partial<Luxcavation>) => update((d) => { Object.assign(d.luxcavation[task], patch); });
   const path = `luxcavation/${task}`;
@@ -298,9 +347,14 @@ function LuxFields({ task }: { task: keyof Settings["luxcavation"] }) {
             label={(id) => { const x = s.teams.find((x) => x.id === id); return x ? `${x.name || "—"} (#${x.game_team})` : t("lux.team_none"); }}
             onChange={(v) => set({ team: v || null })} />
         </Field>
-        <Field label={t("lux.consecutive")} path={`${path}/consecutive`} note={t("lux.consecutive_note")}>
-          <input type="checkbox" checked={opts.consecutive} onChange={(e) => set({ consecutive: e.target.checked })} />
-        </Field>
+        {/* A switch sits in the label column, as on the other tabs. */}
+        <div className={"toggle" + (bad(`${path}/consecutive`) ? " bad" : "")}>
+          <label className="check">
+            <input type="checkbox" checked={opts.consecutive} onChange={(e) => set({ consecutive: e.target.checked })} />
+            {t("lux.consecutive")}
+          </label>
+          <small>{withBreaks(t("lux.consecutive_note"))}</small>
+        </div>
         <Field label={t("lux.retries")} path={`${path}/retries`} note={t("lux.retries_note")}>
           <Num value={opts.retries} min={0} onChange={(v) => set({ retries: v })} />
         </Field>
@@ -319,7 +373,7 @@ function OverrideTable<R extends Record<string, string | number>>({ listKey, col
   const rows = s[listKey] as unknown as R[];
   const set = (fn: (rows: R[]) => void) => update((d) => fn(d[listKey] as unknown as R[]));
   return (
-    <>
+    <div className="card">
       {rows.length ? (
         <table className="overrides">
           <thead><tr>{cols.map((c) => <th key={c.key}>{t(c.label)}</th>)}<th /></tr></thead>
@@ -339,8 +393,8 @@ function OverrideTable<R extends Record<string, string | number>>({ listKey, col
           </tbody>
         </table>
       ) : <p className="muted">{t("noRows")}</p>}
-      <button type="button" onClick={() => set((l) => { l.push({ ...blank }); })}>+ {t("add")}</button>
-    </>
+      <button type="button" className="add" onClick={() => set((l) => { l.push({ ...blank }); })}>+ {t("add")}</button>
+    </div>
   );
 }
 

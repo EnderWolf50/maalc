@@ -102,6 +102,9 @@ export function KeywordPanel({ keyword }: { keyword: string }) {
   const zh = s.language === "zh_tw";
   const c = counts(list, keyword), blocks = tiersOf(list.gorder, keyword);
   const { grid, stop, walk, onFocus } = useTileGrid((id) => GIFT_BY_ID.get(id)?.keyword === keyword, blocks[0]?.ids[0]);
+  const kindsOf = (ids: number[]) => ids.map((id) => GIFT_BY_ID.get(id)!.kind);
+  const noteOf = (ids: number[]) => (kindsOf(ids).includes("fusion") ? "gl.tier_fusion" : kindsOf(ids).some((k) => k !== "buyable") ? "gl.tier_unbuyable" : null);
+  const notes = [...new Set(blocks.map(({ ids }) => noteOf(ids)).filter((k) => k !== null))];
 
   return (
     <div ref={grid} onKeyDown={walk}>
@@ -114,14 +117,13 @@ export function KeywordPanel({ keyword }: { keyword: string }) {
         {c.keep > 0 && <span className="gl-tag keep">{fill(t("gl.n_keep"), { n: c.keep })}</span>}
         {c.fusion > 0 && <span className="gl-tag fusion">{fill(t("gl.n_fusion"), { n: c.fusion })}</span>}
       </h3>
+      {notes.map((k) => <p key={k} className="gl-kwnote">{t(k)}</p>)}
       {blocks.map(({ tier, ids }) => {
-        const kinds = ids.map((id) => GIFT_BY_ID.get(id)!.kind);
         const set = ids.filter((id) => state(list, id) !== "drop").length;
-        const note = kinds.includes("fusion") ? t("gl.tier_fusion") : kinds.some((k) => k !== "buyable") ? t("gl.tier_unbuyable") : "";
         return (
           <section key={tier} className="gl-tier" aria-label={TIERS[tier]}>
             <h4><span className={"gl-tierno" + (tier >= 4 ? " fusion" : "")}>{TIERS[tier]}</span>
-              <small>{note && `${note}・`}{fill(t("gl.tier_n"), { n: ids.length })}{set > 0 && `・${fill(t("gl.tier_set"), { n: set })}`}</small></h4>
+              <small>{fill(t("gl.tier_n"), { n: ids.length })}{set > 0 && `・${fill(t("gl.tier_set"), { n: set })}`}</small></h4>
             <div className="gl-wall">
               {/* A gift the shop sells can be dragged onto another of its tier to change its place in the buy order. */}
               {ids.map((id) => (

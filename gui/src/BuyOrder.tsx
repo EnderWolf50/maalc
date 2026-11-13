@@ -1,5 +1,5 @@
 // The purchase order dialog of the gift list tab (#296, spec 04 section 13): one collapsible section per keyword, in buy order,
-// each listing the gifts the list wants and the shop sells. Drag a keyword or a gift, or use its ▲▼, to change the order.
+// each listing the gifts the list wants and the shop sells. Drag a keyword or a gift, or use its ↑ ↓, to change the order.
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useDragSort } from "./dragSort";
 import { GIFT_BY_ID, giftName, iconUrl } from "./giftCatalog";
@@ -7,16 +7,16 @@ import { buyList, moveGift, moveKeyword, nudgeGift, useGiftEdit } from "./giftEd
 import { mainKeyword, queue } from "./gifts";
 import { fill } from "./i18n";
 import { KeywordIcon, TIERS, kwText } from "./KeywordGrid";
-import { useEditor } from "./ui";
+import { Grip, Icon, useEditor } from "./ui";
 
 type Dir = "up" | "down";
 
-/** The ▲ and ▼ of one row; `id` tells them apart ("kw:Burn", "g:9001"), `last` is the row's index when it is the last. */
+/** The ↑ and ↓ of one row, drawn as in every sorted list (ui.tsx ReorderList); `id` tells them apart ("kw:Burn", "g:9001"), `last` is the row's index when it is the last. */
 function Arrows({ id, labels, at, last, onMove }: { id: string; labels: [string, string]; at: number; last: number; onMove: (dir: Dir) => void }) {
-  return (["up", "down"] as const).map((dir, j) => (
-    <button type="button" key={dir} className="gl-mini gl-mv" data-mv={`${id}:${dir}`} aria-label={labels[j]}
-      disabled={j ? at === last : at === 0} onClick={() => onMove(dir)}>{j ? "▼" : "▲"}</button>
-  ));
+  return <span className="moves">{(["up", "down"] as const).map((dir, j) => (
+    <button type="button" key={dir} className="icon gl-mv" data-mv={`${id}:${dir}`} aria-label={labels[j]} title={labels[j]}
+      disabled={j ? at === last : at === 0} onClick={() => onMove(dir)}><Icon name={dir} /></button>
+  ))}</span>;
 }
 
 export function BuyOrderDialog({ onClose }: { onClose: () => void }) {
@@ -71,7 +71,7 @@ export function BuyOrderDialog({ onClose }: { onClose: () => void }) {
       <div className="gl-dlg" role="dialog" aria-modal="true" aria-label={t("gl.buy_title")} ref={box}>
         <div className="gl-dlgtop">
           <b>{t("gl.buy_title")}</b><small>{t("gl.buy_sub")}</small>
-          <button type="button" className="gl-x" ref={closeButton} aria-label={t("gl.close")} title={`${t("gl.close")} (Esc)`} onClick={onClose}>✕</button>
+          <button type="button" className="gl-x" ref={closeButton} aria-label={t("gl.close")} title={`${t("gl.close")} (Esc)`} onClick={onClose}><Icon name="remove" /></button>
         </div>
         <div className="gl-dlgbody">
           <div className="gl-accbar">
@@ -86,10 +86,10 @@ export function BuyOrderDialog({ onClose }: { onClose: () => void }) {
             return (
               <section key={k} className="gl-agrp">
                 <div className="gl-sortrow gl-ahead" {...dragItem(k, "kw")}>
-                  <span className="gl-grip" aria-hidden>⠿</span>
+                  <Grip className="grip gl-grip" />
                   <button type="button" className="gl-dnb" aria-expanded={isOpen}
                     onClick={() => setOpen((o) => { const n = new Set(o); if (!n.delete(k)) n.add(k); return n; })}>
-                    <span className="gl-chev" aria-hidden>{isOpen ? "▾" : "▸"}</span>
+                    <span className={"gl-chev" + (isOpen ? " open" : "")} aria-hidden />
                     <KeywordIcon keyword={k} />
                     <b>{name}</b>
                     <small>{fill(t("gl.rank"), { n: i + 1 })}・{fill(t("gl.tier_n"), { n: gifts.length })}</small>
@@ -106,7 +106,7 @@ export function BuyOrderDialog({ onClose }: { onClose: () => void }) {
                       const g = GIFT_BY_ID.get(id)!, label = giftName(g, zh), n = all.indexOf(id) + 1;
                       return (
                         <li key={id} className="gl-sortrow gl-gr" data-gift={id} {...dragItem(String(id), k)}>
-                          <span className="gl-grip" aria-hidden>⠿</span>
+                          <Grip className="grip gl-grip" />
                           <span className="gl-ord" title={fill(t("gl.queue_pos"), { n })}>{n}</span>
                           <img className="gl-ico" src={iconUrl(id)} alt="" loading="lazy" />
                           <span className="gl-qn">{label}</span>

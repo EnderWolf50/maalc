@@ -41,8 +41,9 @@
 .gl-panel { background: var(--panel); border: 1px solid var(--line-strong); border-radius: 8px; padding: 8px 12px 12px; min-height: 200px; }
 .gl-empty { border: 1px dashed var(--line-strong); border-radius: 8px; padding: 14px; text-align: center; margin: 6px 0 10px; background: var(--panel-2); }
 .gl-empty p { margin: 4px 0 10px; color: var(--muted); }
-.gl-kwh { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 0; padding: 2px 0 6px; font-size: 14px; font-weight: 400; }
+.gl-kwh { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 0; padding: 2px 0 6px; font-size: 16px; font-weight: 400; }
 .gl-kwh b { font-size: 16px; }
+.gl-kwh small { font-size: 14px; }
 .gl-kwh small { color: var(--muted); }
 .gl-tag { background: var(--panel-2); border: 1px solid var(--line-strong); border-radius: 999px; font-size: 12px; padding: 0 9px; color: var(--muted); }
 .gl-tag.main { background: var(--sel); color: var(--fg); font-weight: 700; }
@@ -54,6 +55,8 @@
 .gl-tierno { background: #4a5163; color: #fff; font-size: 12px; padding: 0 8px; border-radius: 4px; }
 .gl-tierno.fusion { background: #6b4f0b; }
 .gl-tier h4 small { color: var(--muted); font-size: 12px; font-weight: 400; }
+/* What a keyword's fusion or unbuyable gifts mean: once, under its header, not again in each tier band. */
+.gl-kwnote { margin: 0 0 4px; max-width: 60em; color: var(--muted); font-size: 12.5px; line-height: 1.55; }
 .gl-wall { display: flex; flex-wrap: wrap; gap: 9px; }
 
 /* A tile shows the state in its frame: want thick, double ring and stripes; keep solid with a tint; drop thin and faded; a gift
@@ -151,7 +154,8 @@
 }
 .gl-dlgtop { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--line-strong); background: var(--panel-2); border-radius: 12px 12px 0 0; }
 .gl-dlgtop small { color: var(--muted); flex: 1; }
-.gl .gl-x { border: 0; background: none; font-size: 16px; padding: 0 6px; }
+.gl .gl-x { display: inline-flex; border: 0; background: none; padding: 4px; color: var(--muted); }
+.gl .gl-x .ic { width: 16px; height: 16px; }
 .gl-dlgbody { overflow: auto; padding: 8px 10px; flex: 1; }
 .gl-accbar { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
 .gl-accbar small { color: var(--muted); }
@@ -168,14 +172,15 @@
 .gl .gl-dnb:hover:not(:disabled) { background: none; }
 .gl-dnb b { font-size: 14px; }
 .gl-dnb small { color: var(--muted); }
-.gl-chev { width: 12px; color: var(--muted); text-align: center; }
-.gl-ord { min-width: 24px; text-align: center; background: var(--accent); color: var(--on-accent); border-radius: 999px; font-size: 11px; font-weight: 700; flex: none; }
+.gl-chev { flex: none; width: 7px; height: 7px; margin: 0 4px 0 3px; border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted);
+  transform: rotate(-45deg); transition: transform 150ms ease-out; }
+.gl-chev.open { transform: translateY(-2px) rotate(45deg); }
+.gl-ord::before { content: "#"; } /* its place in the whole buy list, as the keyword row's #1–3; the look is index.css's place number */
 .gl-qn { flex: 0 1 auto; }
 .gl-ico { width: 24px; height: 24px; object-fit: contain; flex: none; pointer-events: none; }
 .gl-gr small { color: var(--muted); }
-/* The arrow buttons are small, as in the mockup. */
-.gl .gl-mini { padding: 0 4px; min-width: 20px; font-size: 9px; line-height: 15px; border-radius: 5px; }
-.gl .gl-accbar .gl-mini { font-size: 12px; padding: 0 8px; }
+.gl .gl-accbar .gl-mini { font-size: 12px; padding: 0 8px; border-radius: 5px; }
+.gl button.icon { background: none; border-color: transparent; color: var(--muted); }
 /* List options menu (GiftListOptions.tsx): a popover under its button. */
 .gl-opts { position: relative; }
 .gl-opt-pop {

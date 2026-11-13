@@ -11,7 +11,7 @@ import {
 import { GIFT_BY_ID, giftName } from "./giftCatalog";
 import { listsOfPlan, packWanted } from "./gifts";
 import { fill } from "./i18n";
-import { Field, ReorderList, Select, useEditor, withBreaks } from "./ui";
+import { Field, Icon, ReorderList, Select, useEditor, withBreaks } from "./ui";
 
 /** The 12 sinners in the game's grid; clicking adds one at the end of the order or leaves it out
  * (spec 04 section 6). Read-only without onChange. */
@@ -19,12 +19,12 @@ export function SinnerGrid({ order, onChange, path }: { order: Order; onChange?:
   const { t, bad } = useEditor();
   return (<>
     {onChange && <p className="muted">{t("order.hint")}</p>}
-    <div className={"sinners" + (bad(path) ? " bad" : "")}>
+    <div className={"sinners" + (bad(path) ? " bad" : "") + (onChange ? "" : " readonly")}>
       {SINNERS.map((s) => {
         const n = order.indexOf(s) + 1;
         const kind = n === 0 ? "" : n <= 7 ? "deployed" : "backup";
         return (
-          <button type="button" key={s} className={"sinner " + kind} disabled={!onChange} aria-pressed={n > 0}
+          <button type="button" key={s} className={"sinner " + kind} aria-disabled={onChange ? undefined : true} aria-pressed={n > 0}
             onClick={() => onChange?.(toggleSinner(order, s))}>
             {n > 0 && <span className="num">{n}</span>}
             {n > 0 && <span className="banner">{t(n <= 7 ? "order.deployed" : "order.backup")}</span>}
@@ -55,10 +55,11 @@ export function StarlightEditor({ value, onChange, path }: {
           const rank = order.indexOf(n) + 1;
           const effects = g.effects[level as "plus" | "plus2"] ?? g.effects.base;
           return (
-            <div key={g.en} className={`grace ${level}`} role="button" tabIndex={onChange ? 0 : -1} aria-pressed={rank > 0}
-              aria-disabled={!onChange} title={`${n}. ${g.en} (${tv("level", level)})`}
-              onClick={() => set((v) => clickCard(v, n))}
-              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); set((v) => clickCard(v, n)); } }}>
+            <div key={g.en} className={`grace ${level}`} role="group" aria-label={g.en} title={`${n}. ${g.en} (${tv("level", level)})`}>
+              {/* The whole card is its select button; + and ++ sit above it. */}
+              <button type="button" className="pick" aria-pressed={rank > 0} disabled={!onChange}
+                aria-label={`${zh && g.zh ? g.zh : g.en} ★ ${gracePrice(n, level === "none" ? "base" : level)}`}
+                onClick={() => set((v) => clickCard(v, n))} />
               {rank > 0 && <span className="rank">{rank}</span>}
               <span className="price">★ {gracePrice(n, level === "none" ? "base" : level)}</span>
               <span className="name">{zh && g.zh ? g.zh : g.en}{zh && g.zh && <small>{g.en}</small>}</span>
@@ -112,7 +113,7 @@ function PlanTab<P extends { id: string; name: string }>({ planKey, tab, make, e
   return (
     <div className="split">
       <aside>
-        {lead && <button type="button" className={"lead" + (i === -1 ? " selected" : "")} onClick={() => setSel(-1)}>{lead.label}</button>}
+        {lead && <button type="button" className={"lead" + (i === -1 ? " selected" : "")} onClick={() => setSel(-1)}><Icon name="lock" />{lead.label}</button>}
         {plans.length || lead ? (
           <ReorderList items={plans} keyOf={(p) => p.id} selected={i} onSelect={setSel}
             badAt={(j) => bad(`${planKey}/${j}`)} onChange={(list) => set((l) => l.splice(0, l.length, ...list))}
@@ -201,11 +202,14 @@ function PackPlanEditor({ data, plan, planId, path, onChange }: {
   const [difficulty, setDifficulty] = useState<PackMode>("");
   const [floor, setFloor] = useState(0);
   const [images, setImages] = useState(false);
+  const [query, setQuery] = useState("");
   const [drag, setDrag] = useState<string | null>(null);
   const lanes = lanesOf(plan);
   const line = lineAt(lanes, plan.threshold);
   const extra = Object.keys(plan.weights).filter((n) => !(n in data.packs)); // weighed, gone from the data file
-  const shown = [...Object.keys(data.packs).filter((n) => onFloor(data.packs[n], difficulty, floor)), ...extra];
+  const q = query.trim().toLowerCase();
+  const shown = [...Object.keys(data.packs).filter((n) => onFloor(data.packs[n], difficulty, floor)), ...extra]
+    .filter((n) => !q || n.toLowerCase().includes(q));
   const set = (patch: Partial<PackPlanValues>) => onChange?.({ ...plan, ...patch });
   const weigh = (what: string, w: number) => (what === UNLISTED ? set({ unlisted: w }) : set({ weights: { ...plan.weights, [what]: w } }));
   const ask = (what: string, current?: number) => {
@@ -261,16 +265,18 @@ function PackPlanEditor({ data, plan, planId, path, onChange }: {
       <span>{t("packs.threshold").replace("{n}", String(plan.threshold))}</span>
       {onChange && <>
         <button type="button" className="icon" aria-label={t("up")} title={t("up")} disabled={line - 1 < 1}
-          onClick={() => toGap(line - 1)}>↑</button>
+          onClick={() => toGap(line - 1)}><Icon name="up" /></button>
         <button type="button" className="icon" aria-label={t("down")} title={t("down")} disabled={line + 1 > lanes.length}
-          onClick={() => toGap(line + 1)}>↓</button>
+          onClick={() => toGap(line + 1)}><Icon name="down" /></button>
       </>}
     </div>
   );
   const gapOrLine = (g: number) => (g === line ? lineBar : <div className="gap" {...target(drag === LINE, lanes[g - 1])} />);
-  const chips = <T extends string | number>(values: T[], value: T, label: (v: T) => string, pick: (v: T) => void) =>
+  // A filter is one segmented control; `short` is what a chip shows when its name is long (the floor numbers).
+  const chips = <T extends string | number>(values: T[], value: T, label: (v: T) => string, pick: (v: T) => void, short?: (v: T) => string) =>
     values.map((v) => (
-      <button type="button" key={String(v)} className="chip" aria-pressed={v === value} onClick={() => pick(v)}>{label(v)}</button>
+      <button type="button" key={String(v)} className="chip" aria-pressed={v === value} aria-label={short && label(v)}
+        title={short && label(v)} onClick={() => pick(v)}>{short ? short(v) : label(v)}</button>
     ));
   // The plan's one setting outside the lanes first; then the lanes with what filters them (the filters only change the view).
   return (<>
@@ -281,15 +287,24 @@ function PackPlanEditor({ data, plan, planId, path, onChange }: {
           : <span>{tv("event_packs", plan.event_packs)}</span>}
       </Field>
     </div>
+    <div className="pack-card">
     <div className="packbar">
-      {chips<PackMode>(["", "normal", "hard", "infinity", "extreme"], difficulty, (v) => (v ? v.toUpperCase() : t("packs.anyDifficulty")), setDifficulty)}
-      <span className="gap" />
-      {chips(FLOORS, floor, (v) => (v ? t("packs.floor").replace("{n}", String(v)) : t("packs.anyFloor")), setFloor)}
+      <span className="seg">
+        {chips<PackMode>(["", "normal", "hard", "infinity", "extreme"], difficulty, (v) => (v ? v.toUpperCase() : t("packs.anyDifficulty")), setDifficulty)}
+      </span>
       <span className="spacer" />
       {/* Names or cover images: a switch of the view, drawn as one segmented control, apart from the filters. */}
       <span className="seg">
         {chips([false, true].map(String), String(images), (v) => t(v === "true" ? "packs.images" : "packs.names"), (v) => setImages(v === "true"))}
       </span>
+      <span className="break" />
+      <span className="seg floors">
+        {chips(FLOORS, floor, (v) => (v ? t("packs.floor").replace("{n}", String(v)) : t("packs.anyFloor")), setFloor,
+          (v) => (v ? String(v) : t("packs.anyFloor")))}
+      </span>
+      <label className="search"><Icon name="search" />
+        <input type="search" value={query} placeholder={t("packs.search")} aria-label={t("packs.search")} onChange={(e) => setQuery(e.target.value)} />
+      </label>
     </div>
     {onChange && <p className="muted">{withBreaks(t("packs.hint"))}</p>}
     <p className="muted floorkey">
@@ -317,6 +332,7 @@ function PackPlanEditor({ data, plan, planId, path, onChange }: {
       ))}
       {gapOrLine(lanes.length)}
       {onChange && <div className="lane add" {...target(drag !== null && drag !== LINE, null)}>＋ {t("packs.newLane")}</div>}
+    </div>
     </div>
   </>);
 }

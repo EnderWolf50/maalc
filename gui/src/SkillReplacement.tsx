@@ -6,7 +6,7 @@ import { fill } from "./i18n";
 import {
   GAME_DECK, SINNERS, SKILL_PAYMENTS, SKILL_SWAPS, skillPlan, type SkillPay, type SkillReplacement, type SkillSwapKey, type SkillTarget,
 } from "./model";
-import { useEditor, withBreaks } from "./ui";
+import { Grip, Icon, ProblemMark, useEditor, withBreaks } from "./ui";
 
 const move = <T,>(list: T[], from: number, to: number) => {
   const next = [...list];
@@ -30,8 +30,8 @@ export function SkillPanel({ i }: { i: number }) {
 
   const seen = new Map<string, number>(); // a hand-edited file can list a sinner twice (validate names it): keys stay unique
   return (
-    <details className="panel skill-panel">
-      <summary className={bad(path) ? "bad" : ""}>{t("skill.title")}{changed ? ` (${changed})` : ""}</summary>
+    <details className="panel skill-panel" data-sec="skill">
+      <summary className={bad(path) ? "bad" : ""}>{t("skill.title")}{changed ? ` (${changed})` : ""}<ProblemMark on={bad(path)} /></summary>
       <p className="muted">{withBreaks(t("skill.note"))}</p>
       <select className="skill-add" aria-label={t("skill.add")} value="" disabled={!rest.length}
         onChange={(e) => { const sinner = e.target.value; edit((d) => { d.sinners.push({ sinner, target: { ...GAME_DECK }, s1_s3_first: true }); }); }}>
@@ -52,7 +52,7 @@ export function SkillPanel({ i }: { i: number }) {
           return (
             <li key={n ? `${x.sinner}#${n}` : x.sinner} data-sinner={x.sinner} className={bad(rowPath) || faulty ? "faulty" : ""}
               {...dragItem(String(j), "sinners")}>
-              <span className="grip" aria-hidden>⋮⋮</span>
+              <Grip />
               <b className="skill-rank">{j + 1}</b>
               <span className="skill-name" title={x.sinner}>{x.sinner}</span>
               <span className="skill-count">
@@ -88,13 +88,13 @@ export function SkillPanel({ i }: { i: number }) {
                   ? (["s1_s3", otherSwap] as const).map((k) => <option key={k} value={k}>{fill(t("skill.first"), { swap: swapName(k) })}</option>)
                   : <option value="">—</option>}
               </select>
-              <span className="skill-arrows">
+              <span className="moves">
                 <button type="button" className="icon" aria-label={`${t("up")} ${x.sinner}`} title={t("up")} disabled={j === 0}
-                  onClick={() => edit((d) => { d.sinners = move(d.sinners, j, j - 1); })}>↑</button>
+                  onClick={() => edit((d) => { d.sinners = move(d.sinners, j, j - 1); })}><Icon name="up" /></button>
                 <button type="button" className="icon" aria-label={`${t("down")} ${x.sinner}`} title={t("down")} disabled={j === sr.sinners.length - 1}
-                  onClick={() => edit((d) => { d.sinners = move(d.sinners, j, j + 1); })}>↓</button>
-                <button type="button" className="icon" aria-label={`${t("skill.remove")} ${x.sinner}`} title={t("skill.remove")}
-                  onClick={() => edit((d) => { d.sinners.splice(j, 1); })}>✕</button>
+                  onClick={() => edit((d) => { d.sinners = move(d.sinners, j, j + 1); })}><Icon name="down" /></button>
+                <button type="button" className="icon remove" aria-label={`${t("skill.remove")} ${x.sinner}`} title={t("skill.remove")}
+                  onClick={() => edit((d) => { d.sinners.splice(j, 1); })}><Icon name="remove" /></button>
               </span>
             </li>
           );

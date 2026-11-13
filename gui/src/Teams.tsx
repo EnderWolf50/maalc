@@ -3,13 +3,14 @@ import { useState } from "react";
 import { resetTeamTimes } from "./api";
 import { TIERS, kwText } from "./KeywordGrid";
 import { teamKeyword } from "./gifts";
+import { fill } from "./i18n";
 import {
   MAX_GIFTS, SEARCH_GIFTS, SEARCH_TABS, SINNERS, defaultStarlight, freeName, newId, newTeam, teamEnum, toggleGift,
   type GiftRef, type SearchGift, type Team,
 } from "./model";
 import { SinnerGrid, StarlightEditor } from "./Plans";
 import { SkillPanel } from "./SkillReplacement";
-import { Field, Num, ReorderList, Select, ToggleNum, useEditor, withBreaks } from "./ui";
+import { Field, Num, ProblemMark, ReorderList, Select, ToggleNum, tabKeys, useEditor, withBreaks } from "./ui";
 
 export function TeamsTab() {
   const { s, update, t, bad } = useEditor();
@@ -19,7 +20,7 @@ export function TeamsTab() {
     <div className="split">
       <aside>
         {s.teams.length ? (
-          <ReorderList className="queue" items={s.teams} keyOf={(x) => x.id} selected={i} onSelect={(j, teams) => setSel(teams[j].id)}
+          <ReorderList className="queue" numbered items={s.teams} keyOf={(x) => x.id} selected={i} onSelect={(j, teams) => setSel(teams[j].id)}
             badAt={(j) => bad(`teams/${j}`)}
             onChange={(teams) => update((d) => { d.teams = teams; })}
             render={(x) => (
@@ -94,11 +95,23 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
         <button type="button" className="danger" onClick={() => { update((d) => { d.teams.splice(i, 1); }); onRemove(); }}>{t("remove")}</button>
       </div>
       {notice && <p className="notice">{notice}</p>}
+      {/* The page runs about seven screens: a row of its sections, which stays at the top while it scrolls, opens one and goes
+          there; a section holding a wrong field is red here too. */}
+      <div className="jump" role="navigation" aria-label={t("team.sections")}>
+        {SECTIONS.map(([key, title, fields]) => {
+          const wrong = badIn(bad, path, [...fields]) !== "";
+          return (
+            <button type="button" key={key} className={wrong ? "bad" : ""} onClick={(e) => jumpTo(e.currentTarget, key)}>
+              {t(title).replace(/[（(].*$/, "")}<ProblemMark on={wrong} />
+            </button>
+          );
+        })}
+      </div>
 
       {/* What the shop buys and which packs the team takes: chosen here, near the top, edited on their own tabs. Every section
           of the team is a panel that starts open, so one header style runs down the page and a long one (starlight) folds away. */}
-      <details className="panel" open>
-        <summary className={badIn(bad, path, ["gift_list", "theme_pack_plan"])}>{t("team.lists")}</summary>
+      <details className="panel" open data-sec="lists">
+        <summary className={badIn(bad, path, ["gift_list", "theme_pack_plan"])}>{t("team.lists")}<ProblemMark on={badIn(bad, path, ["gift_list", "theme_pack_plan"]) !== ""} /></summary>
         <div className="rows">
           <Field label={t("team.gift_list")} path={`${path}/gift_list`} note={t("team.gift_list_note")}>
             <span className="inline">
@@ -121,8 +134,8 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
         </div>
       </details>
 
-      <details className="panel" open>
-        <summary className={badIn(bad, path, ["deployment_order"])}>{t("team.deployment_order")}</summary>
+      <details className="panel" open data-sec="deployment">
+        <summary className={badIn(bad, path, ["deployment_order"])}>{t("team.deployment_order")}<ProblemMark on={badIn(bad, path, ["deployment_order"]) !== ""} /></summary>
         <div className={"row" + (bad(`${path}/deployment_order`) && !("custom" in team.deployment_order) ? " bad" : "")}>
           {planSelect(orderSource, s.deployment_order_plans, (id) => set({
             deployment_order: id ? { plan: id } : { custom: [...(order ?? SINNERS)] },
@@ -132,11 +145,14 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
         {"custom" in team.deployment_order ? (
           <SinnerGrid order={team.deployment_order.custom} path={`${path}/deployment_order/custom`}
             onChange={(custom) => set({ deployment_order: { custom } })} />
-        ) : order && <SinnerGrid order={order} path={`${path}/deployment_order`} />}
+        ) : order && <>
+          <p className="muted from-plan">{fill(t("team.fromPlan"), { tab: t("tab.deployment") })}</p>
+          <SinnerGrid order={order} path={`${path}/deployment_order`} />
+        </>}
       </details>
 
-      <details className="panel" open>
-        <summary className={badIn(bad, path, ["starlight"])}>{t("team.starlight")}</summary>
+      <details className="panel" open data-sec="starlight">
+        <summary className={badIn(bad, path, ["starlight"])}>{t("team.starlight")}<ProblemMark on={badIn(bad, path, ["starlight"]) !== ""} /></summary>
         <div className={"row" + (bad(`${path}/starlight`) && !("custom" in team.starlight) ? " bad" : "")}>
           {planSelect(starSource, s.starlight_plans, (id) => set({
             starlight: id ? { plan: id } : {
@@ -148,15 +164,18 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
         {"custom" in team.starlight ? (
           <StarlightEditor value={team.starlight.custom} path={`${path}/starlight/custom`}
             onChange={(custom) => set({ starlight: { custom } })} />
-        ) : starPlan && <StarlightEditor value={starPlan} path={`${path}/starlight`} />}
+        ) : starPlan && <>
+          <p className="muted from-plan">{fill(t("team.fromPlan"), { tab: t("tab.starlight") })}</p>
+          <StarlightEditor value={starPlan} path={`${path}/starlight`} />
+        </>}
       </details>
 
       <GiftSearchPanel i={i} />
       <KeepPanel i={i} />
       <SkillPanel i={i} />
 
-      <details className="panel" open>
-        <summary className={badIn(bad, path, MORE)}>{t("team.more")}</summary>
+      <details className="panel" open data-sec="more">
+        <summary className={badIn(bad, path, MORE)}>{t("team.more")}<ProblemMark on={badIn(bad, path, MORE) !== ""} /></summary>
         <div className="rows">
           <div className={"toggle" + (bad(`${path}/guard_turns`) ? " bad" : "")}>
             <label className="check">
@@ -204,9 +223,9 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
           </Field>
         </div>
         <div className={"rewards" + (bad(`${path}/reward_cards`) ? " bad" : "")}>
-          <h4>{t("team.reward_cards")}</h4>
-          <ReorderList items={team.reward_cards} keyOf={(x) => x} onChange={(reward_cards) => set({ reward_cards })}
-            render={(x, j) => <>{j + 1}. {x}</>} />
+          <h3>{t("team.reward_cards")}</h3>
+          <ReorderList numbered items={team.reward_cards} keyOf={(x) => x} onChange={(reward_cards) => set({ reward_cards })}
+            render={(x) => x} />
         </div>
       </details>
     </div>
@@ -234,14 +253,15 @@ function GiftGrid({ gifts, start, full, mark, onToggle }: {
     <div className="gift-search">
       <div className="gift-tabs" role="tablist">
         {SEARCH_TABS.map((k) => (
-          <button type="button" key={k} role="tab" aria-selected={k === tab} className={k === tab ? "selected" : ""} onClick={() => setTab(k)}>
+          <button type="button" key={k} role="tab" data-tab={k} aria-selected={k === tab} tabIndex={k === tab ? 0 : -1}
+            onKeyDown={tabKeys(SEARCH_TABS, tab, setTab)} className={k === tab ? "selected" : ""} onClick={() => setTab(k)}>
             {k}{count(k) > 0 && <b>{count(k)}</b>}
           </button>
         ))}
       </div>
       {[3, 2, 1].map((tier) => (
         <div key={tier} className="gift-tier">
-          <h4>{TIERS[tier]}</h4>
+          <h3>{TIERS[tier]}</h3>
           <div className="gifts">
             {SEARCH_GIFTS.filter((g) => g.keyword === tab && g.tier === tier).map((g) => {
               const m = mark(g);
@@ -270,9 +290,9 @@ function KeepPanel({ i }: { i: number }) {
   const path = `teams/${i}`;
   const set = (patch: Partial<Team>) => update((d) => { Object.assign(d.teams[i], patch); });
   return (
-    <details className="panel">
+    <details className="panel" data-sec="keep">
       {/* The summary, not the details: `.bad input` would outline every field of the panel (as in SkillPanel). */}
-      <summary className={badIn(bad, path, ["sell_max_tier", "sell_vestiges"])}>{t("keep.title")}</summary>
+      <summary className={badIn(bad, path, ["sell_max_tier", "sell_vestiges"])}>{t("keep.title")}<ProblemMark on={badIn(bad, path, ["sell_max_tier", "sell_vestiges"]) !== ""} /></summary>
       <p className="muted">{t("keep.note")}</p>
       <div className="rows">
         <div className={"toggle" + (bad(`${path}/sell_max_tier`) ? " bad" : "")}>
@@ -306,8 +326,8 @@ function GiftSearchPanel({ i }: { i: number }) {
   const rank = (g: SearchGift) => search.gifts.findIndex((x) => sameRef(x, g)) + 1;
   const full = search.gifts.length >= MAX_GIFTS;
   return (
-    <details className="panel">
-      <summary className={bad(path) ? "bad" : ""}>{t("gift.title")}{search.enabled && search.gifts.length ? ` (${search.gifts.length})` : ""}</summary>
+    <details className="panel" data-sec="gift">
+      <summary className={bad(path) ? "bad" : ""}>{t("gift.title")}{search.enabled && search.gifts.length ? ` (${search.gifts.length})` : ""}<ProblemMark on={bad(path)} /></summary>
       <div className="toggle">
         <label className="check">
           <input type="checkbox" checked={search.enabled} onChange={(e) => set({ enabled: e.target.checked })} />{t("gift.enabled")}
@@ -317,17 +337,12 @@ function GiftSearchPanel({ i }: { i: number }) {
       <GiftGrid gifts={search.gifts} start={main ?? SEARCH_TABS[0]} full={full} mark={(g) => (rank(g) ? String(rank(g)) : null)}
         onToggle={(g) => set({ gifts: toggleGift(search.gifts, g) })} />
       <div className={"rewards" + (bad(`${path}/gifts`) ? " bad" : "")}>
-        <h4>{t("gift.order")} ({search.gifts.length}/{MAX_GIFTS})</h4>
+        <h3>{t("gift.order")} ({search.gifts.length}/{MAX_GIFTS})</h3>
         {full && <p className="muted">{t("gift.full")}</p>}
         {search.gifts.length ? (
-          <ReorderList items={search.gifts} keyOf={(g) => `${g.keyword}|${g.tier}|${g.name}`} onChange={(gifts) => set({ gifts })}
-            render={(g, j) => (
-              <>
-                {j + 1}. {refName(g, zh)} <small className="muted">{g.keyword} {TIERS[g.tier]}</small>{" "}
-                <button type="button" className="icon" aria-label={t("remove")} title={t("remove")}
-                  onClick={(e) => { e.stopPropagation(); set({ gifts: toggleGift(search.gifts, g) }); }}>×</button>
-              </>
-            )} />
+          <ReorderList numbered items={search.gifts} keyOf={(g) => `${g.keyword}|${g.tier}|${g.name}`} onChange={(gifts) => set({ gifts })}
+            onRemove={(j) => set({ gifts: toggleGift(search.gifts, search.gifts[j]) })}
+            render={(g) => <>{refName(g, zh)} <small className="muted">{g.keyword} {TIERS[g.tier]}</small></>} />
         ) : <p className="muted">{t("gift.none")}</p>}
       </div>
     </details>
@@ -339,7 +354,27 @@ const MORE = ["guard_turns", "hard_from_floor", "allow_white_gossypium", "usage"
   "shop_refresh_normal", "min_alive", "reward_cards"];
 
 /** "bad" when a check failed on any of these fields of the team at `path`: the panel's summary shows it while the panel is closed. */
-const badIn = (bad: (path: string) => boolean, path: string, keys: string[]) => (keys.some((k) => bad(`${path}/${k}`)) ? "bad" : "");
+const badIn = (bad: (path: string) => boolean, path: string, keys: readonly string[]) => (keys.some((k) => bad(`${path}/${k}`)) ? "bad" : "");
+
+/** The team page's panels, top to bottom (their `data-sec`), the title each shows and the fields it holds. */
+const SECTIONS = [
+  ["lists", "team.lists", ["gift_list", "theme_pack_plan"]],
+  ["deployment", "team.deployment_order", ["deployment_order"]],
+  ["starlight", "team.starlight", ["starlight"]],
+  ["gift", "gift.title", ["gift_search"]],
+  ["keep", "keep.title", ["sell_max_tier", "sell_vestiges"]],
+  ["skill", "skill.title", ["skill_replacement"]],
+  ["more", "team.more", MORE],
+] as const;
+
+/** Open a team page's section and scroll it to the top, under the jump bar. */
+function jumpTo(from: Element, key: string) {
+  const panel = from.closest(".team")?.querySelector<HTMLDetailsElement>(`details[data-sec="${key}"]`);
+  if (!panel) return;
+  panel.open = true;
+  const still = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+  panel.scrollIntoView?.({ block: "start", behavior: still ? "auto" : "smooth" });
+}
 
 /** Keep a dangling plan id selectable so the select shows it instead of silently changing it. */
 function missing(id: string | false, plans: { id: string }[]) {
