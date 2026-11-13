@@ -3,15 +3,10 @@ their code uses, and the tests and tools that read them through `actions` read t
 agent/actions.py writes nothing."""
 
 import re
-from collections import Counter
-from pathlib import Path
 
 import pytest
 
-import split_actions
-from split_actions import Misfit, Source, split
-
-ROOT = Path(__file__).resolve().parent.parent
+from split_actions import Misfit, split
 
 # A small agent: json, luxcavation and load_settings only the Luxcavation code reads, time and SettingsError only the
 # code that stays, AgentServer both.
@@ -250,19 +245,3 @@ def test_a_table_that_does_not_fit_writes_nothing(tmp_path, change, problem):
 
     assert text(root, "agent/actions.py") == ACTIONS.replace(*change)
     assert not (root / "agent/lux_actions.py").exists() and text(root, "tests/test_lux.py") == TEST
-
-
-def test_the_table_places_every_top_level_name_of_actions_py_once():
-    # a name added to actions.py goes in the table, in the module of the code around it
-    table = [n for _, names in split_actions.MODULES.values() for n in names] + list(split_actions.STAY)
-    _, statements = split_actions.statements(Source((ROOT / "agent/actions.py").read_text(encoding="utf-8")))
-    assert [n for n, k in Counter(table).items() if k > 1] == []
-    assert [n for s in statements for n in s.names if n not in table] == []
-
-
-def test_every_module_not_split_yet_fits_actions_py():
-    # #676 splits the page modules one PR each, in any order: nothing a module not split yet moves reads another page
-    # module, nothing staying reads it
-    src = Source((ROOT / "agent/actions.py").read_text(encoding="utf-8"))
-    not_split = [m for m in split_actions.MODULES if not (ROOT / "agent" / f"{m}.py").exists()]
-    assert {m: split_actions.move_plan(src, m).problems for m in not_split} == {m: [] for m in not_split}

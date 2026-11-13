@@ -2,6 +2,10 @@
 go to agent/<module>.py unchanged and in their order, and the tests and tools that read one as `actions.<name>` read
 `<module>.<name>`.
 
+The split is done (#676): every module of MODULES is in agent/, and the tests read the pure-logic modules directly
+(#713). The tool stays for a re-run on a new base; on today's tree it refuses each module (`agent/<module>.py
+exists already`) and writes nothing. Its tests (tests/test_split_actions.py) run it on a small agent of their own.
+
     uv run python tools/split_actions.py <module>        # lux_actions, or agent/lux_actions.py
 
 It writes:
