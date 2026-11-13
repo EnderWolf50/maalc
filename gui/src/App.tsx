@@ -37,9 +37,17 @@ const toText = (s: Settings) => JSON.stringify(s, null, 2) + "\n";
 const problemId = (i: number) => `problem-${i}`;
 /** The tab that edits a settings path ("teams/1/name"), if any ("(root)" has none). */
 const tabOf = (path: string) => TABS.find((x) => (x[3] as readonly string[]).includes(path.split("/")[0]));
-/** One mark of a problem across edits: its kind at one field it marks, not its words, which name what the user is typing.
- * Two of three teams left on one TEAMS # keep two of the three marks. */
-const problemMark = (p: Problem, path: string) => `${p.say.key} ${path}`;
+/** While the field at settings path `at` is typed in: `p` with the fields it marked before the last keystroke (`before`, the
+ * problems shown then), or nothing for a problem the typing made. A problem is the one of its kind it was by a field it marks
+ * outside the typed one, not by its words, which name what the user is typing: the typed field's own mark may now be another
+ * problem of the kind (TEAMS #1 typed into #12, one clash for another). A problem of the typed field alone is matched by it. */
+function asBefore(p: Problem, at: string, before: Problem[]): Problem[] {
+  const inField = (m: string) => at !== "" && (m === at || m.startsWith(at + "/"));
+  const outside = p.paths.every(inField) ? p.paths : p.paths.filter((m) => !inField(m));
+  const was = before.filter((q) => q.say.key === p.say.key && q.paths.some((m) => outside.includes(m)));
+  const paths = p.paths.filter((m) => was.some((q) => q.paths.includes(m)));
+  return paths.length ? [{ ...p, paths }] : [];
+}
 /** The controls a value is typed into, not picked from (a select, a switch, a drag). */
 const TYPED = new Set(["text", "search", "url", "number"]);
 const typesText = (el: EventTarget) => el instanceof HTMLTextAreaElement || (el instanceof HTMLInputElement && TYPED.has(el.type));
@@ -53,10 +61,10 @@ export default function App() {
   const [giftList, setGiftList] = useState("default"); // what the gift list tab shows; the teams tab can point it at a list
   const [picked, setPicked] = useState<Picked>({});
   const [jump, setJump] = useState<string | null>(null); // the path of the problem the user clicked
-  // The field being typed in, its settings path ("" for none) and the marks (problemMark) that showed before its last
-  // keystroke: a mark the typing makes waits until the field loses focus, a save is tried or another writer changes the file;
-  // null: every problem shows (#717).
-  const [typed, setTyped] = useState<{ field: EventTarget; at: string; marks: Set<string> } | null>(null);
+  // The field being typed in, its settings path ("" for none) and the problems shown before its last keystroke: a mark the
+  // typing makes waits until the field loses focus, a save is tried or another writer changes the file (asBefore); null: every
+  // problem shows (#717).
+  const [typed, setTyped] = useState<{ field: EventTarget; at: string; before: Problem[] } | null>(null);
   const [status, setStatus] = useState(""); // a TEXT key, or text as it is (an error, the gift ids a load dropped)
   const [failed, setFailed] = useState(false); // the last save did not write the file (a conflict or an error)
   const [refused, setRefused] = useState(false); // the last save stopped at the checks, and its problems are not all fixed
@@ -187,14 +195,7 @@ export default function App() {
   // a fix shows at once, typing or not. The hold is the field's only while it has the focus: a field that goes with the focus
   // in it (Enter closes its box) fires no blur.
   const held = typed && typed.field === document.activeElement ? typed : null;
-  const shown = held ? problems.flatMap((p) => {
-    const kept = p.paths.filter((m) => held.marks.has(problemMark(p, m)));
-    const typedHere = (m: string) => held.at !== "" && (m === held.at || m.startsWith(held.at + "/"));
-    // the same problem as before: by a mark elsewhere, since the typed field's own may now be another problem of its kind
-    // (TEAMS #1 typed into #12, a clash for a clash); a problem of the typed field alone, by that field's mark
-    const before = p.paths.every(typedHere) ? kept.length > 0 : kept.some((m) => !typedHere(m));
-    return before ? [{ ...p, paths: kept }] : [];
-  }) : problems;
+  const shown = held ? problems.flatMap((p) => asBefore(p, held.at, held.before)) : problems;
   useEffect(() => { if (!problems.length) setRefused(false); }, [problems.length]);
   const lang = s?.language ?? "zh_tw";
   const { t } = translate(lang);
@@ -361,7 +362,7 @@ export default function App() {
         onChange={(e) => {
           if (!(e.target === document.activeElement && typesText(e.target))) return;
           const at = (e.target as HTMLElement).closest<HTMLElement>("[data-path]")?.dataset.path ?? "";
-          setTyped({ field: e.target, at, marks: new Set(shown.flatMap((p) => p.paths.map((m) => problemMark(p, m)))) });
+          setTyped({ field: e.target, at, before: shown });
         }}
         onBlur={() => setTyped(null)}>
         <div id="tabpanel" role="tabpanel" aria-labelledby={`tab-${tab}`}>

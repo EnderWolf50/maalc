@@ -98,6 +98,8 @@ describe("a problem shows while editing, before any save", () => {
     expect(screen.queryByRole("alert")).toBeNull();
   };
   const slot = () => screen.getByRole("spinbutton", { name: zh["team.game_team"] });
+  /** Which rows of the team list are marked wrong, top to bottom. */
+  const bad = () => [...document.querySelectorAll("aside li")].map((r) => r.classList.contains("bad"));
 
   test("one the file has, as it opens", async () => {
     const s = settings();
@@ -186,7 +188,6 @@ describe("a problem shows while editing, before any save", () => {
     await pickInList(user, "Tc");
     await user.type(slot(), "{Backspace}"); // Tc's TEAMS #12 becomes #1
     expect(slot()).toHaveValue(1);
-    const bad = () => [...document.querySelectorAll("aside li")].map((r) => r.classList.contains("bad"));
     expect(bad()).toEqual([true, true, false]);
     expect(slot()).not.toHaveAttribute("aria-invalid");
     await user.tab();
@@ -201,11 +202,24 @@ describe("a problem shows while editing, before any save", () => {
     const user = await openOn(s, zh["tab.teams"]);
     await pickInList(user, "Tb");
     await user.type(slot(), "2"); // Tb's TEAMS #1 becomes #12, Tc's
-    const bad = () => [...document.querySelectorAll("aside li")].map((r) => r.classList.contains("bad"));
     expect(bad()).toEqual([false, false, false]);
     unmarked(slot(), zh["tab.teams"]);
     await user.tab();
     expect(bad()).toEqual([false, true, true]);
+    marked(slot(), zh["tab.teams"]);
+  });
+
+  test("typing a field from one shown clash into another: the first goes at once, the field joins the second once left", async () => {
+    const s = settings();
+    s.teams[1].game_team = 1; // Ta and Tb share TEAMS #1
+    s.teams.push({ ...newTeam(3, "Tc"), id: "c", game_team: 12 }, { ...newTeam(4, "Td"), id: "d", game_team: 12 }); // Tc, Td #12
+    const user = await openOn(s, zh["tab.teams"]);
+    await pickInList(user, "Tb");
+    await user.type(slot(), "2"); // Tb's TEAMS #1 becomes #12
+    expect(bad()).toEqual([false, false, true, true]);
+    expect(slot()).not.toHaveAttribute("aria-invalid");
+    await user.tab();
+    expect(bad()).toEqual([false, true, true, true]);
     marked(slot(), zh["tab.teams"]);
   });
 
@@ -215,8 +229,7 @@ describe("a problem shows while editing, before any save", () => {
     s.teams.forEach((x) => { x.game_team = 1; });
     const user = await openOn(s, zh["tab.teams"]);
     await user.type(slot(), "2"); // the first team leaves TEAMS #1 for #12; the other two still share #1
-    const rows = [...document.querySelectorAll("aside li")];
-    expect(rows.map((r) => r.classList.contains("bad"))).toEqual([false, true, true]);
+    expect(bad()).toEqual([false, true, true]);
     expect(problem(/隊伍「Tb」、「Tc」都啟用，也都用 TEAMS #1/)).toBeInTheDocument();
   });
 
