@@ -47,6 +47,7 @@ def child():
     sys.modules["maa.agent"] = types.ModuleType("maa.agent")
     sys.modules["maa.agent.agent_server"] = stub
     import actions
+    import shop_actions
     import shop
     from test_shop import skill_entry
 
@@ -74,37 +75,37 @@ def child():
         def run(self, context, argv):
             try:
                 for name in SLOTS:
-                    slots = shop.skill_slots(shop.read_slots(actions.ocr(context, capture(name), actions.OFFER_GRID)))
+                    slots = shop.skill_slots(shop.read_slots(actions.ocr(context, capture(name), shop_actions.OFFER_GRID)))
                     out["slots"][name] = [[s["name"], s["sinner"], s["purchased"]] for s in slots]
                 for name in FIRST_LAYER:
                     image = capture(name)
-                    out["dialog"][name] = actions.Shop.read_replace_dialog(context, image)
-                    out["texts"][name] = {roi: actions.text(context, image, getattr(actions, roi))
+                    out["dialog"][name] = shop_actions.Shop.read_replace_dialog(context, image)
+                    out["texts"][name] = {roi: actions.text(context, image, getattr(shop_actions, roi))
                                           for roi in ("REPLACE_TITLE", "REPLACE_OWNED", "DIALOG_TITLE")}
                 for name in SECOND_LAYER:
                     image = capture(name)
-                    out["ask"][name] = [actions.number(actions.text(context, image, actions.REPLACE_ASK)),
-                                        shop.dialog_price(350, actions.text(context, image, actions.REPLACE_PREVIEW))]
-                    out["texts"][name] = {"DIALOG_TITLE": actions.text(context, image, actions.DIALOG_TITLE)}
+                    out["ask"][name] = [actions.number(actions.text(context, image, shop_actions.REPLACE_ASK)),
+                                        shop.dialog_price(350, actions.text(context, image, shop_actions.REPLACE_PREVIEW))]
+                    out["texts"][name] = {"DIALOG_TITLE": actions.text(context, image, shop_actions.DIALOG_TITLE)}
                 for name in WAY_OUT:
-                    at = actions.Shop.way_out(context, capture(name))
+                    at = shop_actions.Shop.way_out(context, capture(name))
                     out["way_out"][name] = list(at) if isinstance(at, tuple) else at
                 for name in FIRST_LAYER + SECOND_LAYER:
                     image = capture(name)
-                    out["shop_cost"][name] = actions.cost_in(context, image)
+                    out["shop_cost"][name] = shop_actions.cost_in(context, image)
                     out["nodes"][name] = [n for n in ("Shop", "Connecting") if actions.seen(context, image, n)]
                 for path in sorted((ROOT / "tests" / "screens").glob("*.png")):
                     image = np.ascontiguousarray(np.array(Image.open(path).convert("RGB"))[:, :, ::-1])
-                    if image.shape[:2] == (720, 1280) and actions.has(actions.text(context, image, actions.DIALOG_TITLE), *actions.REPLACE_MARK):
+                    if image.shape[:2] == (720, 1280) and actions.has(actions.text(context, image, shop_actions.DIALOG_TITLE), *shop_actions.REPLACE_MARK):
                         out["mark_sweep"].append(path.stem)
-                    if image.shape[:2] == (720, 1280) and actions.has(actions.text(context, image, actions.SELECT_TITLE), "Select a Sinner"):
+                    if image.shape[:2] == (720, 1280) and actions.has(actions.text(context, image, shop_actions.SELECT_TITLE), "Select a Sinner"):
                         out["select_sweep"].append(path.stem)
                 swaps = actions.data("shop.yaml")["skill_replacement"]
                 for name in ID_GRIDS:
-                    slot = shop.id_search_slot(shop.read_slots(actions.ocr(context, capture(name), actions.OFFER_GRID)))
+                    slot = shop.id_search_slot(shop.read_slots(actions.ocr(context, capture(name), shop_actions.OFFER_GRID)))
                     out["id_slot"][name] = slot and [slot["name"], slot["purchased"], slot["x"], slot["y"] - 50]
                 for name in ID_FIRST_LAYER + FIRST_LAYER:
-                    read = actions.Shop.read_replace_dialog(context, capture(name))
+                    read = shop_actions.Shop.read_replace_dialog(context, capture(name))
                     out["pay_mode"][name] = shop.pay_mode(read["lit"], read["prices"], swaps)
                     if name in ID_FIRST_LAYER:
                         out["id_dialog"][name] = read
@@ -113,15 +114,15 @@ def child():
                                                          read["prices"], read["cost"], out["pay_mode"]["ShopIdSkillSearchDimmed"], 0, swaps)
                 for name in ID_SECOND_LAYER:
                     image = capture(name)
-                    ask = actions.text(context, image, actions.REPLACE_ASK)
-                    out["id_ask"][name] = [actions.number(ask), shop.dialog_price(868, actions.text(context, image, actions.REPLACE_PREVIEW)),
-                                           actions.shows(context, actions.REPLACE_ASK, r"spend\s*\d+\s*Cost")(image)]
+                    ask = actions.text(context, image, shop_actions.REPLACE_ASK)
+                    out["id_ask"][name] = [actions.number(ask), shop.dialog_price(868, actions.text(context, image, shop_actions.REPLACE_PREVIEW)),
+                                           actions.shows(context, shop_actions.REPLACE_ASK, r"spend\s*\d+\s*Cost")(image)]
                 for name in ID_WAY_OUT:
-                    at = actions.Shop.way_out(context, capture(name))
+                    at = shop_actions.Shop.way_out(context, capture(name))
                     out["id_way_out"][name] = list(at) if isinstance(at, tuple) else at
                 for name in ["ShopIdSkillSearchSelect", *ID_FIRST_LAYER, *ID_SECOND_LAYER]:
                     image = capture(name)
-                    out["id_shop_cost"][name] = actions.cost_in(context, image)
+                    out["id_shop_cost"][name] = shop_actions.cost_in(context, image)
                     out["id_nodes"][name] = [n for n in ("Shop", "Connecting") if actions.seen(context, image, n)]
             except Exception:  # MaaFramework swallows it: hand it to the test
                 out["error"] = traceback.format_exc()
