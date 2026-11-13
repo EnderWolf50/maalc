@@ -8,8 +8,9 @@ import { TEXT, fill } from "./i18n";
 import {
   GIFT_KEYWORDS, GRACES, SINNERS, defaultGorder, defaultStarlight, newSettings, newTeam, type GiftList, type Settings,
 } from "./model";
+import css from "./index.css?raw";
 import { DeploymentTab, StarlightTab, ThemePackTab } from "./Plans";
-import { expectLines, renderEditor } from "./testing";
+import { cssRules, expectLines, renderEditor } from "./testing";
 import { useEditor } from "./ui";
 
 const zh = TEXT.zh_tw;
@@ -395,13 +396,15 @@ describe("a grace card at each level", () => {
   };
   const card = (n: number) => screen.getByRole("group", { name: GRACES[n - 1].zh });
   const marked = (n: number) => [...card(n).querySelectorAll("mark")].map((m) => m.textContent);
+  /** A card's price: the game's starlight icon (a "★" the icon covers, so a screen reader still says it) and the number. */
+  const price = (n: number) => card(n).querySelector(".price");
 
   test("at + the title gains a +, the price doubles, the + effects show and the values that changed are marked", () => {
     show({ 1: "plus" });
     expect(within(card(1)).getByText("起始之星+")).toBeInTheDocument();
     // the pick button's name is the title it shows, so a voice command can say it (WCAG 2.5.3)
     expect(within(card(1)).getByRole("button", { name: "起始之星+" })).toHaveAttribute("aria-pressed", "true");
-    expect(within(card(1)).getByText("★ 20")).toBeInTheDocument();
+    expect(price(1)).toHaveTextContent(/^★ 20$/);
     expect([...card(1).querySelectorAll("li")].map((li) => li.textContent)).toEqual(GRACES[0].effects.plus);
     expect(marked(1)).toEqual(["+250"]);
   });
@@ -409,7 +412,7 @@ describe("a grace card at each level", () => {
   test("at ++ a line the base lacks is marked whole, even beside a base line it resembles", () => {
     show({ 7: "plus2" });
     expect(within(card(7)).getByText("星雲的寵愛++")).toBeInTheDocument();
-    expect(within(card(7)).getByText("★ 120")).toBeInTheDocument();
+    expect(price(7)).toHaveTextContent(/^★ 120$/);
     expect(marked(7)).toEqual(["進入第6層時，人格等級 +3", "+9"]);
   });
 
@@ -426,7 +429,7 @@ describe("a grace card at each level", () => {
     show({ 2: "base" });
     for (const n of [1, 2]) {
       expect(within(card(n)).getByText(GRACES[n - 1].zh)).toBeInTheDocument();
-      expect(within(card(n)).getByText("★ 10")).toBeInTheDocument();
+      expect(price(n)).toHaveTextContent(/^★ 10$/);
       expect([...card(n).querySelectorAll("li")].map((li) => li.textContent)).toEqual(GRACES[n - 1].effects.base);
       expect(card(n).querySelector("mark")).toBeNull();
     }
@@ -441,6 +444,52 @@ describe("a grace card at each level", () => {
     expect(pressed(7)).toEqual(["true", "false", "true"]);
     expect(pressed(2)).toEqual(["true", "false", "false"]);
     expect(screen.getByText(zh["starlight.total"]).querySelector("b")).toHaveTextContent("★ 150"); // 20 + 120 + 10
+  });
+
+  test("the price and the total wear the game's starlight icon over their ★", () => {
+    show({ 1: "plus" });
+    expect(price(1)?.querySelector(".star")).toHaveTextContent(/^★$/);
+    expect(screen.getByText(zh["starlight.total"]).querySelector("b .star")).toHaveTextContent(/^★$/);
+  });
+
+  test("+ and ++ draw the game's + glyph once and twice, on each card and in Enhance All, lit or not", () => {
+    show({ 1: "plus", 2: "plus2" });
+    for (const n of [1, 2, 3]) {
+      const [, plus, plus2] = within(card(n)).getAllByRole("button");
+      expect(plus.querySelectorAll(".glyph")).toHaveLength(1);
+      expect(plus2.querySelectorAll(".glyph")).toHaveLength(2);
+    }
+    expect(screen.getByRole("button", { name: `${zh["starlight.enhanceAll"]} +` }).querySelectorAll(".glyph")).toHaveLength(1);
+    expect(screen.getByRole("button", { name: `${zh["starlight.enhanceAll"]} ++` }).querySelectorAll(".glyph")).toHaveLength(2);
+  });
+
+  // #726: the card face, its selected and hover frames, the + / ++ plate lit and unlit, the glyphs, the price icon, the Enhance
+  // All panel and the page are the game's own sprites (tools/grace_icons.py), each drawn for its own state.
+  test("each state draws the game's own texture for it, and the page draws every texture the tool writes", () => {
+    const rules = cssRules(css);
+    const drawn = (selector: string) => rules.filter((r) => r.selector.split(",").map((x) => x.trim()).includes(selector))
+      .flatMap((r) => [...r.body.matchAll(/grace_card\/([\w-]+)\.webp/g)].map((m) => m[1]));
+    const states: [string, string][] = [
+      [".starlight", "page"], [".grace::before", "face"], [".grace:not(.none)::before", "face-picked"], [".grace::after", "hover"],
+      [".grace .enhance button", "button"], ['.grace .enhance button[aria-pressed="true"]', "button-lit"],
+      [".grace-side button", "button"], ['.grace-side button[aria-pressed="true"]', "button-lit"],
+      [".starlight .glyph", "plus"], ['.starlight button[aria-pressed="true"] .glyph', "plus-lit"],
+      [".starlight .star", "star"], [".grace-side", "side"],
+    ];
+    for (const [selector, file] of states) expect(drawn(selector), selector).toEqual([file]);
+    const written = Object.keys(import.meta.glob("./grace_card/*.webp")).map((f) => f.replace(/^.*\/|\.webp$/g, ""));
+    expect(written.sort()).toEqual([...new Set(states.map(([, file]) => file))].sort());
+  });
+
+  // The longest title, "傾落的流星雨++" (6 characters and "++", about 7.2 em), sits right of the icon's bracket, in 55 % of the
+  // card's width (the face's band from 145 to 356 of 380 px): at 6.8 % of the width per em it takes 49 %, on one line. Below
+  // 191 px the font stops at 13 px, so no column is narrower than 216 px (#726; 144 px before, and two lines).
+  test("a card is wide enough for its longest title on one line", () => {
+    const cols = cssRules(css).filter((r) => r.selector === ".graces").map((r) => r.body.match(/minmax\((\d+)px/)?.[1]);
+    expect(cols.length).toBeGreaterThan(0);
+    for (const px of cols) expect(Number(px)).toBeGreaterThanOrEqual(216);
+    const title = cssRules(css).find((r) => r.selector === ".grace .title")?.body ?? "";
+    expect(title).toMatch(/font-size:\s*clamp\(13px,\s*6\.8cqw/);
   });
 
   test("every card shows its grace's icon from the game, as decoration the screen reader skips", () => {

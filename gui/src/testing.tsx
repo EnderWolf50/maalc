@@ -26,6 +26,11 @@ export function renderEditor(ui: ReactElement, initial: Settings = newSettings()
   return { user: userEvent.setup(), settings: () => current, opened: () => opened, ...render(<Host />) };
 }
 
+/** The stylesheet's plain rules, `selector { body }`, enough to read what a selector sets (`import css from "./index.css?raw"`). */
+export function cssRules(text: string) {
+  return [...text.replace(/\/\*[\s\S]*?\*\//g, "").matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({ selector: m[1].trim(), body: m[2] }));
+}
+
 /** Expect `text`, a help text of several lines ("\n"), to show each line on its own: every element that shows it holds the
  * lines with a <br> between each two (ui.tsx withBreaks). Fails when none does, as when the "\n" shows as a space. */
 export function expectLines(text: string) {

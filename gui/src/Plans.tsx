@@ -73,7 +73,7 @@ export function StarlightEditor({ value, onChange, path }: {
               aria-disabled={!onChange} title={`${n}. ${g.en} (${tv("level", level)})`}
               onClick={() => set((v) => clickCard(v, n))}>
               {rank > 0 && <span className="rank" id={`${id}-rank-${n}`}>{rank}</span>}
-              <span className="price" id={`${id}-price-${n}`}>★ {gracePrice(n, level === "none" ? "base" : level)}</span>
+              <span className="price" id={`${id}-price-${n}`}><Star /> {gracePrice(n, level === "none" ? "base" : level)}</span>
               <div className="head">
                 <img className="icon" src={graceIconUrl(n)} alt="" />
                 <button type="button" className="name" disabled={!onChange} aria-pressed={rank > 0}
@@ -95,7 +95,7 @@ export function StarlightEditor({ value, onChange, path }: {
                 {([1, 2] as const).map((plus) => (
                   <button type="button" key={plus} disabled={!onChange} aria-pressed={level === LEVELS[plus + 1]}
                     aria-label={`${graceName(g, zh)} ${"+".repeat(plus)}`}
-                    onClick={(e) => { e.stopPropagation(); set((v) => clickEnhance(v, n, plus)); }}>{"+".repeat(plus)}</button>
+                    onClick={(e) => { e.stopPropagation(); set((v) => clickEnhance(v, n, plus)); }}><Glyphs n={plus} /></button>
                 ))}
               </span>
             </div>
@@ -110,11 +110,11 @@ export function StarlightEditor({ value, onChange, path }: {
           {([1, 2] as const).map((plus) => (
             <button type="button" key={plus} className="boost" aria-label={`${t("starlight.enhanceAll")} ${"+".repeat(plus)}`}
               aria-pressed={allEnhanced(value, plus)} onClick={() => set((v) => enhanceAll(v, plus))}>
-              {"+".repeat(plus)}
+              <Glyphs n={plus} />
             </button>
           ))}
         </>}
-        <span className="total">{t("starlight.total")} <b>★ {starlightCost(value.levels)}</b></span>
+        <span className="total">{t("starlight.total")} <b><Star /> {starlightCost(value.levels)}</b></span>
         <Mark as="label" className="check" path={`${path}/convert_leftover`}>
           <Input type="checkbox" checked={value.convert_leftover} disabled={!onChange}
             onChange={(e) => set((v) => ({ ...v, convert_leftover: e.target.checked }))} />
@@ -144,6 +144,10 @@ const graceName = (g: Grace, zh: boolean) => (zh && g.zh ? g.zh : g.en);
 const GRACE_ICONS = import.meta.glob<string>("./grace_icons/*.webp", { eager: true, query: "?url", import: "default" });
 /** The game's icon of grace n (1-10): ./grace_icons/<n>.webp (tools/grace_icons.py). */
 const graceIconUrl = (n: number): string | undefined => GRACE_ICONS[`./grace_icons/${n}.webp`];
+/** A "★" the stylesheet covers with the game's starlight icon (gui/src/grace_card/star.webp): a screen reader and a copy keep it. */
+const Star = () => <span className="star">★</span>;
+/** The game's + glyph n times, for a + or ++ button; the button's aria-label names it. */
+const Glyphs = ({ n }: { n: number }) => <>{Array.from({ length: n }, (_, k) => <span key={k} className="glyph" />)}</>;
 /** What the game adds to a grace's title at a level: "+" at +, "++" at ++, nothing below. */
 const plusOf = (level: string) => "+".repeat(Math.max(0, LEVELS.indexOf(level) - 1));
 
