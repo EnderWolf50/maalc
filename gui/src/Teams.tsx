@@ -55,9 +55,8 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
 
   // "plan id" or "" for custom. Switching to custom copies the plan's values (spec 04 section 9).
   const orderSource = "plan" in team.deployment_order ? team.deployment_order.plan : "";
-  const order = "custom" in team.deployment_order ? team.deployment_order.custom
-    : s.deployment_order_plans.find((p) => p.id === orderSource)?.order;
   const orderPlan = s.deployment_order_plans.find((p) => p.id === orderSource);
+  const order = "custom" in team.deployment_order ? team.deployment_order.custom : orderPlan?.order;
   const starSource = "plan" in team.starlight ? team.starlight.plan : "";
   const starPlan = s.starlight_plans.find((p) => p.id === starSource);
   const star = "custom" in team.starlight ? team.starlight.custom : starPlan;

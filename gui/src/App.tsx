@@ -196,13 +196,14 @@ export default function App() {
   const Current = TABS.find((x) => x[0] === tab)![2];
   const blocked = checked && problems.length > 0; // the marks show: a save cannot go through until they are fixed
   // The save state plate: problems to fix (a refused save, or problems made after the checks first ran), a write that failed,
-  // unsaved, saved, or a note; Save takes the crimson frame while it cannot go through, the caution stripe while it can.
+  // unsaved, saved, or a note. Save takes the crimson frame while the marked problems stop it or after a write failed, the
+  // caution stripe while unsaved changes can go through, neither while a problem not yet marked would stop it.
   const state = blocked ? "blocked" : failed ? "failed" : dirty ? "dirty" : status === "saved" ? "saved" : said ? "note" : "clean";
   const stateText = [
-    blocked && fill(t(refused ? "saveState.blocked" : "saveState.toFix"), { n: problems.length }),
+    blocked && fill(t(refused ? "saveState.refused" : "saveState.toFix"), { n: problems.length }),
     dirty ? [t("unsaved"), note].filter(Boolean).join(" ") : said || (!blocked && t("saveState.clean")),
   ].filter(Boolean).join(" · ");
-  const saveLook = state === "blocked" || state === "failed" ? " refused" : state === "dirty" ? " armed" : "";
+  const saveLook = state === "blocked" || state === "failed" ? " refused" : state === "dirty" && !problems.length ? " armed" : "";
   /** Arrow keys walk the tabs and open the one they reach (they are cheap to draw); Home and End go to the ends. */
   const walkTabs = (e: ReactKeyboardEvent) => {
     const next = nextTab(TABS.map((x) => x[0]), tab, e.key);

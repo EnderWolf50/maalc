@@ -225,5 +225,10 @@ describe("the E.G.O Gift Search keyword tabs", () => {
     await r.user.keyboard("{ArrowLeft}{ArrowLeft}");
     expect(tabs()[at - 1]).toHaveAttribute("aria-selected", "true");
     expect(tabs()[at - 1]).toHaveFocus();
+    await r.user.keyboard("{End}");
+    expect(tabs()[SEARCH_TABS.length - 1]).toHaveFocus();
+    await r.user.keyboard("{ArrowRight}"); // round at the end, as the main tabs
+    expect(tabs()[0]).toHaveAttribute("aria-selected", "true");
+    expect(tabs()[0]).toHaveFocus();
   });
 });

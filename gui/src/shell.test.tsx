@@ -82,7 +82,7 @@ test("a refused save shows in the header with the number of problems, also when 
   const save = await screen.findByRole("button", { name: zh.save });
   await user.click(save);
   await waitFor(() => expect(document.querySelector(".status")).toHaveAttribute("data-state", "blocked"));
-  expect(document.querySelector(".status")).toHaveTextContent(fill(zh["saveState.blocked"], { n: 1 }));
+  expect(document.querySelector(".status")).toHaveTextContent(fill(zh["saveState.refused"], { n: 1 }));
   expect(save).not.toHaveClass("armed");
   expect(file.saved).toEqual([]);
 });
@@ -102,9 +102,9 @@ test("a problem made after a good save asks to fix it before saving: no save was
   const plate = document.querySelector(".status")!;
   expect(plate).toHaveAttribute("data-state", "blocked");
   expect(plate).toHaveTextContent(fill(zh["saveState.toFix"], { n: 1 }));
-  expect(plate).not.toHaveTextContent(fill(zh["saveState.blocked"], { n: 1 }));
+  expect(plate).not.toHaveTextContent(fill(zh["saveState.refused"], { n: 1 }));
   await user.click(save);
-  expect(document.querySelector(".status")).toHaveTextContent(fill(zh["saveState.blocked"], { n: 1 }));
+  expect(document.querySelector(".status")).toHaveTextContent(fill(zh["saveState.refused"], { n: 1 }));
 });
 
 test("an edit after a refused save still shows the refusal, with the unsaved changes", async () => {
@@ -114,6 +114,6 @@ test("an edit after a refused save still shows the refusal, with the unsaved cha
   await user.click(await screen.findByRole("button", { name: zh.save }));
   await user.type(screen.getByRole("textbox", { name: zh.name }), "!");
   expect(document.querySelector(".status")).toHaveAttribute("data-state", "blocked");
-  expect(document.querySelector(".status")).toHaveTextContent(fill(zh["saveState.blocked"], { n: 1 }));
+  expect(document.querySelector(".status")).toHaveTextContent(fill(zh["saveState.refused"], { n: 1 }));
   expect(document.querySelector(".status")).toHaveTextContent(zh.unsaved);
 });
