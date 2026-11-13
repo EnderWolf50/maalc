@@ -2,18 +2,21 @@
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, test, vi } from "vitest";
+import capability from "../src-tauri/capabilities/default.json";
 import App from "./App";
 import { TEXT } from "./i18n";
 import { GIFT_KEYWORDS, defaultGorder, defaultStarlight, newPackPlan, newSettings, newTeam, SINNERS, type Settings } from "./model";
 
-const file = vi.hoisted(() => ({ text: "", saved: [] as string[] }));
+const file = vi.hoisted(() => ({ text: "", saved: [] as string[], keepOpen: undefined as (() => boolean) | undefined, closed: 0 }));
 vi.mock("./api", async (original) => ({
   ...(await original<typeof import("./api")>()),
   loadSettings: () => Promise.resolve(file.text),
   saveSettings: (text: string) => { file.saved.push(text); file.text = text; return Promise.resolve(); },
   rootDir: () => Promise.resolve("root"),
+  onCloseRequested: (keepOpen: () => boolean) => { file.keepOpen = keepOpen; return () => {}; },
+  closeWindow: () => { file.closed++; return Promise.resolve(); },
 }));
-beforeEach(() => { file.saved = []; });
+beforeEach(() => { file.saved = []; file.keepOpen = undefined; file.closed = 0; });
 
 const zh = TEXT.zh_tw;
 const two = (prefix: string) => [1, 2].map((n) => ({ id: `${prefix}${n}`, name: `${prefix.toUpperCase()}${n}` }));
@@ -161,6 +164,94 @@ describe("clicking a problem", () => {
     expect(tab(zh["tab.gifts"])).toHaveAttribute("aria-selected", "true");
     expect(screen.getByRole("combobox", { name: zh["gl.list"] })).toHaveValue("g1");
     expect(screen.getByRole("combobox", { name: zh["gl.list"] })).toHaveFocus();
+  });
+});
+
+describe("closing the window", () => {
+  beforeEach(() => { file.text = JSON.stringify(settings()); });
+  /** The user closes the window (its ✕, Alt+F4); true when the editor keeps it open. */
+  const closeWindow = () => {
+    let kept = false;
+    act(() => { kept = file.keepOpen!(); });
+    return kept;
+  };
+  /** The editor with the first team's name changed and not saved. */
+  const edited = async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await user.type(await screen.findByRole("textbox", { name: zh.name }), "!");
+    return user;
+  };
+
+  test("with unsaved changes, asks first and keeps the window open", async () => {
+    await edited();
+    expect(closeWindow()).toBe(true);
+    expect(screen.getByRole("alertdialog")).toHaveTextContent(zh.closeAsk);
+    expect(file.closed).toBe(0);
+  });
+
+  test("with nothing unsaved, closes without asking, also after a save", async () => {
+    const user = await edited();
+    await user.click(screen.getByRole("button", { name: zh.save }));
+    await screen.findByText(zh.saved);
+    expect(closeWindow()).toBe(false);
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+  });
+
+  test("Close without saving closes it and writes nothing", async () => {
+    const user = await edited();
+    closeWindow();
+    await user.click(screen.getByRole("button", { name: zh.closeDiscard }));
+    expect(file.closed).toBe(1);
+    expect(file.saved).toEqual([]);
+  });
+
+  test.each([
+    ["Cancel", (user: ReturnType<typeof userEvent.setup>) => user.click(screen.getByRole("button", { name: zh.cancel }))],
+    ["Esc", (user: ReturnType<typeof userEvent.setup>) => user.keyboard("{Escape}")],
+  ])("%s keeps the window open, the edits and the field the user was typing in", async (_, dismiss) => {
+    const user = await edited();
+    closeWindow();
+    await dismiss(user);
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+    expect(file.closed).toBe(0);
+    expect(nameBox()).toHaveValue("Ta!");
+    await waitFor(() => expect(nameBox()).toHaveFocus());
+  });
+
+  test("starts on Save and close, and the page behind it takes no click or key", async () => {
+    await edited();
+    closeWindow();
+    expect(screen.getByRole("button", { name: zh.closeSave })).toHaveFocus();
+    const behind = document.querySelectorAll("header, nav, main");
+    expect(behind).toHaveLength(3);
+    for (const el of behind) expect(el).toHaveAttribute("inert");
+  });
+
+  test("the window may destroy itself: without the permission no close goes through, with unsaved changes or none", () => {
+    // Tauri 2 lets the page close the window once it listens to the close (manager/window.rs); core:default lacks destroy
+    expect(capability.permissions).toContain("core:window:allow-destroy");
+  });
+
+  test("Save and close saves, then closes", async () => {
+    const user = await edited();
+    closeWindow();
+    await user.click(screen.getByRole("button", { name: zh.closeSave }));
+    await waitFor(() => expect(file.closed).toBe(1));
+    expect(JSON.parse(file.saved[0]).teams[0].name).toBe("Ta!");
+  });
+
+  test("Save and close with a save the checks refuse stays open and shows the problems", async () => {
+    const s = settings();
+    s.teams[1].game_team = 1;
+    file.text = JSON.stringify(s);
+    const user = await edited();
+    closeWindow();
+    await user.click(screen.getByRole("button", { name: zh.closeSave }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(zh.saveBlocked);
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+    expect(file.closed).toBe(0);
+    expect(file.saved).toEqual([]);
   });
 });
 

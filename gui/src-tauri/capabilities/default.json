@@ -5,6 +5,7 @@
   "windows": ["main"],
   "permissions": [
     "core:default",
+    "core:window:allow-destroy",
     "allow-root-dir",
     "allow-load-settings",
     "allow-load-theme-packs",

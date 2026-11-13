@@ -39,6 +39,7 @@ export default function App() {
   const [jump, setJump] = useState<string | null>(null); // the path of the problem the user clicked
   const [checked, setChecked] = useState(false); // marks show after the first save attempt
   const [status, setStatus] = useState(""); // a TEXT key, or text as it is (an error, the gift ids a load dropped)
+  const [asking, setAsking] = useState(false); // the window was closed with unsaved changes: the close prompt shows
   // The file's text as last read or written: other text there is another writer's, the Agent's after a claim (#501).
   const disk = useRef<string | null>(null);
   const latest = useRef({ s, savedText });
@@ -115,6 +116,23 @@ export default function App() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
+  // Closing the window with unsaved changes asks first; with none it closes.
+  const back = useRef<Element | null>(null); // what had the focus when the prompt opened: it gets it back when the prompt goes
+  useEffect(() => api.onCloseRequested(() => {
+    const { s, savedText } = latest.current;
+    const keep = s !== null && toText(s) !== savedText;
+    if (keep) {
+      back.current ??= document.activeElement; // now: the page behind the prompt goes inert, which takes the focus away
+      setAsking(true);
+    }
+    return keep;
+  }), []);
+  useEffect(() => {
+    if (asking || !back.current) return;
+    (back.current as HTMLElement).focus?.();
+    back.current = null;
+  }, [asking]);
+
   // A clicked problem's field, focused once its tab and its team or plan are on screen.
   useEffect(() => {
     if (jump === null) return;
@@ -148,30 +166,45 @@ export default function App() {
   const said = Object.prototype.hasOwnProperty.call(TEXT[lang], status) ? t(status as Key) : status;
   const note = status === "saved" ? "" : said; // shown beside "unsaved" too: a refused save, the file read again
 
+  /** Check, then write; true when the file holds the edits. */
   const save = async () => {
     setChecked(true);
     try {
       for (let tries = 1; ; tries++) {
         const current = (await sync())!; // what another writer changed since goes under the edits first (#501)
-        if (validate(current).length) return setStatus("");
+        if (validate(current).length) {
+          setStatus("");
+          return false;
+        }
         const written = toText(current);
         try {
           await api.saveSettings(written, disk.current);
         } catch (e) {
           if (!api.isChanged(e)) throw e;
           if (tries < 3) continue; // it changed between that read and this write
-          return setStatus("saveConflict");
+          setStatus("saveConflict");
+          return false;
         }
         disk.current = written;
         latest.current = { s: current, savedText: written };
         setSavedText(written);
-        return setStatus("saved");
+        setStatus("saved");
+        return true;
       }
     } catch (e) {
       setStatus(String(e));
+      return false;
     }
   };
   saveRef.current = save;
+
+  /** The window closes; a failed close (no permission to) says why, and the editor stays as it was. */
+  const close = () => api.closeWindow().catch((e) => setStatus(String(e)));
+  const closePrompt = asking && (
+    <ClosePrompt onCancel={() => setAsking(false)}
+      onSave={async () => { setAsking(false); if (await save()) await close(); }}
+      onDiscard={() => { setAsking(false); close(); }} />
+  );
 
   /** Show where a problem points: its tab and the team, plan or gift list it names; the effect above then focuses its field. */
   const goTo = (path: string) => {
@@ -186,7 +219,7 @@ export default function App() {
   const Current = TABS.find((x) => x[0] === tab)![2];
   return (
     <EditorContext.Provider value={ctx}>
-      <header>
+      <header inert={asking}>
         <h1>{t("title")}</h1>
         <span className="muted path" title={t("file")}>{root}\config\settings.json</span>
         <label className="lang">{t("language")}{" "}
@@ -198,14 +231,14 @@ export default function App() {
         <span className="status">{dirty ? [t("unsaved"), note].filter(Boolean).join(" ") : said}</span>
         <button type="button" className="primary" onClick={save}>{t("save")}</button>
       </header>
-      <nav role="tablist">
+      <nav role="tablist" inert={asking}>
         {TABS.map(([id, label, , prefixes]) => (
           <button type="button" role="tab" key={id} aria-selected={tab === id}
             className={(tab === id ? "selected" : "") + (prefixes.some(bad) ? " bad" : "")}
             onClick={() => setTab(id)}>{t(label)}</button>
         ))}
       </nav>
-      <main>
+      <main inert={asking}>
         {/* in the tab panel, so the tab bar stays where it is when problems come and go */}
         {checked && problems.length > 0 && (
           <div className="problems" role="alert">
@@ -217,7 +250,34 @@ export default function App() {
         )}
         <Current />
       </main>
+      {closePrompt}
     </EditorContext.Provider>
+  );
+}
+
+/** Asked when the window closes with unsaved changes: save and close, close without saving, or stay (Esc). The focus starts
+ * on the choice that keeps the edits. */
+function ClosePrompt({ onSave, onDiscard, onCancel }: { onSave: () => void; onDiscard: () => void; onCancel: () => void }) {
+  const { t } = useEditor();
+  const cancel = useRef(onCancel);
+  cancel.current = onCancel;
+  useEffect(() => {
+    // from the document: a click on the dimmed page behind takes the focus out of the prompt
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") cancel.current(); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, []);
+  return (
+    <div className="ask-back">
+      <div className="ask" role="alertdialog" aria-modal="true" aria-labelledby="close-ask">
+        <p id="close-ask">{t("closeAsk")}</p>
+        <div className="ask-buttons">
+          <button type="button" className="primary" autoFocus onClick={onSave}>{t("closeSave")}</button>
+          <button type="button" className="danger" onClick={onDiscard}>{t("closeDiscard")}</button>
+          <button type="button" onClick={onCancel}>{t("cancel")}</button>
+        </div>
+      </div>
+    </div>
   );
 }
 

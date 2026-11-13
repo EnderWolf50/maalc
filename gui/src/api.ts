@@ -1,6 +1,7 @@
 // File access through the Rust side (src-tauri/src/lib.rs). In a plain browser (`pnpm dev`,
 // screenshots) it falls back to localStorage so the editor can be tried without Tauri.
 import { invoke, isTauri } from "@tauri-apps/api/core";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import bundledThemePacks from "../../assets/resource/base/data/theme_packs.yaml?raw";
 import { parseThemePacks, type ThemePacks } from "./model";
 
@@ -27,6 +28,18 @@ export function saveSettings(text: string, expected: string | null): Promise<voi
   localStorage.setItem("settings.json", text);
   return Promise.resolve();
 }
+
+/** Ask `keepOpen` each time the user closes the window (its ✕, Alt+F4): true keeps it open. Returns the function that stops
+ * asking. With a listener, Tauri leaves the closing to the page, which destroys the window (needs core:window:allow-destroy,
+ * capabilities/default.json). A plain browser has no window to keep. */
+export function onCloseRequested(keepOpen: () => boolean): () => void {
+  if (!tauri) return () => {};
+  const listening = getCurrentWindow().onCloseRequested((e) => { if (keepOpen()) e.preventDefault(); });
+  return () => { listening.then((stop) => stop()); };
+}
+
+/** Close the window without asking again. */
+export const closeWindow = (): Promise<void> => (tauri ? getCurrentWindow().destroy() : Promise.resolve());
 
 /** Spec 04 section 12 / spec 06: a reset marker holds only the team id and the time. */
 export function resetTeamTimes(teamId: string): Promise<void> {
