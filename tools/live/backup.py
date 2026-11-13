@@ -14,7 +14,8 @@ live test queues, so the emulator stays taken while the agent does the interacti
 more than once, each run under its own log: while any of those processes runs the timeout does not run, and it starts
 again when the last one ends, so the emulator is never handed on under a running bot or right after it. When the bot ends, `hold` prints
 `[hold] bot ended <iso time>` (read by `queue.py resume`); with `--stop-recording <profile>` it stops that screen-record
-profile 60 s later, so a recording nobody stopped does not grow for hours.
+profile 60 s later, so a recording nobody stopped does not grow for hours. Under `queue.py run` it publishes its done
+file, its guard and its deadline beside the run's ticket for `queue.py status` (hold.py).
 """
 import argparse
 import hashlib
@@ -30,7 +31,8 @@ TOOLS = Path(__file__).resolve().parents[1]
 if str(TOOLS) not in sys.path:  # run as a script, `live` is not importable until tools/ is on the path
     sys.path.insert(0, str(TOOLS))
 
-from live.queue import detached_doc, detached_running, guard_logs, pause_until  # noqa: E402
+from live.hold import State, bot_ended, guard_logs, own_state_path, pause_until, publish, withdraw  # noqa: E402
+from live.queue import detached_doc, detached_running  # noqa: E402
 from local_dir import local_dir, main_checkout  # noqa: E402
 
 RUNTIME = {"debug", "logs", "state", "cache"}
@@ -69,36 +71,40 @@ def stop_recording(profile: str) -> None:
 
 def hold(root: Path, dest: Path, done: Path, timeout: float, poll: float = 2.0, guard: Path | None = None,
          running=detached_running, stop_profile: str | None = None, grace: float = 60.0, stop=stop_recording,
-         wall=time.time) -> int:
-    print(f"backed up {backup(root, dest)} files of {root}; waiting for {done}", flush=True)
-    deadline = time.monotonic() + timeout
-    shown = float("-inf")  # `queue.py status` reads the deadline from this file; written at most every 30 s
-    seen, ended = False, None  # the bot was seen running; when it ended (monotonic)
-    logs = (lambda: guard_logs(guard)) if guard else list  # a glob takes in the logs of later runs as they start
-    before = {p: detached_doc(p) for p in logs()}  # a pid file of an earlier run under a log is not this run's bot
-    while not done.exists():
-        if (until := pause_until(done.parent)) and until > wall():
-            deadline = time.monotonic() + timeout  # paused by its agent (queue.py pause): the emulator stays taken
-        if any(running(p) for p in logs()):
-            seen, ended, deadline = True, None, time.monotonic() + timeout  # the agent's own steps after the bot get the whole timeout; a restarted bot re-arms the end note
-        elif time.monotonic() >= deadline:
-            break
-        elif (seen or any(detached_doc(p) not in (None, before.get(p)) for p in logs())) and ended is None:  # durable for `queue.py resume` (nobody may have been watching); a bot gone within one poll still counts
-            ended = time.monotonic()
-            print(f"[hold] bot ended {datetime.now().isoformat(timespec='seconds')}", flush=True)
-        if ended is not None and stop_profile and time.monotonic() >= ended + grace:
-            stop(stop_profile)  # a stranded recording must not grow for hours
-            stop_profile = None
-        if time.monotonic() - shown >= 30:
-            shown = time.monotonic()
-            # Whole seconds are all status needs (it shows minutes), and they carry no float rounding noise (#578).
-            (done.parent / "hold.deadline").write_text(str(round(wall() + deadline - time.monotonic())), encoding="utf-8")
-        time.sleep(poll)
-    (done.parent / "hold.deadline").unlink(missing_ok=True)
-    print("done file found" if done.exists() else f"timed out after {timeout:.0f} s", flush=True)
-    diff = verify(root, dest)
-    print("\n".join(diff) if diff else "install matches the backup (md5)")
-    return 1 if diff else 0
+         wall=time.time, state_file: Path | None = None) -> int:
+    """state_file: where `queue.py status` reads this hold's state (hold.own_state_path(); None publishes nothing)."""
+    publish(state_file, State(done, guard))  # from the start, as status read the done file and guard off the command line
+    try:
+        print(f"backed up {backup(root, dest)} files of {root}; waiting for {done}", flush=True)
+        deadline = time.monotonic() + timeout
+        shown = float("-inf")  # `queue.py status` reads the deadline from the state file; written at most every 30 s
+        seen, ended = False, None  # the bot was seen running; when it ended (monotonic)
+        logs = (lambda: guard_logs(guard)) if guard else list  # a glob takes in the logs of later runs as they start
+        before = {p: detached_doc(p) for p in logs()}  # a pid file of an earlier run under a log is not this run's bot
+        while not done.exists():
+            if (until := pause_until(done.parent)) and until > wall():
+                deadline = time.monotonic() + timeout  # paused by its agent (queue.py pause): the emulator stays taken
+            if any(running(p) for p in logs()):
+                seen, ended, deadline = True, None, time.monotonic() + timeout  # the agent's own steps after the bot get the whole timeout; a restarted bot re-arms the end note
+            elif time.monotonic() >= deadline:
+                break
+            elif (seen or any(detached_doc(p) not in (None, before.get(p)) for p in logs())) and ended is None:  # durable for `queue.py resume` (nobody may have been watching); a bot gone within one poll still counts
+                ended = time.monotonic()
+                print(bot_ended(datetime.now()), flush=True)
+            if ended is not None and stop_profile and time.monotonic() >= ended + grace:
+                stop(stop_profile)  # a stranded recording must not grow for hours
+                stop_profile = None
+            if time.monotonic() - shown >= 30:
+                shown = time.monotonic()
+                publish(state_file, State(done, guard, round(wall() + deadline - time.monotonic())))
+            time.sleep(poll)
+        publish(state_file, State(done, guard))  # the wait is over: no deadline to warn about
+        print("done file found" if done.exists() else f"timed out after {timeout:.0f} s", flush=True)
+        diff = verify(root, dest)
+        print("\n".join(diff) if diff else "install matches the backup (md5)")
+        return 1 if diff else 0
+    finally:
+        withdraw(state_file)
 
 
 def main(argv=None) -> int:
@@ -117,10 +123,10 @@ def main(argv=None) -> int:
             ap.error("hold needs --done")
         if a.timeout is None:
             ap.error("hold needs --timeout (seconds; 7200 is the old default)")
-        # a relative path is the main checkout's, as queue.py's hold_path reads it, whatever the cwd (a worktree's)
+        # a relative path is the main checkout's, whatever the cwd (a worktree's): the state file names it absolute
         done = main_checkout() / a.done
         guard = main_checkout() / a.guard if a.guard else None
-        return hold(a.root, dest, done, a.timeout, guard=guard, stop_profile=a.stop_recording)
+        return hold(a.root, dest, done, a.timeout, guard=guard, stop_profile=a.stop_recording, state_file=own_state_path())
     if a.cmd == "backup":
         print(f"backed up {backup(a.root, dest)} files of {a.root} -> {dest}")
         return 0

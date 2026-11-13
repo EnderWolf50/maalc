@@ -77,7 +77,7 @@ Everything that belongs to one machine lives in `.local/` of the **main checkout
 | `.local/scratch/` | throwaway scripts and output of a task, `install-backup/<label>/` |
 | `.local/archive/` | evidence of every live test and experiment, with `INDEX.md` (one row per folder) |
 | `.local/check-runs.jsonl` | the run log of `tools/check.py` ("Checks") |
-| `.local/queue/<resource>/` | the tickets of `tools/live/queue.py` (`bench`, `emulator`) and of `tools/ship.py land --go` (`land`) |
+| `.local/queue/<resource>/` | the tickets of `tools/live/queue.py` (`bench`, `emulator`) and of `tools/ship.py land --go` (`land`); beside a ticket that runs `backup.py hold`, the hold's `<ticket>.hold.json` (`tools/live/hold.py`) |
 | `.local/unpack/` | unpacked game data |
 | `.local/llc/` | the Localize Limbus Company release zips `tools/llc_text.py` downloads |
 | `.local/evidence/` | privacy-mask templates and `masks.json`; they can show the account, so they stay out of git |
