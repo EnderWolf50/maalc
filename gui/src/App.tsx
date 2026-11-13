@@ -184,19 +184,22 @@ export default function App() {
   };
 
   const Current = TABS.find((x) => x[0] === tab)![2];
+  const blocked = checked && problems.length > 0;
+  // What the save state plate shows: blocked (a refused save not yet fixed), unsaved, saved, or nothing to say.
+  const state = blocked ? "blocked" : dirty ? "dirty" : status === "saved" ? "saved" : "note";
   return (
     <EditorContext.Provider value={ctx}>
       <header>
         <h1>{t("title")}</h1>
         <span className="muted path" title={t("file")}>{root}\config\settings.json</span>
-        <label className="lang">{t("language")}{" "}
+        <label className="lang">{t("language")}
           <select value={s.language} onChange={(e) => ctx.update((d) => { d.language = e.target.value as Settings["language"]; })}>
             <option value="zh_tw">繁體中文</option>
             <option value="en_us">English</option>
           </select>
         </label>
-        <span className="status">{dirty ? [t("unsaved"), note].filter(Boolean).join(" ") : said}</span>
-        <button type="button" className="primary" onClick={save}>{t("save")}</button>
+        <span className="status" data-state={state} aria-live="polite">{dirty ? [t("unsaved"), note].filter(Boolean).join(" ") : said}</span>
+        <button type="button" className={"primary" + (dirty ? " armed" : "")} onClick={save}>{t("save")}</button>
       </header>
       <nav role="tablist">
         {TABS.map(([id, label, , prefixes]) => (
@@ -207,7 +210,7 @@ export default function App() {
       </nav>
       <main>
         {/* in the tab panel, so the tab bar stays where it is when problems come and go */}
-        {checked && problems.length > 0 && (
+        {blocked && (
           <div className="problems" role="alert">
             <p>{t("saveBlocked")}</p>
             <ul>{problems.map((p, i) => (
@@ -231,35 +234,57 @@ function RunTab() {
       <Select value={run[k]} options={runEnum(k)} label={(v) => tv(k, v)} onChange={(v) => set({ [k]: v })} />
     </Field>
   );
+  // Four groups by what they decide: the run itself, the weekly bonuses, what happens when something fails, what the bot does
+  // on its own. The controls and their order inside a group are the same as before.
   return (
-    <div className="grid">
-      {pick("difficulty")}
-      <Field label={t("run.target_floor")} path="run/target_floor" note={pastFive ? t("run.target_floor_note") : undefined}>
-        <Select value={String(run.target_floor)} options={runEnum("target_floor").map(String)} label={(v) => tv("target_floor", v)} onChange={(v) => set({ target_floor: Number(v) })} />
-        {/* Remove with #434: until the entrance switches Parallel Superposition on, a target above 5 still stops at floor 5. */}
-        {pastFive && <small>{t("run.target_floor_entry_note")}</small>}
-      </Field>
-      <ToggleNum label={t("run.runs")} path="run/runs" value={run.runs} on={1} min={1} note={t("run.runs_note")}
-        onChange={(v) => set({ runs: v })} />
-      {pick("weekly_bonus_use", run.weekly_bonus_use === "normal" ? t("run.weekly_bonus_normal_note") : undefined)}
-      {pick("weekly_bonus_amount")}
-      <label className={"check" + (bad("run/stop_when_weekly_bonus_out") ? " bad" : "")} data-path="run/stop_when_weekly_bonus_out">
-        <input type="checkbox" checked={run.stop_when_weekly_bonus_out} onChange={(e) => set({ stop_when_weekly_bonus_out: e.target.checked })} />
-        {t("run.stop_when_weekly_bonus_out")}
-      </label>
-      {pick("starlight_unaffordable")}
-      <Field label={t("run.wipe_retries")} path="run/wipe_retries"><Num value={run.wipe_retries} min={0} onChange={(v) => set({ wipe_retries: v })} /></Field>
-      {pick("after_retries")}
-      {pick("theme_pack_refresh", t("run.theme_pack_refresh_note"))}
-      {(["auto_accept_terms", "auto_download", "keep_dismissed_screens"] as const).map((k) => (
-        <label key={k} className={"check" + (bad(`run/${k}`) ? " bad" : "")} data-path={`run/${k}`}>
-          <input type="checkbox" checked={run[k]} onChange={(e) => set({ [k]: e.target.checked })} />
-          {t(`run.${k}`)}
-        </label>
-      ))}
-      <Field label={t("run.webhook_url")} path="run/webhook_url">
-        <input type="url" value={run.webhook_url} onChange={(e) => set({ webhook_url: e.target.value })} />
-      </Field>
+    <div className="groups">
+      <fieldset>
+        <legend>{t("run.group_run")}</legend>
+        <div className="grid">
+          {pick("difficulty")}
+          <Field label={t("run.target_floor")} path="run/target_floor" note={pastFive ? t("run.target_floor_note") : undefined}>
+            <Select value={String(run.target_floor)} options={runEnum("target_floor").map(String)} label={(v) => tv("target_floor", v)} onChange={(v) => set({ target_floor: Number(v) })} />
+            {/* Remove with #434: until the entrance switches Parallel Superposition on, a target above 5 still stops at floor 5. */}
+            {pastFive && <small>{t("run.target_floor_entry_note")}</small>}
+          </Field>
+          <ToggleNum label={t("run.runs")} path="run/runs" value={run.runs} on={1} min={1} note={t("run.runs_note")}
+            onChange={(v) => set({ runs: v })} />
+          {pick("theme_pack_refresh", t("run.theme_pack_refresh_note"))}
+        </div>
+      </fieldset>
+      <fieldset>
+        <legend>{t("run.group_weekly")}</legend>
+        <div className="grid">
+          {pick("weekly_bonus_use", run.weekly_bonus_use === "normal" ? t("run.weekly_bonus_normal_note") : undefined)}
+          {pick("weekly_bonus_amount")}
+          <label className={"check wide" + (bad("run/stop_when_weekly_bonus_out") ? " bad" : "")} data-path="run/stop_when_weekly_bonus_out">
+            <input type="checkbox" checked={run.stop_when_weekly_bonus_out} onChange={(e) => set({ stop_when_weekly_bonus_out: e.target.checked })} />
+            {t("run.stop_when_weekly_bonus_out")}
+          </label>
+        </div>
+      </fieldset>
+      <fieldset>
+        <legend>{t("run.group_failure")}</legend>
+        <div className="grid">
+          {pick("starlight_unaffordable")}
+          <Field label={t("run.wipe_retries")} path="run/wipe_retries"><Num value={run.wipe_retries} min={0} onChange={(v) => set({ wipe_retries: v })} /></Field>
+          {pick("after_retries")}
+          <Field label={t("run.webhook_url")} path="run/webhook_url">
+            <input type="url" value={run.webhook_url} onChange={(e) => set({ webhook_url: e.target.value })} />
+          </Field>
+        </div>
+      </fieldset>
+      <fieldset>
+        <legend>{t("run.group_auto")}</legend>
+        <div className="options">
+          {(["auto_accept_terms", "auto_download", "keep_dismissed_screens"] as const).map((k) => (
+            <label key={k} className={"check" + (bad(`run/${k}`) ? " bad" : "")} data-path={`run/${k}`}>
+              <input type="checkbox" checked={run[k]} onChange={(e) => set({ [k]: e.target.checked })} />
+              {t(`run.${k}`)}
+            </label>
+          ))}
+        </div>
+      </fieldset>
     </div>
   );
 }

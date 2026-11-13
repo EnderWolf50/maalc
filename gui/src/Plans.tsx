@@ -316,12 +316,16 @@ function PackPlanEditor({ data, plan, planId, path, onChange }: {
     ));
   return (<>
     <div className="packbar">
-      {chips<PackMode>(["", "normal", "hard", "infinity", "extreme"], difficulty,
-        (v) => (v ? t(BADGES[MODE_KEYS[v]][0]) : t("packs.anyDifficulty")) /* a badge's name: 普通, not NORMAL, in Chinese */, setDifficulty)}
-      <span className="gap" />
-      {chips(FLOORS, floor, (v) => (v ? t("packs.floor").replace("{n}", String(v)) : t("packs.anyFloor")), setFloor)}
-      <span className="spacer" />
-      {chips([false, true].map(String), String(images), (v) => t(v === "true" ? "packs.images" : "packs.names"), (v) => setImages(v === "true"))}
+      <span className="seg">
+        {chips<PackMode>(["", "normal", "hard", "infinity", "extreme"], difficulty,
+          (v) => (v ? t(BADGES[MODE_KEYS[v]][0]) : t("packs.anyDifficulty")) /* a badge's name: 普通, not NORMAL, in Chinese */, setDifficulty)}
+      </span>
+      <span className="seg view">
+        {chips([false, true].map(String), String(images), (v) => t(v === "true" ? "packs.images" : "packs.names"), (v) => setImages(v === "true"))}
+      </span>
+      <span className="seg floors">
+        {chips(FLOORS, floor, (v) => (v ? t("packs.floor").replace("{n}", String(v)) : t("packs.anyFloor")), setFloor)}
+      </span>
     </div>
     {onChange && <p className="muted">{withBreaks(t("packs.hint"))}</p>}
     <p className="muted floorkey">

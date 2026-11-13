@@ -18,7 +18,7 @@ export function TeamsTab() {
   const remove = () => removeAt(s.teams, i, (fn) => update((d) => fn(d.teams)), setSel);
   return (
     <div className="split">
-      <aside>
+      <aside className="queue">
         <p className="muted">{t("teams.queue")}</p>
         {s.teams.length ? (
           <ReorderList items={s.teams} keyOf={(x) => x.id} selected={i} onSelect={(j, teams) => setSel(teams[j].id)}
