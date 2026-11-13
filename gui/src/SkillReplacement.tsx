@@ -6,7 +6,7 @@ import { fill } from "./i18n";
 import {
   GAME_DECK, SINNERS, SKILL_PAYMENTS, SKILL_SWAPS, skillPlan, type SkillPay, type SkillReplacement, type SkillSwapKey, type SkillTarget,
 } from "./model";
-import { Note, Section } from "./frame";
+import { Note, Row, Section } from "./frame";
 import { GLYPHS, Icon, cautionClass, useEditor } from "./ui";
 
 const move = <T,>(list: T[], from: number, to: number) => {
@@ -104,18 +104,19 @@ export function SkillPanel({ i }: { i: number }) {
       </ol>
       <p className="muted skill-rest">{t("skill.rest")}{rest.join(t("skill.sep")) || t("skill.rest_none")}</p>
       <p className="muted">{t("skill.uptie")}</p>
-      <div className={"toggle" + (bad(`${path}/id_skill_search`) ? " bad" : "")} data-path={`${path}/id_skill_search`}>
-        <label className="check">
-          <input type="checkbox" checked={search.enabled} onChange={(e) => edit((d) => { d.id_skill_search.enabled = e.target.checked; })} />
-          {t("skill.id_search")}
-        </label>
-        <select aria-label={t("skill.pay")} value={search.pay} disabled={!search.enabled}
-          onChange={(e) => edit((d) => { d.id_skill_search.pay = e.target.value as SkillPay; })}>
-          {SKILL_PAYMENTS.map((v) => <option key={v} value={v}>{tv("skill_pay", v)}</option>)}
-        </select>
-        <small>{t("skill.id_search_note")}</small>
-        <small className={search.pay === "starlight" ? cautionClass(t("skill.pay_starlight_note")) : undefined}>
-          {search.pay === "starlight" ? t("skill.pay_starlight_note") : t("skill.pay_cost_note")}</small>
+      <div className="srows">
+        <Row many label={t("skill.id_search")} path={`${path}/id_skill_search`} control={<>
+          <input type="checkbox" className="switch" aria-label={t("skill.id_search")} checked={search.enabled}
+            onChange={(e) => edit((d) => { d.id_skill_search.enabled = e.target.checked; })} />
+          <select aria-label={t("skill.pay")} value={search.pay} disabled={!search.enabled}
+            onChange={(e) => edit((d) => { d.id_skill_search.pay = e.target.value as SkillPay; })}>
+            {SKILL_PAYMENTS.map((v) => <option key={v} value={v}>{tv("skill_pay", v)}</option>)}
+          </select>
+        </>}>
+          <small>{t("skill.id_search_note")}</small>
+          <small className={search.pay === "starlight" ? cautionClass(t("skill.pay_starlight_note")) : undefined}>
+            {search.pay === "starlight" ? t("skill.pay_starlight_note") : t("skill.pay_cost_note")}</small>
+        </Row>
       </div>
     </Section>
   );

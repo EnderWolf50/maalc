@@ -151,7 +151,7 @@
 
 /* Purchase order dialog (BuyOrder.tsx): one column, collapsible keyword sections. */
 .gl .gl-buy { margin-left: auto; }
-.gl-dlgback { position: fixed; inset: 0; z-index: 80; background: #0008; display: flex; align-items: center; justify-content: center; padding: 20px; }
+.gl-dlgback { position: fixed; inset: 0; z-index: 80; background: rgba(0, 0, 0, 0.6); display: flex; align-items: center; justify-content: center; padding: 20px; }
 .gl-dlg {
   background: var(--gl-panel); border: 1px solid var(--gl-line); border-radius: 12px; width: min(640px, 100%); max-height: 88vh;
   display: flex; flex-direction: column; box-shadow: 0 12px 40px #000a;

@@ -117,7 +117,12 @@ button:hover:not(:disabled) { background: var(--card-2); }
 button:active:not(:disabled) { background: var(--card-2); color: var(--fg-2); border-bottom-color: var(--stroke); }
 button:disabled { opacity: 0.4; }
 button .icon-glyph { font-size: 14px; }
-button.primary { min-width: 104px; background: var(--accent); border-color: transparent; color: var(--on-accent); }
+button.primary { position: relative; min-width: 104px; background: var(--accent); border-color: transparent; color: var(--on-accent); }
+/* unsaved edits: a badge on Save itself, where the eye already is */
+button.primary.dirty::after {
+  content: ""; position: absolute; top: -3px; right: -3px; width: 10px; height: 10px; border-radius: 50%;
+  background: var(--caution); box-shadow: 0 0 0 2px var(--base);
+}
 button.primary:hover:not(:disabled) { background: var(--accent-hover); }
 button.primary:active:not(:disabled) { background: var(--accent-hover); color: var(--on-accent); opacity: 0.85; }
 button.subtle { background: transparent; border-color: transparent; }
@@ -247,12 +252,16 @@ small.caution::before, p.caution::before { content: "\E7BA"; position: absolute;
   background: var(--card); border: 1px solid var(--stroke); border-radius: var(--r-ctl);
 }
 .srow-main { display: contents; }
+.srow:not(:has(> .srow-help)) { grid-template-areas: "label ctl"; }
+.srow:has(.caution) .srow-ctl { align-self: start; margin-top: 2px; }
 .srow-label { grid-area: label; font-size: 14px; line-height: 20px; }
 .srow-help { grid-area: help; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
 .srow-help small { max-width: 70ch; }
 .srow-help small.caution { max-width: none; margin-top: 4px; }
 .srow-ctl { grid-area: ctl; display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
 .srow-ctl select { min-width: 220px; }
+/* a switch with its value: the value at one width, so the switches of a stack line up */
+.srow-ctl > .switch + select, .srow-ctl > .switch + input { width: 160px; min-width: 160px; }
 .check-row:hover { background: var(--card-2); }
 /* A long help text: two lines, then a button for the rest. */
 .note { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
@@ -315,6 +324,9 @@ ol.reorder .moves { display: inline-flex; opacity: 0; }
 ol.reorder li:hover .moves, ol.reorder li:focus-within .moves { opacity: 1; }
 .rewards ol.reorder li .moves, ol.reorder:not(aside ol) li.selected .moves { opacity: 1; }
 ol.reorder .moves .icon-glyph { font-size: 12px; }
+ol.reorder li:only-child .moves { display: none; }
+.rewards ol.reorder .item { display: flex; align-items: center; gap: 6px; }
+.rewards ol.reorder .item > button.icon:last-child { margin-left: auto; }
 /* The team list is the queue: a number before each team, its game slot after. */
 aside ol.reorder { counter-reset: queue; }
 aside ol.reorder li { counter-increment: queue; }
@@ -396,7 +408,7 @@ details.exp > summary.bad .exp-sum::before { content: ""; display: inline-block;
 /* Grace of the Star, in this season's colours: steel cards with a cobalt edge; a selected card lights up in cobalt, and + and
  * ++ add a gold rim. The page ground carries the faint blueprint grid of the game's cards. */
 .starlight {
-  display: flex; flex-direction: column; gap: 10px; padding: 12px; border-radius: var(--r-card); color: var(--sy-text);
+  display: flex; flex-direction: column; gap: 10px; padding: 12px; border-radius: var(--r-card); color: var(--sy-text); box-shadow: 0 0 0 1px var(--sy-line);
   background-color: var(--sy-ink);
   background-image: linear-gradient(rgba(120, 138, 255, 0.07) 1px, transparent 1px), linear-gradient(90deg, rgba(120, 138, 255, 0.07) 1px, transparent 1px);
   background-size: 24px 24px;
@@ -475,7 +487,7 @@ ol.skill-sinners .grip { color: var(--fg-2); font-size: 11px; }
 .skill-count { display: flex; align-items: center; gap: 3px; font-size: 12px; color: var(--fg-2); }
 /* S1 is worked out, S2 and S3 are − n + in one box each: no free number field */
 .skill-box { display: inline-flex; align-items: stretch; width: 68px; border: 1px solid var(--stroke); border-bottom-color: var(--stroke-2); border-radius: var(--r-ctl); background: var(--card); font-size: 14px; color: var(--fg); }
-.skill-box.ro { justify-content: center; padding: 5px 0; background: transparent; color: var(--fg-2); }
+.skill-box.ro { justify-content: center; padding: 5px 0; background: transparent; border-color: transparent; color: var(--fg); font-weight: 600; width: 28px; }
 .skill-spin button { flex: 1; min-width: 0; min-height: 28px; padding: 0; border: none; border-radius: 0; background: none; font-weight: 600; }
 .skill-spin button:first-child { border-radius: 3px 0 0 3px; }
 .skill-spin button:last-child { border-radius: 0 3px 3px 0; }
@@ -493,7 +505,7 @@ ol.skill-sinners .grip { color: var(--fg-2); font-size: 11px; }
 /* E.G.O Gift Search, after the game's page, in the season's colours like the starlight: keyword tabs, a band per tier, text
  * cards; a picked one takes the gold rim and its place in the order. */
 .gift-search {
-  display: flex; flex-direction: column; gap: 10px; padding: 12px; border-radius: var(--r-card); color: var(--sy-text);
+  display: flex; flex-direction: column; gap: 10px; padding: 12px; border-radius: var(--r-card); color: var(--sy-text); box-shadow: 0 0 0 1px var(--sy-line);
   background-color: var(--sy-ink);
   background-image: linear-gradient(rgba(120, 138, 255, 0.07) 1px, transparent 1px), linear-gradient(90deg, rgba(120, 138, 255, 0.07) 1px, transparent 1px);
   background-size: 24px 24px;

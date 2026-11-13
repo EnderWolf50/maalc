@@ -235,7 +235,7 @@ export default function App() {
             <option value="en_us">English</option>
           </select>
         </label>
-        <button type="button" className="primary" onClick={save}><Icon glyph={GLYPHS.save} />{t("save")}</button>
+        <button type="button" className={"primary" + (dirty ? " dirty" : "")} onClick={save}><Icon glyph={GLYPHS.save} />{t("save")}</button>
       </header>
       <Rail groups={groups} current={tab} onPick={setTab} label={t("nav.label")} compact={compact} />
       <main aria-labelledby="page-title">
