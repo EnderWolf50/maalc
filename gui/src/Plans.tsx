@@ -6,7 +6,7 @@ import {
   gracePrice,
   lanesOf, lineAt, newId, newPackPlan, onFloor, parseThemePacks, selectAll, starlightCost, toggleSinner, weightOf,
   type DeploymentPlan, type Order, type PackMode, type PackPlanValues, type StarlightPlan, type StarlightValues, type ThemePackPlan,
-  type ThemePacks,
+  type Team, type ThemePacks,
 } from "./model";
 import { GIFT_BY_ID, giftName } from "./giftCatalog";
 import { listsOfPlan, packWanted } from "./gifts";
@@ -92,6 +92,20 @@ export function StarlightEditor({ value, onChange, path }: {
   );
 }
 
+/** The plan a team names for each kind (null: its own custom values). */
+const PLAN_OF: Record<PlanKey, (team: Team) => string | null> = {
+  deployment_order_plans: (x) => ("plan" in x.deployment_order ? x.deployment_order.plan : null),
+  starlight_plans: (x) => ("plan" in x.starlight ? x.starlight.plan : null),
+  theme_pack_plans: (x) => x.theme_pack_plan,
+};
+
+/** Which teams use plan `id`, so a change or a delete shows whom it touches. */
+function PlanUsers({ planKey, id }: { planKey: PlanKey; id: string }) {
+  const { s, t } = useEditor();
+  const names = s.teams.filter((x) => PLAN_OF[planKey](x) === id).map((x) => x.name || "—");
+  return <p className="muted">{names.length ? fill(t("plan.usedBy"), { names: names.join(t("gl.sep")) }) : t("plan.unused")}</p>;
+}
+
 /** A list of named plans on the left, the selected plan's editor on the right; `lead`, a read-only plan above the list. */
 function PlanTab<P extends { id: string; name: string }>({ planKey, tab, make, editor, lead }: {
   planKey: PlanKey; tab: "tab.deployment" | "tab.starlight" | "tab.themepacks"; make: () => Omit<P, "id" | "name">;
@@ -122,7 +136,7 @@ function PlanTab<P extends { id: string; name: string }>({ planKey, tab, make, e
         <button type="button" onClick={add}>+ {t("add")}</button>
       </aside>
       <section data-path={i >= 0 ? `${planKey}/${i}` : undefined}>
-        {i === -1 && lead ? lead.body : plans[i] && (
+        {i === -1 && lead ? <><PlanUsers planKey={planKey} id={lead.id} />{lead.body}</> : plans[i] && (
           <>
             <div className="row">
               <Field label={t("name")} path={`${planKey}/${i}/name`}>
@@ -132,6 +146,7 @@ function PlanTab<P extends { id: string; name: string }>({ planKey, tab, make, e
                 {t("remove")}
               </button>
             </div>
+            <PlanUsers planKey={planKey} id={plans[i].id} />
             {editor(plans[i], (p) => set((l) => { l[i] = p; }), `${planKey}/${i}`)}
           </>
         )}

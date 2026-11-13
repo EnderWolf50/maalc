@@ -144,6 +144,27 @@ describe("deleting a plan", () => {
   });
 });
 
+describe("which teams use a plan", () => {
+  const teams = () => [
+    { ...newTeam(1, "Ta"), deployment_order: { plan: "d1" } },
+    { ...newTeam(2, "Tb"), theme_pack_plan: "p1" },
+    { ...newTeam(3, "Tc"), deployment_order: { plan: "d1" } },
+  ];
+  const plans = ["D1", "D2"].map((name) => ({ id: name.toLowerCase(), name, order: [...SINNERS] }));
+
+  test("a plan lists the teams that use it, and says so when none does", async () => {
+    const r = renderEditor(<DeploymentTab />, settings({ deployment_order_plans: plans, teams: teams() }));
+    expect(screen.getByText(fill(zh["plan.usedBy"], { names: "Ta、Tc" }))).toBeInTheDocument();
+    await r.user.click(within(document.querySelector("aside")!).getByText("D2"));
+    expect(screen.getByText(zh["plan.unused"])).toBeInTheDocument();
+  });
+
+  test("the theme packs' default plan lists the teams on the default", async () => {
+    renderEditor(<ThemePackTab />, settings({ theme_pack_plans: [{ id: "p1", name: "P1", weights: {}, threshold: 0, unlisted: 0, event_packs: "weight" }], teams: teams() }));
+    expect(await screen.findByText(fill(zh["plan.usedBy"], { names: "Ta、Tc" }))).toBeInTheDocument();
+  });
+});
+
 test("a plan's hint and the event pack note show one topic to a line", async () => {
   const plan = { id: "p1", name: "Mine", weights: {}, threshold: 0, unlisted: 0, event_packs: "weight" };
   const r = renderEditor(<ThemePackTab />, settings({ theme_pack_plans: [plan] }));
