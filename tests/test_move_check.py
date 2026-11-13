@@ -29,15 +29,24 @@ def test_a_move_reports_only_the_lines_it_did_not_move(tmp_path):
 
 
 def test_a_module_split_off_actions_pairs_its_renamed_reads_off(tmp_path):
-    # #676: a test that read actions.LUX reads lux_actions.LUX; only the new import is left. test_actions.FUSING read
-    # as test_lux_actions.FUSING is no such rename: another module's name only ends the same.
+    # #676: a test that read actions.LUX (defined in lux_actions) or actions.luxcavation (imported there, no longer in
+    # actions) reads it through lux_actions; only the new import is left. ROOT stays in actions: a test that reads it
+    # through lux_actions reads lux_actions' own binding, which is no rename. Nor is test_lux_actions.FUSING.
     git(tmp_path, "init", "-q")
-    commit(tmp_path, {"t.py": "import actions\n\nx = actions.LUX + test_actions.LUX\ny = test_actions.FUSING\n"})
-    commit(tmp_path, {"t.py": "import actions\nimport lux_actions\n\nx = lux_actions.LUX + test_actions.LUX\n"
-                              "y = test_lux_actions.FUSING\n"})
+    (tmp_path / "agent").mkdir()
+    commit(tmp_path, {"agent/actions.py": "import luxcavation\n\nROOT = 1\nLUX = luxcavation.COST\n",
+                      "t.py": "import actions\n\nx = actions.LUX + actions.luxcavation.COST + test_actions.LUX\n"
+                              "y = test_actions.FUSING\nz = actions.ROOT\n"})
+    commit(tmp_path, {"agent/actions.py": "ROOT = 1\n",
+                      "agent/lux_actions.py": "import luxcavation\nfrom actions import ROOT\n\nLUX = luxcavation.COST\n",
+                      "t.py": "import actions\nimport lux_actions\n\n"
+                              "x = lux_actions.LUX + lux_actions.luxcavation.COST + test_actions.LUX\n"
+                              "y = test_lux_actions.FUSING\nz = lux_actions.ROOT\n"})
 
     added, removed = move_check.unmatched("HEAD~", "HEAD", cwd=tmp_path, module="lux_actions")
 
-    assert added == [("t.py", 2, "import lux_actions"), ("t.py", 5, "y = test_lux_actions.FUSING")]
-    assert removed == [("t.py", 4, "y = test_actions.FUSING")]
-    assert ("t.py", 4, "x = lux_actions.LUX + test_actions.LUX") in move_check.unmatched("HEAD~", "HEAD", cwd=tmp_path)[0]
+    assert added == [("agent/lux_actions.py", 2, "from actions import ROOT"), ("t.py", 2, "import lux_actions"),
+                     ("t.py", 5, "y = test_lux_actions.FUSING"), ("t.py", 6, "z = lux_actions.ROOT")]
+    assert removed == [("t.py", 4, "y = test_actions.FUSING"), ("t.py", 5, "z = actions.ROOT")]
+    assert ("t.py", 4, "x = lux_actions.LUX + lux_actions.luxcavation.COST + test_actions.LUX") in \
+        move_check.unmatched("HEAD~", "HEAD", cwd=tmp_path)[0]

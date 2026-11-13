@@ -83,11 +83,22 @@ def body(context, actions, out):
 def test_lux_alone():
     import actions  # not at the top: as a child's
     assert actions.LUX
+
+
+def test_patches(monkeypatch):
+    monkeypatch.setattr(actions, "log", print)
+    actions.ROOT = "elsewhere"
+    reads = lambda actions: actions.LUX
+'''
+LUXCAVATION = '''"""Luxcavation's rules; actions.py reads its pages."""
+
+EXP_COST = 3
 '''
 
 
 def agent(tmp_path, actions=ACTIONS):
-    for path, text in {"agent/actions.py": actions, "agent/main.py": MAIN, "tests/test_lux.py": TEST}.items():
+    files = {"agent/actions.py": actions, "agent/main.py": MAIN, "agent/luxcavation.py": LUXCAVATION, "tests/test_lux.py": TEST}
+    for path, text in files.items():
         (tmp_path / path).parent.mkdir(parents=True, exist_ok=True)
         (tmp_path / path).write_text(text, encoding="utf-8")
     return tmp_path
@@ -200,18 +211,29 @@ def body(context, actions, out):
 def test_lux_alone():
     import lux_actions  # not at the top: as a child's
     assert lux_actions.LUX
+
+
+def test_patches(monkeypatch):
+    monkeypatch.setattr(actions, "log", print)
+    actions.ROOT = "elsewhere"
+    reads = lambda actions: actions.LUX
 '''
     assert report.renamed == {"tests/test_lux.py": 5}
 
 
-def test_a_string_lookup_and_a_mention_are_left_for_a_hand_edit(tmp_path):
+def test_what_the_rename_cannot_do_is_left_for_a_hand_edit(tmp_path):
+    # a lookup by a string, a mention in a docstring, a lambda's parameter; a name the module binds set on actions
+    # alone (its own patch never reaches lux_actions); a pure-logic module's docstring that points at actions.py
     root = agent(tmp_path)
 
     report = split(root, "lux_actions", TABLE, STAY)
 
-    # the line numbers of the file as the split leaves it
-    assert [line.split(": ")[:2] for line in report.by_hand] == [["tests/test_lux.py:12", "getattr by a string"],
-                                                                ["tests/test_lux.py:16", "still names it"]]
+    # the line numbers of the files as the split leaves them
+    assert [line.split(": ")[:2] for line in report.by_hand] == [
+        ["tests/test_lux.py:12", "getattr by a string"], ["tests/test_lux.py:16", "still names it"],
+        ["tests/test_lux.py:27", "sets it on actions alone, not on lux_actions"],
+        ["tests/test_lux.py:28", "sets it on actions alone, not on lux_actions"],
+        ["tests/test_lux.py:29", "still names it"], ["agent/luxcavation.py:1", "points at actions.py"]]
 
 
 @pytest.mark.parametrize("change, problem", [
@@ -241,4 +263,4 @@ def test_the_table_places_every_top_level_name_of_actions_py_once():
 def test_the_pilot_module_fits_actions_py():
     # #676 PR 4 splits lux_actions first: nothing it moves reads another page module, nothing staying reads it
     src = Source((ROOT / "agent/actions.py").read_text(encoding="utf-8"))
-    assert split_actions.plan(src, "lux_actions")[3] == []
+    assert split_actions.move_plan(src, "lux_actions").problems == []

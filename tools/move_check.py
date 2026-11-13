@@ -12,12 +12,14 @@ anything else is a change the move did not announce. Read it next to
 
 --module names a page module split off agent/actions.py (#676, tools/split_actions.py; a name or a path): an added
 line that reads `<module>.X` where a removed one read `actions.X` pairs off with it, so the tests' rename is no
-leftover either.
+leftover either. X is a name agent/<module>.py defines at <head>, or one it imports that agent/actions.py no longer
+does; a name that stayed in actions.py read through the module is no rename and stays a leftover.
 
 Exit code 0 when nothing is left over, 1 otherwise.
 """
 
 import argparse
+import ast
 import re
 import sys
 from collections import Counter
@@ -53,11 +55,35 @@ def leftover(lines, other, key=str):
     return left
 
 
+def top_level(source):
+    """(names source defines, names it imports from a module other than actions) at its top level."""
+    defined, imported = set(), set()
+    for node in ast.parse(source).body:
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            defined.add(node.name)
+        elif isinstance(node, (ast.Assign, ast.AnnAssign)):
+            targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+            defined |= {e.id for t in targets for e in ast.walk(t) if isinstance(e, ast.Name)}
+        elif isinstance(node, (ast.Import, ast.ImportFrom)) and getattr(node, "module", None) != "actions":
+            imported |= {a.asname or a.name.split(".")[0] for a in node.names}
+    return defined, imported
+
+
+def moved_names(head, module, cwd=None):
+    """The names a test reads through module at head where it read them through actions: those agent/<module>.py
+    defines, and those it imports that agent/actions.py no longer binds."""
+    defined, imported = top_level(git("show", f"{head}:agent/{module}.py", cwd=cwd))
+    in_actions = set().union(*top_level(git("show", f"{head}:agent/actions.py", cwd=cwd)))
+    return defined | (imported - in_actions)
+
+
 def unmatched(base, head, cwd=None, module=None):
-    """(added, removed): the changed lines the other side does not account for as moved; with module, `<module>.X`
-    reads as `actions.X`."""
+    """(added, removed): the changed lines the other side does not account for as moved; with module, an added
+    `<module>.X` reads as `actions.X` for each X of moved_names."""
     added, removed = changed_lines(base, head, cwd)
-    renamed = re.compile(rf"\b{re.escape(Path(module).stem)}\.") if module else None
+    renamed = None
+    if module and (names := moved_names(head, Path(module).stem, cwd)):
+        renamed = re.compile(rf"\b{re.escape(Path(module).stem)}\.(?=(?:{'|'.join(map(re.escape, sorted(names)))})\b)")
 
     def key(text):
         return renamed.sub("actions.", text) if renamed else text

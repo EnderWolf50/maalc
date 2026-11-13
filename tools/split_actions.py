@@ -18,7 +18,10 @@ It writes nothing and exits 1 when the table does not fit agent/actions.py: a to
 places twice, a name of the module that actions.py does not hold, moved code that declares a global or reads a name
 of another page module, or code staying in actions.py that reads a moved name (both would be an import cycle). It
 prints what a person edits by hand: `getattr(actions, "<moved name>")`, an `actions.<moved name>` left in a comment, a
-string or docs/, and a read whose `actions` it cannot trace to an import, an assignment or a parameter.
+string or docs/, a read whose `actions` it cannot trace to an import, an assignment or a function's parameter, a
+test that sets a name the module binds on actions alone (`setattr(actions, "tap", ...)`, `actions.ROOT = ...`: the
+module never reads it; agent_patch's patch_all and rebind set both), and the lines of the agent modules the new
+module imports whose docstring points at actions.py.
 
 Then `uv run python tools/move_check.py --module <module> origin/main HEAD` lists what is not a move.
 """
@@ -133,6 +136,13 @@ NESTED = (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda, ast.ClassDef, ast.L
           ast.GeneratorExp)
 
 
+FUNCTIONS = (ast.FunctionDef, ast.AsyncFunctionDef)
+DEFS = (*FUNCTIONS, ast.ClassDef)
+SCOPES = (*DEFS, ast.Lambda, ast.Module)  # what can bind actions (a comprehension binds only its own targets)
+# this tool and the tests of the two: their strings name actions.<name> as examples
+OWN = {"tools/split_actions.py", "tools/move_check.py", "tests/test_split_actions.py", "tests/test_move_check.py"}
+
+
 class Misfit(Exception):
     """The table does not fit agent/actions.py; the message lists each problem."""
 
@@ -140,7 +150,21 @@ class Misfit(Exception):
 class Report(NamedTuple):
     moved: list[str]  # the names moved, in their order
     renamed: dict[str, int]  # repo path -> `actions.<name>` reads pointed at the module
-    by_hand: list[str]  # "path:line: text" a person edits
+    by_hand: list[str]  # "path:line: why: text" a person edits
+
+
+def split_lines(text):
+    """text's lines with their ends, broken at \\n only, as ast counts them (str.splitlines breaks at \\f too)."""
+    return re.findall(r"[^\n]*\n|[^\n]+\Z", text)
+
+
+def parent_map(tree):
+    return {c: p for p in ast.walk(tree) for c in ast.iter_child_nodes(p)}
+
+
+def params(args):
+    """The parameters of a function's or lambda's ast.arguments."""
+    return [x for x in (*args.posonlyargs, *args.args, *args.kwonlyargs, args.vararg, args.kwarg) if x]
 
 
 class Source:
@@ -148,7 +172,7 @@ class Source:
 
     def __init__(self, text):
         self.text, self.tree = text, ast.parse(text)
-        self.lines = text.splitlines(keepends=True)
+        self.lines = split_lines(text)
         self.eol = "\r\n" if "\r\n" in text else "\n"
         self.starts = [0]
         for line in self.lines:
@@ -169,7 +193,7 @@ def bound(alias):
 def names_of(node):
     """The top-level names a statement defines: a function's or class's, an assignment's targets, or the custom name
     an expression statement registers."""
-    if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+    if isinstance(node, DEFS):
         return [node.name]
     if isinstance(node, (ast.Assign, ast.AnnAssign)):
         targets = node.targets if isinstance(node, ast.Assign) else [node.target]
@@ -185,10 +209,9 @@ def own_reads(node):
     holds, whose reads symtable gives (a comprehension's apart from its own targets: Python 3.12 inlines them)."""
     if isinstance(node, ast.Name):
         return {node.id} if isinstance(node.ctx, ast.Load) else set()
-    if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+    if isinstance(node, FUNCTIONS):
         a = node.args
-        parts = [*node.decorator_list, *a.defaults, *a.kw_defaults, node.returns,
-                 *(x.annotation for x in (*a.posonlyargs, *a.args, *a.kwonlyargs, a.vararg, a.kwarg) if x)]
+        parts = [*node.decorator_list, *a.defaults, *a.kw_defaults, node.returns, *(x.annotation for x in params(a))]
     elif isinstance(node, ast.Lambda):
         parts = [*node.args.defaults, *node.args.kw_defaults]
     elif isinstance(node, ast.ClassDef):
@@ -260,7 +283,7 @@ def header_imports(src):
     return groups
 
 
-def import_text(src, node, keep, eol):
+def import_text(src, node, keep):
     """node's text with only the names in keep, None for none of them; the original text when it keeps them all."""
     aliases = [a for a in node.names if bound(a) in keep]
     if not aliases:
@@ -269,7 +292,7 @@ def import_text(src, node, keep, eol):
         return "".join(src.lines[node.lineno - 1:node.end_lineno]).rstrip("\r\n")
     names = ", ".join(a.name + (f" as {a.asname}" if a.asname else "") for a in aliases)
     head = "import " if isinstance(node, ast.Import) else f"from {'.' * node.level}{node.module or ''} import "
-    return wrapped(head, names, eol)
+    return wrapped(head, names, src.eol)
 
 
 def wrapped(head, names, eol):
@@ -283,7 +306,7 @@ def wrapped(head, names, eol):
 def blank_lead(text):
     """How many blank lines text starts with."""
     n = 0
-    for line in text.splitlines():
+    for line in split_lines(text):
         if line.strip():
             break
         n += 1
@@ -292,11 +315,19 @@ def blank_lead(text):
 
 def lead_with(text, blanks, eol):
     """text with exactly `blanks` blank lines before its first line that is not blank."""
-    return eol * blanks + text[len("".join(text.splitlines(keepends=True)[:blank_lead(text)])):]
+    return eol * blanks + text[len("".join(split_lines(text)[:blank_lead(text)])):]
 
 
-def plan(src, module, modules=MODULES, stay=STAY):
-    """(header end, statements, moved names, misfits) of moving module's names out of src, actions.py's Source."""
+class Plan(NamedTuple):
+    header_end: int  # the last line of the docstring and imports
+    statements: list[Statement]
+    moved: list[Statement]  # the module's, in their order
+    out: set[str]  # the names they define
+    problems: list[str]  # why the table does not fit; none when it does
+
+
+def move_plan(src, module, modules=MODULES, stay=STAY):
+    """The Plan of moving module's names out of src, actions.py's Source."""
     placed = {}
     problems = []
     for mod, names in [*((m, n) for m, (_, n) in modules.items()), ("actions", stay)]:
@@ -323,21 +354,20 @@ def plan(src, module, modules=MODULES, stay=STAY):
                                 f"actions.py and reads {n}, which goes to {module}")
         if here and any(isinstance(e, (ast.Global, ast.Nonlocal)) for e in ast.walk(s.node)):
             problems.append(f"actions.py:{s.node.lineno}: {s.names[0]} declares a global, which the move would rebind")
-    return header_end, stmts, moved, problems
+    return Plan(header_end, stmts, moved, out, problems)
 
 
-def module_text(src, module, docstring, header_end, stmts, moved, eol):
-    """The new module's text, and the imported names it uses."""
-    reads = set().union(*(s.reads for s in moved))
+def module_text(src, plan, docstring):
+    """(the new module's text, the names it takes from actions, the imported names it uses)."""
+    eol, reads = src.eol, set().union(*(s.reads for s in plan.moved))
     groups = header_imports(src)
     imported = {bound(a) for g in groups for n in g for a in n.names}
-    defined = {n for s in stmts for n in s.names}
     # constants, then classes, then the rest, as the imports of actions.py order them
-    from_actions = sorted((reads & defined) - {n for s in moved for n in s.names},
+    from_actions = sorted((reads & {n for s in plan.statements for n in s.names}) - plan.out,
                           key=lambda n: (0 if n.isupper() else 1 if n[0].isupper() else 2, n))
     blocks = []
     for i, group in enumerate(groups):
-        kept = [(n, t) for n in group if (t := import_text(src, n, reads, eol))]
+        kept = [(n, t) for n in group if (t := import_text(src, n, reads))]
         lines = [t for _, t in kept]
         if i == len(groups) - 1 and from_actions:  # the local group: from actions first of its from-imports
             at = next((j for j, (n, _) in enumerate(kept) if isinstance(n, ast.ImportFrom)), len(kept))
@@ -346,43 +376,43 @@ def module_text(src, module, docstring, header_end, stmts, moved, eol):
             blocks.append(eol.join(lines))
     text = '"""' + eol.join(textwrap.wrap(docstring, WIDTH - 6)) + '"""' + eol * 2 + (eol * 2).join(blocks) + eol
     prev = None
-    for s in moved:
+    for s in plan.moved:
         chunk = "".join(src.lines[s.first - 1:s.node.end_lineno])
-        index = stmts.index(s)
+        index = plan.statements.index(s)
         if prev is None or index != prev + 1:  # a statement not right after the last one moved: its own gap
-            def_like = isinstance(s.node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
-            chunk = lead_with(chunk, max(blank_lead(chunk), 2 if def_like or prev is None else 1), eol)
+            chunk = lead_with(chunk, max(blank_lead(chunk), 2 if isinstance(s.node, DEFS) or prev is None else 1), eol)
         text += chunk
         prev = index
-    return text.rstrip("\r\n") + eol, reads & imported
+    return text.rstrip("\r\n") + eol, set(from_actions), reads & imported
 
 
-def actions_text(src, header_end, stmts, moved, eol):
-    """actions.py without the moved statements and without the imported names nothing left reads."""
-    kept = [s for s in stmts if s not in moved]
+def actions_text(src, plan):
+    """(actions.py without the moved statements and the imported names nothing left reads, those names)."""
+    eol = src.eol
+    kept = [s for s in plan.statements if s not in plan.moved]
     reads = set().union(*(s.reads for s in kept))
     groups = header_imports(src)
-    blocks = [eol.join(t for n in g if (t := import_text(src, n, reads, eol))) for g in groups]
-    first = groups[0][0].lineno if groups else header_end + 1
+    blocks = [eol.join(t for n in g if (t := import_text(src, n, reads))) for g in groups]
+    first = groups[0][0].lineno if groups else plan.header_end + 1
     text = "".join(src.lines[:first - 1]) + (eol * 2).join(b for b in blocks if b) + eol
     gap = None  # the leading blank lines of the first statement of a run moved out
-    for s in stmts:
+    for s in plan.statements:
         chunk = "".join(src.lines[s.first - 1:s.node.end_lineno])
-        if s in moved:
+        if s in plan.moved:
             gap = blank_lead(chunk) if gap is None else gap
             continue
         if gap is not None:
             chunk = lead_with(chunk, max(gap, blank_lead(chunk)), eol)
             gap = None
         text += chunk
-    tail = "".join(src.lines[stmts[-1].node.end_lineno:]) if stmts else ""
+    tail = "".join(src.lines[plan.statements[-1].node.end_lineno:]) if plan.statements else ""
     dropped = {bound(a) for g in groups for n in g for a in n.names} - reads
     return text + tail, dropped
 
 
 def main_text(text, module):
     """main.py with `import <module>` among its imports of actions and the page modules, in name order."""
-    lines = text.splitlines(keepends=True)
+    lines = split_lines(text)
     at = [i for i, line in enumerate(lines) if re.match(r"import (actions|\w+_actions)\b", line)]
     if not at:
         raise Misfit("main.py has no `import actions`")
@@ -393,12 +423,11 @@ def main_text(text, module):
 
 
 def scope_chain(parents, node):
-    """The scopes node sits in that can bind actions, innermost first, the module last (a comprehension binds only
-    its own targets)."""
+    """The scopes node sits in that can bind actions, innermost first, the module last."""
     chain = []
     while node in parents:
         node = parents[node]
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda, ast.ClassDef, ast.Module)):
+        if isinstance(node, SCOPES):
             chain.append(node)
     return chain
 
@@ -415,10 +444,8 @@ def own_nodes(scope):
 
 def bindings(scope, name, parents):
     """The statements of scope that bind name, "param" when one of its parameters does, [] when none does."""
-    if isinstance(scope, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
-        a = scope.args
-        if any(x.arg == name for x in (*a.posonlyargs, *a.args, *a.kwonlyargs, a.vararg, a.kwarg) if x):
-            return "param"
+    if isinstance(scope, (*FUNCTIONS, ast.Lambda)) and any(x.arg == name for x in params(scope.args)):
+        return "param"
     found = []
     for node in own_nodes(scope):
         if isinstance(node, (ast.Import, ast.ImportFrom)) and any(bound(a) == name for a in node.names):
@@ -431,18 +458,29 @@ def bindings(scope, name, parents):
     return found
 
 
+def binding_scope(parents, node):
+    """The scope whose binding of actions a read of it (node) sees: a class body only for a read right in it; None
+    when no scope binds it."""
+    chain = scope_chain(parents, node)
+    return next((s for i, s in enumerate(chain) if not (isinstance(s, ast.ClassDef) and i > 0)
+                 and bindings(s, "actions", parents)), None)
+
+
 def rename(text, module, names):
     """(new text, reads renamed): text's `actions.<name>` for names pointed at module, with `import <module>` after
     each statement that binds actions for them. A read whose actions it cannot trace to an import, an assignment or a
-    parameter it leaves as it is."""
+    parameter of a function it leaves as it is."""
     src = Source(text)
-    parents = {c: p for p in ast.walk(src.tree) for c in ast.iter_child_nodes(p)}
+    parents = parent_map(src.tree)
     edits, inserts = [], {}  # inserts: offset -> line
 
     def line_start(st):  # the statement starts its line: an import can go on a line of its own after it
         return not src.lines[st.lineno - 1][:st.col_offset].strip()
 
-    def after(st):  # (offset, line) of `import <module>` on the line after st, at its indentation
+    def before(st):  # (offset, line) of `import <module>` on a line of its own before st, at its indentation
+        return src.at(st.lineno, 0), f"{src.lines[st.lineno - 1][:st.col_offset]}import {module}{src.eol}"
+
+    def after(st):  # the same on the line after st
         return src.starts[st.end_lineno], f"{src.lines[st.lineno - 1][:st.col_offset]}import {module}{src.eol}"
 
     for node in ast.walk(src.tree):
@@ -456,10 +494,12 @@ def rename(text, module, names):
         if bindings(scope, module, parents):
             pass  # the scope has the module already
         elif found == "param":
+            if isinstance(scope, ast.Lambda):
+                continue  # no statement to put the import before
             first = next(st for st in scope.body if not (isinstance(st, ast.Expr) and isinstance(st.value, ast.Constant)))
             if not line_start(first):
                 continue
-            inserts[src.at(first.lineno, 0)] = f"{src.lines[first.lineno - 1][:first.col_offset]}import {module}{src.eol}"
+            inserts.update([before(first)])
         elif all(isinstance(st, (ast.Import, ast.ImportFrom, ast.Assign, ast.AnnAssign)) and line_start(st) for st in found):
             inserts.update(after(st) for st in found)
         else:
@@ -473,24 +513,15 @@ def rename(text, module, names):
     return (swap_unused(new, module) if count else new), count
 
 
-def binding_scope(parents, node):
-    """The scope whose binding of actions a read of it (node) sees: a class body only for a read right in it; None
-    when no scope binds it."""
-    chain = scope_chain(parents, node)
-    return next((s for i, s in enumerate(chain) if not (isinstance(s, ast.ClassDef) and i > 0)
-                 and bindings(s, "actions", parents)), None)
-
-
 def swap_unused(text, module):
     """text with each `import actions` that nothing reads any more, and that `import <module>` follows, turned into
     that import (its comment kept, the line after dropped): an unused import fails ruff F401."""
     src = Source(text)
-    parents = {c: p for p in ast.walk(src.tree) for c in ast.iter_child_nodes(p)}
+    parents = parent_map(src.tree)
     read = {binding_scope(parents, n) for n in ast.walk(src.tree)
             if isinstance(n, ast.Name) and n.id == "actions" and isinstance(n.ctx, ast.Load)}
     lines = list(src.lines)
-    for scope in [n for n in ast.walk(src.tree) if isinstance(n, (ast.Module, ast.FunctionDef, ast.AsyncFunctionDef,
-                                                                  ast.ClassDef))]:
+    for scope in [n for n in ast.walk(src.tree) if isinstance(n, (*DEFS, ast.Module))]:
         found = bindings(scope, "actions", parents)
         if scope in read or found == "param":
             continue
@@ -502,21 +533,54 @@ def swap_unused(text, module):
     return "".join(lines)
 
 
-def by_hand(path_name, text, names):
-    """"path:line: why: text" of each line of a file that still names a moved name through actions: in code the
-    rename could not trace, in a comment, a string or a doc, by a string (getattr), or in `from actions import`."""
+def by_hand(path_name, text, names, module, shared=frozenset()):
+    """"path:line: why: text" of each line of a file a person still edits after the move: one that names a moved name
+    through actions (in code the rename could not trace, a comment, a string or a doc), reads one by a string
+    (getattr), imports one from actions, or sets a name of names or shared (those actions and the module both bind) on
+    actions alone, which the module never reads (#676 risk 1: patch_all sets both)."""
     pattern = re.compile(r"\bactions\.(?:" + "|".join(map(re.escape, sorted(names))) + r")\b")
-    lines = text.splitlines()
+    lines = [line.rstrip("\r\n") for line in split_lines(text)]
     found = {i: "still names it" for i, line in enumerate(lines, 1) if pattern.search(line)}
     if path_name.endswith(".py"):
+        binds = names | shared
+
+        def on_actions(node):
+            return isinstance(node, ast.Name) and node.id == "actions"
+
         for node in ast.walk(ast.parse(text)):
-            if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id in ("getattr", "hasattr") \
-                    and len(node.args) > 1 and isinstance(node.args[0], ast.Name) and node.args[0].id == "actions" \
-                    and isinstance(node.args[1], ast.Constant) and node.args[1].value in names:
-                found[node.lineno] = f"{node.func.id} by a string"
+            if isinstance(node, ast.Call) and len(node.args) > 1 and on_actions(node.args[0]) \
+                    and isinstance(node.args[1], ast.Constant) and node.args[1].value in binds:
+                call = node.func.id if isinstance(node.func, ast.Name) else getattr(node.func, "attr", None)
+                if call in ("getattr", "hasattr") and node.args[1].value in names:
+                    found[node.lineno] = f"{call} by a string"
+                elif call in ("setattr", "delattr"):
+                    found[node.lineno] = f"sets it on actions alone, not on {module}"
+            elif isinstance(node, (ast.Assign, ast.AugAssign, ast.Delete)):
+                targets = node.targets if isinstance(node, (ast.Assign, ast.Delete)) else [node.target]
+                if any(isinstance(t, ast.Attribute) and on_actions(t.value) and t.attr in shared for t in targets):
+                    found[node.lineno] = f"sets it on actions alone, not on {module}"
             elif isinstance(node, ast.ImportFrom) and node.module == "actions" and any(a.name in names for a in node.names):
                 found[node.lineno] = "from actions import"
     return [f"{path_name}:{i}: {why}: {lines[i - 1].strip()}" for i, why in sorted(found.items())]
+
+
+def pointers(root, new_module):
+    """"path:line: why: text" of each line naming actions.py in the docstring of an agent module the new module (its
+    text) imports (`luxcavation.py: actions.py reads the Luxcavation pages`): it may now point at the new module."""
+    found = []
+    for node in ast.parse(new_module).body:
+        if isinstance(node, (ast.Import, ast.ImportFrom)):
+            names = [a.name for a in node.names] if isinstance(node, ast.Import) else [node.module or ""]
+            for name in names:
+                path = root / "agent" / f"{name}.py"
+                if name == "actions" or not path.exists():
+                    continue
+                body = ast.parse(text := read(path)).body
+                if body and isinstance(body[0], ast.Expr) and isinstance(body[0].value, ast.Constant):
+                    lines = split_lines(text)
+                    found += [f"agent/{name}.py:{i}: points at actions.py: {lines[i - 1].strip()}"
+                              for i in range(body[0].lineno, body[0].end_lineno + 1) if "actions.py" in lines[i - 1]]
+    return found
 
 
 def read(path):
@@ -537,31 +601,33 @@ def split(root, module, modules=MODULES, stay=STAY):
     if (agent / f"{module}.py").exists():
         raise Misfit(f"agent/{module}.py exists already")
     src = Source(read(agent / "actions.py"))
-    header_end, stmts, moved, problems = plan(src, module, modules, stay)
-    if problems:
-        raise Misfit("\n".join(problems))
-    new_module, imports = module_text(src, module, modules[module][0], header_end, stmts, moved, src.eol)
-    new_actions, dropped = actions_text(src, header_end, stmts, moved, src.eol)
-    names = {n for s in moved for n in s.names} | (dropped & imports)
+    plan = move_plan(src, module, modules, stay)
+    if plan.problems:
+        raise Misfit("\n".join(plan.problems))
+    new_module, from_actions, imports = module_text(src, plan, modules[module][0])
+    new_actions, dropped = actions_text(src, plan)
+    names = plan.out | (dropped & imports)  # what the tests read through the module from now on
+    shared = from_actions | (imports - dropped)  # what actions and the module both bind
     new_main = main_text(read(agent / "main.py"), module)
     files, renamed, hand = {}, {}, []
     for path in sorted([*root.glob("tests/*.py"), *root.glob("tools/*.py"), *root.glob("tools/live/*.py")]):
         rel = path.relative_to(root).as_posix()
-        if rel == "tools/split_actions.py":
+        if rel in OWN:
             continue
         new, count = rename(read(path), module, names)
-        hand += by_hand(rel, new, names)
+        hand += by_hand(rel, new, names, module, shared)
         if count:
             files[path], renamed[rel] = new, count
     for path in sorted([*agent.glob("*.py"), *root.glob("docs/**/*.md"), *root.glob("*.md")]):
         if path.name not in ("actions.py", f"{module}.py"):
-            hand += by_hand(path.relative_to(root).as_posix(), read(path), names)
+            hand += by_hand(path.relative_to(root).as_posix(), read(path), names, module)
+    hand += pointers(root, new_module)
     write(agent / f"{module}.py", new_module)
     write(agent / "actions.py", new_actions)
     write(agent / "main.py", new_main)
     for path, new in files.items():
         write(path, new)
-    return Report([n for s in moved for n in s.names], renamed, hand)
+    return Report([n for s in plan.moved for n in s.names], renamed, hand)
 
 
 def main():
