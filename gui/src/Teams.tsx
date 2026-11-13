@@ -24,8 +24,8 @@ export function TeamsTab() {
           <ReorderList className="queue" numbered items={s.teams} keyOf={(x) => x.id} nameOf={(x) => x.name || "—"} selected={i} onSelect={(j, teams) => setSel(teams[j].id)}
             badAt={(j) => bad(`teams/${j}`)}
             onChange={(teams) => update((d) => { d.teams = teams; })}
-            render={(x) => (
-              <span className={x.enabled ? "" : "muted"}>{x.name || "—"} <small>#{x.game_team}</small></span>
+            render={(x, j) => (
+              <span className={x.enabled ? "" : "muted"}>{x.name || "—"} <small className={bad(`teams/${j}/game_team`) ? "bad" : undefined}>#{x.game_team}</small></span>
             )} />
         ) : <p className={"muted" + (bad("teams") ? " bad" : "")}>{t("noTeams")}</p>}
         <button type="button" onClick={() => {
@@ -116,7 +116,7 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
           is a panel with one header style; the short ones and the sinner grid and starlight start open, Gift Search, shop sales
           and skill replacement closed (their summaries say what they hold). */}
       <details className="panel" open data-sec="lists">
-        <summary className={badIn(bad, path, ["gift_list", "theme_pack_plan"])}>{t("team.lists")}<Holds>{listName(team.gift_list, s.gift_lists, t("defaultPlan"))} · {listName(team.theme_pack_plan, s.theme_pack_plans, t("defaultPlan"))}</Holds><ProblemMark on={badIn(bad, path, ["gift_list", "theme_pack_plan"]) !== ""} /></summary>
+        <summary className={badIn(bad, path, ["gift_list", "theme_pack_plan"])}>{t("team.lists")}<Holds>{t("team.gift_list")} {listName(team.gift_list, s.gift_lists, t("defaultPlan"))} · {t("team.theme_pack_plan")} {listName(team.theme_pack_plan, s.theme_pack_plans, t("defaultPlan"))}</Holds><ProblemMark on={badIn(bad, path, ["gift_list", "theme_pack_plan"]) !== ""} /></summary>
         <div className="rows">
           <Field label={t("team.gift_list")} path={`${path}/gift_list`} note={t("team.gift_list_note")}>
             <span className="inline">
@@ -299,7 +299,7 @@ function KeepPanel({ i }: { i: number }) {
   return (
     <details className="panel" data-sec="keep">
       {/* The summary, not the details: `.bad input` would outline every field of the panel (as in SkillPanel). */}
-      <summary className={badIn(bad, path, ["sell_max_tier", "sell_vestiges"])}>{t("keep.title")}<Holds>≤ {TIERS[team.sell_max_tier]}</Holds><ProblemMark on={badIn(bad, path, ["sell_max_tier", "sell_vestiges"]) !== ""} /></summary>
+      <summary className={badIn(bad, path, ["sell_max_tier", "sell_vestiges"])}>{t("keep.title")}<Holds>{t("keep.sell_max_tier")} {TIERS[team.sell_max_tier]}</Holds><ProblemMark on={badIn(bad, path, ["sell_max_tier", "sell_vestiges"]) !== ""} /></summary>
       <p className="muted">{t("keep.note")}</p>
       <div className="rows">
         <div className={"toggle" + (bad(`${path}/sell_max_tier`) ? " bad" : "")}>

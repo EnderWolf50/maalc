@@ -55,7 +55,7 @@ export function StarlightEditor({ value, onChange, path }: {
           const rank = order.indexOf(n) + 1;
           const effects = g.effects[level as "plus" | "plus2"] ?? g.effects.base;
           return (
-            <div key={g.en} className={`grace ${level}`} role="group" aria-label={g.en} title={`${n}. ${g.en} (${tv("level", level)})`}>
+            <div key={g.en} className={`grace ${level}`} role="group" aria-label={zh && g.zh ? g.zh : g.en} title={`${n}. ${g.en} (${tv("level", level)})`}>
               {/* The whole card is its select button; + and ++ sit above it. */}
               <button type="button" className="pick" aria-pressed={rank > 0} disabled={!onChange}
                 aria-label={`${zh && g.zh ? g.zh : g.en} ★ ${gracePrice(n, level === "none" ? "base" : level)}`}
@@ -79,8 +79,8 @@ export function StarlightEditor({ value, onChange, path }: {
         {onChange && <>
           <button type="button" onClick={() => set(selectAll)}>{t("starlight.selectAll")}</button>
           <span className="muted">{t("starlight.enhanceAll")}</span>
-          <button type="button" onClick={() => set((v) => enhanceAll(v, 1))}>+</button>
-          <button type="button" onClick={() => set((v) => enhanceAll(v, 2))}>++</button>
+          <button type="button" aria-label={`${t("starlight.enhanceAll")} +`} onClick={() => set((v) => enhanceAll(v, 1))}>+</button>
+          <button type="button" aria-label={`${t("starlight.enhanceAll")} ++`} onClick={() => set((v) => enhanceAll(v, 2))}>++</button>
         </>}
         <span className="total">{t("starlight.total")} <b>★ {starlightCost(value.levels)}</b></span>
         <label className="check">
@@ -264,9 +264,9 @@ function PackPlanEditor({ data, plan, planId, path, onChange }: {
     <div className={"thr" + (path && bad(`${path}/threshold`) ? " bad" : "")} {...dragged(LINE)}>
       <span>{t("packs.threshold").replace("{n}", String(plan.threshold))}</span>
       {onChange && <>
-        <button type="button" className="icon" aria-label={t("up")} title={t("up")} disabled={line - 1 < 1}
+        <button type="button" className="icon" aria-label={`${t("up")} ${t("packs.threshold").replace("{n}", String(plan.threshold))}`} title={t("up")} disabled={line - 1 < 1}
           onClick={() => toGap(line - 1)}><Icon name="up" /></button>
-        <button type="button" className="icon" aria-label={t("down")} title={t("down")} disabled={line + 1 > lanes.length}
+        <button type="button" className="icon" aria-label={`${t("down")} ${t("packs.threshold").replace("{n}", String(plan.threshold))}`} title={t("down")} disabled={line + 1 > lanes.length}
           onClick={() => toGap(line + 1)}><Icon name="down" /></button>
       </>}
     </div>
@@ -305,17 +305,18 @@ function PackPlanEditor({ data, plan, planId, path, onChange }: {
       <label className="search"><Icon name="search" />
         <input type="search" value={query} placeholder={t("packs.search")} aria-label={t("packs.search")} onChange={(e) => setQuery(e.target.value)} />
       </label>
+      {/* The badges' key stays with the filters while the lanes scroll. */}
+      <p className="muted floorkey">
+        {Object.values(BADGES).map(([key, cls]) => <small key={key} className={"fl" + cls}>{t(key)}</small>)}{t("packs.floorsKey")}
+      </p>
     </div>
     {onChange && <p className="muted">{withBreaks(t("packs.hint"))}</p>}
-    <p className="muted floorkey">
-      {Object.values(BADGES).map(([key, cls]) => <small key={key} className={"fl" + cls}>{t(key)}</small>)}{t("packs.floorsKey")}
-    </p>
     <div className={"lanes" + (images ? " images" : "") + (drag === LINE ? " moving" : "")}>
       {line === 0 && lineBar}
       {lanes.map((w, i) => (
         <Fragment key={w}>
           {i > 0 && gapOrLine(i)}
-          <div className={"lane" + (shown.filter((n) => weightOf(plan, n) === w).length > 40 ? " crowded" : "")} {...target(drag !== LINE, w)}>
+          <div className="lane" {...target(drag !== LINE, w)}>
             <span className={"w" + (w > 0 ? " pos" : w < 0 ? " neg" : "")}>{w > 0 ? `+${w}` : w}</span>
             <div className="packs">
               {shown.filter((n) => weightOf(plan, n) === w).sort(byFirstFloor(data.packs)).map(chip)}

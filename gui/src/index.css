@@ -130,7 +130,8 @@ nav button.selected { border-bottom-color: var(--accent); color: var(--fg); font
 nav button.group-start { margin-left: 17px; }
 nav button.group-start::before { content: ""; position: absolute; left: -9px; top: 12px; bottom: 12px; border-left: 1px solid var(--line-strong); }
 nav button.bad::after { content: ""; position: absolute; top: 9px; right: 2px; width: 7px; height: 7px; border-radius: 50%; background: var(--bad); }
-main { flex: 1; min-height: 0; overflow: auto; padding: 20px 24px 40px; min-width: 0; }
+main { flex: 1; min-height: 0; overflow: auto; padding: 20px 24px 0; min-width: 0; }
+main::after { content: ""; display: block; height: 40px; } /* the gap under a tab: a spacer, not padding, for sticky bars */
 
 /* A refused save: the first thing in the tab, under the tab bar, so the frame above never moves (the tab bar's dots say which
  * tabs hold a problem). */
@@ -258,6 +259,7 @@ ol.reorder .item small { color: var(--muted); font-variant-numeric: tabular-nums
 ol.reorder.queue .item small { margin-left: 4px; padding: 0 6px; border: 1px solid var(--line-strong); border-radius: 999px; font-size: 11.5px; }
 ol.reorder li.selected .item, ol.reorder li.selected .item > span { color: var(--fg); } /* a wrong team keeps its red frame */
 ol.reorder li.selected .item small { color: var(--fg); border-color: color-mix(in srgb, var(--fg) 40%, transparent); }
+ol.reorder.queue .item small.bad, ol.reorder li.selected .item small.bad { color: var(--bad); border-color: var(--bad); font-weight: 600; }
 /* A list whose order is a queue numbers its rows (the team queue: who runs next); the skill rows and the buy order's gifts
  * print their number in the same place and type. */
 ol.reorder.numbered { counter-reset: place; }
@@ -291,9 +293,10 @@ main > p.muted { margin-bottom: 16px; }
   position: sticky; top: 0; z-index: 5; display: flex; flex-wrap: wrap; gap: 4px; margin: -4px 0; padding: 8px 0;
   background: var(--bg);
 }
-.jump button { padding: 3px 11px; border-radius: 999px; font-size: 13px; color: var(--fg-2); background: var(--panel); border-color: var(--line); }
+.jump button { padding: 3px 8px; border: 0; border-radius: 4px; background: none; font-size: 13px; color: var(--muted);
+  text-decoration: underline 1.5px transparent; text-underline-offset: 6px; }
 .jump button:hover:not(:disabled) { background: var(--hov); color: var(--fg); }
-.jump button[aria-current] { background: var(--sel); border-color: var(--accent); color: var(--fg); font-weight: 600; }
+.jump button[aria-current] { color: var(--fg); text-decoration-color: var(--accent); }
 .jump button.bad { color: var(--bad); }
 .jump button.bad::after { content: ""; display: inline-block; width: 6px; height: 6px; margin-left: 6px; border-radius: 50%; background: var(--bad); vertical-align: 2px; }
 .team > details.panel { scroll-margin-top: 36px; }
@@ -494,7 +497,6 @@ ol.skill-sinners > li[data-over] { background: var(--sel); }
 .lane .w.pos { color: var(--ok); }
 .lane .w.neg { color: var(--bad); }
 .lane .packs { display: flex; flex-wrap: wrap; gap: 6px; flex: 1; }
-.lane.crowded .packs { max-height: 15em; overflow: auto; align-content: flex-start; padding: 2px 4px 2px 0; }
 .lane.add { color: var(--muted); justify-content: center; align-items: center; border: 1px dashed var(--line-strong); border-radius: 6px; margin: 6px 0; }
 .lanes .gap { height: 12px; }
 .lanes.moving .gap { background: repeating-linear-gradient(90deg, var(--accent) 0 6px, transparent 6px 12px) center / 100% 2px no-repeat; }
@@ -516,7 +518,7 @@ small.fl.hard { background: var(--fl-h-bg); color: var(--fl-h-fg); }
 small.fl.inf { background: var(--fl-i-bg); color: var(--fl-i-fg); }
 small.fl.ext { background: var(--fl-x-bg); color: var(--fl-x-fg); }
 small.wk { background: var(--wk-bg); color: var(--wk-fg); font-size: 11px; font-weight: 600; padding: 0 4px; border-radius: 3px; } /* the "含想要" mark (#421) */
-.floorkey { display: flex; align-items: center; gap: 4px; }
+.floorkey { display: flex; align-items: center; gap: 4px; margin: 0; font-size: 12px; }
 .pk.unlisted { border-style: dashed; color: var(--muted); }
 .pk.bad { border-color: var(--bad); outline: 1px solid var(--bad); }
 .lanes.images .pk { flex-wrap: wrap; justify-content: center; width: 128px; text-align: center; padding: 4px; }
