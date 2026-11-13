@@ -99,6 +99,21 @@ fn append_runs_log(line: String) -> Result<(), String> {
     f.write_all(format!("{line}\n").as_bytes()).map_err(|e| e.to_string())
 }
 
+/// The Windows accent colour as #rrggbb (Settings > Personalization > Colors), which the editor uses for its accent; None
+/// where Windows does not say. DWM keeps it as a DWORD of 0xAABBGGRR.
+#[tauri::command]
+fn accent_color() -> Option<String> {
+    #[cfg(windows)]
+    {
+        use winreg::{RegKey, enums::HKEY_CURRENT_USER};
+        let dwm = RegKey::predef(HKEY_CURRENT_USER).open_subkey(r"Software\Microsoft\Windows\DWM").ok()?;
+        let v: u32 = dwm.get_value("AccentColor").ok()?;
+        Some(format!("#{:02x}{:02x}{:02x}", v & 0xff, (v >> 8) & 0xff, (v >> 16) & 0xff))
+    }
+    #[cfg(not(windows))]
+    None
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -107,7 +122,8 @@ pub fn run() {
             load_settings,
             load_theme_packs,
             save_settings,
-            append_runs_log
+            append_runs_log,
+            accent_color
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

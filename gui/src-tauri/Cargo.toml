@@ -16,6 +16,10 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 tauri = { version = "2", features = [] }
 
+# The accent colour of Windows (accent_color in lib.rs), at the version Tauri already pulls in.
+[target.'cfg(windows)'.dependencies]
+winreg = "0.56"
+
 [profile.release]
 codegen-units = 1
 lto = true

@@ -6,7 +6,8 @@ import { fill } from "./i18n";
 import {
   GAME_DECK, SINNERS, SKILL_PAYMENTS, SKILL_SWAPS, skillPlan, type SkillPay, type SkillReplacement, type SkillSwapKey, type SkillTarget,
 } from "./model";
-import { useEditor, withBreaks } from "./ui";
+import { Note, Section } from "./frame";
+import { GLYPHS, Icon, cautionClass, useEditor } from "./ui";
 
 const move = <T,>(list: T[], from: number, to: number) => {
   const next = [...list];
@@ -30,9 +31,9 @@ export function SkillPanel({ i }: { i: number }) {
 
   const seen = new Map<string, number>(); // a hand-edited file can list a sinner twice (validate names it): keys stay unique
   return (
-    <details className="panel skill-panel">
-      <summary className={bad(path) ? "bad" : ""}>{t("skill.title")}{changed ? ` (${changed})` : ""}</summary>
-      <p className="muted">{withBreaks(t("skill.note"))}</p>
+    <Section id="team.skill" className="panel skill-panel" title={t("skill.title")} bad={bad(path)}
+      summary={sr.sinners.length ? fill(t("sum.skill"), { n: sr.sinners.length, m: changed }) : t("sum.none")}>
+      <Note text={t("skill.note")} block />
       <select className="skill-add" aria-label={t("skill.add")} value="" disabled={!rest.length}
         onChange={(e) => { const sinner = e.target.value; edit((d) => { d.sinners.push({ sinner, target: { ...GAME_DECK }, s1_s3_first: true }); }); }}>
         <option value="">{t("skill.add")}</option>
@@ -90,11 +91,11 @@ export function SkillPanel({ i }: { i: number }) {
               </select>
               <span className="skill-arrows">
                 <button type="button" className="icon" aria-label={`${t("up")} ${x.sinner}`} title={t("up")} disabled={j === 0}
-                  onClick={() => edit((d) => { d.sinners = move(d.sinners, j, j - 1); })}>↑</button>
+                  onClick={() => edit((d) => { d.sinners = move(d.sinners, j, j - 1); })}><Icon glyph={GLYPHS.up} /></button>
                 <button type="button" className="icon" aria-label={`${t("down")} ${x.sinner}`} title={t("down")} disabled={j === sr.sinners.length - 1}
-                  onClick={() => edit((d) => { d.sinners = move(d.sinners, j, j + 1); })}>↓</button>
+                  onClick={() => edit((d) => { d.sinners = move(d.sinners, j, j + 1); })}><Icon glyph={GLYPHS.down} /></button>
                 <button type="button" className="icon" aria-label={`${t("skill.remove")} ${x.sinner}`} title={t("skill.remove")}
-                  onClick={() => edit((d) => { d.sinners.splice(j, 1); })}>✕</button>
+                  onClick={() => edit((d) => { d.sinners.splice(j, 1); })}><Icon glyph={GLYPHS.close} /></button>
               </span>
             </li>
           );
@@ -112,8 +113,9 @@ export function SkillPanel({ i }: { i: number }) {
           {SKILL_PAYMENTS.map((v) => <option key={v} value={v}>{tv("skill_pay", v)}</option>)}
         </select>
         <small>{t("skill.id_search_note")}</small>
-        <small>{search.pay === "starlight" ? t("skill.pay_starlight_note") : t("skill.pay_cost_note")}</small>
+        <small className={search.pay === "starlight" ? cautionClass(t("skill.pay_starlight_note")) : undefined}>
+          {search.pay === "starlight" ? t("skill.pay_starlight_note") : t("skill.pay_cost_note")}</small>
       </div>
-    </details>
+    </Section>
   );
 }

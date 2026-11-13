@@ -1,5 +1,5 @@
 // Shared controls: the editor context, labelled fields, and a drag-or-button reorder list.
-import { Fragment, createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { Fragment, createContext, useContext, useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { TEXT, fill, type Key } from "./i18n";
 import type { Settings } from "./model";
 
@@ -119,7 +119,7 @@ export function Field({ label, path, note, children }: { label: string; path?: s
     <label className={"field" + (path && bad(path) ? " bad" : "")} data-path={path}>
       <span>{label}</span>
       {children}
-      {note && <small>{withBreaks(note)}</small>}
+      {note && <small className={cautionClass(note)}>{withBreaks(note)}</small>}
     </label>
   );
 }
@@ -145,10 +145,10 @@ export function Num({ value, min, max, disabled, onChange }: {
 
 /** A number with decimals (#381). A text field: a number field's value reads "" on the way from "0" to "0.5", which React
  * would write back. Each text that reads as a number of at least `min` is the value; leaving the field shows the value again. */
-export function Decimal({ value, min, onChange }: { value: number; min: number; onChange: (v: number) => void }) {
+export function Decimal({ value, min, label, onChange }: { value: number; min: number; label?: string; onChange: (v: number) => void }) {
   const [text, setText] = useState<string | null>(null); // null: not being typed in, the value shows
   return (
-    <input type="text" inputMode="decimal" className="decimal" value={text ?? String(value)} onBlur={() => setText(null)}
+    <input type="text" inputMode="decimal" className="decimal" aria-label={label} value={text ?? String(value)} onBlur={() => setText(null)}
       onChange={(e) => {
         setText(e.target.value);
         const v = Number(e.target.value);
@@ -157,57 +157,91 @@ export function Decimal({ value, min, onChange }: { value: number; min: number; 
   );
 }
 
-/** A switch with its number (#137): off is null and greys the number out; switched on, it starts at `on`. */
-export function ToggleNum({ label, path, value, on, min, max, note, onChange }: {
-  label: string; path: string; value: number | null; on: number; min: number; max?: number; note?: string;
-  onChange: (v: number | null) => void;
-}) {
-  const { bad } = useEditor();
-  return (
-    <div className={"toggle" + (bad(path) ? " bad" : "")} data-path={path}>
-      <label className="check">
-        <input type="checkbox" checked={value !== null} onChange={(e) => onChange(e.target.checked ? on : null)} />
-        {label}
-      </label>
-      <Num value={value ?? on} min={min} max={max} disabled={value === null} onChange={onChange} />
-      {note && <small>{withBreaks(note)}</small>}
-    </div>
-  );
-}
-
-/** Native HTML drag and drop, plus up/down buttons for the keyboard. Needs "dragDropEnabled": false on the Tauri
- * window (tauri.conf.json): on Windows Tauri otherwise replaces WebView2's drop handler and no HTML5 drop fires (#64). */
-export function ReorderList<T>({ items, onChange, render, keyOf, selected, onSelect, badAt }: {
+/** Native HTML drag and drop, plus the keyboard: each row takes the focus, ↑ and ↓ go to the row above or below (and select
+ * it in a list that selects), Alt+↑ and Alt+↓ move the row; the up/down buttons do the same for the mouse. Needs
+ * "dragDropEnabled": false on the Tauri window (tauri.conf.json): on Windows Tauri otherwise replaces WebView2's drop handler
+ * and no HTML5 drop fires (#64). */
+export function ReorderList<T>({ items, onChange, render, keyOf, selected, onSelect, badAt, label }: {
   items: T[]; onChange: (items: T[]) => void; render: (item: T, i: number) => ReactNode; keyOf: (item: T) => string;
-  selected?: number; onSelect?: (i: number, items: T[]) => void; badAt?: (i: number) => boolean;
+  selected?: number; onSelect?: (i: number, items: T[]) => void; badAt?: (i: number) => boolean; label?: string;
 }) {
   const { t } = useEditor();
   const [dragging, setDragging] = useState<number | null>(null);
+  const [focused, setFocused] = useState(0); // the row that takes Tab in a list that does not select
+  const rows = useRef(new Map<string, HTMLLIElement>());
+  const refocus = useRef<string | null>(null); // a row moved by the keyboard keeps the focus after React moves it
+  useEffect(() => {
+    if (refocus.current === null) return;
+    rows.current.get(refocus.current)?.focus();
+    refocus.current = null;
+  });
+  const stop = selected !== undefined && selected >= 0 ? selected : Math.min(focused, items.length - 1);
   const move = (from: number, to: number) => {
     if (to < 0 || to >= items.length || from === to) return;
     const next = [...items];
     next.splice(to, 0, ...next.splice(from, 1));
     onChange(next);
     if (selected === from) onSelect?.(to, next);
+    setFocused(to);
+  };
+  const onKey = (e: KeyboardEvent, i: number) => {
+    if (e.target !== e.currentTarget) return; // a button inside the row
+    const to = { ArrowUp: i - 1, ArrowDown: i + 1, Home: 0, End: items.length - 1 }[e.key];
+    if (to === undefined || to < 0 || to >= items.length) return;
+    e.preventDefault();
+    if (e.altKey) {
+      if (e.key === "Home" || e.key === "End") return;
+      refocus.current = keyOf(items[i]);
+      move(i, to);
+      return;
+    }
+    onSelect?.(to, items);
+    setFocused(to);
+    rows.current.get(keyOf(items[to]))?.focus();
   };
   return (
-    <ol className="reorder" title={t("dragHint")}>
+    <ol className={"reorder" + (onSelect ? " selecting" : "")} title={`${t("dragHint")}\n${t("list.keys")}`} aria-label={label}>
       {items.map((item, i) => (
-        <li key={keyOf(item)} draggable
+        <li key={keyOf(item)} draggable tabIndex={i === stop ? 0 : -1} aria-current={selected === i ? "true" : undefined}
+          aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown" aria-describedby={badAt?.(i) ? PROBLEM_HINT : undefined}
+          ref={(el) => { if (el) rows.current.set(keyOf(item), el); else rows.current.delete(keyOf(item)); }}
           className={[selected === i && "selected", dragging === i && "dragging", badAt?.(i) && "bad"].filter(Boolean).join(" ")}
-          onClick={() => onSelect?.(i, items)}
+          onClick={() => { onSelect?.(i, items); setFocused(i); }}
+          onKeyDown={(e) => onKey(e, i)}
           onDragStart={(e) => { setDragging(i); e.dataTransfer.effectAllowed = "move"; }}
           onDragEnd={() => setDragging(null)}
           onDragOver={(e) => e.preventDefault()}
           onDrop={(e) => { e.preventDefault(); if (dragging !== null) move(dragging, i); setDragging(null); }}>
           <span className="grip" aria-hidden>⋮⋮</span>
           <span className="item">{render(item, i)}</span>
-          <button type="button" className="icon" aria-label={t("up")} title={t("up")} disabled={i === 0}
-            onClick={(e) => { e.stopPropagation(); move(i, i - 1); }}>↑</button>
-          <button type="button" className="icon" aria-label={t("down")} title={t("down")} disabled={i === items.length - 1}
-            onClick={(e) => { e.stopPropagation(); move(i, i + 1); }}>↓</button>
+          <span className="moves">
+            <button type="button" className="icon" tabIndex={-1} aria-label={t("up")} title={t("up")} disabled={i === 0}
+              onClick={(e) => { e.stopPropagation(); move(i, i - 1); }}><Icon glyph={GLYPHS.up} /></button>
+            <button type="button" className="icon" tabIndex={-1} aria-label={t("down")} title={t("down")} disabled={i === items.length - 1}
+              onClick={(e) => { e.stopPropagation(); move(i, i + 1); }}><Icon glyph={GLYPHS.down} /></button>
+          </span>
         </li>
       ))}
     </ol>
   );
 }
+
+/** The Segoe Fluent Icons glyphs (the icon font of Windows 11) the editor uses, by job: one glyph per job everywhere. */
+export const GLYPHS = {
+  remove: 0xe74d, // delete a team, a plan or a row
+  close: 0xe711, // take an entry out of a list
+  up: 0xe70e, down: 0xe70d, // move an entry
+  reset: 0xe777, save: 0xe74e, error: 0xeb90, menu: 0xe700, language: 0xe774,
+} as const;
+
+/** A Segoe Fluent Icons glyph, by its code point; decorative, so screen readers skip it. */
+export function Icon({ glyph, className }: { glyph: number; className?: string }) {
+  return <i className={"icon-glyph" + (className ? " " + className : "")} aria-hidden>{String.fromCodePoint(glyph)}</i>;
+}
+
+/** A help text that warns about a spend starts "注意：" or "Caution:" (#682's rule for those notes): it shows as a caution. */
+export const cautionClass = (text: string) => (/^(注意：|Caution:)/.test(text) ? "caution" : undefined);
+
+/** The id of the hidden text "this has a problem" (the rail holds it): a page, section or row with a red dot points at it
+ * with aria-describedby, so a screen reader says what the dot shows. */
+export const PROBLEM_HINT = "problem-hint";

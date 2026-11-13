@@ -11,15 +11,16 @@ import {
 import { GIFT_BY_ID, giftName } from "./giftCatalog";
 import { listsOfPlan, packWanted } from "./gifts";
 import { fill } from "./i18n";
-import { Field, ReorderList, Select, useEditor, usePick, useUndo, withBreaks, type PlanKey } from "./ui";
+import { Note, Row } from "./frame";
+import { Field, GLYPHS, Icon, ReorderList, Select, useEditor, usePick, useUndo, type PlanKey } from "./ui";
 
 /** The 12 sinners in the game's grid; clicking adds one at the end of the order or leaves it out
  * (spec 04 section 6). Read-only without onChange. */
 export function SinnerGrid({ order, onChange, path }: { order: Order; onChange?: (o: Order) => void; path: string }) {
   const { t, bad } = useEditor();
   return (<>
-    {onChange && <p className="muted">{t("order.hint")}</p>}
-    <div className={"sinners" + (bad(path) ? " bad" : "")} data-path={path}>
+    <p className="muted hint">{onChange ? t("order.hint") : t("plan.readonly")}</p>
+    <div className={"sinners" + (onChange ? "" : " readonly") + (bad(path) ? " bad" : "")} data-path={path}>
       {SINNERS.map((s) => {
         const n = order.indexOf(s) + 1;
         const kind = n === 0 ? "" : n <= 7 ? "deployed" : "backup";
@@ -46,7 +47,7 @@ export function StarlightEditor({ value, onChange, path }: {
   const order = buyOrder(value);
   const set = (fn: (v: StarlightValues) => StarlightValues) => onChange?.(fn(value));
   return (
-    <>{onChange && <p className="muted">{t("starlight.hint")}</p>}
+    <><p className="muted hint">{onChange ? t("starlight.hint") : t("plan.readonly")}</p>
     <div className={"starlight" + (onChange ? "" : " readonly")} data-path={path}>
       <div className={"graces" + (bad(`${path}/levels`) || bad(`${path}/priority`) ? " bad" : "")}>
         {GRACES.map((g, i) => {
@@ -77,7 +78,7 @@ export function StarlightEditor({ value, onChange, path }: {
       <div className="grace-side">
         {onChange && <>
           <button type="button" onClick={() => set(selectAll)}>{t("starlight.selectAll")}</button>
-          <span className="muted">{t("starlight.enhanceAll")}</span>
+          <span className="side-label">{t("starlight.enhanceAll")}</span>
           <button type="button" onClick={() => set((v) => enhanceAll(v, 1))}>+</button>
           <button type="button" onClick={() => set((v) => enhanceAll(v, 2))}>++</button>
         </>}
@@ -126,24 +127,26 @@ function PlanTab<P extends { id: string; name: string }>({ planKey, tab, make, e
   return (
     <div className="split">
       <aside>
-        {lead && <button type="button" className={"lead" + (i === -1 ? " selected" : "")} onClick={() => setSel(lead.id)}>{lead.label}</button>}
+        <button type="button" className="add" onClick={add}>+ {t("add")}</button>
+        {lead && <button type="button" className={"lead" + (i === -1 ? " selected" : "")} aria-current={i === -1 ? "true" : undefined}
+          onClick={() => setSel(lead.id)}>{lead.label}</button>}
         {plans.length || lead ? (
-          <ReorderList items={plans} keyOf={(p) => p.id} selected={i} onSelect={(j, list) => setSel(list[j].id)}
+          <ReorderList items={plans} keyOf={(p) => p.id} selected={i} onSelect={(j, list) => setSel(list[j].id)} label={t(tab)}
             badAt={(j) => bad(`${planKey}/${j}`)} onChange={(list) => set((l) => l.splice(0, l.length, ...list))}
             render={(p) => p.name || "—"} />
-        ) : <p className="muted">{t("noPlans")}</p>}
+        ) : <p className="empty-note">{t("noPlans")}</p>}
         {undoNote}
-        <button type="button" onClick={add}>+ {t("add")}</button>
       </aside>
       <section data-path={i >= 0 ? `${planKey}/${i}` : undefined}>
         {i === -1 && lead ? <><PlanUsers planKey={planKey} id={lead.id} />{lead.body}</> : plans[i] && (
           <>
-            <div className="row">
+            <div className="bar">
               <Field label={t("name")} path={`${planKey}/${i}/name`}>
                 <input value={plans[i].name} onChange={(e) => set((l) => { l[i].name = e.target.value; })} />
               </Field>
-              <button type="button" className="danger" onClick={remove}>
-                {t("remove")}
+              <span className="spacer" />
+              <button type="button" className="subtle danger" onClick={remove}>
+                <Icon glyph={GLYPHS.remove} />{t("remove")}
               </button>
             </div>
             <PlanUsers planKey={planKey} id={plans[i].id} />
@@ -197,6 +200,8 @@ const coverOf = (name: string): string | undefined => COVER_URLS[COVERS_DIR + CO
 
 const UNLISTED = "\u0000unlisted"; // what the "unlisted packs" chip drags: no pack name starts with NUL
 const LINE = "\u0000line";
+/** A lane of more packs than this shows two rows until opened. */
+const FOLD_AT = 30;
 /** The floor filter's chips (0: any): a run's 15 floors, 6-10 INFINITY's and 11-15 EXTREME's (#387). */
 const FLOORS = Array.from({ length: 16 }, (_, i) => i);
 /** A floor badge's label and class per mode of the data file. */
@@ -240,6 +245,7 @@ function PackPlanEditor({ data, plan, planId, path, onChange }: {
   const [floor, setFloor] = useState(0);
   const [images, setImages] = useState(false);
   const [drag, setDrag] = useState<string | null>(null);
+  const [open, setOpen] = useState<number[]>([]); // the weights of the lanes opened past their fold
   const lanes = lanesOf(plan);
   const line = lineAt(lanes, plan.threshold);
   const extra = Object.keys(plan.weights).filter((n) => !(n in data.packs)); // weighed, gone from the data file
@@ -303,9 +309,9 @@ function PackPlanEditor({ data, plan, planId, path, onChange }: {
       <span>{t("packs.threshold").replace("{n}", String(plan.threshold))}</span>
       {onChange && <>
         <button type="button" className="icon" aria-label={t("up")} title={t("up")} disabled={line - 1 < 1}
-          onClick={() => toGap(line - 1)}>↑</button>
+          onClick={() => toGap(line - 1)}><Icon glyph={GLYPHS.up} /></button>
         <button type="button" className="icon" aria-label={t("down")} title={t("down")} disabled={line + 1 > lanes.length}
-          onClick={() => toGap(line + 1)}>↓</button>
+          onClick={() => toGap(line + 1)}><Icon glyph={GLYPHS.down} /></button>
       </>}
     </div>
   );
@@ -315,6 +321,10 @@ function PackPlanEditor({ data, plan, planId, path, onChange }: {
       <button type="button" key={String(v)} className="chip" aria-pressed={v === value} onClick={() => pick(v)}>{label(v)}</button>
     ));
   return (<>
+    <Row label={t("packs.eventPacks")} path={path ? `${path}/event_packs` : undefined} note={t("packs.eventPacksNote")}
+      control={onChange
+        ? <Select value={plan.event_packs} options={EVENT_MODES} label={(v) => tv("event_packs", v)} onChange={(v) => set({ event_packs: v })} />
+        : <span>{tv("event_packs", plan.event_packs)}</span>} />
     <div className="packbar">
       {chips<PackMode>(["", "normal", "hard", "infinity", "extreme"], difficulty,
         (v) => (v ? t(BADGES[MODE_KEYS[v]][0]) : t("packs.anyDifficulty")) /* a badge's name: 普通, not NORMAL, in Chinese */, setDifficulty)}
@@ -323,19 +333,24 @@ function PackPlanEditor({ data, plan, planId, path, onChange }: {
       <span className="spacer" />
       {chips([false, true].map(String), String(images), (v) => t(v === "true" ? "packs.images" : "packs.names"), (v) => setImages(v === "true"))}
     </div>
-    {onChange && <p className="muted">{withBreaks(t("packs.hint"))}</p>}
+    {onChange && <Note text={t("packs.hint")} block />}
     <p className="muted floorkey">
       {Object.values(BADGES).map(([key, cls]) => <small key={key} className={"fl" + cls}>{t(key)}</small>)}{t("packs.floorsKey")}
     </p>
     <div className={"lanes" + (images ? " images" : "") + (drag === LINE ? " moving" : "")}>
       {line === 0 && lineBar}
-      {lanes.map((w, i) => (
+      {lanes.map((w, i) => {
+        const here = shown.filter((n) => weightOf(plan, n) === w);
+        // A lane of many packs (the unweighted ones, mostly) shows two rows until opened, so the weighted lanes and the line
+        // stay near the top; a drag opens it, so every pack is a place to drop.
+        const fold = here.length > FOLD_AT && !open.includes(w) && drag === null;
+        return (
         <Fragment key={w}>
           {i > 0 && gapOrLine(i)}
-          <div className="lane" {...target(drag !== LINE, w)}>
+          <div className={"lane" + (fold ? " folded" : "")} {...target(drag !== LINE, w)}>
             <span className={"w" + (w > 0 ? " pos" : w < 0 ? " neg" : "")}>{w > 0 ? `+${w}` : w}</span>
             <div className="packs">
-              {shown.filter((n) => weightOf(plan, n) === w).map(chip)}
+              {here.map(chip)}
               {w === plan.unlisted && (
                 <span className={"pk unlisted" + (path && bad(`${path}/unlisted`) ? " bad" : "")} data-path={path && `${path}/unlisted`}
                   {...dragged(UNLISTED)} {...clickable(UNLISTED)}>
@@ -345,9 +360,16 @@ function PackPlanEditor({ data, plan, planId, path, onChange }: {
                 </span>
               )}
             </div>
+            {here.length > FOLD_AT && drag === null && (
+              <button type="button" className="more lane-more" aria-expanded={!fold}
+                onClick={() => setOpen(fold ? [...open, w] : open.filter((x) => x !== w))}>
+                {fold ? fill(t("packs.showAll"), { n: here.length }) : t("less")}
+              </button>
+            )}
           </div>
         </Fragment>
-      ))}
+        );
+      })}
       {gapOrLine(lanes.length)}
       {onChange && (
         <div className="lane add" {...target(drag !== null && drag !== LINE, null)}>
@@ -357,10 +379,5 @@ function PackPlanEditor({ data, plan, planId, path, onChange }: {
         </div>
       )}
     </div>
-    <Field label={t("packs.eventPacks")} path={path && `${path}/event_packs`} note={t("packs.eventPacksNote")}>
-      {onChange
-        ? <Select value={plan.event_packs} options={EVENT_MODES} label={(v) => tv("event_packs", v)} onChange={(v) => set({ event_packs: v })} />
-        : <span>{tv("event_packs", plan.event_packs)}</span>}
-    </Field>
   </>);
 }

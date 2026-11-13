@@ -1,249 +1,511 @@
+/* The editor as a Windows 11 desktop tool (#664). Fluent tokens on Mica: the title bar and the
+ * rail sit on the base, the page is one layer sheet with a rounded corner; the system accent marks selection, the primary
+ * button and focus. Light and dark follow the system. The game-styled panels keep their own dress inside the sheet: the sinner
+ * grid in the amber and teal the gift tiles share, Grace of the Star and E.G.O Gift Search in the colours of this season's
+ * Mirror Dungeon (Mirror of Sisyphe: steel cards, cobalt edges, pale gold numbers). */
 :root {
-  --fg: #1d2330;
-  --muted: #6b7385;
-  --line: #d9dde5;
-  --bg: #f6f7f9;
-  --panel: #fff;
-  --accent: #2f5bd3;
-  --bad: #c62828;
-  --fl-n-bg: #e3edff; --fl-n-fg: #2457c5; --fl-h-bg: #ffe5e0; --fl-h-fg: #b23a1e; /* floor badges: NORMAL blue, HARD red, */
-  --fl-i-bg: #efe6ff; --fl-i-fg: #6b3fc0; --fl-x-bg: #2e2a33; --fl-x-fg: #f4efe6; /* INFINITY purple, EXTREME dark */
-  --wk-bg: #fff1c2; --wk-fg: #7a5200; /* the "含想要" mark on a theme pack: amber */
-  font: 14px/1.45 "Segoe UI", "Microsoft JhengHei UI", system-ui, sans-serif;
-  color: var(--fg);
-  background: var(--bg);
+  color-scheme: light dark;
+  --sys-accent: #0078d4; /* Windows' default accent; App writes the user's own here when Tauri can read it */
+  --font: "Segoe UI Variable Text", "Segoe UI", "Microsoft JhengHei UI", "Microsoft JhengHei", system-ui, sans-serif;
+  --font-display: "Segoe UI Variable Display", "Segoe UI", "Microsoft JhengHei UI", "Microsoft JhengHei", system-ui, sans-serif;
+  --icons: "Segoe Fluent Icons", "Segoe MDL2 Assets";
+  --rail-w: 176px;
+  --r-ctl: 4px;
+  --r-card: 8px;
+
+  /* light: Fluent's fills over Mica */
+  --accent: oklch(from var(--sys-accent) min(l, 0.5) c h);
+  --accent-hover: oklch(from var(--accent) calc(l + 0.06) c h);
+  --accent-text: oklch(from var(--sys-accent) min(l, 0.45) c h);
+  --accent-soft: color-mix(in srgb, var(--accent) 12%, var(--card));
+  --on-accent: #fff;
+  --base: color-mix(in srgb, var(--sys-accent) 3%, #f2f2f2);
+  --layer: #f9f9f9;
+  --card: #ffffff;
+  --card-2: #f5f5f5;
+  --stroke: #e3e3e3;
+  --stroke-2: #cfcfcf;
+  --stroke-strong: #868686;
+  --fg: #1b1b1b;
+  --fg-2: #5b5b5b;
+  --hover: rgba(0, 0, 0, 0.04);
+  --press: rgba(0, 0, 0, 0.025);
+  --sel: rgba(0, 0, 0, 0.065);
+  --focus-out: #000;
+  --focus-in: #fff;
+  --critical: #c42b1c; --critical-bg: #fde7e9;
+  --caution: #8a5300; --caution-bg: #fff4ce;
+  --success: #0f7b0f; --success-bg: #dff6dd;
+  /* game meanings the sinner grid and the gift tiles share: amber is deployed or wanted, teal is backup or kept */
+  --amber: #8a5a00; --amber-soft: #fff3d6; --amber-mid: #f5d995; --amber-line: #c58a14; --on-amber: #fff;
+  --teal: #0b6b63; --teal-soft: #dcf3ef; --teal-mid: #b2e4dc; --teal-line: #1d9488; --on-teal: #fff;
+  --ink-amber: #1d1300; --ink-teal: #03201c; /* text on the bright amber and teal bands, in both schemes */
+  /* theme pack floor badges: one tint and one ink per mode, all four built the same way */
+  --fl-n-bg: #dce9fb; --fl-n-fg: #0b4a8b;
+  --fl-h-bg: #fbe2dc; --fl-h-fg: #a12c15;
+  --fl-i-bg: #ece3fb; --fl-i-fg: #5a32a3;
+  --fl-x-bg: #e8e4de; --fl-x-fg: #4b3e2c;
+  --shadow-pop: 0 8px 16px rgba(0, 0, 0, 0.14);
+  /* Mirror of Sisyphe, sampled from the game's Grace of the Star page (client 1.118): the same in both schemes, as in the game */
+  --sy-ink: #0b0c13;
+  --sy-card: #262a3a;
+  --sy-card-2: #1d2030;
+  --sy-line: #3b4058;
+  --sy-edge: #4a59c8;
+  --sy-edge-hi: #93a2ff;
+  --sy-lit: #3346a8;
+  --sy-lit-2: #232f7a;
+  --sy-gold: #f0d49a;
+  --sy-text: #eceef6;
+  --sy-dim: #b4b9cf;
 }
+@media (prefers-color-scheme: dark) {
+  :root {
+    --accent: oklch(from var(--sys-accent) max(l, 0.78) c h);
+    --accent-hover: oklch(from var(--accent) calc(l - 0.05) c h);
+    --accent-text: oklch(from var(--sys-accent) max(l, 0.8) c h);
+    --on-accent: #000;
+    --base: color-mix(in srgb, var(--sys-accent) 4%, #1f1f1f);
+    --layer: #272727;
+    --card: #2d2d2d;
+    --card-2: #333333;
+    --stroke: #3b3b3b;
+    --stroke-2: #474747;
+    --stroke-strong: #9a9a9a;
+    --fg: #ffffff;
+    --fg-2: #c5c5c5;
+    --hover: rgba(255, 255, 255, 0.06);
+    --press: rgba(255, 255, 255, 0.035);
+    --sel: rgba(255, 255, 255, 0.09);
+    --focus-out: #fff;
+    --focus-in: #000;
+    --critical: #ff99a4; --critical-bg: #442726;
+    --caution: #fce100; --caution-bg: #433519;
+    --success: #6ccb5f; --success-bg: #393d1b;
+    --amber: #f2b94a; --amber-soft: #3a2d10; --amber-mid: #57431a; --amber-line: #d29b2f; --on-amber: #1d1300;
+    --teal: #55d6c7; --teal-soft: #11302c; --teal-mid: #1d4c45; --teal-line: #3fc1b4; --on-teal: #04211d;
+    --fl-n-bg: #183352; --fl-n-fg: #a9cff8;
+    --fl-h-bg: #4b231c; --fl-h-fg: #ffb2a3;
+    --fl-i-bg: #34274f; --fl-i-fg: #cfbbf9;
+    --fl-x-bg: #3d3832; --fl-x-fg: #e9dcc8;
+    --shadow-pop: 0 8px 16px rgba(0, 0, 0, 0.45);
+  }
+}
+
 * { box-sizing: border-box; }
-body { margin: 0; }
-h1 { font-size: 16px; margin: 0; }
-h4 { margin: 0 0 6px; font-size: 13px; }
+html, body, #root { height: 100%; }
+body {
+  margin: 0; font: 14px/20px var(--font); color: var(--fg); background: var(--base);
+  -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
+}
+::selection { background: var(--accent); color: var(--on-accent); }
+#root { display: grid; grid-template-columns: var(--rail-w) minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
+h1, h2, h3, h4 { margin: 0; }
+h4, h3.sub { font-size: 13px; line-height: 20px; font-weight: 600; margin-bottom: 6px; }
+p { margin: 0; }
+small { font-size: 12px; line-height: 16px; color: var(--fg-2); }
+.icon-glyph { font: normal 16px/1 var(--icons); font-style: normal; flex: none; }
 
-button, select, input { font: inherit; color: inherit; }
+/* Controls: Fluent's 32 px buttons and fields, the elevation edge at the bottom, the arrow cursor of a desktop app. */
+button, select, input, textarea { font: inherit; color: inherit; }
 button {
-  border: 1px solid var(--line); background: var(--panel); border-radius: 6px; padding: 4px 12px; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 32px; padding: 0 12px;
+  border: 1px solid var(--stroke); border-bottom-color: var(--stroke-2); border-radius: var(--r-ctl);
+  background: var(--card); color: var(--fg); cursor: default; white-space: nowrap;
 }
-button:hover:not(:disabled) { border-color: var(--accent); }
-button:disabled { opacity: 0.35; cursor: default; }
-button.primary { background: var(--accent); border-color: var(--accent); color: #fff; padding: 5px 20px; }
-button.danger { color: var(--bad); }
-button.icon { padding: 0 6px; border-color: transparent; background: none; }
-select, input:not([type="checkbox"]) {
-  border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; background: var(--panel); min-width: 0;
+button:hover:not(:disabled) { background: var(--card-2); }
+button:active:not(:disabled) { background: var(--card-2); color: var(--fg-2); border-bottom-color: var(--stroke); }
+button:disabled { opacity: 0.4; }
+button .icon-glyph { font-size: 14px; }
+button.primary { min-width: 104px; background: var(--accent); border-color: transparent; color: var(--on-accent); }
+button.primary:hover:not(:disabled) { background: var(--accent-hover); }
+button.primary:active:not(:disabled) { background: var(--accent-hover); color: var(--on-accent); opacity: 0.85; }
+button.subtle { background: transparent; border-color: transparent; }
+button.subtle:hover:not(:disabled) { background: var(--hover); }
+button.danger { color: var(--critical); }
+button.icon { min-height: 24px; width: 24px; padding: 0; background: transparent; border-color: transparent; color: var(--fg-2); }
+button.icon:hover:not(:disabled) { background: var(--hover); color: var(--fg); }
+button.add { justify-content: flex-start; }
+select, input:not([type="checkbox"]):not([type="radio"]), textarea {
+  min-height: 32px; min-width: 0; padding: 0 10px; border: 1px solid var(--stroke); border-bottom-color: var(--stroke-strong);
+  border-radius: var(--r-ctl); background: var(--card);
 }
-input[type="number"], input.decimal { width: 7em; }
-input:disabled { opacity: 0.45; cursor: default; }
-:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+select:hover:not(:disabled), input:not([type="checkbox"]):hover:not(:disabled) { background: var(--card-2); }
+input:not([type="checkbox"]):focus, textarea:focus { outline: none; background: var(--card); border-bottom-color: var(--accent); box-shadow: inset 0 -1px 0 var(--accent); }
+input::placeholder { color: var(--fg-2); }
+input[type="number"], input.decimal { width: 96px; font-variant-numeric: tabular-nums; }
+input.wide { width: min(360px, 100%); }
+input:disabled, select:disabled { opacity: 0.45; }
+input[type="checkbox"] { width: 18px; height: 18px; margin: 0; flex: none; accent-color: var(--accent); }
+/* The toggle switch: a 40x20 track, the knob on the left off and on the right on. */
+input.switch {
+  appearance: none; width: 40px; height: 20px; border-radius: 10px; border: 1px solid var(--stroke-strong);
+  background: var(--card) radial-gradient(circle at 10px 50%, var(--fg-2) 0 5px, transparent 5.5px);
+  transition: background-color 0.15s ease-out;
+}
+input.switch:hover { background-color: var(--card-2); }
+input.switch:checked {
+  border-color: transparent; background: var(--accent) radial-gradient(circle at 29px 50%, var(--on-accent) 0 6px, transparent 6.5px);
+}
+/* Focus: Fluent's two rings, dark outside and light inside, on every control the keyboard reaches. */
+:focus-visible { outline: 2px solid var(--focus-out); outline-offset: 1px; box-shadow: 0 0 0 1px var(--focus-in); }
+input:not([type="checkbox"]):focus-visible { outline: none; }
 
+/* Title bar, on the base: the app, the file, the save state and Save. */
 header {
-  display: flex; align-items: center; gap: 16px; padding: 10px 16px; background: var(--panel); border-bottom: 1px solid var(--line);
+  grid-column: 1 / -1; display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 8px 16px 8px 20px;
 }
-header .path { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
-header .status { color: var(--muted); }
-header h1, header button { white-space: nowrap; } /* a long status wraps, not the title or Save */
+header h1 { font: 600 15px/20px var(--font-display); white-space: nowrap; }
+header .nav-toggle { width: 40px; padding: 0; margin-left: -12px; }
+header .nav-toggle .icon-glyph { font-size: 16px; }
+header .path { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: var(--fg-2); }
+header .status { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; line-height: 16px; color: var(--fg-2); text-align: right; }
+header .status.dirty { color: var(--fg); }
+header .status.dirty::before { content: ""; flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--caution); }
+header .status.ok::before { content: "\E73E"; font: 14px/1 var(--icons); color: var(--success); }
+header .status.blocked { color: var(--critical); font-weight: 600; }
+header .status.blocked::before { content: "\EB90"; font: 14px/1 var(--icons); color: var(--critical); }
+header button.primary { flex: none; }
 
-nav { display: flex; gap: 2px; padding: 0 16px; background: var(--panel); border-bottom: 1px solid var(--line); overflow-x: auto; }
-nav button { border: none; border-bottom: 2px solid transparent; border-radius: 0; background: none; padding: 9px 14px 7px; white-space: nowrap; color: var(--muted); }
-nav button:hover:not(:disabled) { color: var(--fg); }
-nav button.selected { border-bottom-color: var(--accent); color: var(--fg); font-weight: 600; }
-nav button.bad::after { content: " ●"; color: var(--bad); }
-main { flex: 1; padding: 16px 20px; min-width: 0; }
+/* The navigation rail, on the base: pages grouped by job; the open page has a fill and the accent pill. */
+.rail { grid-row: 2; display: flex; flex-direction: column; min-height: 0; padding: 0 6px 10px; }
+.rail-items { flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 2px; scrollbar-width: thin; }
+.rail-group { display: flex; flex-direction: column; gap: 2px; }
+.rail-head { font: 600 12px/16px var(--font); color: var(--fg-2); margin: 14px 12px 4px; }
+.rail hr { border: 0; border-top: 1px solid var(--stroke); margin: 6px 10px; }
+.rail button {
+  position: relative; justify-content: flex-start; gap: 12px; min-height: 36px; padding: 0 8px 0 14px;
+  border: 0; background: transparent; text-align: left; white-space: normal;
+}
+.rail button:hover:not(:disabled) { background: var(--hover); }
+.rail button:active:not(:disabled) { background: var(--press); }
+.rail button.selected { background: var(--sel); }
+.rail button.selected::before, ol.reorder.selecting li.selected::before, aside .lead.selected::before {
+  content: ""; position: absolute; left: 0; top: 50%; width: 3px; height: 16px; margin-top: -8px; border-radius: 2px; background: var(--accent);
+}
+.rail button > span { flex: 1; }
+/* A page with a problem carries a red dot, like Windows' InfoBadge. */
+.rail button.bad::after { content: ""; flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--critical); }
+/* Compact: icons only, the names kept for screen readers and as tooltips; every group starts with a divider. */
+#root:has(> nav.rail.compact) { grid-template-columns: 56px minmax(0, 1fr); }
+.rail.compact button { justify-content: center; padding: 0; }
+.rail.compact button > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.rail.compact button.bad::after { position: absolute; top: 6px; right: 8px; width: 6px; height: 6px; }
+.rail.compact .rail-head { display: none; }
+.rail.compact .rail-group + .rail-group { border-top: 1px solid var(--stroke); margin-top: 6px; padding-top: 6px; }
+.rail.compact hr { display: none; }
+/* The language, in the title bar: a globe and a quiet select. */
+header .lang { display: inline-flex; align-items: center; gap: 6px; color: var(--fg-2); }
+header .lang select { min-height: 28px; padding: 0 6px; border-color: transparent; background: transparent; color: var(--fg); font-size: 12px; }
+header .lang select:hover:not(:disabled) { background: var(--hover); }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 
-.problems { margin: 0 0 12px; padding: 8px 14px; border: 1px solid var(--bad); border-radius: 8px; background: #fdecea; }
-.problems p { margin: 0 0 4px; font-weight: 600; color: var(--bad); }
-.problems ul { margin: 0; padding-left: 20px; font-family: Consolas, monospace; font-size: 12px; }
-/* a problem is a link to its field */
-.problems li button { all: unset; cursor: pointer; }
-.problems li button:hover { text-decoration: underline; }
-.problems li button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+/* The page: one layer sheet with its top-left corner rounded; only it scrolls. */
+main {
+  grid-row: 2; min-width: 0; min-height: 0; overflow: auto; padding: 20px 24px 48px; background: var(--layer);
+  border: 1px solid var(--stroke); border-width: 1px 0 0 1px; border-top-left-radius: var(--r-card);
+  scrollbar-width: thin; scrollbar-color: var(--stroke-strong) transparent;
+}
+.page-title { font: 600 28px/36px var(--font-display); margin-bottom: 12px; }
+.page-note { font-size: 12px; line-height: 18px; color: var(--fg-2); max-width: 76ch; margin: -10px 0 16px; }
+.load-error { grid-column: 1 / -1; grid-row: 1 / -1; padding: 24px; display: flex; flex-direction: column; gap: 12px; align-items: flex-start; }
 
-.muted { color: var(--muted); }
-.notice { color: var(--accent); margin: 4px 0; }
-.tag { font-style: normal; font-size: 11px; color: var(--accent); margin-left: 8px; }
+/* Problems: an error InfoBar at the top of the page. */
+.problems {
+  display: flex; align-items: flex-start; gap: 12px; margin: 4px 0 16px; padding: 12px 16px; max-width: 920px;
+  background: var(--critical-bg); border: 1px solid color-mix(in srgb, var(--critical) 30%, transparent); border-radius: var(--r-card);
+}
+.problems > .icon-glyph { color: var(--critical); line-height: 20px; }
+.problems p { font-weight: 600; margin-bottom: 4px; }
+.problems ul { margin: 0; padding-left: 18px; font-size: 12px; line-height: 18px; }
+.problems li button { all: unset; text-decoration: underline; text-underline-offset: 2px; }
+.problems li button:hover { text-decoration-thickness: 2px; }
+.problems li button:focus-visible { outline: 2px solid var(--focus-out); outline-offset: 1px; }
 
-.split { display: flex; gap: 20px; align-items: flex-start; }
-.split aside { width: 240px; flex: none; display: flex; flex-direction: column; gap: 8px; }
-.split section { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 12px; }
-aside .lead { text-align: left; }
-aside .lead.selected { border-color: var(--accent); }
+.muted { color: var(--fg-2); }
+.hint { font-size: 12px; line-height: 16px; }
+.notice { color: var(--accent-text); }
+.empty-note { font-size: 12px; color: var(--fg-2); padding: 8px 4px; }
+.tag { font-style: normal; font-size: 12px; color: var(--accent-text); margin-left: 8px; }
+.spacer { flex: 1; }
+/* A help text about spending owned starlight or Lunacy: a caution, not grey help. */
+small.caution, p.caution {
+  position: relative; display: block; padding: 6px 10px 6px 32px; border-radius: var(--r-ctl);
+  background: var(--caution-bg); color: var(--fg); font-size: 12px; line-height: 16px;
+}
+small.caution::before, p.caution::before { content: "\E7BA"; position: absolute; left: 10px; top: 6px; font: 14px/16px var(--icons); color: var(--caution); }
 
+/* Settings rows (Windows 11 settings cards): a titled group, then one card per setting, the control at the right. */
+.settings { display: flex; flex-direction: column; gap: 24px; max-width: 920px; }
+.sgroup h3 { font: 600 14px/20px var(--font); margin-bottom: 8px; }
+.sgroup-rows { display: flex; flex-direction: column; gap: 3px; }
+.group-note { font-size: 12px; line-height: 18px; color: var(--fg-2); max-width: 76ch; margin: -2px 0 8px; }
+.group-note.caution { color: var(--fg); margin-bottom: 8px; max-width: none; }
+.srow {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "label ctl" "help ctl"; align-items: center;
+  gap: 2px 16px; min-height: 52px; padding: 10px 16px;
+  background: var(--card); border: 1px solid var(--stroke); border-radius: var(--r-ctl);
+}
+.srow-main { display: contents; }
+.srow-label { grid-area: label; font-size: 14px; line-height: 20px; }
+.srow-help { grid-area: help; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
+.srow-help small { max-width: 70ch; }
+.srow-help small.caution { max-width: none; margin-top: 4px; }
+.srow-ctl { grid-area: ctl; display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
+.srow-ctl select { min-width: 220px; }
+.check-row:hover { background: var(--card-2); }
+/* A long help text: two lines, then a button for the rest. */
+.note { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
+.folded { display: none; }
+button.more {
+  min-height: 20px; padding: 0 2px; border: 0; background: none; color: var(--accent-text); font-size: 12px; line-height: 16px;
+}
+button.more:hover:not(:disabled) { background: none; text-decoration: underline; text-underline-offset: 2px; }
+.note.block { margin: -2px 0 8px; }
+.note.block .group-note { margin: 0; }
+.srow.bad { border-color: var(--critical); }
+.srow.bad .srow-label { color: var(--critical); }
+/* Rows inside a section are list items with a divider, not cards inside a card. */
+.srows { display: flex; flex-direction: column; }
+.exp-body .srow { min-height: 48px; padding: 10px 0; background: transparent; border: 0; border-top: 1px solid var(--stroke); border-radius: 0; }
+.exp-body .srows > .srow:first-child { border-top: 0; padding-top: 0; }
+.exp-body .check-row:hover { background: transparent; }
+.exp-body .srow-ctl select { min-width: 160px; }
+.rewards-row { align-items: start; }
+.rewards-row .rewards { grid-area: ctl; width: 300px; }
+.rewards-row { grid-template-rows: auto 1fr; }
+
+/* Fields in a row or a bar: the label above, small. */
 .row { display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; }
-.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px 20px; align-items: start; }
-.columns { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-
-.field { display: flex; flex-direction: column; gap: 3px; }
-.field > span { font-size: 12px; color: var(--muted); }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px 20px; align-items: start; }
+.field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.field > span { font-size: 12px; line-height: 16px; color: var(--fg-2); }
 .field > span:empty { display: none; }
-.field small { color: var(--muted); font-size: 12px; }
-.check { display: flex; align-items: center; gap: 6px; }
+.check { display: inline-flex; align-items: center; gap: 8px; }
+.bad > select, .bad > input, .bad input, .bad select, table.bad, .bad > .reorder { border-color: var(--critical) !important; outline: 1px solid var(--critical); }
+h4.bad, p.bad, .check.bad, .field.bad > span { color: var(--critical); }
 
-.bad > select, .bad > input, .bad input, .bad select, ol.reorder li.bad, table.bad, .bad > .reorder { border-color: var(--bad) !important; outline: 1px solid var(--bad); }
-h4.bad, p.bad, .check.bad { color: var(--bad); }
-
-fieldset { border: 1px solid var(--line); border-radius: 8px; background: var(--panel); padding: 8px 12px 12px; display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
-legend { font-weight: 600; padding: 0 4px; }
-
-ol.reorder { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; width: 100%; min-width: 220px; }
-ol.reorder li {
-  display: flex; align-items: center; gap: 6px; padding: 3px 4px 3px 8px; background: var(--panel);
-  border: 1px solid var(--line); border-radius: 6px; cursor: grab; user-select: none;
+/* List and detail: the list pane stays while the editor scrolls. */
+.split { display: flex; gap: 20px; align-items: flex-start; }
+.split aside {
+  position: sticky; top: -20px; width: 200px; flex: none; display: flex; flex-direction: column; gap: 6px;
+  padding-top: 20px; margin-top: -20px; max-height: calc(100vh - 72px); overflow: auto; scrollbar-width: thin;
 }
-ol.reorder li.selected { border-color: var(--accent); box-shadow: inset 3px 0 0 var(--accent); }
+.split section { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 10px; }
+aside .lead { position: relative; justify-content: flex-start; min-height: 36px; border-color: transparent; background: transparent; }
+aside .lead:hover:not(:disabled) { background: var(--hover); }
+aside .lead.selected { background: var(--sel); }
+
+/* Lists that reorder: rows take the focus; the arrows show on the row you point at or work in. */
+ol.reorder { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; width: 100%; }
+ol.reorder li {
+  position: relative; display: flex; align-items: center; gap: 6px; min-height: 36px; padding: 0 4px 0 12px;
+  border-radius: var(--r-ctl); cursor: default; user-select: none;
+}
+ol.reorder li:hover { background: var(--hover); }
+ol.reorder li.selected { background: var(--sel); }
 ol.reorder li.dragging { opacity: 0.4; }
-ol.reorder .grip { color: var(--muted); font-size: 11px; }
-ol.reorder .item { flex: 1; }
+ol.reorder li.bad { color: var(--critical); }
+ol.reorder li.bad::after { content: ""; flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--critical); }
+ol.reorder .grip { color: var(--fg-2); font-size: 11px; }
+aside ol.reorder .grip { opacity: 0; }
+aside ol.reorder li:hover .grip, aside ol.reorder li:focus .grip { opacity: 1; }
+ol.reorder .item { flex: 1; min-width: 0; }
+ol.reorder .moves { display: inline-flex; opacity: 0; }
+ol.reorder li:hover .moves, ol.reorder li:focus-within .moves, ol.reorder li.selected .moves { opacity: 1; }
+ol.reorder .moves .icon-glyph { font-size: 12px; }
+/* The team list is the queue: a number before each team, its game slot after. */
+aside ol.reorder { counter-reset: queue; }
+aside ol.reorder li { counter-increment: queue; }
+.queue-row { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.queue-row::before { content: counter(queue); min-width: 1.2em; font-size: 12px; color: var(--fg-2); font-variant-numeric: tabular-nums; }
+.queue-row .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.queue-row small { margin-left: auto; font-variant-numeric: tabular-nums; }
+.queue-row.off .nm { color: var(--fg-2); }
+.queue-row .off-tag { flex: none; padding: 0 6px; border-radius: 3px; background: var(--card-2); box-shadow: inset 0 0 0 1px var(--stroke-2); font-size: 11px; line-height: 16px; }
+/* The same lists inside a panel: one card a row. */
+.rewards { max-width: 420px; }
+.rewards ol.reorder li { background: var(--card); border: 1px solid var(--stroke); min-height: 34px; }
+.rewards ol.reorder li:hover { background: var(--card-2); }
 ol.preview { margin: 0; padding-left: 26px; columns: 2; column-gap: 40px; }
 
-table { border-collapse: collapse; background: var(--panel); }
-th, td { text-align: left; padding: 3px 8px; border-bottom: 1px solid var(--line); }
-th { font-size: 12px; color: var(--muted); font-weight: 500; }
-table.overrides { width: 100%; margin-bottom: 8px; }
-table.overrides input:not([type="number"]):not(.decimal) { width: 100%; }
-
-.load-error { padding: 24px; }
-.team { display: flex; flex-direction: column; gap: 14px; }
-
-/* Team page, laid out like AALC's: a top bar, the sinner grid, starlight selectors, then the rest. */
-.team > fieldset { align-items: stretch; min-width: 0; }
+/* The team editor: a header that stays at the top, then the sections. */
+.team { display: flex; flex-direction: column; gap: 8px; }
 .bar {
-  display: flex; align-items: flex-end; gap: 12px 16px; flex-wrap: wrap;
-  padding: 10px 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+  display: flex; align-items: flex-end; gap: 12px 16px; flex-wrap: wrap; padding: 10px 12px 12px 16px;
+  background: var(--card); border: 1px solid var(--stroke); border-radius: var(--r-card);
 }
-.bar .spacer { flex: 1; }
+.team > .bar { position: sticky; top: -20px; z-index: 5; box-shadow: 0 -20px 0 var(--layer); }
+.bar .field input:not([type="number"]) { width: 200px; }
+.bar .switch-label { align-self: flex-end; min-height: 32px; }
+.bar button { align-self: flex-end; }
+.bar button.subtle:not(:has(span)) { width: 32px; padding: 0; }
 
-.sinners { display: grid; grid-template-columns: repeat(6, minmax(88px, 1fr)); gap: 8px; max-width: 760px; }
-.sinners.bad { outline: 1px solid var(--bad); outline-offset: 3px; border-radius: 8px; }
+/* Sections (Windows 11 settings expanders): the header says what is set, the chevron folds it. */
+details.exp { background: var(--card); border: 1px solid var(--stroke); border-radius: var(--r-card); }
+details.exp > summary {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) 20px; align-items: center; gap: 16px; min-height: 48px; padding: 4px 12px 4px 16px;
+  font-weight: 600; list-style: none; cursor: default; border-radius: var(--r-card);
+}
+details.exp > summary::-webkit-details-marker { display: none; }
+details.exp > summary:hover { background: var(--hover); }
+details.exp > summary::after { content: "\E70D"; grid-column: 3; font: 12px/1 var(--icons); color: var(--fg-2); text-align: center; }
+details.exp[open] > summary::after { content: "\E70E"; }
+details.exp[open] > summary { border-bottom: 1px solid var(--stroke); border-radius: var(--r-card) var(--r-card) 0 0; }
+.exp-sum { font-weight: 400; font-size: 12px; color: var(--fg-2); text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+details.exp > summary.bad { color: var(--critical); }
+details.exp > summary.bad .exp-sum::before { content: ""; display: inline-block; width: 8px; height: 8px; margin-right: 8px; border-radius: 50%; background: var(--critical); }
+.exp-body { display: flex; flex-direction: column; gap: 12px; padding: 12px 16px 16px; }
+.options { display: flex; flex-direction: column; gap: 10px; }
+.toggle { display: flex; align-items: center; gap: 8px 12px; flex-wrap: wrap; }
+.toggle .check { min-width: 12em; }
+.toggle small { flex-basis: 100%; padding-left: 26px; max-width: calc(70ch + 26px); }
+.toggle small.caution { padding-left: 32px; max-width: none; }
+
+/* The sinner grid: the game's deployment cards. Deployed in amber, backup in teal, as the gift tiles want and keep. */
+.sinners { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; max-width: 720px; }
+.sinners.bad { outline: 1px solid var(--critical); outline-offset: 4px; border-radius: var(--r-card); }
 .sinner {
-  --tone: var(--muted);
-  position: relative; aspect-ratio: 2 / 3; padding: 0; overflow: hidden; border-radius: 10px;
-  border: 2px solid var(--line); background: linear-gradient(160deg, #fafbfc, #e9ecf1);
+  --tone: var(--fg-2);
+  position: relative; display: block; aspect-ratio: 4 / 5; padding: 0; overflow: hidden; border-radius: var(--r-card);
+  border: 1px solid var(--stroke-2); background: linear-gradient(160deg, var(--card), var(--card-2));
 }
-.sinner:disabled { opacity: 1; cursor: default; }
-.sinner.deployed { --tone: #c47f00; border-color: var(--tone); background: linear-gradient(160deg, #fff8e6, #f6dfa6); }
-.sinner.backup { --tone: #0f8a80; border-color: var(--tone); background: linear-gradient(160deg, #eafaf7, #b9e8e1); }
-.sinner .num { position: absolute; top: 12%; left: 0; right: 0; font-size: 34px; font-weight: 800; color: var(--tone); }
+.sinner:hover:not(:disabled) { border-color: var(--stroke-strong); background: linear-gradient(160deg, var(--card), var(--card-2)); }
+.sinner:disabled { opacity: 1; }
+.sinner.deployed, .sinner.deployed:hover:not(:disabled) { --tone: var(--amber); border: 2px solid var(--amber-line); background: linear-gradient(160deg, var(--amber-soft), var(--amber-mid)); }
+.sinner.backup, .sinner.backup:hover:not(:disabled) { --tone: var(--teal); border: 2px solid var(--teal-line); background: linear-gradient(160deg, var(--teal-soft), var(--teal-mid)); }
+.sinner .num { position: absolute; top: 10%; left: 0; right: 0; font: 700 28px/1 var(--font-display); color: var(--tone); font-variant-numeric: tabular-nums; }
 .sinner .banner {
-  position: absolute; top: 46%; left: 0; right: 0; padding: 2px 0; background: var(--tone); color: #fff;
-  font-weight: 700; letter-spacing: 0.2em; font-size: 13px;
+  position: absolute; top: 44%; left: 0; right: 0; padding: 2px 0; background: var(--amber-line); color: var(--ink-amber);
+  font-weight: 700; letter-spacing: 0.2em; font-size: 12px; line-height: 16px;
 }
-.sinner .name { position: absolute; right: 8px; bottom: 6px; font-weight: 700; color: var(--fg); text-align: right; }
+.sinner.backup .banner { background: var(--teal-line); color: var(--ink-teal); }
+.sinner .name { position: absolute; right: 8px; bottom: 6px; left: 6px; font-weight: 600; font-size: 13px; color: var(--fg); text-align: right; }
+.sinners.readonly .sinner { filter: saturate(0.55); }
 
-/* Starlight, drawn after the game's "Grace of the Star" page: dark red cards, a selected one turns white. */
+/* Grace of the Star, in this season's colours: steel cards with a cobalt edge; a selected card lights up in cobalt, and + and
+ * ++ add a gold rim. The page ground carries the faint blueprint grid of the game's cards. */
 .starlight {
-  --red: #b3141c; --deep: #2a0709;
-  display: flex; gap: 14px; align-items: flex-start; padding: 12px; border-radius: 8px;
-  background: radial-gradient(ellipse at 50% 40%, #3a0b0e, #120405 75%); color: #f2e9e9;
+  display: flex; flex-direction: column; gap: 10px; padding: 12px; border-radius: var(--r-card); color: var(--sy-text);
+  background-color: var(--sy-ink);
+  background-image: linear-gradient(rgba(120, 138, 255, 0.07) 1px, transparent 1px), linear-gradient(90deg, rgba(120, 138, 255, 0.07) 1px, transparent 1px);
+  background-size: 24px 24px;
 }
-.graces { flex: 1; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; min-width: 0; }
-.graces.bad { outline: 2px solid var(--bad); outline-offset: 4px; border-radius: 6px; }
+.graces { flex: 1; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; min-width: 0; }
+.graces.bad { outline: 2px solid var(--critical); outline-offset: 4px; border-radius: var(--r-ctl); }
 .grace {
-  position: relative; display: flex; flex-direction: column; gap: 6px; min-height: 210px; min-width: 0; padding: 26px 8px 8px; overflow-wrap: anywhere;
-  border: 2px solid var(--red); border-radius: 4px; cursor: pointer; user-select: none;
-  background: linear-gradient(180deg, #8c1016 0, #4a0a0d 38%, #140405 70%);
-  box-shadow: inset 0 0 0 1px #000, 0 0 0 1px #000;
+  position: relative; display: flex; flex-direction: column; gap: 6px; min-height: 188px; min-width: 0; padding: 30px 8px 8px; overflow-wrap: anywhere;
+  border: 1px solid var(--sy-line); border-top: 2px solid var(--sy-edge); border-radius: 3px; cursor: default; user-select: none;
+  background: linear-gradient(180deg, var(--sy-card) 0, var(--sy-card-2) 100%);
 }
-.grace:hover { border-color: #ff4a4a; }
-.grace[aria-disabled="true"] { cursor: default; }
+.grace:hover { border-color: var(--sy-edge-hi); }
+.starlight.readonly .grace:hover { border-color: var(--sy-line); border-top-color: var(--sy-edge); }
 .grace .price {
-  position: absolute; top: 0; right: 0; padding: 1px 8px 1px 10px; background: #000; color: #fff; font-weight: 700;
-  font-size: 15px; clip-path: polygon(10px 0, 100% 0, 100% 100%, 0 100%);
+  position: absolute; top: 0; right: 0; padding: 2px 8px; background: var(--sy-ink); color: var(--sy-gold);
+  font-weight: 700; font-size: 13px; line-height: 18px; font-variant-numeric: tabular-nums;
 }
 .grace .rank {
-  position: absolute; top: -2px; left: -2px; min-width: 26px; padding: 0 6px; height: 26px; line-height: 26px; text-align: center;
-  font-weight: 800; font-size: 16px; background: #ffd34d; color: #2a0709; border-radius: 4px 0 6px 0;
+  position: absolute; top: 0; left: 0; min-width: 24px; height: 22px; padding: 0 6px; line-height: 22px; text-align: center;
+  font-weight: 700; font-size: 14px; background: var(--sy-gold); color: var(--sy-ink); border-radius: 0 0 4px 0;
 }
-.grace .name { font-weight: 700; font-size: 14px; line-height: 1.2; text-align: right; text-shadow: 0 1px 2px #000; }
-.grace .name small { display: block; font-weight: 400; font-size: 10px; opacity: 0.7; }
-.grace ul { margin: 0; padding-left: 14px; font-size: 11.5px; line-height: 1.35; flex: 1; }
-.grace li.sub { list-style: none; margin-left: 4px; opacity: 0.85; }
+.grace .name { font-weight: 700; font-size: 14px; line-height: 18px; text-align: right; color: #fff; }
+.grace .name small { display: block; font-weight: 400; font-size: 11px; line-height: 14px; color: var(--sy-dim); }
+.grace ul { margin: 0; padding-left: 14px; font-size: 12px; line-height: 16px; flex: 1; color: var(--sy-dim); }
+.grace li.sub { list-style: none; margin-left: 4px; }
 .grace .enhance { display: flex; gap: 6px; }
 .grace .enhance button {
-  flex: 1; padding: 1px 0; border: 1px solid #000; border-radius: 0; background: var(--red); color: #fff; font-weight: 800;
+  flex: 1; min-height: 24px; padding: 0; border: 1px solid #5a5f78; border-radius: 2px; background: var(--sy-ink); color: var(--sy-gold); font-weight: 700;
 }
-.grace .enhance button:hover:not(:disabled) { border-color: #fff; }
-.grace .enhance button:disabled { opacity: 1; cursor: default; }
-.grace .enhance button.lit { background: #ffd34d; color: #2a0709; box-shadow: 0 0 8px #ffd34d; }
-/* Selected: the whole card goes white, as in the game; + and ++ add a gold rim. */
-.grace:not(.none) { background: linear-gradient(180deg, #fff 0, #f1e6e6 60%, #e3d3d3); color: var(--deep); border-color: #fff; }
-.grace:not(.none) .name { text-shadow: none; }
-.grace.plus { border-color: #ffd34d; box-shadow: 0 0 0 2px #ffd34d, 0 0 10px #ffd34d88; }
-.grace.plus2 { border-color: #ffb300; box-shadow: 0 0 0 3px #ffb300, 0 0 16px #ffb300; }
+.grace .enhance button:hover:not(:disabled) { border-color: var(--sy-gold); background: var(--sy-ink); }
+.grace .enhance button:disabled { opacity: 1; }
+.grace .enhance button.lit { background: var(--sy-gold); border-color: var(--sy-gold); color: var(--sy-ink); }
+.grace:not(.none) { background: linear-gradient(180deg, var(--sy-lit) 0, var(--sy-lit-2) 100%); border-color: var(--sy-edge-hi); }
+.grace:not(.none) ul, .grace:not(.none) .name small { color: #dfe4ff; }
+.grace.plus { box-shadow: 0 0 0 2px var(--sy-gold); }
+.grace.plus2 { box-shadow: 0 0 0 2px var(--sy-gold), 0 0 0 4px var(--sy-ink), 0 0 0 5px var(--sy-gold); }
 .grace-side {
-  width: 150px; flex: none; display: flex; flex-direction: column; gap: 6px; padding: 10px; border: 2px solid var(--red);
-  background: #140405;
+  order: -1; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; padding: 6px 10px;
+  border: 1px solid var(--sy-line); border-radius: 3px; background: var(--sy-card-2);
 }
-.grace-side button { border-radius: 0; border-color: #000; background: var(--red); color: #fff; }
-.grace-side button:hover:not(:disabled) { border-color: #fff; }
-.grace-side .muted { color: #e46a6a; text-align: center; font-size: 12px; margin-top: 4px; }
-.grace-side .total { margin-top: 8px; color: #d9c2c2; }
-.grace-side .total b { display: block; font-size: 22px; color: #fff; }
-.grace-side .check { color: #f2e9e9; font-size: 12px; align-items: flex-start; }
-
-details.panel { border: 1px solid var(--line); border-radius: 8px; background: var(--panel); padding: 8px 12px 12px; display: flex; flex-direction: column; gap: 12px; }
-details.panel > summary { font-weight: 600; cursor: pointer; }
-details.panel[open] > summary { margin-bottom: 10px; }
-details.panel > * + * { margin-top: 12px; }
-.options { display: flex; flex-direction: column; gap: 8px; }
-.toggle { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.toggle .check { min-width: 9em; }
-.toggle small { color: var(--muted); font-size: 12px; }
-.rewards { max-width: 360px; }
+.grace-side button { min-height: 28px; min-width: 40px; }
+.grace-side button { border: 1px solid #4a4f68; border-radius: 2px; background: var(--sy-card); color: var(--sy-text); }
+.grace-side button:hover:not(:disabled) { border-color: var(--sy-edge-hi); background: var(--sy-card); }
+.grace-side .side-label { margin-left: 8px; font-size: 12px; line-height: 16px; color: var(--sy-dim); }
+.grace-side .total { margin-left: auto; display: inline-flex; align-items: baseline; gap: 8px; font-size: 12px; color: var(--sy-dim); }
+.grace-side .total b { font: 700 18px/24px var(--font-display); color: var(--sy-gold); font-variant-numeric: tabular-nums; }
+.grace-side .check { font-size: 12px; line-height: 16px; color: var(--sy-text); margin-left: 12px; }
+.starlight input[type="checkbox"] { color-scheme: dark; accent-color: var(--sy-gold); }
 
 /* Skill replacement (#454), the layout the user adopted on 2026-11-06: one line per listed sinner, in priority order. */
-details.skill-panel > * + * { margin-top: 8px; }
-details.skill-panel > p { margin-bottom: 0; }
-/* not details.bad nor li.bad: `.bad input`, `.bad select` would outline every field of the panel or the row, not just the wrong row */
-details.skill-panel > summary.bad { color: var(--bad); }
 .skill-add { align-self: flex-start; }
 ol.skill-sinners { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
 ol.skill-sinners:empty { display: none; }
+/* One entry per sinner: the counts and the arrows on its first line, the swaps it needs and their order on the second. */
 ol.skill-sinners > li {
-  display: flex; align-items: center; gap: 6px; padding: 4px 8px; background: var(--panel); border: 1px solid var(--line);
-  border-radius: 6px; cursor: grab; user-select: none;
+  display: grid; grid-template-columns: 10px 20px minmax(3em, 1fr) auto auto auto auto;
+  grid-template-areas: "grip rank name s1 s2 s3 arrows" ". . pill pill pill pill first";
+  align-items: center; gap: 4px 8px; padding: 6px 8px; background: var(--card-2); border: 1px solid var(--stroke);
+  border-radius: var(--r-ctl); cursor: default; user-select: none;
 }
-ol.skill-sinners > li.faulty { border-color: var(--bad); outline: 1px solid var(--bad); }
+ol.skill-sinners > li > .grip { grid-area: grip; }
+ol.skill-sinners > li > .skill-rank { grid-area: rank; }
+ol.skill-sinners > li > .skill-name { grid-area: name; }
+ol.skill-sinners > li > .skill-count:nth-child(4) { grid-area: s1; }
+ol.skill-sinners > li > .skill-count:nth-child(5) { grid-area: s2; }
+ol.skill-sinners > li > .skill-count:nth-child(6) { grid-area: s3; }
+ol.skill-sinners > li > .skill-pillcell { grid-area: pill; width: auto; }
+ol.skill-sinners > li > .skill-first { grid-area: first; justify-self: end; }
+ol.skill-sinners > li > .skill-arrows { grid-area: arrows; }
+ol.skill-sinners > li.faulty { border-color: var(--critical); outline: 1px solid var(--critical); }
 ol.skill-sinners > li[data-dragging] { opacity: 0.4; }
-ol.skill-sinners > li[data-over] { background: var(--line); }
-ol.skill-sinners .grip { color: var(--muted); font-size: 11px; }
-.skill-rank { min-width: 1.5em; text-align: right; color: var(--muted); }
+ol.skill-sinners > li[data-over] { background: var(--sel); }
+ol.skill-sinners .grip { color: var(--fg-2); font-size: 11px; }
+.skill-rank { min-width: 1.5em; text-align: right; color: var(--fg-2); font-variant-numeric: tabular-nums; }
 .skill-name { flex: 0 1 6.5em; min-width: 3em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
-.skill-count { display: flex; align-items: center; gap: 3px; font-size: 12px; color: var(--muted); }
+.skill-count { display: flex; align-items: center; gap: 3px; font-size: 12px; color: var(--fg-2); }
 /* S1 is worked out, S2 and S3 are − n + in one box each: no free number field */
-.skill-box { display: inline-flex; align-items: stretch; width: 64px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); font-size: 14px; color: var(--fg); }
-.skill-box.ro { justify-content: center; padding: 4px 0; background: var(--bg); color: var(--muted); cursor: default; }
-.skill-spin button { flex: 1; min-width: 0; padding: 4px 0; border: none; border-radius: 0; background: none; font-weight: 600; }
-.skill-spin button:first-child { border-radius: 5px 0 0 5px; }
-.skill-spin button:last-child { border-radius: 0 5px 5px 0; }
-.skill-spin button:hover:not(:disabled) { background: color-mix(in srgb, var(--accent) 12%, var(--panel)); color: var(--accent); }
+.skill-box { display: inline-flex; align-items: stretch; width: 68px; border: 1px solid var(--stroke); border-bottom-color: var(--stroke-2); border-radius: var(--r-ctl); background: var(--card); font-size: 14px; color: var(--fg); }
+.skill-box.ro { justify-content: center; padding: 5px 0; background: transparent; color: var(--fg-2); }
+.skill-spin button { flex: 1; min-width: 0; min-height: 28px; padding: 0; border: none; border-radius: 0; background: none; font-weight: 600; }
+.skill-spin button:first-child { border-radius: 3px 0 0 3px; }
+.skill-spin button:last-child { border-radius: 0 3px 3px 0; }
+.skill-spin button:hover:not(:disabled) { background: var(--accent-soft); color: var(--accent-text); }
 .skill-spin button:focus-visible { outline-offset: -2px; }
-.skill-spin .n { width: 22px; flex: none; padding: 4px 0; text-align: center; border-left: 1px solid var(--line); border-right: 1px solid var(--line); }
+.skill-spin .n { width: 22px; flex: none; padding: 4px 0; text-align: center; border-left: 1px solid var(--stroke); border-right: 1px solid var(--stroke); font-variant-numeric: tabular-nums; }
 .skill-pillcell { width: 11em; flex: none; }
-.skill-pill { display: inline-block; padding: 1px 10px; border-radius: 999px; font-size: 12px; white-space: nowrap; border: 1px solid var(--line); }
-.skill-pill.off { color: var(--muted); border-color: var(--muted); background: transparent; }
-.skill-pill.on { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
-.skill-pill.err { background: var(--bad); border-color: var(--bad); color: #fff; white-space: normal; }
+.skill-pill { display: inline-block; padding: 1px 10px; border-radius: 999px; font-size: 12px; line-height: 18px; white-space: nowrap; }
+.skill-pill.off { color: var(--fg-2); box-shadow: inset 0 0 0 1px var(--stroke-2); }
+.skill-pill.on { background: var(--accent-soft); color: var(--accent-text); font-weight: 600; }
+.skill-pill.err { background: var(--critical-bg); color: var(--critical); font-weight: 600; white-space: normal; }
 .skill-first { width: 8.5em; flex: none; }
 .skill-arrows { display: inline-flex; margin-left: auto; }
-.skill-arrows button:hover:not(:disabled) { color: var(--accent); }
 
-/* E.G.O Gift Search, drawn after the game's page: keyword tabs, a band per tier, text cards; a picked one glows gold. */
-.gift-search { display: flex; flex-direction: column; gap: 10px; padding: 12px; border-radius: 8px; background: #0d1424; color: #e6ebf5; }
+/* E.G.O Gift Search, after the game's page, in the season's colours like the starlight: keyword tabs, a band per tier, text
+ * cards; a picked one takes the gold rim and its place in the order. */
+.gift-search {
+  display: flex; flex-direction: column; gap: 10px; padding: 12px; border-radius: var(--r-card); color: var(--sy-text);
+  background-color: var(--sy-ink);
+  background-image: linear-gradient(rgba(120, 138, 255, 0.07) 1px, transparent 1px), linear-gradient(90deg, rgba(120, 138, 255, 0.07) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
 .gift-tabs { display: flex; gap: 4px; flex-wrap: wrap; }
-.gift-tabs button { background: #1b2540; border-color: #2c3a60; color: #c5cee3; font-size: 12px; padding: 4px 10px; }
-.gift-tabs button.selected { background: #3a4d84; border-color: #9fb3ef; color: #fff; font-weight: 600; }
-.gift-tabs b { margin-left: 5px; padding: 0 5px; border-radius: 8px; background: #ffd34d; color: #1a1406; font-size: 11px; }
-.gift-tier h4 { margin: 0 0 6px; padding: 2px 8px; background: #23305a; color: #ffc53d; letter-spacing: 2px; }
+.gift-tabs button { min-height: 28px; padding: 0 10px; background: var(--sy-card); border: 1px solid var(--sy-line); color: var(--sy-dim); font-size: 12px; }
+.gift-tabs button:hover:not(:disabled) { background: var(--sy-card); border-color: var(--sy-edge-hi); color: var(--sy-text); }
+.gift-tabs button.selected { background: var(--sy-lit); border-color: var(--sy-edge-hi); color: #fff; font-weight: 600; }
+.gift-tabs b { margin-left: 2px; padding: 0 5px; border-radius: 8px; background: var(--sy-gold); color: var(--sy-ink); font-size: 11px; line-height: 16px; }
+.gift-tier h3 { margin: 0 0 6px; padding: 2px 8px; background: var(--sy-card-2); border-left: 1px solid var(--sy-edge); color: var(--sy-gold); letter-spacing: 0.12em; font-size: 12px; }
 .gifts { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; }
 .gift {
-  position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 1px; min-height: 48px; padding: 5px 8px 5px 10px;
-  text-align: left; background: #161f36; border: 1px solid #c58b1c; border-radius: 4px; color: #e6ebf5; overflow-wrap: anywhere;
+  position: relative; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 1px; min-height: 48px; padding: 5px 8px 5px 10px;
+  text-align: left; background: var(--sy-card-2); border: 1px solid var(--sy-line); border-radius: 3px; color: var(--sy-text); overflow-wrap: anywhere; white-space: normal;
 }
-.gift:hover:not(:disabled) { border-color: #ffd34d; }
-.gift .name { font-weight: 600; font-size: 13px; line-height: 1.25; }
-.gift small { font-size: 10.5px; opacity: 0.65; line-height: 1.2; }
-.gift.picked { background: #3a2f10; border-color: #ffd34d; box-shadow: 0 0 0 2px #ffd34d, 0 0 8px #ffd34d88; padding-left: 30px; }
+.gift:hover:not(:disabled) { background: var(--sy-card-2); border-color: var(--sy-edge-hi); }
+.gift .name { font-weight: 600; font-size: 13px; line-height: 17px; }
+.gift small { font-size: 11px; line-height: 14px; color: var(--sy-dim); }
+.gift.picked, .gift.picked:hover:not(:disabled) { background: #2a2a2e; border-color: var(--sy-gold); box-shadow: inset 0 0 0 1px var(--sy-gold); padding-left: 32px; }
 .gift .rank {
   position: absolute; top: 0; left: 0; bottom: 0; width: 22px; display: flex; align-items: center; justify-content: center;
-  background: #ffd34d; color: #1a1406; font-weight: 800;
+  background: var(--sy-gold); color: var(--sy-ink); font-weight: 700;
 }
 
 /* Theme pack plan, design A of #240: lanes of weights, the threshold line between them. */
@@ -251,42 +513,56 @@ ol.skill-sinners .grip { color: var(--muted); font-size: 11px; }
 .packbar .gap { width: 10px; }
 .packbar .spacer { flex: 1; }
 .lanes + .field { max-width: 320px; }
-.chip { border-radius: 999px; padding: 1px 10px; font-size: 12px; color: var(--muted); }
-.chip[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
-.lanes { display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 4px 12px; }
-.lane { display: flex; align-items: flex-start; gap: 10px; padding: 6px 0; border-bottom: 1px dashed var(--line); min-height: 38px; }
-.lane .w { width: 40px; flex: none; text-align: right; font-weight: 700; padding-top: 4px; }
-.lane .w.pos { color: #1b7f3b; }
-.lane .w.neg { color: var(--bad); }
+.chip { min-height: 28px; border-radius: 14px; padding: 0 10px; font-size: 12px; color: var(--fg); }
+.chip[aria-pressed="true"] { background: var(--accent); border-color: transparent; color: var(--on-accent); }
+.chip[aria-pressed="true"]:hover:not(:disabled) { background: var(--accent-hover); }
+.lanes { display: flex; flex-direction: column; background: var(--card); border: 1px solid var(--stroke); border-radius: var(--r-card); padding: 4px 12px; }
+.lane { display: flex; align-items: flex-start; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--stroke); min-height: 38px; }
+.lane .w { width: 40px; flex: none; text-align: right; font-weight: 700; padding-top: 4px; font-variant-numeric: tabular-nums; }
+.lane .w.pos { color: var(--success); }
+.lane .w.neg { color: var(--critical); }
 .lane .packs { display: flex; flex-wrap: wrap; gap: 6px; flex: 1; }
-.lane.add { color: var(--muted); justify-content: center; align-items: center; border: 1px dashed var(--line); border-radius: 6px; margin: 6px 0; }
+.lane { flex-wrap: wrap; }
+.lane.folded .packs { max-height: 58px; overflow: hidden; -webkit-mask-image: linear-gradient(#000 60%, transparent); mask-image: linear-gradient(#000 60%, transparent); }
+.lane .lane-more { flex-basis: 100%; margin-left: 50px; align-self: flex-start; }
+.lanes.images .lane.folded .packs { max-height: 200px; }
+.lane.add { color: var(--fg-2); justify-content: center; align-items: center; border: 1px dashed var(--stroke-2); border-radius: var(--r-ctl); margin: 6px 0; }
 .lanes .gap { height: 12px; }
 .lanes.moving .gap { background: repeating-linear-gradient(90deg, var(--accent) 0 6px, transparent 6px 12px) center / 100% 2px no-repeat; }
-.thr { display: flex; align-items: center; gap: 8px; color: var(--accent); font-size: 12px; font-weight: 600; cursor: grab; }
+.thr { display: flex; align-items: center; gap: 8px; color: var(--accent-text); font-size: 12px; font-weight: 600; cursor: grab; }
 .thr::before, .thr > span::after { content: ""; }
 .thr::before { flex: none; width: 40px; border-top: 2px solid var(--accent); }
 .thr > span { flex: 1; display: flex; align-items: center; gap: 8px; }
 .thr > span::after { flex: 1; border-top: 2px solid var(--accent); }
 .pk {
-  display: inline-flex; align-items: center; gap: 4px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px;
-  padding: 3px 8px; font-size: 12px; line-height: 1.3; cursor: default;
+  display: inline-flex; align-items: center; gap: 4px; background: var(--layer); border: 1px solid var(--stroke-2); border-radius: var(--r-ctl);
+  padding: 3px 8px; font-size: 12px; line-height: 16px; cursor: default;
 }
-.pk[draggable="true"] { cursor: grab; }
-.pk small { color: var(--muted); font-size: 10.5px; }
-.pk small em { font-style: normal; color: var(--accent); }
-/* Floor badges: blue NORMAL, red HARD, purple INFINITY, dark EXTREME, only the floors inside. */
-small.fl { background: var(--fl-n-bg); color: var(--fl-n-fg); font-size: 10.5px; font-weight: 600; padding: 0 4px; border-radius: 3px; }
+.pk[draggable="true"]:hover { border-color: var(--stroke-strong); background: var(--card-2); }
+.pk small { color: var(--fg-2); font-size: 11px; }
+.pk small em { font-style: normal; color: var(--accent-text); }
+/* Floor badges: NORMAL blue, HARD red, INFINITY purple, EXTREME warm graphite, each a tint with its own ink. */
+small.fl { background: var(--fl-n-bg); color: var(--fl-n-fg); font-size: 11px; line-height: 16px; font-weight: 600; padding: 0 5px; border-radius: 3px; font-variant-numeric: tabular-nums; }
 small.fl.hard { background: var(--fl-h-bg); color: var(--fl-h-fg); }
 small.fl.inf { background: var(--fl-i-bg); color: var(--fl-i-fg); }
 small.fl.ext { background: var(--fl-x-bg); color: var(--fl-x-fg); }
-small.wk { background: var(--wk-bg); color: var(--wk-fg); font-size: 10.5px; font-weight: 600; padding: 0 4px; border-radius: 3px; } /* the "含想要" mark (#421) */
-.floorkey { display: flex; align-items: center; gap: 4px; }
-.pk.unlisted { border-style: dashed; color: var(--muted); }
+small.wk { background: var(--amber-soft); color: var(--amber); font-size: 11px; line-height: 16px; font-weight: 600; padding: 0 5px; border-radius: 3px; } /* the "含想要" mark (#421) */
+.floorkey { display: flex; align-items: center; gap: 4px; font-size: 12px; }
+.pk.unlisted { border-style: dashed; color: var(--fg-2); }
 /* a pack's weight typed in place */
 .weigh { display: inline-flex; align-items: center; gap: 4px; }
-.weigh input { width: 4.5em; padding: 0 4px; }
-.weigh small { color: var(--bad); }
-.pk.bad { border-color: var(--bad); outline: 1px solid var(--bad); }
+.weigh input { width: 4.5em; min-height: 24px; padding: 0 4px; }
+.weigh small { color: var(--critical); }
+.pk.bad { border-color: var(--critical); outline: 1px solid var(--critical); }
 .lanes.images .pk { flex-wrap: wrap; justify-content: center; width: 128px; text-align: center; padding: 4px; }
-.lanes.images .pk .img { display: block; flex: none; width: 120px; aspect-ratio: 180 / 322; object-fit: cover; border-radius: 4px; margin-bottom: 4px; background: linear-gradient(160deg, #3a3f4b, #151821); }
+.lanes.images .pk .img { display: block; flex: none; width: 120px; aspect-ratio: 180 / 322; object-fit: cover; border-radius: var(--r-ctl); margin-bottom: 4px; background: linear-gradient(160deg, #3a3f4b, #151821); }
 .lanes.images .pk .nm { font-weight: 600; flex-basis: 100%; }
+
+/* Override tables: a data grid on a card. */
+table { border-collapse: separate; border-spacing: 0; }
+table.overrides { width: 100%; max-width: 920px; margin-bottom: 12px; background: var(--card); border: 1px solid var(--stroke); border-radius: var(--r-card); overflow: hidden; }
+table.overrides th { text-align: left; font-size: 12px; line-height: 16px; font-weight: 600; color: var(--fg-2); padding: 8px 12px; background: var(--card-2); border-bottom: 1px solid var(--stroke); }
+table.overrides td { padding: 6px 12px; border-bottom: 1px solid var(--stroke); }
+table.overrides tr:last-child td { border-bottom: 0; }
+table.overrides input:not([type="number"]):not(.decimal) { width: 100%; }
+table.overrides td.act { width: 52px; text-align: right; }

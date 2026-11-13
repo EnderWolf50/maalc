@@ -101,6 +101,10 @@ export function KeywordPanel({ keyword }: { keyword: string }) {
   const dragItem = useDragSort((from, to) => change((l) => moveGift(l, Number(from), Number(to))), editable);
   const zh = s.language === "zh_tw";
   const c = counts(list, keyword), blocks = tiersOf(list.gorder, keyword);
+  const notes = blocks.map(({ ids }) => {
+    const kinds = ids.map((id) => GIFT_BY_ID.get(id)!.kind);
+    return kinds.includes("fusion") ? t("gl.tier_fusion") : kinds.some((k) => k !== "buyable") ? t("gl.tier_unbuyable") : "";
+  });
   const { grid, stop, walk, onFocus } = useTileGrid((id) => GIFT_BY_ID.get(id)?.keyword === keyword, blocks[0]?.ids[0]);
 
   return (
@@ -114,10 +118,9 @@ export function KeywordPanel({ keyword }: { keyword: string }) {
         {c.keep > 0 && <span className="gl-tag keep">{fill(t("gl.n_keep"), { n: c.keep })}</span>}
         {c.fusion > 0 && <span className="gl-tag fusion">{fill(t("gl.n_fusion"), { n: c.fusion })}</span>}
       </h3>
-      {blocks.map(({ tier, ids }) => {
-        const kinds = ids.map((id) => GIFT_BY_ID.get(id)!.kind);
+      {blocks.map(({ tier, ids }, b) => {
         const set = ids.filter((id) => state(list, id) !== "drop").length;
-        const note = kinds.includes("fusion") ? t("gl.tier_fusion") : kinds.some((k) => k !== "buyable") ? t("gl.tier_unbuyable") : "";
+        const note = notes[b] && !notes.slice(0, b).includes(notes[b]) ? notes[b] : ""; // a band above already says it
         return (
           <section key={tier} className="gl-tier" aria-label={TIERS[tier]}>
             <h4><span className={"gl-tierno" + (tier >= 4 ? " fusion" : "")}>{TIERS[tier]}</span>

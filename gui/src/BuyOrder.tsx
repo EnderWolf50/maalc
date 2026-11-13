@@ -7,7 +7,7 @@ import { buyList, moveGift, moveKeyword, nudgeGift, useGiftEdit } from "./giftEd
 import { mainKeyword, queue } from "./gifts";
 import { fill } from "./i18n";
 import { KeywordIcon, TIERS, kwText } from "./KeywordGrid";
-import { useEditor } from "./ui";
+import { GLYPHS, Icon, useEditor } from "./ui";
 
 type Dir = "up" | "down";
 
@@ -15,7 +15,7 @@ type Dir = "up" | "down";
 function Arrows({ id, labels, at, last, onMove }: { id: string; labels: [string, string]; at: number; last: number; onMove: (dir: Dir) => void }) {
   return (["up", "down"] as const).map((dir, j) => (
     <button type="button" key={dir} className="gl-mini gl-mv" data-mv={`${id}:${dir}`} aria-label={labels[j]}
-      disabled={j ? at === last : at === 0} onClick={() => onMove(dir)}>{j ? "▼" : "▲"}</button>
+      disabled={j ? at === last : at === 0} onClick={() => onMove(dir)}><Icon glyph={j ? GLYPHS.down : GLYPHS.up} /></button>
   ));
 }
 

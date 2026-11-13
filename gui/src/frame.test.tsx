@@ -1,0 +1,161 @@
+// The window's frame (frame.tsx, #664): the rail goes through the pages by keyboard and folds to its icons, the team
+// list takes the keyboard, and a folded section says what is set inside.
+import { fireEvent, render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { beforeEach, describe, expect, test, vi } from "vitest";
+import App from "./App";
+import { TEXT } from "./i18n";
+import { newSettings, newTeam, type Settings } from "./model";
+
+const file = vi.hoisted(() => ({ text: "" }));
+vi.mock("./api", async (original) => ({
+  ...(await original<typeof import("./api")>()),
+  loadSettings: () => Promise.resolve(file.text),
+  saveSettings: () => Promise.resolve(),
+  rootDir: () => Promise.resolve("root"),
+}));
+
+const zh = TEXT.zh_tw;
+const settings = (): Settings => ({
+  ...newSettings(), language: "zh_tw",
+  teams: ["a", "b", "c"].map((id, i) => ({ ...newTeam(i + 1, `T${id}`), id })),
+});
+const tab = (name: string) => screen.getByRole("tab", { name });
+const nameBox = () => screen.getByRole("textbox", { name: zh.name });
+const rows = () => within(document.querySelector("aside")!).getAllByRole("listitem");
+const queue = () => rows().map((li) => li.textContent!.match(/T\w/)![0]);
+
+beforeEach(() => { file.text = JSON.stringify(settings()); });
+
+describe("the rail", () => {
+  test("the arrow keys, Home and End open the page they reach and keep the focus on it", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(await screen.findByRole("tab", { name: zh["tab.teams"] }));
+    await user.keyboard("{ArrowDown}");
+    expect(tab(zh["tab.gifts"])).toHaveAttribute("aria-selected", "true");
+    expect(tab(zh["tab.gifts"])).toHaveFocus();
+    await user.keyboard("{ArrowUp}{ArrowUp}");
+    expect(tab(zh["tab.run"])).toHaveAttribute("aria-selected", "true");
+    await user.keyboard("{End}");
+    expect(tab(zh["tab.daily"])).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("heading", { level: 2, name: zh["tab.daily"] })).toBeInTheDocument();
+  });
+
+  test("only the open page is a Tab stop", async () => {
+    render(<App />);
+    await screen.findByRole("tab", { name: zh["tab.teams"] });
+    const stops = within(document.querySelector("nav.rail") as HTMLElement).getAllByRole("tab").filter((x) => x.tabIndex === 0);
+    expect(stops).toEqual([tab(zh["tab.teams"])]);
+  });
+
+  test("folds to its icons and back; the pages keep their names", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    const toggle = await screen.findByRole("button", { name: zh["nav.toggle"] });
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    await user.click(toggle);
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(document.querySelector("nav.rail")).toHaveClass("compact");
+    expect(tab(zh["tab.teams"])).toHaveAttribute("title", zh["tab.teams"]);
+    await user.click(toggle);
+    expect(document.querySelector("nav.rail")).not.toHaveClass("compact");
+  });
+});
+
+describe("the team list", () => {
+  test("the arrow keys select the team above or below", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByRole("tab", { name: zh["tab.teams"] });
+    expect(nameBox()).toHaveValue("Ta");
+    rows()[0].focus();
+    await user.keyboard("{ArrowDown}");
+    expect(nameBox()).toHaveValue("Tb");
+    expect(rows()[1]).toHaveFocus();
+    await user.keyboard("{End}");
+    expect(nameBox()).toHaveValue("Tc");
+  });
+
+  test("Alt and the arrow keys move the team in the queue, and it keeps the focus", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByRole("tab", { name: zh["tab.teams"] });
+    rows()[0].focus();
+    await user.keyboard("{Alt>}{ArrowDown}{/Alt}");
+    expect(queue()).toEqual(["Tb", "Ta", "Tc"]);
+    expect(rows()[1]).toHaveFocus();
+    expect(nameBox()).toHaveValue("Ta");
+    await user.keyboard("{Alt>}{ArrowDown}{/Alt}");
+    expect(queue()).toEqual(["Tb", "Tc", "Ta"]);
+    expect(screen.getByText(zh.unsaved)).toBeInTheDocument();
+  });
+
+  test("only the selected team is a Tab stop", async () => {
+    render(<App />);
+    await screen.findByRole("tab", { name: zh["tab.teams"] });
+    expect(rows().map((li) => li.tabIndex)).toEqual([0, -1, -1]);
+  });
+});
+
+test("a refused save says so in the title bar, with the number of problems", async () => {
+  const s = settings();
+  s.teams[1].game_team = s.teams[0].game_team; // two enabled teams on one TEAMS slot (validate.ts crossCheck)
+  file.text = JSON.stringify(s);
+  const user = userEvent.setup();
+  render(<App />);
+  await user.click(await screen.findByRole("button", { name: zh.save }));
+  expect(document.querySelector("header .status")).toHaveTextContent(zh.blockedCount.replace("{n}", "1"));
+  expect(tab(zh["tab.teams"])).toHaveAttribute("aria-describedby", "problem-hint");
+  expect(document.getElementById("problem-hint")).toHaveTextContent(zh.hasProblem);
+});
+
+test("a long help text shows its first sentence and a button for the rest; a caution shows whole", async () => {
+  const user = userEvent.setup();
+  render(<App />);
+  await user.click(await screen.findByRole("tab", { name: zh["tab.daily"] }));
+  const note = screen.getByText((_, el) => el?.textContent === zh["daily.note"].replace(/\n/g, ""), { selector: "p" });
+  expect(note).toHaveClass("folded");
+  const preview = note.parentElement!.querySelector(".preview")!;
+  expect(preview.textContent).toBe(zh["daily.note"].split("\n")[0]); // a whole sentence, never cut inside one
+  const more = note.parentElement!.querySelector("button.more")!;
+  await user.click(more);
+  expect(more).toHaveAttribute("aria-expanded", "true");
+  expect(note).not.toHaveClass("folded");
+  expect(note.parentElement!.querySelector(".preview")).toBeNull();
+  const caution = screen.getByText((_, el) => el?.textContent === zh["charge.note"].replace(/\n/g, ""), { selector: "p" });
+  expect(caution).toHaveClass("caution");
+  expect(caution).not.toHaveClass("folded");
+});
+
+test("a problem marks its page while the player edits, before any save; the banner waits for a save", async () => {
+  const user = userEvent.setup();
+  render(<App />);
+  await screen.findByRole("tab", { name: zh["tab.teams"] });
+  expect(tab(zh["tab.teams"])).not.toHaveClass("bad");
+  fireEvent.change(screen.getByRole("spinbutton", { name: zh["team.game_team"] }), { target: { value: "2" } }); // Tb holds TEAMS #2
+  expect(tab(zh["tab.teams"])).toHaveClass("bad");
+  await user.click(tab(zh["tab.run"]));
+  expect(tab(zh["tab.teams"])).toHaveClass("bad");
+  expect(screen.queryByRole("alert")).toBeNull();
+});
+
+test("a row with a long help names its switch by the label alone, and a click on the label works the switch", async () => {
+  const user = userEvent.setup();
+  render(<App />);
+  await user.click(await screen.findByRole("tab", { name: zh["tab.daily"] }));
+  const [exp] = screen.getAllByRole("checkbox", { name: zh["lux.consecutive"] }); // the help's 顯示全部 button is outside the <label>
+  const was = (exp as HTMLInputElement).checked;
+  await user.click(screen.getAllByText(zh["lux.consecutive"])[0]);
+  expect(exp).toHaveProperty("checked", !was);
+});
+
+test("a folded section's header says what is set inside", async () => {
+  const s = settings();
+  s.teams[0].gift_search = { enabled: true, gifts: [{ keyword: "Burn", tier: 1, name: "Ashes to Ashes" }] };
+  file.text = JSON.stringify(s);
+  render(<App />);
+  const summary = (await screen.findByText(zh["gift.title"], { selector: "summary" }));
+  expect(summary.closest("details")).not.toHaveAttribute("open");
+  expect(summary).toHaveTextContent(zh["sum.gifts"].replace("{n}", "1"));
+});

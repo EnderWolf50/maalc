@@ -13,6 +13,9 @@ export const loadThemePacks = (): Promise<ThemePacks> =>
 
 export const rootDir = (): Promise<string> => (tauri ? invoke("root_dir") : Promise.resolve("(browser)"));
 
+/** The Windows accent colour (#rrggbb); null in a plain browser or when Windows does not say, and the stylesheet keeps its default. */
+export const accentColor = (): Promise<string | null> => (tauri ? invoke<string | null>("accent_color") : Promise.resolve(null));
+
 export const loadSettings = (): Promise<string | null> =>
   tauri ? invoke("load_settings") : Promise.resolve(localStorage.getItem("settings.json"));
 
