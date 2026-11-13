@@ -75,11 +75,12 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
   const path = `teams/${i}`;
   const set = (patch: Partial<Team>) => update((d) => { Object.assign(d.teams[i], patch); });
   const main = teamKeyword(team.gift_list, s.gift_lists);
-  const [notice, setNotice] = useState<{ team: string; text: string } | null>(null); // its team's: a reset that ends after a switch shows nowhere
+  const [notice, setNotice] = useState<{ team: string; text: string } | null>(null); // shown on its own team only, also when the reset ends after a switch
   const [askReset, setAskReset] = useState(false); // Reset time records asks first, in the page
-  // Picking another team drops the question and the note; the editor stays mounted, so the panels left open stay open.
+  // Picking another team drops the question (its Cancel takes the focus); the editor stays mounted, so the panels left open
+  // stay open.
   const [shownTeam, setShownTeam] = useState(team.id);
-  if (shownTeam !== team.id) { setShownTeam(team.id); setAskReset(false); setNotice(null); }
+  if (shownTeam !== team.id) { setShownTeam(team.id); setAskReset(false); }
 
   // "plan id" or "" for custom. Switching to custom copies the plan's values (spec 04 section 9).
   const orderSource = "plan" in team.deployment_order ? team.deployment_order.plan : "";

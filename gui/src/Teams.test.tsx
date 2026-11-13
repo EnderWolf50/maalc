@@ -49,7 +49,7 @@ describe("Reset time records", () => {
     expect(file.resets).toEqual([]);
   });
 
-  test("the note of a reset stays with its team: the next team picked does not show it", async () => {
+  test("the note of a reset stays with its team: the next team picked does not show it, the way back does", async () => {
     const s = settings();
     s.teams.push({ ...newTeam(2, "T2"), id: "t2" });
     const r = renderEditor(<TeamsTab />, s);
@@ -58,6 +58,8 @@ describe("Reset time records", () => {
     await screen.findByText(zh.resetDone);
     await r.user.click(within(document.querySelector("aside")!).getByText("T2"));
     expect(screen.queryByText(zh.resetDone)).toBeNull();
+    await r.user.click(within(document.querySelector("aside")!).getByText("T1"));
+    expect(screen.getByText(zh.resetDone)).toBeTruthy();
   });
 
   test("asks in the page, not in a browser dialog; Cancel writes nothing, the confirm writes the marker", async () => {
