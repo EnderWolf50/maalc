@@ -5,7 +5,7 @@ import { TIERS, kwText } from "./KeywordGrid";
 import { teamKeyword } from "./gifts";
 import {
   MAX_GIFTS, SEARCH_GIFTS, SEARCH_TABS, SINNERS, defaultStarlight, freeName, newId, newTeam, starlightCost, teamEnum, toggleGift,
-  type GiftRef, type SearchGift, type Team,
+  type GiftRef, type SearchGift, type Settings, type Team,
 } from "./model";
 import { fill, type Key } from "./i18n";
 import { Row, Section, ToggleRow } from "./frame";
@@ -13,9 +13,28 @@ import { SinnerGrid, StarlightEditor } from "./Plans";
 import { SkillPanel } from "./SkillReplacement";
 import { Field, GLYPHS, Icon, Num, ReorderList, Select, useEditor, usePick, useUndo } from "./ui";
 
+/** Which team the next run plays, per difficulty the run can begin on: the first enabled team whose usage fits, as the bot's
+ * agent/team_queue.py pick_team takes it. A fixed difficulty begins on itself; auto begins HARD while weekly bonuses are left
+ * and NORMAL after, and a target past floor 5 is always HARD (spec 04, 自動難度). */
+export function nextTeams(s: Settings): { difficulty: "hard" | "normal"; id: string }[] {
+  const run = s.run.difficulty === "auto" ? (s.run.target_floor > 5 ? ["hard"] : ["hard", "normal"]) : [s.run.difficulty];
+  return (run as ("hard" | "normal")[]).flatMap((difficulty) => {
+    const team = s.teams.find((x) => x.enabled && (x.usage === "any" || x.usage === `${difficulty}_only`));
+    return team ? [{ difficulty, id: team.id }] : [];
+  });
+}
+
 export function TeamsTab() {
   const { s, update, t, tv, bad } = useEditor();
   const [i, setSel] = usePick("teams", s.teams);
+  const next = nextTeams(s);
+  // one difficulty, or one team for both: "下一局"; else each team says for which difficulty
+  const nextTag = (id: string) => {
+    const mine = next.filter((x) => x.id === id);
+    if (!mine.length) return null;
+    const text = mine.length === next.length ? t("queue.next") : `${t("queue.next")}・${mine.map((x) => tv("difficulty", x.difficulty)).join(t("gl.sep"))}`;
+    return <small className="next-tag">{text}</small>;
+  };
   const [undoNote, removeAt] = useUndo();
   const remove = () => removeAt(s.teams, i, (fn) => update((d) => fn(d.teams)), setSel);
   return (<>
@@ -35,6 +54,7 @@ export function TeamsTab() {
             render={(x) => (
               <span className={"queue-row" + (x.enabled ? "" : " off")}>
                 <span className="nm">{x.name || "—"}</span>
+                {nextTag(x.id)}
                 {!x.enabled && <small className="off-tag">{t("team.off")}</small>}
                 {x.usage !== "any" && <small className="off-tag">{tv("usage", x.usage)}</small>} <small>#{x.game_team}</small>
               </span>

@@ -322,6 +322,9 @@ aside ol.reorder li { counter-increment: queue; }
 .queue-row .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .queue-row small { margin-left: auto; font-variant-numeric: tabular-nums; }
 .queue-row.off .nm { color: var(--fg-2); }
+.queue-row .next-tag {
+  flex: none; padding: 0 6px; border-radius: 3px; background: var(--accent); color: var(--on-accent); font-size: 11px; line-height: 16px; font-weight: 600;
+}
 .queue-row .off-tag { flex: none; padding: 0 6px; border-radius: 3px; background: var(--card-2); box-shadow: inset 0 0 0 1px var(--stroke-2); font-size: 11px; line-height: 16px; }
 /* The same lists inside a panel: one card a row. */
 .rewards { max-width: 420px; }

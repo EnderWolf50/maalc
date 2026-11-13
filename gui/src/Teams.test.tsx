@@ -8,7 +8,7 @@ import { DEFAULT_LIST, mainKeyword } from "./gifts";
 import { TEXT, fill } from "./i18n";
 import { GIFT_KEYWORDS, defaultGorder, newSettings, newTeam, type GiftList, type Settings } from "./model";
 import { expectLines, renderEditor } from "./testing";
-import { TeamsTab } from "./Teams";
+import { TeamsTab, nextTeams } from "./Teams";
 import { useEditor } from "./ui";
 
 // The editor reads its settings through api.ts, which falls back to the browser's localStorage; the tests give it a file's text.
@@ -150,6 +150,38 @@ describe("deleting a team", () => {
     expect(r.settings().teams.map((x) => x.id)).toEqual(["c", "a"]);
     await r.user.click(screen.getByRole("button", { name: zh.undo }));
     expect(r.settings().teams.map((x) => x.id)).toEqual(["b", "c", "a"]);
+  });
+});
+
+describe("the next run's team (as agent/team_queue.py pick_team takes it)", () => {
+  const queue = (...teams: [string, boolean, string][]) =>
+    teams.map(([id, enabled, usage], n) => ({ ...newTeam(n + 1, `T${id}`), id, enabled, usage }));
+  const next = (difficulty: string, target: number, teams: ReturnType<typeof queue>) =>
+    nextTeams({ ...newSettings(), run: { ...newSettings().run, difficulty, target_floor: target }, teams })
+      .map((x) => `${x.difficulty}:${x.id}`);
+
+  test("a fixed difficulty: the first enabled team whose usage fits; a disabled one is skipped", () => {
+    const teams = queue(["a", false, "any"], ["b", true, "normal_only"], ["c", true, "any"]);
+    expect(next("hard", 5, teams)).toEqual(["hard:c"]);
+    expect(next("normal", 5, teams)).toEqual(["normal:b"]);
+  });
+
+  test("auto: one team for each difficulty a run can begin on; past floor 5 only HARD", () => {
+    const teams = queue(["a", true, "hard_only"], ["b", true, "any"]);
+    expect(next("auto", 5, teams)).toEqual(["hard:a", "normal:b"]);
+    expect(next("auto", 10, teams)).toEqual(["hard:a"]);
+  });
+
+  test("no team fits: none is next", () => {
+    expect(next("hard", 5, queue(["a", true, "normal_only"]))).toEqual([]);
+  });
+
+  test("the queue marks the next team", () => {
+    const teams = queue(["a", false, "any"], ["b", true, "any"]);
+    renderEditor(<TeamsTab />, { ...newSettings(), language: "zh_tw", run: { ...newSettings().run, difficulty: "hard" }, teams });
+    const rows = within(document.querySelector("aside")!).getAllByRole("listitem");
+    expect(rows[1]).toHaveTextContent(zh["queue.next"]);
+    expect(rows[0]).not.toHaveTextContent(zh["queue.next"]);
   });
 });
 
