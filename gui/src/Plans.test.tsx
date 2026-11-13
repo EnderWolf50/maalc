@@ -363,7 +363,9 @@ test("a grace card is a group named by its grace: a pick button says whether it 
   const pick = within(card).getByRole("button", { name: GRACES[0].zh });
   expect(pick).toHaveAttribute("aria-pressed");
   expect(pick).toHaveAccessibleDescription(new RegExp(GRACES[0].effects.base[0].replace(/^-/, "").replace(/[+()]/g, "\\$&")));
-  expect(within(card).getAllByRole("button").map((b) => b.getAttribute("aria-label"))).toEqual([GRACES[0].zh, `${GRACES[0].zh} +`, `${GRACES[0].zh} ++`]);
+  const [, plus, plus2] = within(card).getAllByRole("button");
+  expect(plus).toHaveAccessibleName(`${GRACES[0].zh} +`);
+  expect(plus2).toHaveAccessibleName(`${GRACES[0].zh} ++`);
 });
 
 test("a grace's + and ++ take Enter and Space from the keyboard, as a click, and the card's own keys still pick it", async () => {
@@ -379,4 +381,85 @@ test("a grace's + and ++ take Enter and Space from the keyboard, as a click, and
   screen.getByRole("button", { name: GRACES[1].zh }).focus();
   await r.user.keyboard("{Enter}");
   expect(levels()[1]).toBe("base");
+});
+
+// #719: a card reads as the game's does at each level. The expected titles, prices and yellow values are the game's own
+// (its starlight page at + and ++, captures of 2026-11-13), except where comparing with the base text marks a little
+// more or less than the game's hand-made marks: Chance Comet's "所選關鍵詞的" (the game: "所選關鍵詞").
+describe("a grace card at each level", () => {
+  /** The starlight tab on one plan whose grace n is at levels[n]; the others unselected. */
+  const show = (levels: Record<number, string>) => {
+    const plan = { id: "s1", name: "Plan", ...defaultStarlight() };
+    for (const [n, level] of Object.entries(levels)) plan.levels[+n - 1] = level;
+    return renderEditor(<StarlightTab />, settings({ starlight_plans: [plan] }));
+  };
+  const card = (n: number) => screen.getByRole("group", { name: GRACES[n - 1].zh });
+  const marked = (n: number) => [...card(n).querySelectorAll("mark")].map((m) => m.textContent);
+
+  test("at + the title gains a +, the price doubles, the + effects show and the values that changed are marked", () => {
+    show({ 1: "plus" });
+    expect(within(card(1)).getByText("起始之星+")).toBeInTheDocument();
+    // the pick button's name is the title it shows, so a voice command can say it (WCAG 2.5.3)
+    expect(within(card(1)).getByRole("button", { name: "起始之星+" })).toHaveAttribute("aria-pressed", "true");
+    expect(within(card(1)).getByText("★ 20")).toBeInTheDocument();
+    expect([...card(1).querySelectorAll("li")].map((li) => li.textContent)).toEqual(GRACES[0].effects.plus);
+    expect(marked(1)).toEqual(["+250"]);
+  });
+
+  test("at ++ a line the base lacks is marked whole, even beside a base line it resembles", () => {
+    show({ 7: "plus2" });
+    expect(within(card(7)).getByText("星雲的寵愛++")).toBeInTheDocument();
+    expect(within(card(7)).getByText("★ 120")).toBeInTheDocument();
+    expect(marked(7)).toEqual(["進入第6層時，人格等級 +3", "+9"]);
+  });
+
+  test("a line reworded around the same values stays plain, and its new detail lines are marked and indented", () => {
+    show({ 9: "plus" });
+    const lines = [...card(9).querySelectorAll("li")];
+    expect(lines[0]).toHaveTextContent("進入商店時，獲得1件合成·售賣專用飾品");
+    expect(lines[0].querySelector("mark")).toBeNull();
+    expect(lines.filter((li) => li.classList.contains("sub")).map((li) => li.textContent)).toEqual(["· 第5層及以下：1~3級", "· 第6層及以上：2~3級"]);
+    expect(marked(9)).toEqual(["· 第5層及以下：1~3級", "· 第6層及以上：2~3級", "與第5層", "所選關鍵詞的"]);
+  });
+
+  test("unselected and at base a card keeps its plain title, the base price and the base text; its pick button says which", () => {
+    show({ 2: "base" });
+    for (const n of [1, 2]) {
+      expect(within(card(n)).getByText(GRACES[n - 1].zh)).toBeInTheDocument();
+      expect(within(card(n)).getByText("★ 10")).toBeInTheDocument();
+      expect([...card(n).querySelectorAll("li")].map((li) => li.textContent)).toEqual(GRACES[n - 1].effects.base);
+      expect(card(n).querySelector("mark")).toBeNull();
+    }
+    expect(within(card(1)).getByRole("button", { name: GRACES[0].zh })).toHaveAttribute("aria-pressed", "false");
+    expect(within(card(2)).getByRole("button", { name: GRACES[1].zh })).toHaveAttribute("aria-pressed", "true");
+  });
+
+  test("the lit + or ++ says so, and the total is what the cards cost at their levels", () => {
+    show({ 1: "plus", 7: "plus2", 2: "base" });
+    const pressed = (n: number) => within(card(n)).getAllByRole("button").map((b) => b.getAttribute("aria-pressed"));
+    expect(pressed(1)).toEqual(["true", "true", "false"]);
+    expect(pressed(7)).toEqual(["true", "false", "true"]);
+    expect(pressed(2)).toEqual(["true", "false", "false"]);
+    expect(screen.getByText(zh["starlight.total"]).querySelector("b")).toHaveTextContent("★ 150"); // 20 + 120 + 10
+  });
+
+  test("every card shows its grace's icon from the game, as decoration the screen reader skips", () => {
+    show({});
+    GRACES.forEach((_, i) => {
+      const icon = card(i + 1).querySelector("img");
+      expect(icon?.getAttribute("src")).toMatch(new RegExp(`grace_icons/${i + 1}\\.webp$`));
+      expect(icon).toHaveAttribute("alt", "");
+    });
+  });
+
+  test("Select All and Enhance All + / ++ are lit while every card is selected, or at that level", () => {
+    show(Object.fromEntries(GRACES.map((_, i) => [i + 1, "plus"])));
+    expect(screen.getByRole("button", { name: zh["starlight.selectAll"] })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: `${zh["starlight.enhanceAll"]} +` })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: `${zh["starlight.enhanceAll"]} ++` })).toHaveAttribute("aria-pressed", "false");
+    cleanup();
+    show({ 1: "plus" });
+    expect(screen.getByRole("button", { name: zh["starlight.selectAll"] })).toHaveAttribute("aria-pressed", "false");
+    expect(screen.getByRole("button", { name: `${zh["starlight.enhanceAll"]} +` })).toHaveAttribute("aria-pressed", "false");
+  });
 });
