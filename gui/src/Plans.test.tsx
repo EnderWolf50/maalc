@@ -326,7 +326,9 @@ test("a grace card is a group named by its grace: a pick button says whether it 
   const pick = within(card).getByRole("button", { name: GRACES[0].zh });
   expect(pick).toHaveAttribute("aria-pressed");
   expect(pick).toHaveAccessibleDescription(new RegExp(GRACES[0].effects.base[0].replace(/^-/, "").replace(/[+()]/g, "\\$&")));
-  expect(within(card).getAllByRole("button").map((b) => b.getAttribute("aria-label"))).toEqual([GRACES[0].zh, `${GRACES[0].zh} +`, `${GRACES[0].zh} ++`]);
+  const [, plus, plus2] = within(card).getAllByRole("button");
+  expect(plus).toHaveAccessibleName(`${GRACES[0].zh} +`);
+  expect(plus2).toHaveAccessibleName(`${GRACES[0].zh} ++`);
 });
 
 test("a grace's + and ++ take Enter and Space from the keyboard, as a click, and the card's own keys still pick it", async () => {
@@ -345,7 +347,8 @@ test("a grace's + and ++ take Enter and Space from the keyboard, as a click, and
 });
 
 // #719: a card reads as the game's does at each level. The expected titles, prices and yellow values are the game's own
-// (its starlight page at + and ++, captures of 2026-11-13).
+// (its starlight page at + and ++, captures of 2026-11-13), except where comparing with the base text marks a little
+// more or less than the game's hand-made marks: Chance Comet's "所選關鍵詞的" (the game: "所選關鍵詞").
 describe("a grace card at each level", () => {
   /** The starlight tab on one plan whose grace n is at levels[n]; the others unselected. */
   const show = (levels: Record<number, string>) => {
@@ -359,6 +362,8 @@ describe("a grace card at each level", () => {
   test("at + the title gains a +, the price doubles, the + effects show and the values that changed are marked", () => {
     show({ 1: "plus" });
     expect(within(card(1)).getByText("起始之星+")).toBeInTheDocument();
+    // the pick button's name is the title it shows, so a voice command can say it (WCAG 2.5.3)
+    expect(within(card(1)).getByRole("button", { name: "起始之星+" })).toHaveAttribute("aria-pressed", "true");
     expect(within(card(1)).getByText("★ 20")).toBeInTheDocument();
     expect([...card(1).querySelectorAll("li")].map((li) => li.textContent)).toEqual(GRACES[0].effects.plus);
     expect(marked(1)).toEqual(["+250"]);

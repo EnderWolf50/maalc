@@ -28,12 +28,12 @@ def gift_ids() -> list[int]:
     return [g["id"] for g in search] + [g["id"] for g in recipes["gifts"] + recipes["materials"] + recipes["extra_gifts"] + recipes["vestiges"]]
 
 
-def webp(sprite) -> bytes:
-    """The sprite fitted into SIZE x SIZE, alpha kept."""
+def webp(sprite, size: int = SIZE, quality: int = QUALITY) -> bytes:
+    """The sprite fitted into size x size, alpha kept (tools/grace_icons.py uses it too)."""
     im = sprite.convert("RGBA")
-    im.thumbnail((SIZE, SIZE))
+    im.thumbnail((size, size))
     buf = io.BytesIO()
-    im.save(buf, "WEBP", quality=QUALITY, method=6)
+    im.save(buf, "WEBP", quality=quality, method=6)
     return buf.getvalue()
 
 

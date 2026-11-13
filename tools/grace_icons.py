@@ -8,11 +8,11 @@ index `.local/unpack/out/sprite-index.tsv` (tools/game_data.py bundle_index); wh
 first run reads them all (~12 GB): run it as a `bench` ticket then (tools/live/queue.py, docs/spec/05-game-data.md section 8).
 """
 
-import io
 import json
 from pathlib import Path
 
 from game_data import INDEX, UNITY_VERSION, bundle_index
+from gift_icons import webp
 from local_dir import local_dir
 
 REPO = Path(__file__).resolve().parent.parent
@@ -52,15 +52,6 @@ def sprites(unpack: Path, ids: list[str]) -> dict:
     return found
 
 
-def webp(image) -> bytes:
-    """The sprite fitted into SIZE x SIZE, alpha kept."""
-    im = image.convert("RGBA")
-    im.thumbnail((SIZE, SIZE))
-    buf = io.BytesIO()
-    im.save(buf, "WEBP", quality=QUALITY, method=6)
-    return buf.getvalue()
-
-
 def main():
     unpack = local_dir("unpack")
     ids = grace_ids(unpack)
@@ -71,7 +62,7 @@ def main():
     OUT.mkdir(exist_ok=True)
     files = {OUT / f"{n}.webp" for n in range(1, len(ids) + 1)}
     for n, i in enumerate(ids, 1):
-        (OUT / f"{n}.webp").write_bytes(webp(found[i]))
+        (OUT / f"{n}.webp").write_bytes(webp(found[i], SIZE, QUALITY))
     for stale in set(OUT.glob("*.webp")) - files:
         stale.unlink()
     total = sum(f.stat().st_size for f in files)

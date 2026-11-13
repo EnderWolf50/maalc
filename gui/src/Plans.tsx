@@ -2,7 +2,8 @@
 import { Fragment, useEffect, useId, useRef, useState, type DragEvent, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
 import { loadThemePacks } from "./api";
 import {
-  EVENT_MODES, GRACES, LEVELS, MODE_KEYS, SINNERS, buyOrder, clickCard, clickEnhance, defaultStarlight, enhanceAll, floorBadges, freeName,
+  EVENT_MODES, GRACES, LEVELS, MODE_KEYS, SINNERS, allEnhanced, allSelected, buyOrder, clickCard, clickEnhance, defaultStarlight, enhanceAll,
+  floorBadges, freeName,
   gracePrice,
   lanesOf, lineAt, newId, newPackPlan, onFloor, parseThemePacks, selectAll, starlightCost, toggleSinner, weightOf,
   type DeploymentPlan, type Order, type PackMode, type PackPlanValues, type StarlightPlan, type StarlightValues, type ThemePackPlan,
@@ -64,8 +65,8 @@ export function StarlightEditor({ value, onChange, path }: {
               {rank > 0 && <span className="rank" id={`${id}-rank-${n}`}>{rank}</span>}
               <span className="price" id={`${id}-price-${n}`}>★ {gracePrice(n, level === "none" ? "base" : level)}</span>
               <div className="head">
-                <img className="icon" src={GRACE_ICONS[`./grace_icons/${n}.webp`]} alt="" />
-                <button type="button" className="name" disabled={!onChange} aria-pressed={rank > 0} aria-label={graceName(g, zh)}
+                <img className="icon" src={graceIconUrl(n)} alt="" />
+                <button type="button" className="name" disabled={!onChange} aria-pressed={rank > 0}
                   aria-describedby={[rank > 0 && `${id}-rank-${n}`, `${id}-price-${n}`, zh && `${id}-fx-${n}`].filter(Boolean).join(" ")}>
                   <span className="title">{graceName(g, zh)}{plusOf(level)}</span>
                 </button>
@@ -94,11 +95,11 @@ export function StarlightEditor({ value, onChange, path }: {
       <div className="grace-side">
         {onChange && <>
           {/* lit while a second click would undo them: every card selected, every card at + or at ++ */}
-          <button type="button" aria-pressed={!value.levels.includes("none")} onClick={() => set(selectAll)}>{t("starlight.selectAll")}</button>
+          <button type="button" aria-pressed={allSelected(value)} onClick={() => set(selectAll)}>{t("starlight.selectAll")}</button>
           <span className="muted">{t("starlight.enhanceAll")}</span>
           {([1, 2] as const).map((plus) => (
             <button type="button" key={plus} className="boost" aria-label={`${t("starlight.enhanceAll")} ${"+".repeat(plus)}`}
-              aria-pressed={value.levels.every((l) => l === LEVELS[plus + 1])} onClick={() => set((v) => enhanceAll(v, plus))}>
+              aria-pressed={allEnhanced(value, plus)} onClick={() => set((v) => enhanceAll(v, plus))}>
               {"+".repeat(plus)}
             </button>
           ))}
@@ -130,8 +131,9 @@ function PlanUsers({ planKey, id }: { planKey: PlanKey; id: string }) {
 
 /** A grace's name in the GUI's language: the Chinese one when the data has it. */
 const graceName = (g: Grace, zh: boolean) => (zh && g.zh ? g.zh : g.en);
-/** The game's icon of each grace, ./grace_icons/<n>.webp (tools/grace_icons.py). */
 const GRACE_ICONS = import.meta.glob<string>("./grace_icons/*.webp", { eager: true, query: "?url", import: "default" });
+/** The game's icon of grace n (1-10): ./grace_icons/<n>.webp (tools/grace_icons.py). */
+const graceIconUrl = (n: number): string | undefined => GRACE_ICONS[`./grace_icons/${n}.webp`];
 /** What the game adds to a grace's title at a level: "+" at +, "++" at ++, nothing below. */
 const plusOf = (level: string) => "+".repeat(Math.max(0, LEVELS.indexOf(level) - 1));
 
