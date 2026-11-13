@@ -6,6 +6,7 @@ import pytest
 import actions
 import test_actions
 from test_actions import live_shop, sell_page, SELLER, cells_read, with_ids
+from agent_patch import patch_all
 
 clock, context = test_actions.clock, test_actions.context  # its fixtures
 CELLS = [{"i": 10 + k, "x": x, "y": y} for k, (x, y) in enumerate(actions.FUSE_CELLS[:3])]
@@ -17,13 +18,13 @@ def placing(context, monkeypatch, reads, out=False):
     i, the log lines)."""
     lines, tapped, now = [], [], {"cell": None}
     reads = iter(reads)
-    monkeypatch.setattr(actions, "log", lines.append)
-    monkeypatch.setattr(actions, "cell_at", lambda context, grid, c: now.update(cell=c["i"]) or (c["x"], c["y"]))
-    monkeypatch.setattr(actions, "page_guard", lambda context, home, image=None: None)
-    monkeypatch.setattr(actions, "tap_moved", lambda context, x, y, timeout=0.5: tapped.append(now["cell"]))
-    monkeypatch.setattr(actions, "still", lambda context, timeout=2.0, **k: None)
-    monkeypatch.setattr(actions, "screen", lambda context: (len(CELLS) if out else 0, out))
-    monkeypatch.setattr(actions, "close_tooltip", lambda context, page, force=False: next(reads))
+    patch_all(monkeypatch, "log", lines.append)
+    patch_all(monkeypatch, "cell_at", lambda context, grid, c: now.update(cell=c["i"]) or (c["x"], c["y"]))
+    patch_all(monkeypatch, "page_guard", lambda context, home, image=None: None)
+    patch_all(monkeypatch, "tap_moved", lambda context, x, y, timeout=0.5: tapped.append(now["cell"]))
+    patch_all(monkeypatch, "still", lambda context, timeout=2.0, **k: None)
+    patch_all(monkeypatch, "screen", lambda context: (len(CELLS) if out else 0, out))
+    patch_all(monkeypatch, "close_tooltip", lambda context, page, force=False: next(reads))
     monkeypatch.setattr(actions.shop, "placed", lambda image, n: image[0])
     monkeypatch.setattr(actions.shop, "picked", lambda image, x, y, bottom=720: image[1])
     done = actions.Shop.place(context, CELLS, 3, {"page": "fuse", "at": 0}, out=out)
@@ -114,8 +115,8 @@ def selling(context, monkeypatch, lost, sell_lost=False):
         return shown
     taps = live_shop(context, reads_now)
     cells_read(monkeypatch, *with_ids([("Bleed",)]))
-    monkeypatch.setattr(actions, "cell_at", lambda context, grid, c: (c["x"], c["y"]))  # this page's screen is no grid
+    patch_all(monkeypatch, "cell_at", lambda context, grid, c: (c["x"], c["y"]))  # this page's screen is no grid
     logs = []
-    monkeypatch.setattr(actions, "log", logs.append)
+    patch_all(monkeypatch, "log", logs.append)
     actions.Shop.sell(context, SELLER, {"wanted": 145, "sold": False})
     return taps, logs

@@ -9,6 +9,7 @@ import pytest
 import actions
 import test_actions
 from test_actions import Choices
+from agent_patch import patch_all
 
 clock, context = test_actions.clock, test_actions.context  # its fixtures
 
@@ -179,7 +180,7 @@ def test_a_new_lit_button_whose_label_is_not_read_whole_is_handed_back(context, 
 def connecting(context, monkeypatch, shots):
     """CONNECTING over event_text's screenshots n in shots, the Event node reading through it (as the title's nodes
     read under RetryCountdown.png); page_guard as it runs."""
-    monkeypatch.setattr(actions, "page_guard", test_actions.REAL_GUARD)
+    patch_all(monkeypatch, "page_guard", test_actions.REAL_GUARD)
     inner = context.run_recognition.side_effect
 
     def read(name, image, override=None):
@@ -313,7 +314,7 @@ class Outro:
 def test_gift_windows_after_the_last_continue_are_tapped_as_fast_as_one_alone(context, clock, monkeypatch, lead):
     # #309 live: a lone gift's window, closed by the next corner tap, was up 0.27-0.33 s; the second of two waited
     # 1.7-2.5 s for GiftGet.
-    monkeypatch.setattr(actions, "page_guard", test_actions.REAL_GUARD)
+    patch_all(monkeypatch, "page_guard", test_actions.REAL_GUARD)
     outro = Outro(context, 2, lead)
     assert actions.Event().run(context, None) is True
     assert len(outro.shown_at) == 2 and len(outro.tapped_at) == 2
@@ -324,7 +325,7 @@ def test_gift_windows_after_the_last_continue_are_tapped_as_fast_as_one_alone(co
 @pytest.mark.parametrize("windows, lead", [(0, 0.0)] + [(n, lead) for n in (1, 2) for lead in LEADS])
 def test_an_event_hands_back_once_the_map_it_ends_on_holds_still(context, clock, monkeypatch, windows, lead, lever):
     # #511 live: Event looked at the map 1 s more before it handed back, 1.4-1.6 s after its last corner tap.
-    monkeypatch.setattr(actions, "page_guard", test_actions.REAL_GUARD)
+    patch_all(monkeypatch, "page_guard", test_actions.REAL_GUARD)
     outro = Outro(context, windows, lead, lever)
     assert actions.Event().run(context, None) is True
     handed_back = outro.now()
@@ -338,7 +339,7 @@ def wanting_table(monkeypatch, *options):
     table = [{"key": test_actions.TABLE[0]["key"], "options": [
         {"text": t, "hint": h, "kind": k, "gifts": [["Burn", how] for _, how in g], "gift_ids": [[i, how] for i, how in g]}
         for t, h, k, g in options]}]
-    monkeypatch.setattr(actions, "event_table", lambda: table)
+    patch_all(monkeypatch, "event_table", lambda: table)
     return [(t, h) for t, h, _, _ in options]
 
 
@@ -361,7 +362,7 @@ def test_the_want_is_asked_with_the_gifts_the_run_holds(context, monkeypatch, he
     if held is not None:
         actions.RUN["owned"] = held
     asked = []
-    monkeypatch.setattr(actions, "want_kind", lambda gift_list, i, packs, held: asked.append((packs, list(held))) or "want")
+    patch_all(monkeypatch, "want_kind", lambda gift_list, i, packs, held: asked.append((packs, list(held))) or "want")
     options = wanting_table(monkeypatch, ("Reach out.", "Select to gain a Burn E.G.O Gift", "direct", [(9001, "direct")]))
     Choices(context, monkeypatch, options, test_actions.DOLL)
     actions.Event().run(context, None)

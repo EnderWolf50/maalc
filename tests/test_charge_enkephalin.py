@@ -18,6 +18,7 @@ import numpy as np
 import pytest
 from daily_child import ROOT, bind, game_class, interface as interface_json, load, result, run_child, screen
 from test_settings import VALID
+from agent_patch import patch_all, rebind
 
 if __name__ != "__main__":  # as test_luxcavation.py: the fixtures are test_actions's
     import actions
@@ -92,7 +93,7 @@ def child():
         "window_stays": (10, {"stays": True, "bought": 4}),
         "boxes_tab": (2, {"tab": "boxes"}),  # the same Recharge prompt, no Daily Count
     }.items():
-        actions.ROOT = settings(count)  # the settings, and the stop procedure's evidence and log
+        rebind("ROOT", settings(count))  # the settings, and the stop procedure's evidence and log
         game.set(**state)
         out[scenario] = result(tasker.post_task("ChargeEnkephalin", {"ChargeHub": {"timeout": 25000}}).wait().get(), game, actions)
     for shown in ("modules", "lunacy0"):  # the prompt: the Modules tab's own line is not it
@@ -154,10 +155,10 @@ class Tab:
     def __init__(self, context, monkeypatch, used=0, price=None, confirm_works=True, step=1, readable=True):
         self.used, self.price, self.confirm_works, self.step, self.readable = used, price, confirm_works, step, readable
         self.taps, self.stops = [], []
-        monkeypatch.setattr(actions, "TASK", {"runs": 0, "done": None})  # the panel's state, gone after the test
-        monkeypatch.setattr(actions, "tap", self.tap)
-        monkeypatch.setattr(actions, "ocr_texts", self.ocr)
-        monkeypatch.setattr(actions, "stop", lambda context, reason, **kw: self.stops.append(reason) or False)
+        patch_all(monkeypatch, "TASK", {"runs": 0, "done": None})  # the panel's state, gone after the test
+        patch_all(monkeypatch, "tap", self.tap)
+        patch_all(monkeypatch, "ocr_texts", self.ocr)
+        patch_all(monkeypatch, "stop", lambda context, reason, **kw: self.stops.append(reason) or False)
         context.run_recognition.side_effect = lambda node, image: SimpleNamespace(hit=self.readable) if node == "ChargePrompt" else None
 
     def tap(self, context, x, y, wait=1.0):

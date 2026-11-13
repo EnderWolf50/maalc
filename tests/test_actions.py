@@ -21,6 +21,7 @@ import recovery
 from settings import gift_tables
 from test_settings import DEFAULT_SKILLS
 from test_shop import OLD_DOLL_SHOP
+from agent_patch import patch_all
 
 REAL_GUARD = actions.page_guard
 SCREENS = Path(__file__).resolve().parent / "screens"
@@ -47,9 +48,9 @@ def clock(monkeypatch):
 @pytest.fixture
 def context(clock, monkeypatch, tmp_path):
     # The action's page stays up: #118's guard is driven on its own (page_until).
-    monkeypatch.setattr(actions, "ROOT", tmp_path)  # what the agent keeps under logs/ (a Cost miss's crop) stays out of the repo
-    monkeypatch.setattr(actions, "page_guard", lambda context, home, image=None: actions.screen(context) if image is None else image)
-    monkeypatch.setattr(actions, "FEATURE_MATCH", set())  # fakes read every roi in screen coordinates: no cut-outs
+    patch_all(monkeypatch, "ROOT", tmp_path)  # what the agent keeps under logs/ (a Cost miss's crop) stays out of the repo
+    patch_all(monkeypatch, "page_guard", lambda context, home, image=None: actions.screen(context) if image is None else image)
+    patch_all(monkeypatch, "FEATURE_MATCH", set())  # fakes read every roi in screen coordinates: no cut-outs
     ctx = MagicMock()
     ctx.tasker.controller.post_screencap.return_value.wait.return_value.get.return_value = np.zeros((720, 1280, 3), np.uint8)
     ctx.run_recognition.return_value = None  # OCR reads nothing, no node hits
@@ -91,8 +92,8 @@ class TimedGame:
         self.reads, self.level, self.answers, self.taps, self.at, self.due = \
             dict(reads), level, {k: list(v) for k, v in answers.items()}, [], [], []
         self.t0 = actions.time.monotonic()
-        monkeypatch.setattr(actions, "tap", self.tap)
-        monkeypatch.setattr(actions, "text", lambda context, image, roi, only_rec=False: self.now().get(tuple(roi), ""))
+        patch_all(monkeypatch, "tap", self.tap)
+        patch_all(monkeypatch, "text", lambda context, image, roi, only_rec=False: self.now().get(tuple(roi), ""))
         context.tasker.controller.post_screencap.return_value.wait.return_value.get.side_effect = self.shot
 
     def now(self):
@@ -156,8 +157,8 @@ def test_still_wants_its_runs_of_alike_screenshots_in_a_row(context, clock):
 def test_a_formation_page_still_fading_in_is_read_once_it_is_still(context, monkeypatch):
     # Live (#58): read mid-fade, Total Participants gave 3 alive of 12.
     actions.RUN.update(team={"min_alive": 5, "name": "t"}, settings={"run": {"after_retries": "stop"}})
-    monkeypatch.setattr(actions, "stop", lambda context, reason, line=None: False)
-    monkeypatch.setattr(actions, "tap_shown", lambda *a, **k: None)
+    patch_all(monkeypatch, "stop", lambda context, reason, line=None: False)
+    patch_all(monkeypatch, "tap_shown", lambda *a, **k: None)
     monkeypatch.setattr(actions.run_start, "resolve_plan", lambda *a: [])  # ends the action after the count
     screens(context, [60, 120, 120])
     reads_by_image = {60: "3/3", 120: "12/12"}
@@ -175,8 +176,8 @@ def few_alive(context, monkeypatch, after_retries, min_alive):
     """A formation page with 4 of 12 alive; the stops and taps it leads to."""
     actions.RUN.update(team={"min_alive": min_alive, "name": "t"}, settings={"run": {"after_retries": after_retries}})
     stops, taps = [], []
-    monkeypatch.setattr(actions, "stop", lambda context, reason, line=None: stops.append(reason) or False)
-    monkeypatch.setattr(actions, "tap", lambda context, x, y, wait=1.0: taps.append((x, y)))
+    patch_all(monkeypatch, "stop", lambda context, reason, line=None: stops.append(reason) or False)
+    patch_all(monkeypatch, "tap", lambda context, x, y, wait=1.0: taps.append((x, y)))
     monkeypatch.setattr(actions.run_start, "resolve_plan", lambda *a: [])  # ends the action after the count
     reads(context, {tuple(actions.PARTICIPANTS): [("4/4", (1125, 500, 60, 30))],
                     tuple(actions.DETAILS_BUTTON): [("Details", (0, 0, 10, 10))]})
@@ -334,7 +335,7 @@ def test_a_map_not_readable_yet_is_read_again_before_any_tap(context, monkeypatc
             return SimpleNamespace(hit=True, box=[446, 248, 45, 75]) if len(looks) > 1 else None
         return SimpleNamespace(hit=True, box=[0, 0, 26, 24]) if name in ("MapLinkMid", "MapNodeCost") else None
     context.run_recognition.side_effect = run_recognition
-    monkeypatch.setattr(actions, "map_weights", lambda context: {"battle": 2, "unknown": 9})
+    patch_all(monkeypatch, "map_weights", lambda context: {"battle": 2, "unknown": 9})
     actions.RUN["map_entered"] = True  # a node entered before: the bus is not tried first
     actions.RouteMap().run(context, None)
     first = context.tasker.controller.post_click.call_args_list[0].args
@@ -405,7 +406,7 @@ def test_a_node_with_its_badges_under_the_resource_bar_is_no_event_for_showing_n
 
 def test_after_a_restart_or_recovery_the_bus_is_tapped_first(context, monkeypatch):
     # #88: L3 or Accept results leave the bus on a node not entered yet, whose panel its tap opens.
-    monkeypatch.setattr(actions, "map_weights", lambda context: {"battle": 2, "unknown": 9})
+    patch_all(monkeypatch, "map_weights", lambda context: {"battle": 2, "unknown": 9})
     bus_at(context, *actions.BUS_HOME, linked=("MapLinkMid", "MapNodeCost"))
     actions.RouteMap().run(context, None)
     bx, by = actions.BUS_HOME
@@ -415,7 +416,7 @@ def test_after_a_restart_or_recovery_the_bus_is_tapped_first(context, monkeypatc
 def test_a_bus_tap_on_a_node_already_entered_gives_up_quickly_for_the_planned_slot(context, clock, monkeypatch):
     # #130 (live 2026-10-18 07:04:47): after an agent restart the first tap, on the bus, showed no panel
     # (its node was entered) and waited the full 2 s before the planned slot; a panel shows within about 0.5 s.
-    monkeypatch.setattr(actions, "map_weights", lambda context: {"battle": 2, "unknown": 9})
+    patch_all(monkeypatch, "map_weights", lambda context: {"battle": 2, "unknown": 9})
     bus_at(context, *actions.BUS_HOME, linked=("MapLinkMid", "MapNodeCost"))
     ctl, at = context.tasker.controller, []
     ctl.post_click.side_effect = lambda x, y: at.append(((x, y), actions.time.monotonic())) or DEFAULT
@@ -428,7 +429,7 @@ def test_a_bus_tap_on_a_node_already_entered_gives_up_quickly_for_the_planned_sl
 
 def test_a_bus_dragged_off_the_screen_is_found_by_dragging_the_map(context, monkeypatch):
     # #61, live 2026-10-16: the map dragged by hand, the bus off the top; three blind rounds, L1, then L2.
-    monkeypatch.setattr(actions, "map_weights", lambda context: {"battle": 2, "unknown": 9})
+    patch_all(monkeypatch, "map_weights", lambda context: {"battle": 2, "unknown": 9})
     actions.RUN["map_entered"] = True
     ctl = context.tasker.controller
 
@@ -444,7 +445,7 @@ def test_a_bus_dragged_off_the_screen_is_found_by_dragging_the_map(context, monk
 
 def test_a_bus_not_found_even_by_dragging_goes_straight_to_l2(context, monkeypatch):
     # #61: To Window and Resume put the map back; L1 (the back key) does nothing for a map.
-    monkeypatch.setattr(actions, "map_weights", lambda context: {"battle": 2, "unknown": 9})
+    patch_all(monkeypatch, "map_weights", lambda context: {"battle": 2, "unknown": 9})
     actions.RUN["map_entered"] = True
     actions.RouteMap().run(context, None)
     assert context.tasker.controller.post_click.called  # the fallback taps still go first
@@ -524,7 +525,7 @@ WEIGHTS = {"event": 1, "battle": 2, "focused": 4, "unknown": 9}
 def test_the_bus_is_dragged_to_the_far_left_and_the_cheapest_path_over_four_columns_is_taken(context, monkeypatch):
     # The user (#111): event -> battle -> battle -> Focused (9) loses to battle -> battle -> battle -> event (7),
     # which only the fourth column tells apart; with the bus at rest it is off screen.
-    monkeypatch.setattr(actions, "map_weights", lambda context: WEIGHTS)
+    patch_all(monkeypatch, "map_weights", lambda context: WEIGHTS)
     nodes = {(1, "up"): {"event"}, (1, "down"): {"cost"}, (2, "up"): {"cost"}, (2, "down"): {"cost"},
              (3, "up"): {"cost"}, (3, "down"): {"cost"}, (4, "up"): {"cost", "gift"}, (4, "down"): {"event"}}
     links = [((c, r), (c + 1, r)) for c in (1, 2, 3) for r in ("up", "down")]
@@ -538,7 +539,7 @@ def test_the_bus_is_dragged_to_the_far_left_and_the_cheapest_path_over_four_colu
 
 def test_two_columns_on_a_hard_floor_take_the_cheapest_path(context, monkeypatch):
     # Hard mode shows two columns; nothing past them is lit to read.
-    monkeypatch.setattr(actions, "map_weights", lambda context: WEIGHTS)
+    patch_all(monkeypatch, "map_weights", lambda context: WEIGHTS)
     nodes = {(1, "up"): {"event"}, (1, "down"): {"cost"}, (2, "up"): {"cost", "gift"}, (2, "down"): {"event"}}
     map_world(context, nodes, [((1, "up"), (2, "up")), ((1, "down"), (2, "down"))], bus_x=actions.BUS_HOME[0])
     actions.RouteMap().run(context, None)
@@ -550,7 +551,7 @@ def test_two_columns_on_a_hard_floor_take_the_cheapest_path(context, monkeypatch
 
 def test_a_full_read_plans_the_path_and_the_next_step_follows_it_without_a_drag(context, monkeypatch):
     # The user (#111): once the floor's nodes are read, follow the path decided on.
-    monkeypatch.setattr(actions, "map_weights", lambda context: WEIGHTS)
+    patch_all(monkeypatch, "map_weights", lambda context: WEIGHTS)
     actions.RUN["floor"] = 1
     nodes = {(1, "up"): {"event"}, (1, "down"): {"cost"}, (2, "up"): {"cost"}, (2, "mid"): {"cost"},
              (3, "up"): {"cost", "gift"}, (3, "mid"): {"event"}}
@@ -570,7 +571,7 @@ def test_a_full_read_plans_the_path_and_the_next_step_follows_it_without_a_drag(
 
 def test_a_planned_slot_of_another_type_means_the_map_is_read_again(context, monkeypatch):
     # The bus not where the plan put it, or a node misread from afar: read again rather than follow.
-    monkeypatch.setattr(actions, "map_weights", lambda context: WEIGHTS)
+    patch_all(monkeypatch, "map_weights", lambda context: WEIGHTS)
     actions.RUN.update(floor=1, map_plan={"floor": 1, "steps": [("mid", "event")]})
     map_world(context, {(1, "mid"): {"cost"}}, [], bus_x=446)
     actions.RouteMap().run(context, None)
@@ -579,7 +580,7 @@ def test_a_planned_slot_of_another_type_means_the_map_is_read_again(context, mon
 
 
 def test_a_planned_slot_not_linked_to_the_bus_means_the_map_is_read_again(context, monkeypatch):
-    monkeypatch.setattr(actions, "map_weights", lambda context: WEIGHTS)
+    patch_all(monkeypatch, "map_weights", lambda context: WEIGHTS)
     actions.RUN.update(floor=1, map_plan={"floor": 1, "steps": [("up", "battle")]})
     map_world(context, {(1, "mid"): {"event"}}, [], bus_x=446)
     actions.RouteMap().run(context, None)
@@ -588,7 +589,7 @@ def test_a_planned_slot_not_linked_to_the_bus_means_the_map_is_read_again(contex
 
 
 def test_a_plan_from_the_last_floor_is_not_followed(context, monkeypatch):
-    monkeypatch.setattr(actions, "map_weights", lambda context: WEIGHTS)
+    patch_all(monkeypatch, "map_weights", lambda context: WEIGHTS)
     actions.RUN.update(floor=2, map_plan={"floor": 1, "steps": [("mid", "battle")]})
     map_world(context, {(1, "mid"): {"cost"}}, [], bus_x=446)
     actions.RouteMap().run(context, None)
@@ -748,7 +749,7 @@ def test_a_held_finger_lifts_on_an_error(context, clock):
 
 def test_a_turn_started_by_play_turn_is_held_until_the_next_turn(context, monkeypatch):
     monkeypatch.setattr(actions.battle, "disc_lit", lambda image, x, y: True)
-    monkeypatch.setattr(actions, "turn_started", lambda context, image: True)
+    patch_all(monkeypatch, "turn_started", lambda context, image: True)
     hits(context, "BattleTurn")
     actions.PlayTurn().run(context, SimpleNamespace(box=[984, 531, 40, 20]))
     assert [t for t, _ in touches(context)] == ["click", "down", "up"]  # START, then the hold
@@ -756,7 +757,7 @@ def test_a_turn_started_by_play_turn_is_held_until_the_next_turn(context, monkey
 
 def test_a_turn_that_did_not_start_is_not_held(context, monkeypatch):
     monkeypatch.setattr(actions.battle, "disc_lit", lambda image, x, y: True)
-    monkeypatch.setattr(actions, "turn_started", lambda context, image: False)
+    patch_all(monkeypatch, "turn_started", lambda context, image: False)
     actions.PlayTurn().run(context, SimpleNamespace(box=[984, 531, 40, 20]))
     assert "down" not in [t for t, _ in touches(context)]
 
@@ -803,7 +804,7 @@ def grid_read(monkeypatch, readings):
                  "id": t[1] if len(t) > 1 else None, "score": 0.9 if len(t) > 1 else 0.0}
                 for i, (x, y) in enumerate(cells) if places[(x, y)] < len(readings)
                 for k, *t in [readings[places[(x, y)]]]]
-    monkeypatch.setattr(actions, "read_cells", read_cells)
+    patch_all(monkeypatch, "read_cells", read_cells)
 
 
 FUSE_PAGE = {tuple(actions.DIALOG_TITLE): [("Fuse E.G.O Gift", (500, 100, 200, 40))],
@@ -1125,7 +1126,7 @@ def test_a_sale_confirms_the_sell_dialog(context, monkeypatch):
     taps = live_shop(context, sell_page(lambda taps: actions.DIALOG_CONFIRM in taps))
     cells_read(monkeypatch, *with_ids([("Bleed",)]))
     logs = []
-    monkeypatch.setattr(actions, "log", logs.append)
+    patch_all(monkeypatch, "log", logs.append)
     assert actions.Shop.sell(context, SELLER, {"wanted": 145, "sold": False})
     assert taps.index(actions.SELL_CELLS[0]) < taps.index(actions.PAGE_OK) < taps.index(actions.DIALOG_CONFIRM)
     assert "shop: sold cell 0 for 95: 51 -> 146 Cost" in logs
@@ -1136,7 +1137,7 @@ def test_the_cost_preview_of_a_picked_cell_is_not_a_sale(context, monkeypatch):
     live_shop(context, sell_page(lambda taps: False))
     cells_read(monkeypatch, *with_ids([("Bleed",)]))
     logs = []
-    monkeypatch.setattr(actions, "log", logs.append)
+    patch_all(monkeypatch, "log", logs.append)
     actions.Shop.sell(context, SELLER, {"wanted": 145, "sold": False})
     assert any("not sold" in line for line in logs)
     assert not any("sold cell" in line for line in logs)
@@ -1161,7 +1162,7 @@ def test_a_keyword_refresh_checks_the_page_before_its_first_tap(context, clock, 
     # #118 (ADR 0007): the shop gone after its Cost was read, the refresh's first tap does not go out.
     def gone(context, home, image=None):
         raise actions.PageGone(home)
-    monkeypatch.setattr(actions, "page_guard", gone)
+    patch_all(monkeypatch, "page_guard", gone)
     taps = live_shop(context, lambda taps: {tuple(actions.SHOP_COST): [("500", (560, 120, 60, 30))],
                                             tuple(actions.REFRESH["normal"][1]): [("100", (970, 145, 40, 20))],
                                             tuple(actions.REFRESH["keyword"][1]): [("90", (1110, 145, 40, 20))]})
@@ -1227,7 +1228,7 @@ def test_a_team_without_white_gossypium_does_not_buy_it(context, monkeypatch):
 def gift_page(context, monkeypatch, names, slots=1):
     """A gift choice page with a Bleed card per name, Select 0/`slots`."""
     taps = []
-    monkeypatch.setattr(actions, "tap", lambda context, x, y, wait=1.0: taps.append((x, y)))
+    patch_all(monkeypatch, "tap", lambda context, x, y, wait=1.0: taps.append((x, y)))
 
     def ocr(context, image, roi, only_rec=False):
         if roi == actions.GIFT_CARDS:
@@ -1241,7 +1242,7 @@ def gift_page(context, monkeypatch, names, slots=1):
         if roi == actions.REFUSE_GIFT and not (selected and picked):
             return [("Refuse Gift", (900, 570, 100, 25))]
         return []
-    monkeypatch.setattr(actions, "ocr", ocr)
+    patch_all(monkeypatch, "ocr", ocr)
     actions.RUN.update(settings={"trial_risk_overrides": []}, team={**NO_GOSSYPIUM})
     return taps
 
@@ -1293,7 +1294,7 @@ def left_shop_holding(context, monkeypatch, owned):
     monkeypatch.setattr(actions.Shop, "to_main", staticmethod(lambda context: True))
     monkeypatch.setattr(actions.Shop, "sell", staticmethod(lambda *a: False))
     handed_over = actions.page_guard
-    monkeypatch.setattr(actions, "page_guard", REAL_GUARD)
+    patch_all(monkeypatch, "page_guard", REAL_GUARD)
 
     def buy(context, team, visit):
         visit["owned"] = list(owned)
@@ -1302,7 +1303,7 @@ def left_shop_holding(context, monkeypatch, owned):
     assert actions.Shop().run(context, argv())
     actions.enter_node(context)
     assert "shop" not in actions.RUN
-    monkeypatch.setattr(actions, "page_guard", handed_over)
+    patch_all(monkeypatch, "page_guard", handed_over)
 
 
 def test_a_material_of_a_fusion_made_in_the_shop_scores_as_a_main_card_on_the_next_gift_page(context, monkeypatch):
@@ -1446,7 +1447,7 @@ def test_the_fusion_grid_is_not_scanned_again_while_the_owned_gifts_are_the_same
     # The fuse page with its keyword dialog, no materials: no fusion this visit.
     reads(context, FUSE_PAGE)
     scans = []
-    monkeypatch.setattr(actions, "owned_cells", lambda *a: scans.append(a) or ([], {"page": "fuse", "at": 0}))
+    patch_all(monkeypatch, "owned_cells", lambda *a: scans.append(a) or ([], {"page": "fuse", "at": 0}))
     team, visit = shop_team({}), {}
     assert not actions.Shop.fuse(context, team, visit)
     taps = context.tasker.controller.post_click.call_count
@@ -1457,7 +1458,7 @@ def test_the_fusion_grid_is_not_scanned_again_while_the_owned_gifts_are_the_same
 
 def test_recover_waits_out_a_download_without_climbing(context, clock, monkeypatch, tmp_path):
     # MirrorHub's own 60 s timeout lands in Recover while the download shows nothing it knows.
-    monkeypatch.setattr(actions, "ROOT", tmp_path)
+    patch_all(monkeypatch, "ROOT", tmp_path)
     actions.STUCK["watch"].reset()
     actions.STUCK["watch"].hold(actions.time.monotonic(), 1800)
     before = dict(actions.STUCK["ladder"].counts)
@@ -1468,7 +1469,7 @@ def test_recover_waits_out_a_download_without_climbing(context, clock, monkeypat
 
 
 def test_recover_keeps_the_screen_when_the_hub_recognised_nothing(context, clock, monkeypatch, tmp_path):
-    monkeypatch.setattr(actions, "ROOT", tmp_path)
+    patch_all(monkeypatch, "ROOT", tmp_path)
     actions.STUCK["flag"] = None
     actions.STUCK["watch"].reset()
     actions.Recover().run(context, None)
@@ -1587,8 +1588,8 @@ def test_tap_until_logs_how_long_the_screen_took(context, clock):
 def test_plan_run_waits_for_the_enter_dialog_after_pressing_enter(context, clock, monkeypatch):
     team = {"id": 1, "name": "t", "game_team": 1, "guard_turns": 3, "hard_from_floor": 1, "gift_list": "default", "enabled": True}
     run = {"runs": 0, "stop_when_weekly_bonus_out": False, "difficulty": "normal", "target_floor": 5}
-    monkeypatch.setattr(actions, "load_settings", lambda root, need_team=False: {"run": run, "teams": [team], "gift_lists": []})
-    monkeypatch.setattr(actions, "pick_team", lambda teams, difficulty: team)
+    patch_all(monkeypatch, "load_settings", lambda root, need_team=False: {"run": run, "teams": [team], "gift_lists": []})
+    patch_all(monkeypatch, "pick_team", lambda teams, difficulty: team)
     monkeypatch.setattr(actions.settlement, "runs_done", lambda done, limit: False)
     monkeypatch.setattr(actions.recovery, "read_runs", lambda root: [])
     monkeypatch.setattr(actions.recovery, "floor_limit", lambda runs, team, target: 1800)
@@ -1605,8 +1606,8 @@ def test_a_planned_run_of_a_team_that_never_switches_to_hard(context, clock, mon
     # Only the global "hard" makes it HARD (every floor, hard_wanted).
     team = {"id": 1, "name": "t", "game_team": 1, "guard_turns": 0, "hard_from_floor": None, "gift_list": "default", "enabled": True}
     run = {"runs": None, "stop_when_weekly_bonus_out": False, "difficulty": setting, "target_floor": 5}
-    monkeypatch.setattr(actions, "load_settings", lambda root, need_team=False: {"run": run, "teams": [team], "gift_lists": []})
-    monkeypatch.setattr(actions, "pick_team", lambda teams, difficulty: team)
+    patch_all(monkeypatch, "load_settings", lambda root, need_team=False: {"run": run, "teams": [team], "gift_lists": []})
+    patch_all(monkeypatch, "pick_team", lambda teams, difficulty: team)
     monkeypatch.setattr(actions.run_start, "run_difficulty", lambda setting, weekly, target: "hard")
     monkeypatch.setattr(actions.recovery, "read_runs", lambda root: [])
     monkeypatch.setattr(actions.recovery, "floor_limit", lambda runs, team, target: 1800)
@@ -1625,8 +1626,8 @@ def team_picker(context, title, after_confirm):
 def infinity_switch(context, monkeypatch, takes):
     """The entry page's Parallel Superposition Mode reads ON until a tap on INFINITY MIRROR takes (if it does)."""
     taps, stops = [], []
-    monkeypatch.setattr(actions, "tap", lambda context, x, y, wait=1.0: taps.append((x, y)))
-    monkeypatch.setattr(actions, "stop", lambda context, reason, line=None: stops.append(reason) or False)
+    patch_all(monkeypatch, "tap", lambda context, x, y, wait=1.0: taps.append((x, y)))
+    patch_all(monkeypatch, "stop", lambda context, reason, line=None: stops.append(reason) or False)
 
     def ocr(context, image, roi, only_rec=False):
         if roi == actions.INFINITY_TITLE:
@@ -1634,7 +1635,7 @@ def infinity_switch(context, monkeypatch, takes):
             text = "Parallel Superposition Mode : OFF" if takes and taps else "PParallel Superposition Mode : oN "
             return [(text, (894, 333, 316, 17))]
         return []
-    monkeypatch.setattr(actions, "ocr", ocr)
+    patch_all(monkeypatch, "ocr", ocr)
     return taps, stops, actions.ParallelModeOff().run(context, None)
 
 
@@ -1650,7 +1651,7 @@ def test_a_parallel_superposition_switch_that_stays_on_stops_the_task(context, c
 
 
 def test_select_team_waits_for_the_title_after_the_tap_and_for_the_page_after_confirm(context, clock, monkeypatch):
-    monkeypatch.setattr(actions, "scroll", lambda *a: None)  # the drag to the top has its own waits
+    patch_all(monkeypatch, "scroll", lambda *a: None)  # the drag to the top has its own waits
     actions.RUN["team"] = {"game_team": 3}
     team_picker(context, lambda clicks, looks: "TEAMS #1" if looks < 4 else "TEAMS #3",
                 lambda clicks, looks: "lower than the recommended level" if clicks >= 2 else None)
@@ -1693,8 +1694,8 @@ def team_list(context, monkeypatch, first, title, blank=0):
             state["tapped"].append(n)
             state["title"] = n or state["title"]
         return MagicMock()
-    monkeypatch.setattr(actions, "ocr", ocr)
-    monkeypatch.setattr(actions, "scroll", scroll)
+    patch_all(monkeypatch, "ocr", ocr)
+    patch_all(monkeypatch, "scroll", scroll)
     context.tasker.controller.post_click.side_effect = click
     return state
 
@@ -1749,7 +1750,7 @@ def test_select_team_makes_a_plan_for_an_abandoned_empty_run_instead_of_backing_
     # #128 (live 2026-10-18): Resume on a run paused before team selection reaches the picker with no plan in memory;
     # backing out to the entry page, which only offers Resume, looped every 8 s.
     team = {"id": 1, "name": "t", "game_team": 3, "guard_turns": 0, "gift_list": "default", "enabled": True, "usage": "any"}
-    monkeypatch.setattr(actions, "load_settings", lambda root, need_team=False: {"run": {"difficulty": "normal", "target_floor": 5}, "teams": [team], "gift_lists": []})
+    patch_all(monkeypatch, "load_settings", lambda root, need_team=False: {"run": {"difficulty": "normal", "target_floor": 5}, "teams": [team], "gift_lists": []})
     actions.RUN.clear()
     team_picker(context, "TEAMS #3", lambda clicks, looks: "recommended level" if clicks else None)
     assert actions.SelectTeam().run(context, argv())
@@ -1827,7 +1828,7 @@ def test_graces_beyond_available_and_owned_follow_starlight_unaffordable_skip(co
 
 def test_graces_beyond_available_and_owned_follow_starlight_unaffordable_stop(context, clock, monkeypatch):
     stopped = []
-    monkeypatch.setattr(actions, "stop", lambda context, reason, line=None: stopped.append(reason) or False)
+    patch_all(monkeypatch, "stop", lambda context, reason, line=None: stopped.append(reason) or False)
     buy_grace_1(monkeypatch, "stop")
     starlight_page(context, "5", "2")
     assert actions.BuyStarlight().run(context, argv()) is False
@@ -1904,7 +1905,7 @@ def test_the_default_list_makes_burn_the_main_keyword():
 
 def test_a_planned_run_plays_the_main_keyword_of_the_teams_list(context, clock, monkeypatch):
     settings = {**listed("Bleed"), "run": {"runs": None, "stop_when_weekly_bonus_out": False, "difficulty": "normal", "target_floor": 5}}
-    monkeypatch.setattr(actions, "load_settings", lambda root, need_team=False: settings)
+    patch_all(monkeypatch, "load_settings", lambda root, need_team=False: settings)
     monkeypatch.setattr(actions.recovery, "read_runs", lambda root: [])
     monkeypatch.setattr(actions.recovery, "floor_limit", lambda runs, team, target: 1800)
     monkeypatch.setattr(actions.settlement, "runs_done", lambda done, limit: False)
@@ -2016,7 +2017,7 @@ def pack_page(context, monkeypatch, floor, setting, mode, covers=None, spent_aft
     plan = {"weights": {}, "threshold": 0, "unlisted": -5, "event_packs": mode}
     art = {"Hello Bus": "S.E.A."}
     packs = {"S.E.A.": {"N": [2], "H": [2, 3]}, "Extreme Pack": {"X": True}}
-    monkeypatch.setattr(actions, "theme_pack_plan", lambda settings, team: (plan, packs, set(), art))
+    patch_all(monkeypatch, "theme_pack_plan", lambda settings, team: (plan, packs, set(), art))
 
     def rank_packs(cards, names, plan, title_art, cover):
         assert title_art == art  # every page, a refreshed one too, gets the data file's title art (#246)
@@ -2027,11 +2028,11 @@ def pack_page(context, monkeypatch, floor, setting, mode, covers=None, spent_aft
     covers = [] if covers is None else covers
     monkeypatch.setattr(actions.pack_cover, "read_cover", lambda page, x, allowed: ("Cover pack", page, x, allowed))
     lines = []
-    monkeypatch.setattr(actions, "log", lines.append)
+    patch_all(monkeypatch, "log", lines.append)
     taps = []
-    monkeypatch.setattr(actions, "tap", lambda context, x, y, wait=1.0: taps.append((x, y)))
-    monkeypatch.setattr(actions, "seen", lambda context, image, node: node == "PackRefreshSpent" and spent_after is not None
-                        and len(taps) >= spent_after)
+    patch_all(monkeypatch, "tap", lambda context, x, y, wait=1.0: taps.append((x, y)))
+    patch_all(monkeypatch, "seen", lambda context, image, node: node == "PackRefreshSpent" and spent_after is not None
+              and len(taps) >= spent_after)
 
     def ocr(context, image, roi, only_rec=False):
         page = min(taps.count(REFRESH), 4)
@@ -2040,7 +2041,7 @@ def pack_page(context, monkeypatch, floor, setting, mode, covers=None, spent_aft
             (830, 30, 160, 35): [("NORMAL", (900, 40, 60, 20))],
             tuple(actions.PACK_TITLES): [(f"Pack {page}a", (200, 420, 90, 20)), (f"Pack {page}b", (500, 420, 90, 20))],
         }.get(tuple(roi), [])
-    monkeypatch.setattr(actions, "ocr", ocr)
+    patch_all(monkeypatch, "ocr", ocr)
 
     actions.PickThemePack().run(context, None)
     assert context.tasker.controller.post_swipe.call_count == 1  # one card is pulled whatever the page
@@ -2051,10 +2052,10 @@ def test_theme_pack_titles_are_read_once_the_cards_stop_swinging(context, monkey
     # #246, recordings: dealt cards swing for ~2.8 s. Read mid-swing, a card not landed yet was left out and title
     # art was misread. Every read waits for the cards to stop, the refreshed page's too.
     order = []
-    monkeypatch.setattr(actions, "still", lambda context, **kw:
-                        order.append(("still", tuple(kw.get("roi") or ()), kw.get("runs"), kw.get("timeout"))) or actions.screen(context))
+    patch_all(monkeypatch, "still", lambda context, **kw:
+              order.append(("still", tuple(kw.get("roi") or ()), kw.get("runs"), kw.get("timeout"))) or actions.screen(context))
     real = actions.pack_titles
-    monkeypatch.setattr(actions, "pack_titles", lambda context, image: order.append("read") or real(context, image))
+    patch_all(monkeypatch, "pack_titles", lambda context, image: order.append("read") or real(context, image))
     pack_page(context, monkeypatch, 2, "once", "weight")
     reads = [i for i, o in enumerate(order) if o == "read"]
     assert len(reads) == 2  # the page and the refreshed page
@@ -2064,7 +2065,7 @@ def test_theme_pack_titles_are_read_once_the_cards_stop_swinging(context, monkey
 
 def test_cards_still_moving_after_the_wait_are_read_anyway_and_logged(context, monkeypatch):
     # #246: a card that never stops (an animated one) costs CARDS_SETTLE, not the floor.
-    monkeypatch.setattr(actions, "still", lambda context, **kw: None)
+    patch_all(monkeypatch, "still", lambda context, **kw: None)
     _, lines = pack_page(context, monkeypatch, 2, "none", "weight")
     assert f"floor 2: the cards still moved after {actions.CARDS_SETTLE:g} s" in lines
     assert lines[-1] == "floor 2: pull 'Pack 0a' (-5, below the threshold)"
@@ -2139,7 +2140,7 @@ def test_floor_5s_leftmost_new_pack_is_taken_when_event_packs_are_preferred(cont
 
 def test_the_pulled_pack_is_noted_by_id_for_the_run(context, monkeypatch):
     # #306: PickThemePack notes the pack it pulls (not the ones on screen) in the run; pulled twice, it is one note.
-    monkeypatch.setattr(actions, "pack_ids", lambda: {"Pack 0a": 1004, "Pack 0b": 1005})
+    patch_all(monkeypatch, "pack_ids", lambda: {"Pack 0a": 1004, "Pack 0b": 1005})
     actions.RUN["packs"] = [1011]
     pack_page(context, monkeypatch, 2, "none", "weight")
     assert actions.RUN["packs"] == [1011, 1004]
@@ -2149,7 +2150,7 @@ def test_the_pulled_pack_is_noted_by_id_for_the_run(context, monkeypatch):
 
 def test_a_pack_with_a_bokgak_re_run_notes_both_ids(context, monkeypatch):
     # #306: the re-run's card shows the same title, so a pull of "Pack 0a" may be either; some recipes name only the re-run.
-    monkeypatch.setattr(actions, "pack_ids", lambda: {"Pack 0a": 1103, "Pack 0a BokGak": 1113})
+    patch_all(monkeypatch, "pack_ids", lambda: {"Pack 0a": 1103, "Pack 0a BokGak": 1113})
     actions.RUN["packs"] = []
     pack_page(context, monkeypatch, 2, "none", "weight")
     assert actions.RUN["packs"] == [1103, 1113]
@@ -2157,7 +2158,7 @@ def test_a_pack_with_a_bokgak_re_run_notes_both_ids(context, monkeypatch):
 
 def test_a_card_read_as_the_bokgak_re_run_notes_only_the_re_run(monkeypatch):
     # #361: with the BokGak line read, the pulled name is the copy's own: its id alone, not the original's.
-    monkeypatch.setattr(actions, "pack_ids", lambda: {"Pack 0a": 1103, "Pack 0a BokGak": 1113})
+    patch_all(monkeypatch, "pack_ids", lambda: {"Pack 0a": 1103, "Pack 0a BokGak": 1113})
     actions.RUN["packs"] = []
     actions.note_pack("Pack 0a BokGak")
     assert actions.RUN["packs"] == [1113]
@@ -2166,18 +2167,18 @@ def test_a_card_read_as_the_bokgak_re_run_notes_only_the_re_run(monkeypatch):
 def test_a_pulled_pack_without_an_id_is_skipped_and_the_packs_noted_so_far_stay(context, monkeypatch):
     # #310 review: a pack the data file lacks (an EXTREME-only pack, an event's, a plan's own) is not noted; the packs noted
     # before it, and the ones after it, still are, so the exclusive recipes of the known packs stay open.
-    monkeypatch.setattr(actions, "pack_ids", lambda: {})
+    patch_all(monkeypatch, "pack_ids", lambda: {})
     actions.RUN["packs"] = [1011]
     pack_page(context, monkeypatch, 2, "none", "weight")
     assert actions.run_packs() == [1011]
-    monkeypatch.setattr(actions, "pack_ids", lambda: {"Pack 0a": 1004})
+    patch_all(monkeypatch, "pack_ids", lambda: {"Pack 0a": 1004})
     actions.note_pack("Pack 0a")
     assert actions.run_packs() == [1011, 1004]
 
 
 def test_a_run_without_a_packs_note_stays_unknown_after_a_pull(context, monkeypatch):
     # #306: the agent restarted mid-run, the earlier floors' packs are lost: one later pull does not make a list of it.
-    monkeypatch.setattr(actions, "pack_ids", lambda: {"Pack 0a": 1004})
+    patch_all(monkeypatch, "pack_ids", lambda: {"Pack 0a": 1004})
     pack_page(context, monkeypatch, 3, "none", "weight")
     assert actions.run_packs() is None
 
@@ -2185,8 +2186,8 @@ def test_a_run_without_a_packs_note_stays_unknown_after_a_pull(context, monkeypa
 def test_a_new_run_starts_with_no_packs_taken(context, clock, monkeypatch):
     team = {"id": 1, "name": "t", "game_team": 1, "guard_turns": 3, "hard_from_floor": 1, "gift_list": "default", "enabled": True}
     run = {"runs": 0, "stop_when_weekly_bonus_out": False, "difficulty": "normal", "target_floor": 5}
-    monkeypatch.setattr(actions, "load_settings", lambda root, need_team=False: {"run": run, "teams": [team], "gift_lists": []})
-    monkeypatch.setattr(actions, "pick_team", lambda teams, difficulty: team)
+    patch_all(monkeypatch, "load_settings", lambda root, need_team=False: {"run": run, "teams": [team], "gift_lists": []})
+    patch_all(monkeypatch, "pick_team", lambda teams, difficulty: team)
     monkeypatch.setattr(actions.settlement, "runs_done", lambda done, limit: False)
     monkeypatch.setattr(actions.recovery, "read_runs", lambda root: [])
     monkeypatch.setattr(actions.recovery, "floor_limit", lambda runs, team, target: 1800)
@@ -2490,7 +2491,7 @@ class Choices:
         ctl.post_screencap.return_value.wait.return_value.get.side_effect = self.render
         ctl.post_click.side_effect = self.click
         context.run_recognition.side_effect = self.read
-        monkeypatch.setattr(actions, "scroll", self.scroll)
+        patch_all(monkeypatch, "scroll", self.scroll)
 
     def scroll(self, context, x, y, dx, dy):
         assert 690 < x < 1165 and 165 < y < 512 and 165 < y + dy < 512  # on the list
@@ -2564,7 +2565,7 @@ def test_a_list_that_scrolls_is_read_whole_and_the_pick_scrolled_into_view(conte
     options[best] = (f"Option {best}.", "Select to gain a Burn E.G.O Gift")
     table = [{"key": TABLE[0]["key"], "options": [{"text": t, "hint": h, "kind": "direct" if h else "other",
                                                    "gifts": [["Burn", "direct"]] if h else []} for t, h in options]}]
-    monkeypatch.setattr(actions, "event_table", lambda: table)
+    patch_all(monkeypatch, "event_table", lambda: table)
     page = Choices(context, monkeypatch, options, DOLL, offset=100)  # left part way down
     actions.Event().run(context, None)
     assert page.tapped == [f"Option {best}."]
@@ -2761,7 +2762,7 @@ def test_a_plaque_still_swinging_in_is_waited_for_before_the_chain_is_dragged_ag
 def chains(monkeypatch):
     """The points of every drag the action makes, in order; the drags still reach the fake controller."""
     seen, real = [], actions.drag
-    monkeypatch.setattr(actions, "drag", lambda context, points, **kw: seen.append(points) or real(context, points, **kw))
+    patch_all(monkeypatch, "drag", lambda context, points, **kw: seen.append(points) or real(context, points, **kw))
     return seen
 
 
@@ -2897,7 +2898,7 @@ def test_a_cost_that_stays_unread_is_none(context):
 def test_a_forfeited_run_gives_up_its_rewards_and_the_same_team_runs_next(context, monkeypatch, tmp_path):
     # #95: after_retries "forfeit" ends the run at Exploration Reward short of floor 5; the team keeps its place
     # at the head of the queue, so the team that lost runs the next run again.
-    monkeypatch.setattr(actions, "ROOT", tmp_path)
+    patch_all(monkeypatch, "ROOT", tmp_path)
     teams = [{"id": "a", "name": "A", "enabled": True}, {"id": "b", "name": "B", "enabled": True}]
     (tmp_path / "config").mkdir()
     (tmp_path / "config" / "settings.json").write_text(json.dumps({"teams": teams}), encoding="utf-8")
@@ -2910,8 +2911,8 @@ def test_a_forfeited_run_gives_up_its_rewards_and_the_same_team_runs_next(contex
         if roi == actions.DIALOG_TEXT and taps:
             return [("End expedition without claiming rewards?", (400, 300, 400, 30))]
         return []
-    monkeypatch.setattr(actions, "ocr", ocr)
-    monkeypatch.setattr(actions, "tap", lambda context, x, y, wait=1.0: taps.append((x, y)))
+    patch_all(monkeypatch, "ocr", ocr)
+    patch_all(monkeypatch, "tap", lambda context, x, y, wait=1.0: taps.append((x, y)))
 
     actions.Settle().run(context, None)
     assert taps == [actions.GIVE_UP, actions.DIALOG_CONFIRM]
@@ -2923,7 +2924,7 @@ def test_a_forfeited_run_gives_up_its_rewards_and_the_same_team_runs_next(contex
 # #118: an action checks its page before each tap and hands a changed screen back to MirrorHub.
 @pytest.fixture
 def guarded(monkeypatch):
-    monkeypatch.setattr(actions, "page_guard", REAL_GUARD)
+    patch_all(monkeypatch, "page_guard", REAL_GUARD)
 
 
 def page_until(context, node, clicks):
@@ -2999,7 +3000,7 @@ def test_a_formation_left_mid_pick_taps_no_card(context, guarded):
 
 def test_a_team_list_gone_is_handed_back_not_stopped_on(context, guarded, monkeypatch):
     actions.RUN["team"] = {"game_team": 3}
-    monkeypatch.setattr(actions, "stop", lambda *a, **k: pytest.fail("stopped"))
+    patch_all(monkeypatch, "stop", lambda *a, **k: pytest.fail("stopped"))
     team_picker(context, "TEAMS #1", lambda clicks, looks: None)
     assert actions.SelectTeam().run(context, argv())
     assert taps(context) == []
@@ -3035,8 +3036,8 @@ def test_feature_match_lists_every_feature_match_node_of_the_pipeline():
 def test_forfeit_reads_its_dialogs_however_ocr_cases_them(context, monkeypatch):
     # #138: the settings panel and the Quit dialog read in capitals still count as shown.
     reads = iter(["DUNGEON PROGRESS", "QUIT EXPLORING THE DUNGEON?", ""])
-    monkeypatch.setattr(actions, "text", lambda *a, **k: next(reads))
-    monkeypatch.setattr(actions, "tap", lambda *a, **k: None)
+    patch_all(monkeypatch, "text", lambda *a, **k: next(reads))
+    patch_all(monkeypatch, "tap", lambda *a, **k: None)
     actions.RUN["forfeit"] = True
     assert actions.forfeit(context) is True
     assert actions.STUCK["flag"] is None and "forfeit" not in actions.RUN
@@ -3114,7 +3115,7 @@ def test_wipe_picks_the_card_again_when_confirm_does_not_take(context, clock, mo
 
 def test_the_theme_pack_page_reads_its_floor_in_any_case(context, monkeypatch):
     # #138: "Floor 3" is floor 3, as the page-gone wait after the pull already reads it.
-    monkeypatch.setattr(actions, "text", lambda *a, **k: "Floor 3")
+    patch_all(monkeypatch, "text", lambda *a, **k: "Floor 3")
     monkeypatch.setattr(actions.PickThemePack, "set_difficulty", lambda *a: False)
     actions.RUN["difficulty"] = None
     actions.PickThemePack().run(context, None)
@@ -3123,7 +3124,7 @@ def test_the_theme_pack_page_reads_its_floor_in_any_case(context, monkeypatch):
 
 def test_a_new_floor_forgets_the_shop_left_before_the_boss(context, monkeypatch):
     # #279: the boss' floor ends with the boss; the next floor's first map is read by its marks again.
-    monkeypatch.setattr(actions, "text", lambda *a, **k: "Floor 3")
+    patch_all(monkeypatch, "text", lambda *a, **k: "Floor 3")
     monkeypatch.setattr(actions.PickThemePack, "set_difficulty", lambda *a: False)
     actions.RUN.update(difficulty=None, floor=2, after_shop=True)
     actions.PickThemePack().run(context, None)
@@ -3133,7 +3134,7 @@ def test_a_new_floor_forgets_the_shop_left_before_the_boss(context, monkeypatch)
 @pytest.mark.parametrize("shown, floor", [("SELECT FLOOR 10 THEME PACK", 10), ("Select Floor 12 Theme Pack", 12), ("SELECT FLOOR 15 THEME PACK", 15)])
 def test_the_theme_pack_page_reads_a_two_digit_floor(context, monkeypatch, shown, floor):
     # #383: floors run to 15; "Floor 12" is not floor 1.
-    monkeypatch.setattr(actions, "text", lambda *a, **k: shown)
+    patch_all(monkeypatch, "text", lambda *a, **k: shown)
     monkeypatch.setattr(actions.PickThemePack, "set_difficulty", lambda *a: False)
     actions.RUN["difficulty"] = None
     actions.PickThemePack().run(context, None)
@@ -3142,10 +3143,10 @@ def test_the_theme_pack_page_reads_a_two_digit_floor(context, monkeypatch, shown
 
 def test_floor_10_to_11_restarts_the_clock_and_the_map_quota(context, monkeypatch):
     # #383: 10 -> 11 is a new floor: the clock restarts and map_misses is back to 0.
-    monkeypatch.setattr(actions, "text", lambda *a, **k: "SELECT FLOOR 11 THEME PACK")
+    patch_all(monkeypatch, "text", lambda *a, **k: "SELECT FLOOR 11 THEME PACK")
     monkeypatch.setattr(actions.PickThemePack, "set_difficulty", lambda *a: False)
     restarted = []
-    monkeypatch.setattr(actions, "restart_floor_clock", lambda: restarted.append(1))
+    patch_all(monkeypatch, "restart_floor_clock", lambda: restarted.append(1))
     actions.RUN.update(difficulty=None, floor=10, map_misses=3)
     actions.PickThemePack().run(context, None)
     assert actions.RUN["floor"] == 11 and actions.RUN["map_misses"] == 0 and restarted == [1]
@@ -3153,7 +3154,7 @@ def test_floor_10_to_11_restarts_the_clock_and_the_map_quota(context, monkeypatc
 
 def test_a_new_floor_tells_the_ladder_the_floor_and_the_run_target(context, monkeypatch):
     # #435: a target-15 run's recovery allowance refills at floors 6 and 11 (recovery.Ladder.floor).
-    monkeypatch.setattr(actions, "text", lambda *a, **k: "SELECT FLOOR 6 THEME PACK")
+    patch_all(monkeypatch, "text", lambda *a, **k: "SELECT FLOOR 6 THEME PACK")
     monkeypatch.setattr(actions.PickThemePack, "set_difficulty", lambda *a: False)
     seen = []
     monkeypatch.setattr(actions.STUCK["ladder"], "floor", lambda floor, target: seen.append((floor, target)))
@@ -3188,7 +3189,7 @@ def test_a_gift_page_gone_is_handed_back_untouched(context, guarded, action, tea
 
 
 def test_a_theme_pack_page_gone_is_handed_back_untouched(context, guarded, monkeypatch):
-    monkeypatch.setattr(actions, "text", lambda *a, **k: "FLOOR 1")
+    patch_all(monkeypatch, "text", lambda *a, **k: "FLOOR 1")
     actions.RUN["difficulty"] = None
     assert actions.PickThemePack().run(context, None)
     assert moved(context) == 0 and actions.STUCK["flag"] is None
@@ -3200,8 +3201,8 @@ def starlight(monkeypatch, available):
     actions.RUN["settings"] = {"run": {"starlight_unaffordable": "stop"}}
     monkeypatch.setattr(actions.run_start, "resolve_plan", lambda *a: {"priority": [1, 2], "levels": ["base", "base"] + ["none"] * 8})
     reads = list(available)
-    monkeypatch.setattr(actions, "read_available", lambda context, image: reads.pop(0) if len(reads) > 1 else reads[0])
-    monkeypatch.setattr(actions, "stop", lambda context, reason, line=None: pytest.fail(reason))
+    patch_all(monkeypatch, "read_available", lambda context, image: reads.pop(0) if len(reads) > 1 else reads[0])
+    patch_all(monkeypatch, "stop", lambda context, reason, line=None: pytest.fail(reason))
 
 
 def test_a_starlight_page_gone_is_handed_back_untouched(context, guarded, monkeypatch):
@@ -3213,7 +3214,7 @@ def test_a_starlight_page_gone_is_handed_back_untouched(context, guarded, monkey
 def test_a_starlight_page_handed_back_after_one_grace_still_buys_the_next(context, monkeypatch):
     # #118: back from MirrorHub with grace 1 bought: Available reads 10, grace 1 already selected.
     starlight(monkeypatch, [10, 0])
-    monkeypatch.setattr(actions, "grace_selected", lambda image, n: n == 1)
+    patch_all(monkeypatch, "grace_selected", lambda image, n: n == 1)
     monkeypatch.setattr(actions.BuyStarlight, "set_level", staticmethod(lambda *a: True))
     assert actions.BuyStarlight().run(context, argv())
     x, y = actions.grace_box(2)
@@ -3314,7 +3315,7 @@ def test_a_gift_choice_gone_after_one_card_does_not_press_select(context, guarde
 
 def test_a_formation_gone_after_the_first_card_taps_no_more(context, guarded, monkeypatch):
     ctl = context.tasker.controller
-    monkeypatch.setattr(actions, "participants", lambda context, image: (max(0, ctl.post_click.call_count - 1), 5))
+    patch_all(monkeypatch, "participants", lambda context, image: (max(0, ctl.post_click.call_count - 1), 5))
     page_until(context, "Formation", 2)  # Clear Selection, then Yi Sang
     with pytest.raises(actions.PageGone):
         actions.Formation.pick(context, ["Yi Sang", "Hong Lu"])
@@ -3334,7 +3335,7 @@ def test_an_exploration_reward_gone_after_a_toggle_tap_does_not_claim(context, g
     actions.RUN.update(settings={"run": {"weekly_bonus_use": "all", "weekly_bonus_amount": 3, "target_floor": 5}}, team={"hard_from_floor": None}, difficulty="normal")
     monkeypatch.setattr(actions.settlement, "read_result", lambda text: actions.settlement.Result(5, "normal", 5, 5))
     monkeypatch.setattr(actions.settlement, "bonus_toggles", lambda *a: 1)
-    monkeypatch.setattr(actions, "toggles", lambda context, image: [False, False, False])
+    patch_all(monkeypatch, "toggles", lambda context, image: [False, False, False])
     page_until(context, "ExplorationReward", 1)
     assert actions.Settle().run(context, argv())
     assert taps(context) == [(actions.TOGGLE_X[0], 252)]
@@ -3359,8 +3360,8 @@ def test_a_gift_search_gone_under_its_consume_dialog_is_not_confirmed(context, g
     monkeypatch.setattr(actions.gift_search, "select_count", lambda text: (1, 1))
     monkeypatch.setattr(actions.GiftSearch, "chosen", staticmethod(lambda *a: ["Phlebotomy Pack"]))
     monkeypatch.setattr(actions.gift_search, "next_gift", lambda *a: None)
-    monkeypatch.setattr(actions, "text", lambda context, image, roi, only_rec=False:
-                        "Consume 70 Starlight" if roi == actions.SEARCH_DIALOG and ctl.post_click.call_count else "")
+    patch_all(monkeypatch, "text", lambda context, image, roi, only_rec=False:
+              "Consume 70 Starlight" if roi == actions.SEARCH_DIALOG and ctl.post_click.call_count else "")
     page_until(context, "GiftSearch", 1)  # gone once Select brought its dialog up
     assert actions.GiftSearch().run(context, argv())
     assert taps(context) == [actions.SEARCH_SELECT]
@@ -3371,7 +3372,7 @@ def test_a_starting_gift_page_gone_after_a_gift_tap_does_not_press_select(contex
     monkeypatch.setattr(actions.PickStartingGift, "set_gift_search", staticmethod(lambda *a: None))
     monkeypatch.setattr(actions.PickStartingGift, "full", staticmethod(lambda *a: False))
     monkeypatch.setattr(actions.PickStartingGift, "count", staticmethod(lambda *a: (0, 1)))
-    monkeypatch.setattr(actions, "ocr", lambda *a, **k: [("Burn", (200, 200, 60, 20))])
+    patch_all(monkeypatch, "ocr", lambda *a, **k: [("Burn", (200, 200, 60, 20))])
     page_until(context, "StartingGift", 2)  # the cabinet, then its first gift
     assert actions.PickStartingGift().run(context, argv())
     assert taps(context) == [(230, 285), (970, 262)]

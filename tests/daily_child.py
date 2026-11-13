@@ -14,6 +14,7 @@ import types
 from pathlib import Path
 
 import numpy as np
+from agent_patch import rebind
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "agent"))  # run as a script: as pytest's pythonpath has it
@@ -73,7 +74,7 @@ def load():
         (resource.register_custom_action if kind == "action" else resource.register_custom_recognition)(name, cls())
     resource.post_bundle(ROOT / "assets" / "resource" / "base").wait()
     resource.override_pipeline({name: {"pre_delay": 0, "post_delay": 0} for name in resource.node_list})
-    actions.ROOT = Path(tempfile.mkdtemp())
+    rebind("ROOT", Path(tempfile.mkdtemp()))
     return actions, resource
 
 

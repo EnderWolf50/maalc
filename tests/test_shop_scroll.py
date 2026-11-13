@@ -7,6 +7,7 @@ import pytest
 import actions
 import test_actions
 from test_shop import screen_with
+from agent_patch import patch_all
 
 clock, context = test_actions.clock, test_actions.context  # its fixtures
 DONE = SimpleNamespace(wait=lambda: None)
@@ -179,7 +180,7 @@ class Grid:
 def grid(context, monkeypatch):
     def make(page, n, fling=None, share=1.0, recipes=0, **gifts):
         g = Grid(context, page, n, fling, share, recipes, **gifts)
-        monkeypatch.setattr(actions, "read_cells", g.read_cells)
+        patch_all(monkeypatch, "read_cells", g.read_cells)
         context.run_recognition.side_effect = g.recognition
         return g
     return make
@@ -193,7 +194,7 @@ def test_every_gift_is_read_once_whatever_the_grid_holds(context, grid, monkeypa
     # its top (a drag that does not move it here).
     g = grid(page, n)
     logs = []
-    monkeypatch.setattr(actions, "log", logs.append)
+    patch_all(monkeypatch, "log", logs.append)
     cells, _ = actions.owned_cells(context, page)
     assert g.reads == list(range(n))  # each gift once, in the grid's order
     assert (f"shop: the {page} grid does not move: at its end" in logs) == (n == 20)
@@ -236,7 +237,7 @@ def test_a_tooltip_the_check_misses_is_closed_for_the_cells_it_hid(context, grid
 def test_a_page_the_guard_does_not_find_untapped_is_tapped_as_before(context, clock, monkeypatch):
     # A tooltip that hides Leave (the Shop node's anchor) and that shop.tooltip misses: the guard on the untapped screenshot
     # fails, so the neutral spot is tapped and the page checked again, as close_tooltip always did (ADR 0007).
-    monkeypatch.setattr(actions, "page_guard", test_actions.REAL_GUARD)
+    patch_all(monkeypatch, "page_guard", test_actions.REAL_GUARD)
     ctl = context.tasker.controller
     context.run_recognition.side_effect = lambda name, image, override=None: \
         SimpleNamespace(hit=True, box=[0, 0, 1, 1]) if name == "Shop" and ctl.post_click.called else None
@@ -248,11 +249,11 @@ def test_the_tap_that_closes_a_materials_tooltip_is_followed_by_the_page_guard(c
     # ADR 0007, #331: the neutral spot is tapped through close_tooltip (the tap, then the guard: a tooltip over the fuse page
     # hides Leave, so the page node reads nothing until it is closed), after each material tapped in.
     events = []
-    monkeypatch.setattr(actions, "cell_at", lambda context, grid, c: (c["x"], c["y"]))
-    monkeypatch.setattr(actions, "tap_moved", lambda context, x, y, timeout=0.5: events.append("cell"))
-    monkeypatch.setattr(actions, "tap_settled", lambda context, x, y, timeout=1.0: events.append((x, y)))
-    monkeypatch.setattr(actions, "page_guard", lambda context, home, image=None: events.append("guard") or np.zeros((720, 1280, 3), np.uint8))
-    monkeypatch.setattr(actions, "screen", lambda context: np.zeros((720, 1280, 3), np.uint8))
+    patch_all(monkeypatch, "cell_at", lambda context, grid, c: (c["x"], c["y"]))
+    patch_all(monkeypatch, "tap_moved", lambda context, x, y, timeout=0.5: events.append("cell"))
+    patch_all(monkeypatch, "tap_settled", lambda context, x, y, timeout=1.0: events.append((x, y)))
+    patch_all(monkeypatch, "page_guard", lambda context, home, image=None: events.append("guard") or np.zeros((720, 1280, 3), np.uint8))
+    patch_all(monkeypatch, "screen", lambda context: np.zeros((720, 1280, 3), np.uint8))
     monkeypatch.setattr(actions.shop, "placed", lambda image, n: events.count("cell"))
     monkeypatch.setattr(actions.shop, "picked", lambda image, x, y, bottom=720: True)
     cells = [{"i": i, "x": x, "y": y} for i, (x, y) in enumerate(actions.FUSE_CELLS[:3])]
@@ -461,7 +462,7 @@ def test_a_sale_whose_dialog_names_another_price_is_cancelled(context, grid, mon
     # The tap picked another gift than the one meant (the grid moved under it): the dialog's price says so.
     g = grid("sell", 4)
     state = sell_page(context, g, [10, 20, 30, 90])
-    monkeypatch.setattr(actions, "cell_at", lambda context, grid, cell: g.place(0))
+    patch_all(monkeypatch, "cell_at", lambda context, grid, cell: g.place(0))
     actions.Shop.sell(context, test_actions.shop_team({}),
                       {"wanted": 180, "sold": False})
     assert actions.DIALOG_CANCEL in g.taps and actions.DIALOG_CONFIRM not in g.taps and state["cost"] == 100
@@ -477,7 +478,7 @@ def test_a_fusion_taps_nothing_when_the_grid_is_not_where_it_was_measured(contex
         out = scan(*args)
         g.at -= g.dy  # unseen by the shift measured
         return out
-    monkeypatch.setattr(actions, "owned_cells", owned_cells)
+    patch_all(monkeypatch, "owned_cells", owned_cells)
     assert not fusion(context, monkeypatch, g, kept_but(23, 1, 12, 22))
     assert not [i for i in g.taps if isinstance(i, int)] and actions.PAGE_OK not in g.taps
 
@@ -507,7 +508,7 @@ def test_no_cell_of_the_fusion_grid_is_tapped_to_read_it(context, monkeypatch):
     test_actions.reads(context, test_actions.FUSE_PAGE)
     test_actions.owned_gifts(context, actions.FUSE_CELLS[10:12])
     logs = []
-    monkeypatch.setattr(actions, "log", logs.append)
+    patch_all(monkeypatch, "log", logs.append)
     assert not actions.Shop.fuse(context, test_actions.shop_team({}), {})
     taps = [c.args for c in context.tasker.controller.post_click.call_args_list]
     assert not set(taps) & set(actions.FUSE_CELLS) and context.tasker.controller.post_touch_down.called

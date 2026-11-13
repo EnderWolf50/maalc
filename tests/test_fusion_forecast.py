@@ -7,6 +7,7 @@ import pytest
 import actions
 import test_actions
 from test_shop import screen_with
+from agent_patch import patch_all
 
 clock, context = test_actions.clock, test_actions.context  # its fixtures
 CHANCE = {tuple(actions.FORECAST_CHANCE): [("90%", (430, 456, 40, 24))]}
@@ -18,7 +19,7 @@ def fuse(context, monkeypatch, team, readings, page, chance=True, slots=3, stuck
     nothing: the row does not read; page: a dict, or anything with .get). get: the page reads "GET!" after a fusion; stuck: a material tapped in cannot be taken out again, framed: it goes out but its frame stays lit; visit: the shop visit's dict.
     Returns (fused, how often each cell was tapped, whether Fuse was pressed, the log lines)."""
     lines = []
-    monkeypatch.setattr(actions, "log", lines.append)
+    patch_all(monkeypatch, "log", lines.append)
     reads_ = {**test_actions.FUSE_PAGE, tuple(actions.FUSE_CONFIRM): [(f"Selected E.G.O Gifts 3/{slots}", (330, 175, 320, 30))],
               **({tuple(actions.GET_TITLE): [("E.G.O Gift GET!", (560, 165, 160, 30))]} if get else {}), **(CHANCE if chance else {})}
     test_actions.reads(context, reads_)
@@ -154,8 +155,8 @@ def real_read_cells(monkeypatch, tiers, ids):
     monkeypatch.setattr(actions.shop, "cell_crop", lambda image, x, y, scale: (x, y))
     monkeypatch.setattr(actions.shop, "rescale", lambda image, factor: image)
     monkeypatch.setattr(actions.shop, "tier", lambda crop: tiers[spots.index(crop)])
-    monkeypatch.setattr(actions, "template_hits", lambda *args: [])
-    monkeypatch.setattr(actions, "cell_id", lambda context, grid, at, keyword, tier: (next(named), 0.9))
+    patch_all(monkeypatch, "template_hits", lambda *args: [])
+    patch_all(monkeypatch, "cell_id", lambda context, grid, at, keyword, tier: (next(named), 0.9))
 
 
 def test_a_cell_named_by_a_gift_of_another_tier_takes_that_gifts_tier(context, monkeypatch):
@@ -170,7 +171,7 @@ def test_a_misread_tier_does_not_make_a_fusion_the_condition_refuses(context, mo
     # forecasts IV, so it would be fused. It is IV + III + III: a IV again, no upgrade over its IV. Nothing is tapped in.
     real_read_cells(monkeypatch, [2, 3, 3], [CASK_SPIRITS, 9071, 9053])
     lines = []
-    monkeypatch.setattr(actions, "log", lines.append)
+    patch_all(monkeypatch, "log", lines.append)
     test_actions.reads(context, {**test_actions.FUSE_PAGE, tuple(actions.FUSE_CONFIRM): [("Selected E.G.O Gifts 3/3", (330, 175, 320, 30))],
                                  tuple(actions.GET_TITLE): [("E.G.O Gift GET!", (560, 165, 160, 30))], **CHANCE})
     test_actions.fuse_slots(context, monkeypatch)

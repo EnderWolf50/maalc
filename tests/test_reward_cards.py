@@ -3,6 +3,7 @@ import numpy as np
 
 import actions
 import test_actions
+from agent_patch import patch_all
 
 clock, context = test_actions.clock, test_actions.context  # its fixtures
 ORDER = ["Starlight", "Random E.G.O Gift", "Cost & Keyword Gift Chance", "Cost", "E.G.O Resource"]
@@ -18,8 +19,8 @@ class RewardPage:
         self.start, self.deal, self.ignore = actions.time.monotonic(), deal, ignore
         self.taps, self.reads, self.picked, self.shots = [], [], [], 0
         context.tasker.controller.post_screencap.return_value.wait.return_value.get.side_effect = self.screen
-        monkeypatch.setattr(actions, "ocr", self.ocr)
-        monkeypatch.setattr(actions, "tap", self.tap)
+        patch_all(monkeypatch, "ocr", self.ocr)
+        patch_all(monkeypatch, "tap", self.tap)
         actions.RUN["team"] = {"reward_cards": ORDER}
 
     def dealing(self):
@@ -81,7 +82,7 @@ def misread(context, monkeypatch, page, wrong_reads):
             return ocr(context, image, roi, only_rec)
         page.reads.append(wrong)
         return [(t, (x - 60, 380, 120, 30)) for (x, _), t in zip(CARDS, wrong)]
-    monkeypatch.setattr(actions, "ocr", read)
+    patch_all(monkeypatch, "ocr", read)
 
 
 def test_a_card_that_reads_as_nothing_is_read_again(context, monkeypatch):
@@ -112,7 +113,7 @@ def test_a_look_that_cannot_read_selectable_taps_nothing(context, monkeypatch):
             unread.pop()
             return []
         return ocr(context, image, roi, only_rec)
-    monkeypatch.setattr(actions, "ocr", read)
+    patch_all(monkeypatch, "ocr", read)
     assert actions.RewardCard().run(context, None)
     assert page.taps == [(660, 300), (660, 300), actions.CARD_CONFIRM]
 
@@ -128,7 +129,7 @@ def test_a_gift_get_popup_over_the_title_ends_the_wait_at_once(context, monkeypa
         if roi == actions.GET_TITLE:
             return [("E.G.O Gift GET!", (560, 165, 160, 30))]
         return ocr(context, image, roi, only_rec)
-    monkeypatch.setattr(actions, "ocr", read)
+    patch_all(monkeypatch, "ocr", read)
     start = actions.time.monotonic()
     assert actions.RewardCard().run(context, None)
     assert actions.time.monotonic() - start < 1.0

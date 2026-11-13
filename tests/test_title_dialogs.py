@@ -11,6 +11,7 @@ from PIL import Image
 
 import actions
 from test_pipeline import hub_entries, load_nodes
+from agent_patch import patch_all
 
 SCREENS = Path(__file__).parent / "screens"
 UNTICKED, TICKED = (np.asarray(Image.open(SCREENS / f"{n}.png").convert("RGB"))[:, :, ::-1].copy()
@@ -41,7 +42,7 @@ def game(monkeypatch):
         return MagicMock()
     ctx.tasker.controller.post_click.side_effect = click
     monkeypatch.setattr(actions.time, "sleep", lambda s: None)
-    monkeypatch.setattr(actions, "stop", lambda context, reason, line=None, whole_list=False: state.stops.append(reason) or False)
+    patch_all(monkeypatch, "stop", lambda context, reason, line=None, whole_list=False: state.stops.append(reason) or False)
     actions.RUN.clear()
     actions.RUN["settings"] = {"run": {"auto_accept_terms": True, "auto_download": True}}
     actions.STUCK["updates"] = 0

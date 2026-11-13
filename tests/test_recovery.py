@@ -9,6 +9,7 @@ import actions
 from recovery import (AWAY_AFTER, AWAY_POLL, GAME, L2_SCREENS, TRANSIT, WAIT_STILL, Away, Ladder, Restarts, Watchdog,
                       floor_limit, focused_package, over_time, read_runs, run_limit, same_screen, thumb)
 from test_pipeline import hub_entries, load_nodes
+from agent_patch import patch_all
 
 
 def screen(level):
@@ -533,8 +534,8 @@ def hub(monkeypatch, tmp_path):
     """A fake Maa context for Recover and DailyRecover: a blank screen, every recovery level goes through and GoHome ends
     on the main window; a fresh ladder and task."""
     monkeypatch.setattr(actions.time, "sleep", lambda s: None)
-    monkeypatch.setattr(actions, "ROOT", tmp_path)
-    monkeypatch.setattr(actions, "TASK", {"runs": 0, "done": None})  # the module's own back after the test
+    patch_all(monkeypatch, "ROOT", tmp_path)
+    patch_all(monkeypatch, "TASK", {"runs": 0, "done": None})  # the module's own back after the test
     ctx = MagicMock()
     ctx.tasker.controller.post_screencap.return_value.wait.return_value.get.return_value = np.zeros((720, 1280, 3), np.uint8)
     ctx.tasker.get_node_detail.return_value.name = "HomeReached"  # go_home() reads GoHome's last node (#514)
@@ -582,7 +583,7 @@ def test_recover_climbs_as_before_when_the_focus_cannot_be_read(hub, failed):
 def stops(monkeypatch):
     """The reasons actions.stop was called with; the stop procedure itself does not run."""
     reasons = []
-    monkeypatch.setattr(actions, "stop", lambda context, reason, line=None: reasons.append(reason) or False)
+    patch_all(monkeypatch, "stop", lambda context, reason, line=None: reasons.append(reason) or False)
     return reasons
 
 
