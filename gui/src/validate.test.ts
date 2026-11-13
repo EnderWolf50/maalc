@@ -4,9 +4,11 @@ import cases from "../../tests/settings_cases.json";
 import themePacksYaml from "../../assets/resource/base/data/theme_packs.yaml?raw";
 import {
   MIGRATIONS, OLDEST_VERSION, SKILL_SWAPS, VERSION, cleanGiftList, newSettings, newTeam, parseSettings, parseThemePacks, schema,
-  skillPlan, type GiftList,
+  skillPlan, type GiftList, type Settings,
 } from "./model";
-import { pyRepr, validate } from "./validate";
+import { GIFT_BY_ID } from "./giftCatalog";
+import { TEXT } from "./i18n";
+import { pyRepr, sayProblem, validate } from "./validate";
 
 type Edit = { set: string; value: unknown } | { delete: string };
 
@@ -39,6 +41,58 @@ describe("tests/settings_cases.json", () => {
       }
     });
   }
+});
+
+/** A file with every problem the cross checks know, once each. */
+function everyProblem(): Settings {
+  const s = structuredClone(cases.valid) as unknown as Settings;
+  const team = (id: string, name: string, slot: number) => ({ ...newTeam(slot, name), id });
+  s.teams = [team("a", "Ta", 1), team("b", "Tb", 1), team("a", "Tc", 3), team("d", "Td", 4), team("e", "Te", 5)];
+  s.teams[0].deployment_order = { plan: "gone" };
+  s.teams[0].skill_replacement.sinners = [
+    { sinner: "Yi Sang", target: { s1: 4, s2: 1, s3: 1 }, s1_s3_first: true },
+    { sinner: "Yi Sang", target: { s1: 2, s2: 4, s3: 0 }, s1_s3_first: true },
+    { sinner: "Faust", target: { s1: 1, s2: 1, s3: 1 }, s1_s3_first: true },
+  ];
+  s.run.target_floor = 10;
+  s.run.difficulty = "normal";
+  s.teams[1].usage = "normal_only";
+  s.teams[2].hard_from_floor = 3;
+  s.teams[3].hard_from_floor = null;
+  s.starlight_plans = [{ ...s.starlight_plans[0], id: "s1", name: "Same" }, { ...s.starlight_plans[0], id: "s1", name: "Same" }];
+  s.gift_lists = [{ ...s.gift_lists[0], want: [9780], keep: [9780] }];
+  s.luxcavation.exp.team = "gone";
+  s.event_overrides = [{ question: "Q", option: "a" }, { question: "Q", option: "b" }];
+  s.trial_risk_overrides = [{ trial: "Growth I", risk: 1 }, { trial: "Growth I", risk: 2 }];
+  return s;
+}
+
+describe("what the editor says of a problem", () => {
+  const keys = (Object.keys(TEXT.zh_tw) as (keyof typeof TEXT.zh_tw)[]).filter((k) => k.startsWith("problem."));
+  const problems = validate(everyProblem());
+
+  test("every kind of problem the checks find has words of its own", () => {
+    expect(new Set(problems.map((p) => p.say.key))).toEqual(new Set(keys.filter((k) => k !== "problem.schema")));
+  });
+
+  test.each(["zh_tw", "en_us"] as const)("in %s, every placeholder is filled and no settings path shows", (lang) => {
+    for (const p of [...problems, ...validate({ ...cases.valid, version: "x" })]) {
+      const said = sayProblem(p, lang);
+      expect(said).not.toMatch(/\{\w+\}/);
+      if (p.say.key !== "problem.schema") expect(said).not.toMatch(/\w\/\w/);
+    }
+  });
+
+  test("two teams on one TEAMS slot are named, with the way out", () => {
+    const p = problems.find((x) => x.say.key === "problem.slot")!;
+    expect(sayProblem(p, "zh_tw")).toBe("隊伍「Ta」、「Tb」都啟用，也都用 TEAMS #1：改其中一支的遊戲內隊伍欄位，或停用一支。");
+    expect(sayProblem(p, "en_us")).toBe('Teams "Ta", "Tb" are all enabled and all use TEAMS #1. Give one another slot, or disable one.');
+  });
+
+  test("a gift is said by its name", () => {
+    const p = problems.find((x) => x.say.key === "problem.wantKeep")!;
+    expect(sayProblem(p, "en_us")).toContain(GIFT_BY_ID.get(9780)!.en);
+  });
 });
 
 test("pyRepr matches Python repr", () => {

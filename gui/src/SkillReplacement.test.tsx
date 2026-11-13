@@ -308,7 +308,7 @@ describe("in the whole editor", () => {
     await user.click(await screen.findByText(zh["skill.title"], { exact: false, selector: "summary" }));
     await user.click(screen.getByRole("button", { name: zh.save }));
     expect(file.saved).toEqual([]);
-    expect(screen.getAllByRole("alert").map((a) => a.textContent).join("\n")).toContain("'Yi Sang' targets 4 of skill 1");
+    expect(screen.getAllByRole("alert").map((a) => a.textContent).join("\n")).toContain("Yi Sang：技能 1 的目標是 4");
     await user.click(within(row("Yi Sang")).getByRole("button", { name: `${zh["skill.remove"]} Yi Sang` }));
     await user.click(screen.getByRole("button", { name: zh.save }));
     await waitFor(() => expect(file.saved).toHaveLength(1));

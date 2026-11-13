@@ -10,7 +10,7 @@ import {
   Decimal, EditorContext, Field, Input, Mark, Num, Select, ToggleNum, focusPath, nextTab, isPickList, makeCtx, translate, useEditor, withBreaks,
   type Picked,
 } from "./ui";
-import { validate, type Problem } from "./validate";
+import { sayProblem, validate, type Problem } from "./validate";
 
 export const TABS = [
   ["run", "tab.run", RunTab, ["run"]],
@@ -299,7 +299,10 @@ export default function App() {
             <div className="problems" role="alert">
               <p>{t("saveBlocked")}</p>
               <ul>{problems.map((p, i) => (
-                <li key={i} id={problemId(i)}>{tabOf(p.paths[0]) ? <button type="button" onClick={() => goTo(p.paths[0])}>{p.text}</button> : p.text}</li>
+                // the editor's words; the bot's own (English) text stays on hover, as the log and a bug report have it
+                <li key={i} id={problemId(i)} title={p.text}>
+                  {tabOf(p.paths[0]) ? <button type="button" onClick={() => goTo(p.paths[0])}>{sayProblem(p, lang)}</button> : sayProblem(p, lang)}
+                </li>
               ))}</ul>
             </div>
           )}
