@@ -21,6 +21,7 @@ assets/resource/base/model/ocr/
 /mxu/
 /.playwright-mcp/
 /.claude/worktrees/
+/.impeccable/
 
 # Machine-local state of the main checkout (see docs/agents/local-dev.md)
 /.local/
