@@ -1,12 +1,12 @@
 // Component tests of the theme pack plan screen's "含想要" mark (#421, spec 04 section 8): which packs carry it and what its
 // tooltip lists, for the list the teams using the plan hold.
-import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, test } from "vitest";
 import recipes from "../../assets/resource/base/data/gift_recipes.json";
 import { GIFT_BY_ID } from "./giftCatalog";
-import { TEXT } from "./i18n";
-import { GIFT_KEYWORDS, defaultGorder, newSettings, newTeam, type GiftList, type Settings } from "./model";
-import { ThemePackTab } from "./Plans";
+import { TEXT, fill } from "./i18n";
+import { GIFT_KEYWORDS, SINNERS, defaultGorder, newSettings, newTeam, type GiftList, type Settings } from "./model";
+import { DeploymentTab, ThemePackTab } from "./Plans";
 import { expectLines, renderEditor } from "./testing";
 import { useEditor } from "./ui";
 
@@ -113,6 +113,21 @@ test("INFINITY and EXTREME are choices of the filter and badges of a pack", asyn
   expect(shown("Chachihu")).toBe(false);
   expect(shown("The Heartbreaking")).toBe(true);
   expect(screen.getAllByRole("img", { name: `${zh["packs.floorsInfinity"]} 6–10` }).length).toBeGreaterThan(0);
+});
+
+describe("deleting a plan", () => {
+  test("can be undone: the plan comes back in its place, in the editor", async () => {
+    const plans = ["D1", "D2", "D3"].map((name) => ({ id: name.toLowerCase(), name, order: [...SINNERS] }));
+    const r = renderEditor(<DeploymentTab />, settings({ deployment_order_plans: plans }));
+    await r.user.click(within(document.querySelector("aside")!).getByText("D2"));
+    await r.user.click(screen.getByRole("button", { name: zh.remove }));
+    expect(r.settings().deployment_order_plans.map((p) => p.name)).toEqual(["D1", "D3"]);
+    expect(screen.getByRole("status")).toHaveTextContent(fill(zh["undo.deleted"], { name: "D2" }));
+    await r.user.click(screen.getByRole("button", { name: zh.undo }));
+    expect(r.settings().deployment_order_plans).toEqual(plans);
+    expect(screen.getByRole("textbox", { name: zh.name })).toHaveValue("D2");
+    expect(screen.queryByRole("button", { name: zh.undo })).toBeNull();
+  });
 });
 
 test("a plan's hint and the event pack note show one topic to a line", async () => {

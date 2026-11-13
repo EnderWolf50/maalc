@@ -11,7 +11,7 @@ import {
 import { GIFT_BY_ID, giftName } from "./giftCatalog";
 import { listsOfPlan, packWanted } from "./gifts";
 import { fill } from "./i18n";
-import { Field, Icon, ReorderList, Select, useEditor, usePick, withBreaks, type PlanKey } from "./ui";
+import { Field, Icon, ReorderList, Select, useEditor, usePick, useUndo, withBreaks, type PlanKey } from "./ui";
 
 /** The 12 sinners in the game's grid; clicking adds one at the end of the order or leaves it out
  * (spec 04 section 6). Read-only without onChange. */
@@ -102,7 +102,9 @@ function PlanTab<P extends { id: string; name: string }>({ planKey, tab, make, e
   const { s, update, t, bad } = useEditor();
   const plans = s[planKey] as unknown as P[];
   const [i, setSel] = usePick(planKey, plans, lead?.id); // -1: the lead
+  const [undoNote, removeAt] = useUndo();
   const set = (fn: (list: P[]) => void) => update((d) => fn(d[planKey] as unknown as P[]));
+  const remove = () => removeAt(plans, i, set, setSel);
   const add = () => {
     const id = newId();
     set((list) => list.push({ ...make(), id, name: freeName(t(tab), plans.map((p) => p.name)) } as P));
@@ -117,6 +119,7 @@ function PlanTab<P extends { id: string; name: string }>({ planKey, tab, make, e
             badAt={(j) => bad(`${planKey}/${j}`)} onChange={(list) => set((l) => l.splice(0, l.length, ...list))}
             render={(p) => p.name || "—"} />
         ) : <p className="muted">{t("noPlans")}</p>}
+        {undoNote}
         <button type="button" onClick={add}>+ {t("add")}</button>
       </aside>
       <section data-path={i >= 0 ? `${planKey}/${i}` : undefined}>
@@ -126,7 +129,7 @@ function PlanTab<P extends { id: string; name: string }>({ planKey, tab, make, e
               <Field label={t("name")} path={`${planKey}/${i}/name`}>
                 <input value={plans[i].name} onChange={(e) => set((l) => { l[i].name = e.target.value; })} />
               </Field>
-              <button type="button" className="danger" onClick={() => { set((l) => l.splice(i, 1)); setSel((plans[i - 1] ?? plans[i + 1])?.id); }}>
+              <button type="button" className="danger" onClick={remove}>
                 {t("remove")}
               </button>
             </div>

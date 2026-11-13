@@ -1,6 +1,6 @@
 // Undo (#664): the header's 復原 and Ctrl+Z take back the last edit, so a deleted plan or override row, or a wrong click on a
 // game panel, is one step away from where it was. A text field keeps the browser's own Ctrl+Z for its text.
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import App from "./App";
@@ -31,7 +31,8 @@ async function open(tab: string) {
   await user.click(await screen.findByRole("tab", { name: tab }));
   return user;
 }
-const undoButton = () => screen.getByRole("button", { name: new RegExp(`^${zh.undo}`) });
+// the header's 復原 (a deleted plan also gets its own 復原 under the list, #685)
+const undoButton = () => within(screen.getByRole("banner")).getByRole("button", { name: new RegExp(`^${zh.undo}`) });
 
 beforeEach(() => { file.text = JSON.stringify(settings(), null, 2) + "\n"; });
 
@@ -45,11 +46,11 @@ describe("undo", () => {
     const user = await open(zh["tab.deployment"]);
     await user.click(screen.getByRole("button", { name: zh.remove }));
     expect(screen.queryByDisplayValue("Bleed order")).toBeNull();
-    expect(screen.getByRole("status")).toHaveTextContent(zh.unsaved);
+    expect(within(screen.getByRole("banner")).getByRole("status")).toHaveTextContent(zh.unsaved);
 
     await user.click(undoButton());
     expect(screen.getByDisplayValue("Bleed order")).toBeInTheDocument();
-    expect(screen.getByRole("status")).not.toHaveTextContent(zh.unsaved);
+    expect(within(screen.getByRole("banner")).getByRole("status")).not.toHaveTextContent(zh.unsaved);
     expect(undoButton()).toBeDisabled();
   });
 
@@ -87,9 +88,9 @@ describe("undo", () => {
     const user = await open(zh["tab.deployment"]);
     await user.click(screen.getByRole("button", { name: zh.remove }));
     await user.click(screen.getByRole("button", { name: zh.save }));
-    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent(zh.saved));
+    await waitFor(() => expect(within(screen.getByRole("banner")).getByRole("status")).toHaveTextContent(zh.saved));
     await user.click(undoButton());
     expect(screen.getByDisplayValue("Bleed order")).toBeInTheDocument();
-    expect(screen.getByRole("status")).toHaveTextContent(zh.unsaved);
+    expect(within(screen.getByRole("banner")).getByRole("status")).toHaveTextContent(zh.unsaved);
   });
 });

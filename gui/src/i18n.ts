@@ -7,7 +7,6 @@ export const fill = (text: string, vars: Record<string, string | number>) => tex
 const zh_tw = {
   title: "maalc 設定",
   save: "儲存",
-  undo: "復原",
   blocked: "未儲存：有錯誤",
   hasProblem: "（有錯誤）",
   "team.sections": "跳到區塊",
@@ -68,6 +67,8 @@ const zh_tw = {
   name: "名稱",
   add: "新增",
   remove: "刪除",
+  undo: "復原",
+  "undo.deleted": "已刪除「{name}」。",
   up: "上移",
   down: "下移",
   dragHint: "拖曳或用上移／下移調整順序",
@@ -306,7 +307,6 @@ const zh_tw = {
 const en_us: typeof zh_tw = {
   title: "maalc settings",
   save: "Save",
-  undo: "Undo",
   blocked: "Not saved: problems",
   hasProblem: " (has a problem)",
   "team.sections": "Jump to section",
@@ -365,6 +365,8 @@ const en_us: typeof zh_tw = {
   name: "Name",
   add: "Add",
   remove: "Delete",
+  undo: "Undo",
+  "undo.deleted": "Deleted “{name}”.",
   up: "Move up",
   down: "Move down",
   dragHint: "Drag, or use Move up / Move down, to reorder",

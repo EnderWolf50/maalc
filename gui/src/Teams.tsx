@@ -11,11 +11,13 @@ import {
 } from "./model";
 import { SinnerGrid, StarlightEditor } from "./Plans";
 import { SkillPanel } from "./SkillReplacement";
-import { Field, Holds, Num, ProblemMark, ReorderList, Select, ToggleNum, tabKeys, useEditor, usePick, withBreaks } from "./ui";
+import { Field, Holds, Num, ProblemMark, ReorderList, Select, ToggleNum, tabKeys, useEditor, usePick, useUndo, withBreaks } from "./ui";
 
 export function TeamsTab() {
   const { s, update, t, bad } = useEditor();
   const [i, setSel] = usePick("teams", s.teams);
+  const [undoNote, removeAt] = useUndo();
+  const remove = () => removeAt(s.teams, i, (fn) => update((d) => fn(d.teams)), setSel);
   return (
     <div className="split">
       <aside>
@@ -27,6 +29,7 @@ export function TeamsTab() {
               <span className={x.enabled ? "" : "muted"}>{x.name || "—"} <small className={bad(`teams/${j}/game_team`) ? "bad" : undefined}>#{x.game_team}</small></span>
             )} />
         ) : <p className={"muted" + (bad("teams") ? " bad" : "")}>{t("noTeams")}</p>}
+        {undoNote}
         <button type="button" onClick={() => {
           const n = s.teams.length + 1;
           const team = newTeam(n, `${t("teamName")} ${n}`);
@@ -35,7 +38,7 @@ export function TeamsTab() {
         }}>+ {t("add")}</button>
         <p className="muted">{t("teams.queue")}</p>
       </aside>
-      <section>{s.teams[i] && <TeamEditor i={i} onRemove={() => setSel(s.teams[i - 1]?.id)} />}</section>
+      <section>{s.teams[i] && <TeamEditor i={i} onRemove={remove} />}</section>
     </div>
   );
 }
@@ -94,7 +97,7 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
           if (!confirm(t("resetConfirm"))) return;
           try { await resetTeamTimes(team.id); setNotice(t("resetDone")); } catch (e) { setNotice(String(e)); }
         }}>{t("resetTimes")}</button>
-        <button type="button" className="danger" onClick={() => { update((d) => { d.teams.splice(i, 1); }); onRemove(); }}>{t("remove")}</button>
+        <button type="button" className="danger" onClick={onRemove}>{t("remove")}</button>
       </div>
       {notice && <p className="notice">{notice}</p>}
       {/* The page runs about seven screens: a row of its sections, which stays at the top while it scrolls, opens one and goes

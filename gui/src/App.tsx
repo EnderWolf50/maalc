@@ -146,6 +146,21 @@ export default function App() {
     }, (e) => setLoadError(String(e)));
   }, []);
 
+  // Ctrl+S is the Save button, in a field too; the browser's own Save page never opens.
+  const saveRef = useRef(() => {});
+  saveRef.current = () => {}; // until this render has a save to offer: none on the load error screen
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      // an input method can report the key as "Process": then its place on the keyboard says it is S
+      const s = e.key === "Process" ? e.code === "KeyS" : e.key.toLowerCase() === "s";
+      if (!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey || !s) return;
+      e.preventDefault();
+      if (!e.repeat) saveRef.current(); // held down: one save, not one per repeat
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
   // A clicked problem's field, focused once its tab and its team or plan are on screen.
   useEffect(() => {
     if (jump === null) return;
@@ -204,6 +219,7 @@ export default function App() {
       setStatus(String(e));
     }
   };
+  saveRef.current = save;
 
   /** Show where a problem points: its tab and the team, plan or gift list it names; the effect above then focuses its field. */
   const goTo = (path: string) => {
