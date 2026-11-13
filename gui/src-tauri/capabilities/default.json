@@ -9,6 +9,7 @@
     "allow-load-settings",
     "allow-load-theme-packs",
     "allow-save-settings",
-    "allow-append-runs-log"
+    "allow-append-runs-log",
+    "allow-accent-color"
   ]
 }

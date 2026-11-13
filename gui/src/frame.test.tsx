@@ -91,6 +91,18 @@ describe("the team list", () => {
     expect(screen.getByText(zh.unsaved)).toBeInTheDocument();
   });
 
+  test("a team dragged onto another takes its place in the queue", async () => {
+    render(<App />);
+    await screen.findByRole("tab", { name: zh["tab.teams"] });
+    const dataTransfer = { setData() {}, effectAllowed: "", dropEffect: "" };
+    const [a, b] = rows();
+    fireEvent.dragStart(b, { dataTransfer });
+    fireEvent.dragOver(a, { dataTransfer });
+    fireEvent.drop(a, { dataTransfer });
+    fireEvent.dragEnd(b, { dataTransfer });
+    expect(queue()).toEqual(["Tb", "Ta", "Tc"]);
+  });
+
   test("only the selected team is a Tab stop", async () => {
     render(<App />);
     await screen.findByRole("tab", { name: zh["tab.teams"] });

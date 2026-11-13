@@ -8,6 +8,7 @@ fn main() {
             "load_theme_packs",
             "save_settings",
             "append_runs_log",
+            "accent_color",
         ]),
     ))
     .unwrap();
