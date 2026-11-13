@@ -1,5 +1,6 @@
 """CI shards the tests by file: SHARD=i of SHARDS=n keeps the files the greedy split below gives shard i. Unset, every
-test runs."""
+test runs. The run also notes the docs and gui files the tests open, and fails when the CI `read` filter lacks one
+(tests/ci_filter.py)."""
 
 import inspect
 import json
@@ -7,11 +8,25 @@ import os
 
 import pytest
 
+import ci_filter
 from shard_seconds import TABLE
 
 # Seconds each file took on a CI runner, written by tools/shard_seconds.py; an unlisted file counts 0.15 s a test.
 # CI's shard-balance job reports (does not block) when a number no longer matches the run.
 FILE_SECONDS = json.loads(TABLE.read_text(encoding="utf-8"))
+
+
+ci_filter.install()  # from here on, every file the tests open is noted (#684)
+
+
+def pytest_sessionfinish(session, exitstatus):
+    """A run that opened a docs, gui or root *.md file the CI `read` filter lacks fails: a change to that file alone would
+    skip the tests that read it (tests/ci_filter.py)."""
+    missing = ci_filter.unlisted(ci_filter.all_opened())
+    ci_filter.forget_log()
+    if missing:
+        print(f"\nopened, but missing from the `read` filter of the changes job in .github/workflows/ci.yml: {missing}")
+        session.exitstatus = pytest.ExitCode.TESTS_FAILED
 
 
 def child_timeout(item):
