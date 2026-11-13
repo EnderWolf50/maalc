@@ -136,5 +136,13 @@ def test_the_guard_passes_patch_all_and_an_object_a_module_holds(line):
     assert direct_sets(line, {"actions", "lux_actions"}) == []
 
 
+def test_no_test_or_tool_sets_a_name_on_an_actions_module_directly():
+    # monkeypatch.setattr(actions, ...) and actions.<name> = ... miss a page module's own binding: use patch_all, rebind
+    modules = {"actions", *(p.stem for p in (ROOT / "agent").glob("*_actions.py"))}
+    found = [f"{path.relative_to(ROOT).as_posix()}:{n}" for folder in ("tests", "tools") for path in sorted((ROOT / folder).rglob("*.py"))
+             for n in direct_sets(path.read_text(encoding="utf-8"), modules)]
+    assert not found, "set these through agent_patch.patch_all or rebind: " + ", ".join(found)
+
+
 if __name__ == "__main__":
     child()
