@@ -4,7 +4,7 @@ import { expect, test } from "vitest";
 import { TABS } from "./App";
 import { TEXT } from "./i18n";
 import { newSettings } from "./model";
-import { renderEditor } from "./testing";
+import { expectLines, renderEditor } from "./testing";
 
 const zh = TEXT.zh_tw;
 const TrialsTab = TABS.find((tab) => tab[0] === "trials")![2];
@@ -33,7 +33,7 @@ test("a score that is no number or below 0 leaves the last one, and the field sh
   expect(score).toHaveValue("1.5");
 });
 
-test("the tab says what a score means", () => {
+test("the tab says what a score means, each paragraph on a line of its own", () => {
   renderEditor(<TrialsTab />, newSettings());
-  expect(screen.getByText(zh["trial.note"])).toBeInTheDocument();
+  expectLines(zh["trial.note"]);
 });
