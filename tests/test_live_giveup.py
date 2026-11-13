@@ -66,15 +66,16 @@ def point(xy):
 
 def test_the_taps_are_the_bots_own():
     import actions
+    import map_actions
 
     def centre(target):
         x, y, w, h = target
         return (x + w // 2, y + h // 2)
 
     nodes = load_nodes()
-    assert (gu.MAP_GEAR, gu.FORFEIT, gu.FORFEIT_CONFIRM) == (actions.GEAR, actions.FORFEIT, actions.FORFEIT_CONFIRM)
+    assert (gu.MAP_GEAR, gu.FORFEIT, gu.FORFEIT_CONFIRM) == (map_actions.GEAR, map_actions.FORFEIT, map_actions.FORFEIT_CONFIRM)
     assert gu.BACK == gu.Key(actions.BACK_KEY)
-    assert (gu.FORFEIT_DIALOG, gu.DIALOG_TEXT) == (actions.FORFEIT_DIALOG, actions.DIALOG_TEXT)
+    assert (gu.FORFEIT_DIALOG, gu.DIALOG_TEXT) == (map_actions.FORFEIT_DIALOG, actions.DIALOG_TEXT)
     assert (gu.GIVE_UP_REWARDS, gu.DIALOG_CANCEL, gu.DIALOG_CONFIRM) == (actions.GIVE_UP, actions.DIALOG_CANCEL, actions.DIALOG_CONFIRM)
     assert (gu.ACCEPT_RESULTS, gu.WIPE_CONFIRM, gu.FORMATION_BACK) == (actions.DEFEAT_OPTIONS["forfeit"], actions.DEFEAT_CONFIRM,
                                                                      actions.FORMATION_BACK)

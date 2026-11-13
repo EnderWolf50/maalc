@@ -48,7 +48,7 @@
         "template": "Map/MapNodeCost.png",
         "threshold": 0.8
     },
-    // #522: the Cost coin with its top rows under the resource bar (actions.coin_cut_by_bar): 0.658 on MapPanned.png's
+    // #522: the Cost coin with its top rows under the resource bar (map_actions.coin_cut_by_bar): 0.658 on MapPanned.png's
     // Focused at 725, 106; the 42 events and shops of the labelled map captures 0.408 at most. Over the full frame of
     // the 227 captures in tests/screens, 74 hits under MapNodeCost's 0.8: on the map captures 11, each a Cost coin (cut
     // by the HUD, behind a popup or the bus); the 63 others on pages RouteMap does not read.
@@ -118,7 +118,7 @@
         ],
         "count": 6
     },
-    // The shop icon in grey, for a screenshot flattened to its brightness (actions.shop_icon): the colour templates above
+    // The shop icon in grey, for a screenshot flattened to its brightness (map_actions.shop_icon): the colour templates above
     // miss it on some packs (cyan, orange). Run on a crop, so the roi is the crop.
     "MapNodeShopIcon": {
         "recognition": "TemplateMatch",

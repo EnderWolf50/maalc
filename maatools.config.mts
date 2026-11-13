@@ -315,7 +315,7 @@ const screens: [image: string, hits: string[]][] = [
   ['ShopHeal.png', []],
 ]
 
-// The node marks (actions.MARKS) RouteMap reads around a slot next to the bus, only on the map: they run on the
+// The node marks (map_actions.MARKS) RouteMap reads around a slot next to the bus, only on the map: they run on the
 // map screens alone (those MapBus hits), not on the other screens the bot never reads them on. #156: the
 // FeatureMatch marks SIFT the whole image whatever their roi (measured in #163), ~1-3 s per image on a CI runner.
 const marks = new Set(['MapNodeBoss', 'MapNodeFocusedHex', 'MapNodeFocusedRound', 'MapNodeCost', 'MapNodeGift',

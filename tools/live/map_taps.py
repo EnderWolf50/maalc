@@ -10,7 +10,7 @@ are wall clock, `HH:MM:SS[.fff]`, of the log's day.
 **The touches.** The controller's `x: X, y: Y, width: W, height: H` lines, in device pixels (shown in the game's
 1280x720); a burst of points under 0.25 s and 150 px apart is one touch (a drag), as `evidence.py events` joins them.
 Which touches are on the map, and of what kind, comes from the `[maalc] map:` line after them (`RouteMap` in
-agent/actions.py):
+agent/map_actions.py):
 
   follow      the tap before `follow plan`, `planned ... took no tap`, `... moved the map but showed no panel` or
               `no answer to the tap ...; tapping again`

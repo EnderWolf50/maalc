@@ -64,6 +64,7 @@ def child():
     sys.modules["maa.agent"] = types.ModuleType("maa.agent")
     sys.modules["maa.agent.agent_server"] = stub
     import actions
+    import map_actions
 
     class Still(CustomController):
         def connect(self):
@@ -90,8 +91,8 @@ def child():
                         image = np.asarray(Image.open(ROOT / "tests" / "screens" / f"{name}.png").convert("RGB"))[:, :, ::-1].copy()
                         bus = actions.seen(context, image, "MapBus")
                         bx, by = bus.box[0], bus.box[1]
-                        slots = actions.RouteMap.read_slots(context, image, bx, by)
-                        ahead = actions.RouteMap.read_ahead(context, image, bx + actions.SLOT[0], by + actions.SLOT[1], slots)
+                        slots = map_actions.RouteMap.read_slots(context, image, bx, by)
+                        ahead = map_actions.RouteMap.read_ahead(context, image, bx + map_actions.SLOT[0], by + map_actions.SLOT[1], slots)
                         out[name] = [{"bus": [bx, by]}, {row: [kind, None] for row, (kind, _) in slots.items()},
                                      *({row: [kind, sorted(src)] for row, (kind, src) in column.items()} for column in ahead)]
             except Exception:  # MaaFramework swallows it: hand it to the test
