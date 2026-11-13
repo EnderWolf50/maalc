@@ -325,7 +325,8 @@ def hub_name(context):
 
 def hands_back(run):
     """An action's run(): PageGone ends it with True, for the task's hub (MirrorHub, ExpHub, ...) to look at the screen
-    now up (#118)."""
+    now up (#118). SettingsError (settings that do not load, as when current_run makes the run plan up after a restart
+    mid-run) ends it through the stop procedure, as any bad settings do (#668)."""
     @functools.wraps(run)
     def wrapped(self, context, argv):
         try:
@@ -333,6 +334,8 @@ def hands_back(run):
         except PageGone as e:
             log(f"{type(self).__name__}: {e} is gone: back to {hub_name(context)}")
             return True
+        except SettingsError as e:
+            return stop(context, str(e))
     return wrapped
 
 
@@ -1924,6 +1927,7 @@ class BuyStarlight(CustomAction):
 class ConfirmStarlight(CustomAction):
     """Set Convert Starlight to Cost per the plan, press Confirm."""
 
+    @hands_back
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         run = current_run(context)
         want = run_start.resolve_plan(run["settings"], run["team"], "starlight")["convert_leftover"]
@@ -3577,6 +3581,7 @@ class Wipe(CustomAction):
     Accept results only on the way to forfeiting: it keeps the deaths.
     """
 
+    @hands_back
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         settings = current_run(context)["settings"]["run"]
         used = RUN.get("wipes", 0)

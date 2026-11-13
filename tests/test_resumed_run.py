@@ -113,6 +113,19 @@ def test_a_stop_line_is_written_when_no_team_fits_the_set_difficulty(resumed, mo
     assert (last_line()["team"], last_line()["result"]) == (None, "stop")
 
 
+@pytest.mark.parametrize("action", [actions.SelectTeam, actions.ConfirmStarlight, actions.Wipe])
+def test_a_restart_mid_run_on_a_broken_settings_file_stops_and_says_why(resumed, monkeypatch, action):
+    # #668: the first page action after the restart makes the run plan up from the file, which no longer loads.
+    monkeypatch.setattr(actions, "TASK", {"runs": 0, "done": None})
+    actions.TaskStart().run(resumed, SimpleNamespace(node_name="MirrorDungeon"))
+    (actions.ROOT / "config" / "settings.json").write_text("{", encoding="utf-8")
+    actions.LOG.clear()
+    assert action().run(resumed, argv()) is False
+    said = [line.split(" ", 1)[1] for line in actions.LOG]
+    assert said[0].startswith("stop: Invalid settings:\n- ") and "is not readable JSON" in said[0]
+    assert actions.TASK["ended"]
+
+
 def test_a_daily_task_stopped_with_no_run_plan_writes_no_mirror_line(resumed, monkeypatch):
     stopped_at_once(resumed, monkeypatch, "ExpLuxcavation")
     assert not (actions.ROOT / "logs" / "runs.jsonl").exists()
