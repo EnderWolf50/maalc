@@ -7,7 +7,7 @@ import { DeploymentTab, StarlightTab, ThemePackTab } from "./Plans";
 import { GiftListsTab } from "./GiftLists";
 import { TeamsTab } from "./Teams";
 import {
-  Decimal, EditorContext, Field, Num, PICK_LISTS, Select, ToggleNum, focusPath, makeCtx, translate, useEditor, withBreaks,
+  Decimal, EditorContext, Field, Num, Select, ToggleNum, focusPath, isPickList, makeCtx, translate, useEditor, withBreaks,
   type Picked,
 } from "./ui";
 import { validate, type Problem } from "./validate";
@@ -160,9 +160,9 @@ export default function App() {
   /** Show where a problem points: its tab and the team, plan or gift list it names; the effect above then focuses its field. */
   const goTo = (path: string) => {
     const [section, index] = path.split("/");
-    const item = (s as unknown as Record<string, { id: string }[] | undefined>)[section]?.[Number(index)];
-    if (item && section === "gift_lists") setGiftList(item.id);
-    else if (item && PICK_LISTS.some((x) => x === section)) ctx.pick(section as keyof Picked, item.id);
+    const at = Number(index);
+    if (section === "gift_lists" && s.gift_lists[at]) setGiftList(s.gift_lists[at].id);
+    else if (isPickList(section) && s[section][at]) ctx.pick(section, s[section][at].id);
     setTab(tabOf(path)![0]);
     setJump(path);
   };
@@ -227,7 +227,7 @@ function RunTab() {
         onChange={(v) => set({ runs: v })} />
       {pick("weekly_bonus_use", run.weekly_bonus_use === "normal" ? t("run.weekly_bonus_normal_note") : undefined)}
       {pick("weekly_bonus_amount")}
-      <label className={"check" + (bad("run/stop_when_weekly_bonus_out") ? " bad" : "")}>
+      <label className={"check" + (bad("run/stop_when_weekly_bonus_out") ? " bad" : "")} data-path="run/stop_when_weekly_bonus_out">
         <input type="checkbox" checked={run.stop_when_weekly_bonus_out} onChange={(e) => set({ stop_when_weekly_bonus_out: e.target.checked })} />
         {t("run.stop_when_weekly_bonus_out")}
       </label>
@@ -236,7 +236,7 @@ function RunTab() {
       {pick("after_retries")}
       {pick("theme_pack_refresh", t("run.theme_pack_refresh_note"))}
       {(["auto_accept_terms", "auto_download", "keep_dismissed_screens"] as const).map((k) => (
-        <label key={k} className={"check" + (bad(`run/${k}`) ? " bad" : "")}>
+        <label key={k} className={"check" + (bad(`run/${k}`) ? " bad" : "")} data-path={`run/${k}`}>
           <input type="checkbox" checked={run[k]} onChange={(e) => set({ [k]: e.target.checked })} />
           {t(`run.${k}`)}
         </label>

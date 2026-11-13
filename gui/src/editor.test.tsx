@@ -104,9 +104,31 @@ describe("clicking a problem", () => {
     const s = settings();
     s.teams[0].skill_replacement.sinners = [{ sinner: "Yi Sang", target: { s1: 3, s2: 2, s3: 2 }, s1_s3_first: true }];
     const user = await blocked(s, zh["tab.run"]);
-    expect(screen.queryByText("Yi Sang", { selector: ".skill-name" })).toBeNull(); // the panel starts closed
     await user.click(problem(/skill_replacement\/sinners\/0\/target/));
     expect(screen.getByText(new RegExp(zh["skill.title"]), { selector: "summary" }).closest("details")).toHaveAttribute("open");
+    // the row itself: its first enabled control is its delete button, which Space would press
+    expect(document.activeElement).toHaveAttribute("data-sinner", "Yi Sang");
+  });
+
+  test("with no field of its own, focuses its team's first field, not the list beside it", async () => {
+    const s = settings();
+    s.teams[1].id = "a"; // two teams with one id
+    const user = await blocked(s, zh["tab.run"]);
+    await user.click(problem(/teams: id 'a'/));
+    expect(nameBox()).toHaveValue("Ta");
+    expect(nameBox()).toHaveFocus();
+  });
+
+  test.each([
+    ["a team's switch", (s: Settings) => { s.teams[0].guard_turns = 9; }, /teams\/0\/guard_turns/, "team.guard_turns"],
+    ["a switch of the run options", (s: Settings) => { (s.run as Record<string, unknown>).auto_download = "yes"; },
+      /run\/auto_download/, "run.auto_download"],
+  ] as const)("focuses %s", async (_, change, text, label) => {
+    const s = settings();
+    change(s);
+    const user = await blocked(s, zh["tab.daily"]);
+    await user.click(problem(text));
+    expect(screen.getByRole("checkbox", { name: zh[label] })).toHaveFocus();
   });
 
   test("opens its plan on the plan's tab and focuses the field", async () => {
@@ -137,5 +159,6 @@ describe("clicking a problem", () => {
     await user.click(problem(/gift_lists\/0/));
     expect(tab(zh["tab.gifts"])).toHaveAttribute("aria-selected", "true");
     expect(screen.getByRole("combobox", { name: zh["gl.list"] })).toHaveValue("g1");
+    expect(screen.getByRole("combobox", { name: zh["gl.list"] })).toHaveFocus();
   });
 });

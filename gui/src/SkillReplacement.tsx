@@ -50,7 +50,7 @@ export function SkillPanel({ i }: { i: number }) {
           // a step moves one card between S1 and `k`, so the deck stays 6
           const shift = (k: Stepped, d: 1 | -1) => edit((draft) => { const goal = draft.sinners[j].target; goal.s1 -= d; goal[k] += d; });
           return (
-            <li key={n ? `${x.sinner}#${n}` : x.sinner} data-sinner={x.sinner} data-path={rowPath} className={bad(rowPath) || faulty ? "faulty" : ""}
+            <li key={n ? `${x.sinner}#${n}` : x.sinner} data-sinner={x.sinner} data-path={rowPath} tabIndex={-1} className={bad(rowPath) || faulty ? "faulty" : ""}
               {...dragItem(String(j), "sinners")}>
               <span className="grip" aria-hidden>⋮⋮</span>
               <b className="skill-rank">{j + 1}</b>
@@ -102,7 +102,7 @@ export function SkillPanel({ i }: { i: number }) {
       </ol>
       <p className="muted skill-rest">{t("skill.rest")}{rest.join(t("skill.sep")) || t("skill.rest_none")}</p>
       <p className="muted">{t("skill.uptie")}</p>
-      <div className={"toggle" + (bad(`${path}/id_skill_search`) ? " bad" : "")}>
+      <div className={"toggle" + (bad(`${path}/id_skill_search`) ? " bad" : "")} data-path={`${path}/id_skill_search`}>
         <label className="check">
           <input type="checkbox" checked={search.enabled} onChange={(e) => edit((d) => { d.id_skill_search.enabled = e.target.checked; })} />
           {t("skill.id_search")}

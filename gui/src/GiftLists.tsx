@@ -119,7 +119,7 @@ export function GiftListsTab() {
       <div className="gl">
         <div className="gl-top">
           <div className="gl-bar">
-            <label>{t("gl.list")}{" "}
+            <label data-path={readOnly ? undefined : `gift_lists/${at}`}>{t("gl.list")}{" "}
               <select value={shownId} onChange={(e) => setChosen(e.target.value)}>
                 <option value="default">{t("defaultPlanLocked")}</option>
                 {s.gift_lists.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}

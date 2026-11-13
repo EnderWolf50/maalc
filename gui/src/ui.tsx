@@ -25,6 +25,7 @@ export const PICK_LISTS = ["teams", "deployment_order_plans", "starlight_plans",
 export type PlanKey = Exclude<(typeof PICK_LISTS)[number], "teams">;
 /** By id, so the pick stays on its item when the list is reordered; a tab's lead (the theme packs' default plan) by its own id. */
 export type Picked = Partial<Record<(typeof PICK_LISTS)[number], string>>;
+export const isPickList = (section: string): section is keyof Picked => PICK_LISTS.some((x) => x === section);
 export const EditorContext = createContext<Ctx>(null!);
 export const useEditor = () => useContext(EditorContext);
 
@@ -43,18 +44,20 @@ export function usePick(list: keyof Picked, items: { id: string }[], leadId?: st
 const FOCUSABLE = "input:not(:disabled), select:not(:disabled), textarea:not(:disabled), button:not(:disabled), [tabindex]:not([tabindex='-1'])";
 
 /** Scroll to and focus the field a problem path points at: the element in <main> whose data-path is that path or the nearest
- * one above it ("teams/1/target" finds "teams/1"), else the first marked one. Closed panels around it open. */
+ * one above it ("teams/1/id" finds the team's editor, "teams/1"). Closed panels around it open. The element itself takes the
+ * focus when it can (a row with tabIndex -1), else its first enabled control. */
 export function focusPath(path: string) {
-  let best: HTMLElement | undefined;
-  for (const el of document.querySelectorAll<HTMLElement>("main [data-path]")) {
-    const at = el.dataset.path!;
-    if ((path === at || path.startsWith(at + "/")) && at.length > (best?.dataset.path!.length ?? -1)) best = el;
+  let el: HTMLElement | undefined;
+  for (const at of document.querySelectorAll<HTMLElement>("main [data-path]")) {
+    const p = at.dataset.path!;
+    // on a tie the later one, inside the other in document order: a plan's editor in its tab's panel
+    if ((path === p || path.startsWith(p + "/")) && p.length >= (el?.dataset.path!.length ?? 0)) el = at;
   }
-  const el = best ?? document.querySelector<HTMLElement>("main .bad");
   if (!el) return;
   for (let d = el.closest("details"); d; d = d.parentElement!.closest("details")) d.open = true;
   el.scrollIntoView?.({ block: "center" });
-  (el.matches(FOCUSABLE) ? el : el.querySelector<HTMLElement>(FOCUSABLE))?.focus();
+  const target = el.hasAttribute("tabindex") || el.matches(FOCUSABLE) ? el : el.querySelector<HTMLElement>(FOCUSABLE);
+  target?.focus({ preventScroll: true });
 }
 
 /** A help text as shown: each "\n" in it starts a new line, one topic to a line (#664). A text without one stays a string. */
