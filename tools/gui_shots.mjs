@@ -64,6 +64,8 @@ const SHOTS = [
   { name: "daily-full", steps: `await $.tab("daily", ${TAB.daily});` },
   // Save refused: two enabled teams on one TEAMS slot (validate.ts crossCheck), so the banner, the marked tab and field show.
   { name: "save-blocked", settings: "clash", steps: `await $.tab("teams", ${TAB.teams}); await $.click("header button.primary");` },
+  // Unsaved changes: a team renamed and not saved, so the header shows what an edit leaves before Save.
+  { name: "unsaved", steps: `await $.tab("teams", ${TAB.teams}); await $.pick("aside li", "Team b"); await $.type(".bar input", "Team b (edited)");` },
 ];
 
 const PAGE_HELPERS = `window.$ = {
@@ -83,6 +85,14 @@ const PAGE_HELPERS = `window.$ = {
     const el = [...document.querySelectorAll(sel)].find((e) => e.textContent.includes(text));
     if (!el) throw new Error("no " + sel + " with " + text);
     el.click(); await this.settle();
+  },
+  /** Set a text field as typing would: React reads the value through the input event. */
+  async type(sel, value) {
+    const el = document.querySelector(sel);
+    if (!el) throw new Error("nothing matches " + sel);
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(el, value);
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+    await this.settle();
   },
   async select(sel, value) {
     const el = document.querySelector(sel);
