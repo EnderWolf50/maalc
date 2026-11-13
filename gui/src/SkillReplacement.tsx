@@ -50,7 +50,7 @@ export function SkillPanel({ i }: { i: number }) {
           // a step moves one card between S1 and `k`, so the deck stays 6
           const shift = (k: Stepped, d: 1 | -1) => edit((draft) => { const goal = draft.sinners[j].target; goal.s1 -= d; goal[k] += d; });
           return (
-            <li key={n ? `${x.sinner}#${n}` : x.sinner} data-sinner={x.sinner} className={bad(rowPath) || faulty ? "faulty" : ""}
+            <li key={n ? `${x.sinner}#${n}` : x.sinner} data-sinner={x.sinner} data-path={rowPath} className={bad(rowPath) || faulty ? "faulty" : ""}
               {...dragItem(String(j), "sinners")}>
               <span className="grip" aria-hidden>⋮⋮</span>
               <b className="skill-rank">{j + 1}</b>

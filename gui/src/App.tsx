@@ -7,7 +7,8 @@ import { DeploymentTab, StarlightTab, ThemePackTab } from "./Plans";
 import { GiftListsTab } from "./GiftLists";
 import { TeamsTab } from "./Teams";
 import {
-  Decimal, EditorContext, Field, Num, Select, ToggleNum, makeCtx, translate, useEditor, withBreaks, type Picked,
+  Decimal, EditorContext, Field, Num, PICK_LISTS, Select, ToggleNum, focusPath, makeCtx, translate, useEditor, withBreaks,
+  type Picked,
 } from "./ui";
 import { validate, type Problem } from "./validate";
 
@@ -24,6 +25,8 @@ export const TABS = [
 ] as const;
 
 const toText = (s: Settings) => JSON.stringify(s, null, 2) + "\n";
+/** The tab that edits a settings path ("teams/1/name"), if any ("(root)" has none). */
+const tabOf = (path: string) => TABS.find((x) => (x[3] as readonly string[]).includes(path.split("/")[0]));
 
 export default function App() {
   const [s, setS] = useState<Settings | null>(null);
@@ -33,6 +36,7 @@ export default function App() {
   const [tab, setTab] = useState<(typeof TABS)[number][0]>("teams");
   const [giftList, setGiftList] = useState("default"); // what the gift list tab shows; the teams tab can point it at a list
   const [picked, setPicked] = useState<Picked>({});
+  const [jump, setJump] = useState<string | null>(null); // the path of the problem the user clicked
   const [checked, setChecked] = useState(false); // marks show after the first save attempt
   const [status, setStatus] = useState(""); // a TEXT key, or text as it is (an error, the gift ids a load dropped)
   // The file's text as last read or written: other text there is another writer's, the Agent's after a claim (#501).
@@ -96,6 +100,13 @@ export default function App() {
     }, (e) => setLoadError(String(e)));
   }, []);
 
+  // A clicked problem's field, focused once its tab and its team or plan are on screen.
+  useEffect(() => {
+    if (jump === null) return;
+    setJump(null);
+    focusPath(jump);
+  }, [jump]);
+
   const problems: Problem[] = useMemo(() => (s ? validate(s) : []), [s]);
   const lang = s?.language ?? "zh_tw";
   const { t } = translate(lang);
@@ -146,6 +157,16 @@ export default function App() {
     }
   };
 
+  /** Show where a problem points: its tab and the team, plan or gift list it names; the effect above then focuses its field. */
+  const goTo = (path: string) => {
+    const [section, index] = path.split("/");
+    const item = (s as unknown as Record<string, { id: string }[] | undefined>)[section]?.[Number(index)];
+    if (item && section === "gift_lists") setGiftList(item.id);
+    else if (item && PICK_LISTS.some((x) => x === section)) ctx.pick(section as keyof Picked, item.id);
+    setTab(tabOf(path)![0]);
+    setJump(path);
+  };
+
   const Current = TABS.find((x) => x[0] === tab)![2];
   return (
     <EditorContext.Provider value={ctx}>
@@ -161,12 +182,6 @@ export default function App() {
         <span className="status">{dirty ? [t("unsaved"), note].filter(Boolean).join(" ") : said}</span>
         <button type="button" className="primary" onClick={save}>{t("save")}</button>
       </header>
-      {checked && problems.length > 0 && (
-        <div className="problems" role="alert">
-          <p>{t("saveBlocked")}</p>
-          <ul>{problems.map((p, i) => <li key={i}>{p.text}</li>)}</ul>
-        </div>
-      )}
       <nav role="tablist">
         {TABS.map(([id, label, , prefixes]) => (
           <button type="button" role="tab" key={id} aria-selected={tab === id}
@@ -174,7 +189,18 @@ export default function App() {
             onClick={() => setTab(id)}>{t(label)}</button>
         ))}
       </nav>
-      <main><Current /></main>
+      <main>
+        {/* in the tab panel, so the tab bar stays where it is when problems come and go */}
+        {checked && problems.length > 0 && (
+          <div className="problems" role="alert">
+            <p>{t("saveBlocked")}</p>
+            <ul>{problems.map((p, i) => (
+              <li key={i}>{tabOf(p.paths[0]) ? <button type="button" onClick={() => goTo(p.paths[0])}>{p.text}</button> : p.text}</li>
+            ))}</ul>
+          </div>
+        )}
+        <Current />
+      </main>
     </EditorContext.Provider>
   );
 }
@@ -300,7 +326,7 @@ function OverrideTable<R extends Record<string, string | number>>({ listKey, col
             {rows.map((r, i) => (
               <tr key={i}>
                 {cols.map((c) => (
-                  <td key={c.key} className={bad(`${listKey}/${i}/${c.key}`) ? "bad" : ""}>
+                  <td key={c.key} className={bad(`${listKey}/${i}/${c.key}`) ? "bad" : ""} data-path={`${listKey}/${i}/${c.key}`}>
                     {c.number
                       ? <Decimal value={r[c.key] as number} min={0} onChange={(v) => set((l) => { (l[i] as Record<string, unknown>)[c.key] = v; })} />
                       : <input value={r[c.key] as string} onChange={(e) => set((l) => { (l[i] as Record<string, unknown>)[c.key] = e.target.value; })} />}

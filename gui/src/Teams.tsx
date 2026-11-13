@@ -96,7 +96,8 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
 
       <fieldset>
         <legend>{t("team.deployment_order")}</legend>
-        <div className={"row" + (bad(`${path}/deployment_order`) && !("custom" in team.deployment_order) ? " bad" : "")}>
+        <div className={"row" + (bad(`${path}/deployment_order`) && !("custom" in team.deployment_order) ? " bad" : "")}
+          data-path={`${path}/deployment_order`}>
           {planSelect(orderSource, s.deployment_order_plans, (id) => set({
             deployment_order: id ? { plan: id } : { custom: [...(order ?? SINNERS)] },
           }))}
@@ -110,7 +111,7 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
 
       <fieldset>
         <legend>{t("team.starlight")}</legend>
-        <div className={"row" + (bad(`${path}/starlight`) && !("custom" in team.starlight) ? " bad" : "")}>
+        <div className={"row" + (bad(`${path}/starlight`) && !("custom" in team.starlight) ? " bad" : "")} data-path={`${path}/starlight`}>
           {planSelect(starSource, s.starlight_plans, (id) => set({
             starlight: id ? { plan: id } : {
               custom: starPlan ? { levels: [...starPlan.levels], priority: [...starPlan.priority], convert_leftover: starPlan.convert_leftover } : defaultStarlight(),
@@ -150,7 +151,7 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
             </label>
             <small>{t("team.allow_white_gossypium_note")}</small>
           </div>
-          <div className={"toggle" + (bad(`${path}/usage`) ? " bad" : "")}>
+          <div className={"toggle" + (bad(`${path}/usage`) ? " bad" : "")} data-path={`${path}/usage`}>
             <label className="check">
               <input type="checkbox" checked={team.usage !== "any"} onChange={(e) => set({ usage: e.target.checked ? "hard_only" : "any" })} />
               {t("team.usage")}
