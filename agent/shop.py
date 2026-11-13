@@ -389,12 +389,17 @@ def id_search_plan(listed, known, tried, dead, swaps, waiting=()):
     return out
 
 
-def pay_mode(prices, swaps):
+def pay_mode(lit, prices, swaps):
     """"cost" or "starlight": the ID Skill Search dialog's payment, told by its prices (#456: 90/150/240 for Cost, 25/50/75
-    for starlight), or None. Every price that read must be that mode's, and one at least: a mix or none is never a guess."""
-    read = {k: p for k, p in prices.items() if p is not None}
-    modes = [m for m in ("cost", "starlight") if read and all(swaps[k]["id_search"][m] == p for k, p in read.items())]
-    return modes[0] if len(modes) == 1 else None
+    for starlight), or None. Every price that read must be that mode's, and one at least: a mix or none is never a guess.
+
+    A dim price (lit[k] false) that is no mode's is left out (#658: OCR reads the dim red 90 as 9; a dim option is never
+    bought, so its price only tells the mode); a lit one is a price the bot may pay, and no mode's makes the payment unknown.
+    """
+    fits = {k: {m for m in ("cost", "starlight") if swaps[k]["id_search"][m] == p} for k, p in prices.items() if p is not None}
+    told = [modes for k, modes in fits.items() if modes or lit.get(k)]
+    modes = set.intersection(*told) if told else set()
+    return modes.pop() if len(modes) == 1 else None
 
 
 def id_search_choice(entry, owned, lit, prices, funds, pay, reserve, swaps):
