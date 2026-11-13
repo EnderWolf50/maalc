@@ -1,18 +1,19 @@
-// The editor shell (App.tsx) around the tabs: what a tab switch keeps, and the problems a refused save lists.
-import { render, screen, within } from "@testing-library/react";
+// The editor shell (App.tsx) around the tabs: what a tab switch keeps, the problems a refused save lists, and Ctrl+S.
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import App from "./App";
 import { TEXT } from "./i18n";
 import { GIFT_KEYWORDS, defaultGorder, defaultStarlight, newPackPlan, newSettings, newTeam, SINNERS, type Settings } from "./model";
 
-const file = vi.hoisted(() => ({ text: "" }));
+const file = vi.hoisted(() => ({ text: "", saved: [] as string[] }));
 vi.mock("./api", async (original) => ({
   ...(await original<typeof import("./api")>()),
   loadSettings: () => Promise.resolve(file.text),
-  saveSettings: () => Promise.resolve(),
+  saveSettings: (text: string) => { file.saved.push(text); file.text = text; return Promise.resolve(); },
   rootDir: () => Promise.resolve("root"),
 }));
+beforeEach(() => { file.saved = []; });
 
 const zh = TEXT.zh_tw;
 const two = (prefix: string) => [1, 2].map((n) => ({ id: `${prefix}${n}`, name: `${prefix.toUpperCase()}${n}` }));
@@ -160,5 +161,36 @@ describe("clicking a problem", () => {
     expect(tab(zh["tab.gifts"])).toHaveAttribute("aria-selected", "true");
     expect(screen.getByRole("combobox", { name: zh["gl.list"] })).toHaveValue("g1");
     expect(screen.getByRole("combobox", { name: zh["gl.list"] })).toHaveFocus();
+  });
+});
+
+describe("Ctrl+S", () => {
+  /** Press Ctrl+S on the focused element; true when the editor kept the browser from its own Save page. */
+  const ctrlS = () => {
+    const e = new KeyboardEvent("keydown", { key: "s", code: "KeyS", ctrlKey: true, bubbles: true, cancelable: true });
+    act(() => { (document.activeElement ?? document.body).dispatchEvent(e); });
+    return e.defaultPrevented;
+  };
+
+  test("saves as the Save button does, also while typing in a field", async () => {
+    file.text = JSON.stringify(settings());
+    const user = userEvent.setup();
+    render(<App />);
+    await user.type(await screen.findByRole("textbox", { name: zh.name }), "!");
+    expect(ctrlS()).toBe(true);
+    await waitFor(() => expect(file.saved).toHaveLength(1));
+    expect(JSON.parse(file.saved[0]).teams[0].name).toBe("Ta!");
+    expect(await screen.findByText(zh.saved)).toBeInTheDocument();
+  });
+
+  test("shows the problems when saving is blocked, and writes nothing", async () => {
+    const s = settings();
+    s.teams[1].game_team = 1;
+    file.text = JSON.stringify(s);
+    render(<App />);
+    await screen.findByRole("tab", { name: zh["tab.run"] });
+    expect(ctrlS()).toBe(true);
+    expect(await screen.findByRole("alert")).toHaveTextContent(zh.saveBlocked);
+    expect(file.saved).toEqual([]);
   });
 });
