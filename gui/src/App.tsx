@@ -7,7 +7,7 @@ import { DeploymentTab, StarlightTab, ThemePackTab } from "./Plans";
 import { GiftListsTab } from "./GiftLists";
 import { TeamsTab } from "./Teams";
 import {
-  Decimal, EditorContext, Field, Num, Select, ToggleNum, focusPath, nextTab, isPickList, makeCtx, translate, useEditor, withBreaks,
+  Decimal, EditorContext, Field, Input, Mark, Num, Select, ToggleNum, focusPath, nextTab, isPickList, makeCtx, translate, useEditor, withBreaks,
   type Picked,
 } from "./ui";
 import { validate, type Problem } from "./validate";
@@ -24,7 +24,11 @@ export const TABS = [
   ["daily", "tab.daily", DailyTab, ["luxcavation", "charge_enkephalin"]],
 ] as const;
 
+/** What the prompt guards: the window closes, or the page reloads (F5, Ctrl+R). */
+type Leave = "close" | "reload";
 const toText = (s: Settings) => JSON.stringify(s, null, 2) + "\n";
+/** The element id of the problem at this place in the problems block. */
+const problemId = (i: number) => `problem-${i}`;
 /** The tab that edits a settings path ("teams/1/name"), if any ("(root)" has none). */
 const tabOf = (path: string) => TABS.find((x) => (x[3] as readonly string[]).includes(path.split("/")[0]));
 
@@ -41,6 +45,8 @@ export default function App() {
   const [status, setStatus] = useState(""); // a TEXT key, or text as it is (an error, the gift ids a load dropped)
   const [failed, setFailed] = useState(false); // the last save did not write the file (a conflict or an error)
   const [refused, setRefused] = useState(false); // the last save stopped at the checks, and its problems are not all fixed
+  // The window was closed, or the page asked to reload (F5, Ctrl+R), with unsaved changes: the prompt for that shows (#695, #702).
+  const [asking, setAsking] = useState<false | Leave>(false);
   // The file's text as last read or written: other text there is another writer's, the Agent's after a claim (#501).
   const disk = useRef<string | null>(null);
   const latest = useRef({ s, savedText });
@@ -117,6 +123,38 @@ export default function App() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
+  // Closing the window with unsaved changes asks first; with none it closes.
+  const focusBefore = useRef<Element | null>(null); // what had the focus when the prompt opened: it gets it back when the prompt goes
+  const unsaved = () => { const { s, savedText } = latest.current; return s !== null && toText(s) !== savedText; };
+  const ask = (kind: Leave) => {
+    focusBefore.current ??= document.activeElement; // now: the page behind the prompt goes inert, which takes the focus away
+    setAsking((was) => (kind === "close" ? kind : was || kind)); // a close outranks a reload; a reload keeps the prompt that shows
+  };
+  useEffect(() => api.onCloseRequested(() => {
+    const keep = unsaved();
+    if (keep) ask("close");
+    return keep;
+  }), []);
+  // F5 and Ctrl+R would reload the page and drop the edits (WebView2 keeps the browser's keys on). With unsaved changes the
+  // prompt asks first; with none the key is left alone and the browser reloads (#702).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      // a key that types no Latin letter (an input method's "Process", a Russian "к") is told by its place on the keyboard
+      const r = /^[a-z]$/i.test(e.key) ? e.key.toLowerCase() === "r" : e.code === "KeyR";
+      const reload = e.key === "F5" || e.key === "BrowserRefresh" || ((e.ctrlKey || e.metaKey) && r);
+      if (!reload || e.altKey || !unsaved()) return;
+      e.preventDefault();
+      ask("reload");
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+  useEffect(() => {
+    if (asking || !focusBefore.current) return;
+    (focusBefore.current as HTMLElement).focus?.();
+    focusBefore.current = null;
+  }, [asking]);
+
   // A clicked problem's field, focused once its tab and its team or plan are on screen.
   useEffect(() => {
     if (jump === null) return;
@@ -140,10 +178,11 @@ export default function App() {
   }
   if (!s) return null;
 
-  const marked = new Set(checked ? problems.flatMap((p) => p.paths) : []);
-  const bad = (path: string) => [...marked].some((m) => m === path || m.startsWith(path + "/"));
+  // marks show after the first save attempt; a marked field's controls are described by the problems' text (#695)
+  const problemIds = (path: string) => (checked ? problems : [])
+    .flatMap((p, i) => (p.paths.some((m) => m === path || m.startsWith(path + "/")) ? [problemId(i)] : [])).join(" ");
   const ctx = makeCtx({
-    s, bad, giftList, picked, setPicked,
+    s, problemIds, giftList, picked, setPicked,
     setS: (next) => setS((prev) => next(prev!)),
     chooseList: (id, open) => { setGiftList(id); if (open) setTab("gifts"); },
   });
@@ -151,6 +190,7 @@ export default function App() {
   const said = Object.prototype.hasOwnProperty.call(TEXT[lang], status) ? t(status as Key) : status;
   const note = status === "saved" ? "" : said; // shown beside "unsaved" too: a refused save, the file read again
 
+  /** Check, then write; true when the file holds the edits. */
   const save = async () => {
     setChecked(true);
     setFailed(false);
@@ -160,7 +200,8 @@ export default function App() {
         const current = (await sync())!; // what another writer changed since goes under the edits first (#501)
         if (validate(current).length) {
           setRefused(true);
-          return setStatus("");
+          setStatus("");
+          return false;
         }
         const written = toText(current);
         try {
@@ -169,19 +210,32 @@ export default function App() {
           if (!api.isChanged(e)) throw e;
           if (tries < 3) continue; // it changed between that read and this write
           setFailed(true);
-          return setStatus("saveConflict");
+          setStatus("saveConflict");
+          return false;
         }
         disk.current = written;
         latest.current = { s: current, savedText: written };
         setSavedText(written);
-        return setStatus("saved");
+        setStatus("saved");
+        return true;
       }
     } catch (e) {
       setFailed(true);
       setStatus(String(e));
+      return false;
     }
   };
-  saveRef.current = save;
+  saveRef.current = asking ? () => {} : save; // while the close prompt asks, its buttons decide
+
+  /** The window closes; a failed close (no permission to) says why, and the editor stays as it was. */
+  const close = () => api.closeWindow().catch((e) => setStatus(String(e)));
+  /** What the prompt's Save and Discard end with: the window closes or the page loads again. */
+  const leave = async (kind: Leave) => { if (kind === "close") await close(); else api.reloadPage(); };
+  const leavePrompt = asking && (
+    <LeavePrompt kind={asking} onCancel={() => setAsking(false)}
+      onSave={async () => { setAsking(false); if (await save()) await leave(asking); }}
+      onDiscard={() => { setAsking(false); leave(asking); }} />
+  );
 
   /** Show where a problem points: its tab and the team, plan or gift list it names; the effect above then focuses its field. */
   const goTo = (path: string) => {
@@ -214,7 +268,7 @@ export default function App() {
   };
   return (
     <EditorContext.Provider value={ctx}>
-      <header>
+      <header inert={!!asking}>
         <h1>{t("title")}</h1>
         <span className="muted path" title={t("file")}>{root}\config\settings.json</span>
         <label className="lang">{t("language")}
@@ -226,33 +280,62 @@ export default function App() {
         <span className="status" data-state={state} aria-live="polite">{stateText}</span>
         <button type="button" className={"primary" + saveLook} onClick={save}>{t("save")}</button>
       </header>
-      <nav role="tablist" onKeyDown={walkTabs}>
+      <nav role="tablist" onKeyDown={walkTabs} inert={!!asking}>
         {TABS.map(([id, label, , prefixes]) => (
           <button type="button" role="tab" key={id} id={`tab-${id}`} data-tab={id} aria-selected={tab === id} aria-controls="tabpanel"
-            tabIndex={tab === id ? 0 : -1} className={(tab === id ? "selected" : "") + (prefixes.some(bad) ? " bad" : "")}
+            tabIndex={tab === id ? 0 : -1} className={(tab === id ? "selected" : "") + (prefixes.some(ctx.bad) ? " bad" : "")}
             onClick={() => setTab(id)}>{t(label)}</button>
         ))}
       </nav>
-      <main>
+      <main inert={!!asking}>
         <div id="tabpanel" role="tabpanel" aria-labelledby={`tab-${tab}`}>
           {/* in the tab panel, so the tab bar stays where it is when problems come and go */}
           {blocked && (
             <div className="problems" role="alert">
               <p>{t("saveBlocked")}</p>
               <ul>{problems.map((p, i) => (
-                <li key={i}>{tabOf(p.paths[0]) ? <button type="button" onClick={() => goTo(p.paths[0])}>{p.text}</button> : p.text}</li>
+                <li key={i} id={problemId(i)}>{tabOf(p.paths[0]) ? <button type="button" onClick={() => goTo(p.paths[0])}>{p.text}</button> : p.text}</li>
               ))}</ul>
             </div>
           )}
           <Current />
         </div>
       </main>
+      {leavePrompt}
     </EditorContext.Provider>
   );
 }
 
+/** Asked when the window closes, or the page reloads (F5, Ctrl+R), with unsaved changes: save and go on, go on without saving,
+ * or stay (Esc). The focus starts on the choice that keeps the edits. */
+function LeavePrompt({ kind, onSave, onDiscard, onCancel }: {
+  kind: Leave; onSave: () => void; onDiscard: () => void; onCancel: () => void;
+}) {
+  const { t } = useEditor();
+  const cancel = useRef(onCancel);
+  cancel.current = onCancel;
+  useEffect(() => {
+    // from the document: a click on the dimmed page behind takes the focus out of the prompt
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") cancel.current(); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, []);
+  return (
+    <div className="ask-back">
+      <div className="ask" role="alertdialog" aria-modal="true" aria-labelledby="close-ask">
+        <p id="close-ask">{t(`${kind}Ask`)}</p>
+        <div className="ask-buttons">
+          <button type="button" className="primary" autoFocus onClick={onSave}>{t(`${kind}Save`)}</button>
+          <button type="button" className="danger" onClick={onDiscard}>{t(`${kind}Discard`)}</button>
+          <button type="button" onClick={onCancel}>{t("cancel")}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function RunTab() {
-  const { s, update, t, tv, bad } = useEditor();
+  const { s, update, t, tv } = useEditor();
   const run = s.run;
   const pastFive = run.target_floor > 5;
   const set = (patch: Partial<Settings["run"]>) => update((d) => { Object.assign(d.run, patch); });
@@ -284,10 +367,10 @@ function RunTab() {
         <div className="grid">
           {pick("weekly_bonus_use", run.weekly_bonus_use === "normal" ? t("run.weekly_bonus_normal_note") : undefined)}
           {pick("weekly_bonus_amount")}
-          <label className={"check wide" + (bad("run/stop_when_weekly_bonus_out") ? " bad" : "")} data-path="run/stop_when_weekly_bonus_out">
-            <input type="checkbox" checked={run.stop_when_weekly_bonus_out} onChange={(e) => set({ stop_when_weekly_bonus_out: e.target.checked })} />
+          <Mark as="label" className="check wide" path="run/stop_when_weekly_bonus_out">
+            <Input type="checkbox" checked={run.stop_when_weekly_bonus_out} onChange={(e) => set({ stop_when_weekly_bonus_out: e.target.checked })} />
             {t("run.stop_when_weekly_bonus_out")}
-          </label>
+          </Mark>
         </div>
       </fieldset>
       <fieldset>
@@ -297,7 +380,7 @@ function RunTab() {
           <Field label={t("run.wipe_retries")} path="run/wipe_retries"><Num value={run.wipe_retries} min={0} onChange={(v) => set({ wipe_retries: v })} /></Field>
           {pick("after_retries")}
           <Field label={t("run.webhook_url")} path="run/webhook_url">
-            <input type="url" value={run.webhook_url} onChange={(e) => set({ webhook_url: e.target.value })} />
+            <Input type="url" value={run.webhook_url} onChange={(e) => set({ webhook_url: e.target.value })} />
           </Field>
         </div>
       </fieldset>
@@ -305,10 +388,10 @@ function RunTab() {
         <legend>{t("run.group_auto")}</legend>
         <div className="options">
           {(["auto_accept_terms", "auto_download", "keep_dismissed_screens"] as const).map((k) => (
-            <label key={k} className={"check" + (bad(`run/${k}`) ? " bad" : "")} data-path={`run/${k}`}>
-              <input type="checkbox" checked={run[k]} onChange={(e) => set({ [k]: e.target.checked })} />
+            <Mark as="label" key={k} className="check" path={`run/${k}`}>
+              <Input type="checkbox" checked={run[k]} onChange={(e) => set({ [k]: e.target.checked })} />
               {t(`run.${k}`)}
-            </label>
+            </Mark>
           ))}
         </div>
       </fieldset>
@@ -366,7 +449,7 @@ function LuxFields({ task }: { task: keyof Settings["luxcavation"] }) {
             onChange={(v) => set({ team: v || null })} />
         </Field>
         <Field label={t("lux.consecutive")} path={`${path}/consecutive`} note={t("lux.consecutive_note")}>
-          <input type="checkbox" checked={opts.consecutive} onChange={(e) => set({ consecutive: e.target.checked })} />
+          <Input type="checkbox" checked={opts.consecutive} onChange={(e) => set({ consecutive: e.target.checked })} />
         </Field>
         <Field label={t("lux.retries")} path={`${path}/retries`} note={t("lux.retries_note")}>
           <Num value={opts.retries} min={0} onChange={(v) => set({ retries: v })} />
@@ -382,7 +465,7 @@ function OverrideTable<R extends Record<string, string | number>>({ listKey, col
   cols: { key: keyof R & string; label: Key; number?: boolean }[];
   blank: R;
 }) {
-  const { s, update, t, bad } = useEditor();
+  const { s, update, t } = useEditor();
   const rows = s[listKey] as unknown as R[];
   const set = (fn: (rows: R[]) => void) => update((d) => fn(d[listKey] as unknown as R[]));
   return (
@@ -394,11 +477,11 @@ function OverrideTable<R extends Record<string, string | number>>({ listKey, col
             {rows.map((r, i) => (
               <tr key={i}>
                 {cols.map((c) => (
-                  <td key={c.key} className={bad(`${listKey}/${i}/${c.key}`) ? "bad" : ""} data-path={`${listKey}/${i}/${c.key}`}>
+                  <Mark as="td" key={c.key} path={`${listKey}/${i}/${c.key}`}>
                     {c.number
                       ? <Decimal value={r[c.key] as number} min={0} onChange={(v) => set((l) => { (l[i] as Record<string, unknown>)[c.key] = v; })} />
-                      : <input value={r[c.key] as string} onChange={(e) => set((l) => { (l[i] as Record<string, unknown>)[c.key] = e.target.value; })} />}
-                  </td>
+                      : <Input value={r[c.key] as string} onChange={(e) => set((l) => { (l[i] as Record<string, unknown>)[c.key] = e.target.value; })} />}
+                  </Mark>
                 ))}
                 <td><button type="button" className="danger" onClick={() => set((l) => { l.splice(i, 1); })}>{t("remove")}</button></td>
               </tr>

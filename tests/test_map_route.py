@@ -9,9 +9,11 @@ import yaml
 from PIL import Image
 
 import actions
+import map_actions
 import map_route as mr
 import test_actions
 from test_actions import map_world
+from agent_patch import patch_all
 
 clock, context = test_actions.clock, test_actions.context  # fixtures of the fake Maa context
 
@@ -84,7 +86,7 @@ def test_a_node_is_typed_by_its_cost_on_the_floors_difficulty(context, hard, mar
         return None
     context.run_recognition.side_effect = run_recognition
     actions.RUN.update(settings={}, difficulty="normal", floor_hard=hard)
-    assert actions.node_at(context, np.zeros((720, 1280, 3), np.uint8), 713, 380) == expected
+    assert map_actions.node_at(context, np.zeros((720, 1280, 3), np.uint8), 713, 380) == expected
 
 
 @pytest.mark.parametrize(("hard", "number", "why"), [
@@ -105,8 +107,8 @@ def test_a_cost_read_as_no_cost_is_logged_with_its_text_and_crop(context, monkey
     context.run_recognition.side_effect = run_recognition
     actions.RUN.update(settings={}, difficulty="normal", floor_hard=hard)
     logs = []
-    monkeypatch.setattr(actions, "log", logs.append)
-    assert actions.node_at(context, np.zeros((720, 1280, 3), np.uint8), 713, 380) == "battle"
+    patch_all(monkeypatch, "log", logs.append)
+    assert map_actions.node_at(context, np.zeros((720, 1280, 3), np.uint8), 713, 380) == "battle"
     miss = [line for line in logs if "Cost miss" in line]
     difficulty = "hard" if hard else "normal"
     assert len(miss) == 1 and miss[0].startswith(f"map: Cost miss at 713, 380 ({difficulty}): {why}, OCR {number!r}, crop logs/cost/")
@@ -121,8 +123,8 @@ def test_a_cost_of_the_table_logs_no_miss(context, monkeypatch, tmp_path):
     context.run_recognition.side_effect = run_recognition
     actions.RUN.update(settings={}, difficulty="normal", floor_hard=False)
     logs = []
-    monkeypatch.setattr(actions, "log", logs.append)
-    assert actions.node_at(context, np.zeros((720, 1280, 3), np.uint8), 713, 380) == "battle"
+    patch_all(monkeypatch, "log", logs.append)
+    assert map_actions.node_at(context, np.zeros((720, 1280, 3), np.uint8), 713, 380) == "battle"
     assert not any("Cost miss" in line for line in logs) and not (tmp_path / "logs" / "cost").exists()
 
 
@@ -134,7 +136,7 @@ def test_past_the_first_column_no_cost_is_read(context, marks, expected):
     def run_recognition(name, image, override=None):
         return SimpleNamespace(hit=True, box=[700, 300, 26, 24]) if name in marks else None
     context.run_recognition.side_effect = run_recognition
-    assert actions.node_at(context, np.zeros((720, 1280, 3), np.uint8), 713, 380, costs=False) == expected
+    assert map_actions.node_at(context, np.zeros((720, 1280, 3), np.uint8), 713, 380, costs=False) == expected
     assert all(c.args[0] != "ReadText" for c in context.run_recognition.call_args_list)
 
 
@@ -145,7 +147,7 @@ def test_past_the_first_column_no_cost_is_read(context, marks, expected):
 ])
 def test_is_hard_takes_the_floors_difficulty_first(context, run, hard):
     actions.RUN.update(settings={}, **run)
-    assert actions.is_hard(context) is hard
+    assert map_actions.is_hard(context) is hard
 
 
 def test_the_column_after_a_shop_is_the_boss():
@@ -237,7 +239,7 @@ MAP_SCREENS = {"MapBoss": (446, 248), "MapCards": (446, 248), "MapEvent": (446, 
 def test_the_faint_link_fallback_on_the_map_frames_of_tests_screens(name, bus):
     """CODING_STANDARDS' sweep of FAINT_LINK: every slot of every column on screen, node or not, as a node with
     no link read onward. Its one false link: MapBoss, from the empty middle slot behind the bus (a purple pack's
-    glow, 11.9); read_ahead only reads on from nodes ahead of the bus. Slot centres: actions.SLOT (279, 37)."""
+    glow, 11.9); read_ahead only reads on from nodes ahead of the bus. Slot centres: map_actions.SLOT (279, 37)."""
     v = brightness(name)
     x, y0, extra = (bus[0] + 279) % mr.COLUMN_DX, bus[1] + 37, {}
     while x + mr.COLUMN_DX + 80 <= 1200:
@@ -259,13 +261,13 @@ def test_the_faint_links_between_events_of_a_diamond_read(context):
     focused = {(327, 357), (1092, 357)}
 
     def run_recognition(name, image, override=None):
-        if name in actions.MARKS:
-            mark, (ox, oy, _, _) = actions.MARKS[name]
+        if name in map_actions.MARKS:
+            mark, (ox, oy, _, _) = map_actions.MARKS[name]
             x, y = override[name]["roi"][:2]
             return SimpleNamespace(hit=True, box=[x, y, 26, 24]) if mark in ("cost", "gift") and (x - ox, y - oy) in focused else None
         return None
     context.run_recognition.side_effect = run_recognition
-    ahead = actions.RouteMap.read_ahead(context, v[..., None].repeat(3, axis=2), 48 + 279, 320 + 37, {"mid": ("focused", 2)})
+    ahead = map_actions.RouteMap.read_ahead(context, v[..., None].repeat(3, axis=2), 48 + 279, 320 + 37, {"mid": ("focused", 2)})
     assert ahead == [{"up": ("event", {"mid"}), "down": ("event", {"mid"})}, {"up": ("event", {"up"}), "down": ("event", {"down"})},
                      {"mid": ("focused", {"up", "down"})}]
     score, path = mr.paths({"mid": ("focused", 2)}, NORMAL, ahead)["mid"]
@@ -281,7 +283,7 @@ def test_nothing_is_read_past_the_boss(context):
     x, y = 327, 357
     assert mr.links({("mid", r): mr.line_contrast(v, x, y, x + mr.COLUMN_DX, y + dy) or 0 for r, dy in mr.ROW_DY.items()}) == {("mid", "mid")}  # the glow reads as a link
     context.run_recognition.side_effect = lambda name, image, override=None: None
-    assert actions.RouteMap.read_ahead(context, v[..., None].repeat(3, axis=2), x, y, {"mid": ("boss", None)}) == []
+    assert map_actions.RouteMap.read_ahead(context, v[..., None].repeat(3, axis=2), x, y, {"mid": ("boss", None)}) == []
 
 
 def test_steps_are_rows_seen_from_the_node_before():
@@ -344,7 +346,7 @@ def title_reads(context, shown, switch_at=0.0, then=None):
     inner = context.run_recognition.side_effect
 
     def run_recognition(name, image, override=None):
-        if name == "ReadText" and override["ReadText"]["roi"] == actions.MAP_TITLE:
+        if name == "ReadText" and override["ReadText"]["roi"] == map_actions.MAP_TITLE:
             text = then if then and actions.time.monotonic() >= switch_at else shown
             return SimpleNamespace(all_results=[SimpleNamespace(text=text, box=(40, 90, 220, 25))])
         return inner(name, image, override)
@@ -354,7 +356,7 @@ def title_reads(context, shown, switch_at=0.0, then=None):
 def test_the_last_floors_map_leaving_after_a_theme_pack_is_not_read(context, monkeypatch):
     # Live 2026-10-19 (A F2-F5, B F2-F5): after the floor 3 pull the floor 2 map stayed ~3 s, its bus driving off to
     # the exit; RouteMap dragged it, then the new map, and read floor 3 from the bus at rest.
-    monkeypatch.setattr(actions, "map_weights", lambda context: AB_WEIGHTS)
+    patch_all(monkeypatch, "map_weights", lambda context: AB_WEIGHTS)
     actions.RUN["floor"] = 3
     map_world(context, {(1, "mid"): {"cost"}}, [], bus_x=446)
     ctl, gone = context.tasker.controller, actions.time.monotonic() + 3
@@ -363,29 +365,29 @@ def test_the_last_floors_map_leaving_after_a_theme_pack_is_not_read(context, mon
     touch_down = ctl.post_touch_down.side_effect
     ctl.post_touch_down.side_effect = lambda x, y: downs.append(actions.time.monotonic()) or touch_down(x, y)
     while not ctl.post_click.called and actions.time.monotonic() < gone + 30:  # MirrorHub calls it again
-        actions.RouteMap().run(context, None)
+        map_actions.RouteMap().run(context, None)
     assert downs and min(downs) >= gone  # no drag on the last floor's map
     assert actions.RUN["floor"] == 3
 
 
 def test_a_floor_title_that_never_changes_holds_the_map_once(context, clock, monkeypatch):
     # A misread title must not hold the map forever, nor every read of the floor; the floor itself stays.
-    monkeypatch.setattr(actions, "map_weights", lambda context: AB_WEIGHTS)
+    patch_all(monkeypatch, "map_weights", lambda context: AB_WEIGHTS)
     actions.RUN["floor"] = 3
     map_world(context, {(1, "mid"): {"cost"}}, [], bus_x=446)
     title_reads(context, "Exploring Floor 2")
-    actions.RouteMap().run(context, None)
+    map_actions.RouteMap().run(context, None)
     assert actions.RUN["floor"] == 3
     context.tasker.controller.post_click.assert_called()
     waited = sum(clock)
-    actions.RouteMap().run(context, None)
-    assert sum(clock) - waited < actions.MAP_LEAVING  # not waited out again
+    map_actions.RouteMap().run(context, None)
+    assert sum(clock) - waited < map_actions.MAP_LEAVING  # not waited out again
 
 
 def test_a_fresh_floors_map_that_does_not_take_drags_yet_is_dragged_until_the_bus_moves(context, monkeypatch):
     # Live 2026-10-19: a floor's new map ignored drags for its first seconds; after four looks find_bus gave up and
     # the floor was read and tapped with the bus at rest, its top row under the resource bar.
-    monkeypatch.setattr(actions, "map_weights", lambda context: AB_WEIGHTS)
+    patch_all(monkeypatch, "map_weights", lambda context: AB_WEIGHTS)
     actions.RUN.update(floor=3, fresh_floor=True)  # set by the theme pack pull
     nodes = {(1, "up"): {"event"}, (1, "down"): {"cost"}}
     offsets = map_world(context, nodes, [], bus_x=446)
@@ -393,10 +395,10 @@ def test_a_fresh_floors_map_that_does_not_take_drags_yet_is_dragged_until_the_bu
     ctl = context.tasker.controller
     move = ctl.post_touch_move.side_effect
     ctl.post_touch_move.side_effect = lambda x, y: MagicMock() if ctl.post_touch_down.call_count <= 4 else move(x, y)
-    actions.RouteMap().run(context, None)
-    assert abs(446 - offsets[-1] - actions.BUS_HOME[0]) <= 30  # the bus panned home in the end
+    map_actions.RouteMap().run(context, None)
+    assert abs(446 - offsets[-1] - map_actions.BUS_HOME[0]) <= 30  # the bus panned home in the end
     first = ctl.post_click.call_args_list[0].args
-    assert first == (446 - offsets[-1] + actions.SLOT[0], actions.BUS_HOME[1] + actions.SLOT[1] - 213)  # the top row's event
+    assert first == (446 - offsets[-1] + map_actions.SLOT[0], map_actions.BUS_HOME[1] + map_actions.SLOT[1] - 213)  # the top row's event
 
 
 def test_a_fresh_map_dragged_to_its_edge_costs_no_extra_drags(context):
@@ -412,8 +414,8 @@ def test_a_fresh_map_dragged_to_its_edge_costs_no_extra_drags(context):
         return down(x, y)
     ctl.post_touch_down.side_effect = down_at
     ctl.post_touch_move.side_effect = lambda x, y: move(max(x, at[0] - (edge - at[1])), y)
-    image, bus = actions.RouteMap.find_bus(context)
-    assert bus == (196, actions.BUS_HOME[1])
+    image, bus = map_actions.RouteMap.find_bus(context)
+    assert bus == (196, map_actions.BUS_HOME[1])
     assert ctl.post_touch_down.call_count == 2  # one drag to the edge, one that shows it
 
 
@@ -421,7 +423,7 @@ def test_a_fresh_map_dragged_to_its_edge_costs_no_extra_drags(context):
 def test_the_map_title_gives_the_floor(context, shown, floor):
     context.run_recognition.side_effect = lambda name, image, override=None: SimpleNamespace(
         all_results=[SimpleNamespace(text=shown, box=(40, 90, 220, 25))] if shown else [])
-    assert actions.map_floor(context, np.zeros((720, 1280, 3), np.uint8)) == floor
+    assert map_actions.map_floor(context, np.zeros((720, 1280, 3), np.uint8)) == floor
 
 
 def test_a_map_that_does_not_pan_once_a_node_is_entered_is_dragged_for_map_tap_limit_s(context):
@@ -432,11 +434,11 @@ def test_a_map_that_does_not_pan_once_a_node_is_entered_is_dragged_for_map_tap_l
     map_world(context, nodes, [], bus_x=446)
     ctl = context.tasker.controller
     ctl.post_click(725, 391)  # a node's tap opens its panel
-    assert actions.enter_node(context)
+    assert map_actions.enter_node(context)
     ctl.post_touch_move.side_effect = lambda x, y: MagicMock()
     t0 = actions.time.monotonic()
-    actions.RouteMap.find_bus(context)
-    assert actions.MAP_TAP_LIMIT < actions.time.monotonic() - t0 < actions.MAP_TAP_LIMIT + 1
+    map_actions.RouteMap.find_bus(context)
+    assert map_actions.MAP_TAP_LIMIT < actions.time.monotonic() - t0 < map_actions.MAP_TAP_LIMIT + 1
 
 
 def test_a_fresh_hard_map_that_cannot_pan_is_not_dragged_for_the_fresh_floors_limit(context, clock):
@@ -447,8 +449,8 @@ def test_a_fresh_hard_map_that_cannot_pan_is_not_dragged_for_the_fresh_floors_li
     ctl = context.tasker.controller
     ctl.post_touch_move.side_effect = lambda x, y: MagicMock()
     t0 = actions.time.monotonic()
-    actions.RouteMap.find_bus(context)
-    assert actions.MAP_TAP_LIMIT < actions.time.monotonic() - t0 < actions.MAP_TAP_LIMIT + 1
+    map_actions.RouteMap.find_bus(context)
+    assert map_actions.MAP_TAP_LIMIT < actions.time.monotonic() - t0 < map_actions.MAP_TAP_LIMIT + 1
 
 
 def touch_times(context):
@@ -467,8 +469,8 @@ def test_a_first_drag_the_map_ignores_is_made_again_without_resting_or_waiting(c
     move = ctl.post_touch_move.side_effect
     ctl.post_touch_move.side_effect = lambda x, y: MagicMock() if ctl.post_touch_down.call_count == 1 else move(x, y)
     events = touch_times(context)
-    _, bus = actions.RouteMap.find_bus(context)
-    assert abs(bus[0] - actions.BUS_HOME[0]) <= actions.BUS_SLACK[0] and len(offsets) == 2  # the second drag took the bus home
+    _, bus = map_actions.RouteMap.find_bus(context)
+    assert abs(bus[0] - map_actions.BUS_HOME[0]) <= map_actions.BUS_SLACK[0] and len(offsets) == 2  # the second drag took the bus home
     second = [k for k, _ in events].index("down", 1)
     last_move = max(t for k, t in events[:second] if k == "move")
     assert events[second][1] - last_move < actions.SCROLL_HOLD  # before the old rest alone would have ended
@@ -482,8 +484,8 @@ def test_a_drag_the_map_follows_rests_and_waits_as_before(context):
     grab, looks = shot.side_effect, []
     shot.side_effect = lambda: actions.time.sleep(0.1) or looks.append(actions.time.monotonic()) or grab()
     events = touch_times(context)
-    _, bus = actions.RouteMap.find_bus(context)
-    assert abs(bus[0] - actions.BUS_HOME[0]) <= actions.BUS_SLACK[0]
+    _, bus = map_actions.RouteMap.find_bus(context)
+    assert abs(bus[0] - map_actions.BUS_HOME[0]) <= map_actions.BUS_SLACK[0]
     assert [k for k, _ in events].count("down") == 1
     last_move, lift = max(t for k, t in events if k == "move"), next(t for k, t in events if k == "up")
     assert actions.SCROLL_HOLD <= lift - last_move < actions.SCROLL_HOLD + 0.1  # the screenshot's 0.1 s is inside the rest
@@ -493,12 +495,12 @@ def test_a_drag_the_map_follows_rests_and_waits_as_before(context):
 def test_a_short_pan_rests_before_its_lift_even_when_the_map_ignored_it(context):
     # #486: the map trailed the finger by up to 126 px at a 396 px pan's last move; a shorter pan the map takes may not have
     # moved yet when the finger stops, so it is not judged then: lifted unrested, it would fling.
-    map_world(context, {(1, "mid"): {"cost"}}, [], bus_x=actions.BUS_HOME[0] + actions.PAN_LOOK_MIN - 20)
+    map_world(context, {(1, "mid"): {"cost"}}, [], bus_x=map_actions.BUS_HOME[0] + map_actions.PAN_LOOK_MIN - 20)
     ctl = context.tasker.controller
     move = ctl.post_touch_move.side_effect
     ctl.post_touch_move.side_effect = lambda x, y: MagicMock() if ctl.post_touch_down.call_count == 1 else move(x, y)
     events = touch_times(context)
-    actions.RouteMap.find_bus(context)
+    map_actions.RouteMap.find_bus(context)
     lift = [k for k, _ in events].index("up")
     assert events[lift][1] - max(t for k, t in events[:lift] if k == "move") >= actions.SCROLL_HOLD
 
@@ -510,18 +512,18 @@ def test_three_drags_the_map_ignores_after_a_fight_still_take_the_bus_home(conte
     ctl = context.tasker.controller
     move = ctl.post_touch_move.side_effect
     ctl.post_touch_move.side_effect = lambda x, y: MagicMock() if ctl.post_touch_down.call_count <= 3 else move(x, y)
-    _, bus = actions.RouteMap.find_bus(context)
-    assert abs(bus[0] - actions.BUS_HOME[0]) <= actions.BUS_SLACK[0] and len(offsets) == 4
+    _, bus = map_actions.RouteMap.find_bus(context)
+    assert abs(bus[0] - map_actions.BUS_HOME[0]) <= map_actions.BUS_SLACK[0] and len(offsets) == 4
 
 
 def test_a_gift_window_over_the_map_after_a_battle_goes_back_to_mirror_hub(context, monkeypatch):
     # Live 2026-10-19 23:34: after an abnormality fight E.G.O Gift GET! slid in over the map (GiftGet 0.73, under its
     # threshold, MirrorMap 0.997); RouteMap read under it, found no bus, dragged the map about and went to L2, then L3.
-    monkeypatch.setattr(actions, "map_weights", lambda context: AB_WEIGHTS)
+    patch_all(monkeypatch, "map_weights", lambda context: AB_WEIGHTS)
     plan = {"floor": 3, "steps": [("mid", "battle")]}
     actions.RUN.update(map_entered=True, floor=3, map_plan=dict(plan))
     context.run_recognition.side_effect = lambda name, image, override=None: SimpleNamespace(hit=True) if name == "GiftGet" else None
-    actions.RouteMap().run(context, None)
+    map_actions.RouteMap().run(context, None)
     context.tasker.controller.post_touch_down.assert_not_called()
     context.tasker.controller.post_click.assert_not_called()
     assert actions.STUCK["flag"] is None
@@ -530,7 +532,7 @@ def test_a_gift_window_over_the_map_after_a_battle_goes_back_to_mirror_hub(conte
 
 def test_a_gift_window_that_slides_in_over_the_bus_is_not_dragged_under(context, monkeypatch):
     # The window can slide in after RouteMap's first look, with the bus still showing beside it.
-    monkeypatch.setattr(actions, "map_weights", lambda context: AB_WEIGHTS)
+    patch_all(monkeypatch, "map_weights", lambda context: AB_WEIGHTS)
     actions.RUN["floor"] = 3
     map_world(context, {(1, "mid"): {"cost"}}, [], bus_x=446)
     title_reads(context, "Exploring Floor 3")
@@ -542,7 +544,7 @@ def test_a_gift_window_that_slides_in_over_the_bus_is_not_dragged_under(context,
         looks.append(name)
         return SimpleNamespace(hit=True) if len(looks) > 1 else None
     context.run_recognition.side_effect = window
-    actions.RouteMap().run(context, None)
+    map_actions.RouteMap().run(context, None)
     context.tasker.controller.post_touch_down.assert_not_called()
     context.tasker.controller.post_click.assert_not_called()
 
@@ -564,11 +566,11 @@ def gift_window_after(context, looks):
 def test_a_gift_window_that_comes_up_while_the_bus_is_searched_for_is_not_dragged_under(context, monkeypatch):
     # #213, live 2026-10-21 09:20:41: after an abnormality fight the GET! window came up over the map while RouteMap
     # looked for the bus; it dragged the map about under the window ~20 s, "no bus on the map" went to L2, then L3.
-    monkeypatch.setattr(actions, "page_guard", test_actions.REAL_GUARD)
-    monkeypatch.setattr(actions, "map_weights", lambda context: AB_WEIGHTS)
+    patch_all(monkeypatch, "page_guard", test_actions.REAL_GUARD)
+    patch_all(monkeypatch, "map_weights", lambda context: AB_WEIGHTS)
     actions.RUN.update(map_entered=True, floor=3)
-    gift_window_after(context, actions.MAP_LOOKS + 2)  # read only once the looks for a linked slot are done
-    actions.RouteMap().run(context, None)
+    gift_window_after(context, map_actions.MAP_LOOKS + 2)  # read only once the looks for a linked slot are done
+    map_actions.RouteMap().run(context, None)
     context.tasker.controller.post_touch_down.assert_not_called()
     context.tasker.controller.post_click.assert_not_called()
     assert actions.STUCK["flag"] is None
@@ -576,13 +578,13 @@ def test_a_gift_window_that_comes_up_while_the_bus_is_searched_for_is_not_dragge
 
 def test_a_gift_window_that_comes_up_between_two_pans_ends_the_pans(context, monkeypatch):
     # #213: the bus far out takes several pans to the far left; the window rose between two of them.
-    monkeypatch.setattr(actions, "page_guard", test_actions.REAL_GUARD)
-    monkeypatch.setattr(actions, "map_weights", lambda context: AB_WEIGHTS)
+    patch_all(monkeypatch, "page_guard", test_actions.REAL_GUARD)
+    patch_all(monkeypatch, "map_weights", lambda context: AB_WEIGHTS)
     offsets = map_world(context, {(1, "mid"): {"cost"}}, [], bus_x=446)
-    monkeypatch.setattr(actions, "scroll", lambda *a, **k: offsets.append(None))  # a drag that moves nothing
+    patch_all(monkeypatch, "scroll", lambda *a, **k: offsets.append(None))  # a drag that moves nothing
     gift_window_after(context, 4)  # RouteMap's first look, the look for a slot, the first pan's guard miss it
     actions.RUN["fresh_floor"] = True  # drags that leave the bus in place are made again
-    actions.RouteMap().run(context, None)
+    map_actions.RouteMap().run(context, None)
     assert len(offsets) == 1
     context.tasker.controller.post_click.assert_not_called()
     assert actions.STUCK["flag"] is None
@@ -590,12 +592,12 @@ def test_a_gift_window_that_comes_up_between_two_pans_ends_the_pans(context, mon
 
 def test_a_gift_window_that_comes_up_after_the_last_tap_is_not_taken_for_a_map_with_no_bus(context, monkeypatch):
     # #213 review: the window can rise while the last fallback tap waits for a node panel; "no bus on the map" went to L2.
-    monkeypatch.setattr(actions, "page_guard", test_actions.REAL_GUARD)
-    monkeypatch.setattr(actions, "map_weights", lambda context: AB_WEIGHTS)
+    patch_all(monkeypatch, "page_guard", test_actions.REAL_GUARD)
+    patch_all(monkeypatch, "map_weights", lambda context: AB_WEIGHTS)
     actions.RUN.update(map_entered=True, floor=3)
     # Missed by RouteMap's first look, the looks for a slot, search_bus's 5 drags and the 4 fallback taps' guards.
-    gift_window_after(context, 1 + actions.MAP_LOOKS + 5 + 4 + 1)
-    actions.RouteMap().run(context, None)
+    gift_window_after(context, 1 + map_actions.MAP_LOOKS + 5 + 4 + 1)
+    map_actions.RouteMap().run(context, None)
     assert context.tasker.controller.post_click.call_count == 4
     assert actions.STUCK["flag"] is None
 
@@ -640,17 +642,17 @@ WIDE_WEIGHTS = {"event": 1, "battle": 2, "focused": 4, "shop": 0, "boss": 0, "un
 
 
 def test_a_floor_wider_than_the_screen_is_read_two_columns_a_drag_and_planned_whole(context, monkeypatch):
-    monkeypatch.setattr(actions, "map_weights", lambda context: WIDE_WEIGHTS)
+    patch_all(monkeypatch, "map_weights", lambda context: WIDE_WEIGHTS)
     logs = []
-    monkeypatch.setattr(actions, "log", logs.append)
+    patch_all(monkeypatch, "log", logs.append)
     actions.RUN["floor"] = 1
     offsets = map_world(context, WIDE, WIDE_LINKS, bus_x=446, width=2900)
-    actions.RouteMap().run(context, None)
+    map_actions.RouteMap().run(context, None)
     # The bus to the far left, two drags of two columns on to the boss, then back to the bus. The fake map takes
     # each drag's 10 px threshold move too (actions.scroll): 520 px a drag.
     assert [o - offsets[0] for o in offsets[:3]] == [0, 520, 1040] and offsets[-1] == offsets[0]
     # up: 4 events, 2 focused (12); down: 4 battles, 2 events (10). The first screen alone took the top row.
-    assert context.tasker.controller.post_click.call_args_list[0].args == (446 - offsets[-1] + actions.SLOT[0], actions.BUS_HOME[1] + actions.SLOT[1] + 213)
+    assert context.tasker.controller.post_click.call_args_list[0].args == (446 - offsets[-1] + map_actions.SLOT[0], map_actions.BUS_HOME[1] + map_actions.SLOT[1] + 213)
     assert actions.RUN["map_plan"]["steps"] == [("mid", "battle")] * 3 + [("mid", "event")] * 2 + [("up", "shop"), ("mid", "boss")]
     assert "map: path down battle > down battle > down battle > down battle > down event > down event > mid shop > mid boss, score 10" in logs
     assert [line for line in logs if line.startswith("map: dragged")] == ["map: dragged the map 520 px; reading on from column 3", "map: dragged the map 520 px; reading on from column 5"]
@@ -658,22 +660,22 @@ def test_a_floor_wider_than_the_screen_is_read_two_columns_a_drag_and_planned_wh
 
 def test_a_drag_that_moves_too_little_leaves_the_first_screens_read(context, monkeypatch):
     # The map's right edge two columns on: the first screen showed all there was to read; the plan is as before #202.
-    monkeypatch.setattr(actions, "map_weights", lambda context: WIDE_WEIGHTS)
+    patch_all(monkeypatch, "map_weights", lambda context: WIDE_WEIGHTS)
     actions.RUN["floor"] = 1
     offsets = map_world(context, WIDE, WIDE_LINKS, bus_x=446, width=1800)
-    actions.RouteMap().run(context, None)
-    assert len(offsets) == 3 and abs(446 - offsets[-1] - actions.BUS_HOME[0]) <= 30  # to the far left, on to the edge, back
-    assert context.tasker.controller.post_click.call_args_list[0].args == (446 - offsets[-1] + actions.SLOT[0], actions.BUS_HOME[1] + actions.SLOT[1] - 213)
+    map_actions.RouteMap().run(context, None)
+    assert len(offsets) == 3 and abs(446 - offsets[-1] - map_actions.BUS_HOME[0]) <= 30  # to the far left, on to the edge, back
+    assert context.tasker.controller.post_click.call_args_list[0].args == (446 - offsets[-1] + map_actions.SLOT[0], map_actions.BUS_HOME[1] + map_actions.SLOT[1] - 213)
     assert actions.RUN["map_plan"]["steps"] == [("mid", "event")] * 3
 
 
 def test_a_drag_that_cannot_be_measured_leaves_the_first_screens_read(context, monkeypatch):
     # A drag whose frames match nowhere (a window over the map, a fade): what was read stands; the map goes back.
-    monkeypatch.setattr(actions, "map_weights", lambda context: WIDE_WEIGHTS)
+    patch_all(monkeypatch, "map_weights", lambda context: WIDE_WEIGHTS)
     monkeypatch.setattr(mr, "shift", lambda *args: None)
     actions.RUN["floor"] = 1
     offsets = map_world(context, WIDE, WIDE_LINKS, bus_x=446, width=2900)
-    actions.RouteMap().run(context, None)
+    map_actions.RouteMap().run(context, None)
     assert [o - offsets[0] for o in offsets] == [0, 520, 0]
     assert actions.RUN["map_plan"]["steps"] == [("mid", "event")] * 3
 
@@ -694,18 +696,18 @@ SIX = ({**{k: v for k, v in WIDE.items() if k[0] <= 5}, (6, "mid"): {"boss"}},
 def test_the_drag_back_leaves_undone_a_remainder_find_bus_takes_as_home(context, monkeypatch, floor, width, drags):
     # #490, live 2026-11-06 NORMAL: each drag of 510 px measured 511; the 1 px drag back after the 510 px one did not
     # move the map.
-    monkeypatch.setattr(actions, "map_weights", lambda context: WIDE_WEIGHTS)
+    patch_all(monkeypatch, "map_weights", lambda context: WIDE_WEIGHTS)
     actions.RUN["floor"] = 1
-    offsets = map_world(context, *floor, bus_x=actions.BUS_HOME[0], width=width)
+    offsets = map_world(context, *floor, bus_x=map_actions.BUS_HOME[0], width=width)
     asked, scroll = [], actions.scroll
 
     def live_scroll(context, x, y, dx, dy, **kw):  # map_world's map moves 10 px past dx; the live one 1 px, and none for 1 px
         asked.append(dx)
         return scroll(context, x, y, dx - 9 if dx > 9 else dx + 9 if dx < -9 else 0, dy, **kw)
-    monkeypatch.setattr(actions, "scroll", live_scroll)
-    actions.RouteMap().run(context, None)
+    patch_all(monkeypatch, "scroll", live_scroll)
+    map_actions.RouteMap().run(context, None)
     assert asked == drags
-    start = 446 - actions.BUS_HOME[0]
+    start = 446 - map_actions.BUS_HOME[0]
     assert all(a != b for a, b in itertools.pairwise([start, *offsets])), "a drag did not move the map"
 
 
@@ -720,35 +722,35 @@ def test_the_cost_is_read_on_the_two_columns_next_to_the_bus_and_only_marks_beyo
         return None
     context.run_recognition.side_effect = run_recognition
     actions.RUN.update(settings={}, difficulty="normal", floor_hard=False)
-    x, y = 50 + actions.SLOT[0], 320 + actions.SLOT[1]  # column 1 with the bus at the far left
+    x, y = 50 + map_actions.SLOT[0], 320 + map_actions.SLOT[1]  # column 1 with the bus at the far left
     image = np.zeros((720, 1280, 3), np.uint8)
     for c in range(3):  # each row runs straight on through columns 2-4
         for dy in mr.ROW_DY.values():
             image[y + dy - 2:y + dy + 3, x + c * mr.COLUMN_DX:x + (c + 1) * mr.COLUMN_DX] = 200
-    ahead = actions.RouteMap.read_ahead(context, image, x, y, {r: ("risky", 1) for r in mr.ROWS})
+    ahead = map_actions.RouteMap.read_ahead(context, image, x, y, {r: ("risky", 1) for r in mr.ROWS})
     assert [{r: t for r, (t, _) in c.items()} for c in ahead] == [dict.fromkeys(mr.ROWS, "risky")] + [dict.fromkeys(mr.ROWS, "focused")] * 2
 
 
 def test_a_hard_floor_that_cannot_pan_is_not_dragged_on(context, monkeypatch):
     # #129: a HARD map stays at rest, its two columns ending at the screen's edge (980); read_on makes no drag.
-    monkeypatch.setattr(actions, "map_weights", lambda context: WIDE_WEIGHTS)
+    patch_all(monkeypatch, "map_weights", lambda context: WIDE_WEIGHTS)
     logs = []
-    monkeypatch.setattr(actions, "log", logs.append)
+    patch_all(monkeypatch, "log", logs.append)
     actions.RUN.update(floor=1, floor_hard=True)
     map_world(context, {(1, "up"): {"event"}, (2, "up"): {"cost"}}, [((1, "up"), (2, "up"))], bus_x=446, width=1280)
-    actions.RouteMap().run(context, None)
+    map_actions.RouteMap().run(context, None)
     assert "map: column 2: up battle (from up)" in logs
     assert not [line for line in logs if line.startswith(("map: a drag", "map: dragged"))]
 
 
 def cost_reads(monkeypatch, offsets):
     """The map_world columns node_at reads, as (column, costs) pairs, the screen's offset on the map taken at each read."""
-    node_at, reads = actions.node_at, []
+    node_at, reads = map_actions.node_at, []
 
     def read(context, image, cx, cy, marks=None, costs=True):
-        reads.append(((cx + (offsets[-1] if offsets else 0) - 446 - actions.SLOT[0]) // mr.COLUMN_DX + 1, costs))
+        reads.append(((cx + (offsets[-1] if offsets else 0) - 446 - map_actions.SLOT[0]) // mr.COLUMN_DX + 1, costs))
         return node_at(context, image, cx, cy, marks, costs)
-    monkeypatch.setattr(actions, "node_at", read)
+    patch_all(monkeypatch, "node_at", read)
     return reads
 
 
@@ -757,7 +759,7 @@ def test_a_short_drag_still_brings_every_column_near_before_it_is_joined_on(cont
     # Review of #239: a first drag that moves 382 px (the game ate part of it) left column 4 at x 712, read from its
     # marks; the next drag put it at 202, where it was joined on from, not read again. One of 430 px left it at 664,
     # and one of 530 px after it at 134. Every column reads its Cost.
-    monkeypatch.setattr(actions, "map_weights", lambda context: WIDE_WEIGHTS)
+    patch_all(monkeypatch, "map_weights", lambda context: WIDE_WEIGHTS)
     actions.RUN["floor"] = 1
     offsets = map_world(context, WIDE, WIDE_LINKS, bus_x=446, width=3200)
     drags, scroll, reads = [], actions.scroll, cost_reads(monkeypatch, offsets)
@@ -765,8 +767,8 @@ def test_a_short_drag_still_brings_every_column_near_before_it_is_joined_on(cont
     def short_first(context, x, y, dx, dy, **kw):
         drags.append(dx)
         return scroll(context, x, y, dx + eaten[0] if len(drags) == 2 else dx + eaten[1] if len(drags) == 3 else dx, dy, **kw)
-    monkeypatch.setattr(actions, "scroll", short_first)
-    actions.RouteMap().run(context, None)
+    patch_all(monkeypatch, "scroll", short_first)
+    map_actions.RouteMap().run(context, None)
     assert {c for c, costs in reads if costs} >= set(range(1, 7))
     assert actions.RUN["map_plan"]["steps"][-2:] == [("up", "shop"), ("mid", "boss")]
 
@@ -776,31 +778,31 @@ def test_a_near_read_that_ends_short_keeps_the_columns_read_before(context, monk
     # #202's "never worse": a link unread up close ends the near read at its first column, or before it; the columns
     # the first screen read past it stay, and the floor is read on from them. Those kept near the bus read their Cost
     # there (review of #239: one was joined on from, its Cost never read; with no column read near, none was).
-    monkeypatch.setattr(actions, "map_weights", lambda context: WIDE_WEIGHTS)
+    patch_all(monkeypatch, "map_weights", lambda context: WIDE_WEIGHTS)
     actions.RUN["floor"] = 1
     offsets = map_world(context, WIDE, WIDE_LINKS, bus_x=446, width=2900)
     reads = cost_reads(monkeypatch, offsets)
-    read_ahead = actions.RouteMap.read_ahead
+    read_ahead = map_actions.RouteMap.read_ahead
 
     def near_read(context, image, x, y, before, first=2):
         if first == 3:  # the frame dark past the node: no link onward reads
             image = image.copy()
             image[:, x + dark_from:] = 0
         return read_ahead(context, image, x, y, before, first)
-    monkeypatch.setattr(actions.RouteMap, "read_ahead", staticmethod(near_read))
-    actions.RouteMap().run(context, None)
+    monkeypatch.setattr(map_actions.RouteMap, "read_ahead", staticmethod(near_read))
+    map_actions.RouteMap().run(context, None)
     assert actions.RUN["map_plan"]["steps"] == [("mid", "battle")] * 3 + [("mid", "event")] * 2 + [("up", "shop"), ("mid", "boss")]
     assert {c for c, costs in reads if costs} >= set(range(1, 7))
 
 
 def shop_world(context, monkeypatch, nodes, links=(((1, "mid"), (2, "mid")),), **run):
     """A fresh floor 1 map, the bus at the far left, run once; the log lines it wrote. run: more of RUN's keys."""
-    monkeypatch.setattr(actions, "map_weights", lambda context: {**NORMAL, "shop": 0, "boss": 0})
+    patch_all(monkeypatch, "map_weights", lambda context: {**NORMAL, "shop": 0, "boss": 0})
     logs = []
-    monkeypatch.setattr(actions, "log", logs.append)
+    patch_all(monkeypatch, "log", logs.append)
     actions.RUN.update(floor=1, **run)
-    map_world(context, nodes, list(links), bus_x=actions.BUS_HOME[0])
-    actions.RouteMap().run(context, None)
+    map_world(context, nodes, list(links), bus_x=map_actions.BUS_HOME[0])
+    map_actions.RouteMap().run(context, None)
     return logs
 
 
@@ -854,10 +856,10 @@ def test_without_the_shop_behind_it_a_dark_boss_in_the_first_column_reads_as_it_
 
 def test_a_planned_boss_after_the_shop_is_followed_whatever_it_reads(context, monkeypatch):
     # follow() types the planned node again; the dark boss reads as an event, so the plan was dropped and the map read again.
-    monkeypatch.setattr(actions, "map_weights", lambda context: {**NORMAL, "boss": 0})
+    patch_all(monkeypatch, "map_weights", lambda context: {**NORMAL, "boss": 0})
     actions.RUN.update(floor=1, after_shop=True, map_plan={"floor": 1, "steps": [("mid", "boss")]})
     map_world(context, {(1, "mid"): set()}, [], bus_x=446)
-    assert actions.RouteMap.follow(context)
+    assert map_actions.RouteMap.follow(context)
     context.tasker.controller.post_touch_down.assert_not_called()  # followed: no drag for a full read
     assert actions.RUN["map_plan"]["steps"] == []
 
@@ -866,7 +868,7 @@ def test_a_boss_told_by_the_shop_is_not_typed_again_by_its_cost(context):
     # #279: read_on types the columns now near again (retype); a dark boss reads as an event on its own.
     context.run_recognition.side_effect = lambda name, image, override=None: None
     column = {"mid": ("boss", {"mid"}), "up": ("abno", {"mid"})}
-    actions.RouteMap.retype(context, np.zeros((720, 1280, 3), np.uint8), column, 400, 357, 3)
+    map_actions.RouteMap.retype(context, np.zeros((720, 1280, 3), np.uint8), column, 400, 357, 3)
     assert column == {"mid": ("boss", {"mid"}), "up": ("event", {"mid"})}
 
 
@@ -877,16 +879,16 @@ def test_a_boss_told_by_the_shop_is_not_typed_again_by_its_cost(context):
 def test_a_dark_column_after_a_shop_is_still_the_boss(context, before, expected):
     # #279: no mark and no light (p90 under 20) around it, only the link into it: `lit` alone would end the read there.
     context.run_recognition.side_effect = lambda name, image, override=None: None
-    x, y = 50 + actions.SLOT[0], 320 + actions.SLOT[1]
+    x, y = 50 + map_actions.SLOT[0], 320 + map_actions.SLOT[1]
     image = np.zeros((720, 1280, 3), np.uint8)
     image[y - 2:y + 3, x:x + mr.COLUMN_DX] = 200  # the link, 5 px wide
-    assert actions.RouteMap.read_ahead(context, image, x, y, before) == expected
+    assert map_actions.RouteMap.read_ahead(context, image, x, y, before) == expected
 
 
 def bus_on_a_node_world(context, monkeypatch, floor, **run):
     """The bus stands off BUS_HOME with no slot to its right; the panel shows after any tap."""
-    monkeypatch.setattr(actions, "map_weights", lambda context: AB_WEIGHTS)
-    monkeypatch.setattr(actions, "enter_node", lambda context: True)
+    patch_all(monkeypatch, "map_weights", lambda context: AB_WEIGHTS)
+    patch_all(monkeypatch, "enter_node", lambda context: True)
     actions.RUN.update(floor=floor, **run)
     ctl = context.tasker.controller
 
@@ -906,7 +908,7 @@ def test_a_resumed_run_with_the_bus_on_a_node_taps_the_bus_before_any_pan(contex
     # (~21 s) before the bus was tapped. In a continued run, a bus with no linked slot is tapped first.
     ctl = bus_on_a_node_world(context, monkeypatch, 3)
     actions.forget_game_state()  # the recovery that brought the game back
-    assert actions.RouteMap().run(context, None)
+    assert map_actions.RouteMap().run(context, None)
     ctl.post_touch_down.assert_not_called()  # no drag
     assert ctl.post_click.call_args_list[0].args == (300 + 22, 250 + 37)
     assert actions.RUN["map_entered"] is True
@@ -915,7 +917,7 @@ def test_a_resumed_run_with_the_bus_on_a_node_taps_the_bus_before_any_pan(contex
 def test_a_restarted_agent_that_has_seen_no_floor_taps_the_bus_first(context, monkeypatch):
     ctl = bus_on_a_node_world(context, monkeypatch, 3)
     del actions.RUN["floor"]  # a fresh process: no theme pack seen
-    assert actions.RouteMap().run(context, None)
+    assert map_actions.RouteMap().run(context, None)
     ctl.post_touch_down.assert_not_called()
     assert ctl.post_click.call_args_list[0].args == (300 + 22, 250 + 37)
 
@@ -925,11 +927,11 @@ def test_a_new_runs_first_floor_does_not_tap_the_bus_first(context, monkeypatch)
     ctl = bus_on_a_node_world(context, monkeypatch, 1)
     sleeps = []
     monkeypatch.setattr(actions.time, "sleep", sleeps.append)
-    assert not actions.RouteMap.tap_bus_first(context)
+    assert not map_actions.RouteMap.tap_bus_first(context)
     ctl.post_click.assert_not_called()
 
 
-PLANNED = (446 + actions.SLOT[0], actions.BUS_HOME[1] + actions.SLOT[1])  # by the bus at x 446, clear of the edges: no drag first
+PLANNED = (446 + map_actions.SLOT[0], map_actions.BUS_HOME[1] + map_actions.SLOT[1])  # by the bus at x 446, clear of the edges: no drag first
 
 
 def deaf_world(context, monkeypatch, hears):
@@ -937,9 +939,9 @@ def deaf_world(context, monkeypatch, hears):
 
     The log lines, the clicks as ((x, y), time) and the drags as (time, clicks before it) on the fake clock.
     """
-    monkeypatch.setattr(actions, "map_weights", lambda context: AB_WEIGHTS)
+    patch_all(monkeypatch, "map_weights", lambda context: AB_WEIGHTS)
     logs, clicks, drags = [], [], []
-    monkeypatch.setattr(actions, "log", logs.append)
+    patch_all(monkeypatch, "log", logs.append)
     actions.RUN.update(floor=1, map_plan={"floor": 1, "steps": [("mid", "battle")]})
     map_world(context, {(1, "mid"): {"cost"}}, [], bus_x=446)
     ctl, inner = context.tasker.controller, context.run_recognition.side_effect
@@ -955,11 +957,11 @@ def deaf_world(context, monkeypatch, hears):
 
 def test_a_planned_node_the_map_ignores_is_tapped_again_until_its_panel_shows(context, monkeypatch):
     logs, clicks, drags = deaf_world(context, monkeypatch, lambda clicks, drags: len(clicks) >= 3)
-    assert actions.RouteMap().run(context, None)
+    assert map_actions.RouteMap().run(context, None)
     assert "map: follow plan mid battle" in logs and not drags
-    taps = [(xy, at) for xy, at in clicks if xy != actions.ENTER]
+    taps = [(xy, at) for xy, at in clicks if xy != map_actions.ENTER]
     assert [xy for xy, _ in taps] == [PLANNED] * 3
-    assert all(b - a >= actions.MAP_ANSWER for (_, a), (_, b) in zip(taps, taps[1:]))
+    assert all(b - a >= map_actions.MAP_ANSWER for (_, a), (_, b) in zip(taps, taps[1:]))
     assert logs.count(f"map: no answer to the tap at {PLANNED[0]}, {PLANNED[1]}; tapping again") == 2
     assert actions.RUN["map_plan"]["steps"] == []
     assert "entered the node" in logs
@@ -967,12 +969,12 @@ def test_a_planned_node_the_map_ignores_is_tapped_again_until_its_panel_shows(co
 
 def test_a_planned_node_that_takes_no_tap_for_long_is_left_for_a_full_read(context, monkeypatch):
     logs, clicks, drags = deaf_world(context, monkeypatch, lambda clicks, drags: bool(drags))
-    assert actions.RouteMap().run(context, None)
+    assert map_actions.RouteMap().run(context, None)
     at, tapped = drags[0]
     assert tapped > 1
     assert {xy for xy, _ in clicks[:tapped]} == {PLANNED}
-    assert actions.MAP_TAP_LIMIT <= at - clicks[0][1] < actions.MAP_TAP_LIMIT + 2
-    assert f"map: planned mid battle took no tap in {actions.MAP_TAP_LIMIT} s; reading the map again" in logs
+    assert map_actions.MAP_TAP_LIMIT <= at - clicks[0][1] < map_actions.MAP_TAP_LIMIT + 2
+    assert f"map: planned mid battle took no tap in {map_actions.MAP_TAP_LIMIT} s; reading the map again" in logs
 
 
 def test_a_page_gone_between_taps_ends_the_taps_on_the_planned_node(context, monkeypatch):
@@ -983,9 +985,9 @@ def test_a_page_gone_between_taps_ends_the_taps_on_the_planned_node(context, mon
         if len(clicks) >= 2:
             raise actions.PageGone(home)
         return shown(context, home, image)
-    monkeypatch.setattr(actions, "page_guard", guard)
+    patch_all(monkeypatch, "page_guard", guard)
     with pytest.raises(actions.PageGone):
-        actions.RouteMap.follow(context)
+        map_actions.RouteMap.follow(context)
     assert [xy for xy, _ in clicks] == [PLANNED] * 2
 
 
@@ -994,6 +996,6 @@ def test_a_tap_that_changes_the_map_but_opens_no_panel_is_not_made_again(context
     get = context.tasker.controller.post_screencap.return_value.wait.return_value.get
     shot = get.side_effect
     get.side_effect = lambda: 255 - shot() if clicks and not drags else shot()
-    assert actions.RouteMap().run(context, None)
+    assert map_actions.RouteMap().run(context, None)
     assert [xy for xy, _ in clicks[:drags[0][1]]] == [PLANNED]
     assert "map: planned mid battle moved the map but showed no panel; reading the map again" in logs

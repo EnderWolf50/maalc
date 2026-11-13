@@ -22,7 +22,7 @@ A **turn** is one `CustomAction::run ... [param.name=PlayTurn] | enter`, **seen*
 - `pause_age`: s from the last BattlePause hit to the hit: the hub's `reco hit [result.name=BattlePause]` or an agent
   run_recognition of BattlePause that hit (hold_turn's looks, press_start's).
 - `turn_age`: s from the last agent run_recognition of BattleTurn that hit during a hold (hold_turn returning on it)
-  to the hit. A hold runs from a `post_touch_down` at (1, 1) (agent/actions.py HOLD_SPOT) to the next
+  to the hit. A hold runs from a `post_touch_down` at (1, 1) (agent/battle_actions.py HOLD_SPOT) to the next
   `post_touch_up`.
 
 Both ages count only looks since the previous turn's first touch, the battle's last Loading hit or the log's or
@@ -61,7 +61,7 @@ ENTRY = re.compile(r'"entry":"(\w+)"')
 XY = re.compile(r'"x":(-?\d+),"y":(-?\d+)')
 NAME = re.compile(r'"name":"(\w+)"')
 TOUCHES = {"controller_post_click": "click", "controller_post_touch_down": "down", "controller_post_swipe": "swipe"}
-HOLD_SPOT = (1, 1)  # a copy of agent/actions.py's: this tool reads logs, not the agent
+HOLD_SPOT = (1, 1)  # a copy of agent/battle_actions.py's: this tool reads logs, not the agent
 
 
 class Hit(NamedTuple):

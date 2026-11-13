@@ -11,7 +11,8 @@
 `bench` is a timing or memory measurement, `emulator` is the user's game account on the
 emulator (see the maalc-live-test skill). A run takes one ticket, waits until it is first,
 runs the command and leaves the queue, so a chain of runs interleaves with other tasks' runs.
-The tickets of dead processes are dropped. A `run` leaves `<name>.result` (exit code, `--log`) when its command ends.
+The tickets of dead processes are dropped. A `run` leaves `<name>.result` (exit code, `--log`) when its command ends,
+and hands the command its ticket's path in MAALC_QUEUE_TICKET: a `backup.py hold` keeps its state beside it (hold.py).
 A run whose ticket is removed while it waits (a cleared queue folder) does not start its command: it says so, leaves
 exit 1 as its result, and has to be queued again.
 `run --first` is for the daily task, which a 05:00 game reset ends (#465): its ticket goes right behind the one that
@@ -29,10 +30,10 @@ says whether it still runs (exit 0) or ended (exit 1, with the last line of its 
 `pause --task <task>` marks the task's hold as paused for N minutes (default 120; `--end` lifts it): `backup.py hold` does
 not time out meanwhile and `status` shows the holder as PAUSED, so a bot killed at a pause does not free the emulator.
 `resume --task <task>` prints a live-test task's checklist from `.local/scratch/<task>/` (hold, bot, done, next step).
+What `status`, `pause` and `resume` know of a hold is hold.py's.
 """
 import argparse
 import ctypes
-import glob
 import json
 import os
 import re
@@ -54,6 +55,7 @@ if str(TOOLS) not in sys.path:  # run as a script, local_dir is not importable u
 from local_dir import local_dir, main_checkout  # noqa: E402
 
 RESOURCES = ("bench", "emulator")
+TICKET_ENV = "MAALC_QUEUE_TICKET"  # the ticket path a `run` hands its command (hold.py keeps its state beside it)
 
 
 ACCESS_DENIED = 5
@@ -214,7 +216,7 @@ def turn(qdir: Path, name: str, cmd: list[str], first: bool = False, is_alive=al
                     on_wait(ahead)
                     said = True
             sleep(poll)
-        yield
+        yield me  # the block gets its ticket: run hands it to its command
     finally:
         me.unlink(missing_ok=True)
 
@@ -233,9 +235,10 @@ def run(qdir: Path, name: str, cmd: list[str], is_alive=alive, poll: float = 5.0
 
     try:
         with turn(qdir, name, cmd, first, is_alive, poll,
-                  on_wait=lambda ahead: print(f"[queue] waiting, {len(ahead)} ahead", flush=True)):
+                  on_wait=lambda ahead: print(f"[queue] waiting, {len(ahead)} ahead", flush=True)) as me:
             print(f"[queue] start {name}", flush=True)
-            return write_result(subprocess.call(cmd))  # inside the turn: `wait` sees the result before the ticket goes
+            # inside the turn: `wait` sees the result before the ticket goes
+            return write_result(subprocess.call(cmd, env={**os.environ, TICKET_ENV: str(me)}))
     except TicketGone as gone:
         print(gone, flush=True)
         return write_result(1, str(gone))
@@ -280,70 +283,6 @@ def wait(qdir: Path, name: str, timeout_s: float, is_alive=alive, poll: float = 
     return doc["exit"]
 
 
-STRANDED = 600  # seconds a holder may sit after its bot ended before `status` calls it stranded
-
-
-def guard_logs(guard: Path) -> list[Path]:
-    """The logs a `hold --guard` names: one path, or a glob of them (`bot*.log`: every bot run started during one hold,
-    a second one under its own log included, live-1 T-live)."""
-    s = str(guard)
-    return [Path(p) for p in sorted(glob.glob(s))] if any(c in s for c in "*?[") else [guard]
-
-
-def hold_path(cmd: str, flag: str) -> Path | None:
-    """The `--guard`/`--done` path of a `backup.py hold` command line (relative: to the main checkout)."""
-    m = re.search(rf"--{flag}\s+(\S+)", cmd)  # ponytail: a path with spaces is cut at the space
-    return m and main_checkout() / m.group(1)
-
-
-def stranded(cmd: str, is_alive=alive, now: float | None = None) -> int | None:
-    """Minutes since the guard bot of a holder that waits for an agent that is not there ended (no `done` file
-    exists), when that is over STRANDED seconds; None otherwise."""
-    guard, done = hold_path(cmd, "guard"), hold_path(cmd, "done")
-    logs = [p for p in guard_logs(guard) if p.exists() and detached_doc(p)] if guard else []
-    if not logs or not done or done.exists() or any(detached_running(p, is_alive) for p in logs):
-        return None
-    secs = (now or time.time()) - max(p.stat().st_mtime for p in logs)  # the last bot's last write is when it ended
-    return round(secs / 60) if secs > STRANDED else None
-
-
-EXPIRY_WARN = 1800  # seconds before a hold's timeout from which `status` says it will expire
-
-
-def pause_until(task: Path) -> float | None:
-    """When the pause of the task folder `task` ends (epoch seconds), None when there is none."""
-    try:
-        return float((task / "pause").read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return None
-
-
-def pause(task: Path, minutes: float | None, now: float | None = None) -> str:
-    """Pause the hold of a task for `minutes` (None lifts it): its timeout stops, `status` shows PAUSED."""
-    if minutes is None:
-        (task / "pause").unlink(missing_ok=True)
-        return f"pause of {task.name} ended"
-    task.mkdir(parents=True, exist_ok=True)
-    until = (now or time.time()) + minutes * 60
-    (task / "pause").write_text(str(until), encoding="utf-8")
-    return f"{task.name} paused until {time.strftime('%H:%M', time.localtime(until))}; `pause --task {task.name} --end` lifts it"
-
-
-def hold_note(cmd: str, now: float | None = None) -> str:
-    """What a second agent must know about a hold: paused (do not touch), or about to time out."""
-    done = hold_path(cmd, "done")
-    if not done:
-        return ""
-    now = now or time.time()
-    if (until := pause_until(done.parent)) and until > now:
-        return f" — PAUSED until {time.strftime('%H:%M', time.localtime(until))}, its agent still owns the emulator"
-    try:
-        left = float((done.parent / "hold.deadline").read_text(encoding="utf-8")) - now
-    except (OSError, ValueError):
-        return ""
-    return f" — hold expires in {max(left, 0) / 60:.0f} min unless its bot runs or it is paused" if left < EXPIRY_WARN else ""
-
-
 FIRST_NOTE = " — FIRST: the daily task, due before the 05:00 reset; the holder ends its hold before its next bot run"
 
 
@@ -354,25 +293,29 @@ class Holder:
     pid: str
     cmd: str
     first: bool  # queued with --first
-    stranded_min: int | None  # see stranded()
+    stranded_min: int | None  # see hold.stranded()
+    hold_note: str = ""  # see hold.note()
 
 
 def holders(qdir: Path, is_alive=alive, now: float | None = None) -> list[Holder]:
     """The live tickets of `qdir` in turn order (none for a queue never used): what `status` prints, for the tools
-    that act on it (watchdog.py, ship.py, after_land.py), so none of them parses its text."""
+    that act on it (watchdog.py, ship.py, after_land.py), so none of them parses its text. A ticket that runs a hold
+    adds what the hold publishes (hold.py)."""
+    from live import hold  # here, not at the top: hold imports this module
+
     out = []
     for p in tickets(qdir, is_alive) if qdir.exists() else []:
         if (t := read(p)) is not None:
             cmd, _, first = t
-            ticket = Ticket.of(p)
-            out.append(Holder(ticket.name, ticket.pid, cmd, first, stranded(cmd, is_alive, now)))
+            ticket, state = Ticket.of(p), hold.read_state(p)
+            out.append(Holder(ticket.name, ticket.pid, cmd, first, hold.stranded(state, is_alive, now), hold.note(state, now)))
     return out
 
 
 def status(qdir: Path, is_alive=alive, now: float | None = None) -> list[str]:
     lines = []
     for i, h in enumerate(holders(qdir, is_alive, now)):
-        note = hold_note(h.cmd, now) if i == 0 else FIRST_NOTE if h.first else ""
+        note = h.hold_note if i == 0 else FIRST_NOTE if h.first else ""
         why = "" if h.stranded_min is None else f" — bot ended {h.stranded_min} min ago, waiting for the agent"
         lines.append(("RUNNING " if i == 0 else f"#{i:<6} ") + f"{h.name} (pid {h.pid}){why}{note}: {h.cmd[:120]}")
     return lines
@@ -428,41 +371,6 @@ def detached_status(log: Path, is_alive=alive) -> tuple[bool, str]:
     return False, f"ended pid {doc['pid']}, last line: {lines[-1] if lines else '(no output)'}"
 
 
-OUTCOME = re.compile(r"forfeit|victory|claimed|not passed|gave up|stop: \d+ of|Traceback|Error|failed", re.I)
-BOT_ENDED = re.compile(r"\[hold\] bot ended (\S+)")
-
-
-def resume(task: Path, is_alive=alive, now: float | None = None) -> list[str]:
-    """Where a live-test task stands, from `<task>/` (hold.log, bot.log, done): the checklist an agent reads when its
-    turn (re)starts, before it re-arms any wait."""
-    now = now or time.time()
-    hold_log, bot_log, done = task / "hold.log", task / "bot.log", task / "done"
-    hold_up, (bot_up, bot_text) = detached_running(hold_log, is_alive), detached_status(bot_log, is_alive)
-    out = [f"hold: {detached_status(hold_log, is_alive)[1]}", f"bot: {bot_text}"]
-    if detached_doc(bot_log) and not bot_up:
-        notes = BOT_ENDED.findall(hold_log.read_text(encoding="utf-8", errors="replace")) if hold_log.exists() else []
-        ended = datetime.fromisoformat(notes[-1]).timestamp() if notes else bot_log.stat().st_mtime  # else its last write
-        out.append(f"bot ended at {time.strftime('%H:%M:%S', time.localtime(ended))} ({(now - ended) / 60:.0f} min ago); outcome lines:")
-        lines = [l for l in bot_log.read_text(encoding="utf-8", errors="replace").splitlines() if OUTCOME.search(l)]
-        out += [f"  {l}" for l in lines[-5:]] or ["  (none matched)"]
-    out.append(f"done file: {'present' if done.exists() else 'absent'}")
-    if not detached_doc(hold_log):
-        nxt = f"nothing was started for task '{task.name}': check the --task name, else begin at step 1"
-    elif not hold_up:
-        nxt = "hold ended: the emulator is released; read its result above, then check install/ and the game settings by hand"
-    elif "[queue] start" not in hold_log.read_text(encoding="utf-8", errors="replace"):
-        nxt = "step 1: still queued behind another task; keep waiting on hold.log, do not touch the emulator"
-    elif not detached_doc(bot_log):
-        nxt = "no bot started: finish steps 2-6 (pre-flight, record, start the bot)"
-    elif bot_up:
-        nxt = "step 6: the bot runs; wait with one Monitor on `status --log` of bot.log"
-    elif not done.exists():
-        nxt = "bot ended while you were away: step 7 (stop the run tree and the recording), 8 (evidence, verdicts), 9 (restore settings, create `done`); do not re-arm a wait"
-    else:
-        nxt = "done exists: step 9 is finished; step 10 (report) once hold.log shows `install matches the backup`"
-    return out + [f"next: {nxt}"]
-
-
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -491,12 +399,15 @@ def main(argv=None) -> int:
     rs = sub.add_parser("resume", help="where a live-test task stands; run it first whenever your turn (re)starts")
     rs.add_argument("--task", required=True)
     a = ap.parse_args(argv)
-    if a.cmd == "resume":
+    if a.cmd in ("resume", "pause"):
+        from live import hold  # as in holders()
+
         # not local_dir(): it would create the folder of a mistyped task
-        print("\n".join(resume(main_checkout() / ".local" / "scratch" / a.task)))
-        return 0
-    if a.cmd == "pause":
-        print(pause(main_checkout() / ".local" / "scratch" / a.task, None if a.end else a.minutes))
+        task = main_checkout() / ".local" / "scratch" / a.task
+        if a.cmd == "resume":
+            print("\n".join(hold.resume(task)))
+        else:
+            print(hold.pause(task, None if a.end else a.minutes))
         return 0
     if a.cmd == "wait":
         return wait(queue_dir(a.resource), a.name, a.timeout_s)

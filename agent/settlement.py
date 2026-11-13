@@ -1,6 +1,6 @@
 """Settlement decisions, free of MaaFramework (docs/spec/03-decisions.md sections 1, 14).
 
-actions.py reads the Exploration Reward window and taps; everything here is plain data in, plain data out.
+settle_actions.py reads the Exploration Reward window and taps; everything here is plain data in, plain data out.
 """
 
 import json

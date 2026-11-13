@@ -13,9 +13,16 @@ import pytest
 from daily_child import probe_child, run_child, screen
 
 from settlement import NOT_SEEN, Result, all_hard, append_run, bonus_toggles, claim_bonuses, claim_dialog, claim_ok, counts_as_run, first_floor_hard, floors_passed, new_run_gate, now, read_result, runs_done, target_reached
+from agent_patch import patch_all
+import battle
+import settlement
 
 if __name__ != "__main__":  # as test_luxcavation.py: the fixtures are test_actions's
     import actions
+    import settle_actions
+    import run_start_actions
+    import battle_actions
+    import map_actions
     from test_actions import clock, context  # noqa: F401 (the fake Maa context the in-process tests use)
 
 
@@ -203,11 +210,12 @@ def test_the_floors_not_read_are_not_asked_for_when_all_were_seen():
 def test_the_difficulty_each_floor_is_played_on_is_remembered(monkeypatch):
     # #382: all_hard comes from what the theme pack page showed per floor, not from the run's plan.
     import actions  # not at the top: the child (this file as a script) loads it under its AgentServer stand-in
-    monkeypatch.setattr(actions, "text", lambda *a, **k: "HARD")
-    monkeypatch.setattr(actions, "page_guard", lambda context, node, image=None: screen("MainWindow.png"))
+    import run_start_actions
+    patch_all(monkeypatch, "text", lambda *a, **k: "HARD")
+    patch_all(monkeypatch, "page_guard", lambda context, node, image=None: screen("MainWindow.png"))
     actions.RUN.clear()
     actions.RUN["floor_hard"] = None
-    actions.PickThemePack.set_difficulty(MagicMock(), 4, True)
+    run_start_actions.PickThemePack.set_difficulty(MagicMock(), 4, True)
     assert actions.RUN["floors_hard"] == {4: True}
     actions.RUN.clear()
 
@@ -215,16 +223,17 @@ def test_the_difficulty_each_floor_is_played_on_is_remembered(monkeypatch):
 def test_a_new_runs_first_floor_forgets_the_floors_of_the_last_run(monkeypatch):
     # #382: a run that began on an expired session's dialog has no PlanRun to clear RUN; floor 1 does it.
     import actions
-    monkeypatch.setattr(actions, "current_run", lambda context: {"difficulty": None, "team": {"hard_from_floor": None}, "settings": {"run": {}}})
-    monkeypatch.setattr(actions, "screen", lambda context: None)
-    monkeypatch.setattr(actions, "text", lambda *a, **k: "SELECT FLOOR 1 THEME PACK")
-    monkeypatch.setattr(actions, "restart_floor_clock", lambda: None)
-    monkeypatch.setattr(actions.PickThemePack, "set_difficulty", staticmethod(lambda context, floor, want: False))
-    monkeypatch.setattr(actions, "stuck", lambda reason, level=1: True)
+    import run_start_actions
+    patch_all(monkeypatch, "current_run", lambda context: {"difficulty": None, "team": {"hard_from_floor": None}, "settings": {"run": {}}})
+    patch_all(monkeypatch, "screen", lambda context: None)
+    patch_all(monkeypatch, "text", lambda *a, **k: "SELECT FLOOR 1 THEME PACK")
+    patch_all(monkeypatch, "restart_floor_clock", lambda: None)
+    monkeypatch.setattr(run_start_actions.PickThemePack, "set_difficulty", staticmethod(lambda context, floor, want: False))
+    patch_all(monkeypatch, "stuck", lambda reason, level=1: True)
     actions.RUN.clear()
-    monkeypatch.setattr(actions, "TASK", {"runs": 0, "done": None})  # a fresh task's, the module's own back after the test
+    patch_all(monkeypatch, "TASK", {"runs": 0, "done": None})  # a fresh task's, the module's own back after the test
     actions.RUN.update(floor=5, floors_hard={f: True for f in range(1, 6)})
-    actions.PickThemePack().run(MagicMock(), SimpleNamespace(node_name="PickThemePack"))
+    run_start_actions.PickThemePack().run(MagicMock(), SimpleNamespace(node_name="PickThemePack"))
     assert "floors_hard" not in actions.RUN and actions.RUN["floor"] == 1
     actions.RUN.clear()
 
@@ -235,9 +244,9 @@ def settle(context, monkeypatch, tmp_path, window, target, floors_hard=None, tog
 
     The toggles are three switches that a tap on one flips. Returns (taps, ON toggles when Claim was tapped, the runs.jsonl line).
     """
-    monkeypatch.setattr(actions, "ROOT", tmp_path)
-    monkeypatch.setattr(actions, "address", lambda context: "emulator")
-    monkeypatch.setattr(actions, "TASK", {"runs": 0, "done": None})  # a run given up here is no later test's forfeit in a row
+    patch_all(monkeypatch, "ROOT", tmp_path)
+    patch_all(monkeypatch, "address", lambda context: "emulator")
+    patch_all(monkeypatch, "TASK", {"runs": 0, "done": None})  # a run given up here is no later test's forfeit in a row
     team = {"id": "a", "name": "A", "enabled": True}
     actions.RUN.update(settings={"run": {"weekly_bonus_use": use, "weekly_bonus_amount": amount, "target_floor": target}, "teams": [team]},
                        team=team, planned=True, floors_hard=floors_hard or {})
@@ -245,24 +254,24 @@ def settle(context, monkeypatch, tmp_path, window, target, floors_hard=None, tog
 
     def tap(context, x, y, wait=1.0):
         taps.append((x, y))
-        if (x, y) == actions.CLAIM:
+        if (x, y) == settle_actions.CLAIM:
             on_at_claim.append(sum(switches))
         elif y == 252:
-            i = actions.TOGGLE_X.index(x)
+            i = settle_actions.TOGGLE_X.index(x)
             switches[i] = not switches[i]
 
     def ocr(context, image, roi, only_rec=False):
-        if roi == actions.RESULT:
+        if roi == settle_actions.RESULT:
             return [(window, (300, 420, 90, 20))]
-        if roi == actions.WEEKLY_LEFT:
+        if roi == settle_actions.WEEKLY_LEFT:
             return [("3/3", (440, 230, 40, 20))]
-        if roi == actions.DIALOG_TEXT and actions.GIVE_UP in taps:
+        if roi == actions.DIALOG_TEXT and settle_actions.GIVE_UP in taps:
             return [("End expedition without claiming rewards?", (400, 300, 400, 30))]
         return []
-    monkeypatch.setattr(actions, "ocr", ocr)
-    monkeypatch.setattr(actions, "tap", tap)
-    monkeypatch.setattr(actions, "toggles", lambda context, image: list(switches))
-    assert actions.Settle().run(context, None)
+    patch_all(monkeypatch, "ocr", ocr)
+    patch_all(monkeypatch, "tap", tap)
+    patch_all(monkeypatch, "toggles", lambda context, image: list(switches))
+    assert settle_actions.Settle().run(context, None)
     path = tmp_path / "logs" / "runs.jsonl"
     lines = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()] if path.exists() else []
     return taps, on_at_claim, lines
@@ -277,7 +286,7 @@ def settle(context, monkeypatch, tmp_path, window, target, floors_hard=None, tog
 ])
 def test_settle_claims_a_run_past_floor_5_and_toggles_bonuses_only_at_the_target(context, monkeypatch, tmp_path, window, target, claimed_on, floors, reached):
     taps, on_at_claim, lines = settle(context, monkeypatch, tmp_path, window, target, {f: True for f in range(1, 16)})
-    assert actions.GIVE_UP not in taps and actions.CLAIM in taps
+    assert settle_actions.GIVE_UP not in taps and settle_actions.CLAIM in taps
     assert on_at_claim == [claimed_on]
     assert [(line["result"], line["floors"], line["target_reached"], line["target"]) for line in lines] == [("clear", floors, reached, target)]
 
@@ -292,7 +301,7 @@ def test_the_weekly_bonus_toggles_are_set_from_all_three_on(context, monkeypatch
     taps, on_at_claim, lines = settle(context, monkeypatch, tmp_path, window, 5, {f: "HARD" in window for f in range(1, 6)},
                                       toggles_on=[True] * 3, use=use, amount=amount)
     assert on_at_claim == [claimed_on]
-    assert [x for x in taps if x[1] == 252] == [(actions.TOGGLE_X[i], 252) for i in (2, 1, 0)][:3 - claimed_on]  # the last ON one goes first
+    assert [x for x in taps if x[1] == 252] == [(settle_actions.TOGGLE_X[i], 252) for i in (2, 1, 0)][:3 - claimed_on]  # the last ON one goes first
     assert [(line["result"], line["target_reached"]) for line in lines] == [("clear", True)]
 
 
@@ -305,7 +314,7 @@ def test_the_runs_line_keeps_difficulty_hard_normal_or_null(context, monkeypatch
 @pytest.mark.parametrize("window", ["Floor 3 [NORMAL] 2/6", "Floor 5 [HARD] 5/7", "Floor 4 4/4"])
 def test_settle_gives_up_a_run_short_of_floor_5_even_with_an_unread_marker(context, monkeypatch, tmp_path, window):
     taps, _, lines = settle(context, monkeypatch, tmp_path, window, 15)
-    assert taps == [actions.GIVE_UP, actions.DIALOG_CONFIRM]
+    assert taps == [settle_actions.GIVE_UP, actions.DIALOG_CONFIRM]
     assert [(line["result"], line["target_reached"]) for line in lines] == [("giveup", False)]
 
 
@@ -317,7 +326,7 @@ def test_a_window_with_floor_and_progress_but_no_marker_is_not_left_fading_in(co
 def test_a_forfeited_run_past_floor_5_claims_its_floor_5_rewards(context, monkeypatch, tmp_path):
     # forfeit() quits the dungeon and pops the flag; the Exploration Reward window that follows is Settle's, which decides on the result alone.
     taps, on_at_claim, lines = settle(context, monkeypatch, tmp_path, "Floor 7 [HARD] 3/7", 15)
-    assert actions.CLAIM in taps and actions.GIVE_UP not in taps
+    assert settle_actions.CLAIM in taps and settle_actions.GIVE_UP not in taps
     assert [(line["result"], line["floors"]) for line in lines] == [("clear", 6)]
 
 
@@ -335,29 +344,29 @@ def timed_settle(context, monkeypatch, tmp_path, window, use, answers, reads=Non
     left, "one" to spend on a `use` run; `later`'s changes show with no tap. Returns what Settle returned, the game and
     the runs.jsonl lines."""
     import test_actions
-    monkeypatch.setattr(actions, "ROOT", tmp_path)
-    monkeypatch.setattr(actions, "address", lambda context: "emulator")
-    monkeypatch.setattr(actions, "TASK", {"runs": 0, "done": None})  # a run given up here is no later test's forfeit in a row
+    patch_all(monkeypatch, "ROOT", tmp_path)
+    patch_all(monkeypatch, "address", lambda context: "emulator")
+    patch_all(monkeypatch, "TASK", {"runs": 0, "done": None})  # a run given up here is no later test's forfeit in a row
     team = {"id": "a", "name": "A", "enabled": True}
     actions.RUN.update(settings={"run": {"weekly_bonus_use": use, "weekly_bonus_amount": "one", "target_floor": 5}, "teams": [team]},
                        team=team, planned=True, floors_hard={f: True for f in range(1, 6)})
     game = test_actions.TimedGame(monkeypatch, context, {
-        tuple(actions.REWARD_TITLE_ROI): "Exploration Reward", tuple(actions.WEEKLY_LEFT): "3/3",
+        tuple(settle_actions.REWARD_TITLE_ROI): "Exploration Reward", tuple(settle_actions.WEEKLY_LEFT): "3/3",
         **{toggle_roi(i): "OFF" for i in range(3)}, **(reads or {})}, answers)
     game.shows(*later)
-    monkeypatch.setattr(actions, "ocr", lambda context, image, roi, only_rec=False: [(window, (300, 420, 90, 20))] if roi == actions.RESULT else [])
-    done = actions.Settle().run(context, None)
+    patch_all(monkeypatch, "ocr", lambda context, image, roi, only_rec=False: [(window, (300, 420, 90, 20))] if roi == settle_actions.RESULT else [])
+    done = settle_actions.Settle().run(context, None)
     path = tmp_path / "logs" / "runs.jsonl"
     return done, game, [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()] if path.exists() else []
 
 
 def toggle_roi(i):
-    dx, y, w, h = actions.TOGGLE_ROI
-    return actions.TOGGLE_X[i] + dx, y, w, h
+    dx, y, w, h = settle_actions.TOGGLE_ROI
+    return settle_actions.TOGGLE_X[i] + dx, y, w, h
 
 
 def window_gone(lag):
-    return lag, {tuple(actions.REWARD_TITLE_ROI): "", tuple(actions.DIALOG_TEXT): ""}, 90
+    return lag, {tuple(settle_actions.REWARD_TITLE_ROI): "", tuple(actions.DIALOG_TEXT): ""}, 90
 
 
 def give_up_asks():
@@ -368,8 +377,8 @@ def test_claim_confirms_its_dialog_once_it_stops_and_ends_once_the_window_goes(c
     # #258: Claim and its Confirm slept 2 s each (the 2026-10-29 and 2026-11-08 claims both asked to confirm). Claim now
     # waits for the dialog, Confirm for the window to go.
     done, game, lines = timed_settle(context, monkeypatch, tmp_path, "Floor 5 [NORMAL] 6/6", "none", {
-        actions.CLAIM: [(0.5, {tuple(actions.DIALOG_TEXT): NO_BONUS}, 30)], actions.DIALOG_CONFIRM: [window_gone(0.5)]})
-    assert done and game.taps == [actions.CLAIM, actions.DIALOG_CONFIRM]
+        settle_actions.CLAIM: [(0.5, {tuple(actions.DIALOG_TEXT): NO_BONUS}, 30)], actions.DIALOG_CONFIRM: [window_gone(0.5)]})
+    assert done and game.taps == [settle_actions.CLAIM, actions.DIALOG_CONFIRM]
     assert [line["result"] for line in lines] == ["clear"]
     assert sum(clock) < 2.2  # was 4 s
 
@@ -377,9 +386,9 @@ def test_claim_confirms_its_dialog_once_it_stops_and_ends_once_the_window_goes(c
 def test_a_weekly_bonus_toggle_is_read_back_once_it_flips_not_after_1_5_s(context, clock, monkeypatch, tmp_path):
     spend = "Spend your 「Weekly Bonuses」 to claim the bonus rewards?"
     done, game, lines = timed_settle(context, monkeypatch, tmp_path, "Floor 5 [HARD] 6/6", "hard", {
-        (actions.TOGGLE_X[0], 252): [(0.3, {toggle_roi(0): "ON"}, 20)],
-        actions.CLAIM: [(0.5, {tuple(actions.DIALOG_TEXT): spend}, 30)], actions.DIALOG_CONFIRM: [window_gone(0.5)]})
-    assert done and game.taps == [(actions.TOGGLE_X[0], 252), actions.CLAIM, actions.DIALOG_CONFIRM]
+        (settle_actions.TOGGLE_X[0], 252): [(0.3, {toggle_roi(0): "ON"}, 20)],
+        settle_actions.CLAIM: [(0.5, {tuple(actions.DIALOG_TEXT): spend}, 30)], actions.DIALOG_CONFIRM: [window_gone(0.5)]})
+    assert done and game.taps == [(settle_actions.TOGGLE_X[0], 252), settle_actions.CLAIM, actions.DIALOG_CONFIRM]
     assert [line["result"] for line in lines] == ["clear"]
     assert sum(clock) < 2.6  # was 1.5 + 4 s
 
@@ -387,27 +396,27 @@ def test_a_weekly_bonus_toggle_is_read_back_once_it_flips_not_after_1_5_s(contex
 def test_a_claim_dialog_that_is_not_the_one_asked_for_is_never_confirmed(context, clock, monkeypatch, tmp_path):
     # Toggles read back OFF, so only the no-bonus dialog may be confirmed: a bonus one waits out the five looks and stops.
     spend = "Spend your 「Weekly Bonuses」 to claim the bonus rewards?"
-    monkeypatch.setattr(actions, "stop", lambda context, reason, line=None: False)
+    patch_all(monkeypatch, "stop", lambda context, reason, line=None: False)
     done, game, lines = timed_settle(context, monkeypatch, tmp_path, "Floor 5 [NORMAL] 6/6", "none", {
-        actions.CLAIM: [(0.5, {tuple(actions.DIALOG_TEXT): spend}, 30)], actions.DIALOG_CONFIRM: [window_gone(0.5)]})
-    assert not done and game.taps == [actions.CLAIM] and lines == []
+        settle_actions.CLAIM: [(0.5, {tuple(actions.DIALOG_TEXT): spend}, 30)], actions.DIALOG_CONFIRM: [window_gone(0.5)]})
+    assert not done and game.taps == [settle_actions.CLAIM] and lines == []
 
 
 def test_unread_toggles_are_read_again_as_soon_as_they_read_not_after_1_s(context, clock, monkeypatch, tmp_path):
     # An unread toggle may be ON: Claim waits until all three read. They read 0.4 s in; a fixed 1 s sleep waited past that.
     done, game, lines = timed_settle(context, monkeypatch, tmp_path, "Floor 5 [NORMAL] 6/6", "none", {
-        actions.CLAIM: [(0.5, {tuple(actions.DIALOG_TEXT): NO_BONUS}, 30)], actions.DIALOG_CONFIRM: [window_gone(0.5)]},
+        settle_actions.CLAIM: [(0.5, {tuple(actions.DIALOG_TEXT): NO_BONUS}, 30)], actions.DIALOG_CONFIRM: [window_gone(0.5)]},
         reads={toggle_roi(i): "" for i in range(3)}, later=[(0.4, {toggle_roi(i): "OFF" for i in range(3)}, 20)])
-    assert done and game.taps == [actions.CLAIM, actions.DIALOG_CONFIRM]
+    assert done and game.taps == [settle_actions.CLAIM, actions.DIALOG_CONFIRM]
     assert game.at[0] - game.t0 < 0.9  # Claim went out before the old 1 s sleep ended
 
 
 def test_give_up_confirms_once_its_dialog_stops_and_ends_once_the_window_goes(context, clock, monkeypatch, tmp_path):
     # #258: GiveUpRewards slept 1.5 s, its Confirm 2 s.
     done, game, lines = timed_settle(context, monkeypatch, tmp_path, "Floor 3 [NORMAL] 2/6", "none", {
-        actions.GIVE_UP: [give_up_asks()],
+        settle_actions.GIVE_UP: [give_up_asks()],
         actions.DIALOG_CONFIRM: [window_gone(0.5)]})
-    assert done and game.taps == [actions.GIVE_UP, actions.DIALOG_CONFIRM]
+    assert done and game.taps == [settle_actions.GIVE_UP, actions.DIALOG_CONFIRM]
     assert [line["result"] for line in lines] == ["giveup"]
     assert sum(clock) < 2  # was 3.5 s
 
@@ -416,8 +425,8 @@ def test_a_run_that_earned_nothing_is_given_up_when_its_window_closes_with_no_di
     # #586, live 2026-11-08: Floor 1 0/6, GiveUpRewards closed the window with no dialog. Settle, waiting for the dialog,
     # found the window gone and handed it back: no runs.jsonl line, no forfeit counted, and the bot opened a new run.
     done, game, lines = timed_settle(context, monkeypatch, tmp_path, "Floor 1 [NORMAL] 0/6", "none", {
-        actions.GIVE_UP: [window_gone(0.5)]})
-    assert done and game.taps == [actions.GIVE_UP] and actions.STUCK["flag"] is None
+        settle_actions.GIVE_UP: [window_gone(0.5)]})
+    assert done and game.taps == [settle_actions.GIVE_UP] and actions.STUCK["flag"] is None
     assert [line["result"] for line in lines] == ["giveup"]
 
 
@@ -425,7 +434,7 @@ def test_a_give_up_that_brings_no_dialog_and_leaves_the_window_up_is_handed_to_r
     # #566 with #586: only the window closing counts as a run given up with no dialog.
     done, game, lines = timed_settle(context, monkeypatch, tmp_path, "Floor 1 [NORMAL] 0/6", "none", {})
     assert done and lines == []
-    assert actions.STUCK["flag"] is not None and game.taps == [actions.GIVE_UP] * 3
+    assert actions.STUCK["flag"] is not None and game.taps == [settle_actions.GIVE_UP] * 3
 
 
 def test_a_give_up_confirm_the_game_lost_is_tapped_again_and_the_run_recorded_once(context, clock, monkeypatch, tmp_path):
@@ -435,21 +444,21 @@ def test_a_give_up_confirm_the_game_lost_is_tapped_again_and_the_run_recorded_on
     (tmp_path / "config").mkdir()
     (tmp_path / "config" / "settings.json").write_text(json.dumps(data), encoding="utf-8")  # Settle makes up a run plan again
     _, game, _ = timed_settle(context, monkeypatch, tmp_path, "Floor 3 [NORMAL] 2/6", "none", {
-        actions.GIVE_UP: [give_up_asks(), give_up_asks()], actions.DIALOG_CONFIRM: [None, window_gone(0.5)],
+        settle_actions.GIVE_UP: [give_up_asks(), give_up_asks()], actions.DIALOG_CONFIRM: [None, window_gone(0.5)],
         actions.DIALOG_CANCEL: [(0.4, {tuple(actions.DIALOG_TEXT): ""}, 20)]})
     for _ in range(4):  # MirrorHub hands Settle the window while it is up
-        if not game.now()[tuple(actions.REWARD_TITLE_ROI)]:
+        if not game.now()[tuple(settle_actions.REWARD_TITLE_ROI)]:
             break
-        actions.Settle().run(context, None)
+        settle_actions.Settle().run(context, None)
     lines = (tmp_path / "logs" / "runs.jsonl").read_text(encoding="utf-8").splitlines()
     assert [json.loads(line)["result"] for line in lines] == ["giveup"]
-    assert game.taps == [actions.GIVE_UP, actions.DIALOG_CONFIRM, actions.DIALOG_CONFIRM]
+    assert game.taps == [settle_actions.GIVE_UP, actions.DIALOG_CONFIRM, actions.DIALOG_CONFIRM]
 
 
 def test_a_give_up_whose_window_stays_is_handed_to_recovery_unrecorded(context, clock, monkeypatch, tmp_path):
     # #566: the window and its dialog stay whatever Confirm does: not a run given up yet.
     done, game, lines = timed_settle(context, monkeypatch, tmp_path, "Floor 3 [NORMAL] 2/6", "none", {
-        actions.GIVE_UP: [give_up_asks()]})
+        settle_actions.GIVE_UP: [give_up_asks()]})
     assert done and lines == []
     assert actions.STUCK["flag"] is not None
     assert game.taps.count(actions.DIALOG_CONFIRM) == 5  # the bound: 5 looks, each confirming the dialog that stays
@@ -477,9 +486,9 @@ def mirror_task(context, monkeypatch, runs):
     (actions.ROOT / "config" / "settings.json").write_text(json.dumps(data), encoding="utf-8")
     reads = {"formation": "3/3", "defeat": "All participating Sinners have been killed.", "panel": "Dungeon Progress", "quit": "Quit exploring the dungeon?",
              "reward": "Floor 1 [NORMAL] 0/6", "giveup": "End expedition without claiming rewards?", "cleared": "Floor 5 [NORMAL] 6/6"}
-    leads = {("formation", actions.FORMATION_BACK): "map", ("defeat", actions.DEFEAT_CONFIRM): "map", ("map", actions.GEAR): "panel", ("panel", actions.FORFEIT): "quit",
-             ("quit", actions.FORFEIT_CONFIRM): "reward", ("reward", actions.GIVE_UP): "giveup",
-             ("giveup", actions.DIALOG_CONFIRM): "entry", ("cleared", actions.CLAIM): "entry"}
+    leads = {("formation", battle_actions.FORMATION_BACK): "map", ("defeat", battle_actions.DEFEAT_CONFIRM): "map", ("map", map_actions.GEAR): "panel", ("panel", map_actions.FORFEIT): "quit",
+             ("quit", map_actions.FORFEIT_CONFIRM): "reward", ("reward", settle_actions.GIVE_UP): "giveup",
+             ("giveup", actions.DIALOG_CONFIRM): "entry", ("cleared", settle_actions.CLAIM): "entry"}
     plan, page, started, logged = iter(runs), ["entry"], [], []
 
     def tap(context, x, y, wait=1.0):
@@ -489,22 +498,22 @@ def mirror_task(context, monkeypatch, runs):
         else:
             page[0] = leads.get((page[0], (x, y)), page[0])
 
-    monkeypatch.setattr(actions, "TASK", {"runs": 0, "done": None})  # a task under way would reach the next test's TaskStart
-    monkeypatch.setattr(actions, "tap", tap)
-    monkeypatch.setattr(actions, "ocr", lambda context, image, roi, only_rec=False: [(reads[page[0]], (0, 0, 9, 9))] if page[0] in reads else [])
-    monkeypatch.setattr(actions, "toggles", lambda context, image: [False] * 3)
-    monkeypatch.setattr(actions, "dead_sinners", lambda image: set(actions.battle.SINNERS[3:]))  # the 3 alive of "3/3": the first 3 cards
-    monkeypatch.setattr(actions, "log", logged.append)
+    patch_all(monkeypatch, "TASK", {"runs": 0, "done": None})  # a task under way would reach the next test's TaskStart
+    patch_all(monkeypatch, "tap", tap)
+    patch_all(monkeypatch, "ocr", lambda context, image, roi, only_rec=False: [(reads[page[0]], (0, 0, 9, 9))] if page[0] in reads else [])
+    patch_all(monkeypatch, "toggles", lambda context, image: [False] * 3)
+    patch_all(monkeypatch, "dead_sinners", lambda image: set(battle.SINNERS[3:]))  # the 3 alive of "3/3": the first 3 cards
+    patch_all(monkeypatch, "log", logged.append)
     actions.TaskStart().run(context, SimpleNamespace(node_name="MirrorDungeon"))
     for run in runs:
         actions.TASK["modules"] = 20  # what OpenDrive read on the way to the entry page (#369)
-        actions.PlanRun().run(context, None)
+        run_start_actions.PlanRun().run(context, None)
         if run != "C":
-            (actions.Formation if run == "F" else actions.Wipe)().run(context, None)
-            actions.RouteMap().run(context, None)
-        actions.Settle().run(context, None)
+            (battle_actions.Formation if run == "F" else battle_actions.Wipe)().run(context, None)
+            map_actions.RouteMap().run(context, None)
+        settle_actions.Settle().run(context, None)
     actions.TASK["modules"] = 20
-    result = actions.PlanRun().run(context, None)
+    result = run_start_actions.PlanRun().run(context, None)
     lines = (actions.ROOT / "logs" / "runs.jsonl").read_text(encoding="utf-8").splitlines()
     return result, logged, len(started), [json.loads(line)["result"] for line in lines]
 
@@ -540,14 +549,15 @@ def child():
         pass
 
     def body(context, actions, out):
+        import settle_actions
         team = {"id": "a", "name": "A", "enabled": True, "hard_from_floor": None}
-        asked, real = [], actions.settlement.bonus_toggles
+        asked, real = [], settlement.bonus_toggles
 
         def bonus(use, amount, hard, left, all_hard):
             asked.append(real(use, amount, hard, left, all_hard))
             raise Asked
 
-        actions.settlement.bonus_toggles = bonus
+        settlement.bonus_toggles = bonus
         out["asked"] = {}
         for name, floors in SEEN.items():
             actions.RUN.clear()
@@ -555,7 +565,7 @@ def child():
                                team=team, floors_hard=floors)  # no "planned": the run began on the expired session's dialog
             asked.clear()
             try:
-                actions.Settle().run(context, SimpleNamespace(node_name="Settle"))
+                settle_actions.Settle().run(context, SimpleNamespace(node_name="Settle"))
             except Asked:
                 pass
             out["asked"][name] = list(asked)

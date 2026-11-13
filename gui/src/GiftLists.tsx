@@ -82,13 +82,14 @@ export function GiftListsTab() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
-        if (buying || document.querySelector(".gl-opt-pop")) return; // the purchase order dialog and the list options close themselves
+        // the purchase order dialog, the list options and the close prompt (App.tsx) close themselves
+        if (buying || document.querySelector(".gl-opt-pop, [role=alertdialog]")) return;
         if (open) tip.hide();
         else if (help) setHelp(false);
         else if (query) setQuery("");
         return;
       }
-      const typing = (e.target as HTMLElement).closest("input, select, textarea, [role=dialog]"); // a field or a dialog has its own keys
+      const typing = (e.target as HTMLElement).closest("input, select, textarea, [role=dialog], [role=alertdialog]"); // a field or a dialog has its own keys
       if (e.key === "/" && !typing && !e.ctrlKey && !e.metaKey && !e.altKey) {
         e.preventDefault();
         searchBox.current?.focus();

@@ -1,4 +1,4 @@
-import actions
+import event_actions
 from event_gaps import BUTTON, CORNER, OPTION_X, TAKE, presses, read, soon, table
 
 
@@ -25,7 +25,7 @@ OPTION = (OPTION_X, 400)
 
 
 def test_the_taps_it_tells_apart_are_the_agents():
-    assert (CORNER, BUTTON, OPTION_X, TAKE) == (actions.EVENT_NEUTRAL, actions.EVENT_BUTTON, actions.CHOICE_X, actions.EVENT_TAKE)
+    assert (CORNER, BUTTON, OPTION_X, TAKE) == (event_actions.EVENT_NEUTRAL, event_actions.EVENT_BUTTON, event_actions.CHOICE_X, event_actions.EVENT_TAKE)
 
 
 def groups(lines):

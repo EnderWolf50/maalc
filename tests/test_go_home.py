@@ -9,6 +9,8 @@ import time
 
 import numpy as np
 from daily_child import GAME, bind, game_class, inside, interface as interface_json, load, result, run_child, run_task, screen
+from agent_patch import rebind
+import recovery
 
 HOLD = 0.5  # s: how long the child holds the stop task that an account-level stop queues behind its task
 WINDOW_TAB = (790, 608, 70, 64)  # the bottom tab bar's Window tab
@@ -114,7 +116,7 @@ def child():
     game.set("main")
     # MaaFramework's Linux build (CI) does not pass post_shell to a custom controller ("Shell is not supported for this
     # controller type"), so foreground() reads None there and GameAway never hits: read the model's dumpsys directly.
-    actions.foreground = lambda context: actions.recovery.focused_package(game.shell("dumpsys window", 0))
+    rebind("foreground", lambda context: recovery.focused_package(game.shell("dumpsys window", 0)))
     tasker = bind(resource, game)
 
     class HoldsTheStop(TaskerEventSink):
@@ -185,7 +187,7 @@ def child():
             game.start_app = lambda intent, game=game: (Game.start_app(game, intent), setattr(game, "on_key", Game.on_key.__get__(game)))[0]
             game.on_tap = lambda x, y, game=game: (setattr(game, "screen", "entry") if game.screen == "title" else Game.on_tap(game, x, y)) or True
         # stuck: the restarts in a row that L3 allows were used up before; restart: none were.
-        in_a_row = 0 if scenario in ("restart", "tab_restart") else actions.recovery.L3_FAILED_IN_A_ROW
+        in_a_row = 0 if scenario in ("restart", "tab_restart") else recovery.L3_FAILED_IN_A_ROW
         actions.ROOT.joinpath("logs").mkdir(exist_ok=True)
         stops = len(list(actions.ROOT.joinpath("logs").rglob("agent.log")))
         override = {"GoHome": {"timeout": 4000}}
@@ -199,18 +201,19 @@ def child():
             game.start_app = lambda intent, game=game: (Game.start_app(game, intent), setattr(game, "screen", "drive"),
                                                         setattr(game, "on_tap", Game.on_tap.__get__(game)))[0]
         if scenario == "restarts_used":  # one restart left, and the restarted game is as stuck as before
-            in_a_row = actions.recovery.L3_FAILED_IN_A_ROW - 1
+            in_a_row = recovery.L3_FAILED_IN_A_ROW - 1
             game.start_app = lambda intent, game=game: (setattr(game, "focus", GAME), setattr(game, "screen", "entry"), True)[-1]
-        actions.STUCK["restarts"] = actions.recovery.Restarts()
+        actions.STUCK["restarts"] = recovery.Restarts()
         for _ in range(in_a_row):
             actions.STUCK["restarts"].attempt(None)
         actions.LOG.clear()
-        actions.time = clock = time if scenario in WALL else SleptClock()
+        clock = time if scenario in WALL else SleptClock()
+        rebind("time", clock)
         began = clock.monotonic()
         try:
             detail = run_task(tasker, scenario, "GoHome", override)
         finally:
-            actions.time = time
+            rebind("time", time)
         out[scenario] = {**result(detail, game, actions), "starts": game.starts,
                          "seconds": clock.monotonic() - began, "log": list(actions.LOG),
                          "stops": game.stops, "in_a_row": actions.STUCK["restarts"].in_a_row,

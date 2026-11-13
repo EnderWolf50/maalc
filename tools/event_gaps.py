@@ -31,7 +31,7 @@ START = re.compile(r"CustomAction::run\] \[context\.task_id\(\)=\d+\] \[node_nam
 END = re.compile(r"CustomAction::run\] \[node_name=Event\].*\[ret=")
 CONNECTING = re.compile(r'Recognizer::recognize\] reco \[result=\{"algorithm":"\w+","box":\[.*"name":"Connecting"')
 MAX_GAP = 10.0
-# agent/actions.py's EVENT_NEUTRAL, EVENT_BUTTON, CHOICE_X and EVENT_TAKE (tests/test_event_gaps.py holds them equal).
+# agent/event_actions.py's EVENT_NEUTRAL, EVENT_BUTTON, CHOICE_X and EVENT_TAKE (tests/test_event_gaps.py holds them equal).
 CORNER, BUTTON, OPTION_X, TAKE = (5, 5), (1130, 645), 925, 1.5
 
 

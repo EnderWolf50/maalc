@@ -1,6 +1,6 @@
 """The Luxcavation daily tasks' decisions, free of MaaFramework (docs/spec/03-decisions.md section 15, #367).
 
-actions.py reads the Enkephalin Modules and the battle's result and taps; everything here is plain data in, a step out.
+lux_actions.py reads the Enkephalin Modules and the battle's result and taps; everything here is plain data in, a step out.
 """
 
 import re

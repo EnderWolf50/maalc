@@ -829,36 +829,36 @@ def test_the_tooltip_sweep_over_tests_screens_hits_no_fuse_page():
 def test_an_unselectable_cell_is_told_by_its_tag_though_it_is_flat():
     # #378: the EX gift a failed fusion gives shows dim, as flat as an empty cell (live: read as no gift, the list's places
     # broken), its red "Unselectable" tag over its top edge. Of tests/shop's fuse page crops only that cell has it.
-    import actions  # noqa: PLC0415  (test_gift_cells' MaaFramework child imports this file before its Resource)
+    import shop_actions  # noqa: PLC0415  (test_gift_cells' MaaFramework child imports this file before its Resource)
     ex = screen_with("fuse_ex")
-    assert [c for c, (x, y) in enumerate(actions.FUSE_CELLS) if s.filled(ex, x, y)] == [0, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
-    assert [c for c, (x, y) in enumerate(actions.FUSE_CELLS) if s.unselectable(ex, x, y)] == [1]
+    assert [c for c, (x, y) in enumerate(shop_actions.FUSE_CELLS) if s.filled(ex, x, y)] == [0, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
+    assert [c for c, (x, y) in enumerate(shop_actions.FUSE_CELLS) if s.unselectable(ex, x, y)] == [1]
     for name in [n for n in CROP_AT if n.startswith("fuse") and n != "fuse_ex"]:
         image = screen_with(name)
-        assert not [c for c, (x, y) in enumerate(actions.FUSE_CELLS) if s.unselectable(image, x, y)], name
+        assert not [c for c, (x, y) in enumerate(shop_actions.FUSE_CELLS) if s.unselectable(image, x, y)], name
 
 
 def test_the_unselectable_sweep_over_tests_screens_hits_no_fuse_page():
-    # CODING_STANDARDS' sweep: the tag is looked for on the fuse page only (actions.held). No fuse page of tests/screens has
+    # CODING_STANDARDS' sweep: the tag is looked for on the fuse page only (shop_actions.held). No fuse page of tests/screens has
     # one at a cell of its grid; two map screens read one at cell 9's place.
-    import actions  # noqa: PLC0415  (as above)
+    import shop_actions  # noqa: PLC0415  (as above)
     hits = []
     for png in sorted(SCREENS.glob("*.png")):
         img = Image.open(png)
         if img.size == (1280, 720):
             image = np.asarray(img.convert("RGB"))[:, :, ::-1]
-            hits += [f"{png.stem} {c}" for c, (x, y) in enumerate(actions.FUSE_CELLS) if s.unselectable(image, x, y)]
+            hits += [f"{png.stem} {c}" for c, (x, y) in enumerate(shop_actions.FUSE_CELLS) if s.unselectable(image, x, y)]
     assert hits == ["MapBossDarkAfterShop 9", "MapFloor4Panned 9"]
 
 
 def test_an_ex_gift_shows_its_green_ex_where_the_numerals_go():
     # #449: an EX gift's cell has a green "EX" for its tier numerals: dimmed on the fuse page (fuse_ex, cell 1, A Certain
     # Philosophy), bright on a sell page (unseen live). Of tests/shop's fuse and sell crops only that cell shows it.
-    import actions  # noqa: PLC0415  (as above)
+    import shop_actions  # noqa: PLC0415  (as above)
     for name, page in [(n, "fuse") for n in CROP_AT if n.startswith("fuse")] + [("sell", "sell")]:
         image = screen_with(name)
-        cells = actions.FUSE_CELLS if page == "fuse" else actions.SELL_CELLS
-        shown = [c for c, (x, y) in enumerate(cells) if actions.held(image, x, y, page) and s.ex_mark(s.cell_crop(image, x, y, OWNED))]
+        cells = shop_actions.FUSE_CELLS if page == "fuse" else shop_actions.SELL_CELLS
+        shown = [c for c, (x, y) in enumerate(cells) if shop_actions.held(image, x, y, page) and s.ex_mark(s.cell_crop(image, x, y, OWNED))]
         assert shown == ([1] if name == "fuse_ex" else []), name
 
 
@@ -867,17 +867,17 @@ def test_the_ex_mark_sweep_over_tests_screens_hits_no_shop_page_but_gregors_repl
     # not read. No fuse or sell page of tests/screens has one; 14 other screens do (green art, map nodes, banners at a cell's
     # place; BattleEgoCard, BattleEgoCardsTwo: the green E.G.O card's frame, #468), and so does Gregor's skill replacement
     # dialog (#453), the one with two options dimmed.
-    import actions  # noqa: PLC0415  (as above)
+    import shop_actions  # noqa: PLC0415  (as above)
     hits = set()
     for png in sorted(SCREENS.glob("*.png")):
         img = Image.open(png)
         if img.size != (1280, 720):
             continue
         image = np.asarray(img.convert("RGB"))[:, :, ::-1]
-        for page, cells in (("fuse", actions.FUSE_CELLS), ("sell", actions.SELL_CELLS)):
+        for page, cells in (("fuse", shop_actions.FUSE_CELLS), ("sell", shop_actions.SELL_CELLS)):
             for x, y in cells:
                 cell = s.cell_crop(image, x, y, OWNED)
-                if actions.held(image, x, y, page) and s.tier(cell) is None and s.ex_mark(cell):
+                if shop_actions.held(image, x, y, page) and s.tier(cell) is None and s.ex_mark(cell):
                     hits.add(png.stem)
     # #453: only Gregor's dialog (two options dimmed) has a green skill icon where a fuse or sell cell is; Don Quixote's
     # (ShopReplaceSkillAll, PickedMiddle, PickedRight) has none there. #456's ID Skill Search dialog of Gregor is the same

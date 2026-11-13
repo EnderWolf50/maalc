@@ -216,6 +216,15 @@ main { flex: 1; min-height: 0; overflow: auto; padding: 16px 20px 28px; min-widt
 .problems li button:hover { color: var(--bad); }
 .problems li button:focus-visible { outline: 2px solid var(--fg); outline-offset: 1px; }
 
+/* The close prompt (App.tsx ClosePrompt), over the dimmed editor. */
+.ask-back { position: fixed; inset: 0; z-index: 90; background: #0006; display: flex; align-items: center; justify-content: center; padding: 20px; }
+.ask {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 16px 18px; width: min(440px, 100%);
+  box-shadow: 0 12px 40px #0005;
+}
+.ask p { margin: 0 0 14px; font-weight: 600; }
+.ask-buttons { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
+
 .muted { color: var(--muted); }
 .caution { position: relative; color: var(--fg); padding-left: 24px; }
 .caution::before {

@@ -5,6 +5,7 @@ as test_module_count.py does.
 
 import pytest
 from daily_child import probe_child, run_child, screen
+import luxcavation
 
 # Labelled by eye: every Thread tab capture so far shows 0/3.
 BONUSES = {name: 0 for name in ("LuxThread.png", "LuxThreadLust.png", "LuxThreadScrolled.png", "LuxConsecThread1.png",
@@ -17,7 +18,7 @@ def child():
     """Read every capture's Daily Bonuses; print {image: n read}."""
     def body(context, actions, out):
         for name in [*BONUSES, *NONE]:
-            out[name] = actions.luxcavation.read_bonuses(actions.ocr_texts(context, screen(name), "ThreadBonuses"))
+            out[name] = luxcavation.read_bonuses(actions.ocr_texts(context, screen(name), "ThreadBonuses"))
 
     probe_child(body)
 

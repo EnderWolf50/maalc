@@ -144,24 +144,24 @@ def test_no_next_list_batches_two_ocr_recognitions_under_one_name():
 def test_the_screens_that_lift_a_held_finger_are_hub_nodes():
     # #150: hold_turn lifts on these; each is a MirrorHub screen (its list, HubText's entries (#157) or BattleHUD's
     # list), so the hub acts on it once the finger is up. BattlePause, which holds again, is reached from BattleHUD.
-    import actions
+    import battle_actions
     nodes = load_nodes()
     hub = [re.sub(r"^(\[\w+\])+", "", n) for n in nodes["MirrorHub"]["next"]]
     hub += hub_entries(nodes, "HubText") + strip(nodes["BattleHUD"]["next"])
-    assert set(actions.BATTLE_LEFT) <= set(hub)
+    assert set(battle_actions.BATTLE_LEFT) <= set(hub)
     assert nodes["BattlePause"]["custom_action"] == "HoldTurn" and "BattlePause" in nodes["BattleHUD"]["next"]
     # A popup over a playing turn lifts the finger; BattleHUD acts on it before BattlePause holds again.
     battle = nodes["BattleHUD"]["next"]
-    assert all(battle.index(n) < battle.index("BattlePause") for n in actions.BATTLE_POPUPS)
+    assert all(battle.index(n) < battle.index("BattlePause") for n in battle_actions.BATTLE_POPUPS)
 
 
 def test_the_event_labels_are_the_event_nodes():
     # #188: a press's fade tells another button by these; one the node gains and they lack waits EVENT_TAKE s.
-    import actions
+    import event_actions
     from ocrtext import compact
     event = load_nodes()["Event"]
-    assert {compact(s) for s in event["expected"].split("|")} == actions.EVENT_LABELS
-    assert event["roi"] == actions.EVENT_BUTTON_LABEL
+    assert {compact(s) for s in event["expected"].split("|")} == event_actions.EVENT_LABELS
+    assert event["roi"] == event_actions.EVENT_BUTTON_LABEL
 
 
 KEPT_DELAYS = ["BattleTurn"]  # #258: a post_delay of the default 200 ms, written out with the reason in the pipeline

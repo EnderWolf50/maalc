@@ -17,10 +17,14 @@
 first (the maalc-live-test skill); these commands act on the user's game account.
 
 **freeze** waits for a line of the bot's run.log matching `--fire` (after one matching `--arm`, when given),
-suspends every process under `--pid` (the `bot.py run` pid the detach printed), then runs the commands written
+suspends every process under `--pid` (the `bot.py run` pid the detach printed) except an adb server (below), then runs the commands written
 to `--cmd` (default `cmd.txt` beside the log), one a line: `shot NAME`, `tap X Y`, `press X Y [S]`, `key CODE`,
 `start PACKAGE`, `plan [S]`, `resume`. The bot resumes on `resume` or after `--max` seconds (150): MaaFramework's waits
 run on, so a long freeze can time a node out. Screenshots go to `--out` (default the log's folder) as `HHMMSS.fff-NAME.png`.
+The freeze's own `shot` and `tap` go through the adb server. When MaaFramework started that server from the bot's process
+tree (#663; ※ not seen in a live tree yet), suspending the tree suspends the server and hangs them (#687). So a process named
+`adb` and everything under it keep running. The `frozen` line lists `pid:name` of each process suspended and the `kept running`
+line the ones left, which shows on the next live freeze whether the server was in the tree.
 
 `plan [S]` lets the game play on, a shot every 3 s (`HHMMSS.fff-plan-NN.png`), until one shows a planning phase (the Win
 Rate label up, BattleTurn) or an E.G.O card (EgoCard), read with tools/live/ego_card.py. It prints `PLANNING <file>` or
@@ -136,6 +140,35 @@ def wait_fire(lines, fire: re.Pattern, arm: re.Pattern | None = None) -> str | N
             return line
 
 
+def proc_name(p) -> str:
+    """The process name, or "?" for one that ended meanwhile or refuses to tell."""
+    try:
+        return p.name()
+    except Exception:  # psutil.NoSuchProcess, AccessDenied
+        return "?"
+
+
+def is_adb(p) -> bool:
+    """True for a process of the adb binary (`adb`, `adb.exe`, any case)."""
+    return proc_name(p).lower().removesuffix(".exe") == "adb"
+
+
+def below_adb(tree) -> list:
+    """The processes of `tree` that are adb or run under one: they stay running."""
+    kept = []
+    for p in tree:
+        if is_adb(p):
+            try:
+                kept += [p, *p.children(recursive=True)]
+            except Exception:  # an adb that ended meanwhile
+                kept.append(p)
+    return [p for p in tree if any(p.pid == k.pid for k in kept)]
+
+
+def labels(procs) -> list[str]:
+    return [f"{p.pid}:{proc_name(p)}" for p in procs]
+
+
 def bot_tree(pid: int):
     import psutil
 
@@ -183,10 +216,13 @@ def freeze(a, ctl) -> None:
     cmd.write_text("")  # a command left from an earlier freeze would run at once
     procs = []
     try:
-        for p in bot_tree(a.pid):
-            if each(p.suspend):
+        tree = bot_tree(a.pid)
+        kept = below_adb(tree)  # the freeze's own shot and tap need the adb server (#687)
+        for p in tree:
+            if p not in kept and each(p.suspend):
                 procs.append(p)
-        print("frozen", stamp(), [p.pid for p in procs], flush=True)
+        print("frozen", stamp(), labels(procs), flush=True)
+        print("kept running", stamp(), labels(kept), flush=True)
         run_commands(ctl, cmd, Path(a.out or Path(a.log).parent), time.time() + a.max)
     finally:
         for p in procs:

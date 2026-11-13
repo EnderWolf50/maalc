@@ -5,11 +5,13 @@ from types import SimpleNamespace
 import pytest
 
 import actions
+import run_start_actions
 import settings
 import test_actions
 from team_queue import migrate_cursor, pick_team, requeue, resumed_team
 from test_resumed_run import claim
 from test_task_chain import entry_page
+from agent_patch import patch_all
 
 clock, context = test_actions.clock, test_actions.context  # its fixtures: the fake Maa context
 
@@ -188,7 +190,7 @@ def test_a_team_the_difficulty_skips_keeps_its_place_and_only_the_claimed_team_g
         teams.insert(0, teams.pop(1))
     entry_page(context, queue_b_a_c)  # auto, no weekly bonus left: a normal run
     actions.TASK.update(runs=0, done=None, modules=20)
-    assert actions.PlanRun().run(context, None) is True
+    assert run_start_actions.PlanRun().run(context, None) is True
     assert (actions.RUN["team"]["id"], actions.RUN["difficulty"]) == ("a", "normal")
     assert queue(actions.ROOT) == ["b", "a", "c"]
     claim(context, monkeypatch)
@@ -199,7 +201,7 @@ def test_a_mirror_dungeon_task_turns_the_old_rotation_cursor_into_the_queue_head
     entry_page(context)
     context.tasker.controller.info = {"adb_serial": ADDR}
     old_state(actions.ROOT, "127.0.0.1_16384.json", "b")
-    monkeypatch.setattr(actions, "TASK", {"runs": 0, "done": None})
+    patch_all(monkeypatch, "TASK", {"runs": 0, "done": None})
     actions.TaskStart().run(context, SimpleNamespace(node_name="ExpLuxcavation"))
     assert queue(actions.ROOT) == ["a", "b"]  # a daily task leaves it to the mirror
     actions.TaskStart().run(context, SimpleNamespace(node_name="MirrorDungeon"))

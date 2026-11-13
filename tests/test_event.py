@@ -7,8 +7,10 @@ import numpy as np
 import pytest
 
 import actions
+import event_actions
 import test_actions
 from test_actions import Choices
+from agent_patch import patch_all
 
 clock, context = test_actions.clock, test_actions.context  # its fixtures
 
@@ -33,14 +35,14 @@ def test_the_lit_button_is_pressed_once_the_page_holds_still(context, clock):
     # #273: with MaaFramework's 200 ms pre_delay gone, MirrorHub hands the page over as soon as its button reads, which
     # can be mid-fade. Screenshots 3 and 4 are the first two alike.
     taps = fading(context, [40, 80, 120, 120])
-    actions.Event().run(context, None)
+    event_actions.Event().run(context, None)
     (xy, shots), *_ = taps
-    assert xy == actions.EVENT_BUTTON and shots >= 4
+    assert xy == event_actions.EVENT_BUTTON and shots >= 4
 
 
 def test_a_page_that_never_holds_still_is_handed_back_untapped(context, clock):
     taps = fading(context, [40, 80] * 30)
-    assert actions.Event().run(context, None) is True
+    assert event_actions.Event().run(context, None) is True
     assert taps == []
 
 
@@ -59,7 +61,7 @@ class Picked(Choices):
         return 0 if self.shots_since_tap is None else max(0, self.shots_since_tap - self.fade)
 
     def click(self, x, y):
-        if (x, y) == actions.EVENT_BUTTON:
+        if (x, y) == event_actions.EVENT_BUTTON:
             self.pressed.append(self.next_page())
             return DEFAULT
         result = super().click(x, y)
@@ -81,7 +83,7 @@ class Picked(Choices):
     def read(self, name, image, override=None):
         if self.shots_since_tap is None or self.shots_since_tap <= self.fade:
             return super().read(name, image, override)
-        if actions.red_button(image) and tuple((override or {}).get(name, {}).get("roi", ())) == tuple(actions.EVENT_BUTTON_LABEL):
+        if event_actions.red_button(image) and tuple((override or {}).get(name, {}).get("roi", ())) == tuple(event_actions.EVENT_BUTTON_LABEL):
             label = self.fading if self.next_page() <= len(self.then) else "Proceed"
             return SimpleNamespace(all_results=[SimpleNamespace(text=label, box=(1065, 625, 140, 40))]) if label else None
         return None
@@ -96,7 +98,7 @@ def test_a_taken_option_presses_the_next_pages_button_once_it_holds_still(contex
     actions.RUN["team"] = {"keyword": "Burn"}
     actions.RUN["settings"] = {"event_overrides": []}
     page = Picked(context, monkeypatch, fade=3, then=[40, 80, 120], fading=fading)
-    actions.Event().run(context, None)
+    event_actions.Event().run(context, None)
     assert len(page.tapped) == 1
     assert page.pressed == [4]  # 2 and 3 still fading in
 
@@ -108,10 +110,10 @@ def test_a_press_after_a_taken_option_opens_the_next_questions_options_again(con
     actions.RUN["settings"] = {"event_overrides": []}
     actions.RUN["event_tried"] = {"Take it."}  # an earlier call's tap on it did nothing
     first = Picked(context, monkeypatch, fade=3, then=[40, 80, 120])
-    actions.Event().run(context, None)
+    event_actions.Event().run(context, None)
     assert first.tapped == ["Leave it."] and first.pressed
     second = Choices(context, monkeypatch, [("Take it.", ""), ("Leave it.", "")], ["Unknown story."])
-    actions.Event().run(context, None)
+    event_actions.Event().run(context, None)
     assert second.tapped == ["Take it."]
 
 
@@ -121,9 +123,9 @@ def test_a_choices_page_that_stays_after_the_tap_is_handed_back_in_time(context,
     actions.RUN["settings"] = {"event_overrides": []}
     page = Picked(context, monkeypatch, fade=float("inf"))
     began = actions.time.monotonic()
-    actions.Event().run(context, None)
+    event_actions.Event().run(context, None)
     assert len(page.tapped) == 1
-    assert actions.time.monotonic() - began <= 2 * actions.EVENT_TAKE + 1
+    assert actions.time.monotonic() - began <= 2 * event_actions.EVENT_TAKE + 1
 
 
 def shot_taps(context):
@@ -147,16 +149,16 @@ def shot_taps(context):
 
 def button_presses(taps):
     """shot_taps' taps on the lit button, as (n, shot_at, at)."""
-    return [t[1:] for t in taps if t[0] == actions.EVENT_BUTTON]
+    return [t[1:] for t in taps if t[0] == event_actions.EVENT_BUTTON]
 
 
 def test_a_button_that_lights_under_the_text_is_pressed_before_another_tap(context, clock):
     # #557: a lit button handed back to MirrorHub was pressed 0.6-0.8 s after the last corner tap.
     test_actions.event_text(context, red_from=3, red_to=5, choices_from=9)
     taps = shot_taps(context)
-    actions.Event().run(context, None)
+    event_actions.Event().run(context, None)
     assert [n for n, _, _ in button_presses(taps)] == [3]
-    assert all(at - shot_at < actions.EVENT_TAP_EVERY for _, shot_at, at in button_presses(taps))
+    assert all(at - shot_at < event_actions.EVENT_TAP_EVERY for _, shot_at, at in button_presses(taps))
     assert len(test_actions.corner_taps(context)) > 2  # the text taps went on after it, in the same call
 
 
@@ -164,7 +166,7 @@ def test_a_lit_button_that_became_another_is_pressed_too(context, clock):
     # A check's result page: SKIP pressed, Continue lit in its place (spec 02), with no unlit screen between.
     test_actions.event_text(context, red_from=1, red_to=5, skip_to=3, choices_from=9)
     taps = shot_taps(context)
-    actions.Event().run(context, None)
+    event_actions.Event().run(context, None)
     assert [n for n, _, _ in button_presses(taps)] == [1, 3]
 
 
@@ -172,14 +174,14 @@ def test_a_lit_button_that_became_another_is_pressed_too(context, clock):
 def test_a_new_lit_button_whose_label_is_not_read_whole_is_handed_back(context, clock, label_to, misread):
     # MirrorHub's Event node presses it once its label reads.
     test_actions.event_text(context, red_from=3, label_to=label_to, misread=misread)
-    actions.Event().run(context, None)
+    event_actions.Event().run(context, None)
     assert test_actions.button_taps(context) == [] and len(test_actions.corner_taps(context)) == 2
 
 
 def connecting(context, monkeypatch, shots):
     """CONNECTING over event_text's screenshots n in shots, the Event node reading through it (as the title's nodes
     read under RetryCountdown.png); page_guard as it runs."""
-    monkeypatch.setattr(actions, "page_guard", test_actions.REAL_GUARD)
+    patch_all(monkeypatch, "page_guard", test_actions.REAL_GUARD)
     inner = context.run_recognition.side_effect
 
     def read(name, image, override=None):
@@ -194,7 +196,7 @@ def test_a_lit_button_under_a_popup_is_pressed_once_the_popup_goes(context, cloc
     test_actions.event_text(context, red_from=3)
     connecting(context, monkeypatch, {3, 4})
     taps = shot_taps(context)
-    actions.Event().run(context, None)
+    event_actions.Event().run(context, None)
     (n, _, _), = button_presses(taps)
     assert n > 4
     assert not [t for t in taps if t[1] in (3, 4)]  # nothing tapped under it
@@ -205,7 +207,7 @@ def test_a_lit_button_under_a_popup_that_stays_is_handed_back(context, clock, mo
     test_actions.event_text(context, red_from=3)
     connecting(context, monkeypatch, set(range(3, 100)))
     taps = shot_taps(context)
-    assert actions.Event().run(context, None) is True
+    assert event_actions.Event().run(context, None) is True
     assert button_presses(taps) == [] and max(t[1] for t in taps) < 3
 
 
@@ -213,9 +215,9 @@ def test_a_press_of_a_button_lit_under_the_text_that_did_not_take_is_handed_back
     # The button lit on for EVENT_TAKE s after the press: MirrorHub presses it again.
     test_actions.event_text(context, red_from=3)
     taps = shot_taps(context)
-    actions.Event().run(context, None)
+    event_actions.Event().run(context, None)
     (_, _, pressed), = button_presses(taps)
-    assert actions.EVENT_TAKE <= actions.time.monotonic() - pressed < actions.EVENT_TAKE + 2 * actions.EVENT_TAP_EVERY
+    assert event_actions.EVENT_TAKE <= actions.time.monotonic() - pressed < event_actions.EVENT_TAKE + 2 * event_actions.EVENT_TAP_EVERY
 
 
 # From the last Continue tap, live: the event page fades out with the button lit for FADE s, the map shows lead s before
@@ -289,7 +291,7 @@ class Outro:
 
     def click(self, x, y):
         actions.time.sleep(TAP)
-        if self.pressed is None and (x, y) == actions.EVENT_BUTTON:
+        if self.pressed is None and (x, y) == event_actions.EVENT_BUTTON:
             self.pressed = actions.time.monotonic()
         t = self.now()
         self.last_tap = t
@@ -304,7 +306,7 @@ class Outro:
             return SimpleNamespace(hit=True, box=[0, 0, 1, 1]) if (name, page) in HITS else None
         actions.time.sleep(OCR)
         label = "Continue" if page == "event" else self.lever
-        if label and tuple(override.get(name, {}).get("roi", ())) == tuple(actions.EVENT_BUTTON_LABEL):
+        if label and tuple(override.get(name, {}).get("roi", ())) == tuple(event_actions.EVENT_BUTTON_LABEL):
             return SimpleNamespace(all_results=[SimpleNamespace(text=label, box=(1155, 661, 14, 12))])
         return None
 
@@ -313,9 +315,9 @@ class Outro:
 def test_gift_windows_after_the_last_continue_are_tapped_as_fast_as_one_alone(context, clock, monkeypatch, lead):
     # #309 live: a lone gift's window, closed by the next corner tap, was up 0.27-0.33 s; the second of two waited
     # 1.7-2.5 s for GiftGet.
-    monkeypatch.setattr(actions, "page_guard", test_actions.REAL_GUARD)
+    patch_all(monkeypatch, "page_guard", test_actions.REAL_GUARD)
     outro = Outro(context, 2, lead)
-    assert actions.Event().run(context, None) is True
+    assert event_actions.Event().run(context, None) is True
     assert len(outro.shown_at) == 2 and len(outro.tapped_at) == 2
     assert max(tap - shown for shown, tap in zip(outro.shown_at, outro.tapped_at)) < 0.5
 
@@ -324,9 +326,9 @@ def test_gift_windows_after_the_last_continue_are_tapped_as_fast_as_one_alone(co
 @pytest.mark.parametrize("windows, lead", [(0, 0.0)] + [(n, lead) for n in (1, 2) for lead in LEADS])
 def test_an_event_hands_back_once_the_map_it_ends_on_holds_still(context, clock, monkeypatch, windows, lead, lever):
     # #511 live: Event looked at the map 1 s more before it handed back, 1.4-1.6 s after its last corner tap.
-    monkeypatch.setattr(actions, "page_guard", test_actions.REAL_GUARD)
+    patch_all(monkeypatch, "page_guard", test_actions.REAL_GUARD)
     outro = Outro(context, windows, lead, lever)
-    assert actions.Event().run(context, None) is True
+    assert event_actions.Event().run(context, None) is True
     handed_back = outro.now()
     assert len(outro.tapped_at) == windows
     assert handed_back - outro.last_tap < 0.5
@@ -338,7 +340,7 @@ def wanting_table(monkeypatch, *options):
     table = [{"key": test_actions.TABLE[0]["key"], "options": [
         {"text": t, "hint": h, "kind": k, "gifts": [["Burn", how] for _, how in g], "gift_ids": [[i, how] for i, how in g]}
         for t, h, k, g in options]}]
-    monkeypatch.setattr(actions, "event_table", lambda: table)
+    patch_all(monkeypatch, "event_table", lambda: table)
     return [(t, h) for t, h, _, _ in options]
 
 
@@ -351,7 +353,7 @@ def test_an_event_option_giving_a_wanted_gift_is_taken_before_the_hint_levels(co
     want_team(9001)
     options = wanting_table(monkeypatch, ("Gamble.", "???", "random", []), ("Reach out.", "Select to gain a Burn E.G.O Gift", "direct", [(9001, "direct")]))
     page = Choices(context, monkeypatch, options, test_actions.DOLL)
-    actions.Event().run(context, None)
+    event_actions.Event().run(context, None)
     assert page.tapped == ["Reach out."]
 
 
@@ -361,10 +363,10 @@ def test_the_want_is_asked_with_the_gifts_the_run_holds(context, monkeypatch, he
     if held is not None:
         actions.RUN["owned"] = held
     asked = []
-    monkeypatch.setattr(actions, "want_kind", lambda gift_list, i, packs, held: asked.append((packs, list(held))) or "want")
+    patch_all(monkeypatch, "want_kind", lambda gift_list, i, packs, held: asked.append((packs, list(held))) or "want")
     options = wanting_table(monkeypatch, ("Reach out.", "Select to gain a Burn E.G.O Gift", "direct", [(9001, "direct")]))
     Choices(context, monkeypatch, options, test_actions.DOLL)
-    actions.Event().run(context, None)
+    event_actions.Event().run(context, None)
     assert asked and all(held == owned for _, held in asked)
 
 
@@ -374,7 +376,7 @@ def test_a_wanted_gift_the_run_already_holds_does_not_jump_the_hint_levels(conte
     actions.RUN["owned"] = [9001]
     options = wanting_table(monkeypatch, ("Gamble.", "???", "random", []), ("Reach out.", "Select to gain a Burn E.G.O Gift", "direct", [(9001, "direct")]))
     page = Choices(context, monkeypatch, options, test_actions.DOLL)
-    actions.Event().run(context, None)
+    event_actions.Event().run(context, None)
     assert page.tapped == ["Gamble."]
 
 
@@ -382,10 +384,10 @@ def test_a_wanted_gift_the_run_already_holds_does_not_jump_the_hint_levels(conte
 def test_the_committed_table_entry_of_901001_sends_the_option_that_gives_the_wanted_gift(context, monkeypatch, wanted, taken):
     # #420: 9001 comes from Reach out. (direct) and Enter the haze. (battle, with 9104); the real story and option texts
     want_team(wanted)
-    entry = next(e for e in actions.event_table() if e["id"] == 901001)
+    entry = next(e for e in event_actions.event_table() if e["id"] == 901001)
     page = Choices(context, monkeypatch, [(o["text"], o["hint"]) for o in entry["options"]],
                    ["Burning to death within.", "Would you be scorched as well if the flames touched you?"])
-    actions.Event().run(context, None)
+    event_actions.Event().run(context, None)
     assert page.tapped == [taken]
 
 
@@ -394,21 +396,21 @@ def test_a_gift_only_a_failed_check_gives_sends_the_lowest_odds_sinner(context, 
     options = wanting_table(monkeypatch, ("Leave.", "Select to gain a Burn E.G.O Gift", "direct", [(9100, "direct")]),
                             ("Learn.", "Advantage check", "check_fail_gift", [(9769, "check_fail")]))
     page = Choices(context, monkeypatch, options, test_actions.DOLL)
-    actions.Event().run(context, None)
+    event_actions.Event().run(context, None)
     assert page.tapped == ["Learn."]
     assert actions.RUN["event"]["lowest"] is True
-    odds = [(x, t) for x, t in zip(actions.EVENT_PORTRAIT_X, ["High", "Very Low", "Normal", "Very High", "Low"])]
+    odds = [(x, t) for x, t in zip(event_actions.EVENT_PORTRAIT_X, ["High", "Very Low", "Normal", "Very High", "Low"])]
     test_actions.check_page(context, odds)
-    actions.Event().run(context, None)
-    assert test_actions.event_portrait_taps(context) == [actions.EVENT_PORTRAIT_X[1]]
+    event_actions.Event().run(context, None)
+    assert test_actions.event_portrait_taps(context) == [event_actions.EVENT_PORTRAIT_X[1]]
 
 
 def test_a_check_after_an_option_with_no_fail_only_gift_still_sends_the_best_odds_sinner(context, monkeypatch):
     want_team(9769)
     options = wanting_table(monkeypatch, ("Learn.", "Advantage check", "check", [(9769, "check_pass"), (9769, "check_fail")]))
     page = Choices(context, monkeypatch, options, test_actions.DOLL)
-    actions.Event().run(context, None)
+    event_actions.Event().run(context, None)
     assert page.tapped == ["Learn."] and actions.RUN["event"]["lowest"] is False
-    test_actions.check_page(context, list(zip(actions.EVENT_PORTRAIT_X, ["High", "Very Low", "Normal", "Very High", "Low"])))
-    actions.Event().run(context, None)
-    assert test_actions.event_portrait_taps(context) == [actions.EVENT_PORTRAIT_X[3]]
+    test_actions.check_page(context, list(zip(event_actions.EVENT_PORTRAIT_X, ["High", "Very Low", "Normal", "Very High", "Low"])))
+    event_actions.Event().run(context, None)
+    assert test_actions.event_portrait_taps(context) == [event_actions.EVENT_PORTRAIT_X[3]]

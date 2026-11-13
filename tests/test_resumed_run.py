@@ -8,8 +8,12 @@ from types import SimpleNamespace
 import pytest
 
 import actions
+import settle_actions
+import run_start_actions
+import battle_actions
 import test_actions
 from test_actions import argv, page
+from agent_patch import patch_all
 
 clock, context = test_actions.clock, test_actions.context  # its fixtures: the fake Maa context
 
@@ -44,9 +48,9 @@ def edit_settings(change):
 
 def claim(context, monkeypatch, difficulty="NORMAL"):
     """Exploration Reward of a cleared run, no weekly bonus left: Settle claims."""
-    page(context, {tuple(actions.RESULT): [(f"Floor 5 [{difficulty}] 6/6", (300, 420, 90, 20))]})
-    monkeypatch.setattr(actions, "toggles", lambda context, image: [False, False, False])
-    assert actions.Settle().run(context, argv())
+    page(context, {tuple(settle_actions.RESULT): [(f"Floor 5 [{difficulty}] 6/6", (300, 420, 90, 20))]})
+    patch_all(monkeypatch, "toggles", lambda context, image: [False, False, False])
+    assert settle_actions.Settle().run(context, argv())
 
 
 def b_first(data):
@@ -83,15 +87,15 @@ def test_auto_with_a_target_above_floor_5_begins_hard_so_the_queues_hard_team_is
 def test_the_team_the_bot_picks_on_the_team_page_is_known(resumed, monkeypatch):
     # A run paused before its team page: the bot picks the slot itself, here b's TEAMS #2, so the run is b's.
     edit_settings(b_first)
-    page(resumed, {tuple(actions.TEAM_TITLE): "TEAMS #2"})
-    assert actions.SelectTeam().run(resumed, argv())
+    page(resumed, {tuple(run_start_actions.TEAM_TITLE): "TEAMS #2"})
+    assert run_start_actions.SelectTeam().run(resumed, argv())
     claim(resumed, monkeypatch)
     assert queue() == ["a", "b"] and last_line()["team"] == "b"
 
 
 def stopped_at_once(context, monkeypatch, entry):
     """Stuck at once after the launch: TaskStart of entry, then the stop procedure."""
-    monkeypatch.setattr(actions, "TASK", {"runs": 0, "done": None})
+    patch_all(monkeypatch, "TASK", {"runs": 0, "done": None})
     actions.TaskStart().run(context, SimpleNamespace(node_name=entry))
     assert actions.stop(context, "recovery used up") is False
 
@@ -113,10 +117,10 @@ def test_a_stop_line_is_written_when_no_team_fits_the_set_difficulty(resumed, mo
     assert (last_line()["team"], last_line()["result"]) == (None, "stop")
 
 
-@pytest.mark.parametrize("action", [actions.SelectTeam, actions.ConfirmStarlight, actions.Wipe])
+@pytest.mark.parametrize("action", [run_start_actions.SelectTeam, run_start_actions.ConfirmStarlight, battle_actions.Wipe])
 def test_a_restart_mid_run_on_a_broken_settings_file_stops_and_says_why(resumed, monkeypatch, action):
     # #668: the first page action after the restart makes the run plan up from the file, which no longer loads.
-    monkeypatch.setattr(actions, "TASK", {"runs": 0, "done": None})
+    patch_all(monkeypatch, "TASK", {"runs": 0, "done": None})
     actions.TaskStart().run(resumed, SimpleNamespace(node_name="MirrorDungeon"))
     (actions.ROOT / "config" / "settings.json").write_text("{", encoding="utf-8")
     actions.LOG.clear()
@@ -133,7 +137,7 @@ def test_a_daily_task_stopped_with_no_run_plan_writes_no_mirror_line(resumed, mo
 
 def test_a_stop_after_the_tasks_claim_writes_no_line_for_a_run_not_begun(resumed, monkeypatch):
     # The claim ended the run; the task stops on its way to the next one (Parallel Superposition stays ON, say).
-    monkeypatch.setattr(actions, "TASK", {"runs": 0, "done": None})
+    patch_all(monkeypatch, "TASK", {"runs": 0, "done": None})
     actions.TaskStart().run(resumed, SimpleNamespace(node_name="MirrorDungeon"))
     claim(resumed, monkeypatch)
     actions.stop(resumed, "Parallel Superposition Mode stays ON after tapping INFINITY MIRROR")

@@ -16,6 +16,7 @@ import json
 
 import numpy as np
 from daily_child import ROOT, bind, game_class, inside, interface as interface_json, live_frame, load, result, run_child, screen
+from agent_patch import rebind
 
 WINDOW_TAB = (790, 608, 70, 64)
 DRIVE_TAB = (930, 600, 110, 80)
@@ -281,7 +282,7 @@ def child(task="ExpLuxcavation", scenarios=SCENARIOS, consecutive=CONSECUTIVE, s
 
     game = Game()
     game.set("main")
-    actions.consecutive_now = lambda context, image, box, enter=None: game.read(box, enter)
+    rebind("consecutive_now", lambda context, image, box, enter=None: game.read(box, enter))
     tasker = bind(resource, game)
     out = {"error": None}
     for scenario, (start, team, count, retries, outcomes, *rest) in scenarios.items():

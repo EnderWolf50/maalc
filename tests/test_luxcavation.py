@@ -8,8 +8,11 @@ import pytest
 from PIL import Image
 
 import actions
+import event_actions
+import lux_actions
 import luxcavation
 from luxcavation import EXP_COST, FIGHT, FINISH, RETRY, SKIP, STOP, batch, decide, needed, parse_consecutive, presses
+from agent_patch import patch_all
 
 if __name__ != "__main__":  # as test_task_chain.py: the fixtures are test_actions's
     from test_actions import Choices, clock, context  # noqa: F401 (the fake Maa context the in-process tests use)
@@ -52,9 +55,9 @@ def test_needed(count, cost, need):
 
 
 def test_a_thread_battle_takes_2_modules_and_an_exp_battle_3():
-    # #640 (luxcavation.py): live 2026-10-26, Thread Lv20-60 all take 2, EXP stages 4-9 take 3; actions.py reads them from here.
+    # #640 (luxcavation.py): live 2026-10-26, Thread Lv20-60 all take 2, EXP stages 4-9 take 3; lux_actions.py reads them from here.
     assert (luxcavation.THREAD_COST, luxcavation.EXP_COST) == (2, 3)
-    assert [actions.LUX[k][1] for k in ("thread", "exp")] == [2, 3]
+    assert [lux_actions.LUX[k][1] for k in ("thread", "exp")] == [2, 3]
     thread = luxcavation.THREAD_COST
     assert decide(6, thread, 3, 0, 0, 0) == FIGHT  # the 3 bonuses of a day on exactly 6 Modules
     assert decide(5, thread, 3, 0, 0, 0) == SKIP
@@ -137,7 +140,7 @@ def test_a_luxcavation_event_reads_its_choices_without_a_mirror_run_plan(context
     actions.RUN.clear()
     actions.RUN.update(lux={"name": "Thread Luxcavation"}, team={"keyword": "Burn"})
     page = Choices(context, monkeypatch, [("Option 0.", ""), ("Option 1.", "Select to gain a Burn E.G.O Gift")], ["Unknown story."])
-    actions.Event().run(context, None)
+    event_actions.Event().run(context, None)
     assert page.tapped == ["Option 1."] and "settings" not in actions.RUN
 
 
@@ -150,35 +153,35 @@ LUX_EVENT = {name: np.array(Image.open(SCREENS / f"{name}.png").convert("RGB"))[
 def test_a_check_card_alone_is_told_from_every_other_event_page(name):
     # Live 2026-10-28 (J1): after SKIP, a Luxcavation event's check card shows alone at the right, SKIP grey; nothing
     # goes on until the card is tapped. Its prompt below, a result, a Choices list or no card: another page.
-    assert actions.card_alone(LUX_EVENT[name]) == (name == "LuxEventCard")
+    assert event_actions.card_alone(LUX_EVENT[name]) == (name == "LuxEventCard")
 
 
 def test_no_other_screen_is_a_check_card_alone():
     # CODING_STANDARDS, Recognition: the colour thresholds swept over every 720p capture of tests/screens; only the card
     # alone (live 2026-10-28, J1) hits.
     hits = [png.name for png in sorted(SCREENS.glob("*.png"))
-            if (image := np.asarray(Image.open(png).convert("RGB"))[:, :, ::-1]).shape[:2] == (720, 1280) and actions.card_alone(image)]
+            if (image := np.asarray(Image.open(png).convert("RGB"))[:, :, ::-1]).shape[:2] == (720, 1280) and event_actions.card_alone(image)]
     assert hits == ["LuxEventCard.png"]
 
 
 def test_a_check_card_alone_is_tapped_to_open_its_prompt(context, monkeypatch):
     taps = []
-    monkeypatch.setattr(actions, "tap", lambda context, x, y, wait=1.0: taps.append((x, y)))
+    patch_all(monkeypatch, "tap", lambda context, x, y, wait=1.0: taps.append((x, y)))
     context.tasker.controller.post_screencap.return_value.wait.return_value.get.side_effect = (
         lambda: LUX_EVENT["LuxEventCheck"] if taps else LUX_EVENT["LuxEventCard"])
     actions.RUN.clear()
     actions.RUN.update(lux={"name": "Thread Luxcavation"}, team={"keyword": "Burn"})
-    assert actions.Event().run(context, None) is True
-    assert taps == [actions.EVENT_CARD] and "settings" not in actions.RUN
+    assert event_actions.Event().run(context, None) is True
+    assert taps == [event_actions.EVENT_CARD] and "settings" not in actions.RUN
 
 
 def run_set_consecutive(context, monkeypatch, reads, target, enter=None):
-    """actions.set_consecutive on the exp page with the title reading `reads` in turn (the last repeats); the taps made."""
+    """lux_actions.set_consecutive on the exp page with the title reading `reads` in turn (the last repeats); the taps made."""
     taps, reads = [], list(reads)
-    monkeypatch.setattr(actions, "consecutive_now", lambda context, image, box, enter=None: reads.pop(0) if len(reads) > 1 else reads[0])
-    monkeypatch.setattr(actions, "tap", lambda context, x, y, wait=1.0: taps.append((x, y)))
+    patch_all(monkeypatch, "consecutive_now", lambda context, image, box, enter=None: reads.pop(0) if len(reads) > 1 else reads[0])
+    patch_all(monkeypatch, "tap", lambda context, x, y, wait=1.0: taps.append((x, y)))
     actions.LOG.clear()
-    return actions.set_consecutive(context, "exp", target, enter), taps
+    return lux_actions.set_consecutive(context, "exp", target, enter), taps
 
 
 def test_the_consecutive_battle_logs_what_it_read_pressed_and_read_back(context, monkeypatch):
@@ -194,8 +197,8 @@ def test_the_consecutive_battle_logs_what_it_read_pressed_and_read_back(context,
 def test_the_consecutive_battle_is_tapped_on_the_card_of_the_enter_in_use(context, monkeypatch):
     # Stage 9 in the middle (the 10th locked, LuxExpLocked.png): its Enter is 341 px left of the rightmost card's, and so is
     # the title to tap, the row and its buttons.
-    _, right = run_set_consecutive(context, monkeypatch, [1, 2], 2, actions.ENTER_AT["exp"])
-    _, middle = run_set_consecutive(context, monkeypatch, [1, 2], 2, (actions.ENTER_AT["exp"][0] - 341, actions.ENTER_AT["exp"][1]))
+    _, right = run_set_consecutive(context, monkeypatch, [1, 2], 2, lux_actions.ENTER_AT["exp"])
+    _, middle = run_set_consecutive(context, monkeypatch, [1, 2], 2, (lux_actions.ENTER_AT["exp"][0] - 341, lux_actions.ENTER_AT["exp"][1]))
     assert right == [(1110, 254), (1179, 286), (1110, 254)]
     assert middle == [(1110 - 341, 254), (1179 - 341, 286), (1110 - 341, 254)]
 
@@ -213,7 +216,7 @@ def test_the_consecutive_battle_that_does_not_read_or_set_logs_it(context, monke
     assert got == 2 and actions.LOG[-1].endswith("Consecutive Battle (exp): shows x2 after closing the row, wanted x4")
 
 
-# The task's steps in actions.py, in process (#641): the branches the integration scenarios of test_exp_luxcavation.py
+# The task's steps in lux_actions.py, in process (#641): the branches the integration scenarios of test_exp_luxcavation.py
 # and test_thread_luxcavation.py once ran in MaaFramework, test_actions.py's fake context around them.
 
 def lux_start(context, monkeypatch, key, **opts):
@@ -223,12 +226,12 @@ def lux_start(context, monkeypatch, key, **opts):
     (actions.ROOT / "config").mkdir()
     (actions.ROOT / "config" / "settings.json").write_text(json.dumps(settings), encoding="utf-8")
     stops = []
-    monkeypatch.setattr(actions, "stop", lambda context, reason, **kw: stops.append(reason) or False)
+    patch_all(monkeypatch, "stop", lambda context, reason, **kw: stops.append(reason) or False)
     # TaskStart starts a task afresh: its TASK and STUCK are put back after the test
-    monkeypatch.setattr(actions, "TASK", {"runs": 0, "done": None})  # as at launch: no task before it
-    monkeypatch.setattr(actions, "STUCK", dict(actions.STUCK))
+    patch_all(monkeypatch, "TASK", {"runs": 0, "done": None})  # as at launch: no task before it
+    patch_all(monkeypatch, "STUCK", dict(actions.STUCK))
     entry = {"exp": "ExpLuxcavation", "thread": "ThreadLuxcavation"}[key]
-    return actions.LuxStart().run(context, SimpleNamespace(node_name=entry, custom_action_param=json.dumps(key))), stops
+    return lux_actions.LuxStart().run(context, SimpleNamespace(node_name=entry, custom_action_param=json.dumps(key))), stops
 
 
 @pytest.mark.parametrize("key, mode, target, cost", [
@@ -248,14 +251,14 @@ def test_a_luxcavation_task_with_no_team_picked_stops_before_any_tap(context, mo
 
 
 def run_plan(monkeypatch, today, seen, **lux):
-    """actions.plan on RUN["lux"] = lux over an EXP task in daily mode with 182 Modules; its return, the finish reasons.
+    """lux_actions.plan on RUN["lux"] = lux over an EXP task in daily mode with 182 Modules; its return, the finish reasons.
     The tests take the context fixture for its RUN cleared after them."""
     ends = []
-    monkeypatch.setattr(actions, "finish", lambda context, reason: ends.append(reason) or True)
+    patch_all(monkeypatch, "finish", lambda context, reason: ends.append(reason) or True)
     actions.RUN.clear()
     actions.RUN["lux"] = {"name": "EXP Luxcavation", "cost": 3, "mode": "daily", "target": 1, "today": None, "seen": None,
                           "fights": None, "retries": 0, "modules": 182, **lux}
-    return actions.plan(MagicMock(), today, seen), ends
+    return lux_actions.plan(MagicMock(), today, seen), ends
 
 
 def test_the_modules_are_checked_against_this_runs_battles(context, monkeypatch):
@@ -301,17 +304,17 @@ def test_the_pass_row_reads_as_the_battles_won_today(context, png, found, param,
     context.run_recognition.side_effect = lambda name, image: row if found and name == "PassExpRow" else None
     actions.RUN.clear()
     actions.RUN["lux"] = {"name": "EXP Luxcavation", "today": None, "seen": None}
-    assert actions.ExpPassRead().run(context, SimpleNamespace(custom_action_param=param)) is True
+    assert lux_actions.ExpPassRead().run(context, SimpleNamespace(custom_action_param=param)) is True
     assert (actions.RUN["lux"]["today"], actions.RUN["lux"]["seen"]) == (today, seen)
     assert context.tasker.controller.post_click.call_count == 0  # nothing tapped
 
 
 def over_after(monkeypatch, results, **lux):
-    """actions.battle_over after each battle of results in turn (a result, or (result, its Consecutive Battle size)), from
+    """lux_actions.battle_over after each battle of results in turn (a result, or (result, its Consecutive Battle size)), from
     a fresh EXP task (lux over its defaults); the steps, the stop reasons and the finish reasons."""
     stops, ends, steps = [], [], []
-    monkeypatch.setattr(actions, "stop", lambda context, reason, **kw: stops.append(reason) or False)
-    monkeypatch.setattr(actions, "finish", lambda context, reason: ends.append(reason) or True)
+    patch_all(monkeypatch, "stop", lambda context, reason, **kw: stops.append(reason) or False)
+    patch_all(monkeypatch, "finish", lambda context, reason: ends.append(reason) or True)
     actions.RUN.clear()
     actions.RUN["team"] = {"guard_turns": 0}
     actions.RUN["lux"] = {"name": "EXP", "cost": 3, "fights": 3, "retries": 1, "modules": 99, "won": 0, "retried": 0,
@@ -320,7 +323,7 @@ def over_after(monkeypatch, results, **lux):
         result, size = result if isinstance(result, tuple) else (result, 1)
         actions.RUN.update(entered=True)
         actions.RUN["lux"].update(result=result, size=size)
-        steps.append(actions.battle_over(MagicMock()))
+        steps.append(lux_actions.battle_over(MagicMock()))
     return steps, stops, ends
 
 
@@ -362,7 +365,7 @@ def test_each_battle_starts_its_guard_turns_afresh():
     actions.RUN.update(team={"guard_turns": 2}, guard=0, entered=True)
     actions.RUN["lux"] = {"name": "EXP", "cost": 3, "fights": 2, "retries": 0, "modules": 99, "won": 0, "retried": 0, "result": "win", "size": 1}
     try:
-        assert actions.battle_over(MagicMock()) is None and actions.RUN["guard"] == 2
+        assert lux_actions.battle_over(MagicMock()) is None and actions.RUN["guard"] == 2
     finally:
         actions.RUN.clear()
 
@@ -375,17 +378,17 @@ def enter_card(context, monkeypatch, bonuses=(), box_shows=None, **lux):
     """LuxEnter on the Thread tab's card, its Daily Bonuses box reading `bonuses` (texts) and its Consecutive Battle box
     left at `box_shows`; its return, the taps of the Enter, the stops, the finish reasons and the OCR nodes read."""
     taps, stops, ends, reads = [], [], [], []
-    monkeypatch.setattr(actions, "ocr_texts", lambda context, image, node: reads.append(node) or list(bonuses))
-    monkeypatch.setattr(actions, "tap_then", lambda context, x, y, done, timeout=2.0: taps.append((x, y)) or "page")
-    monkeypatch.setattr(actions, "set_consecutive", lambda context, box, target, enter=None: box_shows)
-    monkeypatch.setattr(actions, "stop", lambda context, reason, **kw: stops.append(reason) or False)
-    monkeypatch.setattr(actions, "finish", lambda context, reason: ends.append(reason) or True)
+    patch_all(monkeypatch, "ocr_texts", lambda context, image, node: reads.append(node) or list(bonuses))
+    patch_all(monkeypatch, "tap_then", lambda context, x, y, done, timeout=2.0: taps.append((x, y)) or "page")
+    patch_all(monkeypatch, "set_consecutive", lambda context, box, target, enter=None: box_shows)
+    patch_all(monkeypatch, "stop", lambda context, reason, **kw: stops.append(reason) or False)
+    patch_all(monkeypatch, "finish", lambda context, reason: ends.append(reason) or True)
     actions.RUN.clear()
     actions.RUN["lux"] = {"name": "Thread Luxcavation", "cost": 2, "mode": "daily", "target": 3, "today": None, "seen": None,
                           "fights": None, "retries": 0, "modules": 182, "won": 0, "retried": 0, "result": None,
                           "consecutive": False, "size": 1, **lux}
     argv = SimpleNamespace(box=CARD_ENTER, node_name="LuxThreadEnter", custom_action_param=json.dumps({"opens_battle": False, "box": "thread"}))
-    return actions.LuxEnter().run(context, argv), taps, stops, ends, reads
+    return lux_actions.LuxEnter().run(context, argv), taps, stops, ends, reads
 
 
 @pytest.mark.parametrize("bonuses, fights, end", [

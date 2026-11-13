@@ -4,11 +4,14 @@ the one meant gives up at once: the first tap may have been taken."""
 import pytest
 
 import actions
+import shop_actions
+import shop
 import test_actions
 from test_actions import live_shop, sell_page, SELLER, cells_read, with_ids
+from agent_patch import patch_all
 
 clock, context = test_actions.clock, test_actions.context  # its fixtures
-CELLS = [{"i": 10 + k, "x": x, "y": y} for k, (x, y) in enumerate(actions.FUSE_CELLS[:3])]
+CELLS = [{"i": 10 + k, "x": x, "y": y} for k, (x, y) in enumerate(shop_actions.FUSE_CELLS[:3])]
 
 
 def placing(context, monkeypatch, reads, out=False):
@@ -17,16 +20,16 @@ def placing(context, monkeypatch, reads, out=False):
     i, the log lines)."""
     lines, tapped, now = [], [], {"cell": None}
     reads = iter(reads)
-    monkeypatch.setattr(actions, "log", lines.append)
-    monkeypatch.setattr(actions, "cell_at", lambda context, grid, c: now.update(cell=c["i"]) or (c["x"], c["y"]))
-    monkeypatch.setattr(actions, "page_guard", lambda context, home, image=None: None)
-    monkeypatch.setattr(actions, "tap_moved", lambda context, x, y, timeout=0.5: tapped.append(now["cell"]))
-    monkeypatch.setattr(actions, "still", lambda context, timeout=2.0, **k: None)
-    monkeypatch.setattr(actions, "screen", lambda context: (len(CELLS) if out else 0, out))
-    monkeypatch.setattr(actions, "close_tooltip", lambda context, page, force=False: next(reads))
-    monkeypatch.setattr(actions.shop, "placed", lambda image, n: image[0])
-    monkeypatch.setattr(actions.shop, "picked", lambda image, x, y, bottom=720: image[1])
-    done = actions.Shop.place(context, CELLS, 3, {"page": "fuse", "at": 0}, out=out)
+    patch_all(monkeypatch, "log", lines.append)
+    patch_all(monkeypatch, "cell_at", lambda context, grid, c: now.update(cell=c["i"]) or (c["x"], c["y"]))
+    patch_all(monkeypatch, "page_guard", lambda context, home, image=None: None)
+    patch_all(monkeypatch, "tap_moved", lambda context, x, y, timeout=0.5: tapped.append(now["cell"]))
+    patch_all(monkeypatch, "still", lambda context, timeout=2.0, **k: None)
+    patch_all(monkeypatch, "screen", lambda context: (len(CELLS) if out else 0, out))
+    patch_all(monkeypatch, "close_tooltip", lambda context, page, force=False: next(reads))
+    monkeypatch.setattr(shop, "placed", lambda image, n: image[0])
+    monkeypatch.setattr(shop, "picked", lambda image, x, y, bottom=720: image[1])
+    done = shop_actions.Shop.place(context, CELLS, 3, {"page": "fuse", "at": 0}, out=out)
     return done, tapped, lines
 
 
@@ -78,20 +81,20 @@ def test_a_sell_cell_tap_that_picked_nothing_is_made_once_more(context, monkeypa
     # #611: Sell asks nothing and the Cost shows no preview (51, not "51 > 146"): the cell tap was lost, so the cell is
     # tapped once more and Sell again; the sale goes through.
     taps, logs = selling(context, monkeypatch, lost=1)
-    assert taps.count(actions.SELL_CELLS[0]) == 2 and SELL_RETAP in logs
+    assert taps.count(shop_actions.SELL_CELLS[0]) == 2 and SELL_RETAP in logs
     assert "shop: sold cell 0 for 95: 51 -> 146 Cost" in logs
 
 
 def test_two_sell_cell_taps_that_pick_nothing_sell_nothing_as_before(context, monkeypatch):
     taps, logs = selling(context, monkeypatch, lost=2)
-    assert taps.count(actions.SELL_CELLS[0]) == 2 and logs.count(SELL_RETAP) == 1
+    assert taps.count(shop_actions.SELL_CELLS[0]) == 2 and logs.count(SELL_RETAP) == 1
     assert "shop: sell cell 0 for 95: not sold, 51 -> 51 Cost" in logs
 
 
 def test_a_sell_cell_picked_whose_sell_tap_was_lost_is_not_tapped_again(context, monkeypatch):
     # The Cost previews the sale ("51 > 146" reads 51146): the cell was picked, and a second tap would unpick it.
     taps, logs = selling(context, monkeypatch, lost=0, sell_lost=True)
-    assert taps.count(actions.SELL_CELLS[0]) == 1 and SELL_RETAP not in logs
+    assert taps.count(shop_actions.SELL_CELLS[0]) == 1 and SELL_RETAP not in logs
     assert any("not sold" in line for line in logs)
 
 
@@ -104,18 +107,18 @@ def selling(context, monkeypatch, lost, sell_lost=False):
     page = sell_page(lambda taps: actions.DIALOG_CONFIRM in taps)
 
     def reads_now(taps):
-        cell = [k for k, t in enumerate(taps) if t == actions.SELL_CELLS[0]]
+        cell = [k for k, t in enumerate(taps) if t == shop_actions.SELL_CELLS[0]]
         taken = [t for k, t in enumerate(taps) if k not in cell[:lost]]
         if sell_lost:
-            taken = [t for t in taken if t != actions.PAGE_OK]
+            taken = [t for t in taken if t != shop_actions.PAGE_OK]
         shown = page(taken)
-        if actions.SELL_CELLS[0] not in taken:
+        if shop_actions.SELL_CELLS[0] not in taken:
             shown[tuple(actions.DIALOG_TEXT)] = []  # Sell with nothing picked asks nothing
         return shown
     taps = live_shop(context, reads_now)
     cells_read(monkeypatch, *with_ids([("Bleed",)]))
-    monkeypatch.setattr(actions, "cell_at", lambda context, grid, c: (c["x"], c["y"]))  # this page's screen is no grid
+    patch_all(monkeypatch, "cell_at", lambda context, grid, c: (c["x"], c["y"]))  # this page's screen is no grid
     logs = []
-    monkeypatch.setattr(actions, "log", logs.append)
-    actions.Shop.sell(context, SELLER, {"wanted": 145, "sold": False})
+    patch_all(monkeypatch, "log", logs.append)
+    shop_actions.Shop.sell(context, SELLER, {"wanted": 145, "sold": False})
     return taps, logs

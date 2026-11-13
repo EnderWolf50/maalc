@@ -1,4 +1,4 @@
-"""The Consecutive Battle box's N (#375), read by actions.consecutive_now on the captures of tests/screens, and the team page
+"""The Consecutive Battle box's N (#375), read by lux_actions.consecutive_now on the captures of tests/screens, and the team page
 that says Chain To Battle! after a x N battle, which LuxTeamSelect must still know.
 
 Real MaaFramework and its OCR, in a child process (this file run as a script), as test_module_count.py does.
@@ -35,13 +35,14 @@ def enter_of(context, actions, name, box):
 
 def child():
     def body(context, actions, out):
+        import lux_actions
         out.update(read={}, none={}, team={}, enters={})
         for name, (box, _) in READS.items():
             enter = enter_of(context, actions, name, box)
             out["enters"][name] = enter
-            out["read"][name] = actions.consecutive_now(context, screen(name), box, enter)
+            out["read"][name] = lux_actions.consecutive_now(context, screen(name), box, enter)
         for name, box in NONE.items():
-            out["none"][f"{name}/{box}"] = actions.consecutive_now(context, screen(name), box)
+            out["none"][f"{name}/{box}"] = lux_actions.consecutive_now(context, screen(name), box)
         for name in [*TEAM_PAGES, *NOT_TEAM_PAGES]:
             out["team"][name] = actions.seen(context, screen(name), "LuxTeamSelect") is not None
 

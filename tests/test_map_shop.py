@@ -1,7 +1,7 @@
 """The shop node on the map, read by MaaFramework's own template matching (#146), on live captures; and fights by
 their Cost where a drag brings them next to the bus (#238).
 
-actions.node_at runs inside a real MaaFramework task (resource bundle loaded, a still controller), so the
+map_actions.node_at runs inside a real MaaFramework task (resource bundle loaded, a still controller), so the
 MapNodeShop and MapNodeShopIcon templates and their scores are the agent's on the device. The pytest process holds MaaFramework in
 AgentServer mode, so the task runs in a child process: this file run as a script, as test_shop_cells.py does.
 """
@@ -46,7 +46,7 @@ BOSS_SHOP, BOSS = (837, 357), (1092, 357)
 
 
 def child():
-    """Run every case through actions.node_at in a MaaFramework task; print {case: node type}."""
+    """Run every case through map_actions.node_at in a MaaFramework task; print {case: node type}."""
     from maa.controller import CustomController
     from maa.custom_action import CustomAction
     from maa.resource import Resource
@@ -59,6 +59,7 @@ def child():
     sys.modules["maa.agent"] = types.ModuleType("maa.agent")
     sys.modules["maa.agent.agent_server"] = stub
     import actions
+    import map_actions
 
     class Still(CustomController):
         def connect(self):
@@ -79,18 +80,18 @@ def child():
         def run(self, context, argv):
             try:
                 for case, (cx, cy) in CASES.items():
-                    out[case] = actions.node_at(context, screen_with(case), cx, cy, costs=False)
+                    out[case] = map_actions.node_at(context, screen_with(case), cx, cy, costs=False)
                 actions.RUN.update(settings={}, difficulty="normal", floor_hard=False)
                 for case in FRAMES:
                     name, cx, cy = case.split()
                     cx, cy = int(cx), int(cy)
                     image = np.asarray(Image.open(ROOT / "tests" / "screens" / f"{name}.png").convert("RGB"))[:, :, ::-1].copy()
-                    out[case] = actions.node_at(context, image, cx, cy, costs=cx <= actions.MAP_NEAR)
+                    out[case] = map_actions.node_at(context, image, cx, cy, costs=cx <= map_actions.MAP_NEAR)
                 image = np.asarray(Image.open(ROOT / "tests" / "screens" / "MapBossDarkAfterShop.png").convert("RGB"))[:, :, ::-1].copy()
                 x, y = BOSS
                 out["boss glow"] = bool(actions.seen(context, image, "MapNodeBoss", (x - 40, y - 40, 80, 80)))
-                out["boss shop"] = actions.node_at(context, image, *BOSS_SHOP, costs=False)
-                ahead = actions.RouteMap.read_ahead(context, image, *BOSS_SHOP, {"mid": ("shop", {"mid"})}, first=5)
+                out["boss shop"] = map_actions.node_at(context, image, *BOSS_SHOP, costs=False)
+                ahead = map_actions.RouteMap.read_ahead(context, image, *BOSS_SHOP, {"mid": ("shop", {"mid"})}, first=5)
                 out["boss ahead"] = [{row: [kind, sorted(src)] for row, (kind, src) in column.items()} for column in ahead]
             except Exception:  # MaaFramework swallows it: hand it to the test
                 out["error"] = traceback.format_exc()

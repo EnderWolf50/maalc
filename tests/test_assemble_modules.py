@@ -10,6 +10,7 @@ import itertools
 import json
 
 from daily_child import bind, game_class, inside, interface as interface_json, load, result, run_child, screen
+from agent_patch import patch_all
 
 WINDOW_TAB = (790, 608, 70, 64)
 ENK_BAR = (440, 640)
@@ -136,11 +137,11 @@ def test_a_confirm_that_never_takes_fails_the_task():
 
 
 def test_fractions_reads_n_over_cap_left_to_right():
-    import actions
+    import daily_actions
 
-    assert actions.fractions([("2 / 136", (200, 0, 1, 1)), ("22 / 136", (0, 0, 1, 1))]) == [(22, 136), (2, 136)]
-    assert actions.fractions([("22/136 > 2/136", (0, 0, 1, 1))]) == [(22, 136), (2, 136)]
-    assert actions.fractions([("Owned 104", (0, 0, 1, 1))]) == []
+    assert daily_actions.fractions([("2 / 136", (200, 0, 1, 1)), ("22 / 136", (0, 0, 1, 1))]) == [(22, 136), (2, 136)]
+    assert daily_actions.fractions([("22/136 > 2/136", (0, 0, 1, 1))]) == [(22, 136), (2, 136)]
+    assert daily_actions.fractions([("Owned 104", (0, 0, 1, 1))]) == []
 
 
 def panel(monkeypatch, tmp_path, frames):
@@ -153,14 +154,14 @@ def panel(monkeypatch, tmp_path, frames):
 
     shots = iter(frames)
     taps = []
-    monkeypatch.setattr(actions, "ROOT", tmp_path)
-    monkeypatch.setattr(actions, "screen", lambda context: next(shots))
-    monkeypatch.setattr(actions, "too_many", lambda context, image: image[2:] == (True,))
-    monkeypatch.setattr(actions, "on_modules_tab", lambda context, image: image[0])
-    monkeypatch.setattr(actions, "read_fractions", lambda context, image, node: image[1])
-    monkeypatch.setattr(actions, "tap", lambda context, x, y, wait=1.0: taps.append((x, y)))
-    monkeypatch.setattr(actions, "stop", lambda context, reason, **kw: taps.append("stop") or False)
-    monkeypatch.setattr(actions, "back", lambda context: taps.append("back"))
+    patch_all(monkeypatch, "ROOT", tmp_path)
+    patch_all(monkeypatch, "screen", lambda context: next(shots))
+    patch_all(monkeypatch, "too_many", lambda context, image: image[2:] == (True,))
+    patch_all(monkeypatch, "on_modules_tab", lambda context, image: image[0])
+    patch_all(monkeypatch, "read_fractions", lambda context, image, node: image[1])
+    patch_all(monkeypatch, "tap", lambda context, x, y, wait=1.0: taps.append((x, y)))
+    patch_all(monkeypatch, "stop", lambda context, reason, **kw: taps.append("stop") or False)
+    patch_all(monkeypatch, "back", lambda context: taps.append("back"))
     actions.TASK.clear()
     actions.TASK.update(runs=0, done=None)
     return actions, MagicMock(), taps
@@ -169,25 +170,28 @@ def panel(monkeypatch, tmp_path, frames):
 def test_a_window_not_on_its_modules_tab_is_cancelled_and_never_confirmed(monkeypatch, tmp_path):
     # S1: the Use Lunacy tab shows the Enkephalin before and after too ("n / cap" twice); Confirm there spends Lunacy.
     actions, context, taps = panel(monkeypatch, tmp_path, itertools.repeat((False, [(22, 136), (48, 136)])))
-    results = [actions.AssemblePanel().run(context, None) for _ in range(actions.ASSEMBLE_TRIES)]
-    assert results == [True] * (actions.ASSEMBLE_TRIES - 1) + [False]  # the window may still be opening: looked at again
+    import daily_actions
+    results = [daily_actions.AssemblePanel().run(context, None) for _ in range(daily_actions.ASSEMBLE_TRIES)]
+    assert results == [True] * (daily_actions.ASSEMBLE_TRIES - 1) + [False]  # the window may still be opening: looked at again
     # the stop procedure's evidence shows the window itself, so it comes before Cancel (live-3 H1)
-    assert taps == [actions.MODULES_TAB] * actions.ASSEMBLE_TRIES + ["stop", actions.PANEL_CANCEL]
+    assert taps == [daily_actions.MODULES_TAB] * daily_actions.ASSEMBLE_TRIES + ["stop", daily_actions.PANEL_CANCEL]
 
 
 def test_a_number_that_stops_reading_after_the_most_button_is_cancelled_not_confirmed(monkeypatch, tmp_path):
     # S1: >> tapped, then the tab or its numbers do not read: what Confirm would buy is not known.
     for after in [(True, []), (False, [(42, 136), (2, 136)])]:
         actions, context, taps = panel(monkeypatch, tmp_path, [(False, []), (True, [(42, 136), (42, 136)]), after])
-        assert actions.AssemblePanel().run(context, None) is False
-        assert taps == [actions.MODULES_TAB, actions.ASSEMBLE_MAX, "stop", actions.PANEL_CANCEL]
+        import daily_actions
+        assert daily_actions.AssemblePanel().run(context, None) is False
+        assert taps == [daily_actions.MODULES_TAB, daily_actions.ASSEMBLE_MAX, "stop", daily_actions.PANEL_CANCEL]
 
 
 def test_the_modules_tab_is_confirmed_once_the_most_button_stops_changing(monkeypatch, tmp_path):
     frames = [(False, []), (True, [(42, 136), (42, 136)]), (True, [(42, 136), (2, 136)])]
     actions, context, taps = panel(monkeypatch, tmp_path, frames)
-    assert actions.AssemblePanel().run(context, None) is True
-    assert taps == [actions.MODULES_TAB, actions.ASSEMBLE_MAX, actions.PANEL_CONFIRM] and actions.TASK["assemble"]["before"] == 42
+    import daily_actions
+    assert daily_actions.AssemblePanel().run(context, None) is True
+    assert taps == [daily_actions.MODULES_TAB, daily_actions.ASSEMBLE_MAX, daily_actions.PANEL_CONFIRM] and actions.TASK["assemble"]["before"] == 42
 
 
 def test_the_refusal_over_the_window_ends_the_task_with_back_and_no_confirm(monkeypatch, tmp_path):
@@ -195,8 +199,9 @@ def test_the_refusal_over_the_window_ends_the_task_with_back_and_no_confirm(monk
     for frames, after_most in [([(False, [], True)], False),
                                ([(False, []), (True, [(42, 136), (42, 136)]), (True, [], True)], True)]:
         actions, context, taps = panel(monkeypatch, tmp_path, frames)
-        assert actions.AssemblePanel().run(context, None) is True
-        assert taps == [*([MODULES_TAB, actions.ASSEMBLE_MAX] if after_most else []), "back"]
+        import daily_actions
+        assert daily_actions.AssemblePanel().run(context, None) is True
+        assert taps == [*([MODULES_TAB, daily_actions.ASSEMBLE_MAX] if after_most else []), "back"]
         assert actions.TASK["assemble"]["end"] == "too many Enkephalin Modules in storage"
 
 
@@ -209,19 +214,21 @@ def test_assemble_modules_is_a_task_of_the_interface():
 def test_after_confirm_the_drop_in_the_open_window_ends_it_with_cancel(monkeypatch, tmp_path):
     # live-1 F1 (EnkephalinAssembled.png): no prompt ("Insufficient Enkephalin." in its place), 5 / 136 where 25 was
     actions, context, taps = panel(monkeypatch, tmp_path, [(False, [(5, 136), (5, 136)])])
+    import daily_actions
     actions.TASK["assemble"] = {"reads": 0, "confirms": 1, "before": 25}
-    assert actions.AssemblePanel().run(context, None) is True
-    assert taps == [actions.PANEL_CANCEL] and actions.TASK["assemble"]["end"] == "Enkephalin 25 -> 5, assembled"
+    assert daily_actions.AssemblePanel().run(context, None) is True
+    assert taps == [daily_actions.PANEL_CANCEL] and actions.TASK["assemble"]["end"] == "Enkephalin 25 -> 5, assembled"
 
 
 def test_after_confirm_a_window_with_nothing_changed_yet_is_looked_at_again(monkeypatch, tmp_path):
     # Neither the prompt nor a drop: the window is still answering the tap; looked at again, then the stop procedure
     frames = itertools.repeat((False, [(25, 136), (5, 136)]))
     actions, context, taps = panel(monkeypatch, tmp_path, frames)
+    import daily_actions
     actions.TASK["assemble"] = {"reads": 0, "confirms": 1, "before": 25}
-    results = [actions.AssemblePanel().run(context, None) for _ in range(actions.ASSEMBLE_TRIES)]
-    assert results == [True] * (actions.ASSEMBLE_TRIES - 1) + [False]
-    assert taps == ["stop", actions.PANEL_CANCEL]
+    results = [daily_actions.AssemblePanel().run(context, None) for _ in range(daily_actions.ASSEMBLE_TRIES)]
+    assert results == [True] * (daily_actions.ASSEMBLE_TRIES - 1) + [False]
+    assert taps == ["stop", daily_actions.PANEL_CANCEL]
 
 
 if __name__ == "__main__":

@@ -18,9 +18,11 @@ import numpy as np
 import pytest
 from daily_child import ROOT, bind, game_class, interface as interface_json, load, result, run_child, screen
 from test_settings import VALID
+from agent_patch import patch_all, rebind
 
 if __name__ != "__main__":  # as test_luxcavation.py: the fixtures are test_actions's
     import actions
+    import daily_actions
     from test_actions import clock, context  # noqa: F401 (the fake Maa context the in-process tests use)
 
 ENK_BAR, TAB, CONFIRM, CANCEL = (440, 640), (639, 226), (760, 534), (520, 534)  # TAB: Use Lunacy (D7, live 720p)
@@ -92,7 +94,7 @@ def child():
         "window_stays": (10, {"stays": True, "bought": 4}),
         "boxes_tab": (2, {"tab": "boxes"}),  # the same Recharge prompt, no Daily Count
     }.items():
-        actions.ROOT = settings(count)  # the settings, and the stop procedure's evidence and log
+        rebind("ROOT", settings(count))  # the settings, and the stop procedure's evidence and log
         game.set(**state)
         out[scenario] = result(tasker.post_task("ChargeEnkephalin", {"ChargeHub": {"timeout": 25000}}).wait().get(), game, actions)
     for shown in ("modules", "lunacy0"):  # the prompt: the Modules tab's own line is not it
@@ -154,10 +156,10 @@ class Tab:
     def __init__(self, context, monkeypatch, used=0, price=None, confirm_works=True, step=1, readable=True):
         self.used, self.price, self.confirm_works, self.step, self.readable = used, price, confirm_works, step, readable
         self.taps, self.stops = [], []
-        monkeypatch.setattr(actions, "TASK", {"runs": 0, "done": None})  # the panel's state, gone after the test
-        monkeypatch.setattr(actions, "tap", self.tap)
-        monkeypatch.setattr(actions, "ocr_texts", self.ocr)
-        monkeypatch.setattr(actions, "stop", lambda context, reason, **kw: self.stops.append(reason) or False)
+        patch_all(monkeypatch, "TASK", {"runs": 0, "done": None})  # the panel's state, gone after the test
+        patch_all(monkeypatch, "tap", self.tap)
+        patch_all(monkeypatch, "ocr_texts", self.ocr)
+        patch_all(monkeypatch, "stop", lambda context, reason, **kw: self.stops.append(reason) or False)
         context.run_recognition.side_effect = lambda node, image: SimpleNamespace(hit=self.readable) if node == "ChargePrompt" else None
 
     def tap(self, context, x, y, wait=1.0):
@@ -173,7 +175,7 @@ class Tab:
 def panel(context, count, passes):
     """ChargePanel `passes` times on a task of target `count`, as the hub hands the open window over; the returns."""
     actions.TASK["charge"] = {"count": count, "reads": 0, "opened": 0, "charged": 0}
-    return [actions.ChargePanel().run(context, None) for _ in range(passes)]
+    return [daily_actions.ChargePanel().run(context, None) for _ in range(passes)]
 
 
 @pytest.mark.parametrize("state, count, passes, steps, clicks, end", [
@@ -208,7 +210,7 @@ def test_a_tab_that_stops_reading_after_a_confirm_fails_the_task(context, monkey
     tab = Tab(context, monkeypatch)
     steps = panel(context, 2, 1)
     tab.readable = False  # after the Confirm the prompt and the Daily Count read no more
-    steps += [actions.ChargePanel().run(context, None) for _ in range(3)]
+    steps += [daily_actions.ChargePanel().run(context, None) for _ in range(3)]
     assert steps == [True] * 3 + [False] and tab.taps == [TAB, CONFIRM, TAB, TAB, TAB, CANCEL]
     assert tab.stops == ["the Use Lunacy tab's prompt and Daily Count could not be read after a Confirm"]
 
@@ -216,9 +218,9 @@ def test_a_tab_that_stops_reading_after_a_confirm_fails_the_task(context, monkey
 def test_a_cancel_that_never_closes_the_window_stops_the_task_after_a_few_taps(context, monkeypatch):
     # Done at the third price, the window stays: ChargePanel is exempt from the same-screen watchdog, so it bounds itself.
     tab = Tab(context, monkeypatch, used=2)
-    assert panel(context, 2, 1 + actions.CHARGE_TRIES + 1) == [True] * (1 + actions.CHARGE_TRIES) + [False]
-    assert tab.taps.count(CANCEL) == 1 + actions.CHARGE_TRIES  # the deciding one, then CHARGE_TRIES more
-    assert tab.stops == [f"the Charge Enkephalin window stayed open after {actions.CHARGE_TRIES} more Cancels"]
+    assert panel(context, 2, 1 + daily_actions.CHARGE_TRIES + 1) == [True] * (1 + daily_actions.CHARGE_TRIES) + [False]
+    assert tab.taps.count(CANCEL) == 1 + daily_actions.CHARGE_TRIES  # the deciding one, then CHARGE_TRIES more
+    assert tab.stops == [f"the Charge Enkephalin window stayed open after {daily_actions.CHARGE_TRIES} more Cancels"]
 
 
 if __name__ == "__main__":

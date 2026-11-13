@@ -37,7 +37,7 @@ import battle  # noqa: E402
 
 PIPELINE = REPO / "assets/resource/base/pipeline"
 IMAGES = REPO / "assets/resource/base/image"
-PORTRAIT_Y = 665  # actions.SLOT_PORTRAIT_Y: a slot's portrait, under its skills
+PORTRAIT_Y = 665  # battle_actions.SLOT_PORTRAIT_Y: a slot's portrait, under its skills
 NO_CARD = 3  # s after a press with no card: that press opened none
 CARD_LIMIT = 30  # s a card may stay up after the press before it counts as a failure
 

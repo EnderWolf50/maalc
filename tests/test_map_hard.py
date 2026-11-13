@@ -22,6 +22,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 from PIL import Image
+from agent_patch import rebind
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "agent"))  # run as a script: as pytest's pythonpath has it
@@ -63,6 +64,7 @@ def child():
     sys.modules["maa.agent"] = types.ModuleType("maa.agent")
     sys.modules["maa.agent.agent_server"] = stub
     import actions
+    import map_actions
 
     class Still(CustomController):
         def connect(self):
@@ -83,14 +85,14 @@ def child():
         def run(self, context, argv):
             try:
                 with tempfile.TemporaryDirectory() as logs:
-                    actions.ROOT = Path(logs)  # a Cost miss keeps its crop under logs/cost
+                    rebind("ROOT", Path(logs))  # a Cost miss keeps its crop under logs/cost
                     actions.RUN.update(settings={}, difficulty="hard", floor_hard=True)
                     for name in (*FRAMES, "MapHardRest.synthetic"):
                         image = np.asarray(Image.open(ROOT / "tests" / "screens" / f"{name}.png").convert("RGB"))[:, :, ::-1].copy()
                         bus = actions.seen(context, image, "MapBus")
                         bx, by = bus.box[0], bus.box[1]
-                        slots = actions.RouteMap.read_slots(context, image, bx, by)
-                        ahead = actions.RouteMap.read_ahead(context, image, bx + actions.SLOT[0], by + actions.SLOT[1], slots)
+                        slots = map_actions.RouteMap.read_slots(context, image, bx, by)
+                        ahead = map_actions.RouteMap.read_ahead(context, image, bx + map_actions.SLOT[0], by + map_actions.SLOT[1], slots)
                         out[name] = [{"bus": [bx, by]}, {row: [kind, None] for row, (kind, _) in slots.items()},
                                      *({row: [kind, sorted(src)] for row, (kind, src) in column.items()} for column in ahead)]
             except Exception:  # MaaFramework swallows it: hand it to the test

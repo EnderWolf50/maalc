@@ -2,10 +2,12 @@
 import pytest
 
 import actions
+import shop_actions
 import gifts
 import settings
 import test_actions
 from test_actions import fusion_taps, sale_taps, wants
+from agent_patch import patch_all
 
 clock, context = test_actions.clock, test_actions.context  # its fixtures
 
@@ -79,7 +81,7 @@ def test_a_sale_reads_ids_and_prices_off_the_grid_and_taps_only_what_it_sells(co
     taps = sale_taps(context, monkeypatch, {"list": wants(9009, keep=[9053])}, [90, 300, 200, 250, 120, 60, 80],
                      ("Bleed", 1), ("Burn", 2, 9009), ("Burn", 3, 9053), ("Keywordless", 3, None),
                      ("Tremor", 3), ("Pierce", 3), ("Sinking", 2))
-    assert taps == [actions.SELL_CELLS[0]]
+    assert taps == [shop_actions.SELL_CELLS[0]]
 
 
 @pytest.mark.parametrize("list_, gift", [
@@ -90,20 +92,20 @@ def test_a_sale_never_sells_what_the_list_wants_keeps_or_locks(context, monkeypa
     # The dearest gift (400) would cover the price, and no fusion would use it (the others are 3 of a kind): it stays.
     taps = sale_taps(context, monkeypatch, {"list": list_}, [400, 90, 60, 70, 80], ("Bleed", 1, gift),
                      ("Bleed",), ("Tremor",), ("Pierce",), ("Sinking",))
-    assert taps == [actions.SELL_CELLS[4]]  # of the 4 drop gifts, 3 fuse and the one left over goes
+    assert taps == [shop_actions.SELL_CELLS[4]]  # of the 4 drop gifts, 3 fuse and the one left over goes
 
 
 def test_a_gift_nothing_recognises_is_not_sold(context, monkeypatch):
     # No id (the icon matched no candidate): kept, though it is the dearest and no fusion would use it.
     taps = sale_taps(context, monkeypatch, {}, [400, 90, 60, 70, 80], ("Bleed", 1, None), ("Bleed",), ("Tremor",),
                      ("Pierce",), ("Sinking",))
-    assert taps == [actions.SELL_CELLS[4]]
+    assert taps == [shop_actions.SELL_CELLS[4]]
 
 
 def test_a_keywordless_drop_gift_is_sold_like_any_other(context, monkeypatch):
     # No keywordless setting any more: only the list says. A Keywordless leftover that the list lets go goes.
     taps = sale_taps(context, monkeypatch, {}, [90, 60, 70, 95], ("Bleed",), ("Tremor",), ("Pierce",), ("Keywordless", 2))
-    assert taps == [actions.SELL_CELLS[3]]
+    assert taps == [shop_actions.SELL_CELLS[3]]
 
 
 def test_a_vestige_the_list_keeps_is_not_sold_though_the_team_sells_vestiges(context, monkeypatch):
@@ -115,7 +117,7 @@ def test_a_vestige_the_list_keeps_is_not_sold_though_the_team_sells_vestiges(con
 def test_the_cells_of_the_sell_and_fuse_pages_are_logged_with_their_state_in_the_list(context, monkeypatch):
     # #291 user story 68: each cell's id and what the list makes of it: wanted, kept, locked by a wanted fusion, dropped, unknown.
     lines = []
-    monkeypatch.setattr(actions, "log", lines.append)
+    patch_all(monkeypatch, "log", lines.append)
     readings = [("Burn", 2, 9009), ("Burn", 3, 9053), ("Tremor", 2, 9031), ("Bleed", 2, 9005), ("Pierce", 2, None)]
     team = {"list": wants(9009, 9092, keep=[9053])}
     sale_taps(context, monkeypatch, team, [90, 80, 70, 60, 50], *readings)
@@ -132,8 +134,8 @@ def test_the_default_list_neither_sells_nor_fuses_lunar_memory_s_materials(page_
     # The user, 2026-11-11 (#626, option C): Lunar Memory's 7 fragments and 3 memories are kept, and nothing locks them.
     team = test_actions.shop_team({"list": gifts.default_list()})
     for gift_id in (9105, 9110, 9116, 9121, 9126, 9131, 9136, 9142, 9147, 9152):
-        assert actions.cell_role({"id": gift_id}, team, page_name, ()) == "keep"
-        assert actions.cell_state({"id": gift_id}, team["list"]) == "keep"
+        assert shop_actions.cell_role({"id": gift_id}, team, page_name, ()) == "keep"
+        assert shop_actions.cell_state({"id": gift_id}, team["list"]) == "keep"
 
 
 def exclusive_team(*, keep=()):
@@ -153,8 +155,8 @@ def test_an_exclusive_recipes_material_is_locked_only_by_the_packs_the_run_took(
         actions.RUN["packs"] = packs
     team = exclusive_team()
     for page_name in ("sell", "fuse"):
-        assert actions.cell_role({"id": 9408}, team, page_name, ()) == role
-    assert actions.cell_state({"id": 9408}, team["list"]) == ("locked" if role == "keep" else "drop")
+        assert shop_actions.cell_role({"id": 9408}, team, page_name, ()) == role
+    assert shop_actions.cell_state({"id": 9408}, team["list"]) == ("locked" if role == "keep" else "drop")
 
 
 @pytest.mark.parametrize("packs, sold", [([], True), ([1004], False)])
@@ -162,7 +164,7 @@ def test_a_sale_spares_an_exclusive_recipes_material_only_in_a_run_that_took_its
     # #306: the tier II material 9408 is priced 300 on a 180 wanted: sold when the run took no pack of 9410, spared when it did.
     actions.RUN["packs"] = packs
     taps = sale_taps(context, monkeypatch, {"list": wants(9410)}, [300], ("Sinking", 2, 9408))
-    assert taps == ([actions.SELL_CELLS[0]] if sold else [])
+    assert taps == ([shop_actions.SELL_CELLS[0]] if sold else [])
 
 
 def test_a_sale_spares_the_materials_of_an_exclusive_recipe_the_fuse_page_will_make(context, monkeypatch):
@@ -179,7 +181,7 @@ def test_a_sale_does_not_count_a_held_recipes_materials_in_an_ordinary_fusion(co
     actions.RUN["packs"] = []
     taps = sale_taps(context, monkeypatch, {"list": wants(9410)}, [90, 90, 300],
                      ("Sinking", 2, 9408), ("Sinking", 2, 9409), ("Bleed", 2))
-    assert taps == [actions.SELL_CELLS[2]]
+    assert taps == [shop_actions.SELL_CELLS[2]]
 
 
 @pytest.mark.parametrize("run, bought", [
@@ -190,6 +192,6 @@ def test_a_sale_does_not_count_a_held_recipes_materials_in_an_ordinary_fusion(co
     ({}, True),
 ])
 def test_a_normal_floor_buys_no_gift_its_shop_never_sells(monkeypatch, run, bought):
-    monkeypatch.setattr(actions, "RUN", run)
+    patch_all(monkeypatch, "RUN", run)
     team = {"list": {"order": list(settings.GIFT_KEYWORDS), "want": [9156], "keep": [], "gorder": settings.default_gorder()}}
-    assert ((9156, None) in actions.buy_list(team, {"owned": []})) is bought  # 9156 Decamillennial Hearthflame, Burn II
+    assert ((9156, None) in shop_actions.buy_list(team, {"owned": []})) is bought  # 9156 Decamillennial Hearthflame, Burn II

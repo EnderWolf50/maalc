@@ -1,7 +1,7 @@
 """The number beside a map node's Cost coin (#257, #284): read by MaaFramework's OCR on every labelled coin of the
 map captures in tests/screens, as read, with no table to snap it to; and every node of those captures typed by it (#228).
 
-actions.coin_text runs inside a real MaaFramework task (resource bundle loaded, a still controller), so the OCR
+map_actions.coin_text runs inside a real MaaFramework task (resource bundle loaded, a still controller), so the OCR
 is the agent's on the device. The pytest process holds MaaFramework in AgentServer mode, so the task runs in a
 child process: this file run as a script, as test_map_shop.py does.
 """
@@ -18,6 +18,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 from PIL import Image
+from agent_patch import rebind
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "agent"))  # run as a script: as pytest's pythonpath has it
@@ -69,7 +70,7 @@ UNCOSTED = {("MapBoss.png", 725, 285), ("MapFloor4Panned.png", 1093, 357), ("Map
 
 
 def child():
-    """Read every labelled coin through actions.coin_text in a MaaFramework task; print {image x y: number read}."""
+    """Read every labelled coin through map_actions.coin_text in a MaaFramework task; print {image x y: number read}."""
     from maa.controller import CustomController
     from maa.custom_action import CustomAction
     from maa.resource import Resource
@@ -82,6 +83,7 @@ def child():
     sys.modules["maa.agent"] = types.ModuleType("maa.agent")
     sys.modules["maa.agent.agent_server"] = stub
     import actions
+    import map_actions
 
     class Still(CustomController):
         def connect(self):
@@ -107,17 +109,17 @@ def child():
                 for name, coins in COINS.items():
                     image = load(SCREENS / name)
                     for x, y, _ in coins:
-                        out[f"{name} {x} {y}"] = actions.coin_number(actions.coin_text(context, image, (x, y, *COIN)))
+                        out[f"{name} {x} {y}"] = map_actions.coin_number(map_actions.coin_text(context, image, (x, y, *COIN)))
                 for crop in CROPS:
-                    out[f"crop {crop.name}"] = actions.coin_number(actions.coin_text(context, load(crop), CROP_COIN))
+                    out[f"crop {crop.name}"] = map_actions.coin_number(map_actions.coin_text(context, load(crop), CROP_COIN))
                 lines = []
-                actions.log = lines.append
+                rebind("log", lines.append)
                 with tempfile.TemporaryDirectory() as logs:
-                    actions.ROOT = Path(logs)  # a miss keeps its crop under logs/cost
+                    rebind("ROOT", Path(logs))  # a miss keeps its crop under logs/cost
                     for name, cx, cy, difficulty in NODE_CASES:
                         actions.RUN.update(settings={}, difficulty=difficulty, floor_hard=difficulty == "hard")
                         lines.clear()
-                        kind = actions.node_at(context, load(SCREENS / name), cx, cy)
+                        kind = map_actions.node_at(context, load(SCREENS / name), cx, cy)
                         cost = next((m[1] for line in lines if (m := re.match(r"map: node at .* reads Cost (\d+)", line))), None)
                         out[f"node {name} {cx} {cy} {difficulty}"] = [kind, cost and int(cost)]
             except Exception:  # MaaFramework swallows it: hand it to the test
@@ -186,10 +188,10 @@ def is_fight(name, x, y):
 
 @pytest.mark.parametrize(("name", "x", "y", "difficulty"), [pytest.param(*c, id=f"{c[0]}-{c[1]}-{c[2]}-{c[3]}") for c in NODE_CASES])
 def test_every_map_node_is_typed_as_the_capture_shows_or_as_listed(read, name, x, y, difficulty):
-    import actions
+    import map_actions
     shown = label(name, x, y)
     if isinstance(shown, int):
-        shown = actions.map_data()["node_costs"][difficulty][shown]
+        shown = map_actions.map_data()["node_costs"][difficulty][shown]
     assert read[f"node {name} {x} {y} {difficulty}"][0] == TYPED_INSTEAD.get((name, x, y), shown)
 
 
@@ -204,8 +206,8 @@ def test_the_fights_typed_with_no_cost_read_are_the_listed_ones(read):
     ("", None), ("8", None), ("00", None), ("05", None),  # no digits, one, a leading 0: part reads
 ])
 def test_coin_number_takes_two_digits_or_more_and_no_leading_zero(found, number):
-    import actions
-    assert actions.coin_number(found) == number
+    import map_actions
+    assert map_actions.coin_number(found) == number
 
 
 if __name__ == "__main__":

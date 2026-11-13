@@ -18,12 +18,16 @@ from unittest.mock import MagicMock
 
 import numpy as np
 import pytest
+from agent_patch import patch_all
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "agent"))  # run as a script: as pytest's pythonpath has it
 
 if __name__ != "__main__":  # pytest; the script (child) imports actions itself, under a stand-in AgentServer
     import actions
+    import daily_actions
+    import run_start_actions
+    import lux_actions
     import recovery
     from test_actions import clock, context  # noqa: F401 (the fake Maa context the in-process tests use)
 
@@ -154,7 +158,7 @@ def test_a_task_the_client_interrupted_leaves_its_run_to_the_same_task(context):
     lambda: actions.stop(MagicMock(), "recovery used up"),
 ])
 def test_a_task_that_ended_by_done_or_the_stop_procedure_leaves_no_run(context, monkeypatch, how):
-    monkeypatch.setattr(actions, "screen", lambda context: np.zeros((720, 1280, 3), np.uint8))
+    patch_all(monkeypatch, "screen", lambda context: np.zeros((720, 1280, 3), np.uint8))
     assert interrupted_run(context, how) == {}
 
 
@@ -190,7 +194,7 @@ def test_a_mirror_dungeon_that_has_nothing_left_to_do_ends_a_success(context, mo
     actions.TASK.update(runs=1, done=None)
     urlopen = MagicMock()
     monkeypatch.setattr(actions.urllib.request, "urlopen", urlopen)
-    assert actions.PlanRun().run(context, None) is True
+    assert run_start_actions.PlanRun().run(context, None) is True
     assert done in actions.TASK["done"]
     assert not (actions.ROOT / "logs").exists() and not urlopen.called
     context.tasker.controller.post_click.assert_not_called()
@@ -201,7 +205,7 @@ def test_plan_run_does_not_open_a_run_the_modules_cannot_claim(context):
     # #369: read 4 on the Drive page (< 5, one Claim): the task is done, Enter is not pressed.
     entry_page(context)
     actions.TASK.update(runs=0, done=None, modules=4)
-    assert actions.PlanRun().run(context, None) is True
+    assert run_start_actions.PlanRun().run(context, None) is True
     assert "Modules 4 < 5" in actions.TASK["done"]
     context.tasker.controller.post_click.assert_not_called()
     context.run_task.assert_called_once_with("GoHome")
@@ -212,15 +216,15 @@ def test_plan_run_logs_modules_that_cover_a_claim(context, monkeypatch):
     entry_page(context)
     actions.TASK.update(runs=0, done=None, modules=118)
     logged = []
-    monkeypatch.setattr(actions, "log", logged.append)
-    assert actions.PlanRun().run(context, None) is True and actions.RUN["planned"]
+    patch_all(monkeypatch, "log", logged.append)
+    assert run_start_actions.PlanRun().run(context, None) is True and actions.RUN["planned"]
     assert "new run: Modules 118 >= 5" in logged
 
 
 def test_plan_run_starts_when_the_modules_did_not_read(context):
     entry_page(context)
     actions.TASK.update(runs=0, done=None, modules=None)
-    assert actions.PlanRun().run(context, None) is True
+    assert run_start_actions.PlanRun().run(context, None) is True
     assert actions.TASK["done"] is None and "modules" not in actions.TASK and actions.RUN["planned"]
 
 
@@ -230,10 +234,10 @@ def test_plan_run_backs_out_to_read_the_modules_when_the_trip_skipped_drive(cont
     actions.TASK.clear()
     actions.TASK.update(runs=0, done=None)
     for n in (1, 2):
-        assert actions.PlanRun().run(context, None) is True
+        assert run_start_actions.PlanRun().run(context, None) is True
         context.tasker.controller.post_click_key.assert_called_with(actions.BACK_KEY)
         assert context.tasker.controller.post_click_key.call_count == n and not actions.RUN
-    assert actions.PlanRun().run(context, None) is True and actions.RUN["planned"]
+    assert run_start_actions.PlanRun().run(context, None) is True and actions.RUN["planned"]
     assert context.tasker.controller.post_click_key.call_count == 2
 
 
@@ -273,8 +277,8 @@ def test_every_task_after_an_account_level_stop_fails_at_its_entry_without_a_tap
     assert actions.Halt().run(context, argv) is False and urlopen.call_count == 1
     evidence = list((actions.ROOT / "logs" / "evidence").iterdir())
     context.reset_mock()
-    for start, node, param in [(actions.TaskStart, "ClaimMail", None), (actions.LuxStart, "ExpLuxcavation", '"exp"'),
-                               (actions.ChargeStart, "ChargeEnkephalin", None)]:
+    for start, node, param in [(actions.TaskStart, "ClaimMail", None), (lux_actions.LuxStart, "ExpLuxcavation", '"exp"'),
+                               (daily_actions.ChargeStart, "ChargeEnkephalin", None)]:
         assert start().run(context, SimpleNamespace(node_name=node, custom_action_param=param)) is False, node
     assert urlopen.call_count == 1 and list((actions.ROOT / "logs" / "evidence").iterdir()) == evidence
     assert not context.method_calls and not context.tasker.controller.method_calls  # no tap, no key, no screenshot

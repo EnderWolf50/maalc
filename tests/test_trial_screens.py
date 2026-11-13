@@ -1,5 +1,5 @@
 """A boss gift card read off the boss captures in tests/screens (#381): its Enemy Level Up badge, its trial's name and
-effect line through actions.trial_card, its gift's tier through actions.gift_tier. The Select button of a gift page
+effect line through event_actions.trial_card, its gift's tier through event_actions.gift_tier. The Select button of a gift page
 read off its capture: its count, or none on a page that takes one card (#494).
 
 trial_card runs inside a real MaaFramework task (resource bundle loaded, a still controller), so the OCR is the agent's
@@ -45,7 +45,7 @@ def load(name):
 
 
 def child():
-    """Read every labelled card through actions.trial_card in a MaaFramework task; print {capture x: [N, name, line]}."""
+    """Read every labelled card through event_actions.trial_card in a MaaFramework task; print {capture x: [N, name, line]}."""
     from maa.controller import CustomController
     from maa.custom_action import CustomAction
     from maa.resource import Resource
@@ -58,6 +58,7 @@ def child():
     sys.modules["maa.agent"] = types.ModuleType("maa.agent")
     sys.modules["maa.agent.agent_server"] = stub
     import actions
+    import event_actions
 
     class Still(CustomController):
         def connect(self):
@@ -80,10 +81,10 @@ def child():
                 for name, (_, cards) in CARDS.items():
                     image = load(name)
                     for x, *_ in cards:
-                        out[f"{name} {x}"] = list(actions.trial_card(context, image, x))
+                        out[f"{name} {x}"] = list(event_actions.trial_card(context, image, x))
                 for name in COUNTS:
-                    out[f"{name} count"] = actions.text(context, load(name), actions.GIFT_COUNT)
-                    out[f"{name} cards"] = actions.gift_cards(context, load(name))
+                    out[f"{name} count"] = actions.text(context, load(name), event_actions.GIFT_COUNT)
+                    out[f"{name} cards"] = event_actions.gift_cards(context, load(name))
             except Exception:  # MaaFramework swallows it: hand it to the test
                 out["error"] = traceback.format_exc()
             return True
@@ -125,8 +126,8 @@ def test_a_boss_card_reads_its_badge_and_its_trial_by_the_effect_line(read, name
 def test_the_tier_numeral_over_a_gift_card_reads_as_the_gift_data_s_tier(name, x, tier):
     # The sweep: every gift card of tests/screens, 11 on 4 captures, tiers I and II, none misread. A III read right on a
     # 2026-10-28 frame that is not committed (Disk Fragment, floor 2); IV and V are on no capture yet.
-    import actions
-    assert actions.gift_tier(load(name), x) == tier
+    import event_actions
+    assert event_actions.gift_tier(load(name), x) == tier
 
 
 # capture -> the gift id of each card, left to right, by its name on the capture (labelled by eye)

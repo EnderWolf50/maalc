@@ -25,7 +25,9 @@ def child():
         not_taken = None
     except AssertionError as e:
         not_taken = str(e)
-    print(json.dumps({"error": None, "not_taken": not_taken, **{name: [d["pre_delay"], d["post_delay"]] for name, d in data.items()}}))
+    registered = {"action": sorted(resource.custom_action_list), "recognition": sorted(resource.custom_recognition_list)}
+    print(json.dumps({"error": None, "not_taken": not_taken, "registered": registered,
+                      **{name: [d["pre_delay"], d["post_delay"]] for name, d in data.items()}}))
 
 
 @pytest.mark.parametrize("name", NODES)
@@ -37,6 +39,16 @@ def test_a_post_maaframework_does_not_take_fails_naming_its_scenario():
     # #564: the loops before run_task read .status on the missing detail of such a post and died on an AttributeError.
     not_taken = run_child(__file__)["not_taken"]
     assert not_taken and not_taken.startswith("unbound: ") and "GoHome" in not_taken, not_taken
+
+
+def test_a_loaded_resource_serves_every_custom_name_the_pipeline_uses():
+    # #676: load() imports main, which imports every module split off actions.py; actions alone registers only its own
+    from test_agent_modules import pipeline_names  # not at the top: the child (this file as a script) has no use for it
+
+    registered, used = run_child(__file__)["registered"], pipeline_names()
+    lacks = {kind: sorted(set(names) - set(registered[kind])) for kind, names in used.items()}
+    extra = {kind: sorted(set(registered[kind]) - set(names)) for kind, names in used.items()}
+    assert registered == used, f"the child's resource lacks {lacks} and has {extra} besides"
 
 
 if __name__ == "__main__":

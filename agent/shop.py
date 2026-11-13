@@ -1,6 +1,6 @@
 """Shop decisions, free of MaaFramework (docs/spec/03-decisions.md section 13).
 
-actions.py reads the shop pages and taps; everything here is plain data in, plain data out.
+shop_actions.py reads the shop pages and taps; everything here is plain data in, plain data out.
 """
 
 import re

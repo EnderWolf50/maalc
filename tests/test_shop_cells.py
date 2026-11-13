@@ -43,7 +43,7 @@ def without_tier(image, x, y):
 
 
 def child():
-    """Run every case through actions.read_cells in a MaaFramework task; print {case: [(tier, keyword)]}."""
+    """Run every case through shop_actions.read_cells in a MaaFramework task; print {case: [(tier, keyword)]}."""
     from maa.controller import CustomController
     from maa.custom_action import CustomAction
     from maa.resource import Resource
@@ -56,7 +56,7 @@ def child():
                                                 "custom_recognition": staticmethod(lambda name: lambda c: c)})
     sys.modules["maa.agent"] = types.ModuleType("maa.agent")
     sys.modules["maa.agent.agent_server"] = stub
-    import actions
+    import shop_actions
 
     class Still(CustomController):
         def connect(self):
@@ -79,12 +79,12 @@ def child():
                 for case, (crop, cells, page) in CASES.items():
                     image = screen_with(crop)
                     if case == "fuse_tier_unread":
-                        image = without_tier(image, *actions.FUSE_CELLS[0])
-                    found = actions.read_cells(context, image, getattr(actions, cells), page)
+                        image = without_tier(image, *shop_actions.FUSE_CELLS[0])
+                    found = shop_actions.read_cells(context, image, getattr(shop_actions, cells), page)
                     out[case] = [(c["tier"], c["keyword"]) for c in found]
                 for name in LABELS:  # #205: the fuse page's owned gifts found by their label's OCR
                     screen = np.array(Image.open(ROOT / "tests" / "screens" / f"{name}.png").convert("RGB"))[:, :, ::-1]
-                    out[name] = actions.owned_label(context, np.ascontiguousarray(screen))[0]
+                    out[name] = shop_actions.owned_label(context, np.ascontiguousarray(screen))[0]
             except Exception:  # MaaFramework swallows it: hand it to the test
                 out["error"] = traceback.format_exc()
             return True
@@ -142,8 +142,8 @@ def test_the_offers_read_tier_and_badge(read):
 def test_the_owned_gifts_are_found_under_their_label(read, name):
     # #205: "E.G.O Gifts Owned" read by OCR, OWNED_LABEL px over the first owned row, with a recipe's section over it or not.
     sys.path.insert(0, str(ROOT / "agent"))
-    import actions  # noqa: PLC0415  # the pytest process's own import, for the constant
-    assert abs(read[name] + actions.OWNED_LABEL - LABELS[name]) <= 3
+    import shop_actions  # noqa: PLC0415  # the pytest process's own import, for the constant
+    assert abs(read[name] + shop_actions.OWNED_LABEL - LABELS[name]) <= 3
 
 
 if __name__ == "__main__":

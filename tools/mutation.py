@@ -36,8 +36,8 @@ ROOT = Path(__file__).resolve().parent.parent
 AGENT = ROOT / "agent"
 
 # Module -> the first run's tests: the files that import it directly, less test_actions.py (46 s, it reaches the module
-# through actions.py), test_gift_cells.py (105 s) and test_shop_skill_screens.py, test_frozen_home.py and test_title.py
-# (each runs a MaaFramework child). A survivor is then run again on every test file that runs its line (`recheck`,
+# through actions.py and its page modules), test_gift_cells.py (105 s) and test_shop_skill_screens.py,
+# test_frozen_home.py and test_title.py (each runs a MaaFramework child). A survivor is then run again on every test file that runs its line (`recheck`,
 # from `cover`). A module's tests also reach the modules it imports; a mutant counts only for the module it changes.
 MODULES = {
     "settlement": ["test_settlement.py"],

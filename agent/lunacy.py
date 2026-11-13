@@ -1,7 +1,7 @@
 """Lunacy for Enkephalin's price check, free of MaaFramework (#373, docs/spec/03-decisions.md section 16).
 
-Charging spends Lunacy, so the one rule is: charge only a price the game's table says. actions.py reads the screen and
-taps; everything here is plain data in, a verdict out.
+Charging spends Lunacy, so the one rule is: charge only a price the game's table says. daily_actions.py reads the
+screen and taps; everything here is plain data in, a verdict out.
 """
 
 import re
