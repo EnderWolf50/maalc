@@ -281,12 +281,12 @@ function PackPlanEditor({ data, plan, planId, path, onChange }: {
   const set = (patch: Partial<PackPlanValues>) => onChange?.({ ...plan, ...patch });
   const weigh = (what: string, w: number) => (what === UNLISTED ? set({ unlisted: w }) : set({ weights: { ...plan.weights, [what]: w } }));
   // The pack whose weight is being typed: on its chip, or in a + lane for a new weight, the one above the lanes or below (#720).
-  const [typing, setTyping] = useState<{ what: string; at: "chip" | AddAt } | null>(null);
-  const ask = (what: string, at: "chip" | AddAt = "chip") => setTyping({ what, at });
+  const [typing, setTyping] = useState<{ what: string; lane: AddAt | null } | null>(null); // lane null: on the chip
+  const ask = (what: string, lane: AddAt | null = null) => setTyping({ what, lane });
   const box = (what: string, current?: number) => (
     <WeightBox value={current} onDone={(w) => { if (w !== null) weigh(what, w); setTyping(null); }} />
   );
-  const typingOn = (what: string) => typing?.what === what && typing.at === "chip";
+  const typingOn = (what: string) => typing?.what === what && typing.lane === null;
   const dropOn = (w: number | AddAt) => (e: DragEvent) => {
     e.preventDefault();
     if (drag === LINE && typeof w === "number") set({ threshold: w });
@@ -315,9 +315,10 @@ function PackPlanEditor({ data, plan, planId, path, onChange }: {
     const cover = images ? coverOf(name) : undefined; // the card has its title printed on it: the name moves to the tooltip
     const wanted = packWanted(lists, data.pack_ids[name]).map((id) => GIFT_BY_ID.get(id)).filter((g) => g !== undefined)
       .map((g) => giftName(g, zh));
-    const wantedTip = wanted.length > 0 ? fill(t("packs.wantedTip"), { names: wanted.join(t("gl.sep")) }) : "";
+    const isWanted = wanted.length > 0;
+    const wantedTip = fill(t("packs.wantedTip"), { names: wanted.join(t("gl.sep")) });
     // The whole chip shows the wanted gifts on hover, the dot being too small a target (#720).
-    const tip = [cover ? name : "", wantedTip].filter(Boolean).join("\n") || undefined;
+    const tip = [cover ? name : "", isWanted ? wantedTip : ""].filter(Boolean).join("\n") || undefined;
     return (
       <span key={name} className={"pk" + (path && bad(`${path}/weights/${name}`) ? " bad" : "")} data-path={path && `${path}/weights/${name}`}
         {...dragged(name)} {...clickable(name)} title={tip}>
@@ -329,7 +330,7 @@ function PackPlanEditor({ data, plan, planId, path, onChange }: {
             return <small key={f.mode} className={"fl" + BADGES[f.mode][1]} role="img" title={label} aria-label={label}>{f.text}</small>;
           })
           : <small><em>{t("packNotInData")}</em></small>}
-        {wantedTip && <i className="wd" role="img" aria-label={t("packs.wanted")} title={wantedTip} />}
+        {isWanted && <i className="wd" role="img" aria-label={t("packs.wanted")} title={wantedTip} />}
         {typingOn(name) && box(name, weightOf(plan, name))}
       </span>
     );
@@ -347,8 +348,8 @@ function PackPlanEditor({ data, plan, planId, path, onChange }: {
   );
   const gapOrLine = (g: number) => (g === line ? lineBar : <div className="gap" {...target(drag === LINE, lanes[g - 1])} />);
   const addLane = (at: AddAt) => onChange && (
-    <div className={"lane add " + at} {...target(drag !== null && drag !== LINE, at)}>
-      {typing?.at === at
+    <div className="lane add" {...target(drag !== null && drag !== LINE, at)}>
+      {typing?.lane === at
         ? <>＋ {typing.what === UNLISTED ? t("packs.unlisted") : typing.what} {box(typing.what)}</>
         : <>＋ {t("packs.newLane")}</>}
     </div>

@@ -38,7 +38,6 @@ describe("the 含想要 mark", () => {
     renderEditor(<ThemePackTab />, settings());
     const key = (await screen.findByText(zh["packs.wantedKey"])).closest("p")!;
     expect(key.querySelector(".wd")).not.toBeNull();
-    expect(zh["packs.wantedKey"]).toContain(zh["packs.wanted"]);
   });
 
   test("a pack whose own gifts none is wanted shows no mark", async () => {

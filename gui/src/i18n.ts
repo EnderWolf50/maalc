@@ -132,7 +132,7 @@ const zh_tw = {
   "packs.newLane": "拖到這裡，輸入新的分數",
   "packs.floorsNormal": "普通", "packs.floorsHard": "困難", "packs.floorSep": "、", "packs.floorsKey": "數字＝會出現的樓層", "packs.wanted": "含想要", "packs.wantedTip": "這個包的專屬飾品裡屬於想要類的：{names}",
   "packs.floorsInfinity": "無限", "packs.floorsExtreme": "極限", // the user's words, 2026-11-14; en_us keeps the game's
-  "packs.wantedKey": "角落的圓點＝含想要：這個包的專屬飾品裡有想要類的（滑鼠移到包上看是哪些）",
+  "packs.wantedKey": "右上角的圓點＝含想要：這個包的專屬飾品裡有想要類的（滑鼠移到包上看是哪些）",
   "packs.weightPrompt": "分數（−10 到 10 的整數）：",
   "packs.weightRange": "分數必須是 −10 到 10 的整數。",
   "packs.eventPacks": "活動卡包",
@@ -472,7 +472,7 @@ const en_us: typeof zh_tw = {
   "packs.newLane": "Drop here to type a new weight",
   "packs.floorsNormal": "NORMAL", "packs.floorsHard": "HARD", "packs.floorSep": ", ", "packs.floorsKey": "numbers = the floors it appears on", "packs.wanted": "Wanted gifts", "packs.wantedTip": "Wanted-class gifts in this pack's own pool: {names}",
   "packs.floorsInfinity": "INFINITY", "packs.floorsExtreme": "EXTREME",
-  "packs.wantedKey": "A dot in the corner = Wanted gifts: the pack's own pool holds gifts of the want class (point at the pack to see which).",
+  "packs.wantedKey": "A dot on the top right corner = Wanted gifts: the pack's own pool holds gifts of the want class (point at the pack to see which).",
   "packs.weightPrompt": "Weight (a whole number from -10 to 10):",
   "packs.weightRange": "The weight must be a whole number from -10 to 10.",
   "packs.eventPacks": "Event packs",
